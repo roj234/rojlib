@@ -36,9 +36,6 @@ public final class HttpServer20 extends H2Stream implements PostSetting, Respons
 		this.time = System.currentTimeMillis() + router.readTimeout(null);
 	}
 
-	private static final byte FLAG_GOAWAY = 1;
-	private byte flag;
-
 	private long time;
 	private H2Connection man;
 	private Request req;
@@ -141,6 +138,7 @@ public final class HttpServer20 extends H2Stream implements PostSetting, Respons
 
 			try {
 				if (ph != null) ph.onSuccess();
+				if ((flag&FLAG_HEADER_SENT) != 0) return;
 
 				var resp = router.response(req, this);
 				if (body == null) body = resp;
@@ -187,7 +185,7 @@ public final class HttpServer20 extends H2Stream implements PostSetting, Respons
 	}
 
 	public void tick(H2Connection man) throws IOException {
-		if (getState() == SEND_BODY) {
+		if ((flag&FLAG_HEADER_SENT) != 0) {
 			if (!pending.isReadable() || !man.sendData(this, pending, dataEnd)) {
 				pending.clear();
 				if (!dataEnd) {
@@ -347,6 +345,7 @@ public final class HttpServer20 extends H2Stream implements PostSetting, Respons
 
 		int window = man.getImmediateWindow(this);
 		if (window <= 0) return 0;
+		window = Math.min(window, man.getRemoteSetting().max_frame_size);
 
 		limit = limit <= 0 ? streamLimit : Math.min(streamLimit, limit);
 		if (limit > window) limit = window;
@@ -390,22 +389,28 @@ public final class HttpServer20 extends H2Stream implements PostSetting, Respons
 	@Override public void sharedRequest() {flag &= ~FLAG_UNSHARED;}
 	@Override public ResponseHeader enableAsyncResponse() {flag |= FLAG_ASYNC;return this;}
 	@Override public void body(Response resp) throws IOException {
-		if ((flag & FLAG_ASYNC) != 0) {
-			if (getState() != PROCESSING) throw new IllegalStateException("Expect PROCESSING: "+_getState());
-
-			var lock = man.channel().channel().lock();
-			lock.lock();
-			try {
-				body = resp;
-				time = System.currentTimeMillis() + router.writeTimeout(req, body);
-				sendHead(man);
-			} catch (Exception e) {
-				onError(man, e);
-			} finally {
-				lock.unlock();
+		if ((flag & FLAG_ASYNC) == 0) {
+			if (getState() != DATA) {
+				this.body = resp;
+				return;
 			}
-		} else {
-			this.body = resp;
+
+			flag |= FLAG_HEADER_SENT;
+			LOGGER.warn("全双工模式正开发中");
+		} else if (getState() != PROCESSING) {
+			throw new IllegalStateException("Expect PROCESSING: "+_getState());
+		}
+
+		var lock = man.channel().channel().lock();
+		lock.lock();
+		try {
+			body = resp;
+			time = System.currentTimeMillis() + router.writeTimeout(req, body);
+			sendHead(man);
+		} catch (Exception e) {
+			onError(man, e);
+		} finally {
+			lock.unlock();
 		}
 	}
 	@Override public ResponseHeader enableCompression() {flag |= FLAG_COMPRESS;return this;}

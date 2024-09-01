@@ -1,7 +1,6 @@
 package roj.crypt.eddsa;
 
-import roj.crypt.KeyAgreement;
-import roj.crypt.eddsa.math.EdPoint;
+import roj.crypt.KeyExchange;
 import roj.util.DynByteBuf;
 
 import java.security.*;
@@ -11,7 +10,7 @@ import java.util.Arrays;
  * @author Roj234
  * @since 2023/12/31 0031 19:22
  */
-public class XDHUnofficial implements KeyAgreement {
+public class XDHUnofficial implements KeyExchange {
 	private byte[] publicKey, privateKey;
 
 	@Override

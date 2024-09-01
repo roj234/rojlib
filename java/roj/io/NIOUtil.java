@@ -90,8 +90,8 @@ public final class NIOUtil {
 
 	public static final int UNAVAILABLE = -2;
 
-	public static FileDescriptor tcpFD(SocketChannel ch) { return UTIL.tcpFD(ch); }
-	public static FileDescriptor tcpFD(ServerSocketChannel ch) { return UTIL.tcpsFD(ch); }
+	public static FileDescriptor tcpFD(SocketChannel ch) {return UTIL.tcpFD(ch);}
+	public static int fdVal(FileDescriptor fd) {return UTIL.fdVal(fd);}
 
 	// on windows reuse is NOT ignored
 	public static void setReusePort(DatagramChannel so, boolean on) throws IOException {

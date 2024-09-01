@@ -42,6 +42,7 @@ import static roj.ui.terminal.CommandNode.literal;
  */
 public class SSOPlugin extends Plugin {
 	private static final XHashSet.Shape<String, UserGroup> shape = XHashSet.noCreation(UserGroup.class, "name", "_next", Hasher.defaul());
+	public static final String COOKIE_ID = "xsso_token";
 
 	private final XHashSet<String, UserGroup> groups = shape.create();
 	private void loadGroups() {
@@ -189,7 +190,7 @@ public class SSOPlugin extends Plugin {
 	@Interceptor("PermissionManager")
 	public Response ssoPermissionManager(Request req) throws IllegalRequestException {
 		String postfix = "";
-		var token = req.cookie().get("xsso_token");
+		var token = req.cookie().get(COOKIE_ID);
 		checkLogin:
 		if (token != null) {
 			User user = verifyToken(req, token.value(), 'L');
@@ -201,7 +202,7 @@ public class SSOPlugin extends Plugin {
 				postfix = "#denied";
 				break checkLogin;
 			}
-			req.responseHeader().sendCookieToClient(Collections.singletonList(new Cookie("xsso_token").expires(-1)));
+			req.responseHeader().sendCookieToClient(Collections.singletonList(new Cookie(COOKIE_ID).expires(-1)));
 		}
 
 		var url = IOUtil.getSharedCharBuf().append('/').append(req.absolutePath()).append(req.query().isEmpty() ? "" : "?"+req.query());
@@ -211,10 +212,10 @@ public class SSOPlugin extends Plugin {
 
 	@Interceptor("SSO/UserCheck")
 	public void ssoPermissionManagerCheckOnly(Request req) throws IllegalRequestException {
-		var token = req.cookie().get("xsso_token");
+		var token = req.cookie().get(COOKIE_ID);
 		if (token != null) {
 			if (verifyToken(req, token.value(), 'L') != null) return;
-			req.responseHeader().sendCookieToClient(Collections.singletonList(new Cookie("xsso_token").expires(-1)));
+			req.responseHeader().sendCookieToClient(Collections.singletonList(new Cookie(COOKIE_ID).expires(-1)));
 		}
 	}
 
@@ -232,7 +233,7 @@ public class SSOPlugin extends Plugin {
 
 	@GET
 	public void logout(Request req, ResponseHeader rh) {
-		req.responseHeader().sendCookieToClient(Collections.singletonList(new Cookie("xsso_token").path("/").expires(-1)));
+		req.responseHeader().sendCookieToClient(Collections.singletonList(new Cookie(COOKIE_ID).path("/").expires(-1)));
 		rh.code(302).header("location", "/"+sitePath+"/");
 	}
 
@@ -327,7 +328,7 @@ public class SSOPlugin extends Plugin {
 	public String changePassword(Request req, String pass) throws IllegalRequestException {
 		if (pass.length() < 6 || pass.length() > 99) throw BAD_REQUEST;
 
-		var token = req.cookie().get("xsso_token").value();
+		var token = req.cookie().get(COOKIE_ID).value();
 
 		ByteList buf = IOUtil.getSharedByteBuf();
 		Base64.decode(token, buf, Base64.B64_URL_SAFE_REV);
@@ -383,7 +384,7 @@ public class SSOPlugin extends Plugin {
 
 	@Interceptor("login")
 	public String loginInterceptor(Request req) throws IllegalRequestException {
-		var token = req.cookie().get("xsso_token");
+		var token = req.cookie().get(COOKIE_ID);
 		if (token != null) {
 			User u = verifyToken(req, token.value(), 'L');
 			req.localCtx().put("xsso:user", u);
@@ -462,7 +463,7 @@ public class SSOPlugin extends Plugin {
 		long expire = LOGIN_TTL + (is_refresh ? -180000 : 0);
 
 		var login_token = makeToken(u, 'L', expire, o, sc);
-		req.responseHeader().sendCookieToClient(Collections.singletonList(new Cookie("xsso_token", login_token).path("/").expires(0).httpOnly(true).sameSite("Strict")));
+		req.responseHeader().sendCookieToClient(Collections.singletonList(new Cookie(COOKIE_ID, login_token).path("/").expires(0).httpOnly(true).sameSite("Strict")));
 
 		var refresh_token = makeToken(u, 'R', 86400_000L * 30, o, sc);
 		var access_token = makeToken(u, 'A', ACCESS_TOKEN_TTL, o, sc);

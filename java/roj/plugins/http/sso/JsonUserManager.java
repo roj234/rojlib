@@ -5,7 +5,6 @@ import roj.collect.SimpleList;
 import roj.config.ConfigMaster;
 import roj.config.ParseException;
 import roj.config.auto.SerializerFactory;
-import roj.config.auto.Serializers;
 
 import java.io.File;
 import java.io.IOException;
@@ -33,8 +32,7 @@ public class JsonUserManager implements UserManager {
 				return new InetSocketAddress(InetAddress.getByName(addr.substring(0, i)), Integer.parseInt(addr.substring(i+1)));
 			}
 			public String writeCallback(InetSocketAddress addr) {return addr.getAddress().getHostAddress()+":"+addr.getPort();}
-		});
-		Serializers.registerAsBase64(SERIALIZER);
+		}).asBase64();
 	}
 
 	public JsonUserManager(File json) throws IOException, ParseException {

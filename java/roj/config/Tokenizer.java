@@ -18,7 +18,6 @@ import roj.util.Helpers;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiFunction;
 
 import static roj.config.Word.*;
@@ -842,22 +841,22 @@ public class Tokenizer {
 		return neg ? -v : v;
 	}
 
+	private static final ThreadLocal<String> IsoParserError = new ThreadLocal<>();
 	@Contract("true -> !null")
 	public final Word ISO8601Datetime(boolean must) throws ParseException {
 		final int i = index;
 		CharSequence in = input;
-		AtomicReference<String> error = new AtomicReference<>();
 
 		try {
 			char c;
 
-			int y = dateNum(4,0, error);
-			dateDelim('-', error);
+			int y = dateNum(4,0);
+			dateDelim('-');
 
-			int m = dateNum(2,12, error);
-			dateDelim('-', error);
+			int m = dateNum(2,12);
+			dateDelim('-');
 
-			int d = dateNum(2,31, error);
+			int d = dateNum(2,31);
 
 			long ts = (ACalendar.daySinceAD(y, m, d, null) - ACalendar.GREGORIAN_OFFSET_DAY) * 86400000L;
 
@@ -866,19 +865,19 @@ public class Tokenizer {
 				return timeWord(RFCDATE_DATE, i, ts, in.subSequence(i, index).toString());
 			index++;
 
-			y = dateNum(2, 23, error);
-			dateDelim(':', error);
+			y = dateNum(2, 23);
+			dateDelim(':');
 
-			m = dateNum(2, 59, error);
-			dateDelim(':', error);
+			m = dateNum(2, 59);
+			dateDelim(':');
 
-			d = dateNum(2, 59, error);
+			d = dateNum(2, 59);
 			c = index == in.length() ? 0 : in.charAt(index++);
 
 			ts += y * 3600000L + m * 60000L + d * 1000L;
 
 			if (c == '.') {
-				ts += dateNum(3, 0, error);
+				ts += dateNum(3, 0);
 				c = index == in.length() ? 0 : in.charAt(index++);
 			}
 
@@ -895,29 +894,32 @@ public class Tokenizer {
 
 			y = c == '+' ? -60000 : 60000;
 
-			m = dateNum(2, 23, error);
-			dateDelim(':', error);
+			m = dateNum(2, 23);
+			dateDelim(':');
 
-			d = dateNum(2, 59, error);
+			d = dateNum(2, 59);
 
 			ts += (m * 60L + d) * y;
 			return timeWord(RFCDATE_DATETIME_TZ, i, ts, in.subSequence(i, index).toString());
 		} catch (OperationDone e) {
-			if (must) throw err(error.get(), index);
+			var error = IsoParserError.get();
+			IsoParserError.remove();
+
+			if (must) throw err(error, index);
 
 			index = i;
 			return null;
 		}
 	}
-	private void dateDelim(char c, AtomicReference<String> err) {
+	private void dateDelim(char c) {
 		int i = index;
 		if (input.charAt(i++) == c) index = i;
 		else {
-			err.set("错误的分隔符,期待"+c);
+			IsoParserError.set("错误的分隔符,期待"+c);
 			throw OperationDone.INSTANCE;
 		}
 	}
-	private int dateNum(int maxLen, int max, AtomicReference<String> err) {
+	private int dateNum(int maxLen, int max) {
 		int i = index;
 		CharSequence in = input;
 
@@ -930,13 +932,13 @@ public class Tokenizer {
 		index = i;
 
 		if (i-prevI <= 0 || i-prevI > maxLen) {
-			err.set("错误的时间范围");
+			IsoParserError.set("错误的时间范围");
 			throw OperationDone.INSTANCE;
 		}
 
 		int num = (int) parseNumber(in, prevI, i, 0);
 		if (max > 0 && num > max) {
-			err.set("错误的时间范围");
+			IsoParserError.set("错误的时间范围");
 			throw OperationDone.INSTANCE;
 		}
 

@@ -8,7 +8,7 @@ import java.util.function.Supplier;
  * @author Roj234
  * @since 2022/11/11 0011 13:28
  */
-public class ECGroup extends ECParameterSpec implements Supplier<KeyAgreement> {
+public class ECGroup extends ECParameterSpec implements Supplier<KeyExchange> {
 	public static final ECGroup secp256r1, secp384r1, secp521r1;
 	public static final ECGroup bp256r1,   bp384r1,   bp512r1;
 	private static final boolean P = true, B = false;
@@ -26,7 +26,7 @@ public class ECGroup extends ECParameterSpec implements Supplier<KeyAgreement> {
 	public String getObjectId() { return oid; }
 	public String toString() { return name+" ("+oid+")"; }
 
-	public KeyAgreement get() { return new ECDHE(this); }
+	public KeyExchange get() { return new ECDH(this); }
 
 	public static ECGroup fpCurve(String name, String oid, boolean finite,
 								  String sfield, String a, String b,

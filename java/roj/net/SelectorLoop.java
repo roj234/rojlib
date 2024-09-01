@@ -113,7 +113,7 @@ public class SelectorLoop implements Shutdownable {
 					boolean closedOn;
 					try {
 						closedOn = t.isClosedOn(key);
-					} catch (Exception e) {
+					} catch (Throwable e) {
 						closedOn = uncaughtException(t, "T_IS_CLOSED_ON", e);
 					}
 
@@ -124,7 +124,7 @@ public class SelectorLoop implements Shutdownable {
 
 					try {
 						t.selected(key.readyOps());
-					} catch (Exception e) {
+					} catch (Throwable e) {
 						if (uncaughtException(t, "T_SELECTED", e)) {
 							safeClose(att, key);
 						}
@@ -205,14 +205,14 @@ public class SelectorLoop implements Shutdownable {
 			Att att = (Att) key.attachment();
 			try {
 				att.s.tick(1);
-			} catch (Exception e) {
+			} catch (Throwable e) {
 				if (uncaughtException(att.s, "T_TICK", e)) {
 					safeClose(att, key);
 				}
 			}
 		}
 
-		private boolean uncaughtException(Selectable t, String stage, Exception e) {
+		private boolean uncaughtException(Selectable t, String stage, Throwable e) {
 			try {
 				Boolean result = t.exceptionCaught(stage, e);
 				if (result != null) return result;

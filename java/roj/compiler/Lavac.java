@@ -10,7 +10,7 @@ import roj.compiler.context.GlobalContext;
 import roj.compiler.context.LibraryZipFile;
 import roj.compiler.context.LocalContext;
 import roj.compiler.diagnostic.Diagnostic;
-import roj.compiler.diagnostic.SimpleDiagnosticListener;
+import roj.compiler.diagnostic.TextDiagnosticReporter;
 import roj.compiler.plugins.GlobalContextApi;
 import roj.compiler.plugins.constant.Constant;
 import roj.io.IOUtil;
@@ -35,7 +35,7 @@ public final class Lavac {
 	public static String getCompileTime() {return ACalendar.toLocalTimeString(System.currentTimeMillis());}
 	public static String getCurrentTime() {return ACalendar.toLocalTimeString(System.currentTimeMillis());}
 
-	public static final String VERSION = "0.10.2[RC] (compiled on "+getCompileTime()+")";
+	public static final String VERSION = "0.11.0[RC] (compiled on "+getCompileTime()+")";
 
 	int debugOps = 10;
 	GlobalContext ctx;
@@ -148,12 +148,12 @@ public final class Lavac {
 
 		File dst = bin == null ? new File("Lava.jar") : new File(bin);
 
-		SimpleDiagnosticListener diagnostic = new SimpleDiagnosticListener(maxError, maxWarn, 0);
+		var diagnostic = new TextDiagnosticReporter(maxError, maxWarn, 0);
 
 		boolean ok = compiler.compile(dst, diagnostic);
-		System.out.println("success="+ok);
 
-		diagnostic.conclusion();
+		diagnostic.printSum();
+		System.out.println("编译状况="+ok);
 
 		try {
 			var ucl = new URLClassLoader(new URL[] {dst.toURL()});
@@ -212,6 +212,7 @@ public final class Lavac {
 			}
 
 			zfw.setComment("Lavac v"+VERSION);
+			done = true;
 		} catch (Exception e) {
 			e.printStackTrace();
 		}

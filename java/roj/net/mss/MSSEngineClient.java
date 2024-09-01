@@ -4,7 +4,7 @@ import roj.collect.CharMap;
 import roj.collect.IntMap;
 import roj.concurrent.OperationDone;
 import roj.crypt.HMAC;
-import roj.crypt.KeyAgreement;
+import roj.crypt.KeyExchange;
 import roj.io.IOUtil;
 import roj.util.ArrayUtil;
 import roj.util.ByteList;
@@ -64,10 +64,22 @@ public class MSSEngineClient extends MSSEngine {
 		return this;
 	}
 
+	@Override
+	protected void processExtensions(CharMap<DynByteBuf> extIn, CharMap<DynByteBuf> extOut, int stage) {
+		if (stage == 0) {
+			if (serverName != null) {
+				extOut.put(Extension.server_name, new ByteList().putUTFData(serverName));
+			}
+			if (alpn != null) {
+				extOut.put(Extension.application_layer_protocol, new ByteList().putUTFData(alpn));
+			}
+		}
+	}
+
 	// endregion
 	// region Solid Handshake Process
 
-	private KeyAgreement keyExch;
+	private KeyExchange keyExch;
 
 	@Override
 	public final boolean isClientMode() { return true; }
@@ -101,18 +113,17 @@ public class MSSEngineClient extends MSSEngine {
 				// opaque[0..2^16-1] key_exchange_data;
 				// u4 support_key_bits
 				// extension[]
-				var ob = IOUtil.getSharedByteBuf().putInt(H_MAGIC).put(PROTOCOL_VERSION);
 				sharedKey = new byte[64];
 				random.nextBytes(sharedKey);
-				// should <= 1024
-				ob.put(sharedKey,0,32).putShort(cipherSuites.length);
-				for (CipherSuite suite : cipherSuites) {
-					ob.putShort(suite.id);
-				}
 
-				KeyAgreement ke = keyExch==null ? keyExch = getKeyExchange(-1) : keyExch;
+				var ob = IOUtil.getSharedByteBuf()
+						  .put(PROTOCOL_VERSION)
+						  .put(sharedKey,0,32).put(cipherSuites.length);
+				for (var suite : cipherSuites) ob.putShort(suite.id);
+
+				var ke = keyExch==null ? keyExch = getKeyExchange(-1) : keyExch;
 				ke.init(random);
-				ke.writePublic(ob.put(CipherSuite.getKeyAgreementId(ke.getAlgorithm())).putShort(ke.length()));
+				ke.writePublic(ob.put(CipherSuite.getKeyExchangeId(ke.getAlgorithm())).putShort(ke.length()));
 
 				CharMap<DynByteBuf> ext = new CharMap<>();
 				if (session != null) {
@@ -122,17 +133,9 @@ public class MSSEngineClient extends MSSEngine {
 					ext.put(Extension.session, new ByteList(session.id));
 				}
 				if (psc != null) {
-					DynByteBuf tmp = heapBuffer(psc.size() << 2);
-					for (IntMap.Entry<MSSPublicKey> entry : psc.selfEntrySet()) {
-						tmp.putInt(entry.getIntKey());
-					}
+					var tmp = heapBuffer(psc.size() << 2);
+					for (var entry : psc.selfEntrySet()) tmp.putInt(entry.getIntKey());
 					ext.put(Extension.pre_shared_certificate, tmp);
-				}
-				if (serverName != null) {
-					ext.put(Extension.server_name, new ByteList().putUTFData(serverName));
-				}
-				if (alpn != null) {
-					ext.put(Extension.application_layer_protocol, new ByteList().putUTFData(alpn));
 				}
 				processExtensions(null, ext, 0);
 				Extension.write(ext, ob.putInt(getSupportCertificateType()));
@@ -183,7 +186,7 @@ public class MSSEngineClient extends MSSEngine {
 	static final byte[] DOWNGRADE_12 = IOUtil.SharedCoder.get().decodeHex("444F574E47524401");
 	static final byte[] DOWNGRADE_11 = IOUtil.SharedCoder.get().decodeHex("444F574E47524400");
 	byte[] serverCookie;
-	public final int handshakeSSL(DynByteBuf out, DynByteBuf in) throws MSSException {
+	public final int handshakeTLS13(DynByteBuf out, DynByteBuf in) throws MSSException {
 		// to be filled
 
 		if (stage == HS_DONE) return HS_OK;
@@ -340,6 +343,7 @@ public class MSSEngineClient extends MSSEngine {
 	private int handleServerHello(DynByteBuf tx, DynByteBuf rx) throws MSSException, GeneralSecurityException {
 		int inBegin = rx.rIndex;
 
+		if (rx.readableBytes() <= 38) return error(ILLEGAL_PACKET, null);
 		if (rx.readUnsignedByte() != PROTOCOL_VERSION) return error(VERSION_MISMATCH, "");
 		rx.readFully(sharedKey,32,32);
 
@@ -348,7 +352,7 @@ public class MSSEngineClient extends MSSEngine {
 			if ((flag & HAS_HELLO_RETRY) != 0) return error(ILLEGAL_PARAM, "hello_retry");
 			flag |= HAS_HELLO_RETRY;
 
-			if (rx.readUnsignedShort() != 4) return error(ILLEGAL_PACKET, null);
+			if (rx.readableBytes() != 4) return error(ILLEGAL_PACKET, null);
 			int ke_avl = getSupportedKeyExchanges() & rx.readInt();
 			if (ke_avl == 0) return error(NEGOTIATION_FAILED, "key_exchange");
 
@@ -373,11 +377,11 @@ public class MSSEngineClient extends MSSEngine {
 		CharMap<DynByteBuf> extIn = Extension.read(rx);
 		CharMap<DynByteBuf> extOut = new CharMap<>();
 
-		if (extIn.containsKey(Extension.certificate_request)) {
-			// noinspection all
-			int formats = extIn.remove(Extension.certificate_request).readInt();
+		var tmpBuf = extIn.remove(Extension.certificate_request);
+		if (tmpBuf != null) {
+			int formats = tmpBuf.readInt();
 
-			MSSKeyPair key = getCertificate(extIn, formats); // supported
+			var key = getCertificate(extIn, formats); // supported
 			if (key == null) return error(NEGOTIATION_FAILED, "client_certificate");
 
 			byte[] sign = CipherSuite.getKeyFormat(key.format()).sign(key, random, sharedKey);
@@ -386,9 +390,8 @@ public class MSSEngineClient extends MSSEngine {
 		}
 
 		MSSPublicKey key;
-		if (extIn.containsKey(Extension.pre_shared_certificate)) {
-			// noinspection all
-			int id = extIn.remove(Extension.pre_shared_certificate).readUnsignedShort();
+		if ((tmpBuf = extIn.remove(Extension.pre_shared_certificate)) != null) {
+			int id = tmpBuf.readUnsignedShort();
 			if (psc == null || !psc.containsKey(id)) return error(ILLEGAL_PARAM, "pre_shared_certificate");
 			key = psc.get(id);
 			if (extIn.containsKey(Extension.certificate)) {
@@ -406,7 +409,7 @@ public class MSSEngineClient extends MSSEngine {
 		}
 		processExtensions(extIn, extOut, 2);
 
-		HMAC sign = new HMAC(suite.sign.get());
+		var sign = new HMAC(suite.sign.get());
 		// signer data:
 		// key=certificate
 		// empty byte 32
@@ -430,16 +433,15 @@ public class MSSEngineClient extends MSSEngine {
 			return error(ILLEGAL_PARAM, "invalid signature");
 		}
 
-		DynByteBuf sessid = extIn.remove(Extension.session);
-		if (session != null && sessid != null) {
-			if (!sessid.equals(new ByteList(session.key)))
-				session = new MSSSession(sessid.toByteArray());
+		if (session != null && (tmpBuf = extIn.remove(Extension.session)) != null) {
+			if (!tmpBuf.equals(new ByteList(session.key)))
+				session = new MSSSession(tmpBuf.toByteArray());
 			session.key = deriveKey("session", 64);
 			session.suite = suite;
 		}
 
 		if (!extOut.isEmpty()) {
-			ByteList ob = IOUtil.getSharedByteBuf();
+			var ob = IOUtil.getSharedByteBuf();
 			Extension.write(extOut, ob);
 
 			encoder.cryptInline(ob, ob.readableBytes());

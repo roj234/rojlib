@@ -47,7 +47,7 @@ public final class QzAES extends QZCoder {
     public OutputStream encode(OutputStream out) throws IOException {
         if (lastKey == null) throw new IllegalArgumentException("缺少密码");
 
-        FeedbackCipher cip = new FeedbackCipher(new AES(dec, false), FeedbackCipher.MODE_CBC);
+        var cip = new FeedbackCipher(dec.copyWith(true), FeedbackCipher.MODE_CBC);
         try {
             cip.init(Cipher.ENCRYPT_MODE, null, new IvParameterSpecNC(iv), null);
         } catch (Exception e) {
@@ -59,7 +59,7 @@ public final class QzAES extends QZCoder {
         if (key == null) throw new IllegalArgumentException("缺少密码");
         init(key);
 
-        FeedbackCipher cip = new FeedbackCipher(dec, FeedbackCipher.MODE_CBC);
+        var cip = new FeedbackCipher(dec, FeedbackCipher.MODE_CBC);
         try {
             cip.init(Cipher.DECRYPT_MODE, null, new IvParameterSpecNC(iv), null);
         } catch (Exception e) {
@@ -69,7 +69,7 @@ public final class QzAES extends QZCoder {
     }
 
     private byte[] lastKey;
-    private final AES dec = new AES();
+    private final RCipherSpi dec = ILCrypto.Aes();
     private void init(byte[] key) {
         if (Arrays.equals(lastKey, key)) return;
         lastKey = key;

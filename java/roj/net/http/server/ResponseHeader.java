@@ -36,6 +36,8 @@ public interface ResponseHeader {
 	 * 异步调用返回响应.
 	 * 未调用enableAsyncResponse: 和return resp效果相同
 	 * 否则在获取锁后立即发送响应
+	 *
+	 * 或者在header阶段全双工启动，一边接受post数据一边发送响应
 	 */
 	void body(Response resp) throws IOException;
 

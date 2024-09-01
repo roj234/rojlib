@@ -41,6 +41,7 @@ import java.util.Collection;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Pattern;
 
@@ -85,7 +86,7 @@ public class LazyBox extends Plugin {
 		registerCommand(literal("zipupdate").then(argument("path", Argument.file()).executes(this::zipUpdate)));
 		registerCommand(literal("7zverify").then(argument("path", Argument.file()).executes(this::qzVerify)));
 		registerCommand(literal("7zdiff").then(argument("file1", Argument.file()).then(argument("file2", Argument.file()).executes(this::qzDiff))));
-		registerCommand(literal("archive_del_folder").then(argument("file", Argument.file()).executes(ctx -> {
+		registerCommand(literal("zipdelfolder").then(argument("file", Argument.file()).executes(ctx -> {
 			try (var za = new ZipArchive(ctx.argument("file", File.class))) {
 				for (ZEntry ze : za.entries()) {
 					String name = ze.getName();
@@ -340,7 +341,7 @@ public class LazyBox extends Plugin {
 				bar.addMax(entry.getSize());
 			}
 
-			archive.parallelDecompress(pool, (entry, in) -> {
+			var r1 = archive.parallelDecompress(pool, (entry, in) -> {
 				byte[] arr = ArrayCache.getByteArray(40960, false);
 				try {
 					while (true) {
@@ -360,7 +361,7 @@ public class LazyBox extends Plugin {
 				}
 			}, null);
 
-			pool.awaitFinish();
+			QZArchive.awaitParallelComplete(r1);
 		} catch (Exception e) {
 			failed.set(e);
 		}
@@ -435,20 +436,23 @@ public class LazyBox extends Plugin {
 					in2_should_copy.remove(entry);
 					out.beginEntry(QZEntry.ofNoAttribute("renamed/"+oldEntry.getName()));
 					out.write(entry.getName().getBytes(StandardCharsets.UTF_8));
-					out.closeEntry();
 				} else {
 					in1_should_copy.put(oldEntry, "del/"+oldEntry.getName());
 				}
 			}
 
+			out.closeWordBlock();
+
 			EasyProgressBar bar = new EasyProgressBar("复制块");
 			bar.setUnit("Block");
 			bar.addMax(in1_should_copy.size()+in2_should_copy.size());
 
-			copy(in1, in1_should_copy, out, bar);
-			copy(in2, in2_should_copy, out, bar);
+			var r1 = copy(in1, in1_should_copy, out, bar);
+			var r2 = copy(in2, in2_should_copy, out, bar);
 
-			pool.awaitFinish();
+			QZArchive.awaitParallelComplete(r1);
+			QZArchive.awaitParallelComplete(r2);
+
 			in1.close();
 			in2.close();
 
@@ -459,8 +463,8 @@ public class LazyBox extends Plugin {
 		})));
 		c1.register(literal("exit").executes(c -> Terminal.setConsole(Panger.console())));
 	}
-	private static void copy(QZArchive arc, MyHashMap<QZEntry, String> should_copy, QZFileWriter out, EasyProgressBar bar) {
-		arc.parallelDecompress(pool, (entry, in) -> {
+	private static AtomicInteger copy(QZArchive arc, MyHashMap<QZEntry, String> should_copy, QZFileWriter out, EasyProgressBar bar) {
+		return arc.parallelDecompress(pool, (entry, in) -> {
 			String prefix = should_copy.get(entry);
 			if (prefix == null) return;
 
@@ -478,7 +482,7 @@ public class LazyBox extends Plugin {
 		String url = ctx.argument("网址", String.class);
 		File saveTo = ctx.argument("保存到", File.class);
 
-		// TODO 在Lavac里设计一个操作符避免这种傻逼操作, 比如JavaScript的 ??
+		// Solved, you can use ?? next time
 		int threads = ctx.argument("线程数", Integer.class) != null ? ctx.argument("线程数", Integer.class) : Math.min(Runtime.getRuntime().availableProcessors() << 2, 64);
 
 		DownloadTask.useETag = false;

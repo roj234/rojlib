@@ -14,7 +14,7 @@ import roj.concurrent.timing.ScheduleTask;
 import roj.concurrent.timing.Scheduler;
 import roj.config.ConfigMaster;
 import roj.config.auto.Serializer;
-import roj.config.auto.Serializers;
+import roj.config.auto.SerializerFactory;
 import roj.config.serial.CVisitor;
 import roj.config.serial.ToYaml;
 import roj.io.FastFailException;
@@ -306,7 +306,7 @@ public class DiffFinder extends JFrame {
 
 		private volatile boolean terminateFlag;
 
-		private final Serializer<DiffResult> writer = Serializers.SAFE.serializer(DiffResult.class);
+		private final Serializer<DiffResult> writer = SerializerFactory.SAFE.serializer(DiffResult.class);
 		private CVisitor result;
 
 		final void initComparator(File base, FileMeta[] metas, int preWindow, TaskPool POOL) {

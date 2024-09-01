@@ -9,8 +9,7 @@ import roj.config.ConfigMaster;
 import roj.config.Tokenizer;
 import roj.config.data.CMap;
 import roj.config.serial.ToJson;
-import roj.crypt.HMAC;
-import roj.crypt.SM3;
+import roj.crypt.ILCrypto;
 import roj.io.IOUtil;
 import roj.net.ChannelCtx;
 import roj.net.ServerLaunch;
@@ -330,7 +329,7 @@ public class Server implements Router, Context {
 	private static MyHashMap<String, Object> initLocal() {
 		var L = HttpCache.getInstance().ctx;
 		if (!L.containsKey("LST")) {
-			L.put("HASH", new HMAC(new SM3()));
+			L.put("HASH", ILCrypto.HMAC(ILCrypto.SM3()));
 			L.put("IA", new int[1]);
 			L.put("LST", new SimpleList<>());
 		}

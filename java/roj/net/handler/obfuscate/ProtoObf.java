@@ -1,6 +1,6 @@
 package roj.net.handler.obfuscate;
 
-import roj.crypt.ChaCha_Poly1305;
+import roj.crypt.ILCrypto;
 import roj.crypt.MT19937;
 import roj.crypt.RCipherSpi;
 import roj.io.IOUtil;
@@ -33,8 +33,8 @@ public class ProtoObf extends LengthFake {
 	}
 
 	private final RCipherSpi
-		c_in = ChaCha_Poly1305.XChaCha1305(),
-		c_out = ChaCha_Poly1305.XChaCha1305();
+		c_in = ILCrypto.XChaCha1305(),
+		c_out = ILCrypto.XChaCha1305();
 
 	private final ByteList c_len = new ByteList(5);
 	private boolean inited, fakeEnable, fakeSending;

@@ -269,6 +269,7 @@ symbol.error.nonStatic.type=[Symbol]'%1'不是静态类，无法在静态上下�
 symbol.error.nonStatic.symbol=[Symbol]无法从静态上下文中引用非静态 %3 '%1.%2'
 symbol.error.field.writeAfterWrite=[Symbol]字段 '%1.%2' 已被赋值
 symbol.error.field.writeFinal=[Symbol]修改最终字段 '%1.%2'
+symbol.error.field.notReadable=[Symbol]字段 '%1.%2' 不可读（write-only）
 symbol.error.field.readBeforeWrite=[Symbol]非法前向引用 '%1.%2'
 symbol.warn.static_on_half=[Symbol]静态%3应由类型名称'%1.%2'而不是表达式限定
 encloseRef.nds=[EncloseRef] %2 不是 %1 的超类或超接口
@@ -295,6 +296,7 @@ multiReturn.incompatible=[MR]只有多返回值方法才能使用多返回值语
 multiReturn.russianToy=[MR]此处禁止套娃！！！
 anonymousClass.inferFailed=匿名类的自动泛型推断无法在该状态下使用
 anonymousClass.interfaceArg=匿名类实现接口; 不能有参数
+nae.unresolvable=解析失败
 
 # lambda表达式
 lambda.untyped=[Lambda]未知的目标类型

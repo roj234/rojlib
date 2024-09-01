@@ -15,6 +15,7 @@ import roj.io.source.Source;
 import roj.reflect.ReflectionUtils;
 import roj.util.ArrayCache;
 import roj.util.ByteList;
+import roj.util.DynByteBuf;
 
 import java.io.EOFException;
 import java.io.File;
@@ -486,14 +487,60 @@ public class ZipFile implements ArchiveFile {
 		cDirOffset = buf.readLongLE(36);
 	}
 
-	private void initDataOffset(Source r, ZEntry entry) throws IOException {
+	private void verifyEntry(Source r, ZEntry entry) throws IOException {
 		if ((entry.mzFlag & ZEntry.MZ_ERROR) != 0 && (flags & FLAG_VERIFY) != 0) throw new ZipException(entry+"报告自身已损坏");
 		if ((entry.mzFlag & ZEntry.MZ_BACKWARD) == 0) return;
 
-		r.seek(entry.startPos() + 28);
+		int extraLen;
+		if ((flags & FLAG_VERIFY) == 0) {
+			r.seek(entry.startPos() + 28);
 
-		int extraLen = r.read() | (r.read()<<8);
-		if (extraLen < 0) throw new EOFException();
+			extraLen = r.read() | (r.read()<<8);
+			if (extraLen < 0) throw new EOFException();
+		} else {
+			r.seek(entry.startPos() + 4);
+			// 2024/10/02 针对关键参数做验证 防止快速模式和正常模式解压的数据不统一
+			var tmp = new byte[26];
+			r.readFully(tmp);
+			var buf = DynByteBuf.wrap(tmp);
+
+			var prevCSize = entry.cSize;
+			var prevUSize = entry.uSize;
+			entry.cSize = buf.readUIntLE(14);
+			entry.uSize = buf.readUIntLE(18);
+
+			extraLen = buf.readUShortLE(24);
+
+			var prev = entry.nameBytes;
+			var nameLen = buf.readUShortLE(22);
+			compareSuccess: {
+				compareFailed:
+				if (nameLen == prev.length) {
+					if (nameLen > tmp.length) tmp = new byte[nameLen];
+					r.readFully(tmp, 0, nameLen);
+
+					for (int i = 0; i < prev.length; i++) {
+						if (prev[i] != tmp[i]) break compareFailed;
+					}
+
+					break compareSuccess;
+				}
+
+				throw new ZipException("ZEntry的名称，偏移和长度必须相同[可能是漏洞利用]");
+			}
+
+			var prevRealName = entry.name;
+			long prevOffset = r.position();
+
+			if (extraLen > 0) {
+				if (extraLen > tmp.length) tmp = new byte[extraLen];
+				r.readFully(tmp, 0, extraLen);
+				entry.readLOCExtra(this, DynByteBuf.wrap(tmp, 0, extraLen));
+			}
+
+			if (!prevRealName.equals(entry.name) || prevOffset != entry.offset || entry.cSize != prevCSize || entry.uSize != prevUSize)
+				throw new ZipException("ZEntry的名称，偏移和长度必须相同[可能是漏洞利用]");
+		}
 
 		entry.mzFlag ^= ZEntry.MZ_BACKWARD;
 		entry.extraLenOfLOC = (char) extraLen;
@@ -518,7 +565,7 @@ public class ZipFile implements ArchiveFile {
 		Source src = (Source) u.getAndSetObject(this, FPREAD_OFFSET, null);
 		if (src == null) src = r.threadSafeCopy();
 
-		initDataOffset(src, entry);
+		verifyEntry(src, entry);
 		src.seek(entry.offset);
 		return new SourceInputStream.Shared(src, entry.cSize, this, FPREAD_OFFSET);
 	}

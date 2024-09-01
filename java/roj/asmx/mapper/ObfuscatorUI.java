@@ -23,7 +23,6 @@ import roj.config.ConfigMaster;
 import roj.config.ParseException;
 import roj.config.auto.Optional;
 import roj.config.auto.SerializerFactory;
-import roj.config.auto.Serializers;
 import roj.io.IOUtil;
 import roj.text.CharList;
 import roj.text.LineReader;
@@ -516,8 +515,7 @@ public class ObfuscatorUI extends JFrame {
 		String lib;
 		ExclusionEntry[] exclusions;
 	}
-	private static final SerializerFactory SF = SerializerFactory.getInstance(SerializerFactory.GENERATE | SerializerFactory.ALLOW_DYNAMIC | SerializerFactory.NO_CONSTRUCTOR);
-	static { Serializers.serializeCharArrayToString(SF); }
+	private static final SerializerFactory SF = SerializerFactory.getInstance(SerializerFactory.GENERATE | SerializerFactory.ALLOW_DYNAMIC | SerializerFactory.NO_CONSTRUCTOR).serializeCharArrayToString();
 	private void saveYml(File file) throws IOException {
 		SaveTo o = new SaveTo();
 		o.flag = uiFlag.getNumber().intValue();

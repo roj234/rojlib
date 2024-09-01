@@ -32,11 +32,13 @@ public interface TaskHandler {
 	/**
 	 * 等待当前的任务执行完成，不论是terminate还是正常运行
 	 */
+	@Deprecated
 	void awaitTermination() throws InterruptedException;
 	/**
 	 * 等待当前的任务执行完成，不论是terminate还是正常运行
 	 * 但是不抛出异常
 	 */
+	@Deprecated
 	default boolean awaitFinish() {
 		try {
 			awaitTermination();

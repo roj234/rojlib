@@ -96,7 +96,7 @@ public final class CompileUnit extends ConstantData {
 	private final CompileUnit _parent;
 	public int _children;
 
-	private LocalContext ctx;
+	LocalContext ctx;
 
 	public void setMinimumBinaryCompatibility(int level) {
 		this.version = Math.max(JavaVersion(level), version);
@@ -217,7 +217,7 @@ public final class CompileUnit extends ConstantData {
 	// endregion
 	// region 阶段1非公共部分: package, import, package-info, module-info
 	public boolean S1_Struct() throws ParseException {
-		var ctx = this.ctx = LocalContext.get();
+		var ctx = LocalContext.get();
 		ctx.setClass(this);
 
 		var wr = ctx.lexer;
@@ -477,7 +477,7 @@ public final class CompileUnit extends ConstantData {
 		w = wr.except(LITERAL, "cu.name");
 		classIdx = w.pos()+1;
 
-		if (ctx.classes.isSpecEnabled(CompilerSpec.VERIFY_FILENAME) && (acc&ACC_PUBLIC) != 0 && !IOUtil.fileName(source).equals(w.val())) {
+		if (ctx.classes.isSpecEnabled(CompilerSpec.VERIFY_FILENAME) && (acc&ACC_PUBLIC) != 0 && _parent == this && !IOUtil.fileName(source).equals(w.val())) {
 			ctx.report(Kind.SEVERE_WARNING, "cu.filename", source);
 		}
 
@@ -1424,7 +1424,7 @@ public final class CompileUnit extends ConstantData {
 	// endregion
 	// region 阶段2 解析并验证类自身的引用
 	public void S2_ResolveSelf() {
-		LocalContext ctx = this.ctx = LocalContext.get();
+		var ctx = LocalContext.get();
 		ctx.setClass(this);
 
 		// init TypeResolver
@@ -1558,7 +1558,7 @@ public final class CompileUnit extends ConstantData {
 	}
 
 	public void S2_ResolveRef() {
-		LocalContext ctx = this.ctx = LocalContext.get();
+		var ctx = LocalContext.get();
 		ctx.setClass(this);
 
 		ctx.lexer.index = classIdx;
@@ -1818,7 +1818,7 @@ public final class CompileUnit extends ConstantData {
 		currentNode = sign != null ? sign : signature;
 	}
 	public void S3_Annotation() throws ParseException {
-		LocalContext ctx = this.ctx = LocalContext.get();
+		var ctx = LocalContext.get();
 		ctx.setClass(this);
 
 		// region 方法覆盖检测
@@ -2225,7 +2225,7 @@ public final class CompileUnit extends ConstantData {
 	public Object getStage4Lock() {return methods;}
 
 	public void S4_Code() throws ParseException {
-		LocalContext ctx = this.ctx = LocalContext.get();
+		var ctx = LocalContext.get();
 		ctx.setClass(this);
 
 		currentNode = signature;

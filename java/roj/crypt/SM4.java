@@ -17,11 +17,26 @@ import static java.lang.Integer.rotateLeft;
 /**
  * 国密SM4 - 对称加解密
  */
-public final class SM4 extends RCipherSpi {
-	private final int[] sKey = new int[32];
+final class SM4 extends RCipherSpi {
+	private int[] sKey;
 	private final int[] temp = new int[4];
+	private boolean encrypt;
 
-	public SM4() {}
+	SM4() {}
+	private SM4(int[] sKey, boolean encrypt) {
+		this.sKey = sKey;
+		this.encrypt = encrypt;
+	}
+
+	@Override
+	public RCipherSpi copyWith(boolean isEncryptMode) {
+		var myKey = sKey;
+		if (encrypt != isEncryptMode) {
+			myKey = myKey.clone();
+			Conv.reverse(myKey, 0, 32);
+		}
+		return new SM4(sKey, isEncryptMode);
+	}
 
 	@Override
 	public void init(int mode, byte[] key, AlgorithmParameterSpec par, SecureRandom random) throws InvalidAlgorithmParameterException, InvalidKeyException {
@@ -30,6 +45,8 @@ public final class SM4 extends RCipherSpi {
 		int i = 0;
 		ByteList bb = IOUtil.SharedCoder.get().wrap(key);
 		while (bb.isReadable()) temp[i] = bb.readInt() ^ FK[i++];
+
+		var sKey = this.sKey = new int[32];
 
 		sKey[0] = temp[0] ^ sm4_iRK(temp[1] ^ temp[2] ^ temp[3] ^ CK[0]);
 		sKey[1] = temp[1] ^ sm4_iRK(temp[2] ^ temp[3] ^ sKey[0] ^ CK[1]);
@@ -40,18 +57,16 @@ public final class SM4 extends RCipherSpi {
 			sKey[i] = sKey[i-4] ^ sm4_iRK(sKey[i-3] ^ sKey[i-2] ^ sKey[i-1] ^ CK[i]);
 		}
 
-		if (mode == Cipher.ENCRYPT_MODE) Conv.reverse(sKey, 0, 32);
+		encrypt = mode != Cipher.DECRYPT_MODE;
+		if (encrypt) Conv.reverse(sKey, 0, 32);
 	}
 
-	@Override
-	protected boolean isBareBlockCipher() { return true; }
-	@Override
-	public int engineGetBlockSize() { return 16; }
+	@Override protected boolean isBareBlockCipher() { return true; }
+	@Override public int engineGetBlockSize() { return 16; }
 
 	@Override
 	public void crypt(DynByteBuf in, DynByteBuf out) throws ShortBufferException {
 		if (out.writableBytes() < in.readableBytes()) throw new ShortBufferException();
-
 		while (in.readableBytes() >= 16) cryptOneBlock(in, out);
 	}
 

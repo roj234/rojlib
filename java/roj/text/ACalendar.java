@@ -266,8 +266,9 @@ public final class ACalendar {
 		return false;
 	}
 
+	public static final String ISO_Format_Millis = "Y-m-dTH:i:s.xP", ISO_Format_Sec = "Y-m-dTH:i:sP";
 	public String toISOString(long millis) { return toISOString(new CharList(), millis).toStringAndFree(); }
-	public CharList toISOString(CharList sb, long millis) { return format(millis%1000 != 0 ? "Y-m-dTH:i:s.xP" : "Y-m-dTH:i:sP", millis, sb); }
+	public CharList toISOString(CharList sb, long millis) { return format(millis%1000 != 0 ? ISO_Format_Millis : /*millis%86400000 == 0 ? "Y-m-d" : */ISO_Format_Sec, millis, sb); }
 
 	public String toRFCString(long millis) { return toRFCString(new CharList(),millis).toStringAndFree(); }
 	public CharList toRFCString(CharList sb, long millis) { return format("W, d M Y H:i:s O", millis, sb); }

@@ -18,7 +18,7 @@ import java.util.Arrays;
  * @author Roj234
  * @since 2022/11/12 0012 15:34
  */
-public class AES extends RCipherSpi {
+class AES extends RCipherSpi {
 	public static final int AES_BLOCK_SIZE = 16;
 
 	private byte[] lastKey;
@@ -26,21 +26,23 @@ public class AES extends RCipherSpi {
 	int[] encrypt_key, decrypt_key;
 	int limit;
 
-	boolean decrypt;
+	boolean encrypt;
 
-	public AES() {}
-	public AES(AES aes, boolean decrypt) {
+	AES() {}
+	private AES(AES aes, boolean encrypt) {
 		this.encrypt_key = aes.encrypt_key;
 		this.decrypt_key = aes.decrypt_key;
 		this.limit = aes.limit;
-		this.decrypt = decrypt;
+		this.encrypt = encrypt;
 	}
+
+	@Override public RCipherSpi copyWith(boolean isEncryptMode) {return new AES(this, isEncryptMode);}
 
 	@Override
 	public void init(int mode, byte[] key, AlgorithmParameterSpec par, SecureRandom random) throws InvalidAlgorithmParameterException, InvalidKeyException {
 		if (par != null) throw new InvalidAlgorithmParameterException();
 
-		this.decrypt = mode == Cipher.DECRYPT_MODE;
+		this.encrypt = mode != Cipher.DECRYPT_MODE;
 		if (Arrays.equals(lastKey, key)) return;
 
 		switch (key.length) {
@@ -119,10 +121,8 @@ public class AES extends RCipherSpi {
 		lastKey = key.clone();
 	}
 
-	@Override
-	protected boolean isBareBlockCipher() { return true; }
-	@Override
-	public int engineGetBlockSize() { return 16; }
+	@Override protected boolean isBareBlockCipher() { return true; }
+	@Override public int engineGetBlockSize() { return 16; }
 
 	@Override
 	public void crypt(DynByteBuf in, DynByteBuf out) throws ShortBufferException {
@@ -132,8 +132,8 @@ public class AES extends RCipherSpi {
 	}
 	@Override
 	public void cryptOneBlock(DynByteBuf in, DynByteBuf out) {
-		if (decrypt) aes_decrypt(decrypt_key, limit, in, out);
-		else aes_encrypt(encrypt_key, limit, in, out);
+		if (encrypt) aes_encrypt(encrypt_key, limit, in, out);
+		else aes_decrypt(decrypt_key, limit, in, out);
 	}
 	@Override
 	protected void cryptFinal1(DynByteBuf in, DynByteBuf out) throws ShortBufferException, BadPaddingException {

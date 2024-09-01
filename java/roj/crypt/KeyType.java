@@ -22,7 +22,7 @@ public class KeyType {
 
 	public static KeyType getInstance(String alg) {
 		try {
-			ILProvider.register();
+			ILCrypto.register();
 			return new KeyType(alg);
 		} catch (NoSuchAlgorithmException e) {
 			return Helpers.maybeNull();
@@ -74,7 +74,7 @@ public class KeyType {
 			cos.write(iv);
 
 			pass = HMAC.Sha256ExpandKey(pass, null, 32);
-			FeedbackCipher c = new FeedbackCipher(new AES(), FeedbackCipher.MODE_CTR);
+			FeedbackCipher c = new FeedbackCipher(ILCrypto.Aes(), FeedbackCipher.MODE_CTR);
 
 			c.init(RCipherSpi.ENCRYPT_MODE, pass, new IvParameterSpecNC(iv), null);
 			cos = new CipherOutputStream(cos, c);
@@ -109,7 +109,7 @@ public class KeyType {
 			IOUtil.readFully(cis, iv);
 
 			pass = HMAC.Sha256ExpandKey(pass, null, 32);
-			FeedbackCipher c = new FeedbackCipher(new AES(), FeedbackCipher.MODE_CTR);
+			FeedbackCipher c = new FeedbackCipher(ILCrypto.Aes(), FeedbackCipher.MODE_CTR);
 			c.init(RCipherSpi.DECRYPT_MODE, pass, new IvParameterSpecNC(iv), null);
 			cis = new CipherInputStream(cis, c);
 		}

@@ -72,15 +72,7 @@ public final class ResolveHelper {
 	public boolean isFastForeach(GlobalContext ctx) {
 		if (foreachType != 0) return foreachType > 0;
 
-		IntBiMap<String> classes;
-		try {
-			classes = getClassList(ctx);
-		} catch (ClassNotFoundException e) {
-			ctx.report(owner, Kind.WARNING, -1, "symbol.error.noSuchClass", e.getMessage());
-			foreachType = -1;
-			return false;
-		}
-
+		var classes = getClassList(ctx);
 		if (classes.containsValue("java/util/List") && classes.containsValue("java/util/RandomAccess")) {
 			foreachType = 1;
 			return true;
@@ -102,7 +94,7 @@ public final class ResolveHelper {
 	private IntBiMap<String> classList;
 	private boolean query;
 
-	public synchronized IntBiMap<String> getClassList(GlobalContext ctx) throws ClassNotFoundException {
+	public synchronized IntBiMap<String> getClassList(GlobalContext ctx) {
 		if (classList != null) return classList;
 
 		if (query) throw new ResolveException("rh.cyclicDepend:"+owner.name());
@@ -123,7 +115,10 @@ public final class ResolveHelper {
 			owner = info.parent();
 			if (owner == null) break;
 			info = ctx.getClassInfo(owner);
-			if (info == null) throw new ClassNotFoundException(owner);
+			if (info == null) {
+				ctx.report(this.owner, Kind.WARNING, -1, "symbol.error.noSuchClass", owner);
+				break;
+			}
 		}
 
 		info = owner;
@@ -134,7 +129,10 @@ public final class ResolveHelper {
 				String name = itf.get(i);
 
 				IClass itfInfo = ctx.getClassInfo(name);
-				if (itfInfo == null) throw new ClassNotFoundException(name);
+				if (itfInfo == null) {
+					ctx.report(this.owner, Kind.WARNING, -1, "symbol.error.noSuchClass", itfInfo);
+					break;
+				}
 
 				list.forcePut((castDistance == 1 ? 0x80000000 : 0) | (list.size() << 16) | castDistance, name);
 
@@ -154,7 +152,7 @@ public final class ResolveHelper {
 			String owner = info.parent();
 			if (owner == null) break;
 			info = ctx.getClassInfo(owner);
-			if (info == null) throw new ClassNotFoundException(owner);
+			if (info == null) break;
 		}
 
 		query = false;
@@ -361,8 +359,7 @@ public final class ResolveHelper {
 						IClass info = ctx.getClassInfo(className);
 						if (info == null) {
 							ctx.report(type, Kind.WARNING, -1, "symbol.error.noSuchClass", className);
-							continue;
-						}
+						} else {
 
 						ResolveHelper rh = ctx.getResolveHelper(info);
 						rh.findField(ctx, "");
@@ -383,6 +380,8 @@ public final class ResolveHelper {
 									prev.add(fl.owner, fl.node);
 								}
 							}
+						}
+
 						}
 						if (i == itf.size()) break;
 						className = itf.get(i++);

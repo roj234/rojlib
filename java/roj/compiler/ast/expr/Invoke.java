@@ -264,7 +264,6 @@ public final class Invoke extends ExprNode {
 
 		block: {
 			ctx.assertAccessible(type);
-			if ((type.modifier()&Opcodes.ACC_INTERFACE) != 0) flag |= INTERFACE_CLASS;
 
 			ComponentList list = ctx.methodListOrReport(type, method);
 			if (list == null) {
@@ -279,6 +278,9 @@ public final class Invoke extends ExprNode {
 			MethodResult r = list.findMethod(ctx, ownMirror, tmp, namedType, flags);
 			ctx.inferrer.manualTPBounds = null;
 			if (r == null) return NaE.RESOLVE_FAILED;
+
+			type = ctx.classes.getClassInfo(r.method.owner);
+			if ((type.modifier()&Opcodes.ACC_INTERFACE) != 0) flag |= INTERFACE_CLASS;
 
 			ctx.checkType(r.method.returnType().owner);
 

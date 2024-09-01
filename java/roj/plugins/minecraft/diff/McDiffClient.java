@@ -7,9 +7,8 @@ import roj.collect.MyHashMap;
 import roj.concurrent.TaskPool;
 import roj.config.NBTParser;
 import roj.config.serial.ToNBT;
-import roj.crypt.Blake3;
+import roj.crypt.ILCrypto;
 import roj.crypt.KeyType;
-import roj.crypt.SM3;
 import roj.io.CorruptedInputException;
 import roj.io.IOUtil;
 import roj.io.MyDataInputStream;
@@ -184,8 +183,8 @@ public class McDiffClient {
 		}
 
 		long count = blocks[blocks.length - 1].getOffset()-32;
-		Blake3 hash1 = new Blake3(32);
-		SM3 hash2 = new SM3();
+		var hash1 = ILCrypto.Blake3(32);
+		var hash2 = ILCrypto.SM3();
 
 		byte[] tmp = ArrayCache.getByteArray(1024, false);
 		try (InputStream in = new FileInputStream(file)) {

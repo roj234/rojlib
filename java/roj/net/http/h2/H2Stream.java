@@ -28,9 +28,12 @@ public abstract class H2Stream {
 	protected static final byte C_SEND_BODY = 0, OPEN = 1, HEAD_V = 2, HEAD_R = 3, DATA = 4, HEAD_T = 5, PROCESSING = 6, SEND_BODY = 7, CLOSED = 8, ERRORED = 9;
 	byte state;
 	protected final byte getState() {return state;}
+	protected static final byte FLAG_GOAWAY = 1, FLAG_HEADER_SENT = -128;
+	protected byte flag;
 
 	int sendWindow, receiveWindow;
 	public final int getReceiveWindow() {return receiveWindow;}
+	public final int getSendWindow() {return sendWindow;}
 
 	protected int headerSize;
 	protected int dependency;
@@ -210,5 +213,11 @@ public abstract class H2Stream {
 	 * 可以使用{@link #isSuccessfullyFinished()}判断是正常关闭还是异常关闭
 	 * 这个方法至多调用一次
 	 */
-	protected abstract void onFinish(H2Connection man);
+	protected void onFinish(H2Connection man) {}
+
+	/**
+	 *
+	 * @param man
+	 */
+	protected void onWindowUpdate(H2Connection man) throws IOException {}
 }

@@ -9,7 +9,7 @@ import roj.util.DynByteBuf;
  * @author solo6975
  * @since 2022/2/14 10:36
  */
-public final class Poly1305 extends BufferedDigest implements MessageAuthenticCode {
+final class Poly1305 extends BufferedDigest implements MessageAuthenticCode {
 	private static final MutableBigInteger P = new MutableBigInteger(0x3, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFb);
 
 	private final MutableBigInteger
@@ -18,7 +18,7 @@ public final class Poly1305 extends BufferedDigest implements MessageAuthenticCo
 		Tmp = new MutableBigInteger(new int[10]);
 	private MutableBigInteger Acc = new MutableBigInteger(new int[9]);
 
-	public Poly1305() { super("Poly1305", 16); }
+	Poly1305() { super("Poly1305", 16); }
 
 	@Override
 	protected int engineGetDigestLength() { return 16; }

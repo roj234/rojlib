@@ -1,7 +1,5 @@
 package roj.crypt.eddsa;
 
-import roj.crypt.eddsa.math.EdInteger;
-import roj.crypt.eddsa.math.EdPoint;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
 import roj.util.Helpers;

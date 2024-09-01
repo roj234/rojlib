@@ -56,7 +56,6 @@ public final class fcgiResponse extends AsyncResponse implements HPostHandler {
 			tmpData._free();
 			if (lazyRead != null)
 				lazyRead.readActive();
-			assert state != LOCAL_FINISH;
 		}
 		if (signalled) onSuccess();
 	}

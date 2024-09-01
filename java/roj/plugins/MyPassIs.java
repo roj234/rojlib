@@ -11,14 +11,13 @@ import roj.crypt.*;
 import roj.io.IOUtil;
 import roj.plugin.Plugin;
 import roj.text.CharList;
+import roj.ui.GuiUtil;
 import roj.ui.Terminal;
 import roj.ui.terminal.Argument;
 import roj.ui.terminal.CommandConsole;
 import roj.util.ByteList;
 
 import javax.crypto.Cipher;
-import java.awt.*;
-import java.awt.datatransfer.*;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
@@ -120,7 +119,7 @@ public class MyPassIs extends Plugin {
 
 		this.mac = new HMAC(MessageDigest.getInstance("SHA-256"));
 		this.pass = HMAC.HKDF_expand(mac, IOUtil.SharedCoder.get().encode(passStr), 32);
-		this.cipher = new FeedbackCipher(new AES(), FeedbackCipher.MODE_CTR);
+		this.cipher = new FeedbackCipher(ILCrypto.Aes(), FeedbackCipher.MODE_CTR);
 
 		File plaintextKey = new File(getDataFolder(), "key.yml");
 		CMap data;
@@ -232,7 +231,7 @@ public class MyPassIs extends Plugin {
 				char ce = Terminal.readChar(MyBitSet.from("c\n"), sb, false);
 				try {
 					if (ce == 'c') {
-						Toolkit.getDefaultToolkit().getSystemClipboard().setContents(new StringSelection(sb.substring(tip.length(), sb.length())), null);
+						GuiUtil.setClipboardText(sb.substring(tip.length(), sb.length()));
 						Terminal.success("密码已复制到剪贴板");
 					}
 				} catch (Exception ignored) {}

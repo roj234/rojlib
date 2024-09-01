@@ -1,7 +1,7 @@
 package roj;
 
 import roj.config.ConfigMaster;
-import roj.config.auto.Serializers;
+import roj.config.auto.SerializerFactory;
 import roj.text.CharList;
 import roj.util.Helpers;
 
@@ -14,5 +14,5 @@ public class ToBeRemoved {
 	 * @deprecated 这个方案比之前的好，但是依然做不到contextual
 	 */
 	@Deprecated
-	public static String deepToString(Object o) {return ConfigMaster.YAML.writeObject(Serializers.UNSAFE.serializer(o.getClass()), Helpers.cast(o), new CharList()).toStringAndFree();}
+	public static String deepToString(Object o) {return ConfigMaster.YAML.writeObject(SerializerFactory.UNSAFE.serializer(o.getClass()), Helpers.cast(o), new CharList()).toStringAndFree();}
 }

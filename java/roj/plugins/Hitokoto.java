@@ -2,7 +2,7 @@ package roj.plugins;
 
 import roj.config.ConfigMaster;
 import roj.config.auto.Optional;
-import roj.config.auto.Serializers;
+import roj.config.auto.SerializerFactory;
 import roj.net.http.IllegalRequestException;
 import roj.net.http.server.Request;
 import roj.net.http.server.Response;
@@ -40,7 +40,7 @@ public class Hitokoto extends Plugin implements Router {
 	@Override
 	protected void onEnable() throws Exception {
 		try (var tr = TextReader.auto(new File(Panger.getInstance().getPluginFolder(), "Core/hitokoto.csv"))) {
-			hitokoto = ConfigMaster.CSV.readObject(Serializers.SAFE.listOf(Item.class), tr);
+			hitokoto = ConfigMaster.CSV.readObject(SerializerFactory.SAFE.listOf(Item.class), tr);
 		}
 		registerRoute("hitokoto", this, false);
 	}

@@ -60,6 +60,7 @@ public class QZFileWriter extends QZWriter {
      */
     public final QZWriter parallel() throws IOException { return parallel(new MemorySource(DynByteBuf.allocateDirect())); }
     public synchronized QZWriter parallel(Source cache) throws IOException {
+        if (out != null) throw new IllegalStateException("进入多线程模式前需要结束QZFW的WordBlock，否则会导致文件数据损坏");
         if (finished) throw new IOException("Stream closed");
         if (parallelWriter == null)
             parallelWriter = new SimpleList<>();

@@ -22,8 +22,8 @@ import java.util.function.Function;
  * @author Roj234
  * @since 2023/5/17 0017 9:20
  */
-public class SimpleConnectionPool {
-	final DbConnector connector;
+public class MyConnectionPool implements Connector {
+	final Connector connector;
 
 	private final SegmentReadWriteLock lock = new SegmentReadWriteLock();
 
@@ -37,7 +37,7 @@ public class SimpleConnectionPool {
 	private final LinkedTransferQueue<Object[]> transfer = new LinkedTransferQueue<>();
 	private final ThreadLocal<Object[]> connId = new ThreadLocal<>();
 
-	public SimpleConnectionPool(DbConnector connector, int pooledConnections) {
+	public MyConnectionPool(Connector connector, int pooledConnections) {
 		this.connector = connector;
 		if (pooledConnections <= 0 || pooledConnections > 32) throw new IllegalArgumentException("仅支持1-32个连接");
 		this.pool = new Connection[pooledConnections];
@@ -73,11 +73,17 @@ public class SimpleConnectionPool {
 		return e1;
 	}
 
-	public Connection getConnection(long timeoutMs) throws SQLException {
-		if (connId.get() != null) throw new SQLException("当前线程已经获取了连接");
+	public Connection connect() throws SQLException {
+		Connection connection = connect(10000);
+		if (connection == null) throw new SQLException("failed to get connection in 10000ms");
+		return connection;
+	}
+	public Connection connect(long timeoutMs) throws SQLException {
+		var conn = connId.get();
+		if (conn != null) return wrap((Connection) conn[1]);
 
 		int id = (pool.length-1) & ((int) Thread.currentThread().getId() * multiplier);
-		long deadline = System.currentTimeMillis()+timeoutMs;
+		long deadline = timeoutMs == 0 ? Long.MAX_VALUE : System.currentTimeMillis()+timeoutMs;
 
 		// optimistic lock
 		if (!lock.tryLock(id)) {
@@ -86,14 +92,14 @@ public class SimpleConnectionPool {
 					id = (id+1)&(pool.length-1);
 					if (lock.tryLock(id)) break;
 
-					Object[] conn = transfer.poll(10, TimeUnit.MICROSECONDS);
+					conn = transfer.poll(10, TimeUnit.MICROSECONDS);
 					if (conn != null) {
 						connId.set(conn);
 						stale[(int) conn[0]] = System.currentTimeMillis();
 						return wrap((Connection) conn[1]);
 					}
 
-					if (timeoutMs != 0 && System.currentTimeMillis() > deadline) return null;
+					if (System.currentTimeMillis() > deadline) return null;
 				}
 			} catch (InterruptedException e) {
 				Helpers.athrow(new ClosedByInterruptException());
@@ -101,7 +107,7 @@ public class SimpleConnectionPool {
 			}
 		}
 
-		if (pool[id] == null) pool[id] = connector.createConnection();
+		if (pool[id] == null) pool[id] = connector.connect();
 
 		connId.set(new Object[]{id, pool[id]});
 		stale[id] = System.currentTimeMillis();
@@ -112,12 +118,12 @@ public class SimpleConnectionPool {
 	private Connection wrap(Connection connection) {
 		if (proxy == null) {
 			block:
-			synchronized (SimpleConnectionPool.class) {
+			synchronized (MyConnectionPool.class) {
 				if (proxy != null) break block;
 				ConstantData data = new ConstantData();
 				data.name("roj/sql/SimpleConnectionPool$PooledConnection");
 
-				int closeHandler = data.newField(0, "$closeHandler", TypeHelper.class2asm(SimpleConnectionPool.class));
+				int closeHandler = data.newField(0, "$closeHandler", TypeHelper.class2asm(MyConnectionPool.class));
 
 				Proxy.proxyClass(data, new Class<?>[]{Connection.class}, (m, c) -> {
 					if (m.getName().equals("close")) {

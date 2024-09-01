@@ -16,7 +16,7 @@ import java.security.spec.AlgorithmParameterSpec;
  * @author solo6975
  * @since 2022/2/14 9:03
  */
-public class ChaCha extends RCipherSpi {
+class ChaCha extends RCipherSpi {
 	//       cccccccc  cccccccc  cccccccc  cccccccc
 	//       kkkkkkkk  kkkkkkkk  kkkkkkkk  kkkkkkkk
 	//       kkkkkkkk  kkkkkkkk  kkkkkkkk  kkkkkkkk
@@ -27,8 +27,8 @@ public class ChaCha extends RCipherSpi {
 
 	SecureRandom rng;
 
-	public ChaCha() { this(10); }
-	public ChaCha(int round) {
+	ChaCha() {this(10);}
+	ChaCha(int round) {
 		this.round = round;
 
 		int[] T = key;

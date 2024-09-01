@@ -1,6 +1,6 @@
 package roj.media.image;
 
-import roj.RequireUpgrade;
+import roj.Beta;
 import roj.collect.IntList;
 import roj.util.ArrayCache;
 import roj.util.ByteList;
@@ -68,7 +68,7 @@ public class GifImage {
 		}
 	}
 
-	@RequireUpgrade
+	@Beta
 	private void readDescriptor(DynByteBuf r) {
 		Frame f = new Frame();
 

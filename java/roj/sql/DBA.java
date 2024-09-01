@@ -17,9 +17,9 @@ import java.util.*;
 public final class DBA implements AutoCloseable {
 	public static final ThreadLocal<DBA> CMAP = new ThreadLocal<>();
 
-	private static SimpleConnectionPool defaultPool;
-	public static void setConnectionPool(SimpleConnectionPool p) {defaultPool = p;}
-	private SimpleConnectionPool pool = defaultPool;
+	private static Connector defaultPool;
+	public static void setConnectionPool(MyConnectionPool p) {defaultPool = p;}
+	private Connector pool = defaultPool;
 
 	private String group, order;
 	private final CharList table = new CharList(), field = new CharList(), where = new CharList(), limit = new CharList();
@@ -44,12 +44,12 @@ public final class DBA implements AutoCloseable {
 		if (inst != null) inst.close();
 	}
 
-	public static DBA getInstance(SimpleConnectionPool pool) {
+	public static DBA getInstance(MyConnectionPool pool) {
 		DBA dba = new DBA();
 		dba.pool = pool;
 		return dba;
 	}
-	public DBA copy() {return new DBA(this);}
+	public DBA copy() {return new DBA(parent);}
 
 	static {
 		GreatErrorPage.addCustomTag("QUERIES", req -> {
@@ -67,7 +67,7 @@ public final class DBA implements AutoCloseable {
 		parent = this;
 		logs = new RingBuffer<>(10);
 	}
-	public DBA(DBA parent) {
+	private DBA(DBA parent) {
 		this.parent = parent;
 		this.logs = parent.logs;
 	}
@@ -644,15 +644,12 @@ public final class DBA implements AutoCloseable {
 
 	public Connection connection() throws SQLException {
 		if (parent != this) return parent.connection();
-
-		if (connection == null) {
-			connection = pool.getConnection(1000);
-			if (connection == null) throw new SQLException("failed to get connection in 1000ms");
-		}
+		if (connection == null) connection = pool.connect();
 		return connection;
 	}
 
 	private CharList myescape(CharList sb, CharSequence seq) {
+		//FIXME SQL注入
 		if (TextUtil.isNumber(seq) != -1) return sb.append(seq);
 		return Tokenizer.addSlashes(sb.append('"'), seq).append('"');
 	}
@@ -719,7 +716,5 @@ public final class DBA implements AutoCloseable {
 	}
 
 	public String lastSql() { return logs.peekLast(); }
-
-	public DBA isolate() { return new DBA(parent); }
 	// endregion
 }

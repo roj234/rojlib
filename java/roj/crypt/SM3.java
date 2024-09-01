@@ -6,7 +6,7 @@ import roj.util.DynByteBuf;
 /**
  * 国密SM3 - 校验码
  */
-public final class SM3 extends BufferedDigest {
+final class SM3 extends BufferedDigest {
 	private static final int[] T = new int[64];
 	static {
 		for(int i = 0; i < 16; ++i) {
@@ -23,7 +23,7 @@ public final class SM3 extends BufferedDigest {
 	private final int[] digest = new int[68 + 8];
 	private int bufOff;
 
-	public SM3() {
+	SM3() {
 		super("SM3", 4);
 		engineReset();
 	}

@@ -12,11 +12,11 @@ import java.util.function.Consumer;
  * @author solo6975
  * @since 2020/12/31 22:22
  */
-public class SimpleDiagnosticListener implements Consumer<Diagnostic> {
+public class TextDiagnosticReporter implements Consumer<Diagnostic> {
 	int err, warn;
 	int[] counter = new int[6];
 
-	public SimpleDiagnosticListener(int maxError, int maxWarn, int warnOps) {
+	public TextDiagnosticReporter(int maxError, int maxWarn, int warnOps) {
 		this.err = maxError;
 		this.warn = maxWarn;
 	}
@@ -98,7 +98,7 @@ public class SimpleDiagnosticListener implements Consumer<Diagnostic> {
 		}
 	}
 
-	public void conclusion() {
+	public void printSum() {
 		PrintStream err = System.err;
 		err.println((counter[2]+counter[3]) + " 个 警告");
 		err.println((counter[4]+counter[5]) + " 个 错误");

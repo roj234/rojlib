@@ -4,9 +4,10 @@ import roj.collect.CharMap;
 import roj.collect.IntMap;
 import roj.crypt.HKDFPRNG;
 import roj.crypt.HMAC;
-import roj.crypt.KeyAgreement;
+import roj.crypt.KeyExchange;
 import roj.crypt.RCipherSpi;
 import roj.io.buf.BufferPool;
+import roj.net.handler.VarintSplitter;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
 
@@ -71,9 +72,9 @@ public abstract class MSSEngine {
 	public final boolean isClosed() { return stage == HS_FAIL; }
 
 	protected int getSupportedKeyExchanges() { return CipherSuite.ALL_KEY_EXCHANGE_TYPE; }
-	protected KeyAgreement getKeyExchange(int type) {
-		if (type == -1) return CipherSuite.getKeyAgreement(CipherSuite.KEX_ECDHE_secp384r1);
-		return CipherSuite.getKeyAgreement(type);
+	protected KeyExchange getKeyExchange(int type) {
+		if (type == -1) return CipherSuite.getKeyExchange(CipherSuite.KEX_ECDHE_secp384r1);
+		return CipherSuite.getKeyExchange(type);
 	}
 
 	protected int getSupportCertificateType() { return CipherSuite.ALL_PUBLIC_KEY_TYPE; }
@@ -137,20 +138,20 @@ public abstract class MSSEngine {
 
 	DynByteBuf toWrite;
 
-	public static final int HS_OK = 0, HS_BUFFER_UNDERFLOW = -1;
+	public static final int HS_PRE_DATA = -2097153, HS_OK = 0, HS_BUFFER_UNDERFLOW = -1;
 
 	// 内部状态
-	static final int INITIAL = 0, SERVER_HELLO = 1, FINISH_WAIT = 3;
-	static final int CLIENT_HELLO = 0, RETRY_KEY_EXCHANGE = 1, PREFLIGHT_END_WAIT = 2;
-	static final int HS_DONE = 4, HS_FAIL = 5;
+	static final byte INITIAL = 0, SERVER_HELLO = 1, FINISH_WAIT = 3;
+	static final byte CLIENT_HELLO = 0, RETRY_KEY_EXCHANGE = 1, PREFLIGHT_WAIT = 2;
+	static final byte HS_DONE = 4, HS_FAIL = 5;
 
 	// 数据包
-	static final byte PROTOCOL_VERSION = 21;
+	static final byte PROTOCOL_VERSION = 3;
 
-	static final int H_MAGIC = 0x53534E43;
 	static final byte H_CLIENT_HELLO = 0x40, H_SERVER_HELLO = 0x41, H_ENCRYPTED_EXTENSION = 0x42;
 	static final byte P_ALERT = 0x30, P_DATA = 0x31, P_PREDATA = 0x32;
 
+	// 错误类别
 	public static final byte
 		ILLEGAL_PACKET = 0,
 		CIPHER_FAULT = 1,
@@ -168,18 +169,23 @@ public abstract class MSSEngine {
 
 		int pos = rx.rIndex;
 		int hdr = rx.getU(pos);
-		int lenHdr = hdr >= 0x40 ? 4 : 3;
+		if (hdr != P_DATA) {
+			int siz = rx.readableBytes()-4;
+			if (siz < 0) return siz;
 
-		int siz = rx.readableBytes()-lenHdr;
-		if (siz < 0) return siz;
+			int len = rx.readMedium(pos+1);
+			if (siz < len) return siz-len;
 
-		int len = lenHdr==3 ? rx.readUnsignedShort(pos+1) : rx.readMedium(pos+1);
-		if (siz < len) return siz-len;
+			rx.rIndex += 4;
+			rx.wIndex(rx.rIndex+len);
 
-		rx.rIndex += lenHdr;
-		rx.wIndex(rx.rIndex+len);
+			if (hdr == P_ALERT) handleError(rx);
+		} else {
+			int len = VarintSplitter.readVarInt(rx, 3);
+			if (len < 0) return len;
+			rx.wIndex(rx.rIndex+len);
+		}
 
-		if (hdr == P_ALERT) handleError(rx);
 		return hdr;
 	}
 	final void handleError(DynByteBuf in) throws MSSException {
@@ -202,7 +208,7 @@ public abstract class MSSEngine {
 		String errMsg = in.readUTF(in.readUnsignedByte());
 
 		if (signLocal != null) {
-			if (in.readableBytes() < signLocal.length) {
+			if (in.readableBytes() != signLocal.length) {
 				flag = 1;
 			} else {
 				for (byte b : signLocal)
@@ -210,7 +216,7 @@ public abstract class MSSEngine {
 			}
 		}
 
-		throw new MSSException("对等端错误: {trustable="+(flag==0)+",code="+errCode+",msg='"+errMsg+"'}");
+		throw new MSSException("对等端错误("+errCode+"): "+(flag==0?"":"unverified,")+"'"+errMsg+"'");
 	}
 
 	/**
@@ -223,48 +229,24 @@ public abstract class MSSEngine {
 	 */
 	public abstract int handshake(DynByteBuf tx, DynByteBuf rx) throws MSSException;
 
+	public RCipherSpi getEncoder() {
+		if (encoder == null) throw new NullPointerException("不适合的状态:"+stage);
+		return encoder;
+	}
+	public RCipherSpi getDecoder() {
+		if (decoder == null) throw new NullPointerException("不适合的状态:"+stage);
+		return decoder;
+	}
 	/**
-	 * 解码收到的数据
-	 *
+	 * 2024.09.14: 现已使用VLUI！不再主动拆分数据包，如果你不喜欢可以把两个密码器拿走
 	 * @param in 接收缓冲
-	 * @param out 目的缓冲
-	 *
-	 * @return 状态 OK(0) BUFFER_OVERFLOW(>0) BUFFER_UNDERFLOW(<0)
+	 * @return OK(0) BUFFER_UNDERFLOW(<0)
 	 */
-	public final int unwrap(DynByteBuf in, DynByteBuf out) throws MSSException {
-		if (decoder == null) throw new MSSException("不适合的状态:" + stage);
-
-		int lim = in.wIndex();
-
-		boolean first = true;
-		while (true) {
-			int type = readPacket(in);
-			if (type < 0) return first ? type : 0;
-			first = false;
-
-			try {
-				if (type == P_DATA) {
-					if (in.readableBytes() >= 32768) close("数据包过大");
-
-					int size = decoder.engineGetOutputSize(in.readableBytes()) - out.writableBytes();
-					if (size > 0) {
-						in.rIndex -= 3;
-						return size;
-					}
-
-					try {
-						decoder.cryptFinal(in, out);
-					} catch (GeneralSecurityException e) {
-						error(e);
-						close("解密失败");
-					}
-				} else {
-					close("illegal_packet");
-				}
-			} finally {
-				in.wIndex(lim);
-			}
-		}
+	public int publicReadPacket(DynByteBuf in) throws MSSException {
+		int type = readPacket(in);
+		if (type < 0) return type;
+		if (type != P_DATA) close("非法数据包");
+		return 0;
 	}
 
 	/**
@@ -276,18 +258,17 @@ public abstract class MSSEngine {
 	 * @return 负数代表还需要至少n个字节的输出缓冲
 	 */
 	public int wrap(DynByteBuf in, DynByteBuf out) throws MSSException {
-		if (encoder == null) throw new MSSException("不适合的状态:" + stage);
+		if (encoder == null) throw new MSSException("不适合的状态:"+stage);
 
 		int lim = in.wIndex();
+		int w = in.readableBytes();
 
-		int w = Math.min(in.readableBytes(), 32767);
-
-		int t = out.writableBytes() - 3 - encoder.engineGetOutputSize(w);
+		int t = out.writableBytes() - 1 - VarintSplitter.getVarIntLength(w) - encoder.engineGetOutputSize(w);
 		if (t < 0) return t;
 
 		try {
 			in.wIndex(in.rIndex + w);
-			out.put(decoder == null ? P_PREDATA : P_DATA).putShort(encoder.engineGetOutputSize(w));
+			out.put(decoder == null ? P_PREDATA : P_DATA).putVUInt(encoder.engineGetOutputSize(w));
 			encoder.cryptFinal(in, out);
 		} catch (GeneralSecurityException e) {
 			close("加密失败");
@@ -303,5 +284,5 @@ public abstract class MSSEngine {
 	static int error(int code, String reason) throws MSSException { throw new MSSException(code, reason, null); }
 	static int error(Throwable ex) throws MSSException { throw new MSSException(CIPHER_FAULT, "", ex); }
 
-	public abstract int handshakeSSL(DynByteBuf out, DynByteBuf recv) throws MSSException;
+	public abstract int handshakeTLS13(DynByteBuf out, DynByteBuf recv) throws MSSException;
 }

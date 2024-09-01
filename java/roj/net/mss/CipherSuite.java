@@ -1,7 +1,10 @@
 package roj.net.mss;
 
 import roj.collect.ToIntMap;
-import roj.crypt.*;
+import roj.crypt.DHGroup;
+import roj.crypt.ECGroup;
+import roj.crypt.ILCrypto;
+import roj.crypt.KeyExchange;
 import roj.crypt.eddsa.XDHUnofficial;
 import roj.util.Helpers;
 
@@ -35,17 +38,17 @@ public final class CipherSuite {
 		ALL_PUBLIC_KEY_TYPE |= 1 << id;
 	}
 
-	private static final Supplier<KeyAgreement>[] KEX_ID2INST = Helpers.cast(new Supplier<?>[32]);
+	private static final Supplier<KeyExchange>[] KEX_ID2INST = Helpers.cast(new Supplier<?>[32]);
 	private static final ToIntMap<String> KEX_NAME2ID = new ToIntMap<>(32);
-	public static byte getKeyAgreementId(String algorithm) {
+	public static byte getKeyExchangeId(String algorithm) {
 		int i = KEX_NAME2ID.getOrDefault(algorithm, -1);
 		if (i < 0) throw new IllegalArgumentException("Unknown key agreement: "+algorithm);
 		return (byte) i;
 	}
-	public static KeyAgreement getKeyAgreement(int type) {
+	public static KeyExchange getKeyExchange(int type) {
 		return type < 0 || type >= KEX_ID2INST.length || KEX_ID2INST[type] == null ? null : KEX_ID2INST[type].get();
 	}
-	public static void register(int id, String algorithm, Supplier<KeyAgreement> kf) {
+	public static void register(int id, String algorithm, Supplier<KeyExchange> kf) {
 		if (KEX_ID2INST[id] != null) throw new IllegalArgumentException("Already has id "+id);
 		KEX_ID2INST[id] = kf;
 		KEX_NAME2ID.putInt(algorithm, id);
@@ -69,14 +72,14 @@ public final class CipherSuite {
 
 	static {
 		MSSCipherFactory
-			CIPHER_AES_128_GCM = new SimpleCipherFactory(16, AES_GCM::new),
-			CIPHER_AES_256_GCM = new SimpleCipherFactory(32, AES_GCM::new),
-			CIPHER_CHACHA20_POLY1305 = new SimpleCipherFactory(32, ChaCha_Poly1305::ChaCha1305),
-			CIPHER_XCHACHA20_POLY1305 = new SimpleCipherFactory(32, ChaCha_Poly1305::XChaCha1305);
+			CIPHER_AES_128_GCM = new SimpleCipherFactory(16, ILCrypto::AesGcm),
+			CIPHER_AES_256_GCM = new SimpleCipherFactory(32, ILCrypto::AesGcm),
+			CIPHER_CHACHA20_POLY1305 = new SimpleCipherFactory(32, ILCrypto::ChaCha1305),
+			CIPHER_XCHACHA20_POLY1305 = new SimpleCipherFactory(32, ILCrypto::XChaCha1305);
 
 		Supplier<MessageDigest> SIGN_SHA256 = _HASH("SHA-256"), SIGN_SHA384 = _HASH("SHA-384");
 		try {
-			ILProvider.register();
+			ILCrypto.register();
 			register(PUB_X509_RSA, new X509KeyFormat("RSA", "NONEwithRSA"));
 			register(PUB_X509_CERTIFICATE, new X509CertFormat());
 			register(PUB_X509_EdDSA, new X509KeyFormat("EdDSA", "EdDSA"));

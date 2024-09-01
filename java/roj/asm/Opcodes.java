@@ -183,7 +183,7 @@ public final class Opcodes {
 	// region 操作码名称
 	private static final String[] _Names = new String[256];
 	public static byte validateOpcode(byte code) {
-		if (_Names[code&0xFF] == null) throw new IllegalStateException("Unknown bytecode 0x"+Integer.toHexString(code&0xFF));
+		if ((code&0xFF) > (BREAKPOINT&0xFF) || _Names[code&0xFF] == null) throw new IllegalStateException("Unknown bytecode 0x"+Integer.toHexString(code&0xFF));
 		return code;
 	}
 	public static String showOpcode(int code) {
@@ -248,7 +248,13 @@ public final class Opcodes {
 			"FReturn| DReturn| AReturn| Return| GetStatic# PutStatic# GetField# PutField# "+
 			"InvokeVirtual# InvokeSpecial# InvokeStatic# InvokeInterface# InvokeDynamic# "+
 			"New# NewArray# ANewArray# ArrayLength| AThrow| CheckCast# InstanceOf# MonitorEnter| "+
-			"MonitorExit| Wide# MultiANewArray# IfNull# IfNonNull# Goto_W# Jsr_W# BREAKPOINT| ";
+			"MonitorExit| Wide# MultiANewArray# IfNull# IfNonNull# Goto_W# Jsr_W# BREAKPOINT| "+
+			// Internal
+			"_LdcQ# _LdcWQ# _Ldc2WQ#"+
+			"_GetFieldQ# _PutFieldQ# _GetField2Q# _PutField2Q#"+
+			"_GetStaticQ# _PutStaticQ# _GetStatic2Q# _PutStatic2Q#" +
+			"_InvokeVirtualQ# _InvokeNonVirtualQ# _InvokeSuperQ# _InvokeStaticQ# _InvokeInterfaceQ# _InvokeVirtualObjectQ# _InvokeIgnoredQ#" +
+			"_NewQ# _ANewArayQ# _MultiANewArrayQ# _CheckCastQ# _InstanceOfQ# _InvokeVirtualQ_W# _GetFieldQ_W# _PutFieldQ_W# _NonNullQ#";
 
 		int j = 0;
 		int i, prevI = 0;
@@ -262,9 +268,6 @@ public final class Opcodes {
 
 			prevI = i+1;
 		}
-
-		_Names[254] = "IMPDEP1";
-		_Names[255] = "IMPDEP2";
 
 		fset(1,17, CATE_CONST);
 		fset(18,20, CATE_LDC);

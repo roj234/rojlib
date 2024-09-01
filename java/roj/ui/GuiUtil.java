@@ -32,18 +32,33 @@ import static roj.reflect.ReflectionUtils.u;
  */
 public final class GuiUtil {
 	private static Clipboard clipboard;
-	@Nullable
-	public static Clipboard getClipboard() {
-		if (clipboard != null) return clipboard;
-
-		Clipboard c;
+	static {
 		try {
-			c = Toolkit.getDefaultToolkit().getSystemClipboard();
-		} catch (Exception e) {
-			c = null;
-		}
-		return clipboard = c;
+			clipboard = Toolkit.getDefaultToolkit().getSystemClipboard();
+		} catch (HeadlessException ignored) {}
 	}
+	@Nullable public static Clipboard getClipboard() {return clipboard;}
+	@Nullable public static String getClipboardText() {
+		if (clipboard != null) {
+			DataFlavor stringFlavor = DataFlavor.stringFlavor;
+			if (clipboard.isDataFlavorAvailable(stringFlavor)) {
+				try {
+					return clipboard.getData(stringFlavor).toString();
+				} catch (Exception e) {
+					e.printStackTrace();
+				}
+			}
+		}
+
+		return null;
+	}
+	public static boolean setClipboardText(String text) {
+		if (clipboard == null) return false;
+		clipboard.setContents(new StringSelection(text), null);
+		return true;
+	}
+
+	public static boolean isGui() {return clipboard != null;}
 
 	public static void systemLook() {
 		int dpi;

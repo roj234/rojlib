@@ -1,7 +1,7 @@
 package roj.asm.visitor;
 
 import org.jetbrains.annotations.Range;
-import roj.RequireUpgrade;
+import roj.Beta;
 import roj.asm.AsmShared;
 import roj.asm.Opcodes;
 import roj.asm.cp.Constant;
@@ -510,7 +510,8 @@ public class CodeWriter extends AbstractCodeWriter {
 		return bci;
 	}
 
-	@RequireUpgrade public FrameVisitor getFv() {return fv;}
+	@Beta
+	public FrameVisitor getFv() {return fv;}
 	public int getState() {return state;}
 
 	public final void addSegment(Segment c) {

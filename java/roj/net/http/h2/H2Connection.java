@@ -18,6 +18,7 @@ import roj.util.DynByteBuf;
 import java.io.IOException;
 import java.net.SocketException;
 import java.util.function.Consumer;
+import java.util.function.IntFunction;
 
 import static roj.net.http.h2.H2Exception.*;
 
@@ -26,7 +27,7 @@ import static roj.net.http.h2.H2Exception.*;
  * @author Roj234
  * @since 2022/10/7 0007 21:38
  */
-public final class H2Connection implements ChannelHandler {
+public class H2Connection implements ChannelHandler {
 	public static final Logger LOGGER = Logger.getLogger("HTTP/2");
 	public static final String H2_GOAWAY = "h2:go_away";
 	// HPACK Dynamic Table encType
@@ -61,7 +62,7 @@ public final class H2Connection implements ChannelHandler {
 		0, 0
 	};
 
-	private final H2Manager manager;
+	private final IntFunction<H2Stream> streamMaker;
 	private final H2Setting localSetting = new H2Setting(), remoteSetting = new H2Setting();
 	private final HPACK hpack = new HPACK();
 	private int hpackLock;
@@ -80,9 +81,15 @@ public final class H2Connection implements ChannelHandler {
 	private int sendWindow, receiveWindow;
 	private final H2FlowControl flowControl;
 
-	public H2Connection(H2Manager manager, boolean isServer) {this(manager, isServer, new H2FlowControlSimple());}
-	public H2Connection(H2Manager manager, boolean isServer, H2FlowControl flowControl) {
-		this.manager = manager;
+	public H2Connection(IntFunction<H2Stream> manager, boolean isServer) {this(manager, isServer, new H2FlowControlSimple());}
+	public H2Connection(IntFunction<H2Stream> manager, boolean isServer, H2FlowControl flowControl) {
+		if (manager == null && getClass() == H2Connection.class) throw new NullPointerException("manager");
+		if (flowControl == null) {
+			if (!(this instanceof H2FlowControl c))
+				throw new NullPointerException("flowControl");
+			flowControl = c;
+		}
+		this.streamMaker = manager;
 		this.flag = (byte) (isServer ? FLAG_SERVER : 0);
 		this.flowControl = flowControl;
 	}
@@ -94,14 +101,16 @@ public final class H2Connection implements ChannelHandler {
 		nextStreamId = 1-(flag & FLAG_SERVER);
 		receiveWindow = sendWindow = 65535;
 		this.ctx = ctx;
-
+		onOpened(ctx);
+	}
+	protected void onOpened(ChannelCtx ctx) throws IOException {
 		ByteList list = IOUtil.getSharedByteBuf();
 		if ((flag & FLAG_SERVER) == 0) {
 			ctx.channelWrite(list.putAscii(H2C.MAGIC));
 			list.clear();
 
 			flowControl.initSetting(localSetting);
-			manager.initSetting(localSetting);
+			initSetting(localSetting);
 			syncSettings();
 
 			flag |= FLAG_SETTING_SENT;
@@ -151,7 +160,7 @@ public final class H2Connection implements ChannelHandler {
 
 					int prevWs = remoteSetting.initial_window_size;
 					remoteSetting.read(buf, isServer());
-					manager.validateRemoteSetting(remoteSetting);
+					validateRemoteSetting(remoteSetting);
 					int ws = remoteSetting.initial_window_size;
 
 					if (prevWs != ws) {
@@ -163,7 +172,7 @@ public final class H2Connection implements ChannelHandler {
 					if ((this.flag & FLAG_SETTING_SENT) == 0) {
 						this.flag |= FLAG_SETTING_SENT;
 						flowControl.initSetting(localSetting);
-						manager.initSetting(localSetting);
+						initSetting(localSetting);
 						syncSettings();
 					}
 
@@ -337,6 +346,7 @@ public final class H2Connection implements ChannelHandler {
 
 					if ((win += sendWindow) < 0) streamError(id, ERROR_FLOW_CONTROL);
 					c.sendWindow = win;
+					c.onWindowUpdate(this);
 				}
 			}
 			case FRAME_ALTSVC -> {
@@ -396,15 +406,13 @@ public final class H2Connection implements ChannelHandler {
 		if (len < 0) error(ERROR_PROTOCOL, "Padding");
 		else buf.wIndex(len);
 	}
-	private H2Stream newStream(int id) {
-		var stream = manager.createStream(id);
+	protected final void initStream(H2Stream stream) {
 		stream.state = H2Stream.OPEN;
 		stream.sendWindow = remoteSetting.initial_window_size;
 		stream.receiveWindow = localSetting.initial_window_size;
 		if (stream.headerSize == 0)
 			stream.headerSize = localSetting.max_header_list_size < 0 ? 32767 : localSetting.max_header_list_size;
-		streams.putInt(id, stream);
-		return stream;
+		streams.putInt(stream.id, stream);
 	}
 	private void checkGoaway() throws IOException {
 		if ((flag&(FLAG_GOAWAY_SENT|FLAG_GOAWAY_RECEIVED)) == 0) return;
@@ -515,6 +523,7 @@ public final class H2Connection implements ChannelHandler {
 	//endregion
 	//region WindowUpdate
 	public H2Setting getLocalSetting() {return localSetting;}
+	public H2Setting getRemoteSetting() {return remoteSetting;}
 	public int getReceiveWindow() {return receiveWindow;}
 	public void sendWindowUpdate(@Nullable H2Stream stream, @Range(from = 1, to = Integer.MAX_VALUE) int increment) throws IOException {
 		//noinspection all
@@ -560,7 +569,6 @@ public final class H2Connection implements ChannelHandler {
 	 */
 	public void sendHeader(@NotNull H2Stream stream, @NotNull Headers header, boolean noBody) throws IOException {
 		if (!isServer()) throw new IllegalArgumentException("客户端请使用sendHeaderClientSide()");
-		if (stream.state != H2Stream.PROCESSING) throw new IllegalArgumentException("流"+stream+"不在可以发送头部的状态");
 		sendHeader0(stream, header, noBody, 0, 0);
 		if (stream.state == H2Stream.CLOSED) {
 			streams.remove(stream.id);
@@ -568,6 +576,9 @@ public final class H2Connection implements ChannelHandler {
 		}
 	}
 	private void sendHeader0(H2Stream stream, Headers header, boolean noBody, int depend, int weight) throws IOException {
+		if ((stream.flag&H2Stream.FLAG_HEADER_SENT) != 0) throw new IllegalArgumentException("流"+stream+"不在可以发送头部的状态");
+		stream.flag |= H2Stream.FLAG_HEADER_SENT;
+
 		ByteList ob = IOUtil.getSharedByteBuf();
 		ob.putMedium(0).put(FRAME_HEADER).put(0).putInt(stream.id);
 		if (weight != 0) {
@@ -613,8 +624,7 @@ public final class H2Connection implements ChannelHandler {
 
 	public int getImmediateWindow(H2Stream stream) {
 		if (ctx.isFlushing()) return 0;
-		int v = stream == null ? sendWindow : Math.min(sendWindow, stream.sendWindow);
-		return Math.min(remoteSetting.max_frame_size, v);
+		return stream == null ? sendWindow : Math.min(sendWindow, stream.sendWindow);
 	}
 	/**
 	 * 发送数据
@@ -709,5 +719,13 @@ public final class H2Connection implements ChannelHandler {
 			} catch (Exception ignored) {}
 		}
 		streams.clear();
+	}
+
+	protected void initSetting(H2Setting setting) {setting.max_streams = 256;}
+	protected void validateRemoteSetting(H2Setting setting) throws H2Exception {setting.sanityCheck();}
+	protected @NotNull H2Stream newStream(int id) {
+		var stream = streamMaker.apply(id);
+		initStream(stream);
+		return stream;
 	}
 }

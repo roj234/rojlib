@@ -3,8 +3,8 @@ package roj.plugins.minecraft.server.network;
 import roj.collect.IntMap;
 import roj.concurrent.Promise;
 import roj.concurrent.TaskPool;
-import roj.crypt.AES;
 import roj.crypt.FeedbackCipher;
+import roj.crypt.ILCrypto;
 import roj.crypt.IvParameterSpecNC;
 import roj.crypt.RCipherSpi;
 import roj.io.IOUtil;
@@ -153,12 +153,12 @@ public class LoginHello implements ChannelHandler {
 
 	static void insertCipher(MyChannel channel, byte[] aesKey) throws IOException {
 		try {
-			AES aes = new AES();
+			var aes = ILCrypto.Aes();
 			aes.init(RCipherSpi.ENCRYPT_MODE, aesKey); // avoid extra compute
 
-			FeedbackCipher encrypt = new FeedbackCipher(aes, FeedbackCipher.MODE_CFB);
+			var encrypt = new FeedbackCipher(aes, FeedbackCipher.MODE_CFB);
 			encrypt.init(RCipherSpi.ENCRYPT_MODE, aesKey, new IvParameterSpecNC(aesKey), null);
-			FeedbackCipher decrypt = new FeedbackCipher(aes, FeedbackCipher.MODE_CFB);
+			var decrypt = new FeedbackCipher(aes, FeedbackCipher.MODE_CFB);
 			decrypt.init(RCipherSpi.DECRYPT_MODE, aesKey, new IvParameterSpecNC(aesKey), null);
 
 			channel.addBefore("splitter", "cipher", new CipherWrapper(encrypt, decrypt, true));

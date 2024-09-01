@@ -7,7 +7,7 @@ import roj.config.ConfigMaster;
 import roj.config.Tokenizer;
 import roj.config.Word;
 import roj.config.auto.Serializer;
-import roj.config.auto.Serializers;
+import roj.config.auto.SerializerFactory;
 import roj.io.IOUtil;
 import roj.ui.Terminal;
 import roj.ui.terminal.Argument;
@@ -40,7 +40,7 @@ public class DiffUser {
 
 		File basePath = ctx.argument("basePath", File.class);
 
-		Serializer<List<DiffResult>> adapter = Serializers.SAFE.listOf(DiffResult.class);
+		Serializer<List<DiffResult>> adapter = SerializerFactory.SAFE.listOf(DiffResult.class);
 		File file = ctx.argument("diffYml", File.class);
 		List<DiffResult> diffs = ConfigMaster.YAML.readObject(adapter, file);
 		for (int i = diffs.size() - 1; i >= 0; i--) {

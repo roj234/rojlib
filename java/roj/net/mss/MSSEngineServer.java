@@ -4,7 +4,6 @@ import roj.collect.CharMap;
 import roj.collect.IntMap;
 import roj.concurrent.OperationDone;
 import roj.crypt.HMAC;
-import roj.crypt.KeyAgreement;
 import roj.crypt.RCipherSpi;
 import roj.io.IOUtil;
 import roj.util.ByteList;
@@ -69,8 +68,9 @@ public class MSSEngineServer extends MSSEngine {
 		return map;
 	}
 
-	protected void onPreData(DynByteBuf o) throws MSSException {}
-
+	/**
+	 * 开启0-RTT以及Encrypted_Extension
+	 */
 	protected boolean clientShouldReply() { return (flag & VERIFY_CLIENT) != 0; }
 
 	// endregion
@@ -99,10 +99,27 @@ public class MSSEngineServer extends MSSEngine {
 			return HS_OK;
 		}
 
-		// fast-fail preventing useless waiting
-		if (stage == CLIENT_HELLO && rx.isReadable() &&
-			(rx.get(rx.rIndex) != H_CLIENT_HELLO && rx.get(rx.rIndex) != P_ALERT))
+		// fast-fail preventing meaningless waiting
+		validated:
+		if (rx.isReadable()) {
+			var type = rx.get(rx.rIndex);
+			switch (stage) {
+				case CLIENT_HELLO, RETRY_KEY_EXCHANGE:
+					if (type == H_CLIENT_HELLO) break validated;
+				break;
+				case PREFLIGHT_WAIT:
+					stage = FINISH_WAIT;
+					if (type == P_PREDATA) break validated;
+				case FINISH_WAIT:
+					preDecoder = null;
+					if (type == H_ENCRYPTED_EXTENSION) break validated;
+					if (!clientShouldReply()) {
+						stage = HS_DONE;
+						return HS_OK;
+					}
+			}
 			return error(ILLEGAL_PACKET, null);
+		}
 
 		int lim = rx.wIndex();
 		int type = readPacket(rx);
@@ -111,16 +128,9 @@ public class MSSEngineServer extends MSSEngine {
 
 		try {
 			switch (stage) {
-				case CLIENT_HELLO:
-				case RETRY_KEY_EXCHANGE:
-					if (type != H_CLIENT_HELLO) return error(ILLEGAL_PACKET, null);
-					return handleClientHello(tx, rx);
-				case PREFLIGHT_END_WAIT:
-					if (type == P_PREDATA) return handlePreflight(tx, rx);
-					stage = FINISH_WAIT;
-				case FINISH_WAIT:
-					if (type != H_ENCRYPTED_EXTENSION) return error(ILLEGAL_PACKET, null);
-					return handleFinish(tx, rx);
+				case CLIENT_HELLO, RETRY_KEY_EXCHANGE: return handleClientHello(tx, rx);
+				case PREFLIGHT_WAIT: return handlePreflight(tx, rx);
+				case FINISH_WAIT: return handleFinish(tx, rx);
 			}
 		} catch (GeneralSecurityException e) {
 			return error(e);
@@ -131,7 +141,7 @@ public class MSSEngineServer extends MSSEngine {
 		return HS_OK;
 	}
 
-	public final int handshakeSSL(DynByteBuf out, DynByteBuf in) throws MSSException {
+	public final int handshakeTLS13(DynByteBuf out, DynByteBuf in) throws MSSException {
 		if (stage == HS_DONE) return HS_OK;
 
 		if ((flag & WRITE_PENDING) != 0) {
@@ -230,7 +240,6 @@ public class MSSEngineServer extends MSSEngine {
 	// u4 support_key_bits
 	// extension[]
 	private int handleClientHello(DynByteBuf tx, DynByteBuf rx) throws MSSException, GeneralSecurityException {
-		if (rx.readInt() != H_MAGIC) return error(ILLEGAL_PACKET, null);
 		if (rx.readUnsignedByte() != PROTOCOL_VERSION) return error(VERSION_MISMATCH, null);
 		int packetBegin = rx.rIndex;
 
@@ -240,11 +249,10 @@ public class MSSEngineServer extends MSSEngine {
 
 		CipherSuite suite = null;
 		CharMap<CipherSuite> map = getCipherSuiteMap();
-		int len = rx.readUnsignedShort();
-		if (len > 1024) return error(ILLEGAL_PARAM, "cipher_suite.length");
+		int len = rx.readUnsignedByte();
 		int suite_id = -1;
 		for (int i = 0; i < len; i++) {
-			CipherSuite mySuite = map.get((char) rx.readUnsignedShort());
+			var mySuite = map.get((char) rx.readUnsignedShort());
 			if (mySuite != null) {
 				suite = mySuite;
 				suite_id = i;
@@ -254,15 +262,13 @@ public class MSSEngineServer extends MSSEngine {
 		}
 		if (suite == null) return error(NEGOTIATION_FAILED, "cipher_suite");
 
-		KeyAgreement ke = getKeyExchange(rx.readUnsignedByte());
+		var ke = getKeyExchange(rx.readUnsignedByte());
 		if (ke == null) {
 			if (stage == RETRY_KEY_EXCHANGE) return error(ILLEGAL_PARAM, "hello_retry");
 			stage = RETRY_KEY_EXCHANGE;
-			rx.skipBytes(rx.readUnsignedShort());
 
-			tx.put(H_SERVER_HELLO).putMedium(43)
-			   .put(PROTOCOL_VERSION).put(EMPTY_32).putShort(0xFFFF)
-			   .putShort(4).putInt(getSupportedKeyExchanges()).putShort(0);
+			tx.put(H_SERVER_HELLO).putMedium(39)
+			  .put(PROTOCOL_VERSION).put(EMPTY_32).putShort(0xFFFF).putInt(getSupportedKeyExchanges());
 			return HS_OK;
 		} else {
 			ke.init(random);
@@ -355,7 +361,7 @@ public class MSSEngineServer extends MSSEngine {
 		byte[] bb = CipherSuite.getKeyFormat(kp.format()).sign(kp, random, sign.digestShared());
 		ob.putShort(bb.length).put(bb);
 
-		stage = PREFLIGHT_END_WAIT;
+		stage = PREFLIGHT_WAIT;
 		encoder = suite.cipher.get();
 		decoder = suite.cipher.get();
 
@@ -380,7 +386,7 @@ public class MSSEngineServer extends MSSEngine {
 		}
 
 		tx.put(H_SERVER_HELLO).putMedium(ob.length()).put(ob);
-		if (!clientShouldReply()) stage = HS_DONE;
+		// 半个通道已经建立：服务器可以发送数据了
 		return HS_OK;
 	}
 
@@ -388,17 +394,17 @@ public class MSSEngineServer extends MSSEngine {
 	// opaque[*] encoded_data
 	private int handlePreflight(DynByteBuf tx, DynByteBuf rx) throws MSSException {
 		if (preDecoder != null) {
-			DynByteBuf o = heapBuffer(preDecoder.engineGetOutputSize(rx.readableBytes()));
+			int outputSize = preDecoder.engineGetOutputSize(rx.readableBytes()) - tx.writableBytes();
+			if (outputSize > 0) return outputSize;
+
 			try {
-				preDecoder.cryptFinal(rx, o);
-				onPreData(o);
+				preDecoder.cryptFinal(rx, tx);
 			} catch (Exception e) {
 				return error(e);
-			} finally {
-				free(o);
 			}
+			return HS_PRE_DATA;
 		}
-		return HS_OK;
+		return HS_BUFFER_UNDERFLOW;
 	}
 
 	// ID encrypted_extension
@@ -408,7 +414,7 @@ public class MSSEngineServer extends MSSEngine {
 
 		CharMap<DynByteBuf> extIn = Extension.read(rx);
 		if ((flag & VERIFY_CLIENT) != 0) {
-			DynByteBuf buf = extIn.remove(Extension.certificate);
+			var buf = extIn.remove(Extension.certificate);
 			if (buf == null) return error(ILLEGAL_PARAM, "certificate missing");
 
 			byte[] sign = buf.readBytes(buf.readUnsignedShort());

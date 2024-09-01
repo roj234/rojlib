@@ -2,7 +2,8 @@ package roj.plugins.mychat;
 
 import roj.concurrent.FastThreadLocal;
 import roj.concurrent.TaskPool;
-import roj.crypt.SM3;
+import roj.crypt.BufferedDigest;
+import roj.crypt.ILCrypto;
 import roj.io.IOUtil;
 import roj.net.ChannelCtx;
 import roj.net.http.server.HttpCache;
@@ -31,7 +32,7 @@ public class UploadHandler extends MultipartFormHandler {
 	private final int uid;
 	private final boolean image;
 
-	private SM3 sm3;
+	private BufferedDigest sm3;
 
 	public File[] files;
 	public String[] errors;
@@ -52,9 +53,9 @@ public class UploadHandler extends MultipartFormHandler {
 
 		Map<String, Object> ctx = HttpCache.getInstance().ctx;
 		if (!ctx.containsKey("SM3U")) {
-			ctx.put("SM3U", sm3 = new SM3());
+			ctx.put("SM3U", sm3 = ILCrypto.SM3());
 		} else {
-			sm3 = (SM3) ctx.get("SM3U");
+			sm3 = (BufferedDigest) ctx.get("SM3U");
 		}
 	}
 

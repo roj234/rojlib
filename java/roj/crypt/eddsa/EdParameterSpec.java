@@ -1,8 +1,5 @@
 package roj.crypt.eddsa;
 
-import roj.crypt.eddsa.math.EdCurve;
-import roj.crypt.eddsa.math.EdInteger;
-import roj.crypt.eddsa.math.EdPoint;
 import roj.io.IOUtil;
 
 import java.security.MessageDigest;
@@ -10,7 +7,7 @@ import java.security.NoSuchAlgorithmException;
 import java.security.spec.AlgorithmParameterSpec;
 
 public class EdParameterSpec implements AlgorithmParameterSpec {
-	private static final EdCurve ed25519curve = new EdCurve(toByte("a3785913ca4deb75abd841414d0a700098e879777940c78c73fe6f2bee6c0352"), EdInteger.fromBytes(toByte("b0a00e4a271beec478e42fad0618432fa7d7fb3d99004d2b0bdfc14f8024832b")));
+	private static final EdCurve ed25519curve = new EdCurve(toByte("a3785913ca4deb75abd841414d0a700098e879777940c78c73fe6f2bee6c0352"), toByte("b0a00e4a271beec478e42fad0618432fa7d7fb3d99004d2b0bdfc14f8024832b"));
 	public static final EdParameterSpec ED25519_CURVE_SPEC = new EdParameterSpec(Type.EdDSA, 255, 3, ed25519curve, "SHA-512", toByte("5866666666666666666666666666666666666666666666666666666666666666"));
 	public static final EdParameterSpec X25519_CURVE_SPEC = new EdParameterSpec(Type.XDH, 255, 3, ed25519curve, "SHA-512", toByte("0000000000000000000000000000000000000000000000000000000000000009"));
 	private static byte[] toByte(String s) { return IOUtil.SharedCoder.get().decodeHex(s); }

@@ -18,8 +18,8 @@ import java.util.Arrays;
  * @author Roj234
  * @since 2022/12/28 0028 14:20
  */
-public class AES_GCM extends AES {
-	public AES_GCM() {}
+final class AES_GCM extends AES {
+	AES_GCM() {}
 
 	private ByteList aadBuffer;
 	private int lenAAD, processed;
@@ -88,7 +88,7 @@ public class AES_GCM extends AES {
 		}
 	}
 
-	public int engineGetOutputSize(int data) { return decrypt ? data - AES_BLOCK_SIZE : data + AES_BLOCK_SIZE; }
+	public int engineGetOutputSize(int data) { return encrypt ? data - AES_BLOCK_SIZE : data + AES_BLOCK_SIZE; }
 
 	public void crypt(DynByteBuf in, DynByteBuf out) throws ShortBufferException {
 		if (out.writableBytes() < in.readableBytes()) throw new ShortBufferException();
@@ -106,14 +106,14 @@ public class AES_GCM extends AES {
 		ByteList t = tmp;
 
 		int block = in.readableBytes() / AES_BLOCK_SIZE;
-		if (decrypt) {
+		if (encrypt) {
 			// 防止tag被处理掉
 			if (--block == 0) return;
 		}
 		processed += block * AES_BLOCK_SIZE;
 
 		ByteList ctr = counter;
-		if (decrypt) {
+		if (encrypt) {
 			while (block > 0) {
 				t.clear();
 				ctr.rIndex = 0;
@@ -151,7 +151,7 @@ public class AES_GCM extends AES {
 	protected void cryptFinal1(DynByteBuf in, DynByteBuf out) throws ShortBufferException, BadPaddingException {
 		if (out.writableBytes() < engineGetOutputSize(in.readableBytes())) throw new ShortBufferException();
 
-		if (decrypt) {
+		if (encrypt) {
 			if (in.readableBytes() < AES_BLOCK_SIZE) throw new AEADBadTagException("怪");
 			decryptFinal(in, out);
 		} else encryptFinal(in, out);
