@@ -4,7 +4,7 @@ import roj.collect.CharMap;
 import roj.collect.IntMap;
 import roj.crypt.HKDFPRNG;
 import roj.crypt.HMAC;
-import roj.crypt.KeyAgreement;
+import roj.crypt.KeyExchange;
 import roj.crypt.RCipherSpi;
 import roj.io.buf.BufferPool;
 import roj.net.handler.VarintSplitter;
@@ -72,9 +72,9 @@ public abstract class MSSEngine {
 	public final boolean isClosed() { return stage == HS_FAIL; }
 
 	protected int getSupportedKeyExchanges() { return CipherSuite.ALL_KEY_EXCHANGE_TYPE; }
-	protected KeyAgreement getKeyExchange(int type) {
-		if (type == -1) return CipherSuite.getKeyAgreement(CipherSuite.KEX_ECDHE_secp384r1);
-		return CipherSuite.getKeyAgreement(type);
+	protected KeyExchange getKeyExchange(int type) {
+		if (type == -1) return CipherSuite.getKeyExchange(CipherSuite.KEX_ECDHE_secp384r1);
+		return CipherSuite.getKeyExchange(type);
 	}
 
 	protected int getSupportCertificateType() { return CipherSuite.ALL_PUBLIC_KEY_TYPE; }

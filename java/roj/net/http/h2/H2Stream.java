@@ -33,6 +33,7 @@ public abstract class H2Stream {
 
 	int sendWindow, receiveWindow;
 	public final int getReceiveWindow() {return receiveWindow;}
+	public final int getSendWindow() {return sendWindow;}
 
 	protected int headerSize;
 	protected int dependency;
@@ -212,5 +213,11 @@ public abstract class H2Stream {
 	 * 可以使用{@link #isSuccessfullyFinished()}判断是正常关闭还是异常关闭
 	 * 这个方法至多调用一次
 	 */
-	protected abstract void onFinish(H2Connection man);
+	protected void onFinish(H2Connection man) {}
+
+	/**
+	 *
+	 * @param man
+	 */
+	protected void onWindowUpdate(H2Connection man) throws IOException {}
 }

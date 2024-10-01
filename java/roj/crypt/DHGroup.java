@@ -9,7 +9,7 @@ import java.util.function.Supplier;
  * @author Roj234
  * @since 2023/4/3 0003 12:23
  */
-public final class DHGroup implements Supplier<KeyAgreement> {
+public final class DHGroup implements Supplier<KeyExchange> {
 	public static final DHGroup
 		ffdhe2048 = new DHGroup("ffdhe2048", 2,
 			"FFFFFFFFFFFFFFFFADF85458A2BB4A9AAFDC5620273D3CF1" +
@@ -23,7 +23,7 @@ public final class DHGroup implements Supplier<KeyAgreement> {
 			"9172FE9CE98583FF8E4F1232EEF28183C3FE3B1B4C6FAD73" +
 			"3BB5FCBC2EC22005C58EF1837D1683B2C6F34A26C1B2EFFA" +
 			"886B423861285C97FFFFFFFFFFFFFFFF", 225),
-		ffdhe3072 = new DHGroup("ffdhe3072", 2, 
+		ffdhe3072 = new DHGroup("ffdhe3072", 2,
 			"FFFFFFFFFFFFFFFFADF85458A2BB4A9AAFDC5620273D3CF1" +
 			"D8B9C583CE2D3695A9E13641146433FBCC939DCE249B3EF9" +
 			"7D2FE363630C75D8F681B202AEC4617AD3DF1ED5D5FD6561" +
@@ -163,7 +163,7 @@ public final class DHGroup implements Supplier<KeyAgreement> {
 		}
 		return q;
 	}
-	public DHE get() { return new DHE(this); }
+	public KeyExchange get() { return new DH(this); }
 
 	public static BigInteger srPrime(int bits) {
 		bits -= 14;

@@ -1,8 +1,8 @@
 package roj.archive.zip;
 
-import roj.crypt.AES;
 import roj.crypt.FeedbackCipher;
 import roj.crypt.HMAC;
+import roj.crypt.ILCrypto;
 import roj.crypt.PBKDF2;
 import roj.io.IOUtil;
 import roj.util.DynByteBuf;
@@ -34,7 +34,7 @@ final class ZipAES extends FeedbackCipher {
 	byte[] salt;
 
 	public ZipAES() {
-		super(new AES(), MODE_CTR);
+		super(ILCrypto.Aes(), MODE_CTR);
 		try {
 			hmac = new HMAC(MessageDigest.getInstance("SHA1"));
 		} catch (NoSuchAlgorithmException e) {

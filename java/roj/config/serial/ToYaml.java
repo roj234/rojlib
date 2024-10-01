@@ -55,13 +55,13 @@ public final class ToYaml extends ToSomeString {
 	@Override
 	public final void valueDate(long value) {
 		preValue(false);
-		if (cal == null) cal = new ACalendar(TimeZone.getTimeZone("UTC"));
+		if (cal == null) cal = ACalendar.GMT();
 		cal.format("Y-m-d", value, sb);
 	}
 	@Override
 	public final void valueTimestamp(long value) {
 		preValue(false);
-		if (cal == null) cal = new ACalendar(TimeZone.getTimeZone("UTC"));
+		if (cal == null) cal = ACalendar.GMT();
 		cal.toISOString(sb, value);
 	}
 

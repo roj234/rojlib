@@ -10,10 +10,9 @@ import roj.collect.SimpleList;
 import roj.concurrent.TaskPool;
 import roj.config.NBTParser;
 import roj.config.serial.ToNBT;
-import roj.crypt.Blake3;
 import roj.crypt.CRC32s;
+import roj.crypt.ILCrypto;
 import roj.crypt.KeyType;
-import roj.crypt.SM3;
 import roj.io.*;
 import roj.io.buf.BufferPool;
 import roj.text.TextUtil;
@@ -252,8 +251,8 @@ public final class McDiffServer {
 
 		qzfw.closeWordBlock();
 
-		Blake3 hash1 = new Blake3(32);
-		SM3 hash2 = new SM3();
+		var hash1 = ILCrypto.Blake3(32);
+		var hash2 = ILCrypto.SM3();
 
 		long count = qzfw.s.position()-32;
 		byte[] tmp = ArrayCache.getByteArray(1024, false);

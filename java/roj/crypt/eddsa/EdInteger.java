@@ -1,35 +1,33 @@
-package roj.crypt.eddsa.math;
+package roj.crypt.eddsa;
 
 import roj.text.TextUtil;
 
 import java.util.Arrays;
 
-import static roj.crypt.eddsa.math.EdPoint.NUMS;
+import static roj.crypt.eddsa.EdPoint.NUMS;
 
-public final class EdInteger {
-	public static final EdInteger ZERO = fromBytes(new byte[32]);
-	public static final EdInteger ONE;
+final class EdInteger {
+	public static final EdInteger ZERO = new EdInteger(new int[10]), ONE;
 	static {
-		byte[] b = new byte[32];
+		var b = new int[10];
 		b[0] = 1;
-		ONE = fromBytes(b);
+		ONE = new EdInteger(b);
 	}
 
-	final int[] t;
-	transient boolean mutable;
+	private final int[] t;
+	private transient boolean mutable;
 
 	public EdInteger(int[] t) {
 		if (t.length != 10) throw new IllegalArgumentException("Invalid radix-2^51 representation");
 		this.t = t;
 	}
 
-	static int load_3(byte[] in, int offset) {
+	private static int load_3(byte[] in, int offset) {
 		int result = in[offset++] & 0xFF;
 		result |= (in[offset++] & 0xFF) << 8;
 		return result | (in[offset] & 0xFF) << 16;
 	}
-
-	static long load_4(byte[] in, int offset) {
+	private static long load_4(byte[] in, int offset) {
 		int result = in[offset++] & 0xFF;
 		result |= (in[offset++] & 0xFF) << 8;
 		result |= (in[offset++] & 0xFF) << 16;

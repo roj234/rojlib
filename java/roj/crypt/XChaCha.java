@@ -12,9 +12,9 @@ import java.security.InvalidAlgorithmParameterException;
  * @author solo6975
  * @since 2022/2/14 19:41
  */
-public final class XChaCha extends ChaCha {
-	public XChaCha() {}
-	public XChaCha(int round) {super(round);}
+final class XChaCha extends ChaCha {
+	XChaCha() {}
+	XChaCha(int round) {super(round);}
 
 	byte[] iv;
 

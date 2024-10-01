@@ -7,10 +7,9 @@ import roj.concurrent.timing.Scheduler;
 import roj.config.data.CInt;
 import roj.io.IOUtil;
 import roj.text.CharList;
+import roj.text.LineReader;
 import roj.ui.*;
 
-import java.awt.datatransfer.*;
-import java.io.IOException;
 import java.util.Collections;
 import java.util.List;
 import java.util.function.IntFunction;
@@ -179,23 +178,25 @@ public class DefaultConsole implements Console {
 		} else {
 			switch (keyCode) {
 				case VK_CTRL|VK_B:
-					var clipboard = GuiUtil.CLIPBOARD;
-					if (clipboard != null)clipboard.setContents(new StringSelection(Terminal.stripAnsi(new CharList(input)).toStringAndFree()), null);
-					else System.err.println("您的环境没有剪贴板，复制失败");
+					if (!GuiUtil.setClipboardText(Terminal.stripAnsi(new CharList(input)).toStringAndFree()))
+						System.err.println("您的环境没有剪贴板，复制失败");
 				return;
 				case VK_CTRL|VK_V:
-					clipboard = GuiUtil.CLIPBOARD;
+					var clipboard = GuiUtil.getClipboard();
 					if (clipboard != null) {
-						DataFlavor stringFlavor = DataFlavor.stringFlavor;
-						if (clipboard.isDataFlavorAvailable(stringFlavor)) {
-							try {
-								String text = filterText(clipboard.getData(stringFlavor).toString());
+						var text = GuiUtil.getClipboardText();
+						if (text != null) {
+							List<String> lines = LineReader.toLines(text, false);
+							for (int i = 0;;) {
+								String line = lines.get(i);
+
 								endCompletion(false);
-								input.insert(cursor, text);
-								cursor += text.length();
+								input.insert(cursor, line);
+								cursor += line.length();
 								afterInput();
-							} catch (UnsupportedFlavorException | IOException e) {
-								e.printStackTrace();
+
+								if (++i == lines.size()) break;
+								keyEnter(VK_ENTER, true);
 							}
 						}
 					} else System.err.println("您的环境没有剪贴板，粘贴失败");
@@ -217,6 +218,7 @@ public class DefaultConsole implements Console {
 					if (!endCompletion(false)) return;
 				break;
 				case VK_ENTER:
+					doRender(); // 适配粘贴多行命令的情况 (TODO 可能卡死吗)
 					if (endCompletion(true)) break;
 
 					String cmd = input.toString();
@@ -367,12 +369,6 @@ public class DefaultConsole implements Console {
 		}
 
 		_isDirty = true;
-	}
-
-	private static String filterText(String string) {
-		int i = string.lastIndexOf('\n');
-		if (i >= 0) string = string.substring(i+1);
-		return string.replace('\t', ' ');
 	}
 
 	protected final void printCommand() {

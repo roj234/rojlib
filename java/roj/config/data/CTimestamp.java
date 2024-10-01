@@ -10,9 +10,6 @@ public final class CTimestamp extends CLong {
 	public CTimestamp(long number) { super(number); }
 
 	public Type getType() { return Type.DATE; }
-	@Override
-	public boolean mayCastTo(Type o) { return o == Type.DATE; }
-
-	@Override
-	public void accept(CVisitor ser) { ser.valueTimestamp(value); }
+	@Override public boolean mayCastTo(Type o) { return o == Type.DATE; }
+	@Override public void accept(CVisitor ser) { ser.valueTimestamp(value); }
 }

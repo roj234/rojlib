@@ -38,6 +38,9 @@ JNIEXPORT jlong JNICALL Java_roj_ui_GuiUtil_nGetWindowLong(JNIEnv *, jclass, jlo
 JNIEXPORT void JNICALL Java_roj_ui_GuiUtil_nSetWindowLong(JNIEnv *, jclass, jlong hwnd, jint dwType, jlong flags);
 JNIEXPORT jlong JNICALL Java_roj_ui_GuiUtil_nGetConsoleWindow(JNIEnv *, jclass);
 
+JNIEXPORT jint JNICALL Java_roj_crypt_AESNI_callNativeFastJNI(JNIEnv *, jclass, jint v);
+JNIEXPORT void JNICALL Java_roj_crypt_AESNI_infLoopFastJNI(JNIEnv *, jclass);
+
 #ifdef __cplusplus
 }
 #endif

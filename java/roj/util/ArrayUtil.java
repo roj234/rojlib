@@ -5,11 +5,9 @@ import roj.config.Tokenizer;
 import roj.io.IOUtil;
 import roj.reflect.Bypass;
 import roj.text.CharList;
+import roj.ui.GuiUtil;
 import roj.ui.Terminal;
 
-import java.awt.*;
-import java.awt.datatransfer.*;
-import java.util.List;
 import java.util.*;
 import java.util.function.ToIntFunction;
 
@@ -47,7 +45,8 @@ public final class ArrayUtil {
 		while (br.readableBits() >= 7) sb.append((char) (br.readBit(7)+1));
 		if (br.readableBits() > 0) sb.append((char) (br.readBit(br.readableBits())+1));
 
-		Toolkit.getDefaultToolkit().getSystemClipboard().setContents(new StringSelection(Tokenizer.addSlashes(sb, 0, new CharList().append('"'), '\'').append('"').toStringAndFree()), null);
+		//FIXME use attribute store and (lavac)
+		GuiUtil.setClipboardText(Tokenizer.addSlashes(sb, 0, new CharList().append('"'), '\'').append('"').toStringAndFree());
 		Terminal.pause();
 	}
 

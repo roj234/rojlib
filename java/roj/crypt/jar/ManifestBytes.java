@@ -15,7 +15,7 @@ import java.util.Map;
  * @author Roj234
  * @since 2024/3/25 0025 16:57
  */
-public class ManifestBytes {
+final class ManifestBytes {
 	byte[] data;
 	Map<String, NamedAttr> namedAttrMap = new MyHashMap<>();
 	ByteAttr mainAttr;

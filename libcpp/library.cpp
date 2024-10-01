@@ -188,6 +188,22 @@ JNIEXPORT void JNICALL Java_roj_ui_GuiUtil_nSetWindowLong(JNIEnv *, jclass, jlon
 }
 
 JNIEXPORT jlong JNICALL Java_roj_ui_GuiUtil_nGetConsoleWindow(JNIEnv *, jclass) {
+    //{
+    //    HANDLE hStdOut = GetStdHandle(STD_OUTPUT_HANDLE);
+    //    HANDLE hStdIn = GetStdHandle(STD_INPUT_HANDLE);
+    //
+    //    if (hStdIn == INVALID_HANDLE_VALUE ||
+    //        hStdOut == INVALID_HANDLE_VALUE) {
+    //        return JNI_FALSE;
+    //    }
+    //
+    //    if (GetFileType(hStdIn) != FILE_TYPE_CHAR ||
+    //        GetFileType(hStdOut) != FILE_TYPE_CHAR) {
+    //        return JNI_FALSE;
+    //    }
+    //
+    //    return JNI_TRUE;
+    //}
     return reinterpret_cast<jlong>(GetConsoleWindow());
 }
 
@@ -222,3 +238,11 @@ JNIEXPORT void JNICALL Java_roj_util_SharedMemory_nClose(JNIEnv *env, jclass, jl
 }
 
 #endif
+
+
+JNIEXPORT jint JNICALL Java_roj_crypt_AESNI_callNativeFastJNI(JNIEnv *, jclass, jint v) {
+    return v * 233;
+}
+JNIEXPORT void JNICALL Java_roj_crypt_AESNI_infLoopFastJNI(JNIEnv *, jclass) {
+    while (true);
+}

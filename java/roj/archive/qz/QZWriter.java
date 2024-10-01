@@ -248,7 +248,7 @@ public abstract class QZWriter extends OutputStream implements ArchiveWriter {
             return;
         }
 
-        WordBlock b = blocks.get(blocks.size()-1);
+        WordBlock b = blocks.getLast();
 
         entry.block = b;
         entry.offset = b.uSize;

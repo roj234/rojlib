@@ -179,10 +179,9 @@ class UdpChImpl extends MyChannel {
 					pauseAndFlush();
 				}
 
-				DynByteBuf put = bp.allocate(true, buf.readableBytes(), 0).put(buf);
-				if (!pending.offerLast(new DatagramPkt(p, put))) {
-					BufferPool.reserve(put);
-					throw new IOException("上层发送缓冲区过载");
+				var put = bp.allocate(true, buf.readableBytes(), 0).put(buf);
+				if (pending.ringAddLast(new DatagramPkt(p, put)) instanceof DatagramPkt prev) {
+					BufferPool.reserve(prev.buf);
 				}
 			} else {
 				fireFlushed();

@@ -866,9 +866,13 @@ public class QZArchive extends QZReader implements ArchiveFile {
 	public List<QZEntry> entries() { return Arrays.asList(entries); }
 	public QZEntry[] getEntriesByPresentOrder() { return entries; }
 
-	public void parallelDecompress(TaskHandler th, BiConsumer<QZEntry, InputStream> callback) { parallelDecompress(th, callback, password); }
-	public void parallelDecompress(TaskHandler th, BiConsumer<QZEntry, InputStream> callback, byte[] pass) {
-		if (blocks == null) return;
+	public AtomicInteger parallelDecompress(TaskHandler th, BiConsumer<QZEntry, InputStream> callback) {return parallelDecompress(th, callback, password);}
+	public AtomicInteger parallelDecompress(TaskHandler th, BiConsumer<QZEntry, InputStream> callback, byte[] pass) {
+		var num = new AtomicInteger();
+
+		if (blocks == null) return num;
+
+		num.set(blocks.length);
 		for (WordBlock b : blocks) {
 			th.submit(() -> {
 				if (r == null) throw new AsynchronousCloseException();
@@ -891,10 +895,24 @@ public class QZArchive extends QZReader implements ArchiveFile {
 
 						entry = entry.next;
 					} while (entry != null);
+				} finally {
+					if (num.decrementAndGet() == 0) {
+						synchronized (num) {
+							num.notifyAll();
+						}
+					}
 				}
 			});
 		}
+
+		return num;
 	}
+	public static void awaitParallelComplete(AtomicInteger r1) throws InterruptedException {
+		while (r1.get() != 0) {
+			synchronized (r1) {r1.wait();}
+		}
+	}
+
 	private static final class SkipInputStream extends InputStream {
 		private final InputStream in, rin;
 		long toSkip;

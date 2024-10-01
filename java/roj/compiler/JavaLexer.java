@@ -239,7 +239,8 @@ public final class JavaLexer extends Tokenizer {
 	}
 
 	public int skipBrace() throws ParseException {
-		if (wd.type() != lBrace) throw new IllegalStateException("not lBrace");
+		//assert => for normal call, but not lambda compiler (index == 0)
+		//if (wd.type() != lBrace) throw new IllegalStateException("not lBrace");
 		int pos = index;
 
 		int L = 1;

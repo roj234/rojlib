@@ -1,13 +1,13 @@
-package roj.crypt.eddsa.math;
+package roj.crypt.eddsa;
 
 import roj.collect.SimpleList;
 
 import java.io.Serializable;
 import java.util.Arrays;
 
-import static roj.crypt.eddsa.math.EdInteger.ZERO;
+import static roj.crypt.eddsa.EdInteger.ZERO;
 
-public final class EdPoint implements Serializable {
+final class EdPoint implements Serializable {
 	public enum Format {
 		P2, P3, P1P1, PRECOMP, CACHED
 	}
@@ -51,7 +51,7 @@ public final class EdPoint implements Serializable {
 		EdInteger y = EdInteger.fromBytes(s);
 		EdInteger yy = y.square();
 		EdInteger u = yy.sub1();
-		EdInteger v = yy.mutable().mul(curve.getD()).add1();
+		EdInteger v = yy.mutable().mul(curve.D).add1();
 		EdInteger v3 = v.mutable().square().mul(v);
 		EdInteger x = v3.mutable().square().mul(v).mul(u);
 		x = x.pow22523();
@@ -62,7 +62,7 @@ public final class EdPoint implements Serializable {
 			check = vxx.add(u);
 			if (check.isNonZero()) throw new IllegalArgumentException("invalid point");
 
-			x.mul(curve.getI());
+			x.mul(curve.I);
 		}
 		if ((x.isNegative() ? 1 : 0) != ((s[31] >> 7) & 1)) x.neg();
 
@@ -127,10 +127,10 @@ public final class EdPoint implements Serializable {
 							EdInteger x = NUMS.get().a.set(Y).add(X);
 							Y.sub(X);
 							X.set(x);
-							T.mul(curve.get2D());
+							T.mul(curve.twoD);
 							return this;
 						}
-						return cached(curve, Y.add(X), Y.sub(X), Z, T.mul(curve.get2D()));
+						return cached(curve, Y.add(X), Y.sub(X), Z, T.mul(curve.twoD));
 				}
 				break;
 			case P1P1:
@@ -186,7 +186,7 @@ public final class EdPoint implements Serializable {
 				x.set(Bij.X).mul(recip);
 				y.set(Bij.Y).mul(recip);
 
-				preval[(i<<3) + j] = precomp(curve, y.mutable().add(x), y.mutable().sub(x), x.mutable().mul(y).mul(curve.get2D()));
+				preval[(i<<3) + j] = precomp(curve, y.mutable().add(x), y.mutable().sub(x), x.mutable().mul(y).mul(curve.twoD));
 
 				Bij.add(cachedBi).toP3();
 			}
@@ -215,7 +215,7 @@ public final class EdPoint implements Serializable {
 			x.set(Bi.X).mul(recip);
 			y.set(Bi.Y).mul(recip);
 
-			preval2[i] = precomp(curve, y.mutable().add(x), y.mutable().sub(x), x.mutable().mul(y).mul(curve.get2D()));
+			preval2[i] = precomp(curve, y.mutable().add(x), y.mutable().sub(x), x.mutable().mul(y).mul(curve.twoD));
 
 			tmp.set(this).add(Bi.toCached()).toP3().toCached();
 			Bi.set(this).add(tmp).toP3();
@@ -561,7 +561,7 @@ public final class EdPoint implements Serializable {
 				EdInteger recip = tt.invert_safe.set(Z).invert();
 				EdInteger xx = tt.b.set(X).mul(recip).square();
 				EdInteger yy = tt.c.set(Y).mul(recip).square();
-				EdInteger dxxyy = tt.a.set(curve.getD()).mul(xx).mul(yy);
+				EdInteger dxxyy = tt.a.set(curve.D).mul(xx).mul(yy);
 				return dxxyy.add1().add(xx).equals(yy);
 			}
 		}

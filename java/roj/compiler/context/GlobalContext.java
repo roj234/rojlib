@@ -122,7 +122,7 @@ public class GlobalContext implements CompilerSpec {
 	@NotNull
 	public final ResolveHelper getResolveHelper(IClass info) { return extraInfos.computeIfAbsent(info); }
 	@NotNull
-	public IntBiMap<String> getParentList(IClass info) throws ClassNotFoundException {return getResolveHelper(info).getClassList(this);}
+	public IntBiMap<String> getParentList(IClass info) {return getResolveHelper(info).getClassList(this);}
 	@Nullable
 	public ComponentList getMethodList(IClass info, String name) throws TypeNotPresentException {return getResolveHelper(info).findMethod(this, name);}
 	@Nullable

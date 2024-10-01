@@ -94,7 +94,7 @@ public class FeedbackCipher extends RCipherSpi {
 	}
 
 	@Override
-	public String getAlgorithm() { return cip.getAlgorithm()+"/"+ getMode()+"/"+"NoPadding"; }
+	public String getAlgorithm() { return cip.getAlgorithm()+"/"+getMode()+"/"+"NoPadding"; }
 
 	@Override
 	public void init(int mode, byte[] key, AlgorithmParameterSpec par, SecureRandom random) throws InvalidAlgorithmParameterException, InvalidKeyException {
@@ -132,12 +132,10 @@ public class FeedbackCipher extends RCipherSpi {
 
 	@Override
 	public int engineGetBlockSize() {
-		switch (type) {
-			case MODE_ECB: case MODE_CBC:
-			case MODE_PCBC: case MODE_CTS:
-				return cip.engineGetBlockSize();
-			default: return 0;
-		}
+		return switch (type) {
+			case MODE_ECB, MODE_CBC, MODE_PCBC, MODE_CTS -> cip.engineGetBlockSize();
+			default -> 0;
+		};
 	}
 
 	@Override

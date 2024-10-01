@@ -4,7 +4,7 @@ import roj.collect.CharMap;
 import roj.collect.IntMap;
 import roj.concurrent.OperationDone;
 import roj.crypt.HMAC;
-import roj.crypt.KeyAgreement;
+import roj.crypt.KeyExchange;
 import roj.io.IOUtil;
 import roj.util.ArrayUtil;
 import roj.util.ByteList;
@@ -79,7 +79,7 @@ public class MSSEngineClient extends MSSEngine {
 	// endregion
 	// region Solid Handshake Process
 
-	private KeyAgreement keyExch;
+	private KeyExchange keyExch;
 
 	@Override
 	public final boolean isClientMode() { return true; }
@@ -123,7 +123,7 @@ public class MSSEngineClient extends MSSEngine {
 
 				var ke = keyExch==null ? keyExch = getKeyExchange(-1) : keyExch;
 				ke.init(random);
-				ke.writePublic(ob.put(CipherSuite.getKeyAgreementId(ke.getAlgorithm())).putShort(ke.length()));
+				ke.writePublic(ob.put(CipherSuite.getKeyExchangeId(ke.getAlgorithm())).putShort(ke.length()));
 
 				CharMap<DynByteBuf> ext = new CharMap<>();
 				if (session != null) {

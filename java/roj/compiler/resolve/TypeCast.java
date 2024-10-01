@@ -6,18 +6,15 @@ import roj.asm.Opcodes;
 import roj.asm.tree.IClass;
 import roj.asm.type.*;
 import roj.asm.visitor.CodeWriter;
-import roj.collect.Int2IntMap;
-import roj.collect.IntBiMap;
-import roj.collect.SimpleList;
+import roj.collect.*;
 import roj.compiler.asm.Asterisk;
 import roj.compiler.context.GlobalContext;
 import roj.compiler.context.LocalContext;
 import roj.concurrent.OperationDone;
 import roj.text.CharList;
 
-import java.util.Collections;
 import java.util.List;
-import java.util.function.Function;
+import java.util.Map;
 
 import static roj.asm.type.Generic.ANY_TYPE;
 import static roj.asm.type.Generic.ASTERISK_TYPE;
@@ -145,14 +142,12 @@ public class TypeCast {
 	// endregion
 
 	public GlobalContext context;
-	public Function<String, List<IType>> genericResolver;
+	public Map<String, List<IType>> typeParamsL, typeParamsR;
 
 	public Cast checkCast(IType from, IType to) { return checkCast(from, to, -1); }
 	private Cast checkCast(IType from, IType to, int etype) {
 		if (from.equals(to)) return RESULT(UPCAST, 0);
 
-		boolean isTypeParam = false;
-		//noinspection all
 		switch (to.genericType()) {
 			default: throw OperationDone.NEVER;
 			case STANDARD_TYPE: break;
@@ -161,14 +156,15 @@ public class TypeCast {
 				to = gg.sub != null ? mergeSubClass(gg) : gg;
 			break;
 
-			case TYPE_PARAMETER_TYPE: isTypeParam = true; break;
+			// TODO 限定范围
+			case TYPE_PARAMETER_TYPE: to = getTypeParamBound(to, typeParamsR, typeParamsL); break;
 			case ANY_TYPE: return RESULT(UPCAST, 0); // *
-			case ASTERISK_TYPE: return ERROR(E_NEVER); // 不能从"某个"具体的类转到"任何"具体的类
+			// 不能从"某个"具体的类转到"任何"具体的类, TODO: 除非它也是Asterisk类型
+			case ASTERISK_TYPE: break;//return ERROR(E_NEVER);
 			case CONCRETE_ASTERISK_TYPE: to = ((Asterisk) to).getBound(); break;
 		}
 
 		Asterisk asterisk = null;
-		//noinspection all
 		switch (from.genericType()) {
 			default: throw OperationDone.NEVER;
 			case STANDARD_TYPE: break;
@@ -177,8 +173,10 @@ public class TypeCast {
 				from = gg.sub != null ? mergeSubClass(gg) : gg;
 			break;
 
-			case TYPE_PARAMETER_TYPE: isTypeParam = true; break;
-			case ANY_TYPE: if (!isTypeParam) return DOWNCAST(to); break;
+			case TYPE_PARAMETER_TYPE:
+				from = getTypeParamBound(from, typeParamsL, typeParamsR);
+				break;
+			case ANY_TYPE: return DOWNCAST(to);
 			case ASTERISK_TYPE:
 				asterisk = (Asterisk) from;
 				if (asterisk.getBound() == null) {
@@ -188,6 +186,7 @@ public class TypeCast {
 
 				from = to;
 				to = asterisk.getBound();
+				to = getTypeParamBound(to, typeParamsL, typeParamsR);
 			break;
 			case CONCRETE_ASTERISK_TYPE:
 				asterisk = (Asterisk) from;
@@ -195,9 +194,7 @@ public class TypeCast {
 			break;
 		}
 
-		Cast result = isTypeParam ?
-			typeParamCast(from, to, etype) :
-			genericCast(from, to, etype);
+		Cast result = genericCast(from, to, etype);
 
 		if (asterisk != null) {
 			List<IType> bounds = asterisk.getBounds();
@@ -223,63 +220,56 @@ public class TypeCast {
 		return result;
 	}
 
-	private Cast typeParamCast(IType from, IType to, int etype) {
-		List<IType> from_list = getTypeParamBound(from);
-		if (from_list == null) return ERROR(E_NODATA);
-		List<IType> to_list = getTypeParamBound(to);
-		if (to_list == null) return ERROR(E_NODATA);
+	private static final class TPCollector extends MyHashMap<String, IType> {
+		final MyHashSet<Object> batch = new MyHashSet<>(), prevBatch = new MyHashSet<>();
 
-		Cast res = null;
-		for (int i = 0; i < from_list.size(); i++) {
-			IType f = from_list.get(i);
-			Cast ok = null;
+		public TPCollector() {}
 
-			for (int j = 0; j < to_list.size(); j++) {
-				IType t = to_list.get(j);
-
-				Cast v = genericCast(f, t, etype);
-				if (v.type >= 0) {if (ok == null || v.type < ok.type) ok = v;}
-				else if (res == null || v.type < res.type) res = v;
-			}
-
-			if (ok != null) res = ok;
+		void reset() {
+			prevBatch.clear();
+			batch.clear();
 		}
 
-		assert res != null;
-		return res;
-	}
-	private List<IType> getTypeParamBound(IType type) {
-		switch (type.genericType()) {
-			default: throw OperationDone.NEVER;
-			case STANDARD_TYPE: return Collections.singletonList(type);
-			case GENERIC_TYPE:
-				Generic gg = (Generic) type;
-				return Collections.singletonList(gg.sub != null ? mergeSubClass(gg) : gg);
-			case TYPE_PARAMETER_TYPE:
-				List<IType> bounds = genericResolver.apply(((TypeParam) type).name);
-				if (bounds == null || bounds.isEmpty()) return null;
-				return mergeSubClasses(bounds);
+		boolean flip() {
+			if (batch.isEmpty()) return true;
+			prevBatch.addAll(batch);
+			batch.clear();
+			return false;
+		}
+
+		@Override
+		public IType getOrDefault(Object key, IType def) {
+			if (prevBatch.contains(key)) return Signature.any();
+			batch.add(key);
+			return super.getOrDefault(key, def);
 		}
 	}
+	private final TPCollector collector = new TPCollector();
+	private IType getTypeParamBound(/*TypeParam*/IType type, Map<String, List<IType>> first, Map<String, List<IType>> second) {
+		var typeParams = second == null ? first : first == null ? second : new MyHashMap<>(second);
+		if (first != null) {
 
-	private static List<IType> mergeSubClasses(List<IType> list) {
-		for (int i = 0; i < list.size(); i++) {
-			IType T = list.get(i);
-			if (T.genericType() == 1 && ((Generic) T).sub != null) {
-				list = new SimpleList<>(list);
-				list.set(i++, mergeSubClass((Generic) T));
-
-				for (; i < list.size(); i++) {
-					T = list.get(i);
-					if (T.genericType() == 1 && ((Generic) T).sub != null) {
-						list.set(i, mergeSubClass((Generic) T));
-					}
-				}
-				break;
+			typeParams.putAll(first);
+		} else {
+			if (typeParams == null) {
+				new IllegalStateException("not tp defined:"+type).printStackTrace();
+				return type;
 			}
 		}
-		return list;
+
+		var visType = collector; visType.reset();
+		Inferrer.fillDefaultTypeParam(typeParams, visType);
+
+		do {
+			type = Inferrer.clearTypeParam(type, visType, typeParams);
+		} while (!visType.flip());
+
+		return type;
 	}
+
+	/**
+	 * Compare only, not directly usable
+	 */
 	private static IType mergeSubClass(Generic gg) {
 		CharList sb = new CharList();
 
@@ -514,12 +504,8 @@ public class TypeCast {
 		// 本来是不该发生的（前面检测了），但是说不定未来会支持class aliasing呢/doge
 		if (fromClass == toClass) return RESULT(UPCAST, 0);
 
-		try {
-			int distance = context.getParentList(fromClass).getValueOrDefault(toClass.name(), -1)&0xFFFF;
-			if (distance != 0xFFFF) return RESULT(UPCAST, distance);
-		} catch (ClassNotFoundException e) {
-			return ERROR(E_NODATA);
-		}
+		int distance = context.getParentList(fromClass).getValueOrDefault(toClass.name(), -1)&0xFFFF;
+		if (distance != 0xFFFF) return RESULT(UPCAST, distance);
 
 		return (fromClass.modifier() & Opcodes.ACC_FINAL) == 0 ? DOWNCAST(to) : ERROR(E_NEVER);
 	}

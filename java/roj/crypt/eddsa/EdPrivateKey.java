@@ -1,7 +1,5 @@
 package roj.crypt.eddsa;
 
-import roj.crypt.eddsa.math.EdPoint;
-
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.PrivateKey;
@@ -10,7 +8,7 @@ import java.security.spec.KeySpec;
 import java.security.spec.PKCS8EncodedKeySpec;
 import java.util.Arrays;
 
-public class EdPrivateKey implements EdKey, PrivateKey, KeySpec {
+final class EdPrivateKey implements EdKey, PrivateKey, KeySpec {
 	static final int OID_OLD = 100, OID_ED25519 = 112;
 	private static final int OID_BYTE = 11, IDLEN_BYTE = 6;
 

@@ -170,7 +170,7 @@ class TcpChImpl extends MyChannel {
 				if (pending.isEmpty()) {
 					fireFlushing();
 					key.interestOps(SelectionKey.OP_WRITE | SelectionKey.OP_READ);
-					flusher = DynByteBuf.allocateDirect();
+					flusher = DynByteBuf.allocateDirect(buf.readableBytes(), 1048576);
 					pending.offerLast(flusher);
 				} else {
 					flusher = (DynByteBuf) pending.getFirst();
@@ -179,7 +179,7 @@ class TcpChImpl extends MyChannel {
 				if (flusher.unsafeWritableBytes() < buf.readableBytes()) flusher.compact();
 				flusher.put(buf);
 				if (flusher.readableBytes() > rb.capacity()) pauseAndFlush();
-				if (flusher.readableBytes() > 1048576) throw new IOException("上层发送缓冲区过载");
+				//if (flusher.readableBytes() > 1048576) throw new IOException("上层发送缓冲区过载");
 			} else {
 				fireFlushed();
 			}
@@ -197,6 +197,5 @@ class TcpChImpl extends MyChannel {
 		buf.rIndex = nioBuffer.position();
 	}
 
-	@Override
-	public boolean canSendfile() {return true;}
+	@Override public boolean canSendfile() {return true;}
 }

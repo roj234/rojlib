@@ -7,6 +7,8 @@ import roj.asm.type.Type;
 import roj.asm.visitor.CodeWriter;
 import roj.compiler.api.FieldWriteReplace;
 import roj.compiler.context.CompileUnit;
+import roj.compiler.context.LocalContext;
+import roj.compiler.diagnostic.Kind;
 
 /**
  * @author Roj234
@@ -36,6 +38,10 @@ public final class FieldBridge extends FieldWriteReplace {
 			super.writeRead(cw, owner, fn);
 		} else {
 			if (readAccessor < 0) {
+				if (readAccessor == -2) {
+					LocalContext.get().report(Kind.ERROR, "symbol.error.field.notReadable", owner, fn.name());
+					return;
+				}
 				var _realOwner = (CompileUnit) this.owner;
 				Type type = fn.fieldType();
 				CodeWriter cw1;

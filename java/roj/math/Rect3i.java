@@ -131,7 +131,7 @@ public class Rect3i {
 	}
 
 	public boolean contains(Vec3i p) {
-		return xmin <= p.x && p.x <= xmax && ymin <= p.x && p.x <= ymax && zmin <= p.x && p.x <= zmax;
+		return xmin <= p.x && p.x <= xmax && ymin <= p.y && p.y <= ymax && zmin <= p.z && p.z <= zmax;
 	}
 
 	public boolean contains(Rect3i o) {

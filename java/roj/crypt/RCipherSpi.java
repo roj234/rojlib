@@ -23,7 +23,7 @@ public abstract class RCipherSpi extends CipherSpi {
 	public Cipher toJavaCipher(boolean feedbackModeAndPadding) {
 		return _toJavaCipher(isBareBlockCipher() ? new FeedbackCipher(this, FeedbackCipher.MODE_ECB) : this);
 	}
-	static Cipher _toJavaCipher(RCipherSpi spi) { return new Cipher(spi, ILProvider.INSTANCE, spi.getAlgorithm()) {}; }
+	static Cipher _toJavaCipher(RCipherSpi spi) { return new Cipher(spi, ILCrypto.INSTANCE, spi.getAlgorithm()) {}; }
 
 	@Override
 	protected void engineSetMode(String s) throws NoSuchAlgorithmException {
@@ -37,7 +37,9 @@ public abstract class RCipherSpi extends CipherSpi {
 		if (!s.equalsIgnoreCase("NoPadding")) throw new NoSuchPaddingException("Use FeedbackCipher");
 	}
 
+	public RCipherSpi copyWith(boolean isEncryptMode) {throw new UnsupportedOperationException();}
 	protected boolean isBareBlockCipher() { return false; }
+
 	public int engineGetBlockSize() { return 0; }
 	public int engineGetOutputSize(int in) { return in; }
 	protected byte[] engineGetIV() { return null; }

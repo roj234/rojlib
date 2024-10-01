@@ -27,7 +27,7 @@ import roj.config.ConfigMaster;
 import roj.config.ParseException;
 import roj.config.Word;
 import roj.config.auto.Serializer;
-import roj.config.auto.Serializers;
+import roj.config.auto.SerializerFactory;
 import roj.config.serial.CVisitor;
 import roj.text.CharList;
 import roj.util.ArrayRef;
@@ -1009,11 +1009,11 @@ public final class ExprParser {
 	public ExprNode newTrinary(ExprNode cur, ExprNode middle, ExprNode right) {return new Trinary(cur, middle, right);}
 	public ExprNode newAnonymousClass(ExprNode expr, CompileUnit type) {return new NewAnonymousClass((Invoke) expr, type);}
 
-	private static final Serializer<ExprNode> serializer = Serializers.POOLED.serializer(ExprNode.class);
+	private static final Serializer<ExprNode> serializer = SerializerFactory.POOLED.serializer(ExprNode.class);
 	public static String serialize(ExprNode node) { return ConfigMaster.JSON.writeObject(serializer(), node, new CharList()).toStringAndFree(); }
 	public static void serialize(ExprNode node, CVisitor visitor) { serializer().write(visitor, node); }
 	public static Serializer<ExprNode> serializer() { return serializer; }
 
-	private final Serializer<ExprNode> deserializer = Serializers.POOLED.serializer(ExprNode.class);
+	private final Serializer<ExprNode> deserializer = SerializerFactory.POOLED.serializer(ExprNode.class);
 	public UnresolvedExprNode deserialize(String string) throws ParseException {return ConfigMaster.JSON.readObject(deserializer, string);}
 }

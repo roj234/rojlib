@@ -21,19 +21,19 @@ public final class RojLib {
 	 */
 	public static Object inject(String s) {return DATA.get(s);}
 
-	public static final boolean IS_DEV = new File("D:\\mc\\FMD-1.5.2").isDirectory();
-
-	public static final int WIN32 = 0, ANSI_READBACK = 1, BSDIFF = 2, SHARED_MEMORY = 3, FAST_LZMA = 4;
+	public static final boolean IS_DEV;
+	public static final int WIN32 = 0, ANSI_READBACK = 1, BSDIFF = 2, SHARED_MEMORY = 3, FAST_LZMA = 4, TCP_RST = 5, AES_NI = 6;
 	public static boolean hasNative(int bit) {return (bits&(1L << bit)) != 0;}
 	private static final long bits;
 
 	static {
+		File devFile = new File("D:\\mc\\FMD-1.5.2\\projects\\implib\\libcpp\\bin\\libcpp.dll");
+		IS_DEV = devFile.isFile();
 		long t = 0;
 
 		block:
 		try {
-			File devFile = new File("D:\\mc\\FMD-1.5.2\\projects\\implib\\libcpp\\bin\\libcpp.dll");
-			if (devFile.isFile()) System.load(devFile.getAbsolutePath());
+			if (IS_DEV) System.load(devFile.getAbsolutePath());
 			else if (!loadLibrary()) break block;
 			t = init();
 		} catch (Throwable e) {

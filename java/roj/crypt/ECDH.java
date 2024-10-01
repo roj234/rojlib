@@ -2,6 +2,7 @@ package roj.crypt;
 
 import roj.util.DynByteBuf;
 
+import javax.crypto.KeyAgreement;
 import java.math.BigInteger;
 import java.security.*;
 import java.security.interfaces.ECPublicKey;
@@ -12,23 +13,23 @@ import java.security.spec.ECPoint;
  * @author Roj234
  * @since 2022/11/11 0011 12:30
  */
-public final class ECDHE implements KeyAgreement {
+final class ECDH implements KeyExchange {
 	private final ECGroup group;
-	private final javax.crypto.KeyAgreement ecAgreement;
+	private final KeyAgreement ecAgreement;
 
 	private ECPoint pub;
 
-	public ECDHE(ECGroup group) {
+	ECDH(ECGroup group) {
 		this.group = group;
 		try {
-			ecAgreement = javax.crypto.KeyAgreement.getInstance("ECDH");
+			ecAgreement = KeyAgreement.getInstance("ECDH");
 		} catch (NoSuchAlgorithmException e) {
 			throw new IllegalStateException("Not support ECDH", e);
 		}
 	}
 
 	@Override
-	public String getAlgorithm() { return "ECDHE-"+group.name; }
+	public String getAlgorithm() { return "ECDH-"+group.name; }
 
 	@Override
 	public void init(SecureRandom r) {
@@ -46,7 +47,7 @@ public final class ECDHE implements KeyAgreement {
 
 	@Override
 	public int length() {
-		return 2 + DHE.lengthOf(pub.getAffineX()) + DHE.lengthOf(pub.getAffineY());
+		return 2 + DH.lengthOf(pub.getAffineX()) + DH.lengthOf(pub.getAffineY());
 	}
 
 	@Override

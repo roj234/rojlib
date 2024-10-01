@@ -18,7 +18,7 @@ import java.security.spec.AlgorithmParameterSpec;
  * @author solo6975
  * @since 2022/2/14 13:40
  */
-public final class ChaCha_Poly1305 extends RCipherSpi {
+final class ChaCha_Poly1305 extends RCipherSpi {
 	final ChaCha c;
 	final Poly1305 p = new Poly1305();
 	final ByteList tmp = ByteList.allocate(32,32);
@@ -28,9 +28,7 @@ public final class ChaCha_Poly1305 extends RCipherSpi {
 	private boolean decrypt;
 	private byte state;
 
-	private ChaCha_Poly1305(ChaCha c) { this.c = c; }
-	public static RCipherSpi ChaCha1305() { return new ChaCha_Poly1305(new ChaCha()); }
-	public static RCipherSpi XChaCha1305() { return new ChaCha_Poly1305(new XChaCha()); }
+	ChaCha_Poly1305(ChaCha c) { this.c = c; }
 
 	public final void init(int mode, byte[] key, AlgorithmParameterSpec par, SecureRandom random) throws InvalidAlgorithmParameterException, InvalidKeyException {
 		c.init(mode, key, par, random);

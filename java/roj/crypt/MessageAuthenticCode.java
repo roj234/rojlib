@@ -14,8 +14,10 @@ public interface MessageAuthenticCode {
 
 	int getDigestLength();
 
+	default void setNoKey() {setSignKey(null,0,0);}
 	default void setSignKey(byte[] key) {setSignKey(key,0,key.length);}
 	void setSignKey(byte[] b, int off, int len);
+	void reset();
 
 	default void update(byte b) {update(new byte[]{b});}
 	default void update(byte[] b) {update(b, 0, b.length);}

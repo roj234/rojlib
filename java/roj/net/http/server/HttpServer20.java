@@ -345,6 +345,7 @@ public final class HttpServer20 extends H2Stream implements PostSetting, Respons
 
 		int window = man.getImmediateWindow(this);
 		if (window <= 0) return 0;
+		window = Math.min(window, man.getRemoteSetting().max_frame_size);
 
 		limit = limit <= 0 ? streamLimit : Math.min(streamLimit, limit);
 		if (limit > window) limit = window;

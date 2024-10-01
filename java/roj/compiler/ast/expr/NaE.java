@@ -1,8 +1,8 @@
 package roj.compiler.ast.expr;
 
 import org.jetbrains.annotations.Nullable;
+import roj.asm.type.Generic;
 import roj.asm.type.IType;
-import roj.asm.type.Type;
 import roj.compiler.asm.MethodWriter;
 import roj.compiler.resolve.TypeCast;
 
@@ -13,13 +13,10 @@ import roj.compiler.resolve.TypeCast;
  */
 public final class NaE extends ExprNode {
 	public static final ExprNode NOEXPR = new NaE(), RESOLVE_FAILED = new NaE();
+	private static final Generic UNRESOLVABLE = new Generic("<\1nae.unresolvable\0>");
 
-	@Override
-	public String toString() {return "<fallback>";}
-	@Override
-	public IType type() {return Type.std(Type.VOID);}
-	@Override
-	public void write(MethodWriter cw, boolean noRet) {}
-	@Override
-	public void writeDyn(MethodWriter cw, @Nullable TypeCast.Cast cast) {}
+	@Override public String toString() {return "<\1nae.unresolvable\0>";}
+	@Override public IType type() {return UNRESOLVABLE;}
+	@Override public void write(MethodWriter cw, boolean noRet) {}
+	@Override public void writeDyn(MethodWriter cw, @Nullable TypeCast.Cast cast) {}
 }
