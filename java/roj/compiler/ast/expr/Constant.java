@@ -84,13 +84,13 @@ public final class Constant extends ExprNode {
 		}
 	}
 	@Override
-	public void writeDyn(MethodWriter cw, @Nullable TypeCast.Cast cast) {
-		if (cast == null) {
+	public void write(MethodWriter cw, @Nullable TypeCast.Cast returnType) {
+		if (returnType == null) {
 			write(cw, false);
 		} else {
-			switch (cast.type) {
+			switch (returnType.type) {
 				case TypeCast.E_NUMBER_DOWNCAST, TypeCast.NUMBER_UPCAST, TypeCast.BOXING -> {
-					String name = Opcodes.showOpcode(cast.getOp1());
+					String name = Opcodes.showOpcode(returnType.getOp1());
 					assert name.length() == 3;
 					writePrimitive(cw, switch (name.charAt(2)) {
 						default -> 4;
@@ -98,12 +98,12 @@ public final class Constant extends ExprNode {
 						case 'F' -> 6;
 						case 'D' -> 7;
 					});
-					if (cast.type == TypeCast.BOXING)
-						cast.writeBox(cw);
+					if (returnType.type == TypeCast.BOXING)
+						returnType.writeBox(cw);
 				}
 				default -> {
 					write(cw, false);
-					cast.write(cw);
+					returnType.write(cw);
 				}
 			}
 		}

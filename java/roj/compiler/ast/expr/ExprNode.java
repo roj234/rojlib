@@ -1,7 +1,10 @@
 package roj.compiler.ast.expr;
 
+import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
+import roj.asm.Opcodes;
 import roj.asm.type.IType;
+import roj.asm.visitor.Label;
 import roj.compiler.asm.MethodWriter;
 import roj.compiler.context.LocalContext;
 import roj.compiler.diagnostic.Kind;
@@ -50,15 +53,20 @@ public abstract class ExprNode implements UnresolvedExprNode {
 	public abstract IType type();
 	public ExprNode resolve(LocalContext ctx) throws ResolveException { return this; }
 
-	@Override
-	public boolean isConstant() { return UnresolvedExprNode.super.isConstant(); }
-	@Override
-	public Object constVal() { return UnresolvedExprNode.super.constVal(); }
+	@Override public boolean isConstant() {return UnresolvedExprNode.super.isConstant();}
+	@Override public Object constVal() {return UnresolvedExprNode.super.constVal();}
 
+	public final void write(MethodWriter cw) {write(cw, false);}
 	public abstract void write(MethodWriter cw, boolean noRet);
-	public void writeDyn(MethodWriter cw, @Nullable TypeCast.Cast cast) {
+	public void write(MethodWriter cw, @Nullable TypeCast.Cast returnType) {
 		write(cw, false);
-		if (cast != null) cast.write(cw);
+		if (returnType != null) returnType.write(cw);
 	}
+	public void writeShortCircuit(MethodWriter cw, @Nullable TypeCast.Cast cast,
+								   boolean ifThen, @NotNull Label label) {
+		write(cw, cast);
+		cw.jump(ifThen ? Opcodes.IFNE/*true*/ : Opcodes.IFEQ/*false*/, label);
+	}
+
 	protected static void mustBeStatement(boolean noRet) { if (noRet) LocalContext.get().report(Kind.ERROR, "expr.skipReturnValue"); }
 }

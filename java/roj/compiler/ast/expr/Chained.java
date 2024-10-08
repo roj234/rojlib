@@ -48,9 +48,9 @@ final class Chained extends ExprNode {
 		par.get(t).write(cw, false);
 	}
 	@Override
-	public void writeDyn(MethodWriter cw, @Nullable TypeCast.Cast cast) {
+	public void write(MethodWriter cw, @Nullable TypeCast.Cast returnType) {
 		int t = w(cw);
-		par.get(t).writeDyn(cw, cast);
+		par.get(t).write(cw, returnType);
 	}
 	private int w(MethodWriter cw) {
 		int t = par.size()-1;

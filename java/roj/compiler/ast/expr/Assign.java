@@ -110,7 +110,7 @@ class Assign extends ExprNode {
 			}
 		} else {
 			left.preStore(cw);
-			right.write(cw, false);
+			right.write(cw);
 		}
 
 		if (isCastNeeded()) cast.write(cw);
@@ -137,7 +137,7 @@ class Assign extends ExprNode {
 			if ((short)value != value) break block;
 
 			cw.iinc(lv.v, value);
-			if (!noRet) left.write(cw, false);
+			if (!noRet) left.write(cw);
 			return true;
 		}
 

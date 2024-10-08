@@ -1040,7 +1040,7 @@ public final class CompileUnit extends ConstantData {
 				for (int i = 0; i < enumInit.size(); i++) {
 					lc.lexer.index = fieldIdx.get(i);
 
-					enumInit.get(i).resolve(lc).write(cw, false);
+					enumInit.get(i).resolve(lc).write(cw);
 					cw.field(PUTSTATIC, this, i);
 
 					finalFields.remove(fields.get(i));

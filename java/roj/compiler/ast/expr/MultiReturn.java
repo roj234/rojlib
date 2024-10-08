@@ -67,11 +67,11 @@ public final class MultiReturn extends ExprNode {
 	}
 
 	@Override
-	public void writeDyn(MethodWriter cw, @Nullable TypeCast.Cast cast) {
+	public void write(MethodWriter cw, @Nullable TypeCast.Cast returnType) {
 		cw.ldc(hashCode);
 		cw.invokeS("roj/compiler/runtime/ReturnStack", "get", "(I)Lroj/compiler/runtime/ReturnStack;");
 		for (ExprNode v : values) {
-			v.write(cw, false);
+			v.write(cw);
 
 			var type = v.type();
 			cw.invokeV("roj/compiler/runtime/ReturnStack", "put", "("+(type.isPrimitive()?(char)type.rawType().type:"Ljava/lang/Object;")+")Lroj/compiler/runtime/ReturnStack;");

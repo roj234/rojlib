@@ -265,14 +265,7 @@ public class LocalContext {
 
 	public ComponentList fieldListOrReport(IClass info, String name) {return classes.getFieldList(info, name);}
 	public ComponentList methodListOrReport(IClass info, String name) {return classes.getMethodList(info, name);}
-	public IntBiMap<String> parentListOrReport(IClass info) {
-		try {
-			return classes.getParentList(info);
-		} catch (ClassNotFoundException e) {
-			report(Kind.ERROR, "symbol.error.noSuchClass", e.getMessage());
-			return new IntBiMap<>();
-		}
-	}
+	public IntBiMap<String> parentListOrReport(IClass info) {return classes.getParentList(info);}
 
 	/**
 	 * 擦除泛型
@@ -728,12 +721,7 @@ public class LocalContext {
 			return false;
 		}
 
-		try {
-			return classes.getParentList(info).containsValue(instClass);
-		} catch (ClassNotFoundException e) {
-			report(Kind.ERROR, "symbol.error.noSuchClass", e.getMessage());
-			return false;
-		}
+		return classes.getParentList(info).containsValue(instClass);
 	}
 
 	public IType getCommonParent(IType a, IType b) {

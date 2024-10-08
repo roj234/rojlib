@@ -10,7 +10,6 @@ import java.net.StandardSocketOptions;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
 import java.nio.channels.ServerSocketChannel;
-import java.nio.channels.SocketChannel;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -69,17 +68,12 @@ final class ServerLaunchTcp extends ServerLaunch implements Selectable {
 
 	private void acceptLimitless() throws IOException {
 		while (true) {
-			SocketChannel sc = tcp.accept();
+			var sc = tcp.accept();
 			if (sc == null) return;
 			sc.configureBlocking(false);
 
-			MyChannel ch = new TcpChImpl(sc, rcvBuf);
-
-			initializator.accept(ch);
-			if (ch.isOpen()) {
-				ch.open();
-				loop.register(ch, null);
-			}
+			var ch = new TcpChImpl(sc, rcvBuf);
+			initialize(ch);
 		}
 	}
 	private void acceptLimited() throws IOException {
@@ -90,11 +84,11 @@ final class ServerLaunchTcp extends ServerLaunch implements Selectable {
 				return;
 			}
 
-			SocketChannel sc = tcp.accept();
+			var sc = tcp.accept();
 			if (sc == null) return;
 			sc.configureBlocking(false);
 
-			MyChannel ch = new TcpChImpl(sc, rcvBuf) {
+			var ch = new TcpChImpl(sc, rcvBuf) {
 				@Override
 				protected void closeHandler() throws IOException {
 					super.closeHandler();
@@ -105,11 +99,16 @@ final class ServerLaunchTcp extends ServerLaunch implements Selectable {
 				}
 			};
 
-			initializator.accept(ch);
-			if (ch.isOpen()) {
-				ch.open();
+			initialize(ch);
+		}
+	}
+
+	private void initialize(TcpChImpl ch) throws IOException {
+		initializator.accept(ch);
+		if (ch.isOpen()) {
+			ch.open();
+			if (ch.isOpen())
 				loop.register(ch, null);
-			}
 		}
 	}
 }

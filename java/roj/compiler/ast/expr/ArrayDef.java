@@ -113,7 +113,7 @@ public final class ArrayDef extends ExprNode {
 
 		if ((flag&1) != 0) {
 			for (int i = 0; i < expr.size(); i++) {
-				expr.get(i).writeDyn(cw, casts[i]);
+				expr.get(i).write(cw, casts[i]);
 			}
 
 			makeArray(cw, expr.size());
@@ -124,25 +124,25 @@ public final class ArrayDef extends ExprNode {
 			for (int i = 0; i < expr.size(); i++) {
 				cw.one(Opcodes.DUP);
 				cw.ldc(i);
-				expr.get(i).writeDyn(cw, casts[i]);
+				expr.get(i).write(cw, casts[i]);
 				cw.one(storeType);
 			}
 		}
 	}
 
 	@Override
-	public void writeDyn(MethodWriter cw, @Nullable TypeCast.Cast cast) {
+	public void write(MethodWriter cw, @Nullable TypeCast.Cast returnType) {
 		if ((flag&8) != 0) {
 			var ctx = LocalContext.get();
-			if (cast == null) {
+			if (returnType == null) {
 				ctx.report(Kind.ERROR, "arrayDef.inferFailed");
 				return;
 			}
 			flag = 0;
-			type = cast.getType1();
+			type = returnType.getType1();
 			resolve(ctx);
 		}
-		super.writeDyn(cw, cast);
+		super.write(cw, returnType);
 	}
 
 	private Type makeArray(MethodWriter cw, int dimension) {

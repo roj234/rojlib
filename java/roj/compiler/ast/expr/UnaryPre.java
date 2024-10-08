@@ -1,5 +1,7 @@
 package roj.compiler.ast.expr;
 
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 import roj.asm.Opcodes;
 import roj.asm.tree.anno.AnnValDouble;
 import roj.asm.tree.anno.AnnValFloat;
@@ -7,6 +9,7 @@ import roj.asm.tree.anno.AnnValInt;
 import roj.asm.tree.anno.AnnValLong;
 import roj.asm.type.IType;
 import roj.asm.type.Type;
+import roj.asm.visitor.Label;
 import roj.compiler.asm.MethodWriter;
 import roj.compiler.context.LocalContext;
 import roj.compiler.diagnostic.Kind;
@@ -128,7 +131,7 @@ class UnaryPre extends UnaryPreNode {
 		}
 
 		mustBeStatement(noRet);
-		right.write(cw, false);
+		right.write(cw);
 		int iType = type.getActualType();
 		if (iType == Type.CLASS) {
 			iType = TypeCast.getWrappedPrimitive(type);
@@ -164,10 +167,15 @@ class UnaryPre extends UnaryPreNode {
 	}
 
 	@Override
+	public void writeShortCircuit(MethodWriter cw, TypeCast.@Nullable Cast cast, boolean ifThen, @NotNull Label label) {
+		if (op != logic_not) super.writeShortCircuit(cw, cast, ifThen, label);
+		else right.writeShortCircuit(cw, cast, !ifThen, label);
+	}
+
+	@Override
 	public boolean equals(Object o) {
 		if (this == o) return true;
-		if (!(o instanceof UnaryPre)) return false;
-		UnaryPre left1 = (UnaryPre) o;
+		if (!(o instanceof UnaryPre left1)) return false;
 		return left1.right.equals(right) && left1.op == op;
 	}
 

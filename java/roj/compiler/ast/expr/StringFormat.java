@@ -41,7 +41,7 @@ public class StringFormat extends ExprNode {
 	}
 
 	@Override
-	public void writeDyn(MethodWriter cw, TypeCast.@Nullable Cast cast) {
-		super.writeDyn(cw, cast);
+	public void write(MethodWriter cw, TypeCast.@Nullable Cast returnType) {
+		super.write(cw, returnType);
 	}
 }

@@ -634,8 +634,8 @@ public final class HttpServer11 extends PacketMerger implements PostSetting, Res
 		if (fh != null && fh.onRequestFinish(this)) {
 			state = CLOSED;
 			finish(true);
-			ch.removeSelf();
 			ch.readActive();
+			ch.removeSelf();
 			return true;
 		}
 

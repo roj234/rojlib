@@ -10,6 +10,7 @@ import roj.config.data.CEntry;
 import roj.config.data.Type;
 import roj.io.IOUtil;
 import roj.math.Version;
+import roj.net.MyChannel;
 import roj.net.ServerLaunch;
 import roj.net.http.server.*;
 import roj.net.http.server.auto.OKRouter;
@@ -258,6 +259,11 @@ public final class Panger extends PluginManager {
 		}
 
 		return router;
+	}
+	public static void addLocalConnection(MyChannel channel) throws IOException {
+		httpServer.initializator().accept(channel);
+		channel.fireOpen();
+		channel.readActive();
 	}
 
 	static final SimpleList<String> motds = new SimpleList<>();

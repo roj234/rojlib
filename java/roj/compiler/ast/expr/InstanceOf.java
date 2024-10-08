@@ -76,7 +76,7 @@ public final class InstanceOf extends ExprNode {
 
 	@Override
 	public void write(MethodWriter cw, boolean noRet) {
-		left.write(cw, false);
+		left.write(cw);
 		cw.clazz(Opcodes.INSTANCEOF, type.rawType());
 	}
 

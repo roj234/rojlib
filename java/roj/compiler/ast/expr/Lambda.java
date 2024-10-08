@@ -11,9 +11,10 @@ import roj.asm.type.IType;
 import roj.asm.type.Type;
 import roj.asm.type.TypeHelper;
 import roj.compiler.CompilerSpec;
+import roj.compiler.JavaLexer;
 import roj.compiler.asm.Asterisk;
 import roj.compiler.asm.MethodWriter;
-import roj.compiler.ast.block.ParseTask;
+import roj.compiler.ast.ParseTask;
 import roj.compiler.context.LocalContext;
 import roj.compiler.diagnostic.Kind;
 import roj.compiler.resolve.ComponentList;
@@ -24,6 +25,7 @@ import roj.config.ParseException;
 import roj.text.TextUtil;
 import roj.util.Helpers;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -90,17 +92,17 @@ public class Lambda extends ExprNode {
 	}
 
 	@Override
-	public final void write(MethodWriter cw, boolean noRet) {writeDyn(cw, null);}
+	public final void write(MethodWriter cw, boolean noRet) {write(cw, null);}
 	@Override
-	public void writeDyn(MethodWriter cw, @Nullable TypeCast.Cast cast) {
+	public void write(MethodWriter cw, @Nullable TypeCast.Cast returnType) {
 		var ctx = LocalContext.get();
 
-		if (cast == null) {
+		if (returnType == null) {
 			ctx.report(Kind.ERROR, "lambda.untyped");
 			return;
 		}
 
-		var info = ctx.classes.getClassInfo(cast.getType1().owner());
+		var info = ctx.classes.getClassInfo(returnType.getType1().owner());
 		var rh = ctx.classes.getResolveHelper(info);
 		int lambdaType = rh.getLambdaType();
 
@@ -116,7 +118,7 @@ public class Lambda extends ExprNode {
 		}
 
 		MethodNode method = rh.getLambdaMethod();
-		MethodResult r = ctx.inferrer.getGenericParameters(info, method, cast.getType1());
+		MethodResult r = ctx.inferrer.getGenericParameters(info, method, returnType.getType1());
 
 		CstRef ref;
 		if (isMethodRef != null) {
@@ -138,13 +140,24 @@ public class Lambda extends ExprNode {
 			//TODO mn can be null
 			// ctx.variableTransfer = new MyHashSet<>();
 
+			List<Type> collect = new ArrayList<>();
+			for (IType type : r.desc) {
+				Type rawType = type.rawType();
+				collect.add(rawType);
+			}
+			Type remove = collect.remove(collect.size() - 1);
 			mn.name("lambda$1");
 			mn.parameters().clear();
-			mn.parameters().addAll(Helpers.cast(Arrays.asList(r.desc)));
-			mn.returnType();
+			mn.parameters().addAll(Helpers.cast(collect));
+			mn.setReturnType(remove);
 
 			try {
-				task.parse();
+				LocalContext next = LocalContext.next();
+				next.setClass(ctx.file);
+				next.setMethod(mn);
+				next.lexer.state = JavaLexer.STATE_EXPR;
+				task.parse(next);
+				LocalContext.prev();
 			} catch (ParseException e) {
 				e.printStackTrace();
 			}

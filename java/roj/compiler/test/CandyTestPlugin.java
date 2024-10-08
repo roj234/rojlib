@@ -57,7 +57,7 @@ public class CandyTestPlugin {
 			public void write(MethodWriter cw, boolean noRet) {
 				mustBeStatement(noRet);
 				long millis = TimeUnit.DAYS.toMillis(1);
-				node.writeDyn(cw, LocalContext.get().castTo(node.type(), type(), 0));
+				node.write(cw, LocalContext.get().castTo(node.type(), type(), 0));
 				cw.ldc(millis);
 				cw.one(Opcodes.LMUL);
 			}
@@ -72,7 +72,7 @@ public class CandyTestPlugin {
 			public void write(MethodWriter cw, boolean noRet) {
 				mustBeStatement(noRet);
 				long millis = TimeUnit.HOURS.toMillis(1);
-				node.writeDyn(cw, LocalContext.get().castTo(node.type(), type(), 0));
+				node.write(cw, LocalContext.get().castTo(node.type(), type(), 0));
 				cw.ldc(millis);
 				cw.one(Opcodes.LMUL);
 			}
@@ -95,7 +95,7 @@ public class CandyTestPlugin {
 			if (ch.sourceType() == null) {
 				cw.ldc(0);
 			} else {
-				ch.sourceType().write(cw, false);
+				ch.sourceType().write(cw);
 			}
 
 			List<Invoke> methods = ch.chain();

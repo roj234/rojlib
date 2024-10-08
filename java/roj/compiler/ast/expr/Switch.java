@@ -108,20 +108,20 @@ final class Switch extends ExprNode {
 	@Override
 	public void write(MethodWriter cw, boolean noRet) {
 		mustBeStatement(noRet);
-		writeDyn(cw, null);
+		write(cw, null);
 	}
 
 	@Override
-	public void writeDyn(MethodWriter cw, @Nullable TypeCast.Cast cast) {
+	public void write(MethodWriter cw, @Nullable TypeCast.Cast returnType) {
 		var ctx = LocalContext.get();
 
 		var type = this.type;
-		if (cast != null && cast.getType1() != null) type = cast.getType1();
+		if (returnType != null && returnType.getType1() != null) type = returnType.getType1();
 
 		for (SwitchNode.Case branch : node.branches) {
 			ExprNode expr = branch.value;
 			if (expr != null) {
-				expr.writeDyn(branch.block, ctx.castTo(expr.type(), type, 0));
+				expr.write(branch.block, ctx.castTo(expr.type(), type, 0));
 				branch.block.jump(node.breakTo);
 				branch.value = null;
 			}
