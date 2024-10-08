@@ -35,7 +35,7 @@ public final class Lavac {
 	public static String getCompileTime() {return ACalendar.toLocalTimeString(System.currentTimeMillis());}
 	public static String getCurrentTime() {return ACalendar.toLocalTimeString(System.currentTimeMillis());}
 
-	public static final String VERSION = "0.11.0[RC] (compiled on "+getCompileTime()+")";
+	public static final String VERSION = "0.12.0[RC] (compiled on "+getCompileTime()+")";
 
 	int debugOps = 10;
 	GlobalContext ctx;
@@ -131,7 +131,6 @@ public final class Lavac {
 		if (i == args.length) throw new RuntimeException("没有源文件");
 
 		compiler.ctx = (GlobalContext) Class.forName(gcName).newInstance();
-		compiler.ctx.packageCacheFile = new File("lavaPackageCache0.bin");
 		LocalContext.set(compiler.ctx.createLocalContext());
 
 		for (String s : TextUtil.split(new ArrayList<>(), cp, File.pathSeparatorChar)) {

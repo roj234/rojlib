@@ -2,6 +2,7 @@ package roj.io;
 
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
+import roj.RojLib;
 import roj.collect.SimpleList;
 import roj.compiler.plugins.annotations.Attach;
 import roj.concurrent.FastThreadLocal;
@@ -10,8 +11,10 @@ import roj.config.data.CLong;
 import roj.crypt.Base64;
 import roj.reflect.ReflectionUtils;
 import roj.text.*;
+import roj.text.logging.Logger;
 import roj.util.ByteList;
 import roj.util.Helpers;
+import roj.util.NativeMemory;
 
 import java.io.*;
 import java.net.URL;
@@ -303,7 +306,7 @@ public final class IOUtil {
 					direct.position(0);
 					return cf.position(to).write(direct);
 				} finally {
-					NIOUtil.clean(direct);
+					NativeMemory.freeDirectBuffer(direct);
 				}
 			} else {
 				File tmpPath = new File(System.getProperty("java.io.tmpdir"));
@@ -377,32 +380,46 @@ public final class IOUtil {
 
 	/**
 	 * 路径过滤函数，处理不可信的用户输入路径.
-	 * 这个函数会删除路径中的
-	 *   //
-	 *   ../
-	 *   ./
-	 *   开头的/
-	 *   空白字符
-	 * 并截断字符串到任意(不可打印, ' ')字符之前
 	 */
+	public static String safePath(String path) {return safePath(path, true);}
 	@NotNull
-	public static String safePath(String path) throws InvalidPathException {
+	public static String safePath(String path, boolean silent) throws InvalidPathException {
 		CharList sb = getSharedCharBuf();
 
 		int end = 0;
 		int i = 0;
 		while (i < path.length()) {
 			var c = path.charAt(i);
-			if (c < 32/* || c == ':'*/) break;
+			// 分号
+			if (c < 32 || c == File.pathSeparatorChar) {
+				if (!silent) throw new InvalidPathException(path, "illegal char", i);
+				break;
+			}
 			i++;
-			if (c != ' ') end = i;
+			end = i;
 		}
 
-		return sb.append(path, 0, end).trim()
-				 .replace(File.separatorChar, '/')
-				 .replaceInReplaceResult("./", "/")
-				 .replaceInReplaceResult("//", "/")
-				 .substring(sb.length() > 0 && sb.charAt(0) == '/' ? 1 : 0, sb.length());
+		sb.append(path, 0, end).trim()
+		  .replace(File.separatorChar, '/') // 在linux上，\是合法的文件名组成部分，而不是路径分隔符，而windows上二者皆是
+		  .replaceInReplaceResult("//", "/");
+
+		var paths = TextUtil.split(sb, '/');
+		if (sb.endsWith("/")) paths.add("");
+		for (int j = 0; j < paths.size();) {
+			var s = paths.get(j);
+			if (s.equals(".")) {
+				paths.remove(j);
+			} else if (s.equals("..")) {
+				paths.remove(j);
+				if (j > 0) paths.remove(--j);
+				else if (!silent) throw new InvalidPathException(path, "illegal directory", j);
+			} else {
+				j++;
+			}
+		}
+		if (!paths.isEmpty() && paths.get(0).isEmpty())
+			paths.remove(0);
+		return TextUtil.join(paths, "/");
 	}
 	/**
 	 * 这是另外一个实现
@@ -411,7 +428,7 @@ public final class IOUtil {
 	 * @return 如果输入合法，那么返回非空
 	 */
 	@Nullable
-	public static File safePath(String base, String relative) {
+	public static File safePath2(String base, String relative) {
 		File file = new File(base, relative);
 		try {
 			if (file.getCanonicalPath().startsWith(base)) return file;
@@ -478,7 +495,9 @@ public final class IOUtil {
 		if (c != null) try {
 			c.close();
 		} catch (Throwable e) {
-			e.printStackTrace();
+			if (RojLib.IS_DEV) {
+				Logger.getLogger("SilentClose").error("关闭时抛出了异常！", e);
+			}
 		}
 	}
 

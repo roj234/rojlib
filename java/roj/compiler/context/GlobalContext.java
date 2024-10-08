@@ -3,7 +3,6 @@ package roj.compiler.context;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import roj.asm.Opcodes;
-import roj.asm.Parser;
 import roj.asm.tree.*;
 import roj.asm.tree.attr.AttrModule;
 import roj.asm.tree.attr.InnerClasses;
@@ -26,11 +25,9 @@ import roj.config.ConfigMaster;
 import roj.config.ParseException;
 import roj.config.auto.Serializer;
 import roj.config.auto.SerializerFactory;
-import roj.crypt.CRC32s;
 import roj.io.IOUtil;
 import roj.text.Interner;
 import roj.text.logging.Logger;
-import roj.util.ByteList;
 import roj.util.Helpers;
 
 import java.io.File;
@@ -57,12 +54,17 @@ import java.util.function.Consumer;
  * @since 2021/7/22 19:05
  */
 public class GlobalContext implements CompilerSpec {
-	private static final XHashSet.Shape<String, CompileUnit> COMPILE_UNIT_SHAPE = XHashSet.noCreation(CompileUnit.class, "name", "_next", Hasher.defaul());
+	public static File cacheFolder = new File(".lavaCache");
+
+	private static final XHashSet.Shape<String, CompileUnit> COMPILE_UNIT_SHAPE = XHashSet.noCreation(CompileUnit.class, "name");
 	private static final XHashSet.Shape<IClass, ResolveHelper> CLASS_EXTRA_INFO_SHAPE = XHashSet.shape(IClass.class, ResolveHelper.class, "owner", "_next", Hasher.identity());
 
 	protected final XHashSet<String, CompileUnit> ctx = COMPILE_UNIT_SHAPE.create();
-	protected final MyHashMap<String, Library> libraries = new MyHashMap<>();
-	protected final List<Library> fallbackLibraries = new SimpleList<>();
+
+	private final MyHashMap<String, Object> libraryCache = new MyHashMap<>();
+	private final List<Library> unenumerableLibraries = new SimpleList<>(LibraryCache.RUNTIME);
+	private final List<Library> libraries = new SimpleList<>();
+
 	protected final XHashSet<IClass, ResolveHelper> extraInfos = CLASS_EXTRA_INFO_SHAPE.create();
 	protected MyHashMap<String, List<String>> packageFastPath = new MyHashMap<>();
 	protected final SimpleList<CompileUnit> generatedCUs = new SimpleList<>();
@@ -72,32 +74,42 @@ public class GlobalContext implements CompilerSpec {
 		final MyHashMap<String, ConstantData> classes = new MyHashMap<>();
 		AttrModule module;
 
-		@Override
-		public ConstantData get(CharSequence name) {return classes.get(name);}
-		@Override
-		public String getModule(String className) {return module == null ? null : module.self.name;}
+		@Override public ConstantData get(CharSequence name) {return classes.get(name);}
+		@Override public String moduleName() {return module == null ? null : module.self.name;}
 	}
 
 	public void addLibrary(Library library) {
-		var set = library.content();
-		if (set.isEmpty()) {
-			fallbackLibraries.add(library);
+		var content = library.content();
+		if (content.isEmpty()) {
+			unenumerableLibraries.add(library);
 		} else {
-			for (String className : set)
-				libraries.put(className, library);
+			for (String className : content)
+				libraryCache.put(className, library);
 		}
 	}
 
 	public ConstantData getClassInfo(CharSequence name) {
 		ConstantData clz = ctx.get(name);
 		if (clz == null) {
-			var library = libraries.get(name);
-			if (library != null) return library.get(name);
-			for (int i = 0; i < fallbackLibraries.size(); i++) {
-				library = fallbackLibraries.get(i);
-				if ((clz = library.get(name)) != null) return clz;
+			var entry = libraryCache.getEntry(name);
+			if (entry != null) {
+				var value = entry.getValue();
+				if (value instanceof ConstantData c) return c;
+
+				clz = ((Library) value).get(name);
+				entry.setValue(clz);
+				return clz;
 			}
-			clz = LibraryRuntime.INSTANCE.get(name);
+
+			for (int i = unenumerableLibraries.size()-1; i >= 0; i--) {
+				var library = unenumerableLibraries.get(i);
+				if ((clz = library.get(name)) != null) {
+					synchronized (libraryCache) {
+						libraryCache.put(name.toString(), clz);
+					}
+					return clz;
+				}
+			}
 		}
 		return clz;
 	}
@@ -113,7 +125,7 @@ public class GlobalContext implements CompilerSpec {
 	}
 
 	public synchronized void addGeneratedClass(ConstantData data) {
-		libraries.put(data.name, generated);
+		libraryCache.put(data.name, generated);
 		var prev = generated.classes.put(data.name, data);
 		if (prev != null) throw new IllegalStateException("重复的生成类: " + data.name);
 	}
@@ -132,79 +144,80 @@ public class GlobalContext implements CompilerSpec {
 	public MyHashMap<String, InnerClasses.Item> getInnerClassFlags(IClass info) {return getResolveHelper(info).getInnerClasses();}
 	public AnnotationSelf getAnnotationDescriptor(IClass clz) {return getResolveHelper(clz).annotationInfo();}
 
-	public File packageCacheFile;
-	public int getLibraryHash() {
-		ByteList list = new ByteList();
-		for (Library library : new MyHashSet<>(libraries.values()))
-			list.putInt(library.fileHashCode());
-		int hash = CRC32s.once(list.list, 0, list.wIndex());
-		list._free();
-		return hash;
-	}
 	/**
 	 * 通过短名称获取全限定名（若存在）
 	 * @return 包含候选包名的列表 例如 [java/lang]
 	 */
-	@SuppressWarnings("unchecked")
 	public List<String> getAvailablePackages(String shortName) {
-		if (packageFastPath.isEmpty()) {
-			long time = System.nanoTime();
-			block:
-			synchronized (this) {
-				if (packageFastPath.isEmpty()) {
-					var serializer = (Serializer<MyHashMap<String, List<String>>>) SerializerFactory.SAFE.serializer(Signature.parseGeneric("Lroj/collect/MyHashMap<Ljava/lang/String;Ljava/util/List<Ljava/lang/String;>;>;"));
+		if (packageFastPath.isEmpty()) buildPackageCache();
+		return packageFastPath.getOrDefault(shortName, Collections.emptyList());
+	}
+	@SuppressWarnings("unchecked")
+	private synchronized void buildPackageCache() {
+		if (!packageFastPath.isEmpty()) return;
 
-					File cache = packageCacheFile;
-					if (cache != null && cache.isFile()) {
-						try {
-							packageFastPath = ConfigMaster.XNBT.readObject(serializer, cache);
-							System.out.println("Read PackageCache: "+(System.nanoTime() - time)/1000000d+"ms");
-							break block;
-						} catch (IOException | ParseException e) {
-							debugLogger().warn("包缓存读取失败", e);
-						}
+		long time = System.nanoTime();
+
+		// solved: use __TypeDecl( MyHashMap<String, List<String>> )
+		var serializer = (Serializer<MyHashMap<String, List<String>>>) SerializerFactory.SAFE.serializer(Signature.parseGeneric("Lroj/collect/MyHashMap<Ljava/lang/String;Ljava/util/List<Ljava/lang/String;>;>;"));
+
+		File cache;
+		var bb = IOUtil.getSharedByteBuf();
+		try {
+			for (Library library : libraries) {
+				bb.putUTFData(library.versionCode()).put(0);
+			}
+			for (Library library : unenumerableLibraries) {
+				bb.putUTFData(library.versionCode()).put(0);
+			}
+
+			//FIXME 用压缩文件系统或者什么东西实现一个更好的缓存机制
+			cache = new File(cacheFolder, "PackageList-.nbt");
+			if (cache.isFile()) {
+				try {
+					packageFastPath = ConfigMaster.XNBT.readObject(serializer, cache);
+					return;
+				} catch (IOException | ParseException e) {
+					debugLogger().warn("包缓存读取失败", e);
+				}
+			}
+		} catch (NullPointerException npe) {
+			cache = null;
+		}
+
+		for (String entry : libraryCache.keySet()) {
+			if (!entry.contains("$")) addFastPath(entry);
+		}
+
+		for (Library library : LibraryCache.RUNTIME) {
+			for (String n : library.content()) {
+				if (!n.contains("$") &&
+					(n.startsWith("java/") || n.startsWith("javax/") ||
+						library.moduleName().startsWith("jdk.unsupported"))) {
+
+					var in = library.get(n);
+					if (in == null) {
+						debugLogger().error("无法获取模块{}的类{}", library.moduleName(), n);
+						continue;
 					}
+					if ((in.modifier&Opcodes.ACC_PUBLIC) == 0) continue;
 
-					for (String entry : libraries.keySet()) {
-						if (!entry.contains("$"))
-							addFastPath(entry);
-					}
-
-					// how to deal with rt.jar ?
-					for (String n : LibraryRuntime.INSTANCE.content()) {
-						if (!n.contains("$") &&
-							(n.startsWith("java/") || n.startsWith("javax/") ||
-							LibraryRuntime.INSTANCE.getModule(n).startsWith("jdk.unsupported"))) {
-
-							try {
-								var in = LibraryRuntime.INSTANCE.getResource(n+".class");
-								var acc = Parser.parseAccess(IOUtil.getSharedByteBuf().readStreamFully(in), false);
-								if ((acc.acc&Opcodes.ACC_PUBLIC) == 0) continue;
-							} catch (Exception e) {
-								e.printStackTrace();
-							}
-
-							addFastPath(n);
-						}
-					}
-
-					for (Map.Entry<String, List<String>> entry : packageFastPath.entrySet()) {
-						var value = entry.getValue();
-						if (value.size() == 1) entry.setValue(Collections.singletonList(Interner.intern(value.get(0))));
-						else for (int i = 0; i < value.size(); i++) value.set(i, Interner.intern(value.get(i).intern()));
-					}
-
-					System.out.println("Build PackageCache: "+(System.nanoTime() - time)/1000000d+"ms");
-
-					if (cache != null) try {
-						ConfigMaster.XNBT.writeObject(serializer, packageFastPath, cache);
-					} catch (IOException e) {
-						debugLogger().warn("包缓存保存失败", e);
-					}
+					addFastPath(n);
 				}
 			}
 		}
-		return packageFastPath.getOrDefault(shortName, Collections.emptyList());
+
+		for (Map.Entry<String, List<String>> entry : packageFastPath.entrySet()) {
+			var value = entry.getValue();
+			if (value.size() == 1) entry.setValue(Collections.singletonList(Interner.intern(value.get(0))));
+			else for (int i = 0; i < value.size(); i++) value.set(i, Interner.intern(value.get(i)));
+		}
+
+		if (cache != null) try {
+			ConfigMaster.XNBT.writeObject(serializer, packageFastPath, cache);
+		} catch (IOException e) {
+			debugLogger().warn("包缓存保存失败", e);
+		}
 	}
 	private void addFastPath(String n) {
 		int i = n.lastIndexOf('/');
@@ -222,7 +235,7 @@ public class GlobalContext implements CompilerSpec {
 		for (CompileUnit unit : ctx) extraInfos.removeKey(unit);
 		ctx.clear();
 
-		for (String s : generated.classes.keySet()) libraries.remove(s, generated);
+		for (String s : generated.classes.keySet()) libraryCache.remove(s, generated);
 		generated.classes.clear();
 	}
 

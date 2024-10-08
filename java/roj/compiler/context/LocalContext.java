@@ -236,6 +236,15 @@ public class LocalContext {
 	}
 	// endregion
 
+	public void clear() {
+		this.file = null;
+		this.tr = null;
+		this.importCache.clear();
+		this.importCacheMethod.clear();
+		this.importCacheField.clear();
+		this.flagCache.clear();
+		this.lexer.init("");
+	}
 	public void setClass(CompileUnit file) {
 		this.file = file;
 		this.tr = file.getTypeResolver();
@@ -246,6 +255,8 @@ public class LocalContext {
 		int pos = this.lexer.index;
 		this.lexer.init(file.getCode());
 		this.lexer.index = pos;
+
+		file.ctx = this;
 	}
 	public void setMethod(MethodNode node) {
 		file._setSign(node);
@@ -265,14 +276,7 @@ public class LocalContext {
 
 	public ComponentList fieldListOrReport(IClass info, String name) {return classes.getFieldList(info, name);}
 	public ComponentList methodListOrReport(IClass info, String name) {return classes.getMethodList(info, name);}
-	public IntBiMap<String> parentListOrReport(IClass info) {
-		try {
-			return classes.getParentList(info);
-		} catch (ClassNotFoundException e) {
-			report(Kind.ERROR, "symbol.error.noSuchClass", e.getMessage());
-			return new IntBiMap<>();
-		}
-	}
+	public IntBiMap<String> parentListOrReport(IClass info) {return classes.getParentList(info);}
 
 	/**
 	 * 擦除泛型
@@ -728,12 +732,7 @@ public class LocalContext {
 			return false;
 		}
 
-		try {
-			return classes.getParentList(info).containsValue(instClass);
-		} catch (ClassNotFoundException e) {
-			report(Kind.ERROR, "symbol.error.noSuchClass", e.getMessage());
-			return false;
-		}
+		return classes.getParentList(info).containsValue(instClass);
 	}
 
 	public IType getCommonParent(IType a, IType b) {

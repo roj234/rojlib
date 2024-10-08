@@ -3,6 +3,7 @@ package roj.config;
 import roj.config.serial.CVisitor;
 import roj.io.MyDataInput;
 import roj.io.MyDataInputStream;
+import roj.reflect.Unaligned;
 import roj.util.DynByteBuf;
 
 import java.io.IOException;
@@ -24,7 +25,7 @@ public final class XNBTParser implements BinaryParser {
 	public <T extends CVisitor> T parse(InputStream in, int flag, T cc) throws IOException { root(MyDataInputStream.wrap(in), cc); return cc; }
 	public <T extends CVisitor> T parse(DynByteBuf buf, int flag, T cc) throws IOException { root(buf, cc); return cc; }
 
-	public ConfigMaster format() { return ConfigMaster.NBT; }
+	public ConfigMaster format() { return ConfigMaster.XNBT; }
 
 	public static void root(MyDataInput in, CVisitor cc) throws IOException {
 		byte type = in.readByte();
@@ -46,15 +47,15 @@ public final class XNBTParser implements BinaryParser {
 			case FLOAT -> cc.value(in.readFloat());
 			case DOUBLE -> cc.value(in.readDouble());
 			case BYTE_ARRAY -> {
-				byte[] ba = new byte[in.readInt()];
-				in.readFully(ba);
-				cc.value(ba);
+				var arr = (byte[]) Unaligned.U.allocateUninitializedArray(byte.class, in.readInt());
+				in.readFully(arr);
+				cc.value(arr);
 			}
 			case STRING -> cc.value(in.readUTF());
 			case X_GB18030_STRING -> cc.value(in.readGB(in.readVUInt()));
 			case X_LATIN1_STRING -> cc.value(in.readAscii(in.readVUInt()));
 			case X_SAME_LIST -> {
-				int mapKeySize = in.readVUInt();
+				int mapKeySize = in.readUnsignedByte();
 				String[] mapKey = new String[mapKeySize];
 				for (int i = 0; i < mapKeySize; i++)
 					mapKey[i] = in.readUTF();
@@ -80,14 +81,14 @@ public final class XNBTParser implements BinaryParser {
 				cc.pop();
 			}
 			case INT_ARRAY -> {
-				int[] ia = new int[in.readInt()];
-				for (int i = 0; i < ia.length; i++) ia[i] = in.readInt();
-				cc.value(ia);
+				var arr = (int[]) Unaligned.U.allocateUninitializedArray(int.class, in.readInt());
+				for (int i = 0; i < arr.length; i++) arr[i] = in.readInt();
+				cc.value(arr);
 			}
 			case LONG_ARRAY -> {
-				long[] la = new long[in.readInt()];
-				for (int i = 0; i < la.length; i++) la[i] = in.readLong();
-				cc.value(la);
+				var arr = (long[]) Unaligned.U.allocateUninitializedArray(long.class, in.readInt());
+				for (int i = 0; i < arr.length; i++) arr[i] = in.readLong();
+				cc.value(arr);
 			}
 		}
 	}

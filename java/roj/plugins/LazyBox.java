@@ -278,7 +278,7 @@ public class LazyBox extends Plugin {
 					}
 				}
 
-				registerRoute(url, (req, rh) -> {
+				registerRoute(url+"/", (req, rh) -> {
 					if (req.path().isEmpty()) return Response.file(req, info);
 					throw IllegalRequestException.NOT_FOUND;
 				});
@@ -461,7 +461,12 @@ public class LazyBox extends Plugin {
 
 			Terminal.setConsole(Panger.console());
 		})));
-		c1.register(literal("exit").executes(c -> Terminal.setConsole(Panger.console())));
+		c1.register(literal("exit").executes(c -> {
+			in1.close();
+			in2.close();
+
+			Terminal.setConsole(Panger.console());
+		}));
 	}
 	private static AtomicInteger copy(QZArchive arc, MyHashMap<QZEntry, String> should_copy, QZFileWriter out, EasyProgressBar bar) {
 		return arc.parallelDecompress(pool, (entry, in) -> {

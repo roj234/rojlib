@@ -86,7 +86,7 @@ final class StringConcat extends ExprNode {
 		cw.newObject("java/lang/StringBuilder");
 		for (int i = 0; i < nodes.size(); i++) {
 			ExprNode node = nodes.get(i);
-			node.write(cw, false);
+			node.write(cw);
 
 			Type rawType = node.type().rawType();
 			if (rawType.isPrimitive()) {
@@ -118,7 +118,7 @@ final class StringConcat extends ExprNode {
 		cw.newObject("roj/text/CharList");
 		for (int i = 0; i < nodes.size(); i++) {
 			ExprNode node = nodes.get(i);
-			node.write(cw, false);
+			node.write(cw);
 
 			Type rawType = node.type().rawType();
 			if (rawType.isPrimitive()) {

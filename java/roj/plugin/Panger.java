@@ -241,7 +241,7 @@ public final class Panger extends PluginManager {
 			HttpServer11.LOGGER.setLevel(level);
 			router = new OKRouter(level.canLog(Level.DEBUG));
 			try {
-				httpServer = HttpServer11.simple(new InetSocketAddress(CONFIG.getInteger("http_port", 8080)), 512, router);
+				httpServer = HttpServer11.simple("PangerHTTP", new InetSocketAddress(CONFIG.getInteger("http_port", 8080)), 512, router);
 				MimeType.loadMimeMap(IOUtil.readUTF(new File("plugins/Core/mime.ini")));
 
 				router.setInterceptor("PermissionManager", null);

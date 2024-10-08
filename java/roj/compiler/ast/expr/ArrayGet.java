@@ -70,8 +70,8 @@ final class ArrayGet extends VarNode {
 	@Override
 	public void preStore(MethodWriter cw) {
 		//GenericSafe
-		array.write(cw, false);
-		index.writeDyn(cw, cast);
+		array.write(cw);
+		index.write(cw, cast);
 	}
 
 	@Override

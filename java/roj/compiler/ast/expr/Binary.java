@@ -1,6 +1,7 @@
 package roj.compiler.ast.expr;
 
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 import roj.asm.tree.anno.AnnVal;
 import roj.asm.type.IType;
 import roj.asm.type.Type;
@@ -355,32 +356,32 @@ final class Binary extends ExprNode {
 		switch (operator) {
 			// && 和 || 想怎么用，就怎么用！
 			case logic_and, logic_or: {
-				Label end = new Label();
-				int id = cw.beginJumpOn(operator == logic_or, end);
-				left.writeDyn(cw, castLeft);
-				cw.endJumpOn(id);
-				right.writeDyn(cw, castRight);
-
+				var shortCircuit = new Label();
+				left.writeShortCircuit(cw, castLeft, operator == logic_or, shortCircuit);
 				if (noRet) {
-					cw.label(end);
-				} else {
-					Label realEnd = new Label();
-					cw.jump(realEnd);
-					cw.label(end);
-					cw.one((byte) (operator-logic_and + ICONST_0));
-					cw.label(realEnd);
+					right.write(cw, true);
+					cw.label(shortCircuit); // short circuit no LDC present
+					return;
 				}
+				right.write(cw, castRight);
+
+				var sayResult = new Label();
+				cw.jump(sayResult);
+
+				cw.label(shortCircuit);
+				cw.one(operator == logic_and ? ICONST_0 : ICONST_1);
+				cw.label(sayResult);
 				return;
 			}
 			case nullish_consolidating: {
 				mustBeStatement(noRet);
 
 				Label end = new Label();
-				left.writeDyn(cw, castLeft);
+				left.write(cw, castLeft);
 				cw.one(DUP);
 				cw.jump(IFNONNULL, end);
 				cw.one(POP);
-				right.writeDyn(cw, castRight);
+				right.write(cw, castRight);
 				cw.label(end);
 				return;
 			}
@@ -391,61 +392,121 @@ final class Binary extends ExprNode {
 		if (flag != 1) writeRight(cw);
 		writeOperator(cw);
 	}
-	final void writeLeft(MethodWriter cw) {
-		left.writeDyn(cw, castLeft);
+
+	private static byte invertCode(int code, boolean invert) {
+		if (invert) {
+			assert code >= IFEQ && code <= IF_acmpne;
+			code = IFEQ + ((code-IFEQ) ^ 1); // 草，Opcode的排序还真的很有讲究
+		}
+		return (byte) code;
 	}
-	final void writeRight(MethodWriter cw) {
-		right.writeDyn(cw, castRight);
+
+	@Override
+	@SuppressWarnings("fallthrough")
+	public void writeShortCircuit(MethodWriter cw, @Nullable TypeCast.Cast cast, boolean ifThen, @NotNull Label far) {
+		if (operator < logic_and || operator > leq || operator == nullish_consolidating) {
+			super.writeShortCircuit(cw, cast, ifThen, far);
+			return;
+		}
+
+		switch (operator) {
+			case logic_and: {
+				var sibling = new Label();
+				if (!ifThen) {
+					left.writeShortCircuit(cw, castLeft, false, far/*fail*/);
+					right.writeShortCircuit(cw, castRight, false, far/*fail*/);
+				} else {
+					left.writeShortCircuit(cw, castLeft, false, sibling/*fail*/);
+					right.writeShortCircuit(cw, castRight, true, far/*success*/);
+				}
+				cw.label(sibling);
+				return;
+			}
+			case logic_or: {
+				var sibling = new Label();
+				if (ifThen) {
+					left.writeShortCircuit(cw, castLeft, true, far/*success*/);
+					right.writeShortCircuit(cw, castRight, true, far/*success*/);
+				} else {
+					left.writeShortCircuit(cw, castLeft, true, sibling/*success*/);
+					right.writeShortCircuit(cw, castRight, false, far/*fail*/);
+				}
+				cw.label(sibling);
+				return;
+			}
+		}
+
+		if (flag != 2) writeLeft(cw);
+		if (flag != 1) writeRight(cw);
+
+		int opc = dType;
+		if (opc < 0) opc = 0;
+
+		switch (operator) {
+			case equ, neq:
+				if (!left.type().isPrimitive() & !right.type().isPrimitive()) {
+					opc = IF_acmpeq + (operator - equ);
+					break;
+				}
+
+			case lss, geq, gtr, leq: {
+				opc = writeCmp(cw, opc) + (operator - equ);
+			}
+		}
+
+		cw.jump(invertCode(opc, !ifThen), far);
 	}
+
+	final void writeLeft(MethodWriter cw) {left.write(cw, castLeft);}
+	final void writeRight(MethodWriter cw) {right.write(cw, castRight);}
 	@SuppressWarnings("fallthrough")
 	final void writeOperator(MethodWriter cw) {
 		int opc = dType;
 		if (opc < 0) opc = 0;
 
 		switch (operator) {
-			default: throw OperationDone.NEVER;
+			//default: throw OperationDone.NEVER;
 			case add, sub, mul, div, mod: opc += ((operator - add) << 2) + IADD; break;
-			case pow: throw new IllegalArgumentException("pow未实现");
+			//FIXME pow正确的提升类型到double
+			case pow: {cw.invoke(INVOKESTATIC, "java/util/Math", "pow", "(DD)D");return;}
 			case lsh, rsh, rsh_unsigned, and, or, xor: opc += ((operator - lsh) << 1) + ISHL; break;
 			case equ, neq:
 				if (!left.type().isPrimitive() & !right.type().isPrimitive()) {
-					if (!cw.jumpOn(opc = IF_acmpeq + (operator - equ))) {
-						jump(cw, opc);
-					}
+					jump(cw, opc);
 					return;
 				}
 
 			case lss, geq, gtr, leq: {
-				switch (opc) {
-					case 1 -> {
-						cw.one(LCMP);
-						opc = IFEQ;
+				opc = writeCmp(cw, opc);
+				if (dType == 0 && operator <= neq && flag == 0) {
+					cw.one(ISUB); // (left - right) == 0
+					if (operator == equ) {
+						cw.one(ICONST_1);
+						cw.one(IXOR);
 					}
-					case 2, 3 -> {
-						// 遇到NaN时必须失败(不跳转
-						// lss => CMPG
-						cw.one((byte) (FCMPL -4+opc*2 + ((operator-equ)&1)));
-						opc = IFEQ;
-					}
-					default -> opc = flag != 0 ? IFEQ : IF_icmpeq;
-				}
-
-				if (!cw.jumpOn(opc += (operator - equ))) {
-					if (dType == 0 && operator <= neq && flag == 0) {
-						cw.one(ISUB); // (left - right) == 0
-						if (operator == equ) {
-							cw.one(ICONST_1);
-							cw.one(IXOR);
-						}
-					} else {
-						jump(cw, opc);
-					}
+				} else {
+					jump(cw, opc + (operator - equ));
 				}
 				return;
 			}
 		}
 
 		cw.one((byte)opc);
+	}
+	private int writeCmp(MethodWriter cw, int opc) {
+		return switch (opc) {
+			case 1 -> {
+				cw.one(LCMP);
+				yield IFEQ;
+			}
+			case 2, 3 -> {
+				// 遇到NaN时必须失败(不跳转
+				// lss => CMPG
+				cw.one((byte) (FCMPL -4+opc*2 + ((operator-equ)&1)));
+				yield IFEQ;
+			}
+			default -> flag != 0 ? IFEQ : IF_icmpeq;
+		};
 	}
 	private void jump(MethodWriter cw, int code) {
 		Label _true = new Label();

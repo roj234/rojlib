@@ -375,7 +375,7 @@ public final class DotGet extends VarNode {
 		byte opcode;
 
 		boolean hasParent = parent != null;
-		if (hasParent) parent.write(cw, false);
+		if (hasParent) parent.write(cw);
 
 		if ((fn.modifier & Opcodes.ACC_STATIC) != 0) {
 			opcode = Opcodes.GETSTATIC;

@@ -53,17 +53,17 @@ final class Cast extends UnaryPre {
 	@Override
 	public void write(MethodWriter cw, boolean noRet) {
 		mustBeStatement(noRet);
-		right.writeDyn(cw, cast);
+		right.write(cw, cast);
 	}
 
 	@Override
-	public void writeDyn(MethodWriter cw, @Nullable TypeCast.Cast cast) {
-		if (cast != null && this.cast.type >= 0 && this.cast.getOp1() != 42/*Do not check for AnyCast*/) {
+	public void write(MethodWriter cw, @Nullable TypeCast.Cast returnType) {
+		if (returnType != null && this.cast.type >= 0 && this.cast.getOp1() != 42/*Do not check for AnyCast*/) {
 			LocalContext.get().report(Kind.WARNING, "cast.warn.redundant", type);
 		}
 
-		right.writeDyn(cw, this.cast);
-		if (cast != null) cast.write(cw);
+		right.write(cw, this.cast);
+		if (returnType != null) returnType.write(cw);
 	}
 
 	@Override

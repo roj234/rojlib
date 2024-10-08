@@ -18,5 +18,5 @@ public final class NaE extends ExprNode {
 	@Override public String toString() {return "<\1nae.unresolvable\0>";}
 	@Override public IType type() {return UNRESOLVABLE;}
 	@Override public void write(MethodWriter cw, boolean noRet) {}
-	@Override public void writeDyn(MethodWriter cw, @Nullable TypeCast.Cast cast) {}
+	@Override public void write(MethodWriter cw, @Nullable TypeCast.Cast returnType) {}
 }

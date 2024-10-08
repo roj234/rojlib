@@ -72,8 +72,8 @@ final class EasyMap extends ExprNode {
 		for (Map.Entry<ExprNode, ExprNode> entry : map.entrySet()) {
 			cw.one(DUP);
 
-			entry.getKey().writeDyn(cw, lc.castTo(entry.getKey().type(), LocalContext.OBJECT_TYPE, 0));
-			entry.getValue().writeDyn(cw, lc.castTo(entry.getValue().type(), LocalContext.OBJECT_TYPE, 0));
+			entry.getKey().write(cw, lc.castTo(entry.getKey().type(), LocalContext.OBJECT_TYPE, 0));
+			entry.getValue().write(cw, lc.castTo(entry.getValue().type(), LocalContext.OBJECT_TYPE, 0));
 
 			cw.invoke(INVOKEVIRTUAL, "roj/collect/MyHashMap", "put", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;");
 			cw.one(POP);

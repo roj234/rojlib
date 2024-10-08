@@ -2,7 +2,6 @@ package roj.reflect;
 
 import org.intellij.lang.annotations.MagicConstant;
 import org.jetbrains.annotations.Nullable;
-import roj.RojLib;
 import roj.asm.Parser;
 import roj.asm.cp.CstClass;
 import roj.asm.tree.ConstantData;
@@ -14,17 +13,10 @@ import roj.asm.type.TypeHelper;
 import roj.asm.visitor.CodeWriter;
 import roj.collect.MyBitSet;
 import roj.collect.MyHashMap;
-import roj.io.IOUtil;
-import roj.io.fs.Filesystem;
-import roj.io.fs.WritableFilesystem;
 import roj.text.CharList;
 import roj.util.ArrayCache;
 import roj.util.ByteList;
-import roj.util.DynByteBuf;
-import roj.util.Helpers;
 
-import java.io.IOException;
-import java.io.InputStream;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
@@ -43,7 +35,7 @@ import static roj.reflect.ReflectionUtils.u;
  * @author Roj233
  * @since 2021/8/13 20:16
  */
-public sealed class Bypass<T> {
+public final class Bypass<T> {
 	public static final String MAGIC_ACCESSOR_CLASS = VMInternals.HackMagicAccessor();
 	public static final MyBitSet EMPTY_BITS = new MyBitSet(0);
 
@@ -670,49 +662,6 @@ public sealed class Bypass<T> {
 	public final Bypass<T> unchecked() { flags |= UNCHECKED_CAST; return this; }
 	public final Bypass<T> weak() { flags |= WEAK_REF; return this; }
 	public final Bypass<T> inline() { flags |= INLINE; return this; }
-
-	public static <V> Bypass<V> cached(String cache, Class<V> impl) {
-		var fs = (Filesystem)RojLib.inject("roj.reflect.Bypass.cache");
-		try {
-			InputStream in;
-			if (fs != null && (in=fs.getStream(cache)) != null)
-				return Helpers.cast(new Cached(IOUtil.read(in)));
-		} catch (IOException ignored) {}
-		if (fs instanceof WritableFilesystem wfs)
-			return Helpers.cast(new ToCache(wfs, cache, impl));
-
-		return builder(impl);
-	}
-	private static final class ToCache extends Bypass<Object> {
-		private final WritableFilesystem wfs;
-		private final String name;
-		public ToCache(WritableFilesystem wfs, String name, Class<?> impl) {
-			super(Helpers.cast(impl), true);
-			this.wfs = wfs;
-			this.name = name;
-		}
-
-		@Override
-		Object define(ClassLoader def, ByteList b) {
-			try {
-				wfs.write(name, b);
-			} catch (IOException e) {
-				e.printStackTrace();
-			}
-			return super.define(def, b);
-		}
-	}
-	private static final class Cached extends Bypass<Object> {
-		private final byte[] data;
-		private Cached(byte[] data) {this.data = data;}
-		@Override public Bypass<Object> access(Class<?> a, String[] b, String[] c, String[] d) throws IllegalArgumentException {return this;}
-		@Override public Bypass<Object> construct(Class<?> a, String[] b, List<Class<?>[]> c) throws IllegalArgumentException {return this;}
-		@Override public Bypass<Object> delegate(Class<?> a, String[] b, MyBitSet c, String[] d, List<Class<?>[]> e) throws IllegalArgumentException {return this;}
-		@Override public Bypass<Object> i_access(String a, String b, Type c, Method d, Method e, boolean f) {return this;}
-		@Override public Bypass<Object> i_construct(String a, String b, Method c) {return this;}
-		@Override public Bypass<Object> i_delegate(String a, String b, String c, Method d, byte e) {return this;}
-		@Override public Object build(ClassLoader def) {return define(def, DynByteBuf.wrap(data));}
-	}
 
 	/**
 	 * 首字母大写: xx,set => setXxx

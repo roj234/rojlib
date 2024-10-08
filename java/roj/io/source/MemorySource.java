@@ -61,7 +61,7 @@ public class MemorySource extends Source {
 	public DataInput asDataInput() { return list; }
 	public InputStream asInputStream() { return list.asInputStream(); }
 
-	public Source threadSafeCopy() { return new MemorySource(asReadonly()); }
+	public Source threadSafeCopy() { return new MemorySource(buffer()); }
 
 	@Override
 	public void moveSelf(long from, long to, long length) {
@@ -72,8 +72,7 @@ public class MemorySource extends Source {
 	@Override
 	public boolean isBuffered() { return true; }
 
-	public DynByteBuf asReadonly() { return list.slice(0, cap); }
-	public DynByteBuf buffer() { list.wIndex(cap); list.rIndex = 0; return list; }
+	public DynByteBuf buffer() {return list.slice(0, cap);}
 
 	@Override
 	public String toString() { return "MemorySource@"+System.identityHashCode(list); }

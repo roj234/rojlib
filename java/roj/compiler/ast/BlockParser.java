@@ -1014,21 +1014,18 @@ public final class BlockParser {
 		if (expr == null) {
 			if (checkLSB) ctx.report(Kind.ERROR, "noExpression");
 		} else {
-			int i = cw.beginJumpOn(mode == /*is WHILE*/2, target);
-
 			ExprNode node = expr.resolve(ctx);
 			if (node.isConstant() && node.type() == Type.std(Type.BOOLEAN)) {
 				boolean flag = (boolean) node.constVal();
 				constantHint = flag ? 1 : -1;
-				cw.skipJumpOn(i);
 
 				if (node.isKind(ExprNode.ExprKind.CONSTANT_WRITABLE)) {
 					if (mode != 0) ctx.report(Kind.ERROR, "expr.constantWritable.ifOnly");
 					node.write(cw, true);
 				}
 			} else {
-				writeCast(node, Type.std(Type.BOOLEAN));
-				cw.endJumpOn(i);
+				var r = ctx.castTo(node.type(), Type.std(Type.BOOLEAN), 0);
+				if (r.type >= 0) node.writeShortCircuit(cw, r, mode == 2/*WHILE*/, target);
 			}
 		}
 
@@ -1102,7 +1099,7 @@ public final class BlockParser {
 						// iterable
 
 						Variable _itr = newVar("@迭代器", new Type("java/util/Iterator"));
-						iter.write(cw, false);
+						iter.write(cw);
 						cw.invokeItf("java/lang/Iterable", "iterator", "()Ljava/util/Iterator;");
 						cw.store(_itr);
 
@@ -1134,7 +1131,7 @@ public final class BlockParser {
 					_arr = lv.getVariable();
 				} else {
 					_arr = newVar("@数组表达式的结果", type);
-					iter.write(cw, false);
+					iter.write(cw);
 					cw.store(_arr);
 				}
 				Variable _i = newVar("@索引", Type.std(Type.INT));
@@ -1553,7 +1550,7 @@ public final class BlockParser {
 					// default, 没找到任何case
 					ctx.report(Kind.SEVERE_WARNING, "block.switch.noBranch");
 
-					sval.write(cw, false);
+					sval.write(cw);
 					// POP or POP2
 					cw.one((byte) (0x56 + sval.type().rawType().length()));
 					node.block.writeTo(cw);
@@ -1569,9 +1566,7 @@ public final class BlockParser {
 				Label ifNe = new Label();
 
 				// 正确的，IFEQ对于Binary equ来说是0，是false，是不相等
-				int i = cw.beginJumpOn(false, ifNe);
-				cmp.write(cw, false);
-				cw.endJumpOn(i);
+				cmp.writeShortCircuit(cw, null, false, ifNe);
 
 				node.block.writeTo(cw);
 
@@ -1617,7 +1612,7 @@ public final class BlockParser {
 					ctx.report(Kind.WARNING, "block.switch.lookupSwitch");
 			}
 			case 1 -> {// legacy string
-				sval.write(cw, false);
+				sval.write(cw);
 				if (result.nullBranch != null) makeNullsafe(result.nullBranch, sval);
 				switchString(branches, breakTo);
 				ctx.report(Kind.WARNING, "block.switch.lookupSwitch");
@@ -1630,7 +1625,7 @@ public final class BlockParser {
 
 				Label start = cw.label();
 				cw.field(GETSTATIC, switchMap, 0);
-				sval.write(cw, false);
+				sval.write(cw);
 				if (result.nullBranch != null) makeNullsafe(result.nullBranch, sval);
 
 				cw.invoke(INVOKEVIRTUAL, "java/lang/Enum", "ordinal", "()I");
@@ -1650,7 +1645,7 @@ public final class BlockParser {
 				addGeneratedClass(switchMap);
 
 				cw.field(GETSTATIC, switchMap, 0);
-				sval.write(cw, false);
+				sval.write(cw);
 				cw.invoke(INVOKEVIRTUAL, "roj/compiler/runtime/SwitchMap", "get", "(Ljava/lang/Object;)I");
 
 				linearMapping(breakTo, branches);
@@ -1714,7 +1709,7 @@ public final class BlockParser {
 	private void makeNullsafe(SwitchNode.Case branch, ExprNode sval) {
 		var labels = branch.labels;
 		for (int i = 0; i < labels.size(); i++) {
-			var n = (ExprNode) labels.get(i);
+			var n = labels.get(i);
 			if (n.isConstant() && n.constVal() == null) {
 				labels.remove(i);
 				break;
@@ -1820,7 +1815,7 @@ public final class BlockParser {
 
 				// an enum constant
 				c.field(GETSTATIC, sm, 0);
-				o.write(c, false);
+				o.write(c);
 				c.invoke(INVOKEVIRTUAL, "java/lang/Enum", "ordinal", "()I");
 				c.ldc(i);
 				c.one(IASTORE);
@@ -1886,7 +1881,7 @@ public final class BlockParser {
 				// TODO write with cast (primitive), while this is better implemented via
 				//  PrimitiveGenericHelper.forClass(ctx.classes.getClassInfo("...")).argumentType(Type.std(Type.INT)).make();
 				//  and this will have a snippet: ;PGEN;I;...
-				o.write(c, false);
+				o.write(c);
 				Label end = c.label();
 				c.ldc(i);
 				c.invokeV("roj/compiler/runtime/SwitchMap$Builder", "add", "(Ljava/lang/Object;I)Ljava/lang/Object;");
@@ -2002,7 +1997,7 @@ public final class BlockParser {
 			ctx.report(Kind.ERROR, "type.primitiveNotAllowed", node.type());
 		}
 
-		node.write(cw, false);
+		node.write(cw);
 
 		beginCodeBlock();
 		Variable syncVar = newVar("@", node.type());
@@ -2051,7 +2046,7 @@ public final class BlockParser {
 			// trust user
 			ref = lv.getVariable();
 		} else {
-			node.write(cw, false);
+			node.write(cw);
 			ref = newVar("@", node.type());
 			cw.store(ref);
 		}
@@ -2125,7 +2120,7 @@ public final class BlockParser {
 				case 'Z', 'C', 'I', 'J', 'F', 'D' -> {
 					cw.clazz(Opcodes.NEW, "java/lang/AssertionError");
 					cw.one(DUP);
-					message.write(cw, false);
+					message.write(cw);
 					cw.invoke(INVOKESPECIAL, "java/lang/AssertionError", "<init>", "("+(char)type+")V");
 					cw.one(ATHROW);
 				}
@@ -2192,7 +2187,7 @@ public final class BlockParser {
 			return;
 		}
 
-		node.write(cw, false);
+		node.write(cw);
 		cw.ldc(types.hashCode()); // 检测篡改 IncompatibleClassChangeError
 		cw.invokeV("roj/compiler/runtime/ReturnStack", "forRead", "(I)Lroj/compiler/runtime/ReturnStack;");
 
@@ -2260,7 +2255,7 @@ public final class BlockParser {
 							//ctx.report(Kind.ERROR, "invoke.noExact");
 						}
 					}
-					node.write(cw, false);
+					node.write(cw);
 				} else {
 					writeCast(node, type);
 				}
@@ -2288,7 +2283,7 @@ public final class BlockParser {
 	private void writeCast(ExprNode node, IType type) {
 		var r = ctx.castTo(node.type(), type, 0);
 		if (r.type < 0) return;
-		node.writeDyn(cw, r);
+		node.write(cw, r);
 	}
 
 	private void except(short id) throws ParseException {wr.except(id, byId(id));}

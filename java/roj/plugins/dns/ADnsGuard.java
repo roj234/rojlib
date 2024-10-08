@@ -104,7 +104,7 @@ public class ADnsGuard extends Plugin {
 			};
 		}
 
-		if (cfg.getBool("manage")) registerRoute("dns", new OKRouter().register(dns));
+		if (cfg.getBool("manage")) registerRoute("dns/", new OKRouter().register(dns));
 		Record.ttlUpdateMultiplier = cfg.getFloat("TTLFactor", 1);
 
 		System.out.println("Welcome, to a cleaner world, "+System.getProperty("user.name", "user")+"!");

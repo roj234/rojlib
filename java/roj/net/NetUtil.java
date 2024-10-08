@@ -21,7 +21,6 @@ public final class NetUtil {
 	private static SimpleList<NetworkInterface> networkInterfaces;
 	private static MyHashSet<InetAddress> endpoints;
 	private static boolean hasAnyIpV6Address;
-	static { refreshEndpoints(); }
 
 	public static void refreshEndpoints() {
 		SimpleList<NetworkInterface> interfaces = new SimpleList<>();
@@ -51,9 +50,9 @@ public final class NetUtil {
 		hasAnyIpV6Address = val;
 	}
 
-	public static boolean hasAnyIpV6Address() { return hasAnyIpV6Address; }
-	public static MyHashSet<InetAddress> getNetworkEndpoints() { return endpoints; }
-	public static SimpleList<NetworkInterface> getNetworkInterfaces() { return networkInterfaces; }
+	public static boolean hasAnyIpV6Address() { if (networkInterfaces == null) refreshEndpoints(); return hasAnyIpV6Address; }
+	public static MyHashSet<InetAddress> getNetworkEndpoints() { if (networkInterfaces == null) refreshEndpoints(); return endpoints; }
+	public static SimpleList<NetworkInterface> getNetworkInterfaces() { if (networkInterfaces == null) refreshEndpoints(); return networkInterfaces; }
 
 	private static InetAddress any;
 	public static InetAddress anyLocalAddress() {

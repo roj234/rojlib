@@ -8,7 +8,6 @@ import roj.io.IOUtil;
 import roj.io.MyDataInput;
 import roj.text.CharList;
 import roj.text.GB18030;
-import roj.text.Interner;
 import roj.text.UTF8;
 
 import java.io.DataOutput;
@@ -591,7 +590,7 @@ public abstract class DynByteBuf extends OutputStream implements CharSequence, M
 		if (len > max) throw new IllegalArgumentException("字符串长度不正确: "+len+" > "+max);
 		return readUTF(len);
 	}
-	public final String readUTF(int len) { return Interner.intern(readUTF(len, IOUtil.getSharedCharBuf())); }
+	public final String readUTF(int len) { return readUTF(len, IOUtil.getSharedCharBuf()).toString(); }
 	public final <T extends Appendable> T readUTF(int len, T target) {
 		if (len < 0) throw new IllegalArgumentException("length < 0: "+len);
 		if (len > 0) {
@@ -607,7 +606,7 @@ public abstract class DynByteBuf extends OutputStream implements CharSequence, M
 		if (len > max) throw new IllegalArgumentException("字符串长度不正确: "+len+" > "+max);
 		return readGB(len);
 	}
-	public final String readGB(int len) { return Interner.intern(readGB(len, IOUtil.getSharedCharBuf())); }
+	public final String readGB(int len) { return readGB(len, IOUtil.getSharedCharBuf()).toString(); }
 	public final <T extends Appendable> T readGB(int len, T target) {
 		if (len > 0) {
 			testWI(rIndex,len);

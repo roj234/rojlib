@@ -270,17 +270,18 @@ public final class OKRouter implements Router {
 			}
 			set.prec = precs.toArray(new Dispatcher[precs.size()]);
 
-			int prefix = a.getBoolean("prefix")?Node.PREFIX|Node.DIRECTORY:0;
+			int flag = a.getBoolean("prefix")?Node.PREFIX:0;
 			String url = pathRel.concat(a.getString("value"));
+			if (url.endsWith("/")) flag |= Node.DIRECTORY;
 
 			Node node = route.add(url, 0, url.length());
 
 			Object prev = node.value;
 			if (prev == null) {
-				node.flag = (byte) prefix;
+				node.flag |= (byte) flag;
 				node.value = set;
 			} else {
-				if (node.flag != prefix) throw new IllegalArgumentException("prefix定义不同/"+o+" in "+prev+"|"+set);
+				if (node.flag != flag) throw new IllegalArgumentException("prefix定义不同/"+o+" in "+prev+"|"+set);
 
 				if (prev instanceof Route prevReq) {
 					Route[] newReq = new Route[8];
@@ -378,14 +379,13 @@ public final class OKRouter implements Router {
 	public final void removeInterceptor(String name) {interceptors.remove(name);}
 
 	public final OKRouter addPrefixDelegation(String path, Router router) {return addPrefixDelegation(path, router, (String[])null);}
-	public final OKRouter addPrefixDelegation(String path, Router router, String... interceptors) {return addPrefixDelegation(path, router, true, interceptors);}
-	public final OKRouter addPrefixDelegation(String path, Router router, boolean directoryMatchOnly, @Nullable String... interceptors) {
+	public final OKRouter addPrefixDelegation(String path, Router router, @Nullable String... interceptors) {
 		Node node = route.add(path, 0, path.length());
 		if (node.value != null) throw new IllegalArgumentException("子路径"+path+"已存在");
 
 		Route aset = new Route();
 
-		node.flag = (byte) (Node.PREFIX|(directoryMatchOnly?Node.DIRECTORY:0));
+		node.flag |= (byte) (Node.PREFIX|(path.endsWith("/")?Node.DIRECTORY:0));
 		node.value = aset;
 		aset.accepts = 511;
 
@@ -693,11 +693,12 @@ public final class OKRouter implements Router {
 			int priority = -1;
 			SimpleList<String> par = null;
 
+			boolean noDir = path.charAt(end - 1) != '/';
 			for (int j = 0; j < nodeS.size(); j++) {
 				Node n = nodeS.get(j);
 				if (n.value != null) {
 					// prefix只接受目录
-					if ((n.flag&Node.DIRECTORY) != 0 && path.charAt(end-1) != '/') {
+					if ((n.flag&Node.DIRECTORY) != 0 && noDir) {
 						continue;
 					}
 
@@ -710,7 +711,7 @@ public final class OKRouter implements Router {
 							if (par == null) par = new SimpleList<>();
 
 							par.add(rex.name);
-							par.add(path.substring(prevI, end));
+							par.add(path.substring(prevI, noDir ? end : end-1));
 						}
 					} else if (prio == priority && node != null) { // equals
 						System.out.println("same: " + node);
@@ -836,13 +837,19 @@ public final class OKRouter implements Router {
 			Node node1;
 			if (path.charAt(i) == ':') {
 				// regexNode
-				Regex node2 = new Regex(path.substring(i+1, j));
-				if ((node2.flag&2) != 0 && j >= end) value = node2;
-
+				var node2 = new Regex(path.substring(i+1, j));
 				if (any.isEmpty()) any = new SimpleList<>();
-				any.add(node2);
 
-				node1 = node2;
+				i = any.indexOf(node2);
+				if (i >= 0) node1 = any.get(i);
+				else {
+					if ((node2.flag&2) != 0 && j >= end) {
+						if (value != null) throw new IllegalStateException();
+						value = node2;
+					}
+					any.add(node2);
+					node1 = node2;
+				}
 			} else {
 				node = new Text(path.substring(i, j));
 				node.next = table[hash &= mask];
@@ -932,9 +939,9 @@ public final class OKRouter implements Router {
 				if (count.equals("+")) {
 					flag |= 4; // MORE
 				} else if (count.equals("*")) {
-					flag |= 6; // ZERO | MORE
+					flag |= 12; // ZERO | MORE
 				} else {
-					flag |= 2; // ZERO
+					flag |= 8; // ZERO
 				}
 			}
 		}
@@ -943,7 +950,7 @@ public final class OKRouter implements Router {
 			if (regexp != null) {
 				Matcher m = regexp.matcher(path);
 				if (!m.find(i) || m.start() != i || m.end() != end) {
-					if ((flag&2) != 0) super.get(path, i, end, nodes);
+					if ((flag&8) != 0) super.get(path, i, end, nodes);
 					return;
 				}
 			}
@@ -968,12 +975,28 @@ public final class OKRouter implements Router {
 		int priority() {
 			int prio = 0;
 			// 有限匹配 > 无限匹配
-			if ((flag & 6) == 0) prio++;
+			if ((flag & 12) == 0) prio++;
 			// 必选匹配 > 可选匹配
 			if ((flag & 4) == 0) prio++;
 			// 有限制 > 无限制
 			if (regexp != null) prio++;
 			return prio;
+		}
+
+		@Override
+		public boolean equals(Object o) {
+			if (this == o) return true;
+			if (o == null || getClass() != o.getClass()) return false;
+
+			Regex regex = (Regex) o;
+			if (!name.equals(regex.name) || flag != regex.flag) return false;
+			return regexp != null ? regexp.pattern().equals(regex.regexp.pattern()) : regex.regexp == null;
+		}
+
+		@Override
+		public int hashCode() {
+			int h = (name.hashCode() << 1) ^ flag;
+			return regexp != null ? h^regexp.hashCode() : h;
 		}
 	}
 

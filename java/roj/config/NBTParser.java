@@ -1,6 +1,7 @@
 package roj.config;
 
 import roj.config.serial.CVisitor;
+import roj.reflect.Unaligned;
 import roj.util.DynByteBuf;
 
 import java.io.DataInput;
@@ -41,37 +42,37 @@ public final class NBTParser implements BinaryParser {
 			case FLOAT -> cc.value(in.readFloat());
 			case DOUBLE -> cc.value(in.readDouble());
 			case BYTE_ARRAY -> {
-				byte[] ba = new byte[in.readInt()];
-				in.readFully(ba);
-				cc.value(ba);
+				var arr = (byte[]) Unaligned.U.allocateUninitializedArray(byte.class, in.readInt());
+				in.readFully(arr);
+				cc.value(arr);
 			}
 			case STRING -> cc.value(in.readUTF());
 			case LIST -> {
-				byte listType = in.readByte();
+				type = in.readByte();
 				int len = in.readInt();
 				cc.valueList(len);
-				while (len-- > 0) element(in, listType, cc);
+				while (len-- > 0) element(in, type, cc);
 				cc.pop();
 			}
 			case COMPOUND -> {
 				cc.valueMap();
 				while (true) {
-					byte flg = in.readByte();
-					if (flg == 0) break;
+					type = in.readByte();
+					if (type == 0) break;
 					cc.key(in.readUTF());
-					element(in, flg, cc);
+					element(in, type, cc);
 				}
 				cc.pop();
 			}
 			case INT_ARRAY -> {
-				int[] ia = new int[in.readInt()];
-				for (int i = 0; i < ia.length; i++) ia[i] = in.readInt();
-				cc.value(ia);
+				var arr = (int[]) Unaligned.U.allocateUninitializedArray(int.class, in.readInt());
+				for (int i = 0; i < arr.length; i++) arr[i] = in.readInt();
+				cc.value(arr);
 			}
 			case LONG_ARRAY -> {
-				long[] la = new long[in.readInt()];
-				for (int i = 0; i < la.length; i++) la[i] = in.readLong();
-				cc.value(la);
+				var arr = (long[]) Unaligned.U.allocateUninitializedArray(long.class, in.readInt());
+				for (int i = 0; i < arr.length; i++) arr[i] = in.readLong();
+				cc.value(arr);
 			}
 		}
 	}

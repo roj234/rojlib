@@ -5,7 +5,6 @@ import roj.asm.tree.MethodNode;
 import roj.asm.tree.attr.LineNumberTable;
 import roj.asm.tree.insn.TryCatchEntry;
 import roj.asm.visitor.*;
-import roj.collect.MyBitSet;
 import roj.collect.SimpleList;
 import roj.compiler.asm.node.LazyIINC;
 import roj.compiler.asm.node.LazyLoadStore;
@@ -16,7 +15,8 @@ import roj.util.DynByteBuf;
 import java.util.List;
 import java.util.Objects;
 
-import static roj.asm.Opcodes.*;
+import static roj.asm.Opcodes.TRAIT_JUMP;
+import static roj.asm.Opcodes.assertTrait;
 
 /**
  * @author Roj233
@@ -64,52 +64,6 @@ public class MethodWriter extends CodeWriter {
 	public void iinc(Variable v, int delta) { addSegment(new LazyIINC(v, delta)); }
 
 	public void jump(byte code, Label target) { assertTrait(code, TRAIT_JUMP); addSegment(new JumpSegmentAO(code, target)); }
-
-	private final SimpleList<Label> jumpNo = new SimpleList<>();
-	private final MyBitSet cond = new MyBitSet();
-	private boolean canuse;
-	public int beginJumpOn(boolean ifNe, Label label) {
-		int size = jumpNo.size();
-		jumpNo.add(label);
-		cond.set(size, ifNe);
-		canuse = true;
-		return size;
-	}
-
-	public void endJumpOn(int size) {
-		if (jumpNo.size() > size) {
-			assert jumpNo.size() == size+1;
-
-			Label target = jumpNo.pop();
-			jump(cond.remove(jumpNo.size()) ? IFNE : IFEQ, target);
-			canuse = true;
-		}
-	}
-
-	public void skipJumpOn(int size) {
-		if (jumpNo.size() > size) {
-			assert jumpNo.size() == size+1;
-
-			jumpNo.pop();
-			cond.remove(jumpNo.size());
-			canuse = true;
-		}
-	}
-
-	public boolean jumpOn(int code) {
-		if (!canuse) return false;
-		canuse = false;
-
-		Label target = jumpNo.remove(jumpNo.size()-1);
-		boolean invert = !cond.remove(jumpNo.size());
-		if (invert) {
-			assert code >= IFEQ && code <= IF_acmpne;
-			code = IFEQ + ((code-IFEQ) ^ 1); // 草，Opcode的排序还真的很有讲究
-		}
-
-		jump((byte) code, target);
-		return true;
-	}
 
 	public int nextSegmentId() {return segments.size()-1;}
 	public void replaceSegment(int id, Segment segment) {segments.set(id, segment);}

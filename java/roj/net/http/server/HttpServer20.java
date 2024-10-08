@@ -9,7 +9,6 @@ import roj.net.http.*;
 import roj.net.http.h2.H2Connection;
 import roj.net.http.h2.H2Exception;
 import roj.net.http.h2.H2Stream;
-import roj.text.logging.Logger;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
 
@@ -26,8 +25,6 @@ import static roj.net.http.server.HttpServer11.*;
  * @since 2024/7/14 0014 8:38
  */
 public final class HttpServer20 extends H2Stream implements PostSetting, ResponseHeader, ResponseWriter, ChannelHandler {
-	private static final Logger LOGGER = Logger.getLogger("HtpSvr/2");
-
 	private final Router router;
 
 	public HttpServer20(Router router, int id) {

@@ -6,6 +6,7 @@ import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
 import java.net.SocketOption;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
 
 /**
@@ -17,6 +18,7 @@ public abstract class ServerLaunch implements Closeable {
 
 	public static final SocketOption<Integer> TCP_RECEIVE_BUFFER = new MyOption<>("TCP_RECEIVE_BUFFER", Integer.class);
 	public static final SocketOption<Integer> TCP_MAX_CONNECTION = new MyOption<>("TCP_MAX_CONNECTION", Integer.class);
+	public static final ConcurrentHashMap<String, ServerLaunch> SHARED = new ConcurrentHashMap<>();
 
 	SelectorLoop loop = DEFAULT_LOOPER;
 
@@ -28,10 +30,10 @@ public abstract class ServerLaunch implements Closeable {
 
 	public MyChannel udpCh() { return null; }
 
-	public static ServerLaunch tcp() throws IOException { return new ServerLaunchTcp(); }
-	public static ServerLaunch udp() throws IOException { return new ServerLaunchUdp(); }
-	public static ServerLaunch tcp(String name) throws IOException { return new ServerLaunchTcp(); }
-	public static ServerLaunch udp(String name) throws IOException { return new ServerLaunchUdp(); }
+	public static ServerLaunch tcp() throws IOException {return new ServerLaunchTcp(null);}
+	public static ServerLaunch udp() throws IOException {return new ServerLaunchUdp(null);}
+	public static ServerLaunch tcp(String name) throws IOException {return new ServerLaunchTcp(name);}
+	public static ServerLaunch udp(String name) throws IOException {return new ServerLaunchUdp(name);}
 
 	public abstract <T> ServerLaunch option(SocketOption<T> k, T v) throws IOException;
 	public abstract <T> T option(SocketOption<T> k) throws IOException;
@@ -57,4 +59,6 @@ public abstract class ServerLaunch implements Closeable {
 
 	public abstract boolean isOpen();
 	public abstract void close() throws IOException;
+
+	public abstract void addTCPConnection(MyChannel channel) throws IOException;
 }

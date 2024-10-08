@@ -2,7 +2,6 @@ package roj.io;
 
 import org.jetbrains.annotations.NotNull;
 import roj.text.GB18030;
-import roj.text.Interner;
 import roj.text.UTF8;
 import roj.util.ArrayCache;
 import roj.util.ArrayUtil;
@@ -227,7 +226,7 @@ public class MyDataInputStream extends MBInputStream implements MyDataInput {
 	@Override
 	public final String readAscii(int len) throws IOException {
 		int i = doRead(len);
-		return Interner.intern(new String(buf, i, len, StandardCharsets.ISO_8859_1));
+		return new String(buf, i, len, StandardCharsets.ISO_8859_1);
 	}
 
 	@Override @NotNull public final String readUTF() throws IOException { return readUTF(readUnsignedShort()); }
@@ -238,7 +237,7 @@ public class MyDataInputStream extends MBInputStream implements MyDataInput {
 		if (len > max) throw new IllegalArgumentException("字符串长度不正确: "+len+" > "+max);
 		return readUTF(len);
 	}
-	@Override public final String readUTF(int len) throws IOException { return Interner.intern(readUTF(len, IOUtil.getSharedCharBuf())); }
+	@Override public final String readUTF(int len) throws IOException { return readUTF(len, IOUtil.getSharedCharBuf()).toString(); }
 	@Override
 	public final <T extends Appendable> T readUTF(int len, T target) throws IOException {
 		if (len < 0) throw new IllegalArgumentException("length="+len);
@@ -256,7 +255,7 @@ public class MyDataInputStream extends MBInputStream implements MyDataInput {
 		if (len > max) throw new IllegalArgumentException("字符串长度不正确: "+len+" > "+max);
 		return readGB(len);
 	}
-	@Override public final String readGB(int len) throws IOException { return Interner.intern(readGB(len, IOUtil.getSharedCharBuf())); }
+	@Override public final String readGB(int len) throws IOException { return readGB(len, IOUtil.getSharedCharBuf()).toString(); }
 	@Override
 	public final <T extends Appendable> T readGB(int len, T target) throws IOException {
 		if (len < 0) throw new IllegalArgumentException("length="+len);

@@ -383,7 +383,7 @@ public final class Invoke extends ExprNode {
 			// 可能会使用当前的变量，所以把结果放在栈上
 			for (int i = 0; i < argVal.size(); i++) {
 				var node = argVal.get(i);
-				node.writeDyn(cw, ctx.castTo(node.type(), argType.get(i), 0));
+				node.write(cw, ctx.castTo(node.type(), argType.get(i), 0));
 			}
 			for (int i = 0; i < argVal.size(); i++) {
 				Type type = argType.get(i);
@@ -410,7 +410,7 @@ public final class Invoke extends ExprNode {
 		if ((methodNode.modifier&Opcodes.ACC_STATIC) != 0) {
 			if (fn != null) {
 				// 明显是对象
-				((ExprNode) fn).write(cw, false);
+				((ExprNode) fn).write(cw);
 				cw.one(Opcodes.POP);
 			}
 			opcode = Opcodes.INVOKESTATIC;
@@ -424,7 +424,7 @@ public final class Invoke extends ExprNode {
 					DotGet.NULLISH_TARGET.set(ifNull = new Label(-1));
 				}
 			}
-			expr.writeDyn(cw, cast);
+			expr.write(cw, cast);
 
 			if (v == 2) {
 				cw.one(DUP);
@@ -445,7 +445,7 @@ public final class Invoke extends ExprNode {
 			DotGet.NULLISH_TARGET.set(null);
 		for (int i = 0; i < args.size(); i++) {
 			ExprNode expr = args.get(i);
-			expr.writeDyn(cw, lc.castTo(expr.type(), desc.get(i), 0));
+			expr.write(cw, lc.castTo(expr.type(), desc.get(i), 0));
 		}
 		if (ifNull != null) DotGet.NULLISH_TARGET.set(ifNull);
 

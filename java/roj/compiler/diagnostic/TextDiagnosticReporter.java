@@ -13,6 +13,8 @@ import java.util.function.Consumer;
  * @since 2020/12/31 22:22
  */
 public class TextDiagnosticReporter implements Consumer<Diagnostic> {
+	public boolean errorOnly;
+
 	int err, warn;
 	int[] counter = new int[6];
 
@@ -44,9 +46,7 @@ public class TextDiagnosticReporter implements Consumer<Diagnostic> {
 	 */
 	@Override
 	public void accept(Diagnostic diag) {
-		if (diag.getCode().equals("import.any") || diag.getCode().equals("ps.method.paramDef")) {
-			return;
-		}
+		if (diag.getKind() != Kind.ERROR && errorOnly) return;
 
 		CharList sb = new CharList();
 

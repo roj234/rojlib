@@ -10,6 +10,7 @@ import roj.util.DynByteBuf;
  */
 public final class AttrString extends Attribute {
 	private static final int SOURCE_ID = NAMED_ID.getInt("SourceFile");
+	private static final int MODULE_TARGET_ID = NAMED_ID.getInt("ModuleTarget");
 
 	private final byte name;
 	public String value;
@@ -23,7 +24,7 @@ public final class AttrString extends Attribute {
 		this.value = value;
 	}
 
-	public void toByteArrayNoHeader(DynByteBuf w, ConstantPool pool) { w.putShort(name==SOURCE_ID ? pool.getUtfId(value) : pool.getClassId(value)); }
+	public void toByteArrayNoHeader(DynByteBuf w, ConstantPool pool) { w.putShort(name==SOURCE_ID||name==MODULE_TARGET_ID ? pool.getUtfId(value) : pool.getClassId(value)); }
 
 	public String name() { return NAMED_ID.get(name); }
 	public String toString() { return name()+": "+value; }

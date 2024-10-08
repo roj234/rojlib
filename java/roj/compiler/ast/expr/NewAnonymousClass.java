@@ -136,10 +136,10 @@ final class NewAnonymousClass extends ExprNode {
 	}
 
 	@Override
-	public void write(MethodWriter cw, boolean noRet) {writeDyn(cw, null);}
+	public void write(MethodWriter cw, boolean noRet) {write(cw, null);}
 	@Override
-	public void writeDyn(MethodWriter cw, @Nullable TypeCast.Cast cast) {
-		if (cast == null || !(cast.getType1() instanceof Generic g)) {
+	public void write(MethodWriter cw, @Nullable TypeCast.Cast returnType) {
+		if (returnType == null || !(returnType.getType1() instanceof Generic g)) {
 			LocalContext.get().report(Kind.ERROR, "anonymousClass.inferFailed");
 			return;
 		}

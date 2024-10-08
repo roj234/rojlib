@@ -92,30 +92,27 @@ public class Fail2Ban implements ChannelHandler, ITask {
 
 	@Override public void channelRead(ChannelCtx ctx, Object msg) throws IOException {
 		var event = new Event("fail2ban:inspect", msg);
-		ctx.postEvent(event.capture());
+		ctx.postEvent(event);
 
 		switch (event.getResult()) {
-			case Event.RESULT_ACCEPT -> {
-				var attempt = data.get(getAddress(ctx));
-				if (attempt != null) attempt.success();
-
-				ctx.removeSelf();
-				ctx.channelRead(msg);
-			}
+			case Event.RESULT_ACCEPT -> ctx.channelRead(msg);
 			case Event.RESULT_DENY -> ctx.close();
 		}
+	}
+
+	@Override
+	public void handlerRemoved(ChannelCtx ctx) {
+		try {
+			var attempt = data.get(getAddress(ctx));
+			if (attempt != null) attempt.success();
+		} catch (UnknownHostException ignored) {}
 	}
 
 	@Override public void onEvent(ChannelCtx ctx, Event event) throws IOException {
 		if (event.id.equals("fail2ban:inspect")) {
 			var copy = (DynByteBuf)event.getData();
-			if (copy.getU(copy.rIndex) != 0x40) {
-				LOGGER.info("{} 发送了无效的数据包: {}", ctx.remoteAddress(), copy.dump());
-				event.setResult(Event.RESULT_DENY);
-				return;
-			}
-
-			event.setResult(Event.RESULT_ACCEPT);
+			LOGGER.info("{} 发送了无效的数据包: {}", ctx.remoteAddress(), copy.slice(copy.rIndex, Math.min(1024, copy.readUnsignedByte())).dump());
+			event.setResult(Event.RESULT_DENY);
 		}
 	}
 }

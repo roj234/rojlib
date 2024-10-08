@@ -26,6 +26,7 @@ import java.util.function.Function;
  * @since 2024/3/17 0017 2:18
  */
 public class EpubWriter implements Closeable, Finishable {
+	private static final boolean SHOW_MAKER_INFO = false;
 	private static ZipFile TEMPLATE;
 	static {
 		try {
@@ -108,13 +109,15 @@ public class EpubWriter implements Closeable, Finishable {
 		}
 		this.cover = coverExt;
 
-		CHAPTER("制作信息", "maker", true).append("<div>");
-		HTML_LINE("""
-			使用 ImpLib/EpubWriter v2.0 制作
-			<a href="https://github.com/roj234/rojlib">开源地址(GitHub)</a>
-			""");
-		tw.append("\n</div></body></html>");
-		tw.flush();
+		if (SHOW_MAKER_INFO) {
+			CHAPTER("制作信息", "maker", true).append("<div>");
+			HTML_LINE("""
+				使用 ImpLib/EpubWriter v2.0 制作
+				<a href="https://github.com/roj234/rojlib">开源地址(GitHub)</a>
+				""");
+			tw.append("\n</div></body></html>");
+			tw.flush();
+		}
 
 		CHAPTER("目录", "index", false);
 

@@ -15,7 +15,6 @@ import roj.net.http.IllegalRequestException;
 import roj.net.http.auth.AuthScheme;
 import roj.text.CharList;
 import roj.text.Escape;
-import roj.text.TextUtil;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
 import roj.util.Helpers;
@@ -78,19 +77,6 @@ public final class Request extends Headers {
 	public String argument(String name) {return arguments.getField(name);}
 	public Headers arguments() {return arguments;}
 	public void setArguments(Headers arguments) {this.arguments = arguments;}
-
-	@Deprecated
-	public Request subDirectory(int i) {
-		while (i-- > 0) path = path.substring(path.lastIndexOf('/')+1);
-		return this;
-	}
-
-	public List<String> directories() {
-		List<String> paths = TextUtil.split(new SimpleList<>(), path(), '/');
-		if (paths.isEmpty()) paths.add("");
-		else if (paths.get(0).isEmpty() && paths.size() > 1) paths.remove(0);
-		return paths;
-	}
 
 	public boolean isExpecting() {return "100-continue".equalsIgnoreCase(get("Expect"));}
 	public String host() {

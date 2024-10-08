@@ -96,7 +96,7 @@ public final class AttrModule extends Attribute {
 
 	public String toString() {
 		StringBuilder sb = new StringBuilder("Module: \n");
-		sb.append(self).append("Requires: \n");
+		sb.append(self).append("\nRequires: \n");
 
 		final List<AttrModule.Module> requires = this.requires;
 		for (int i = 0; i < requires.size(); i++) {

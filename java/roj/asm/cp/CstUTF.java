@@ -44,8 +44,7 @@ public final class CstUTF extends Constant {
 		if (data.getClass() == byte[].class) {
 			byte[] b = (byte[]) data;
 			w.putShort(b.length).write(b);
-		} else if (data instanceof DynByteBuf) {
-			DynByteBuf b = (DynByteBuf) data;
+		} else if (data instanceof DynByteBuf b) {
 			w.putShort(b.readableBytes()).put(b);
 		} else w.writeUTF(data.toString());
 	}

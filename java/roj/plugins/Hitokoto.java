@@ -42,7 +42,7 @@ public class Hitokoto extends Plugin implements Router {
 		try (var tr = TextReader.auto(new File(Panger.getInstance().getPluginFolder(), "Core/hitokoto.csv"))) {
 			hitokoto = ConfigMaster.CSV.readObject(SerializerFactory.SAFE.listOf(Item.class), tr);
 		}
-		registerRoute("hitokoto", this, false);
+		registerRoute("hitokoto", this);
 	}
 
 	@Override

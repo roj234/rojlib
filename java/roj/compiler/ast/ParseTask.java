@@ -141,7 +141,7 @@ public interface ParseTask {
 					var mp = file.getStaticInit();
 					ctx.setMethod(mp.mn);
 
-					node.writeDyn(mp, cast);
+					node.write(mp, cast);
 					mp.field(Opcodes.PUTSTATIC, file.name, f.name(), f.rawDesc());
 				} else {
 					if ((f.modifier & Opcodes.ACC_FINAL) != 0) {
@@ -156,7 +156,7 @@ public interface ParseTask {
 					ctx.setMethod(mp.mn);
 
 					mp.one(Opcodes.ALOAD_0);
-					node.writeDyn(mp, cast);
+					node.write(mp, cast);
 					mp.field(Opcodes.PUTFIELD, file.name, f.name(), f.rawDesc());
 				}
 			}

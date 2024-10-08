@@ -2,6 +2,7 @@ package roj.util;
 
 import roj.reflect.Bypass;
 import roj.reflect.ReflectionUtils;
+import roj.text.logging.Logger;
 
 import java.nio.Buffer;
 import java.nio.ByteBuffer;
@@ -46,17 +47,29 @@ public class NativeMemory {
 		void invokeClean(Object cleaner);
 
 		boolean isDirectMemoryPageAligned();
+
+		long address(Object buf);
+		Object attachment(Object buf);
+		Object cleaner(Object buf);
 	}
 
 	static final H hlp;
 	static {
 		try {
-			Bypass<H> da = Bypass.builder(H.class);
+			Bypass<H> da = Bypass.builder(H.class).inline();
 			da.access(ByteBuffer.class, new String[]{"hb","offset"});
 
-			boolean j17 = ReflectionUtils.JAVA_VERSION >= 17;
-			boolean j9 = ReflectionUtils.JAVA_VERSION >= 9;
-			da.construct(Class.forName("java.nio.DirectByteBuffer"), new String[]{j17?"newDirectBuffer2":"newDirectBuffer"}, j17?Collections.emptyList():null)
+			var dbb = Class.forName("java.nio.DirectByteBuffer");
+			try {
+				Class<?> itf = dbb.getInterfaces()[0];
+				da.delegate_o(itf, "attachment", "cleaner", "address");
+			} catch (Throwable e) {
+				Logger.getLogger().warn("无法加载模块 {}", e, "BufferCleaner");
+			}
+
+			var j17 = ReflectionUtils.JAVA_VERSION >= 17;
+			var j9 = ReflectionUtils.JAVA_VERSION >= 9;
+			da.construct(dbb, new String[]{j17?"newDirectBuffer2":"newDirectBuffer"}, j17?Collections.emptyList():null)
 			  .construct(Class.forName("java.nio.HeapByteBuffer"), new String[]{j17?"newHeapBuffer2":"newHeapBuffer"}, j17?Collections.emptyList():null)
 			  .delegate(Class.forName(j9?"jdk.internal.misc.VM":"sun.misc.VM"), "isDirectMemoryPageAligned")
 			  .access(Buffer.class, new String[]{"capacity", "address"}, new String[]{null,"getAddress"}, new String[]{"setCapacity","setAddress"});
@@ -75,14 +88,25 @@ public class NativeMemory {
 	public static long getAddress(ByteBuffer buf) { return hlp.getAddress(buf); }
 	public static void setBufferCapacityAndAddress(ByteBuffer buf, long addr, int cap) { assert buf.isDirect() : "buffer is not direct"; hlp.setCapacity(buf, cap); hlp.setAddress(buf, addr); }
 
+	public static void freeDirectBuffer(Buffer buffer) {
+		if (!buffer.isDirect()) return;
+
+		// Java做了多次运行的处理，无须担心
+		Object o = buffer;
+		while (hlp.attachment(o) != null) o = hlp.attachment(o);
+
+		Object cleaner = hlp.cleaner(o);
+		if (cleaner != null) invokeClean(cleaner);
+	}
+
 	public static Object createCleaner(Object referent, Runnable fastCallable) { return hlp.newCleaner(referent, fastCallable); }
-	public static void cleanNativeMemory(Object cleaner) { hlp.invokeClean(cleaner); }
+	public static void invokeClean(Object cleaner) { hlp.invokeClean(cleaner); }
 
 	public static ByteBuffer newHeapBuffer(byte[] buf, int mark, int pos, int lim, int cap, int off) { return hlp.newHeapBuffer(buf, mark, pos, lim, cap, off); }
 	public static byte[] getArray(ByteBuffer buf) { return hlp.getHb(buf); }
 	public static int getOffset(ByteBuffer buf) { return hlp.getOffset(buf); }
 
-	public static void reserveMemory(int length) { hlp.reserveMemory(length, length); }
+	public static void reserveMemory(int length) throws OutOfMemoryError { hlp.reserveMemory(length, length); }
 	public static void unreserveMemory(int length) { hlp.unreserveMemory(length, length); }
 
 	public NativeMemory() { this(false); }

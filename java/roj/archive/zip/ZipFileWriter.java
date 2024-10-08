@@ -16,7 +16,6 @@ import roj.util.DynByteBuf;
 import java.io.File;
 import java.io.IOException;
 import java.io.OutputStream;
-import java.nio.channels.FileChannel;
 import java.nio.charset.StandardCharsets;
 import java.util.zip.Deflater;
 import java.util.zip.ZipEntry;
@@ -134,25 +133,7 @@ public class ZipFileWriter extends OutputStream implements ArchiveWriter {
 
 		if (this.entry != null) closeEntry();
 		long entryBeginOffset = file.position();
-		if (file.hasChannel() & owner.source().hasChannel()) {
-			FileChannel myCh = file.channel();
-			owner.source().channel().transferTo(entry.startPos(), entry.endPos() - entry.startPos(), myCh);
-		} else {
-			Source src = owner.source();
-			src.seek(entry.startPos());
-			int max = Math.max(4096, buf.list.length);
-			buf.ensureCapacity(max);
-
-			byte[] list = buf.list;
-			int len = (int) (entry.endPos() - entry.startPos());
-			while (len > 0) {
-				int read = Math.min(len, max);
-				src.readFully(list, 0, read);
-				file.write(list, 0, read);
-				len -= max;
-			}
-		}
-
+		file.put(owner.source(), entry.startPos(), entry.endPos() - entry.startPos());
 		long delta = entryBeginOffset - entry.startPos();
 		entry.offset += delta;
 		buf.clear();

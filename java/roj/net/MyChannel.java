@@ -447,12 +447,16 @@ public abstract class MyChannel implements Selectable, Closeable {
 			if (state > OPENED) throw new ClosedChannelException();
 			state = OPENED;
 
-			ChannelCtx head = head();
-			head.handler.channelOpened(head);
+			fireOpen();
 		} finally {
 			lock.unlock();
 		}
 	}
+	public final void fireOpen() throws IOException {
+		ChannelCtx head = head();
+		head.handler.channelOpened(head);
+	}
+
 	public final void disconnect() throws IOException {
 		if (state == INITIAL) return;
 

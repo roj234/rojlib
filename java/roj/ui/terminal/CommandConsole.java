@@ -190,7 +190,7 @@ public class CommandConsole extends DefaultConsole {
 
 		if (print) printCommand();
 		if (pe != null) pe.printStackTrace();
-		else System.out.println("输入未完整匹配任何指令,最多部分匹配到"+maxI);
+		else System.out.println("未知的指令("+maxI+")");
 
 		return true;
 	}

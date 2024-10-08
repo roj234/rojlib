@@ -12,14 +12,12 @@ import java.io.IOException;
  * @since 2022/10/11 0011 19:16
  */
 public class Pipe2 implements ChannelHandler {
-	public static final ThreadLocal<Pipe2> CURRENT_WRITER = new ThreadLocal<>();
+	public static final ThreadLocal<Pipe2> WRITER = new ThreadLocal<>();
+	public Object att;
 
 	MyChannel remote, local;
 	boolean dispatchClose;
 
-	public Object att;
-
-	// FIXME
 	public Pipe2(MyChannel remote, boolean dispatchClose) {
 		this.remote = remote;
 		this.dispatchClose = dispatchClose;
@@ -28,6 +26,7 @@ public class Pipe2 implements ChannelHandler {
 	public void setDispatchClose(boolean dispatchClose) {this.dispatchClose = dispatchClose;}
 	public MyChannel getRemote() {return remote;}
 	public MyChannel getLocal() {return local;}
+	private MyChannel PAIR(ChannelCtx ctx) {return ctx.channel() == remote ? local : remote;}
 
 	@Override
 	public void handlerAdded(ChannelCtx c) {
@@ -47,26 +46,29 @@ public class Pipe2 implements ChannelHandler {
 	public void channelRead(ChannelCtx ctx, Object msg) throws IOException {
 		assert local != null;
 
-		Pipe2 prev = CURRENT_WRITER.get();
-		CURRENT_WRITER.set(this);
+		Pipe2 prev = WRITER.get();
+		WRITER.set(this);
 		try {
-			(ctx.channel() == remote ? local : remote).fireChannelWrite(msg);
+			PAIR(ctx).fireChannelWrite(msg);
 		} finally {
-			CURRENT_WRITER.set(prev);
+			WRITER.set(prev);
 		}
 	}
+
+	//肥肠简单的拥塞控制
+	@Override public void channelFlushing(ChannelCtx ctx) {PAIR(ctx).readInactive();}
+	@Override public void channelFlushed(ChannelCtx ctx) {PAIR(ctx).readActive();}
 
 	@Override
 	public void channelClosed(ChannelCtx ctx) throws IOException {
 		MyChannel ch = ctx.channel() == remote ? local : remote;
 		if (ch == remote || dispatchClose) {
-			System.out.println("dispatch close to "+ch);
-			Pipe2 prev = CURRENT_WRITER.get();
-			CURRENT_WRITER.set(this);
+			Pipe2 prev = WRITER.get();
+			WRITER.set(this);
 			try {
 				IOUtil.closeSilently(ch);
 			} finally {
-				CURRENT_WRITER.set(prev);
+				WRITER.set(prev);
 			}
 		}
 	}

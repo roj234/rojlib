@@ -1,5 +1,9 @@
 package roj.compiler.plugins.asm;
 
+import roj.asm.visitor.CodeWriter;
+
+import java.util.function.Consumer;
+
 /**
  * @author Roj234
  * @since 2023/9/23 0023 19:21
@@ -20,12 +24,10 @@ public class ASM {
 	public static <T> T inject(String name, T def) {return def;}
 
 	/**
-	 * 执行无返回值的操作，语法为AsmLang
-	 * @param asm 常量
+	 * 执行AsmExpr, *编译时/受限执行环境
 	 * @return true => 不在Lavac环境中
 	 */
-	public static boolean __asm(String asm) {return true;}
-	//public static void __asmx(Object... asm) {}
+	public static boolean __asm(Consumer<CodeWriter> asm) {return true;}
 
 	/**
 	 * 强制的 <b>泛型</b> 转换
@@ -35,15 +37,11 @@ public class ASM {
 	public static <T> T cast(Object input) {return (T) input;}
 
 	/**
-	 * 解释为<none>
+	 * inline
 	 */
-	public static boolean i2z(int v) { return v != 0; }
+	public static boolean i2z(int v) {return v != 0;}
 	/**
-	 * 解释为<none>
+	 * inline
 	 */
-	public static int z2i(boolean b) { return b?1:0; }
-	/**
-	 * 解释为POP或POP2
-	 */
-	public static void pop(Object input) {}
+	public static int z2i(boolean b) {return b?1:0;}
 }

@@ -124,6 +124,32 @@ public final class FragmentSource extends Source {
 		}
 	}
 
+	@Override
+	public void put(Source src, long off, long len) throws IOException {
+		if (!writable) throw new IOException("源是只读的");
+
+		written += len;
+
+		if (fragmentSize <= 0) {
+			s.put(src, off, len);
+			return;
+		}
+
+		while (len > 0) {
+			int writable = (int) Math.min(Integer.MAX_VALUE, fragmentSize - s.position());
+
+			if (len <= writable) {
+				s.put(src, off, len);
+				return;
+			}
+
+			s.put(src, off, writable);
+			off += writable;
+			len -= writable;
+			next();
+		}
+	}
+
 	private final CharList t = new CharList();
 
 	public void setSourceId(int sid) throws IOException {

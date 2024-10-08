@@ -42,7 +42,7 @@ public class RSegmentTree<T extends Range> implements Iterable<RSegmentTree.Regi
 		@Override
 		public long endPos() {return e;}
 		@Override
-		public String toString() {return "Cross{"+s+" => "+e+'}'+sth;}
+		public String toString() {return String.valueOf(sth);}
 	}
 
 	public RSegmentTree() {this(0, true, 15);}
@@ -373,9 +373,9 @@ public class RSegmentTree<T extends Range> implements Iterable<RSegmentTree.Regi
 
 		@Override
 		public String toString() {
-			StringBuilder sb = new StringBuilder().append(node.toString());
-			if (value != Collections.EMPTY_LIST) sb.append(value);
-			return sb.toString();
+			var sb = new StringBuilder().append('{').append(node);
+			if (value != Collections.EMPTY_LIST) sb.append("\n  ").append(value);
+			return sb.append("\n}").toString();
 		}
 	}
 
@@ -398,8 +398,8 @@ public class RSegmentTree<T extends Range> implements Iterable<RSegmentTree.Regi
 
 		@Override
 		public String toString() {
-			StringBuilder sb = new StringBuilder("{").append(end ? "E" : "S").append("/").append(owner).append(" at ").append(pos()).append('}');
-			if (next != null) sb.append("\n").append(next);
+			var sb = new StringBuilder("\n  ").append(owner).append(end ? " end" : " start").append(" at ").append(pos());
+			if (next != null) sb.append(next);
 			return sb.toString();
 		}
 	}

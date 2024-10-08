@@ -18,6 +18,7 @@ import roj.io.MBInputStream;
 import roj.util.ArrayUtil;
 import sun.misc.Unsafe;
 
+import java.io.DataInput;
 import java.io.DataInputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -26,6 +27,37 @@ import java.io.InputStream;
  * Decompresses a raw LZMA2 stream (no XZ headers).
  */
 public final class LZMA2InputStream extends MBInputStream {
+	public static long skipStream(DataInput in) throws IOException {
+		long skipped = 0;
+
+		while (true) {
+			int control = in.readUnsignedByte();
+			if (control <= 0x7F) {
+				switch (control) {
+					default: return -1;
+					case 0: return skipped;
+					case 1, 2: break;
+				}
+
+				var uSize = in.readUnsignedShort()+1;
+				in.skipBytes(uSize);
+				skipped += uSize;
+			} else {
+				var uSize = ((control & 0x1F) << 16) + in.readUnsignedShort() + 1;
+				int cSize = in.readUnsignedShort()+1;
+
+				switch (control >>> 5) {
+					// LZMA, dict reset
+					case 7, 6: in.skipBytes(1); break;
+				}
+
+				skipped += uSize;
+				in.skipBytes(cSize);
+			}
+
+		}
+	}
+
 	/**
 	 * Smallest valid LZMA2 dictionary size.
 	 * <p>

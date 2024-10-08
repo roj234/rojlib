@@ -593,6 +593,18 @@ public class TextUtil {
 		return list;
 	}
 	// endregion
+	public static String renderBitset(int BITSET, String... flags) {
+		var splitter = "";
+		var sb = new CharList();
+		for (int i = 0; i < flags.length; i++) {
+			String flag = flags[i];
+			if (flag != null && (BITSET&(1<<i)) != 0) {
+				sb.append(splitter).append(flag);
+				splitter = " ";
+			}
+		}
+		return sb.toStringAndFree();
+	}
 
 	public static <T extends Appendable> T prettyTable(T sb, String linePrefix, Object data, String... separators) {
 		List<Object[]> table = new SimpleList<>();

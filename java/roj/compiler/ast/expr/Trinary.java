@@ -80,7 +80,7 @@ final class Trinary extends ExprNode {
 			mustBeStatement(noRet);
 			GlobalContext.debugLogger().info("trinary.note.boolean_hack {}", this);
 
-			val.writeDyn(cw, cast);
+			val.write(cw, cast);
 			int value = ((AnnValInt) ok.constVal()).value;
 
 			if (boolHack != 1) {
@@ -94,12 +94,11 @@ final class Trinary extends ExprNode {
 			}
 			return;
 		}
-		Label falsy = new Label(), end = new Label();
 
-		int i = cw.beginJumpOn(false, falsy);
-		val.writeDyn(cw, cast);
-		cw.endJumpOn(i);
-		//GenericSafe(type use getCommonParent)
+		var end = new Label();
+		var falsy = new Label();
+		val.writeShortCircuit(cw, cast, false, falsy);
+		//GenericSafe(using getCommonParent)
 		ok.write(cw, noRet);
 		cw.jump(end);
 		cw.label(falsy);

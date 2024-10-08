@@ -5,15 +5,12 @@ import roj.reflect.Bypass;
 import roj.reflect.ReflectionUtils;
 import roj.text.logging.Logger;
 import roj.util.NativeException;
-import roj.util.NativeMemory;
 import roj.util.OS;
 
 import java.io.Closeable;
 import java.io.FileDescriptor;
 import java.io.IOException;
 import java.net.StandardSocketOptions;
-import java.nio.Buffer;
-import java.nio.ByteBuffer;
 import java.nio.channels.DatagramChannel;
 import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
@@ -36,15 +33,7 @@ public final class NIOUtil {
 	public static LLIO tcpFdRW() { return SCN; }
 
 	static {
-		ByteBuffer b = ByteBuffer.allocateDirect(1);
-
 		Bypass<NUT> da = Bypass.builder(NUT.class).inline().unchecked();
-		try {
-			Class<?> itf = b.getClass().getInterfaces()[0];
-			da.delegate_o(itf, "attachment", "cleaner", "address");
-		} catch (Throwable e1) {
-			Logger.getLogger("NIOUtil").warn("无法加载模块 {}", e1, "BufferCleaner");
-		}
 
 		try {
 			da.access(FileDescriptor.class, "fd", "fdVal", "fdFd")
@@ -75,7 +64,6 @@ public final class NIOUtil {
 		}
 
 		UTIL = da.build();
-		clean(b);
 
 		String[] ss1 = new String[] {"read", "readVector", "write", "writeVector"};
 		String[] ss2 = new String[] {"read0", "readv0", "write0", "writev0"};
@@ -132,23 +120,6 @@ public final class NIOUtil {
 		FileDescriptor udpFD(DatagramChannel ch);
 		FileDescriptor tcpFD(SocketChannel ch);
 		FileDescriptor tcpsFD(ServerSocketChannel ch);
-
-		long address(Object buf);
-		Object attachment(Object buf);
-		Object cleaner(Object buf);
-	}
-
-	private static Object topMost(Object o) {
-		while (UTIL.attachment(o) != null) o = UTIL.attachment(o);
-		return o;
-	}
-
-	public static void clean(Buffer shared) {
-		if (!shared.isDirect()) return;
-
-		// Java做了多次运行的处理，无须担心
-		Object cleaner = UTIL.cleaner(topMost(shared));
-		if (cleaner != null) NativeMemory.cleanNativeMemory(cleaner);
 	}
 
 	public interface LLIO {

@@ -13,11 +13,11 @@ public class Event {
 		this.data = data;
 	}
 
-	public int getResult() {return state >>> 1;}
+	public int getResult() {return (state >>> 1) & 3;}
 
 	public void setResult(int result) {
 		if (result < 0 || result > 2) throw new IllegalArgumentException();
-		state = (byte) ((result << 1) | (state & 1));
+		state = (byte) ((result << 1) | (state & (1|STOP|REVERSE)));
 	}
 
 	public Object getData() {return data;}

@@ -169,8 +169,7 @@ public class ConstantData implements IClass {
 			methods.get(j).forEachCode(cv, cp);
 	}
 
-	@Override
-	public ConstantPool cp() { return cp; }
+	@Override public ConstantPool cp() { return cp; }
 
 	@Override
 	public DynByteBuf getBytes(DynByteBuf w) {
@@ -179,31 +178,7 @@ public class ConstantData implements IClass {
 		ConstantPool cw = this.cp;
 		assert autoVerify(w, cw);
 
-		w.putShort(modifier)
-		 .putShort(cw.reset(nameCst).getIndex())
-		 .putShort(parent == null ? 0 : parentCst == null ? (parentCst = cw.getClazz(parent)).getIndex() : cw.reset(parentCst).getIndex())
-		 .putShort(interfaces.size());
-
-		List<CstClass> interfaces = this.interfaces;
-		for (int i = 0; i < interfaces.size(); i++) {
-			w.putShort(cw.reset(interfaces.get(i)).getIndex());
-		}
-
-		List<FieldNode> fields = this.fields;
-		w.putShort(fields.size());
-		for (int i = 0, l = fields.size(); i < l; i++) {
-			fields.get(i).toByteArray(w, cw);
-		}
-
-		List<MethodNode> methods = this.methods;
-		w.putShort(methods.size());
-		for (int i = 0, l = methods.size(); i < l; i++) {
-			methods.get(i).toByteArray(w, cw);
-		}
-
-		AttributeList attr = attributes;
-		if (attr == null) w.putShort(0);
-		else attr.toByteArray(w, cw);
+		getBytesNoCp(w, cw);
 
 		int pos = w.wIndex();
 		int cpl = cw.byteLength() + 10;
@@ -214,6 +189,33 @@ public class ConstantData implements IClass {
 		w.wIndex(pos + cpl);
 
 		return w;
+	}
+	public final void getBytesNoCp(DynByteBuf w, ConstantPool cw) {
+		w.putShort(modifier)
+		 .putShort(cw.reset(nameCst).getIndex())
+		 .putShort(parent == null ? 0 : parentCst == null ? (parentCst = cw.getClazz(parent)).getIndex() : cw.reset(parentCst).getIndex())
+		 .putShort(interfaces.size());
+
+		var interfaces = this.interfaces;
+		for (int i = 0; i < interfaces.size(); i++) {
+			w.putShort(cw.reset(interfaces.get(i)).getIndex());
+		}
+
+		var fields = this.fields;
+		w.putShort(fields.size());
+		for (int i = 0, l = fields.size(); i < l; i++) {
+			fields.get(i).toByteArray(w, cw);
+		}
+
+		var methods = this.methods;
+		w.putShort(methods.size());
+		for (int i = 0, l = methods.size(); i < l; i++) {
+			methods.get(i).toByteArray(w, cw);
+		}
+
+		var attr = attributes;
+		if (attr == null) w.putShort(0);
+		else attr.toByteArray(w, cw);
 	}
 
 	private boolean autoVerify(DynByteBuf w, ConstantPool cw) {

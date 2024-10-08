@@ -39,7 +39,7 @@ public class McDiffClient {
 		QZEntry hashes = archive.getEntry(".vcs|hashes");
 		System.out.println("正在验证哈希");
 		if (hashes != null) try (MyDataInputStream in = new MyDataInputStream(archive.getStream(hashes))) {
-			byte[] tmp = ArrayCache.getByteArray(1024, false);
+			byte[] tmp = ArrayCache.getByteArray(4096, false);
 			while (in.isReadable()) {
 				String name = in.readVUIGB();
 				File file = new File(basePath, name);
@@ -186,7 +186,7 @@ public class McDiffClient {
 		var hash1 = ILCrypto.Blake3(32);
 		var hash2 = ILCrypto.SM3();
 
-		byte[] tmp = ArrayCache.getByteArray(1024, false);
+		byte[] tmp = ArrayCache.getByteArray(4096, false);
 		try (InputStream in = new FileInputStream(file)) {
 			IOUtil.readFully(in, tmp, 0, 32); // 跳过文件头
 			while (count > 0) {
@@ -209,7 +209,7 @@ public class McDiffClient {
 			buf.putChars(entry1.getName());
 			if (entry1.getSize() > 0) buf.putLong(entry1.getSize());
 
-			if (buf.wIndex() > 1024) {
+			if (buf.wIndex() > 4096) {
 				hash1.update(buf);
 				buf.rIndex = 0;
 				hash2.update(buf);

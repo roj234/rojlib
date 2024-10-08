@@ -1,6 +1,9 @@
 package roj.reflect;
 
 import roj.ReferenceByGeneratedClass;
+import roj.asm.Opcodes;
+import roj.asm.cp.CstClass;
+import roj.compiler.plugins.asm.ASM;
 import roj.util.Helpers;
 import sun.misc.Unsafe;
 
@@ -12,8 +15,6 @@ import java.lang.reflect.Method;
 import java.util.Arrays;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
-
-import static roj.compiler.plugins.asm.ASM.__asm;
 
 /**
  * 在"不归路"上越走越远
@@ -102,14 +103,14 @@ final class VMInternals {
 	static void OpenModule(Module src_module, String src_package, Module target_module) { _ModuleOpener.accept(new Object[] {src_module, target_module}, src_package); }
 	static Class<?> DefineWeakClass(String displayName, byte[] b) {
 		if (JAVA_VERSION < 17) {
-			if (__asm("""
-				getstatic this u
-				ldc sun.misc.Unsafe.class
-				aload 1
-				aconst_null
-				invokevirtual java/lang/Unsafe defineAnonymousClass (Ljava/lang/Class;[B[Ljava/lang/Object;)Ljava/lang/Class;
-				areturn
-				""")) {
+			if (ASM.__asm(mw -> {
+				mw.field(Opcodes.GETSTATIC, "${this}", "u", "Ljava/lang/Unsafe;");
+				mw.ldc(new CstClass("sun/misc/Unsafe"));
+				mw.one(Opcodes.ALOAD_1);
+				mw.one(Opcodes.ACONST_NULL);
+				mw.invoke(Opcodes.INVOKEVIRTUAL, "java/lang/Unsafe", "defineAnonymousClass", "(Ljava/lang/Class;[B[Ljava/lang/Object;)Ljava/lang/Class");
+				mw.one(Opcodes.ARETURN);
+			})) {
 				try {
 					Method m = Unsafe.class.getDeclaredMethod("defineAnonymousClass", Class.class, byte[].class, Object[].class);
 					m.setAccessible(true);
