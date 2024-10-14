@@ -8,7 +8,6 @@ import roj.collect.SimpleList;
 import roj.collect.XHashSet;
 import roj.crypt.CipherInputStream;
 import roj.io.IOUtil;
-import roj.io.NIOUtil;
 import roj.io.SourceInputStream;
 import roj.io.source.BufferedSource;
 import roj.io.source.Source;
@@ -16,6 +15,7 @@ import roj.reflect.ReflectionUtils;
 import roj.util.ArrayCache;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
+import roj.util.NativeMemory;
 
 import java.io.EOFException;
 import java.io.File;
@@ -43,7 +43,7 @@ public class ZipFile implements ArchiveFile {
 	private Source fpRead;
 	private static final long FPREAD_OFFSET = ReflectionUtils.fieldOffset(ZipFile.class, "fpRead");
 
-	private static final XHashSet.Shape<String, ZEntry> ENTRY_SHAPE = XHashSet.shape(String.class, ZEntry.class, "name", "next");
+	private static final XHashSet.Shape<String, ZEntry> ENTRY_SHAPE = XHashSet.noCreation(ZEntry.class, "name", "next");
 
 	XHashSet<String, ZEntry> namedEntries;
 	SimpleList<ZEntry> entries;
@@ -260,7 +260,7 @@ public class ZipFile implements ArchiveFile {
 			}
 		}
 
-		NIOUtil.clean(mb);
+		NativeMemory.freeDirectBuffer(mb);
 		if (pos == 0) {
 			flags &= ~FLAG_BACKWARD_READ;
 			r.seek(0);

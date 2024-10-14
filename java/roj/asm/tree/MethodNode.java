@@ -1,5 +1,6 @@
 package roj.asm.tree;
 
+import roj.RojLib;
 import roj.asm.AsmShared;
 import roj.asm.Opcodes;
 import roj.asm.Parser;
@@ -13,6 +14,7 @@ import roj.asm.type.Type;
 import roj.asm.type.TypeHelper;
 import roj.asm.visitor.*;
 import roj.text.CharList;
+import roj.text.logging.Logger;
 import roj.util.AttributeKey;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
@@ -65,8 +67,8 @@ public final class MethodNode extends CNode {
 		if (attributes == null) return this;
 		Parser.parseAttributes(this, cp, attributes, Signature.METHOD);
 
-		if ((attrByName("Code") == null) == (0 == (modifier & (Opcodes.ACC_ABSTRACT | Opcodes.ACC_NATIVE)))) {
-			System.err.println("Method.java:63: Non-abstract " + owner + '.' + name + desc + " missing Code.");
+		if (RojLib.ASM_DEBUG && (attrByName("Code") == null) == (0 == (modifier & (Opcodes.ACC_ABSTRACT | Opcodes.ACC_NATIVE)))) {
+			Logger.getLogger().warn("方法 "+owner+'.'+name+desc+" 缺少Code属性.");
 		}
 
 		return this;

@@ -2,14 +2,16 @@ package roj.io;
 
 import org.jetbrains.annotations.NotNull;
 
+import java.io.Closeable;
 import java.io.DataInput;
+import java.io.EOFException;
 import java.io.IOException;
 
 /**
  * @author Roj234
  * @since 2024/3/10 0010 3:53
  */
-public interface MyDataInput extends DataInput {
+public interface MyDataInput extends DataInput, Closeable {
 	int DEFAULT_MAX_STRING_LEN = 65536;
 
 	static int zag(int i) {return (i >> 1) & ~(1 << 31) ^ -(i & 1);}
@@ -19,6 +21,17 @@ public interface MyDataInput extends DataInput {
 	void readFully(byte[] b, int off, int len) throws IOException;
 
 	int skipBytes(int n) throws IOException;
+	default void skipForce(long n) throws IOException {
+		err: {
+			while (n > Integer.MAX_VALUE) {
+				if (skipBytes(Integer.MAX_VALUE) != Integer.MAX_VALUE) break err;
+				n -= Integer.MAX_VALUE;
+			}
+			if (skipBytes((int) n) == n) return;
+		}
+
+		throw new EOFException("Failed to skip "+n+" bytes");
+	}
 
 	boolean readBoolean() throws IOException;
 

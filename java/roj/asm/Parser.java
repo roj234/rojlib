@@ -1,5 +1,6 @@
 package roj.asm;
 
+import org.jetbrains.annotations.NotNull;
 import roj.asm.cp.ConstantPool;
 import roj.asm.cp.CstClass;
 import roj.asm.cp.CstNameAndType;
@@ -155,6 +156,7 @@ public final class Parser {
 				case "NestMembers": limit(origin,Signature.CLASS); return new AttrClassList(name, data, cp);
 				case "ModuleMainClass":
 				case "NestHost": limit(origin,Signature.CLASS); return new AttrString(name, ((CstClass) cp.get(data)).name().str());
+				case "ModuleTarget":
 				case "SourceFile": limit(origin,Signature.CLASS); return new AttrString(name, ((CstUTF) cp.get(data)).str());
 				case "BootstrapMethods": limit(origin,Signature.CLASS); return new BootstrapMethods(data, cp);
 				// 匿名类所属的方法
@@ -205,6 +207,10 @@ public final class Parser {
 			r.rIndex += pool.byteLength()+2;
 		}
 
+		return parseConstantsNoCp(r, pool, version);
+	}
+	@NotNull
+	public static ConstantData parseConstantsNoCp(DynByteBuf r, ConstantPool pool, int version) {
 		ConstantData data = new ConstantData(version, pool, r.readUnsignedShort(), r.readUnsignedShort(), r.readUnsignedShort());
 
 		int len = r.readUnsignedShort();
@@ -268,7 +274,7 @@ public final class Parser {
 		char acc = r.readChar();
 
 		AccessData data = new AccessData(modifiable?r.toByteArray():null, cfo, pool.getRefName(r), pool.getRefName(r));
-		data.acc = acc;
+		data.modifier = acc;
 
 		int len = r.readUnsignedShort();
 		SimpleList<String> itf = new SimpleList<>(len);
@@ -285,7 +291,7 @@ public final class Parser {
 				acc = r.readChar();
 
 				AccessData.MOF d = data.new MOF(((CstUTF) pool.get(r)).str(), ((CstUTF) pool.get(r)).str(), offset);
-				d.acc = acc;
+				d.modifier = acc;
 				com.add(d);
 
 				int attrs = r.readUnsignedShort();

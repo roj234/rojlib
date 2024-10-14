@@ -56,6 +56,7 @@ public final class TypeHelper {
 					int j = desc.indexOf(';', i+1);
 					if (j < 0) throw new IllegalArgumentException("雷星未终止:"+desc);
 					params.add(new Type(desc.substring(i+1, j), arr));
+					arr = 0;
 					i = j;
 				break;
 				default:
@@ -65,7 +66,6 @@ public final class TypeHelper {
 				break;
 			}
 		}
-
 	}
 
 	/**

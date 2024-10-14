@@ -40,7 +40,6 @@ public class FileSource extends Source {
 	public void write(DynByteBuf data) throws IOException {
 		if (data.hasArray()) io.write(data.array(), data.relativeArrayOffset(), data.readableBytes());
 		else io.getChannel().write(data.nioBuffer());
-		//data.rIndex = data.wIndex();
 	}
 
 	public void seek(long pos) throws IOException { io.seek(pos+offset); }

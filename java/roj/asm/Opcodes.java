@@ -135,7 +135,7 @@ public final class Opcodes {
 		 * Synthetic Modifiers:
 		 * ACC_SUPER	    0x0020	Treat superclass methods specially when invoked by the invokespecial instruction.
 		*/
-		{ "public", null, null, null, "final", "/*super*/", null, null, null, "interface", "abstract", null, "synthetic", "@interface", "enum", "module" },
+		{ "public", null, null, null, "final", "/*super*/", null, null, null, "interface", "abstract", null, "/*synthetic*/", "@interface", "enum", "module" },
 		/**
 		 * Field_Acc_String
 		 * Synthetic Modifiers:
@@ -152,7 +152,7 @@ public final class Opcodes {
 		/**
 		 * InnerClass_Acc_String
 		 */
-		{ "public", "private", "protected", "static", "final", null, null, null, null, "interface", "abstract", null, "synthetic", "annotation", "enum" },
+		{ "public", "private", "protected", "static", "final", null, null, null, null, "interface", "abstract", null, "/*synthetic*/", "@interface", "enum" },
 		/**
 		 * ACC_OPEN         0x0020  Indicates that this module is open.
 		 * ACC_TRANSITIVE   0x0020	Indicates that any module which depends on the current module, implicitly declares a dependence on the module indicated by this entry. ('转移性')
@@ -160,7 +160,7 @@ public final class Opcodes {
 		 * ACC_SYNTHETIC	0x1000	Declared synthetic; not present in the source code.
 		 * ACC_MANDATED     0x8000  Indicates that this dependence was implicitly declared in the source of the module declaration.
 		 */
-		{ null, null, null, null, null, "open / transitive", "static_phase", null, null, null, null, null, "synthetic", null, null, "mandated" }
+		{ null, null, null, null, null, "open | transitive", "static_phase", null, null, null, null, null, "/*synthetic*/", null, null, "mandated" }
 	};
 	public static final int ACC_SHOW_CLASS = 0, ACC_SHOW_FIELD = 1, ACC_SHOW_PARAM = 1, ACC_SHOW_METHOD = 2, ACC_SHOW_INNERCLASS = 3, ACC_SHOW_MODULE = 4;
 

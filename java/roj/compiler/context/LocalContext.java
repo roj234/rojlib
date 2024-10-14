@@ -236,6 +236,15 @@ public class LocalContext {
 	}
 	// endregion
 
+	public void clear() {
+		this.file = null;
+		this.tr = null;
+		this.importCache.clear();
+		this.importCacheMethod.clear();
+		this.importCacheField.clear();
+		this.flagCache.clear();
+		this.lexer.init("");
+	}
 	public void setClass(CompileUnit file) {
 		this.file = file;
 		this.tr = file.getTypeResolver();
@@ -246,6 +255,8 @@ public class LocalContext {
 		int pos = this.lexer.index;
 		this.lexer.init(file.getCode());
 		this.lexer.index = pos;
+
+		file.ctx = this;
 	}
 	public void setMethod(MethodNode node) {
 		file._setSign(node);

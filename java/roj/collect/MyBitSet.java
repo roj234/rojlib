@@ -1,8 +1,10 @@
 package roj.collect;
 
 import org.jetbrains.annotations.NotNull;
+import roj.io.MyDataInput;
 import roj.util.DynByteBuf;
 
+import java.io.IOException;
 import java.util.Arrays;
 import java.util.NoSuchElementException;
 
@@ -439,7 +441,7 @@ public class MyBitSet implements Iterable<Integer> {
 		return new String(str);
 	}
 
-	public static MyBitSet readBits(DynByteBuf buf, int byteLength) {
+	public static MyBitSet readBits(MyDataInput buf, int byteLength) throws IOException {
 		if (byteLength == 0) return new MyBitSet();
 
 		long[] set = new long[(byteLength+63)/64];

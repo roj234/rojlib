@@ -53,7 +53,7 @@ public class PHPPlugin extends Plugin implements Router {
 		dispatcher.submit(fpm);
 
 		String pluginRoot = config.getString("dps_root");
-		registerRoute(pluginRoot, this, false, "PermissionManager");
+		registerRoute(pluginRoot, this, "PermissionManager");
 
 		PanHttp.addStatusProvider((sb, request) ->
 			sb.append("PHP-FPM for Win32:\n  活动的进程: ").append(fpm.processes.size()).append('/').append(fpm.maxProcess)

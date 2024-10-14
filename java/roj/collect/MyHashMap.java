@@ -448,15 +448,15 @@ public class MyHashMap<K, V> extends AbstractMap<K, V> implements FindMap<K, V>,
 	}
 
 	@SuppressWarnings("unchecked")
-	public AbstractEntry<K, V> getEntry(K key) {
-		AbstractEntry<K, V> entry = getFirst(key, false);
+	public AbstractEntry<K, V> getEntry(Object key) {
+		AbstractEntry<K, V> entry = getFirst((K)key, false);
 
 		if (entry != null && entry.getClass() == Entry2.class) {
 			return (AbstractEntry<K, V>) ((Entry2) entry).get(key);
 		}
 
 		while (entry != null) {
-			if (hasher.equals(key, entry.k)) {
+			if (hasher.equals((K)key, entry.k)) {
 				onGet(entry);
 				return entry;
 			}

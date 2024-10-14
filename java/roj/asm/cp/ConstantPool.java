@@ -1,5 +1,6 @@
 package roj.asm.cp;
 
+import org.intellij.lang.annotations.MagicConstant;
 import roj.asm.AsmShared;
 import roj.collect.IntMap;
 import roj.collect.MyHashSet;
@@ -33,7 +34,7 @@ public class ConstantPool {
 		refMap = new MyHashSet<>();
 	}
 
-	public void read(DynByteBuf r, int stringDecodeType) {
+	public void read(DynByteBuf r, @MagicConstant(intValues = {ONLY_STRING,BYTE_STRING,CHAR_STRING}) int stringDecodeType) {
 		int len = r.readUnsignedShort()-1;
 		if (len < 0) throw new IllegalArgumentException("size error: "+len);
 

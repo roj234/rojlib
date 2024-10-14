@@ -2,7 +2,6 @@ package roj.compiler.context;
 
 import roj.asm.Parser;
 import roj.asm.tree.ConstantData;
-import roj.collect.MyHashMap;
 import roj.io.IOUtil;
 
 import java.io.File;
@@ -15,24 +14,17 @@ import java.io.InputStream;
  * @since 2022/9/16 0016 21:52
  */
 public class LibraryFolder implements Library {
+	private final File path;
 	public LibraryFolder(File file) {this.path = file;}
 
-	private final File path;
-	private final MyHashMap<String, ConstantData> info = new MyHashMap<>();
-
-	@Override
-	public ConstantData get(CharSequence name) {
-		var o = info.get(name);
-		if (o != null) return o;
+	@Override public ConstantData get(CharSequence name) {
 		try {
-			String cn = name.toString();
-			ConstantData data = Parser.parseConstants(IOUtil.read(new File(path, cn.concat(".class"))));
-			info.put(cn, data);
-			return data;
+			var file = new File(path, name.toString().concat(".class"));
+			if (file.isFile()) return Parser.parseConstants(IOUtil.read(file));
 		} catch (IOException e) {
 			e.printStackTrace();
-			return null;
 		}
+		return null;
 	}
 
 	@Override

@@ -26,7 +26,7 @@ public final class GB18030 extends UnsafeCharset {
 
 	static {
 		try (var in = new LZMAInputStream(GB18030.class.getClassLoader().getResourceAsStream("roj/text/GB18030.lzma"))) {
-			byte[] b = ArrayCache.getByteArray(1024, false);
+			byte[] b = ArrayCache.getByteArray(4096, false);
 			int off = 0;
 			while (true) {
 				int r = in.read(b);

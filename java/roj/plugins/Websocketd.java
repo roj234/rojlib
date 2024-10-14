@@ -49,7 +49,7 @@ public class Websocketd extends Plugin implements Router {
 		for (var entry : getConfig().getMap("path_to_command").entrySet()) {
 			var value = entry.getValue();
 			var cmd = value.getType() == Type.STRING ? Collections.singletonList(value.asString()) : value.asList().toStringList();
-			registerRoute(entry.getKey(), this, false);
+			registerRoute(entry.getKey(), this);
 			cmdList.put(entry.getKey(), cmd);
 
 			getLogger().info("URL子路径: {}, 指令: {}", entry.getKey(), cmd);

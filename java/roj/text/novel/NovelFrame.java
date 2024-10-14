@@ -230,8 +230,8 @@ public class NovelFrame extends JFrame {
 		btnGroup.addActionListener(e -> {
 			Chapter root = (Chapter) chaptersTree.getRoot();
 
-			char matcher = JOptionPane.showInputDialog("type matcher", "章").charAt(0);
-			char upcome = JOptionPane.showInputDialog("type target", "卷").charAt(0);
+			char matcher = JOptionPane.showInputDialog("子项目", "章").charAt(0);
+			char upcome = JOptionPane.showInputDialog("父项目", "卷").charAt(0);
 
 			List<Chapter> _ch = root.children;
 			int pi = -1;

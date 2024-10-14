@@ -32,7 +32,6 @@ import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.security.SecureRandom;
 import java.util.Collections;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -143,14 +142,6 @@ public class Server implements Router, Context {
 		return router.response(req, rh);
 	}
 
-	private static String pathFilter(String path) {
-		for (int i = 0; i < path.length(); i++) {
-			char c = path.charAt(i);
-			if (!TextUtil.isPrintableAscii(c) || c == '/' || c == '\\') return "invalid";
-		}
-		return path;
-	}
-
 	@Interceptor
 	public String logon(Request req, ResponseHeader rh, PostSetting ps) {
 		return null;
@@ -181,7 +172,7 @@ public class Server implements Router, Context {
 	@Accepts(Accepts.GET)
 	@Interceptor({"logon","parallelLimit"})
 	public Response getFile(Request req, ResponseHeader rh) {
-		String safePath = IOUtil.safePath(req.subDirectory(1).path());
+		String safePath = req.path();
 		File file = new File(attDir, safePath);
 		if (!file.isFile()) return rh.code(404).returnNull();
 		DiskFileInfo info = new DiskFileInfo(file);
@@ -194,7 +185,7 @@ public class Server implements Router, Context {
 	public Object deleteFile(Request req) {
 		User u = (User) req.localCtx().get("USER");
 
-		String safePath = IOUtil.safePath(req.subDirectory(1).path());
+		String safePath = req.path();
 		DynByteBuf bb = IOUtil.SharedCoder.get().decodeBase64(safePath);
 		if (bb.readInt() != u.id) {
 			return jsonErr("没有权限");
@@ -209,10 +200,9 @@ public class Server implements Router, Context {
 	public void fileUpload(Request req, ResponseHeader rh, PostSetting ps) {
 		User u = (User) req.localCtx().get("USER");
 
-		List<String> restful = req.directories();
-
-		boolean img = restful.get(1).contains("img");
-		int count = TextUtil.parseInt(restful.get(2));
+		var paths = TextUtil.split(req.path(), '/');
+		boolean img = paths.get(1).contains("img");
+		int count = TextUtil.parseInt(paths.get(2));
 
 		ps.postAccept(4194304, 10000);
 		ps.postHandler(new UploadHandler(req, count, u.id, img));
@@ -285,7 +275,7 @@ public class Server implements Router, Context {
 	@Route(prefix = true)
 	@Accepts(Accepts.GET)
 	public Response user__head(Request req, ResponseHeader rh) {
-		File img = new File(attDir, pathFilter(req.subDirectory(2).path()));
+		File img = new File(attDir, req.path());
 		System.out.println(img.getAbsolutePath());
 		if (!img.isFile()) img = new File(attDir, "default");
 

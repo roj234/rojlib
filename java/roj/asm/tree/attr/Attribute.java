@@ -40,6 +40,7 @@ public abstract class Attribute {
 	public static final AttributeKey<AttrString> SourceFile = createAttributeName("SourceFile");
 	public static final AttributeKey<BootstrapMethods> BootstrapMethods = createAttributeName("BootstrapMethods");
 	public static final AttributeKey<EnclosingMethod> EnclosingMethod = createAttributeName("EnclosingMethod");
+	public static final AttributeKey<AttrString> ModuleTarget = createAttributeName("ModuleTarget");
 	// method
 	public static final AttributeKey<XAttrCode> Code = createAttributeName("Code");
 	public static final AttributeKey<MethodParameters> MethodParameters = createAttributeName("MethodParameters");

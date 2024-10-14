@@ -15,7 +15,7 @@ public class LavaScript extends Plugin {
 	@Override
 	protected void onEnable() throws Exception {
 		var engine = new MyTemplateEngine();
-		registerRoute("tpl", (req, rh) -> {
+		registerRoute("tpl/", (req, rh) -> {
 			String path = req.path();
 			if (path.endsWith(".html")) {
 				File tpl = new File(getDataFolder(), path);

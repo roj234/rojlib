@@ -10,7 +10,6 @@ import roj.net.*;
 import roj.net.handler.Fail2Ban;
 import roj.net.handler.Pipe2;
 import roj.net.handler.Timeout;
-import roj.plugin.Panger;
 import roj.plugin.Plugin;
 import roj.util.DynByteBuf;
 
@@ -43,6 +42,7 @@ public class DPIProxy extends Plugin implements Consumer<MyChannel> {
 			var matcher = compiler.linkLambda(DpiMatcher.class, entry.getValue().asString(), "data");
 			if (matcher != null) patterns.add(matcher);
 		}
+		compiler.gctx.reset();
 		getLogger().info("成功：生成了{}个Pattern", patterns.size());
 
 		launch = ServerLaunch.tcp("DPIProxy").bind(NetUtil.parseListeningAddress(cfg.getString("port"))).initializator(this).launch();
@@ -72,17 +72,29 @@ public class DPIProxy extends Plugin implements Consumer<MyChannel> {
 					ch.readInactive();
 					ch.removeAll();
 
-					if (resp.errno == 0) {
-						var handler = handlers.get(resp.getMessage());
-						//handler.accept(ch);
-						getLogger().info("Embedded {} to #{}", ch.remoteAddress(), resp.getMessage());
-						Panger.addLocalConnection(ch);
-					} else {
+					if (resp.errno > 0) {
 						var pipe = new Pipe2(ch, true);
 						ch.addLast("pipe", pipe);
 
 						ClientLaunch.tcp().initializator(channel -> channel.addLast("pipe", pipe)).connect(InetAddress.getByName(resp.getMessage()), resp.errno).launch();
-						getLogger().info("Proxying {} to {}:{}", ch.remoteAddress(), resp.getMessage(), resp.errno);
+						getLogger().info("Proxy {} => {}:{}", ch.remoteAddress(), resp.getMessage(), resp.errno);
+					} else {
+						switch (resp.errno) {
+							case 0 -> {
+								var handler = ServerLaunch.SHARED.get(resp.getMessage());
+								if (handler == null) {
+									getLogger().warn("找不到管道:"+resp.getMessage());
+								} else {
+									getLogger().info("Pipe {} => #{}", ch.remoteAddress(), resp.getMessage());
+									handler.addTCPConnection(ch);
+								}
+							}
+							case -1 -> {
+								if (resp.getMessage() != null)
+									ctx.channelWrite(IOUtil.getSharedByteBuf().putUTFData(resp.getMessage()));
+								ctx.close();
+							}
+						}
 					}
 
 					return;
@@ -90,7 +102,7 @@ public class DPIProxy extends Plugin implements Consumer<MyChannel> {
 					// thrown from DynByteBuf
 					continue;
 				} catch (/*OperationDone | */Throwable failed) {
-					if (failed != OperationDone.INSTANCE) getLogger().warn("matcher {} failed due to uncaught exception", failed, matcher.getClass().getSimpleName());
+					if (failed != OperationDone.INSTANCE) getLogger().warn("matcher {} 意外失败", failed, matcher.getClass().getSimpleName());
 					itr.remove();
 
 					if (matchers.size() == 0) {

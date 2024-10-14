@@ -9,6 +9,7 @@ import roj.compiler.ast.expr.Constant;
 import roj.compiler.context.CompileUnit;
 import roj.compiler.context.LibraryZipFile;
 import roj.compiler.context.LocalContext;
+import roj.compiler.diagnostic.TextDiagnosticReporter;
 import roj.compiler.plugins.GlobalContextApi;
 import roj.compiler.plugins.annotations.AnnotationProcessor1;
 import roj.compiler.plugins.annotations.AnnotationProcessor2;
@@ -25,22 +26,21 @@ import java.io.IOException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Parameter;
 import java.util.Arrays;
-import java.util.Locale;
 
 /**
  * @author Roj234
  * @since 2024/5/20 0020 2:52
  */
 public class LavaCompiler {
-	final GlobalContextApi gctx = new GlobalContextApi();
-	final LocalContext lctx = gctx.createLocalContext();
-	final ClassLoader maker = new ClassDefiner(LavaCompiler.class.getClassLoader(), "LavaLambdaLink");
+	public final GlobalContextApi gctx = new GlobalContextApi();
+	public final LocalContext lctx = gctx.createLocalContext();
+	public final ClassLoader maker = new ClassDefiner(LavaCompiler.class.getClassLoader(), "LavaLambdaLink");
 
 	public LavaCompiler() throws IOException {
 		LocalContext.set(lctx);
 		initDefaultPlugins(gctx);
 		LocalContext.set(null);
-		gctx.listener = x -> {System.out.println(x.getMessage(Locale.CHINA));};
+		((TextDiagnosticReporter) gctx.listener).errorOnly = true;
 	}
 
 	static void initDefaultPlugins(GlobalContextApi ctx) throws IOException {
@@ -97,6 +97,7 @@ public class LavaCompiler {
 		lctx.lexer.setState(JavaLexer.STATE_EXPR);
 		ParseTask.Method(u, mn, Arrays.asList(parName)).parse(lctx);
 
+		lctx.clear();
 		LocalContext.set(null);
 
 		for (ConstantData data : gctx.getGeneratedClasses()) {

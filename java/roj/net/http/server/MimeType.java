@@ -1,7 +1,6 @@
 package roj.net.http.server;
 
 import org.jetbrains.annotations.NotNull;
-import roj.collect.Hasher;
 import roj.collect.XHashSet;
 import roj.util.Helpers;
 
@@ -15,7 +14,7 @@ import java.util.Objects;
 public final class MimeType {
 	// 在传递过程中，XHashSet.Shape<String, Mime>的K参数（String）被javac直接擦除到了Object，这是Lavac已解决的问题
 	private static MimeType fallback = new MimeType("*", "application/octet-stream");
-	public static final XHashSet<String, MimeType> REPOSITORY = Helpers.cast(XHashSet.noCreation(MimeType.class, "ext", "_next", Hasher.defaul()).createSized(128));
+	public static final XHashSet<String, MimeType> REPOSITORY = Helpers.cast(XHashSet.noCreation(MimeType.class, "ext").createSized(128));
 
 	public final String ext;
 	public String mime;

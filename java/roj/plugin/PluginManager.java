@@ -1,7 +1,6 @@
 package roj.plugin;
 
 import roj.archive.zip.ZipFile;
-import roj.collect.Hasher;
 import roj.collect.SimpleList;
 import roj.collect.TrieTreeSet;
 import roj.collect.XHashSet;
@@ -27,7 +26,7 @@ import java.util.regex.Pattern;
  */
 public class PluginManager {
 	static final Logger LOGGER = Logger.getLogger("Panger");
-	static final XHashSet.Shape<String, PluginDescriptor> PM_SHAPE = XHashSet.noCreation(PluginDescriptor.class, "id", "_next", Hasher.defaul());
+	static final XHashSet.Shape<String, PluginDescriptor> PM_SHAPE = XHashSet.noCreation(PluginDescriptor.class, "id");
 	final XHashSet<String, PluginDescriptor> plugins = PM_SHAPE.create();
 
 	private final ClassLoader env = getClass().getClassLoader();

@@ -113,7 +113,7 @@ public final class BsDiff {
 	public static long patchStream(DynByteBuf in, MyDataInput patch, OutputStream out) throws IOException {
 		int wrote = 0;
 		int outputSize = patch.readIntLE();
-		byte[] tmp = ArrayCache.getByteArray(1024, false);
+		byte[] tmp = ArrayCache.getByteArray(4096, false);
 
 		while (wrote < outputSize) {
 			int copyLen  = patch.readIntLE(); // copy in
@@ -279,7 +279,7 @@ public final class BsDiff {
 			if (!closePending) return;
 			if (v == 1 && u.compareAndSwapInt(this, REFCOUNT_OFF, 0, -999999)) {
 				// to make Cleaner GC-able
-				NativeMemory.cleanNativeMemory(cleaner);
+				NativeMemory.invokeClean(cleaner);
 			}
 		}
 	}

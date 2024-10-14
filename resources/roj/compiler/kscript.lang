@@ -55,7 +55,7 @@ module.eof=模块文本在解析完成前终止
 
 #Cu Stage1 [Import]
 import.unpackaged=[Import]不带包名的导入
-import.any=[Import]任意导入可能导致安全性或可靠性下降，建议仅用于脚本模式
+#import.any=[Import]任意导入可能导致安全性或可靠性下降，建议仅用于脚本模式
 import.conflict=[Import] %1 的短名称%2与 %3 重复
 
 modifier.annotation=[Modifier]此处不允许注解

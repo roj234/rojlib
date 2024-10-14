@@ -87,7 +87,7 @@ public final class McDiffServer {
 
 			checkSpecialFileType:
 			if (path.contains(".dat") || path.contains(".nbt")) {
-				byte[] tmp = ArrayCache.getByteArray(1024, false);
+				byte[] tmp = ArrayCache.getByteArray(4096, false);
 
 				try (InputStream in = new GZIPInputStream(new FileInputStream(file))) {
 					while (true) {
@@ -152,7 +152,7 @@ public final class McDiffServer {
 
 				pool.submit(() -> {
 					try (ByteList.WriteOut out = new ByteList.WriteOut(w)) {
-						for (int i = 0; i < 1024; i++) {
+						for (int i = 0; i < 4096; i++) {
 							if (!rin.hasData(i)) continue;
 
 							var din = rin.getInputStream(i);
@@ -255,7 +255,7 @@ public final class McDiffServer {
 		var hash2 = ILCrypto.SM3();
 
 		long count = qzfw.s.position()-32;
-		byte[] tmp = ArrayCache.getByteArray(1024, false);
+		byte[] tmp = ArrayCache.getByteArray(4096, false);
 		try (InputStream in = new FileInputStream(file)) {
 			IOUtil.readFully(in, tmp, 0, 32); // 跳过文件头
 			while (count > 0) {
@@ -337,7 +337,7 @@ public final class McDiffServer {
 
 		int prefix = directory.getAbsolutePath().length()+1;
 		List<File> newEntries = IOUtil.findAllFiles(directory, filter);
-		byte[] tmp = new byte[1024];
+		byte[] tmp = new byte[4096];
 
 		System.out.println("正在计算哈希 (1/4)");
 
@@ -411,8 +411,8 @@ public final class McDiffServer {
 
 	private static boolean compare(File left, QZArchive pack, QZEntry entry) throws IOException {return compare(new FileInputStream(left), pack.getInputUncached(entry));}
 	private static boolean compare(InputStream ina, InputStream inb) {
-		byte[] a = ArrayCache.getByteArray(1024, false);
-		byte[] b = ArrayCache.getByteArray(1024, false);
+		byte[] a = ArrayCache.getByteArray(4096, false);
+		byte[] b = ArrayCache.getByteArray(4096, false);
 
 		try {
 			while (true) {

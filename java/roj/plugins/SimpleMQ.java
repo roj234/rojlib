@@ -32,7 +32,7 @@ import java.util.concurrent.locks.Lock;
 public class SimpleMQ extends Plugin {
 	@Override
 	protected void onEnable() throws Exception {
-		registerRoute("mq", new OKRouter().register(this));
+		registerRoute("mq/", new OKRouter().register(this));
 	}
 
 	@Override

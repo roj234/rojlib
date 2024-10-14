@@ -74,21 +74,29 @@ public abstract class Source extends DataOutputStream implements Closeable {
 	 * 和isBuffered没关系
 	 */
 	public DynByteBuf buffer() { return null; }
-	public void put(Source s) throws IOException {
-		DynByteBuf buf = s.buffer();
+	public void put(Source src) throws IOException {put(src, 0, src.length());}
+	public void put(Source src, long offset, long len) throws IOException {
+		var buf = src.buffer();
 		if (buf != null) {
-			write(buf);
-		} else if (hasChannel()&s.hasChannel()) {
-			s.channel().transferTo(0, s.length(), channel());
+			write(buf.slice((int) offset, (int) len));
+		} else if (hasChannel()&src.hasChannel()) {
+			src.channel().transferTo(offset, len, channel());
 		} else {
-			byte[] data = ArrayCache.getByteArray(4096, false);
-			s.seek(0);
-			while (true) {
-				int r = s.read(data);
-				if (r < 0) break;
-				write(data, 0, r);
+			var pos = src.position();
+			src.seek(offset);
+
+			byte[] bb = ArrayCache.getByteArray(4096, false);
+			try {
+				while (len > 0) {
+					int l = (int) Math.min(bb.length, len);
+					src.readFully(bb, 0, l);
+					write(bb, 0, l);
+					len -= l;
+				}
+			} finally {
+				ArrayCache.putArray(bb);
+				src.seek(pos);
 			}
-			ArrayCache.putArray(data);
 		}
 	}
 

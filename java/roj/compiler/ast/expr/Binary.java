@@ -356,11 +356,21 @@ final class Binary extends ExprNode {
 		switch (operator) {
 			// && 和 || 想怎么用，就怎么用！
 			case logic_and, logic_or: {
-				var endOfStatement = new Label();
-				left.writeShortCircuit(cw, castLeft, operator == logic_or, endOfStatement);
-				if (noRet) right.write(cw, true);
-				else right.write(cw, castRight);
-				cw.label(endOfStatement);
+				var shortCircuit = new Label();
+				left.writeShortCircuit(cw, castLeft, operator == logic_or, shortCircuit);
+				if (noRet) {
+					right.write(cw, true);
+					cw.label(shortCircuit); // short circuit no LDC present
+					return;
+				}
+				right.write(cw, castRight);
+
+				var sayResult = new Label();
+				cw.jump(sayResult);
+
+				cw.label(shortCircuit);
+				cw.one(operator == logic_and ? ICONST_0 : ICONST_1);
+				cw.label(sayResult);
 				return;
 			}
 			case nullish_consolidating: {

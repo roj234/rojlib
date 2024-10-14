@@ -64,8 +64,9 @@ public final class HttpServer11 extends PacketMerger implements PostSetting, Res
 	}
 	//endregion
 
-	public static ServerLaunch simple(InetSocketAddress addr, int backlog, Router router) throws IOException {
-		return ServerLaunch.tcp("HTTP服务器")
+	public static ServerLaunch simple(InetSocketAddress addr, int backlog, Router router) throws IOException {return simple(null, addr, backlog, router);}
+	public static ServerLaunch simple(String name, InetSocketAddress addr, int backlog, Router router) throws IOException {
+		return ServerLaunch.tcp(name)
 						   .bind(addr, backlog)
 						   .option(StandardSocketOptions.SO_REUSEADDR, true)
 						   .initializator((ctx) -> ctx.addLast("h2c@test", new H2C(router)).addLast("h11@server", create(router)));

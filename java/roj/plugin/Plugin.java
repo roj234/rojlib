@@ -113,8 +113,7 @@ public abstract class Plugin {
 
 	private Set<String> pPaths = Collections.emptySet();
 	protected final void registerRoute(String path, Router router) {router(path).addPrefixDelegation(path, router);}
-	protected final void registerRoute(String path, Router router, boolean directoryMatchOnly) {router(path).addPrefixDelegation(path, router, directoryMatchOnly);}
-	protected final void registerRoute(String path, Router router, boolean directoryMatchOnly, String... interceptors) {router(path).addPrefixDelegation(path, router, directoryMatchOnly, interceptors);}
+	protected final void registerRoute(String path, Router router, String... interceptors) {router(path).addPrefixDelegation(path, router, interceptors);}
 	private OKRouter router(String path) {
 		synchronized (desc.stateLock) {
 			if (pPaths.isEmpty()) pPaths = new MyHashSet<>(4);

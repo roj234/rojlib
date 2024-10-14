@@ -33,6 +33,8 @@ public final class XHashSet<K, V> extends AbstractSet<V> {
 			throw new IllegalArgumentException("无法找到字段", e);
 		}
 	}
+	public static <K, V> Shape<K, V> noCreation(Class<V> vType, String field_key) {return noCreation(vType, field_key, "_next");}
+	public static <K, V> Shape<K, V> noCreation(Class<V> vType, String field_key, String field_next) {return noCreation(vType, field_key, field_next, Hasher.defaul());}
 	public static <K, V> Shape<K, V> noCreation(Class<V> vType, String field_key, String field_next, Hasher<K> hasher) {
 		try {
 			Field key = ReflectionUtils.getField(vType, field_key);

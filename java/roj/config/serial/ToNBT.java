@@ -125,14 +125,11 @@ public class ToNBT implements CVisitor {
 				if (size < 0) {
 					ob.writeInt(-size);
 					sizeOffset = -1;
-					size++;
 				} else {
 					ob.writeInt(0);
-					size = 1;
 				}
-				break;
 			default:
-				if (XNbt) ob.putShort(type);
+				if (XNbt) ob.put(type);
 				else if (state != type+2) throw new IllegalStateException("NBT列表的每项类型必须相同(使用XNbt避免此限制)/at="+stateLen+":"+size+"/type="+(type+2)+",exceptType="+state);
 				size++;
 				break;

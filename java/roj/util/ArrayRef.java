@@ -23,7 +23,7 @@ public final class ArrayRef {
 		this.length = length;
 	}
 
-	public static ArrayRef create(long addr, int length) { return create(null, addr, 1, length); }
+	public static ArrayRef create(long addr, int compSize, int length) { return create(null, addr, compSize, length); }
 	public static ArrayRef create(Object ref, long addr, int compSize, int length) { return new ArrayRef(ref, addr, compSize, length); }
 
 	public static ArrayRef primitiveArray(Object b) {

@@ -225,7 +225,7 @@ public class QZFileWriter extends QZWriter {
             crcOut.out = null;
         } finally {
             // crcOut没写close, 并且如果出异常了也能关闭out()
-            out.close();
+            IOUtil.closeSilently(out);
         }
 
         long hend = s.position();

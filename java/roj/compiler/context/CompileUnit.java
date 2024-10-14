@@ -291,7 +291,6 @@ public final class CompileUnit extends ConstantData {
 			if (tmp.charAt(tmp.length()-1) == '*') {
 				// import *
 				if (tmp.length() == 1) {
-					ctx.report(Kind.WARNING, "import.any");
 					tmp.clear();
 					tr.setImportAny(true);
 				} else {

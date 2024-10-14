@@ -18,7 +18,7 @@ public class PathRouter implements Router {
 	@Override
 	public Response response(Request req, ResponseHeader rh) throws IOException {
 		String url = req.path();
-		var file = IOUtil.safePath(path, url);
+		var file = IOUtil.safePath2(path, url);
 		if (file == null) {
 			rh.code(500);
 			HttpServer11.LOGGER.fatal("啊呀呀，你写的路径过滤被绕过了！路径是："+url);

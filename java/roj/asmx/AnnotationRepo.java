@@ -103,7 +103,7 @@ public final class AnnotationRepo {
 		var parent = intern(cp.getRefName(r));
 
 		var skeleton = new AccessData(null, -1, name, parent);
-		skeleton.acc = acc;
+		skeleton.modifier = acc;
 
 		Type klass = new Type(skeleton);
 
@@ -118,7 +118,7 @@ public final class AnnotationRepo {
 			while (len-- > 0) {
 				acc = r.readChar();
 				var node = skeleton.new MOF(intern(((CstUTF) cp.get(r)).str()), intern(((CstUTF) cp.get(r)).str()), 0);
-				node.acc = acc;
+				node.modifier = acc;
 
 				int attrSize = r.readUnsignedShort();
 				if (attrSize == 0) continue;
@@ -208,18 +208,18 @@ public final class AnnotationRepo {
 		var owner = (AccessData) parent.owner;
 		buf.putShort(cp.getUtfId(owner.name))
 		   .putShort(cp.getUtfId(owner.parent))
-		   .putShort(owner.acc)
+		   .putShort(owner.modifier)
 		   .putShort(owner.itf.size());
 		for (String itf : owner.itf) buf.putShort(cp.getUtfId(itf));
 		buf.putShort(owner.methods.size());
 		for (var node : owner.methods) {
 			elements.putIfAbsent(node, elements.size());
-			buf.putShort(cp.getUtfId(node.name)).putShort(cp.getUtfId(node.desc)).putShort(node.acc);
+			buf.putShort(cp.getUtfId(node.name)).putShort(cp.getUtfId(node.desc)).putShort(node.modifier);
 		}
 		buf.putShort(owner.fields.size());
 		for (var node : owner.fields) {
 			elements.putIfAbsent(node, elements.size());
-			buf.putShort(cp.getUtfId(node.name)).putShort(cp.getUtfId(node.desc)).putShort(node.acc);
+			buf.putShort(cp.getUtfId(node.name)).putShort(cp.getUtfId(node.desc)).putShort(node.modifier);
 		}
 	}
 	public boolean deserialize(DynByteBuf buf) {
@@ -266,7 +266,7 @@ public final class AnnotationRepo {
 	}
 	private int readAcc(DynByteBuf r, ConstantPool cp, AnnotatedElement[] elements, int elementCount) {
 		var skeleton = new AccessData(null, 0, ((CstUTF) cp.get(r)).str(), ((CstUTF) cp.get(r)).str());
-		skeleton.acc = r.readChar();
+		skeleton.modifier = r.readChar();
 
 		rawNodes.clear();
 		int len = r.readUnsignedShort();
@@ -282,7 +282,7 @@ public final class AnnotationRepo {
 			rawNodes.clear();
 			for (int j = 0; j < len; j++) {
 				var mof = skeleton.new MOF(((CstUTF) cp.get(r)).str(), ((CstUTF) cp.get(r)).str(), 0);
-				mof.acc = r.readChar();
+				mof.modifier = r.readChar();
 				rawNodes.add(mof);
 				elements[elementCount++] = new Node(type, mof);
 			}

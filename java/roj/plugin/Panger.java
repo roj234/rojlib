@@ -10,7 +10,6 @@ import roj.config.data.CEntry;
 import roj.config.data.Type;
 import roj.io.IOUtil;
 import roj.math.Version;
-import roj.net.MyChannel;
 import roj.net.ServerLaunch;
 import roj.net.http.server.*;
 import roj.net.http.server.auto.OKRouter;
@@ -242,7 +241,7 @@ public final class Panger extends PluginManager {
 			HttpServer11.LOGGER.setLevel(level);
 			router = new OKRouter(level.canLog(Level.DEBUG));
 			try {
-				httpServer = HttpServer11.simple(new InetSocketAddress(CONFIG.getInteger("http_port", 8080)), 512, router);
+				httpServer = HttpServer11.simple("PangerHTTP", new InetSocketAddress(CONFIG.getInteger("http_port", 8080)), 512, router);
 				MimeType.loadMimeMap(IOUtil.readUTF(new File("plugins/Core/mime.ini")));
 
 				router.setInterceptor("PermissionManager", null);
@@ -259,11 +258,6 @@ public final class Panger extends PluginManager {
 		}
 
 		return router;
-	}
-	public static void addLocalConnection(MyChannel channel) throws IOException {
-		httpServer.initializator().accept(channel);
-		channel.fireOpen();
-		channel.readActive();
 	}
 
 	static final SimpleList<String> motds = new SimpleList<>();

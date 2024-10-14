@@ -1,7 +1,6 @@
 package roj.plugins.http.sso;
 
 import roj.collect.CollectionX;
-import roj.collect.Hasher;
 import roj.collect.XHashSet;
 import roj.config.Tokenizer;
 import roj.config.serial.ToJson;
@@ -41,7 +40,7 @@ import static roj.ui.terminal.CommandNode.literal;
  * @since 2024/7/9 0009 8:27
  */
 public class SSOPlugin extends Plugin {
-	private static final XHashSet.Shape<String, UserGroup> shape = XHashSet.noCreation(UserGroup.class, "name", "_next", Hasher.defaul());
+	private static final XHashSet.Shape<String, UserGroup> shape = XHashSet.noCreation(UserGroup.class, "name");
 	public static final String COOKIE_ID = "xsso_token";
 
 	private final XHashSet<String, UserGroup> groups = shape.create();
@@ -72,6 +71,8 @@ public class SSOPlugin extends Plugin {
 
 		var cfg = getConfig();
 		sitePath = cfg.getString("path", "sso");
+		//ensure directory match
+		if (!sitePath.endsWith("/")) sitePath = sitePath.concat("/");
 		siteName = cfg.getString("name");
 		register = cfg.getBool("register");
 		var skStr = cfg.getString("session_key", null);

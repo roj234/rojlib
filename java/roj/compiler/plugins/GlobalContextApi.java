@@ -7,7 +7,6 @@ import roj.asm.tree.ConstantData;
 import roj.asm.tree.IClass;
 import roj.asmx.AnnotatedElement;
 import roj.asmx.AnnotationRepo;
-import roj.collect.MyHashSet;
 import roj.collect.SimpleList;
 import roj.compiler.JavaLexer;
 import roj.compiler.asm.AnnotationPrimer;
@@ -24,39 +23,54 @@ import roj.compiler.plugins.api.Resolver;
 import java.io.IOException;
 import java.util.Collections;
 import java.util.List;
+import java.util.PriorityQueue;
 
 /**
  * @author Roj234
  * @since 2024/6/10 4:05
  */
 public class GlobalContextApi extends GlobalContext implements LavaApi {
-	private final ImplResolveApi resolveApi = new ImplResolveApi();
+	private final PriorityQueue<ImplResolver<Resolver>> resolveApi = new PriorityQueue<>();
+	private static final class ImplResolver<T> implements Comparable<ImplResolver<T>> {
+		final int priority;
+		final T resolver;
+
+		ImplResolver(int priority, T resolver) {
+			this.priority = priority;
+			this.resolver = resolver;
+		}
+
+		public int compareTo(ImplResolver<T> resolver) {return Integer.compare(priority, resolver.priority);}
+	}
+
 	private final ImplExprApi exprApi = new ImplExprApi();
 	private AnnotationRepo repo;
+	private List<Library> _libraries = new SimpleList<>();
 
 	@Override
 	public void addLibrary(Library library) {
-		if (repo != null) throw new IllegalStateException("Classpath annotation was created");
+		if (repo != null) addAnnotations(library);
+		else _libraries.add(library);
 		super.addLibrary(library);
 	}
 
 	// ◢◤
 	public ConstantData getClassInfo(CharSequence name) {
-		ConstantData clz = ctx.get(name);
-		if (clz == null) {
-			clz = libraries.getOrDefault(name, LibraryRuntime.INSTANCE).get(name);
-			if (clz == null && resolveApi != null) {
-				clz = resolveApi.preFilter(name);
-				if (clz == null) return null;
-
-				synchronized (libraries) {
-					libraries.put(name.toString(), resolveApi);
-				}
+		ConstantData info = ctx.get(name);
+		if (info == null) {
+			info = super.getClassInfo(name);
+			for (var sortable : resolveApi) {
+				sortable.resolver.classResolved(info);
 			}
 		}
 
-		if (resolveApi != null) resolveApi.postFilter(clz);
-		return clz;
+		return info;
+	}
+
+	private void packageListed(String pkg, List<String> list) {
+		for (ImplResolver<Resolver> sortable : resolveApi) {
+			sortable.resolver.packageListed(pkg, list);
+		}
 	}
 
 	// DEFINE BY USER
@@ -125,9 +139,7 @@ public class GlobalContextApi extends GlobalContext implements LavaApi {
 	public ExprApi getExprApi() {return exprApi;}
 
 	@Override
-	public void addResolveListener(int priority, Resolver dtr) {
-		resolveApi.addTypeResolver(priority, dtr);
-	}
+	public void addResolveListener(int priority, Resolver dtr) {resolveApi.add(new ImplResolver<>(priority, dtr));}
 
 	public void invalidateResolveHelper(IClass file) {
 		extraInfos.removeKey(file);
@@ -161,9 +173,10 @@ public class GlobalContextApi extends GlobalContext implements LavaApi {
 	public AnnotationRepo getClasspathAnnotations() {
 		if (repo == null) {
 			repo = new AnnotationRepo();
-			for (Library library : new MyHashSet<>(libraries.values())) {
+			for (Library library : _libraries) {
 				addAnnotations(library);
 			}
+			_libraries = null;
 		}
 		return repo;
 	}

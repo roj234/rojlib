@@ -17,13 +17,15 @@ import java.util.concurrent.atomic.AtomicInteger;
  * @since 2022/6/14 20:58
  */
 final class ServerLaunchTcp extends ServerLaunch implements Selectable {
+	private final String name;
 	private final ServerSocketChannel tcp;
 	private SelectionKey key;
 
 	private int rcvBuf = 1536;
 	private AtomicInteger maxConn;
 
-	ServerLaunchTcp() throws IOException {
+	ServerLaunchTcp(String name) throws IOException {
+		this.name = name;
 		tcp = ServerSocketChannel.open();
 		tcp.configureBlocking(false);
 	}
@@ -47,12 +49,14 @@ final class ServerLaunchTcp extends ServerLaunch implements Selectable {
 	public ServerLaunch launch() throws IOException {
 		if (initializator == null) throw new IllegalStateException("no initializator");
 
+		if (name != null) SHARED.put(name, this);
 		loop().register(this, null, SelectionKey.OP_ACCEPT);
 		return this;
 	}
 
 	public final boolean isOpen() { return tcp.isOpen(); }
-	public final void close() throws IOException { tcp.close(); }
+	public final void close() throws IOException {
+		if (name != null) SHARED.remove(name); tcp.close(); }
 
 	@Override
 	public void register(Selector sel, int ops, Object att) throws IOException {
@@ -110,5 +114,12 @@ final class ServerLaunchTcp extends ServerLaunch implements Selectable {
 			if (ch.isOpen())
 				loop.register(ch, null);
 		}
+	}
+
+	@Override
+	public void addTCPConnection(MyChannel channel) throws IOException {
+		initializator().accept(channel);
+		channel.fireOpen();
+		channel.readActive();
 	}
 }

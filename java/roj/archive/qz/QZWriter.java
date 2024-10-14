@@ -7,11 +7,9 @@ import roj.collect.SimpleList;
 import roj.config.data.CInt;
 import roj.crypt.CRC32s;
 import roj.io.source.Source;
-import roj.util.ArrayCache;
 
 import java.io.IOException;
 import java.io.OutputStream;
-import java.nio.channels.FileChannel;
 import java.util.Arrays;
 
 /**
@@ -181,23 +179,7 @@ public abstract class QZWriter extends OutputStream implements ArchiveWriter {
 
         closeWordBlock();
 
-        if (s.hasChannel() & archive.r.hasChannel()) {
-            FileChannel myCh = s.channel();
-            archive.r.channel().transferTo(b.offset, b.size(), myCh);
-        } else {
-            Source src = archive.r;
-            src.seek(b.offset);
-
-            byte[] bb = ArrayCache.getByteArray(1024, false);
-            long len = b.size();
-            while (len > 0) {
-                int l = (int) Math.min(bb.length, len);
-                src.readFully(bb, 0, l);
-                s.write(bb, 0, l);
-                len -= l;
-            }
-            ArrayCache.putArray(bb);
-        }
+        s.put(archive.r, b.offset, b.size());
 
         blocks.add(b);
         countBlockFlag(b);
