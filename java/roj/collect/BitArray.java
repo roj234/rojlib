@@ -6,6 +6,7 @@ import roj.util.ArrayUtil;
 
 import java.util.Arrays;
 import java.util.function.IntConsumer;
+import java.util.function.IntUnaryOperator;
 
 /**
  * int大概能快点？
@@ -74,6 +75,26 @@ public class BitArray {
 			int myMask = mask << bitPos;
 			val = (val << bitPos) & myMask;
 
+			data[i] = data[i] & ~myMask | val;
+		}
+	}
+	public void replace(int i, IntUnaryOperator op) {
+		check(i);
+
+		i *= bits;
+		int bitPos = i&31;
+		i >>>= 5;
+
+		if (bitPos+bits > 32) {
+			long myMask = (long) mask << bitPos;
+			long d = (data[i]&0xFFFFFFFFL) | ((long) data[i+1] << 32);
+			long longVal = ((long) op.applyAsInt((int) ((d & myMask) >>> bitPos)) << bitPos) & myMask;
+			d = d & ~myMask | longVal;
+			data[i] = (int) d;
+			data[i+1] = (int) (d >>> 32);
+		} else {
+			int myMask = mask << bitPos;
+			int val = (op.applyAsInt((data[i] & myMask) >>> bitPos) << bitPos) & myMask;
 			data[i] = data[i] & ~myMask | val;
 		}
 	}

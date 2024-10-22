@@ -1,10 +1,8 @@
 package roj.net.handler;
 
-import roj.RojLib;
 import roj.concurrent.task.ITask;
 import roj.concurrent.timing.ScheduleTask;
 import roj.concurrent.timing.Scheduler;
-import roj.io.NIOUtil;
 import roj.net.ChannelCtx;
 import roj.net.ChannelHandler;
 import roj.net.Event;
@@ -18,7 +16,6 @@ import java.net.Inet6Address;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.UnknownHostException;
-import java.nio.channels.SocketChannel;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
 
@@ -41,7 +38,7 @@ public class Fail2Ban implements ChannelHandler, ITask {
 			if (!ok) forgive = System.currentTimeMillis();
 			return ok;
 		}
-		public void success() {ReflectionUtils.u.getAndAddInt(this, COUNT_OFFSET, -1);}
+		public void success() {count = 0;}
 	}
 
 	private final int LOGIN_ATTEMPTS, LOGIN_TIMEOUT;
@@ -77,18 +74,13 @@ public class Fail2Ban implements ChannelHandler, ITask {
 		if (user != null && !user.login()) {
 			LOGGER.info("已阻止 {} 的连接请求", ip);
 
-			if (RojLib.hasNative(RojLib.TCP_RST)) {
-				sendRST(NIOUtil.fdVal(NIOUtil.tcpFD((SocketChannel) ctx.channel().i_outOfControl())));
-			} else {
-				ctx.close();
-				if (VMUtil.isRoot()) {
-					// TODO netsh timed block
-					//Scheduler.getDefaultScheduler().delay(ctx::close, 60000);
-				}
+			ctx.close();
+			if (VMUtil.isRoot()) {
+				// TODO netsh timed block
+				//Scheduler.getDefaultScheduler().delay(ctx::close, 60000);
 			}
 		}
 	}
-	private static native void sendRST(int fd);
 
 	@Override public void channelRead(ChannelCtx ctx, Object msg) throws IOException {
 		var event = new Event("fail2ban:inspect", msg);

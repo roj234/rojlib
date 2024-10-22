@@ -66,7 +66,8 @@ public class ILCrypto extends Provider {
 	public static BufferedDigest SM3() {return new SM3();}
 	//end Hash
 	//MAC
-	public static MessageAuthenticCode Blake3(int digestLength) {return new Blake3(digestLength);}
+	@SuppressWarnings("unchecked")
+	public static <T extends BufferedDigest & MessageAuthenticCode> T Blake3(int digestLength) {return (T) new Blake3(digestLength);}
 	public static MessageAuthenticCode HMAC(MessageDigest digest) {return new HMAC(digest);}
 	public static MessageAuthenticCode HMAC(MessageDigest digest, int blockSize) {return new HMAC(digest, blockSize);}
 	public static MessageAuthenticCode Poly1305() {return new Poly1305();}

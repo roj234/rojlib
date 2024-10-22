@@ -5,7 +5,6 @@ import roj.asm.Opcodes;
 import roj.asm.Parser;
 import roj.asm.cp.ConstantPool;
 import roj.asm.cp.CstClass;
-import roj.asm.tree.attr.Annotations;
 import roj.asm.tree.attr.AttrUnknown;
 import roj.asm.tree.attr.Attribute;
 import roj.asm.tree.attr.AttributeList;
@@ -252,19 +251,59 @@ public class ConstantData implements IClass {
 	public String toString() {
 		CharList sb = new CharList(1000);
 
-		Annotations a = parsedAttr(cp, Attribute.RtAnnotations);
-		if (a != null) a.toString(sb, 0).append('\n');
-		a = parsedAttr(cp, Attribute.ClAnnotations);
-		if (a != null) a.toString(sb, 0).append('\n');
+		var _a = parsedAttr(cp, Attribute.RtAnnotations);
+		if (_a != null) _a.toString(sb, 0);
+		_a = parsedAttr(cp, Attribute.ClAnnotations);
+		if (_a != null) _a.toString(sb, 0);
 
-		writeModifier(sb);
+		int acc = modifier;
+		if ((acc&ACC_ANNOTATION) != 0) acc &= ~(ACC_ABSTRACT|ACC_INTERFACE);
+		else if ((acc&ACC_INTERFACE) != 0) acc &= ~(ACC_ABSTRACT);
+		showModifiers(acc, ACC_SHOW_CLASS, sb);
 
-		TypeHelper.toStringOptionalPackage(sb, name);
-		Signature s = parsedAttr(cp, Attribute.SIGNATURE);
-		if (s != null) sb.append(s);
-		else writeParent(sb);
+		var _seal = parsedAttr(cp, Attribute.PermittedSubclasses);
+		if (_seal != null) sb.append("sealed ");
 
-		sb.append(" {\n");
+		var _module = parsedAttr(cp, Attribute.Module);
+		if (_module != null) sb.append( _module.self.name);
+		else {
+			if ((acc&(ACC_ENUM|ACC_INTERFACE|ACC_MODULE|ACC_ANNOTATION)) == 0) sb.append("class ");
+			TypeHelper.toStringOptionalPackage(sb, name);
+		}
+
+		var _sign = parsedAttr(cp, Attribute.SIGNATURE);
+		if (_sign != null) sb.append(_sign);
+		else {
+			if (!"java/lang/Object".equals(parent) && parent != null) {
+				TypeHelper.toStringOptionalPackage(sb.append(" extends "), parent);
+			}
+
+			var _list = interfaces;
+			if (!_list.isEmpty()) {
+				sb.append(" implements ");
+				for (int j = 0; j < _list.size();) {
+					String i = _list.get(j).name().str();
+					TypeHelper.toStringOptionalPackage(sb, i);
+					if (++j == _list.size()) break;
+					sb.append(", ");
+				}
+			}
+		}
+		if (_seal != null) {
+			sb.append(" permits ");
+			var _list = _seal.value;
+			for (int j = 0; j < _list.size();) {
+				String i = _list.get(j);
+				TypeHelper.toStringOptionalPackage(sb, i);
+				if (++j == _list.size()) break;
+				sb.append(", ");
+			}
+		}
+
+		sb.append(" {");
+		if (_module != null) {
+			_module.writeModuleInfo(sb);
+		}
 		if (!fields.isEmpty()) {
 			sb.append('\n');
 			for (int i = 0; i < fields.size(); i++) {
@@ -279,54 +318,6 @@ public class ConstantData implements IClass {
 		}
 
 		return sb.append('}').toStringAndFree();
-	}
-
-	public CharList toAsmLang(CharList sb) {
-		Annotations a = parsedAttr(cp, Attribute.RtAnnotations);
-		if (a != null) a.toString(sb, 0).append('\n');
-		a = parsedAttr(cp, Attribute.ClAnnotations);
-		if (a != null) a.toString(sb, 0).append('\n');
-
-		writeModifier(sb);
-		writeParent(sb.append(name));
-
-		sb.append(" {\n");
-		if (!fields.isEmpty()) {
-			sb.append('\n');
-			for (int i = 0; i < fields.size(); i++) {
-				fields.get(i).toString(sb, this, 4, false).append("\n");
-			}
-		}
-		if (!methods.isEmpty()) {
-			sb.append('\n');
-			for (int i = 0; i < methods.size(); i++) {
-				methods.get(i).toAsmLang(sb, cp, 4).append("\n\n");
-			}
-		}
-
-		return sb.append('}');
-	}
-
-	private void writeModifier(CharList sb) {
-		int acc = modifier;
-		if ((acc&ACC_ANNOTATION) != 0) acc &= ~(ACC_ABSTRACT|ACC_INTERFACE);
-		else if ((acc&ACC_INTERFACE) != 0) acc &= ~(ACC_ABSTRACT);
-		showModifiers(acc, ACC_SHOW_CLASS, sb);
-		if ((acc&(ACC_ENUM|ACC_INTERFACE|ACC_MODULE|ACC_ANNOTATION)) == 0) sb.append("class ");
-	}
-
-	private void writeParent(CharList sb) {
-		if (!"java/lang/Object".equals(parent) && parent != null) {
-			TypeHelper.toStringOptionalPackage(sb.append(" extends "), parent);
-		}
-		if (interfaces.size() > 0) {
-			sb.append(" implements ");
-			for (int j = 0; j < interfaces.size(); j++) {
-				String i = interfaces.get(j).name().str();
-				TypeHelper.toStringOptionalPackage(sb, i);
-				if (++j == interfaces.size()) break;
-				sb.append(", ");
-			}}
 	}
 
 	public final String name() { return nameCst.name().str(); }

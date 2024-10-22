@@ -13,7 +13,7 @@ import roj.compiler.resolve.TypeCast;
  */
 public final class NaE extends ExprNode {
 	public static final ExprNode NOEXPR = new NaE(), RESOLVE_FAILED = new NaE();
-	private static final Generic UNRESOLVABLE = new Generic("<\1nae.unresolvable\0>");
+	public static final Generic UNRESOLVABLE = new Generic("<\1nae.unresolvable\0>");
 
 	@Override public String toString() {return "<\1nae.unresolvable\0>";}
 	@Override public IType type() {return UNRESOLVABLE;}

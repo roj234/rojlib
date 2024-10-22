@@ -12,8 +12,10 @@ import roj.compiler.context.LocalContext;
 import roj.compiler.diagnostic.Kind;
 import roj.io.IOUtil;
 import roj.text.CharList;
+import roj.text.TextReader;
 import roj.util.Helpers;
 
+import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 
@@ -22,6 +24,15 @@ import java.util.Map;
  * @since 2024/5/12 0012 14:43
  */
 public final class TypeResolver {
+	private static final MyHashSet<String> JAVA_LANG_WHITELIST = new MyHashSet<>();
+	static {
+		try(var tr = TextReader.auto(TypeResolver.class.getClassLoader().getResourceAsStream("roj/compiler/resolve/JLAllow.txt"))) {
+			for (var line : tr) JAVA_LANG_WHITELIST.add(line);
+		} catch (IOException e) {
+			throw new RuntimeException(e);
+		}
+	}
+
 	private boolean importAny, restricted, inited;
 	private final MyHashMap<String, Object> importClass = new MyHashMap<>(), importStatic = new MyHashMap<>();
 	private final SimpleList<String> importPackage = new SimpleList<>(), importStaticClass = new SimpleList<>();
@@ -146,7 +157,14 @@ public final class TypeResolver {
 			}
 		}
 
-		if (qualifiedName == null && !restricted) {
+		block:
+		if (qualifiedName == null) {
+			if (restricted) {
+				if (JAVA_LANG_WHITELIST.contains(name) && packages.contains("java/lang")) {
+					qualifiedName = "java/lang/"+name;
+				}
+				break block;
+			}
 			// 下列注释中: myName = A$B$C
 			String myName = ctx.file.name;
 

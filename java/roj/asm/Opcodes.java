@@ -181,21 +181,18 @@ public final class Opcodes {
 	}
 	// endregion
 	// region 操作码名称
+	private static final int OPCODE_COUNT = 201;
 	private static final String[] _Names = new String[256];
 	public static byte validateOpcode(byte code) {
-		if ((code&0xFF) > (BREAKPOINT&0xFF) || _Names[code&0xFF] == null) throw new IllegalStateException("Unknown bytecode 0x"+Integer.toHexString(code&0xFF));
+		if ((code&0xFF) > OPCODE_COUNT) throw new IllegalStateException("Unknown bytecode 0x"+Integer.toHexString(code&0xFF));
 		return code;
 	}
-	public static String showOpcode(int code) {
-		String x = _Names[code&0xFF];
-		if (x == null) throw new IllegalStateException("Unknown bytecode 0x"+Integer.toHexString(code&0xFF));
-		return x;
-	}
+	public static String showOpcode(int code) {return _Names[code&0xFF];}
 
 	private static ToIntMap<CharSequence> byName;
 	public static ToIntMap<CharSequence> opcodeByName() {
 		if (byName == null) {
-			byName = new ToIntMap<>(256);
+			byName = new ToIntMap<>(OPCODE_COUNT);
 			for (int i = 0; i < _Names.length; i++) {
 				if (_Names[i] == null) continue;
 				byName.putInt(_Names[i], i);
@@ -228,33 +225,27 @@ public final class Opcodes {
 
 	static {
 		// @=零地址
-		String desc = "Nop| AConst_NULL| IConst_M1| IConst_0| IConst_1| IConst_2| IConst_3| IConst_4| IConst_5| "+
-			"LConst_0| LConst_1| FConst_0| FConst_1| FConst_2| DConst_0| DConst_1| BIPush# "+
-			"SIPush# Ldc# Ldc_W# Ldc2_W# ILoad# LLoad# FLoad# DLoad# ALoad# ILoad_0| ILoad_1| "+
-			"ILoad_2| ILoad_3| LLoad_0| LLoad_1| LLoad_2| LLoad_3| FLoad_0| FLoad_1| FLoad_2| "+
-			"FLoad_3| DLoad_0| DLoad_1| DLoad_2| DLoad_3| ALoad_0| ALoad_1| ALoad_2| ALoad_3| "+
-			"IALoad| LALoad| FALoad| DALoad| AALoad| BALoad| CALoad| SALoad| IStore# LStore# "+
-			"FStore# DStore# AStore# IStore_0| IStore_1| IStore_2| IStore_3| LStore_0| LStore_1| "+
-			"LStore_2| LStore_3| FStore_0| FStore_1| FStore_2| FStore_3| DStore_0| DStore_1| "+
-			"DStore_2| DStore_3| AStore_0| AStore_1| AStore_2| AStore_3| IAStore| LAStore| "+
-			"FAStore| DAStore| AAStore| BAStore| CAStore| SAStore| Pop| Pop2| Dup| Dup_X1| "+
-			"Dup_X2| Dup2| Dup2_X1| Dup2_X2| Swap| IAdd| LAdd| FAdd| DAdd| ISub| LSub| FSub| "+
-			"DSub| IMul| LMul| FMul| DMul| IDiv| LDiv| FDiv| DDiv| IRem| LRem| FRem| DRem| "+
-			"INeg| LNeg| FNeg| DNeg| IShL| LShL| IShR| LShR| IUshR| LUshR| IAnd| LAnd| IOr| "+
-			"Lor| IXor| LXor| IInc# I2L| I2F| I2D| L2I| L2F| L2D| F2I| F2L| F2D| D2I| D2L| "+
-			"D2F| I2B| I2C| I2S| LCmp| FCmpL| FCmpG| DCmpL| DCmpG| IfEq# IfNe# IfLt# IfGe# "+
+		String desc = "Nop AConst_NULL IConst_M1 IConst_0 IConst_1 IConst_2 IConst_3 IConst_4 IConst_5 "+
+			"LConst_0 LConst_1 FConst_0 FConst_1 FConst_2 DConst_0 DConst_1 BIPush# "+
+			"SIPush# Ldc# Ldc_W# Ldc2_W# ILoad# LLoad# FLoad# DLoad# ALoad# ILoad_0 ILoad_1 "+
+			"ILoad_2 ILoad_3 LLoad_0 LLoad_1 LLoad_2 LLoad_3 FLoad_0 FLoad_1 FLoad_2 "+
+			"FLoad_3 DLoad_0 DLoad_1 DLoad_2 DLoad_3 ALoad_0 ALoad_1 ALoad_2 ALoad_3 "+
+			"IALoad LALoad FALoad DALoad AALoad BALoad CALoad SALoad IStore# LStore# "+
+			"FStore# DStore# AStore# IStore_0 IStore_1 IStore_2 IStore_3 LStore_0 LStore_1 "+
+			"LStore_2 LStore_3 FStore_0 FStore_1 FStore_2 FStore_3 DStore_0 DStore_1 "+
+			"DStore_2 DStore_3 AStore_0 AStore_1 AStore_2 AStore_3 IAStore LAStore "+
+			"FAStore DAStore AAStore BAStore CAStore SAStore Pop Pop2 Dup Dup_X1 "+
+			"Dup_X2 Dup2 Dup2_X1 Dup2_X2 Swap IAdd LAdd FAdd DAdd ISub LSub FSub "+
+			"DSub IMul LMul FMul DMul IDiv LDiv FDiv DDiv IRem LRem FRem DRem "+
+			"INeg LNeg FNeg DNeg IShL LShL IShR LShR IUshR LUshR IAnd LAnd IOr "+
+			"Lor IXor LXor IInc# I2L I2F I2D L2I L2F L2D F2I F2L F2D D2I D2L "+
+			"D2F I2B I2C I2S LCmp FCmpL FCmpG DCmpL DCmpG IfEq# IfNe# IfLt# IfGe# "+
 			"IfGt# IfLe# If_ICmpEq# If_iCmpNe# If_iCmpLt# If_iCmpGe# If_iCmpGt# If_iCmpLe# "+
-			"If_ACmpEq# If_ACmpNe# Goto# Jsr# Ret# TableSwitch# LookupSwitch# IReturn| LReturn| "+
-			"FReturn| DReturn| AReturn| Return| GetStatic# PutStatic# GetField# PutField# "+
+			"If_ACmpEq# If_ACmpNe# Goto# Jsr# Ret# TableSwitch# LookupSwitch# IReturn LReturn "+
+			"FReturn DReturn AReturn Return GetStatic# PutStatic# GetField# PutField# "+
 			"InvokeVirtual# InvokeSpecial# InvokeStatic# InvokeInterface# InvokeDynamic# "+
-			"New# NewArray# ANewArray# ArrayLength| AThrow| CheckCast# InstanceOf# MonitorEnter| "+
-			"MonitorExit| Wide# MultiANewArray# IfNull# IfNonNull# Goto_W# Jsr_W# BREAKPOINT| "+
-			// Internal
-			"_LdcQ# _LdcWQ# _Ldc2WQ#"+
-			"_GetFieldQ# _PutFieldQ# _GetField2Q# _PutField2Q#"+
-			"_GetStaticQ# _PutStaticQ# _GetStatic2Q# _PutStatic2Q#" +
-			"_InvokeVirtualQ# _InvokeNonVirtualQ# _InvokeSuperQ# _InvokeStaticQ# _InvokeInterfaceQ# _InvokeVirtualObjectQ# _InvokeIgnoredQ#" +
-			"_NewQ# _ANewArayQ# _MultiANewArrayQ# _CheckCastQ# _InstanceOfQ# _InvokeVirtualQ_W# _GetFieldQ_W# _PutFieldQ_W# _NonNullQ#";
+			"New# NewArray# ANewArray# ArrayLength AThrow CheckCast# InstanceOf# MonitorEnter "+
+			"MonitorExit Wide# MultiANewArray# IfNull# IfNonNull# Goto_W# Jsr_W#";
 
 		int j = 0;
 		int i, prevI = 0;
@@ -262,9 +253,12 @@ public final class Opcodes {
 			i = desc.indexOf(' ', prevI);
 			if (i < 0) break;
 
-			_Names[j] = desc.substring(prevI, i-1);
-			if (desc.charAt(i-1) == '|') _Flags[j] = TRAIT_ZERO_ADDRESS;
-			j++;
+			int k;
+			if (desc.charAt(k = (i - 1)) != '#') {
+				k = i;
+				_Flags[j] = TRAIT_ZERO_ADDRESS;
+			}
+			_Names[j++] = desc.substring(prevI, k);
 
 			prevI = i+1;
 		}

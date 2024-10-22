@@ -11,7 +11,7 @@ import roj.concurrent.TaskPool;
 import roj.crypt.CRC32s;
 import roj.io.IOUtil;
 import roj.io.source.CacheSource;
-import roj.io.source.FragmentSource;
+import roj.io.source.CompositeSource;
 import roj.math.MathUtils;
 import roj.text.TextUtil;
 import roj.ui.EasyProgressBar;
@@ -492,7 +492,7 @@ public class QZArchiver {
 				writer = new QZFileWriter(tmp);
 			} else {
 				// .tmp.001
-				writer = new QZFileWriter(FragmentSource.fixed(tmp, splitSize));
+				writer = new QZFileWriter(CompositeSource.fixed(tmp, splitSize));
 			}
 		}
 

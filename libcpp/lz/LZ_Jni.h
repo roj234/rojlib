@@ -5,7 +5,7 @@
 #ifndef LZ_JNI_H
 #define LZ_JNI_H
 
-#include "../roj_NativeLibrary.h"
+#include "../main.h"
 
 #ifdef __cplusplus
 extern "C" {

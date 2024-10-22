@@ -24,6 +24,9 @@ public class User {
 	transient byte loginAttempt;
 	transient long suspendTimer;
 
+	//在需要的时候让所有token失效而无需修改密码（“紧急冻结”）
+	//未来应该是需要落盘的
+	transient long tokenSeq;
 	transient final IntSet accessNonceUsed = new IntSet();
 	transient long accessNonceTime;
 

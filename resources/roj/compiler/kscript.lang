@@ -9,7 +9,8 @@ braceMismatch=未关闭的花括号
 not_statement=不是语句
 noExpression=非法的表达式开始
 
-lava.sandbox.enabled=[Sandbox]预编译模式已开启，请注意安全
+lava.compiler=<编译器>
+lava.sandbox=预编译模式已开启，请注意安全
 lava.sandbox.error=[Sandbox]计算出错: %1
 
 # ResolveHelper
@@ -162,6 +163,8 @@ block.error.dupLabel=标签名称%1已存在
 
 block.assert.constant=[Assert]值始终为真
 
+block.for.manyVariablesInForeach=for-each表达式仅允许使用单个变量 (目前使用了%1个)
+
 block.goto.error.outsideLoop=[Goto]在switch或循环外%1
 block.goto.error.noSuchLabel=[Goto]未定义的标签: %1
 
@@ -271,6 +274,7 @@ symbol.error.field.writeAfterWrite=[Symbol]字段 '%1.%2' 已被赋值
 symbol.error.field.writeFinal=[Symbol]修改最终字段 '%1.%2'
 symbol.error.field.notReadable=[Symbol]字段 '%1.%2' 不可读（write-only）
 symbol.error.field.readBeforeWrite=[Symbol]非法前向引用 '%1.%2'
+symbol.similar="\n但是，找到了名称相似的%1：\n    %2\n这也许是一个拼写错误"
 symbol.warn.static_on_half=[Symbol]静态%3应由类型名称'%1.%2'而不是表达式限定
 encloseRef.nds=[EncloseRef] %2 不是 %1 的超类或超接口
 encloseRef.tooFar=[EncloseRef][Incompatible] %2 不是 %1 的直接超类或超接口
@@ -343,3 +347,5 @@ plugins.annotation.argError.getter=属性%1的getter %2 参数验证失败
 plugins.annotation.argError.setter=属性%1的setter %2 参数验证失败
 
 plugins.annotation.singleton=Singleton的方法必须是静态，无参数，有返回值
+
+plugins.eval.macro.error=宏生成函数发生了未捕获的异常

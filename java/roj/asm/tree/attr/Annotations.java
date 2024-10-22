@@ -64,7 +64,6 @@ public final class Annotations extends Attribute {
 			for (int i = 0; i < annotations.size(); i++) {
 				sb.padEnd(' ', prefix).append(annotations.get(i)).append('\n');
 			}
-			sb.setLength(sb.length()-1);
 		}
 		return sb;
 	}

@@ -107,7 +107,8 @@ public class IntList implements Iterable<Integer> {
 
 	public void add(int i, int e) {
 		if (i > size) throw new ArrayIndexOutOfBoundsException(i);
-		System.arraycopy(list, i, list, i + 1, size - i);
+		ensureCapacity(size + 1);
+		if (i != size) System.arraycopy(list, i, list, i + 1, size - i);
 		list[i] = e;
 		size++;
 	}

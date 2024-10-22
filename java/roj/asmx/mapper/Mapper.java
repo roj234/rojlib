@@ -194,7 +194,7 @@ public class Mapper extends Mapping {
 		}
 
 		try (OutputStream out = new LZMAOutputStream(new FileOutputStream(cache), getLZMAOption(), -1)) {
-			ByteList.WriteOut w1 = new ByteList.WriteOut(out);
+			ByteList.ToStream w1 = new ByteList.ToStream(out);
 			pool.writePool(w1.putInt(FILE_HEADER).putLong(hash));
 			w1.flush();
 

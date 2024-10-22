@@ -67,7 +67,7 @@ public final class GuiUtil {
 		} catch (HeadlessException ex) {
 			return;
 		}
-		System.out.println("Dpi="+dpi);
+
 		int size = 12;
 		if (Math.round(size * 72F / dpi) < 8) {
 			size = Math.round(8 * dpi / 72F);
@@ -104,14 +104,12 @@ public final class GuiUtil {
 		Object peer = u.getObject(window, u.objectFieldOffset(Component.class.getDeclaredField("peer")));
 		long hwnd = u.getLong(peer, u.objectFieldOffset(ReflectionUtils.getField(peer.getClass(), "hwnd")));
 
-		long flags = nGetWindowLong(hwnd, -20/*GWL_EXSTYLE*/);
+		long flags = GetWindowLong(hwnd, -20/*GWL_EXSTYLE*/);
 		flags |= 524320/*WS_EX_LAYERED|WS_EX_TRANSPARENT*/;
-		nSetWindowLong(hwnd, -20, flags);
+		SetWindowLong(hwnd, -20, flags);
 	}
-	public static long getConsoleWindow() {return nGetConsoleWindow();}
-	private static native long nGetWindowLong(long hwnd, int dwType);
-	private static native void nSetWindowLong(long hwnd, int dwType, long flags);
-	private static native long nGetConsoleWindow();
+	private static native long GetWindowLong(long hwnd, int dwType);
+	private static native void SetWindowLong(long hwnd, int dwType, long flags);
 
 	@NotNull
 	public static DropTarget dropFilePath(Component comp, Consumer<File> callback, boolean append) {

@@ -1224,7 +1224,6 @@ final class SerializerFactoryImpl extends SerializerFactory {
 
 		if (methodType == Type.CLASS) {
 			t.seg.branch(-2, cw.label());
-			// todo 把这个抽走，不过现在貌似能跑了……
 			cw.one(ALOAD_1);
 			cw.one(ICONST_1);
 			cw.invoke(DIRECT_IF_OVERRIDE, "roj/config/auto/AdaptContext", "popd", "(Z)V");

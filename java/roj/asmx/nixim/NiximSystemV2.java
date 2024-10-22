@@ -178,7 +178,8 @@ public class NiximSystemV2 implements ITransformer {
 			} else {
 				at = map.getEnumValue("at", "OLD_SUPER_INJECT");
 				switch (at) {
-					case "REMOVE": isAbstract = false; break;
+					// might replace to native method(FastJNI)
+					case "REPLACE", "REMOVE": isAbstract = false; break;
 					case "HEAD", "TAIL": nodeList = new ArrayList<>(); break;
 					default: break;
 				}
@@ -378,7 +379,7 @@ public class NiximSystemV2 implements ITransformer {
 					throw new NiximException("没有找到 "+SPEC_M_CONSTRUCTOR+"或"+SPEC_M_CONSTRUCTOR_THIS+" in "+state.method);
 
 				try {
-					prepareInject(state, data, nx);
+					prepareInject(state, data);
 				} catch (NiximException e) {
 					throw new NiximException("处理方法"+data.name+"."+state.method.name()+"时出现了错误: ", e);
 				}
@@ -520,7 +521,7 @@ public class NiximSystemV2 implements ITransformer {
 			}
 		}
 	}
-	private static void prepareInject(InjectState s, ConstantData data, NiximData nx) throws NiximException {
+	private static void prepareInject(InjectState s, ConstantData data) throws NiximException {
 		MethodNode method = s.method;
 		XAttrCode code = method.parsedAttr(data.cp, Attribute.Code);
 		if (s.initBci > 0) {
@@ -854,8 +855,6 @@ public class NiximSystemV2 implements ITransformer {
 		if (CLASS_DUMP) dump("nixim_out", data);
 	}
 	private void applyLoop(ConstantData data, NiximData nx) throws NiximException {
-		//System.out.println("NiximClass " + data.name);
-
 		// 添加接口
 		List<String> itfs = nx.impls;
 		for (int i = 0; i < itfs.size(); i++) data.addInterface(itfs.get(i));
@@ -880,7 +879,7 @@ public class NiximSystemV2 implements ITransformer {
 				if ((pcd.mode&Pcd.SHADOW) != 0 && pcd.mapOwner.equals(data.name)) {
 					throw new NiximException("@Shadow的目标缺失\n" +
 						"源: " + nx.self + "\n" +
-						"对象" + nx.preconditions + "\n" +
+						"对象" + pcd + "\n" +
 						"目标方法: " + data.methods + "\n" +
 						"目标字段: " + data.fields);
 				}
@@ -1049,9 +1048,11 @@ public class NiximSystemV2 implements ITransformer {
 		XAttrCode mnCode = input.parsedAttr(data.cp, Attribute.Code);
 		switch (s.at) {
 			case "REMOVE": return null;
-			case "REPLACE": default: return s.method;
+			case "REPLACE": default:
+				s.method.name(s.mapName);
+				return s.method;
 			case "HEAD": {
-				Label endMy = null;
+				Label endMy;
 
 				block1:
 				if (s.initBci >= 0) {

@@ -38,7 +38,8 @@ public final class NativeVT implements ITerminal, Runnable {
 		DISABLE_NEWLINE_AUTO_RETURN = 0x8,
 		ENABLE_LVB_GRID_WORLDWIDE = 0x10;
 
-	private static native int setConsoleMode0(int target, int mode, int flag) throws NativeException;
+	private static native int SetConsoleMode(int target, int mode, int flag) throws NativeException;
+	public static native long GetConsoleWindow();
 
 	private static final String VTERROR = "RojLib Error: 虚拟终端: ";
 	private static byte cap;
@@ -106,19 +107,19 @@ public final class NativeVT implements ITerminal, Runnable {
 	private static ITerminal init() {
 		if (Boolean.getBoolean("roj.noAnsi")) return null;
 		// 避免初始化System.console()造成16KB的内存浪费
-		if (RojLib.hasNative(RojLib.WIN32) ? GuiUtil.getConsoleWindow() == 0 : System.console() == null) return null;
+		if (RojLib.hasNative(RojLib.WIN32) ? GetConsoleWindow() == 0 : System.console() == null) return null;
 		// current: win32 only
 		if (RojLib.hasNative(RojLib.ANSI_READBACK)) {
 			try {
-				setConsoleMode0(STDOUT, MODE_SET, ENABLE_VIRTUAL_TERMINAL_PROCESSING|ENABLE_PROCESSED_OUTPUT|ENABLE_WRAP_AT_EOL_OUTPUT);
+				SetConsoleMode(STDOUT, MODE_SET, ENABLE_VIRTUAL_TERMINAL_PROCESSING|ENABLE_PROCESSED_OUTPUT|ENABLE_WRAP_AT_EOL_OUTPUT);
 			} catch (NativeException e) {
 				System.err.println(VTERROR+e.getMessage());
 				return null;
 			}
 			try {
-				setConsoleMode0(STDIN, MODE_SET, ENABLE_VIRTUAL_TERMINAL_INPUT);
+				SetConsoleMode(STDIN, MODE_SET, ENABLE_VIRTUAL_TERMINAL_INPUT);
 				cap = 1;
-				setConsoleMode0(STDIN, MODE_SET, ENABLE_VIRTUAL_TERMINAL_INPUT|ENABLE_EXTENDED_FLAGS|ENABLE_QUICK_EDIT_MODE);
+				SetConsoleMode(STDIN, MODE_SET, ENABLE_VIRTUAL_TERMINAL_INPUT|ENABLE_EXTENDED_FLAGS|ENABLE_QUICK_EDIT_MODE);
 			} catch (NativeException e) {
 				System.err.println(VTERROR+e.getMessage());
 			}
@@ -142,7 +143,7 @@ public final class NativeVT implements ITerminal, Runnable {
 		if (!io.read) {
 			io.read = true;
 			if (cap != 0) {
-				setConsoleMode0(STDIN, MODE_SET, ENABLE_PROCESSED_INPUT|ENABLE_ECHO_INPUT|ENABLE_LINE_INPUT);
+				SetConsoleMode(STDIN, MODE_SET, ENABLE_PROCESSED_INPUT|ENABLE_ECHO_INPUT|ENABLE_LINE_INPUT);
 				cap = 0;
 			}
 

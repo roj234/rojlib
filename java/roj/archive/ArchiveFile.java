@@ -1,6 +1,6 @@
 package roj.archive;
 
-import roj.io.fs.Filesystem;
+import roj.io.storage.Filesystem;
 
 import java.io.Closeable;
 import java.io.IOException;

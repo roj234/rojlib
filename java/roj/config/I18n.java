@@ -37,6 +37,7 @@ public class I18n {
 		langMap = parseLang(data);
 		at = langMap.getOrDefault("at", " 在 ");
 	}
+	public void add(CharSequence data) {langMap.putAll(parseLang(data));}
 
 	public final String at;
 	final Map<String, String> langMap;
@@ -71,7 +72,7 @@ public class I18n {
 			tmp.clear();
 			int j = sb.indexOf(tmp.append('%').append(++num));
 			if (j < 0) {
-				sb.append(str, prevI, str.length());
+				inlineTranslate(str, prevI, sb);
 				break;
 			}
 

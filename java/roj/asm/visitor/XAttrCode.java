@@ -7,7 +7,6 @@ import roj.asm.cp.ConstantPool;
 import roj.asm.cp.CstUTF;
 import roj.asm.frame.Frame2;
 import roj.asm.frame.FrameVisitor;
-import roj.asm.frame.Var2;
 import roj.asm.tree.Attributed;
 import roj.asm.tree.MethodNode;
 import roj.asm.tree.attr.*;
@@ -210,7 +209,7 @@ public class XAttrCode extends Attribute implements Attributed {
 		sb2.clear();
 		TextUtil.prettyTable(sb, sb2.padEnd(' ', prefix).toString(), a.toArray(), "  ", "    ");
 
-		if (tryCatch != null && !tryCatch.isEmpty()) {
+		if (tryCatch != null) {
 			sb.append('\n').padEnd(' ', prefix).append("异常处理程序");
 
 			a.clear(); a.addAll("从","至","处理程序","异常",IntMap.UNDEFINED);
@@ -236,17 +235,10 @@ public class XAttrCode extends Attribute implements Attributed {
 		return sb;
 	}
 
-	public CharList toAsmLang(CharList sb, int prefix) {
-		sb.append('\n').padEnd(' ', prefix).append(".stack ").append((int)stackSize);
-		sb.append('\n').padEnd(' ', prefix).append(".local ").append((int)localSize);
-
-		IntMap<Frame2> frames = new IntMap<>();
-		if (this.frames != null) {
-			for (int i = 0; i < this.frames.size(); i++) {
-				Frame2 f = this.frames.get(i);
-				frames.putIfAbsent(f.target3.getValue(), f);
-			}
-		}
+	//WIP
+	public CharList simpleDecompiler(CharList sb, int prefix) {
+		sb.padEnd(' ', prefix).append(".stack ").append((int)stackSize).append('\n')
+		  .padEnd(' ', prefix).append(".local ").append((int)localSize).append('\n');
 
 		IntMap<String> labels = new IntMap<>();
 		if (tryCatch != null) {
@@ -275,31 +267,10 @@ public class XAttrCode extends Attribute implements Attributed {
 
 		LineNumberTable lines = getLines();
 
-		for (XInsnNodeView node : instructions) {
-			sb.append("\n\n");
-
+		for (var node : instructions) {
 			if (lines != null) {
 				int line = lines.searchLine(node.bci());
 				if (line > 0) sb.padEnd(' ', prefix).append(".line ").append(line).append('\n');
-			}
-
-			Frame2 fr = frames.get(node.bci());
-			if (fr != null) {
-				sb.padEnd(' ', prefix).append(".frame ").append(Frame2.getName(fr.type)).append(" {\n");
-				int len = sb.length();
-				if (fr.locals != null) {
-					for (Var2 v : fr.locals) {
-						sb.padEnd(' ', prefix+4).append(".local ").append(v).append('\n');
-					}
-				}
-				if (fr.stacks != null) {
-					for (Var2 v : fr.stacks) {
-						sb.padEnd(' ', prefix+4).append(".stack ").append(v).append('\n');
-					}
-				}
-				if (sb.length() == len) sb.setLength(sb.length()-3);
-				else sb.padEnd(' ', prefix).append("}");
-				sb.append('\n');
 			}
 
 			String lbl = labels.get(node.bci());
@@ -308,17 +279,18 @@ public class XAttrCode extends Attribute implements Attributed {
 			sb.padEnd(' ', prefix).append(Opcodes.showOpcode(node.opcode()));
 			if ((Opcodes.flag(node.opcode())&16) == 0) {
 				sb.append(' ');
-				node.toAsmCode(sb, labels, prefix);
+				node.myToString(sb, false);
 			}
+			sb.append('\n');
 		}
 
-		if (tryCatch != null && !tryCatch.isEmpty()) {
-			sb.append("\n\n").padEnd(' ', prefix).append(".exception");
+		if (tryCatch != null) {
+			sb.append('\n').padEnd(' ', prefix).append(".exception\n");
 
 			for (int i = 0; i < tryCatch.size(); i++) {
 				TryCatchEntry ex = tryCatch.get(i);
-				sb.append('\n').padEnd(' ', prefix+4).append("exc_").append(i).append("_start exc_").append(i).append("_end => exc_").append(i).append("_handler");
-				sb.append('\n').padEnd(' ', prefix+4).append(ex.type == null ? "*" : ex.type);
+				sb.padEnd(' ', prefix+4).append("exc_").append(i).append("_start exc_").append(i).append("_end => exc_").append(i).append("_handler").append('\n')
+				  .padEnd(' ', prefix+4).append(ex.type == null ? "*" : ex.type).append('\n');
 			}
 		}
 

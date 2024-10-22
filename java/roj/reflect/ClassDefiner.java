@@ -22,12 +22,14 @@ public final class ClassDefiner extends ClassLoader {
 	public String toString() {return "ClassDefiner<"+desc+">";}
 
 	public static final ClassLoader APP_LOADER = ClassDefiner.class.getClassLoader();
+	private static final boolean __UseAllocateInstance = true;
 
 	private static final ThreadLocal<Object> Callback = new ThreadLocal<>();
 	@ReferenceByGeneratedClass
 	public static void __(Object handle) { Callback.set(handle); }
 
 	public static void premake(ConstantData clz) {
+		if (__UseAllocateInstance) return;
 		clz.npConstructor();
 
 		CodeWriter cw = clz.newMethod(ACC_PUBLIC|ACC_STATIC, "<clinit>", "()V");
@@ -48,16 +50,15 @@ public final class ClassDefiner extends ClassLoader {
 			throw new IllegalStateException("初始化失败", e);
 		}
 	}
-	public static Object postMake(Class<?> klass) {
-		try {
-			ReflectionUtils.ensureClassInitialized(klass);
+	public static Object postMake(Class<?> klass) throws InstantiationException {
+		if (__UseAllocateInstance) return ReflectionUtils.u.allocateInstance(klass);
 
-			Object o = Callback.get();
-			if (null == o) throw new IllegalStateException("未在过去调用premake()");
-			return o;
-		} finally {
-			Callback.remove();
-		}
+		ReflectionUtils.ensureClassInitialized(klass);
+
+		var o = Callback.get();
+		if (null == o) throw new IllegalStateException("未在过去调用premake()");
+		Callback.remove();
+		return o;
 	}
 
 	// 用weak(), 这样不会走ClassDefiner#defineClass分支

@@ -54,6 +54,7 @@ public final class Project extends FileConfig {
 
 	Mapper.State state;
 	String atConfigPathStr;
+	final File basePath;
 	final File srcPath, resPath, binJar;
 	private final String resPrefix;
 
@@ -63,9 +64,10 @@ public final class Project extends FileConfig {
 		super(new File(PROJECT_DIR, name+"/project.json"), true);
 		this.name = name;
 
+		basePath = new File(BASE, "projects/"+name).getAbsoluteFile();
 		resPath = new File(BASE, getConfig().getString("OVERRIDE_RES_PATH", "projects/"+name+"/resources")).getAbsoluteFile();
 		srcPath = new File(BASE, getConfig().getString("OVERRIDE_SRC_PATH", "projects/"+name+"/java")).getAbsoluteFile();
-		binJar = new File(BASE, getConfig().getString("OVERRIDE_DEV_JAR", "bin/"+name+".jar")).getAbsoluteFile();
+		binJar = new File(BASE, getConfig().getString("OVERRIDE_DEV_JAR", "projects/"+name+".jar")).getAbsoluteFile();
 		resPrefix = resPath.getAbsolutePath();
 
 		// noinspection all
@@ -198,12 +200,7 @@ public final class Project extends FileConfig {
 	}
 
 	final void writeRes(String s) {
-		String relPath;
-		//if (s.startsWith(resPrefix)) {
-			relPath = s.substring(resPrefix.length()+1).replace(File.separatorChar, '/');
-		//} else {
-		//	relPath = s.substring(srcPrefix.length()+1).replace(File.separatorChar, '/');
-		//}
+		String relPath = s.substring(resPrefix.length()+1).replace(File.separatorChar, '/');
 		dstFile.setCompress(!ArchiveUtils.INCOMPRESSIBLE_FILE_EXT.contains(IOUtil.extensionName(relPath)));
 		try {
 			dstFile.set(relPath, new FileInputStream(s));

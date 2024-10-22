@@ -30,7 +30,7 @@ import static roj.config.JSONParser.NO_DUPLICATE_KEY;
  */
 public final class Shared {
 	public static final boolean DEBUG;
-	public static final String VERSION = "3.1.0";
+	public static final String VERSION = "1.0";
 
 	public static final File BASE, PROJECT_DIR;
 
@@ -68,7 +68,7 @@ public final class Shared {
 						return;
 					}
 					try {
-						mapperFwd.initEnv(map, new File(BASE, "class"), new File(BASE, "util/mapCache.lzma"), false);
+						mapperFwd.initEnv(map, new File(BASE, "libs"), new File(BASE, "util/mapCache.lzma"), false);
 					} catch (Exception e) {
 						Terminal.error("混淆映射表加载失败", e);
 					}
@@ -103,12 +103,6 @@ public final class Shared {
 			Terminal.error("config.json 读取失败!", e1);
 		}
 		if (CONFIG == null) System.exit(-2);
-
-		File classDir = new File(BASE, "class");
-		if (!classDir.isDirectory() && !classDir.mkdirs()) {
-			Terminal.error("无法创建库文件夹: " + classDir.getAbsolutePath());
-			System.exit(-2);
-		}
 
 		PROJECT_DIR = new File(BASE, "projects");
 		if (!PROJECT_DIR.isDirectory() && !PROJECT_DIR.mkdirs()) {

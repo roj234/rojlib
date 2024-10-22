@@ -7,8 +7,8 @@ import roj.compiler.plugins.asm.ASM;
 import roj.util.Helpers;
 import sun.misc.Unsafe;
 
-import java.io.DataInputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.lang.invoke.MethodHandles;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
@@ -46,7 +46,7 @@ final class VMInternals {
 
 		if (JAVA_VERSION > 8) {
 			if (JAVA_VERSION > 21) throw new UnsupportedOperationException("不支持Java22或更高版本，即便支持，在这些版本上，Bypass和其它反射工具的性能也会严重降低");
-			try (var in = new DataInputStream(VMInternals.class.getClassLoader().getResourceAsStream("roj/reflect/Injector.class"))) {
+			try (var in = VMInternals.class.getClassLoader().getResourceAsStream("roj/reflect/Injector.class")) {
 				if (JAVA_VERSION >= 17) {
 					Field implLookup = MethodHandles.Lookup.class.getDeclaredField("IMPL_LOOKUP");
 					_ImplLookup = (MethodHandles.Lookup) uu.getObject(uu.staticFieldBase(implLookup), uu.staticFieldOffset(implLookup));
@@ -59,7 +59,7 @@ final class VMInternals {
 		}
 	}
 
-	private static byte[] readClassData(DataInputStream in) throws IOException {
+	private static byte[] readClassData(InputStream in) throws IOException {
 		byte[] b = new byte[2048];
 		int off = 0;
 		while (off < b.length) {

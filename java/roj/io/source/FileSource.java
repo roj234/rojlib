@@ -55,7 +55,7 @@ public class FileSource extends Source {
 	public FileChannel channel() { return io.getChannel(); }
 
 	@Override
-	public void close() throws IOException { io.close(); }
+	public void close() throws IOException { super.close(); io.close(); }
 	@Override
 	public void reopen() throws IOException {
 		if (io != null) io.close();
@@ -63,17 +63,9 @@ public class FileSource extends Source {
 		io.seek(offset);
 	}
 
-	public DataInput asDataInput() { return io; }
-
-	@Override
-	public boolean isWritable() {return write;}
-
-	@Override
-	public Source threadSafeCopy() throws IOException { return new FileSource(file, offset, write); }
-
-	@Override
-	public void moveSelf(long from, long to, long length) throws IOException { IOUtil.transferFileSelf(channel(), from, to, length); }
-
-	@Override
-	public String toString() { return file.getPath(); }
+	@Override public boolean isWritable() {return write;}
+	@Override public DataInput asDataInput() {return io;}
+	@Override public Source threadSafeCopy() throws IOException { return new FileSource(file, offset, write); }
+	@Override public void moveSelf(long from, long to, long length) throws IOException { IOUtil.transferFileSelf(channel(), from, to, length); }
+	@Override public String toString() { return file.getPath(); }
 }

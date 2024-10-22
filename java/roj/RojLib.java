@@ -2,6 +2,9 @@ package roj;
 
 import roj.collect.MyHashMap;
 import roj.compiler.plugins.asm.ASM;
+import roj.reflect.ReflectionUtils;
+import roj.reflect.litasm.Intrinsics;
+import roj.reflect.litasm.LibraryLoader;
 import roj.util.OS;
 
 import java.io.File;
@@ -21,55 +24,68 @@ public final class RojLib {
 	 */
 	public static Object inject(String s) {return DATA.get(s);}
 
+	/**
+	 * FastJNI
+	 */
+	public static void linkFastJNI(int bit) {
+		if ((bits&(1L<<bit)) == 0 || !Intrinsics.available()) return;
+		Intrinsics.linkNative(LibraryLoader.INSTANCE.loadLibraryEx(RojLib.class, LibFile), ReflectionUtils.getCallerClass(2));
+	}
+
+	private static final String LibName = "libcpp";
+	private static File LibFile = new File("D:\\mc\\FMD-1.5.2\\projects\\implib\\libcpp\\bin\\libcpp.dll");
+
 	public static final boolean ASM_DEBUG = false;
 	public static final boolean IS_DEV;
-	public static final int WIN32 = 0, ANSI_READBACK = 1, BSDIFF = 2, SHARED_MEMORY = 3, FAST_LZMA = 4, TCP_RST = 5, AES_NI = 6, FastJNI = 7;
+	public static final int GENERIC = 0, WIN32 = 1, ANSI_READBACK = 2, SHARED_MEMORY = 3, FAST_LZMA = 4, AES_NI = 5, FastJNI = 6;
 	public static boolean hasNative(int bit) {return (bits&(1L << bit)) != 0;}
 	private static final long bits;
 
 	static {
-		File devFile = new File("D:\\mc\\FMD-1.5.2\\projects\\implib\\libcpp\\bin\\libcpp.dll");
-		IS_DEV = devFile.isFile();
+		IS_DEV = LibFile.isFile();
 		long t = 0;
+		long mask = ~Long.getLong("roj.nativeDisableBit", 0);
 
 		block:
-		try {
-			if (IS_DEV) System.load(devFile.getAbsolutePath());
+		if (mask != 0) try {
+			if (IS_DEV) System.load(LibFile.getAbsolutePath());
 			else if (!loadLibrary()) break block;
 			t = init();
 		} catch (Throwable e) {
 			e.printStackTrace();
 		}
 
-		bits = t;
+		bits = t & mask;
 	}
 
 	private static boolean loadLibrary() throws Exception {
-		String lib = OS.ARCH == 64 ? "libcpp" : "libcpp32";
-		String ext = OS.CURRENT.libext();
-		String hash = ASM.inject("libcpp_hash", "e6d0a146");// TODO dynamically inject version of libcpp
+		if (OS.ARCH == 64) {
+			String ext = OS.CURRENT.libext();
+			String hash = ASM.inject("libcpp_hash", "ab62fb3b");
 
-		var in = RojLib.class.getClassLoader().getResourceAsStream(lib+ext);
-		if (in == null) {
-			System.err.println("RojLib Warning: 您的平台没有可用的二进制，部分功能将不可用.");
-			return false;
-		}
+			var in = RojLib.class.getClassLoader().getResourceAsStream(LibName + ext);
+			if (in != null) {
+				File tmp = new File(System.getProperty("java.io.tmpdir"), LibName + hash + ext);
+				if (!tmp.isFile()) {
+					byte[] buf = new byte[4096];
+					try (var out = new FileOutputStream(tmp)) {
+						do {
+							int r = in.read(buf);
+							if (r <= 0) break;
+							out.write(buf, 0, r);
+						} while (true);
+						in.close();
+					}
+				}
 
-		File tmp = new File(System.getProperty("java.io.tmpdir"), lib+hash+ext);
-		if (!tmp.isFile()) {
-			byte[] buf = new byte[4096];
-			try (var out = new FileOutputStream(tmp)) {
-				do {
-					int r = in.read(buf);
-					if (r <= 0) break;
-					out.write(buf, 0, r);
-				} while (true);
-				in.close();
+				System.load(tmp.getAbsolutePath());
+				LibFile = tmp;
+				return true;
 			}
 		}
 
-		System.load(tmp.getAbsolutePath());
-		return true;
+		System.err.println("RojLib Warning: 您的平台没有可用的二进制，部分功能将不可用.");
+		return false;
 	}
 
 	private static native long init();

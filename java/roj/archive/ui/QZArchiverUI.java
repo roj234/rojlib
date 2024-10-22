@@ -146,7 +146,7 @@ public class QZArchiverUI extends JFrame {
 			uiLog.append("压缩流并行需要的额外内存:"+TextUtil.scaledNumber1024(mem)+"\n");
 
 			pool2 = TaskPool.MaxThread(threads, "split-worker-");
-			buffer = new BufferPool(mem, 0, mem, 0, 0, 0, 0, 0, threads, 0, BufferPool.OOM_NULL);
+			buffer = new BufferPool(mem, 0, mem, 0, 0, 0, threads, 0);
 
 			myOpt.setAsyncMode(pool2, buffer, man);
 			if (arc.threads == 1) threads = 1;

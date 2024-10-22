@@ -13,11 +13,6 @@ public class TimSortForEveryone {
 		int compare(Object refLeft, long offLeft, long offRight);
 	}
 
-	public static BufferPool TimSort_BufferPool = new BufferPool(
-		4096, 4096, 16777216, 1048576,
-		0, 0, 0, 0,
-		15, 15000, BufferPool.OOM_UNPOOLED);
-
 	/**
 	 * @implNote 对象数组的ArrayRef compSize固定为4，并且内存中保存的是int index
 	 */
@@ -35,7 +30,7 @@ public class TimSortForEveryone {
 		long halfCap = (long) (toIndex - fromIndex) * compSize;
 		if (halfCap > Integer.MAX_VALUE/2) throw new IllegalArgumentException("array is too large to sort (as my implement is very naive)");
 
-		DirectByteList temp = (DirectByteList) TimSort_BufferPool.allocate(true, (int) (halfCap << 1), 0);
+		DirectByteList temp = (DirectByteList) BufferPool.localPool().allocate(true, (int) (halfCap << 1), 0);
 		long addr = temp.address();
 
 		try {
@@ -59,7 +54,7 @@ public class TimSortForEveryone {
 	public static void sort(int leftIn, int rightEx, MyComparator cmp,
 							Object ref, long off,
 							int compSize) {
-		DirectByteList temp = (DirectByteList) TimSort_BufferPool.allocate(true, compSize * (rightEx - leftIn), 0);
+		DirectByteList temp = (DirectByteList) BufferPool.localPool().allocate(true, compSize * (rightEx - leftIn), 0);
 		try {
 			timSort(leftIn, rightEx, cmp, ref, off, temp.address(), compSize);
 		} finally {

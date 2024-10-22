@@ -79,7 +79,7 @@ public class ZipFile implements ArchiveFile {
 		GP_STRONG_ENC= 64,
 		GP_UTF       = 2048,
 
-		FLAG_HAS_ERROR = 128;
+	FLAG_HAS_ERROR = 128;
 
 	public static final byte
 		CRYPT_NONE = 0,
@@ -173,7 +173,6 @@ public class ZipFile implements ArchiveFile {
 		// found_end = 2
 		// found_zip64 = 4
 		int state = 0;
-
 		int field;
 
 		try {
@@ -185,25 +184,25 @@ public class ZipFile implements ArchiveFile {
 						if ((state&7) != 0 && (flags & FLAG_VERIFY) != 0) break loop;
 
 						readLOC(locEntries);
-					break;
+						break;
 					case HEADER_CEN:
 						if ((state&6) != 0 && (flags & FLAG_VERIFY) != 0) break loop;
 
 						readCEN(locEntries);
 						state |= 1;
-					break;
+						break;
 					case HEADER_END:
 						if ((state&2) != 0 && (flags & FLAG_VERIFY) != 0) break loop;
 
 						readEND((state&4) != 0);
 						state |= 2;
-					break;
+						break;
 					case HEADER_ZIP64_END:
 						if ((state&4) != 0 && (flags & FLAG_VERIFY) != 0) break loop;
 
 						readEND64();
 						state |= 4;
-					break;
+						break;
 					case HEADER_ZIP64_END_LOCATOR: r.skip(16); break;
 					default: break loop;
 				}
@@ -226,11 +225,11 @@ public class ZipFile implements ArchiveFile {
 			}
 
 			throw new ZipException("未知的ZIP头: 0x"+Integer.toHexString(field)+", pos="+r.position());
-		} catch (Throwable e) {
-			if (r != r1) r.close();
-			r = r1;
-
-			throw e;
+		} finally {
+			if (r != r1) {
+				r.close();
+				r = r1;
+			}
 		}
 	}
 	private void readBackward() throws IOException {

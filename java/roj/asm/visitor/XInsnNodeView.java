@@ -8,7 +8,6 @@ import roj.asm.type.Desc;
 import roj.asm.type.Type;
 import roj.asm.type.TypeHelper;
 import roj.asm.util.InsnHelper;
-import roj.collect.IntMap;
 import roj.text.CharList;
 import roj.util.ArrayUtil;
 import roj.util.DynByteBuf;
@@ -470,32 +469,6 @@ public final class XInsnNodeView {
 				else if (ref instanceof Constant) {
 					sb.append(((Constant) ref).getEasyReadValue());
 				} else if (ref != null) sb.append(parseOwner((String) ref, simple));
-			break;
-		}
-		return sb;
-	}
-
-	public CharList toAsmCode(CharList sb, IntMap<String> labels, int prefix) {
-		switch (OPLENGTH[code&0xFF]&0xF) {
-			case 1: case 2:
-				Desc d = desc();
-				sb.append(d.owner).append(' ').append(d.name).append(' ').append(d.param);
-			break;
-			case 3:
-				d = desc();
-				sb.append(d.name).append(' ').append(d.param).append(" #").append((int)d.flags);
-			break;
-			case 5: case 6: case 8: case 9: sb.append(id); break;
-			case 7: sb.append(id).append(' ').append(number); break;
-			case 10: sb.append(ref.toString()).append(" ").append(id); break;
-			default:
-				if (ref instanceof LdcSegment) sb.append(((LdcSegment) ref).c.getEasyReadValue());
-				else if (ref instanceof JumpSegment) sb.append(labels.get(((JumpSegment) ref).target.getValue()));
-				else if (ref instanceof SwitchSegment) {
-					((SwitchSegment) ref).toString(sb, prefix);
-				} else if (ref instanceof Constant) {
-					sb.append(((Constant) ref).getEasyReadValue());
-				} else if (ref != null) sb.append(ref);
 			break;
 		}
 		return sb;

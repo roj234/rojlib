@@ -15,17 +15,11 @@
 没列出来的还在WIP
 
 ## 上新
-roj.reflect.VirtualReference  
-  虚引用，via change GC root
-
-roj.reflect.GetCallerArgs  
-  像其它弱类型语言一样获取调用者的变量  
-```java
-  int[] s = {0};  
-  doSomeThingViaGetCallerArgs();  
-  assert s[0] != 0 : "这是可以做到的，相信我";  
-```
-  使用了很多内部API，但是兼容性应该不差
+roj.reflect.litasm.Intrinsics
+  Literally 'ASM'  
+  你可以写对应ABI的汇编  
+  除此之外还提供了@FastJNI注解以让你更快的调用DLL函数  
+   * 仅支持64位windows平台
 
 # 这里都有啥
 ## roj.archive
@@ -332,7 +326,8 @@ ddns
   `GIFDecoder` 解码GIF文件  
   `VarMapperX` 变量ID分配器
 
-# Properties
+# Properties （不全）
+int roj.nativeDisableBit [禁用native优化] (RojLib)
 int roj.cpuPoolSize [CPU Count]  (TaskPool)  
 String roj.text.outputCharset [UTF-8]  (TextWriter)  
 Path roj.archiver.temp [.]  (ArchiverUI)  
@@ -341,16 +336,45 @@ boolean roj.debug.dumpClass  (ClassDefiner)
   
 
 # Libcpp.dll
-Windows专属：
+Windows：
   * 具名共享内存
   * ReusePort
   * ANSI转义序列
   * Fast LZMA2 (https://github.com/conor42/fast-lzma2)
   
-共用(WIP)：
-  * native BsDiff
-  * native LZMA2
+公共：
+  * AES-NI
+  * BsDiff
+  * XXHash
 
-要是有人问，你为什么不给Linux做优化啊  
-Linux那么多工具缺我一个么/doge  
-而且也要有人问啊/doge  
+如果有人问，你为什么不给Linux做优化？  
+因为没有人问 ×  
+
+# 特别鸣谢
+JFormDesigner  
+  * 让我不用碰恶心的AWT界面  
+
+STM32F10X
+  * 让我意识到C语言多么简单
+
+@huige233
+  * 提供了很多梗图
+  * 提供了子模块的命名建议
+  * 提供了一些乱七八糟还被我真的实现了的需求
+  * 在我学会用IDA之前提供了一些Assembler中的opcode
+
+黄豆
+  * 为7z压缩GUI提供了设计建议
+  * 找到了一些bug
+  * 给我的硬盘增加了许多写入量
+
+ETC
+  * 提供EpubWriter的新模板
+
+CraftKuro
+  * 帮助安装和配置OpenWRT
+  * 提供情绪价值（吉祥物 ×）
+
+咖喱人
+  * 提供很多很多支持 (真的)
+  * 提供编程天赋 (雾, 但大概也是真的)

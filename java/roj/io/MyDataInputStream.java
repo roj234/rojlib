@@ -25,7 +25,7 @@ import static roj.reflect.Unaligned.U;
  * @author Roj234
  * @since 2024/3/10 0010 3:10
  */
-public class MyDataInputStream extends MBInputStream implements MyDataInput {
+public class MyDataInputStream extends MBInputStream implements MyDataInput, Finishable {
 	public static MyDataInput wrap(InputStream in) {
 		if (in instanceof MyDataInputStream d) return d;
 		if (in instanceof DynByteBuf.BufferInputStream b) return b.buffer();
@@ -93,9 +93,13 @@ public class MyDataInputStream extends MBInputStream implements MyDataInput {
 	public int available() throws IOException { return lim - pos + in.available(); }
 
 	@Override
-	public void close() throws IOException {
+	public void finish() throws IOException {
 		ArrayCache.putArray(buf);
 		buf = ArrayCache.BYTES;
+	}
+	@Override
+	public void close() throws IOException {
+		finish();
 		in.close();
 	}
 

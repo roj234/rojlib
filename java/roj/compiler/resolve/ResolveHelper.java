@@ -123,6 +123,7 @@ public final class ResolveHelper {
 
 		info = owner;
 		int castDistance = 1;
+		int justAnId = list.size();
 		while (true) {
 			List<String> itf = info.interfaces();
 			for (int i = 0; i < itf.size(); i++) {
@@ -130,11 +131,11 @@ public final class ResolveHelper {
 
 				IClass itfInfo = ctx.getClassInfo(name);
 				if (itfInfo == null) {
-					ctx.report(this.owner, Kind.WARNING, -1, "symbol.error.noSuchClass", itfInfo);
+					ctx.report(this.owner, Kind.WARNING, -1, "symbol.error.noSuchClass", name);
 					break;
 				}
 
-				list.forcePut((castDistance == 1 ? 0x80000000 : 0) | (list.size() << 16) | castDistance, name);
+				list.putByValue((castDistance == 1 ? 0x80000000 : 0) | (justAnId++ << 16) | castDistance, name);
 
 				for (var entry : ctx.getParentList(itfInfo).selfEntrySet()) {
 					int id = entry.getIntKey();
@@ -143,7 +144,7 @@ public final class ResolveHelper {
 					// id's castDistance is smaller
 					// parentList是包含自身的
 					if ((list.getInt(name)&0xFFFF) > (id&0xFFFF)) {
-						list.forcePut((list.size() << 16) | (castDistance + (id & 0xFFFF)), name);
+						list.putByValue((justAnId++ << 16) | (castDistance + (id & 0xFFFF)), name);
 					}
 				}
 			}

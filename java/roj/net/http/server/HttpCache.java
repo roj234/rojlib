@@ -3,6 +3,7 @@ package roj.net.http.server;
 import roj.collect.MyHashMap;
 import roj.collect.RingBuffer;
 import roj.collect.SimpleList;
+import roj.io.storage.DataStorage;
 import roj.net.http.Headers;
 import roj.text.ACalendar;
 
@@ -25,12 +26,21 @@ public final class HttpCache implements BiConsumer<String, String> {
 
 	private static final ThreadLocal<HttpCache> TL = ThreadLocal.withInitial(HttpCache::new);
 	public static HttpCache getInstance() {return TL.get();}
+
+	public static DataStorage getSessionStorage() {
+		DataStorage storage = getInstance().sessionStorage;
+		return storage == null ? globalSessionStorage : storage;
+	}
+
 	private HttpCache() {}
 
 	public final ACalendar date = new ACalendar(null);
 	public String toRFC(long time) {return date.toRFCString(time);}
 
 	public final MyHashMap<String, Object> ctx = new MyHashMap<>();
+
+	public static DataStorage globalSessionStorage;
+	public DataStorage sessionStorage;
 
 	public final SimpleList<Object> headers = new SimpleList<>();
 
