@@ -939,16 +939,19 @@ public final class Terminal extends DelegatedPrintStream {
 		if (t != null) {
 			addListener(t);
 			CharLength.put(0, 0);
-
-			System.setOut(out);
-			System.setErr(out);
-			System.setIn(ALT = new AnsiIn());
+			ALT = new AnsiIn();
 
 			ANSI_OUTPUT = true;
 			try {
 				ANSI_INPUT = t.readBack(true);
 			} catch (IOException e) {
 				throw new IllegalStateException(e);
+			}
+
+			if (!Boolean.getBoolean("roj.debug.disableVT")) {
+				if (ANSI_INPUT) System.setIn(ALT);
+				System.setOut(out);
+				System.setErr(out);
 			}
 
 			int winSize = out.cursorPos;

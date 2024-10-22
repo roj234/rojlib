@@ -10,8 +10,8 @@ public class Pcd {
 	public static final ThreadLocal<Boolean> REVERSE = new ThreadLocal<>();
 
 	public static final int
-		SHADOW = 0x0100, COPY = 0x0200, INJECT = 0x0400,
-		REAL_ADD_FINAL = 0x1000, REAL_DEL_FINAL = 0x2000;
+		SHADOW = 0x01000000, COPY = 0x02000000, INJECT = 0x04000000,
+		REAL_ADD_FINAL = 0x10000000, REAL_DEL_FINAL = 0x20000000;
 
 	public String name, desc;
 	public String mapOwner, mapName;

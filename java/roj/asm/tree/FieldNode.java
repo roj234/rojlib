@@ -72,9 +72,9 @@ public final class FieldNode extends CNode {
 
 		Annotations a;
 		a = parsedAttr(cp, Attribute.RtAnnotations);
-		if (a != null) a.toString(sb, prefix).append('\n');
+		if (a != null) a.toString(sb, prefix);
 		a = parsedAttr(cp, Attribute.ClAnnotations);
-		if (a != null) a.toString(sb, prefix).append('\n');
+		if (a != null) a.toString(sb, prefix);
 
 		Signature sig = writeSignature ? parsedAttr(cp, Attribute.SIGNATURE) : null;
 		Opcodes.showModifiers(modifier, Opcodes.ACC_SHOW_FIELD, sb.padEnd(' ', prefix)).append(sig != null ? sig : fieldType()).append(' ').append(name());

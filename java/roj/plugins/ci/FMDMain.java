@@ -5,18 +5,15 @@ import roj.archive.zip.ZipArchive;
 import roj.archive.zip.ZipOutput;
 import roj.asm.tree.ConstantData;
 import roj.asm.util.Context;
-import roj.asmx.mapper.Mapper;
 import roj.asmx.mapper.Mapper.State;
 import roj.collect.MyHashMap;
 import roj.collect.MyHashSet;
 import roj.collect.SimpleList;
-import roj.concurrent.timing.ScheduleTask;
 import roj.config.data.CEntry;
 import roj.config.data.CList;
 import roj.config.data.CMap;
 import roj.config.data.Type;
 import roj.io.IOUtil;
-import roj.plugin.Plugin;
 import roj.plugins.ci.plugin.PluginContext;
 import roj.text.CharList;
 import roj.text.TextUtil;
@@ -27,14 +24,13 @@ import roj.ui.terminal.Argument;
 import roj.ui.terminal.CommandConsole;
 import roj.util.Helpers;
 import roj.util.HighResolutionTimer;
-import roj.util.VMUtil;
 
 import java.io.File;
 import java.io.IOException;
 import java.util.*;
 import java.util.concurrent.locks.LockSupport;
 import java.util.function.Consumer;
-import java.util.zip.ZipFile;
+import java.util.function.Predicate;
 
 import static roj.plugins.ci.Shared.*;
 import static roj.ui.terminal.CommandNode.argument;
@@ -46,25 +42,13 @@ import static roj.ui.terminal.CommandNode.literal;
  * @author Roj234
  * @since 2021/6/18 10:51
  */
-public final class FMDMain extends Plugin {
-	static ScheduleTask shinyTask;
-	public static CommandConsole console = new CommandConsole("") {
-		@Override
-		public boolean execute(String cmd, boolean print) {
-			if (shinyTask != null) shinyTask.cancel();
-			return super.execute(cmd, print);
-		}
-	};
+public final class FMDMain {
+	public static CommandConsole console = new CommandConsole("");
 	static int exitCode;
-
-	@Override
-	protected void onEnable() throws Exception {
-
-	}
 
 	@SuppressWarnings("fallthrough")
 	public static void main(String[] args) throws IOException, InterruptedException {
-		CommandConsole c = console;
+		var c = console;
 
 		/*jvmArg
 				String par = " -javaagent:" + new File(BASE, "util/FMD-agent.jar").getAbsolutePath() + "=" + port;
@@ -110,17 +94,12 @@ public final class FMDMain extends Plugin {
 			Project conf = Project.load(selected);
 			ConfigEditWindow.open(conf, null);
 		})));
-		c.register(literal("set").then(argument("name", dynamicProject).executes(ctx -> {
+		c.register(literal("select").then(argument("name", dynamicProject).executes(ctx -> {
 			var selected = ctx.argument("name", String.class);
 			Shared.setProject(selected);
 			Terminal.success("配置文件已选择: "+selected);
 			c.setPrompt("\u001b[33mFMD\u001b[97m[\u001b[96m"+project.name+"\u001b[97m]\u001b[33m > ");
 		})));
-		c.register(literal("gc").executes(ctx -> {
-			long free = VMUtil.usableMemory();
-			System.gc();
-			System.out.println("释放了 "+TextUtil.scaledNumber1024(VMUtil.usableMemory() - free)+"内存.");
-		}));
 
 		if (project == null) {
 			Terminal.warning("未加载项目配置文件! 请使用create <名称>创建配置、和/或使用set <名称>选择配置");
@@ -130,19 +109,14 @@ public final class FMDMain extends Plugin {
 
 		if (args.length == 0) {
 			String slogan = "Roj234-CI "+VERSION+" | 2019-2024";
-			System.out.println(slogan);
-
 			if (Terminal.ANSI_OUTPUT) {
-				shinyTask = PeriodicTask.loop(() -> {
-					CharList sb1 = IOUtil.getSharedCharBuf().append("\u001b7\u001b[?25l\u001b[1;1H\u001b[1K");
-					Terminal.MinecraftColor.sonic(slogan, sb1);
-					sb1.append("\u001b8\u001b[?25h");
-					Terminal.directWrite(sb1);
-				}, 1000 / 60, 1800);
-
+				CharList sb1 = IOUtil.getSharedCharBuf();
+				Terminal.MinecraftColor.rainbow(slogan, sb1);
+				System.out.println(sb1);
 				Terminal.info("使用Tab补全指令、或按下F1查看帮助");
 				System.out.println();
 			} else {
+				System.out.println(slogan);
 				System.out.println("使用支持ANSI转义的终端以获得更好的体验");
 			}
 
@@ -314,10 +288,10 @@ public final class FMDMain extends Plugin {
 		for (int i = 0; i < dependencies.size(); i++) {
 			libBuf.append(dependencies.get(i).binJar.getAbsolutePath()).append(File.pathSeparatorChar);
 		}
-		libBuf.append(getLibClasses());
+		getLibClasses(libBuf);
 
 		SimpleList<String> options = CONFIG.getList("编译参数").toStringList();
-		options.addAll("-cp", libBuf.toString(), "-encoding", p.charset.name());
+		options.addAll("-cp", libBuf.toStringAndFree(), "-encoding", p.charset.name());
 
 		p.compiler.showErrorCode(args.containsKey("showErrorCode"));
 		// endregion
@@ -476,41 +450,19 @@ public final class FMDMain extends Plugin {
 		return amount != 0;
 	}
 
-	private static long lastLibHash;
-	private static final CharList libClasses = new CharList();
-
-	private static CharSequence getLibClasses() {
-		CharList sb = libClasses;
-
-		File lib = new File(BASE, "class");
-
-		File[] a = lib.listFiles();
-		if (a == null || a.length == 0) return "";
-		List<File> fs = Arrays.asList(a);
-
-		if (Mapper.libHash(fs) == lastLibHash) return sb;
-		sb.clear();
-
-		for (int i = 0; i < fs.size(); i++) {
-			File file = fs.get(i);
-			String ext = file.getName().toLowerCase();
-			if (!(ext.endsWith(".zip") || ext.endsWith(".jar")) || file.length() == 0) continue;
-
-			try (ZipFile zf = new ZipFile(file)) {
-				if (zf.size() == 0) Terminal.warning(file.getPath()+" 是空的");
-				else sb.append(file.getAbsolutePath()).append(File.pathSeparatorChar);
-			} catch (Throwable e) {
-				Terminal.error(file.getPath()+ " 不是有效的jar", e);
-				if (!file.renameTo(new File(file.getAbsolutePath()+".err"))) {
-					throw new RuntimeException("未指定的I/O错误");
-				} else {
-					Terminal.info("文件已被自动重命名为.err");
-				}
+	private static CharList getLibClasses(CharList sb) {
+		Predicate<File> callback = file -> {
+			String ext = IOUtil.extensionName(file.getName());
+			if ((ext.equals("zip") || ext.equals("jar")) && file.length() != 0) {
+				sb.append(file.getAbsolutePath()).append(File.pathSeparatorChar);
 			}
-		}
+			return false;
+		};
 
-		lastLibHash = Mapper.libHash(fs);
-		sb.setLength(sb.length()-1);
+		IOUtil.findAllFiles(new File(BASE, "libs"), callback);
+		IOUtil.findAllFiles(new File(project.basePath, "libs"), callback);
+
+		if (sb.length() > 0) sb.setLength(sb.length()-1);
 		return sb;
 	}
 

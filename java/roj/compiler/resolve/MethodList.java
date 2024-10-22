@@ -14,7 +14,6 @@ import roj.collect.MatchMap;
 import roj.collect.MyHashSet;
 import roj.collect.SimpleList;
 import roj.compiler.CompilerSpec;
-import roj.compiler.JavaLexer;
 import roj.compiler.api.Evaluable;
 import roj.compiler.ast.expr.ExprNode;
 import roj.compiler.context.CompileUnit;
@@ -264,7 +263,10 @@ final class MethodList extends ComponentList {
 	}
 
 	static void appendError(MethodResult mr, CharList sb) {
-		sb.append(JavaLexer.translate.translate(mr.error == null || mr.error.length == 0 ? "typeCast.error."+mr.distance : "typeCast.error."+mr.distance+":"+mr.error[0]+":"+mr.error[1]));
+		sb.append("\1typeCast.error.").append(mr.distance);
+		if (mr.error != null && mr.error.length == 3)
+			sb.append(':').append(mr.error[0]).append(':').append(mr.error[1]);
+		sb.append('\0');
 	}
 	static void appendInput(List<IType> params, CharList sb) {
 		sb.append("  ").append("\1invoke.found\0 ");

@@ -93,7 +93,7 @@ public final class JCompiler implements Compiler, DiagnosticListener<JavaFileObj
 		Method proxyGetOutput = StandardJavaFileManager.class.getMethod("getJavaFileForOutput", JavaFileManager.Location.class, String.class, JavaFileObject.Kind.class, FileObject.class);
 
 		ConstantData data = new ConstantData();
-		data.name("roj/mod/JCompiler$MySFM");
+		data.name("roj/plugins/ci/JCompiler$MySFM");
 
 		int listId = data.newField(0, "bo", new Type("java/util/List"));
 		int nameId = data.newField(0, "aa", new Type("java/lang/String"));
@@ -106,7 +106,7 @@ public final class JCompiler implements Compiler, DiagnosticListener<JavaFileObj
 				cw.field(Opcodes.GETFIELD, data, listId);
 				cw.one(Opcodes.ALOAD_0);
 				cw.field(Opcodes.GETFIELD, data, nameId);
-				cw.invoke(Opcodes.INVOKESTATIC, "roj/mod/JCompiler", "proxyGetOutput", TypeHelper.class2asm(new Class<?>[]{StandardJavaFileManager.class, JavaFileManager.Location.class, String.class, JavaFileObject.Kind.class, FileObject.class, List.class, String.class}, JavaFileObject.class));
+				cw.invoke(Opcodes.INVOKESTATIC, "roj/plugins/ci/JCompiler", "proxyGetOutput", TypeHelper.class2asm(new Class<?>[]{StandardJavaFileManager.class, JavaFileManager.Location.class, String.class, JavaFileObject.Kind.class, FileObject.class, List.class, String.class}, JavaFileObject.class));
 				return true;
 			}
 			return false;

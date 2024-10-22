@@ -66,7 +66,7 @@ public enum ConfigMaster {
 			case BENCODE -> {
 				try (DynByteBuf ob = out instanceof DynByteBuf buf
 					? buf
-					: new ByteList.WriteOut(out instanceof File f
+					: new ByteList.ToStream(out instanceof File f
 					? new FileOutputStream(f)
 					: (OutputStream) out)) {
 
@@ -94,7 +94,7 @@ public enum ConfigMaster {
 			case NBT, XNBT -> {
 				DynByteBuf ob = out instanceof DynByteBuf buf
 					? buf
-					: new ByteList.WriteOut(out instanceof File f
+					: new ByteList.ToStream(out instanceof File f
 					? new FileOutputStream(f)
 					: (OutputStream) out);
 				return new ToNBT(ob).setXNbt(this == XNBT);

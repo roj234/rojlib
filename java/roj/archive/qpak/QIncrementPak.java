@@ -11,7 +11,7 @@ import roj.asmx.nixim.Shadow;
 import roj.concurrent.OperationDone;
 import roj.crypt.CRC32s;
 import roj.io.IOUtil;
-import roj.io.source.FragmentSource;
+import roj.io.source.CompositeSource;
 import roj.io.source.Source;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
@@ -30,7 +30,7 @@ public class QIncrementPak {
 	// .002 - .xxx Block data
 	// .last QZTailHeader
 	public static QZFileWriter openIncremental(File baseFile) throws IOException {
-		var source = FragmentSource.dynamic(baseFile, true);
+		var source = CompositeSource.dynamic(baseFile, true);
 		QZFileWriter out;
 		if (source.length() > 0) {
 			out = new QZArchive(source).append();
@@ -45,7 +45,7 @@ public class QIncrementPak {
 	// 请在调用之前关闭所有的ParallelWriter
 	public static void closeIncremental(QZFileWriter qfw) throws IOException {
 		qfw.closeWordBlock();
-		((FragmentSource) qfw.s).next();
+		((CompositeSource) qfw.s).next();
 		qfw.close();
 	}
 
@@ -58,7 +58,7 @@ public class QIncrementPak {
 	 * .002 - .xxx Block data
 	 */
 	public static QZFileWriter openIncrementalV2(File baseFile) throws IOException {
-		var source = FragmentSource.dynamic(baseFile, true);
+		var source = CompositeSource.dynamic(baseFile, true);
 		QZFileWriter out = source.length() > 0 ? new QZArchive(source).append() : new QZFileWriter(source);
 		source.next();
 		return out;
@@ -68,7 +68,7 @@ public class QIncrementPak {
 		qzfw.closeWordBlock();
 		qzfw.setCodec(roj.archive.qz.Copy.INSTANCE);
 
-		FragmentSource s = (FragmentSource) qzfw.s;
+		CompositeSource s = (CompositeSource) qzfw.s;
 
 		s.setSourceId(0);
 		Source meta = s.getSource();

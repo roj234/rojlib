@@ -72,7 +72,7 @@ public final class McDiffServer {
 		long myMem = (1L<<24) * affinity;
 		System.out.println("Allocating "+TextUtil.scaledNumber1024(myMem)+" of memory");
 		LZMA2Options opt = new LZMA2Options();
-		opt.setAsyncMode(1<<24, TaskPool.Common(), affinity, new BufferPool(myMem,0,myMem,0,0,0, 0,0,10,0,(byte) 2), LZMA2Options.ASYNC_DICT_NONE);
+		opt.setAsyncMode(1<<24, TaskPool.Common(), affinity, new BufferPool(myMem,0,myMem, 0,0, 0, 10,0), LZMA2Options.ASYNC_DICT_NONE);
 		QZWriter genericParallel = qzfw.parallel();
 		genericParallel.setCodec(new LZMA2(opt));
 
@@ -151,8 +151,8 @@ public final class McDiffServer {
 				w.beginEntry(entry);
 
 				pool.submit(() -> {
-					try (ByteList.WriteOut out = new ByteList.WriteOut(w)) {
-						for (int i = 0; i < 4096; i++) {
+					try (ByteList.ToStream out = new ByteList.ToStream(w)) {
+						for (int i = 0; i < 1024; i++) {
 							if (!rin.hasData(i)) continue;
 
 							var din = rin.getInputStream(i);
@@ -216,7 +216,7 @@ public final class McDiffServer {
 		genericParallel.close();
 
 		qzfw.beginEntry(QZEntry.ofNoAttribute(".vcs|hashes"));
-		try (ByteList.WriteOut out = new ByteList.WriteOut(qzfw, false)) {
+		try (ByteList.ToStream out = new ByteList.ToStream(qzfw, false)) {
 			for (QZEntry file : qzfw.getFiles()) {
 				// or other kind that need original file
 				if (file.getModificationTime() == REGION) {

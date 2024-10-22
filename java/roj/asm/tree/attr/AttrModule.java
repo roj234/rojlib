@@ -5,7 +5,9 @@ import roj.asm.cp.ConstantPool;
 import roj.asm.cp.CstModule;
 import roj.asm.cp.CstPackage;
 import roj.asm.cp.CstUTF;
+import roj.asm.type.TypeHelper;
 import roj.collect.SimpleList;
+import roj.text.CharList;
 import roj.util.DynByteBuf;
 
 import java.util.ArrayList;
@@ -95,39 +97,76 @@ public final class AttrModule extends Attribute {
 	}
 
 	public String toString() {
-		StringBuilder sb = new StringBuilder("Module: \n");
-		sb.append(self).append("\nRequires: \n");
-
-		final List<AttrModule.Module> requires = this.requires;
-		for (int i = 0; i < requires.size(); i++) {
-			sb.append(requires.get(i)).append('\n');
+		CharList sb = new CharList("module ");
+		sb.append(self.name).append('{');
+		writeModuleInfo(sb);
+		return sb.append('\n').toString();
+	}
+	public void writeModuleInfo(CharList sb) {
+		var requires = this.requires;
+		if (!requires.isEmpty()) {
+			sb.append('\n');
+			for (int i = 0; i < requires.size(); i++) {
+				sb.append("\n  requires ").append(requires.get(i).name).append(';');
+			}
 		}
 
-		sb.append("Exports: \n");
-		final List<Export> exports = this.exports;
-		for (int i = 0; i < exports.size(); i++) {
-			sb.append(exports.get(i)).append('\n');
+		var exports = this.exports;
+		if (!exports.isEmpty()) {
+			sb.append('\n');
+			for (int i = 0; i < exports.size(); i++) {
+				writeExportOpen(sb.append("\n  exports "), exports.get(i));
+			}
 		}
 
-		sb.append("Reflective opens: \n");
-		final List<Export> opens = this.opens;
-		for (int i = 0; i < opens.size(); i++) {
-			sb.append(opens.get(i)).append('\n');
+		var opens = this.opens;
+		if (!opens.isEmpty()) {
+			sb.append('\n');
+			for (int i = 0; i < opens.size(); i++) {
+				writeExportOpen(sb.append("\n  opens "), opens.get(i));
+			}
 		}
 
-		sb.append("SPI classes: \n");
-		final List<String> uses = this.uses;
-		for (int i = 0; i < uses.size(); i++) {
-			sb.append(uses.get(i)).append('\n');
+		var uses = this.uses;
+		if (!uses.isEmpty()) {
+			sb.append('\n');
+			for (int i = 0; i < uses.size(); i++) {
+				sb.append("\n  uses ").append(uses.get(i)).append(';');
+			}
 		}
 
-		sb.append("SPI implements: \n");
-		final List<Provide> provides = this.provides;
-		for (int i = 0; i < provides.size(); i++) {
-			sb.append(provides.get(i)).append('\n');
+		var provides = this.provides;
+		if (!provides.isEmpty()) {
+			sb.append('\n');
+			for (int i = 0; i < provides.size(); i++) {
+				var export = provides.get(i);
+				sb.append("\n  provides ").append(export.spi);
+				var _list = export.impl;
+				if (!_list.isEmpty()) {
+					sb.append(" with\n    ");
+					for (int j = 0; j < _list.size();) {
+						sb.append(_list.get(j));
+						if (++j == _list.size()) break;
+						sb.append(",\n    ");
+					}
+				}
+				sb.append(';');
+			}
 		}
-
-		return sb.toString();
+	}
+	private static void writeExportOpen(CharList sb, Export export) {
+		sb.append(export.pkg);
+		var _list = export.to;
+		if (!_list.isEmpty()) {
+			sb.append(" to\n    ");
+			for (int j = 0; j < _list.size();) {
+				String ss = _list.get(j);
+				TypeHelper.toStringOptionalPackage(sb, ss);
+				if (++j == _list.size()) break;
+				sb.append(",\n    ");
+			}
+		}
+		sb.append(';');
 	}
 
 	public static final class Module {
@@ -151,9 +190,7 @@ public final class AttrModule extends Attribute {
 		}
 
 		@Override
-		public String toString() {
-			return "Module " + '\'' + name + '\'' + " ver" + version + ", acc='" + Opcodes.showModifiers(access, Opcodes.ACC_SHOW_MODULE) + '\'' + '}';
-		}
+		public String toString() {return Opcodes.showModifiers(access, Opcodes.ACC_SHOW_MODULE)+" Module "+name+" v"+version;}
 	}
 
 	public static final class Export {

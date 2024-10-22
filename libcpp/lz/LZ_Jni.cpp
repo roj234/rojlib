@@ -5,7 +5,7 @@
 #ifndef LZ_JNI_CPP
 #define LZ_JNI_CPP
 
-#include "../roj_NativeLibrary.h"
+#include "../main.h"
 #include "LZ_Jni.h"
 #include "fast-lzma2.h"
 #include <Windows.h>
@@ -91,7 +91,6 @@ JNIEXPORT void JNICALL Java_roj_archive_qz_xz_LZMA2WriterN_initNatives(JNIEnv *e
     for(jfieldID id : fields) {
         if (id == nullptr) {
             Error(env, "LZMA2WriterN field %d not found");
-            printf("LZMA2WriterN field %d not found", i);
             return;
         }
         i++;

@@ -84,20 +84,20 @@ public final class NIOUtil {
 	// on windows reuse is NOT ignored
 	public static void setReusePort(DatagramChannel so, boolean on) throws IOException {
 		if (OS.CURRENT != OS.WINDOWS) so.setOption(StandardSocketOptions.SO_REUSEPORT, on);
-		else setReusePortW(UTIL.udpFD(so), on);
+		else SetSockOpt(UTIL.udpFD(so), on);
 	}
 	public static void setReusePort(SocketChannel so, boolean on) throws IOException {
 		if (OS.CURRENT != OS.WINDOWS) so.setOption(StandardSocketOptions.SO_REUSEPORT, on);
-		else setReusePortW(UTIL.tcpFD(so), on);
+		else SetSockOpt(UTIL.tcpFD(so), on);
 	}
 	public static void setReusePort(ServerSocketChannel so, boolean on) throws IOException {
 		if (OS.CURRENT != OS.WINDOWS) so.setOption(StandardSocketOptions.SO_REUSEPORT, on);
-		else setReusePortW(UTIL.tcpsFD(so), on);
+		else SetSockOpt(UTIL.tcpsFD(so), on);
 	}
 
-	private static void setReusePortW(FileDescriptor fd, boolean enabled) throws IOException {
-		if (!RojLib.hasNative(RojLib.WIN32)) throw new NativeException("native library not available");
-		int error = windowsOnlyReuseAddr(UTIL.fdVal(fd), enabled);
+	private static void SetSockOpt(FileDescriptor fd, boolean enabled) throws IOException {
+		if (!RojLib.hasNative(RojLib.WIN32)) throw new NativeException("not available");
+		int error = SetSockOpt(UTIL.fdVal(fd), enabled);
 		if (error != 0) {
 			switch (error) {
 				case 10036: throw new IOException("WSAEINPROGRESS");
@@ -108,7 +108,7 @@ public final class NIOUtil {
 			}
 		}
 	}
-	private static native int windowsOnlyReuseAddr(int fd, boolean enable);
+	private static native int SetSockOpt(int fd, boolean enable);
 
 	public interface NUT {
 		void fdFd(FileDescriptor fd, int fdVal);

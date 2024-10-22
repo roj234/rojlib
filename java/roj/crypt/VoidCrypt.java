@@ -76,7 +76,7 @@ public class VoidCrypt {
 			for (int tries = 0; tries <= 0xFFFF; tries++) {
 				int nonce1 = rnd.nextInt(65536);
 				for (int k = 0; k < pairs.length; k++) {
-					int hash = XXHash32.xxHash32(nonce1, sbox[k], 0, 64);
+					int hash = XXHash.xxHash32(nonce1, sbox[k], 0, 64);
 					if ((Integer.bitCount(hash & 0xFF) & 3) != pairs[k].bit) continue retry;
 				}
 
@@ -118,7 +118,7 @@ public class VoidCrypt {
 
 				seed++;
 				for (int j = 0; j < pairs.length; j++) {
-					int hash = XXHash32.xxHash32(seed, sbox[j], 0, 64);
+					int hash = XXHash.xxHash32(seed, sbox[j], 0, 64);
 					int bit = getProbI(hash) > 0 ? 1 : 0;
 					if (bit != pairs[j].bit) continue retry;
 				}
@@ -159,7 +159,7 @@ public class VoidCrypt {
 
 				seed++;
 				for (int j = 0; j < pairs.length; j++) {
-					int hash = XXHash32.xxHash32(seed, sbox[j], 0, 64);
+					int hash = XXHash.xxHash32(seed, sbox[j], 0, 64);
 					int bit = getProb(hash) > 0 ? 1 : 0;
 					if (bit != pairs[j].bit) continue retry;
 				}
@@ -188,14 +188,14 @@ public class VoidCrypt {
 			case 1 -> {
 				while (ciphertext.isReadable()) {
 					retry = ciphertext.readVUInt();
-					hash = XXHash32.xxHash32(seed += retry, sbox, 0, 64);
+					hash = XXHash.xxHash32(seed += retry, sbox, 0, 64);
 					bw.writeBit(1, getProbI(hash) > 0 ? 1 : 0);
 				}
 			}
 			case 2 -> {
 				while (ciphertext.isReadable()) {
 					retry = ciphertext.readVUInt();
-					hash = XXHash32.xxHash32(seed += retry, sbox, 0, 64);
+					hash = XXHash.xxHash32(seed += retry, sbox, 0, 64);
 					bw.writeBit(1, getProb(hash) > 0 ? 1 : 0);
 				}
 			}
@@ -203,7 +203,7 @@ public class VoidCrypt {
 				int len = ciphertext.readableBytes() / 2;
 				while (len-- > 0) {
 					retry = ciphertext.readUnsignedShort();
-					hash = XXHash32.xxHash32(retry, sbox, 0, 64);
+					hash = XXHash.xxHash32(retry, sbox, 0, 64);
 					bw.writeBit(2, Integer.bitCount(hash & 0xFF) & 3);
 				}
 			}

@@ -13,6 +13,7 @@ import roj.io.CorruptedInputException;
 import roj.io.IOUtil;
 import roj.io.MyDataInputStream;
 import roj.io.MyRegionFile;
+import roj.io.source.MemorySource;
 import roj.text.TextReader;
 import roj.text.TextUtil;
 import roj.ui.EasyProgressBar;
@@ -72,65 +73,71 @@ public class McDiffClient {
 					}
 				}
 				bar.addCurrent(1);
-			} else {
-				File file = new File(basePath, name);
-				file.getParentFile().mkdirs();
-
-				pool.submit(() -> {
-					var data = archive.getInputUncached(entry);
-					try (InputStream in = data) {
-						switch ((int) entry.getModificationTime()) {
-							case 0 -> {
-								try (var out = new FileOutputStream(file)) {
-									IOUtil.copyStream(in, out);
-								}
-							}
-							case McDiffServer.GZIP -> {
-								try (var out = new GZIPOutputStream(new FileOutputStream(file))) {
-									IOUtil.copyStream(in, out);
-								}
-							}
-							case McDiffServer.REGION -> {
-								MyRegionFile rf;
-								try {
-									rf = new MyRegionFile(file);
-								} catch (Exception e) {
-									return;
-								}
-
-								try (var mdi = new MyDataInputStream(in)) {
-									// short pos int timestamp int patchLength
-									while (mdi.isReadable()) {
-										int pos = mdi.readShort();
-										int time = mdi.readInt();
-										int patch = mdi.readInt();
-
-										try (var dos = rf.getDataOutput(pos)) {
-											if (patch == 0) {
-												try (var buf = new ByteList.WriteOut(dos)) {
-													new NBTParser().parse(mdi, 0, new ToNBT(buf));
-												}
-											} else {
-												if (!rf.hasData(pos)) throw new CorruptedInputException("diff source missing");
-
-												ByteList xin = IOUtil.getSharedByteBuf().readStreamFully(rf.getInputStream(pos, null));
-												BsDiff.patchStream(xin, mdi, dos);
-											}
-										}
-										rf.setTimestamp(pos, time);
-									}
-								} finally {
-									IOUtil.closeSilently(rf);
-								}
-							}
-							case McDiffServer.DIFF -> throw new IllegalStateException("not supported yet");
-						}
-					}
-					bar.addCurrent(1);
-				});
 			}
 		}
-		pool.awaitFinish();
+		var async = archive.parallelDecompress(pool, (entry, in) -> {
+			if (entry.getName().startsWith(".vcs")) return;
+
+			File file = new File(basePath, entry.getName());
+			file.getParentFile().mkdirs();
+
+			try {
+				switch ((int) entry.getModificationTime()) {
+					case 0 -> {
+						try (var out = new FileOutputStream(file)) {
+							IOUtil.copyStream(in, out);
+						}
+					}
+					case McDiffServer.GZIP -> {
+						try (var out = new GZIPOutputStream(new FileOutputStream(file))) {
+							IOUtil.copyStream(in, out);
+						}
+					}
+					case McDiffServer.REGION -> {
+						MyRegionFile rf;
+						try {
+							rf = new MyRegionFile(file);
+						} catch (Exception e) {
+							return;
+						}
+
+						try (var mdi = new MyDataInputStream(in)) {
+							// short pos int timestamp int patchLength
+							while (mdi.isReadable()) {
+								int pos = mdi.readShort();
+								int time = mdi.readInt();
+								int patch = mdi.readInt();
+
+								try (var dos = rf.getDataOutput(pos)) {
+									if (patch == 0) {
+										try (var buf = new ByteList.ToStream(dos)) {
+											new NBTParser().parse(mdi, 0, new ToNBT(buf));
+										}
+									} else {
+										if (!rf.hasData(pos)) throw new CorruptedInputException("diff source missing");
+
+										ByteList xin = IOUtil.getSharedByteBuf().readStreamFully(rf.getInputStream(pos, null));
+										BsDiff.patch(new MemorySource(xin), mdi, dos);
+									}
+								}
+								rf.setTimestamp(pos, time);
+							}
+						} finally {
+							IOUtil.closeSilently(rf);
+						}
+					}
+					case McDiffServer.DIFF -> throw new IllegalStateException("not supported yet");
+				}
+			} catch (IOException e) {
+				e.printStackTrace();
+			}
+			bar.addCurrent(1);
+		});
+		try {
+			QZArchive.awaitParallelComplete(async);
+		} catch (InterruptedException e) {
+			e.printStackTrace();
+		}
 		bar.end("应用成功");
 		archive.close();
 	}

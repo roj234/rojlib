@@ -187,7 +187,7 @@ public class QZFileWriter extends QZWriter {
             }
             public void close() throws IOException {if (out != null) out.close();}
         };
-        var out = buf = new ByteList.WriteOut(crcOut);
+        var out = buf = new ByteList.ToStream(crcOut);
 
         long hstart = s.position();
         try {

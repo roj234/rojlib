@@ -267,7 +267,7 @@ public final class Invoke extends ExprNode {
 
 			ComponentList list = ctx.methodListOrReport(type, method);
 			if (list == null) {
-				ctx.report(Kind.ERROR, "symbol.error.noSuchSymbol", "invoke.method", method+"("+TextUtil.join(tmp, ",")+")", "\1symbol.type\0 "+type.name());
+				ctx.report(Kind.ERROR, "symbol.error.noSuchSymbol", "invoke.method", method+"("+TextUtil.join(tmp, ",")+")", "\1symbol.type\0 "+type.name(), ctx.reportSimilarMethod(type, method));
 				return NaE.RESOLVE_FAILED;
 			}
 

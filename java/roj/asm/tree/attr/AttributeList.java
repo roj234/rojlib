@@ -120,7 +120,7 @@ public final class AttributeList extends SimpleList<Attribute> {
 		w.putShort(size);
 		var o = list;
 
-		for (int i = 0; i < size; i++) {
+		for (int i = 0; i < this.size; i++) {
 			var attr = (Attribute) o[i];
 			if (attr.isEmpty()) size--;
 			else attr.toByteArray(w, cw);

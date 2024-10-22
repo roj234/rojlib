@@ -12,8 +12,7 @@ import java.nio.channels.FileChannel;
  * @author Roj233
  * @since 2021/8/18 13:36
  */
-// TODO implements MyDataInput and remove dataInput
-public abstract class Source extends DataOutputStream implements Closeable {
+public abstract class Source extends DataOutputStream {
 	private byte[] b1;
 
 	public Source() {

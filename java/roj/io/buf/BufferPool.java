@@ -13,9 +13,6 @@ import sun.misc.Unsafe;
 
 import java.lang.ref.WeakReference;
 import java.nio.ByteBuffer;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.locks.Lock;
-import java.util.concurrent.locks.ReentrantLock;
 
 import static roj.reflect.ReflectionUtils.fieldOffset;
 import static roj.reflect.ReflectionUtils.u;
@@ -25,36 +22,27 @@ import static roj.reflect.ReflectionUtils.u;
  * @since 2022/6/1 7:06
  */
 public final class BufferPool {
-	// 数据瞎填的
-	// 另外req >= CAP+INCR也不会用
-	private static final int TL_HEAP_INITIAL = 32768, TL_HEAP_INCR = 32768, TL_HEAP_MAX = 16777216, TL_HEAP_THRES = 131072;
-	private static final int TL_DIRECT_INITIAL = 32768, TL_DIRECT_INCR = 32768, TL_DIRECT_MAX = 16777216, TL_DIRECT_THRES = 131072;
-
-	private static final int GLOBAL_HEAP_SIZE = 4194304, GLOBAL_DIRECT_SIZE = 4194304;
+	// 超过128KB的从ArrayCache拿，本地缓存不大于4MB
+	private static final int HEAP_INIT = 32768, HEAP_INCR = 32768, HEAP_FLEX_MAX = 4194304, HEAP_LARGE = 131072;
+	// 超过4MB的调用系统分配，本地缓存不大于16MB
+	private static final int DIRECT_INIT = 32768, DIRECT_INCR = 32768, DIRECT_FLEX_MAX = 16777216, DIRECT_LARGE = 4194304;
 	private static final int DEFAULT_KEEP_BEFORE = 16;
 
 	private static final class PooledDirectBuf extends DirectByteList.Slice implements PooledBuffer {
 		private static final long u_pool = fieldOffset(PooledDirectBuf.class, "pool");
 		private volatile Object pool;
-		@Override
-		public Object pool(Object p1) { return u.getAndSetObject(this, u_pool, p1); }
+		@Override public Object pool(Object p1) { return u.getAndSetObject(this, u_pool, p1); }
 
 		private Page page;
-		@Override
-		public Page page() { return page; }
-		@Override
-		public void page(Page p) { page = p; }
+		@Override public Page page() { return page; }
+		@Override public void page(Page p) { page = p; }
 
 		private int meta;
-		@Override
-		public int getKeepBefore() { return meta; }
-		@Override
-		public void setKeepBefore(int keepBefore) { meta = keepBefore; }
+		@Override public int getKeepBefore() { return meta; }
+		@Override public void setKeepBefore(int keepBefore) { meta = keepBefore; }
 
-		@Override
-		public void close() { if (pool != null) BufferPool.reserve(this); }
-		@Override
-		public void release() { set(null,0L,0); }
+		@Override public void close() { if (pool != null) BufferPool.reserve(this); }
+		@Override public void release() { set(null,0L,0); }
 	}
 	private static final class PooledHeapBuf extends ByteList.Slice implements PooledBuffer {
 		private static final long u_pool = fieldOffset(PooledHeapBuf.class, "pool");
@@ -63,21 +51,15 @@ public final class BufferPool {
 		public Object pool(Object p1) { return u.getAndSetObject(this, u_pool, p1); }
 
 		private Page page;
-		@Override
-		public Page page() { return page; }
-		@Override
-		public void page(Page p) { page = p; }
+		@Override public Page page() { return page; }
+		@Override public void page(Page p) { page = p; }
 
 		private int meta;
-		@Override
-		public int getKeepBefore() { return meta; }
-		@Override
-		public void setKeepBefore(int keepBefore) { meta = keepBefore; }
+		@Override public int getKeepBefore() { return meta; }
+		@Override public void setKeepBefore(int keepBefore) { meta = keepBefore; }
 
-		@Override
-		public void close() { if (pool != null) BufferPool.reserve(this); }
-		@Override
-		public void release() { set(ArrayCache.BYTES,0,0); }
+		@Override public void close() { if (pool != null) BufferPool.reserve(this); }
+		@Override public void release() { set(ArrayCache.BYTES,0,0); }
 	}
 
 	private static final ThreadLocal<BufferPool> DEFAULT = ThreadLocal.withInitial(BufferPool::new);
@@ -95,19 +77,10 @@ public final class BufferPool {
 	private static final PooledHeapBuf EMPTY_HEAP_SENTIAL = new PooledHeapBuf();
 	private static final PooledDirectBuf EMPTY_DIRECT_SENTIAL = new PooledDirectBuf();
 
-	private static final ReentrantLock lgDirect = new ReentrantLock(), lgHeap = new ReentrantLock();
-	private static final Page pgDirect = Page.create(GLOBAL_DIRECT_SIZE), pgHeap = Page.create(GLOBAL_HEAP_SIZE);
-	private static long gDirect;
-	private static byte[] gHeap;
-
 	private final LeakDetector ldt = LeakDetector.create();
 
-	private final int
-		heapInit, heapIncr, heapThreshold, heapMax,
-		directThreshold;
+	private final int heapInit, heapIncr, heapMax;
 	private final long directInit, directIncr, directMax;
-	private final byte oomHandler;
-	public static final byte OOM_UNPOOLED = 0, OOM_THROW = 1, OOM_NULL = 2;
 
 	public long getDirectMax() { return directMax; }
 	public int getHeapMax() { return heapMax; }
@@ -122,58 +95,45 @@ public final class BufferPool {
 
 	private final SimpleList<ByteBuffer> directBufferShell = new SimpleList<>();
 
-	private long directTimeStamp, heapTimestamp;
-	private boolean hasTask;
+	private boolean hasDelay;
 	private final int maxStall;
 	private final ITask stallReleaseTask;
 
-	private BufferPool() {
-		this(TL_DIRECT_INITIAL, TL_DIRECT_INCR, TL_DIRECT_MAX, TL_DIRECT_THRES,
-		TL_HEAP_INITIAL, TL_HEAP_INCR, TL_HEAP_MAX, TL_HEAP_THRES, 15, 900000, OOM_UNPOOLED); }
-
-	public BufferPool(long directInit, long directIncr, long directMax, int directGlobalThreshold,
-					  int heapInit, int heapIncr, int heapMax, int heapGlobalThreshold,
-					  int shellSize, int maxStall, byte oomHandler) {
+	private BufferPool() {this(DIRECT_INIT, DIRECT_INCR, DIRECT_FLEX_MAX, HEAP_INIT, HEAP_INCR, HEAP_FLEX_MAX, 15, 60000);}
+	public BufferPool(long directInit, long directIncr, long directMax,
+					  int heapInit, int heapIncr, int heapMax,
+					  int shellSize, int maxStall) {
 		this.directInit = directInit;
 		this.heapInit = heapInit;
 
 		this.pHeap = heapInit <= 0 ? null : Page.create(heapInit);
 		this.heapIncr = heapIncr;
 		this.heapMax = heapMax;
-		this.heapThreshold = heapGlobalThreshold;
 		this.pDirect = directInit <= 0 ? null : Page.create(directInit);
 		this.directIncr = directIncr;
 		this.directMax = directMax;
-		this.directThreshold = directGlobalThreshold;
 		this.directShell = directInit <= 0 ? null : new PooledBuffer[shellSize];
 		this.heapShell = heapInit <= 0 ? null : new PooledBuffer[shellSize];
 
-		this.oomHandler = oomHandler;
 		this.maxStall = maxStall;
-		if (maxStall > 0) {
-			stallReleaseTask = getTask(new WeakReference<>(this));
-		} else {
-			stallReleaseTask = null;
-			hasTask = true;
-		}
+		this.stallReleaseTask = getTask(new WeakReference<>(this));
 	}
 
-	private void scheduleClean() { Scheduler.getDefaultScheduler().delay(stallReleaseTask, maxStall); hasTask = true; }
+	private void tryDelayedFree() {
+		if (!hasDelay) {
+			Scheduler.getDefaultScheduler().delay(stallReleaseTask, maxStall);
+			hasDelay = true;
+		}
+	}
 	private static ITask getTask(WeakReference<BufferPool> pool) {
 		return () -> {
 			BufferPool p = pool.get();
 			if (p == null) return;
 
-			long yy = System.currentTimeMillis();
-			if (p.directRef != null && p.pDirect.usedSpace() == 0 && yy - p.directTimeStamp >= p.maxStall) {
-				freeDirect(p);
-			}
-			if (p.heap != null && p.pHeap.usedSpace() == 0 && yy - p.heapTimestamp >= p.maxStall) {
-				freeHeap(p);
-			}
+			if (p.directRef != null && p.pDirect.usedSpace() == 0) freeDirect(p);
+			if (p.heap != null && p.pHeap.usedSpace() == 0) freeHeap(p);
 
-			if (p.directRef == null && p.heap == null) p.hasTask = false;
-			else p.scheduleClean();
+			p.hasDelay = false;
 		};
 	}
 	public void release() {
@@ -223,16 +183,12 @@ public final class BufferPool {
 		if (cap == 0) return direct ? EMPTY_DIRECT_SENTIAL : EMPTY_HEAP_SENTIAL;
 
 		PooledBuffer buf;
-		int threshold = direct ? directThreshold : heapThreshold;
-		boolean large = threshold > 0 && cap >= threshold;
 		if (direct) {
 			buf = getShell(directShell, u_directShellLen);
 			if (buf == null) buf = new PooledDirectBuf();
 			buf.setKeepBefore(keepBefore);
 
-			if (allocDirect(large, cap, buf)) {
-				if (!hasTask) scheduleClean();
-				directTimeStamp = System.currentTimeMillis();
+			if (allocDirect(cap, buf) != 0) {
 				buf.pool(this);
 				if (ldt != null) ldt.track(buf);
 				return (DynByteBuf) buf;
@@ -242,23 +198,12 @@ public final class BufferPool {
 			if (buf == null) buf = new PooledHeapBuf();
 			buf.setKeepBefore(keepBefore);
 
-			if (allocHeap(large, cap, buf)) {
-				if (!hasTask) scheduleClean();
-				heapTimestamp = System.currentTimeMillis();
+			if (allocHeap(cap, buf)) {
 				buf.pool(this);
 				if (ldt != null) ldt.track(buf);
 				return (DynByteBuf) buf;
 			}
 		}
-
-		switch (oomHandler) {
-			default:
-			case OOM_UNPOOLED: break;
-			case OOM_THROW: throw new OutOfMemoryError("BufferPool is full: "+(direct?pDirect:pHeap));
-			case OOM_NULL: return Helpers.maybeNull();
-		}
-
-		LOGGER.warn("Pool is OOM: {}, using Unpooled impl {}", direct?pDirect:pHeap, cap);
 
 		if (direct) {
 			var mem = new NativeMemory(cap);
@@ -291,38 +236,9 @@ public final class BufferPool {
 		}
 		return null;
 	}
-	private boolean allocDirect(boolean large, int cap, PooledBuffer sh) {
-		if (!large && allocateDirect0(cap, sh) != 0) return true;
-
-		try {
-			if (directThreshold < 0 || !lgDirect.tryLock(16, TimeUnit.MILLISECONDS)) return false;
-		} catch (InterruptedException ignored) {}
-
-		try {
-			if (gDirect == 0) {
-				NativeMemory.reserveMemory(GLOBAL_DIRECT_SIZE);
-				try {
-					gDirect = u.allocateMemory(GLOBAL_DIRECT_SIZE);
-				} catch (OutOfMemoryError e) {
-					NativeMemory.unreserveMemory(GLOBAL_DIRECT_SIZE);
-					throw e;
-				}
-			}
-
-			long off = pgDirect.alloc(cap);
-			if (off >= 0) {
-				sh.set(null, gDirect+off+sh.getKeepBefore(), cap-sh.getKeepBefore());
-				return true;
-			}
-		} finally {
-			lgDirect.unlock();
-		}
-
-		return false;
-	}
-	private long allocateDirect0(long cap, PooledBuffer sh) {
+	private long allocDirect(long cap, PooledBuffer sh) {
 		long off;
-		while (true) {
+		if (cap < DIRECT_LARGE) while (true) {
 			Page p = pDirect;
 			NativeMemory stamp = directRef;
 			if (stamp == null && !u.compareAndSwapObject(this, u_directRef, null, stamp = new NativeMemory(p.totalSpace()))) {
@@ -369,9 +285,9 @@ public final class BufferPool {
 
 		return 0;
 	}
-	private boolean allocHeap(boolean large, int cap, PooledBuffer sh) {
+	private boolean allocHeap(int cap, PooledBuffer sh) {
 		int off;
-		if (!large) while (true) {
+		if(cap < HEAP_LARGE) while (true) {
 			Page p = pHeap;
 			byte[] stamp = heap;
 			if (stamp == null && !u.compareAndSwapObject(this, u_heap, null, stamp = new byte[(int) p.totalSpace()]))
@@ -409,22 +325,6 @@ public final class BufferPool {
 			}
 		}
 
-		try {
-			if (heapThreshold < 0 || !lgHeap.tryLock(16, TimeUnit.MILLISECONDS)) return false;
-		} catch (InterruptedException ignored) {}
-
-		try {
-			off = (int) pgHeap.alloc(cap);
-			if (off >= 0) {
-				if (gHeap == null) gHeap = new byte[GLOBAL_HEAP_SIZE];
-
-				sh.set(gHeap, off+sh.getKeepBefore(), cap-sh.getKeepBefore());
-				return true;
-			}
-		} finally {
-			lgHeap.unlock();
-		}
-
 		return false;
 	}
 
@@ -434,14 +334,8 @@ public final class BufferPool {
 		if (size == 0) return 0;
 
 		size += 16;
-		long addr = allocateDirect0(size, null);
-		if (addr == 0) {
-			if (oomHandler == OOM_THROW) throw new OutOfMemoryError("BufferPool is full: "+pDirect);
-			return 0;
-		}
-
-		if (!hasTask) scheduleClean();
-		directTimeStamp = System.currentTimeMillis();
+		long addr = allocDirect(size, null);
+		if (addr == 0) return 0;
 
 		u.putLong(addr, size);
 		u.putLong(addr+8, ~size);
@@ -522,50 +416,34 @@ public final class BufferPool {
 		if (buf.isDirect()) {
 			long m = buf.address();
 			NativeMemory nm = ((DirectByteList) buf).memory();
-			block: {
-				if (nm == null) {
-					lgDirect.lock();
-					try {
-						pgDirect.free(m-gDirect-prefix, buf.capacity()+prefix);
-					} finally {
-						lgDirect.unlock();
-					}
-					break block;
+			Page p = pb.page();
+			int slot = System.identityHashCode(p);
+			lock.lock(slot);
+			try {
+				p.free(m-nm.address()-prefix, buf.capacity()+prefix);
+				if (p.usedSpace() == 0) {
+					if (directRef != nm) nm.release();
+					else tryDelayedFree();
 				}
-
-				Page p = pb.page();
-				int slot = System.identityHashCode(p);
-				lock.lock(slot);
-				try {
-					p.free(m-nm.address()-prefix, buf.capacity()+prefix);
-					if (p.usedSpace() == 0 && directRef != nm) nm.release();
-				} finally {
-					lock.unlock(slot);
-				}
+			} finally {
+				lock.unlock(slot);
 			}
+
 			pb.release();
 			addShell(directShell, u_directShellLen, pb);
 		} else {
-			block: {
-				byte[] bb = buf.array();
-				if (bb == gHeap) {
-					lgHeap.lock();
-					try {
-						pgHeap.free(buf.arrayOffset()-prefix, buf.capacity()+prefix);
-					} finally {
-						lgHeap.unlock();
-					}
-					break block;
+			byte[] bb = buf.array();
+			Page p = pb.page();
+			int slot = System.identityHashCode(p);
+			lock.lock(slot);
+			try {
+				p.free(buf.arrayOffset()-prefix, buf.capacity()+prefix);
+				if (p.usedSpace() == 0) {
+					if (heap != bb) ArrayCache.putArray(bb);
+					else tryDelayedFree();
 				}
-
-				Page p = pb.page();
-				int slot = System.identityHashCode(p);
-				lock.lock(slot);
-				try {
-					p.free(buf.arrayOffset()-prefix, buf.capacity()+prefix);
-				} finally {
-					lock.unlock(slot);
-				}
+			} finally {
+				lock.unlock(slot);
 			}
 
 			pb.release();
@@ -625,32 +503,10 @@ public final class BufferPool {
 		return newBuf;
 	}
 	private static boolean tryZeroCopy(int more, boolean addAtEnd, BufferPool p, PooledBuffer pb) {
-		Page page;
-		Lock lock;
-		int offset;
-
 		var b = (DynByteBuf) pb;
-		if (b.isDirect()) {
-			NativeMemory nm = ((DirectByteList) b).memory();
-			if (nm == null) {
-				page = pgDirect;
-				lock = lgDirect;
-				offset = (int) (b.address()-gDirect);
-			} else {
-				page = pb.page();
-				lock = p.lock.asReadLock(System.identityHashCode(page));
-				offset = (int) (b.address()-nm.address());
-			}
-		} else {
-			offset = b.arrayOffset();
-			if (b.array() == gHeap) {
-				page = pgHeap;
-				lock = lgHeap;
-			} else {
-				page = pb.page();
-				lock = p.lock.asReadLock(System.identityHashCode(page));
-			}
-		}
+		var offset = b.isDirect() ? (int) (b.address() - ((DirectByteList) b).memory().address()) : b.arrayOffset();
+		var page = pb.page();
+		var lock = p.lock.asReadLock(System.identityHashCode(page));
 
 		int prefix = pb.getKeepBefore();
 		if (addAtEnd) {

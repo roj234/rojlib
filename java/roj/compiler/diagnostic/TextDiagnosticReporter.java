@@ -46,12 +46,12 @@ public class TextDiagnosticReporter implements Consumer<Diagnostic> {
 	 */
 	@Override
 	public void accept(Diagnostic diag) {
-		if (diag.getKind() != Kind.ERROR && errorOnly) return;
+		if (diag.getKind().ordinal() < Kind.ERROR.ordinal() && errorOnly) return;
 
 		CharList sb = new CharList();
 
-		if (diag.getFilePath() != null) {
-			String file = diag.getFilePath();
+		if (diag.getFile() != null) {
+			String file = diag.getFile();
 			sb.append(file).append(':');
 			if (diag.getLineNumber() > 0) sb.append(diag.getLineNumber()).append(':');
 			sb.append(' ');

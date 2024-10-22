@@ -104,6 +104,10 @@ public class LocalContext {
 		classes.report(file, kind, lexer.index, message);
 	}
 	public void report(Kind kind, String message, Object... args) {
+		for (Object arg : args) {
+			if (arg == NaE.UNRESOLVABLE) return;
+		}
+
 		if (errorCapture != null) {
 			errorCapture.accept(message, args);
 			return;
@@ -999,6 +1003,21 @@ public class LocalContext {
 	public Label[] getTmpLabels(int i) {
 		if (i > labels.length) return labels = new Label[i];
 		return labels;
+	}
+
+	public String reportSimilarMethod(IClass type, String method) {
+		var methods = classes.getResolveHelper(type).getMethods(classes);
+		var maybeWrongMethod = new SimpleList<String>();
+		for (var entry : methods.entrySet()) {
+			if (TextUtil.editDistance(method, entry.getKey()) < Math.min(5, method.length()/2)) {
+				maybeWrongMethod.add(entry.getKey());
+			}
+		}
+		if (maybeWrongMethod.isEmpty()) return "";
+
+		var sb = new CharList("\1symbol.similar:\1invoke.method\0:");
+		sb.append(TextUtil.join(maybeWrongMethod, "\n    "));
+		return sb.append('\0').toStringAndFree();
 	}
 	// endregion
 }

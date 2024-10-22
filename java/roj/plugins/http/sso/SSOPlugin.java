@@ -5,7 +5,6 @@ import roj.collect.XHashSet;
 import roj.config.Tokenizer;
 import roj.config.serial.ToJson;
 import roj.crypt.Base64;
-import roj.crypt.HMAC;
 import roj.crypt.MySaltedHash;
 import roj.io.IOUtil;
 import roj.net.http.Cookie;
@@ -83,6 +82,7 @@ public class SSOPlugin extends Plugin {
 		loadGroups();
 
 		try {
+			onDisable();
 			users = cfg.getString("storage", "file").equals("file")
 				? new JsonUserManager(new File(getDataFolder(), "users.json"))
 				: new DbUserManager("users");
@@ -155,6 +155,7 @@ public class SSOPlugin extends Plugin {
 
 			 u.suspendTimer = System.currentTimeMillis() + ctx.argument("timeout", Integer.class)*1000L;
 			 u.loginAttempt = 99;
+			 u.tokenSeq++;
 			 System.out.println("账户已锁定至"+ACalendar.toLocalTimeString(u.suspendTimer));
 		 }))))
 		 .then(literal("unsuspend").then(argument("用户名", userNameList).executes(ctx -> {
@@ -176,6 +177,7 @@ public class SSOPlugin extends Plugin {
 			 if (u == null) {Terminal.warning("账户不存在");return;}
 
 			 u.tempOtp = TextUtil.bytes2hex(new SecureRandom().generateSeed(8));
+			 u.tokenSeq++;
 			 System.out.println("一次有效的临时密码:"+u.tempOtp);
 		 })))
 		 .then(literal("expirepass").then(argument("用户名", userNameList).executes(ctx -> {
@@ -186,6 +188,11 @@ public class SSOPlugin extends Plugin {
 			 System.out.println("密码已过期(该状态服务器重启后失效)");
 		 })));
 		registerCommand(c);
+	}
+
+	@Override
+	protected void onDisable() {
+		if (users != null) users.onShutdown();
 	}
 
 	@Interceptor("PermissionManager")
@@ -207,7 +214,7 @@ public class SSOPlugin extends Plugin {
 		}
 
 		var url = IOUtil.getSharedCharBuf().append('/').append(req.absolutePath()).append(req.query().isEmpty() ? "" : "?"+req.query());
-		req.responseHeader().put("Location", "/"+sitePath+"/?return="+Escape.encodeURIComponent(url)+postfix);
+		req.responseHeader().put("Location", "/"+sitePath+"?return="+Escape.encodeURIComponent(url)+postfix);
 		throw new IllegalRequestException(302);
 	}
 
@@ -460,7 +467,12 @@ public class SSOPlugin extends Plugin {
 		u.loginAttempt = 0;
 		u.loginTime = System.currentTimeMillis();
 		u.loginAddr = req.proxyRemoteAddress();
-		users.setDirty(u, "loginAttempt", "loginTime", "loginAddr");
+
+		//这个功能暂时不开放给前端
+		//u.tokenNonce = o.srnd.nextLong();
+		//让之前所有的refresh token失效(多设备登录怎么处理？？先只保留冻结功能好了)
+
+		users.setDirty(u, "loginAttempt", "loginTime", "loginAddr", "refreshNonce");
 		long expire = LOGIN_TTL + (is_refresh ? -180000 : 0);
 
 		var login_token = makeToken(u, 'L', expire, o, sc);
@@ -475,26 +487,23 @@ public class SSOPlugin extends Plugin {
 		return sb.append('}').toStringAndFree();
 	}
 	private String makeToken(User u, char usage, long expire, LocalData o, IOUtil sc) {
-		ByteList bb = sc.byteBuf; bb.clear();
+		ByteList buf = sc.byteBuf; buf.clear();
 
-		byte[] nonce = new byte[8];
+		byte[] nonce = o.tmpNonce;
 		o.srnd.nextBytes(nonce);
 
 		expire += System.currentTimeMillis();
-		HMAC hmac = o.hmac;
+		var hmac = o.hmac;
 		hmac.setSignKey(sessionKey);
-		bb.put(nonce).put(usage).putInt(u.id).putLong(expire);
-		if (usage != 'A') {
-			bb.putAscii(u.passHash);
-			if (usage == 'R' && u.tempOtp != null) bb.putAscii(u.tempOtp);
-		}
-		hmac.update(bb);
+		hmac.update(buf.putInt(u.id).putLong(expire).put(nonce)
+					  .put(usage).putLong(u.tokenSeq)
+					  .putAscii(u.passHash));
 
-		bb.clear();
-		bb.putVUInt(u.id).putVULong(expire).put(nonce).put(hmac.digestShared());
+		buf.clear();
+		buf.putVUInt(u.id).putVULong(expire).put(nonce).put(hmac.digestShared());
 
 		CharList sb = sc.charBuf; sb.clear();
-		return Base64.encode(bb, sb, Base64.B64_URL_SAFE).toString();
+		return Base64.encode(buf, sb, Base64.B64_URL_SAFE).toString();
 	}
 
 	private User verifyToken(Request req, String v, char usage) {
@@ -515,16 +524,12 @@ public class SSOPlugin extends Plugin {
 				if (u != null) {
 					var o = LocalData.get(req);
 
-					HMAC hmac = o.hmac;
+					var hmac = o.hmac;
 					hmac.setSignKey(sessionKey);
-					buf.putLong(nonce).put(usage).putInt(u.id).putLong(expire);
-					if (usage != 'A') {
-						buf.putAscii(u.passHash);
-						if (usage == 'R' && u.tempOtp != null) buf.putAscii(u.tempOtp);
-					} else {
-						o.localNonce = nonce;
-					}
-					hmac.update(buf);
+					hmac.update(buf.putInt(u.id).putLong(expire).putLong(nonce)
+								   .put(usage).putLong(u.tokenSeq)
+								   .putAscii(u.passHash));
+					if (usage == 'A') o.localNonce = nonce;
 
 					if (MessageDigest.isEqual(hmac.digestShared(), hash)) {
 						if (u.groupInst == null) {

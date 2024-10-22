@@ -24,7 +24,7 @@ class AES extends RCipherSpi {
 	private byte[] lastKey;
 
 	int[] encrypt_key, decrypt_key;
-	int limit;
+	int rounds4;
 
 	boolean encrypt;
 
@@ -32,7 +32,7 @@ class AES extends RCipherSpi {
 	private AES(AES aes, boolean encrypt) {
 		this.encrypt_key = aes.encrypt_key;
 		this.decrypt_key = aes.decrypt_key;
-		this.limit = aes.limit;
+		this.rounds4 = aes.rounds4;
 		this.encrypt = encrypt;
 	}
 
@@ -40,19 +40,19 @@ class AES extends RCipherSpi {
 
 	@Override
 	public void init(int mode, byte[] key, AlgorithmParameterSpec par, SecureRandom random) throws InvalidAlgorithmParameterException, InvalidKeyException {
-		if (par != null) throw new InvalidAlgorithmParameterException();
+		if (par != null || random != null) throw new InvalidAlgorithmParameterException();
 
 		this.encrypt = mode != Cipher.DECRYPT_MODE;
 		if (Arrays.equals(lastKey, key)) return;
 
 		switch (key.length) {
-			case 16: case 24: case 32: break;
+			case 16, 24, 32: break;
 			default: throw new InvalidKeyException("AES key length must be 16, 24 or 32");
 		}
 
 		int ROUNDS = (key.length >> 2) + 6;
-		limit = ROUNDS << 2;
-		int ROUND_KEY_COUNT = limit + 4;
+		rounds4 = ROUNDS << 2;
+		int ROUND_KEY_COUNT = rounds4 + 4;
 
 		int[] Ke = new int[ROUND_KEY_COUNT]; // encryption round keys
 		int[] Kd = new int[ROUND_KEY_COUNT]; // decryption round keys
@@ -69,7 +69,7 @@ class AES extends RCipherSpi {
 		int k = 0;
 		for (j = 0; j < KC && k < ROUND_KEY_COUNT; j++, k++) {
 			Ke[k] = tk[j];
-			Kd[(limit - (k&~3)) | (k&3)] = tk[j];
+			Kd[(rounds4 - (k&~3)) | (k&3)] = tk[j];
 		}
 
 		int t, ri = 0;
@@ -97,11 +97,11 @@ class AES extends RCipherSpi {
 
 			for (j = 0; j < KC && k < ROUND_KEY_COUNT; j++, k++) {
 				Ke[k] = tk[j];
-				Kd[(limit - (k&~3)) | (k&3)] = tk[j];
+				Kd[(rounds4 - (k&~3)) | (k&3)] = tk[j];
 			}
 		}
 
-		for (int r = 4; r < limit; r++) {
+		for (int r = 4; r < rounds4; r++) {
 			t = Kd[r];
 			Kd[r] = U1[(t >>> 24) & 0xFF] ^
 				U2[(t >>> 16) & 0xFF] ^
@@ -132,8 +132,8 @@ class AES extends RCipherSpi {
 	}
 	@Override
 	public void cryptOneBlock(DynByteBuf in, DynByteBuf out) {
-		if (encrypt) aes_encrypt(encrypt_key, limit, in, out);
-		else aes_decrypt(decrypt_key, limit, in, out);
+		if (encrypt) aes_encrypt(encrypt_key, rounds4, in, out);
+		else aes_decrypt(decrypt_key, rounds4, in, out);
 	}
 	@Override
 	protected void cryptFinal1(DynByteBuf in, DynByteBuf out) throws ShortBufferException, BadPaddingException {

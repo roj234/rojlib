@@ -94,7 +94,7 @@ public class ChunkTrim {
 
 						delete:{
 							int timestamp = rf.getTimestamp(j);
-							if (currentTime - timestamp > 86400 * 31) {delete = "超过31天未访问";break delete;}
+							//if (currentTime - timestamp > 86400 * 31) {delete = "超过31天未访问";break delete;}
 
 							NbtChunk chunk;
 							try (var nbt = rf.getBufferedInputStream(j)) {

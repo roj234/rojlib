@@ -23,6 +23,8 @@ public class Win32FPM extends fcgiManager implements ITask {
 	final List<String> command;
 	final int minProcess, maxProcess, timeout;
 	final ConcurrentHashMap<Process, fcgiConnection> processes = new ConcurrentHashMap<>();
+	int portBase = 40000;
+	private int launchedSize;
 
 	File docRoot;
 
@@ -147,7 +149,7 @@ public class Win32FPM extends fcgiManager implements ITask {
 					SimpleList<String> myArgs = new SimpleList<>(command.size()+1);
 					myArgs.addAll(command);
 
-					int port = 10000 + (Math.abs((int) System.nanoTime()) % 40000);
+					int port = portBase + launchedSize++ % 1000;
 					myArgs.add(String.valueOf(port));
 
 					var key = new ProcessBuilder(myArgs).directory(new File(myArgs.get(0)).getParentFile()).start();

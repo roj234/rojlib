@@ -46,6 +46,7 @@ public class PHPPlugin extends Plugin implements Router {
 
 		fpm = new Win32FPM(config.getInteger("fcgi_process_stale_max"), config.getInteger("fcgi_process_max"), config.getInteger("fcgi_process_timeout", 600000), args);
 		fpm.docRoot = document_root.toFile();
+		fpm.portBase = 40000 + (int)System.nanoTime()%20000;
 
 		var dispatcher = new TaskExecutor();
 		dispatcher.setName("PHP-FPM 请求分配");

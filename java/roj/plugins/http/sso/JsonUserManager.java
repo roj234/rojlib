@@ -23,6 +23,7 @@ public class JsonUserManager implements UserManager {
 
 	private List<User> users;
 	private Map<String, User> userByName = new MyHashMap<>();
+	private boolean isDataDirty;
 
 	private static final SerializerFactory SERIALIZER = SerializerFactory.getInstance();
 	static {
@@ -62,11 +63,22 @@ public class JsonUserManager implements UserManager {
 			for (String s : field) {
 				if (s.equals("passHash") || s.equals("totpKey") || s.equals("group")) break block;
 			}
+			isDataDirty = true;
 			return;
 		}
 
+		doSave();
+	}
+
+	public void onShutdown() {
+		if (isDataDirty) doSave();
+	}
+
+	private void doSave() {
 		try {
-			ConfigMaster.JSON.writeObject(SERIALIZER.listOf(User.class), users, json);
+			synchronized (this) {
+				ConfigMaster.JSON.writeObject(SERIALIZER.listOf(User.class), users, json);
+			}
 		} catch (Exception e) {
 			e.printStackTrace();
 		}

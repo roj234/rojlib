@@ -2,7 +2,6 @@ package roj.io;
 
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
-import roj.RojLib;
 import roj.collect.SimpleList;
 import roj.compiler.plugins.annotations.Attach;
 import roj.concurrent.FastThreadLocal;
@@ -11,7 +10,6 @@ import roj.config.data.CLong;
 import roj.crypt.Base64;
 import roj.reflect.ReflectionUtils;
 import roj.text.*;
-import roj.text.logging.Logger;
 import roj.util.ByteList;
 import roj.util.Helpers;
 import roj.util.NativeMemory;
@@ -25,6 +23,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 import java.util.function.Predicate;
@@ -204,6 +203,7 @@ public final class IOUtil {
 	@Attach("listAll")
 	public static List<File> findAllFiles(File file, List<File> files, Predicate<File> predicate) {
 		try {
+			if (!file.exists()) return Collections.emptyList();
 			Files.walkFileTree(file.toPath(), new SimpleFileVisitor<Path>() {
 				@Override
 				public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) {
@@ -495,9 +495,7 @@ public final class IOUtil {
 		if (c != null) try {
 			c.close();
 		} catch (Throwable e) {
-			if (RojLib.IS_DEV) {
-				Logger.getLogger("SilentClose").error("关闭时抛出了异常！", e);
-			}
+			new UnsupportedOperationException(c.getClass()+"在关闭时抛出了异常！", e).printStackTrace();
 		}
 	}
 

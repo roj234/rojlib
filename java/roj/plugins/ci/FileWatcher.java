@@ -59,7 +59,7 @@ final class FileWatcher extends IFileWatcher implements Consumer<WatchKey> {
 		via = new X();
 		actions.add(via);
 
-		File lib = new File(BASE, "class");
+		File lib = new File(BASE, "libs");
 		lib.toPath().register(watcher, ENTRY_CREATE, ENTRY_DELETE, ENTRY_MODIFY, OVERFLOW);
 		this.libPath = lib.getAbsolutePath();
 	}
@@ -81,7 +81,7 @@ final class FileWatcher extends IFileWatcher implements Consumer<WatchKey> {
 				}
 			}
 
-			if (!key.reset()) Terminal.warning("[watcher reset failed]class没了？");
+			if (!key.reset()) Terminal.warning("[watcher reset failed]libs没了？");
 			return;
 		}
 

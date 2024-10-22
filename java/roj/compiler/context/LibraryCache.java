@@ -83,6 +83,15 @@ public final class LibraryCache implements Library {
 					ConstantData data;
 					try {
 						data = Parser.parseConstants(j9.getResource(ir, path));
+
+						var list = data.attributesNullable();
+						if (list != null) {
+							list.removeByName("NestMembers");
+							list.removeByName("NestHost");
+							list.removeByName("BootstrapMethods");
+							list.removeByName("SourceFile");
+							list.removeByName("EnclosingMethod");
+						}
 					} catch (Exception e) {
 						String className = path.substring(i + 1, path.length() - 6);
 						GlobalContext.debugLogger().warn("无法解析模块{}中的类{}",module,className);
@@ -96,7 +105,7 @@ public final class LibraryCache implements Library {
 			var version = prop.getProperty("java.vendor", "")+"-"+prop.getProperty("java.vm.version", "")+"-"+prop.getProperty("os.arch", "")+"-"+prop.getProperty("os.name", "");
 
 			var tmp = new ZipFileWriter(symTable);
-			var ob = new ByteList.WriteOut(tmp);
+			var ob = new ByteList.ToStream(tmp);
 			for (var cache : caches.values()) {
 				cache.module = cache.version;
 				cache.version = version;

@@ -33,7 +33,7 @@ final class AES_GCM extends AES {
 		super.init(mode, key, null, null);
 
 		ByteList H = tmp; H.clear(); Arrays.fill(H.array(), (byte) 0);
-		aes_encrypt(encrypt_key, limit, H.sliceNoIndexCheck(0, AES_BLOCK_SIZE), H);
+		aes_encrypt(encrypt_key, rounds4, H.sliceNoIndexCheck(0, AES_BLOCK_SIZE), H);
 
 		H0 = H.readLong();
 		H1 = H.readLong();
@@ -88,7 +88,7 @@ final class AES_GCM extends AES {
 		}
 	}
 
-	public int engineGetOutputSize(int data) { return encrypt ? data - AES_BLOCK_SIZE : data + AES_BLOCK_SIZE; }
+	public int engineGetOutputSize(int data) { return encrypt ? data + AES_BLOCK_SIZE : data - AES_BLOCK_SIZE; }
 
 	public void crypt(DynByteBuf in, DynByteBuf out) throws ShortBufferException {
 		if (out.writableBytes() < in.readableBytes()) throw new ShortBufferException();
@@ -106,10 +106,8 @@ final class AES_GCM extends AES {
 		ByteList t = tmp;
 
 		int block = in.readableBytes() / AES_BLOCK_SIZE;
-		if (encrypt) {
-			// 防止tag被处理掉
-			if (--block == 0) return;
-		}
+		// 防止tag被处理掉
+		if (!encrypt && --block == 0) return;
 		processed += block * AES_BLOCK_SIZE;
 
 		ByteList ctr = counter;
@@ -117,22 +115,7 @@ final class AES_GCM extends AES {
 			while (block > 0) {
 				t.clear();
 				ctr.rIndex = 0;
-				aes_encrypt(encrypt_key, limit, ctr, t);
-				incr(ctr.array());
-
-				long in0 = in.readLong(), in1 = in.readLong();
-
-				h[0] ^= in0; h[1] ^= in1;
-				GaloisHash(h, H0, H1);
-
-				out.putLong(in0^t.readLong()).putLong(in1^t.readLong());
-				block--;
-			}
-		} else {
-			while (block > 0) {
-				t.clear();
-				ctr.rIndex = 0;
-				aes_encrypt(encrypt_key, limit, ctr, t);
+				aes_encrypt(encrypt_key, rounds4, ctr, t);
 				incr(ctr.array());
 
 				long in0 = in.readLong()^t.readLong(), in1 = in.readLong()^t.readLong();
@@ -143,6 +126,21 @@ final class AES_GCM extends AES {
 				out.putLong(in0).putLong(in1);
 				block--;
 			}
+		} else {
+			while (block > 0) {
+				t.clear();
+				ctr.rIndex = 0;
+				aes_encrypt(encrypt_key, rounds4, ctr, t);
+				incr(ctr.array());
+
+				long in0 = in.readLong(), in1 = in.readLong();
+
+				h[0] ^= in0; h[1] ^= in1;
+				GaloisHash(h, H0, H1);
+
+				out.putLong(in0^t.readLong()).putLong(in1^t.readLong());
+				block--;
+			}
 		}
 	}
 	public void cryptOneBlock(DynByteBuf in, DynByteBuf out) {
@@ -151,7 +149,7 @@ final class AES_GCM extends AES {
 	protected void cryptFinal1(DynByteBuf in, DynByteBuf out) throws ShortBufferException, BadPaddingException {
 		if (out.writableBytes() < engineGetOutputSize(in.readableBytes())) throw new ShortBufferException();
 
-		if (encrypt) {
+		if (!encrypt) {
 			if (in.readableBytes() < AES_BLOCK_SIZE) throw new AEADBadTagException("怪");
 			decryptFinal(in, out);
 		} else encryptFinal(in, out);
@@ -207,7 +205,7 @@ final class AES_GCM extends AES {
 		if (len > 0) {
 			assert len < AES_BLOCK_SIZE;
 			// encrypt ctr inline
-			aes_encrypt(encrypt_key, limit, ctr.sliceNoIndexCheck(0, AES_BLOCK_SIZE), ctr);
+			aes_encrypt(encrypt_key, rounds4, ctr.sliceNoIndexCheck(0, AES_BLOCK_SIZE), ctr);
 
 			processed += len;
 
@@ -222,7 +220,7 @@ final class AES_GCM extends AES {
 		finalHashBlock();
 
 		ctr.clear();
-		aes_encrypt(encrypt_key, limit, iv, ctr);
+		aes_encrypt(encrypt_key, rounds4, iv, ctr);
 
 		ByteList t = getHash();
 		len = tagLen;
@@ -236,7 +234,7 @@ final class AES_GCM extends AES {
 			in.wIndex(in.wIndex() - AES_BLOCK_SIZE);
 
 			// encrypt ctr inline
-			aes_encrypt(encrypt_key, limit, ctr.slice(0, AES_BLOCK_SIZE), ctr);
+			aes_encrypt(encrypt_key, rounds4, ctr.slice(0, AES_BLOCK_SIZE), ctr);
 
 			processed += len;
 
@@ -251,7 +249,7 @@ final class AES_GCM extends AES {
 		finalHashBlock();
 
 		ctr.clear();
-		aes_encrypt(encrypt_key, limit, iv, ctr);
+		aes_encrypt(encrypt_key, rounds4, iv, ctr);
 
 		ByteList t = getHash();
 		int v = 0;

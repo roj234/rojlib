@@ -1,22 +1,17 @@
 package roj.io.source;
 
-import roj.collect.LRUCache;
-import roj.collect.MyHashMap;
-import roj.config.data.CInt;
 import roj.io.buf.BufferPool;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
 
 import java.io.IOException;
 import java.nio.channels.FileChannel;
-import java.util.Iterator;
-import java.util.function.BiConsumer;
 
 /**
  * @author Roj233
  * @since 2021/8/18 13:36
  */
-public class BufferedSource extends Source implements BiConsumer<CInt,ByteList> {
+public class BufferedSource extends Source {
 	private static final int PAGE = 4096;
 
 	private long pos, len;
@@ -25,25 +20,16 @@ public class BufferedSource extends Source implements BiConsumer<CInt,ByteList> 
 	private final Source s;
 	private final boolean close;
 
-	private final LRUCache<CInt, ByteList> buffers;
-	private final BufferPool pool;
+	private int bufPos;
+	private final ByteList buf;
 
-	public static Source autoClose(Source copy) throws IOException {
-		return new BufferedSource(copy, 4096, BufferPool.localPool(), true);
-	}
-	public static Source wrap(Source copy) throws IOException {
-		return new BufferedSource(copy, 4096, BufferPool.localPool(), false);
-	}
+	public static Source autoClose(Source copy) throws IOException {return new BufferedSource(copy, 4096, BufferPool.localPool(), true);}
+	public static Source wrap(Source copy) throws IOException {return new BufferedSource(copy, 4096, BufferPool.localPool(), false);}
 
-	public BufferedSource(Source s, int buffer) throws IOException {
-		this(s, buffer, BufferPool.localPool(), false);
-	}
-
-	public BufferedSource(Source s, int buffer, BufferPool pool, boolean dispatchClose) throws IOException {
+	public BufferedSource(Source s, int buf, BufferPool pool, boolean dispatchClose) throws IOException {
 		this.s = s;
-		this.buffers = new LRUCache<>((buffer + (PAGE-1)) >>> 12);
-		this.buffers.setEvictListener(this);
-		this.pool = pool;
+		this.bufPos = -1;
+		this.buf = (ByteList) pool.allocate(false, buf);
 		this.pos = s.position();
 		this.len = s.length();
 		this.close = dispatchClose;
@@ -139,15 +125,10 @@ public class BufferedSource extends Source implements BiConsumer<CInt,ByteList> 
 	public FileChannel channel() {
 		return s.channel();
 	}
-	public void sync() throws IOException {
-		pos = s.position();
-		len = s.length();
-		sync = 0;
-	}
 
 	@Override
 	public void close() throws IOException {
-		invalidate();
+		BufferPool.reserve(buf);
 		if (close) s.close();
 	}
 	@Override
@@ -156,71 +137,35 @@ public class BufferedSource extends Source implements BiConsumer<CInt,ByteList> 
 	}
 
 	@Override
-	public Source threadSafeCopy() throws IOException { return new BufferedSource(s.threadSafeCopy(), 4096, pool, close); }
+	public Source threadSafeCopy() throws IOException { return new BufferedSource(s.threadSafeCopy(), 4096, BufferPool.localPool(), close); }
 
 	public void moveSelf(long from, long to, long length) throws IOException {
-		invalidate(to, to + length);
+		bufPos = -1;
 		s.moveSelf(from, to, length);
-	}
-
-	@Override
-	public boolean isBuffered() {return true;}
-	@Override
-	public boolean isWritable() {return s.isWritable();}
-
-	public final void invalidate() {
-		for (Iterator<MyHashMap.Entry<CInt, ByteList>> it = buffers.__iterator_javac_is_sb(); it.hasNext(); ) {
-			MyHashMap.Entry<CInt, ByteList> next = it.next();
-			try {
-				BufferPool.reserve(next.v);
-			} catch (Exception e) {
-				e.printStackTrace();
-			}
-		}
-		buffers.clear();
 	}
 
 	private void invalidate(long from, long to) {
 		int f = (int) (from>>>12);
 		int t = (int) ((to+(PAGE-1))>>>12);
-		while (f < t) {
-			int v = f++;
-			val.value = v;
-			DynByteBuf buf = buffers.remove(val);
-			if (buf != null) BufferPool.reserve(buf);
+		if (bufPos >= f && bufPos < t) {
+			bufPos = -1;
 		}
 	}
 
-	private final CInt val = new CInt();
-	private CInt myNext;
+	@Override public boolean isBuffered() {return true;}
+	@Override public boolean isWritable() {return s.isWritable();}
+
 	private ByteList buffer(long pos) throws IOException {
-		val.value = (int) (pos>>>12);
-		ByteList buf = buffers.get(val);
-		if (buf == null) {
+		if (bufPos != (int) (pos>>>12)) {
 			s.seek(pos & -PAGE);
 			sync |= 1;
 
-			buf = (ByteList) pool.allocate(false, PAGE, 0);
-			try {
-				int len = s.read(buf.list, buf.arrayOffset(), PAGE);
-				buf.wIndex(len);
-			} catch (Throwable e) {
-				BufferPool.reserve(buf);
-				invalidate();
-				throw e;
-			}
-
-			CInt next = myNext;
-			myNext = null;
-
-			if (next == null) next = new CInt(val);
-			else next.value = val.value;
-
-			buffers.put(next, buf);
+			int len = s.read(buf.list, buf.arrayOffset(), PAGE);
+			buf.rIndex = 0;
+			buf.wIndex(len);
 		}
 		return buf;
 	}
-
 	private void sp() throws IOException {
 		if ((sync & 1) != 0) {
 			s.seek(pos);
@@ -235,11 +180,5 @@ public class BufferedSource extends Source implements BiConsumer<CInt,ByteList> 
 	}
 
 	@Override
-	public String toString() { return "BufferedSource@" + pool; }
-
-	@Override
-	public void accept(CInt key, ByteList buffer) {
-		myNext = key;
-		BufferPool.reserve(buffer);
-	}
+	public String toString() { return "BufferedSource@"+s; }
 }

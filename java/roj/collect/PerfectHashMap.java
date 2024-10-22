@@ -1,6 +1,6 @@
 package roj.collect;
 
-import roj.crypt.XXHash32;
+import roj.crypt.XXHash;
 import roj.util.DynByteBuf;
 import roj.util.Helpers;
 
@@ -161,7 +161,7 @@ public class PerfectHashMap<E> {
 	}
 	static int hash(String s, int seed) {
 		byte[] stringData = s.getBytes(StandardCharsets.UTF_8);
-		return XXHash32.xxHash32(seed, stringData, 0, stringData.length);
+		return XXHash.xxHash32(seed, stringData, 0, stringData.length);
 	}
 
 	public static class Entry<S> {

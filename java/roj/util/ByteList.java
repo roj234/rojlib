@@ -1,7 +1,7 @@
 package roj.util;
 
 import org.jetbrains.annotations.NotNull;
-import roj.compiler.plugins.constant.Constant;
+import roj.compiler.plugins.eval.Constant;
 import roj.io.buf.BufferPool;
 import roj.math.MathUtils;
 import roj.text.CharList;
@@ -398,16 +398,16 @@ public class ByteList extends DynByteBuf implements Appendable {
 
 	@Override public CharList hex(CharList sb) {return TextUtil.bytes2hex(list, arrayOffset()+rIndex, arrayOffset()+wIndex, sb);}
 
-	public static final class WriteOut extends ByteList {
+	public static final class ToStream extends ByteList {
 		private OutputStream out;
 		private int fakeWriteIndex;
 
 		private DynByteBuf buf;
 		private boolean dispatchClose;
 
-		public WriteOut(OutputStream out) { this(out, true); }
-		public WriteOut(OutputStream out, boolean dispatchClose) { this(out, 1024, dispatchClose); }
-		public WriteOut(OutputStream out, int buffer, boolean dispatchClose) {
+		public ToStream(OutputStream out) { this(out, true); }
+		public ToStream(OutputStream out, boolean dispatchClose) { this(out, 1024, dispatchClose); }
+		public ToStream(OutputStream out, int buffer, boolean dispatchClose) {
 			this.out = out;
 			this.buf = BufferPool.buffer(false, buffer);
 			this.list = buf.array();

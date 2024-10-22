@@ -2,6 +2,8 @@ package roj.compiler.context;
 
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
+import roj.archive.qz.xz.LZMA2InputStream;
+import roj.archive.qz.xz.LZMA2Options;
 import roj.asm.Opcodes;
 import roj.asm.tree.*;
 import roj.asm.tree.attr.AttrModule;
@@ -31,6 +33,8 @@ import roj.text.logging.Logger;
 import roj.util.Helpers;
 
 import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.util.Collection;
 import java.util.Collections;
@@ -172,10 +176,10 @@ public class GlobalContext implements CompilerSpec {
 			}
 
 			//FIXME 用压缩文件系统或者什么东西实现一个更好的缓存机制
-			cache = new File(cacheFolder, "PackageList-.nbt");
+			cache = new File(cacheFolder, "PackageList-.lzx");
 			if (cache.isFile()) {
-				try {
-					packageFastPath = ConfigMaster.XNBT.readObject(serializer, cache);
+				try (var in = new LZMA2InputStream(new FileInputStream(cache), 131072)) {
+					packageFastPath = ConfigMaster.XNBT.readObject(serializer, in);
 					return;
 				} catch (IOException | ParseException e) {
 					debugLogger().warn("包缓存读取失败", e);
@@ -213,10 +217,12 @@ public class GlobalContext implements CompilerSpec {
 			else for (int i = 0; i < value.size(); i++) value.set(i, Interner.intern(value.get(i)));
 		}
 
-		if (cache != null) try {
-			ConfigMaster.XNBT.writeObject(serializer, packageFastPath, cache);
-		} catch (IOException e) {
-			debugLogger().warn("包缓存保存失败", e);
+		if (cache != null) {
+			try (var out = new LZMA2Options(9).setDictSize(131072).getOutputStream(new FileOutputStream(cache))) {
+				ConfigMaster.XNBT.writeObject(serializer, packageFastPath, out);
+			} catch (IOException e) {
+				debugLogger().warn("包缓存保存失败", e);
+			}
 		}
 	}
 	private void addFastPath(String n) {

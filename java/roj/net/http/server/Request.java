@@ -4,7 +4,7 @@ import roj.collect.MyHashMap;
 import roj.collect.SimpleList;
 import roj.config.Tokenizer;
 import roj.io.IOUtil;
-import roj.io.session.SessionProvider;
+import roj.io.storage.DataStorage;
 import roj.net.ChannelCtx;
 import roj.net.EmbeddedChannel;
 import roj.net.MyChannel;
@@ -187,25 +187,25 @@ public final class Request extends Headers {
 	public Request sessionName(String prefix) {this.sessionName = prefix; return this;}
 	public Map<String,Object> session() throws IllegalRequestException { return session(true); }
 	public Map<String,Object> session(boolean createIfNonExist) throws IllegalRequestException {
-		SessionProvider provider = SessionProvider.getDefault();
-		if (provider == null) throw new IllegalStateException("没有session provider");
+		var storage = HttpCache.getSessionStorage();
+		if (storage == null) throw new IllegalStateException("没有SessionStorage");
 
 		if (session == null) {
 			Cookie c = cookie().get(sessionName);
-			if (c != null && SessionProvider.isValid(c.value())) sessionId = c.value();
+			if (c != null && DataStorage.isValid(c.value())) sessionId = c.value();
 			else if (!createIfNonExist) return null;
 			else {
-				c = new Cookie(sessionName, sessionId = provider.createSession()).httpOnly(true);
+				c = new Cookie(sessionName, sessionId = storage.newId()).httpOnly(true);
 				cookie.put(sessionName, c);
 			}
-			session = provider.loadSession(sessionId);
+			session = storage.get(sessionId);
 			if (session == null && createIfNonExist) session = new MyHashMap<>();
 		}
 		return session;
 	}
 	public void session_write_close() {
 		if (session != null) {
-			SessionProvider.getDefault().saveSession(sessionId, session);
+			HttpCache.getSessionStorage().put(sessionId, session);
 			session = null;
 			sessionId = null;
 		}
@@ -213,7 +213,7 @@ public final class Request extends Headers {
 	public void session_destroy() throws IllegalRequestException {
 		session(false);
 		if (sessionId != null) {
-			SessionProvider.getDefault().destroySession(sessionId);
+			HttpCache.getSessionStorage().remove(sessionId);
 			session = null;
 			sessionId = null;
 

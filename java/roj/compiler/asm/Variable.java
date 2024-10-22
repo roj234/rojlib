@@ -3,7 +3,6 @@ package roj.compiler.asm;
 import roj.asm.tree.attr.LocalVariableTable;
 import roj.asm.type.IType;
 import roj.compiler.ast.stream.StreamChainImpl;
-import roj.util.VarMapper;
 
 /**
  * @author Roj234
@@ -16,7 +15,7 @@ public class Variable extends LocalVariableTable.Item implements Cloneable {
 	public int useCount;
 	public StreamChainImpl streamChain;
 
-	VarMapper.VarX att;
+	public Object att;
 
 	public Variable(String name, IType type) { super(name, type); }
 

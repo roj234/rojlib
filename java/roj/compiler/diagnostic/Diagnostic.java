@@ -36,7 +36,7 @@ public class Diagnostic {
 
 	public Kind getKind() { return kind; }
 
-	public String getFilePath() {return source == null ? "<compiler>" : source instanceof CompileUnit cu ? cu.getSourceFile() : source.name();}
+	public String getFile() {return source == null ? JavaLexer.i18n.translate("lava.compiler") : source instanceof CompileUnit cu ? cu.getSourceFile() : source.name();}
 	public IClass getSource() { return source; }
 	public int getStartPosition() { return offset; }
 	public int getEndPosition() { return offset+length; }
@@ -88,6 +88,6 @@ public class Diagnostic {
 	@Nls
 	public String getMessage(Locale locale) {
 		if (!locale.equals(Locale.SIMPLIFIED_CHINESE)) return code;
-		return JavaLexer.translate.translate(code+(args == null ? "" : ":"+(TextUtil.join(Arrays.asList(getArgs()), ":"))));
+		return JavaLexer.i18n.translate(code+(args == null ? "" : ":"+(TextUtil.join(Arrays.asList(getArgs()), ":"))));
 	}
 }

@@ -1,10 +1,10 @@
 package roj.io.source;
 
+import roj.io.MyDataInput;
 import roj.reflect.ReflectionUtils;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
 
-import java.io.DataInput;
 import java.io.IOException;
 import java.io.InputStream;
 
@@ -58,7 +58,7 @@ public class MemorySource extends Source {
 
 	public void reopen() {}
 
-	public DataInput asDataInput() { return list; }
+	public MyDataInput asDataInput() { return list; }
 	public InputStream asInputStream() { return list.asInputStream(); }
 
 	public Source threadSafeCopy() { return new MemorySource(buffer()); }

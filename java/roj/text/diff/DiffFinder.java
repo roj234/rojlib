@@ -19,7 +19,6 @@ import roj.config.serial.CVisitor;
 import roj.config.serial.ToYaml;
 import roj.io.FastFailException;
 import roj.io.IOUtil;
-import roj.io.buf.BufferPool;
 import roj.text.CharList;
 import roj.text.TextReader;
 import roj.text.TextUtil;
@@ -29,7 +28,6 @@ import roj.ui.GuiUtil;
 import roj.ui.OnChangeHelper;
 import roj.util.ArrayCache;
 import roj.util.BsDiff;
-import roj.util.DynByteBuf;
 import sun.misc.Unsafe;
 
 import javax.swing.*;
@@ -71,7 +69,7 @@ public class DiffFinder extends JFrame {
 	private static final class FileMeta {
 		String path;
 		int group, bucket;
-		transient DynByteBuf data;
+		transient byte[] data;
 	}
 
 	private Pattern nameFilter;
@@ -325,7 +323,7 @@ public class DiffFinder extends JFrame {
 								i = r;
 							}
 
-							meta.data = BufferPool.localPool().allocate(true, i, 0).put(out, 0, i);
+							meta.data = Arrays.copyOf(out, i);
 							ArrayCache.putArray(out);
 							memoryUsage.addAndGet(i);
 
@@ -350,7 +348,7 @@ public class DiffFinder extends JFrame {
 								sb.clear();
 							}
 
-							meta.data = BufferPool.localPool().allocate(true, i, 0).put(out, 0, i);
+							meta.data = Arrays.copyOf(out, i);
 							ArrayCache.putArray(out);
 							memoryUsage.addAndGet(i);
 
@@ -465,9 +463,9 @@ public class DiffFinder extends JFrame {
 							if (group >= 0 && right.group == group) continue;
 
 							var dataB = right.data;
-							int maxHeadDiff = (int) (dataB.readableBytes() * DIFF_MAX);
+							int maxHeadDiff = (int) (dataB.length * DIFF_MAX);
 
-							int byteDiff = diff.getDiffLength(dataB, slideWindow, dataB.readableBytes()-slideWindow, maxHeadDiff);
+							int byteDiff = diff.getDiffLength(dataB, slideWindow, dataB.length-slideWindow, maxHeadDiff);
 							if (byteDiff >= 0) {
 								DiffResult diff1 = new DiffResult();
 								diff1.left = left.path;
@@ -483,9 +481,9 @@ public class DiffFinder extends JFrame {
 							if (group >= 0 && right.group == group) continue;
 
 							var dataB = right.data;
-							int maxHeadDiff = (int) (dataB.readableBytes() * DIFF_MAX);
+							int maxHeadDiff = (int) (dataB.length * DIFF_MAX);
 
-							int byteDiff = diff.getDiffLength(dataB, slideWindow, dataB.readableBytes()-slideWindow, maxHeadDiff);
+							int byteDiff = diff.getDiffLength(dataB, slideWindow, dataB.length-slideWindow, maxHeadDiff);
 							if (byteDiff >= 0) {
 								DiffResult diff1 = new DiffResult();
 								diff1.left = left.path;
@@ -541,8 +539,7 @@ public class DiffFinder extends JFrame {
 					List<FileMeta> value = layered.get(j);
 					if (value != null) {
 						for (FileMeta file : value) {
-							mem += file.data.readableBytes();
-							BufferPool.reserve(file.data);
+							mem += file.data.length;
 							file.data = null;
 						}
 						layered.set(j, Collections.emptyList());

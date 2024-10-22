@@ -12,7 +12,7 @@ import roj.compiler.context.LocalContext;
 import roj.compiler.diagnostic.Diagnostic;
 import roj.compiler.diagnostic.TextDiagnosticReporter;
 import roj.compiler.plugins.GlobalContextApi;
-import roj.compiler.plugins.constant.Constant;
+import roj.compiler.plugins.eval.Constant;
 import roj.io.IOUtil;
 import roj.text.ACalendar;
 import roj.text.TextUtil;

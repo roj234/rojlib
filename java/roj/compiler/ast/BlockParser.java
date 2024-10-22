@@ -25,6 +25,7 @@ import roj.compiler.asm.MethodWriter;
 import roj.compiler.asm.Variable;
 import roj.compiler.ast.expr.*;
 import roj.compiler.context.CompileUnit;
+import roj.compiler.context.GlobalContext;
 import roj.compiler.context.LocalContext;
 import roj.compiler.diagnostic.Kind;
 import roj.compiler.resolve.*;
@@ -65,6 +66,11 @@ public final class BlockParser {
 	private final ExprParser ep;
 	private final JavaLexer wr;
 
+	public final VisMap visMap = new VisMap();
+	private final VarMapper varMapper = new VarMapper();
+	private final SimpleList<Variable> allVariables = new SimpleList<>();
+	private int maxVariableSlot;
+
 	private CompileUnit file;
 	private MethodWriter cw;
 	private boolean blockMethod;
@@ -77,6 +83,11 @@ public final class BlockParser {
 	}
 
 	public BlockParser reset() {
+		this.visMap.clear();
+		this.varMapper.clear();
+		this.allVariables.clear();
+		this.maxVariableSlot = 0;
+
 		this.variables.clear();
 		this.regionNew.clear();
 		this.sectionFlag = 0;
@@ -137,6 +148,7 @@ public final class BlockParser {
 				fastSlot += type.rawType().length();
 			}
 		}
+		maxVariableSlot = fastSlot;
 
 		parse0();
 
@@ -165,6 +177,8 @@ public final class BlockParser {
 		}
 
 		endCodeBlock();
+		// TODO stackSize compute
+		cw.visitSizeMax(10, maxVariableSlot);
 	}
 	//endregion
 	/**
@@ -366,24 +380,28 @@ public final class BlockParser {
 		}
 	}
 
-	private final VarMapper varMapper = new VarMapper();
 	// 自然也有slowSlot => VarMapper
 	private int fastSlot;
 	private Variable newVar(String name, IType type) {
 		// TODO => CONSIDER TYPE MERGING (if var)
 		Variable v = new Variable(name, type);
-		v.slot = fastSlot;
 		v.startPos = v.endPos = wr.index;
+		postDefineVar(type, v);
+		return v;
+	}
+	private void postDefineVar(IType type, Variable v) {
+		v.slot = fastSlot;
 
-		if (!name.startsWith("@") && null != variables.putIfAbsent(name, v)) {
-			ctx.report(Kind.ERROR, "block.var.error.duplicate", name);
-			return v;
+		if (!v.name.startsWith("@") && null != variables.putIfAbsent(v.name, v)) {
+			ctx.report(Kind.ERROR, "block.var.error.duplicate", v.name);
 		}
 
-		if (!regionNew.isEmpty()) regionNew.get(regionNew.size()-1).add(v);
-
+		if (!regionNew.isEmpty()) regionNew.getLast().add(v);
 		fastSlot += type.rawType().length();
-		return v;
+		if (maxVariableSlot < fastSlot) maxVariableSlot = fastSlot;
+
+		visMap.add(v);
+		//allVariables.add(v);
 	}
 	// endregion
 	// try-finally重定向return
@@ -442,6 +460,7 @@ public final class BlockParser {
 
 						if (!ctx.instanceOf(type.owner(), "java/lang/AutoCloseable")) {
 							ctx.report(Kind.ERROR, "block.try.noAutoCloseable", type);
+							continue;
 						}
 
 						var tryANullable = !(node instanceof Invoke i && i.isNew());
@@ -461,8 +480,10 @@ public final class BlockParser {
 
 			flag |= 2;
 			except(lBrace);
+			visMap.enter();
 			block();
 		} else {
+			visMap.enter();
 			blockV();
 		}
 
@@ -475,14 +496,17 @@ public final class BlockParser {
 			beginCodeBlock();
 
 			var vars = tryNode.vars;
-			for (int i = 0; i < vars.size(); i++) {
-				if (vars.get(i) instanceof Variable v) {
-					variables.remove(v.name);
-					regionNew.getLast().add(v);
+			// 如果所有变量都不是autocloseable类型（错误）
+			if (!vars.isEmpty()) {
+				for (int i = 0; i < vars.size(); i++) {
+					if (vars.get(i) instanceof Variable v) {
+						variables.remove(v.name);
+						regionNew.getLast().add(v);
+					}
 				}
-			}
 
-			closeResource(anyNormal, tryNode, blockEnd, tryEnd);
+				closeResource(anyNormal, tryNode, blockEnd, tryEnd);
+			}
 
 			endCodeBlock();
 		} else {
@@ -501,10 +525,14 @@ public final class BlockParser {
 			switch (w.type()) {
 				default -> wr.unexpected(w.val(), "block.except.tryOrAuto");
 				case lBrace -> { // {
+					visMap.orElse();
+
 					cw.one(POP);
 					flag |= 1;
 				}
 				case lParen -> { // (
+					visMap.orElse();
+
 					// TODO "不能抛出异常" 的检测
 					IType type = ctx.resolveType(file.readType(0));
 					entry.type = type.owner();
@@ -546,11 +574,13 @@ public final class BlockParser {
 		}
 		// endregion
 
-		// TODO breakHook
+		// TODO breakHook 在break跳转到try之外前需要执行finally
 		Label hook = returnHook;
 		IntList used = returnHookUsed;
 		returnHook = prevHook;
 		returnHookUsed = prevUse;
+
+		visMap.exit();
 
 		if (w.type() == FINALLY) {
 			boolean isNormalFinally = prevHook == null && w.val().equals("finally");
@@ -875,6 +905,7 @@ public final class BlockParser {
 			ctx.report(Kind.ERROR, "block.goto.error.noSuchLabel", w.val());
 		}
 		except(semicolon);
+		//visMap.jump();
 		controlFlowTerminate();
 	}
 
@@ -896,6 +927,8 @@ public final class BlockParser {
 				ctx.report(Kind.ERROR, "block.goto.error.noSuchLabel", w.val());
 			}
 
+			// TODO
+			//visMap.jump();
 			except(semicolon);
 		} else if (w.type() == semicolon) {
 			Label node = isBreak ? curBreak : curContinue;
@@ -904,6 +937,7 @@ public final class BlockParser {
 			} else {
 				ctx.report(Kind.ERROR, "block.goto.error.outsideLoop", errId);
 			}
+			//visMap.jump(-1);
 		} else {
 			throw wr.err("block.except.labelOrSemi");
 		}
@@ -951,6 +985,7 @@ public final class BlockParser {
 			cw.one(rt.shiftedOpcode(IRETURN));
 		}
 
+		visMap.terminate();
 		controlFlowTerminate();
 	}
 
@@ -963,6 +998,7 @@ public final class BlockParser {
 		}
 
 		cw.one(ATHROW);
+		visMap.terminate();
 		controlFlowTerminate();
 	}
 	// endregion
@@ -970,8 +1006,13 @@ public final class BlockParser {
 	private void _if() throws ParseException {
 		Label ifFalse = condition(null, 0);
 
+		visMap.enter();
+
 		if (constantHint < 0) skipBlockOrStatement();
-		else blockOrStatement();
+		else {
+			blockOrStatement();
+			visMap.orElse();
+		}
 
 		if (!wr.nextIf(ELSE)) {
 			cw.label(ifFalse);
@@ -988,12 +1029,16 @@ public final class BlockParser {
 		// if goto else goto 由MethodWriter处理
 		cw.label(ifFalse);
 		if (constantHint > 0) skipBlockOrStatement();
-		else blockOrStatement();
+		else {
+			blockOrStatement();
+			visMap.orElse();
+		}
 		if (end != null) cw.label(end);
 
 		// if (xx) {} else if() {}
 		//      is equivalent to
 		// if (xx) {} else { if() {} }
+		visMap.exit();
 	}
 
 	// 宏的一部分，忽略常量部分的所有内容，其它的处理还在Trinary和switch
@@ -1064,14 +1109,16 @@ public final class BlockParser {
 
 		NoForEach:{
 		if (w.type() != semicolon) {
-			wr.retractWord();
-
 			beginCodeBlock();
-			define(null);
+			statement(w);
 			hasVar = true;
 
 			// region ForEach for (Vtype vname : expr) {}
 			if (wr.current().type() == colon) {
+				if (regionNew.getLast().size() != 1) {
+					ctx.report(Kind.ERROR, "block.for.manyVariablesInForeach", regionNew.getLast().size());
+				}
+
 				Variable lastVar = (Variable) regionNew.getLast().getLast();
 
 				ExprNode iter = ep.parse(ExprParser.STOP_RSB|ExprParser.SKIP_RSB|ExprParser.NAE).resolve(ctx);
@@ -1187,6 +1234,8 @@ public final class BlockParser {
 			execLast = ep.parse(ExprParser.STOP_RSB | ExprParser.SKIP_RSB);
 		}
 
+		visMap.enter();
+
 		nBreakTo = CodeWriter.newLabel();
 		if (constantHint < 0) skipBlockOrStatement();
 		else {
@@ -1208,6 +1257,8 @@ public final class BlockParser {
 
 		cw.label(breakTo);
 
+		visMap.orElse();
+
 		// for-else (python语法) 如果在循环内使用break退出，则不会进入该分支
 		// 如果循环正常结束，或从未开始，都会进入该分支
 		if (wr.nextIf(ELSE)) {
@@ -1217,6 +1268,8 @@ public final class BlockParser {
 			cw.label(nBreakTo); // add to labels
 			nBreakTo.set(breakTo);
 		}
+
+		visMap.exit();
 	}
 	private void _while() throws ParseException {
 		MethodWriter fork = cw.fork(), prev = cw;
@@ -1233,6 +1286,7 @@ public final class BlockParser {
 		// 比较 => head
 		// breakTo:
 
+		visMap.enter();
 		switch (constantHint) {
 			case 0 -> {
 				Label continueTo = new Label(), breakTo = new Label();
@@ -1245,6 +1299,8 @@ public final class BlockParser {
 				fork.writeTo(cw);
 				head.set(head1);
 				cw.label(breakTo);
+
+				visMap.orElse();
 			}
 			case 1 -> { // while true
 				Label continueTo = new Label(), breakTo = new Label();
@@ -1258,8 +1314,10 @@ public final class BlockParser {
 			}
 			case -1 -> skipBlockOrStatement(); // while false
 		}
+		visMap.exit();
 	}
 	private void _doWhile() throws ParseException {
+		// 这个不需要VisMap因为无论如何都会执行
 		Label continueTo = cw.label(), breakTo = new Label();
 
 		loopBody(continueTo, breakTo);
@@ -1350,6 +1408,7 @@ public final class BlockParser {
 		int flags = 0;
 		boolean lastBreak = false;
 
+		visMap.enter();
 		loop:
 		while (wr.hasNext()) {
 			SwitchNode.Case kase;
@@ -1410,7 +1469,8 @@ public final class BlockParser {
 							if (cst != null && cst.equals(node.constVal()))
 								match = true;
 						} else {
-							if (kind < 3 && (flags&32) == 0) {
+							// 防止用case (a = b)之类的搞坏VisMap的预测
+							if (!(node instanceof DotGet) || (kind < 3 && (flags&32) == 0)) {
 								ctx.report(Kind.ERROR, "block.switch.nonConstant");
 								flags |= 32;
 							}
@@ -1468,6 +1528,7 @@ public final class BlockParser {
 			} else {
 				lastBreak = switchBlock(breakTo, w.type() == lambda, parse);
 			}
+			visMap.orElse();
 		}
 
 		// 忽略最后一个分支的最后的break;
@@ -2236,7 +2297,6 @@ public final class BlockParser {
 		do {
 			var name = wr.except(Word.LITERAL).val();
 			var var = new Variable(name, type);
-			var.slot = fastSlot;
 			var.startPos = var.endPos = wr.index;
 
 			w = wr.next();
@@ -2252,7 +2312,7 @@ public final class BlockParser {
 					if (Inferrer.hasUndefined(type)) {
 						var g = (Generic) type;
 						if (g.children.size() != 1 || g.children.get(0) != Asterisk.anyGeneric) {
-							//ctx.report(Kind.ERROR, "invoke.noExact");
+							GlobalContext.debugLogger().info("trap 2316");
 						}
 					}
 					node.write(cw);
@@ -2268,11 +2328,7 @@ public final class BlockParser {
 				if (type == T_VAR) ctx.report(Kind.ERROR, "block.var.var");
 			}
 
-			if (null != variables.putIfAbsent(name, var))
-				ctx.report(Kind.ERROR, "block.var.error.duplicate", name);
-
-			if (!regionNew.isEmpty()) regionNew.getLast().add(var);
-			fastSlot += type.rawType().length();
+			postDefineVar(type, var);
 		} while (w.type() == comma);
 
 		if (!ctx.classes.isSpecEnabled(CompilerSpec.OPTIONAL_SEMICOLON) && w.type() != semicolon)

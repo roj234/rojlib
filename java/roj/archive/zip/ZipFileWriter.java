@@ -6,8 +6,8 @@ import roj.archive.ArchiveFile;
 import roj.archive.ArchiveWriter;
 import roj.crypt.CRC32s;
 import roj.io.IOUtil;
+import roj.io.source.CompositeSource;
 import roj.io.source.FileSource;
-import roj.io.source.FragmentSource;
 import roj.io.source.Source;
 import roj.util.ArrayCache;
 import roj.util.ByteList;
@@ -38,7 +38,7 @@ public class ZipFileWriter extends OutputStream implements ArchiveWriter {
 
 	public ZipFileWriter(File file) throws IOException { this(file, Deflater.DEFAULT_COMPRESSION, 0); }
 	public ZipFileWriter(File file, int compression, long splitSize) throws IOException {
-		this.file = splitSize != 0 ? FragmentSource.fixed(file, splitSize) : new FileSource(file);
+		this.file = splitSize != 0 ? CompositeSource.fixed(file, splitSize) : new FileSource(file);
 		this.file.seek(0);
 		this.def = new Deflater(compression, true);
 	}

@@ -10,6 +10,7 @@ import roj.compiler.context.LocalContext;
 import roj.compiler.diagnostic.Kind;
 import roj.compiler.doc.Javadoc;
 import roj.compiler.plugins.annotations.AutoIncrement;
+import roj.concurrent.OperationDone;
 import roj.config.I18n;
 import roj.config.ParseException;
 import roj.config.Tokenizer;
@@ -149,11 +150,11 @@ public final class JavaLexer extends Tokenizer {
 	private static final MyBitSet JAVA_LEND = new MyBitSet();
 	private static final Int2IntMap JAVA_C2C = new Int2IntMap();
 
-	public static I18n translate;
+	public static I18n i18n;
 	static {
 		String path = System.getProperty("roj.lavac.i18n");
 		try {
-			translate = new I18n(path == null ? IOUtil.getTextResource("roj/compiler/kscript.lang") : IOUtil.readUTF(new File(path)));
+			i18n = new I18n(path == null ? IOUtil.getTextResource("roj/compiler/kscript.lang") : IOUtil.readUTF(new File(path)));
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
@@ -170,6 +171,7 @@ public final class JavaLexer extends Tokenizer {
 		JAVA_TOKEN.put("/*", new Word().init(0, ST_MULTI_LINE_COMMENT, "*/"));
 		JAVA_TOKEN.put("\"\"\"", new Word().init(1, -1, "\"\"\""));
 		JAVA_TOKEN.put("/**", new Word().init(2, -1, "*/"));
+		JAVA_TOKEN.put("`", new Word().init(3, -1, "`"));
 
 		addWhitespace(JAVA_LEND);
 		JAVA_LEND.remove('$');
@@ -197,6 +199,10 @@ public final class JavaLexer extends Tokenizer {
 	public final Tokenizer init(CharSequence seq) {
 		super.init(seq);
 		LN = 1;
+
+		stack.clear();
+		labelGen = null;
+		lines = null;
 		return this;
 	}
 
@@ -308,13 +314,20 @@ public final class JavaLexer extends Tokenizer {
 
 	@Override
 	protected Word onSpecialToken(Word w) throws ParseException {
-		if (w.type() == 2) {
-			if (javadocCollector == null) multiLineComment(null, "*/");
-			else readJavadoc();
-			return null;
-		} else {
-			return readStringBlock();
+		switch (w.type()) {
+			case 3 -> {
+				return formClip(LITERAL, readSlashString('`', false));
+			}
+			case 2 -> {
+				if (javadocCollector == null) multiLineComment(null, "*/");
+				else readJavadoc();
+				return null;
+			}
+			case 1 -> {
+				return readStringBlock();
+			}
 		}
+		throw OperationDone.NEVER;
 	}
 	private void readJavadoc() {
 		var doc = new Javadoc();
@@ -437,7 +450,7 @@ public final class JavaLexer extends Tokenizer {
 	}
 
 	public void setLines(LineNumberTable _new) {
-		assert lines == null;
+		if (lines != null) throw new IllegalStateException("excepting a proper reset after a failed parsing");
 		lines = _new;
 		stack.clear();
 	}
@@ -464,7 +477,7 @@ public final class JavaLexer extends Tokenizer {
 	}
 
 	@Override
-	protected String i18n(String msg) { return translate.translate(msg); }
+	protected String i18n(String msg) { return i18n.translate(msg); }
 
 	public final Word except(short type) throws ParseException {
 		Word w = next();

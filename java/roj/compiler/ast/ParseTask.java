@@ -196,6 +196,7 @@ public interface ParseTask {
 							.put(Opcodes.INVOKESPECIAL)
 							.putShort(file.cp.getMethodRefId("java/lang/Enum", "<init>", "(Ljava/lang/String;I)V"));
 						cw.insertBefore(buf);
+						cw.visitSizeMax(3, 0);
 						break autoConstructor;
 					}
 
@@ -212,9 +213,9 @@ public interface ParseTask {
 						.put(Opcodes.INVOKESPECIAL)
 						.putShort(file.cp.getMethodRefId(file.parent, "<init>", "()V"));
 					cw.insertBefore(buf);
+					cw.visitSizeMax(1, 0);
 				}
 
-				cw.visitSizeMax(10, 20);
 				cw.finish();
 
 				mn.putAttr(new AttrUnknown("Code", cw.bw.toByteArray()));

@@ -7,7 +7,6 @@ import roj.asm.Parser;
 import roj.asm.cp.ConstantPool;
 import roj.asm.cp.CstUTF;
 import roj.asm.tree.attr.*;
-import roj.asm.tree.attr.MethodParameters.MethodParam;
 import roj.asm.type.IType;
 import roj.asm.type.Signature;
 import roj.asm.type.Type;
@@ -139,9 +138,9 @@ public final class MethodNode extends CNode {
 
 		if (attrByName("Deprecated") != null) sb.padEnd(' ', prefix).append("@Deprecated").append('\n');
 		a = parsedAttr(cp, Attribute.RtAnnotations);
-		if (a != null) a.toString(sb, prefix).append('\n');
+		if (a != null) a.toString(sb, prefix);
 		a = parsedAttr(cp, Attribute.ClAnnotations);
-		if (a != null) a.toString(sb, prefix).append('\n');
+		if (a != null) a.toString(sb, prefix);
 
 		sb.padEnd(' ', prefix);
 		if ((modifier&Opcodes.ACC_ABSTRACT) == 0 && owner != null && (owner.modifier&(Opcodes.ACC_INTERFACE|Opcodes.ACC_ANNOTATION)) == Opcodes.ACC_INTERFACE) sb.append("default ");
@@ -164,7 +163,9 @@ public final class MethodNode extends CNode {
 			sb.append('(');
 
 			if (!in.isEmpty()) {
-				MethodParameters acc = parsedAttr(cp, Attribute.MethodParameters);
+				var modifiers = parsedAttr(cp, Attribute.MethodParameters);
+				var a1 = parsedAttr(cp, Attribute.ClParameterAnnotations);
+				var a2 = parsedAttr(cp, Attribute.RtParameterAnnotations);
 				XAttrCode code;
 				try {
 					code = parsedAttr(cp, Attribute.Code);
@@ -177,19 +178,33 @@ public final class MethodNode extends CNode {
 				LocalVariableTable lvt = code != null ? (LocalVariableTable) code.attrByName("LocalVariableTable") : null;
 				Label ZERO_READONLY = new Label(0);
 
-				int slot = (modifier &Opcodes.ACC_STATIC) == 0 ? 1 : 0;
+				int slot = (modifier&Opcodes.ACC_STATIC) == 0 ? 1 : 0;
 				for (int j = 0;;) {
 					IType type = sig != null && sig.values.size() > j ? sig.values.get(j) : in.get(j);
 
-					MethodParam name_a = acc == null || acc.flags.size() <= j ? null : acc.flags.get(j);
-					LocalVariableTable.Item name_b = lvt == null ? null : lvt.getItem(ZERO_READONLY, slot);
-
 					String name = null;
+
+					var name_a = modifiers == null || modifiers.flags.size() <= j ? null : modifiers.flags.get(j);
 					if (name_a != null) {
 						name = name_a.name;
 						Opcodes.showModifiers(name_a.flag, Opcodes.ACC_SHOW_PARAM, sb);
 					}
+
+					var name_b = lvt == null ? null : lvt.getItem(ZERO_READONLY, slot);
 					if (name_b != null) name = name_b.name;
+
+					if (a1 != null && a1.annotations.size() > j) {
+						var list = a1.annotations.get(j);
+						for (int i = 0; i < list.size(); i++) {
+							sb.append(list.get(i)).append(' ');
+						}
+					}
+					if (a2 != null && a2.annotations.size() > j) {
+						var list = a2.annotations.get(j);
+						for (int i = 0; i < list.size(); i++) {
+							sb.append(list.get(i)).append(' ');
+						}
+					}
 
 					sb.append(type);
 					if (name != null) sb.append(' ').append(name);
@@ -229,46 +244,6 @@ public final class MethodNode extends CNode {
 		} catch (Exception e) {
 			sb.append(e);
 		}
-		return sb;
-	}
-
-	public CharList toAsmLang(CharList sb, ConstantPool cp, int prefix) {
-		Annotations a;
-
-		if (attrByName("Deprecated") != null) sb.padEnd(' ', prefix).append(".attr Deprecated {}").append('\n');
-		if (attrByName("Synthetic") != null) sb.padEnd(' ', prefix).append(".attr Synthetic {}").append('\n');
-
-		a = parsedAttr(cp, Attribute.RtAnnotations);
-		if (a != null) a.toString(sb, prefix).append('\n');
-		a = parsedAttr(cp, Attribute.ClAnnotations);
-		if (a != null) a.toString(sb, prefix).append('\n');
-
-		Opcodes.showModifiers(modifier, Opcodes.ACC_SHOW_METHOD, sb.padEnd(' ', prefix));
-
-		if (!name().equals("<clinit>")) {
-			sb.append(name()).append(' ').append(rawDesc());
-
-			AttrClassList exceptions = parsedAttr(cp, Attribute.Exceptions);
-			if (exceptions != null) {
-				sb.append(" throws ");
-				List<String> classes = exceptions.value;
-				if (!classes.isEmpty()) for (int i = 0;;) {
-					String clz = classes.get(i);
-					sb.append(clz);
-					if (++i == classes.size()) break;
-					sb.append(", ");
-				}
-			}
-
-			AnnotationDefault def = parsedAttr(cp, Attribute.AnnotationDefault);
-			if (def != null) sb.append(" default ").append(def.val);
-		} else {
-			sb.setLength(sb.length()-1);
-		}
-
-		XAttrCode code = parsedAttr(cp, Attribute.Code);
-		if (code != null) code.toAsmLang(sb.append(" {"), prefix+4).append('\n').padEnd(' ', prefix).append("}");
-		else sb.append(';');
 		return sb;
 	}
 }

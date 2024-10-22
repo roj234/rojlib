@@ -9,4 +9,5 @@ public interface UserManager {
 	 User getUserByName(String user);
 	 User createUser(String name);
 	 void setDirty(User user, String... field);
+	 default void onShutdown() {}
 }

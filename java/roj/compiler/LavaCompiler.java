@@ -14,7 +14,7 @@ import roj.compiler.plugins.GlobalContextApi;
 import roj.compiler.plugins.annotations.AnnotationProcessor1;
 import roj.compiler.plugins.annotations.AnnotationProcessor2;
 import roj.compiler.plugins.asm.AsmHook;
-import roj.compiler.plugins.constant.ConstantEvaluator;
+import roj.compiler.plugins.eval.Evaluator;
 import roj.compiler.resolve.TypeResolver;
 import roj.compiler.test.CandyTestPlugin;
 import roj.io.IOUtil;
@@ -35,25 +35,38 @@ public class LavaCompiler {
 	public final GlobalContextApi gctx = new GlobalContextApi();
 	public final LocalContext lctx = gctx.createLocalContext();
 	public final ClassLoader maker = new ClassDefiner(LavaCompiler.class.getClassLoader(), "LavaLambdaLink");
+	public final AsmHook injector;
+	public String fileName = "<eval>";
 
 	public LavaCompiler() throws IOException {
 		LocalContext.set(lctx);
-		initDefaultPlugins(gctx);
+		injector = initDefaultPlugins(gctx);
 		LocalContext.set(null);
 		((TextDiagnosticReporter) gctx.listener).errorOnly = true;
 	}
 
-	static void initDefaultPlugins(GlobalContextApi ctx) throws IOException {
-		ctx.addLibrary(new LibraryZipFile(IOUtil.getJar(LavaCompiler.class)));
+	public static final LibraryZipFile Implib_Archive;
+	static {
+		try {
+			Implib_Archive = new LibraryZipFile(IOUtil.getJar(LavaCompiler.class));
+		} catch (IOException e) {
+			throw new RuntimeException(e);
+		}
+	}
+
+	static AsmHook initDefaultPlugins(GlobalContextApi ctx) throws IOException {
+		ctx.addLibrary(Implib_Archive);
 
 		AsmHook hook = AsmHook.init(ctx);
 		hook.injectedProperties.put("咕咕咕", Constant.valueOf("咕咕咕咕，我是🕊"));
-		ConstantEvaluator.init(ctx);
+		Evaluator.init(ctx);
 
 		ctx.addGenericProcessor(new AnnotationProcessor1());
 		ctx.addGenericProcessor(new AnnotationProcessor2());
 
 		new CandyTestPlugin().register(ctx);
+
+		return hook;
 	}
 
 	@SuppressWarnings("unchecked")
@@ -70,7 +83,7 @@ public class LavaCompiler {
 		}
 		if (myMethod == null) throw new IllegalArgumentException(functionalInterface.getName()+"看起来不像FunctionalInterface");
 
-		CompileUnit u = new CompileUnit("<stdin>", methodStr+"}");
+		CompileUnit u = new CompileUnit(fileName, methodStr+"}");
 
 		u.version = CompileUnit.JavaVersion(8);
 		u.name("roj/lavac/Lambda"+ReflectionUtils.uniqueId());
