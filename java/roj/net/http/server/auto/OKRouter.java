@@ -137,9 +137,7 @@ public final class OKRouter implements Router {
 		for (int i = 0; i < methods.size(); i++) {
 			var mn = methods.get(i);
 
-			var list = Attributes.getAnnotations(data.cp, mn, false);
-			if (list == null) continue;
-			var a = parseAnnotations(list);
+			var a = parseAnnotations(Annotation.getAnnotations(data.cp, mn, false));
 			if (a == null) continue;
 
 			if (a.type().equals("roj/net/http/server/auto/Interceptor")) {
@@ -329,7 +327,7 @@ public final class OKRouter implements Router {
 
 	@Nullable
 	private static List<AnnVal> getPredefInterceptor(ConstantData data) {
-		var preDef = Attributes.getAnnotation(Attributes.getAnnotations(data.cp, data, false), "roj/net/http/server/auto/Interceptor");
+		var preDef = Annotation.findInvisible(data.cp, data, "roj/net/http/server/auto/Interceptor");
 		return preDef != null ? preDef.getArray("value") : null;
 	}
 	private static Annotation parseAnnotations(List<Annotation> list) {
@@ -425,7 +423,7 @@ public final class OKRouter implements Router {
 	private void provideBodyPars(CodeWriter c, ConstantPool cp, MethodNode m, int begin, List<TryCatchEntry> tries) {
 		List<Type> parTypes = m.parameters();
 
-		Annotation body = Attributes.getAnnotation(Attributes.getAnnotations(cp, m, false), "roj/net/http/server/auto/Body");
+		Annotation body = Annotation.findInvisible(cp, m, "roj/net/http/server/auto/Body");
 		if (body == null) throw new IllegalArgumentException("没有@Body注解 " + m);
 
 		List<List<Annotation>> annos = Attributes.getParameterAnnotation(cp, m, false);
@@ -447,7 +445,7 @@ public final class OKRouter implements Router {
 		bw.tries = tries;
 
 		for (; begin < parTypes.size(); begin++) {
-			bw.process(begin>=annos.size()?null: Attributes.getAnnotation(annos.get(begin), "roj/net/http/server/auto/Field"),
+			bw.process(begin>=annos.size()?null: Annotation.find(annos.get(begin), "roj/net/http/server/auto/Field"),
 				begin>=parNames.size()?null:parNames.get(begin),
 				parTypes.get(begin),
 				begin>=genTypes.size()|| !(genTypes.get(begin) instanceof Generic) ? null: (Generic) genTypes.get(begin));
@@ -843,7 +841,7 @@ public final class OKRouter implements Router {
 				i = any.indexOf(node2);
 				if (i >= 0) node1 = any.get(i);
 				else {
-					if ((node2.flag&2) != 0 && j >= end) {
+					if ((node2.flag&8) != 0 && j >= end) {
 						if (value != null) throw new IllegalStateException();
 						value = node2;
 					}

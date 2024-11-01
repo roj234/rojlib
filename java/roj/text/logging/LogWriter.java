@@ -5,6 +5,7 @@ import roj.collect.MyHashMap;
 import roj.compiler.plugins.asm.ASM;
 import roj.concurrent.timing.ScheduleTask;
 import roj.concurrent.timing.Scheduler;
+import roj.reflect.ReflectionUtils;
 import roj.text.CharList;
 import roj.text.LineReader;
 import roj.text.logging.d.LogDestination;
@@ -49,6 +50,16 @@ class LogWriter extends PrintWriter {
 		sb.append("\tat ");
 		int end = name.lastIndexOf('.', name.indexOf('('));
 		int i = 4;
+
+		if (ReflectionUtils.JAVA_VERSION > 8) {
+			// java.base/
+			int module = name.indexOf('/');
+			if (module >= 0) {
+				sb.append(name, i, module+1);
+				i = module+1;
+			}
+		}
+
 		while (true) {
 			int j = name.indexOf('.', i);
 			if (j < 0 || j >= end) break;

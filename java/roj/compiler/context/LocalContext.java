@@ -13,7 +13,6 @@ import roj.asm.tree.attr.AttrClassList;
 import roj.asm.tree.attr.Attribute;
 import roj.asm.tree.attr.InnerClasses;
 import roj.asm.type.*;
-import roj.asm.util.Attributes;
 import roj.asm.util.ClassUtil;
 import roj.asm.visitor.Label;
 import roj.asmx.mapper.util.NameAndType;
@@ -29,12 +28,14 @@ import roj.compiler.ast.BlockParser;
 import roj.compiler.ast.expr.ExprNode;
 import roj.compiler.ast.expr.ExprParser;
 import roj.compiler.ast.expr.Invoke;
+import roj.compiler.ast.expr.NaE;
 import roj.compiler.diagnostic.Kind;
 import roj.compiler.resolve.*;
 import roj.config.ParseException;
 import roj.config.data.CInt;
 import roj.reflect.GetCallerArgs;
 import roj.text.CharList;
+import roj.text.TextUtil;
 import roj.util.ArrayCache;
 import roj.util.Helpers;
 
@@ -662,9 +663,11 @@ public class LocalContext {
 	// this should inherit, see #parent for details
 	public SimpleList<NestContext> enclosing = new SimpleList<>();
 
-	// Assigned by BlockParser
-	public MyHashMap<String, Variable> variables = new MyHashMap<>();
+	// Read by BlockParser
+	public final MyHashMap<String, Variable> variables = new MyHashMap<>();
 	public Variable tryVariable(String name) {return variables.get(name);}
+	public boolean hasValue(Variable v) {return bp.visMap.hasValue(v);}
+	public void assign(Variable v) {bp.visMap.assign(v);}
 
 	public static final class Import {
 		public final IClass owner;
@@ -853,7 +856,7 @@ public class LocalContext {
 
 	// region 也许应该放在GlobalContext中的一些实现特殊语法的函数
 	public Annotation getAnnotation(IClass type, Attributed node, String annotation, boolean rt) {
-		return Attributes.getAnnotation(Attributes.getAnnotations(type.cp(), node, rt), annotation);
+		return Annotation.find(Annotation.getAnnotations(type.cp(), node, rt), annotation);
 	}
 
 	private static final IntMap<ExprNode> EMPTY = new IntMap<>(0);

@@ -13,10 +13,7 @@ import roj.asm.type.Generic;
 import roj.asm.type.IType;
 import roj.asm.type.Signature;
 import roj.asm.type.Type;
-import roj.asm.visitor.CodeWriter;
-import roj.asm.visitor.Label;
-import roj.asm.visitor.StaticSegment;
-import roj.asm.visitor.SwitchSegment;
+import roj.asm.visitor.*;
 import roj.collect.*;
 import roj.compiler.CompilerSpec;
 import roj.compiler.JavaLexer;
@@ -35,10 +32,7 @@ import roj.config.Word;
 import roj.util.Helpers;
 import roj.util.VarMapper;
 
-import java.util.AbstractMap;
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.function.Function;
 
 import static roj.asm.Opcodes.*;
@@ -97,7 +91,8 @@ public final class BlockParser {
 		this.returnHookUsed = null;
 
 		this.labels.clear();
-		this.curBreak = this.curContinue = null;
+		this.imBreak = this.imContinue = null;
+		this.imPendingVis.clear();
 		this.immediateLabel = null;
 
 		this.switchMapId = 0;
@@ -140,10 +135,12 @@ public final class BlockParser {
 		for (int i = 0; i < parameters.size(); i++) {
 			IType type = parameters.get(i);
 			if (i < names.size()) {
-				// TODO @skip(_)不应该占据slot
 				Variable var = newVar(names.get(i), sign != null ? sign.values.get(i) : type);
 				if (flags != null && (flags.getFlag(i, 0)&ACC_FINAL) != 0) var.isFinal = true;
-				var.hasValue = true;
+				if (!names.get(i).equals("@skip")) {
+					var.isParam = true;
+					var.hasValue = true;
+				}
 			} else {
 				fastSlot += type.rawType().length();
 			}
@@ -365,7 +362,7 @@ public final class BlockParser {
 		regionNew.add(list);
 	}
 	private void endCodeBlock() {
-		SimpleList<Object> added = regionNew.pop();
+		var added = regionNew.pop();
 		for (int i = 1; i < added.size(); i++) {
 			Object var = added.get(i);
 			if (var instanceof Variable v) {
@@ -375,7 +372,7 @@ public final class BlockParser {
 				variables.remove(v.name);
 				fastSlot -= v.type.rawType().length();
 			} else {
-				labels.remove(var.toString());
+				Objects.requireNonNull(labels.remove(var.toString()), "regionNew.labelAdded").combineState(visMap);
 			}
 		}
 	}
@@ -383,7 +380,6 @@ public final class BlockParser {
 	// 自然也有slowSlot => VarMapper
 	private int fastSlot;
 	private Variable newVar(String name, IType type) {
-		// TODO => CONSIDER TYPE MERGING (if var)
 		Variable v = new Variable(name, type);
 		v.startPos = v.endPos = wr.index;
 		postDefineVar(type, v);
@@ -392,27 +388,29 @@ public final class BlockParser {
 	private void postDefineVar(IType type, Variable v) {
 		v.slot = fastSlot;
 
-		if (!v.name.startsWith("@") && null != variables.putIfAbsent(v.name, v)) {
-			ctx.report(Kind.ERROR, "block.var.error.duplicate", v.name);
+		if (!v.name.startsWith("@")) {
+			if (null != variables.putIfAbsent(v.name, v)) {
+				ctx.report(Kind.ERROR, "block.var.error.duplicate", v.name);
+			}
 		}
+		//allVariables.add(v);
 
 		if (!regionNew.isEmpty()) regionNew.getLast().add(v);
 		fastSlot += type.rawType().length();
 		if (maxVariableSlot < fastSlot) maxVariableSlot = fastSlot;
-
-		visMap.add(v);
-		//allVariables.add(v);
 	}
 	// endregion
-	// try-finally重定向return
+	// try-finally重定向return/break
 	private Label returnHook;
-	private IntList returnHookUsed;
+	private IntList returnHookUsed, breakHookUsed;
 	// region 异常: try-catch-finally try-with-resource
 	private void _try() throws ParseException {
-		Label prevHook = returnHook;
-		IntList prevUse = returnHookUsed;
+		var prevHook = returnHook;
+		var prevReturnHook = returnHookUsed;
+		var prevBreakHook = breakHookUsed;
 		returnHook = new Label();
 		returnHookUsed = new IntList();
+		breakHookUsed = new IntList();
 
 		Word w = wr.next();
 
@@ -574,11 +572,12 @@ public final class BlockParser {
 		}
 		// endregion
 
-		// TODO breakHook 在break跳转到try之外前需要执行finally
 		Label hook = returnHook;
 		IntList used = returnHookUsed;
+		var breakHook = breakHookUsed;
 		returnHook = prevHook;
-		returnHookUsed = prevUse;
+		returnHookUsed = prevReturnHook;
+		breakHookUsed = prevBreakHook;
 
 		visMap.exit();
 
@@ -634,6 +633,21 @@ public final class BlockParser {
 					}
 				}
 
+				// 副本的 n/3: break劫持
+				for (int i = 0; i < breakHook.size(); i++) {
+					var segment = (JumpSegment) cw.getSegment(breakHook.get(i));
+
+					var target = segment.target;
+					if (target.isValid() && target.compareTo(tryBegin) >= 0) continue;
+
+					copyCount++;
+
+					segment.target = cw.label();
+					tmp.writeTo(cw);
+
+					if (cw.isContinuousControlFlow()) cw.jump(target);
+				}
+
 				// 副本的 3/3: 正常执行(可选)
 				if (anyNormal) {
 					copyCount++;
@@ -655,6 +669,7 @@ public final class BlockParser {
 				Variable sri = newVar("@跳转自", Type.std(Type.INT));
 				Variable rva = cw.mn.returnType().type == Type.VOID ? null : newVar("@返回值", LocalContext.OBJECT_TYPE);
 				Label real_finally_handler = new Label();
+				int branchId = 0;
 
 				// 副本的 1/3: 正常执行(可选)
 				if (anyNormal) {
@@ -662,7 +677,7 @@ public final class BlockParser {
 						cw.replaceSegment(cw.nextSegmentId()-1, new StaticSegment());
 
 					cw.label(blockEnd);
-					cw.one(ICONST_0);
+					cw.ldc(branchId++);
 					cw.store(sri);
 					if (rva != null) {
 						cw.one(ACONST_NULL);
@@ -678,11 +693,44 @@ public final class BlockParser {
 					cw.label(hook);
 
 					if (rva != null) cw.store(rva);
-					cw.one(ICONST_1);
+					cw.ldc(branchId++);
 					cw.store(sri);
 					cw.one(ACONST_NULL);
 					cw.store(exc);
 					cw.jump(real_finally_handler);
+				}
+
+				// 副本的 n/3: break劫持
+				ToIntMap<Label> breakHookId;
+				if (breakHook.size() > 0) {
+					breakHookId = new ToIntMap<>();
+					for (int i = 0; i < used.size(); i++) {
+						var segmentId = used.get(i);
+						Label target = ((JumpSegment) cw.getSegment(segmentId)).target;
+						// 如果下一个segment跳转目标不是hook那么就是break或continue
+						if (target.isValid() && target.compareTo(tryBegin) >= 0) continue;
+						//  当它跳转到try外部时，才需要执行finally
+						//   外部：Label未定义（后） or 在tryBegin之前
+						//   同时,goto target替换成ldc + switch -> target
+
+						int _branchId = breakHookId.getOrDefault(target, 0);
+						if (_branchId == 0) breakHookId.putInt(target, branchId++);
+
+						var cw = this.cw.fork();
+						cw.ldc(_branchId);
+						cw.store(sri);
+						if (rva != null) {
+							cw.one(ACONST_NULL);
+							cw.store(rva);
+						}
+						cw.one(ACONST_NULL);
+						cw.store(exc);
+						cw.jump(real_finally_handler);
+
+						this.cw.replaceSegment(segmentId, new StaticSegment(cw.writeTo()));
+					}
+				} else {
+					breakHookId = null;
 				}
 
 				// 副本的 3/3: 异常
@@ -700,12 +748,37 @@ public final class BlockParser {
 				blockV();
 
 				// finally可以执行完
+				_finallyHookPostProc:
 				if (cw.isContinuousControlFlow()) {
+					if (breakHookId != null) {
+						var segment = new SwitchSegment(TABLESWITCH);
+						cw.addSegment(segment);
+
+						segment.def = cw.label();
+						cw.load(exc);
+						cw.one(ATHROW);
+
+						branchId = 0;
+						if (anyNormal) segment.branch(branchId++, blockEnd = new Label());
+						if (used.size() > 0) {
+							segment.branch(branchId, cw.label());
+							if (rva != null) cw.load(rva);
+							cw.one(cw.mn.returnType().shiftedOpcode(IRETURN));
+						}
+
+						for (var entry : breakHookId.selfEntrySet()) {
+							segment.branch(entry.v, entry.k);
+						}
+
+						break _finallyHookPostProc;
+					}
+
 					if (used.size() > 0) {
 						Label returnHook = new Label();
 
 						cw.load(sri);
-						cw.jump(IFLE, returnHook);
+						// 匹配branchId
+						cw.jump(anyNormal ? IFLE : IFLT, returnHook);
 
 						// sri > 0 : return hook
 						if (rva != null) cw.load(rva);
@@ -724,6 +797,8 @@ public final class BlockParser {
 					// sri < 0 : exception
 					cw.load(exc);
 					cw.one(ATHROW);
+				} else {
+					// TODO 删去多余的赋值语句 (延后创建到blockV之后）
 				}
 			}
 		} else {
@@ -893,19 +968,20 @@ public final class BlockParser {
 	// 对循环上标签的支持 (continue XX)
 	private LabelNode immediateLabel;
 	// 当前代码块可用的break和continue目标
-	private Label curBreak, curContinue;
+	private Label imBreak, imContinue;
+	// VisMap变量定义状态
+	private final SimpleList<VisMap.State> imPendingVis = new SimpleList<>();
 	// region 控制流终止: break continue goto return throw
 	private void _goto() throws ParseException {
-		Word w = wr.except(Word.LITERAL);
-		LabelNode info = labels.get(w.val());
+		var w = wr.except(Word.LITERAL);
+		var info = labels.get(w.val());
 		if (info != null && info.head != null) {
 			cw.jump(info.head);
-			// TODO check variable change
+			info.addState(visMap.jump());
 		} else {
 			ctx.report(Kind.ERROR, "block.goto.error.noSuchLabel", w.val());
 		}
 		except(semicolon);
-		//visMap.jump();
 		controlFlowTerminate();
 	}
 
@@ -913,31 +989,36 @@ public final class BlockParser {
 	 * @param isBreak true => break, false => continue
 	 */
 	private void _break(boolean isBreak) throws ParseException {
-		String errId = wr.current().val();
+		var errId = wr.current().val();
 
 		if ((sectionFlag&SF_SWITCH) != 0) ctx.report(Kind.ERROR, "block.switch.exprMode", errId);
 
-		Word w = wr.next();
+		var w = wr.next();
 		if (w.type() == Word.LITERAL) {
-			LabelNode info = labels.get(w.val());
+			var info = labels.get(w.val());
 			Label node;
 			if (info != null && (node = isBreak ? info.onBreak : info.onContinue) != null) {
+				if (breakHookUsed != null) breakHookUsed.add(cw.nextSegmentId());
 				cw.jump(node);
+
+				if (isBreak) info.addState(visMap.jump());
+				else visMap.terminate();
 			} else {
 				ctx.report(Kind.ERROR, "block.goto.error.noSuchLabel", w.val());
 			}
 
-			// TODO
-			//visMap.jump();
 			except(semicolon);
 		} else if (w.type() == semicolon) {
-			Label node = isBreak ? curBreak : curContinue;
+			Label node = isBreak ? imBreak : imContinue;
 			if (node != null) {
+				if (breakHookUsed != null) breakHookUsed.add(cw.nextSegmentId());
 				cw.jump(node);
+
+				if (isBreak) imPendingVis.add(visMap.jump());
+				else visMap.terminate();
 			} else {
 				ctx.report(Kind.ERROR, "block.goto.error.outsideLoop", errId);
 			}
-			//visMap.jump(-1);
 		} else {
 			throw wr.err("block.except.labelOrSemi");
 		}
@@ -971,7 +1052,7 @@ public final class BlockParser {
 			ctx.report(Kind.ERROR, "block.return.error.exceptExpr");
 		}
 
-		if (returnHook != null) {
+		if (returnHookUsed != null) {
 			if ((sectionFlag&SF_SWITCH) != 0) ctx.report(Kind.ERROR, "block.switch.exprMode.returnHook");
 
 			if (expr instanceof MultiReturn mr) {
@@ -1080,22 +1161,26 @@ public final class BlockParser {
 	// endregion
 	// region 循环: for while do-while
 	private void loopBody(@Nullable Label continueTo, @NotNull Label breakTo) throws ParseException {
-		LabelNode info = immediateLabel;
+		var info = immediateLabel;
 		if (info != null) {
 			info.onBreak = breakTo;
 			info.onContinue = continueTo;
 			immediateLabel = null;
 		}
 
-		Label prevBreak = curBreak, prevContinue = curContinue;
+		Label prevBreak = imBreak, prevContinue = imContinue;
+		int combineSize = imPendingVis.size();
 
-		if (continueTo != null) curContinue = continueTo;
-		curBreak = breakTo;
+		if (continueTo != null) imContinue = continueTo;
+		imBreak = breakTo;
 
 		blockOrStatement();
 
-		curContinue = prevContinue;
-		curBreak = prevBreak;
+		while (combineSize < imPendingVis.size()) {
+			visMap.orElse(imPendingVis.pop());
+		}
+		imContinue = prevContinue;
+		imBreak = prevBreak;
 	}
 
 	private void _for() throws ParseException {
@@ -1404,6 +1489,8 @@ public final class BlockParser {
 		 * 32 => non-constant error reported
 		 *
 		 * 64 => hasDefault
+		 *
+		 * 128 => isContinuousControlFlow ever return true
 		 */
 		int flags = 0;
 		boolean lastBreak = false;
@@ -1528,6 +1615,7 @@ public final class BlockParser {
 			} else {
 				lastBreak = switchBlock(breakTo, w.type() == lambda, parse);
 			}
+			if (cw.isContinuousControlFlow()) flags |= 128;
 			visMap.orElse();
 		}
 
@@ -1537,9 +1625,9 @@ public final class BlockParser {
 
 		setCw(tmp);
 
-		// if switch will never continue
-		// TODO check continuous control flow for EVERY subblock
-		// if (defaultBranch && (flags&128) != 0 && cw.isContinuousControlFlow()) sectionFlag |= SF_BLOCK_END;
+		visMap.exit();
+		// TODO 检测switch是否有任意分支能继续执行 (or: visMap当前block是否有未经terminateFlag的分支)
+		if ((flags&128) == 0) controlFlowTerminate();
 
 		boolean defaultBranch = (flags & 64) != 0;
 		// 检测type switch和pattern switch的混用
@@ -1570,17 +1658,68 @@ public final class BlockParser {
 		if (result.kind < 0) writePatternSwitch(result);
 		else writeTypeSwitch(result);
 	}
-	private void writePatternSwitch(SwitchNode result) {
-		/*
-		 * switch (o) {
-		 *         case Integer i -> i.doubleValue();
-		 *         case Float f -> f.doubleValue();
-		 *         case String s -> Double.parseDouble(s);
-		 *         default -> 0d;
-		 * };
-		 */
-		// class switch, must be final/sealed class to use getClass();
-		ctx.report(Kind.ERROR, "Class switch 暂未实现");
+	private void writePatternSwitch(SwitchNode node) {
+		endCodeBlock();
+
+		var sval = node.sval;
+		var switchVal = newVar("@临时_switchValue", sval.type());
+		sval.write(cw);
+		cw.store(switchVal);
+
+		var nullBranch = node.nullBranch;
+		if (nullBranch != null) {
+			var endOfBlock = new Label();
+
+			cw.load(switchVal);
+			cw.jump(IFNONNULL, endOfBlock);
+
+			if (cw.lines != null) cw.lines.add(cw.label(), nullBranch.lineNumber);
+			nullBranch.block.writeTo(cw);
+
+			if (cw.isContinuousControlFlow())
+				cw.jump(node.breakTo);
+
+			cw.label(endOfBlock);
+		}
+
+		int defaultId = -1;
+		for (int i = 0; i < node.branches.size(); i++) {
+			var kase = node.branches.get(i);
+			if (kase == nullBranch) continue;
+			if (kase.labels == null) {
+				defaultId = i;
+				continue;
+			}
+
+			var endOfBlock = new Label();
+
+			cw.load(switchVal);
+			var vType = kase.variable.type.rawType();
+			cw.clazz(Opcodes.INSTANCEOF, vType);
+			cw.jump(IFEQ, endOfBlock);
+			cw.load(switchVal);
+			cw.clazz(CHECKCAST, vType);
+			cw.store(kase.variable);
+
+			if (cw.lines != null) cw.lines.add(cw.label(), kase.lineNumber);
+			kase.block.writeTo(cw);
+
+			if (cw.isContinuousControlFlow())
+				cw.jump(node.breakTo);
+
+			cw.label(endOfBlock);
+		}
+		endCodeBlock();
+
+		if (defaultId >= 0) {
+			var kase = node.branches.get(defaultId);
+
+			if (cw.lines != null) cw.lines.add(cw.label(), kase.lineNumber);
+			kase.block.writeTo(cw);
+
+			if (cw.isContinuousControlFlow())
+				cw.jump(node.breakTo);
+		}
 	}
 	private void writeTypeSwitch(SwitchNode result) {
 		var branches = result.branches;
@@ -1758,7 +1897,7 @@ public final class BlockParser {
 			var branch = branches.get(i++);
 
 			Label pos;
-			if (branch.location != null) cw.label(pos = branch.location);
+			if (branch.tmpLoc != null) cw.label(pos = branch.tmpLoc);
 			else pos = cw.label();
 
 			branch.block.writeTo(cw);
@@ -1782,7 +1921,7 @@ public final class BlockParser {
 		Variable xvar = newVar("@", sval.type());
 		cw.one(DUP);
 		cw.store(xvar);
-		cw.jump(IFNULL, branch.location = new Label());
+		cw.jump(IFNULL, branch.tmpLoc = new Label());
 		cw.load(xvar);
 
 		endCodeBlock();
@@ -1805,7 +1944,7 @@ public final class BlockParser {
 
 		for (int i = 0; i < branches.size();) {
 			var branch = branches.get(i++);
-			Label pos = branch.location == null ? branch.location = new Label() : branch.location;
+			Label pos = branch.tmpLoc == null ? branch.tmpLoc = new Label() : branch.tmpLoc;
 
 			if (branch.labels == null) {
 				sw.def = pos;
@@ -1841,7 +1980,7 @@ public final class BlockParser {
 		// 如果要内联到上面的循环，条件判断比较麻烦，每个list1的长度都是1才可以，懒得做了
 		for (int i = 0; i < branches.size();) {
 			SwitchNode.Case branch = branches.get(i++);
-			c.label(branch.location);
+			c.label(branch.tmpLoc);
 			branch.block.writeTo(c);
 		}
 	}
@@ -2253,7 +2392,9 @@ public final class BlockParser {
 		cw.invokeV("roj/compiler/runtime/ReturnStack", "forRead", "(I)Lroj/compiler/runtime/ReturnStack;");
 
 		for (int i = 0; i < variables.size(); i++) {
-			variables.set(i, newVar(variables.get(i).toString(), types.get(i)));
+			var v = newVar(variables.get(i).toString(), types.get(i));
+			v.hasValue = true;
+			variables.set(i, v);
 		}
 
 		var tmp = newVar("@", new Type("roj/compiler/runtime/ReturnStack"));
@@ -2307,7 +2448,7 @@ public final class BlockParser {
 				ExprNode node = ep.parse(ExprParser.STOP_SEMICOLON|ExprParser.STOP_COMMA|ExprParser.NAE).resolve(ctx);
 
 				if (type == T_VAR) {
-					var.isDynamic = true;
+					var.isVar = true;
 					type = var.type = node.type();
 					if (Inferrer.hasUndefined(type)) {
 						var g = (Generic) type;
@@ -2326,6 +2467,7 @@ public final class BlockParser {
 			} else {
 				if (isFinal != 0) ctx.report(Kind.ERROR, "block.var.final");
 				if (type == T_VAR) ctx.report(Kind.ERROR, "block.var.var");
+				visMap.add(var);
 			}
 
 			postDefineVar(type, var);

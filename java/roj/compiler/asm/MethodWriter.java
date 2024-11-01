@@ -59,9 +59,9 @@ public class MethodWriter extends CodeWriter {
 		else if (lines != null && !lines.isEmpty()) visitAttribute(lines);
 	}
 
-	public void load(Variable v) { addSegment(new LazyLoadStore(v, false)); }
-	public void store(Variable v) { v.hasValue = true; addSegment(new LazyLoadStore(v, true)); }
-	public void iinc(Variable v, int delta) { addSegment(new LazyIINC(v, delta)); }
+	public void load(Variable v) {addSegment(new LazyLoadStore(v, false));}
+	public void store(Variable v) {addSegment(new LazyLoadStore(v, true));}
+	public void iinc(Variable v, int delta) { addSegment(new LazyIINC(v, delta));}
 
 	public void jump(byte code, Label target) { assertTrait(code, TRAIT_JUMP); addSegment(new JumpSegmentAO(code, target)); }
 
@@ -138,4 +138,6 @@ public class MethodWriter extends CodeWriter {
 
 		cw.codeOb = ((StaticSegment) tarSeg.get(tarSeg.size()-1)).getData();
 	}
+
+	public Segment getSegment(int i) {return segments.get(i);}
 }

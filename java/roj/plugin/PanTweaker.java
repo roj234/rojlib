@@ -2,7 +2,6 @@ package roj.plugin;
 
 import roj.RojLib;
 import roj.asm.Opcodes;
-import roj.asm.Parser;
 import roj.asm.util.Context;
 import roj.asmx.AnnotationRepo;
 import roj.asmx.ITransformer;
@@ -13,7 +12,6 @@ import roj.config.ConfigMaster;
 import roj.config.ParseException;
 import roj.config.data.CMap;
 import roj.io.IOUtil;
-import roj.reflect.litasm.Intrinsics;
 import roj.text.CharList;
 import roj.ui.ITerminal;
 import roj.ui.NativeVT;
@@ -77,16 +75,6 @@ public final class PanTweaker extends DefaultTweaker implements ITransformer {
 
 		loader.registerTransformer(EventTransformer.register(DefaultTweaker.CONDITIONAL));
 		loader.registerTransformer(this);
-		if (Intrinsics.available()) {
-			try {
-				if (RojLib.hasNative(RojLib.AES_NI)) {
-					DefaultTweaker.NIXIM.load(Parser.parseConstants(IOUtil.getResource("roj/crypt/n/AES.class")));
-				}
-			} catch (Exception e) {
-				System.err.println("无法初始化FastJNI的AOP注入");
-				e.printStackTrace();
-			}
-		}
 
 		annotations = repo;
 

@@ -1,11 +1,13 @@
-package roj.crypt.n;
+package roj.crypt;
 
 import roj.RojLib;
+import roj.asmx.launcher.Autoload;
 import roj.asmx.nixim.Copy;
 import roj.asmx.nixim.Inject;
 import roj.asmx.nixim.Nixim;
 import roj.asmx.nixim.Shadow;
 import roj.reflect.litasm.FastJNI;
+import roj.reflect.litasm.Intrinsics;
 import roj.reflect.litasm.ObjectField;
 import roj.util.DynByteBuf;
 
@@ -21,10 +23,9 @@ import java.util.Arrays;
  * @author Roj234
  * @since 2024/10/02 02:17
  */
-//@Autoload(Autoload.Target.NIXIM)
-//@Dynamic("rojlib_has_aesni")
+@Autoload(value = Autoload.Target.NIXIM, intrinsic = RojLib.AES_NI)
 @Nixim("roj/crypt/AES")
-final class AES {
+final class nAES {
 	public static final int AES_BLOCK_SIZE = 16;
 
 	@Shadow private byte[] lastKey;
@@ -85,8 +86,7 @@ final class AES {
 		in.rIndex += AES_BLOCK_SIZE;
 	}
 
-	@Inject("<clinit>")
-	static void __clinit() {RojLib.linkFastJNI(RojLib.AES_NI);}
+	@Inject("<clinit>") static void __clinit() {Intrinsics.linkNative(RojLib.getLibrary(), AES.class);}
 
 	@Copy
 	@FastJNI

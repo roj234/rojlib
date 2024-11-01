@@ -14,8 +14,7 @@ import java.lang.annotation.Target;
 public @interface Autoload {
 	Target value();
 	int priority() default 0;
+	int intrinsic() default -1;
 
-	enum Target {
-		NIXIM, TRANSFORMER, INIT;
-	}
+	enum Target {NIXIM, TRANSFORMER, INIT}
 }

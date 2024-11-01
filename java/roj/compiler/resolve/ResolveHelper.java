@@ -13,7 +13,6 @@ import roj.asm.tree.attr.InnerClasses;
 import roj.asm.type.Generic;
 import roj.asm.type.IType;
 import roj.asm.type.Signature;
-import roj.asm.util.Attributes;
 import roj.asmx.AnnotationSelf;
 import roj.collect.IntBiMap;
 import roj.collect.MyHashMap;
@@ -78,8 +77,7 @@ public final class ResolveHelper {
 			return true;
 		}
 
-		var attr = owner.parsedAttr(owner.cp(), Attribute.ClAnnotations);
-		if (attr != null && Attributes.getAnnotation(attr.annotations, "roj/compiler/api/ListIterable") != null) {
+		if (Annotation.findInvisible(owner.cp(), owner, "roj/compiler/api/ListIterable") != null) {
 			if (owner.getMethod("get") >= 0 && owner.getMethod("size", "()I") >= 0) {
 				foreachType = 1;
 				return true;

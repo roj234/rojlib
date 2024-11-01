@@ -15,7 +15,7 @@ public class XXHash {
 	private static final int BLOCK_SIZE = 16;
 	private static final int P1 = 0x9e3779b1, P2 = 0x85ebca7, P3 = 0xc2b2ae3d, P4 = 0x27d4eb2f, P5 = 0x165667b1;
 
-	static {RojLib.linkFastJNI(RojLib.GENERIC);}
+	static {RojLib.linkLibrary(RojLib.GENERIC);}
 
 	@FastJNI("IL_xxHash32")
 	public static int xxHash32(int seed, byte[] buf, int off, int len) {

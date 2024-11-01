@@ -63,16 +63,12 @@ public final class Bypass<T> {
 			}
 		}
 		var = new ConstantData();
-
+		Class<?> caller = ReflectionUtils.getCallerClass(3);
+		String clsName = caller.getName().replace('.', '/')+"$Bypass$"+ReflectionUtils.uniqueId();
 		String itfClass = itf.getName().replace('.', '/');
-		String clsName = "roj/gen/DAc$"+ReflectionUtils.uniqueId();
 		makeHeader(clsName, itfClass, var);
+		//var.putAttr(new AttrString(Attribute.SourceFile, caller.getSimpleName()+".<dynamic>"));
 		ClassDefiner.premake(var);
-	}
-	Bypass() {
-		assert getClass() != Bypass.class;
-		this.methodByName = null;
-		this.itf = null;
 	}
 
 	public final T build() { return build(ClassDefiner.APP_LOADER); }

@@ -13,6 +13,7 @@ import java.util.List;
  * @author Roj233
  * @since 2021/9/29 12:58
  */
+@Deprecated
 public class ReflectClass implements IClass {
 	public final Class<?> owner;
 	public final String className;

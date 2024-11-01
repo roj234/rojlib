@@ -17,11 +17,9 @@ public final class JumpSegmentAO extends JumpSegment {
 	public boolean put(CodeWriter to, int segmentId) {
 		if (!target.isValid()) throw new IllegalStateException("target label is not valid: "+target);
 
-		// 连续goto自动合并
-		// 或者这是无法访问的代码
-		// TODO 增加一个独立的unreachable code检测，在CodeWriter中
+		// 无法访问的代码 (连续goto自动合并会误判)
 		if (!to.isContinuousControlFlow(segmentId-1)) {
-			GlobalContext.debugLogger().warn("Unreachable code: SelfOn("+segmentId+")="+to.bci+"+?]=>"+target);
+			GlobalContext.debugLogger().warn("无法访问的代码: Goto(segment="+segmentId+", bci="+to.bci+") => "+target);
 			to.segments.set(segmentId, StaticSegment.EMPTY);
 			return true;
 		}
@@ -70,7 +68,6 @@ public final class JumpSegmentAO extends JumpSegment {
 				}
 			break;
 			default:
-				// TODO 到时候FrameVisitor怎么搞.jpg
 				if (((short) off) != off) {
 					o.put(IFEQ + ((code-IFEQ) ^ 1)).putShort(8).put(GOTO_W).putInt(off);
 					len = 8;

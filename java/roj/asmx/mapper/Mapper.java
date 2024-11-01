@@ -16,7 +16,6 @@ import roj.asm.tree.attr.*;
 import roj.asm.type.Desc;
 import roj.asm.type.Signature;
 import roj.asm.type.TypeHelper;
-import roj.asm.util.Attributes;
 import roj.asm.util.ClassUtil;
 import roj.asm.util.Context;
 import roj.asm.util.ReflectClass;
@@ -383,13 +382,10 @@ public class Mapper extends Mapping {
 		for (int i = 0; i < itfs.size(); i++) list.add(itfs.get(i));
 
 		if ((flag&MF_ANNOTATION_INHERIT) != 0) {
-			Annotations a = data.parsedAttr(data.cp, Attribute.ClAnnotations);
-			if (a != null) {
-				Annotation found = Attributes.getAnnotation(a.annotations, "roj/mapper/Inherited");
-				if (found != null) {
-					for (AnnVal klass : found.getArray("value")) {
-						list.add(klass.asClass().owner);
-					}
+			var found = Annotation.findInvisible(data.cp, data, "roj/mapper/Inherited");
+			if (found != null) {
+				for (AnnVal klass : found.getArray("value")) {
+					list.add(klass.asClass().owner);
 				}
 			}
 			if (list.isEmpty()) return;
@@ -1113,9 +1109,7 @@ public class Mapper extends Mapping {
 	}
 	/** InnerClass type */
 	private void mapInnerClass(ClassUtil U, ConstantData data) {
-		List<InnerClasses.Item> classes = Attributes.getInnerClasses(data.cp, data);
-		if (classes == null) return;
-
+		var classes = data.getInnerClasses();
 		CharList sb = IOUtil.getSharedCharBuf();
 		for (int j = 0; j < classes.size(); j++) {
 			InnerClasses.Item clz = classes.get(j);

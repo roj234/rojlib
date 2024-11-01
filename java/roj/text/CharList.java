@@ -2,6 +2,7 @@ package roj.text;
 
 import org.jetbrains.annotations.NotNull;
 import roj.collect.CharMap;
+import roj.collect.MyBitSet;
 import roj.collect.MyHashMap;
 import roj.collect.TrieTree;
 import roj.config.data.CInt;
@@ -184,6 +185,13 @@ public class CharList implements CharSequence, Appendable {
 			return pos;
 		}
 
+		return -1;
+	}
+	public final int indexOf(MyBitSet map, int pos) {
+		while (pos < len) {
+			if (map.contains(list[pos])) return pos;
+			pos++;
+		}
 		return -1;
 	}
 

@@ -8,7 +8,7 @@ import roj.asm.cp.Constant;
 import roj.asm.cp.ConstantPool;
 import roj.asm.cp.CstClass;
 import roj.asm.cp.CstUTF;
-import roj.asm.frame.Frame2;
+import roj.asm.frame.Frame;
 import roj.asm.frame.FrameVisitor;
 import roj.asm.tree.MethodNode;
 import roj.asm.tree.attr.Attribute;
@@ -36,7 +36,7 @@ public class CodeWriter extends AbstractCodeWriter {
 	public MethodNode mn;
 	public int interpretFlags;
 
-	public SimpleList<Frame2> frames;
+	public SimpleList<Frame> frames;
 	private FrameVisitor fv;
 	private boolean hasFrames;
 
@@ -336,7 +336,7 @@ public class CodeWriter extends AbstractCodeWriter {
 		if (ENABLE_FV && interpretFlags != 0) {
 			interpretFlags = 0;
 
-			frames = (SimpleList<Frame2>) fv.finish(codeOb, cpw);
+			frames = (SimpleList<Frame>) fv.finish(codeOb, cpw);
 
 			int stack = visitAttributeI("StackMapTable");
 			//frames.remove(0);

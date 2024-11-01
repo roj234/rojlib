@@ -4,6 +4,7 @@ import roj.archive.zip.ZEntry;
 import roj.archive.zip.ZipFileWriter;
 import roj.asm.Parser;
 import roj.asm.tree.ConstantData;
+import roj.asmx.launcher.ClassWrapper;
 import roj.collect.MyHashMap;
 import roj.compiler.context.CompileUnit;
 import roj.compiler.context.GlobalContext;
@@ -20,8 +21,6 @@ import roj.text.TextUtil;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
-import java.net.URL;
-import java.net.URLClassLoader;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Consumer;
@@ -155,8 +154,8 @@ public final class Lavac {
 		System.out.println("编译状况="+ok);
 
 		try {
-			var ucl = new URLClassLoader(new URL[] {dst.toURL()});
-			((Runnable) Class.forName("Test", true, ucl).newInstance()).run();
+			ClassWrapper.instance.enableFastZip(dst.toURL());
+			((Runnable) Class.forName("Test", true, Lavac.class.getClassLoader()).newInstance()).run();
 		} catch (Exception e) {
 			e.printStackTrace();
 		}

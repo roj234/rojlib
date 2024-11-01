@@ -40,27 +40,32 @@ public final class Logger {
 	public final void info(String msg, Object p0) { log(Level.INFO, msg, null, p0); }
 	public final void info(String msg, Object p0, Object p1) { log(Level.INFO, msg, null, p0, p1); }
 	public final void info(String msg, Object p0, Object p1, Object p2) { log(Level.INFO, msg, null, p0, p1, p2); }
+	public final void info(String msg, Object ...p) { log(Level.INFO, msg, null, p); }
 
 
 	public final void warn(String msg) { log(Level.WARN, msg, null); }
 	public final void warn(String msg, Object p0) { log(Level.WARN, msg, null, p0); }
 	public final void warn(String msg, Object p0, Object p1) { log(Level.WARN, msg, null, p0, p1); }
 	public final void warn(String msg, Object p0, Object p1, Object p2) { log(Level.WARN, msg, null, p0, p1, p2); }
+	public final void warn(String msg, Object ...p) { log(Level.ERROR, msg, null, p); }
 
 	public final void warn(String msg, Throwable ex) { log(Level.WARN, msg, ex); }
 	public final void warn(String msg, Throwable ex, Object p0) { log(Level.WARN, msg, ex, p0); }
 	public final void warn(String msg, Throwable ex, Object p0, Object p1) { log(Level.WARN, msg, ex, p0, p1); }
+	public final void warn(String msg, Throwable ex, Object ...p) { log(Level.WARN, msg, ex, p); }
 
 
 	public final void error(String msg) { log(Level.ERROR, msg, null); }
 	public final void error(String msg, Object p0) { log(Level.ERROR, msg, null, p0); }
 	public final void error(String msg, Object p0, Object p1) { log(Level.ERROR, msg, null, p0, p1); }
 	public final void error(String msg, Object p0, Object p1, Object p2) { log(Level.ERROR, msg, null, p0, p1, p2); }
+	public final void error(String msg, Object ...p) { log(Level.ERROR, msg, null, p); }
 
 	public final void error(Throwable e) { log(Level.ERROR, "Catching {}", e, e.getClass().getSimpleName()); }
 	public final void error(String msg, Throwable ex) { log(Level.ERROR, msg, ex); }
 	public final void error(String msg, Throwable ex, Object p0) { log(Level.ERROR, msg, ex, p0); }
 	public final void error(String msg, Throwable ex, Object p0, Object p1) { log(Level.ERROR, msg, ex, p0, p1); }
+	public final void error(String msg, Throwable ex, Object ...p) { log(Level.ERROR, msg, ex, p); }
 
 
 	public final void fatal(String msg) { log(Level.FATAL, msg, null); }

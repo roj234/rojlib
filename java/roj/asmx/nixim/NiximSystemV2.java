@@ -4,7 +4,7 @@ import org.jetbrains.annotations.NotNull;
 import roj.asm.Opcodes;
 import roj.asm.Parser;
 import roj.asm.cp.*;
-import roj.asm.frame.Frame2;
+import roj.asm.frame.Frame;
 import roj.asm.frame.Var2;
 import roj.asm.tree.*;
 import roj.asm.tree.anno.AnnVal;
@@ -263,7 +263,7 @@ public class NiximSystemV2 implements ITransformer {
 				if (nx1 != null && nx1.self.equals(name)) {
 					changed = true;
 
-					cp.setUTFValue(ref1.name(), nx1.target);
+					ref1.setValue(cp.getUtf(nx1.target));
 				}
 			}
 		}
@@ -508,9 +508,9 @@ public class NiximSystemV2 implements ITransformer {
 			}
 
 			// TODO well, maybe automatic calculation future
-			List<Frame2> frames = code.frames;
+			List<Frame> frames = code.frames;
 			if (frames != null) {
-				for (Frame2 frame : frames) {
+				for (Frame frame : frames) {
 					for (Var2 v : frame.stacks)
 						if (nx.self.equals(v.owner))
 							v.owner = nx.target;

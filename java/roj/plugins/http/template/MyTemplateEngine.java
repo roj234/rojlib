@@ -1,6 +1,7 @@
 package roj.plugins.http.template;
 
 import roj.collect.XHashSet;
+import roj.compiler.LavaCompiler;
 import roj.compiler.context.CompileUnit;
 import roj.compiler.context.GlobalContext;
 import roj.compiler.context.LocalContext;
@@ -46,6 +47,10 @@ public class MyTemplateEngine {
 		long lastUpdate;
 		Template template;
 		String nothingSpecial;
+	}
+
+	public MyTemplateEngine() {
+		compiler.addLibrary(LavaCompiler.Implib_Archive);
 	}
 
 	public Response render(File file, Request req, ResponseHeader rh) {

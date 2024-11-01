@@ -5,7 +5,7 @@ import roj.asm.AsmShared;
 import roj.asm.Opcodes;
 import roj.asm.cp.ConstantPool;
 import roj.asm.cp.CstUTF;
-import roj.asm.frame.Frame2;
+import roj.asm.frame.Frame;
 import roj.asm.frame.FrameVisitor;
 import roj.asm.tree.Attributed;
 import roj.asm.tree.MethodNode;
@@ -34,7 +34,7 @@ public class XAttrCode extends Attribute implements Attributed {
 	private MethodNode owner;
 	private byte frameFlag;
 
-	public List<Frame2> frames;
+	public List<Frame> frames;
 
 	public SimpleList<TryCatchEntry> tryCatch;
 

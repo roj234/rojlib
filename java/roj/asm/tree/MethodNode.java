@@ -55,7 +55,6 @@ public final class MethodNode extends CNode {
 		return inst;
 	}
 
-	// todo move to parameter
 	public String owner;
 	public String ownerClass() { return owner; }
 

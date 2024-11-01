@@ -62,14 +62,15 @@ public final class SwitchNode {
 		/** 如果是Type switch那么非空，该分支的常量或表达式 */
 		public List<ExprNode> labels;
 
-		 /** 是switch表达式时可能非空，是对应分支的最后一个（或者唯一的）语句，用来计算类型 */
-		public ExprNode value;
-		@NotNull
-		public MethodWriter block;
+		/** 该分支的最后一个表达式，是switch表达式且能正常完成时非空，用来计算switch的返回类型 */
+		@Nullable public ExprNode value;
+
+		/** 代码 */
+		@NotNull public MethodWriter block;
 
 		// writeSwitch用到临时值
-		public Label location;
-		/** case或default刚结束时行号 */
+		public Label tmpLoc;
+		/** case或default关键字结束时的行号 */
 		public int lineNumber;
 
 		public Case(List<ExprNode> labels) {this.labels = labels;}

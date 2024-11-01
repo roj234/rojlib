@@ -18,7 +18,7 @@ inline int min(int l, int r) {return l < r ? l : r;}
 #define AESNI             32
 
 struct bsdiff {
-    int32_t* sfx;
+    const int32_t* sfx;
 
     const uint8_t* left;
     int32_t leftLen;
@@ -43,11 +43,11 @@ FJNIEXPORT void FJNICALL IL_aes_CBC_encrypt(const uint8_t *key, uint8_t number_o
 FJNIEXPORT void FJNICALL IL_aes_CBC_decrypt(const uint8_t *key, uint8_t number_of_rounds, const uint8_t ivec[16], uint64_t ip0, uint64_t ip1, uint64_t op0, uint64_t op1, int32_t blocks);
 FJNIEXPORT void FJNICALL IL_aes_CTR(const uint8_t *key, uint8_t number_of_rounds, const uint8_t ivec[16], const uint8_t nonce[4], uint64_t ip0, uint64_t ip1, uint64_t op0, uint64_t op1, int32_t blocks);
 
-FJNIEXPORT int FJNICALL IL_bsdiff_init(void *_this, uint8_t *left, int32_t *sfx, int32_t size);
+FJNIEXPORT int FJNICALL IL_bsdiff_init(uint8_t *left, int32_t *sfx, int32_t size);
 FJNIEXPORT bsdiff* FJNICALL IL_bsdiff_newCtx();
 FJNIEXPORT void FJNICALL IL_bsdiff_freeCtx(void *ptr);
-FJNIEXPORT int FJNICALL IL_bsdiff_makePatch(void *_this, bsdiff *ctx, const uint8_t *right, uint64_t ip0, uint64_t ip1, int32_t outSize);
-FJNIEXPORT int FJNICALL IL_bsdiff_getDiffLength(void *_this, const uint8_t *right, int32_t off, int32_t len, int32_t maxDiff);
+FJNIEXPORT int FJNICALL IL_bsdiff_makePatch(const int32_t *sfx, const uint8_t *left, bsdiff *ctx, const uint8_t *right, uint64_t ip0, uint64_t ip1, int32_t outSize);
+FJNIEXPORT int FJNICALL IL_bsdiff_getDiffLength(const int32_t *sfx, const uint8_t *left, const uint8_t *right, int32_t off, int32_t len, int32_t maxDiff);
 
 FJNIEXPORT uint32_t FJNICALL IL_xxHash32(int32_t seed, uint8_t *buf, int32_t off, int32_t len);
 

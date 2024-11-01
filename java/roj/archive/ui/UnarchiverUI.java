@@ -28,6 +28,8 @@ import javax.swing.*;
 import javax.swing.tree.DefaultTreeModel;
 import javax.swing.tree.TreePath;
 import java.awt.*;
+import java.awt.datatransfer.*;
+import java.awt.dnd.*;
 import java.awt.event.*;
 import java.io.*;
 import java.nio.charset.Charset;
@@ -50,85 +52,47 @@ public class UnarchiverUI extends JFrame {
 		f.setVisible(true);
 	}
 
+	private final DefaultTreeModel fileTree = new DefaultTreeModel(null);
 	private ArchiveFile archiveFile;
 	private QZArchive qzArhive;
 	private ZipFile zipFile;
+
 	public UnarchiverUI() {
 		initComponents();
 		addWindowListener(new WindowAdapter() {
-			@Override
-			public void windowClosing(WindowEvent e) {
-				try {
-					closeFile(null);
-				} catch (IOException ex) {
-					ex.printStackTrace();
-				}
-			}
+			@Override public void windowClosing(WindowEvent e) {closeFile();}
 		});
-		GuiUtil.dropFilePath(uiArchivePath, null, false);
 		GuiUtil.dropFilePath(uiOutputPath, null, false);
 
-		DefaultComboBoxModel<String> m = new DefaultComboBoxModel<>();
+		var m = new DefaultComboBoxModel<String>();
 		m.addElement("跳过");
 		m.addElement("替换");
 		m.addElement("重命名");
 		uiDuplicateType.setModel(m);
 
-		DefaultTreeModel m1 = new DefaultTreeModel(null);
-		uiPathTree.setModel(m1);
+		uiPathTree.setModel(fileTree);
 
-		uiRead.addActionListener(e -> {
-			String pathText = uiArchivePath.getText();
-			File archive;
-			if (pathText.isEmpty() || !(archive = new File(pathText)).isFile()) {
-				archive = GuiUtil.fileLoadFrom("压缩文件", this);
-				if (archive == null) return;
-			}
-			try {
-				closeFile(m1);
-
-				byte[] h = new byte[32];
-				try (FileInputStream in = new FileInputStream(archive)) {
-					int r = in.read(h);
-					if (r != h.length) h = Arrays.copyOf(h, Math.max(r, 0));
-				}
-
-				uiStoreAnti.setEnabled(false);
-
-				GuiPathTreeBuilder<ArchiveEntry> pathTree = new GuiPathTreeBuilder<>();
-				if (h[0] == 'P' && h[1] == 'K') {
-					archiveFile = zipFile = new ZipFile(archive, ZipFile.FLAG_BACKWARD_READ, uiCharset.getText().isEmpty() ? Charset.defaultCharset() : Charset.forName(uiCharset.getText()));
-					for (ZEntry entry : zipFile.entries()) {
-						pathTree.add(entry.getName(), entry, entry.isDirectory());
-					}
-				} else if (h[0] == '7' && h[1] == 'z') {
-					List<String> password = null;
-					while (true) {
+		new DropTarget(uiRead, new DropTargetAdapter() {
+			@Override
+			public void drop(DropTargetDropEvent dtde) {
+				dtde.acceptDrop(3);
+				Transferable t = dtde.getTransferable();
+				for (DataFlavor flavor : t.getTransferDataFlavors()) {
+					if (flavor.getMimeType().startsWith("application/x-java-file-list")) {
 						try {
-							String strPass = password == null ? null : password.remove(0);
-							archiveFile = qzArhive = new QZArchive(archive, strPass);
-							if (strPass != null) uiPasswordInfo.setText("密码是"+strPass);
-							break;
-						} catch (CorruptedInputException|IllegalArgumentException ex) {
-							if (password == null) password = TextUtil.split(uiPasswords.getText(), '\n');
-							if (password.isEmpty()) throw ex;
-						}
-					}
-					for (QZEntry entry : qzArhive.getEntriesByPresentOrder()) {
-						pathTree.add(entry.getName(), entry, entry.isDirectory());
-					}
-					uiStoreAnti.setEnabled(true);
-				} else {
-					throw new FastFailException("无法识别的文件头，目前只支持7z和zip");
-				}
+							List<File> data = Helpers.cast(t.getTransferData(flavor));
+							if (data.size() != 1) {
+								JOptionPane.showMessageDialog(UnarchiverUI.this, "仅能打开一个文件！");
+								return;
+							}
 
-				m1.setRoot(pathTree.build(archive.getName()));
-				uiExtract.setEnabled(true);
-			} catch (Exception ex) {
-				JOptionPane.showMessageDialog(this, "无法打开压缩文件: "+ex.getMessage(), "打开失败", JOptionPane.ERROR_MESSAGE);
-				ex.printStackTrace();
+							doOpen(data.get(0));
+						} catch (Exception ignored) {}
+					}
+				}
 			}
 		});
+		uiRead.addActionListener(e -> doOpen(null));
 		uiExtract.addActionListener(e -> {
 			File basePath = uiOutputPath.getText().isEmpty() ? GuiUtil.fileSaveTo("解压位置", "", this, true) : new File(uiOutputPath.getText());
 			if (basePath == null || !basePath.isDirectory() && !basePath.mkdirs()) {
@@ -136,6 +100,7 @@ public class UnarchiverUI extends JFrame {
 				return;
 			}
 
+			uiRead.setEnabled(false);
 			uiExtract.setEnabled(false);
 			TaskPool.Common().submit(() -> {
 				int threads = (int) uiThreads.getValue();
@@ -152,6 +117,7 @@ public class UnarchiverUI extends JFrame {
 					pool.shutdown();
 					pool.awaitTermination();
 
+					uiRead.setEnabled(true);
 					uiExtract.setEnabled(true);
 					progressBar1.setValue(100);
 					bar.end("完成");
@@ -160,6 +126,63 @@ public class UnarchiverUI extends JFrame {
 		});
 	}
 
+	private void doOpen(File archive) {
+		if (archive == null) {
+			if (archiveFile != null) {
+				closeFile();
+				return;
+			}
+
+			archive = GuiUtil.fileLoadFrom("压缩文件", this);
+			if (archive == null) return;
+		} else if (!archive.isFile()) {
+			return;
+		}
+
+		closeFile();
+
+		try {
+			byte[] h = new byte[32];
+			try (var in = new FileInputStream(archive)) {
+				int r = in.read(h);
+				if (r != h.length) h = Arrays.copyOf(h, Math.max(r, 0));
+			}
+
+			if (h[0] == 'P' && h[1] == 'K') {
+				archiveFile = zipFile = new ZipFile(archive, ZipFile.FLAG_BACKWARD_READ, uiCharset.getText().isEmpty() ? Charset.defaultCharset() : Charset.forName(uiCharset.getText()));
+				uiStoreAnti.setEnabled(false);
+			} else if (h[0] == '7' && h[1] == 'z') {
+				List<String> password = null;
+				while (true) {
+					try {
+						String strPass = password == null ? null : password.remove(0);
+						archiveFile = qzArhive = new QZArchive(archive, strPass);
+						if (strPass != null) uiPasswordInfo.setText("密码是"+strPass);
+						break;
+					} catch (CorruptedInputException|IllegalArgumentException ex) {
+						if (password == null) password = TextUtil.split(uiPasswords.getText(), '\n');
+						if (password.isEmpty()) throw ex;
+					}
+				}
+				uiStoreAnti.setEnabled(true);
+			} else {
+				throw new FastFailException("无法识别的文件头，目前只支持7z和zip");
+			}
+		} catch (Exception ex) {
+			JOptionPane.showMessageDialog(this, "无法打开压缩文件: "+ex.getMessage(), "打开失败", JOptionPane.ERROR_MESSAGE);
+			ex.printStackTrace();
+			return;
+		}
+
+		var pathTree = new GuiPathTreeBuilder<>();
+		for (var entry : archiveFile.entries()) {
+			pathTree.add(entry.getName(), entry, entry.isDirectory());
+		}
+		fileTree.setRoot(pathTree.build(archive.getName()));
+
+		uiExtract.setEnabled(true);
+		uiRead.setText("关闭");
+	}
 	private void doExtract(File basePath, TaskPool pool, EasyProgressBar bar) {
 		TreePath[] paths = uiPathTree.getSelectionPaths();
 		TrieTreeSet set;
@@ -193,6 +216,7 @@ public class UnarchiverUI extends JFrame {
 				if (uiPathFilter.isSelected()) name = Escape.escapeFilePath(IOUtil.safePath(name));
 
 				File file1 = new File(basePath, name);
+				int ord = 0;
 				loop:
 				while (file1.exists()) {
 					switch (uiDuplicateType.getSelectedIndex()) {
@@ -200,20 +224,21 @@ public class UnarchiverUI extends JFrame {
 						case 1: break loop; // replace
 						case 2: break; // rename
 					}
-					name = IOUtil.fileName(name)+"-."+IOUtil.extensionName(name);
+					name = IOUtil.fileName(name)+"("+ ++ord +")."+IOUtil.extensionName(name);
 					file1 = new File(basePath, name);
 				}
+
 				file1.getParentFile().mkdirs();
 				try {
 					IOUtil.createSparseFile(file1, entry.getSize());
 					assert in.available() == Math.min(entry.getSize(), Integer.MAX_VALUE);
-					try (FileOutputStream out = new FileOutputStream(file1)) {
+					try (var out = new FileOutputStream(file1)) {
 						QZUtils.copyStreamWithProgress(in, out, bar);
 					}
 					assert file1.length() == entry.getSize();
 
 					if ((storeFlag1&7) != 0) {
-						BasicFileAttributeView view = Files.getFileAttributeView(file1.toPath(), BasicFileAttributeView.class);
+						var view = Files.getFileAttributeView(file1.toPath(), BasicFileAttributeView.class);
 						view.setTimes(
 							(storeFlag1&1) == 0 ? null : entry.getPrecisionModificationTime(),
 							(storeFlag1&2) == 0 ? null : entry.getPrecisionAccessTime(),
@@ -296,12 +321,14 @@ public class UnarchiverUI extends JFrame {
 		qzArhive.parallelDecompress(pool, Helpers.cast(cb), password);
 	}
 
-	private void closeFile(DefaultTreeModel m1) throws IOException {
-		if (m1 != null) m1.setRoot(null);
-		if (archiveFile != null) archiveFile.close();
+	private void closeFile() {
+		fileTree.setRoot(null);
+		IOUtil.closeSilently(archiveFile);
+		archiveFile = null;
 		zipFile = null;
 		qzArhive = null;
-		archiveFile = null;
+		uiRead.setText("打开");
+		uiExtract.setEnabled(false);
 	}
 
 	private byte[] checkPassword(ArchiveEntry entry, String pass, String charset) {
@@ -316,8 +343,6 @@ public class UnarchiverUI extends JFrame {
 
 	private void initComponents() {
 		// JFormDesigner - Component initialization - DO NOT MODIFY  //GEN-BEGIN:initComponents  @formatter:off
-        var label1 = new JLabel();
-        uiArchivePath = new JTextField();
         var label2 = new JLabel();
         uiOutputPath = new JTextField();
         uiThreads = new JSpinner();
@@ -342,38 +367,28 @@ public class UnarchiverUI extends JFrame {
         uiCharset = new JTextField();
 
         //======== this ========
-        setTitle("Roj234 Unarchiver 1.1");
+        setTitle("Roj234 Unarchiver 1.2");
         var contentPane = getContentPane();
         contentPane.setLayout(null);
-
-        //---- label1 ----
-        label1.setText("\u6587\u4ef6");
-        contentPane.add(label1);
-        label1.setBounds(new Rectangle(new Point(30, 10), label1.getPreferredSize()));
-
-        //---- uiArchivePath ----
-        uiArchivePath.setFont(uiArchivePath.getFont().deriveFont(uiArchivePath.getFont().getSize() + 2f));
-        contentPane.add(uiArchivePath);
-        uiArchivePath.setBounds(60, 5, 180, 25);
 
         //---- label2 ----
         label2.setText("\u89e3\u538b\u5230");
         contentPane.add(label2);
-        label2.setBounds(new Rectangle(new Point(20, 45), label2.getPreferredSize()));
+        label2.setBounds(new Rectangle(new Point(2, 62), label2.getPreferredSize()));
 
         //---- uiOutputPath ----
         uiOutputPath.setFont(uiOutputPath.getFont().deriveFont(uiOutputPath.getFont().getSize() + 2f));
         contentPane.add(uiOutputPath);
-        uiOutputPath.setBounds(60, 35, 180, 25);
+        uiOutputPath.setBounds(40, 55, 180, 25);
         contentPane.add(uiThreads);
-        uiThreads.setBounds(250, 40, 45, uiThreads.getPreferredSize().height);
+        uiThreads.setBounds(240, 55, 60, uiThreads.getPreferredSize().height);
 
         //---- uiRead ----
-        uiRead.setText("\u8bfb\u53d6");
+        uiRead.setText("\u6253\u5f00");
         uiRead.setFont(uiRead.getFont().deriveFont(uiRead.getFont().getSize() + 6f));
         uiRead.setMargin(new Insets(2, 2, 2, 2));
         contentPane.add(uiRead);
-        uiRead.setBounds(60, 65, 80, 40);
+        uiRead.setBounds(30, 5, 80, 40);
 
         //---- uiExtract ----
         uiExtract.setText("\u89e3\u538b");
@@ -381,14 +396,14 @@ public class UnarchiverUI extends JFrame {
         uiExtract.setMargin(new Insets(2, 2, 2, 2));
         uiExtract.setFont(uiExtract.getFont().deriveFont(uiExtract.getFont().getSize() + 6f));
         contentPane.add(uiExtract);
-        uiExtract.setBounds(160, 65, 80, 40);
+        uiExtract.setBounds(140, 5, 80, 40);
         contentPane.add(uiDuplicateType);
-        uiDuplicateType.setBounds(255, 80, 60, uiDuplicateType.getPreferredSize().height);
+        uiDuplicateType.setBounds(240, 10, 60, uiDuplicateType.getPreferredSize().height);
 
         //---- label4 ----
-        label4.setText("\u76ee\u5f55\u6811 \u5982\u679c\u9009\u4e2d\u4e86\uff0c\u90a3\u4e48\u53ea\u4f1a\u89e3\u538b\u9009\u4e2d\u7684\u6587\u4ef6\u548c\u5b50\u6587\u4ef6");
+        label4.setText("\u76ee\u5f55\u6811 \u82e5\u9009\u4e2d\uff0c\u4ec5\u9012\u5f52\u89e3\u538b\u9009\u4e2d\u7684");
         contentPane.add(label4);
-        label4.setBounds(new Rectangle(new Point(10, 110), label4.getPreferredSize()));
+        label4.setBounds(new Rectangle(new Point(10, 155), label4.getPreferredSize()));
 
         //======== scrollPane1 ========
         {
@@ -398,7 +413,7 @@ public class UnarchiverUI extends JFrame {
         scrollPane1.setBounds(5, 170, 375, 245);
 
         //---- label5 ----
-        label5.setText("\u8986\u76d6\u7684\u5c5e\u6027");
+        label5.setText("\u6587\u4ef6\u5c5e\u6027");
         contentPane.add(label5);
         label5.setBounds(new Rectangle(new Point(320, 10), label5.getPreferredSize()));
 
@@ -419,7 +434,7 @@ public class UnarchiverUI extends JFrame {
         uiStoreATime.setBounds(new Rectangle(new Point(315, 70), uiStoreATime.getPreferredSize()));
 
         //---- uiStoreAttr ----
-        uiStoreAttr.setText("\u6587\u4ef6\u5c5e\u6027");
+        uiStoreAttr.setText("DOS\u5c5e\u6027");
         uiStoreAttr.setEnabled(false);
         contentPane.add(uiStoreAttr);
         uiStoreAttr.setBounds(new Rectangle(new Point(315, 90), uiStoreAttr.getPreferredSize()));
@@ -432,12 +447,12 @@ public class UnarchiverUI extends JFrame {
         //---- progressBar1 ----
         progressBar1.setMaximum(10000);
         contentPane.add(progressBar1);
-        progressBar1.setBounds(80, 140, 300, progressBar1.getPreferredSize().height);
+        progressBar1.setBounds(5, 140, 375, progressBar1.getPreferredSize().height);
 
         //---- uiPathFilter ----
-        uiPathFilter.setText("\u8def\u5f84\u5b89\u5168");
+        uiPathFilter.setText("\u8def\u5f84\u8fc7\u6ee4");
         contentPane.add(uiPathFilter);
-        uiPathFilter.setBounds(new Rectangle(new Point(5, 130), uiPathFilter.getPreferredSize()));
+        uiPathFilter.setBounds(new Rectangle(new Point(235, 32), uiPathFilter.getPreferredSize()));
 
         //======== scrollPane2 ========
         {
@@ -447,28 +462,27 @@ public class UnarchiverUI extends JFrame {
         scrollPane2.setBounds(5, 440, 375, 200);
 
         //---- uiPasswordInfo ----
-        uiPasswordInfo.setText("\u5728\u4e0b\u65b9\u8f93\u5165\u5bc6\u7801\u6765\u81ea\u52a8\u8f93\u5165 \u6bcf\u884c\u4e00\u4e2a");
+        uiPasswordInfo.setText("\u6bcf\u884c\u4e00\u4e2a\u5bc6\u7801\uff0c\u81ea\u52a8\u5c1d\u8bd5");
         contentPane.add(uiPasswordInfo);
         uiPasswordInfo.setBounds(new Rectangle(new Point(10, 420), uiPasswordInfo.getPreferredSize()));
 
         //---- uiNoVerify ----
         uiNoVerify.setText("\u4e0d\u9a8c\u8bc1");
         contentPane.add(uiNoVerify);
-        uiNoVerify.setBounds(new Rectangle(new Point(210, 417), uiNoVerify.getPreferredSize()));
+        uiNoVerify.setBounds(new Rectangle(new Point(145, 416), uiNoVerify.getPreferredSize()));
 
         //---- uiCharset ----
         uiCharset.setText("UTF-8");
         contentPane.add(uiCharset);
-        uiCharset.setBounds(305, 415, 75, uiCharset.getPreferredSize().height);
+        uiCharset.setBounds(305, 417, 75, uiCharset.getPreferredSize().height);
 
-        contentPane.setPreferredSize(new Dimension(390, 675));
+        contentPane.setPreferredSize(new Dimension(390, 650));
         pack();
         setLocationRelativeTo(getOwner());
 		// JFormDesigner - End of component initialization  //GEN-END:initComponents  @formatter:on
 	}
 
 	// JFormDesigner - Variables declaration - DO NOT MODIFY  //GEN-BEGIN:variables  @formatter:off
-    private JTextField uiArchivePath;
     private JTextField uiOutputPath;
     private JSpinner uiThreads;
     private JButton uiRead;

@@ -169,8 +169,7 @@ public interface Evaluator {
 					impl.toString(sb);
 				}
 
-				lexer.init(sb.append(text, after, text.length()).toStringAndFree());
-				lexer.index = before;
+				lexer.setText(sb.append(text, after, text.length()).toStringAndFree(), before);
 			} catch (Throwable e) {
 				ctx1.report(Kind.ERROR, "plugins.eval.macro.error", e);
 				e.printStackTrace();

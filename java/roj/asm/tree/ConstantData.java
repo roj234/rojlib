@@ -8,6 +8,7 @@ import roj.asm.cp.CstClass;
 import roj.asm.tree.attr.AttrUnknown;
 import roj.asm.tree.attr.Attribute;
 import roj.asm.tree.attr.AttributeList;
+import roj.asm.tree.attr.InnerClasses;
 import roj.asm.type.Signature;
 import roj.asm.type.Type;
 import roj.asm.type.TypeHelper;
@@ -22,7 +23,6 @@ import roj.util.AttributeKey;
 import roj.util.DynByteBuf;
 import roj.util.Helpers;
 
-import java.io.FileOutputStream;
 import java.util.AbstractList;
 import java.util.Collections;
 import java.util.List;
@@ -166,6 +166,11 @@ public class ConstantData implements IClass {
 		List<MethodNode> methods = this.methods;
 		for (int j = 0; j < methods.size(); j++)
 			methods.get(j).forEachCode(cv, cp);
+	}
+
+	public List<InnerClasses.Item> getInnerClasses() {
+		var ic = parsedAttr(cp, Attribute.InnerClasses);
+		return ic == null ? Collections.emptyList() : ic.classes;
 	}
 
 	@Override public ConstantPool cp() { return cp; }
@@ -329,14 +334,6 @@ public class ConstantData implements IClass {
 	public final List<String> interfaces() { return itfView == null ? itfView = new ItfView() : itfView; }
 	public final List<MethodNode> methods() { return methods; }
 	public final List<FieldNode> fields() { return fields; }
-
-	public final void dump() {
-		try (FileOutputStream fos = new FileOutputStream(name.replace('/', '.') + ".class")) {
-			Parser.toByteArrayShared(this).writeToStream(fos);
-		} catch (Throwable e) {
-			e.printStackTrace();
-		}
-	}
 
 	public final MethodNode getMethodObj(String name) { return getMethodObj(name, null); }
 	public final MethodNode getMethodObj(String name, String desc) {

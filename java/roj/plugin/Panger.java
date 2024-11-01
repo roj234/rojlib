@@ -185,7 +185,7 @@ public final class Panger extends PluginManager {
 			MyHashMap<String, PluginDescriptor> builtin = new MyHashMap<>();
 			for (var info : PanTweaker.annotations.annotatedBy("roj/plugin/SimplePlugin")) {
 				pd = new PluginDescriptor();
-				pd.fileName = "annotation:"+info.node();
+				pd.fileName = "annotated_builtin";
 				pd.mainClass = info.owner().replace('/', '.');
 
 				Annotation pin = info.annotations().get("roj/plugin/SimplePlugin");

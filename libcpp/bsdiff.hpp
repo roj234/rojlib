@@ -190,7 +190,7 @@ static int32_t matchLen(const uint8_t* a, int32_t a_size, const uint8_t* b, int3
 }
 
 static int32_t search(bsdiff* ctx, const uint8_t *right, int32_t rightLen, const uint8_t *left, int32_t leftStart, int32_t leftEnd, int32_t *len) {
-    int32_t* sfx = ctx->sfx;
+    const int32_t* sfx = ctx->sfx;
 
     while (true) {
         int32_t leftLen = leftEnd - leftStart;
@@ -216,13 +216,9 @@ static int32_t search(bsdiff* ctx, const uint8_t *right, int32_t rightLen, const
     }
 }
 
-static int32_t offset_left, offset_sfx, offset_arrayLength;
+inline int32_t ArrayLength(void *array) {return * (int32_t *)((uint64_t)array - 4);}
 
-inline int32_t ArrayLength(void *array) {
-    return  * (int32_t *)((uint64_t)array + offset_arrayLength);
-}
-
-FJNIEXPORT int FJNICALL IL_bsdiff_init(void *_this, uint8_t *left, int32_t *sfx, int32_t size) {return divsufsort(left, sfx, size);}
+FJNIEXPORT int FJNICALL IL_bsdiff_init(uint8_t *left, int32_t *sfx, int32_t size) {return divsufsort(left, sfx, size);}
 
 FJNIEXPORT bsdiff* FJNICALL IL_bsdiff_newCtx() {
     auto ptr = malloc(sizeof(bsdiff));
@@ -231,10 +227,10 @@ FJNIEXPORT bsdiff* FJNICALL IL_bsdiff_newCtx() {
 }
 FJNIEXPORT void FJNICALL IL_bsdiff_freeCtx(void *ptr) {free(ptr);}
 
-FJNIEXPORT int FJNICALL IL_bsdiff_makePatch(void *_this, bsdiff *ctx, const uint8_t *right, uint64_t ip0, uint64_t ip1, int32_t outSize) {
-    ctx->sfx = * (int32_t **)((uint64_t)_this + offset_sfx);
-    ctx->left = * (uint8_t **)((uint64_t)_this + offset_left);
-    ctx->leftLen = ArrayLength((void *) ctx->left);
+FJNIEXPORT int FJNICALL IL_bsdiff_makePatch(const int32_t *sfx, const uint8_t *left, bsdiff *ctx, const uint8_t *right, uint64_t ip0, uint64_t ip1, int32_t outSize) {
+    ctx->sfx = sfx;
+    ctx->left = left;
+    ctx->leftLen = ArrayLength((void *) left);
     ctx->right = right;
     ctx->rightLen = ArrayLength((void *) right);
 
@@ -247,13 +243,13 @@ FJNIEXPORT int FJNICALL IL_bsdiff_makePatch(void *_this, bsdiff *ctx, const uint
     return ref[1];
 }
 
-FJNIEXPORT int FJNICALL IL_bsdiff_getDiffLength(void *_this, const uint8_t *right, int32_t off, int32_t len, int32_t maxDiff) {
+FJNIEXPORT int FJNICALL IL_bsdiff_getDiffLength(const int32_t *sfx, const uint8_t *left, const uint8_t *right, int32_t off, int32_t len, int32_t maxDiff) {
     int32_t ref[2] = {0, maxDiff};
 
     bsdiff ctx {
-            * (int32_t **)((uint64_t)_this + offset_sfx),
-            * (uint8_t **)((uint64_t)_this + offset_left),
-            ArrayLength((void *) ctx.left),
+            sfx,
+            left,
+            ArrayLength((void *) left),
 
             right,
             len,

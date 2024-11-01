@@ -782,7 +782,7 @@ public final class CompileUnit extends ConstantData {
 
 				List<String> paramNames = ctx.tmpList; paramNames.clear();
 
-				if ((modifier&ACC_ENUM) != 0) {
+				if (name.equals("<init>") && (modifier&ACC_ENUM) != 0) {
 					paramNames.add("@name");
 					paramNames.add("@ordinal");
 					var par = method.parameters();
@@ -799,6 +799,10 @@ public final class CompileUnit extends ConstantData {
 					if (ctx.classes.isSpecEnabled(CompilerSpec.ATTR_METHOD_PARAMETERS)) {
 						parAccName = new MethodParameters();
 						method.putAttr(parAccName);
+						if (name.equals("<init>") && (modifier&ACC_ENUM) != 0) {
+							parAccName.flags.add(new MethodParam(null, ACC_SYNTHETIC));
+							parAccName.flags.add(new MethodParam(null, ACC_SYNTHETIC));
+						}
 					} else {
 						parAccName = null;
 					}
@@ -2244,7 +2248,7 @@ public final class CompileUnit extends ConstantData {
 		finalFields.clear();
 
 		// 隐式构造器
-		if (glinit != null && glInitBytes == null) {
+		if (glinit != null && glInitBytes == null && extraModifier != (ACC_FINAL|ACC_INTERFACE)) {
 			glinit.one(Opcodes.RETURN);
 			glinit.finish();
 		}

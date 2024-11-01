@@ -21,7 +21,6 @@ import roj.text.CharList;
 import roj.util.ArrayCache;
 import roj.util.Helpers;
 
-import java.lang.reflect.Constructor;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
@@ -186,11 +185,11 @@ public abstract class SerializerFactory {
 
 			boolean hasNP = false, hasSized = false;
 			try {
-				Constructor<?> c = type.getDeclaredConstructor(int.class);
+				var c = type.getDeclaredConstructor(int.class);
 				if ((c.getModifiers()&ACC_PUBLIC) != 0) hasSized = true;
 			} catch (NoSuchMethodException ignored) {}
 			try {
-				Constructor<?> c = type.getDeclaredConstructor(ArrayCache.CLASSES);
+				var c = type.getDeclaredConstructor(ArrayCache.CLASSES);
 				if ((c.getModifiers()&ACC_PUBLIC) != 0) hasNP = true;
 			} catch (NoSuchMethodException ignored) {}
 
@@ -199,8 +198,8 @@ public abstract class SerializerFactory {
 				return null;
 			}
 
-			ConstantData c = new ConstantData();
-			c.name("roj/gen/DC$"+ ReflectionUtils.uniqueId());
+			var c = new ConstantData();
+			c.name(type.getName().replace('.', '/')+"$DC");
 			c.addInterface("java/util/function/IntFunction");
 			ClassDefiner.premake(c);
 

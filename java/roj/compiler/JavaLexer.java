@@ -261,10 +261,14 @@ public final class JavaLexer extends Tokenizer {
 		}
 	}
 	public void init(int pos, int ln, int lnIndex) throws ParseException {
-		next();
+		super.init(getText());
 		index = pos;
 		LN = ln;
 		LNIndex = lnIndex;
+	}
+	public void setText(CharSequence text, int index) {
+		super.init(text);
+		this.index = index;
 	}
 
 	@Override

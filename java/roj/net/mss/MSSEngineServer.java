@@ -6,6 +6,7 @@ import roj.concurrent.OperationDone;
 import roj.crypt.HMAC;
 import roj.crypt.RCipherSpi;
 import roj.io.IOUtil;
+import roj.text.TextUtil;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
 import roj.util.Helpers;
@@ -141,6 +142,7 @@ public class MSSEngineServer extends MSSEngine {
 		return HS_OK;
 	}
 
+	private static final byte[] FAKE_SESSION_ID = TextUtil.hex2bytes("e0e1e2e3 e4e5e6e7 e8e9eaeb ecedeeef f0f1f2f3 f4f5f6f7 f8f9fafb fcfdfeff");
 	public final int handshakeTLS13(DynByteBuf out, DynByteBuf in) throws MSSException {
 		if (stage == HS_DONE) return HS_OK;
 
@@ -165,7 +167,17 @@ public class MSSEngineServer extends MSSEngine {
 		return HS_OK;
 	}
 	private int handleClientHelloSSL(DynByteBuf out, DynByteBuf in) throws MSSException {
-		if (in.readShort() != 0x0303) return error(VERSION_MISMATCH, "");
+		if (in.readableBytes() < 5) return -1;
+		int ridx = in.rIndex;
+		if (in.readMedium() != 0x160301) return error(ILLEGAL_PACKET, "protocol version");
+		if (in.readableBytes() < in.readUnsignedShort()) {
+			in.rIndex = ridx;
+			return -1;
+		}
+
+		if (in.readUnsignedByte() != 0x01) return error(ILLEGAL_PACKET, "handshake record");
+		if (in.readableBytes() < in.readMedium()) return error(ILLEGAL_PACKET, "");
+		if (in.readUnsignedShort() != 0x0303) return error(VERSION_MISMATCH, "TLS12");
 
 		byte[] rnd = sharedKey = new byte[64];
 		random.nextBytes(rnd);

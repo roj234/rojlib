@@ -28,7 +28,7 @@ public interface Connector {
 	static Connector mysql(String url, String database, String user, String pass) {return mysql(url+"/"+database, user, pass);}
 	static Connector mysql(String url, String user, String pass) {return jdbc("com.mysql.jdbc.Driver", "jdbc:mysql://"+url+"?characterEncoding="+MY_DB_CHARSET, user, pass);}
 
-	String MY_DB_CHARSET = "GB18030";
+	String MY_DB_CHARSET = "UTF-16LE";
 	private static Connector jdbc(String driverClass, String url, String user, String pass) {
 		try {
 			Class.forName(driverClass);

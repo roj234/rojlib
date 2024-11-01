@@ -1,7 +1,10 @@
 package roj.asm.tree.anno;
 
+import org.jetbrains.annotations.NotNull;
 import roj.asm.cp.ConstantPool;
 import roj.asm.cp.CstUTF;
+import roj.asm.tree.Attributed;
+import roj.asm.tree.attr.Attribute;
 import roj.asm.type.Type;
 import roj.asm.type.TypeHelper;
 import roj.collect.LinkedMyHashMap;
@@ -206,5 +209,31 @@ public class Annotation {
 		int result = type.hashCode();
 		result = 31 * result + values.hashCode();
 		return result;
+	}
+
+	@NotNull
+	public static List<Annotation> getAnnotations(ConstantPool cp, Attributed node, boolean vis) {
+		var attr = node.parsedAttr(cp, vis?Attribute.RtAnnotations:Attribute.ClAnnotations);
+		return attr == null ? Collections.emptyList() : attr.annotations;
+	}
+
+	public static Annotation find(List<Annotation> list, String type) {
+		for (int i = 0; i < list.size(); i++) {
+			var a = list.get(i);
+			if (a.type().equals(type)) return a;
+		}
+		return null;
+	}
+
+	public static Annotation findInvisible(ConstantPool cp, Attributed node, String type) {
+		var attr = node.parsedAttr(cp, Attribute.ClAnnotations);
+		if (attr != null) {
+			var list = attr.annotations;
+			for (int i = 0; i < list.size(); i++) {
+				var a = list.get(i);
+				if (a.type().equals(type)) return a;
+			}
+		}
+		return null;
 	}
 }
