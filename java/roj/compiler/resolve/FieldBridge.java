@@ -44,21 +44,21 @@ public final class FieldBridge extends FieldWriteReplace {
 				}
 				var _realOwner = (CompileUnit) this.owner;
 				Type type = fn.fieldType();
-				CodeWriter cw1;
-				synchronized (_realOwner.getStage4Lock()) {
-					readAccessor = _realOwner.methods.size();
 
-					if ((fn.modifier & Opcodes.ACC_STATIC) != 0) {
-						cw1 = _realOwner.newMethod(Opcodes.ACC_STATIC | Opcodes.ACC_SYNTHETIC, _realOwner.getNextAccessorName(), "()"+type.toDesc());
-						cw1.visitSize(type.length(), 0);
-						cw1.field(Opcodes.GETSTATIC, owner, fn.name(), fn.rawDesc());
-					} else {
-						cw1 = _realOwner.newMethod(Opcodes.ACC_FINAL | Opcodes.ACC_SYNTHETIC, _realOwner.getNextAccessorName(), "()"+type.toDesc());
-						cw1.visitSize(type.length(), 1);
-						cw1.one(Opcodes.ALOAD_0);
-						cw1.field(Opcodes.GETFIELD, owner, fn.name(), fn.rawDesc());
-					}
+				readAccessor = _realOwner.methods.size();
+
+				CodeWriter cw1;
+				if ((fn.modifier & Opcodes.ACC_STATIC) != 0) {
+					cw1 = _realOwner.newMethod(Opcodes.ACC_STATIC | Opcodes.ACC_SYNTHETIC, _realOwner.getNextAccessorName(), "()"+type.toDesc());
+					cw1.visitSize(type.length(), 0);
+					cw1.field(Opcodes.GETSTATIC, owner, fn.name(), fn.rawDesc());
+				} else {
+					cw1 = _realOwner.newMethod(Opcodes.ACC_FINAL | Opcodes.ACC_SYNTHETIC, _realOwner.getNextAccessorName(), "()"+type.toDesc());
+					cw1.visitSize(type.length(), 1);
+					cw1.one(Opcodes.ALOAD_0);
+					cw1.field(Opcodes.GETFIELD, owner, fn.name(), fn.rawDesc());
 				}
+
 				cw1.return_(type);
 				cw1.finish();
 			}
@@ -73,22 +73,21 @@ public final class FieldBridge extends FieldWriteReplace {
 			if (writeAccessor < 0) {
 				var _realOwner = (CompileUnit) this.owner;
 				Type type = fn.fieldType();
-				CodeWriter cw1;
-				synchronized (_realOwner.getStage4Lock()) {
-					writeAccessor = _realOwner.methods.size();
 
-					if ((fn.modifier & Opcodes.ACC_STATIC) != 0) {
-						cw1 = _realOwner.newMethod(Opcodes.ACC_STATIC | Opcodes.ACC_SYNTHETIC, _realOwner.getNextAccessorName(), "("+type.toDesc()+")V");
-						cw1.visitSize(type.length(), type.length());
-						cw1.varLoad(type, 0);
-						cw1.field(Opcodes.PUTSTATIC, owner, fn.name(), fn.rawDesc());
-					} else {
-						cw1 = _realOwner.newMethod(Opcodes.ACC_FINAL | Opcodes.ACC_SYNTHETIC, _realOwner.getNextAccessorName(), "("+type.toDesc()+")V");
-						cw1.visitSize(type.length()+1, type.length()+1);
-						cw1.one(Opcodes.ALOAD_0);
-						cw1.varLoad(type, 1);
-						cw1.field(Opcodes.PUTFIELD, owner, fn.name(), fn.rawDesc());
-					}
+				writeAccessor = _realOwner.methods.size();
+
+				CodeWriter cw1;
+				if ((fn.modifier & Opcodes.ACC_STATIC) != 0) {
+					cw1 = _realOwner.newMethod(Opcodes.ACC_STATIC | Opcodes.ACC_SYNTHETIC, _realOwner.getNextAccessorName(), "("+type.toDesc()+")V");
+					cw1.visitSize(type.length(), type.length());
+					cw1.varLoad(type, 0);
+					cw1.field(Opcodes.PUTSTATIC, owner, fn.name(), fn.rawDesc());
+				} else {
+					cw1 = _realOwner.newMethod(Opcodes.ACC_FINAL | Opcodes.ACC_SYNTHETIC, _realOwner.getNextAccessorName(), "("+type.toDesc()+")V");
+					cw1.visitSize(type.length()+1, type.length()+1);
+					cw1.one(Opcodes.ALOAD_0);
+					cw1.varLoad(type, 1);
+					cw1.field(Opcodes.PUTFIELD, owner, fn.name(), fn.rawDesc());
 				}
 				cw1.one(Opcodes.RETURN);
 				cw1.finish();

@@ -75,7 +75,7 @@ final class HPACK {
 			}
 
 			while (cap - size < len) _remove();
-			ringAddFirst(f);
+			ringAddLast(f);
 
 			if (owner != null) {
 				f.id = STATIC_TABLE.size()+super.size;
@@ -167,6 +167,12 @@ final class HPACK {
 		encode_fp = new MyHashSet<>();
 
 		decode_tbl = new Table(4096);
+	}
+
+	public void clear() {
+		encode_tbl.clear();
+		encode_fp.clear();
+		decode_tbl.clear();
 	}
 
 	public void setEncoderTableSize(int encodeMax/*REMOTE*/) {
@@ -302,7 +308,7 @@ final class HPACK {
 			if (c <= 0x20 || (c >= 0x41 && c <= 0x5a) || c >= 0x7f || c == pseudo)
 				throw new H2Exception(ERROR_PROTOCOL, "Header.KeyError");
 		}
-		return null;
+		return key;
 	}
 
 	private String readString(DynByteBuf in) throws H2Exception {

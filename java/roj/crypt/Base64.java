@@ -1,5 +1,7 @@
 package roj.crypt;
 
+import roj.text.CharList;
+import roj.util.ArrayCache;
 import roj.util.DynByteBuf;
 import roj.util.Helpers;
 
@@ -37,50 +39,78 @@ public final class Base64 {
 
 	public static <T extends Appendable> T encode(DynByteBuf in, T out) { return encode(in, out, B64_CHAR); }
 	public static <T extends Appendable> T encode(DynByteBuf in, T out, byte[] tab) {
+		var ob = ArrayCache.getCharArray(512, false);
+		int i = 0;
 		try {
 			int c = in.readableBytes() / 3;
 			while (c-- > 0) {
 				int bits = in.readMedium();
 
-				out.append((char) tab[bits >> 18 & 0x3f]).append((char) tab[bits >> 12 & 0x3f])
-				   .append((char) tab[bits >> 6 & 0x3f]).append((char) tab[bits & 0x3f]);
+				ob[i++] = (char) tab[bits >> 18 & 0x3f];
+				ob[i++] = (char) tab[bits >> 12 & 0x3f];
+				ob[i++] = (char) tab[bits >>  6 & 0x3f];
+				ob[i++] = (char) tab[bits       & 0x3f];
+
+				if (i == (512-4)) {
+					out.append(new CharList.Slice(ob, 0, i));
+					i = 0;
+				}
 			}
 
 			int r = in.readableBytes();
 			if (r != 0) {
-				int r1 = in.readUnsignedByte();
-				out.append((char) tab[r1 >> 2]);
+				int b1 = in.readUnsignedByte();
+				ob[i++] = (char) tab[b1 >> 2];
+
 				if (r == 1) {
-					out.append((char) tab[(r1 << 4) & 0x3f]);
+					ob[i++] = (char) tab[(b1 << 4) & 0x3f];
 				} else {
 					int r2 = in.readUnsignedByte();
-					out.append((char) tab[(r1 << 4) & 0x3f | (r2 >> 4)]).append((char) tab[(r2 << 2) & 0x3f]);
+					ob[i++] = (char) tab[(b1 << 4) & 0x3f | (r2 >> 4)];
+					ob[i++] = (char) tab[(r2 << 2) & 0x3f];
 				}
 
 				if (tab[64] != 0) {
-					out.append((char) tab[64]);
-					if (r == 1) out.append((char) tab[64]);
+					ob[i++] = (char) tab[64];
+					if (r == 1) ob[i++] = (char) tab[64];
 				}
 			}
+
+			if (i != 0) out.append(new CharList.Slice(ob, 0, i));
 		} catch (IOException e) {
 			Helpers.athrow(e);
+		} finally {
+			ArrayCache.putArray(ob);
 		}
 		return out;
 	}
 
 	public static DynByteBuf decode(CharSequence s, DynByteBuf out) { return decode(s, 0, s.length(), out, B64_CHAR_REV); }
 	public static DynByteBuf decode(CharSequence s, DynByteBuf out, byte[] tab) { return decode(s, 0, s.length(), out, tab); }
-	public static DynByteBuf decode(CharSequence s, int i, int len, DynByteBuf out, byte[] tab) {
-		do {
-			int bits = tab[s.charAt(i++)] << 18 | tab[s.charAt(i++)] << 12;
-			int h3 = i >= len ? 64 : tab[s.charAt(i++)];
-			int h4 = i >= len ? 64 : tab[s.charAt(i++)];
-			bits |= h3 << 6 | h4;
+	public static DynByteBuf decode(CharSequence s, int off, int count, DynByteBuf out, byte[] tab) {
+		while (count > 0) {
+			if (tab[s.charAt(off + count - 1)] != 64) break;
+			count--;
+		}
+		if (count <= 0) return out;
 
-			if (h3 == 64) out.put((byte) (bits>>16));
-			else if (h4 == 64) out.putShort(bits>>8);
-			else out.putMedium(bits);
-		} while (i < len);
+		int block = count >> 2;
+		count -= block << 2;
+		if (count == 1) throw new IllegalArgumentException("Invalid size");
+
+		out.ensureWritable(block * 3);
+		for (int j = 0; j < block; j++) {
+			int bits = tab[s.charAt(off++)] << 18 | tab[s.charAt(off++)] << 12 | tab[s.charAt(off++)] << 6 | tab[s.charAt(off++)];
+			if (bits < 0) throw new IllegalArgumentException("Invalid char");
+			out.putMedium(bits);
+		}
+
+		if (count != 0) {
+			int bits = tab[s.charAt(off++)] << 12 | tab[s.charAt(off++)] << 6;
+			if (count == 2) out.put(bits>>10);
+			else out.putShort((bits|tab[s.charAt(off)])>>2); // count == 3
+		}
+
 		return out;
 	}
 }

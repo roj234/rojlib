@@ -35,7 +35,7 @@ final class Trinary extends ExprNode {
 	@Override
 	public ExprNode resolve(LocalContext ctx) {
 		// must before resolve
-		if (val.isKind(ExprKind.IMMEDIATE_CONSTANT))
+		if (val.hasFeature(ExprFeat.IMMEDIATE_CONSTANT))
 			ctx.report(Kind.WARNING, "trinary.constant");
 
 		val = val.resolve(ctx);

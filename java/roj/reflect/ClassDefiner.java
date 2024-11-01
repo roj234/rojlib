@@ -29,8 +29,8 @@ public final class ClassDefiner extends ClassLoader {
 	public static void __(Object handle) { Callback.set(handle); }
 
 	public static void premake(ConstantData clz) {
-		if (__UseAllocateInstance) return;
 		clz.npConstructor();
+		if (__UseAllocateInstance) return;
 
 		CodeWriter cw = clz.newMethod(ACC_PUBLIC|ACC_STATIC, "<clinit>", "()V");
 		cw.visitSize(2,0);
@@ -50,8 +50,13 @@ public final class ClassDefiner extends ClassLoader {
 			throw new IllegalStateException("初始化失败", e);
 		}
 	}
-	public static Object postMake(Class<?> klass) throws InstantiationException {
-		if (__UseAllocateInstance) return ReflectionUtils.u.allocateInstance(klass);
+	public static Object postMake(Class<?> klass) {
+		if (__UseAllocateInstance) {
+			try {
+				return ReflectionUtils.u.allocateInstance(klass);
+			} catch (InstantiationException e) {
+			}
+		}
 
 		ReflectionUtils.ensureClassInitialized(klass);
 

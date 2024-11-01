@@ -152,7 +152,7 @@ public final class Inferrer {
 			distance += LEVEL_DEPTH*2;
 
 			IType type = mpar.get(vararg);
-			if (type.array() == 0) throw new ResolveException("varargs方法"+mn.owner+"."+mn.name()+"未以数组作为最后一个参数");
+			if (type.array() == 0) throw ResolveException.ofIllegalInput("inferrer.illegalVararg", mn.owner, mn.name());
 			IType componentType = TypeHelper.componentType(type);
 
 			if (inSize == vararg) {
@@ -436,8 +436,8 @@ public final class Inferrer {
 			break;
 			case Type.TYPE_PARAMETER_TYPE:
 				TypeParam tp = (TypeParam) methodSide;
-				if (paramSide.isPrimitive())
-					paramSide = TypeCast.getWrapper(paramSide.rawType());
+				//if (paramSide.isPrimitive())
+				//	paramSide = TypeCast.getWrapper(paramSide.rawType());
 				addBound(tp, paramSide);
 			break;
 		}
@@ -457,9 +457,9 @@ public final class Inferrer {
 	}
 	private IType getCommonChild(IType a, IType b) {
 		TypeCast.Cast cast = cast(a, b);
-		if (cast.type == TypeCast.UPCAST) return b; // a更不具体
+		if (cast.type >= 0) return b; // a更不具体
 		cast = cast(b, a);
-		if (cast.type == TypeCast.UPCAST)  return a; // b更不具体
+		if (cast.type >= 0) return a; // b更不具体
 
 		throw new UnableCastException(a, b, cast);
 	}

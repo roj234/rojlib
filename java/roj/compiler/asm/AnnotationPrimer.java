@@ -89,7 +89,7 @@ public final class AnnotationPrimer extends Annotation {
 		if (node instanceof ArrayDef def) def.setType(type);
 		node = node.resolve(ctx);
 
-		if (!node.isConstant() && !node.isKind(ExprNode.ExprKind.ENUM_REFERENCE)) {
+		if (!node.isConstant() && !node.hasFeature(ExprNode.ExprFeat.ENUM_REFERENCE)) {
 			ctx.report(Kind.ERROR, "ap.annotation.noConstant");
 			return null;
 		}
@@ -107,7 +107,7 @@ public final class AnnotationPrimer extends Annotation {
 		AnnVal val = toAnnVal(node.constVal(), type);
 		return tryAutoArray ? new AnnValArray(Collections.singletonList(val)) : val;
 	}
-	private static AnnVal toAnnVal(Object o, Type type) {
+	private static AnnVal toAnnVal(Object o, IType type) {
 		if (o instanceof Object[] arr) {
 			type = type.clone();
 			type.setArrayDim(type.array()-1);
@@ -116,18 +116,22 @@ public final class AnnotationPrimer extends Annotation {
 			}
 			return new AnnValArray(Helpers.cast(Arrays.asList(arr)));
 		}
-		if (o instanceof AnnVal a) return switch (TypeCast.getDataCap(type.getActualType())) {
+		if (o instanceof AnnVal a) return toAnnVal(a, type);
+		if (o instanceof String) return AnnVal.valueOf(o.toString());
+		if (o instanceof IType type1) return new AnnValClass(type1.rawType().toDesc());
+		if (o instanceof Boolean b) return AnnVal.valueOf((byte) (b ? 1 : 0));
+		throw new UnsupportedOperationException("未预料的常量类型:"+o);
+	}
+	public static AnnVal toAnnVal(AnnVal a, IType type) {
+		return switch (TypeCast.getDataCap(type.getActualType())) {
 			default -> a;
-			case 1 -> AnnVal.valueOf((byte)a.asInt());
-			case 2 -> AnnVal.valueOf((char)a.asInt());
-			case 3 -> AnnVal.valueOf((short)a.asInt());
+			case 1 -> AnnVal.valueOf((byte) a.asInt());
+			case 2 -> AnnVal.valueOf((char) a.asInt());
+			case 3 -> AnnVal.valueOf((short) a.asInt());
 			case 4 -> AnnVal.valueOf(a.asInt());
 			case 5 -> AnnVal.valueOf(a.asLong());
 			case 6 -> AnnVal.valueOf(a.asFloat());
 			case 7 -> AnnVal.valueOf(a.asDouble());
 		};
-		if (o instanceof String) return AnnVal.valueOf(o.toString());
-		if (o instanceof IType type1) return new AnnValClass(type1.rawType().toDesc());
-		throw new UnsupportedOperationException("未预料的常量类型:"+o);
 	}
 }

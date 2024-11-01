@@ -68,12 +68,6 @@ public final class HCompress extends GDeflate {
 	}
 
 	@Override
-	public void channelClosed(ChannelCtx ctx) throws IOException {
-		if (def != null) def.end();
-		if (inf != null) inf.end();
-	}
-
-	@Override
 	public void onEvent(ChannelCtx ctx, Event event) throws IOException {
 		if (event.id.equals(EVENT_CLOSE_OUT)) {
 			if (def != null) {

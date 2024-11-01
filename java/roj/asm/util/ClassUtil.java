@@ -4,7 +4,6 @@ import org.jetbrains.annotations.Nullable;
 import roj.asm.tree.IClass;
 import roj.asm.type.Desc;
 import roj.asm.type.Type;
-import roj.collect.SimpleList;
 import roj.text.CharList;
 import roj.text.TextUtil;
 import roj.text.logging.Logger;
@@ -35,7 +34,6 @@ public final class ClassUtil {
 	private final Function<CharSequence, IClass> localClassInfo;
 
 	private final CharList sharedCL = new CharList(128), sharedCL2 = new CharList(12);
-	private final SimpleList<?> sharedAL = new SimpleList<>();
 
 	public static ClassUtil getInstance() {
 		ClassUtil u = ThreadBasedCache.get();

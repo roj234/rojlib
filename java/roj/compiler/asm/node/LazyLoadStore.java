@@ -26,15 +26,21 @@ public final class LazyLoadStore extends Segment {
 		DynByteBuf ob = to.bw;
 		int begin = ob.wIndex();
 
-		byte code = switch (TypeCast.getDataCap(v.type.getActualType())) {
-			default -> ILOAD;
-			case 5 -> LLOAD;
-			case 6 -> FLOAD;
-			case 7 -> DLOAD;
-			case 8 -> ALOAD;
-		};
-		if (store) code += 33;
-		to.vars(code, v.slot);
+		if (v.slot < 0) {
+			ob.put(0x56 + v.type.rawType().length());
+		} else {
+			// Note: 如果以后StreamChain要改的话，这里要和Type.DirtyHacker一起改
+			byte code = switch (TypeCast.getDataCap(v.type.getActualType())) {
+				default -> ILOAD;
+				case 5 -> LLOAD;
+				case 6 -> FLOAD;
+				case 7 -> DLOAD;
+				case 8 -> ALOAD;
+			};
+			if (store) code += 33;
+			to.vars(code, v.slot);
+		}
+
 
 		begin = ob.wIndex() - begin;
 		assert length() == begin;

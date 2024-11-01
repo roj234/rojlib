@@ -12,6 +12,7 @@ import roj.asm.type.Type;
 import roj.asm.visitor.Label;
 import roj.collect.SimpleList;
 import roj.collect.ToIntMap;
+import roj.compiler.LavaFeatures;
 import roj.compiler.api.FieldWriteReplace;
 import roj.compiler.asm.Asterisk;
 import roj.compiler.asm.MethodWriter;
@@ -33,7 +34,7 @@ import java.util.function.Consumer;
  * @author Roj233
  * @since 2022/2/27 20:27
  */
-public final class DotGet extends VarNode {
+final class DotGet extends VarNode {
 	static final ThreadLocal<Label> NULLISH_TARGET = new ThreadLocal<>();
 	static void writeNullishTarget(MethodWriter cw, Label ifNull, IType targetType) {
 		NULLISH_TARGET.remove();
@@ -44,7 +45,7 @@ public final class DotGet extends VarNode {
 		cw.one(Opcodes.POP);
 		int type1 = targetType.getActualType();
 		if (type1 != Type.VOID) {
-			if (type1 != Type.CLASS) throw new ResolveException("symbol.error.derefPrimitive:"+targetType);
+			if (type1 != Type.CLASS) LocalContext.get().report(Kind.ERROR, "symbol.error.derefPrimitive", targetType);
 			cw.one(Opcodes.ACONST_NULL);
 		}
 		cw.label(tmp);
@@ -72,6 +73,7 @@ public final class DotGet extends VarNode {
 
 		TypeId.putInt(Invoke.class, 2);
 		TypeId.putInt(ArrayGet.class, 2);
+		TypeId.putInt(Binary.class, 2);
 
 		TypeId.putInt(Cast.class, 3);
 
@@ -96,7 +98,7 @@ public final class DotGet extends VarNode {
 	}
 	DotGet() {}
 
-	public static ExprNode resolved(ExprNode parent, IClass begin, IType type, boolean isFinal, FieldNode... chain) {
+	public static ExprNode fieldChain(ExprNode parent, IClass begin, IType type, boolean isFinal, FieldNode... chain) {
 		DotGet el = new DotGet();
 		el.names = new SimpleList<>();
 		el.parent = parent;
@@ -129,9 +131,9 @@ public final class DotGet extends VarNode {
 
 	@NotNull
 	@Override
-	public ExprNode resolve(LocalContext ctx) throws ResolveException { return resolveEx(ctx, null); }
-	@Contract("_, null -> !null")
-	final ExprNode resolveEx(LocalContext ctx, Consumer<IClass> classExprTarget) throws ResolveException {
+	public ExprNode resolve(LocalContext ctx) throws ResolveException { return resolveEx(ctx, null, null); }
+	@Contract("_, null, _ -> !null")
+	final ExprNode resolveEx(LocalContext ctx, Consumer<Object> classExprTarget, String lastSegment) throws ResolveException {
 		if ((flags&RESOLVED) != 0) return this;
 
 		// 用于错误提示
@@ -143,11 +145,15 @@ public final class DotGet extends VarNode {
 
 			String part = names.get(0);
 
-			Variable varParent = ctx.tryVariable(part);
+			Variable varParent = ctx.getVariable(part);
 			check:
 			if (varParent != null) {
 				// 1. 变量
-				parent = new LocalVariable(varParent);
+				var varNode = new LocalVariable(varParent);
+				varNode.wordStart = wordStart;
+				varNode.wordEnd = wordEnd;
+
+				parent = varNode;
 				if (names.size() == 1) return parent;
 
 				names.remove(0);
@@ -172,9 +178,9 @@ public final class DotGet extends VarNode {
 				// 3. 静态字段导入
 				if ((result = ctx.tryImportField(part)) != null) {
 					begin = result.owner;
-					if (begin == null) return result.prev;
+					if (begin == null) return result.parent();
 					names.set(0, result.method);
-					parent = result.prev;
+					parent = result.parent();
 					flags = 0;
 				}
 			}
@@ -247,6 +253,15 @@ public final class DotGet extends VarNode {
 					return null;
 				}
 
+				if (lastSegment != null && ctx.classes.hasFeature(LavaFeatures.OMISSION_NEW)) {
+					var checkConstructor = ctx.resolveDotGet(sb.append('/').append(lastSegment), true);
+					if ("".equals(checkConstructor)) {
+						assert classExprTarget != null;
+						classExprTarget.accept(new Type(ctx.get_frBegin().name()));
+						return null;
+					}
+				}
+
 				if (inaccessibleThis != null) error = inaccessibleThis.error;
 				ctx.report(Kind.ERROR, error);
 				return NaE.RESOLVE_FAILED;
@@ -315,9 +330,13 @@ public final class DotGet extends VarNode {
 	}
 
 	@Override
-	public boolean isKind(ExprKind kind) {return kind == ExprKind.ENUM_REFERENCE && isStaticField() && (chain[0].modifier&Opcodes.ACC_ENUM) != 0;}
+	public boolean hasFeature(ExprFeat kind) {
+		if (kind == ExprFeat.ENUM_REFERENCE) return isStaticField() && (chain[0].modifier & Opcodes.ACC_ENUM) != 0;
+		if (kind == ExprFeat.STATIC_BEGIN) return parent == null;
+		return false;
+	}
 	@Override
-	public Object constVal() {return isKind(ExprKind.ENUM_REFERENCE) ? new AnnValEnum(begin.name(), chain[0].name()) : super.constVal();}
+	public Object constVal() {return hasFeature(ExprFeat.ENUM_REFERENCE) ? new AnnValEnum(begin.name(), chain[0].name()) : super.constVal();}
 
 	@Override
 	public IType type() {return type == null ? Asterisk.anyType : type;}
@@ -348,7 +367,7 @@ public final class DotGet extends VarNode {
 	}
 
 	@Override
-	public void postStore(MethodWriter cw) {
+	public void postStore(MethodWriter cw, int state) {
 		FieldNode fn = chain[chain.length-1];
 		String owner = chain.length == 1 ? begin.name() : chain[chain.length-2].fieldType().owner();
 
@@ -360,8 +379,9 @@ public final class DotGet extends VarNode {
 	}
 
 	@Override
-	public void copyValue(MethodWriter cw, boolean twoStack) {
+	public int copyValue(MethodWriter cw, boolean twoStack) {
 		cw.one(isStaticField() ? twoStack ? Opcodes.DUP2 : Opcodes.DUP : twoStack ? Opcodes.DUP2_X1 : Opcodes.DUP_X1);
+		return 0;
 	}
 
 	@Override
@@ -426,7 +446,7 @@ public final class DotGet extends VarNode {
 
 	public DotGet add(String name, int flag) {
 		if (flag != 0) {
-			if (names.size() > 64) throw new ResolveException("dotGet.opChain.tooLong");
+			if (names.size() > 64) LocalContext.get().report(Kind.ERROR, "dotGet.opChain.tooLong");
 			bits |= 1L << names.size();
 		}
 		names.add(name);

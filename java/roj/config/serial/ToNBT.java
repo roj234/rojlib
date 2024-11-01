@@ -106,6 +106,7 @@ public class ToNBT implements CVisitor {
 		for (long l : la) ob.writeLong(l);
 	}
 
+	@SuppressWarnings("fallthrough")
 	public final void onValue(byte type) {
 		switch (state) {
 			case -1:

@@ -9,8 +9,8 @@ import roj.collect.SimpleList;
 import roj.collect.ToIntMap;
 import roj.compiler.asm.MethodWriter;
 import roj.compiler.asm.Variable;
-import roj.compiler.ast.expr.DotGet;
 import roj.compiler.ast.expr.ExprNode;
+import roj.compiler.ast.expr.ExprParser;
 import roj.compiler.ast.expr.LocalVariable;
 import roj.compiler.context.CompileUnit;
 import roj.compiler.context.LocalContext;
@@ -20,8 +20,6 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Only for enclosing class
- * lambda只要喂参数用aload就行
  * @author Roj234
  * @since 2024/6/11 0011 20:02
  */
@@ -62,9 +60,7 @@ public final class NestContext {
 		int fid = fieldIds.getOrDefault(this, -1);
 		if (fid < 0) {
 			Type type = new Type(nestType);
-			synchronized (self.getStage4Lock()) {
-				fid = self.newField(Opcodes.ACC_SYNTHETIC|Opcodes.ACC_FINAL, "$this", type);
-			}
+			fid = self.newField(Opcodes.ACC_SYNTHETIC|Opcodes.ACC_FINAL, "$this", type);
 			fieldIds.putInt(this, fid);
 
 			addConstr(new ExprNode() {
@@ -73,7 +69,11 @@ public final class NestContext {
 				@Override
 				public IType type() {return type;}
 				@Override
-				public void write(MethodWriter cw, boolean noRet) {cw.one(Opcodes.ALOAD_0);}
+				public void write(MethodWriter cw, boolean noRet) {
+					var ctx = LocalContext.get();
+					ctx.thisUsed = true;
+					cw.vars(Opcodes.ALOAD, ctx.thisSlot);
+				}
 			}, fid);
 		}
 		return self.fields.get(fid);
@@ -92,7 +92,7 @@ public final class NestContext {
 				chain[k] = ec.self.fields.get(ec.getVariable(v));
 
 				// must use This(), will reference topmost fieldIds
-				return new LocalContext.Import(DotGet.resolved(ctx.ep.This(), list.getLast().self, null, true, chain));
+				return new LocalContext.Import(ExprParser.fieldChain(ctx.ep.This(), list.getLast().self, null, true, chain));
 			}
 		}
 
@@ -101,11 +101,10 @@ public final class NestContext {
 	private int getVariable(Variable v) {
 		int fid = fieldIds.getOrDefault(v, -1);
 		if (fid < 0) {
-			synchronized (self.getStage4Lock()) {
-				fid = self.newField(Opcodes.ACC_SYNTHETIC|Opcodes.ACC_FINAL, "$arg$"+v.name, v.type.rawType().toDesc());
-			}
+			fid = self.newField(Opcodes.ACC_SYNTHETIC|Opcodes.ACC_FINAL, "$arg$"+v.name, v.type.rawType().toDesc());
 			fieldIds.put(v, fid);
 
+			v.refByNest = true;
 			// to invoke constructor
 			addConstr(new LocalVariable(v), fid);
 		}
@@ -124,7 +123,7 @@ public final class NestContext {
 					chain[k++] = list.get(j).nestRef();
 
 				// must use This(), will reference topmost fieldIds
-				return new LocalContext.Import(ec.self, name, DotGet.resolved(ctx.ep.This(), list.getLast().self, null, true, chain));
+				return new LocalContext.Import(ec.self, name, ExprParser.fieldChain(ctx.ep.This(), list.getLast().self, null, true, chain));
 			}
 		}
 
@@ -132,6 +131,9 @@ public final class NestContext {
 	}
 
 	private void addConstr(ExprNode invoke, int fid) {
+		var ctx = LocalContext.get();
+		ctx.thisUsed = true;
+
 		var type = invoke.type().rawType();
 		initArgs.add(invoke);
 		init.mn.parameters().add(type);

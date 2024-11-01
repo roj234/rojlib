@@ -10,19 +10,20 @@ import static roj.asm.Opcodes.*;
  * @since 2024/2/25 0:17
  */
 public final class JumpSegmentAO extends JumpSegment {
+	private StaticSegment writeReplace;
+
 	public JumpSegmentAO(byte code, Label target) { super(code, target); }
 
 	@Override
 	@SuppressWarnings("fallthrough")
 	public boolean put(CodeWriter to, int segmentId) {
+		if (writeReplace != null) return writeReplace.put(to, segmentId);
 		if (!target.isValid()) throw new IllegalStateException("target label is not valid: "+target);
 
-		// 连续goto自动合并
-		// 或者这是无法访问的代码
-		// TODO 增加一个独立的unreachable code检测，在CodeWriter中
+		// 无法访问的代码 (连续goto自动合并会误判)
 		if (!to.isContinuousControlFlow(segmentId-1)) {
-			GlobalContext.debugLogger().warn("Unreachable code: SelfOn("+segmentId+")="+to.bci+"+?]=>"+target);
-			to.segments.set(segmentId, StaticSegment.EMPTY);
+			GlobalContext.debugLogger().warn("无法访问的代码: "+this+" (from b"+segmentId+", bci="+to.bci+") => "+target.getValue());
+			doWriteReplace();
 			return true;
 		}
 
@@ -70,7 +71,6 @@ public final class JumpSegmentAO extends JumpSegment {
 				}
 			break;
 			default:
-				// TODO 到时候FrameVisitor怎么搞.jpg
 				if (((short) off) != off) {
 					o.put(IFEQ + ((code-IFEQ) ^ 1)).putShort(8).put(GOTO_W).putInt(off);
 					len = 8;
@@ -81,10 +81,15 @@ public final class JumpSegmentAO extends JumpSegment {
 		}
 
 		if (target.getValue() == to.bci + newLen) {
-			GlobalContext.debugLogger().warn("如果这个提示重复出现代表程序又出bug辣 See MethodWriter#label for details");
+			GlobalContext.debugLogger().warn("无意义的跳转: "+this+" (from b"+segmentId+", bci="+to.bci+") => "+target.getValue());
+			doWriteReplace();
 			return true;
 		}
 		return len != newLen;
+	}
+
+	private void doWriteReplace() {
+		writeReplace = code < GOTO ? new StaticSegment(code >= IF_icmpeq ? POP2 : POP) : StaticSegment.EMPTY;
 	}
 
 	@Override
@@ -92,4 +97,7 @@ public final class JumpSegmentAO extends JumpSegment {
 		Label rx = copyLabel(target, from, to, blockMoved, mode);
 		return mode==XInsnList.REP_CLONE?new JumpSegmentAO(code,rx):this;
 	}
+
+	@Override
+	public final int length() { return writeReplace != null ? writeReplace.length() : super.length(); }
 }

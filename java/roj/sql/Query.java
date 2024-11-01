@@ -14,6 +14,4 @@ import java.lang.annotation.Target;
 public @interface Query {
 	String value();
 	String[] properties() default "";
-	Returns returns() default Returns.DEFAULT;
-	enum Returns {DEFAULT, AFFECTED_ID}
 }

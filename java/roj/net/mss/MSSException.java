@@ -1,5 +1,6 @@
 package roj.net.mss;
 
+import roj.RojLib;
 import roj.crypt.HMAC;
 import roj.util.ArrayCache;
 import roj.util.DynByteBuf;
@@ -20,7 +21,7 @@ public class MSSException extends IOException {
 	}
 
 	public MSSException(int code, String msg, Throwable cause) {
-		super(msg, cause);
+		super(msg == null ? String.valueOf(code) : msg, cause);
 		this.code = code;
 	}
 
@@ -34,7 +35,9 @@ public class MSSException extends IOException {
 		if (buf.writableBytes() < extra) return;
 
 		int pos = buf.wIndex();
-		buf.put(MSSEngine.P_ALERT).putMedium(extra-3).put(code).put(data.length).put(data);
+		buf.put(MSSEngine.P_ALERT).putShort(extra-3).put(code);
+		if (RojLib.IS_DEV) buf.put(data.length).put(data);
+		else buf.put(0);
 
 		if (kd != null) {
 			kd.setSignKey(engine.deriveKey("alert", kd.getDigestLength()));
@@ -42,4 +45,6 @@ public class MSSException extends IOException {
 			buf.put(kd.digestShared());
 		}
 	}
+
+	public boolean shouldNotifyRemote() {return code != MSSEngine.ILLEGAL_PACKET;}
 }

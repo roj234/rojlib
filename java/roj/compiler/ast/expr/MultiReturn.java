@@ -3,78 +3,79 @@ package roj.compiler.ast.expr;
 import org.jetbrains.annotations.Nullable;
 import roj.asm.type.Generic;
 import roj.asm.type.IType;
+import roj.collect.MyBitSet;
 import roj.compiler.asm.LPSignature;
 import roj.compiler.asm.MethodWriter;
+import roj.compiler.asm.Variable;
 import roj.compiler.context.LocalContext;
 import roj.compiler.diagnostic.Kind;
 import roj.compiler.resolve.ResolveException;
 import roj.compiler.resolve.TypeCast;
+import roj.text.TextUtil;
 
 import java.util.List;
+
+import static roj.compiler.ast.GeneratorUtil.RETURNSTACK_TYPE;
 
 /**
  * @author Roj234
  * @since 2024/6/9 0009 1:42
  */
-public final class MultiReturn extends ExprNode {
+final class MultiReturn extends ExprNode {
 	private final List<ExprNode> values;
-	private int hashCode;
-	public MultiReturn(List<ExprNode> values) {
-		this.values = values;
-		if (values.size() == 0 || values.size() > 255) throw new UnsupportedOperationException("Illegal return size "+values.size());
-	}
+	private MyBitSet _callUnsafe;
+	private Generic exactType;
 
-	@Override
-	public String toString() {return values.toString();}
+	public MultiReturn(List<ExprNode> values) {this.values = values;}
+
+	@Override public String toString() {return "{"+TextUtil.join(values, ", ")+"}";}
 
 	@Override
 	public ExprNode resolve(LocalContext ctx) throws ResolveException {
+		if (values.size() == 0 || values.size() > 255) ctx.report(Kind.ERROR, "泛型过长："+values.size());
+
+		_callUnsafe = new MyBitSet(values.size());
+
 		for (int i = 0; i < values.size(); i++) {
 			ExprNode node = values.get(i).resolve(ctx);
 			values.set(i, node);
-			if ("roj/compiler/runtime/ReturnStack".equals(node.type().owner())) {
+			if (!(node instanceof LocalVariable) && !node.isConstant()) {
+				_callUnsafe.add(i);
+				ctx.report(Kind.WARNING, "multiReturn.sideEffect");
+			}
+
+			if (RETURNSTACK_TYPE.equals(node.type().owner())) {
 				ctx.report(Kind.ERROR, "multiReturn.russianToy");
 			}
 		}
 
 		LPSignature node = ctx.file.currentNode;
-		ok: {
-			if (node != null) {
-				IType type1 = node.values.get(node.values.size() - 1);
-				if (type1.owner().equals("roj/compiler/runtime/ReturnStack") && type1 instanceof Generic g) {
-					for (IType child : g.children) {
-						if ("roj/compiler/runtime/ReturnStack".equals(child.owner())) {
-							ctx.report(Kind.ERROR, "multiReturn.russianToy");
-						}
-					}
-					hashCode = g.children.hashCode();
-					break ok;
-				}
+		if (node != null) {
+			IType type1 = node.values.get(node.values.size() - 1);
+			if (type1.owner().equals(RETURNSTACK_TYPE) && type1 instanceof Generic g) {
+				exactType = g;
+				return this;
 			}
-
-			ctx.report(Kind.ERROR, "multiReturn.incompatible");
 		}
 
-
-		return this;
+		ctx.report(Kind.ERROR, "multiReturn.incompatible");
+		return NaE.RESOLVE_FAILED;
 	}
 
-	@Override
-	public IType type() {
-		Generic generic = new Generic("roj/compiler/runtime/ReturnStack");
-		for (ExprNode value : values) generic.addChild(value.type());
-		return generic;
-	}
+	@Override public IType type() {return exactType;}
 
 	@Override
 	public void write(MethodWriter cw, @Nullable TypeCast.Cast returnType) {
-		cw.ldc(hashCode);
-		cw.invokeS("roj/compiler/runtime/ReturnStack", "get", "(I)Lroj/compiler/runtime/ReturnStack;");
-		for (ExprNode v : values) {
-			v.write(cw);
+		Variable[] varTmp = new Variable[_callUnsafe.size()];
+		var ctx = LocalContext.get();
 
-			var type = v.type();
-			cw.invokeV("roj/compiler/runtime/ReturnStack", "put", "("+(type.isPrimitive()?(char)type.rawType().type:"Ljava/lang/Object;")+")Lroj/compiler/runtime/ReturnStack;");
+		cw.ldc(exactType.children.hashCode());
+		cw.invokeS(RETURNSTACK_TYPE, "get", "(I)L"+RETURNSTACK_TYPE+";");
+		for (int i = 0; i < values.size(); i++) {
+			var node = values.get(i);
+			var type = exactType.children.get(i);
+			node.write(cw, ctx.castTo(node.type(), type, 0));
+			cw.invokeV(RETURNSTACK_TYPE, "put", "(" + (type.isPrimitive() ? (char) type.rawType().type : "Ljava/lang/Object;") + ")L"+RETURNSTACK_TYPE+";");
 		}
 	}
 

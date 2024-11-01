@@ -1,6 +1,7 @@
 package roj.asm.tree.attr;
 
 import roj.asm.cp.ConstantPool;
+import roj.asm.tree.MethodNode;
 import roj.asm.tree.anno.Annotation;
 import roj.collect.SimpleList;
 import roj.util.DynByteBuf;
@@ -13,6 +14,11 @@ import java.util.List;
  */
 public final class ParameterAnnotations extends Attribute {
 	public static final String VISIBLE = "RuntimeVisibleParameterAnnotations", INVISIBLE = "RuntimeInvisibleParameterAnnotations";
+
+	public static List<List<Annotation>> getParameterAnnotation(ConstantPool cp, MethodNode m, boolean vis) {
+		ParameterAnnotations pa = m.parsedAttr(cp, vis ? RtParameterAnnotations : ClParameterAnnotations);
+		return pa == null ? null : pa.annotations;
+	}
 
 	public ParameterAnnotations(boolean visibleForRuntime) {
 		vis = visibleForRuntime;

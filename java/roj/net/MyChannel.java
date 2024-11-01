@@ -4,10 +4,10 @@ import roj.collect.MyHashMap;
 import roj.collect.RingBuffer;
 import roj.collect.SimpleList;
 import roj.io.buf.BufferPool;
-import roj.util.AttributeKey;
 import roj.util.DynByteBuf;
 import roj.util.Helpers;
 import roj.util.NativeMemory;
+import roj.util.TypedKey;
 
 import java.io.Closeable;
 import java.io.IOException;
@@ -33,7 +33,7 @@ public abstract class MyChannel implements Selectable, Closeable {
 
 	ChannelCtx pipelineHead, pipelineTail;
 
-	private Map<AttributeKey<?>, Object> attachments = Collections.emptyMap();
+	private Map<TypedKey<?>, Object> attachments = Collections.emptyMap();
 
 	SelectionKey key = DummySelectionKey.INSTANCE;
 	AbstractSelectableChannel ch;
@@ -264,11 +264,11 @@ public abstract class MyChannel implements Selectable, Closeable {
 	}
 
 	@SuppressWarnings("unchecked")
-	public final <T> T attachment(AttributeKey<T> key) {
+	public final <T> T attachment(TypedKey<T> key) {
 		return (T) attachments.get(key);
 	}
 	@SuppressWarnings("unchecked")
-	public synchronized final <T> T attachment(AttributeKey<T> key, T val) {
+	public synchronized final <T> T attachment(TypedKey<T> key, T val) {
 		if (attachments.isEmpty()) attachments = new MyHashMap<>(4);
 		return (T) (val == null ? attachments.remove(key) : attachments.put(key, val));
 	}
@@ -453,8 +453,13 @@ public abstract class MyChannel implements Selectable, Closeable {
 		}
 	}
 	public final void fireOpen() throws IOException {
-		ChannelCtx head = head();
-		head.handler.channelOpened(head);
+		try {
+			lock.lock();
+			ChannelCtx head = head();
+			head.handler.channelOpened(head);
+		} finally {
+			lock.unlock();
+		}
 	}
 
 	public final void disconnect() throws IOException {

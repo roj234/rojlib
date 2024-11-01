@@ -118,7 +118,7 @@ public abstract class WebSocketHandler implements ChannelHandler {
 		if (idle == 30000) {
 			send(FRAME_PING, null);
 		} else if (idle == 35000) {
-			error(ERR_CLOSED, "timeout");
+			error(ERR_UNEXPECTED, "timeout");
 		}
 	}
 
@@ -343,7 +343,7 @@ public abstract class WebSocketHandler implements ChannelHandler {
 		switch (ph & 0xF) {
 			case FRAME_CLOSE:
 				if (in.readableBytes() < 2) {
-					error(ERR_PROTOCOL, "reason missing");
+					error(ERR_CLOSED, "closed");
 					return;
 				}
 				if (errCode == 0) {

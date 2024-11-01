@@ -5,7 +5,7 @@ import roj.asm.tree.anno.AnnVal;
 import roj.asm.type.IType;
 import roj.asm.type.Type;
 import roj.collect.SimpleList;
-import roj.compiler.CompilerSpec;
+import roj.compiler.LavaFeatures;
 import roj.compiler.asm.MethodWriter;
 import roj.compiler.context.LocalContext;
 import roj.compiler.resolve.ResolveException;
@@ -14,6 +14,8 @@ import roj.io.IOUtil;
 import roj.text.CharList;
 import roj.text.TextUtil;
 
+import java.util.Collections;
+
 /**
  * @author Roj234
  * @since 2024/1/27 0027 2:57
@@ -21,9 +23,10 @@ import roj.text.TextUtil;
 final class StringConcat extends ExprNode {
 	SimpleList<ExprNode> nodes = new SimpleList<>();
 
+	StringConcat() {}
 	StringConcat(ExprNode left, ExprNode right) {
 		nodes.add(left);
-		append(right);
+		nodes.add(right);
 	}
 
 	@Override
@@ -76,7 +79,7 @@ final class StringConcat extends ExprNode {
 	public void write(MethodWriter cw, boolean noRet) {
 		mustBeStatement(noRet);
 		var lc = LocalContext.get();
-		if (lc.classes.isSpecEnabled(CompilerSpec.SHARED_STRING_CONCAT)) {
+		if (lc.classes.hasFeature(LavaFeatures.SHARED_STRING_CONCAT)) {
 			viaCharList(cw, lc);
 		} else {
 			viaStringBuilder(cw, lc);
@@ -86,11 +89,16 @@ final class StringConcat extends ExprNode {
 		cw.newObject("java/lang/StringBuilder");
 		for (int i = 0; i < nodes.size(); i++) {
 			ExprNode node = nodes.get(i);
+			var type = node.type();
+			if (type.getClass() == Type.DirtyHacker.class) {
+				node = callPseudoToString(lc, node);
+				type = node.type();
+			}
 			node.write(cw);
 
-			Type rawType = node.type().rawType();
-			if (rawType.isPrimitive()) {
-				String desc = switch (TypeCast.getDataCap(rawType.type)) {
+			int cap = TypeCast.getDataCap(type.getActualType());
+			if (cap != 8) {
+				String desc = switch (cap) {
 					case 0 -> "(Z)Ljava/lang/StringBuilder;";
 					case 2 -> "(C)Ljava/lang/StringBuilder;";
 					case 5 -> "(J)Ljava/lang/StringBuilder;";
@@ -100,10 +108,10 @@ final class StringConcat extends ExprNode {
 				};
 
 				cw.invoke(Opcodes.INVOKEVIRTUAL, "java/lang/StringBuilder", "append", desc);
-			} else if (rawType.equals(Constant.STRING)) {
+			} else if (type.equals(Constant.STRING)) {
 				cw.invoke(Opcodes.INVOKEVIRTUAL, "java/lang/StringBuilder", "append", "(Ljava/lang/String;)Ljava/lang/StringBuilder;");
 			} else {
-				TypeCast.Cast cast = lc.castTo(rawType, CHARSEQUENCE_TYPE, TypeCast.E_NEVER);
+				TypeCast.Cast cast = lc.castTo(type, CHARSEQUENCE_TYPE, TypeCast.E_NEVER);
 				if (cast.type >= 0) {
 					cast.write(cw);
 					cw.invoke(Opcodes.INVOKEVIRTUAL, "java/lang/StringBuilder", "append", "(Ljava/lang/CharSequence;)Ljava/lang/StringBuilder;");
@@ -114,15 +122,26 @@ final class StringConcat extends ExprNode {
 		}
 		cw.invoke(Opcodes.INVOKEVIRTUAL, "java/lang/StringBuilder", "toString", "()Ljava/lang/String;");
 	}
+
+	private static ExprNode callPseudoToString(LocalContext ctx, ExprNode node) {
+		DotGet fn = new DotGet(node, "toString", 0);
+		return new Invoke(fn, Collections.emptyList()).resolve(ctx);
+	}
+
 	private void viaCharList(MethodWriter cw, LocalContext lc) {
 		cw.newObject("roj/text/CharList");
 		for (int i = 0; i < nodes.size(); i++) {
 			ExprNode node = nodes.get(i);
+			var type = node.type();
+			if (type.getClass() == Type.DirtyHacker.class) {
+				node = callPseudoToString(lc, node);
+				type = node.type();
+			}
 			node.write(cw);
 
-			Type rawType = node.type().rawType();
-			if (rawType.isPrimitive()) {
-				String desc = switch (TypeCast.getDataCap(rawType.type)) {
+			int cap = TypeCast.getDataCap(type.getActualType());
+			if (cap != 8) {
+				String desc = switch (cap) {
 					case 0 -> "(Z)Lroj/text/CharList;";
 					case 2 -> "(C)Lroj/text/CharList;";
 					case 5 -> "(J)Lroj/text/CharList;";
@@ -132,10 +151,10 @@ final class StringConcat extends ExprNode {
 				};
 
 				cw.invoke(Opcodes.INVOKEVIRTUAL, "roj/text/CharList", "append", desc);
-			} else if (rawType.equals(Constant.STRING)) {
+			} else if (type.equals(Constant.STRING)) {
 				cw.invoke(Opcodes.INVOKEVIRTUAL, "roj/text/CharList", "append", "(Ljava/lang/String;)Lroj/text/CharList;");
 			} else {
-				TypeCast.Cast cast = lc.castTo(rawType, CHARSEQUENCE_TYPE, TypeCast.E_NEVER);
+				TypeCast.Cast cast = lc.castTo(type, CHARSEQUENCE_TYPE, TypeCast.E_NEVER);
 				if (cast.type >= 0) {
 					cast.write(cw);
 					cw.invoke(Opcodes.INVOKEVIRTUAL, "roj/text/CharList", "append", "(Ljava/lang/CharSequence;)Lroj/text/CharList;");

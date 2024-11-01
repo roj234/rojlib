@@ -99,7 +99,7 @@ final class NewAnonymousClass extends ExprNode {
 			MethodResult r = list.findMethod(ctx, argTypes, ComponentList.THIS_ONLY);
 			if (r == null) return NaE.RESOLVE_FAILED;
 
-			r.addExceptions(ctx, info, false);
+			r.addExceptions(ctx, false);
 			type.j11PrivateConstructor(r.method);
 			initMethod = type.createDelegation(Opcodes.ACC_SYNTHETIC, r.method, r.method, false, false);
 		}

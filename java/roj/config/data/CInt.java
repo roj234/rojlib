@@ -3,7 +3,6 @@ package roj.config.data;
 import roj.config.serial.CVisitor;
 import roj.text.CharList;
 import roj.text.TextUtil;
-import roj.util.DynByteBuf;
 
 /**
  * @author Roj234
@@ -19,7 +18,7 @@ public final class CInt extends CEntry {
 	public static CInt valueOf(String number) { return valueOf(TextUtil.parseInt(number)); }
 
 	public Type getType() { return Type.INTEGER; }
-	protected boolean eqVal(CEntry o) { return o.asInteger() == value; }
+	protected boolean eqVal(CEntry o) { return o.asInt() == value; }
 	public boolean mayCastTo(Type o) {
 		if (((1 << o.ordinal()) & 0b011110000100) != 0) return true;
 		return switch (o) {
@@ -30,7 +29,7 @@ public final class CInt extends CEntry {
 	}
 
 	public boolean asBool() { return value != 0; }
-	public int asInteger() { return value; }
+	public int asInt() { return value; }
 	public long asLong() { return value; }
 	public float asFloat() { return value; }
 	public double asDouble() { return value; }
@@ -40,8 +39,6 @@ public final class CInt extends CEntry {
 	public Object raw() { return value; }
 
 	public CharList toJSON(CharList sb, int depth) { return sb.append(value); }
-
-	public void toB_encode(DynByteBuf w) { w.put('i').putAscii(Integer.toString(value)).put('e'); }
 
 	public int hashCode() { return value; }
 	public boolean equals(Object o) {

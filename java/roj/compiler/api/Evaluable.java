@@ -4,6 +4,7 @@ import org.jetbrains.annotations.Nullable;
 import roj.asm.tree.MethodNode;
 import roj.asm.tree.attr.Attribute;
 import roj.compiler.ast.expr.ExprNode;
+import roj.compiler.ast.expr.Invoke;
 
 import java.util.List;
 
@@ -16,11 +17,8 @@ import java.util.List;
 public abstract class Evaluable extends Attribute {
 	public static final String NAME = "LavaEvaluable";
 
-	@Override
-	public final boolean isEmpty() {return true;}
-	@Override
-	public final String name() {return NAME;}
+	@Override public final boolean isEmpty() {return true;}
+	@Override public final String name() {return NAME;}
 
-	@Nullable
-	public abstract ExprNode eval(MethodNode owner, @Nullable ExprNode self, List<ExprNode> args);
+	@Nullable public abstract ExprNode eval(MethodNode owner, @Nullable ExprNode self, List<ExprNode> args, Invoke node);
 }

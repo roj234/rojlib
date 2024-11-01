@@ -109,11 +109,8 @@ public class Compress extends GDeflate {
 	}
 
 	@Override
-	public void channelClosed(ChannelCtx ctx) throws IOException {
-		if (def != null) {
-			def.end();
-			inf.end();
-		}
+	public void handlerRemoved(ChannelCtx ctx) {
+		super.handlerRemoved(ctx);
 		if (merged != null) {
 			BufferPool.reserve(merged);
 			merged = null;

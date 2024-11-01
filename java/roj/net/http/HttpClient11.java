@@ -1,5 +1,6 @@
 package roj.net.http;
 
+import roj.crypt.CRC32s;
 import roj.io.IOUtil;
 import roj.net.ChannelCtx;
 import roj.net.ChannelHandler;
@@ -10,8 +11,6 @@ import roj.util.DynByteBuf;
 
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
-import java.nio.ByteBuffer;
-import java.util.zip.CRC32;
 import java.util.zip.Inflater;
 import java.util.zip.ZipException;
 
@@ -25,8 +24,8 @@ public class HttpClient11 extends HttpRequest implements ChannelHandler {
 	private boolean sendEof;
 	private long len;
 
-	private CRC32 crc;
-	private int rcv;
+	private int crc, rcv;
+	private boolean hasCrc;
 
 	HttpClient11() {}
 
@@ -35,8 +34,7 @@ public class HttpClient11 extends HttpRequest implements ChannelHandler {
 		state = SEND_HEAD;
 		sendEof = false;
 
-		crc = null;
-		rcv = 0;
+		hasCrc = false;
 		response = null;
 
 		setCompr(ctx, null);
@@ -51,7 +49,7 @@ public class HttpClient11 extends HttpRequest implements ChannelHandler {
 
 		_getBody();
 		if (_body instanceof DynByteBuf b) {
-			ctx.channelWrite(b.slice(b.rIndex, b.readableBytes()));
+			ctx.channelWrite(b.slice());
 		} else {
 			/*if ("deflate".equalsIgnoreCase(hdr.get("content-encoding")))
 				setCompr(ctx, 1);*/
@@ -81,23 +79,23 @@ public class HttpClient11 extends HttpRequest implements ChannelHandler {
 	@Override
 	public void onEvent(ChannelCtx ctx, Event event) throws IOException {
 		switch (event.id) {
-			case MyChannel.IN_EOF:
-				sendEof(ctx, false);
-				break;
-			case HCompress.EVENT_IN_END:
-				if (crc != null) {
-					((HCompress) event.getData()).setInf(null);
+			case MyChannel.IN_EOF -> sendEof(ctx, false);
+			case HCompress.EVENT_IN_END -> {
+				if (hasCrc) {
+					var comp = (HCompress) event.getData();
+					comp.getInf().end();
+					comp.setInf(null);
 					state = RECV_CHECKSUM;
 				} else sendEof(ctx, true);
-				break;
-			case HChunk.EVENT_IN_END:
+			}
+			case HChunk.EVENT_IN_END -> {
 				if (response.getContentEncoding().equals("identity")) {
 					sendEof(ctx, true);
 				} else if (state == RECV_CHECKSUM) {
 					sendEof(ctx, false);
 					throw new ZipException("Unexpected gzip EOS: checksum missing");
 				}
-				break;
+			}
 		}
 	}
 
@@ -108,13 +106,9 @@ public class HttpClient11 extends HttpRequest implements ChannelHandler {
 
 		switch (state) {
 			case RECV_BODY:
-				if (crc != null) {
+				if (hasCrc) {
 					rcv += buf.readableBytes();
-					if (buf.hasArray()) {
-						crc.update(buf.array(), buf.arrayOffset()+buf.rIndex, buf.readableBytes());
-					} else {
-						crc.update(buf.nioBuffer());
-					}
+					crc = CRC32s.update(crc, buf);
 				} else {
 					if (len >= 0) {
 						len -= buf.readableBytes();
@@ -132,13 +126,14 @@ public class HttpClient11 extends HttpRequest implements ChannelHandler {
 
 				int crc32 = buf.readIntLE();
 				int rcvByte = buf.readIntLE();
-				if (crc32 != (int) crc.getValue() || rcvByte != rcv) {
+				crc = CRC32s.retVal(crc);
+				if (crc32 != crc || rcvByte != rcv) {
 					throw new IOException("gzip数据校验错误:" +
-						("crc="+Integer.toHexString(crc32)+"|"+Integer.toHexString((int) crc.getValue())) + "\n" +
+						("crc="+Integer.toHexString(crc32)+"|"+Integer.toHexString(crc)) + "\n" +
 					    ("len="+rcv+"|"+rcvByte));
 				}
+				hasCrc = false;
 				sendEof(ctx, true);
-				crc = null;
 
 				if (buf.isReadable()) throw new IOException("多余的数据: " + buf);
 				return;
@@ -191,7 +186,9 @@ public class HttpClient11 extends HttpRequest implements ChannelHandler {
 							buf.rIndex = pos;
 							return;
 						}
-						crc = new CRC32();
+						crc = CRC32s.INIT_CRC;
+						rcv = 0;
+						hasCrc = true;
 
 						ctx = setCompr(ctx, new Inflater(true));
 					}
@@ -274,36 +271,30 @@ public class HttpClient11 extends HttpRequest implements ChannelHandler {
 		int n = 2 + 2 + 6;
 
 		// extra
-		if ((flg & FEXTRA) == FEXTRA) {
+		if ((flg & FEXTRA) != 0) {
 			int m = buf.readUShortLE();
 			buf.rIndex += m;
 			n += m + 2;
 		}
 
 		// file name
-		if ((flg & FNAME) == FNAME) {
+		if ((flg & FNAME) != 0) {
 			do {
 				n++;
 			} while (buf.readByte() != 0);
 		}
 
 		// comment
-		if ((flg & FCOMMENT) == FCOMMENT) {
+		if ((flg & FCOMMENT) != 0) {
 			do {
 				n++;
 			} while (buf.readByte() != 0);
 		}
 
 		// header CRC
-		if ((flg & FHCRC) == FHCRC) {
-			CRC32 crc = new CRC32();
-			ByteBuffer nio = buf.nioBuffer();
-			nio.limit(buf.rIndex).position(rPos);
-			crc.update(nio);
-			int v = (int) crc.getValue() & 0xffff;
-			if (buf.readUShortLE() != v) {
-				throw new ZipException("Corrupt GZIP header");
-			}
+		if ((flg & FHCRC) != 0) {
+			int v = CRC32s.once(buf, rPos, buf.rIndex - rPos)&0xFFFF;
+			if (buf.readUShortLE() != v) throw new ZipException("Corrupt GZIP header");
 			n += 2;
 		}
 

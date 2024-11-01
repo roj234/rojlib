@@ -3,6 +3,8 @@ package roj.config.data;
 import roj.config.serial.CVisitor;
 import roj.text.CharList;
 
+import java.util.Collections;
+
 /**
  * @author Roj234
  * @since 2021/5/31 21:17
@@ -11,21 +13,22 @@ public final class CNull extends CEntry {
 	public static final CNull NULL = new CNull();
 	private CNull() {}
 
-	public Type getType() { return Type.NULL; }
-	//public boolean mayCastTo(Type o) { return true; }
+	public Type getType() {return Type.NULL;}
 
-	public boolean asBool() { return false; }
-	public int asInteger() { return 0; }
-	public long asLong() { return 0; }
-	public float asFloat() { return 0; }
-	public double asDouble() { return 0; }
-	public String asString() { return ""; }
+	private static final CMap NULL_MAP = new CMap(Collections.emptyMap());
+	private static final CList NULL_LIST = new CList(Collections.emptyList());
 
-	public CMap asMap() { return new CMap(); }
-	public CList asList() { return new CList(); }
+	public boolean asBool() {return false;}
+	public int asInt() {return 0;}
+	public long asLong() {return 0;}
+	public float asFloat() {return 0;}
+	public double asDouble() {return 0;}
+	public String asString() {return "";}
+	public CMap asMap() {return NULL_MAP;}
+	public CList asList() {return NULL_LIST;}
 
-	public void accept(CVisitor ser) { ser.valueNull(); }
-	public Object raw() { return null; }
+	public void accept(CVisitor ser) {ser.valueNull();}
+	public Object raw() {return null;}
 
-	public CharList toJSON(CharList sb, int depth) { return sb.append("null"); }
+	public CharList toJSON(CharList sb, int depth) {return sb.append("null");}
 }

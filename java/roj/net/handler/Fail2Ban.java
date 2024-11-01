@@ -8,7 +8,6 @@ import roj.net.ChannelHandler;
 import roj.net.Event;
 import roj.reflect.ReflectionUtils;
 import roj.text.logging.Logger;
-import roj.util.DynByteBuf;
 import roj.util.VMUtil;
 
 import java.io.IOException;
@@ -34,23 +33,23 @@ public class Fail2Ban implements ChannelHandler, ITask {
 		public Attempt(InetAddress address) {}
 
 		public boolean login() {
-			boolean ok = ReflectionUtils.u.getAndAddInt(this, COUNT_OFFSET, 1) < LOGIN_ATTEMPTS;
+			boolean ok = ReflectionUtils.u.getAndAddInt(this, COUNT_OFFSET, 1) < maxFail;
 			if (!ok) forgive = System.currentTimeMillis();
 			return ok;
 		}
 		public void success() {count = 0;}
 	}
 
-	private final int LOGIN_ATTEMPTS, LOGIN_TIMEOUT;
-	private final ScheduleTask task;
+	private final int maxFail, purgeInterval;
+	private final ScheduleTask purgeTask;
 	public Fail2Ban(int maxAttempts, int interval) {
-		LOGIN_ATTEMPTS = maxAttempts;
-		LOGIN_TIMEOUT = interval;
-		task = Scheduler.getDefaultScheduler().delay(this, LOGIN_TIMEOUT);
+		maxFail = maxAttempts;
+		purgeInterval = interval;
+		purgeTask = Scheduler.getDefaultScheduler().delay(this, purgeInterval);
 	}
 
 	@Override public void execute() throws Exception {
-		var time = System.currentTimeMillis()-LOGIN_TIMEOUT;
+		var time = System.currentTimeMillis()-purgeInterval;
 		for (var itr = data.values().iterator(); itr.hasNext(); ) {
 			if (itr.next().forgive < time) itr.remove();
 		}
@@ -72,12 +71,12 @@ public class Fail2Ban implements ChannelHandler, ITask {
 		var ip = getAddress(ctx);
 		var user = data.computeIfAbsent(ip, NEW);
 		if (user != null && !user.login()) {
-			LOGGER.info("已阻止 {} 的连接请求", ip);
+			LOGGER.info("{} 被阻止", ip);
 
 			ctx.close();
 			if (VMUtil.isRoot()) {
 				// TODO netsh timed block
-				//Scheduler.getDefaultScheduler().delay(ctx::close, 60000);
+				//Scheduler.getDefaultScheduler().delay(ctx::close, purgeInterval);
 			}
 		}
 	}
@@ -86,25 +85,28 @@ public class Fail2Ban implements ChannelHandler, ITask {
 		var event = new Event("fail2ban:inspect", msg);
 		ctx.postEvent(event);
 
-		switch (event.getResult()) {
-			case Event.RESULT_ACCEPT -> ctx.channelRead(msg);
-			case Event.RESULT_DENY -> ctx.close();
+		if (event.getResult() == Event.RESULT_ACCEPT) {
+			ctx.channelRead(msg);
+		} else {
+			ctx.close();
 		}
 	}
 
+	// don't call handlerRemoved
+	@Override public void channelClosed(ChannelCtx ctx) throws IOException {}
 	@Override
 	public void handlerRemoved(ChannelCtx ctx) {
 		try {
-			var attempt = data.get(getAddress(ctx));
-			if (attempt != null) attempt.success();
+			var ip = getAddress(ctx);
+			var attempt = data.get(ip);
+			if (attempt != null) {
+				attempt.success();
+				LOGGER.info("{} 被放行", ip);
+			}
 		} catch (UnknownHostException ignored) {}
 	}
 
 	@Override public void onEvent(ChannelCtx ctx, Event event) throws IOException {
-		if (event.id.equals("fail2ban:inspect")) {
-			var copy = (DynByteBuf)event.getData();
-			LOGGER.info("{} 发送了无效的数据包: {}", ctx.remoteAddress(), copy.slice(copy.rIndex, Math.min(1024, copy.readUnsignedByte())).dump());
-			event.setResult(Event.RESULT_DENY);
-		}
+		if (event.id.equals("fail2ban:inspect")) event.setResult(Event.RESULT_DENY);
 	}
 }

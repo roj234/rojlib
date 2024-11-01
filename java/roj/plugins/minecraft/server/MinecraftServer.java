@@ -24,10 +24,10 @@ import roj.plugins.minecraft.server.network.PlayerInit;
 import roj.text.TextWriter;
 import roj.text.logging.Logger;
 import roj.ui.AnsiString;
-import roj.util.AttributeKey;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
 import roj.util.HighResolutionTimer;
+import roj.util.TypedKey;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -43,7 +43,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * @since 2024/3/19 0019 15:04
  */
 public class MinecraftServer extends Plugin {
-	public static final AttributeKey<PlayerConnection> PLAYER = new AttributeKey<>("player");
+	public static final TypedKey<PlayerConnection> PLAYER = new TypedKey<>("player");
 
 	public static Logger LOGGER;
 	public static MinecraftServer INSTANCE;

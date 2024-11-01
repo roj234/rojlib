@@ -8,7 +8,7 @@ import roj.asm.cp.Constant;
 import roj.asm.cp.ConstantPool;
 import roj.asm.cp.CstClass;
 import roj.asm.cp.CstUTF;
-import roj.asm.frame.Frame2;
+import roj.asm.frame.Frame;
 import roj.asm.frame.FrameVisitor;
 import roj.asm.tree.MethodNode;
 import roj.asm.tree.attr.Attribute;
@@ -36,7 +36,7 @@ public class CodeWriter extends AbstractCodeWriter {
 	public MethodNode mn;
 	public int interpretFlags;
 
-	public SimpleList<Frame2> frames;
+	public SimpleList<Frame> frames;
 	private FrameVisitor fv;
 	private boolean hasFrames;
 
@@ -336,7 +336,7 @@ public class CodeWriter extends AbstractCodeWriter {
 		if (ENABLE_FV && interpretFlags != 0) {
 			interpretFlags = 0;
 
-			frames = (SimpleList<Frame2>) fv.finish(codeOb, cpw);
+			frames = (SimpleList<Frame>) fv.finish(codeOb, cpw);
 
 			int stack = visitAttributeI("StackMapTable");
 			//frames.remove(0);
@@ -548,7 +548,21 @@ public class CodeWriter extends AbstractCodeWriter {
 		// targetBlock-1 : 有机会走到这个长度为0的StaticSegment
 		if (seg.length() > 0 ? !seg.isTerminate() : targetBlock == 0 || !segments.get(targetBlock-1).isTerminate()) return true;
 		for (int i = 1; i < segments.size(); i++) {
-			if (segments.get(i).willJumpTo(targetBlock, seg.length())) return true;
+			if (segments.get(i).willJumpTo(targetBlock, -1)) return true;
+		}
+		return false;
+	}
+
+	public boolean isImmediateBeforeContinuous(int targetBlock) {
+		Segment seg = segments.get(targetBlock);
+		// targetBlock-1 : 有机会走到这个长度为0的StaticSegment
+		return seg.length() > 0 ? !seg.isTerminate() : targetBlock == 0 || !segments.get(targetBlock - 1).isTerminate();
+	}
+
+	public boolean willJumpTo(Label label) {return willJumpTo(label, 1);}
+	public boolean willJumpTo(Label label, int segmentId) {
+		for (; segmentId < segments.size(); segmentId++) {
+			if (segments.get(segmentId).willJumpTo(label.block, label.offset)) return true;
 		}
 		return false;
 	}

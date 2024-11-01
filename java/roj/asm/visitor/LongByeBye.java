@@ -13,7 +13,6 @@ import roj.asm.tree.attr.AttrUnknown;
 import roj.asm.tree.attr.Attribute;
 import roj.asm.type.Type;
 import roj.asm.type.TypeHelper;
-import roj.asm.util.InsnHelper;
 import roj.collect.SimpleList;
 import roj.io.IOUtil;
 import roj.text.CharList;
@@ -21,6 +20,8 @@ import roj.util.ByteList;
 import roj.util.DynByteBuf;
 
 import java.util.List;
+
+import static roj.asm.Opcodes.*;
 
 /**
  * @author Roj234
@@ -30,6 +31,24 @@ public class LongByeBye extends CodeWriter {
 	private final int templateType;
 	private final Type internalType, methodType, callingType;
 	private final boolean replaceCallingName;
+
+	public static byte changeCodeType(int code, Type from, Type to) {
+		int flag = flag(code);
+		if ((flag&TRAIT_ILFDA) == 0) return (byte) code;
+
+		String name = showOpcode(code);
+		if ((flag&0xF) == CATE_ARRAY_SL)
+			return (byte) ((name.endsWith("Store") ? 33 : 0)+ArrayLoad(to));
+
+		if (from != null && name.charAt(0) != from.nativeName().charAt(0)) return (byte) code;
+
+		CharList sb = IOUtil.getSharedCharBuf().append(name);
+		sb.list[0] = to.nativeName().charAt(0);
+
+		int v = Opcodes.opcodeByName().getOrDefault(sb, -1);
+		if (v < 0) throw new IllegalStateException("找不到"+sb);
+		return (byte) v;
+	}
 
 	public LongByeBye(int templateType, Type internalType, Type methodType, Type callingType, boolean replaceCallingName) {
 		this.templateType = templateType;
@@ -82,10 +101,10 @@ public class LongByeBye extends CodeWriter {
 
 	@Override
 	public void newArray(byte arrayType) {
-		byte b = InsnHelper.FromPrimitiveArrayId(arrayType);
+		var b = FromPrimitiveArrayId(arrayType);
 		if (b == templateType) {
 			if (internalType.isPrimitive()) {
-				arrayType = InsnHelper.ToPrimitiveArrayId(internalType.type);
+				arrayType = ToPrimitiveArrayId(internalType.type);
 			} else {
 				super.clazz(Opcodes.ANEWARRAY, internalType.getActualClass());
 				return;
@@ -168,7 +187,7 @@ public class LongByeBye extends CodeWriter {
 			case Opcodes.CATE_LOAD_STORE_LEN:
 			case Opcodes.CATE_MATH:
 			case Opcodes.CATE_ARRAY_SL:
-				code = InsnHelper.changeCodeType(code, Type.std(templateType), internalType);
+				code = changeCodeType(code, Type.std(templateType), internalType);
 				break;
 		}
 		return code;

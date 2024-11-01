@@ -21,31 +21,18 @@ public class HKDFPRNG extends SecureRandom {
 		info = new ByteList().putLong(0).putUTF(name);
 	}
 
-	public void generate(Object pointer, int off, int len) {
-		HMAC.HKDF_expand(kd,prk,info,len,pointer,off);
-		incr();
-	}
-
-	@Override
-	public void setSeed(long seed) {
-		if (info == null) return;
-		info.putLong(seed);
-	}
-
-	@Override
-	public synchronized void setSeed(byte[] seed) {
-		info.put(seed);
-	}
+	@Override public void setSeed(long seed) {if (info != null) info.putLong(seed);}
+	@Override public synchronized void setSeed(byte[] seed) {info.put(seed);}
 
 	@Override
 	public void nextBytes(byte[] b) {
-		generate(b, Unsafe.ARRAY_BYTE_BASE_OFFSET, b.length);
+		KDF.HKDF_expand(kd,prk,info, b.length, b, Unsafe.ARRAY_BYTE_BASE_OFFSET);
 		incr();
 	}
 
 	@Override
 	public byte[] generateSeed(int numBytes) {
-		byte[] b = HMAC.HKDF_expand(kd,prk,info,numBytes);
+		byte[] b = KDF.HKDF_expand(kd,prk,info,numBytes);
 		incr();
 		return b;
 	}

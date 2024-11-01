@@ -38,7 +38,7 @@ public final class Constant extends ExprNode {
 	public String toString() { return c instanceof String ? '"'+ Tokenizer.addSlashes(c.toString())+'"' : isClassRef() ? type+".class" : String.valueOf(c); }
 
 	@Override
-	public boolean isKind(ExprKind kind) {return kind == ExprKind.IMMEDIATE_CONSTANT || (kind == ExprKind.LDC_CLASS && isClassRef());}
+	public boolean hasFeature(ExprFeat kind) {return kind == ExprFeat.IMMEDIATE_CONSTANT || (kind == ExprFeat.LDC_CLASS && isClassRef());}
 	@Override
 	public IType type() { return type; }
 	@Override
@@ -50,12 +50,22 @@ public final class Constant extends ExprNode {
 	public static Constant classRef(Type type) { return new Constant(new Generic("java/lang/Class", Collections.singletonList(type)), type); }
 	public static Constant valueOf(boolean v) { return new Constant(Type.std(Type.BOOLEAN), v); }
 	public static Constant valueOf(String v) { return new Constant(STRING, v); }
+	public static Constant valueOf(int v) {
+		IType type;
+		if ((short) v == v) {
+			if ((byte) v == v) type = Type.std(Type.BYTE);
+			else type = Type.std(Type.SHORT);
+		}
+		else type = Type.std(Type.INT);
+
+		return new Constant(type, AnnVal.valueOf(v));
+	}
 	public static Constant valueOf(AnnVal v) {
 		return switch (v.type()) {
 			case 's' -> valueOf(v.asString());
 			case 'e' -> new Constant(new Type(v.asEnum().owner()), v);
 			case 'c' -> classRef(v.asClass());
-			case '@', '[' -> throw new IllegalArgumentException("not supported at this time");
+			//case '@', '[' -> throw new IllegalArgumentException("not supported at this time");
 			default -> new Constant(Type.std(v.type()), v);
 		};
 	}

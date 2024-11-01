@@ -2,6 +2,8 @@ package roj.media.audio;
 
 import org.jetbrains.annotations.Nullable;
 import roj.collect.MyHashMap;
+import roj.io.Finishable;
+import roj.io.MyDataInputStream;
 import roj.io.source.Source;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
@@ -107,11 +109,14 @@ public class WavDecoder implements AudioDecoder {
 					} else if (buf.readAscii(8).equals("APETAGEX")) {
 						APETag tag = new APETag();
 
-						buf.clear();
-						in.read(buf, (int) Math.min(in.length()-in.position(), 1048576));
-						System.out.println(buf.dump());
-						//if (tag.checkID3V2())
-						return null;
+						in.seek(in.length() - 8);
+						var mdi = MyDataInputStream.wrap(in.asInputStream());
+						try {
+							tag.parseTag(mdi, false);
+							return tag;
+						} finally {
+							if (mdi instanceof Finishable f) f.finish();
+						}
 					} else {
 						in.skip(len);
 						System.out.println("unknown wave block:" + buf.dump());

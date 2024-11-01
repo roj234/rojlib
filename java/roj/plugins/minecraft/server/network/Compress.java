@@ -82,10 +82,4 @@ public class Compress extends GDeflate {
 		if (isFull) out.ensureWritable(out.capacity());
 		return out.wIndex();
 	}
-
-	@Override
-	public void channelClosed(ChannelCtx ctx) throws IOException {
-		inf.end();
-		def.end();
-	}
 }

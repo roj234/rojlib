@@ -24,11 +24,12 @@ final class EncloseRef extends ExprNode {
 	private int thisEnclosingRef;
 
 	@Override
-	public String toString() { return type.toString() + (thisEnclosing?".this":".super"); }
+	public String toString() { return type + (thisEnclosing?".this":".super"); }
 
 	@Override
 	public ExprNode resolve(LocalContext ctx) throws ResolveException {
 		if (ctx.in_static) ctx.report(Kind.ERROR, "this.static");
+		ctx.thisUsed = true;
 
 		ctx.resolveType(type);
 		if (thisEnclosing) {
@@ -72,11 +73,11 @@ final class EncloseRef extends ExprNode {
 
 	@Override
 	public void write(MethodWriter cw, boolean noRet) {
+		var lc = LocalContext.get();
 		mustBeStatement(noRet);
-		cw.one(Opcodes.ALOAD_0);
+		cw.vars(Opcodes.ALOAD, lc.thisSlot);
 
 		if (thisEnclosingRef > 0) {
-			var lc = LocalContext.get();
 			var owner = lc.file.name;
 			var fields = lc.enclosing;
 			for (int i = fields.size()-1; i >= thisEnclosingRef; i--) {

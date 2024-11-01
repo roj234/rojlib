@@ -1,40 +1,45 @@
 package roj.ui;
 
+import roj.math.MathUtils;
+import roj.reflect.ReflectionUtils;
 import roj.text.CharList;
 import roj.text.TextUtil;
+
+import static roj.reflect.ReflectionUtils.u;
 
 /**
  * @author Roj234
  * @since 2022/11/19 0019 3:33
  */
 public class ProgressBar implements AutoCloseable {
+	private static final int BAR_FPS = 40;
+
 	protected final CharList batch = new CharList();
 
-	protected void render(CharList b) { Terminal.renderBottomLine(batch); }
+	protected void render(CharList b) {Terminal.renderBottomLine(batch);}
 	protected void dispose(boolean clearText) {
 		Terminal.removeBottomLine(batch, clearText);
-		barUpdate = dataUpdate = 0;
+		barUpdate = 0;
 	}
 
 	protected String unit;
 	private String name, prefix, postfix;
-	private int barInterval;
 	private long barUpdate, dataUpdate;
 	private boolean hideBar, hideSpeed;
 
 	private long delta;
+	private static final long DELTA_OFFSET = ReflectionUtils.fieldOffset(ProgressBar.class, "delta");
+	private static final long UPDATE_OFFSET = ReflectionUtils.fieldOffset(ProgressBar.class, "barUpdate");
 
 	public ProgressBar(String name) {
 		this.name = name;
 		this.unit = "it";
-		this.barInterval = 200;
 	}
 
 	public void setName(String name) { this.name = name; }
 	public void setUnit(String unit) { this.unit = unit; }
 	public void setPrefix(String s) { this.prefix = s; }
 	public void setPostfix(String s) { this.postfix = s; }
-	public void setBarInterval(int bi) { this.barInterval = bi; }
 	public void setHideBar(boolean b) { this.hideBar = b; }
 	public void setHideSpeed(boolean hideSpeed) { this.hideSpeed = hideSpeed; }
 	public double getEta(long remainUnit) { return remainUnit <= 0 ? 0 : remainUnit / speedPerMs(); }
@@ -47,40 +52,55 @@ public class ProgressBar implements AutoCloseable {
 
 	public void update(double percent, int deltaUnit) {
 		long time = System.currentTimeMillis();
-		synchronized (this) {
-			if (dataUpdate == 0) dataUpdate = time;
-			delta += deltaUnit;
 
-			if (time - barUpdate < barInterval) return;
-			barUpdate = time;
+		u.getAndAddLong(this, DELTA_OFFSET, deltaUnit);
+
+		long t = barUpdate;
+		if (time - t < BAR_FPS || !u.compareAndSwapLong(this, UPDATE_OFFSET, t, time)) return;
+
+		if (time - dataUpdate > 2000) {
+			delta = (long) (speedPerMs() * 1000);
+			dataUpdate = time - 1000;
 		}
+
 		updateForce(percent);
 	}
 
-	// 进度条粒度
-	private static final int PROGRESS_SIZE = 50;
-	private static final int BITE = 100 / PROGRESS_SIZE;
-
+	private static final String TIMER = "|/-\\";
+	private int timerId;
+	private int prevWidth;
 	public synchronized void updateForce(double percent) {
-		if (percent < 0) percent = 0;
-		else if (percent > 1) percent = 1;
-		// NaN
-		else if (percent != percent) percent = 0;
-
-		percent *= 100;
+		percent = MathUtils.clamp(percent, 0, 1);
 
 		batch.clear();
 		CharList b = (name == null ? batch : batch.append("\u001b[0m").append(name).append(": ")).append("\u001B[96m");
 
-		if (prefix == null) b.append(TextUtil.toFixedLength(percent, 4)).append('%');
+		if (prefix == null) b.append(TextUtil.toFixedLength(percent*100, 4)).append('%');
 		else b.append(prefix);
 
 		if (!hideBar) {
-			int tx = (int) percent / BITE;
-			b.append("\u001B[97m├")
-			 .padEnd('█', tx)
-			 .padEnd('─', PROGRESS_SIZE - tx)
-			 .append("┤\u001B[93m");
+			int width = Terminal.getStringWidth(b);
+			int pad = 0;
+			if (width > prevWidth || width < prevWidth - 5) {
+				prevWidth = width;
+			} else {
+				pad = prevWidth - width;
+				width = prevWidth;
+			}
+
+			if (postfix != null) width += Terminal.getStringWidth(postfix)+1;
+			if (!hideSpeed) width += Terminal.getStringWidth(unit)+9;
+
+			int progressWidth = Terminal.windowWidth - width - 7;
+			if (progressWidth < 10) progressWidth = 10;
+
+			int tx = (int) Math.round(percent * progressWidth);
+
+			b.padEnd(' ', pad)
+			 .append("\u001B[97m [");
+			Terminal.MinecraftColor.sonic("=".repeat(tx), b);
+			b.padEnd(' ', progressWidth - tx)
+			 .append("]\u001B[93m ").append(TIMER.charAt(timerId = (timerId+1) & 3));
 		}
 
 		if (!hideSpeed) {

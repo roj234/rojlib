@@ -9,13 +9,23 @@ import roj.config.serial.CVisitor;
  */
 final class PrimObj extends Adapter {
 	private final byte type;
-	PrimObj(int type) {
-		this.type = (byte) type;
-	}
+	PrimObj(int type) {this.type = (byte) type;}
 
-	@Override
-	public void read(AdaptContext ctx, Object o) {
+	public void read(AdaptContext ctx, float l) {read(ctx, (Float) l);}
+	@Override public void read(AdaptContext ctx, Object o) {
 		assert ctx.fieldId == -2;
+
+		if (o instanceof Number n) {
+			switch (type) {
+				case Type.LONG -> o = n.longValue();
+				case Type.DOUBLE -> o = n.doubleValue();
+				case Type.FLOAT -> o = n.floatValue();
+				case Type.BYTE -> o = n.byteValue();
+				case Type.SHORT -> o = n.shortValue();
+				case Type.INT -> o = n.intValue();
+				case Type.CHAR -> o = (char) n.intValue();
+			}
+		}
 
 		ctx.setRef(o);
 		ctx.popd(true);
@@ -29,15 +39,15 @@ final class PrimObj extends Adapter {
 		}
 
 		switch (type) {
-			case Type.CLASS: c.value(o.toString()); break;
-			case Type.BOOLEAN: c.value((Boolean) o); break;
-			case Type.LONG: c.value((Long) o); break;
-			case Type.DOUBLE: c.value(((Number) o).doubleValue()); break;
-			case Type.FLOAT: c.value(((Number) o).floatValue()); break;
-			case Type.BYTE: c.value(((Byte) o)); break;
-			case Type.SHORT: c.value(((Short) o)); break;
-			case Type.INT: c.value(((Number) o).intValue()); break;
-			case Type.CHAR: c.value((Character) o); break;
+			case Type.CLASS -> c.value(o.toString());
+			case Type.BOOLEAN -> c.value((Boolean) o);
+			case Type.LONG -> c.value(((Number) o).longValue());
+			case Type.DOUBLE -> c.value(((Number) o).doubleValue());
+			case Type.FLOAT -> c.value(((Number) o).floatValue());
+			case Type.BYTE -> c.value(((Number) o).byteValue());
+			case Type.SHORT -> c.value(((Number) o).shortValue());
+			case Type.INT -> c.value(((Number) o).intValue());
+			case Type.CHAR -> c.value((Character) o);
 		}
 	}
 }

@@ -2,15 +2,22 @@ package roj.media.audio.mp3;
 
 import org.jetbrains.annotations.NotNull;
 import roj.concurrent.TaskPool;
+import roj.io.Finishable;
+import roj.io.MyDataInputStream;
 import roj.io.source.Source;
 import roj.media.audio.APETag;
 import roj.media.audio.AudioDecoder;
 import roj.media.audio.AudioMetadata;
 import roj.media.audio.AudioOutput;
+import roj.reflect.ReflectionUtils;
+import roj.text.logging.Logger;
 import roj.util.ArrayCache;
+import roj.util.DynByteBuf;
 
 import javax.sound.sampled.LineUnavailableException;
 import java.io.IOException;
+
+import static roj.reflect.ReflectionUtils.u;
 
 /**
  * MP3解码器
@@ -18,118 +25,149 @@ import java.io.IOException;
  * @since 2024/2/18 23:37
  */
 public final class MP3Decoder implements AudioDecoder {
-	private static final int BUFFER_LEN = 2048;
+	private static final Logger LOGGER = Logger.getLogger("MP3Decoder");
+	private static final int BUFFER_LEN = 16384;
+	private static final long STATE_OFFSET = ReflectionUtils.fieldOffset(MP3Decoder.class, "eof");
 
 	private Source in;
 	private AudioOutput out;
 
-	private ID3Tag tag;
 	private TaskPool asyncSyh;
 
 	private final Header header = new Header();
-	private final byte[] buf = new byte[BUFFER_LEN];
+	private final byte[] buf = ArrayCache.getByteArray(BUFFER_LEN, false);
 	private int off, maxOff;
-	private volatile boolean eof;
+	private volatile int eof;
 	private volatile long seekPos;
 
 	byte[] pcm;
-	int[] pcmOff = new int[2];
+	final int[] pcmOff = new int[2];
 
 	public MP3Decoder() {}
 
 	@Override
 	public AudioMetadata open(Source in, AudioOutput out, boolean parseMetadata) throws IOException, LineUnavailableException {
+		if (eof == 1) throw new IllegalStateException("Already decoding");
 		maxOff = off = 0;
-		eof = false;
+		eof = 0;
 		seekPos = -1;
 
 		this.in = in;
 		this.out = out;
 
 		in.seek(0);
-		AudioMetadata metadata = parseMetadata ? parseTag() : null;
+		AudioMetadata metadata = null;
+		if (parseMetadata) {
+			try {
+				metadata = parseTag();
+			} catch (Exception e) {
+				LOGGER.error("解析音频元数据失败", e);
+			}
+		}
 
-		header.reset();
+		header.reset((int)in.position()-off, (int)in.length());
 		// 定位并解码第一帧
 		nextHeader();
-		if (!eof) out.init(header.getAudioFormat(), (header.getMode()==3?1:2)*header.getSamplingRate());
+		if (eof == 0) out.init(header.getAudioFormat(), (header.getMode()==3?1:2)*header.getSamplingRate());
 
 		return metadata;
 	}
-	private ID3Tag parseTag() throws IOException {
-		if (tag == null) tag = new ID3Tag();
-		else tag.clear();
+	private AudioMetadata parseTag() throws IOException {
+		var id3 = new ID3Tag();
+		AudioMetadata tag = null;
 
 		int len;
-		if ((len = in.read(buf, 0, BUFFER_LEN)) <= 10) {
-			eof = true;
+		if ((len = in.read(buf, 0, Math.min(BUFFER_LEN, 4096))) <= 10) {
+			eof = 2;
 			return null;
 		}
 
-		boolean hasTag = false;
+		var _buf = DynByteBuf.wrap(buf, 0, len);
+
 		// ID3 v2
-		int tagSize = tag.checkID3V2(buf, 0);
+		int tagSize = id3.checkID3V2(_buf);
 		if (tagSize > len) {
-			if (tagSize > 1048576) throw new IOException("corrupt MP3 file (ID3v2 too large)");
-
-			byte[] b = new byte[tagSize];
-			System.arraycopy(buf, 0, b, 0, len);
-			tagSize -= len;
-			in.readFully(b, len, tagSize);
-			tag.parseID3V2(b, 0, b.length);
-
-			hasTag = true;
+			in.seek(0);
+			var st = MyDataInputStream.wrap(in.asInputStream());
+			try {
+				id3.parseID3V2(st);
+			} finally {
+				if (st instanceof Finishable f) f.finish();
+			}
+			in.seek(tagSize);
+			tag = id3;
 		} else if (tagSize > 10) {
-			tag.parseID3V2(buf, 0, tagSize);
+			_buf.rIndex = 0;
+			id3.parseID3V2(_buf);
 			off = tagSize;
 			maxOff = len;
-			hasTag = true;
+			tag = id3;
 		} else {
 			int length = (int) in.length();
+
+			// try ID3 v1
+			if (length >= 128) {
+				in.seek(length - 128);
+				in.readFully(buf, 0, 128);
+				if (id3.parseID3V1(buf, 0)) {
+					tag = id3;
+					length -= 128;
+				}
+			}
 
 			// then try APE
 			if (length >= 32) {
 				in.seek(length-32);
 				in.readFully(buf, 0, 32);
 
-				APETag apeTag = new APETag();
-				// TODO check APE tag footer
-				int i = apeTag.checkFooter(buf, 0);
-				if (i != 0) {
-					hasTag = true;
+				APETag ape = new APETag();
+				tagSize = ape.findFooter(buf, 0);
+				if (tagSize != 0) {
+					in.seek(length - 32 - Math.abs(tagSize));
+
+					var st = MyDataInputStream.wrap(in.asInputStream());
+					try {
+						ape.parseTag(st, tagSize < 0);
+					} finally {
+						if (st instanceof Finishable f) f.finish();
+					}
+
+					tag = ape;
 				}
 			}
 
-			// try ID3 v1
-			if (length >= 128) {
-				in.seek(length - 128);
-				in.readFully(buf, 0, 128);
-				if (tag.parseID3V1(buf, 0)) hasTag = true;
-			}
 			in.seek(0);
 		}
 
-		return hasTag ? tag : null;
+		return tag;
 	}
 
-	@Override
-	public boolean isOpen() { return in != null; }
+	@Override public boolean isOpen() { return in != null; }
 
 	@Override
 	public void stop() {
-		eof = true;
+		synchronized (this) {
+			if (u.compareAndSwapInt(this, STATE_OFFSET, 1, 2)) {
+				try {
+					wait();
+				} catch (InterruptedException ignored) {}
+			}
+		}
 		in = null;
 		out = null;
-		synchronized (this) { notify(); }
-		header.reset();
 	}
 
 	@Override
-	public boolean isDecoding() { return !eof; }
+	public void close() {
+		AudioDecoder.super.close();
+		ArrayCache.putArray(buf);
+	}
+
+	@Override public boolean isDecoding() { return eof == 1; }
 
 	@Override
 	public void decodeLoop() throws IOException {
-		if (eof) return;
+		if (!u.compareAndSwapInt(this, STATE_OFFSET, 0, 1)) return;
 
 		Layer layer = switch (header.getLayer()) {
 			case 1 -> new Layer1(header, this);
@@ -142,7 +180,7 @@ public final class MP3Decoder implements AudioDecoder {
 		pcmOff[1] = 2;
 		pcm = ArrayCache.getByteArray(header.getPcmSize(), false);
 		try {
-			while (!eof) {
+			while (eof == 1) {
 				// 1. 解码一帧
 				off = layer.decodeFrame(buf, off);
 
@@ -158,8 +196,10 @@ public final class MP3Decoder implements AudioDecoder {
 			}
 		} finally {
 			layer.close();
-			if (pcmOff[0] > 0) out.write(pcm, 0, pcmOff[0], true);
+			if (pcmOff[0] > 0 && out != null) out.write(pcm, 0, pcmOff[0], true);
 			ArrayCache.putArray(pcm);
+			eof = 3;
+			synchronized (this) {notifyAll();}
 		}
 	}
 
@@ -190,7 +230,7 @@ public final class MP3Decoder implements AudioDecoder {
 			off = 0;
 
 			if (maxOff <= len || (chunk += read) > 0x10000) {
-				eof = true;
+				eof = 2;
 				break;
 			}
 		}
@@ -199,28 +239,12 @@ public final class MP3Decoder implements AudioDecoder {
 		this.maxOff = maxOff;
 	}
 
-	@Override
-	public boolean isSeekable() { return isDecoding(); }
-	@Override
-	public void seek(double second) throws IOException {
-		long targetFrame = Math.round(second / header.frameDuration);
-		long seekPos = (long) (header.getFrameSizeAvg() * targetFrame);
-		if (seekPos < 0) seekPos = 0;
-		else {
-			long l = in.length();
-			if (seekPos > l) seekPos = l;
-		}
-		this.seekPos = seekPos;
-		header.frames = (int) targetFrame;
-	}
+	@Override public boolean isSeekable() { return isDecoding(); }
+	@Override public void seek(double second) throws IOException {this.seekPos = header.seek(second);}
 
-	@Override
-	public double getCurrentTime() { return header.frames*(double)header.frameDuration; }
-	@Override
-	public double getDuration() {
-		if (in != null) try {
-			return in.length() / header.getFrameSizeAvg() * header.frameDuration;
-		} catch (IOException ignored) {}
+	@Override public double getCurrentTime() {return header.getTimePlayed();}
+	@Override public double getDuration() {
+		if (in != null) return header.getDuration();
 		return -1;
 	}
 

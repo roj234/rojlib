@@ -13,10 +13,10 @@ import roj.net.http.server.HttpCache;
 import roj.net.http.ws.WebSocketHandler;
 import roj.text.CharList;
 import roj.text.Escape;
-import roj.util.AttributeKey;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
 import roj.util.Helpers;
+import roj.util.TypedKey;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -283,7 +283,7 @@ public abstract class HttpRequest {
 	}
 
 	public final SyncHttpClient executePooled() throws IOException { return executePooled(DEFAULT_TIMEOUT); }
-	public final SyncHttpClient executePooled(int timeout) throws IOException { return executePooled(timeout, 1); }
+	public final SyncHttpClient executePooled(int timeout) throws IOException { return executePooled(timeout, action.equals("GET") || action.equals("HEAD") || action.equals("OPTIONS") ? 1 : -1); }
 	public final SyncHttpClient executePooled(int timeout, int maxRedirect) throws IOException { return executePooled(timeout, maxRedirect, 0); }
 	public final SyncHttpClient executePooled(int timeout, int maxRedirect, int maxRetry) throws IOException {
 		headers.putIfAbsent("connection", "keep-alive");
@@ -441,7 +441,7 @@ public abstract class HttpRequest {
 	private static final Map<InetSocketAddress, Pool> pool = new ConcurrentHashMap<>();
 
 	private static final class Pool extends RingBuffer<MyChannel> implements ChannelHandler {
-		static final AttributeKey<AtomicLong> SLEEP = new AttributeKey<>("_sleep");
+		static final TypedKey<AtomicLong> SLEEP = new TypedKey<>("_sleep");
 
 		final ReentrantLock lock = new ReentrantLock();
 		final Condition available = lock.newCondition();
@@ -520,6 +520,7 @@ public abstract class HttpRequest {
 							return;
 						} else {
 							IOUtil.closeSilently(ch);
+							lock.lock();
 						}
 					}
 					lock.unlock();

@@ -14,9 +14,9 @@ import roj.asm.type.TypeHelper;
 import roj.asm.visitor.*;
 import roj.text.CharList;
 import roj.text.logging.Logger;
-import roj.util.AttributeKey;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
+import roj.util.TypedKey;
 
 import java.util.List;
 import java.util.Objects;
@@ -55,7 +55,6 @@ public final class MethodNode extends CNode {
 		return inst;
 	}
 
-	// todo move to parameter
 	public String owner;
 	public String ownerClass() { return owner; }
 
@@ -103,7 +102,7 @@ public final class MethodNode extends CNode {
 	}
 
 	@Override
-	public <T extends Attribute> T parsedAttr(ConstantPool cp, AttributeKey<T> type) { return Parser.parseAttribute(this, cp, type, attributes, Signature.METHOD); }
+	public <T extends Attribute> T parsedAttr(ConstantPool cp, TypedKey<T> type) { return Parser.parseAttribute(this, cp, type, attributes, Signature.METHOD); }
 
 	public String rawDesc() {
 		if (in != null) {
@@ -170,9 +169,8 @@ public final class MethodNode extends CNode {
 				try {
 					code = parsedAttr(cp, Attribute.Code);
 				} catch (ClassCastException e) {
-					AttrCodeWriter code1 = (AttrCodeWriter) attrByName("Code");
-					//noinspection all
-					code = new XAttrCode(code1.getRawData(), cp, this);
+					if (cp != null) code = new XAttrCode(attrByName("Code").getRawData(), cp, this);
+					else code = null;
 				}
 
 				LocalVariableTable lvt = code != null ? (LocalVariableTable) code.attrByName("LocalVariableTable") : null;

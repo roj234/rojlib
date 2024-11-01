@@ -9,47 +9,46 @@ import roj.util.DynByteBuf;
  */
 public interface AudioMetadata {
 	String toString();
-
 	/**
 	 * 获取歌曲标题。
 	 * @return 歌曲标题
 	 */
-	@Nullable
-	String getTitle();
-
+	@Nullable String getTitle();
 	/**
 	 * 获取歌曲艺术家。
 	 * @return 歌曲艺术家
 	 */
-	@Nullable
-	String getArtist();
-
+	@Nullable String getArtist();
 	/**
 	 * 获取歌曲唱片集。
 	 * @return 歌曲唱片集
 	 */
-	@Nullable
-	String getAlbum();
-
+	@Nullable String getAlbum();
 	/**
 	 * 获取歌曲发行年份。
 	 * @return 歌曲发行年份
 	 */
-	@Nullable
-	default String getYear() { return null; }
+	@Nullable default String getYear() { return null; }
 	/**
 	 * 获取歌曲编码软件。
 	 * @return 歌曲编码软件
 	 */
-	@Nullable
-	default String getCoder() { return null; }
+	@Nullable default String getCoder() { return null; }
+	/**
+	 * 获取歌词。
+	 * @return 歌词
+	 */
+	@Nullable default String getLyrics() {return null;}
 
-	default boolean hasPicture() { return false; }
+	/**
+	 * 获取文件中内置的唱片集图片的mime类型
+	 */
+	@Nullable default String getPictureMime() { return null; }
 	/**
 	 * 获取文件中内置的唱片集图片
+	 * @param buf 用于放置数据
 	 */
 	default void getPicture(DynByteBuf buf) {}
 
-	@Nullable
-	default String getNamedAttribute(String name) { return null; }
+	@Nullable default Object getNamedAttribute(String name) { return null; }
 }

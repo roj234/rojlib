@@ -6,17 +6,22 @@ import roj.asm.tree.MethodNode;
 import roj.asm.type.TypeHelper;
 import roj.compiler.ast.ParseTask;
 import roj.compiler.ast.expr.Constant;
+import roj.compiler.ast.expr.ExprNode;
 import roj.compiler.context.CompileUnit;
 import roj.compiler.context.LibraryZipFile;
 import roj.compiler.context.LocalContext;
 import roj.compiler.diagnostic.TextDiagnosticReporter;
-import roj.compiler.plugins.GlobalContextApi;
-import roj.compiler.plugins.annotations.AnnotationProcessor1;
-import roj.compiler.plugins.annotations.AnnotationProcessor2;
-import roj.compiler.plugins.asm.AsmHook;
+import roj.compiler.plugin.GlobalContextApi;
+import roj.compiler.plugins.TypeDeclPlugin;
+import roj.compiler.plugins.UintPlugin;
+import roj.compiler.plugins.annotations.AnnotationsPlugin;
+import roj.compiler.plugins.asm.AsmPlugin;
 import roj.compiler.plugins.eval.Evaluator;
+import roj.compiler.plugins.moreop.MoreOpPlugin;
 import roj.compiler.resolve.TypeResolver;
-import roj.compiler.test.CandyTestPlugin;
+import roj.compiler.test.ComparisonChainPlugin;
+import roj.compiler.test.TestPlugin;
+import roj.compiler.test.TimeUnitPlugin;
 import roj.io.IOUtil;
 import roj.reflect.Bypass;
 import roj.reflect.ClassDefiner;
@@ -26,6 +31,7 @@ import java.io.IOException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Parameter;
 import java.util.Arrays;
+import java.util.Map;
 
 /**
  * @author Roj234
@@ -35,14 +41,15 @@ public class LavaCompiler {
 	public final GlobalContextApi gctx = new GlobalContextApi();
 	public final LocalContext lctx = gctx.createLocalContext();
 	public final ClassLoader maker = new ClassDefiner(LavaCompiler.class.getClassLoader(), "LavaLambdaLink");
-	public final AsmHook injector;
+	public final Map<String, ExprNode> injector;
 	public String fileName = "<eval>";
 
 	public LavaCompiler() throws IOException {
 		LocalContext.set(lctx);
-		injector = initDefaultPlugins(gctx);
+		initDefaultPlugins(gctx);
+		injector = gctx.attachment(AsmPlugin.INJECT_PROPERTY);
 		LocalContext.set(null);
-		((TextDiagnosticReporter) gctx.listener).errorOnly = true;
+		((TextDiagnosticReporter) gctx.reporter).errorOnly = true;
 	}
 
 	public static final LibraryZipFile Implib_Archive;
@@ -54,23 +61,25 @@ public class LavaCompiler {
 		}
 	}
 
-	static AsmHook initDefaultPlugins(GlobalContextApi ctx) throws IOException {
-		ctx.addLibrary(Implib_Archive);
+	static void initDefaultPlugins(GlobalContextApi api) throws IOException {
+		api.addLibrary(Implib_Archive);
 
-		AsmHook hook = AsmHook.init(ctx);
-		hook.injectedProperties.put("咕咕咕", Constant.valueOf("咕咕咕咕，我是🕊"));
-		Evaluator.init(ctx);
+		Evaluator.pluginInit(api);
+		new AsmPlugin().pluginInit(api);
+		AnnotationsPlugin.pluginInit(api);
+		new MoreOpPlugin().pluginInit(api);
+		new TypeDeclPlugin().pluginInit(api);
+		new UintPlugin().pluginInit(api);
+		new TestPlugin().pluginInit(api);
+		TimeUnitPlugin.pluginInit(api);
+		new ComparisonChainPlugin().pluginInit(api);
 
-		ctx.addGenericProcessor(new AnnotationProcessor1());
-		ctx.addGenericProcessor(new AnnotationProcessor2());
-
-		new CandyTestPlugin().register(ctx);
-
-		return hook;
+		api.attachment(AsmPlugin.INJECT_PROPERTY).put("咕咕咕", Constant.valueOf("咕咕咕咕，我是🕊"));
 	}
 
+	public <T> T linkLambda(Class<T> functionalInterface, String methodStr, String... parName) throws Exception {return linkLambda("roj/lavac/Lambda"+ReflectionUtils.uniqueId(), functionalInterface, methodStr, parName);}
 	@SuppressWarnings("unchecked")
-	public <T> T linkLambda(Class<T> functionalInterface, String methodStr, String... parName) throws Exception {
+	public <T> T linkLambda(String className, Class<T> functionalInterface, String methodStr, String... parName) throws Exception {
 		gctx.reset();
 
 		LocalContext.set(lctx);
@@ -86,7 +95,7 @@ public class LavaCompiler {
 		CompileUnit u = new CompileUnit(fileName, methodStr+"}");
 
 		u.version = CompileUnit.JavaVersion(8);
-		u.name("roj/lavac/Lambda"+ReflectionUtils.uniqueId());
+		u.name(className);
 		u.parent(Bypass.MAGIC_ACCESSOR_CLASS);
 		u.addInterface(functionalInterface.getName().replace('.', '/'));
 		u.npConstructor();

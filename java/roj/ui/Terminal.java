@@ -158,8 +158,8 @@ public final class Terminal extends DelegatedPrintStream {
 													   '7', '7', '7', '7', '7', '7', '7', '7', '7', '7',
 													   '7', '7', '7', '7', '7', '7', '7', '7', '7', '7'};
 
-		public static void minecraftTooltip(char[] codex, String str, float charTimeSec, CharList sb) {
-			int si = (int) (((int) System.currentTimeMillis() & Integer.MAX_VALUE) / (charTimeSec*1000) % codex.length);
+		public static void minecraftTooltip(char[] codex, String str, int speed, CharList sb) {
+			int si = codex.length - (((int) System.currentTimeMillis() & Integer.MAX_VALUE) / speed) % codex.length;
 			for (int i = 0; i < str.length(); i++) {
 				sb.append("\u001B[;").append(MC_COLOR[TextUtil.h2b(codex[si++ % codex.length])]).append('m').append(str.charAt(i));
 			}
@@ -168,12 +168,12 @@ public final class Terminal extends DelegatedPrintStream {
 
 		public static void rainbow(String s, CharList sb) {
 			if (!ANSI_OUTPUT) sb.append(s);
-			else minecraftTooltip(rainbow, s, 0.05f, sb);
+			else minecraftTooltip(rainbow, s, 70, sb);
 		}
 
 		public static void sonic(String s, CharList sb) {
 			if (!ANSI_OUTPUT) sb.append(s);
-			else minecraftTooltip(sonic, s, 0.07f, sb);
+			else minecraftTooltip(sonic, s, 50, sb);
 		}
 	}
 
@@ -298,7 +298,7 @@ public final class Terminal extends DelegatedPrintStream {
 						sb.append(line).append("\u001b[").append(cursor).append('G');
 					}
 				} else {
-					sb.append(line);
+					sb.append('\n').append(line);
 					LINES.add(0, line);
 					CURSORS.add(0, cursor);
 				}
@@ -336,7 +336,7 @@ public final class Terminal extends DelegatedPrintStream {
 	@Override
 	protected void newLine() {
 		begin();
-		write(sb.append("\r\n"));
+		write(sb.append("\u001b[0K\r\n"));
 		sb.clear();
 		PrevWidth = 0;
 	}

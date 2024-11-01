@@ -28,7 +28,7 @@ public final class CDouble extends CEntry {
 		};
 	}
 
-	public int asInteger() { return value >= Integer.MIN_VALUE && value <= Integer.MAX_VALUE ? (int) value : super.asInteger(); }
+	public int asInt() { return value >= Integer.MIN_VALUE && value <= Integer.MAX_VALUE ? (int) value : super.asInt(); }
 	public long asLong() { return value >= Long.MIN_VALUE && value <= Long.MAX_VALUE ? (long) value : super.asLong(); }
 	public float asFloat() { return (float) value; }
 	public double asDouble() { return value; }

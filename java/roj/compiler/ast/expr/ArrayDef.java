@@ -5,9 +5,10 @@ import org.jetbrains.annotations.Nullable;
 import roj.asm.Opcodes;
 import roj.asm.type.IType;
 import roj.asm.type.Type;
-import roj.asm.util.InsnHelper;
+import roj.asm.visitor.AbstractCodeWriter;
 import roj.compiler.asm.Asterisk;
 import roj.compiler.asm.MethodWriter;
+import roj.compiler.ast.GeneratorUtil;
 import roj.compiler.context.LocalContext;
 import roj.compiler.diagnostic.Kind;
 import roj.compiler.resolve.ResolveException;
@@ -30,14 +31,38 @@ public final class ArrayDef extends ExprNode {
 	private final List<ExprNode> expr;
 	private byte flag;
 
-	ArrayDef(IType type, List<ExprNode> args, boolean sized) {
+	ArrayDef(IType type, List<ExprNode> args, boolean argIsSize) {
 		this.type = type;
 		this.expr = args;
-		this.flag = (byte) (sized ? 1 : 0);
+		this.flag = (byte) (argIsSize ? 1 : 0);
+		if (argIsSize && args.size() != type.array()) throw new IllegalArgumentException("args.size() != type.array");
 	}
 
 	@Override
-	public IType type() { return type == null ? Asterisk.anyType : type; }
+	public String toString() {
+		CharList sb = new CharList().append("new ");
+		if ((flag&1) != 0) {
+			IType clone = type.clone();
+			clone.setArrayDim(0);
+			sb.append(clone);
+
+			for (int i = 0; i < expr.size(); i++)
+				sb.append('[').append(expr.get(i)).append(']');
+			sb.padEnd("[]", (type.array()-expr.size())<<1);
+			return sb.toStringAndFree();
+		} else {
+			sb.append(type).append(" {");
+			if (!expr.isEmpty()) {
+				int i = 0;
+				while (true) {
+					sb.append(expr.get(i++));
+					if (i == expr.size()) break;
+					sb.append(',');
+				}
+			}
+			return sb.append("}").toStringAndFree();
+		}
+	}
 
 	public void setType(IType type) {this.type = type;}
 
@@ -48,6 +73,8 @@ public final class ArrayDef extends ExprNode {
 		flag |= 4;
 
 		if (type == null) {
+			if (ctx.inReturn && GeneratorUtil.RETURNSTACK_TYPE.equals(ctx.method.returnType().owner))
+				return new MultiReturn(expr).resolve(ctx);
 			autoType(ctx);
 			return this;
 		} else {
@@ -97,11 +124,9 @@ public final class ArrayDef extends ExprNode {
 		}
 	}
 
-	@Override
-	public boolean isConstant() { return (flag&2) != 0; }
-
-	@Override
-	public Object constVal() {
+	@Override public IType type() { return type == null ? Asterisk.anyType : type; }
+	@Override public boolean isConstant() { return (flag&2) != 0; }
+	@Override public Object constVal() {
 		Object[] array = new Object[expr.size()];
 		for (int i = 0; i < expr.size(); i++) array[i] = expr.get(i).constVal();
 		return array;
@@ -120,7 +145,7 @@ public final class ArrayDef extends ExprNode {
 		} else {
 			cw.ldc(expr.size());
 
-			byte storeType = InsnHelper.XAStore(makeArray(cw, 1));
+			byte storeType = AbstractCodeWriter.ArrayStore(makeArray(cw, 1));
 			for (int i = 0; i < expr.size(); i++) {
 				cw.one(Opcodes.DUP);
 				cw.ldc(i);
@@ -148,38 +173,12 @@ public final class ArrayDef extends ExprNode {
 	private Type makeArray(MethodWriter cw, int dimension) {
 		Type at = type.rawType();
 		if (at.array() == 1) {
-			if (at.type != Type.CLASS) cw.newArray(InsnHelper.ToPrimitiveArrayId(at.type));
+			if (at.type != Type.CLASS) cw.newArray(AbstractCodeWriter.ToPrimitiveArrayId(at.type));
 			else cw.clazz(Opcodes.ANEWARRAY, at.owner);
 		} else {
 			cw.multiArray(at.getActualClass(), dimension);
 		}
 		return at;
-	}
-
-	@Override
-	public String toString() {
-		CharList sb = new CharList().append("new ");
-		if ((flag&1) != 0) {
-			IType clone = type.clone();
-			clone.setArrayDim(0);
-			sb.append(clone);
-
-			for (int i = 0; i < expr.size(); i++)
-				sb.append('[').append(expr.get(i)).append(']');
-			sb.padEnd("[]", (type.array()-expr.size())<<1);
-			return sb.toStringAndFree();
-		} else {
-			sb.append(type).append(" {");
-			if (!expr.isEmpty()) {
-				int i = 0;
-				while (true) {
-					sb.append(expr.get(i++));
-					if (i == expr.size()) break;
-					sb.append(',');
-				}
-			}
-			return sb.append("}").toStringAndFree();
-		}
 	}
 
 	@Override

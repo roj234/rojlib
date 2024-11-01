@@ -1,5 +1,6 @@
 package roj.compiler.runtime;
 
+import roj.ReferenceByGeneratedClass;
 import roj.collect.SimpleList;
 import roj.util.NativeMemory;
 
@@ -19,10 +20,14 @@ public final class ReturnStack<T> implements GenericIgnore {
 	public ReturnStack() {this(MEMORY_CAPACITY);}
 	public ReturnStack(int cap) {memory = new NativeMemory(cap);}
 
-	public ReturnStack<T> toImmutable(int memoryCap) {
+	@ReferenceByGeneratedClass
+	public ReturnStack<T> toImmutable() {
+		int memoryCap = (int) (address - memory.address());
+		System.out.println("CopyImmutable size="+memoryCap);
 		ReturnStack<T> stack = new ReturnStack<>(memoryCap);
 		u.copyMemory(memory.address(), stack.memory.address(), memoryCap);
 		stack.objects.addAll(objects);
+		stack.address += memoryCap;
 		return stack;
 	}
 	public ReturnStack<T> forWrite() {
@@ -41,14 +46,14 @@ public final class ReturnStack<T> implements GenericIgnore {
 		if (genericHash != hashCode) throw new IncompatibleClassChangeError("Excepting generic hash "+hashCode+", but got "+genericHash);
 		return this;
 	}
-	public long address() {return memory.address();}
+	public long base() {return memory.address();}
 
 	/**
 	 * Optional: put return crc32 at +0, and throw IncompatibleClassChangeError on demand
 	 */
-	private long address;
-	private final SimpleList<Object> objects = new SimpleList<>();
-	private int index;
+	long address;
+	final SimpleList<Object> objects = new SimpleList<>();
+	int index;
 
 	public ReturnStack<T> put(boolean v) {return put(v ? 1 : 0);}
 	public ReturnStack<T> put(byte v) {
@@ -102,5 +107,7 @@ public final class ReturnStack<T> implements GenericIgnore {
 		address += 8;
 		return v;
 	}
+	public float getF() {return Float.intBitsToFloat(getI());}
+	public double getD() {return Double.longBitsToDouble(getJ());}
 	public Object getL() {return objects.set(index++, null);}
 }

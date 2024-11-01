@@ -14,7 +14,6 @@ import roj.asm.tree.attr.Annotations;
 import roj.asm.tree.attr.AttrString;
 import roj.asm.tree.attr.Attribute;
 import roj.asm.type.*;
-import roj.asm.util.Attributes;
 import roj.asm.visitor.CodeWriter;
 import roj.asm.visitor.Label;
 import roj.asm.visitor.LongByeBye;
@@ -67,6 +66,7 @@ final class SerializerFactoryImpl extends SerializerFactory {
 		DEFAULT.put("java.util.Collection", LIST);
 		DEFAULT.put("java.util.List", LIST);
 		DEFAULT.put("java.util.Set", new CollectionSer(null, true, null));
+		DEFAULT.put("java.util.Optional", new OptionalSer());
 
 		DEFAULT.put("roj.config.auto.Either", new EitherSer());
 	}
@@ -333,20 +333,20 @@ final class SerializerFactoryImpl extends SerializerFactory {
 	}
 	//ObjAny
 	final Adapter getByName(String name) {
-		return (flag & ALLOW_DYNAMIC) == 0 ? localRegistry.get(name) : make(name, null, null, true);
+		Class<?> type;
+		try {
+			type = Class.forName(name, false, classLoader);
+		} catch (ClassNotFoundException e) {
+			throw new TypeNotPresentException(name, e);
+		}
+		name = type.getName();
+		if ((flag & ALLOW_DYNAMIC) == 0) return localRegistry.get(name);
+		return make(name, type, null, true);
 	}
 
-	private Adapter make(String name, Class<?> type, Generic generic, boolean mustExact) {
+	private Adapter make(String name, @NotNull Class<?> type, Generic generic, boolean mustExact) {
 		Adapter ser = localRegistry.get(name!=null?name:(name=type.getName()));
 		if (ser != null) return ser;
-
-		if (type == null) {
-			try {
-				type = Class.forName(name, false, classLoader);
-			} catch (ClassNotFoundException e) {
-				throw new TypeNotPresentException(generic==null?name:generic.toString(), e);
-			}
-		}
 
 		// if (generic != null) name = generic.toDesc();
 		// so check original type and derive
@@ -437,12 +437,12 @@ final class SerializerFactoryImpl extends SerializerFactory {
 		if ((type.getModifiers() & (ACC_ABSTRACT|ACC_INTERFACE)) != 0) return true;
 		return type == Object.class;
 	}
-	/**@param flag 只检查这些FLAG，其中SAFE不影响生成结果: CHECK_PARENT,SERIALIZE_PARENT,SAFE,NO_CONSTRUCTOR,OPTIONAL_BY_DEFAULT */
+	/**@param flag 只检查这些FLAG，其中SAFE,NO_CONSTRUCTOR不影响生成结果: CHECK_PARENT,SERIALIZE_PARENT,SAFE,NO_CONSTRUCTOR,OPTIONAL_BY_DEFAULT */
 	private Adapter make(Class<?> type, String name, int flag) {
 		Adapter ser;
 
 		if (!type.isEnum() && (type.getComponentType() == null || !type.getComponentType().isPrimitive())) {
-			name = ((this.flag&OBJECT_POOL) | (flag&(NO_CONSTRUCTOR|SERIALIZE_PARENT|OPTIONAL_BY_DEFAULT)))+";"+name;
+			name = ((this.flag&OBJECT_POOL) | (flag&(SERIALIZE_PARENT|OPTIONAL_BY_DEFAULT)))+";"+name;
 		}
 
 		var GENERATED = Isolation.computeIfAbsent(type.getClassLoader(), Fn).generated;
@@ -663,6 +663,7 @@ final class SerializerFactoryImpl extends SerializerFactory {
 		serializerId.putInt("",0);
 		copy.one(ALOAD_0);
 		copy.one(ALOAD_2);
+		copy.clazz(CHECKCAST, data.name);
 		copy.field(PUTFIELD, c, ua);
 
 		return build(classLoader);
@@ -729,7 +730,12 @@ final class SerializerFactoryImpl extends SerializerFactory {
 		}
 
 		c.putAttr(new AttrString("SourceFile", o.getName()));
-		CodeWriter cw;
+		var cw = c.newMethod(ACC_PUBLIC | ACC_FINAL, "toString", "()Ljava/lang/String;");
+		cw.visitSize(1, 1);
+		cw.ldc(o.getName());
+		cw.one(ARETURN);
+		cw.finish();
+
 		int fieldIdKey = c.newField(ACC_PRIVATE|ACC_STATIC, "FIELD_ID", "Lroj/collect/IntBiMap;");
 		// region fieldId
 		cw = c.newMethod(ACC_PUBLIC|ACC_FINAL, "fn", "()Lroj/collect/IntBiMap;");
@@ -795,15 +801,12 @@ final class SerializerFactoryImpl extends SerializerFactory {
 		cw.one(IRETURN);
 		// endregion
 
-		boolean defaultOptional = (flag&OPTIONAL_BY_DEFAULT) != 0;
+		String defaultOptional = (flag&OPTIONAL_BY_DEFAULT) != 0 ? "IF_DEFAULT" : "NEVER";
 		int optional = 0;
 		optionalEx = null;
 
-		Annotations tmp1 = data.parsedAttr(data.cp, Attribute.ClAnnotations);
-		if (tmp1 != null) {
-			Annotation opt = Attributes.getAnnotation(tmp1.annotations, "roj/config/auto/Optional");
-			if (opt != null) defaultOptional = opt.getBoolean("value", true);
-		}
+		Annotation opt = Annotation.findInvisible(data.cp, data, "roj/config/auto/Optional");
+		if (opt != null) defaultOptional = opt.getEnumValue("value", "SMALLEST_OUTPUT");
 
 		SimpleList<FieldNode> fields = data.fields;
 		for (int i = 0; i < fields.size(); i++) {
@@ -816,7 +819,7 @@ final class SerializerFactoryImpl extends SerializerFactory {
 
 			String name = f.name();
 			MethodNode get = null, set = null;
-			boolean optional1 = defaultOptional;
+			String optional1 = defaultOptional;
 			AsType as = null;
 
 			Annotations attr = f.parsedAttr(data.cp, Attribute.ClAnnotations);
@@ -844,7 +847,7 @@ final class SerializerFactoryImpl extends SerializerFactory {
 							break;
 						}
 						case "roj/config/auto/Optional":
-							optional1 = anno.getBoolean("value", true);
+							optional1 = anno.getEnumValue("value", "SMALLEST_OUTPUT");
 							break;
 						case "roj/config/auto/As":
 							as = asTypes.get(anno.getString("value"));
@@ -853,13 +856,14 @@ final class SerializerFactoryImpl extends SerializerFactory {
 				}
 			}
 
-			if (optional1) {
+			if (!optional1.equals("NEVER")) {
 				if (fieldId < 32) {
 					optional |= 1 << fieldId;
 				} else {
 					if (optionalEx == null) optionalEx = new MyBitSet();
 					optionalEx.add(fieldId-32);
 				}
+				// TODO fill auto
 			}
 
 			if (unsafe != 0 ||
@@ -943,7 +947,7 @@ final class SerializerFactoryImpl extends SerializerFactory {
 
 	private void value(int fieldId, ConstantData data, FieldNode fn,
 					   String actualName, MethodNode get, MethodNode set,
-					   boolean optional1, AsType as,
+					   String ignoreMode, AsType as,
 					   Class<?> unsafePut) {
 		Type type = as != null ? as.output : fn.fieldType();
 		int actualType = type.getActualType();
@@ -1061,30 +1065,72 @@ final class SerializerFactoryImpl extends SerializerFactory {
 		break;
 		}
 
+		cw = write;
 		// 如果可选并且不是基本类型
 		Label skip;
-		if (optional1) {
+		if ("NEVER".equals(ignoreMode) || ("IF_NULL".equals(ignoreMode) && fn.fieldType().isPrimitive())) {
+			skip = null;
+		} else {
 			skip = new Label();
 
-			write.one(ALOAD_2);
-			if (get == null) write.field(GETFIELD, data.name, fn.name(), fn.rawDesc());
-			else write.invoke(INVOKEVIRTUAL, get);
+			cw.one(ALOAD_2);
+			if (get == null) cw.field(GETFIELD, data.name, fn.name(), fn.rawDesc());
+			else cw.invoke(INVOKEVIRTUAL, get);
 
 			byte code = IFEQ;
 			switch (actualType) {
-				case Type.CLASS: code = IFNULL; break;
-				case Type.LONG: write.one(LCONST_0); write.one(LCMP); write.visitSizeMax(4,0); break;
-				case Type.FLOAT: write.one(FCONST_0); write.one(FCMPG); break;
-				case Type.DOUBLE: write.one(DCONST_0); write.one(DCMPG); write.visitSizeMax(4,0); break;
+				case Type.CLASS: code = IFNULL; cw.one(DUP); cw.vars(ASTORE, 4); cw.visitSizeMax(0, 5); break;
+				case Type.LONG: cw.one(LCONST_0); cw.one(LCMP); cw.visitSizeMax(4,0); break;
+				case Type.FLOAT: cw.one(FCONST_0); cw.one(FCMPG); break;
+				case Type.DOUBLE: cw.one(DCONST_0); cw.one(DCMPG); cw.visitSizeMax(4,0); break;
 			}
-			write.jump(code, skip);
-		} else {
-			skip = null;
+			cw.jump(code, skip);
+			if (actualType == Type.CLASS && ignoreMode.equals("IF_EMPTY")) {
+				var actualTypeName = type.getActualClass();
+				if  (actualTypeName.startsWith("[")) {
+					cw.vars(ALOAD, 4);
+					cw.one(ARRAYLENGTH);
+					cw.jump(IFEQ, skip);
+				} else {
+					var inferrer = genericInferrer();
+					if ("java/lang/String".equals(actualTypeName)) {
+						cw.vars(ALOAD, 4);
+						cw.invokeV("java/lang/String", "isEmpty", "()Z");
+						cw.jump(IFNE, skip);
+					} else if (inferrer.instanceOf("java/lang/CharSequence", actualTypeName)) {
+						cw.vars(ALOAD, 4);
+						cw.invokeItf("java/lang/CharSequence", "length", "()I");
+						cw.jump(IFEQ, skip);
+					} else if (inferrer.instanceOf("java/util/Map", actualTypeName)) {
+						cw.vars(ALOAD, 4);
+						cw.invokeItf("java/util/Map", "isEmpty", "()Z");
+						cw.jump(IFNE, skip);
+					} else if (inferrer.instanceOf("java/util/Collection", actualTypeName)) {
+						cw.vars(ALOAD, 4);
+						cw.invokeItf("java/util/Collection", "isEmpty", "()Z");
+						cw.jump(IFNE, skip);
+					} else if ("java/util/Optional".equals(actualTypeName)) {
+						cw.vars(ALOAD, 4);
+						cw.invokeV("java/util/Optional", "isPresent", "()Z");
+						cw.jump(IFEQ, skip);
+					}
+
+					/*int id;
+					String serType = type.getActualClass();
+					Signature serSig = fn.parsedAttr(data.cp, Attribute.SIGNATURE);
+					id = ser(serType, serSig != null ? typeParamToRaw(serSig) : null);
+
+					cw.one(ALOAD_0);
+					cw.field(GETFIELD, c, id);
+					cw.invokeV("roj/config/auto/Adapter", "isEmpty", "(Ljava/lang/Object;)Z");
+					cw.jump(IFNE, skip);*/
+				}
+			}
 		}
 
-		write.one(ALOAD_1);
-		write.ldc(new CstString(actualName));
-		write.invokeItf("roj/config/serial/CVisitor", "key", "(Ljava/lang/String;)V");
+		cw.one(ALOAD_1);
+		cw.ldc(new CstString(actualName));
+		cw.invokeItf("roj/config/serial/CVisitor", "key", "(Ljava/lang/String;)V");
 
 		cw = keyCw;
 		block:
@@ -1113,10 +1159,13 @@ final class SerializerFactoryImpl extends SerializerFactory {
 				cw.one(ALOAD_0);
 				cw.field(GETFIELD, c, asId);
 			}
-			cw.one(ALOAD_2);
 
-			if (get == null) cw.field(GETFIELD, data.name, fn.name(), fn.rawDesc());
-			else cw.invoke(INVOKEVIRTUAL, get);
+			if (skip != null) cw.vars(ALOAD, 4);
+			else {
+				cw.one(ALOAD_2);
+				if (get == null) cw.field(GETFIELD, data.name, fn.name(), fn.rawDesc());
+				else cw.invoke(INVOKEVIRTUAL, get);
+			}
 
 			if (as != null) cw.invoke(as.ref == null ? INVOKESTATIC : INVOKEVIRTUAL, as.writer);
 
@@ -1142,10 +1191,14 @@ final class SerializerFactoryImpl extends SerializerFactory {
 			} else {
 				cw.one(ALOAD_1);
 			}
-			cw.one(ALOAD_2);
 
-			if (get == null) cw.field(GETFIELD, data.name, fn.name(), fn.rawDesc());
-			else cw.invoke(INVOKEVIRTUAL, get);
+			// String
+			if (skip != null && actualType == Type.CLASS) cw.vars(ALOAD, 4);
+			else {
+				cw.one(ALOAD_2);
+				if (get == null) cw.field(GETFIELD, data.name, fn.name(), fn.rawDesc());
+				else cw.invoke(INVOKEVIRTUAL, get);
+			}
 
 			if (as != null) {
 				if (as.user) cw.one(ALOAD_1);
@@ -1218,6 +1271,8 @@ final class SerializerFactoryImpl extends SerializerFactory {
 			cw.one(ALOAD_1);
 			cw.field(GETFIELD, "roj/config/auto/AdaptContext", "fieldId", "I");
 			cw.invoke(INVOKESTATIC, "java/lang/Integer", "toString", "(I)Ljava/lang/String;");
+			//cw.ldc(" not valid field (t="+(char)methodType+")");
+			//cw.invoke(INVOKEVIRTUAL, "java/lang/String", "concat", "(Ljava/lang/String;)Ljava/lang/String;");
 			cw.invoke(INVOKESPECIAL, "java/lang/IllegalStateException", "<init>", "(Ljava/lang/String;)V");
 			cw.one(ATHROW);
 		}

@@ -3,11 +3,14 @@ package roj.compiler.asm;
 import roj.asm.tree.ConstantData;
 import roj.asm.tree.MethodNode;
 import roj.asm.tree.attr.LineNumberTable;
+import roj.asm.tree.attr.LocalVariableTable;
 import roj.asm.tree.insn.TryCatchEntry;
+import roj.asm.type.IType;
 import roj.asm.visitor.*;
 import roj.collect.SimpleList;
 import roj.compiler.asm.node.LazyIINC;
 import roj.compiler.asm.node.LazyLoadStore;
+import roj.compiler.context.GlobalContext;
 import roj.reflect.ReflectionUtils;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
@@ -25,43 +28,69 @@ import static roj.asm.Opcodes.assertTrait;
 public class MethodWriter extends CodeWriter {
 	private final ConstantData owner;
 
-	private final SimpleList<TryCatchEntry> entryList = new SimpleList<>();
+	private final SimpleList<TryCatchEntry> trys = new SimpleList<>();
 
 	public LineNumberTable lines;
-	public boolean debugLines;
-	public boolean noverify;
+	private LocalVariableTable lvt1, lvt2;
 
-	public MethodWriter(ConstantData unit, MethodNode mn) {
+	public void addLVTEntry(LocalVariableTable.Item v) {
+		lvt1.list.add(v);
+		if (v.type.genericType() != IType.STANDARD_TYPE) {
+			lvt2.list.add(v);
+		}
+	}
+
+	public MethodWriter(ConstantData unit, MethodNode mn, boolean generateLVT) {
 		this.owner = unit;
 		this.init(new ByteList(),unit.cp,mn,(byte)0);
+		if (generateLVT) {
+			lvt1 = new LocalVariableTable("LocalVariableTable");
+			lvt2 = new LocalVariableTable("LocalVariableTypeTable");
+		}
 	}
 
 	public TryCatchEntry addException(Label str, Label end, Label proc, String s) {
 		TryCatchEntry entry = new TryCatchEntry(Objects.requireNonNull(str, "start"), Objects.requireNonNull(end, "end"), Objects.requireNonNull(proc, "handler"), s);
-		entryList.add(entry);
+		if (!str.equals(end)) {
+			trys.add(entry);
+		} else {
+			GlobalContext.debugLogger().debug("无意义的异常处理器: "+entry);
+		}
 		return entry;
 	}
 
 	@Override
 	public void visitExceptions() {
 		super.visitExceptions();
-		for (TryCatchEntry entry : entryList) {
+		for (TryCatchEntry entry : trys) {
 			visitException(entry.start,entry.end,entry.handler,entry.type);
 		}
-		entryList.clear();
+		trys.clear();
 	}
 
 	@Override
 	public void visitAttributes() {
 		super.visitAttributes();
 
-		if (debugLines) lineNumberDebug();
-		else if (lines != null && !lines.isEmpty()) visitAttribute(lines);
+		if (lvt1 != null && !lvt1.isEmpty()) {
+			visitAttribute(lvt1);
+			if (!lvt2.isEmpty()) visitAttribute(lvt2);
+		}
+		if (lines != null && !lines.isEmpty()) visitAttribute(lines);
 	}
 
-	public void load(Variable v) { addSegment(new LazyLoadStore(v, false)); }
-	public void store(Variable v) { v.hasValue = true; addSegment(new LazyLoadStore(v, true)); }
-	public void iinc(Variable v, int delta) { addSegment(new LazyIINC(v, delta)); }
+	public void load(Variable v) {
+		if (v.slot != 0) varLoad(v.type.rawType(), v.slot);
+		else addSegment(new LazyLoadStore(v, false));
+	}
+	public void store(Variable v) {
+		if (v.slot != 0) varStore(v.type.rawType(), v.slot);
+		else addSegment(new LazyLoadStore(v, true));
+	}
+	public void iinc(Variable v, int delta) {
+		if (v.slot != 0) iinc(v.slot, delta);
+		else addSegment(new LazyIINC(v, delta));
+	}
 
 	public void jump(byte code, Label target) { assertTrait(code, TRAIT_JUMP); addSegment(new JumpSegmentAO(code, target)); }
 
@@ -69,19 +98,14 @@ public class MethodWriter extends CodeWriter {
 	public void replaceSegment(int id, Segment segment) {segments.set(id, segment);}
 	public boolean isJumpingTo(Label point) {return !segments.isEmpty() && segments.get(segments.size()-1) instanceof JumpSegment js && js.target == point;}
 
-	public MethodWriter fork() {return new MethodWriter(owner, mn);}
+	public MethodWriter fork() {return new MethodWriter(owner, mn, lvt1 != null);}
 
 	private final List<Label> zeroLabels = new SimpleList<>();
 
 	@Override
 	public void label(Label x) {
 		// 预优化无用的跳转
-		if (segments.isEmpty()) {
-			zeroLabels.add(x);
-		} else if (segments.get(segments.size()-1).length() == 0 && segments.get(segments.size()-2) instanceof JumpSegment jump && jump.target == x) {
-			segments.remove(segments.size()-2);
-		}
-
+		if (segments.isEmpty()) zeroLabels.add(x);
 		super.label(x);
 	}
 
@@ -103,23 +127,23 @@ public class MethodWriter extends CodeWriter {
 
 	private boolean disposed;
 	public void writeTo(MethodWriter cw) {
-		if (disposed) throw new AssertionError();
-		disposed = true;
-
 		if (bw.wIndex() > 8) cw.codeOb.put(bw, 8, bw.wIndex()-8);
 
 		int mb = cw.segments.size();
 		if (mb == 0) mb = 1;
-		for (Label label : labels) {
-			ReflectionUtils.u.getAndAddInt(label, BLOCK_INDEX, mb);
-			cw.labels.add(label);
+		if (!disposed) {
+			for (Label label : labels) {
+				ReflectionUtils.u.getAndAddInt(label, BLOCK_INDEX, mb);
+				cw.labels.add(label);
+			}
+			labels.clear();
+			/*for (Label label : zeroLabels) {
+				ReflectionUtils.u.getAndAddInt(label, BLOCK_INDEX, mb-1);
+				cw.labels.add(label);
+			}
+			zeroLabels.clear();*/
+			disposed = true;
 		}
-		labels.clear();
-		for (Label label : zeroLabels) {
-			ReflectionUtils.u.getAndAddInt(label, BLOCK_INDEX, mb-1);
-			cw.labels.add(label);
-		}
-		zeroLabels.clear();
 
 		if (segments.isEmpty()) return;
 		if (cw.segments.isEmpty()) cw._addFirst();
@@ -138,4 +162,6 @@ public class MethodWriter extends CodeWriter {
 
 		cw.codeOb = ((StaticSegment) tarSeg.get(tarSeg.size()-1)).getData();
 	}
+
+	public Segment getSegment(int i) {return segments.get(i);}
 }

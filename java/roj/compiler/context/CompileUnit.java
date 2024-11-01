@@ -15,16 +15,21 @@ import roj.asm.visitor.CodeWriter;
 import roj.asmx.AnnotationSelf;
 import roj.asmx.mapper.util.NameAndType;
 import roj.collect.*;
-import roj.compiler.CompilerSpec;
 import roj.compiler.JavaLexer;
+import roj.compiler.LavaFeatures;
 import roj.compiler.asm.*;
 import roj.compiler.ast.BlockParser;
+import roj.compiler.ast.EnumUtil;
+import roj.compiler.ast.GeneratorUtil;
 import roj.compiler.ast.ParseTask;
 import roj.compiler.ast.expr.Constant;
 import roj.compiler.ast.expr.ExprNode;
 import roj.compiler.ast.expr.ExprParser;
 import roj.compiler.diagnostic.Kind;
-import roj.compiler.resolve.*;
+import roj.compiler.resolve.ComponentList;
+import roj.compiler.resolve.ResolveHelper;
+import roj.compiler.resolve.TypeCast;
+import roj.compiler.resolve.TypeResolver;
 import roj.config.ParseException;
 import roj.config.Word;
 import roj.io.IOUtil;
@@ -33,8 +38,6 @@ import roj.util.ArrayUtil;
 import roj.util.DynByteBuf;
 import roj.util.Helpers;
 
-import java.io.IOException;
-import java.io.InputStream;
 import java.util.*;
 
 import static roj.asm.Opcodes.*;
@@ -56,13 +59,15 @@ public final class CompileUnit extends ConstantData {
 	public static final Type RUNTIME_EXCEPTION = new Type("java/lang/RuntimeException");
 	private Object _next;
 
-	static final int _ACC_DEFAULT = 1 << 16, _ACC_ANNOTATION = 1 << 17, _ACC_RECORD = 1 << 18, _ACC_STRUCT = 1 << 19, _ACC_SEALED = 1 << 20, _ACC_NON_SEALED = 1 << 21,
-		_ACC_INNER_CLASS = 1 << 22, _ACC_JAVADOC = 1 << 23;
+	// Class level flags
+	static final int _ACC_RECORD = 1 << 31, _ACC_STRUCT = 1 << 30, _ACC_INNER_CLASS = 1 << 29;
+	// read via _modifier()
+	static final int _ACC_DEFAULT = 1 << 16, _ACC_ANNOTATION = 1 << 17, _ACC_SEALED = 1 << 18, _ACC_NON_SEALED = 1 << 19, _ACC_JAVADOC = 1 << 20, _ACC_ASYNC = 1 << 21;
 	static final int CLASS_ACC = ACC_PUBLIC|ACC_FINAL|ACC_ABSTRACT|ACC_STRICT|_ACC_ANNOTATION|_ACC_SEALED|_ACC_NON_SEALED|_ACC_JAVADOC;
 	static final int
-		ACC_CLASS_ILLEGAL = ACC_NATIVE|ACC_TRANSIENT|ACC_VOLATILE|ACC_SYNCHRONIZED,
-		ACC_METHOD_ILLEGAL = ACC_TRANSIENT|ACC_VOLATILE|_ACC_SEALED,
-		ACC_FIELD_ILLEGAL = ACC_STRICT|ACC_NATIVE|ACC_ABSTRACT|_ACC_SEALED;
+		ACC_CLASS_ILLEGAL = ACC_NATIVE|ACC_TRANSIENT|ACC_VOLATILE|ACC_SYNCHRONIZED | _ACC_DEFAULT|_ACC_ASYNC,
+		ACC_METHOD_ILLEGAL = ACC_TRANSIENT|ACC_VOLATILE,
+		ACC_FIELD_ILLEGAL = ACC_STRICT|ACC_NATIVE|ACC_ABSTRACT | _ACC_DEFAULT|_ACC_ASYNC;
 
 	private static final char UNRELATED_MARKER = 32768, PARENT_MARKER = 16384;
 
@@ -98,6 +103,8 @@ public final class CompileUnit extends ConstantData {
 
 	LocalContext ctx;
 
+	public void _setCtx(LocalContext ctx) {this.ctx = ctx;}
+
 	public void setMinimumBinaryCompatibility(int level) {
 		this.version = Math.max(JavaVersion(level), version);
 	}
@@ -109,19 +116,18 @@ public final class CompileUnit extends ConstantData {
 
 		_parent = this;
 	}
-	public CompileUnit(String name, InputStream in) throws IOException {this(name, IOUtil.readString(in));}
 
 	public TypeResolver getTypeResolver() {return tr;}
 
 	// region 文件中的其余类
-	private CompileUnit(CompileUnit parent) {
+	private CompileUnit(CompileUnit parent, boolean helperClass) {
 		source = parent.source;
 		ctx = parent.ctx;
 
-		if (ctx.classes.isSpecEnabled(CompilerSpec.ATTR_SOURCE_FILE))
+		if (ctx.classes.hasFeature(LavaFeatures.ATTR_SOURCE_FILE))
 			putAttr(parent.attrByName("SourceFile"));
 
-		_parent = parent;
+		_parent = helperClass ? this : parent;
 
 		code = parent.code;
 		classIdx = parent.ctx.lexer.index;
@@ -130,7 +136,7 @@ public final class CompileUnit extends ConstantData {
 	}
 
 	private CompileUnit _newHelper(int acc) throws ParseException {
-		CompileUnit c = new CompileUnit(this);
+		CompileUnit c = new CompileUnit(this, true);
 
 		int i = name.lastIndexOf('/') + 1;
 		c.name(i <= 0 ? "" : name.substring(0, i));
@@ -140,13 +146,13 @@ public final class CompileUnit extends ConstantData {
 		return c;
 	}
 	private CompileUnit _newInner(int acc) throws ParseException {
-		CompileUnit c = new CompileUnit(this);
+		CompileUnit c = new CompileUnit(this, false);
 
 		c.name(name.concat("$"));
 		c.header(acc|_ACC_INNER_CLASS);
 		acc = c.modifier;
 
-		if (ctx.classes.isSpecEnabled(CompilerSpec.ATTR_INNER_CLASS)) {
+		if (ctx.classes.hasFeature(LavaFeatures.ATTR_INNER_CLASS)) {
 			if ((acc & (ACC_INTERFACE|ACC_ENUM|_ACC_RECORD)) != 0) acc |= ACC_STATIC;
 
 			var desc = InnerClasses.Item.innerClass(c.name, acc);
@@ -154,7 +160,7 @@ public final class CompileUnit extends ConstantData {
 			c.innerClasses().add(desc);
 		}
 
-		if (ctx.classes.isSpecEnabled(CompilerSpec.NESTED_MEMBER)) addNestMember(c);
+		if (ctx.classes.hasFeature(LavaFeatures.NESTED_MEMBER)) addNestMember(c);
 
 		if ((acc&ACC_PROTECTED) != 0) {
 			acc &= ~ACC_PROTECTED;
@@ -166,7 +172,9 @@ public final class CompileUnit extends ConstantData {
 		return c;
 	}
 	public CompileUnit newAnonymousClass(@Nullable MethodNode mn) throws ParseException {
-		CompileUnit c = new CompileUnit(this);
+		CompileUnit c = new CompileUnit(this, false);
+		// [20241206] temporary workaround for Macro & NewAnonymousClass
+		c.code = ctx.lexer.getText();
 
 		c.name(IOUtil.getSharedCharBuf().append(name).append("$").append(++_children).toString());
 		c.modifier = ACC_FINAL|ACC_SUPER;
@@ -175,7 +183,7 @@ public final class CompileUnit extends ConstantData {
 
 		c.body();
 
-		if (ctx.classes.isSpecEnabled(CompilerSpec.ATTR_INNER_CLASS)) {
+		if (ctx.classes.hasFeature(LavaFeatures.ATTR_INNER_CLASS)) {
 			var desc = InnerClasses.Item.anonymous(c.name, c.modifier);
 			this.innerClasses().add(desc);
 			c.innerClasses().add(desc);
@@ -190,19 +198,45 @@ public final class CompileUnit extends ConstantData {
 			c.putAttr(ownerMethod);
 		}
 
-		if (ctx.classes.isSpecEnabled(CompilerSpec.NESTED_MEMBER)) addNestMember(c);
+		if (ctx.classes.hasFeature(LavaFeatures.NESTED_MEMBER)) addNestMember(c);
 
+		return c;
+	}
+	public ConstantData newAnonymousClass_NoBody(@Nullable MethodNode mn) {
+		var c = new ConstantData();
+
+		c.name(IOUtil.getSharedCharBuf().append(name).append("$").append(++_children).toString());
+		c.modifier = ACC_FINAL|ACC_SUPER;
+
+		if (ctx.classes.hasFeature(LavaFeatures.ATTR_INNER_CLASS)) {
+			var desc = InnerClasses.Item.anonymous(c.name, c.modifier);
+			this.innerClasses().add(desc);
+			//c.innerClasses().add(desc);
+
+			var ownerMethod = new EnclosingMethod();
+			ownerMethod.owner = name;
+			if (mn != null && !mn.name().startsWith("<")) {
+				ownerMethod.name = mn.name();
+				ownerMethod.parameters = mn.parameters();
+				ownerMethod.returnType = mn.returnType();
+			}
+			c.putAttr(ownerMethod);
+		}
+
+		if (ctx.classes.hasFeature(LavaFeatures.NESTED_MEMBER)) addNestMember(c);
+
+		ctx.classes.addGeneratedClass(c);
 		return c;
 	}
 
 	public void addNestMember(ConstantData c) {
-		assert ctx.classes.isSpecEnabled(CompilerSpec.NESTED_MEMBER);
+		assert ctx.classes.hasFeature(LavaFeatures.NESTED_MEMBER);
 
 		var top = _parent;
 		while (top._parent != top) top = top._parent;
 
-		if (c instanceof CompileUnit cu) cu.setMinimumBinaryCompatibility(CompilerSpec.COMPATIBILITY_LEVEL_JAVA_11);
-		top.setMinimumBinaryCompatibility(CompilerSpec.COMPATIBILITY_LEVEL_JAVA_11);
+		if (c instanceof CompileUnit cu) cu.setMinimumBinaryCompatibility(LavaFeatures.COMPATIBILITY_LEVEL_JAVA_11);
+		top.setMinimumBinaryCompatibility(LavaFeatures.COMPATIBILITY_LEVEL_JAVA_11);
 
 		c.putAttr(new AttrString("NestHost", top.name));
 		AttrClassList nestMembers = (AttrClassList) top.attrByName("NestMembers");
@@ -272,7 +306,7 @@ public final class CompileUnit extends ConstantData {
 			if (w.type() == EOF) return false;
 		}
 
-		if (ctx.classes.isSpecEnabled(CompilerSpec.ATTR_SOURCE_FILE))
+		if (ctx.classes.hasFeature(LavaFeatures.ATTR_SOURCE_FILE))
 			putAttr(new AttrString(Annotations.SourceFile, source));
 
 		tr.clear();
@@ -339,7 +373,7 @@ public final class CompileUnit extends ConstantData {
 		return isNormalClass;
 	}
 	private void parseModuleInfo(JavaLexer wr, boolean moduleIsOpen) throws ParseException {
-		setMinimumBinaryCompatibility(CompilerSpec.COMPATIBILITY_LEVEL_JAVA_9);
+		setMinimumBinaryCompatibility(LavaFeatures.COMPATIBILITY_LEVEL_JAVA_9);
 		modifier = ACC_MODULE;
 		name("module-info");
 
@@ -456,7 +490,7 @@ public final class CompileUnit extends ConstantData {
 				parent("java/lang/Enum");
 			break;
 			case RECORD:
-				setMinimumBinaryCompatibility(CompilerSpec.COMPATIBILITY_LEVEL_JAVA_17);
+				setMinimumBinaryCompatibility(LavaFeatures.COMPATIBILITY_LEVEL_JAVA_17);
 				acc |= ACC_FINAL|_ACC_RECORD;
 				parent("java/lang/Record");
 			break;
@@ -476,7 +510,7 @@ public final class CompileUnit extends ConstantData {
 		w = wr.except(LITERAL, "cu.name");
 		classIdx = w.pos()+1;
 
-		if (ctx.classes.isSpecEnabled(CompilerSpec.VERIFY_FILENAME) && (acc&ACC_PUBLIC) != 0 && _parent == this && !IOUtil.fileName(source).equals(w.val())) {
+		if (ctx.classes.hasFeature(LavaFeatures.VERIFY_FILENAME) && (acc&ACC_PUBLIC) != 0 && _parent == this && !IOUtil.fileName(source).equals(w.val())) {
 			ctx.report(Kind.SEVERE_WARNING, "cu.filename", source);
 		}
 
@@ -650,7 +684,7 @@ public final class CompileUnit extends ConstantData {
 			}
 
 			// ## 3.1 访问级别和注解
-			acc = ACC_PUBLIC|ACC_STATIC|ACC_STRICT|ACC_FINAL|ACC_ABSTRACT|_ACC_ANNOTATION|_ACC_SEALED|_ACC_NON_SEALED|_ACC_JAVADOC;
+			acc = ACC_PUBLIC|ACC_STATIC|ACC_STRICT|ACC_FINAL|ACC_ABSTRACT|_ACC_ANNOTATION|_ACC_SEALED|_ACC_NON_SEALED|_ACC_JAVADOC|_ACC_ASYNC;
 			switch (modifier & (ACC_INTERFACE|ACC_ANNOTATION)) {
 				case ACC_INTERFACE:
 					acc |= _ACC_DEFAULT|ACC_PRIVATE;
@@ -667,7 +701,7 @@ public final class CompileUnit extends ConstantData {
 				if ((acc & ACC_PRIVATE) == 0) {
 					acc |= ACC_PUBLIC;
 				} else {
-					setMinimumBinaryCompatibility(CompilerSpec.COMPATIBILITY_LEVEL_JAVA_9);
+					setMinimumBinaryCompatibility(LavaFeatures.COMPATIBILITY_LEVEL_JAVA_9);
 				}
 			}
 
@@ -745,7 +779,7 @@ public final class CompileUnit extends ConstantData {
 				IType type1;
 				if (w.type() == lBracket) {
 					// [ra, rb, rc]
-					Generic g = new Generic("roj/compiler/runtime/ReturnStack", 0, Generic.EX_NONE);
+					Generic g = new Generic(GeneratorUtil.RETURNSTACK_TYPE, 0, Generic.EX_NONE);
 					type1 = g;
 					do {
 						g.addChild(readType(wr, TYPE_PRIMITIVE|TYPE_GENERIC));
@@ -782,11 +816,11 @@ public final class CompileUnit extends ConstantData {
 
 				List<String> paramNames = ctx.tmpList; paramNames.clear();
 
-				if ((modifier&ACC_ENUM) != 0) {
+				if (name.equals("<init>") && (modifier&ACC_ENUM) != 0) {
 					paramNames.add("@name");
 					paramNames.add("@ordinal");
 					var par = method.parameters();
-					par.add(new Type("java/lang/String"));
+					par.add(EnumUtil.TYPE_STRING);
 					par.add(Type.std(Type.INT));
 				}
 
@@ -796,9 +830,13 @@ public final class CompileUnit extends ConstantData {
 
 					boolean lsVarargs = false;
 					MethodParameters parAccName;
-					if (ctx.classes.isSpecEnabled(CompilerSpec.ATTR_METHOD_PARAMETERS)) {
+					if (ctx.classes.hasFeature(LavaFeatures.ATTR_METHOD_PARAMETERS)) {
 						parAccName = new MethodParameters();
 						method.putAttr(parAccName);
+						if (name.equals("<init>") && (modifier&ACC_ENUM) != 0) {
+							parAccName.flags.add(new MethodParam(null, ACC_SYNTHETIC));
+							parAccName.flags.add(new MethodParam(null, ACC_SYNTHETIC));
+						}
 					} else {
 						parAccName = null;
 					}
@@ -912,7 +950,9 @@ public final class CompileUnit extends ConstantData {
 						break noMethodBody;
 					}
 
-					lazyTasks.add(ParseTask.Method(this, method, ArrayUtil.copyOf(paramNames)));
+					lazyTasks.add((acc & _ACC_ASYNC) != 0
+						? GeneratorUtil.Generator(this, method, ArrayUtil.copyOf(paramNames))
+						: ParseTask.Method(this, method, ArrayUtil.copyOf(paramNames)));
 					continue;
 				}
 
@@ -1012,8 +1052,8 @@ public final class CompileUnit extends ConstantData {
 				var _type = newAnonymousClass(null);
 				expr = ctx.ep.newAnonymousClass(expr, _type);
 
-				if (ctx.classes.isSpecEnabled(CompilerSpec.SEALED_ENUM)) {
-					setMinimumBinaryCompatibility(CompilerSpec.COMPATIBILITY_LEVEL_JAVA_17);
+				if (ctx.classes.hasFeature(LavaFeatures.SEALED_ENUM)) {
+					setMinimumBinaryCompatibility(LavaFeatures.COMPATIBILITY_LEVEL_JAVA_17);
 
 					var ps = (AttrClassList) attrByName("PermittedSubclasses");
 					if (ps == null) putAttr(ps = new AttrClassList(Attribute.PermittedSubclasses));
@@ -1085,25 +1125,26 @@ public final class CompileUnit extends ConstantData {
 					acc |= _ACC_ANNOTATION;
 					continue;
 				}
-				// n << 22 => conflict mask
-				case PUBLIC -> 		f = (        1 << 22) | ACC_PUBLIC;
-				case PROTECTED -> 	f = (        1 << 22) | ACC_PROTECTED;
-				case PRIVATE -> 	f = (     0b11 << 22) | ACC_PRIVATE;
-				case NATIVE -> 		f = (    0b100 << 22) | ACC_NATIVE;
-				case SYNCHRONIZED ->f = (   0b1000 << 22) | ACC_SYNCHRONIZED;
-				case FINAL -> 		f = (0b1010000 << 22) | ACC_FINAL;
-				case STATIC -> 		f = ( 0b100000 << 22) | ACC_STATIC;
-				case CONST -> 		f = ( 0b110001 << 22) | ACC_PUBLIC | ACC_STATIC | ACC_FINAL;
-				case DEFAULT -> 	f = ( 0b110110 << 22) | _ACC_DEFAULT;
-				case ABSTRACT -> 	f = ( 0b111110 << 22) | ACC_ABSTRACT;
-				case SEALED ->      f = (0b1000000 << 22) | _ACC_SEALED;
-				case NON_SEALED ->  f = (0b1000000 << 22) | _ACC_NON_SEALED;
+				// n << 25 => conflict mask
+				case PUBLIC -> 		f = (        1 << 25) | ACC_PUBLIC;
+				case PROTECTED -> 	f = (        1 << 25) | ACC_PROTECTED;
+				case PRIVATE -> 	f = (     0b11 << 25) | ACC_PRIVATE;
+				case NATIVE -> 		f = (    0b100 << 25) | ACC_NATIVE;
+				case SYNCHRONIZED ->f = (   0b1000 << 25) | ACC_SYNCHRONIZED;
+				case FINAL -> 		f = (0b1010000 << 25) | ACC_FINAL;
+				case STATIC -> 		f = ( 0b100000 << 25) | ACC_STATIC;
+				case CONST -> 		f = ( 0b110001 << 25) | ACC_PUBLIC | ACC_STATIC | ACC_FINAL;
+				case DEFAULT -> 	f = ( 0b110110 << 25) | _ACC_DEFAULT;
+				case ABSTRACT -> 	f = ( 0b111110 << 25) | ACC_ABSTRACT;
+				case SEALED ->      f = (0b1000000 << 25) | _ACC_SEALED;
+				case NON_SEALED ->  f = (0b1000000 << 25) | _ACC_NON_SEALED;
 				case STRICTFP -> 	f = ACC_STRICT; // on method, cannot be used with abstract
 				case VOLATILE -> 	f = ACC_VOLATILE;
 				case TRANSIENT -> 	f = ACC_TRANSIENT;
+				case ASYNC ->       f = _ACC_ASYNC;
 				default -> {
 					wr.retractWord();
-					return acc & ((1<<22) - 1);
+					return acc & ((1<<25) - 1);
 				}
 			}
 
@@ -1448,7 +1489,7 @@ public final class CompileUnit extends ConstantData {
 
 				ctx.disableRawTypeWarning = true;
 			}
-			ctx.resolveType(field.fieldType());
+			field.fieldType(ctx.transformPseudoType(ctx.resolveType(field.fieldType())).rawType());
 
 			ctx.disableRawTypeWarning = false;
 		}
@@ -1465,8 +1506,8 @@ public final class CompileUnit extends ConstantData {
 
 				ctx.disableRawTypeWarning = true;
 			}
-			for (int j = 0; j < par.size(); j++) ctx.resolveType(par.get(j));
-			ctx.resolveType(method.returnType());
+			for (int j = 0; j < par.size(); j++) par.set(j, ctx.transformPseudoType(ctx.resolveType(par.get(j))).rawType());
+			method.setReturnType(ctx.transformPseudoType(ctx.resolveType(method.returnType())).rawType());
 
 			ctx.disableRawTypeWarning = false;
 		}
@@ -1521,8 +1562,7 @@ public final class CompileUnit extends ConstantData {
 		}
 
 		// annotation
-		for (Map.Entry<Attributed, List<AnnotationPrimer>> annotated : annoTask.entrySet()) {
-			var list = annotated.getValue();
+		for (var list : annoTask.values()) {
 			for (int i = 0; i < list.size(); i++) {
 				var a = list.get(i);
 				resolveAnnotationType(ctx, a);
@@ -1533,17 +1573,14 @@ public final class CompileUnit extends ConstantData {
 							for (AnnVal val : array.value) {
 								var a1 = (AnnotationPrimer) ((AnnValAnnotation) val).value;
 								resolveAnnotationType(ctx, a1);
-								annoTask.computeIfAbsent(null, Helpers.fnArrayList()).add(a1);
 							}
 						} else {
 							var a1 = (AnnotationPrimer) ((AnnValAnnotation) value).value;
 							resolveAnnotationType(ctx, a1);
-							annoTask.computeIfAbsent(null, Helpers.fnArrayList()).add(a1);
 						}
 					}
 				}
 			}
-			//ctx.classes.invokeAnnotationProcessorPre0(this, annotated.getKey(), list);
 		}
 	}
 	private void resolveAnnotationType(LocalContext ctx, AnnotationPrimer a) {
@@ -1806,7 +1843,7 @@ public final class CompileUnit extends ConstantData {
 		var mn = new MethodNode(acc, this.name, name, desc);
 		methods.add(mn);
 		if ((acc & (ACC_ABSTRACT|ACC_NATIVE)) != 0) return Helpers.nonnull();
-		var cw = ctx.classes.createMethodPoet(this, mn);
+		var cw = ctx.classes.createMethodWriter(this, mn);
 		mn.putAttr(new AttrCodeWriter(cp, mn, cw));
 		return cw;
 	}
@@ -1941,7 +1978,7 @@ public final class CompileUnit extends ConstantData {
 		// check annotations
 		MyHashMap<String, Object> dup = ctx.tmpMap1, extra = ctx.tmpMap2;
 		var missed = ctx.tmpSet;
-		for (Map.Entry<Attributed, List<AnnotationPrimer>> annotated : annoTask.entrySet()) {
+		for (var annotated : annoTask.entrySet()) {
 			Annotations inv = null, vis = null;
 
 			dup.clear();
@@ -1950,17 +1987,11 @@ public final class CompileUnit extends ConstantData {
 				var a = list.get(i);
 				ctx.lexer.index = a.pos;
 
-				var type = tr.resolve(ctx, a.type());
-				if (type == null) {
-					ctx.report(Kind.ERROR, "symbol.error.noSuchSymbol", "symbol.type", a.type(), ctx.currentCodeBlockForReport());
-					continue;
-				}
-				a.setType(type.name());
+				String type = a.type();
+				var desc = ctx.classes.getAnnotationDescriptor(ctx.classes.getClassInfo(type));
 
-				var desc = ctx.classes.getAnnotationDescriptor(type);
 				Object prev;
-				// S2会给嵌套的注解增加key=null
-				if (annotated.getKey() != null) if (!desc.stackable && (prev = dup.putIfAbsent(type.name(), i)) != null) {
+				if (!desc.stackable && (prev = dup.putIfAbsent(type, i)) != null) {
 					if (desc.repeatOn == null) ctx.report(Kind.ERROR, "cu.annotation.noRepeat", type);
 					else {
 						List<AnnVal> values;
@@ -1979,7 +2010,7 @@ public final class CompileUnit extends ConstantData {
 								list1.set(list1.indexOf(removable), repeat);
 							}
 
-							dup.put(type.name, values);
+							dup.put(type, values);
 						} else {
 							values = Helpers.cast(prev);
 						}
@@ -2024,7 +2055,7 @@ public final class CompileUnit extends ConstantData {
 				if (!missed.isEmpty()) ctx.report(Kind.ERROR, "cu.annotation.missing", type, missed);
 			}
 
-			ctx.classes.invokeAnnotationProcessor(this, annotated.getKey(), list);
+			ctx.classes.runAnnotationProcessor(this, annotated.getKey(), list);
 		}
 		annoTask.clear();
 	}
@@ -2058,15 +2089,12 @@ public final class CompileUnit extends ConstantData {
 			if (c.name().endsWith("/package-info")) mask = AnnotationSelf.PACKAGE;
 			else if (c.name().equals("module-info")) mask = AnnotationSelf.MODULE;
 			else mask = (c.modifier()&Opcodes.ACC_ANNOTATION) != 0 ? AnnotationSelf.ANNOTATION_TYPE : AnnotationSelf.TYPE;
-		} else if (key instanceof IType) {
-			// TYPE_PARAMETER, TYPE_USE
-			throw new ResolveException("unsupported case");
 		} else if (key instanceof ParamAnnotationRef) {
 			mask = AnnotationSelf.PARAMETER;
 		} else if (key instanceof Variable) {
 			mask = AnnotationSelf.LOCAL_VARIABLE;
 		} else {
-			throw new ResolveException("unsupported case");
+			throw new AssertionError("不支持的注解目标："+key.getClass());
 		}
 		return (ctx.applicableTo&mask) != 0;
 	}
@@ -2113,16 +2141,14 @@ public final class CompileUnit extends ConstantData {
 
 		int v = getMethod("<clinit>");
 		if (v < 0) {
-			synchronized (getStage4Lock()) {
-				v = methods.size();
-				methods.add(new MethodNode(ACC_PUBLIC|ACC_STATIC, name, "<clinit>", "()V"));
-			}
+			v = methods.size();
+			methods.add(new MethodNode(ACC_PUBLIC|ACC_STATIC, name, "<clinit>", "()V"));
 		}
 
 		MethodNode node = methods.get(v);
-		clinit = ctx.classes.createMethodPoet(this, node);
+		clinit = ctx.classes.createMethodWriter(this, node);
 		node.putAttr(new AttrCodeWriter(cp, node, clinit));
-		clinit.visitSize(10,10);
+		clinit.visitSizeMax(10,0);
 		return clinit;
 	}
 	public MethodWriter getGlobalInit() {
@@ -2174,7 +2200,7 @@ public final class CompileUnit extends ConstantData {
 			// common parent of all constructor throws'
 			mn.putAttr(new AttrClassList(Attribute.Exceptions, SimpleList.asModifiableList(strings)));
 		}
-		return glinit = ctx.classes.createMethodPoet(this, mn);
+		return glinit = ctx.classes.createMethodWriter(this, mn);
 	}
 	private DynByteBuf glInitBytes;
 	public void appendGlobalInit(CodeWriter target, LineNumberTable lines) {
@@ -2189,10 +2215,7 @@ public final class CompileUnit extends ConstantData {
 	public int getAssertEnabled() {
 		if (assertionId >= 0) return assertionId;
 
-		int fid;
-		synchronized (getStage4Lock()) {
-			fid = newField(ACC_PRIVATE | ACC_STATIC | ACC_FINAL | ACC_SYNTHETIC, "$assertionEnabled", "Z");
-		}
+		int fid = newField(ACC_PRIVATE | ACC_STATIC | ACC_FINAL | ACC_SYNTHETIC, "$assertionEnabled", "Z");
 		assertionId = fid;
 
 		MethodWriter initAssert;
@@ -2219,10 +2242,6 @@ public final class CompileUnit extends ConstantData {
 		return i;
 	}
 
-	// 异步操作methods和fields时需要这个锁
-	// TODO 如果把内部类放在同一个线程中，就不需要这个锁了
-	public Object getStage4Lock() {return methods;}
-
 	public void S4_Code() throws ParseException {
 		var ctx = LocalContext.get();
 		ctx.setClass(this);
@@ -2244,7 +2263,8 @@ public final class CompileUnit extends ConstantData {
 		finalFields.clear();
 
 		// 隐式构造器
-		if (glinit != null && glInitBytes == null) {
+		if (glinit != null && glInitBytes == null && extraModifier != (ACC_FINAL|ACC_INTERFACE)) {
+			glinit.visitSizeMax(10,0);
 			glinit.one(Opcodes.RETURN);
 			glinit.finish();
 		}
@@ -2279,8 +2299,11 @@ public final class CompileUnit extends ConstantData {
 
 	public void j11PrivateConstructor(MethodNode method) {
 		// package-private on demand
-		if ((method.modifier&Opcodes.ACC_PRIVATE) != 0 && !ctx.classes.isSpecEnabled(CompilerSpec.NESTED_MEMBER)) {
+		if ((method.modifier&Opcodes.ACC_PRIVATE) != 0 && !ctx.classes.hasFeature(LavaFeatures.NESTED_MEMBER)) {
 			method.modifier ^= Opcodes.ACC_PRIVATE;
 		}
 	}
+
+	private int accessorId;
+	public String getNextAccessorName() {return "`acc$"+accessorId++;}
 }

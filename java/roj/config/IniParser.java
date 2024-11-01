@@ -10,6 +10,8 @@ import roj.text.TextUtil;
 
 import java.util.Map;
 
+import static roj.config.Flags.NO_DUPLICATE_KEY;
+import static roj.config.Flags.ORDERED_MAP;
 import static roj.config.JSONParser.*;
 import static roj.config.Word.*;
 
@@ -22,7 +24,7 @@ public final class IniParser extends Parser {
 
 	private static final short eq = rBrace;
 	// readWord() checked WHITESPACE
-	private static final MyBitSet iniSymbol_LN = MyBitSet.from("[]=\r\n");
+	private static final MyBitSet iniSymbol_LN = MyBitSet.from("\r\n");
 
 	private static final TrieTree<Word> INI_TOKENS = new TrieTree<>();
 	private static final MyBitSet INI_LENDS = new MyBitSet();
@@ -38,7 +40,7 @@ public final class IniParser extends Parser {
 		this.flag = flags;
 		init(text);
 		try {
-			MyHashMap<String, CEntry> map = (flag&ORDERED_MAP) != 0 ? new LinkedMyHashMap<>() : new MyHashMap<>();
+			MyHashMap<String, CEntry> map = new LinkedMyHashMap<>();
 
 			String name = CMap.CONFIG_TOPLEVEL;
 			while (true) {
@@ -54,7 +56,8 @@ public final class IniParser extends Parser {
 				var in = input;
 				int j = TextUtil.gIndexOf(in, ']', index);
 				if (j < 0) throw err("no more");
-				name = Interner.intern(in, index, index = j+1);
+				name = Interner.intern(in, index, j);
+				index = j+1;
 
 				if ((flags & NO_DUPLICATE_KEY) != 0 && map.containsKey(name)) throw err("重复的key: "+name);
 			}
@@ -172,7 +175,7 @@ public final class IniParser extends Parser {
 
 				index = i-1;
 				try {
-					return NUMBER.contains(c) ? digitReader(false, 0) : readLiteral();
+					return NUMBER.contains(c) ? digitReader(false, 0) : readSymbol();
 				} finally {
 					literalEnd = INI_LENDS;
 				}
@@ -186,7 +189,7 @@ public final class IniParser extends Parser {
 		if (ALWAYS_ESCAPE) return false;
 
 		for (int i = 0; i < key.length(); i++) {
-			if (INI_LENDS.contains(key.charAt(i))) return false;
+			if (iniSymbol_LN.contains(key.charAt(i))) return false;
 		}
 		return key.length() > 0;
 	}

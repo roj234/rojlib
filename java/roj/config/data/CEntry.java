@@ -8,7 +8,6 @@ import roj.config.serial.CVisitor;
 import roj.io.IOUtil;
 import roj.text.CharList;
 import roj.text.TextUtil;
-import roj.util.DynByteBuf;
 
 import java.util.List;
 import java.util.Map;
@@ -47,7 +46,7 @@ public abstract class CEntry {
 				case '"': quoted ^= true; continue;
 				case '.': case '[': if (quoted) break;
 					if (sql.charAt(prevI) != ']') {
-						if (node.getType() != Type.MAP) throw new IllegalStateException("期待映射 '" + sql.subSequence(0, prevI) + "' 实际为 " + node.getType());
+						if (node.getType() != Type.MAP) throw new IllegalStateException("期待映射 '"+sql.subSequence(0, prevI)+"' 实际为 "+node.getType());
 
 						node = getInMap(node, tmp, flag, c=='[');
 						tmp.clear();
@@ -55,17 +54,17 @@ public abstract class CEntry {
 					}
 
 					if (c == '[') {
-						if (node.getType() != Type.LIST) throw new IllegalStateException("期待列表 '" + sql.subSequence(0, i) + "' 实际为 " + node.getType());
+						if (node.getType() != Type.LIST) throw new IllegalStateException("期待列表 '"+sql.subSequence(0, i)+"' 实际为 "+node.getType());
 
 						int j = ++i;
 						foundEnd: {
 							for (; j < sql.length(); j++) {
 								if (sql.charAt(j) == ']') break foundEnd;
 							}
-							throw new IllegalArgumentException("invalid ListEq: not end: " + sql);
+							throw new IllegalArgumentException("invalid ListEq: not end: "+sql);
 						}
 
-						if (j==i) throw new IllegalArgumentException("invalid ListEq: not number: " + sql);
+						if (j==i) throw new IllegalArgumentException("invalid ListEq: not number: "+sql);
 						if (tmp.length() > 0) throw new AssertionError();
 						int pos = TextUtil.parseInt(tmp.append(sql, i, j));
 						tmp.clear();
@@ -99,7 +98,7 @@ public abstract class CEntry {
 								return entry;
 							}
 						} else if ((c=sql.charAt(j+1)) != '.' && c != '[') {
-							throw new IllegalArgumentException("invalid ListEq: excepting '.' or '[' at "+(j+1)+": " + sql);
+							throw new IllegalArgumentException("invalid ListEq: excepting '.' or '[' at "+(j+1)+": "+sql);
 						} else if (c == '.') j++;
 
 						node = node.asList().get(pos);
@@ -111,7 +110,7 @@ public abstract class CEntry {
 			tmp.append(c);
 		}
 
-		if (node.getType() != Type.MAP) throw new IllegalStateException("match failed: '" + sql.subSequence(0, prevI) + "' is not a MAP but " + node.getType());
+		if (node.getType() != Type.MAP) throw new IllegalStateException("match failed: '"+sql.subSequence(0, prevI)+"' is not a MAP but "+node.getType());
 
 		if ((flag & Q_RETURN_CONTAINER) != 0) return node;
 
@@ -147,14 +146,15 @@ public abstract class CEntry {
 
 	////// easy caster
 
-	public boolean asBool() { throw new ClassCastException(getType() + "不是布尔值"); }
-	public int asInteger() { throw new ClassCastException(getType() + "不是整数"); }
-	public long asLong() { throw new ClassCastException(getType() + "不是长整数"); }
-	public float asFloat() { throw new ClassCastException(getType() + "不是浮点数"); }
-	public double asDouble() { throw new ClassCastException(getType() + "不是双精度浮点数"); }
-	public String asString() { throw new ClassCastException(getType() + "不是字符串"); }
-	public CMap asMap() { throw new ClassCastException(getType() + "不是映射"); }
-	public CList asList() { throw new ClassCastException(getType() + "不是列表"); }
+	public boolean asBool() { throw new ClassCastException(getType()+"不是布尔值"); }
+	@Deprecated public final int asInteger() { return asInt(); }
+	public int asInt() { throw new ClassCastException(getType()+"不是整数"); }
+	public long asLong() { throw new ClassCastException(getType()+"不是长整数"); }
+	public float asFloat() { throw new ClassCastException(getType()+"不是浮点数"); }
+	public double asDouble() { throw new ClassCastException(getType()+"不是双精度浮点数"); }
+	public String asString() { throw new ClassCastException(getType()+"不是字符串"); }
+	public CMap asMap() { throw new ClassCastException(getType()+"不是映射"); }
+	public CList asList() { throw new ClassCastException(getType()+"不是列表"); }
 
 	////// toString methods
 
@@ -166,13 +166,10 @@ public abstract class CEntry {
 	public abstract Object raw();
 	public Object rawDeep() { return raw(); }
 
-	protected CharList toINI(CharList sb, int depth) { return toJSON(sb, 0); }
-	public final CharList appendINI(CharList sb) { return toINI(sb, 0); }
-
 	protected CharList toTOML(CharList sb, int depth, CharSequence chain) { return toJSON(sb, 0); }
 	public final CharList appendTOML(CharList sb, CharList tmp) { return toTOML(sb, 0, tmp); }
 
 	protected abstract CharList toJSON(CharList sb, int depth);
 
-	public void toB_encode(DynByteBuf w) { throw new ClassCastException(getType() + "无法序列化为B-encode"); }
+	public CEntry __call(CEntry self, CEntry args) {throw new UnsupportedOperationException(getClass()+"不是函数");}
 }

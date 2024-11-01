@@ -10,6 +10,8 @@ import roj.util.Helpers;
 
 import java.util.Map;
 
+import static roj.config.Flags.NO_DUPLICATE_KEY;
+import static roj.config.Flags.ORDERED_MAP;
 import static roj.config.Word.*;
 
 /**
@@ -33,8 +35,6 @@ public class JSONParser extends Parser {
 		JSON_TOKENS.put("/*", new Word().init(0, ST_MULTI_LINE_COMMENT, "*/"));
 	}
 	{ tokens = JSON_TOKENS; literalEnd = JSON_LENDS; }
-
-	public static final int NO_DUPLICATE_KEY = 1, COMMENT = 2, ORDERED_MAP = 4;
 
 	public static CEntry parses(CharSequence cs) throws ParseException { return new JSONParser().parse(cs, 0); }
 

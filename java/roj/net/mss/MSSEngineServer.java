@@ -1,19 +1,20 @@
 package roj.net.mss;
 
 import roj.collect.CharMap;
-import roj.collect.IntMap;
 import roj.concurrent.OperationDone;
 import roj.crypt.HMAC;
 import roj.crypt.RCipherSpi;
 import roj.io.IOUtil;
+import roj.io.buf.BufferPool;
+import roj.text.TextUtil;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
-import roj.util.Helpers;
 
 import javax.crypto.Cipher;
 import java.security.GeneralSecurityException;
-import java.security.SecureRandom;
 
+import static roj.net.mss.MSSContext.PRESHARED_ONLY;
+import static roj.net.mss.MSSContext.VERIFY_CLIENT;
 import static roj.net.mss.MSSEngineClient.HELLO_RETRY_REQUEST;
 
 /**
@@ -22,64 +23,15 @@ import static roj.net.mss.MSSEngineClient.HELLO_RETRY_REQUEST;
  * @author Roj233
  * @since 2021/12/22 12:21
  */
-public class MSSEngineServer extends MSSEngine {
-	public MSSEngineServer() {}
-	public MSSEngineServer(SecureRandom rnd) {super(rnd);}
-
-	public static final int VERIFY_CLIENT = 0x2;
-
-	@Override
-	public final void switches(int sw) {
-		final int AVAILABLE_SWITCHES = PSC_ONLY | VERIFY_CLIENT;
-		int i = sw & ~AVAILABLE_SWITCHES;
-		if (i != 0) throw new IllegalArgumentException("Illegal switch:"+i);
-
-		flag = (byte) sw;
-	}
-
-	// region inheritor modifiable
-
-	protected IntMap<MSSKeyPair> preSharedCerts;
-	protected MSSSessionManager sessionManager;
-
-	public void setPreSharedCertificate(IntMap<MSSPublicKey> certs) {
-		assertInitial();
-		if (certs != null && !certs.isEmpty()) {
-			for (MSSPublicKey key : certs.values()) {
-				if (!(key instanceof MSSKeyPair))
-					throw new IllegalArgumentException("Should be private key pair");
-			}
-		}
-		preSharedCerts = Helpers.cast(certs);
-	}
-
-	public void setSessionManager(MSSSessionManager sm) {
-		assertInitial();
-		sessionManager = sm;
-	}
-
-	public MSSSessionManager getSessionManager() { return sessionManager; }
-
-	protected CharMap<CipherSuite> getCipherSuiteMap() {
-		CharMap<CipherSuite> map = new CharMap<>(cipherSuites.length);
-		for (CipherSuite c : cipherSuites) {
-			map.put((char) c.id, c);
-		}
-		return map;
-	}
-
+final class MSSEngineServer extends MSSEngine {
+	private RCipherSpi preDecoder;
+	MSSEngineServer(MSSContext config) {super(config, PRESHARED_ONLY|VERIFY_CLIENT);}
 	/**
 	 * 开启0-RTT以及Encrypted_Extension
 	 */
-	protected boolean clientShouldReply() { return (flag & VERIFY_CLIENT) != 0; }
+	private boolean noReply() {return (flag & VERIFY_CLIENT) == 0;}
 
-	// endregion
-	// region Solid Handshake Progress
-
-	private RCipherSpi preDecoder;
-
-	@Override
-	public final boolean isClientMode() { return false; }
+	@Override public final boolean isClient() {return false;}
 
 	@Override
 	@SuppressWarnings("fallthrough")
@@ -87,15 +39,15 @@ public class MSSEngineServer extends MSSEngine {
 		if (stage == HS_DONE) return HS_OK;
 
 		if ((flag & WRITE_PENDING) != 0) {
-			int v = ensureWritable(tx, toWrite.readableBytes()+4);
+			int v = ensureWritable(tx, toWrite.readableBytes()+3);
 			if (v != 0) return v;
 
-			tx.put(H_SERVER_HELLO).putMedium(toWrite.readableBytes()).put(toWrite);
-			free(toWrite);
+			tx.put(H_SERVER_PACKET).putShort(toWrite.readableBytes()).put(toWrite);
+			BufferPool.reserve(toWrite);
 			toWrite = null;
 
 			flag &= ~WRITE_PENDING;
-			if (!clientShouldReply()) stage = HS_DONE;
+			if (preDecoder == null && noReply()) stage = HS_DONE;
 			return HS_OK;
 		}
 
@@ -105,15 +57,15 @@ public class MSSEngineServer extends MSSEngine {
 			var type = rx.get(rx.rIndex);
 			switch (stage) {
 				case CLIENT_HELLO, RETRY_KEY_EXCHANGE:
-					if (type == H_CLIENT_HELLO) break validated;
+					if (type == H_CLIENT_PACKET) break validated;
 				break;
 				case PREFLIGHT_WAIT:
 					stage = FINISH_WAIT;
 					if (type == P_PREDATA) break validated;
 				case FINISH_WAIT:
 					preDecoder = null;
-					if (type == H_ENCRYPTED_EXTENSION) break validated;
-					if (!clientShouldReply()) {
+					if (type == H_CLIENT_PACKET) break validated;
+					if (noReply()) {
 						stage = HS_DONE;
 						return HS_OK;
 					}
@@ -141,97 +93,7 @@ public class MSSEngineServer extends MSSEngine {
 		return HS_OK;
 	}
 
-	public final int handshakeTLS13(DynByteBuf out, DynByteBuf in) throws MSSException {
-		if (stage == HS_DONE) return HS_OK;
-
-		if ((flag & WRITE_PENDING) != 0) {
-			int v = ensureWritable(out, toWrite.readableBytes()+4);
-			if (v != 0) return v;
-
-			out.put(H_SERVER_HELLO).putMedium(toWrite.readableBytes()).put(toWrite);
-			free(toWrite);
-			toWrite = null;
-
-			flag &= ~WRITE_PENDING;
-			return HS_OK;
-		}
-
-		switch (stage) {
-			case INITIAL:
-				handleClientHelloSSL(out, in);
-				break;
-			case SERVER_HELLO:
-		}
-		return HS_OK;
-	}
-	private int handleClientHelloSSL(DynByteBuf out, DynByteBuf in) throws MSSException {
-		if (in.readShort() != 0x0303) return error(VERSION_MISMATCH, "");
-
-		byte[] rnd = sharedKey = new byte[64];
-		random.nextBytes(rnd);
-		in.readFully(rnd,0,32);
-
-		int len = in.readUnsignedByte();
-		if (len > 32) return error(ILLEGAL_PARAM, "session_id");
-		DynByteBuf legacy_session_id = in.slice(len);
-
-		CipherSuite suite = null;
-		CharMap<CipherSuite> map = getCipherSuiteMap();
-		len = in.readUnsignedShort();
-		if (len > 32767) return error(ILLEGAL_PACKET, "cipher_suite.length");
-		for (int i = 0; i < len; i++) {
-			CipherSuite mySuite = map.get((char) in.readUnsignedShort());
-			if (mySuite != null) {
-				suite = mySuite;
-				in.rIndex += len-i-1;
-				break;
-			}
-		}
-
-		if (suite == null) {
-			System.arraycopy(HELLO_RETRY_REQUEST, 0, rnd, 32, 32);
-		}
-
-		if (in.readUnsignedShort() != 0x0100) return error(NEGOTIATION_FAILED, "compression_method");
-
-		CharMap<DynByteBuf> extOut = new CharMap<>();
-		CharMap<DynByteBuf> extIn = Extension.read(in);
-
-		// 0-RTT
-		if (sessionManager != null) {
-
-		}
-
-		processExtensions(extIn, extOut, 1);
-		// ProtocolVersion legacy_version = 0x0303;    /* TLS v1.2 */
-		// Random random;
-		// opaque legacy_session_id_echo<0..32>;
-		// CipherSuite cipher_suite;
-		// uint8 legacy_compression_method = 0;
-		// Extension extensions<6..2^16-1>;
-
-		ByteList ob = IOUtil.getSharedByteBuf();
-		ob.putShort(0x0303)
-		  .put(rnd,32,32)
-		  .put(legacy_session_id.readableBytes()).put(legacy_session_id)
-		  .putShort(suite.id)
-		  .put(0);
-
-		Extension.write(extOut, ob);
-
-		int v = ensureWritable(out, ob.length() + 4);
-		if (v != 0) {
-			flag |= WRITE_PENDING;
-			toWrite = heapBuffer(ob.length()).put(ob);
-			return v;
-		}
-
-		out.put(H_SERVER_HELLO).putMedium(ob.length()).put(ob);
-		return HS_OK;
-	}
-
 	// ID client_hello
-	// u4 magic
 	// u1 version (反正我一直都是破坏性更改)
 	// opaque[32] random
 	// u2[2..2^16-2] ciphers
@@ -248,27 +110,23 @@ public class MSSEngineServer extends MSSEngine {
 		rx.readFully(sharedRandom,0,32);
 
 		CipherSuite suite = null;
-		CharMap<CipherSuite> map = getCipherSuiteMap();
+		var map = config.getCipherSuites();
 		int len = rx.readUnsignedByte();
-		int suite_id = -1;
 		for (int i = 0; i < len; i++) {
-			var mySuite = map.get((char) rx.readUnsignedShort());
-			if (mySuite != null) {
-				suite = mySuite;
-				suite_id = i;
+			if ((suite = map.get(rx.readChar())) != null) {
 				rx.skipBytes((len-i-1) << 1);
 				break;
 			}
 		}
 		if (suite == null) return error(NEGOTIATION_FAILED, "cipher_suite");
 
-		var ke = getKeyExchange(rx.readUnsignedByte());
+		var ke = config.getKeyExchange(rx.readUnsignedByte());
 		if (ke == null) {
 			if (stage == RETRY_KEY_EXCHANGE) return error(ILLEGAL_PARAM, "hello_retry");
 			stage = RETRY_KEY_EXCHANGE;
 
-			tx.put(H_SERVER_HELLO).putMedium(39)
-			  .put(PROTOCOL_VERSION).put(EMPTY_32).putShort(0xFFFF).putInt(getSupportedKeyExchanges());
+			tx.put(H_SERVER_PACKET).putShort(39)
+			  .put(PROTOCOL_VERSION).put(EMPTY_32).putShort(0xFFFF).putInt(config.getSupportedKeyExchanges());
 			return HS_OK;
 		} else {
 			ke.init(random);
@@ -281,11 +139,11 @@ public class MSSEngineServer extends MSSEngine {
 		CharMap<DynByteBuf> extOut = new CharMap<>();
 		CharMap<DynByteBuf> extIn = Extension.read(rx);
 
+		DynByteBuf tmp;
 		// 0-RTT
 		zeroRtt:
-		if (sessionManager != null && extIn.containsKey(Extension.session)) {
-			DynByteBuf id = extIn.remove(Extension.session);
-			MSSSession sess = sessionManager.getOrCreateSession(extIn, id);
+		if ((tmp = extIn.remove(Extension.session)) != null) {
+			var sess = config.getOrCreateSession(context, tmp, 1);
 
 			// 如果session不存在or新建则丢弃0-RTT消息
 			if (sess == null) break zeroRtt;
@@ -300,36 +158,34 @@ public class MSSEngineServer extends MSSEngine {
 			extOut.put(Extension.session, new ByteList(sess.id));
 		}
 
-		// Pre-shared certificate to decrease bandwidth consumption
+		// Pre-shared certificate
 		MSSKeyPair kp = null;
-		if (preSharedCerts != null) {
-			DynByteBuf psc = extIn.remove(Extension.pre_shared_certificate);
-			if (psc == null) {
-				if ((flag & PSC_ONLY) != 0) return error(NEGOTIATION_FAILED, "pre_shared_certificate only");
-			} else {
+		if ((tmp = extIn.remove(Extension.pre_shared_certificate)) != null) {
+			var certs = config.getPreSharedCerts();
+			if (certs != null) while (tmp.isReadable()) {
 				int i;
-				while (psc.isReadable()) {
-					kp = preSharedCerts.get(i = psc.readInt());
-					if (kp != null) {
-						extOut.put(Extension.pre_shared_certificate, heapBuffer(4).putInt(i));
-						break;
-					}
+				kp = certs.get(i = tmp.readInt());
+				if (kp != null) {
+					extOut.put(Extension.pre_shared_certificate, config.buffer(4).putInt(i));
+					break;
 				}
 			}
+		} else {
+			if ((flag & PRESHARED_ONLY) != 0) return error(NEGOTIATION_FAILED, "pre_shared_certificate only");
 		}
 
 		if (kp == null) {
-			kp = getCertificate(extIn, supported_certificate);
+			kp = config.getCertificate(context, extIn, supported_certificate);
 			if (kp == null) return error(NEGOTIATION_FAILED, "certificateType");
 
 			byte[] data = kp.encode();
-			extOut.put(Extension.certificate, heapBuffer(1+data.length).put(kp.format()).put(data));
+			extOut.put(Extension.certificate, config.buffer(1+data.length).put(kp.format()).put(data));
 		}
 
 		if ((flag & VERIFY_CLIENT) != 0)
-			extOut.put(Extension.certificate_request, heapBuffer(4).putInt(getSupportCertificateType()));
+			extOut.put(Extension.certificate_request, config.buffer(4).putInt(config.getSupportCertificateType()));
 
-		processExtensions(extIn, extOut, 1);
+		config.processExtensions(context, extIn, extOut, 1);
 
 		// ID server_hello
 		// u1 version
@@ -340,52 +196,55 @@ public class MSSEngineServer extends MSSEngine {
 		// opaque[1..2^8-1] encrypted_signature
 
 		ByteList ob = IOUtil.getSharedByteBuf();
-		ob.put(PROTOCOL_VERSION).put(sharedRandom,32,32).putShort(suite_id);
+		ob.put(PROTOCOL_VERSION).put(sharedRandom,32,32).putShort(suite.id);
 		ke.writePublic(ob.putShort(ke.length()));
 
 		// signer data:
 		// key=certificate
-		// empty byte 32
 		// client_hello body
+		// empty byte 32
 		// server_hello body (not encrypted)
-		HMAC sign = new HMAC(suite.sign.get());
-		sign.setSignKey(deriveKey("verify_s", sign.getDigestLength()));
-		sign.update(EMPTY_32);
-		sign.update(rx.slice(packetBegin, rx.rIndex-packetBegin));
+		HMAC signData = new HMAC(suite.sign.get());
+		signData.setSignKey(deriveKey("verify_s", signData.getDigestLength()));
+		signData.update(rx.slice(packetBegin, rx.rIndex-packetBegin));
+		signData.update(EMPTY_32);
 
 		int pos = ob.wIndex();
 		Extension.write(extOut, ob);
 
 		// signature of not encrypted data
-		sign.update(ob);
-		byte[] bb = CipherSuite.getKeyFormat(kp.format()).sign(kp, random, sign.digestShared());
-		ob.putShort(bb.length).put(bb);
+		signData.update(ob);
+
+		byte[] signBytes = CipherSuite.getKeyFormat(kp.format()).sign(kp, random, signData.digestShared());
+		ob.putShort(signBytes.length).put(signBytes);
 
 		stage = PREFLIGHT_WAIT;
 		encoder = suite.cipher.get();
 		decoder = suite.cipher.get();
 
-		encoder.init(Cipher.ENCRYPT_MODE, deriveKey("s2c0", suite.cipher.getKeySize()), null, getPRNG("s2c"));
-		decoder.init(Cipher.DECRYPT_MODE, deriveKey("c2s0", suite.cipher.getKeySize()), null, getPRNG("c2s"));
+		var prng = getPRNG("comm_prng");
+		// 和Client是反的，因为PRNG顺序
+		decoder.init(Cipher.DECRYPT_MODE, deriveKey("c2s0", suite.cipher.getKeySize()), null, prng);
+		encoder.init(Cipher.ENCRYPT_MODE, deriveKey("s2c0", suite.cipher.getKeySize()), null, prng);
 
 		ob.rIndex = pos;
-		DynByteBuf encb = heapBuffer(encoder.engineGetOutputSize(ob.readableBytes()));
+		DynByteBuf encb = config.buffer(encoder.engineGetOutputSize(ob.readableBytes()));
 		try {
 			encoder.cryptFinal(ob, encb);
 			ob.wIndex(pos); ob.put(encb);
 			ob.rIndex = 0;
 		} finally {
-			free(encb);
+			BufferPool.reserve(encb);
 		}
 
-		int v = ensureWritable(tx, ob.length() + 4);
+		int v = ensureWritable(tx, ob.readableBytes()+3);
 		if (v != 0) {
 			flag |= WRITE_PENDING;
-			toWrite = heapBuffer(ob.length()).put(ob);
+			toWrite = config.buffer(ob.readableBytes()).put(ob);
 			return v;
 		}
 
-		tx.put(H_SERVER_HELLO).putMedium(ob.length()).put(ob);
+		tx.put(H_SERVER_PACKET).putShort(ob.readableBytes()).put(ob);
 		// 半个通道已经建立：服务器可以发送数据了
 		return HS_OK;
 	}
@@ -420,20 +279,110 @@ public class MSSEngineServer extends MSSEngine {
 			byte[] sign = buf.readBytes(buf.readUnsignedShort());
 
 			int type = buf.readUnsignedByte();
-			if ((getSupportCertificateType() & (1 << type)) == 0) return error(NEGOTIATION_FAILED, "unsupported_certificate_type");
+			if ((config.getSupportCertificateType() & (1 << type)) == 0) return error(NEGOTIATION_FAILED, "unsupported_certificate_type");
 
-			MSSPublicKey key = checkCertificate(type, buf);
+			MSSPublicKey key = config.checkCertificate(context, type, buf);
 			try {
 				if (!CipherSuite.getKeyFormat(key.format()).verify(key, sharedKey, sign)) throw OperationDone.INSTANCE;
 			} catch (Exception e) {
 				return error(ILLEGAL_PARAM, "invalid signature");
 			}
 		}
-		processExtensions(extIn, null, 3);
+		config.processExtensions(context, extIn, null, 3);
 
 		stage = HS_DONE;
 		return HS_OK;
 	}
 
+	private int ensureWritable(DynByteBuf out, int len) {
+		int size = len - out.writableBytes();
+		return size > 0 ? size : 0;
+	}
+
+	// region TLS1.3
+	private static final byte[] FAKE_SESSION_ID = TextUtil.hex2bytes("e0e1e2e3 e4e5e6e7 e8e9eaeb ecedeeef f0f1f2f3 f4f5f6f7 f8f9fafb fcfdfeff");
+	public final int handshakeTLS13(DynByteBuf out, DynByteBuf in) throws MSSException {
+		if (stage == HS_DONE) return HS_OK;
+
+		if ((flag & WRITE_PENDING) != 0) {
+			// ...
+		}
+
+		switch (stage) {
+			case INITIAL:
+				handleClientHelloSSL(out, in);
+				break;
+			case SERVER_HELLO:
+		}
+		return HS_OK;
+	}
+	private int handleClientHelloSSL(DynByteBuf out, DynByteBuf in) throws MSSException {
+		if (in.readableBytes() < 5) return -1;
+		int ridx = in.rIndex;
+		if (in.readMedium() != 0x160301) return error(ILLEGAL_PACKET, "protocol version");
+		if (in.readableBytes() < in.readUnsignedShort()) {
+			in.rIndex = ridx;
+			return -1;
+		}
+
+		if (in.readUnsignedByte() != 0x01) return error(ILLEGAL_PACKET, "handshake record");
+		if (in.readableBytes() < in.readMedium()) return error(ILLEGAL_PACKET, "");
+		if (in.readUnsignedShort() != 0x0303) return error(VERSION_MISMATCH, "TLS12");
+
+		byte[] rnd = sharedKey = new byte[64];
+		random.nextBytes(rnd);
+		in.readFully(rnd,0,32);
+
+		int len = in.readUnsignedByte();
+		if (len > 32) return error(ILLEGAL_PARAM, "session_id");
+		DynByteBuf legacy_session_id = in.slice(len);
+
+		CipherSuite suite = null;
+		CharMap<CipherSuite> map = config.getCipherSuites();
+		len = in.readUnsignedShort();
+		if (len > 32767) return error(ILLEGAL_PACKET, "cipher_suite.length");
+		for (int i = 0; i < len; i++) {
+			CipherSuite mySuite = map.get((char) in.readUnsignedShort());
+			if (mySuite != null) {
+				suite = mySuite;
+				in.rIndex += len-i-1;
+				break;
+			}
+		}
+
+		if (suite == null) {
+			System.arraycopy(HELLO_RETRY_REQUEST, 0, rnd, 32, 32);
+		}
+
+		if (in.readUnsignedShort() != 0x0100) return error(NEGOTIATION_FAILED, "compression_method");
+
+		CharMap<DynByteBuf> extOut = new CharMap<>();
+		CharMap<DynByteBuf> extIn = Extension.read(in);
+
+		// 0-RTT
+		//if (sessionManager != null) {
+
+		//}
+
+		config.processExtensions(context, extIn, extOut, 1);
+		// ProtocolVersion legacy_version = 0x0303;    /* TLS v1.2 */
+		// Random random;
+		// opaque legacy_session_id_echo<0..32>;
+		// CipherSuite cipher_suite;
+		// uint8 legacy_compression_method = 0;
+		// Extension extensions<6..2^16-1>;
+
+		ByteList ob = IOUtil.getSharedByteBuf();
+		ob.putShort(0x0303)
+		  .put(rnd,32,32)
+		  .put(legacy_session_id.readableBytes()).put(legacy_session_id)
+		  .putShort(suite.id)
+		  .put(0);
+
+		Extension.write(extOut, ob);
+
+		out.put(H_SERVER_PACKET).putMedium(ob.length()).put(ob);
+		return HS_OK;
+	}
 	// endregion
 }

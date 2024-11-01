@@ -1,5 +1,6 @@
 package roj.plugins.http.sso;
 
+import org.jetbrains.annotations.Nullable;
 import roj.collect.CollectionX;
 import roj.collect.XHashSet;
 import roj.config.Tokenizer;
@@ -218,13 +219,15 @@ public class SSOPlugin extends Plugin {
 		throw new IllegalRequestException(302);
 	}
 
-	@Interceptor("SSO/UserCheck")
-	public void ssoPermissionManagerCheckOnly(Request req) throws IllegalRequestException {
+	@Nullable
+	public User authorizeExternal(Request req) throws IllegalRequestException {
 		var token = req.cookie().get(COOKIE_ID);
 		if (token != null) {
-			if (verifyToken(req, token.value(), 'L') != null) return;
+			User user = verifyToken(req, token.value(), 'L');
+			if (user != null) return user;
 			req.responseHeader().sendCookieToClient(Collections.singletonList(new Cookie(COOKIE_ID).expires(-1)));
 		}
+		return null;
 	}
 
 	@GET
@@ -242,7 +245,7 @@ public class SSOPlugin extends Plugin {
 	@GET
 	public void logout(Request req, ResponseHeader rh) {
 		req.responseHeader().sendCookieToClient(Collections.singletonList(new Cookie(COOKIE_ID).path("/").expires(-1)));
-		rh.code(302).header("location", "/"+sitePath+"/");
+		rh.code(302).header("location", "/"+sitePath);
 	}
 
 	@POST
@@ -476,7 +479,7 @@ public class SSOPlugin extends Plugin {
 		long expire = LOGIN_TTL + (is_refresh ? -180000 : 0);
 
 		var login_token = makeToken(u, 'L', expire, o, sc);
-		req.responseHeader().sendCookieToClient(Collections.singletonList(new Cookie(COOKIE_ID, login_token).path("/").expires(0).httpOnly(true).sameSite("Strict")));
+		req.responseHeader().sendCookieToClient(Collections.singletonList(new Cookie(COOKIE_ID, login_token).path("/").secure(req.isSecure()).expires(0).httpOnly(true).sameSite("Strict")));
 
 		var refresh_token = makeToken(u, 'R', 86400_000L * 30, o, sc);
 		var access_token = makeToken(u, 'A', ACCESS_TOKEN_TTL, o, sc);

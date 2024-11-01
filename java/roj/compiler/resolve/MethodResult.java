@@ -1,6 +1,5 @@
 package roj.compiler.resolve;
 
-import roj.asm.tree.IClass;
 import roj.asm.tree.MethodNode;
 import roj.asm.tree.attr.Attribute;
 import roj.asm.type.IType;
@@ -9,11 +8,12 @@ import roj.collect.IntMap;
 import roj.compiler.asm.MethodWriter;
 import roj.compiler.context.LocalContext;
 import roj.compiler.diagnostic.Kind;
+import roj.concurrent.Liu;
 
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
-import java.util.stream.Collectors;
+import java.util.function.Function;
 
 import static roj.asm.Opcodes.*;
 
@@ -47,11 +47,11 @@ public final class MethodResult {
 			var list = method.parsedAttr(ctx.classes.getClassInfo(method.owner).cp(), Attribute.Exceptions);
 			if (list == null) return Collections.emptyList();
 			// TODO StreamChain简单的示例
-			return list.value.stream().map(Type::new).collect(Collectors.toList());
+			return Liu.of(list.value).map((Function<String, IType>) Type::new).toList();
 		}
 	}
 
-	public void addExceptions(LocalContext ctx, IClass cn, boolean twr) {
+	public void addExceptions(LocalContext ctx, boolean twr) {
 		for (IType ex : getExceptions(ctx)) {
 			if (twr && ex.owner().equals("java/lang/InterruptedException"))
 				ctx.report(Kind.WARNING, "block.try.interrupted");

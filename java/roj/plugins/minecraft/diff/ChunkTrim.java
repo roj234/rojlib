@@ -35,12 +35,8 @@ public class ChunkTrim {
 	private static TaskPool pool = TaskPool.Common();
 	private static MCTWhitelist whitelist;
 
-	static {
-		try {
-			whitelist = ConfigMaster.JSON.readObject(MCTWhitelist.class, new File("ignore.json"));
-		} catch (IOException | ParseException e) {
-			e.printStackTrace();
-		}
+	public static void init(File file1) throws IOException, ParseException {
+		whitelist = ConfigMaster.JSON.readObject(MCTWhitelist.class, file1);
 	}
 
 	public static void createBackup(File worldDir, File backup) {

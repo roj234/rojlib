@@ -5,6 +5,7 @@ import roj.concurrent.TaskExecutor;
 import roj.config.data.CEntry;
 import roj.config.data.CMap;
 import roj.config.data.Type;
+import roj.io.IOUtil;
 import roj.net.http.IllegalRequestException;
 import roj.net.http.server.*;
 import roj.plugin.PanHttp;
@@ -15,12 +16,13 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Collections;
 import java.util.List;
+import java.util.function.Predicate;
 
 /**
  * @author Roj234
  * @since 2024/7/10 0010 3:17
  */
-public class PHPPlugin extends Plugin implements Router {
+public class PHPPlugin extends Plugin implements Router, Predicate<String> {
 	private Win32FPM fpm;
 
 	@Override
@@ -97,6 +99,13 @@ public class PHPPlugin extends Plugin implements Router {
 		}
 
 		return Response.file(req, new DiskFileInfo(file));
+	}
+
+	// (Optional) for OKRouter Prefix Delegation check
+	@Override
+	public boolean test(String url) {
+		var file = IOUtil.safePath2(fpm.docRoot.getAbsolutePath(), url);
+		return file != null && file.exists();
 	}
 
 	@Override

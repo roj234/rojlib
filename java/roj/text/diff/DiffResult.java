@@ -18,7 +18,7 @@ import static roj.reflect.ReflectionUtils.u;
  * @since 2024/3/5 0005 2:30
  */
 public final class DiffResult {
-	static final EasyProgressBar bar = new EasyProgressBar("进度");
+	public static final EasyProgressBar bar = new EasyProgressBar("进度");
 
 	public transient File leftFile, rightFile;
 	public String left, right;

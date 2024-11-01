@@ -61,7 +61,7 @@ public sealed class JumpSegment extends Segment permits JumpSegmentAO {
 	}
 
 	@Override
-	public final int length() { return Opcodes.showOpcode(code).endsWith("_W")?5:3; }
+	public int length() { return Opcodes.showOpcode(code).endsWith("_W")?5:3; }
 
 	@Override
 	public Segment move(AbstractCodeWriter from, AbstractCodeWriter to, int blockMoved, int mode) {
@@ -73,7 +73,7 @@ public sealed class JumpSegment extends Segment permits JumpSegmentAO {
 	public final boolean isTerminate() { return code == GOTO || code == GOTO_W; }
 
 	@Override
-	public final boolean willJumpTo(int block, int offset) { return target.offset == offset && target.block == block; }
+	public final boolean willJumpTo(int block, int offset) { return (offset == -1 || target.offset == offset) && target.block == block; }
 
 	@Override
 	public final String toString() { return Opcodes.showOpcode(code)+"(b"+target.getBlock()+" + "+target.getOffset()+")"; }

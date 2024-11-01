@@ -39,34 +39,36 @@ final class ChaCha_Poly1305 extends RCipherSpi {
 
 	@Override
 	public final void crypt(DynByteBuf in, DynByteBuf out) throws ShortBufferException {
-		if (out.writableBytes() < in.readableBytes()) throw new ShortBufferException();
-
-		if (state != 2) {
-			if (state == 0) cryptBegin();
+		if (state != 3) {
+			if (state != 2) cryptBegin();
 			else finishAAD();
-			state = 2;
+			state = 3;
 		}
 
+		int count = in.readableBytes();
 		if (decrypt) {
+			if ((count -= 16) <= 0) return;
+			if (out.writableBytes() < in.readableBytes()) throw new ShortBufferException();
+
 			in.wIndex(in.wIndex() - 16);
-			if (in.isReadable()) {
-				processed += in.readableBytes();
 
-				int pos = in.rIndex;
-				p.update(in);
-				in.rIndex = pos;
+			int pos = in.rIndex;
+			p.update(in);
+			in.rIndex = pos;
 
-				c.crypt(in, out);
-			}
+			c.crypt(in, out);
+
 			in.wIndex(in.wIndex() + 16);
 		} else {
-			processed += in.readableBytes();
+			if (out.writableBytes() < in.readableBytes()) throw new ShortBufferException();
 
 			int pos = out.wIndex();
 
 			c.crypt(in, out);
 			p.update(out.slice(pos, out.wIndex()-pos));
 		}
+
+		processed += count;
 	}
 	public void cryptFinal1(DynByteBuf in, DynByteBuf out) throws ShortBufferException, BadPaddingException {
 		if (decrypt) {
@@ -88,10 +90,11 @@ final class ChaCha_Poly1305 extends RCipherSpi {
 	}
 
 	public final void insertAAD(DynByteBuf aad) {
-		if (state == 0) {
+		if (state != 2) {
+			if (state > 2) throw new IllegalStateException("AAD 必须在加密开始前提供");
 			cryptBegin();
-			state = 1;
-		} else if (state > 1) throw new IllegalStateException("AAD 必须在加密开始前提供");
+			state = 2;
+		}
 
 		lenAAD += aad.readableBytes();
 		p.update(aad);
@@ -102,8 +105,9 @@ final class ChaCha_Poly1305 extends RCipherSpi {
 	}
 
 	private void cryptBegin() {
-		ChaCha c = this.c;
+		var c = this.c;
 
+		c.incrIV();
 		c.reset();
 		c.KeyStream();
 

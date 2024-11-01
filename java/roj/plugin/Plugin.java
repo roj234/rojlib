@@ -8,6 +8,7 @@ import roj.concurrent.task.ITask;
 import roj.concurrent.timing.LoopTaskWrapper;
 import roj.concurrent.timing.ScheduleTask;
 import roj.concurrent.timing.Scheduler;
+import roj.config.Flags;
 import roj.config.ParseException;
 import roj.config.YAMLParser;
 import roj.config.data.CMap;
@@ -59,10 +60,10 @@ public abstract class Plugin {
 		try {
 			var parser = new YAMLParser();
 			saveDefaultConfig();
-			config = parser.parse(configFile, YAMLParser.LENIENT).asMap();
+			config = parser.parse(configFile, Flags.LENIENT).asMap();
 
 			var defaults = getResource("config.yml");
-			if (defaults != null) config.merge(parser.parse(defaults, YAMLParser.LENIENT).asMap(), true, true);
+			if (defaults != null) config.merge(parser.parse(defaults, Flags.LENIENT).asMap(), true, true);
 		} catch (ParseException|IOException e) {
 			throw new IllegalArgumentException("无法读取配置文件"+configFile.getName(),e);
 		}
@@ -240,7 +241,7 @@ public abstract class Plugin {
 				}
 
 				start = System.currentTimeMillis() - start;
-				if (start > 1000) plugin.getLogger().warn("[Long]插件{}执行任务{}时花费了太长的时间", plugin.desc.getId(), task);
+				if (start > 1000) plugin.getLogger().warn("[Long]任务{}花费了太长的时间", task);
 			}
 		}
 		private final class PLoopTask extends LoopTaskWrapper {
@@ -259,7 +260,7 @@ public abstract class Plugin {
 							userTasks.remove(realTask);
 						}
 					} else {
-						plugin.getLogger().warn("[Loop]插件{}执行任务{}时花费了太长的时间", plugin.desc.getId(), task);
+						plugin.getLogger().warn("[Loop]任务{}花费了太长的时间", task);
 					}
 				}
 				return run;

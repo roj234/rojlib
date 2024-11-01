@@ -123,7 +123,7 @@ public final class LibraryCache implements Library {
 			return null;
 		}
 	}
-	private static List<Library> loadSymbolCache(File symTable) throws IOException {
+	public static List<Library> loadSymbolCache(File symTable) throws IOException {
 		List<Library> output = new SimpleList<>();
 
 		try (var zf = new ZipFile(symTable)) {

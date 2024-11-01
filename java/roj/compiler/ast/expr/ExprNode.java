@@ -36,7 +36,7 @@ public abstract class ExprNode implements UnresolvedExprNode {
 
 	public abstract String toString();
 
-	public enum ExprKind {
+	public enum ExprFeat {
 		// this() or super()
 		INVOKE_CONSTRUCTOR,
 		// constant literal
@@ -47,9 +47,10 @@ public abstract class ExprNode implements UnresolvedExprNode {
 		CONSTANT_WRITABLE,
 		ENUM_REFERENCE,
 		//尾调用
-		TAILREC
+		TAILREC,
+		STATIC_BEGIN
 	}
-	public boolean isKind(ExprKind kind) {return false;}
+	public boolean hasFeature(ExprFeat kind) {return false;}
 	public abstract IType type();
 	public ExprNode resolve(LocalContext ctx) throws ResolveException { return this; }
 

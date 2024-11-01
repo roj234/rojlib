@@ -101,8 +101,6 @@ class UnaryPre extends UnaryPreNode {
 				return right;
 			case Type.BOOLEAN:
 				return new Constant(type, !(boolean)right.constVal());
-				//right.setConstVal(!(boolean)right.constVal());
-				//return right;
 			case Type.LONG:
 				AnnValLong lv = (AnnValLong)right.constVal();
 				switch (op) {

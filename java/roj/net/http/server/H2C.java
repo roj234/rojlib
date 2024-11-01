@@ -1,5 +1,6 @@
 package roj.net.http.server;
 
+import roj.io.IOUtil;
 import roj.net.ChannelCtx;
 import roj.net.ChannelHandler;
 import roj.net.http.h2.H2Connection;
@@ -18,6 +19,12 @@ public class H2C implements ChannelHandler {
 
 	private final Router router;
 	public H2C(Router router) {this.router = router;}
+
+	@Override
+	public void channelOpened(ChannelCtx ctx) throws IOException {
+		if (router == null) ctx.channelWrite(IOUtil.getSharedByteBuf().putAscii(H2C.MAGIC));
+		ctx.channelOpened();
+	}
 
 	@Override
 	public void channelRead(ChannelCtx ctx, Object msg) throws IOException {

@@ -2,8 +2,8 @@ package roj.asm.tree.attr;
 
 import roj.asm.cp.ConstantPool;
 import roj.collect.SimpleList;
-import roj.util.AttributeKey;
 import roj.util.DynByteBuf;
+import roj.util.TypedKey;
 
 import java.util.List;
 
@@ -15,8 +15,8 @@ public final class AttrClassList extends Attribute {
 	private static final int MODULE_PACKAGES_ID = NAMED_ID.getInt("ModulePackages");
 	private final byte name;
 
-	public AttrClassList(AttributeKey<AttrClassList> key) {this(key, new SimpleList<>());}
-	public AttrClassList(AttributeKey<AttrClassList> key, List<String> list) {
+	public AttrClassList(TypedKey<AttrClassList> key) {this(key, new SimpleList<>());}
+	public AttrClassList(TypedKey<AttrClassList> key, List<String> list) {
 		this.name = (byte) NAMED_ID.getInt(key.name);
 		value = list;
 	}

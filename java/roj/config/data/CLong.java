@@ -2,7 +2,6 @@ package roj.config.data;
 
 import roj.config.serial.CVisitor;
 import roj.text.CharList;
-import roj.util.DynByteBuf;
 
 /**
  * @author Roj234
@@ -28,7 +27,7 @@ public class CLong extends CEntry {
 		};
 	}
 
-	public int asInteger() { return value >= Integer.MIN_VALUE && value <= Integer.MAX_VALUE ? (int) value : super.asInteger(); }
+	public int asInt() { return value >= Integer.MIN_VALUE && value <= Integer.MAX_VALUE ? (int) value : super.asInt(); }
 	public final long asLong() { return value; }
 	public float asFloat() { return value; }
 	public final double asDouble() { return value; }
@@ -38,8 +37,6 @@ public class CLong extends CEntry {
 	public Object raw() { return value; }
 
 	public CharList toJSON(CharList sb, int depth) { return sb.append(value); }
-
-	public void toB_encode(DynByteBuf w) { w.put('i').putAscii(Long.toString(value)).put('e'); }
 
 	public int hashCode() { return (int) (value ^ (value >>> 32)); }
 	public boolean equals(Object o) {

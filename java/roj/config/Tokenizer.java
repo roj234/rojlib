@@ -203,10 +203,10 @@ public class Tokenizer {
 			prevWords.clear();
 
 			lastWord = w;
-			lwType = w.type();
-			lwBegin = w.pos();
+			lwType = w.type;
+			lwBegin = w.pos;
 			lwEnd = index;
-			lwStr = w.val();
+			lwStr = w.val;
 		}
 
 		afterWord();
@@ -366,7 +366,7 @@ public class Tokenizer {
 			}
 		}
 
-		throw err("在 转义字符串 终止前遇到了文件尾", i);
+		throw err("在 转义字符串 终止前遇到了文件尾", index);
 	}
 
 	@SuppressWarnings("fallthrough")
@@ -578,7 +578,7 @@ public class Tokenizer {
 		if (reason.endsWith(":")) reason += input.charAt(i);
 		throw err(reason, i);
 	}
-	protected void onNumberFlow(CharSequence str, short from, short to) throws ParseException {}
+	protected Word onNumberFlow(CharList str, short from, short to) throws ParseException {return null;}
 
 	private static final MyBitSet
 		BIN_NUMBERS = MyBitSet.from("01Ll"),
@@ -598,7 +598,6 @@ public class Tokenizer {
 		CharSequence in = input;
 		int i = index;
 
-		double dd = 0xbeef.CP-3;
 		boolean neg = sign && in.charAt(i++) == '-';
 
 		/*
@@ -732,34 +731,47 @@ public class Tokenizer {
 			String represent = input.subSequence(index, i).toString();
 
 			Word w;
+			for(;;) {
 			switch (type) {
-				default:
-				case 0:
+				default -> {
 					if ((flag &= 3) == 0 && !TextUtil.checkMax(TextUtil.INT_MAXS, v, 0, v.length(), neg)) {
 						if (TextUtil.checkMax(TextUtil.LONG_MAXS, v, 0, v.length(), neg)) {
-							onNumberFlow(v, INTEGER, LONG);
-							w = Word.numberWord(index, parseNumber(v, 4, neg), represent);
+							w = onNumberFlow(v, INTEGER, LONG);
+							if (w != null) break;
+							w = Word.numberWord(index, _parseNumber(v, 4, neg), represent);
 						} else {
-							onNumberFlow(v, INTEGER, DOUBLE);
-							w = Word.numberWord(index, Double.parseDouble(v.toString()), represent);
+							w = onNumberFlow(v, INTEGER, DOUBLE);
+							if (w != null) break;
+							type = DOUBLE;
+							continue;
 						}
 					} else {
-						w = numberWord(index, (int) parseNumber(v, flag, neg), represent);
+						if (!TextUtil.checkMax(RADIX_MAX[flag], v, 0, v.length(), neg)) {
+							return onInvalidNumber(oFlag, index, "lexer.number.intLarge");
+						}
+						w = numberWord(index, (int) _parseNumber(v, flag, neg), represent);
 					}
-				break;
-				case 1: w = Word.numberWord(index, parseNumber(v, (flag&3)|4, neg), represent); break;
-				case 2:
+				}
+				case 1 -> {
+					if (!TextUtil.checkMax(RADIX_MAX[flag = (flag&3)|4], v, 0, v.length(), neg)) {
+						return onInvalidNumber(oFlag, index, "lexer.number.longLarge");
+					}
+					w = Word.numberWord(index, _parseNumber(v, flag, neg), represent);
+				}
+				case 2 -> {
 					float fv = Float.parseFloat(v.toString());
 					if (fv == Float.POSITIVE_INFINITY || fv == Float.NEGATIVE_INFINITY) return onInvalidNumber(oFlag, index, "lexer.number.floatLarge");
 					if (fv == 0 && !isZero(v)) return onInvalidNumber(oFlag, index, "lexer.number.floatSmall");
 					w = Word.numberWord(index, fv, represent);
-				break;
-				case 3:
+				}
+				case 3 -> {
 					double dv = Double.parseDouble(v.toString());
 					if (dv == Double.POSITIVE_INFINITY || dv == Double.NEGATIVE_INFINITY) return onInvalidNumber(oFlag, index, "lexer.number.floatLarge");
 					if (dv == 0 && !isZero(v)) return onInvalidNumber(oFlag, index, "lexer.number.floatSmall");
 					w = Word.numberWord(index, dv, represent);
-				break;
+				}
+			}
+			break;
 			}
 			index = i;
 			return w;
@@ -818,6 +830,16 @@ public class Tokenizer {
 		while (--i >= 0) {
 			a0[i] = (byte) num;
 		}
+	}
+	private static long _parseNumber(CharList s, int radix, boolean neg) {
+		radix = RADIX[radix&3];
+		long v = 0;
+		int len = s.length();
+		for (int i = 0; i < len; i++) {
+			v *= radix;
+			v += Character.digit(s.charAt(i), radix);
+		}
+		return neg ? -v : v;
 	}
 
 	public static long parseNumber(CharSequence s, int i, int len, int mode) { return parseNumber(s, i, len, mode, false); }

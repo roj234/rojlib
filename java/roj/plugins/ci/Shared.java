@@ -4,6 +4,7 @@ import roj.asmx.mapper.Mapper;
 import roj.collect.SimpleList;
 import roj.concurrent.TaskPool;
 import roj.concurrent.timing.Scheduler;
+import roj.config.Flags;
 import roj.config.JSONParser;
 import roj.config.ParseException;
 import roj.config.data.CMap;
@@ -19,8 +20,6 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
-
-import static roj.config.JSONParser.NO_DUPLICATE_KEY;
 
 /**
  * FMD Shared Data / Utility Methods
@@ -95,7 +94,7 @@ public final class Shared {
 
 		try {
 			File file = new File(BASE, "config.json");
-			CONFIG = new JSONParser().parse(file, NO_DUPLICATE_KEY).asMap();
+			CONFIG = new JSONParser().parse(file, Flags.NO_DUPLICATE_KEY).asMap();
 			CONFIG.dot(true);
 		} catch (ParseException | ClassCastException e1) {
 			Terminal.error("config.json 有语法错误! 请修正!", e1);

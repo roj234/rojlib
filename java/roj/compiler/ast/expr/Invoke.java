@@ -13,10 +13,11 @@ import roj.asm.visitor.Label;
 import roj.collect.IntMap;
 import roj.collect.SimpleList;
 import roj.collect.ToIntMap;
-import roj.compiler.CompilerSpec;
+import roj.compiler.LavaFeatures;
 import roj.compiler.api.Evaluable;
 import roj.compiler.asm.Asterisk;
 import roj.compiler.asm.MethodWriter;
+import roj.compiler.ast.EnumUtil;
 import roj.compiler.context.GlobalContext;
 import roj.compiler.context.LocalContext;
 import roj.compiler.diagnostic.Kind;
@@ -28,10 +29,7 @@ import roj.text.CharList;
 import roj.text.TextUtil;
 import roj.util.Helpers;
 
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 import static roj.asm.Opcodes.*;
 
@@ -53,36 +51,36 @@ public final class Invoke extends ExprNode {
 
 	public static Invoke staticMethod(MethodNode node) {return staticMethod(node, Collections.emptyList());}
 	public static Invoke staticMethod(MethodNode node, @WillChange ExprNode... args) {return staticMethod(node, Arrays.asList(args));}
-	public static Invoke staticMethod(MethodNode node, @WillChange List<ExprNode> args) {return create(node, null, args);}
+	public static Invoke staticMethod(MethodNode node, @WillChange List<ExprNode> args) {return invoke(node, null, args, 0);}
 
 	public static Invoke virtualMethod(MethodNode node, ExprNode loader) {return virtualMethod(node, loader, Collections.emptyList());}
 	public static Invoke virtualMethod(MethodNode node, ExprNode loader, @WillChange ExprNode... args) {return virtualMethod(node, loader, Arrays.asList(args));}
-	public static Invoke virtualMethod(MethodNode node, ExprNode loader, @WillChange List<ExprNode> args) {return create(node, loader, args);}
+	public static Invoke virtualMethod(MethodNode node, ExprNode loader, @WillChange List<ExprNode> args) {return invoke(node, loader, args, 0);}
 
 	public static Invoke interfaceMethod(MethodNode node, ExprNode loader) {return interfaceMethod(node, loader, Collections.emptyList());}
 	public static Invoke interfaceMethod(MethodNode node, ExprNode loader, @WillChange ExprNode... args) {return interfaceMethod(node, loader, Arrays.asList(args));}
-	public static Invoke interfaceMethod(MethodNode node, ExprNode loader, @WillChange List<ExprNode> args) {
-		Invoke invoke = create(node, loader, args);
-		invoke.flag |= INTERFACE_CLASS;
-		return invoke;
-	}
+	public static Invoke interfaceMethod(MethodNode node, ExprNode loader, @WillChange List<ExprNode> args) {return invoke(node, loader, args, INTERFACE_CLASS);}
 
 	public static Invoke constructor(MethodNode node) {return constructor(node, Collections.emptyList());}
 	public static Invoke constructor(MethodNode node, @WillChange ExprNode... args) {return constructor(node, Arrays.asList(args));}
 	public static Invoke constructor(MethodNode node, @WillChange List<ExprNode> args) {
-		Invoke invoke = create(node, new Type(node.owner), args);
-		if (!node.name().equals("<init>")) throw new IllegalArgumentException(invoke+"调用的不是构造函数");
-		return invoke;
+		if (!node.name().equals("<init>")) throw new IllegalArgumentException("调用的不是构造函数");
+		return invoke(node, new Type(node.owner), args, 0);
 	}
 
-	private static Invoke create(MethodNode node, Object loader, List<ExprNode> args) {
-		Invoke invoke = new Invoke(loader, args);
-		invoke.methodNode = node;
-		invoke.desc = Helpers.cast(TypeHelper.parseMethod(node.rawDesc()));
-		invoke.flag = RESOLVED;
-		if (((node.modifier&Opcodes.ACC_STATIC) == 0) == (loader == null)) throw new IllegalArgumentException("静态参数错误:"+invoke);
-		if (args.size() != invoke.desc.size()-1) throw new IllegalArgumentException("参数数量错误:"+invoke);
-		return invoke;
+	static Invoke invoke(MethodNode method, Object fn, List<ExprNode> args, int flag) {
+		var node = new Invoke(fn, args);
+		node.flag = (byte) flag;
+		if (method != null) {
+			node.methodNode = method;
+			node.desc = Helpers.cast(TypeHelper.parseMethod(method.rawDesc()));
+			node.flag |= RESOLVED;
+			// 不可能在生成的代码中出现，仅供插件使用
+			if ((method.modifier&ACC_INTERFACE) != 0) node.flag |= INTERFACE_CLASS;
+			if (((method.modifier&Opcodes.ACC_STATIC) == 0) == (fn == null)) throw new IllegalArgumentException("静态参数错误:"+node);
+			if (args.size() != node.desc.size()-1) throw new IllegalArgumentException("参数数量错误:"+node);
+		}
+		return node;
 	}
 
 
@@ -117,7 +115,7 @@ public final class Invoke extends ExprNode {
 		return TextUtil.join(args, ", ", sb.append('(')).append(')').toStringAndFree();
 	}
 
-	static final byte RESOLVED = 1, INVOKE_SPECIAL = ComponentList.THIS_ONLY, INTERFACE_CLASS = 4, PMSIGN = 8;
+	static final byte RESOLVED = 1, INVOKE_SPECIAL = ComponentList.THIS_ONLY, INTERFACE_CLASS = 4, POLYSIGN = 8, ARG0_IS_THIS = 16;
 	@Override
 	public ExprNode resolve(LocalContext ctx) throws ResolveException {
 		if ((flag&RESOLVED) != 0) return this;
@@ -168,11 +166,23 @@ public final class Invoke extends ExprNode {
 					// 静态导入
 					if (mn != null) {
 						type = mn.owner;
-						if (type == null) return mn.prev;
+						if (type == null) return mn.parent();
 						method = mn.method;
 						fn = mn.prev;
 						break block;
 					}
+
+					if(ctx.classes.hasFeature(LavaFeatures.OMISSION_NEW)) {
+						type = ctx.resolveType(method);
+						if (type != null) {
+							// 构造器
+							method = "<init>";
+							fn = new Type(type.name());
+							break block;
+						}
+					}
+
+					// will fail 但是要打印错误
 				} else {
 					// ((java.lang.Object) System.out).println(1);
 					fn2 = fn1.parent.resolve(ctx);
@@ -184,12 +194,18 @@ public final class Invoke extends ExprNode {
 				}
 			} else {
 				// [x.y].a();
-				fn2 = fn1.resolveEx(ctx, x -> fn = x);
+				fn2 = fn1.resolveEx(ctx, x -> fn = x, method);
 
-				// 静态方法
 				if (fn2 == null) {
-					type = (IClass) fn;
-					fn = null;
+					if (fn instanceof Type t) {
+						// 构造器
+						method = "<init>";
+						type = Objects.requireNonNull(ctx.getClassOrArray(t));
+					} else {
+						// 静态方法
+						type = (IClass) fn;
+						fn = null;
+					}
 					break block;
 				}
 			}
@@ -219,7 +235,7 @@ public final class Invoke extends ExprNode {
 					return NaE.RESOLVE_FAILED;
 				}
 			}
-		} else if (fn.getClass() == This.class) {
+		} else if (fn.getClass() == This.class) {// this / super
 			if (!ctx.in_constructor | !ctx.not_invoke_constructor) {
 				ctx.report(Kind.ERROR, "invoke.error.constructor", fn);
 				return NaE.RESOLVE_FAILED;
@@ -229,7 +245,11 @@ public final class Invoke extends ExprNode {
 			ownMirror = ((This) fn).resolve(ctx).type();
 			type = ctx.classes.getClassInfo(ownMirror.owner());
 			method = "<init>";
-		} else {
+
+			if ((ctx.file.modifier()&Opcodes.ACC_ENUM) != 0) {
+				args = EnumUtil.prependEnumConstructor(args);
+			}
+		} else {// new type
 			ownMirror = ctx.resolveType((IType) fn);
 			if (Inferrer.hasUndefined(ownMirror)) ctx.report(Kind.ERROR, "invoke.noExact");
 			klass = ownMirror.owner();
@@ -241,10 +261,16 @@ public final class Invoke extends ExprNode {
 				return NaE.RESOLVE_FAILED;
 			}
 
-			if ((type.modifier()&(Opcodes.ACC_ABSTRACT|Opcodes.ACC_INTERFACE)) != 0) {
-				ctx.report(Kind.ERROR, "invoke.error.instantiationAbstract", klass);
+			int check_flag = ctx.file == type ? ACC_ABSTRACT|ACC_INTERFACE : ACC_ABSTRACT|ACC_INTERFACE|ACC_ENUM;
+			if ((type.modifier()&check_flag) != 0) {
+				ctx.report(Kind.ERROR, (type.modifier()&ACC_ENUM) != 0 ? "invoke.error.instantiationEnum" : "invoke.error.instantiationAbstract", klass);
 				return NaE.RESOLVE_FAILED;
 			}
+		}
+
+		var innerClassFlags = ctx.classes.getInnerClassFlags(type);
+		if ((flag&ARG0_IS_THIS) == 0 == innerClassFlags.containsKey(type)) {
+			ctx.report(Kind.ERROR, "invoke.error.notThisInnerClass");
 		}
 
 		SimpleList<IType> tmp = Helpers.cast(ctx.tmpList);
@@ -267,7 +293,7 @@ public final class Invoke extends ExprNode {
 
 			ComponentList list = ctx.methodListOrReport(type, method);
 			if (list == null) {
-				ctx.report(Kind.ERROR, "symbol.error.noSuchSymbol", "invoke.method", method+"("+TextUtil.join(tmp, ",")+")", "\1symbol.type\0 "+type.name(), ctx.reportSimilarMethod(type, method));
+				ctx.report(Kind.ERROR, "symbol.error.noSuchSymbol", method.equals("<init>") ? "invoke.constructor" : "invoke.method", method+"("+TextUtil.join(tmp, ",")+")", "\1symbol.type\0 "+type.name(), ctx.reportSimilarMethod(type, method));
 				return NaE.RESOLVE_FAILED;
 			}
 
@@ -290,7 +316,7 @@ public final class Invoke extends ExprNode {
 
 			// Object#getClass的特殊处理
 			if (mn.name().equals("getClass") && mn.rawDesc().equals("()Ljava/lang/Class;")) {
-				Generic val = ownMirror instanceof Generic ? (Generic) ownMirror.clone() : new Generic(ownMirror.owner(), ownMirror.array(), Generic.EX_NONE);
+				Generic val = Objects.requireNonNull(ownMirror) instanceof Generic ? (Generic) ownMirror.clone() : new Generic(ownMirror.owner(), ownMirror.array(), Generic.EX_EXTENDS);
 				val.extendType = Generic.EX_EXTENDS;
 				desc = Collections.singletonList(new Generic("java/lang/Class", Collections.singletonList(val)));
 			} else if (mn == GlobalContext.arrayClone()) {
@@ -311,15 +337,15 @@ public final class Invoke extends ExprNode {
 			}
 
 			if ((mn.modifier & Opcodes.ACC_VARARGS) != 0) {
-				Annotation pmsign = ctx.getAnnotation(type, mn, "java/lang/invoke/MethodHandle$PolymorphicSignature", true);
-				if (pmsign != null) {
+				var polySign = ctx.getAnnotation(type, mn, "java/lang/invoke/MethodHandle$PolymorphicSignature", true);
+				if (polySign != null) {
 					methodNode = new MethodNode(mn.modifier, mn.owner, mn.name(), "()V");
-					List<Type> pars = methodNode.parameters(); pars.clear();
+					List<Type> pars = methodNode.parameters();
 					for (int i = 0; i < tmp.size(); i++)
 						pars.add(tmp.get(i).rawType());
 
-					// result = Asterisk.nulltype;
-					flag |= PMSIGN;
+					// TODO returnValue
+					flag |= POLYSIGN;
 					break block;
 				}
 
@@ -347,11 +373,11 @@ public final class Invoke extends ExprNode {
 			}
 
 			if (mn.attrByName(Evaluable.NAME) instanceof Evaluable eval) {
-				ExprNode result = eval.eval(mn, fn instanceof ExprNode e ? e : null, args);
+				ExprNode result = eval.eval(mn, getParent(), args, this);
 				if (result != null) return result.resolve(ctx);
 			}
 
-			r.addExceptions(ctx, type, false);
+			r.addExceptions(ctx, false);
 		}
 
 		tmp.clear();
@@ -359,9 +385,9 @@ public final class Invoke extends ExprNode {
 	}
 
 	@Override
-	public boolean isKind(ExprKind kind) {
-		if (kind == ExprKind.INVOKE_CONSTRUCTOR) return fn instanceof This;
-		if (kind == ExprKind.TAILREC) return methodNode == LocalContext.get().method;
+	public boolean hasFeature(ExprFeat kind) {
+		if (kind == ExprFeat.INVOKE_CONSTRUCTOR) return fn instanceof This;
+		if (kind == ExprFeat.TAILREC) return methodNode == LocalContext.get().method;
 		return false;
 	}
 	@Override
@@ -451,7 +477,7 @@ public final class Invoke extends ExprNode {
 
 		if ((flag&INTERFACE_CLASS) != 0) {
 			if (opcode == Opcodes.INVOKESTATIC) {
-				LocalContext.get().file.setMinimumBinaryCompatibility(CompilerSpec.COMPATIBILITY_LEVEL_JAVA_8);
+				LocalContext.get().file.setMinimumBinaryCompatibility(LavaFeatures.COMPATIBILITY_LEVEL_JAVA_8);
 			}
 			cw.invoke(opcode == Opcodes.INVOKEVIRTUAL ? Opcodes.INVOKEINTERFACE : opcode, methodNode.owner, methodNode.name(), methodNode.rawDesc(), true);
 		} else {
@@ -488,8 +514,16 @@ public final class Invoke extends ExprNode {
 	public boolean isNew() {return fn instanceof IType;}
 	public ExprNode getParent() {return fn instanceof ExprNode expr ? expr : null;}
 	public MethodNode getMethod() {return methodNode;}
+	public List<ExprNode> getArguments() {return args;}
 	/**
 	 * 仅给静态工厂准备，指定该表达式的泛型返回值
 	 */
 	public void setGenericReturnType(IType genericReturnType) {desc.set(desc.size()-1, genericReturnType);}
+
+	public Invoke setEnclosingArg() {
+		this.flag |= ARG0_IS_THIS;
+		// TODO
+		GlobalContext.debugLogger().warn("NewEnclosingClass is not finished");
+		return this;
+	}
 }

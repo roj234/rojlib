@@ -20,12 +20,13 @@ public class PluginDescriptor {
 	transient Source source;
 	transient String fileName;
 
-	String mainClass;
+	String mainClass, moduleId;
 	String id, desc = "";
 	Version version;
 	Charset charset;
 	List<String> authors = Collections.emptyList();
 	String website = "";
+	boolean library;
 
 	Plugin instance;
 	List<String> depend = Collections.emptyList(), loadAfter = Collections.emptyList(), loadBefore = Collections.emptyList();

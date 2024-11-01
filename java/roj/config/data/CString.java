@@ -1,11 +1,9 @@
 package roj.config.data;
 
-import roj.config.IniParser;
 import roj.config.Tokenizer;
 import roj.config.serial.CVisitor;
 import roj.text.CharList;
 import roj.text.TextUtil;
-import roj.util.DynByteBuf;
 
 import java.util.Objects;
 
@@ -36,7 +34,7 @@ public final class CString extends CEntry {
 	}
 
 	public boolean asBool() { return value.equalsIgnoreCase("true") || !value.equalsIgnoreCase("false") && super.asBool(); }
-	public int asInteger() { return TextUtil.isNumber(value) == 0 ? TextUtil.parseInt(value) : super.asInteger(); }
+	public int asInt() { return TextUtil.isNumber(value) == 0 ? TextUtil.parseInt(value) : super.asInt(); }
 	public long asLong() { return TextUtil.isNumber(value) == 0 ? Long.parseLong(value) : super.asLong(); }
 	public float asFloat() { return Float.parseFloat(value); }
 	public double asDouble() { return Double.parseDouble(value); }
@@ -49,11 +47,6 @@ public final class CString extends CEntry {
 
 	@Override
 	protected CharList toJSON(CharList sb, int depth) { return Tokenizer.addSlashes(sb.append('"'), value).append('"'); }
-
-	@Override
-	public void toB_encode(DynByteBuf w) { w.putAscii(Integer.toString(DynByteBuf.byteCountUTF8(value))).put(':').putUTFData(value); }
-	@Override
-	protected CharList toINI(CharList sb, int depth) { return IniParser.literalSafe(value) ? sb.append(value) : Tokenizer.addSlashes(sb.append('"'), value).append('"'); }
 
 	@Override
 	public int hashCode() { return value.hashCode(); }

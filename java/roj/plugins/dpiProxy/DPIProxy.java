@@ -15,11 +15,13 @@ import roj.plugin.Plugin;
 import roj.text.logging.Level;
 import roj.text.logging.Logger;
 import roj.util.DynByteBuf;
+import roj.util.Helpers;
 
 import java.io.File;
 import java.io.IOException;
 import java.net.InetAddress;
 import java.util.List;
+import java.util.Objects;
 import java.util.function.Function;
 
 /**
@@ -45,7 +47,7 @@ public class DPIProxy extends Plugin {
 
 			ctx.lexer.init(item.getValue().asString()+";");
 			var node = ctx.ep.parse(ExprParser.STOP_SEMICOLON|ExprParser.SKIP_SEMICOLON);
-			compiler.injector.injectedProperties.put(item.getKey(), node.resolve(ctx));
+			compiler.injector.put(item.getKey(), node.resolve(ctx));
 		}
 
 		Function<String, DpiMatcher> _createMatcher = file -> {
@@ -54,9 +56,9 @@ public class DPIProxy extends Plugin {
 				try {
 					String text = IOUtil.readString(realFile);
 					compiler.fileName = realFile.getName();
-					return compiler.linkLambda(DpiMatcher.class, text, "data");
+					return compiler.linkLambda("roj/plugins/dpiProxy/impl/"+file, DpiMatcher.class, text, "data");
 				} catch (Exception e) {
-					e.printStackTrace();
+					Helpers.athrow(e);
 				}
 			}
 			return null;
@@ -72,13 +74,14 @@ public class DPIProxy extends Plugin {
 			var launcher = ServerLaunch.tcp("DPIProxy-"+port).bind(NetUtil.parseListeningAddress(port)).initializator(ch ->
 				ch.addLast("fail2ban", f2b)
 				  .addLast("dpi_timer", new Timeout(timeout))
-				  .addLast("dpi", new Matcher(patterns)));
+				  .addLast("dpi", new Matcher(patterns))
+			);
 			servers.add(launcher);
 
 			var matcher = item.getList("matcher").raw();
 			for (int j = 0; j < matcher.size(); j++) {
 				var name = matcher.get(j).asString();
-				patterns.add(matchers.computeIfAbsent(name, _createMatcher));
+				patterns.add(Objects.requireNonNull(matchers.computeIfAbsent(name, _createMatcher), "Matcher compile failed"));
 			}
 		}
 
@@ -125,22 +128,22 @@ public class DPIProxy extends Plugin {
 						ch.addLast("pipe", pipe);
 
 						ClientLaunch.tcp().initializator(channel -> channel.addLast("pipe", pipe)).connect(InetAddress.getByName(resp.getMessage()), resp.errno).launch();
-						LOGGER.info("Proxy {} => {}:{}", ch.remoteAddress(), resp.getMessage(), resp.errno);
+						LOGGER.debug("{}: Proxy {}:{}", ch.remoteAddress(), resp.getMessage(), resp.errno);
 					} else {
 						switch (resp.errno) {
 							case 0 -> {
 								var handler = ServerLaunch.SHARED.get(resp.getMessage());
 								if (handler == null) {
-									LOGGER.warn("找不到管道:"+resp.getMessage());
+									LOGGER.warn("{}: 找不到管道", ch.remoteAddress(), resp.getMessage());
 								} else {
-									LOGGER.info("Pipe {} => #{}", ch.remoteAddress(), resp.getMessage());
+									LOGGER.debug("{}: Pipe #{}", ch.remoteAddress(), resp.getMessage());
 									handler.addTCPConnection(ch);
 								}
 							}
 							case -1 -> {
 								if (resp.getMessage() != null)
 									ctx.channelWrite(IOUtil.getSharedByteBuf().putUTFData(resp.getMessage()));
-								LOGGER.debug("Close {}", ctx.remoteAddress());
+								LOGGER.debug("{}: 关闭", ctx.remoteAddress());
 								ctx.close();
 							}
 						}
@@ -151,11 +154,13 @@ public class DPIProxy extends Plugin {
 					// thrown from DynByteBuf
 					continue;
 				} catch (/*OperationDone | */Throwable failed) {
-					if (failed != OperationDone.INSTANCE) LOGGER.warn("matcher {} 意外失败", failed, matcher.getClass().getSimpleName());
+					if (failed != OperationDone.INSTANCE) LOGGER.warn("{}匹配器意外失败", failed, matcher.getClass().getSimpleName());
 					itr.remove();
 
 					if (matchers.size() == 0) {
-						LOGGER.debug("Block {}", ctx.remoteAddress());
+						if (LOGGER.canLog(Level.INFO)) {
+							LOGGER.info("{}: 发送无效的数据{}", ctx.remoteAddress(), data.slice(Math.min(data.readableBytes(), 256)).dump());
+						}
 						ctx.close();
 					}
 				}

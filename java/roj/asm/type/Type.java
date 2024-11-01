@@ -15,12 +15,11 @@ import java.util.function.UnaryOperator;
  * @author Roj234
  * @since 2021/6/18 9:51
  */
-public final class Type implements IType, Cloneable {
+public sealed class Type implements IType permits Type.DirtyHacker {
 	public static final char ARRAY = '[', CLASS = 'L', VOID = 'V', BOOLEAN = 'Z', BYTE = 'B', CHAR = 'C', SHORT = 'S', INT = 'I', FLOAT = 'F', DOUBLE = 'D', LONG = 'J';
 
 	static final Object[][] MAP = new Object[26][];
 	static {
-		A(ARRAY, "[", null, null, 4);
 		A(CLASS, "L", "object", "A", 4);
 		A(VOID, "V", "void", null, 5);
 		A(BOOLEAN, "Z", "boolean", "I", 0);
@@ -60,6 +59,25 @@ public final class Type implements IType, Cloneable {
 			if (arr != null) return (Type) arr[2];
 		}
 		throw new IllegalArgumentException("Illegal type desc '"+(char)c+"'("+c+")");
+	}
+
+	// for Lava Compiler only
+	// since 2024/11/30 13:30
+	public static final class DirtyHacker extends Type {
+		public DirtyHacker(int type, String owner) {
+			super((byte) type, true);
+			this.owner = owner;
+		}
+
+		@Override public boolean isPrimitive() {return false;}
+		//@Override public int getActualType() {return type;}
+		//@Override public Type rawType() {return std(type);}
+
+		@Override
+		public void toString(CharList sb) {
+			super.toString(sb);
+			if (type != 'L') sb.append("<alias of ").append(toString(type)).append(">");
+		}
 	}
 
 	/**

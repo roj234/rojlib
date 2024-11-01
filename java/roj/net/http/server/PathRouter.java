@@ -5,12 +5,13 @@ import roj.net.http.HttpUtil;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.function.Predicate;
 
 /**
  * @author Roj234
  * @since 2024/7/22 23:18
  */
-public class PathRouter implements Router {
+public class PathRouter implements Router, Predicate<String> {
 	public final String path;
 	public PathRouter(String path) {this.path = new File(path).getAbsolutePath();}
 	public PathRouter(File path) {this.path = path.getAbsolutePath();}
@@ -38,5 +39,12 @@ public class PathRouter implements Router {
 
 		rh.code(200).header("cache-control", HttpUtil.CACHED_REVALIDATE);
 		return Response.file(req, new DiskFileInfo(file));
+	}
+
+	// (Optional) for OKRouter Prefix Delegation check
+	@Override
+	public boolean test(String url) {
+		var file = IOUtil.safePath2(path, url);
+		return file != null && file.exists();
 	}
 }

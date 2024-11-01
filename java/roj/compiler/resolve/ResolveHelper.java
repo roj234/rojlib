@@ -13,7 +13,6 @@ import roj.asm.tree.attr.InnerClasses;
 import roj.asm.type.Generic;
 import roj.asm.type.IType;
 import roj.asm.type.Signature;
-import roj.asm.util.Attributes;
 import roj.asmx.AnnotationSelf;
 import roj.collect.IntBiMap;
 import roj.collect.MyHashMap;
@@ -66,7 +65,7 @@ public final class ResolveHelper {
 		}
 		return lambdaType;
 	}
-	public MethodNode getLambdaMethod() {return lambdaMethod;}
+	public MethodNode getLambdaMethod() {getLambdaType();return lambdaMethod;}
 
 	private byte foreachType;
 	public boolean isFastForeach(GlobalContext ctx) {
@@ -78,8 +77,7 @@ public final class ResolveHelper {
 			return true;
 		}
 
-		var attr = owner.parsedAttr(owner.cp(), Attribute.ClAnnotations);
-		if (attr != null && Attributes.getAnnotation(attr.annotations, "roj/compiler/api/ListIterable") != null) {
+		if (Annotation.findInvisible(owner.cp(), owner, "roj/compiler/api/ListIterable") != null) {
 			if (owner.getMethod("get") >= 0 && owner.getMethod("size", "()I") >= 0) {
 				foreachType = 1;
 				return true;
@@ -97,7 +95,7 @@ public final class ResolveHelper {
 	public synchronized IntBiMap<String> getClassList(GlobalContext ctx) {
 		if (classList != null) return classList;
 
-		if (query) throw new ResolveException("rh.cyclicDepend:"+owner.name());
+		if (query) throw ResolveException.ofIllegalInput("rh.cyclicDepend", owner.name());
 		query = true;
 
 		IntBiMap<String> list = new IntBiMap<>();
@@ -109,14 +107,14 @@ public final class ResolveHelper {
 				int i = list.size();
 				list.putInt((i << 16) | i, owner);
 			} catch (IllegalArgumentException e) {
-				throw new ResolveException("rh.cyclicDepend:"+owner);
+				throw ResolveException.ofIllegalInput("rh.cyclicDepend", owner);
 			}
 
 			owner = info.parent();
 			if (owner == null) break;
 			info = ctx.getClassInfo(owner);
 			if (info == null) {
-				ctx.report(this.owner, Kind.WARNING, -1, "symbol.error.noSuchClass", owner);
+				ctx.report(this.owner, Kind.SEVERE_WARNING, -1, "symbol.error.noSuchClass", owner);
 				break;
 			}
 		}
@@ -131,7 +129,7 @@ public final class ResolveHelper {
 
 				IClass itfInfo = ctx.getClassInfo(name);
 				if (itfInfo == null) {
-					ctx.report(this.owner, Kind.WARNING, -1, "symbol.error.noSuchClass", name);
+					ctx.report(this.owner, Kind.SEVERE_WARNING, -1, "symbol.error.noSuchClass", name);
 					break;
 				}
 
@@ -293,7 +291,7 @@ public final class ResolveHelper {
 					while (true) {
 						IClass info = ctx.getClassInfo(className);
 						if (info == null) {
-							ctx.report(type, Kind.WARNING, -1, "symbol.error.noSuchClass", className);
+							ctx.report(type, Kind.SEVERE_WARNING, -1, "symbol.error.noSuchClass", className);
 						} else for (Map.Entry<String, ComponentList> entry : ctx.getResolveHelper(info).getMethods(ctx).entrySet()) {
 							String key = entry.getKey();
 							if (key.startsWith("<")) continue;
@@ -359,7 +357,7 @@ public final class ResolveHelper {
 					while (true) {
 						IClass info = ctx.getClassInfo(className);
 						if (info == null) {
-							ctx.report(type, Kind.WARNING, -1, "symbol.error.noSuchClass", className);
+							ctx.report(type, Kind.SEVERE_WARNING, -1, "symbol.error.noSuchClass", className);
 						} else {
 
 						ResolveHelper rh = ctx.getResolveHelper(info);
@@ -447,22 +445,25 @@ public final class ResolveHelper {
 		return typeParamOwner;
 	}
 	// endregion
-	private MyHashMap<String, InnerClasses.Item> subclassDecl;
+	private volatile Map<String, InnerClasses.Item> subclassDecl;
 
-	public MyHashMap<String, InnerClasses.Item> getInnerClasses() {
+	public Map<String, InnerClasses.Item> getInnerClasses() {
 		if (subclassDecl == null) {
 			synchronized (this) {
 				if (subclassDecl != null) return subclassDecl;
-				subclassDecl = new MyHashMap<>();
 				var classes = owner.parsedAttr(owner.cp(), Attribute.InnerClasses);
-				if (classes == null) return subclassDecl;
+				if (classes == null) return subclassDecl = Collections.emptyMap();
 
+				MyHashMap<String, InnerClasses.Item> decl = new MyHashMap<>();
 				var list = classes.classes;
 				for (int i = 0; i < list.size(); i++) {
 					var ref = list.get(i);
-					if (ref.name != null && owner.name().equals(ref.parent))
-						subclassDecl.put(ref.name, ref);
+					if (ref.name != null && owner.name().equals(ref.parent)) {
+						decl.put("!"+ref.name, ref);
+						decl.put(ref.self, ref);
+					}
 				}
+				subclassDecl = decl;
 			}
 		}
 

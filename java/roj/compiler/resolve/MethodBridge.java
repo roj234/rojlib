@@ -25,16 +25,14 @@ final class MethodBridge extends Evaluable {
 		this.prev = prev;
 
 		// <init> will also have a delegation
-		synchronized (this.owner.getStage4Lock()) {
-			accessor = this.owner.methods.size();
-			MethodNode delegate = new MethodNode(0, "", this.owner.getNextAccessorName(), mn.rawDesc());
-			boolean invokeSpecial = mn.name().equals("<init>");
-			if ((owner.modifier&Opcodes.ACC_STATIC) != 0 || invokeSpecial) {
-				if (invokeSpecial) delegate.setReturnType(new Type(owner.name));
-				this.owner.createDelegation(Opcodes.ACC_STATIC|Opcodes.ACC_SYNTHETIC, mn, delegate, true, invokeSpecial);
-			} else {
-				this.owner.createDelegation(Opcodes.ACC_FINAL|Opcodes.ACC_SYNTHETIC, mn, delegate, true, false);
-			}
+		accessor = this.owner.methods.size();
+		MethodNode delegate = new MethodNode(0, "", this.owner.getNextAccessorName(), mn.rawDesc());
+		boolean invokeSpecial = mn.name().equals("<init>");
+		if ((owner.modifier&Opcodes.ACC_STATIC) != 0 || invokeSpecial) {
+			if (invokeSpecial) delegate.setReturnType(new Type(owner.name));
+			this.owner.createDelegation(Opcodes.ACC_STATIC|Opcodes.ACC_SYNTHETIC, mn, delegate, true, invokeSpecial);
+		} else {
+			this.owner.createDelegation(Opcodes.ACC_FINAL|Opcodes.ACC_SYNTHETIC, mn, delegate, true, false);
 		}
 	}
 
@@ -42,9 +40,9 @@ final class MethodBridge extends Evaluable {
 	public String toString() {return "Evaluable<Generic MethodBridge>";}
 
 	@Override
-	public ExprNode eval(MethodNode owner, @Nullable ExprNode self, List<ExprNode> args) {
+	public ExprNode eval(MethodNode owner, @Nullable ExprNode self, List<ExprNode> args, Invoke node) {
 		if (prev != null) {
-			ExprNode eval = prev.eval(owner, self, args);
+			ExprNode eval = prev.eval(owner, self, args, node);
 			if (eval != null) return eval;
 		}
 

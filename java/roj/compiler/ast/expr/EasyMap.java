@@ -2,9 +2,9 @@ package roj.compiler.ast.expr;
 
 import roj.asm.type.Generic;
 import roj.asm.type.IType;
-import roj.asm.type.Type;
 import roj.collect.Hasher;
 import roj.collect.MyHashMap;
+import roj.compiler.asm.Asterisk;
 import roj.compiler.asm.MethodWriter;
 import roj.compiler.context.LocalContext;
 import roj.compiler.resolve.ResolveException;
@@ -50,11 +50,15 @@ final class EasyMap extends ExprNode {
 		map = map1;
 		type = new Generic("java/util/Map", 0, Generic.EX_NONE);
 
-		Type wrapper = TypeCast.getWrapper(key);
-		type.addChild(wrapper == null ? key : wrapper);
-		wrapper = TypeCast.getWrapper(key);
-		type.addChild(wrapper == null ? val : wrapper);
-
+		if (key == null) {
+			type.addChild(Asterisk.anyType);
+			type.addChild(Asterisk.anyType);
+		} else {
+			var wrapper = TypeCast.getWrapper(key);
+			type.addChild(wrapper == null ? key : wrapper);
+			wrapper = TypeCast.getWrapper(val);
+			type.addChild(wrapper == null ? val : wrapper);
+		}
 		return this;
 	}
 

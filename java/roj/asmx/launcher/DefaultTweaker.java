@@ -1,5 +1,6 @@
 package roj.asmx.launcher;
 
+import roj.RojLib;
 import roj.asm.Opcodes;
 import roj.asm.Parser;
 import roj.asm.cp.CstClass;
@@ -13,6 +14,7 @@ import roj.asmx.nixim.NiximSystemV2;
 import roj.collect.SimpleList;
 import roj.io.IOUtil;
 import roj.reflect.ReflectionUtils;
+import roj.reflect.litasm.Intrinsics;
 import roj.util.Helpers;
 
 import java.io.IOException;
@@ -39,6 +41,9 @@ public class DefaultTweaker implements ITweaker {
 				Annotation a = element.annotations().get("roj/asmx/launcher/Autoload");
 				int priority = a.getInt("priority", 0);
 				String owner = element.owner();
+
+				var intrinsic = a.getInt("intrinsic", -1);
+				if (intrinsic >= 0 && (!Intrinsics.available() || !RojLib.hasNative(intrinsic))) continue;
 
 				switch (a.getEnumValue("value", null)) {
 					case "INIT" -> classes.add(new A(owner, priority));

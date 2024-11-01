@@ -14,9 +14,14 @@ import java.io.IOException;
 public interface MyDataInput extends DataInput, Closeable {
 	int DEFAULT_MAX_STRING_LEN = 65536;
 
-	static int zag(int i) {return (i >> 1) & ~(1 << 31) ^ -(i & 1);}
-	static long zag(long i) {return (i >> 1) & ~(1L << 63) ^ -(i & 1);}
+	static int zag(int i) {return (i >>> 1) ^ -(i & 1);}
+	static long zag(long i) {return (i >>> 1) ^ -(i & 1);}
 
+	default byte[] readBytes(int len) throws IOException {
+		byte[] result = new byte[len];
+		this.readFully(result, 0, len);
+		return result;
+	}
 	void readFully(byte[] b) throws IOException;
 	void readFully(byte[] b, int off, int len) throws IOException;
 

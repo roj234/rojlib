@@ -14,7 +14,7 @@ import java.io.InputStream;
 import java.nio.charset.Charset;
 import java.util.Map;
 
-import static roj.config.JSONParser.COMMENT;
+import static roj.config.Flags.COMMENT;
 
 /**
  * 删除INTERN功能，如果碰到很多的重复字符串，您可能需要Serializer而不是解析到Entry
@@ -24,11 +24,8 @@ import static roj.config.JSONParser.COMMENT;
 public abstract class Parser extends Tokenizer implements BinaryParser {
 	public static final boolean ALWAYS_ESCAPE = Boolean.getBoolean("roj.config.noRawCheck");
 
-	protected Parser() { this(0); }
-	protected Parser(int solidFlag) {
-		this.flag = solidFlag;
-		if ((solidFlag & COMMENT) != 0) comment = new CharList();
-	}
+	protected Parser() {}
+	protected Parser(int _flag) {if ((_flag & COMMENT) != 0) comment = new CharList();}
 
 	public final CEntry parse(CharSequence text) throws ParseException { return parse(text, 0); }
 	public CEntry parse(CharSequence text, int flag) throws ParseException {

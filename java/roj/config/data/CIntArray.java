@@ -22,7 +22,7 @@ public class CIntArray extends CList {
 		}
 		public CEntry set(int i, CEntry e) {
 			ref.value = value[i];
-			value[i] = e.asInteger();
+			value[i] = e.asInt();
 			return ref;
 		}
 	}

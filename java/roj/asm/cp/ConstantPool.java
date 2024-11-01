@@ -269,7 +269,6 @@ public class ConstantPool {
 		if (!refMap.isEmpty()) {
 			rm = refMap.remove(c);
 			assert rm : "不在该常量池中";
-			refMap.add(c);
 		} else {
 			rm = false;
 		}

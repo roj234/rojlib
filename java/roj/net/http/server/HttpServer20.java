@@ -9,6 +9,7 @@ import roj.net.http.*;
 import roj.net.http.h2.H2Connection;
 import roj.net.http.h2.H2Exception;
 import roj.net.http.h2.H2Stream;
+import roj.net.util.SpeedLimiter;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
 
@@ -17,6 +18,7 @@ import java.io.InputStream;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.zip.Deflater;
 
+import static roj.net.http.h2.H2Connection.LOGGER;
 import static roj.net.http.server.HttpCache.*;
 import static roj.net.http.server.HttpServer11.*;
 
@@ -185,10 +187,7 @@ public final class HttpServer20 extends H2Stream implements PostSetting, Respons
 		if ((flag&FLAG_HEADER_SENT) != 0) {
 			if (!pending.isReadable() || !man.sendData(this, pending, dataEnd)) {
 				pending.clear();
-				if (!dataEnd) {
-					streamLimit = streamLimitDefault;
-					if (!body.send(this)) sendLastData();
-				}
+				if (!dataEnd && !body.send(this)) sendLastData();
 			}
 		}
 
@@ -198,10 +197,13 @@ public final class HttpServer20 extends H2Stream implements PostSetting, Respons
 					if (req != null) throw new IllegalRequestException(HttpUtil.TIMEOUT);
 					man.streamError(id, H2Exception.ERROR_CANCEL/*TIMEOUT*/);
 				}
-				case PROCESSING -> code(504).body(Response.internalError("处理超时\n在规定的时间内未收到响应头，请求代理失败"));
-				case SEND_BODY -> {
-					LOGGER.warn("发送超时[在规定的时间内未能将响应体全部发送]: {}", body);
-					man.streamError(id, H2Exception.ERROR_INTERNAL/*TIMEOUT*/);
+				case DATA_FIN -> {
+					if (getOutState() == OPEN) {
+						code(504).body(Response.internalError("处理超时\n在规定的时间内未收到响应头，请求代理失败"));
+					} else {
+						LOGGER.warn("发送超时[在规定的时间内未能将响应体全部发送]: {}", body);
+						man.streamError(id, H2Exception.ERROR_INTERNAL/*TIMEOUT*/);
+					}
 				}
 			}
 		}
@@ -209,7 +211,7 @@ public final class HttpServer20 extends H2Stream implements PostSetting, Respons
 
 	@Override
 	protected void onError(H2Connection man, Exception e) {
-		if ((flag & FLAG_ERRORED) == 0 && getState() < SEND_BODY && req != null) {
+		if ((flag & FLAG_ERRORED) == 0 && getOutState() == OPEN && req != null) {
 			flag |= FLAG_ERRORED;
 			req.responseHeader.clear();
 
@@ -268,13 +270,14 @@ public final class HttpServer20 extends H2Stream implements PostSetting, Respons
 		pending._free();
 	}
 
+	private long sendBytes;
+	@Override public long getSendBytes() {return sendBytes;}
+
 	private boolean sendData(DynByteBuf buf) throws IOException {
+		sendBytes += buf.readableBytes();
 		if (embed == null) return man.sendData(this, buf, false);
 
-		int len = buf.readableBytes();
-		if ((flag & FLAG_GZIP) != 0) {
-			crc = buf.hasArray() ? CRC32s.update(crc, buf.array(), buf.arrayOffset() + buf.rIndex, len) : CRC32s.update(crc, buf.address(), len);
-		}
+		if ((flag & FLAG_GZIP) != 0) crc = CRC32s.update(crc, buf);
 		embed.fireChannelWrite(buf);
 		return pending.wIndex() > 0;
 	}
@@ -325,16 +328,31 @@ public final class HttpServer20 extends H2Stream implements PostSetting, Respons
 	}
 
 	//region ResponseWriter
-	private static final int WRITE_ONCE = 4080;
-	private int streamLimit, streamLimitDefault = WRITE_ONCE;
+	private static final int NOOB_LIMIT = 4080;
+	private SpeedLimiter limiter;
 
-	public int getStreamLimit() {return streamLimitDefault;}
-
-	public void setStreamLimit(int kbps) {this.streamLimitDefault = kbps;}
+	@Override public int getStreamLimit() {return limiter == null ? 0 : limiter.getBytePerSecond();}
+	@Override public void setStreamLimit(int bps) {
+		if (limiter == null) limiter = new SpeedLimiter(1450, 50_000_000);
+		limiter.setBytePerSecond(bps);
+	}
+	@Override public void setStreamLimit(SpeedLimiter limiter) {this.limiter = limiter;}
 
 	public void write(DynByteBuf buf) throws IOException {
 		assert ((ReentrantLock) man.channel().channel().lock()).isHeldByCurrentThread();
-		sendData(buf);
+
+		int limit = buf.readableBytes();
+		int window = man.getImmediateWindow(this);
+		if (limit > window) limit = window;
+		if (limiter != null && (limit = limiter.limit(limit)) <= 0) return;
+
+		int prevWpos = buf.wIndex();
+		buf.wIndex(buf.rIndex + limit);
+		try {
+			sendData(buf);
+		} finally {
+			buf.wIndex(prevWpos);
+		}
 	}
 
 	public int write(InputStream in, int limit) throws IOException {
@@ -344,12 +362,13 @@ public final class HttpServer20 extends H2Stream implements PostSetting, Respons
 		if (window <= 0) return 0;
 		window = Math.min(window, man.getRemoteSetting().max_frame_size);
 
-		limit = limit <= 0 ? streamLimit : Math.min(streamLimit, limit);
+		if (limit < 0) limit = NOOB_LIMIT;
 		if (limit > window) limit = window;
+		if (limiter != null) limit = limiter.limit(limit);
 		if (limit <= 0) return 0;
 
-		int writeOnce = Math.min(WRITE_ONCE, limit);
-		ByteList buf = (ByteList) man.channel().allocate(false, writeOnce);
+		int writeOnce = Math.min(NOOB_LIMIT, limit);
+		var buf = (ByteList) man.channel().allocate(false, writeOnce);
 		try {
 			int totalRead = 0;
 			while (true) {
@@ -368,7 +387,6 @@ public final class HttpServer20 extends H2Stream implements PostSetting, Respons
 				buf.clear();
 			}
 
-			streamLimit -= totalRead;
 			return totalRead;
 		} finally {
 			BufferPool.reserve(buf);
@@ -387,14 +405,13 @@ public final class HttpServer20 extends H2Stream implements PostSetting, Respons
 	@Override public ResponseHeader enableAsyncResponse() {flag |= FLAG_ASYNC;return this;}
 	@Override public void body(Response resp) throws IOException {
 		if ((flag & FLAG_ASYNC) == 0) {
-			if (getState() != DATA) {
+			if (getState() >= DATA_FIN) {
 				this.body = resp;
 				return;
 			}
 
 			flag |= FLAG_HEADER_SENT;
-			LOGGER.warn("全双工模式正开发中");
-		} else if (getState() != PROCESSING) {
+		} else if (getOutState() != OPEN) {
 			throw new IllegalStateException("Expect PROCESSING: "+_getState());
 		}
 

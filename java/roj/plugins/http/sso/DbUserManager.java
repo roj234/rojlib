@@ -13,7 +13,7 @@ import java.util.Map;
  * @author Roj234
  * @since 2024/7/8 0008 7:04
  */
-public class DbUserManager implements UserManager {
+class DbUserManager implements UserManager {
 	private final String userTable;
 	private IntMap<User> users = new IntMap<>();
 	private Map<String, User> userByName = new MyHashMap<>();

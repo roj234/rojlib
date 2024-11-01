@@ -13,28 +13,28 @@ import roj.asm.tree.attr.AttrClassList;
 import roj.asm.tree.attr.Attribute;
 import roj.asm.tree.attr.InnerClasses;
 import roj.asm.type.*;
-import roj.asm.util.Attributes;
 import roj.asm.util.ClassUtil;
 import roj.asm.visitor.Label;
 import roj.asmx.mapper.util.NameAndType;
 import roj.collect.*;
-import roj.compiler.CompilerSpec;
 import roj.compiler.JavaLexer;
+import roj.compiler.LavaFeatures;
 import roj.compiler.api.MethodDefault;
+import roj.compiler.api.ValueBased;
 import roj.compiler.asm.AnnotationPrimer;
 import roj.compiler.asm.Asterisk;
-import roj.compiler.asm.LPSignature;
 import roj.compiler.asm.Variable;
 import roj.compiler.ast.BlockParser;
 import roj.compiler.ast.expr.ExprNode;
 import roj.compiler.ast.expr.ExprParser;
-import roj.compiler.ast.expr.Invoke;
+import roj.compiler.ast.expr.NaE;
 import roj.compiler.diagnostic.Kind;
 import roj.compiler.resolve.*;
 import roj.config.ParseException;
 import roj.config.data.CInt;
 import roj.reflect.GetCallerArgs;
 import roj.text.CharList;
+import roj.text.TextUtil;
 import roj.util.ArrayCache;
 import roj.util.Helpers;
 
@@ -74,15 +74,21 @@ public class LocalContext {
 	public CompileUnit file;
 	public MethodNode method;
 	public boolean in_static, in_constructor, not_invoke_constructor;
+	// CompileUnit S2 resovler
 	public boolean disableRawTypeWarning;
-	// Tailrec使用
+
+	// Tailrec,MultiReturn等使用
 	public boolean inReturn;
+	// This(AST)使用 也许能换成callback 目前主要给Generator用
+	public int thisSlot;
+	public boolean thisUsed;
 
 	public LocalContext(GlobalContext ctx) {
 		this.classes = ctx;
 		this.lexer = ctx.createLexer();
 		this.ep = ctx.createExprParser(this);
 		this.bp = ctx.createBlockParser(this);
+		this.variables = bp.getVariables();
 		this.caster.context = ctx;
 	}
 
@@ -127,10 +133,8 @@ public class LocalContext {
 	}
 
 	public TypeCast.Cast castTo(@NotNull IType from, @NotNull IType to, @Range(from = -8, to = 0) int lower_limit) {
-		TypeCast.Cast cast = caster.checkCast(from, to);
-
-		if (cast.type == TypeCast.E_NEVER && isDynamicType(to)) cast = TypeCast.RESULT(TypeCast.UPCAST, 0);
-		else if (cast.type < lower_limit) report(Kind.ERROR, "typeCast.error."+cast.type, from, to);
+		var cast = caster.checkCast(from, to);
+		if (cast.type < lower_limit) report(Kind.ERROR, "typeCast.error."+cast.type, from, to);
 		return cast;
 	}
 
@@ -164,7 +168,7 @@ public class LocalContext {
 			checkAccessModifier(flag, type, null, "symbol.error.accessDenied.type", true);
 		} else {
 			switch ((type.modifier()&(Opcodes.ACC_PUBLIC|Opcodes.ACC_PROTECTED|Opcodes.ACC_PRIVATE))) {
-				default: throw new ResolveException("非法的修饰符组合:"+Integer.toHexString(type.modifier()));
+				default: throw ResolveException.ofIllegalInput("lc.illegalModifier", Integer.toHexString(type.modifier()));
 				case Opcodes.ACC_PUBLIC: return;
 				case 0: if (!ClassUtil.arePackagesSame(type.name(), file.name()))
 					report(Kind.ERROR, "symbol.error.accessDenied.type", type.name(), "package-private", file.name());
@@ -175,7 +179,7 @@ public class LocalContext {
 	public boolean checkAccessible(IClass type, RawNode node, boolean staticEnv, boolean report) {
 		if (type == file) return true;
 
-		if (!checkAccessModifier(node.modifier(), type, node.name(), "symbol.error.accessDenied.symbol", report) & !report) {
+		if (!checkAccessModifier(node.modifier(), type, node.name(), "symbol.error.accessDenied.symbol", report)) {
 			return false;
 		}
 
@@ -188,7 +192,7 @@ public class LocalContext {
 	private boolean checkAccessModifier(int flag, IClass type, String node, String message, boolean report) {
 		String modifier;
 		switch ((flag & (Opcodes.ACC_PUBLIC|Opcodes.ACC_PROTECTED|Opcodes.ACC_PRIVATE))) {
-			default: throw new ResolveException("非法的修饰符组合: 0x"+Integer.toHexString(flag));
+			default: throw ResolveException.ofIllegalInput("lc.illegalModifier", Integer.toHexString(flag));
 			case Opcodes.ACC_PUBLIC: return true;
 			case Opcodes.ACC_PROTECTED:
 				if (ClassUtil.arePackagesSame(type.name(), file.name()) || instanceOf(file.name(), type.name())) return true;
@@ -264,6 +268,8 @@ public class LocalContext {
 	}
 	public void setMethod(MethodNode node) {
 		file._setSign(node);
+		//TODO test
+		caster.typeParamsL = file.currentNode != null ? file.currentNode.typeParams : null;
 
 		in_static = (node.modifier&Opcodes.ACC_STATIC) != 0;
 		not_invoke_constructor = in_constructor = node.name().startsWith("<");
@@ -276,6 +282,10 @@ public class LocalContext {
 			}
 		}
 		method = node;
+
+		inReturn = false;
+		thisSlot = 0;
+		thisUsed = in_constructor;
 	}
 
 	public ComponentList fieldListOrReport(IClass info, String name) {return classes.getFieldList(info, name);}
@@ -380,7 +390,7 @@ public class LocalContext {
 
 	// region 解析符号引用 Class Field Method
 	@Nullable
-	public ConstantData getClassOrArray(IType type) { return type.array() > 0 ? GlobalContext.anyArray() : classes.getClassInfo(type.owner()); }
+	public ConstantData getClassOrArray(IType type) { return type.array() > 0 ? classes.getArrayInfo(type) : classes.getClassInfo(type.owner()); }
 
 	public ConstantData resolveType(String klass) { return tr.resolve(this, klass); }
 	@Contract("_ -> param1")
@@ -410,7 +420,6 @@ public class LocalContext {
 
 			if (sign == null) return type;
 			var itr = sign.typeParams.values().iterator();
-			Function<String, List<IType>> prev = castCheck.genericResolver, curr = sign.typeParams::get;
 
 			for (int i = 0; i < gp.size(); i++) {
 				IType type2 = resolveType(gp.get(i));
@@ -418,9 +427,10 @@ public class LocalContext {
 
 				// skip if is AnyType (?)
 				if (type2.genericType() <= 2) {
-					castCheck.genericResolver = curr;
+				// TODO test
+					caster.typeParamsR = sign.typeParams;
 					for (IType iType : itr.next()) castTo(type2, iType, 0);
-					castCheck.genericResolver = prev;
+					caster.typeParamsR = null;
 				}
 
 				if (type2 instanceof Generic g && g.canBeAny()) {
@@ -621,8 +631,8 @@ public class LocalContext {
 				return "symbol.error.derefPrimitive:"+type;
 			}
 
-			clz = type.array() > 0 ? GlobalContext.anyArray() : classes.getClassInfo(type.owner);
-			if (clz == null) return "symbol.error.noSuchClass:".concat(type.owner);
+			clz = getClassOrArray(type);
+			if (clz == null) return "symbol.error.noSuchClass:".concat(type.toString());
 		}
 	}
 	public IClass get_frBegin() {return _frBegin;}
@@ -639,9 +649,27 @@ public class LocalContext {
 		}
 	}
 
+	public IType transformPseudoType(IType type) {
+		if (type.owner() != null && !"java/lang/Object".equals(type.owner())) {
+			var info = classes.getClassInfo(type.owner());
+			if (info.parent == null) {
+				var vb = (ValueBased) info.attrByName(ValueBased.NAME);
+				if (vb != null) {
+					report(Kind.WARNING, "pseudoType.cast");
+					return vb.exactType;
+				} else {
+					report(Kind.ERROR, "pseudoType.pseudo");
+				}
+			}
+		}
+
+		return type;
+	}
+
 	public void addException(IType type) {
-		TypeCast.Cast cast = caster.checkCast(type, CompileUnit.RUNTIME_EXCEPTION);
+		var cast = caster.checkCast(type, CompileUnit.RUNTIME_EXCEPTION);
 		if (cast.type >= 0) return;
+		if (bp.addException(type)) return;
 
 		var exceptions = (AttrClassList) method.attrByName("Exceptions");
 		if (exceptions != null) {
@@ -656,38 +684,55 @@ public class LocalContext {
 				}
 			}
 		}
-		report(classes.isSpecEnabled(CompilerSpec.CHECKED_EXCEPTION) ? Kind.WARNING : Kind.ERROR, "lc.unReportedException", type);
+		report(classes.hasFeature(LavaFeatures.NO_CHECKED_EXCEPTION) ? Kind.WARNING : Kind.ERROR, "lc.unReportedException", type);
 	}
 
 	// this should inherit, see #parent for details
 	public SimpleList<NestContext> enclosing = new SimpleList<>();
 
-	// Assigned by BlockParser
-	public MyHashMap<String, Variable> variables = new MyHashMap<>();
-	public Variable tryVariable(String name) {return variables.get(name);}
+	// Read by BlockParser
+	public final MyHashMap<String, Variable> variables;
+	public Variable getVariable(String name) {return variables.get(name);}
+	public void loadVar(Variable v) {bp.loadVar(v);}
+	public void storeVar(Variable v) {bp.storeVar(v);}
+	public void assignConstVar(Variable var, roj.compiler.ast.expr.Constant val) {
+		var.constantValue = val.constVal();
+	}
 
 	public static final class Import {
 		public final IClass owner;
 		public final String method;
-		public final ExprNode prev;
+		public final Object prev;
 
+		// 替换
 		public Import(ExprNode node) {
 			this.owner = null;
 			this.method = null;
 			this.prev = Objects.requireNonNull(node);
 		}
 
+		// 静态方法
 		public Import(IClass owner, String method) {
 			this.owner = Objects.requireNonNull(owner);
 			this.method = Objects.requireNonNull(method);
 			this.prev = null;
 		}
 
+		// 动态方法
 		public Import(IClass owner, String method, ExprNode prev) {
 			this.owner = Objects.requireNonNull(owner);
 			this.method = Objects.requireNonNull(method);
 			this.prev = prev;
 		}
+
+		// 构造器
+		public Import(IClass owner) {
+			this.owner = Objects.requireNonNull(owner);
+			this.method = "<init>";
+			this.prev = new Type(owner.name());
+		}
+
+		public ExprNode parent() {return (ExprNode) prev;}
 	}
 	public Function<String, Import> dynamicMethodImport, dynamicFieldImport;
 
@@ -853,7 +898,7 @@ public class LocalContext {
 
 	// region 也许应该放在GlobalContext中的一些实现特殊语法的函数
 	public Annotation getAnnotation(IClass type, Attributed node, String annotation, boolean rt) {
-		return Attributes.getAnnotation(Attributes.getAnnotations(type.cp(), node, rt), annotation);
+		return Annotation.find(Annotation.getAnnotations(type.cp(), node, rt), annotation);
 	}
 
 	private static final IntMap<ExprNode> EMPTY = new IntMap<>(0);
@@ -882,46 +927,17 @@ public class LocalContext {
 		return EMPTY;
 	}
 
-	// 被cast和intanceof调用，若返回true则禁用编译警告和化简
-	public boolean isDynamicType(IType type) {return false;}
-
 	public static final int UNARY_PRE = 0, UNARY_POST = 65536;
 	/**
 	 * 操作符重载的统一处理
 	 * 注意：重载是次低优先级，仅高于报错，所以无法覆盖默认行为
 	 * @param e1 左侧
 	 * @param e2 右侧， 当operator属于一元运算符时为null
-	 * @param operator JavaLexer中的tokenId,可以是一元运算符、一元运算符|UNARY_POST、二元运算符、lBracket(数组取值)
+	 * @param operator JavaLexer中的tokenId,可以是一元运算符、一元运算符|UNARY_POST、二元运算符、lBracket(数组取值)、lParen(cast表达式)、rParen(变量赋值)
 	 * @return 替代的表达式
 	 */
 	@Nullable
-	public ExprNode getOperatorOverride(@NotNull ExprNode e1, @Nullable ExprNode e2, int operator) {
-		IType left = e1.type(), right = e2 == null ? /*deal with null check*/Helpers.maybeNull() : e2.type();
-
-		switch (operator) {
-			case JavaLexer.mul -> {
-				if (left.array() == 0 && "java/lang/String".equals(left.owner()) && right.getActualType() == Type.INT) {
-					MethodNode mn = new MethodNode(Opcodes.ACC_PUBLIC, "java/lang/String", "repeat", "(I)Ljava/lang/String;");
-					return Invoke.staticMethod(mn, e1, e2);
-				}
-			}
-			case JavaLexer.logic_not -> {
-				if (left.array() == 0 && "java/lang/String".equals(left.owner())) {
-					MethodNode mn = new MethodNode(Opcodes.ACC_PUBLIC, "java/lang/String", "isEmpty", "()Z");
-					return Invoke.virtualMethod(mn, e1);
-				}
-			}
-			case JavaLexer.lBracket -> {
-				TypeCast.Cast cast = castTo(left, new Type("java/util/Map"), TypeCast.E_NEVER);
-				if (cast.type == TypeCast.UPCAST) {
-					// cannot use SingletonList, will call set()
-					return new Invoke(ep.chain(e1, "get", 0), Arrays.asList(e2)).resolve(this);
-				}
-			}
-		}
-
-		return null;
-	}
+	public ExprNode getOperatorOverride(@NotNull ExprNode e1, @Nullable Object e2, int operator) {return null;}
 
 	public IClass getPrimitiveMethod(IType type, ExprNode caller, List<ExprNode> args) {
 		if (type.getActualType() == Type.INT) {
@@ -957,10 +973,6 @@ public class LocalContext {
 		return new roj.compiler.ast.expr.Constant(fieldType == null ? field.fieldType() : fieldType, c);
 	}
 
-	// WIP
-	public boolean setConstantValue(Variable var, roj.compiler.ast.expr.Constant val) {
-		return false;
-	}
 	// endregion
 	// region CompileUnit用到的
 	private static final ThreadLocal<List<Object>> FTL = new ThreadLocal<>();

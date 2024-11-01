@@ -1,7 +1,6 @@
 package roj.config.data;
 
 import roj.config.serial.CVisitor;
-import roj.util.DynByteBuf;
 
 import java.util.AbstractList;
 
@@ -20,7 +19,7 @@ public class CByteArray extends CList {
 		}
 		public CEntry set(int i, CEntry e) {
 			ref.value = value[i];
-			value[i] = (byte) e.asInteger();
+			value[i] = (byte) e.asInt();
 			return ref;
 		}
 	}
@@ -36,5 +35,4 @@ public class CByteArray extends CList {
 	public void accept(CVisitor ser) { ser.value(value); }
 	public byte[] rawDeep() { return value; }
 
-	public void toB_encode(DynByteBuf w) { w.putAscii(Integer.toString(value.length)).put((byte) ':').put(value); }
 }

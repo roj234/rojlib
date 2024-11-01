@@ -6,7 +6,6 @@ import roj.asm.tree.MethodNode;
 import roj.asm.type.Type;
 import roj.asm.type.TypeHelper;
 import roj.asm.util.ClassUtil;
-import roj.asm.util.InsnHelper;
 import roj.asm.util.ReflectClass;
 import roj.asm.visitor.AbstractCodeWriter;
 import roj.asm.visitor.JumpSegment;
@@ -23,7 +22,7 @@ import java.util.Collections;
 import java.util.List;
 
 import static roj.asm.Opcodes.*;
-import static roj.asm.frame.Frame2.*;
+import static roj.asm.frame.Frame.*;
 import static roj.asm.frame.VarType.*;
 
 /**
@@ -38,12 +37,12 @@ public class FrameVisitor implements IFrameVisitor {
 
 	boolean firstOnly;
 	MethodNode mn;
-	private final IntMap<BasicBlock2> stateIn = new IntMap<>();
-	private final List<BasicBlock2> stateOut = new SimpleList<>();
-	private final IntMap<List<BasicBlock2>> jumpTo = new IntMap<>();
+	private final IntMap<BasicBlock> stateIn = new IntMap<>();
+	private final List<BasicBlock> stateOut = new SimpleList<>();
+	private final IntMap<List<BasicBlock>> jumpTo = new IntMap<>();
 
 	int bci;
-	BasicBlock2 current;
+	BasicBlock current;
 	private boolean eof;
 
 	SimpleList<Type> paramList = new SimpleList<>();
@@ -77,7 +76,7 @@ public class FrameVisitor implements IFrameVisitor {
 	}
 	private Var2[] initS;
 
-	public Frame2 visitFirst(MethodNode owner, DynByteBuf r, ConstantPool cp) {
+	public Frame visitFirst(MethodNode owner, DynByteBuf r, ConstantPool cp) {
 		init(owner);
 		firstOnly = true;
 		LOCAL.set(this);
@@ -87,7 +86,7 @@ public class FrameVisitor implements IFrameVisitor {
 			LOCAL.remove();
 		}
 
-		Frame2 f0 = new Frame2();
+		Frame f0 = new Frame();
 		f0.locals = Arrays.copyOf(current.local, current.localMax);
 		f0.stacks = Arrays.copyOf(current.stack, current.stackSize);
 		return f0;
@@ -100,12 +99,12 @@ public class FrameVisitor implements IFrameVisitor {
 			Segment s = segments.get(i);
 			if (s.getClass() == JumpSegment.class) {
 				JumpSegment js = (JumpSegment) s;
-				List<BasicBlock2> list;
+				List<BasicBlock> list;
 
-				BasicBlock2 fs = add(js.target.getValue(), "jump target");
+				BasicBlock fs = add(js.target.getValue(), "jump target");
 				// normal execution
 				if (js.code != GOTO && js.code != GOTO_W) {
-					BasicBlock2 fs1 = add(js.fv_bci+3, "if next");
+					BasicBlock fs1 = add(js.fv_bci+3, "if next");
 					fs1.noFrame = true;
 					list = SimpleList.asModifiableList(fs,fs1);
 				} else {
@@ -114,7 +113,7 @@ public class FrameVisitor implements IFrameVisitor {
 				jumpTo.putInt(js.fv_bci, list);
 			} else if (s.getClass() == SwitchSegment.class) {
 				SwitchSegment ss = (SwitchSegment) s;
-				List<BasicBlock2> list = Arrays.asList(new BasicBlock2[ss.targets.size()+1]);
+				List<BasicBlock> list = Arrays.asList(new BasicBlock[ss.targets.size()+1]);
 
 				list.set(0, add(ss.def.getValue(), "switch default"));
 				for (int j = 0; j < ss.targets.size();j++) {
@@ -129,14 +128,14 @@ public class FrameVisitor implements IFrameVisitor {
 		current = add(handler, "exception#["+start+','+end+"]: "+type);
 		push(type == null ? "java/lang/Throwable" : type);
 	}
-	private BasicBlock2 add(int pos, String desc) {
-		BasicBlock2 target = stateIn.get(pos);
-		if (target == null) stateIn.put(pos, target = new BasicBlock2(pos, desc));
+	private BasicBlock add(int pos, String desc) {
+		BasicBlock target = stateIn.get(pos);
+		if (target == null) stateIn.put(pos, target = new BasicBlock(pos, desc));
 		else target.merge(desc, false);
 		return target;
 	}
 
-	public List<Frame2> finish(DynByteBuf code, ConstantPool cp) {
+	public List<Frame> finish(DynByteBuf code, ConstantPool cp) {
 		if (stateIn.size() <= 1) return null;
 
 		current = null;
@@ -155,8 +154,8 @@ public class FrameVisitor implements IFrameVisitor {
 
 		if (!stateIn.isEmpty()) throw new IllegalArgumentException("以下BCI未找到: " + stateIn.values());
 
-		List<BasicBlock2> blocks = stateOut;
-		List<Frame2> frames = new SimpleList<>();
+		List<BasicBlock> blocks = stateOut;
+		List<Frame> frames = new SimpleList<>();
 
 		for (int i = 0; i < blocks.size(); i++) {
 			blocks.get(i).updatePreHook();
@@ -172,7 +171,7 @@ public class FrameVisitor implements IFrameVisitor {
 
 		maxLocalSize = 0;
 		for (int i = 1; i < blocks.size(); i++) {
-			BasicBlock2 fs = blocks.get(i);
+			BasicBlock fs = blocks.get(i);
 			maxLocalSize = Math.max(maxLocalSize, Math.max(fs.localMax,fs.inheritLocalMax));
 			if (fs.noFrame) {
 				blocks.remove(i--); continue;
@@ -185,7 +184,7 @@ public class FrameVisitor implements IFrameVisitor {
 			}
 			Var2[] stack = fs.vStack;
 
-			Frame2 frame = new Frame2();
+			Frame frame = new Frame();
 			frame.target = fs.bci;
 			frame.locals = local;
 			frame.stacks = stack;
@@ -238,7 +237,7 @@ public class FrameVisitor implements IFrameVisitor {
 		while (r.isReadable()) {
 			int bci = r.rIndex - rBegin;
 
-			BasicBlock2 next = stateIn.remove(bci);
+			BasicBlock next = stateIn.remove(bci);
 			if (next != null) {
 				// if
 				if (!eof && current != null) current.to(next);
@@ -395,7 +394,7 @@ public class FrameVisitor implements IFrameVisitor {
 				case JSR, JSR_W, RET -> ret();
 				case NEWARRAY -> {
 					pop(INT);
-					push("[" + (char) InsnHelper.FromPrimitiveArrayId(r.readByte()));
+					push("["+AbstractCodeWriter.FromPrimitiveArrayId(r.readByte()));
 				}
 				case INSTANCEOF -> {
 					r.rIndex += 2;
@@ -675,11 +674,11 @@ public class FrameVisitor implements IFrameVisitor {
 			return;
 		}
 
-		List<BasicBlock2> list = jumpTo.remove(bci);
+		List<BasicBlock> list = jumpTo.remove(bci);
 		assert list != null;
 
 		for (int i = 0; i < list.size(); i++) {
-			BasicBlock2 t = list.get(i);
+			BasicBlock t = list.get(i);
 			current.to(t);
 		}
 	}
@@ -732,7 +731,7 @@ public class FrameVisitor implements IFrameVisitor {
 	private Var2 get(int i, byte type) { return get(i, Var2.except(type, null)); }
 	private Var2 get(int i, String type) { return get(i, new Var2(REFERENCE, type)); }
 	private Var2 get(int i, Var2 v) {
-		BasicBlock2 s = current;
+		BasicBlock s = current;
 		if (i < s.localMax && s.local[i] != null) {
 			s.local[i].merge(v);
 			return s.local[i];
@@ -750,7 +749,7 @@ public class FrameVisitor implements IFrameVisitor {
 		}
 	}
 	private void set(int i, Var2 v) {
-		BasicBlock2 s = current;
+		BasicBlock s = current;
 		if (i >= s.local.length) s.local = Arrays.copyOf(s.local, i+1);
 		if (s.localMax <= i) s.localMax = i+1;
 
@@ -768,7 +767,7 @@ public class FrameVisitor implements IFrameVisitor {
 	}
 	private Var2 pop12() { return pop(new Var2(ANY2)); }
 	private Var2 pop(Var2 v) {
-		BasicBlock2 s = current;
+		BasicBlock s = current;
 		if (s.stackSize == 0) {
 			if (v == null) v = Var2.any();
 
@@ -800,7 +799,7 @@ public class FrameVisitor implements IFrameVisitor {
 	private void push(byte type) { push(Var2.except(type, null)); }
 	private void push(String owner) { push(new Var2(REFERENCE, owner)); }
 	private void push(Var2 v) {
-		BasicBlock2 s = current;
+		BasicBlock s = current;
 		if (s.stackSize >= s.stack.length) s.stack = Arrays.copyOf(s.stack, s.stackSize+1);
 		s.stack[s.stackSize++] = v.copy();
 
@@ -855,14 +854,14 @@ public class FrameVisitor implements IFrameVisitor {
 
 	// endregion
 	// region Frame writing
-	public static void readFrames(List<Frame2> fr, DynByteBuf r, ConstantPool cp, AbstractCodeWriter pc, String owner, int lMax, int sMax) {
+	public static void readFrames(List<Frame> fr, DynByteBuf r, ConstantPool cp, AbstractCodeWriter pc, String owner, int lMax, int sMax) {
 		fr.clear();
 
 		int allOffset = -1;
 		int tableLen = r.readUnsignedShort();
 		while (tableLen-- > 0) {
 			int type = r.readUnsignedByte();
-			Frame2 f = fromVarietyType(type);
+			Frame f = fromVarietyType(type);
 			fr.add(f);
 
 			int off = -1;
@@ -925,10 +924,10 @@ public class FrameVisitor implements IFrameVisitor {
 	}
 
 	@SuppressWarnings("fallthrough")
-	public static void writeFrames(List<Frame2> frames, DynByteBuf w, ConstantPool cp) {
-		Frame2 prev = null;
+	public static void writeFrames(List<Frame> frames, DynByteBuf w, ConstantPool cp) {
+		Frame prev = null;
 		for (int j = 0; j < frames.size(); j++) {
-			Frame2 curr = frames.get(j);
+			Frame curr = frames.get(j);
 
 			int offset = curr.bci();
 			if (j > 0) offset -= prev.bci() + 1;

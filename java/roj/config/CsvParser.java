@@ -5,17 +5,23 @@ import roj.collect.MyBitSet;
 import roj.collect.SimpleList;
 import roj.config.data.*;
 import roj.config.serial.CVisitor;
+import roj.config.table.TableParser;
+import roj.config.table.TableReader;
+import roj.io.source.Source;
 import roj.text.CharList;
+import roj.text.TextReader;
 import roj.util.Helpers;
 
+import java.io.File;
+import java.io.IOException;
+import java.nio.charset.Charset;
 import java.util.List;
-import java.util.function.Consumer;
 
 /**
  * @author Roj233
  * @since 2022/1/6 13:46
  */
-public final class CsvParser extends Parser {
+public final class CsvParser extends Parser implements TableParser {
 	private static final short seperator = 9, line = 10;
 
 	private static final MyBitSet CSV_LENDS = MyBitSet.from("\r\n,;");
@@ -32,11 +38,24 @@ public final class CsvParser extends Parser {
 
 	private List<CEntry> tmpList;
 
-	public void forEachLine(CharSequence text, Consumer<List<String>> c) throws ParseException {
+	@Override public void table(File file, Charset charset, TableReader listener) throws IOException, ParseException {
+		try (var tw = TextReader.from(file, charset)) {
+			listener.onSheet(0, "csvTable", null);
+			forEachLine(tw, listener);
+		}
+	}
+	@Override public void table(Source file, Charset charset, TableReader listener) throws IOException, ParseException {
+		try (var tw = TextReader.from(file.asInputStream(), charset)) {
+			listener.onSheet(0, "csvTable", null);
+			forEachLine(tw, listener);
+		}
+	}
+
+	public void forEachLine(CharSequence text, TableReader c) throws ParseException {
 		init(text);
 		tmpList = new SimpleList<>();
 
-		int i = 0;
+		int i = 1;
 		while (true) {
 			Word w = next();
 			short type = w.type();
@@ -44,7 +63,7 @@ public final class CsvParser extends Parser {
 			else if (type == line) continue;
 
 			try {
-				c.accept(fastLine(w));
+				c.onRow(i, fastLine(w));
 			} catch (ParseException e) {
 				throw e.addPath("$["+i+"]");
 			}

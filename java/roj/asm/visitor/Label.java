@@ -61,10 +61,17 @@ public class Label extends Number implements Comparable<Label>, ReadonlyLabel {
 			if (block != -1) throw new IllegalStateException("label: "+this);
 
 			block = (short) findBlock(sum, offset, len);
-			if (block >= len) throw new IllegalStateException("Offset "+offset+" exceeded bytecode boundary("+sum[len-1]+")");
+			if (block >= len) throw new IllegalStateException("标签偏移量 "+(int)offset+" 超过bytecode长度 "+sum[len-1]);
 
 			offset -= sum[block];
 			pos = -1;
+		} else {
+			int blockSize = sum[block+1] - sum[block];
+			if (offset > blockSize) {
+				//FIXME 谁动了我的length？
+				block++;
+				offset = 0;
+			}
 		}
 
 		int off = value = (char) (offset + sum[block]);

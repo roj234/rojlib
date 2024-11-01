@@ -11,6 +11,8 @@ import roj.util.Helpers;
 import java.util.List;
 import java.util.Map;
 
+import static roj.config.Flags.LENIENT;
+import static roj.config.Flags.ORDERED_MAP;
 import static roj.config.JSONParser.*;
 import static roj.config.Word.*;
 
@@ -22,8 +24,6 @@ import static roj.config.Word.*;
  * @since 2022/1/6 19:49
  */
 public final class TOMLParser extends Parser {
-	public static final int LENIENT = 1;
-
 	private static final int INLINE = 2;
 	private static final short eq = 17, dot = 18, dlmb = 19, drmb = 20;
 
@@ -249,8 +249,9 @@ public final class TOMLParser extends Parser {
 	}
 
 	@Override
-	protected void onNumberFlow(CharSequence str, short from, short to) throws ParseException {
+	protected Word onNumberFlow(CharList str, short from, short to) throws ParseException {
 		if (to == DOUBLE) throw err("数之大,一个long放不下!");
+		return null;
 	}
 
 	String k;

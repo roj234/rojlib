@@ -4,7 +4,7 @@ import roj.archive.zip.ZipFile;
 import roj.collect.SimpleList;
 import roj.collect.TrieTreeSet;
 import roj.collect.XHashSet;
-import roj.config.YAMLParser;
+import roj.config.ConfigMaster;
 import roj.config.auto.SerializerFactory;
 import roj.config.data.CMap;
 import roj.io.CorruptedInputException;
@@ -56,7 +56,7 @@ public class PluginManager {
 
 		for (var itr = plugins.iterator(); itr.hasNext(); ) {
 			var pd = itr.next();
-			try {
+			if (!pd.library) try {
 				loadPlugin(pd);
 			} catch (Throwable e) {
 				LOGGER.error("插件{}加载失败", e, pd);
@@ -67,6 +67,12 @@ public class PluginManager {
 
 		for (var itr = plugins.iterator(); itr.hasNext(); ) {
 			var pd = itr.next();
+			if (pd.library && pd.state < LOADED) {
+				itr.remove();
+				LOGGER.debug("插件{}已识别,但是由于没有插件依赖它,未加载", pd);
+				continue;
+			}
+
 			try {
 				enablePlugin(pd);
 			} catch (Throwable e) {
@@ -77,7 +83,7 @@ public class PluginManager {
 		}
 	}
 
-	static final int UNLOAD = 0, LOADING = 1, ERRORED = 2, LOADED = 3, ENABLED = 4, DISABLED = 5;
+	public static final int UNLOAD = 0, LOADING = 1, ERRORED = 2, LOADED = 3, ENABLED = 4, DISABLED = 5;
 	final void loadPlugin(PluginDescriptor pd) {
 		switch (pd.state) {
 			default: return;
@@ -117,6 +123,11 @@ public class PluginManager {
 				var pcl = new PluginClassLoader(env, pd, accessible);
 
 				pd.cl = pcl;
+				if (pd.mainClass.isEmpty()) {
+					pd.state = ENABLED;
+					return;
+				}
+
 				klass = pcl.loadClass(pd.mainClass);
 			} else {
 				klass = PluginManager.class.getClassLoader().loadClass(pd.mainClass);
@@ -192,17 +203,19 @@ public class PluginManager {
 			InputStream in = za.getStream("plugin.yml");
 			if (in == null) return null;
 
-			CMap config = new YAMLParser().parse(in).asMap();
+			CMap config = ConfigMaster.YAML.parse(in).asMap();
 
 			var pd = new PluginDescriptor();
 			pd.fileName = plugin.getName();
 			pd.source = new FileSource(plugin, false);
 			pd.id = config.getString("id");
+			pd.moduleId = config.getString("moduleId", pd.id);
 			if (!PLUGIN_ID.matcher(pd.id).matches()) throw new FastFailException("插件id不合法");
 			pd.version = new Version(config.getString("version", "1"));
 			pd.charset = Charset.forName(config.getString("charset", "UTF-8"));
+			pd.library = config.getBool("library");
 			pd.mainClass = config.getString("mainClass");
-			if (pd.mainClass.isEmpty()) throw new FastFailException("mainClass未指定");
+			if (pd.mainClass.isEmpty() && !pd.library) throw new FastFailException("mainClass未指定");
 
 			pd.depend = config.getList("depend").toStringList();
 			pd.loadBefore = config.getList("loadBefore").toStringList();

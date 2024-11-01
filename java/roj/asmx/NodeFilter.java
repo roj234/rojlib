@@ -12,8 +12,8 @@ import roj.asm.util.ClassUtil;
 import roj.asm.util.Context;
 import roj.collect.MyHashMap;
 import roj.collect.SimpleList;
-import roj.util.AttributeKey;
 import roj.util.Helpers;
+import roj.util.TypedKey;
 
 import java.util.List;
 import java.util.Map;
@@ -124,7 +124,7 @@ public class NodeFilter implements ITransformer {
 		}
 		return mod;
 	}
-	private boolean checkAnnotation(ConstantData data, Attributed node, AttributeKey<Annotations> flag, MyHashMap<Object, Object> ref) throws TransformException {
+	private boolean checkAnnotation(ConstantData data, Attributed node, TypedKey<Annotations> flag, MyHashMap<Object, Object> ref) throws TransformException {
 		Annotations attr = node.parsedAttr(data.cp, flag);
 		boolean mod = false;
 		if (attr != null) {

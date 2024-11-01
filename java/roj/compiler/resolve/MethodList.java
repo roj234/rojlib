@@ -4,16 +4,13 @@ import roj.asm.Opcodes;
 import roj.asm.tree.IClass;
 import roj.asm.tree.MethodNode;
 import roj.asm.tree.attr.Attribute;
-import roj.asm.type.IType;
-import roj.asm.type.Signature;
-import roj.asm.type.Type;
-import roj.asm.type.TypeHelper;
+import roj.asm.type.*;
 import roj.asmx.mapper.ParamNameMapper;
 import roj.collect.IntMap;
 import roj.collect.MatchMap;
 import roj.collect.MyHashSet;
 import roj.collect.SimpleList;
-import roj.compiler.CompilerSpec;
+import roj.compiler.LavaFeatures;
 import roj.compiler.api.Evaluable;
 import roj.compiler.ast.expr.ExprNode;
 import roj.compiler.context.CompileUnit;
@@ -23,6 +20,7 @@ import roj.compiler.diagnostic.Kind;
 import roj.text.CharList;
 import roj.text.TextUtil;
 
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
@@ -166,10 +164,10 @@ final class MethodList extends ComponentList {
 				}
 			}
 
-			MethodResult result = ctx.inferrer.infer(mnOwner, mn, that, myParam == null ? params : myParam);
-			int score = result.distance;
-			if (score < 0) continue;
+			var result = ctx.inferrer.infer(mnOwner, mn, that, myParam == null ? params : myParam);
+			if (result.method == null) continue;
 
+			int score = result.distance;
 			if (best == null || score <= best.distance) {
 				if (best != null && score == best.distance) dup.add(mn);
 				else {
@@ -181,17 +179,20 @@ final class MethodList extends ComponentList {
 		}
 
 		String name = methods.get(0).name();
+		boolean isConstructor = name.equals("<init>");
+		if (isConstructor) name = owner.name().substring(owner.name().lastIndexOf('/')+1);
+
 		if (!dup.isEmpty()) {
 			CharList sb = new CharList().append("invoke.compatible.plural:").append(name).append(':');
 
 			appendInput(params, sb);
 
 			sb.append("  ").append(best.method.owner).append("\1invoke.method\0").append(name).append('(');
-			getArg(best.method, sb).append(')');
+			getArg(best.method, that, sb).append(')');
 
 			for (MethodNode mn : dup) {
 				sb.append(" \1and\0\n  ").append(mn.owner).append("\1invoke.method\0").append(name).append('(');
-				getArg(mn, sb).append(')');
+				getArg(mn, that, sb).append(')');
 			}
 
 			ctx.report(Kind.ERROR, sb.replace('/', '.').append(" \1invoke.matches\0").toStringAndFree());
@@ -214,8 +215,9 @@ final class MethodList extends ComponentList {
 
 			for (int i = 0; i < size; i++) {
 				MethodNode mn = methods.get(i);
-				sb.append("  \1invoke.method\0").append(mn.owner).append('.').append(mn.name());
-				getArg(mn, sb.append('(')).append(")\1invoke.notApplicable\0\n    ");
+				if (isConstructor) sb.append("  \1invoke.constructor\0").append(mn.owner);
+				else sb.append("  \1invoke.method\0").append(mn.owner).append('.').append(mn.name());
+				getArg(mn, that, sb.append('(')).append(")\1invoke.notApplicable\0\n    ");
 
 				getErrorMsg(ctx, that, params, (flags&IN_STATIC) != 0, mn, sb.append("(\1"), tmp);
 				sb.append("\0)\n");
@@ -263,10 +265,9 @@ final class MethodList extends ComponentList {
 	}
 
 	static void appendError(MethodResult mr, CharList sb) {
-		sb.append("\1typeCast.error.").append(mr.distance);
+		sb.append("typeCast.error.").append(mr.distance);
 		if (mr.error != null && mr.error.length == 3)
 			sb.append(':').append(mr.error[0]).append(':').append(mr.error[1]);
-		sb.append('\0');
 	}
 	static void appendInput(List<IType> params, CharList sb) {
 		sb.append("  ").append("\1invoke.found\0 ");
@@ -274,10 +275,24 @@ final class MethodList extends ComponentList {
 		else sb.append(TextUtil.join(params, ","));
 		sb.append('\n');
 	}
-	static CharList getArg(MethodNode mn, CharList sb) {
+	static CharList getArg(MethodNode mn, IType that, CharList sb) {
 		Signature sign = mn.parsedAttr(null, Attribute.SIGNATURE);
-		List<? extends IType> params2 = sign == null ? mn.parameters() : sign.values.subList(0, sign.values.size()-1);
-		return sb.append(params2.isEmpty() ? "\1invoke.no_param\0" : TextUtil.join(params2, ","));
+		List<? extends IType> params = sign == null ? mn.parameters() : sign.values.subList(0, sign.values.size()-1);
+		if (params.isEmpty()) return sb.append("\1invoke.no_param\0");
+
+		var myList = that instanceof Generic g ? g.children : Collections.emptyList();
+
+		int i = 0;
+		while (true) {
+			sb.append(params.get(i));
+			if (i < myList.size()) {
+				sb.append("\1invoke.generic.s\0").append(myList.get(i)).append("\1invoke.generic.e\0");
+			}
+			if (++i == params.size()) break;
+			sb.append(",");
+		}
+
+		return sb;
 	}
 
 	@Override
@@ -298,7 +313,7 @@ final class MethodList extends ComponentList {
 	static void checkBridgeMethod(LocalContext ctx, MethodResult mr) {
 		var mn = mr.method;
 		if ((mn.modifier&Opcodes.ACC_PRIVATE) == 0 || ctx.file.name.equals(mn.owner) ||
-			ctx.classes.isSpecEnabled(CompilerSpec.NESTED_MEMBER)) return;
+			ctx.classes.hasFeature(LavaFeatures.NESTED_MEMBER)) return;
 
 		var prev = (Evaluable)mn.attrByName(Evaluable.NAME);
 		if (prev != null) {

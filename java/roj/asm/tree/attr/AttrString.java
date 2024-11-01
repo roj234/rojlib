@@ -1,8 +1,8 @@
 package roj.asm.tree.attr;
 
 import roj.asm.cp.ConstantPool;
-import roj.util.AttributeKey;
 import roj.util.DynByteBuf;
+import roj.util.TypedKey;
 
 /**
  * @author Roj234
@@ -15,7 +15,7 @@ public final class AttrString extends Attribute {
 	private final byte name;
 	public String value;
 
-	public AttrString(AttributeKey<AttrString> key, String value) {
+	public AttrString(TypedKey<AttrString> key, String value) {
 		this.name = (byte) NAMED_ID.getInt(key.name);
 		this.value = value;
 	}

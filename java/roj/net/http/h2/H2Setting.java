@@ -51,7 +51,7 @@ public final class H2Setting {
 
 	public void sanityCheck() throws H2Exception {
 		if (max_streams == -1) max_streams = 256;
-		if (max_frame_size < 1024 || header_table_size > 16384 || initial_window_size < 512 || max_streams < 2) throw new H2Exception(H2Exception.ERROR_REFUSED, "Insanity setting");
-		if (max_frame_size > 65536) max_frame_size = 65536;
+		if (max_frame_size < 1024 || header_table_size > 65536 || initial_window_size < 512 || max_streams < 2) throw new H2Exception(H2Exception.ERROR_REFUSED, "Insanity setting");
+		//if (max_frame_size > 65536) max_frame_size = 65536;
 	}
 }

@@ -45,7 +45,7 @@ import static roj.ui.terminal.CommandNode.literal;
  * @since 2023/12/25 0025 18:01
  */
 public final class Panger extends PluginManager {
-	static final CommandConsole CMD = new CommandConsole("Panger> ");
+	static final CommandConsole CMD = new CommandConsole("Panger>");
 	public static Console console() {return CMD;}
 
 	static Panger pm;
@@ -155,11 +155,11 @@ public final class Panger extends PluginManager {
 		CharList s = new CharList("""
 			------------------------------------------------------------
 			\u001b[38;2;46;137;255m
-			  ██████╗   █████╗  ███╗   ██╗  ██████╗  ███████╗ ██████╗\s
-			  ██╔══██╗ ██╔══██╗ ████╗  ██║ ██╔════╝  ██╔════╝ ██╔══██╗
-			  ██████╔╝ ███████║ ██╔██╗ ██║ ██║  ███╗ █████╗   ██████╔╝
-			  ██╔═══╝  ██╔══██║ ██║╚██╗██║ ██║   ██║ ██╔══╝   ██╔══██╗
-			  ██║      ██║  ██║ ██║ ╚████║ ╚██████╔╝ ███████╗ ██║  ██║
+			  ▌▌▌▌▌▌╗   ▌▌▌▌▌╗  ▌▌▌╗   ▌▌╗  ▌▌▌▌▌▌╗  ▌▌▌▌▌▌▌╗ ▌▌▌▌▌▌╗\s
+			  ▌▌╔══▌▌╗ ▌▌╔══▌▌╗ ▌▌▌▌╗  ▌▌║ ▌▌╔════╝  ▌▌╔════╝ ▌▌╔══▌▌╗
+			  ▌▌▌▌▌▌╔╝ ▌▌▌▌▌▌▌║ ▌▌╔▌▌╗ ▌▌║ ▌▌║  ▌▌▌╗ ▌▌▌▌▌╗   ▌▌▌▌▌▌╔╝
+			  ▌▌╔═══╝  ▌▌╔══▌▌║ ▌▌║╚▌▌╗▌▌║ ▌▌║   ▌▌║ ▌▌╔══╝   ▌▌╔══▌▌╗
+			  ▌▌║      ▌▌║  ▌▌║ ▌▌║ ╚▌▌▌▌║ ╚▌▌▌▌▌▌╔╝ ▌▌▌▌▌▌▌╗ ▌▌║  ▌▌║
 			  ╚═╝      ╚═╝  ╚═╝ ╚═╝  ╚═══╝  ╚═════╝  ╚══════╝ ╚═╝  ╚═╝\s\u001b[38;2;128;255;255mv{V}
 			\u001b[38;2;255;255;255m
 			""").replace("{V}", CORE_VERSION);
@@ -185,7 +185,7 @@ public final class Panger extends PluginManager {
 			MyHashMap<String, PluginDescriptor> builtin = new MyHashMap<>();
 			for (var info : PanTweaker.annotations.annotatedBy("roj/plugin/SimplePlugin")) {
 				pd = new PluginDescriptor();
-				pd.fileName = "annotation:"+info.node();
+				pd.fileName = "annotated_builtin";
 				pd.mainClass = info.owner().replace('/', '.');
 
 				Annotation pin = info.annotations().get("roj/plugin/SimplePlugin");
@@ -250,7 +250,7 @@ public final class Panger extends PluginManager {
 
 				var http = new PanHttp();
 				var proxyToken = CONFIG.getString("http_reverse_proxy");
-				if (!proxyToken.isEmpty()) HttpCache.proxyRequestRetainer = http;
+				if (!proxyToken.isEmpty()) HttpCache.proxySecret = proxyToken;
 				if (CONFIG.getBool("http_status")) router.register(http);
 			} catch (IOException e) {
 				LOGGER.error("HTTP服务启动失败", e);

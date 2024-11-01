@@ -2,9 +2,9 @@ package roj.config.serial;
 
 import org.jetbrains.annotations.NotNull;
 import roj.config.Tokenizer;
+import roj.io.IOUtil;
 import roj.text.CharList;
 import roj.text.TextUtil;
-import roj.util.Helpers;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -142,12 +142,6 @@ public abstract class ToSomeString implements CVisitor {
 	}
 
 	public final void close() throws IOException {
-		if (sb instanceof AutoCloseable c) {
-			try {
-				c.close();
-			} catch (Exception e) {
-				Helpers.athrow(e);
-			}
-		}
+		if (sb instanceof AutoCloseable c) IOUtil.closeSilently(c);
 	}
 }

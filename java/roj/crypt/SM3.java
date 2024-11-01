@@ -3,6 +3,8 @@ package roj.crypt;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
 
+import static java.lang.Integer.rotateLeft;
+
 /**
  * 国密SM3 - 校验码
  */
@@ -73,19 +75,19 @@ final class SM3 extends BufferedDigest {
 	protected void engineReset() {
 		buf.clear();
 		bufOff = 0;
-		digest[68 + 0] = 1937774191;
-		digest[68 + 1] = 1226093241;
-		digest[68 + 2] = 388252375;
-		digest[68 + 3] = -628488704;
-		digest[68 + 4] = -1452330820;
-		digest[68 + 5] = 372324522;
-		digest[68 + 6] = -477237683;
-		digest[68 + 7] = -1325724082;
+		digest[68 + 0] = 0x7380166f;
+		digest[68 + 1] = 0x4914b2b9;
+		digest[68 + 2] = 0x172442d7;
+		digest[68 + 3] = 0xda8a0600;
+		digest[68 + 4] = 0xa96f30bc;
+		digest[68 + 5] = 0x163138aa;
+		digest[68 + 6] = 0xe38dee4d;
+		digest[68 + 7] = 0xb0fb0e4e;
 	}
 
 	private static void GetSM3(int[] W) {
 		for (int i = 16; i < 68; i++) {
-			W[i] = P1(W[i - 16] ^ W[i - 9] ^ Conv.IRL(W[i - 3], 15)) ^ Conv.IRL(W[i - 13], 7) ^ W[i - 6];
+			W[i] = P1(W[i - 16] ^ W[i - 9] ^ rotateLeft(W[i - 3], 15)) ^ rotateLeft(W[i - 13], 7) ^ W[i - 6];
 		}
 
 		int t1, t2;
@@ -100,36 +102,36 @@ final class SM3 extends BufferedDigest {
 
 		int i = 0;
 		for (; i < 16; i++) {
-			t2 = Conv.IRL(a, 12);
-			t1 = Conv.IRL(t2 + e + T[i], 7);
+			t2 = rotateLeft(a, 12);
+			t1 = rotateLeft(t2 + e + T[i], 7);
 			t2 = t1 ^ t2;
 
 			t2 = FF1(a, b, c) + d + t2 + (W[i] ^ W[i + 4]);
 			d = c;
-			c = Conv.IRL(b, 9);
+			c = rotateLeft(b, 9);
 			b = a;
 			a = t2;
 
 			t2 = FF1(e, f, g) + h + t1 + W[i];
 			h = g;
-			g = Conv.IRL(f, 19);
+			g = rotateLeft(f, 19);
 			f = e;
 			e = P0(t2);
 		}
 		for (; i < 64; i++) {
-			t2 = Conv.IRL(a, 12);
-			t1 = Conv.IRL(t2 + e + T[i], 7);
+			t2 = rotateLeft(a, 12);
+			t1 = rotateLeft(t2 + e + T[i], 7);
 			t2 = t1 ^ t2;
 
 			t2 = FF2(a, b, c) + d + t2 + (W[i] ^ W[i + 4]);
 			d = c;
-			c = Conv.IRL(b, 9);
+			c = rotateLeft(b, 9);
 			b = a;
 			a = t2;
 
 			t2 = GG(e, f, g) + h + t1 + W[i];
 			h = g;
-			g = Conv.IRL(f, 19);
+			g = rotateLeft(f, 19);
 			f = e;
 			e = P0(t2);
 		}
@@ -147,6 +149,6 @@ final class SM3 extends BufferedDigest {
 	private static int FF1(int X, int Y, int Z) { return X ^ Y ^ Z; }
 	private static int FF2(int X, int Y, int Z) { return ((X & Y) | (X & Z) | (Y & Z)); }
 	private static int GG(int X, int Y, int Z) { return (X & Y) | (~X & Z); }
-	private static int P0(int X) { return X ^ Conv.IRL(X, 9) ^ Conv.IRL(X, 17); }
-	private static int P1(int X) { return X ^ Conv.IRL(X, 15) ^ Conv.IRL(X, 23); }
+	private static int P0(int X) {return X ^ rotateLeft(X, 9) ^ rotateLeft(X, 17);}
+	private static int P1(int X) {return X ^ rotateLeft(X, 15) ^ rotateLeft(X, 23);}
 }

@@ -3,7 +3,7 @@ package roj.archive.zip;
 import roj.crypt.FeedbackCipher;
 import roj.crypt.HMAC;
 import roj.crypt.ILCrypto;
-import roj.crypt.PBKDF2;
+import roj.crypt.KDF;
 import roj.io.IOUtil;
 import roj.util.DynByteBuf;
 import roj.util.Helpers;
@@ -48,7 +48,7 @@ final class ZipAES extends FeedbackCipher {
 
 		if (salt == null) salt = SecureRandom.getSeed(SALT_LENGTH);
 
-		byte[] compositeKey = PBKDF2.PBKDF2_Derive(hmac, key, salt, PBKDF2_ITERATION_COUNT, COMPOSITE_KEY_LENGTH);
+		byte[] compositeKey = KDF.PBKDF2_Derive(hmac, key, salt, PBKDF2_ITERATION_COUNT, COMPOSITE_KEY_LENGTH);
 
 		try {
 			cip.init(Cipher.ENCRYPT_MODE, Arrays.copyOf(compositeKey, KEY_LENGTH)); // AES Key

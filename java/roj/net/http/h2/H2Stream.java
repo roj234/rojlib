@@ -25,8 +25,10 @@ public abstract class H2Stream {
 	public final int id;
 	protected H2Stream(int id) {this.id = id;}
 
-	protected static final byte C_SEND_BODY = 0, OPEN = 1, HEAD_V = 2, HEAD_R = 3, DATA = 4, HEAD_T = 5, PROCESSING = 6, SEND_BODY = 7, CLOSED = 8, ERRORED = 9;
-	byte state;
+	protected static final byte OPEN = 0, HEAD_V = 1, HEAD_R = 2, DATA = 3, DATA_FIN = 4, HEAD_T = 5, CLOSED = 6, ERRORED = 7;
+	byte state, outState;
+
+	protected final byte getOutState() {return outState;}
 	protected final byte getState() {return state;}
 	protected static final byte FLAG_GOAWAY = 1, FLAG_HEADER_SENT = -128;
 	protected byte flag;
@@ -49,13 +51,13 @@ public abstract class H2Stream {
 		AA = ReflectionUtils.fieldOffset(HttpHead.class, "a"),
 		BB = ReflectionUtils.fieldOffset(HttpHead.class, "b"),
 		CC = ReflectionUtils.fieldOffset(HttpHead.class, "c");
-	private HttpHead hh = new HttpHead(false,null,null,null);
+	protected HttpHead _header = new HttpHead(false,null,null,null);
 
 	final String header(DynByteBuf buf, HPACK coder, boolean first) throws IOException {
 		switch (state) {
 			default: return "StreamState";
-			case HEAD_V, HEAD_R, HEAD_T: break;
-			case OPEN, DATA:
+			case HEAD_V, HEAD_R/*, HEAD_T*/: break;
+			case OPEN, DATA_FIN:
 				if (!first) return "StreamState";
 				state++;
 			break;
@@ -70,7 +72,7 @@ public abstract class H2Stream {
 			if ((headerSize -= field.len()) < 0) throw new IllegalRequestException(431);
 
 			if (key.startsWith(":")) {
-				if (state != HEAD_V || hh.containsKey(key) || !PSEUDO_HEADERS.contains(key)) return "PseudoHeader.Invalid";
+				if (state != HEAD_V || _header.containsKey(key) || !PSEUDO_HEADERS.contains(key)) return "PseudoHeader.Invalid";
 			} else if (state == HEAD_V) {
 				state = HEAD_R;
 			}
@@ -78,7 +80,7 @@ public abstract class H2Stream {
 			// key不得包含具有'连接特定语义'([HTTP] 7.6.1节)的字段
 			// 唯一的例外是TE，不过，它只能为 'TE: trailer'
 			try {
-				hh.add(key, field.v.toString());
+				_header.add(key, field.v.toString());
 			} catch (IllegalArgumentException e) {
 				return "Header.ValueError";
 			}
@@ -86,8 +88,14 @@ public abstract class H2Stream {
 
 		return null;
 	}
-	final String headerEnd(H2Connection man) {
-		var hh = this.hh;
+	final String _headerEnd(H2Connection man) throws IOException {
+		var t = headerEnd(man);
+		if (state < DATA) state = DATA;
+		//else if (state == HEAD_T) state = CLOSED;
+		return t;
+	}
+	protected String headerEnd(H2Connection man) throws IOException {
+		var hh = this._header;
 
 		var authority = hh.remove(":authority");
 		// 请注意，CONNECT或asterisk-form OPTIONS请求的目标不包含authority；见[HTTP]第7.1和7.2节。
@@ -133,28 +141,26 @@ public abstract class H2Stream {
 			u.putBoolean(hh, RR, false);
 		}
 
-		if (state < DATA) state = DATA;
 		return null;
 	}
 
 	final String data(H2Connection man, DynByteBuf buf) throws IOException {
 		if (state != DATA) return "StreamState";
-		if (!buf.isReadable()) return null;
 
-		var h = hh;
+		var h = _header;
 		if (h != null) {
-			hh = null;
+			_header = null;
 			onHeaderDone(man, h, true);
 		}
 		return onData(man, buf);
 	}
 	final void dataEnd(H2Connection man) throws IOException {
-		if (state >= PROCESSING) return;
-		state = PROCESSING;
+		if (state >= DATA_FIN) return;
+		state = DATA_FIN;
 
-		var h = hh;
+		var h = _header;
 		if (h != null) {
-			hh = null;
+			_header = null;
 			onHeaderDone(man, h, false);
 		}
 		onDone(man);
@@ -168,20 +174,17 @@ public abstract class H2Stream {
 		onRST(man, errno);
 	}
 
-	protected final boolean isSuccessfullyFinished() {return state == CLOSED;}
 	public final String _getState() {
 		return switch (state) {
-			case C_SEND_BODY -> "C_SEND_BODY";
 			case OPEN -> "OPEN";
 			case HEAD_V -> "HEAD_V";
 			case HEAD_R -> "HEAD_R";
-			case DATA -> "DATA";
-			case HEAD_T -> "HEAD_T";
-			case PROCESSING -> "PROCESSING";
-			case SEND_BODY -> "SEND_BODY";
+			case DATA -> "RECV_BODY";
+			case DATA_FIN -> "PROCESSING";
+			case HEAD_T -> "PROCESSING";
 			case CLOSED -> "CLOSED";
 			case ERRORED -> "ERRORED";
-			default -> "State "+state;
+			default -> "State "+ state;
 		};
 	}
 	protected void tick(H2Connection man) throws IOException {}
@@ -198,14 +201,14 @@ public abstract class H2Stream {
 		}
 
 		man.streamError(id, ERROR_INTERNAL);
-		LOGGER.warn("未捕获的异常[{}.Stream#{}]", ex, man, id);
+		LOGGER.warn("未捕获的异常[{}/#{}]", ex, man, id);
 	}
 	/**
 	 * 连接被RST_STREAM或GOAWAY关闭.
 	 * 这个方法至多调用一次
 	 */
 	protected void onRST(H2Connection man, int errno) {
-		LOGGER.debug("对等端的RST[{}.Stream#{}]: {}", man, id, errno);
+		LOGGER.debug("对等端的RST[{}/#{}]: {}", man, id, errno);
 		onFinish(man);
 	}
 	/**

@@ -1,3 +1,8 @@
+# Lavac CLI
+lavac.noSource=错误：没有源文件
+lavac.sourceNotExist=错误：找不到源文件 '%1'
+
+
 # Common
 type.literal=标识符(identifier)
 type.expr=表达式
@@ -13,8 +18,8 @@ lava.compiler=<编译器>
 lava.sandbox=预编译模式已开启，请注意安全
 lava.sandbox.error=[Sandbox]计算出错: %1
 
-# ResolveHelper
-rh.cyclicDepend=[RH]包括%1在内的循环继承
+# ResolveHelper | ResolveException
+rh.cyclicDepend=包括%1在内的循环继承
 
 # Tokenizer
 lexer.number.floatLarge=[Num]浮点数过大
@@ -28,8 +33,11 @@ lexer.number.noExponent=[Num]数字在指数后被截断
 lexer.number.formatError=[Num]浮点文字的格式错误
 
 lexer.stringBlock.noCRLF=[StringBlock]期待换行
-lexer.stringBlock.noIndent=[StringBlock]缩进为零
-lexer.stringBlock.indentChange=[StringBlock][Incompatible]文本块的最小缩进必须在第一行确定
+lexer.stringBlock.noIndent=文本块必须有缩进
+lexer.stringBlock.indentChange=[Incompatible]文本块的缩进必须在第一行确定
+
+pseudoType.cast=伪类型擦除
+pseudoType.pseudo=伪类型不存在
 
 # Predefined annotation processor
 annotation.override=此方法未能覆盖超类的方法
@@ -59,9 +67,9 @@ import.unpackaged=[Import]不带包名的导入
 #import.any=[Import]任意导入可能导致安全性或可靠性下降，建议仅用于脚本模式
 import.conflict=[Import] %1 的短名称%2与 %3 重复
 
-modifier.annotation=[Modifier]此处不允许注解
-modifier.conflict=[Modifier]修饰符%1不能与%2组合
-modifier.notAllowed=[Modifier]此处不允许修饰符%1
+modifier.annotation=此处不允许注解
+modifier.conflict=修饰符%1不能与%2组合
+modifier.notAllowed=此处不允许修饰符%1
 
 #Cu Stage1 [Class]
 cu.filename=[CU]%1中的公共类名称应当与文件名相同
@@ -148,11 +156,15 @@ type.except.afterAsk=大于号、逗号、extends或super
 type.except.afterLss=大于号或逗号
 
 # LocalContext
-lc.unReportedException=[LC]可能抛出未声明的异常%1
-lc.packageRestricted=[LC]中间变量或返回值%1不在受限import的导入范围中
+lc.unReportedException=可能抛出未声明的异常 %1
+lc.packageRestricted=中间变量或返回值 %1 不在受限import的导入范围中
+lc.illegalModifier=在类%1中遇到非法的修饰符组合: 0x%2
 
 # ParseTask
 ps.method.paramDef=[PS]默认参数不是立即常量
+
+# Inferrer
+inferrer.illegalVararg=可变参数方法%1.%2的最后一个参数不是数组
 
 # BlockParser
 block.initializorCannotComplete=初始化程序必须能够正常完成
@@ -163,15 +175,16 @@ block.error.dupLabel=标签名称%1已存在
 
 block.assert.constant=[Assert]值始终为真
 
-block.for.manyVariablesInForeach=for-each表达式仅允许使用单个变量 (目前使用了%1个)
+block.for.manyVariablesInForeach=for-each表达式(目前)仅允许使用单个变量 (目前使用了%1个)
 
 block.goto.error.outsideLoop=[Goto]在switch或循环外%1
 block.goto.error.noSuchLabel=[Goto]未定义的标签: %1
 
-block.return.error.outsideMethod=[Return]方法外的返回
-block.return.error.exceptVoid=[Return]意外的返回值
-block.return.error.exceptExpr=[Return]缺少返回值
+block.return.error.outsideMethod=方法外的return语句
+block.return.error.exceptVoid=意外的返回值
+block.return.error.exceptExpr=缺少返回值
 
+block.try.noDefer=必须在try语句中使用defer
 block.try.duplicateCatch=[Try]在AnyCatch后不能再有catch
 block.try.notException=[Try]%1不是异常
 block.try.generic=[Try]不能捕获泛型异常%1
@@ -180,6 +193,7 @@ block.try.noHandler=[Try]孤立的try
 block.try.noAutoCloseable=[Try] try-with-resources 不适用 (%1无法转换为java.lang.AutoCloseable)
 block.try.waste=[Try]finally代码块（%1字节）被复制了%2次，用"...finally"替换finally以减小文件体积
 block.try.interrupted=[Try]对close()的隐式调用可能抛出InterruptedException
+block.try.cantThrow=[Try]块中的代码不可能抛出异常%1
 
 
 block.switch.mixedCase=[Switch]使用了不同的 case 类型
@@ -189,7 +203,7 @@ block.switch.uncovered="[Switch]缺少default分支\n  %1"
 block.switch.collisionType=[Switch]分支类型%1和%2之间存在交集
 block.switch.nullfail=[Switch]基本类型不允许case null
 block.switch.nonConstant=[Switch]使用"...switch"允许非编译期常量
-block.switch.fallthrough=[Switch]在分支最后没有break
+block.switch.fallthrough=[Switch]上一个分支没有break
 
 block.switch.noBranch=[Switch]没有分支
 block.switch.incompatible=[Switch]类型%1不能使用switch比较 (对于对象类型，添加@Switchable即可)
@@ -212,10 +226,12 @@ block.var.exist=变量%1已存在
 block.var.final=最终变量未赋初值
 block.var.var=var变量必须初始化
 
+block.loop.notLoop="无意义的循环语句\n  该循环仅执行1次"
+
 expr.constantWritable.ifOnly=ASM_if只能在if语句中使用
 
 # BlockParser Excepting Types
-block.except.tryOrAuto=(或{
+block.except.tryOrAuto=(
 block.except.name=变量名称(标识符)
 block.except.labelOrSemi=标签或;
 block.except.switchCase=逗号, 分号或'->'
@@ -284,23 +300,28 @@ instanceof.error.unsafeCast=[InstanceOf]%1 无法安全地转换为 %2
 instanceOf.constant=[InstanceOf]对 %1 的检测总是常量
 invoke.error.constructor=[Invoke]对 %1 的调用必须是构造器中的第一个语句
 invoke.error.instantiationAbstract=[Invoke] %1 是抽象的; 无法实例化
+invoke.error.instantiationEnum=[Invoke] 无法实例化枚举类型 %1
 invoke.compatible.plural="[Invoke]对 %1 的引用不明确\n%2"
 invoke.incompatible.single="[Invoke]无法将类 %1 中的方法 %2 应用到给定类型\n%3"
 invoke.incompatible.plural="[Invoke]对于%1找不到合适的方法\n%2"
 invoke.noExact=创建的类型参数不得包含非具体泛型(<>除外)
 trinary.constant=[Trinary]值总是常量
-this.static=[This]无法在静态上下文中引用this
-this.no_super=[This]%1没有超类引用
-unary.error.notApplicable=[Unary]运算符'%1'不适用于'%2'
+this.static=无法在静态上下文中引用this
+this.no_super=%1没有父类
+unary.error.notApplicable=运算符'%1'不适用于'%2'
 unary.warn.wrapper=[Unary]对包装类型%1的%2操作
 unary.error.void=[Unary]空类型
-unary.error.final=[Unary]无法为最终变量%1分配值
-var.notAssigned=[Var]可能尚未初始化变量%1
-multiReturn.incompatible=[MR]只有多返回值方法才能使用多返回值语法糖
-multiReturn.russianToy=[MR]此处禁止套娃！！！
+unary.error.final=无法为最终变量%1分配值
+var.notAssigned=可能尚未初始化变量%1
+var.refByNest=值已拷贝到隔离的上下文, 源变量%1不应再改变
+multiReturn.incompatible=只有多返回值方法才能使用多返回值语法糖
+multiReturn.russianToy="禁止套娃！\n  须知：ReturnStack是线程单例"
+multiReturn.sideEffect="潜在的副作用。\n  须知：ReturnStack是线程单例"
 anonymousClass.inferFailed=匿名类的自动泛型推断无法在该状态下使用
 anonymousClass.interfaceArg=匿名类实现接口; 不能有参数
 nae.unresolvable=解析失败
+stringFormat.f.unclosed=未关闭的表达式
+stringFormat.unknown=未知的字符串常量修饰符 %1
 
 # lambda表达式
 lambda.untyped=[Lambda]未知的目标类型
@@ -316,6 +337,7 @@ expr.skipReturnValue=[Expr]该语句的返回值不能省略
 symbol.type=类
 symbol.field=字段
 invoke.method=方法
+invoke.constructor=构造器
 
 invoke.except=需要:
 invoke.found=找到:
@@ -323,6 +345,8 @@ invoke.reason=原因:
 invoke.no_param=没有参数
 invoke.matches=都匹配
 invoke.notApplicable=不适用:
+invoke.generic.s= (解析为
+invoke.generic.e=)
 and=和
 
 invoke.warn.illegalNameList=[Resolve]方法%1的参数列表不合法

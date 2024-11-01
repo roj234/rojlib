@@ -30,18 +30,9 @@ public class ASM {
 	public static boolean __asm(Consumer<CodeWriter> asm) {return true;}
 
 	/**
-	 * 强制的 <b>泛型</b> 转换
+	 * 强制泛型转换
 	 * @see roj.util.Helpers#cast(Object)
 	 */
 	@SuppressWarnings("unchecked")
 	public static <T> T cast(Object input) {return (T) input;}
-
-	/**
-	 * inline
-	 */
-	public static boolean i2z(int v) {return v != 0;}
-	/**
-	 * inline
-	 */
-	public static int z2i(boolean b) {return b?1:0;}
 }

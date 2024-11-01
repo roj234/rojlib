@@ -317,14 +317,8 @@ public abstract class DynByteBuf extends OutputStream implements CharSequence, M
 	public final DynByteBuf putDouble(int wi, double x) {return putLong(wi, Double.doubleToRawLongBits(x));}
 	//endregion
 	//region varint
-	public static int zig(int i) {
-		// (~i << 1) + 1
-		// (-i << 1) - 1
-		return (i & Integer.MIN_VALUE) == 0 ? i << 1 : ((-i << 1) - 1);
-	}
-	public static long zig(long i) {
-		return (i & Long.MIN_VALUE) == 0 ? i << 1 : ((-i << 1) - 1);
-	}
+	public static int zig(int i) {return (i << 1) ^ (i >> 31);}
+	public static long zig(long i) {return (i << 1) ^ (i >> 63);}
 
 	public final DynByteBuf putVarInt(int x) {
 		//ensureWritable(VarintSplitter.getVarIntLength(i));
@@ -437,7 +431,6 @@ public abstract class DynByteBuf extends OutputStream implements CharSequence, M
 		this.readFully(result, 0, len);
 		return result;
 	}
-
 	public final void readFully(byte[] b) { this.readFully(b, 0, b.length); }
 	public abstract void readFully(byte[] b, int off, int len);
 	public final void readFully(int i, byte[] b) { readFully(i, b, 0, b.length); }

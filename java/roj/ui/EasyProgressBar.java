@@ -1,5 +1,6 @@
 package roj.ui;
 
+import roj.io.IOUtil;
 import roj.text.TextUtil;
 
 import java.util.concurrent.atomic.AtomicLong;
@@ -44,9 +45,17 @@ public class EasyProgressBar extends ProgressBar {
 		} else {
 			setPrefix(sum+"/"+tot);
 		}
-		int s = (int) (getEta(tot-sum) / 1000);
-		setPostfix("ETA: "+s/3600+":"+s/60%60+":"+s%60);
+
+		if (speedPerMs() == 0) {
+			setPostfix("ETA: --:--");
+		} else {
+			int s = (int) (getEta(tot-sum) / 1000);
+			setPostfix(IOUtil.getSharedCharBuf().append("ETA: ").append(s/3600).append(':').padNumber(s/60%60, 2).append(':').padNumber(s%60, 2).toString());
+		}
 
 		super.updateForce(percent);
 	}
+
+	public long getCurrent() {return fin.sum();}
+	public long getMax() {return max.get();}
 }

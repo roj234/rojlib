@@ -22,10 +22,7 @@ public abstract class AnnVal {
 	public static AnnVal valueOf(long v) { return new AnnValLong(v); }
 	public static AnnVal valueOf(double v) { return new AnnValDouble(v); }
 
-	public static final char STRING = 's';
-	public static final char ENUM = 'e';
-	public static final char ANNOTATION_CLASS = 'c';
-	public static final char ANNOTATION = '@';
+	public static final char STRING = 's', ENUM = 'e', ANNOTATION_CLASS = 'c', ANNOTATION = '@';
 
 	public int asInt() { throw new UnsupportedOperationException(getClass().getSimpleName()+" is not INT"); }
 	public float asFloat() { throw new UnsupportedOperationException(getClass().getSimpleName()+" is not FLOAT"); }
@@ -43,8 +40,8 @@ public abstract class AnnVal {
 		int type = r.readUnsignedByte();
 
 		switch (type) {
-			case BOOLEAN: case BYTE: case SHORT: case CHAR: case INT:
-			case DOUBLE: case FLOAT: case LONG: case STRING: case ANNOTATION_CLASS:
+			case BOOLEAN, BYTE, SHORT, CHAR, INT:
+			case DOUBLE, FLOAT, LONG, STRING, ANNOTATION_CLASS:
 				Constant c = pool.get(r);
 				return switch (type) {
 					case DOUBLE -> valueOf(((CstDouble) c).value);

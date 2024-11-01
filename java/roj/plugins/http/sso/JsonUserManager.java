@@ -18,7 +18,7 @@ import java.util.Map;
  * @author Roj234
  * @since 2024/7/8 0008 7:04
  */
-public class JsonUserManager implements UserManager {
+class JsonUserManager implements UserManager {
 	private final File json;
 
 	private List<User> users;
@@ -38,7 +38,7 @@ public class JsonUserManager implements UserManager {
 
 	public JsonUserManager(File json) throws IOException, ParseException {
 		this.json = json;
-		this.users = json.length() == 0 ? new SimpleList<>() : ConfigMaster.JSON.readObject(SERIALIZER.listOf(User.class), json);
+		this.users = !json.isFile() ? new SimpleList<>() : ConfigMaster.JSON.readObject(SERIALIZER.listOf(User.class), json);
 		for (User user : users) userByName.put(user.name, user);
 	}
 
@@ -70,15 +70,17 @@ public class JsonUserManager implements UserManager {
 		doSave();
 	}
 
-	public void onShutdown() {
-		if (isDataDirty) doSave();
-	}
+	public void onShutdown() {if (isDataDirty) doSave();}
 
 	private void doSave() {
 		try {
 			synchronized (this) {
-				ConfigMaster.JSON.writeObject(SERIALIZER.listOf(User.class), users, json);
+				if (!users.isEmpty()) {
+					json.renameTo(new File(json.getAbsolutePath()+".bak"));
+					ConfigMaster.JSON.writeObject(SERIALIZER.listOf(User.class), users, json);
+				}
 			}
+			isDataDirty = false;
 		} catch (Exception e) {
 			e.printStackTrace();
 		}

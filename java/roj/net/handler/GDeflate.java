@@ -142,4 +142,10 @@ public abstract class GDeflate implements ChannelHandler {
 		}
 	}
 	protected int writePacket(ChannelCtx ctx, DynByteBuf out, boolean isFull) throws IOException {ctx.channelWrite(out);return 0;}
+
+	@Override
+	public void handlerRemoved(ChannelCtx ctx) {
+		if (def != null) def.end();
+		if (inf != null) inf.end();
+	}
 }

@@ -4,8 +4,8 @@ import roj.asm.cp.ConstantPool;
 import roj.asm.type.Signature;
 import roj.asm.visitor.XAttrCode;
 import roj.collect.IntBiMap;
-import roj.util.AttributeKey;
 import roj.util.DynByteBuf;
+import roj.util.TypedKey;
 
 /**
  * @author Roj234
@@ -13,41 +13,41 @@ import roj.util.DynByteBuf;
  */
 public abstract class Attribute {
 	public static final IntBiMap<String> NAMED_ID = new IntBiMap<>();
-	public static <T> AttributeKey<T> createAttributeName(String name) {
+	public static <T> TypedKey<T> createAttributeName(String name) {
 		NAMED_ID.putInt(NAMED_ID.size(), name);
-		return new AttributeKey<>(name);
+		return new TypedKey<>(name);
 	}
 
-	public static final AttributeKey<TypeAnnotations>
+	public static final TypedKey<TypeAnnotations>
 		RtTypeAnnotations = createAttributeName("RuntimeVisibleTypeAnnotations"),
 		ClTypeAnnotations = createAttributeName("RuntimeInvisibleTypeAnnotations");
-	public static final AttributeKey<Annotations>
+	public static final TypedKey<Annotations>
 		RtAnnotations = createAttributeName("RuntimeVisibleAnnotations"),
 		ClAnnotations = createAttributeName("RuntimeInvisibleAnnotations");
-	public static final AttributeKey<ParameterAnnotations>
+	public static final TypedKey<ParameterAnnotations>
 		RtParameterAnnotations = createAttributeName("RuntimeVisibleParameterAnnotations"),
 		ClParameterAnnotations = createAttributeName("RuntimeInvisibleParameterAnnotations");
-	public static final AttributeKey<Signature> SIGNATURE = createAttributeName("Signature");
+	public static final TypedKey<Signature> SIGNATURE = createAttributeName("Signature");
 	// class
-	public static final AttributeKey<AttrRecord> Record = createAttributeName("Record");
-	public static final AttributeKey<InnerClasses> InnerClasses = createAttributeName("InnerClasses");
-	public static final AttributeKey<AttrModule> Module = createAttributeName("Module");
-	public static final AttributeKey<AttrClassList> ModulePackages = createAttributeName("ModulePackages");
-	public static final AttributeKey<AttrString> ModuleMainClass = createAttributeName("ModuleMainClass");
-	public static final AttributeKey<AttrString> NestHost = createAttributeName("NestHost");
-	public static final AttributeKey<AttrClassList> PermittedSubclasses = createAttributeName("PermittedSubclasses");
-	public static final AttributeKey<AttrClassList> NestMembers = createAttributeName("NestMembers");
-	public static final AttributeKey<AttrString> SourceFile = createAttributeName("SourceFile");
-	public static final AttributeKey<BootstrapMethods> BootstrapMethods = createAttributeName("BootstrapMethods");
-	public static final AttributeKey<EnclosingMethod> EnclosingMethod = createAttributeName("EnclosingMethod");
-	public static final AttributeKey<AttrString> ModuleTarget = createAttributeName("ModuleTarget");
+	public static final TypedKey<AttrRecord> Record = createAttributeName("Record");
+	public static final TypedKey<InnerClasses> InnerClasses = createAttributeName("InnerClasses");
+	public static final TypedKey<AttrModule> Module = createAttributeName("Module");
+	public static final TypedKey<AttrClassList> ModulePackages = createAttributeName("ModulePackages");
+	public static final TypedKey<AttrString> ModuleMainClass = createAttributeName("ModuleMainClass");
+	public static final TypedKey<AttrString> NestHost = createAttributeName("NestHost");
+	public static final TypedKey<AttrClassList> PermittedSubclasses = createAttributeName("PermittedSubclasses");
+	public static final TypedKey<AttrClassList> NestMembers = createAttributeName("NestMembers");
+	public static final TypedKey<AttrString> SourceFile = createAttributeName("SourceFile");
+	public static final TypedKey<BootstrapMethods> BootstrapMethods = createAttributeName("BootstrapMethods");
+	public static final TypedKey<EnclosingMethod> EnclosingMethod = createAttributeName("EnclosingMethod");
+	public static final TypedKey<AttrString> ModuleTarget = createAttributeName("ModuleTarget");
 	// method
-	public static final AttributeKey<XAttrCode> Code = createAttributeName("Code");
-	public static final AttributeKey<MethodParameters> MethodParameters = createAttributeName("MethodParameters");
-	public static final AttributeKey<AttrClassList> Exceptions = createAttributeName("Exceptions");
-	public static final AttributeKey<AnnotationDefault> AnnotationDefault = createAttributeName("AnnotationDefault");
+	public static final TypedKey<XAttrCode> Code = createAttributeName("Code");
+	public static final TypedKey<MethodParameters> MethodParameters = createAttributeName("MethodParameters");
+	public static final TypedKey<AttrClassList> Exceptions = createAttributeName("Exceptions");
+	public static final TypedKey<AnnotationDefault> AnnotationDefault = createAttributeName("AnnotationDefault");
 	// field
-	public static final AttributeKey<ConstantValue> ConstantValue = createAttributeName("ConstantValue");
+	public static final TypedKey<ConstantValue> ConstantValue = createAttributeName("ConstantValue");
 
 	public abstract String name();
 

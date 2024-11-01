@@ -12,5 +12,9 @@ import java.lang.annotation.Target;
 @Retention(RetentionPolicy.CLASS)
 @Target({ElementType.FIELD,ElementType.TYPE})
 public @interface Optional {
-    boolean value() default true;
+    Mode value() default Mode.IF_DEFAULT;
+    enum Mode {NEVER, IF_DEFAULT, IF_NULL, IF_EMPTY}
+
+    // WIP
+    //String predicate() default "";
 }

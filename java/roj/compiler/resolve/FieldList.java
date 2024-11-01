@@ -5,7 +5,7 @@ import roj.asm.Opcodes;
 import roj.asm.tree.FieldNode;
 import roj.asm.tree.IClass;
 import roj.collect.SimpleList;
-import roj.compiler.CompilerSpec;
+import roj.compiler.LavaFeatures;
 import roj.compiler.api.FieldWriteReplace;
 import roj.compiler.context.CompileUnit;
 import roj.compiler.context.LocalContext;
@@ -81,7 +81,7 @@ final class FieldList extends ComponentList {
 
 	static void checkBridgeMethod(LocalContext ctx, IClass owner, FieldNode fn) {
 		if ((fn.modifier&Opcodes.ACC_PRIVATE) == 0 || ctx.file == owner ||
-			ctx.classes.isSpecEnabled(CompilerSpec.NESTED_MEMBER)) return;
+			ctx.classes.hasFeature(LavaFeatures.NESTED_MEMBER)) return;
 
 		if (fn.attrByName(FieldWriteReplace.NAME) != null) return;
 

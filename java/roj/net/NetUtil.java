@@ -205,6 +205,11 @@ public final class NetUtil {
 		return Util.getOriginalHostName(Util.getHolder(address));
 	}
 
+	public static String toString(SocketAddress address) {
+		if (!(address instanceof InetSocketAddress n)) return address.toString();
+		return n.getAddress().getHostAddress()+":"+n.getPort();
+	}
+
 	public static void setHostCachePolicy(boolean negative, int seconds) {
 		if (seconds < 0) seconds = -1;
 		initUtil();

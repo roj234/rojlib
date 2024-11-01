@@ -28,7 +28,7 @@ class Scene implements Unpacker {
 			int len = b.readIntLE();
 			String ver = b.readUTF(len);
 			int verInt = Integer.parseInt(ver.substring(4));
-			if (!ver.startsWith("PKGV00") || verInt < 18 || verInt > 22) throw new CorruptedInputException("不是受支持的版本: "+ver);
+			if (!ver.startsWith("PKGV00") || verInt > 22) throw new CorruptedInputException("不是受支持的版本: "+ver);
 
 			TrieTree<PosInfo> tree = this.tree = new TrieTree<>();
 

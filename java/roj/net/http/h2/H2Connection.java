@@ -8,8 +8,8 @@ import roj.io.IOUtil;
 import roj.net.ChannelCtx;
 import roj.net.ChannelHandler;
 import roj.net.Event;
+import roj.net.NetUtil;
 import roj.net.http.Headers;
-import roj.net.http.server.H2C;
 import roj.text.logging.Level;
 import roj.text.logging.Logger;
 import roj.util.ByteList;
@@ -28,7 +28,7 @@ import static roj.net.http.h2.H2Exception.*;
  * @since 2022/10/7 0007 21:38
  */
 public class H2Connection implements ChannelHandler {
-	public static final Logger LOGGER = Logger.getLogger("HTTP/2");
+	public static final Logger LOGGER = Logger.getLogger("SPDY");
 	public static final String H2_GOAWAY = "h2:go_away";
 	// HPACK Dynamic Table encType
 	public static final byte FIELD_SAVE = 0, FIELD_DISCARD = 1, FIELD_DISCARD_ALWAYS = 2;
@@ -67,7 +67,7 @@ public class H2Connection implements ChannelHandler {
 	private final HPACK hpack = new HPACK();
 	private int hpackLock;
 
-	private static final int FLAG_SERVER = 1, FLAG_SETTING_SENT = 2, FLAG_GOAWAY_SENT = 4, FLAG_GOAWAY_RECEIVED = 8;
+	private static final int FLAG_SERVER = 1, FLAG_SETTING_ACK = 2, FLAG_GOAWAY_SENT = 4, FLAG_GOAWAY_RECEIVED = 8;
 	private byte flag;
 
 	private final IntMap<H2Stream> streams = new IntMap<>();
@@ -96,26 +96,19 @@ public class H2Connection implements ChannelHandler {
 
 	private ChannelCtx ctx;
 
-	@Override
-	public void channelOpened(ChannelCtx ctx) throws IOException {
-		nextStreamId = 1-(flag & FLAG_SERVER);
+	@Override public void handlerAdded(ChannelCtx ctx) {this.ctx = ctx;}
+	@Override public void handlerRemoved(ChannelCtx ctx) {this.ctx = null;}
+
+	@Override public final void channelOpened(ChannelCtx ctx) throws IOException {
+		nextStreamId = 1-(flag&FLAG_SERVER);
 		receiveWindow = sendWindow = 65535;
-		this.ctx = ctx;
-		onOpened(ctx);
-	}
-	protected void onOpened(ChannelCtx ctx) throws IOException {
-		ByteList list = IOUtil.getSharedByteBuf();
-		if ((flag & FLAG_SERVER) == 0) {
-			ctx.channelWrite(list.putAscii(H2C.MAGIC));
-			list.clear();
 
-			flowControl.initSetting(localSetting);
-			initSetting(localSetting);
-			syncSettings();
+		flowControl.initSetting(localSetting);
+		initSetting(localSetting);
 
-			flag |= FLAG_SETTING_SENT;
-		}
+		syncSettings();
 	}
+	protected void onOpened() throws IOException {}
 
 	//region 数据包接收
 	@Override
@@ -168,18 +161,15 @@ public class H2Connection implements ChannelHandler {
 					}
 
 					ctx.channelWrite(IOUtil.getSharedByteBuf().putMedium(0).put(FRAME_SETTINGS).put(FLAG_ACK).putInt(0));
-
-					if ((this.flag & FLAG_SETTING_SENT) == 0) {
-						this.flag |= FLAG_SETTING_SENT;
-						flowControl.initSetting(localSetting);
-						initSetting(localSetting);
-						syncSettings();
-					}
-
 					hpack.setEncoderTableSize(remoteSetting.header_table_size);
 				} else {
 					if (buf.isReadable()) sizeError();
 					hpack.setDecoderTableSize(localSetting.header_table_size);
+
+					if ((this.flag & FLAG_SETTING_ACK) == 0) {
+						this.flag |= FLAG_SETTING_ACK;
+						onOpened();
+					}
 				}
 			}
 			case FRAME_HEADER -> {
@@ -187,7 +177,7 @@ public class H2Connection implements ChannelHandler {
 				if (c == null) {
 					if (id != 0 && isServer()) {
 						// PROTOCOL_ERROR or REFUSED_STREAM determines automatic retry (Section 8.7)
-						if (streams.size() >= localSetting.max_streams) {streamError(id, ERROR_REFUSED);return;}
+						if (streams.size() >= localSetting.max_streams && localSetting.max_streams != -1) {streamError(id, ERROR_REFUSED);return;}
 						if (id < nextStreamId-1) {error(ERROR_PROTOCOL, "StreamId");return;}
 						c = newStream(id);
 					} else {invalidStream(id);return;}
@@ -253,9 +243,11 @@ public class H2Connection implements ChannelHandler {
 				if (streams.get(id) != null) {invalidStream(id);return;}
 				if (id > nextStreamId) nextStreamId = id+1;
 				// #section-6.6-10
-				if (streams.size() >= localSetting.max_streams) {streamError(id, ERROR_REFUSED);return;}
+				if (streams.size() >= localSetting.max_streams && localSetting.max_streams != -1) {streamError(id, ERROR_REFUSED);return;}
 
 				c = newStream(id);
+				c.outState = H2Stream.DATA;
+
 				var err = c.header(buf, hpack, true);
 				if (err != null) error(ERROR_PROTOCOL, err);
 				else if ((flag & FLAG_HEADER_END) != 0) headerEnd(c);
@@ -358,8 +350,8 @@ public class H2Connection implements ChannelHandler {
 		}
 	}
 
-	private void headerEnd(H2Stream c) {
-		var err = c.headerEnd(this);
+	private void headerEnd(H2Stream c) throws IOException {
+		var err = c._headerEnd(this);
 		if (err != null) streamError(c.id, ERROR_PROTOCOL);
 	}
 	private void dataEnd(H2Stream c) throws IOException {
@@ -430,6 +422,7 @@ public class H2Connection implements ChannelHandler {
 	@Override
 	public void exceptionCaught(ChannelCtx ctx, Throwable ex) throws Exception {
 		if (ex instanceof H2Exception exc) {error(exc.errno, exc.getMessage());return;}
+		if ((flag& FLAG_SETTING_ACK) == 0) {ctx.exceptionCaught(ex);return;}
 
 		if (ex.getClass() == IOException.class || ex instanceof SocketException) {
 			LOGGER.debug(ex.getClass().getSimpleName()+": "+ex.getMessage());
@@ -437,15 +430,15 @@ public class H2Connection implements ChannelHandler {
 			return;
 		}
 
-		LOGGER.warn("未捕获的异常", ex);
 		error(ERROR_INTERNAL, ex.toString());
+		LOGGER.warn("未捕获的异常", ex);
 	}
 	// connection error
 	private void sizeError() {error(ERROR_FRAME_SIZE, null);}
 	public void error(int errno, String reason) {
 		if (errno != ERROR_INTERNAL) LOGGER.debug("协议错误({}): {}", errno, reason);
 
-		if ((flag& FLAG_GOAWAY_SENT) == 0) goaway(errno, reason != null && LOGGER.canLog(Level.DEBUG) ? reason : "");
+		if ((flag&FLAG_GOAWAY_SENT) == 0) goaway(errno, reason != null && LOGGER.canLog(Level.DEBUG) ? reason : "");
 
 		try {
 			ctx.channel().close();
@@ -457,7 +450,7 @@ public class H2Connection implements ChannelHandler {
 		else streamError(id, ERROR_STREAM_CLOSED);
 	}
 	public void streamError(int id, int errno) {
-		if (id != ERROR_INTERNAL) LOGGER.debug("流错误[{}.Stream#{}]: {}", this, id, errno);
+		if (errno != ERROR_OK) LOGGER.debug("流关闭[{}/#{}]: {}", this, id, errno);
 
 		var c = streams.remove(id);
 		if (c != null) c.finish(this);
@@ -491,26 +484,22 @@ public class H2Connection implements ChannelHandler {
 		return true;
 	}
 	@Nullable
-	public H2Stream push(@NotNull H2Stream enclosingStream) throws IOException {
+	public H2Stream push(@NotNull H2Stream enclosingStream, @NotNull Headers header) throws IOException {
 		if (!remoteSetting.push_enable || !isServer()) return null;
 
 		H2Stream stream = newStream(nextStreamId);
 		nextStreamId += 2;
-		stream.state = H2Stream.PROCESSING;
-
-		var ob = IOUtil.getSharedByteBuf().putMedium(8)
-			.put(FRAME_PUSH_PROMISE).put(0)
-			.putInt(enclosingStream.id).putInt(stream.id);
-		ctx.channelWrite(ob);
-
+		sendHeader0(stream, header, false, 0, enclosingStream.id);
+		stream.state = H2Stream.DATA;
 		return stream;
 	}
 	//region Goaway (trigger via event)
 	@Override
 	public void onEvent(ChannelCtx ctx, Event event) throws IOException {
-		if (event.id.equals(H2_GOAWAY) && (flag& FLAG_GOAWAY_SENT) == 0) goaway((int)event.getData(), "");
+		if (event.id.equals(H2_GOAWAY)) goaway((int)event.getData(), "");
 	}
 	public void goaway(int errno, @NotNull String message) {
+		if ((flag&FLAG_GOAWAY_SENT) != 0) return;
 		flag |= FLAG_GOAWAY_SENT;
 		DynByteBuf ob = IOUtil
 			.getSharedByteBuf().putMedium(0)
@@ -559,8 +548,6 @@ public class H2Connection implements ChannelHandler {
 		H2Stream stream = newStream(nextStreamId);
 		nextStreamId += 2;
 		sendHeader0(stream, header, noBody, depend | (exclusive ? 0x80000000 : 0), weight);
-		//详情查看客户端状态转换图
-		stream.state = stream.state == H2Stream.SEND_BODY ? H2Stream.C_SEND_BODY : H2Stream.OPEN;
 		return stream;
 	}
 	/**
@@ -570,7 +557,7 @@ public class H2Connection implements ChannelHandler {
 	public void sendHeader(@NotNull H2Stream stream, @NotNull Headers header, boolean noBody) throws IOException {
 		if (!isServer()) throw new IllegalArgumentException("客户端请使用sendHeaderClientSide()");
 		sendHeader0(stream, header, noBody, 0, 0);
-		if (stream.state == H2Stream.CLOSED) {
+		if (stream.outState == H2Stream.CLOSED) {
 			streams.remove(stream.id);
 			stream.finish(this);
 		}
@@ -580,19 +567,25 @@ public class H2Connection implements ChannelHandler {
 		stream.flag |= H2Stream.FLAG_HEADER_SENT;
 
 		ByteList ob = IOUtil.getSharedByteBuf();
-		ob.putMedium(0).put(FRAME_HEADER).put(0).putInt(stream.id);
-		if (weight != 0) {
-			ob.put(4, FLAG_PRIORITY);
-			if (!streams.containsKey(depend) || weight < 0 || weight > 256) throw new IllegalArgumentException("weight error");
-			ob.putInt(depend).put(weight -1);
+		if (weight != 0 && isServer()) {
+			if (noBody) throw new IllegalArgumentException("Push_Promise必须包含BODY");
+			ob.putMedium(0).put(FRAME_PUSH_PROMISE).put(0).putInt(weight).putInt(stream.id);
+		} else {
+			ob.putMedium(0).put(FRAME_HEADER).put(0).putInt(stream.id);
+			if (weight != 0) {
+				ob.put(4, FLAG_PRIORITY);
+				if (!streams.containsKey(depend) || weight < 0 || weight > 256) throw new IllegalArgumentException("weight error");
+				ob.putInt(depend).put(weight -1);
+			}
 		}
+
 
 		noBody = encodeLoop(header, noBody, ob, true);
 		noBody = encodeLoop(header, noBody, ob, false);
 
 		ob.put(4, ob.get(4) | FLAG_HEADER_END | (noBody ? FLAG_END : 0));
 		ctx.channelWrite(withLength(ob));
-		stream.state = noBody ? H2Stream.CLOSED : H2Stream.SEND_BODY;
+		stream.outState = noBody ? H2Stream.CLOSED : H2Stream.DATA;
 	}
 	private boolean encodeLoop(Headers header, boolean noBody, ByteList ob, boolean pseudo) throws IOException {
 		// 是否需要在这里限制header list？
@@ -632,7 +625,7 @@ public class H2Connection implements ChannelHandler {
 	 * @return 是否因为流量控制未发送完全
 	 */
 	public boolean sendData(H2Stream stream, DynByteBuf data, boolean isLastBlock) throws IOException {
-		if (stream.state != (isServer() ? H2Stream.SEND_BODY : H2Stream.C_SEND_BODY)) throw new IllegalArgumentException("流"+stream+"不在可以发送数据的状态");
+		if (stream.outState != H2Stream.DATA) throw new IllegalArgumentException("流"+stream+"不在可以发送数据的状态");
 
 		int window = Math.min(stream.sendWindow, this.sendWindow);
 		// 两年过去，我已经忘了BLOCK帧是干啥的了，RFC里也没看到
@@ -682,11 +675,10 @@ public class H2Connection implements ChannelHandler {
 
 		if (isLastBlock) {
 			if (isServer()) {
-				stream.state = H2Stream.CLOSED;
 				streams.remove(stream.id);
 				stream.finish(this);
 			} else {
-				stream.state = H2Stream.OPEN;
+				stream.outState = H2Stream.CLOSED;
 			}
 		}
 
@@ -698,7 +690,7 @@ public class H2Connection implements ChannelHandler {
 	public boolean isServer() {return (flag & FLAG_SERVER) != 0;}
 	public ChannelCtx channel() {return ctx;}
 	@Override
-	public String toString() {return ctx == null ? "<disconnected>" : String.valueOf(ctx.channel().remoteAddress());}
+	public String toString() {return "H2/"+(ctx == null ? "<disconnected>" : NetUtil.toString(ctx.remoteAddress()));}
 
 	@Override
 	public void channelTick(ChannelCtx ctx) throws IOException {
@@ -719,6 +711,8 @@ public class H2Connection implements ChannelHandler {
 			} catch (Exception ignored) {}
 		}
 		streams.clear();
+		hpack.clear();
+		flag &= FLAG_SERVER;
 	}
 
 	protected void initSetting(H2Setting setting) {setting.max_streams = 256;}

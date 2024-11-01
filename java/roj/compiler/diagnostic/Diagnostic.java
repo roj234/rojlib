@@ -4,6 +4,7 @@ import org.jetbrains.annotations.Nls;
 import roj.asm.tree.IClass;
 import roj.compiler.JavaLexer;
 import roj.compiler.context.CompileUnit;
+import roj.math.MathUtils;
 import roj.text.CharList;
 import roj.text.TextUtil;
 
@@ -75,7 +76,7 @@ public class Diagnostic {
 			if (j > pos || j < 0) {
 				CharList sb = new CharList().append(lines, i, j < 0 ? lines.length() : j).trimLast();
 				lineNumber = ln;
-				columnNumber = Math.min(pos, lines.length())-i;
+				columnNumber = MathUtils.clamp(pos-i, 0, sb.length());
 				line = sb.toStringAndFree();
 				break;
 			}

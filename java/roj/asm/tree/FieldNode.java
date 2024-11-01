@@ -10,8 +10,8 @@ import roj.asm.type.Signature;
 import roj.asm.type.Type;
 import roj.asm.type.TypeHelper;
 import roj.text.CharList;
-import roj.util.AttributeKey;
 import roj.util.DynByteBuf;
+import roj.util.TypedKey;
 
 import java.util.Objects;
 
@@ -56,12 +56,12 @@ public final class FieldNode extends CNode {
 		return this;
 	}
 
-	public <T extends Attribute> T parsedAttr(ConstantPool cp, AttributeKey<T> type) { return Parser.parseAttribute(this,cp,type,attributes,Signature.FIELD); }
+	public <T extends Attribute> T parsedAttr(ConstantPool cp, TypedKey<T> type) { return Parser.parseAttribute(this,cp,type,attributes,Signature.FIELD); }
 
-	public String rawDesc() { return desc.getClass() == CstUTF.class ? ((CstUTF) desc).str() : desc.getClass() == Type.class ? ((Type) desc).toDesc() : desc.toString(); }
+	public String rawDesc() { return desc.getClass() == CstUTF.class ? ((CstUTF) desc).str() : desc instanceof Type ? ((Type) desc).toDesc() : desc.toString(); }
 
 	public Type fieldType() {
-		if (desc.getClass() != Type.class) desc = TypeHelper.parseField(rawDesc());
+		if (!(desc instanceof Type)) desc = TypeHelper.parseField(rawDesc());
 		return (Type) desc;
 	}
 	public void fieldType(Type type) { this.desc = Objects.requireNonNull(type); }

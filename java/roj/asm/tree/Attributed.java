@@ -4,7 +4,7 @@ import org.jetbrains.annotations.Nullable;
 import roj.asm.cp.ConstantPool;
 import roj.asm.tree.attr.Attribute;
 import roj.asm.tree.attr.AttributeList;
-import roj.util.AttributeKey;
+import roj.util.TypedKey;
 
 /**
  * @author Roj233
@@ -16,7 +16,7 @@ public interface Attributed {
 		return list == null ? null : (Attribute) list.getByName(name);
 	}
 
-	default <T extends Attribute> T parsedAttr(ConstantPool cp, AttributeKey<T> type) {throw new UnsupportedOperationException("未实现");}
+	default <T extends Attribute> T parsedAttr(ConstantPool cp, TypedKey<T> type) {throw new UnsupportedOperationException("未实现");}
 
 	default void putAttr(Attribute attr) {attributes().add(attr);}
 	default AttributeList attributes() {throw new UnsupportedOperationException(getClass().getName());}

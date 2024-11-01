@@ -11,7 +11,7 @@ import roj.util.DynByteBuf;
  * @since 2022/11/17 0017 12:53
  */
 public final class StaticSegment extends Segment {
-	public static final Segment EMPTY = new StaticSegment(ArrayCache.BYTES);
+	public static final StaticSegment EMPTY = new StaticSegment(ArrayCache.BYTES);
 
 	private Object array;
 	private short off;

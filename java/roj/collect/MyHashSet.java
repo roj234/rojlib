@@ -162,10 +162,8 @@ public final class MyHashSet<K> extends AbstractSet<K> implements FindSet<K> {
 	}
 
 	public void deduplicate(Collection<K> otherSet) {
-		for (K k : otherSet) {
-			if (!this.add(k)) {
-				otherSet.remove(k);
-			}
+		for (var itr = otherSet.iterator(); itr.hasNext(); ) {
+			if (!this.add(itr.next())) itr.remove();
 		}
 	}
 

@@ -55,6 +55,11 @@ abstract class Adapter {
 	public int plusOptional(int fieldState, @Nullable MyBitSet fieldStateEx) { return fieldState; }
 	public boolean valueIsMap() { return getClass().getName().contains("GA$"); }
 
+	//WIP
+	@ReferenceByGeneratedClass
+	public boolean isEmpty(Object o) {return o != null;}
+	//end WIP
+
 	public void write(CVisitor c, Object o) {
 		if (o == null) c.valueNull();
 		else {

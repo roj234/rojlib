@@ -140,8 +140,8 @@ public class TransformUtil {
 	 * 修改InnerClasses属性中定义的内部类的访问权限
 	 */
 	public static void makeSubclassAccessible(ConstantData data, Collection<String> toOpen) {
-		var classes = Attributes.getInnerClasses(data.cp, data);
-		if (classes == null) throw new IllegalStateException("no InnerClass in " + data.name);
+		var classes = data.getInnerClasses();
+		if (classes.isEmpty()) throw new IllegalStateException("no InnerClass in " + data.name);
 
 		for (int i = 0; i < classes.size(); i++) {
 			InnerClasses.Item clz = classes.get(i);
@@ -302,4 +302,30 @@ public class TransformUtil {
 			cv.visit(data.cp, Parser.reader(code));
 		}
 	}
+
+	public static boolean exceptionCheck(byte code) {
+		return switch (code) {
+			// ClassCastException
+			case CHECKCAST,
+			// NullPointerException
+			ATHROW, ARRAYLENGTH, MONITORENTER, MONITOREXIT,
+			// NullPointerException, ArrayStoreException
+			IALOAD, LALOAD, FALOAD, DALOAD, AALOAD, BALOAD, CALOAD, SALOAD,
+			IASTORE, LASTORE, FASTORE, DASTORE, AASTORE, BASTORE, CASTORE, SASTORE,
+			// LinkageError for Load_Dynamic
+			LDC, LDC_W, LDC2_W,
+			// NullPointerException | LinkageError
+			GETFIELD, PUTFIELD, GETSTATIC, PUTSTATIC,
+			// NullPointerException | ExceptionInExecution | LinkageError
+			INVOKEVIRTUAL, INVOKEINTERFACE, INVOKESPECIAL,
+			// ExceptionInExecution | LinkageError
+			INVOKESTATIC, INVOKEDYNAMIC,
+			// OutOfMemoryError | LinkageError
+			NEW, INSTANCEOF,
+			// OutOfMemoryError | NegativeArraySizeException | LinkageError
+			NEWARRAY, ANEWARRAY, MULTIANEWARRAY -> true;
+			default -> false;
+		};
+	}
+
 }

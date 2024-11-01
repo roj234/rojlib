@@ -7,7 +7,7 @@ import roj.net.http.IllegalRequestException;
 import roj.net.http.server.*;
 import roj.text.logging.Level;
 import roj.text.logging.Logger;
-import roj.util.AttributeKey;
+import roj.util.TypedKey;
 
 import java.net.InetSocketAddress;
 import java.util.Locale;
@@ -20,7 +20,7 @@ import java.util.Map;
 public abstract class fcgiManager implements Router {
 	static final Logger LOGGER = Logger.getLogger("FastCGI");
 	static {LOGGER.setLevel(Level.WARN);}
-	private static final AttributeKey<fcgiResponse> FCGI_Handler = new AttributeKey<>("fcgi:handler");
+	private static final TypedKey<fcgiResponse> FCGI_Handler = new TypedKey<>("fcgi:handler");
 
 	@Override
 	public Response response(Request req, ResponseHeader rh) throws Exception {
@@ -55,10 +55,7 @@ public abstract class fcgiManager implements Router {
 		param.putIfAbsent("GATEWAY_INTERFACE", "CGI/1.1");
 		param.putIfAbsent("SERVER_NAME", "localhost");
 		param.putIfAbsent("SERVER_PROTOCOL", "HTTP/1.1");
-		if (HttpCache.proxyRequestRetainer != null) {
-			String https = req.get("x-proxy-https");
-			if (https != null) param.put("HTTPS", https);
-		}
+		if (req.isSecure()) param.put("HTTPS", "1");
 
 		String field = req.getField("content-length");
 		if (!field.isEmpty()) param.putIfAbsent("CONTENT_LENGTH", field);

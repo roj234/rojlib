@@ -38,7 +38,7 @@ public class Intrinsics {
 			if (RojLib.hasNative(RojLib.FastJNI)) tmp = new NativeInjector();
 			else {
 				if (e instanceof NoClassDefFoundError) {
-					LOGGER.error("JVMCI未开启, 无法使用LiteralASM (请添加 -XX:+UnlockExperimentalVMOptions -XX:+EnableJVMCI 虚拟机参数)");
+					LOGGER.error("添加 -XX:+UnlockExperimentalVMOptions -XX:+EnableJVMCI 虚拟机参数以启用LiteralASM");
 				} else {
 					LOGGER.error("LiteralAsm初始化失败", e);
 				}

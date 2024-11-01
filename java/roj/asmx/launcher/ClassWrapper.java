@@ -13,6 +13,7 @@ import roj.crypt.CRC32s;
 import roj.crypt.jar.JarVerifier;
 import roj.io.IOUtil;
 import roj.io.source.FileSource;
+import roj.reflect.Debug;
 import roj.text.Escape;
 import roj.text.logging.Level;
 import roj.util.ByteList;
@@ -198,9 +199,9 @@ public class ClassWrapper implements Function<String, Class<?>> {
 				if (changed1 && prev == i) LOGGER.warn("类转换器'{}'可能造成了循环调用", ts.get(i).getClass().getName());
 				changed |= changed1;
 			} catch (Throwable e) {
-				LOGGER.fatal("转换类'{}'时发生异常", e, name);
+				LOGGER.fatal("转换类'{}'时发生异常({}/{})", e, name, i);
 				try {
-					ctx.getData().dump();
+					Debug.dump("transform_failed", ctx.get());
 				} catch (Throwable e1) {
 					LOGGER.fatal("保存'{}'的内容用于调试时发生异常", e1, name);
 				}
@@ -242,7 +243,7 @@ public class ClassWrapper implements Function<String, Class<?>> {
 	public void addTransformerExclusion(String toExclude) {transformExcept.add(toExclude);}
 
 	public void enableFastZip(URL url) throws IOException {
-		ZipFile zf = new ZipFile(new File(Escape.decodeURI(IOUtil.getSharedCharBuf(), IOUtil.getSharedByteBuf(), url.getPath().substring(1)).toString()));
+		ZipFile zf = new ZipFile(new File(Escape.decodeURI(url.getPath().substring(1))));
 		JarVerifier jv = JarVerifier.create(zf);
 		if (archives.isEmpty()) zf.getStream(zf.entries().iterator().next()).close(); // INIT
 		archives.add(zf);

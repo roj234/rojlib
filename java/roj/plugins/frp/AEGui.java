@@ -5,9 +5,7 @@
 package roj.plugins.frp;
 
 import roj.collect.Hasher;
-import roj.collect.IntMap;
 import roj.collect.MyHashMap;
-import roj.collect.SimpleList;
 import roj.config.ConfigMaster;
 import roj.config.data.CEntry;
 import roj.config.data.CList;
@@ -19,12 +17,7 @@ import roj.crypt.KeyType;
 import roj.io.IOUtil;
 import roj.io.NIOUtil;
 import roj.net.*;
-import roj.net.handler.Pipe2;
-import roj.net.http.server.HttpServer11;
-import roj.net.http.server.StringResponse;
 import roj.net.mss.MSSKeyPair;
-import roj.plugins.frp.server.AEServer;
-import roj.text.CharList;
 import roj.text.TextUtil;
 import roj.text.TextWriter;
 import roj.ui.GuiUtil;
@@ -36,7 +29,6 @@ import java.awt.*;
 import java.awt.event.*;
 import java.io.File;
 import java.io.IOException;
-import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.security.KeyPair;
 import java.security.PrivateKey;
@@ -45,7 +37,6 @@ import java.util.Map;
 import java.util.function.Consumer;
 
 import static roj.plugins.frp.Constants.MAX_PORTS;
-import static roj.plugins.frp.Constants.PHS_UPDATE_MOTD;
 
 /**
  * @author Roj234
@@ -69,7 +60,7 @@ public class AEGui extends JFrame implements ChannelHandler {
 		setVisible(true);
 
 		uiConnect.dispose();
-		if (client instanceof AEClient c) {
+		/*if (client instanceof AEClient c) {
 			uiCustomMotd.setText(c.roomMotd);
 
 			var m = (DefaultListModel<PortMapEntry>) uiPortList.getModel();
@@ -92,12 +83,12 @@ public class AEGui extends JFrame implements ChannelHandler {
 			}
 
 			uiRefreshPort.setText("启动服务");
-		}
+		}*/
 	}
 
 	@Override
 	public void channelClosed(ChannelCtx ctx) throws IOException {
-		if (AEServer.server != null) AEServer.server.shutdown();
+		//if (AEServer.server != null) AEServer.server.shutdown();
 		onLogout("很遗憾，今日屠龙宝刀已送完");
 		if (exitOnClose) System.exit(-1);
 	}
@@ -211,7 +202,7 @@ public class AEGui extends JFrame implements ChannelHandler {
 		uiPortList.setModel(model);
 
 		uiRefreshPort.addActionListener(e -> {
-			SimpleList<Pipe2> pipes;
+			/*SimpleList<Pipe2> pipes;
 			synchronized (client.pipes) {
 				pipes = new SimpleList<>(client.pipes);
 			}
@@ -234,7 +225,7 @@ public class AEGui extends JFrame implements ChannelHandler {
 					model.set(i, model.get(i));
 
 				uiRefreshPort.setText("重启服务");
-			}
+			}*/
 		});
 		// Host
 		uiCreateRoom.addActionListener(e -> {
@@ -276,9 +267,9 @@ public class AEGui extends JFrame implements ChannelHandler {
 			});
 
 			evt.addEventListener(uiCustomMotd, e1 -> {
-				if (client != null && !client.shutdown) {
-					client.writeAsync(IOUtil.getSharedByteBuf().put(PHS_UPDATE_MOTD).putGBData(uiCustomMotd.getText()));
-				}
+				//if (client != null && !client.shutdown) {
+				//	client.writeAsync(IOUtil.getSharedByteBuf().put(PHS_UPDATE_MOTD).putGBData(uiCustomMotd.getText()));
+				//}
 			});
 		});
 		// Host+Direct server
@@ -393,9 +384,9 @@ public class AEGui extends JFrame implements ChannelHandler {
 					JOptionPane.showMessageDialog(uiConnect, "请在弹出的窗口中设置端口！");
 					return;
 				}
-				client = new AEHost(loop);
+				//client = new AEHost(loop);
 			} else {
-				client = new AEClient(loop);
+				//client = new AEClient(loop);
 			}
 
 			if (first) {
@@ -458,7 +449,7 @@ public class AEGui extends JFrame implements ChannelHandler {
 				System.out.println("正在连接"+address.getAddress()+", 端口"+address.getPort());
 				launch.loop(loop).connect(address);
 
-				if (client instanceof AEHost h) {
+				/*if (client instanceof AEHost h) {
 					char[] ports = new char[model.size()];
 					int udpOffset = 0;
 
@@ -474,11 +465,11 @@ public class AEGui extends JFrame implements ChannelHandler {
 					}
 
 					if (uiDirectServer.isSelected()) {
-						AEServer server = new AEServer(launch.address(), 512, key);
+						*//*AEServer server = new AEServer(launch.address(), 512, key);
 						server.userWhiteList = userWhiteList;
 						server.launch.loop(loop);
 						server.start();
-						AEServer.localUserId = userId;
+						AEServer.localUserId = userId;*//*
 
 						h.init(null, uiRoom.getText(), uiCustomMotd.getText(), ports, udpOffset);
 						MyChannel ch = client.handlers;
@@ -491,7 +482,7 @@ public class AEGui extends JFrame implements ChannelHandler {
 					h.init(launch, uiRoom.getText(), uiCustomMotd.getText(), ports, udpOffset);
 				} else {
 					((AEClient) client).init(launch, uiUser.getText(), uiRoom.getText());
-				}
+				}*/
 
 				launch.channel().addLast("open_check", this);
 				launch.launch();
@@ -503,17 +494,8 @@ public class AEGui extends JFrame implements ChannelHandler {
 
 		uiLogout.addActionListener(e -> {
 			uiLogout.setEnabled(false);
-			if (client != null) client.logout(client.handlers.handler("open_check"));
-			else onLogout("屠龙宝刀点击就送");
-		});
-
-		uiWeb.addActionListener(e -> {
-			try {
-				JOptionPane.showMessageDialog(this, "但是还不能用！ port=1500");
-				runServer(1500);
-			} catch (IOException ex) {
-				ex.printStackTrace();
-			}
+			//if (client != null) client.logout(client.handlers.handler("open_check"));
+			//else onLogout("屠龙宝刀点击就送");
 		});
 	}
 
@@ -526,253 +508,195 @@ public class AEGui extends JFrame implements ChannelHandler {
 		uiKeyDigest.setToolTipText(digest);
 	}
 
-	private static final MyHashMap<String, String> res = new MyHashMap<>();
-	private static String res(String name) throws IOException {
-		String v = res.get(name);
-		if (v == null) res.put(name, v = IOUtil.getTextResource("META-INF/html/"+name));
-		return v;
-	}
-	private static void runServer(int port) throws IOException {
-		HttpServer11.simple(new InetSocketAddress(InetAddress.getLoopbackAddress(), port), 64, (request, rh) -> {
-			AEHost host = (AEHost) client;
-			switch (request.path()) {
-				case "bundle.min.css": return new StringResponse(res("bundle.min.css"), "text/css");
-				case "bundle.min.js": return new StringResponse(res("bundle.min.js"), "text/javascript");
-				case "": return new StringResponse(res("client_owner.html"), "text/html");
-				case "ws":// return man.switchToWebsocket(request, rh);
-					CList lx = new CList();
-					for (IntMap.Entry<AEHost.Client> entry : host.clients.selfEntrySet()) {
-						CMap map = new CMap();
-						map.put("id", entry.getIntKey());
-						map.put("ip", entry.getValue().addr);
-						map.put("time", entry.getValue().time);
-						CList pipes = map.getOrCreateList("pipes");
-						for (Pipe2 pipe : host.pipes) {
-//							PipeInfoClient att = (PipeInfoClient) pipe.att;
-/*							if (att.clientId == entry.getIntKey()) {
-								CMap map1 = new CMap();
-								map1.put("up", pipe.downloaded);
-								map1.put("down", pipe.uploaded);
-								map1.put("idle", pipe.idleTime);
-								map1.put("id", att.pipeId);
-								map1.put("port", host.portMap[att.portId]);
-								pipes.add(map1);
-							}*/
-						}
-						lx.add(map);
-					}
-					return new StringResponse(ConfigMaster.JSON.toString(lx, new CharList()), "application/json");
-				case "kick_user":
-					int count = 0;
-					String[] arr = request.PostFields().get("users").split(",");
-					int[] arrs = new int[arr.length];
-					for (int i = 0; i < arr.length; i++) {
-						arrs[i] = Integer.parseInt(arr[i]);
-					}
-					host.kickSome(arrs);
-					return new StringResponse("{\"count\":"+arr.length+"}", "application/json");
-			}
-			return null;
-		}).launch();
-	}
-
 	private void initComponents() {
 		// JFormDesigner - Component initialization - DO NOT MODIFY  //GEN-BEGIN:initComponents  @formatter:off
-		uiLogout = new JButton();
-		uiWeb = new JButton();
-		var scrollPane1 = new JScrollPane();
-		uiPortList = new JList<>();
-		uiRefreshPort = new JButton();
-		var label4 = new JLabel();
-		uiRemotePort = new JLabel();
-		var label6 = new JLabel();
-		uiLocalPort = new JTextField();
-		uiDelPort = new JButton();
-		var label7 = new JLabel();
-		var scrollPane2 = new JScrollPane();
-		uiCustomMotd = new JTextPane();
-		uiConnect = new JDialog();
-		uiServer = new JTextField();
-		uiLogin = new JButton();
-		uiRoom = new JTextField();
-		var label1 = new JLabel();
-		var label2 = new JLabel();
-		var label3 = new JLabel();
-		uiUser = new JTextField();
-		uiCreateRoom = new JCheckBox();
-		uiDirectServer = new JCheckBox();
-		uiKeyDigest = new JLabel();
-		uiKeyGen = new JButton();
-		uiKeySL = new JButton();
+        uiLogout = new JButton();
+        var scrollPane1 = new JScrollPane();
+        uiPortList = new JList<>();
+        uiRefreshPort = new JButton();
+        var label4 = new JLabel();
+        uiRemotePort = new JLabel();
+        var label6 = new JLabel();
+        uiLocalPort = new JTextField();
+        uiDelPort = new JButton();
+        var label7 = new JLabel();
+        var scrollPane2 = new JScrollPane();
+        uiCustomMotd = new JTextPane();
+        uiConnect = new JDialog();
+        uiServer = new JTextField();
+        uiLogin = new JButton();
+        uiRoom = new JTextField();
+        var label1 = new JLabel();
+        var label2 = new JLabel();
+        var label3 = new JLabel();
+        uiUser = new JTextField();
+        uiCreateRoom = new JCheckBox();
+        uiDirectServer = new JCheckBox();
+        uiKeyDigest = new JLabel();
+        uiKeyGen = new JButton();
+        uiKeySL = new JButton();
 
-		//======== this ========
-		setTitle("AE-FakeP2P");
-		var contentPane = getContentPane();
-		contentPane.setLayout(null);
+        //======== this ========
+        setTitle("AE-FakeP2P");
+        var contentPane = getContentPane();
+        contentPane.setLayout(null);
 
-		//---- uiLogout ----
-		uiLogout.setText("\u65ad\u5f00\u8fde\u63a5");
-		uiLogout.setMargin(new Insets(2, 2, 2, 2));
-		contentPane.add(uiLogout);
-		uiLogout.setBounds(new Rectangle(new Point(246, 2), uiLogout.getPreferredSize()));
+        //---- uiLogout ----
+        uiLogout.setText("\u65ad\u5f00\u8fde\u63a5");
+        uiLogout.setMargin(new Insets(2, 2, 2, 2));
+        contentPane.add(uiLogout);
+        uiLogout.setBounds(new Rectangle(new Point(246, 2), uiLogout.getPreferredSize()));
 
-		//---- uiWeb ----
-		uiWeb.setText("WebUI");
-		uiWeb.setMargin(new Insets(2, 2, 2, 2));
-		contentPane.add(uiWeb);
-		uiWeb.setBounds(new Rectangle(new Point(185, 2), uiWeb.getPreferredSize()));
+        //======== scrollPane1 ========
+        {
+            scrollPane1.setViewportView(uiPortList);
+        }
+        contentPane.add(scrollPane1);
+        scrollPane1.setBounds(5, 25, 160, 150);
 
-		//======== scrollPane1 ========
-		{
-			scrollPane1.setViewportView(uiPortList);
-		}
-		contentPane.add(scrollPane1);
-		scrollPane1.setBounds(5, 25, 160, 150);
+        //---- uiRefreshPort ----
+        uiRefreshPort.setText("\u91cd\u542f\u670d\u52a1");
+        uiRefreshPort.setMargin(new Insets(1, 2, 1, 2));
+        contentPane.add(uiRefreshPort);
+        uiRefreshPort.setBounds(new Rectangle(new Point(109, 2), uiRefreshPort.getPreferredSize()));
 
-		//---- uiRefreshPort ----
-		uiRefreshPort.setText("\u91cd\u542f\u670d\u52a1");
-		uiRefreshPort.setMargin(new Insets(1, 2, 1, 2));
-		contentPane.add(uiRefreshPort);
-		uiRefreshPort.setBounds(new Rectangle(new Point(109, 2), uiRefreshPort.getPreferredSize()));
+        //---- label4 ----
+        label4.setText("\u7aef\u53e3\u6620\u5c04");
+        contentPane.add(label4);
+        label4.setBounds(new Rectangle(new Point(5, 5), label4.getPreferredSize()));
 
-		//---- label4 ----
-		label4.setText("\u7aef\u53e3\u6620\u5c04");
-		contentPane.add(label4);
-		label4.setBounds(new Rectangle(new Point(5, 5), label4.getPreferredSize()));
+        //---- uiRemotePort ----
+        uiRemotePort.setText("\u8fdc\u7a0b\u7aef\u53e3: \u672a\u9009\u4e2d");
+        contentPane.add(uiRemotePort);
+        uiRemotePort.setBounds(new Rectangle(new Point(170, 30), uiRemotePort.getPreferredSize()));
 
-		//---- uiRemotePort ----
-		uiRemotePort.setText("\u8fdc\u7a0b\u7aef\u53e3: \u672a\u9009\u4e2d");
-		contentPane.add(uiRemotePort);
-		uiRemotePort.setBounds(new Rectangle(new Point(170, 30), uiRemotePort.getPreferredSize()));
+        //---- label6 ----
+        label6.setText("\u672c\u5730\u7aef\u53e3:");
+        contentPane.add(label6);
+        label6.setBounds(new Rectangle(new Point(170, 55), label6.getPreferredSize()));
 
-		//---- label6 ----
-		label6.setText("\u672c\u5730\u7aef\u53e3:");
-		contentPane.add(label6);
-		label6.setBounds(new Rectangle(new Point(170, 55), label6.getPreferredSize()));
+        //---- uiLocalPort ----
+        uiLocalPort.setEnabled(false);
+        contentPane.add(uiLocalPort);
+        uiLocalPort.setBounds(228, 52, 40, uiLocalPort.getPreferredSize().height);
 
-		//---- uiLocalPort ----
-		uiLocalPort.setEnabled(false);
-		contentPane.add(uiLocalPort);
-		uiLocalPort.setBounds(228, 52, 40, uiLocalPort.getPreferredSize().height);
+        //---- uiDelPort ----
+        uiDelPort.setText("\u5220\u9664");
+        uiDelPort.setEnabled(false);
+        uiDelPort.setVisible(false);
+        contentPane.add(uiDelPort);
+        uiDelPort.setBounds(new Rectangle(new Point(240, 25), uiDelPort.getPreferredSize()));
 
-		//---- uiDelPort ----
-		uiDelPort.setText("\u5220\u9664");
-		uiDelPort.setEnabled(false);
-		uiDelPort.setVisible(false);
-		contentPane.add(uiDelPort);
-		uiDelPort.setBounds(new Rectangle(new Point(240, 25), uiDelPort.getPreferredSize()));
+        //---- label7 ----
+        label7.setText("motd");
+        contentPane.add(label7);
+        label7.setBounds(new Rectangle(new Point(275, 165), label7.getPreferredSize()));
 
-		//---- label7 ----
-		label7.setText("motd");
-		contentPane.add(label7);
-		label7.setBounds(new Rectangle(new Point(275, 165), label7.getPreferredSize()));
+        //======== scrollPane2 ========
+        {
 
-		//======== scrollPane2 ========
-		{
+            //---- uiCustomMotd ----
+            uiCustomMotd.setEditable(false);
+            scrollPane2.setViewportView(uiCustomMotd);
+        }
+        contentPane.add(scrollPane2);
+        scrollPane2.setBounds(5, 180, 295, 135);
 
-			//---- uiCustomMotd ----
-			uiCustomMotd.setEditable(false);
-			scrollPane2.setViewportView(uiCustomMotd);
-		}
-		contentPane.add(scrollPane2);
-		scrollPane2.setBounds(5, 180, 295, 135);
+        contentPane.setPreferredSize(new Dimension(305, 320));
+        pack();
+        setLocationRelativeTo(getOwner());
 
-		contentPane.setPreferredSize(new Dimension(305, 320));
-		pack();
-		setLocationRelativeTo(getOwner());
+        //======== uiConnect ========
+        {
+            uiConnect.setTitle("\u4eca\u665a\u516b\u70b9\uff0c\u6211\u5728\u6c99\u57ce\u7b49\u4f60");
+            uiConnect.setResizable(false);
+            uiConnect.setAlwaysOnTop(true);
+            var uiConnectContentPane = uiConnect.getContentPane();
+            uiConnectContentPane.setLayout(null);
 
-		//======== uiConnect ========
-		{
-			uiConnect.setTitle("\u4eca\u665a\u516b\u70b9\uff0c\u6211\u5728\u6c99\u57ce\u7b49\u4f60");
-			uiConnect.setResizable(false);
-			uiConnect.setAlwaysOnTop(true);
-			var uiConnectContentPane = uiConnect.getContentPane();
-			uiConnectContentPane.setLayout(null);
+            //---- uiServer ----
+            uiServer.setText("127.0.0.1:12003");
+            uiConnectContentPane.add(uiServer);
+            uiServer.setBounds(45, 5, 145, uiServer.getPreferredSize().height);
 
-			//---- uiServer ----
-			uiServer.setText("127.0.0.1:12003");
-			uiConnectContentPane.add(uiServer);
-			uiServer.setBounds(45, 5, 145, uiServer.getPreferredSize().height);
+            //---- uiLogin ----
+            uiLogin.setMargin(new Insets(2, 2, 2, 2));
+            uiConnectContentPane.add(uiLogin);
+            uiLogin.setBounds(10, 100, 175, 23);
+            uiConnectContentPane.add(uiRoom);
+            uiRoom.setBounds(45, 30, 145, uiRoom.getPreferredSize().height);
 
-			//---- uiLogin ----
-			uiLogin.setMargin(new Insets(2, 2, 2, 2));
-			uiConnectContentPane.add(uiLogin);
-			uiLogin.setBounds(10, 100, 175, 23);
-			uiConnectContentPane.add(uiRoom);
-			uiRoom.setBounds(45, 30, 145, uiRoom.getPreferredSize().height);
+            //---- label1 ----
+            label1.setText("\u670d\u52a1\u5668");
+            label1.setLabelFor(uiServer);
+            uiConnectContentPane.add(label1);
+            label1.setBounds(new Rectangle(new Point(5, 8), label1.getPreferredSize()));
 
-			//---- label1 ----
-			label1.setText("\u670d\u52a1\u5668");
-			label1.setLabelFor(uiServer);
-			uiConnectContentPane.add(label1);
-			label1.setBounds(new Rectangle(new Point(5, 8), label1.getPreferredSize()));
+            //---- label2 ----
+            label2.setText("\u623f  \u95f4");
+            label2.setLabelFor(uiRoom);
+            uiConnectContentPane.add(label2);
+            label2.setBounds(new Rectangle(new Point(5, 34), label2.getPreferredSize()));
 
-			//---- label2 ----
-			label2.setText("\u623f  \u95f4");
-			label2.setLabelFor(uiRoom);
-			uiConnectContentPane.add(label2);
-			label2.setBounds(new Rectangle(new Point(5, 34), label2.getPreferredSize()));
+            //---- label3 ----
+            label3.setText("\u6635  \u79f0");
+            label3.setLabelFor(uiUser);
+            uiConnectContentPane.add(label3);
+            label3.setBounds(new Rectangle(new Point(5, 58), label3.getPreferredSize()));
+            uiConnectContentPane.add(uiUser);
+            uiUser.setBounds(45, 55, 145, uiUser.getPreferredSize().height);
 
-			//---- label3 ----
-			label3.setText("\u6635  \u79f0");
-			label3.setLabelFor(uiUser);
-			uiConnectContentPane.add(label3);
-			label3.setBounds(new Rectangle(new Point(5, 58), label3.getPreferredSize()));
-			uiConnectContentPane.add(uiUser);
-			uiUser.setBounds(45, 55, 145, uiUser.getPreferredSize().height);
+            //---- uiCreateRoom ----
+            uiCreateRoom.setText("\u6211\u662f\u623f\u4e3b");
+            uiConnectContentPane.add(uiCreateRoom);
+            uiCreateRoom.setBounds(new Rectangle(new Point(2, 78), uiCreateRoom.getPreferredSize()));
 
-			//---- uiCreateRoom ----
-			uiCreateRoom.setText("\u6211\u662f\u623f\u4e3b");
-			uiConnectContentPane.add(uiCreateRoom);
-			uiCreateRoom.setBounds(new Rectangle(new Point(2, 78), uiCreateRoom.getPreferredSize()));
+            //---- uiDirectServer ----
+            uiDirectServer.setText("\u6211\u8fd8\u662f\u670d\u52a1\u5668");
+            uiDirectServer.setVisible(false);
+            uiConnectContentPane.add(uiDirectServer);
+            uiDirectServer.setBounds(new Rectangle(new Point(72, 78), uiDirectServer.getPreferredSize()));
 
-			//---- uiDirectServer ----
-			uiDirectServer.setText("\u6211\u8fd8\u662f\u670d\u52a1\u5668");
-			uiDirectServer.setVisible(false);
-			uiConnectContentPane.add(uiDirectServer);
-			uiDirectServer.setBounds(new Rectangle(new Point(72, 78), uiDirectServer.getPreferredSize()));
+            //---- uiKeyDigest ----
+            uiKeyDigest.setText("\u7528\u6237ID");
+            uiConnectContentPane.add(uiKeyDigest);
+            uiKeyDigest.setBounds(5, 130, 190, uiKeyDigest.getPreferredSize().height);
 
-			//---- uiKeyDigest ----
-			uiKeyDigest.setText("\u7528\u6237ID");
-			uiConnectContentPane.add(uiKeyDigest);
-			uiKeyDigest.setBounds(5, 130, 190, uiKeyDigest.getPreferredSize().height);
+            //---- uiKeyGen ----
+            uiKeyGen.setText("\u751f\u6210");
+            uiKeyGen.setMargin(new Insets(1, 0, 1, 0));
+            uiConnectContentPane.add(uiKeyGen);
+            uiKeyGen.setBounds(2, 145, 60, uiKeyGen.getPreferredSize().height);
 
-			//---- uiKeyGen ----
-			uiKeyGen.setText("\u751f\u6210");
-			uiKeyGen.setMargin(new Insets(1, 0, 1, 0));
-			uiConnectContentPane.add(uiKeyGen);
-			uiKeyGen.setBounds(2, 145, 60, uiKeyGen.getPreferredSize().height);
+            //---- uiKeySL ----
+            uiKeySL.setText("\u8bfb\u53d6");
+            uiKeySL.setMargin(new Insets(1, 0, 1, 0));
+            uiConnectContentPane.add(uiKeySL);
+            uiKeySL.setBounds(135, 145, 60, uiKeySL.getPreferredSize().height);
 
-			//---- uiKeySL ----
-			uiKeySL.setText("\u8bfb\u53d6");
-			uiKeySL.setMargin(new Insets(1, 0, 1, 0));
-			uiConnectContentPane.add(uiKeySL);
-			uiKeySL.setBounds(135, 145, 60, uiKeySL.getPreferredSize().height);
-
-			uiConnectContentPane.setPreferredSize(new Dimension(200, 170));
-			uiConnect.pack();
-			uiConnect.setLocationRelativeTo(uiConnect.getOwner());
-		}
+            uiConnectContentPane.setPreferredSize(new Dimension(200, 170));
+            uiConnect.pack();
+            uiConnect.setLocationRelativeTo(uiConnect.getOwner());
+        }
 		// JFormDesigner - End of component initialization  //GEN-END:initComponents  @formatter:on
 	}
 	// JFormDesigner - Variables declaration - DO NOT MODIFY  //GEN-BEGIN:variables  @formatter:off
-	private JButton uiLogout;
-	private JButton uiWeb;
-	private JList<PortMapEntry> uiPortList;
-	private JButton uiRefreshPort;
-	private JLabel uiRemotePort;
-	private JTextField uiLocalPort;
-	private JButton uiDelPort;
-	private JTextPane uiCustomMotd;
-	private JDialog uiConnect;
-	private JTextField uiServer;
-	private JButton uiLogin;
-	private JTextField uiRoom;
-	private JTextField uiUser;
-	private JCheckBox uiCreateRoom;
-	private JCheckBox uiDirectServer;
-	private JLabel uiKeyDigest;
-	private JButton uiKeyGen;
-	private JButton uiKeySL;
+    private JButton uiLogout;
+    private JList<PortMapEntry> uiPortList;
+    private JButton uiRefreshPort;
+    private JLabel uiRemotePort;
+    private JTextField uiLocalPort;
+    private JButton uiDelPort;
+    private JTextPane uiCustomMotd;
+    private JDialog uiConnect;
+    private JTextField uiServer;
+    private JButton uiLogin;
+    private JTextField uiRoom;
+    private JTextField uiUser;
+    private JCheckBox uiCreateRoom;
+    private JCheckBox uiDirectServer;
+    private JLabel uiKeyDigest;
+    private JButton uiKeyGen;
+    private JButton uiKeySL;
 	// JFormDesigner - End of variables declaration  //GEN-END:variables  @formatter:on
 }

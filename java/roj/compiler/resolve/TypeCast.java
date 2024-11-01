@@ -156,11 +156,19 @@ public class TypeCast {
 				to = gg.sub != null ? mergeSubClass(gg) : gg;
 			break;
 
-			// TODO 限定范围
-			case TYPE_PARAMETER_TYPE: to = getTypeParamBound(to, typeParamsR, typeParamsL); break;
+			case TYPE_PARAMETER_TYPE: to = getTypeParamBound(to, typeParamsR, typeParamsL);break;
 			case ANY_TYPE: return RESULT(UPCAST, 0); // *
-			// 不能从"某个"具体的类转到"任何"具体的类, TODO: 除非它也是Asterisk类型
-			case ASTERISK_TYPE: break;//return ERROR(E_NEVER);
+			// 不能从"某个"具体的类转到"任何"具体的类, 除非它也是Asterisk类型
+			case ASTERISK_TYPE:
+				IType bound = ((Asterisk) to).getBound();
+				if (bound == null) {
+					if (from.isPrimitive()) {
+						GlobalContext.debugLogger().debug("E_INT_OBJ, {}, {}", from, to);
+						//return ERROR(E_INT2OBJ);
+					}
+					return RESULT(UPCAST, 0).setAnyCast(from);
+				}
+			break;
 			case CONCRETE_ASTERISK_TYPE: to = ((Asterisk) to).getBound(); break;
 		}
 
@@ -173,9 +181,7 @@ public class TypeCast {
 				from = gg.sub != null ? mergeSubClass(gg) : gg;
 			break;
 
-			case TYPE_PARAMETER_TYPE:
-				from = getTypeParamBound(from, typeParamsL, typeParamsR);
-				break;
+			case TYPE_PARAMETER_TYPE: from = getTypeParamBound(from, typeParamsL, typeParamsR);break;
 			case ANY_TYPE: return DOWNCAST(to);
 			case ASTERISK_TYPE:
 				asterisk = (Asterisk) from;
@@ -201,7 +207,10 @@ public class TypeCast {
 			if (asterisk.genericType() == CONCRETE_ASTERISK_TYPE) {
 				var cast = genericCast(bounds.get(0), to, etype);
 				// direct cast
-				if (cast.type >= 0) return cast;
+				if (cast.type >= 0) {
+					cast.distance = result.distance;
+					return cast;
+				}
 				result.type1 = asterisk.getBound();
 			} else {
 				for (int i = 1; i < bounds.size(); i++) {
@@ -462,7 +471,7 @@ public class TypeCast {
 			x = (String[]) (Object) null;
 			x = (String[]) (Serializable) null;*/
 			if ("java/lang/Object".equals(from.owner) ||
-				GlobalContext.anyArray().interfaces().contains(from.owner))
+				GlobalContext.arrayInterfaces().contains(from.owner))
 				return DOWNCAST(to);
 
 			return ERROR(E_NEVER);
@@ -475,7 +484,7 @@ public class TypeCast {
 				if (owner == null) return ERROR(E_NEVER); // t2是基本类型数组
 
 				if (owner.equals("java/lang/Object")) return RESULT(UPCAST, 2);
-				if (GlobalContext.anyArray().interfaces().contains(owner)) return RESULT(UPCAST, 1);
+				if (GlobalContext.arrayInterfaces().contains(owner)) return RESULT(UPCAST, 1);
 
 				return ERROR(E_NEVER); // int[] 除了转换成数组实现的类不能变成任何其他东西
 			} else {
@@ -507,10 +516,12 @@ public class TypeCast {
 		int distance = context.getParentList(fromClass).getValueOrDefault(toClass.name(), -1)&0xFFFF;
 		if (distance != 0xFFFF) return RESULT(UPCAST, distance);
 
-		return (fromClass.modifier() & Opcodes.ACC_FINAL) == 0 ? DOWNCAST(to) : ERROR(E_NEVER);
+		// to.parent == null => !Object (alias object or ??)
+		return (fromClass.modifier() & Opcodes.ACC_FINAL) == 0 && toClass.parent() != null && (fromClass.parent() != null || fromClass.name().equals("java/lang/Object")) ? DOWNCAST(to) : ERROR(E_NEVER);
 	}
 
 	private static final Int2IntMap DataCap = new Int2IntMap(8);
+	private static final byte[] DataCapRev = {BOOLEAN,BYTE,CHAR,SHORT,INT,LONG,FLOAT,DOUBLE};
 	static {
 		DataCap.putInt(BOOLEAN, 0);
 		DataCap.putInt(BYTE, 1);
@@ -523,6 +534,7 @@ public class TypeCast {
 	}
 	@Range(from = 0, to = 8)
 	public static int getDataCap(int type) { return DataCap.getOrDefaultInt(type, 8); }
+	public static int getDataCapRev(int type) { return DataCapRev[type]; }
 
 	private static final IntBiMap<Type> WRAPPER = new IntBiMap<>(9);
 	static {

@@ -23,19 +23,12 @@ public interface MessageAuthenticCode {
 	default void update(byte[] b) {update(b, 0, b.length);}
 	void update(byte[] b, int off, int len);
 	void update(ByteBuffer buf);
-
 	default void update(DynByteBuf b) {
 		if (b.hasArray()) update(b.array(), b.arrayOffset() + b.rIndex, b.readableBytes());
-		else {
-			ByteBuffer dbb = b.nioBuffer();
-			dbb.position(b.rIndex).limit(b.wIndex());
-			update(dbb);
-		}
+		else update(b.nioBuffer());
 	}
 
 	byte[] digest();
 	int digest(byte[] b, int off, int len) throws DigestException;
-	default byte[] digestShared() {
-		return digest();
-	}
+	default byte[] digestShared() {return digest();}
 }

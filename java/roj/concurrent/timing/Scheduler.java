@@ -5,11 +5,12 @@ import roj.concurrent.TaskHandler;
 import roj.concurrent.TaskPool;
 import roj.concurrent.task.ITask;
 import roj.reflect.ReflectionUtils;
+import roj.text.logging.Logger;
 import roj.util.Helpers;
 
 import java.util.Collection;
 import java.util.concurrent.locks.LockSupport;
-import java.util.function.ToLongFunction;
+import java.util.function.Consumer;
 
 import static roj.reflect.ReflectionUtils.u;
 
@@ -17,10 +18,12 @@ import static roj.reflect.ReflectionUtils.u;
  * 处理定时任务
  *
  * @author Roj234
- * @version 2.1
+ * @version 2.2
  * @since 2024/3/6 0:38
  */
 public class Scheduler implements Runnable {
+	private static final Logger LOGGER = Logger.getLogger("TaskSchd");
+
 	private static volatile Scheduler defaultScheduler;
 	public static Scheduler getDefaultScheduler() {
 		if (defaultScheduler == null) {
@@ -53,7 +56,7 @@ public class Scheduler implements Runnable {
 			if (lock instanceof TimingWheel) state = "list-root";
 			else if (lock instanceof TaskHolder) state = "queued";
 			else state = timeLeft == 0 ? "expired" : timeLeft == -1 ? "cancelled" : "detached";
-			return "ScheduleTask{state="+state+",task="+task+",lock="+lock+",approx.timeLeft="+timeLeft+'}';
+			return "ScheduleTask{state="+state+",task="+task+",lock="+lock+",timeLeft="+timeLeft+'}';
 		}
 
 		static final long OFF_LOCK = ReflectionUtils.fieldOffset(TaskHolder.class, "lock");
@@ -113,13 +116,13 @@ public class Scheduler implements Runnable {
 		@Override
 		public String toString() { return next == null ? Integer.toString(clock) : next.toString()+":"+Integer.toHexString(clock); }
 
-		final void fastForward(int ticks, Collection<TaskHolder> lazyTask, ToLongFunction<TaskHolder> exec) {
-			int ff = (ticks >>> (slot*DEPTH_SHL)) & DEPTH_MASK;
+		final void fastForward(int ticks, Collection<TaskHolder> lazyTask, Consumer<ITask> exec) {
+			int ff = ticks >>> (slot*DEPTH_SHL);
 			int c = clock;
 			clock = (c+ff) & DEPTH_MASK;
 
 			if (taskCount > 0) {
-				if (ticks >>> (slot*DEPTH_SHL) > DEPTH_MASK) ff = DEPTH_MASK;
+				if (ff > DEPTH_MASK) ff = DEPTH_MASK;
 
 				for (int slot = c; slot < c+ff; slot++) {
 					TaskHolder root = tasks[slot&DEPTH_MASK], task = root.next;
@@ -130,7 +133,7 @@ public class Scheduler implements Runnable {
 						block:
 						if (remove(root, task) && time > 0 && u.compareAndSwapLong(task, TaskHolder.OFF_TIME_LEFT, time, time = Math.max(0, time-ticks))) {
 							if (time == 0) {
-								time = exec.applyAsLong(task);
+								time = safeApply(exec, task);
 								if (time == 0) break block;
 
 								if (u.compareAndSwapLong(task, TaskHolder.OFF_TIME_LEFT, 0, time)) lazyTask.add(task);
@@ -147,7 +150,7 @@ public class Scheduler implements Runnable {
 			if (next != null) next.fastForward(ticks, lazyTask, exec);
 		}
 
-		final void tick(ToLongFunction<TaskHolder> exec) {
+		final void tick(Consumer<ITask> exec) {
 			int c = clock;
 			if (c != DEPTH_MASK) {
 				clock = c+1;
@@ -169,7 +172,7 @@ public class Scheduler implements Runnable {
 					block:
 					if (remove(root, task) && time > 0 && u.compareAndSwapLong(task, TaskHolder.OFF_TIME_LEFT, time, time &= mask)) {
 						if (time == 0) {
-							time = exec.applyAsLong(task);
+							time = safeApply(exec, task);
 							if (time == 0) break block;
 
 							TimingWheel whell = this;
@@ -183,6 +186,18 @@ public class Scheduler implements Runnable {
 					} // else task was cancelled
 					task = next;
 				}
+			}
+		}
+
+		static long safeApply(Consumer<ITask> exec, TaskHolder task) {
+			try {
+				ITask _task = task.task;
+				long nextRun = _task instanceof LoopTaskWrapper loop ? loop.getNextRun() : 0;
+				if (nextRun >= 0) exec.accept(_task);
+				return nextRun;
+			} catch (Throwable e) {
+				LOGGER.error("提交任务时发生了异常", e);
+				return 0;
 			}
 		}
 
@@ -218,28 +233,29 @@ public class Scheduler implements Runnable {
 			}
 
 			int i = clk.clock + ((int) (time >> (DEPTH_SHL*slot)) & DEPTH_MASK) - 1;
-			TaskHolder root = clk.tasks[i & DEPTH_MASK];
+			var root = clk.tasks[i & DEPTH_MASK];
 
-			u.putObjectVolatile(task, TaskHolder.OFF_LOCK, root);
-			u.getAndAddInt(clk, OFF_TASK_COUNT, 1);
-
+			if (!u.compareAndSwapObject(task, TaskHolder.OFF_LOCK, null, root)) return;
 			synchronized (root) {
-				task.next = root.next;
-				root.next.prev = task;
+				var next = root.next;
 				task.prev = root;
+				task.next = next;
+
+				next.prev = task;
 				root.next = task;
 			}
+			u.getAndAddInt(clk, OFF_TASK_COUNT, 1);
 		}
 		final boolean remove(TaskHolder root, TaskHolder task) {
 			if (!u.compareAndSwapObject(task, TaskHolder.OFF_LOCK, root, null)) return false;
-			u.getAndAddInt(this, OFF_TASK_COUNT, -1);
-
 			synchronized (root) {
+				var prev = task.prev;
 				var next = task.next;
-				next.prev = task.prev;
-				task.prev.next = next;
-				// 但是不要清除task.next，因为上面(#127/#142)可能会引用
+
+				next.prev = prev;
+				prev.next = next;
 			}
+			u.getAndAddInt(this, OFF_TASK_COUNT, -1);
 			return true;
 		}
 
@@ -270,19 +286,13 @@ public class Scheduler implements Runnable {
 
 	private final TimingWheel wheel = new TimingWheel(null);
 	private volatile boolean stopFlag;
-	private final ToLongFunction<TaskHolder> callback;
+	private final Consumer<ITask> callback;
 
-	private volatile TaskHolder head;
+	private static final TaskHolder SENTIAL_HEAD_END = new TaskHolder(null);
+	private volatile TaskHolder head = SENTIAL_HEAD_END;
 
-	public Scheduler(ToLongFunction<ScheduleTask> callback) { this.callback = Helpers.cast(callback); }
-	public Scheduler(TaskHandler th) {
-		callback = task -> {
-			ITask _task = task.getTask();
-			long nextRun = _task instanceof LoopTaskWrapper loop ? loop.getNextRun() : 0;
-			th.submit(_task);
-			return nextRun;
-		};
-	}
+	public Scheduler(Consumer<ITask> callback) { this.callback = callback; }
+	public Scheduler(TaskHandler th) {callback = th::submit;}
 
 	public void run() {
 		int delta = 1;
@@ -323,12 +333,13 @@ public class Scheduler implements Runnable {
 	}
 
 	public final void pollNewTasks(long time) {
-		if (head == null) return;
+		TaskHolder h = (TaskHolder) u.getAndSetObject(this, OFF_HEAD, SENTIAL_HEAD_END);
 
-		TaskHolder h = (TaskHolder) u.getAndSetObject(this, OFF_HEAD, null);
-
-		while (h != null) {
-			TaskHolder next = (TaskHolder) u.getAndSetObject(h, TaskHolder.OFF_NEXT, null);
+		while (h != SENTIAL_HEAD_END) {
+			TaskHolder next;
+			do {
+				next = (TaskHolder) u.getObject(h, TaskHolder.OFF_NEXT);
+			} while (next == null || !u.compareAndSwapObject(h, TaskHolder.OFF_NEXT, next, null));
 
 			block: {
 				long timeLeft = h.timeLeft;
@@ -337,7 +348,7 @@ public class Scheduler implements Runnable {
 
 				long addTime = timeLeft - time;
 				if (addTime <= 0) {
-					addTime = callback.applyAsLong(h);
+					addTime = TimingWheel.safeApply(callback, h);
 					if (addTime == 0) break block;
 				}
 
@@ -355,7 +366,7 @@ public class Scheduler implements Runnable {
 		if (delayMs < 0) throw new IllegalArgumentException("delayMs < 0");
 		TaskHolder holder = new TaskHolder(task, delayMs);
 		if (delayMs == 0) {
-			delayMs = callback.applyAsLong(holder);
+			delayMs = TimingWheel.safeApply(callback, holder);
 			if (delayMs == 0) return holder; // expired
 		}
 

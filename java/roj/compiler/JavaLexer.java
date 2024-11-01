@@ -119,7 +119,9 @@ public final class JavaLexer extends Tokenizer {
 		// Assign
 		"=",
 		"+=", "-=", "*=", "/=", "%=", "**=",
-		"<<=", ">>=", ">>>=", "&=", "^=", "|=",
+		"<<=", ">>=", ">>>=",
+		"&=", "|=", "^=",
+		// Misc? custom
 		"<<<"
 	};
 	@AutoIncrement(100)
@@ -134,7 +136,7 @@ public final class JavaLexer extends Tokenizer {
 
 		inc = 117, dec = 118, rev = 119, logic_not = 120,
 
-		add = 121, sub = 122, mul = 123, div = 124, mod = 125, pow = 126,
+		add = 121, sub = 122, mul = 123, div = 124, rem = 125, pow = 126,
 		lsh = 127, rsh = 128, rsh_unsigned = 129,
 		and = 130, or = 131, xor = 132,
 		logic_and = 133, logic_or = 134,
@@ -142,9 +144,12 @@ public final class JavaLexer extends Tokenizer {
 		equ = 136, neq = 137, lss = 138, geq = 139, gtr = 140, leq = 141,
 
 		assign = 142,
-		add_assign = 143, sub_assign = 144, mul_assign = 145, div_assign = 146, mod_assign = 147, pow_assign = 148,
-		lsh_assign = 149, rsh_assign = 150, rsh_unsigned_assign = 151, and_assign = 152, xor_assign = 153, or_assign = 154,
-		direct_assign = 155;
+		// start from Number Binary
+		binary_assign_base_offset = 143, binary_assign_count = 12,
+		binary_assign_delta = add-binary_assign_base_offset,
+		direct_assign = binary_assign_base_offset+binary_assign_count;
+
+	public static final short INT_MIN_VALUE = 198, LONG_MIN_VALUE = 199;
 
 	public static final TrieTree<Word> JAVA_TOKEN = new TrieTree<>();
 	private static final MyBitSet JAVA_LEND = new MyBitSet();
@@ -163,10 +168,12 @@ public final class JavaLexer extends Tokenizer {
 		addSymbols(JAVA_TOKEN, JAVA_LEND, 100, operators);
 
 		// 文本块的支持
-		JAVA_C2C.putAll(SIGNED_NUMBER_C2C);
+		JAVA_C2C.putAll(NUMBER_C2C);
 		JAVA_C2C.remove('"');
 
 		JAVA_TOKEN.put("\"", new Word().init(0, ST_STRING, "\""));
+		// hey, bro
+		JAVA_TOKEN.put("“", new Word().init(0, ST_STRING, "”"));
 		JAVA_TOKEN.put("//", new Word().init(0, ST_SINGLE_LINE_COMMENT, "//"));
 		JAVA_TOKEN.put("/*", new Word().init(0, ST_MULTI_LINE_COMMENT, "*/"));
 		JAVA_TOKEN.put("\"\"\"", new Word().init(1, -1, "\"\"\""));
@@ -175,6 +182,7 @@ public final class JavaLexer extends Tokenizer {
 
 		addWhitespace(JAVA_LEND);
 		JAVA_LEND.remove('$');
+		JAVA_LEND.add('"');
 
 		alias("...finally", FINALLY, null);
 		alias("...switch", SWITCH, null);
@@ -261,10 +269,14 @@ public final class JavaLexer extends Tokenizer {
 		}
 	}
 	public void init(int pos, int ln, int lnIndex) throws ParseException {
-		next();
+		super.init(getText());
 		index = pos;
 		LN = ln;
 		LNIndex = lnIndex;
+	}
+	public void setText(CharSequence text, int index) {
+		super.init(text);
+		this.index = index;
 	}
 
 	@Override
@@ -276,12 +288,6 @@ public final class JavaLexer extends Tokenizer {
 		while (i < in.length()) {
 			char c = in.charAt(i);
 			switch (JAVA_C2C.getOrDefaultInt(c, 0)) {
-				case C_MAY__NUMBER_SIGN:
-					if (i+1 < in.length() && NUMBER.contains(in.charAt(i))) {
-						prevIndex = index = i;
-						return digitReader(true, DIGIT_DFL|DIGIT_HBO);
-					}
-					// fall to literal(symbol)
 				default:
 					prevIndex = index = i;
 					Word w = readSymbol();
@@ -306,8 +312,17 @@ public final class JavaLexer extends Tokenizer {
 	}
 
 	@Override
-	protected void onNumberFlow(CharSequence str, short from, short to) {
+	protected Word onNumberFlow(CharList str, short from, short to) {
+		if (str.equals("2147483648")) return formClip(INT_MIN_VALUE, "2147483648");
 		LocalContext.get().report(Kind.ERROR, "lexer.number.overflow");
+		return null;
+	}
+
+	@Override
+	protected Word onInvalidNumber(int flag, int i, String reason) throws ParseException {
+		if (reason.equals("lexer.number.longLarge") && found.equals("9223372036854775808"))
+			return formClip(LONG_MIN_VALUE, "9223372036854775808");
+		return super.onInvalidNumber(flag, i, reason);
 	}
 
 	public List<Javadoc> javadocCollector;

@@ -4,12 +4,10 @@ import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import roj.collect.MyHashMap;
-import roj.config.IniParser;
 import roj.config.TOMLParser;
 import roj.config.Tokenizer;
 import roj.config.serial.CVisitor;
 import roj.text.CharList;
-import roj.util.DynByteBuf;
 import roj.util.Helpers;
 
 import java.util.*;
@@ -76,8 +74,8 @@ public class CMap extends CEntry {
 
 	// region PUT
 	public final CEntry put(String key, CEntry entry) { return put1(key, entry == null ? CNull.NULL : entry, 0); }
-	public final CEntry put(String key, String entry) {
-		if (entry == null) return map.remove(key);
+	public final CEntry put(String key, @NotNull String entry) {
+		Objects.requireNonNull(entry);
 
 		CEntry prev = get(key);
 		if (prev.getType() == Type.STRING) {
@@ -119,14 +117,14 @@ public class CMap extends CEntry {
 	public final CEntry putIfAbsent(String key, CEntry v) { return put1(key, v, Q_SET_IF_ABSENT);}
 	public final String putIfAbsent(String key, String v) { return put1(key, CString.valueOf(v), Q_SET_IF_ABSENT).asString();}
 	public final boolean putIfAbsent(String key, boolean v) { return put1(key, CBoolean.valueOf(v), Q_SET_IF_ABSENT).asBool();}
-	public final int putIfAbsent(String key, int v) { return put1(key, CInt.valueOf(v), Q_SET_IF_ABSENT).asInteger();}
+	public final int putIfAbsent(String key, int v) { return put1(key, CInt.valueOf(v), Q_SET_IF_ABSENT).asInt();}
 	public final long putIfAbsent(String key, long v) { return put1(key, CLong.valueOf(v), Q_SET_IF_ABSENT).asLong();}
 	public final double putIfAbsent(String key, double v) { return put1(key, CDouble.valueOf(v), Q_SET_IF_ABSENT).asDouble();}
 
 	public final CMap getOrCreateMap(String key) { return put1(key, new CMap(), Q_SET_IF_ABSENT).asMap();}
 	public final CList getOrCreateList(String key) { return put1(key, new CList(), Q_SET_IF_ABSENT).asList();}
 
-	private CEntry put1(String k, CEntry v, int f) {
+	protected CEntry put1(String k, CEntry v, int f) {
 		if (null == dot) {
 			if ((f & Q_SET_IF_ABSENT) == 0 || !map.getOrDefault(k, CNull.NULL).mayCastTo(v.getType())) {
 				map.put(k, v);
@@ -157,7 +155,7 @@ public class CMap extends CEntry {
 	public final int getInteger(String key) {return getInteger(key, 0);}
 	public final int getInteger(String key, int def) {
 		CEntry entry = get(key);
-		return entry.mayCastTo(Type.INTEGER) ? entry.asInteger() : def;
+		return entry.mayCastTo(Type.INTEGER) ? entry.asInt() : def;
 	}
 	public final long getLong(String key) {return getLong(key, 0);}
 	public final long getLong(String key, long def) {
@@ -185,7 +183,7 @@ public class CMap extends CEntry {
 	@Nullable
 	public final CEntry getOr(String k) {return getOr(k,null);}
 	@Contract("_,!null -> !null")
-	public final CEntry getOr(String k, CEntry def) {
+	public CEntry getOr(String k, CEntry def) {
 		if (k == null) return def;
 		if (null == dot) return map.getOrDefault(k, def);
 		return query(k, 0, CNull.NULL, dot);
@@ -269,73 +267,6 @@ public class CMap extends CEntry {
 	protected final CharList toJSON(CharList sb, int depth) { throw new NoSuchMethodError(); }
 
 	@Override
-	public CharList toINI(CharList sb, int depth) {
-		if (!map.isEmpty()) {
-			Iterator<Map.Entry<String, CEntry>> itr = map.entrySet().iterator();
-			if (depth == 0) {
-				CEntry root = map.get(CONFIG_TOPLEVEL);
-				if (root != null) root.toINI(sb, 1);
-
-				while (itr.hasNext()) {
-					Map.Entry<String, CEntry> entry = itr.next();
-
-					String key = entry.getKey();
-					if (key.equals(CONFIG_TOPLEVEL)) continue;
-
-					String comment = getComment(entry.getKey());
-					if (comment != null && comment.length() > 0) {
-						addComments(sb, 0, comment, ";", "\n");
-					}
-
-					sb.append('[');
-					if (key.indexOf(']') >= 0) {
-						Tokenizer.addSlashes(sb.append('"'), entry.getKey()).append('"');
-					} else {
-						sb.append(key);
-					}
-					sb.append(']').append('\n');
-
-					entry.getValue().toINI(sb, 1);
-					if (!itr.hasNext()) break;
-					sb.append('\n');
-				}
-			} else if (depth == 1) {
-				while (itr.hasNext()) {
-					Map.Entry<String, CEntry> entry = itr.next();
-
-					String key = entry.getKey();
-					boolean safe = IniParser.literalSafe(key);
-
-					CEntry v = entry.getValue();
-					if (v.getType() == Type.LIST) {
-						List<CEntry> list = v.asList().raw();
-						for (int i = 0; i < list.size(); i++) {
-							if (safe) {
-								sb.append(key);
-							} else {
-								Tokenizer.addSlashes(sb.append('"'), entry.getKey()).append('"');
-							}
-							list.get(i).toINI(sb.append('='), 2);
-							sb.append('\n');
-						}
-					} else {
-						if (safe) {
-							sb.append(key);
-						} else {
-							Tokenizer.addSlashes(sb.append('"'), entry.getKey()).append('"');
-						}
-
-						v.toINI(sb.append('='), 2).append('\n');
-					}
-				}
-			} else {
-				throw new IllegalArgumentException("INI不支持两级以上的映射");
-			}
-		}
-		return sb;
-	}
-
-	@Override
 	public CharList toTOML(CharList sb, int depth, CharSequence chain) {
 		if (!map.isEmpty()) {
 			if (chain.length() > 0 && depth < 2) {
@@ -412,20 +343,6 @@ public class CMap extends CEntry {
 			for (int j = 0; j < depth; j++) sb.append(' ');
 			sb.append(prefix).append(com, prev, i).append(postfix);
 		}
-	}
-
-	@Override
-	public void toB_encode(DynByteBuf w) {
-		w.put('d');
-		if (!map.isEmpty()) {
-			for (Map.Entry<String, CEntry> entry : map.entrySet()) {
-				String k = entry.getKey();
-				w.putAscii(Integer.toString(DynByteBuf.byteCountUTF8(k))).put((byte)':').putUTFData(k);
-
-				entry.getValue().toB_encode(w);
-			}
-		}
-		w.put('e');
 	}
 
 	public int hashCode() { return map.hashCode(); }

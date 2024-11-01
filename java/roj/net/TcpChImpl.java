@@ -179,7 +179,6 @@ class TcpChImpl extends MyChannel {
 				if (flusher.unsafeWritableBytes() < buf.readableBytes()) flusher.compact();
 				flusher.put(buf);
 				if (flusher.readableBytes() > rb.capacity()) pauseAndFlush();
-				//if (flusher.readableBytes() > 1048576) throw new IOException("上层发送缓冲区过载");
 			} else {
 				fireFlushed();
 			}

@@ -233,7 +233,7 @@ public abstract class ParamNameMapper {
 	}
 
 	protected String fallbackParamName(MethodNode m, int index, int stackPos) {
-		return "par"+index;
+		return "arg"+index;
 	}
 	protected List<String> getNewParamName(MethodNode m) {
 		return Collections.emptyList();

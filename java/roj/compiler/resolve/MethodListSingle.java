@@ -81,7 +81,7 @@ final class MethodListSingle extends ComponentList {
 			}
 
 			result = ctx.inferrer.infer(mnOwner, mn, that, myParam == null ? params : myParam);
-			if (result.distance >= 0) {
+			if (result.method != null) {
 				result.namedParams = defParamState;
 				MethodList.checkBridgeMethod(ctx, result);
 				return result;
@@ -94,13 +94,13 @@ final class MethodListSingle extends ComponentList {
 		CharList sb = new CharList().append("invoke.incompatible.single:").append(mn.owner).append(':').append(mn.name()).append(':');
 
 		sb.append("  ").append("\1invoke.except\0 ");
-		MethodList.getArg(mn, sb).append('\n');
+		MethodList.getArg(mn, that, sb).append('\n');
 
 		MethodList.appendInput(myParam == null ? params : myParam, sb);
 
-		sb.append("  ").append("\1invoke.reason\0 ");
+		sb.append("  ").append("\1invoke.reason\0 \1");
 		MethodList.appendError(result, sb);
-		sb.append('\n');
+		sb.append("\0\n");
 
 		ctx.report(Kind.ERROR, sb.replace('/', '.').toStringAndFree());
 		return null;

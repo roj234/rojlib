@@ -7,7 +7,7 @@ import roj.asm.cp.*;
 import roj.asm.type.Desc;
 import roj.asm.type.Type;
 import roj.asm.type.TypeHelper;
-import roj.asm.util.InsnHelper;
+import roj.asm.util.InsnMatcher;
 import roj.text.CharList;
 import roj.util.ArrayUtil;
 import roj.util.DynByteBuf;
@@ -69,7 +69,7 @@ public final class XInsnNodeView {
 			boolean wide = code == WIDE;
 			if (wide) {
 				code = r.get(i++);
-				InsnHelper.checkWide(code);
+				CodeVisitor.checkWide(code);
 			}
 
 			byte data = OPLENGTH[code&0xFF];
@@ -313,7 +313,7 @@ public final class XInsnNodeView {
 	public final Type arrayType() {
 		byte code = opcode();
 		switch (code) {
-			case NEWARRAY: return Type.std(InsnHelper.FromPrimitiveArrayId(number));
+			case NEWARRAY: return Type.std(AbstractCodeWriter.FromPrimitiveArrayId(number));
 			case ANEWARRAY: case MULTIANEWARRAY: return TypeHelper.parseField(type());
 			default: return invalidArg(code);
 		}
@@ -398,7 +398,7 @@ public final class XInsnNodeView {
 	}
 
 	@SuppressWarnings("fallthrough")
-	public boolean isSimilarTo(XInsnNodeView b, InsnHelper context) {
+	public boolean isSimilarTo(XInsnNodeView b, InsnMatcher context) {
 		if (normalize(code) == normalize(b.code)) {
 			switch (OPLENGTH[code&0xFF]&0xF) {
 				case 6: case 7: case 8: case 9:
@@ -458,7 +458,7 @@ public final class XInsnNodeView {
 			break;
 			case 6:
 				//noinspection MagicConstant
-				sb.append(Type.std(InsnHelper.FromPrimitiveArrayId(id))); break;
+				sb.append(Type.std(AbstractCodeWriter.FromPrimitiveArrayId(id))); break;
 			case 5: case 8: case 9: sb.append(id); break;
 			case 7: sb.append('#').append(id).append(number >= 0 ? " += " : " -= ").append(Math.abs(number)); break;
 			case 10: TypeHelper.parseField(ref.toString()).toString(sb); sb.append(" // [维度=").append(id).append(']'); break;

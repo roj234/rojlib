@@ -8,7 +8,6 @@ import roj.asm.type.Type;
 import roj.compiler.asm.MethodWriter;
 import roj.compiler.context.LocalContext;
 import roj.compiler.diagnostic.Kind;
-import roj.compiler.resolve.ResolveException;
 import roj.compiler.resolve.TypeCast;
 
 import java.util.List;
@@ -41,36 +40,38 @@ public final class InstanceOf extends ExprNode {
 	@SuppressWarnings("fallthrough")
 	public ExprNode resolve(LocalContext ctx) {
 		left = left.resolve(ctx);
-		ctx.resolveType(type);
 
-		if (left.type().isPrimitive()) ctx.report(Kind.ERROR, "symbol.error.derefPrimitive");
+		IType lType = left.type();
+		if (lType.isPrimitive()) {
+			ctx.report(Kind.ERROR, "symbol.error.derefPrimitive");
+			return NaE.RESOLVE_FAILED;
+		}
 
-		if (type.genericType() != IType.STANDARD_TYPE) {
+		if (ctx.resolveType(type).genericType() != IType.STANDARD_TYPE) {
 			if (type.genericType() == IType.GENERIC_TYPE) {
 				List<IType> children = ((Generic) type).children;
 				for (int i = 0; i < children.size(); i++) {
 					if (children.get(i) != Signature.any()) {
-						ctx.report(Kind.ERROR, "instanceOf.error.unsafeCast", left.type(), type);
+						ctx.report(Kind.ERROR, "instanceOf.error.unsafeCast", lType, type);
 						break;
 					}
 				}
 			} else {
 				// typeParam
-				ctx.report(Kind.ERROR, "instanceOf.error.unsafeCast", left.type(), type);
+				ctx.report(Kind.ERROR, "instanceOf.error.unsafeCast", lType, type);
 			}
 		}
 
-		TypeCast.Cast cast = ctx.castTo(left.type(), type, TypeCast.E_NEVER);
+		var cast = ctx.castTo(lType, type, TypeCast.E_NEVER);
 		boolean result;
 		switch (cast.type) {
-			case TypeCast.E_NEVER: result = false; break;
-			case TypeCast.E_NODATA: ctx.report(Kind.ERROR, "symbol.error.noSuchClass:", type);
+			default: ctx.report(Kind.ERROR, "typeCast.error."+cast.type, lType, type);
 			case TypeCast.E_DOWNCAST: return this;
 			case TypeCast.UPCAST: result = true; break;
-			default: throw new ResolveException("unknownState-"+cast);
+			case TypeCast.E_NEVER: result = false; break;
 		}
 
-		ctx.report(Kind.SEVERE_WARNING, "instanceOf.constant", type.toString());
+		ctx.report(Kind.SEVERE_WARNING, "instanceOf.constant", type);
 		return Constant.valueOf(result);
 	}
 

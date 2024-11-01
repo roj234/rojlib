@@ -3,7 +3,6 @@ package roj.crypt;
 import roj.io.IOUtil;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
-import sun.misc.Unsafe;
 
 import javax.crypto.ShortBufferException;
 import javax.crypto.spec.IvParameterSpec;
@@ -11,6 +10,8 @@ import java.security.InvalidAlgorithmParameterException;
 import java.security.InvalidKeyException;
 import java.security.SecureRandom;
 import java.security.spec.AlgorithmParameterSpec;
+
+import static java.lang.Integer.rotateLeft;
 
 /**
  * @author solo6975
@@ -25,8 +26,6 @@ class ChaCha extends RCipherSpi {
 	final int round;
 	private int pos;
 
-	SecureRandom rng;
-
 	ChaCha() {this(10);}
 	ChaCha(int round) {
 		this.round = round;
@@ -39,22 +38,22 @@ class ChaCha extends RCipherSpi {
 	}
 
 	@Override
-	public void init(int flags, byte[] pass, AlgorithmParameterSpec par, SecureRandom random) throws InvalidAlgorithmParameterException, InvalidKeyException {
-		if (pass.length != 32) throw new InvalidKeyException("Key should be 256 bits length");
+	public void init(int flags, byte[] key, AlgorithmParameterSpec par, SecureRandom random) throws InvalidAlgorithmParameterException, InvalidKeyException {
+		if (key.length != 32) throw new InvalidKeyException("Key should be 256 bits length");
 
-		ByteList b = IOUtil.SharedCoder.get().wrap(pass);
-		for (int i = 4; i < 12; i++) key[i] = b.readIntLE();
+		ByteList b = IOUtil.SharedCoder.get().wrap(key);
+		for (int i = 4; i < 12; i++) this.key[i] = b.readIntLE();
 
 		if (par != null) {
 			if (random != null) throw new IllegalArgumentException("IV和随机器必须也只能提供一个");
 
 			byte[] newIv;
-			if (par instanceof IvParameterSpec) {
-				newIv = ((IvParameterSpec) par).getIV();
+			if (par instanceof IvParameterSpec spec) {
+				newIv = spec.getIV();
 			} else if (par instanceof IvParameterSpecNC) {
 				newIv = ((IvParameterSpecNC) par).getIV();
-				if (par instanceof AEADParameterSpec) {
-					int size = ((AEADParameterSpec) par).getTagSize();
+				if (par instanceof AEADParameterSpec spec) {
+					int size = spec.getTagSize();
 					if (size != 0 && size != 16) {
 						throw new InvalidAlgorithmParameterException("tag size无效, 只能是16");
 					}
@@ -66,34 +65,32 @@ class ChaCha extends RCipherSpi {
 			setIv(newIv);
 		} else {
 			if (random == null) throw new IllegalArgumentException("IV和随机器必须也只能提供一个");
-
-			this.rng = random;
+			randIV(random);
 		}
 
 		reset();
 	}
 
-	public final void reset() {
-		if (rng != null) rngIv();
+	final void reset() {
 		key[12] = 0;
 		pos = 64;
 	}
 
 	// Note that it is not acceptable to use a truncation of a counter encrypted with a
 	// 128-bit or 256-bit cipher, because such a truncation may repeat after a short time.
-	void rngIv() {
-		if (rng instanceof HKDFPRNG) {
-			((HKDFPRNG) rng).generate(key, Unsafe.ARRAY_INT_BASE_OFFSET + 13 * 4, 3 * 4);
-		} else {
-			key[13] = rng.nextInt();
-			key[14] = rng.nextInt();
-			key[15] = rng.nextInt();
-		}
+	void randIV(SecureRandom rnd) {
+		key[13] = rnd.nextInt();
+		key[14] = rnd.nextInt();
+		key[15] = rnd.nextInt();
 	}
-
+	void incrIV() {
+		if (++key[15] == 0)
+			if (++key[14] == 0)
+				key[13]++;
+	}
 	void setIv(byte[] iv) throws InvalidAlgorithmParameterException {
-		if (iv.length != 12) throw new InvalidAlgorithmParameterException("Nonce 长度应当是12, got " + iv.length);
-		ByteList b = IOUtil.SharedCoder.get().wrap(iv);
+		if (iv.length != 12) throw new InvalidAlgorithmParameterException("iv.length("+iv.length+") != 12");
+		var b = IOUtil.SharedCoder.get().wrap(iv);
 		key[13] = b.readIntLE();
 		key[14] = b.readIntLE();
 		key[15] = b.readIntLE();
@@ -169,16 +166,16 @@ class ChaCha extends RCipherSpi {
 
 		a += b;
 		d ^= a;
-		d = Conv.IRL(d, 16);
+		d = rotateLeft(d, 16);
 		c += d;
 		b ^= c;
-		b = Conv.IRL(b, 12);
+		b = rotateLeft(b, 12);
 		a += b;
 		d ^= a;
-		d = Conv.IRL(d, 8);
+		d = rotateLeft(d, 8);
 		c += d;
 		b ^= c;
-		b = Conv.IRL(b, 7);
+		b = rotateLeft(b, 7);
 
 		T[x] = a;
 		T[y] = b;

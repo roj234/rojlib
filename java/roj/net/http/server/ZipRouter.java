@@ -10,13 +10,14 @@ import roj.net.http.IllegalRequestException;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.function.Predicate;
 import java.util.zip.ZipEntry;
 
 /**
  * @author Roj234
  * @since 2021/2/16 11:17
  */
-public class ZipRouter implements Router {
+public class ZipRouter implements Router, Predicate<String> {
 	public final ZipFile zip;
 	private String prefix = "";
 	private String cacheControl = HttpUtil.CACHED;
@@ -56,6 +57,15 @@ public class ZipRouter implements Router {
 		rh.code(200).header("cache-control", getCacheControl(ze));
 		if (ze.isEncrypted()) throw new IllegalRequestException(500, "该文件已加密");
 		return Response.file(req, new ZipFileInfo(zip, ze));
+	}
+
+	// (Optional) for OKRouter Prefix Delegation check
+	@Override
+	public boolean test(String url) {
+		boolean isDir = url.isEmpty() || url.endsWith("/");
+		url = prefix.concat(url);
+
+		return zip.getEntry(url) != null || (isDir && zip.getEntry(url+"index.html") != null);
 	}
 
 	static final class ZipFileInfo implements FileInfo {

@@ -7,7 +7,6 @@ import roj.config.TOMLParser;
 import roj.config.Tokenizer;
 import roj.config.serial.CVisitor;
 import roj.text.CharList;
-import roj.util.DynByteBuf;
 
 import java.util.Arrays;
 import java.util.Iterator;
@@ -65,6 +64,7 @@ public class CList extends CEntry implements Iterable<CEntry> {
 	public final void add(long s) { list.add(CLong.valueOf(s)); }
 	public final void add(double s) { list.add(CDouble.valueOf(s)); }
 
+	public void set(int i, CEntry val) {list.set(i, val);}
 	@NotNull
 	public CEntry get(int i) { return list.get(i); }
 	public final boolean getBool(int i) {
@@ -77,7 +77,7 @@ public class CList extends CEntry implements Iterable<CEntry> {
 	}
 	public final int getInteger(int i) {
 		CEntry entry = list.get(i);
-		return entry.mayCastTo(Type.INTEGER) ? entry.asInteger() : 0;
+		return entry.mayCastTo(Type.INTEGER) ? entry.asInt() : 0;
 	}
 	public final long getLong(int i) {
 		CEntry entry = list.get(i);
@@ -120,7 +120,7 @@ public class CList extends CEntry implements Iterable<CEntry> {
 		int[] array = new int[list.size()];
 		for (int i = 0; i < list.size(); i++) {
 			CEntry entry = list.get(i);
-			array[i] = entry.mayCastTo(Type.INTEGER) ? entry.asInteger() : 0;
+			array[i] = entry.mayCastTo(Type.INTEGER) ? entry.asInt() : 0;
 		}
 		return array;
 	}
@@ -128,7 +128,7 @@ public class CList extends CEntry implements Iterable<CEntry> {
 		byte[] array = new byte[list.size()];
 		for (int i = 0; i < list.size(); i++) {
 			CEntry entry = list.get(i);
-			array[i] = (byte) (entry.mayCastTo(Type.INTEGER) ? entry.asInteger() : 0);
+			array[i] = (byte) (entry.mayCastTo(Type.INTEGER) ? entry.asInt() : 0);
 		}
 		return array;
 	}
@@ -142,19 +142,6 @@ public class CList extends CEntry implements Iterable<CEntry> {
 	@Override
 	public final CharList toJSON(CharList sb, int depth) { throw new NoSuchMethodError(); }
 
-	@Override
-	public void toB_encode(DynByteBuf w) {
-		w.put('l');
-		for (int i = 0; i < list.size(); i++) list.get(i).toB_encode(w);
-		w.put('e');
-	}
-	@Override
-	public final CharList toINI(CharList sb, int depth) {
-		if (depth != 1) throw new IllegalArgumentException("Can not serialize LIST to INI at depth "+depth);
-
-		for (int i = 0; i < list.size(); i++) list.get(i).toINI(sb, 1).append('\n');
-		return sb;
-	}
 	@Override
 	public CharList toTOML(CharList sb, int depth, CharSequence chain) {
 		if (list.isEmpty()) {

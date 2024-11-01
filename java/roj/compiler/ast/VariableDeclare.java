@@ -3,7 +3,6 @@ package roj.compiler.ast;
 import roj.asm.type.IType;
 import roj.compiler.asm.MethodWriter;
 import roj.compiler.ast.expr.ExprNode;
-import roj.compiler.context.LocalContext;
 import roj.compiler.resolve.ResolveException;
 
 /**
@@ -18,12 +17,7 @@ public final class VariableDeclare extends ExprNode {
 		this.name = name;
 	}
 
-	@Override
-	public String toString() {return type+" "+name;}
-	@Override
-	public IType type() { return type; }
-	@Override
-	public ExprNode resolve(LocalContext ctx) throws ResolveException { throw new ResolveException("not expression"); }
-	@Override
-	public void write(MethodWriter cw, boolean noRet) {throw new ResolveException("not expression");}
+	@Override public String toString() {return type+" "+name;}
+	@Override public IType type() {return type;}
+	@Override public void write(MethodWriter cw, boolean noRet) {throw ResolveException.ofInternalError("这不是表达式");}
 }

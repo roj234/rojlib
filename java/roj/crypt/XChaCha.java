@@ -1,10 +1,10 @@
 package roj.crypt;
 
-import roj.io.IOUtil;
-import roj.util.ByteList;
-import roj.util.Helpers;
+import roj.reflect.Unaligned;
+import sun.misc.Unsafe;
 
 import java.security.InvalidAlgorithmParameterException;
+import java.security.SecureRandom;
 
 /**
  * <a href="https://datatracker.ietf.org/doc/html/draft-irtf-cfrg-xchacha">Draft-XChaCha</a>
@@ -16,19 +16,30 @@ final class XChaCha extends ChaCha {
 	XChaCha() {}
 	XChaCha(int round) {super(round);}
 
-	byte[] iv;
+	int[] keyIv;
 
-	void rngIv() {
-		if (iv == null) iv = new byte[24];
-		rng.nextBytes(iv);
-		setIv(iv);
+	void randIV(SecureRandom rnd) {
+		keyIv = new int[14];
+		System.arraycopy(key, 4, keyIv, 0, 8);
+		for (int i = 8; i < 14; i++) keyIv[i] = rnd.nextInt();
+		doSetIv();
+	}
+	void incrIV() {
+		for (int i = 13; i >= 8; i--) {
+			if (++keyIv[i] != 0) break;
+		}
+		doSetIv();
+	}
+	void setIv(byte[] iv) throws InvalidAlgorithmParameterException {
+		if (iv.length != 24) throw new InvalidAlgorithmParameterException("iv.length("+iv.length+") != 24");
+		if (keyIv == null) keyIv = new int[14];
+		System.arraycopy(key, 4, keyIv, 0, 8);
+		for (int i = 8; i < 14; i++) keyIv[i] = Unaligned.U.get32UL(iv, Unsafe.ARRAY_BYTE_BASE_OFFSET + ((i&7) << 2));
+		doSetIv();
 	}
 
-	void setIv(byte[] iv) {
-		if (iv.length != 24) Helpers.athrow(new InvalidAlgorithmParameterException("Nonce 长度应当是24, got " + iv.length));
-		ByteList b = IOUtil.SharedCoder.get().wrap(iv);
-
-		int[] Src = key, Dst = tmp;
+	private void doSetIv() {
+		int[] Key = key, Tmp = tmp;
 
 		// HChaCha an intermediary step towards XChaCha based on the
 		// construction and security proof used to create XSalsa20.
@@ -37,30 +48,25 @@ final class XChaCha extends ChaCha {
 		// kkkkkkkk  kkkkkkkk  kkkkkkkk  kkkkkkkk
 		// kkkkkkkk  kkkkkkkk  kkkkkkkk  kkkkkkkk
 		// nnnnnnnn  nnnnnnnn  nnnnnnnn  nnnnnnnn
-		System.arraycopy(Src, 0, Dst, 0, 12);
-		Dst[12] = b.readIntLE();
-		Dst[13] = b.readIntLE();
-		Dst[14] = b.readIntLE();
-		Dst[15] = b.readIntLE();
+		System.arraycopy(Key, 0, Tmp, 0, 4);    // Constant
+		System.arraycopy(keyIv, 0, Tmp, 4, 12); // Key & Nonce
 
-		Round(Dst, round);
+		Key[12] = 0;         // Counter
+		Key[13] = 0;         // Padding
+		Key[14] = keyIv[12]; // Nonce
+		Key[15] = keyIv[13];
 
-		// Put SubKey
-		Src[4] = Dst[0];
-		Src[5] = Dst[1];
-		Src[6] = Dst[2];
-		Src[7] = Dst[3];
+		Round(Tmp, round);
 
-		Src[8] = Dst[12];
-		Src[9] = Dst[13];
-		Src[10] = Dst[14];
-		Src[11] = Dst[15];
+		// SubKey
+		Key[4] = Tmp[0];
+		Key[5] = Tmp[1];
+		Key[6] = Tmp[2];
+		Key[7] = Tmp[3];
 
-		Src[12] = 0;
-		Src[13] = 0;
-
-		// Put Remain Nonce
-		Src[14] = b.readIntLE();
-		Src[15] = b.readIntLE();
+		Key[8] = Tmp[12];
+		Key[9] = Tmp[13];
+		Key[10] = Tmp[14];
+		Key[11] = Tmp[15];
 	}
 }

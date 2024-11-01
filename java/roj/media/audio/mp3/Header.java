@@ -1,6 +1,9 @@
 package roj.media.audio.mp3;
 
-import roj.math.EMA;
+import roj.reflect.Unaligned;
+import roj.util.DynByteBuf;
+import roj.util.Helpers;
+import sun.misc.Unsafe;
 
 import javax.sound.sampled.AudioFormat;
 
@@ -8,40 +11,44 @@ import javax.sound.sampled.AudioFormat;
  * MPEG-1/2/2.5 Audio Layer I/II/III 帧同步和帧头信息解码
  */
 public final class Header {
-	public static final int MPEG1 = 3, MPEG2 = 2, MPEG2_5 = 0,
-
-	MAX_FRAME_SIZE = 1732;
+	public static final int MPEG1 = 3, MPEG2 = 2, MPEG2_5 = 0, MAX_FRAME_SIZE = 1732;
 
 	/*
-	 * bitrate[lsf][layer-1][bitrate_index]
+	 * bitrate[lsf*3 + (layer-1)][bitrate_index]
 	 */
-	private static final int[][][] BITRATE = {
-		{
-			//MPEG-1
-			//Layer I
-			{0, 32, 64, 96, 128, 160, 192, 224, 256, 288, 320, 352, 384, 416, 448},
-			//Layer II
-			{0, 32, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320, 384},
-			//Layer III
-			{0, 32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320}
-		}, {
-			//MPEG-2/2.5
-			//Layer I
-			{0, 32, 48, 56, 64, 80, 96, 112, 128, 144, 160, 176, 192, 224, 256},
-			//Layer II
-			{0, 8, 16, 24, 32, 40, 48, 56, 64, 80, 96, 112, 128, 144, 160},
-			//Layer III
-			{0, 8, 16, 24, 32, 40, 48, 56, 64, 80, 96, 112, 128, 144, 160}
-		}};
+	private static final short[][] BITRATE = {
+		//MPEG-1
+		//Layer I
+		{0, 32, 64, 96, 128, 160, 192, 224, 256, 288, 320, 352, 384, 416, 448},
+		//Layer II
+		{0, 32, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320, 384},
+		//Layer III
+		{0, 32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320},
+
+		//MPEG-2/2.5
+		//Layer I
+		{0, 32, 48, 56, 64, 80, 96, 112, 128, 144, 160, 176, 192, 224, 256},
+		//Layer II
+		{0, 8, 16, 24, 32, 40, 48, 56, 64, 80, 96, 112, 128, 144, 160},
+		//Layer III
+		{0, 8, 16, 24, 32, 40, 48, 56, 64, 80, 96, 112, 128, 144, 160}
+	};
 
 	/*
 	 * samplingRate[verID][sampling_frequency]
 	 */
-	private static final int[][] SAMPLING_RATE = {
+	private static final char[][] SAMPLING_RATE = {
 		{11025, 12000, 8000, 0},     //MPEG-2.5
-		{},                          //reserved
+		Helpers.maybeNull(),         //reserved
 		{22050, 24000, 16000, 0},    //MPEG-2 (ISO/IEC 13818-3)
 		{44100, 48000, 32000, 0}     //MPEG-1 (ISO/IEC 11172-3)
+	};
+
+	private static final short[] SAMPLE_COUNT = {
+		// MPEG-1
+		384,1152,1152,
+		// MPEG-2/2.5
+		384,1152,576
 	};
 
 	/**
@@ -116,14 +123,18 @@ public final class Header {
 	private int syncMask;
 	private boolean sync;    //true:帧头的特征未改变
 
-	public void reset() {
+	private double frameDuration;//一帧时长(秒)
+	private boolean isVBR;
+	private int fileOffset, frameCount, fileSize;
+	private byte[] seekTable;
+	int frames;
+
+	public void reset(int fileOffset, int fileSize) {
 		syncMask = 0xffe00000;
 		sync = false;
-
 		frames = 0;
-		frameDuration = 0;
-		frameSize2.clear();
-		s_sideInfo = 0;
+		this.fileOffset = fileOffset;
+		this.fileSize = fileSize;
 	}
 
 	private void parseHeader(int h) {
@@ -136,29 +147,24 @@ public final class Header {
 		mode = (byte) ((h >> 6) & 3);
 		mode_extension = (byte) ((h >> 4) & 3);
 
-		int s_frame = this.s_frame;
+		int s_frame = 0;
 		final int pad = (h >> 9) & 0x1;
-		bi = BITRATE[lsf = (ver == MPEG1) ? 0 : 1][layer - 1][bi];
+		lsf = (ver == MPEG1) ? 0 : 1;
+		bi = BITRATE[lsf*3 + (layer-1)][bi];
 		final int s_rate = SAMPLING_RATE[ver][sampling_frequency];
 		switch (layer) {
-			case 1: s_frame = (bi * 12000 / s_rate) + (pad << 2); break;
-			case 2: s_frame = bi * 144000 / s_rate + pad; break;
-			case 3: s_frame = (bi * 144000 / (s_rate << lsf)) + pad;
-
+			case 1 -> s_frame = (bi * 12000 / s_rate) + (pad << 2);
+			case 2 -> s_frame = bi * 144000 / s_rate + pad;
+			case 3 -> {
+				s_frame = (bi * 144000 / (s_rate << lsf)) + pad;
 				// 帧边信息长度
 				s_sideInfo = ver == MPEG1 ? (mode == 3) ? 17 : 32 : (mode == 3) ? 9 : 17;
-				break;
+			}
 		}
 
 		// 主数据长度
 		s_main = (this.s_frame = s_frame) - 4 - s_sideInfo;
 		if (protectionBit == 0) s_main -= 2;    //CRC
-
-		frameSize2.add(s_main);
-	}
-
-	private static int b2i(byte[] b, int i) {
-		return ((b[i++] & 0xFF) << 24) | ((b[i++] & 0xFF) << 16) | ((b[i++] & 0xFF) << 8) | (b[i] & 0xFF);
 	}
 
 	private static boolean findSyncFrame(int h, int mask) {
@@ -191,13 +197,11 @@ public final class Header {
 	public boolean findSyncFrame(byte[] b, int off, int endPos) {
 		int hdr, mask, orig_off = off;
 
-		//int skipBytes = 0; // debug
-
 		idx = off;
 
 		if (endPos - off <= 4) return false;
 
-		hdr = b2i(b, off);
+		hdr = Unaligned.U.get32UB(b, Unsafe.ARRAY_BYTE_BASE_OFFSET + off);
 		idx = orig_off += 4;
 
 		while (true) {
@@ -210,10 +214,7 @@ public final class Header {
 				}
 			}
 
-			if (orig_off > 4 + off) {
-				sync = false;
-				//skipBytes += idx - off - 4;
-			}
+			if (orig_off > 4 + off) sync = false;
 
 			// 2. 解析帧头
 			parseHeader(hdr);
@@ -236,10 +237,34 @@ public final class Header {
 			mask = 0xffe00000 | (hdr & 1969152);
 
 			// mode, mode_extension 不是每帧都相同.
-			if (findSyncFrame(b2i(b, orig_off + s_frame - 4), mask)) {
-				if (this.syncMask == 0xffe00000) { // 是第一帧
-					this.syncMask = mask;
-					frameDuration = 1152f / (getSamplingRate() << lsf);
+			if (findSyncFrame(Unaligned.U.get32UB(b, Unsafe.ARRAY_BYTE_BASE_OFFSET + orig_off - 4 + s_frame), mask)) {
+				if (syncMask == 0xffe00000) { // 是第一帧
+					off += 4 + s_sideInfo;
+					if (endPos - off < s_main) {
+						idx = orig_off - 4;
+						return false;
+					}
+
+					syncMask = mask;
+					frameDuration = getSampleCount() / (getSamplingRate() << lsf);
+
+					var buf = DynByteBuf.wrap(b, off, s_main);
+					var header = buf.readInt();
+					if (header == 1483304551/*FOURCC(Xing)*/ || header == 1231971951/*FOURCC(Info)*/) {
+						isVBR = header == 1483304551; // VBR
+
+						int flag = buf.readInt();
+						if ((flag&1) != 0) frameCount = buf.readInt();
+						if ((flag&2) != 0) fileSize = buf.readInt();
+						if ((flag&4) != 0) seekTable = buf.readBytes(100);
+						if ((flag&8) != 0) {
+							var quality = 100 - buf.readInt();
+							//debugInfo.append("V").append(quality/10).append(" q").append(quality%10);
+						}
+
+						//var encoder = buf.readAscii(9).trim();
+						//debugInfo.append(" encoder ").append(encoder);
+					}
 				}
 				sync = true;
 				break; // 找到有效的帧同步字段，结束查找
@@ -269,7 +294,12 @@ public final class Header {
 	/**
 	 * 获取当前帧的码率（Kbps）
 	 */
-	public int getBitrate() { return BITRATE[lsf][layer - 1][bitrate_index]; }
+	public int getBitrate() { return BITRATE[lsf*3 + (layer-1)][bitrate_index]; }
+
+	/**
+	 * 获取每帧的采样数
+	 */
+	public float getSampleCount() {return SAMPLE_COUNT[lsf + (layer-1)];}
 
 	/**
 	 * 声道数
@@ -338,21 +368,47 @@ public final class Header {
 		return pcmsize;
 	}
 
+	private static final String[] stereo_type = {"Stereo", "Joint Stereo", "Dual Mono", "Mono"};
 	@Override
 	public String toString() {
-		return "MPEG"+(ver == MPEG1 ? "1" : ver == MPEG2 ? "2" : "2.5")+" Layer"+layer+ ", "+getSamplingRate()+"kHz "+getBitrate()+"k, " +
-			"mode=0b"+Integer.toBinaryString(mode)+", mode_ext=0b"+Integer.toBinaryString(mode_extension) + ", frameSizeAvg="+frameSize2.avg();
+		return "MPEG"+(ver == MPEG1 ? "1" : ver == MPEG2 ? "2" : "2.5")+
+			" Layer"+layer+ ", "+getSamplingRate()+"kHz "+
+			(isVBR?"VBR ":"")+getBitrate()+"k, "+stereo_type[mode]+"/"+mode_extension;
 	}
 
-	EMA frameSize2 = new EMA(0.9995);
-	float frameDuration;//一帧时长(秒)
-	int frames;         //当前帧序号
+	public double getTimePlayed() {return frames * frameDuration;}
+	public double getDuration() {
+		if (frameCount != 0) return frameCount * getSampleCount() / (double)getSamplingRate();
+		return fileSize / (double)s_frame * frameDuration;
+	}
+	public long seek(double time) {
+		var duration = getDuration();
 
-	public int getFrames() { return frames; }
-	public double getFrameSizeAvg() { return frameSize2.avg(); }
-	/**
-	 * 获取文件一帧的长度(sec)
-	 * 每一帧的播放时长一般相同
-	 */
-	public double getFrameDuration() { return frameDuration; }
+		if (time < 0) time = 0;
+		else if (time > duration) time = duration;
+
+		// 时间看起来对就行……
+		frames = (int) Math.round(time / frameDuration);
+
+		long seekPos;
+		if (seekTable != null) {
+			var percent = time * 100 / duration;
+
+			double x;
+			if(percent <= 0) x = 0;
+			else if(percent >= 100) x = 256;
+			else {
+				int pct = (int)percent;
+				double before = pct == 0 ? 0 : seekTable[pct-1]&0xFF;
+				double after = pct < 99 ? seekTable[pct]&0xFF : 256;
+				x = before + (after-before)*(percent-pct);
+			}
+
+			seekPos = (int) ((1.0/256.0)*x*fileSize);
+		} else {
+			seekPos = (long) s_frame * frames;
+		}
+
+		return fileOffset+seekPos;
+	}
 }

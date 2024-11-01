@@ -11,10 +11,10 @@ public interface ResponseHeader {
 	Request request();
 
 	/**
-	 * Gets speed limit in KB per second
+	 * Gets speed limit in Byte per second
 	 */
 	int getStreamLimit();
-	void setStreamLimit(int kbps);
+	void setStreamLimit(int bps);
 
 	void onFinish(HFinishHandler o);
 

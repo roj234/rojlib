@@ -3,12 +3,16 @@ package roj.plugin;
 import org.jetbrains.annotations.Nullable;
 import roj.archive.zip.ZEntry;
 import roj.archive.zip.ZipFile;
+import roj.collect.MyHashSet;
+import roj.reflect.ModulePlus;
 import roj.text.Escape;
 import roj.util.ByteList;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.lang.module.ModuleDescriptor;
 import java.net.MalformedURLException;
+import java.net.URI;
 import java.net.URL;
 import java.security.CodeSigner;
 import java.security.CodeSource;
@@ -33,6 +37,31 @@ public class PluginClassLoader extends ClassLoader {
 		this.accessible = accessible;
 		this.archive = new ZipFile(plugin.source, ZipFile.FLAG_VERIFY|ZipFile.FLAG_BACKWARD_READ, plugin.charset);
 		this.archive.reload();
+
+		if (Panger.class.getModule().isNamed()) {
+			var packages = new MyHashSet<String>();
+			for (ZEntry entry : this.archive.entries()) {
+				String name = entry.getName();
+				if (!name.endsWith(".class")) continue;
+				packages.add(name.substring(0, name.lastIndexOf('/')).replace('/', '.'));
+			}
+
+			if (!packages.isEmpty()) {
+
+			}
+			var md = ModuleDescriptor.newAutomaticModule(Escape.escapeFileName(plugin.fileName)).packages(packages).build();
+			var module = ModulePlus.INSTANCE.createModule(null, this, md, URI.create("panger://plugin/"+plugin.fileName));
+			System.out.println(module);
+		}
+	}
+
+	@Override
+	protected Class<?> findClass(String moduleName, String name) {
+		System.out.println("moduleName = " + moduleName + ", name = " + name);
+		try {
+			return findClass(name);
+		} catch (ClassNotFoundException e) {}
+		return null;
 	}
 
 	@Override

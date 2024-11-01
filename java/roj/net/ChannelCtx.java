@@ -2,8 +2,8 @@ package roj.net;
 
 import roj.collect.SimpleList;
 import roj.io.buf.BufferPool;
-import roj.util.AttributeKey;
 import roj.util.DynByteBuf;
+import roj.util.TypedKey;
 
 import java.io.IOException;
 import java.net.SocketAddress;
@@ -41,10 +41,10 @@ public final class ChannelCtx {
 	public void readActive() { root.readActive(); }
 	public void readInactive() { root.readInactive(); }
 
-	public <T> T attachment(AttributeKey<T> key) {
+	public <T> T attachment(TypedKey<T> key) {
 		return root.attachment(key);
 	}
-	public <T> T attachment(AttributeKey<T> key, T val) {
+	public <T> T attachment(TypedKey<T> key, T val) {
 		return root.attachment(key, val);
 	}
 
@@ -62,6 +62,7 @@ public final class ChannelCtx {
 
 	public void channelRead(Object data) throws IOException {
 		if (next != null) next.handler.channelRead(next, data);
+		else throw new IllegalStateException("No next handler");
 	}
 
 	public Event postEvent(String id) throws IOException {
@@ -80,7 +81,7 @@ public final class ChannelCtx {
 				for (int i = 0; i < list.size(); i++) {
 					StackTraceElement el = list.get(i);
 					if (el.getMethodName().startsWith("channel")) {
-						if (el.getClassName().startsWith("roj.net.ch.Channel")) {
+						if (el.getClassName().startsWith("roj.net.Channel")) {
 							list.remove(i--);
 						}
 					}
@@ -116,7 +117,7 @@ public final class ChannelCtx {
 	}
 
 	public void dispose() throws IOException {
-		ChannelHandler h = handler;
+		var h = handler;
 		try {
 			if (h != null) h.channelClosed(this);
 		} finally {

@@ -14,19 +14,19 @@ import static roj.reflect.ReflectionUtils.u;
 public abstract class Generator<T> implements Iterator<T> {
 	private byte stage;
 	// position, returnValue, registers
-	private final ReturnStack<?> stack = new ReturnStack<>();
-
-	protected Generator() {stack.forWrite().put(0);}
+	protected final ReturnStack<?> stack = new ReturnStack<>();
+	protected Generator() {stack.forWrite();}
 
 	@Override
 	public final boolean hasNext() {
 		if (stage == 0) {
 			try {
-				if (u.getInt(stack.address()) == -1) return false;
-				invoke();
-				stage = 1;
+				invoke(stack.forRead());
+				stage = (byte) (u.getInt(stack.base()) == -1 ? -1 : 1);
 			} catch (Throwable e) {
-				u.putInt(stack.address(), -1);
+				stage = -1;
+				stack.forWrite();
+
 				Helpers.athrow(e);
 			}
 		}
@@ -41,13 +41,11 @@ public abstract class Generator<T> implements Iterator<T> {
 
 	@Override
 	@SuppressWarnings("unchecked")
-	public final T next() {check();return (T) stack.forRead().getL();}
-	public final int nextInt() {check();return u.getInt(stack.address()+4);}
-	public final long nextLong() {check();return u.getLong(stack.address()+4);}
+	public final T next() {check();return (T) stack.objects.getLast();}
+	public final int nextInt() {check();return u.getInt(stack.address-4);}
+	public final long nextLong() {check();return u.getLong(stack.address-8);}
 	public final float nextFloat() { return Float.floatToIntBits(nextInt()); }
 	public final double nextDouble() { return Double.longBitsToDouble(nextLong()); }
 
-	protected final ReturnStack<?> __pos() {return stack.forRead();}
-	protected final ReturnStack<?> __yield(int position) {return stack.forWrite().put(position);}
-	protected abstract void invoke() throws Throwable;
+	protected abstract void invoke(ReturnStack<?> stack) throws Throwable;
 }

@@ -12,8 +12,8 @@ import roj.asm.type.IType;
 import roj.asm.type.Signature;
 import roj.asmx.AnnotationSelf;
 import roj.collect.*;
-import roj.compiler.CompilerSpec;
 import roj.compiler.JavaLexer;
+import roj.compiler.LavaFeatures;
 import roj.compiler.asm.AnnotationPrimer;
 import roj.compiler.asm.MethodWriter;
 import roj.compiler.ast.BlockParser;
@@ -57,7 +57,7 @@ import java.util.function.Consumer;
  * @author solo6975
  * @since 2021/7/22 19:05
  */
-public class GlobalContext implements CompilerSpec {
+public class GlobalContext implements LavaFeatures {
 	public static File cacheFolder = new File(".lavaCache");
 
 	private static final XHashSet.Shape<String, CompileUnit> COMPILE_UNIT_SHAPE = XHashSet.noCreation(CompileUnit.class, "name");
@@ -65,9 +65,9 @@ public class GlobalContext implements CompilerSpec {
 
 	protected final XHashSet<String, CompileUnit> ctx = COMPILE_UNIT_SHAPE.create();
 
-	private final MyHashMap<String, Object> libraryCache = new MyHashMap<>();
+	protected final MyHashMap<String, Object> libraryCache = new MyHashMap<>();
+	protected final List<Library> libraries = new SimpleList<>();
 	private final List<Library> unenumerableLibraries = new SimpleList<>(LibraryCache.RUNTIME);
-	private final List<Library> libraries = new SimpleList<>();
 
 	protected final XHashSet<IClass, ResolveHelper> extraInfos = CLASS_EXTRA_INFO_SHAPE.create();
 	protected MyHashMap<String, List<String>> packageFastPath = new MyHashMap<>();
@@ -90,35 +90,40 @@ public class GlobalContext implements CompilerSpec {
 			for (String className : content)
 				libraryCache.put(className, library);
 		}
+		libraries.add(library);
 	}
 
-	public ConstantData getClassInfo(CharSequence name) {
+	public final ConstantData getClassInfo(CharSequence name) {
 		ConstantData clz = ctx.get(name);
 		if (clz == null) {
 			var entry = libraryCache.getEntry(name);
 			if (entry != null) {
-				var value = entry.getValue();
-				if (value instanceof ConstantData c) return c;
+				synchronized (entry) {
+					var value = entry.getValue();
+					if (value instanceof ConstantData c) return c;
 
-				clz = ((Library) value).get(name);
-				entry.setValue(clz);
+					clz = ((Library) value).get(name);
+					clz = onClassLoaded(entry.k, clz);
+					entry.setValue(clz);
+				}
 				return clz;
 			}
 
 			for (int i = unenumerableLibraries.size()-1; i >= 0; i--) {
 				var library = unenumerableLibraries.get(i);
 				if ((clz = library.get(name)) != null) {
-					synchronized (libraryCache) {
-						libraryCache.put(name.toString(), clz);
-					}
+					var key = name.toString();
+					clz = onClassLoaded(key, clz);
+					synchronized (libraryCache) {libraryCache.put(key, clz);}
 					return clz;
 				}
 			}
 		}
 		return clz;
 	}
+	protected ConstantData onClassLoaded(String name, ConstantData clazz) {return clazz;}
 
-	public void addCompileUnit(CompileUnit unit, boolean generated) {
+	public synchronized void addCompileUnit(CompileUnit unit, boolean generated) {
 		CompileUnit prev = ctx.put(unit.name, unit);
 		if (prev != null) throw new IllegalStateException("重复的编译单位: "+unit.name);
 		if (generated) generatedCUs.add(unit);
@@ -135,17 +140,14 @@ public class GlobalContext implements CompilerSpec {
 	}
 	public Collection<ConstantData> getGeneratedClasses() {return generated.classes.values();}
 
-	@NotNull
-	public final ResolveHelper getResolveHelper(IClass info) { return extraInfos.computeIfAbsent(info); }
-	@NotNull
-	public IntBiMap<String> getParentList(IClass info) {return getResolveHelper(info).getClassList(this);}
-	@Nullable
-	public ComponentList getMethodList(IClass info, String name) throws TypeNotPresentException {return getResolveHelper(info).findMethod(this, name);}
-	@Nullable
-	public ComponentList getFieldList(IClass info, String name) throws TypeNotPresentException {return getResolveHelper(info).findField(this, name);}
-	@Nullable
-	public List<IType> getTypeParamOwner(IClass info, String superType) throws ClassNotFoundException {return getResolveHelper(info).getTypeParamOwner(this).get(superType);}
-	public MyHashMap<String, InnerClasses.Item> getInnerClassFlags(IClass info) {return getResolveHelper(info).getInnerClasses();}
+	@NotNull public synchronized final ResolveHelper getResolveHelper(IClass info) { return extraInfos.computeIfAbsent(info); }
+	public synchronized void invalidateResolveHelper(IClass file) {extraInfos.removeKey(file);}
+
+	@NotNull public IntBiMap<String> getParentList(IClass info) {return getResolveHelper(info).getClassList(this);}
+	@Nullable public ComponentList getMethodList(IClass info, String name) throws TypeNotPresentException {return getResolveHelper(info).findMethod(this, name);}
+	@Nullable public ComponentList getFieldList(IClass info, String name) throws TypeNotPresentException {return getResolveHelper(info).findField(this, name);}
+	@Nullable public List<IType> getTypeParamOwner(IClass info, String superType) throws ClassNotFoundException {return getResolveHelper(info).getTypeParamOwner(this).get(superType);}
+	public Map<String, InnerClasses.Item> getInnerClassFlags(IClass info) {return getResolveHelper(info).getInnerClasses();}
 	public AnnotationSelf getAnnotationDescriptor(IClass clz) {return getResolveHelper(clz).annotationInfo();}
 
 	/**
@@ -160,8 +162,6 @@ public class GlobalContext implements CompilerSpec {
 	private synchronized void buildPackageCache() {
 		if (!packageFastPath.isEmpty()) return;
 
-		long time = System.nanoTime();
-
 		// solved: use __TypeDecl( MyHashMap<String, List<String>> )
 		var serializer = (Serializer<MyHashMap<String, List<String>>>) SerializerFactory.SAFE.serializer(Signature.parseGeneric("Lroj/collect/MyHashMap<Ljava/lang/String;Ljava/util/List<Ljava/lang/String;>;>;"));
 
@@ -169,9 +169,6 @@ public class GlobalContext implements CompilerSpec {
 		var bb = IOUtil.getSharedByteBuf();
 		try {
 			for (Library library : libraries) {
-				bb.putUTFData(library.versionCode()).put(0);
-			}
-			for (Library library : unenumerableLibraries) {
 				bb.putUTFData(library.versionCode()).put(0);
 			}
 
@@ -190,7 +187,7 @@ public class GlobalContext implements CompilerSpec {
 		}
 
 		for (String entry : libraryCache.keySet()) {
-			if (!entry.contains("$")) addFastPath(entry);
+			if (!entry.contains("$") && !entry.startsWith("[")) addFastPath(entry);
 		}
 
 		for (Library library : LibraryCache.RUNTIME) {
@@ -233,10 +230,6 @@ public class GlobalContext implements CompilerSpec {
 		packageFastPath.computeIfAbsent(name, Helpers.fnArrayList()).add(packag);
 	}
 
-	public void invalidateResolveHelper(IClass file) {
-		extraInfos.removeKey(file);
-	}
-
 	public void reset() {
 		for (CompileUnit unit : ctx) extraInfos.removeKey(unit);
 		ctx.clear();
@@ -250,30 +243,25 @@ public class GlobalContext implements CompilerSpec {
 
 	public ExprParser createExprParser(LocalContext ctx) {return new ExprParser(ctx);}
 	public BlockParser createBlockParser(LocalContext ctx) {return new BlockParser(ctx);}
-	public MethodWriter createMethodPoet(ConstantData file, MethodNode node) {return new MethodWriter(file, node);}
+	public MethodWriter createMethodWriter(ConstantData file, MethodNode node) {return new MethodWriter(file, node, hasFeature(LavaFeatures.ATTR_LOCAL_VARIABLES));}
 
 	public void setModule(AttrModule module) {
 		if (generated.module != null) report(null, Kind.ERROR, -1, "module.dup");
 		generated.module = module;
 	}
 
-	// DEFINE BY USER
-	public void invokeAnnotationProcessor(CompileUnit file, Attributed node, List<AnnotationPrimer> annotations) {
+	// example
+	public void runAnnotationProcessor(CompileUnit file, Attributed node, List<AnnotationPrimer> annotations) {
 		for (var annotation : annotations) {
 			if (annotation.type().equals("java/lang/Override") && annotation.values != Collections.EMPTY_MAP) {
 				report(file, Kind.ERROR, annotation.pos, "annotation.override");
 			}
-			if (annotation.type().equals("roj/compiler/api/Ignore")) {
-				debugLogger().info("\n\n当前的错误已被忽略\n\n");
-				// 临时解决方案
-				hasError = false;
-			}
 		}
 	}
 
-	public boolean isSpecEnabled(int specId) {return true;}
+	public boolean hasFeature(int specId) {return true;}
 
-	public Consumer<Diagnostic> listener = new TextDiagnosticReporter(1, 1, 1);
+	public Consumer<Diagnostic> reporter = new TextDiagnosticReporter(1, 1, 1);
 	public boolean hasError;
 
 	public boolean hasError() {return hasError;}
@@ -281,26 +269,27 @@ public class GlobalContext implements CompilerSpec {
 	public void report(IClass source, Kind kind, int pos, String code, Object... args) {
 		Diagnostic diagnostic = new Diagnostic(source, kind, pos, pos, code, args);
 		if (kind.ordinal() >= Kind.ERROR.ordinal()) hasError = true;
-		listener.accept(diagnostic);
+		reporter.accept(diagnostic);
 	}
 	public void report(IClass source, Kind kind, int start, int end, String code, Object... args) {
 		Diagnostic diagnostic = new Diagnostic(source, kind, start, end, code, args);
 		if (kind.ordinal() >= Kind.ERROR.ordinal()) hasError = true;
-		listener.accept(diagnostic);
+		reporter.accept(diagnostic);
 	}
 
 	private static final ConstantData AnyArray;
 	static {
 		var array = Object[].class;
 		var ref = new ConstantData();
-		ref.name("java/lang/Array");
+		ref.name("<\1arrayBase\0>");
 		ref.parent(array.getSuperclass().getName().replace('.', '/'));
 		for (Class<?> itf : array.getInterfaces()) ref.addInterface(itf.getName().replace('.', '/'));
 		ref.fields.add(new FieldNode(Opcodes.ACC_PUBLIC|Opcodes.ACC_FINAL, "length", "I"));
 		ref.methods.add(new MethodNode(Opcodes.ACC_PUBLIC|Opcodes.ACC_FINAL, "java/lang/Object", "clone", "()Ljava/lang/Object;"));
 		AnyArray = ref;
 	}
-	public static ConstantData anyArray() {return AnyArray;}
+	public ConstantData getArrayInfo(IType type) {return AnyArray;}
+	public static List<String> arrayInterfaces() {return AnyArray.interfaces();}
 	public static FieldNode arrayLength() {return AnyArray.fields.get(0);}
 	public static MethodNode arrayClone() {return AnyArray.methods.get(0);}
 

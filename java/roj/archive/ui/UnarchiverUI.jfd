@@ -7,26 +7,7 @@ new FormModel {
 			"autoSize": false
 		} ) {
 			name: "this"
-			"title": "Roj234 Unarchiver 1.1"
-			add( new FormComponent( "javax.swing.JLabel" ) {
-				name: "label1"
-				"text": "文件"
-				auxiliary() {
-					"JavaCodeGenerator.variableLocal": true
-				}
-			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
-				"x": 30
-				"y": 10
-			} )
-			add( new FormComponent( "javax.swing.JTextField" ) {
-				name: "uiArchivePath"
-				"font": new com.jformdesigner.model.SwingDerivedFont( null, 0, 2, false )
-			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
-				"x": 60
-				"y": 5
-				"width": 180
-				"height": 25
-			} )
+			"title": "Roj234 Unarchiver 1.2"
 			add( new FormComponent( "javax.swing.JLabel" ) {
 				name: "label2"
 				"text": "解压到"
@@ -34,33 +15,33 @@ new FormModel {
 					"JavaCodeGenerator.variableLocal": true
 				}
 			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
-				"x": 20
-				"y": 45
+				"x": 2
+				"y": 62
 			} )
 			add( new FormComponent( "javax.swing.JTextField" ) {
 				name: "uiOutputPath"
 				"font": new com.jformdesigner.model.SwingDerivedFont( null, 0, 2, false )
 			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
-				"x": 60
-				"y": 35
+				"x": 40
+				"y": 55
 				"width": 180
 				"height": 25
 			} )
 			add( new FormComponent( "javax.swing.JSpinner" ) {
 				name: "uiThreads"
 			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
-				"x": 250
-				"y": 40
-				"width": 45
+				"x": 240
+				"y": 55
+				"width": 60
 			} )
 			add( new FormComponent( "javax.swing.JButton" ) {
 				name: "uiRead"
-				"text": "读取"
+				"text": "打开"
 				"font": new com.jformdesigner.model.SwingDerivedFont( null, 0, 6, false )
 				"margin": new java.awt.Insets( 2, 2, 2, 2 )
 			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
-				"x": 60
-				"y": 65
+				"x": 30
+				"y": 5
 				"height": 40
 				"width": 80
 			} )
@@ -71,8 +52,8 @@ new FormModel {
 				"margin": new java.awt.Insets( 2, 2, 2, 2 )
 				"font": new com.jformdesigner.model.SwingDerivedFont( null, 0, 6, false )
 			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
-				"x": 160
-				"y": 65
+				"x": 140
+				"y": 5
 				"width": 80
 				"height": 40
 			} )
@@ -82,19 +63,19 @@ new FormModel {
 					"JavaCodeGenerator.typeParameters": "String"
 				}
 			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
-				"x": 255
-				"y": 80
+				"x": 240
+				"y": 10
 				"width": 60
 			} )
 			add( new FormComponent( "javax.swing.JLabel" ) {
 				name: "label4"
-				"text": "目录树 如果选中了，那么只会解压选中的文件和子文件"
+				"text": "目录树 若选中，仅递归解压选中的"
 				auxiliary() {
 					"JavaCodeGenerator.variableLocal": true
 				}
 			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
 				"x": 10
-				"y": 110
+				"y": 155
 			} )
 			add( new FormContainer( "javax.swing.JScrollPane", new FormLayoutManager( class javax.swing.JScrollPane ) ) {
 				name: "scrollPane1"
@@ -112,7 +93,7 @@ new FormModel {
 			} )
 			add( new FormComponent( "javax.swing.JLabel" ) {
 				name: "label5"
-				"text": "覆盖的属性"
+				"text": "文件属性"
 				auxiliary() {
 					"JavaCodeGenerator.variableLocal": true
 				}
@@ -144,7 +125,7 @@ new FormModel {
 			} )
 			add( new FormComponent( "javax.swing.JCheckBox" ) {
 				name: "uiStoreAttr"
-				"text": "文件属性"
+				"text": "DOS属性"
 				"enabled": false
 			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
 				"x": 315
@@ -161,16 +142,16 @@ new FormModel {
 				name: "progressBar1"
 				"maximum": 10000
 			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
-				"x": 80
+				"x": 5
 				"y": 140
-				"width": 300
+				"width": 375
 			} )
 			add( new FormComponent( "javax.swing.JCheckBox" ) {
 				name: "uiPathFilter"
-				"text": "路径安全"
+				"text": "路径过滤"
 			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
-				"x": 5
-				"y": 130
+				"x": 235
+				"y": 32
 			} )
 			add( new FormContainer( "javax.swing.JScrollPane", new FormLayoutManager( class javax.swing.JScrollPane ) ) {
 				name: "scrollPane2"
@@ -188,7 +169,7 @@ new FormModel {
 			} )
 			add( new FormComponent( "javax.swing.JLabel" ) {
 				name: "uiPasswordInfo"
-				"text": "在下方输入密码来自动输入 每行一个"
+				"text": "每行一个密码，自动尝试"
 			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
 				"x": 10
 				"y": 420
@@ -197,20 +178,20 @@ new FormModel {
 				name: "uiNoVerify"
 				"text": "不验证"
 			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
-				"x": 210
-				"y": 417
+				"x": 145
+				"y": 416
 			} )
 			add( new FormComponent( "javax.swing.JTextField" ) {
 				name: "uiCharset"
 				"text": "UTF-8"
 			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
 				"x": 305
-				"y": 415
+				"y": 417
 				"width": 75
 			} )
 		}, new FormLayoutConstraints( null ) {
 			"location": new java.awt.Point( 0, 0 )
-			"size": new java.awt.Dimension( 390, 675 )
+			"size": new java.awt.Dimension( 390, 650 )
 		} )
 	}
 }

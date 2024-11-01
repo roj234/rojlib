@@ -2,6 +2,8 @@ package roj.compiler.ast.expr;
 
 import org.jetbrains.annotations.Nullable;
 import roj.asm.Opcodes;
+import roj.asm.tree.FieldNode;
+import roj.asm.tree.IClass;
 import roj.asm.tree.MethodNode;
 import roj.asm.tree.anno.AnnVal;
 import roj.asm.type.IType;
@@ -10,19 +12,18 @@ import roj.collect.Int2IntMap;
 import roj.collect.IntList;
 import roj.collect.IntMap;
 import roj.collect.SimpleList;
-import roj.compiler.CompilerSpec;
 import roj.compiler.JavaLexer;
+import roj.compiler.LavaFeatures;
 import roj.compiler.asm.Asterisk;
 import roj.compiler.asm.LPGeneric;
 import roj.compiler.ast.BlockParser;
 import roj.compiler.ast.ParseTask;
 import roj.compiler.ast.VariableDeclare;
 import roj.compiler.context.CompileUnit;
-import roj.compiler.context.GlobalContext;
 import roj.compiler.context.LocalContext;
 import roj.compiler.diagnostic.Kind;
-import roj.compiler.plugins.api.LEC;
-import roj.compiler.plugins.api.LEG;
+import roj.compiler.plugin.LEC;
+import roj.compiler.plugin.LEG;
 import roj.config.ConfigMaster;
 import roj.config.ParseException;
 import roj.config.Word;
@@ -50,7 +51,7 @@ import static roj.reflect.ReflectionUtils.u;
  *     <li>{@link BlockParser Method Parser}</li>
  *     <li><b><i>Expression Parser</i></b></li>
  * </ol>
- * @version 2.4 (General Type|Expr parser)
+ * @version 2.6 (Nested new)
  * @author Roj233
  * @since 2024/01/22 13:51
  */
@@ -90,7 +91,7 @@ public final class ExprParser {
 		SM.putInt(SM_UnaryPre | dec, -1);
 
 		SM.putInt(SM_UnaryPre | add, -1);
-		SM.putInt(SM_UnaryPre | sub, -1);
+		SM.putInt(SM_UnaryPre | sub, -5);
 		SM.putInt(SM_UnaryPre | logic_not, -1);
 		SM.putInt(SM_UnaryPre | rev, -1);
 		SM.putInt(SM_UnaryPre | lParen, -2);
@@ -113,6 +114,8 @@ public final class ExprParser {
 		SM.putInt(SM_ExprStart | lBracket, -14);
 		batch(SM_ExprStart, -15, /*VOID, */BOOLEAN, BYTE, CHAR, SHORT, INT, LONG, FLOAT, DOUBLE);
 		SM.putInt(SM_ExprStart | LITERAL, -16);
+		SM.putInt(SM_ExprStart | INT_MIN_VALUE, -17);
+		SM.putInt(SM_ExprStart | LONG_MIN_VALUE, -17);
 
 		SM.putInt(SM_ExprNext | lss, -1);
 		SM.putInt(SM_ExprNext | lBracket, -2);
@@ -120,11 +123,15 @@ public final class ExprParser {
 		SM.putInt(SM_ExprNext | dot, -4);
 		SM.putInt(SM_ExprNext | Word.LITERAL, -5);
 		SM.putInt(SM_ExprNext | lParen, -6);
-		batch(SM_ExprNext, -7, assign, add_assign, sub_assign, mul_assign, div_assign, mod_assign, pow_assign, lsh_assign, rsh_assign, rsh_unsigned_assign, and_assign, or_assign, xor_assign);
+		SM.putInt(SM_ExprNext | assign, -7);
+		for (int i = binary_assign_base_offset; i < binary_assign_base_offset+binary_assign_count; i++) {
+			SM.putInt(SM_ExprNext | i, -7);
+		}
 		SM.putInt(SM_ExprNext | inc, -8);
 		SM.putInt(SM_ExprNext | dec, -8);
 		SM.putInt(SM_ExprNext | method_referent, -9);
 		SM.putInt(SM_ExprNext | Word.STRING, -10);
+		SM.putInt(SM_ExprNext | NEW, -11);
 
 		// Spec
 		SM.putInt(SM_ExprTerm | INSTANCEOF, -1);
@@ -155,7 +162,7 @@ public final class ExprParser {
 
 		SM.putInt(SM_ExprTerm | mul, 7);
 		SM.putInt(SM_ExprTerm | div, 7);
-		SM.putInt(SM_ExprTerm | mod, 7);
+		SM.putInt(SM_ExprTerm | rem, 7);
 
 		SM.putInt(SM_ExprTerm | add, 6);
 		SM.putInt(SM_ExprTerm | sub, 6);
@@ -202,6 +209,7 @@ public final class ExprParser {
 	public ExprParser(LocalContext ctx) {this.ctx = ctx;}
 
 	public UnresolvedExprNode parse(int flag) throws ParseException {
+		hasNullExpr = false;
 		UnresolvedExprNode node;
 		try {
 			node = parse1(flag);
@@ -241,7 +249,22 @@ public final class ExprParser {
 			while (true) {
 				UnaryPreNode pf;
 				switch (_sid = sm.getOrDefaultInt(w.type()|SM_UnaryPre, 0)) {
-					case -1: //inc, dec, add, sub, logic_not, rev
+					case -5: //dec
+						w = wr.next();
+						if (w.type() == INT_MIN_VALUE) {
+							w = wr.next();
+							cur = Constant.valueOf(AnnVal.valueOf(Integer.MIN_VALUE));
+							break endValueGen;
+						} else if (w.type() == LONG_MIN_VALUE) {
+							w = wr.next();
+							cur = Constant.valueOf(AnnVal.valueOf(Long.MIN_VALUE));
+							break endValueGen;
+						} else {
+							wr.retractWord();
+							pf = unaryPre(sub);
+							break;
+						}
+					case -1: //inc, add, sub, logic_not, rev
 						pf = unaryPre(w.type());
 					break;
 					case -2: //lParen
@@ -293,7 +316,10 @@ public final class ExprParser {
 				w = wr.next();
 
 				if (up == null) nodes.add(pf);
-				else up.setRight(pf);
+				else {
+					var code = up.setRight(pf);
+					if (code != null) ctx.report(Kind.ERROR, code);
+				}
 				up = pf;
 			}
 			// endregion
@@ -370,13 +396,15 @@ public final class ExprParser {
 				// constant
 				case -2: cur = new Constant(Type.std(Type.CHAR), AnnVal.valueOf(w.val().charAt(0))); break;
 				case -3: cur = Constant.valueOf(w.val()); break;
-				case -4: cur = new Constant(Type.std(Type.INT), AnnVal.valueOf(w.asInt())); break;
+				case -4: cur = Constant.valueOf(w.asInt()); break;
 				case -5: cur = new Constant(Type.std(Type.LONG), AnnVal.valueOf(w.asLong())); break;
 				case -6: cur = new Constant(Type.std(Type.FLOAT), AnnVal.valueOf(w.asFloat())); break;
 				case -7: cur = new Constant(Type.std(Type.DOUBLE), AnnVal.valueOf(w.asDouble())); break;
 				case -8: cur = Constant.valueOf(true); break;
 				case -9: cur = Constant.valueOf(false); break;
 				case -10: cur = new Constant(Asterisk.anyType, null); break;
+				// MIN_VALUE_NUMBER_LITERAL
+				case -17: LocalContext.get().report(Kind.ERROR, "lexer.number.overflow"); break;
 				// this
 				case -11: cur = Super(); break;
 				case -12: cur = This(); break;
@@ -452,15 +480,15 @@ public final class ExprParser {
 					}
 
 					wr.except(rBracket, "]");
-					cur = new MultiReturn(copyOf(args));
+					cur = new EasyList(copyOf(args));
 				break;
 				case -15://primitive type ref
 					Type typeRef = PW.get(w.type());
 					assert typeRef != null;
 
 					cur = _typeRef(wr.next(), typeRef, flag);
-					if (cur == null) throw wr.err("expr.typeRef.illegal");
-					if (cur.getClass() == VariableDeclare.class) return cur;
+					if (cur == null) ctx.report(Kind.ERROR, "expr.typeRef.illegal");
+					else if (cur.getClass() == VariableDeclare.class) return cur;
 				break;
 				case -16://type ref
 					while (true) {
@@ -525,7 +553,7 @@ public final class ExprParser {
 			}
 			w = wr.next();
 			// endregion
-			}
+			}//END endValueGen
 			// region 重复性"值生成" (变量|字段访问 数组获取 函数调用) 和 值终止 (赋值运算符 后缀自增/自减 方法引用lambda)
 			boolean waitDot = cur != null && _sid != 0;
 			int opFlag = 0;
@@ -575,7 +603,7 @@ public final class ExprParser {
 							break;
 						}
 
-						if (ctx.classes.isSpecEnabled(CompilerSpec.OPTIONAL_SEMICOLON) && cur != null) {
+						if (ctx.classes.hasFeature(LavaFeatures.OPTIONAL_SEMICOLON) && cur != null) {
 							wr.retractWord();
 							break endValueConv;
 						}
@@ -586,11 +614,18 @@ public final class ExprParser {
 						if (!waitDot) ue(wr, w.val(), "type.literal");
 						cur = invoke(cur, null);
 					break;
+					case -11://xxx.new SomeClass(...)
+						if (waitDot) ue(wr, w.val(), ".");
+						String className = wr.except(LITERAL, "cu.name").val();
+						wr.except(lParen);
+						cur = invoke(new Type(className), cur).setEnclosingArg();
+					break endValueConv;
 
 					// 我是无敌可爱的分隔线
 
 					case -10://字符串格式化 FMT. ""
 						if (cur instanceof DotGet dg && dg.maybeStringTemplate()) {
+							//if (waitDot) ue(wr, w.val(), ".");
 							cur = new StringFormat(dg, w.val());
 							break endValueConv;
 						}
@@ -599,17 +634,20 @@ public final class ExprParser {
 					break endValueConvNrt;
 
 					case -7: {//assign及其变种
-						if (!(cur instanceof VarNode vn)) throw wr.err("expr.notVariable:".concat(w.val()));
+						if (!(cur instanceof VarNode vn)) {
+							ctx.report(Kind.ERROR, "expr.notVariable", cur);
+							break endValueConv;
+						}
 
 						short vtype = w.type();
 
 						ExprNode right = parse1(flag & ~(CHECK_VARIABLE_DECLARE|SKIP_SEMICOLON|SKIP_COMMA|SKIP_RMB|SKIP_RSB) | STOP_COMMA | NAE);
-						cur = newAssign(vn, vtype == assign ? right : binary((short) (add + (vtype - add_assign)), cur, right));
+						cur = newAssign(vn, vtype == assign ? right : binary((short) (vtype + binary_assign_delta), cur, right));
 					}
 					break endValueConv;
 					case -8://inc, dec
-						if (!(cur instanceof VarNode vn)) throw wr.err("expr.notVariable:".concat(w.val()));
-						cur = newUnaryPost(w.type(), vn);
+						if (!(cur instanceof VarNode vn)) ctx.report(Kind.ERROR, "expr.notVariable", cur);
+						else cur = newUnaryPost(w.type(), vn);
 					break endValueConv;
 					case -9://method_referent this::stop
 						if (!waitDot) ue(wr, w.val(), "type.literal");
@@ -629,14 +667,14 @@ public final class ExprParser {
 				w = wr.next();
 			}
 			// endregion
-			}
+			}//END endValueConv
 			w = wr.next();
-			}
+			}//END endValueConvNrt
 			// 总结-在valueConv之外的终止: lambda lambdaB methodReference namedParamList 嵌套数组定义(省略new array[])
 
 			// 应用前缀算符
 			if (up != null) {
-				String code = up.setRight(cur);
+				var code = up.setRight(cur);
 				if (code != null) ctx.report(Kind.ERROR, code);
 			} else {
 				// Nullable
@@ -646,11 +684,12 @@ public final class ExprParser {
 			// 二元运算符 | 三元运算符 | 终结符
 			_sid = sm.getOrDefaultInt(SM_ExprTerm | w.type(), 0);
 			if (_sid == 0) {
-				if (!ctx.classes.isSpecEnabled(CompilerSpec.OPTIONAL_SEMICOLON) || cur == null) {
-					ue(wr, w.val());
+				if (ctx.classes.hasFeature(LavaFeatures.OPTIONAL_SEMICOLON) && cur != null) {
+					wr.retractWord();
+					break;
 				}
-				wr.retractWord();
-				break;
+
+				ue(wr, w.val());
 			}
 
 			if ((_sid&0x400) != 0) {
@@ -661,7 +700,14 @@ public final class ExprParser {
 				// 0x400 = FLAG_TERMINATOR
 				// 0x020 = FLAG_NEVER_SKIP
 				int shl = _sid & 31;
-				if ((flag & (1 << shl)) == 0) ue(wr, w.val());
+				if ((flag & (1 << shl)) == 0) {
+					if (ctx.classes.hasFeature(LavaFeatures.OPTIONAL_SEMICOLON) && cur != null) {
+						wr.retractWord();
+						break;
+					}
+
+					ue(wr, w.val());
+				}
 				if ((_sid & 0x20) != 0 || (flag & (1 << (shl+1))) == 0) wr.retractWord();
 
 				break;
@@ -723,9 +769,7 @@ public final class ExprParser {
 				int start = wr.current().pos();
 
 				do {
-					ExprNode expr = parse1(flag|STOP_COMMA|SKIP_COMMA);
-					if (expr == null) ctx.report(Kind.ERROR, "noExpression");
-					else args.add(expr);
+					args.add(parse1(flag|STOP_COMMA|SKIP_COMMA|NAE));
 				} while (w.type() == comma);
 				if (w.type() != semicolon) ue(wr, w.val(), ";");
 
@@ -747,8 +791,10 @@ public final class ExprParser {
 			cur = newTrinary(cur, middle, right);
 		}
 
+		if (hasNullExpr) cur = null;
+
 		if (cur == null && (flag&NAE) != 0) {
-			ctx.report(Kind.ERROR, "noExpression");
+			if (!hasNullExpr) ctx.report(Kind.ERROR, "noExpression");
 			cur = NaE.NOEXPR;
 		}
 
@@ -756,8 +802,12 @@ public final class ExprParser {
 		return cur;
 	}
 
+	private boolean hasNullExpr;
 	private void checkNullExpr(ExprNode cur) {
-		if (cur == null) ctx.report(Kind.ERROR, "noExpression");
+		if (cur == null && !hasNullExpr) {
+			ctx.report(Kind.ERROR, "noExpression");
+			hasNullExpr = true;
+		}
 	}
 
 	@Nullable
@@ -787,7 +837,7 @@ public final class ExprParser {
 		// int [] . class
 		if (w.type() == dot && wr.nextIf(CLASS)) return Constant.classRef(type);
 
-		if (array != 0) throw wr.err("expr.typeRef.arrayDecl");
+		if (array != 0) ctx.report(Kind.ERROR, "expr.typeRef.arrayDecl");
 		return null;
 	}
 	private boolean detectGeneric(JavaLexer wr) throws ParseException {
@@ -916,7 +966,7 @@ public final class ExprParser {
 		flag = sm.getOrDefaultInt(flag|SM_UnaryPre, 0) | sm.getOrDefaultInt(flag|SM_ExprStart, 0);
 		if (flag == 0) return null;
 
-		wr.skip();
+		wr.skip(-2);
 		return new Type(sb.toString());
 	}
 
@@ -927,10 +977,11 @@ public final class ExprParser {
 		}
 		return new DotGet(e, name, flag);
 	}
-	private ExprNode invoke(Object fn, List<IType> bounds) throws ParseException {
+	private Invoke invoke(Object fn, Object arg2) throws ParseException {
 		int wordStart = ctx.lexer.current().pos();
 
 		List<ExprNode> args = tmp();
+		if (arg2 instanceof ExprNode x) args.add(x);
 		while (true) {
 			// _ENV_TYPED_ARRAY may not stable
 			ExprNode expr = parse1(STOP_RSB|STOP_COMMA|SKIP_COMMA|_ENV_INVOKE|_ENV_TYPED_ARRAY);
@@ -943,7 +994,7 @@ public final class ExprParser {
 
 		var node = newInvoke(fn, args.isEmpty() ? Collections.emptyList() : copyOf(args));
 		node.wordStart = wordStart;
-		if (bounds != null) node.setBounds(bounds);
+		if (arg2 instanceof List) node.setBounds(Helpers.cast(arg2));
 		return node;
 	}
 
@@ -1008,6 +1059,8 @@ public final class ExprParser {
 	public ExprNode newInstanceOf(Type type, ExprNode cur, String variable) {return new InstanceOf(type, cur, variable);}
 	public ExprNode newTrinary(ExprNode cur, ExprNode middle, ExprNode right) {return new Trinary(cur, middle, right);}
 	public ExprNode newAnonymousClass(ExprNode expr, CompileUnit type) {return new NewAnonymousClass((Invoke) expr, type);}
+
+	public static ExprNode fieldChain(ExprNode parent, IClass begin, IType type, boolean isFinal, FieldNode... chain) {return DotGet.fieldChain(parent, begin, type, isFinal, chain);}
 
 	private static final Serializer<ExprNode> serializer = SerializerFactory.POOLED.serializer(ExprNode.class);
 	public static String serialize(ExprNode node) { return ConfigMaster.JSON.writeObject(serializer(), node, new CharList()).toStringAndFree(); }

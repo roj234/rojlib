@@ -24,7 +24,8 @@ public abstract class MathUtils {
 
 	public static int clamp(int val, int min, int max) { return val < min ? min : val > max ? max : val; }
 	public static long clamp(long val, long min, long max) { return val < min ? min : val > max ? max : val; }
-	public static double clamp(double val, double min, double max) { return val < min ? min : val > max ? max : val; }
+	// 碰到NaN时，返回min
+	public static double clamp(double val, double min, double max) { return val >= min ? val > max ? max : val : min; }
 	// Will this faster than Math ?
 	public static int floor(float value) {
 		int i = (int) value;
@@ -113,6 +114,10 @@ public abstract class MathUtils {
 			// | 0| x| x| x|  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
 			//    | 0| 1| 2| 3| 4| 5| 6| 7| 8| 9|10|11|12|13|14|15|16|17|18|19|
 		};
+	}
+
+	public static double interpolate(double old, double now, double delta) {
+		return old + delta * (now - old);
 	}
 
 	public static int getMin2PowerOf(int cap) {

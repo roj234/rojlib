@@ -15,5 +15,7 @@ public interface LogHelper {
 	List<Throwable> getSuppressed(Throwable t);
 	StackTraceElement[] getStackTrace(Throwable t);
 
+	static void printError(Throwable e) {printError(e, System.err);}
+	static void printError(Throwable e, Appendable myOut) {printError(e, myOut, "");}
 	static void printError(Throwable e, Appendable myOut, String prefix) {LogWriter.LOCAL.get().printError(e, myOut, prefix);}
 }

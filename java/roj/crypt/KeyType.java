@@ -73,7 +73,7 @@ public class KeyType {
 			byte[] iv = SecureRandom.getSeed(16);
 			cos.write(iv);
 
-			pass = HMAC.Sha256ExpandKey(pass, null, 32);
+			pass = KDF.HKDF_HmacSha256(pass, null, 32);
 			FeedbackCipher c = new FeedbackCipher(ILCrypto.Aes(), FeedbackCipher.MODE_CTR);
 
 			c.init(RCipherSpi.ENCRYPT_MODE, pass, new IvParameterSpecNC(iv), null);
@@ -108,7 +108,7 @@ public class KeyType {
 			byte[] iv = new byte[16];
 			IOUtil.readFully(cis, iv);
 
-			pass = HMAC.Sha256ExpandKey(pass, null, 32);
+			pass = KDF.HKDF_HmacSha256(pass, null, 32);
 			FeedbackCipher c = new FeedbackCipher(ILCrypto.Aes(), FeedbackCipher.MODE_CTR);
 			c.init(RCipherSpi.DECRYPT_MODE, pass, new IvParameterSpecNC(iv), null);
 			cis = new CipherInputStream(cis, c);

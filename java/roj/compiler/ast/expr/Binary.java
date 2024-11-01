@@ -29,7 +29,10 @@ final class Binary extends ExprNode {
 	ExprNode left, right;
 
 	// 对于下列操作，由于范围已知，可以保证它们的类型不会自动变int
-	private static final MyBitSet KNOWN_NUMBER_STATE = MyBitSet.from(and,or,xor,rsh);
+	private static final MyBitSet BIT_OP = MyBitSet.from(and,or,xor,rsh,rsh_unsigned),
+		BITSHIFT = MyBitSet.from(lsh,rsh,rsh_unsigned);
+	private static final byte[] BIT_COUNT = new byte[] {-1, 8, 16, 16, 32, 64};
+
 	private IType type;
 	private TypeCast.Cast castLeft, castRight;
 	private byte flag, dType;
@@ -62,10 +65,20 @@ final class Binary extends ExprNode {
 		return !(node instanceof Binary n) || ep.binaryOperatorPriority(n.operator) > ep.binaryOperatorPriority(operator);
 	}
 
+	private static int getPrimitiveOrWrapperType(IType type) {
+		int i = type.getActualType();
+		if (i == Type.CLASS) {
+			if (type.genericType() != 0) return 8;
+			i = TypeCast.getWrappedPrimitive(type);
+		}
+		return TypeCast.getDataCap(i);
+	}
+
 	private static final ThreadLocal<Boolean> IN_ANY_BINARY = new ThreadLocal<>();
 	@NotNull
 	@Override
-	public ExprNode resolve(LocalContext ctx) throws ResolveException {
+	public ExprNode resolve(LocalContext ctx) throws ResolveException {return resolveEx(ctx, false);}
+	final ExprNode resolveEx(LocalContext ctx, boolean isAssignEx) {
 		if (type != null) return this;
 
 		IType lType, rType;
@@ -112,54 +125,41 @@ final class Binary extends ExprNode {
 		}
 
 		type = lType;
-		int dpType = KNOWN_NUMBER_STATE.contains(operator) ? 0 : 4;
+		int capL = getPrimitiveOrWrapperType(lType);
+		int capR = getPrimitiveOrWrapperType(rType);
+		int dpType = Math.max(capL, capR);
 
 		primitive: {
-			IType plType = lType.isPrimitive() ? lType : rType;
-			if (plType.isPrimitive() && (operator < logic_and || operator > nullish_consolidating)) {
-				int cap = TypeCast.getDataCap(plType.getActualType());
-				if ((cap&7) != 0) dpType = Math.max(cap, dpType);
-				else dpType = 8; // boolean
-
-				IType prType = plType == lType ? rType : lType;
-				if (prType.isPrimitive()) {
-					cap = TypeCast.getDataCap(prType.getActualType());
-					if ((cap & 7) != 0) {
-						if (dpType != cap) {
-							if (dpType < cap) {
-								dpType = cap;
-
-								type = prType;
-								TypeCast.Cast cast = ctx.castTo(plType, prType, TypeCast.E_NUMBER_DOWNCAST);
-								if (plType == lType) castLeft = cast;
-								else castRight = cast;
-							} else {
-								type = plType;
-								TypeCast.Cast cast = ctx.castTo(prType, plType, TypeCast.E_NUMBER_DOWNCAST);
-								if (plType == lType) castRight = cast;
-								else castLeft = cast;
-							}
-						}
-					} else if (dpType != 8 || operator > logic_or || operator < and) {
+			if (dpType < 8 && (operator < logic_and || operator > nullish_consolidating)) {
+				if (Math.min(capL, capR) == 0) {
+					if (dpType != 0 || operator > logic_or || operator < and) {
 						ctx.report(Kind.ERROR, "binary.error.notApplicable", lType, rType, byId(operator));
 						return NaE.RESOLVE_FAILED;
 					}
+					dpType = 8; // boolean
+				} else {
+					if (dpType < 4 && !BIT_OP.contains(operator)) dpType = 4;
 
-					break primitive;
-				} else if (prType.genericType() == 0) {
-					int wrType = TypeCast.getWrappedPrimitive(prType.rawType());
-					if (wrType != 0) {
-						cap = TypeCast.getDataCap(wrType);
-						if (cap > dpType)
-							//noinspection MagicConstant
-							type = Type.std(wrType);
-						else type = plType;
-						castLeft = ctx.castTo(lType, type, TypeCast.E_NUMBER_DOWNCAST);
-						castRight = ctx.castTo(rType, type, TypeCast.E_NUMBER_DOWNCAST);
-
-						break primitive;
+					if (operator >= lsh) {
+						// 6 = float, 7 = double
+						if (dpType > 5) {
+							ctx.report(Kind.ERROR, "binary.error.notApplicable", lType, rType, byId(operator));
+							return NaE.RESOLVE_FAILED;
+						} else if (dpType == 5 && BITSHIFT.contains(operator)) {
+							// 5 = long
+							// lsh, rsh, rsh_unsigned => int bits operator
+							castRight = ctx.castTo(rType, Type.std(Type.INT), TypeCast.E_NUMBER_DOWNCAST);
+							break primitive;
+						}
 					}
+
+					//noinspection MagicConstant
+					type = Type.std(TypeCast.getDataCapRev(dpType));
+					castLeft = ctx.castTo(lType, type, TypeCast.E_NUMBER_DOWNCAST);
+					castRight = ctx.castTo(rType, type, TypeCast.E_NUMBER_DOWNCAST);
 				}
+
+				break primitive;
 			}
 
 			switch (operator) {
@@ -182,6 +182,7 @@ final class Binary extends ExprNode {
 				default:
 					ExprNode override = ctx.getOperatorOverride(left, right, operator);
 					if (override == null) {
+						if (isAssignEx) return null;
 						ctx.report(Kind.ERROR, "binary.error.notApplicable", lType, rType, byId(operator));
 						return NaE.RESOLVE_FAILED;
 					}
@@ -192,18 +193,27 @@ final class Binary extends ExprNode {
 				castRight != null && (castRight.type) < 0) return NaE.RESOLVE_FAILED;
 		}
 
-		dType = (byte) (TypeCast.getDataCap(type.rawType().type)-4);
+		dType = (byte) (TypeCast.getDataCap(type.getActualType())-4);
 		if (operator >= equ) type = Type.std(Type.BOOLEAN);
 
 		if (!left.isConstant()) {
 			if (right.isConstant()) {
 				switch (operator) {
+					case add, sub, or, xor -> {
+						// 可交换位置的二元表达式无需当且仅当…… 是确定运算：int/long，没有类型提升
+						if (dpType <= 4 && castLeft == null && ((AnnVal) right.constVal()).asInt() == 0)
+							return left;
+					}
+					case lsh, rsh, rsh_unsigned -> {
+						int value = ((AnnVal) right.constVal()).asInt();
+						if (value == 0 && castLeft == null) return left;
+						if (value > BIT_COUNT[dpType]) ctx.report(Kind.SEVERE_WARNING, "binary.shiftOverflow", type, BIT_COUNT[dpType]);
+					}
 					// equ 和 neq 应该可以直接删除跳转？反正boolean也就是0和非0 （AND 1就行）
 					case equ, neq, lss, geq, gtr, leq -> {
 						if (dpType <= 4 && ((AnnVal) right.constVal()).asInt() == 0) {
 							flag = 1;
 						}
-						return this;
 					}
 					// expr ?? null => expr
 					case nullish_consolidating -> {
@@ -212,14 +222,15 @@ final class Binary extends ExprNode {
 							return left;
 						}
 					}
-					default -> checkDivZero(right, ctx);
+					default -> {
+						if(checkDivZero(ctx)) return this;
+					}
 				}
 			}
 			return this;
 		}
 
 		switch (operator) {
-			default: checkDivZero(right, ctx); break;
 			case logic_and, logic_or:
 				var exprVal = (boolean) left.constVal();
 				var v = exprVal == (operator == logic_and) ? right : Constant.valueOf(exprVal);
@@ -233,13 +244,19 @@ final class Binary extends ExprNode {
 
 		if (!right.isConstant()) {
 			switch (operator) {
-				case equ, neq, lss, geq, gtr, leq: {
+				case add, sub, or, xor -> {
+					if (dpType <= 4 && castLeft == null && ((AnnVal) left.constVal()).asInt() == 0)
+						return right;
+				}
+				case equ, neq, lss, geq, gtr, leq -> {
 					if (dpType <= 4 && ((AnnVal) left.constVal()).asInt() == 0) {
 						flag = 2;
 					}
 				}
 			}
 			return this;
+		} else {
+			if (checkDivZero(ctx)) return this;
 		}
 
 		switch (operator) {
@@ -267,7 +284,7 @@ final class Binary extends ExprNode {
 					case sub -> l-r;
 					case mul -> l*r;
 					case div -> l/r;
-					case mod -> l%r;
+					case rem -> l%r;
 					case pow -> (int) Math.pow(l, r);
 
 					case lsh -> l<<r;
@@ -278,7 +295,7 @@ final class Binary extends ExprNode {
 					case xor -> l^r;
 					default -> throw OperationDone.NEVER;
 				};
-				return new Constant(type, AnnVal.valueOf(o));
+				return Constant.valueOf(o);
 			}
 			case 5: {
 				long l = ((AnnVal) left.constVal()).asLong(), r = ((AnnVal) right.constVal()).asLong();
@@ -287,7 +304,7 @@ final class Binary extends ExprNode {
 					case sub -> l-r;
 					case mul -> l*r;
 					case div -> l/r;
-					case mod -> l%r;
+					case rem -> l%r;
 					case pow -> (long) Math.pow(l, r);
 
 					case lsh -> l<<r;
@@ -307,7 +324,7 @@ final class Binary extends ExprNode {
 					case sub -> l-r;
 					case mul -> l*r;
 					case div -> l/r;
-					case mod -> l%r;
+					case rem -> l%r;
 					case pow -> (float) Math.pow(l, r);
 					default -> throw OperationDone.NEVER;
 				};
@@ -320,7 +337,7 @@ final class Binary extends ExprNode {
 					case sub -> l-r;
 					case mul -> l*r;
 					case div -> l/r;
-					case mod -> l%r;
+					case rem -> l%r;
 					case pow -> Math.pow(l, r);
 					default -> throw OperationDone.NEVER;
 				};
@@ -341,10 +358,12 @@ final class Binary extends ExprNode {
 		return this;
 	}
 
-	private void checkDivZero(ExprNode node, LocalContext ctx) {
-		if (dType <= 1 && operator == div && ((AnnVal) node.constVal()).asInt() == 0) {
-			ctx.report(Kind.WARNING, "binary.divisionByZero");
+	private boolean checkDivZero(LocalContext ctx) {
+		if (dType <= 1 && operator == div && ((AnnVal) right.constVal()).asInt() == 0) {
+			ctx.report(Kind.SEVERE_WARNING, "binary.divisionByZero");
+			return true;
 		}
+		return false;
 	}
 
 	@Override
@@ -436,6 +455,7 @@ final class Binary extends ExprNode {
 			}
 		}
 
+		var flag = this.flag;
 		if (flag != 2) writeLeft(cw);
 		if (flag != 1) writeRight(cw);
 
@@ -450,11 +470,21 @@ final class Binary extends ExprNode {
 				}
 
 			case lss, geq, gtr, leq: {
-				opc = writeCmp(cw, opc) + (operator - equ);
+				opc = writeCmp(cw, opc) + invertOperator();
 			}
 		}
 
 		cw.jump(invertCode(opc, !ifThen), far);
+	}
+
+	private int invertOperator() {
+		return (flag == 2 ? switch (operator) {
+			case lss -> gtr;
+			case geq -> leq;
+			case gtr -> lss;
+			case leq -> geq;
+			default -> operator;
+		} : operator) - equ;
 	}
 
 	final void writeLeft(MethodWriter cw) {left.write(cw, castLeft);}
@@ -464,12 +494,13 @@ final class Binary extends ExprNode {
 		int opc = dType;
 		if (opc < 0) opc = 0;
 
-		switch (operator) {
+		var opr = this.operator;
+		switch (opr) {
 			//default: throw OperationDone.NEVER;
-			case add, sub, mul, div, mod: opc += ((operator - add) << 2) + IADD; break;
+			case add, sub, mul, div, rem: opc += ((opr - add) << 2) + IADD; break;
 			//FIXME pow正确的提升类型到double
 			case pow: {cw.invoke(INVOKESTATIC, "java/util/Math", "pow", "(DD)D");return;}
-			case lsh, rsh, rsh_unsigned, and, or, xor: opc += ((operator - lsh) << 1) + ISHL; break;
+			case lsh, rsh, rsh_unsigned, and, or, xor: opc += ((opr - lsh) << 1) + ISHL; break;
 			case equ, neq:
 				if (!left.type().isPrimitive() & !right.type().isPrimitive()) {
 					jump(cw, opc);
@@ -478,14 +509,14 @@ final class Binary extends ExprNode {
 
 			case lss, geq, gtr, leq: {
 				opc = writeCmp(cw, opc);
-				if (dType == 0 && operator <= neq && flag == 0) {
+				if (dType == 0 && opr <= neq && flag == 0) {
 					cw.one(ISUB); // (left - right) == 0
-					if (operator == equ) {
+					if (opr == equ) {
 						cw.one(ICONST_1);
 						cw.one(IXOR);
 					}
 				} else {
-					jump(cw, opc + (operator - equ));
+					jump(cw, opc + invertOperator());
 				}
 				return;
 			}

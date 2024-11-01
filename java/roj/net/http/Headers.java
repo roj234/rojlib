@@ -357,7 +357,7 @@ public class Headers extends MyHashMap<CharSequence, String> {
 	}
 
 	// region lowerMap
-	public AbstractEntry<CharSequence, String> getEntry(CharSequence key) { return super.getEntry(lower(key)); }
+	public AbstractEntry<CharSequence, String> getEntry(Object key) {return super.getEntry(lower(key.toString())); }
 	public AbstractEntry<CharSequence, String> getOrCreateEntry(CharSequence key) { return super.getOrCreateEntry(lower(key)); }
 
 	@Override
@@ -445,7 +445,6 @@ public class Headers extends MyHashMap<CharSequence, String> {
 					if (c >= 'A' && c <= 'Z') cs[i] = (char) (c+32);
 					i++;
 				}
-
 				return tmp;
 			}
 		}

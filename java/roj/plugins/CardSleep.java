@@ -415,7 +415,7 @@ public class CardSleep extends JFrame {
 
 						for (int i = 0; i < r; i++) {
 							if (buf[wIndex] == '\n') {
-								cp.forEachLine(ByteList.wrap(buf, rIndex, wIndex-rIndex), lines -> {
+								cp.forEachLine(ByteList.wrap(buf, rIndex, wIndex-rIndex), (rowId, lines) -> {
 									for (int j = 0; j < lines.size(); j++) lines.set(j, lines.get(j).trim());
 
 									int cfreq, cusage, mfreq, musage;
@@ -609,7 +609,7 @@ public class CardSleep extends JFrame {
 		try {
 			Process p = pb.start();
 			try (TextReader stdout = TextReader.auto(p.getInputStream())) {
-				new CsvParser().forEachLine(stdout, lines -> {
+				new CsvParser().forEachLine(stdout, (rowId, lines) -> {
 					for (int i = 0; i < lines.size(); i++) {
 						lines.set(i, lines.get(i).trim());
 					}

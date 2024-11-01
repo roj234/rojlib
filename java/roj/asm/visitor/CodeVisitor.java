@@ -3,7 +3,6 @@ package roj.asm.visitor;
 import roj.asm.AsmShared;
 import roj.asm.Opcodes;
 import roj.asm.cp.*;
-import roj.asm.util.InsnHelper;
 import roj.util.DynByteBuf;
 
 import static roj.asm.Opcodes.*;
@@ -16,6 +15,13 @@ import static roj.asm.Opcodes.*;
  */
 public class CodeVisitor {
 	protected int bci;
+
+	static void checkWide(byte code) {
+		switch (code) {
+			case RET, IINC, ISTORE, LSTORE, FSTORE, DSTORE, ASTORE, ILOAD, LLOAD, FLOAD, DLOAD, ALOAD -> {}
+			default -> throw new IllegalStateException(showOpcode(code)+"不支持WIDE指令");
+		}
+	}
 
 	public CodeVisitor() {}
 
@@ -62,7 +68,7 @@ public class CodeVisitor {
 			code = Opcodes.validateOpcode(r.readByte());
 
 			boolean widen = prev == Opcodes.WIDE;
-			if (widen) InsnHelper.checkWide(code);
+			if (widen) checkWide(code);
 			else _visitNodePre();
 
 			switch (code) {

@@ -11,10 +11,12 @@ import roj.text.logging.Level;
 import roj.text.logging.Logger;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
+import sun.misc.Unsafe;
 
 import java.io.*;
 import java.util.Arrays;
 import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.zip.DeflaterOutputStream;
 import java.util.zip.GZIPInputStream;
 import java.util.zip.GZIPOutputStream;
@@ -43,6 +45,7 @@ public class MyRegionFile implements AutoCloseable {
 
 	Source fpRead;
 	static final long FPREAD_OFFSET = ReflectionUtils.fieldOffset(MyRegionFile.class, "fpRead");
+	protected Lock lock = new ReentrantLock();
 
 	public MyRegionFile(File file) throws IOException {
 		this(new FileSource(file), 4096, 1024, F_KEEP_TIME_IN_MEMORY);
@@ -100,8 +103,12 @@ public class MyRegionFile implements AutoCloseable {
 	}
 
 	public void load() throws IOException {
-		int sectors = sectorCount;
 		int fileCap = offsets.length;
+		int header = (flag & F_DONT_STORE_TIME) != 0 ? fileCap<<2 : fileCap<<3;
+		int sectors = sectorCount = (int) (raf.length() / chunkSize);
+		free.fill(sectors);
+		free.removeRange(0, header/chunkSize + ((header&chunkSize) == 0 ? 0 : 1));
+
 		int headerBytes = fileCap << 2;
 		ByteList tmp = IOUtil.getSharedByteBuf();
 
@@ -149,7 +156,7 @@ public class MyRegionFile implements AutoCloseable {
 		if (in == null) return null;
 		return wrapDecoder(in);
 	}
-	private SourceInputStream getRawdata(int id, int[] metadata) throws IOException {
+	public SourceInputStream getRawdata(int id, int[] metadata) throws IOException {
 		int i = offsets[id];
 		if (i == 0) return null;
 
@@ -158,8 +165,7 @@ public class MyRegionFile implements AutoCloseable {
 
 		assert off + len < sectorCount;
 
-		Source src = (Source) u.getAndSetObject(this, FPREAD_OFFSET, null);
-		if (src == null) src = raf.threadSafeCopy();
+		Source src = getUnsharedSource();
 
 		src.seek((long) off * chunkSize);
 		int byteLength = src.asDataInput().readInt();
@@ -183,6 +189,16 @@ public class MyRegionFile implements AutoCloseable {
 		return new SourceInputStream.Shared(src, byteLength, this, FPREAD_OFFSET);
 	}
 
+	private Source getUnsharedSource() throws IOException {
+		Source src = (Source) u.getAndSetObject(this, FPREAD_OFFSET, null);
+		if (src == null) src = raf.threadSafeCopy();
+		return src;
+	}
+	private void putUnsharedSource(Source raf) throws IOException {
+		if (!u.compareAndSwapObject(this, FPREAD_OFFSET, null, raf))
+			raf.close();
+	}
+
 	@Nullable
 	public DataOutputStream getDataOutput(int id) { return outOfBounds(id) ? null : new DataOutputStream(new DeflaterOutputStream(new Out(id,DEFLATE))); }
 	@Nullable
@@ -192,8 +208,13 @@ public class MyRegionFile implements AutoCloseable {
 		return new CancellableOutputStream(wrapEncoder(type, out), out);
 	}
 
-	public void write(int id, DynByteBuf data) throws IOException { _write(id, raf, data, null); }
-	final void _write(int id, Source raf, DynByteBuf data, Lock lock) throws IOException {
+	public void write(int id, DynByteBuf data) throws IOException {
+		int cLen = chunkCount(data.readableBytes() + 5);
+		if (cLen <= 0) throw new AssertionError("cLen==0");
+		if (cLen >= 255) log("大数据: {} #{} 占用的块: {} 长度: ", file, id, cLen, data.wIndex());
+
+		var raf = getUnsharedSource();
+
 		int i1 = offsets[id];
 		int off = i1 >>> 8;
 		int oldCLen = i1 & 255;
@@ -202,89 +223,89 @@ public class MyRegionFile implements AutoCloseable {
 			oldCLen = chunkCount(raf.asDataInput().readInt() + 4);
 		}
 
-		int cLen = chunkCount(data.readableBytes() + 5);
-		if (cLen <= 0) throw new AssertionError("cLen==0");
-		if (cLen > 255) {
-			log("大数据: {} #{} 占用的块: {} 长度: ", file, id, cLen, data.wIndex());
-		}
-
-		w:
+		finish:
 		try {
 			if (cLen == oldCLen) {
 				writeBlock(raf, off, data);
-				break w;
+				break finish;
 			}
 
-			if (lock != null) lock.lock();
-			if (cLen < oldCLen) {
-				free.addRange(off+cLen, off+oldCLen);
-				if (lock != null) lock.unlock();
-
-				writePosAndBlock(raf, id, data, off, cLen);
-				break w;
-			}
-
-			free.addRange(off,off+oldCLen);
-
-			// 找到连续的可用块
-			int i = free.first();
-			while (true) {
-				i = free.nextTrue(i);
-				if (i < 0) break;
-				if (!free.allTrue(i,i+cLen)) {
-					i++;
-					continue;
+			lock.lock();
+			_found:
+			try {
+				if (cLen < oldCLen) {
+					free.addRange(off+cLen, off+oldCLen);
+					break _found;
 				}
 
-				free.removeRange(i, i+cLen);
-				if (lock != null) lock.unlock();
+				free.addRange(off, off+oldCLen);
 
-				writePosAndBlock(raf, id, data, i, cLen);
-				break w;
+				// 找到连续的可用块
+				off = 0;
+				while (true) {
+					off = free.nextTrue(off);
+					if (off < 0) break;
+					if (!free.allTrue(off,off+cLen)) {
+						off++;
+						continue;
+					}
+
+					free.removeRange(off, off+cLen);
+
+					writePosAndBlock(raf, id, data, off, cLen);
+					break _found;
+				}
+
+				int lastAvailBlock = (int) (raf.length() / chunkSize);
+				while (lastAvailBlock > 0 && free.remove(lastAvailBlock-1)) lastAvailBlock--;
+
+				// 在文件后增加
+				int extraBlocks = cLen + lastAvailBlock;
+
+				raf.setLength((long) chunkSize * extraBlocks);
+
+				off = sectorCount;
+				sectorCount = extraBlocks;
+			} finally {
+				lock.unlock();
 			}
 
-			int lastAvailBlock = (int) (raf.length() / chunkSize);
-			while (lastAvailBlock > 0 && free.remove(lastAvailBlock-1)) lastAvailBlock--;
-
-			// 在文件后增加
-			int extraBlocks = cLen + lastAvailBlock;
-
-			raf.setLength((long) chunkSize * extraBlocks);
-
-			int sec = sectorCount;
-			sectorCount = extraBlocks;
-
-			if (lock != null) lock.unlock();
-
-			writePosAndBlock(raf, id, data, sec, cLen);
-		} catch (Throwable e) {
-			close();
-			try {
-				while (lock != null) lock.unlock();
-			} catch (IllegalMonitorStateException ignored) {}
+			writePosAndBlock(raf, id, data, off, cLen);
+		} catch (Exception e) {
+			putUnsharedSource(raf);
 			throw e;
 		}
 
-		setTimestamp(raf, id, (int) (System.currentTimeMillis() / 1000L));
+		if ((flag & F_DONT_UPDATE_TIME) == 0) {
+			setTimestamp(raf, id, (int) (System.currentTimeMillis() / 1000L));
+		}
+		putUnsharedSource(raf);
 	}
 
 	public void delete(int id) throws IOException {
-		int i = offsets[id];
+		if (outOfBounds(id)) return;
+		int i = u.getAndSetInt(offsets, Unsafe.ARRAY_INT_BASE_OFFSET + id, 0);
 		if (i == 0) return;
 
 		int off = i >>> 8;
 		int len = i & 255;
 
-		if (len == 255) {
-			raf.seek((long) off * chunkSize);
-			len = chunkCount(raf.asDataInput().readInt() + 4);
+		lock.lock();
+		try {
+			if (len == 255) {
+				raf.seek((long) off * chunkSize);
+				len = chunkCount(raf.asDataInput().readInt() + 4);
+			}
+
+			setOffset(raf, id, 0);
+			free.addRange(off, off+len);
+
+			if ((flag & F_DONT_UPDATE_TIME) == 0) {
+				setTimestamp(raf, id, (int) (System.currentTimeMillis() / 1000L));
+			}
+		} finally {
+			lock.unlock();
 		}
-
-		offsets[id] = 0;
-		while (len-- > 0) free.add(off + len);
-
-		setOffset(raf, id, 0);
-		setTimestamp(raf, id, (int) (System.currentTimeMillis() / 1000L));
 	}
 
 	public int copyTo(MyRegionFile target) throws IOException {
@@ -321,16 +342,11 @@ public class MyRegionFile implements AutoCloseable {
 		if (offsets.length != target.offsets.length || chunkSize != target.chunkSize)
 			throw new IOException("Incompatible regions");
 
-		ByteList tmp = IOUtil.getSharedByteBuf();
 		var in = getRawdata(i, null);
 		if (in == null) return false;
 
-		try {
-			tmp.clear();
-			tmp.readStreamFully(in, false);
-		} finally {
-			IOUtil.closeSilently(in);
-		}
+		ByteList tmp = IOUtil.getSharedByteBuf();
+		tmp.readStreamFully(in);
 		target.write(i, tmp);
 		return true;
 	}
@@ -339,9 +355,11 @@ public class MyRegionFile implements AutoCloseable {
 	public final int getTimestamp(int id) {
 		if (timestamps != null) return timestamps[id];
 		try {
-			Source raf = this.raf.threadSafeCopy();
-			raf.seek((offsets.length<<2) + (id<<2));
-			return raf.asDataInput().readInt();
+			Source raf = getUnsharedSource();
+			raf.seek((long) (offsets.length + id) <<2);
+			int time = raf.asDataInput().readInt();
+			putUnsharedSource(raf);
+			return time;
 		} catch (IOException e) {
 			return 0;
 		}
@@ -357,13 +375,11 @@ public class MyRegionFile implements AutoCloseable {
 		free.removeRange(0, header/chunkSize + ((header&chunkSize) == 0 ? 0 : 1));
 	}
 
-	public long memorySize() {
+	public int memorySize() {
 		return (offsets.length<<(timestamps==null?2:3)) + (free.array().length << 3) + 192;
 	}
 
-	protected void log(String msg, Object... params) {
-		Logger.getLogger("BlkFile").log(Level.ERROR, msg, null, params);
-	}
+	protected void log(String msg, Object... params) {Logger.getLogger("RegionFile").log(Level.ERROR, msg, null, params);}
 
 	protected int chunkCount(int dataLen) {
 		int i = dataLen / chunkSize;
@@ -376,7 +392,7 @@ public class MyRegionFile implements AutoCloseable {
 			case GZIP: return new GZIPInputStream(in);
 			case DEFLATE: return new InflaterInputStream(in);
 			case PLAIN: return in;
-			default: raf.close(); throw new IOException("Unknown data type " + type);
+			default: in.close(); throw new IOException("Unknown data type " + type);
 		}
 	}
 	protected OutputStream wrapEncoder(int type, OutputStream out) throws IOException {
@@ -394,23 +410,21 @@ public class MyRegionFile implements AutoCloseable {
 	}
 	private void writeBlock(Source raf, int off, DynByteBuf data) throws IOException {
 		raf.seek((long) off * chunkSize);
-		raf.writeInt(data.readableBytes()+1);
+		raf.writeInt(data.readableBytes());
 		raf.write(data);
 	}
 
-	public final boolean outOfBounds(int id) {
-		return id < 0 || id > offsets.length;
-	}
-	final void setOffset(Source raf, int id, int offset) throws IOException {
+	public final boolean outOfBounds(int id) {return id < 0 || id > offsets.length;}
+	private void setOffset(Source raf, int id, int offset) throws IOException {
 		offsets[id] = offset;
-		raf.seek(id<<2);
+		raf.seek((long) id << 2);
 		raf.writeInt(offset);
 	}
 	public final void setTimestamp(int id, int timestamp) throws IOException {setTimestamp(raf, id, timestamp);}
-	final void setTimestamp(Source raf, int id, int timestamp) throws IOException {
+	private void setTimestamp(Source raf, int id, int timestamp) throws IOException {
 		if ((flag & (F_DONT_STORE_TIME|F_DONT_UPDATE_TIME)) != 0) return;
 		if (timestamps != null) timestamps[id] = timestamp;
-		raf.seek((offsets.length<<2) + (id<<2));
+		raf.seek((long) (offsets.length + id) << 2);
 		raf.writeInt(timestamp);
 	}
 
@@ -460,6 +474,4 @@ public class MyRegionFile implements AutoCloseable {
 		CancellableOutputStream(OutputStream in, Out manager) {super(in);man = manager;}
 		public void cancel() throws IOException {man.cancel();}
 	}
-
-	public int[] dataArray() { return offsets; }
 }

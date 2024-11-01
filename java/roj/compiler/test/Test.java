@@ -15,12 +15,6 @@ import java.util.Map;
 @PrimitiveGeneric.User(to = "T", type = {int.class, float.class})
 @Switchable(suggest = true)
 public class Test<T> {
-	public static int compareTest() {
-		return ComparisonChain.start().compare(1, 2).compare("asdf12312", "dfbshdf").compare(222f, 333d).result();
-	}
-
-	public static final Test<?> A = new Test<>(), B = new Test<>(), NulL = null;
-
 	public static <T1> T1 any() { return null; }
 
 	private int pp;

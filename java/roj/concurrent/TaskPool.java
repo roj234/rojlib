@@ -66,7 +66,8 @@ public class TaskPool implements TaskHandler {
 		if (stopTimeout < 100) throw new IllegalArgumentException("stopTimeout < 100");
 		this.factory = namedPrefixFactory(namePrefix);
 
-		tasks = new RingBuffer<>(64, 99999999);
+		// large enough, but (might) will not cause OOM
+		tasks = new RingBuffer<>(64, 200000);
 	}
 
 	private static final AtomicInteger poolId = new AtomicInteger();
@@ -96,10 +97,8 @@ public class TaskPool implements TaskHandler {
 		// move throw into newWorker()
 		if (len <= 0) newWorker();
 
-		// 等待立即结束的短时任务
-		try {
-			if (fastPath.tryTransfer(task, 10, TimeUnit.MICROSECONDS)) return;
-		} catch (InterruptedException ignored) {}
+		// 等待立即结束的短任务
+		if (fastPath.tryTransfer(task)) return;
 
 		len = running;
 		if (len < core ||
@@ -110,7 +109,7 @@ public class TaskPool implements TaskHandler {
 
 		lock.lock();
 		try {
-			if (len < 0) throw new RejectedExecutionException("TaskPool was shutdown.");
+			if (len < 0) throw new RejectedExecutionException(this+" was shutdown.");
 			if (!tasks.offerLast(task)) {
 				if (policy == null) throwPolicy(this, task);
 				else policy.onReject(this, task);
@@ -171,7 +170,7 @@ public class TaskPool implements TaskHandler {
 
 	private void newWorker() {
 		int r = running;
-		if (r < 0) throw new RejectedExecutionException("TaskPool was shutdown.");
+		if (r < 0) throw new RejectedExecutionException(this+" was shutdown.");
 		if (u.compareAndSwapInt(this, RUNNING_OFFSET, r, r+1)) {
 			prevStop = System.currentTimeMillis();
 
@@ -182,11 +181,11 @@ public class TaskPool implements TaskHandler {
 	}
 
 	public void setRejectPolicy(RejectPolicy policy) { this.policy = policy; }
-	public static void throwPolicy(TaskPool pool, ITask task) {throw new RejectedExecutionException("Too many tasks pending");}
+	public static void throwPolicy(TaskPool pool, ITask task) {throw new RejectedExecutionException(pool+" is full, rejecting "+task);}
 	public static void waitPolicy(TaskPool pool, ITask task) {
 		while (!pool.fastPath.tryTransfer(task) && !pool.tasks.offerLast(task)) {
 			pool.noFull.awaitUninterruptibly();
-			if (pool.running < 0) throw new RejectedExecutionException("TaskPool was shutdown.");
+			if (pool.running < 0) throw new RejectedExecutionException(pool+" was shutdown.");
 		}
 	}
 
@@ -259,10 +258,11 @@ public class TaskPool implements TaskHandler {
 	public int busyCount() {return running - fastPath.getWaitingConsumerCount();}
 
 	@Override
-	public String toString() {return "TaskPool{" + ", range=[" + core + ',' + max + "], lock="+lock+'}';}
+	public String toString() {return "TaskPool{"+factory+", threads=["+running+','+core+','+max+"], lock="+lock+'}';}
 
 	public class ExecutorImpl extends FastLocalThread {
 		public ExecutorImpl(String name) {setName(name);setDaemon(true);}
+		public static final Logger LOGGER = Logger.getLogger("ThreadPool");
 
 		@Override
 		public void run() {
@@ -274,7 +274,7 @@ public class TaskPool implements TaskHandler {
 					if (!task.isCancelled()) executeForDebug(task);
 				} catch (Throwable e) {
 					if (exceptionHandler != null) exceptionHandler.uncaughtException(this, e);
-					else Logger.getLogger("TaskPool").error("未捕获的异常", e);
+					else LOGGER.error("未捕获的异常", e);
 				}
 			}
 

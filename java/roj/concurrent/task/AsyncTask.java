@@ -28,8 +28,7 @@ public class AsyncTask<T> implements Future<T>, ITask {
 	public boolean cancel(boolean mayInterruptIfRunning) { return cancel(); }
 	@Override
 	public boolean cancel() {
-		if (u.compareAndSwapInt(this, u_stateOffset, INITIAL, RUNNING)) {
-			state = CANCELLED;
+		if (u.compareAndSwapInt(this, u_stateOffset, INITIAL, CANCELLED)) {
 			synchronized (this) { notifyAll(); }
 			return true;
 		}

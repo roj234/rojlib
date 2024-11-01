@@ -64,7 +64,7 @@ public final class LocalVariableTable extends Attribute implements CodeAttribute
 			int e = (v.end == null ? c.bci() : v.end.getValue())-s;
 			w.putShort(s).putShort(e)
 			 .putShort(c.cpw.getUtfId(v.name))
-			 .putShort(c.cpw.getUtfId(TypeHelper.getField(v.type)))
+			 .putShort(c.cpw.getUtfId(TypeHelper.getField(generic ? v.type : v.type.rawType())))
 			 .putShort(v.slot);
 		}
 	}

@@ -4,7 +4,7 @@ import roj.asm.type.TypeHelper;
 import roj.collect.MyHashMap;
 import roj.compiler.plugins.asm.ASM;
 import roj.concurrent.timing.ScheduleTask;
-import roj.concurrent.timing.Scheduler;
+import roj.reflect.ReflectionUtils;
 import roj.text.CharList;
 import roj.text.LineReader;
 import roj.text.logging.d.LogDestination;
@@ -49,6 +49,16 @@ class LogWriter extends PrintWriter {
 		sb.append("\tat ");
 		int end = name.lastIndexOf('.', name.indexOf('('));
 		int i = 4;
+
+		if (ReflectionUtils.JAVA_VERSION > 8) {
+			// java.base/
+			int module = name.indexOf('/');
+			if (module >= 0) {
+				sb.append(name, i, module+1);
+				i = module+1;
+			}
+		}
+
 		while (true) {
 			int j = name.indexOf('.', i);
 			if (j < 0 || j >= end) break;
@@ -123,7 +133,7 @@ class LogWriter extends PrintWriter {
 	}
 
 	void log(LogContext ctx, Level level, CharSequence msg, Throwable ex, Object[] args, int argc) {
-		if (ex == prevExc && msg.equals(prevTxt) && equals(args, prevArg, argc)) {
+		/*if (ex == prevExc && msg.equals(prevTxt) && equals(args, prevArg, argc)) {
 			if (++prevCount % 100 == 0) msg += " (x100)";
 			else if (System.currentTimeMillis() - prevTime < 100) {
 				if (prevCount == 1) {
@@ -141,7 +151,7 @@ class LogWriter extends PrintWriter {
 			prevExc = ex;
 			prevArg = args == holder ? Arrays.copyOf(args, argc) : args;
 			prevTime = System.currentTimeMillis();
-		}
+		}*/
 
 		MyMap m = tmpCtx;
 		m.put("LEVEL", level);

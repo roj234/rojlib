@@ -53,19 +53,21 @@ public sealed class Page {
 		return toString(sb, 0).toStringAndFree();
 	}
 	CharList toString(CharList sb, int depth) {
-		sb.append("[ depth = "+MINIMUM_SHIFT+" (min)\n");
+		sb.append("[ depth = "+MINIMUM_SHIFT+" (min)");
+		if (bitmap == 0) return sb.append(" (empty) ]");
+		sb.append('\n');
 
-		for (int i = 0; i < depth; i++) sb.append(' ');
+		sb.padEnd(' ', depth);
 		scaledNumber1024(sb.append("  usage = "), usedSpace());
 		scaledNumber1024(sb.append(" / "), totalSpace())
 			.append('\n');
 
-		for (int i = 0; i < depth; i++) sb.append(' ');
+		sb.padEnd(' ', depth);
 		CharList bin = new CharList(Long.toBinaryString(bitmap)).replace('0', BITMAP_FREE).replace('1', BITMAP_USED);
 		sb.append("  mapping = ").padEnd(BITMAP_FREE, 64-bin.length()).append(bin).append('\n');
 		bin._free();
 
-		for (int i = 0; i < depth; i++) sb.append(' ');
+		sb.padEnd(' ', depth);
 		return sb.append(']');
 	}
 
@@ -212,7 +214,7 @@ public sealed class Page {
 		CharList toString(CharList sb, int depth) {
 			sb.append("[ depth = ").append(SHIFT).append('\n');
 
-			for (int i = 0; i < depth; i++) sb.append(' ');
+			sb.padEnd(' ', depth);
 			scaledNumber1024(sb.append("  usage = "), usedSpace());
 			scaledNumber1024(sb.append(" / "), totalSpace())
 				.append(" (").append(usedSpace()).append(" / ").append(totalSpace()).append(")")
@@ -398,7 +400,10 @@ public sealed class Page {
 			long before = off&MASK64[SHIFT], after = (off+len)&MASK64[SHIFT];
 
 			int bitTo = (int) ((off+len) >>> SHIFT);
-			if (bitTo >= bitmapCapacity() && after != 0) return false;
+			if (bitTo >= bitmapCapacity()) {
+				if (bitTo > bitmapCapacity() || after != 0)
+					return false;
+			}
 
 			long flag;
 			int lbStart = before == 0 ? bitFrom : bitFrom+1;

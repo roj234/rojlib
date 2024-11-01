@@ -156,7 +156,7 @@ public final class SwitchSegment extends Segment {
 		if (def.offset == offset && def.block == block) return true;
 		for (int i = 0; i < targets.size(); i++) {
 			SwitchEntry target = targets.get(i);
-			if (target.pos.offset == offset && target.pos.block == block) return true;
+			if ((offset == -1 || target.pos.offset == offset) && target.pos.block == block) return true;
 		}
 		return false;
 	}

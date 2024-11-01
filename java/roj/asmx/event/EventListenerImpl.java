@@ -85,7 +85,7 @@ final class EventListenerImpl implements EventListener {
 		ConstantData c = new ConstantData();
 
 		c.parent(Bypass.MAGIC_ACCESSOR_CLASS);
-		c.name("roj/gen/GEL$"+ReflectionUtils.uniqueId());
+		c.name("roj/asmx/event/EventListenerImpl$"+ReflectionUtils.uniqueId());
 		ClassDefiner.premake(c);
 		c.addInterface("roj/asmx/event/EventListenerImpl$ASM");
 

@@ -3,6 +3,7 @@ package roj.crypt;
 import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.NotNull;
 import roj.reflect.Bypass;
+import roj.util.DynByteBuf;
 
 import java.util.zip.CRC32;
 
@@ -27,10 +28,23 @@ public class CRC32s {
 	}
 
 	@Contract(pure = true)
-	public static int once(@NotNull byte[] b, int off, int len) { return retVal(update(INIT_CRC, b, off, len)); }
+	public static int once(DynByteBuf buf, int off, int len) {
+		if ((off| len|(off+len)) < 0 || off + len > buf.readableBytes())
+			throw new IndexOutOfBoundsException("off="+off+",len="+len+",cap="+buf.readableBytes());
+		return buf.isDirect() ? CRC32s.once(buf.address() + off, len) : CRC32s.once(buf.array(), buf.arrayOffset() + off, len);
+	}
 	@Contract(pure = true)
-	public static int once(long address, int length) { return retVal(update(INIT_CRC, address, length)); }
+	public static int once(@NotNull byte[] b, int off, int count) { return retVal(update(INIT_CRC, b, off, count)); }
+	@Contract(pure = true)
+	public static int once(long address, int count) { return retVal(update(INIT_CRC, address, count)); }
 
+	@Contract(pure = true)
+	public static int update(int crc, DynByteBuf buf) {
+		int len = buf.readableBytes();
+		return buf.hasArray()
+			? CRC32s.update(crc, buf.array(), buf.arrayOffset() + buf.rIndex, len)
+			: CRC32s.update(crc, buf.address(), len);
+	}
 	@Contract(pure = true)
 	public static int update(int crc, long off, int len) {
 		if (HWAC != null) return HWAC.updateByteBuffer(crc, off, 0, len);

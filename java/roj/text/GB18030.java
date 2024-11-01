@@ -208,7 +208,7 @@ public final class GB18030 extends UnsafeCharset {
 		return ((i-base) << 32) | off;}
 
 		if (this == THROW_ON_FAIL) throw new IllegalArgumentException((int) (i-base) + " 附近解码错误");
-		out[off++] = INVALID;
+		out[off++] = (char) c;
 		return ((i-base) << 32) | off;
 	}
 

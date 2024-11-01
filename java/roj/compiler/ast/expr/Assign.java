@@ -7,8 +7,9 @@ import roj.compiler.JavaLexer;
 import roj.compiler.asm.MethodWriter;
 import roj.compiler.context.LocalContext;
 import roj.compiler.diagnostic.Kind;
-import roj.compiler.plugins.asm.ASM;
 import roj.compiler.resolve.TypeCast;
+
+import static roj.compiler.JavaLexer.byId;
 
 /**
  * @author Roj234
@@ -45,11 +46,29 @@ class Assign extends ExprNode {
 			if ((castType == -1 || castType == -2) && !(left instanceof LocalVariable))
 				ctx.report(Kind.INCOMPATIBLE, "assign.incompatible.redundantCast");
 		}
-		right = prev.resolve(ctx);
+
+		if (prev instanceof Binary op) {
+			right = op.resolveEx(ctx, true);
+			if (right == NaE.RESOLVE_FAILED) return right;
+
+			if (node.equals(op.left)) {
+				// a = a + b
+				// check binary_assign override
+				var override = ctx.getOperatorOverride(node, op.right, op.operator - JavaLexer.binary_assign_delta);
+				if (override != null) return override;
+			}
+
+			if (right == null) {
+				ctx.report(Kind.ERROR, "binary.error.notApplicable", op.left.type(), op.right.type(), byId(op.operator));
+				return NaE.RESOLVE_FAILED;
+			}
+		} else {
+			right = prev.resolve(ctx);
+		}
 
 		// 也许搞个 未修改的常量变量 => 常量
 		if (right.isConstant() && left instanceof LocalVariable lv) {
-			ctx.setConstantValue(lv.v, (Constant) right);
+			ctx.assignConstVar(lv.v, (Constant) right);
 		}
 
 		IType lType = left.type();
@@ -65,7 +84,10 @@ class Assign extends ExprNode {
 		if (expr instanceof LocalVariable lv) {
 			isLv = true;
 			lv.v.endPos = expr.wordEnd;
-			if (!lv.v.hasValue) LocalContext.get().report(Kind.ERROR, "var.notAssigned", lv.v.name);
+
+			var ctx = LocalContext.get();
+			ctx.loadVar(lv.v);
+			ctx.storeVar(lv.v);
 
 			if (dtype == 4 && (short)amount == amount) {
 				if (!noRet & returnBefore) cw.load(lv.v);
@@ -95,7 +117,7 @@ class Assign extends ExprNode {
 		cw.one((byte) (op + type2));
 		if (dtype < 4 && isLv) cw.one((byte) (Opcodes.I2B-1 + dtype));
 
-		expr.postStore(cw);
+		expr.postStore(cw, 0);
 	}
 
 	@Override
@@ -115,10 +137,8 @@ class Assign extends ExprNode {
 
 		if (isCastNeeded()) cast.write(cw);
 
-		// 测试一下
-		if (!noRet) left.copyValue(cw, ASM.i2z(left.type().rawType().length()-1));
-
-		left.postStore(cw);
+		int state = noRet ? 0 : left.copyValue(cw, left.type().rawType().length() - 1 != 0);
+		left.postStore(cw, state);
 	}
 
 	private boolean isCastNeeded() { return (cast.type != -1 && cast.type != -2) || left.getClass() == LocalVariable.class; }
@@ -126,7 +146,7 @@ class Assign extends ExprNode {
 	private boolean sameVarShrink(MethodWriter cw, Binary br, boolean noRet, ExprNode operand) {
 		// to IINC if applicable
 		block:
-		if (left instanceof LocalVariable lv && TypeCast.getDataCap(br.type().getActualType()) == 4) {
+		if (left instanceof LocalVariable lv && TypeCast.getDataCap(br.type().getActualType()) == 4 && operand.isConstant()) {
 			int value = ((AnnValInt) operand.constVal()).value;
 
 			switch (br.operator) {
@@ -135,6 +155,10 @@ class Assign extends ExprNode {
 				case JavaLexer.sub: value = -value; break;
 			}
 			if ((short)value != value) break block;
+
+			var ctx = LocalContext.get();
+			ctx.loadVar(lv.v);
+			ctx.storeVar(lv.v);
 
 			cw.iinc(lv.v, value);
 			if (!noRet) left.write(cw);

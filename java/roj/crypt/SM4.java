@@ -33,7 +33,7 @@ final class SM4 extends RCipherSpi {
 		var myKey = sKey;
 		if (encrypt != isEncryptMode) {
 			myKey = myKey.clone();
-			Conv.reverse(myKey, 0, 32);
+			KDF.reverse(myKey, 0, 32);
 		}
 		return new SM4(sKey, isEncryptMode);
 	}
@@ -58,7 +58,7 @@ final class SM4 extends RCipherSpi {
 		}
 
 		encrypt = mode != Cipher.DECRYPT_MODE;
-		if (encrypt) Conv.reverse(sKey, 0, 32);
+		if (encrypt) KDF.reverse(sKey, 0, 32);
 	}
 
 	@Override protected boolean isBareBlockCipher() { return true; }

@@ -40,6 +40,9 @@ public class McDiffPlugin extends Plugin {
 	protected void onEnable() throws Exception {
 		var ks = (KeyStorePlugin) getPluginManager().getPlugin("keyStore").getInstance();
 
+		File file1 = new File(getDataFolder(), "ignore.json");
+		ChunkTrim.init(file1);
+
 		registerCommand(literal("mcdiff")
 			.then(literal("patch")
 				.then(argument("差异文件", Argument.file())
@@ -89,6 +92,18 @@ public class McDiffPlugin extends Plugin {
 				return;
 			}
 			ChunkTrim.createBackup(file, backup);
+		}))));
+
+		registerCommand(literal("mcgroupby")
+			.then(argument("chunk", Argument.folder())
+			.then(argument("backup", Argument.fileOptional(false)).executes(ctx -> {
+			var file = ctx.argument("chunk", File.class);
+			var backup = ctx.argument("backup", File.class);
+			if (!backup.isDirectory() && !backup.mkdirs()) {
+				Terminal.error("无法创建保存目录");
+				return;
+			}
+			GroupBy.createBackup(file, backup);
 		}))));
 	}
 }

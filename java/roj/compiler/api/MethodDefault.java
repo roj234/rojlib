@@ -3,15 +3,15 @@ package roj.compiler.api;
 import roj.asm.cp.ConstantPool;
 import roj.asm.tree.attr.Attribute;
 import roj.collect.IntMap;
-import roj.util.AttributeKey;
 import roj.util.DynByteBuf;
+import roj.util.TypedKey;
 
 /**
  * @author Roj234
  * @since 2024/6/5 20:00
  */
 public class MethodDefault extends Attribute {
-	public static final AttributeKey<MethodDefault> METHOD_DEFAULT = new AttributeKey<>("MethodDefault");
+	public static final TypedKey<MethodDefault> METHOD_DEFAULT = new TypedKey<>("MethodDefault");
 
 	@Override
 	public final boolean isEmpty() {return defaultValue.isEmpty();}

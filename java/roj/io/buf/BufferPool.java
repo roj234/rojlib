@@ -98,6 +98,7 @@ public final class BufferPool {
 	private boolean hasDelay;
 	private final int maxStall;
 	private final ITask stallReleaseTask;
+	private long accessTimestamp;
 
 	private BufferPool() {this(DIRECT_INIT, DIRECT_INCR, DIRECT_FLEX_MAX, HEAP_INIT, HEAP_INCR, HEAP_FLEX_MAX, 15, 60000);}
 	public BufferPool(long directInit, long directIncr, long directMax,
@@ -123,12 +124,15 @@ public final class BufferPool {
 		if (!hasDelay) {
 			Scheduler.getDefaultScheduler().delay(stallReleaseTask, maxStall);
 			hasDelay = true;
+		} else {
+			//reset delay
+			accessTimestamp = System.currentTimeMillis();
 		}
 	}
 	private static ITask getTask(WeakReference<BufferPool> pool) {
 		return () -> {
 			BufferPool p = pool.get();
-			if (p == null) return;
+			if (p == null || System.currentTimeMillis() - p.accessTimestamp < p.maxStall) return;
 
 			if (p.directRef != null && p.pDirect.usedSpace() == 0) freeDirect(p);
 			if (p.heap != null && p.pHeap.usedSpace() == 0) freeHeap(p);

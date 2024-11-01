@@ -1,44 +1,77 @@
 package roj.media.audio;
 
+import roj.collect.MyHashMap;
+import roj.io.IOUtil;
+import roj.io.MyDataInput;
+import roj.reflect.Unaligned;
+import sun.misc.Unsafe;
+
+import java.io.IOException;
+import java.util.Map;
+
 /**
+ * <a href="https://magiclen.org/mp3-tag/">MP3标签格式(ID3、APE)超详细解析 | MagicLen</a>
  * @author Roj234
  * @since 2024/2/20 0020 0:49
  */
-public class APETag {
-	private int apeVer;
-
-	private static int apeInt32(byte[] b, int off) {
-		if (b.length - off < 4) return 0;
-		return ((b[off + 3] & 0xff) << 24) | ((b[off + 2] & 0xff) << 16) | ((b[off + 1] & 0xff) << 8) | (b[off] & 0xff);
-	}
+public class APETag implements AudioMetadata {
+	public static final long SIGNATURE = 0x4150455441474558L;
+	private int itemCount;
+	private Map<String, Object> attributes = new MyHashMap<>();
 
 	/**
 	 * 获取APE标签信息长度。源数据b的可用长度不少于32字节。
-	 *
-	 * @param b 源数据。
-	 * @param off 源数据偏移量。
-	 *
-	 * @return APE标签信息长度。以下两种情况返回0：
-	 * <ul>
-	 * <li>如果源数据b偏移量off开始的数据内未检测到APE标签信息；</li>
-	 * <li>如果源数据b的可用长度少于32字节。</li>
-	 * </ul>
 	 */
-	public int checkFooter(byte[] b, int off) {
+	public int findFooter(byte[] b, int off) {
 		if (b.length - off < 32) return 0;
-		if (b[off] == 'A' && b[off + 1] == 'P' && b[off + 2] == 'E' && b[off + 3] == 'T' && b[off + 4] == 'A' && b[off + 5] == 'G' && b[off + 6] == 'E' && b[off + 7] == 'X') {
-			apeVer = apeInt32(b, off + 8);
-			return apeInt32(b, off + 12) + 32;
+
+		// APETAGEX
+		if (Unaligned.U.get64UB(b, Unsafe.ARRAY_BYTE_BASE_OFFSET+off) == SIGNATURE) {
+			itemCount = Unaligned.U.get32UL(b, Unsafe.ARRAY_BYTE_BASE_OFFSET + off + 16);
+			int flags = Unaligned.U.get32UL(b, Unsafe.ARRAY_BYTE_BASE_OFFSET + off + 20);
+			// Illegal flag
+			if ((flags&0x60) != 0) return 0;
+			int len = Unaligned.U.get32UL(b, Unsafe.ARRAY_BYTE_BASE_OFFSET + off + 12);
+			return (flags&0x80) != 0 ? len+32 : len;
 		}
 		return 0;
 	}
 
-	/**
-	 * 获取APE标签信息版本。
-	 *
-	 * @return 以整数形式返回APE标签信息版本。
-	 */
-	public int getApeVer() {
-		return apeVer;
+	public void parseTag(MyDataInput st, boolean noHeader) throws IOException {
+		if (!noHeader) {
+			if (st.readLong() != SIGNATURE) return;
+			int apeVer = st.readIntLE();
+			int tagSize = st.readIntLE();
+			itemCount = st.readIntLE();
+			int tagFlag = st.readInt();
+			st.skipForce(8);
+			if ((tagFlag&0x20) == 0) return;
+		}
+
+		for (int i = 0; i < itemCount; i++) readItem(st);
 	}
+
+	private void readItem(MyDataInput st) throws IOException {
+		int valueSize = st.readIntLE();
+		int flags = st.readInt()&7;
+
+		var tmp = IOUtil.getSharedByteBuf();
+		int b;
+		while ((b = st.readByte()) != 0) tmp.put(b);
+
+		var key = tmp.readAscii(tmp.readableBytes());
+
+		Object o;
+		if ((flags>>1) == 1) o = st.readBytes(valueSize);
+		else o = st.readUTF(valueSize);
+
+		attributes.put(key, o);
+	}
+
+	public String getTitle() {return (String) attributes.get("Title");}
+	public String getArtist() {return (String) attributes.get("Artist");}
+	public String getAlbum() {return (String) attributes.get("Album");}
+	public Object getNamedAttribute(String name) {return attributes.get(name);}
+
+	public String toString() {return "APETAG: "+getTitle()+" - "+getArtist()+" - "+getAlbum();}
 }

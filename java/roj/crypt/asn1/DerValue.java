@@ -100,7 +100,7 @@ public interface DerValue {
 		public boolean mayCastTo(Type o) { return ref.mayCastTo(o); }
 
 		public boolean asBool() {return ref.asBool();}
-		public int asInteger() {return ref.asInteger();}
+		public int asInt() {return ref.asInt();}
 		public long asLong() {return ref.asLong();}
 		public float asFloat() {return ref.asFloat();}
 		public double asDouble() {return ref.asDouble();}

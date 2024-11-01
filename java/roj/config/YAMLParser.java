@@ -12,6 +12,7 @@ import roj.util.Helpers;
 
 import java.util.Map;
 
+import static roj.config.Flags.*;
 import static roj.config.JSONParser.*;
 import static roj.config.Word.EOF;
 import static roj.config.Word.LITERAL;
@@ -23,7 +24,6 @@ import static roj.config.Word.LITERAL;
  * @since 2021/7/7 2:03
  */
 public class YAMLParser extends Parser {
-	public static final int LENIENT = 8;
 	static final int JSON_MODE = 16;
 
 	static final short delim = 18,
@@ -193,7 +193,7 @@ public class YAMLParser extends Parser {
 				switch (cnt) {
 					case "str": return CString.valueOf(val.asString());
 					case "float": return CDouble.valueOf(val.asDouble());
-					case "int": return CInt.valueOf(val.asInteger());
+					case "int": return CInt.valueOf(val.asInt());
 					case "bool": return CBoolean.valueOf(val.asBool());
 					case "long": return CLong.valueOf(val.asLong());
 					case "map": return val.asMap();

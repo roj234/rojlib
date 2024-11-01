@@ -1,6 +1,7 @@
 package roj.net.mss;
 
 import roj.collect.CharMap;
+import roj.io.buf.BufferPool;
 import roj.util.DynByteBuf;
 
 public class Extension {
@@ -35,7 +36,7 @@ public class Extension {
 			if (b == null) buf.putShort(0);
 			else buf.putShort(b.readableBytes()).put(b);
 
-			MSSEngine.free(b);
+			BufferPool.reserve(b);
 		}
 	}
 

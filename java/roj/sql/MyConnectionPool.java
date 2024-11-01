@@ -121,7 +121,7 @@ public class MyConnectionPool implements Connector {
 			synchronized (MyConnectionPool.class) {
 				if (proxy != null) break block;
 				ConstantData data = new ConstantData();
-				data.name("roj/sql/SimpleConnectionPool$PooledConnection");
+				data.name("roj/sql/MyConnectionPool$PooledConnection");
 
 				int closeHandler = data.newField(0, "$closeHandler", TypeHelper.class2asm(MyConnectionPool.class));
 
@@ -132,7 +132,7 @@ public class MyConnectionPool implements Connector {
 						c.one(Opcodes.ALOAD_0);
 						c.field(Opcodes.GETFIELD, data, closeHandler);
 						c.one(Opcodes.ALOAD_0);
-						c.invokeV("roj/sql/SimpleConnectionPool", "_reserve", "(Ljava/sql/Connection;)V");
+						c.invokeV("roj/sql/MyConnectionPool", "_reserve", "(Ljava/sql/Connection;)V");
 						return true;
 					} else if (m.getName().equals("isClosed")) {
 						c.visitSizeMax(2, 0);
@@ -147,7 +147,7 @@ public class MyConnectionPool implements Connector {
 						c.label(label);
 						c.one(Opcodes.ALOAD_0);
 						c.field(Opcodes.GETFIELD, data, closeHandler);
-						c.invokeV("roj/sql/SimpleConnectionPool", "_isClosed", "()Z");
+						c.invokeV("roj/sql/MyConnectionPool", "_isClosed", "()Z");
 						return true;
 					}
 					return false;

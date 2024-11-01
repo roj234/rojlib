@@ -141,6 +141,25 @@ public final class PacketBuffer {
 		}
 	}
 
+	private boolean release() {
+		pollReverse();
+
+		Entry entry = rHead;
+		if (entry == null) return false;
+
+		BufferPool.reserve(entry.buffer);
+
+		LockSupport.unpark((Thread) u.getAndSetObject(entry, u_entryWaiter, null));
+
+		if (entry.next == null) {
+			assert entry == rTail;
+			rTail = null;
+		}
+		rHead = (Entry) u.getAndSetObject(entry, u_entryNext, null);
+
+		return true;
+	}
+
 	public boolean isEmpty() {return head == null && rHead == null;}
-	public void clear() {head = rHead = rTail = null;}
+	public void clear() {while (release());}
 }

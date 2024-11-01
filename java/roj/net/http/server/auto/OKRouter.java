@@ -12,9 +12,9 @@ import roj.asm.tree.anno.AnnValArray;
 import roj.asm.tree.anno.AnnValEnum;
 import roj.asm.tree.anno.Annotation;
 import roj.asm.tree.attr.Attribute;
+import roj.asm.tree.attr.ParameterAnnotations;
 import roj.asm.tree.insn.TryCatchEntry;
 import roj.asm.type.*;
-import roj.asm.util.Attributes;
 import roj.asm.visitor.CodeWriter;
 import roj.asm.visitor.Label;
 import roj.asmx.mapper.ParamNameMapper;
@@ -23,7 +23,8 @@ import roj.collect.MyHashMap;
 import roj.collect.SimpleList;
 import roj.collect.ToIntMap;
 import roj.concurrent.task.ITask;
-import roj.config.CCJson;
+import roj.config.BinaryParser;
+import roj.config.ConfigMaster;
 import roj.config.auto.SerializerFactory;
 import roj.io.FastFailException;
 import roj.net.http.Headers;
@@ -33,13 +34,15 @@ import roj.net.http.server.*;
 import roj.reflect.Bypass;
 import roj.reflect.ClassDefiner;
 import roj.reflect.ReflectionUtils;
-import roj.util.AttributeKey;
+import roj.reflect.VirtualReference;
 import roj.util.Helpers;
+import roj.util.TypedKey;
 
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.function.Predicate;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -52,7 +55,7 @@ import static roj.asm.Opcodes.*;
 public final class OKRouter implements Router {
 	private static final String REQ = "roj/net/http/server/Request";
 
-	private final AttributeKey<Route> RouterImplKey = new AttributeKey<>("or:router");
+	private final TypedKey<Route> RouterImplKey = new TypedKey<>("or:router");
 	private final MyHashMap<String, Dispatcher> interceptors = new MyHashMap<>();
 
 	private final Node route = new Text("");
@@ -82,9 +85,9 @@ public final class OKRouter implements Router {
 	}
 
 	public final OKRouter register(Object o) {return register(o, "");}
-	public final OKRouter register(Object o, String pathRel) {
-		var data = Parser.parseConstants(o.getClass());
-		if (data == null) throw new IllegalStateException("找不到"+o.getClass().getName()+"的类文件");
+	private ImplRef makeRouterInst(Class<?> o) {
+		var data = Parser.parseConstants(o);
+		if (data == null) throw new IllegalStateException("找不到"+ o.getName()+"的类文件");
 
 		var hndInst = new ConstantData();
 		hndInst.name("roj/net/http/server/auto/Router$"+ReflectionUtils.uniqueId());
@@ -93,7 +96,7 @@ public final class OKRouter implements Router {
 		ClassDefiner.premake(hndInst);
 
 		hndInst.newField(0, "$methodId", "I");
-		hndInst.newField(0, "$handler", TypeHelper.class2asm(o.getClass()));
+		hndInst.newField(0, "$handler", TypeHelper.class2asm(o));
 
 		var cw = hndInst.newMethod(ACC_PUBLIC, "copyWith", "(ILjava/lang/Object;)Lroj/net/http/server/auto/OKRouter$Dispatcher;");
 		cw.visitSize(2, 3);
@@ -107,7 +110,7 @@ public final class OKRouter implements Router {
 
 		cw.one(ALOAD_0);
 		cw.one(ALOAD_2);
-		cw.clazz(CHECKCAST, o.getClass().getName().replace('.', '/'));
+		cw.clazz(CHECKCAST, o.getName().replace('.', '/'));
 		cw.field(PUTFIELD, hndInst, 1);
 
 		cw.one(ALOAD_0);
@@ -137,9 +140,7 @@ public final class OKRouter implements Router {
 		for (int i = 0; i < methods.size(); i++) {
 			var mn = methods.get(i);
 
-			var list = Attributes.getAnnotations(data.cp, mn, false);
-			if (list == null) continue;
-			var a = parseAnnotations(list);
+			var a = parseAnnotations(Annotation.getAnnotations(data.cp, mn, false));
 			if (a == null) continue;
 
 			if (a.type().equals("roj/net/http/server/auto/Interceptor")) {
@@ -229,14 +230,43 @@ public final class OKRouter implements Router {
 		for (var tce : exhandlers) cw.visitException(tce.start,tce.end,tce.handler,null);
 		cw.finish();
 
-		var ah = (Dispatcher) ClassDefiner.make(hndInst, o.getClass().getClassLoader());
-		for (var entry : handlers.selfEntrySet()) {
+		var inst = (Dispatcher) ClassDefiner.make(hndInst, o.getClassLoader());
+		return new ImplRef(handlers, interceptorId, inst);
+	}
+
+	private static final VirtualReference<MyHashMap<String, ImplRef>> Isolation = new VirtualReference<>();
+	private static final class ImplRef {
+		final IntMap<Annotation> handlers;
+		final ToIntMap<String> interceptors;
+		final Dispatcher inst;
+
+		ImplRef(IntMap<Annotation> handlers, ToIntMap<String> interceptors, Dispatcher inst) {
+			this.handlers = handlers;
+			this.interceptors = interceptors;
+			this.inst = inst;
+		}
+	}
+
+	public final OKRouter register(Object o, String pathRel) {
+		var type = o.getClass();
+		var map = Isolation.computeIfAbsent(type.getClassLoader(), Helpers.cast(Helpers.fnMyHashMap()));
+		var inst = map.get(type.getName());
+		if (inst == null) {
+			synchronized (map) {
+				if ((inst = map.get(type.getName())) == null) {
+					inst = makeRouterInst(type);
+					map.put(type.getName(), inst);
+				}
+			}
+		}
+
+		for (var entry : inst.handlers.selfEntrySet()) {
 			int i = entry.getIntKey();
 			var a = entry.getValue();
 			var set = new Route();
 
 			set.accepts = a.getInt("accepts", 255);
-			set.req = ah.copyWith(i, o);
+			set.req = inst.inst.copyWith(i, o);
 			set.mime = a.getString("mime");
 
 			List<Dispatcher> precs = Collections.emptyList();
@@ -249,13 +279,13 @@ public final class OKRouter implements Router {
 						// dummy interceptor
 						if (interceptors.containsKey(name)) continue;
 
-						int vid = interceptorId.getOrDefault(name, -1);
+						int vid = inst.interceptors.getOrDefault(name, -1);
 						if (vid < 0) {
 							if ((prec = getParentInterceptor(name)) == null) {
 								throw new IllegalArgumentException("未找到"+a+"引用的拦截器"+vname.get(j));
 							}
 						} else {
-							prec = ah.copyWith(vid, o);
+							prec = inst.inst.copyWith(vid, o);
 							interceptors.put(name, prec);
 						}
 					}
@@ -310,9 +340,9 @@ public final class OKRouter implements Router {
 			}
 		}
 
-		for (var entry : interceptorId.selfEntrySet()) {
+		for (var entry : inst.interceptors.selfEntrySet()) {
 			if (!interceptors.containsKey(entry.k)) {
-				interceptors.put(entry.k, ah.copyWith(entry.v, o));
+				interceptors.put(entry.k, inst.inst.copyWith(entry.v, o));
 			}
 		}
 		return this;
@@ -329,7 +359,7 @@ public final class OKRouter implements Router {
 
 	@Nullable
 	private static List<AnnVal> getPredefInterceptor(ConstantData data) {
-		var preDef = Attributes.getAnnotation(Attributes.getAnnotations(data.cp, data, false), "roj/net/http/server/auto/Interceptor");
+		var preDef = Annotation.findInvisible(data.cp, data, "roj/net/http/server/auto/Interceptor");
 		return preDef != null ? preDef.getArray("value") : null;
 	}
 	private static Annotation parseAnnotations(List<Annotation> list) {
@@ -383,18 +413,26 @@ public final class OKRouter implements Router {
 		Node node = route.add(path, 0, path.length());
 		if (node.value != null) throw new IllegalArgumentException("子路径"+path+"已存在");
 
-		Route aset = new Route();
+		var aset = new Route();
 
 		node.flag |= (byte) (Node.PREFIX|(path.endsWith("/")?Node.DIRECTORY:0));
 		node.value = aset;
 		aset.accepts = 511;
 
-		Dispatcher lastCheck = (req, srv, extra) -> {
-			router.checkHeader(req, (PostSetting) extra);
-			return null;
-		};
-		if (interceptors == null || interceptors.length == 0) aset.prec = new Dispatcher[] {lastCheck};
-		else {
+		if (interceptors == null || interceptors.length == 0) {
+			if (router instanceof OKRouter okRouter) {
+				Node otherRoot = okRouter.route;
+				node.flag = otherRoot.flag;
+				node.value = otherRoot.value;
+				node.table = otherRoot.table;
+				node.size = otherRoot.size;
+				node.mask = otherRoot.mask;
+				node.any = otherRoot.any;
+				return this;
+			}
+
+			aset.prec = new Dispatcher[] {_getChecker(router)};
+		} else {
 			var prec = new Dispatcher[interceptors.length + 1];
 			int size = 0;
 			for (String name : interceptors) {
@@ -406,7 +444,7 @@ public final class OKRouter implements Router {
 					prec[size++] = dp;
 				}
 			}
-			prec[size] = lastCheck;
+			prec[size] = _getChecker(router);
 			aset.prec = size == interceptors.length ? prec : Arrays.copyOf(prec, size+1);
 		}
 		aset.req = (req, srv, extra) -> {
@@ -418,17 +456,28 @@ public final class OKRouter implements Router {
 			return null;
 		};
 
+		if (router instanceof Predicate<?>) {
+			aset.earlyCheck = Helpers.cast(router);
+		}
+
 		return this;
 	}
+	private static Dispatcher _getChecker(Router router) {
+		return (req, srv, extra) -> {
+			router.checkHeader(req, (PostSetting) extra);
+			return null;
+		};
+	}
+
 	public final boolean removePrefixDelegation(String path) {return route.remove(path, 0, path.length());}
 
 	private void provideBodyPars(CodeWriter c, ConstantPool cp, MethodNode m, int begin, List<TryCatchEntry> tries) {
 		List<Type> parTypes = m.parameters();
 
-		Annotation body = Attributes.getAnnotation(Attributes.getAnnotations(cp, m, false), "roj/net/http/server/auto/Body");
+		Annotation body = Annotation.findInvisible(cp, m, "roj/net/http/server/auto/Body");
 		if (body == null) throw new IllegalArgumentException("没有@Body注解 " + m);
 
-		List<List<Annotation>> annos = Attributes.getParameterAnnotation(cp, m, false);
+		List<List<Annotation>> annos = ParameterAnnotations.getParameterAnnotation(cp, m, false);
 		if (annos == null) annos = Collections.emptyList();
 
 		Signature signature = m.parsedAttr(cp, Attribute.SIGNATURE);
@@ -447,7 +496,7 @@ public final class OKRouter implements Router {
 		bw.tries = tries;
 
 		for (; begin < parTypes.size(); begin++) {
-			bw.process(begin>=annos.size()?null: Attributes.getAnnotation(annos.get(begin), "roj/net/http/server/auto/Field"),
+			bw.process(begin>=annos.size()?null: Annotation.find(annos.get(begin), "roj/net/http/server/auto/Field"),
 				begin>=parNames.size()?null:parNames.get(begin),
 				parTypes.get(begin),
 				begin>=genTypes.size()|| !(genTypes.get(begin) instanceof Generic) ? null: (Generic) genTypes.get(begin));
@@ -602,7 +651,10 @@ public final class OKRouter implements Router {
 	}
 
 	private static final class Route {
+		//bitset for http method
 		int accepts;
+		//accept this path for prefix router
+		Predicate<String> earlyCheck = Helpers.alwaysTrue();
 		String mime;
 		Dispatcher req;
 		Dispatcher[] prec;
@@ -640,7 +692,7 @@ public final class OKRouter implements Router {
 				for (int k = 0; k < nodeS.size(); k++) {
 					Node node = nodeS.get(k);
 
-					if ((node.flag & Node.PREFIX) != 0) {
+					if ((node.flag & Node.PREFIX) != 0 && checkPrefixMatch(node, path, i)) {
 						prefixLen = i;
 						prefixNode = node;
 						prefixPar = parS.size() <= k ? null : parS.get(k);
@@ -698,9 +750,7 @@ public final class OKRouter implements Router {
 				Node n = nodeS.get(j);
 				if (n.value != null) {
 					// prefix只接受目录
-					if ((n.flag&Node.DIRECTORY) != 0 && noDir) {
-						continue;
-					}
+					if ((n.flag&Node.DIRECTORY) != 0 && noDir) continue;
 
 					int prio = n.priority();
 					if (prio > priority) {
@@ -714,8 +764,7 @@ public final class OKRouter implements Router {
 							par.add(path.substring(prevI, noDir ? end : end-1));
 						}
 					} else if (prio == priority && node != null) { // equals
-						System.out.println("same: " + node);
-						System.out.println("same: " + n);
+						throw new IllegalStateException("该路径被多个请求处理器命中: "+node+"|"+n);
 					}
 				}
 			}
@@ -726,7 +775,7 @@ public final class OKRouter implements Router {
 			if (node == null) return buildPrefix();
 
 			prefixLen = end;
-			value = node.value instanceof Node n ? n.value : node.value;
+			value = getNodeValue(node);
 			if (par != null) {
 				params = new Headers();
 				int j = 0;
@@ -739,11 +788,16 @@ public final class OKRouter implements Router {
 			return true;
 		}
 
+		private boolean checkPrefixMatch(Node node, String path, int i) {
+			Object v = getNodeValue(node);
+			return v instanceof Route r && r.earlyCheck.test(path.substring(i));
+		}
+
 		private boolean buildPrefix() {
 			if (prefixNode == null) return false;
+			value = getNodeValue(prefixNode);
 
-			value = prefixNode.value;
-			SimpleList<String> par = prefixPar;
+			var par = prefixPar;
 			if (par != null) {
 				params = new Headers();
 				int i = 0;
@@ -757,6 +811,13 @@ public final class OKRouter implements Router {
 			prefixNode = null;
 			prefixPar = null;
 			return true;
+		}
+		private static Object getNodeValue(Node node) {
+			var v = node.value;
+			while (v instanceof Node n) {
+				v = n.value;
+			}
+			return v;
 		}
 	}
 	private static abstract class Node {
@@ -843,7 +904,7 @@ public final class OKRouter implements Router {
 				i = any.indexOf(node2);
 				if (i >= 0) node1 = any.get(i);
 				else {
-					if ((node2.flag&2) != 0 && j >= end) {
+					if ((node2.flag&8) != 0 && j >= end) {
 						if (value != null) throw new IllegalStateException();
 						value = node2;
 					}
@@ -1064,8 +1125,8 @@ public final class OKRouter implements Router {
 	public static Object parse(Request req, String type) throws Exception {
 		if (req.postBuffer() == null) throw new FastFailException("没有请求体");
 
-		var parser = (CCJson) req.localCtx().get("or:parser");
-		if (parser == null) req.localCtx().put("or:parser", parser = new CCJson());
+		var parser = (BinaryParser) req.localCtx().get("or:parser");
+		if (parser == null) req.localCtx().put("or:parser", parser = ConfigMaster.JSON.parser(true));
 
 		var adapter = SerializerFactory.SAFE.serializer(Signature.parseGeneric(type));
 		adapter.reset();

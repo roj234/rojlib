@@ -6,12 +6,15 @@ import roj.RojLib;
 import roj.compiler.plugins.annotations.Attach;
 import roj.io.IOUtil;
 import roj.reflect.ReflectionUtils;
+import roj.text.TextReader;
+import roj.text.TextUtil;
 import roj.util.Helpers;
 import roj.util.NativeException;
 import roj.util.OS;
 
 import javax.imageio.ImageIO;
 import javax.swing.*;
+import javax.swing.filechooser.FileFilter;
 import javax.swing.text.BadLocationException;
 import javax.swing.text.Document;
 import javax.swing.text.JTextComponent;
@@ -152,14 +155,29 @@ public final class GuiUtil {
 		return doc;
 	}
 
-	private static File lastPath = new File("");
+	public static void setDefaultPathToDesktop() {
+		if (OS.CURRENT != OS.WINDOWS) return;
+		try {
+			Process proc = Runtime.getRuntime().exec("reg query \"HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Shell Folders\" /v \"Desktop\"");
+			try (var tx = TextReader.auto(proc.getInputStream())) {
+				tx.skipLines(2);
+				var folder = new File(TextUtil.split(tx.readLine(), "    ").get(3));
+				if (folder.isDirectory()) lastPath = folder;
+			} finally {
+				proc.destroy();
+			}
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+	}
+	public static File lastPath = new File("");
 	@Nullable
 	public static File fileSaveTo(String title, String defaultFileName) { return fileSaveTo(title, defaultFileName, null, false); }
 	@Nullable
 	public static File fileSaveTo(String title, String defaultFileName, Component pos) { return fileSaveTo(title, defaultFileName, pos, false); }
 	@Nullable
 	public static File fileSaveTo(String title, String defaultFileName, Component pos, boolean folder) {
-		JFileChooser jfc = getFileChooser();
+		JFileChooser jfc = newMyFileChooser();
 		jfc.setDialogTitle(title);
 		jfc.setFileSelectionMode(folder?JFileChooser.DIRECTORIES_ONLY:JFileChooser.FILES_ONLY);
 		jfc.setSelectedFile(new File(lastPath, defaultFileName));
@@ -177,7 +195,7 @@ public final class GuiUtil {
 	public static File fileLoadFrom(String title, Component pos) { return fileLoadFrom(title, pos, JFileChooser.FILES_ONLY); }
 	@Nullable
 	public static File fileLoadFrom(String title, Component pos, int mode) {
-		JFileChooser jfc = getFileChooser();
+		JFileChooser jfc = newMyFileChooser();
 		jfc.setDialogTitle(title);
 		jfc.setFileSelectionMode(mode);
 
@@ -189,7 +207,7 @@ public final class GuiUtil {
 	}
 	@Nullable
 	public static File[] filesLoadFrom(String title, Component pos, int mode) {
-		JFileChooser jfc = getFileChooser();
+		JFileChooser jfc = newMyFileChooser();
 		jfc.setDialogTitle(title);
 		jfc.setMultiSelectionEnabled(true);
 		jfc.setFileSelectionMode(mode);
@@ -201,7 +219,7 @@ public final class GuiUtil {
 		return jfc.getSelectedFiles();
 	}
 
-	private static JFileChooser getFileChooser() {
+	public static JFileChooser newMyFileChooser() {
 		return new JFileChooser(lastPath) {
 			@Override
 			protected JDialog createDialog(Component parent) throws HeadlessException {
@@ -241,6 +259,13 @@ public final class GuiUtil {
 					}
 				}
 			}
+		};
+	}
+	public static FileFilter newExtensionFilter(String extension, String briefDesc) {
+		String desc = briefDesc+" (*."+extension+")";
+		return new FileFilter() {
+			@Override public boolean accept(File f) {return f.isDirectory() || IOUtil.extensionName(f.getName()).equals(extension);}
+			@Override public String getDescription() {return desc;}
 		};
 	}
 

@@ -14,11 +14,12 @@ import roj.archive.qz.xz.lz.LZDecoder;
 import roj.archive.qz.xz.lzma.LZMADecoder;
 import roj.archive.qz.xz.rangecoder.RangeDecoderFromStream;
 import roj.io.CorruptedInputException;
+import roj.io.IOUtil;
 import roj.io.MBInputStream;
+import roj.reflect.Unaligned;
 import roj.util.ArrayUtil;
 import sun.misc.Unsafe;
 
-import java.io.EOFException;
 import java.io.IOException;
 import java.io.InputStream;
 
@@ -118,23 +119,19 @@ public class LZMAInputStream extends MBInputStream {
 	public LZMAInputStream(InputStream in) throws IOException { this(in, -1); }
 	public LZMAInputStream(InputStream in, int memoryLimit) throws IOException {
 		byte[] h = new byte[13];
-		if (in.read(h) != 13) throw new EOFException();
+		IOUtil.readFully(in, h);
 
 		// Properties byte (lc, lp, and pb)
 		byte propsByte = h[0];
 
 		// Dictionary size is an unsigned 32-bit little endian integer.
-		int dictSize = 0;
-		for (int i = 0; i < 4; ++i)
-			dictSize |= (h[i+1]&0xFF) << (8 * i);
+		int dictSize = Unaligned.U.get32UL(h, Unsafe.ARRAY_BYTE_BASE_OFFSET+1);
 
 		// Uncompressed size is an unsigned 64-bit little endian integer.
 		// The maximum 64-bit value is a special case (becomes -1 here)
 		// which indicates that the end marker is used instead of knowing
 		// the uncompressed size beforehand.
-		long uncompSize = 0;
-		for (int i = 0; i < 8; ++i)
-			uncompSize |= (long) (h[i+5]&0xFF) << (8 * i);
+		long uncompSize = Unaligned.U.get64UL(h, Unsafe.ARRAY_BYTE_BASE_OFFSET+5);
 
 		// Check the memory usage limit.
 		int memoryNeeded = getMemoryUsage(dictSize, propsByte);

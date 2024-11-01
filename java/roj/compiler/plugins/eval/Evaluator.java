@@ -15,7 +15,8 @@ import roj.compiler.ast.ParseTask;
 import roj.compiler.ast.expr.NaE;
 import roj.compiler.context.CompileUnit;
 import roj.compiler.diagnostic.Kind;
-import roj.compiler.plugins.GlobalContextApi;
+import roj.compiler.plugin.GlobalContextApi;
+import roj.compiler.plugin.LavaPlugin;
 import roj.compiler.resolve.TypeCast;
 import roj.io.IOUtil;
 import roj.reflect.ClassDefiner;
@@ -33,8 +34,9 @@ import static roj.asm.Opcodes.*;
  * @author Roj234
  * @since 2024/5/30 0030 3:47
  */
+@LavaPlugin(name = "evaluator", desc = "预编译")
 public interface Evaluator {
-	public static void init(GlobalContextApi ctx) throws IOException {
+	public static void pluginInit(GlobalContextApi ctx) throws IOException {
 		MyHashMap<String, byte[]> data = new MyHashMap<>();
 		SimpleList<RawNode> invoker = new SimpleList<>();
 
@@ -43,7 +45,7 @@ public interface Evaluator {
 				if (element.desc().indexOf('(') < 0) continue;
 
 				AccessData.MOF node = (AccessData.MOF) element.node();
-				node.modifier |= (char) (node.owner().modifier &ACC_INTERFACE);
+				node.modifier |= (char) (node.owner().modifier&ACC_INTERFACE);
 				invoker.add(node);
 			}
 
@@ -157,7 +159,7 @@ public interface Evaluator {
 				lc.lexer.index = lexer.index;
 				lc.lexer.LN = lexer.LN;
 				lc.lexer.LNIndex = lexer.LNIndex;
-				lc.lexer.setState(JavaLexer.STATE_EXPR);
+				lc.lexer.state = JavaLexer.STATE_EXPR;
 				lc.lexer.next();
 
 				ParseTask.Method(def, toString, Collections.singletonList("code")).parse(lc);
@@ -169,8 +171,8 @@ public interface Evaluator {
 					impl.toString(sb);
 				}
 
-				lexer.init(sb.append(text, after, text.length()).toStringAndFree());
-				lexer.index = before;
+				// inherited (see CompileUnit#newAnonymousClass)
+				lexer.setText(sb.append(text, after, text.length()).toStringAndFree(), before);
 			} catch (Throwable e) {
 				ctx1.report(Kind.ERROR, "plugins.eval.macro.error", e);
 				e.printStackTrace();

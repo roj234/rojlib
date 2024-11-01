@@ -6,12 +6,12 @@ import roj.config.data.CEntry;
 import roj.config.serial.*;
 import roj.io.IOUtil;
 import roj.text.CharList;
+import roj.text.TextUtil;
 import roj.text.TextWriter;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
 
 import java.io.*;
-import java.nio.charset.StandardCharsets;
 import java.util.TimeZone;
 
 /**
@@ -44,33 +44,21 @@ public enum ConfigMaster {
 	 */
 	public void serialize(Object out, CEntry entry) throws IOException {
 		switch (this) {
-			case JSON, YAML, NBT, XNBT -> {
+			case JSON, YAML, NBT, XNBT, BENCODE -> {
 				try (CVisitor v = serializer(out)) {
 					entry.accept(v);
 				}
 			}
 			case TOML,INI,XML -> {
-				try (TextWriter tw = out instanceof File f ? TextWriter.to(f) : new TextWriter((Closeable) out, StandardCharsets.UTF_8)) {
+				try (TextWriter tw = out instanceof File f ? TextWriter.to(f) : new TextWriter((Closeable) out, TextUtil.DefaultOutputCharset)) {
 					if (this == TOML) {
 						CharList tmp = new CharList();
 						entry.appendTOML(tw, tmp);
 						tmp._free();
-					} else if (this == INI) {
-						entry.appendINI(tw);
 					} else {
 						CVisitor sb = new ToXml();
 						entry.accept(sb);
 					}
-				}
-			}
-			case BENCODE -> {
-				try (DynByteBuf ob = out instanceof DynByteBuf buf
-					? buf
-					: new ByteList.ToStream(out instanceof File f
-					? new FileOutputStream(f)
-					: (OutputStream) out)) {
-
-					entry.toB_encode(ob);
 				}
 			}
 			default -> throw new UnsupportedOperationException(this+"不支持序列化");
@@ -87,17 +75,17 @@ public enum ConfigMaster {
 	// 也不是所有格式都支持indent 哈哈
 	public CVisitor serializer(Object out, String indent) throws IOException {
 		switch (this) {
-			case JSON, YAML -> {
-				TextWriter tw = out instanceof File f ? TextWriter.to(f) : new TextWriter((Closeable) out, StandardCharsets.UTF_8);
-				return (this == JSON ? new ToJson(indent) : new ToYaml(indent)).sb(tw);
+			case JSON, YAML, INI -> {
+				TextWriter tw = out instanceof File f ? TextWriter.to(f) : new TextWriter((Closeable) out, TextUtil.DefaultOutputCharset);
+				return textSerializer(tw, indent);
 			}
-			case NBT, XNBT -> {
+			case NBT, XNBT, BENCODE -> {
 				DynByteBuf ob = out instanceof DynByteBuf buf
 					? buf
 					: new ByteList.ToStream(out instanceof File f
 					? new FileOutputStream(f)
 					: (OutputStream) out);
-				return new ToNBT(ob).setXNbt(this == XNBT);
+				return this == BENCODE ? new ToBEncode(ob) : new ToNBT(ob).setXNbt(this == XNBT);
 			}
 			default -> throw new UnsupportedOperationException(this+"不支持流式序列化");
 		}
@@ -113,6 +101,7 @@ public enum ConfigMaster {
 		return switch (this) {
 			case JSON -> new ToJson(indent).sb(out);
 			case YAML -> new ToYaml(indent).multiline(true).timezone(TimeZone.getDefault()).sb(out);
+			case INI -> new ToIni().sb(out);
 			default -> throw new UnsupportedOperationException(this+"不支持流式序列化到字符串");
 		};
 	}
@@ -122,9 +111,8 @@ public enum ConfigMaster {
 	public CharList toString(CEntry entry, CharList out) { return toString(entry, out, ""); }
 	public CharList toString(CEntry entry, CharList out, String indent) {
 		switch (this) {
-			case JSON, YAML -> entry.accept(textSerializer(out, indent));
+			case JSON, YAML, INI -> entry.accept(textSerializer(out, indent));
 			case TOML -> entry.appendTOML(out, new CharList());
-			case INI -> entry.appendINI(out);
 			case XML -> {
 				// convert to xml
 				ToXml sb = new ToXml();
@@ -147,12 +135,21 @@ public enum ConfigMaster {
 		return tp.parse(sb);
 	}
 
-	public BinaryParser parser(boolean visitorMode) {
+	/**
+	 * @see #parser(boolean, int)
+	 */
+	public BinaryParser parser(boolean visitorMode) {return parser(visitorMode, 0);}
+	/**
+	 * 返回的实例并非线程安全
+	 * @param visitorMode 是否为CVisitor优化
+	 * @param initFlag 初始化标记，无法在解析时动态修改，目前仅有{@link Flags#COMMENT}以支持注释
+	 */
+	public BinaryParser parser(boolean visitorMode, int initFlag) {
 		return switch (this) {
-			case JSON -> visitorMode ? new CCJson() : new JSONParser();
-			case YAML -> visitorMode ? new CCYaml() : new YAMLParser();
+			case JSON -> visitorMode ? new CCJson(initFlag) : new JSONParser(initFlag);
+			case YAML -> visitorMode ? new CCYaml(initFlag) : new YAMLParser(initFlag);
 			case XML -> new XMLParser();
-			case TOML -> new TOMLParser();
+			case TOML -> new TOMLParser(initFlag);
 			case INI -> new IniParser();
 			case CSV -> new CsvParser();
 			case NBT -> new NBTParser();

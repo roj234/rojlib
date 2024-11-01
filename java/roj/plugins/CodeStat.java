@@ -3,6 +3,7 @@ package roj.plugins;
 import roj.collect.MyHashMap;
 import roj.collect.SimpleList;
 import roj.collect.ToIntMap;
+import roj.concurrent.Liu;
 import roj.io.IOUtil;
 import roj.plugin.Plugin;
 import roj.plugin.SimplePlugin;
@@ -29,7 +30,6 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
-import java.util.stream.Collectors;
 
 /**
  * @author Roj234
@@ -148,7 +148,7 @@ public class CodeStat extends Plugin {
 		if (inst.totalLines.size() > 1) {
 			printStatistic(inst, "语言按行数", new SimpleList<>(inst.totalLines.selfEntrySet()), 99);
 			printStatistic(inst, "语言按字符数", new SimpleList<>(inst.totalChars.selfEntrySet()), 99);
-			printStatistic(inst, "语言按文件数", inst.lines.entrySet().stream().map(entry -> new ToIntMap.Entry<>(entry.getKey(), entry.getValue().size())).collect(Collectors.toList()), 99);
+			printStatistic(inst, "语言按文件数", Liu.of(inst.lines.entrySet()).map(entry -> new ToIntMap.Entry<>(entry.getKey(), entry.getValue().size())).toList(), 99);
 			for (Map.Entry<String, ToIntMap<String>> entry : inst.lines.entrySet()) {
 				printStatistic(inst, "行数Top"+TOP+" - "+entry.getKey(), new SimpleList<>(entry.getValue().selfEntrySet()), TOP);
 			}

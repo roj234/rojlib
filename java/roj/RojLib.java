@@ -27,10 +27,11 @@ public final class RojLib {
 	/**
 	 * FastJNI
 	 */
-	public static void linkFastJNI(int bit) {
+	public static void linkLibrary(int bit) {
 		if ((bits&(1L<<bit)) == 0 || !Intrinsics.available()) return;
-		Intrinsics.linkNative(LibraryLoader.INSTANCE.loadLibraryEx(RojLib.class, LibFile), ReflectionUtils.getCallerClass(2));
+		Intrinsics.linkNative(getLibrary(), ReflectionUtils.getCallerClass(2));
 	}
+	public static Object getLibrary() {return LibraryLoader.INSTANCE.loadLibraryEx(RojLib.class, LibFile);}
 
 	private static final String LibName = "libcpp";
 	private static File LibFile = new File("D:\\mc\\FMD-1.5.2\\projects\\implib\\libcpp\\bin\\libcpp.dll");

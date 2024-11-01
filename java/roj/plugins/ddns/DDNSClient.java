@@ -44,7 +44,7 @@ public class DDNSClient extends Plugin {
 			CMap map1 = subSites.getValue().asMap();
 			for (Iterator<Map.Entry<String, CEntry>> itr = map1.entrySet().iterator(); itr.hasNext(); ) {
 				Map.Entry<String, CEntry> entry = itr.next();
-				int e = entry.getValue().asInteger();
+				int e = entry.getValue().asInt();
 				if ((e & 3) != 0) monitorIps.putInt(entry.getKey(), e);
 				else itr.remove();
 			}

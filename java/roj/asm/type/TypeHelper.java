@@ -128,7 +128,8 @@ public final class TypeHelper {
 	 * @see Type#toDesc()
 	 */
 	public static String getField(IType type) {
-		if (type instanceof Type && type.isPrimitive()) return toDesc(((Type) type).type);
+		type = type.rawType();
+		if (type.isPrimitive()) return toDesc(((Type) type).type);
 
 		CharList sb = IOUtil.getSharedCharBuf();
 		type.toDesc(sb);
@@ -138,15 +139,15 @@ public final class TypeHelper {
 	/**
 	 * 转换方法type为字符串
 	 */
-	public static String getMethod(List<Type> list) { return getMethod(list, null); }
-	public static String getMethod(List<Type> list, String prev) {
+	public static String getMethod(List<? extends IType> list) { return getMethod(list, null); }
+	public static String getMethod(List<? extends IType> list, String prev) {
 		CharList sb = IOUtil.getSharedCharBuf().append('(');
 
 		for (int i = 0; i < list.size(); i++) {
 			// return value
 			if (i == list.size() - 1) sb.append(')');
 
-			list.get(i).toDesc(sb);
+			list.get(i).rawType().toDesc(sb);
 		}
 		return sb.equals(prev) ? prev : sb.toString();
 	}

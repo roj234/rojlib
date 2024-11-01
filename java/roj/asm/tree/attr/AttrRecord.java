@@ -1,13 +1,14 @@
 package roj.asm.tree.attr;
 
 import org.jetbrains.annotations.Nullable;
+import roj.asm.Opcodes;
 import roj.asm.Parser;
 import roj.asm.cp.ConstantPool;
 import roj.asm.cp.CstUTF;
 import roj.asm.tree.RawNode;
 import roj.collect.SimpleList;
-import roj.util.AttributeKey;
 import roj.util.DynByteBuf;
+import roj.util.TypedKey;
 
 import java.util.List;
 
@@ -68,23 +69,19 @@ public final class AttrRecord extends Attribute {
 	public static final class Val implements RawNode {
 		public String name, type;
 
-		AttributeList attributes;
 		// Signature
 		// RuntimeVisibleAnnotations, RuntimeInvisibleAnnotations
 		// RuntimeVisibleTypeAnnotations, RuntimeInvisibleTypeAnnotations
+		AttributeList attributes;
 
-		@Override
-		public AttributeList attributes() { return attributes == null ? attributes = new AttributeList() : attributes; }
+		@Override public AttributeList attributes() { return attributes == null ? attributes = new AttributeList() : attributes; }
 		@Nullable
-		@Override
-		public AttributeList attributesNullable() { return attributes; }
-		@Override
-		public <T extends Attribute> T parsedAttr(ConstantPool cp, AttributeKey<T> type) { return Parser.parseAttribute(this,cp,type,attributes,Parser.RECORD_ATTR); }
-		@Override
-		public char modifier() { throw new UnsupportedOperationException(); }
-		@Override
-		public String name() { return name; }
-		@Override
-		public String rawDesc() { return type; }
+		@Override public AttributeList attributesNullable() { return attributes; }
+		@Override public <T extends Attribute> T parsedAttr(ConstantPool cp, TypedKey<T> type) { return Parser.parseAttribute(this,cp,type,attributes,Parser.RECORD_ATTR); }
+		@Override public char modifier() {return Opcodes.ACC_PUBLIC|Opcodes.ACC_FINAL;}
+		@Override public String name() { return name; }
+		@Override public void name(String name) {this.name = name;}
+		@Override public String rawDesc() { return type; }
+		@Override public void rawDesc(String rawDesc) {this.type = rawDesc;}
 	}
 }

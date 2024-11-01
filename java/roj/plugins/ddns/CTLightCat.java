@@ -19,25 +19,21 @@ public class CTLightCat extends IpGetter {
 	private String accessToken;
 	private long refreshTime;
 
-	private boolean refreshAccessToken() {
-		try {
-			ByteList body = IOUtil.getSharedByteBuf().putAscii("username=useradmin&psd=").putAscii(Escape.encodeURIComponent(pass));
-			SyncHttpClient shc = HttpRequest.nts()
-				.url("http://"+catUrl+"/cgi-bin/luci")
-				.header("Content-Type","application/x-www-form-urlencoded")
-				.body(ByteList.wrap(body.toByteArray()))
-				.executePooled();
+	private boolean refreshAccessToken() throws Exception {
+		ByteList body = IOUtil.getSharedByteBuf().putAscii("username=useradmin&psd=").putAscii(Escape.encodeURIComponent(pass));
+		SyncHttpClient shc = HttpRequest.nts()
+										.url("http://"+catUrl+"/cgi-bin/luci")
+										.header("Content-Type","application/x-www-form-urlencoded")
+										.body(ByteList.wrap(body.toByteArray()))
+										.executePooled();
 
-			if (shc.head().getCode() == 302) {
-				refreshTime = System.currentTimeMillis();
-				accessToken = shc.head().getFieldValue("set-cookie", "sysauth");
-				if (accessToken != null) return true;
-			}
-
-			Terminal.warning("[getAddress]无法获取AccessToken 是否密码错误？: "+shc.head());
-		} catch (Exception e) {
-			Terminal.error("getAddress", e);
+		if (shc.head().getCode() == 302) {
+			refreshTime = System.currentTimeMillis();
+			accessToken = shc.head().getFieldValue("set-cookie", "sysauth");
+			if (accessToken != null) return true;
 		}
+
+		Terminal.warning("[getAddress]无法获取AccessToken 是否密码错误？: "+shc.head());
 		return false;
 	}
 
