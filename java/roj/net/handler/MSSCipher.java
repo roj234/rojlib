@@ -4,13 +4,13 @@ import roj.io.IOUtil;
 import roj.io.buf.BufferPool;
 import roj.net.ChannelCtx;
 import roj.net.mss.MSSEngine;
-import roj.net.mss.MSSEngineClient;
 import roj.net.mss.MSSException;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
 
 import java.io.IOException;
 import java.security.GeneralSecurityException;
+import java.util.Objects;
 
 import static roj.util.ByteList.EMPTY;
 
@@ -24,8 +24,10 @@ public class MSSCipher extends PacketMerger {
 	private static final byte TLS13 = 1;
 	private byte flag;
 
+	static final byte P_DATA = 0x40;
+
 	public MSSCipher(MSSEngine engine) {this.engine = engine;}
-	public MSSCipher() {this.engine = new MSSEngineClient();}
+	public MSSCipher() {this.engine = MSSEngine.client();}
 
 	public MSSCipher sslMode() {flag |= TLS13;return this;}
 	public MSSEngine getEngine() {return engine;}
@@ -41,13 +43,26 @@ public class MSSCipher extends PacketMerger {
 		if (!ctx.isOutputOpen()) return;
 
 		var in = (DynByteBuf) msg;
-		var out = ctx.allocate(false, 1024);
+
+		int w = in.readableBytes();
+		int lengthBytes = VarintSplitter.getVarIntLength(w);
+		if (lengthBytes > 3) throw new MSSException("要包装的数据过大");
+
+		var encoder = Objects.requireNonNull(engine.getEncoder(), "无法在此时发送数据");
+		int outputSize = encoder.engineGetOutputSize(w);
+
+		var out = ctx.allocate(false, 1 + lengthBytes + outputSize);
 		try {
-			while (in.isReadable()) {
-				int req = engine.wrap(in, out);
-				if (req >= 0) ctx.channelWrite(out);
-				else out = ctx.alloc().expand(out, -req);
-			}
+			var isEarlyData = engine.getDecoder() == null;
+
+			if (isEarlyData) out.put(MSSEngine.P_PREDATA).putShort(outputSize);
+			else out.put(P_DATA).putVUInt(outputSize);
+
+			encoder.cryptFinal(in, out);
+
+			ctx.channelWrite(out);
+		} catch (GeneralSecurityException e) {
+			throw new MSSException(MSSEngine.CIPHER_FAULT, "加密失败", e);
 		} finally {
 			BufferPool.reserve(out);
 		}
@@ -66,18 +81,29 @@ public class MSSCipher extends PacketMerger {
 		}
 
 		int lim = in.wIndex();
-		while (in.isReadable()) {
-			var packet = engine.publicReadPacket(in);
-			if (packet != 0) break;
+		while (in.readableBytes() > 2) {
+			int pos = in.rIndex;
+			if (in.getU(pos) != P_DATA) {
+				int packet = engine.readPacket(in);
+				throw new MSSException(MSSEngine.ILLEGAL_PACKET, ""+packet, null);
+			}
 
+			in.rIndex = pos+1;
+			int len = VarintSplitter.readVUInt(in, 3);
+			if (len < 0 || in.readableBytes() < len) {
+				in.rIndex = pos;
+				break;
+			}
+
+			in.wIndex(in.rIndex + len);
 			var decoder = engine.getDecoder();
 
-			int size = decoder.engineGetOutputSize(in.readableBytes());
+			int size = decoder.engineGetOutputSize(len);
 			try(var out = ctx.allocate(in.isDirect(), size)) {
 				decoder.cryptFinal(in, out);
 				mergedRead(ctx, out);
 			} catch (GeneralSecurityException e) {
-				throw new MSSException("解密失败:"+e.getMessage());
+				throw new MSSException(MSSEngine.CIPHER_FAULT, "解密失败", e);
 			} finally {
 				in.wIndex(lim);
 			}
@@ -119,7 +145,7 @@ public class MSSCipher extends PacketMerger {
 
 	@Override
 	public void exceptionCaught(ChannelCtx ctx, Throwable ex) throws Exception {
-		if (ex instanceof MSSException e && e.code != MSSEngine.ILLEGAL_PACKET) {
+		if (ex instanceof MSSException e && e.shouldNotifyRemote()) {
 			if ((flag&TLS13) == 0) {
 				try {
 					ByteList ob = IOUtil.getSharedByteBuf();

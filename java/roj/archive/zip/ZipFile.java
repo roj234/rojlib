@@ -503,32 +503,29 @@ public class ZipFile implements ArchiveFile {
 			r.readFully(tmp);
 			var buf = DynByteBuf.wrap(tmp);
 
-			var prevCSize = entry.cSize;
-			var prevUSize = entry.uSize;
-			entry.cSize = buf.readUIntLE(14);
-			entry.uSize = buf.readUIntLE(18);
+			verifySuccess_:{
+			verifyFailed:{
+
+			var cSize = buf.readUIntLE(14);
+			if (cSize != 0 && entry.cSize != cSize) break verifyFailed;
+
+			var uSize = buf.readUIntLE(18);
+			if (uSize != 0 && entry.uSize != uSize) break verifyFailed;
 
 			extraLen = buf.readUShortLE(24);
 
-			var prev = entry.nameBytes;
+			var prevNameBytes = entry.nameBytes;
 			var nameLen = buf.readUShortLE(22);
-			compareSuccess: {
-				compareFailed:
-				if (nameLen == prev.length) {
-					if (nameLen > tmp.length) tmp = new byte[nameLen];
-					r.readFully(tmp, 0, nameLen);
+			if (nameLen != prevNameBytes.length) break verifyFailed;
 
-					for (int i = 0; i < prev.length; i++) {
-						if (prev[i] != tmp[i]) break compareFailed;
-					}
+			if (nameLen > tmp.length) tmp = new byte[nameLen];
+			r.readFully(tmp, 0, nameLen);
 
-					break compareSuccess;
-				}
-
-				throw new ZipException("ZEntry的名称，偏移和长度必须相同[可能是漏洞利用]");
+			for (int i = 0; i < nameLen; i++) {
+				if (prevNameBytes[i] != tmp[i]) break verifyFailed;
 			}
 
-			var prevRealName = entry.name;
+			var prevName = entry.name;
 			long prevOffset = r.position();
 
 			if (extraLen > 0) {
@@ -537,8 +534,12 @@ public class ZipFile implements ArchiveFile {
 				entry.readLOCExtra(this, DynByteBuf.wrap(tmp, 0, extraLen));
 			}
 
-			if (!prevRealName.equals(entry.name) || prevOffset != entry.offset || entry.cSize != prevCSize || entry.uSize != prevUSize)
-				throw new ZipException("ZEntry的名称，偏移和长度必须相同[可能是漏洞利用]");
+			if (prevName.equals(entry.name) && prevOffset == entry.offset)
+				break verifySuccess_;
+
+			}
+			throw new ZipException("ZEntry的名称，偏移和长度必须相同[可能是漏洞利用]");
+			}
 		}
 
 		entry.mzFlag ^= ZEntry.MZ_BACKWARD;

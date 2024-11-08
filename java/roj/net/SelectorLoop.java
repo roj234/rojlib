@@ -216,7 +216,7 @@ public class SelectorLoop implements Shutdownable {
 			try {
 				Boolean result = t.exceptionCaught(stage, e);
 				if (result != null) return result;
-			} catch (Exception e1) {
+			} catch (Throwable e1) {
 				if (e != e1) e.addSuppressed(e1);
 			}
 			exception.accept(stage, e);
@@ -228,14 +228,16 @@ public class SelectorLoop implements Shutdownable {
 
 			try {
 				att.s.close();
-			} catch (Exception e) {
+				} catch (Throwable e) {
 				uncaughtException(att.s, "T_CLOSE", e);
 			}
 
 			if (att.cb != null) {
 				try {
 					att.cb.accept(att.s);
-				} catch (Exception ignored) {}
+				} catch (Throwable e) {
+					uncaughtException(att.s, "T_CALLBACK", e);
+				}
 				att.cb = null;
 			}
 		}

@@ -181,6 +181,9 @@ final class MethodList extends ComponentList {
 		}
 
 		String name = methods.get(0).name();
+		boolean isConstructor = name.equals("<init>");
+		if (isConstructor) name = owner.name().substring(owner.name().lastIndexOf('/')+1);
+
 		if (!dup.isEmpty()) {
 			CharList sb = new CharList().append("invoke.compatible.plural:").append(name).append(':');
 
@@ -214,7 +217,8 @@ final class MethodList extends ComponentList {
 
 			for (int i = 0; i < size; i++) {
 				MethodNode mn = methods.get(i);
-				sb.append("  \1invoke.method\0").append(mn.owner).append('.').append(mn.name());
+				if (isConstructor) sb.append("  \1invoke.constructor\0").append(mn.owner);
+				else sb.append("  \1invoke.method\0").append(mn.owner).append('.').append(mn.name());
 				getArg(mn, sb.append('(')).append(")\1invoke.notApplicable\0\n    ");
 
 				getErrorMsg(ctx, that, params, (flags&IN_STATIC) != 0, mn, sb.append("(\1"), tmp);
@@ -263,10 +267,9 @@ final class MethodList extends ComponentList {
 	}
 
 	static void appendError(MethodResult mr, CharList sb) {
-		sb.append("\1typeCast.error.").append(mr.distance);
+		sb.append("typeCast.error.").append(mr.distance);
 		if (mr.error != null && mr.error.length == 3)
 			sb.append(':').append(mr.error[0]).append(':').append(mr.error[1]);
-		sb.append('\0');
 	}
 	static void appendInput(List<IType> params, CharList sb) {
 		sb.append("  ").append("\1invoke.found\0 ");

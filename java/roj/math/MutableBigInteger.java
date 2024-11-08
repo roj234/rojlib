@@ -150,7 +150,10 @@ public final class MutableBigInteger implements Comparable<MutableBigInteger> {
 		while (i < myMethods.length) {
 			Method m = myMethods[i++];
 			if (m.getName().startsWith("_")) continue;
-			Method im = itMethods[j++];
+			Method im;
+			do {
+				im = itMethods[j++];
+			} while (!m.getName().equals(im.getName()));
 			dab.i_delegate(target, m.getName(), TypeHelper.class2asm(im.getParameterTypes(), im.getReturnType()), m,
 						   (im.getModifiers() & Opcodes.ACC_STATIC) != 0 ? Bypass.INVOKE_STATIC : Bypass.INVOKE_SPECIAL);
 		}

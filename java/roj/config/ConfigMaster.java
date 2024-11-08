@@ -6,12 +6,12 @@ import roj.config.data.CEntry;
 import roj.config.serial.*;
 import roj.io.IOUtil;
 import roj.text.CharList;
+import roj.text.TextUtil;
 import roj.text.TextWriter;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
 
 import java.io.*;
-import java.nio.charset.StandardCharsets;
 import java.util.TimeZone;
 
 /**
@@ -50,7 +50,7 @@ public enum ConfigMaster {
 				}
 			}
 			case TOML,INI,XML -> {
-				try (TextWriter tw = out instanceof File f ? TextWriter.to(f) : new TextWriter((Closeable) out, StandardCharsets.UTF_8)) {
+				try (TextWriter tw = out instanceof File f ? TextWriter.to(f) : new TextWriter((Closeable) out, TextUtil.DefaultOutputCharset)) {
 					if (this == TOML) {
 						CharList tmp = new CharList();
 						entry.appendTOML(tw, tmp);
@@ -88,7 +88,7 @@ public enum ConfigMaster {
 	public CVisitor serializer(Object out, String indent) throws IOException {
 		switch (this) {
 			case JSON, YAML -> {
-				TextWriter tw = out instanceof File f ? TextWriter.to(f) : new TextWriter((Closeable) out, StandardCharsets.UTF_8);
+				TextWriter tw = out instanceof File f ? TextWriter.to(f) : new TextWriter((Closeable) out, TextUtil.DefaultOutputCharset);
 				return (this == JSON ? new ToJson(indent) : new ToYaml(indent)).sb(tw);
 			}
 			case NBT, XNBT -> {
@@ -147,12 +147,21 @@ public enum ConfigMaster {
 		return tp.parse(sb);
 	}
 
-	public BinaryParser parser(boolean visitorMode) {
+	/**
+	 * @see #parser(boolean, int)
+	 */
+	public BinaryParser parser(boolean visitorMode) {return parser(visitorMode, 0);}
+	/**
+	 * 返回的实例并非线程安全
+	 * @param visitorMode 是否为CVisitor优化
+	 * @param initFlag 初始化标记，无法在解析时动态修改，目前仅有{@link Flags#COMMENT}以支持注释
+	 */
+	public BinaryParser parser(boolean visitorMode, int initFlag) {
 		return switch (this) {
-			case JSON -> visitorMode ? new CCJson() : new JSONParser();
-			case YAML -> visitorMode ? new CCYaml() : new YAMLParser();
+			case JSON -> visitorMode ? new CCJson(initFlag) : new JSONParser(initFlag);
+			case YAML -> visitorMode ? new CCYaml(initFlag) : new YAMLParser(initFlag);
 			case XML -> new XMLParser();
-			case TOML -> new TOMLParser();
+			case TOML -> new TOMLParser(initFlag);
 			case INI -> new IniParser();
 			case CSV -> new CsvParser();
 			case NBT -> new NBTParser();

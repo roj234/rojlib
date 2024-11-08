@@ -14,10 +14,10 @@ public interface ResponseWriter {
 	MyChannel ch();
 
 	/**
-	 * Gets speed limit in KB per second
+	 * Gets speed limit in Byte per second
 	 */
 	int getStreamLimit();
-	void setStreamLimit(int kbps);
+	void setStreamLimit(int bps);
 
 	void write(DynByteBuf buf) throws IOException;
 	default int write(InputStream in) throws IOException {return write(in, 0);}

@@ -12,6 +12,7 @@ import roj.net.MyChannel;
 import roj.net.ServerLaunch;
 import roj.net.handler.PacketMerger;
 import roj.net.http.*;
+import roj.net.util.SpeedLimiter;
 import roj.plugins.http.error.GreatErrorPage;
 import roj.text.CharList;
 import roj.text.TextUtil;
@@ -57,7 +58,7 @@ public final class HttpServer11 extends PacketMerger implements PostSetting, Res
 		  .append(Tokenizer.addSlashes(req.getField("user-agent")))
 		  .append("\"[");
 		if (def != null) sb.append('Z');
-		if (state == HANG) sb.append('A');
+		if (state == HANG_PRE) sb.append('A');
 		LOGGER.trace(sb.append(']').toString());
 
 		receivedBytes = sendBytes = 0;
@@ -111,8 +112,6 @@ public final class HttpServer11 extends PacketMerger implements PostSetting, Res
 		if (state == UNOPENED) return;
 
 		if ((flag&SEND_BODY) != 0 && !ctx.isFlushing()) {
-			streamLimit = streamLimitDefault;
-
 			boolean hasMore = body.send(this);
 			if (ctx.isFlushing()) ctx.pauseAndFlush();
 			else if (!hasMore) outEof();
@@ -552,19 +551,20 @@ public final class HttpServer11 extends PacketMerger implements PostSetting, Res
 	@Override public Headers headers() {return req.responseHeader;}
 	//endregion
 	//region ResponseWriter
-	private static final int WRITE_ONCE = 4080;
-	private int streamLimit, streamLimitDefault = WRITE_ONCE;
+	private static final int NOOB_LIMIT = 4080;
+	private SpeedLimiter limiter;
 
-	@Override
-	public int getStreamLimit() {return streamLimitDefault * 1000 / 1024;}
-	@Override
-	public void setStreamLimit(int kbps) {streamLimit = streamLimitDefault = (int)Math.round(kbps*1024D/1000);}
+	@Override public int getStreamLimit() {return limiter == null ? 0 : limiter.getBytePerSecond();}
+	@Override public void setStreamLimit(int bps) {
+		if (limiter == null) limiter = new SpeedLimiter(NOOB_LIMIT, 5_000_000);
+		limiter.setBytePerSecond(bps);
+	}
 
 	public void write(DynByteBuf buf) throws IOException {
 		if ((flag&SEND_BODY) == 0) throw new IllegalStateException();
 
-		int len = Math.min(buf.readableBytes(), streamLimit);
-		if (len == 0 || ch.isFlushing()) return;
+		int len = buf.readableBytes();
+		if (ch.isFlushing() || limiter != null && (len = limiter.limit(len)) <= 0) return;
 
 		if ((flag & FLAG_GZIP) != 0) {
 			crc = buf.hasArray()
@@ -573,16 +573,15 @@ public final class HttpServer11 extends PacketMerger implements PostSetting, Res
 		}
 		ch.channelWrite(len < buf.readableBytes() ? buf.slice(len) : buf);
 		sendBytes += len;
-		streamLimit -= len;
 	}
 	public int write(InputStream in, int limit) throws IOException {
 		if ((flag&SEND_BODY) == 0) throw new IllegalStateException();
 
-		limit = limit <= 0 ? streamLimit : Math.min(streamLimit, limit);
-		if (limit <= 0 || ch.isFlushing()) return 0;
+		if (limit < 0) limit = NOOB_LIMIT;
+		if (ch.isFlushing() || limiter != null && (limit = limiter.limit(limit)) <= 0) return 0;
 
-		int writeOnce = Math.min(WRITE_ONCE, limit);
-		ByteList buf = (ByteList) ch.allocate(false, writeOnce);
+		int writeOnce = Math.min(NOOB_LIMIT, limit);
+		var buf = (ByteList) ch.allocate(false, writeOnce);
 		try {
 			int totalRead = 0;
 			while (true) {
@@ -606,7 +605,6 @@ public final class HttpServer11 extends PacketMerger implements PostSetting, Res
 			}
 
 			sendBytes += totalRead;
-			streamLimit -= totalRead;
 			return totalRead;
 		} finally {
 			BufferPool.reserve(buf);
@@ -755,7 +753,7 @@ public final class HttpServer11 extends PacketMerger implements PostSetting, Res
 
 		code = 0;
 		flag = KEPT_ALIVE;
-		streamLimitDefault = WRITE_ONCE;
+		if (limiter != null) limiter.setBytePerSecond(0);
 
 		setChunk(ch, 0);
 		setCompr(ch, ENC_PLAIN, null);

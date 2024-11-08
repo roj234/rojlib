@@ -49,7 +49,7 @@ public class DefaultConsole implements Console {
 	private Runnable interruptHandler;
 	private List<IntFunction<Boolean>> keyHandler = Collections.emptyList();
 
-	private boolean _isDirty;
+	private boolean _isDirty, _selectAll;
 
 	public DefaultConsole(String prompt) {
 		setPrompt(prompt);
@@ -150,7 +150,7 @@ public class DefaultConsole implements Console {
 		isAutoComplete = false;
 		return true;
 	}
-	private void afterInput() { historyPos = history.size(); }
+	private void afterInput() { historyPos = history.size();_selectAll = false; }
 	private void setFromHistory(String history) {
 		input.clear(); input.append(history);
 		cursor = input.length();
@@ -177,17 +177,14 @@ public class DefaultConsole implements Console {
 			afterInput();
 		} else {
 			switch (keyCode) {
-				case VK_CTRL|VK_B:
-					if (!GuiUtil.setClipboardText(Terminal.stripAnsi(new CharList(input)).toStringAndFree()))
-						System.err.println("您的环境没有剪贴板，复制失败");
-				return;
-				case VK_CTRL|VK_V:
+				case VK_CTRL|VK_A -> _selectAll = true;
+				case VK_CTRL|VK_V -> {
 					var clipboard = GuiUtil.getClipboard();
 					if (clipboard != null) {
 						var text = GuiUtil.getClipboardText();
 						if (text != null) {
 							List<String> lines = LineReader.toLines(text, false);
-							for (int i = 0;;) {
+							for (int i = 0; ; ) {
 								String line = lines.get(i);
 
 								endCompletion(false);
@@ -200,25 +197,29 @@ public class DefaultConsole implements Console {
 							}
 						}
 					} else System.err.println("您的环境没有剪贴板，粘贴失败");
-				break;
-				case VK_CTRL|VK_UP: scrollLeft++; break;
-				case VK_CTRL|VK_DOWN: scrollLeft--; break;
-				case VK_CTRL|VK_LEFT: cursor = 0; break;
-				case VK_CTRL|VK_RIGHT: cursor = input.length() - invisible.size(); break;
-
-				case VK_F1: printHelp(); return;
-				case VK_F4:
+				}
+				case VK_CTRL|VK_UP -> {
+					var tmp = invisible.nextFalse(scrollLeft);
+					if (tmp < input.length()) scrollLeft = tmp;
+				}
+				case VK_CTRL|VK_DOWN -> {
+					var tmp = invisible.prevFalse(scrollLeft);
+					if (tmp >= 0) scrollLeft = tmp;
+				}
+				case VK_CTRL|VK_LEFT -> cursor = 0;
+				case VK_CTRL|VK_RIGHT -> cursor = input.length() - invisible.size();
+				case VK_F1 -> {printHelp();return;}
+				case VK_F4 -> {
 					autoComplete = !autoComplete;
-					tooltip().append(autoComplete ?
-						"\u001b[92m+即时补全" :
-						"\u001b[91m-即时补全");
+					tooltip().append(autoComplete ? "\u001b[92m+即时补全" : "\u001b[91m-即时补全");
 					displayTooltip(1000);
-				return;
-				case VK_ESCAPE:
+					return;
+				}
+				case VK_ESCAPE -> {
 					if (!endCompletion(false)) return;
-				break;
-				case VK_ENTER:
-					doRender(); // 适配粘贴多行命令的情况 (TODO 可能卡死吗)
+				}
+				case VK_ENTER -> {
+					doRender(); // 适配粘贴多行命令的情况
 					if (endCompletion(true)) break;
 
 					String cmd = input.toString();
@@ -234,8 +235,8 @@ public class DefaultConsole implements Console {
 
 					cursor = scrollLeft = 0;
 					afterInput();
-				break;
-				case VK_UP:
+				}
+				case VK_UP -> {
 					if (!_echo) return;
 
 					if (tabs.size() > 0) {
@@ -253,8 +254,8 @@ public class DefaultConsole implements Console {
 					} else {
 						return; // no update
 					}
-				break;
-				case VK_DOWN:
+				}
+				case VK_DOWN -> {
 					if (!_echo) return;
 
 					if (tabs.size() > 0) {
@@ -273,16 +274,16 @@ public class DefaultConsole implements Console {
 					} else {
 						return;
 					}
-				break;
-				case VK_LEFT:
+				}
+				case VK_LEFT -> {
 					if (_echo && cursor > 0) cursor--;
 					else return;
-				break;
-				case VK_RIGHT:
+				}
+				case VK_RIGHT -> {
 					if (_echo && cursor < input.length() - invisible.size()) cursor++;
 					else return;
-				break;
-				case VK_TAB:
+				}
+				case VK_TAB -> {
 					if (!_echo || input.length() > MAX_INPUT) { beep(); return; }
 
 					if (tabs.size() > 0) {
@@ -339,18 +340,17 @@ public class DefaultConsole implements Console {
 							}
 						}
 						setComplete(0);
-					}
-					else return;
-				break;
-				case VK_BACK_SPACE:
-					boolean isDeletingTabComplete = tabCursor >= 0 && (cursor == 0 || (cursor > tabCursor && cursor <= tabCursor+tabs.get(tabId).completion.length()));
+					} else return;
+				}
+				case VK_BACK_SPACE -> {
+					boolean isDeletingTabComplete = tabCursor >= 0 && (cursor == 0 || (cursor > tabCursor && cursor <= tabCursor + tabs.get(tabId).completion.length()));
 					if (endCompletion(false) && isDeletingTabComplete) break;
 
 					if (cursor == 0) return;
 					input.delete(--cursor);
 					afterInput();
-				break;
-				default:
+				}
+				default -> {
 					for (int i = 0; i < keyHandler.size(); i++) {
 						var result = keyHandler.get(i).apply(keyCode);
 						if (result != null) {
@@ -360,11 +360,19 @@ public class DefaultConsole implements Console {
 					}
 
 					if (keyCode == (VK_CTRL|VK_C)) {
+						if (_selectAll) {
+							if (!GuiUtil.setClipboardText(Terminal.stripAnsi(new CharList(input)).toStringAndFree()))
+								System.err.println("您的环境没有剪贴板，复制失败");
+							_selectAll = false;
+							break;
+						}
+
 						var r = interruptHandler;
 						if (r == null) System.exit(0);
 						else r.run();
 					}
 					return;
+				}
 			}
 		}
 
@@ -428,6 +436,7 @@ public class DefaultConsole implements Console {
 			Terminal.directWrite("RojLib Warning: [VT]找到无效的ANSI转义.\n");
 			scrollLeft = 0;
 		}
+		if (_selectAll) prompt.append("\u001b[7m");
 		prompt.append(staticHighlight).append(input, scrollLeft, end);
 
 		if (end < input.length()) prompt.append("\u001b[1;5;41;97m+"); // + after

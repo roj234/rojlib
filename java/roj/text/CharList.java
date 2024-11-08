@@ -127,6 +127,10 @@ public class CharList implements CharSequence, Appendable {
 		}
 	}
 
+	public void _secureFree() {
+		for (int i = 0; i < len; i++) list[i] = 0;
+		_free();
+	}
 	public void _free() {
 		clear();
 
@@ -153,29 +157,18 @@ public class CharList implements CharSequence, Appendable {
 	}
 
 	// region search
-	public final boolean contains(CharSequence s) { return indexOf(s, 0) >= 0; }
-	public final boolean containsAny(TrieTree<CInt> map) {
-		int pos = 0;
-
-		MyHashMap.Entry<CInt, CInt> entry = new MyHashMap.Entry<>(new CInt(), null);
-		while (pos < len) {
-			map.match(this, pos, len, entry);
-			int len = entry.getKey().value;
-			if (len >= 0) return true;
-			pos++;
-		}
-
-		return false;
-	}
+	public final boolean contains(CharSequence s) {return indexOf(s, 0) >= 0;}
+	public final boolean containsAny(TrieTree<?> map) {return indexOf(map, 0) >= 0;}
+	public final boolean containsAny(MyBitSet map) {return indexOf(map, 0) >= 0;}
 	public final int indexOf(CharSequence s) { return indexOf(s, 0); }
 	public final int indexOf(CharSequence s, int from) { return doMatch(s, from, len-s.length()+1); }
 	public final boolean startsWith(CharSequence s) { return s.length() == 0 || doMatch(s, 0, 1) >= 0; }
 	public final boolean endsWith(CharSequence s) { return s.length() == 0 || (len >= s.length() && doMatch(s, len-s.length(), len-s.length()+1) >= 0); }
 
-	public final int indexOf(TrieTree<String> map, int pos) {
-		MyHashMap.Entry<CInt, String> entry = new MyHashMap.Entry<>(new CInt(), null);
+	public final int indexOf(TrieTree<?> map, int pos) {
+		var entry = new MyHashMap.Entry<>(new CInt(), null);
 		while (pos < len) {
-			map.match(this, pos, len, entry);
+			map.match(this, pos, len, Helpers.cast(entry));
 			int len = entry.getKey().value;
 			if (len < 0) {
 				pos++;

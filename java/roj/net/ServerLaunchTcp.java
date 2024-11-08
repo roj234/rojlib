@@ -56,7 +56,7 @@ final class ServerLaunchTcp extends ServerLaunch implements Selectable {
 
 	public final boolean isOpen() { return tcp.isOpen(); }
 	public final void close() throws IOException {
-		if (name != null) SHARED.remove(name); tcp.close(); }
+		if (name != null) SHARED.remove(name, this); tcp.close(); }
 
 	@Override
 	public void register(Selector sel, int ops, Object att) throws IOException {

@@ -1,6 +1,8 @@
 package roj.media.audio.mp3;
 
 import roj.math.EMA;
+import roj.reflect.Unaligned;
+import sun.misc.Unsafe;
 
 import javax.sound.sampled.AudioFormat;
 
@@ -9,7 +11,6 @@ import javax.sound.sampled.AudioFormat;
  */
 public final class Header {
 	public static final int MPEG1 = 3, MPEG2 = 2, MPEG2_5 = 0,
-
 	MAX_FRAME_SIZE = 1732;
 
 	/*
@@ -32,7 +33,8 @@ public final class Header {
 			{0, 8, 16, 24, 32, 40, 48, 56, 64, 80, 96, 112, 128, 144, 160},
 			//Layer III
 			{0, 8, 16, 24, 32, 40, 48, 56, 64, 80, 96, 112, 128, 144, 160}
-		}};
+		}
+	};
 
 	/*
 	 * samplingRate[verID][sampling_frequency]
@@ -136,18 +138,18 @@ public final class Header {
 		mode = (byte) ((h >> 6) & 3);
 		mode_extension = (byte) ((h >> 4) & 3);
 
-		int s_frame = this.s_frame;
+		int s_frame = 0;
 		final int pad = (h >> 9) & 0x1;
 		bi = BITRATE[lsf = (ver == MPEG1) ? 0 : 1][layer - 1][bi];
 		final int s_rate = SAMPLING_RATE[ver][sampling_frequency];
 		switch (layer) {
-			case 1: s_frame = (bi * 12000 / s_rate) + (pad << 2); break;
-			case 2: s_frame = bi * 144000 / s_rate + pad; break;
-			case 3: s_frame = (bi * 144000 / (s_rate << lsf)) + pad;
-
+			case 1 -> s_frame = (bi * 12000 / s_rate) + (pad << 2);
+			case 2 -> s_frame = bi * 144000 / s_rate + pad;
+			case 3 -> {
+				s_frame = (bi * 144000 / (s_rate << lsf)) + pad;
 				// 帧边信息长度
 				s_sideInfo = ver == MPEG1 ? (mode == 3) ? 17 : 32 : (mode == 3) ? 9 : 17;
-				break;
+			}
 		}
 
 		// 主数据长度
@@ -155,10 +157,6 @@ public final class Header {
 		if (protectionBit == 0) s_main -= 2;    //CRC
 
 		frameSize2.add(s_main);
-	}
-
-	private static int b2i(byte[] b, int i) {
-		return ((b[i++] & 0xFF) << 24) | ((b[i++] & 0xFF) << 16) | ((b[i++] & 0xFF) << 8) | (b[i] & 0xFF);
 	}
 
 	private static boolean findSyncFrame(int h, int mask) {
@@ -197,7 +195,7 @@ public final class Header {
 
 		if (endPos - off <= 4) return false;
 
-		hdr = b2i(b, off);
+		hdr = Unaligned.U.get32UB(b, Unsafe.ARRAY_BYTE_BASE_OFFSET + off);
 		idx = orig_off += 4;
 
 		while (true) {
@@ -236,7 +234,7 @@ public final class Header {
 			mask = 0xffe00000 | (hdr & 1969152);
 
 			// mode, mode_extension 不是每帧都相同.
-			if (findSyncFrame(b2i(b, orig_off + s_frame - 4), mask)) {
+			if (findSyncFrame(Unaligned.U.get32UB(b, Unsafe.ARRAY_BYTE_BASE_OFFSET + orig_off + s_frame - 4), mask)) {
 				if (this.syncMask == 0xffe00000) { // 是第一帧
 					this.syncMask = mask;
 					frameDuration = 1152f / (getSamplingRate() << lsf);
@@ -338,10 +336,10 @@ public final class Header {
 		return pcmsize;
 	}
 
+	private static final String[] stereo_type = {"Stereo", "Joint Stereo", "Dual Mono", "Mono"};
 	@Override
 	public String toString() {
-		return "MPEG"+(ver == MPEG1 ? "1" : ver == MPEG2 ? "2" : "2.5")+" Layer"+layer+ ", "+getSamplingRate()+"kHz "+getBitrate()+"k, " +
-			"mode=0b"+Integer.toBinaryString(mode)+", mode_ext=0b"+Integer.toBinaryString(mode_extension) + ", frameSizeAvg="+frameSize2.avg();
+		return "MPEG"+(ver == MPEG1 ? "1" : ver == MPEG2 ? "2" : "2.5")+" Layer"+layer+ ", "+getSamplingRate()+"kHz "+getBitrate()+"k, "+stereo_type[mode]+"/"+mode_extension+", frameSizeAvg="+frameSize2.avg();
 	}
 
 	EMA frameSize2 = new EMA(0.9995);

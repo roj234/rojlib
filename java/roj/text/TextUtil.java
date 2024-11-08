@@ -13,6 +13,7 @@ import roj.util.Helpers;
 
 import java.io.IOException;
 import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Random;
@@ -27,7 +28,7 @@ public class TextUtil {
 	public static Charset DefaultOutputCharset;
 	static {
 		String property = System.getProperty("roj.text.outputCharset", null);
-		DefaultOutputCharset = property == null ? Charset.defaultCharset()/*file.encoding*/ : Charset.forName(property);
+		DefaultOutputCharset = property == null ? StandardCharsets.UTF_8 : Charset.forName(property);
 	}
 
 	public static final MyBitSet HEX = MyBitSet.from("0123456789ABCDEFabcdef");
@@ -148,7 +149,7 @@ public class TextUtil {
 
 		for (int i = 0; i < hex.length(); ) {
 			char c = hex.charAt(i++);
-			if (Tokenizer.WHITESPACE.contains(c)) continue;
+			if (Tokenizer.WHITESPACE.contains(c) || c == ':') continue;
 			bl.put((byte) ((h2b(c) << 4) | h2b(hex.charAt(i++))));
 		}
 		return bl;

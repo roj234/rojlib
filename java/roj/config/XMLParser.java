@@ -9,7 +9,6 @@ import roj.config.serial.ToEntry;
 import roj.config.serial.ToXml;
 import roj.text.CharList;
 import roj.text.Escape;
-import roj.text.Interner;
 import roj.text.TextUtil;
 import roj.util.Helpers;
 
@@ -18,6 +17,7 @@ import java.io.IOException;
 import java.util.Map;
 import java.util.function.Predicate;
 
+import static roj.config.Flags.LENIENT;
 import static roj.config.JSONParser.*;
 import static roj.config.Word.*;
 
@@ -45,14 +45,14 @@ public class XMLParser extends Parser {
 
 	{ tokens = XML_TOKENS; literalEnd = XML_LENDS; firstChar = SIGNED_NUMBER_C2C; }
 
-	public static final int LENIENT = 1, HTML = 2, DECODE_ENTITY = 4, KEEP_SPACE = 8;
+	public static final int HTML = 2, DECODE_ENTITY = 4, PRESERVE_SPACE = 8, NO_MY_SPACE = 16;
 	private static final MyHashSet<String> HTML_SHORT_TAGS = new MyHashSet<>(TextUtil.split("area|base|br|col|embed|hr|img|input|link|meta|param|source|track|wbr", '|'));
 
 	public static Document parses(CharSequence string) throws ParseException { return new XMLParser().parseToXml(string, LENIENT); }
 	public static Document parses(CharSequence string, int flag) throws ParseException { return new XMLParser().parseToXml(string, flag); }
 
 	@Override
-	public final Map<String, Integer> dynamicFlags() { return Map.of("Lenient", LENIENT, "HTML", HTML, "DecodeEntity", DECODE_ENTITY, "KeepSpace", KEEP_SPACE); }
+	public final Map<String, Integer> dynamicFlags() { return Map.of("Lenient", LENIENT, "HTML", HTML, "DecodeEntity", DECODE_ENTITY, "PreserveSpace", PRESERVE_SPACE, "NoImplibSpace", NO_MY_SPACE); }
 	@Override
 	public final ConfigMaster format() { return ConfigMaster.XML; }
 
@@ -135,13 +135,14 @@ public class XMLParser extends Parser {
 	}
 
 	private void ccXmlElem() throws ParseException {
-		String name = Interner.intern(except(LITERAL, "元素名称").val());
+		String name = except(LITERAL, "元素名称").val();
 
 		cc.valueList();
 		cc.value(name);
 
 		Word w = next();
 
+		var prevFlag = flag;
 		if (w.type() != tag_end_close && w.type() != tag_end) {
 			cc.valueMap();
 			do {
@@ -157,6 +158,7 @@ public class XMLParser extends Parser {
 		if (w.type() == tag_end_close || name.equals("!DOCTYPE") || !needCLOSE.test(name)) {
 			cc.setProperty("xml:short_tag", true);
 			cc.pop();
+			flag = prevFlag;
 			return;
 		}
 
@@ -207,18 +209,32 @@ public class XMLParser extends Parser {
 		except(tag_end, ">");
 
 		cc.pop();
+		flag = prevFlag;
 	}
 
 	private Word readAttribute(Word w) throws ParseException {
-		cc.key(Interner.intern(w.val()));
+		var key = w.val();
+		cc.key(key);
 		w = next();
 
 		if (w.type() == equ) {
-			attrVal(next()).accept(cc);
+			var val = attrVal(next());
+			if (key.startsWith("xml:")) handlerInternalAttribute(key, val);
+			val.accept(cc);
 			return next();
 		} else {
 			cc.valueNull();
 			return w;
+		}
+	}
+
+	private void handlerInternalAttribute(String key, CEntry val) {
+		if (key.equals("xml:space")) {
+			if (val.asString().equalsIgnoreCase("preserve")) {
+				flag |= PRESERVE_SPACE;
+			} else {
+				flag &= ~PRESERVE_SPACE;
+			}
 		}
 	}
 
@@ -299,7 +315,7 @@ public class XMLParser extends Parser {
 
 		// skip and collect whitespace
 		int c;
-		while (true) {
+		if ((flag&PRESERVE_SPACE) == 0) while (true) {
 			c = in.charAt(i);
 			if (!WHITESPACE.contains(c)) break;
 
@@ -310,9 +326,9 @@ public class XMLParser extends Parser {
 		}
 		index = i;
 
-		if (in.charAt(i) == '<' && ((flag&KEEP_SPACE) == 0 || prevI == i)) {
+		if (in.charAt(i) == '<') {
 			// includes tag_start, tag_end
-			// and CDATA_STRING (and skipped COMMEND)
+			// and CDATA_STRING (and skipped COMMENT)
 			return tryMatchToken();
 		}
 
@@ -324,7 +340,7 @@ public class XMLParser extends Parser {
 		CharList v = found; v.clear();
 
 		// restore whitespace
-		if (i != prevI) v.append(' ');
+		if (i != prevI && (flag&NO_MY_SPACE) == 0) v.append(' ');
 		int lastNonEmpty = prevI = i;
 
 		boolean hasEntity = false;
@@ -339,7 +355,7 @@ public class XMLParser extends Parser {
 
 			i++;
 
-			if (!WHITESPACE.contains(c)) lastNonEmpty = i;
+			if ((flag&PRESERVE_SPACE) != 0 || !WHITESPACE.contains(c)) lastNonEmpty = i;
 		}
 
 		if (hasEntity && (flag&DECODE_ENTITY) != 0) {
@@ -348,7 +364,7 @@ public class XMLParser extends Parser {
 			v.append(in, prevI, lastNonEmpty);
 		}
 
-		if (lastNonEmpty != i || (flag&KEEP_SPACE) != 0) v.append(' ');
+		if (lastNonEmpty != i && (flag&NO_MY_SPACE) == 0) v.append(' ');
 
 		index = i;
 		return formClip(LITERAL, v);

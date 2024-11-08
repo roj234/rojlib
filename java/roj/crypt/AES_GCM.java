@@ -2,7 +2,6 @@ package roj.crypt;
 
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
-import sun.misc.Unsafe;
 
 import javax.crypto.AEADBadTagException;
 import javax.crypto.BadPaddingException;
@@ -21,10 +20,9 @@ import java.util.Arrays;
 final class AES_GCM extends AES {
 	AES_GCM() {}
 
-	private ByteList aadBuffer;
+	private ByteList partAad = ByteList.EMPTY;
 	private int lenAAD, processed;
 
-	SecureRandom prng;
 	byte state, tagLen;
 
 	private final ByteList tmp = ByteList.allocate(AES_BLOCK_SIZE,AES_BLOCK_SIZE);
@@ -45,12 +43,12 @@ final class AES_GCM extends AES {
 			if (random != null) throw new IllegalArgumentException("IV和随机器必须也只能提供一个");
 			byte[] newIv;
 
-			if (par instanceof IvParameterSpec) {
-				newIv = ((IvParameterSpec) par).getIV();
+			if (par instanceof IvParameterSpec spec) {
+				newIv = spec.getIV();
 			} else if (par instanceof IvParameterSpecNC) {
 				newIv = ((IvParameterSpecNC) par).getIV();
-				if (par instanceof AEADParameterSpec) {
-					int size = ((AEADParameterSpec) par).getTagSize();
+				if (par instanceof AEADParameterSpec spec) {
+					int size = spec.getTagSize();
 					if (size != 0) {
 						if (size < 6 || size > 8) throw new InvalidAlgorithmParameterException("tag size无效, got " + size);
 						tagLen = (byte) size;
@@ -84,22 +82,24 @@ final class AES_GCM extends AES {
 		} else {
 			if (random == null) throw new IllegalArgumentException("IV和随机器必须也只能提供一个");
 
-			this.prng = random;
+			iv.clear();
+			iv.putInt(random.nextInt())
+			  .putInt(random.nextInt())
+			  .putInt(random.nextInt())
+			  .putInt(1);
 		}
 	}
 
 	public int engineGetOutputSize(int data) { return encrypt ? data + AES_BLOCK_SIZE : data - AES_BLOCK_SIZE; }
 
 	public void crypt(DynByteBuf in, DynByteBuf out) throws ShortBufferException {
-		if (out.writableBytes() < in.readableBytes()) throw new ShortBufferException();
-
-		if (state != 2) {
-			if (state == 0) cryptBegin();
+		if (state != 3) {
+			if (state != 2) cryptBegin();
 			else {
-				paddedHash(aadBuffer);
-				aadBuffer.clear();
+				paddedHash(partAad);
+				partAad.clear();
 			}
-			state = 2;
+			state = 3;
 		}
 
 		long[] h = hash;
@@ -108,11 +108,12 @@ final class AES_GCM extends AES {
 		int block = in.readableBytes() / AES_BLOCK_SIZE;
 		// 防止tag被处理掉
 		if (!encrypt && --block == 0) return;
+		if (out.writableBytes() < AES_BLOCK_SIZE * block) throw new ShortBufferException();
 		processed += block * AES_BLOCK_SIZE;
 
 		ByteList ctr = counter;
 		if (encrypt) {
-			while (block > 0) {
+			while (block-- > 0) {
 				t.clear();
 				ctr.rIndex = 0;
 				aes_encrypt(encrypt_key, rounds4, ctr, t);
@@ -124,10 +125,9 @@ final class AES_GCM extends AES {
 				GaloisHash(h, H0, H1);
 
 				out.putLong(in0).putLong(in1);
-				block--;
 			}
 		} else {
-			while (block > 0) {
+			while (block-- > 0) {
 				t.clear();
 				ctr.rIndex = 0;
 				aes_encrypt(encrypt_key, rounds4, ctr, t);
@@ -139,13 +139,10 @@ final class AES_GCM extends AES {
 				GaloisHash(h, H0, H1);
 
 				out.putLong(in0^t.readLong()).putLong(in1^t.readLong());
-				block--;
 			}
 		}
 	}
-	public void cryptOneBlock(DynByteBuf in, DynByteBuf out) {
-		throw new IllegalArgumentException();
-	}
+	public void cryptOneBlock(DynByteBuf in, DynByteBuf out) {throw new IllegalArgumentException();}
 	protected void cryptFinal1(DynByteBuf in, DynByteBuf out) throws ShortBufferException, BadPaddingException {
 		if (out.writableBytes() < engineGetOutputSize(in.readableBytes())) throw new ShortBufferException();
 
@@ -154,18 +151,36 @@ final class AES_GCM extends AES {
 			decryptFinal(in, out);
 		} else encryptFinal(in, out);
 
-		state = 0;
+		state = 1;
 	}
 
 	public final void insertAAD(DynByteBuf aad) {
-		if (state == 0) {
+		if (state != 2) {
+			if (state > 2) throw new IllegalStateException("AAD 必须在加密开始前提供");
 			cryptBegin();
-			state = 1;
-		} else if (state > 1) throw new IllegalStateException("AAD 必须在加密开始前提供");
+			state = 2;
+		}
 
 		lenAAD += aad.readableBytes();
 
 		long[] h = hash;
+
+		int need = AES_BLOCK_SIZE - partAad.readableBytes();
+		if (need != AES_BLOCK_SIZE) {
+			if (aad.readableBytes() < need) {
+				partAad.put(aad);
+				aad.rIndex = aad.wIndex();
+				return;
+			}
+
+			partAad.put(aad, need);
+			aad.rIndex += need;
+
+			h[0] ^= partAad.readLong(); h[1] ^= partAad.readLong();
+			GaloisHash(h, H0, H1);
+
+			partAad.clear();
+		}
 
 		int block = aad.readableBytes() / AES_BLOCK_SIZE;
 		while (block-- > 0) {
@@ -173,20 +188,21 @@ final class AES_GCM extends AES {
 			GaloisHash(h, H0, H1);
 		}
 
-		if (aadBuffer == null) aadBuffer = new ByteList();
-		aadBuffer.put(aad);
+		if (aad.isReadable()) {
+			if (partAad == ByteList.EMPTY) partAad = new ByteList();
+			partAad.put(aad);
+		}
 	}
 
 	private void cryptBegin() {
-		if (encrypt_key == null) throw new IllegalArgumentException("你还没设置密钥");
+		if (encrypt_key == null) throw new IllegalArgumentException("未初始化");
 
-		if (prng != null) {
-			if (prng instanceof HKDFPRNG) ((HKDFPRNG) prng).generate(iv.array(), Unsafe.ARRAY_BYTE_BASE_OFFSET, 12);
-			else prng.nextBytes(iv.array());
-
+		// Iv is not New
+		if (state == 1) {
 			iv.rIndex = 0;
-			iv.wIndex(AES_BLOCK_SIZE);
-			iv.putInt(12, 1);
+			byte[] b = iv.array();
+			int n = AES_BLOCK_SIZE - 1;
+			while (++b[n] == 0 && n > 0) n--;
 		}
 
 		long[] h = hash;
@@ -211,7 +227,7 @@ final class AES_GCM extends AES {
 
 			// ctr update final
 			int len1 = len;
-			while (len1-- > 0) out.put((byte) (in.readByte() ^ ctr.readByte()));
+			while (len1-- > 0) out.put(in.readByte() ^ ctr.readByte());
 
 			paddedHash(out.slice(out.wIndex()-len, len));
 		}
@@ -224,7 +240,7 @@ final class AES_GCM extends AES {
 
 		ByteList t = getHash();
 		len = tagLen;
-		while (len-- > 0) out.put((byte) (t.readByte() ^ ctr.readByte()));
+		while (len-- > 0) out.put((t.readByte() ^ ctr.readByte()));
 	}
 	private void decryptFinal(DynByteBuf in, DynByteBuf out) throws AEADBadTagException {
 		ByteList ctr = counter; ctr.clear();
@@ -234,14 +250,14 @@ final class AES_GCM extends AES {
 			in.wIndex(in.wIndex() - AES_BLOCK_SIZE);
 
 			// encrypt ctr inline
-			aes_encrypt(encrypt_key, rounds4, ctr.slice(0, AES_BLOCK_SIZE), ctr);
+			aes_encrypt(encrypt_key, rounds4, ctr.sliceNoIndexCheck(0, AES_BLOCK_SIZE), ctr);
 
 			processed += len;
 
 			paddedHash(in);
 
 			// ctr update final
-			while (len-- > 0) out.put((byte) (in.readByte() ^ ctr.readByte()));
+			while (len-- > 0) out.put(in.readByte() ^ ctr.readByte());
 
 			in.wIndex(in.wIndex() + AES_BLOCK_SIZE);
 		}

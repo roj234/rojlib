@@ -316,6 +316,7 @@ expr.skipReturnValue=[Expr]该语句的返回值不能省略
 symbol.type=类
 symbol.field=字段
 invoke.method=方法
+invoke.constructor=构造器
 
 invoke.except=需要:
 invoke.found=找到:

@@ -55,9 +55,6 @@ public final class CipherSuite {
 		ALL_KEY_EXCHANGE_TYPE |= 1 << id;
 	}
 
-	private static void _ECDHE(int i, ECGroup c) { register(i, "ECDHE-"+c.name, c); }
-	private static void _DHE(int i, DHGroup c) {  }
-
 	private static Supplier<MessageDigest> _HASH(String algo) {
 		try {
 			MessageDigest md = MessageDigest.getInstance(algo);
@@ -84,8 +81,8 @@ public final class CipherSuite {
 			register(PUB_X509_CERTIFICATE, new X509CertFormat());
 			register(PUB_X509_EdDSA, new X509KeyFormat("EdDSA", "EdDSA"));
 
-			register(KEX_DHE_ffdhe2048, "DHE-ffdhe2048", DHGroup.ffdhe2048);
-			register(KEX_ECDHE_secp384r1, "ECDHE-secp384r1", ECGroup.secp384r1);
+			register(KEX_DHE_ffdhe2048, "DH-ffdhe2048", DHGroup.ffdhe2048);
+			register(KEX_ECDHE_secp384r1, "ECDH-secp384r1", ECGroup.secp384r1);
 			register(KEX_XDHE_x25519, "XDH-x25519", XDHUnofficial::new);
 		} catch (Exception e) {
 			Helpers.athrow(e);

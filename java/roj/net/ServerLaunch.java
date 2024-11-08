@@ -34,6 +34,20 @@ public abstract class ServerLaunch implements Closeable {
 	public static ServerLaunch udp() throws IOException {return new ServerLaunchUdp(null);}
 	public static ServerLaunch tcp(String name) throws IOException {return new ServerLaunchTcp(name);}
 	public static ServerLaunch udp(String name) throws IOException {return new ServerLaunchUdp(name);}
+	public static ServerLaunch shadow(String name, Consumer<MyChannel> initializator) {return new Shadow(name).initializator(initializator);}
+	private static final class Shadow extends ServerLaunch {
+		private final String name;
+		public Shadow(String name) {this.name = name;SHARED.put(name, this);}
+
+		@Override public <T> ServerLaunch option(SocketOption<T> k, T v) {throw new UnsupportedOperationException();}
+		@Override public <T> T option(SocketOption<T> k) {return null;}
+		@Override public ServerLaunch bind(SocketAddress a, int backlog) {throw new UnsupportedOperationException();}
+		@Override public SocketAddress localAddress() {return null;}
+		@Override public ServerLaunch launch() {return this;}
+		@Override public boolean isOpen() {return true;}
+		@Override public void close() {SHARED.remove(name, this);}
+		@Override public void addTCPConnection(MyChannel channel) {initializator.accept(channel);}
+	}
 
 	public abstract <T> ServerLaunch option(SocketOption<T> k, T v) throws IOException;
 	public abstract <T> T option(SocketOption<T> k) throws IOException;

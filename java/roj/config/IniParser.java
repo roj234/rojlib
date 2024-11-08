@@ -10,6 +10,8 @@ import roj.text.TextUtil;
 
 import java.util.Map;
 
+import static roj.config.Flags.NO_DUPLICATE_KEY;
+import static roj.config.Flags.ORDERED_MAP;
 import static roj.config.JSONParser.*;
 import static roj.config.Word.*;
 

@@ -98,9 +98,9 @@ final class MethodListSingle extends ComponentList {
 
 		MethodList.appendInput(myParam == null ? params : myParam, sb);
 
-		sb.append("  ").append("\1invoke.reason\0 ");
+		sb.append("  ").append("\1invoke.reason\0 \1");
 		MethodList.appendError(result, sb);
-		sb.append('\n');
+		sb.append("\0\n");
 
 		ctx.report(Kind.ERROR, sb.replace('/', '.').toStringAndFree());
 		return null;

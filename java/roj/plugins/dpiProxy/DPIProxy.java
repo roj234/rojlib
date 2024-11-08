@@ -15,6 +15,7 @@ import roj.plugin.Plugin;
 import roj.text.logging.Level;
 import roj.text.logging.Logger;
 import roj.util.DynByteBuf;
+import roj.util.Helpers;
 
 import java.io.File;
 import java.io.IOException;
@@ -56,7 +57,7 @@ public class DPIProxy extends Plugin {
 					compiler.fileName = realFile.getName();
 					return compiler.linkLambda(DpiMatcher.class, text, "data");
 				} catch (Exception e) {
-					e.printStackTrace();
+					Helpers.athrow(e);
 				}
 			}
 			return null;

@@ -120,7 +120,7 @@ public final class MP3Decoder implements AudioDecoder {
 		eof = true;
 		in = null;
 		out = null;
-		synchronized (this) { notify(); }
+		synchronized (this) { notifyAll(); }
 		header.reset();
 	}
 
@@ -158,7 +158,7 @@ public final class MP3Decoder implements AudioDecoder {
 			}
 		} finally {
 			layer.close();
-			if (pcmOff[0] > 0) out.write(pcm, 0, pcmOff[0], true);
+			if (pcmOff[0] > 0 && out != null) out.write(pcm, 0, pcmOff[0], true);
 			ArrayCache.putArray(pcm);
 		}
 	}

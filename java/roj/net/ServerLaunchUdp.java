@@ -51,7 +51,7 @@ final class ServerLaunchUdp extends ServerLaunch {
 
 	public final boolean isOpen() { return udp.isOpen(); }
 	public final void close() throws IOException {
-		if (name != null) SHARED.remove(name); udp.close(); }
+		if (name != null) SHARED.remove(name, this); udp.close(); }
 
 	@Override
 	public void addTCPConnection(MyChannel channel) throws IOException {

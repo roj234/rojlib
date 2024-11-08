@@ -118,7 +118,7 @@ public class MyPassIs extends Plugin {
 		c.setInputEcho(true);
 
 		this.mac = new HMAC(MessageDigest.getInstance("SHA-256"));
-		this.pass = HMAC.HKDF_expand(mac, IOUtil.SharedCoder.get().encode(passStr), 32);
+		this.pass = KDF.HKDF_expand(mac, IOUtil.SharedCoder.get().encode(passStr), 32);
 		this.cipher = new FeedbackCipher(ILCrypto.Aes(), FeedbackCipher.MODE_CTR);
 
 		File plaintextKey = new File(getDataFolder(), "key.yml");
@@ -216,7 +216,7 @@ public class MyPassIs extends Plugin {
 			ByteList b = IOUtil.getSharedByteBuf();
 			if (prev.asMap().getInteger("v") == 2) b.putUTFData(site).put(0);
 
-			byte[] gen_pass = HMAC.HKDF_expand(mac, keys, b.putUTFData(account).putInt(iter), length);
+			byte[] gen_pass = KDF.HKDF_expand(mac, keys, b.putUTFData(account).putInt(iter), length);
 
 			CharList sb = new CharList();
 			for (int i = 0; i < gen_pass.length; i++) {
@@ -235,14 +235,14 @@ public class MyPassIs extends Plugin {
 						Terminal.success("密码已复制到剪贴板");
 					}
 				} catch (Exception ignored) {}
+				sb._secureFree();
 				return;
 			}
 			sb.insert(0, "您的密码是[\u001b[;92m(a)ccept\u001b[;0m,\u001b[;91m(c)ancel\u001b[;96m,\u001b[;93m(r)andom\u001b[;0m] > ");
 			Terminal.renderBottomLine(sb, true, Terminal.getStringWidth(sb)+1);
 			char acr = Terminal.readChar(MyBitSet.from("acr"));
 			Terminal.removeBottomLine(sb, true);
-			Arrays.fill(sb.list, (char) 0);
-			sb._free();
+			sb._secureFree();
 			switch (acr) {
 				case 'a':
 					accounts.put(account, iter);

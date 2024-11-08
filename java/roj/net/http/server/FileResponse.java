@@ -12,7 +12,6 @@ import roj.text.DateParser;
 import roj.text.TextUtil;
 import roj.util.ArrayCache;
 import roj.util.ByteList;
-import roj.util.DynByteBuf;
 import roj.util.Helpers;
 
 import java.io.IOException;
@@ -157,18 +156,22 @@ final class FileResponse implements Response {
 		for (int i = 0; i < ranges.size(); i++) {
 			v = ranges.get(i);
 			int j = v.indexOf('-');
+			long start, end;
 			if (j == 0) {
-				data[(i << 1)] = 0;
-				data[(i << 1) + 1] = parseLong(v.substring(1), len);
+				start = len - parseLong(v.substring(1), len);
+				end = len - 1;
 			} else {
 				// start, end
 				// 加1是允许长度为0时的[Range: 0-]请求
-				data[i << 1] = parseLong(v.substring(0, j), len+1);
-				data[(i << 1) + 1] = j == v.length() - 1 ? len - 1 : parseLong(v.substring(j + 1), len);
+				start = parseLong(v.substring(0, j), len+1);
+				end = j == v.length() - 1 ? len - 1 : parseLong(v.substring(j + 1), len);
 			}
 
-			long seglen = data[(i << 1) + 1] - data[i << 1] + 1;
-			if (seglen < 0) {
+			data[i << 1] = start;
+			data[(i << 1) + 1] = end;
+
+			long seglen = end - start + 1;
+			if (seglen <= 0) {
 				rh.code(416);
 				return Response.httpError(416);
 			}
@@ -183,7 +186,7 @@ final class FileResponse implements Response {
 			ThreadLocalRandom.current().nextBytes(rnd.list);
 			rnd.wIndex(rnd.capacity());
 
-			CharList b = new CharList().append("multipart/byteranges; boundary=\"BARFOO");
+			CharList b = new CharList().append("multipart/byteranges; boundary=\"");
 			rnd.hex(b).append("\"");
 
 			req.responseHeader.put("content-type", b.toString());
@@ -236,16 +239,17 @@ final class FileResponse implements Response {
 			}
 			if ((flag&3) != 2) h.put("content-length", Long.toString(remain));
 		} else {
+			if (cantSendfile(rh) || (fch = file.getSendFile(def)) == null) {
+				in = file.get(def, ranges[0]);
+			} else {
+				sendfile = new SendfilePkt(fch, ranges[0], remain);
+			}
+
 			if (ranges.length > 2) {
 				off = -2;
 				remain = 0;
 			} else {
 				remain = ranges[1]-ranges[0]+1;
-				if (cantSendfile(rh) || (fch = file.getSendFile(def)) == null) {
-					in = file.get(def, ranges[0]);
-				} else {
-					sendfile = new SendfilePkt(fch, ranges[0], remain);
-				}
 			}
 		}
 
@@ -261,16 +265,10 @@ final class FileResponse implements Response {
 			off += 2;
 
 			if (ranges.length > 2) {
-				DynByteBuf t = rh.ch().alloc().allocate(true, splitter.length()+128).putAscii(splitter);
-				if (off == ranges.length) t.putAscii("--");
-				t.putAscii("\r\n");
-
-				if (off < ranges.length) {
-					t.putAscii("content-range: byte "+ranges[off]+"-"+ranges[off+1]+"/"+file.length((flag&3) == 1)+"\r\n\r\n");
-				}
-
+				String nextHeader = off >= ranges.length ? "--" : "\r\ncontent-range: byte "+ranges[off]+'-'+ranges[off+1]+'/'+file.length((flag&3) == 1)+"\r\n\r\n";
+				var t = rh.ch().alloc().allocate(true, splitter.length()+nextHeader.length());
 				try {
-					rh.write(t);
+					rh.write(t.putAscii(splitter).putAscii(nextHeader));
 				} finally {
 					BufferPool.reserve(t);
 				}
@@ -282,9 +280,9 @@ final class FileResponse implements Response {
 			if (sendfile != null) {
 				sendfile.offset = ranges[off];
 				sendfile.length = remain;
-			} else {
-				long delta = ranges[off]/*next position*/ - ranges[off-1]/*in position*/;
-				if (delta >= 0) {
+			} else if (off > 0) {
+				long delta;
+				if ((file.stats()&FileInfo.FILE_RA) == 0 && (delta = ranges[off]/*next position*/ - ranges[off-1]/*in position*/) >= 0) {
 					IOUtil.skipFully(in, delta);
 				} else {
 					IOUtil.closeSilently(in);

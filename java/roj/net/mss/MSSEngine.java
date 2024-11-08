@@ -2,18 +2,16 @@ package roj.net.mss;
 
 import roj.collect.CharMap;
 import roj.collect.IntMap;
-import roj.crypt.HKDFPRNG;
-import roj.crypt.HMAC;
-import roj.crypt.KeyExchange;
-import roj.crypt.RCipherSpi;
+import roj.crypt.*;
 import roj.io.buf.BufferPool;
-import roj.net.handler.VarintSplitter;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
 
-import javax.crypto.Cipher;
 import java.security.GeneralSecurityException;
+import java.security.KeyPair;
+import java.security.PublicKey;
 import java.security.SecureRandom;
+import java.util.function.Supplier;
 
 /**
  * MSS协议处理器：My Secure Socket
@@ -90,8 +88,8 @@ public abstract class MSSEngine {
 
 		RCipherSpi cipher = session.suite.cipher.get();
 		try {
-			cipher.init(Cipher.DECRYPT_MODE,
-				HMAC.HKDF_expand(pfKd, pfSk, new ByteList(2).putAscii("PF"), session.suite.cipher.getKeySize()), null,
+			cipher.init(mode,
+				KDF.HKDF_expand(pfKd, pfSk, new ByteList(2).putAscii("PF"), session.suite.cipher.getKeySize()), null,
 				new HKDFPRNG(pfKd, pfSk, "PF"));
 		} catch (GeneralSecurityException e) {
 			error(e);
@@ -103,11 +101,11 @@ public abstract class MSSEngine {
 
 	final void initKeyDeriver(CipherSuite suite, byte[] sharedKey_pre) {
 		keyDeriver = new HMAC(suite.sign.get());
-		sharedKey = HMAC.HKDF_expand(keyDeriver, sharedKey_pre, ByteList.wrap(sharedKey), 64);
+		sharedKey = KDF.HKDF_expand(keyDeriver, sharedKey_pre, ByteList.wrap(sharedKey), 64);
 	}
 	public final byte[] deriveKey(String name, int len) {
 		DynByteBuf info = heapBuffer(ByteList.byteCountUTF8(name)+2).putUTF(name);
-		byte[] secret = HMAC.HKDF_expand(keyDeriver, sharedKey, info, len);
+		byte[] secret = KDF.HKDF_expand(keyDeriver, sharedKey, info, len);
 		free(info);
 		return secret;
 	}
@@ -148,8 +146,8 @@ public abstract class MSSEngine {
 	// 数据包
 	static final byte PROTOCOL_VERSION = 3;
 
-	static final byte H_CLIENT_HELLO = 0x40, H_SERVER_HELLO = 0x41, H_ENCRYPTED_EXTENSION = 0x42;
-	static final byte P_ALERT = 0x30, P_DATA = 0x31, P_PREDATA = 0x32;
+	static final byte H_CLIENT_PACKET = 0x31, H_SERVER_PACKET = 0x32;
+	public static final byte P_ALERT = 0x30, P_PREDATA = 0x34;
 
 	// 错误类别
 	public static final byte
@@ -160,33 +158,20 @@ public abstract class MSSEngine {
 		ILLEGAL_PARAM = 4,
 		NEGOTIATION_FAILED = 6;
 
-	final int ensureWritable(DynByteBuf out, int len) {
-		int size = len - out.writableBytes();
-		return size > 0 ? size : 0;
-	}
-	final int readPacket(DynByteBuf rx) throws MSSException {
-		if (!rx.isReadable()) return HS_BUFFER_UNDERFLOW;
+	public final int readPacket(DynByteBuf rx) throws MSSException {
+		int siz = rx.readableBytes()-3;
+		if (siz < 0) return siz;
 
 		int pos = rx.rIndex;
-		int hdr = rx.getU(pos);
-		if (hdr != P_DATA) {
-			int siz = rx.readableBytes()-4;
-			if (siz < 0) return siz;
+		int len = rx.readShort(pos+1);
+		if (siz < len) return siz-len;
 
-			int len = rx.readMedium(pos+1);
-			if (siz < len) return siz-len;
+		rx.rIndex = pos+3;
+		rx.wIndex(rx.rIndex+len);
 
-			rx.rIndex += 4;
-			rx.wIndex(rx.rIndex+len);
-
-			if (hdr == P_ALERT) handleError(rx);
-		} else {
-			int len = VarintSplitter.readVarInt(rx, 3);
-			if (len < 0) return len;
-			rx.wIndex(rx.rIndex+len);
-		}
-
-		return hdr;
+		int type = rx.getU(pos);
+		if (type == P_ALERT) handleError(rx);
+		return type;
 	}
 	final void handleError(DynByteBuf in) throws MSSException {
 		int flag;
@@ -216,7 +201,7 @@ public abstract class MSSEngine {
 			}
 		}
 
-		throw new MSSException("对等端错误("+errCode+"): "+(flag==0?"":"unverified,")+"'"+errMsg+"'");
+		throw new MSSException(ILLEGAL_PACKET, "对等端错误("+errCode+"): "+(flag==0?"":"unverified,")+"'"+errMsg+"'", null);
 	}
 
 	/**
@@ -237,46 +222,6 @@ public abstract class MSSEngine {
 		if (decoder == null) throw new NullPointerException("不适合的状态:"+stage);
 		return decoder;
 	}
-	/**
-	 * 2024.09.14: 现已使用VLUI！不再主动拆分数据包，如果你不喜欢可以把两个密码器拿走
-	 * @param in 接收缓冲
-	 * @return OK(0) BUFFER_UNDERFLOW(<0)
-	 */
-	public int publicReadPacket(DynByteBuf in) throws MSSException {
-		int type = readPacket(in);
-		if (type < 0) return type;
-		if (type != P_DATA) close("非法数据包");
-		return 0;
-	}
-
-	/**
-	 * 编码数据用于发送
-	 *
-	 * @param in 源缓冲
-	 * @param out 发送缓冲
-	 *
-	 * @return 负数代表还需要至少n个字节的输出缓冲
-	 */
-	public int wrap(DynByteBuf in, DynByteBuf out) throws MSSException {
-		if (encoder == null) throw new MSSException("不适合的状态:"+stage);
-
-		int lim = in.wIndex();
-		int w = in.readableBytes();
-
-		int t = out.writableBytes() - 1 - VarintSplitter.getVarIntLength(w) - encoder.engineGetOutputSize(w);
-		if (t < 0) return t;
-
-		try {
-			in.wIndex(in.rIndex + w);
-			out.put(decoder == null ? P_PREDATA : P_DATA).putVUInt(encoder.engineGetOutputSize(w));
-			encoder.cryptFinal(in, out);
-		} catch (GeneralSecurityException e) {
-			close("加密失败");
-		} finally {
-			in.wIndex(lim);
-		}
-		return 0;
-	}
 
 	@Override
 	public String toString() { return getClass().getSimpleName()+"{stage="+stage+"}"; }
@@ -285,4 +230,43 @@ public abstract class MSSEngine {
 	static int error(Throwable ex) throws MSSException { throw new MSSException(CIPHER_FAULT, "", ex); }
 
 	public abstract int handshakeTLS13(DynByteBuf out, DynByteBuf recv) throws MSSException;
+
+	public static Factory serverFactory() {return new Factory(false);}
+	public static Factory clientFactory() {return new Factory(true);}
+	public static MSSEngine client() {return new MSSEngineClient();}
+
+	/**
+	 * @author Roj233
+	 * @since 2021/12/24 22:44
+	 */
+	public static final class Factory implements Supplier<MSSEngine> {
+		public Factory(boolean client) {this.client = client;}
+
+		private final boolean client;
+		private MSSKeyPair pair;
+		private int switches;
+		private IntMap<MSSPublicKey> psc;
+
+		public Factory key(KeyPair key) throws GeneralSecurityException {return key(new MSSKeyPair(key));}
+		public Factory key(MSSKeyPair pair) {this.pair = pair;return this;}
+		public Factory switches(int switches) {this.switches = switches;return this;}
+
+		public Factory psc(int id, PublicKey key) {return psc(id, new MSSPublicKey(key));}
+		public Factory psc(int id, MSSPublicKey key) {
+			if (!client && !(key instanceof MSSKeyPair)) throw new IllegalArgumentException("Server mode psc must be private key");
+			if (psc == null) psc = new IntMap<>();
+			psc.putInt(id, key);
+			return this;
+		}
+
+		public MSSKeyPair getKeyPair() {return pair;}
+
+		@Override
+		public MSSEngine get() {
+			MSSEngine s = client ? new MSSEngineClient() : new MSSEngineServer();
+			s.setDefaultCert(pair).switches(switches);
+			s.setPreSharedCertificate(psc);
+			return s;
+		}
+	}
 }

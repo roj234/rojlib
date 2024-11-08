@@ -88,10 +88,10 @@ public class MSSEngineServer extends MSSEngine {
 		if (stage == HS_DONE) return HS_OK;
 
 		if ((flag & WRITE_PENDING) != 0) {
-			int v = ensureWritable(tx, toWrite.readableBytes()+4);
+			int v = ensureWritable(tx, toWrite.readableBytes()+3);
 			if (v != 0) return v;
 
-			tx.put(H_SERVER_HELLO).putMedium(toWrite.readableBytes()).put(toWrite);
+			tx.put(H_SERVER_PACKET).putShort(toWrite.readableBytes()).put(toWrite);
 			free(toWrite);
 			toWrite = null;
 
@@ -106,14 +106,14 @@ public class MSSEngineServer extends MSSEngine {
 			var type = rx.get(rx.rIndex);
 			switch (stage) {
 				case CLIENT_HELLO, RETRY_KEY_EXCHANGE:
-					if (type == H_CLIENT_HELLO) break validated;
+					if (type == H_CLIENT_PACKET) break validated;
 				break;
 				case PREFLIGHT_WAIT:
 					stage = FINISH_WAIT;
 					if (type == P_PREDATA) break validated;
 				case FINISH_WAIT:
 					preDecoder = null;
-					if (type == H_ENCRYPTED_EXTENSION) break validated;
+					if (type == H_CLIENT_PACKET) break validated;
 					if (!clientShouldReply()) {
 						stage = HS_DONE;
 						return HS_OK;
@@ -147,15 +147,7 @@ public class MSSEngineServer extends MSSEngine {
 		if (stage == HS_DONE) return HS_OK;
 
 		if ((flag & WRITE_PENDING) != 0) {
-			int v = ensureWritable(out, toWrite.readableBytes()+4);
-			if (v != 0) return v;
-
-			out.put(H_SERVER_HELLO).putMedium(toWrite.readableBytes()).put(toWrite);
-			free(toWrite);
-			toWrite = null;
-
-			flag &= ~WRITE_PENDING;
-			return HS_OK;
+			// ...
 		}
 
 		switch (stage) {
@@ -231,19 +223,11 @@ public class MSSEngineServer extends MSSEngine {
 
 		Extension.write(extOut, ob);
 
-		int v = ensureWritable(out, ob.length() + 4);
-		if (v != 0) {
-			flag |= WRITE_PENDING;
-			toWrite = heapBuffer(ob.length()).put(ob);
-			return v;
-		}
-
-		out.put(H_SERVER_HELLO).putMedium(ob.length()).put(ob);
+		out.put(H_SERVER_PACKET).putMedium(ob.length()).put(ob);
 		return HS_OK;
 	}
 
 	// ID client_hello
-	// u4 magic
 	// u1 version (反正我一直都是破坏性更改)
 	// opaque[32] random
 	// u2[2..2^16-2] ciphers
@@ -279,7 +263,7 @@ public class MSSEngineServer extends MSSEngine {
 			if (stage == RETRY_KEY_EXCHANGE) return error(ILLEGAL_PARAM, "hello_retry");
 			stage = RETRY_KEY_EXCHANGE;
 
-			tx.put(H_SERVER_HELLO).putMedium(39)
+			tx.put(H_SERVER_PACKET).putShort(39)
 			  .put(PROTOCOL_VERSION).put(EMPTY_32).putShort(0xFFFF).putInt(getSupportedKeyExchanges());
 			return HS_OK;
 		} else {
@@ -312,7 +296,7 @@ public class MSSEngineServer extends MSSEngine {
 			extOut.put(Extension.session, new ByteList(sess.id));
 		}
 
-		// Pre-shared certificate to decrease bandwidth consumption
+		// Pre-shared certificate
 		MSSKeyPair kp = null;
 		if (preSharedCerts != null) {
 			DynByteBuf psc = extIn.remove(Extension.pre_shared_certificate);
@@ -357,28 +341,31 @@ public class MSSEngineServer extends MSSEngine {
 
 		// signer data:
 		// key=certificate
-		// empty byte 32
 		// client_hello body
+		// empty byte 32
 		// server_hello body (not encrypted)
-		HMAC sign = new HMAC(suite.sign.get());
-		sign.setSignKey(deriveKey("verify_s", sign.getDigestLength()));
-		sign.update(EMPTY_32);
-		sign.update(rx.slice(packetBegin, rx.rIndex-packetBegin));
+		HMAC signData = new HMAC(suite.sign.get());
+		signData.setSignKey(deriveKey("verify_s", signData.getDigestLength()));
+		signData.update(rx.slice(packetBegin, rx.rIndex-packetBegin));
+		signData.update(EMPTY_32);
 
 		int pos = ob.wIndex();
 		Extension.write(extOut, ob);
 
 		// signature of not encrypted data
-		sign.update(ob);
-		byte[] bb = CipherSuite.getKeyFormat(kp.format()).sign(kp, random, sign.digestShared());
-		ob.putShort(bb.length).put(bb);
+		signData.update(ob);
+
+		byte[] signBytes = CipherSuite.getKeyFormat(kp.format()).sign(kp, random, signData.digestShared());
+		ob.putShort(signBytes.length).put(signBytes);
 
 		stage = PREFLIGHT_WAIT;
 		encoder = suite.cipher.get();
 		decoder = suite.cipher.get();
 
-		encoder.init(Cipher.ENCRYPT_MODE, deriveKey("s2c0", suite.cipher.getKeySize()), null, getPRNG("s2c"));
-		decoder.init(Cipher.DECRYPT_MODE, deriveKey("c2s0", suite.cipher.getKeySize()), null, getPRNG("c2s"));
+		var prng = getPRNG("comm_prng");
+		// 和Client是反的，因为PRNG顺序
+		decoder.init(Cipher.DECRYPT_MODE, deriveKey("c2s0", suite.cipher.getKeySize()), null, prng);
+		encoder.init(Cipher.ENCRYPT_MODE, deriveKey("s2c0", suite.cipher.getKeySize()), null, prng);
 
 		ob.rIndex = pos;
 		DynByteBuf encb = heapBuffer(encoder.engineGetOutputSize(ob.readableBytes()));
@@ -390,14 +377,14 @@ public class MSSEngineServer extends MSSEngine {
 			free(encb);
 		}
 
-		int v = ensureWritable(tx, ob.length() + 4);
+		int v = ensureWritable(tx, ob.readableBytes()+3);
 		if (v != 0) {
 			flag |= WRITE_PENDING;
-			toWrite = heapBuffer(ob.length()).put(ob);
+			toWrite = heapBuffer(ob.readableBytes()).put(ob);
 			return v;
 		}
 
-		tx.put(H_SERVER_HELLO).putMedium(ob.length()).put(ob);
+		tx.put(H_SERVER_PACKET).putShort(ob.readableBytes()).put(ob);
 		// 半个通道已经建立：服务器可以发送数据了
 		return HS_OK;
 	}
@@ -447,5 +434,9 @@ public class MSSEngineServer extends MSSEngine {
 		return HS_OK;
 	}
 
+	private int ensureWritable(DynByteBuf out, int len) {
+		int size = len - out.writableBytes();
+		return size > 0 ? size : 0;
+	}
 	// endregion
 }

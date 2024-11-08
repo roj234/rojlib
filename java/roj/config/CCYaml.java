@@ -5,17 +5,16 @@ import roj.config.serial.CVisitor;
 import java.util.Map;
 
 import static roj.config.CCJson.*;
+import static roj.config.Flags.LENIENT;
 import static roj.config.Word.EOF;
 
 /**
  * @author Roj234
  * @since 2023/3/19 0019 10:30
  */
-public final class CCYaml extends YAMLParser implements CCParser {
-	public CCYaml() {}
-	public CCYaml(int flag) { super(flag); }
-
-	public Map<String, Integer> dynamicFlags() { return Map.of("Lenient", LENIENT); }
+final class CCYaml extends YAMLParser implements CCParser {
+	public CCYaml(int flag) {super(flag);}
+	public final Map<String, Integer> dynamicFlags() {return Map.of("Lenient", LENIENT);}
 
 	private CVisitor cc;
 	@Override

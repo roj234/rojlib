@@ -9,6 +9,7 @@ import roj.net.http.*;
 import roj.net.http.h2.H2Connection;
 import roj.net.http.h2.H2Exception;
 import roj.net.http.h2.H2Stream;
+import roj.net.util.SpeedLimiter;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
 
@@ -185,10 +186,7 @@ public final class HttpServer20 extends H2Stream implements PostSetting, Respons
 		if ((flag&FLAG_HEADER_SENT) != 0) {
 			if (!pending.isReadable() || !man.sendData(this, pending, dataEnd)) {
 				pending.clear();
-				if (!dataEnd) {
-					streamLimit = streamLimitDefault;
-					if (!body.send(this)) sendLastData();
-				}
+				if (!dataEnd && !body.send(this)) sendLastData();
 			}
 		}
 
@@ -325,16 +323,30 @@ public final class HttpServer20 extends H2Stream implements PostSetting, Respons
 	}
 
 	//region ResponseWriter
-	private static final int WRITE_ONCE = 4080;
-	private int streamLimit, streamLimitDefault = WRITE_ONCE;
+	private static final int NOOB_LIMIT = 4080;
+	private SpeedLimiter limiter;
 
-	public int getStreamLimit() {return streamLimitDefault;}
-
-	public void setStreamLimit(int kbps) {this.streamLimitDefault = kbps;}
+	@Override public int getStreamLimit() {return limiter == null ? 0 : limiter.getBytePerSecond();}
+	@Override public void setStreamLimit(int bps) {
+		if (limiter == null) limiter = new SpeedLimiter(1450, 50_000_000);
+		limiter.setBytePerSecond(bps);
+	}
 
 	public void write(DynByteBuf buf) throws IOException {
 		assert ((ReentrantLock) man.channel().channel().lock()).isHeldByCurrentThread();
-		sendData(buf);
+
+		int limit = buf.readableBytes();
+		int window = man.getImmediateWindow(this);
+		if (limit > window) limit = window;
+		if (limiter != null && (limit = limiter.limit(limit)) <= 0) return;
+
+		int prevWpos = buf.wIndex();
+		buf.wIndex(buf.rIndex + limit);
+		try {
+			sendData(buf);
+		} finally {
+			buf.wIndex(prevWpos);
+		}
 	}
 
 	public int write(InputStream in, int limit) throws IOException {
@@ -344,12 +356,13 @@ public final class HttpServer20 extends H2Stream implements PostSetting, Respons
 		if (window <= 0) return 0;
 		window = Math.min(window, man.getRemoteSetting().max_frame_size);
 
-		limit = limit <= 0 ? streamLimit : Math.min(streamLimit, limit);
+		if (limit < 0) limit = NOOB_LIMIT;
 		if (limit > window) limit = window;
+		if (limiter != null) limit = limiter.limit(limit);
 		if (limit <= 0) return 0;
 
-		int writeOnce = Math.min(WRITE_ONCE, limit);
-		ByteList buf = (ByteList) man.channel().allocate(false, writeOnce);
+		int writeOnce = Math.min(NOOB_LIMIT, limit);
+		var buf = (ByteList) man.channel().allocate(false, writeOnce);
 		try {
 			int totalRead = 0;
 			while (true) {
@@ -368,7 +381,6 @@ public final class HttpServer20 extends H2Stream implements PostSetting, Respons
 				buf.clear();
 			}
 
-			streamLimit -= totalRead;
 			return totalRead;
 		} finally {
 			BufferPool.reserve(buf);

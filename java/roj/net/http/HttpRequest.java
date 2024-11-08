@@ -283,7 +283,7 @@ public abstract class HttpRequest {
 	}
 
 	public final SyncHttpClient executePooled() throws IOException { return executePooled(DEFAULT_TIMEOUT); }
-	public final SyncHttpClient executePooled(int timeout) throws IOException { return executePooled(timeout, 1); }
+	public final SyncHttpClient executePooled(int timeout) throws IOException { return executePooled(timeout, action.equals("GET") || action.equals("HEAD") || action.equals("OPTIONS") ? 1 : -1); }
 	public final SyncHttpClient executePooled(int timeout, int maxRedirect) throws IOException { return executePooled(timeout, maxRedirect, 0); }
 	public final SyncHttpClient executePooled(int timeout, int maxRedirect, int maxRetry) throws IOException {
 		headers.putIfAbsent("connection", "keep-alive");
@@ -511,10 +511,10 @@ public abstract class HttpRequest {
 						MyChannel ch = pollFirst();
 						if (ch == null) break;
 						if (!(ch.isOpen() & ch.isInputOpen() & ch.isOutputOpen())) continue;
-						lock.unlock();
 
 						SyncHttpClient shc = (SyncHttpClient) ch.handler("h11@merger").handler();
 						if (shc.retain(request, client)) {
+							lock.unlock();
 							ch.remove("super_timer");
 							ch.addBefore("h11@merger", "super_timer", timer);
 							return;

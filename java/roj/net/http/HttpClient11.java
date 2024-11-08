@@ -51,7 +51,7 @@ public class HttpClient11 extends HttpRequest implements ChannelHandler {
 
 		_getBody();
 		if (_body instanceof DynByteBuf b) {
-			ctx.channelWrite(b.slice(b.rIndex, b.readableBytes()));
+			ctx.channelWrite(b.slice());
 		} else {
 			/*if ("deflate".equalsIgnoreCase(hdr.get("content-encoding")))
 				setCompr(ctx, 1);*/

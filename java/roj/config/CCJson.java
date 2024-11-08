@@ -2,6 +2,7 @@ package roj.config;
 
 import roj.config.serial.CVisitor;
 
+import java.util.Collections;
 import java.util.Map;
 
 import static roj.config.Word.*;
@@ -10,16 +11,13 @@ import static roj.config.Word.*;
  * @author Roj234
  * @since 2023/3/19 0019 10:24
  */
-public final class CCJson extends JSONParser implements CCParser {
-	public CCJson() {}
-	public CCJson(int flag) { super(flag); }
-
-	public final Map<String, Integer> dynamicFlags() { return Map.of(); }
+final class CCJson extends JSONParser implements CCParser {
+	public CCJson(int flag) {super(flag);}
+	public final Map<String, Integer> dynamicFlags() {return Collections.emptyMap();}
 
 	private CVisitor cc;
 	@Override
 	public <CV extends CVisitor> CV parse(CharSequence text, int flag, CV cv) throws ParseException {
-		this.flag = flag;
 		cc = cv;
 		init(text);
 		try {
@@ -33,7 +31,7 @@ public final class CCJson extends JSONParser implements CCParser {
 		return cv;
 	}
 
-	static <T extends Parser &CCParser> void jsonList(T wr, int flag) throws ParseException {
+	static <T extends Parser&CCParser> void jsonList(T wr, int flag) throws ParseException {
 		boolean more = true;
 		int size = 0;
 
@@ -53,6 +51,11 @@ public final class CCJson extends JSONParser implements CCParser {
 			if (!more) wr.unexpected(w.val(), "逗号");
 			more = false;
 
+			if (wr.comment != null && wr.comment.length() != 0) {
+				wr.cc().comment(wr.comment.toString());
+				wr.comment.clear();
+			}
+
 			try {
 				wr.ccElement(flag);
 			} catch (ParseException e) {
@@ -61,10 +64,11 @@ public final class CCJson extends JSONParser implements CCParser {
 			size++;
 		}
 
+		if (wr.comment != null) wr.comment.clear();
 		wr.cc().pop();
 	}
 	@SuppressWarnings("fallthrough")
-	static <T extends Parser &CCParser> void jsonMap(T wr, int flag) throws ParseException {
+	static <T extends Parser&CCParser> void jsonMap(T wr, int flag) throws ParseException {
 		boolean more = true;
 
 		wr.cc().valueMap();
@@ -88,6 +92,11 @@ public final class CCJson extends JSONParser implements CCParser {
 
 			wr.except(colon, ":");
 
+			if (wr.comment != null && wr.comment.length() != 0) {
+				wr.cc().comment(wr.comment.toString());
+				wr.comment.clear();
+			}
+
 			wr.cc().key(k);
 			try {
 				wr.ccElement(flag);
@@ -95,10 +104,11 @@ public final class CCJson extends JSONParser implements CCParser {
 				throw e.addPath('.'+k);
 			}
 		}
+		if (wr.comment != null) wr.comment.clear();
 		wr.cc().pop();
 	}
 	static ParseException adaptError(Parser wr, Exception e) {
-		ParseException err = wr.err(e.getClass().getName() + ": " + e.getMessage());
+		ParseException err = wr.err(e.getClass().getName()+": "+e.getMessage());
 		err.setStackTrace(e.getStackTrace());
 		return err;
 	}

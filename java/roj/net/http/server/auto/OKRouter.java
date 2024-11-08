@@ -23,7 +23,8 @@ import roj.collect.MyHashMap;
 import roj.collect.SimpleList;
 import roj.collect.ToIntMap;
 import roj.concurrent.task.ITask;
-import roj.config.CCJson;
+import roj.config.BinaryParser;
+import roj.config.ConfigMaster;
 import roj.config.auto.SerializerFactory;
 import roj.io.FastFailException;
 import roj.net.http.Headers;
@@ -1062,8 +1063,8 @@ public final class OKRouter implements Router {
 	public static Object parse(Request req, String type) throws Exception {
 		if (req.postBuffer() == null) throw new FastFailException("没有请求体");
 
-		var parser = (CCJson) req.localCtx().get("or:parser");
-		if (parser == null) req.localCtx().put("or:parser", parser = new CCJson());
+		var parser = (BinaryParser) req.localCtx().get("or:parser");
+		if (parser == null) req.localCtx().put("or:parser", parser = ConfigMaster.JSON.parser(true));
 
 		var adapter = SerializerFactory.SAFE.serializer(Signature.parseGeneric(type));
 		adapter.reset();

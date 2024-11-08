@@ -57,10 +57,6 @@ public class ProgressBar implements AutoCloseable {
 		updateForce(percent);
 	}
 
-	// 进度条粒度
-	private static final int PROGRESS_SIZE = 50;
-	private static final int BITE = 100 / PROGRESS_SIZE;
-
 	public synchronized void updateForce(double percent) {
 		if (percent < 0) percent = 0;
 		else if (percent > 1) percent = 1;
@@ -76,10 +72,17 @@ public class ProgressBar implements AutoCloseable {
 		else b.append(prefix);
 
 		if (!hideBar) {
-			int tx = (int) percent / BITE;
+			int width = Terminal.getStringWidth(b);
+			if (postfix != null) width += Terminal.getStringWidth(postfix)+1;
+			if (!hideSpeed) width += Terminal.getStringWidth(unit)+8;
+
+			int progressWidth = Terminal.windowWidth - width - 4;
+			if (progressWidth < 10) progressWidth = 10;
+
+			int tx = (int) (percent * progressWidth) / 100;
 			b.append("\u001B[97m├")
-			 .padEnd('█', tx)
-			 .padEnd('─', PROGRESS_SIZE - tx)
+			 .padEnd('▌', tx)
+			 .padEnd('─', progressWidth - tx)
 			 .append("┤\u001B[93m");
 		}
 

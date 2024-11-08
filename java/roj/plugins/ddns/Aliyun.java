@@ -206,15 +206,15 @@ public class Aliyun implements DDNSService {
 		// string RecordId
 		// 主机记录，如果要解析@.exmaple.com，主机记录要填写"@”，而不是空
 		// string RR
-		// 解析记录类型，参见解析记录类型格式(https://help.aliyun.com/document_detail/29805.html?spm=a2c4g.11186623.2.19.29f17d8ciNDiKK)
+		// 解析记录类型，参见解析记录类型格式(https://help.aliyun.com/document_detail/29805.html)
 		// string Type = "A";
 		// 记录值
 		// string Value { get; set; }
-		// 生存时间，默认为600秒（10分钟），参见TTL定义说明(https://help.aliyun.com/document_detail/29806.html?spm=a2c4g.11186623.2.20.29f17d8cFvRltO)
+		// 生存时间，默认为600秒（10分钟），参见TTL定义说明(https://help.aliyun.com/document_detail/29806.html)
 		// int TTL { get; set; } = 600;
 		// MX记录的优先级，取值范围[1,10]，记录类型为MX记录时，此参数必须
 		// int Priority { get; set; }
-		// 解析线路，默认为default。参见解析线路枚举(https://help.aliyun.com/document_detail/29807.html?spm=a2c4g.11186623.2.21.29f17d8ciNDiKK)
+		// 解析线路，默认为default。参见解析线路枚举(https://help.aliyun.com/document_detail/29807.html)
 		// string Line
 
 		// ==AddDomainRecord==
@@ -270,7 +270,6 @@ public class Aliyun implements DDNSService {
 		var url = makeUrl(param);
 		return () -> {
 			CMap cfg = _parse(pooledRequest(url));
-			System.out.println(cfg);
 			CList list = cfg.getDot("DomainRecords.Record").asList();
 			for (int i = 0; i < list.size(); i++) {
 				CMap data = list.get(i).asMap();

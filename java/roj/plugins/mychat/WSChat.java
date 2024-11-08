@@ -2,6 +2,7 @@ package roj.plugins.mychat;
 
 import roj.collect.IntSet;
 import roj.concurrent.PacketBuffer;
+import roj.config.Flags;
 import roj.config.JSONParser;
 import roj.config.data.CList;
 import roj.config.data.CMap;
@@ -113,7 +114,7 @@ public abstract class WSChat extends WebSocketHandler {
 		int mark = in.rIndex;
 		try {
 			if (jl == null) jl = (JSONParser) new JSONParser().charset(StandardCharsets.UTF_8);
-			CMap map = jl.parse(in, JSONParser.NO_DUPLICATE_KEY).asMap();
+			CMap map = jl.parse(in, Flags.NO_DUPLICATE_KEY).asMap();
 			switch (map.getInteger("act")) {
 				case P_LOGOUT:
 					error(ERR_OK, null);
