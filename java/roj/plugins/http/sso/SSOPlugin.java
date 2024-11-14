@@ -476,7 +476,7 @@ public class SSOPlugin extends Plugin {
 		long expire = LOGIN_TTL + (is_refresh ? -180000 : 0);
 
 		var login_token = makeToken(u, 'L', expire, o, sc);
-		req.responseHeader().sendCookieToClient(Collections.singletonList(new Cookie(COOKIE_ID, login_token).path("/").expires(0).httpOnly(true).sameSite("Strict")));
+		req.responseHeader().sendCookieToClient(Collections.singletonList(new Cookie(COOKIE_ID, login_token).path("/").secure(req.isSecure()).expires(0).httpOnly(true).sameSite("Strict")));
 
 		var refresh_token = makeToken(u, 'R', 86400_000L * 30, o, sc);
 		var access_token = makeToken(u, 'A', ACCESS_TOKEN_TTL, o, sc);

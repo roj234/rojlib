@@ -21,9 +21,10 @@ import roj.text.TextUtil;
 final class StringConcat extends ExprNode {
 	SimpleList<ExprNode> nodes = new SimpleList<>();
 
+	StringConcat() {}
 	StringConcat(ExprNode left, ExprNode right) {
 		nodes.add(left);
-		append(right);
+		nodes.add(right);
 	}
 
 	@Override

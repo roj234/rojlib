@@ -30,10 +30,11 @@ public final class ArrayDef extends ExprNode {
 	private final List<ExprNode> expr;
 	private byte flag;
 
-	ArrayDef(IType type, List<ExprNode> args, boolean sized) {
+	ArrayDef(IType type, List<ExprNode> args, boolean argIsSize) {
 		this.type = type;
 		this.expr = args;
-		this.flag = (byte) (sized ? 1 : 0);
+		this.flag = (byte) (argIsSize ? 1 : 0);
+		if (argIsSize && args.size() != type.array()) throw new IllegalArgumentException("args.size() != type.array");
 	}
 
 	@Override

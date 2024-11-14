@@ -8,7 +8,6 @@ import roj.asm.type.Signature;
 import roj.asm.type.TypeHelper;
 import roj.collect.MyHashSet;
 import roj.compiler.context.CompileUnit;
-import roj.compiler.context.GlobalContext;
 import roj.compiler.context.LocalContext;
 import roj.compiler.diagnostic.Kind;
 import roj.compiler.plugins.api.Processor;
@@ -33,16 +32,14 @@ public final class AnnotationProcessor2 implements Processor {
 
 	@Override
 	public void handle(LocalContext ctx, IClass file, Attributed node, Annotation annotation) {
-		var gctx = ctx.classes;
-
 		String type = annotation.type();
 		if (type.endsWith("Attach")) {
 			if (file == node) {
 				if (annotation.getString("value") != null)
 					ctx.report(Kind.ERROR, "plugins.annotation.namedAttachOnType", file);
-				for (RawNode mn : file.methods()) attach(mn, gctx, annotation);
+				for (RawNode mn : file.methods()) attach(mn, ctx, annotation);
 			} else {
-				attach((RawNode) node, gctx, annotation);
+				attach((RawNode) node, ctx, annotation);
 			}
 		} else if (type.endsWith("Operator")) {
 			String token = annotation.getString("value");
@@ -106,24 +103,25 @@ public final class AnnotationProcessor2 implements Processor {
 		return s.toStringAndFree();
 	}
 
-	private static void attach(RawNode mn, GlobalContext gctx, Annotation annotation) {
+	private static void attach(RawNode mn, LocalContext ctx, Annotation annotation) {
 		if ((mn.modifier()&Opcodes.ACC_STATIC) == 0) return;
 		String desc = mn.rawDesc();
-		if (!desc.startsWith("(L")) return;
 
 		var params = TypeHelper.parseMethod(desc);
-		IClass info = gctx.getClassInfo(params.get(0).owner);
+		IClass info = ctx.getClassOrArray(params.get(0));
 		if (info != null) {
 			params.remove(0);
 
 			desc = TypeHelper.getMethod(params);
-			if (info.getMethod(mn.name(), desc) >= 0) return;
+			int idx = info.getMethod(mn.name(), desc);
+			if (idx >= 0 && !annotation.getBoolean("override")) return;
 
 			MethodNode replace = new MethodNode(Opcodes.ACC_PUBLIC, info.name(), annotation.getString("value", mn.name()), desc);
 			replace.putAttr(new AttachedMethod(new MethodNode(mn)));
-			info.methods().add(Helpers.cast(replace));
+			if (idx >= 0) info.methods().set(idx, Helpers.cast(replace));
+			else info.methods().add(Helpers.cast(replace));
 
-			gctx.invalidateResolveHelper(info);
+			ctx.classes.invalidateResolveHelper(info);
 		}
 	}
 }

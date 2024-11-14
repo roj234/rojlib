@@ -28,7 +28,7 @@ import static roj.net.http.h2.H2Exception.*;
  * @since 2022/10/7 0007 21:38
  */
 public class H2Connection implements ChannelHandler {
-	public static final Logger LOGGER = Logger.getLogger("HTTP/2");
+	public static final Logger LOGGER = Logger.getLogger("SPDY");
 	public static final String H2_GOAWAY = "h2:go_away";
 	// HPACK Dynamic Table encType
 	public static final byte FIELD_SAVE = 0, FIELD_DISCARD = 1, FIELD_DISCARD_ALWAYS = 2;

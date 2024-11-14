@@ -76,7 +76,7 @@ var map = [ 1+1 -> 3+4 , "mixed type" -> also.can.be.used() ];
 ```
 ### goto语句 (部分实现)
   使用goto语句在任意标签之间跳转  
-  在跳转过程中增加的变量必须立即赋值
+  * 警告，由于VisMap的加入，goto并没有那么可靠
 ### 基本类型函数 (已实现)
   12345 . toHexString() => Integer.toHexString (static)
 ### Switchable (已实现)
@@ -96,17 +96,20 @@ var map = [ 1+1 -> 3+4 , "mixed type" -> also.can.be.used() ];
 #### SwitchEx (WIP)
   看到隔壁CSharp那么多switch的语法糖，我给switch加了一个goto default  
   你可以用goto default跳到default分支的开始，不能在default分支中使用
-#### SwitchArray / SwitchTuple (WIP)
-  数组类型和record类型
-  switch (someRecord) {
-    case (_, > 3): ...
-    case (< 3, _): ...
-    case [..., > 114514]: ...
-    case [1, 2, 3]: ...
-    case [1, _, 3]: ...
-  }
 ### 操作符重载 (已实现)
-  允许重载已有的二元或一元运算符，还能添加自定义的运算符，它们会在解析时被换成方法调用
+  重载已有的运算符，或添加自定义的运算符，它们能被替换为任意表达式  
+  允许重载的运算符（重载优先级最低，你无法覆盖!true这种运算）：  
+  * 二元运算符 + - * / % ** << >> >>> & | ^ && || ?? == != < >= > <=
+  * 前缀后缀运算符 ++ -- ~ !  
+  * 修改赋值运算符 += -= *= /= %= **= <<= >>= >>>= &= ^= |=  
+
+不允许重载的
+  * 三目 ? :
+  * lambda ->
+  * 赋值 =
+  * 取值 . ?.
+  * 扩展 ...
+  * 方法引用 ::
 #### 默认的重载
 * ! String => String#isEmpty
 * String * int => String#repeat(int)
@@ -239,11 +242,11 @@ public class Some {
 #### @Operator
   自定义操作符  
   WIP
+  * 目前仅能使用Lavac的API自定义操作符
 ### 编译期执行: constant
   使用@Constant标记纯函数  
   自动推断还在研发  
 ### 参数注入 / inline ASM / 泛型转换: asm
-
 	/**
 	 * 获取注入的属性
 	 * @return 返回类型为属性或def的真实类型，不一定是对象，并且可能随属性注入改变
@@ -251,32 +254,17 @@ public class Some {
 	public static <T> T inject(String name, T def) {return def;}
 
 	/**
-	 * 执行无返回值的操作，语法为AsmLang
-	 * @param asm 常量
+	 * 执行AsmExpr, *编译时/受限执行环境
 	 * @return true => 不在Lavac环境中
 	 */
-	public static boolean __asm(String asm) {return true;}
-	//public static void __asmx(Object... asm) {}
+	public static boolean __asm(Consumer<CodeWriter> asm) {return true;}
 
 	/**
-	 * 强制的 <b>泛型</b> 转换
+	 * 强制泛型转换
 	 * @see roj.util.Helpers#cast(Object)
 	 */
 	@SuppressWarnings("unchecked")
 	public static <T> T cast(Object input) {return (T) input;}
-
-	/**
-	 * 解释为<none>
-	 */
-	public static boolean i2z(int v) { return v != 0; }
-	/**
-	 * 解释为<none>
-	 */
-	public static int z2i(boolean b) { return b?1:0; }
-	/**
-	 * 解释为POP或POP2
-	 */
-	public static void pop(Object input) {}
 ### PrimGen
 
 ## Java17支持，Lava暂时不支持

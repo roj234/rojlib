@@ -662,6 +662,7 @@ final class SerializerFactoryImpl extends SerializerFactory {
 		serializerId.putInt("",0);
 		copy.one(ALOAD_0);
 		copy.one(ALOAD_2);
+		copy.clazz(CHECKCAST, data.name);
 		copy.field(PUTFIELD, c, ua);
 
 		return build(classLoader);
@@ -1072,7 +1073,7 @@ final class SerializerFactoryImpl extends SerializerFactory {
 
 			byte code = IFEQ;
 			switch (actualType) {
-				case Type.CLASS: code = IFNULL; cw.vars(ASTORE, 4); cw.visitSizeMax(0, 5); break;
+				case Type.CLASS: code = IFNULL; cw.one(DUP); cw.vars(ASTORE, 4); cw.visitSizeMax(0, 5); break;
 				case Type.LONG: cw.one(LCONST_0); cw.one(LCMP); cw.visitSizeMax(4,0); break;
 				case Type.FLOAT: cw.one(FCONST_0); cw.one(FCMPG); break;
 				case Type.DOUBLE: cw.one(DCONST_0); cw.one(DCMPG); cw.visitSizeMax(4,0); break;
@@ -1152,10 +1153,10 @@ final class SerializerFactoryImpl extends SerializerFactory {
 				cw.one(ALOAD_0);
 				cw.field(GETFIELD, c, asId);
 			}
-			cw.one(ALOAD_2);
 
 			if (skip != null) cw.vars(ALOAD, 4);
 			else {
+				cw.one(ALOAD_2);
 				if (get == null) cw.field(GETFIELD, data.name, fn.name(), fn.rawDesc());
 				else cw.invoke(INVOKEVIRTUAL, get);
 			}
@@ -1184,11 +1185,11 @@ final class SerializerFactoryImpl extends SerializerFactory {
 			} else {
 				cw.one(ALOAD_1);
 			}
-			cw.one(ALOAD_2);
 
 			// String
 			if (skip != null && actualType == Type.CLASS) cw.vars(ALOAD, 4);
 			else {
+				cw.one(ALOAD_2);
 				if (get == null) cw.field(GETFIELD, data.name, fn.name(), fn.rawDesc());
 				else cw.invoke(INVOKEVIRTUAL, get);
 			}
@@ -1264,6 +1265,8 @@ final class SerializerFactoryImpl extends SerializerFactory {
 			cw.one(ALOAD_1);
 			cw.field(GETFIELD, "roj/config/auto/AdaptContext", "fieldId", "I");
 			cw.invoke(INVOKESTATIC, "java/lang/Integer", "toString", "(I)Ljava/lang/String;");
+			//cw.ldc(" not valid field (t="+(char)methodType+")");
+			//cw.invoke(INVOKEVIRTUAL, "java/lang/String", "concat", "(Ljava/lang/String;)Ljava/lang/String;");
 			cw.invoke(INVOKESPECIAL, "java/lang/IllegalStateException", "<init>", "(Ljava/lang/String;)V");
 			cw.one(ATHROW);
 		}

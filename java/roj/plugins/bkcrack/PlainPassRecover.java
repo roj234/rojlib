@@ -2,6 +2,7 @@ package roj.plugins.bkcrack;
 
 import roj.collect.MyBitSet;
 import roj.collect.SimpleList;
+import roj.concurrent.TaskHandler;
 import roj.concurrent.task.ITask;
 import roj.io.FastFailException;
 import roj.ui.ProgressBar;
@@ -214,7 +215,7 @@ class PlainPassRecover implements Macros, ITask {
 	}
 
 	/// Try to recover the password associated with the given keys
-	static byte[] recoverPassword(Cipher c, byte[] charset, int minLength, int maxLength) {
+	static byte[] recoverPassword(TaskHandler pool, Cipher c, byte[] charset, int minLength, int maxLength) {
 		Manager w = new Manager(c, charset);
 
 		for(int length = minLength; length <= maxLength; length++) {
@@ -243,9 +244,9 @@ class PlainPassRecover implements Macros, ITask {
 					copy.concI = i;
 					copy.concLen = length;
 
-					Main.pool.submit(copy);
+					pool.submit(copy);
 				}
-				Main.pool.awaitFinish();
+				pool.awaitFinish();
 
 				if (w.found) return w.kill();
 			}

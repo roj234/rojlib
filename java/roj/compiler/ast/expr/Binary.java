@@ -212,14 +212,15 @@ final class Binary extends ExprNode {
 							return left;
 						}
 					}
-					default -> checkDivZero(right, ctx);
+					default -> {
+						if(checkDivZero(ctx)) return this;
+					}
 				}
 			}
 			return this;
 		}
 
 		switch (operator) {
-			default: checkDivZero(right, ctx); break;
 			case logic_and, logic_or:
 				var exprVal = (boolean) left.constVal();
 				var v = exprVal == (operator == logic_and) ? right : Constant.valueOf(exprVal);
@@ -229,6 +230,8 @@ final class Binary extends ExprNode {
 				v = left.constVal() == null ? right : left;
 				ctx.report(Kind.WARNING, "binary.constant", v);
 				return v;
+			default:
+				if(checkDivZero(ctx)) return this;
 		}
 
 		if (!right.isConstant()) {
@@ -341,10 +344,12 @@ final class Binary extends ExprNode {
 		return this;
 	}
 
-	private void checkDivZero(ExprNode node, LocalContext ctx) {
-		if (dType <= 1 && operator == div && ((AnnVal) node.constVal()).asInt() == 0) {
-			ctx.report(Kind.WARNING, "binary.divisionByZero");
+	private boolean checkDivZero(LocalContext ctx) {
+		if (dType <= 1 && operator == div && ((AnnVal) right.constVal()).asInt() == 0) {
+			ctx.report(Kind.SEVERE_WARNING, "binary.divisionByZero");
+			return true;
 		}
+		return false;
 	}
 
 	@Override
@@ -436,6 +441,7 @@ final class Binary extends ExprNode {
 			}
 		}
 
+		var flag = this.flag;
 		if (flag != 2) writeLeft(cw);
 		if (flag != 1) writeRight(cw);
 
@@ -450,11 +456,21 @@ final class Binary extends ExprNode {
 				}
 
 			case lss, geq, gtr, leq: {
-				opc = writeCmp(cw, opc) + (operator - equ);
+				opc = writeCmp(cw, opc) + invertOperator();
 			}
 		}
 
 		cw.jump(invertCode(opc, !ifThen), far);
+	}
+
+	private int invertOperator() {
+		return (flag == 2 ? switch (operator) {
+			case lss -> gtr;
+			case geq -> leq;
+			case gtr -> lss;
+			case leq -> geq;
+			default -> operator;
+		} : operator) - equ;
 	}
 
 	final void writeLeft(MethodWriter cw) {left.write(cw, castLeft);}
@@ -464,12 +480,13 @@ final class Binary extends ExprNode {
 		int opc = dType;
 		if (opc < 0) opc = 0;
 
-		switch (operator) {
+		var opr = this.operator;
+		switch (opr) {
 			//default: throw OperationDone.NEVER;
-			case add, sub, mul, div, mod: opc += ((operator - add) << 2) + IADD; break;
+			case add, sub, mul, div, mod: opc += ((opr - add) << 2) + IADD; break;
 			//FIXME pow正确的提升类型到double
 			case pow: {cw.invoke(INVOKESTATIC, "java/util/Math", "pow", "(DD)D");return;}
-			case lsh, rsh, rsh_unsigned, and, or, xor: opc += ((operator - lsh) << 1) + ISHL; break;
+			case lsh, rsh, rsh_unsigned, and, or, xor: opc += ((opr - lsh) << 1) + ISHL; break;
 			case equ, neq:
 				if (!left.type().isPrimitive() & !right.type().isPrimitive()) {
 					jump(cw, opc);
@@ -478,14 +495,14 @@ final class Binary extends ExprNode {
 
 			case lss, geq, gtr, leq: {
 				opc = writeCmp(cw, opc);
-				if (dType == 0 && operator <= neq && flag == 0) {
+				if (dType == 0 && opr <= neq && flag == 0) {
 					cw.one(ISUB); // (left - right) == 0
-					if (operator == equ) {
+					if (opr == equ) {
 						cw.one(ICONST_1);
 						cw.one(IXOR);
 					}
 				} else {
-					jump(cw, opc + (operator - equ));
+					jump(cw, opc + invertOperator());
 				}
 				return;
 			}

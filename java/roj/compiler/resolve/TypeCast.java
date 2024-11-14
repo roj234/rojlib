@@ -462,7 +462,7 @@ public class TypeCast {
 			x = (String[]) (Object) null;
 			x = (String[]) (Serializable) null;*/
 			if ("java/lang/Object".equals(from.owner) ||
-				GlobalContext.anyArray().interfaces().contains(from.owner))
+				GlobalContext.arrayInterfaces().contains(from.owner))
 				return DOWNCAST(to);
 
 			return ERROR(E_NEVER);
@@ -475,7 +475,7 @@ public class TypeCast {
 				if (owner == null) return ERROR(E_NEVER); // t2是基本类型数组
 
 				if (owner.equals("java/lang/Object")) return RESULT(UPCAST, 2);
-				if (GlobalContext.anyArray().interfaces().contains(owner)) return RESULT(UPCAST, 1);
+				if (GlobalContext.arrayInterfaces().contains(owner)) return RESULT(UPCAST, 1);
 
 				return ERROR(E_NEVER); // int[] 除了转换成数组实现的类不能变成任何其他东西
 			} else {

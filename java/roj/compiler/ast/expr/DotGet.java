@@ -172,9 +172,9 @@ public final class DotGet extends VarNode {
 				// 3. 静态字段导入
 				if ((result = ctx.tryImportField(part)) != null) {
 					begin = result.owner;
-					if (begin == null) return result.prev;
+					if (begin == null) return result.parent();
 					names.set(0, result.method);
-					parent = result.prev;
+					parent = result.parent();
 					flags = 0;
 				}
 			}

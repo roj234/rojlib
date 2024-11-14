@@ -55,10 +55,7 @@ public abstract class fcgiManager implements Router {
 		param.putIfAbsent("GATEWAY_INTERFACE", "CGI/1.1");
 		param.putIfAbsent("SERVER_NAME", "localhost");
 		param.putIfAbsent("SERVER_PROTOCOL", "HTTP/1.1");
-		if (HttpCache.proxyRequestRetainer != null) {
-			String https = req.get("x-proxy-https");
-			if (https != null) param.put("HTTPS", https);
-		}
+		if (req.isSecure()) param.put("HTTPS", "1");
 
 		String field = req.getField("content-length");
 		if (!field.isEmpty()) param.putIfAbsent("CONTENT_LENGTH", field);

@@ -19,6 +19,7 @@ import roj.compiler.CompilerSpec;
 import roj.compiler.JavaLexer;
 import roj.compiler.asm.*;
 import roj.compiler.ast.BlockParser;
+import roj.compiler.ast.EnumUtil;
 import roj.compiler.ast.ParseTask;
 import roj.compiler.ast.expr.Constant;
 import roj.compiler.ast.expr.ExprNode;
@@ -114,14 +115,14 @@ public final class CompileUnit extends ConstantData {
 	public TypeResolver getTypeResolver() {return tr;}
 
 	// region 文件中的其余类
-	private CompileUnit(CompileUnit parent) {
+	private CompileUnit(CompileUnit parent, boolean helperClass) {
 		source = parent.source;
 		ctx = parent.ctx;
 
 		if (ctx.classes.isSpecEnabled(CompilerSpec.ATTR_SOURCE_FILE))
 			putAttr(parent.attrByName("SourceFile"));
 
-		_parent = parent;
+		_parent = helperClass ? this : parent;
 
 		code = parent.code;
 		classIdx = parent.ctx.lexer.index;
@@ -130,7 +131,7 @@ public final class CompileUnit extends ConstantData {
 	}
 
 	private CompileUnit _newHelper(int acc) throws ParseException {
-		CompileUnit c = new CompileUnit(this);
+		CompileUnit c = new CompileUnit(this, true);
 
 		int i = name.lastIndexOf('/') + 1;
 		c.name(i <= 0 ? "" : name.substring(0, i));
@@ -140,7 +141,7 @@ public final class CompileUnit extends ConstantData {
 		return c;
 	}
 	private CompileUnit _newInner(int acc) throws ParseException {
-		CompileUnit c = new CompileUnit(this);
+		CompileUnit c = new CompileUnit(this, false);
 
 		c.name(name.concat("$"));
 		c.header(acc|_ACC_INNER_CLASS);
@@ -166,7 +167,7 @@ public final class CompileUnit extends ConstantData {
 		return c;
 	}
 	public CompileUnit newAnonymousClass(@Nullable MethodNode mn) throws ParseException {
-		CompileUnit c = new CompileUnit(this);
+		CompileUnit c = new CompileUnit(this, false);
 
 		c.name(IOUtil.getSharedCharBuf().append(name).append("$").append(++_children).toString());
 		c.modifier = ACC_FINAL|ACC_SUPER;
@@ -786,7 +787,7 @@ public final class CompileUnit extends ConstantData {
 					paramNames.add("@name");
 					paramNames.add("@ordinal");
 					var par = method.parameters();
-					par.add(new Type("java/lang/String"));
+					par.add(EnumUtil.TYPE_STRING);
 					par.add(Type.std(Type.INT));
 				}
 

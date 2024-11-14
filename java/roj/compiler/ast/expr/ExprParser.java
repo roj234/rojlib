@@ -591,6 +591,7 @@ public final class ExprParser {
 
 					case -10://字符串格式化 FMT. ""
 						if (cur instanceof DotGet dg && dg.maybeStringTemplate()) {
+							//if (waitDot) ue(wr, w.val(), ".");
 							cur = new StringFormat(dg, w.val());
 							break endValueConv;
 						}
@@ -646,11 +647,12 @@ public final class ExprParser {
 			// 二元运算符 | 三元运算符 | 终结符
 			_sid = sm.getOrDefaultInt(SM_ExprTerm | w.type(), 0);
 			if (_sid == 0) {
-				if (!ctx.classes.isSpecEnabled(CompilerSpec.OPTIONAL_SEMICOLON) || cur == null) {
-					ue(wr, w.val());
+				if (ctx.classes.isSpecEnabled(CompilerSpec.OPTIONAL_SEMICOLON) && cur != null) {
+					wr.retractWord();
+					break;
 				}
-				wr.retractWord();
-				break;
+
+				ue(wr, w.val());
 			}
 
 			if ((_sid&0x400) != 0) {
@@ -661,7 +663,14 @@ public final class ExprParser {
 				// 0x400 = FLAG_TERMINATOR
 				// 0x020 = FLAG_NEVER_SKIP
 				int shl = _sid & 31;
-				if ((flag & (1 << shl)) == 0) ue(wr, w.val());
+				if ((flag & (1 << shl)) == 0) {
+					if (ctx.classes.isSpecEnabled(CompilerSpec.OPTIONAL_SEMICOLON) && cur != null) {
+						wr.retractWord();
+						break;
+					}
+
+					ue(wr, w.val());
+				}
 				if ((_sid & 0x20) != 0 || (flag & (1 << (shl+1))) == 0) wr.retractWord();
 
 				break;

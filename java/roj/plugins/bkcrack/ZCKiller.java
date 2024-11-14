@@ -147,13 +147,7 @@ final class ZCKiller implements Macros {
 			th.submit(new Solver(this, zIndex, candidates.get(i)));
 		}
 
-		synchronized (th) {
-			try {
-				th.wait();
-			} catch (InterruptedException e) {
-				e.printStackTrace();
-			}
-		}
+		th.awaitFinish();
 
 		bar.end("finish");
 		bar = null;

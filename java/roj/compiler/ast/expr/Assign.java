@@ -5,9 +5,9 @@ import roj.asm.tree.anno.AnnValInt;
 import roj.asm.type.IType;
 import roj.compiler.JavaLexer;
 import roj.compiler.asm.MethodWriter;
+import roj.compiler.context.GlobalContext;
 import roj.compiler.context.LocalContext;
 import roj.compiler.diagnostic.Kind;
-import roj.compiler.plugins.asm.ASM;
 import roj.compiler.resolve.TypeCast;
 
 /**
@@ -50,6 +50,18 @@ class Assign extends ExprNode {
 		// 也许搞个 未修改的常量变量 => 常量
 		if (right.isConstant() && left instanceof LocalVariable lv) {
 			ctx.setConstantValue(lv.v, (Constant) right);
+		}
+
+		// a = a + b
+		else if (prev instanceof Binary op && node.equals(op.left)) {
+			if (right != op) {
+				// try add_assign override
+				ExprNode override = ctx.getOperatorOverride(node, op.right, op.operator + (JavaLexer.add_assign - JavaLexer.add));
+				if (override != null) {
+					GlobalContext.debugLogger().debug("a += b override done {}", override);
+					return override;
+				}
+			}
 		}
 
 		IType lType = left.type();
@@ -116,7 +128,7 @@ class Assign extends ExprNode {
 		if (isCastNeeded()) cast.write(cw);
 
 		// 测试一下
-		if (!noRet) left.copyValue(cw, ASM.i2z(left.type().rawType().length()-1));
+		if (!noRet) left.copyValue(cw, left.type().rawType().length()-1 != 0);
 
 		left.postStore(cw);
 	}

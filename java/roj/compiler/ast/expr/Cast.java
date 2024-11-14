@@ -4,11 +4,11 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import roj.asm.tree.anno.AnnVal;
 import roj.asm.type.IType;
+import roj.compiler.asm.AnnotationPrimer;
 import roj.compiler.asm.MethodWriter;
 import roj.compiler.context.LocalContext;
 import roj.compiler.diagnostic.Kind;
 import roj.compiler.resolve.TypeCast;
-import roj.concurrent.OperationDone;
 
 /**
  * 强制类型转换
@@ -35,17 +35,7 @@ final class Cast extends UnaryPre {
 		cast = ctx.castTo(rType, type, TypeCast.E_DOWNCAST);
 
 		if (type.isPrimitive() && rType.isPrimitive() && right.isConstant()) {
-			AnnVal o = (AnnVal) right.constVal();
-			return new Constant(type, switch (TypeCast.getDataCap(type.getActualType())) {
-				default -> throw OperationDone.NEVER;
-				case 1 -> AnnVal.valueOf((byte)o.asInt());
-				case 2 -> AnnVal.valueOf((char)o.asInt());
-				case 3 -> AnnVal.valueOf((short)o.asInt());
-				case 4 -> AnnVal.valueOf(o.asInt());
-				case 5 -> AnnVal.valueOf(o.asLong());
-				case 6 -> AnnVal.valueOf(o.asFloat());
-				case 7 -> AnnVal.valueOf(o.asDouble());
-			});
+			return new Constant(type, AnnotationPrimer.toAnnVal((AnnVal) right.constVal(), type));
 		}
 		return this;
 	}

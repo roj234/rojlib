@@ -24,7 +24,7 @@ public class GreatErrorPage {
 	private static Template template;
 	static {
 		try {
-			template = Template.compile(IOUtil.getTextResource("META-INF/html/system_error.html"));
+			template = Template.compile(IOUtil.getTextResource("roj/plugins/http/error/template.html"));
 		} catch (IOException e) {
 			e.printStackTrace();
 		}

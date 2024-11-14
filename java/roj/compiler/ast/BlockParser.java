@@ -32,7 +32,10 @@ import roj.config.Word;
 import roj.util.Helpers;
 import roj.util.VarMapper;
 
-import java.util.*;
+import java.util.AbstractMap;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
 import java.util.function.Function;
 
 import static roj.asm.Opcodes.*;
@@ -184,10 +187,15 @@ public final class BlockParser {
 	@SuppressWarnings("fallthrough")
 	private void statement(Word w) throws ParseException {
 		LabelNode imLabel = null;
+		boolean blockStatement;
 		for(;;) {
 		switch (w.type()) {
 			case semicolon -> ctx.report(Kind.WARNING, "block.emptyStatement");
-			case lBrace -> blockV();
+			case lBrace -> {
+				if (imLabel != null) visMap.enter();
+				blockV();
+				if (imLabel != null) visMap.exit();
+			}
 
 			case TRY -> _try();
 
@@ -245,6 +253,7 @@ public final class BlockParser {
 					if (imLabel == null) {
 						imLabel = new LabelNode(cw.label());
 						imLabel.onBreak = new Label();
+						visMap.blockHook(imLabel);
 					}
 					labels.put(val, imLabel);
 
@@ -372,7 +381,7 @@ public final class BlockParser {
 				variables.remove(v.name);
 				fastSlot -= v.type.rawType().length();
 			} else {
-				Objects.requireNonNull(labels.remove(var.toString()), "regionNew.labelAdded").combineState(visMap);
+				labels.remove(var.toString());
 			}
 		}
 	}
@@ -1659,8 +1668,6 @@ public final class BlockParser {
 		else writeTypeSwitch(result);
 	}
 	private void writePatternSwitch(SwitchNode node) {
-		endCodeBlock();
-
 		var sval = node.sval;
 		var switchVal = newVar("@临时_switchValue", sval.type());
 		sval.write(cw);
@@ -1686,7 +1693,7 @@ public final class BlockParser {
 		for (int i = 0; i < node.branches.size(); i++) {
 			var kase = node.branches.get(i);
 			if (kase == nullBranch) continue;
-			if (kase.labels == null) {
+			if (kase.variable == null) {
 				defaultId = i;
 				continue;
 			}
@@ -1709,7 +1716,6 @@ public final class BlockParser {
 
 			cw.label(endOfBlock);
 		}
-		endCodeBlock();
 
 		if (defaultId >= 0) {
 			var kase = node.branches.get(defaultId);
@@ -1720,6 +1726,8 @@ public final class BlockParser {
 			if (cw.isContinuousControlFlow())
 				cw.jump(node.breakTo);
 		}
+
+		cw.label(node.breakTo);
 	}
 	private void writeTypeSwitch(SwitchNode result) {
 		var branches = result.branches;
@@ -2248,6 +2256,7 @@ public final class BlockParser {
 		} else {
 			node.write(cw);
 			ref = newVar("@", node.type());
+			ref.hasValue = true;
 			cw.store(ref);
 		}
 

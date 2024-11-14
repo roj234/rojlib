@@ -35,7 +35,7 @@ import static roj.net.http.IllegalRequestException.badRequest;
 import static roj.net.http.server.HttpCache.*;
 
 public final class HttpServer11 extends PacketMerger implements PostSetting, ResponseHeader, ResponseWriter {
-	public static final Logger LOGGER = Logger.getLogger("HtpSvr/1");
+	public static final Logger LOGGER = Logger.getLogger("IIS");
 	//region 用户可修改？？
 	public static final String SERVER_NAME = "openresty";
 	//TODO use ASM/Preinjector
@@ -585,21 +585,18 @@ public final class HttpServer11 extends PacketMerger implements PostSetting, Res
 		try {
 			int totalRead = 0;
 			while (true) {
-				int remain = Math.min(limit - totalRead, writeOnce);
-				if (remain == 0) break;
-
-				int r = buf.readStream(in, remain);
-				if (r <= 0) {
+				int r = Math.min(limit - totalRead, writeOnce);
+				if (r == 0 || (r = buf.readStream(in, r)) <= 0) {
 					if (totalRead == 0) return r;
 					break;
 				}
 
 				totalRead += r;
 
-				ch.channelWrite(buf);
 				if ((flag & FLAG_GZIP) != 0) {
-					crc = CRC32s.update(crc, buf.array(), buf.arrayOffset(), buf.wIndex());
+					crc = CRC32s.update(crc, buf.array(), buf.arrayOffset(), r);
 				}
+				ch.channelWrite(buf);
 				if (ch.isFlushing()) break;
 				buf.clear();
 			}

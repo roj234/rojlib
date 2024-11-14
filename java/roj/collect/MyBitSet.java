@@ -252,7 +252,7 @@ public class MyBitSet implements Iterable<Integer> {
 		if (from < 0 || to < 0) throw new IllegalArgumentException("from/to="+from+"/"+to);
 		expand(to);
 		to--;
-		if (to > max) max = to;
+		if (max < to) max = to;
 		return setRange(from, to, false);
 	}
 
@@ -260,7 +260,7 @@ public class MyBitSet implements Iterable<Integer> {
 		if (from < 0 || to < 0) throw new IllegalArgumentException("from/to="+from+"/"+to);
 		to = Math.min(to-1, max);
 		int i = -setRange(from, to, true);
-		if (to == max) max = prevTrue(max-1);
+		if (to == max) max = prevTrue(max);
 		return i;
 	}
 

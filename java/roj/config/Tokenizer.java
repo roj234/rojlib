@@ -203,10 +203,10 @@ public class Tokenizer {
 			prevWords.clear();
 
 			lastWord = w;
-			lwType = w.type();
-			lwBegin = w.pos();
+			lwType = w.type;
+			lwBegin = w.pos;
 			lwEnd = index;
-			lwStr = w.val();
+			lwStr = w.val;
 		}
 
 		afterWord();
@@ -366,7 +366,7 @@ public class Tokenizer {
 			}
 		}
 
-		throw err("在 转义字符串 终止前遇到了文件尾", i);
+		throw err("在 转义字符串 终止前遇到了文件尾", index);
 	}
 
 	@SuppressWarnings("fallthrough")
@@ -598,7 +598,6 @@ public class Tokenizer {
 		CharSequence in = input;
 		int i = index;
 
-		double dd = 0xbeef.CP-3;
 		boolean neg = sign && in.charAt(i++) == '-';
 
 		/*

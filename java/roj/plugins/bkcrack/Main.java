@@ -5,6 +5,7 @@ import roj.archive.zip.ZipCrypto;
 import roj.archive.zip.ZipFile;
 import roj.archive.zip.ZipFileWriter;
 import roj.collect.IntMap;
+import roj.concurrent.TaskHandler;
 import roj.concurrent.TaskPool;
 import roj.crypt.CipherInputStream;
 import roj.io.IOUtil;
@@ -43,7 +44,6 @@ import static roj.ui.terminal.CommandNode.literal;
 	密钥将会输出在STDERR 日志为STDOUT
 	默认字符集为file.encoding""", version = "0.1.0")
 public class Main extends Plugin {
-	static TaskPool pool = TaskPool.Common();
 	static Charset charset = Charset.defaultCharset();
 
 	@Override
@@ -56,7 +56,7 @@ public class Main extends Plugin {
 
 		var crack = argument("entry", Argument.string()).then(argument("data", Argument.restArray()).executes(ctx -> {
 			File zip = ctx.argument("zip", File.class);
-			tryFindPass(ctx.argument("data", String[].class), zip, 0, ctx.context.equals("crack"));
+			tryFindPass(ctx.argument("entry", String.class), ctx.argument("data", String[].class), zip, 0, ctx.context.equals("crack"));
 		}));
 		node.then(literal("crack").then(crack))
 		.then(literal("crackall").then(crack))
@@ -69,7 +69,7 @@ public class Main extends Plugin {
 		}));
 	}
 
-	private static void tryGetPlain(String[] args, File f, int off) throws IOException {
+	private static void tryGetPlain(TaskHandler pool, File f, int off) throws IOException {
 		File key = new File(f.getAbsolutePath() + ".key");
 		if (!key.exists()) return;
 
@@ -81,15 +81,15 @@ public class Main extends Plugin {
 			plainTable[i-32] = (byte) i;
 		}
 
-		byte[] x = PlainPassRecover.recoverPassword(key1, plainTable, 0, 12);
+		byte[] x = PlainPassRecover.recoverPassword(pool, key1, plainTable, 0, 12);
 		System.out.println("密码是: "+TextUtil.dumpBytes(x));
 	}
 
-	private static void tryFindPass(String[] args, File file, int argOff, boolean stopOnFirstKey) throws IOException {
-		ZipFile mzf = new ZipFile(file, ZipFile.FLAG_BACKWARD_READ, Charset.defaultCharset());
-		ZEntry entry = mzf.getEntry(args[argOff++]);
+	private static void tryFindPass(String entryName, String[] args, File file, int argOff, boolean stopOnFirstKey) throws IOException {
+		ZipFile mzf = new ZipFile(file, ZipFile.FLAG_BACKWARD_READ, charset);
+		ZEntry entry = mzf.getEntry(entryName);
 		if (entry == null || entry.getEncryptType() != ZipFile.CRYPT_ZIP2) {
-			System.out.println("没找到或不符合要求:"+args[argOff-1]);
+			System.out.println("没找到或不符合要求:"+entryName);
 			return;
 		}
 		System.err.println("文件: "+file+"#!"+entry.getName());
@@ -115,6 +115,8 @@ public class Main extends Plugin {
 		ZCKiller ctx = new ZCKiller(IOUtil.read(mzf.getFileStream(entry)), plains);
 		mzf.close();
 		ctx.stopOnFirstKey = stopOnFirstKey;
+
+		TaskPool pool = TaskPool.MaxThread(Runtime.getRuntime().availableProcessors(), "BKCrack-Worker-");
 
 		List<Cipher> keys = ctx.find(pool);
 
@@ -147,8 +149,7 @@ public class Main extends Plugin {
 			System.out.println("正在反查密码，若五秒内未能找到则放弃，直接用内部密钥破解");
 			Thread thread = new Thread(() -> {
 				try {
-					tryGetPlain(null, file, 0);
-					System.exit(0);
+					tryGetPlain(pool, file, 0);
 				} catch (IOException e) {
 					e.printStackTrace();
 				}

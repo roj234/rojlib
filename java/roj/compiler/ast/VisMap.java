@@ -5,14 +5,14 @@ import roj.collect.IntList;
 import roj.collect.MyBitSet;
 import roj.collect.SimpleList;
 import roj.compiler.asm.Variable;
-import roj.compiler.context.GlobalContext;
 
 /**
  * 和Thaumcraft没有关系（雾
+ * Variable Initialization State
  * @author Roj234
  * @since 2024/6/23 0023 17:10
  */
-public class VisMap {
+public final class VisMap {
 	private final IntBiMap<Variable> vuid = new IntBiMap<>();
 
 	private final IntList varCounts = new IntList();
@@ -20,10 +20,15 @@ public class VisMap {
 
 	private MyBitSet varState = new MyBitSet();
 	private int varCount;
+
 	private boolean terminateFlag;
 
-	static class State {
+	private final SimpleList<LabelNode> extraHooks = new SimpleList<>();
+	private LabelNode immediateHook;
 
+	public static final class State {
+		final MyBitSet data;
+		State(MyBitSet data) {this.data = data;}
 	}
 
 	public void clear() {
@@ -33,9 +38,14 @@ public class VisMap {
 		varState.clear();
 		varCount = 0;
 		terminateFlag = false;
+		extraHooks.clear();
+		immediateHook = null;
 	}
 
 	public void enter() {
+		extraHooks.add(immediateHook);
+		immediateHook = null;
+
 		varCounts.add(varCount);
 
 		varStates.add(varState); // prev
@@ -47,7 +57,6 @@ public class VisMap {
 		tmp = new MyBitSet();
 		tmp.or(varState);
 		varState = tmp; // current
-		GlobalContext.debugLogger().info("进入分支语句，当前变量数:"+varCount+"/"+vuid.size());
 	}
 	public void orElse() {
 		var prevVarCount = varCounts.get(varCounts.size()-1);
@@ -69,19 +78,10 @@ public class VisMap {
 		tmp.or(initVarDefined);
 		varState = tmp;
 	}
-	public void terminate() {
-		// 控制流结束，定义的变量无法合并
-		terminateFlag = true;
-	}
-	public State jump() {
-		terminateFlag = true;
-		// TODO not finished
-		return null;
-	}
-	public void orElse(State state) {
-
-	}
 	public void exit() {
+		var pop = extraHooks.pop();
+		if (pop != null) pop.combineState(this);
+
 		var prevVarCount = varCounts.remove(varCounts.size()-1);
 		var prevVarDefined = varStates.get(varStates.size()-2);
 		varStates.pop();
@@ -92,27 +92,55 @@ public class VisMap {
 		varCount = prevVarCount;
 
 		for (int i = 0; i < prevVarCount; i++) {
-			boolean hasValue = varState.contains(i << 1/*DEFINED*/) && !varState.remove((i << 1) + 1/*UNSET*/) && (terminateFlag || prevVarDefined.contains(i << 1/*DEFINED*/));
+			var hasValue = varState.contains(i << 1/*DEFINED*/) && !varState.remove((i << 1) + 1/*UNSET*/) && (terminateFlag || prevVarDefined.contains(i << 1/*DEFINED*/));
+			var _var = vuid.get(i);
 			if (hasValue) {
-				GlobalContext.debugLogger().info("退出分支语句，变量{}已在所有分支有值", vuid.get(i).name);
-				vuid.remove(i).hasValue = true;
+				_var.hasValue = true;
 			} else {
-				GlobalContext.debugLogger().info("退出分支语句，变量{}未在所有分支有值", vuid.get(i).name);
 				varState.remove(i<<1/*DEFINED*/);
+				_var.hasValue = false;
 			}
 		}
 	}
 
-	public boolean hasValue(Variable v) {
-		var vid = vuid.getValueOrDefault(v, -1);
-		return v.hasValue || vid >= 0 && varState.contains(vid << 1);
+	// 控制流中止
+	public void terminate() {
+		// 控制流结束，定义的变量无法合并
+		terminateFlag = true;
+	}
+
+	// 控制流转移
+	void blockHook(LabelNode label) {
+		if (immediateHook != null) throw new IllegalStateException("immediateHook != null");
+		immediateHook = label;
+	}
+	public State jump() {
+		terminateFlag = true;
+
+		var prevVarCount = varCounts.get(varCounts.size()-1);
+		var copyOf = new MyBitSet();
+		for (int i = 0; i < prevVarCount; i++) {
+			copyOf.add(varState.contains(i << 1/*DEFINED*/) ? (i << 1/*DEFINED*/) : (i << 1) + 1/*UNSET*/);
+		}
+
+		return new State(copyOf);
+	}
+	public void orElse(State state) {
+		var prevVarCount = varCounts.get(varCounts.size()-1);
+		var prevVarDefined = varStates.get(varStates.size()-2);
+
+		state.data.removeRange(prevVarCount << 1, state.data.last()+1);
+		prevVarDefined.or(state.data);
 	}
 
 	public void add(Variable v) {
 		if (v.hasValue) return;
 		vuid.putByValue(varCount++, v);
 	}
-
+	public boolean hasValue(Variable v) {
+		var vid = vuid.getValueOrDefault(v, -1);
+		return v.hasValue || vid >= 0 && varState.contains(vid << 1);
+	}
 	public void assign(Variable var) {
 		var vid = vuid.getValueOrDefault(var, -1);
 		if (vid >= 0) varState.add(vid << 1);

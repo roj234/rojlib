@@ -175,6 +175,7 @@ public final class JavaLexer extends Tokenizer {
 
 		addWhitespace(JAVA_LEND);
 		JAVA_LEND.remove('$');
+		JAVA_LEND.add('"');
 
 		alias("...finally", FINALLY, null);
 		alias("...switch", SWITCH, null);

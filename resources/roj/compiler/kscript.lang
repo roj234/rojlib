@@ -284,6 +284,7 @@ instanceof.error.unsafeCast=[InstanceOf]%1 无法安全地转换为 %2
 instanceOf.constant=[InstanceOf]对 %1 的检测总是常量
 invoke.error.constructor=[Invoke]对 %1 的调用必须是构造器中的第一个语句
 invoke.error.instantiationAbstract=[Invoke] %1 是抽象的; 无法实例化
+invoke.error.instantiationEnum=[Invoke] 无法实例化枚举类型 %1
 invoke.compatible.plural="[Invoke]对 %1 的引用不明确\n%2"
 invoke.incompatible.single="[Invoke]无法将类 %1 中的方法 %2 应用到给定类型\n%3"
 invoke.incompatible.plural="[Invoke]对于%1找不到合适的方法\n%2"
@@ -301,6 +302,8 @@ multiReturn.russianToy=[MR]此处禁止套娃！！！
 anonymousClass.inferFailed=匿名类的自动泛型推断无法在该状态下使用
 anonymousClass.interfaceArg=匿名类实现接口; 不能有参数
 nae.unresolvable=解析失败
+stringFormat.f.unclosed=未关闭的表达式
+stringFormat.unknown=未知的字符串常量修饰符 %1
 
 # lambda表达式
 lambda.untyped=[Lambda]未知的目标类型

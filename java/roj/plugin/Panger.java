@@ -250,7 +250,7 @@ public final class Panger extends PluginManager {
 
 				var http = new PanHttp();
 				var proxyToken = CONFIG.getString("http_reverse_proxy");
-				if (!proxyToken.isEmpty()) HttpCache.proxyRequestRetainer = http;
+				if (!proxyToken.isEmpty()) HttpCache.proxySecret = proxyToken;
 				if (CONFIG.getBool("http_status")) router.register(http);
 			} catch (IOException e) {
 				LOGGER.error("HTTP服务启动失败", e);

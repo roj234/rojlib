@@ -183,20 +183,14 @@ public interface ParseTask {
 			public int priority() {return 2;}
 			@Override
 			public void parse(LocalContext ctx) throws ParseException {
+				var file = ctx.file;
 				ctx.lexer.init(pos, linePos, lineIdx);
 				MethodWriter cw = ctx.bp.parseMethod(file, mn, argNames);
 
 				autoConstructor:
 				if (ctx.not_invoke_constructor) {
 					if ((file.modifier&Opcodes.ACC_ENUM) != 0) {
-						var buf = IOUtil.getSharedByteBuf()
-							.put(Opcodes.ALOAD_0)
-							.put(Opcodes.ALOAD_1)
-							.put(Opcodes.ILOAD_2)
-							.put(Opcodes.INVOKESPECIAL)
-							.putShort(file.cp.getMethodRefId("java/lang/Enum", "<init>", "(Ljava/lang/String;I)V"));
-						cw.insertBefore(buf);
-						cw.visitSizeMax(3, 0);
+						EnumUtil.writeAutoConstructor(file, cw);
 						break autoConstructor;
 					}
 

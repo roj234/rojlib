@@ -37,16 +37,15 @@ public abstract class ExeFile implements Closeable {
 	public void read(long off, int len) throws IOException {
 		if (off >= 0) src.seek(off);
 		ByteList rb = this.rb;
+		rb.clear();
 		rb.ensureCapacity(len);
-		len = src.read(rb.list, 0, len);
-		rb.rIndex = 0;
-		rb.wIndex(len);
+		src.read(rb, len);
 	}
 
 	public void write(long off) throws IOException {
 		if (off >= 0) src.seek(off);
-		src.write(rb.list, 0, rb.wIndex());
-		rb.wIndex(0);
+		src.write(rb);
+		rb.rIndex = rb.wIndex();
 	}
 
 	@Override

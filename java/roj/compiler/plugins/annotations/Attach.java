@@ -14,4 +14,6 @@ import java.lang.annotation.Target;
 @Target({ElementType.METHOD, ElementType.TYPE})
 public @interface Attach {
 	String value() default "";
+	boolean override() default false;
+	//boolean scoped() default false;
 }

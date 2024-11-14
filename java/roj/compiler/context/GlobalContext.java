@@ -293,14 +293,15 @@ public class GlobalContext implements CompilerSpec {
 	static {
 		var array = Object[].class;
 		var ref = new ConstantData();
-		ref.name("java/lang/Array");
+		ref.name("<\1arrayBase\0>");
 		ref.parent(array.getSuperclass().getName().replace('.', '/'));
 		for (Class<?> itf : array.getInterfaces()) ref.addInterface(itf.getName().replace('.', '/'));
 		ref.fields.add(new FieldNode(Opcodes.ACC_PUBLIC|Opcodes.ACC_FINAL, "length", "I"));
 		ref.methods.add(new MethodNode(Opcodes.ACC_PUBLIC|Opcodes.ACC_FINAL, "java/lang/Object", "clone", "()Ljava/lang/Object;"));
 		AnyArray = ref;
 	}
-	public static ConstantData anyArray() {return AnyArray;}
+	public ConstantData getArrayInfo(IType type) {return AnyArray;}
+	public static List<String> arrayInterfaces() {return AnyArray.interfaces();}
 	public static FieldNode arrayLength() {return AnyArray.fields.get(0);}
 	public static MethodNode arrayClone() {return AnyArray.methods.get(0);}
 

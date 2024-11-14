@@ -5,6 +5,7 @@ import roj.collect.IntList;
 import roj.collect.IntMap;
 import roj.collect.MyBitSet;
 import roj.collect.SimpleList;
+import roj.compiler.plugins.annotations.Attach;
 import roj.config.Tokenizer;
 import roj.io.IOUtil;
 import roj.util.ArrayCache;
@@ -155,6 +156,7 @@ public class TextUtil {
 		return bl;
 	}
 
+	@Attach("hex")
 	public static String bytes2hex(byte[] b) {return bytes2hex(b, 0, b.length, new CharList()).toStringAndFree();}
 
 	// not recommend to use!
@@ -686,6 +688,7 @@ public class TextUtil {
 		return sb;
 	}
 
+	@Attach
 	public static String join(Iterable<?> split, CharSequence c) {
 		Iterator<?> itr = split.iterator();
 		if (!itr.hasNext()) return "";

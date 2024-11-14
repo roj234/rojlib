@@ -25,13 +25,13 @@ public class Escape {
 	public static String decodeURI(CharSequence src) throws MalformedURLException {
 		ByteList bb = new ByteList();
 		try {
-			return decodeURI(new CharList(), bb, src).toStringAndFree();
+			return decodeURI(new CharList(), bb, src, false).toStringAndFree();
 		} finally {
 			bb._free();
 		}
 	}
 	@SuppressWarnings("fallthrough")
-	public static <T extends Appendable> T decodeURI(T sb, DynByteBuf tmp, CharSequence src) throws MalformedURLException {
+	public static <T extends Appendable> T decodeURI(T sb, DynByteBuf tmp, CharSequence src, boolean unescapePlus) throws MalformedURLException {
 		tmp.clear();
 
 		int len = src.length();
@@ -58,7 +58,7 @@ public class Escape {
 				if (i == len) break;
 				c = src.charAt(i);
 			}
-			if (c == '+') c = ' ';
+			if (c == '+' && unescapePlus) c = ' ';
 
 			try {
 				sb.append(c);
@@ -68,8 +68,9 @@ public class Escape {
 		return sb;
 	}
 
-	public static final MyBitSet URI_SAFE = MyBitSet.from(TextUtil.digits).addAll("~!@#$&*()_+-=/?.,:;'");
-	public static final MyBitSet URI_COMPONENT_SAFE = MyBitSet.from(TextUtil.digits).addAll("~!*()_-.'");
+	public static final MyBitSet URI_SAFE = MyBitSet.from(TextUtil.digits).addAll("~!@$&*()_+-=/.,:;'|^`");
+	// = & + / ? removed
+	public static final MyBitSet URI_COMPONENT_SAFE = MyBitSet.from(TextUtil.digits).addAll("~!@$*()_-.,:;'|^`");
 
 	public static String encodeURI(CharSequence src) { return encodeURI(new CharList(), src).toStringAndFree(); }
 	public static String encodeURIComponent(CharSequence src) { return encodeURIComponent(new CharList(), src).toStringAndFree(); }

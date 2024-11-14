@@ -243,7 +243,7 @@ public class ClassWrapper implements Function<String, Class<?>> {
 	public void addTransformerExclusion(String toExclude) {transformExcept.add(toExclude);}
 
 	public void enableFastZip(URL url) throws IOException {
-		ZipFile zf = new ZipFile(new File(Escape.decodeURI(IOUtil.getSharedCharBuf(), IOUtil.getSharedByteBuf(), url.getPath().substring(1)).toString()));
+		ZipFile zf = new ZipFile(new File(Escape.decodeURI(url.getPath().substring(1))));
 		JarVerifier jv = JarVerifier.create(zf);
 		if (archives.isEmpty()) zf.getStream(zf.entries().iterator().next()).close(); // INIT
 		archives.add(zf);

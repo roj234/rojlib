@@ -176,7 +176,7 @@ public class LocalContext {
 	public boolean checkAccessible(IClass type, RawNode node, boolean staticEnv, boolean report) {
 		if (type == file) return true;
 
-		if (!checkAccessModifier(node.modifier(), type, node.name(), "symbol.error.accessDenied.symbol", report) & !report) {
+		if (!checkAccessModifier(node.modifier(), type, node.name(), "symbol.error.accessDenied.symbol", report)) {
 			return false;
 		}
 
@@ -381,7 +381,7 @@ public class LocalContext {
 
 	// region 解析符号引用 Class Field Method
 	@Nullable
-	public ConstantData getClassOrArray(IType type) { return type.array() > 0 ? GlobalContext.anyArray() : classes.getClassInfo(type.owner()); }
+	public ConstantData getClassOrArray(IType type) { return type.array() > 0 ? classes.getArrayInfo(type) : classes.getClassInfo(type.owner()); }
 
 	public ConstantData resolveType(String klass) { return tr.resolve(this, klass); }
 	@Contract("_ -> param1")
@@ -622,8 +622,8 @@ public class LocalContext {
 				return "symbol.error.derefPrimitive:"+type;
 			}
 
-			clz = type.array() > 0 ? GlobalContext.anyArray() : classes.getClassInfo(type.owner);
-			if (clz == null) return "symbol.error.noSuchClass:".concat(type.owner);
+			clz = getClassOrArray(type);
+			if (clz == null) return "symbol.error.noSuchClass:".concat(type.toString());
 		}
 	}
 	public IClass get_frBegin() {return _frBegin;}
@@ -672,25 +672,37 @@ public class LocalContext {
 	public static final class Import {
 		public final IClass owner;
 		public final String method;
-		public final ExprNode prev;
+		public final Object prev;
 
+		// 替换
 		public Import(ExprNode node) {
 			this.owner = null;
 			this.method = null;
 			this.prev = Objects.requireNonNull(node);
 		}
 
+		// 静态方法
 		public Import(IClass owner, String method) {
 			this.owner = Objects.requireNonNull(owner);
 			this.method = Objects.requireNonNull(method);
 			this.prev = null;
 		}
 
+		// 动态方法
 		public Import(IClass owner, String method, ExprNode prev) {
 			this.owner = Objects.requireNonNull(owner);
 			this.method = Objects.requireNonNull(method);
 			this.prev = prev;
 		}
+
+		// 构造器
+		public Import(IClass owner) {
+			this.owner = Objects.requireNonNull(owner);
+			this.method = "<init>";
+			this.prev = new Type(owner.name());
+		}
+
+		public ExprNode parent() {return (ExprNode) prev;}
 	}
 	public Function<String, Import> dynamicMethodImport, dynamicFieldImport;
 

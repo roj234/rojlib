@@ -251,12 +251,38 @@ public final class Request extends Headers {
 		throw new IllegalRequestException(401);
 	}
 
+	private boolean checkProxyToken() {
+		String proxySec = get("x-proxy-sec");
+		if (proxySec == null || HttpCache.proxySecret == null) return false;
+		if (proxySec.equals(HttpCache.proxySecret)) return true;
+		Helpers.athrow(new IllegalRequestException(400, "Bad proxy-sec"));
+		return false;
+	}
+
+	public boolean isSecure() {
+		var conn = handler;
+		if (conn == null) return false;
+
+		if (checkProxyToken()) {
+			String field = getField("x-proxy-https");
+			return !field.isEmpty() && !field.equalsIgnoreCase("off") && !field.equalsIgnoreCase("false");
+		}
+
+		return handler.ch().handler("h11@tls") != null;
+	}
+
 	public InetSocketAddress proxyRemoteAddress() {
 		var conn = handler;
 		if (conn == null) return null;
-		return HttpCache.proxyRequestRetainer == null
-			? (InetSocketAddress) conn.ch().remoteAddress()
-			: HttpCache.proxyRequestRetainer.apply(this);
+
+		if (checkProxyToken()) {
+			var forwardedFor = getField("x-proxy-addr");
+			int i = forwardedFor.indexOf(',');
+			if (i < 0) i = forwardedFor.length();
+			return new InetSocketAddress(forwardedFor.substring(0, i), Integer.parseInt(getField("x-proxy-port")));
+		}
+
+		return (InetSocketAddress) conn.ch().remoteAddress();
 	}
 
 	public CharList headerLine(CharList sb) {

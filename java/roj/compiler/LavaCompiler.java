@@ -69,8 +69,9 @@ public class LavaCompiler {
 		return hook;
 	}
 
+	public <T> T linkLambda(Class<T> functionalInterface, String methodStr, String... parName) throws Exception {return linkLambda("roj/lavac/Lambda"+ReflectionUtils.uniqueId(), functionalInterface, methodStr, parName);}
 	@SuppressWarnings("unchecked")
-	public <T> T linkLambda(Class<T> functionalInterface, String methodStr, String... parName) throws Exception {
+	public <T> T linkLambda(String className, Class<T> functionalInterface, String methodStr, String... parName) throws Exception {
 		gctx.reset();
 
 		LocalContext.set(lctx);
@@ -86,7 +87,7 @@ public class LavaCompiler {
 		CompileUnit u = new CompileUnit(fileName, methodStr+"}");
 
 		u.version = CompileUnit.JavaVersion(8);
-		u.name("roj/lavac/Lambda"+ReflectionUtils.uniqueId());
+		u.name(className);
 		u.parent(Bypass.MAGIC_ACCESSOR_CLASS);
 		u.addInterface(functionalInterface.getName().replace('.', '/'));
 		u.npConstructor();

@@ -4,7 +4,6 @@ import roj.asm.type.TypeHelper;
 import roj.collect.MyHashMap;
 import roj.compiler.plugins.asm.ASM;
 import roj.concurrent.timing.ScheduleTask;
-import roj.concurrent.timing.Scheduler;
 import roj.reflect.ReflectionUtils;
 import roj.text.CharList;
 import roj.text.LineReader;
@@ -134,7 +133,7 @@ class LogWriter extends PrintWriter {
 	}
 
 	void log(LogContext ctx, Level level, CharSequence msg, Throwable ex, Object[] args, int argc) {
-		if (ex == prevExc && msg.equals(prevTxt) && equals(args, prevArg, argc)) {
+		/*if (ex == prevExc && msg.equals(prevTxt) && equals(args, prevArg, argc)) {
 			if (++prevCount % 100 == 0) msg += " (x100)";
 			else if (System.currentTimeMillis() - prevTime < 100) {
 				if (prevCount == 1) {
@@ -152,7 +151,7 @@ class LogWriter extends PrintWriter {
 			prevExc = ex;
 			prevArg = args == holder ? Arrays.copyOf(args, argc) : args;
 			prevTime = System.currentTimeMillis();
-		}
+		}*/
 
 		MyMap m = tmpCtx;
 		m.put("LEVEL", level);

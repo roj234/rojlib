@@ -17,6 +17,7 @@ import roj.compiler.CompilerSpec;
 import roj.compiler.api.Evaluable;
 import roj.compiler.asm.Asterisk;
 import roj.compiler.asm.MethodWriter;
+import roj.compiler.ast.EnumUtil;
 import roj.compiler.context.GlobalContext;
 import roj.compiler.context.LocalContext;
 import roj.compiler.diagnostic.Kind;
@@ -168,11 +169,13 @@ public final class Invoke extends ExprNode {
 					// 静态导入
 					if (mn != null) {
 						type = mn.owner;
-						if (type == null) return mn.prev;
+						if (type == null) return mn.parent();
 						method = mn.method;
 						fn = mn.prev;
 						break block;
 					}
+
+					// will fail 但是要打印错误
 				} else {
 					// ((java.lang.Object) System.out).println(1);
 					fn2 = fn1.parent.resolve(ctx);
@@ -219,7 +222,7 @@ public final class Invoke extends ExprNode {
 					return NaE.RESOLVE_FAILED;
 				}
 			}
-		} else if (fn.getClass() == This.class) {
+		} else if (fn.getClass() == This.class) {// this / super
 			if (!ctx.in_constructor | !ctx.not_invoke_constructor) {
 				ctx.report(Kind.ERROR, "invoke.error.constructor", fn);
 				return NaE.RESOLVE_FAILED;
@@ -229,7 +232,11 @@ public final class Invoke extends ExprNode {
 			ownMirror = ((This) fn).resolve(ctx).type();
 			type = ctx.classes.getClassInfo(ownMirror.owner());
 			method = "<init>";
-		} else {
+
+			if ((ctx.file.modifier()&Opcodes.ACC_ENUM) != 0) {
+				args = EnumUtil.prependEnumConstructor(args);
+			}
+		} else {// new type
 			ownMirror = ctx.resolveType((IType) fn);
 			if (Inferrer.hasUndefined(ownMirror)) ctx.report(Kind.ERROR, "invoke.noExact");
 			klass = ownMirror.owner();
@@ -241,8 +248,9 @@ public final class Invoke extends ExprNode {
 				return NaE.RESOLVE_FAILED;
 			}
 
-			if ((type.modifier()&(Opcodes.ACC_ABSTRACT|Opcodes.ACC_INTERFACE)) != 0) {
-				ctx.report(Kind.ERROR, "invoke.error.instantiationAbstract", klass);
+			int check_flag = ctx.file == type ? ACC_ABSTRACT|ACC_INTERFACE : ACC_ABSTRACT|ACC_INTERFACE|ACC_ENUM;
+			if ((type.modifier()&check_flag) != 0) {
+				ctx.report(Kind.ERROR, (type.modifier()&ACC_ENUM) != 0 ? "invoke.error.instantiationEnum" : "invoke.error.instantiationAbstract", klass);
 				return NaE.RESOLVE_FAILED;
 			}
 		}

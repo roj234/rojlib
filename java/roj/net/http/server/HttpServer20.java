@@ -18,6 +18,7 @@ import java.io.InputStream;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.zip.Deflater;
 
+import static roj.net.http.h2.H2Connection.LOGGER;
 import static roj.net.http.server.HttpCache.*;
 import static roj.net.http.server.HttpServer11.*;
 
