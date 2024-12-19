@@ -146,6 +146,8 @@ public class AnsiString {
 					sb.append(value, 0, i);
 					return new AnsiString(this, value.subSequence(i, value.length()));
 				}
+
+				i++;
 			}
 		} else {
 			sb.append(value);

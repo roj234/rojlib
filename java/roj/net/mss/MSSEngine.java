@@ -173,8 +173,21 @@ public abstract class MSSEngine {
 	@Override
 	public String toString() { return getClass().getSimpleName()+"{stage="+stage+"}"; }
 
-	static int error(int code, String reason) throws MSSException { throw new MSSException(code, reason, null); }
-	static int error(Throwable ex) throws MSSException { throw new MSSException(CIPHER_FAULT, "", ex); }
+	static int error(int code, String reason) throws MSSException {
+		if (reason == null) {
+			switch (code) {
+				case ILLEGAL_PACKET -> reason = "ILLEGAL_PACKET";
+				case CIPHER_FAULT -> reason = "CIPHER_FAULT";
+				case VERSION_MISMATCH -> reason = "VERSION_MISMATCH";
+				case INTERNAL_ERROR -> reason = "INTERNAL_ERROR";
+				case ILLEGAL_PARAM -> reason = "ILLEGAL_PARAM";
+				case NEGOTIATION_FAILED -> reason = "NEGOTIATION_FAILED";
+				default -> throw new IllegalArgumentException();
+			}
+		}
+		throw new MSSException(code, reason, null);
+	}
+	static int error(Throwable ex) throws MSSException { throw new MSSException(CIPHER_FAULT, "CIPHER_FAULT", ex); }
 
 	public abstract int handshakeTLS13(DynByteBuf out, DynByteBuf recv) throws MSSException;
 }

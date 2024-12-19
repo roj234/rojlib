@@ -21,6 +21,7 @@ import roj.text.CharList;
 import roj.util.ArrayCache;
 import roj.util.Helpers;
 
+import java.io.File;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
@@ -112,9 +113,15 @@ public abstract class SerializerFactory {
 	public abstract SerializerFactory add(Class<?> type, Object adapter);
 
 	//region 一些常用的序列化转换器
-	public final SerializerFactory serializeCharArrayToString() {return add(char[].class, SerializerFactory.class,"ToChars","FromChars");}
-	public static String ToChars(char[] t) {return new String(t);}
-	public static char[] FromChars(String t) {return t.toCharArray();}
+	public final SerializerFactory serializeCharArrayToString() {return add(char[].class, SerializerFactory.class,"FromChars","ToChars");}
+	public static String FromChars(char[] t) {return new String(t);}
+	public static char[] ToChars(String t) {return t.toCharArray();}
+	public final SerializerFactory serializeCharListToString() {return add(CharList.class, SerializerFactory.class,"FromCharList","ToCharList");}
+	public static String FromCharList(CharList t) {return t.toString();}
+	public static CharList ToCharList(String t) {return new CharList(t);}
+	public final SerializerFactory serializeFileToString() {return add(File.class, SerializerFactory.class,"FromFile","ToFile");}
+	public static String FromFile(File t) {return t.getAbsolutePath();}
+	public static File ToFile(String t) {return new File(t);}
 	//endregion
 
 	/**

@@ -53,7 +53,7 @@ public class SyncHttpClient implements ChannelHandler {
 
 	@Override
 	public void channelOpened(ChannelCtx ctx) throws IOException {
-		head = ((HttpRequest) findHandler(ctx).handler()).response();
+		head = ctx.prev(HttpRequest.class).response();
 		synchronized (this) {
 			state = HEAD;
 			notifyAll();
@@ -61,15 +61,6 @@ public class SyncHttpClient implements ChannelHandler {
 		if (callback != null) callback.accept(this);
 
 		ctx.channelOpened();
-	}
-
-	@NotNull
-	static ChannelCtx findHandler(ChannelCtx ctx) {
-		ChannelCtx ctx1 = ctx.prev();
-		while (!(ctx1.handler() instanceof HttpRequest)) {
-			ctx1 = ctx1.prev();
-		}
-		return ctx1;
 	}
 
 	@Override
@@ -145,6 +136,14 @@ public class SyncHttpClient implements ChannelHandler {
 			shc.finish(o, false);
 			return false;
 		}
+	}
+	@NotNull
+	static ChannelCtx findHandler(ChannelCtx ctx) {
+		ChannelCtx ctx1 = ctx.prev();
+		while (!(ctx1.handler() instanceof HttpRequest)) {
+			ctx1 = ctx1.prev();
+		}
+		return ctx1;
 	}
 
 	// not use again now

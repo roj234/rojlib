@@ -141,7 +141,9 @@ public class DPIProxy extends Plugin {
 								}
 							}
 							case -1 -> {
-								if (resp.getMessage() != null)
+								if (resp.byteMessage != null)
+									ctx.channelWrite(resp.byteMessage);
+								else if (resp.getMessage() != null)
 									ctx.channelWrite(IOUtil.getSharedByteBuf().putUTFData(resp.getMessage()));
 								LOGGER.debug("{}: 关闭", ctx.remoteAddress());
 								ctx.close();
@@ -159,7 +161,8 @@ public class DPIProxy extends Plugin {
 
 					if (matchers.size() == 0) {
 						if (LOGGER.canLog(Level.INFO)) {
-							LOGGER.info("{}: 发送无效的数据{}", ctx.remoteAddress(), data.slice(Math.min(data.readableBytes(), 256)).dump());
+							data.rIndex = rIdx;
+							LOGGER.info("{}: [FAIL] {}", ctx.remoteAddress(), data.slice(Math.min(data.readableBytes(), 256)).dump());
 						}
 						ctx.close();
 					}

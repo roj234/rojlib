@@ -26,9 +26,11 @@ public abstract class Source extends DataOutputStream {
 	}
 	public final int read(byte[] b) throws IOException { return read(b, 0, b.length); }
 	public abstract int read(byte[] b, int off, int len) throws IOException;
-	public final void read(ByteList buf, int len) throws IOException {
+	public void read(ByteList buf, int len) throws IOException {read__(buf, len);}
+	protected void read__(DynByteBuf buf, int len) throws IOException {
+		if (!buf.hasArray()) throw new IllegalStateException("Not implemented!");
 		buf.ensureCapacity(buf.wIndex()+len);
-		readFully(buf.list, buf.arrayOffset()+buf.wIndex(), len);
+		readFully(buf.array(), buf.arrayOffset()+buf.wIndex(), len);
 		buf.wIndex(buf.wIndex()+len);
 	}
 

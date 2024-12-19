@@ -94,23 +94,19 @@ class TcpChImpl extends MyChannel {
 
 		lock.lock();
 		try {
-			do {
-				var buf = (DynByteBuf) pending.peekFirst();
-				if (buf == null) break;
+			var buf = (DynByteBuf) pending.peekFirst();
+			if (buf == null) return;
 
-				write0(buf);
+			write0(buf);
+			if (buf.isReadable()) return;
 
-				if (buf.isReadable()) break;
+			assert pending.size() == 1 : "composite buffer violation";
+			pending.clear();
+			BufferPool.reserve(buf);
 
-				pending.pollFirst();
-				BufferPool.reserve(buf);
-			} while (true);
-
-			if (pending.isEmpty()) {
-				flag &= ~(PAUSE_FOR_FLUSH|TIMED_FLUSH);
-				key.interestOps(SelectionKey.OP_READ);
-				fireFlushed();
-			}
+			flag &= ~(PAUSE_FOR_FLUSH|TIMED_FLUSH);
+			key.interestOps(SelectionKey.OP_READ);
+			fireFlushed();
 		} finally {
 			lock.unlock();
 		}
@@ -147,8 +143,6 @@ class TcpChImpl extends MyChannel {
 	}
 
 	protected void write(Object o) throws IOException {
-		BufferPool bp = alloc();
-
 		if (o instanceof SendfilePkt req) {
 			if (!pending.isEmpty()) flush();
 			req.written = pending.isEmpty() ? req.channel.transferTo(req.offset, req.length, sc) : -1;
@@ -158,6 +152,7 @@ class TcpChImpl extends MyChannel {
 		var buf = (DynByteBuf) o;
 		if (!buf.isReadable()) return;
 
+		BufferPool bp = alloc();
 		try {
 			if (pending.isEmpty()) {
 				if (!buf.isDirect()) buf = bp.allocate(true, buf.readableBytes(), 0).put(buf);
@@ -167,6 +162,7 @@ class TcpChImpl extends MyChannel {
 			if (buf.isReadable()) {
 				DynByteBuf flusher;
 
+				// difference with EmbeddedChannel: #selected will automatically invoke flush()
 				if (pending.isEmpty()) {
 					fireFlushing();
 					key.interestOps(SelectionKey.OP_WRITE | SelectionKey.OP_READ);

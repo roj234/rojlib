@@ -1,10 +1,7 @@
 package roj.plugins.pinyin;
 
 import roj.archive.qz.xz.LZMA2InputStream;
-import roj.collect.Int2IntMap;
-import roj.collect.MyHashMap;
-import roj.collect.TrieEntry;
-import roj.collect.TrieTree;
+import roj.collect.*;
 import roj.config.Tokenizer;
 import roj.config.data.CInt;
 import roj.io.IOUtil;
@@ -13,6 +10,7 @@ import roj.text.GB18030;
 import roj.util.DynByteBuf;
 
 import java.nio.CharBuffer;
+import java.util.List;
 
 /**
  * @author Roj234
@@ -123,24 +121,29 @@ public class JPinyin {
 	private static void addTone(CharList sb, int cpState, int mode, String splitter) {
 		int off = cpState >>> CPBits;
 		int len = off + (cpState & CPMask);
-		while (off < len) {
-			int j = findNextNumber(off);
-			switch (mode&3) {
-				case PINYIN_TONE: addTone(sb, off, j); break;
-				case PINYIN_FIRST_LETTER: sb.append(StringPool[off]); break;
-				default: case PINYIN_TONE_NUMBER: sb.append(StringPool, off, j+1); break;
-				case PINYIN_NONE: sb.append(StringPool, off, j); break;
+		int j = findNextNumber(off);
+		while (true) {
+			switch (mode & 3) {
+				case PINYIN_TONE -> addTone(sb, off, j);
+				case PINYIN_FIRST_LETTER -> sb.append(StringPool[off]);
+				default/*case PINYIN_TONE_NUMBER*/ -> sb.append(StringPool, off, j + 1);
+				case PINYIN_NONE -> sb.append(StringPool, off, j);
 			}
+			if ((mode & PINYIN_DUOYINZI) == 0) break;
+
 			off = j+1;
+			j = findNextNumber(off);
+			if (j+1 >= len) break;
+
 			sb.append(splitter);
-			if ((mode&PINYIN_DUOYINZI) == 0) break;
 		}
 	}
 	private static int findNextNumber(int i) {
-		while (true) {
+		while (i < StringPool.length) {
 			if (Tokenizer.NUMBER.contains(StringPool[i])) return i;
 			i++;
 		}
+		return i;
 	}
 	private static void addTone(CharList sb, int from, int to) {
 		String vowels = null;

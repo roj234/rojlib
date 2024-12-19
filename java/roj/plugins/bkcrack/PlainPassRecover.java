@@ -5,12 +5,10 @@ import roj.collect.SimpleList;
 import roj.concurrent.TaskHandler;
 import roj.concurrent.task.ITask;
 import roj.io.FastFailException;
-import roj.ui.ProgressBar;
+import roj.ui.EasyProgressBar;
 import roj.util.ByteList;
 
 import java.util.List;
-import java.util.concurrent.atomic.LongAdder;
-import java.util.concurrent.locks.LockSupport;
 
 /**
  * @author Roj234
@@ -230,7 +228,7 @@ class PlainPassRecover implements Macros, ITask {
 				int charsetSize = charset.length;
 				int total = charsetSize * charsetSize;
 
-				w.ep.setName("长度 " + length);
+				w.progress.setName("长度 "+length);
 				w.compute(total);
 
 				// bruteforce two characters to have many tasks for each CPU thread and share work evenly
@@ -271,7 +269,7 @@ class PlainPassRecover implements Macros, ITask {
 				concOwner.found = true;
 			}
 		} catch (FastFailException ignored) {}
-		concOwner.finished.increment();
+		concOwner.progress.increment(1);
 	}
 
 	@Override
@@ -279,55 +277,17 @@ class PlainPassRecover implements Macros, ITask {
 		return concOwner.found;
 	}
 
-	static final class Manager extends PlainPassRecover implements Runnable {
-		LongAdder finished = new LongAdder();
-		int total;
+	static final class Manager extends PlainPassRecover {
 		boolean found, kill;
-		Thread thread;
-		ProgressBar ep = new ProgressBar("");
+		EasyProgressBar progress = new EasyProgressBar("", "H");
 
-		Manager(Cipher keys, byte[] charset) {
-			super(keys, charset);
-			ep.setUnit("H");
-		}
+		Manager(Cipher keys, byte[] charset) {super(keys, charset);}
 
-		@Override
-		public void run() {
-			while (!kill && !found) {
-				long sum = 0;
-				do {
-					long delta = finished.sumThenReset();
-					sum += delta;
-					LockSupport.parkNanos(50_000_000);
-					if (found) break;
-					ep.setPrefix(sum + "/" + total);
-					ep.update(sum / (double)total, (int) delta);
-					if (Thread.interrupted()) {
-						sum = 0;
-					}
-				} while (sum < total);
-
-				finished.reset();
-				ep.end("完成");
-			}
-		}
-
-		public void compute(int total) {
-			finished.reset();
-			this.total = total;
-			if (thread == null) {
-				Thread t = thread = new Thread(this);
-				t.setDaemon(true);
-				t.start();
-			} else {
-				thread.interrupt();
-			}
-		}
+		public void compute(int total) {progress.setTotal(total);}
 
 		byte[] kill() {
 			kill = true;
-			ep.end("完成");
-			if (thread != null) thread.interrupt();
+			progress.end("完成");
 			return found ? pass.toByteArray() : null;
 		}
 	}

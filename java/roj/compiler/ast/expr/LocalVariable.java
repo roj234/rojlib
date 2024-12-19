@@ -1,13 +1,11 @@
 package roj.compiler.ast.expr;
 
-import org.jetbrains.annotations.Nullable;
 import roj.asm.Opcodes;
 import roj.asm.type.IType;
 import roj.compiler.asm.MethodWriter;
 import roj.compiler.asm.Variable;
 import roj.compiler.context.LocalContext;
 import roj.compiler.resolve.ResolveException;
-import roj.compiler.resolve.TypeCast;
 
 /**
  * @author Roj234
@@ -38,16 +36,6 @@ public final class LocalVariable extends VarNode {
 
 		LocalContext.get().loadVar(v);
 		cw.load(v);
-	}
-
-	@Override
-	public void write(MethodWriter cw, @Nullable TypeCast.Cast returnType) {
-		if (v.isVar && returnType != null && returnType.getType1() != null) {
-			System.out.println(v.type);
-			v.type = LocalContext.get().getCommonParent(v.type, returnType.getType1());
-		}
-
-		super.write(cw, returnType);
 	}
 
 	@Override

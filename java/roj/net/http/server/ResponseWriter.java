@@ -20,6 +20,7 @@ public interface ResponseWriter {
 	int getStreamLimit();
 	void setStreamLimit(int bps);
 	void setStreamLimit(SpeedLimiter limiter);
+	SpeedLimiter getStreamLimiter();
 
 	long getSendBytes();
 

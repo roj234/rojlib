@@ -301,8 +301,8 @@ public class HttpClient11 extends HttpRequest implements ChannelHandler {
 		return n;
 	}
 
-	public static Inflater checkWrap(int first2) {
-		int flag0 = first2 >>> 8;
+	public static Inflater checkWrap(int firstTwoByte) {
+		int flag0 = firstTwoByte >>> 8;
 
 		// 检测Zlib Header
 		boolean wrap = false;
@@ -310,14 +310,13 @@ public class HttpClient11 extends HttpRequest implements ChannelHandler {
 		if ((flag0 & 0xF) == 0x8) {
 			// CINFO
 			if ((flag0 >>> 4 & 0xF) <= 7) {
-				int flag1 = first2&0xFF;
 				// FCHECK
-				if (0 == ((flag0 << 8) | flag1) % 31) {
+				if (0 == firstTwoByte % 31) {
 					wrap = true;
 				}
 			}
 		}
-		return new Inflater(wrap);
+		return new Inflater(!wrap);
 	}
 
 	@Override

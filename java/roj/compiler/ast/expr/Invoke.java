@@ -417,7 +417,7 @@ public final class Invoke extends ExprNode {
 				slot += type.length();
 			}
 
-			cw.jump(new Label(0));
+			cw.jump(Label.atZero());
 			return true;
 		}
 		return false;
@@ -447,7 +447,7 @@ public final class Invoke extends ExprNode {
 			if (expr instanceof DotGet dg && (v = dg.isNullish()) != 0) {
 				if (ifNull == null) {
 					isSet = true;
-					DotGet.NULLISH_TARGET.set(ifNull = new Label(-1));
+					DotGet.NULLISH_TARGET.set(ifNull = new Label());
 				}
 			}
 			expr.write(cw, cast);

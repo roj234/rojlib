@@ -7,13 +7,12 @@ import roj.collect.SimpleList;
 import roj.concurrent.TaskHandler;
 import roj.io.FastFailException;
 import roj.io.IOUtil;
-import roj.ui.ProgressBar;
+import roj.ui.EasyProgressBar;
 import roj.util.ArrayUtil;
 import roj.util.ByteList;
 import roj.util.Helpers;
 
 import java.util.List;
-import java.util.concurrent.atomic.LongAdder;
 
 /**
  * @author Roj234
@@ -98,9 +97,7 @@ final class ZCKiller implements Macros {
 
 	boolean stopOnFirstKey;
 	boolean interrupt;
-	LongAdder finished = new LongAdder();
-	int total;
-	ProgressBar bar;
+	EasyProgressBar progress;
 
 	List<Cipher> solutions = new SimpleList<>();
 
@@ -115,33 +112,23 @@ final class ZCKiller implements Macros {
 	}
 
 	List<Cipher> find(TaskHandler th) {
-		bar = new ProgressBar("进度");
+		var bar = progress = new EasyProgressBar("进度");
 
-		bar.setPrefix("Z-创建");
-		bar.updateForce(0);
-
+		bar.set("进度: Z-创建");
 		Zreduction zr = new Zreduction(keystream);
 		if(keystream.length > Solver.MIN_CONTIGUOUS_PLAIN_LENGTH) {
-			bar.setPrefix("Z-筛选");
-			bar.updateForce(0);
+			bar.set("进度: Z-筛选");
 			zr.filter();
 		}
 
-		bar.setPrefix("Z-生成");
-		bar.updateForce(0);
+		bar.set("进度: Z-生成");
 		zr.generate();
 
 		int zIndex = zr.getIndex();
 		IntList candidates = zr.getCandidates();
-		System.out.println("剩余的Z: " + candidates.size());
+		bar.addTotal(candidates.size());
 
-		List<Cipher> solutions = this.solutions = new SimpleList<>();
-
-		finished.reset();
-		total = candidates.size();
-		bar.setPrefix(null);
-
-		log();
+		solutions.clear();
 
 		for (int i = 0; i < candidates.size(); i++) {
 			th.submit(new Solver(this, zIndex, candidates.get(i)));
@@ -149,28 +136,8 @@ final class ZCKiller implements Macros {
 
 		th.awaitFinish();
 
-		bar.end("finish");
-		bar = null;
+		bar.end("完成");
+		progress = null;
 		return solutions;
-	}
-
-	private void log() {
-		Thread t = new Thread(() -> {
-			long sum = 0;
-			do {
-				long delta = finished.sumThenReset();
-				sum += delta;
-				try {
-					Thread.sleep(200);
-				} catch (InterruptedException ignored) {}
-				if (bar == null) return;
-
-				bar.setPrefix(sum + " / " + total);
-				bar.update(((double) sum / total), (int) delta);
-				if (interrupt) return;
-			} while (sum < total);
-		});
-		t.setDaemon(true);
-		t.start();
 	}
 }

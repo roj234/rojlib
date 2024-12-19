@@ -66,9 +66,9 @@ class Assign extends ExprNode {
 			right = prev.resolve(ctx);
 		}
 
-		// 也许搞个 未修改的常量变量 => 常量
+		// 常量传播
 		if (right.isConstant() && left instanceof LocalVariable lv) {
-			ctx.assignConstVar(lv.v, (Constant) right);
+			ctx.assignVar(lv.v, right.constVal());
 		}
 
 		IType lType = left.type();

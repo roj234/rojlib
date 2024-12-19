@@ -9,6 +9,7 @@ import roj.asm.cp.CstString;
 import roj.asm.tree.ConstantData;
 import roj.asm.tree.FieldNode;
 import roj.asm.tree.MethodNode;
+import roj.asm.tree.anno.AnnVal;
 import roj.asm.tree.anno.Annotation;
 import roj.asm.tree.attr.Annotations;
 import roj.asm.tree.attr.AttrString;
@@ -661,10 +662,12 @@ final class SerializerFactoryImpl extends SerializerFactory {
 		// endregion
 
 		serializerId.putInt("",0);
-		copy.one(ALOAD_0);
-		copy.one(ALOAD_2);
-		copy.clazz(CHECKCAST, data.name);
-		copy.field(PUTFIELD, c, ua);
+		if (!isStatic) {
+			copy.one(ALOAD_0);
+			copy.one(ALOAD_2);
+			copy.clazz(CHECKCAST, data.name);
+			copy.field(PUTFIELD, c, ua);
+		}
 
 		return build(classLoader);
 	}
@@ -806,9 +809,27 @@ final class SerializerFactoryImpl extends SerializerFactory {
 		optionalEx = null;
 
 		Annotation opt = Annotation.findInvisible(data.cp, data, "roj/config/auto/Optional");
-		if (opt != null) defaultOptional = opt.getEnumValue("value", "SMALLEST_OUTPUT");
+		if (opt != null) {
+			defaultOptional = opt.getEnumValue("value", "SMALLEST_OUTPUT");
+			if (!opt.containsKey("value") && !opt.values.isEmpty()) {
+				throw new IllegalStateException("类"+data.name+"上的Optional注解只能修改value的默认值");
+			}
+		}
 
 		SimpleList<FieldNode> fields = data.fields;
+
+		opt = Annotation.findInvisible(data.cp, data, "roj/config/auto/FieldOrder");
+		if (opt != null) {
+			List<AnnVal> nodeName = opt.getArray("value");
+			FieldNode[] nodes = new FieldNode[nodeName.size()];
+			for (int i = 0; i < nodes.length; i++) {
+				int fieldId1 = data.getField(nodeName.get(i).asString());
+				if (fieldId1 < 0) throw new IllegalStateException("在"+data.name+"中找不到名为"+nodeName.get(i)+"的字段");
+				nodes[i] = fields.get(fieldId1);
+			}
+			fields = SimpleList.asModifiableList(nodes);
+		}
+
 		for (int i = 0; i < fields.size(); i++) {
 			FieldNode f = fields.get(i);
 			if ((f.modifier() & (ACC_TRANSIENT|ACC_STATIC)) != 0) continue;
@@ -819,7 +840,8 @@ final class SerializerFactoryImpl extends SerializerFactory {
 
 			String name = f.name();
 			MethodNode get = null, set = null;
-			String optional1 = defaultOptional;
+			String writeIgnore = defaultOptional;
+			boolean readIgnore = false;
 			AsType as = null;
 
 			Annotations attr = f.parsedAttr(data.cp, Attribute.ClAnnotations);
@@ -847,8 +869,11 @@ final class SerializerFactoryImpl extends SerializerFactory {
 							break;
 						}
 						case "roj/config/auto/Optional":
-							optional1 = anno.getEnumValue("value", "SMALLEST_OUTPUT");
-							break;
+							writeIgnore = anno.getString("writeIgnore", "NEVER");
+							if (writeIgnore.equals("NEVER"))
+								writeIgnore = anno.getEnumValue("value", "SMALLEST_OUTPUT");
+							readIgnore = anno.getBoolean("readIgnore", false);
+						break;
 						case "roj/config/auto/As":
 							as = asTypes.get(anno.getString("value"));
 							if (as == null) throw new IllegalArgumentException("Unknown as " + anno);
@@ -856,19 +881,24 @@ final class SerializerFactoryImpl extends SerializerFactory {
 				}
 			}
 
-			if (!optional1.equals("NEVER")) {
-				if (fieldId < 32) {
-					optional |= 1 << fieldId;
-				} else {
-					if (optionalEx == null) optionalEx = new MyBitSet();
-					optionalEx.add(fieldId-32);
+			if (!readIgnore) {
+				if (!writeIgnore.equals("NEVER")) {
+					// add this to read optional
+					if (fieldId < 32) {
+						optional |= 1 << fieldId;
+					} else {
+						if (optionalEx == null) optionalEx = new MyBitSet();
+						optionalEx.add(fieldId-32);
+					}
+					// writeIgnore==ALWAYS的处理在value函数里
 				}
-				// TODO fill auto
+
+				fieldIds.putInt(fieldId, name);
 			}
 
 			if (unsafe != 0 ||
-				set != null && (set.modifier()& ACC_PUBLIC) == 0 ||
-				get != null && (get.modifier()& ACC_PUBLIC) == 0) {
+				set != null && (set.modifier()&ACC_PUBLIC) == 0 ||
+				get != null && (get.modifier()&ACC_PUBLIC) == 0) {
 				if ((flag & CHECK_PUBLIC) != 0)
 					throw new RuntimeException("无权访问"+data.name+"."+f+" ("+unsafe+")\n" +
 					"解决方案:\n" +
@@ -880,10 +910,10 @@ final class SerializerFactoryImpl extends SerializerFactory {
 						"解决方案: 换用支持的JVM");
 			}
 
-			value(fieldId, data, f, name, get, set, optional1, as, (unsafe&4) != 0 ? o : null);
-			fieldIds.putInt(fieldId, name);
+			value(fieldId, data, f, name, get, set, writeIgnore, readIgnore, as, (unsafe&4) != 0 ? o : null);
 
-			fieldId++;
+			if (!readIgnore)
+				fieldId++;
 		}
 
 		count.value = fieldId;
@@ -947,7 +977,7 @@ final class SerializerFactoryImpl extends SerializerFactory {
 
 	private void value(int fieldId, ConstantData data, FieldNode fn,
 					   String actualName, MethodNode get, MethodNode set,
-					   String ignoreMode, AsType as,
+					   String writeIgnore, boolean noRead, AsType as,
 					   Class<?> unsafePut) {
 		Type type = as != null ? as.output : fn.fieldType();
 		int actualType = type.getActualType();
@@ -963,7 +993,7 @@ final class SerializerFactoryImpl extends SerializerFactory {
 		int asId = -1;
 
 		byte myCode = type.shiftedOpcode(ILOAD);
-		while (true) {
+		if (!noRead) while (true) {
 		Tmp2 t = readMethods.get(methodType);
 		if (t == null) t = createReadMethod(data, methodType);
 
@@ -1065,72 +1095,91 @@ final class SerializerFactoryImpl extends SerializerFactory {
 		break;
 		}
 
-		cw = write;
-		// 如果可选并且不是基本类型
-		Label skip;
-		if ("NEVER".equals(ignoreMode) || ("IF_NULL".equals(ignoreMode) && fn.fieldType().isPrimitive())) {
-			skip = null;
-		} else {
-			skip = new Label();
+		Label skip = null;
+		if (!"ALWAYS".equals(writeIgnore)) {
+			cw = write;
+			// 如果可选并且不是基本类型
+			_ActualTypeIsClass:
+			if (!"NEVER".equals(writeIgnore)) {
+				skip = new Label();
 
-			cw.one(ALOAD_2);
-			if (get == null) cw.field(GETFIELD, data.name, fn.name(), fn.rawDesc());
-			else cw.invoke(INVOKEVIRTUAL, get);
+				cw.one(ALOAD_2);
+				if (get == null) cw.field(GETFIELD, data.name, fn.name(), fn.rawDesc());
+				else cw.invoke(INVOKEVIRTUAL, get);
 
-			byte code = IFEQ;
-			switch (actualType) {
-				case Type.CLASS: code = IFNULL; cw.one(DUP); cw.vars(ASTORE, 4); cw.visitSizeMax(0, 5); break;
-				case Type.LONG: cw.one(LCONST_0); cw.one(LCMP); cw.visitSizeMax(4,0); break;
-				case Type.FLOAT: cw.one(FCONST_0); cw.one(FCMPG); break;
-				case Type.DOUBLE: cw.one(DCONST_0); cw.one(DCMPG); cw.visitSizeMax(4,0); break;
-			}
-			cw.jump(code, skip);
-			if (actualType == Type.CLASS && ignoreMode.equals("IF_EMPTY")) {
-				var actualTypeName = type.getActualClass();
-				if  (actualTypeName.startsWith("[")) {
-					cw.vars(ALOAD, 4);
-					cw.one(ARRAYLENGTH);
-					cw.jump(IFEQ, skip);
-				} else {
-					var inferrer = genericInferrer();
-					if ("java/lang/String".equals(actualTypeName)) {
-						cw.vars(ALOAD, 4);
-						cw.invokeV("java/lang/String", "isEmpty", "()Z");
-						cw.jump(IFNE, skip);
-					} else if (inferrer.instanceOf("java/lang/CharSequence", actualTypeName)) {
-						cw.vars(ALOAD, 4);
-						cw.invokeItf("java/lang/CharSequence", "length", "()I");
-						cw.jump(IFEQ, skip);
-					} else if (inferrer.instanceOf("java/util/Map", actualTypeName)) {
-						cw.vars(ALOAD, 4);
-						cw.invokeItf("java/util/Map", "isEmpty", "()Z");
-						cw.jump(IFNE, skip);
-					} else if (inferrer.instanceOf("java/util/Collection", actualTypeName)) {
-						cw.vars(ALOAD, 4);
-						cw.invokeItf("java/util/Collection", "isEmpty", "()Z");
-						cw.jump(IFNE, skip);
-					} else if ("java/util/Optional".equals(actualTypeName)) {
-						cw.vars(ALOAD, 4);
-						cw.invokeV("java/util/Optional", "isPresent", "()Z");
-						cw.jump(IFEQ, skip);
+				switch (actualType) {
+					case Type.CLASS -> {
+						cw.one(DUP);
+
+						if (writeIgnore.endsWith("U!")) {
+							assert false : "未实现";
+							// cw.field(GETFIELD, "");
+							// Nullable
+							cw.invokeItf("java/util/function/Predicate", "test", "(Ljava/lang/Object;)Z");
+							cw.jump(IFNE, skip);
+							break _ActualTypeIsClass;
+						}
+
+						cw.vars(ASTORE, 4);
+						cw.visitSizeMax(0, 5);
+						cw.jump(IFNULL, skip);
+
+						if (writeIgnore.equals("IF_EMPTY")) {
+							var actualTypeName = type.getActualClass();
+							if (actualTypeName.startsWith("[")) {
+								cw.vars(ALOAD, 4);
+								cw.one(ARRAYLENGTH);
+								cw.jump(IFEQ, skip);
+							} else {
+								var inferrer = genericInferrer();
+								if ("java/lang/String".equals(actualTypeName)) {
+									cw.vars(ALOAD, 4);
+									cw.invokeV("java/lang/String", "isEmpty", "()Z");
+									cw.jump(IFNE, skip);
+								} else if (inferrer.instanceOf("java/lang/CharSequence", actualTypeName)) {
+									cw.vars(ALOAD, 4);
+									cw.invokeItf("java/lang/CharSequence", "length", "()I");
+									cw.jump(IFEQ, skip);
+								} else if (inferrer.instanceOf("java/util/Map", actualTypeName)) {
+									cw.vars(ALOAD, 4);
+									cw.invokeItf("java/util/Map", "isEmpty", "()Z");
+									cw.jump(IFNE, skip);
+								} else if (inferrer.instanceOf("java/util/Collection", actualTypeName)) {
+									cw.vars(ALOAD, 4);
+									cw.invokeItf("java/util/Collection", "isEmpty", "()Z");
+									cw.jump(IFNE, skip);
+								} else if ("java/util/Optional".equals(actualTypeName)) {
+									cw.vars(ALOAD, 4);
+									cw.invokeV("java/util/Optional", "isPresent", "()Z");
+									cw.jump(IFEQ, skip);
+								}
+							}
+						}
+
+						break _ActualTypeIsClass;
 					}
-
-					/*int id;
-					String serType = type.getActualClass();
-					Signature serSig = fn.parsedAttr(data.cp, Attribute.SIGNATURE);
-					id = ser(serType, serSig != null ? typeParamToRaw(serSig) : null);
-
-					cw.one(ALOAD_0);
-					cw.field(GETFIELD, c, id);
-					cw.invokeV("roj/config/auto/Adapter", "isEmpty", "(Ljava/lang/Object;)Z");
-					cw.jump(IFNE, skip);*/
+					case Type.LONG -> {
+						cw.one(LCONST_0);
+						cw.one(LCMP);
+						cw.visitSizeMax(4, 0);
+					}
+					case Type.FLOAT -> {
+						cw.one(FCONST_0);
+						cw.one(FCMPG);
+					}
+					case Type.DOUBLE -> {
+						cw.one(DCONST_0);
+						cw.one(DCMPG);
+						cw.visitSizeMax(4, 0);
+					}
 				}
+				cw.jump(IFEQ, skip);
 			}
-		}
 
-		cw.one(ALOAD_1);
-		cw.ldc(new CstString(actualName));
-		cw.invokeItf("roj/config/serial/CVisitor", "key", "(Ljava/lang/String;)V");
+			cw.one(ALOAD_1);
+			cw.ldc(new CstString(actualName));
+			cw.invokeItf("roj/config/serial/CVisitor", "key", "(Ljava/lang/String;)V");
+		}
 
 		cw = keyCw;
 		block:
@@ -1149,6 +1198,7 @@ final class SerializerFactoryImpl extends SerializerFactory {
 
 			cw.one(RETURN);
 
+			if ("ALWAYS".equals(writeIgnore)) return;
 			cw = write;
 			cw.one(ALOAD_0);
 			cw.field(GETFIELD, c, id);
@@ -1181,6 +1231,7 @@ final class SerializerFactoryImpl extends SerializerFactory {
 			}
 			keySwitch.branch(fieldId, keyPrimitive);
 
+			if ("ALWAYS".equals(writeIgnore)) return;
 			cw = write;
 			if (as != null) {
 				if (!as.user) cw.one(ALOAD_1);

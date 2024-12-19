@@ -99,14 +99,13 @@ public class MyBitSet implements Iterable<Integer> {
 
 		int addSize = o.size;
 
-		for (int i = 0; i < myLen; i++) {
-			if (i >= len) {
-				set[i] = 0;
-			} else {
-				long num = o.set[i]&set[i];
-				addSize += Long.bitCount(num);
-				set[i] = num;
-			}
+		for (int i = 0; i < len; i++) {
+			long num = o.set[i]&set[i];
+			addSize += Long.bitCount(num);
+			set[i] = num;
+		}
+		for (int i = len; i < myLen; i++) {
+			set[i] = 0;
 		}
 
 		size = addSize;
@@ -126,6 +125,9 @@ public class MyBitSet implements Iterable<Integer> {
 			addSize += Long.bitCount(num);
 			set[i] = num;
 		}
+		for (int i = len; i < set.length; i++) {
+			addSize += Long.bitCount(set[i]);
+		}
 
 		size = addSize;
 		return this;
@@ -144,8 +146,18 @@ public class MyBitSet implements Iterable<Integer> {
 			addSize += Long.bitCount(num);
 			set[i] = num;
 		}
+		for (int i = len; i < set.length; i++) {
+			addSize += Long.bitCount(set[i]);
+		}
 
-		max = prevTrue(theMax);
+		int max1 = max+1;
+		while (true) {
+			int next = trueRange(max1, cap>>>6);
+			if (next < 0) break;
+			max1 = next+1;
+		}
+
+		max = prevTrue(max = max1);
 		size = addSize;
 		return this;
 	}
@@ -160,7 +172,7 @@ public class MyBitSet implements Iterable<Integer> {
 		if (e > max) max = e;
 		expand(e);
 		long v = set[e >>> 6];
-		if (v != (v = v | 1L << (e & 63))) {
+		if (v != (v |= 1L << (e & 63))) {
 			set[e >>> 6] = v;
 			size++;
 			return true;
@@ -171,8 +183,9 @@ public class MyBitSet implements Iterable<Integer> {
 	public final boolean remove(int e) {
 		if (e < 0 || (e >>> 6) >= set.length) return false;
 		//expand(e);
-		if ((set[e >>> 6] & 1L << (e & 63)) != 0) {
-			set[e >>> 6] &= ~(1L << (e & 63));
+		long mask = 1L << (e & 63);
+		if ((set[e >>> 6] & mask) != 0) {
+			set[e >>> 6] &= ~mask;
 			if (e == max) max = prevTrue(max-1);
 			size--;
 			return true;
@@ -398,9 +411,14 @@ public class MyBitSet implements Iterable<Integer> {
 		max -= i;
 	}
 
-	public final MyBitSet copy() {
-		MyBitSet copied = new MyBitSet(cap);
+	public Throwable x;
+	public final MyBitSet copy() {return copyTo(new MyBitSet(cap-1));}
+	public final MyBitSet copyTo(MyBitSet copied) {
+		copied.expand(cap);
 		System.arraycopy(set, 0, copied.set, 0, set.length);
+		for (int i = set.length; i < copied.set.length; i++) {
+			copied.set[i] = 0;
+		}
 		copied.max = this.max;
 		copied.size = this.size;
 		return copied;
@@ -576,6 +594,7 @@ public class MyBitSet implements Iterable<Integer> {
 				if (mbs.set[i] != set[i++]) return false;
 				size -= 64;
 			}
+			if (size == 0) return true;
 
 			long mask = (1L << size) - 1;
 			return (mbs.set[i] & mask) == (set[i] & mask);
@@ -595,6 +614,7 @@ public class MyBitSet implements Iterable<Integer> {
 			hash = hash*31 + Long.hashCode(set[i++]);
 			size -= 64;
 		}
+		if (size == 0) return hash;
 
 		long mask = (1L << size) - 1;
 		return hash*31 + Long.hashCode(set[i]&mask);

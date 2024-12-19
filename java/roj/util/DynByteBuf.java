@@ -256,6 +256,10 @@ public abstract class DynByteBuf extends OutputStream implements CharSequence, M
 	public DynByteBuf put(DynByteBuf b, int len) {return put(b, b.rIndex, len);}
 	public abstract DynByteBuf put(DynByteBuf b, int off, int len);
 
+	public final DynByteBuf put(int offset, DynByteBuf b) {return put(offset, b, b.rIndex, b.readableBytes());}
+	public final DynByteBuf put(int offset, DynByteBuf b, int len) {return put(offset, b, b.rIndex, len);}
+	public abstract DynByteBuf put(int offset, DynByteBuf b, int off, int len);
+
 	//region 基本类型
 	public final DynByteBuf putBool(boolean b) {return put(b?1:0);}
 	@ReferenceByGeneratedClass

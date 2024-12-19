@@ -5,11 +5,13 @@ import roj.collect.RingBuffer;
 import roj.collect.SimpleList;
 import roj.io.storage.DataStorage;
 import roj.net.http.Headers;
+import roj.net.http.HttpUtil;
 import roj.text.ACalendar;
 
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.function.BiConsumer;
+import java.util.function.IntFunction;
 import java.util.zip.Deflater;
 
 /**
@@ -18,6 +20,7 @@ import java.util.zip.Deflater;
  */
 public final class HttpCache implements BiConsumer<String, String> {
 	public static String proxySecret;
+	public static IntFunction<Response> globalHttpError;
 
 	private static final int KEEPALIVE_MAX = 32;
 	private static final int MAX_REQEUST_CACHE = 10;
@@ -41,6 +44,14 @@ public final class HttpCache implements BiConsumer<String, String> {
 	public DataStorage sessionStorage;
 
 	public final SimpleList<Object> headers = new SimpleList<>();
+
+	public IntFunction<Response> httpError = globalHttpError;
+	public Response createHttpError(int code) {
+		if (httpError != null) return httpError.apply(code);
+
+		String desc = code+" "+ HttpUtil.getDescription(code);
+		return new StringResponse("<title>"+desc+"</title><center><h1>"+desc+"</h1><hr/><div>"+HttpServer11.SERVER_NAME+"</div></center>", "text/html");
+	}
 
 	final RingBuffer<HttpServer11> hanging = new RingBuffer<>(KEEPALIVE_MAX);
 

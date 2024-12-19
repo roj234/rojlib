@@ -185,7 +185,7 @@ final class Solver implements ITask, Macros {
 		try {
 			searchZ(7);
 		} catch (FastFailException ignored) {}
-		ctx.finished.increment();
+		ctx.progress.increment(1);
 	}
 
 	@Override

@@ -1,7 +1,6 @@
 package roj.plugins.http.template;
 
 import roj.config.data.CEntry;
-import roj.io.IOUtil;
 import roj.net.http.HttpUtil;
 import roj.net.http.server.DiskFileInfo;
 import roj.net.http.server.Response;
@@ -20,7 +19,7 @@ public class LavaScript extends Plugin {
 	@Override
 	protected void onEnable() throws Exception {
 		for (Map.Entry<String, CEntry> entry : getConfig().getMap("paths").entrySet()) {
-			var basePath = new File(IOUtil.safePath(getDataFolder().getAbsolutePath()+entry.getValue().asString()));
+			var basePath = new File(getDataFolder(), entry.getValue().asString());
 
 			registerRoute(entry.getKey()+"/", (req, rh) -> {
 				File file = new File(basePath, req.path());

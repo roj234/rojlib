@@ -1,61 +1,106 @@
 package roj.ui;
 
 import roj.io.IOUtil;
+import roj.reflect.ReflectionUtils;
+import roj.text.CharList;
 import roj.text.TextUtil;
 
-import java.util.concurrent.atomic.AtomicLong;
-import java.util.concurrent.atomic.LongAdder;
+import static roj.reflect.ReflectionUtils.u;
 
 /**
  * @author Roj234
  * @since 2023/10/28 0028 1:55
  */
 public class EasyProgressBar extends ProgressBar {
-	final LongAdder fin = new LongAdder();
-	final AtomicLong max = new AtomicLong();
+	private static final int AVG_SPEED_WINDOW = 2000;
 
-	public EasyProgressBar(String name) { super(name); }
-	public EasyProgressBar(String name, String unit) { super(name); setUnit(unit); }
+	private String unit, postfix = "--:--";
+	private volatile long deltaTime, delta;
+	private volatile long finish, total;
 
-	public void reset() {
-		fin.reset();
-		max.set(0);
-		super.reset();
+	private static final long
+		DELTA_OFFSET = ReflectionUtils.fieldOffset(EasyProgressBar.class, "delta"),
+		FINISH_OFFSET = ReflectionUtils.fieldOffset(EasyProgressBar.class, "finish"),
+		TOTAL_OFFSET = ReflectionUtils.fieldOffset(EasyProgressBar.class, "total");
+
+	public EasyProgressBar(String name) { super(name); this.unit = "it"; }
+	public EasyProgressBar(String name, String unit) { super(name); this.unit = unit; }
+	public void setUnit(String unit) { this.unit = unit; }
+
+	public void reset() {setTotal(0);}
+	public void setUnlimited() {setTotal(-1);}
+	public void setTotal(long total) {
+		finish = 0;
+		this.total = total;
+
+		delta = 0;
+		deltaTime = 0;
+		barTime = 0;
 	}
+	public void addTotal(long total) {u.getAndAddLong(this, TOTAL_OFFSET, total);}
 
-	public void addMax(long count) { max.addAndGet(count); }
-	public void addCurrent(long count) {
-		fin.add(count);
+	public long getFinished() {return finish;}
+	public long getTotal() {return total;}
 
-		long sum = fin.sum();
-		long tot = max.get();
+	private double speed() { return deltaTime == 0 ? 0 : (double) delta / (System.currentTimeMillis() - deltaTime) * 1000; }
+	public void increment() {increment(1);}
+	public void increment(long count) {
+		long prevFin = u.getAndAddLong(this, FINISH_OFFSET, count);
+		long fin = prevFin + count;
+		long tot = total;
 
-		double pct = (double) sum / tot;
-		update(pct, (int) Math.min(count, Integer.MAX_VALUE));
-		if (pct >= 1) updateForce(pct);
+		u.getAndAddLong(this, DELTA_OFFSET, count);
+
+		long time = System.currentTimeMillis();
+		long t = barTime;
+		if (((tot >= 0 && fin < tot || prevFin >= tot) && time - t < BAR_DELAY) || !u.compareAndSwapLong(this, UPDATE_OFFSET, t, time)) return;
+
+		if (time - deltaTime > AVG_SPEED_WINDOW) {
+			delta = (long) speed();
+			deltaTime = time - (AVG_SPEED_WINDOW / 2);
+		}
+
+		setPrefix(tot < 0
+			? unit.equals("B") ? TextUtil.scaledNumber1024(fin) : String.valueOf(fin)
+			: unit.equals("B") ? TextUtil.scaledNumber1024(fin)+"/"+TextUtil.scaledNumber1024(tot) : fin+"/"+tot);
+
+		if (delta == 0 || fin > tot) {
+			postfix = "--:--";
+		} else {
+			int eta = (int) Math.ceil((tot - fin) / speed());
+			postfix = IOUtil.getSharedCharBuf().append(eta/3600).append(':').padNumber(eta/60%60, 2).append(':').padNumber(eta%60, 2).toString();
+		}
+
+		setProgress((double) fin / tot);
 	}
 
 	@Override
-	public void updateForce(double percent) {
-		long sum = fin.sum();
-		long tot = max.get();
-
-		if (unit.equals("B")) {
-			setPrefix(TextUtil.scaledNumber1024(sum)+"/"+TextUtil.scaledNumber1024(tot));
-		} else {
-			setPrefix(sum+"/"+tot);
-		}
-
-		if (speedPerMs() == 0) {
-			setPostfix("ETA: --:--");
-		} else {
-			int s = (int) (getEta(tot-sum) / 1000);
-			setPostfix(IOUtil.getSharedCharBuf().append("ETA: ").append(s/3600).append(':').padNumber(s/60%60, 2).append(':').padNumber(s%60, 2).toString());
-		}
-
-		super.updateForce(percent);
+	protected int getPostFixWidth() {
+		int width = Terminal.getStringWidth(unit)+9;
+		width += Terminal.getStringWidth(postfix)+5;
+		return width;
 	}
 
-	public long getCurrent() {return fin.sum();}
-	public long getMax() {return max.get();}
+	@Override
+	protected void renderPostFix(CharList sb) {
+		double speed = speed();
+		String timeUnit = "s";
+		if (speed < 1) {
+			speed *= 60;
+			timeUnit = "m";
+		}
+		if (speed < 1) {
+			speed *= 60;
+			timeUnit = "h";
+		}
+		if (speed < 1) {
+			speed *= 24;
+			timeUnit = "d";
+		}
+
+		sb.append(" \u001B[92m").append(speed < 1000 ? TextUtil.toFixed(speed, 2) : TextUtil.scaledNumber(Math.round(speed))).append(unit).append('/').append(timeUnit)
+		  .append(" \u001B[93mETA: \u001B[94m").append(postfix);
+	}
+
+	@Override public void close() {setTotal(0);super.close();}
 }

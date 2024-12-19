@@ -76,5 +76,5 @@ public sealed class JumpSegment extends Segment permits JumpSegmentAO {
 	public final boolean willJumpTo(int block, int offset) { return (offset == -1 || target.offset == offset) && target.block == block; }
 
 	@Override
-	public final String toString() { return Opcodes.showOpcode(code)+"(b"+target.getBlock()+" + "+target.getOffset()+")"; }
+	public final String toString() { return Opcodes.showOpcode(code)+"("+target+")"; }
 }

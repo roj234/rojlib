@@ -241,7 +241,7 @@ public class MyPassIs extends Plugin {
 			sb.insert(0, "您的密码是[\u001b[;92m(a)ccept\u001b[;0m,\u001b[;91m(c)ancel\u001b[;96m,\u001b[;93m(r)andom\u001b[;0m] > ");
 			Terminal.renderBottomLine(sb, true, Terminal.getStringWidth(sb)+1);
 			char acr = Terminal.readChar(MyBitSet.from("acr"));
-			Terminal.removeBottomLine(sb, true);
+			Terminal.removeBottomLine(sb);
 			sb._secureFree();
 			switch (acr) {
 				case 'a':

@@ -147,20 +147,15 @@ public class DirectByteList extends DynByteBuf {
 
 	@Override
 	public final DynByteBuf put(DynByteBuf b, int off, int len) {
-		if (off+len > b.wIndex) throw new IndexOutOfBoundsException();
+		if ((off|len|(off+len)) < 0 || off + len > b.wIndex) throw new IndexOutOfBoundsException("off="+off+",len="+len+",cap="+b.wIndex);
 
-		if (b.hasArray()) {
-			put(b.array(), b.arrayOffset()+off, len);
-		} else if (b.isDirect()) {
-			if ((off|len) < 0) throw new IndexOutOfBoundsException();
-			if (len == 0) return this;
+		u.copyMemory(b.array(), b._unsafeAddr()+off, null, preWrite(len) + address, len);
+		return this;
+	}
 
-			int wi = preWrite(len);
-			copyToArray(b.address()+off, null, address, wi, len);
-		} else {
-			while (len-- > 0) put(b.get(off++));
-		}
-
+	@Override
+	public DynByteBuf put(int wi, DynByteBuf b, int off, int len) {
+		u.copyMemory(b.array(), b._unsafeAddr()+off, null, testWI(wi, len) + address, len);
 		return this;
 	}
 
@@ -345,7 +340,7 @@ public class DirectByteList extends DynByteBuf {
 	}
 
 	@Override
-	public final ByteBuffer nioBuffer() {return NativeMemory.newDirectBuffer(address, length, nm).limit(wIndex).position(rIndex);}
+	public final ByteBuffer nioBuffer() {return NativeMemory.newDirectBuffer(address, length, null/*java sb*/).limit(wIndex).position(rIndex);}
 
 	@Override
 	public String dump() {

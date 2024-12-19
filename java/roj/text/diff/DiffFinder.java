@@ -308,7 +308,7 @@ public class DiffFinder extends JFrame {
 		private CVisitor result;
 
 		final void initComparator(File base, FileMeta[] metas, int preWindow, TaskPool POOL) {
-			bar.addMax(metas.length);
+			bar.addTotal(metas.length);
 			AtomicLong memoryUsage = new AtomicLong();
 			boolean notText = uiNotTextCompare.isSelected();
 			for (FileMeta meta : metas) {
@@ -327,7 +327,7 @@ public class DiffFinder extends JFrame {
 							ArrayCache.putArray(out);
 							memoryUsage.addAndGet(i);
 
-							bar.addCurrent(1);
+							bar.increment(1);
 						} catch (Exception e) {
 							LOGGER.error("读取文件{}发生了错误", e, meta.path);
 						}
@@ -352,7 +352,7 @@ public class DiffFinder extends JFrame {
 							ArrayCache.putArray(out);
 							memoryUsage.addAndGet(i);
 
-							bar.addCurrent(1);
+							bar.increment(1);
 						} catch (Exception e) {
 							LOGGER.error("读取文件{}发生了错误", e, meta.path);
 						}
@@ -415,11 +415,11 @@ public class DiffFinder extends JFrame {
 				List<FileMeta> self = layered.get(j);
 
 				int cmpCount = self.size() * prev.size() + (self.size() - 1) * self.size() / 2;
-				bar.addMax(cmpCount);
+				bar.addTotal(cmpCount);
 
 				taskCount += self.size();
 				if (skip >= taskCount) {
-					bar.addCurrent(cmpCount);
+					bar.increment(cmpCount);
 					finishedBlock.add(j);
 				}
 			}
@@ -442,7 +442,7 @@ public class DiffFinder extends JFrame {
 					int fTaskId = taskId++;
 					int count = prev.size() + self.size() - j - 1;
 					if (skip > 0) {
-						bar.addCurrent(count);
+						bar.increment(count);
 						skip --;
 						finishedTask.add(fTaskId);
 						continue;
@@ -506,7 +506,7 @@ public class DiffFinder extends JFrame {
 
 						synchronized (finishedTask) { finishedTask.add(fTaskId); }
 
-						bar.addCurrent(count);
+						bar.increment(count);
 
 						x.resolveOn(null, cleanup);
 					}));

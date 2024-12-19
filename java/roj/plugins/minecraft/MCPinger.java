@@ -65,9 +65,10 @@ public class MCPinger extends Plugin {
 			try {
 				for (var ip : ips) {
 					System.out.println("正在扫描:"+ip);
+					bar.setTotal(64536);
 					for (int port = 1000; port < 65536; port++) {
 						bar.setPrefix(Integer.toString(port));
-						bar.update((port-1000)/64536f, 1);
+						bar.increment(1);
 
 						conn.acquire();
 						ClientLaunch.tcp().timeout(1000).connect(ip, port).loop(loop).initializator(new PingTask()).launch();
@@ -102,7 +103,7 @@ public class MCPinger extends Plugin {
 			logger.debug("端口开放 "+ctx.remoteAddress());
 			ByteList buf = IOUtil.getSharedByteBuf();
 			buf.put(0) // packet id: handshake
-			   .putVarInt(1343); // protocol
+			   .putVarInt(760); // protocol
 			InetSocketAddress addr = ((InetSocketAddress) ctx.remoteAddress());
 			buf.putVarIntUTF(addr.getHostName()+"\u0000FML\u0000") // host
 			   .putShort(addr.getPort()) // port

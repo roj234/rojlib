@@ -72,13 +72,14 @@ public class DefaultConsole implements Console {
 
 	public void registered() {doRender();}
 	public void unregistered() {
-		Terminal.removeBottomLine(prompt, true);
-		Terminal.removeBottomLine(tooltip, true);
+		Terminal.removeBottomLine(prompt);
+		Terminal.removeBottomLine(tooltip);
 	}
 	public void idleCallback() {
 		if (_isDirty) {_isDirty = false;doRender();}
 	}
 
+	protected CharList input() {return input;}
 	private void checkAnsi() {
 		invisible.clear();
 		Matcher m = ANSI_ESCAPE.matcher(input);
@@ -130,6 +131,13 @@ public class DefaultConsole implements Console {
 		assert tabCursor >= 0;
 
 		Completion c = tabs.get(tabId);
+		if (insert && c.isTip) {
+			beep();
+			tooltip.clear();
+			tooltip.append("请填充该参数的内容，而不是补全它");
+			displayTooltip(1000);
+			insert = false;
+		}
 		AnsiString str = c.completion;
 		if (insert) {
 			input.replace(tabCursor+c.offset, tabCursor, str.writeRaw(IOUtil.getSharedCharBuf()));
@@ -167,7 +175,7 @@ public class DefaultConsole implements Console {
 			cursor ++;
 
 			if (autoComplete) {
-				complete(lastInput != null ? lastInput.substring(0, cursor) : input.substring(0, cursor), tabs);
+				complete(lastInput != null ? lastInput.substring(0, cursor) : input.substring(0, cursor), tabs, true);
 				if (tabs.size() > 0) {
 					isAutoComplete = true;
 					setComplete(0);
@@ -291,13 +299,18 @@ public class DefaultConsole implements Console {
 						break;
 					}
 
-					complete(lastInput != null ? lastInput.substring(0, cursor) : input.substring(0, cursor), tabs);
+					complete(lastInput != null ? lastInput.substring(0, cursor) : input.substring(0, cursor), tabs, false);
 					if (tabs.size() > 0) {
 						if (!isAutoComplete) {
 							String prev = null;
 							int lca = 0;
 							int offset = 1;
 							for (Completion tab : tabs) {
+								if (tab.isTip) {
+									lca = offset = 0;
+									break;
+								}
+
 								if (tab.offset != offset) {
 									if (offset != 1) {
 										lca = 0;
@@ -484,7 +497,7 @@ public class DefaultConsole implements Console {
 	protected final void displayTooltip(int timeout) {
 		if (removeTooltip != null) removeTooltip.cancel();
 		if (timeout < 0) {
-			Terminal.removeBottomLine(tooltip, true);
+			Terminal.removeBottomLine(tooltip);
 			return;
 		}
 
@@ -514,7 +527,7 @@ https://unix.stackexchange.com/questions/245013/get-the-display-width-of-a-strin
 		});
 	}
 	protected AnsiString highlight(CharList input) {return null;}
-	protected void complete(String prefix, List<Completion> out) {}
+	protected void complete(String prefix, List<Completion> out, boolean oninput) {}
 	protected boolean evaluate(String cmd) {return true;}
 
 	public void setInputEcho(boolean echo) {this._echo = echo; _isDirty = true;}

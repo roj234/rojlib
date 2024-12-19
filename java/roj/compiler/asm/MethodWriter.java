@@ -40,6 +40,9 @@ public class MethodWriter extends CodeWriter {
 		}
 	}
 
+	public void __addLabel(Label l) {labels.add(l);}
+	public void __removeLabel(Label l) {labels.remove(l);}
+
 	public MethodWriter(ConstantData unit, MethodNode mn, boolean generateLVT) {
 		this.owner = unit;
 		this.init(new ByteList(),unit.cp,mn,(byte)0);
@@ -96,18 +99,12 @@ public class MethodWriter extends CodeWriter {
 
 	public int nextSegmentId() {return segments.size()-1;}
 	public void replaceSegment(int id, Segment segment) {segments.set(id, segment);}
+	public Segment getSegment(int i) {return segments.get(i);}
 	public boolean isJumpingTo(Label point) {return !segments.isEmpty() && segments.get(segments.size()-1) instanceof JumpSegment js && js.target == point;}
 
 	public MethodWriter fork() {return new MethodWriter(owner, mn, lvt1 != null);}
 
-	private final List<Label> zeroLabels = new SimpleList<>();
-
-	@Override
-	public void label(Label x) {
-		// 预优化无用的跳转
-		if (segments.isEmpty()) zeroLabels.add(x);
-		super.label(x);
-	}
+	private static final long BLOCK_INDEX = ReflectionUtils.fieldOffset(Label.class, "block");
 
 	public DynByteBuf writeTo() {
 		if (getState() < 2) visitExceptions();
@@ -115,14 +112,6 @@ public class MethodWriter extends CodeWriter {
 		b.remove(0, 8);
 		b.wIndex(b.wIndex()-2);
 		return b;
-	}
-
-	private static final long BLOCK_INDEX = ReflectionUtils.fieldOffset(Label.class, "block");
-	private static final long OFFSET_INDEX = ReflectionUtils.fieldOffset(Label.class, "offset");
-	public void insertBefore(DynByteBuf buf) {
-		super.insertBefore(buf);
-		int delta = buf.readableBytes();
-		for (Label label : zeroLabels) ReflectionUtils.u.getAndAddInt(label, OFFSET_INDEX, delta);
 	}
 
 	private boolean disposed;
@@ -137,11 +126,6 @@ public class MethodWriter extends CodeWriter {
 				cw.labels.add(label);
 			}
 			labels.clear();
-			/*for (Label label : zeroLabels) {
-				ReflectionUtils.u.getAndAddInt(label, BLOCK_INDEX, mb-1);
-				cw.labels.add(label);
-			}
-			zeroLabels.clear();*/
 			disposed = true;
 		}
 
@@ -163,5 +147,4 @@ public class MethodWriter extends CodeWriter {
 		cw.codeOb = ((StaticSegment) tarSeg.get(tarSeg.size()-1)).getData();
 	}
 
-	public Segment getSegment(int i) {return segments.get(i);}
 }

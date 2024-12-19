@@ -17,9 +17,9 @@ public class GuiProgressBar extends EasyProgressBar {
 	}
 
 	@Override
-	public void updateForce(double percent) {
-		if (uiProgress != null) uiProgress.setValue((int) (percent * 10000));
-		super.updateForce(percent);
+	public void setProgress(double progress) {
+		if (uiProgress != null) uiProgress.setValue((int) (progress * 10000));
+		super.setProgress(progress);
 	}
 
 	@Override

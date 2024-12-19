@@ -174,7 +174,7 @@ public final class MethodNode extends CNode {
 				}
 
 				LocalVariableTable lvt = code != null ? (LocalVariableTable) code.attrByName("LocalVariableTable") : null;
-				Label ZERO_READONLY = new Label(0);
+				Label ZERO_READONLY = Label.atZero();
 
 				int slot = (modifier&Opcodes.ACC_STATIC) == 0 ? 1 : 0;
 				for (int j = 0;;) {

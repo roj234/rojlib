@@ -90,9 +90,11 @@ public final class OKRouter implements Router {
 		if (data == null) throw new IllegalStateException("找不到"+ o.getName()+"的类文件");
 
 		var hndInst = new ConstantData();
-		hndInst.name("roj/net/http/server/auto/Router$"+ReflectionUtils.uniqueId());
+		hndInst.name("roj/net/http/server/auto/OKRouter$"+ReflectionUtils.uniqueId());
 		hndInst.interfaces().add("roj/net/http/server/auto/OKRouter$Dispatcher");
 		hndInst.parent(Bypass.MAGIC_ACCESSOR_CLASS);
+		//not needed, only invoke o.xxx
+		//hndInst.putAttr(new AttrString("SourceFile", o.getName()));
 		ClassDefiner.premake(hndInst);
 
 		hndInst.newField(0, "$methodId", "I");
@@ -655,7 +657,7 @@ public final class OKRouter implements Router {
 		int accepts;
 		//accept this path for prefix router
 		Predicate<String> earlyCheck = Helpers.alwaysTrue();
-		String mime;
+		String mime = "text/plain";
 		Dispatcher req;
 		Dispatcher[] prec;
 	}
@@ -1116,7 +1118,7 @@ public final class OKRouter implements Router {
 		}
 		if (ret instanceof Response r) return r;
 		if (ret == null) return null;
-		return new StringResponse(ret.toString(), set.mime != null ? set.mime : "text/plain");
+		return new StringResponse(ret.toString(), set.mime);
 	}
 
 	@ReferenceByGeneratedClass

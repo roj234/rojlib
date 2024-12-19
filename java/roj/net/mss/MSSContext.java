@@ -66,23 +66,31 @@ public class MSSContext {
 	}
 
 	protected int getSupportCertificateType() {return CipherSuite.ALL_PUBLIC_KEY_TYPE;}
-	protected MSSPublicKey checkCertificate(Object ctx, int type, DynByteBuf data) throws GeneralSecurityException {
+	protected MSSPublicKey checkCertificate(Object ctx, int type, DynByteBuf data, boolean isServerCert) throws MSSException, GeneralSecurityException {
 		return CipherSuite.getKeyFormat(type).decode(data);
 	}
 
 	protected String alpn, serverName;
+	protected CharMap<DynByteBuf> handshakeExtensions;
 	public MSSContext setServerName(String serverName) {this.serverName = serverName;return this;}
 	public MSSContext setALPN(String alpn) {this.alpn = alpn;return this;}
+	public MSSContext addExtension(int id, DynByteBuf data) {
+		if (handshakeExtensions == null) handshakeExtensions = new CharMap<>();
+		handshakeExtensions.put((char)id, data);
+		return this;
+	}
 	/**
 	 *
 	 * @param stage Enum[BEFORE_CLIENT_HELLO, HANDLE_CLIENT_HELLO, HANDLE_SERVER_HELLO]
 	 */
 	protected void processExtensions(Object ctx, CharMap<DynByteBuf> extIn, CharMap<DynByteBuf> extOut, int stage) throws MSSException {
 		if (stage == 0) {
+			if (handshakeExtensions != null) extOut.putAll(handshakeExtensions);
 			if (serverName != null) extOut.put(Extension.server_name, new ByteList().putAscii(serverName));
 			if (alpn != null) extOut.put(Extension.application_layer_protocol, new ByteList().putAscii(alpn));
 		}
 		if (stage == 1) {
+			if (handshakeExtensions != null) extOut.putAll(handshakeExtensions);
 			if (alpn != null) {
 				var buf = extIn.remove(Extension.application_layer_protocol);
 				if (buf == null || !alpn.equals(buf.readAscii(buf.readableBytes())))

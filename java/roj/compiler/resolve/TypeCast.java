@@ -255,6 +255,8 @@ public class TypeCast {
 	}
 	private final TPCollector collector = new TPCollector();
 	private IType getTypeParamBound(/*TypeParam*/IType type, Map<String, List<IType>> first, Map<String, List<IType>> second) {
+		if (type.genericType() == 0) return type;
+
 		var typeParams = second == null ? first : first == null ? second : new MyHashMap<>(second);
 		if (first != null) {
 

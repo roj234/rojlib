@@ -68,11 +68,11 @@ public class ZipRouter implements Router, Predicate<String> {
 		return zip.getEntry(url) != null || (isDir && zip.getEntry(url+"index.html") != null);
 	}
 
-	static final class ZipFileInfo implements FileInfo {
+	public static final class ZipFileInfo implements FileInfo {
 		final ZipFile zf;
 		final ZEntry ze;
 
-		ZipFileInfo(ZipFile zf, ZEntry ze) {
+		public ZipFileInfo(ZipFile zf, ZEntry ze) {
 			this.zf = zf;
 			this.ze = ze;
 		}
@@ -99,7 +99,7 @@ public class ZipRouter implements Router, Predicate<String> {
 		@Override
 		public long lastModified() {return ze.getModificationTime();}
 		@Override
-		public String getETag() {return '"'+Integer.toString(ze.getCrc32(), 36)+'"';}
+		public String getETag() {return '"'+Integer.toUnsignedString(ze.getCrc32(), 36)+'"';}
 
 		@Override
 		public void prepare(ResponseHeader rh, Headers h) {h.put("content-type", MimeType.getMimeType(ze.getName()));}

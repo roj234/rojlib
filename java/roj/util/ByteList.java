@@ -12,6 +12,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.BufferOverflowException;
+import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
 import java.nio.ReadOnlyBufferException;
 import java.nio.charset.StandardCharsets;
@@ -149,6 +150,11 @@ public class ByteList extends DynByteBuf implements Appendable {
 		wIndex += len;
 		return this;
 	}
+	public DynByteBuf put(int wi, DynByteBuf b, int off, int len) {
+		wi = testWI(wi, len)+arrayOffset();
+		b.readFully(off, list, wi, len);
+		return this;
+	}
 
 	public final ByteList putChars(int wi, CharSequence s) {
 		wi = testWI(wi, s.length() << 1)+arrayOffset();
@@ -280,7 +286,7 @@ public class ByteList extends DynByteBuf implements Appendable {
 		int off = arrayOffset() + rIndex;
 		int len = arrayOffset() + wIndex;
 		while (i <= 28) {
-			if (off >= len) throw new ArrayIndexOutOfBoundsException();
+			if (off >= len) throw new BufferUnderflowException();
 
 			int chunk = list[off++];
 			rIndex++;
@@ -460,6 +466,11 @@ public class ByteList extends DynByteBuf implements Appendable {
 			}
 			fakeWriteIndex += len;
 			return this;
+		}
+
+		@Override
+		public DynByteBuf put(int wi, DynByteBuf b, int off, int len) {
+			throw new UnsupportedOperationException();
 		}
 
 		@Override

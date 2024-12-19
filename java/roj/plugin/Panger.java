@@ -10,10 +10,12 @@ import roj.config.data.CEntry;
 import roj.config.data.Type;
 import roj.io.IOUtil;
 import roj.math.Version;
+import roj.net.MyChannel;
 import roj.net.ServerLaunch;
 import roj.net.http.server.*;
 import roj.net.http.server.auto.OKRouter;
 import roj.reflect.ILSecurityManager;
+import roj.reflect.ReflectionUtils;
 import roj.text.CharList;
 import roj.text.Formatter;
 import roj.text.Template;
@@ -35,6 +37,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.function.BiConsumer;
+import java.util.function.Consumer;
 
 import static roj.plugin.PanTweaker.CONFIG;
 import static roj.ui.terminal.CommandNode.argument;
@@ -87,6 +90,7 @@ public final class Panger extends PluginManager {
 		if (CONFIG.containsKey("webui")) {
 			boolean webTerminal = CONFIG.getBool("web_terminal");
 			initHttp().register(new WebUI(webTerminal), "webui/");
+			router.addPrefixDelegation("xui", new PathRouter(new File("plugins/Core/xui")));
 			var noPerm = router.getInterceptor("PermissionManager") == null;
 			if (noPerm) LOGGER.fatal("警告：您未安装任何权限管理插件，这会导致webui能被任何人访问！");
 			if (webTerminal) {
@@ -106,7 +110,7 @@ public final class Panger extends PluginManager {
 	}
 
 	private void onLoad() {
-		String CORE_VERSION = "1.8.1";
+		String CORE_VERSION = "1.8.2";
 		splash(CORE_VERSION);
 
 		var pd = new PluginDescriptor();
@@ -155,11 +159,11 @@ public final class Panger extends PluginManager {
 		CharList s = new CharList("""
 			------------------------------------------------------------
 			\u001b[38;2;46;137;255m
-			  ▌▌▌▌▌▌╗   ▌▌▌▌▌╗  ▌▌▌╗   ▌▌╗  ▌▌▌▌▌▌╗  ▌▌▌▌▌▌▌╗ ▌▌▌▌▌▌╗\s
-			  ▌▌╔══▌▌╗ ▌▌╔══▌▌╗ ▌▌▌▌╗  ▌▌║ ▌▌╔════╝  ▌▌╔════╝ ▌▌╔══▌▌╗
-			  ▌▌▌▌▌▌╔╝ ▌▌▌▌▌▌▌║ ▌▌╔▌▌╗ ▌▌║ ▌▌║  ▌▌▌╗ ▌▌▌▌▌╗   ▌▌▌▌▌▌╔╝
-			  ▌▌╔═══╝  ▌▌╔══▌▌║ ▌▌║╚▌▌╗▌▌║ ▌▌║   ▌▌║ ▌▌╔══╝   ▌▌╔══▌▌╗
-			  ▌▌║      ▌▌║  ▌▌║ ▌▌║ ╚▌▌▌▌║ ╚▌▌▌▌▌▌╔╝ ▌▌▌▌▌▌▌╗ ▌▌║  ▌▌║
+			  █████▌╗   ████▌╗  ██▌╗   █▌╗  █████▌╗  ██████▌╗ █████▌╗\s
+			  █▌╔══█▌╗ █▌╔══█▌╗ ███▌╗  █▌║ █▌╔════╝  █▌╔════╝ █▌╔══█▌╗
+			  █████▌╔╝ ██████▌║ █▌╔█▌╗ █▌║ █▌║  ██▌╗ ████▌╗   █████▌╔╝
+			  █▌╔═══╝  █▌╔══█▌║ █▌║╚█▌╗█▌║ █▌║   █▌║ █▌╔══╝   █▌╔══█▌╗
+			  █▌║      █▌║  █▌║ █▌║ ╚███▌║ ╚█████▌╔╝ ██████▌╗ █▌║  █▌║
 			  ╚═╝      ╚═╝  ╚═╝ ╚═╝  ╚═══╝  ╚═════╝  ╚══════╝ ╚═╝  ╚═╝\s\u001b[38;2;128;255;255mv{V}
 			\u001b[38;2;255;255;255m
 			""").replace("{V}", CORE_VERSION);
@@ -233,6 +237,12 @@ public final class Panger extends PluginManager {
 		IOUtil.closeSilently(httpServer);
 	}
 
+	public static void addChannelInitializator(Consumer<MyChannel> ch) {
+		var caller = ReflectionUtils.getCallerClass(2);
+		if (caller.getClassLoader() instanceof PluginClassLoader) throw new IllegalStateException("not allowed for external plugin");
+		httpServer.initializator(httpServer.initializator().andThen(ch));
+	}
+
 	private static ServerLaunch httpServer;
 	private static OKRouter router;
 	static OKRouter initHttp() {
@@ -246,7 +256,6 @@ public final class Panger extends PluginManager {
 
 				router.setInterceptor("PermissionManager", null);
 				router.addPrefixDelegation("", new ZipRouter(new File("plugins/Core/resource.zip")));
-				router.addPrefixDelegation("xui", new PathRouter(new File("plugins/Core")));
 
 				var http = new PanHttp();
 				var proxyToken = CONFIG.getString("http_reverse_proxy");

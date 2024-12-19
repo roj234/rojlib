@@ -27,6 +27,7 @@ public final class LazyLoadStore extends Segment {
 		int begin = ob.wIndex();
 
 		if (v.slot < 0) {
+			// POP | POP2, this variable not used
 			ob.put(0x56 + v.type.rawType().length());
 		} else {
 			// Note: 如果以后StreamChain要改的话，这里要和Type.DirtyHacker一起改

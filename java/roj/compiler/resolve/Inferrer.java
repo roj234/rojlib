@@ -436,11 +436,16 @@ public final class Inferrer {
 			break;
 			case Type.TYPE_PARAMETER_TYPE:
 				TypeParam tp = (TypeParam) methodSide;
-				//if (paramSide.isPrimitive())
-				//	paramSide = TypeCast.getWrapper(paramSide.rawType());
+				if (paramSide.isPrimitive() && !isPrimitiveTypeParam(tp))
+					paramSide = TypeCast.getWrapper(paramSide.rawType());
 				addBound(tp, paramSide);
 			break;
 		}
+	}
+	private boolean isPrimitiveTypeParam(TypeParam tp) {
+		IType type = typeParams.get(tp.name);
+		// TODO
+		return false;
 	}
 	private void addBound(TypeParam tp, IType type) {
 		IType bound = typeParams.get(tp.name);

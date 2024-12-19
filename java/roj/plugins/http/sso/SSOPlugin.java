@@ -206,13 +206,16 @@ public class SSOPlugin extends Plugin {
 			if (user != null) {
 				var group = user.groupInst;
 				if (group == null) throw new IllegalRequestException(500, Response.internalError("用户组配置错误"));
-				if (group.isAdmin() || group.permissions.strStartsWithThis("/"+req.absolutePath())) return null;
+				if (group.isAdmin() || group.permissions.strStartsWithThis("/".concat(req.absolutePath()))) return null;
 
 				postfix = "#denied";
 				break checkLogin;
 			}
 			req.responseHeader().sendCookieToClient(Collections.singletonList(new Cookie(COOKIE_ID).expires(-1)));
 		}
+
+		var group = groups.get("guest");
+		if (group != null && group.permissions.strStartsWithThis("/".concat(req.absolutePath()))) return null;
 
 		var url = IOUtil.getSharedCharBuf().append('/').append(req.absolutePath()).append(req.query().isEmpty() ? "" : "?"+req.query());
 		req.responseHeader().put("Location", "/"+sitePath+"?return="+Escape.encodeURIComponent(url)+postfix);

@@ -574,7 +574,7 @@ public class XInsnList extends AbstractCodeWriter implements Iterable<XInsnNodeV
 					label.offset -= to.offset;
 				label.block += blockDelta;
 			} else if (label.compareTo(from) > 0) {
-				label.dispose();
+				label.clear();
 				itr.remove();
 			}
 		}

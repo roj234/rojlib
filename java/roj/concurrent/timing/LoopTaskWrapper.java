@@ -48,9 +48,16 @@ public class LoopTaskWrapper implements ITask {
 				} finally {
 					// 任务执行时间超过一个周期，在完成之后重新添加
 					if (!u.compareAndSwapInt(this, STATE_OFFSET, 3, 1) || state != 2) {
-						this.state = 1;
-						// re-schedule
-						sched.delay(this, interval);
+						int v;
+						while (true) {
+							v = u.getIntVolatile(this, STATE_OFFSET);
+							if (v <= 0) break;
+							if (u.compareAndSwapInt(this, STATE_OFFSET, v, 1)) {
+								// re-schedule
+								sched.delay(this, interval);
+								break;
+							}
+						}
 					}
 				}
 			}
@@ -81,7 +88,7 @@ public class LoopTaskWrapper implements ITask {
 
 	@Override public boolean cancel() {
 		int state = u.getAndSetInt(this, STATE_OFFSET, -1);
-		return state < 0 || task.cancel();
+		return state < 0 | task.cancel();
 	}
 	@Override public boolean isCancelled() {return (state & 1) != 0;}
 

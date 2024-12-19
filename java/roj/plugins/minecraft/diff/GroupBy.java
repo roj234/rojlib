@@ -12,7 +12,6 @@ import roj.io.IOUtil;
 import roj.io.MyRegionFile;
 import roj.math.Stitcher;
 import roj.math.Tile;
-import roj.ui.EasyProgressBar;
 import roj.util.ByteList;
 import roj.util.Helpers;
 
@@ -24,20 +23,14 @@ import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
-import java.util.regex.Pattern;
+
+import static roj.plugins.minecraft.diff.ChunkTrim.*;
 
 /**
  * @author Roj234
  * @since 2024/8/15 0015 20:34
  */
 public class GroupBy {
-	private static final Pattern REGION_MATCHER = Pattern.compile("r\\.(-?\\d+)\\.(-?\\d+)\\.mca$");
-
-	private static EasyProgressBar bar = new EasyProgressBar("计算需要清理的区块");
-	static {bar.setUnit("区块");}
-
-	private static TaskPool pool = TaskPool.Common();
-
 	public static void createBackup(File from, File to) {
 		File[] chunks = new File(from, "region").listFiles();
 		var data = generateRemap(chunks, pool);
@@ -51,14 +44,13 @@ public class GroupBy {
 	}
 
 	private static LongMap<Long> generateRemap(File[] fileList, TaskPool asyncPool) {
-		bar.reset();
-		bar.addMax(fileList.length * 1024L);
+		bar.setTotal(fileList.length * 1024L);
 		Set<Long> chunks = Collections.newSetFromMap(new ConcurrentHashMap<>());
 
 		for (File mca : fileList) {
 			var match = REGION_MATCHER.matcher(mca.getName());
 			if (!match.find()) {
-				bar.addCurrent(1024);
+				bar.increment(1024);
 				continue;
 			}
 
@@ -67,7 +59,7 @@ public class GroupBy {
 			asyncPool.submit(() -> {
 				try (var rf = new MyRegionFile(mca)) {
 					for (int j = 0; j < 1024; j++) {
-						bar.addCurrent(1);
+						bar.increment(1);
 
 						if (!rf.hasData(j)) continue;
 
@@ -75,9 +67,9 @@ public class GroupBy {
 						int z = fileZ + j / 32;
 						bar.setName(x + "," + z);
 
-						NbtChunk chunk;
+						_ChunkPos chunk;
 						try (var nbt = rf.getBufferedInputStream(j)) {
-							chunk = ConfigMaster.NBT.readObject(NbtChunk.class, nbt);
+							chunk = ConfigMaster.NBT.readObject(_ChunkPos.class, nbt);
 							chunks.add(chunkPos(chunk.xPos, chunk.zPos));
 						} catch (Exception e) {
 						}
@@ -165,9 +157,8 @@ public class GroupBy {
 
 		File[] fileList = fromPath.listFiles();
 
-		bar.reset();
 		bar.setName("复制区块");
-		bar.addMax(fileList.length * 1024L);
+		bar.setTotal(fileList.length * 1024L);
 
 		for (var mca : fileList) {
 			var match = REGION_MATCHER.matcher(mca.getName());
@@ -226,7 +217,7 @@ public class GroupBy {
 						} catch (Exception e) {
 							e.printStackTrace();
 						}
-						bar.addCurrent(1);
+						bar.increment(1);
 					}
 				} catch (IOException e) {
 					System.out.println("无法锁定文件:"+e.getMessage());
@@ -254,9 +245,5 @@ public class GroupBy {
 
 	private static long chunkPos(int x, int z) {return ((long)x << 32) | (z&0xFFFFFFFFL);}
 
-	private static final class NbtChunk {
-		int LastUpdate, InhabitedTime, DataVersion;
-		String Status;
-		int xPos, yPos, zPos;
-	}
+	private static final class _ChunkPos { int xPos, zPos;}
 }

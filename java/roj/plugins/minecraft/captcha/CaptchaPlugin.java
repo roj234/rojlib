@@ -28,7 +28,7 @@ import java.util.Random;
 public class CaptchaPlugin extends Plugin {
 	private BlockSet[] blockSets;
 	private CaptchaFont[] captchaFonts;
-	private final RingBuffer<Captcha> captchas = new RingBuffer<>(100, false);
+	private final RingBuffer<Captcha> captchas = RingBuffer.lazy(100);
 	private Random random;
 
 	public static CaptchaPlugin INSTANCE;

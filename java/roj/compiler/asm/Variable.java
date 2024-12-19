@@ -11,10 +11,14 @@ import roj.collect.RSegmentTree;
 public class Variable extends LocalVariableTable.Item implements RSegmentTree.Range {
 	// refByNest仅用于诊断
 	// isParam未使用
-	// isVar用来计算共有类型
-	public boolean isFinal, isVar, isParam, hasValue, refByNest;
+	public boolean isFinal, isParam, hasValue, refByNest;
+
+	// TODO assigned from X -> 在X下一次赋值前可以使用当前变量替代
 	public Object constantValue;
+
 	public int startPos, endPos;
+	// (unused) 基于VisMap分区返回的占用状态：解决生命周期黑洞问题
+	public RSegmentTree<?> complexStartEnd;
 
 	public Variable(String name, IType type) { super(name, type); }
 

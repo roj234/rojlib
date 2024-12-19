@@ -14,7 +14,6 @@ import java.util.Locale;
 import java.util.Set;
 
 import static roj.net.http.h2.H2Connection.LOGGER;
-import static roj.net.http.h2.H2Exception.ERROR_INTERNAL;
 import static roj.reflect.ReflectionUtils.u;
 
 /**
@@ -191,7 +190,7 @@ public abstract class H2Stream {
 	protected abstract void onHeaderDone(H2Connection man, HttpHead head, boolean hasData) throws IOException;
 	protected abstract String onData(H2Connection man, DynByteBuf buf) throws IOException;
 	protected abstract void onDone(H2Connection man) throws IOException;
-	protected void onError(H2Connection man, Exception ex) {
+	protected void onError(H2Connection man, Throwable ex) {
 		state = ERRORED;
 
 		if (ex.getClass() == IOException.class || ex instanceof SocketException) {
@@ -200,15 +199,14 @@ public abstract class H2Stream {
 			return;
 		}
 
-		man.streamError(id, ERROR_INTERNAL);
-		LOGGER.warn("未捕获的异常[{}/#{}]", ex, man, id);
+		man.streamErrorCaught(id, ex);
 	}
 	/**
 	 * 连接被RST_STREAM或GOAWAY关闭.
 	 * 这个方法至多调用一次
 	 */
 	protected void onRST(H2Connection man, int errno) {
-		LOGGER.debug("对等端的RST[{}/#{}]: {}", man, id, errno);
+		LOGGER.debug("流[{}/#{}]收到RST: {}", man, id, errno);
 		onFinish(man);
 	}
 	/**

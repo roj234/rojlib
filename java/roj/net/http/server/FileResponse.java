@@ -57,14 +57,11 @@ final class FileResponse implements Response {
 			if (eTag != null) {
 				if ((v = req.get("If-Match")) != null) {
 					List<String> tags = TextUtil.split(v, ", ");
-					// Cache-Control、Content-Location、Date、ETag、Expires 和 Vary 。
-					if (!tags.contains(eTag)) return plus(304, req);
+					if (!hasETag(tags, eTag) && !tags.contains("*")) return plus(304, req);
 					break checkIfModified;
 				} else if ((v = req.get("If-None-Match")) != null) {
-					//if (v.startsWith("W/")) v = v.substring(2);
 					// 当且仅当服务器上没有任何资源的 ETag 属性值与这个首部中列出的相匹配的时候，服务器端才会返回所请求的资源
-					List<String> tags = TextUtil.split(v, ", ");
-					if (tags.contains(eTag)) return plus(304, req);
+					if (hasETag(TextUtil.split(v, ", "), eTag)) return plus(304, req);
 					break checkIfModified;
 				}
 			}
@@ -199,6 +196,17 @@ final class FileResponse implements Response {
 
 		return plus(206, req);
 	}
+
+	private static boolean hasETag(List<String> tags, String eTag) {
+		String v;
+		for (int i = 0; i < tags.size(); i++) {
+			v = tags.get(i);
+			if (v.equals(eTag) || (v.startsWith("W/") && !eTag.startsWith("W/") && eTag.regionMatches(0, v, 2, eTag.length())))
+				return true;
+		}
+		return false;
+	}
+
 	private static long parseLong(String str, long max) {
 		if (TextUtil.isNumber(str) == 0) {
 			long num = Long.parseLong(str);
@@ -215,6 +223,8 @@ final class FileResponse implements Response {
 			h.header("last-modified", HttpCache.getInstance().toRFC(file.lastModified()));
 			if (r == 206) return this;
 
+			// 需要注意的是，服务器端在生成状态码为 304 的响应的时候，必须同时生成以下会存在于对应的 200 响应中的首部：Cache-Control、Content-Location、Date、ETag、Expires 和 Vary。
+			// 我怎么感觉我又没遵循标准了（
 			String tag = file.getETag();
 			if (tag != null) h.header("etag", tag);
 			var def = flag&3;
@@ -292,7 +302,11 @@ final class FileResponse implements Response {
 		}
 
 		if (sendfile != null) {
+			var prevLength = sendfile.length;
+			var limiter = rh.getStreamLimiter();
+			if (limiter != null) sendfile.length = limiter.limit((int) Math.min(sendfile.length, Integer.MAX_VALUE));
 			rh.ch().fireChannelWrite(sendfile);
+			sendfile.length = prevLength;
 			sendfile.flip();
 			remain = sendfile.length;
 		} else {

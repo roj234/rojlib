@@ -79,6 +79,7 @@ public class CommandParser {
 	public void pushStack() { stack.add(i); }
 	public void popStack() { i = stack.remove(stack.size()-1); }
 
+	public int getI() {return i;}
 	public int getMaxI() { return maxI; }
 
 	protected final CommandContext createContext() { return new CommandContext(context, map); }

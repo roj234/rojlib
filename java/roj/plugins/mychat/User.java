@@ -14,7 +14,7 @@ import java.util.concurrent.atomic.AtomicInteger;
  */
 public class User extends AbstractUser {
 	// 存储最近的N条未接收消息
-	public RingBuffer<Message> c2c = new RingBuffer<>(100, false);
+	public RingBuffer<Message> c2c = RingBuffer.lazy(100);
 
 	Group globalGroupMy;
 

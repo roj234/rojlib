@@ -2,15 +2,18 @@ package roj.compiler.ast.expr;
 
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
+import roj.WillChange;
 import roj.asm.Opcodes;
 import roj.asm.type.IType;
 import roj.asm.visitor.Label;
 import roj.compiler.asm.MethodWriter;
+import roj.compiler.asm.Variable;
 import roj.compiler.context.LocalContext;
 import roj.compiler.diagnostic.Kind;
 import roj.compiler.resolve.ResolveException;
 import roj.compiler.resolve.TypeCast;
 
+import java.util.Set;
 import java.util.concurrent.atomic.LongAdder;
 
 /**
@@ -35,6 +38,14 @@ public abstract class ExprNode implements UnresolvedExprNode {
 	protected ExprNode(int _noUpdate) {}
 
 	public abstract String toString();
+
+	// Not used, 高级优化使用，例如将 t = num * i 转换为 t = 0, loop<t += num>，以及代码提升
+	public boolean hasNoSideEffect(
+		Set<Variable> variablesShouldNotRefersTo,
+		Set<Variable> variablesMayRefersTo,
+		@WillChange
+		Set<Variable> variablesReferredTo
+								  ) {return false;}
 
 	public enum ExprFeat {
 		// this() or super()

@@ -404,7 +404,7 @@ public final class BufferPool {
 		Object pool = buf instanceof PooledBuffer pb ? pb.pool(null) : _UNPOOLED;
 		if (pool == null) {
 			if (buf != EMPTY_DIRECT_SENTIAL && buf != EMPTY_HEAP_SENTIAL)
-				throwUnpooled(buf);
+				LOGGER.warn("已释放的缓冲区: "+buf.info()+"@"+System.identityHashCode(buf));
 		} else if (pool != _UNPOOLED) ((BufferPool) pool).reserve0(buf);
 		else {
 			if (buf.isDirect()) ((DirectByteList) buf)._free();

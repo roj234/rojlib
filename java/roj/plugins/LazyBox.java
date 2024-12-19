@@ -9,14 +9,14 @@ import roj.asm.util.Context;
 import roj.asmx.classpak.Cpk;
 import roj.asmx.nixim.NiximException;
 import roj.asmx.nixim.NiximSystemV2;
-import roj.collect.*;
+import roj.collect.CollectionX;
+import roj.collect.IntMap;
+import roj.collect.MyBitSet;
+import roj.collect.MyHashMap;
 import roj.concurrent.TaskPool;
 import roj.io.FastFailException;
 import roj.io.IOUtil;
 import roj.io.down.DownloadTask;
-import roj.net.http.IllegalRequestException;
-import roj.net.http.server.DiskFileInfo;
-import roj.net.http.server.Response;
 import roj.plugin.Panger;
 import roj.plugin.Plugin;
 import roj.plugin.SimplePlugin;
@@ -52,7 +52,7 @@ import static roj.ui.terminal.CommandNode.literal;
  * @author Roj234
  * @since 2024/5/15 0015 14:10
  */
-@SimplePlugin(id = "lazyBox", version = "1.3", desc = """
+@SimplePlugin(id = "lazyBox", version = "1.4", desc = """
 	高仿瑞士军刀/doge
 	
 	[文件工具]
@@ -72,7 +72,6 @@ import static roj.ui.terminal.CommandNode.literal;
 	
 	[网页工具]
 	多线程下载文件: curl <url> <saveTo> [threads]
-	直链共享: fileshare <path> <url>
 	
 	[Java工具]
 	Cpk压缩: cpk <input> [output]
@@ -265,33 +264,6 @@ public class LazyBox extends Plugin {
 				.then(argument("源", Argument.file())
 					.executes(nixim)
 					.then(argument("保存至", Argument.fileOptional(true)).executes(nixim)))));
-
-		var registeredFileShare = new MyHashSet<String>();
-		registerCommand(literal("fileshare").then(argument("网页路径", Argument.string())
-			.then(argument("文件路径", Argument.path()).executes(ctx -> {
-				DiskFileInfo info = new DiskFileInfo(ctx.argument("文件路径", File.class), true);
-				String url = ctx.argument("网页路径", String.class);
-				synchronized (registeredFileShare) {
-					if (!registeredFileShare.add(url)) {
-						Terminal.error("该路径已被注册");
-						return;
-					}
-				}
-
-				registerRoute(url+"/", (req, rh) -> {
-					if (req.path().isEmpty()) return Response.file(req, info);
-					throw IllegalRequestException.NOT_FOUND;
-				});
-				getLogger().info("成功在路径注册直链{}", url);
-			})))
-			.then(literal("remove").then(argument("网页路径", Argument.oneOf(CollectionX.toMap(registeredFileShare))).executes(ctx -> {
-				String url = ctx.argument("网页路径", String.class);
-				unregisterRoute(url);
-				synchronized (registeredFileShare) {
-					registeredFileShare.remove(url);
-				}
-				getLogger().info("移除了直链{}", url);
-			}))));
 	}
 
 	private void zipUpdate(CommandContext ctx) throws IOException {
@@ -332,13 +304,12 @@ public class LazyBox extends Plugin {
 	private void qzVerify(CommandContext ctx) {
 		File file = ctx.argument("path", File.class);
 
-		EasyProgressBar bar = new EasyProgressBar("验证压缩文件");
-		bar.setUnit("B");
+		EasyProgressBar bar = new EasyProgressBar("验证压缩文件", "B");
 
 		AtomicReference<Throwable> failed = new AtomicReference<>();
 		try (QZArchive archive = new QZArchive(file)) {
 			for (QZEntry entry : archive.getEntriesByPresentOrder()) {
-				bar.addMax(entry.getSize());
+				bar.addTotal(entry.getSize());
 			}
 
 			var r1 = archive.parallelDecompress(pool, (entry, in) -> {
@@ -349,7 +320,7 @@ public class LazyBox extends Plugin {
 						if (r < 0) break;
 
 						if (failed.get() != null) throw new FastFailException("-other thread failed-");
-						bar.addCurrent(r);
+						bar.increment(r);
 					}
 				} catch (FastFailException e) {
 					throw e;
@@ -368,7 +339,7 @@ public class LazyBox extends Plugin {
 
 		Throwable exception = failed.getAndSet(null);
 		if (exception != null) {
-			bar.end("验证失败");
+			bar.end("验证失败", Terminal.RED);
 			exception.printStackTrace();
 		} else {
 			bar.end("验证成功");
@@ -443,9 +414,8 @@ public class LazyBox extends Plugin {
 
 			out.closeWordBlock();
 
-			EasyProgressBar bar = new EasyProgressBar("复制块");
-			bar.setUnit("Block");
-			bar.addMax(in1_should_copy.size()+in2_should_copy.size());
+			EasyProgressBar bar = new EasyProgressBar("复制块", "块");
+			bar.addTotal(in1_should_copy.size()+in2_should_copy.size());
 
 			var r1 = copy(in1, in1_should_copy, out, bar);
 			var r2 = copy(in2, in2_should_copy, out, bar);
@@ -476,7 +446,7 @@ public class LazyBox extends Plugin {
 			try (QZWriter w = out.parallel()) {
 				w.beginEntry(QZEntry.ofNoAttribute(prefix));
 				IOUtil.copyStream(in, w);
-				bar.addCurrent(1);
+				bar.increment(1);
 			} catch (Exception e) {
 				Helpers.athrow(e);
 			}

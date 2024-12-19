@@ -2,6 +2,7 @@ package roj.net.http.server;
 
 import roj.net.MyChannel;
 import roj.net.http.Headers;
+import roj.net.util.SpeedLimiter;
 
 import java.io.IOException;
 
@@ -15,6 +16,7 @@ public interface ResponseHeader {
 	 */
 	int getStreamLimit();
 	void setStreamLimit(int bps);
+	void setStreamLimit(SpeedLimiter limiter);
 
 	void onFinish(HFinishHandler o);
 

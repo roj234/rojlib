@@ -137,10 +137,14 @@ public class Mat3d {
 	 * @return this matrix.
 	 */
 	public Mat3d mul(Mat3d other) {
-		set(m00 * other.m00 + m01 * other.m10 + m02 * other.m20, m00 * other.m01 + m01 * other.m11 + m02 * other.m21,
-			m00 * other.m02 + m01 * other.m12 + m02 * other.m22, m10 * other.m00 + m11 * other.m10 + m12 * other.m20,
-			m10 * other.m01 + m11 * other.m11 + m12 * other.m21, m10 * other.m02 + m11 * other.m12 + m12 * other.m22,
-			m20 * other.m00 + m21 * other.m10 + m22 * other.m20, m20 * other.m01 + m21 * other.m11 + m22 * other.m21,
+		set(m00 * other.m00 + m01 * other.m10 + m02 * other.m20,
+			m00 * other.m01 + m01 * other.m11 + m02 * other.m21,
+			m00 * other.m02 + m01 * other.m12 + m02 * other.m22,
+			m10 * other.m00 + m11 * other.m10 + m12 * other.m20,
+			m10 * other.m01 + m11 * other.m11 + m12 * other.m21,
+			m10 * other.m02 + m11 * other.m12 + m12 * other.m22,
+			m20 * other.m00 + m21 * other.m10 + m22 * other.m20,
+			m20 * other.m01 + m21 * other.m11 + m22 * other.m21,
 			m20 * other.m02 + m21 * other.m12 + m22 * other.m22);
 		return this;
 	}

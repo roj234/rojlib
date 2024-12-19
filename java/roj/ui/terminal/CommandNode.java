@@ -4,6 +4,7 @@ import org.jetbrains.annotations.Nullable;
 import roj.collect.SimpleList;
 import roj.config.ParseException;
 import roj.text.CharList;
+import roj.ui.AnsiString;
 
 import java.util.Comparator;
 import java.util.List;
@@ -67,9 +68,11 @@ public abstract class CommandNode {
 			} catch (ParseException e) {
 				pe = e;
 			}
+
+			int pos = ctx.getI();
 			ctx.popStack();
 
-			if (node.fastFail) break;
+			if (node.fastFail && (completions == null || pos != ctx.getI())) break;
 		}
 
 		if (pe != null) throw pe;
@@ -165,8 +168,9 @@ public abstract class CommandNode {
 		@Override
 		public boolean apply(CommandParser ctx, List<Completion> completions) throws ParseException {
 			if (ctx.isEOF()) {
-				if (completions != null) argument.example(completions);
-				else {
+				if (completions != null) {
+					makeExample(completions);
+				} else {
 					try {
 						Object o = argument.parse(ctx, null);
 						ctx.putArgument(name, o);
@@ -188,7 +192,7 @@ public abstract class CommandNode {
 
 				if (o == null) {
 					if (completions != null && ctx.isEOF()) {
-						argument.example(completions);
+						makeExample(completions);
 					}
 					break block;
 				}
@@ -205,6 +209,23 @@ public abstract class CommandNode {
 				return doApply(ctx, completions);
 			} finally {
 				if (shouldPop) ctx.popStack();
+			}
+		}
+
+		private void makeExample(List<Completion> completions) {
+			int size = completions.size();
+			argument.example(completions);
+			if (completions.size() == size) {
+				var tip = new Completion("<"+name+">");
+				tip.isTip = true;
+				completions.add(tip);
+			}
+
+			var paramDesc = new AnsiString("参数名称：<"+name+">，类型："+argument.type());
+			for (; size < completions.size(); size++) {
+				Completion completion = completions.get(size);
+				if (completion.description == null)
+					completion.description = paramDesc;
 			}
 		}
 	}

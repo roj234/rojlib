@@ -281,7 +281,7 @@ final class MSSEngineServer extends MSSEngine {
 			int type = buf.readUnsignedByte();
 			if ((config.getSupportCertificateType() & (1 << type)) == 0) return error(NEGOTIATION_FAILED, "unsupported_certificate_type");
 
-			MSSPublicKey key = config.checkCertificate(context, type, buf);
+			MSSPublicKey key = config.checkCertificate(context, type, buf, false);
 			try {
 				if (!CipherSuite.getKeyFormat(key.format()).verify(key, sharedKey, sign)) throw OperationDone.INSTANCE;
 			} catch (Exception e) {

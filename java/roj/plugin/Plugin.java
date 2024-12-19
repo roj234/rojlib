@@ -24,7 +24,7 @@ import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.util.Collections;
 import java.util.Set;
-import java.util.function.ToLongFunction;
+import java.util.function.Consumer;
 
 /**
  * @author Roj234
@@ -109,7 +109,7 @@ public abstract class Plugin {
 	}
 	public final InputStream getResource(String path) {
 		if (path == null) throw new IllegalArgumentException("Filename cannot be null");
-		return desc.cl.getResourceAsStream(path);
+		return desc.cl == null ? null : desc.cl.getResourceAsStream(path);
 	}
 
 	private Set<String> pPaths = Collections.emptySet();
@@ -187,7 +187,7 @@ public abstract class Plugin {
 
 		private final Scheduler sched;
 		public PSched(Plugin plugin, Scheduler sched) {
-			super((ToLongFunction<ScheduleTask>) null);
+			super((Consumer<ITask>) null);
 			this.plugin = plugin;
 			this.sched = sched;
 		}
@@ -209,7 +209,6 @@ public abstract class Plugin {
 		public ScheduleTask loop(ITask task, long intervalMs) { return delay(new PLoopTask(sched, task, intervalMs, -1), 0); }
 		public ScheduleTask loop(ITask task, long intervalMs, int count) { return delay(new PLoopTask(sched, task, intervalMs, count), 0); }
 		public ScheduleTask loop(ITask task, long intervalMs, int count, long delayMs) { return delay(new PLoopTask(sched, task, intervalMs, count), delayMs); }
-		public void submit(ITask task) { runAsync(task); }
 
 		public void cancelAll() {
 			synchronized (userTasks) {

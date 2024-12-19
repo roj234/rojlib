@@ -142,7 +142,7 @@ public final class HttpServer20 extends H2Stream implements PostSetting, Respons
 				var resp = router.response(req, this);
 				if (body == null) body = resp;
 				else if (resp != null) throw new FastFailException("已调用body()设置请求体,response必须返回null");
-			} catch (Exception e) {
+			} catch (Throwable e) {
 				onError(man, e);
 			}
 
@@ -210,7 +210,7 @@ public final class HttpServer20 extends H2Stream implements PostSetting, Respons
 	}
 
 	@Override
-	protected void onError(H2Connection man, Exception e) {
+	protected void onError(H2Connection man, Throwable e) {
 		if ((flag & FLAG_ERRORED) == 0 && getOutState() == OPEN && req != null) {
 			flag |= FLAG_ERRORED;
 			req.responseHeader.clear();
@@ -337,6 +337,7 @@ public final class HttpServer20 extends H2Stream implements PostSetting, Respons
 		limiter.setBytePerSecond(bps);
 	}
 	@Override public void setStreamLimit(SpeedLimiter limiter) {this.limiter = limiter;}
+	@Override public SpeedLimiter getStreamLimiter() {return limiter;}
 
 	public void write(DynByteBuf buf) throws IOException {
 		assert ((ReentrantLock) man.channel().channel().lock()).isHeldByCurrentThread();
@@ -421,7 +422,7 @@ public final class HttpServer20 extends H2Stream implements PostSetting, Respons
 			body = resp;
 			time = System.currentTimeMillis() + router.writeTimeout(req, body);
 			sendHead(man);
-		} catch (Exception e) {
+		} catch (Throwable e) {
 			onError(man, e);
 		} finally {
 			lock.unlock();

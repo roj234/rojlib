@@ -9,8 +9,7 @@ import roj.net.http.IllegalRequestException;
  */
 @FunctionalInterface
 public interface Router {
-	// 1MB
-	int DEFAULT_POST_SIZE = 1048576;
+	int DEFAULT_POST_SIZE = 4096;
 
 	default int writeTimeout(@Nullable Request req, @Nullable Response resp) {return resp == null ? 60000 : 3600_000;}
 	default int readTimeout(Request req) {return req != null ? 30000 : 3000;}
@@ -22,5 +21,6 @@ public interface Router {
 	}
 
 	default int keepaliveTimeout() {return 300_000;}
-	default int maxHeaderSize() {return 8192;}
+	// 这个默认值是4KB的cookie+1KB的其它部分
+	default int maxHeaderSize() {return 4096 + 1024;}
 }

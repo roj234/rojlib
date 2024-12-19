@@ -173,21 +173,17 @@ public abstract class MathUtils {
 	}
 
 	public static double[] pdf2cdf(double[] pdf) {
-		double[] cdf = pdf.clone();
-		for (int i = 1; i < cdf.length-1; i++) cdf[i] += cdf[i-1];
+		double[] cdf = new double[pdf.length];
+		cdf[0] = pdf[0];
+		for (int i = 1; i < cdf.length-1; i++) cdf[i] = pdf[i] + cdf[i-1];
 		// Force set last cdf to 1, preventing floating-point summing error in the loop.
 		cdf[cdf.length-1] = 1;
 		return cdf;
 	}
 	public static int cdfRandom(Random rand, double[] cdf) {
 		double x = rand.nextDouble();
-
-		int i = 0, end = cdf.length-1;
-		while (i < end) {
-			if (x < cdf[i]) return i;
-			i++;
-		}
-		return end;
+		int pos = Arrays.binarySearch(cdf, x);
+		return pos >= 0 ? pos : -pos - 2;
 	}
 	public static int randomRange(Random rand, int min, int max) {return min + rand.nextInt(max - min + 1);}
 
@@ -196,5 +192,17 @@ public abstract class MathUtils {
 	static {
 		for (int i = 0; i < 64; i++) MASK64[i] = (1L << i) - 1;
 		for (int i = 0; i < 32; i++) MASK32[i] = (1 << i) - 1;
+	}
+
+	public static int pow(int base, int exponent) {
+		int result = 1;
+		while (exponent > 0) {
+			if ((exponent & 1) == 1) {
+				result *= base;
+			}
+			base *= base;
+			exponent >>= 1;
+		}
+		return result;
 	}
 }

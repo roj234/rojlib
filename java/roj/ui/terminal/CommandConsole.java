@@ -101,6 +101,20 @@ public class CommandConsole extends DefaultConsole {
 	@Override
 	protected AnsiString highlight(CharList input) {
 		AnsiString root = new AnsiString("");
+		/*var cmdNow = input.toString();
+		List<Word> words = parse(cmdNow);
+
+		var myList = Collections.singletonList(new Completion(root));
+
+		ctx.isSyntaxHighlight = true;
+		for (int i = 0; i < nodes.size(); i++) {
+			CommandNode node = nodes.get(i);
+			ctx.init(cmdNow, words);
+			try {
+				if (node.apply(ctx, myList)) break;
+			} catch (ParseException e) {}
+		}
+		ctx.isSyntaxHighlight = false;*/
 
 		wr.init(input);
 		int prevI = 0;
@@ -115,8 +129,8 @@ public class CommandConsole extends DefaultConsole {
 
 			if (w.pos() > prevI) root.append(new AnsiString(input.substring(prevI, w.pos())));
 			switch (w.type()) {
-				case Word.LITERAL: root.append(new AnsiString(w.val()).color16(Terminal.YELLOW+ Terminal.HIGHLIGHT)); break;
-				case Word.STRING: root.append(new AnsiString(input.substring(w.pos(), wr.index)).color16(Terminal.GREEN+ Terminal.HIGHLIGHT)); break;
+				case Word.LITERAL: root.append(new AnsiString(w.val()).color16(Terminal.YELLOW+Terminal.HIGHLIGHT)); break;
+				case Word.STRING: root.append(new AnsiString(input.substring(w.pos(), wr.index)).color16(Terminal.GREEN+Terminal.HIGHLIGHT)); break;
 				case Word.INTEGER: case Word.LONG: root.append(new AnsiString(w.val()).color16(getNumberColor(w.val()))); break;
 				case Word.DOUBLE: case Word.FLOAT: root.append(new AnsiString(w.val()).color16(Terminal.BLUE+ Terminal.HIGHLIGHT)); break;
 				default: root.append(new AnsiString(w.val()).color16(Terminal.WHITE+ Terminal.HIGHLIGHT));
@@ -133,13 +147,13 @@ public class CommandConsole extends DefaultConsole {
 			String v = val.toLowerCase();
 			if (v.startsWith("0b")) return Terminal.CYAN;
 			if (v.startsWith("0x")) return Terminal.YELLOW;
-			if (v.startsWith("0")) return Terminal.PURPLE+ Terminal.HIGHLIGHT;
+			if (v.startsWith("0")) return Terminal.PURPLE+Terminal.HIGHLIGHT;
 		}
-		return Terminal.CYAN+ Terminal.HIGHLIGHT;
+		return Terminal.CYAN+Terminal.HIGHLIGHT;
 	}
 
 	@Override
-	protected void complete(String prefix, List<Completion> out) {
+	protected void complete(String prefix, List<Completion> out, boolean oninput) {
 		List<Word> words = parse(prefix);
 		if (words == null) return;
 

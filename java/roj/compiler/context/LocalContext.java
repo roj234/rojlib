@@ -695,9 +695,8 @@ public class LocalContext {
 	public Variable getVariable(String name) {return variables.get(name);}
 	public void loadVar(Variable v) {bp.loadVar(v);}
 	public void storeVar(Variable v) {bp.storeVar(v);}
-	public void assignConstVar(Variable var, roj.compiler.ast.expr.Constant val) {
-		var.constantValue = val.constVal();
-	}
+	public void assignVar(Variable v, Object constant) {bp.assignVar(v, constant);}
+	public Variable createTempVariable(IType type) {return bp.tempVar(type);}
 
 	public static final class Import {
 		public final IClass owner;

@@ -499,8 +499,8 @@ public class QZArchiver {
 		if (bar != null) {
 			bar.setName("1/4 复制未修改的文件");
 			bar.setUnit("B");
-			bar.updateForce(0);
-			bar.addMax(keepSize);
+			bar.setProgress(0);
+			bar.addTotal(keepSize);
 		}
 
 		try {
@@ -511,7 +511,7 @@ public class QZArchiver {
 			if (entry.getValue().size() == block.getFileCount()) {
 				writer.copy(oldArchive, block);
 				itr.remove();
-				if (bar != null) bar.addCurrent((int)block.getuSize());
+				if (bar != null) bar.increment((int)block.getuSize());
 			}
 		}
 
@@ -557,11 +557,9 @@ public class QZArchiver {
 		}
 
 		if (bar != null) {
-			bar.reset();
-
 			bar.setName("2/4 复制不压缩的文件");
-			bar.addMax(totalUncompressedSize);
-			bar.updateForce(0);
+			bar.setTotal(totalUncompressedSize);
+			bar.setProgress(0);
 		}
 
 		// copy empty
@@ -574,7 +572,7 @@ public class QZArchiver {
 		AtomicInteger blockCompleted = new AtomicInteger();
 		if (bar != null) {
 			bar.setName("3/4 压缩("+blockCompleted+"/"+appends.size()+")");
-			bar.updateForce(0);
+			bar.setProgress(0);
 		}
 
 		writer.closeWordBlock();

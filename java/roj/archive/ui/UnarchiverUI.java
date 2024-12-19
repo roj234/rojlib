@@ -248,7 +248,7 @@ public class UnarchiverUI extends JFrame {
 					logger.warn("文件{}解压错误", ex, name);
 				}
 
-				bar.addCurrent(entry.getSize());
+				bar.increment(entry.getSize());
 			}
 		};
 
@@ -268,9 +268,10 @@ public class UnarchiverUI extends JFrame {
 								}
 							}
 						}
+						JOptionPane.showMessageDialog(this, "密码错误, 解压失败");
 						throw new IllegalArgumentException("密码错误");
 					}
-					bar.addMax(entry.getSize());
+					bar.addTotal(entry.getSize());
 				}
 			}
 
@@ -314,7 +315,7 @@ public class UnarchiverUI extends JFrame {
 						logger.warn("文件{}无法删除", ex, file1);
 					}
 				}
-				bar.addMax(entry.getSize());
+				bar.addTotal(entry.getSize());
 			}
 		}
 

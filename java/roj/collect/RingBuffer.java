@@ -20,42 +20,43 @@ public class RingBuffer<E> extends AbstractCollection<E> implements Deque<E> {
 
 	protected int head, tail, size;
 
-	public static <T> RingBuffer<T> infCap() {return new RingBuffer<>(-1, false);}
-	public RingBuffer(int capacity) {this(capacity, true);}
-	public RingBuffer(int capacity, boolean allocateNow) {
+	public static <T> RingBuffer<T> bounded(int capacity) {return new RingBuffer<>(capacity);}
+	public static <T> RingBuffer<T> unbounded() {return new RingBuffer<>(0, Integer.MAX_VALUE);}
+	public static <T> RingBuffer<T> lazy(int maxCapacity) {return new RingBuffer<>(0, maxCapacity);}
+
+	public RingBuffer(int capacity) {
+		// not check == 0, for SerializerFactory
+		if (capacity < 0) throw new IllegalArgumentException("Capacity must >= 0");
 		maxCap = capacity;
-		if (capacity < 0) capacity = 10;
-		else if (!allocateNow) capacity = Math.min(10, capacity);
-		array = new Object[capacity];
+		array = capacity == 0 ? ArrayCache.OBJECTS : new Object[capacity];
 	}
 	public RingBuffer(int capacity, int maxCapacity) {
+		if (maxCapacity <= 0) throw new IllegalArgumentException("MaxCapacity must > 0");
 		maxCap = maxCapacity;
 		array = capacity == 0 ? ArrayCache.OBJECTS : new Object[capacity];
 	}
 
 	public int capacity() {return maxCap;}
 	public void setCapacity(int capacity) {
-		if (array.length > capacity && capacity > 0) resize(capacity);
 		maxCap = capacity;
-	}
-
-	public void ensureCapacity(int capacity) {
-		if (capacity > array.length) {
-			if (array.length == 0) capacity = 8;
-			else capacity = MathUtils.getMin2PowerOf(capacity);
-
-			if (maxCap > 0 && capacity > maxCap) capacity = maxCap;
-
-			if (size > 0) {
-				// in loop mode
-				resize(capacity);
-			} else {
-				array = new Object[capacity];
-			}
+		if (array.length > capacity && capacity > 0) {
+			if (size > 0) refit(capacity);
+			else array = new Object[capacity];
 		}
 	}
 
-	protected void resize(int capacity) {
+	private void ensureCapacity() {
+		int capacity = array.length;
+		if (capacity > 64) capacity = MathUtils.getMin2PowerOf(capacity+1);
+		else capacity += 10;
+
+		if (capacity > maxCap) capacity = maxCap;
+
+		if (size > 0) refit(capacity);
+		else array = new Object[capacity];
+	}
+
+	private void refit(int capacity) {
 		Object[] newArray = new Object[capacity];
 		int j = 0;
 
@@ -307,7 +308,7 @@ public class RingBuffer<E> extends AbstractCollection<E> implements Deque<E> {
 	public E ringAddFirst(E e) {
 		int s = size;
 		if (s < maxCap) {
-			if (s == array.length) ensureCapacity(array.length + 10);
+			if (s == array.length) ensureCapacity();
 			size = s+1;
 		}
 
@@ -326,7 +327,7 @@ public class RingBuffer<E> extends AbstractCollection<E> implements Deque<E> {
 	public E ringAddLast(E e) {
 		int s = size;
 		if (s < maxCap) {
-			if (s == array.length) ensureCapacity(array.length + 10);
+			if (s == array.length) ensureCapacity();
 			size = s+1;
 		}
 

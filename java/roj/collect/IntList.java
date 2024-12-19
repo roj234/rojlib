@@ -2,6 +2,7 @@ package roj.collect;
 
 import org.jetbrains.annotations.NotNull;
 import roj.compiler.api.ListIterable;
+import roj.reflect.Unaligned;
 import roj.util.ArrayCache;
 
 import java.util.Arrays;
@@ -18,12 +19,12 @@ public class IntList implements Iterable<Integer> {
 	protected int size;
 
 	public IntList() {list = ArrayCache.INTS;}
-	public IntList(int size) {list = new int[size];}
+	public IntList(int size) {list = (int[]) Unaligned.U.allocateUninitializedArray(int.class, size);}
 
 	public void ensureCapacity(int cap) {
 		if (list.length < cap) {
 			int length = ((cap * 3) >> 1) + 1;
-			int[] newList = new int[length];
+			int[] newList = (int[]) Unaligned.U.allocateUninitializedArray(int.class, length);
 			if (size > 0) System.arraycopy(list, 0, newList, 0, size);
 			list = newList;
 		}

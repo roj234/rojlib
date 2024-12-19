@@ -53,7 +53,7 @@ public class McDiffClient {
 
 		var pool = TaskPool.Common();
 		var bar = new EasyProgressBar("应用更新包");
-		bar.addMax(archive.getEntriesByPresentOrder().length);
+		bar.addTotal(archive.getEntriesByPresentOrder().length);
 		for (QZEntry entry : archive.getEntriesByPresentOrder()) {
 			String name = entry.getName();
 
@@ -72,7 +72,7 @@ public class McDiffClient {
 						System.out.println("移动文件 "+name+" => "+destFile+" 失败");
 					}
 				}
-				bar.addCurrent(1);
+				bar.increment(1);
 			}
 		}
 		var async = archive.parallelDecompress(pool, (entry, in) -> {
@@ -131,7 +131,7 @@ public class McDiffClient {
 			} catch (IOException e) {
 				e.printStackTrace();
 			}
-			bar.addCurrent(1);
+			bar.increment(1);
 		});
 		try {
 			QZArchive.awaitParallelComplete(async);

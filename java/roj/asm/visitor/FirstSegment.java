@@ -5,7 +5,7 @@ package roj.asm.visitor;
  * @since 2023/10/5 1:50
  */
 final class FirstSegment extends Segment {
-	private final int length;
+	int length;
 	FirstSegment(int len) { length = len; }
 	protected boolean put(CodeWriter to, int segmentId) { return false; }
 

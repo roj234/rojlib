@@ -69,7 +69,6 @@ public class MusicPlayer extends Plugin implements Runnable {
 		t.start();
 		player = t;
 
-		progress.setHideSpeed(true);
 		getScheduler().loop(() -> {
 			var dec = getDecoderIfPlaying();
 			if (dec != null) {
@@ -116,7 +115,7 @@ public class MusicPlayer extends Plugin implements Runnable {
 				  .padNumber(iDuration/60, 2).append(':')
 				  .padNumber(iDuration%60, 2);
 				progress.setPrefix(sb.toString());
-				progress.update(played/duration, 0);
+				progress.setProgress(played/duration);
 			} else {
 				progress.end();
 			}

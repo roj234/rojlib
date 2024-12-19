@@ -206,7 +206,7 @@ public final class NetUtil {
 	}
 
 	public static String toString(SocketAddress address) {
-		if (!(address instanceof InetSocketAddress n)) return address.toString();
+		if (!(address instanceof InetSocketAddress n)) return String.valueOf(address);
 		return n.getAddress().getHostAddress()+":"+n.getPort();
 	}
 

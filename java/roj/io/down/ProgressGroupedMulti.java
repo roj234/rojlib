@@ -4,6 +4,7 @@ import java.util.Iterator;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
 /**
+ * FIXME
  * @author Roj234
  * @since 2020/9/13 12:33
  */
@@ -25,23 +26,8 @@ public class ProgressGroupedMulti extends ProgressSimple {
 
 	@Override
 	public void onJoin(Downloader dn) {
+		super.onJoin(dn);
 		workers.add(dn);
-	}
-
-	@Override
-	public void onChange(Downloader dn) {
-		long t = System.currentTimeMillis();
-		if (t - last < sampleInterval) return;
-		last = t;
-
-		long sumDown = 0;
-		for (Iterator<Downloader> itr = workers.iterator(); itr.hasNext(); ) {
-			Downloader d = itr.next();
-			sumDown += d.getDelta();
-			if (d.getRemain() <= 0) itr.remove();
-		}
-
-		bar.update((double) finished / all, (int) sumDown);
 	}
 
 	public IProgress subProgress() {

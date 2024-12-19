@@ -56,7 +56,7 @@ final class HPACK {
 		int size, cap;
 
 		public Table(int capacity) {
-			super(256, false);
+			super(0, 256);
 			cap = capacity;
 		}
 

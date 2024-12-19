@@ -27,12 +27,10 @@ import java.util.regex.Pattern;
  * @since 2024/8/15 0015 20:34
  */
 public class ChunkTrim {
-	private static final Pattern REGION_MATCHER = Pattern.compile("r\\.(-?\\d+)\\.(-?\\d+)\\.mca$");
+	static final Pattern REGION_MATCHER = Pattern.compile("r\\.(-?\\d+)\\.(-?\\d+)\\.mca$");
+	static EasyProgressBar bar = new EasyProgressBar("计算", "区块");
+	static TaskPool pool = TaskPool.Common();
 
-	private static EasyProgressBar bar = new EasyProgressBar("计算需要清理的区块");
-	static {bar.setUnit("区块");}
-
-	private static TaskPool pool = TaskPool.Common();
 	private static MCTWhitelist whitelist;
 
 	public static void init(File file1) throws IOException, ParseException {
@@ -61,15 +59,13 @@ public class ChunkTrim {
 		var toClear = new MyHashMap<String,IntList>();
 
 		MyRegionFile[] definedState = new MyRegionFile[fileList.length];
-		bar.reset();
-		bar.addMax(fileList.length * 1024L);
-		var currentTime = (int)(System.currentTimeMillis() / 1000);
+		bar.setTotal(fileList.length * 1024L);
 
 		for (int i = 0; i < fileList.length; i++) {
 			File mca = fileList[i];
 
 			var match = REGION_MATCHER.matcher(mca.getName());
-			if (!match.find()) {bar.addCurrent(1024);continue;}
+			if (!match.find()) {bar.increment(1024);continue;}
 
 			int fileX = Integer.parseInt(match.group(1)) * 32;
 			int fileZ = Integer.parseInt(match.group(2)) * 32;
@@ -79,7 +75,7 @@ public class ChunkTrim {
 				try (var rf = new MyRegionFile(mca)) {
 					definedState[javac傻逼] = rf;
 					for (int j = 0; j < 1024; j++) {
-						bar.addCurrent(1);
+						bar.increment(1);
 
 						if (!rf.hasData(j)) continue;
 
@@ -208,9 +204,8 @@ public class ChunkTrim {
 			}
 		}
 
-		bar.reset();
 		bar.setName("删除区块");
-		bar.addMax(max);
+		bar.setTotal(max);
 
 		for (int i = 0; i < fileList.length; i++) {
 			File mca = fileList[i];
@@ -279,20 +274,19 @@ public class ChunkTrim {
 	private static void removeOtherChunk(MyRegionFile[] fileList, File basePath, File trimToPath, TaskPool asyncPool) {
 		char yn = trimToPath == null ? Terminal.readChar(MyBitSet.from("YyNn"), new CharList("是否需要压缩区块？(Yn)"), false) : 'y';
 
-		bar.reset();
 		bar.setName("删除区块");
-		bar.addMax(fileList.length * 1024L);
+		bar.setTotal(fileList.length * 1024L);
 
 		var del = new AtomicInteger();
 		boolean isCompress = yn == 'y' || yn == 'Y';
 		for (var prev : fileList) {
-			if (prev == null) {bar.addMax(1024);continue;}
+			if (prev == null) {bar.addTotal(1024);continue;}
 
 			var match = REGION_MATCHER.matcher(prev.file);
 			if (!match.find()) continue;
 
 			var mca = new File(basePath, "r."+match.group(1)+"."+match.group(2)+".mca");
-			if (!mca.isFile()) {bar.addMax(1024);continue;}
+			if (!mca.isFile()) {bar.addTotal(1024);continue;}
 
 			asyncPool.submit(() -> {
 				File file1 = null;
@@ -313,7 +307,7 @@ public class ChunkTrim {
 						}
 					} else {
 						for (int i = 0; i < 1024; i++) {
-							bar.addCurrent(1);
+							bar.increment(1);
 							if (!prev.hasData(i)) {
 								if (rf.hasData(i)) {
 									del.getAndIncrement();

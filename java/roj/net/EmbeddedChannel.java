@@ -2,13 +2,14 @@ package roj.net;
 
 import roj.collect.MyHashSet;
 import roj.collect.SimpleList;
+import roj.io.buf.BufferPool;
+import roj.util.ByteList;
 import roj.util.DynByteBuf;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
 import java.net.SocketOption;
-import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
 import java.util.Iterator;
 import java.util.concurrent.locks.LockSupport;
@@ -36,7 +37,7 @@ public class EmbeddedChannel extends MyChannel {
 		public void run() {
 			long prevTick = System.currentTimeMillis();
 			while (!shutdown) {
-				if (ch.isEmpty() && !notify) LockSupport.park();
+				//if (ch.isEmpty() && !notify) LockSupport.park();
 				synchronized (addPending) {
 					ch.addAll(addPending);
 					addPending.clear();
@@ -207,41 +208,68 @@ public class EmbeddedChannel extends MyChannel {
 
 	public void flush() throws IOException {
 		if (state >= CLOSED) return;
-		fireFlushing();
 		if (pending.isEmpty()) return;
 
 		lock.lock();
 		try {
-			do {
-				Object buf = pending.peekFirst();
-				if (buf == null) break;
+			var buf = (DynByteBuf) pending.peekFirst();
+			if (buf == null) return;
 
-				if (writer != null) {
-					if (!writer.apply(buf)) return;
-				} else {
-					if (pair.readDisabled()) return;
-					pair.fireChannelRead(buf);
-					if (buf instanceof DynByteBuf && ((DynByteBuf) buf).isReadable()) return;
-				}
+			write0(buf);
+			if (buf.isReadable()) return;
 
-				pending.pollFirst();
-			} while (true);
+			assert pending.size() == 1 : "composite buffer violation";
+			pending.clear();
+			BufferPool.reserve(buf);
 
-			if (pending.isEmpty()) {
-				flag &= ~(PAUSE_FOR_FLUSH|TIMED_FLUSH);
-				key.interestOps(SelectionKey.OP_READ);
-				fireFlushed();
-			}
+			flag &= ~(PAUSE_FOR_FLUSH|TIMED_FLUSH);
+			fireFlushed();
 		} finally {
 			lock.unlock();
 		}
 	}
 	protected void write(Object o) throws IOException {
+		flush();
+
+		var buf = (DynByteBuf) o;
+		if (!buf.isReadable()) return;
+
+		try {
+			if (pending.isEmpty()) write0(buf = new ByteList().put(buf));
+
+			if (buf.isReadable()) {
+				DynByteBuf flusher;
+
+				if (pending.isEmpty()) {
+					fireFlushing();
+					flusher = DynByteBuf.allocateDirect(buf.readableBytes(), 1048576);
+					pending.offerLast(flusher);
+				} else {
+					flusher = (DynByteBuf) pending.getFirst();
+				}
+
+				if (flusher.unsafeWritableBytes() < buf.readableBytes()) flusher.compact();
+				flusher.put(buf);
+			} else {
+				fireFlushed();
+			}
+		} finally {
+			buf.rIndex = buf.wIndex();
+		}
+	}
+
+	private void write0(DynByteBuf buf) throws IOException {
 		if (writer != null) {
-			if (!writer.apply(o)) pending.addLast(o);
+			if (writer.apply(buf)) {
+			}
 		} else {
-			if (pair.readDisabled()) pending.addLast(o);
-			else pair.fireChannelRead(o);
+			if (!pair.readDisabled() && pair.lock().tryLock()) {
+				try {
+					pair.fireChannelRead(buf);
+				} finally {
+					pair.lock.unlock();
+				}
+			}
 		}
 	}
 

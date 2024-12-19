@@ -1,6 +1,6 @@
 package roj.io.down;
 
-import roj.ui.ProgressBar;
+import roj.ui.EasyProgressBar;
 import roj.ui.Terminal;
 
 /**
@@ -8,45 +8,23 @@ import roj.ui.Terminal;
  * @since 2020/9/13 12:33
  */
 public class ProgressSimple implements IProgress {
-	public static int sampleInterval = 100;
-
 	public void onFinish(Downloader dn) {
 		bar.setName(dn.owner.file.getName());
 		bar.end("下载完成");
 	}
 
-	protected ProgressBar bar;
+	protected EasyProgressBar bar;
 	boolean kill;
 
-	public ProgressBar bar() {
-		return bar;
-	}
+	public EasyProgressBar bar() {return bar;}
 
 	public ProgressSimple() {
-		bar = new ProgressBar("下载进度");
-		bar.setUnit("B");
+		bar = new EasyProgressBar("下载", "B");
 	}
 
-	@Override
-	public boolean wasShutdown() {
-		return kill;
-	}
+	@Override public boolean wasShutdown() {return kill;}
+	@Override public void shutdown() {bar.end("下载失败", Terminal.RED);kill = true;}
 
-	@Override
-	public void shutdown() {
-		bar.end("下载失败", Terminal.RED);
-		kill = true;
-	}
-
-	long last;
-
-	@Override
-	public void onChange(Downloader dn) {
-		long t = System.currentTimeMillis();
-		if (t - last < sampleInterval) return;
-		last = t;
-
-		double pct = ((double) dn.getDownloaded() / dn.getTotal());
-		bar.update(pct, (int) dn.getAverageSpeed());
-	}
+	@Override public void onJoin(Downloader dn) {bar.addTotal(dn.getTotal());}
+	@Override public void onChange(Downloader dn) {bar.increment(dn.getDelta());}
 }

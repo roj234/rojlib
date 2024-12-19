@@ -1,14 +1,15 @@
 package roj.crypt.eddsa;
 
+import roj.crypt.DerivablePrivateKey;
+
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
-import java.security.PrivateKey;
+import java.security.PublicKey;
 import java.security.spec.InvalidKeySpecException;
-import java.security.spec.KeySpec;
 import java.security.spec.PKCS8EncodedKeySpec;
 import java.util.Arrays;
 
-final class EdPrivateKey implements EdKey, PrivateKey, KeySpec {
+final class EdPrivateKey implements EdKey, DerivablePrivateKey {
 	static final int OID_OLD = 100, OID_ED25519 = 112;
 	private static final int OID_BYTE = 11, IDLEN_BYTE = 6;
 
@@ -177,8 +178,9 @@ final class EdPrivateKey implements EdKey, PrivateKey, KeySpec {
 
 	public boolean equals(Object o) {
 		if (o == this) return true;
-		if (!(o instanceof EdPrivateKey)) return false;
-		EdPrivateKey pk = (EdPrivateKey) o;
+		if (!(o instanceof EdPrivateKey pk)) return false;
 		return Arrays.equals(h, pk.h) && spec.equals(pk.spec);
 	}
+
+	@Override public PublicKey generatePublic() {return new EdPublicKey(this);}
 }

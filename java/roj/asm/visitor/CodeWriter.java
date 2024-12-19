@@ -84,12 +84,35 @@ public class CodeWriter extends AbstractCodeWriter {
 	public void insertBefore(DynByteBuf buf) {
 		if (state != 1) throw new IllegalStateException();
 		var bw = this.bw;
+
 		int offset = tmpLenOffset;
-		bw.preInsert(offset, buf.readableBytes());
-		int pos = bw.wIndex();
-		bw.wIndex(offset);
-		bw.put(buf);
-		bw.wIndex(pos);
+		int length = buf.readableBytes();
+
+		bw.preInsert(offset, length);
+		bw.put(offset, buf);
+
+		if (!segments.isEmpty()) {
+			((FirstSegment) segments.get(0)).length += length;
+		}
+
+		for (Label label : labels) {
+			if (label.block == 0) label.offset += length;
+			if (label.isRaw()) throw new IllegalStateException("raw label "+label+" is not supported");
+		}
+	}
+	public void insertSegments(int off, List<Segment> segments1) {
+		if (state != 1) throw new IllegalStateException();
+
+		for (int i = off; i < segments.size(); i++) {
+			segments.get(i).move(this, this, segments1.size(), XInsnList.REP_SHARED_NOUPDATE);
+		}
+
+		segments.addAll(off, segments1);
+
+		for (Label label : labels) {
+			if (label.block >= off) label.block += segments1.size();
+			if (label.isRaw()) throw new IllegalStateException("raw label "+label+" is not supported");
+		}
 	}
 
 	public void visitSize(int stackSize, int localSize) {
@@ -491,8 +514,16 @@ public class CodeWriter extends AbstractCodeWriter {
 		return lbl;
 	}
 
+	public Label __tryReuseLabelHere() {
+		for (Label label : labels) {
+			if (label.block == segments.size()-1 && label.offset == codeOb.wIndex())
+				return label;
+		}
+		return label();
+	}
+
 	public void label(Label x) {
-		if (x.block >= 0) throw new IllegalStateException("Label already had a position at "+x);
+		if (!x.isUnset()) throw new IllegalStateException("标签的状态不是<unset>: "+x);
 
 		if (segments.isEmpty()) {
 			x.setFirst(bw.wIndex() - tmpLenOffset);
@@ -505,6 +536,11 @@ public class CodeWriter extends AbstractCodeWriter {
 		labels.add(x);
 	}
 
+	/**
+	 * 获取不稳定的代码位置，仅用作参考.
+	 * Segment的大小可能因之后的修改而在序列化之前改变
+	 * 如果需要精确的位置，请使用{@link #label()}
+	 */
 	public int bci() {
 		if (state < 2) return segments.isEmpty() ? (bw.wIndex() - tmpLenOffset) : codeOb.wIndex() + offset;
 		return bci;

@@ -1,14 +1,12 @@
 package roj.compiler.ast;
 
-import roj.collect.IntBiMap;
-import roj.collect.IntList;
-import roj.collect.MyBitSet;
-import roj.collect.SimpleList;
+import roj.collect.*;
 import roj.compiler.asm.Variable;
 
 /**
+ * Variable Initialization State.
  * 和Thaumcraft没有关系（雾
- * Variable Initialization State
+ * Is this some kind of SSA?
  * @author Roj234
  * @since 2024/6/23 0023 17:10
  */
@@ -17,6 +15,7 @@ public final class VisMap {
 
 	private final IntList varCounts = new IntList();
 	private final SimpleList<MyBitSet> varStates = new SimpleList<>();
+	private final SimpleList<XHashSet<Variable, ConstantState>> constantStates = new SimpleList<>();
 
 	private MyBitSet varState = new MyBitSet();
 	private int varCount;
@@ -29,6 +28,13 @@ public final class VisMap {
 	public static final class State {
 		final MyBitSet data;
 		State(MyBitSet data) {this.data = data;}
+	}
+
+	private static final XHashSet.Shape<Variable, ConstantState> CONSTANT_STATE_SHAPE = XHashSet.shape(Variable.class, ConstantState.class, "variable", "_next");
+	private static final class ConstantState {
+		Variable variable;
+		Object initialValue, lastValue;
+		ConstantState _next;
 	}
 
 	public void clear() {
@@ -57,6 +63,8 @@ public final class VisMap {
 		tmp = new MyBitSet();
 		tmp.or(varState);
 		varState = tmp; // current
+
+		constantStates.add(CONSTANT_STATE_SHAPE.create());
 	}
 	public void orElse() {
 		var prevVarCount = varCounts.get(varCounts.size()-1);
@@ -67,9 +75,7 @@ public final class VisMap {
 
 		if (!terminateFlag) {
 			var prevVarDefined = varStates.get(varStates.size()-2);
-			for (int i = 0; i < prevVarCount; i++) {
-				prevVarDefined.add(varState.contains(i << 1/*DEFINED*/) ? (i << 1/*DEFINED*/) : (i << 1) + 1/*UNSET*/);
-			}
+			mergeState(prevVarCount, prevVarDefined);
 		}
 		terminateFlag = false;
 
@@ -78,6 +84,20 @@ public final class VisMap {
 		tmp.or(initVarDefined);
 		varState = tmp;
 	}
+	private void mergeState(int prevVarCount, MyBitSet prevVarDefined) {
+		for (int i = 0; i < prevVarCount; i++) {
+			prevVarDefined.add(varState.contains(i << 1/*DEFINED*/) ? (i << 1/*DEFINED*/) : (i << 1) + 1/*UNSET*/);
+		}
+		var map = constantStates.getLast();
+		for (var state : map) {
+			var a = state.lastValue;
+			var b = state.variable.constantValue;
+			state.lastValue = a == null || a.equals(b) ? b : IntMap.UNDEFINED;
+			state.variable.constantValue = state.initialValue;
+		}
+		//map.clear();
+	}
+
 	public void exit() {
 		var pop = extraHooks.pop();
 		if (pop != null) pop.combineState(this);
@@ -90,10 +110,19 @@ public final class VisMap {
 			vuid.remove(i);
 		varCount = prevVarCount;
 
+		if (!terminateFlag) mergeState(prevVarCount, prevVarDefined);
+		// TODO 由于我选择了立即序列化，在此刻进行循环中的变量状态分析是不可能的
+		for (var state : constantStates.pop()) {
+			state.variable.constantValue =
+				state.lastValue == IntMap.UNDEFINED
+				|| (state.initialValue != null && !state.initialValue.equals(state.lastValue))
+					? null
+					: state.lastValue;
+		}
+
 		for (int i = 0; i < prevVarCount; i++) {
 			var hasValue = prevVarDefined.contains(i << 1/*DEFINED*/)
-				&& !prevVarDefined.remove((i << 1) + 1/*UNSET*/)
-				&& (terminateFlag || varState.contains(i << 1/*DEFINED*/));
+				&& !prevVarDefined.remove((i << 1) + 1/*UNSET*/);
 			var _var = vuid.get(i);
 			if (hasValue) {
 				_var.hasValue = true;
@@ -123,9 +152,7 @@ public final class VisMap {
 
 		var prevVarCount = varCounts.get(varCounts.size()-1);
 		var copyOf = new MyBitSet();
-		for (int i = 0; i < prevVarCount; i++) {
-			copyOf.add(varState.contains(i << 1/*DEFINED*/) ? (i << 1/*DEFINED*/) : (i << 1) + 1/*UNSET*/);
-		}
+		mergeState(prevVarCount, copyOf);
 
 		return new State(copyOf);
 	}
@@ -150,6 +177,14 @@ public final class VisMap {
 		if (vid >= 0) varState.add(vid << 1);
 		else {
 			if (!var.hasValue) throw new AssertionError();
+		}
+	}
+	public void assignWithValue(Variable var) {
+		var vid = vuid.getValueOrDefault(var, -1);
+		if (vid >= 0 && !constantStates.isEmpty()) {
+			var set = constantStates.getLast();
+			if (!set.containsKey(var))
+				set.computeIfAbsent(var).initialValue = var.constantValue;
 		}
 	}
 }

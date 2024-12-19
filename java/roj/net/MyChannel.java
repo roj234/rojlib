@@ -210,7 +210,9 @@ public abstract class MyChannel implements Selectable, Closeable {
 		List<ChannelCtx> list = handlers();
 		pipelineHead = pipelineTail = null;
 		for (int i = 0; i < list.size(); i++) {
-			list.get(i).handler.handlerRemoved(list.get(i));
+			var x = list.get(i);
+			x.handler.handlerRemoved(x);
+			x.prev = x.next = null;
 		}
 		return list;
 	}

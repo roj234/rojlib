@@ -2,7 +2,6 @@ package roj.net.http.server;
 
 import roj.net.ChannelCtx;
 import roj.net.http.Headers;
-import roj.net.http.HttpUtil;
 import roj.net.http.ws.WebSocketHandler;
 import roj.util.DynByteBuf;
 
@@ -36,10 +35,7 @@ public interface Response {
 	 * 显示一个用户友好的错误界面
 	 */
 	static Response internalError(String message, Throwable exception) {return StringResponse.errorPage(message, exception);}
-	static Response httpError(int code) {
-		String desc = code+" "+HttpUtil.getDescription(code);
-		return new StringResponse("<title>"+desc+"</title><center><h1>"+desc+"</h1><hr/><div>"+HttpServer11.SERVER_NAME+"</div></center>", "text/html");
-	}
+	static Response httpError(int code) {return HttpCache.getInstance().createHttpError(code);}
 	static Response websocket(Request req, Function<Request, WebSocketHandler> newHandler) {return websocket(req, newHandler, WebSocketResponse.EMPTY_PROTOCOL);}
 	static Response websocket(Request req, Function<Request, WebSocketHandler> newHandler, Set<String> protocols) {return WebSocketResponse.websocket(req, newHandler, protocols);}
 

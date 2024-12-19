@@ -183,7 +183,7 @@ final class MSSEngineClient extends MSSEngine {
 			int type = cert_data.readUnsignedByte();
 			if ((config.getSupportCertificateType() & (1 << type)) == 0) return error(NEGOTIATION_FAILED, "unsupported_certificate_type");
 
-			key = config.checkCertificate(context, type, cert_data);
+			key = config.checkCertificate(context, type, cert_data, true);
 		}
 		config.processExtensions(context, extIn, extOut, 2);
 

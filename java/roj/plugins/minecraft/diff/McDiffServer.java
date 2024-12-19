@@ -77,8 +77,7 @@ public final class McDiffServer {
 		genericParallel.setCodec(new LZMA2(opt));
 
 		System.out.println("正在处理新增 (3/4)");
-		bar.reset();
-		bar.addMax(added.size());
+		bar.setTotal(added.size());
 		for (String path : added) {
 			File file = new File(directory, path);
 			QZEntry entry = QZEntry.of(path);
@@ -106,7 +105,7 @@ public final class McDiffServer {
 					genericParallel.beginEntry(entry);
 					IOUtil.copyStream(in, genericParallel);
 				}
-				bar.addCurrent(1);
+				bar.increment(1);
 			} else if (path.contains(".mca")) {
 				MyRegionFile rin;
 				try {
@@ -189,7 +188,7 @@ public final class McDiffServer {
 								IOUtil.closeSilently(din);
 							}
 						}
-						bar.addCurrent(1);
+						bar.increment(1);
 					} finally {
 						IOUtil.closeSilently(javac傻逼);
 						IOUtil.closeSilently(rin);
@@ -207,7 +206,7 @@ public final class McDiffServer {
 					e.printStackTrace();
 					entry.setName("出现异常/"+entry.getName());
 				}
-				bar.addCurrent(1);
+				bar.increment(1);
 			}
 		}
 		pool.awaitFinish();

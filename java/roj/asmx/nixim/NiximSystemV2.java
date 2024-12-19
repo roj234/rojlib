@@ -1067,7 +1067,7 @@ public class NiximSystemV2 implements ITransformer {
 					}
 					throw new NiximException(data.name+" 存在错误: 无法找到替换构造器中<init>的调用");
 				} else {
-					endMy = new Label(0);
+					endMy = Label.atZero();
 				}
 
 				XInsnList replace = new XInsnList();
@@ -1087,7 +1087,7 @@ public class NiximSystemV2 implements ITransformer {
 					}
 				}
 
-				mnCode.instructions.replaceRange(new Label(0),endMy,out,XInsnList.REP_SHARED);
+				mnCode.instructions.replaceRange(Label.atZero(),endMy,out,XInsnList.REP_SHARED);
 
 				mnCode.recomputeFrames(XAttrCode.COMPUTE_FRAMES, input);
 				mnCode.stackSize = (char) Math.max(mnCode.stackSize, nxCode.stackSize);

@@ -39,7 +39,7 @@ public final class DiffResult {
 		System.out.print(".");
 		diff = d.getDiffLength(data2, 0, data2.length, Integer.MAX_VALUE);
 		minSize = Math.min(data.length, data2.length);
-		bar.addCurrent(1);
+		bar.increment(1);
 	}
 
 	private static byte[] read(File file, boolean isText) throws IOException {

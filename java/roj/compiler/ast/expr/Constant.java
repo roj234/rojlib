@@ -52,11 +52,11 @@ public final class Constant extends ExprNode {
 	public static Constant valueOf(String v) { return new Constant(STRING, v); }
 	public static Constant valueOf(int v) {
 		IType type;
-		if ((short) v == v) {
+		/*if ((short) v == v) {
 			if ((byte) v == v) type = Type.std(Type.BYTE);
 			else type = Type.std(Type.SHORT);
 		}
-		else type = Type.std(Type.INT);
+		else */type = Type.std(Type.INT);
 
 		return new Constant(type, AnnVal.valueOf(v));
 	}

@@ -222,7 +222,7 @@ public class H2Connection implements ChannelHandler {
 					String err;
 					try {
 						err = c.data(this, buf);
-					} catch (Exception e) {
+					} catch (Throwable e) {
 						c.onError(this, e);
 						return;
 					}
@@ -357,7 +357,7 @@ public class H2Connection implements ChannelHandler {
 	private void dataEnd(H2Stream c) throws IOException {
 		try {
 			c.dataEnd(this);
-		} catch (Exception e) {
+		} catch (Throwable e) {
 			c.onError(this, e);
 		} finally {
 			if (!isServer()) {
@@ -431,7 +431,11 @@ public class H2Connection implements ChannelHandler {
 		}
 
 		error(ERROR_INTERNAL, ex.toString());
-		LOGGER.warn("未捕获的异常", ex);
+		LOGGER.warn("未捕获的异常\nHandler={}", ex, ctx.channel().handlers());
+	}
+	protected void streamErrorCaught(int id, Throwable ex) {
+		LOGGER.warn("流#{}未捕获的异常\nHandler={}", ex, id, ctx.channel().handlers());
+		streamError(id, ERROR_INTERNAL);
 	}
 	// connection error
 	private void sizeError() {error(ERROR_FRAME_SIZE, null);}
@@ -450,7 +454,7 @@ public class H2Connection implements ChannelHandler {
 		else streamError(id, ERROR_STREAM_CLOSED);
 	}
 	public void streamError(int id, int errno) {
-		if (errno != ERROR_OK) LOGGER.debug("流关闭[{}/#{}]: {}", this, id, errno);
+		if (errno != ERROR_OK) LOGGER.debug("流[{}/#{}]关闭: {}", this, id, errno);
 
 		var c = streams.remove(id);
 		if (c != null) c.finish(this);
@@ -690,14 +694,14 @@ public class H2Connection implements ChannelHandler {
 	public boolean isServer() {return (flag & FLAG_SERVER) != 0;}
 	public ChannelCtx channel() {return ctx;}
 	@Override
-	public String toString() {return "H2/"+(ctx == null ? "<disconnected>" : NetUtil.toString(ctx.remoteAddress()));}
+	public String toString() {return getClass().getSimpleName()+"/"+(ctx == null ? "<disconnected>" : NetUtil.toString(ctx.remoteAddress()));}
 
 	@Override
 	public void channelTick(ChannelCtx ctx) throws IOException {
 		for (var stream : streams.values()) {
 			try {
 				stream.tick(this);
-			} catch (Exception e) {
+			} catch (Throwable e) {
 				stream.onError(this, e);
 			}
 		}

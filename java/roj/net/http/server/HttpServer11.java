@@ -233,7 +233,7 @@ public final class HttpServer11 extends PacketMerger implements PostSetting, Res
 
 				if (TextUtil.isNumber(lenStr) != 0) throw IllegalRequestException.badRequest("content-length非法");
 				exceptPostSize = lenStr != null ? Long.parseLong(lenStr) : -1;
-				postSize = Router.DEFAULT_POST_SIZE;
+				postSize = -1;
 
 				if (checkHeader(ctx, this)) return;
 				time = System.currentTimeMillis() + router.readTimeout(req);
@@ -453,6 +453,7 @@ public final class HttpServer11 extends PacketMerger implements PostSetting, Res
 		else if ((flag & KEPT_ALIVE) == 0) {
 			h.put("server", SERVER_NAME);
 			h.putIfAbsent("connection", "keep-alive");
+			//h.putIfAbsent("keep-alive", "timeout="+router.keepaliveTimeout()/1000);
 		}
 
 		int enc = ENC_PLAIN;
@@ -561,6 +562,7 @@ public final class HttpServer11 extends PacketMerger implements PostSetting, Res
 		limiter.setBytePerSecond(bps);
 	}
 	@Override public void setStreamLimit(SpeedLimiter limiter) {this.limiter = limiter;}
+	@Override public SpeedLimiter getStreamLimiter() {return limiter;}
 
 	public void write(DynByteBuf buf) throws IOException {
 		if ((flag&SEND_BODY) == 0) throw new IllegalStateException();
@@ -748,7 +750,7 @@ public final class HttpServer11 extends PacketMerger implements PostSetting, Res
 
 		code = 0;
 		flag = KEPT_ALIVE;
-		if (limiter != null) limiter.setBytePerSecond(0);
+		limiter = null;
 
 		setChunk(ch, 0);
 		setCompr(ch, ENC_PLAIN, null);

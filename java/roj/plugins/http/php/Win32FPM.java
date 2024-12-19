@@ -85,8 +85,8 @@ public class Win32FPM extends fcgiManager implements ITask {
 	private final ReentrantLock lock = new ReentrantLock();
 	private final Condition stateChanged = lock.newCondition();
 
-	final RingBuffer<fcgiResponse> pendingTask = new RingBuffer<>(1024, false);
-	private final RingBuffer<Map<String, String>> pendingParam = new RingBuffer<>(1024, false);
+	final RingBuffer<fcgiResponse> pendingTask = RingBuffer.lazy(1024);
+	private final RingBuffer<Map<String, String>> pendingParam = RingBuffer.lazy(1024);
 
 	protected void fcgi_attach(fcgiResponse response, Map<String, String> param) {
 		lock.lock();

@@ -315,7 +315,7 @@ public final class Terminal extends DelegatedPrintStream {
 			_flush();
 		}
 	}
-	public static void removeBottomLine(CharList b, boolean clearText) {
+	public static void removeBottomLine(CharList b) {
 		synchronized (out) {
 			int pos = LINES.indexOfAddress(b);
 			if (pos < 0) return;
@@ -326,9 +326,7 @@ public final class Terminal extends DelegatedPrintStream {
 			int cursor = !CURSORS.isEmpty() ? CURSORS.get(0) : PrevWidth+1;
 			if (cursor > 1) seq.append("\u001b[").append(cursor).append('G');
 			writeSeq(seq);
-
-			if (!clearText) out.println(b);
-			else _flush();
+			_flush();
 		}
 	}
 
@@ -752,7 +750,7 @@ public final class Terminal extends DelegatedPrintStream {
 			if (exitIfCancel) System.exit(1);
 			return 0;
 		} finally {
-			if (prefix != null) removeBottomLine(prefix, true);
+			if (prefix != null) removeBottomLine(prefix);
 			setConsole(prev);
 		}
 	}

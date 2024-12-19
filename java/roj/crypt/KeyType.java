@@ -8,7 +8,6 @@ import roj.util.Helpers;
 
 import java.io.*;
 import java.security.*;
-import java.security.spec.KeySpec;
 import java.security.spec.PKCS8EncodedKeySpec;
 import java.security.spec.X509EncodedKeySpec;
 
@@ -90,7 +89,7 @@ public class KeyType {
 		cos.write(b.length);
 		cos.write(b);
 
-		if (!(kp.getPublic() instanceof EasilyDerivedFromPrivateKey)) {
+		if (!(kp.getPrivate() instanceof DerivablePrivateKey)) {
 			if (!kp.getPublic().getFormat().equals("X.509")) {
 				b = FACTORY.getKeySpec(kp.getPublic(), X509EncodedKeySpec.class).getEncoded();
 			} else {
@@ -122,8 +121,8 @@ public class KeyType {
 		len = (cis.read() << 8) | cis.read();
 		PublicKey pub;
 		if (len < 0) {
-			// interface : EasilyDerivedFromPrivateKey
-			pub = FACTORY.generatePublic((KeySpec) pri);
+			// interface : DerivablePrivateKey
+			pub = ((DerivablePrivateKey) pri).generatePublic();
 		} else {
 			key = new byte[len];
 			IOUtil.readFully(cis, key);

@@ -151,7 +151,7 @@ public final class Header {
 		final int pad = (h >> 9) & 0x1;
 		lsf = (ver == MPEG1) ? 0 : 1;
 		bi = BITRATE[lsf*3 + (layer-1)][bi];
-		final int s_rate = SAMPLING_RATE[ver][sampling_frequency];
+		final int s_rate = getSamplingRate();
 		switch (layer) {
 			case 1 -> s_frame = (bi * 12000 / s_rate) + (pad << 2);
 			case 2 -> s_frame = bi * 144000 / s_rate + pad;
@@ -299,7 +299,7 @@ public final class Header {
 	/**
 	 * 获取每帧的采样数
 	 */
-	public float getSampleCount() {return SAMPLE_COUNT[lsf + (layer-1)];}
+	public float getSampleCount() {return SAMPLE_COUNT[lsf*3 + (layer-1)];}
 
 	/**
 	 * 声道数

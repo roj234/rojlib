@@ -12,7 +12,7 @@ import roj.io.IOUtil;
 import roj.plugin.Plugin;
 import roj.plugin.SimplePlugin;
 import roj.text.TextUtil;
-import roj.ui.ProgressBar;
+import roj.ui.EasyProgressBar;
 import roj.ui.Terminal;
 import roj.ui.terminal.Argument;
 import roj.util.ByteList;
@@ -173,13 +173,12 @@ public class Main extends Plugin {
 		int[] state = {r.readInt(), r.readInt(), r.readInt()};
 		Inflater inf = new Inflater(true);
 
-		ProgressBar ep = new ProgressBar("解密数据");
-		ep.setUnit("");
+		var bar = new EasyProgressBar("解密数据", "文件");
 
 		ZipFile zip = new ZipFile(f);
-		try (ZipFileWriter dst = new ZipFileWriter(new File(f.getAbsolutePath()+".crk.zip"))) {
-			int i = 0;
-			int size = zip.entries().size();
+		try (var out = new ZipFileWriter(new File(f.getAbsolutePath()+".crk.zip"))) {
+			bar.addTotal(zip.entries().size());
+
 			for (ZEntry entry : zip.entries()) {
 				if (entry.isEncrypted()) {
 					zc.copyState(state, true);
@@ -190,15 +189,18 @@ public class Main extends Plugin {
 						InputStream iin = entry.getMethod() == 0 ? in : new InflaterInputStream(in, inf);
 						ZEntry entry1 = new ZEntry(entry.getName());
 						entry1.setMethod(ZipEntry.STORED);
-						dst.beginEntry(entry1);
-						IOUtil.copyStream(iin, dst);
-						dst.closeEntry();
+						out.beginEntry(entry1);
+						IOUtil.copyStream(iin, out);
+						out.closeEntry();
 					}
-					ep.update((float) ++i / size, 1);
+					bar.increment(1);
 				}
 			}
+		} finally {
+			zip.close();
+			inf.end();
+			bar.end("fin");
 		}
-		ep.end("fin");
 	}
 
 	private static byte[] getExample(byte[] cipher, int[] key) throws IOException {

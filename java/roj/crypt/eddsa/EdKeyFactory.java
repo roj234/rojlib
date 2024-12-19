@@ -13,14 +13,11 @@ import java.security.spec.X509EncodedKeySpec;
 public class EdKeyFactory extends KeyFactorySpi {
     protected PrivateKey engineGeneratePrivate(KeySpec ks) throws InvalidKeySpecException {
         if (ks instanceof PKCS8EncodedKeySpec) return new EdPrivateKey((PKCS8EncodedKeySpec)ks);
-
         throw new InvalidKeySpecException("unsupported "+ks.getClass().getName());
     }
 
     protected PublicKey engineGeneratePublic(KeySpec ks) throws InvalidKeySpecException {
         if (ks instanceof X509EncodedKeySpec) return new EdPublicKey((X509EncodedKeySpec)ks);
-        if (ks instanceof EdPrivateKey) return new EdPublicKey(((EdPrivateKey) ks));
-
         throw new InvalidKeySpecException("unsupported "+ks.getClass().getName());
     }
 

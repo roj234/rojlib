@@ -3,10 +3,10 @@ package roj.compiler.context;
 import roj.archive.zip.ZEntry;
 import roj.archive.zip.ZipFile;
 import roj.archive.zip.ZipFileWriter;
+import roj.asm.Opcodes;
 import roj.asm.Parser;
 import roj.asm.cp.ConstantPool;
 import roj.asm.tree.ConstantData;
-import roj.asm.tree.MethodNode;
 import roj.collect.MyHashMap;
 import roj.collect.SimpleList;
 import roj.collect.ToIntMap;
@@ -147,9 +147,18 @@ public final class LibraryCache implements Library {
 	}
 
 	public void add(ConstantData data) {
-		for (MethodNode method : data.methods()) {
+		for (var method : data.methods()) {
 			var attributes = method.attributesNullable();
-			if (attributes != null) attributes.removeByName("Code");
+			if (attributes != null) {
+				if ((method.modifier&Opcodes.ACC_PRIVATE) != 0) attributes.clear();
+				else attributes.removeByName("Code");
+			}
+		}
+		for (var method : data.fields()) {
+			var attributes = method.attributesNullable();
+			if (attributes != null) {
+				if ((method.modifier&Opcodes.ACC_PRIVATE) != 0) attributes.clear();
+			}
 		}
 
 		if (pool.getLast().array().size() + data.cp.array().size() >= 0xFFFF) {

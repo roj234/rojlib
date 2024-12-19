@@ -127,6 +127,25 @@ public final class ChannelCtx {
 
 	public ChannelCtx prev() { return prev; }
 	public ChannelCtx next() { return next; }
+	@SuppressWarnings("unchecked")
+	public <T> T prev(Class<T> type) {
+		var ctx = prev;
+		while (true) {
+			if (ctx == null) return null;
+			if (type.isInstance(ctx.handler)) return (T) ctx.handler;
+			ctx = ctx.prev;
+		}
+	}
+	@SuppressWarnings("unchecked")
+	public <T> T next(Class<T> type) {
+		var ctx = next;
+		while (true) {
+			if (ctx == null) return null;
+			if (type.isInstance(ctx.handler)) return (T) ctx.handler;
+			ctx = ctx.next;
+		}
+	}
+
 
 	@Override
 	public String toString() { return name + "=" + handler; }

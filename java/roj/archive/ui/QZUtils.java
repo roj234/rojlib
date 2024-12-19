@@ -23,7 +23,7 @@ public class QZUtils {
 				if (len < 0) break;
 				out.write(tmp, 0, len);
 
-				if (bar != null) bar.addCurrent(len);
+				if (bar != null) bar.increment(len);
 			}
 		} finally {
 			ArrayCache.putArray(tmp);

@@ -46,15 +46,22 @@ public class MSSCrypto extends PacketMerger {
 
 		var in = (DynByteBuf) msg;
 
-		int w = in.readableBytes();
+		int inputSize = in.readableBytes();
 		var isEarlyData = engine.getDecoder() == null;
-		int lengthBytes = isEarlyData ? 2 : VarintSplitter.getVarIntLength(w);
-		if (lengthBytes > 3) throw new MSSException("要包装的数据过大");
 
 		var encoder = Objects.requireNonNull(engine.getEncoder(), "无法在此时发送数据");
-		int outputSize = encoder.engineGetOutputSize(w);
+		int outputSize = encoder.engineGetOutputSize(inputSize);
 
-		var out = ctx.allocate(false, 1 + lengthBytes + outputSize);
+		int lengthBytes;
+		if (isEarlyData) {
+			lengthBytes = 2;
+			if (outputSize > 0xFFFF) throw new MSSException("要包装的数据过大");
+		} else {
+			lengthBytes = VarintSplitter.getVarIntLength(outputSize);
+			if (lengthBytes > 3) throw new MSSException("要包装的数据过大");
+		}
+
+		var out = ctx.allocate(in.isDirect(), 1 + lengthBytes + outputSize);
 		try {
 			if (isEarlyData) out.put(MSSEngine.P_PREDATA).putShort(outputSize);
 			else out.put(P_DATA).putVUInt(outputSize);
@@ -85,8 +92,8 @@ public class MSSCrypto extends PacketMerger {
 		while (in.readableBytes() > 2) {
 			int pos = in.rIndex;
 			if (in.getU(pos) != P_DATA) {
-				int packet = engine.readPacket(in);
-				throw new MSSException(MSSEngine.ILLEGAL_PACKET, ""+packet, null);
+				if (engine.isClosed()) return;
+				throw new MSSException(MSSEngine.ILLEGAL_PACKET, "ILLEGAL_PACKET "+in.getU(pos), null);
 			}
 
 			in.rIndex = pos+1;
@@ -106,7 +113,7 @@ public class MSSCrypto extends PacketMerger {
 			} catch (GeneralSecurityException e) {
 				throw new MSSException(MSSEngine.CIPHER_FAULT, "解密失败", e);
 			} finally {
-				in.wIndex(lim);
+				if (ctx.isOpen()) in.wIndex(lim);
 			}
 		}
 	}
