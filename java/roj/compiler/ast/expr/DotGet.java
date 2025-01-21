@@ -190,7 +190,7 @@ final class DotGet extends VarNode {
 
 		String part = names.get(0);
 		int i = 0;
-		CharList sb = ctx.tmpSb; sb.clear();
+		CharList sb = ctx.getTmpSb();
 		while (true) {
 			sb.append(part);
 			if (++i == names.size()) break;

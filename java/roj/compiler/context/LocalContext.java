@@ -27,6 +27,7 @@ import roj.compiler.asm.Variable;
 import roj.compiler.ast.BlockParser;
 import roj.compiler.ast.expr.ExprNode;
 import roj.compiler.ast.expr.ExprParser;
+import roj.compiler.ast.expr.LocalVariable;
 import roj.compiler.ast.expr.NaE;
 import roj.compiler.diagnostic.Kind;
 import roj.compiler.resolve.*;
@@ -34,7 +35,6 @@ import roj.config.ParseException;
 import roj.config.data.CInt;
 import roj.reflect.GetCallerArgs;
 import roj.text.CharList;
-import roj.text.TextUtil;
 import roj.util.ArrayCache;
 import roj.util.Helpers;
 
@@ -94,6 +94,7 @@ public class LocalContext {
 
 	public boolean disableConstantValue;
 	public BiConsumer<String, Object[]> errorCapture;
+	public int errorReportIndex;
 
 	public void report(Kind kind, String message) {
 		if (errorCapture != null) {
@@ -107,7 +108,7 @@ public class LocalContext {
 			return;
 		}
 
-		classes.report(file, kind, lexer.index, message);
+		classes.report(file, kind, errorReportIndex >= 0 ? errorReportIndex : lexer.index, message);
 	}
 	public void report(Kind kind, String message, Object... args) {
 		for (Object arg : args) {
@@ -125,7 +126,7 @@ public class LocalContext {
 			return;
 		}
 
-		classes.report(file, kind, lexer.index, message, args);
+		classes.report(file, kind, errorReportIndex >= 0 ? errorReportIndex : lexer.index, message, args);
 	}
 	public void report(int knownPos, Kind kind, String message, Object... args) {
 		if (errorCapture != null) errorCapture.accept(message, args);
@@ -254,6 +255,7 @@ public class LocalContext {
 		this.lexer.init("");
 	}
 	public void setClass(CompileUnit file) {
+		this.errorReportIndex = -1;
 		this.file = file;
 		this.tr = file.getTypeResolver();
 		this.importCache.clear();
@@ -293,13 +295,21 @@ public class LocalContext {
 	public IntBiMap<String> parentListOrReport(IClass info) {return classes.getParentList(info);}
 
 	/**
-	 * 擦除泛型
-	 * 如果有 A<K, V> extends B<String> implements C<K>
+	 * 将泛型类型typeInst继承链上的targetType擦除到具体类型.
+	 * 若有 A&lt;K extends Number, V> extends B&lt;String> implements C&lt;K>
+	 * 第一个判断按顺序检测它们
+	 *     inferGeneric (A&lt;x, y>, D) = null     // D不在继承链上，或D不是泛型类型
+	 *     inferGeneric (A&lt;x, y>, B) = [String] // 具体类型，不存在IType
+	 * 第二个判断检测它们
+	 *     inferGeneric (A, C) = [Number]          // raw类型，会返回C的泛型边界
+	 *     inferGeneric (A&lt;>, C) = [Number]     // anyGeneric类型，同上
+	 * 最后的动态解析处理它
+	 *     inferGeneric (A&lt;x, y>, C) = [x]      // 变量类型，需要解析
 	 *
-	 * @param typeInst 提供A的泛型实例以擦除K到具体类型
-	 * @param targetType B or C
+	 * @param typeInst 泛型实例
+	 * @param targetType 需要擦除到的具体类型
 	 *
-	 * @return [String] or [K] or [具体类型]
+	 * @return targetType在typeInst中的实际类型
 	 */
 	@Nullable
 	public List<IType> inferGeneric(@NotNull IType typeInst, @NotNull String targetType) {
@@ -312,14 +322,13 @@ public class LocalContext {
 			report(Kind.ERROR, "symbol.error.noSuchClass", e.getMessage());
 		}
 
-		if (bounds == null ||
-			bounds.getClass() == SimpleList.class ||
-			!(typeInst instanceof Generic g)) return bounds;
+		if (bounds == null || bounds.getClass() == SimpleList.class) return bounds;
 
-		if (g.children.size() == 1 && g.children.get(0) == Asterisk.anyGeneric) {
+		if (!(typeInst instanceof Generic g) || (g.children.size() == 1 && g.children.get(0) == Asterisk.anyGeneric)) {
 			var sign = info.parsedAttr(info.cp, Attribute.SIGNATURE);
 
-			MyHashMap<String, IType> realType = new MyHashMap<>();
+
+			MyHashMap<String, IType> realType = Helpers.cast(tmpMap1);
 			Inferrer.fillDefaultTypeParam(sign.typeParams, realType);
 
 			bounds = new SimpleList<>(bounds);
@@ -339,8 +348,11 @@ public class LocalContext {
 	private List<IType> inferGeneric0(ConstantData typeInst, List<IType> params, String target) {
 		Map<String, IType> visType = new MyHashMap<>();
 
+		int depthInfo = parentListOrReport(typeInst).getValueOrDefault(target, -1);
+		if (depthInfo == -1) throw new IllegalStateException("无法从"+typeInst.name+"<"+params+">推断"+target);
+
 		loop:
-		while (true) {
+		for(;;) {
 			var g = typeInst.parsedAttr(typeInst.cp, Attribute.SIGNATURE);
 
 			int i = 0;
@@ -348,43 +360,29 @@ public class LocalContext {
 			for (String s : g.typeParams.keySet())
 				visType.put(s, params.get(i++));
 
-			var map = parentListOrReport(typeInst);
-			int depthInfo = map.getValueOrDefault(target, -1);
-			if (depthInfo == -1) throw new IllegalStateException("Cannot infer "+target+" "+params);
-
-			// depthInfo & 0x80000000 == 0 => is parent class' interface
-			boolean isFromParent = depthInfo > 0;
-			for (int j = 0; j < g.values.size(); j++) {
-				IType type = g.values.get(j);
+			// < 0 => flag[0x80000000] => 从接口的接口继承，而不是父类的接口
+			i = depthInfo < 0 ? 1 : 0;
+			for(;;) {
+				IType type = g.values.get(i);
 				if (target.equals(type.owner())) {
+					// rawtypes
 					if (type.genericType() == IType.STANDARD_TYPE) return Collections.emptyList();
 
-					var rubber = Inferrer.clearTypeParam(type, visType, g.typeParams);
-					return ((Generic) rubber).children;
+					var rubber = (Generic) Inferrer.clearTypeParam(type, visType, g.typeParams);
+					return rubber.children;
 				}
 
-				if (isFromParent) continue;
-
-				var info = classes.getClassInfo(type.owner());
-				if (parentListOrReport(info).containsValue(target)) {
-					var rubber = Inferrer.clearTypeParam(type, visType, g.typeParams);
-					params = ((Generic) rubber).children;
-					typeInst = info;
+				typeInst = classes.getClassInfo(type.owner());
+				depthInfo = parentListOrReport(typeInst).getValueOrDefault(target, -1);
+				if (depthInfo != -1) {
+					var rubber = (Generic) Inferrer.clearTypeParam(type, visType, g.typeParams);
+					params = rubber.children;
 					continue loop;
 				}
+
+				i++;
+				assert i < g.values.size();
 			}
-
-			// parentList
-			IType parent = g.values.get(0);
-			var rubber = (Generic) Inferrer.clearTypeParam(parent, visType, g.typeParams);
-
-			if (target.equals(parent.owner())) {
-				if (parent.genericType() == IType.STANDARD_TYPE) return Collections.emptyList();
-				return rubber.children;
-			}
-
-			params = rubber.children;
-			typeInst = classes.getClassInfo(typeInst.parent);
 		}
 	}
 
@@ -735,6 +733,19 @@ public class LocalContext {
 	}
 	public Function<String, Import> dynamicMethodImport, dynamicFieldImport;
 
+	@NotNull
+	public Function<String, Import> getFieldDFI(IClass info, Variable ref, Function<String, Import> prev) {
+		return name -> {
+			ComponentList cl = fieldListOrReport(info, name);
+			if (cl != null) {
+				FieldResult result = cl.findField(this, ref == null ? ComponentList.IN_STATIC : 0);
+				if (result.error == null) return new Import(info, result.field.name(), ref == null ? null : new LocalVariable(ref));
+			}
+
+			return prev == null ? null : prev.apply(name);
+		};
+	}
+
 	/**
 	 * @param name DotGet name
 	 * @param args arguments
@@ -1001,34 +1012,22 @@ public class LocalContext {
 	}
 	public static void prev() {((CInt) FTL.get().get(0)).value--;}
 
-	public List<String> tmpList = new SimpleList<>();
-	public MyHashSet<String> tmpSet = new MyHashSet<>();
-	public SimpleList<AnnotationPrimer> tmpAnnotations = new SimpleList<>();
-	public MyHashMap<String, Object> tmpMap1 = new MyHashMap<>(), tmpMap2 = new MyHashMap<>();
-	public CharList tmpSb = new CharList();
+	public SimpleList<String> tmpList = new SimpleList<>();
+	public final SimpleList<AnnotationPrimer> tmpAnnotations = new SimpleList<>();
+	public final MyHashSet<String> tmpSet = new MyHashSet<>();
+	public final MyHashMap<String, Object> tmpMap1 = new MyHashMap<>(), tmpMap2 = new MyHashMap<>();
+	public final CharList tmpSb = new CharList();
 	public NameAndType tmpNat = new NameAndType();
 
-	public String currentCodeBlockForReport() {return "\1symbol.type\0 "+file.name;}
+	public MyHashSet<String> getTmpSet() {tmpSet.clear();return tmpSet;}
+	public CharList getTmpSb() {tmpSb.clear();return tmpSb;}
 
-	private Label[] labels = new Label[8];
+	private Label[] tmpLabels = new Label[8];
 	public Label[] getTmpLabels(int i) {
-		if (i > labels.length) return labels = new Label[i];
-		return labels;
+		if (i > tmpLabels.length) return tmpLabels = new Label[i];
+		return tmpLabels;
 	}
 
-	public String reportSimilarMethod(IClass type, String method) {
-		var methods = classes.getResolveHelper(type).getMethods(classes);
-		var maybeWrongMethod = new SimpleList<String>();
-		for (var entry : methods.entrySet()) {
-			if (TextUtil.editDistance(method, entry.getKey()) < Math.min(5, method.length()/2)) {
-				maybeWrongMethod.add(entry.getKey());
-			}
-		}
-		if (maybeWrongMethod.isEmpty()) return "";
-
-		var sb = new CharList("\1symbol.similar:\1invoke.method\0:");
-		sb.append(TextUtil.join(maybeWrongMethod, "\n    "));
-		return sb.append('\0').toStringAndFree();
-	}
+	public String currentCodeBlockForReport() {return "\1symbol.type\0 "+file.name;}
 	// endregion
 }

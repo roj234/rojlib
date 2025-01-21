@@ -1,5 +1,6 @@
 package roj.compiler.resolve;
 
+import org.jetbrains.annotations.Nullable;
 import roj.asm.tree.MethodNode;
 import roj.asm.tree.attr.Attribute;
 import roj.asm.type.IType;
@@ -24,6 +25,7 @@ import static roj.asm.Opcodes.*;
 public final class MethodResult {
 	public MethodNode method;
 	public boolean directVarargCall;
+	@Nullable
 	public IType[] desc, exception;
 
 	public IntMap<Object> namedParams;

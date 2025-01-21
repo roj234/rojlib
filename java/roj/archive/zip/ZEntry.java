@@ -222,15 +222,15 @@ public class ZEntry implements RSegmentTree.Range, ArchiveEntry {
 					}
 					break;
 				case 0x0001: // Zip64 extended information
-					if (uSize == (int) U32_MAX && len >= 8) {
+					if (uSize == U32_MAX && len >= 8) {
 						len -= 8;
 						uSize = buf.readLongLE();
 					}
-					if (cSize == (int) U32_MAX && len >= 8) {
+					if (cSize == U32_MAX && len >= 8) {
 						len -= 8;
 						cSize = buf.readLongLE();
 					}
-					if (header == (int) U32_MAX && len >= 8) {
+					if (header == U32_MAX && len >= 8) {
 						header = buf.readLongLE();
 					}
 					break;

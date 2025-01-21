@@ -66,12 +66,12 @@ class UnaryPre extends UnaryPreNode {
 				}
 				break;
 			case Type.DOUBLE: case Type.FLOAT:
-				if (op == rev || op == logic_not) {
+				if (op == inv || op == logic_not) {
 					ctx.report(Kind.ERROR, "unary.error.notApplicable", byId(op), type);
 					return NaE.RESOLVE_FAILED;
 				}
 				break;
-			default: type = Type.std(Type.INT);
+			default: if (type.isPrimitive()) type = Type.std(Type.INT);
 			case Type.LONG:
 				if (op == logic_not) {
 					ctx.report(Kind.ERROR, "unary.error.notApplicable:!", type);
@@ -105,14 +105,14 @@ class UnaryPre extends UnaryPreNode {
 				AnnValLong lv = (AnnValLong)right.constVal();
 				switch (op) {
 					case sub: lv.value = -lv.value; break;
-					case rev: lv.value ^= -1L; break;
+					case inv: lv.value ^= -1L; break;
 				}
 				return right;
 			case Type.BYTE: case Type.CHAR: case Type.SHORT: case Type.INT:
 				AnnValInt iv = (AnnValInt)right.constVal();
 				switch (op) {
 					case sub: iv.value = -iv.value; break;
-					case rev: iv.value ^= -1; break;
+					case inv: iv.value ^= -1; break;
 				}
 				return right;
 		}
@@ -148,7 +148,7 @@ class UnaryPre extends UnaryPreNode {
 				cw.one(ICONST_1);
 				cw.one(IXOR);
 			break;
-			case rev:
+			case inv:
 				// 我在期待什么... 甚至没有LCONST_M1
 				if (iType == Type.LONG) {
 					cw.ldc(-1L);

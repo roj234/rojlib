@@ -365,7 +365,7 @@ public final class Inferrer {
 
 				// TODO temporary workaround for SerializerFactory
 				if (TEMPORARY_DISABLE_ASTERISK.get() != null) return exact;
-				return new Asterisk(exact, bound.get(bound.get(0).genericType() == IType.PLACEHOLDER_TYPE ? 1 : 0));
+				return Asterisk.genericReturn(exact, bound.get(bound.get(0).genericType() == IType.PLACEHOLDER_TYPE ? 1 : 0));
 			}
 			case IType.ASTERISK_TYPE -> {
 				Asterisk t = (Asterisk) type;

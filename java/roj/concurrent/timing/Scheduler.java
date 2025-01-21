@@ -134,7 +134,7 @@ public class Scheduler implements Runnable {
 						if (remove(root, task) && time > 0 && u.compareAndSwapLong(task, TaskHolder.OFF_TIME_LEFT, time, time = Math.max(0, time-ticks))) {
 							if (time == 0) {
 								time = safeApply(exec, task);
-								if (time == 0) break block;
+								if (time <= 0) break block;
 
 								if (u.compareAndSwapLong(task, TaskHolder.OFF_TIME_LEFT, 0, time)) lazyTask.add(task);
 							} else {
@@ -173,7 +173,7 @@ public class Scheduler implements Runnable {
 					if (remove(root, task) && time > 0 && u.compareAndSwapLong(task, TaskHolder.OFF_TIME_LEFT, time, time &= mask)) {
 						if (time == 0) {
 							time = safeApply(exec, task);
-							if (time == 0) break block;
+							if (time <= 0) break block;
 
 							TimingWheel whell = this;
 							while (whell.prev != null) whell = whell.prev;

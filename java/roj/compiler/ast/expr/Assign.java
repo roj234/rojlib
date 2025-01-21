@@ -3,6 +3,7 @@ package roj.compiler.ast.expr;
 import roj.asm.Opcodes;
 import roj.asm.tree.anno.AnnValInt;
 import roj.asm.type.IType;
+import roj.asm.type.Type;
 import roj.compiler.JavaLexer;
 import roj.compiler.asm.MethodWriter;
 import roj.compiler.context.LocalContext;
@@ -78,18 +79,28 @@ class Assign extends ExprNode {
 	}
 
 	static void incOrDec(VarNode expr, MethodWriter cw, boolean noRet, boolean returnBefore, int amount) {
-		boolean isLv = false;
-		int dtype = TypeCast.getDataCap(expr.type().getActualType());
+		var ctx = LocalContext.get();
+		boolean isVariable = false;
+
+		IType type = expr.type();
+		int dataCap, primType = 0;
+		if (type.isPrimitive()) {
+			dataCap = TypeCast.getDataCap(type.getActualType());
+		} else {
+			primType = TypeCast.getWrappedPrimitive(type);
+			if (primType == 0) throw new UnsupportedOperationException("incOrDec(expr = " + expr + ", cw = " + cw + ", noRet = " + noRet + ", returnBefore = " + returnBefore + ", amount = " + amount+") fail");
+			dataCap = TypeCast.getDataCap(primType);
+		}
+
 		// == 4 (int) 防止byte自增导致溢出什么的...
 		if (expr instanceof LocalVariable lv) {
-			isLv = true;
-			lv.v.endPos = expr.wordEnd;
+			isVariable = true;
+			lv.v.endPos = cw.bci();
 
-			var ctx = LocalContext.get();
 			ctx.loadVar(lv.v);
 			ctx.storeVar(lv.v);
 
-			if (dtype == 4 && (short)amount == amount) {
+			if (dataCap == 4 && (short)amount == amount) {
 				if (!noRet & returnBefore) cw.load(lv.v);
 				cw.iinc(lv.v, amount);
 				if (!noRet & !returnBefore) cw.load(lv.v);
@@ -99,6 +110,10 @@ class Assign extends ExprNode {
 
 		expr.preLoadStore(cw);
 
+		int state = 0;
+		if (!noRet & returnBefore) state = expr.copyValue(cw, type.rawType().length() - 1 != 0);
+		if (primType != 0) ctx.castTo(type, Type.std(primType), 0).write(cw);
+
 		int op;
 		if (amount < 0 && amount != Integer.MIN_VALUE) {
 			amount = -amount;
@@ -107,7 +122,7 @@ class Assign extends ExprNode {
 			op = Opcodes.IADD-4;
 		}
 
-		int type2 = Math.max(4, dtype);
+		int type2 = Math.max(4, dataCap);
 		switch (type2) {
 			case 4: cw.ldc(amount); break;
 			case 5: cw.ldc((long)amount); break;
@@ -115,9 +130,12 @@ class Assign extends ExprNode {
 			case 7: cw.ldc((double)amount); break;
 		}
 		cw.one((byte) (op + type2));
-		if (dtype < 4 && isLv) cw.one((byte) (Opcodes.I2B-1 + dtype));
 
-		expr.postStore(cw, 0);
+		if (dataCap < 4 && primType == 0 && isVariable) cw.one((byte) (Opcodes.I2B-1 + dataCap));
+		else if (primType != 0) ctx.castTo(Type.std(primType), type, 0).write(cw);
+
+		if (!noRet & !returnBefore) state = expr.copyValue(cw, type.rawType().length() - 1 != 0);
+		expr.postStore(cw, state);
 	}
 
 	@Override

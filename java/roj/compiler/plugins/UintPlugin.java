@@ -71,6 +71,7 @@ public final class UintPlugin extends Evaluable implements Library, ExprApi.Expr
 
 	private static int u32Count(ExprApi.OperatorContext opctx) {return u32Count(opctx.leftType())+u32Count(opctx.rightType());}
 	private static int u32Count(IType type) {
+		if (type == null) return -1;
 		if ("uint32".equals(type.owner())) return 1;
 		int cap = TypeCast.getDataCap(type.getActualType());
 		return cap >= 1 && cap <= 4 ? 0 : -1;
@@ -78,6 +79,7 @@ public final class UintPlugin extends Evaluable implements Library, ExprApi.Expr
 
 	private static int u64Count(ExprApi.OperatorContext opctx) {return u64Count(opctx.leftType())+u64Count(opctx.rightType());}
 	private static int u64Count(IType type) {
+		if (type == null) return -1;
 		if ("uint64".equals(type.owner())) return 1;
 		int cap = TypeCast.getDataCap(type.getActualType());
 		return cap >= 1 && cap <= 5 ? 0 : -1;
@@ -177,13 +179,13 @@ public final class UintPlugin extends Evaluable implements Library, ExprApi.Expr
 	public ExprNode test(LocalContext ctx, ExprApi.OperatorContext opctx, ExprNode left, Object right) {
 		short sym = opctx.symbol();
 		switch (sym) {
-			case inc, dec, add, sub, mul, lsh, rsh, rev, and, or, xor -> {
+			case inc, dec, add, sub, mul, shl, shr, inv, and, or, xor -> {
 				if (u32Count(opctx) > 0) {
-					var node = ctx.ep.binary(sym == rsh ? rsh_unsigned : sym, _i32(left), _i32((ExprNode) right));
+					var node = ctx.ep.binary(sym == shr ? ushr : sym, _i32(left), _i32((ExprNode) right));
 					return _u32(node);
 				}
 				if (u64Count(opctx) > 0) {
-					var node = ctx.ep.binary(sym == rsh ? rsh_unsigned : sym, _i64(left), _i64((ExprNode) right));
+					var node = ctx.ep.binary(sym == shr ? ushr : sym, _i64(left), _i64((ExprNode) right));
 					return _u64(node);
 				}
 			}

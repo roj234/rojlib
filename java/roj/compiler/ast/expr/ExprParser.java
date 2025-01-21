@@ -6,6 +6,7 @@ import roj.asm.tree.FieldNode;
 import roj.asm.tree.IClass;
 import roj.asm.tree.MethodNode;
 import roj.asm.tree.anno.AnnVal;
+import roj.asm.tree.attr.AttrUnknown;
 import roj.asm.type.IType;
 import roj.asm.type.Type;
 import roj.collect.Int2IntMap;
@@ -16,6 +17,7 @@ import roj.compiler.JavaLexer;
 import roj.compiler.LavaFeatures;
 import roj.compiler.asm.Asterisk;
 import roj.compiler.asm.LPGeneric;
+import roj.compiler.asm.MethodWriter;
 import roj.compiler.ast.BlockParser;
 import roj.compiler.ast.ParseTask;
 import roj.compiler.ast.VariableDeclare;
@@ -93,7 +95,7 @@ public final class ExprParser {
 		SM.putInt(SM_UnaryPre | add, -1);
 		SM.putInt(SM_UnaryPre | sub, -5);
 		SM.putInt(SM_UnaryPre | logic_not, -1);
-		SM.putInt(SM_UnaryPre | rev, -1);
+		SM.putInt(SM_UnaryPre | inv, -1);
 		SM.putInt(SM_UnaryPre | lParen, -2);
 		SM.putInt(SM_UnaryPre | Word.LITERAL, -3);
 		SM.putInt(SM_UnaryPre | SWITCH, -4);
@@ -150,14 +152,7 @@ public final class ExprParser {
 		SM.putInt(SM_ExprTerm | lambda, 0x42A);
 
 		// 优先级
-		SM.putInt(SM_ExprTerm | and, 10);
-		SM.putInt(SM_ExprTerm | or, 10);
-		SM.putInt(SM_ExprTerm | xor, 10);
-
-		SM.putInt(SM_ExprTerm | lsh, 9);
-		SM.putInt(SM_ExprTerm | rsh, 9);
-		SM.putInt(SM_ExprTerm | rsh_unsigned, 9);
-
+		// 20250111 按照“正确”的优先级重新排序它们，但是并未改变val
 		SM.putInt(SM_ExprTerm | pow, 8);
 
 		SM.putInt(SM_ExprTerm | mul, 7);
@@ -167,6 +162,10 @@ public final class ExprParser {
 		SM.putInt(SM_ExprTerm | add, 6);
 		SM.putInt(SM_ExprTerm | sub, 6);
 
+		SM.putInt(SM_ExprTerm | shl, 9);
+		SM.putInt(SM_ExprTerm | shr, 9);
+		SM.putInt(SM_ExprTerm | ushr, 9);
+
 		SM.putInt(SM_ExprTerm | lss, 5);
 		SM.putInt(SM_ExprTerm | gtr, 5);
 		SM.putInt(SM_ExprTerm | geq, 5);
@@ -174,7 +173,11 @@ public final class ExprParser {
 		SM.putInt(SM_ExprTerm | equ, 5);
 		SM.putInt(SM_ExprTerm | neq, 5);
 
-		SM.putInt(SM_ExprTerm | nullish_consolidating, 4);
+		SM.putInt(SM_ExprTerm | and, 10);
+		SM.putInt(SM_ExprTerm | or, 10);
+		SM.putInt(SM_ExprTerm | xor, 10);
+
+		SM.putInt(SM_ExprTerm | nullish_coalescing, 4);
 		SM.putInt(SM_ExprTerm | logic_and, 4);
 		SM.putInt(SM_ExprTerm | logic_or, 4);
 	}
@@ -651,7 +654,7 @@ public final class ExprParser {
 					break endValueConv;
 					case -9://method_referent this::stop
 						if (!waitDot) ue(wr, w.val(), "type.literal");
-						cur = new Lambda(cur, wr.except(Word.LITERAL).val());
+						cur = new Lambda(chain(cur, wr.except(Word.LITERAL).val(), 0));
 					break endValueConv;
 
 					// 我是无敌可爱的分隔线
@@ -903,7 +906,7 @@ public final class ExprParser {
 
 		String first = w.val();
 
-		var sb = LocalContext.get().tmpSb; sb.clear();
+		var sb = LocalContext.get().getTmpSb();
 		sb.append(first);
 
 		wr.state = STATE_TYPE;
@@ -1014,19 +1017,37 @@ public final class ExprParser {
 		node.wordStart = wordStart;
 		return node;
 	}
+	//WIP
 	private ExprNode lambda(JavaLexer wr, List<String> parNames) throws ParseException {
-		var strings = copyOf(parNames);
+		var argNames = copyOf(parNames);
 
-		Word w = wr.next();
-		if (w.type() == lBrace) {
-			var file = ctx.file;
-			MethodNode mn = new MethodNode(Opcodes.ACC_PRIVATE|Opcodes.ACC_SYNTHETIC, file.name, "", "()V");
-			ParseTask lambdaTask = ParseTask.Method(file, mn, strings);
-			return new Lambda(strings, mn, lambdaTask);
+		var file = ctx.file;
+		MethodNode mn = new MethodNode(Opcodes.ACC_PRIVATE|(ctx.in_static ? Opcodes.ACC_STATIC : 0)|Opcodes.ACC_SYNTHETIC, file.name, "lambda$", "()V");
+
+		if (wr.nextIf(lBrace)) {
+			ParseTask task = ParseTask.Method(file, mn, argNames);
+			return new Lambda(argNames, mn, task);
 		} else {
-			wr.retractWord();
-			ExprNode expr = parse1(STOP_RSB|STOP_COMMA|STOP_SEMICOLON|NAE);
-			return new Lambda(strings, expr);
+			int start = wr.prevIndex;
+			int linePos = wr.LN;
+			int lineIdx = wr.LNIndex;
+
+			var expr = parse1(STOP_RSB|STOP_COMMA|STOP_SEMICOLON|NAE);
+			int end = wr.prevIndex;
+
+			var methodStr = "return "+wr.getText().subSequence(start, end)+";}";
+			System.out.println(methodStr);
+			ParseTask task = ctx -> {
+				var file1 = ctx.file;
+				ctx.lexer.init(start, linePos, lineIdx);
+				MethodWriter cw = ctx.bp.parseMethod(file1, mn, argNames);
+
+				cw.finish();
+
+				mn.putAttr(new AttrUnknown("Code", cw.bw.toByteArray()));
+			};
+
+			return new Lambda(argNames, expr);
 		}
 	}
 

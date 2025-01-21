@@ -80,6 +80,7 @@ cu.noInheritance=[CU]%1已隐式的从%2继承
 cu.interfaceInit=[CU]接口中不允许有初始化程序
 cu.interfacePrivateNonstatic=[CU]仅接口中的静态方法和字段允许私有修饰
 cu.enumInit=[CU]枚举的初始化程序必须是私有的
+cu.enumMethod=覆盖的枚举默认方法修饰符不正确
 
 cu.sealed.noPermits=密封类必须具有permits字句
 

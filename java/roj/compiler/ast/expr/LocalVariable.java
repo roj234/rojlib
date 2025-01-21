@@ -28,15 +28,14 @@ public final class LocalVariable extends VarNode {
 
 	@Override public boolean isConstant() { return v.constantValue != null; }
 	@Override public Object constVal() { return v.constantValue; }
+	@Override public void write(MethodWriter cw, boolean noRet) {mustBeStatement(noRet);preLoadStore(cw);}
 
-	@Override
-	public void write(MethodWriter cw, boolean noRet) {
-		v.endPos = wordEnd;
-		mustBeStatement(noRet);
-
-		LocalContext.get().loadVar(v);
-		cw.load(v);
-	}
+	@Override public boolean isFinal() { return v.isFinal; }
+	@Override public void preStore(MethodWriter cw) {}
+	@Override public void preLoadStore(MethodWriter cw) {LocalContext.get().loadVar(v); cw.load(v); v.endPos = cw.bci();}
+	@Override public void postStore(MethodWriter cw, int state) {LocalContext.get().storeVar(v); cw.store(v); v.endPos = cw.bci();}
+	@Override public int copyValue(MethodWriter cw, boolean twoStack) {cw.one(twoStack?Opcodes.DUP2:Opcodes.DUP);return 0;}
+	@Override public boolean canBeReordered() {return true;}
 
 	@Override
 	public boolean equals(Object o) {
@@ -45,11 +44,4 @@ public final class LocalVariable extends VarNode {
 		return v.equals(lv.v);
 	}
 	@Override public int hashCode() { return v.hashCode(); }
-
-	@Override public boolean isFinal() { return v.isFinal; }
-	@Override public void preStore(MethodWriter cw) {}
-	@Override public void preLoadStore(MethodWriter cw) {LocalContext.get().loadVar(v); cw.load(v);}
-	@Override public void postStore(MethodWriter cw, int state) {LocalContext.get().storeVar(v); cw.store(v);}
-	@Override public int copyValue(MethodWriter cw, boolean twoStack) {cw.one(twoStack?Opcodes.DUP2:Opcodes.DUP);return 0;}
-	@Override public boolean canBeReordered() {return true;}
 }

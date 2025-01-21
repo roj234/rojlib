@@ -912,6 +912,7 @@ public class QZArchive extends QZReader implements ArchiveFile {
 
 		if (blocks == null) return num;
 
+		Objects.requireNonNull(r, "Stream Closed");
 		num.set(blocks.length);
 		for (WordBlock b : blocks) {
 			th.submit(() -> {

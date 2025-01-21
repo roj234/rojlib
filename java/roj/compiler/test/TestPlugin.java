@@ -44,10 +44,13 @@ public class TestPlugin {
 		rtApi.onBinary(new Type("roj/compiler/test/CandyTestPlugin$Item"), "*", Type.std(Type.INT), mn, true);
 
 		api.getExprApi().addUnaryPre("__TypeOf", (lexer, node) -> new UnaryPreNode() {
-			@Override public String setRight(ExprNode node) {return "[\n  表达式="+node+"\n  解析="+(node = node.resolve(LocalContext.get()))+"\n  返回类型="+node.type()+"\n]";}
+			ExprNode node;
+			@Override public String setRight(ExprNode node) {this.node = node;return null;}
 			@Override public String toString() {return null;}
 			@Override public IType type() {return null;}
-			@Override public void write(MethodWriter cw, boolean noRet) {}
+			@Override public void write(MethodWriter cw, boolean noRet) {
+				throw new UnsupportedOperationException("[\n  表达式="+node+"\n  解析="+(node = node.resolve(LocalContext.get()))+"\n  返回类型="+node.type()+"\n]");
+			}
 		});
 	}
 

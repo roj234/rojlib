@@ -29,8 +29,8 @@ final class Binary extends ExprNode {
 	ExprNode left, right;
 
 	// 对于下列操作，由于范围已知，可以保证它们的类型不会自动变int
-	private static final MyBitSet BIT_OP = MyBitSet.from(and,or,xor,rsh,rsh_unsigned),
-		BITSHIFT = MyBitSet.from(lsh,rsh,rsh_unsigned);
+	private static final MyBitSet BIT_OP = MyBitSet.from(and,or,xor,shr,ushr),
+		BITSHIFT = MyBitSet.from(shl,shr,ushr);
 	private static final byte[] BIT_COUNT = new byte[] {-1, 8, 16, 16, 32, 64};
 
 	private IType type;
@@ -130,7 +130,7 @@ final class Binary extends ExprNode {
 		int dpType = Math.max(capL, capR);
 
 		primitive: {
-			if (dpType < 8 && (operator < logic_and || operator > nullish_consolidating)) {
+			if (dpType < 8 && (operator < logic_and || operator > nullish_coalescing)) {
 				if (Math.min(capL, capR) == 0) {
 					if (dpType != 0 || operator > logic_or || operator < and) {
 						ctx.report(Kind.ERROR, "binary.error.notApplicable", lType, rType, byId(operator));
@@ -140,7 +140,7 @@ final class Binary extends ExprNode {
 				} else {
 					if (dpType < 4 && !BIT_OP.contains(operator)) dpType = 4;
 
-					if (operator >= lsh) {
+					if (operator >= shl) {
 						// 6 = float, 7 = double
 						if (dpType > 5) {
 							ctx.report(Kind.ERROR, "binary.error.notApplicable", lType, rType, byId(operator));
@@ -168,8 +168,8 @@ final class Binary extends ExprNode {
 					else if (lType.isPrimitive()) castLeft = ctx.castTo(lType, rType, TypeCast.E_DOWNCAST);
 					dpType = 9;
 				break;
-				case logic_and, logic_or, nullish_consolidating:
-					if (operator == nullish_consolidating) {
+				case logic_and, logic_or, nullish_coalescing:
+					if (operator == nullish_coalescing) {
 						if (lType.isPrimitive()) ctx.report(Kind.ERROR, "symbol.error.derefPrimitive", lType);
 						type = ctx.getCommonParent(lType, rType);
 					} else {
@@ -204,7 +204,7 @@ final class Binary extends ExprNode {
 						if (dpType <= 4 && castLeft == null && ((AnnVal) right.constVal()).asInt() == 0)
 							return left;
 					}
-					case lsh, rsh, rsh_unsigned -> {
+					case shl, shr, ushr -> {
 						int value = ((AnnVal) right.constVal()).asInt();
 						if (value == 0 && castLeft == null) return left;
 						if (value > BIT_COUNT[dpType]) ctx.report(Kind.SEVERE_WARNING, "binary.shiftOverflow", type, BIT_COUNT[dpType]);
@@ -216,7 +216,7 @@ final class Binary extends ExprNode {
 						}
 					}
 					// expr ?? null => expr
-					case nullish_consolidating -> {
+					case nullish_coalescing -> {
 						if (right.constVal() == null) {
 							ctx.report(Kind.WARNING, "binary.uselessNullish");
 							return left;
@@ -236,7 +236,7 @@ final class Binary extends ExprNode {
 				var v = exprVal == (operator == logic_and) ? right : Constant.valueOf(exprVal);
 				ctx.report(Kind.WARNING, "binary.constant", v);
 				return v;
-			case nullish_consolidating:
+			case nullish_coalescing:
 				v = left.constVal() == null ? right : left;
 				ctx.report(Kind.WARNING, "binary.constant", v);
 				return v;
@@ -287,9 +287,9 @@ final class Binary extends ExprNode {
 					case rem -> l%r;
 					case pow -> (int) Math.pow(l, r);
 
-					case lsh -> l<<r;
-					case rsh -> l>>r;
-					case rsh_unsigned -> l>>>r;
+					case shl -> l<<r;
+					case shr -> l>>r;
+					case ushr -> l>>>r;
 					case and -> l&r;
 					case or -> l|r;
 					case xor -> l^r;
@@ -307,9 +307,9 @@ final class Binary extends ExprNode {
 					case rem -> l%r;
 					case pow -> (long) Math.pow(l, r);
 
-					case lsh -> l<<r;
-					case rsh -> l>>r;
-					case rsh_unsigned -> l>>>r;
+					case shl -> l<<r;
+					case shr -> l>>r;
+					case ushr -> l>>>r;
 					case and -> l&r;
 					case or -> l|r;
 					case xor -> l^r;
@@ -392,7 +392,7 @@ final class Binary extends ExprNode {
 				cw.label(sayResult);
 				return;
 			}
-			case nullish_consolidating: {
+			case nullish_coalescing: {
 				mustBeStatement(noRet);
 
 				Label end = new Label();
@@ -423,7 +423,7 @@ final class Binary extends ExprNode {
 	@Override
 	@SuppressWarnings("fallthrough")
 	public void writeShortCircuit(MethodWriter cw, @Nullable TypeCast.Cast cast, boolean ifThen, @NotNull Label far) {
-		if (operator < logic_and || operator > leq || operator == nullish_consolidating) {
+		if (operator < logic_and || operator > leq || operator == nullish_coalescing) {
 			super.writeShortCircuit(cw, cast, ifThen, far);
 			return;
 		}
@@ -500,7 +500,7 @@ final class Binary extends ExprNode {
 			case add, sub, mul, div, rem: opc += ((opr - add) << 2) + IADD; break;
 			//FIXME pow正确的提升类型到double
 			case pow: {cw.invoke(INVOKESTATIC, "java/util/Math", "pow", "(DD)D");return;}
-			case lsh, rsh, rsh_unsigned, and, or, xor: opc += ((opr - lsh) << 1) + ISHL; break;
+			case shl, shr, ushr, and, or, xor: opc += ((opr - shl) << 1) + ISHL; break;
 			case equ, neq:
 				if (!left.type().isPrimitive() & !right.type().isPrimitive()) {
 					jump(cw, opc);

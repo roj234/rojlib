@@ -255,7 +255,6 @@ public final class CompileUnit extends ConstantData {
 		ctx.setClass(this);
 
 		var wr = ctx.lexer;
-		var tmp = IOUtil.getSharedCharBuf();
 
 		wr.index = 0;
 		wr.state = STATE_CLASS;
@@ -297,8 +296,7 @@ public final class CompileUnit extends ConstantData {
 		if (w.type() == PACKAGE) {
 			if (packageAnnotation) ctx.report(Kind.ERROR, "package.annotation");
 
-			readRef(wr, tmp, false);
-			pkg = tmp.append('/').toString();
+			pkg = readRef(false).append('/').toString();
 
 			w = wr.optionalNext(semicolon);
 
@@ -315,11 +313,12 @@ public final class CompileUnit extends ConstantData {
 			w = wr.optionalNext(semicolon);
 		}
 
+		var tmp = ctx.tmpSb;
 		while (w.type() == IMPORT) {
 			boolean impField = wr.nextIf(STATIC);
 			boolean unimport = !wr.nextIf(sub);
 
-			readRef(wr, tmp, unimport);
+			readRef(unimport);
 
 			importBlock:
 			if (tmp.charAt(tmp.length()-1) == '*') {
@@ -380,7 +379,7 @@ public final class CompileUnit extends ConstantData {
 		var a = new AttrModule(wr.except(LITERAL, "cu.name").val(), moduleIsOpen ? ACC_OPEN : 0);
 		putAttr(a);
 
-		var names = ctx.tmpSet; names.clear();
+		var names = ctx.getTmpSet();
 
 		// TODO ModulePackages ModuleMainClass
 		// 某些重复可能并非错误
@@ -661,7 +660,7 @@ public final class CompileUnit extends ConstantData {
 
 		wr.except(lBrace);
 
-		var names = ctx.tmpSet; names.clear();
+		var names = ctx.getTmpSet();
 		// for record
 		for (int i = 0; i < fields.size(); i++) {
 			String name = fields.get(i).name();
@@ -1077,13 +1076,14 @@ public final class CompileUnit extends ConstantData {
 				lc.setMethod(cw.mn);
 
 				for (int i = 0; i < enumInit.size(); i++) {
-					lc.lexer.index = fieldIdx.get(i);
+					lc.errorReportIndex = fieldIdx.get(i);
 
 					enumInit.get(i).resolve(lc).write(cw);
 					cw.field(PUTSTATIC, this, i);
 
 					finalFields.remove(fields.get(i));
 				}
+				lc.errorReportIndex = -1;
 
 				cw.newArraySized(selfType, enumInit.size());
 				cw.visitSizeMax(4, 0); // array array index value
@@ -1184,9 +1184,7 @@ public final class CompileUnit extends ConstantData {
 			if (w.type() != LITERAL) throw wr.err("type.illegalType:"+w.val());
 			wr.retractWord();
 
-			CharList sb = ctx.tmpSb;
-			readRef(wr, sb, false);
-			String klass = sb.toString();
+			String klass = readRef();
 
 			if ((flags&TYPE_GENERIC) != 0) {
 				int prev = wr.state;
@@ -1232,17 +1230,14 @@ public final class CompileUnit extends ConstantData {
 	}
 	private static final IntMap<Type> FastPrimitive = ExprParser.getPrimitiveWords();
 
-	private String readRef() throws ParseException {
-		CharList sb = ctx.tmpSb;
-		readRef(ctx.lexer, sb, false);
-		return sb.toString();
-	}
+	private String readRef() throws ParseException {return readRef(false).toString();}
 	/**
 	 * 解析引用类型 (a.b.c)
 	 * @param allowStar allow * (in import)
 	 */
-	private static void readRef(JavaLexer wr, CharList sb, boolean allowStar) throws ParseException {
-		sb.clear();
+	private CharList readRef(boolean allowStar) throws ParseException {
+		var wr = ctx.lexer;
+		var sb = ctx.getTmpSb();
 
 		while (true) {
 			Word w = wr.next();
@@ -1258,6 +1253,8 @@ public final class CompileUnit extends ConstantData {
 			if (!wr.nextIf(dot)) break;
 			sb.append('/');
 		}
+
+		return sb;
 	}
 
 	public IType genericTypePart(String type) throws ParseException {
@@ -1407,13 +1404,11 @@ public final class CompileUnit extends ConstantData {
 
 	public List<AnnotationPrimer> _annotations(List<AnnotationPrimer> list) throws ParseException {
 		JavaLexer wr = ctx.lexer;
-		CharList tmp = ctx.tmpSb;
 
 		while (true) {
 			int pos = wr.index;
-			readRef(wr, tmp, false);
 
-			var a = new AnnotationPrimer(tmp.toString(), pos+1);
+			var a = new AnnotationPrimer(readRef(), pos+1);
 			// 允许忽略注解
 			if (list != Collections.EMPTY_LIST) list.add(a);
 
@@ -1451,11 +1446,7 @@ public final class CompileUnit extends ConstantData {
 
 			if (w.type() != rParen) throw wr.err(a.valueOnly ? "cu.annotation.valueOnly" : "unexpected:"+w.val());
 
-			w = wr.next();
-			if (w.type() != at) {
-				wr.retractWord();
-				return list;
-			}
+			if (!wr.nextIf(at)) return list;
 		}
 	}
 	private void commitAnnotations(Attributed node) {
@@ -1471,7 +1462,7 @@ public final class CompileUnit extends ConstantData {
 		tr.init(ctx);
 		var wr = ctx.lexer;
 
-		wr.index = classIdx;
+		ctx.errorReportIndex = classIdx;
 		var s1 = signature;
 		if (s1 != null) {
 			currentNode = s1;
@@ -1479,7 +1470,7 @@ public final class CompileUnit extends ConstantData {
 		}
 
 		for (int i = 0; i < fieldIdx.size(); i++) {
-			wr.index = fieldIdx.get(i);
+			ctx.errorReportIndex = fieldIdx.get(i);
 			var field = fields.get(i);
 			var s = (LPSignature) field.attrByName("Signature");
 			if (s != null) {
@@ -1494,7 +1485,7 @@ public final class CompileUnit extends ConstantData {
 			ctx.disableRawTypeWarning = false;
 		}
 		for (int i = 0; i < methodIdx.size(); i++) {
-			wr.index = methodIdx.get(i);
+			ctx.errorReportIndex = methodIdx.get(i);
 			var method = methods.get(i);
 			var s = (LPSignature) method.attrByName("Signature");
 			List<Type> par = method.parameters();
@@ -1511,6 +1502,7 @@ public final class CompileUnit extends ConstantData {
 
 			ctx.disableRawTypeWarning = false;
 		}
+		ctx.errorReportIndex = classIdx;
 
 		// extends
 		var pInfo = tr.resolve(ctx, parent);
@@ -1563,31 +1555,34 @@ public final class CompileUnit extends ConstantData {
 
 		// annotation
 		for (var list : annoTask.values()) {
-			for (int i = 0; i < list.size(); i++) {
-				var a = list.get(i);
-				resolveAnnotationType(ctx, a);
+			resolveAnnotationTypes(ctx, list);
+		}
+	}
+	// call by BlockParser
+	public void resolveAnnotationTypes(LocalContext ctx, List<AnnotationPrimer> list) {
+		for (int i = 0; i < list.size(); i++) {
+			var a = list.get(i);
+			resolveAnnotationType(ctx, a);
 
-				for (Iterator<?> itr = a.values.values().iterator(); itr.hasNext(); ) {
-					if (itr.next() instanceof AnnVal value) {
-						if (value instanceof AnnValArray array) {
-							for (AnnVal val : array.value) {
-								var a1 = (AnnotationPrimer) ((AnnValAnnotation) val).value;
-								resolveAnnotationType(ctx, a1);
-							}
-						} else {
-							var a1 = (AnnotationPrimer) ((AnnValAnnotation) value).value;
+			for (Iterator<?> itr = a.values.values().iterator(); itr.hasNext(); ) {
+				if (itr.next() instanceof AnnVal value) {
+					if (value instanceof AnnValArray array) {
+						for (AnnVal val : array.value) {
+							var a1 = (AnnotationPrimer) ((AnnValAnnotation) val).value;
 							resolveAnnotationType(ctx, a1);
 						}
+					} else {
+						var a1 = (AnnotationPrimer) ((AnnValAnnotation) value).value;
+						resolveAnnotationType(ctx, a1);
 					}
 				}
 			}
 		}
 	}
 	private void resolveAnnotationType(LocalContext ctx, AnnotationPrimer a) {
-		ctx.lexer.index = a.pos;
 		var type = tr.resolve(ctx, a.type());
 		if (type == null) {
-			ctx.report(Kind.ERROR, "symbol.error.noSuchSymbol", "symbol.type", a.type(), ctx.currentCodeBlockForReport());
+			ctx.report(a.pos, Kind.ERROR, "symbol.error.noSuchSymbol", "symbol.type", a.type(), ctx.currentCodeBlockForReport());
 		} else {
 			a.setType(type.name());
 		}
@@ -1597,7 +1592,7 @@ public final class CompileUnit extends ConstantData {
 		var ctx = LocalContext.get();
 		ctx.setClass(this);
 
-		ctx.lexer.index = classIdx;
+		ctx.errorReportIndex = classIdx;
 
 		// 检测循环继承
 		ctx.parentListOrReport(this);
@@ -1609,8 +1604,9 @@ public final class CompileUnit extends ConstantData {
 
 		overridableMethods.methods = new SimpleList<>();
 		overridableMethods.itf = Collections.emptyList();
-		var names = ctx.tmpSet; names.clear();
+		var names = ctx.getTmpSet();
 
+		// 收集继承方法
 		{
 		String name = parent;
 		int i = 0;
@@ -1621,7 +1617,7 @@ public final class CompileUnit extends ConstantData {
 			ctx.assertAccessible(info);
 			collectMethods(ctx, info, i != 0);
 
-			// sealed
+			// 检查自身是否继承自密封类
 			var ps = info.parsedAttr(info.cp, Attribute.PermittedSubclasses);
 			if (ps != null) {
 				if ((extraModifier&(_ACC_SEALED|_ACC_NON_SEALED|ACC_FINAL)) == 0) {
@@ -1638,13 +1634,29 @@ public final class CompileUnit extends ConstantData {
 		}
 		}
 
+		// 检查子类是否实现密封类
+		if ((extraModifier&_ACC_SEALED) != 0) {
+			var ps = (AttrClassList) attrByName("PermittedSubclasses");
+
+			List<String> value = ps.value;
+			for (int i = 0; i < value.size(); i++) {
+				String type = value.get(i);
+				var info = ctx.classes.getClassInfo(type);
+
+				ctx.assertAccessible(info);
+				if (!info.parent.equals(name) && !info.interfaces().contains(name)) {
+					ctx.report(Kind.ERROR, "cu.sealed.indirectInherit", type, name);
+				}
+			}
+		}
+
 		// use extraModifier so that anonymous class can disable it
 		boolean autoInit = (extraModifier & ACC_INTERFACE) == 0;
 		// 方法冲突在这里检查，因为stage0/1拿不到完整的rawDesc
 		names.clear();
 		List<MethodNode> methods = this.methods;
 		for (int i = 0; i < methodIdx.size(); i++) {
-			ctx.lexer.index = methodIdx.get(i);
+			ctx.errorReportIndex = methodIdx.get(i);
 			var method = methods.get(i);
 
 			String par = method.rawDesc();
@@ -1709,45 +1721,43 @@ public final class CompileUnit extends ConstantData {
 			cw.invoke(INVOKESPECIAL, parent, "<init>", "()V");
 		}
 
-		// permits validate
-		if ((extraModifier&_ACC_SEALED) != 0) {
-			var ps = (AttrClassList) attrByName("PermittedSubclasses");
-
-			List<String> value = ps.value;
-			for (int i = 0; i < value.size(); i++) {
-				String type = value.get(i);
-				var info = ctx.classes.getClassInfo(type);
-
-				ctx.assertAccessible(info);
-				if (!info.parent.equals(name) && !info.interfaces().contains(name)) {
-					ctx.report(Kind.ERROR, "cu.sealed.indirectInherit", type, name);
-				}
-			}
-		}
-
-		// enum default method
+		// 枚举类的默认方法
 		if ((modifier&ACC_ENUM) != 0) {
 			String arrayType_ = "[L"+name+";";
+
+			//int fid = getField("$VALUES");
 			int fid = miscFieldId = newField(ACC_PRIVATE|ACC_STATIC|ACC_FINAL/*|ACC_SYNTHETIC*/, "$VALUES", arrayType_);
 
-			// T[] values()
-			var w = newMethod(ACC_PUBLIC|ACC_STATIC, "values", "()".concat(arrayType_));
-			w.visitSize(1, 1);
-			w.field(GETSTATIC, this, fid);
-			w.invoke(INVOKEVIRTUAL, arrayType_, "clone", "()Ljava/lang/Object;");
-			w.clazz(CHECKCAST, arrayType_);
-			w.one(ARETURN);
-			w.finish();
+			CodeWriter w;
 
-			// T valueOf(String name)
-			w = newMethod(ACC_PUBLIC|ACC_STATIC, "valueOf", "(Ljava/lang/String;)L"+name+";");
-			w.visitSize(2, 1);
-			w.ldc(cp.getClazz(name));
-			w.one(ALOAD_0);
-			w.invokeS("java/lang/Enum", "valueOf", "(Ljava/lang/Class;Ljava/lang/String;)Ljava/lang/Enum;");
-			w.clazz(CHECKCAST, name);
-			w.one(ARETURN);
-			w.finish();
+			// T[] values()
+			int mid = getMethod("values", "()".concat(arrayType_));
+			if (mid < 0) {
+				w = newMethod(ACC_PUBLIC|ACC_STATIC, "values", "()".concat(arrayType_));
+				w.visitSize(1, 1);
+				w.field(GETSTATIC, this, fid);
+				w.invoke(INVOKEVIRTUAL, arrayType_, "clone", "()Ljava/lang/Object;");
+				w.clazz(CHECKCAST, arrayType_);
+				w.one(ARETURN);
+				w.finish();
+			} else if (methods.get(mid).modifier != (ACC_PUBLIC|ACC_STATIC)) {
+				ctx.report(methodIdx.get(mid), Kind.ERROR, "cu.enumMethod");
+			}
+
+			mid = getMethod("valueOf", "(Ljava/lang/String;)L"+name+";");
+			if (mid < 0) {
+				// T valueOf(String name)
+				w = newMethod(ACC_PUBLIC|ACC_STATIC, "valueOf", "(Ljava/lang/String;)L"+name+";");
+				w.visitSize(2, 1);
+				w.ldc(cp.getClazz(name));
+				w.one(ALOAD_0);
+				w.invokeS("java/lang/Enum", "valueOf", "(Ljava/lang/Class;Ljava/lang/String;)Ljava/lang/Enum;");
+				w.clazz(CHECKCAST, name);
+				w.one(ARETURN);
+				w.finish();
+			} else if (methods.get(mid).modifier != (ACC_PUBLIC|ACC_STATIC)) {
+				ctx.report(methodIdx.get(mid), Kind.ERROR, "cu.enumMethod");
+			}
 		}
 	}
 	// 检测抽象方法，可以覆盖的方法和多个default
@@ -1887,7 +1897,7 @@ public final class CompileUnit extends ConstantData {
 			ctx.inferrer.overrideMode = false;
 			if (ri == null) continue;
 
-			ctx.lexer.index = methodIdx.get(i);
+			ctx.errorReportIndex = methodIdx.get(i);
 
 			var it = ri.method;
 
@@ -1950,7 +1960,7 @@ public final class CompileUnit extends ConstantData {
 		}
 		// endregion
 
-		ctx.lexer.index = classIdx;
+		ctx.errorReportIndex = classIdx;
 		for (Desc method : abstractOrUnrelated) {
 			if (!method.owner.equals(parent)) {
 				// check parent implement
@@ -1977,15 +1987,14 @@ public final class CompileUnit extends ConstantData {
 
 		// check annotations
 		MyHashMap<String, Object> dup = ctx.tmpMap1, extra = ctx.tmpMap2;
-		var missed = ctx.tmpSet;
+		var missed = ctx.getTmpSet();
 		for (var annotated : annoTask.entrySet()) {
 			Annotations inv = null, vis = null;
 
-			dup.clear();
 			var list = annotated.getValue();
 			for (int i = 0; i < list.size(); i++) {
 				var a = list.get(i);
-				ctx.lexer.index = a.pos;
+				ctx.errorReportIndex = a.pos;
 
 				String type = a.type();
 				var desc = ctx.classes.getAnnotationDescriptor(ctx.classes.getClassInfo(type));
@@ -2040,8 +2049,8 @@ public final class CompileUnit extends ConstantData {
 					}
 				}
 
-				missed.clear();
-				extra.clear(); extra.putAll(a.values);
+				dup.clear();
+				extra.putAll(a.values);
 
 				for (Map.Entry<String, Type> entry : desc.types.entrySet()) {
 					String name = entry.getKey();
@@ -2053,6 +2062,9 @@ public final class CompileUnit extends ConstantData {
 
 				if (!extra.isEmpty()) ctx.report(Kind.ERROR, "cu.annotation.extra", type, extra.keySet());
 				if (!missed.isEmpty()) ctx.report(Kind.ERROR, "cu.annotation.missing", type, missed);
+
+				extra.clear();
+				missed.clear();
 			}
 
 			ctx.classes.runAnnotationProcessor(this, annotated.getKey(), list);
@@ -2257,8 +2269,7 @@ public final class CompileUnit extends ConstantData {
 		if (clinit != null) clinit.one(Opcodes.RETURN);
 
 		for (FieldNode field : finalFields) {
-			ctx.lexer.index = fieldIdx.get(fields.indexOfAddress(field));
-			ctx.report(Kind.ERROR, "cu.finalField.missed", field.name());
+			ctx.report(fieldIdx.get(fields.indexOfAddress(field)), Kind.ERROR, "cu.finalField.missed", field.name());
 		}
 		finalFields.clear();
 

@@ -24,7 +24,7 @@ public final class SwitchNode {
 	public final Object cst;
 	/**
 	 * SwitchMap目标类型
-	 * -1 pattern switch （未实现）
+	 * -1 pattern switch
 	 * 0 int选择
 	 * 1 传统String选择
 	 * 2 传统Enum选择

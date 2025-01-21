@@ -327,6 +327,7 @@ public class ZipFile implements ArchiveFile {
 			buf = read(extraLen);
 			entry.extraLenOfLOC = (char) extraLen;
 			entry.readLOCExtra(this, buf);
+			cSize = entry.cSize;
 		}
 
 		long off = r.position();

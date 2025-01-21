@@ -112,7 +112,7 @@ public final class JavaLexer extends Tokenizer {
 		"&", "|", "^",
 		// Boolean Binary with boolean support
 		"&&", "||",
-		// nullish_consolidating (是这个名字吗？)
+		// nullish_coalescing
 		"??",
 		// Boolean Binary without boolean support
 		"==", "!=", "<", ">=", ">", "<=",
@@ -134,13 +134,13 @@ public final class JavaLexer extends Tokenizer {
 
 		optional_chaining = 113, at = 114, varargs = 115, method_referent = 116,
 
-		inc = 117, dec = 118, rev = 119, logic_not = 120,
+		inc = 117, dec = 118, inv = 119, logic_not = 120,
 
 		add = 121, sub = 122, mul = 123, div = 124, rem = 125, pow = 126,
-		lsh = 127, rsh = 128, rsh_unsigned = 129,
+		shl = 127, shr = 128, ushr = 129,
 		and = 130, or = 131, xor = 132,
 		logic_and = 133, logic_or = 134,
-		nullish_consolidating = 135,
+		nullish_coalescing = 135,
 		equ = 136, neq = 137, lss = 138, geq = 139, gtr = 140, leq = 141,
 
 		assign = 142,
@@ -183,10 +183,6 @@ public final class JavaLexer extends Tokenizer {
 		addWhitespace(JAVA_LEND);
 		JAVA_LEND.remove('$');
 		JAVA_LEND.add('"');
-
-		alias("...finally", FINALLY, null);
-		alias("...switch", SWITCH, null);
-		alias("...for", FOR, null);
 
 		alias("。", dot, JAVA_LEND);
 		alias("，", comma, JAVA_LEND);
@@ -249,7 +245,7 @@ public final class JavaLexer extends Tokenizer {
 	protected boolean isValidToken(int off, Word w) {
 		if (!super.isValidToken(off, w)) return false;
 		int id = w.type();
-		return state != STATE_TYPE || (id != rsh && id != rsh_unsigned);
+		return state != STATE_TYPE || (id != shr && id != ushr);
 	}
 
 	public int skipBrace() throws ParseException {

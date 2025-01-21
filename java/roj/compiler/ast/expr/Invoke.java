@@ -293,7 +293,8 @@ public final class Invoke extends ExprNode {
 
 			ComponentList list = ctx.methodListOrReport(type, method);
 			if (list == null) {
-				ctx.report(Kind.ERROR, "symbol.error.noSuchSymbol", method.equals("<init>") ? "invoke.constructor" : "invoke.method", method+"("+TextUtil.join(tmp, ",")+")", "\1symbol.type\0 "+type.name(), ctx.reportSimilarMethod(type, method));
+				ctx.report(Kind.ERROR, "symbol.error.noSuchSymbol", method.equals("<init>") ? "invoke.constructor" : "invoke.method", method+"("+TextUtil.join(tmp, ",")+")", "\1symbol.type\0 "+type.name(),
+					reportSimilarMethod(ctx, type, method));
 				return NaE.RESOLVE_FAILED;
 			}
 
@@ -321,7 +322,7 @@ public final class Invoke extends ExprNode {
 				desc = Collections.singletonList(new Generic("java/lang/Class", Collections.singletonList(val)));
 			} else if (mn == GlobalContext.arrayClone()) {
 				// 数组的clone方法的特殊处理
-				desc = Collections.singletonList(new Asterisk(ownMirror, LocalContext.OBJECT_TYPE));
+				desc = Collections.singletonList(Asterisk.genericReturn(ownMirror, LocalContext.OBJECT_TYPE));
 			} else {
 				desc = r.desc != null ? Arrays.asList(r.desc) : Helpers.cast(TypeHelper.parseMethod(mn.rawDesc()));
 			}
@@ -382,6 +383,27 @@ public final class Invoke extends ExprNode {
 
 		tmp.clear();
 		return this;
+	}
+	private String reportSimilarMethod(LocalContext ctx, IClass type, String method) {
+		var maybeWrongMethod = new SimpleList<String>();
+		loop:
+		for (var entry : ctx.classes.getResolveHelper(type).getMethods(ctx.classes).entrySet()) {
+			for (MethodNode node : entry.getValue().getMethods()) {
+				int parSize = node.parameters().size();
+				int argSize = args.size();
+				if ((node.modifier & Opcodes.ACC_VARARGS) != 0 ? argSize < parSize - 1 : argSize != parSize) {
+					continue loop;
+				}
+			}
+			if (TextUtil.editDistance(method, entry.getKey()) < (method.length()+1)/2) {
+				maybeWrongMethod.add(entry.getKey());
+			}
+		}
+		if (maybeWrongMethod.isEmpty()) return "";
+
+		var sb = ctx.getTmpSb().append("\1symbol.similar:\1invoke.method\0:");
+		sb.append(TextUtil.join(maybeWrongMethod, "\n    "));
+		return sb.append('\0').toString();
 	}
 
 	@Override

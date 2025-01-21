@@ -550,7 +550,7 @@ public class TypeCast {
 		WRAPPER.putInt(DOUBLE, new Type("java/lang/Double"));
 		WRAPPER.putInt(VOID, new Type("java/lang/Void"));
 	}
-	public static int getWrappedPrimitive(IType self) { return WRAPPER.getValueOrDefault(self, 0); }
+	public static int getWrappedPrimitive(IType self) { if (self instanceof Asterisk ax) self = ax.getBound(); return WRAPPER.getValueOrDefault(self, 0); }
 	@Nullable
 	public static Type getWrapper(IType self) { return WRAPPER.get(self.getActualType()); }
 }

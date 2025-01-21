@@ -39,26 +39,17 @@ public class LoopTaskWrapper implements ITask {
 	@Override
 	public void execute() throws Exception {
 		var state = this.state;
-		if (this.state == 0) {
+		if (state == 0) {
 			task.execute();
 		} else if ((state&1) == 0) {
+			// state 3只是防止重复执行(以及给toString看的，可以和4合并)
 			if (u.compareAndSwapInt(this, STATE_OFFSET, state, 3)) {
 				try {
 					task.execute();
 				} finally {
 					// 任务执行时间超过一个周期，在完成之后重新添加
-					if (!u.compareAndSwapInt(this, STATE_OFFSET, 3, 1) || state != 2) {
-						int v;
-						while (true) {
-							v = u.getIntVolatile(this, STATE_OFFSET);
-							if (v <= 0) break;
-							if (u.compareAndSwapInt(this, STATE_OFFSET, v, 1)) {
-								// re-schedule
-								sched.delay(this, interval);
-								break;
-							}
-						}
-					}
+					if (u.getAndSetInt(this, STATE_OFFSET, 1) == 4)
+						sched.delay(this, interval);
 				}
 			}
 		}
@@ -75,8 +66,8 @@ public class LoopTaskWrapper implements ITask {
 			switch (state) {
 				case 2, 3:
 					if (!u.compareAndSwapInt(this, STATE_OFFSET, state, 4)) break;
-				case 4: return -1;
-				default: return 0;
+				case 4:
+				default: return -1;
 				case 1:
 					if (!u.compareAndSwapInt(this, STATE_OFFSET, 1, 2)) break;
 				case 0: break loop;

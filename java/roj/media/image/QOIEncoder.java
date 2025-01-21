@@ -87,9 +87,9 @@ public class QOIEncoder implements ImageEncoder {
 			// Run length encode  QOI_OP_RUN
 			if (pixel == prev) {
 				int run = 0;
-				while (argb[i] == pixel && run < 62) {
-					i++;
+				while (argb[i] == pixel && run < 61) {
 					run++;
+					if (++i == pixels) break;
 				}
 
 				out.put(0b11000000 | run);

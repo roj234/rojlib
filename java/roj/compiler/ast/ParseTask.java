@@ -75,9 +75,10 @@ public interface ParseTask {
 		mn.putAttr(attr);
 
 		return (ctx) -> {
-			ctx.lexer.index = index;
+			ctx.errorReportIndex = index;
 			ctx.setMethod(file.getStaticInit().mn);
 			attr.val = AnnotationPrimer.toAnnVal(ctx, (ExprNode) expr, mn.returnType());
+			ctx.errorReportIndex = -1;
 		};
 	}
 
