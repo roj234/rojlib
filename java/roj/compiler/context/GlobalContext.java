@@ -144,8 +144,8 @@ public class GlobalContext implements LavaFeatures {
 	public synchronized void invalidateResolveHelper(IClass file) {extraInfos.removeKey(file);}
 
 	@NotNull public IntBiMap<String> getParentList(IClass info) {return getResolveHelper(info).getClassList(this);}
-	@Nullable public ComponentList getMethodList(IClass info, String name) throws TypeNotPresentException {return getResolveHelper(info).findMethod(this, name);}
-	@Nullable public ComponentList getFieldList(IClass info, String name) throws TypeNotPresentException {return getResolveHelper(info).findField(this, name);}
+	@NotNull public ComponentList getMethodList(IClass info, String name) throws TypeNotPresentException {return getResolveHelper(info).getMethods(this).getOrDefault(name, ComponentList.NOT_FOUND);}
+	@NotNull public ComponentList getFieldList(IClass info, String name) throws TypeNotPresentException {return getResolveHelper(info).getFields(this).getOrDefault(name, ComponentList.NOT_FOUND);}
 	@Nullable public List<IType> getTypeParamOwner(IClass info, String superType) throws ClassNotFoundException {return getResolveHelper(info).getTypeParamOwner(this).get(superType);}
 	public Map<String, InnerClasses.Item> getInnerClassFlags(IClass info) {return getResolveHelper(info).getInnerClasses();}
 	public AnnotationSelf getAnnotationDescriptor(IClass clz) {return getResolveHelper(clz).annotationInfo();}

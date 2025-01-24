@@ -90,13 +90,13 @@ final class NewAnonymousClass extends ExprNode {
 		} else {
 			type.parent(parent);
 
-			ComponentList list = ctx.methodListOrReport(info, "<init>");
-			if (list == null) {
+			var list = ctx.getMethodList(info, "<init>");
+			if (list == ComponentList.NOT_FOUND) {
 				ctx.report(Kind.ERROR, "symbol.error.noSuchSymbol", "invoke.method", "<init>"+"("+TextUtil.join(argTypes, ",")+")", "\1symbol.type\0 "+parent);
 				return NaE.RESOLVE_FAILED;
 			}
 
-			MethodResult r = list.findMethod(ctx, argTypes, ComponentList.THIS_ONLY);
+			var r = list.findMethod(ctx, argTypes, ComponentList.THIS_ONLY);
 			if (r == null) return NaE.RESOLVE_FAILED;
 
 			r.addExceptions(ctx, false);

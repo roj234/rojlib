@@ -880,7 +880,7 @@ public class Tokenizer {
 
 			int d = dateNum(2,31);
 
-			long ts = (ACalendar.daySinceAD(y, m, d, null) - ACalendar.GREGORIAN_OFFSET_DAY) * 86400000L;
+			long ts = (ACalendar.daySinceAD(y, m, d) - ACalendar.GREGORIAN_OFFSET_DAY) * 86400000L;
 
 			c = index == in.length() ? 0 : in.charAt(index);
 			if (c != 'T' && c != 't' && c != ' ')

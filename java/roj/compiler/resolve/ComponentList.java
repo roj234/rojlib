@@ -17,6 +17,7 @@ import java.util.Map;
  */
 public abstract class ComponentList {
 	public static final int IN_STATIC = 1, THIS_ONLY = 2, NO_REPORT = 4;
+	public static final ComponentList NOT_FOUND = new EmptyComponentList();
 
 	@Nullable
 	public final MethodResult findMethod(LocalContext ctx, List<IType> params, @MagicConstant(flags = {IN_STATIC, THIS_ONLY, NO_REPORT}) int flags) {return findMethod(ctx, null, params, Collections.emptyMap(), flags);}

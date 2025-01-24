@@ -88,21 +88,22 @@ final class MethodListSingle extends ComponentList {
 			}
 		}
 
-		if ((flags & NO_REPORT) != 0) return null;
-		if (result == null) result = ctx.inferrer.infer(mnOwner, mn, that, params);
+		if ((flags & NO_REPORT) == 0) {
+			if (result == null) result = ctx.inferrer.infer(mnOwner, mn, that, params);
 
-		CharList sb = new CharList().append("invoke.incompatible.single:").append(mn.owner).append(':').append(mn.name()).append(':');
+			CharList sb = new CharList().append("invoke.incompatible.single:").append(mn.owner).append(':').append(mn.name()).append(':');
 
-		sb.append("  ").append("\1invoke.except\0 ");
-		MethodList.getArg(mn, that, sb).append('\n');
+			sb.append("  ").append("\1invoke.except\0 ");
+			MethodList.getArg(mn, that, sb).append('\n');
 
-		MethodList.appendInput(myParam == null ? params : myParam, sb);
+			MethodList.appendInput(myParam == null ? params : myParam, sb);
 
-		sb.append("  ").append("\1invoke.reason\0 \1");
-		MethodList.appendError(result, sb);
-		sb.append("\0\n");
+			sb.append("  ").append("\1invoke.reason\0 \1");
+			MethodList.appendError(result, sb);
+			sb.append("\0\n");
 
-		ctx.report(Kind.ERROR, sb.replace('/', '.').toStringAndFree());
+			ctx.report(Kind.ERROR, sb.replace('/', '.').toStringAndFree());
+		}
 		return null;
 	}
 

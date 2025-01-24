@@ -68,24 +68,20 @@ public final class ResolveHelper {
 	public MethodNode getLambdaMethod() {getLambdaType();return lambdaMethod;}
 
 	private byte foreachType;
-	public boolean isFastForeach(GlobalContext ctx) {
-		if (foreachType != 0) return foreachType > 0;
+	public int getForeachType(GlobalContext ctx) {
+		if (foreachType != 0) return foreachType;
 
 		var classes = getClassList(ctx);
 		if (classes.containsValue("java/util/List") && classes.containsValue("java/util/RandomAccess")) {
-			foreachType = 1;
-			return true;
-		}
-
-		if (Annotation.findInvisible(owner.cp(), owner, "roj/compiler/api/ListIterable") != null) {
-			if (owner.getMethod("get") >= 0 && owner.getMethod("size", "()I") >= 0) {
-				foreachType = 1;
-				return true;
+			return foreachType = 1;
+		} else if (Annotation.findInvisible(owner.cp(), owner, "roj/compiler/api/ListIterable") != null) {
+			int tmp;
+			if ((tmp = owner.getMethod("get")) >= 0 && owner.methods().get(tmp).rawDesc().startsWith("(I)") && owner.getMethod("size", "()I") >= 0) {
+				return foreachType = 2;
 			}
 		}
 
-		foreachType = -1;
-		return false;
+		return foreachType = -1;
 	}
 
 	// region 父类列表
@@ -133,7 +129,7 @@ public final class ResolveHelper {
 					break;
 				}
 
-				list.putByValue((castDistance == 1 ? 0x80000000 : 0) | (justAnId++ << 16) | castDistance, name);
+				list.putByValue((justAnId++ << 16) | castDistance, name);
 
 				for (var entry : ctx.getParentList(itfInfo).selfEntrySet()) {
 					int id = entry.getIntKey();
@@ -142,7 +138,7 @@ public final class ResolveHelper {
 					// id's castDistance is smaller
 					// parentList是包含自身的
 					if ((list.getInt(name)&0xFFFF) > (id&0xFFFF)) {
-						list.putByValue((justAnId++ << 16) | (castDistance + (id & 0xFFFF)), name);
+						list.putByValue((castDistance == 1 ? 0x80000000 : 0) | (justAnId++ << 16) | (castDistance + (id & 0xFFFF)), name);
 					}
 				}
 			}
@@ -233,6 +229,7 @@ public final class ResolveHelper {
 	// region 方法
 	private MyHashMap<String, ComponentList> methods;
 
+	@Deprecated
 	public ComponentList findMethod(GlobalContext ctx, String name) {return getMethods(ctx).get(name);}
 	/*
 	 * <pre> 调用的实际方法由以下查找过程选择：
@@ -332,7 +329,6 @@ public final class ResolveHelper {
 	//region 字段
 	private MyHashMap<String, ComponentList> fields;
 
-	public ComponentList findField(GlobalContext ctx, String name) {return getFields(ctx).get(name);}
 	public MyHashMap<String, ComponentList> getFields(GlobalContext ctx) {
 		if (fields == null) {
 			synchronized (this) {
@@ -360,10 +356,7 @@ public final class ResolveHelper {
 							ctx.report(type, Kind.SEVERE_WARNING, -1, "symbol.error.noSuchClass", className);
 						} else {
 
-						ResolveHelper rh = ctx.getResolveHelper(info);
-						rh.findField(ctx, "");
-
-						for (Map.Entry<String, ComponentList> entry : rh.fields.entrySet()) {
+						for (var entry : ctx.getResolveHelper(info).getFields(ctx).entrySet()) {
 							String key = entry.getKey();
 							ComponentList list = entry.getValue();
 

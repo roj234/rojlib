@@ -419,7 +419,7 @@ public class ZEntry implements RSegmentTree.Range, ArchiveEntry {
 	}
 
 	public static long dos2JavaTime(int dtime) {
-		long day = ACalendar.daySinceAD(((dtime >> 25) & 0x7f) + 1980, ((dtime >> 21) & 0x0f), (dtime >> 16) & 0x1f, null) - ACalendar.GREGORIAN_OFFSET_DAY;
+		long day = ACalendar.daySinceAD(((dtime >> 25) & 0x7f) + 1980, ((dtime >> 21) & 0x0f), (dtime >> 16) & 0x1f) - ACalendar.GREGORIAN_OFFSET_DAY;
 		return 86400000L * day + 3600_000L * ((dtime >> 11) & 0x1f) + 60_000L * ((dtime >> 5) & 0x3f) + 1000L * ((dtime << 1) & 0x3e);
 	}
 	public static int java2DosTime(long time) {

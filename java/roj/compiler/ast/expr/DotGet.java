@@ -163,8 +163,8 @@ final class DotGet extends VarNode {
 				// 2. 省略this的当前类字段（包括继承！）
 				// * => 在错误处理中需要二次检查以生成更有帮助的错误信息（static）
 
-				ComponentList fieldList = ctx.fieldListOrReport(ctx.file, part);
-				if (fieldList != null) {
+				var fieldList = ctx.getFieldList(ctx.file, part);
+				if (fieldList != ComponentList.NOT_FOUND) {
 					inaccessibleThis = fieldList.findField(ctx, ctx.in_static ? ComponentList.IN_STATIC : 0);
 					if (inaccessibleThis.error == null) {
 						begin = ctx.file;

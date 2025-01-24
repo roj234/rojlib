@@ -21,10 +21,14 @@ public class ChinaNumeric {
 		UNIT_MAP.putInt('千', 1000);
 		UNIT_MAP.putInt('仟', 1000);
 		UNIT_MAP.putInt('万', 10000);
+		UNIT_MAP.putInt('萬', 10000);
 		UNIT_MAP.putInt('亿', 100000000);
+		UNIT_MAP.putInt('镱', 100000000);
 
-		for (int i = 0; i < 10; i++) NUMBER_MAP.put('0'+i, i);
-		for (int i = 0; i < 10; i++) NUMBER_MAP.put('０'+i, i);
+		for (int i = 0; i < 10; i++) {
+			NUMBER_MAP.put('0'+i, i);
+			NUMBER_MAP.put('０'+i, i);
+		}
 
 		char[] arr = "壹贰叁肆伍陆柒捌玖".toCharArray();
 		for (int i = 0; i < 9;) NUMBER_MAP.put(arr[i], ++i);
@@ -49,6 +53,7 @@ public class ChinaNumeric {
 
 		// 十一万 => 一十一万
 		NUMBER_MAP.putInt('十', 10);
+		NUMBER_MAP.putInt('拾', 10);
 	}
 
 	public static long parse(char[] cbuf) { return parse(cbuf, 0, cbuf.length); }

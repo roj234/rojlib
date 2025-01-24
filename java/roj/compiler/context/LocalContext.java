@@ -290,9 +290,9 @@ public class LocalContext {
 		thisUsed = in_constructor;
 	}
 
-	public ComponentList fieldListOrReport(IClass info, String name) {return classes.getFieldList(info, name);}
-	public ComponentList methodListOrReport(IClass info, String name) {return classes.getMethodList(info, name);}
-	public IntBiMap<String> parentListOrReport(IClass info) {return classes.getParentList(info);}
+	@NotNull public IntBiMap<String> getParentList(IClass info) {return classes.getParentList(info);}
+	@NotNull public ComponentList getFieldList(IClass info, String name) {return classes.getFieldList(info, name);}
+	@NotNull public ComponentList getMethodList(IClass info, String name) {return classes.getMethodList(info, name);}
 
 	/**
 	 * 将泛型类型typeInst继承链上的targetType擦除到具体类型.
@@ -327,6 +327,7 @@ public class LocalContext {
 		if (!(typeInst instanceof Generic g) || (g.children.size() == 1 && g.children.get(0) == Asterisk.anyGeneric)) {
 			var sign = info.parsedAttr(info.cp, Attribute.SIGNATURE);
 
+//
 
 			MyHashMap<String, IType> realType = Helpers.cast(tmpMap1);
 			Inferrer.fillDefaultTypeParam(sign.typeParams, realType);
@@ -348,7 +349,7 @@ public class LocalContext {
 	private List<IType> inferGeneric0(ConstantData typeInst, List<IType> params, String target) {
 		Map<String, IType> visType = new MyHashMap<>();
 
-		int depthInfo = parentListOrReport(typeInst).getValueOrDefault(target, -1);
+		int depthInfo = getParentList(typeInst).getValueOrDefault(target, -1);
 		if (depthInfo == -1) throw new IllegalStateException("无法从"+typeInst.name+"<"+params+">推断"+target);
 
 		loop:
@@ -373,7 +374,7 @@ public class LocalContext {
 				}
 
 				typeInst = classes.getClassInfo(type.owner());
-				depthInfo = parentListOrReport(typeInst).getValueOrDefault(target, -1);
+				depthInfo = getParentList(typeInst).getValueOrDefault(target, -1);
 				if (depthInfo != -1) {
 					var rubber = (Generic) Inferrer.clearTypeParam(type, visType, g.typeParams);
 					params = rubber.children;
@@ -576,14 +577,13 @@ public class LocalContext {
 
 			FieldNode field;
 			block: {
-				ComponentList fields = fieldListOrReport(clz, name);
-				if (fields != null) {
-					FieldResult fr = fields.findField(this, 0);
-					if (fr.error == null) {
-						field = fr.field;
-						break block;
-					}
-					return fr.error;
+				var fields = getFieldList(clz, name);
+				if (fields != ComponentList.NOT_FOUND) {
+					var fr = fields.findField(this, 0);
+					if (fr.error != null) return fr.error;
+
+					field = fr.field;
+					break block;
 				}
 				return "symbol.error.noSuchSymbol:symbol.field:"+name+":\1symbol.type\0 "+clz.name();
 			}
@@ -672,7 +672,7 @@ public class LocalContext {
 		var exceptions = (AttrClassList) method.attrByName("Exceptions");
 		if (exceptions != null) {
 			if (type.genericType() == 0) {
-				var parents = parentListOrReport(classes.getClassInfo(type.owner()));
+				var parents = getParentList(classes.getClassInfo(type.owner()));
 				for (String s : exceptions.value) {
 					if (parents.containsValue(s)) return;
 				}
@@ -736,8 +736,8 @@ public class LocalContext {
 	@NotNull
 	public Function<String, Import> getFieldDFI(IClass info, Variable ref, Function<String, Import> prev) {
 		return name -> {
-			ComponentList cl = fieldListOrReport(info, name);
-			if (cl != null) {
+			var cl = getFieldList(info, name);
+			if (cl != ComponentList.NOT_FOUND) {
 				FieldResult result = cl.findField(this, ref == null ? ComponentList.IN_STATIC : 0);
 				if (result.error == null) return new Import(info, result.field.name(), ref == null ? null : new LocalVariable(ref));
 			}
@@ -882,8 +882,8 @@ public class LocalContext {
 	}
 	public String getCommonParent(IClass infoA, IClass infoB) {
 		IntBiMap<String> tmp,
-			listA = parentListOrReport(infoA),
-			listB = parentListOrReport(infoB);
+			listA = getParentList(infoA),
+			listB = getParentList(infoB);
 
 		if (listA.size() > listB.size()) {
 			tmp = listA;

@@ -1,6 +1,5 @@
 package roj.text;
 
-import org.jetbrains.annotations.Nullable;
 import roj.io.IOUtil;
 
 import java.util.TimeZone;
@@ -15,10 +14,9 @@ public final class ACalendar {
 
 	public ACalendar copy() { return new ACalendar(zone); }
 
-	public static final int YEAR = 0, MONTH = 1, DAY = 2, HOUR = 3, MINUTE = 4, SECOND = 5, MILLISECOND = 6, DAY_OF_WEEK = 7, LEAP_YEAR = 8, TOTAL = 9;
+	public static final int YEAR = 0, MONTH = 1, DAY = 2, HOUR = 3, MINUTE = 4, SECOND = 5, MILLISECOND = 6, DAY_OF_WEEK = 7, LEAP_YEAR = 8, FIELD_COUNT = 9;
 
-	private final int[] buf = new int[TOTAL];
-	private final long[] cache = new long[4];
+	private final int[] buf = new int[FIELD_COUNT];
 	private TimeZone zone;
 
 	public ACalendar() { this(TimeZone.getDefault()); }
@@ -27,167 +25,127 @@ public final class ACalendar {
 	public TimeZone getTimezone() { return zone; }
 	public void setTimezone(TimeZone tz) { zone = tz; }
 
-	public int[] parse(long unix) {
-		if (zone != null) unix += zone.getOffset(unix);
-		return parse(unix, buf, cache);
+	public int[] parse(long timestamp) {
+		if (zone != null) timestamp += zone.getOffset(timestamp);
+		return parse(timestamp, buf);
 	}
-	public static int[] parse1(long unix) { return parse(unix, new int[TOTAL], null); }
+	public static int[] parse1(long timestamp) {return parse(timestamp, new int[FIELD_COUNT]);}
+	public static int[] parse(long ts, int[] fields) {
+		if (fields.length < FIELD_COUNT) throw new ArrayIndexOutOfBoundsException(FIELD_COUNT);
 
-	private static int[] parse(long date, int[] buf, long[] cache) {
-		if (buf.length < 9) throw new ArrayIndexOutOfBoundsException(6);
+		ts = His(ts, fields);
+		ts += GREGORIAN_OFFSET_DAY;
 
-		date = His(date, buf);
-		date += GREGORIAN_OFFSET_DAY;
+		if (ts < MINIMUM_GREGORIAN_DAY) throw new ArithmeticException("ACalendar does not support time < 1582/8/15");
 
-		if (date < MINIMUM_GREGORIAN_DAY) throw new ArithmeticException("ACalendar does not support time < 1582/8/15");
-
-		int y = buf[YEAR] = yearSinceUnix(date);
-		long days = daySinceAD(y, 1, 1, cache);
+		int y = fields[YEAR] = yearSinceAD(ts);
+		int days = daySinceAD(y, 1, 1);
+		int daysInYear = (int) (ts - days);
 		boolean leapYear = isLeapYear(y);
 
-		int daysSinceY = (int) (date - days);
-
-		long daysAfterFeb = days + 31 + 28 + (leapYear ? 1 : 0);
-		if (date >= daysAfterFeb) {
-			daysSinceY += leapYear ? 1 : 2;
-		}
-
-		int m = 12 * daysSinceY + 373;
-		if (m > 0) m /= 367;
-		else m = floorDiv(m, 367);
-
-		long monthDays = days + SUMMED_DAYS[m] + (m >= 3 && leapYear ? 1 : 0);
-		buf[DAY] = (int) (date - monthDays) + 1;
-
-		if (m == 0) {
-			// fail safe
-			buf[YEAR]--;
-			buf[MONTH] = 12;
-			buf[DAY]++;
+		if (daysInYear < 0) {
+			fields[YEAR] --;
+			fields[MONTH] = 12;
+			fields[DAY] = 32 + daysInYear;
 		} else {
-			buf[MONTH] = m;
+			// 至少3月1日
+			if (daysInYear >= 59/*SUMMED_DAYS[3]*/ + (leapYear ? 1 : 0)) {
+				daysInYear += leapYear ? 1 : 2;
+			}
+
+			int month = fields[MONTH] = (12 * daysInYear + 373) / 367;
+
+			long monthDays = days + SUMMED_DAYS[month];
+			if (month > 2 && leapYear) monthDays++;
+			fields[DAY] = (int) (ts - monthDays) + 1;
 		}
 
-		buf[DAY_OF_WEEK] = dayOfWeek(date - 1);
+		fields[DAY_OF_WEEK] = dayOfWeek(ts-1);
+		fields[LEAP_YEAR] = leapYear ? 1 : 0;
 
-		buf[LEAP_YEAR] = leapYear ? 1 : 0;
-
-		return buf;
+		return fields;
 	}
 	private static long His(long date, int[] buf) {
-		if (date > 0) {
-			buf[MILLISECOND] = (int) (date % 1000);
-			date /= 1000;
+		long q;
 
-			buf[SECOND] = (int) (date % 60);
-			date /= 60;
+		if (date >= 0) {
+			q = date / 1000;
+			buf[MILLISECOND] = (int) (date - q * 1000);
+			date = q;
 
-			buf[MINUTE] = (int) (date % 60);
-			date /= 60;
+			q = date / 60;
+			buf[SECOND] = (int) (date - q * 60);
+			date = q;
 
-			buf[HOUR] = (int) (date % 24);
-			date /= 24;
+			q = date / 60;
+			buf[MINUTE] = (int) (date - q * 60);
+			date = q;
+
+			q = date / 24;
 		} else {
-			date = divModLss(date, 1000, buf);
-			buf[MILLISECOND] = buf[0];
+			q = (date + 1) / 1000 - 1;
+			buf[MILLISECOND] = (int) (date - q * 1000);
+			date = q;
 
-			date = divModLss(date, 60, buf);
-			buf[SECOND] = buf[0];
+			q = (date + 1) / 60 - 1;
+			buf[SECOND] = (int) (date - q * 60);
+			date = q;
 
-			date = divModLss(date, 60, buf);
-			buf[MINUTE] = buf[0];
+			q = (date + 1) / 60 - 1;
+			buf[MINUTE] = (int) (date - q * 60);
+			date = q;
 
-			date = divModLss(date, 24, buf);
-			buf[HOUR] = buf[0];
+			q = (date + 1) / 24 - 1;
 		}
-
+		buf[HOUR] = (int) (date - q * 24);
+		date = q;
 		return date;
 	}
-	private static int yearSinceUnix(long date) {
-		int years = 400 * (int) (date / 146097L);
-		int datei = (int) (date % 146097L);
+	private static int yearSinceAD(long date) {
+		int tmp400 = (int) (date / 146097);
+		int datei = (int) (date - tmp400 * 146097L);
+		int years = 400 * tmp400;
 
-		int r100;
-		years += 100 * (r100 = datei / 36524);
-		datei = datei % 36524;
+		int tmp100 = datei / 36524;
+		datei -= tmp100 * 36524;
+		years += 100 * tmp100;
 
-		years += 4 * (datei / 1461);
+		int tmp4 = datei / 1461;
+		datei -= tmp4 * 1461;
+		years += 4 * tmp4;
 
-		years += (datei % 1461) / 365;
+		years += datei / 365;
 
-		if (r100 != 4 && years != 4) {
-			++years;
-		}
+		if (tmp100 != 4 && years != 4) years++;
 
 		return years;
 	}
 
-	/***
-	 * 计算公元零年后过去的日子
+	/**
+	 * 计算公元零年至year-month-day过去的天数.
+	 * 年份使用了si32，所以它会在遥远的未来，而不是“更加遥远”的未来溢出：约588万年
+	 * 作为对比，si64的毫秒时间戳将在2.9亿年后溢出
+	 * @param year 大于等于1的年数
+	 * @param month 从1开始的月数
+	 * @param day 从1开始的天数
 	 * @return 天数
 	 */
-	public static long daySinceAD(int year, int month, int day, @Nullable long[] cache) {
-		boolean firstDay = month == 1 && day == 1;
-		if (cache != null && cache[2] == year) {
-			return cache[3] + (firstDay ? 0 : dayOfYear(year, month, day) - 1);
-		} else {
-			int i = year - 1970;
-			if (i >= 0 && i < CACHED_YEARS.length) {
-				long yearTS = CACHED_YEARS[i];
-				if (cache != null) {
-					cache[2] = year;
-					cache[3] = yearTS;
-				}
-
-				return firstDay ? yearTS : yearTS + dayOfYear(year, month, day) - 1L;
-			}
-
-			long longYr = year - 1L;
-			long date = day + longYr * 365 + ((367L * month - 362) / 12) // raw year + month + day
-				+ longYr / 4L - longYr / 100L + longYr / 400L; // ren days
-
-			if (month > 2) { // feb offset
-				date -= isLeapYear(year) ? 1L : 2L;
-			}
-
-			if (cache != null && firstDay) {
-				cache[2] = year;
-				cache[3] = date;
-			}
-
-			return date;
-		}
+	public static int daySinceAD(int year, int month, int day) {
+		int yearm1 = year-1;
+		return yearm1*365 + yearm1/4 - yearm1/100 + yearm1/400 // with leap days
+			+ day + (SUMMED_DAYS[month] + (month > 2 && isLeapYear(year) ? 1 : 0));
 	}
 
 	private static boolean isLeapYear(int year) { return (year & 3) == 0 && (year % 100 != 0 || year % 400 == 0); }
-	private static long dayOfYear(int year, int month, int day) { return day + (long) (SUMMED_DAYS[month] + (month > 2 && isLeapYear(year) ? 1 : 0)); }
 	private static int dayOfWeek(long day) { return (int) (day % 7L) + 1; }
 
-	/**
-	 * 1970 to 2030
-	 */
-	private static final int[] CACHED_YEARS = new int[] {719163, 719528, 719893, 720259, 720624, 720989, 721354, 721720, 722085, 722450, 722815, 723181, 723546, 723911, 724276, 724642, 725007, 725372, 725737,
-												 726103, 726468, 726833, 727198, 727564, 727929, 728294, 728659, 729025, 729390, 729755, 730120, 730486, 730851, 731216, 731581, 731947, 732312, 732677,
-												 733042, 733408, 733773, 734138, 734503, 734869, 735234, 735599, 735964, 736330, 736695, 737060, 737425, 737791, 738156, 738521, 738886, 739252, 739617,
-												 739982, 740347, 740713, 741078, 741443, 741808, 742174, 742539, 742904, 743269, 743635, 744000, 744365};
 	/**
 	 * 每月的天数
 	 */
 	private static final int[] SUMMED_DAYS = new int[] {-30, 0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334};
 
-	public static final int GREGORIAN_OFFSET_DAY = 719163; // Fixed day of 1970/1/ 1 (Gregorian)
+	public static final int GREGORIAN_OFFSET_DAY = 719163; // Fixed day of 1970/1/1 (Gregorian)
 	public static final int MINIMUM_GREGORIAN_DAY = 577736; // Fixed day of 1582/8/15
-
-	private static int floorDiv(int a, int b) { return a >= 0 ? a / b : (a + 1) / b - 1; }
-	private static long divModLss(long a, int b, int[] buf) {
-		if (a >= 0) {
-			return (a % b) << 54 | (a / b);
-		} else {
-			long div = (a + 1) / b - 1;
-			buf[0] = (int) (a - b * div);
-			return div;
-		}
-	}
 
 	static final String[]
 		UTCWEEK = {"Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"},

@@ -1595,7 +1595,7 @@ public final class CompileUnit extends ConstantData {
 		ctx.errorReportIndex = classIdx;
 
 		// 检测循环继承
-		ctx.parentListOrReport(this);
+		ctx.getParentList(this);
 
 		// 泛型异常
 		if (signature != null && ctx.instanceOf(parent, "java/lang/Throwable")) {
@@ -1789,7 +1789,7 @@ public final class CompileUnit extends ConstantData {
 						// 虽然有点像下面的，但目的只是让owner更具体
 						var d1 = abstractOrUnrelated.intern(d);
 						if (d != d1) {
-							if (ctx.parentListOrReport(info).containsValue(d1.owner)) {
+							if (ctx.getParentList(info).containsValue(d1.owner)) {
 								assert itf;
 								d1.flags = (char) cacheMethod(node);
 								d1.owner = d.owner;
@@ -1808,10 +1808,10 @@ public final class CompileUnit extends ConstantData {
 
 					var d1 = hasDefault.intern(d);
 					if (d != d1) {
-						if (ctx.parentListOrReport(info).containsValue(d1.owner)) {
+						if (ctx.getParentList(info).containsValue(d1.owner)) {
 							d1.flags = (char) (cacheMethod(node) | UNRELATED_MARKER);
 							d1.owner = d.owner;
-						} else if (!ctx.parentListOrReport(ctx.classes.getClassInfo(d1.owner)).containsValue(d.owner)) {
+						} else if (!ctx.getParentList(ctx.classes.getClassInfo(d1.owner)).containsValue(d.owner)) {
 							abstractOrUnrelated.add(d1);
 						}
 					} else {
@@ -2185,11 +2185,11 @@ public final class CompileUnit extends ConstantData {
 				} else {
 					loop:
 					for (int j = _throws.size() - 1; j >= 0; j--) {
-						var exParent = ctx.parentListOrReport(_throws.get(j));
+						var exParent = ctx.getParentList(_throws.get(j));
 						for (String s : list.value) {
 							var self = ctx.classes.getClassInfo(s);
 
-							if (ctx.parentListOrReport(self).containsValue(exParent.get(0))) {
+							if (ctx.getParentList(self).containsValue(exParent.get(0))) {
 								if (!_throws.contains(self)) _throws.add(self);
 							} else if (exParent.containsValue(s)) continue loop;
 						}

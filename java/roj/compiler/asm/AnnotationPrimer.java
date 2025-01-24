@@ -1,6 +1,7 @@
 package roj.compiler.asm;
 
 import org.jetbrains.annotations.Nullable;
+import roj.asm.Opcodes;
 import roj.asm.tree.anno.*;
 import roj.asm.type.IType;
 import roj.asm.type.Type;
@@ -87,7 +88,16 @@ public final class AnnotationPrimer extends Annotation {
 	@Nullable
 	public static AnnVal toAnnVal(LocalContext ctx, ExprNode node, Type type) {
 		if (node instanceof ArrayDef def) def.setType(type);
+
+		// begin 20250120 可以用 @ABC (DEF)这种方式直接引用枚举常量DEF
+		var prevDfi = ctx.dynamicFieldImport;
+		var typeRef = ctx.getClassOrArray(type);
+		if (typeRef != null && (typeRef.modifier & Opcodes.ACC_ENUM) != 0) {
+			ctx.dynamicFieldImport = ctx.getFieldDFI(typeRef, null, prevDfi);
+		}
+		// end
 		node = node.resolve(ctx);
+		ctx.dynamicFieldImport = prevDfi;
 
 		if (!node.isConstant() && !node.hasFeature(ExprNode.ExprFeat.ENUM_REFERENCE)) {
 			ctx.report(Kind.ERROR, "ap.annotation.noConstant");

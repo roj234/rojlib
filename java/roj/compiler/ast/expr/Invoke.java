@@ -146,8 +146,7 @@ public final class Invoke extends ExprNode {
 					// 省略this : a() => this.a();
 					fn2 = ctx.ep.This().resolve(ctx);
 
-					ComponentList list = ctx.methodListOrReport(ctx.file, method);
-					if (list != null) {
+					{
 						/*  这么设计源于下列代码无法编译
 							class TestN {
 								{ a(); }
@@ -155,7 +154,7 @@ public final class Invoke extends ExprNode {
 							}
 							void a() {}
 						 */
-						for (MethodNode mn : list.getMethods()) {
+						for (MethodNode mn : ctx.getMethodList(ctx.file, method).getMethods()) {
 							if (ctx.checkAccessible(ctx.classes.getClassInfo(mn.owner), mn, false, false)) {
 								break check;
 							}
@@ -291,8 +290,8 @@ public final class Invoke extends ExprNode {
 		block: {
 			ctx.assertAccessible(type);
 
-			ComponentList list = ctx.methodListOrReport(type, method);
-			if (list == null) {
+			var list = ctx.getMethodList(type, method);
+			if (list == ComponentList.NOT_FOUND) {
 				ctx.report(Kind.ERROR, "symbol.error.noSuchSymbol", method.equals("<init>") ? "invoke.constructor" : "invoke.method", method+"("+TextUtil.join(tmp, ",")+")", "\1symbol.type\0 "+type.name(),
 					reportSimilarMethod(ctx, type, method));
 				return NaE.RESOLVE_FAILED;

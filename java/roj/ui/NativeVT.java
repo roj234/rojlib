@@ -134,7 +134,7 @@ public final class NativeVT implements ITerminal, Runnable {
 		t.setDaemon(true);
 		t.start();
 		try {
-			synchronized (io) {io.wait(30);}
+			synchronized (io) {io.wait(100);}
 		} catch (InterruptedException e) {
 			System.err.println(VTERROR+"Interrupt");
 			return null;
@@ -148,6 +148,7 @@ public final class NativeVT implements ITerminal, Runnable {
 			}
 
 			System.err.println(VTERROR+"Timeout");
+			return null;
 		}
 		reader = t;
 		return io;

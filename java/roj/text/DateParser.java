@@ -185,7 +185,7 @@ public class DateParser {
 
 		if ((method&F_AMPM) != 0 && cal[11] == 2) cal[4] += 12;
 
-		long stamp = (ACalendar.daySinceAD(cal[1], cal[2], cal[3], null) - ACalendar.GREGORIAN_OFFSET_DAY);
+		long stamp = (ACalendar.daySinceAD(cal[1], cal[2], cal[3]) - ACalendar.GREGORIAN_OFFSET_DAY);
 		if ((method&F_YWD) != 0) stamp += ((cal[9] - 1) * 7L + (cal[10] - 1));
 
 		stamp *= 86400000L;
@@ -277,7 +277,7 @@ public class DateParser {
 		if (m > 59) throw new IllegalArgumentException("你一小时" + m + "分钟");
 		if (s > 59) throw new IllegalArgumentException("你一分钟" + s + "秒");
 
-		long a = (ACalendar.daySinceAD(year, month, day, null) - ACalendar.GREGORIAN_OFFSET_DAY) * 86400000L + h * 3600000L + m * 60000L + s * 1000L;
+		long a = (ACalendar.daySinceAD(year, month, day) - ACalendar.GREGORIAN_OFFSET_DAY) * 86400000L + h * 3600000L + m * 60000L + s * 1000L;
 
 		int i = -1;
 		switch (seq.charAt(26)) {
