@@ -15,6 +15,7 @@ import roj.collect.SimpleList;
 import roj.collect.ToIntMap;
 import roj.compiler.LavaFeatures;
 import roj.compiler.api.Evaluable;
+import roj.compiler.api.Types;
 import roj.compiler.asm.Asterisk;
 import roj.compiler.asm.MethodWriter;
 import roj.compiler.ast.EnumUtil;
@@ -321,7 +322,7 @@ public final class Invoke extends ExprNode {
 				desc = Collections.singletonList(new Generic("java/lang/Class", Collections.singletonList(val)));
 			} else if (mn == GlobalContext.arrayClone()) {
 				// 数组的clone方法的特殊处理
-				desc = Collections.singletonList(Asterisk.genericReturn(ownMirror, LocalContext.OBJECT_TYPE));
+				desc = Collections.singletonList(Asterisk.genericReturn(ownMirror, Types.OBJECT_TYPE));
 			} else {
 				desc = r.desc != null ? Arrays.asList(r.desc) : Helpers.cast(TypeHelper.parseMethod(mn.rawDesc()));
 			}

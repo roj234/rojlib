@@ -1,6 +1,5 @@
 package roj.asm.visitor;
 
-import org.intellij.lang.annotations.MagicConstant;
 import org.jetbrains.annotations.NotNull;
 import roj.asm.Opcodes;
 import roj.asm.cp.*;
@@ -129,14 +128,12 @@ public final class XInsnNodeView {
 		data1.put(pos.offset, code = (byte) newCode);
 	}
 
-	public final int bci() { return pos.value; }
-	public final ReadonlyLabel pos() { return pos; }
-	public final ReadonlyLabel end() { return end1(); }
+	public final int bci() { return pos.getValue(); }
+	public final Label pos() { return pos; }
+	public final Label end() { return new Label(pos.getValue()+len); }
 	public final int length() { return len; }
 
 	private DynByteBuf getData() { return owner.segments.get(pos.block).getData(); }
-	private Label start() { return shared?new Label(pos.getValue()):pos; }
-	public final Label end1() { return new Label(pos.getValue()+len); }
 
 	/** 直接改，但是不要动flag | owner为null时，是invokeDynamic */
 	@NotNull
@@ -156,19 +153,19 @@ public final class XInsnNodeView {
 	@NotNull
 	public final Constant constant() {
 		byte code = opcode();
-		switch (code) {
-			case LDC: case LDC_W: return ((LdcSegment) ref).c;
-			case LDC2_W: return (Constant) ref;
-			default: return invalidArg(code);
-		}
+		return switch (code) {
+			case LDC, LDC_W -> ((LdcSegment) ref).c;
+			case LDC2_W -> (Constant) ref;
+			default -> invalidArg(code);
+		};
 	}
 	public final Constant constantOrNull() {
 		byte code = opcode();
-		switch (code) {
-			case LDC: case LDC_W: return ((LdcSegment) ref).c;
-			case LDC2_W: return (Constant) ref;
-			default: return null;
-		}
+		return switch (code) {
+			case LDC, LDC_W -> ((LdcSegment) ref).c;
+			case LDC2_W -> (Constant) ref;
+			default -> null;
+		};
 	}
 
 	@NotNull
@@ -190,11 +187,11 @@ public final class XInsnNodeView {
 
 	public final int id() {
 		byte code = opcode();
-		switch (OPLENGTH[code&0xFF]&0xF) {
-			case 5: case 7: return id; // vs,vl,ret iinc
-			case 6: return number; // newarray
-			default: return invalidArg(code);
-		}
+		return switch (OPLENGTH[code & 0xFF] & 0xF) {
+			case 5, 7 -> id; // vs,vl,ret iinc
+			case 6 -> number; // newarray
+			default -> invalidArg(code);
+		};
 	}
 	public final void setId(int id) {
 		byte code = opcode();
@@ -237,11 +234,11 @@ public final class XInsnNodeView {
 
 	public final int getNumberExact() {
 		byte code = opcode();
-		switch (OPLENGTH[code&0xFF]&0xF) {
-			case 8: case 9: return id; // bipush sipush
-			case 7: return number; // iinc
-			default: return invalidArg(code);
-		}
+		return switch (OPLENGTH[code & 0xFF] & 0xF) {
+			case 8, 9 -> id; // bipush sipush
+			case 7 -> number; // iinc
+			default -> invalidArg(code);
+		};
 	}
 	public final void setNumberExact(int num) {
 		byte code = opcode();
@@ -268,40 +265,40 @@ public final class XInsnNodeView {
 	public final int getAsInt() {
 		byte code = opcode();
 		if (code>=2&&code<=8) return code-3;
-		switch (code) {
-			case BIPUSH: case SIPUSH: return id;
-			case LDC: case LDC_W: return ((CstInt) ref).value;
-			default: return invalidArg(code);
-		}
+		return switch (code) {
+			case BIPUSH, SIPUSH -> id;
+			case LDC, LDC_W -> ((CstInt) ref).value;
+			default -> invalidArg(code);
+		};
 	}
 	public final long getAsLong() {
 		byte code = opcode();
-		switch (code) {
-			case LCONST_0: return 0;
-			case LCONST_1: return 1;
-			case LDC2_W: return ((CstLong) ref).value;
-			default: return invalidArg(code);
-		}
+		return switch (code) {
+			case LCONST_0 -> 0;
+			case LCONST_1 -> 1;
+			case LDC2_W -> ((CstLong) ref).value;
+			default -> invalidArg(code);
+		};
 
 	}
 	public final float getAsFloat() {
 		byte code = opcode();
-		switch (code) {
-			case FCONST_0: return 0;
-			case FCONST_1: return 1;
-			case FCONST_2: return 2;
-			case LDC: case LDC_W: return ((CstFloat) ref).value;
-			default: return invalidArg(code);
-		}
+		return switch (code) {
+			case FCONST_0 -> 0;
+			case FCONST_1 -> 1;
+			case FCONST_2 -> 2;
+			case LDC, LDC_W -> ((CstFloat) ref).value;
+			default -> invalidArg(code);
+		};
 	}
 	public final double getAsDouble() {
 		byte code = opcode();
-		switch (code) {
-			case DCONST_0: return 0;
-			case DCONST_1: return 1;
-			case LDC2_W: return ((CstDouble) ref).value;
-			default: return invalidArg(code);
-		}
+		return switch (code) {
+			case DCONST_0 -> 0;
+			case DCONST_1 -> 1;
+			case LDC2_W -> ((CstDouble) ref).value;
+			default -> invalidArg(code);
+		};
 	}
 
 	public final int MultiANewArray_initDimension() {
@@ -312,11 +309,11 @@ public final class XInsnNodeView {
 	@NotNull
 	public final Type arrayType() {
 		byte code = opcode();
-		switch (code) {
-			case NEWARRAY: return Type.std(AbstractCodeWriter.FromPrimitiveArrayId(number));
-			case ANEWARRAY: case MULTIANEWARRAY: return TypeHelper.parseField(type());
-			default: return invalidArg(code);
-		}
+		return switch (code) {
+			case NEWARRAY -> Type.std(AbstractCodeWriter.FromPrimitiveArrayId(number));
+			case ANEWARRAY, MULTIANEWARRAY -> TypeHelper.parseField(type());
+			default -> invalidArg(code);
+		};
 	}
 
 	@NotNull
@@ -348,29 +345,20 @@ public final class XInsnNodeView {
 	}
 
 	public XInsnNodeView prev() {
-		int bci = owner.getPcMap().prevTrue(pos.value-1);
+		int bci = owner.getPcMap().prevTrue(pos.getValue()-1);
 		return bci < 0 ? Helpers.nonnull() : owner.getNodeAt(bci);
 	}
 	public XInsnNodeView next() {
-		int bci = pos.value + len;
+		int bci = pos.getValue() + len;
 		return bci == owner.bci() ? Helpers.nonnull() : owner.getNodeAt(bci);
 	}
 
-	public InsnMod replace() { return new InsnMod(owner, start(), end1()); }
-	public InsnMod insertBefore() {
-		Label start = start();
-		return new InsnMod(owner, start, start);
-	}
-	public InsnMod insertAfter() {
-		Label end = end1();
-		return new InsnMod(owner, end, end);
-	}
+	@Deprecated
+	public InsnMod replace() { return new InsnMod(owner, pos(), end()); }
 	public static class InsnMod {
 		XInsnList owner;
 		Label from, to;
 		public XInsnList list = new XInsnList();
-		@MagicConstant(intValues = {XInsnList.REP_CLONE, XInsnList.REP_SHARED, XInsnList.REP_SHARED_NOUPDATE})
-		public int mode;
 
 		public InsnMod(XInsnList list, Label from, Label to) {
 			this.owner = list;
@@ -380,22 +368,16 @@ public final class XInsnNodeView {
 
 		public void commit() {
 			if (owner == null) throw new IllegalStateException("committed");
-			owner.replaceRange(from, to, list, mode);
+			owner.replaceRange(from, to, list, true);
 			owner = null;
 		}
 	}
 
-	public void replace(XInsnList list, @MagicConstant(intValues = {XInsnList.REP_CLONE, XInsnList.REP_SHARED, XInsnList.REP_SHARED_NOUPDATE}) int mode) {
-		owner.replaceRange(start(), end1(), list, mode);
-	}
-	public void insertBefore(XInsnList list, @MagicConstant(intValues = {XInsnList.REP_CLONE, XInsnList.REP_SHARED, XInsnList.REP_SHARED_NOUPDATE}) int mode) {
-		Label start = start();
-		owner.replaceRange(start, start, list, mode);
-	}
-	public void insertAfter(XInsnList list, @MagicConstant(intValues = {XInsnList.REP_CLONE, XInsnList.REP_SHARED, XInsnList.REP_SHARED_NOUPDATE}) int mode) {
-		Label end = end1();
-		owner.replaceRange(end, end, list, mode);
-	}
+	@Deprecated
+	public void remove() {replace(new XInsnList(), false);}
+	public void replace(XInsnList list, boolean clone) {owner.replaceRange(pos(), end(), list, clone);}
+	public void insertBefore(XInsnList list, boolean clone) {Label start = pos();owner.replaceRange(start, start, list, clone);}
+	public void insertAfter(XInsnList list, boolean clone) {Label end = end();owner.replaceRange(end, end, list, clone);}
 
 	@SuppressWarnings("fallthrough")
 	public boolean isSimilarTo(XInsnNodeView b, InsnMatcher context) {
@@ -434,7 +416,7 @@ public final class XInsnNodeView {
 	public String toString() {
 		CharList sb = new CharList();
 
-		if (pos.isValid()) sb.append("#").append((int)pos.value).append(' ');
+		if (pos.isValid()) sb.append("#").append(pos.getValue()).append(' ');
 		else sb.append("#<invalid>: ");
 
 		sb.append(showOpcode(code)).append(' ');

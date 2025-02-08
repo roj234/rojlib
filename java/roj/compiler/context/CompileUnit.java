@@ -5,8 +5,12 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import roj.asm.Opcodes;
 import roj.asm.cp.CstClass;
+import roj.asm.cp.CstString;
 import roj.asm.tree.*;
-import roj.asm.tree.anno.*;
+import roj.asm.tree.anno.AnnVal;
+import roj.asm.tree.anno.AnnValAnnotation;
+import roj.asm.tree.anno.AnnValArray;
+import roj.asm.tree.anno.Annotation;
 import roj.asm.tree.attr.*;
 import roj.asm.tree.attr.MethodParameters.MethodParam;
 import roj.asm.type.*;
@@ -17,9 +21,9 @@ import roj.asmx.mapper.util.NameAndType;
 import roj.collect.*;
 import roj.compiler.JavaLexer;
 import roj.compiler.LavaFeatures;
+import roj.compiler.api.Types;
 import roj.compiler.asm.*;
 import roj.compiler.ast.BlockParser;
-import roj.compiler.ast.EnumUtil;
 import roj.compiler.ast.GeneratorUtil;
 import roj.compiler.ast.ParseTask;
 import roj.compiler.ast.expr.Constant;
@@ -30,6 +34,7 @@ import roj.compiler.resolve.ComponentList;
 import roj.compiler.resolve.ResolveHelper;
 import roj.compiler.resolve.TypeCast;
 import roj.compiler.resolve.TypeResolver;
+import roj.config.ConfigMaster;
 import roj.config.ParseException;
 import roj.config.Word;
 import roj.io.IOUtil;
@@ -56,7 +61,6 @@ import static roj.config.Word.*;
  * @since 2020/12/31 17:34
  */
 public final class CompileUnit extends ConstantData {
-	public static final Type RUNTIME_EXCEPTION = new Type("java/lang/RuntimeException");
 	private Object _next;
 
 	// Class level flags
@@ -546,7 +550,7 @@ public final class CompileUnit extends ConstantData {
 		} else if ((acc & ACC_ENUM) != 0) {
 			makeSignature()._add(new Generic("java/lang/Enum", Collections.singletonList(new Type(name))));
 		} else if (currentNode != null) {
-			currentNode._add(LocalContext.OBJECT_TYPE);
+			currentNode._add(Types.OBJECT_TYPE);
 		}
 
 		structCheck:{
@@ -582,9 +586,9 @@ public final class CompileUnit extends ConstantData {
 					// C-style array definition
 					field.modifier |= ACC_NATIVE; // SPECIAL PROCESSING
 
-					List<AnnVal> list = new SimpleList<>();
+					IntList list = new IntList();
 					do {
-						list.add(AnnValInt.valueOf(wr.except(INTEGER).asInt()));
+						list.add(wr.except(INTEGER).asInt());
 						wr.except(rBracket);
 						w = wr.next();
 					} while (w.type() == lBracket);
@@ -593,7 +597,8 @@ public final class CompileUnit extends ConstantData {
 					clone.setArrayDim(list.size());
 					field.fieldType(clone);
 
-					field.putAttr(new AnnotationDefault(new AnnValArray(list)));
+					// TODO better solution?
+					field.putAttr(new ConstantValue(new CstString(ConfigMaster.JSON.writeObject(list, new CharList()).toStringAndFree())));
 				}
 			} while (w.type() == comma);
 
@@ -819,7 +824,7 @@ public final class CompileUnit extends ConstantData {
 					paramNames.add("@name");
 					paramNames.add("@ordinal");
 					var par = method.parameters();
-					par.add(EnumUtil.TYPE_STRING);
+					par.add(Types.STRING_TYPE);
 					par.add(Type.std(Type.INT));
 				}
 
@@ -1946,7 +1951,7 @@ public final class CompileUnit extends ConstantData {
 				List<IType> itThrows = ri.getExceptions(ctx);
 				outer:
 				for (IType f : myThrows) {
-					if (ctx.castTo(f, RUNTIME_EXCEPTION, TypeCast.E_NEVER).type == 0) continue;
+					if (ctx.castTo(f, Types.RUNTIME_EXCEPTION, TypeCast.E_NEVER).type == 0) continue;
 
 					for (IType type : itThrows) {
 						TypeCast.Cast c = ctx.castTo(f, type, TypeCast.E_NEVER);

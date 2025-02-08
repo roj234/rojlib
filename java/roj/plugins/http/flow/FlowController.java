@@ -68,7 +68,7 @@ public class FlowController extends SpeedLimiter implements ChannelHandler {
 		timestamp = System.currentTimeMillis();
 
 		var first = pendingConnections.pollFirst();
-		if (first != null) {
+		if (first != null && first.isOpen()) {
 			channel.putLong(first, 0L);
 			first.readActive();
 		}

@@ -268,10 +268,10 @@ public class Obfuscator {
 				if (node.opcode() == Opcodes.INVOKEVIRTUAL) {
 					Desc desc = node.desc();
 					if (desc.name.equals("getStackTrace") && desc.param.equals("[Ljava/lang/StackTraceElement;")) {
-						XInsnNodeView.InsnMod mod = node.replace();
-						mod.list.one(Opcodes.POP);
-						mod.list.invoke(Opcodes.INVOKESTATIC, "_syncGetStackTrace", "roj/mapper/Obfuscator", desc.param);
-						mod.commit();
+						var replaceList = new XInsnList();
+						replaceList.one(Opcodes.POP);
+						replaceList.invoke(Opcodes.INVOKESTATIC, "_syncGetStackTrace", "roj/mapper/Obfuscator", desc.param);
+						node.replace(replaceList, false);
 						System.out.println("找到stack trace 调用！");
 					}
 				}
@@ -459,7 +459,7 @@ public class Obfuscator {
 									}
 									//}
 									m.putAttr(code);
-									next.replace().commit();
+									next.remove();
 								}
 							}
 						}

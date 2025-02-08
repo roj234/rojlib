@@ -160,12 +160,22 @@ public class FeedbackCipher extends RCipherSpi {
 	}
 	protected void cryptFinal1(DynByteBuf in, DynByteBuf out) throws ShortBufferException, IllegalBlockSizeException, BadPaddingException {
 		switch (type) {
-			case MODE_ECB: case MODE_CBC: case MODE_PCBC:
+			case MODE_ECB, MODE_CBC, MODE_PCBC:
 				if (padding != 0) {
 					if (decrypt) FC_Unpad(vec.capacity(), out, padding == 2);
 					else {
-						FC_Pad(vec.capacity(), in, padding == 2);
-						crypt(in, out);
+						if (in.writableBytes() >= vec.capacity()) {
+							int wi = in.wIndex();
+							FC_Pad(vec.capacity(), in, padding == 2);
+							crypt(in, out);
+							in.wIndex(wi);
+						} else {
+							var tmp = new ByteList();
+							FC_Pad(vec.capacity(), tmp.put(in), padding == 2);
+							crypt(tmp, out);
+							tmp._free();
+						}
+						in.rIndex = in.wIndex();
 					}
 				}
 				break;

@@ -3,6 +3,7 @@ package roj.compiler.plugins.moreop;
 import org.jetbrains.annotations.NotNull;
 import roj.asm.Opcodes;
 import roj.asm.type.IType;
+import roj.compiler.api.Types;
 import roj.compiler.asm.MethodWriter;
 import roj.compiler.ast.expr.ExprNode;
 import roj.compiler.ast.expr.VarNode;
@@ -39,8 +40,8 @@ final class MapGet extends VarNode {
 			componentType = types.get(0);
 			cast = ctx.castTo(index.type(), types.get(1), 0);
 		} else {
-			componentType = LocalContext.OBJECT_TYPE;
-			cast = ctx.castTo(index.type(), LocalContext.OBJECT_TYPE, 0);
+			componentType = Types.OBJECT_TYPE;
+			cast = ctx.castTo(index.type(), Types.OBJECT_TYPE, 0);
 		}
 		return this;
 	}

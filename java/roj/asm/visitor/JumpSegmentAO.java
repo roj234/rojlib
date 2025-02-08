@@ -27,15 +27,15 @@ public final class JumpSegmentAO extends JumpSegment {
 			return true;
 		}
 
-		while (target.offset == 0 && target.block > 0) {
-			Segment segment = to.segments.get(target.block);
+		while (target.offset == 0 && target.getBlock() > 0) {
+			Segment segment = to.segments.get(target.getBlock());
 			if (!(segment instanceof JumpSegmentAO j) || !j.isTerminate()) break;
 			target = j.target;
 		}
 
 		// if-goto-segment自动翻转
 		if (!isTerminate() &&
-			target.offset == 0 && target.block == segmentId+2 &&
+			target.offset == 0 && target.getBlock() == segmentId+2 &&
 			!(to.segments.get(segmentId+2) instanceof JumpSegment) &&
 			to.segments.get(segmentId+1) instanceof JumpSegment t &&
 			t.isTerminate()) {
@@ -87,17 +87,13 @@ public final class JumpSegmentAO extends JumpSegment {
 		}
 		return len != newLen;
 	}
+	private void doWriteReplace() {writeReplace = code < GOTO ? new StaticSegment(code >= IF_icmpeq ? POP2 : POP) : StaticSegment.EMPTY;}
 
-	private void doWriteReplace() {
-		writeReplace = code < GOTO ? new StaticSegment(code >= IF_icmpeq ? POP2 : POP) : StaticSegment.EMPTY;
-	}
-
-	@Override
-	public Segment move(AbstractCodeWriter from, AbstractCodeWriter to, int blockMoved, int mode) {
-		Label rx = copyLabel(target, from, to, blockMoved, mode);
-		return mode==XInsnList.REP_CLONE?new JumpSegmentAO(code,rx):this;
-	}
+	@Override public final int length() { return writeReplace != null ? writeReplace.length() : super.length(); }
 
 	@Override
-	public final int length() { return writeReplace != null ? writeReplace.length() : super.length(); }
+	public Segment move(AbstractCodeWriter to, int blockMoved, boolean clone) {
+		Label rx = copyLabel(target, to, blockMoved, clone);
+		return clone?new JumpSegmentAO(code,rx):this;
+	}
 }

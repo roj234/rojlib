@@ -76,7 +76,7 @@ public final class EventTransformer implements ITransformer, NodeTransformer<Con
 		if (clinit != null) {
 			XAttrCode code = clinit.parsedAttr(data.cp, Attribute.Code);
 			if (code.stackSize == 0) code.stackSize = 1;
-			code.instructions.replaceRange(0,0, (XInsnList) c, XInsnList.REP_SHARED);
+			code.instructions.replaceRange(0,0, (XInsnList) c, false);
 		}
 	}
 

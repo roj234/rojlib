@@ -4,6 +4,7 @@ import org.jetbrains.annotations.NotNull;
 import roj.asm.Opcodes;
 import roj.asm.type.IType;
 import roj.asm.type.Type;
+import roj.compiler.api.Types;
 import roj.compiler.asm.MethodWriter;
 import roj.compiler.ast.expr.ExprNode;
 import roj.compiler.ast.expr.VarNode;
@@ -38,7 +39,7 @@ final class ListGet extends VarNode {
 
 		IType type = list.type();
 		var types = ctx.inferGeneric(type, "java/util/List");
-		componentType = types != null ? types.get(0) : LocalContext.OBJECT_TYPE;
+		componentType = types != null ? types.get(0) : Types.OBJECT_TYPE;
 		return this;
 	}
 

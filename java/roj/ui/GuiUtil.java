@@ -6,6 +6,7 @@ import roj.RojLib;
 import roj.compiler.plugins.annotations.Attach;
 import roj.io.IOUtil;
 import roj.reflect.ReflectionUtils;
+import roj.reflect.litasm.FastJNI;
 import roj.text.TextReader;
 import roj.text.TextUtil;
 import roj.util.Helpers;
@@ -111,7 +112,11 @@ public final class GuiUtil {
 		flags |= 524320/*WS_EX_LAYERED|WS_EX_TRANSPARENT*/;
 		SetWindowLong(hwnd, -20, flags);
 	}
+
+	//static {Intrinsics.linkNative("USER32");}
+	@FastJNI
 	private static native long GetWindowLong(long hwnd, int dwType);
+	@FastJNI
 	private static native void SetWindowLong(long hwnd, int dwType, long flags);
 
 	@NotNull

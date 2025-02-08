@@ -2,7 +2,6 @@ package roj.asm.tree.attr;
 
 import roj.asm.visitor.CodeWriter;
 import roj.asm.visitor.Label;
-import roj.asm.visitor.ReadonlyLabel;
 import roj.asm.visitor.XInsnList;
 import roj.collect.IntMap;
 import roj.collect.SimpleList;
@@ -69,7 +68,7 @@ public final class LineNumberTable extends Attribute implements CodeAttribute {
 	public void sort() { list.sort((o1, o2) -> Integer.compare(o1.pos.getValue(), o2.pos.getValue())); }
 
 	public static final class Item {
-		public ReadonlyLabel pos;
+		public Label pos;
 		char line;
 
 		public Item(Label pos, int i) {

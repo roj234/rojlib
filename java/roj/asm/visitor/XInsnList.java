@@ -1,6 +1,5 @@
 package roj.asm.visitor;
 
-import org.intellij.lang.annotations.MagicConstant;
 import org.jetbrains.annotations.NotNull;
 import roj.asm.AsmShared;
 import roj.asm.Opcodes;
@@ -33,7 +32,7 @@ public class XInsnList extends AbstractCodeWriter implements Iterable<XInsnNodeV
 		else segments.clear();
 		offset = 0;
 
-		StaticSegment b = new StaticSegment();
+		StaticSegment b = StaticSegment.emptyWritable();
 		segments.add(b);
 		codeOb = b.getData();
 
@@ -83,7 +82,7 @@ public class XInsnList extends AbstractCodeWriter implements Iterable<XInsnNodeV
 		ob.setArray(ob.toByteArray());
 
 		validateBciRef();
-		updateLabelValues();
+		satisfySegments();
 		bciR2W.clear();
 		bciR2W = null;
 	}
@@ -155,7 +154,7 @@ public class XInsnList extends AbstractCodeWriter implements Iterable<XInsnNodeV
 
 		int blockFrom = cw.segments.size();
 		for (int i = 0; i < segments.size(); i++) {
-			cw.addSegment(segments.get(i).move(this, cw, blockFrom, REP_CLONE));
+			cw.addSegment(segments.get(i).move(cw, blockFrom, true));
 		}
 		cw.codeOb = codeOb;
 
@@ -187,13 +186,12 @@ public class XInsnList extends AbstractCodeWriter implements Iterable<XInsnNodeV
 	public final XInsnNodeView getNodeAt(int bci) {
 		if (!getPcMap().contains(bci)) throw new IllegalArgumentException("bci "+bci+" is not valid");
 		Label label = new Label(bci);
-		updateLabelValue(label);
+		indexLabel(label);
 
 		XInsnNodeView view = new XInsnNodeView(this, false);
 		view._init(label, segments.get(label.block));
 		return view;
 	}
-	public final int byteLength() { return bci(); }
 	@NotNull
 	public final NodeIterator iterator() { return since(0); }
 	public final NodeIterator since(int bci) { return new NodeIterator(bci); }
@@ -205,14 +203,10 @@ public class XInsnList extends AbstractCodeWriter implements Iterable<XInsnNodeV
 		public NodeIterator(int bci) {
 			if (bci >= bci()) stage = ENDED;
 			label.setRaw(bci);
-			updateLabelValue(label);
+			indexLabel(label);
 		}
 
-		public Label unsharedPos() {
-			Label lbl = newLabel();
-			lbl.set(label);
-			return label;
-		}
+		public Label unsharedPos() {return new Label(label);}
 
 		@Override
 		protected boolean computeNext() {
@@ -273,20 +267,6 @@ public class XInsnList extends AbstractCodeWriter implements Iterable<XInsnNodeV
 	protected final void ldc2(Constant c) { addRef(c); codeOb.put(LDC2_W).putShort(0); }
 	// endregion
 
-	public final void label(Label x) {
-		if (x.block >= 0) throw new IllegalStateException("Label already had a position at "+x);
-
-		if (segments.isEmpty()) {
-			x.setFirst(codeOb.wIndex());
-			return;
-		}
-
-		x.block = (short) (segments.size()-1);
-		x.offset = (char) codeOb.wIndex();
-		x.value = (char) (x.offset + offset);
-		labels.add(x);
-	}
-
 	public int bci() { return codeOb.wIndex()+offset; }
 
 	public final void addSegment(Segment c) {
@@ -300,7 +280,7 @@ public class XInsnList extends AbstractCodeWriter implements Iterable<XInsnNodeV
 		segments.add(c);
 		offset += c.length();
 
-		StaticSegment b = new StaticSegment();
+		StaticSegment b = StaticSegment.emptyWritable();
 		segments.add(b);
 		codeOb = b.getData();
 	}
@@ -328,13 +308,13 @@ public class XInsnList extends AbstractCodeWriter implements Iterable<XInsnNodeV
 		refLen = i+1;
 	}
 	// OPTIONAL: override field, invoke, invokeItf and use Shared Desc
-	public final Object getNodeData(Label pos) {
+	final Object getNodeData(Label pos) {
 		int target = (pos.block << 16) | pos.offset;
 		int i = Arrays.binarySearch(refPos, 0, refLen, target);
 		if (i < 0) throw new IllegalArgumentException("no data at " + pos);
 		return refVal[i];
 	}
-	public final void setNodeData(Label pos, Object val) {
+	final void setNodeData(Label pos, Object val) {
 		if (val == null) throw new IllegalArgumentException("data cannot be null");
 		int target = (pos.block << 16) | pos.offset;
 		int i = Arrays.binarySearch(refPos, 0, refLen, target);
@@ -363,7 +343,7 @@ public class XInsnList extends AbstractCodeWriter implements Iterable<XInsnNodeV
 		public Label getKey() {
 			label.block = (short) (refPos[realI] >>> 16);
 			label.offset = (char) refPos[realI];
-			updateLabelValue(label);
+			indexLabel(label);
 			return label;
 		}
 		public Object getValue() { return refVal[realI]; }
@@ -378,93 +358,23 @@ public class XInsnList extends AbstractCodeWriter implements Iterable<XInsnNodeV
 	public final XInsnList copy() { return copySlice(0, bci()); }
 	public final XInsnList copySlice(int from, int to) { return copySlice(new Label(from), new Label(to)); }
 	public final XInsnList copySlice(Label from, Label to) {
-		updateLabelValue(from); updateLabelValue(to);
-
 		XInsnList target = new XInsnList();
-		List<Segment> out = target.segments;
-		out.clear();
-
-		int blockFrom = from.block, blockTo = to.block;
-		List<Segment> blocks = segments;
-
-		final int offTo = to.offset == 0 && blockTo>0 ? blocks.get(--blockTo).length() : to.offset;
-
-		boolean myFlag = false;
-		Segment b = blocks.get(blockFrom);
-		if (from.offset > 0) {
-			DynByteBuf data = AsmShared.local().copy(b.getData());
-
-			data.rIndex = from.offset;
-			if (from.block == blockTo) {
-				data.wIndex(to.offset);
-				myFlag = true;
-			}
-
-			blockFrom++;
-
-			out.add(new StaticSegment().setData(data));
-		}
-
-		for (int i = blockFrom; i < blockTo; i++) {
-			out.add(blocks.get(i).move(this, target, -from.block, REP_CLONE));
-		}
-
-		if (!myFlag) {
-			b = blocks.get(blockTo);
-			if (offTo < b.length()) {
-				DynByteBuf data = AsmShared.local().copy(b.getData());
-				data.wIndex(offTo);
-				out.add(new StaticSegment().setData(data));
-			} else {
-				out.add(blocks.get(blockTo).move(this, target, -from.block, REP_CLONE));
-			}
-		}
-
-		copyRef:
-		if (refLen > 0) {
-			int refBefore = Arrays.binarySearch(refPos, 0, refLen, from.block << 16 | from.offset);
-			if (refBefore < 0) refBefore = -refBefore -1;
-			int refAfter = Arrays.binarySearch(refPos, refBefore, refLen, to.block << 16 | to.offset);
-			if (refAfter < 0) refAfter = -refAfter -1;
-
-			target.refLen = refAfter-refBefore;
-			if (target.refLen == 0) break copyRef;
-			target.refPos = new int[target.refLen];
-			target.refVal = new Object[target.refLen];
-
-			int deltaBlock = from.block << 16;
-			for (int i = 0; i < target.refLen; i++) {
-				int p = refPos[refBefore+i]-deltaBlock;
-				if ((p&0xFFFF0000) == 0) p -= from.offset;
-				target.refPos[i] = p;
-				target.refVal[i] = copyLabel(refVal[refBefore+i]);
-			}
-		}
-
-		Segment lastBlock = out.isEmpty() ? null : out.get(out.size()-1);
-		if (!(lastBlock instanceof StaticSegment) || ((StaticSegment) lastBlock).compacted()) {
-			lastBlock = new StaticSegment();
-			out.add(lastBlock);
-		}
-		target.codeOb = lastBlock.getData();
-
-		target.updateLabelValues();
+		var zero = Label.atZero();
+		insnCopy(this, target, from, to, zero, zero, true);
 		return target;
 	}
 
-	private boolean updateLabelValues() {
+	private void satisfySegments() {
 		if (segments.size() > 0) {
 			int segLen = segments.size()+1;
 			int[] offSum = AsmShared.local().getIntArray_(segLen);
 			boolean updated = updateOffset(labels, offSum, segLen);
 			offset = offSum[segments.size()-1]; // last block begin
-			return updated;
 		} else {
 			offset = 0;
 		}
-		return false;
 	}
-	private void updateLabelValue(Label pos) {
+	private void indexLabel(Label pos) {
 		if (pos.block < 0) {
 			pos.value = pos.offset;
 
@@ -475,7 +385,7 @@ public class XInsnList extends AbstractCodeWriter implements Iterable<XInsnNodeV
 				if (j > pos.offset || (j == pos.offset && block == segments.size() - 1)) {
 					pos.block = (short) block;
 					pos.offset -= i;
-					if (pos.offset != 0 && s.getClass() != StaticSegment.class) throw new IllegalArgumentException("标签位于不可分割部分 " + pos);
+					if (pos.offset != 0 && s.getClass() != StaticSegment.class) throw new IllegalArgumentException("标签位于不可分割部分 "+pos);
 					return;
 				}
 				i = j;
@@ -490,182 +400,243 @@ public class XInsnList extends AbstractCodeWriter implements Iterable<XInsnNodeV
 		}
 		throw new IllegalArgumentException("找不到 " + pos);
 	}
-	public final Label labelAt(ReadonlyLabel pos) {
-		if (labels.contains(pos)) return (Label) pos;
+	public final Label labelAt(Label pos) {
+		if (labels.contains(pos)) return pos;
 
-		updateLabelValue((Label) pos);
-		Label label = new Label(pos);
-		updateLabelValue(label);
-		labels.add(label);
-		return label;
+		indexLabel(pos);
+		var copy = new Label(pos);
+		labels.add(copy);
+		return copy;
 	}
 	public final Label labelAt(int pos) {
 		Label label = new Label(pos);
-		updateLabelValue(label);
-		labels.add(label);
-		return label;
+		indexLabel(label);
+		return labelAt(label);
 	}
 
-	public static final int
-		/** 在复制的列表中处理,不能与其它标志共用 */
-		REP_CLONE = 0,
-		/** 在源列表中处理 */
-		REP_SHARED = 1,
-		/** 在源列表中处理,但不更新输入的Label */
-		REP_SHARED_NOUPDATE = 2;
-	public final void replaceRange(int from, int to, XInsnList list1, @MagicConstant(intValues = {REP_CLONE, REP_SHARED, REP_SHARED_NOUPDATE}) int mode) { replaceRange(new Label(from), new Label(to), list1, mode); }
-	public final void replaceRange(Label from, Label to, XInsnList list1, @MagicConstant(intValues = {REP_CLONE, REP_SHARED, REP_SHARED_NOUPDATE}) int mode) {
-		updateLabelValue(from); updateLabelValue(to);
+	// REFACTORED, AND NOT TESTED YET!!!
+	public static void insnCopy(XInsnList src, XInsnList dst, Label sstart, Label send, Label dstart, Label dend, boolean clone) {
+		src.indexLabel(sstart);
+		src.indexLabel(send);
+		dst.indexLabel(dstart);
+		dst.indexLabel(dend);
+		dst.pc = null;
 
-		pc = null;
+		SimpleList<Segment> toInsert = new SimpleList<>();
 
-		int blockFrom = from.block, blockTo = to.block;
-		SimpleList<Segment> blocks = segments.getClass() == SimpleList.class ? (SimpleList<Segment>) segments : new SimpleList<>(segments);
+		src.satisfySegments();
+		int blockFrom = sstart.block, blockTo = send.block;
+		List<Segment> srcSegments = src.segments;
 
-		boolean inserted = false;
-		splitSegment: {
-			final int offTo = to.offset == 0 && blockTo>0 ? blocks.get(--blockTo).length() : to.offset;
+		// 如果是某个segment的开始，那么移动到上一个的结尾
+		final int offTo = send.offset == 0 && blockTo>0 ? srcSegments.get(--blockTo).length() : send.offset;
 
-			Segment b = blocks.get(blockFrom);
-			if (from.offset > 0) {
-				int length = b.length();
+		//处理src的partial segment
+		OnlyOneStaticSegment: {
+			int dstartMoved = alignSegment(dstart, 1);
 
-				DynByteBuf data = b.getData();
-				data.wIndex(from.offset);
-				blocks.set(blockFrom, b.setData(data));
+			if (sstart.offset != 0) {
+				// 拆分start
+				var bytecode = AsmShared.local().copy(srcSegments.get(blockFrom++).getData());
+				bytecode.rIndex = sstart.offset;
+				toInsert.add(new StaticSegment().setData(bytecode));
 
-				blockFrom++;
-
-				if (from.block == blockTo) {
-					if (offTo < length) {
-						data.rIndex = offTo;
-						data.wIndex(data.capacity());
-
-						b = new StaticSegment().setData(data);
-						blocks.add(blockFrom, b);
-
-						inserted = true;
-					} else {
-						blockTo++;
-					}
-
-					break splitSegment;
+				// 如果总共只复制一个StaticSegment
+				if (sstart.block == blockTo) {
+					bytecode.wIndex(send.offset);
+					break OnlyOneStaticSegment;
 				}
 			}
 
-			b = blocks.get(blockTo);
-			if (offTo < b.length()) {
-				DynByteBuf data = b.getData();
-				data.rIndex = offTo;
-				blocks.set(blockTo, b.setData(data));
+			for (int i = blockFrom; i < blockTo; i++) {
+				// FIXME blockMoved not test
+				toInsert.add(srcSegments.get(i).move(dst, dstartMoved - blockFrom, clone));
+			}
+
+			var toBlock = srcSegments.get(blockTo);
+			if (offTo != toBlock.length()) {
+				//拆分end
+				var bytecode = AsmShared.local().copy(toBlock.getData());
+				bytecode.wIndex(offTo);
+				toInsert.add(new StaticSegment().setData(bytecode));
 			} else {
-				blockTo++;
+				toInsert.add(toBlock.move(dst, dstartMoved - blockTo, clone));
 			}
 		}
 
-		int blockInsert = list1.segments.size() - (list1.codeOb.isReadable() ? 0 : 1);
-		int blockDelta = blockInsert + blockFrom - blockTo;
+		int segmentRemoved = 0;
 
-		for (Iterator<Label> itr = labels.iterator(); itr.hasNext(); ) {
-			Label label = itr.next();
+		//处理dst的partial segment
+		if (dstart.block != dend.block || dstart.offset != dend.offset || dstart.offset != 0) {
+			var tmp = dst.segments.get(dstart.block);
 
-			if (label.compareTo(to) >= 0) {
-				if (label.block == blockTo)
-					label.offset -= to.offset;
-				label.block += blockDelta;
-			} else if (label.compareTo(from) > 0) {
-				label.clear();
-				itr.remove();
+			var bytecode = AsmShared.local().copy(tmp.getData());
+
+			tmp.setData(bytecode.slice(dstart.offset)); // left 可能长度为零
+
+			boolean leftSplit;
+			RightKnown: {
+				if (dstart.block == dend.block) {
+					bytecode.rIndex = dend.offset;
+					if (bytecode.isReadable()) {
+						toInsert.add(new StaticSegment().setData(bytecode));// right
+						leftSplit = true;
+						break RightKnown;
+					}
+				} else {
+					segmentRemoved = dend.block - dstart.block;
+					if (dend.offset != 0) {
+						segmentRemoved--;
+
+						tmp = dst.segments.get(dend.block);
+
+						bytecode = AsmShared.local().copy(tmp.getData());
+						bytecode.rIndex = dend.offset;
+						tmp.setData(bytecode); // right
+					}
+				}
+
+				leftSplit = false;
+			}
+
+			// 然后修复label
+			int blockDelta = toInsert.size() - segmentRemoved;
+			for (var itr = dst.labels.iterator(); itr.hasNext(); ) {
+				Label label = itr.next();
+
+				int labelBlock = label.block;
+				// 受影响的label
+				check:
+				if (labelBlock >= dstart.block && labelBlock <= dend.block) {
+					if (label.block == dend.block) {
+						if (label.offset >= dend.offset) {
+							label.offset -= dend.offset;
+							// 如果这部分还存在
+							if (leftSplit) label.offset += dstart.offset;
+							break check;
+						}
+					} else {
+						if (label.block == dstart.block && label.offset < dstart.offset) {
+							break check;
+						}
+					}
+
+					label.clear();
+					itr.remove();
+				}
+
+				if (label.block >= dend.block) {
+					label.block += blockDelta;
+				}
 			}
 		}
 
-		blocks.ensureCapacity(blocks.size()+blockDelta);
-		Object[] array = blocks.getInternalArray();
+		// 按顺序插入所有的segment
 
-		if (inserted) blockDelta--;
+		SimpleList<Segment> dstSegments = dst.segments instanceof SimpleList<Segment> x ? x : (SimpleList<Segment>) (dst.segments = new SimpleList<>(dst.segments));
+		int blockDelta = toInsert.size() - segmentRemoved;
+
+		dstSegments.ensureCapacity(dstSegments.size()+blockDelta);
+		Object[] array = dstSegments.getInternalArray();
 
 		// move
-		if (blockTo < blocks.size()) System.arraycopy(array, blockTo, array, blockTo+blockDelta, blocks.size()-blockTo);
-		// clear after
-		for (int i = blocks.size()+blockDelta; i < blocks.size(); i++) array[i] = null;
+		System.arraycopy(array, dend.block, array, dend.block + blockDelta, dstSegments.size() - dend.block);
 		// copy
-		if (blockInsert > 0) {
-			for (int i = 0; i < blockInsert; i++) {
-				array[blockFrom+i] = list1.segments.get(i).move(this, this, blockDelta, mode);
+		System.arraycopy(toInsert.getInternalArray(), 0, array, alignSegment(dstart, 1), toInsert.size());
+		// clear
+		for (int i = dstSegments.size()+blockDelta; i < dstSegments.size(); i++) array[i] = null;
+
+		dstSegments._setSize(dstSegments.size()+blockDelta);
+
+		int refSrcStart, refSrcEnd;
+		int refDstStart, refDstEnd;
+
+		if (src.refLen > 0) {
+			refSrcStart = Arrays.binarySearch(src.refPos, 0, src.refLen, sstart.block << 16 | sstart.offset);
+			if (refSrcStart < 0) refSrcStart = -refSrcStart -1;
+			refSrcEnd = Arrays.binarySearch(src.refPos, refSrcStart, src.refLen, send.block << 16 | send.offset);
+			if (refSrcEnd < 0) refSrcEnd = -refSrcEnd -1;
+		} else {
+			refSrcStart = refSrcEnd = 0;
+		}
+
+		if (dst.refLen > 0) {
+			refDstStart = Arrays.binarySearch(dst.refPos, 0, dst.refLen, dstart.block << 16 | dstart.offset);
+			if (refDstStart < 0) refDstStart = -refDstStart -1;
+			refDstEnd = Arrays.binarySearch(dst.refPos, refSrcStart, dst.refLen, dend.block << 16 | dend.offset);
+			if (refDstEnd < 0) refDstEnd = -refDstEnd -1;
+		} else {
+			refDstStart = refDstEnd = 0;
+		}
+
+		int[] outRefPos;
+		Object[] outRefVal;
+
+		int refDstDeleteCount = refDstEnd - refDstStart;
+		int refSrcInsertCount = refSrcEnd - refSrcStart;
+		int newRefLen = dst.refLen + refSrcInsertCount - refDstDeleteCount;
+		int refDeltaCount = refSrcInsertCount - refDstDeleteCount;
+
+		if (dst.refPos.length < newRefLen) {
+			outRefPos = new int[newRefLen];
+			outRefVal = new Object[newRefLen];
+		} else {
+			outRefPos = dst.refPos;
+			outRefVal = dst.refVal;
+		}
+
+		// label update part1
+		for (int srcPos = refDstEnd; srcPos < dst.refLen; srcPos++) {
+			int label = dst.refPos[srcPos];
+
+			if (dend.offset != 0 && (label >>> 16) == dend.block) {
+				label -= dend.offset;
 			}
+			label += blockDelta << 16;
+
+			outRefPos[srcPos + refDeltaCount] = label;
 		}
-		blocks._setSize(blocks.size()+blockDelta);
+		// label update part2
+		for (int srcPos = refSrcStart, dstPos = refDstStart; srcPos < refSrcEnd; srcPos++, dstPos++) {
+			int label = src.refPos[srcPos];
 
-		if (inserted) blockDelta++;
-
-		if (mode == REP_SHARED) {
-			for (Label label : list1.labels) {
-				if (labels.add(label)) label.block += blockFrom;
+			if (sstart.offset != 0 && (label >>> 16) == sstart.block) {
+				label -= sstart.offset;
 			}
+			label += alignSegment(dstart, 1) << 16;
+
+			outRefPos[dstPos] = label;
 		}
 
-		int refBefore = Arrays.binarySearch(refPos, 0, refLen, from.block << 16 | from.offset);
-		if (refBefore < 0) refBefore = -refBefore -1;
-		int refAfter = Arrays.binarySearch(refPos, refBefore, refLen, to.block << 16 | to.offset);
-		if (refAfter < 0) refAfter = -refAfter -1;
-
-		refAfter += replaceLabel(refBefore, refAfter, list1, 0, list1.refLen, blockFrom, mode == REP_CLONE);
-
-		for (int k = refAfter; k < refLen; k++) {
-			int pos = refPos[k];
-			if (pos >>> 16 == blockTo)
-				pos -= to.offset;
-
-			pos += blockDelta << 16;
-			refPos[k] = pos;
+		// move
+		System.arraycopy(dst.refVal, refDstEnd, outRefVal, refDstEnd + refDeltaCount, dst.refLen - refDstEnd);
+		// copy
+		if (clone) {
+			for (int srcPos = refSrcStart, dstPos = refDstStart; srcPos < refSrcEnd; srcPos++, dstPos++) {
+				outRefVal[dstPos] = copyData(src.refVal[srcPos]);
+			}
+		} else {
+			System.arraycopy(src.refVal, refSrcStart, outRefVal, refDstStart, refSrcInsertCount);
 		}
+		// clear
+		for (int i = dst.refLen + refDeltaCount; i < dst.refLen; i++) outRefVal[i] = null;
 
-		Segment lastBlock = blocks.isEmpty() ? null : blocks.get(blocks.size()-1);
-		if (!(lastBlock instanceof StaticSegment) || ((StaticSegment) lastBlock).compacted()) {
+		dst.refLen += refDeltaCount;
+
+		Segment lastBlock = dstSegments.isEmpty() ? null : dstSegments.getLast();
+		if (!(lastBlock instanceof StaticSegment) || ((StaticSegment) lastBlock).isReadonly()) {
 			lastBlock = new StaticSegment();
-			blocks.add(lastBlock);
+			dstSegments.add(lastBlock);
 		}
-		segments = blocks;
-		codeOb = lastBlock.getData();
-
-		updateLabelValues();
+		dst.codeOb = lastBlock.getData();
+		dst.satisfySegments();
 	}
-	private int replaceLabel(int from, int to, XInsnList listFrom, int listFromFrom, int listFromTo, int deltaBlock, boolean copy) {
-		int delta = listFromTo-to + from-listFromFrom;
+	private static int alignSegment(Label label, int dir) {return label.block + (label.offset == 0 ? 0 : dir);}
 
-		if (refLen+delta > refPos.length) {
-			int[] array1 = new int[refLen+delta];
-			Object[] array2 = new Object[array1.length];
+	public final void replaceRange(int from, int to, XInsnList list1, boolean clone) { replaceRange(new Label(from), new Label(to), list1, clone); }
+	public final void replaceRange(Label from, Label to, XInsnList list1, boolean clone) {insnCopy(list1, this, new Label(0), new Label(list1.bci()), from, to, clone);}
 
-			if (to < refLen) {
-				System.arraycopy(refPos, to, array1, to + delta, refLen - to);
-				System.arraycopy(refVal, to, array2, to + delta, refLen - to);
-			}
-
-			System.arraycopy(refPos, 0, array1, 0, from);
-			System.arraycopy(refVal, 0, array2, 0, from);
-
-			refPos = array1;
-			refVal = array2;
-		} else if (to < refLen) {
-			System.arraycopy(refPos, to, refPos, to + delta, refLen - to);
-			System.arraycopy(refVal, to, refVal, to + delta, refLen - to);
-
-			for (int i = refLen+delta; i < refLen; i++) refVal[i] = null;
-		}
-
-		deltaBlock <<= 16;
-		for (int i = 0; i < listFrom.refLen; i++) {
-			refPos[from+i] = listFrom.refPos[i+listFromFrom]+deltaBlock;
-
-			Object val = listFrom.refVal[i+listFromFrom];
-			refVal[from+i] = copy?copyLabel(val):val;
-		}
-		refLen += delta;
-		return delta;
-	}
-
-	private static Object copyLabel(Object o) {
+	private static Object copyData(Object o) {
 		if (o instanceof Constant) return ((Constant) o).clone();
 		if (o instanceof Desc) return ((Desc) o).copy();
 		return o;

@@ -7,6 +7,7 @@ import roj.asm.type.IType;
 import roj.asm.type.Type;
 import roj.asm.visitor.Label;
 import roj.collect.MyBitSet;
+import roj.compiler.api.Types;
 import roj.compiler.asm.MethodWriter;
 import roj.compiler.context.LocalContext;
 import roj.compiler.diagnostic.Kind;
@@ -90,8 +91,8 @@ final class Binary extends ExprNode {
 			if (_add) IN_ANY_BINARY.set(true);
 			try {
 				lType = (left = left.resolve(ctx)).type();
-				if ((lType.equals(Constant.STRING) ||
-					(rType = (right = right.resolve(ctx)).type()).equals(Constant.STRING))) {
+				if ((lType.equals(Types.STRING_TYPE) ||
+					(rType = (right = right.resolve(ctx)).type()).equals(Types.STRING_TYPE))) {
 					ExprNode node =
 						left instanceof StringConcat ? ((StringConcat) left).append(right) :
 						right instanceof StringConcat ? ((StringConcat) right).prepend(left) :

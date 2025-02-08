@@ -129,8 +129,8 @@ public final class LZMA2Writer extends LZMA2Out implements Finishable, UnsafeOut
 		}
 
 		try {
-			if (out instanceof Finishable)
-				((Finishable) out).finish();
+			if (out instanceof Finishable f)
+				f.finish();
 		} catch (Throwable e) {
 			try {
 				close();

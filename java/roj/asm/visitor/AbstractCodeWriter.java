@@ -323,14 +323,28 @@ public abstract class AbstractCodeWriter extends CodeVisitor {
 		}
 		Label l = newLabel(); label(l); return l;
 	}
-	public abstract void label(Label x);
+	protected boolean skipFirstSegmentLabels() {return true;}
+	public final void label(Label x) {
+		if (!x.isUnset()) throw new IllegalStateException("标签的状态不是<unset>: "+x);
+
+		if (segments.isEmpty()) {
+			x.setFirst(bci());
+			if (skipFirstSegmentLabels()) return;
+		} else {
+			x.block = (short) (segments.size()-1);
+			x.offset = (char) codeOb.wIndex();
+			x.value = (char) (x.offset + offset);
+		}
+
+		labels.add(x);
+	}
 
 	final boolean updateOffset(Collection<Label> labels, int[] offSum, int len) {
 		sumOffset(segments, offSum);
 
 		boolean changed = false;
 		for (Label label : labels) {
-			changed |= label.update(offSum, len);
+			changed |= label.update(offSum, len, segments);
 		}
 		return changed;
 	}

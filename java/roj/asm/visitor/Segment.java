@@ -13,13 +13,10 @@ public abstract class Segment {
 	StaticSegment setData(DynByteBuf data) { throw new UnsupportedOperationException(getClass().getName()); }
 	DynByteBuf getData() { return null; }
 
-	public Segment move(AbstractCodeWriter from, AbstractCodeWriter to, int blockMoved, int mode) { return this; }
-
-	static Label copyLabel(Label label, AbstractCodeWriter from, AbstractCodeWriter to, int blockMoved, int mode) {
-		if ((mode&XInsnList.REP_SHARED_NOUPDATE) != 0 || !from.labels.contains(label)) return label;
-
-		Label tx = mode==XInsnList.REP_CLONE?new Label():label;
-		tx.block = (short) (label.block+blockMoved);
+	public Segment move(AbstractCodeWriter to, int blockMoved, boolean clone) { return this; }
+	final Label copyLabel(Label label, AbstractCodeWriter to, int blockMoved, boolean clone) {
+		Label tx = clone&&!to.labels.contains(label)?new Label():label;
+		tx.block = (short) (label.getBlock() + blockMoved);
 		tx.offset = label.offset;
 		to.labels.add(tx);
 		return tx;

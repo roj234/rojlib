@@ -3,6 +3,7 @@ package roj.compiler.ast;
 import roj.asm.Opcodes;
 import roj.asm.type.Type;
 import roj.collect.SimpleList;
+import roj.compiler.api.Types;
 import roj.compiler.asm.MethodWriter;
 import roj.compiler.asm.Variable;
 import roj.compiler.ast.expr.ExprNode;
@@ -29,10 +30,9 @@ public class EnumUtil {
 		cw.visitSizeMax(3, 0);
 	}
 
-	public static final Type TYPE_STRING = new Type("java/lang/String");
 	private static final List<LocalVariable> _NAME_ORDINAL;
 	static {
-		var v1 = new Variable("@name", TYPE_STRING);
+		var v1 = new Variable("@name", Types.STRING_TYPE);
 		v1.slot = 1;
 		v1.hasValue = true;
 

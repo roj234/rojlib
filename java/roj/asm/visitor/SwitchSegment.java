@@ -98,8 +98,7 @@ public final class SwitchSegment extends Segment {
 		}
 		return false;
 	}
-	@Override
-	public int length() { return length; }
+	@Override public int length() { return length; }
 
 	public byte findBestCode() {
 		List<SwitchEntry> m = targets;
@@ -127,32 +126,8 @@ public final class SwitchSegment extends Segment {
 		}
 	}
 
-	@Override
-	public Segment move(AbstractCodeWriter from, AbstractCodeWriter to, int blockMoved, int mode) {
-		if (mode==XInsnList.REP_CLONE) {
-			SwitchSegment next = new SwitchSegment();
-			for (int i = 0; i < targets.size(); i++) {
-				SwitchEntry entry = targets.get(i);
-				Label label = copyLabel(entry.pos, from, to, blockMoved, XInsnList.REP_CLONE);
-				entry = new SwitchEntry(entry.val, label);
-				next.targets.add(entry);
-			}
-			next.def = copyLabel(def, from, to, blockMoved, XInsnList.REP_CLONE);
-			return next;
-		}
-
-		for (int i = 0; i < targets.size(); i++) {
-			copyLabel(targets.get(i).pos, from, to, blockMoved, mode);
-		}
-		copyLabel(def, from, to, blockMoved, mode);
-		return this;
-	}
-
-	@Override
-	public boolean isTerminate() { return true; }
-
-	@Override
-	public boolean willJumpTo(int block, int offset) {
+	@Override public boolean isTerminate() {return true;}
+	@Override public boolean willJumpTo(int block, int offset) {
 		if (def.offset == offset && def.block == block) return true;
 		for (int i = 0; i < targets.size(); i++) {
 			SwitchEntry target = targets.get(i);
@@ -162,8 +137,27 @@ public final class SwitchSegment extends Segment {
 	}
 
 	@Override
-	public String toString() { return toString(IOUtil.getSharedCharBuf().append(Opcodes.showOpcode(code)).append(' '), 0).toString(); }
+	public Segment move(AbstractCodeWriter to, int blockMoved, boolean clone) {
+		if (clone) {
+			var copy = new SwitchSegment(code);
+			for (int i = 0; i < targets.size(); i++) {
+				SwitchEntry entry = targets.get(i);
+				copy.targets.add(new SwitchEntry(entry.val, copy.copyLabel(entry.pos, to, blockMoved, true)));
+			}
+			copy.def = copyLabel(def, to, blockMoved, true);
+			return copy;
+		}
 
+		for (int i = 0; i < targets.size(); i++) {
+			copyLabel(targets.get(i).pos, to, blockMoved, false);
+		}
+		copyLabel(def, to, blockMoved, false);
+
+		return this;
+	}
+
+	@Override
+	public String toString() { return toString(IOUtil.getSharedCharBuf().append(Opcodes.showOpcode(code)).append(' '), 0).toString(); }
 	public CharList toString(CharList sb, int prefix) {
 		sb.append("{");
 		SimpleList<Object> a = new SimpleList<>();

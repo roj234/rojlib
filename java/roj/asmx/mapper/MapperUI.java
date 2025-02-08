@@ -12,7 +12,7 @@ import roj.collect.MyHashMap;
 import roj.collect.SimpleList;
 import roj.concurrent.TaskPool;
 import roj.io.IOUtil;
-import roj.misc.mapping.MappingUI;
+import roj.plugins.ci.mapping.MappingUI;
 import roj.text.CharList;
 import roj.text.LineReader;
 import roj.text.TextReader;

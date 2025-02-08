@@ -10,13 +10,12 @@ import java.security.Security;
  * @author Roj234
  * @since 2023/4/29 0029 3:44
  */
-public class ILCrypto extends Provider {
+public final class ILCrypto extends Provider {
 	public static final String PROVIDER_NAME = "IL";
 	public static Provider INSTANCE;
 
-
 	public ILCrypto() {
-		super(PROVIDER_NAME, 1.2, "RojLib Security Provider v1.2");
+		super(PROVIDER_NAME, 1.3, "RojLib Security Provider v1.3");
 		setup();
 		INSTANCE = this;
 	}

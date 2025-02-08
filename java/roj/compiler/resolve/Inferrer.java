@@ -7,6 +7,7 @@ import roj.asm.tree.MethodNode;
 import roj.asm.tree.attr.Attribute;
 import roj.asm.type.*;
 import roj.collect.MyHashMap;
+import roj.compiler.api.Types;
 import roj.compiler.asm.Asterisk;
 import roj.compiler.ast.expr.Lambda;
 import roj.compiler.context.GlobalContext;
@@ -157,7 +158,7 @@ public final class Inferrer {
 
 			if (inSize == vararg) {
 				if (vararg == 0)
-					distance -= cast(componentType, LocalContext.OBJECT_TYPE).distance;
+					distance -= cast(componentType, Types.OBJECT_TYPE).distance;
 				break checkSpecial;
 			}
 
@@ -350,7 +351,7 @@ public final class Inferrer {
 				if (exact == null) throw new IllegalArgumentException("missing type param "+tt);
 
 				if (exact.genericType() == IType.ASTERISK_TYPE) return exact;
-				if (exact.genericType() == IType.ANY_TYPE) return LocalContext.OBJECT_TYPE;//Asterisk.anyType;
+				if (exact.genericType() == IType.ANY_TYPE) return Types.OBJECT_TYPE;//Asterisk.anyType;
 
 				if (tt.array() > 0) {
 					exact = exact.clone();

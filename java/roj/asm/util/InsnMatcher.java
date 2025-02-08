@@ -56,9 +56,9 @@ public class InsnMatcher {
 						if (code >= ISTORE_0) code = (byte) (((code - ISTORE_0) / 4) + ISTORE);
 					}
 					if (map.containsKey(id)) {
-						XInsnNodeView.InsnMod replace = node.replace();
-						replace.list.vars((byte) code, map.get(id));
-						replace.commit();
+						var replaceList = new XInsnList();
+						replaceList.vars((byte) code, map.get(id));
+						node.replace(replaceList, false);
 					}
 					break;
 			}

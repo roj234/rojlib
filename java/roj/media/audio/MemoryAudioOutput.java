@@ -1,6 +1,7 @@
 package roj.media.audio;
 
 import roj.util.ByteList;
+import roj.util.DynByteBuf;
 
 import javax.sound.sampled.AudioFormat;
 
@@ -9,7 +10,10 @@ import javax.sound.sampled.AudioFormat;
  */
 public class MemoryAudioOutput implements AudioOutput {
 	public AudioFormat format;
-	public ByteList buf = new ByteList();
+	public DynByteBuf buf;
+	public MemoryAudioOutput() {this.buf = new ByteList();}
+	public MemoryAudioOutput(DynByteBuf buf) {this.buf = buf;}
+
 	@Override
 	public void init(AudioFormat h, int buffer) {
 		this.format = h;

@@ -5,7 +5,12 @@ import roj.util.BitBuffer;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
 
+import javax.crypto.ShortBufferException;
 import java.nio.charset.StandardCharsets;
+import java.security.InvalidAlgorithmParameterException;
+import java.security.InvalidKeyException;
+import java.security.SecureRandom;
+import java.security.spec.AlgorithmParameterSpec;
 import java.util.Arrays;
 import java.util.Random;
 
@@ -14,7 +19,7 @@ import java.util.Random;
  * @author Roj234
  * @since 2022/12/26 0026 14:06
  */
-public class ConvolutionalECC {
+public class ConvolutionalECC extends RCipherSpi {
 	public static void main(String[] args) throws ParseException {
 		ConvolutionalECC cecc = new ConvolutionalECC(24,25);
 		var rsecc = new ReedSolomonECC(255-32, 4);
@@ -29,7 +34,7 @@ public class ConvolutionalECC {
 		System.out.print("| rsecc="+test.wIndex());
 
 		ByteList tmp = new ByteList();
-		cecc.begin(tmp);
+		cecc.init(tmp);
 		cecc.encode(test);
 		cecc.encodeFinish();
 		System.out.println("| cecc="+tmp.wIndex());
@@ -45,7 +50,7 @@ public class ConvolutionalECC {
 		System.out.println();
 
 		test.clear();
-		cecc.begin(test);
+		cecc.init(test);
 		cecc.decode(tmp);
 		System.out.println(test.dump());
 		int i = rsecc.errorCorrection(test);
@@ -92,8 +97,31 @@ public class ConvolutionalECC {
 
 	private BitBuffer ob = new BitBuffer();
 
-	public void begin(DynByteBuf output) {ob.init(output);buffer = 0;rnd.setSeed(42L);}
-	public int getEncodedSize(int lengthBit) {return lengthBit*outBits;}
+	//region RCipherSpi
+	private boolean _cipherEncrypt;
+	@Override public int engineGetOutputSize(int in) {return _cipherEncrypt ? in*8 / inBits * outBits : in / outBits * inBits;}
+
+	@Override
+	public void init(int mode, byte[] key, AlgorithmParameterSpec par, SecureRandom random) throws InvalidAlgorithmParameterException, InvalidKeyException {
+		_cipherEncrypt = mode == ENCRYPT_MODE;
+		buffer = 0;
+		rnd = random == null ? new Random(42L) : random;
+		assert key == null || key.length == 0;
+	}
+
+	@Override
+	public void crypt(DynByteBuf in, DynByteBuf out) throws ShortBufferException {
+		if (ob.list != out) ob.init(out);
+
+		if (engineGetOutputSize(in.readableBytes()) > out.writableBytes()) throw new ShortBufferException();
+
+		if (_cipherEncrypt) encode(in);
+		else decode(in);
+	}
+	@Override protected void cryptFinal1(DynByteBuf in, DynByteBuf out) {if(_cipherEncrypt) encodeFinish();}
+	//endregion
+
+	public void init(DynByteBuf output) {ob.init(output);buffer = 0;rnd.setSeed(42L);}
 	public void encode(DynByteBuf data) {
 		var ib = new BitBuffer(data);
 		int history = buffer;
@@ -106,24 +134,6 @@ public class ConvolutionalECC {
 
 		buffer = history;
 	}
-
-	private int encodeSymbol(int i) {
-		var sh = rnd.nextInt(outBits);
-		var xor = rnd.nextInt(1 << outBits);
-
-		i ^= xor;
-		i = (i >>> sh) | (i << (outBits-sh));
-		return i & outMask;
-	}
-	private int decodeSymbol(int i) {
-		var sh = rnd.nextInt(outBits);
-		var xor = rnd.nextInt(1 << outBits);
-
-		i = (i << sh) | (i >>> (outBits-sh));
-		i ^= xor;
-		return i & outMask;
-	}
-
 	public void encodeFinish() {
 		int buf = buffer;
 		do {
@@ -133,6 +143,7 @@ public class ConvolutionalECC {
 
 		buffer = 0;
 		ob.endBitWrite();
+		ob.list = null;
 	}
 
 	private int symbolCount, symbolError;
@@ -174,5 +185,22 @@ public class ConvolutionalECC {
 		}
 
 		buffer = hbPos;
+	}
+
+	private int encodeSymbol(int i) {
+		var sh = rnd.nextInt(outBits);
+		var xor = rnd.nextInt(1 << outBits);
+
+		i ^= xor;
+		i = (i >>> sh) | (i << (outBits-sh));
+		return i & outMask;
+	}
+	private int decodeSymbol(int i) {
+		var sh = rnd.nextInt(outBits);
+		var xor = rnd.nextInt(1 << outBits);
+
+		i = (i << sh) | (i >>> (outBits-sh));
+		i ^= xor;
+		return i & outMask;
 	}
 }

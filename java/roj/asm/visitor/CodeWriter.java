@@ -91,26 +91,8 @@ public class CodeWriter extends AbstractCodeWriter {
 		bw.preInsert(offset, length);
 		bw.put(offset, buf);
 
-		if (!segments.isEmpty()) {
-			((FirstSegment) segments.get(0)).length += length;
-		}
-
 		for (Label label : labels) {
 			if (label.block == 0) label.offset += length;
-			if (label.isRaw()) throw new IllegalStateException("raw label "+label+" is not supported");
-		}
-	}
-	public void insertSegments(int off, List<Segment> segments1) {
-		if (state != 1) throw new IllegalStateException();
-
-		for (int i = off; i < segments.size(); i++) {
-			segments.get(i).move(this, this, segments1.size(), XInsnList.REP_SHARED_NOUPDATE);
-		}
-
-		segments.addAll(off, segments1);
-
-		for (Label label : labels) {
-			if (label.block >= off) label.block += segments1.size();
 			if (label.isRaw()) throw new IllegalStateException("raw label "+label+" is not supported");
 		}
 	}
@@ -514,28 +496,6 @@ public class CodeWriter extends AbstractCodeWriter {
 		return lbl;
 	}
 
-	public Label __tryReuseLabelHere() {
-		for (Label label : labels) {
-			if (label.block == segments.size()-1 && label.offset == codeOb.wIndex())
-				return label;
-		}
-		return label();
-	}
-
-	public void label(Label x) {
-		if (!x.isUnset()) throw new IllegalStateException("标签的状态不是<unset>: "+x);
-
-		if (segments.isEmpty()) {
-			x.setFirst(bw.wIndex() - tmpLenOffset);
-			return;
-		}
-
-		x.block = (short) (segments.size()-1);
-		x.offset = (char) codeOb.wIndex();
-		x.value = (char) (x.offset + offset);
-		labels.add(x);
-	}
-
 	/**
 	 * 获取不稳定的代码位置，仅用作参考.
 	 * Segment的大小可能因之后的修改而在序列化之前改变
@@ -560,7 +520,7 @@ public class CodeWriter extends AbstractCodeWriter {
 		offset += c.length();
 
 		StaticSegment ss;
-		if (c instanceof StaticSegment && !((StaticSegment) c).compacted()) ss = (StaticSegment) c;
+		if (c instanceof StaticSegment x && !x.isReadonly()) ss = x;
 		else {
 			ss = new StaticSegment();
 			segments.add(ss);
@@ -571,7 +531,8 @@ public class CodeWriter extends AbstractCodeWriter {
 	protected final void _addOffset(int c) {offset += c;}
 	protected final void _addFirst() {
 		segments = new SimpleList<>(3);
-		segments.add(new FirstSegment(offset = bw.wIndex()-tmpLenOffset));
+		offset = bw.wIndex()-tmpLenOffset;
+		segments.add(new FirstSegment(bw, tmpLenOffset));
 	}
 
 	public boolean isContinuousControlFlow() {

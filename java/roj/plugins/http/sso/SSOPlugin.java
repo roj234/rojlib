@@ -262,6 +262,7 @@ public class SSOPlugin extends Plugin {
 			if (is_token) {
 				if (verifyToken(req, pass, 'R') == null)
 					return "{\"ok\":false,\"msg\":\"登录已过期，请重新输入密码\"}";
+				getLogger().info("用户{}在{}使用{}登录成功", user, req.proxyRemoteAddress(), "refresh_token");
 				return loginSuccess(o, u, req, true);
 			}
 
@@ -275,15 +276,21 @@ public class SSOPlugin extends Plugin {
 			}
 			if (++u.loginAttempt >= 5) return "{\"ok\":false,\"msg\":\"你的账户已被锁定\"}";
 
-			if (pass.equals(u.tempOtp) || o.hasher.compare(u.passHash, getUTFBytes(pass)))
+			if (pass.equals(u.tempOtp) || o.hasher.compare(u.passHash, getUTFBytes(pass))) {
+				getLogger().info("用户{}在{}使用{}登录成功", user, req.proxyRemoteAddress(), "password");
 				return loginSuccess(o, u, req, false);
+			}
 
 			if (u.totpKey != null) {
 				String totp = TOTP.makeTOTP(o.hmac, u.totpKey, time);
-				if (totp.equals(pass)) return loginSuccess(o, u, req, false);
+				if (totp.equals(pass)) {
+					getLogger().info("用户{}在{}使用{}登录成功", user, req.proxyRemoteAddress(), "totp");
+					return loginSuccess(o, u, req, false);
+				}
 			}
 
 			users.setDirty(u, "loginAttempt");
+			getLogger().info("用户{}在{}登录失败", user, req.proxyRemoteAddress());
 		}
 
 		return "{\"ok\":false,\"msg\":\"用户名或密码错误\"}";

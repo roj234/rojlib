@@ -628,7 +628,7 @@ public final class ExprParser {
 
 					case -10://字符串格式化 FMT. ""
 						if (cur instanceof DotGet dg && dg.maybeStringTemplate()) {
-							//if (waitDot) ue(wr, w.val(), ".");
+							//if (waitDot) ue(wr, w.val(), "."); // 使得.可加可不加
 							cur = new StringFormat(dg, w.val());
 							break endValueConv;
 						}

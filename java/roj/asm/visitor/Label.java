@@ -3,32 +3,31 @@ package roj.asm.visitor;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.Arrays;
+import java.util.List;
 
 /**
  * @author Roj234
  * @since 2022/11/17 0017 12:53
  */
-public class Label implements Comparable<Label>, ReadonlyLabel {
-	public static final short LABEL_UNSET = -2;
-
-	protected short block;
-	protected char offset;
+public class Label implements Comparable<Label> {
+	short block;
+	char offset;
 	char value;
 
 	public static Label atZero() {return new Label(0);}
 	public Label() { block = -1; }
 	public Label(int raw) { setRaw(raw); }
-	public Label(ReadonlyLabel label) { set(label); }
+	public Label(Label label) { set(label); }
 
-	public final void set(ReadonlyLabel label) {
-		block = (short) label.getBlock();
-		offset = (char) label.getOffset();
-		value = (char) label.getValue();
+	public void set(Label label) {
+		block = label.block;
+		offset = label.offset;
+		value = label.value;
 	}
 
-	final boolean isUnset() {return block == -1 && offset == 0;}
-	final boolean isRaw() {return block == -1 && offset != 0;}
-	public final void clear() {
+	public final boolean isUnset() {return block == -1 && offset == 0;}
+	public final boolean isRaw() {return block == -1 && offset != 0;}
+	public void clear() {
 		block = -1;
 		value = offset = 0;
 	}
@@ -40,16 +39,20 @@ public class Label implements Comparable<Label>, ReadonlyLabel {
 	}
 	// negative relative offset (in _rel)
 	final void setRaw(int off) {
-		assert off > 0;
+		assert off >= 0;
 		block = -1;
 		offset = (char) off;
-		value = 0;
+		value = (char) off;
+	}
+
+	public void __move(int size) {
+		block += size;
 	}
 
 	public boolean isValid() { return block >= 0; }
 	public int getBlock() { return block; }
 	public int getOffset() { return block < 0 ? -1 : offset; }
-	public int getValue() { return block < -1 ? -1 : value; }
+	public int getValue() { return value; }
 
 	private static int findBlock(int[] lengths, int val, int len) {
 		int i = Arrays.binarySearch(lengths, 0, len, val);
@@ -58,7 +61,7 @@ public class Label implements Comparable<Label>, ReadonlyLabel {
 		else return -i - 2;
 	}
 
-	boolean update(int[] sum, int len) {
+	boolean update(int[] sum, int len, List<Segment> segments) {
 		int pos = value;
 		if (block < 0) {
 			if (isUnset()) throw new IllegalStateException("无法序列化未初始化的标签");
@@ -102,7 +105,7 @@ public class Label implements Comparable<Label>, ReadonlyLabel {
 
 	@Override
 	public int hashCode() {
-		assert isValid();
+		assert isValid() : this+" not valid";
 		return (block << 16) ^ offset;
 	}
 

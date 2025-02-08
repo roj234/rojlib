@@ -35,15 +35,11 @@ final class LdcSegment extends Segment {
 		return code != prevCode;
 	}
 
-	@Override
-	public int length() { return code-0x10; } // LDC=0x12, LDC_W=0x13
-	@Override
-	public Segment move(AbstractCodeWriter from, AbstractCodeWriter to, int blockMoved, int mode) { return mode==XInsnList.REP_CLONE ?new LdcSegment(code,c.clone()):this; }
-	@Override
-	public String toString() { return Opcodes.showOpcode(code)+"("+c.getEasyReadValue()+")"; }
+	@Override public int length() { return code-0x10; } // LDC=0x12, LDC_W=0x13
+	@Override public Segment move(AbstractCodeWriter to, int blockMoved, boolean clone) { return clone?new LdcSegment(code,c.clone()):this; }
+	@Override public String toString() { return Opcodes.showOpcode(code)+"("+c.getEasyReadValue()+")"; }
 
-	@Override
-	public boolean equals(Object o) {
+	@Override public boolean equals(Object o) {
 		if (this == o) return true;
 		if (o == null || getClass() != o.getClass()) return false;
 
@@ -51,7 +47,5 @@ final class LdcSegment extends Segment {
 
 		return c.equals(segment.c);
 	}
-
-	@Override
-	public int hashCode() { return c.hashCode(); }
+	@Override public int hashCode() { return c.hashCode(); }
 }

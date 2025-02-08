@@ -20,6 +20,7 @@ import roj.collect.*;
 import roj.compiler.JavaLexer;
 import roj.compiler.LavaFeatures;
 import roj.compiler.api.MethodDefault;
+import roj.compiler.api.Types;
 import roj.compiler.api.ValueBased;
 import roj.compiler.asm.AnnotationPrimer;
 import roj.compiler.asm.Asterisk;
@@ -56,8 +57,6 @@ import java.util.function.Function;
  * 6. 权限限制，以及clinit等的引用限制
  */
 public class LocalContext {
-	public static final Type OBJECT_TYPE = new Type("java/lang/Object");
-
 	public final GlobalContext classes;
 
 	public final ExprParser ep;
@@ -665,7 +664,7 @@ public class LocalContext {
 	}
 
 	public void addException(IType type) {
-		var cast = caster.checkCast(type, CompileUnit.RUNTIME_EXCEPTION);
+		var cast = caster.checkCast(type, Types.RUNTIME_EXCEPTION);
 		if (cast.type >= 0) return;
 		if (bp.addException(type)) return;
 
@@ -811,7 +810,7 @@ public class LocalContext {
 		// 双方都是数字
 		if ((capa&7) != 0 && (capb&7) != 0) return new Type("java/lang/Number");
 		// 没有任何一方是对象 (boolean | void)
-		if ((capa|capb) < 8) return OBJECT_TYPE;
+		if ((capa|capb) < 8) return Types.OBJECT_TYPE;
 
 		if (a.isPrimitive()) a = TypeCast.getWrapper(a);
 		if (b.isPrimitive()) b = TypeCast.getWrapper(b);

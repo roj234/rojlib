@@ -7,7 +7,12 @@ import roj.ui.EasyProgressBar;
 import roj.util.DynByteBuf;
 import sun.misc.Unsafe;
 
+import javax.crypto.ShortBufferException;
 import java.io.IOException;
+import java.security.InvalidAlgorithmParameterException;
+import java.security.InvalidKeyException;
+import java.security.SecureRandom;
+import java.security.spec.AlgorithmParameterSpec;
 
 import static roj.reflect.ReflectionUtils.u;
 
@@ -16,116 +21,7 @@ import static roj.reflect.ReflectionUtils.u;
  * @author Roj234
  * @since 2024/12/19 0019 14:02
  */
-public final class ReedSolomonECC {
-	public void generateInterleavedCode(Source in, Source out, int stride, @Nullable EasyProgressBar bar) throws IOException {
-		var codeword = dataSize();
-		var matrix = new byte[stride][chunkSize()];
-		var buffer = new byte[stride * Math.max(codeword, eccSize())];
-
-		while (true) {
-			int r = in.read(buffer, 0, stride * codeword);
-			if (bar != null) bar.increment(r);
-			if (r < stride * codeword) {
-				if (r < 0) break;
-				assert in.read() < 0 : "excepting EOF: "+in.getClass();
-
-				stride = (r + codeword - 1) / codeword;
-				for (; r < stride * codeword; r++) buffer[r] = 0;
-			}
-
-			int i = 0;
-			for (int j = 0; j < codeword; j++) {
-				for (int k = 0; k < stride; k++) {
-					matrix[k][j] = buffer[i++];
-				}
-			}
-
-			for (int j = 0; j < stride; j++) {
-				generateCode(matrix[j]);
-			}
-
-			i = 0;
-			for (int j = codeword; j < chunkSize(); j++) {
-				for (int k = 0; k < stride; k++) {
-					buffer[i++] = matrix[k][j];
-				}
-			}
-			out.write(buffer, 0, i);
-		}
-	}
-
-	public int interleavedErrorCorrection(Source file, long dataSize, int stride, @Nullable EasyProgressBar bar) throws IOException {
-		var codeword = dataSize();
-		var matrix = new byte[stride][chunkSize()];
-		var buffer = new byte[stride * Math.max(codeword, eccSize())];
-
-		var eccOffset = dataSize;
-		var errorFixed = 0;
-
-		while (true) {
-			int r = stride * codeword;
-			if (r > dataSize - file.position()) {
-				r = (int) (dataSize - file.position());
-				if (r == 0) break;
-
-				stride = (r + codeword - 1) / codeword;
-			}
-
-			file.readFully(buffer, 0, r);
-			if (bar != null) bar.increment(r);
-			for (int i = stride * codeword - 1; i >= r; i--) buffer[i] = 0;
-
-			int i = 0;
-			for (int j = 0; j < codeword; j++) {
-				for (int k = 0; k < stride; k++) {
-					matrix[k][j] = buffer[i++];
-				}
-			}
-
-			var pos = file.position();
-
-			file.seek(eccOffset);
-			r = stride * eccSize();
-			file.readFully(buffer, 0, r);
-			eccOffset += r;
-
-			i = 0;
-			for (int j = codeword; j < chunkSize(); j++) {
-				for (int k = 0; k < stride; k++) {
-					matrix[k][j] = buffer[i++];
-				}
-			}
-
-			boolean hasError = false;
-			for (int j = 0; j < stride; j++) {
-				try {
-					int found = errorCorrection(matrix[j]);
-					if (found != 0) hasError = true;
-					errorFixed += found;
-				} catch (Exception e) {
-					errorFixed |= Integer.MIN_VALUE;
-					System.out.println("unrecoverable error at ["+j+"/"+ stride +"] of "+(pos + stride * (j - codeword))+": "+e.getMessage());
-				}
-			}
-
-			if (hasError) {
-				i = 0;
-				for (int j = 0; j < codeword; j++) {
-					for (int k = 0; k < stride; k++) {
-						buffer[i++] = matrix[k][j];
-					}
-				}
-
-				file.seek(pos - i);
-				file.write(buffer, 0, i);
-			} else {
-				file.seek(pos);
-			}
-		}
-
-		return errorFixed;
-	}
-
+public final class ReedSolomonECC extends RCipherSpi {
 	private int _eccLength;
 	private final byte[] buf, gen, tmp;
 	private final int codeBytes;
@@ -141,6 +37,36 @@ public final class ReedSolomonECC {
 	public int dataSize() {return codeBytes;}
 	public int eccSize() {return buf.length - codeBytes;}
 	public int maxError() {return eccSize()/2;}
+
+	//region RCipherSpi
+	private boolean _cipherEncrypt;
+	// 允许使用FeedbackCipher的ECB模式进行填充。
+	@Override protected boolean isBareBlockCipher() {return true;}
+	@Override public int engineGetBlockSize() { return dataSize(); }
+	@Override public int engineGetOutputSize(int in) {return _cipherEncrypt ? in / dataSize() * chunkSize() : in / chunkSize() * dataSize();}
+
+	@Override
+	public void init(int mode, byte[] key, AlgorithmParameterSpec par, SecureRandom random) throws InvalidAlgorithmParameterException, InvalidKeyException {
+		_cipherEncrypt = mode == ENCRYPT_MODE;
+		assert key == null || key.length == 0;
+	}
+
+	@Override
+	public void crypt(DynByteBuf in, DynByteBuf out) throws ShortBufferException {
+		if (engineGetOutputSize(in.readableBytes()) > out.writableBytes()) throw new ShortBufferException();
+
+		while (in.readableBytes() >= dataSize()) cryptOneBlock(in, out);
+	}
+	@Override
+	public void cryptOneBlock(DynByteBuf in, DynByteBuf out) {
+		if (_cipherEncrypt) generateCode(in, out.put(in, dataSize()));
+		else {
+			errorCorrection(in);
+			out.put(in, dataSize());
+			in.rIndex += chunkSize();
+		}
+	}
+	//endregion
 
 	public void generateCode(DynByteBuf in, DynByteBuf out) {
 		in.readFully(buf, 0, codeBytes);
@@ -266,6 +192,124 @@ public final class ReedSolomonECC {
 		return new byte[][] {sigma, omega};
 	}
 
+	//region 交错和反交错
+	/**
+	 * 通过交错，使连续错误分散，进而使得原本只能纠正n个错误的RS码能纠正(n * stride)个连续错误
+	 * @param in
+	 * @param out
+	 * @param stride
+	 * @param bar
+	 * @throws IOException
+	 */
+	public void generateInterleavedCode(Source in, Source out, int stride, @Nullable EasyProgressBar bar) throws IOException {
+		var codeword = dataSize();
+		var matrix = new byte[stride][chunkSize()];
+		var buffer = new byte[stride * Math.max(codeword, eccSize())];
+
+		while (true) {
+			int r = in.read(buffer, 0, stride * codeword);
+			if (bar != null) bar.increment(r);
+			if (r < stride * codeword) {
+				if (r < 0) break;
+				assert in.read() < 0 : "excepting EOF: "+in.getClass();
+
+				stride = (r + codeword - 1) / codeword;
+				for (; r < stride * codeword; r++) buffer[r] = 0;
+			}
+
+			int i = 0;
+			for (int j = 0; j < codeword; j++) {
+				for (int k = 0; k < stride; k++) {
+					matrix[k][j] = buffer[i++];
+				}
+			}
+
+			for (int j = 0; j < stride; j++) {
+				generateCode(matrix[j]);
+			}
+
+			i = 0;
+			for (int j = codeword; j < chunkSize(); j++) {
+				for (int k = 0; k < stride; k++) {
+					buffer[i++] = matrix[k][j];
+				}
+			}
+			out.write(buffer, 0, i);
+		}
+	}
+
+	public int interleavedErrorCorrection(Source file, long dataSize, int stride, @Nullable EasyProgressBar bar) throws IOException {
+		var codeword = dataSize();
+		var matrix = new byte[stride][chunkSize()];
+		var buffer = new byte[stride * Math.max(codeword, eccSize())];
+
+		var eccOffset = dataSize;
+		var errorFixed = 0;
+
+		while (true) {
+			int r = stride * codeword;
+			if (r > dataSize - file.position()) {
+				r = (int) (dataSize - file.position());
+				if (r == 0) break;
+
+				stride = (r + codeword - 1) / codeword;
+			}
+
+			file.readFully(buffer, 0, r);
+			if (bar != null) bar.increment(r);
+			for (int i = stride * codeword - 1; i >= r; i--) buffer[i] = 0;
+
+			int i = 0;
+			for (int j = 0; j < codeword; j++) {
+				for (int k = 0; k < stride; k++) {
+					matrix[k][j] = buffer[i++];
+				}
+			}
+
+			var pos = file.position();
+
+			file.seek(eccOffset);
+			r = stride * eccSize();
+			file.readFully(buffer, 0, r);
+			eccOffset += r;
+
+			i = 0;
+			for (int j = codeword; j < chunkSize(); j++) {
+				for (int k = 0; k < stride; k++) {
+					matrix[k][j] = buffer[i++];
+				}
+			}
+
+			boolean hasError = false;
+			for (int j = 0; j < stride; j++) {
+				try {
+					int found = errorCorrection(matrix[j]);
+					if (found != 0) hasError = true;
+					errorFixed += found;
+				} catch (Exception e) {
+					errorFixed |= Integer.MIN_VALUE;
+					System.out.println("unrecoverable error at ["+j+"/"+ stride +"] of "+(pos + stride * (j - codeword))+": "+e.getMessage());
+				}
+			}
+
+			if (hasError) {
+				i = 0;
+				for (int j = 0; j < codeword; j++) {
+					for (int k = 0; k < stride; k++) {
+						buffer[i++] = matrix[k][j];
+					}
+				}
+
+				file.seek(pos - i);
+				file.write(buffer, 0, i);
+			} else {
+				file.seek(pos);
+			}
+		}
+
+		return errorFixed;
+	}
+	//endregion
 	//region GF(p = 283, n = 8)
 	private static final byte[] EXP_TABLE = new byte[256], LOG_TABLE = new byte[256];
 	static {

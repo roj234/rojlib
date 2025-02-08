@@ -452,7 +452,7 @@ public final class JavaLexer extends Tokenizer {
 	public void setCw(MethodWriter cw) {
 		if (!stack.containsValue(cw)) {
 			stack.putByValue(stack.size(), cw);
-			if (lines != null) lines.add(cw.label(), LN);
+			if (lines != null) lines.add(cw.__attrLabel(), LN);
 		} else {
 			int id = stack.getInt(cw);
 			while (++id < stack.size()) stack.remove(id);
@@ -482,7 +482,7 @@ public final class JavaLexer extends Tokenizer {
 		super.afterWord();
 		if (line != LN) {
 			if (lines != null && (labelGen.bci() != lines.lastBci())) {
-				lines.add(labelGen.label(), LN);
+				lines.add(labelGen.__attrLabel(), LN);
 			}
 		}
 	}

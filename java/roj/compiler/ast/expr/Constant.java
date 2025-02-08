@@ -7,6 +7,7 @@ import roj.asm.tree.anno.AnnVal;
 import roj.asm.type.Generic;
 import roj.asm.type.IType;
 import roj.asm.type.Type;
+import roj.compiler.api.Types;
 import roj.compiler.asm.MethodWriter;
 import roj.compiler.context.LocalContext;
 import roj.compiler.resolve.ResolveException;
@@ -46,10 +47,9 @@ public final class Constant extends ExprNode {
 	@Override
 	public Object constVal() { return c; }
 
-	public static final Type STRING = new Type("java/lang/String");
 	public static Constant classRef(Type type) { return new Constant(new Generic("java/lang/Class", Collections.singletonList(type)), type); }
 	public static Constant valueOf(boolean v) { return new Constant(Type.std(Type.BOOLEAN), v); }
-	public static Constant valueOf(String v) { return new Constant(STRING, v); }
+	public static Constant valueOf(String v) { return new Constant(Types.STRING_TYPE, v); }
 	public static Constant valueOf(int v) {
 		IType type;
 		/*if ((short) v == v) {

@@ -967,7 +967,7 @@ public class NiximSystemV2 implements ITransformer {
 				code = data.methods.get(clinit_id).parsedAttr(data.cp, Attribute.Code);
 				XInsnList insn = code.instructions;
 				last = insn.getPcMap().last();
-				insn.replaceRange(last, insn.bci(), injectClInit.instructions, XInsnList.REP_CLONE);
+				insn.replaceRange(last, insn.bci(), injectClInit.instructions, true);
 			} else {
 				MethodNode mn = new MethodNode(ACC_PUBLIC | ACC_STATIC, data.name, "<clinit>", "()V");
 				mn.putAttr(code = new XAttrCode());
@@ -1060,7 +1060,7 @@ public class NiximSystemV2 implements ITransformer {
 						Desc d = node.descOrNull();
 						if (d != null && d.owner != null) {
 							if (d.name.equals("<init>") && (d.owner.equals(data.parent) || d.owner.equals(data.name))) {
-								endMy = node.end1();
+								endMy = node.end();
 								break block1;
 							}
 						}
@@ -1076,18 +1076,18 @@ public class NiximSystemV2 implements ITransformer {
 				List<Label> jumps = s.headJump();
 				// noinspection all
 				if (endMy.getValue() == 0 && jumps.size() == 2 && jumps.get(1).getValue() == out.bci()) {
-					out.replaceRange(jumps.get(0), jumps.get(1), replace, XInsnList.REP_SHARED_NOUPDATE);
+					out.replaceRange(jumps.get(0), jumps.get(1), replace, false);
 				} else {
 					replace.jump(mnCode.instructions.labelAt(endMy));
 
 					for (int i = jumps.size()-1; i >= 0; i--) {
 						Label end = jumps.get(i--);
 						Label start = jumps.get(i--);
-						out.replaceRange(start, end, replace, XInsnList.REP_SHARED_NOUPDATE);
+						out.replaceRange(start, end, replace, false);
 					}
 				}
 
-				mnCode.instructions.replaceRange(Label.atZero(),endMy,out,XInsnList.REP_SHARED);
+				mnCode.instructions.replaceRange(Label.atZero(),endMy,out,false);
 
 				mnCode.recomputeFrames(XAttrCode.COMPUTE_FRAMES, input);
 				mnCode.stackSize = (char) Math.max(mnCode.stackSize, nxCode.stackSize);
@@ -1142,7 +1142,7 @@ public class NiximSystemV2 implements ITransformer {
 
 									XInsnList list = new XInsnList();
 									list.one(ALOAD_0);
-									node.insertBefore(list, XInsnList.REP_CLONE);
+									node.insertBefore(list, false);
 
 									break block;
 								}
@@ -1207,39 +1207,39 @@ public class NiximSystemV2 implements ITransformer {
 						case ICONST_M1, ICONST_0:
 						case ICONST_1, ICONST_2, ICONST_3, ICONST_4, ICONST_5:
 							if (type == Constant.INT && doLdcMatchBytecode(node, ICONST_0, find, occurrences, ordinal)) {
-								node.replace(replaceTo, XInsnList.REP_SHARED);
+								node.replace(replaceTo, false);
 								used++;
 							}
 						break;
 						case LCONST_0, LCONST_1:
 							if (type == Constant.LONG && doLdcMatchBytecode(node, LCONST_0, find, occurrences, ordinal)) {
-								node.replace(replaceTo, XInsnList.REP_SHARED);
+								node.replace(replaceTo, false);
 								used++;
 							}
 						break;
 						case FCONST_0, FCONST_1, FCONST_2:
 							if (type == Constant.FLOAT && doLdcMatchBytecode(node, FCONST_0, find, occurrences, ordinal)) {
-								node.replace(replaceTo, XInsnList.REP_SHARED);
+								node.replace(replaceTo, false);
 								used++;
 							}
 						break;
 						case DCONST_0, DCONST_1:
 							if (type == Constant.DOUBLE && doLdcMatchBytecode(node, DCONST_0, find, occurrences, ordinal)) {
-								node.replace(replaceTo, XInsnList.REP_SHARED);
+								node.replace(replaceTo, false);
 								used++;
 							}
 						break;
 						case BIPUSH, SIPUSH:
 							if (type == Constant.INT && find.equals(String.valueOf(node.getNumberExact())) &&
 								(occurrences == null || occurrences.contains(++ordinal.value))) {
-								node.replace(replaceTo, XInsnList.REP_SHARED);
+								node.replace(replaceTo, false);
 								used++;
 							}
 						break;
 						case LDC, LDC_W, LDC2_W:
 							if (type == node.constant().type() && find.equals(node.constant().getEasyCompareValue()) &&
 								(occurrences == null || occurrences.contains(++ordinal.value))) {
-								node.replace(replaceTo, XInsnList.REP_SHARED);
+								node.replace(replaceTo, false);
 								used++;
 							}
 						break;
@@ -1286,7 +1286,7 @@ public class NiximSystemV2 implements ITransformer {
 				for (XInsnNodeView node : hookInsn) {
 					Desc desc = node.descOrNull();
 					if (desc != null && desc.name.startsWith(SPEC_M_RETVAL)) {
-						node.replace(tmpList, XInsnList.REP_CLONE);
+						node.replace(tmpList, true);
 					}
 				}
 
@@ -1326,7 +1326,7 @@ public class NiximSystemV2 implements ITransformer {
 					begin = tmpList.bci();
 					if (begin == 0) break parBR;
 
-					insn.replaceRange(0,0,tmpList,XInsnList.REP_SHARED);
+					insn.replaceRange(0,0,tmpList,false);
 
 					tmpList.clear();
 					for (Int2IntMap.Entry entry : overwriteCheck.selfEntrySet()) {
@@ -1341,14 +1341,14 @@ public class NiximSystemV2 implements ITransformer {
 						}
 					}
 
-					hookInsn.replaceRange(0, 0, tmpList, XInsnList.REP_SHARED);
+					hookInsn.replaceRange(0, 0, tmpList, false);
 				} else {
 					begin = 0;
 				}
 
 				Label hookBegin = hookInsn.labelAt(0);
 				int end = insn.bci();
-				insn.replaceRange(end, end, hookInsn, XInsnList.REP_SHARED);
+				insn.replaceRange(end, end, hookInsn, false);
 
 				for (XInsnList.NodeIterator it = insn.since(begin); it.hasNext(); ) {
 					XInsnNodeView node = it.next();
@@ -1368,7 +1368,7 @@ public class NiximSystemV2 implements ITransformer {
 							end += tmpList.bci() - node.length();
 						}
 
-						node.replace(tmpList, XInsnList.REP_SHARED_NOUPDATE);
+						node.replace(tmpList, false);
 						it = insn.since(node.bci());
 					}
 				}
@@ -1438,12 +1438,12 @@ public class NiximSystemV2 implements ITransformer {
 							}
 						}
 
-						System.out.println("successfully match sequence "+toFind.copySlice((Label) node.pos(), itrA.unsharedPos()));
+						System.out.println("successfully match sequence "+toFind.copySlice(node.pos(), itrA.unsharedPos()));
 						// found
 						XInsnList toInj = nxCode.instructions.copy();
 						ctx.mapVarId(toInj);
 
-						toFind.replaceRange(toFind.labelAt(node.pos()), itrA.unsharedPos(), toInj, XInsnList.REP_SHARED);
+						toFind.replaceRange(toFind.labelAt(node.pos()), itrA.unsharedPos(), toInj, false);
 
 						mnCode.recomputeFrames(XAttrCode.COMPUTE_FRAMES, input);
 						mnCode.stackSize = (char) Math.max(mnCode.stackSize, nxCode.stackSize);

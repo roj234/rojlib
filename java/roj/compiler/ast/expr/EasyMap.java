@@ -4,6 +4,7 @@ import roj.asm.type.Generic;
 import roj.asm.type.IType;
 import roj.collect.Hasher;
 import roj.collect.MyHashMap;
+import roj.compiler.api.Types;
 import roj.compiler.asm.Asterisk;
 import roj.compiler.asm.MethodWriter;
 import roj.compiler.context.LocalContext;
@@ -76,8 +77,8 @@ final class EasyMap extends ExprNode {
 		for (Map.Entry<ExprNode, ExprNode> entry : map.entrySet()) {
 			cw.one(DUP);
 
-			entry.getKey().write(cw, lc.castTo(entry.getKey().type(), LocalContext.OBJECT_TYPE, 0));
-			entry.getValue().write(cw, lc.castTo(entry.getValue().type(), LocalContext.OBJECT_TYPE, 0));
+			entry.getKey().write(cw, lc.castTo(entry.getKey().type(), Types.OBJECT_TYPE, 0));
+			entry.getValue().write(cw, lc.castTo(entry.getValue().type(), Types.OBJECT_TYPE, 0));
 
 			cw.invoke(INVOKEVIRTUAL, "roj/collect/MyHashMap", "put", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;");
 			cw.one(POP);

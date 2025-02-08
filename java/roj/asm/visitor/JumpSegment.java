@@ -60,21 +60,14 @@ public sealed class JumpSegment extends Segment permits JumpSegmentAO {
 		return len != newLen;
 	}
 
-	@Override
-	public int length() { return Opcodes.showOpcode(code).endsWith("_W")?5:3; }
+	@Override public int length() { return Opcodes.showOpcode(code).endsWith("_W")?5:3; }
+	@Override public final boolean isTerminate() { return code == GOTO || code == GOTO_W; }
+	@Override public final boolean willJumpTo(int block, int offset) { return (offset == -1 || target.offset == offset) && target.getBlock() == block; }
 
-	@Override
-	public Segment move(AbstractCodeWriter from, AbstractCodeWriter to, int blockMoved, int mode) {
-		Label rx = copyLabel(target, from, to, blockMoved, mode);
-		return mode==XInsnList.REP_CLONE?new JumpSegment(code,rx):this;
+	@Override public Segment move(AbstractCodeWriter to, int blockMoved, boolean clone) {
+		Label rx = copyLabel(target, to, blockMoved, clone);
+		return clone?new JumpSegment(code,rx):this;
 	}
 
-	@Override
-	public final boolean isTerminate() { return code == GOTO || code == GOTO_W; }
-
-	@Override
-	public final boolean willJumpTo(int block, int offset) { return (offset == -1 || target.offset == offset) && target.block == block; }
-
-	@Override
-	public final String toString() { return Opcodes.showOpcode(code)+"("+target+")"; }
+	@Override public final String toString() { return Opcodes.showOpcode(code)+"("+target+")"; }
 }

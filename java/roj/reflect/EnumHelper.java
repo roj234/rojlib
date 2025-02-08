@@ -41,7 +41,8 @@ public final class EnumHelper extends CodeVisitor {
 	private XAttrCode staticInit;
 
 	private CstInt len;
-	private XInsnNodeView.InsnMod addPos;
+	private XInsnNodeView addPos;
+	private XInsnList addCode;
 	private int lvid;
 
 	public EnumHelper(ConstantData klass) {
@@ -81,7 +82,7 @@ public final class EnumHelper extends CodeVisitor {
 				for (XInsnNodeView node : list) {
 					lvid = Math.max(node.getVarId(), lvid);
 					if (node.opcode() == ANEWARRAY && node.type().equals(klass.name)) {
-						addPos = node.insertAfter();
+						addPos = node.unshared();
 
 						XInsnNodeView prev = node.prev();
 						switch (prev.opcode()) {
@@ -89,7 +90,7 @@ public final class EnumHelper extends CodeVisitor {
 								len = new CstInt(prev.getAsInt());
 								XInsnList rplTo = new XInsnList();
 								rplTo.ldc(len);
-								prev.replace(rplTo, XInsnList.REP_SHARED_NOUPDATE);
+								prev.replace(rplTo, false);
 							break;
 							case LDC: case LDC_W:
 								len = (CstInt) prev.constant();
@@ -157,7 +158,7 @@ public final class EnumHelper extends CodeVisitor {
 
 		int nid = (int)(mi>>>16)&0xFF, oid = (int)(mi>>>8)&0xFF, len = (int)mi&0xFF;
 
-		XInsnList l = addPos.list;
+		XInsnList l = addCode;
 		l.one(DUP);
 		l.ldc(this.len.value);
 		l.clazz(NEW, ref.name);
@@ -211,7 +212,7 @@ public final class EnumHelper extends CodeVisitor {
 	}
 
 	public ConstantData commit() {
-		addPos.commit();
+		addPos.insertAfter(addCode, false);
 		return ref;
 	}
 }

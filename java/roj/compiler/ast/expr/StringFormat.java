@@ -3,6 +3,7 @@ package roj.compiler.ast.expr;
 import roj.asm.tree.anno.AnnVal;
 import roj.asm.type.IType;
 import roj.asm.type.Type;
+import roj.compiler.api.Types;
 import roj.compiler.asm.MethodWriter;
 import roj.compiler.context.LocalContext;
 import roj.compiler.diagnostic.Kind;
@@ -18,7 +19,6 @@ import java.util.Arrays;
  * @since 2024/6/14 0014 8:05
  */
 class StringFormat extends ExprNode {
-	private static final Type STRING_TYPE = new Type("java/lang/String");
 	private final String template;
 	private VarNode prev;
 
@@ -30,7 +30,7 @@ class StringFormat extends ExprNode {
 	@Override
 	public String toString() {return prev+".\""+Tokenizer.addSlashes(template)+'"';}
 	@Override
-	public IType type() {return STRING_TYPE;}
+	public IType type() {return Types.STRING_TYPE;}
 
 	@Override
 	public ExprNode resolve(LocalContext ctx) throws ResolveException {

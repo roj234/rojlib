@@ -57,5 +57,5 @@ public final class LazyLoadStore extends Segment {
 	}
 
 	@Override
-	public String toString() { return (store?"Put ":"Get ")+v.name; }
+	public String toString() { return (store?"Put ":"Get ")+v.name+ "("+v.slot+")"; }
 }

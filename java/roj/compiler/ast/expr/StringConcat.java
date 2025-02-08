@@ -6,6 +6,7 @@ import roj.asm.type.IType;
 import roj.asm.type.Type;
 import roj.collect.SimpleList;
 import roj.compiler.LavaFeatures;
+import roj.compiler.api.Types;
 import roj.compiler.asm.MethodWriter;
 import roj.compiler.context.LocalContext;
 import roj.compiler.resolve.ResolveException;
@@ -33,7 +34,7 @@ final class StringConcat extends ExprNode {
 	public String toString() { return "<concat> "+TextUtil.join(nodes, " + "); }
 
 	@Override
-	public IType type() { return Constant.STRING; }
+	public IType type() { return Types.STRING_TYPE; }
 
 	@Override
 	public ExprNode resolve(LocalContext ctx) throws ResolveException {
@@ -74,7 +75,6 @@ final class StringConcat extends ExprNode {
 	public ExprNode prepend(ExprNode left) {nodes.add(0, left);return this;}
 	public ExprNode append(ExprNode right) {nodes.add(right);return this;}
 
-	private static final Type CHARSEQUENCE_TYPE = new Type("java/lang/CharSequence");
 	@Override
 	public void write(MethodWriter cw, boolean noRet) {
 		mustBeStatement(noRet);
@@ -108,10 +108,10 @@ final class StringConcat extends ExprNode {
 				};
 
 				cw.invoke(Opcodes.INVOKEVIRTUAL, "java/lang/StringBuilder", "append", desc);
-			} else if (type.equals(Constant.STRING)) {
+			} else if (type.equals(Types.STRING_TYPE)) {
 				cw.invoke(Opcodes.INVOKEVIRTUAL, "java/lang/StringBuilder", "append", "(Ljava/lang/String;)Ljava/lang/StringBuilder;");
 			} else {
-				TypeCast.Cast cast = lc.castTo(type, CHARSEQUENCE_TYPE, TypeCast.E_NEVER);
+				TypeCast.Cast cast = lc.castTo(type, Types.CHARSEQUENCE_TYPE, TypeCast.E_NEVER);
 				if (cast.type >= 0) {
 					cast.write(cw);
 					cw.invoke(Opcodes.INVOKEVIRTUAL, "java/lang/StringBuilder", "append", "(Ljava/lang/CharSequence;)Ljava/lang/StringBuilder;");
@@ -151,10 +151,10 @@ final class StringConcat extends ExprNode {
 				};
 
 				cw.invoke(Opcodes.INVOKEVIRTUAL, "roj/text/CharList", "append", desc);
-			} else if (type.equals(Constant.STRING)) {
+			} else if (type.equals(Types.STRING_TYPE)) {
 				cw.invoke(Opcodes.INVOKEVIRTUAL, "roj/text/CharList", "append", "(Ljava/lang/String;)Lroj/text/CharList;");
 			} else {
-				TypeCast.Cast cast = lc.castTo(type, CHARSEQUENCE_TYPE, TypeCast.E_NEVER);
+				TypeCast.Cast cast = lc.castTo(type, Types.CHARSEQUENCE_TYPE, TypeCast.E_NEVER);
 				if (cast.type >= 0) {
 					cast.write(cw);
 					cw.invoke(Opcodes.INVOKEVIRTUAL, "roj/text/CharList", "append", "(Ljava/lang/CharSequence;)Lroj/text/CharList;");

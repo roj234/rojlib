@@ -20,32 +20,29 @@ public final class StaticSegment extends Segment {
 	StaticSegment() { array = new ByteList(); }
 	public StaticSegment(DynByteBuf data) { array = data; }
 	public StaticSegment(byte... data) { array = data; length = (char) data.length; }
+	public static StaticSegment emptyWritable() {return new StaticSegment();}
 
-	@Override
-	public String toString() { return "Code("+length()+')'; }
-
-	@Override
-	protected boolean put(CodeWriter to, int segmentId) {
-		if (array instanceof ByteList b) to.bw.put(b);
+	@Override protected boolean put(CodeWriter to, int segmentId) {
+		if (array instanceof DynByteBuf b) to.bw.put(b);
 		else to.bw.put((byte[]) array,off&0x7FFF,length);
 		return false;
 	}
-	@Override
-	public int length() { return array.getClass() == ByteList.class ? ((ByteList)array).readableBytes() : length; }
+	@Override public int length() { return array instanceof DynByteBuf ? ((DynByteBuf)array).readableBytes() : length; }
 
-	@Override
-	public Segment move(AbstractCodeWriter from, AbstractCodeWriter to, int blockMoved, int mode) {
-		if (mode==XInsnList.REP_CLONE) {
-			if (compacted()) {
-				off |= 0x8000;
-				return this;
-			}
+	boolean isReadonly() { return array.getClass() == byte[].class; }
+	@Override public DynByteBuf getData() { return array.getClass() == byte[].class ? new ByteList.Slice((byte[]) array,off&0x7FFF,length) : (DynByteBuf) array; }
+	@Override StaticSegment setData(DynByteBuf b) {
+		StaticSegment that = off < 0 ? emptyWritable() : this;
 
-			StaticSegment b = new StaticSegment();
-			b.array = new ByteList(((ByteList) array).toByteArray());
-			return b;
-		}
-		return this;
+		AsmShared local = AsmShared.local();
+
+		that.length = (char) b.readableBytes();
+		byte[] arr = local.getArray(that.length);
+		that.array = arr;
+		that.off = (short) local.getOffset(arr, that.length);
+
+		b.readFully(b.rIndex, arr, that.off, that.length);
+		return that;
 	}
 
 	@Override
@@ -54,7 +51,6 @@ public final class StaticSegment extends Segment {
 		DynByteBuf buf = getData();
 		return isTerminate(buf, buf.rIndex, buf.wIndex());
 	}
-
 	static boolean isTerminate(DynByteBuf buf, int start, int end) {
 		int op = buf.get(end-1);
 		if ((op < Opcodes.IRETURN || op > Opcodes.RETURN) && op != Opcodes.ATHROW) return false;
@@ -68,20 +64,18 @@ public final class StaticSegment extends Segment {
 		return (op >= Opcodes.IRETURN && op <= Opcodes.RETURN) || op == Opcodes.ATHROW;
 	}
 
-	boolean compacted() { return array.getClass() == byte[].class; }
-	@Override
-	public DynByteBuf getData() { return array.getClass() == byte[].class ? new ByteList.Slice((byte[]) array,off&0x7FFF,length) : (DynByteBuf) array; }
-	StaticSegment setData(DynByteBuf b) {
-		StaticSegment that = off < 0 ? new StaticSegment() : this;
-
-		AsmShared local = AsmShared.local();
-
-		that.length = (char) b.readableBytes();
-		byte[] arr = local.getArray(that.length);
-		that.array = arr;
-		that.off = (short) local.getOffset(arr, that.length);
-
-		b.readFully(b.rIndex, arr, that.off, that.length);
-		return that;
+	@Override public Segment move(AbstractCodeWriter to, int blockMoved, boolean clone) {
+		if (!clone) return this;
+		var b = emptyWritable();
+		if (isReadonly()) {
+			b.array = array;
+			b.off = off;
+			b.length = length;
+		} else {
+			b.setData(getData());
+		}
+		return b;
 	}
+
+	@Override public String toString() {return "Code("+length()+", "+getData().hex()+")"; }
 }
