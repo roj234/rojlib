@@ -7,11 +7,12 @@ import roj.asm.tree.attr.LocalVariableTable;
 import roj.asm.tree.insn.TryCatchEntry;
 import roj.asm.type.IType;
 import roj.asm.visitor.*;
+import roj.collect.Hasher;
+import roj.collect.MyHashSet;
 import roj.collect.SimpleList;
 import roj.compiler.asm.node.LazyIINC;
 import roj.compiler.asm.node.LazyLoadStore;
 import roj.compiler.context.GlobalContext;
-import roj.reflect.ReflectionUtils;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
 
@@ -33,6 +34,8 @@ public class MethodWriter extends CodeWriter {
 	public LineNumberTable lines;
 	private LocalVariableTable lvt1, lvt2;
 
+	protected final MyHashSet<Label> __attributeLabel = new MyHashSet<>(Hasher.identity());
+
 	public void addLVTEntry(LocalVariableTable.Item v) {
 		lvt1.list.add(v);
 		if (v.type.genericType() != IType.STANDARD_TYPE) {
@@ -41,7 +44,11 @@ public class MethodWriter extends CodeWriter {
 	}
 
 	public void __addLabel(Label l) {labels.add(l);}
-	public void __removeLabel(Label l) {labels.remove(l);}
+	public Label __attrLabel() {
+		Label label = label();
+		__attributeLabel.add(label);
+		return label;
+	}
 
 	public MethodWriter(ConstantData unit, MethodNode mn, boolean generateLVT) {
 		this.owner = unit;
@@ -50,7 +57,9 @@ public class MethodWriter extends CodeWriter {
 			lvt1 = new LocalVariableTable("LocalVariableTable");
 			lvt2 = new LocalVariableTable("LocalVariableTypeTable");
 		}
+		//addSegment(StaticSegment.emptyWritable());
 	}
+	protected boolean skipFirstSegmentLabels() {return false;}
 
 	public TryCatchEntry addException(Label str, Label end, Label proc, String s) {
 		TryCatchEntry entry = new TryCatchEntry(Objects.requireNonNull(str, "start"), Objects.requireNonNull(end, "end"), Objects.requireNonNull(proc, "handler"), s);
@@ -97,15 +106,56 @@ public class MethodWriter extends CodeWriter {
 
 	public void jump(byte code, Label target) { assertTrait(code, TRAIT_JUMP); addSegment(new JumpSegmentAO(code, target)); }
 
-	public int nextSegmentId() {return segments.size()-1;}
-	public void replaceSegment(int id, Segment segment) {segments.set(id, segment);}
+	public int nextSegmentId() {return segments.isEmpty() ? 1 : segments.size();}
+	public void replaceSegment(int id, Segment segment) {
+		segments.set(id, segment);
+
+		for (Label label : labels) {
+			if (label.getBlock() == id && label.getOffset() != 0) throw new IllegalStateException("Cannot handle "+label);
+			if (label.isRaw()) throw new IllegalStateException("raw label "+label+" is not supported");
+		}
+	}
+	public void replaceSegment(int id, MethodWriter mw) {
+		boolean firstIsEmpty;
+		if (mw.bw.readableBytes() > 8) {
+			segments.set(id, new StaticSegment(mw.bw.slice(8, mw.bw.readableBytes()-8)));
+			firstIsEmpty = false;
+		} else {
+			firstIsEmpty = true;
+		}
+
+		List<Segment> toInsert = mw.segments;
+		if (!toInsert.isEmpty()) {
+			toInsert.remove(0);
+			if (toInsert.get(toInsert.size()-1).length() == 0)
+				toInsert.remove(toInsert.size()-1);
+
+			/*int blockMoved = segments.size();
+			for (int i = 0; i < toInsert.size(); i++) {
+				toInsert.set(i, toInsert.get(i).move(this, blockMoved, false));
+			}*/
+
+			if (firstIsEmpty) segments.set(id, toInsert.remove(0));
+
+			segments.addAll(id+1, toInsert);
+
+			for (Label label : labels) {
+				if (label.getBlock() == id && label.getOffset() != 0) throw new IllegalStateException("Cannot handle this!");
+				if (label.getBlock() > id) label.__move(toInsert.size());
+				if (label.isRaw()) throw new IllegalStateException("raw label "+label+" is not supported");
+			}
+		}
+
+		for (Label label : mw.labels) label.__move(id);
+		labels.addAll(mw.labels);
+		mw.labels.clear();
+	}
 	public Segment getSegment(int i) {return segments.get(i);}
 	public boolean isJumpingTo(Label point) {return !segments.isEmpty() && segments.get(segments.size()-1) instanceof JumpSegment js && js.target == point;}
 
 	public MethodWriter fork() {return new MethodWriter(owner, mn, lvt1 != null);}
 
-	private static final long BLOCK_INDEX = ReflectionUtils.fieldOffset(Label.class, "block");
-
+	// for insertBefore()
 	public DynByteBuf writeTo() {
 		if (getState() < 2) visitExceptions();
 		var b = bw;
@@ -114,37 +164,31 @@ public class MethodWriter extends CodeWriter {
 		return b;
 	}
 
-	private boolean disposed;
 	public void writeTo(MethodWriter cw) {
 		if (bw.wIndex() > 8) cw.codeOb.put(bw, 8, bw.wIndex()-8);
 
-		int mb = cw.segments.size();
-		if (mb == 0) mb = 1;
-		if (!disposed) {
-			for (Label label : labels) {
-				ReflectionUtils.u.getAndAddInt(label, BLOCK_INDEX, mb);
-				cw.labels.add(label);
-			}
-			labels.clear();
-			disposed = true;
-		}
-
-		if (segments.isEmpty()) return;
 		if (cw.segments.isEmpty()) cw._addFirst();
-
 		List<Segment> tarSeg = cw.segments;
 		int offset = tarSeg.size();
 
-		for (int i = 1; i < segments.size(); i++) {
-			Segment seg = segments.get(i);
-			if (seg.length() == 0 && i != segments.size()-1) continue;
+		if (!segments.isEmpty()) {
+			for (int i = 1; i < segments.size(); i++) {
+				Segment seg = segments.get(i);
+				//if (seg.length() == 0 && i != segments.size()-1) continue;
 
-			Segment move = seg.move(this, cw, offset, XInsnList.REP_CLONE);
-			tarSeg.add(move);
-			cw._addOffset(move.length());
+				Segment move = seg.move(cw, offset, true);
+				tarSeg.add(move);
+				cw._addOffset(move.length());
+			}
+
+			cw.codeOb = ((StaticSegment) tarSeg.get(tarSeg.size() - 1)).getData();
 		}
 
-		cw.codeOb = ((StaticSegment) tarSeg.get(tarSeg.size()-1)).getData();
+		cw.labels.addAll(__attributeLabel);
+		for (Label label : __attributeLabel) {
+			label.__move(offset);
+		}
+		__attributeLabel.clear();
+		labels.clear();
 	}
-
 }

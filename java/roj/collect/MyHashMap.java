@@ -133,7 +133,7 @@ public class MyHashMap<K, V> extends AbstractMap<K, V> implements FindMap<K, V>,
 			Object[] arr = k;
 			int pos = lastPos;
 
-			if (len == arr.length-1) k = arr = Arrays.copyOf(arr, len << 1);
+			if (len == arr.length) k = arr = Arrays.copyOf(arr, len << 1);
 
 			if (len - pos > 0) System.arraycopy(arr, pos, arr, pos+1, len-pos);
 			arr[pos] = entry;

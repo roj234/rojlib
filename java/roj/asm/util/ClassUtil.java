@@ -37,7 +37,7 @@ public final class ClassUtil {
 
 	public static ClassUtil getInstance() {
 		ClassUtil u = ThreadBasedCache.get();
-		u.checkSubClass = false;
+		u.checkSubClass = true;
 		return u;
 	}
 

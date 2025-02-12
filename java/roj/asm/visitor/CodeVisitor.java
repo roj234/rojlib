@@ -63,47 +63,51 @@ public class CodeVisitor {
 		len += rBegin;
 
 		byte prev = 0, code;
-		while (r.rIndex < len) {
-			bci = r.rIndex - rBegin;
-			code = Opcodes.validateOpcode(r.readByte());
+		try {
+			while (r.rIndex < len) {
+				bci = r.rIndex - rBegin;
+				code = Opcodes.validateOpcode(r.readByte());
 
-			boolean widen = prev == Opcodes.WIDE;
-			if (widen) checkWide(code);
-			else _visitNodePre();
+				boolean widen = prev == Opcodes.WIDE;
+				if (widen) checkWide(code);
+				else _visitNodePre();
 
-			switch (code) {
-				case PUTFIELD, GETFIELD, PUTSTATIC, GETSTATIC -> field(code, (CstRefField) cp.get(r));
-				case INVOKEVIRTUAL, INVOKESPECIAL, INVOKESTATIC -> invoke(code, (CstRef) cp.get(r));
-				case INVOKEINTERFACE -> invokeItf((CstRefItf) cp.get(r), r.readShort());
-				case INVOKEDYNAMIC -> invokeDyn((CstDynamic) cp.get(r), r.readUnsignedShort());
-				case GOTO, IFEQ, IFNE, IFLT, IFGE, IFGT, IFLE, IF_icmpeq, IF_icmpne, IF_icmplt, IF_icmpge, IF_icmpgt, IF_icmple, IF_acmpeq, IF_acmpne, IFNULL, IFNONNULL, JSR -> jump(code, r.readShort());
-				case GOTO_W, JSR_W -> jump(code, r.readInt());
-				case SIPUSH -> smallNum(code, r.readShort());
-				case RET -> ret(widen ? r.readShort() : r.readByte());
-				case BIPUSH -> smallNum(code, r.readByte());
-				case NEWARRAY -> newArray(r.readByte());
-				case LDC -> ldc(LDC, cp.array(r.readUnsignedByte()));
-				case LDC_W, LDC2_W -> ldc(code, cp.get(r));
-				case IINC -> iinc(widen ? r.readUnsignedShort() : r.readUnsignedByte(), widen ? r.readShort() : r.readByte());
-				case WIDE -> {
-					if (prev == WIDE) throw new IllegalArgumentException("multi wide");
+				switch (code) {
+					case PUTFIELD, GETFIELD, PUTSTATIC, GETSTATIC -> field(code, (CstRefField) cp.get(r));
+					case INVOKEVIRTUAL, INVOKESPECIAL, INVOKESTATIC -> invoke(code, (CstRef) cp.get(r));
+					case INVOKEINTERFACE -> invokeItf((CstRefItf) cp.get(r), r.readShort());
+					case INVOKEDYNAMIC -> invokeDyn((CstDynamic) cp.get(r), r.readUnsignedShort());
+					case GOTO, IFEQ, IFNE, IFLT, IFGE, IFGT, IFLE, IF_icmpeq, IF_icmpne, IF_icmplt, IF_icmpge, IF_icmpgt, IF_icmple, IF_acmpeq, IF_acmpne, IFNULL, IFNONNULL, JSR -> jump(code, r.readShort());
+					case GOTO_W, JSR_W -> jump(code, r.readInt());
+					case SIPUSH -> smallNum(code, r.readShort());
+					case RET -> ret(widen ? r.readShort() : r.readByte());
+					case BIPUSH -> smallNum(code, r.readByte());
+					case NEWARRAY -> newArray(r.readByte());
+					case LDC -> ldc(LDC, cp.array(r.readUnsignedByte()));
+					case LDC_W, LDC2_W -> ldc(code, cp.get(r));
+					case IINC -> iinc(widen ? r.readUnsignedShort() : r.readUnsignedByte(), widen ? r.readShort() : r.readByte());
+					case WIDE -> {
+						if (prev == WIDE) throw new IllegalArgumentException("multi wide");
+					}
+					case NEW, ANEWARRAY, INSTANCEOF, CHECKCAST -> clazz(code, (CstClass) cp.get(r));
+					case MULTIANEWARRAY -> multiArray((CstClass) cp.get(r), r.readUnsignedByte());
+					case ISTORE, LSTORE, FSTORE, DSTORE, ASTORE, ILOAD, LLOAD, FLOAD, DLOAD, ALOAD -> vars(code, widen ? r.readUnsignedShort() : r.readUnsignedByte());
+					case TABLESWITCH -> {
+						// align
+						r.rIndex += (4 - ((r.rIndex - rBegin) & 3)) & 3;
+						tableSwitch(r);
+					}
+					case LOOKUPSWITCH -> {
+						r.rIndex += (4 - ((r.rIndex - rBegin) & 3)) & 3;
+						lookupSwitch(r);
+					}
+					default -> one(code);
 				}
-				case NEW, ANEWARRAY, INSTANCEOF, CHECKCAST -> clazz(code, (CstClass) cp.get(r));
-				case MULTIANEWARRAY -> multiArray((CstClass) cp.get(r), r.readUnsignedByte());
-				case ISTORE, LSTORE, FSTORE, DSTORE, ASTORE, ILOAD, LLOAD, FLOAD, DLOAD, ALOAD -> vars(code, widen ? r.readUnsignedShort() : r.readUnsignedByte());
-				case TABLESWITCH -> {
-					// align
-					r.rIndex += (4 - ((r.rIndex - rBegin) & 3)) & 3;
-					tableSwitch(r);
-				}
-				case LOOKUPSWITCH -> {
-					r.rIndex += (4 - ((r.rIndex - rBegin) & 3)) & 3;
-					lookupSwitch(r);
-				}
-				default -> one(code);
+
+				prev = code;
 			}
-
-			prev = code;
+		} catch (Exception e) {
+			throw new IllegalStateException("Parse failed near BCI#"+bci, e);
 		}
 	}
 

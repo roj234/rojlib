@@ -3,6 +3,7 @@ package roj.plugins.ci;
 import com.sun.nio.file.ExtendedWatchEventModifier;
 import roj.collect.*;
 import roj.io.NIOUtil;
+import roj.plugins.ci.event.LibraryModifiedEvent;
 import roj.ui.Terminal;
 
 import java.io.File;
@@ -15,7 +16,7 @@ import java.util.function.Consumer;
 
 import static java.nio.file.StandardWatchEventKinds.*;
 import static roj.asmx.mapper.Mapper.DONT_LOAD_PREFIX;
-import static roj.plugins.ci.Shared.BASE;
+import static roj.plugins.ci.FMD.BASE;
 
 /**
  * Project file change watcher
@@ -28,18 +29,18 @@ final class FileWatcher extends IFileWatcher implements Consumer<WatchKey> {
 		private Object _next;
 
 		WatchKey key;
-		final String owner;
+		final Project owner;
 		final byte no;
 		final MyHashSet<String> mod = new MyHashSet<>();
 
-		X(String owner, WatchKey key, int tag) {
+		X(Project owner, WatchKey key, int tag) {
 			this.owner = owner;
 			this.key = key;
 			this.no = (byte) tag;
 		}
 
 		X() {
-			this.owner = "";
+			this.owner = null;
 			this.no = 0;
 		}
 	}
@@ -66,15 +67,15 @@ final class FileWatcher extends IFileWatcher implements Consumer<WatchKey> {
 
 	@Override
 	public void accept(WatchKey key) {
-		X csm = actions.get(key);
-		if (csm == null || csm == via) {
+		X handler = actions.get(key);
+		if (handler == null || handler == via) {
 			for (WatchEvent<?> event : key.pollEvents()) {
 				if (!event.kind().name().equals("OVERFLOW")) {
 					String path = key.watchable().toString();
 					String name = event.context().toString().toLowerCase();
 					if (path.startsWith(libPath)) {
 						if (!name.startsWith(DONT_LOAD_PREFIX) && (name.endsWith(".zip") || name.endsWith(".jar"))) {
-							Shared.mappingIsClean = false;
+							FMD.EVENT_BUS.post(new LibraryModifiedEvent(null));
 							break;
 						}
 					}
@@ -86,43 +87,41 @@ final class FileWatcher extends IFileWatcher implements Consumer<WatchKey> {
 		}
 
 		boolean isOverflow = false;
-		x:
+		loop:
 		for (WatchEvent<?> event : key.pollEvents()) {
 			String name = event.kind().name();
-			MyHashSet<String> s = csm.mod;
+			MyHashSet<String> s = handler.mod;
 			switch (name) {
 				case "OVERFLOW": {
 					Terminal.error("[PW]更改的文件过多，已暂停自动编译 "+key.watchable());
 					isOverflow = true;
-					break x;
+					break loop;
 				}
-				case "ENTRY_MODIFY":
-				case "ENTRY_CREATE":
-				case "ENTRY_DELETE": {
-					String id = key.watchable().toString() + File.separatorChar + event.context();
+				case "ENTRY_MODIFY", "ENTRY_CREATE", "ENTRY_DELETE": {
+					String id = key.watchable().toString()+File.separatorChar+event.context();
 					if (new File(id).isDirectory()) break;
-					if (csm.no == ID_SRC) {
-						if (!id.endsWith(".java")) break x;
-					}
-					synchronized (s) {
-						if (name.equals("ENTRY_DELETE")) {
-							s.remove(id);
-						} else {
-							s.add(id);
+					if (handler.no == ID_LIB) {
+						FMD.EVENT_BUS.post(new LibraryModifiedEvent(handler.owner));
+						break loop;
+					} else {
+						if (handler.no == ID_SRC && !id.endsWith(".java")) continue;
+
+						synchronized (s) {
+							if (name.equals("ENTRY_DELETE")) s.remove(id);
+							else s.add(id);
 						}
 					}
-					break;
 				}
 			}
 		}
 
 		// The key is not valid (directory was deleted
 		if (isOverflow || !key.reset()) {
-			X[] remove = listeners.remove(csm.owner);
+			X[] remove = listeners.remove(handler.owner);
 			if (remove != null) {
 				for (X set : remove) {
 					actions.remove(set);
-					Shared.Task.submit(set.key::cancel);
+					FMD.Task.submit(set.key::cancel);
 					synchronized (set.mod) {
 						set.mod.clear();
 						set.mod.add(null);
@@ -130,7 +129,7 @@ final class FileWatcher extends IFileWatcher implements Consumer<WatchKey> {
 				}
 			}
 		} else {
-			AutoCompile.notifyUpdate();
+			handler.owner.fileChanged();
 		}
 	}
 
@@ -141,22 +140,27 @@ final class FileWatcher extends IFileWatcher implements Consumer<WatchKey> {
 	}
 
 	public void removeAll() {
-		for (X key : new SimpleList<>(actions)) key.key.cancel();
+		for (X listener : new SimpleList<>(actions)) {
+			var key1 = listener.key;
+			if (key1 != null) key1.cancel();
+		}
 		actions.clear();
 		listeners.clear();
 	}
 
-	public void register(Project proj) throws IOException {
+	public void add(Project proj) throws IOException {
 		X[] arr = listeners.get(proj.name);
 		if (arr != null) {
 			for (X x : arr)
 				x.mod.clear();
 		} else {
-			arr = new X[2];
+			arr = new X[3];
 			WatchKey key = proj.resPath.toPath().register(watcher, new WatchEvent.Kind<?>[] {ENTRY_CREATE, ENTRY_MODIFY, ENTRY_DELETE, OVERFLOW}, ExtendedWatchEventModifier.FILE_TREE);
-			actions.add(arr[0] = new X(proj.name, key, ID_RES));
+			actions.add(arr[0] = new X(proj, key, ID_RES));
 			key = proj.srcPath.toPath().register(watcher, new WatchEvent.Kind<?>[] {ENTRY_CREATE, ENTRY_MODIFY, ENTRY_DELETE, OVERFLOW}, ExtendedWatchEventModifier.FILE_TREE);
-			actions.add(arr[1] = new X(proj.name, key, ID_SRC));
+			actions.add(arr[1] = new X(proj, key, ID_SRC));
+			key = proj.libPath.toPath().register(watcher, new WatchEvent.Kind<?>[] {ENTRY_CREATE, ENTRY_MODIFY, ENTRY_DELETE, OVERFLOW}, ExtendedWatchEventModifier.FILE_TREE);
+			actions.add(arr[2] = new X(proj, key, ID_LIB));
 
 			listeners.put(proj.name, arr);
 		}

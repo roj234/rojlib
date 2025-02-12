@@ -30,7 +30,7 @@ public final class Version {
 		boolean dot = false;
 		for (int i = 0; i < version.length(); i++) {
 			char c = version.charAt(i);
-			if (c == '.') {
+			if (c == '.' || c == '-') {
 				if (dot) throw new IllegalArgumentException("Invalid version " + version);
 				dot = true;
 			} else {
@@ -55,7 +55,7 @@ public final class Version {
 		int i = 0;
 		for (; i < s.length(); i++) {
 			char c = s.charAt(i);
-			if (Tokenizer.NUMBER.contains(c) || c == '.') {
+			if (Tokenizer.NUMBER.contains(c) || c == '.' || c == '-') {
 				buf.append(c);
 			} else {
 				if (thr) throw new IllegalArgumentException("Illegal version " + s);

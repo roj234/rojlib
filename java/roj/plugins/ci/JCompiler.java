@@ -4,6 +4,7 @@ import roj.asm.Opcodes;
 import roj.asm.tree.ConstantData;
 import roj.asm.type.Type;
 import roj.asm.type.TypeHelper;
+import roj.asm.util.ClassLike;
 import roj.collect.SimpleList;
 import roj.io.IOUtil;
 import roj.reflect.ClassDefiner;
@@ -27,43 +28,43 @@ import java.nio.charset.StandardCharsets;
 import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
-import java.util.Set;
 import java.util.function.Function;
 
 /**
  * @author Roj234
  * @since 2021/6/1 1:54
  */
-@Deprecated
 public final class JCompiler implements Compiler, DiagnosticListener<JavaFileObject> {
 	private static final JavaCompiler javac = ToolProvider.getSystemJavaCompiler();
 
 	private final String basePath;
-	private final Set<String> skipErrors;
+	private final Factory factory;
 	private int ignored, warnings, errors;
 	private final CharList buf;
 	private boolean showErrorCode;
 
-	public JCompiler(Set<String> skipErrors, String basePath) {
+	public JCompiler(Factory factory, String basePath) {
 		if (javac == null) throw new IllegalStateException("请安装JDK");
 
-		this.skipErrors = skipErrors == null ? Collections.emptySet() : skipErrors;
+		this.factory = factory;
 		this.basePath = basePath;
 		this.buf = new CharList(1024);
 	}
 
-	public void showErrorCode(boolean show) {showErrorCode = show;}
-	public synchronized List<? extends Compiled> compile(List<String> options, List<File> files) {
-		if (files.isEmpty()) return Collections.emptyList();
+	@Override public Compiler.Factory factory() {return factory;}
+
+	public synchronized List<? extends ClassLike> compile(List<String> options, List<File> sources, boolean showDiagnosticId) {
+		if (sources.isEmpty()) return Collections.emptyList();
 
 		ignored = warnings = errors = 0;
+		showErrorCode = showDiagnosticId;
 		buf.clear();
 
 		List<MyJFO> compiled = new SimpleList<>();
 		var jfm = javac.getStandardFileManager(this, Locale.getDefault(), StandardCharsets.UTF_8);
 		jfm = createOrUseDelegation(jfm, compiled, basePath);
 
-		var jfo = jfm.getJavaFileObjectsFromFiles(files);
+		var jfo = jfm.getJavaFileObjectsFromFiles(sources);
 		var task = javac.getTask(null, jfm, this, options, null, jfo);
 
 		boolean result = task.call();
@@ -134,7 +135,7 @@ public final class JCompiler implements Compiler, DiagnosticListener<JavaFileObj
 
 	@Override
 	public void report(Diagnostic<? extends JavaFileObject> diag) {
-		if (diag.getKind() == Diagnostic.Kind.ERROR || !skipErrors.contains(diag.getCode())) {
+		if (diag.getKind() == Diagnostic.Kind.ERROR || !factory.ignoredDiagnostics.contains(diag.getCode())) {
 			CharList sb = buf;
 			block1:
 			if (diag.getSource() != null) {
@@ -190,7 +191,7 @@ public final class JCompiler implements Compiler, DiagnosticListener<JavaFileObj
 	 * @author solo6975
 	 * @since 2021/10/2 14:00
 	 */
-	private static final class MyJFO extends SimpleJavaFileObject implements Compiled {
+	private static final class MyJFO extends SimpleJavaFileObject implements ClassLike {
 		private final String name;
 		private final ByteList output;
 
@@ -201,10 +202,10 @@ public final class JCompiler implements Compiler, DiagnosticListener<JavaFileObj
 		}
 
 		@Override
-		public String getName() { return name; }
+		public String getFileName() { return name; }
 		@Override
 		public OutputStream openOutputStream() { return output; }
 		@Override
-		public ByteList getData() { return output; }
+		public ByteList get() { return output; }
 	}
 }

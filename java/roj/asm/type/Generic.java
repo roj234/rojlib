@@ -5,6 +5,7 @@ import roj.text.CharList;
 import roj.text.logging.Logger;
 import roj.util.Helpers;
 
+import java.util.Arrays;
 import java.util.List;
 import java.util.function.UnaryOperator;
 
@@ -36,6 +37,9 @@ public class Generic extends IGeneric {
 		this.owner = owner;
 		setArrayDim(array);
 	}
+
+	public static Type type(String type) {return new Type(type);}
+	public static Generic generic(String type, IType...rest) {return new Generic(type, Arrays.asList(rest));}
 
 	public boolean canBeAny() { return extendType == EX_EXTENDS && owner.equals("java/lang/Object") && children.isEmpty() && sub == null; }
 

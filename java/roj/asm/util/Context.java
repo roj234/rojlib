@@ -22,7 +22,7 @@ import java.util.Objects;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
-public final class Context implements Consumer<Constant>, Supplier<ByteList> {
+public final class Context implements ClassLike, Consumer<Constant>, Supplier<ByteList> {
 	private static final int ID_METHOD = 0, ID_FIELD = 1, ID_CLASS = 2;
 
 	private String name;

@@ -34,6 +34,8 @@ public class CRC32s {
 		return buf.isDirect() ? CRC32s.once(buf.address() + off, len) : CRC32s.once(buf.array(), buf.arrayOffset() + off, len);
 	}
 	@Contract(pure = true)
+	public static int once(@NotNull byte[] b) {return once(b, 0, b.length);}
+	@Contract(pure = true)
 	public static int once(@NotNull byte[] b, int off, int count) { return retVal(update(INIT_CRC, b, off, count)); }
 	@Contract(pure = true)
 	public static int once(long address, int count) { return retVal(update(INIT_CRC, address, count)); }

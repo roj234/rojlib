@@ -1,9 +1,10 @@
-package roj.plugins.ci.mapping;
+package roj.plugins.ci.minecraft;
 
 import roj.asm.type.Desc;
 import roj.asmx.mapper.Mapping;
+import roj.collect.IntList;
 import roj.collect.SimpleList;
-import roj.io.IOUtil;
+import roj.text.CharList;
 import roj.text.LinedReader;
 import roj.text.TextReader;
 import roj.text.TextUtil;
@@ -23,7 +24,7 @@ import java.util.zip.ZipFile;
  * @author Roj233
  * @since 2022/3/3 12:39
  */
-public final class YarnMapping extends Mapping {
+final class YarnMapping extends Mapping {
 	public Mapping load(File intermediary, File mapping, String version) throws IOException {
 		SimpleList<String> tmp = new SimpleList<>();
 		readIntermediaryMap(intermediary.getName(), TextReader.auto(intermediary), tmp);
@@ -56,11 +57,11 @@ public final class YarnMapping extends Mapping {
 	}
 
 	public void readYarnEntry(String name, TextReader slr, List<String> tmp, Map<Desc, List<String>> paramMap) {
+		IntList stack = new IntList();
+		CharList srcClass = new CharList();
+		CharList dstClass = new CharList();
 		String srcCls = null;
-		SimpleList<String> srcLevel = new SimpleList<>();
-		SimpleList<String> dstLevel = new SimpleList<>();
 		Desc method = null;
-		int prevCL = 0;
 
 		int ln = 0;
 		for (String line : slr) {
@@ -74,37 +75,39 @@ public final class YarnMapping extends Mapping {
 			}
 			if (level == line.length()) continue;
 
+			while (stack.size() > 0 && level <= stack.get(stack.size()-1)) {
+				stack.remove(stack.size()-1);
+				dstClass.setLength(stack.remove(stack.size()-1));
+				srcClass.setLength(stack.remove(stack.size()-1));
+			}
+
 			tmp.clear();
 			TextUtil.split(tmp, line.substring(level), ' ', 5);
+			// CLASS -> FIELD
+			// CLASS -> METHOD -> PARAM
+			// CLASS -> CLASS
 			switch (tmp.get(0)) {
-				case "CLASS":
+				case "CLASS" -> {
+					stack.add(srcClass.length());
+					stack.add(dstClass.length());
+					stack.add(level);
 					int j = tmp.size() <= 2 ? 1 : 2;
-
-					srcLevel.removeRange(prevCL + 1, srcLevel.size());
-					dstLevel.removeRange(prevCL + 1, dstLevel.size());
-
-					String dstCls;
-					if (dstLevel.isEmpty()) {
-						srcLevel.add(srcCls = tmp.get(1));
-						dstLevel.add(dstCls = tmp.get(j));
-					} else {
-						srcLevel.add(srcCls = IOUtil.getSharedCharBuf().append(srcLevel.get(srcLevel.size() - 1)).append('$').append(tmp.get(1)).toString());
-						dstLevel.add(dstCls = IOUtil.getSharedCharBuf().append(dstLevel.get(dstLevel.size() - 1)).append('$').append(tmp.get(j)).toString());
+					if (srcClass.length() > 0) {
+						srcClass.append('$');
+						dstClass.append('$');
 					}
-
-					if (tmp.size() > 2) classMap.put(srcCls, dstCls);
-					prevCL = level;
-
+					srcCls = srcClass.append(tmp.get(1)).toString();
+					classMap.put(srcCls, dstClass.append(tmp.get(j)).toString());
 					method = null;
-					break;
-				case "METHOD":
+				}
+				case "METHOD" -> {
 					if (tmp.size() > 3) {
 						methodMap.put(method = new Desc(srcCls, tmp.get(1), tmp.get(3)), tmp.get(2));
 					} else {
 						method = new Desc(srcCls, tmp.get(1), tmp.get(2));
 					}
-					break;
-				case "ARG":
+				}
+				case "ARG" -> {
 					if (method == null) throw new IllegalArgumentException("ARG出现在METHOD前");
 					// ARG index name
 					if (paramMap != null) {
@@ -114,15 +117,16 @@ public final class YarnMapping extends Mapping {
 						while (list.size() <= argNo) list.add(null);
 						list.set(argNo, tmp.get(2));
 					}
-					break;
-				case "FIELD":
+				}
+				case "FIELD" -> {
 					// FIELD intermediary_name new_name type
 					if (tmp.size() > 3) {
-						fieldMap.put(new Desc(srcCls, tmp.get(1), checkFieldType?tmp.get(3):""), tmp.get(2));
+						fieldMap.put(new Desc(srcCls, tmp.get(1), checkFieldType ? tmp.get(3) : ""), tmp.get(2));
 					}
-					break;
-				case "COMMENT": break;
-				default: Terminal.error(name+":"+ln+": 未知标记类型. "+tmp);
+				}
+				case "COMMENT" -> {
+				}
+				default -> Terminal.error(name + ":" + ln + ": 未知标记类型. " + tmp);
 			}
 		}
 	}

@@ -54,13 +54,14 @@ public class ZipFileWriter extends OutputStream implements ArchiveWriter {
 	public void setComment(byte[] comment) { this.comment = comment; }
 
 	public void writeNamed(String name, ByteList b) throws IOException { writeNamed(name, b, ZipEntry.DEFLATED); }
-	public void writeNamed(String name, ByteList b, int method) throws IOException {
+	public void writeNamed(String name, ByteList b, int method) throws IOException { writeNamed(name, b, method, System.currentTimeMillis()); }
+	public void writeNamed(String name, ByteList b, int method, long modTime) throws IOException {
 		if (entry != null) closeEntry();
 		if (name.endsWith("/")) throw new ZipException("目录不是空的: "+name);
 
 		int crc = CRC32s.once(b.list, b.arrayOffset()+b.rIndex, b.readableBytes());
 
-		int time = ZEntry.java2DosTime(System.currentTimeMillis());
+		int time = ZEntry.java2DosTime(modTime);
 		ByteList buf = this.buf;
 		buf.clear();
 		buf.putInt(HEADER_LOC)
@@ -133,7 +134,18 @@ public class ZipFileWriter extends OutputStream implements ArchiveWriter {
 
 		if (this.entry != null) closeEntry();
 		long entryBeginOffset = file.position();
-		file.put(owner.source(), entry.startPos(), entry.endPos() - entry.startPos());
+
+		// 20250221 fixed 文件中不知道长度的Entry但是经过读取已经知道了，所以复制之前需要重写CEntry
+		owner.validateEntry(entry);
+		if ((entry.flags & GP_HAS_EXT) != 0 && entry.getCompressedSize() != 0) {
+			entry = entry.clone();
+			entry.flags &= ~GP_HAS_EXT;
+			ZipArchive.writeLOC(file, buf, entry);
+			file.put(owner.source(), entry.getOffset(), entry.getCompressedSize());
+		} else {
+			file.put(owner.source(), entry.startPos(), entry.endPos() - entry.startPos());
+		}
+
 		long delta = entryBeginOffset - entry.startPos();
 		entry.offset += delta;
 		buf.clear();

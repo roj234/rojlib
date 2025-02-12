@@ -11,11 +11,12 @@ import roj.compiler.context.LibraryZipFile;
 import roj.compiler.context.LocalContext;
 import roj.compiler.diagnostic.TextDiagnosticReporter;
 import roj.compiler.plugin.GlobalContextApi;
-import roj.compiler.plugins.eval.Constant;
+import roj.compiler.plugins.eval.Constexpr;
 import roj.io.IOUtil;
 import roj.text.ACalendar;
 import roj.text.TextReader;
 import roj.text.TextUtil;
+import roj.util.ByteList;
 
 import java.io.File;
 import java.io.IOException;
@@ -27,7 +28,7 @@ import java.util.ArrayList;
  * @since 2022/9/16 19:05
  */
 public final class Lavac {
-	@Constant
+	@Constexpr
 	public static String getCompileTime() {return ACalendar.toLocalTimeString(System.currentTimeMillis());}
 	public static String getCurrentTime() {return ACalendar.toLocalTimeString(System.currentTimeMillis());}
 

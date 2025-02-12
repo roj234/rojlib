@@ -1,4 +1,4 @@
-package roj.plugins.ci.mapping;
+package roj.plugins.ci.minecraft;
 
 import roj.asm.type.Desc;
 import roj.asmx.mapper.Mapping;
@@ -26,23 +26,28 @@ import java.util.zip.ZipFile;
  * @author Roj233
  * @since 2022/3/3 12:39
  */
-public final class TSrgMapping extends Mapping {
+final class TSrgMapping extends Mapping {
 	public boolean readMcpConfig(File mapFile, Map<Desc, List<String>> paramMap, List<String> tmp) throws IOException {
-		MCPConfig cfg = new MCPConfig(mapFile);
-		InputStream in = cfg.getData("mappings");
-		if (in == null) {
-			Terminal.warning("不是有效的MCP Config");
-			return false;
-		}
-
-		try (TextReader tr = TextReader.from(in, StandardCharsets.UTF_8)) {
-			switch (cfg.version()) {
-				case 1: tsrgV1(tr, tmp); break;
-				case 2: case 3: tSrgV2(tr, tmp, paramMap); break;
-				default: Terminal.warning("不支持的版本 " + cfg.version());
+		try(var cfg = new MCPConfig(mapFile);) {
+			InputStream in = cfg.getData("mappings");
+			if (in == null) {
+				Terminal.warning("不是有效的MCP Config");
+				return false;
 			}
-		} finally {
-			cfg.close();
+
+			try (var tr = TextReader.from(in, StandardCharsets.UTF_8)) {
+				switch (cfg.version()) {
+					case 1: tsrgV1(tr, tmp); break;
+					case 2: case 3: tSrgV2(tr, tmp, paramMap); break;
+					default: Terminal.warning("不支持的版本 " + cfg.version());
+				}
+			}
+		} catch (Exception e) {
+			try (var tr = TextReader.from(mapFile, StandardCharsets.UTF_8)) {
+				tSrgV2(tr, tmp, paramMap);
+			} catch (Throwable e2) {
+				throw e;
+			}
 		}
 
 		return true;
@@ -114,9 +119,7 @@ public final class TSrgMapping extends Mapping {
 			if (level == 0) {
 				method = null;
 				prevF = tmp.get(0);
-				if (!prevF.equals(tmp.get(1))) {
-					classMap.put(prevF, tmp.get(1));
-				}
+				classMap.put(prevF, tmp.get(1));
 			} else if (level == 1) {
 				if (prevF == null) {
 					Terminal.error("#!config/joined.tsrg:"+ln+": 无效的元素开始.");

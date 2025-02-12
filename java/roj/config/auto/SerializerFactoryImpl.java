@@ -48,9 +48,8 @@ final class SerializerFactoryImpl extends SerializerFactory {
 	private static final ReentrantLock lock = new ReentrantLock();
 	private static final Map<String, Adapter> DEFAULT = new MyHashMap<>();
 	static {
-		PrimObj STR = new PrimObj(Type.CLASS);
-		DEFAULT.put("java.lang.CharSequence", STR);
-		DEFAULT.put("java.lang.String", STR);
+		DEFAULT.put("java.lang.CharSequence", PrimObj.STR);
+		DEFAULT.put("java.lang.String", PrimObj.STR);
 		DEFAULT.put("java.lang.Long", new PrimObj(Type.LONG));
 		DEFAULT.put("java.lang.Double", new PrimObj(Type.DOUBLE));
 		DEFAULT.put("java.lang.Float", new PrimObj(Type.FLOAT));
@@ -62,7 +61,7 @@ final class SerializerFactoryImpl extends SerializerFactory {
 		DEFAULT.put("java.lang.Character", new PrimObj(Type.CHAR));
 		DEFAULT.put("java.lang.Byte", new PrimObj(Type.BYTE));
 
-		DEFAULT.put("java.util.Map", new MapSer(null, null));
+		DEFAULT.put("java.util.Map", new MapSer(PrimObj.STR, null, null));
 		CollectionSer LIST = new CollectionSer(null, false, null);
 		DEFAULT.put("java.util.Collection", LIST);
 		DEFAULT.put("java.util.List", LIST);
@@ -106,7 +105,7 @@ final class SerializerFactoryImpl extends SerializerFactory {
 		// 不开启AllowDynamic仍然可以序列化集合，只是不能反序列化
 		ObjAny any = dynamicRoot = new ObjAny(this);
 		if ((flag & ALLOW_DYNAMIC) != 0) {
-			localRegistry.put("java.util.Map", new MapSer(any, null));
+			localRegistry.put("java.util.Map", new MapSer(DEFAULT.get("java.lang.String"), any, null));
 			CollectionSer LIST = new CollectionSer(any, false, null);
 			localRegistry.put("java.util.Collection", LIST);
 			localRegistry.put("java.util.List", LIST);
@@ -386,18 +385,20 @@ final class SerializerFactoryImpl extends SerializerFactory {
 
 			// 就是有点太重量级了
 			// 然而，java反射自带的泛型API就是依托答辩
-			if (generic != null) {
+			// 20250213 好了，去除了预处理静态库，现在没那么重量级了
+			List<IType> childType = generic == null ? null : generic.children;
+			//if (generic != null) {
 				try {
 					Inferrer.TEMPORARY_DISABLE_ASTERISK.set(true);
-					var types = genericInferrer().inferGeneric(generic, c.getName().replace('.', '/'));
-					if (types != null) generic.children = types;
+					var types = genericInferrer().inferGeneric(generic == null ? new Type(name.replace('.', '/')) : generic, c.getName().replace('.', '/'));
+					if (types != null) childType = types;
 				} catch (Exception e) {
 					e.printStackTrace();
 				}
 				Inferrer.TEMPORARY_DISABLE_ASTERISK.remove();
-			}
+			//}
 
-			ser = ser.transform(this, type, generic == null ? null : generic.children);
+			ser = ser.transform(this, type, childType);
 			synchronized (localRegistry) {localRegistry.put(name, ser);}
 			return ser;
 		}
@@ -423,14 +424,17 @@ final class SerializerFactoryImpl extends SerializerFactory {
 		return ser;
 	}
 
-	private GlobalContext gc_;
+	private LocalContext inferrer;
 	private LocalContext genericInferrer() {
-		var gc = gc_;
-		if (gc == null) {
-			gc_ = gc = new GlobalContext();
+		var lc = inferrer;
+		if (lc == null) {
+			var gc = new GlobalContext() {@Override protected void addRuntime() {}};
+			gc.addLibrary(new LibraryClassLoader(Object.class.getClassLoader()));
+			gc.addLibrary(new LibraryClassLoader(SerializerFactoryImpl.class.getClassLoader()));
 			gc.addLibrary(new LibraryClassLoader(classLoader));
+			lc = inferrer = gc.createLocalContext();
 		}
-		return gc.createLocalContext();
+		return lc;
 	}
 
 	private static boolean mustBeDynamic(Class<?> type) {
@@ -578,8 +582,9 @@ final class SerializerFactoryImpl extends SerializerFactory {
 	 * 包装用户提供的序列化器
  	 */
 	private Adapter user(ConstantData data, MethodNode writer, MethodNode reader, boolean isStatic) {
-		String klassIn = reader.returnType().getActualClass();
-		if (klassIn == null) throw new IllegalArgumentException("覆盖"+reader.returnType()+"的序列化");
+		String klassIn = writer.parameters().get(0).getActualClass();
+		if (klassIn == null)
+			throw new IllegalArgumentException("无法覆盖"+reader.returnType()+"的序列化");
 
 		begin("roj/config/auto/UserSer");
 
@@ -623,7 +628,8 @@ final class SerializerFactoryImpl extends SerializerFactory {
 			cw.field(GETFIELD, c, ua);
 		}
 		cw.varLoad(type, 2);
-		if (klassOut != null) cw.clazz(CHECKCAST, klassOut);
+		var clz = reader.parameters().get(0).getActualClass();
+		if (clz != null) cw.clazz(CHECKCAST, clz);
 		cw.invoke(ua >= 0 ? INVOKEVIRTUAL : INVOKESTATIC, reader);
 		cw.field(PUTFIELD, "roj/config/auto/AdaptContext", "ref", "Ljava/lang/Object;");
 

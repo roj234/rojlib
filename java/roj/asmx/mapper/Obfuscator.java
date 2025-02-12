@@ -81,6 +81,8 @@ public class Obfuscator {
 			named.put(data.name, data);
 		}
 
+		Mapper.LOGGER.setLevel(Level.ALL);
+		LOGGER.setLevel(Level.ALL);
 		Context cur = null;
 		try {
 			Profiler.startSection("initSelf");
@@ -112,7 +114,6 @@ public class Obfuscator {
 			List<Desc> dup2 = m.S2_3_FixSubImpl(arr, true);
 			if (!dup2.isEmpty()) LOGGER.log(Level.WARN, "[Obf-MapGen-Fix]: {} SubImpl entry added", null, dup2.size());
 
-			Mapper.LOGGER.setLevel(Level.ERROR);
 			m.S2_end();
 
 			Profiler.endStartSection("S3_mapSelf");
@@ -173,7 +174,10 @@ public class Obfuscator {
 			if ((d.name = method.name()).charAt(0) == '<') continue; // clinit, init
 			d.param = method.rawDesc();
 			if (0 == (acc & (Opcodes.ACC_STATIC | Opcodes.ACC_PRIVATE))) {
-				if (isInherited(d)) continue;
+				if (isInherited(d) && d.name.length() < 10) {
+					System.out.println("method is inherited: "+d);
+					continue;
+				}
 			}
 			d.flags = (char) acc;
 

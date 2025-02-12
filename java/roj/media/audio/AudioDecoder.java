@@ -40,8 +40,8 @@ public interface AudioDecoder extends Closeable {
 	 */
 	void decodeLoop() throws IOException;
 
-	boolean isSeekable();
-	void seek(double second) throws IOException;
+	default boolean isSeekable() {return false;}
+	default void seek(double second) throws IOException {throw new UnsupportedOperationException(getClass().getName());}
 	double getCurrentTime();
 	double getDuration();
 

@@ -9,6 +9,7 @@ import roj.collect.SimpleList;
 import roj.compiler.plugins.asm.ASM;
 import roj.reflect.Bypass;
 import roj.reflect.ReflectionUtils;
+import roj.text.CharList;
 import roj.text.logging.Level;
 import roj.text.logging.Logger;
 import roj.util.ByteList;
@@ -43,16 +44,15 @@ public final class Bootstrap {
 
 	public static void boot(String[] args) {
 		// 甚至都不用传参
-		var entryPoint = (EntryPoint) Bootstrap.class.getClassLoader();
+		// 需要注意的是，必须是这个类，别的类会崩，因为加载顺序问题，我也不清楚怎么回事，哈哈哈
+		var entryPoint = (EntryPoint) CharList.Slice.class.getClassLoader();
 
-		// necessary (加载Logger相关类)
-		LOGGER.info("ImpLib TLauncher 2.3");
-
-		if (ASM.TARGET_JAVA_VERSION >= 17 || GetOtherJars()) {
+		boolean isSecureJar = EntryPoint.class.getProtectionDomain().getCodeSource().getCertificates() != null;
+		if (ASM.TARGET_JAVA_VERSION >= 17 || GetOtherJars() && !isSecureJar) {
 			URL myJar = EntryPoint.class.getProtectionDomain().getCodeSource().getLocation();
 			if (myJar != null && myJar.getProtocol().equals("file") && myJar.getPath().indexOf('!') < 0) {
 				try {
-					ClassWrapper.instance.enableFastZip(myJar);
+					ClassWrapper.instance.enableFastZip(myJar, false);
 				} catch (Exception e) {
 					e.printStackTrace();
 				}
@@ -147,7 +147,7 @@ public final class Bootstrap {
 		c.finish();
 
 		ByteList list = Parser.toByteArrayShared(L);
-		Class<?> loaderClass = entryPoint.defineClassB(L.name.replace('/', '.'), list.list, 0, list.wIndex());
+		Class<?> loaderClass = entryPoint.defineClassA(L.name.replace('/', '.'), list.list, 0, list.wIndex(), Bootstrap.class.getProtectionDomain().getCodeSource());
 		ReflectionUtils.ensureClassInitialized(loaderClass);
 	}
 
@@ -199,7 +199,7 @@ public final class Bootstrap {
 				hasError = true;
 			} else {
 				try {
-					ClassWrapper.instance.enableFastZip(url);
+					ClassWrapper.instance.enableFastZip(url, true);
 				} catch (Exception e) {
 					hasError = true;
 					e.printStackTrace();

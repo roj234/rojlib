@@ -17,6 +17,7 @@ import roj.collect.SimpleList;
 import roj.io.IOUtil;
 import roj.text.CharList;
 import roj.text.TextUtil;
+import roj.text.logging.Logger;
 import roj.util.DynByteBuf;
 
 import java.util.List;
@@ -88,11 +89,14 @@ public class XAttrCode extends Attribute implements Attributed {
 						case "RuntimeInvisibleTypeAnnotations": case "RuntimeVisibleTypeAnnotations":
 							attributes.i_direct_add(new TypeAnnotations(name, r, cp));
 						break;
-						default: System.err.println("[R.A.AC]Skip unknown " + name + " for " + (mn.ownerClass() + '.' + mn.name()));
+						default:
+							Logger.FALLBACK.debug("{}.{} 中发现不支持的属性 {}", mn.ownerClass(), mn.name(), name);
+							r.rIndex = r.wIndex();
+							continue;
 					}
 
 					if (r.isReadable()) {
-						System.err.println("无法读取"+mn.ownerClass()+"."+mn.name()+"的'Code'的子属性'"+name+"' ,剩余了"+r.readableBytes()+",数据:"+r.dump());
+						Logger.FALLBACK.warn("无法读取"+mn.ownerClass()+"."+mn.name()+"的'Code'的子属性'"+name+"' ,剩余了"+r.readableBytes()+",数据:"+r.dump());
 						r.rIndex = r.wIndex();
 					}
 				} catch (Throwable e) {

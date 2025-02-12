@@ -1,7 +1,7 @@
 package roj.util;
 
 import org.jetbrains.annotations.NotNull;
-import roj.compiler.plugins.eval.Constant;
+import roj.compiler.plugins.eval.Constexpr;
 import roj.io.buf.BufferPool;
 import roj.math.MathUtils;
 import roj.text.CharList;
@@ -372,9 +372,9 @@ public class ByteList extends DynByteBuf implements Appendable {
 
 	// endregion
 
-	@Constant
+	@Constexpr
 	public static int FOURCC(CharSequence x) { return ((x.charAt(0) & 0xFF) << 24) | ((x.charAt(1) & 0xFF) << 16) | ((x.charAt(2) & 0xFF) << 8) | ((x.charAt(3) & 0xFF)); }
-	@Constant
+	@Constexpr
 	public static String UNFOURCC(int fc) { return new String(new char[]{(char) (fc >>> 24), (char) ((fc >>> 16) & 0xFF), (char) ((fc >>> 8) & 0xFF), (char) (fc & 0xFF)}); }
 
 	static void jutf8_encode_all(String s, Object ref, long addr) {

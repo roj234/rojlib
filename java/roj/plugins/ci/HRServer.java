@@ -11,6 +11,7 @@ import roj.net.ServerLaunch;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
 
+import java.io.Closeable;
 import java.io.IOException;
 import java.net.InetAddress;
 import java.net.StandardSocketOptions;
@@ -23,7 +24,7 @@ import java.util.List;
  * @author Roj233
  * @since 2022/2/21 15:09
  */
-public final class HRServer {
+public final class HRServer implements Closeable {
 	public static final int DEFAULT_PORT = 4485;
 
 	final class Client implements ChannelHandler {
@@ -87,9 +88,10 @@ public final class HRServer {
 	}
 
 	private final SimpleList<Client> clients = new SimpleList<>();
+	private final ServerLaunch channel;
 
 	public HRServer(int port) throws IOException {
-		ServerLaunch.tcp("热重载服务器")
+		channel = ServerLaunch.tcp("HotReload")
 					.bind2(InetAddress.getLoopbackAddress(), port)
 					.option(StandardSocketOptions.SO_REUSEADDR, true)
 					.initializator(ctx -> {
@@ -99,4 +101,6 @@ public final class HRServer {
 						synchronized (this) {clients.add(t);}
 					}).launch();
 	}
+
+	@Override public void close() throws IOException {channel.close();}
 }

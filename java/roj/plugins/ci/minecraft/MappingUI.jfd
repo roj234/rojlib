@@ -1,4 +1,4 @@
-JFDML JFormDesigner: "8.1.1.0.298" Java: "11.0.15" encoding: "UTF-8"
+JFDML JFormDesigner: "8.2.3.0.386" Java: "17.0.9" encoding: "UTF-8"
 
 new FormModel {
 	contentType: "form/swing"
@@ -72,8 +72,8 @@ new FormModel {
 				"enabled": false
 				addEvent( new FormEvent( "java.awt.event.ActionListener", "actionPerformed", "uiDel", true ) )
 			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
-				"x": 30
-				"y": 318
+				"x": 15
+				"y": 320
 			} )
 			add( new FormComponent( "javax.swing.JButton" ) {
 				name: "uiFlip"
@@ -82,8 +82,8 @@ new FormModel {
 				"enabled": false
 				addEvent( new FormEvent( "java.awt.event.ActionListener", "actionPerformed", "uiFlip", true ) )
 			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
-				"x": 60
-				"y": 318
+				"x": 45
+				"y": 320
 			} )
 			add( new FormComponent( "javax.swing.JButton" ) {
 				name: "uiMerge"
@@ -92,8 +92,8 @@ new FormModel {
 				"enabled": false
 				addEvent( new FormEvent( "java.awt.event.ActionListener", "actionPerformed", "uiMerge", true ) )
 			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
-				"x": 96
-				"y": 318
+				"x": 80
+				"y": 320
 			} )
 			add( new FormComponent( "javax.swing.JButton" ) {
 				name: "uiExtend"
@@ -102,8 +102,8 @@ new FormModel {
 				"enabled": false
 				addEvent( new FormEvent( "java.awt.event.ActionListener", "actionPerformed", "uiExtend", true ) )
 			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
-				"x": 138
-				"y": 318
+				"x": 125
+				"y": 320
 			} )
 			add( new FormComponent( "javax.swing.JButton" ) {
 				name: "uiSave"
@@ -112,8 +112,8 @@ new FormModel {
 				"enabled": false
 				addEvent( new FormEvent( "java.awt.event.ActionListener", "actionPerformed", "uiSave", true ) )
 			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
-				"x": 222
-				"y": 318
+				"x": 210
+				"y": 320
 			} )
 			add( new FormComponent( "javax.swing.JButton" ) {
 				name: "uiCopy"
@@ -122,8 +122,28 @@ new FormModel {
 				"enabled": false
 				addEvent( new FormEvent( "java.awt.event.ActionListener", "actionPerformed", "uiCopy", true ) )
 			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
-				"x": 186
-				"y": 318
+				"x": 170
+				"y": 320
+			} )
+			add( new FormComponent( "javax.swing.JButton" ) {
+				name: "uiDelLeft"
+				"text": "DC←"
+				"border": &EmptyBorder0 new javax.swing.border.EmptyBorder( 5, 5, 5, 5 )
+				"toolTipText": "用右侧的名称覆盖整个ClassMap"
+				"enabled": false
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 250
+				"y": 320
+			} )
+			add( new FormComponent( "javax.swing.JButton" ) {
+				name: "uiDelRight"
+				"text": "DC→"
+				"border": #EmptyBorder0
+				"toolTipText": "用左侧的名称覆盖整个ClassMap"
+				"enabled": false
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 290
+				"y": 320
 			} )
 		}, new FormLayoutConstraints( null ) {
 			"location": new java.awt.Point( 0, 0 )

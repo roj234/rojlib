@@ -40,7 +40,7 @@ public interface Evaluator {
 		MyHashMap<String, byte[]> data = new MyHashMap<>();
 		SimpleList<RawNode> invoker = new SimpleList<>();
 
-		for (AnnotatedElement element : ctx.getClasspathAnnotations().annotatedBy("roj/compiler/plugins/eval/Constant")) {
+		for (AnnotatedElement element : ctx.getClasspathAnnotations().annotatedBy("roj/compiler/plugins/eval/Constexpr")) {
 			if (element.isLeaf()) {
 				if (element.desc().indexOf('(') < 0) continue;
 

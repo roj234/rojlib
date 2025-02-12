@@ -1,8 +1,10 @@
 package roj.text;
 
 import roj.collect.ToIntMap;
+import roj.io.MyDataInput;
 import roj.util.DynByteBuf;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -15,7 +17,7 @@ public class StringPool {
 	private final ToIntMap<String> list;
 	private final List<String> ordered;
 
-	public StringPool(DynByteBuf w) {
+	public StringPool(MyDataInput w) throws IOException {
 		int len = w.readVUInt();
 		String[] array = new String[len];
 		this.list = null;
@@ -24,7 +26,7 @@ public class StringPool {
 			array[i] = w.readVUIGB();
 		}
 	}
-	public String get(DynByteBuf r) { return ordered.get(r.readVUInt()); }
+	public String get(MyDataInput r) throws IOException { return ordered.get(r.readVUInt()); }
 
 	public StringPool() { ordered = new ArrayList<>(); list = new ToIntMap<>(); }
 

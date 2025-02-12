@@ -17,7 +17,7 @@ import java.lang.annotation.Target;
  */
 @Retention(RetentionPolicy.CLASS)
 @Target({ElementType.FIELD, ElementType.METHOD, ElementType.TYPE})
-public @interface Constant {
+public @interface Constexpr {
 	/**
 	 * 尚未实现
 	 */

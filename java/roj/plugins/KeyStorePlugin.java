@@ -18,6 +18,7 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.security.KeyPair;
 import java.security.PrivateKey;
+import java.security.cert.Certificate;
 import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
 import java.util.Arrays;
@@ -34,7 +35,7 @@ import static roj.ui.terminal.CommandNode.literal;
  */
 @SimplePlugin(id = "keyStore", desc = "统一密钥管理器，同时提供jar签名和验证功能")
 public class KeyStorePlugin extends Plugin {
-	private final Map<String, List<X509Certificate>> certificates = new MyHashMap<>();
+	private final Map<String, List<Certificate>> certificates = new MyHashMap<>();
 	private final Map<String, PrivateKey> privateKeys = new MyHashMap<>();
 
 	public Argument<KeyPair> asKeyPair() {return Argument.oneOf(CollectionX.toMap(privateKeys.keySet(), name -> new KeyPair(certificates.get(name).get(0).getPublicKey(), privateKeys.get(name))));}
@@ -47,7 +48,7 @@ public class KeyStorePlugin extends Plugin {
 			var name = ctx.argument("别名", String.class, IOUtil.fileName(key.getName()));
 
 			var cf = CertificateFactory.getInstance("X509");
-			var certs = new SimpleList<X509Certificate>();
+			var certs = new SimpleList<Certificate>();
 			try (var in = new BufferedInputStream(new FileInputStream(pem))) {
 				while (true) {
 					certs.add((X509Certificate) cf.generateCertificate(in));

@@ -1,7 +1,6 @@
 package roj.asmx.mapper;
 
 import org.jetbrains.annotations.NotNull;
-import org.jetbrains.annotations.Nullable;
 import roj.archive.qz.xz.LZMA2Options;
 import roj.archive.qz.xz.LZMAInputStream;
 import roj.archive.qz.xz.LZMAOutputStream;
@@ -25,6 +24,7 @@ import roj.asmx.mapper.util.SubImpl;
 import roj.collect.*;
 import roj.concurrent.TaskPool;
 import roj.io.IOUtil;
+import roj.io.MyDataInputStream;
 import roj.text.CharList;
 import roj.text.StringPool;
 import roj.text.logging.Level;
@@ -33,8 +33,10 @@ import roj.util.ByteList;
 import roj.util.DynByteBuf;
 import roj.util.Helpers;
 
-import java.io.*;
-import java.nio.file.NotDirectoryException;
+import java.io.File;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
@@ -85,7 +87,7 @@ public class Mapper extends Mapping {
 	private final ParamNameMapper PARAM_TYPE_MAPPER = new ParamNameMapper() {
 		@Override
 		protected List<String> getNewParamName(MethodNode m) {
-			if (paramNameMap != null) {
+			if (paramMap != null) {
 				String owner = m.ownerClass();
 
 				Desc md = ClassUtil.getInstance().sharedDC;
@@ -96,15 +98,15 @@ public class Mapper extends Mapping {
 				List<String> parents = selfSupers.getOrDefault(owner, Collections.emptyList());
 				int i = 0;
 				do {
-					List<String> param = paramNameMap.get(md);
-					if (param != null) return param;
+					List<String> param = paramMap.get(md);
+					if (param != null) return new SimpleList<>(param);
 
 					if (i == parents.size()) break;
 					md.owner = parents.get(i++);
 				} while (true);
 			}
 
-			return Collections.emptyList();
+			return new SimpleList<>();
 		}
 
 		@Override
@@ -117,7 +119,6 @@ public class Mapper extends Mapping {
 		}
 	};
 
-	private Map<Desc, List<String>> paramNameMap;
 	private final List<State> extraStates = new SimpleList<>();
 	/**
 	 * 来自依赖的数据
@@ -143,10 +144,14 @@ public class Mapper extends Mapping {
 
 	public Mapper(Mapper o) {
 		super(o);
-		this.paramNameMap = o.paramNameMap;
 		this.libStopAnchor = o.libStopAnchor;
 		this.libSupers = o.libSupers;
 		this.PARAM_TYPE_MAPPER.validNameChars = o.PARAM_TYPE_MAPPER.validNameChars;
+	}
+	public Mapper(Mapping o) {
+		super(o);
+		this.libSupers = new MyHashMap<>(128);
+		this.libStopAnchor = new MyHashSet<>();
 	}
 
 	// region 缓存
@@ -155,83 +160,85 @@ public class Mapper extends Mapping {
 		return new LZMA2Options(6).setDictSize(2097152).setPb(0);
 	}
 
-	public void saveCache(long hash, File cache) throws IOException {
+	public void saveCache(OutputStream cache, int saveMode) throws IOException {
 		StringPool pool = new StringPool();
 		if (!checkFieldType) pool.add("");
 
 		ByteList w = IOUtil.getSharedByteBuf();
 
-		w.putVUInt(classMap.size());
-		for (Map.Entry<String, String> s : classMap.entrySet()) {
-			pool.add(pool.add(w, s.getKey()), s.getValue());
+		if ((saveMode&1) != 0) {
+			w.putVUInt(classMap.size());
+			for (Map.Entry<String, String> s : classMap.entrySet()) {
+				pool.add(pool.add(w, s.getKey()), s.getValue());
+			}
+
+			w.putVUInt(fieldMap.size());
+			for (Map.Entry<Desc, String> s : fieldMap.entrySet()) {
+				Desc desc = s.getKey();
+				pool.add(pool.add(pool.add(pool.add(w, desc.owner), desc.name), desc.param).put(desc.flags), s.getValue());
+			}
+
+			w.putVUInt(methodMap.size());
+			for (Map.Entry<Desc, String> s : methodMap.entrySet()) {
+				Desc desc = s.getKey();
+				pool.add(pool.add(pool.add(pool.add(w, desc.owner), desc.name), desc.param).put(desc.flags), s.getValue());
+			}
+		} else {
+			w.putMedium(0);
 		}
 
-		w.putVUInt(fieldMap.size());
-		for (Map.Entry<Desc, String> s : fieldMap.entrySet()) {
-			Desc desc = s.getKey();
-			pool.add(pool.add(pool.add(pool.add(w, desc.owner), desc.name), desc.param).put(desc.flags), s.getValue());
+		if ((saveMode&2) != 0) {
+			w.putVUInt(libSupers.size());
+			for (Map.Entry<String, List<String>> s : libSupers.entrySet()) {
+				pool.add(w, s.getKey());
+
+				MapperList list = (MapperList) s.getValue();
+				w.putVUInt(list.selfIdx).putVUInt(list.size());
+				for (int i = 0; i < list.size(); i++) pool.add(w, list.get(i));
+			}
+
+			w.putVUInt(libStopAnchor.size());
+			for (Desc s : libStopAnchor) {
+				pool.add(pool.add(pool.add(w, s.owner), s.name), s.param);
+			}
+		} else {
+			w.putShort(0);
 		}
 
-		w.putVUInt(methodMap.size());
-		for (Map.Entry<Desc, String> s : methodMap.entrySet()) {
-			Desc desc = s.getKey();
-			pool.add(pool.add(pool.add(pool.add(w, desc.owner), desc.name), desc.param).put(desc.flags), s.getValue());
-		}
-
-		w.putVUInt(libSupers.size());
-		for (Map.Entry<String, List<String>> s : libSupers.entrySet()) {
-			pool.add(w, s.getKey());
-
-			MapperList list = (MapperList) s.getValue();
-			w.putVUInt(list.selfIdx).putVUInt(list.size());
-			for (int i = 0; i < list.size(); i++) pool.add(w, list.get(i));
-		}
-
-		w.putVUInt(libStopAnchor.size());
-		for (Desc s : libStopAnchor) {
-			pool.add(pool.add(pool.add(w, s.owner), s.name), s.param);
-		}
-
-		try (OutputStream out = new LZMAOutputStream(new FileOutputStream(cache), getLZMAOption(), -1)) {
-			ByteList.ToStream w1 = new ByteList.ToStream(out);
-			pool.writePool(w1.putInt(FILE_HEADER).putLong(hash));
-			w1.flush();
-
+		try (var out = new LZMAOutputStream(cache, getLZMAOption(), -1)) {
+			try (var header = new ByteList.ToStream(out, false)) {
+				pool.writePool(header.putInt(FILE_HEADER));
+			}
 			w.writeToStream(out);
 		}
 	}
 
-	public Boolean readCache(long hash, File cache) throws IOException {
-		if (cache.length() == 0) return null;
-		ByteList r = IOUtil.getSharedByteBuf().readStreamFully(new LZMAInputStream(new FileInputStream(cache)));
+	public Boolean loadCache(InputStream cache, boolean readClassInheritanceMap) throws IOException {
+		var r = MyDataInputStream.wrap(new LZMAInputStream(cache));
 
 		if (r.readInt() != FILE_HEADER) throw new IllegalArgumentException("file header");
 
-		boolean readClassInheritanceMap = r.readLong() == hash;
+		var pool = new StringPool(r);
 
-		StringPool pool = new StringPool(r);
+		int count = r.readVUInt();
+		while(count-- > 0) classMap.put(pool.get(r), pool.get(r));
 
-		int len = r.readVUInt();
-		while(len-- > 0) {
-			classMap.put(pool.get(r), pool.get(r));
-		}
-
-		len = r.readVUInt();
-		fieldMap.ensureCapacity(len);
-		while(len-- > 0) {
+		count = r.readVUInt();
+		fieldMap.ensureCapacity(count);
+		while(count-- > 0) {
 			fieldMap.put(new Desc(pool.get(r), pool.get(r), pool.get(r), r.readUnsignedByte()), pool.get(r));
 		}
 
-		len = r.readVUInt();
-		methodMap.ensureCapacity(len);
-		while(len-- > 0) {
+		count = r.readVUInt();
+		methodMap.ensureCapacity(count);
+		while(count-- > 0) {
 			methodMap.put(new Desc(pool.get(r), pool.get(r), pool.get(r), r.readUnsignedByte()), pool.get(r));
 		}
 
 		if (!readClassInheritanceMap) return false;
 
-		len = r.readVUInt();
-		while(len-- > 0) {
+		count = r.readVUInt();
+		while(count-- > 0) {
 			String name = pool.get(r);
 
 			int idx = r.readVUInt();
@@ -244,8 +251,8 @@ public class Mapper extends Mapping {
 			libSupers.put(name, sch);
 		}
 
-		len = r.readVUInt();
-		while(len-- > 0) {
+		count = r.readVUInt();
+		while(count-- > 0) {
 			libStopAnchor.add(new Desc(pool.get(r), pool.get(r), pool.get(r)));
 		}
 
@@ -1105,7 +1112,7 @@ public class Mapper extends Mapping {
 
 		data.unparsed(); // serialize to cp
 		mapConstant(U, data.cp);
-		mapClassAndSuper(U, data);
+		mapClassAndSuper(data);
 	}
 	/** InnerClass type */
 	private void mapInnerClass(ClassUtil U, ConstantData data) {
@@ -1221,7 +1228,7 @@ public class Mapper extends Mapping {
 		if (generic != null) generic.rename(GENERIC_TYPE_MAPPER);
 	}
 	/** Class name and parent */
-	private void mapClassAndSuper(ClassUtil U, ConstantData data) {
+	private void mapClassAndSuper(ConstantData data) {
 		data.name(data.name());
 		data.parent(data.parent());
 	}
@@ -1307,12 +1314,6 @@ public class Mapper extends Mapping {
 	}
 	// endregion
 	// region libraries
-
-	public final void loadLibraries(File folder) {
-		if (!folder.isDirectory()) Helpers.athrow(new NotDirectoryException(folder.getAbsolutePath()));
-		loadLibraries(IOUtil.findAllFiles(folder));
-	}
-
 	public void loadLibraries(List<?> files) {
 		SimpleList<Context> classes = new SimpleList<>();
 		Desc m = ClassUtil.getInstance().sharedDC;
@@ -1435,60 +1436,6 @@ public class Mapper extends Mapping {
 
 		return this;
 	}
-
-	@SuppressWarnings("unchecked")
-	public final void initEnv(@Nullable Object map, @Nullable Object libPath, @Nullable File cacheFile, boolean reverse) throws IOException {
-		long hash = FILE_HEADER;
-		if (cacheFile != null && libPath != null) {
-			List<?> list;
-			if (libPath instanceof File folder) {
-				if (!folder.isDirectory()) {
-					throw new IllegalArgumentException(new FileNotFoundException(folder.getAbsolutePath()));
-				}
-
-				list = IOUtil.findAllFiles(folder);
-			} else list = (List<Object>) libPath;
-			hash = libHash(list);
-		}
-
-		loadLibraryOnly: {
-
-		if (cacheFile != null && cacheFile.isFile()) {
-			clear();
-
-			Boolean result = null;
-			try {
-				result = readCache(hash, cacheFile);
-			} catch (Throwable e) {
-				if (!(e instanceof IllegalArgumentException)) {
-					Terminal.warning("缓存读取失败!", e);
-				} else {
-					Terminal.warning("缓存读取失败: " + e.getMessage());
-				}
-			}
-
-			if (result != null) {
-				if (result == Boolean.FALSE) break loadLibraryOnly;
-				packup();
-				return;
-			}
-		}
-
-		clear();
-		if (map instanceof File) loadMap((File) map, reverse);
-		else if (map instanceof InputStream) loadMap((InputStream) map, reverse);
-		else if (map instanceof ByteList) loadMap(((ByteList) map).asInputStream(), reverse);
-
-		}
-
-		if (libPath != null) {
-			if (libPath instanceof File) loadLibraries((File) libPath);
-			else loadLibraries((List<Object>) libPath);
-		}
-		packup();
-		if (cacheFile != null) saveCache(hash, cacheFile);
-	}
-
 	// endregion
 
 	/**
@@ -1534,9 +1481,7 @@ public class Mapper extends Mapping {
 	 * By slot
 	 * Caution: unmapped class name + mapped method name / descriptor
 	 */
-	public final void setParamMap(Map<Desc, List<String>> paramMap) {
-		this.paramNameMap = paramMap;
-	}
+	public final void setParamMap(Map<Desc, List<String>> paramMap) {this.paramMap = paramMap;}
 
 	public final State snapshot() { return snapshot(null); }
 	public final State snapshot(State s) {
@@ -1593,19 +1538,5 @@ public class Mapper extends Mapping {
 
 			LOGGER.log(Level.FATAL, "  [{}] {} => {}", null, type, entry.getKey(), entry.getValue());
 		}
-	}
-
-	public static long libHash(List<?> list) {
-		long hash = 0;
-		for (int i = 0; i < list.size(); i++) {
-			if (!(list.get(i) instanceof File f)) continue;
-			if (f.getName().endsWith(".jar") || f.getName().endsWith(".zip")) {
-				hash = 31 * hash + f.getName().hashCode();
-				hash = 31 * hash + (f.length() * 262143);
-				hash ^= f.lastModified();
-			}
-		}
-
-		return hash;
 	}
 }

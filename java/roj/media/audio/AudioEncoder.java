@@ -12,6 +12,6 @@ import java.io.IOException;
  */
 public interface AudioEncoder extends Closeable {
 	void start(Source out, AudioFormat pcm, AudioMetadata meta) throws IOException;
-	void stop();
+	void stop() throws IOException;
 	void write(byte[] b, int off, int len) throws IOException;
 }

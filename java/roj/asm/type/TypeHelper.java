@@ -128,7 +128,6 @@ public final class TypeHelper {
 	 * @see Type#toDesc()
 	 */
 	public static String getField(IType type) {
-		type = type.rawType();
 		if (type.isPrimitive()) return toDesc(((Type) type).type);
 
 		CharList sb = IOUtil.getSharedCharBuf();

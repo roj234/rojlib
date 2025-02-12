@@ -1,4 +1,4 @@
-package roj.plugins.ci.mapping;
+package roj.plugins.ci.minecraft;
 
 import roj.asm.type.Desc;
 import roj.asm.type.TypeHelper;
@@ -21,7 +21,7 @@ import java.util.Map;
  * @author Roj233
  * @since 2022/3/3 12:39
  */
-public final class OjngMapping extends Mapping {
+final class OjngMapping extends Mapping {
 	public void load(File client, File server) throws IOException {
 		SimpleList<String> tmp = new SimpleList<>(5);
 
@@ -108,14 +108,16 @@ public final class OjngMapping extends Mapping {
 			i++;
 		}
 
+		// might have ConcurrentModificationException
 		for (Iterator<Map.Entry<Desc, String>> itr = methodMap.entrySet().iterator(); itr.hasNext(); ) {
 			Map.Entry<Desc, String> entry = itr.next();
 			Desc k = entry.getKey();
 			String param = U.mapMethodParam(classMap.flip(), k.param);
 			if (param != k.param) {
+				itr.remove();
+
 				k.param = param;
 				String v = entry.getValue();
-				itr.remove();
 				methodMap.put(k, v);
 			}
 		}

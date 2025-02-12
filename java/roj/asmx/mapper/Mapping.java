@@ -32,26 +32,28 @@ public class Mapping {
 	protected Flippable<String, String> classMap;
 	protected FindMap<Desc, String> fieldMap, methodMap;
 	protected TrieTree<String> packageMap;
+	protected Map<Desc, List<String>> paramMap;
 	public boolean checkFieldType;
 
-	public static Mapping fullCopy(Mapping m1) {
-		Mapping m = new Mapping(m1.checkFieldType);
-		m.classMap.putAll(m1.classMap);
-		m.fieldMap.putAll(m1.fieldMap);
-		m.methodMap.putAll(m1.methodMap);
-		if (m1.packageMap != null) m.packageMap = new TrieTree<>(m1.packageMap);
+	public Map<Desc, List<String>> getParamMap() {return paramMap;}
+
+	public Mapping copy() {
+		Mapping m = new Mapping(checkFieldType);
+		m.classMap.putAll(classMap);
+		m.fieldMap.putAll(fieldMap);
+		m.methodMap.putAll(methodMap);
+		m.paramMap.putAll(paramMap);
+		if (packageMap != null) m.packageMap = new TrieTree<>(packageMap);
 		return m;
 	}
 
-	public Mapping() {
-		this(false);
-	}
-
+	public Mapping() {this(false);}
 	public Mapping(boolean checkFieldType) {
 		this.checkFieldType = checkFieldType;
 		this.classMap = new HashBiMap<>(1000);
 		this.fieldMap = new MyHashMap<>(1000);
 		this.methodMap = new MyHashMap<>(1000);
+		this.paramMap = new MyHashMap<>();
 	}
 
 	public Mapping(Mapping o) {
@@ -59,6 +61,7 @@ public class Mapping {
 		this.fieldMap = o.fieldMap;
 		this.methodMap = o.methodMap;
 		this.packageMap = o.packageMap;
+		this.paramMap = o.paramMap;
 		this.checkFieldType = o.checkFieldType;
 	}
 
@@ -80,6 +83,7 @@ public class Mapping {
 	public final void loadMap(LinedReader slr, boolean reverse) {
 		ArrayList<String> q = new ArrayList<>();
 		String last0 = null, last1 = null;
+		Desc lastMethod = null;
 
 		while (true) {
 			String s;
@@ -135,7 +139,7 @@ public class Mapping {
 						methodMap.put(new Desc(q.get(0).substring(0, id), q.get(0).substring(id + 1), q.get(1)), q.get(2).substring(id2 + 1));
 					}
 					break;
-				case "FL": case "F":
+				case "FL", "F":
 					FindMap<Desc, String> fm = fieldMap;
 					try {
 						for (int j = 0; j < q.size(); j++) q.set(j, Tokenizer.removeSlashes(q.get(j)));
@@ -155,7 +159,7 @@ public class Mapping {
 						break;
 					}
 					break;
-				case "ML": case "M":
+				case "ML", "M":
 					FindMap<Desc, String> mm = methodMap;
 					try {
 						for (int j = 0; j < q.size(); j++) q.set(j, Tokenizer.removeSlashes(q.get(j)));
@@ -163,8 +167,16 @@ public class Mapping {
 						e.printStackTrace();
 					}
 					if (q.size() == 3) q.add("~");
-					if (reverse) mm.put(new Desc(last1, q.get(2), q.get(3).equals("~") ? q.get(1) : q.get(3)), q.get(0));
-					else mm.put(new Desc(last0, q.get(0), q.get(1)), q.get(2));
+					if (reverse) mm.put(lastMethod = new Desc(last1, q.get(2), q.get(3).equals("~") ? q.get(1) : q.get(3)), q.get(0));
+					else mm.put(lastMethod = new Desc(last0, q.get(0), q.get(1)), q.get(2));
+				break;
+				case "A":
+					SimpleList<String> value = new SimpleList<>(q);
+					for (int j = 0; j < value.size(); j++) {
+						String arg = value.get(j);
+						if (arg.equals("null")) value.set(j, null);
+					}
+					paramMap.put(lastMethod, value);
 				break;
 				default:
 					System.err.println("Unsupported type: " + s);
@@ -176,16 +188,10 @@ public class Mapping {
 		try (TextWriter ob = TextWriter.to(file)) { saveMap(ob); }
 	}
 	public void saveMap(Appendable ob) throws IOException {
-		staticSaveMap(classMap, methodMap.entrySet(), fieldMap.entrySet(), checkFieldType, ob);
-	}
-
-	public static void staticSaveMap(Map<String, String> classMap,
-									 Iterable<Map.Entry<Desc, String>> methodMap, Iterable<Map.Entry<Desc, String>> fieldMap,
-									 boolean checkFieldType, Appendable ob) throws IOException {
 		MyHashMap<String, CharList> classFos = new MyHashMap<>(classMap.size());
 
 		ClassUtil U = ClassUtil.getInstance();
-		for (Map.Entry<Desc, String> entry : fieldMap) {
+		for (Map.Entry<Desc, String> entry : fieldMap.entrySet()) {
 			Desc d = entry.getKey();
 
 			String cn = d.owner;
@@ -210,7 +216,7 @@ public class Mapping {
 			}
 		}
 
-		for (Map.Entry<Desc, String> entry : methodMap) {
+		for (Map.Entry<Desc, String> entry : methodMap.entrySet()) {
 			Desc d = entry.getKey();
 
 			String cn = d.owner;
@@ -228,6 +234,14 @@ public class Mapping {
 			Tokenizer.addSlashes(sb.append(' '), entry.getValue());
 			if (!param.equals(d.param)) Tokenizer.addSlashes(sb.append(' '), param);
 			sb.append('\n');
+
+			List<String> args = paramMap.get(d);
+			if (args != null && !args.isEmpty()) {
+				sb.append("A: ");
+				for (int i = 0; i < args.size();) {
+					sb.append(args.get(i)).append(++i == args.size() ? '\n' : ' ');
+				}
+			}
 		}
 
 		for (Map.Entry<String, String> entry : classMap.entrySet()) {
@@ -345,18 +359,35 @@ public class Mapping {
 		dst.fieldMap = fieldMap1;
 
 		MyHashMap<Desc, String> methodMap1 = new MyHashMap<>(methodMap.size());
-		for (Map.Entry<Desc, String> entry : methodMap.entrySet()) {
+		for (var entry : methodMap.entrySet()) {
 			Desc desc = entry.getKey();
 			Desc target = new Desc(classMap.getOrDefault(desc.owner, desc.owner), entry.getValue(), U.mapMethodParam(classMap, desc.param), desc.flags);
 			methodMap1.put(target, desc.name);
 		}
+		var backupMethodMap = methodMap;
 		dst.methodMap = methodMap1;
+
+		MyHashMap<Desc, List<String>> paramMap1 = new MyHashMap<>(paramMap.size());
+		for (var entry : paramMap.entrySet()) {
+			Desc desc = entry.getKey();
+			Desc target = new Desc(classMap.getOrDefault(desc.owner, desc.owner), backupMethodMap.getOrDefault(desc, desc.name), U.mapMethodParam(classMap, desc.param), desc.flags);
+			paramMap1.put(target, entry.getValue());
+		}
+		dst.paramMap = paramMap1;
 
 		dst.classMap = classMap.flip();
 	}
 
+	public void deleteClassMap() {
+		var newMap = new HashBiMap<String, String>();
+		for (Map.Entry<String, String> entry : classMap.entrySet()) {
+			newMap.put(entry.getKey(), entry.getKey());
+		}
+		classMap = newMap;
+	}
+
 	/**
-	 * Mapper{B->C} .extend ( Mapper{A->B} )   =>>  Mapper{A->C}
+	 * Mapper{A->B} .extend ( Mapper{B->C} )   =>>  Mapper{A->C}
 	 */
 	public void extend(Mapping from) {
 		extend(from, true);
@@ -400,6 +431,28 @@ public class Mapping {
 				if (v == null) itr.remove();
 				else entry.setValue(v);
 			}
+		}
+
+		if (!from.paramMap.isEmpty()) {
+			var reversedMethodMap = new MyHashMap<Desc, String>();
+			for (var entry : methodMap.entrySet()) {
+				Desc desc = entry.getKey();
+				Desc target = new Desc(classMap.getOrDefault(desc.owner, desc.owner), entry.getValue(), U.mapMethodParam(classMap, desc.param), desc.flags);
+				reversedMethodMap.put(target, desc.name);
+			}
+
+			System.out.println(from.paramMap.toString().substring(0, 1000));
+			for (var entry : from.paramMap.entrySet()) {
+				Desc md = entry.getKey();
+
+				var changed = reversedMethodMap.get(md);
+				if (changed != null) {
+					paramMap.putIfAbsent(new Desc(md.owner, changed, md.param), entry.getValue());
+				} else if (keepNotfound) {
+					paramMap.putIfAbsent(md, entry.getValue());
+				}
+			}
+			System.out.println(paramMap.toString().substring(0, 1000));
 		}
 
 		for (Iterator<Map.Entry<String, String>> itr = classMap.entrySet().iterator(); itr.hasNext(); ) {
@@ -466,6 +519,14 @@ public class Mapping {
 					System.out.println("前缀冲突: " + prefix + "=>" + newClass + "与其子类" + name.substring(pos) + "=>" + entry.getValue() + "不在同一域中");
 					classMap.forcePut(name, fixed);
 				}
+			}
+		}
+
+		for (Mapping other : others) {
+			if (priority == Boolean.TRUE) paramMap.putAll(other.paramMap);
+			else for (var entry : other.paramMap.entrySet()) {
+				var prev = paramMap.putIfAbsent(entry.getKey(), entry.getValue());
+				if (prev != null && priority == null) throw new UnsupportedOperationException("replace existing name without priority");
 			}
 		}
 	}

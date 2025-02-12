@@ -435,6 +435,14 @@ public final class IOUtil {
 		} catch (IOException ignored) {}
 		return null;
 	}
+	public static File relativePath(File relativeBase, String myPath) {
+		File pathFile = new File(myPath);
+		if (pathFile.isAbsolute()) {
+			return pathFile;
+		} else {
+			return new File(relativeBase, myPath);
+		}
+	}
 
 	public static long movePath(File from, File to, boolean move) throws IOException {
 		if (!from.isDirectory()) {

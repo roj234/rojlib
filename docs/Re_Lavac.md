@@ -127,7 +127,7 @@ var list = [1, 2, 3]; // List<Integer> (不可变)
 ### finally优化 (已实现)
   在多个嵌套的finally块中，防止代码体积暴增
 ### 预编译函数 (已实现)
-  在编译期间执行标为【可预编译 @roj.compiler.plugins.eval.Constant】并已知入参的函数，并生成常量结果
+  在编译期间执行标为【可预编译 @roj.compiler.plugins.eval.Constexpr】并已知入参的函数，并生成常量结果
 ### 数组压缩
   将基本类型数组压缩为字符串(Base128)，减少文件体积
 ### 隐式导入|ImportAny (已实现)

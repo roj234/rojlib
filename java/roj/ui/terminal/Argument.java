@@ -42,7 +42,7 @@ public interface Argument<T> {
 					String match, prefix;
 
 					if (path.isFile()) return null;
-					if (path.isDirectory()) {
+					if (path.isDirectory() && !pathStr.endsWith(".")) {
 						match = "";
 						prefix = pathStr.endsWith(File.separator) ? "" : File.separator;
 					} else {
@@ -149,10 +149,15 @@ public interface Argument<T> {
 					}
 				} else {
 					List<File> arr = new SimpleList<>();
-					while (true) {
-						arr.add(file.parse(ctx, null));
-						if (ctx.isEOF()) return arr;
-					}
+					do {
+						try {
+							arr.add(file.parse(ctx, null));
+						} catch (ParseException e) {
+							if (!ctx.isEOF() && !ctx.isWordEdge()) throw e;
+							break;
+						}
+					} while (!ctx.isWordEdge() && !ctx.isWordEdge());
+					return arr;
 				}
 			}
 			@Override

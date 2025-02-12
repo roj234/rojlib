@@ -168,7 +168,52 @@ public final class Terminal extends DelegatedPrintStream {
 
 		public static void rainbow(String s, CharList sb) {
 			if (!ANSI_OUTPUT) sb.append(s);
-			else minecraftTooltip(rainbow, s, 70, sb);
+			else {
+				//minecraftTooltip(rainbow, s, 70, sb);
+				var length = s.length();
+				var str = new AnsiString("");
+
+				float hue = (float) ((int) System.currentTimeMillis() / 70 % length) / length;
+				for (int i = 0; i < length; i++) {
+					int rgb = HueToRGB(hue);
+					hue += 0.02f;
+					str.append(new AnsiString(String.valueOf(s.charAt(i))).colorRGB(rgb));
+				}
+				str.writeAnsi(sb);
+			}
+		}
+		public static int HueToRGB(float hue) {
+			int r = 0, g = 0, b = 0;
+			float h = (hue - (float)Math.floor(hue)) * 6.0f;
+			float f = h - (float) Math.floor(h);
+			float q = (1.0f - f);
+			switch ((int) h) {
+				case 0:
+					r = 255;
+					g = (int) (f * 255.0f + 0.5f);
+					break;
+				case 1:
+					r = (int) (q * 255.0f + 0.5f);
+					g = 255;
+					break;
+				case 2:
+					g = 255;
+					b = (int) (f * 255.0f + 0.5f);
+					break;
+				case 3:
+					g = (int) (q * 255.0f + 0.5f);
+					b = 255;
+					break;
+				case 4:
+					r = (int) (f * 255.0f + 0.5f);
+					b = 255;
+					break;
+				case 5:
+					r = 255;
+					b = (int) (q * 255.0f + 0.5f);
+					break;
+			}
+			return (r << 16) | (g << 8) | b;
 		}
 
 		public static void sonic(String s, CharList sb) {
@@ -481,69 +526,52 @@ public final class Terminal extends DelegatedPrintStream {
 	public static Console getConsole() {return console;}
 	//region AnsiInput - 处理字符键入
 	public static final int VK_CTRL = 0x100;
+	public static final int VK_SHIFT = 0x200;
 	private static final TrieTree<Integer> KeyMap = new TrieTree<>();
 	static {
-		key(VK_BACK_SPACE,  "7f");
-		key(VK_ESCAPE,  "1b");
-		key(VK_TAB, "09");
-		key(VK_ENTER, "0d");
+		key(VK_BACK_SPACE,  "\u007f");
+		key(VK_ESCAPE, "\33");
+		key(VK_TAB, "\t");
+		key(VK_ENTER, "\r");
 
-		key(VK_F1, "1b4f50");
-		key(VK_F2, "1b4f51");
-		key(VK_F3, "1b4f52");
-		key(VK_F4, "1b4f53");
-		key(VK_F5, "1b5b31357e");
-		key(VK_F6, "1b5b31377e");
-		key(VK_F7, "1b5b31387e");
-		key(VK_F8, "1b5b31397e");
-		key(VK_F9, "1b5b32307e");
-		key(VK_F10, "1b5b32317e");
-		key(VK_F11, "1b5b32337e");
-		key(VK_F12, "1b5b32347e");
+		key(VK_F1, "\33OP");
+		key(VK_F2, "\33OQ");
+		key(VK_F3, "\33OR");
+		key(VK_F4, "\33OS");
+		key(VK_F5, "\33[15~");
+		key(VK_F6, "\33[17~");
+		key(VK_F7, "\33[18~");
+		key(VK_F8, "\33[19~");
+		key(VK_F9, "\33[20~");
+		key(VK_F10, "\33[21~");
+		key(VK_F11, "\33[23~");
+		key(VK_F12, "\33[24~");
 
-		key(VK_UP, "1b5b41");
-		key(VK_DOWN, "1b5b42");
-		key(VK_LEFT, "1b5b44");
-		key(VK_RIGHT, "1b5b43");
+		var keys = new byte[] {VK_UP,VK_DOWN,VK_LEFT,VK_RIGHT,VK_HOME,VK_END};
+		var values = "ABDCHF";
+		for (int i = 0; i < keys.length; i++) {
+			int key = keys[i]&0xFF;
+			key(key, "\33["+values.charAt(i));
+			key(VK_SHIFT|key, "\33[1;2"+values.charAt(i));
+			key(VK_CTRL|key, "\33[1;5"+values.charAt(i));
+			key(VK_CTRL|VK_SHIFT|key, "\33[1;6"+values.charAt(i));
+		}
 
-		key(VK_INSERT, "1b5b327e");
-		key(VK_HOME, "1b5b48");
-		key(VK_PAGE_UP, "1b5b357e");
-		key(VK_DELETE, "1b5b337e");
-		key(VK_END, " 1b5b46");
-		key(VK_PAGE_DOWN, "1b5b367e");
+		keys = new byte[] {(byte)VK_INSERT, VK_DELETE, VK_PAGE_UP, VK_PAGE_DOWN};
+		values = "2356";
+		for (int i = 0; i < keys.length; i++) {
+			int key = keys[i]&0xFF;
+			key(key, "\33["+values.charAt(i)+"~");
+			key(VK_SHIFT|key, "\33["+values.charAt(i)+";2~");
+			key(VK_CTRL|key, "\33["+values.charAt(i)+";5~");
+			key(VK_CTRL|VK_SHIFT|key, "\33["+values.charAt(i)+";6~");
+		}
 
-		key(VK_CTRL | VK_A, "01");
-		key(VK_CTRL | VK_B, "02");
-		key(VK_CTRL | VK_C, "03");
-		key(VK_CTRL | VK_D, "04");
-		key(VK_CTRL | VK_E, "05");
-		key(VK_CTRL | VK_F, "06");
-		key(VK_CTRL | VK_G, "07");
-		key(VK_CTRL | VK_H, "08");
-		key(VK_CTRL | VK_J, "0a");
-		key(VK_CTRL | VK_K, "0b");
-		key(VK_CTRL | VK_L, "0c");
-		key(VK_CTRL | VK_N, "0e");
-		key(VK_CTRL | VK_O, "0f");
-		key(VK_CTRL | VK_P, "10");
-		key(VK_CTRL | VK_Q, "11");
-		key(VK_CTRL | VK_R, "12");
-		key(VK_CTRL | VK_S, "13");
-		key(VK_CTRL | VK_T, "14");
-		key(VK_CTRL | VK_U, "15");
-		key(VK_CTRL | VK_V, "16");
-		key(VK_CTRL | VK_W, "17");
-		key(VK_CTRL | VK_X, "18");
-		key(VK_CTRL | VK_Y, "19");
-		key(VK_CTRL | VK_Z, "1a");
-
-		key(VK_CTRL | VK_UP, "1b5b313b3541");
-		key(VK_CTRL | VK_DOWN, "1b5b313b3542");
-		key(VK_CTRL | VK_LEFT, "1b5b313b3544");
-		key(VK_CTRL | VK_RIGHT, "1b5b313b3543");
+		for (int i = 0; i < 26; i++) {
+			key(VK_CTRL | VK_A + i, String.valueOf((char) (i + 1)));
+		}
 	}
-	private static void key(int vk, String seq) {KeyMap.put(TextUtil.hex2bytes(seq, new ByteList()), vk);}
+	private static void key(int vk, String seq) {KeyMap.putIfAbsent(new ByteList().putAscii(seq), vk);}
 
 	private static final CharList ISEQ = new CharList(256);
 	public static void onInput(DynByteBuf buf, UnsafeCharset ucs) {
@@ -606,7 +634,7 @@ public final class Terminal extends DelegatedPrintStream {
 				return;
 			}
 		}
-		serr.println("未识别的ANSI转义: "+buf.substring(start, end+1)+" (考虑报告该问题)");
+		serr.println("未识别的ANSI转义: "+Tokenizer.addSlashes(buf)+" (考虑报告该问题)");
 	}
 	//endregion
 	//region AnsiInput基础
@@ -617,13 +645,13 @@ public final class Terminal extends DelegatedPrintStream {
 	 */
 	public static int readInt(int min, int max) {return readLine("您的选择: ", Argument.number(min, max));}
 	public static boolean readBoolean(String info) {return readLine(info, Argument.bool());}
-	public static File readFile(String name) {return readLine("请输入"+name+"的路径", Argument.file());}
-	public static int readChosenFile(List<File> files, String desc) {
+	public static File readFile(String name) {return readLine(name+"的路径: ", Argument.path());}
+	public static int readChosenFile(List<?> files, String desc) {
 		if (files.size() <= 1) return 0;
 		info("在多个 "+desc+" 中输入序号来选择");
 
 		for (int i = 0; i < files.size(); i++) {
-			String name = files.get(i).getName();
+			String name = files.get(i).toString();
 			if (ANSI_OUTPUT) System.out.print("\u001B["+(WHITE+(i&1)*HIGHLIGHT)+'m');
 			System.out.println(i+". "+name);
 			reset();
@@ -638,7 +666,7 @@ public final class Terminal extends DelegatedPrintStream {
 	 */
 	private static <T> T readLine(String prompt, Argument<T> arg) {
 		T v = readLine(new CommandConsole("\u001B[;"+(WHITE+HIGHLIGHT)+'m'+prompt), arg);
-		if (v == null) System.exit(1);
+		//if (v == null) System.exit(1);
 		return v;
 	}
 	//endregion

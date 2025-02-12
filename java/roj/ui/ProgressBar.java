@@ -20,12 +20,13 @@ public class ProgressBar implements AutoCloseable {
 
 	protected String name, prefix;
 	public ProgressBar(String name) {this.name = name;}
-	public void setName(String name) {this.name = name;}
-	public void setPrefix(String prefix) {this.prefix = prefix;}
+	public void setName(String name) {this.name = name;barTime = 0;}
+	public void setPrefix(String prefix) {this.prefix = prefix;barTime = 0;}
 
 	protected int getPostFixWidth() {return 0;}
 	protected void renderPostFix(CharList sb) {}
 	protected void render(CharList b) {Terminal.renderBottomLine(b);}
+	public void _forceUpdate() {render(batch);}
 
 	public void set(String text) {
 		batch.clear();

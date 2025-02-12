@@ -1,4 +1,4 @@
-package roj.plugins.ci.mapping;
+package roj.plugins.ci;
 
 import roj.math.Version;
 

@@ -23,8 +23,7 @@ class AdaptContext implements Serializer<Object> {
 		MyBitSet fieldStateExtra;
 		int fieldState;
 		int fieldId;
-		Object ref;
-		String serCtx;
+		Object ref, ref2;
 		Adapter owner;
 
 		State stk;
@@ -36,7 +35,7 @@ class AdaptContext implements Serializer<Object> {
 			this.fieldStateExtra = ctx.fieldStateEx;
 
 			this.ref = ctx.ref;
-			this.serCtx = ctx.serCtx;
+			this.ref2 = ctx.ref2;
 
 			this.owner = ctx.curr;
 
@@ -47,7 +46,7 @@ class AdaptContext implements Serializer<Object> {
 			ctx.fieldStateEx = null;
 
 			ctx.ref = null;
-			ctx.serCtx = null;
+			ctx.ref2 = null;
 			return this;
 		}
 		void pop(AdaptContext ctx) {
@@ -56,7 +55,7 @@ class AdaptContext implements Serializer<Object> {
 			ctx.fieldStateEx = fieldStateExtra;
 
 			ctx.ref = ref;
-			ctx.serCtx = serCtx;
+			ctx.ref2 = ref2;
 
 			ctx.curr = owner;
 
@@ -74,8 +73,7 @@ class AdaptContext implements Serializer<Object> {
 
 	int fieldId;
 
-	Object ref;
-	String serCtx;
+	Object ref, ref2;
 
 	public AdaptContext(Adapter root) {
 		this.curr = this.root = root;
@@ -233,7 +231,7 @@ class AdaptContext implements Serializer<Object> {
 		if (fieldStateEx != null) fieldStateEx.clear();
 
 		ref = null;
-		serCtx = null;
+		ref2 = null;
 
 		stack = null;
 

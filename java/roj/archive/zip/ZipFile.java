@@ -40,13 +40,13 @@ import static roj.reflect.ReflectionUtils.u;
  */
 public class ZipFile implements ArchiveFile {
 	Source r;
-	private Source fpRead;
+	Source fpRead;
 	private static final long FPREAD_OFFSET = ReflectionUtils.fieldOffset(ZipFile.class, "fpRead");
 
 	private static final XHashSet.Shape<String, ZEntry> ENTRY_SHAPE = XHashSet.noCreation(ZEntry.class, "name", "next");
 
 	XHashSet<String, ZEntry> namedEntries;
-	SimpleList<ZEntry> entries;
+	SimpleList<ZEntry> entries = new SimpleList<>();
 
 	private ByteList buf;
 	final Charset cs;
@@ -128,7 +128,7 @@ public class ZipFile implements ArchiveFile {
 	}
 
 	public final void reload() throws IOException {
-		entries = new SimpleList<>();
+		entries.clear();
 		namedEntries = null;
 		cDirLen = cDirOffset = 0;
 
@@ -338,7 +338,7 @@ public class ZipFile implements ArchiveFile {
 		// 8; HAS EXT
 		if ((flags & 8) != 0 && cSize == 0) {
 			// skip method
-			InflateIn in1 = (InflateIn) getCachedInflater(r.asInputStream());
+			InflateIn in1 = (InflateIn) getCachedInflater(new SourceInputStream(r, Long.MAX_VALUE, false));
 			byte[] tmp = buf.list;
 			while (in1.read(tmp) >= 0);
 
@@ -487,7 +487,8 @@ public class ZipFile implements ArchiveFile {
 		cDirOffset = buf.readLongLE(36);
 	}
 
-	private void verifyEntry(Source r, ZEntry entry) throws IOException {
+	public void validateEntry(ZEntry entry) throws IOException {validateEntry(r, entry);}
+	private void validateEntry(Source r, ZEntry entry) throws IOException {
 		if ((entry.mzFlag & ZEntry.MZ_ERROR) != 0 && (flags & FLAG_VERIFY) != 0) throw new ZipException(entry+"报告自身已损坏");
 		if ((entry.mzFlag & ZEntry.MZ_BACKWARD) == 0) return;
 
@@ -566,7 +567,7 @@ public class ZipFile implements ArchiveFile {
 		Source src = (Source) u.getAndSetObject(this, FPREAD_OFFSET, null);
 		if (src == null) src = r.threadSafeCopy();
 
-		verifyEntry(src, entry);
+		validateEntry(src, entry);
 		src.seek(entry.offset);
 		return new SourceInputStream.Shared(src, entry.cSize, this, FPREAD_OFFSET);
 	}

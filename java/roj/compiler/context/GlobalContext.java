@@ -67,7 +67,7 @@ public class GlobalContext implements LavaFeatures {
 
 	protected final MyHashMap<String, Object> libraryCache = new MyHashMap<>();
 	protected final List<Library> libraries = new SimpleList<>();
-	private final List<Library> unenumerableLibraries = new SimpleList<>(LibraryCache.RUNTIME);
+	private final List<Library> unenumerableLibraries = new SimpleList<>();
 
 	protected final XHashSet<IClass, ResolveHelper> extraInfos = CLASS_EXTRA_INFO_SHAPE.create();
 	protected MyHashMap<String, List<String>> packageFastPath = new MyHashMap<>();
@@ -82,6 +82,8 @@ public class GlobalContext implements LavaFeatures {
 		@Override public String moduleName() {return module == null ? null : module.self.name;}
 	}
 
+	{addRuntime();}
+	protected void addRuntime() {unenumerableLibraries.addAll(LibraryCache.RUNTIME);}
 	public void addLibrary(Library library) {
 		var content = library.content();
 		if (content.isEmpty()) {

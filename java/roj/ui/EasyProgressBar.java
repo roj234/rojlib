@@ -25,7 +25,7 @@ public class EasyProgressBar extends ProgressBar {
 
 	public EasyProgressBar(String name) { super(name); this.unit = "it"; }
 	public EasyProgressBar(String name, String unit) { super(name); this.unit = unit; }
-	public void setUnit(String unit) { this.unit = unit; }
+	public void setUnit(String unit) { this.unit = unit; barTime = 0; }
 
 	public void reset() {setTotal(0);}
 	public void setUnlimited() {setTotal(-1);}

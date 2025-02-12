@@ -1,106 +1,107 @@
 package roj.plugins.ci;
 
 import roj.archive.ArchiveUtils;
+import roj.archive.zip.ZEntry;
+import roj.archive.zip.ZipFile;
+import roj.archive.zip.ZipFileWriter;
 import roj.archive.zip.ZipOutput;
 import roj.asmx.mapper.Mapper;
 import roj.collect.LinkedMyHashMap;
 import roj.collect.MyHashMap;
-import roj.config.FileConfig;
-import roj.config.data.CList;
-import roj.config.data.CMap;
-import roj.config.data.CString;
+import roj.collect.SimpleList;
+import roj.concurrent.timing.ScheduleTask;
+import roj.io.FastFailException;
 import roj.io.IOUtil;
-import roj.text.CharList;
-import roj.text.TextUtil;
+import roj.text.Template;
 import roj.ui.Terminal;
-import roj.util.Helpers;
+import roj.util.DynByteBuf;
 
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.nio.charset.Charset;
-import java.nio.charset.StandardCharsets;
-import java.nio.charset.UnsupportedCharsetException;
 import java.util.*;
 import java.util.concurrent.Callable;
-import java.util.concurrent.locks.LockSupport;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-
-import static roj.plugins.ci.Shared.*;
 
 /**
  * @author Roj233
  * @since 2021/7/11 13:59
  */
-public final class Project extends FileConfig {
-	static final MyHashMap<String, Project> projects = new MyHashMap<>();
-	static final Matcher matcher = Pattern.compile("^[a-z_\\-][a-z0-9_\\-]*$").matcher("");
+public final class Project {
+	public boolean compiling;
 
-	public static Project load(String name) {
-		if (!matcher.reset(name).matches()) throw new IllegalArgumentException("名称必须为全小写,不能以数字开头,可以包含下划线 ^[a-z_\\-][a-z0-9_\\-]*$");
-		Project project = projects.get(name);
-		if (project == null) projects.put(name, project = new Project(name));
-		else project.reload();
-		return project;
-	}
+	FMD.EnvPojo.Project conf;
 
 	final String name;
-	String version, atName;
-	Charset charset;
+	String version;
+	final Charset charset;
 	List<Project> dependencies;
-
+	final File root, srcPath, resPath, libPath;
 	final Compiler compiler;
+	public final Workspace workspace;
+	public Mapper mapper;
+	public Mapper.State mapperState;
+	public final Map<String, String> variables;
 
-	Mapper.State state;
-	String atConfigPathStr;
-	final File basePath;
-	final File srcPath, resPath, binJar;
+	final File unmappedJar;
 	private final String resPrefix;
+	ZipOutput mappedWriter, unmappedWriter;
+	FMD.SignatureInfo signatureInfo;
 
-	ZipOutput dstFile, binFile;
+	public String getName() {return name;}
+	public File getRoot() {return root;}
+	public File getResPath() {return resPath;}
 
-	private Project(String name) {
-		super(new File(PROJECT_DIR, name+"/project.json"), true);
-		this.name = name;
+	public Project(FMD.EnvPojo.Project config) throws IOException {
+		this.conf = config;
+		this.name = IOUtil.safePath(config.name);
+		this.version = config.version.toString();
+		this.charset = config.charset;
 
-		basePath = new File(BASE, "projects/"+name).getAbsoluteFile();
-		resPath = new File(BASE, getConfig().getString("OVERRIDE_RES_PATH", "projects/"+name+"/resources")).getAbsoluteFile();
-		srcPath = new File(BASE, getConfig().getString("OVERRIDE_SRC_PATH", "projects/"+name+"/java")).getAbsoluteFile();
-		binJar = new File(BASE, getConfig().getString("OVERRIDE_DEV_JAR", "projects/"+name+".jar")).getAbsoluteFile();
+		this.root = new File(FMD.PROJECT_PATH, name);
+		this.srcPath = new File(root, "java");
+		this.resPath = new File(root, "resources");
+		this.libPath = new File(root, "libs");
+		this.unmappedJar = new File(FMD.PROJECT_PATH, name+".jar");
+
+		var obj = FMD.compilerTypes.get(config.compiler);
+		if (obj == null) throw new NullPointerException("找不到编译器"+config.compiler);
+		this.compiler =  obj.getInstance(srcPath.getAbsolutePath().replace(File.separatorChar, '/'));
+		var obj2 = FMD.workspaces.get(config.workspace);
+		if (obj2 == null) throw new NullPointerException("找不到工作空间"+config.workspace);
+		this.workspace = obj2;
+
+		this.variables = new MyHashMap<>(obj2.variables);
+		this.variables.put("name", name);
+		this.variables.put("version", version);
+		this.variables.putAll(config.variables);
+
+		if (root.mkdirs()) Workspace.addIDEAProject(this, false);
+
+		srcPath.mkdir();
+		resPath.mkdir();
+		libPath.mkdir();
+		unmappedJar.createNewFile();
+
+		unmappedWriter = new ZipOutput(unmappedJar);
+		unmappedWriter.setCompress(true);
+
 		resPrefix = resPath.getAbsolutePath();
-
-		// noinspection all
-		resPath.mkdirs();
-		// noinspection all
-		srcPath.mkdirs();
-		// noinspection all
-		binJar.getParentFile().mkdir();
-
-		compiler = Compiler.getInstance("JAVA", srcPath.getAbsolutePath().replace(File.separatorChar, '/'));
-
-		try {
-			if (binJar.length() == 0) if (!binJar.createNewFile() || !binJar.setLastModified(0)) Terminal.warning("无法初始化StampFileTime");
-			binFile = new ZipOutput(binJar);
-			binFile.setCompress(true);
-		} catch (Throwable e) {
-			Terminal.warning("无法初始化StampFile, 请尝试重新启动FMD或删除 "+binJar.getAbsolutePath(), e);
-			LockSupport.parkNanos(3_000_000_000L);
-			System.exit(-2);
-		}
 	}
-
-	public List<Project> getAllDependencies() {
-		if (dependencies.isEmpty()) return dependencies;
-
+	public void init() {
 		LinkedMyHashMap<Project, Void> projects = new LinkedMyHashMap<>();
 
-		List<Project> dest = new ArrayList<>(this.dependencies);
+		List<Project> dest = new ArrayList<>();
+		for (String name : conf.dependency) dest.add(FMD.projects.get(name));
+
 		List<Project> dest2 = new ArrayList<>();
 		while (!dest.isEmpty()) {
 			for (int i = 0; i < dest.size(); i++) {
-				projects.put(dest.get(i), null);
-				dest2.addAll(dest.get(i).dependencies);
+				Project key = dest.get(i);
+				projects.put(key, null);
+
+				for (String name : key.conf.dependency) dest2.add(FMD.projects.get(name));
 			}
 			List<Project> tmp = dest;
 			dest = dest2;
@@ -108,138 +109,133 @@ public final class Project extends FileConfig {
 			dest2.clear();
 		}
 
-		for (Map.Entry<Project, Void> entry : projects.entrySet()) {
-			dest2.add(entry.getKey());
-		}
-
-		return dest2;
+		this.dependencies = new SimpleList<>(projects.keySet());
 	}
 
-	public String dependencyString() {
-		CharList cl = new CharList();
-		if (!dependencies.isEmpty()) {
-			for (int i = 0; i < dependencies.size(); i++) {
-				cl.append(dependencies.get(i).name).append('|');
-			}
-			cl.setLength(cl.length() - 1);
-		}
-		return cl.toString();
-	}
+	public List<Project> getAllDependencies() {return dependencies;}
 
-	public void setDependencyString(String text) {
-		List<String> depend = TextUtil.split(new ArrayList<>(), text, '|');
-		for (int i = 0; i < depend.size(); i++) {
-			dependencies.add(Project.load(depend.get(i)));
-		}
-	}
-
-	protected void load(CMap map) {
-		version = map.putIfAbsent("version", "1.0-SNAPSHOT");
-
-		String cs = map.putIfAbsent("charset", "UTF-8");
-		charset = StandardCharsets.UTF_8;
-		try {
-			charset = Charset.forName(cs);
-		} catch (UnsupportedCharsetException e) {
-			Terminal.warning(name+" 的字符集 "+cs+" 不存在, 使用默认的UTF-8");
-		}
-
-		String atName = this.atName = map.putIfAbsent("atConfig", "");
-		atConfigPathStr = atName.length() > 0 ? resPath.getPath() + "/META-INF/"+atName+".cfg" : null;
-
-		List<String> required = map.getOrCreateList("dependency").toStringList();
-		List<Project> cast = Helpers.cast(required);
-		if (!required.isEmpty()) {
-			for (int i = 0; i < required.size(); i++) {
-				File config = new File(PROJECT_DIR, required.get(i)+"/project.json");
-				if (!config.exists()) {
-					Terminal.warning(name+" 的前置"+required.get(i)+"未找到");
-				} else {
-					cast.set(i, load(required.get(i)));
-				}
-			}
-			dependencies = cast;
-		} else {
-			dependencies = Collections.emptyList();
-		}
-	}
-
-	public Callable<Void> getResourceTask(boolean inc) {
+	private int resCount;
+	public Callable<Integer> getResourceTask(long stamp) {
 		return () -> {
-			boolean prevCompress = dstFile.isCompress();
+			resCount = 0;
+			long useCompileTimestamp = "true".equals(variables.get("fmd:resource:use_compile_timestamp")) ? System.currentTimeMillis() : 0;
+			boolean prevCompress = mappedWriter.isCompress();
 			block: {
-				// 检测是否第一次运行 关机状态无法检测文件变化
-				if (state != null && inc) {
-					Set<String> set = watcher.getModified(Project.this, FileWatcher.ID_RES);
+				if (stamp > 0) {
+					Set<String> set = FMD.watcher.getModified(Project.this, FileWatcher.ID_RES);
 					if (!set.contains(null)) {
 						synchronized (set) {
-							for (String s : set) writeRes(s);
+							for (String fileName : set) writeRes(fileName, useCompileTimestamp != 0 ? useCompileTimestamp : new File(fileName).lastModified());
 							set.clear();
 						}
 						break block;
 					}
 				}
 
+				// update all resource ??
 				IOUtil.findAllFiles(resPath, file -> {
-					writeRes(file.getAbsolutePath());
+					long lastModified = file.lastModified();
+					if (lastModified >= stamp) writeRes(file.getAbsolutePath(), useCompileTimestamp != 0 ? useCompileTimestamp : lastModified);
 					return false;
 				});
 
-				/*IOUtil.findAllFiles(srcPath, file -> {
-					if (!IOUtil.extensionName(file.getName()).equalsIgnoreCase("java"))
-						writeRes(file.getAbsolutePath());
-					return false;
-				});*/
+				ZipFileWriter zfw = mappedWriter.getZFW();
+				if (zfw != null) {
+					for (String depend : conf.binary_depend) {
+						try (var zf = new ZipFile(IOUtil.relativePath(depend.startsWith("/") ? FMD.BASE : libPath, depend))) {
+							for (ZEntry entry : zf.entries()) {
+								mappedWriter.getZFW().copy(zf, entry);
+							}
+						}
+					}
+				}
 			}
 
-			dstFile.setCompress(prevCompress);
-
-			loadMapper();
-			return null;
+			mappedWriter.setCompress(prevCompress);
+			return resCount;
 		};
 	}
-
-	final void writeRes(String s) {
-		String relPath = s.substring(resPrefix.length()+1).replace(File.separatorChar, '/');
-		dstFile.setCompress(!ArchiveUtils.INCOMPRESSIBLE_FILE_EXT.contains(IOUtil.extensionName(relPath)));
+	private void writeRes(String absolutePath, long time) {
+		resCount++;
+		String relPath = absolutePath.substring(resPrefix.length()+1).replace(File.separatorChar, '/');
+		mappedWriter.setCompress(!ArchiveUtils.INCOMPRESSIBLE_FILE_EXT.contains(IOUtil.extensionName(relPath)));
 		try {
-			dstFile.set(relPath, new FileInputStream(s));
+			if (conf.variable_replace_in.strStartsWithThis(relPath)) {
+				String string;
+				try {
+					string = IOUtil.readString(new File(absolutePath));
+				} catch (Exception e) {
+					FMD.LOGGER.warn("变量替换规则可能命中了二进制文件{}", e, relPath);
+					return;
+				}
+
+				var template = Template.compile(string);
+				if (template.hasName()) {
+					string = template.format(variables, IOUtil.getSharedCharBuf()).toString();
+				}
+
+				String fuckJavac = string;
+				mappedWriter.set(relPath, () -> DynByteBuf.wrap(fuckJavac.getBytes(charset)), time);
+				return;
+			}
+
+			mappedWriter.setStream(relPath, () -> {
+				try {
+					return new FileInputStream(absolutePath);
+				} catch (FileNotFoundException e) {
+					throw new RuntimeException(e);
+				}
+			}, time);
 		} catch (IOException e) {
-			Terminal.warning("资源文件", e);
+			FMD.LOGGER.warn("资源文件{}复制失败", e, relPath);
 		}
 	}
 
-	public void registerWatcher() {
+	private ScheduleTask delayedCompile;
+	private boolean autoCompile;
+	public void compileSuccess() {
+		if (delayedCompile != null) delayedCompile.cancel();
 		try {
-			Shared.watcher.register(this);
+			FMD.watcher.add(this);
 		} catch (IOException e) {
 			Terminal.warning("无法启动文件监控", e);
 		}
 	}
+	public void setAutoCompile(boolean b) {autoCompile = b;}
+	public boolean isAutoCompile() {return autoCompile;}
+	public void fileChanged() {
+		if (delayedCompile != null) delayedCompile.cancel();
+		if (autoCompile) {
+			delayedCompile = FMD.DefaultScheduler.delay(() -> {
+				try {
+					block:
+					if (!isDirty(this)) {
+						for (Project p : dependencies) {
+							if (isDirty(p)) break block;
+						}
+						return;
+					}
 
-	@Override
-	protected void save(CMap map) {
-		map.put("charset", charset == null ? "UTF-8" : charset.name());
-		map.put("version", version);
-		map.put("atConfig", atName);
-
-		CList list = new CList(dependencies.size());
-		for (int i = 0; i < dependencies.size(); i++) {
-			list.add(CString.valueOf(dependencies.get(i).name));
+					FMD.build(Collections.singleton("zl"), this);
+				} catch (FastFailException ignored) {
+					fileChanged();
+				} catch (Throwable e) {
+					Terminal.error("自动编译出错", e);
+					FMD.watcher.removeAll();
+				}
+			}, FMD.config.getInteger("自动编译防抖"));
 		}
-		map.put("dependency", list);
+	}
+	private static boolean isDirty(Project p) {
+		var modified = FMD.watcher.getModified(p, IFileWatcher.ID_SRC);
+		if (modified.contains(null) || modified.isEmpty()) {
+			if (modified.contains(null)) FMD.LOGGER.debug("{}未注册监听器", p.getName());
+			return false;
+		}
+		return true;
 	}
 
-	@Override
-	public boolean equals(Object o) {
-		if (this == o) return true;
-		if (o == null || getClass() != o.getClass()) return false;
-		Project project = (Project) o;
-		return name.equals(project.name);
-	}
-
-	@Override
-	public int hashCode() {
-		return name.hashCode();
-	}
+	public FMD.EnvPojo.Project serialize() {return conf;}
+	public Map<String, String> getVariables() {return variables;}
+	public String getOutputFormat() {return Template.compile(conf.name_format).format(variables, IOUtil.getSharedCharBuf()).toString();}
 }

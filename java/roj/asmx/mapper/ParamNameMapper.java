@@ -70,6 +70,7 @@ public abstract class ParamNameMapper {
 				int len = r.readUnsignedByte();
 				while (len-- > 0) {
 					String name = ((CstUTF) pool.get(r)).str();
+					while (parNames.size() < j) parNames.add(null);
 					if (parNames.get(j) == null && validNameChars.contains(name.charAt(0))) parNames.set(j, name);
 
 					r.rIndex += 2;

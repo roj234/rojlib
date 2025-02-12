@@ -329,7 +329,7 @@ public class Signature extends Attribute {
 					i1.value++;
 				}
 
-				sign.values = new SimpleList<>(v);
+				sign.Throws = new SimpleList<>(v);
 			}
 		} else {
 			i1.value = i;

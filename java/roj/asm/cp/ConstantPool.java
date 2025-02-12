@@ -284,11 +284,11 @@ public class ConstantPool {
 	}
 
 	private void addConstant(Constant c) {
-		int size = constants.size();
-		if (size >= 0xFFFE) throw new UnsupportedOperationException("constant overflow!");
-		c.setIndex(size+1);
 		refMap.add(c);
 		constants.add(c);
+		int size = constants.size();
+		c.setIndex(size);
+		if (size >= 0xFFFF) throw new UnsupportedOperationException("constant overflow!");
 
 		switch (c.type()) {
 			case UTF -> length += 3 + DynByteBuf.byteCountDioUTF(((CstUTF) c).str());

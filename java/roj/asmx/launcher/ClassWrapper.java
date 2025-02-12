@@ -242,22 +242,23 @@ public class ClassWrapper implements Function<String, Class<?>> {
 	public List<ITransformer> getTransformers() {return transformers;}
 	public void addTransformerExclusion(String toExclude) {transformExcept.add(toExclude);}
 
-	public void enableFastZip(URL url) throws IOException {
+	public void enableFastZip(URL url, boolean skipCodeSource) throws IOException {
 		ZipFile zf = new ZipFile(new File(Escape.decodeURI(url.getPath().substring(1))));
 		JarVerifier jv = JarVerifier.create(zf);
-		if (archives.isEmpty()) zf.getStream(zf.entries().iterator().next()).close(); // INIT
+		if (archives.isEmpty()) IOUtil.read(zf.getStream(zf.entries().iterator().next())); // INIT
 		archives.add(zf);
+		int slot = verifiers.size();
+		verifiers.add(null);
+		locations.add(new CodeSource(url, (CodeSigner[]) null));
 		if (jv != null) {
+			if (skipCodeSource) locations.set(slot, jv.getCodeSource());
 			try {
 				jv.ensureManifestValid();
 			} catch (GeneralSecurityException e) {
 				Helpers.athrow(e);
 			}
-			locations.add(jv.getCodeSource());
-		} else {
-			locations.add(new CodeSource(url, (CodeSigner[]) null));
+			verifiers.set(slot, jv);
 		}
-		verifiers.add(jv);
 	}
 	public void enableTransformerCache() throws IOException {
 		ByteList buf = new ByteList();

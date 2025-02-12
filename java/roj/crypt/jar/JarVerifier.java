@@ -21,10 +21,12 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.net.URL;
 import java.security.*;
+import java.security.cert.Certificate;
 import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.jar.Attributes;
 import java.util.jar.Manifest;
@@ -34,7 +36,8 @@ import java.util.jar.Manifest;
  * @since 2024/3/22 0022 19:44
  */
 public class JarVerifier {
-	private static final MyHashSet<String> VALID_CERTIFICATE_EXTENSION = new MyHashSet<>("RSA", "DSA", "EC");
+	public static String CREATED_BY = "ImpLib/JarSigner (v1.1)";
+	private static final MyHashSet<String> VALID_CERTIFICATE_EXTENSION = new MyHashSet<>("rsa", "dsa", "ec");
 	private static final List<String> SECURE_HASH_ALGORITHMS = Arrays.asList("SHA-512", "SHA-384", "SHA-256");
 	private static final ThreadLocal<Map<String, MessageDigest>> DIGESTS = new ThreadLocal<>();
 
@@ -152,6 +155,11 @@ public class JarVerifier {
 		if (digest == null) digests.put(algorithm, digest = MessageDigest.getInstance(algorithm));
 		return digest;
 	}
+	private static MessageDigest digesterLazyReuse(Map<String, MessageDigest> digests, String algorithm) throws NoSuchAlgorithmException {
+		MessageDigest digest = digests.remove(algorithm);
+		if (digest == null) digest = MessageDigest.getInstance(algorithm);
+		return digest;
+	}
 
 	public InputStream wrapInput(String name, InputStream in) {
 		Attributes attr = manifest.getAttributes(name);
@@ -168,9 +176,15 @@ public class JarVerifier {
 			return in;
 		}
 
+		var digests = DIGESTS.get();
+		if (digests == null) {
+			digests = new MyHashMap<>();
+			DIGESTS.set(digests);
+		}
+
 		MessageDigest md;
 		try {
-			md = digester(DIGESTS.get(), algorithm);
+			md = digesterLazyReuse(digests, algorithm);
 		} catch (NoSuchAlgorithmException e) {
 			return in;
 		}
@@ -213,6 +227,7 @@ public class JarVerifier {
 			if (!Base64.encode(DynByteBuf.wrap(md.digest()), IOUtil.getSharedCharBuf()).equals(hash)) {
 				throw new SecurityException(name+"的"+md.getAlgorithm()+"校验失败");
 			}
+			DIGESTS.get().put(md.getAlgorithm(), md);
 		}
 	}
 
@@ -253,11 +268,11 @@ public class JarVerifier {
 	}
 
 	@Nullable
-	public static String signJar(ZipArchive zf, String hashAlg, String signHashAlg, List<X509Certificate> certs, PrivateKey prk, String sfName) throws GeneralSecurityException, IOException {
+	public static String signJar(ZipArchive zf, String hashAlg, String signHashAlg, List<Certificate> certs, PrivateKey prk, String sfName) throws GeneralSecurityException, IOException {
 		String signAlg = certs.get(0).getPublicKey().getAlgorithm();
 		var signer = Signature.getInstance(signHashAlg.replace("-", "")+"with"+(signAlg.equals("EC")?"ECDSA": signAlg));
 
-		if (!VALID_CERTIFICATE_EXTENSION.contains(signAlg)) return "Invalid SignAlg: not in "+VALID_CERTIFICATE_EXTENSION;
+		if (!VALID_CERTIFICATE_EXTENSION.contains(signAlg.toLowerCase(Locale.ROOT))) return "Invalid SignAlg: not in "+VALID_CERTIFICATE_EXTENSION;
 		if (!SECURE_HASH_ALGORITHMS.contains(hashAlg) || !SECURE_HASH_ALGORITHMS.contains(signHashAlg)) return "Invalid HashAlg: not in "+SECURE_HASH_ALGORITHMS;
 
 		var md = MessageDigest.getInstance(hashAlg);
@@ -267,7 +282,7 @@ public class JarVerifier {
 		if (mfin == null) return "未找到MANIFEST.MF";
 		var mf = new Manifest(mfin);
 
-		var digestKey = new Attributes.Name(hashAlg +"-Digest");
+		var digestKey = new Attributes.Name(hashAlg+"-Digest");
 		for (ZEntry entry : zf.entries()) {
 			if (entry.getName().startsWith("META-INF/")) {
 				if (entry.getName().equals("META-INF/MANIFEST.MF")) continue;
@@ -310,7 +325,7 @@ public class JarVerifier {
 		var sf = new Manifest();
 		var sfMain = sf.getMainAttributes();
 		sfMain.put(Attributes.Name.SIGNATURE_VERSION, "1.0");
-		sfMain.put(new Attributes.Name("Created-By"), "ImpLib/JarSigner (v1.1)");
+		sfMain.put(new Attributes.Name("Created-By"), CREATED_BY);
 		sfMain.put(new Attributes.Name(hashAlg +"-Digest-Manifest"), Base64.encode(DynByteBuf.wrap(md.digest(mfBytes)), IOUtil.getSharedCharBuf()).toString());
 		sfMain.put(new Attributes.Name(hashAlg +"-Digest-Manifest-Main-Attributes"), Base64.encode(DynByteBuf.wrap(mb.digest(md, null)), IOUtil.getSharedCharBuf()).toString());
 		for (String name : mb.namedAttrMap.keySet()) {

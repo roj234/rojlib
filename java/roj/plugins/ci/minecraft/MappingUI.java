@@ -2,7 +2,7 @@
  * Created by JFormDesigner on Sat Sep 09 21:07:44 CST 2023
  */
 
-package roj.plugins.ci.mapping;
+package roj.plugins.ci.minecraft;
 
 import roj.asm.type.Desc;
 import roj.asmx.mapper.Mapper;
@@ -17,9 +17,12 @@ import roj.ui.GuiUtil;
 import roj.util.Helpers;
 
 import javax.swing.*;
+import javax.swing.border.EmptyBorder;
 import java.awt.*;
 import java.awt.event.*;
 import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;
@@ -63,13 +66,15 @@ public class MappingUI extends JFrame {
 				break;
 			case "tab srg": {
 				TSrgMapping m1 = new TSrgMapping();
-				m1.readMcpConfig(input, null, new SimpleList<>());
+				m1.readMcpConfig(input, m1.getParamMap(), new SimpleList<>());
 				m = m1;
 			}
 			break;
 			case "mapper cache": {
 				Mapper m1 = new Mapper();
-				m1.readCache(0L, input);
+				try (var src = new FileInputStream(input)) {
+					m1.loadCache(src, true);
+				}
 				m = m1;
 			}
 			break;
@@ -81,7 +86,7 @@ public class MappingUI extends JFrame {
 			break;
 			case "yarn": {
 				YarnMapping m1 = new YarnMapping();
-				m1.readYarnMap(input, new SimpleList<>(), null, null);
+				m1.readYarnMap(input, new SimpleList<>(), null, m1.getParamMap());
 				m = m1;
 			}
 			break;
@@ -132,6 +137,7 @@ public class MappingUI extends JFrame {
 
 		List<NamedMapping> maps = uiMappingList.getSelectedValuesList();
 
+		System.out.println(maps);
 		for (NamedMapping m : maps) {
 			out.mapping.merge(m.mapping, true);
 		}
@@ -178,11 +184,16 @@ public class MappingUI extends JFrame {
 	}
 
 	private void uiSave(ActionEvent e) {
-		File file = GuiUtil.fileSaveTo("保存映射表", "mapping.map", MappingUI.this);
+		File file = GuiUtil.fileSaveTo("保存映射表", uiMappingList.getSelectedValue().name+".srg", MappingUI.this);
 		if (file == null) return;
 
 		try {
 			uiMappingList.getSelectedValue().mapping.saveMap(file);
+			try (var fos = new FileOutputStream(file.getAbsolutePath()+".lzma")) {
+				Mapper mapper = new Mapper();
+				mapper.loadMap(file, false);
+				mapper.saveCache(fos, 1);
+			}
 		} catch (IOException ex) {
 			ex.printStackTrace();
 		}
@@ -214,12 +225,31 @@ public class MappingUI extends JFrame {
 			uiExtend.setEnabled(len == 2);
 			uiCopy.setEnabled(one);
 			uiSave.setEnabled(one);
+			uiDelLeft.setEnabled(one);
+			uiDelRight.setEnabled(one);
 		});
 
 		uiMappingList.addMouseListener(new DoubleClickHelper(uiMappingList, 300, (e) -> {
 			uiDel2.setVisible(false);
 			preview(uiMappingList.getSelectedValue());
 		}));
+
+		uiDelLeft.addActionListener(e -> {
+			NamedMapping m = getNamedMapping();
+			NamedMapping om = uiMappingList.getSelectedValue();
+			if (m.name == null) m.name = om.name+"-rl";
+			m.mapping = om.mapping.reverse();
+			m.mapping.deleteClassMap();
+			mappings.addElement(m);
+		});
+		uiDelRight.addActionListener(e -> {
+			NamedMapping m = getNamedMapping();
+			NamedMapping om = uiMappingList.getSelectedValue();
+			if (m.name == null) m.name = om.name+"-rr";
+			m.mapping = new Mapping(om.mapping);
+			m.mapping.deleteClassMap();
+			mappings.addElement(m);
+		});
 
 		dlgPreview.addWindowListener(new WindowAdapter() {
 			@Override
@@ -277,145 +307,165 @@ public class MappingUI extends JFrame {
 
 	private void initComponents() {
 		// JFormDesigner - Component initialization - DO NOT MODIFY  //GEN-BEGIN:initComponents  @formatter:off
-		JScrollPane scrollPane1 = new JScrollPane();
-		uiMappingList = new JList<>();
-		uiName = new JTextField();
-		uiMappingType = new JComboBox<>();
-		JLabel label1 = new JLabel();
-		JButton uiLoad = new JButton();
-		uiDel = new JButton();
-		uiFlip = new JButton();
-		uiMerge = new JButton();
-		uiExtend = new JButton();
-		uiSave = new JButton();
-		uiCopy = new JButton();
-		dlgPreview = new JDialog();
-		JScrollPane scrollPane2 = new JScrollPane();
-		uiPreview = new JList<>();
-		uiDel2 = new JButton();
+        var scrollPane1 = new JScrollPane();
+        uiMappingList = new JList<>();
+        uiName = new JTextField();
+        uiMappingType = new JComboBox<>();
+        var label1 = new JLabel();
+        var uiLoad = new JButton();
+        uiDel = new JButton();
+        uiFlip = new JButton();
+        uiMerge = new JButton();
+        uiExtend = new JButton();
+        uiSave = new JButton();
+        uiCopy = new JButton();
+        uiDelLeft = new JButton();
+        uiDelRight = new JButton();
+        dlgPreview = new JDialog();
+        var scrollPane2 = new JScrollPane();
+        uiPreview = new JList<>();
+        uiDel2 = new JButton();
 
-		//======== this ========
-		setTitle("\u6620\u5c04\u8868Playground");
-		setResizable(false);
-		Container contentPane = getContentPane();
-		contentPane.setLayout(null);
+        //======== this ========
+        setTitle("\u6620\u5c04\u8868Playground");
+        setResizable(false);
+        var contentPane = getContentPane();
+        contentPane.setLayout(null);
 
-		//======== scrollPane1 ========
-		{
-			scrollPane1.setViewportView(uiMappingList);
-		}
-		contentPane.add(scrollPane1);
-		scrollPane1.setBounds(10, 35, 320, 275);
-		contentPane.add(uiName);
-		uiName.setBounds(35, 5, 100, uiName.getPreferredSize().height);
-		contentPane.add(uiMappingType);
-		uiMappingType.setBounds(134, 5, 90, uiMappingType.getPreferredSize().height);
+        //======== scrollPane1 ========
+        {
+            scrollPane1.setViewportView(uiMappingList);
+        }
+        contentPane.add(scrollPane1);
+        scrollPane1.setBounds(10, 35, 320, 275);
+        contentPane.add(uiName);
+        uiName.setBounds(35, 5, 100, uiName.getPreferredSize().height);
+        contentPane.add(uiMappingType);
+        uiMappingType.setBounds(134, 5, 90, uiMappingType.getPreferredSize().height);
 
-		//---- label1 ----
-		label1.setText("\u540d\u79f0");
-		contentPane.add(label1);
-		label1.setBounds(new Rectangle(new Point(6, 8), label1.getPreferredSize()));
+        //---- label1 ----
+        label1.setText("\u540d\u79f0");
+        contentPane.add(label1);
+        label1.setBounds(new Rectangle(new Point(6, 8), label1.getPreferredSize()));
 
-		//---- uiLoad ----
-		uiLoad.setText("\u52a0\u8f7d");
-		uiLoad.setMargin(new Insets(2, 4, 2, 4));
-		uiLoad.addActionListener(e -> uiLoad(e));
-		contentPane.add(uiLoad);
-		uiLoad.setBounds(new Rectangle(new Point(222, 4), uiLoad.getPreferredSize()));
+        //---- uiLoad ----
+        uiLoad.setText("\u52a0\u8f7d");
+        uiLoad.setMargin(new Insets(2, 4, 2, 4));
+        uiLoad.addActionListener(e -> uiLoad(e));
+        contentPane.add(uiLoad);
+        uiLoad.setBounds(new Rectangle(new Point(222, 4), uiLoad.getPreferredSize()));
 
-		//---- uiDel ----
-		uiDel.setText("del");
-		uiDel.setMargin(new Insets(2, 4, 2, 4));
-		uiDel.setEnabled(false);
-		uiDel.addActionListener(e -> uiDel(e));
-		contentPane.add(uiDel);
-		uiDel.setBounds(new Rectangle(new Point(30, 318), uiDel.getPreferredSize()));
+        //---- uiDel ----
+        uiDel.setText("del");
+        uiDel.setMargin(new Insets(2, 4, 2, 4));
+        uiDel.setEnabled(false);
+        uiDel.addActionListener(e -> uiDel(e));
+        contentPane.add(uiDel);
+        uiDel.setBounds(new Rectangle(new Point(15, 320), uiDel.getPreferredSize()));
 
-		//---- uiFlip ----
-		uiFlip.setText("flip");
-		uiFlip.setMargin(new Insets(2, 4, 2, 4));
-		uiFlip.setEnabled(false);
-		uiFlip.addActionListener(e -> uiFlip(e));
-		contentPane.add(uiFlip);
-		uiFlip.setBounds(new Rectangle(new Point(60, 318), uiFlip.getPreferredSize()));
+        //---- uiFlip ----
+        uiFlip.setText("flip");
+        uiFlip.setMargin(new Insets(2, 4, 2, 4));
+        uiFlip.setEnabled(false);
+        uiFlip.addActionListener(e -> uiFlip(e));
+        contentPane.add(uiFlip);
+        uiFlip.setBounds(new Rectangle(new Point(45, 320), uiFlip.getPreferredSize()));
 
-		//---- uiMerge ----
-		uiMerge.setText("merge");
-		uiMerge.setMargin(new Insets(2, 4, 2, 4));
-		uiMerge.setEnabled(false);
-		uiMerge.addActionListener(e -> uiMerge(e));
-		contentPane.add(uiMerge);
-		uiMerge.setBounds(new Rectangle(new Point(96, 318), uiMerge.getPreferredSize()));
+        //---- uiMerge ----
+        uiMerge.setText("merge");
+        uiMerge.setMargin(new Insets(2, 4, 2, 4));
+        uiMerge.setEnabled(false);
+        uiMerge.addActionListener(e -> uiMerge(e));
+        contentPane.add(uiMerge);
+        uiMerge.setBounds(new Rectangle(new Point(80, 320), uiMerge.getPreferredSize()));
 
-		//---- uiExtend ----
-		uiExtend.setText("extend");
-		uiExtend.setMargin(new Insets(2, 4, 2, 4));
-		uiExtend.setEnabled(false);
-		uiExtend.addActionListener(e -> uiExtend(e));
-		contentPane.add(uiExtend);
-		uiExtend.setBounds(new Rectangle(new Point(138, 318), uiExtend.getPreferredSize()));
+        //---- uiExtend ----
+        uiExtend.setText("extend");
+        uiExtend.setMargin(new Insets(2, 4, 2, 4));
+        uiExtend.setEnabled(false);
+        uiExtend.addActionListener(e -> uiExtend(e));
+        contentPane.add(uiExtend);
+        uiExtend.setBounds(new Rectangle(new Point(125, 320), uiExtend.getPreferredSize()));
 
-		//---- uiSave ----
-		uiSave.setText("save");
-		uiSave.setMargin(new Insets(2, 4, 2, 4));
-		uiSave.setEnabled(false);
-		uiSave.addActionListener(e -> uiSave(e));
-		contentPane.add(uiSave);
-		uiSave.setBounds(new Rectangle(new Point(222, 318), uiSave.getPreferredSize()));
+        //---- uiSave ----
+        uiSave.setText("save");
+        uiSave.setMargin(new Insets(2, 4, 2, 4));
+        uiSave.setEnabled(false);
+        uiSave.addActionListener(e -> uiSave(e));
+        contentPane.add(uiSave);
+        uiSave.setBounds(new Rectangle(new Point(210, 320), uiSave.getPreferredSize()));
 
-		//---- uiCopy ----
-		uiCopy.setText("copy");
-		uiCopy.setMargin(new Insets(2, 4, 2, 4));
-		uiCopy.setEnabled(false);
-		uiCopy.addActionListener(e -> uiCopy(e));
-		contentPane.add(uiCopy);
-		uiCopy.setBounds(new Rectangle(new Point(186, 318), uiCopy.getPreferredSize()));
+        //---- uiCopy ----
+        uiCopy.setText("copy");
+        uiCopy.setMargin(new Insets(2, 4, 2, 4));
+        uiCopy.setEnabled(false);
+        uiCopy.addActionListener(e -> uiCopy(e));
+        contentPane.add(uiCopy);
+        uiCopy.setBounds(new Rectangle(new Point(170, 320), uiCopy.getPreferredSize()));
 
-		contentPane.setPreferredSize(new Dimension(345, 345));
-		pack();
-		setLocationRelativeTo(getOwner());
+        //---- uiDelLeft ----
+        uiDelLeft.setText("DC\u2190");
+        uiDelLeft.setBorder(new EmptyBorder(5, 5, 5, 5));
+        uiDelLeft.setToolTipText("\u7528\u53f3\u4fa7\u7684\u540d\u79f0\u8986\u76d6\u6574\u4e2aClassMap");
+        uiDelLeft.setEnabled(false);
+        contentPane.add(uiDelLeft);
+        uiDelLeft.setBounds(new Rectangle(new Point(250, 320), uiDelLeft.getPreferredSize()));
 
-		//======== dlgPreview ========
-		{
-			dlgPreview.setTitle("\u9884\u89c8");
-			Container dlgPreviewContentPane = dlgPreview.getContentPane();
-			dlgPreviewContentPane.setLayout(null);
+        //---- uiDelRight ----
+        uiDelRight.setText("DC\u2192");
+        uiDelRight.setBorder(new EmptyBorder(5, 5, 5, 5));
+        uiDelRight.setToolTipText("\u7528\u5de6\u4fa7\u7684\u540d\u79f0\u8986\u76d6\u6574\u4e2aClassMap");
+        uiDelRight.setEnabled(false);
+        contentPane.add(uiDelRight);
+        uiDelRight.setBounds(new Rectangle(new Point(290, 320), uiDelRight.getPreferredSize()));
 
-			//======== scrollPane2 ========
-			{
+        contentPane.setPreferredSize(new Dimension(345, 345));
+        pack();
+        setLocationRelativeTo(getOwner());
 
-				//---- uiPreview ----
-				uiPreview.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
-				scrollPane2.setViewportView(uiPreview);
-			}
-			dlgPreviewContentPane.add(scrollPane2);
-			scrollPane2.setBounds(5, 5, 390, 280);
+        //======== dlgPreview ========
+        {
+            dlgPreview.setTitle("\u9884\u89c8");
+            var dlgPreviewContentPane = dlgPreview.getContentPane();
+            dlgPreviewContentPane.setLayout(null);
 
-			//---- uiDel2 ----
-			uiDel2.setText("\u53d6\u6d88\u64cd\u4f5c");
-			uiDel2.addActionListener(e -> uiDel(e));
-			dlgPreviewContentPane.add(uiDel2);
-			uiDel2.setBounds(new Rectangle(new Point(160, 290), uiDel2.getPreferredSize()));
+            //======== scrollPane2 ========
+            {
 
-			dlgPreviewContentPane.setPreferredSize(new Dimension(400, 325));
-			dlgPreview.pack();
-			dlgPreview.setLocationRelativeTo(dlgPreview.getOwner());
-		}
+                //---- uiPreview ----
+                uiPreview.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
+                scrollPane2.setViewportView(uiPreview);
+            }
+            dlgPreviewContentPane.add(scrollPane2);
+            scrollPane2.setBounds(5, 5, 390, 280);
+
+            //---- uiDel2 ----
+            uiDel2.setText("\u53d6\u6d88\u64cd\u4f5c");
+            uiDel2.addActionListener(e -> uiDel(e));
+            dlgPreviewContentPane.add(uiDel2);
+            uiDel2.setBounds(new Rectangle(new Point(160, 290), uiDel2.getPreferredSize()));
+
+            dlgPreviewContentPane.setPreferredSize(new Dimension(400, 325));
+            dlgPreview.pack();
+            dlgPreview.setLocationRelativeTo(dlgPreview.getOwner());
+        }
 		// JFormDesigner - End of component initialization  //GEN-END:initComponents  @formatter:on
 	}
 
 	// JFormDesigner - Variables declaration - DO NOT MODIFY  //GEN-BEGIN:variables  @formatter:off
-	private JList<NamedMapping> uiMappingList;
-	private JTextField uiName;
-	private JComboBox<String> uiMappingType;
-	private JButton uiDel;
-	private JButton uiFlip;
-	private JButton uiMerge;
-	private JButton uiExtend;
-	private JButton uiSave;
-	private JButton uiCopy;
-	private JDialog dlgPreview;
-	private JList<String> uiPreview;
-	private JButton uiDel2;
+    private JList<NamedMapping> uiMappingList;
+    private JTextField uiName;
+    private JComboBox<String> uiMappingType;
+    private JButton uiDel;
+    private JButton uiFlip;
+    private JButton uiMerge;
+    private JButton uiExtend;
+    private JButton uiSave;
+    private JButton uiCopy;
+    private JButton uiDelLeft;
+    private JButton uiDelRight;
+    private JDialog dlgPreview;
+    private JList<String> uiPreview;
+    private JButton uiDel2;
 	// JFormDesigner - End of variables declaration  //GEN-END:variables  @formatter:on
 }

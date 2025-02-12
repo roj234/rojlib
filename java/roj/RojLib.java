@@ -34,7 +34,7 @@ public final class RojLib {
 	public static Object getLibrary() {return LibraryLoader.INSTANCE.loadLibraryEx(RojLib.class, LibFile);}
 
 	private static final String LibName = "libcpp";
-	private static File LibFile = new File("D:\\mc\\FMD-1.5.2\\projects\\implib\\libcpp\\bin\\libcpp.dll");
+	private static File LibFile = new File("D:\\mc\\MCMake\\projects\\rojlib-jni\\bin\\libcpp.dll");
 
 	public static final boolean ASM_DEBUG = false;
 	public static final boolean IS_DEV;

@@ -17,6 +17,7 @@ import roj.asm.type.TypeHelper;
 import roj.collect.IntMap;
 import roj.collect.SimpleList;
 import roj.io.IOUtil;
+import roj.text.logging.Logger;
 import roj.util.DynByteBuf;
 
 import java.util.List;
@@ -432,6 +433,9 @@ public class CodeWriter extends AbstractCodeWriter {
 				len = b.readableBytes();
 				frames = null;
 				break;
+			default:
+				Logger.FALLBACK.debug("{}.{} 中发现不支持的属性 {}", mn.ownerClass(), mn.name(), name);
+				return;
 		}
 		b.rIndex = pos;
 

@@ -12,6 +12,13 @@ public enum OS {
 	WINDOWS, UNIX, JVM, OSX, UNKNOWN;
 	public static final OS CURRENT = getOS();
 	public static final int ARCH = getArch();
+	public static String archName() {
+		return switch (ARCH) {
+			case 32 -> "x86";
+			case 64 -> "x64";
+			default -> "unknown";
+		};
+	}
 
 	private static int getArch() {
 		return switch (ReflectionUtils.u.addressSize()) {

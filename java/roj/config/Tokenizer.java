@@ -61,7 +61,11 @@ public class Tokenizer {
 		}
 	}
 
-	public static Tokenizer arguments() { return new Tokenizer().literalEnd(WHITESPACE); }
+	public static Tokenizer arguments() {
+		Tokenizer tokenizer = new Tokenizer();
+		tokenizer.firstChar = NONE_C2C;
+		return tokenizer;
+	}
 	public final List<Word> split(String seq) throws ParseException {
 		init(seq);
 		List<Word> list = new ArrayList<>();
@@ -742,7 +746,7 @@ public class Tokenizer {
 						} else {
 							w = onNumberFlow(v, INTEGER, DOUBLE);
 							if (w != null) break;
-							type = DOUBLE;
+							type = 3;
 							continue;
 						}
 					} else {

@@ -15,6 +15,8 @@ public final class Logger {
 	public static Logger getLogger(String name) { return getLogger(new LogContext(rootContext, name)); }
 	public static Logger getLogger(LogContext ctx) { return ctx.logger == null ? ctx.logger = new Logger(ctx) : ctx.logger; }
 
+	public static final Logger FALLBACK = getLogger("RojLib");
+
 	private final LogContext ctx;
 	private Logger(LogContext ctx) {this.ctx = ctx;}
 

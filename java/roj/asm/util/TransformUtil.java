@@ -7,7 +7,10 @@ import roj.asm.cp.Constant;
 import roj.asm.cp.CstDynamic;
 import roj.asm.cp.CstNameAndType;
 import roj.asm.tree.*;
-import roj.asm.tree.attr.*;
+import roj.asm.tree.attr.AttrUnknown;
+import roj.asm.tree.attr.Attribute;
+import roj.asm.tree.attr.AttributeList;
+import roj.asm.tree.attr.BootstrapMethods;
 import roj.asm.type.Type;
 import roj.asm.type.TypeHelper;
 import roj.asm.visitor.CodeVisitor;
@@ -53,6 +56,12 @@ public class TransformUtil {
 		Type t = ms.returnType();
 
 		cw.visitSize(t.length(), TypeHelper.paramSize(ms.rawDesc()) + ((ACC_STATIC & ms.modifier()) == 0 ? 1 : 0));
+
+		if (ms.name().equals("<init>")) {
+			cw.visitSizeMax(1, 0);
+			cw.one(ALOAD_0);
+			cw.invokeD(data.parent, "<init>", "()V");
+		}
 
 		switch (t.type) {
 			case CLASS: cw.one(ACONST_NULL); break;
@@ -125,6 +134,16 @@ public class TransformUtil {
 			data.modifier(toPublic(data.modifier(), true));
 		}
 
+		if (data instanceof ConstantData cdata) {
+			var classes = cdata.getInnerClasses();
+			for (int i = 0; i < classes.size(); i++) {
+				var clz = classes.get(i);
+				if (toOpen.contains(clz.self)) {
+					clz.flags = (char) toPublic(clz.flags, true);
+				}
+			}
+		}
+
 		boolean starP = true;
 		if (toOpen.contains("*")) {
 			toOpen = null;
@@ -136,24 +155,10 @@ public class TransformUtil {
 		toPublic(toOpen, starP, data.fields());
 		toPublic(toOpen, starP, data.methods());
 	}
-	/**
-	 * 修改InnerClasses属性中定义的内部类的访问权限
-	 */
-	public static void makeSubclassAccessible(ConstantData data, Collection<String> toOpen) {
-		var classes = data.getInnerClasses();
-		if (classes.isEmpty()) throw new IllegalStateException("no InnerClass in " + data.name);
-
-		for (int i = 0; i < classes.size(); i++) {
-			InnerClasses.Item clz = classes.get(i);
-			if (toOpen.contains(clz.self)) {
-				clz.flags = (char) toPublic(clz.flags, true);
-			}
-		}
-	}
 	private static void toPublic(Collection<String> toOpen, boolean starP, List<? extends RawNode> nodes) {
 		for (int i = 0; i < nodes.size(); i++) {
 			RawNode node = nodes.get(i);
-			if (toOpen != null && !toOpen.contains(node.name()) && !toOpen.contains(node.name()+'|'+node.rawDesc())) continue;
+			if (toOpen != null && !toOpen.contains(node.name()) && !toOpen.contains(node.name()+node.rawDesc())) continue;
 
 			int flag = toPublic(node.modifier(), starP || toOpen != null);
 			node.modifier(flag);
@@ -244,16 +249,18 @@ public class TransformUtil {
 	}
 
 	public static void compress(ConstantData data) {
+		var lazyLDC = new MyHashSet<Constant>();
 		var cpw = AsmShared.local().constPool();
 		CodeVisitor smallerLdc = new CodeVisitor() {
-			protected void ldc(byte code, Constant c) { cpw.reset(c); }
+			protected void ldc(byte code, Constant c) {if (code != LDC2_W) lazyLDC.add(c);}
 		};
 		ByteList bw = new ByteList();
 
-		SimpleList<MethodNode> methods = data.methods;
+		var methods = data.methods;
 		for (int i = 0; i < methods.size(); i++) {
 			visitCode(data, methods.get(i), bw, smallerLdc);
 		}
+		for (var constant : lazyLDC) cpw.reset(constant);
 
 		CodeWriter cw = new CodeWriter();
 		for (int i = 0; i < methods.size(); i++) {

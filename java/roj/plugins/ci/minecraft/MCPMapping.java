@@ -1,4 +1,4 @@
-package roj.plugins.ci.mapping;
+package roj.plugins.ci.minecraft;
 
 import roj.asm.type.Desc;
 import roj.asm.util.ClassUtil;
@@ -23,7 +23,7 @@ import java.util.zip.ZipFile;
  * @author Roj234
  * @since 2020/8/29 22:25
  */
-public final class MCPMapping extends Mapping {
+final class MCPMapping extends Mapping {
 	private final File file;
 	private final Map<Desc, List<String>> paramMap;
 	public static Boolean printAll;

@@ -7,6 +7,7 @@ import roj.text.ACalendar;
 import roj.text.TextUtil;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
+import roj.util.Helpers;
 
 import java.nio.file.attribute.FileTime;
 import java.util.TimeZone;
@@ -19,7 +20,7 @@ import static roj.archive.zip.ZipFile.*;
  * @author Roj234
  * @since 2023/3/14 0014 0:43
  */
-public class ZEntry implements RSegmentTree.Range, ArchiveEntry {
+public class ZEntry implements RSegmentTree.Range, ArchiveEntry, Cloneable {
 	//00: no compression
 	//08: deflated
 	//14: LZMA
@@ -429,6 +430,15 @@ public class ZEntry implements RSegmentTree.Range, ArchiveEntry {
 			return (1 << 21) | (1 << 16)/*ZipEntry.DOSTIME_BEFORE_1980*/;
 		}
 		return (year << 25) | (arr[ACalendar.MONTH] << 21) | (arr[ACalendar.DAY] << 16) | (arr[ACalendar.HOUR] << 11) | (arr[ACalendar.MINUTE] << 5) | (arr[ACalendar.SECOND] >> 1);
+	}
+
+	@Override
+	protected ZEntry clone() {
+		try {
+			return (ZEntry) super.clone();
+		} catch (CloneNotSupportedException e) {
+			return Helpers.nonnull();
+		}
 	}
 
 	private static final long WINDOWS_TIME_NOT_AVAILABLE = Long.MIN_VALUE;

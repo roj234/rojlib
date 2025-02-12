@@ -32,6 +32,7 @@ import java.util.zip.Deflater;
 import java.util.zip.ZipException;
 
 import static roj.archive.zip.ZEntry.MZ_NoCrc;
+import static roj.reflect.ReflectionUtils.u;
 
 /**
  * 支持分卷压缩文件
@@ -417,7 +418,10 @@ public final class ZipArchive extends ZipFile {
 	 */
 	public void reopen() throws IOException {
 		if (file == null) throw new IOException("不是从文件打开");
-		if (r == null) r = ArchiveUtils.tryOpenSplitArchive(file, false);
+		if (r == null) {
+			r = ArchiveUtils.tryOpenSplitArchive(file, false);
+			fpRead = null;
+		}
 	}
 
 	private static void checkName(EntryMod entry) {

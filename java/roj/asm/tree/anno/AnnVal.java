@@ -14,6 +14,7 @@ import static roj.asm.type.Type.*;
  */
 public abstract class AnnVal {
 	public static AnnVal valueOf(String v) { return new AnnValString(v); }
+	public static AnnVal valueOf(boolean v) { return new AnnValInt(BOOLEAN, v ? 1 : 0); }
 	public static AnnVal valueOf(byte v) { return new AnnValInt(BYTE, v); }
 	public static AnnVal valueOf(char v) { return new AnnValInt(CHAR, v); }
 	public static AnnVal valueOf(short v) { return new AnnValInt(SHORT, v); }

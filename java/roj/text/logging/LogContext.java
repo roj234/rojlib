@@ -8,6 +8,7 @@ import roj.text.logging.d.LogDestination;
 
 import java.util.Collections;
 import java.util.List;
+import java.util.Objects;
 
 /**
  * @author Roj233
@@ -27,7 +28,7 @@ public class LogContext {
 	Logger logger;
 
 	public LogContext(LogContext parent, String name) {
-		this.parent = parent;
+		this.parent = Objects.requireNonNull(parent);
 		this.name = name;
 	}
 

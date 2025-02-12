@@ -27,20 +27,25 @@ public final class ZipOutput implements AutoCloseable {
 	public boolean isCompress() { return compress; }
 	public void setCompress(boolean compress) { this.compress = compress; }
 
-	public void begin(boolean allModifyMode) throws IOException {
+	public boolean isUseZFW() {return useZFW;}
+	public ZipFileWriter getZFW() {return all;}
+
+	public void begin(boolean increment) throws IOException {
 		if (work) end();
 
-		useZFW = allModifyMode;
-		if (allModifyMode) {
+		useZFW = !increment;
+		if (increment) {
+			if (some == null) {
+				some = new ZipArchive(file);
+			} else {
+				some.reopen();
+			}
+		} else {
 			all = new ZipFileWriter(file);
 			if (some != null) {
 				some.close();
 				some = null;
 			}
-		} else if (some == null) {
-			some = new ZipArchive(file);
-		} else {
-			some.reopen();
 		}
 		work = true;
 	}
@@ -63,26 +68,34 @@ public final class ZipOutput implements AutoCloseable {
 		}
 	}
 
-	public void set(String name, InputStream in) throws IOException {
+	public void set(String name, Supplier<ByteList> data, long modTime) throws IOException {
+		if (useZFW) {
+			all.writeNamed(name, data.get(), compress ? ZipEntry.DEFLATED : ZipEntry.STORED, modTime);
+		} else {
+			some.put(name, data, compress).entry.setModificationTime(modTime);
+		}
+	}
+
+	public void setStream(String name, Supplier<InputStream> data, long modTime) throws IOException {
 		if (useZFW) {
 			ZEntry ze = new ZEntry(name);
 			ze.setMethod(compress ? ZipEntry.DEFLATED : ZipEntry.STORED);
+			ze.setModificationTime(modTime);
 			all.beginEntry(ze);
 
 			byte[] b = IOUtil.getSharedByteBuf().list;
 			int r;
-			try {
+			try (var in = data.get()) {
 				do {
 					r = in.read(b);
 					if (r < 0) break;
 					all.write(b, 0, r);
 				} while (r == b.length);
 			} finally {
-				in.close();
 				all.closeEntry();
 			}
 		} else {
-			some.putStream(name, in, compress);
+			some.putStream(name, data, compress);
 		}
 	}
 

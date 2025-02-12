@@ -15,32 +15,33 @@ public final class Template implements Formatter {
 	private final String[] names;
 	private final char[] data, pos;
 
-	public static Template compile(String tag) {return new Template(tag);}
-	public Template(String tag) {
+	public static Template compile(String template) {return new Template(template);}
+	public Template(String template) {
 		CharList tmp = IOUtil.getSharedCharBuf();
 		CharList pos = new CharList();
 		SimpleList<String> names = new SimpleList<>();
 
 		int prevI = 0;
 		while (true) {
-			int i = tag.indexOf("${", prevI);
+			int i = template.indexOf("${", prevI);
 			if (i < 0) break;
 
-			int end = tag.indexOf('}', i);
+			int end = template.indexOf('}', i);
 			if (end < 0) throw new IllegalStateException();
 
-			names.add(tag.substring(i+2, end));
-			tmp.append(tag, prevI, i);
+			names.add(template.substring(i+2, end));
+			tmp.append(template, prevI, i);
 			pos.append((char)(i - prevI));
 
 			prevI = end+1;
 		}
-		tmp.append(tag, prevI, tag.length());
+		tmp.append(template, prevI, template.length());
 
 		data = tmp.toCharArray();
 		this.pos = pos.toCharArray();
 		this.names = names.toArray(new String[names.size()]);
 	}
+	public boolean hasName() {return names.length > 0;}
 
 	/**
 	 * replace via string name
