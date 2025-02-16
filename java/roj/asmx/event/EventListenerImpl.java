@@ -1,14 +1,14 @@
 package roj.asmx.event;
 
-import roj.asm.tree.ConstantData;
-import roj.asm.tree.RawNode;
-import roj.asm.tree.attr.Attribute;
+import roj.asm.ClassNode;
+import roj.asm.RawNode;
+import roj.asm.attr.Attribute;
+import roj.asm.insn.AbstractCodeWriter;
+import roj.asm.insn.CodeWriter;
+import roj.asm.insn.Label;
 import roj.asm.type.Generic;
 import roj.asm.type.Signature;
 import roj.asm.type.Type;
-import roj.asm.visitor.AbstractCodeWriter;
-import roj.asm.visitor.CodeWriter;
-import roj.asm.visitor.Label;
 import roj.io.IOUtil;
 import roj.reflect.Bypass;
 import roj.reflect.ClassDefiner;
@@ -82,7 +82,7 @@ final class EventListenerImpl implements EventListener {
 
 	private ASM asm() {
 		ListenerInfo info = this.infos.get(0);
-		ConstantData c = new ConstantData();
+		ClassNode c = new ClassNode();
 
 		c.parent(Bypass.MAGIC_ACCESSOR_CLASS);
 		c.name("roj/asmx/event/EventListenerImpl$"+ReflectionUtils.uniqueId());
@@ -177,7 +177,7 @@ final class EventListenerImpl implements EventListener {
 		cw.finish();
 		return (ASM) ClassDefiner.make(c);
 	}
-	private static int callEvent(ConstantData out, CodeWriter c, RawNode listener, int fid) {
+	private static int callEvent(ClassNode out, CodeWriter c, RawNode listener, int fid) {
 		String clz = listener.ownerClass();
 		if ((listener.modifier()&ACC_STATIC) != 0) {
 			c.one(ALOAD_1);
@@ -195,8 +195,8 @@ final class EventListenerImpl implements EventListener {
 		}
 		return fid;
 	}
-	private static int addField(ConstantData out, String type) {
-		int fid = out.newField(ACC_PRIVATE, "instance", new Type(type));
+	private static int addField(ClassNode out, String type) {
+		int fid = out.newField(ACC_PRIVATE, "instance", Type.klass(type));
 		CodeWriter c = out.newMethod(ACC_PUBLIC|ACC_FINAL, "setInstance", "(Ljava/lang/Object;)V");
 		c.visitSize(2,2);
 		c.one(ALOAD_0);

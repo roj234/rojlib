@@ -5,7 +5,7 @@ import roj.util.Helpers;
 import java.util.Iterator;
 import java.util.NoSuchElementException;
 
-import static roj.reflect.ReflectionUtils.u;
+import static roj.reflect.Unaligned.U;
 
 /**
  * @author Roj234
@@ -22,7 +22,7 @@ public abstract class Generator<T> implements Iterator<T> {
 		if (stage == 0) {
 			try {
 				invoke(stack.forRead());
-				stage = (byte) (u.getInt(stack.base()) == -1 ? -1 : 1);
+				stage = (byte) (U.getInt(stack.base()) == -1 ? -1 : 1);
 			} catch (Throwable e) {
 				stage = -1;
 				stack.forWrite();
@@ -42,8 +42,8 @@ public abstract class Generator<T> implements Iterator<T> {
 	@Override
 	@SuppressWarnings("unchecked")
 	public final T next() {check();return (T) stack.objects.getLast();}
-	public final int nextInt() {check();return u.getInt(stack.address-4);}
-	public final long nextLong() {check();return u.getLong(stack.address-8);}
+	public final int nextInt() {check();return U.getInt(stack.address-4);}
+	public final long nextLong() {check();return U.getLong(stack.address-8);}
 	public final float nextFloat() { return Float.floatToIntBits(nextInt()); }
 	public final double nextDouble() { return Double.longBitsToDouble(nextLong()); }
 

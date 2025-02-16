@@ -58,8 +58,8 @@ public class AT implements Processor {
 	@Override
 	public int beforeCompile(Compiler compiler, SimpleList<String> options, List<File> files, ProcessEnvironment pc) {
 		Project p = pc.project;
-		var atFile = new File(p.getResPath(), p.variables.getOrDefault("at_path", "META-INF/accesstransformer.cfg"));
-		if (atFile.isFile() && p.variables.getOrDefault("fmd:at_enable", "true").equals("true")) {
+		var atFile = new File(p.getResPath(), p.variables.getOrDefault("fmd:at:path", "META-INF/accesstransformer.cfg"));
+		if (atFile.isFile() && "true".equals(p.variables.get("fmd:at"))) {
 			try {
 				var atList = buildATMapFromATCfg(atFile, p.workspace.getInvMapper());
 				makeAT(options, atList, p.getName(), p);
@@ -149,6 +149,9 @@ public class AT implements Processor {
 					return false;
 				};
 
+				for (var file : p.workspace.depend) {
+					tryAt(file, atList, zfw);
+				}
 				for (var file : p.workspace.mappedDepend) {
 					tryAt(file, atList, zfw);
 				}

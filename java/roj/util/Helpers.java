@@ -1,5 +1,6 @@
 package roj.util;
 
+import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.NotNull;
 import roj.collect.MyHashMap;
 import roj.collect.MyHashSet;
@@ -23,6 +24,7 @@ public class Helpers {
 	 * athrow(new IOException());
 	 */
 	@SuppressWarnings("unchecked")
+	@Contract("_ -> fail")
 	public static <T extends Throwable> void athrow(Throwable e) throws T {throw (T) e;}
 
 	/**

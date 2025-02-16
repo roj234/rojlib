@@ -1,9 +1,11 @@
 package roj.compiler.asm;
 
-import roj.asm.tree.MethodNode;
+import roj.asm.MethodNode;
 import roj.asm.type.*;
 import roj.collect.LinkedMyHashMap;
+import roj.collect.MyHashMap;
 import roj.collect.SimpleList;
+import roj.compiler.api.Types;
 import roj.compiler.context.LocalContext;
 import roj.compiler.diagnostic.Kind;
 
@@ -11,13 +13,23 @@ import java.util.Collections;
 import java.util.List;
 
 public final class LPSignature extends Signature {
-	public static final List<IType> UNBOUNDED_TYPE_PARAM = Collections.singletonList(LocalContext.OBJECT_TYPE);
-	private static final Type SKIP = new Type('S');
+	public static final List<IType> UNBOUNDED_TYPE_PARAM = Collections.singletonList(Types.OBJECT_TYPE);
+	private static final Type SKIP = Type.custom('S');
 
 	public LPSignature parent;
 	public LPSignature(int type) {
 		super(type);
-		typeParams = new LinkedMyHashMap<>();
+		typeParams = new LinkedMyHashMap<>() {
+			@Override
+			public List<IType> getOrDefault(Object key, List<IType> def) {
+				var n = LPSignature.this;
+				while (!n.typeParams.containsKey(key)) {
+					n = n.parent;
+					if (n == null) return def;
+				}
+				return ((MyHashMap<String, List<IType>>)n.typeParams).getEntry((String) key).getValue();
+			}
+		};
 	}
 
 	// class decl
@@ -94,7 +106,7 @@ public final class LPSignature extends Signature {
 				// 意外的类型
 				//  需要: 类
 				//  找到: 类型参数T
-				LocalContext.get().report(g.wrPos, Kind.ERROR, "type.parameterizedParam");
+				LocalContext.get().report(g.pos, Kind.ERROR, "type.parameterizedParam");
 			} else {
 				// 神奇的语法: <T extends Map> => T.Entry
 				if (i >= 0) type.owner(bounds.get(0).owner() + owner.substring(i));
@@ -116,10 +128,14 @@ public final class LPSignature extends Signature {
 	}
 
 	public void resolve(LocalContext ctx) {
+		var prev = ctx.caster.typeParamsL;
+		System.out.println(prev);
+		ctx.caster.typeParamsL = typeParams;
 		for (List<IType> value : typeParams.values()) {
 			if (value != UNBOUNDED_TYPE_PARAM) resolve(value, ctx);
 		}
 		resolve(values, ctx);
+		ctx.caster.typeParamsL = prev;
 	}
 	private void resolve(List<IType> list, LocalContext ctx) {
 		for (int i = 0; i < list.size(); i++) ctx.resolveType(list.get(i));

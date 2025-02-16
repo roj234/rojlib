@@ -10,17 +10,11 @@ public final class CstLong extends Constant {
 	public long value;
 
 	public CstLong(long value) { this.value = value; }
-	@Override
-	void write(DynByteBuf w) { w.put(LONG).putLong(value); }
-	@Override
-	public byte type() { return LONG; }
+	@Override public byte type() { return LONG; }
+	@Override void write(DynByteBuf w) { w.put(LONG).putLong(value); }
 
-	public final String toString() { return super.toString() + " : " + value; }
-
-	@Override
-	public String getEasyReadValue() { return Long.toString(value).concat("L"); }
-	@Override
-	public String getEasyCompareValue() { return Long.toString(value); }
+	@Override public String toString() { return Long.toString(value).concat("L"); }
+	@Override public String getEasyCompareValue() { return Long.toString(value); }
 
 	public final int hashCode() { long l = value; return (int) ~(l ^ (l >>> 32)); }
 

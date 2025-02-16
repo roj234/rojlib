@@ -2,9 +2,9 @@ package roj.plugins.http.php;
 
 import org.jetbrains.annotations.Nullable;
 import roj.collect.MyHashMap;
-import roj.net.http.HttpUtil;
-import roj.net.http.IllegalRequestException;
-import roj.net.http.server.*;
+import roj.http.HttpUtil;
+import roj.http.IllegalRequestException;
+import roj.http.server.*;
 import roj.text.logging.Level;
 import roj.text.logging.Logger;
 import roj.util.TypedKey;

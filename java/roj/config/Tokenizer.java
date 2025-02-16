@@ -9,8 +9,8 @@ import roj.collect.TrieTree;
 import roj.concurrent.OperationDone;
 import roj.config.data.CInt;
 import roj.io.IOUtil;
-import roj.text.ACalendar;
 import roj.text.CharList;
+import roj.text.DateParser;
 import roj.text.TextReader;
 import roj.text.TextUtil;
 import roj.util.Helpers;
@@ -73,6 +73,16 @@ public class Tokenizer {
 			Word w = next();
 			if (w.type() == Word.EOF) break;
 			list.add(w.copy());
+		}
+		return list;
+	}
+	public final List<String> splitToString(String seq) throws ParseException {
+		init(seq);
+		List<String> list = new ArrayList<>();
+		while (true) {
+			Word w = next();
+			if (w.type() == Word.EOF) break;
+			list.add(w.val());
 		}
 		return list;
 	}
@@ -884,7 +894,7 @@ public class Tokenizer {
 
 			int d = dateNum(2,31);
 
-			long ts = (ACalendar.daySinceAD(y, m, d) - ACalendar.GREGORIAN_OFFSET_DAY) * 86400000L;
+			long ts = DateParser.daySinceUnixZero(y, m, d) * 86400000L;
 
 			c = index == in.length() ? 0 : in.charAt(index);
 			if (c != 'T' && c != 't' && c != ' ')
@@ -895,9 +905,14 @@ public class Tokenizer {
 			dateDelim(':');
 
 			m = dateNum(2, 59);
-			dateDelim(':');
 
-			d = dateNum(2, 59);
+			if (index < in.length()) {
+				dateDelim(':');
+
+				d = dateNum(2, 59);
+			} else {
+				d = 0;
+			}
 			c = index == in.length() ? 0 : in.charAt(index++);
 
 			ts += y * 3600000L + m * 60000L + d * 1000L;

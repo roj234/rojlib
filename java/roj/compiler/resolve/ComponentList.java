@@ -3,7 +3,7 @@ package roj.compiler.resolve;
 import org.intellij.lang.annotations.MagicConstant;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
-import roj.asm.tree.MethodNode;
+import roj.asm.MethodNode;
 import roj.asm.type.IType;
 import roj.compiler.context.LocalContext;
 
@@ -35,4 +35,5 @@ public abstract class ComponentList {
 	public FieldResult findField(LocalContext ctx, @MagicConstant(flags = {IN_STATIC, THIS_ONLY}) int flags) { throw new UnsupportedOperationException("这不是字段列表"); }
 
 	public List<MethodNode> getMethods() {throw new UnsupportedOperationException("这不是方法列表");}
+	public boolean isOverriddenMethod(int id) {return false;}
 }

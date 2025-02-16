@@ -5,21 +5,21 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Range;
 import roj.collect.IntMap;
 import roj.collect.SimpleList;
-import roj.concurrent.task.ITask;
+import roj.concurrent.ITask;
 import roj.io.Finishable;
 import roj.io.IOUtil;
 import roj.io.buf.BufferPool;
+import roj.reflect.Unaligned;
 import roj.util.ArrayUtil;
 import roj.util.DynByteBuf;
 import roj.util.Helpers;
-import sun.misc.Unsafe;
 
 import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.channels.AsynchronousCloseException;
 
 import static roj.archive.qz.xz.LZMA2Options.*;
-import static roj.reflect.ReflectionUtils.u;
+import static roj.reflect.Unaligned.U;
 
 /**
  * @author Roj234
@@ -191,7 +191,7 @@ public final class LZMA2Parallel {
 				if (closed != 0) throw new AsynchronousCloseException();
 
 				int copyLen = Math.min(man.bufLen - bufPos, len);
-				u.copyMemory(buf, Unsafe.ARRAY_BYTE_BASE_OFFSET+off, null, this.buf+bufPos, copyLen);
+				U.copyMemory(buf, Unaligned.ARRAY_BYTE_BASE_OFFSET+off, null, this.buf+bufPos, copyLen);
 
 				bufPos += copyLen;
 				off += copyLen;
@@ -208,18 +208,18 @@ public final class LZMA2Parallel {
 			task.id = taskId++;
 			task.in.clear();
 			if (dictMode == ASYNC_DICT_ASYNCSET) {
-				u.copyMemory(buf, task.in.address()+man.asyncBufOff, task.pendingSize = bufPos);
+				U.copyMemory(buf, task.in.address()+man.asyncBufOff, task.pendingSize = bufPos);
 			} else {
 				if (dictMode == ASYNC_DICT_NONE) dictSize = 0;
 				else if (task.id > 0) task.lzma.lzPresetDict0(dictSize, null, buf, dictSize);
 
-				u.copyMemory(buf+dictSize, task.in.address()+man.asyncBufOff, task.pendingSize = bufPos - dictSize);
+				U.copyMemory(buf+dictSize, task.in.address()+man.asyncBufOff, task.pendingSize = bufPos - dictSize);
 			}
 
 			synchronized (tasksDone) { taskRunning++; }
 
 			// move dictionary to head
-			u.copyMemory(null, buf+bufPos-dictSize, null, buf, dictSize);
+			U.copyMemory(null, buf+bufPos-dictSize, null, buf, dictSize);
 			bufPos = dictSize;
 
 			return task;

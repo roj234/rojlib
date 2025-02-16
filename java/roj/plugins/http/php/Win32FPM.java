@@ -2,11 +2,11 @@ package roj.plugins.http.php;
 
 import roj.collect.RingBuffer;
 import roj.collect.SimpleList;
-import roj.concurrent.task.ITask;
-import roj.concurrent.timing.Scheduler;
+import roj.concurrent.ITask;
+import roj.concurrent.Scheduler;
+import roj.http.IllegalRequestException;
+import roj.http.server.Request;
 import roj.io.FastFailException;
-import roj.net.http.IllegalRequestException;
-import roj.net.http.server.Request;
 
 import java.io.File;
 import java.util.List;

@@ -6,7 +6,7 @@ import roj.config.JSONParser;
 import roj.config.ParseException;
 import roj.config.data.CMap;
 import roj.io.IOUtil;
-import roj.text.LinedReader;
+import roj.text.LineReader;
 import roj.text.TextReader;
 import roj.text.TextUtil;
 import roj.ui.Terminal;
@@ -53,7 +53,7 @@ final class TSrgMapping extends Mapping {
 		return true;
 	}
 
-	public boolean tsrgV1(LinedReader slr, List<String> tmp) throws IOException {
+	public boolean tsrgV1(LineReader slr, List<String> tmp) throws IOException {
 		String prevF = null;
 
 		int ln = 1;
@@ -97,7 +97,7 @@ final class TSrgMapping extends Mapping {
 		return true;
 	}
 
-	public boolean tSrgV2(LinedReader slr, List<String> tmp, Map<Desc, List<String>> paramMap) throws IOException {
+	public boolean tSrgV2(LineReader slr, List<String> tmp, Map<Desc, List<String>> paramMap) throws IOException {
 		String prevF = null;
 		Desc method = null;
 
@@ -170,7 +170,7 @@ final class TSrgMapping extends Mapping {
 		}
 
 		public int version() {
-			return manifest.getInteger("spec");
+			return manifest.getInt("spec");
 		}
 
 		public InputStream getData(String key) throws IOException {

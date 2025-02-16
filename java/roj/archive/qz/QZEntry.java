@@ -1,8 +1,8 @@
 package roj.archive.qz;
 
 import roj.archive.ArchiveEntry;
-import roj.text.ACalendar;
 import roj.text.CharList;
+import roj.text.DateParser;
 import roj.util.Helpers;
 
 import java.nio.file.attribute.FileTime;
@@ -92,9 +92,9 @@ public sealed class QZEntry implements ArchiveEntry, Cloneable permits QZEntryA 
         else sb.append("文件");
         sb.append(": '").append(name).append('\'');
 
-        if ((flag & AT) != 0) sb.append("\n  访问: ").append(ACalendar.toLocalTimeString(getAccessTime()));
-        if ((flag & CT) != 0) sb.append("\n  创建: ").append(ACalendar.toLocalTimeString(getCreationTime()));
-        if ((flag & MT) != 0) sb.append("\n  修改: ").append(ACalendar.toLocalTimeString(getModificationTime()));
+        if ((flag & AT) != 0) sb.append("\n  访问: ").append(DateParser.toLocalTimeString(getAccessTime()));
+        if ((flag & CT) != 0) sb.append("\n  创建: ").append(DateParser.toLocalTimeString(getCreationTime()));
+        if ((flag & MT) != 0) sb.append("\n  修改: ").append(DateParser.toLocalTimeString(getModificationTime()));
         if ((flag & ATTR) != 0) appendWindowsAttribute(sb.append("\n  属性: "));
         if ((flag & CRC) != 0) sb.append("\n  校验: ").append(Integer.toHexString(crc32));
 

@@ -3,7 +3,7 @@ package roj.config.serial;
 import org.jetbrains.annotations.NotNull;
 import roj.config.Tokenizer;
 import roj.config.YAMLParser;
-import roj.text.ACalendar;
+import roj.text.DateParser;
 import roj.text.TextUtil;
 
 import java.util.TimeZone;
@@ -17,7 +17,7 @@ public final class ToYaml extends ToSomeString {
 	public ToYaml(@NotNull String indent) { super(indent.isEmpty() ? " " : indent);  }
 
 	public ToYaml multiline(boolean b) { this.multiline = b; return this; }
-	public ToYaml timezone(TimeZone tz) { cal = new ACalendar(tz); return this; }
+	public ToYaml timezone(TimeZone tz) { cal = DateParser.forTimezone(tz); return this; }
 
 	private boolean topLevel, multiline;
 
@@ -51,17 +51,17 @@ public final class ToYaml extends ToSomeString {
 	public final void valueMap() { push(MAP|32); }
 	public final void valueList() { push(LIST|NEXT|32); }
 
-	private ACalendar cal;
+	private DateParser cal;
 	@Override
 	public final void valueDate(long value) {
 		preValue(false);
-		if (cal == null) cal = ACalendar.GMT();
+		if (cal == null) cal = DateParser.GMT();
 		cal.format("Y-m-d", value, sb);
 	}
 	@Override
 	public final void valueTimestamp(long value) {
 		preValue(false);
-		if (cal == null) cal = ACalendar.GMT();
+		if (cal == null) cal = DateParser.GMT();
 		cal.toISOString(sb, value);
 	}
 

@@ -2,15 +2,15 @@ package roj.compiler.ast.expr;
 
 import org.jetbrains.annotations.NotNull;
 import roj.asm.Opcodes;
-import roj.asm.tree.anno.AnnValInt;
+import roj.asm.insn.Label;
 import roj.asm.type.IType;
 import roj.asm.type.Type;
-import roj.asm.visitor.Label;
 import roj.compiler.asm.MethodWriter;
 import roj.compiler.context.GlobalContext;
 import roj.compiler.context.LocalContext;
 import roj.compiler.diagnostic.Kind;
 import roj.compiler.resolve.TypeCast;
+import roj.config.data.CInt;
 
 /**
  * @author Roj234
@@ -39,7 +39,7 @@ final class Trinary extends ExprNode {
 			ctx.report(Kind.WARNING, "trinary.constant");
 
 		val = val.resolve(ctx);
-		cast = ctx.castTo(val.type(), Type.std(Type.BOOLEAN), 0);
+		cast = ctx.castTo(val.type(), Type.primitive(Type.BOOLEAN), 0);
 
 		ok = ok.resolve(ctx);
 		fail = fail.resolve(ctx);
@@ -54,7 +54,7 @@ final class Trinary extends ExprNode {
 		}
 
 		if (ok.isConstant()&fail.isConstant()) {
-			if (ok.constVal() instanceof AnnValInt tv && fail.constVal() instanceof AnnValInt fv) {
+			if (ok.constVal() instanceof CInt tv && fail.constVal() instanceof CInt fv) {
 				if (fv.value == 0) {
 					// if not 1 => IMUL
 					// else => NOP
@@ -81,7 +81,7 @@ final class Trinary extends ExprNode {
 			GlobalContext.debugLogger().info("trinary.note.boolean_hack {}", this);
 
 			val.write(cw, cast);
-			int value = ((AnnValInt) ok.constVal()).value;
+			int value = ((CInt) ok.constVal()).value;
 
 			if (boolHack != 1) {
 				cw.ldc(1);

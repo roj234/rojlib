@@ -39,7 +39,7 @@ public abstract class ExeFile implements Closeable {
 		ByteList rb = this.rb;
 		rb.clear();
 		rb.ensureCapacity(len);
-		src.read(rb, len);
+		src.readFully(rb, len);
 	}
 
 	public void write(long off) throws IOException {

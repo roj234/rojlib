@@ -1,10 +1,10 @@
 package roj.compiler.resolve;
 
+import roj.asm.FieldNode;
 import roj.asm.Opcodes;
-import roj.asm.tree.FieldNode;
+import roj.asm.insn.CodeWriter;
 import roj.asm.type.IType;
 import roj.asm.type.Type;
-import roj.asm.visitor.CodeWriter;
 import roj.collect.SimpleList;
 import roj.collect.ToIntMap;
 import roj.compiler.asm.MethodWriter;
@@ -36,13 +36,13 @@ public final class NestContext {
 
 
 	public static NestContext anonymousClass(LocalContext ctx, CompileUnit self, CodeWriter constructor, List<ExprNode> args) {
-		return new NestContext(ctx.file.name, self, ctx.variables, constructor, args);
+		return new NestContext(ctx.file.name(), self, ctx.variables, constructor, args);
 	}
 	public static NestContext notFinalClass(LocalContext ctx, CompileUnit self, CodeWriter constructor, List<ExprNode> args) {
-		return new NestContext(ctx.file.name, self, Collections.emptyMap(), constructor, args);
+		return new NestContext(ctx.file.name(), self, Collections.emptyMap(), constructor, args);
 	}
 	public static NestContext lambda(LocalContext ctx, CompileUnit self, CodeWriter constructor, List<ExprNode> args) {
-		return new NestContext(ctx.file.name, self, Collections.emptyMap(), constructor, args);
+		return new NestContext(ctx.file.name(), self, Collections.emptyMap(), constructor, args);
 	}
 
 	public NestContext(String nestType, CompileUnit that, Map<String, Variable> vars, CodeWriter constructor, List<ExprNode> initArgs) {
@@ -59,7 +59,7 @@ public final class NestContext {
 	public FieldNode nestRef() {
 		int fid = fieldIds.getOrDefault(this, -1);
 		if (fid < 0) {
-			Type type = new Type(nestType);
+			Type type = Type.klass(nestType);
 			fid = self.newField(Opcodes.ACC_SYNTHETIC|Opcodes.ACC_FINAL, "$this", type);
 			fieldIds.putInt(this, fid);
 

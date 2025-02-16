@@ -5,7 +5,7 @@ import roj.asmx.mapper.Mapping;
 import roj.collect.IntList;
 import roj.collect.SimpleList;
 import roj.text.CharList;
-import roj.text.LinedReader;
+import roj.text.LineReader;
 import roj.text.TextReader;
 import roj.text.TextUtil;
 import roj.ui.Terminal;
@@ -131,7 +131,7 @@ final class YarnMapping extends Mapping {
 		}
 	}
 
-	public void readIntermediaryMap(String name, LinedReader slr, List<String> tmp) throws IOException {
+	public void readIntermediaryMap(String name, LineReader slr, List<String> tmp) throws IOException {
 		int i = 2;
 
 		slr.readLine();

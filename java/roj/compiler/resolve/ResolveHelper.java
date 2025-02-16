@@ -1,15 +1,11 @@
 package roj.compiler.resolve;
 
-import roj.asm.Opcodes;
-import roj.asm.tree.FieldNode;
-import roj.asm.tree.IClass;
-import roj.asm.tree.MethodNode;
-import roj.asm.tree.RawNode;
-import roj.asm.tree.anno.AnnVal;
-import roj.asm.tree.anno.Annotation;
-import roj.asm.tree.attr.Annotations;
-import roj.asm.tree.attr.Attribute;
-import roj.asm.tree.attr.InnerClasses;
+import roj.asm.*;
+import roj.asm.annotation.Annotation;
+import roj.asm.attr.Annotations;
+import roj.asm.attr.Attribute;
+import roj.asm.attr.InnerClasses;
+import roj.asm.type.Desc;
 import roj.asm.type.Generic;
 import roj.asm.type.IType;
 import roj.asm.type.Signature;
@@ -18,7 +14,6 @@ import roj.collect.IntBiMap;
 import roj.collect.MyHashMap;
 import roj.collect.MyHashSet;
 import roj.collect.SimpleList;
-import roj.compiler.asm.LazyAnnVal;
 import roj.compiler.context.GlobalContext;
 import roj.compiler.diagnostic.Kind;
 
@@ -171,7 +166,7 @@ public final class ResolveHelper {
 				MethodNode m = (MethodNode) methods.get(j);
 				if ((m.modifier() & Opcodes.ACC_STATIC) != 0) continue;
 				var dv = m.parsedAttr(owner.cp(), Attribute.AnnotationDefault);
-				if (dv != null) ac.values.put(m.name(), dv.val == null ? new LazyAnnVal(dv) : dv.val);
+				if (dv != null) ac.values.put(m.name(), dv.val == null ? new LazyAnnotationValue(dv) : dv.val);
 				ac.types.put(m.name(), m.returnType());
 			}
 
@@ -198,9 +193,9 @@ public final class ResolveHelper {
 					case "java/lang/annotation/Target" -> {
 						int tmp = 0;
 						if (!a.containsKey("value")) throw new NullPointerException("Invalid @Target");
-						List<AnnVal> array = a.getArray("value");
-						for (int j = 0; j < array.size(); j++) {
-							tmp |= switch (array.get(j).asEnum().field) {
+						var list1 = a.getArray("value");
+						for (int j = 0; j < list1.size(); j++) {
+							tmp |= switch (list1.getEnumValue(j)) {
 								case "TYPE" -> TYPE;
 								case "FIELD" -> FIELD;
 								case "METHOD" -> METHOD;
@@ -263,19 +258,24 @@ public final class ResolveHelper {
 
 				IClass type = owner;
 				List<? extends RawNode> methods1 = type.methods();
-				MyHashSet<String> remove = new MyHashSet<>();
+				MyHashSet<Desc> bridgeIgnore = new MyHashSet<>();
 				for (int i = 0; i < methods1.size(); i++) {
-					MethodNode mn = (MethodNode) methods1.get(i);
-					// <init> 允许 synthetic
-					if (mn.name().startsWith("<") ? mn.name().equals("<clinit>") : (mn.modifier & (Opcodes.ACC_BRIDGE | Opcodes.ACC_SYNTHETIC)) != 0) {
-						remove.add(mn.rawDesc());
-						continue;
-					}
+					var mn = (MethodNode) methods1.get(i);
 
-					MethodList ml = (MethodList) methods.get(mn.name());
+					// 下面会continue，<init>又不可能带bridge
+					if ((mn.modifier & Opcodes.ACC_BRIDGE) != 0) bridgeIgnore.add(new Desc("",mn.name(),mn.rawDesc()));
+
+					// <init> 允许 synthetic
+					if (mn.name().startsWith("<") ? mn.name().equals("<clinit>") : (mn.modifier & (Opcodes.ACC_BRIDGE | Opcodes.ACC_SYNTHETIC)) != 0)
+						continue;
+
+					var ml = (MethodList) methods.get(mn.name());
 					if (ml == null) methods.put(mn.name(), ml = new MethodList());
 					ml.add(type, mn);
 				}
+
+				var tmpDesc = new Desc();
+				tmpDesc.owner = "";
 
 				// Object不会实现接口
 				String className = type.parent();
@@ -292,6 +292,7 @@ public final class ResolveHelper {
 						} else for (Map.Entry<String, ComponentList> entry : ctx.getResolveHelper(info).getMethods(ctx).entrySet()) {
 							String key = entry.getKey();
 							if (key.startsWith("<")) continue;
+							tmpDesc.name = key;
 
 							ComponentList list = entry.getValue();
 
@@ -299,12 +300,14 @@ public final class ResolveHelper {
 							if (cl instanceof MethodList prev && prev.owner == null) {
 								if (list instanceof MethodList ml) {
 									for (MethodNode node : ml.methods) {
-										if (!remove.contains(node.rawDesc()))
+										tmpDesc.param = node.rawDesc();
+										if (!bridgeIgnore.contains(tmpDesc))
 											prev.add(ctx.getClassInfo(node.owner), node);
 									}
 								} else {
 									MethodNode node = ((MethodListSingle) list).node;
-									if (!remove.contains(node.rawDesc()))
+									tmpDesc.param = node.rawDesc();
+									if (!bridgeIgnore.contains(tmpDesc))
 										prev.add(ctx.getClassInfo(node.owner), node);
 								}
 							}
@@ -317,7 +320,7 @@ public final class ResolveHelper {
 
 				for (Map.Entry<String, ComponentList> entry : methods.entrySet()) {
 					if (entry.getValue() instanceof MethodList ml && ml.owner == null && ml.pack(type)) {
-						entry.setValue(new MethodListSingle(ml.methods.get(0)));
+						entry.setValue(new MethodListSingle(ml.methods.get(0), ml.isOverriddenMethod(0)));
 					}
 				}
 			}

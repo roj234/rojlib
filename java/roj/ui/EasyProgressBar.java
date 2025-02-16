@@ -5,7 +5,7 @@ import roj.reflect.ReflectionUtils;
 import roj.text.CharList;
 import roj.text.TextUtil;
 
-import static roj.reflect.ReflectionUtils.u;
+import static roj.reflect.Unaligned.U;
 
 /**
  * @author Roj234
@@ -37,7 +37,7 @@ public class EasyProgressBar extends ProgressBar {
 		deltaTime = 0;
 		barTime = 0;
 	}
-	public void addTotal(long total) {u.getAndAddLong(this, TOTAL_OFFSET, total);}
+	public void addTotal(long total) {U.getAndAddLong(this, TOTAL_OFFSET, total);}
 
 	public long getFinished() {return finish;}
 	public long getTotal() {return total;}
@@ -45,22 +45,22 @@ public class EasyProgressBar extends ProgressBar {
 	private double speed() { return deltaTime == 0 ? 0 : (double) delta / (System.currentTimeMillis() - deltaTime) * 1000; }
 	public void increment() {increment(1);}
 	public void increment(long count) {
-		long prevFin = u.getAndAddLong(this, FINISH_OFFSET, count);
+		long prevFin = U.getAndAddLong(this, FINISH_OFFSET, count);
 		long fin = prevFin + count;
 		long tot = total;
 
-		u.getAndAddLong(this, DELTA_OFFSET, count);
+		U.getAndAddLong(this, DELTA_OFFSET, count);
 
 		long time = System.currentTimeMillis();
 		long t = barTime;
-		if (((tot >= 0 && fin < tot || prevFin >= tot) && time - t < BAR_DELAY) || !u.compareAndSwapLong(this, UPDATE_OFFSET, t, time)) return;
+		if (((tot >= 0 && fin < tot || prevFin >= tot) && time - t < BAR_DELAY) || !U.compareAndSwapLong(this, UPDATE_OFFSET, t, time)) return;
 
 		if (time - deltaTime > AVG_SPEED_WINDOW) {
 			delta = (long) speed();
 			deltaTime = time - (AVG_SPEED_WINDOW / 2);
 		}
 
-		setPrefix(tot < 0
+		prefix = (tot < 0
 			? unit.equals("B") ? TextUtil.scaledNumber1024(fin) : String.valueOf(fin)
 			: unit.equals("B") ? TextUtil.scaledNumber1024(fin)+"/"+TextUtil.scaledNumber1024(tot) : fin+"/"+tot);
 

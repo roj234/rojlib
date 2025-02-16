@@ -64,7 +64,10 @@ public abstract class UnsafeCharset {
 	}
 
 	public final void encodeFully(CharSequence s, DynByteBuf out) { encodeFully(s, 0, s.length(), out); }
-	public final void encodeFully(CharSequence s, int off, int end, DynByteBuf out) { encodeLoop(s, off, end, out, Integer.MAX_VALUE, 1024); }
+	public final void encodeFully(CharSequence s, int off, int end, DynByteBuf out) {
+		int i = encodeLoop(s, off, end, out, Integer.MAX_VALUE, 1024);
+		if (i < end) throw new IllegalStateException("Trailing surrogate?");
+	}
 	public final int encodeFixedOut(CharSequence s, int off, int end, DynByteBuf out) {
 		return encodeLoop(s, off, end, out, out.writableBytes(), 0);
 	}

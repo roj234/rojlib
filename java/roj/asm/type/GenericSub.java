@@ -9,12 +9,10 @@ import java.util.List;
  * @since 2022/11/1 11:21
  */
 public class GenericSub extends IGeneric {
-	public GenericSub() {}
-	public GenericSub(String name) { this.owner = name; }
-	public GenericSub(String owner, List<IType> children) {
-		this.owner = owner;
-		this.children = children;
-	}
+	public GenericSub(String name) {this.owner = name;}
+	public GenericSub(String owner, List<IType> children) {this.owner = owner;this.children = children;}
+
+	@Override public byte genericType() {return GENERIC_SUBCLASS_TYPE;}
 
 	public void toDesc(CharList sb) {
 		sb.append('.').append(owner);
@@ -48,13 +46,5 @@ public class GenericSub extends IGeneric {
 		if (sub != null) sub.toString(sb.append('.'));
 	}
 
-	@Override
-	public void checkPosition(int env, int pos) {
-		throw new IllegalStateException("GenericSub not suitable for " + env + "." + pos);
-	}
-
-	@Override
-	public byte genericType() {
-		return GENERIC_SUBCLASS_TYPE;
-	}
+	@Override public void validate(int position, int index) {throw new IllegalStateException("<泛型子类>"+this+" 不允许作为泛型TopLevel序列化");}
 }

@@ -1,7 +1,7 @@
 package roj.compiler.plugins.moreop;
 
+import roj.asm.MethodNode;
 import roj.asm.Opcodes;
-import roj.asm.tree.MethodNode;
 import roj.asm.type.Type;
 import roj.compiler.JavaLexer;
 import roj.compiler.api.Types;
@@ -26,17 +26,17 @@ public final class MoreOpPlugin implements ExprApi.ExprOp {
 	 */
 	public static boolean UseOriginalPut;
 
-	private final Type LIST_TYPE = new Type("java/util/List");
-	private final Type MAP_TYPE = new Type("java/util/Map");
+	private final Type LIST_TYPE = Type.klass("java/util/List");
+	private final Type MAP_TYPE = Type.klass("java/util/Map");
 	public MoreOpPlugin() {}
 
 	public void pluginInit(LavaApi ctx) {
 		var expr = ctx.getExprApi();
 
-		expr.onBinary(new Type("java/util/Collection"), "+=", Types.OBJECT_TYPE, new MethodNode(Opcodes.ACC_PUBLIC|Opcodes.ACC_INTERFACE, "java/util/Collection", "add", "(Ljava/lang/Object;)Z"), false);
+		expr.onBinary(Type.klass("java/util/Collection"), "+=", Types.OBJECT_TYPE, new MethodNode(Opcodes.ACC_PUBLIC | Opcodes.ACC_INTERFACE, "java/util/Collection", "add", "(Ljava/lang/Object;)Z"), false);
 		expr.addOpHandler("[", this);
-		expr.onBinary(new Type("java/lang/String"), "*", Type.std(Type.INT), new MethodNode(Opcodes.ACC_PUBLIC, "java/lang/String", "repeat", "(I)Ljava/lang/String;"), false);
-		expr.onUnary("!", new Type("java/lang/String"), new MethodNode(Opcodes.ACC_PUBLIC, "java/lang/String", "isEmpty", "()Z"), 1);
+		expr.onBinary(Type.klass("java/lang/String"), "*", Type.primitive(Type.INT), new MethodNode(Opcodes.ACC_PUBLIC, "java/lang/String", "repeat", "(I)Ljava/lang/String;"), false);
+		expr.onUnary("!", Type.klass("java/lang/String"), new MethodNode(Opcodes.ACC_PUBLIC, "java/lang/String", "isEmpty", "()Z"), 1);
 	}
 
 	@Override

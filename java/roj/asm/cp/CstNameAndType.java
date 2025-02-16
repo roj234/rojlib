@@ -1,5 +1,6 @@
 package roj.asm.cp;
 
+import roj.asm.type.Type;
 import roj.asm.type.TypeHelper;
 import roj.text.CharList;
 import roj.util.DynByteBuf;
@@ -40,11 +41,11 @@ public final class CstNameAndType extends Constant {
 
 		if (type.startsWith("(")) {
 			try {
-				return sb.append(TypeHelper.humanize(TypeHelper.parseMethod(type), name, true)).toString();
+				return sb.append(TypeHelper.humanize(Type.methodDesc(type), name, true)).toString();
 			} catch (Exception ignored) {}
 		} else {
 			try {
-				TypeHelper.parseField(type).toString(sb);
+				Type.fieldDesc(type).toString(sb);
 				return sb.append(' ').append(name).toString();
 			} catch (Exception ignored) {}
 		}

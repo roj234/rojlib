@@ -9,17 +9,17 @@ import roj.collect.SimpleList;
 import roj.collect.ToIntMap;
 import roj.util.ByteList;
 import roj.util.Helpers;
-import sun.misc.Unsafe;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.nio.ByteOrder;
-import java.util.Collections;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static roj.asm.type.Type.ARRAY;
 import static roj.asm.type.Type.CLASS;
+import static roj.reflect.VMInternals.u;
 
 /**
  * @author Roj234
@@ -28,7 +28,6 @@ import static roj.asm.type.Type.CLASS;
 public final class ReflectionUtils {
 	public static final int JAVA_VERSION = VMInternals.JAVA_VERSION;
 
-	public static final Unsafe u = VMInternals.u;
 	public static final boolean BIG_ENDIAN = ByteOrder.nativeOrder() == ByteOrder.BIG_ENDIAN;
 
 	public static long fieldOffset(Class<?> type, String fieldName) {
@@ -116,35 +115,12 @@ public final class ReflectionUtils {
 		throw new NoSuchFieldException(type.getName()+"中没有任一字段匹配提供的名称"+set);
 	}
 
-	@Deprecated
-	public static List<Class<?>> getAllParentsWithSelfOrdered(Class<?> clazz) {
-		SimpleList<Class<?>> classes = new SimpleList<>();
-		SimpleList<Class<?>> pending = new SimpleList<>();
-		pending.add(clazz);
-
-		while (!pending.isEmpty()) {
-			int size = pending.size();
-			for (int i = 0; i < size; i++) {
-				Class<?> c = pending.get(i);
-				if (!classes.contains(c)) {
-					classes.add(c);
-
-					Collections.addAll(pending, c.getInterfaces());
-					Class<?> s = c.getSuperclass();
-					if (s != Object.class && s != null) pending.add(s);
-				}
-			}
-			pending.removeRange(0, size);
-		}
-		return classes;
-	}
-
 	public static String accessorName(Field field) {
 		char c = TypeHelper.class2asm(field.getType()).charAt(0);
 		switch (c) {
 			case ARRAY: case CLASS: return "Object";
 			default:
-				StringBuilder s = new StringBuilder(Type.toString((byte) c));
+				StringBuilder s = new StringBuilder(Type.getName((byte) c));
 				s.setCharAt(0, Character.toUpperCase(s.charAt(0)));
 				return s.toString();
 		}
@@ -158,7 +134,7 @@ public final class ReflectionUtils {
 		if (sm != null) b = sm.checkDefineClass(null, b);
 		return VMInternals.DefineWeakClass(null, b.toByteArray());
 	}
-	public static void ensureClassInitialized(Class<?> klass) { VMInternals.InitializeClass(klass); }
+	public static void ensureClassInitialized(Class<?> klass) { Unaligned.U.ensureClassInitialized(klass); }
 	/**
 	 * 对target_module开放src_module中的src_package
 	 */
@@ -182,14 +158,23 @@ public final class ReflectionUtils {
 		}
 	}
 
-	public static Class<?> getCallerClass(int backward) {return JAVA_VERSION < 17 ? Tracer.INSTANCE.getCallerClass(backward+1) : GetCallerArgs.getCallerClass(backward+1);}
-	private static final class Tracer extends SecurityManager {
+	public static Class<?> getCallerClass(int backward) {return JAVA_VERSION < 9 ? T8.INSTANCE.getCallerClass(backward+1) : T9.getCallerClass(backward+1);}
+	private static final class T8 extends SecurityManager {
 		// avoid security manager creation warning
-		static final Tracer INSTANCE = new Tracer();
+		static final T8 INSTANCE = new T8();
 
 		public Class<?> getCallerClass(int backward) {
 			Class<?>[] ctx = super.getClassContext();
 			return ctx.length < backward ? null : ctx[backward];
+		}
+	}
+	private static final class T9 {
+		static final StackWalker NOT_LIVE = StackWalker.getInstance(EnumSet.of(StackWalker.Option.RETAIN_CLASS_REFERENCE));
+		public static Class<?> getCallerClass(int skip) {
+			return NOT_LIVE.walk(stream -> {
+				StackWalker.StackFrame frame = stream.skip(skip).findFirst().orElse(null);
+				return frame == null ? null : frame.getDeclaringClass();
+			});
 		}
 	}
 

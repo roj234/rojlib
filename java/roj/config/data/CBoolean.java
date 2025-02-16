@@ -9,10 +9,7 @@ import roj.text.CharList;
  */
 public final class CBoolean extends CEntry {
 	public static final CBoolean TRUE = new CBoolean(), FALSE = new CBoolean();
-
 	private CBoolean() {}
-	public static CEntry valueOf(boolean b) { return b ? TRUE : FALSE; }
-	public static CEntry valueOf(String val) { return valueOf(Boolean.parseBoolean(val)); }
 
 	public Type getType() { return Type.BOOL; }
 	protected boolean eqVal(CEntry o) { return o.asBool() == asBool(); }
@@ -21,8 +18,9 @@ public final class CBoolean extends CEntry {
 	public boolean asBool() { return this == TRUE; }
 	public String asString() { return this == TRUE ? "true" : "false"; }
 
-	public void accept(CVisitor ser) { ser.value(this == TRUE); }
-	public Object raw() { return this == TRUE; }
+	public void accept(CVisitor ser) {ser.value(this == TRUE);}
+	public Object raw() {return this == TRUE;}
+	public String toString() {return asString();}
 
 	public CharList toJSON(CharList sb, int depth) { return sb.append(asString()); }
 }

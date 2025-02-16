@@ -113,7 +113,7 @@ public interface DerValue {
 		@Override
 		public Object raw() {return ref.raw();}
 		@Override
-		public Object rawDeep() {return ref.rawDeep();}
+		public Object unwrap() {return ref.unwrap();}
 		@Override
 		protected CharList toJSON(CharList sb, int depth) {ToJson ser = new ToJson();accept(ser);return ser.getValue();}
 

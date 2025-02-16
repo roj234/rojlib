@@ -1,6 +1,6 @@
 package roj.archive;
 
-import roj.io.storage.Filesystem;
+import org.jetbrains.annotations.UnmodifiableView;
 
 import java.io.Closeable;
 import java.io.IOException;
@@ -11,7 +11,7 @@ import java.util.Collection;
  * @author Roj234
  * @since 2023/3/15 0015 8:37
  */
-public interface ArchiveFile extends Closeable, Filesystem {
+public interface ArchiveFile extends Closeable, MultiFileSource {
 	void close() throws IOException;
 	/**
 	 * Reload this archive file from disk, discarding any unsaved changes
@@ -19,7 +19,7 @@ public interface ArchiveFile extends Closeable, Filesystem {
 	void reload() throws IOException;
 
 	ArchiveEntry getEntry(String name);
-	Collection<? extends ArchiveEntry> entries();
+	@UnmodifiableView Collection<? extends ArchiveEntry> entries();
 
 	default InputStream getStream(String name) throws IOException {
 		var entry = getEntry(name);

@@ -3,6 +3,7 @@ package roj.crypt.jar;
 import roj.collect.MyHashMap;
 import roj.collect.SimpleList;
 import roj.io.IOUtil;
+import roj.text.LineReader;
 import roj.util.ByteList;
 
 import java.io.IOException;
@@ -10,6 +11,7 @@ import java.io.InputStream;
 import java.security.MessageDigest;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Function;
 
 /**
  * @author Roj234
@@ -64,10 +66,11 @@ final class ManifestBytes {
 		}
 
 		Map<String, NamedAttr> map = namedAttrMap;
+		Function<String, NamedAttr> mapper = NamedAttr::new;
 		for (int j = 1; j < tmp.size(); j++) {
 			ByteAttr attr = tmp.get(j);
 			String name = attr.init(data, tmp.get(j-1));
-			map.computeIfAbsent(name, NamedAttr::new).sections.add(attr);
+			map.computeIfAbsent(name, mapper).sections.add(attr);
 		}
 		mainAttr = tmp.get(0);
 	}
@@ -96,7 +99,7 @@ final class ManifestBytes {
 			return digest.digest();
 		}
 	}
-	private static final class ByteAttr {
+	static final class ByteAttr {
 		int offset;
 		final int endOfLastLine, endOfSection, startOfNext;
 
@@ -104,6 +107,22 @@ final class ManifestBytes {
 			this.endOfLastLine = endOfLastLine;
 			this.endOfSection = endOfSection;
 			this.startOfNext = startOfNext;
+		}
+
+		String getAllLines(byte[] data) {
+			int myTerminate = endOfLastLine;
+			while (true) {
+				myTerminate++;
+				if (data[myTerminate] == '\n' && (myTerminate+1 == data.length || data[myTerminate+1] != ' ')) break;
+			}
+			return new String(data, myTerminate, endOfSection - myTerminate - 1);
+		}
+
+		void getAllLines(byte[] data, Map<String, String> map) {
+			for (String line : LineReader.create(getAllLines(data))) {
+				int pos = line.indexOf(": ");
+				map.put(line.substring(0, pos), line.substring(pos+2));
+			}
 		}
 
 		@SuppressWarnings("fallthrough")

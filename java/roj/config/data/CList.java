@@ -38,9 +38,9 @@ public class CList extends CEntry implements Iterable<CEntry> {
 	}
 
 	public List<CEntry> raw() { return list; }
-	public Object rawDeep() {
+	public Object unwrap() {
 		List<Object> caster = Arrays.asList(new Object[list.size()]);
-		for (int i = 0; i < list.size(); i++) caster.set(i, list.get(i).rawDeep());
+		for (int i = 0; i < list.size(); i++) caster.set(i, list.get(i).unwrap());
 		return caster;
 	}
 
@@ -58,11 +58,11 @@ public class CList extends CEntry implements Iterable<CEntry> {
 		list.add(entry == null ? CNull.NULL : entry);
 		return this;
 	}
-	public final void add(String s) { list.add(CString.valueOf(s)); }
-	public final void add(boolean b) { list.add(CBoolean.valueOf(b)); }
-	public final void add(int s) { list.add(CInt.valueOf(s)); }
-	public final void add(long s) { list.add(CLong.valueOf(s)); }
-	public final void add(double s) { list.add(CDouble.valueOf(s)); }
+	public final void add(String s) { list.add(CEntry.valueOf(s)); }
+	public final void add(boolean b) { list.add(CEntry.valueOf(b)); }
+	public final void add(int s) { list.add(CEntry.valueOf(s)); }
+	public final void add(long s) { list.add(CEntry.valueOf(s)); }
+	public final void add(double s) { list.add(CEntry.valueOf(s)); }
 
 	public void set(int i, CEntry val) {list.set(i, val);}
 	@NotNull
@@ -96,39 +96,44 @@ public class CList extends CEntry implements Iterable<CEntry> {
 
 	public final MyHashSet<String> toStringSet() {
 		MyHashSet<String> stringSet = new MyHashSet<>(list.size());
-		for (CEntry entry : list) {
-			try {
-				String val = entry.asString();
-				stringSet.add(val);
-			} catch (ClassCastException ignored) {
-			}
+		for (int i = 0; i < list.size(); i++) {
+			stringSet.add(list.get(i).asString());
 		}
 		return stringSet;
 	}
 	public final SimpleList<String> toStringList() {
 		SimpleList<String> stringList = new SimpleList<>(list.size());
-		for (CEntry entry : list) {
-			try {
-				String val = entry.asString();
-				stringList.add(val);
-			} catch (ClassCastException ignored) {
-			}
+		for (int i = 0; i < list.size(); i++) {
+			stringList.add(list.get(i).asString());
 		}
 		return stringList;
 	}
-	public final int[] toIntArray() {
-		int[] array = new int[list.size()];
+	public final String[] toStringArray() {
+		String[] array = new String[list.size()];
 		for (int i = 0; i < list.size(); i++) {
-			CEntry entry = list.get(i);
-			array[i] = entry.mayCastTo(Type.INTEGER) ? entry.asInt() : 0;
+			array[i] = list.get(i).asString();
 		}
 		return array;
 	}
-	public final byte[] toByteArray() {
+	public byte[] toByteArray() {
 		byte[] array = new byte[list.size()];
 		for (int i = 0; i < list.size(); i++) {
 			CEntry entry = list.get(i);
-			array[i] = (byte) (entry.mayCastTo(Type.INTEGER) ? entry.asInt() : 0);
+			array[i] = (byte) (entry.mayCastTo(Type.Int1) ? entry.asInt() : 0);
+		}
+		return array;
+	}
+	public int[] toIntArray() {
+		int[] array = new int[list.size()];
+		for (int i = 0; i < list.size(); i++) {
+			array[i] = list.get(i).asInt();
+		}
+		return array;
+	}
+	public long[] toLongArray() {
+		long[] array = new long[list.size()];
+		for (int i = 0; i < list.size(); i++) {
+			array[i] = list.get(i).asLong();
 		}
 		return array;
 	}
@@ -138,9 +143,6 @@ public class CList extends CEntry implements Iterable<CEntry> {
 	public void putComment(int key, String val) {throw new UnsupportedOperationException();}
 	public CList withComments() { return new CCommList(list); }
 	public void clearComments() {}
-
-	@Override
-	public final CharList toJSON(CharList sb, int depth) { throw new NoSuchMethodError(); }
 
 	@Override
 	public CharList toTOML(CharList sb, int depth, CharSequence chain) {

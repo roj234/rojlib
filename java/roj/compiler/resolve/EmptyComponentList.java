@@ -1,7 +1,7 @@
 package roj.compiler.resolve;
 
 import org.jetbrains.annotations.NotNull;
-import roj.asm.tree.MethodNode;
+import roj.asm.MethodNode;
 import roj.asm.type.IType;
 import roj.compiler.context.LocalContext;
 

@@ -27,7 +27,7 @@ public class RingBuffer<E> extends AbstractCollection<E> implements Deque<E> {
 	public RingBuffer(int capacity) {
 		// not check == 0, for SerializerFactory
 		if (capacity < 0) throw new IllegalArgumentException("Capacity must >= 0");
-		maxCap = capacity;
+		maxCap = capacity == 0 ? Integer.MAX_VALUE : capacity;
 		array = capacity == 0 ? ArrayCache.OBJECTS : new Object[capacity];
 	}
 	public RingBuffer(int capacity, int maxCapacity) {

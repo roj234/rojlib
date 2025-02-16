@@ -1,16 +1,27 @@
 package roj.asm.util;
 
 import org.jetbrains.annotations.Nullable;
-import roj.asm.tree.IClass;
+import roj.asm.ClassNode;
+import roj.asm.IClass;
+import roj.asm.MethodNode;
+import roj.asm.Opcodes;
 import roj.asm.type.Desc;
+import roj.asm.type.IType;
 import roj.asm.type.Type;
+import roj.collect.CollectionX;
+import roj.collect.IntBiMap;
+import roj.collect.SimpleList;
+import roj.compiler.context.GlobalContext;
+import roj.compiler.context.LibraryClassLoader;
+import roj.compiler.context.LocalContext;
+import roj.compiler.resolve.ComponentList;
+import roj.compiler.resolve.TypeCast;
 import roj.text.CharList;
 import roj.text.TextUtil;
-import roj.text.logging.Logger;
 
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
 
 /**
@@ -21,25 +32,13 @@ import java.util.function.Function;
  */
 public final class ClassUtil {
 	private static final ThreadLocal<ClassUtil> ThreadBasedCache = ThreadLocal.withInitial(ClassUtil::new);
-
-	private ClassUtil() { this.localClassInfo = s -> null; }
-	public ClassUtil(Function<CharSequence, IClass> classInfo) { this.localClassInfo = classInfo; }
+	public static ClassUtil getInstance() {return ThreadBasedCache.get();}
 
 	public final Desc sharedDC = new Desc();
-	public boolean checkSubClass;
-
-	public static final ReflectClass FAILED = new ReflectClass(ClassUtil.class);
-	public static final ConcurrentHashMap<String, ReflectClass> classInfo = new ConcurrentHashMap<>();
-
-	private final Function<CharSequence, IClass> localClassInfo;
-
 	private final CharList sharedCL = new CharList(128), sharedCL2 = new CharList(12);
 
-	public static ClassUtil getInstance() {
-		ClassUtil u = ThreadBasedCache.get();
-		u.checkSubClass = true;
-		return u;
-	}
+	@Deprecated public static final Object FAILED = null;
+	@Deprecated public static final Map<String, IClass> classInfo = Collections.emptyMap();
 
 	// region 映射各种名字
 
@@ -67,7 +66,7 @@ public final class ClassUtil {
 				sb.clear();
 				return sb.append(name, arrLv, s+1).append(result).append(';').toString();
 			}
-		} else if (checkSubClass) {
+		} else {
 			int dollar = e;
 			while ((dollar = TextUtil.gLastIndexOf(name, "$", dollar-1, s)) >= 0) {
 				sb.clear();
@@ -122,9 +121,7 @@ public final class ClassUtil {
 		sharedCL.clear();
 		return sharedCL.append(fd, 0, off+1).append(nn).append(';').toString();
 	}
-
 	// endregion
-	// region 各种可继承性的判断
 	public static boolean arePackagesSame(String packageA, String packageB) {
 		int ia = packageA.lastIndexOf('/');
 
@@ -140,85 +137,90 @@ public final class ClassUtil {
 
 		return fieldOwner.regionMatches(0, accessor, 0, ia);
 	}
+	public static boolean isOverridable(String owner, char ownerModifier, String referent) {
+		if ((ownerModifier&(Opcodes.ACC_PUBLIC|Opcodes.ACC_PROTECTED)) != 0) return true;
+		if ((ownerModifier&Opcodes.ACC_PRIVATE) != 0) return false;
+		return arePackagesSame(owner, referent);
+	}
 
-	public static ReflectClass reflectClassInfo(CharSequence _name) {
-		ReflectClass me = classInfo.get(_name);
-		if (me != null) return me == FAILED ? null : me;
-
-		synchronized (classInfo) {
-			me = classInfo.get(_name);
-			if (me != null) return me == FAILED ? null : me;
-
-			String name = _name.toString();
-			try {
-				Class<?> inst = Class.forName(name.replace('/', '.'), false, ClassUtil.class.getClassLoader());
-				classInfo.put(name, me = ReflectClass.from(inst));
-				return me;
-			} catch (ClassNotFoundException | NoClassDefFoundError e) {
-				classInfo.put(name, FAILED);
-				return null;
-			} catch (Throwable e) {
-				Logger.getLogger("ASM").error("Exception Loading {}", e, name);
-				classInfo.put(name, FAILED);
-				return null;
+	private static class MyGlobalContext extends GlobalContext { @Override protected void addRuntime() {} }
+	private static volatile GlobalContext defaultCtx;
+	private LocalContext getLocalContext() {
+		if (lc == null) lc = getGlobalContext().createLocalContext();
+		return lc;
+	}
+	private GlobalContext getGlobalContext() {
+		if (gc == null) {
+			if (defaultCtx == null) {
+				synchronized (ClassUtil.class) {
+					if (defaultCtx == null) {
+						defaultCtx = new MyGlobalContext();
+						defaultCtx.addLibrary(new LibraryClassLoader(ClassUtil.class.getClassLoader()));
+					}
+				}
 			}
+			gc = defaultCtx;
+		}
+		return gc;
+	}
+
+	private GlobalContext gc;
+	private LocalContext lc;
+
+	public ClassUtil() {}
+	public ClassUtil(ClassLoader... classLoaders) {
+		gc = new MyGlobalContext();
+		for (ClassLoader loader : classLoaders) {
+			gc.addLibrary(new LibraryClassLoader(loader));
 		}
 	}
-	public IClass getClassInfo(CharSequence name) {
-		IClass ref = localClassInfo.apply(name);
-		if (ref != null) return ref;
-		return reflectClassInfo(name);
+
+	public IClass getClassInfo(CharSequence name) {return getGlobalContext().getClassInfo(name);}
+
+	private final Function<ClassNode, List<String>> getSuperClassListCached = CollectionX.lazyLru(info -> {
+		IntBiMap<String> classList = getGlobalContext().getResolveHelper(info).getClassList(gc);
+
+		List<String> parents = new SimpleList<>(classList.values());
+		parents.sort((o1, o2) -> Integer.compare(classList.getInt(o1) >>> 16, classList.getInt(o2) >>> 16));
+		return parents;
+	}, 1000);
+	public List<String> getSuperClassList(String type) {
+		ClassNode info = getGlobalContext().getClassInfo(type);
+		if (info == null) return Collections.emptyList();
+		return getSuperClassListCached.apply(info);
 	}
 
 	/**
 	 * method所表示的方法是否从parents(若非空)或method.owner的父类继承/实现
 	 */
-	public Boolean isInherited(Desc method, List<String> parents, Boolean defVal) {
-		// 检查Object的继承
-		if (method.param.startsWith("()")) {
-			switch (method.name) {
-				case "clone":
-				case "toString":
-				case "hashCode":
-				case "finalize":
-					return true;
-			}
-		} else if (method.param.equals("(Ljava/lang/Object;)Z") && method.name.equals("equals")) {
-			return true;
-		}
+	public Boolean isInherited(Desc method, @Nullable List<String> parents, Boolean defVal) {
+		ClassNode info = getGlobalContext().getClassInfo(method.owner);
+		if (info == null) return defVal;
+		ComponentList ml = getLocalContext().getMethodList(info, method.name);
+		if (ml == ComponentList.NOT_FOUND) return defVal;
 
-		if (parents != null && parents.isEmpty()) return defVal;
-
-		boolean failedSome = false;
-
-		if (parents == null) {
-			ReflectClass ref = reflectClassInfo(method.owner);
-			if (ref == null) return defVal;
-
-			List<Class<?>> sup = ref.allParentsWithSelf();
-			// from 1, not check itself
-			for (int i = 1; i < sup.size(); i++) {
-				Class<?> clz = sup.get(i);
-				String name = clz.getName().replace('.', '/');
-
-				ref = classInfo.get(name);
-				if (ref == null) classInfo.putIfAbsent(name, ref = new ReflectClass(clz));
-
-				if (ref.getMethod(method.name, method.rawDesc()) >= 0) return true;
-			}
-		} else {
-			for (int i = 0; i < parents.size(); i++) {
-				IClass ref = getClassInfo(parents.get(i));
-				if (ref == null) {
-					failedSome = true;
-					continue;
-				}
-
-				if (ref.getMethod(method.name, method.rawDesc()) >= 0) return true;
+		for (MethodNode mn : ml.getMethods()) {
+			if (mn.rawDesc().equals(method.rawDesc())) {
+				return parents == null || parents.contains(mn.ownerClass());
 			}
 		}
-		return failedSome ? defVal : false;
+
+		return false;
 	}
 
-	// endregion
+	public boolean instanceOf(String testClass, String instClass) {return getLocalContext().instanceOf(testClass, instClass);}
+	public List<IType> inferGeneric(IType typeInst, String targetType) {return getLocalContext().inferGeneric(typeInst, targetType);}
+	public String getCommonParent(String type1, String type2) {return getLocalContext().getCommonParent(Type.klass(type1), Type.klass(type2)).owner();}
+	public String getCommonChild(String type1, String type2) {
+		var left = type1.startsWith("[") ? Type.fieldDesc(type1) : Type.klass(type1);
+		var right = type2.startsWith("[") ? Type.fieldDesc(type2) : Type.klass(type2);
+		// copied from Inferrer
+		TypeCast.Cast cast = getLocalContext().caster.checkCast(left, right);
+		if (cast.type >= 0) return type2; // a更不具体
+		cast = lc.caster.checkCast(right, left);
+		if (cast.type >= 0) return type1; // b更不具体
+
+		//throw new UnableCastException(a, b, cast);
+		throw new UnsupportedOperationException("无法比较两个无关的类型:"+type1+","+type2);
+	}
 }

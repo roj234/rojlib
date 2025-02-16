@@ -2,8 +2,8 @@ package roj.plugins.minecraft.server.network;
 
 import org.jetbrains.annotations.Range;
 import roj.asmx.event.EventBus;
-import roj.concurrent.timing.ScheduleTask;
-import roj.concurrent.timing.Scheduler;
+import roj.concurrent.ScheduleTask;
+import roj.concurrent.Scheduler;
 import roj.config.Tokenizer;
 import roj.io.IOUtil;
 import roj.math.MathUtils;

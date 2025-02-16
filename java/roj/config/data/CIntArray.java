@@ -35,6 +35,8 @@ public class CIntArray extends CList {
 		this.value = value;
 	}
 
+	public int[] toIntArray() {return value.clone();}
+
 	public void accept(CVisitor ser) { ser.value(value); }
-	public Object rawDeep() { return value; }
+	public Object unwrap() { return value; }
 }

@@ -10,12 +10,9 @@ import roj.text.TextUtil;
  */
 public final class CInt extends CEntry {
 	public int value;
-
 	public CInt() {}
-	public CInt(int n) { value = n; }
-	public CInt(CInt n) { value = n.value; }
-	public static CInt valueOf(int number) { return new CInt(number); }
-	public static CInt valueOf(String number) { return valueOf(TextUtil.parseInt(number)); }
+	public CInt(int n) {value = n;}
+	public static CEntry valueOf(String number) { return valueOf(TextUtil.parseInt(number)); }
 
 	public Type getType() { return Type.INTEGER; }
 	protected boolean eqVal(CEntry o) { return o.asInt() == value; }
@@ -38,9 +35,10 @@ public final class CInt extends CEntry {
 	public void accept(CVisitor ser) { ser.value(value); }
 	public Object raw() { return value; }
 
-	public CharList toJSON(CharList sb, int depth) { return sb.append(value); }
+	public CharList toJSON(CharList sb, int depth) {return sb.append(value);}
+	public String toString() {return String.valueOf(value);}
 
-	public int hashCode() { return value; }
+	public int hashCode() {return value;}
 	public boolean equals(Object o) {
 		if (this == o) return true;
 		if (o == null || getClass() != o.getClass()) return false;

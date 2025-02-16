@@ -1,9 +1,10 @@
 package roj.plugins.ci.plugin;
 
-import roj.asm.tree.ConstantData;
-import roj.asm.tree.RawNode;
-import roj.asm.tree.anno.AnnVal;
-import roj.asm.tree.anno.Annotation;
+import roj.asm.ClassNode;
+import roj.asm.RawNode;
+import roj.asm.annotation.AnnVal;
+import roj.asm.annotation.Annotation;
+import roj.asm.attr.Annotations;
 import roj.asm.type.Desc;
 import roj.asm.util.ClassUtil;
 import roj.asm.util.Context;
@@ -29,15 +30,15 @@ public class NIXIM implements Processor {
 	@Override
 	public List<Context> process(List<Context> classes, ProcessEnvironment pc) {
 		m = FMD.MapPlugin.getProjectMapper(pc.project);
-		var ctx = pc.getAnnotatedClass(classes, NiximSystemV2.A_NIXIM_CLASS_FLAG);
+		var ctx = pc.getAnnotatedClass(classes, NiximSystemV2.A_NIXIM);
 
 		for (int i = 0; i < ctx.size(); i++) {
-			ConstantData data = ctx.get(i).getData();
-			Annotation nixim = Annotation.findInvisible(data.cp, data, NiximSystemV2.A_NIXIM_CLASS_FLAG);
+			ClassNode data = ctx.get(i).getData();
+			Annotation nixim = Annotation.findInvisible(data.cp, data, NiximSystemV2.A_NIXIM);
 
 			// noinspection all
 			String dest = nixim.getString("value");
-			if (dest.equals("/")) dest = data.parent;
+			if (dest.equals("/")) dest = data.parent();
 			else dest = dest.replace('.', '/');
 
 			process(data, dest, data.fields);
@@ -47,12 +48,12 @@ public class NIXIM implements Processor {
 		return classes;
 	}
 
-	private void process(ConstantData data, String dest, List<? extends RawNode> nodes) {
+	private void process(ClassNode data, String dest, List<? extends RawNode> nodes) {
 		for (int i = 0; i < nodes.size(); i++) {
 			RawNode node = nodes.get(i);
 			if (node.name().startsWith("func_") || node.name().startsWith("field_")) continue;
 
-			List<Annotation> list = Annotation.getAnnotations(data.cp, node, false);
+			List<Annotation> list = Annotations.getAnnotations(data.cp, node, false);
 			for (int j = 0; j < list.size(); j++) {
 				Annotation anno = list.get(j);
 				if (anno.type().equals(NiximSystemV2.A_SHADOW)) {
@@ -67,17 +68,17 @@ public class NIXIM implements Processor {
 							}
 							anno.put("value", AnnVal.valueOf(name));
 						} else {
-							Terminal.warning("无法为对象找到签名: " + data.name + " " + node);
+							Terminal.warning("无法为对象找到签名: " + data.name() + " " + node);
 						}
 					}
 					break;
 				} else if (anno.type().equals(NiximSystemV2.A_COPY)) {
-					if (anno.getBoolean("map", false)) {
+					if (anno.getBool("map", false)) {
 						String name = map(dest, node);
 						if (name != null) {
 							anno.put("value", AnnVal.valueOf(name));
 						} else {
-							Terminal.warning("无法为对象找到签名: " + data.name + " " + node);
+							Terminal.warning("无法为对象找到签名: " + data.name() + " " + node);
 						}
 					}
 					break;
@@ -88,7 +89,7 @@ public class NIXIM implements Processor {
 						if (name != null) {
 							anno.put("value", AnnVal.valueOf(name));
 						} else {
-							Terminal.warning("无法为对象找到签名: " + data.name + " " + node);
+							Terminal.warning("无法为对象找到签名: " + data.name() + " " + node);
 						}
 					}
 					break;

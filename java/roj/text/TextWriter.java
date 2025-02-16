@@ -74,7 +74,7 @@ public class TextWriter extends CharList implements Closeable, Finishable {
 			ce = charset.newEncoder().onUnmappableCharacter(CodingErrorAction.REPORT);
 		}
 
-		buf1 = pool.allocate(!(out instanceof OutputStream), 1024);
+		buf1 = pool.allocate(!(out instanceof OutputStream), 1024, 0);
 		ob = buf1.nioBuffer();
 		ob.clear();
 	}
@@ -211,7 +211,12 @@ public class TextWriter extends CharList implements Closeable, Finishable {
 			} else {
 				int i = 0;
 				while (i < ib.length()) {
-					i = ucs.encodeFixedOut(ib, i, ib.length(), buf1, buf1.writableBytes());
+					int nextI = ucs.encodeFixedOut(ib, i, ib.length(), buf1, buf1.writableBytes());
+					if (nextI == i) {
+						len = ib.position(i).compact().position();
+						return;
+					}
+					i = nextI;
 
 					ob.position(buf1.wIndex());
 					if (buf1.writableBytes() < 8) flush_ce();

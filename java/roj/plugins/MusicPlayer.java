@@ -12,10 +12,10 @@ import roj.plugin.Plugin;
 import roj.plugin.SimplePlugin;
 import roj.reflect.ReflectionUtils;
 import roj.text.CharList;
+import roj.ui.Argument;
+import roj.ui.Command;
 import roj.ui.ProgressBar;
 import roj.ui.Terminal;
-import roj.ui.terminal.Argument;
-import roj.ui.terminal.Command;
 import roj.util.ArrayUtil;
 import roj.util.Helpers;
 
@@ -23,9 +23,9 @@ import java.io.File;
 import java.util.List;
 import java.util.concurrent.locks.LockSupport;
 
-import static roj.reflect.ReflectionUtils.u;
-import static roj.ui.terminal.CommandNode.argument;
-import static roj.ui.terminal.CommandNode.literal;
+import static roj.reflect.Unaligned.U;
+import static roj.ui.CommandNode.argument;
+import static roj.ui.CommandNode.literal;
 
 /**
  * @author Roj233
@@ -156,7 +156,7 @@ public class MusicPlayer extends Plugin implements Runnable {
 		 .then(literal("next").executes(prevNext));
 		c.then(literal("play").executes(ctx -> {
 				if (audio.paused()) audio.pause();
-				else if ((u.getAndSetInt(this, FLAG, 0) & STOP) != 0) LockSupport.unpark(player);
+				else if ((U.getAndSetInt(this, FLAG, 0) & STOP) != 0) LockSupport.unpark(player);
 				else System.out.println("已经在播放");
 			 }).then(argument("歌曲序号", Argument.number(1, playList.size()))
 			.executes(ctx -> play(ctx.argument("歌曲序号", Integer.class)-1))));
@@ -165,7 +165,7 @@ public class MusicPlayer extends Plugin implements Runnable {
 		}));
 		c.then(literal("stop").executes(ctx -> {
 			unpause();
-			if (u.compareAndSwapInt(this, FLAG, 0, SKIP_AUTO|STOP)) decoder.stop();
+			if (U.compareAndSwapInt(this, FLAG, 0, SKIP_AUTO|STOP)) decoder.stop();
 		}));
 
 		c.then(literal("seek").then(argument("时间", Argument.real(0,86400)).executes(ctx -> {
@@ -213,7 +213,7 @@ public class MusicPlayer extends Plugin implements Runnable {
 	public void play(int song) {
 		unpause();
 		playIndex = song;
-		int f = u.getAndSetInt(this, FLAG, SKIP_AUTO);
+		int f = U.getAndSetInt(this, FLAG, SKIP_AUTO);
 		if ((f&STOP) != 0) {
 			flag = 0;
 			LockSupport.unpark(player);

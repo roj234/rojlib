@@ -34,7 +34,7 @@ final class SignatureBlock extends CertPath {
 	private static final Asn1Context PKCS_7_CTX;
 	static {
 		try {
-			PKCS_7_CTX = Asn1Context.createFromString(IOUtil.getTextResource("META-INF/asn1/PKCS#7.asn"));
+			PKCS_7_CTX = Asn1Context.createFromString(IOUtil.getTextResource("roj/crypt/jar/PKCS#7.asn"));
 		} catch (ParseException | IOException e) {
 			throw new RuntimeException(e);
 		}
@@ -106,7 +106,7 @@ final class SignatureBlock extends CertPath {
 				digestOid = DigestAlg.get(signerInfo.query("digestAlgorithm.algorithm"));
 				//noinspection SuspiciousMethodCalls
 				signOid = SignAlg.get(signerInfo.query("signatureAlgorithm.algorithm"));
-				sign = (byte[]) signerInfo.get("signature").rawDeep();
+				sign = (byte[]) signerInfo.get("signature").unwrap();
 			}
 
 			var factory = CertificateFactory.getInstance("X.509");

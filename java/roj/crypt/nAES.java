@@ -24,7 +24,7 @@ import java.util.Arrays;
  * @since 2024/10/02 02:17
  */
 @Autoload(value = Autoload.Target.NIXIM, intrinsic = RojLib.AES_NI)
-@Nixim("roj/crypt/AES")
+@Nixim(altValue = AES.class)
 final class nAES {
 	public static final int AES_BLOCK_SIZE = 16;
 

@@ -10,17 +10,11 @@ public final class CstInt extends Constant {
 	public int value;
 
 	public CstInt(int value) { this.value = value; }
-	@Override
-	void write(DynByteBuf w) { w.put(INT).putInt(value); }
-	@Override
-	public byte type() { return INT; }
+	@Override public byte type() { return INT; }
+	@Override void write(DynByteBuf w) { w.put(INT).putInt(value); }
 
-	public final String toString() { return super.toString() + " : " + value; }
-
-	@Override
-	public String getEasyReadValue() { return Integer.toString(value); }
-	@Override
-	public String getEasyCompareValue() { return Integer.toString(value); }
+	@Override public String toString() { return Integer.toString(value); }
+	@Override public String getEasyCompareValue() { return Integer.toString(value); }
 
 	public final int hashCode() { return ~value; }
 

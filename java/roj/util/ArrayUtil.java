@@ -1,17 +1,18 @@
 package roj.util;
 
+import roj.compiler.plugins.annotations.Attach;
 import roj.compiler.plugins.asm.ASM;
+import roj.compiler.runtime.RtUtil;
 import roj.config.Tokenizer;
-import roj.io.IOUtil;
+import roj.gui.GuiUtil;
 import roj.reflect.Bypass;
 import roj.text.CharList;
-import roj.ui.GuiUtil;
 import roj.ui.Terminal;
 
 import java.util.*;
 import java.util.function.ToIntFunction;
 
-import static roj.reflect.ReflectionUtils.u;
+import static roj.reflect.Unaligned.U;
 
 /**
  * @author Roj234
@@ -34,48 +35,19 @@ public final class ArrayUtil {
 	}
 
 	public static void pack(int[] arr) {
-		ByteList tmp = IOUtil.getSharedByteBuf();
-		for (int i = 0; i < arr.length; i++) tmp.putInt(arr[i]);
-		Base128(tmp);
+		var sb = RtUtil.pack(arr);
+		GuiUtil.setClipboardText(Tokenizer.addSlashes(sb, 0, new CharList().append('"'), '\'').append('"').toStringAndFree());
+		Terminal.pause();
 	}
-	public static void pack(byte[] arr) { Base128(ByteList.wrap(arr)); }
-
-	private static void Base128(ByteList tmp) {
-		BitBuffer br = new BitBuffer(tmp);
-		CharList sb = new CharList();
-		sb.ensureCapacity(tmp.readableBytes() * 8/7 + 1);
-		while (br.readableBits() >= 7) sb.append((char) (br.readBit(7)+1));
-		if (br.readableBits() > 0) sb.append((char) (br.readBit(br.readableBits())+1));
-
-		//FIXME use attribute store and (lavac)
+	public static void pack(byte[] arr) {
+		var sb = RtUtil.pack(arr);
 		GuiUtil.setClipboardText(Tokenizer.addSlashes(sb, 0, new CharList().append('"'), '\'').append('"').toStringAndFree());
 		Terminal.pause();
 	}
 
-	private static ByteList UnBase128(String s) {
-		int len = s.length() * 7/8;
-
-		ByteList tmp = ByteList.allocate(len,len);
-		BitBuffer br = new BitBuffer(tmp);
-		for (int i = 0; i < s.length()-1; i++) br.writeBit(7, s.charAt(i)-1);
-
-		br.writeBit(8-br.bitPos, s.charAt(s.length()-1)-1);
-		br.endBitWrite();
-
-		return tmp;
-	}
-
-	public static byte[] unpackB(String s) {
-		return UnBase128(s).list;
-	}
-	public static int[] unpackI(String s) {
-		ByteList list = UnBase128(s);
-		int[] b = new int[list.readableBytes()>>>2];
-		for (int i = 0; i < b.length; i++) b[i] = list.readInt();
-		return b;
-	}
-
+	@Attach
 	public static <T> List<T> inverse(List<T> list) { return inverse(list, 0, list.size()); }
+	@Attach
 	public static <T> List<T> inverse(List<T> list, int i, int length) {
 		if (--length <= 0) return list;
 
@@ -85,7 +57,7 @@ public final class ArrayUtil {
 		}
 		return list;
 	}
-
+	@Attach
 	public static <T> void shuffle(List<T> list, Random r) {
 		for (int i = 0; i < list.size(); i++) {
 			int an = r.nextInt(list.size());
@@ -119,7 +91,7 @@ public final class ArrayUtil {
 		int i = 0;
 		// 当null时也就意味着是Java8 ... 无法确定处理器是否支持不对齐访问呢
 		if (length > (8 >> log2ArrayIndexScale) - 1 && H.SCOPED_MEMORY_ACCESS != null) {
-			if (u.getByte(a, aOffset) != u.getByte(b, bOffset))
+			if (U.getByte(a, aOffset) != U.getByte(b, bOffset))
 				return 0;
 			i = H.SCOPED_MEMORY_ACCESS.vectorizedMismatch(a, aOffset, b, bOffset, length, log2ArrayIndexScale);
 			if (i >= 0) return i;
@@ -127,7 +99,7 @@ public final class ArrayUtil {
 		}
 
 		for (; i < length; i++) {
-			if (u.getByte(a, aOffset+i) != u.getByte(b, bOffset+i))
+			if (U.getByte(a, aOffset+i) != U.getByte(b, bOffset+i))
 				return i;
 		}
 
@@ -172,7 +144,7 @@ public final class ArrayUtil {
 		long end = off+len;
 		int hash = 1;
 		while (off < end) {
-			hash = u.getByte(o, off++) + 31 * hash;
+			hash = U.getByte(o, off++) + 31 * hash;
 		}
 		return hash;
 	}

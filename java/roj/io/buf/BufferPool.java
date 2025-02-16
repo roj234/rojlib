@@ -2,20 +2,22 @@ package roj.io.buf;
 
 import roj.collect.IntMap;
 import roj.collect.SimpleList;
+import roj.concurrent.FastThreadLocal;
+import roj.concurrent.ITask;
+import roj.concurrent.Scheduler;
 import roj.concurrent.SegmentReadWriteLock;
-import roj.concurrent.task.ITask;
-import roj.concurrent.timing.Scheduler;
 import roj.plugin.Status;
+import roj.reflect.Unaligned;
 import roj.text.CharList;
 import roj.text.logging.Logger;
 import roj.util.*;
-import sun.misc.Unsafe;
 
+import java.io.Closeable;
 import java.lang.ref.WeakReference;
 import java.nio.ByteBuffer;
 
 import static roj.reflect.ReflectionUtils.fieldOffset;
-import static roj.reflect.ReflectionUtils.u;
+import static roj.reflect.Unaligned.U;
 
 /**
  * @author Roj233
@@ -28,10 +30,15 @@ public final class BufferPool {
 	private static final int DIRECT_INIT = 32768, DIRECT_INCR = 32768, DIRECT_FLEX_MAX = 16777216, DIRECT_LARGE = 4194304;
 	private static final int DEFAULT_KEEP_BEFORE = 16;
 
+	public static void addRef(Closeable in) {
+		if (in instanceof PooledBuffer pooledBuffer) pooledBuffer.addRef(1);
+	}
+
 	private static final class PooledDirectBuf extends DirectByteList.Slice implements PooledBuffer {
 		private static final long u_pool = fieldOffset(PooledDirectBuf.class, "pool");
 		private volatile Object pool;
-		@Override public Object pool(Object p1) { return u.getAndSetObject(this, u_pool, p1); }
+		private int refCount;
+		@Override public Object pool(Object p1) { return U.getAndSetObject(this, u_pool, p1); }
 
 		private Page page;
 		@Override public Page page() { return page; }
@@ -41,14 +48,16 @@ public final class BufferPool {
 		@Override public int getKeepBefore() { return meta; }
 		@Override public void setKeepBefore(int keepBefore) { meta = keepBefore; }
 
-		@Override public void close() { if (pool != null) BufferPool.reserve(this); }
+		@Override public void close() { if (pool != null && --refCount <= 0) BufferPool.reserve(this); }
+		@Override public void addRef(int count) {refCount += count;}
 		@Override public void release() { set(null,0L,0); }
 	}
 	private static final class PooledHeapBuf extends ByteList.Slice implements PooledBuffer {
 		private static final long u_pool = fieldOffset(PooledHeapBuf.class, "pool");
 		private volatile Object pool;
+		private int refCount;
 		@Override
-		public Object pool(Object p1) { return u.getAndSetObject(this, u_pool, p1); }
+		public Object pool(Object p1) { return U.getAndSetObject(this, u_pool, p1); }
 
 		private Page page;
 		@Override public Page page() { return page; }
@@ -58,12 +67,14 @@ public final class BufferPool {
 		@Override public int getKeepBefore() { return meta; }
 		@Override public void setKeepBefore(int keepBefore) { meta = keepBefore; }
 
-		@Override public void close() { if (pool != null) BufferPool.reserve(this); }
+		@Override public void close() { if (pool != null && --refCount <= 0) BufferPool.reserve(this); }
+		@Override public void addRef(int count) {refCount += count;}
 		@Override public void release() { set(ArrayCache.BYTES,0,0); }
 	}
 
-	private static final ThreadLocal<BufferPool> DEFAULT = ThreadLocal.withInitial(BufferPool::new);
+	private static final FastThreadLocal<BufferPool> DEFAULT = FastThreadLocal.withInitial(BufferPool::new);
 	public static BufferPool localPool() { return DEFAULT.get(); }
+	public static final BufferPool UNPOOLED = new BufferPool(0,0,0,0,0,0,0,0);
 
 	private static final long
 		u_directShellLen = fieldOffset(BufferPool.class, "directShellLen"),
@@ -121,6 +132,8 @@ public final class BufferPool {
 	}
 
 	private void tryDelayedFree() {
+		if (maxStall <= 0) return;
+
 		if (!hasDelay) {
 			Scheduler.getDefaultScheduler().delay(stallReleaseTask, maxStall);
 			hasDelay = true;
@@ -221,19 +234,19 @@ public final class BufferPool {
 		return (DynByteBuf) buf;
 	}
 	private PooledBuffer getShell(PooledBuffer[] array, long offset) {
-		int len = u.getIntVolatile(this, offset);
+		int len = U.getIntVolatile(this, offset);
 		if (len == 0) return null;
 
 		for (int i = array.length-1; i >= 0; i--) {
-			long o = Unsafe.ARRAY_OBJECT_BASE_OFFSET + (long) i * Unsafe.ARRAY_OBJECT_INDEX_SCALE;
+			long o = Unaligned.ARRAY_OBJECT_BASE_OFFSET + (long) i * Unaligned.ARRAY_OBJECT_INDEX_SCALE;
 
-			Object b = u.getObjectVolatile(array, o);
+			Object b = U.getObjectVolatile(array, o);
 			if (b == null) continue;
 
-			if (u.compareAndSwapObject(array, o, b, null)) {
+			if (U.compareAndSwapObject(array, o, b, null)) {
 				while (true) {
-					len = u.getIntVolatile(this, offset);
-					if (u.compareAndSwapInt(this, offset, len, len-1))
+					len = U.getIntVolatile(this, offset);
+					if (U.compareAndSwapInt(this, offset, len, len-1))
 						return (PooledBuffer) b;
 				}
 			}
@@ -244,8 +257,9 @@ public final class BufferPool {
 		long off;
 		if (cap < DIRECT_LARGE) while (true) {
 			Page p = pDirect;
+			if (p == null) return 0;
 			NativeMemory stamp = directRef;
-			if (stamp == null && !u.compareAndSwapObject(this, u_directRef, null, stamp = new NativeMemory(p.totalSpace()))) {
+			if (stamp == null && !U.compareAndSwapObject(this, u_directRef, null, stamp = new NativeMemory(p.totalSpace()))) {
 				stamp.release();
 				continue;
 			}
@@ -293,8 +307,9 @@ public final class BufferPool {
 		int off;
 		if(cap < HEAP_LARGE) while (true) {
 			Page p = pHeap;
+			if (p == null) return false;
 			byte[] stamp = heap;
-			if (stamp == null && !u.compareAndSwapObject(this, u_heap, null, stamp = new byte[(int) p.totalSpace()]))
+			if (stamp == null && !U.compareAndSwapObject(this, u_heap, null, stamp = new byte[(int) p.totalSpace()]))
 				continue;
 
 			int slot = System.identityHashCode(p);
@@ -341,15 +356,15 @@ public final class BufferPool {
 		long addr = allocDirect(size, null);
 		if (addr == 0) return 0;
 
-		u.putLong(addr, size);
-		u.putLong(addr+8, ~size);
+		U.putLong(addr, size);
+		U.putLong(addr+8, ~size);
 
 		return addr+16;
 	}
 	public void free(long address) {
 		if (address == 0) return;
-		long cap1 = ~u.getLong(address -= 8);
-		long cap2 = u.getLong(address -= 8);
+		long cap1 = ~U.getLong(address -= 8);
+		long cap2 = U.getLong(address -= 8);
 		if (cap1 != cap2 || cap1 == 0) throw new UnsupportedOperationException("memory segment mangled");
 
 		int slot = System.identityHashCode(pDirect);
@@ -404,7 +419,7 @@ public final class BufferPool {
 		Object pool = buf instanceof PooledBuffer pb ? pb.pool(null) : _UNPOOLED;
 		if (pool == null) {
 			if (buf != EMPTY_DIRECT_SENTIAL && buf != EMPTY_HEAP_SENTIAL)
-				LOGGER.warn("已释放的缓冲区: "+buf.info()+"@"+System.identityHashCode(buf));
+				LOGGER.warn("重复释放缓冲区: "+buf.info()+"@"+System.identityHashCode(buf), new Exception());
 		} else if (pool != _UNPOOLED) ((BufferPool) pool).reserve0(buf);
 		else {
 			if (buf.isDirect()) ((DirectByteList) buf)._free();
@@ -455,19 +470,19 @@ public final class BufferPool {
 		}
 	}
 	private void addShell(PooledBuffer[] array, long offset, PooledBuffer b1) {
-		int len = u.getIntVolatile(this, offset);
+		int len = U.getIntVolatile(this, offset);
 		if (len >= array.length) return;
 
 		for (int i = 0; i < array.length; i++) {
-			long o = Unsafe.ARRAY_OBJECT_BASE_OFFSET + (long)i * Unsafe.ARRAY_OBJECT_INDEX_SCALE;
+			long o = Unaligned.ARRAY_OBJECT_BASE_OFFSET + (long) i * Unaligned.ARRAY_OBJECT_INDEX_SCALE;
 
-			Object b = u.getObjectVolatile(array, o);
+			Object b = U.getObjectVolatile(array, o);
 			if (b != null) continue;
 
-			if (u.compareAndSwapObject(array, o, null, b1)) {
+			if (U.compareAndSwapObject(array, o, null, b1)) {
 				while (true) {
-					len = u.getIntVolatile(this, offset);
-					if (u.compareAndSwapInt(this, offset, len, len+1)) return;
+					len = U.getIntVolatile(this, offset);
+					if (U.compareAndSwapInt(this, offset, len, len+1)) return;
 				}
 			}
 		}

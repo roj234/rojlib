@@ -3,12 +3,13 @@ package roj.asm.util;
 import roj.archive.zip.ZEntry;
 import roj.archive.zip.ZipFile;
 import roj.archive.zip.ZipFileWriter;
+import roj.asm.ClassNode;
 import roj.asm.Parser;
 import roj.asm.cp.Constant;
 import roj.asm.cp.ConstantPool;
 import roj.asm.cp.CstClass;
 import roj.asm.cp.CstRef;
-import roj.asm.tree.ConstantData;
+import roj.concurrent.TaskHandler;
 import roj.io.IOUtil;
 import roj.util.ByteList;
 import roj.util.Helpers;
@@ -19,6 +20,8 @@ import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Future;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
@@ -27,16 +30,17 @@ public final class Context implements ClassLike, Consumer<Constant>, Supplier<By
 
 	private String name;
 	private Object in;
-	private ConstantData data;
+	private ClassNode data;
 	private boolean isCompressed;
+	private int initialCpOffset;
 
-	public Context(ConstantData o) {
+	public Context(ClassNode o) {
 		data = o;
 		getFileName();
 	}
 	public Context(String name, Object o) {
 		this.name = name;
-		if (o instanceof ConstantData) this.data = (ConstantData) o;
+		if (o instanceof ClassNode) this.data = (ClassNode) o;
 		else this.in = Objects.requireNonNull(o, name);
 	}
 
@@ -59,14 +63,21 @@ public final class Context implements ClassLike, Consumer<Constant>, Supplier<By
 		throw new IllegalArgumentException("无法读取"+o);
 	}
 
-	public ConstantData getData() {
+	public ClassNode getData() {
 		isCompressed = false;
 		if (data == null) {
 			try {
 				ByteList r = read0(in);
 				in = null;
 
-				data = Parser.parseConstants(r, cp);
+				if (cp == null) {
+					data = Parser.parseConstants(r);
+				} else {
+					r.rIndex += 4;
+					int version = r.readInt();
+					r.skipBytes(initialCpOffset);
+					data = Parser.parseConstantsNoCp(r, cp, version);
+				}
 				cp = data.cp;
 			} catch (Throwable e) {
 				throw new IllegalArgumentException(name+" 解析失败", e);
@@ -94,6 +105,7 @@ public final class Context implements ClassLike, Consumer<Constant>, Supplier<By
 
 				cp = new ConstantPool();
 				cp.read(r, ConstantPool.BYTE_STRING);
+				initialCpOffset = 2 + cp.byteLength();
 
 				r.rIndex = i;
 			} catch (Throwable e) {
@@ -160,6 +172,13 @@ public final class Context implements ClassLike, Consumer<Constant>, Supplier<By
 		}
 	}
 
+	public void set(String newName, ByteList bytes) {
+		this.in = bytes;
+		this.data = null;
+		if (newName != null)
+			this.name = newName;
+	}
+
 	public ByteList getCompressedShared() {
 		compress();
 		return get();
@@ -176,11 +195,11 @@ public final class Context implements ClassLike, Consumer<Constant>, Supplier<By
 
 	public String getFileName() {
 		if (data == null) return name;
-		return name = data.name.concat(".class");
+		return name = data.name().concat(".class");
 	}
 	public String getClassName() {
 		if (data == null) return name.substring(0, name.length()-6);
-		return name = data.name;
+		return name = data.name();
 	}
 
 	public static List<Context> fromZip(File input, ZipFileWriter rw) throws IOException {
@@ -199,5 +218,32 @@ public final class Context implements ClassLike, Consumer<Constant>, Supplier<By
 			}
 		}
 		return ctx;
+	}
+
+	public static void runAsync(Consumer<Context> action, List<List<Context>> ctxs, TaskHandler executor) {
+		ArrayList<Future<?>> wait = new ArrayList<>(ctxs.size());
+		for (int i = 0; i < ctxs.size(); i++) {
+			List<Context> files = ctxs.get(i);
+			var w = executor.submit(() -> {
+				for (int j = 0; j < files.size(); j++) {
+					try {
+						action.accept(files.get(j));
+					} catch (Throwable e) {
+						throw new RuntimeException(files.get(j).getFileName(), e);
+					}
+				}
+				return null;
+			});
+			wait.add(w);
+		}
+
+		for (int i = 0; i < wait.size(); i++) {
+			try {
+				wait.get(i).get();
+			} catch (InterruptedException ignored) {
+			} catch (ExecutionException e) {
+				Helpers.athrow(e.getCause());
+			}
+		}
 	}
 }

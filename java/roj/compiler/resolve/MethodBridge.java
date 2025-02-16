@@ -1,8 +1,8 @@
 package roj.compiler.resolve;
 
 import org.jetbrains.annotations.Nullable;
+import roj.asm.MethodNode;
 import roj.asm.Opcodes;
-import roj.asm.tree.MethodNode;
 import roj.asm.type.Type;
 import roj.compiler.api.Evaluable;
 import roj.compiler.ast.expr.ExprNode;
@@ -29,7 +29,7 @@ final class MethodBridge extends Evaluable {
 		MethodNode delegate = new MethodNode(0, "", this.owner.getNextAccessorName(), mn.rawDesc());
 		boolean invokeSpecial = mn.name().equals("<init>");
 		if ((owner.modifier&Opcodes.ACC_STATIC) != 0 || invokeSpecial) {
-			if (invokeSpecial) delegate.setReturnType(new Type(owner.name));
+			if (invokeSpecial) delegate.setReturnType(Type.klass(owner.name()));
 			this.owner.createDelegation(Opcodes.ACC_STATIC|Opcodes.ACC_SYNTHETIC, mn, delegate, true, invokeSpecial);
 		} else {
 			this.owner.createDelegation(Opcodes.ACC_FINAL|Opcodes.ACC_SYNTHETIC, mn, delegate, true, false);

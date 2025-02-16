@@ -1,12 +1,17 @@
 package roj.plugins.http.error;
 
+import roj.ReferenceByGeneratedClass;
+import roj.asmx.launcher.Autoload;
+import roj.asmx.nixim.Inject;
+import roj.asmx.nixim.Nixim;
 import roj.collect.MyHashMap;
+import roj.http.server.HttpServer11;
+import roj.http.server.Request;
+import roj.http.server.Response;
 import roj.io.IOUtil;
-import roj.net.http.server.Request;
-import roj.net.http.server.Response;
 import roj.text.CharList;
 import roj.text.Escape;
-import roj.text.Template;
+import roj.text.Formatter;
 import roj.text.TextReader;
 
 import java.io.File;
@@ -19,20 +24,28 @@ import java.util.function.Function;
  * @since 2023/2/11 0011 1:14
  */
 public class GreatErrorPage {
-	private static final String CODEBASE = "projects/implib/java";
+	private static final String CODEBASE = "../projects/rojlib/java";
 	private static final Map<String,Function<Request,Map<String, ?>>> customTag = new MyHashMap<>();
-	private static Template template;
+	private static Formatter template;
 	static {
 		try {
-			template = Template.compile(IOUtil.getTextResource("roj/plugins/http/error/template.html"));
+			template = Formatter.simple(IOUtil.getTextResource("roj/plugins/http/error/template.html"));
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
+		registerCustomTag();
 	}
 
-	public static void addCustomTag(String tag, Function<Request,Map<String, ?>> fn) {
-		customTag.put(tag, fn);
+	@Autoload(Autoload.Target.NIXIM)
+	@Nixim(altValue = HttpServer11.class)
+	private static final class Injector {
+		@Inject
+		static Response onUncaughtError(Request req, Throwable e) {return GreatErrorPage.display(req, e);}
 	}
+
+	@ReferenceByGeneratedClass
+	public static void registerCustomTag() {}
+	public static void addCustomTag(String tag, Function<Request,Map<String, ?>> fn) {customTag.put(tag, fn);}
 
 	public static Response display(Request req, Throwable e) {
 		StackTraceElement[] els = e.getStackTrace();

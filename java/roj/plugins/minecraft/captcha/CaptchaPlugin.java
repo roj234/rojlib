@@ -49,7 +49,7 @@ public class CaptchaPlugin extends Plugin {
 		}
 		blockSets = new BlockSet[] {set};
 
-		MinecraftServer server = (MinecraftServer) getPluginManager().getPlugin("MinecraftServer").getInstance();
+		MinecraftServer server = (MinecraftServer) getPluginManager().getPlugin("MinecraftServer").instance();
 		server.getEventBus().register(this);
 
 		random = server.random;

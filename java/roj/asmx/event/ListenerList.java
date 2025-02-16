@@ -2,14 +2,14 @@ package roj.asmx.event;
 
 import roj.collect.SimpleList;
 import roj.reflect.ReflectionUtils;
+import roj.reflect.Unaligned;
 import roj.util.Helpers;
-import sun.misc.Unsafe;
 
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
-import static roj.reflect.ReflectionUtils.u;
+import static roj.reflect.Unaligned.U;
 
 /**
  * @author Roj234
@@ -57,17 +57,17 @@ public final class ListenerList {
 				if (size > array.length || size + i > val.length) continue retry;
 
 				for (int j = 0; j < size; j++) {
-					var offset = Unsafe.ARRAY_OBJECT_BASE_OFFSET + (long)j * Unsafe.ARRAY_OBJECT_INDEX_SCALE;
+					var offset = Unaligned.ARRAY_OBJECT_BASE_OFFSET + (long) j * Unaligned.ARRAY_OBJECT_INDEX_SCALE;
 
 					var listener = (EventListener) array[j];
 					if (listener instanceof EventListenerImpl impl)
-						u.compareAndSwapObject(array, offset, listener, listener = impl.impl());
+						U.compareAndSwapObject(array, offset, listener, listener = impl.impl());
 
 					val[i++] = listener;
 				}
 			}
 
-			if (u.getAndAddInt(this, MODCOUNT_OFFSET, 1) == mc) {
+			if (U.getAndAddInt(this, MODCOUNT_OFFSET, 1) == mc) {
 				assert i == val.length;
 				return cooked = val;
 			}
@@ -78,16 +78,16 @@ public final class ListenerList {
 	final void add(int priority, EventListener listener) {
 		var instance = instances[priority];
 		if (instance == Collections.EMPTY_LIST) {
-			int offset = Unsafe.ARRAY_OBJECT_BASE_OFFSET + priority * Unsafe.ARRAY_OBJECT_INDEX_SCALE;
+			int offset = Unaligned.ARRAY_OBJECT_BASE_OFFSET + priority * Unaligned.ARRAY_OBJECT_INDEX_SCALE;
 			while (true) {
-				if (u.compareAndSwapObject(instances, offset, Collections.EMPTY_LIST, instance = new SimpleList<>())) break;
-				if ((instance = (List<EventListener>) u.getObjectVolatile(instances, offset)) != Collections.EMPTY_LIST) break;
+				if (U.compareAndSwapObject(instances, offset, Collections.EMPTY_LIST, instance = new SimpleList<>())) break;
+				if ((instance = (List<EventListener>) U.getObjectVolatile(instances, offset)) != Collections.EMPTY_LIST) break;
 			}
 		}
 
 		synchronized (instance) {instance.add(listener);}
 		cooked = null;
-		u.getAndAddInt(this, MODCOUNT_OFFSET, 1);
+		U.getAndAddInt(this, MODCOUNT_OFFSET, 1);
 	}
 
 	final boolean remove(int priority, Object ref, String name, String desc) {
@@ -97,7 +97,7 @@ public final class ListenerList {
 				if (instance.get(i).isFor(ref, name, desc)) {
 					instance.remove(i);
 					cooked = null;
-					u.getAndAddInt(this, MODCOUNT_OFFSET, 1);
+					U.getAndAddInt(this, MODCOUNT_OFFSET, 1);
 					return true;
 				}
 			}

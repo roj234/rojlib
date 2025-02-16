@@ -20,5 +20,7 @@ interface PooledBuffer {
 
 	void _expand(int len, boolean backward);
 
+	default void addRef() {addRef(1);}
+	void addRef(int count);
 	void release();
 }

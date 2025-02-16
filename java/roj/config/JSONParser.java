@@ -128,14 +128,14 @@ public class JSONParser extends Parser {
 			default: wr.unexpected(w.val()); return Helpers.nonnull();
 			case lBracket: return list(wr, new CList(), flag);
 			case lBrace: return map(wr, flag);
-			case LITERAL, STRING: return CString.valueOf(w.val());
+			case LITERAL, STRING: return CEntry.valueOf(w.val());
 			case NULL: return CNull.NULL;
 			case TRUE: return CBoolean.TRUE;
 			case FALSE: return CBoolean.FALSE;
-			case INTEGER: return CInt.valueOf(w.asInt());
-			case LONG: return CLong.valueOf(w.asLong());
-			case FLOAT: return CFloat.valueOf(w.asFloat());
-			case DOUBLE: return CDouble.valueOf(w.asDouble());
+			case INTEGER: return CEntry.valueOf(w.asInt());
+			case LONG: return CEntry.valueOf(w.asLong());
+			case FLOAT: return CEntry.valueOf(w.asFloat());
+			case DOUBLE: return CEntry.valueOf(w.asDouble());
 		}
 	}
 

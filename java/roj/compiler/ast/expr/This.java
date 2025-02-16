@@ -16,7 +16,7 @@ final class This extends ExprNode {
 	private final boolean isThis;
 	This(boolean isThis) {super(0);this.isThis = isThis;}
 
-	private final Type type = new Type("");
+	private final Type type = Type.klass("");
 
 	@Override
 	public String toString() { return (isThis?"this<":"super<")+type+'>'; }
@@ -24,7 +24,7 @@ final class This extends ExprNode {
 	@Override
 	public ExprNode resolve(LocalContext ctx) throws ResolveException {
 		var file = ctx.file;
-		type.owner = isThis ? file.name : file.parent;
+		type.owner = isThis ? file.name() : file.parent();
 		if (type.owner == null) throw ResolveException.ofIllegalInput("this.no_super", file);
 		return this;
 	}

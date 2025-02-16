@@ -1,7 +1,7 @@
 package roj.plugins.dpiProxy;
 
 import roj.concurrent.OperationDone;
-import roj.net.http.h2.H2Exception;
+import roj.http.h2.H2Exception;
 import roj.util.DynByteBuf;
 
 /**

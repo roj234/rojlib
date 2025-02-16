@@ -1,7 +1,7 @@
 package roj.compiler.context;
 
+import roj.asm.ClassNode;
 import roj.asm.Parser;
-import roj.asm.tree.ConstantData;
 import roj.io.IOUtil;
 
 import java.io.File;
@@ -17,7 +17,7 @@ public class LibraryFolder implements Library {
 	private final File path;
 	public LibraryFolder(File file) {this.path = file;}
 
-	@Override public ConstantData get(CharSequence name) {
+	@Override public ClassNode get(CharSequence name) {
 		try {
 			var file = new File(path, name.toString().concat(".class"));
 			if (file.isFile()) return Parser.parseConstants(IOUtil.read(file));

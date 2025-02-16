@@ -1,16 +1,15 @@
 package roj.sql;
 
+import roj.asm.ClassNode;
 import roj.asm.Parser;
+import roj.asm.annotation.Annotation;
+import roj.asm.attr.Attribute;
 import roj.asm.cp.CstClass;
-import roj.asm.tree.ConstantData;
-import roj.asm.tree.anno.Annotation;
-import roj.asm.tree.attr.Attribute;
+import roj.asm.insn.CodeWriter;
+import roj.asm.insn.Label;
 import roj.asm.type.Generic;
 import roj.asm.type.IType;
 import roj.asm.type.Type;
-import roj.asm.type.TypeHelper;
-import roj.asm.visitor.CodeWriter;
-import roj.asm.visitor.Label;
 import roj.asmx.mapper.ParamNameMapper;
 import roj.collect.MyBitSet;
 import roj.collect.MyHashSet;
@@ -41,7 +40,7 @@ public final class DAOMaker {
 	}
 
 	private static final MyHashSet<String> iterable = new MyHashSet<>("java/lang/Iterable", "java/util/Collection", "java/util/List", "java/util/Set");
-	private static final VirtualReference<Map<Class<?>, DAO<?>>> ref = new VirtualReference<>();
+	private static final VirtualReference<Map<Class<?>, Object>> ref = new VirtualReference<>();
 	@SuppressWarnings("unchecked")
 	public static <T> DAO<T> makeDAO(Class<T> dao) {
 		var map = ref.computeIfAbsent(dao.getClassLoader(), Helpers.fnMyHashMap());
@@ -68,15 +67,15 @@ public final class DAOMaker {
 		var ref = Parser.parseConstants(daoItf);
 		if (ref == null) throw new IllegalArgumentException("找不到"+daoItf+"的代码");
 
-		var impl = new ConstantData();
-		impl.name(ref.name+"$Impl");
+		var impl = new ClassNode();
+		impl.name(ref.name()+"$Impl");
 		impl.addInterface("roj/sql/DAOMaker$DAO");
 		impl.addInterface(daoItf.getName().replace('.', '/'));
 		ClassDefiner.premake(impl);
 
 		var init = impl.newMethod(ACC_PUBLIC, "init", "(Ljava/sql/Connection;)Lroj/sql/DAOMaker$DAO;");
 		init.visitSize(3, 2);
-		init.newObject(impl.name);
+		init.newObject(impl.name());
 		init.one(ASTORE_0);
 
 		var variables = new SimpleList<String>();
@@ -133,7 +132,7 @@ public final class DAOMaker {
 				if (extraType == null) throw new IllegalArgumentException(method+"缺少泛型签名,无法确定List<T>的类型");
 
 				IType itrType = ((Generic) extraType.values.get(0)).children.get(0);
-				Class<?> parTypeInst = itrType.rawType().toJavaClass(daoItf.getClassLoader());
+				Class<?> parTypeInst = itrType.rawType().toJavaType(daoItf.getClassLoader());
 
 				if (parTypes.get(0).owner.equals("java/util/List")) {
 					cw.visitSizeMax(3, 5);
@@ -163,7 +162,7 @@ public final class DAOMaker {
 						cw.ldc(j+1);
 						cw.one(ALOAD_2);
 
-						Type asmType = TypeHelper.class2type(parTypeInst.getDeclaredField(name).getType());
+						Type asmType = Type.fromJavaType(parTypeInst.getDeclaredField(name).getType());
 						cw.field(GETFIELD, itrType.owner(), name, asmType);
 						invokeSet(cw, asmType);
 					}
@@ -200,7 +199,7 @@ public final class DAOMaker {
 						cw.ldc(j+1);
 						cw.one(ALOAD_2);
 
-						Type asmType = TypeHelper.class2type(parTypeInst.getDeclaredField(name).getType());
+						Type asmType = Type.fromJavaType(parTypeInst.getDeclaredField(name).getType());
 						cw.field(GETFIELD, itrType.owner(), name, asmType);
 						invokeSet(cw, asmType);
 					}
@@ -236,8 +235,8 @@ public final class DAOMaker {
 					Type parType = parTypes.get(parId&0xFFFF);
 					cw.varLoad(parType, parId>>>16);
 					if (nameLast != null) {
-						Class<?> parTypeInst = parType.toJavaClass(daoItf.getClassLoader());
-						Type asmType = TypeHelper.class2type(parTypeInst.getDeclaredField(nameLast).getType());
+						Class<?> parTypeInst = parType.toJavaType(daoItf.getClassLoader());
+						Type asmType = Type.fromJavaType(parTypeInst.getDeclaredField(nameLast).getType());
 						cw.field(GETFIELD, parType.owner, nameLast, parType = asmType);
 					}
 					invokeSet(cw, parType);
@@ -320,7 +319,7 @@ public final class DAOMaker {
 						case "java/sql/Date" -> "setDate";
 						case "java/sql/Timestamp" -> "setTimestamp";
 						default -> {
-							type = new Type("java/lang/Object");
+							type = Type.klass("java/lang/Object");
 							yield "setObject";
 						}
 					};
@@ -343,7 +342,7 @@ public final class DAOMaker {
 
 		ResultSet set = stm.executeQuery();
 
-		var ser = SerializerFactory.SAFE.listOf(type);
+		var ser = getSerializerFactory(type).listOf(type);
 		ser.valueList();
 
 		while (set.next()) {
@@ -368,7 +367,7 @@ public final class DAOMaker {
 
 		var set = stm.executeQuery();
 		if (set.next()) {
-			var ser = SerializerFactory.SAFE.serializer(type);
+			var ser = getSerializerFactory(type).serializer(type);
 			ser.valueMap();
 			for (int i = 0; i < adapters.size(); ) {
 				ser.key(adapters.get(i++).toString());
@@ -380,6 +379,22 @@ public final class DAOMaker {
 
 		return null;
 	}
+	private static SerializerFactory getSerializerFactory(Class<?> type) {
+        if (type.getClassLoader() == null || type.getClassLoader() == DAOMaker.class.getClassLoader()) return SerializerFactory.SAFE;
+
+		var map = ref.getEntry(type.getClassLoader()).getValue();
+        assert map != null;
+
+		Object v = map.get(null);
+		if (v == null) {
+			synchronized (map) {
+				v = SerializerFactory.getInstance0(SerializerFactory.GENERATE | SerializerFactory.CHECK_INTERFACE | SerializerFactory.CHECK_PARENT, type.getClassLoader());
+				var tmp = map.putIfAbsent(null, v);
+				if (tmp != null) v = tmp;
+			}
+		}
+		return (SerializerFactory) v;
+    }
 
 	private interface A {void adapt(CVisitor visitor, ResultSet set) throws SQLException;}
 	private static List<Object> createAdapter(Class<?> klass, ResultSetMetaData meta) throws Exception {
@@ -387,7 +402,7 @@ public final class DAOMaker {
 		for (int i = 1; i <= meta.getColumnCount(); i++) {
 			String name = meta.getColumnLabel(i);
 
-			var type = TypeHelper.class2type(klass.getDeclaredField(name).getType());
+			var type = Type.fromJavaType(klass.getDeclaredField(name).getType());
 
 			var adapter = switch (type.getActualType()) {
 				case Type.BOOLEAN -> boolAdapter(i);

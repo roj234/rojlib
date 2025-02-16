@@ -2,7 +2,7 @@ package roj.util;
 
 import roj.io.buf.BufferPool;
 
-import static roj.reflect.ReflectionUtils.u;
+import static roj.reflect.Unaligned.U;
 
 /**
  * @author Roj234
@@ -17,6 +17,7 @@ public class TimSortForEveryone {
 	 * @implNote 对象数组的ArrayRef compSize固定为4，并且内存中保存的是int index
 	 */
 	public static void sort(int fromIndex, int toIndex, MyComparator cmp, ArrayRef... arrayRefs) {
+		if (toIndex - fromIndex <= 1) return;
 		if (arrayRefs.length == 0) throw new IllegalArgumentException("no array to sort");
 		if (arrayRefs.length == 1 && !arrayRefs[0].isObjectArray()) {
 			ArrayRef op = arrayRefs[0];
@@ -109,7 +110,7 @@ public class TimSortForEveryone {
 									  long temp, int compSize) {
 		for (int i = left+1; i <= right; i++) {
 			// int temp = arr[i];
-			u.copyMemory(ref, off + (long)i*compSize, null, temp, compSize);
+			U.copyMemory(ref, off + (long)i*compSize, null, temp, compSize);
 
 			int j = i-1;
 			int val = cmp.compare(ref, off + (long)j*compSize, temp);
@@ -121,10 +122,10 @@ public class TimSortForEveryone {
 
 			j++;
 			//lazy arr[j + 1] = arr[j];
-			u.copyMemory(ref, off + (long)j*compSize, ref, off + (long)(j+1)*compSize, (long)(i-j)*compSize);
+			U.copyMemory(ref, off + (long)j*compSize, ref, off + (long)(j+1)*compSize, (long)(i-j)*compSize);
 
 			//arr[j + 1] = temp;
-			u.copyMemory(null, temp, ref, off + (long)j*compSize, compSize);
+			U.copyMemory(null, temp, ref, off + (long)j*compSize, compSize);
 		}
 	}
 
@@ -134,7 +135,7 @@ public class TimSortForEveryone {
 					   long work, int compSize) {
 		off += (long)l*compSize;
 
-		u.copyMemory(ref, off, null, work, compSize * (long)(r-l+1));
+		U.copyMemory(ref, off, null, work, compSize * (long)(r-l+1));
 
 		long i = work;
 		long j = work + (long)(m-l+1)*compSize;
@@ -152,7 +153,7 @@ public class TimSortForEveryone {
 
 			if (v <= 0) {
 				if (prevJ != j) {
-					u.copyMemory(null, prevJ, ref, prevOff, j - prevJ);
+					U.copyMemory(null, prevJ, ref, prevOff, j - prevJ);
 					prevJ = j;
 					prevOff = off;
 				}
@@ -161,7 +162,7 @@ public class TimSortForEveryone {
 				i += compSize;
 			} else {
 				if (prevI != i) {
-					u.copyMemory(null, prevI, ref, prevOff, i - prevI);
+					U.copyMemory(null, prevI, ref, prevOff, i - prevI);
 					prevI = i;
 					prevOff = off;
 				}
@@ -175,11 +176,11 @@ public class TimSortForEveryone {
 
 		// Copy remaining elements, if any
 		if (prevI != i) {
-			u.copyMemory(null, prevI, ref, prevOff, i - prevI);
-			u.copyMemory(null, j, ref, off, len2 - j);
+			U.copyMemory(null, prevI, ref, prevOff, i - prevI);
+			U.copyMemory(null, j, ref, off, len2 - j);
 		} else {
-			u.copyMemory(null, prevJ, ref, prevOff, j - prevJ);
-			u.copyMemory(null, i, ref, off, len1 - i);
+			U.copyMemory(null, prevJ, ref, prevOff, j - prevJ);
+			U.copyMemory(null, i, ref, off, len1 - i);
 		}
 	}
 }

@@ -2,7 +2,9 @@ package roj.plugins.http.sso;
 
 import roj.collect.IntSet;
 import roj.config.auto.As;
+import roj.config.auto.Name;
 import roj.config.auto.Optional;
+import roj.plugin.PermissionHolder;
 
 import java.net.InetSocketAddress;
 
@@ -10,16 +12,14 @@ import java.net.InetSocketAddress;
  * @author Roj234
  * @since 2024/7/8 0008 6:37
  */
-public class User {
-	public int id;
+final class User implements PermissionHolder {
+	int id;
 
-	public String name;
+	String name;
 	// 一次有效的临时密码
 	transient String tempOtp;
 	String passHash;
-	@Optional
-	@As("base64")
-	byte[] totpKey;
+	@Optional @As("base64")byte[] totpKey;
 
 	transient byte loginAttempt;
 	transient long suspendTimer;
@@ -30,13 +30,17 @@ public class User {
 	transient final IntSet accessNonceUsed = new IntSet();
 	transient long accessNonceTime;
 
-	@Optional
-	InetSocketAddress registerAddr, loginAddr;
-	@Optional
-	long registerTime, loginTime;
+	@Optional InetSocketAddress registerAddr, loginAddr;
+	@Optional long registerTime, loginTime;
 
-	@Optional
-	public String group = "default";
-	public transient UserGroup groupInst;
-	public boolean isAdmin() {return id == 0 || groupInst.isAdmin();}
+	@Optional @Name("group") String groupName = "default";
+	transient Group group;
+
+	boolean isAdmin() {return id == 0 || group.isAdmin();}
+
+	@Override public int getId() {return id;}
+	@Override public String getName() {return name;}
+	@Override public String getGroupName() {return groupName;}
+	@Override public boolean hasPermission(String permission) {return group.has(permission);}
+	@Override public int getPermissionFlags(String permission) {return group.getBits(permission);}
 }

@@ -5,7 +5,7 @@ import roj.collect.MyHashSet;
 import roj.concurrent.TaskHandler;
 import roj.concurrent.TaskPool;
 import roj.config.ConfigMaster;
-import roj.config.data.CInt;
+import roj.config.data.CEntry;
 import roj.config.data.CList;
 import roj.config.data.Type;
 import roj.io.IOUtil;
@@ -174,7 +174,7 @@ public class GroupBy {
 							var data = ConfigMaster.NBT.parse(nbt).asMap();
 							long chunkPos;
 							if (data.containsKey("xPos")) {
-								chunkPos = chunkPos(data.getInteger("xPos"), data.getInteger("zPos"));
+								chunkPos = chunkPos(data.getInt("xPos"), data.getInt("zPos"));
 							} else if (data.containsKey("Position", Type.LIST)) {
 								CList list = data.getList("Position");
 								chunkPos = chunkPos(list.getInteger(0), list.getInteger(1));
@@ -196,8 +196,8 @@ public class GroupBy {
 									changed = true;
 								} else if (data.containsKey("Position", Type.LIST)) {
 									CList list = data.getList("Position");
-									list.set(0, CInt.valueOf((int) (remapPos >>> 32)));
-									list.set(1, CInt.valueOf(remapPos.intValue()));
+									list.set(0, CEntry.valueOf((int) (remapPos >>> 32)));
+									list.set(1, CEntry.valueOf(remapPos.intValue()));
 									changed = true;
 								}
 							}

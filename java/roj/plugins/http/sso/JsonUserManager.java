@@ -5,6 +5,8 @@ import roj.collect.SimpleList;
 import roj.config.ConfigMaster;
 import roj.config.ParseException;
 import roj.config.auto.SerializerFactory;
+import roj.io.IOUtil;
+import roj.util.Helpers;
 
 import java.io.File;
 import java.io.IOException;
@@ -23,7 +25,7 @@ class JsonUserManager implements UserManager {
 
 	private List<User> users;
 	private Map<String, User> userByName = new MyHashMap<>();
-	private boolean isDataDirty;
+	private boolean dirty;
 
 	private static final SerializerFactory SERIALIZER = SerializerFactory.getInstance();
 	static {
@@ -63,26 +65,34 @@ class JsonUserManager implements UserManager {
 			for (String s : field) {
 				if (s.equals("passHash") || s.equals("totpKey") || s.equals("group")) break block;
 			}
-			isDataDirty = true;
+			dirty = true;
 			return;
 		}
 
 		doSave();
 	}
 
-	public void onShutdown() {if (isDataDirty) doSave();}
+	public void save() {if (dirty) doSave();}
 
 	private void doSave() {
+		SimpleList<User> copy;
+		synchronized (this) {
+			if (!dirty) return;
+			copy = new SimpleList<>(users);
+			dirty = false;
+		}
+
 		try {
-			synchronized (this) {
-				if (!users.isEmpty()) {
-					json.renameTo(new File(json.getAbsolutePath()+".bak"));
-					ConfigMaster.JSON.writeObject(SERIALIZER.listOf(User.class), users, json);
+			IOUtil.writeFileEvenMoreSafe(json.getParentFile(), json.getName(), file -> {
+				try {
+					ConfigMaster.JSON.writeObject(SERIALIZER.listOf(User.class), copy, file);
+				} catch (Exception e) {
+					Helpers.athrow(e);
 				}
-			}
-			isDataDirty = false;
+			});
 		} catch (Exception e) {
 			e.printStackTrace();
+			dirty = true;
 		}
 	}
 }

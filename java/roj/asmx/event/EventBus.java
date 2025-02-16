@@ -3,9 +3,9 @@ package roj.asmx.event;
 import roj.ToBeRemoved;
 import roj.asm.Opcodes;
 import roj.asm.Parser;
-import roj.asm.tree.RawNode;
-import roj.asm.tree.anno.Annotation;
-import roj.asm.tree.attr.Attribute;
+import roj.asm.RawNode;
+import roj.asm.annotation.Annotation;
+import roj.asm.attr.Attribute;
 import roj.asm.type.Type;
 import roj.asm.type.TypeHelper;
 import roj.asmx.AnnotatedElement;
@@ -111,7 +111,7 @@ public class EventBus {
 			}
 
 			entry = new ListenerInfo.MapEntry(
-				data.name,
+				data.name(),
 				objectList.toArray(new ListenerInfo[objectList.size()]),
 				staticList.toArray(new ListenerInfo[staticList.size()])
 			);
@@ -124,12 +124,12 @@ public class EventBus {
 		return object ? entry.objectList : entry.staticList;
 	}
 	private static void toListenerInfo(RawNode mn, Annotation subscribe, List<ListenerInfo> objectList, List<ListenerInfo> staticList) {
-		List<Type> types = TypeHelper.parseMethod(mn.rawDesc());
+		List<Type> types = Type.methodDesc(mn.rawDesc());
 		if (types.size() != 2 || types.get(0).isPrimitive() || types.get(1).type != Type.VOID)
 			throw new IllegalArgumentException("事件监听函数的参数不合法: 期待[Event, void]而不是"+types);
 
 		int flags = Priority.valueOf(subscribe.getEnumValue("priority", "NORMAL")).ordinal();
-		if (subscribe.getBoolean("receiveCancelled")) flags |= 128;
+		if (subscribe.getBool("receiveCancelled")) flags |= 128;
 
 		ListenerInfo info = new ListenerInfo(types.get(0).owner.replace('/', '.'), mn, (byte) flags);
 		((mn.modifier()&Opcodes.ACC_STATIC) != 0 ? staticList : objectList).add(info);

@@ -1,7 +1,6 @@
 package roj.text.logging;
 
 import roj.text.Formatter;
-import roj.text.Template;
 import roj.text.logging.c.LCTime;
 import roj.text.logging.c.LogComponent;
 import roj.text.logging.d.LogDestination;
@@ -35,7 +34,7 @@ public class LogContext {
 	LogContext() {
 		name = "root";
 		level = Level.DEBUG;
-		prefix = Template.compile("[${0}][${THREAD}/${LEVEL}]: ");
+		prefix = Formatter.simple("[${0}][${THREAD}/${LEVEL}]: ");
 		components = Collections.singletonList(LCTime.of("H:i:s"));
 		destination = () -> System.out;
 	}

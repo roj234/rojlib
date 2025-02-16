@@ -2,6 +2,7 @@ package roj.net;
 
 import roj.collect.SimpleList;
 import roj.reflect.Bypass;
+import roj.reflect.Java22Workaround;
 import roj.reflect.ReflectionUtils;
 
 import java.io.IOException;
@@ -11,7 +12,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Set;
 
-import static roj.reflect.ReflectionUtils.u;
+import static roj.reflect.Unaligned.U;
 
 /**
  * @author Roj233
@@ -25,6 +26,7 @@ final class MySelector extends SimpleList<SelectionKey> implements Set<Selection
 		return v instanceof HashSet<SelectionKey> set ? getter.getMap(set).keySet() : v;
 	}
 
+	@Java22Workaround
 	private interface H {
 		Set<SelectionKey> getSet(Selector selector);
 		HashMap<SelectionKey, Object> getMap(HashSet<SelectionKey> set);
@@ -40,9 +42,9 @@ final class MySelector extends SimpleList<SelectionKey> implements Set<Selection
 					getter = Bypass.builder(H.class).unchecked().access(t.getClass(), "keys", "getSet", null)
 								   .access(HashSet.class, "map", "getMap", null).build();
 					try {
-						oSelectedSet = u.objectFieldOffset(ReflectionUtils.getField(t.getClass(), "selectedKeys"));
-						oPublicSelectedSet = u.objectFieldOffset(ReflectionUtils.getField(t.getClass(), "publicSelectedKeys"));
-						oPublicSet = u.objectFieldOffset(ReflectionUtils.getField(t.getClass(), "publicKeys"));
+						oSelectedSet = U.objectFieldOffset(ReflectionUtils.getField(t.getClass(), "selectedKeys"));
+						oPublicSelectedSet = U.objectFieldOffset(ReflectionUtils.getField(t.getClass(), "publicSelectedKeys"));
+						oPublicSet = U.objectFieldOffset(ReflectionUtils.getField(t.getClass(), "publicKeys"));
 					} catch (NoSuchFieldException e){
 						e.printStackTrace();
 					}
@@ -51,10 +53,10 @@ final class MySelector extends SimpleList<SelectionKey> implements Set<Selection
 		}
 
 		var sel = new MySelector();
-		u.putObjectVolatile(t, oSelectedSet, sel);
-		u.putObjectVolatile(t, oPublicSelectedSet, sel);
+		U.putObjectVolatile(t, oSelectedSet, sel);
+		U.putObjectVolatile(t, oPublicSelectedSet, sel);
 		//字段类型直接是HashSet 没法改了...
-		u.putObjectVolatile(t, oPublicSet, getter.getSet(t));
+		U.putObjectVolatile(t, oPublicSet, getter.getSet(t));
 		return t;
 	}
 }

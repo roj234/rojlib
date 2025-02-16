@@ -7,7 +7,7 @@ import roj.asmx.mapper.Mapping;
 import roj.collect.FilterList;
 import roj.collect.SimpleList;
 import roj.io.FastFailException;
-import roj.text.LinedReader;
+import roj.text.LineReader;
 import roj.text.TextReader;
 import roj.text.TextUtil;
 
@@ -38,7 +38,7 @@ final class OjngMapping extends Mapping {
 		}
 	}
 
-	public void readMojangMap(String map, LinedReader slr, List<String> tmp) throws IOException {
+	public void readMojangMap(String map, LineReader slr, List<String> tmp) throws IOException {
 		ClassUtil U = ClassUtil.getInstance();
 
 		String[] currentClass = null;

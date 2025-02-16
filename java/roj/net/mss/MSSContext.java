@@ -47,6 +47,7 @@ public class MSSContext {
 
 	protected MSSKeyPair cert;
 	public MSSContext setCertificate(MSSKeyPair cert) {this.cert = cert;return this;}
+	public MSSKeyPair getCertificate() {return cert;}
 	/**
 	 *
 	 * @param ext choose certificate via extension
@@ -80,10 +81,10 @@ public class MSSContext {
 		return this;
 	}
 	/**
-	 *
-	 * @param stage Enum[BEFORE_CLIENT_HELLO, HANDLE_CLIENT_HELLO, HANDLE_SERVER_HELLO]
+	 * @param stage Enum[BEFORE_CLIENT_HELLO, HANDLE_CLIENT_HELLO, HANDLE_SERVER_HELLO, HANDLE_FINISH]
+	 * @return 客户端是否会回复数据包，仅stage为HANDLE_CLIENT_HELLO(1)时有效
 	 */
-	protected void processExtensions(Object ctx, CharMap<DynByteBuf> extIn, CharMap<DynByteBuf> extOut, int stage) throws MSSException {
+	protected boolean processExtensions(Object ctx, CharMap<DynByteBuf> extIn, CharMap<DynByteBuf> extOut, int stage) throws MSSException {
 		if (stage == 0) {
 			if (handshakeExtensions != null) extOut.putAll(handshakeExtensions);
 			if (serverName != null) extOut.put(Extension.server_name, new ByteList().putAscii(serverName));
@@ -97,6 +98,8 @@ public class MSSContext {
 					throw new MSSException(MSSEngine.NEGOTIATION_FAILED, "alpn", null);
 			}
 		}
+
+		return false;
 	}
 
 	protected DynByteBuf buffer(int capacity) {return BufferPool.buffer(false, capacity);}

@@ -3,9 +3,9 @@ package roj.util;
 import org.jetbrains.annotations.NotNull;
 import roj.io.UnsafeOutputStream;
 import roj.math.MathUtils;
+import roj.reflect.Unaligned;
 import roj.text.CharList;
 import roj.text.TextUtil;
-import sun.misc.Unsafe;
 
 import java.io.IOException;
 import java.io.OutputStream;
@@ -16,7 +16,6 @@ import java.nio.charset.StandardCharsets;
 import java.util.ConcurrentModificationException;
 import java.util.function.IntUnaryOperator;
 
-import static roj.reflect.ReflectionUtils.u;
 import static roj.reflect.Unaligned.U;
 
 /**
@@ -81,7 +80,7 @@ public class DirectByteList extends DynByteBuf {
 
 				NativeMemory mem = new NativeMemory();
 				long addr = mem.allocate(newLen);
-				u.copyMemory(prevAddr, addr, Math.min(newLen, len));
+				U.copyMemory(prevAddr, addr, Math.min(newLen, len));
 
 				if (wIndex != 0) {
 					mem.release();
@@ -115,7 +114,7 @@ public class DirectByteList extends DynByteBuf {
 			long addr = address;
 			while (len > 0) {
 				int w = Math.min(len, array.length);
-				u.copyMemory(null, addr, array, Unsafe.ARRAY_BYTE_BASE_OFFSET, w);
+				U.copyMemory(null, addr, array, Unaligned.ARRAY_BYTE_BASE_OFFSET, w);
 				out.write(array, 0, w);
 
 				addr += w;
@@ -128,11 +127,11 @@ public class DirectByteList extends DynByteBuf {
 
 	// region PUTxxx
 	public final DynByteBuf put(int x) {
-		u.putByte(preWrite(1)+address, (byte) x);
+		U.putByte(preWrite(1)+address, (byte) x);
 		return this;
 	}
 	public final DynByteBuf put(int i, int x) {
-		u.putByte(testWI(i, 1)+address, (byte) x);
+		U.putByte(testWI(i, 1)+address, (byte) x);
 		return this;
 	}
 
@@ -140,7 +139,7 @@ public class DirectByteList extends DynByteBuf {
 		ArrayUtil.checkRange(b, off, len);
 		if (len > 0) {
 			int off1 = preWrite(len);
-			copyFromArray(b, Unsafe.ARRAY_BYTE_BASE_OFFSET, off, address + off1, len);
+			copyFromArray(b, Unaligned.ARRAY_BYTE_BASE_OFFSET, off, address + off1, len);
 		}
 		return this;
 	}
@@ -149,13 +148,13 @@ public class DirectByteList extends DynByteBuf {
 	public final DynByteBuf put(DynByteBuf b, int off, int len) {
 		if ((off|len|(off+len)) < 0 || off + len > b.wIndex) throw new IndexOutOfBoundsException("off="+off+",len="+len+",cap="+b.wIndex);
 
-		u.copyMemory(b.array(), b._unsafeAddr()+off, null, preWrite(len) + address, len);
+		U.copyMemory(b.array(), b._unsafeAddr()+off, null, preWrite(len) + address, len);
 		return this;
 	}
 
 	@Override
 	public DynByteBuf put(int wi, DynByteBuf b, int off, int len) {
-		u.copyMemory(b.array(), b._unsafeAddr()+off, null, testWI(wi, len) + address, len);
+		U.copyMemory(b.array(), b._unsafeAddr()+off, null, testWI(wi, len) + address, len);
 		return this;
 	}
 
@@ -171,7 +170,7 @@ public class DirectByteList extends DynByteBuf {
 	public final DynByteBuf putAscii(int wi, CharSequence s) {
 		long addr = testWI(wi, s.length())+address;
 		for (int i = 0; i < s.length(); i++) {
-			u.putByte(addr++, (byte) s.charAt(i));
+			U.putByte(addr++, (byte) s.charAt(i));
 		}
 		return this;
 	}
@@ -184,9 +183,9 @@ public class DirectByteList extends DynByteBuf {
 	public final DynByteBuf put(ByteBuffer buf) {
 		int rem = buf.remaining();
 		if (buf.isDirect()) {
-			u.copyMemory(NativeMemory.getAddress(buf)+buf.position(), preWrite(rem)+address, rem);
+			U.copyMemory(NativeMemory.getAddress(buf)+buf.position(), preWrite(rem)+address, rem);
 		} else if (buf.hasArray()) {
-			copyFromArray(buf.array(), Unsafe.ARRAY_BYTE_BASE_OFFSET, buf.arrayOffset() + buf.position(), preWrite(rem)+address, rem);
+			copyFromArray(buf.array(), Unaligned.ARRAY_BYTE_BASE_OFFSET, buf.arrayOffset() + buf.position(), preWrite(rem) + address, rem);
 		} else {
 			while (rem-- > 0) put(buf.get());
 		}
@@ -195,7 +194,7 @@ public class DirectByteList extends DynByteBuf {
 
 	public final byte[] toByteArray() {
 		byte[] b = new byte[wIndex-rIndex];
-		copyToArray(address+rIndex, b, Unsafe.ARRAY_BYTE_BASE_OFFSET, 0, b.length);
+		copyToArray(address + rIndex, b, Unaligned.ARRAY_BYTE_BASE_OFFSET, 0, b.length);
 		return b;
 	}
 
@@ -210,8 +209,8 @@ public class DirectByteList extends DynByteBuf {
 		} else nm1 = null;
 
 		if (wIndex != off) {
-			if (address != tmp) u.copyMemory(address, tmp, off);
-			u.copyMemory(address+off, tmp+off+len, wIndex-off);
+			if (address != tmp) U.copyMemory(address, tmp, off);
+			U.copyMemory(address+off, tmp+off+len, wIndex-off);
 		}
 		wIndex += len;
 
@@ -228,18 +227,18 @@ public class DirectByteList extends DynByteBuf {
 	public final void readFully(byte[] b, int off, int len) {
 		ArrayUtil.checkRange(b, off, len);
 		if (len > 0) {
-			copyToArray(address+ preRead(len), b, Unsafe.ARRAY_BYTE_BASE_OFFSET, off, len);
+			copyToArray(address + preRead(len), b, Unaligned.ARRAY_BYTE_BASE_OFFSET, off, len);
 		}
 	}
 	public final void readFully(int i, byte[] b, int off, int len) {
 		ArrayUtil.checkRange(b, off, len);
 		if (len > 0) {
-			copyToArray(address+testWI(i, len), b, Unsafe.ARRAY_BYTE_BASE_OFFSET, off, len);
+			copyToArray(address + testWI(i, len), b, Unaligned.ARRAY_BYTE_BASE_OFFSET, off, len);
 		}
 	}
 
-	public final byte get(int i) {return u.getByte(testWI(i, 1)+address);}
-	public final byte readByte() {return u.getByte(preRead(1)+address);}
+	public final byte get(int i) {return U.getByte(testWI(i, 1)+address);}
+	public final byte readByte() {return U.getByte(preRead(1)+address);}
 
 	public final int readVarInt() {
 		int value = 0;
@@ -251,7 +250,7 @@ public class DirectByteList extends DynByteBuf {
 		while (i <= 28) {
 			if (r-- <= 0) throw new BufferUnderflowException();
 
-			int chunk = u.getByte(off++);
+			int chunk = U.getByte(off++);
 			value |= (chunk & 0x7F) << i;
 			i += 7;
 			if ((chunk & 0x80) == 0) {
@@ -269,7 +268,7 @@ public class DirectByteList extends DynByteBuf {
 
 		long addr = testWI(i, len)+address;
 		byte[] ob = ArrayCache.getByteArray(len, false);
-		u.copyMemory(null,addr,ob,Unsafe.ARRAY_BYTE_BASE_OFFSET, len);
+		U.copyMemory(null, addr, ob, Unaligned.ARRAY_BYTE_BASE_OFFSET, len);
 
 		String s = new String(ob, 0, len, StandardCharsets.ISO_8859_1);
 		ArrayCache.putArray(ob);
@@ -284,14 +283,14 @@ public class DirectByteList extends DynByteBuf {
 
 		while (true) {
 			if (r-- == 0) break;
-			byte b = u.getByte(l++);
+			byte b = U.getByte(l++);
 			if (b == '\r' || b == '\n') {
-				if (b == '\r' && r>0 && u.getByte(l) == '\n') l++;
+				if (b == '\r' && r>0 && U.getByte(l) == '\n') l++;
 				break;
 			}
 		}
 		byte[] tmp = new byte[(int)(l-address)-rIndex];
-		copyToArray(address + rIndex, tmp, Unsafe.ARRAY_BYTE_BASE_OFFSET, 0, tmp.length);
+		copyToArray(address + rIndex, tmp, Unaligned.ARRAY_BYTE_BASE_OFFSET, 0, tmp.length);
 		rIndex += tmp.length;
 		return new String(tmp, 0, tmp.length, StandardCharsets.ISO_8859_1);
 	}
@@ -300,7 +299,7 @@ public class DirectByteList extends DynByteBuf {
 		long i = address+rIndex;
 		int r = Math.min(max, wIndex-rIndex);
 		while (r-- > 0) {
-			if (u.getByte(i) == 0) return (int) (i-address)-rIndex;
+			if (U.getByte(i) == 0) return (int) (i-address)-rIndex;
 			i++;
 		}
 		return max;
@@ -310,8 +309,8 @@ public class DirectByteList extends DynByteBuf {
 		long i = address+rIndex;
 		long e = address+wIndex;
 		while (i < e) {
-			int v = operator.applyAsInt(u.getByte(i));
-			u.putByte(i, (byte) v);
+			int v = operator.applyAsInt(U.getByte(i));
+			U.putByte(i, (byte) v);
 
 			i++;
 		}
@@ -331,7 +330,7 @@ public class DirectByteList extends DynByteBuf {
 			if (addr != 0) {
 				int wi = wIndex, ri = rIndex;
 				if ((wi -= ri) < 0) throw new AssertionError("Illegal Buffer State:"+info());
-				u.copyMemory(addr+ri, addr, wi);
+				U.copyMemory(addr+ri, addr, wi);
 			}
 			wIndex -= rIndex;
 			rIndex = 0;
@@ -355,7 +354,7 @@ public class DirectByteList extends DynByteBuf {
 		long offset = srcBaseOffset + srcPos;
 		while (length > 0) {
 			long size = (length > 1048576) ? 1048576 : length;
-			u.copyMemory(src, offset, null, dstAddr, size);
+			U.copyMemory(src, offset, null, dstAddr, size);
 			length -= size;
 			offset += size;
 			dstAddr += size;
@@ -367,7 +366,7 @@ public class DirectByteList extends DynByteBuf {
 		long offset = dstBaseOffset + dstPos;
 		while (length > 0) {
 			long size = (length > 1048576) ? 1048576 : length;
-			u.copyMemory(null, srcAddr, dst, offset, size);
+			U.copyMemory(null, srcAddr, dst, offset, size);
 			length -= size;
 			srcAddr += size;
 			offset += size;
@@ -381,7 +380,7 @@ public class DirectByteList extends DynByteBuf {
 		assert len <= length : info();
 
 		byte[] tmp = new byte[len];
-		copyToArray(address, tmp, Unsafe.ARRAY_BYTE_BASE_OFFSET, 0, len);
+		copyToArray(address, tmp, Unaligned.ARRAY_BYTE_BASE_OFFSET, 0, len);
 		return new String(tmp, StandardCharsets.US_ASCII);
 	}
 
@@ -393,7 +392,7 @@ public class DirectByteList extends DynByteBuf {
 		char[] tmp = sb.list;
 		int j = sb.length();
 		while (off < len) {
-			int bb = u.getByte(off++);
+			int bb = U.getByte(off++);
 			tmp[j++] = TextUtil.b2h(bb >>> 4);
 			tmp[j++] = TextUtil.b2h(bb & 0xf);
 		}

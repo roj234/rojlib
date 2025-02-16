@@ -1,5 +1,6 @@
 package roj.asm.cp;
 
+import org.jetbrains.annotations.ApiStatus;
 import roj.util.DynByteBuf;
 
 /**
@@ -39,21 +40,17 @@ public abstract class Constant implements Cloneable {
 
 	Constant() {}
 
+	final void setIndex(int i) {this.index = (char) i;}
+	@ApiStatus.Internal public final int getIndex() {return index;}
+
+	public abstract byte type();
 	abstract void write(DynByteBuf w);
+
+	public String toString() { return toString(type()) + "#" + (int) index; }
+	public String getEasyCompareValue() { throw new UnsupportedOperationException(); }
 
 	public abstract boolean equals(Object o);
 	public abstract int hashCode();
-
-	public String toString() { return toString(type()) + "#" + (int) index; }
-	public String getEasyReadValue() { throw new UnsupportedOperationException(); }
-	public String getEasyCompareValue() { throw new UnsupportedOperationException(); }
-
-	final void setIndex(int i) {
-		this.index = (char) i;
-	}
-	public final int getIndex() { return index; }
-
-	public abstract byte type();
 
 	@Override
 	public Constant clone() {

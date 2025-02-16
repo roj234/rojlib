@@ -1,6 +1,7 @@
 package roj.config.data;
 
 import roj.config.serial.CVisitor;
+import roj.text.DateParser;
 
 /**
  * @author Roj234
@@ -12,4 +13,7 @@ public final class CTimestamp extends CLong {
 	public Type getType() { return Type.DATE; }
 	@Override public boolean mayCastTo(Type o) { return o == Type.DATE; }
 	@Override public void accept(CVisitor ser) { ser.valueTimestamp(value); }
+
+	@Override
+	public String toString() {return DateParser.GMT().toISOString(value);}
 }

@@ -514,6 +514,8 @@ public class ConstantPool {
 		return ref.getIndex();
 	}
 
+	public int fit(Constant c) {return reset(c).getIndex();}
+
 	@SuppressWarnings({"unchecked", "fallthrough"})
 	public <T extends Constant> T reset(T c) {
 		switch (c.type()) {
@@ -595,10 +597,10 @@ public class ConstantPool {
 			if (s1 == null) s1 = "TOP";
 			k += s1.length();
 			array[i++] = s1;
-			array[i++] = s1.equals("TOP")?"/":c.toString().substring(k);
+			array[i++] = s1.equals("TOP")?"/":c.toString().substring(c.type() < 3 || c.type() > 8 ? k : 0);
 			array[i++] = IntMap.UNDEFINED;
 		}
-		return TextUtil.prettyTable(new StringBuilder("constants[" + constants.size() + "]=["), "    ", array, " ", " ").append("]").toString();
+		return TextUtil.prettyTable(new StringBuilder("constants["+constants.size()+"]=["), "    ", array, " ", " ").append("]").toString();
 	}
 
 	public void clear() {

@@ -17,7 +17,8 @@ import java.util.function.Function;
  * @since 2022/10/7 0007 23:54
  */
 public interface Promise<T> {
-	static <T> Promise<T> sync(Consumer<PromiseCallback> handler) { return new PromiseImpl<>(null, handler); }
+	@SuppressWarnings("unchecked")
+	static <T, X extends Promise<T> & PromiseCallback> X sync() { return (X) new PromiseImpl<>(null, null); }
 	static <T> Promise<T> async(TaskHandler e, Consumer<PromiseCallback> handler) { return new PromiseImpl<>(e, handler); }
 	static <T> Promise<T> resolve(T t) {
 		PromiseImpl<T> p = new PromiseImpl<>();

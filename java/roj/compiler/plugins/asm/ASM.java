@@ -1,6 +1,6 @@
 package roj.compiler.plugins.asm;
 
-import roj.asm.visitor.CodeWriter;
+import roj.asm.insn.CodeWriter;
 
 import java.util.function.Consumer;
 

@@ -1,9 +1,9 @@
 package roj.compiler.resolve;
 
+import roj.asm.ClassNode;
+import roj.asm.FieldNode;
 import roj.asm.Opcodes;
-import roj.asm.tree.ConstantData;
-import roj.asm.tree.FieldNode;
-import roj.asm.tree.RawNode;
+import roj.asm.RawNode;
 import roj.collect.MyHashMap;
 import roj.collect.MyHashSet;
 import roj.collect.SimpleList;
@@ -17,7 +17,6 @@ import roj.util.Helpers;
 
 import java.io.IOException;
 import java.util.List;
-import java.util.Map;
 
 /**
  * @author Roj234
@@ -66,17 +65,21 @@ public final class TypeResolver {
 		resolveImport(ctx, gc, importStatic);
 	}
 	private void resolveImport(LocalContext ctx, GlobalContext gc, MyHashMap<String, Object> aStatic) {
-		for (Map.Entry<String, Object> entry : aStatic.entrySet()) {
+		for (var itr = aStatic.entrySet().iterator(); itr.hasNext(); ) {
+			var entry = itr.next();
 			String name = (String) entry.getValue();
 			if (name == null) continue;
 
-			ConstantData info = gc.getClassInfo(name);
+			ClassNode info = gc.getClassInfo(name);
 			if (info == null) info = fixStaticImport(ctx, name);
-			if (info == null) ctx.report(Kind.ERROR, "symbol.error.noSuchClass", name);
+			if (info == null) {
+				itr.remove();
+				ctx.report(Kind.ERROR, "symbol.error.noSuchClass", name);
+			}
 			else entry.setValue(info);
 		}
 	}
-	private ConstantData fixStaticImport(LocalContext ctx, String name) {
+	private ClassNode fixStaticImport(LocalContext ctx, String name) {
 		// import java.util.Map.Entry
 		int slash = name.lastIndexOf('/');
 		if (slash >= 0) {
@@ -87,7 +90,7 @@ public final class TypeResolver {
 			do {
 				sb.set(slash, '$');
 
-				ConstantData info = ctx.classes.getClassInfo(sb);
+				ClassNode info = ctx.classes.getClassInfo(sb);
 				if (info != null) return info;
 
 				slash = sb.lastIndexOf("/", slash-1);
@@ -100,7 +103,7 @@ public final class TypeResolver {
 	/**
 	 * 将短名称解析为全限定名称
 	 */
-	public ConstantData resolve(LocalContext ctx, String name) {
+	public ClassNode resolve(LocalContext ctx, String name) {
 		var entry = ctx.importCache.getEntry(name);
 		if (entry != null) return entry.getValue();
 
@@ -112,7 +115,7 @@ public final class TypeResolver {
 			// TODO add InnerClass reference attribute if used such import
 			int slash = name.indexOf('/');
 			if (slash >= 0) {
-				String myName = ctx.file.name;
+				String myName = ctx.file.name();
 				if (slash != myName.length() || !name.startsWith(myName)) {
 					var entry1 = resolve1(ctx, name.substring(0, slash));
 					if (entry1 == null) break block;
@@ -127,13 +130,13 @@ public final class TypeResolver {
 		ctx.importCache.put(name, info);
 		return info;
 	}
-	private ConstantData resolve1(LocalContext ctx, String name) {
+	private ClassNode resolve1(LocalContext ctx, String name) {
 		// 具名和unimport (delete)
 		var entry = importClass.getEntry(name);
-		if (entry != null) return (ConstantData) entry.getValue();
+		if (entry != null) return (ClassNode) entry.getValue();
 
 		GlobalContext gc = ctx.classes;
-		ConstantData c;
+		ClassNode c;
 
 		// 已经是全限定名
 		if ((c = gc.getClassInfo(name)) != null) return restricted ? checkRestricted(c) : c;
@@ -166,7 +169,7 @@ public final class TypeResolver {
 				break block;
 			}
 			// 下列注释中: myName = A$B$C
-			String myName = ctx.file.name;
+			String myName = ctx.file.name();
 
 			// 看看是不是对自身的引用
 			// A$B$C B$C C => self
@@ -210,7 +213,7 @@ public final class TypeResolver {
 			}
 
 			// java.lang.* 和 importAny
-			if (importAny && packages.size() == 1) qualifiedName = packages.get(0)+"/"+name;
+			if (importAny && (packages.size() == 1/* || onlyOneInsideImportedModules(packages)*/)) qualifiedName = packages.get(0)+"/"+name;
 			else if (packages.contains("java/lang")) qualifiedName = "java/lang/"+name;
 		}
 
@@ -226,18 +229,18 @@ public final class TypeResolver {
 		return c;
 	}
 
-	private ConstantData checkRestricted(ConstantData c) {
-		if (importClass.containsValue(c.name)) return c;
-		int index = c.name.lastIndexOf('/');
-		if (index > 0 && importPackage.contains(c.name.substring(index))) return c;
+	private ClassNode checkRestricted(ClassNode c) {
+		if (importClass.containsValue(c.name())) return c;
+		int index = c.name().lastIndexOf('/');
+		if (index > 0 && importPackage.contains(c.name().substring(index))) return c;
 		return null;
 	}
 
 	/**
 	 * @return [ConstantData owner, FieldNode node]
 	 */
-	public ConstantData resolveField(LocalContext ctx, String name, List<FieldNode> out2) {
-		var imported = (ConstantData) importStatic.get(name);
+	public ClassNode resolveField(LocalContext ctx, String name, List<FieldNode> out2) {
+		var imported = (ClassNode) importStatic.get(name);
 		if (imported != null) {
 			int fid = imported.getField(name);
 			if (fid < 0) return null;
@@ -256,7 +259,7 @@ public final class TypeResolver {
 
 			MyHashSet<String> oneClass = new MyHashSet<>(), allClass = new MyHashSet<>();
 			for (String klassName : importStaticClass) {
-				ConstantData info = ctx.classes.getClassInfo(klassName);
+				ClassNode info = ctx.classes.getClassInfo(klassName);
 				if (info == null) {
 					ctx.report(Kind.ERROR, "symbol.error.noSuchClass", klassName);
 					continue;
@@ -282,9 +285,9 @@ public final class TypeResolver {
 				return null;
 			}
 
-			if (ctx.checkAccessible((ConstantData) arr[0], (RawNode) arr[1], true, false)) {
+			if (ctx.checkAccessible((ClassNode) arr[0], (RawNode) arr[1], true, false)) {
 				out2.add((FieldNode) arr[1]);
-				return (ConstantData) arr[0];
+				return (ClassNode) arr[0];
 			}
 		}
 		return null;
@@ -293,15 +296,15 @@ public final class TypeResolver {
 	/**
 	 * @return [ConstantData owner]
 	 */
-	public ConstantData resolveMethod(LocalContext ctx, String name) {
-		ConstantData imported = (ConstantData) importStatic.get(name);
+	public ClassNode resolveMethod(LocalContext ctx, String name) {
+		ClassNode imported = (ClassNode) importStatic.get(name);
 		if (imported != null) return imported;
 
 		var methodCache = ctx.importCacheMethod;
 		if (methodCache.isEmpty()) {
 			MyHashSet<String> oneClass = new MyHashSet<>(), allClass = new MyHashSet<>();
 			for (String klassName : importStaticClass) {
-				ConstantData info = ctx.classes.getClassInfo(klassName);
+				ClassNode info = ctx.classes.getClassInfo(klassName);
 				if (info == null) {
 					ctx.report(Kind.ERROR, "symbol.error.noSuchClass", klassName);
 					continue;

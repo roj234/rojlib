@@ -3,19 +3,20 @@ package roj.plugins.ddns;
 import roj.collect.MyBitSet;
 import roj.collect.MyHashMap;
 import roj.collect.SimpleList;
+import roj.concurrent.ITask;
 import roj.concurrent.TaskExecutor;
-import roj.concurrent.task.ITask;
 import roj.config.JSONParser;
 import roj.config.data.CList;
 import roj.config.data.CMap;
 import roj.crypt.HMAC;
+import roj.http.HttpRequest;
+import roj.http.SyncHttpClient;
 import roj.io.IOUtil;
-import roj.net.http.HttpRequest;
-import roj.net.http.SyncHttpClient;
-import roj.text.ACalendar;
 import roj.text.CharList;
+import roj.text.DateParser;
 import roj.text.Escape;
 import roj.ui.Terminal;
+import roj.util.ByteList;
 
 import java.net.InetAddress;
 import java.nio.charset.StandardCharsets;
@@ -31,7 +32,7 @@ import static roj.plugins.ddns.IpGetter.pooledRequest;
  * @author Roj234
  * @since 2023/1/27 0027 19:03
  */
-public class Aliyun implements DDNSService {
+final class Aliyun implements DDNSService {
 	private static final String API_URL = "https://alidns.aliyuncs.com";
 	private static final String DEFAULT_API_VERSION = "2015-01-09";
 	private static final String DEFAULT_SIGNATURE_METHOD = "HMAC-SHA1";
@@ -51,7 +52,7 @@ public class Aliyun implements DDNSService {
 		byte[] nonce = new byte[16];
 		rnd.nextBytes(nonce);
 		queries.put("SignatureNonce", IOUtil.SharedCoder.get().encodeHex(nonce));
-		queries.put("Timestamp", new ACalendar(null).format("Y-m-dTH:i:sP", System.currentTimeMillis()).toString());
+		queries.put("Timestamp", DateParser.GMT().format("Y-m-dTH:i:sP", System.currentTimeMillis()).toString());
 
 		//计算签名
 		String signature = makeSign(queries, AccessKeySecret);
@@ -59,8 +60,8 @@ public class Aliyun implements DDNSService {
 		return API_URL+"/?"+makeQuery(queries)+"&Signature="+signature;
 	}
 
-	private String makeQuery(Map<String, String> queries) {
-		StringBuilder sb = new StringBuilder();
+	private static String makeQuery(Map<String, String> queries) {
+		var sb = IOUtil.getSharedCharBuf();
 		for (Map.Entry<String, String> p : queries.entrySet()) {
 			sb.append("&").append(Escape.encodeURIComponent(p.getKey()))
 			  .append("=").append(Escape.encodeURIComponent(p.getValue()));
@@ -71,14 +72,14 @@ public class Aliyun implements DDNSService {
 		SimpleList<Map.Entry<String, String>> sorted = new SimpleList<>(queries.entrySet());
 		sorted.sort((o1, o2) -> o1.getKey().compareTo(o2.getKey()));
 
-		StringBuilder sb = new StringBuilder();
+		ByteList sb = new ByteList();
 		String s = "";
 		for (Map.Entry<String, String> p : sorted) {
-			sb.append(s).append(encodeSignature(p.getKey()))
-			  .append("=").append(encodeSignature(p.getValue()));
+			sb.putAscii(s).putAscii(encodeSignature(p.getKey()))
+			  .putAscii("=").putAscii(encodeSignature(p.getValue()));
 			s = "&";
 		}
-		String signStr = "GET" + "&%2F&" + encodeSignature(sb);
+		String signStr = "GET&%2F&"+encodeSignature(sb);
 
 		try {
 			IOUtil uc = IOUtil.SharedCoder.get();
@@ -95,7 +96,7 @@ public class Aliyun implements DDNSService {
 	}
 
 	private static final MyBitSet aliyun_pass = MyBitSet.from("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_.~");
-	private static CharList encodeSignature(CharSequence src) {return Escape.escape(IOUtil.getSharedCharBuf(), IOUtil.getSharedByteBuf().putUTFData(src), aliyun_pass);}
+	private static CharList encodeSignature(CharSequence src) {return Escape.escape(IOUtil.getSharedCharBuf(), src instanceof ByteList b ? b : IOUtil.getSharedByteBuf().putUTFData(src), aliyun_pass);}
 
 	private Map<String, DDnsRecord> domain2Id = new MyHashMap<>();
 	static final class DDnsRecord {

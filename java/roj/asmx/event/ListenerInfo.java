@@ -1,6 +1,6 @@
 package roj.asmx.event;
 
-import roj.asm.tree.RawNode;
+import roj.asm.RawNode;
 
 /**
  * @author Roj234

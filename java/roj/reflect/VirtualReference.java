@@ -1,20 +1,20 @@
 package roj.reflect;
 
 import org.jetbrains.annotations.NotNull;
+import roj.asm.ClassNode;
 import roj.asm.Opcodes;
-import roj.asm.tree.ConstantData;
 import roj.math.MathUtils;
 import roj.util.Helpers;
-import sun.misc.Unsafe;
 
 import java.lang.ref.ReferenceQueue;
 import java.lang.ref.WeakReference;
 import java.util.Arrays;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
+import java.util.function.Consumer;
 import java.util.function.Function;
 
-import static roj.reflect.ReflectionUtils.u;
+import static roj.reflect.Unaligned.U;
 
 /**
  * 让ClassLoader能正确的被卸载，防止内存泄露 <pre>
@@ -78,21 +78,21 @@ public class VirtualReference<V> {
 		@SuppressWarnings("unchecked")
 		public V getValue() {
 			Class<?> o = v.get();
-			return o == null ? null : (V) u.getObject(o, offset);
+			return o == null ? null : (V) U.getObject(o, offset);
 		}
 
 		public void setValue(V v) {
 			if (this.v != null) {
 				Class<?> ref = this.v.get();
 				if (ref == null) throw new IllegalStateException("key was freed???");
-				u.putObject(ref, offset, v);
+				U.putObject(ref, offset, v);
 				return;
 			}
 
 			ClassLoader loader = get();
 			if (loader == null) throw new IllegalStateException("key was freed???");
 
-			var xref = new ConstantData();
+			var xref = new ClassNode();
 			xref.modifier = 0;
 			xref.name(loader.getClass().getName().replace('.', '/')+"$OwnedRef$"+ReflectionUtils.uniqueId());
 			xref.newField(Opcodes.ACC_STATIC, "r", "Ljava/lang/Object;");
@@ -101,7 +101,7 @@ public class VirtualReference<V> {
 
 			this.v = new WeakReference<>(klass);
 			offset = ReflectionUtils.fieldOffset(klass, "r");
-			u.putObject(klass, offset, v);
+			U.putObject(klass, offset, v);
 		}
 	}
 
@@ -119,12 +119,12 @@ public class VirtualReference<V> {
 				Entry<?> prev = null;
 				for (;;) {
 					if (entry == remove) {
-						Object next = u.getAndSetObject(entry, NEXT_OFF, SENTIAL);
+						Object next = U.getAndSetObject(entry, NEXT_OFF, SENTIAL);
 						if (next != SENTIAL) {
 							if (prev == null) array[i] = (Entry<?>) next;
 							else prev.next = Helpers.cast(next);
 
-							u.getAndAddInt(this, SIZE_OFF, -1);
+							U.getAndAddInt(this, SIZE_OFF, -1);
 						}
 
 						break loop;
@@ -190,6 +190,23 @@ public class VirtualReference<V> {
 		return null;
 	}
 
+	@SuppressWarnings("unchecked")
+	public void forEach(Consumer<Entry<V>> consumer) {
+		lock.readLock().lock();
+		try {
+			doEvict();
+
+			for (Entry<?> entry : entries) {
+				while (entry != null) {
+					consumer.accept((Entry<V>) entry);
+					entry = entry.next;
+				}
+			}
+		} finally {
+			lock.readLock().unlock();
+		}
+	}
+
 	public final V computeIfAbsent(ClassLoader key, @NotNull Function<? super ClassLoader, ? extends V> mapper) {
 		if (key == null) key = VirtualReference.class.getClassLoader();
 
@@ -217,8 +234,8 @@ public class VirtualReference<V> {
 			V value = entry.getValue();
 			if (value != null) return value;
 
-			if (u.compareAndSwapObject(entry, VALUE_OFF, SENTIAL, null)) {
-				u.getAndAddInt(this, SIZE_OFF, 1);
+			if (U.compareAndSwapObject(entry, VALUE_OFF, SENTIAL, null)) {
+				U.getAndAddInt(this, SIZE_OFF, 1);
 
 				entry.setValue(value = mapper.apply(key));
 				return value;
@@ -255,15 +272,15 @@ public class VirtualReference<V> {
 
 		int i = System.identityHashCode(key)&(array.length-1);
 		Entry<V> entry;
-		long offset = Unsafe.ARRAY_OBJECT_BASE_OFFSET + ((long) i * Unsafe.ARRAY_OBJECT_INDEX_SCALE);
+		long offset = Unaligned.ARRAY_OBJECT_BASE_OFFSET + ((long) i * Unaligned.ARRAY_OBJECT_INDEX_SCALE);
 		// CAS first
 		for (;;) {
 			for (;;) {
-				entry = (Entry<V>) u.getObjectVolatile(array, offset);
+				entry = (Entry<V>) U.getObjectVolatile(array, offset);
 				if (entry != null) break;
 
-				if (u.compareAndSwapObject(array, offset, null, SENTIAL)) {
-					u.putObjectVolatile(array, offset, entry = new Entry<>(queue, key));
+				if (U.compareAndSwapObject(array, offset, null, SENTIAL)) {
+					U.putObjectVolatile(array, offset, entry = new Entry<>(queue, key));
 					return entry;
 				}
 			}
@@ -272,7 +289,7 @@ public class VirtualReference<V> {
 				if (key == entry.get()) return entry;
 
 				if (entry.next == null) {
-					if (u.compareAndSwapObject(entry, NEXT_OFF, null, SENTIAL)) {
+					if (U.compareAndSwapObject(entry, NEXT_OFF, null, SENTIAL)) {
 						Entry<V> next = new Entry<>(queue, key);
 						entry.next = next;
 						return next;

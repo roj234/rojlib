@@ -13,7 +13,7 @@ package roj.archive.qz.xz.lz;
 import roj.util.NativeMemory;
 
 import static roj.crypt.CRC32s.crcTab;
-import static roj.reflect.ReflectionUtils.u;
+import static roj.reflect.Unaligned.U;
 
 final class Hash234 {
 	private static final int HASH_2_SIZE = 1 << 10;
@@ -53,30 +53,30 @@ final class Hash234 {
 		hash4Table = hash3Table + (HASH_3_SIZE<<2);
 	}
 
-	void reset() { u.setMemory(hash2Table, hashTable.length(), (byte) 0); }
+	void reset() { U.setMemory(hash2Table, hashTable.length(), (byte) 0); }
 	void release() { hashTable.release(); }
 
 	void calcHashes(long buf, int off) {
 		buf += off;
 
-		int hash = crcTab[u.getByte(buf) & 0xFF] ^ (u.getByte(buf+1) & 0xFF);
+		int hash = crcTab[U.getByte(buf) & 0xFF] ^ (U.getByte(buf+1) & 0xFF);
 		hash2Value = hash & HASH_2_MASK;
 
-		hash ^= (u.getByte(buf+2) & 0xFF) << 8;
+		hash ^= (U.getByte(buf+2) & 0xFF) << 8;
 		hash3Value = hash & HASH_3_MASK;
 
-		hash ^= crcTab[u.getByte(buf+3) & 0xFF] << 5;
+		hash ^= crcTab[U.getByte(buf+3) & 0xFF] << 5;
 		hash4Value = hash & hash4Mask;
 	}
 
-	int getHash2Pos() { return u.getInt(hash2Table+((long) hash2Value<<2)); }
-	int getHash3Pos() { return u.getInt(hash3Table+((long) hash3Value<<2)); }
-	int getHash4Pos() { return u.getInt(hash4Table+((long) hash4Value<<2)); }
+	int getHash2Pos() { return U.getInt(hash2Table+((long) hash2Value<<2)); }
+	int getHash3Pos() { return U.getInt(hash3Table+((long) hash3Value<<2)); }
+	int getHash4Pos() { return U.getInt(hash4Table+((long) hash4Value<<2)); }
 
 	void updateTables(int pos) {
-		u.putInt(hash2Table+((long) hash2Value<<2), pos);
-		u.putInt(hash3Table+((long) hash3Value<<2), pos);
-		u.putInt(hash4Table+((long) hash4Value<<2), pos);
+		U.putInt(hash2Table+((long) hash2Value<<2), pos);
+		U.putInt(hash3Table+((long) hash3Value<<2), pos);
+		U.putInt(hash4Table+((long) hash4Value<<2), pos);
 	}
 
 	void normalize(int normalizationOffset) {

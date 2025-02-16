@@ -14,7 +14,7 @@ import static roj.collect.IntMap.UNDEFINED;
 public final class Interner extends LFUCache<CharSequence,String> {
 	private static final ThreadLocal<Interner> instances = ThreadLocal.withInitial(Interner::new);
 
-	private Interner() {super(256, 1);}
+	private Interner() {super(256);}
 
 	public static String intern(CharSequence input) {return input.length() > 127 ? input.toString() : instances.get().doIntern(input);}
 	public static String intern(CharSequence input, int start, int end) {return instances.get().doIntern(input.subSequence(start, end));}

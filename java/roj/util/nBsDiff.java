@@ -14,7 +14,7 @@ import roj.reflect.litasm.Intrinsics;
  * @since 2023/8/2 0002 6:08
  */
 @Autoload(value = Autoload.Target.NIXIM, intrinsic = RojLib.GENERIC)
-@Nixim("roj/util/BsDiff")
+@Nixim(altValue = BsDiff.class)
 public final class nBsDiff {
 	@Inject("<clinit>") static void __clinit() {Intrinsics.linkNative(RojLib.getLibrary(), nBsDiff.class);}
 

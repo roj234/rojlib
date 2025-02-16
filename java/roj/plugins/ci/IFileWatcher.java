@@ -13,5 +13,6 @@ class IFileWatcher {
 
 	public Set<String> getModified(Project proj, int id) {return Collections.singleton(null);}
 	public void add(Project proj) throws IOException {}
+	public void remove(Project project) {}
 	public void removeAll() {}
 }

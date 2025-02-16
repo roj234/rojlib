@@ -1,6 +1,6 @@
 package roj.net;
 
-import roj.asm.type.TypeHelper;
+import roj.asm.type.Type;
 import roj.io.buf.BufferPool;
 import roj.reflect.Bypass;
 import roj.reflect.ReflectionUtils;
@@ -33,7 +33,7 @@ class UdpChImpl extends MyChannel {
 		H inst;
 		try {
 			Class<?> type = InetSocketAddress.class.getDeclaredField("holder").getType();
-			Bypass<H> b = Bypass.builder(H.class).i_access("java/net/InetSocketAddress", "holder", TypeHelper.class2type(type), "getHolder", null, false);
+			Bypass<H> b = Bypass.builder(H.class).i_access("java/net/InetSocketAddress", "holder", Type.fromJavaType(type), "getHolder", null, false);
 			Field field = ReflectionUtils.checkFieldName(type, "address", "addr");
 			inst = b.access(type, new String[]{field.getName(),"port"}, null, new String[]{"setAddress","setPort"}).delegate(AbstractSelectableChannel.class, "removeKey").build();
 		} catch (Exception e) {

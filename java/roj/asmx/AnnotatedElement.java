@@ -1,10 +1,10 @@
 package roj.asmx;
 
+import roj.asm.Attributed;
+import roj.asm.IClass;
 import roj.asm.Opcodes;
-import roj.asm.tree.Attributed;
-import roj.asm.tree.IClass;
-import roj.asm.tree.RawNode;
-import roj.asm.tree.anno.Annotation;
+import roj.asm.RawNode;
+import roj.asm.annotation.Annotation;
 import roj.collect.MyHashMap;
 import roj.io.IOUtil;
 import roj.text.CharList;
@@ -18,7 +18,7 @@ import java.util.Set;
  * @since 2023/12/26 0026 12:47
  */
 public abstract sealed class AnnotatedElement permits AnnotatedElement.Type, AnnotatedElement.Node {
-	final MyHashMap<String, Annotation> annotations = new MyHashMap<>();
+	final MyHashMap<String, Annotation> annotations = new MyHashMap<>(2);
 
 	public abstract String owner();
 	public String name() { return owner(); }

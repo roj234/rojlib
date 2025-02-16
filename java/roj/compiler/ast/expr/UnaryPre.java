@@ -3,17 +3,17 @@ package roj.compiler.ast.expr;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import roj.asm.Opcodes;
-import roj.asm.tree.anno.AnnValDouble;
-import roj.asm.tree.anno.AnnValFloat;
-import roj.asm.tree.anno.AnnValInt;
-import roj.asm.tree.anno.AnnValLong;
+import roj.asm.insn.Label;
 import roj.asm.type.IType;
 import roj.asm.type.Type;
-import roj.asm.visitor.Label;
 import roj.compiler.asm.MethodWriter;
 import roj.compiler.context.LocalContext;
 import roj.compiler.diagnostic.Kind;
 import roj.compiler.resolve.TypeCast;
+import roj.config.data.CDouble;
+import roj.config.data.CFloat;
+import roj.config.data.CInt;
+import roj.config.data.CLong;
 
 import static roj.asm.Opcodes.*;
 import static roj.compiler.JavaLexer.*;
@@ -71,7 +71,7 @@ class UnaryPre extends UnaryPreNode {
 					return NaE.RESOLVE_FAILED;
 				}
 				break;
-			default: if (type.isPrimitive()) type = Type.std(Type.INT);
+			default: if (type.isPrimitive()) type = Type.primitive(Type.INT);
 			case Type.LONG:
 				if (op == logic_not) {
 					ctx.report(Kind.ERROR, "unary.error.notApplicable:!", type);
@@ -89,27 +89,27 @@ class UnaryPre extends UnaryPreNode {
 		switch (iType) {
 			case Type.DOUBLE:
 				if (op == sub) {
-					AnnValDouble val = ((AnnValDouble) right.constVal());
+					var val = ((CDouble) right.constVal());
 					val.value = -val.value;
 				}
 				return right;
 			case Type.FLOAT:
 				if (op == sub) {
-					AnnValFloat val = ((AnnValFloat) right.constVal());
+					var val = ((CFloat) right.constVal());
 					val.value = -val.value;
 				}
 				return right;
 			case Type.BOOLEAN:
 				return new Constant(type, !(boolean)right.constVal());
 			case Type.LONG:
-				AnnValLong lv = (AnnValLong)right.constVal();
+				var lv = (CLong)right.constVal();
 				switch (op) {
 					case sub: lv.value = -lv.value; break;
 					case inv: lv.value ^= -1L; break;
 				}
 				return right;
 			case Type.BYTE: case Type.CHAR: case Type.SHORT: case Type.INT:
-				AnnValInt iv = (AnnValInt)right.constVal();
+				var iv = (CInt)right.constVal();
 				switch (op) {
 					case sub: iv.value = -iv.value; break;
 					case inv: iv.value ^= -1; break;
@@ -136,7 +136,7 @@ class UnaryPre extends UnaryPreNode {
 			assert iType != 0;
 			// 手动拆箱，不通过TypeCast
 			//noinspection MagicConstant
-			Type primType = Type.std(iType);
+			Type primType = Type.primitive(iType);
 			cw.invoke(Opcodes.INVOKEVIRTUAL, type.owner(), primType.toString().concat("Value"), "()".concat(primType.toDesc()));
 		}
 

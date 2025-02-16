@@ -5,6 +5,7 @@ import roj.collect.MyHashSet;
 import roj.collect.SimpleList;
 import roj.net.handler.Socks5Client;
 import roj.reflect.Bypass;
+import roj.reflect.Java22Workaround;
 import roj.text.CharList;
 import roj.text.Escape;
 import roj.text.TextUtil;
@@ -254,6 +255,7 @@ public final class NetUtil {
 	}
 
 	private static volatile H Util;
+	@Java22Workaround
 	private interface H {
 		Object getHolder(InetAddress address);
 		String getOriginalHostName(Object o);

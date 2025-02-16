@@ -1,5 +1,8 @@
 package roj.sql;
 
+import roj.asmx.launcher.Autoload;
+import roj.asmx.nixim.Inject;
+import roj.asmx.nixim.Nixim;
 import roj.collect.*;
 import roj.config.Tokenizer;
 import roj.plugins.http.error.GreatErrorPage;
@@ -18,7 +21,7 @@ public final class DBA implements AutoCloseable {
 	public static final ThreadLocal<DBA> CMAP = new ThreadLocal<>();
 
 	private static Connector defaultPool;
-	public static void setConnectionPool(MyConnectionPool p) {defaultPool = p;}
+	public static void setConnectionPool(PooledConnector p) {defaultPool = p;}
 	private Connector pool = defaultPool;
 
 	private String group, order;
@@ -44,23 +47,28 @@ public final class DBA implements AutoCloseable {
 		if (inst != null) inst.close();
 	}
 
-	public static DBA getInstance(MyConnectionPool pool) {
+	public static DBA getInstance(PooledConnector pool) {
 		DBA dba = new DBA();
 		dba.pool = pool;
 		return dba;
 	}
 	public DBA copy() {return new DBA(parent);}
 
-	static {
-		GreatErrorPage.addCustomTag("QUERIES", req -> {
-			DBA inst = CMAP.get();
-			if (inst == null) return null;
+	@Autoload(Autoload.Target.NIXIM)
+	@Nixim(altValue = GreatErrorPage.class)
+	private static final class JDBCErrorType {
+		@Inject(at = Inject.At.TAIL)
+		public static void registerCustomTag() {
+			GreatErrorPage.addCustomTag("QUERIES", req -> {
+				DBA inst = CMAP.get();
+				if (inst == null) return null;
 
-			List<String> values = new SimpleList<>(inst.logs);
-			IntBiMap<String> index = new IntBiMap<>(values.size());
-			for (int i = 0; i < values.size();) index.putInt(i, String.valueOf(++i));
-			return new ListMap<>(index, values);
-		});
+				List<String> values = new SimpleList<>(inst.logs);
+				IntBiMap<String> index = new IntBiMap<>(values.size());
+				for (int i = 0; i < values.size();) index.putInt(i, String.valueOf(++i));
+				return new ListMap<>(index, values);
+			});
+		}
 	}
 
 	private DBA() {
@@ -323,19 +331,19 @@ public final class DBA implements AutoCloseable {
 	/**
 	 * 读取一条结果
 	 */
-	public List<String> getone() throws SQLException {
+	public List<String> next() throws SQLException {
 		if (set == null) throw new SQLException("not in select mode!");
 		List<String> result = new SimpleList<>(set.getMetaData().getColumnCount());
-		return getone(result) ? result : null;
+		return next(result) ? result : null;
 	}
 	/**
 	 * 读取一条结果，并存入list
 	 */
-	public boolean getone(List<String> list) throws SQLException {
+	public boolean next(List<String> list) throws SQLException {
 		ResultSet set = this.set;
 		if (!set.next()) {
 			set.close();
-			if (next_page()) return getone(list);
+			if (next_page()) return next(list);
 			return false;
 		}
 
@@ -346,8 +354,8 @@ public final class DBA implements AutoCloseable {
 	/**
 	 * 以关联数组的形式返回一条查询结果
 	 */
-	public Map<String, String> getone_colkey() throws SQLException {
-		List<String> list = getone();
+	public Map<String, String> nextMap() throws SQLException {
+		List<String> list = next();
 		return list == null ? null : new ListMap<>(select_field_names(), list);
 	}
 
@@ -388,7 +396,7 @@ public final class DBA implements AutoCloseable {
 	public List<List<String>> getrows(List<List<String>> list) throws SQLException {
 		try {
 			while (true) {
-				List<String> a = getone();
+				List<String> a = next();
 				if (a == null) break;
 
 				list.add(a);
@@ -410,7 +418,7 @@ public final class DBA implements AutoCloseable {
 	public List<Map<String,String>> getrows_colkey(List<Map<String,String>> list) throws SQLException {
 		try {
 			while (true) {
-				Map<String, String> a = getone_colkey();
+				Map<String, String> a = nextMap();
 				if (a == null) break;
 
 				list.add(a);
@@ -426,7 +434,7 @@ public final class DBA implements AutoCloseable {
 	public Map<String, List<String>> getrows_index(Map<String, List<String>> map, int key) throws SQLException {
 		try {
 			while (true) {
-				List<String> a = getone();
+				List<String> a = next();
 				if (a == null) break;
 
 				map.put(set.getString(key+1), a);
@@ -442,7 +450,7 @@ public final class DBA implements AutoCloseable {
 	public Map<String, Map<String, String>> getrows_index_colkey(Map<String, Map<String, String>> map, int key) throws SQLException {
 		try {
 			while (true) {
-				Map<String, String> a = getone_colkey();
+				Map<String, String> a = nextMap();
 				if (a == null) break;
 
 				map.put(set.getString(key+1), a);

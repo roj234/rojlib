@@ -1,13 +1,13 @@
 package roj.compiler.ast.expr;
 
 import org.jetbrains.annotations.Nullable;
+import roj.asm.IClass;
 import roj.asm.Opcodes;
-import roj.asm.tree.IClass;
+import roj.asm.insn.CodeWriter;
 import roj.asm.type.Generic;
 import roj.asm.type.IType;
 import roj.asm.type.Signature;
 import roj.asm.type.Type;
-import roj.asm.visitor.CodeWriter;
 import roj.collect.SimpleList;
 import roj.compiler.asm.Asterisk;
 import roj.compiler.asm.LPSignature;
@@ -39,7 +39,7 @@ final class NewAnonymousClass extends ExprNode {
 	}
 
 	@Override
-	public String toString() {return "<newAnonymousClass "+type.name+">: "+init;}
+	public String toString() {return "<newAnonymousClass "+type.name()+">: "+init;}
 
 	@Override
 	public IType type() {return init.type();}
@@ -131,7 +131,7 @@ final class NewAnonymousClass extends ExprNode {
 		initMethod.one(RETURN);
 		initMethod.finish();
 
-		init.fn = new Type(type.name);
+		init.fn = Type.klass(type.name());
 		return init.resolve(ctx);
 	}
 

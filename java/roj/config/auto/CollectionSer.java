@@ -58,7 +58,7 @@ final class CollectionSer extends Adapter {
 				ctx.popd(true);
 				return;
 			}
-			throw new IllegalStateException("ILS:"+o);
+			throw new IllegalStateException(o+"不是集合对象:"+o.getClass().getName());
 		}
 		ref.add(Helpers.cast(o));
 

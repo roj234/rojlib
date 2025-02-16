@@ -15,7 +15,7 @@ import java.net.InetAddress;
 import java.util.Map;
 import java.util.function.Consumer;
 
-import static roj.reflect.ReflectionUtils.u;
+import static roj.reflect.Unaligned.U;
 
 /**
  * 来源：nginx抓包分析
@@ -68,7 +68,7 @@ public final class fcgiConnection implements ChannelHandler, Consumer<MyChannel>
 			if (!(opened & ctx.isOpen())) return -1;
 		}
 
-		if (!u.compareAndSwapObject(this, OFF, null, resp)) return 0;
+		if (!U.compareAndSwapObject(this, OFF, null, resp)) return 0;
 		abort = -1;
 		abortEx = null;
 
@@ -243,7 +243,7 @@ public final class fcgiConnection implements ChannelHandler, Consumer<MyChannel>
 
 	void requestFinished(fcgiResponse response) {
 		//potential release before setEof()
-		if (u.compareAndSwapObject(this, OFF, response, null)) {
+		if (U.compareAndSwapObject(this, OFF, response, null)) {
 			abort = 0;
 		}
 	}

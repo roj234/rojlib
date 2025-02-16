@@ -32,6 +32,7 @@ final class FileWatcher extends IFileWatcher implements Consumer<WatchKey> {
 		final Project owner;
 		final byte no;
 		final MyHashSet<String> mod = new MyHashSet<>();
+		final MyHashSet<String> del = new MyHashSet<>();
 
 		X(Project owner, WatchKey key, int tag) {
 			this.owner = owner;
@@ -107,8 +108,9 @@ final class FileWatcher extends IFileWatcher implements Consumer<WatchKey> {
 						if (handler.no == ID_SRC && !id.endsWith(".java")) continue;
 
 						synchronized (s) {
-							if (name.equals("ENTRY_DELETE")) s.remove(id);
-							else s.add(id);
+							if (name.equals("ENTRY_DELETE")) {
+								if (!s.remove(id)) handler.del.add(id);
+							} else s.add(id);
 						}
 					}
 				}
@@ -121,10 +123,11 @@ final class FileWatcher extends IFileWatcher implements Consumer<WatchKey> {
 			if (remove != null) {
 				for (X set : remove) {
 					actions.remove(set);
-					FMD.Task.submit(set.key::cancel);
+					FMD.EXECUTOR.submit(set.key::cancel);
 					synchronized (set.mod) {
 						set.mod.clear();
 						set.mod.add(null);
+						set.del.clear();
 					}
 				}
 			}
@@ -151,8 +154,10 @@ final class FileWatcher extends IFileWatcher implements Consumer<WatchKey> {
 	public void add(Project proj) throws IOException {
 		X[] arr = listeners.get(proj.name);
 		if (arr != null) {
-			for (X x : arr)
+			for (X x : arr) {
 				x.mod.clear();
+				x.del.clear();
+			}
 		} else {
 			arr = new X[3];
 			WatchKey key = proj.resPath.toPath().register(watcher, new WatchEvent.Kind<?>[] {ENTRY_CREATE, ENTRY_MODIFY, ENTRY_DELETE, OVERFLOW}, ExtendedWatchEventModifier.FILE_TREE);
@@ -163,6 +168,15 @@ final class FileWatcher extends IFileWatcher implements Consumer<WatchKey> {
 			actions.add(arr[2] = new X(proj, key, ID_LIB));
 
 			listeners.put(proj.name, arr);
+		}
+	}
+
+	@Override
+	public void remove(Project proj) {
+		X[] arr = listeners.remove(proj.name);
+		if (arr != null) {
+			for (X x : arr)
+				x.key.cancel();
 		}
 	}
 }

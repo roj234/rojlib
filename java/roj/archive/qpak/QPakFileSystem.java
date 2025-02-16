@@ -1,5 +1,8 @@
 package roj.archive.qpak;
 
+import org.jetbrains.annotations.ApiStatus;
+import org.jetbrains.annotations.Nullable;
+import roj.archive.MultiFileSource;
 import roj.archive.qz.*;
 import roj.archive.qz.xz.LZMA2Options;
 import roj.collect.IntMap;
@@ -18,7 +21,7 @@ import java.util.function.Predicate;
  * @author Roj234
  * @since 2023/11/4 0004 20:15
  */
-public class QPakFileSystem {
+public class QPakFileSystem implements MultiFileSource {
 	private List<QZArchive> archives;
 	private final IntMap<QZFileWriter> metadataOverride = new IntMap<>();
 	private final MyHashMap<String, QPakPath> files = new MyHashMap<>();
@@ -154,6 +157,7 @@ public class QPakFileSystem {
 		return out;
 	}
 
+	@ApiStatus.Experimental
 	public List<QPakPath> queryPath(QPakPath path, Predicate<String> filter) {
 		if (!path.isDirectory()) return null;
 
@@ -162,9 +166,10 @@ public class QPakFileSystem {
 		int len = pathname.length();
 
 		SimpleList<QPakPath> paths = new SimpleList<>();
+		// Not implemented yet!!
 		for (Map.Entry<String, QPakPath> entry : files.entrySet()) {
 			String name = entry.getKey();
-			if (name.length() > len && name.startsWith(pathname) && name.indexOf('/', len) == -1)
+			if (name.length() > len && name.startsWith(pathname) && name.indexOf('/', len) == -1 && filter.test(entry.getValue().getPath()))
 				paths.add(entry.getValue());
 		}
 
@@ -173,6 +178,8 @@ public class QPakFileSystem {
 			int len1 = alsoReadFrom.getAbsolutePath().length();
 			file.listFiles(f -> {
 				String pa = f.getAbsolutePath().substring(len1).replace(File.separatorChar, '/');
+				if (!filter.test(pa)) return false;
+
 				QPakPath path1 = new QPakPath(this, pa, f);
 				QPakPath prev = files.put(pa, path1);
 
@@ -182,5 +189,11 @@ public class QPakFileSystem {
 			});
 		}
 		return paths;
+	}
+
+	@Override
+	public @Nullable InputStream getStream(String pathname) throws IOException {
+		QPakPath path = getPath(pathname);
+		return path.exists() ? getInputStream(path) : null;
 	}
 }

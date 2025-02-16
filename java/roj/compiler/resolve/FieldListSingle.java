@@ -1,8 +1,8 @@
 package roj.compiler.resolve;
 
 import org.jetbrains.annotations.NotNull;
-import roj.asm.tree.FieldNode;
-import roj.asm.tree.IClass;
+import roj.asm.FieldNode;
+import roj.asm.IClass;
 import roj.compiler.context.LocalContext;
 import roj.text.CharList;
 

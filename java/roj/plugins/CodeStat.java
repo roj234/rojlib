@@ -3,18 +3,18 @@ package roj.plugins;
 import roj.collect.MyHashMap;
 import roj.collect.SimpleList;
 import roj.collect.ToIntMap;
-import roj.concurrent.Liu;
+import roj.concurrent.Flow;
+import roj.gui.GuiUtil;
+import roj.gui.TextAreaPrintStream;
 import roj.io.IOUtil;
 import roj.plugin.Plugin;
 import roj.plugin.SimplePlugin;
 import roj.text.CharList;
 import roj.text.TextReader;
 import roj.text.TextUtil;
-import roj.ui.GuiUtil;
+import roj.ui.Argument;
+import roj.ui.CommandNode;
 import roj.ui.Terminal;
-import roj.ui.TextAreaPrintStream;
-import roj.ui.terminal.Argument;
-import roj.ui.terminal.CommandNode;
 
 import javax.swing.*;
 import java.awt.*;
@@ -46,7 +46,7 @@ public class CodeStat extends Plugin {
 	protected void onEnable() throws Exception {
 		registerCommand(CommandNode.literal("codestat").executes(ctx -> {
 			main(new String[0]);
-		}).then(CommandNode.argument("path", Argument.rest()).executes(ctx -> {
+		}).then(CommandNode.argument("path", Argument.path()).executes(ctx -> {
 			main(new String[] {ctx.argument("path", String.class)});
 		})));
 	}
@@ -94,7 +94,7 @@ public class CodeStat extends Plugin {
 		}
 
 		List<File> files;
-		File f = new File(args.length == 0 ? "projects/implib/java" : args[0]);
+		File f = new File(args.length == 0 ? "projects/rojlib/java" : args[0]);
 		if (!f.isDirectory()) {
 			File[] f1 = GuiUtil.filesLoadFrom("选择文件夹以统计所有子目录(可多选)", null, JFileChooser.DIRECTORIES_ONLY);
 			if (f1 == null) return;
@@ -148,7 +148,7 @@ public class CodeStat extends Plugin {
 		if (inst.totalLines.size() > 1) {
 			printStatistic(inst, "语言按行数", new SimpleList<>(inst.totalLines.selfEntrySet()), 99);
 			printStatistic(inst, "语言按字符数", new SimpleList<>(inst.totalChars.selfEntrySet()), 99);
-			printStatistic(inst, "语言按文件数", Liu.of(inst.lines.entrySet()).map(entry -> new ToIntMap.Entry<>(entry.getKey(), entry.getValue().size())).toList(), 99);
+			printStatistic(inst, "语言按文件数", Flow.of(inst.lines.entrySet()).map(entry -> new ToIntMap.Entry<>(entry.getKey(), entry.getValue().size())).toList(), 99);
 			for (Map.Entry<String, ToIntMap<String>> entry : inst.lines.entrySet()) {
 				printStatistic(inst, "行数Top"+TOP+" - "+entry.getKey(), new SimpleList<>(entry.getValue().selfEntrySet()), TOP);
 			}

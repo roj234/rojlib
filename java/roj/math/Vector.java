@@ -9,178 +9,35 @@ import roj.util.Hasher;
  */
 @SuppressWarnings("fallthrough")
 public abstract class Vector {
-	public abstract Vector newInstance();
+	public abstract Vector copy();
 
-	@Contract(pure = true)
-	public abstract double x();
-	@Contract(pure = true)
-	public abstract double y();
-	@Contract(pure = true)
-	public double z() {
-		return 0;
-	}
-	@Contract(pure = true)
-	public double w() {
-		return 1;
-	}
+	@Contract(pure = true) public abstract double x();
+	@Contract(pure = true) public abstract double y();
+	@Contract(pure = true) public double z() {return 0;}
+	@Contract(pure = true) public double w() {return 1;}
 
 	public abstract void x(double x);
 	public abstract void y(double y);
-	public void z(double z) {
-		throw new UnsupportedOperationException();
-	}
-	public void w(double w) {
-		throw new UnsupportedOperationException();
-	}
-
+	public void z(double z) {throw new UnsupportedOperationException();}
+	public void w(double w) {throw new UnsupportedOperationException();}
 	public abstract int axis();
 
-	public Vector set(Vector v) {
-		checkAxis(v);
-		switch (axis()) {
-			case 4: w(v.w());
-			case 3: z(v.z());
-		}
-		x(v.x());
-		y(v.y());
-		return this;
-	}
-	public final Vector add(Vector v) {
-		checkAxis(v);
-		return add(v, axis());
-	}
-	public final Vector add(Vector v, int axis) {
-		switch (axis) {
-			case 4: w(w()+v.w());
-			case 3: z(z()+v.z());
-		}
-		x(x()+v.x());
-		y(y()+v.y());
-		return this;
-	}
-	public final Vector add(double x, double y) {
-		checkAxis(2);
-		x(x()+x);
-		y(y()+y);
-		return this;
-	}
-	public Vector add(double x, double y, double z) {
-		checkAxis(3);
-		x(x()+x);
-		y(y()+y);
-		z(z()+z);
-		return this;
-	}
-	public final Vector add(double x, double y, double z, double w) {
-		checkAxis(4);
-		x(x()+x);
-		y(y()+y);
-		z(z()+z);
-		w(w()+w);
-		return this;
-	}
-	public final Vector sub(Vector v) {
-		checkAxis(v);
-		return sub(v, axis());
-	}
-	public final Vector sub(Vector v, int axis) {
-		switch (axis) {
-			case 4: w(w()-v.w());
-			case 3: z(z()-v.z());
-		}
-		x(x()-v.x());
-		y(y()-v.y());
-		return this;
-	}
-	public Vector mul(double scalar) {
-		switch (axis()) {
-			case 4: w(w()*scalar);
-			case 3: z(z()*scalar);
-		}
-		x(x()*scalar);
-		y(y()*scalar);
-		return this;
-	}
-	public final Vector mul(Vector v) {
-		checkAxis(v);
-		return mul(axis());
-	}
-	public final Vector mul(Vector v, int axis) {
-		switch (axis) {
-			case 4: w(w()*v.w());
-			case 3: z(z()*v.z());
-		}
-		x(x()*v.x());
-		y(y()*v.y());
-		return this;
-	}
+	public abstract Vector set(Vector v);
+	public abstract Vector add(Vector v);
+	public abstract Vector sub(Vector v);
+	public abstract Vector mul(Vector v);
+	public abstract Vector mul(double scalar);
 
-	public double len() { return Math.sqrt(dot(this, axis())); }
-	public double len(int axis) { return Math.sqrt(dot(this, axis)); }
-	public double len2() { return dot(this, axis()); }
-
+	public final double length() { return Math.sqrt(lengthSquared()); }
 	public final double distance(Vector v) { return Math.sqrt(distanceSq(v)); }
-	public final double distanceSq(Vector v) {
-		double t,d;
+	public abstract double lengthSquared();
+	public abstract double distanceSq(Vector v);
 
-		t = v.x()-x();
-		d = t * t;
-		t = v.y()-y();
-		d += t*t;
+	public abstract double dot(Vector v);
+	public abstract Vector cross(Vector b);
+	public abstract Vector normalize();
 
-		switch (axis()) {
-			case 4:
-				t = v.w()-w();
-				d += t*t;
-			case 3:
-				t = v.z()-z();
-				d += t*t;
-		}
-
-		return d;
-	}
-	public final double angle(Vector v) {
-		checkAxis(v);
-		return dot(v) / Math.sqrt(len2() * v.len2());
-	}
-
-	public Vector normalize() {
-		return normalize(axis());
-	}
-	public final Vector normalize(int axis) {
-		double len = Math.sqrt(dot(this, axis));
-		x(x()/len);
-		y(y()/len);
-		switch (axis) {
-			case 4: w(w()/len);
-			case 3: z(z()/len);
-		}
-		return this;
-	}
-
-	public final double dot(Vector v) {
-		checkAxis(v);
-		return dot(v, axis());
-	}
-	public final double dot(Vector v, int axis) {
-		double d = v.x()*x()+v.y()*y();
-		switch (axis) {
-			case 4: d += v.w()*w();
-			case 3: d += v.z()*z();
-		}
-		return d;
-	}
-	public abstract Vector cross(Vector v);
-	public final double cross2(Vector v) {
-		return x() * v.y() - y() * v.x();
-	}
-
-	private void checkAxis(Vector v) {
-		if (v.axis() != axis()) throw new IllegalArgumentException("Axis are not same");
-	}
-	private void checkAxis(int v) {
-		if (v > axis()) throw new IllegalArgumentException("Axis larger than "+axis());
-	}
+	public final double angle(Vector v) {return dot(v) / Math.sqrt(lengthSquared() * v.lengthSquared());}
 
 	@Override
 	public final boolean equals(Object o) {

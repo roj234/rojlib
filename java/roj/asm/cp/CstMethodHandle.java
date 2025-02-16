@@ -36,7 +36,7 @@ public final class CstMethodHandle extends Constant {
 	}
 
 	public final CstRef getRef() { return (CstRef) ref; }
-	public int getRefIndex() { return ref instanceof Constant ? ((Constant) ref).getIndex() : ((Number) ref).intValue(); }
+	int getRefIndex() { return ref instanceof Constant ? ((Constant) ref).getIndex() : ((Number) ref).intValue(); }
 
 	public void setRef(CstRef ref) {
 		if (ref == null) throw new NullPointerException("ref");

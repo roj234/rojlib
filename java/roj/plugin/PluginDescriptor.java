@@ -44,7 +44,7 @@ public class PluginDescriptor {
 
 	public String getId() { return id; }
 	public Version getVersion() { return version; }
-	public Plugin getInstance() { return instance; }
+	public Plugin instance() { return instance; }
 	public int getState() { return state; }
 	@Nullable
 	public Source getFile() {return source;}

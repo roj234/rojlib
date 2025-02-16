@@ -1,17 +1,13 @@
 package roj.compiler.ast;
 
+import roj.asm.FieldNode;
+import roj.asm.IClass;
+import roj.asm.MethodNode;
 import roj.asm.Opcodes;
+import roj.asm.attr.AnnotationDefault;
+import roj.asm.attr.AttrUnknown;
+import roj.asm.attr.ConstantValue;
 import roj.asm.cp.*;
-import roj.asm.tree.FieldNode;
-import roj.asm.tree.IClass;
-import roj.asm.tree.MethodNode;
-import roj.asm.tree.anno.AnnValDouble;
-import roj.asm.tree.anno.AnnValFloat;
-import roj.asm.tree.anno.AnnValInt;
-import roj.asm.tree.anno.AnnValLong;
-import roj.asm.tree.attr.AnnotationDefault;
-import roj.asm.tree.attr.AttrUnknown;
-import roj.asm.tree.attr.ConstantValue;
 import roj.asm.type.IType;
 import roj.compiler.JavaLexer;
 import roj.compiler.api.MethodDefault;
@@ -24,6 +20,7 @@ import roj.compiler.context.CompileUnit;
 import roj.compiler.context.LocalContext;
 import roj.compiler.diagnostic.Kind;
 import roj.config.ParseException;
+import roj.config.data.CEntry;
 import roj.io.IOUtil;
 
 import java.util.List;
@@ -143,7 +140,7 @@ public interface ParseTask {
 					ctx.setMethod(mp.mn);
 
 					node.write(mp, cast);
-					mp.field(Opcodes.PUTSTATIC, file.name, f.name(), f.rawDesc());
+					mp.field(Opcodes.PUTSTATIC, file.name(), f.name(), f.rawDesc());
 				} else {
 					if ((f.modifier & Opcodes.ACC_FINAL) != 0) {
 						if (!file.finalFields.remove(f)) {
@@ -158,16 +155,20 @@ public interface ParseTask {
 
 					mp.one(Opcodes.ALOAD_0);
 					node.write(mp, cast);
-					mp.field(Opcodes.PUTFIELD, file.name, f.name(), f.rawDesc());
+					mp.field(Opcodes.PUTFIELD, file.name(), f.name(), f.rawDesc());
 				}
 			}
 		};
 	}
 	private static roj.asm.cp.Constant toConstant(Object o) {
-		if (o instanceof AnnValInt a) return new CstInt(a.value);
-		if (o instanceof AnnValFloat a) return new CstFloat(a.value);
-		if (o instanceof AnnValLong a) return new CstLong(a.value);
-		if (o instanceof AnnValDouble a) return new CstDouble(a.value);
+		if (o instanceof CEntry entry) {
+			switch (entry.dataType()) {
+				case 'F': return new CstFloat(entry.asFloat());
+				case 'D': return new CstDouble(entry.asDouble());
+				case 'J': return new CstLong(entry.asLong());
+				case 'I', 'S', 'C', 'B', 'Z': return new CstInt(entry.asInt());
+			}
+		}
 		if (o instanceof String) return new CstString(o.toString());
 		if (o instanceof IType type) return new CstClass(type.rawType().toDesc());
 		throw new UnsupportedOperationException("未预料的常量类型:"+o);
@@ -195,10 +196,10 @@ public interface ParseTask {
 						break autoConstructor;
 					}
 
-					IClass pInfo = ctx.classes.getClassInfo(file.parent);
+					IClass pInfo = ctx.classes.getClassInfo(file.parent());
 					int superInit = pInfo.getMethod("<init>", "()V");
 					if (superInit < 0) {
-						ctx.report(Kind.ERROR, "cu.noDefaultConstructor", file.parent);
+						ctx.report(Kind.ERROR, "cu.noDefaultConstructor", file.parent());
 						break autoConstructor;
 					}
 					if (!ctx.checkAccessible(pInfo, pInfo.methods().get(superInit), false, true)) break autoConstructor;
@@ -206,7 +207,7 @@ public interface ParseTask {
 					var buf = IOUtil.getSharedByteBuf()
 						.put(Opcodes.ALOAD_0)
 						.put(Opcodes.INVOKESPECIAL)
-						.putShort(file.cp.getMethodRefId(file.parent, "<init>", "()V"));
+						.putShort(file.cp.getMethodRefId(file.parent(), "<init>", "()V"));
 					cw.insertBefore(buf);
 					cw.visitSizeMax(1, 0);
 				}

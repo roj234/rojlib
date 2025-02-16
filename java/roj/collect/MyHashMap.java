@@ -4,6 +4,7 @@ import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.NotNull;
 import roj.io.FastFailException;
 import roj.math.MathUtils;
+import roj.text.logging.Logger;
 import roj.util.ArrayUtil;
 import roj.util.Helpers;
 
@@ -508,7 +509,7 @@ public class MyHashMap<K, V> extends AbstractMap<K, V> implements FindMap<K, V>,
 
 	private boolean treeify(K key, int loop) {
 		AbstractEntry<K, V> entry;
-		if (hasher != Hasher.defaul()) new Exception("Custom hasher "+hasher+"(A "+hasher.getClass().getName()+") generate many("+loop+") hash collisions for "+ key.getClass().getName()).printStackTrace();
+		if (hasher != Hasher.defaul()) Logger.FALLBACK.warn("Custom hasher "+hasher+"(A "+hasher.getClass().getName()+") generate many("+loop+") hash collisions for "+ key.getClass().getName(), new Throwable());
 		if (!acceptTreeNode()) return false;
 
 		AbstractEntry<K, V>[] arr = Helpers.cast(new AbstractEntry<?,?>[MathUtils.getMin2PowerOf(loop +1)]);

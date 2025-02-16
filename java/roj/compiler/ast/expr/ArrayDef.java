@@ -3,9 +3,9 @@ package roj.compiler.ast.expr;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import roj.asm.Opcodes;
+import roj.asm.insn.AbstractCodeWriter;
 import roj.asm.type.IType;
 import roj.asm.type.Type;
-import roj.asm.visitor.AbstractCodeWriter;
 import roj.compiler.asm.Asterisk;
 import roj.compiler.asm.MethodWriter;
 import roj.compiler.ast.GeneratorUtil;
@@ -85,7 +85,7 @@ public final class ArrayDef extends ExprNode {
 
 		// useless if sized creation
 		boolean isAllConstant = (flag&1) == 0;
-		IType exprType = isAllConstant ? componentType(type) : Type.std(Type.INT);
+		IType exprType = isAllConstant ? componentType(type) : Type.primitive(Type.INT);
 		casts = new TypeCast.Cast[expr.size()];
 		for (int i = 0; i < expr.size(); i++) {
 			var node = expr.get(i);

@@ -7,11 +7,11 @@ import roj.asm.type.Type;
  * @since 2025/2/3 0003 22:15
  */
 public interface Types {
-	Type OBJECT_TYPE = new Type("java/lang/Object");
-	Type STRING_TYPE = new Type("java/lang/String");
-	Type THROWABLE_TYPE = new Type("java/lang/Throwable");
-	Type VOID_TYPE = new Type("java/lang/Void");
-	Type ITERATOR_TYPE = new Type("java/util/Iterator");
-	Type CHARSEQUENCE_TYPE = new Type("java/lang/CharSequence");
-	Type RUNTIME_EXCEPTION = new Type("java/lang/RuntimeException");
+	Type OBJECT_TYPE = Type.klass("java/lang/Object");
+	Type STRING_TYPE = Type.klass("java/lang/String");
+	Type THROWABLE_TYPE = Type.klass("java/lang/Throwable");
+	Type VOID_TYPE = Type.klass("java/lang/Void");
+	Type ITERATOR_TYPE = Type.klass("java/util/Iterator");
+	Type CHARSEQUENCE_TYPE = Type.klass("java/lang/CharSequence");
+	Type RUNTIME_EXCEPTION = Type.klass("java/lang/RuntimeException");
 }

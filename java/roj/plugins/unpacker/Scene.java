@@ -4,8 +4,8 @@ import roj.collect.TrieTree;
 import roj.io.CorruptedInputException;
 import roj.io.IOUtil;
 import roj.io.MyDataInputStream;
-import roj.io.SourceInputStream;
 import roj.io.source.FileSource;
+import roj.io.source.SourceInputStream;
 import roj.text.TextUtil;
 
 import java.io.File;

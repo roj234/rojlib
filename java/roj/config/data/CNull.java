@@ -31,4 +31,5 @@ public final class CNull extends CEntry {
 	public Object raw() {return null;}
 
 	public CharList toJSON(CharList sb, int depth) {return sb.append("null");}
+	public String toString() {return "null";}
 }

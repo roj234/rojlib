@@ -5,9 +5,9 @@ import roj.concurrent.TaskExecutor;
 import roj.config.data.CEntry;
 import roj.config.data.CMap;
 import roj.config.data.Type;
+import roj.http.IllegalRequestException;
+import roj.http.server.*;
 import roj.io.IOUtil;
-import roj.net.http.IllegalRequestException;
-import roj.net.http.server.*;
 import roj.plugin.PanHttp;
 import roj.plugin.Plugin;
 
@@ -46,7 +46,7 @@ public class PHPPlugin extends Plugin implements Router, Predicate<String> {
 			return;
 		}
 
-		fpm = new Win32FPM(config.getInteger("fcgi_process_stale_max"), config.getInteger("fcgi_process_max"), config.getInteger("fcgi_process_timeout", 600000), args);
+		fpm = new Win32FPM(config.getInt("fcgi_process_stale_max"), config.getInt("fcgi_process_max"), config.getInt("fcgi_process_timeout", 600000), args);
 		fpm.docRoot = document_root.toFile();
 		fpm.portBase = 40000 + (int)System.nanoTime()%20000;
 

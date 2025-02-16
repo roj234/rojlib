@@ -24,7 +24,7 @@ import java.nio.file.StandardOpenOption;
  * @author Roj234
  * @since 2022/12/11 0011 9:12
  */
-public class TextReader extends Reader implements CharSequence, Closeable, Finishable, LinedReader {
+public class TextReader extends Reader implements CharSequence, Closeable, Finishable, LineReader {
 	private char[] buf;
 	private int off, maxOff, len;
 	protected byte eof;
@@ -263,8 +263,8 @@ public class TextReader extends Reader implements CharSequence, Closeable, Finis
 
 	@Override
 	public synchronized void finish() throws IOException {
-		if (lock instanceof DynByteBuf) {
-			((DynByteBuf) lock).close();
+		if (lock != in && lock instanceof DynByteBuf b) {
+			b.close();
 			lock = this;
 		}
 

@@ -10,14 +10,13 @@ import roj.concurrent.Promise;
 import roj.config.ConfigMaster;
 import roj.config.ParseException;
 import roj.config.Tokenizer;
-import roj.config.Word;
 import roj.config.data.CEntry;
 import roj.config.data.CList;
 import roj.config.data.CMap;
 import roj.config.data.Type;
+import roj.http.server.HttpCache;
 import roj.io.IOUtil;
 import roj.math.Version;
-import roj.net.http.server.HttpCache;
 import roj.text.CharList;
 import roj.text.TextUtil;
 import roj.ui.Terminal;
@@ -31,6 +30,7 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 import java.util.function.BiConsumer;
@@ -115,7 +115,7 @@ final class MinecraftClientInfo {
 		String mainClass = mapping.getString("mainClass");
 		if (!mainClass.isEmpty()) this.mainClass = mainClass;
 
-		int ver = mapping.getInteger("minimumLauncherVersion");
+		int ver = mapping.getInt("minimumLauncherVersion");
 		if (ver != 0) this.version = ver;
 
 		if (ver < 18) {
@@ -143,7 +143,7 @@ final class MinecraftClientInfo {
 					if (fitRules(entry.asMap().getList("rules"))) {
 						CEntry argument = entry.asMap().get("value");
 						if (argument.getType() == Type.LIST) {
-							args.addAll((List<String>) argument.asList().rawDeep());
+							args.addAll((List<String>) argument.asList().unwrap());
 						} else {
 							args.add(argument.asString());
 						}
@@ -155,21 +155,12 @@ final class MinecraftClientInfo {
 		return args;
 	}
 	static List<String> tokenize(String argString) {
-		var args = new SimpleList<String>();
-
-		var tokenizer = Tokenizer.arguments().init(argString);
-		while (tokenizer.hasNext()) {
-			Word token;
-			try {
-				token = tokenizer.next();
-			} catch (ParseException e) {
-				LOGGER.warn("无法解析指令 {}: ", e, argString);
-				continue;
-			}
-			if (token.type() < 0) break;
-			args.add(token.val());
+		try {
+			return Tokenizer.arguments().splitToString(argString);
+		} catch (ParseException e) {
+			LOGGER.warn("无法解析指令 {}: ", e, argString);
+			return Collections.emptyList();
 		}
-		return args;
 	}
 
 	private static final int NOT = -1, MAYBE = 0, DEFINITELY = 1;

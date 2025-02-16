@@ -2,7 +2,6 @@ package roj.compiler.ast.expr;
 
 import org.jetbrains.annotations.NotNull;
 import roj.asm.Opcodes;
-import roj.asm.tree.anno.AnnVal;
 import roj.asm.type.IType;
 import roj.asm.type.Type;
 import roj.asm.type.TypeHelper;
@@ -11,6 +10,7 @@ import roj.compiler.asm.MethodWriter;
 import roj.compiler.context.LocalContext;
 import roj.compiler.diagnostic.Kind;
 import roj.compiler.resolve.TypeCast;
+import roj.config.data.CEntry;
 
 /**
  * 操作符 - 获取数组某项
@@ -45,13 +45,13 @@ final class ArrayGet extends VarNode {
 			ctx.report(Kind.ERROR, "arrayGet.error.notArray:"+type);
 			return NaE.RESOLVE_FAILED;
 		}
-		cast = ctx.castTo(index.type(), Type.std(Type.INT), 0);
+		cast = ctx.castTo(index.type(), Type.primitive(Type.INT), 0);
 		componentType = TypeHelper.componentType(type);
 
 		if (array.isConstant()) {
 			if (index.isConstant()) {
 				ctx.report(Kind.WARNING, "arrayGet.warn.constant");
-				return new Constant(type(), ((Object[])array.constVal())[((AnnVal) index.constVal()).asInt()]);
+				return new Constant(type(), ((Object[])array.constVal())[((CEntry) index.constVal()).asInt()]);
 			}
 
 			if (!ctx.in_static) ctx.report(Kind.NOTE, "arrayGet.note.uselessCreation");

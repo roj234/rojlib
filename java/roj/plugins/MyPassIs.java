@@ -8,13 +8,13 @@ import roj.config.data.CByteArray;
 import roj.config.data.CEntry;
 import roj.config.data.CMap;
 import roj.crypt.*;
+import roj.gui.GuiUtil;
 import roj.io.IOUtil;
 import roj.plugin.Plugin;
 import roj.text.CharList;
-import roj.ui.GuiUtil;
+import roj.ui.Argument;
+import roj.ui.CommandConsole;
 import roj.ui.Terminal;
-import roj.ui.terminal.Argument;
-import roj.ui.terminal.CommandConsole;
 import roj.util.ByteList;
 
 import javax.crypto.Cipher;
@@ -27,8 +27,8 @@ import java.security.SecureRandom;
 import java.util.Arrays;
 import java.util.Locale;
 
-import static roj.ui.terminal.CommandNode.argument;
-import static roj.ui.terminal.CommandNode.literal;
+import static roj.ui.CommandNode.argument;
+import static roj.ui.CommandNode.literal;
 
 public class MyPassIs extends Plugin {
 	public static final int MASTER_KEY_LEN = 64;
@@ -195,7 +195,7 @@ public class MyPassIs extends Plugin {
 		} else {
 			CMap m = prev.asMap();
 			charset = buildCharset(m.getString("c"));
-			length = m.getInteger("l");
+			length = m.getInt("l");
 		}
 
 		CMap accounts = prev.asMap().getOrCreateMap("account");
@@ -209,12 +209,12 @@ public class MyPassIs extends Plugin {
 			return;
 		}
 
-		byte[] keys = (byte[]) data.get("key").rawDeep();
-		int iter = accounts.getInteger(account);
+		byte[] keys = (byte[]) data.get("key").unwrap();
+		int iter = accounts.getInt(account);
 
 		while (true) {
 			ByteList b = IOUtil.getSharedByteBuf();
-			if (prev.asMap().getInteger("v") == 2) b.putUTFData(site).put(0);
+			if (prev.asMap().getInt("v") == 2) b.putUTFData(site).put(0);
 
 			byte[] gen_pass = KDF.HKDF_expand(mac, keys, b.putUTFData(account).putInt(iter), length);
 
@@ -240,7 +240,7 @@ public class MyPassIs extends Plugin {
 			}
 			sb.insert(0, "您的密码是[\u001b[;92m(a)ccept\u001b[;0m,\u001b[;91m(c)ancel\u001b[;96m,\u001b[;93m(r)andom\u001b[;0m] > ");
 			Terminal.renderBottomLine(sb, true, Terminal.getStringWidth(sb)+1);
-			char acr = Terminal.readChar(MyBitSet.from("acr"));
+			char acr = Terminal.readChar("acr");
 			Terminal.removeBottomLine(sb);
 			sb._secureFree();
 			switch (acr) {

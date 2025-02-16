@@ -11,14 +11,14 @@
 package roj.archive.qz.xz.lz;
 
 import roj.archive.qz.xz.LZMA2Options;
+import roj.reflect.Unaligned;
 import roj.util.ArrayCache;
 import roj.util.NativeMemory;
-import sun.misc.Unsafe;
 
 import java.io.IOException;
 import java.io.OutputStream;
 
-import static roj.reflect.ReflectionUtils.u;
+import static roj.reflect.Unaligned.U;
 
 public abstract class LZEncoder {
 	public static final int MF_HC4 = 0, MF_BT4 = 1;
@@ -62,9 +62,9 @@ public abstract class LZEncoder {
 
 	static void normalize(long addr, int len, int off) {
 		for (int i = 0; i < len; ++i) {
-			int val = u.getInt(addr)-off;
+			int val = U.getInt(addr)-off;
 			if (val < 0) val = 0;
-			u.putInt(addr, val);
+			U.putInt(addr, val);
 
 			addr += 4;
 		}
@@ -174,7 +174,7 @@ public abstract class LZEncoder {
 		// size, copy only the tail of the preset dictionary.
 		int copySize = Math.min(len, dictSize);
 		long offset = off + len - copySize;
-		u.copyMemory(ref, offset, null, buf, copySize);
+		U.copyMemory(ref, offset, null, buf, copySize);
 		writePos += copySize;
 		skip(copySize);
 	}
@@ -189,7 +189,7 @@ public abstract class LZEncoder {
 		// alignment of the uncompressed data.
 		int moveOffset = (readPos + 1 - keepSizeBefore) & ~15;
 		int moveSize = writePos - moveOffset;
-		u.copyMemory(buf+moveOffset, buf, moveSize);
+		U.copyMemory(buf+moveOffset, buf, moveSize);
 
 		readPos -= moveOffset;
 		readLimit -= moveOffset;
@@ -209,7 +209,7 @@ public abstract class LZEncoder {
 		// some input bytes may be left unused.
 		if (len > bufSize - writePos) len = bufSize - writePos;
 
-		u.copyMemory(in, off, null, buf+writePos, len);
+		U.copyMemory(in, off, null, buf+writePos, len);
 		writePos += len;
 
 		// Set the new readLimit but only if there's enough data to allow
@@ -278,7 +278,7 @@ public abstract class LZEncoder {
 
 	public final void copyUncompressed(OutputStream out, int backward, int len) throws IOException {
 		byte[] arr = ArrayCache.getByteArray(len, false);
-		u.copyMemory(null, buf+readPos+1-backward, arr, Unsafe.ARRAY_BYTE_BASE_OFFSET, len);
+		U.copyMemory(null, buf+readPos+1-backward, arr, Unaligned.ARRAY_BYTE_BASE_OFFSET, len);
 		out.write(arr,0,len);
 		ArrayCache.putArray(arr);
 	}
@@ -310,8 +310,8 @@ public abstract class LZEncoder {
 	 * <p>
 	 * This function is equivalent to <code>getByte(0, backward)</code>.
 	 */
-	public final int getByte(int backward) { return u.getByte(buf+readPos-backward)&0xFF; }
-	public final int getByte(int forward, int backward) { return u.getByte(buf+readPos+forward-backward)&0xFF; }
+	public final int getByte(int backward) { return U.getByte(buf+readPos-backward)&0xFF; }
+	public final int getByte(int forward, int backward) { return U.getByte(buf+readPos+forward-backward)&0xFF; }
 
 	/**
 	 * Get the length of a match at the given distance.
@@ -325,7 +325,7 @@ public abstract class LZEncoder {
 		int backPos = readPos - dist - 1;
 		int len = 0;
 
-		while (len < lenLimit && u.getByte(buf+readPos+len) == u.getByte(buf+backPos+len)) ++len;
+		while (len < lenLimit && U.getByte(buf+readPos+len) == U.getByte(buf+backPos+len)) ++len;
 
 		return len;
 	}
@@ -344,7 +344,7 @@ public abstract class LZEncoder {
 		int backPos = curPos - dist - 1;
 		int len = 0;
 
-		while (len < lenLimit && u.getByte(buf+curPos+len) == u.getByte(buf+backPos+len)) ++len;
+		while (len < lenLimit && U.getByte(buf+curPos+len) == U.getByte(buf+backPos+len)) ++len;
 
 		return len;
 	}

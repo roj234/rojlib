@@ -4,16 +4,16 @@ import roj.io.Finishable;
 import roj.io.IOUtil;
 import roj.io.UnsafeOutputStream;
 import roj.io.buf.BufferPool;
+import roj.reflect.Unaligned;
 import roj.util.ArrayCache;
 import roj.util.ArrayUtil;
 import roj.util.DynByteBuf;
 import roj.util.NativeException;
-import sun.misc.Unsafe;
 
 import java.io.IOException;
 import java.io.OutputStream;
 
-import static roj.reflect.ReflectionUtils.u;
+import static roj.reflect.Unaligned.U;
 
 /**
  * @author Roj234
@@ -54,37 +54,37 @@ class LZMA2WriterN extends OutputStream {
 		//		} LZMA_OPTIONS_NATIVE;
 
 		long addr = nStruct.address();
-		u.putByte(addr, (byte) 6); // compressionLevel
+		U.putByte(addr, (byte) 6); // compressionLevel
 		addr ++;
-		u.putInt(addr, opt.getDictSize()); // dictSize
+		U.putInt(addr, opt.getDictSize()); // dictSize
 		addr += 4;
 
 		if (dict != null) {
-			u.putAddress(addr, nStruct.address()+128); // *presetDict
-			addr += u.addressSize();
-			u.putInt(addr, dict.length); // presetDictLength
+			U.putAddress(addr, nStruct.address()+128); // *presetDict
+			addr += Unaligned.ADDRESS_SIZE;
+			U.putInt(addr, dict.length); // presetDictLength
 		} else {
-			u.putAddress(addr, 0); // *presetDict
-			addr += u.addressSize();
-			u.putInt(addr, 0); // presetDictLength
+			U.putAddress(addr, 0); // *presetDict
+			addr += Unaligned.ADDRESS_SIZE;
+			U.putInt(addr, 0); // presetDictLength
 		}
 		addr += 4;
 
-		u.putByte(addr, (byte) opt.getLc()); // lc
+		U.putByte(addr, (byte) opt.getLc()); // lc
 		addr ++;
-		u.putByte(addr, (byte) opt.getLp()); // lp
+		U.putByte(addr, (byte) opt.getLp()); // lp
 		addr ++;
-		u.putByte(addr, (byte) opt.getPb()); // pb
+		U.putByte(addr, (byte) opt.getPb()); // pb
 		addr ++;
-		u.putByte(addr, (byte) 0); // mode
+		U.putByte(addr, (byte) 0); // mode
 		addr ++;
-		u.putByte(addr, (byte) 0); // mf
+		U.putByte(addr, (byte) 0); // mf
 		addr ++;
-		u.putInt(addr, opt.getNiceLen()); // niceLen
+		U.putInt(addr, opt.getNiceLen()); // niceLen
 		addr += 4;
-		u.putInt(addr, opt.getDepthLimit()); // depthLimit
+		U.putInt(addr, opt.getDepthLimit()); // depthLimit
 		addr += 4;
-		u.putByte(addr, opt.getAsyncMan() == null ? 0 : (byte) opt.getAsyncMan().taskAffinity); // asyncThreads
+		U.putByte(addr, opt.getAsyncMan() == null ? 0 : (byte) opt.getAsyncMan().taskAffinity); // asyncThreads
 
 		try {
 			long l = nInit(nStruct.address());
@@ -97,7 +97,7 @@ class LZMA2WriterN extends OutputStream {
 	public final void write(int b) throws IOException {write(new byte[]{(byte) b}, 0, 1);}
 	public final void write(byte[] buf, int off, int len) throws IOException {
 		ArrayUtil.checkRange(buf, off, len);
-		write0(buf, (long) Unsafe.ARRAY_BYTE_BASE_OFFSET+off, len);
+		write0(buf, (long) Unaligned.ARRAY_BYTE_BASE_OFFSET+off, len);
 	}
 	public final void write(long off, int len) throws IOException { write0(null, off, len); }
 	public final void write0(Object buf, long off, int len) throws IOException {
@@ -105,7 +105,7 @@ class LZMA2WriterN extends OutputStream {
 			while (len > 0) {
 				int w = Math.min(inSize - inOffset, len);
 
-				u.copyMemory(buf, off, null, pIn+NATIVE_STRUCT_SIZE+inOffset, w);
+				U.copyMemory(buf, off, null, pIn+NATIVE_STRUCT_SIZE+inOffset, w);
 
 				long nWrite = nWrite(w);
 				flush0();
@@ -204,7 +204,7 @@ class LZMA2WriterN extends OutputStream {
 			byte[] arr = ArrayCache.getByteArray(Math.min(4096, len), false);
 			while (len > 0) {
 				int copyLen = Math.min(4096, len);
-				u.copyMemory(null, off, arr, Unsafe.ARRAY_BYTE_BASE_OFFSET, copyLen);
+				U.copyMemory(null, off, arr, Unaligned.ARRAY_BYTE_BASE_OFFSET, copyLen);
 				out.write(arr, 0, copyLen);
 
 				len -= copyLen;

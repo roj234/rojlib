@@ -1,6 +1,6 @@
 package roj.util;
 
-import roj.reflect.ReflectionUtils;
+import roj.reflect.Unaligned;
 
 import java.util.Locale;
 
@@ -21,7 +21,7 @@ public enum OS {
 	}
 
 	private static int getArch() {
-		return switch (ReflectionUtils.u.addressSize()) {
+		return switch (Unaligned.ADDRESS_SIZE) {
 			case 4 -> 32;
 			case 8 -> 64;
 			default -> 0;

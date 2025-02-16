@@ -3,7 +3,6 @@ package roj.asmx.mapper;
 import org.jetbrains.annotations.Nullable;
 import roj.asm.type.Desc;
 import roj.asm.util.ClassUtil;
-import roj.asmx.mapper.util.MapperList;
 import roj.collect.*;
 import roj.config.ParseException;
 import roj.config.Tokenizer;
@@ -80,7 +79,7 @@ public class Mapping {
 		}
 	}
 	@SuppressWarnings("fallthrough")
-	public final void loadMap(LinedReader slr, boolean reverse) {
+	public final void loadMap(LineReader slr, boolean reverse) {
 		ArrayList<String> q = new ArrayList<>();
 		String last0 = null, last1 = null;
 		Desc lastMethod = null;

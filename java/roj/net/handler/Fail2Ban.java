@@ -1,12 +1,13 @@
 package roj.net.handler;
 
-import roj.concurrent.task.ITask;
-import roj.concurrent.timing.ScheduleTask;
-import roj.concurrent.timing.Scheduler;
+import roj.concurrent.ITask;
+import roj.concurrent.ScheduleTask;
+import roj.concurrent.Scheduler;
 import roj.net.ChannelCtx;
 import roj.net.ChannelHandler;
 import roj.net.Event;
 import roj.reflect.ReflectionUtils;
+import roj.reflect.Unaligned;
 import roj.text.logging.Logger;
 import roj.util.VMUtil;
 
@@ -33,7 +34,7 @@ public class Fail2Ban implements ChannelHandler, ITask {
 		public Attempt(InetAddress address) {}
 
 		public boolean login() {
-			boolean ok = ReflectionUtils.u.getAndAddInt(this, COUNT_OFFSET, 1) < maxFail;
+			boolean ok = Unaligned.U.getAndAddInt(this, COUNT_OFFSET, 1) < maxFail;
 			if (!ok) forgive = System.currentTimeMillis();
 			return ok;
 		}

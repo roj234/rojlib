@@ -1,7 +1,7 @@
 package roj.compiler.plugins.annotations;
 
 import org.jetbrains.annotations.Nullable;
-import roj.asm.tree.MethodNode;
+import roj.asm.MethodNode;
 import roj.compiler.api.Evaluable;
 import roj.compiler.ast.expr.ExprNode;
 import roj.compiler.ast.expr.Invoke;

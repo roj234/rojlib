@@ -1,7 +1,6 @@
 package roj.crypt;
 
 import roj.reflect.Unaligned;
-import sun.misc.Unsafe;
 
 import java.security.InvalidAlgorithmParameterException;
 import java.security.SecureRandom;
@@ -34,7 +33,7 @@ final class XChaCha extends ChaCha {
 		if (iv.length != 24) throw new InvalidAlgorithmParameterException("iv.length("+iv.length+") != 24");
 		if (keyIv == null) keyIv = new int[14];
 		System.arraycopy(key, 4, keyIv, 0, 8);
-		for (int i = 8; i < 14; i++) keyIv[i] = Unaligned.U.get32UL(iv, Unsafe.ARRAY_BYTE_BASE_OFFSET + ((i&7) << 2));
+		for (int i = 8; i < 14; i++) keyIv[i] = Unaligned.U.get32UL(iv, Unaligned.ARRAY_BYTE_BASE_OFFSET + ((i&7) << 2));
 		doSetIv();
 	}
 

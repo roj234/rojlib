@@ -4,6 +4,7 @@ import roj.util.Helpers;
 
 import java.util.Comparator;
 import java.util.Set;
+import java.util.function.Function;
 import java.util.function.ToIntFunction;
 
 import static roj.collect.IntMap.UNDEFINED;
@@ -61,12 +62,16 @@ public class ToIntMap<K> extends MyHashMap<K, Integer> implements ToIntFunction<
 
 	@Override
 	public final int applyAsInt(K value) { return getOrDefault(value, -1); }
-	public final int getInt(K key) { return getOrDefault(key, 0); }
-	public final int getOrDefault(K key, int def) {
+	public final int getInt(Object key) { return getOrDefault(key, 0); }
+	public final int getOrDefault(Object key, int def) {
 		Entry<K> entry = (Entry<K>) getEntry(key);
 		return entry == null ? def : entry.v;
 	}
 
+	/**
+	 * 增加key计数器i
+	 * 如果需要排序，可以看一下常数时间的实现：{@link LFUCache#increment(Object, Function)}
+	 */
 	public int increment(K key, int i) {
 		Entry<K> entry = (Entry<K>) getOrCreateEntry(key);
 		if (entry.k == UNDEFINED) {

@@ -2,9 +2,9 @@ package roj.text;
 
 import roj.collect.MyBitSet;
 import roj.io.IOUtil;
+import roj.reflect.Unaligned;
 import roj.util.ArrayCache;
 import roj.util.DynByteBuf;
-import sun.misc.Unsafe;
 
 import java.io.Closeable;
 import java.io.IOException;
@@ -69,12 +69,12 @@ public final class CharsetDetector implements IntConsumer, AutoCloseable {
 			bLen += readUpto(b.length - bLen);
 
 			ps = ns = 0;
-			UTF8.CODER.unsafeValidate(b, Unsafe.ARRAY_BYTE_BASE_OFFSET+len, Unsafe.ARRAY_BYTE_BASE_OFFSET+bLen, this);
+			UTF8.CODER.unsafeValidate(b, Unaligned.ARRAY_BYTE_BASE_OFFSET + len, Unaligned.ARRAY_BYTE_BASE_OFFSET + bLen, this);
 			utf8_score += ps - 5*ns;
 			utf8_negate += ns;
 
 			ps = ns = 0;
-			GB18030.CODER.unsafeValidate(b, Unsafe.ARRAY_BYTE_BASE_OFFSET+len, Unsafe.ARRAY_BYTE_BASE_OFFSET+bLen, this);
+			GB18030.CODER.unsafeValidate(b, Unaligned.ARRAY_BYTE_BASE_OFFSET + len, Unaligned.ARRAY_BYTE_BASE_OFFSET + bLen, this);
 			gb18030_score += ps - 5*ns;
 			gb18030_negate += ns;
 

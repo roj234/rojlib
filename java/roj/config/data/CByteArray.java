@@ -32,7 +32,8 @@ public class CByteArray extends CList {
 		this.value = value;
 	}
 
-	public void accept(CVisitor ser) { ser.value(value); }
-	public byte[] rawDeep() { return value; }
+	public byte[] toByteArray() {return value.clone();}
 
+	public void accept(CVisitor ser) { ser.value(value); }
+	public Object unwrap() { return value; }
 }

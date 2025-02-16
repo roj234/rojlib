@@ -1,6 +1,6 @@
 package roj.asm.cp;
 
-import roj.asm.type.TypeHelper;
+import roj.asm.type.Type;
 
 /**
  * @author Roj234
@@ -11,13 +11,10 @@ public final class CstClass extends CstRefUTF {
 	public CstClass(String name) { super(name); }
 	public CstClass() {}
 
-	@Override
-	public byte type() { return Constant.CLASS; }
-	@Override
-	public String getEasyReadValue() {
+	@Override public byte type() {return Constant.CLASS;}
+	@Override public String toString() {
 		String str = name().str();
-		return (str.startsWith("[")?TypeHelper.parseField(str).toString():str).replace('/', '.')+".class";
+		return (str.startsWith("[")?Type.fieldDesc(str).toString():str).replace('/', '.')+".class";
 	}
-	@Override
-	public String getEasyCompareValue() { return name().str(); }
+	@Override public String getEasyCompareValue() { return name().str(); }
 }

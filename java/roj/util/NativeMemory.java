@@ -1,6 +1,7 @@
 package roj.util;
 
 import roj.reflect.Bypass;
+import roj.reflect.Java22Workaround;
 import roj.reflect.ReflectionUtils;
 import roj.text.logging.Logger;
 
@@ -10,13 +11,14 @@ import java.util.Collections;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
-import static roj.reflect.ReflectionUtils.u;
+import static roj.reflect.Unaligned.U;
 
 /**
  * @author Roj233
  * @since 2022/5/31 20:04
  */
 public class NativeMemory {
+	@Java22Workaround
 	private interface H {
 		int pageSize();
 
@@ -166,7 +168,7 @@ public class NativeMemory {
 
 		boolean release() {
 			if (base != 0) {
-				u.freeMemory(base);
+				U.freeMemory(base);
 				hlp.unreserveMemory(length, except);
 				base = 0;
 				return true;
@@ -195,14 +197,14 @@ public class NativeMemory {
 
 			long base;
 			try {
-				base = this.base == 0 ? u.allocateMemory(size) : u.reallocateMemory(this.base, size);
+				base = this.base == 0 ? U.allocateMemory(size) : U.reallocateMemory(this.base, size);
 			} catch (OutOfMemoryError x) {
 				hlp.unreserveMemory(size, except);
 				throw x;
 			}
 
 			if (size > length && clear) {
-				u.setMemory(base + length, cap - length, (byte) 0);
+				U.setMemory(base + length, cap - length, (byte) 0);
 			}
 
 			long addr;

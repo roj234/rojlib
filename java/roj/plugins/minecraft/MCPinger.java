@@ -10,8 +10,8 @@ import roj.plugin.Plugin;
 import roj.plugin.SimplePlugin;
 import roj.text.CharList;
 import roj.text.logging.Logger;
+import roj.ui.Argument;
 import roj.ui.EasyProgressBar;
-import roj.ui.terminal.Argument;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
 
@@ -20,9 +20,9 @@ import java.net.*;
 import java.util.concurrent.Semaphore;
 import java.util.function.Consumer;
 
+import static roj.ui.CommandNode.argument;
+import static roj.ui.CommandNode.literal;
 import static roj.ui.Terminal.MinecraftColor.minecraftJsonStyleToString;
-import static roj.ui.terminal.CommandNode.argument;
-import static roj.ui.terminal.CommandNode.literal;
 
 /**
  * @author Roj234

@@ -1,8 +1,8 @@
 package roj.plugin;
 
+import roj.http.ws.WebSocketHandler;
 import roj.net.ChannelCtx;
-import roj.net.http.ws.WebSocketHandler;
-import roj.text.ACalendar;
+import roj.text.DateParser;
 import roj.text.UTF8;
 import roj.text.logging.Logger;
 import roj.ui.ITerminal;
@@ -10,10 +10,10 @@ import roj.ui.Terminal;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
 
-import java.awt.event.*;
+import java.awt.event.KeyEvent;
 import java.io.IOException;
 
-import static roj.ui.terminal.CommandNode.literal;
+import static roj.ui.CommandNode.literal;
 
 /**
  * @author Roj234
@@ -32,7 +32,7 @@ final class WebTerminal extends WebSocketHandler implements ITerminal {
 		Panger.CMD.onVirtualKey(key -> {
 			if (key == (Terminal.VK_CTRL|KeyEvent.VK_Q)) {
 				timeout = System.currentTimeMillis() + 300000;
-				Terminal.error("Web终端功能关闭至"+ACalendar.toLocalTimeString(timeout));
+				Terminal.error("Web终端功能关闭至"+DateParser.toLocalTimeString(timeout));
 				return false;
 			}
 			if (key == (Terminal.VK_CTRL|KeyEvent.VK_C)) {

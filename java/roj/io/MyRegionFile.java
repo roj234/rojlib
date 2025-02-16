@@ -5,13 +5,14 @@ import roj.collect.MyBitSet;
 import roj.io.buf.BufferPool;
 import roj.io.source.FileSource;
 import roj.io.source.Source;
+import roj.io.source.SourceInputStream;
 import roj.math.MathUtils;
 import roj.reflect.ReflectionUtils;
+import roj.reflect.Unaligned;
 import roj.text.logging.Level;
 import roj.text.logging.Logger;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
-import sun.misc.Unsafe;
 
 import java.io.*;
 import java.util.Arrays;
@@ -22,7 +23,7 @@ import java.util.zip.GZIPInputStream;
 import java.util.zip.GZIPOutputStream;
 import java.util.zip.InflaterInputStream;
 
-import static roj.reflect.ReflectionUtils.u;
+import static roj.reflect.Unaligned.U;
 
 /**
  * @author Roj233
@@ -113,7 +114,7 @@ public class MyRegionFile implements AutoCloseable {
 		ByteList tmp = IOUtil.getSharedByteBuf();
 
 		raf.seek(0L);
-		raf.read(tmp, headerBytes);
+		raf.readFully(tmp, headerBytes);
 
 		for (int i = 0; i < fileCap; ++i) {
 			int n = offsets[i] = tmp.readInt();
@@ -136,7 +137,7 @@ public class MyRegionFile implements AutoCloseable {
 		if (timestamps != null) {
 			tmp.clear();
 			raf.seek(headerBytes);
-			raf.read(tmp, headerBytes);
+			raf.readFully(tmp, headerBytes);
 
 			for (int i = 0; i < fileCap; ++i) {
 				timestamps[i] = tmp.readInt();
@@ -163,7 +164,7 @@ public class MyRegionFile implements AutoCloseable {
 		int off = i >>> 8;
 		int len = i & 255;
 
-		assert off + len < sectorCount;
+		//assert off + len < sectorCount;
 
 		Source src = getUnsharedSource();
 
@@ -190,12 +191,12 @@ public class MyRegionFile implements AutoCloseable {
 	}
 
 	private Source getUnsharedSource() throws IOException {
-		Source src = (Source) u.getAndSetObject(this, FPREAD_OFFSET, null);
+		Source src = (Source) U.getAndSetObject(this, FPREAD_OFFSET, null);
 		if (src == null) src = raf.threadSafeCopy();
 		return src;
 	}
 	private void putUnsharedSource(Source raf) throws IOException {
-		if (!u.compareAndSwapObject(this, FPREAD_OFFSET, null, raf))
+		if (!U.compareAndSwapObject(this, FPREAD_OFFSET, null, raf))
 			raf.close();
 	}
 
@@ -284,7 +285,7 @@ public class MyRegionFile implements AutoCloseable {
 
 	public void delete(int id) throws IOException {
 		if (outOfBounds(id)) return;
-		int i = u.getAndSetInt(offsets, Unsafe.ARRAY_INT_BASE_OFFSET + id, 0);
+		int i = U.getAndSetInt(offsets, Unaligned.ARRAY_INT_BASE_OFFSET + id, 0);
 		if (i == 0) return;
 
 		int off = i >>> 8;

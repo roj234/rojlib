@@ -1,11 +1,10 @@
 package roj.compiler.plugins.annotations;
 
-import roj.asm.Opcodes;
-import roj.asm.tree.*;
-import roj.asm.tree.anno.Annotation;
-import roj.asm.tree.attr.Attribute;
+import roj.asm.*;
+import roj.asm.annotation.Annotation;
+import roj.asm.attr.Attribute;
 import roj.asm.type.Signature;
-import roj.asm.type.TypeHelper;
+import roj.asm.type.Type;
 import roj.collect.MyHashSet;
 import roj.compiler.context.CompileUnit;
 import roj.compiler.context.LocalContext;
@@ -105,14 +104,14 @@ final class ClassStage implements Processor {
 		if ((mn.modifier()&Opcodes.ACC_STATIC) == 0) return;
 		String desc = mn.rawDesc();
 
-		var params = TypeHelper.parseMethod(desc);
+		var params = Type.methodDesc(desc);
 		IClass info = ctx.getClassOrArray(params.get(0));
 		if (info != null) {
 			params.remove(0);
 
-			desc = TypeHelper.getMethod(params);
+			desc = Type.toMethodDesc(params);
 			int idx = info.getMethod(mn.name(), desc);
-			if (idx >= 0 && !annotation.getBoolean("override")) return;
+			if (idx >= 0 && !annotation.getBool("override")) return;
 
 			MethodNode replace = new MethodNode(Opcodes.ACC_PUBLIC, info.name(), annotation.getString("value", mn.name()), desc);
 			replace.putAttr(new AttachedMethod(new MethodNode(mn)));

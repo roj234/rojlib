@@ -6,16 +6,13 @@ import roj.asm.util.Context;
 import roj.asmx.AnnotationRepo;
 import roj.asmx.ITransformer;
 import roj.asmx.event.EventTransformer;
-import roj.asmx.launcher.ClassWrapper;
+import roj.asmx.launcher.Bootstrap;
 import roj.asmx.launcher.DefaultTweaker;
 import roj.config.ConfigMaster;
 import roj.config.ParseException;
 import roj.config.data.CMap;
 import roj.io.IOUtil;
-import roj.text.CharList;
-import roj.ui.ITerminal;
 import roj.ui.NativeVT;
-import roj.ui.Terminal;
 import roj.util.ArrayUtil;
 import roj.util.ByteList;
 import roj.util.Helpers;
@@ -36,7 +33,7 @@ public final class PanTweaker extends DefaultTweaker implements ITransformer {
 	static AnnotationRepo annotations;
 
 	@Override
-	public void init(List<String> args, ClassWrapper loader) {
+	public void init(List<String> args, Bootstrap loader) {
 		File file = new File("plugins/Core/config.yml");
 		try {
 			CONFIG = file.isFile() ? ConfigMaster.YAML.parse(file).asMap() : new CMap();
@@ -78,16 +75,11 @@ public final class PanTweaker extends DefaultTweaker implements ITransformer {
 
 		annotations = repo;
 
-		if (NativeVT.getInstance() == null) {
-			var sout = System.out;
+		if (NativeVT.getInstance() == null && !Boolean.getBoolean("roj.noAnsi")) {
 			System.err.println("[警告]NativeVT不可用，请使用Web终端输入内容，否则可能造成不可预知的问题");
-			RojLib.DATA.put("roj.ui.Terminal.fallback", new ITerminal() {
-				@Override public boolean readBack(boolean sync) {return false;}
-				@Override public void write(CharSequence str) {
-					CharList x = Terminal.stripAnsi(new CharList(str));
-					sout.print(x.toStringAndFree());
-				}
-			});
+			var fallback = new NativeVT.Fallback();
+			RojLib.BLACKBOARD.put("roj.ui.Terminal.fallback", fallback);
+			fallback.start();
 		}
 	}
 

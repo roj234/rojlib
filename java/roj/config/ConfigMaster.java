@@ -179,6 +179,8 @@ public enum ConfigMaster {
 	@SuppressWarnings("unchecked")
 	public void writeObject(Object o, File file) throws IOException { writeObject((Serializer<Object>) SerializerFactory.SAFE.serializer(o.getClass()), o, file); }
 	@SuppressWarnings("unchecked")
+	public void writeObject(Object o, File file, String indent) throws IOException {writeObject((Serializer<Object>) SerializerFactory.SAFE.serializer(o.getClass()), o, file, indent); }
+	@SuppressWarnings("unchecked")
 	public void writeObject(Object o, OutputStream out) throws IOException { writeObject((Serializer<Object>) SerializerFactory.SAFE.serializer(o.getClass()), o, out); }
 	@SuppressWarnings("unchecked")
 	public DynByteBuf writeObject(Object o, DynByteBuf buf) throws IOException { return writeObject((Serializer<Object>) SerializerFactory.SAFE.serializer(o.getClass()), o, buf); }
@@ -188,8 +190,11 @@ public enum ConfigMaster {
 	public <T> void writeObject(Serializer<T> ser, T o, File file) throws IOException { writeObject0(ser, o, file, ""); }
 	public <T> void writeObject(Serializer<T> ser, T o, File file, String indent) throws IOException { writeObject0(ser, o, file, indent); }
 	public <T> void writeObject(Serializer<T> ser, T o, OutputStream out) throws IOException { writeObject0(ser, o, out, ""); }
+	public <T> void writeObject(Serializer<T> ser, T o, OutputStream out, String indent) throws IOException { writeObject0(ser, o, out, indent); }
 	public <T> DynByteBuf writeObject(Serializer<T> ser, T o, DynByteBuf buf) throws IOException { writeObject0(ser, o, buf, ""); return buf; }
+	public <T> DynByteBuf writeObject(Serializer<T> ser, T o, DynByteBuf buf, String indent) throws IOException { writeObject0(ser, o, buf, indent); return buf; }
 	public <T> CharList writeObject(Serializer<T> ser, T o, CharList sb) { ser.write(textSerializer(sb, ""), o); return sb; }
+	public <T> CharList writeObject(Serializer<T> ser, T o, CharList sb, String indent) { ser.write(textSerializer(sb, indent), o); return sb; }
 
 	private <T> void writeObject0(Serializer<T> ser, T o, Object out, String indent) throws IOException {
 		if (hasSerializer()) {

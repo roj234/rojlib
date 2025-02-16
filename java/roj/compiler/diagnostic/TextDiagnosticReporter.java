@@ -57,9 +57,10 @@ public class TextDiagnosticReporter implements Consumer<Diagnostic> {
 			sb.append(' ');
 		}
 
-		sb.append(getErrorType(diag.getKind())).append(':').append(' ').append(diag.getMessage(Locale.CHINA)).append('\n');
+		sb.append(getErrorType(diag.getKind())).append(':').append(' ').append(diag.getMessage(Locale.CHINA));
 
 		if (diag.getLine() != null) {
+			sb.append('\n');
 			String line = diag.getLine();
 
 			if (diag.getLength() > 0) {
@@ -75,7 +76,6 @@ public class TextDiagnosticReporter implements Consumer<Diagnostic> {
 					AnsiString as = new AnsiString(line.substring(diag.getColumnNumber()));
 					as.bgColorRGB(0xff3333).append(new AnsiString("").clear()).writeAnsi(sb);
 				}
-				sb.append('\n');
 			} else {
 				sb.append(line).append('\n');
 
@@ -83,11 +83,11 @@ public class TextDiagnosticReporter implements Consumer<Diagnostic> {
 				for (int i = 0; i < diag.getColumnNumber(); i++) {
 					realWidth += Terminal.getCharWidth(line.charAt(i));
 				}
-				sb.padEnd(' ', realWidth).append('^').append('\n');
+				sb.padEnd(' ', realWidth).append('^');
 			}
 		}
 
-		System.err.print(sb);
+		System.err.println(sb);
 		StackTraceElement[] trace = new Throwable().getStackTrace();
 		for (int i = 2; i < trace.length; i++) {
 			String name = trace[i].getMethodName();

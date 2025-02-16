@@ -3,7 +3,7 @@ package roj.archive.zip;
 import org.jetbrains.annotations.NotNull;
 import roj.crypt.CipherInputStream;
 import roj.io.IOUtil;
-import roj.io.SourceInputStream;
+import roj.io.source.SourceInputStream;
 
 import java.io.IOException;
 import java.io.InputStream;

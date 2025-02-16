@@ -61,6 +61,7 @@ public class Workspace {
 			m = new Mapper(getMapper());
 			m.reverseSelf();
 			m.loadLibraries(unmappedDepend);
+			m.flag = 0;
 			m.packup();
 			invMapper = m;
 		}
@@ -115,14 +116,13 @@ public class Workspace {
 
 			var event = new ProjectUpdateEvent(p, module_workspace);
 
-
+			FMD.EVENT_BUS.post(event);
 			for (File file : workspace.mappedDepend) {
 				event.add(file.getName());
 			}
 			for (File file : workspace.depend) {
 				event.add(file.getName());
 			}
-			FMD.EVENT_BUS.post(event);
 
 			CharList sb;
 			File f = new File(FMD.DATA_PATH, "template.iml");

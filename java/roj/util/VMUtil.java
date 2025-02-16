@@ -2,6 +2,7 @@ package roj.util;
 
 import roj.io.IOUtil;
 import roj.reflect.ReflectionUtils;
+import roj.reflect.Unaligned;
 
 /**
  * @author Roj234
@@ -19,9 +20,9 @@ public class VMUtil {
 			throw new RuntimeException(e);
 		}
 	}
+	public static boolean isShutdownInProgress() {return Unaligned.U.getObject(Hooks_Instance, Hooks_Offset) == null;}
 
 	private static Boolean isRoot;
-
 	public static synchronized Boolean isRoot() {
 		if (isRoot == null) {
 			try {
@@ -39,8 +40,6 @@ public class VMUtil {
 		}
 		return isRoot;
 	}
-
-	public static boolean isShutdown() {return ReflectionUtils.u.getObject(Hooks_Instance, Hooks_Offset) == null;}
 
 	public static long usableMemory() { Runtime r = Runtime.getRuntime(); return r.maxMemory() - r.totalMemory() + r.freeMemory(); }
 }

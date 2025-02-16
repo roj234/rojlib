@@ -1,7 +1,7 @@
 package roj.plugins.bkcrack;
 
 import roj.collect.IntMap;
-import roj.concurrent.task.ITask;
+import roj.concurrent.ITask;
 import roj.io.FastFailException;
 
 /**

@@ -8,7 +8,7 @@ import java.io.IOException;
 import java.nio.charset.Charset;
 import java.util.function.IntConsumer;
 
-import static roj.reflect.ReflectionUtils.u;
+import static roj.reflect.Unaligned.U;
 
 /**
  * @author Roj234
@@ -68,7 +68,7 @@ public final class GB18030 extends UnsafeCharset {
 			i++;
 			outMax--;
 
-			u.putByte(ref, addr++, (byte) c);
+			U.putByte(ref, addr++, (byte) c);
 		}
 
 		while (i < end) {
@@ -80,7 +80,7 @@ public final class GB18030 extends UnsafeCharset {
 				i++;
 				outMax--;
 
-				u.putByte(ref, addr++, (byte) c);
+				U.putByte(ref, addr++, (byte) c);
 				continue;
 			}
 
@@ -105,20 +105,20 @@ public final class GB18030 extends UnsafeCharset {
 				if (outMax < 2) break;
 				outMax -= 2;
 
-				u.putByte(ref, addr++, (byte) (129 + (cp / 191)));
-				u.putByte(ref, addr++, (byte) (cp % 191 + 64));
+				U.putByte(ref, addr++, (byte) (129 + (cp / 191)));
+				U.putByte(ref, addr++, (byte) (cp % 191 + 64));
 			} else { // four bytes
 				if (outMax < 4) break;
 				outMax -= 4;
 
 				cp -= TAB2;
 
-				u.putByte(ref, addr++, (byte) (129 + cp / 12600));
+				U.putByte(ref, addr++, (byte) (129 + cp / 12600));
 				cp %= 12600;
-				u.putByte(ref, addr++, (byte) (48 + cp / 1260));
+				U.putByte(ref, addr++, (byte) (48 + cp / 1260));
 				cp %= 1260;
-				u.putByte(ref, addr++, (byte) (129 + cp / 10));
-				u.putByte(ref, addr++, (byte) (48 + cp % 10));
+				U.putByte(ref, addr++, (byte) (129 + cp / 10));
+				U.putByte(ref, addr++, (byte) (48 + cp % 10));
 			}
 			i += sum;
 		}
@@ -134,7 +134,7 @@ public final class GB18030 extends UnsafeCharset {
 
 		int c;
 		while (i < max && off < outMax) {
-			c = u.getByte(ref, i);
+			c = U.getByte(ref, i);
 			if (c < 0) break;
 			i++;
 			out[off++] = (char) c;
@@ -142,7 +142,7 @@ public final class GB18030 extends UnsafeCharset {
 
 		malformed: {
 		while (i < max && off < outMax) {
-			c = u.getByte(ref,i++);
+			c = U.getByte(ref,i++);
 			// US_ASCII
 			if (c >= 0) {
 				out[off++] = (char) c;
@@ -161,7 +161,7 @@ public final class GB18030 extends UnsafeCharset {
 				break;
 			}
 
-			int c2 = u.getByte(ref,i++) & 255;
+			int c2 = U.getByte(ref,i++) & 255;
 			if (c2 <= 57) {
 				if (c2 < 48) { i--; break malformed; }
 
@@ -170,8 +170,8 @@ public final class GB18030 extends UnsafeCharset {
 					break;
 				}
 
-				int c3 = u.getByte(ref,i++) & 255;
-				int c4 = u.getByte(ref,i++) & 255;
+				int c3 = U.getByte(ref,i++) & 255;
+				int c4 = U.getByte(ref,i++) & 255;
 
 				if (c3 == 128 || c3 == 255 || c4 < 48 || c4 > 57) { i -= 3; break malformed; }
 
@@ -217,7 +217,7 @@ public final class GB18030 extends UnsafeCharset {
 		int c;
 
 		while (i < max) {
-			c = u.getByte(ref,i++);
+			c = U.getByte(ref,i++);
 			// US_ASCII
 			if (c >= 0) {
 				cs.accept(c);
@@ -236,7 +236,7 @@ public final class GB18030 extends UnsafeCharset {
 				break;
 			}
 
-			int c2 = u.getByte(ref,i++) & 255;
+			int c2 = U.getByte(ref,i++) & 255;
 			if (c2 < 48) {
 				cs.accept(MALFORMED - 2);
 				i -= 1;
@@ -249,14 +249,14 @@ public final class GB18030 extends UnsafeCharset {
 					break;
 				}
 
-				int c3 = u.getByte(ref,i++) & 255;
+				int c3 = U.getByte(ref,i++) & 255;
 				if (c3 == 128 || c3 == 255) {
 					cs.accept(MALFORMED - 4);
 					i -= 2;
 					continue;
 				}
 
-				int c4 = u.getByte(ref,i++) & 255;
+				int c4 = U.getByte(ref,i++) & 255;
 				if (c4 < 48 || c4 > 57) {
 					cs.accept(MALFORMED - 4);
 					i -= 3;

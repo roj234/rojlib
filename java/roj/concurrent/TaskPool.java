@@ -5,20 +5,20 @@ import roj.collect.IntMap;
 import roj.collect.MyHashSet;
 import roj.collect.RingBuffer;
 import roj.collect.SimpleList;
-import roj.concurrent.task.AsyncTask;
-import roj.concurrent.task.ITask;
 import roj.reflect.ReflectionUtils;
 import roj.text.logging.Logger;
 
 import java.util.List;
-import java.util.Objects;
-import java.util.concurrent.*;
+import java.util.concurrent.LinkedTransferQueue;
+import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TransferQueue;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.LockSupport;
 import java.util.concurrent.locks.ReentrantLock;
 
-import static roj.reflect.ReflectionUtils.u;
+import static roj.reflect.Unaligned.U;
 
 public class TaskPool implements TaskHandler {
 	@FunctionalInterface
@@ -78,7 +78,7 @@ public class TaskPool implements TaskHandler {
 
 	public static TaskPool Common() { return CommonHolder.P; }
 	private static final class CommonHolder {
-		static final TaskPool P = new TaskPool(1, Integer.getInteger("roj.cpuPoolSize", Runtime.getRuntime().availableProcessors()), 0, 60000, "Cpu任务-");
+		static final TaskPool P = new TaskPool(1, Integer.getInteger("roj.cpuPoolSize", Runtime.getRuntime().availableProcessors()), 0, 60000, "RojLib 线程池 #");
 	}
 
 	public static TaskPool MaxThread(int threadCount, String prefix) { return MaxThread(threadCount, namedPrefixFactory(prefix)); }
@@ -140,12 +140,12 @@ public class TaskPool implements TaskHandler {
 			if (task == null) {
 				int r = running;
 				if (r < 0) {// shutdown
-					if (u.getAndAddInt(this, RUNNING_OFFSET, 1) == -2) {
+					if (U.getAndAddInt(this, RUNNING_OFFSET, 1) == -2) {
 						synchronized (threads) {threads.notifyAll();}
 					}
 					return null;
 				} else if (r > core && timeout && System.currentTimeMillis() - prevStop >= idleTime) {// idle timeout
-					if (u.compareAndSwapInt(this, RUNNING_OFFSET, r, r-1)) {
+					if (U.compareAndSwapInt(this, RUNNING_OFFSET, r, r-1)) {
 						prevStop = System.currentTimeMillis();
 						return null;
 					}
@@ -171,7 +171,7 @@ public class TaskPool implements TaskHandler {
 	private void newWorker() {
 		int r = running;
 		if (r < 0) throw new RejectedExecutionException(this+" was shutdown.");
-		if (u.compareAndSwapInt(this, RUNNING_OFFSET, r, r+1)) {
+		if (U.compareAndSwapInt(this, RUNNING_OFFSET, r, r+1)) {
 			prevStop = System.currentTimeMillis();
 
 			var t = factory.get(this);
@@ -194,7 +194,7 @@ public class TaskPool implements TaskHandler {
 		do {
 			r = running;
 			if (r < 0) return;
-		} while (!u.compareAndSwapInt(this, RUNNING_OFFSET, r, -r-1));
+		} while (!U.compareAndSwapInt(this, RUNNING_OFFSET, r, -r-1));
 
 		synchronized (this) {notifyAll();}
 	}
@@ -241,12 +241,6 @@ public class TaskPool implements TaskHandler {
 			if (tasks.isEmpty() && fastPath.getWaitingConsumerCount() == running) break;
 			LockSupport.parkNanos(1_000_000L);
 		}
-	}
-
-	public <T> Future<T> submit(Callable<T> task) {
-		var ftask = new AsyncTask<>(Objects.requireNonNull(task));
-		submit(ftask);
-		return ftask;
 	}
 
 	public int taskPending() {

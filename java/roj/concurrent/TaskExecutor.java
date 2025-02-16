@@ -1,6 +1,5 @@
 package roj.concurrent;
 
-import roj.concurrent.task.ITask;
 import roj.reflect.ReflectionUtils;
 import roj.util.ArrayUtil;
 
@@ -9,7 +8,7 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.locks.LockSupport;
 
-import static roj.reflect.ReflectionUtils.u;
+import static roj.reflect.Unaligned.U;
 
 public class TaskExecutor extends FastLocalThread implements TaskHandler {
 	ConcurrentLinkedQueue<ITask> tasks = new ConcurrentLinkedQueue<>();
@@ -56,7 +55,7 @@ public class TaskExecutor extends FastLocalThread implements TaskHandler {
 	}
 	@Override
 	public void shutdown() {
-		if (u.compareAndSwapInt(this, STATE_OFFSET, 0, 1))
+		if (U.compareAndSwapInt(this, STATE_OFFSET, 0, 1))
 			LockSupport.unpark(this);
 	}
 	@Override

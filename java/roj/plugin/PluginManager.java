@@ -1,5 +1,7 @@
 package roj.plugin;
 
+import org.jetbrains.annotations.Contract;
+import org.jetbrains.annotations.Nullable;
 import roj.archive.zip.ZipFile;
 import roj.collect.SimpleList;
 import roj.collect.TrieTreeSet;
@@ -28,6 +30,7 @@ public class PluginManager {
 	static final Logger LOGGER = Logger.getLogger("Panger");
 	static final XHashSet.Shape<String, PluginDescriptor> PM_SHAPE = XHashSet.noCreation(PluginDescriptor.class, "id");
 	final XHashSet<String, PluginDescriptor> plugins = PM_SHAPE.create();
+	boolean stopping;
 
 	private final ClassLoader env = getClass().getClassLoader();
 	private final File pluginFolder;
@@ -85,6 +88,8 @@ public class PluginManager {
 
 	public static final int UNLOAD = 0, LOADING = 1, ERRORED = 2, LOADED = 3, ENABLED = 4, DISABLED = 5;
 	final void loadPlugin(PluginDescriptor pd) {
+		if (stopping) throw new FastFailException("系统正在关闭");
+
 		switch (pd.state) {
 			default: return;
 			case ERRORED: throw new IllegalStateException("插件加载失败");
@@ -240,8 +245,19 @@ public class PluginManager {
 		}
 	}
 
+	//public PluginDescriptor getPluginOfType(String typeId) { return null; }
+	@Nullable
+	@Contract(pure = true)
 	public PluginDescriptor getPlugin(String id) { return plugins.get(id); }
+	@Nullable
+	@Contract(pure = true)
+	public Plugin getPluginInstance(String id) {
+		var pd = plugins.get(id);
+		return pd == null ? null : pd.instance;
+	}
 	public void enablePlugin(PluginDescriptor pd) throws Exception {
+		if (stopping) throw new FastFailException("系统正在关闭");
+
 		for (String s : pd.depend) {
 			var dep = plugins.get(s);
 			try {

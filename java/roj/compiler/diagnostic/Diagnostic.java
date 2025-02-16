@@ -1,7 +1,7 @@
 package roj.compiler.diagnostic;
 
 import org.jetbrains.annotations.Nls;
-import roj.asm.tree.IClass;
+import roj.asm.IClass;
 import roj.compiler.JavaLexer;
 import roj.compiler.context.CompileUnit;
 import roj.math.MathUtils;

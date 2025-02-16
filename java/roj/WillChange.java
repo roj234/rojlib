@@ -12,4 +12,6 @@ import java.lang.annotation.Target;
  */
 @Retention(RetentionPolicy.CLASS)
 @Target(ElementType.PARAMETER)
-public @interface WillChange {}
+public @interface WillChange {
+	String value() default "";
+}

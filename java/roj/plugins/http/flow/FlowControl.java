@@ -4,13 +4,10 @@ import roj.collect.Hasher;
 import roj.collect.LFUCache;
 import roj.collect.MyHashMap;
 import roj.config.auto.SerializerFactory;
-import roj.net.http.IllegalRequestException;
-import roj.net.http.server.Request;
-import roj.plugin.Panger;
-import roj.plugin.Plugin;
-import roj.plugin.PluginManager;
-import roj.plugin.SimplePlugin;
+import roj.http.server.Request;
+import roj.plugin.*;
 import roj.plugins.http.sso.SSOPlugin;
+import roj.util.TypedKey;
 
 import java.net.InetSocketAddress;
 import java.util.Arrays;
@@ -25,8 +22,8 @@ import java.util.function.Function;
  */
 @SimplePlugin(id = "flowControl", loadAfter = "EasySSO")
 public class FlowControl extends Plugin {
-	LFUCache<byte[], FlowController> addressLimiters = new LFUCache<>(32767,1);
-	LFUCache<String, FlowController> groupLimiters = new LFUCache<>(4096,1);
+	LFUCache<byte[], FlowController> addressLimiters = new LFUCache<>(32767);
+	LFUCache<String, FlowController> groupLimiters = new LFUCache<>(4096);
 
 	public FlowControl() {
 		addressLimiters.setHasher(Hasher.array(byte[].class));
@@ -87,31 +84,28 @@ public class FlowControl extends Plugin {
 
 		if (!hasEasySSO) return fc;
 
-		var sso = (SSOPlugin)getPluginManager().getPlugin("EasySSO").getInstance();
-		try {
-			var user = sso.authorizeExternal(request);
-			if (user != null) {
-				var group = user.groupInst.name;
-				var id = user.name+'\1'+group;
+		var sso = (SSOPlugin)getPluginManager().getPluginInstance("EasySSO");
+		var user = sso.ipc(new TypedKey<PermissionHolder>("getUser"), request);
+		if (user != null) {
+			var group = user.getGroupName();
+			var id = user.getName()+'\1'+group;
 
-				fc = groupLimiters.get(id);
-				if (fc == null) {
-					synchronized (groupLimiters) {
-						var info = limitGroup.get(group);
-						if (info == null) {
-							getLogger().warn("未找到组{}的流量控制定义", group);
-							info = guestGroup;
-						}
-
-						fc = createLimiter(info);
-						var fc1 = groupLimiters.putIfAbsent(id, fc);
-						if (fc1 != null) fc = fc1;
+			fc = groupLimiters.get(id);
+			if (fc == null) {
+				synchronized (groupLimiters) {
+					var info = limitGroup.get(group);
+					if (info == null) {
+						getLogger().warn("未找到组{}的流量控制定义", group);
+						info = guestGroup;
 					}
-				}
 
-				return fc;
+					fc = createLimiter(info);
+					var fc1 = groupLimiters.putIfAbsent(id, fc);
+					if (fc1 != null) fc = fc1;
+				}
 			}
-		} catch (IllegalRequestException e) {
+
+			return fc;
 		}
 
 		return fc;

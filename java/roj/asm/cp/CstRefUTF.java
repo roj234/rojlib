@@ -22,7 +22,7 @@ public abstract class CstRefUTF extends Constant {
 	@Override
 	public final void write(DynByteBuf w) {w.put(type()).putShort(value.getIndex());}
 
-	public final String toString() {return super.toString() + " 引用["+value.getIndex()+"] " + value.str();}
+	public String toString() {return super.toString() + " 引用["+value.getIndex()+"] " + value.str();}
 
 	public final int hashCode() {return 31 * value.hashCode() + type();}
 	public final boolean equals(Object o) {return o instanceof CstRefUTF && equals0((CstRefUTF) o);}

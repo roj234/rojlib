@@ -1,7 +1,7 @@
 package roj.plugins.http.template;
 
-import roj.net.http.server.Request;
-import roj.net.http.server.ResponseHeader;
+import roj.http.server.Request;
+import roj.http.server.ResponseHeader;
 import roj.text.CharList;
 
 /**

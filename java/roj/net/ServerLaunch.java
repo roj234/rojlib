@@ -14,7 +14,7 @@ import java.util.function.Consumer;
  * @since 2022/10/11 0011 18:16
  */
 public abstract class ServerLaunch implements Closeable {
-	public static final SelectorLoop DEFAULT_LOOPER = new SelectorLoop("NIO请求池", 0, 4, 60000, 127);
+	public static final SelectorLoop DEFAULT_LOOPER = new SelectorLoop("RojLib 网络", 0, 4, 60000, 127);
 
 	public static final SocketOption<Integer> TCP_RECEIVE_BUFFER = new MyOption<>("TCP_RECEIVE_BUFFER", Integer.class);
 	public static final SocketOption<Integer> TCP_MAX_CONNECTION = new MyOption<>("TCP_MAX_CONNECTION", Integer.class);
@@ -46,7 +46,11 @@ public abstract class ServerLaunch implements Closeable {
 		@Override public ServerLaunch launch() {return this;}
 		@Override public boolean isOpen() {return true;}
 		@Override public void close() {SHARED.remove(name, this);}
-		@Override public void addTCPConnection(MyChannel channel) {initializator.accept(channel);}
+		@Override public void addTCPConnection(MyChannel channel) throws IOException {
+			initializator.accept(channel);
+			channel.fireOpen();
+			channel.readActive();
+		}
 	}
 
 	public abstract <T> ServerLaunch option(SocketOption<T> k, T v) throws IOException;

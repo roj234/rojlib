@@ -2,8 +2,8 @@ package roj.archive.qz;
 
 import roj.archive.CRC32InputStream;
 import roj.io.LimitInputStream;
-import roj.io.SourceInputStream;
 import roj.io.source.Source;
+import roj.io.source.SourceInputStream;
 import roj.reflect.ReflectionUtils;
 
 import java.io.Closeable;
@@ -11,7 +11,7 @@ import java.io.EOFException;
 import java.io.IOException;
 import java.io.InputStream;
 
-import static roj.reflect.ReflectionUtils.u;
+import static roj.reflect.Unaligned.U;
 
 /**
  * @author Roj233
@@ -88,8 +88,7 @@ public abstract class QZReader implements Closeable {
 		}
 
 		LimitInputStream fin = new LimitInputStream(in, file.uSize);
-		if ((file.flag&QZEntry.CRC) != 0) return new CRC32InputStream(fin, file.crc32);
-		return null;
+		return (file.flag & QZEntry.CRC) != 0 ? new CRC32InputStream(fin, file.crc32) : fin;
 	}
 
 	final void closeSolidStream() throws IOException {
@@ -102,7 +101,7 @@ public abstract class QZReader implements Closeable {
 	}
 
 	final InputStream getSolidStream(WordBlock b, byte[] pass, boolean verify) throws IOException {
-		Source src = (Source) u.getAndSetObject(this, FPREAD_OFFSET, null);
+		Source src = (Source) U.getAndSetObject(this, FPREAD_OFFSET, null);
 		if (src == null) src = r.threadSafeCopy();
 		return getSolidStream1(b, pass, src, this, verify);
 	}

@@ -1,15 +1,14 @@
 package roj.compiler.ast.expr;
 
 import roj.WillChange;
+import roj.asm.IClass;
+import roj.asm.MethodNode;
 import roj.asm.Opcodes;
-import roj.asm.tree.IClass;
-import roj.asm.tree.MethodNode;
-import roj.asm.tree.anno.Annotation;
+import roj.asm.annotation.Annotation;
+import roj.asm.insn.Label;
 import roj.asm.type.Generic;
 import roj.asm.type.IType;
 import roj.asm.type.Type;
-import roj.asm.type.TypeHelper;
-import roj.asm.visitor.Label;
 import roj.collect.IntMap;
 import roj.collect.SimpleList;
 import roj.collect.ToIntMap;
@@ -66,7 +65,7 @@ public final class Invoke extends ExprNode {
 	public static Invoke constructor(MethodNode node, @WillChange ExprNode... args) {return constructor(node, Arrays.asList(args));}
 	public static Invoke constructor(MethodNode node, @WillChange List<ExprNode> args) {
 		if (!node.name().equals("<init>")) throw new IllegalArgumentException("调用的不是构造函数");
-		return invoke(node, new Type(node.owner), args, 0);
+		return invoke(node, Type.klass(node.owner), args, 0);
 	}
 
 	static Invoke invoke(MethodNode method, Object fn, List<ExprNode> args, int flag) {
@@ -74,7 +73,7 @@ public final class Invoke extends ExprNode {
 		node.flag = (byte) flag;
 		if (method != null) {
 			node.methodNode = method;
-			node.desc = Helpers.cast(TypeHelper.parseMethod(method.rawDesc()));
+			node.desc = Helpers.cast(Type.methodDesc(method.rawDesc()));
 			node.flag |= RESOLVED;
 			// 不可能在生成的代码中出现，仅供插件使用
 			if ((method.modifier&ACC_INTERFACE) != 0) node.flag |= INTERFACE_CLASS;
@@ -177,7 +176,7 @@ public final class Invoke extends ExprNode {
 						if (type != null) {
 							// 构造器
 							method = "<init>";
-							fn = new Type(type.name());
+							fn = Type.klass(type.name());
 							break block;
 						}
 					}
@@ -324,7 +323,7 @@ public final class Invoke extends ExprNode {
 				// 数组的clone方法的特殊处理
 				desc = Collections.singletonList(Asterisk.genericReturn(ownMirror, Types.OBJECT_TYPE));
 			} else {
-				desc = r.desc != null ? Arrays.asList(r.desc) : Helpers.cast(TypeHelper.parseMethod(mn.rawDesc()));
+				desc = r.desc != null ? Arrays.asList(r.desc) : Helpers.cast(Type.methodDesc(mn.rawDesc()));
 			}
 
 			if ((mn.modifier&Opcodes.ACC_STATIC) != 0) {
@@ -422,7 +421,7 @@ public final class Invoke extends ExprNode {
 		Annotation tailrec;
 		// static，private，final或者@Tailrec(true)
 		if ((tailrec = ctx.getAnnotation(ctx.file, mn, "roj/compiler/api/Tailrec", false)) != null
-			? tailrec.getBoolean("value", true)
+			? tailrec.getBool("value", true)
 			: (mn.modifier&(ACC_STATIC|ACC_PRIVATE|ACC_FINAL)) != 0
 		) {
 			int slot = (mn.modifier&ACC_STATIC) != 0 ? 0 : 1;
@@ -463,7 +462,7 @@ public final class Invoke extends ExprNode {
 			}
 			opcode = Opcodes.INVOKESTATIC;
 		} else if (fn instanceof ExprNode expr) {
-			var cast = genType1 == null || genType1.genericType() >= IType.ASTERISK_TYPE ? null : lc.castTo(genType1, new Type(methodNode.owner), 0);
+			var cast = genType1 == null || genType1.genericType() >= IType.ASTERISK_TYPE ? null : lc.castTo(genType1, Type.klass(methodNode.owner), 0);
 
 			int v = 0;
 			if (expr instanceof DotGet dg && (v = dg.isNullish()) != 0) {
@@ -509,7 +508,7 @@ public final class Invoke extends ExprNode {
 		// pop or pop2
 		if (!methodNode.rawDesc().endsWith(")V") && noRet) cw.one((byte) (0x56 + methodNode.returnType().length()));
 
-		if (isSet) DotGet.writeNullishTarget(cw, ifNull, noRet ? Type.std(Type.VOID) : methodNode.returnType());
+		if (isSet) DotGet.writeNullishTarget(cw, ifNull, noRet ? Type.primitive(Type.VOID) : methodNode.returnType());
 	}
 
 	@Override

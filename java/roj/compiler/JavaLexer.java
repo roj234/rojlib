@@ -1,6 +1,6 @@
 package roj.compiler;
 
-import roj.asm.tree.attr.LineNumberTable;
+import roj.asm.attr.LineNumberTable;
 import roj.collect.Int2IntMap;
 import roj.collect.IntBiMap;
 import roj.collect.MyBitSet;
@@ -234,7 +234,7 @@ public final class JavaLexer extends Tokenizer {
 					case STATE_CLASS -> id <= JavaLexer.DOUBLE;
 					case STATE_EXPR -> id >= VOID && id <= FINALLY || id == CLASS || id == FINAL || id == CONST || id == DEFAULT || id == SUPER || id > 999;
 					case STATE_TYPE -> id >= VOID && id <= FINALLY || id == SUPER || id == EXTENDS;
-					case STATE_MODULE -> id >= EXPORTS && id <= TO || id == WITH || id == STATIC;
+					case STATE_MODULE -> id >= REQUIRES && id <= TO || id == WITH || id == STATIC;
 					default -> false;
 				} ? id : LITERAL;
 			}

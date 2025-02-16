@@ -17,7 +17,7 @@ import roj.util.DynByteBuf;
 import javax.sound.sampled.LineUnavailableException;
 import java.io.IOException;
 
-import static roj.reflect.ReflectionUtils.u;
+import static roj.reflect.Unaligned.U;
 
 /**
  * MP3解码器
@@ -147,7 +147,7 @@ public final class MP3Decoder implements AudioDecoder {
 	@Override
 	public void stop() {
 		synchronized (this) {
-			if (u.compareAndSwapInt(this, STATE_OFFSET, 1, 2)) {
+			if (U.compareAndSwapInt(this, STATE_OFFSET, 1, 2)) {
 				try {
 					wait();
 				} catch (InterruptedException ignored) {}
@@ -167,7 +167,7 @@ public final class MP3Decoder implements AudioDecoder {
 
 	@Override
 	public void decodeLoop() throws IOException {
-		if (!u.compareAndSwapInt(this, STATE_OFFSET, 0, 1)) return;
+		if (!U.compareAndSwapInt(this, STATE_OFFSET, 0, 1)) return;
 
 		Layer layer = switch (header.getLayer()) {
 			case 1 -> new Layer1(header, this);

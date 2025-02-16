@@ -1,6 +1,6 @@
 package roj.plugins.http.template;
 
-import roj.net.http.server.AsyncResponse;
+import roj.http.server.AsyncResponse;
 
 /**
  * @author Roj234

@@ -1,9 +1,9 @@
 package roj.compiler.resolve;
 
 import org.jetbrains.annotations.NotNull;
+import roj.asm.FieldNode;
+import roj.asm.IClass;
 import roj.asm.Opcodes;
-import roj.asm.tree.FieldNode;
-import roj.asm.tree.IClass;
 import roj.collect.SimpleList;
 import roj.compiler.LavaFeatures;
 import roj.compiler.api.FieldWriteReplace;

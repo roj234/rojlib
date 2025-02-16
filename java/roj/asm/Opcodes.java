@@ -160,7 +160,7 @@ public final class Opcodes {
 		 * ACC_SYNTHETIC	0x1000	Declared synthetic; not present in the source code.
 		 * ACC_MANDATED     0x8000  Indicates that this dependence was implicitly declared in the source of the module declaration.
 		 */
-		{ null, null, null, null, null, "open | transitive", "static_phase", null, null, null, null, null, "/*synthetic*/", null, null, "mandated" }
+		{ null, null, null, null, null, "open | transitive", "static", null, null, null, null, null, "/*synthetic*/", null, null, "mandated" }
 	};
 	public static final int ACC_SHOW_CLASS = 0, ACC_SHOW_FIELD = 1, ACC_SHOW_PARAM = 1, ACC_SHOW_METHOD = 2, ACC_SHOW_INNERCLASS = 3, ACC_SHOW_MODULE = 4;
 

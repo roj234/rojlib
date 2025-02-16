@@ -1,9 +1,11 @@
 package roj.plugin;
 
+import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import roj.archive.zip.ZEntry;
 import roj.archive.zip.ZipFile;
 import roj.collect.MyHashSet;
+import roj.io.source.FileSource;
 import roj.reflect.ModulePlus;
 import roj.text.Escape;
 import roj.util.ByteList;
@@ -81,7 +83,7 @@ public class PluginClassLoader extends ClassLoader {
 		PLUGIN_CONTEXT.set(this);
 		try {
 			ByteList buf = new ByteList().readStreamFully(archive.getStream(entry));
-			var cs = new CodeSource(new URL("jar:file:/"+desc.fileName+"!/"+Escape.encodeURI(klass)), (CodeSigner[]) null);
+			var cs = new CodeSource(getUrl(klass), (CodeSigner[]) null);
 			PanSecurityManager.transform(name, buf);
 			var clazz = defineClass(name, buf.list, 0, buf.wIndex(), new ProtectionDomain(cs, null));
 			buf._free();
@@ -98,10 +100,15 @@ public class PluginClassLoader extends ClassLoader {
 	protected URL findResource(String name) {
 		if (archive.getEntry(name) != null) {
 			try {
-				return new URL("jar:file:/"+desc.fileName+"!/"+Escape.encodeURI(name));
+				return getUrl(name);
 			} catch (MalformedURLException ignored) {}
 		}
 		return null;
+	}
+
+	@NotNull
+	private URL getUrl(String name) throws MalformedURLException {
+		return new URL("jar:file:/"+(desc.source instanceof FileSource fs ? fs.getFile().getAbsolutePath() : desc.fileName)+"!/"+Escape.encodeURI(name));
 	}
 
 	@Override

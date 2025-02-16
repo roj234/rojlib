@@ -68,4 +68,22 @@ public class FileSource extends Source {
 	@Override public Source threadSafeCopy() throws IOException { return new FileSource(file, offset, write); }
 	@Override public void moveSelf(long from, long to, long length) throws IOException { IOUtil.transferFileSelf(channel(), from, to, length); }
 	@Override public String toString() { return file.getPath(); }
+
+	@Override
+	public boolean equals(Object o) {
+		if (this == o) return true;
+		if (o == null || getClass() != o.getClass()) return false;
+
+		FileSource source = (FileSource) o;
+
+		if (offset != source.offset) return false;
+		return file.equals(source.file);
+	}
+
+	@Override
+	public int hashCode() {
+		int result = file.hashCode();
+		result = 31 * result + (int) (offset ^ (offset >>> 32));
+		return result;
+	}
 }

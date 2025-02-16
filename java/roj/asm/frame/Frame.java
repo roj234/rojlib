@@ -1,7 +1,7 @@
 package roj.asm.frame;
 
 import org.jetbrains.annotations.NotNull;
-import roj.asm.visitor.Label;
+import roj.asm.insn.Label;
 import roj.io.IOUtil;
 import roj.text.CharList;
 
@@ -20,43 +20,35 @@ public final class Frame {
 
 	public static int toExactFrameType(int b) {
 		final int b1 = b & 0xFF;
-		if ((b1 & 128) == 0) {
-			// 64 - 127
-			return (b1 & 64) == 0 ? same : same_local_1_stack;
-			// 0 - 63
-		}
-		switch (b1) {
-			case 247: return same_local_1_stack_ex;
+		if ((b1 & 128) == 0) return (b1 & 64) == 0 ? same : same_local_1_stack;
+		return switch (b1) {
+			case 247 -> same_local_1_stack_ex;
 			// chop 1-3
-			case 248: case 249: case 250: return b1;
-			case 251: return same_ex;
-			case 252: case 253: case 254: return append;
-			case 255: return full;
-		}
-		throw new IllegalArgumentException("Undefined frame type" + b1);
+			case 248, 249, 250 -> b1;
+			case 251 -> same_ex;
+			case 252, 253, 254 -> append;
+			case 255 -> full;
+			default -> throw new IllegalArgumentException("unknown frame "+b1);
+		};
 	}
 
 	public static String getName(int type) {
-		if ((type & 128) == 0) {
-			// 64 - 127
-			return (type & 64) == 0 ? "same" : "same_local_1_stack";
-			// 0 - 63
-		}
-		switch (type) {
-			case 247: return "same_local_1_stack_ex";
-			case 248: case 249: case 250: return "chop "+(251-type);
-			case 251: return "same_ex";
-			case 252: case 253: case 254: return "append "+(type-251);
-			case 255: return "full";
-		}
-		return "unknown";
+		if ((type & 128) == 0) return (type & 64) == 0 ? "same" : "same_local_1_stack";
+		return switch (type) {
+			case 247 -> "same_local_1_stack_ex";
+			case 248, 249, 250 -> "chop " + (251 - type);
+			case 251 -> "same_ex";
+			case 252, 253, 254 -> "append " + (type - 251);
+			case 255 -> "full";
+			default -> "unknown";
+		};
 	}
 
 	public static final Var2[] NONE = new Var2[0];
 
 	public short type;
-	public int target;
-	public Label target3;
+	public int bci;
+	public Label monitor_bci;
 	@NotNull
 	public Var2[] locals = NONE, stacks = NONE;
 
@@ -68,7 +60,7 @@ public final class Frame {
 	public Frame(int type) { this.type = (short) type; }
 
 	public int bci() {
-		return target3 == null ? target : target3.getValue();
+		return monitor_bci == null ? bci : monitor_bci.getValue();
 	}
 
 	public String toString() { return toString(IOUtil.getSharedCharBuf(), 0).toString(); }

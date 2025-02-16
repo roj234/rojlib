@@ -12,7 +12,8 @@ import java.lang.annotation.Target;
 @Retention(RetentionPolicy.CLASS)
 @Target(ElementType.TYPE)
 public @interface Nixim {
-	String value(); // target
+	String value() default ""; // target
+	Class<?> altValue() default Object.class;
 	boolean copyItf() default true;
 	int flags() default 0; // no usage now
 }

@@ -4,7 +4,7 @@ import roj.reflect.ReflectionUtils;
 
 import java.util.Random;
 
-import static roj.reflect.ReflectionUtils.u;
+import static roj.reflect.Unaligned.U;
 
 /**
  * @implNote MT19937 is not thread safe
@@ -36,7 +36,7 @@ public class MT19937 extends Random {
 		// Random will invoke setSeed() before this class initialize
 		if (MT == null) {
 			_seed = seed;
-			if (u_seed > 0) u.putObject(this, u_seed, null);
+			if (u_seed > 0) U.putObject(this, u_seed, null);
 			return;
 		}
 
@@ -46,7 +46,7 @@ public class MT19937 extends Random {
 		this.i = 0;
 
 		// clear hasNextGaussian
-		if (u_nextGaussian > 0) u.putBoolean(this, u_nextGaussian, false);
+		if (u_nextGaussian > 0) U.putBoolean(this, u_nextGaussian, false);
 		else super.setSeed(seed);
 	}
 

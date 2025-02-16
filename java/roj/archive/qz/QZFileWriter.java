@@ -22,7 +22,7 @@ import java.util.Arrays;
 import java.util.List;
 
 import static roj.archive.qz.BlockId.*;
-import static roj.reflect.ReflectionUtils.u;
+import static roj.reflect.Unaligned.U;
 
 /**
  * @author Roj234
@@ -481,7 +481,7 @@ public class QZFileWriter extends QZWriter {
         for (int i = 0; i < files.size(); i++) {
             QZEntry entry = files.get(i);
             if ((entry.flag&QZEntry.ATTR) != 0)
-                buf.putIntLE(u.getInt(entry, offset));
+                buf.putIntLE(U.getInt(entry, offset));
         }
     }
     private void writeSparseAttribute(int id, int flag, int count) {
@@ -491,7 +491,7 @@ public class QZFileWriter extends QZWriter {
         for (int i = 0; i < files.size(); i++) {
             QZEntry entry = files.get(i);
             if ((entry.flag&flag) != 0)
-                buf.putLongLE(u.getLong(entry, offset));
+                buf.putLongLE(U.getLong(entry, offset));
         }
     }
     private DynByteBuf writeSparseHeader(int id, int flag, int count) {

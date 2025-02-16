@@ -2,10 +2,10 @@ package roj.compiler.resolve;
 
 import org.jetbrains.annotations.Nullable;
 import org.jetbrains.annotations.Range;
+import roj.asm.IClass;
 import roj.asm.Opcodes;
-import roj.asm.tree.IClass;
+import roj.asm.insn.CodeWriter;
 import roj.asm.type.*;
-import roj.asm.visitor.CodeWriter;
 import roj.collect.*;
 import roj.compiler.asm.Asterisk;
 import roj.compiler.context.GlobalContext;
@@ -83,7 +83,7 @@ public class TypeCast {
 					return;
 				case UNBOXING:
 					cast(cw);
-					cw.invoke(Opcodes.INVOKEVIRTUAL, WRAPPER.get(box).owner, std(box).toString().concat("Value"), "()"+(char)box);
+					cw.invoke(Opcodes.INVOKEVIRTUAL, WRAPPER.get(box).owner, Type.primitive(box).toString().concat("Value"), "()"+(char)box);
 				break;
 				case UPCAST, E_DOWNCAST:
 					if (isNoop()) return;
@@ -142,6 +142,7 @@ public class TypeCast {
 	// endregion
 
 	public GlobalContext context;
+	public LocalContext ctx;
 	public Map<String, List<IType>> typeParamsL, typeParamsR;
 
 	public Cast checkCast(IType from, IType to) { return checkCast(from, to, -1); }
@@ -344,12 +345,12 @@ public class TypeCast {
 		genericCastCheck:
 		if (to.owner() != null && from.owner() != null) {
 			if (tc == null) {
-				tc = LocalContext.get().inferGeneric(to, from.owner());
+				tc = ctx.inferGeneric(to, from.owner());
 				if (tc == null) break genericCastCheck;
 			}
 
 			if (fc == null) {
-				fc = LocalContext.get().inferGeneric(from, to.owner());
+				fc = ctx.inferGeneric(from, to.owner());
 				if (fc == null) break genericCastCheck;
 			}
 
@@ -385,7 +386,7 @@ public class TypeCast {
 					if (box == 0) return ERROR(E_INT2OBJ);
 
 					//noinspection MagicConstant
-					cast = checkCast(from, std(box), inheritType);
+					cast = checkCast(from, Type.primitive(box), inheritType);
 					if (cast.type < UPCAST) return ERROR(E_INT2OBJ);
 				}
 
@@ -443,7 +444,7 @@ public class TypeCast {
 				cast = RESULT(UNBOXING, DISTANCE_BOXING);
 			} else {
 				//noinspection MagicConstant
-				cast = checkCast(std(primitive), to, inheritType);
+				cast = checkCast(Type.primitive(primitive), to, inheritType);
 				if (cast.type < E_NUMBER_DOWNCAST) return cast;
 				assert cast.type <= NUMBER_UPCAST;
 
@@ -540,15 +541,15 @@ public class TypeCast {
 
 	private static final IntBiMap<Type> WRAPPER = new IntBiMap<>(9);
 	static {
-		WRAPPER.putInt(BOOLEAN, new Type("java/lang/Boolean"));
-		WRAPPER.putInt(BYTE, new Type("java/lang/Byte"));
-		WRAPPER.putInt(CHAR, new Type("java/lang/Character"));
-		WRAPPER.putInt(SHORT, new Type("java/lang/Short"));
-		WRAPPER.putInt(INT, new Type("java/lang/Integer"));
-		WRAPPER.putInt(LONG, new Type("java/lang/Long"));
-		WRAPPER.putInt(FLOAT, new Type("java/lang/Float"));
-		WRAPPER.putInt(DOUBLE, new Type("java/lang/Double"));
-		WRAPPER.putInt(VOID, new Type("java/lang/Void"));
+		WRAPPER.putInt(BOOLEAN, Type.klass("java/lang/Boolean"));
+		WRAPPER.putInt(BYTE, Type.klass("java/lang/Byte"));
+		WRAPPER.putInt(CHAR, Type.klass("java/lang/Character"));
+		WRAPPER.putInt(SHORT, Type.klass("java/lang/Short"));
+		WRAPPER.putInt(INT, Type.klass("java/lang/Integer"));
+		WRAPPER.putInt(LONG, Type.klass("java/lang/Long"));
+		WRAPPER.putInt(FLOAT, Type.klass("java/lang/Float"));
+		WRAPPER.putInt(DOUBLE, Type.klass("java/lang/Double"));
+		WRAPPER.putInt(VOID, Type.klass("java/lang/Void"));
 	}
 	public static int getWrappedPrimitive(IType self) { if (self instanceof Asterisk ax) self = ax.getBound(); return WRAPPER.getValueOrDefault(self, 0); }
 	@Nullable

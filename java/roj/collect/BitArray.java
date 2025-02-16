@@ -1,8 +1,8 @@
 package roj.collect;
 
 import org.jetbrains.annotations.Range;
+import roj.compiler.runtime.RtUtil;
 import roj.util.ArrayCache;
-import roj.util.ArrayUtil;
 
 import java.util.Arrays;
 import java.util.function.IntConsumer;
@@ -18,7 +18,7 @@ public class BitArray {
 	private final int bits, mask, length;
 
 	public BitArray(String unpack) {
-		data = ArrayUtil.unpackI(unpack);
+		data = RtUtil.unpackI(unpack);
 		bits = data[data.length-1];
 		length = (data.length-1) * 32 / bits;
 		mask = bits == 32 ? -1 : ((1 << bits)-1);
@@ -225,10 +225,10 @@ public class BitArray {
 		}
 	}
 
-	public void pack() {
+	public String pack() {
 		int[] data1 = Arrays.copyOf(data, data.length+1);
 		data1[data1.length-1] = bits;
-		ArrayUtil.pack(data1);
+		return RtUtil.pack(data1);
 	}
 
 	private void check(int i) {

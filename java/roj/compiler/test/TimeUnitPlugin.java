@@ -1,7 +1,6 @@
 package roj.compiler.test;
 
 import roj.asm.Opcodes;
-import roj.asm.tree.anno.AnnVal;
 import roj.asm.type.IType;
 import roj.asm.type.Type;
 import roj.compiler.asm.MethodWriter;
@@ -13,6 +12,7 @@ import roj.compiler.plugin.LavaApi;
 import roj.compiler.plugin.LavaPlugin;
 import roj.compiler.resolve.ResolveException;
 import roj.compiler.resolve.TypeCast;
+import roj.config.data.CEntry;
 
 import java.util.concurrent.TimeUnit;
 
@@ -39,13 +39,13 @@ public class TimeUnitPlugin extends ExprNode {
 	}
 
 	@Override public String toString() { return node+" "+unit; }
-	@Override public IType type() { return Type.std(Type.LONG); }
+	@Override public IType type() { return Type.primitive(Type.LONG); }
 
 	@Override
 	public ExprNode resolve(LocalContext ctx) throws ResolveException {
 		node = node.resolve(ctx);
 		cast = ctx.castTo(node.type(), type(), 0);
-		if (node.isConstant()) return Constant.valueOf(AnnVal.valueOf(unit.toMillis(((AnnVal) node.constVal()).asLong())));
+		if (node.isConstant()) return Constant.valueOf(CEntry.valueOf(unit.toMillis(((CEntry) node.constVal()).asLong())));
 		return this;
 	}
 

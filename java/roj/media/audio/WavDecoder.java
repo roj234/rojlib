@@ -39,14 +39,14 @@ public class WavDecoder implements AudioDecoder {
 		buf.clear();
 
 		in.seek(0);
-		in.read(buf, 20);
+		in.readFully(buf, 20);
 
 		if (buf.readInt() != RIFF) throw new IOException("not a RIFF file");
 		int dataLen = buf.readIntLE();
 		if (!buf.readAscii(8).equals("WAVEfmt ")) throw new IOException("not a WAVE file");
 		int fmtLen = buf.readIntLE();
 		buf.clear();
-		in.read(buf, fmtLen);
+		in.readFully(buf, fmtLen);
 
 		int format = buf.readUShortLE();
 		if (format != 1) throw new IOException("compressed WAVE file (0x"+Integer.toHexString(format)+")");
@@ -68,12 +68,12 @@ public class WavDecoder implements AudioDecoder {
 		sampleCount = -1;
 		while (true) {
 			buf.clear();
-			in.read(buf, 8);
+			in.readFully(buf, 8);
 			int type = buf.readInt(0);
 			if (type == DATA) break;
 			if (type == FACT) {
 				buf.clear();
-				in.read(buf, 4);
+				in.readFully(buf, 4);
 				sampleCount = buf.readIntLE();
 			} else {
 				in.skip(buf.readIntLE(4));
@@ -94,14 +94,14 @@ public class WavDecoder implements AudioDecoder {
 			try {
 				while (in.length() - in.position() > 8) {
 					buf.clear();
-					in.read(buf, 8);
+					in.readFully(buf, 8);
 
 					int type = buf.readInt(0);
 					int len = buf.readIntLE(4);
 
 					if (type == LIST) {
 						buf.clear();
-						in.read(buf, len);
+						in.readFully(buf, len);
 						int subType = buf.readInt();
 						if (subType == INFO || subType == INF0) {
 							return new WavListTag(buf);
@@ -197,7 +197,7 @@ public class WavDecoder implements AudioDecoder {
 		while (in != null && in1.position() < dataEnd) {
 			buf.clear();
 			int len = (int) Math.min(bytePerSecond, dataEnd-in1.position());
-			in1.read(buf, len);
+			in1.readFully(buf, len);
 			out.write(buf.list, 0, len, true);
 		}
 	}

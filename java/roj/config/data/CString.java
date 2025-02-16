@@ -13,12 +13,10 @@ import java.util.Objects;
  */
 public final class CString extends CEntry {
 	public String value;
+	CString(String string) {value = string.toString();}
 
-	public CString(String string) { value = string.toString(); }
-	public static CString valueOf(String s) { return new CString(s); }
-
-	public Type getType() { return Type.STRING; }
-	protected boolean eqVal(CEntry o) { return o.asString().equals(value); }
+	public Type getType() {return Type.STRING;}
+	protected boolean eqVal(CEntry o) {return o.asString().equals(value);}
 	@Override
 	public boolean mayCastTo(Type o) {
 		//                          TDFLISBZNsML
@@ -40,17 +38,12 @@ public final class CString extends CEntry {
 	public double asDouble() { return Double.parseDouble(value); }
 	public String asString() { return value; }
 
-	@Override
 	public void accept(CVisitor ser) { ser.value(value); }
-	@Override
 	public Object raw() { return value; }
 
-	@Override
 	protected CharList toJSON(CharList sb, int depth) { return Tokenizer.addSlashes(sb.append('"'), value).append('"'); }
 
-	@Override
-	public int hashCode() { return value.hashCode(); }
-	@Override
+	public int hashCode() {return value.hashCode();}
 	public boolean equals(Object o) {
 		if (this == o) return true;
 		if (o == null || getClass() != o.getClass()) return false;

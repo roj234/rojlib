@@ -6,8 +6,7 @@ import roj.io.IOUtil;
 import roj.io.MyDataInput;
 import roj.io.source.Source;
 import roj.media.audio.AudioMetadata;
-import roj.reflect.ReflectionUtils;
-import roj.text.J9String;
+import roj.text.TextUtil;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
 
@@ -353,7 +352,7 @@ public class ID3Tag implements AudioMetadata {
 		var tmp = IOUtil.getSharedByteBuf();
 
 		source.seek(0);
-		source.read(tmp, 16);
+		source.readFully(tmp, 16);
 		int header_size_orig = checkID3V2(tmp);
 
 		// ID3v2.4
@@ -405,7 +404,7 @@ public class ID3Tag implements AudioMetadata {
 		var pos = tmp.wIndex();
 		tmp.putInt(0).putShort(0);
 
-		boolean isIso8859_1 = ReflectionUtils.JAVA_VERSION >= 9 && J9String.isLatin1(picDesc);
+		boolean isIso8859_1 = TextUtil.isLatin1(picDesc);
 		// encoding=_, description=""
 		if (isIso8859_1) {
 			tmp.put(0).putAscii(picMime).put(0).put(picType).putAscii(picDesc).put(0);
@@ -422,7 +421,7 @@ public class ID3Tag implements AudioMetadata {
 		var pos = tmp.wIndex();
 		tmp.putInt(0).putShort(0);
 
-		boolean isIso8859_1 = ReflectionUtils.JAVA_VERSION >= 9 && J9String.isLatin1(lyrics);
+		boolean isIso8859_1 = TextUtil.isLatin1(lyrics);
 		// encoding=_, description=""
 		if (isIso8859_1) {
 			tmp.put(0).put(0).putAscii(lyrics);
@@ -439,7 +438,7 @@ public class ID3Tag implements AudioMetadata {
 		var pos = tmp.wIndex();
 		tmp.putInt(0).putShort(0);
 
-		if (ReflectionUtils.JAVA_VERSION >= 9 && J9String.isLatin1(value)) {
+		if (TextUtil.isLatin1(value)) {
 			tmp.put(0).putAscii(value);
 		} else {
 			tmp.put(1).putShort(0xFEFF).putChars(value);

@@ -2,10 +2,9 @@ package roj.compiler.ast.expr;
 
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
-import roj.asm.tree.anno.AnnVal;
+import roj.asm.insn.Label;
 import roj.asm.type.IType;
 import roj.asm.type.Type;
-import roj.asm.visitor.Label;
 import roj.collect.MyBitSet;
 import roj.compiler.api.Types;
 import roj.compiler.asm.MethodWriter;
@@ -13,7 +12,9 @@ import roj.compiler.context.LocalContext;
 import roj.compiler.diagnostic.Kind;
 import roj.compiler.resolve.ResolveException;
 import roj.compiler.resolve.TypeCast;
+import roj.compiler.runtime.RtUtil;
 import roj.concurrent.OperationDone;
+import roj.config.data.CEntry;
 import roj.text.CharList;
 
 import static roj.asm.Opcodes.*;
@@ -149,13 +150,13 @@ final class Binary extends ExprNode {
 						} else if (dpType == 5 && BITSHIFT.contains(operator)) {
 							// 5 = long
 							// lsh, rsh, rsh_unsigned => int bits operator
-							castRight = ctx.castTo(rType, Type.std(Type.INT), TypeCast.E_NUMBER_DOWNCAST);
+							castRight = ctx.castTo(rType, Type.primitive(Type.INT), TypeCast.E_NUMBER_DOWNCAST);
 							break primitive;
 						}
 					}
 
 					//noinspection MagicConstant
-					type = Type.std(TypeCast.getDataCapRev(dpType));
+					type = Type.primitive(TypeCast.getDataCapRev(dpType));
 					castLeft = ctx.castTo(lType, type, TypeCast.E_NUMBER_DOWNCAST);
 					castRight = ctx.castTo(rType, type, TypeCast.E_NUMBER_DOWNCAST);
 				}
@@ -174,7 +175,7 @@ final class Binary extends ExprNode {
 						if (lType.isPrimitive()) ctx.report(Kind.ERROR, "symbol.error.derefPrimitive", lType);
 						type = ctx.getCommonParent(lType, rType);
 					} else {
-						type = Type.std(Type.BOOLEAN);
+						type = Type.primitive(Type.BOOLEAN);
 					}
 
 					castLeft = ctx.castTo(lType, type, 0);
@@ -195,24 +196,31 @@ final class Binary extends ExprNode {
 		}
 
 		dType = (byte) (TypeCast.getDataCap(type.getActualType())-4);
-		if (operator >= equ) type = Type.std(Type.BOOLEAN);
+		if (operator >= equ) type = Type.primitive(Type.BOOLEAN);
+		if (operator == pow && dpType == 6) {
+			// 将pow float提升到double
+			type = Type.primitive(Type.DOUBLE);
+			dType = 3;
+			//但是编译期常量就算了
+			//dpType = 7;
+		}
 
 		if (!left.isConstant()) {
 			if (right.isConstant()) {
 				switch (operator) {
 					case add, sub, or, xor -> {
 						// 可交换位置的二元表达式无需当且仅当…… 是确定运算：int/long，没有类型提升
-						if (dpType <= 4 && castLeft == null && ((AnnVal) right.constVal()).asInt() == 0)
+						if (dpType <= 4 && castLeft == null && ((CEntry) right.constVal()).asInt() == 0)
 							return left;
 					}
 					case shl, shr, ushr -> {
-						int value = ((AnnVal) right.constVal()).asInt();
+						int value = ((CEntry) right.constVal()).asInt();
 						if (value == 0 && castLeft == null) return left;
 						if (value > BIT_COUNT[dpType]) ctx.report(Kind.SEVERE_WARNING, "binary.shiftOverflow", type, BIT_COUNT[dpType]);
 					}
 					// equ 和 neq 应该可以直接删除跳转？反正boolean也就是0和非0 （AND 1就行）
 					case equ, neq, lss, geq, gtr, leq -> {
-						if (dpType <= 4 && ((AnnVal) right.constVal()).asInt() == 0) {
+						if (dpType <= 4 && ((CEntry) right.constVal()).asInt() == 0) {
 							flag = 1;
 						}
 					}
@@ -246,11 +254,11 @@ final class Binary extends ExprNode {
 		if (!right.isConstant()) {
 			switch (operator) {
 				case add, sub, or, xor -> {
-					if (dpType <= 4 && castLeft == null && ((AnnVal) left.constVal()).asInt() == 0)
+					if (dpType <= 4 && castLeft == null && ((CEntry) left.constVal()).asInt() == 0)
 						return right;
 				}
 				case equ, neq, lss, geq, gtr, leq -> {
-					if (dpType <= 4 && ((AnnVal) left.constVal()).asInt() == 0) {
+					if (dpType <= 4 && ((CEntry) left.constVal()).asInt() == 0) {
 						flag = 2;
 					}
 				}
@@ -262,7 +270,7 @@ final class Binary extends ExprNode {
 
 		switch (operator) {
 			case lss, gtr, geq, leq:
-				double l = ((AnnVal) left.constVal()).asDouble(), r = ((AnnVal) right.constVal()).asDouble();
+				double l = ((CEntry) left.constVal()).asDouble(), r = ((CEntry) right.constVal()).asDouble();
 				return Constant.valueOf(switch (operator) {
 					case lss -> l < r;
 					case gtr -> l > r;
@@ -274,19 +282,19 @@ final class Binary extends ExprNode {
 			case equ, neq:
 				return Constant.valueOf((operator == equ) == (dpType == 9 ?
 					left.constVal().equals(right.constVal()) :
-					((AnnVal)left.constVal()).asDouble() == ((AnnVal)right.constVal()).asDouble()));
+					((CEntry)left.constVal()).asDouble() == ((CEntry)right.constVal()).asDouble()));
 		}
 
 		switch (dpType) {
 			case 1, 2, 3, 4: {
-				int l = ((AnnVal) left.constVal()).asInt(), r = ((AnnVal) right.constVal()).asInt();
+				int l = ((CEntry) left.constVal()).asInt(), r = ((CEntry) right.constVal()).asInt();
 				int o = switch (operator) {
 					case add -> l+r;
 					case sub -> l-r;
 					case mul -> l*r;
 					case div -> l/r;
 					case rem -> l%r;
-					case pow -> (int) Math.pow(l, r);
+					case pow -> RtUtil.pow(l, r);
 
 					case shl -> l<<r;
 					case shr -> l>>r;
@@ -296,17 +304,17 @@ final class Binary extends ExprNode {
 					case xor -> l^r;
 					default -> throw OperationDone.NEVER;
 				};
-				return Constant.valueOf(o);
+				return new Constant(BIT_OP.contains(operator) ? type : Type.primitive(Type.INT), CEntry.valueOf(o));
 			}
 			case 5: {
-				long l = ((AnnVal) left.constVal()).asLong(), r = ((AnnVal) right.constVal()).asLong();
-				long o = switch (operator) {
+				long l = ((CEntry) left.constVal()).asLong(), r = ((CEntry) right.constVal()).asLong();
+				return Constant.valueOf(CEntry.valueOf(switch (operator) {
 					case add -> l+r;
 					case sub -> l-r;
 					case mul -> l*r;
 					case div -> l/r;
 					case rem -> l%r;
-					case pow -> (long) Math.pow(l, r);
+					case pow -> RtUtil.pow(l, r);
 
 					case shl -> l<<r;
 					case shr -> l>>r;
@@ -315,12 +323,11 @@ final class Binary extends ExprNode {
 					case or -> l|r;
 					case xor -> l^r;
 					default -> throw OperationDone.NEVER;
-				};
-				return new Constant(Type.std(Type.LONG), AnnVal.valueOf(o));
+				}));
 			}
 			case 6: {
-				float l = ((AnnVal) left.constVal()).asFloat(), r = ((AnnVal) right.constVal()).asFloat();
-				float o = switch (operator) {
+				float l = ((CEntry) left.constVal()).asFloat(), r = ((CEntry) right.constVal()).asFloat();
+				return Constant.valueOf(CEntry.valueOf(switch (operator) {
 					case add -> l+r;
 					case sub -> l-r;
 					case mul -> l*r;
@@ -328,12 +335,11 @@ final class Binary extends ExprNode {
 					case rem -> l%r;
 					case pow -> (float) Math.pow(l, r);
 					default -> throw OperationDone.NEVER;
-				};
-				return new Constant(Type.std(Type.FLOAT), AnnVal.valueOf(o));
+				}));
 			}
 			case 7: {
-				double l = ((AnnVal) left.constVal()).asDouble(), r = ((AnnVal) right.constVal()).asDouble();
-				double o = switch (operator) {
+				double l = ((CEntry) left.constVal()).asDouble(), r = ((CEntry) right.constVal()).asDouble();
+				return Constant.valueOf(CEntry.valueOf(switch (operator) {
 					case add -> l+r;
 					case sub -> l-r;
 					case mul -> l*r;
@@ -341,18 +347,16 @@ final class Binary extends ExprNode {
 					case rem -> l%r;
 					case pow -> Math.pow(l, r);
 					default -> throw OperationDone.NEVER;
-				};
-				return new Constant(Type.std(Type.DOUBLE), AnnVal.valueOf(o));
+				}));
 			}
 			case 8: {
 				boolean l = (boolean) left.constVal(), r = (boolean) right.constVal();
-				boolean o = switch (operator) {
+				return Constant.valueOf(switch (operator) {
 					case and -> l&r;
 					case or -> l|r;
 					case xor -> l^r;
 					default -> throw OperationDone.NEVER;
-				};
-				return new Constant(Type.std(Type.BOOLEAN), o);
+				});
 			}
 		}
 
@@ -360,7 +364,7 @@ final class Binary extends ExprNode {
 	}
 
 	private boolean checkDivZero(LocalContext ctx) {
-		if (dType <= 1 && operator == div && ((AnnVal) right.constVal()).asInt() == 0) {
+		if (dType <= 1 && operator == div && ((CEntry) right.constVal()).asInt() == 0) {
 			ctx.report(Kind.SEVERE_WARNING, "binary.divisionByZero");
 			return true;
 		}
@@ -499,8 +503,14 @@ final class Binary extends ExprNode {
 		switch (opr) {
 			//default: throw OperationDone.NEVER;
 			case add, sub, mul, div, rem: opc += ((opr - add) << 2) + IADD; break;
-			//FIXME pow正确的提升类型到double
-			case pow: {cw.invoke(INVOKESTATIC, "java/util/Math", "pow", "(DD)D");return;}
+			case pow: {
+				switch (opc) {
+					case 0 -> cw.invoke(INVOKESTATIC, RtUtil.CLASS_NAME, "pow", "(II)I");
+					case 1 -> cw.invoke(INVOKESTATIC, RtUtil.CLASS_NAME, "pow", "(JJ)J");
+					default -> cw.invoke(INVOKESTATIC, "java/util/Math", "pow", "(DD)D");
+				}
+				return;
+			}
 			case shl, shr, ushr, and, or, xor: opc += ((opr - shl) << 1) + ISHL; break;
 			case equ, neq:
 				if (!left.type().isPrimitive() & !right.type().isPrimitive()) {

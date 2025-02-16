@@ -1,7 +1,7 @@
 package roj.compiler.resolve;
 
-import roj.asm.tree.FieldNode;
-import roj.asm.tree.IClass;
+import roj.asm.FieldNode;
+import roj.asm.IClass;
 
 /**
  * @author Roj234

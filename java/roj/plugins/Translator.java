@@ -2,10 +2,10 @@ package roj.plugins;
 
 import roj.archive.zip.ZEntry;
 import roj.archive.zip.ZipArchive;
+import roj.asm.ClassNode;
 import roj.asm.Parser;
 import roj.asm.cp.Constant;
 import roj.asm.cp.CstString;
-import roj.asm.tree.ConstantData;
 import roj.collect.IntMap;
 import roj.collect.MyBitSet;
 import roj.collect.MyHashMap;
@@ -17,7 +17,7 @@ import roj.plugin.SimplePlugin;
 import roj.text.CharList;
 import roj.text.TextReader;
 import roj.text.TextWriter;
-import roj.ui.terminal.Argument;
+import roj.ui.Argument;
 import roj.util.ByteList;
 
 import java.io.File;
@@ -31,8 +31,8 @@ import java.util.Map;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 
-import static roj.ui.terminal.CommandNode.argument;
-import static roj.ui.terminal.CommandNode.literal;
+import static roj.ui.CommandNode.argument;
+import static roj.ui.CommandNode.literal;
 
 /**
  * @author Roj234
@@ -142,9 +142,9 @@ public class Translator extends Plugin {
 		}
 	}
 	private static byte[] apply(String path, ByteList ib) {
-		ConstantData data = Parser.parseConstants(ib);
+		ClassNode data = Parser.parseConstants(ib);
 
-		IntMap<String> map = value.get(path+data.name);
+		IntMap<String> map = value.get(path+data.name());
 		if (map == null) return null;
 
 		boolean any = false;
@@ -195,10 +195,10 @@ public class Translator extends Plugin {
 		}
 	}
 	private static void read(String path, ByteList ib) {
-		ConstantData data = Parser.parseConstants(ib);
+		ClassNode data = Parser.parseConstants(ib);
 
 		CharList sb = IOUtil.getSharedCharBuf();
-		sb.append(path).append(data.name).append(':').append('\n');
+		sb.append(path).append(data.name()).append(':').append('\n');
 		boolean any = false;
 
 		List<Constant> array = data.cp.array();

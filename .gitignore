@@ -1,7 +1,5 @@
-libcpp/.idea/*
-libcpp/bin/*
 *.iml
 *.psd
 *.lava
 resources/libcpp.dll
-project.json
+libs/pregenerated.jar

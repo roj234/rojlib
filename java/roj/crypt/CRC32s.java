@@ -3,11 +3,12 @@ package roj.crypt;
 import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.NotNull;
 import roj.reflect.Bypass;
+import roj.reflect.Java22Workaround;
 import roj.util.DynByteBuf;
 
 import java.util.zip.CRC32;
 
-import static roj.reflect.ReflectionUtils.u;
+import static roj.reflect.Unaligned.U;
 
 /**
  * s is either software or stream
@@ -51,7 +52,7 @@ public class CRC32s {
 	public static int update(int crc, long off, int len) {
 		if (HWAC != null) return HWAC.updateByteBuffer(crc, off, 0, len);
 
-		while (len-- > 0) crc = (crc >>> 8) ^ crcTab[(crc ^ (u.getByte(off++) & 0xFF)) & 0xFF];
+		while (len-- > 0) crc = (crc >>> 8) ^ crcTab[(crc ^ (U.getByte(off++) & 0xFF)) & 0xFF];
 		return crc;
 	}
 
@@ -70,6 +71,7 @@ public class CRC32s {
 
 	public static int retVal(int crc) { return HWAC != null ? crc : ~crc; }
 
+	@Java22Workaround
 	private interface CRC32h {
 		int update(int crc, int b);
 		int updateBytes(int crc, byte[] b, int off, int len);

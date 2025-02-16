@@ -100,7 +100,7 @@ public final class CaptchaFont {
 				String text = cfgXCaptcha.asMap().getString("text");
 				Int2IntMap types = new Int2IntMap();
 
-				List<String> lines = LineReader.toLines(text, false);
+				List<String> lines = LineReader.getAllLines(text, false);
 
 				for (String line : lines) {
 					c.width = Math.max(c.width, line.length());

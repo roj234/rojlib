@@ -11,21 +11,22 @@ import roj.collect.SimpleList;
 import roj.concurrent.TaskExecutor;
 import roj.concurrent.TaskPool;
 import roj.config.CsvParser;
+import roj.gui.CMBoxValue;
+import roj.gui.DoubleClickHelper;
+import roj.gui.GuiUtil;
+import roj.gui.OnChangeHelper;
 import roj.io.IOUtil;
 import roj.plugin.Plugin;
 import roj.plugin.SimplePlugin;
 import roj.text.TextReader;
 import roj.text.TextUtil;
-import roj.ui.CMBoxValue;
-import roj.ui.DoubleClickHelper;
-import roj.ui.GuiUtil;
-import roj.ui.OnChangeHelper;
 import roj.util.ByteList;
 import roj.util.VMUtil;
 
 import javax.swing.*;
 import java.awt.*;
-import java.awt.event.*;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
 import java.io.InputStream;
 import java.util.Arrays;
 import java.util.List;
@@ -80,7 +81,7 @@ public class CardSleep extends JFrame {
 			monitorRead.shutdown();
 			monitorRead = null;
 
-			if (VMUtil.isShutdown()) return;
+			if (VMUtil.isShutdownInProgress()) return;
 			instance.dispose();
 			instance = null;
 		}

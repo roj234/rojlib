@@ -1,12 +1,12 @@
 package roj.asmx;
 
+import roj.asm.*;
+import roj.asm.annotation.Annotation;
+import roj.asm.attr.Annotations;
+import roj.asm.attr.Attribute;
 import roj.asm.cp.Constant;
 import roj.asm.cp.CstClass;
 import roj.asm.cp.CstRef;
-import roj.asm.tree.*;
-import roj.asm.tree.anno.Annotation;
-import roj.asm.tree.attr.Annotations;
-import roj.asm.tree.attr.Attribute;
 import roj.asm.type.Desc;
 import roj.asm.util.ClassUtil;
 import roj.asm.util.Context;
@@ -26,7 +26,7 @@ public class NodeFilter implements ITransformer {
 	final MyHashMap<Object, Object> reference = new MyHashMap<>(), declare = new MyHashMap<>(),
 		annotationClass = new MyHashMap<>(), annotationField = new MyHashMap<>(), annotationMethod = new MyHashMap<>();
 
-	public NodeFilter declaredClass(String owner, NodeTransformer<? super ConstantData> cb) { add(declare, owner, cb); return this; }
+	public NodeFilter declaredClass(String owner, NodeTransformer<? super ClassNode> cb) { add(declare, owner, cb); return this; }
 	public NodeFilter declaredMethod(String owner, String name, String desc, NodeTransformer<? super MethodNode> cb) { add(declare, new Desc(owner, name, desc), cb); return this; }
 	public NodeFilter declaredField(String owner, String name, String desc, NodeTransformer<? super FieldNode> cb) { add(declare, new Desc(owner, name, desc), cb); return this; }
 	public NodeFilter declaredAnyMethod(String name, String desc, NodeTransformer<? super MethodNode> cb) { add(declare, new Desc("", name, desc), cb); return this; }
@@ -36,7 +36,7 @@ public class NodeFilter implements ITransformer {
 	public NodeFilter referencedAnyMethod(String name, String desc, NodeTransformer<? super CstRef> cb) { add(reference, new Desc("", name, desc), cb); return this; }
 	public NodeFilter referencedAnyField(String name, String desc, NodeTransformer<? super CstRef> cb) { add(reference, new Desc("", name, desc), cb); return this; }
 	public NodeFilter referencedClass(String name, NodeTransformer<? super CstClass> cb) { add(reference, name, cb); return this; }
-	public NodeFilter annotatedClass(String type, NodeTransformer<? super ConstantData> tr) { add(annotationClass, type, tr); return this; }
+	public NodeFilter annotatedClass(String type, NodeTransformer<? super ClassNode> tr) { add(annotationClass, type, tr); return this; }
 	public NodeFilter annotatedField(String type, NodeTransformer<? super FieldNode> tr) { add(annotationField, type, tr); return this; }
 	public NodeFilter annotatedMethod(String type, NodeTransformer<? super MethodNode> tr) { add(annotationMethod, type, tr); return this; }
 
@@ -94,14 +94,14 @@ public class NodeFilter implements ITransformer {
 		mod |= checkAnnotation(data, data, Attribute.ClAnnotations, annotationClass);
 		mod |= checkAnnotation(data, data, Attribute.RtAnnotations, annotationClass);
 
-		tr = declare.get(data.name);
+		tr = declare.get(data.name());
 		if (tr != null) mod |= transform(tr, data, data);
 
 		mod |= invokeDeclare(data, data.methods, d, annotationMethod);
 		mod |= invokeDeclare(data, data.fields, d, annotationField);
 		return mod;
 	}
-	private boolean invokeDeclare(ConstantData data, SimpleList<? extends RawNode> nodes, Desc d, MyHashMap<Object, Object> ref) throws TransformException {
+	private boolean invokeDeclare(ClassNode data, SimpleList<? extends RawNode> nodes, Desc d, MyHashMap<Object, Object> ref) throws TransformException {
 		boolean mod = false;
 		Object tr;
 
@@ -111,7 +111,7 @@ public class NodeFilter implements ITransformer {
 			mod |= checkAnnotation(data, node, Attribute.ClAnnotations, ref);
 			mod |= checkAnnotation(data, node, Attribute.RtAnnotations, ref);
 
-			d.owner = data.name;
+			d.owner = data.name();
 			d.name = node.name();
 			d.param = node.rawDesc();
 
@@ -124,7 +124,7 @@ public class NodeFilter implements ITransformer {
 		}
 		return mod;
 	}
-	private boolean checkAnnotation(ConstantData data, Attributed node, TypedKey<Annotations> flag, MyHashMap<Object, Object> ref) throws TransformException {
+	private boolean checkAnnotation(ClassNode data, Attributed node, TypedKey<Annotations> flag, MyHashMap<Object, Object> ref) throws TransformException {
 		Annotations attr = node.parsedAttr(data.cp, flag);
 		boolean mod = false;
 		if (attr != null) {
@@ -138,7 +138,7 @@ public class NodeFilter implements ITransformer {
 	}
 
 	@SuppressWarnings("unchecked")
-	private boolean transform(Object tr, ConstantData data, Object ctx) throws TransformException {
+	private boolean transform(Object tr, ClassNode data, Object ctx) throws TransformException {
 		if (tr instanceof NodeTransformer<?> trx) return trx.transform(data, Helpers.cast(ctx));
 
 		List<NodeTransformer<?>> list = (List<NodeTransformer<?>>) tr;

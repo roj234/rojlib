@@ -3,7 +3,6 @@ package roj.crypt;
 import roj.RojLib;
 import roj.reflect.Unaligned;
 import roj.reflect.litasm.FastJNI;
-import sun.misc.Unsafe;
 
 import static java.lang.Integer.rotateLeft;
 
@@ -65,5 +64,5 @@ public class XXHash {
 		return hash;
 	}
 
-	private static int getIntLE(byte[] b, int i) {return Unaligned.U.get32UL(b, Unsafe.ARRAY_BYTE_BASE_OFFSET+i);}
+	private static int getIntLE(byte[] b, int i) {return Unaligned.U.get32UL(b, Unaligned.ARRAY_BYTE_BASE_OFFSET+i);}
 }

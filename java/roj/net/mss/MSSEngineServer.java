@@ -24,14 +24,13 @@ import static roj.net.mss.MSSEngineClient.HELLO_RETRY_REQUEST;
  * @since 2021/12/22 12:21
  */
 final class MSSEngineServer extends MSSEngine {
+	static final byte _1RTT_HS = 0x40;
+
 	private RCipherSpi preDecoder;
 	MSSEngineServer(MSSContext config) {super(config, PRESHARED_ONLY|VERIFY_CLIENT);}
-	/**
-	 * 开启0-RTT以及Encrypted_Extension
-	 */
-	private boolean noReply() {return (flag & VERIFY_CLIENT) == 0;}
 
 	@Override public final boolean isClient() {return false;}
+	@Override public boolean maySendMessage() {return stage>=PREFLIGHT_WAIT;}
 
 	@Override
 	@SuppressWarnings("fallthrough")
@@ -46,8 +45,8 @@ final class MSSEngineServer extends MSSEngine {
 			BufferPool.reserve(toWrite);
 			toWrite = null;
 
+			if ((flag&_1RTT_HS) != 0) stage = HS_DONE;
 			flag &= ~WRITE_PENDING;
-			if (preDecoder == null && noReply()) stage = HS_DONE;
 			return HS_OK;
 		}
 
@@ -65,7 +64,7 @@ final class MSSEngineServer extends MSSEngine {
 				case FINISH_WAIT:
 					preDecoder = null;
 					if (type == H_CLIENT_PACKET) break validated;
-					if (noReply()) {
+					if ((flag&_1RTT_HS) != 0) {
 						stage = HS_DONE;
 						return HS_OK;
 					}
@@ -125,7 +124,7 @@ final class MSSEngineServer extends MSSEngine {
 			if (stage == RETRY_KEY_EXCHANGE) return error(ILLEGAL_PARAM, "hello_retry");
 			stage = RETRY_KEY_EXCHANGE;
 
-			tx.put(H_SERVER_PACKET).putShort(39)
+			tx.put(H_SERVER_PACKET).putShort(39/*length*/)
 			  .put(PROTOCOL_VERSION).put(EMPTY_32).putShort(0xFFFF).putInt(config.getSupportedKeyExchanges());
 			return HS_OK;
 		} else {
@@ -140,9 +139,11 @@ final class MSSEngineServer extends MSSEngine {
 		CharMap<DynByteBuf> extIn = Extension.read(rx);
 
 		DynByteBuf tmp;
+		boolean hasZeroRTT = false;
 		// 0-RTT
 		zeroRtt:
 		if ((tmp = extIn.remove(Extension.session)) != null) {
+			hasZeroRTT = true;
 			var sess = config.getOrCreateSession(context, tmp, 1);
 
 			// 如果session不存在or新建则丢弃0-RTT消息
@@ -182,10 +183,15 @@ final class MSSEngineServer extends MSSEngine {
 			extOut.put(Extension.certificate, config.buffer(1+data.length).put(kp.format()).put(data));
 		}
 
-		if ((flag & VERIFY_CLIENT) != 0)
+		boolean clientWillReply;
+		if ((flag & VERIFY_CLIENT) != 0 && !verifyClientCertificate(extIn, false)) {
+			clientWillReply = true;
 			extOut.put(Extension.certificate_request, config.buffer(4).putInt(config.getSupportCertificateType()));
+		} else {
+			clientWillReply = false;
+		}
 
-		config.processExtensions(context, extIn, extOut, 1);
+        if (config.processExtensions(context, extIn, extOut, 1)) clientWillReply = true;
 
 		// ID server_hello
 		// u1 version
@@ -218,7 +224,6 @@ final class MSSEngineServer extends MSSEngine {
 		byte[] signBytes = CipherSuite.getKeyFormat(kp.format()).sign(kp, random, signData.digestShared());
 		ob.putShort(signBytes.length).put(signBytes);
 
-		stage = PREFLIGHT_WAIT;
 		encoder = suite.cipher.get();
 		decoder = suite.cipher.get();
 
@@ -237,12 +242,17 @@ final class MSSEngineServer extends MSSEngine {
 			BufferPool.reserve(encb);
 		}
 
+		stage = hasZeroRTT ? PREFLIGHT_WAIT : FINISH_WAIT;
+		if (!clientWillReply) flag |= _1RTT_HS;
+
 		int v = ensureWritable(tx, ob.readableBytes()+3);
 		if (v != 0) {
 			flag |= WRITE_PENDING;
 			toWrite = config.buffer(ob.readableBytes()).put(ob);
 			return v;
 		}
+
+		if (!hasZeroRTT && !clientWillReply) stage = HS_DONE;
 
 		tx.put(H_SERVER_PACKET).putShort(ob.readableBytes()).put(ob);
 		// 半个通道已经建立：服务器可以发送数据了
@@ -272,26 +282,36 @@ final class MSSEngineServer extends MSSEngine {
 		decoder.cryptInline(rx, rx.readableBytes());
 
 		CharMap<DynByteBuf> extIn = Extension.read(rx);
-		if ((flag & VERIFY_CLIENT) != 0) {
-			var buf = extIn.remove(Extension.certificate);
-			if (buf == null) return error(ILLEGAL_PARAM, "certificate missing");
-
-			byte[] sign = buf.readBytes(buf.readUnsignedShort());
-
-			int type = buf.readUnsignedByte();
-			if ((config.getSupportCertificateType() & (1 << type)) == 0) return error(NEGOTIATION_FAILED, "unsupported_certificate_type");
-
-			MSSPublicKey key = config.checkCertificate(context, type, buf, false);
-			try {
-				if (!CipherSuite.getKeyFormat(key.format()).verify(key, sharedKey, sign)) throw OperationDone.INSTANCE;
-			} catch (Exception e) {
-				return error(ILLEGAL_PARAM, "invalid signature");
-			}
-		}
+		if ((flag & VERIFY_CLIENT) != 0) verifyClientCertificate(extIn, false);
 		config.processExtensions(context, extIn, null, 3);
 
 		stage = HS_DONE;
 		return HS_OK;
+	}
+	private boolean verifyClientCertificate(CharMap<DynByteBuf> extIn, boolean noThrow) throws MSSException, GeneralSecurityException {
+		var buf = extIn.remove(Extension.certificate);
+		if (buf == null) {
+			if (noThrow) return false;
+			error(ILLEGAL_PARAM, "certificate missing");
+		}
+
+		byte[] sign = buf.readBytes(buf.readUnsignedShort());
+
+		int type = buf.readUnsignedByte();
+		if ((config.getSupportCertificateType() & (1 << type)) == 0) {
+			if (noThrow) return false;
+			error(NEGOTIATION_FAILED, "unsupported_certificate_type");
+		}
+
+		MSSPublicKey key = config.checkCertificate(context, type, buf, false);
+		try {
+			if (!CipherSuite.getKeyFormat(key.format()).verify(key, sharedKey, sign)) throw OperationDone.INSTANCE;
+		} catch (Exception e) {
+			if (noThrow) return false;
+			error(ILLEGAL_PARAM, "invalid signature");
+		}
+
+		return true;
 	}
 
 	private int ensureWritable(DynByteBuf out, int len) {

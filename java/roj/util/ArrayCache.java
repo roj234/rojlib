@@ -4,13 +4,12 @@ import roj.plugin.Status;
 import roj.reflect.Unaligned;
 import roj.text.CharList;
 import roj.text.TextUtil;
-import sun.misc.Unsafe;
 
 import java.lang.ref.Reference;
 import java.lang.ref.SoftReference;
 import java.lang.ref.WeakReference;
 
-import static roj.reflect.ReflectionUtils.u;
+import static roj.reflect.Unaligned.U;
 
 public class ArrayCache {
 	public static final byte[] BYTES = new byte[0];
@@ -111,16 +110,16 @@ public class ArrayCache {
 			if (Integer.lowestOneBit(size) != size) return null;
 		}
 
-		long offCache = Unsafe.ARRAY_OBJECT_BASE_OFFSET + Unsafe.ARRAY_OBJECT_INDEX_SCALE * CACHE_COUNT * (long) idx;
-		long offUsing = Unsafe.ARRAY_INT_BASE_OFFSET + ((long) idx << 2);
-		for (int i = 0; i < CACHE_COUNT; i++, offCache += Unsafe.ARRAY_OBJECT_INDEX_SCALE) {
-			var r = (Reference<?>) u.getObjectVolatile(G_Cache, offCache);
+		long offCache = Unaligned.ARRAY_OBJECT_BASE_OFFSET + Unaligned.ARRAY_OBJECT_INDEX_SCALE * CACHE_COUNT * (long) idx;
+		long offUsing = Unaligned.ARRAY_INT_BASE_OFFSET + ((long) idx << 2);
+		for (int i = 0; i < CACHE_COUNT; i++, offCache += Unaligned.ARRAY_OBJECT_INDEX_SCALE) {
+			var r = (Reference<?>) U.getObjectVolatile(G_Cache, offCache);
 			Object t;
 			if (r != null && (t = r.get()) != null) {
 				while (true) {
-					int bits = u.getIntVolatile(G_Using, offUsing);
+					int bits = U.getIntVolatile(G_Using, offUsing);
 					if ((bits & (1<<i)) != 0) break;
-					if (u.compareAndSwapInt(G_Using, offUsing, bits, bits | (1<<i)))
+					if (U.compareAndSwapInt(G_Using, offUsing, bits, bits | (1<<i)))
 						return (T) t;
 				}
 			}
@@ -132,33 +131,33 @@ public class ArrayCache {
 	private static void putGlobalArray(int idx, Object array, int size) {
 		idx = idx * 256 + Math.min(size / LARGE_ARRAY_SIZE - 1, 255);
 
-		long offCache = Unsafe.ARRAY_OBJECT_BASE_OFFSET + Unsafe.ARRAY_OBJECT_INDEX_SCALE * CACHE_COUNT * (long) idx;
-		long offUsing = Unsafe.ARRAY_INT_BASE_OFFSET + ((long) idx << 2);
-		for (int i = 0; i < CACHE_COUNT; i++, offCache += Unsafe.ARRAY_OBJECT_INDEX_SCALE) {
-			var r = (Reference<?>) u.getObjectVolatile(G_Cache, offCache);
+		long offCache = Unaligned.ARRAY_OBJECT_BASE_OFFSET + Unaligned.ARRAY_OBJECT_INDEX_SCALE * CACHE_COUNT * (long) idx;
+		long offUsing = Unaligned.ARRAY_INT_BASE_OFFSET + ((long) idx << 2);
+		for (int i = 0; i < CACHE_COUNT; i++, offCache += Unaligned.ARRAY_OBJECT_INDEX_SCALE) {
+			var r = (Reference<?>) U.getObjectVolatile(G_Cache, offCache);
 			if (r != null && r.get() == array) {
 				int mask = 1 << i;
 				while (true) {
-					int bits = u.getIntVolatile(G_Using, offUsing);
+					int bits = U.getIntVolatile(G_Using, offUsing);
 					if ((bits & mask) == 0) throw new InternalError("using[i] == false");
-					if (u.compareAndSwapInt(G_Using, offUsing, bits, bits&~mask))
+					if (U.compareAndSwapInt(G_Using, offUsing, bits, bits&~mask))
 						return;
 				}
 			}
 		}
 
-		offCache = Unsafe.ARRAY_OBJECT_BASE_OFFSET + Unsafe.ARRAY_OBJECT_INDEX_SCALE * CACHE_COUNT * (long) idx;
-		for (int i = 0; i < CACHE_COUNT; i++, offCache += Unsafe.ARRAY_OBJECT_INDEX_SCALE) {
-			var r = (Reference<?>) u.getObjectVolatile(G_Cache, offCache);
+		offCache = Unaligned.ARRAY_OBJECT_BASE_OFFSET + Unaligned.ARRAY_OBJECT_INDEX_SCALE * CACHE_COUNT * (long) idx;
+		for (int i = 0; i < CACHE_COUNT; i++, offCache += Unaligned.ARRAY_OBJECT_INDEX_SCALE) {
+			var r = (Reference<?>) U.getObjectVolatile(G_Cache, offCache);
 			if (r == null || r.get() == null) {
-				if (u.compareAndSwapObject(G_Cache, offCache, r, G_Sential)) {
+				if (U.compareAndSwapObject(G_Cache, offCache, r, G_Sential)) {
 					var ref = i < 2 ? new SoftReference<>(array) : new WeakReference<>(array);
-					u.putObjectVolatile(G_Cache, offCache, ref);
+					U.putObjectVolatile(G_Cache, offCache, ref);
 
 					int mask = 1 << i;
 					while (true) {
-						int bits = u.getIntVolatile(G_Using, offUsing);
-						if ((bits & mask) == 0 || u.compareAndSwapInt(G_Using, offUsing, bits, bits&~mask))
+						int bits = U.getIntVolatile(G_Using, offUsing);
+						if ((bits & mask) == 0 || U.compareAndSwapInt(G_Using, offUsing, bits, bits&~mask))
 							return;
 					}
 				}

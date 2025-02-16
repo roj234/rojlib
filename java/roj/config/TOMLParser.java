@@ -309,14 +309,14 @@ public final class TOMLParser extends Parser {
 							yield tomlObject(flag);
 						} else {
 							retractWord();
-							yield CString.valueOf(w.val());
+							yield CEntry.valueOf(w.val());
 						}
 					}
 					case RFCDATE_DATE -> new CDate(w.asLong());
 					case RFCDATE_DATETIME, RFCDATE_DATETIME_TZ -> new CTimestamp(w.asLong());
-					case DOUBLE, FLOAT -> CDouble.valueOf(w.asDouble());
-					case INTEGER -> CInt.valueOf(w.asInt());
-					case LONG -> CLong.valueOf(w.asLong());
+					case DOUBLE, FLOAT -> CEntry.valueOf(w.asDouble());
+					case INTEGER -> CEntry.valueOf(w.asInt());
+					case LONG -> CEntry.valueOf(w.asLong());
 					case TRUE -> CBoolean.TRUE;
 					case FALSE -> CBoolean.FALSE;
 					case NULL -> CNull.NULL;

@@ -2,8 +2,8 @@ package roj.plugins.bkcrack;
 
 import roj.collect.MyBitSet;
 import roj.collect.SimpleList;
+import roj.concurrent.ITask;
 import roj.concurrent.TaskHandler;
-import roj.concurrent.task.ITask;
 import roj.io.FastFailException;
 import roj.ui.EasyProgressBar;
 import roj.util.ByteList;

@@ -10,7 +10,7 @@
 
 package roj.archive.qz.xz.lz;
 
-import static roj.reflect.ReflectionUtils.u;
+import static roj.reflect.Unaligned.U;
 
 final class HC4 extends LZEncoder {
 	HC4(int dictSize, int beforeSizeMin, int readAheadMax, int niceLen, int matchLenMax, int depthLimit) {
@@ -62,7 +62,7 @@ final class HC4 extends LZEncoder {
 		int currentMatch = hash.getHash4Pos();
 		hash.updateTables(lzPos);
 
-		u.putInt(base +((long) cyclicPos<<2), currentMatch);
+		U.putInt(base +((long) cyclicPos<<2), currentMatch);
 
 		int lenBest = 0;
 
@@ -70,7 +70,7 @@ final class HC4 extends LZEncoder {
 		// The hashing algorithm guarantees that if the first byte
 		// matches, also the second byte does, so there's no need to
 		// test the second byte.
-		if (delta2 < cyclicSize && u.getByte(buf + readPos - delta2) == u.getByte(buf + readPos)) {
+		if (delta2 < cyclicSize && U.getByte(buf + readPos - delta2) == U.getByte(buf + readPos)) {
 			lenBest = 2;
 			mlen[0] = 2;
 			mdist[0] = delta2 - 1;
@@ -81,7 +81,7 @@ final class HC4 extends LZEncoder {
 		// is different from the match possibly found by the two-byte hash.
 		// Also here the hashing algorithm guarantees that if the first byte
 		// matches, also the next two bytes do.
-		if (delta2 != delta3 && delta3 < cyclicSize && u.getByte(buf + readPos - delta3) == u.getByte(buf + readPos)) {
+		if (delta2 != delta3 && delta3 < cyclicSize && U.getByte(buf + readPos - delta3) == U.getByte(buf + readPos)) {
 			lenBest = 3;
 			mdist[mcount++] = delta3 - 1;
 			delta2 = delta3;
@@ -89,7 +89,7 @@ final class HC4 extends LZEncoder {
 
 		// If a match was found, see how long it is.
 		if (mcount > 0) {
-			while (lenBest < matchLenLimit && u.getByte(buf + readPos + lenBest - delta2) == u.getByte(buf + readPos + lenBest)) ++lenBest;
+			while (lenBest < matchLenLimit && U.getByte(buf + readPos + lenBest - delta2) == U.getByte(buf + readPos + lenBest)) ++lenBest;
 
 			mlen[mcount - 1] = lenBest;
 
@@ -112,17 +112,17 @@ final class HC4 extends LZEncoder {
 			// dictionary size.
 			if (depth-- == 0 || delta >= cyclicSize) return;
 
-			currentMatch = u.getInt(base + ((long) (cyclicPos - delta + (delta > cyclicPos ? cyclicSize : 0)) <<2));
+			currentMatch = U.getInt(base + ((long) (cyclicPos - delta + (delta > cyclicPos ? cyclicSize : 0)) <<2));
 
 			// Test the first byte and the first new byte that would give us
 			// a match that is at least one byte longer than lenBest. This
 			// too short matches get quickly skipped.
 			long offset = buf+readPos;
-			if (u.getByte(offset + lenBest - delta) == u.getByte(offset + lenBest) &&
-				u.getByte(offset - delta) == u.getByte(offset)) {
+			if (U.getByte(offset + lenBest - delta) == U.getByte(offset + lenBest) &&
+				U.getByte(offset - delta) == U.getByte(offset)) {
 				// Calculate the length of the match.
 				int len = 0;
-				while (++len < matchLenLimit) if (u.getByte(offset + len - delta) != u.getByte(offset + len)) break;
+				while (++len < matchLenLimit) if (U.getByte(offset + len - delta) != U.getByte(offset + len)) break;
 
 				// Use the match if and only if it is better than the longest
 				// match found so far.
@@ -147,7 +147,7 @@ final class HC4 extends LZEncoder {
 			if (movePos() != 0) {
 				// Update the hash chain and hash tables.
 				hash.calcHashes(buf, readPos);
-				u.putInt(base +((long) cyclicPos<<2), hash.getHash4Pos());
+				U.putInt(base +((long) cyclicPos<<2), hash.getHash4Pos());
 				hash.updateTables(lzPos);
 			}
 		}

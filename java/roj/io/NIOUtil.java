@@ -1,9 +1,9 @@
 package roj.io;
 
 import roj.RojLib;
+import roj.net.SelectorLoop;
 import roj.reflect.Bypass;
 import roj.reflect.ReflectionUtils;
-import roj.text.logging.Logger;
 import roj.util.NativeException;
 import roj.util.OS;
 
@@ -20,7 +20,7 @@ import java.nio.file.WatchService;
 import java.util.concurrent.LinkedBlockingDeque;
 import java.util.function.Consumer;
 
-import static roj.reflect.ReflectionUtils.u;
+import static roj.reflect.Unaligned.U;
 
 /**
  * @author Roj234
@@ -30,6 +30,7 @@ public final class NIOUtil {
 	private static LLIO SCN;
 	private static final NUT UTIL;
 
+	@Deprecated
 	public static LLIO tcpFdRW() { return SCN; }
 
 	static {
@@ -39,28 +40,28 @@ public final class NIOUtil {
 			da.access(FileDescriptor.class, "fd", "fdVal", "fdFd")
 			  .delegate(FileDescriptor.class, "closeAll", "fdClose");
 		} catch (Throwable e1) {
-			Logger.getLogger("NIOUtil").error("无法加载模块 {}", e1, "GetFdVal");
+			SelectorLoop.LOGGER.error("无法加载模块 {}", e1, "GetFdVal");
 		}
 
 		try {
 			SocketChannel sc = SocketChannel.open(); sc.close();
 			da.access(sc.getClass(), new String[] {"fd","nd"}, new String[] {"tcpFD","sChNd"}, null);
 		} catch (Throwable e1) {
-			Logger.getLogger("NIOUtil").error("无法加载模块 {}", e1, "GetChannelFD");
+			SelectorLoop.LOGGER.error("无法加载模块 {}", e1, "GetChannelFD");
 		}
 
 		try {
 			DatagramChannel dc = DatagramChannel.open(); dc.close();
 			da.access(dc.getClass(), new String[] {"fd","nd"}, new String[] {"udpFD","dChNd"}, null);
 		} catch (Throwable e1) {
-			Logger.getLogger("NIOUtil").error("无法加载模块 {}", e1, "GetChannelFD");
+			SelectorLoop.LOGGER.error("无法加载模块 {}", e1, "GetChannelFD");
 		}
 
 		try {
 			ServerSocketChannel sc = ServerSocketChannel.open(); sc.close();
 			da.access(sc.getClass(), "fd", "tcpsFD", null);
 		} catch (Throwable e1) {
-			Logger.getLogger("NIOUtil").error("无法加载模块 {}", e1, "GetServerChannelFD");
+			SelectorLoop.LOGGER.error("无法加载模块 {}", e1, "GetServerChannelFD");
 		}
 
 		UTIL = da.build();
@@ -70,7 +71,7 @@ public final class NIOUtil {
 		try {
 			SCN = Bypass.builder(LLIO.class).inline().delegate(UTIL.sChNd().getClass(), ss2, ss1).build();
 		} catch (Throwable e1) {
-			Logger.getLogger("NIOUtil").error("无法加载模块 {}", e1, "TCP_LLIO");
+			SelectorLoop.LOGGER.error("无法加载模块 {}", e1, "TCP_LLIO");
 		}
 	}
 
@@ -147,7 +148,7 @@ public final class NIOUtil {
 				off = pendingKeys_offset = ReflectionUtils.fieldOffset(Class.forName("sun.nio.fs.AbstractWatchService"), "pendingKeys");
 			}
 			if (off > 0) {
-				u.putObject(watcher, off, new LinkedBlockingDeque<>() {
+				U.putObject(watcher, off, new LinkedBlockingDeque<>() {
 					@Override
 					public boolean offer(Object o) {
 						c.accept((WatchKey) o);

@@ -19,8 +19,8 @@ import java.util.*;
 public class CMap extends CEntry {
 	public static final String CONFIG_TOPLEVEL = "<root>";
 
-	final Map<String, CEntry> map;
-	CharList dot;
+	protected Map<String, CEntry> map;
+	boolean dot;
 
 	public CMap() { this.map = new MyHashMap<>(); }
 	public CMap(Map<String, CEntry> map) { this.map = map; }
@@ -54,10 +54,10 @@ public class CMap extends CEntry {
 	}
 
 	public final Map<String, CEntry> raw() { return map; }
-	public final Map<String, Object> rawDeep() {
+	public final Map<String, Object> unwrap() {
 		MyHashMap<String, Object> caster = Helpers.cast(new MyHashMap<>(map));
 		for (Map.Entry<String, Object> entry : caster.entrySet()) {
-			entry.setValue(((CEntry) entry.getValue()).rawDeep());
+			entry.setValue(((CEntry) entry.getValue()).unwrap());
 		}
 		return caster;
 	}
@@ -66,11 +66,9 @@ public class CMap extends CEntry {
 	public final Set<String> keySet() { return map.keySet(); }
 	public final Collection<CEntry> values() { return map.values(); }
 
-	public final int size() { return map.size(); }
-	public CharList dot(boolean dotMode) {
-		if (dotMode == (dot == null)) this.dot = dotMode ? new CharList() : null;
-		return dot;
-	}
+	public boolean isEmpty() {return map.isEmpty();}
+	public final int size() {return map.size();}
+	public void dot(boolean dotMode) {this.dot = dotMode;}
 
 	// region PUT
 	public final CEntry put(String key, CEntry entry) { return put1(key, entry == null ? CNull.NULL : entry, 0); }
@@ -82,17 +80,17 @@ public class CMap extends CEntry {
 			((CString) prev).value = entry;
 			return null;
 		} else {
-			return put1(key, CString.valueOf(entry), 0);
+			return put1(key, CEntry.valueOf(entry), 0);
 		}
 	}
-	public final CEntry put(String key, boolean entry) { return put1(key, CBoolean.valueOf(entry), 0); }
+	public final CEntry put(String key, boolean entry) { return put1(key, CEntry.valueOf(entry), 0); }
 	public final CEntry put(String key, int entry) {
 		CEntry prev = get(key);
 		if (prev.getType() == Type.INTEGER) {
 			((CInt) prev).value = entry;
 			return null;
 		} else {
-			return put1(key, CInt.valueOf(entry), 0);
+			return put1(key, CEntry.valueOf(entry), 0);
 		}
 	}
 	public final CEntry put(String key, long entry) {
@@ -101,7 +99,7 @@ public class CMap extends CEntry {
 			((CLong) prev).value = entry;
 			return null;
 		} else {
-			return put1(key, CLong.valueOf(entry), 0);
+			return put1(key, CEntry.valueOf(entry), 0);
 		}
 	}
 	public final CEntry put(String key, double entry) {
@@ -110,22 +108,22 @@ public class CMap extends CEntry {
 			((CDouble) prev).value = entry;
 			return null;
 		} else {
-			return put1(key, CDouble.valueOf(entry), 0);
+			return put1(key, CEntry.valueOf(entry), 0);
 		}
 	}
 
 	public final CEntry putIfAbsent(String key, CEntry v) { return put1(key, v, Q_SET_IF_ABSENT);}
-	public final String putIfAbsent(String key, String v) { return put1(key, CString.valueOf(v), Q_SET_IF_ABSENT).asString();}
-	public final boolean putIfAbsent(String key, boolean v) { return put1(key, CBoolean.valueOf(v), Q_SET_IF_ABSENT).asBool();}
-	public final int putIfAbsent(String key, int v) { return put1(key, CInt.valueOf(v), Q_SET_IF_ABSENT).asInt();}
-	public final long putIfAbsent(String key, long v) { return put1(key, CLong.valueOf(v), Q_SET_IF_ABSENT).asLong();}
-	public final double putIfAbsent(String key, double v) { return put1(key, CDouble.valueOf(v), Q_SET_IF_ABSENT).asDouble();}
+	public final String putIfAbsent(String key, String v) { return put1(key, CEntry.valueOf(v), Q_SET_IF_ABSENT).asString();}
+	public final boolean putIfAbsent(String key, boolean v) { return put1(key, CEntry.valueOf(v), Q_SET_IF_ABSENT).asBool();}
+	public final int putIfAbsent(String key, int v) { return put1(key, CEntry.valueOf(v), Q_SET_IF_ABSENT).asInt();}
+	public final long putIfAbsent(String key, long v) { return put1(key, CEntry.valueOf(v), Q_SET_IF_ABSENT).asLong();}
+	public final double putIfAbsent(String key, double v) { return put1(key, CEntry.valueOf(v), Q_SET_IF_ABSENT).asDouble();}
 
 	public final CMap getOrCreateMap(String key) { return put1(key, new CMap(), Q_SET_IF_ABSENT).asMap();}
 	public final CList getOrCreateList(String key) { return put1(key, new CList(), Q_SET_IF_ABSENT).asList();}
 
 	protected CEntry put1(String k, CEntry v, int f) {
-		if (null == dot) {
+		if (!dot) {
 			if ((f & Q_SET_IF_ABSENT) == 0 || !map.getOrDefault(k, CNull.NULL).mayCastTo(v.getType())) {
 				map.put(k, v);
 				return v;
@@ -133,7 +131,7 @@ public class CMap extends CEntry {
 			return map.getOrDefault(k, v);
 		}
 
-		return query(k, Q_CREATE_MID|Q_SET|f, v, dot);
+		return query(k, Q_CREATE_MID|Q_SET|f, v);
 	}
 	// endregion
 	// region GET
@@ -141,9 +139,10 @@ public class CMap extends CEntry {
 	public final boolean containsKey(String key) {return getOr(key, null) != null;}
 	public final boolean containsKey(String key, Type type) {return get(key).mayCastTo(type);}
 
-	public final boolean getBool(String key) {
+	public final boolean getBool(String key) {return getBool(key, false);}
+	public final boolean getBool(String key, boolean def) {
 		CEntry entry = get(key);
-		return entry.mayCastTo(Type.BOOL) && entry.asBool();
+		return entry.mayCastTo(Type.BOOL) && entry.asBool() || def;
 	}
 	@NotNull
 	public final String getString(String key) {return getString(key, "");}
@@ -152,8 +151,10 @@ public class CMap extends CEntry {
 		CEntry entry = get(key);
 		return entry.mayCastTo(Type.STRING) ? entry.asString() : def;
 	}
-	public final int getInteger(String key) {return getInteger(key, 0);}
-	public final int getInteger(String key, int def) {
+	public final int getInteger(String key) {return getInt(key, 0);}
+	public final int getInteger(String key, int def) {return getInt(key, def);}
+	public final int getInt(String key) {return getInt(key, 0);}
+	public final int getInt(String key, int def) {
 		CEntry entry = get(key);
 		return entry.mayCastTo(Type.INTEGER) ? entry.asInt() : def;
 	}
@@ -172,21 +173,15 @@ public class CMap extends CEntry {
 		CEntry entry = get(key);
 		return entry.mayCastTo(Type.DOUBLE) ? entry.asDouble() : def;
 	}
-	@NotNull
-	public final CList getList(String key) {return get(key).asList();}
-	@NotNull
-	public final CMap getMap(String key) {return get(key).asMap();}
-	@NotNull
-	public final CEntry get(String key) {return getOr(key, CNull.NULL);}
-	@NotNull
-	public final CEntry getDot(String path) {return query(path, 0, CNull.NULL, dot == null ? new CharList() : dot);}
-	@Nullable
-	public final CEntry getOr(String k) {return getOr(k,null);}
-	@Contract("_,!null -> !null")
-	public CEntry getOr(String k, CEntry def) {
+	@NotNull public CList getList(String key) {return get(key).asList();}
+	@NotNull public CMap getMap(String key) {return get(key).asMap();}
+
+	@NotNull public CEntry get(String key) {return getOr(key, CNull.NULL);}
+	@NotNull public final CEntry getDot(String path) {return query(path, 0, CNull.NULL);}
+	@Nullable public final CEntry getOr(String k) {return getOr(k,null);}
+	@Contract("_,!null -> !null") public CEntry getOr(String k, CEntry def) {
 		if (k == null) return def;
-		if (null == dot) return map.getOrDefault(k, def);
-		return query(k, 0, CNull.NULL, dot);
+		return !dot ? map.getOrDefault(k, def) : query(k, 0, CNull.NULL);
 	}
 	// endregion
 
@@ -263,8 +258,6 @@ public class CMap extends CEntry {
 	public void putComment(String key, String val) {throw new UnsupportedOperationException();}
 	public CMap withComments() { return new CCommMap(map); }
 	public void clearComments() {}
-
-	protected final CharList toJSON(CharList sb, int depth) { throw new NoSuchMethodError(); }
 
 	@Override
 	public CharList toTOML(CharList sb, int depth, CharSequence chain) {

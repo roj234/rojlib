@@ -24,7 +24,7 @@ public class XlsxWriter implements TableWriter {
 	private static ZipFile TEMPLATE;
 	static {
 		try {
-			TEMPLATE = new ZipFile(new MemorySource(IOUtil.getResource("META-INF/template.xlsx")), 0, StandardCharsets.UTF_8);
+			TEMPLATE = new ZipFile(new MemorySource(IOUtil.getResource("roj/config/table/template.xlsx")), 0, StandardCharsets.UTF_8);
 			TEMPLATE.reload();
 		} catch (IOException ignored) {}
 	}

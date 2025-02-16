@@ -2,10 +2,10 @@ package roj.plugins.minecraft.server.network;
 
 import roj.collect.ToIntMap;
 import roj.config.ParseException;
-import roj.ui.terminal.Argument;
-import roj.ui.terminal.CommandNode;
-import roj.ui.terminal.CommandParser;
-import roj.ui.terminal.Completion;
+import roj.ui.Argument;
+import roj.ui.CommandNode;
+import roj.ui.CommandParser;
+import roj.ui.Completion;
 import roj.util.DynByteBuf;
 
 import java.util.ArrayDeque;

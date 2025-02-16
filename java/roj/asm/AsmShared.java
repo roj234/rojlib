@@ -3,12 +3,15 @@ package roj.asm;
 import roj.asm.cp.Constant;
 import roj.asm.cp.ConstantPool;
 import roj.asm.cp.CstTop;
+import roj.asm.insn.CodeWriter;
+import roj.asm.insn.Label;
 import roj.asm.type.Type;
-import roj.asm.visitor.CodeWriter;
-import roj.asm.visitor.Label;
 import roj.collect.IntMap;
 import roj.collect.SimpleList;
-import roj.util.*;
+import roj.util.ArrayCache;
+import roj.util.ByteList;
+import roj.util.DynByteBuf;
+import roj.util.Helpers;
 
 /**
  * @author Roj234
@@ -18,13 +21,24 @@ public final class AsmShared {
 	private static final ThreadLocal<AsmShared> BUFFERS = ThreadLocal.withInitial(AsmShared::new);
 
 	public static AsmShared local() { return BUFFERS.get(); }
-	public static void drop() { BUFFERS.remove(); }
-	public static ByteList getBuf() { return BUFFERS.get().current(); }
+	@Deprecated public static void reset() { BUFFERS.remove(); }
+
+	private ByteList buf;
+	public static ByteList buf() {
+		AsmShared inst = BUFFERS.get();
+		var buf = inst.buf;
+		if (buf == null) buf = new ByteList(4096);
+		else buf.clear();
+		inst.buf = null;
+		return buf;
+	}
+	public static void buf(ByteList x) {
+		var inst = BUFFERS.get();
+		inst.buf = x;
+	}
 
 	private final SimpleList<Type> mp = new SimpleList<>();
-	public <T> SimpleList<T> methodTypeTmp() {
-		mp.clear(); return Helpers.cast(mp);
-	}
+	public <T> SimpleList<T> methodTypeTmp() {mp.clear(); return Helpers.cast(mp);}
 
 	private final Object[][] cpArr = new Object[10][];
 	private int cpCount;
@@ -57,13 +71,12 @@ public final class AsmShared {
 		cpArr[--cpCount] = cpArray;
 	}
 
-	private final CodeWriter cw = new CodeWriter();
-	public CodeWriter cw() { return cw; }
+	private CodeWriter cw = new CodeWriter();
+	public CodeWriter cw() { var tmp = cw; cw = null; return tmp == null ? new CodeWriter() : tmp; }
+	public void cw(CodeWriter cw) { this.cw = cw; }
 
 	private final IntMap<Label> pcm = new IntMap<>();
-	public IntMap<Label> getBciMap() {
-		pcm.clear(); return pcm;
-	}
+	public IntMap<Label> getBciMap() {pcm.clear(); return pcm;}
 
 	private byte[] xInsn_sharedSegmentData = new byte[256];
 	private int xInsn_sharedSegmentUsed = 0;
@@ -108,20 +121,6 @@ public final class AsmShared {
 		pool.clear();
 	}
 
-	private final ByteList.Slice wrapB = new ByteList.Slice();
-	private DirectByteList.Slice wrapD;
-	public DynByteBuf copy(DynByteBuf src) {
-		if (src.hasArray()) return wrapB.copy(src);
-		if (src.isDirect()) {
-			if (wrapD == null) wrapD = new DirectByteList.Slice();
-			return wrapD.copy(src);
-		}
-		throw new IllegalStateException("Not standard DynByteBuf: " + src.getClass().getName());
-	}
-
-	private final ByteList buf = new ByteList(4096);
-	ByteList current() {
-		buf.clear();
-		return buf;
-	}
+	@Deprecated
+	public DynByteBuf copy(DynByteBuf src) {return src.slice();}
 }

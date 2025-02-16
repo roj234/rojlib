@@ -11,6 +11,7 @@ public interface ChannelHandler {
 	default void handlerRemoved(ChannelCtx ctx) {}
 
 	default void channelOpened(ChannelCtx ctx) throws IOException {ctx.channelOpened();}
+	//@MustBeInvokedByOverriders
 	default void channelClosed(ChannelCtx ctx) throws IOException {handlerRemoved(ctx);}
 
 	default void channelWrite(ChannelCtx ctx, Object msg) throws IOException {ctx.channelWrite(msg);}

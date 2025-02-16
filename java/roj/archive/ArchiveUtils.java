@@ -4,7 +4,6 @@ import roj.collect.MyHashSet;
 import roj.io.source.CompositeSource;
 import roj.io.source.FileSource;
 import roj.io.source.Source;
-import roj.text.TextUtil;
 
 import java.io.File;
 import java.io.IOException;
@@ -22,6 +21,11 @@ public class ArchiveUtils {
 
 	public static Source tryOpenSplitArchive(File file, boolean readonly) throws IOException {
 		Matcher m = SPLIT_ARCHIVE_PATTERN.matcher(file.getName());
-		return m.find() ? CompositeSource.dynamic(new File(TextUtil.substr(file.getAbsolutePath(), -(m.end() - m.start()))), !readonly) : new FileSource(file, !readonly);
+		if (m.find()) {
+			String s = file.getAbsolutePath();
+			return CompositeSource.dynamic(new File(s.substring(0, s.length() + m.start() - m.end())), !readonly);
+		} else {
+			return new FileSource(file, !readonly);
+		}
 	}
 }

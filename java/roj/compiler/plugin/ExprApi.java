@@ -1,7 +1,7 @@
 package roj.compiler.plugin;
 
 import org.jetbrains.annotations.Nullable;
-import roj.asm.tree.MethodNode;
+import roj.asm.MethodNode;
 import roj.asm.type.IType;
 import roj.asm.type.Type;
 import roj.compiler.JavaLexer;

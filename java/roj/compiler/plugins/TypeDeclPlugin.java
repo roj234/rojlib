@@ -1,7 +1,7 @@
 package roj.compiler.plugins;
 
+import roj.asm.MethodNode;
 import roj.asm.Opcodes;
-import roj.asm.tree.MethodNode;
 import roj.asm.type.Generic;
 import roj.asm.type.IType;
 import roj.compiler.JavaLexer;

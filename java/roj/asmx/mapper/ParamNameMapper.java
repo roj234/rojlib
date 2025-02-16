@@ -1,12 +1,13 @@
 package roj.asmx.mapper;
 
+import org.jetbrains.annotations.Nullable;
+import roj.asm.MethodNode;
 import roj.asm.Opcodes;
 import roj.asm.Parser;
+import roj.asm.attr.AttrUnknown;
+import roj.asm.attr.Attribute;
 import roj.asm.cp.ConstantPool;
 import roj.asm.cp.CstUTF;
-import roj.asm.tree.MethodNode;
-import roj.asm.tree.attr.AttrUnknown;
-import roj.asm.tree.attr.Attribute;
 import roj.asm.type.Type;
 import roj.asm.type.TypeHelper;
 import roj.collect.MyBitSet;
@@ -15,7 +16,6 @@ import roj.io.IOUtil;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
 
-import java.util.Collections;
 import java.util.List;
 
 /**
@@ -32,7 +32,7 @@ public abstract class ParamNameMapper {
 
 		ParamNameMapper pmap = new ParamNameMapper() {
 			@Override
-			protected List<String> getNewParamName(MethodNode m) {
+			protected List<String> getParamNames(MethodNode m) {
 				return names;
 			}
 		};
@@ -55,7 +55,7 @@ public abstract class ParamNameMapper {
 	public MyBitSet validNameChars = HUMAN_READABLE_TOKENS;
 
 	public boolean mapParam(ConstantPool pool, MethodNode m) {
-		List<String> parNames = getNewParamName(m);
+		List<String> parNames = getParamNames(m);
 
 		Attribute a;
 		DynByteBuf r;
@@ -100,7 +100,7 @@ public abstract class ParamNameMapper {
 				int end = r.readInt() + r.rIndex;
 				switch (aname) {
 					case "LocalVariableTable":
-						List<V> list = readVar(pool, r);
+						List<V> list = parseLVT(pool, r);
 						for (int j = 0; j < list.size(); j++) {
 							V entry = list.get(j);
 
@@ -128,11 +128,11 @@ public abstract class ParamNameMapper {
 						}
 						break;
 					case "LocalVariableTypeTable":
-						list = readVar(pool, r);
+						list = parseLVT(pool, r);
 						for (int j = 0; j < list.size(); j++) {
 							V entry = list.get(j);
 
-							String ref = mapGeneric(entry.type.str());
+							String ref = mapGenericType(entry.type.str());
 							if (ref != null) r.putShort(entry.typeOff, pool.getUtfId(ref));
 
 							String name = entry.name.str();
@@ -183,7 +183,7 @@ public abstract class ParamNameMapper {
 				// including Null check
 				String name = parNames.get(j);
 				if (name == null) {
-					name = fallbackParamName(m, i, j);
+					name = getFallbackParamName(m, i, j);
 					parNames.set(j, name);
 				}
 				attr.putShort(pool.getUtfId(name)).putShort(0);
@@ -198,7 +198,12 @@ public abstract class ParamNameMapper {
 		return false;
 	}
 
-	public static List<V> readVar(ConstantPool cp, DynByteBuf r) {
+	private static final class V {
+		CstUTF name, type;
+		int slot, nameOff, typeOff;
+		int start, end;
+	}
+	private static List<V> parseLVT(ConstantPool cp, DynByteBuf r) {
 		int len = r.readUnsignedShort();
 		List<V> list = new SimpleList<>(len);
 
@@ -216,27 +221,10 @@ public abstract class ParamNameMapper {
 		return list;
 	}
 
-	public static final class V {
-		public CstUTF name, type;
-		public int slot, nameOff, typeOff;
-		public int start, end;
 
-		public final void write(DynByteBuf w) {
-			w.putShort(start).putShort(end).putShort(name.getIndex()).putShort(type.getIndex()).putShort(slot);
-		}
-	}
+	@Nullable protected String mapType(String type) {return null;}
+	@Nullable protected String mapGenericType(String type) {return null;}
 
-	protected String mapType(String string) {
-		return null;
-	}
-	protected String mapGeneric(String string) {
-		return null;
-	}
-
-	protected String fallbackParamName(MethodNode m, int index, int stackPos) {
-		return "arg"+index;
-	}
-	protected List<String> getNewParamName(MethodNode m) {
-		return Collections.emptyList();
-	}
+	protected String getFallbackParamName(MethodNode m, int index, int stackPos) {return "arg"+index;}
+	protected abstract List<String> getParamNames(MethodNode m);
 }

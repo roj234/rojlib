@@ -3,13 +3,13 @@ package roj.compiler.ast.expr;
 import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
+import roj.asm.FieldNode;
+import roj.asm.IClass;
 import roj.asm.Opcodes;
-import roj.asm.tree.FieldNode;
-import roj.asm.tree.IClass;
-import roj.asm.tree.anno.AnnValEnum;
+import roj.asm.annotation.AnnVal;
+import roj.asm.insn.Label;
 import roj.asm.type.IType;
 import roj.asm.type.Type;
-import roj.asm.visitor.Label;
 import roj.collect.SimpleList;
 import roj.collect.ToIntMap;
 import roj.compiler.LavaFeatures;
@@ -119,7 +119,7 @@ final class DotGet extends VarNode {
 			sb.append('/');
 		}
 
-		return new Type(sb.toString(), names.size()-i);
+		return Type.klass(sb.toString(), names.size() - i);
 	}
 
 	@Override
@@ -206,7 +206,7 @@ final class DotGet extends VarNode {
 			IClass symbol;
 
 			if (parent == null) {
-				fType = new Type(begin.name());
+				fType = Type.klass(begin.name());
 				symbol = begin;
 			} else {
 				fType = (parent = parent.resolve(ctx)).type();
@@ -257,7 +257,7 @@ final class DotGet extends VarNode {
 					var checkConstructor = ctx.resolveDotGet(sb.append('/').append(lastSegment), true);
 					if ("".equals(checkConstructor)) {
 						assert classExprTarget != null;
-						classExprTarget.accept(new Type(ctx.get_frBegin().name()));
+						classExprTarget.accept(Type.klass(ctx.get_frBegin().name()));
 						return null;
 					}
 				}
@@ -284,7 +284,7 @@ final class DotGet extends VarNode {
 		// length不是字段而是opcode
 		if (last == GlobalContext.arrayLength()) {
 			flags |= FINAL_FIELD|ARRAY_LENGTH;
-			type = Type.std(Type.INT);
+			type = Type.primitive(Type.INT);
 			length--;
 		} else if (type == null) {
 			// get_frType只处理泛型
@@ -321,7 +321,7 @@ final class DotGet extends VarNode {
 
 		// == is better
 		//noinspection all
-		if (part != null && part == ctx.file.name) {
+		if (part != null && part == ctx.file.name()) {
 			flags |= SELF_FIELD;
 			// redirect check to LocalContext
 			if (ctx.in_constructor) flags &= ~FINAL_FIELD;
@@ -336,7 +336,7 @@ final class DotGet extends VarNode {
 		return false;
 	}
 	@Override
-	public Object constVal() {return hasFeature(ExprFeat.ENUM_REFERENCE) ? new AnnValEnum(begin.name(), chain[0].name()) : super.constVal();}
+	public Object constVal() {return hasFeature(ExprFeat.ENUM_REFERENCE) ? AnnVal.ofEnum(begin.name(), chain[0].name()) : super.constVal();}
 
 	@Override
 	public IType type() {return type == null ? Asterisk.anyType : type;}

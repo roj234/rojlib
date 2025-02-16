@@ -2,6 +2,7 @@ package roj.collect;
 
 import roj.util.Helpers;
 
+import java.util.Map;
 import java.util.function.BiConsumer;
 
 import static roj.collect.IntMap.UNDEFINED;
@@ -16,6 +17,9 @@ public class LFUCache<K, V> extends MyHashMap<K, V> implements Cache<K, V> {
 	public static final class Entry<K, V> extends MyHashMap.Entry<K, V> {
 		Bucket owner;
 		Entry<K, V> lfuPrev, lfuNext;
+
+		@Override
+		public String toString() {return String.valueOf(k)+'='+v+" (lfu="+(owner==null?"null":owner.freq)+")";}
 	}
 
 	private static final class Bucket {
@@ -24,7 +28,7 @@ public class LFUCache<K, V> extends MyHashMap<K, V> implements Cache<K, V> {
 		Entry<?, ?> entry;
 	}
 
-	private final int maximumCapacity, removeAtOnce;
+	private final int maximumCapacity;
 	private final Bucket head;
 
 	private int wellDepth;
@@ -32,10 +36,8 @@ public class LFUCache<K, V> extends MyHashMap<K, V> implements Cache<K, V> {
 
 	private BiConsumer<K, V> listener;
 
-	public LFUCache(int maxCap) {this(maxCap, 16);}
-	public LFUCache(int maxCap, int evictOnce) {
+	public LFUCache(int maxCap) {
 		this.maximumCapacity = maxCap;
-		this.removeAtOnce = evictOnce;
 		this.head = new Bucket();
 		this.head.freq = 1;
 	}
@@ -56,13 +58,16 @@ public class LFUCache<K, V> extends MyHashMap<K, V> implements Cache<K, V> {
 		int nextF = b.freq+1;
 		assert nextF >= 0;
 
+		setNewFreq((Entry<K, V>) entry, b, nextF);
+	}
+	private void setNewFreq(Entry<K, V> entry, Bucket b, int freq) {
 		find:{
-			while (b.freq < nextF) {
+			while (b.freq < freq) {
 				assert b.freq >= 0;
 
 				if (b.next == null) {
 					Bucket f = fill();
-					f.freq = nextF;
+					f.freq = freq;
 					f.prev = b;
 
 					b = b.next = f;
@@ -71,9 +76,9 @@ public class LFUCache<K, V> extends MyHashMap<K, V> implements Cache<K, V> {
 				b = b.next;
 			}
 
-			if (b.freq > nextF) {
+			if (b.freq > freq) {
 				Bucket f = fill();
-				f.freq = nextF;
+				f.freq = freq;
 				f.prev = b.prev;
 				if (f.prev != null) f.prev.next = f;
 				f.next = b;
@@ -82,15 +87,15 @@ public class LFUCache<K, V> extends MyHashMap<K, V> implements Cache<K, V> {
 			}
 		}
 
-		unlink((Entry<K, V>) entry);
-		append((Entry<K, V>) entry, b);
+		unlink(entry);
+		append(entry, b);
 	}
 
 	@Override
 	protected boolean acceptTreeNode() {return false;}
 
 	protected AbstractEntry<K, V> useEntry() {
-		if (size == maximumCapacity) evict(removeAtOnce);
+		if (size > maximumCapacity) evict(size - maximumCapacity);
 
 		Entry<K, V> entry = new Entry<>();
 
@@ -182,4 +187,71 @@ public class LFUCache<K, V> extends MyHashMap<K, V> implements Cache<K, V> {
 
 		return except - amount;
 	}
+
+	/**
+	 * 除了是LFU缓存外，这个类还可以是一个常数时间的计数器
+	 * 并且经过优化，并不会有很多对象被创建
+	 */
+	public final void increment(K key, int count) {
+		if (count < 0) throw new IllegalStateException("count < 0: "+count);
+
+		AbstractEntry<K, V> entry = getOrCreateEntry(key);
+		if (entry.k != UNDEFINED) {
+			Bucket b = ((Entry<K, V>) entry).owner;
+
+			int nextF = b.freq+count;
+
+			setNewFreq((Entry<K, V>) entry, b, nextF);
+		} else {
+			entry.k = key;
+			size++;
+			onPut(entry, null);
+			entry.setValue(null);
+		}
+	}
+	public final void iterateForward(BiConsumer<Integer, Map.Entry<K, V>> listener) {
+		var b = head;
+		do {
+			var entry = b.entry;
+			while (entry != null) {
+				listener.accept(b.freq, Helpers.cast(entry));
+				entry = entry.lfuNext;
+			}
+
+			b = b.next;
+		} while (b != null);
+	}
+	public final void iterateBackward(BiConsumer<Integer, Map.Entry<K, V>> listener) {
+		var b = head.prev;
+		while (b != head) {
+			var entry = b.entry;
+			while (entry != null) {
+				listener.accept(b.freq, Helpers.cast(entry));
+				entry = entry.lfuNext;
+			}
+
+			b = b.prev;
+		}
+	}
+	public Map.Entry<K, V> getSmallest() {
+		var b = head;
+		do {
+			var entry = b.entry;
+			if (entry != null) return Helpers.cast(entry);
+			b = b.next;
+		} while (b != null);
+
+		return null;
+	}
+	public Map.Entry<K, V> getLargest() {
+		var b = head.prev;
+		while (b != head) {
+			var entry = b.entry;
+			if (entry != null) return Helpers.cast(entry);
+			b = b.prev;
+		}
+
+		return null;
+	}
+	public int getCount(Map.Entry<K, V> a) {return ((Entry<K, V>) a).owner.freq;}
 }

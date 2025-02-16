@@ -1,10 +1,10 @@
 package roj.compiler.resolve;
 
 import org.jetbrains.annotations.Nullable;
+import roj.asm.ClassNode;
+import roj.asm.MethodNode;
 import roj.asm.Opcodes;
-import roj.asm.tree.ConstantData;
-import roj.asm.tree.MethodNode;
-import roj.asm.tree.attr.Attribute;
+import roj.asm.attr.Attribute;
 import roj.asm.type.*;
 import roj.collect.MyHashMap;
 import roj.compiler.api.Types;
@@ -45,9 +45,11 @@ public final class Inferrer {
 	public Inferrer(LocalContext ctx) {
 		this.ctx = ctx;
 		this.castChecker.typeParamsL = typeParamBounds;
+		this.castChecker.context = ctx.classes;
+		this.castChecker.ctx = ctx;
 	}
 
-	public MethodResult getGenericParameters(ConstantData info, MethodNode method, IType instanceType) {
+	public MethodResult getGenericParameters(ClassNode info, MethodNode method, IType instanceType) {
 		int argc = method.parameters().size();
 		return infer(info, method, instanceType instanceof Generic g ? g : null, new AbstractList<>() {
 			public IType get(int index) {return Asterisk.anyType;}
@@ -66,7 +68,7 @@ public final class Inferrer {
 	 * 如果性能不够再优化吧
 	 */
 	@SuppressWarnings("fallthrough")
-	public MethodResult infer(ConstantData owner, MethodNode mn, IType instanceType, List<IType> input) {
+	public MethodResult infer(ClassNode owner, MethodNode mn, IType instanceType, List<IType> input) {
 		this.castChecker.context = ctx.classes;
 
 		List<? extends IType> mpar;
@@ -100,10 +102,10 @@ public final class Inferrer {
 
 				if (instanceType == null) break block;
 
-				if (!instanceType.owner().equals(owner.name)) {
-					List<IType> myBounds = ctx.inferGeneric(instanceType, owner.name);
+				if (!instanceType.owner().equals(owner.name())) {
+					List<IType> myBounds = ctx.inferGeneric(instanceType, owner.name());
 
-					Generic g = new Generic(owner.name, (byte) 0);
+					Generic g = new Generic(owner.name(), Generic.EX_NONE);
 					g.children = myBounds;
 					instanceType = g;
 				} else if (instanceType.genericType() == IType.CONCRETE_ASTERISK_TYPE) {
@@ -283,9 +285,9 @@ public final class Inferrer {
 			}
 		}
 
-		if (sign.Throws != null) {
-			r.exception = new IType[sign.Throws.size()];
-			List<IType> values = sign.Throws;
+		if (sign.exceptions != null) {
+			r.exception = new IType[sign.exceptions.size()];
+			List<IType> values = sign.exceptions;
 			for (int i = 0; i < values.size(); i++) {
 				r.exception[i] = cloneTP(values.get(i));
 			}

@@ -26,6 +26,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
+import java.util.function.Consumer;
 import java.util.function.Predicate;
 
 /**
@@ -85,8 +86,8 @@ public final class IOUtil {
 	}
 
 	//region InputStream/TextReader
-	public static byte[] getResource(String path) throws IOException { return getResource(ReflectionUtils.getCallerClass(2), path); }
-	public static byte[] getResource(Class<?> caller, String path) throws IOException {
+	public static byte[] getResource(String path) throws IOException { return getResource(path, ReflectionUtils.getCallerClass(2)); }
+	public static byte[] getResource(String path, Class<?> caller) throws IOException {
 		var in = caller.getClassLoader().getResourceAsStream(path);
 		if (in == null) throw new FileNotFoundException(path+" is not in jar "+caller.getName());
 		return new ByteList(Math.max(in.available(), 4096)).readStreamFully(in).toByteArrayAndFree();
@@ -187,7 +188,10 @@ public final class IOUtil {
 		int i = loc.lastIndexOf('!');
 		loc = loc.substring(loc.startsWith("/")?1:0, i<0?loc.length():i);
 		try {
-			return new File(Escape.decodeURI(loc)).getCanonicalFile();
+			loc = Escape.decodeURI(loc);
+			i = loc.lastIndexOf('#');
+			loc = loc.substring(0, i<0?loc.length():i);
+			return new File(loc).getCanonicalFile();
 		} catch (Exception e) {
 			e.printStackTrace();
 			return null;
@@ -325,6 +329,28 @@ public final class IOUtil {
 			// 还原位置
 			cf.position(pos+len);
 		}
+	}
+
+	public static boolean writeFileEvenMoreSafe(File baseFolder, String baseName, Consumer<File> consumer) throws IOException {
+		var realFile = new File(baseFolder, baseName);
+		var tmpFile = new File(baseFolder, baseName+"."+System.nanoTime()+".tmp");
+		var deletePend = new File(baseFolder, baseName+".delete_pend");
+
+		if (!realFile.isFile()) tmpFile = realFile;
+
+		try {
+			consumer.accept(tmpFile);
+		} catch (Throwable e) {
+			if (!tmpFile.delete()) {
+				tmpFile.deleteOnExit();
+			}
+			throw e;
+		}
+
+		if (tmpFile == realFile) return true;
+
+		deletePend.delete();
+		return realFile.renameTo(deletePend) && tmpFile.renameTo(realFile) && deletePend.delete();
 	}
 
 	public static CharList mavenPath(CharSequence name) {

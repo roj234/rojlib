@@ -6,6 +6,7 @@ import roj.asm.type.IType;
 import roj.asm.type.TypeHelper;
 import roj.collect.MyBitSet;
 import roj.config.serial.CVisitor;
+import roj.reflect.Java22Workaround;
 
 import java.util.List;
 
@@ -13,6 +14,7 @@ import java.util.List;
  * @author Roj234
  * @since 2023/3/18 0018 12:55
  */
+@Java22Workaround
 abstract class Adapter {
 	@ReferenceByGeneratedClass
 	static void value(CVisitor v, String s) {if(s == null) v.valueNull(); else v.value(s);}

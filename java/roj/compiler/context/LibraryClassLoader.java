@@ -1,7 +1,7 @@
 package roj.compiler.context;
 
+import roj.asm.ClassNode;
 import roj.asm.Parser;
-import roj.asm.tree.ConstantData;
 import roj.io.IOUtil;
 
 import java.io.IOException;
@@ -15,7 +15,7 @@ public class LibraryClassLoader implements Library {
 	public LibraryClassLoader(ClassLoader loader) {this.cl = loader;}
 
 	@Override
-	public ConstantData get(CharSequence name) {
+	public ClassNode get(CharSequence name) {
 		try (var in = cl == null ? ClassLoader.getSystemResourceAsStream(name+".class") : cl.getResourceAsStream(name+".class")) {
 			if (in != null) return Parser.parse(IOUtil.read(in));
 		} catch (IOException e) {

@@ -1,7 +1,7 @@
 package roj.compiler.test;
 
+import roj.asm.MethodNode;
 import roj.asm.Opcodes;
-import roj.asm.tree.MethodNode;
 import roj.asm.type.IType;
 import roj.asm.type.Type;
 import roj.compiler.JavaLexer;
@@ -41,7 +41,7 @@ public class TestPlugin {
 
 		// <minecraft:stone> * 5
 		MethodNode mn = new MethodNode(Opcodes.ACC_STATIC, "roj/compiler/test/CandyTestPlugin$Item", "stack", "(Lroj/compiler/test/CandyTestPlugin$Item;I)Lroj/compiler/test/CandyTestPlugin$ItemStack;");
-		rtApi.onBinary(new Type("roj/compiler/test/CandyTestPlugin$Item"), "*", Type.std(Type.INT), mn, true);
+		rtApi.onBinary(Type.klass("roj/compiler/test/CandyTestPlugin$Item"), "*", Type.primitive(Type.INT), mn, true);
 
 		api.getExprApi().addUnaryPre("__TypeOf", (lexer, node) -> new UnaryPreNode() {
 			ExprNode node;

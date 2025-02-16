@@ -1,343 +1,265 @@
 package roj.text;
 
-import roj.collect.Int2IntMap;
-import roj.collect.IntList;
-import roj.collect.MyBitSet;
-import roj.collect.SimpleList;
-import roj.config.ParseException;
-import roj.config.Tokenizer;
-import roj.config.Word;
+import roj.io.IOUtil;
 
 import java.util.TimeZone;
 
-import static roj.text.ACalendar.UTCMONTH;
-import static roj.text.ACalendar.UTCWEEK;
-
 /**
- * @author Roj234
- * @since 2024/5/6 08:26
+ * 将时间戳解析出年月日等信息，并可转换为字符串.
+ * @see DateFormat
+ * @author solo6975
+ * @since 2021/6/16 2:48
  */
-public class DateParser {
-	private final int[] formats;
-	private final String[] chars;
-	private final int method;
+public final class DateParser {
+	public static final int YEAR = 0, MONTH = 1, DAY = 2, HOUR = 3, MINUTE = 4, SECOND = 5, MILLISECOND = 6, DAY_OF_WEEK = 7, LEAP_YEAR = 8, FIELD_COUNT = 9;
 
-	public static DateParser create(String format) throws ParseException {
-		IntList formats = new IntList();
-		SimpleList<String> formatChars = new SimpleList<>();
+	private final int[] fields = new int[FIELD_COUNT];
+	private final TimeZone zone;
 
-		Tokenizer wr = new Tokenizer().literalEnd(MyBitSet.from("'\" ")).init(format);
-		while (wr.hasNext()) {
-			Word w = wr.next();
-			if (w.type() == Word.LITERAL) {
-				String val = w.val();
-				Int2IntMap.Entry entry = STRATEGIES.getEntry(val.charAt(0) | (val.length() << 16));
-				if (entry == null) throw wr.err("unknown strategy "+val);
-				int strategy = entry.getIntValue();
-				formats.add(strategy);
-			} else if (w.type() == Word.STRING) {
-				formats.add(-1);
-				formatChars.add(w.val());
+	public static DateParser GMT() {return new DateParser(null);}
+	public static DateParser local() {return new DateParser(TimeZone.getDefault());}
+	public static DateParser forTimezone(TimeZone tz) {return new DateParser(tz);}
+
+	private DateParser(TimeZone tz) {zone = tz;}
+
+	public DateParser copy() {return new DateParser(zone);}
+
+	public int[] parse(long timestamp) {
+		if (zone != null) timestamp += zone.getOffset(timestamp);
+		return parseGMT(timestamp, fields);
+	}
+	public static int[] parseGMT(long timestamp) {return parseGMT(timestamp, new int[FIELD_COUNT]);}
+	public static int[] parseGMT(long ts, int[] fields) {
+		if (fields.length < FIELD_COUNT) throw new ArrayIndexOutOfBoundsException(FIELD_COUNT);
+
+		ts = His(ts, fields);
+		ts += UNIX_ZERO;
+
+		if (ts < MINIMUM_GREGORIAN_DAY) throw new ArithmeticException("DateParser does not support time < 1582/8/15");
+
+		int y = fields[YEAR] = yearSinceAD(ts);
+		int days = daySinceAD(y, 1, 1);
+		int daysInYear = (int) (ts - days);
+		boolean leapYear = isLeapYear(y);
+
+		if (daysInYear < 0) {
+			fields[YEAR] --;
+			fields[MONTH] = 12;
+			fields[DAY] = 32 + daysInYear;
+		} else {
+			// 至少3月1日
+			if (daysInYear >= 59/*SUMMED_DAYS[3]*/ + (leapYear ? 1 : 0)) {
+				daysInYear += leapYear ? 1 : 2;
+			}
+
+			int month = fields[MONTH] = (12 * daysInYear + 373) / 367;
+
+			long monthDays = days + SUMMED_DAYS[month];
+			if (month > 2 && leapYear) monthDays++;
+			fields[DAY] = (int) (ts - monthDays) + 1;
+		}
+
+		fields[DAY_OF_WEEK] = dayOfWeek(ts-1);
+		fields[LEAP_YEAR] = leapYear ? 1 : 0;
+
+		return fields;
+	}
+	//region 时间戳解析为日期相关函数
+	private static long His(long date, int[] buf) {
+		long q;
+
+		if (date >= 0) {
+			q = date / 1000;
+			buf[MILLISECOND] = (int) (date - q * 1000);
+			date = q;
+
+			q = date / 60;
+			buf[SECOND] = (int) (date - q * 60);
+			date = q;
+
+			q = date / 60;
+			buf[MINUTE] = (int) (date - q * 60);
+			date = q;
+
+			q = date / 24;
+		} else {
+			q = (date + 1) / 1000 - 1;
+			buf[MILLISECOND] = (int) (date - q * 1000);
+			date = q;
+
+			q = (date + 1) / 60 - 1;
+			buf[SECOND] = (int) (date - q * 60);
+			date = q;
+
+			q = (date + 1) / 60 - 1;
+			buf[MINUTE] = (int) (date - q * 60);
+			date = q;
+
+			q = (date + 1) / 24 - 1;
+		}
+		buf[HOUR] = (int) (date - q * 24);
+		date = q;
+		return date;
+	}
+	private static int yearSinceAD(long date) {
+		int tmp400 = (int) (date / 146097);
+		int datei = (int) (date - tmp400 * 146097L);
+		int years = 400 * tmp400;
+
+		int tmp100 = datei / 36524;
+		datei -= tmp100 * 36524;
+		years += 100 * tmp100;
+
+		int tmp4 = datei / 1461;
+		datei -= tmp4 * 1461;
+		years += 4 * tmp4;
+
+		years += datei / 365;
+
+		if (tmp100 != 4 && years != 4) years++;
+
+		return years;
+	}
+
+	/**
+	 * 计算Unix零纪元至year-month-day过去的天数.
+	 * 年份使用了si32，所以它会在遥远的未来，而不是“更加遥远”的未来溢出：约588万年
+	 * 作为对比，si64的毫秒时间戳将在2.9亿年后溢出
+	 * @param year 大于等于1的年数
+	 * @param month 从1开始的月数
+	 * @param day 从1开始的天数
+	 * @return 合计天数
+	 */
+	public static int daySinceUnixZero(int year, int month, int day) {return daySinceAD(year, month, day) - UNIX_ZERO;}
+	private static final int UNIX_ZERO = 719163; // Fixed day of 1970/1/1 (Gregorian)
+	/**
+	 * 每月的天数
+	 */
+	private static final int[] SUMMED_DAYS = new int[] {-30, 0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334};
+	private static int daySinceAD(int year, int month, int day) {
+		int yearm1 = year-1;
+		return yearm1*365 + yearm1/4 - yearm1/100 + yearm1/400 // with leap days
+				+ day + (SUMMED_DAYS[month] + (month > 2 && isLeapYear(year) ? 1 : 0));
+	}
+
+	private static boolean isLeapYear(int year) { return (year & 3) == 0 && (year % 100 != 0 || year % 400 == 0); }
+	private static int dayOfWeek(long day) { return (int) (day % 7L) + 1; }
+
+	private static final int MINIMUM_GREGORIAN_DAY = 577736; // Fixed day of 1582/8/15
+	//endregion
+	//region 日期格式化相关函数
+	static final String[]
+		UTCWEEK = {"Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"},
+		UTCMONTH = {"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
+
+	public CharList format(String format, long stamp) { return format(format, stamp, IOUtil.getSharedCharBuf()); }
+	public CharList format(String format, long stamp, CharList sb) {
+		int[] fields = parse(stamp);
+		char c;
+		for (int i = 0; i < format.length(); i++) {
+			switch (c = format.charAt(i)) {
+				case 'Y' -> sb.append(fields[YEAR]);
+				case 'y' -> sb.append(fields[YEAR] % 100);
+
+				case 'L' -> sb.append(fields[LEAP_YEAR]);
+
+				case 'M' -> sb.append(UTCMONTH[fields[MONTH] - 1]);
+				case 'm' -> sb.padNumber(fields[MONTH], 2);
+				case 'n' -> sb.append(fields[MONTH]);
+
+				case 't' -> {// 本月有几天
+					int mth = fields[MONTH];
+					sb.append(mth == 2 ? 28 + fields[LEAP_YEAR] : ((mth & 1) != 0) == mth < 8 ? 31 : 30);
+				}
+
+				case 'd' -> sb.padNumber(fields[DAY], 2);
+				case 'j' -> sb.append(fields[DAY]);
+				case 'D' -> sb.append(stamp / 86400000L);
+
+				case 'l' -> sb.append("星期").append(ChinaNumeric.NUMBER[fields[DAY_OF_WEEK]]);
+				case 'W' -> sb.append(UTCWEEK[fields[DAY_OF_WEEK]-1]);
+				case 'w' -> sb.append(fields[DAY_OF_WEEK]-1);
+
+				case 'H' -> sb.padNumber(fields[HOUR], 2);
+				case 'G' -> sb.append(fields[HOUR]);
+
+				case 'A' -> sb.append(fields[HOUR] > 11 ? "PM" : "AM");
+				case 'a' -> sb.append(fields[HOUR] > 11 ? "pm" : "am");
+
+				case 'h' -> {
+					int h = fields[HOUR] % 12;
+					sb.padNumber(h == 0 ? 12 : h, 2);
+				}
+				case 'g' -> {// am/pm时间
+					int h = fields[HOUR] % 12;
+					sb.append(h == 0 ? 12 : h);
+				}
+
+				case 'i' -> sb.padNumber(fields[MINUTE], 2);
+				case 's' -> sb.padNumber(fields[SECOND], 2);
+				case 'x' -> sb.padNumber(fields[MILLISECOND], 3);
+
+				// unix秒时间戳
+				case 'U' -> sb.append(stamp / 1000);
+
+				case 'O', 'P' -> {// TimeZone offset
+					if (tzoff(stamp, sb)) sb.append(c == 'P' ? "Z" : "GMT");
+				}
+
+				case 'c' -> format("Y-m-dTH:i:sP", stamp, sb);
+				default -> sb.append(c);
+			}
+		}
+		return sb;
+	}
+	private boolean tzoff(long stamp, CharList sb) {
+		int offset;
+		if (zone == null || (offset = zone.getOffset(stamp)) == 0) return true;
+
+		offset /= 60000;
+
+		sb.append(offset>0?'+':'-')
+		  .padNumber(Math.abs(offset / 60), 2)
+		  .append(':')
+		  .padNumber(offset % 60, 2);
+		return false;
+	}
+
+	public static final String ISO_Format_Millis = "Y-m-dTH:i:s.xP", ISO_Format_Sec = "Y-m-dTH:i:sP";
+	public String toISOString(long millis) { return toISOString(new CharList(), millis).toStringAndFree(); }
+	public CharList toISOString(CharList sb, long millis) { return format(millis%1000 != 0 ? ISO_Format_Millis : /*millis%86400000 == 0 ? "Y-m-d" : */ISO_Format_Sec, millis, sb); }
+
+	public String toRFCString(long millis) { return toRFCString(new CharList(),millis).toStringAndFree(); }
+	public CharList toRFCString(CharList sb, long millis) { return format("W, d M Y H:i:s O", millis, sb); }
+
+	public static String toLocalTimeString(long time) {
+		var cal = local();
+		return cal.format("Y-m-d H:i:s.x", time, new CharList()).append(" (").append(cal.zone!=null?cal.zone.getDisplayName():"GMT").append(')').toStringAndFree(); }
+	//endregion
+	private static final int[]
+		TIME_DT = {60, 1800, 3600, 86400, 604800, 2592000, 15552000},
+		TIME_FACTOR = {60, 1, 60, 24, 7, -2592000, 6};
+	private static final String[] TIME_NAME = {" 秒前", " 分前", "半小时前", " 小时前", " 天前", " 周前", " 月前"};
+
+	public String prettyTime(long unix) {
+		long diff = System.currentTimeMillis() - unix;
+		if (diff == 0) return "现在";
+		if (diff < 0) return Long.toString(diff);
+		double val = diff;
+		boolean flag = false;
+		for (int i = 0; i < TIME_DT.length; i++) {
+			int time = TIME_DT[i];
+			if (diff < time) {
+				return flag ? TIME_NAME[i] : Math.round(val) + TIME_NAME[i];
+			}
+			int dt = TIME_FACTOR[i];
+			flag = dt == 1;
+			if (dt < 0) {
+				val = (double) time / (-dt);
 			} else {
-				throw wr.err("未预料的类型");
+				val /= dt;
 			}
 		}
-
-		return new DateParser(formats.toArray(), formatChars.toArray(new String[formatChars.size()]));
-	}
-
-	public DateParser(int[] formats, String[] chars) {
-		this.formats = formats;
-		this.chars = chars;
-		this.method = checkMethod(formats);
-	}
-
-	private int checkMethod(int[] formats) {
-		int bitset = 0;
-		for (int f : formats) {
-			bitset |= 1 << f;
-		}
-
-		int weekday_accept = 0b11_111000000;
-		int weekday_ignore = 0b111_1100;
-
-		int method = 0;
-		if (Integer.bitCount(bitset&weekday_ignore) < Integer.bitCount(bitset&weekday_accept)) {
-			method |= F_YWD;
-		}
-		if ((bitset & (1 << 16)) != 0) {
-			method |= F_AMPM;
-		}
-		return method;
-	}
-
-	private static final int F_YWD = 1, F_AMPM = 2;
-
-	public void setTimeZone(TimeZone timeZone) {this.timeZone = timeZone;}
-	public void setCentury(int century) {this.century = century;}
-	public void setOptional(boolean optional) {this.optional = optional;}
-
-	private TimeZone timeZone;
-	private int century = 19;
-	private boolean optional;
-
-	public long parse(CharList sb) {
-		int charI = 0;
-		TimeZone tz = null;
-		// POS YMD HIS MS APM Week DOW fixedTZOff
-		int[] cal = new int[] {
-			0,
-			1900, 1, 1,
-			0, 0, 0, 0,
-			0, 1, 1, -1
-		};
-		loop:
-		for (int id : formats) {
-			switch (id) {
-				case -1 -> {
-					String s = chars[charI++];
-					if (!sb.regionMatches(cal[0], s)) {
-						throw new IllegalArgumentException("Delim error");
-					}
-					cal[0] += s.length();
-				}
-				case 0 -> cal[1] = dateNum(sb, cal, 4, 0, 9999);
-				case 1 -> cal[1] = century * 100 + dateNum(sb, cal, 2, 0, 99);
-				case 2, 3 -> cal[2] = dateNum(sb, cal, 2, 1, 12);
-				case 4 -> {
-					for (int i = 0; i < UTCMONTH.length;) {
-						String month = UTCMONTH[i++];
-						if (sb.regionMatches(cal[0], month)) {
-							cal[2] = i;
-							continue loop;
-						}
-					}
-					throw new IllegalArgumentException("Month error");
-				}
-				case 5, 6 -> cal[3] = dateNum(sb, cal, 2, 1, 31);
-				case 7 -> cal[10] = dateNum(sb, cal, 2, 1, 7);
-				case 8 -> {
-					for (int i = 0; i < UTCWEEK.length;) {
-						String week = UTCWEEK[i++];
-						if (sb.regionMatches(cal[0], week)) {
-							cal[10] = i;
-							continue loop;
-						}
-					}
-					throw new IllegalArgumentException("Week error");
-				}
-				case 9 -> {
-					if (sb.regionMatches(cal[0], "星期")) {
-						//cal[10] = i;
-						continue loop;
-					}
-					throw new IllegalArgumentException("Week error");
-				}
-				case 10, 11 -> cal[9] = dateNum(sb, cal, 2, 1, 42);
-				case 12, 13, 14, 15 -> cal[4] = dateNum(sb, cal, 2, 0, id > 13 ? 11 : 23);
-				case 16 -> {
-					String s = sb.substring(cal[0], cal[0] += 2);
-					if (s.equalsIgnoreCase("am")) {
-						cal[8] = 1;
-					} else if (s.equalsIgnoreCase("pm")) {
-						cal[8] = 2;
-					} else {
-						throw new IllegalArgumentException("AM/PM error");
-					}
-				}
-				case 17, 18 -> cal[5] = dateNum(sb, cal, 2, 0, 59);
-				case 19, 20 -> cal[6] = dateNum(sb, cal, 2, 0, 59);
-				case 21, 22 -> cal[7] = dateNum(sb, cal, 3, 0, 999);
-				case 23 -> {
-					int i = sb.charAt(cal[0]);
-					if (i == 'Z' || i == 'z') {
-						cal[0]++;
-						cal[11] = 0;
-					} else if (i == '+' || i == '-') {
-						int fixTzOff = dateNum(sb, cal, 2, 0, 99) * 60;
-						char td = sb.charAt(cal[0]);
-						if (td == ':' || td == '.') {
-							cal[0]++;
-							td = sb.charAt(cal[0]);
-						}
-						if (td >= '0' && td <= '9') fixTzOff += dateNum(sb, cal, 2, 0, 59);
-						cal[11] = fixTzOff;
-					} else if (i == 'G' && sb.regionMatches(i, "GMT")) {
-						cal[0] += 3;
-						cal[11] = 0;
-					}
-				}
-				case 24 -> {
-					int i = cal[0];
-					int prevI = i;
-					while (i < sb.length()) {
-						char c = sb.charAt(i);
-						if (!((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c =='/')) break;
-						i++;
-					}
-
-					if (i == prevI) throw new IllegalArgumentException("无效的时区Str");
-					tz = TimeZone.getTimeZone(sb.substring(prevI, i));
-				}
-			}
-			if (optional && cal[0] == sb.length()) break;
-		}
-
-		if ((method&F_AMPM) != 0 && cal[11] == 2) cal[4] += 12;
-
-		long stamp = (ACalendar.daySinceAD(cal[1], cal[2], cal[3]) - ACalendar.GREGORIAN_OFFSET_DAY);
-		if ((method&F_YWD) != 0) stamp += ((cal[9] - 1) * 7L + (cal[10] - 1));
-
-		stamp *= 86400000L;
-
-		stamp += cal[4] * 3600000L;
-		stamp += cal[5] * 60000L;
-		stamp += cal[6] * 1000L;
-		stamp += cal[7];
-		if (tz != null) stamp -= tz.getOffset(stamp);
-		else if (cal[11] != -1) stamp -= cal[11];
-		else if (timeZone != null) stamp -= timeZone.getOffset(stamp);
-
-		return stamp;
-	}
-	private static int dateNum(CharSequence sb, int[] pos, int maxLen, int min, int max) {
-		int i = pos[0];
-		int prevI = i;
-		while (i < sb.length()) {
-			if (!Tokenizer.NUMBER.contains(sb.charAt(i))) break;
-			i++;
-		}
-
-		if (i-prevI <= 0 || i-prevI > maxLen) throw new IllegalArgumentException("错误的时间范围");
-
-		int num = TextUtil.parseInt(sb, prevI, i);
-		if (num < min || num > max) throw new IllegalArgumentException("错误的时间范围");
-
-		pos[0] = i;
-		return num;
-	}
-
-	/**
-	 * parse ISO8601 timestamp
-	 * 使用这个函数是为了支持可选的前导零
-	 * @see Tokenizer#ISO8601Datetime
-	 * @param seq "2020-07-14T07:59:08+08:00"
-	 * @return unix timestamp
-	 */
-	public static long parseISO8601Datetime(CharSequence seq) {
-		try {
-			return new Tokenizer().init(seq).ISO8601Datetime(true).asLong();
-		} catch (ParseException e) {
-			throw new IllegalArgumentException(e.toString());
-		}
-	}
-
-	/**
-	 * parse RFC like timestamp
-	 * @param seq "Tue, 25 Feb 2022 21:48:10 GMT"
-	 * @return unix timestamp
-	 */
-	@SuppressWarnings("fallthrough")
-	public static long parseRFCDate(CharSequence seq) {
-		String str = seq.subSequence(0, 3).toString();
-		String[] x = UTCWEEK;
-		int week = 0;
-		while (week < x.length) {
-			if (str.equals(x[week++])) {
-				break;
-			}
-		}
-		if (week == 8) throw new IllegalArgumentException("Invalid week " + str);
-		if (seq.charAt(3) != ',' || seq.charAt(4) != ' ') throw new IllegalArgumentException("分隔符错误");
-		int day = TextUtil.parseInt(seq, 5, 7);
-		if (seq.charAt(7) != ' ') throw new IllegalArgumentException("分隔符错误");
-
-		str = seq.subSequence(8, 11).toString();
-		x = UTCMONTH;
-		int month = 0;
-		while (month < x.length) {
-			if (str.equals(x[month++])) {
-				break;
-			}
-		}
-		if (month == 13) throw new IllegalArgumentException("Invalid month " + str);
-
-		if (seq.charAt(11) != ' ') throw new IllegalArgumentException("分隔符错误");
-
-		int year = TextUtil.parseInt(seq, 12, 16);
-		if (seq.charAt(16) != ' ') throw new IllegalArgumentException("分隔符错误");
-		int h = TextUtil.parseInt(seq, 17, 19);
-		if (seq.charAt(19) != ':') throw new IllegalArgumentException("分隔符错误");
-		int m = TextUtil.parseInt(seq, 20, 22);
-		if (seq.charAt(22) != ':') throw new IllegalArgumentException("分隔符错误");
-		int s = TextUtil.parseInt(seq, 23, 25);
-		if (seq.charAt(25) != ' ') throw new IllegalArgumentException("分隔符错误");
-
-		if (h > 23) throw new IllegalArgumentException("你一天" + h + "小时");
-		if (m > 59) throw new IllegalArgumentException("你一小时" + m + "分钟");
-		if (s > 59) throw new IllegalArgumentException("你一分钟" + s + "秒");
-
-		long a = (ACalendar.daySinceAD(year, month, day) - ACalendar.GREGORIAN_OFFSET_DAY) * 86400000L + h * 3600000L + m * 60000L + s * 1000L;
-
-		int i = -1;
-		switch (seq.charAt(26)) {
-			case '-':
-				i = 1;
-			case '+':
-				i *= TextUtil.parseInt(seq, 27, 31);
-				int d = i % 100;
-				if (d < -59 || d > 59) throw new IllegalArgumentException("你一小时" + d + "分钟");
-				a += 60000 * d;
-
-				d = i / 100;
-				if (d < -23 || d > 23) throw new IllegalArgumentException("你一天" + d + "小时");
-				a += 3600000 * d;
-
-				break;
-			case 'G':
-				if (seq.charAt(27) != 'M' || seq.charAt(28) != 'T') throw new IllegalArgumentException("分隔符错误");
-				break;
-			default:
-				throw new IllegalArgumentException("分隔符错误");
-		}
-
-		return a;
-	}
-
-	private static final Int2IntMap STRATEGIES = new Int2IntMap(32);
-	private static void reg(char name, int width, int id) {STRATEGIES.putInt(name | (width << 16), id);}
-	static {
-		reg('Y', 4, 0); // year
-		reg('Y', 2, 1); // length-2 year
-		reg('M', 1, 2); // Unpadded month
-		reg('M', 2, 3); // Padded month
-		reg('M', 3, 4); // English month
-		reg('D', 1, 5); // Unpadded day
-		reg('D', 2, 6); // Padded day
-
-		reg('W', 1, 7); // Number day of week
-		reg('W', 3, 8); // English day of week
-		reg('W', 4, 9); // Chinese day of week
-
-		reg('w', 1, 10); // Week of the year
-		reg('w', 2, 11); // Week of the year
-
-		reg('H', 1, 12); // Unpadded 24 hour
-		reg('H', 2, 13); // Padded 24 hour
-
-		reg('h', 1, 14); // Unpadded 12 hour
-		reg('h', 2, 15); // Padded 12 hour
-		reg('a', 1, 16); // AM/PM
-
-		reg('i', 1, 17); // Unpadded minute
-		reg('i', 2, 18); // Padded minute
-		reg('s', 1, 19); // Unpadded second
-		reg('s', 2, 20); // Padded second
-
-		reg('x', 1, 21); // Unpadded millisecond
-		reg('x', 3, 22); // Padded millisecond
-
-		reg('Z', 1, 23); // +- 00:00 Timezone
-		reg('z', 1, 24); // String Timezone
+		return format("Y-m-d H:i:s", unix).toStringAndFree();
 	}
 }

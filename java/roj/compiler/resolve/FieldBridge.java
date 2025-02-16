@@ -1,10 +1,10 @@
 package roj.compiler.resolve;
 
+import roj.asm.FieldNode;
+import roj.asm.IClass;
 import roj.asm.Opcodes;
-import roj.asm.tree.FieldNode;
-import roj.asm.tree.IClass;
+import roj.asm.insn.CodeWriter;
 import roj.asm.type.Type;
-import roj.asm.visitor.CodeWriter;
 import roj.compiler.api.FieldWriteReplace;
 import roj.compiler.context.CompileUnit;
 import roj.compiler.context.LocalContext;

@@ -1,7 +1,7 @@
 package roj.compiler.api;
 
+import roj.asm.attr.Attribute;
 import roj.asm.cp.ConstantPool;
-import roj.asm.tree.attr.Attribute;
 import roj.collect.IntMap;
 import roj.util.DynByteBuf;
 import roj.util.TypedKey;

@@ -45,7 +45,7 @@ public class DnsServer implements ChannelHandler {
 	public InetSocketAddress fakeDns;
 
 	public DnsServer(CMap cfg, InetSocketAddress address) throws IOException {
-		ServerLaunch.udp().bind(new InetSocketAddress(cfg.getInteger("forwarderReceive")))
+		ServerLaunch.udp().bind(new InetSocketAddress(cfg.getInt("forwarderReceive")))
 					.initializator(new ForwardQueryHandler(this))
 					.option(ServerLaunch.TCP_RECEIVE_BUFFER, 10000)
 					.launch();
@@ -55,7 +55,7 @@ public class DnsServer implements ChannelHandler {
 		}).option(ServerLaunch.TCP_RECEIVE_BUFFER, 10000).launch();
 
 		waiting = new ConcurrentHashMap<>();
-		requestTimeout = cfg.getInteger("requestTimeout");
+		requestTimeout = cfg.getInt("requestTimeout");
 		forwardDns = new ArrayList<>();
 		CList list = cfg.getOrCreateList("trustedDnsServers");
 		for (int i = 0; i < list.size(); i++) {

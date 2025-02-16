@@ -5,7 +5,7 @@ import roj.reflect.ReflectionUtils;
 import roj.text.CharList;
 import roj.text.TextUtil;
 
-import static roj.reflect.ReflectionUtils.u;
+import static roj.reflect.Unaligned.U;
 
 /**
  * @author Roj234
@@ -36,7 +36,7 @@ public class ProgressBar implements AutoCloseable {
 	public boolean setProgressWithDelay(double progress) {
 		long time = System.currentTimeMillis();
 		long t = barTime;
-		if (time - t < BAR_DELAY || !u.compareAndSwapLong(this, UPDATE_OFFSET, t, time)) return false;
+		if (time - t < BAR_DELAY || !U.compareAndSwapLong(this, UPDATE_OFFSET, t, time)) return false;
 		setProgress(progress);
 		return true;
 	}

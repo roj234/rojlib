@@ -25,7 +25,20 @@ final class PrimObj extends Adapter {
 				case Type.BYTE -> o = n.byteValue();
 				case Type.SHORT -> o = n.shortValue();
 				case Type.INT -> o = n.intValue();
-				case Type.CHAR -> o = (char) n.intValue();
+				default -> throw new IllegalArgumentException("Cannot convert "+o+" to "+(char)type);
+			}
+		} else {
+			var s = String.valueOf(o);
+			switch (type) {
+				case Type.LONG -> o = Long.parseLong(s);
+				case Type.DOUBLE -> o = Double.parseDouble(s);
+				case Type.FLOAT -> o = Float.parseFloat(s);
+				case Type.BYTE -> o = Byte.parseByte(s);
+				case Type.SHORT -> o = Short.parseShort(s);
+				case Type.INT -> o = Integer.parseInt(s);
+				case Type.CHAR -> o = o.toString().charAt(0);
+				case Type.CLASS -> o = o == null ? null : s;
+				default -> throw new IllegalArgumentException("Cannot convert "+o+" to "+(char)type);
 			}
 		}
 

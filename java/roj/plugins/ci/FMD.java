@@ -4,15 +4,24 @@ import org.jetbrains.annotations.NotNull;
 import roj.archive.zip.ZEntry;
 import roj.archive.zip.ZipArchive;
 import roj.archive.zip.ZipOutput;
+import roj.asm.ClassNode;
+import roj.asm.Opcodes;
+import roj.asm.Parser;
+import roj.asm.attr.AttrModule;
+import roj.asm.attr.AttrString;
+import roj.asm.attr.Attribute;
 import roj.asm.util.Context;
 import roj.asm.util.TransformUtil;
 import roj.asmx.event.EventBus;
-import roj.asmx.launcher.ClassWrapper;
-import roj.collect.*;
+import roj.asmx.launcher.Bootstrap;
+import roj.collect.MyHashMap;
+import roj.collect.MyHashSet;
+import roj.collect.SimpleList;
+import roj.collect.TrieTreeSet;
 import roj.compiler.context.GlobalContext;
+import roj.concurrent.ScheduleTask;
+import roj.concurrent.Scheduler;
 import roj.concurrent.TaskPool;
-import roj.concurrent.timing.ScheduleTask;
-import roj.concurrent.timing.Scheduler;
 import roj.config.ConfigMaster;
 import roj.config.Flags;
 import roj.config.ParseException;
@@ -21,6 +30,7 @@ import roj.config.auto.Optional;
 import roj.config.auto.SerializerFactory;
 import roj.config.data.CMap;
 import roj.crypt.jar.JarVerifier;
+import roj.gui.Profiler;
 import roj.io.FastFailException;
 import roj.io.IOUtil;
 import roj.math.Version;
@@ -28,15 +38,15 @@ import roj.plugins.ci.plugin.MAP;
 import roj.plugins.ci.plugin.ProcessEnvironment;
 import roj.plugins.ci.plugin.Processor;
 import roj.text.CharList;
-import roj.text.Template;
+import roj.text.Formatter;
 import roj.text.TextUtil;
 import roj.text.logging.Level;
 import roj.text.logging.Logger;
-import roj.ui.Profiler;
+import roj.ui.Argument;
+import roj.ui.CommandConsole;
 import roj.ui.Terminal;
-import roj.ui.terminal.Argument;
-import roj.ui.terminal.CommandConsole;
 import roj.util.ByteList;
+import roj.util.DynByteBuf;
 import roj.util.Helpers;
 import roj.util.HighResolutionTimer;
 
@@ -56,17 +66,17 @@ import java.util.concurrent.locks.LockSupport;
 import java.util.function.BiConsumer;
 import java.util.function.Predicate;
 
-import static roj.ui.terminal.CommandNode.argument;
-import static roj.ui.terminal.CommandNode.literal;
+import static roj.ui.CommandNode.argument;
+import static roj.ui.CommandNode.literal;
 
 /**
  * FMD Main class
- *
+ * TODO file delete event
  * @author Roj234
  * @since 2021/6/18 10:51
  */
 public final class FMD {
-	public static final String VERSION = "2.0.0-Infinity";
+	public static final String VERSION = "2.1.2";
 
 	//static final Pattern NAME_PATTERN = Pattern.compile("^[a-z_\\-][a-z0-9_\\-]*$");
 	//static final Pattern VERSION_PATTERN = Pattern.compile("^(\\d+\\.?)+?([-_][a-zA-Z0-9]+)?$");
@@ -76,10 +86,10 @@ public final class FMD {
 	public static final Logger LOGGER = Logger.getLogger("FMD");
 
 	private static boolean immediateExit;
-	public static final Scheduler DefaultScheduler = Scheduler.getDefaultScheduler();
-	public static final TaskPool Task = TaskPool.Common();
+	public static final Scheduler TIMER = Scheduler.getDefaultScheduler();
+	public static final TaskPool EXECUTOR = TaskPool.Common();
 	public static final EventBus EVENT_BUS = new EventBus();
-	private static final AtomicInteger ThreadLock = new AtomicInteger();
+	private static final AtomicInteger COMPILE_LOCK = new AtomicInteger();
 	static IFileWatcher watcher;
 
 	public static CMap config;
@@ -95,19 +105,19 @@ public final class FMD {
 	@Deprecated public static MAP MapPlugin;
 
 	public static void _lock() {
-		if (!ThreadLock.compareAndSet(0, 1)) {
+		if (!COMPILE_LOCK.compareAndSet(0, 1)) {
 			throw new FastFailException("其他线程正在编译");
 		}
 	}
-	public static void _unlock() {ThreadLock.set(0);}
+	public static void _unlock() {COMPILE_LOCK.set(0);}
 
 
 	private static ScheduleTask prelaunchTask;
 	@SuppressWarnings({"fallthrough"})
 	public static void main(String[] args) throws IOException, InterruptedException {
-		if (ClassWrapper.instance.getResource("java/awt/Color.class") == null) {
-			ClassWrapper.instance.registerTransformer((name, ctx) -> {
-				if (name.equals("roj/ui/Profiler")) {
+		if (Bootstrap.instance.getResource("java/awt/Color.class") == null) {
+			Bootstrap.instance.registerTransformer((name, ctx) -> {
+				if (name.equals("roj/gui/Profiler")) {
 					TransformUtil.apiOnly(ctx.getData());
 					return true;
 				}
@@ -118,11 +128,12 @@ public final class FMD {
 
 		var c = CommandManager;
 
-		c.register(literal("build").then(argument("flags", Argument.stringFlags("zl", "showErrorCode", "profile")).executes(ctx -> {
-			List<String> flags = Helpers.cast(ctx.argument("flags", List.class));
+		var buildProject = argument("选项", Argument.stringFlags("full", "diagnostic", "profile")).executes(ctx -> {
+			Project project = ctx.argument("项目名称", Project.class, defaultProject);
+			List<String> flags = Helpers.cast(ctx.argument("选项", List.class));
 			Profiler p = flags.contains("profile") ? new Profiler("build").begin() : null;
 			try {
-				int build = build(new MyHashSet<>(flags), defaultProject);
+				int build = build(new MyHashSet<>(flags), project);
 				if (immediateExit) System.exit(build);
 			} catch (IOException e) {
 				e.printStackTrace();
@@ -132,7 +143,8 @@ public final class FMD {
 					p.popup();
 				}
 			}
-		})));
+		});
+		c.register(literal("build").then(argument("项目名称", Argument.oneOf(projects)).then(buildProject)).then(buildProject));
 
 		c.register(literal("project")
 			.then(literal("new").then(argument("项目名称", Argument.string()).then(argument("工作空间名称", Argument.oneOf(workspaces)).executes(ctx -> {
@@ -153,7 +165,13 @@ public final class FMD {
 				defaultProject = ctx.argument("项目名称", Project.class);
 				saveConfig();
 				updatePrompt();
-			}))));
+			})))
+			.then(literal("auto").then(argument("项目名称", Argument.oneOf(projects)).then(argument("自动编译开关", Argument.bool()).executes(ctx -> {
+				var proj = ctx.argument("项目名称", Project.class);
+				proj.setAutoCompile(ctx.argument("自动编译开关", Boolean.class));
+				saveConfig();
+			}))))
+		);
 
 		c.register(literal("workspace")
 			.then(literal("create").then(argument("工作空间类型", Argument.oneOf(workspaceTypes)).executes(ctx -> {
@@ -171,7 +189,7 @@ public final class FMD {
 			})))
 			.then(literal("delete").then(argument("工作空间名称", Argument.oneOf(workspaces)).executes(ctx -> {
 				Workspace space = ctx.argument("工作空间名称", Workspace.class);
-				char nn = Terminal.readChar(MyBitSet.from("YyNn"), new CharList("输入Y确定删除'"+space.id+"'"), false);
+				char nn = Terminal.readChar("YyNn", "输入Y确定删除'"+space.id+"'");
 				if (nn != 'Y' && nn != 'y') return;
 				for (File dependency : space.unmappedDepend) {
 					Files.deleteIfExists(dependency.toPath());
@@ -200,11 +218,79 @@ public final class FMD {
 			}))));
 
 		c.register(literal("reload").executes(ctx -> loadEnv()));
+		c.register(literal("zip").then(argument("路径", Argument.file()).executes(ctx -> {
+			var file = ctx.argument("路径", File.class);
+			try (ZipArchive za = new ZipArchive(file)) {
+				for (ZEntry ze : za.entries()) {
+					if (ze.getName().endsWith("/")) {
+						za.put(ze.getName(), null);
+                        if (ze.getSize() != 0) {
+							LOGGER.warn("找到了有大小的文件夹{}", ze);
+							za.put(ze.getName().substring(0, ze.getName().length()-1), DynByteBuf.wrap(za.get(ze)));
+						}
+                    }
+				}
+
+				za.save();
+			}
+		})));
+
+		c.register(literal("modulize").then(argument("文件", Argument.file()).then(argument("模块名", Argument.string()).executes(ctx -> {
+			File file = ctx.argument("文件", File.class);
+			var moduleName = ctx.argument("模块名", String.class);
+
+			MyHashSet<String> packages = new MyHashSet<>();
+
+			boolean hasModule = false;
+			for (Context context : Context.fromZip(file, null)) {
+				String className = context.getClassName();
+				if (className.startsWith("module-info")) {
+					hasModule = true;
+					continue;
+				}
+				int i = className.lastIndexOf('/');
+				if (i < 0) throw new UnsupportedOperationException();
+				String pack = className.substring(0, i);
+				packages.add(pack);
+			}
+
+			if (hasModule) {
+				char c1 = Terminal.readChar("YyNn", "该文件已包含模块信息，是否替换 [Yn]");
+				if (c1 != 'y' && c1 != 'Y') return;
+			}
+
+			var moduleInfo = new ClassNode();
+			var moduleAttr = new AttrModule(moduleName, 0);
+
+			moduleInfo.version = ClassNode.JavaVersion(17);
+			moduleAttr.self.version = "1.0.0";
+			moduleAttr.requires.add(new AttrModule.Module("java.base", Opcodes.ACC_MANDATED));
+			for (String pack : packages) {
+				moduleAttr.exports.add(new AttrModule.Export(pack));
+			}
+
+			moduleInfo.name("module-info");
+			moduleInfo.parent(null);
+			moduleInfo.modifier = Opcodes.ACC_MODULE;
+			moduleInfo.putAttr(new AttrString(Attribute.SourceFile, "module-info.java"));
+			//moduleInfo.putAttr(new AttrString(Attribute.ModuleTarget, "windows-amd64"));
+			//moduleInfo.putAttr(new AttrClassList(Attribute.ModulePackages, new SimpleList<>(packages)));
+			moduleInfo.putAttr(moduleAttr);
+
+			System.out.println(moduleAttr);
+			try (var za = new ZipArchive(file)) {
+				za.put("module-info.class", DynByteBuf.wrap(Parser.toByteArray(moduleInfo)));
+				za.save();
+			}
+			System.out.println("IL自动模块，应用成功！");
+		}))));
+
+		c.sortCommands();
+		c.setAutoComplete(config.getBool("自动补全"));
 
 		if (args.length != 0) {
 			immediateExit = true;
 			c.executeSync(TextUtil.join(Arrays.asList(args), " "));
-			System.exit(0);
 			return;
 		}
 
@@ -226,7 +312,6 @@ public final class FMD {
 																—— Roj234
 							""");
 		}
-		updatePrompt();
 
 		if (Terminal.ANSI_OUTPUT) {
 			//prelaunchTask.cancel();
@@ -237,46 +322,33 @@ public final class FMD {
 		}
 
 		Terminal.setConsole(c);
+		HighResolutionTimer.runThis();
 		//ansidebug();
-	}
-
-	private static void ansidebug() throws InterruptedException {
-		// 假设终端有 20 行，设置滚动区域为第 2 行到第 19 行
-		int startRow = 2;
-		int endRow = 19;
-
-		// 设置滚动区域
-		System.out.print("\033[" + startRow + ";" + endRow + "r");
-
-		// 模拟一些内容输出到滚动区域
-		for (int i = 0; i < 10; i++) {
-			// 移动光标到滚动区域的起始行
-			Terminal.directWrite("\033[" + startRow + ";1H");
-			Terminal.directWrite("Line " + (i + 1) + ": 你好我是米塔.\n");
-			System.out.flush();
-			Thread.sleep(50);
-
-			// 向下滚动一行
-			Terminal.directWrite("\033[1T");
-			System.out.flush();
-		}
-
-		// 恢复默认的滚动区域（整个屏幕）
-		System.out.print("\033[r");
 	}
 
 	private static void updatePrompt() {CommandManager.setPrompt("\u001b[33mMCMake"+(defaultProject == null ? "" : "\u001b[97m[\u001b[96m"+defaultProject.name+"\u001b[97m]")+"\u001b[33m > ");}
 
+	private static final SerializerFactory POJO_FACTORY = SerializerFactory.getInstance();
 	//region 初始化
 	static {
 		String slogan = "MCMake，您的最后一个模组开发工具！ "+VERSION+" | 2019-2025";
 		System.out.println(slogan);
 		if (Terminal.ANSI_OUTPUT) {
 			setLogFormat();
-			prelaunchTask = DefaultScheduler.loop(() -> {
-				CharList sb1 = IOUtil.getSharedCharBuf().append("\u001b7\u001b[?25l\u001b[1;1H");
-				Terminal.MinecraftColor.rainbow(slogan, sb1);
-				Terminal.directWrite(sb1.append("\u001b[?25h\u001b8"));
+			// 设置滚动区域
+			// Terminal.directWrite("\033[" + 2 + ";" + Terminal.windowHeight + "r");
+			// 向下滚动一行
+			// Terminal.directWrite("\033[1T");
+			// 恢复默认的滚动区域（整个屏幕）
+			// Terminal.directWrite("\033[r");
+			prelaunchTask = TIMER.loop(() -> {
+				// 光标移动到第一行
+				synchronized (System.out) {
+					CharList sb1 = new CharList().append("\u001b7\u001b[?25l\u001b["+1+";1H");
+					Terminal.MinecraftColor.rainbow(slogan, sb1);
+					Terminal.directWrite(sb1.append("\u001b[?25h\u001b8"));
+					sb1._free();
+				}
 			}, 1000/60, 60 * 10);
 		}
 
@@ -340,10 +412,7 @@ public final class FMD {
 			}
 		}
 
-		SerializerFactory.SAFE.serializeFileToString().serializeCharsetToString().add(Version.class, new Object() {
-			public String toString(Version v) {return v.toString();}
-			public Version fromString(Object v) {return new Version(String.valueOf(v));}
-		});
+		POJO_FACTORY.serializeCharsetToString().add(Version.class, CustomSerializer.class).add(File.class, CustomSerializer.class);
 		try {
 			loadEnv();
 		} catch (Exception e) {
@@ -351,7 +420,6 @@ public final class FMD {
 			LockSupport.parkNanos(5_000_000_000L);
 			System.exit(-2);
 		}
-		HighResolutionTimer.activate();
 	}
 	@SuppressWarnings("unchecked")
 	private static void setLogFormat() {
@@ -384,6 +452,7 @@ public final class FMD {
 			String compiler;
 			@Optional List<String> compiler_options = Collections.emptyList();
 			@Optional boolean compiler_options_overwrite;
+			@Optional boolean no_compile_depend;
 			String workspace;
 			@Optional String name_format = "${name}-${version}.jar";
 			@Optional List<String> dependency = Collections.emptyList();
@@ -394,7 +463,7 @@ public final class FMD {
 		}
 	}
 	private static void loadEnv() throws IOException, ParseException {
-		var env = ConfigMaster.YAML.readObject(EnvPojo.class, new File(DATA_PATH, "env.yml"));
+		var env = ConfigMaster.YAML.readObject(POJO_FACTORY.serializer(EnvPojo.class), new File(DATA_PATH, "env.yml"));
 
 		workspaces.clear();
 		projects.clear();
@@ -416,6 +485,7 @@ public final class FMD {
 		}
 		defaultProject = projects.get(env.default_project);
 		for (var value : projects.values()) value.init();
+		updatePrompt();
 	}
 	private static void saveConfig() {
 		var env = new EnvPojo();
@@ -430,10 +500,24 @@ public final class FMD {
 		}
 		if (defaultProject != null) env.default_project = defaultProject.name;
 		try {
-			ConfigMaster.YAML.writeObject(env, new File(DATA_PATH, "env.yml"));
+			ConfigMaster.YAML.writeObject(POJO_FACTORY.serializer(EnvPojo.class), env, new File(DATA_PATH, "env.yml"));
 		} catch (IOException e) {
 			LOGGER.error("配置保存失败", e);
 		}
+	}
+
+	private static class CustomSerializer {
+		static String dataBase = DATA_PATH.getAbsolutePath();
+
+		public static String toString(Version v) {return v.toString();}
+		public static Version fromString(Object v) {return new Version(String.valueOf(v));}
+
+		public static String toString(File v) {
+			if (v == null) return null;
+			String path = v.getAbsolutePath();
+			return path.startsWith(dataBase) ? path.substring(dataBase.length() + 1) : path;
+		}
+		public static File fromString(String v) {return v == null ? null : IOUtil.relativePath(DATA_PATH, v);}
 	}
 	//endregion
 	public static int build(Set<String> args, Project project) throws Exception {
@@ -441,8 +525,16 @@ public final class FMD {
 		boolean v;
 		try {
 			v = build(args, project, BASE, 0);
+			if (!v && args.contains("full")) {
+				watcher.remove(project);
+			}
 		} finally {
-			if (project.mappedWriter != null) project.mappedWriter.end();
+			if (project.mappedWriter != null) try {
+				project.mappedWriter.end();
+			} catch (Throwable e) {
+				new UnsupportedOperationException(project.mappedWriter.getClass()+"在关闭时抛出了异常！", e).printStackTrace();
+			}
+
 			_unlock();
 		}
 
@@ -453,7 +545,7 @@ public final class FMD {
 	 * @param flag Bit 1 : run (NoVersion) , Bit 2 : dependency mode
 	 */
 	private static boolean build(Set<String> args, Project p, File dest, int flag) throws IOException {
-		if ((flag & 2) == 0) {
+		if ((flag & 2) == 0 && !p.conf.no_compile_depend) {
 			Profiler.startSection("depend");
 			for (Project depend : p.getAllDependencies()) {
 				depend.compiling = true;
@@ -474,7 +566,7 @@ public final class FMD {
 		}
 
 		File jarFile = new File(dest, (flag&1) != 0 ? p.name+".jar" : p.getOutputFormat());
-		boolean increment = jarFile.isFile() && p.unmappedJar.length() > 0 && args.contains("zl");
+		boolean increment = jarFile.isFile() && p.unmappedJar.length() > 0 && !args.contains("full");
 
 		Profiler.startSection("lockOutputFile");
 
@@ -491,7 +583,7 @@ public final class FMD {
 			long stamp;
 			if (increment) {
 				stamp = p.unmappedJar.lastModified();
-				updateResource = Task.submit(p.getResourceTask(stamp));
+				updateResource = EXECUTOR.submit(p.getResourceTask(stamp));
 				Set<String> set = watcher.getModified(p, FileWatcher.ID_SRC);
 				if (!set.contains(null)) {
 					sources = new ArrayList<>(set.size());
@@ -503,7 +595,7 @@ public final class FMD {
 				}
 			} else {
 				stamp = -1;
-				updateResource = Task.submit(p.getResourceTask(stamp));
+				updateResource = EXECUTOR.submit(p.getResourceTask(stamp));
 			}
 
 			Predicate<File> incrFilter = file -> IOUtil.extensionName(file.getName()).equals("java") && file.lastModified() > stamp;
@@ -523,6 +615,7 @@ public final class FMD {
 			Profiler.endSection();
 
 			if ((flag & 3) == 0) Terminal.info("更新了("+count+")个资源");
+			mappedWriter.end();
 		} else {
 			Profiler.endStartSection("prepareCompileParam");
 
@@ -550,13 +643,22 @@ public final class FMD {
 			for (int i = 0; i < dependencies.size(); i++) {
 				classpath.append(dependencies.get(i).unmappedJar.getAbsolutePath().substring(prefix)).append(File.pathSeparatorChar);
 			}
+			for (int i = 0; i < p.binaryDepend.size(); i++) {
+				var dep = p.binaryDepend.get(i);
+				if (IOUtil.extensionName(dep.getName()).equals("jar")) {
+					classpath.append(dep.getAbsolutePath().substring(prefix)).append(File.pathSeparatorChar);
+				}
+			}
 
 			if (increment) classpath.append(p.unmappedJar.getAbsolutePath().substring(prefix));
 			else if (classpath.length() > 0) classpath.setLength(classpath.length()-1);
 
 			SimpleList<String> options = p.conf.compiler_options_overwrite ? new SimpleList<>() : p.compiler.factory().getDefaultOptions();
 			options.addAll(p.conf.compiler_options);
-			options.addAll("-cp", classpath.toStringAndFree(), "-encoding", p.charset.name());
+			String classPathStr = classpath.toStringAndFree();
+			options.addAll("-cp", classPathStr, "-encoding", p.charset.name());
+			if ("true".equals(p.conf.variables.get("javac:use_module")))
+				options.addAll("--module-path", classPathStr);
 
 			Profiler.endStartSection("Plugin.beforeCompile");
 
@@ -570,7 +672,7 @@ public final class FMD {
 			pc.increment = incrementLevel;
 
 			Profiler.endStartSection("compile");
-			var outputs = p.compiler.compile(options, sources, args.contains("showErrorCode"));
+			var outputs = p.compiler.compile(options, sources, args.contains("diagnostic"));
 			if (outputs == null) return false;
 
 			Profiler.endStartSection("writeUnmappedJar");
@@ -645,7 +747,7 @@ public final class FMD {
 
 			Profiler.endStartSection("signature");
 			if ((flag&1) == 0 && p.variables.get("fmd:signature:keystore") != null) {
-				p.mappedWriter.end();
+				mappedWriter.end();
 
 				try {
 					signatureJar(p, dest, jarFile);
@@ -680,7 +782,7 @@ public final class FMD {
 	private static void signatureJar(Project p, File dest, File jarFile) throws IOException, GeneralSecurityException {
 		String name_format = p.variables.get("fmd:signature:name_format");
 		if (name_format != null) {
-			File newFile = new File(dest, Template.compile(name_format).format(p.variables, IOUtil.getSharedCharBuf()).toString());
+			File newFile = new File(dest, Formatter.simple(name_format).format(p.variables, IOUtil.getSharedCharBuf()).toString());
 			IOUtil.copyFile(jarFile, newFile);
 			jarFile = newFile;
 		}
@@ -688,33 +790,29 @@ public final class FMD {
 		var keystore = new File(p.variables.get("fmd:signature:keystore"));
 		var private_key_pass = p.variables.get("fmd:signature:keystore_pass").toCharArray();
 		var key_alias = p.variables.get("fmd:signature:key_alias");
-		var certificate_name = p.variables.getOrDefault("fmd:signature:certificate_name", IOUtil.fileName(keystore.getName()));
 
-		var manifest_hash_algorithm = p.variables.getOrDefault("fmd:signature:manifest_hash_algorithm", "SHA-256");
-		var signature_hash_algorithm = p.variables.getOrDefault("fmd:signature:signature_hash_algorithm", "SHA-256");
-
-		var result = p.signatureInfo;
+		var result = p.signatureCache;
 
 		if (result == null) result = readKeys(keystore, private_key_pass, key_alias);
-
-		JarVerifier.CREATED_BY = "MCMake/"+VERSION;
-		try (var zf = name_format == null ? p.mappedWriter.getMZF() : new ZipArchive(jarFile)) {
-			zf.reopen();
-			JarVerifier.signJar(zf, manifest_hash_algorithm, signature_hash_algorithm, result.certificate_chain, result.private_key, certificate_name);
-			zf.save();
+		var options = result.options;
+		if (options.isEmpty()) {
+			options.put("jarSigner:creator", "MCMake/"+VERSION);
+			options.put("jarSigner:signatureFileName", p.variables.getOrDefault("fmd:signature:certificate_name", IOUtil.fileName(keystore.getName())));
+			options.put("jarSigner:skipPerFileAttributes", p.variables.getOrDefault("fmd:signature:skip_per_file_attributes", "false"));
+			options.put("jarSigner:manifestHashAlgorithm", p.variables.getOrDefault("fmd:signature:manifest_hash_algorithm", "SHA-256"));
+			options.put("jarSigner:signatureHashAlgorithm", p.variables.getOrDefault("fmd:signature:signature_hash_algorithm", "SHA-256"));
+			//options.put("jarSigner:cacheHash", "true");
 		}
 
-		if ("true".equals(p.variables.get("fmd:signature:verify"))) {
-			try {
-				JarVerifier.main(new String[]{jarFile.getAbsolutePath()});
-			} catch (Exception e) {
-				e.printStackTrace();
-			}
+		try (var zf = name_format == null ? p.mappedWriter.getMZF() : new ZipArchive(jarFile)) {
+			zf.reopen();
+			JarVerifier.signJar(zf, result.certificate_chain, result.private_key, result.options);
+			zf.save();
 		}
 	}
 
 	@NotNull
-	private static SignatureInfo readKeys(File keystore, char[] keyPass, String keyAlias) throws KeyStoreException, IOException, NoSuchAlgorithmException, CertificateException, UnrecoverableEntryException {
+	private static SignatureCache readKeys(File keystore, char[] keyPass, String keyAlias) throws KeyStoreException, IOException, NoSuchAlgorithmException, CertificateException, UnrecoverableEntryException {
 		List<Certificate> certificate_chain;
 		PrivateKey private_key;
 		var ks = KeyStore.getInstance("PKCS12");
@@ -724,14 +822,15 @@ public final class FMD {
 			certificate_chain = Arrays.asList(entry.getCertificateChain());
 			private_key = entry.getPrivateKey();
 		}
-        return new SignatureInfo(certificate_chain, private_key);
+        return new SignatureCache(certificate_chain, private_key);
 	}
 
-    public static final class SignatureInfo {
+    public static final class SignatureCache {
 		final List<Certificate> certificate_chain;
 		final PrivateKey private_key;
+		Map<String, String> options = new MyHashMap<>();
 
-        public SignatureInfo(List<Certificate> certificate_chain, PrivateKey private_key) {
+		public SignatureCache(List<Certificate> certificate_chain, PrivateKey private_key) {
             this.certificate_chain = certificate_chain;
             this.private_key = private_key;
         }

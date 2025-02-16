@@ -1,8 +1,8 @@
 package roj.asm.util;
 
 import roj.asm.Opcodes;
-import roj.asm.visitor.XInsnList;
-import roj.asm.visitor.XInsnNodeView;
+import roj.asm.insn.InsnList;
+import roj.asm.insn.InsnNode;
 import roj.collect.Int2IntMap;
 
 import static roj.asm.Opcodes.*;
@@ -36,12 +36,12 @@ public class InsnMatcher {
 		return true;
 	}
 
-	public boolean isNodeSimilar(XInsnNodeView a, XInsnNodeView b) { return a.isSimilarTo(b, this); }
+	public boolean isNodeSimilar(InsnNode a, InsnNode b) { return a.isSimilarTo(b, this); }
 
 	@SuppressWarnings("fallthrough")
-	public void mapVarId(XInsnList from) {
+	public void mapVarId(InsnList from) {
 		Int2IntMap map = varIdReplace;
-		for (XInsnNodeView node : from) {
+		for (InsnNode node : from) {
 			switch (Opcodes.category(node.opcode())) {
 				default: if (node.opcode() != IINC) break;
 				case CATE_LOAD_STORE_LEN:
@@ -56,7 +56,7 @@ public class InsnMatcher {
 						if (code >= ISTORE_0) code = (byte) (((code - ISTORE_0) / 4) + ISTORE);
 					}
 					if (map.containsKey(id)) {
-						var replaceList = new XInsnList();
+						var replaceList = new InsnList();
 						replaceList.vars((byte) code, map.get(id));
 						node.replace(replaceList, false);
 					}

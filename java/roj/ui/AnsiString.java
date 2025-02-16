@@ -11,6 +11,7 @@ import roj.text.TextUtil;
 
 import java.util.Collections;
 import java.util.List;
+import java.util.Objects;
 
 /**
  * @author Roj234
@@ -23,10 +24,10 @@ public class AnsiString {
 
 	private List<AnsiString> extra = Collections.emptyList();
 
-	public AnsiString(CharSequence value) { this.value = value; }
+	public AnsiString(CharSequence value) { this.value = Objects.requireNonNull(value); }
 	public AnsiString(AnsiString copy) { this(copy, copy.value); }
 	public AnsiString(AnsiString copy, CharSequence altValue) {
-		this.value = altValue;
+		this.value = Objects.requireNonNull(altValue);
 		this.fgColor = copy.fgColor;
 		this.bgColor = copy.bgColor;
 		this.flag = copy.flag;

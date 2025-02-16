@@ -1,8 +1,7 @@
 package roj.asm.type;
 
-import roj.asm.AsmShared;
+import roj.asm.insn.AbstractCodeWriter;
 import roj.collect.MyHashMap;
-import roj.collect.SimpleList;
 import roj.config.Tokenizer;
 import roj.io.IOUtil;
 import roj.text.CharList;
@@ -11,7 +10,7 @@ import roj.text.TextUtil;
 import java.util.ArrayList;
 import java.util.List;
 
-import static roj.asm.type.Type.*;
+import static roj.asm.type.Type.MAP;
 
 /**
  * @author Roj234
@@ -33,135 +32,43 @@ public final class TypeHelper {
 		}
 	}
 
-	public static List<Type> parseMethod(String desc) {
-		SimpleList<Type> p = AsmShared.local().methodTypeTmp();
-		parseMethod(desc, p); return new SimpleList<>(p);
-	}
-	@SuppressWarnings("fallthrough")
-	public static void parseMethod(String desc, List<Type> params) {
-		if (desc.charAt(0) != '(') throw new IllegalArgumentException("方法描述符无效:"+desc);
-
-		int arr = 0;
-		for (int i = 1; i < desc.length(); i++) {
-			char c = desc.charAt(i);
-			switch (c) {
-				case ')':
-					Type returns = parse(desc, i+1);
-					params.add(returns);
-					return;
-				case '[':
-					arr++;
-				break;
-				case 'L':
-					int j = desc.indexOf(';', i+1);
-					if (j < 0) throw new IllegalArgumentException("雷星未终止:"+desc);
-					params.add(new Type(desc.substring(i+1, j), arr));
-					arr = 0;
-					i = j;
-				break;
-				default:
-					if (!isValid(c)) throw new IllegalArgumentException(desc);
-					params.add(arr == 0 ? std(c) : new Type(c, arr));
-					arr = 0;
-				break;
-			}
-		}
-	}
-
 	/**
-	 * 方法参数所占空间
+	 * 方法参数所占空间.
+	 * @implNote 未检查方法描述的有效性
 	 *
-	 * @see roj.asm.visitor.AbstractCodeWriter#invokeItf(String, String, String)
+	 * @see AbstractCodeWriter#invokeItf(String, String, String)
 	 */
 	public static int paramSize(String desc) {
 		int size = 0;
 		int end = desc.indexOf(')');
-
 		for (int i = 1; i < end; i++) {
 			char c = desc.charAt(i);
 			switch (c) {
-				case ARRAY: break;
-				case CLASS:
+				case Type.ARRAY -> {}
+				case Type.CLASS -> {
 					i = desc.indexOf(';', i+1);
-					if (i <= 0) throw new IllegalArgumentException("class end missing: "+desc);
+					if (i <= 0) throw new IllegalArgumentException("方法描述无效:"+desc);
 					size++;
-				break;
-				case DOUBLE: case LONG:
-					if (desc.charAt(i-1) == '[') size++;
+				}
+				case Type.DOUBLE, Type.LONG -> {
+					if (desc.charAt(i - 1) == '[') size++;
 					else size += 2;
-				break;
-				default:
-					if (!isValid(c)) throw new IllegalArgumentException("unknown character '"+c+"' in "+desc);
+				}
+				default -> {
+					if (!Type.isValid(c)) throw new IllegalArgumentException("方法描述无效:"+desc);
 					size++;
-				break;
+				}
 			}
 		}
 		return size;
 	}
 
-	public static Type parseReturn(String desc) {
-		int index = desc.indexOf(')');
-		if (index < 0) throw new IllegalArgumentException("不是方法描述");
-		return parse(desc, index+1);
-	}
-
-	public static Type parseField(String desc) { return parse(desc, 0); }
-
-	private static Type parse(String desc, int off) {
-		char c0 = desc.charAt(off);
-		switch (c0) {
-			case ARRAY:
-				int pos = desc.lastIndexOf('[')+1;
-				Type t = parse(desc, pos);
-				if (t.owner == null) t = new Type(t.type, pos - off);
-				else t.setArrayDim(pos - off);
-				return t;
-			case CLASS:
-				if (!desc.endsWith(";")) throw new IllegalArgumentException("'类'类型 '" + desc + "' 未以';'结束");
-				return new Type(desc.substring(off+1, desc.length()-1));
-			default: return std(c0);
-		}
-	}
-
-	/**
-	 * 转换字段type为字符串
-	 * @see Type#toDesc()
-	 */
-	public static String getField(IType type) {
-		if (type.isPrimitive()) return toDesc(((Type) type).type);
-
-		CharList sb = IOUtil.getSharedCharBuf();
-		type.toDesc(sb);
-		return sb.toString();
-	}
-
-	/**
-	 * 转换方法type为字符串
-	 */
-	public static String getMethod(List<? extends IType> list) { return getMethod(list, null); }
-	public static String getMethod(List<? extends IType> list, String prev) {
-		CharList sb = IOUtil.getSharedCharBuf().append('(');
-
-		for (int i = 0; i < list.size(); i++) {
-			// return value
-			if (i == list.size() - 1) sb.append(')');
-
-			list.get(i).rawType().toDesc(sb);
-		}
-		return sb.equals(prev) ? prev : sb.toString();
-	}
-
-	private static final MyHashMap<String, Object[]> PD;
+	static final MyHashMap<String, Object[]> ByName;
 	static {
-		PD = new MyHashMap<>(MAP.length);
+		ByName = new MyHashMap<>(MAP.length);
 		for (Object[] o : MAP) {
-			if (o != null && o[1] != null) PD.put(o[1].toString(), o);
+			if (o != null && o[1] != null) ByName.put(o[1].toString(), o);
 		}
-	}
-
-	public static int toPrimitiveType(String primitiveName) {
-		Object[] objects = PD.get(primitiveName);
-		return objects == null ? -1 : objects[0].toString().charAt(0);
 	}
 
 	/**
@@ -175,24 +82,8 @@ public final class TypeHelper {
 			sb.append('[');
 		}
 
-		if (clazz.isPrimitive()) return sb.append(PD.get(clazz.getName())[0].toString());
+		if (clazz.isPrimitive()) return sb.append(ByName.get(clazz.getName())[0].toString());
 		return sb.append('L').append(clazz.getName().replace('.', '/')).append(';');
-	}
-
-	public static Type class2type(Class<?> clazz) {
-		int arr = 0;
-		Class<?> tmp;
-		while ((tmp = clazz.getComponentType()) != null) {
-			clazz = tmp;
-			arr++;
-		}
-
-		if (clazz.isPrimitive()) {
-			Type type = (Type) PD.get(clazz.getName())[2];
-			return arr == 0 ? type : new Type(type.type, arr);
-		}
-
-		return new Type(clazz.getName().replace('.', '/'), arr);
 	}
 
 	/**
@@ -281,7 +172,7 @@ public final class TypeHelper {
 			sb.append('[');
 		}
 
-		Object[] arr = PD.get(sb1);
+		Object[] arr = ByName.get(sb1);
 		if (arr != null) return sb.append(arr[0]);
 
 		return sb.append('L').append(sb1.replace('.', '/')).append(';');

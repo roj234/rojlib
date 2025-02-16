@@ -14,7 +14,6 @@ import roj.text.CharList;
 import roj.text.GB18030;
 import roj.text.TextUtil;
 import roj.text.UnsafeCharset;
-import roj.ui.terminal.*;
 import roj.util.ArrayUtil;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
@@ -255,6 +254,7 @@ public final class Terminal extends DelegatedPrintStream {
 		} else {
 			synchronized (out) {
 				write("\7");
+				_flush();
 			}
 		}
 	}
@@ -264,6 +264,7 @@ public final class Terminal extends DelegatedPrintStream {
 		} else {
 			synchronized (out) {
 				write(s);
+				_flush();
 			}
 		}
 	}
@@ -533,6 +534,9 @@ public final class Terminal extends DelegatedPrintStream {
 		key(VK_ESCAPE, "\33");
 		key(VK_TAB, "\t");
 		key(VK_ENTER, "\r");
+		// for fallback
+		key(VK_ENTER, "\n");
+		key(VK_ENTER, "\r\n");
 
 		key(VK_F1, "\33OP");
 		key(VK_F2, "\33OQ");
@@ -634,11 +638,11 @@ public final class Terminal extends DelegatedPrintStream {
 				return;
 			}
 		}
-		serr.println("未识别的ANSI转义: "+Tokenizer.addSlashes(buf)+" (考虑报告该问题)");
+		printError("未识别的ANSI转义: "+Tokenizer.addSlashes(buf)+" (考虑报告该问题)");
 	}
 	//endregion
 	//region AnsiInput基础
-	public static void pause() {readString("按回车继续");}
+	public static void pause() {readChar(null, new CharList("按任意键继续"), true);}
 	/**
 	 * @param min 最小值(包括)
 	 * @param max 最大值(包括)
@@ -725,7 +729,8 @@ public final class Terminal extends DelegatedPrintStream {
 	/**
 	 * @see #readChar(MyBitSet, CharList, boolean)
 	 */
-	public static char readChar(MyBitSet chars) {return readChar(chars, null, true);}
+	public static char readChar(String chars) {return readChar(chars, "");}
+	public static char readChar(String chars, String prefix) {return readChar(MyBitSet.from(chars), new CharList(prefix), false);}
 	/**
 	 * 从标准输入中读取一个被chars允许的字符.
 	 * 如果输入的字符不允许，发出哔哔声
@@ -923,8 +928,12 @@ public final class Terminal extends DelegatedPrintStream {
 	//endregion
 	//region StdIO
 	public static final boolean ANSI_INPUT, ANSI_OUTPUT;
-	public static final BufferedReader in;
-	public static final PrintStream serr = System.err;
+	private static final BufferedReader in;
+	private static final PrintStream serr = System.err;
+	/**
+	 * 给文本部分的调试设计，sout可能会Stackoverflow
+	 */
+	public static void printError(String text) {serr.println(text);}
 
 	// T和其它终端不同之处在于，光标（字符长度）会通过它获取
 	@Nullable
@@ -957,7 +966,6 @@ public final class Terminal extends DelegatedPrintStream {
 	//endregion
 	//out必须最后初始化
 	public static final Terminal out = new Terminal();
-	public static boolean hasNativeTerminal() {return T != null;}
 	static {
 		nativeCharset = NativeVT.charset;
 		var t = T = NativeVT.getInstance();
@@ -974,22 +982,32 @@ public final class Terminal extends DelegatedPrintStream {
 				throw new IllegalStateException(e);
 			}
 
-			if (!Boolean.getBoolean("roj.debug.disableVT")) {
-				if (ANSI_INPUT) System.setIn(ALT);
-				System.setOut(out);
-				System.setErr(out);
+			if (ANSI_INPUT && !Boolean.getBoolean("roj.noAnsiInput")) {
+				System.setIn(ALT);
 			}
+			System.setOut(out);
+			System.setErr(out);
 
 			int winSize = out.cursorPos;
 			if (winSize > 0) {
 				windowWidth = winSize&0xFFFF;
 				windowHeight = winSize >>> 16;
 			}
+
+			in = null;
 		} else {
 			ANSI_INPUT = false;
 			ANSI_OUTPUT = false;
-		}
+			ALT = new AnsiIn();
 
-		in = new BufferedReader(new InputStreamReader(System.in), 1024);
+			var fallback = new NativeVT.Fallback();
+			addListener(fallback);
+			fallback.start();
+
+			in = new BufferedReader(new InputStreamReader(System.in), 1024);
+
+			System.setOut(fallback);
+			System.setErr(fallback);
+		}
 	}
 }

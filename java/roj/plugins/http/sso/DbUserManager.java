@@ -25,7 +25,7 @@ class DbUserManager implements UserManager {
 		User cached = users.get(uid);
 		if (cached != null) {
 			try (var dba = DBA.getInstance()) {
-				var data = dba.table(userTable).where("id", uid).select().getone_colkey();
+				var data = dba.table(userTable).where("id", uid).select().nextMap();
 				if (data == null) return null;
 
 				return addFromDb(data);
@@ -58,7 +58,7 @@ class DbUserManager implements UserManager {
 		User cached = userByName.get(user);
 		if (cached == null) {
 			try (var dba = DBA.getInstance()) {
-				var data = dba.table(userTable).where("name", user).select().getone_colkey();
+				var data = dba.table(userTable).where("name", user).select().nextMap();
 				if (data == null) return null;
 				return addFromDb(data);
 			} catch (SQLException e) {

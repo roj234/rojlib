@@ -2,8 +2,8 @@ package roj.compiler.plugin;
 
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
+import roj.asm.MethodNode;
 import roj.asm.Opcodes;
-import roj.asm.tree.MethodNode;
 import roj.asm.type.IType;
 import roj.asm.type.Type;
 import roj.collect.Int2IntMap;

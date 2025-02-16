@@ -1,17 +1,16 @@
 package roj.plugins.ci;
 
+import roj.asm.ClassNode;
 import roj.asm.Opcodes;
-import roj.asm.tree.ConstantData;
 import roj.asm.type.Type;
 import roj.asm.type.TypeHelper;
 import roj.asm.util.ClassLike;
 import roj.collect.SimpleList;
-import roj.io.IOUtil;
 import roj.reflect.ClassDefiner;
 import roj.reflect.Proxy;
 import roj.text.CharList;
 import roj.text.Escape;
-import roj.text.LineReader;
+import roj.text.TextReader;
 import roj.ui.AnsiString;
 import roj.ui.Terminal;
 import roj.util.ByteList;
@@ -40,7 +39,7 @@ public final class JCompiler implements Compiler, DiagnosticListener<JavaFileObj
 	private final String basePath;
 	private final Factory factory;
 	private int ignored, warnings, errors;
-	private final CharList buf;
+	private CharList buf;
 	private boolean showErrorCode;
 
 	public JCompiler(Factory factory, String basePath) {
@@ -48,7 +47,6 @@ public final class JCompiler implements Compiler, DiagnosticListener<JavaFileObj
 
 		this.factory = factory;
 		this.basePath = basePath;
-		this.buf = new CharList(1024);
 	}
 
 	@Override public Compiler.Factory factory() {return factory;}
@@ -58,7 +56,7 @@ public final class JCompiler implements Compiler, DiagnosticListener<JavaFileObj
 
 		ignored = warnings = errors = 0;
 		showErrorCode = showDiagnosticId;
-		buf.clear();
+		buf = new CharList(1024);
 
 		List<MyJFO> compiled = new SimpleList<>();
 		var jfm = javac.getStandardFileManager(this, Locale.getDefault(), StandardCharsets.UTF_8);
@@ -72,6 +70,7 @@ public final class JCompiler implements Compiler, DiagnosticListener<JavaFileObj
 		if (errors > 0) buf.append('\n').append(errors).append(" 个 错误");
 		if (warnings > 0) buf.append('\n').append(warnings).append('/').append(warnings+ ignored).append(" 个 警告");
 		System.out.println(new AnsiString(buf).bgColor16(result ? Terminal.BLUE : Terminal.RED).color16(Terminal.WHITE + Terminal.HIGHLIGHT).toAnsiString());
+		buf._free();
 		return result ? compiled : null;
 	}
 
@@ -93,11 +92,11 @@ public final class JCompiler implements Compiler, DiagnosticListener<JavaFileObj
 	private static Function<Object[], StandardJavaFileManager> createDelegation() throws Exception {
 		Method proxyGetOutput = StandardJavaFileManager.class.getMethod("getJavaFileForOutput", JavaFileManager.Location.class, String.class, JavaFileObject.Kind.class, FileObject.class);
 
-		ConstantData data = new ConstantData();
+		ClassNode data = new ClassNode();
 		data.name("roj/plugins/ci/JCompiler$MySFM");
 
-		int listId = data.newField(0, "bo", new Type("java/util/List"));
-		int nameId = data.newField(0, "aa", new Type("java/lang/String"));
+		int listId = data.newField(0, "bo", Type.klass("java/util/List"));
+		int nameId = data.newField(0, "aa", Type.klass("java/lang/String"));
 
 		Proxy.proxyClass(data, new Class<?>[] {StandardJavaFileManager.class}, (m, cw) -> {
 			if (m.equals(proxyGetOutput)) {
@@ -168,8 +167,11 @@ public final class JCompiler implements Compiler, DiagnosticListener<JavaFileObj
 
 	private static String getNearCode(JavaFileObject source, long lineNumber) {
 		if (lineNumber == -1) return "";
-		try {
-			return LineReader.getLine(IOUtil.readUTF(source.openInputStream()), (int) lineNumber);
+		try (var tr = TextReader.auto(source.openInputStream())) {
+			while (true) {
+				var line = tr.readLine();
+				if (line == null || --lineNumber == 0) return line;
+			}
 		} catch (IOException e) {
 			e.printStackTrace();
 			return "<ERROR> failed to get " + source.getName() + " due to " + e;

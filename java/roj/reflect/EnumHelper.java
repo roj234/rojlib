@@ -1,19 +1,19 @@
 package roj.reflect;
 
+import roj.asm.ClassNode;
+import roj.asm.MethodNode;
 import roj.asm.Opcodes;
 import roj.asm.Parser;
+import roj.asm.attr.Attribute;
 import roj.asm.cp.CstClass;
 import roj.asm.cp.CstInt;
 import roj.asm.cp.CstRef;
-import roj.asm.tree.ConstantData;
-import roj.asm.tree.MethodNode;
-import roj.asm.tree.attr.Attribute;
+import roj.asm.insn.AttrCode;
+import roj.asm.insn.CodeVisitor;
+import roj.asm.insn.InsnList;
+import roj.asm.insn.InsnNode;
 import roj.asm.type.Type;
 import roj.asm.type.TypeHelper;
-import roj.asm.visitor.CodeVisitor;
-import roj.asm.visitor.XAttrCode;
-import roj.asm.visitor.XInsnList;
-import roj.asm.visitor.XInsnNodeView;
 import roj.collect.SimpleList;
 import roj.collect.ToLongMap;
 import roj.concurrent.OperationDone;
@@ -37,15 +37,15 @@ public final class EnumHelper extends CodeVisitor {
 
 	private final ToLongMap<String> parPos = new ToLongMap<>();
 
-	private final ConstantData ref;
-	private XAttrCode staticInit;
+	private final ClassNode ref;
+	private AttrCode staticInit;
 
 	private CstInt len;
-	private XInsnNodeView addPos;
-	private XInsnList addCode;
+	private InsnNode addPos;
+	private InsnList addCode;
 	private int lvid;
 
-	public EnumHelper(ConstantData klass) {
+	public EnumHelper(ClassNode klass) {
 		if ((klass.modifier & ACC_ENUM) == 0) throw new IllegalStateException("Not enum class: " + klass.name());
 
 		ref = klass;
@@ -66,29 +66,29 @@ public final class EnumHelper extends CodeVisitor {
 					SimpleList<Type> param = new SimpleList<>(mn.parameters());
 					param.remove(Math.max(nameId, ordinalId));
 					param.remove(Math.min(nameId, ordinalId));
-					param.add(Type.std(Type.VOID));
+					param.add(Type.primitive(Type.VOID));
 
 					long v = 0;
 					v |= (long)i << 24;
 					v |= (long) nameId << 16;
 					v |= (long) ordinalId << 8;
 					v |= param.size();
-					parPos.put(TypeHelper.getMethod(param), v);
+					parPos.put(Type.toMethodDesc(param), v);
 				}
 			} else if (mn.name().equals("<clinit>")) {
 				staticInit = mn.parsedAttr(klass.cp, Attribute.Code);
 
-				XInsnList list = staticInit.instructions;
-				for (XInsnNodeView node : list) {
+				InsnList list = staticInit.instructions;
+				for (InsnNode node : list) {
 					lvid = Math.max(node.getVarId(), lvid);
-					if (node.opcode() == ANEWARRAY && node.type().equals(klass.name)) {
+					if (node.opcode() == ANEWARRAY && node.type().equals(klass.name())) {
 						addPos = node.unshared();
 
-						XInsnNodeView prev = node.prev();
+						InsnNode prev = node.prev();
 						switch (prev.opcode()) {
 							default:
 								len = new CstInt(prev.getAsInt());
-								XInsnList rplTo = new XInsnList();
+								InsnList rplTo = new InsnList();
 								rplTo.ldc(len);
 								prev.replace(rplTo, false);
 							break;
@@ -158,10 +158,10 @@ public final class EnumHelper extends CodeVisitor {
 
 		int nid = (int)(mi>>>16)&0xFF, oid = (int)(mi>>>8)&0xFF, len = (int)mi&0xFF;
 
-		XInsnList l = addCode;
+		InsnList l = addCode;
 		l.one(DUP);
 		l.ldc(this.len.value);
-		l.clazz(NEW, ref.name);
+		l.clazz(NEW, ref.name());
 		l.one(DUP);
 
 		int stackSize = 7 + TypeHelper.paramSize(desc);
@@ -169,7 +169,7 @@ public final class EnumHelper extends CodeVisitor {
 			staticInit.stackSize = (char) stackSize;
 		}
 
-		List<Type> types = TypeHelper.parseMethod(desc);
+		List<Type> types = Type.methodDesc(desc);
 		int j = 0;
 		for (int i = 0; i < len; i++) {
 			if (i == nid) {
@@ -211,7 +211,7 @@ public final class EnumHelper extends CodeVisitor {
 		return this.len.value++;
 	}
 
-	public ConstantData commit() {
+	public ClassNode commit() {
 		addPos.insertAfter(addCode, false);
 		return ref;
 	}

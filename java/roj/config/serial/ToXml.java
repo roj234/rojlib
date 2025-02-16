@@ -37,13 +37,13 @@ public class ToXml implements CVisitor {
 				stack.add(stackBottom);
 				stackBottom.add(stackBottom = createElement(str));
 				break;
-			default: add(CString.valueOf(str)); break;
+			default: add(CEntry.valueOf(str)); break;
 		}
 	}
-	public final void value(int l) { add(CInt.valueOf(l)); }
-	public final void value(long l) { add(CLong.valueOf(l)); }
-	public final void value(double l) { add(CDouble.valueOf(l));}
-	public final void value(boolean l) { add(CBoolean.valueOf(l)); }
+	public final void value(int l) { add(CEntry.valueOf(l)); }
+	public final void value(long l) { add(CEntry.valueOf(l)); }
+	public final void value(double l) { add(CEntry.valueOf(l));}
+	public final void value(boolean l) { add(CEntry.valueOf(l)); }
 	public final void valueNull() { add(CNull.NULL); }
 	private void add(CEntry v) {
 		if (state == XML_CHILD) {

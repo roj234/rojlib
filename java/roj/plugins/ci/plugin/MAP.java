@@ -2,6 +2,7 @@ package roj.plugins.ci.plugin;
 
 import roj.archive.zip.ZipArchive;
 import roj.archive.zip.ZipFileWriter;
+import roj.asm.type.Desc;
 import roj.asm.util.Context;
 import roj.asmx.event.Subscribe;
 import roj.asmx.mapper.Mapper;
@@ -15,8 +16,9 @@ import roj.plugins.ci.Project;
 import roj.plugins.ci.Workspace;
 import roj.plugins.ci.event.LibraryModifiedEvent;
 import roj.text.TextUtil;
+import roj.text.logging.Level;
+import roj.ui.Argument;
 import roj.ui.Terminal;
-import roj.ui.terminal.Argument;
 import roj.util.ByteList;
 import roj.util.Helpers;
 
@@ -24,13 +26,15 @@ import java.io.File;
 import java.io.IOException;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.function.Predicate;
+import java.util.regex.Pattern;
 
 import static roj.asmx.mapper.Mapper.DONT_LOAD_PREFIX;
 import static roj.asmx.mapper.Mapper.MF_FIX_SUBIMPL;
 import static roj.plugins.ci.FMD.*;
-import static roj.ui.terminal.CommandNode.argument;
-import static roj.ui.terminal.CommandNode.literal;
+import static roj.ui.CommandNode.argument;
+import static roj.ui.CommandNode.literal;
 
 /**
  * @author Roj234
@@ -64,6 +68,7 @@ public class MAP implements Processor {
 	public MAP() {
 		EVENT_BUS.register(this);
 		FMD.MapPlugin = this;
+
 		var finishNode = argument("文件", Argument.files(2)).executes(ctx -> {
 			var workspace = ctx.argument("工作空间", Workspace.class);
 			if (workspace == null && defaultProject != null) workspace = defaultProject.workspace;
@@ -80,15 +85,21 @@ public class MAP implements Processor {
 				m = new Mapper(workspace.getInvMapper());
 			} else {
 				m = workspace.getMapper();
+				m.flag = (byte) flag;
 				m.loadLibraries(workspace.mappedDepend);
 			}
-			m.flag |= flag;
-			m.packup();
 
+			m.loadLibraries(files);
+			m.packup();
 			m.getSeperatedLibraries().clear();
 			for (int i = 0; i < files.size(); i++) {
 				File in = files.get(i);
-				File out = IOUtil.deriveOutput(in, reverse ? "-unmap" : "-mapped");
+				String postfix = reverse ? "-unmap" : "-mapped";
+				if (IOUtil.fileName(in.getName()).endsWith(postfix)) {
+					LOGGER.info("{}仅作为依赖，不映射", in.getName());
+					continue;
+				}
+				File out = IOUtil.deriveOutput(in, postfix);
 				try (var zfw = new ZipFileWriter(out)) {
 					var classes = Context.fromZip(in, zfw);
 
@@ -105,6 +116,37 @@ public class MAP implements Processor {
 		});
 		CommandManager.register(literal("map").then(argument("工作空间", Argument.oneOf(workspaces)).then(finishNode)).then(finishNode));
 		CommandManager.register(literal("unmap").then(argument("工作空间", Argument.oneOf(workspaces)).then(finishNode)).then(finishNode));
+
+
+		var mapName = argument("搜索词", Argument.string()).executes(ctx -> {
+			var word = Pattern.compile(ctx.argument("搜索词", String.class));
+
+			var workspace = ctx.argument("工作空间", Workspace.class);
+			if (workspace == null && defaultProject != null) workspace = defaultProject.workspace;
+			if (workspace == null || workspace.mapping == null) {
+				Terminal.error("这个项目没有映射器");
+				return;
+			}
+
+			Mapper m = workspace.getMapper();
+			for (Map.Entry<Desc, String> entry : m.getMethodMap().entrySet()) {
+				if (word.matcher(entry.getKey().owner+"."+entry.getKey().name+entry.getKey().param).find()) {
+					System.out.println(entry.getKey()+" => "+entry.getValue());
+				}
+			}
+			for (Map.Entry<Desc, String> entry : m.getFieldMap().entrySet()) {
+				if (word.matcher(entry.getKey().owner+"."+entry.getKey().name).find()) {
+					System.out.println(entry.getKey()+" => "+entry.getValue());
+				}
+			}
+		});
+		CommandManager.register(literal("mapname").then(argument("工作空间", Argument.oneOf(workspaces)).then(mapName)).then(mapName));
+		CommandManager.register(literal("mapdebug").then(argument("type", Argument.string()).executes(ctx -> {
+            var s = ctx.argument("type", String.class);
+			int i = s.indexOf('#');
+			Mapper.LOGGER.setLevel(Level.ALL);
+			defaultProject.mapper.debugRelative(s.substring(0, i).replace('.', '/'), s.substring(i+1));
+        })));
 	}
 
 	@Override public String name() {return "映射";}
@@ -166,6 +208,7 @@ public class MAP implements Processor {
 		var hash = digest.digest();
 		try (var mzf = new ZipArchive(new File(DATA_PATH, ".mapCacheAll.zip"))) {
 			m = new Mapper(p.workspace.getMapper());
+			m.flag = (byte) flag;
 
 			String entryId = TextUtil.bytes2hex(hash);
 			var in = mzf.getStream(entryId);
@@ -187,7 +230,7 @@ public class MAP implements Processor {
 			ByteList buf = new ByteList();
 			m.saveCache(buf, 2);
 
-			int cacheWipe = mzf.entries().size()-config.getInteger("映射缓存大小");
+			int cacheWipe = mzf.entries().size()-config.getInt("映射缓存大小");
 			if (cacheWipe > 0) {
 				var entries = new SimpleList<>(mzf.entries());
 				entries.sort((o1, o2) -> Long.compare(o1.getModificationTime(), o2.getModificationTime()));
@@ -202,7 +245,6 @@ public class MAP implements Processor {
 			return new Mapper();
 		}
 
-		m.flag = (byte) flag;
 		p.mapper = m;
 		return m.packup();
 	}

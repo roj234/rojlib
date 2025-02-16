@@ -10,7 +10,7 @@
 
 package roj.archive.qz.xz.lz;
 
-import static roj.reflect.ReflectionUtils.u;
+import static roj.reflect.Unaligned.U;
 
 final class BT4 extends LZEncoder {
 	BT4(int dictSize, int beforeSizeMin, int readAheadMax, int niceLen, int matchLenMax, int depthLimit) {
@@ -60,7 +60,7 @@ final class BT4 extends LZEncoder {
 		// The hashing algorithm guarantees that if the first byte
 		// matches, also the second byte does, so there's no need to
 		// test the second byte.
-		if (delta2 < cyclicSize && u.getByte(buf + readPos - delta2) == u.getByte(buf + readPos)) {
+		if (delta2 < cyclicSize && U.getByte(buf + readPos - delta2) == U.getByte(buf + readPos)) {
 			lenBest = 2;
 			mlen[0] = 2;
 			mdist[0] = delta2 - 1;
@@ -71,7 +71,7 @@ final class BT4 extends LZEncoder {
 		// is different from the match possibly found by the two-byte hash.
 		// Also here the hashing algorithm guarantees that if the first byte
 		// matches, also the next two bytes do.
-		if (delta2 != delta3 && delta3 < cyclicSize && u.getByte(buf + readPos - delta3) == u.getByte(buf + readPos)) {
+		if (delta2 != delta3 && delta3 < cyclicSize && U.getByte(buf + readPos - delta3) == U.getByte(buf + readPos)) {
 			lenBest = 3;
 			mdist[mcount++] = delta3 - 1;
 			delta2 = delta3;
@@ -79,7 +79,7 @@ final class BT4 extends LZEncoder {
 
 		// If a match was found, see how long it is.
 		if (mcount > 0) {
-			while (lenBest < matchLenLimit && u.getByte(buf + readPos + lenBest - delta2) == u.getByte(buf + readPos + lenBest)) ++lenBest;
+			while (lenBest < matchLenLimit && U.getByte(buf + readPos + lenBest - delta2) == U.getByte(buf + readPos + lenBest)) ++lenBest;
 
 			mlen[mcount - 1] = lenBest;
 
@@ -109,8 +109,8 @@ final class BT4 extends LZEncoder {
 			// if the distance of the potential match exceeds the
 			// dictionary size.
 			if (depth-- == 0 || delta >= cyclicSize) {
-				u.putInt(ptr0, 0);
-				u.putInt(ptr1, 0);
+				U.putInt(ptr0, 0);
+				U.putInt(ptr1, 0);
 				return;
 			}
 
@@ -120,9 +120,9 @@ final class BT4 extends LZEncoder {
 			long pos = buf + readPos + len;
 			long prevPos = pos - delta;
 
-			if (u.getByte(prevPos) == u.getByte(pos)) {
+			if (U.getByte(prevPos) == U.getByte(pos)) {
 				while (++len < matchLenLimit) {
-					if (u.getByte(++prevPos) != u.getByte(++pos)) break;
+					if (U.getByte(++prevPos) != U.getByte(++pos)) break;
 				}
 
 				if (len > lenBest) {
@@ -132,22 +132,22 @@ final class BT4 extends LZEncoder {
 					++mcount;
 
 					if (len >= niceLenLimit) {
-						u.putInt(ptr1, u.getInt(pair));
-						u.putInt(ptr0, u.getInt(pair + 4));
+						U.putInt(ptr1, U.getInt(pair));
+						U.putInt(ptr0, U.getInt(pair + 4));
 						return;
 					}
 				}
 			}
 
-			if ((u.getByte(prevPos) & 0xFF) < (u.getByte(pos) & 0xFF)) {
-				u.putInt(ptr1, currentMatch);
+			if ((U.getByte(prevPos) & 0xFF) < (U.getByte(pos) & 0xFF)) {
+				U.putInt(ptr1, currentMatch);
 				ptr1 = pair + 4;
-				currentMatch = u.getInt(ptr1);
+				currentMatch = U.getInt(ptr1);
 				len1 = len;
 			} else {
-				u.putInt(ptr0, currentMatch);
+				U.putInt(ptr0, currentMatch);
 				ptr0 = pair;
-				currentMatch = u.getInt(ptr0);
+				currentMatch = U.getInt(ptr0);
 				len0 = len;
 			}
 		}
@@ -166,8 +166,8 @@ final class BT4 extends LZEncoder {
 			int delta = lzPos - currentMatch;
 
 			if (depth-- == 0 || delta >= cyclicSize) {
-				u.putInt(ptr0, 0);
-				u.putInt(ptr1, 0);
+				U.putInt(ptr0, 0);
+				U.putInt(ptr1, 0);
 				return;
 			}
 
@@ -175,29 +175,29 @@ final class BT4 extends LZEncoder {
 			int len = Math.min(len0, len1);
 
 			long myOff = buf + readPos + len;
-			if (u.getByte(myOff - delta) == u.getByte(myOff)) {
+			if (U.getByte(myOff - delta) == U.getByte(myOff)) {
 				// No need to look for longer matches than niceLenLimit
 				// because we only are updating the tree, not returning
 				// matches found to the caller.
 				do {
 					myOff++;
 					if (++len == niceLenLimit) {
-						u.putInt(ptr1, u.getInt(pair));
-						u.putInt(ptr0, u.getInt(pair + 4));
+						U.putInt(ptr1, U.getInt(pair));
+						U.putInt(ptr0, U.getInt(pair + 4));
 						return;
 					}
-				} while (u.getByte(myOff - delta) == u.getByte(myOff));
+				} while (U.getByte(myOff - delta) == U.getByte(myOff));
 			}
 
-			if ((u.getByte(myOff - delta) & 0xFF) < (u.getByte(myOff) & 0xFF)) {
-				u.putInt(ptr1, currentMatch);
+			if ((U.getByte(myOff - delta) & 0xFF) < (U.getByte(myOff) & 0xFF)) {
+				U.putInt(ptr1, currentMatch);
 				ptr1 = pair + 4;
-				currentMatch = u.getInt(ptr1);
+				currentMatch = U.getInt(ptr1);
 				len1 = len;
 			} else {
-				u.putInt(ptr0, currentMatch);
+				U.putInt(ptr0, currentMatch);
 				ptr0 = pair;
-				currentMatch = u.getInt(ptr0);
+				currentMatch = U.getInt(ptr0);
 				len0 = len;
 			}
 		}

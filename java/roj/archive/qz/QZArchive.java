@@ -9,11 +9,12 @@ import roj.collect.*;
 import roj.concurrent.TaskHandler;
 import roj.crypt.CRC32s;
 import roj.io.CorruptedInputException;
+import roj.io.FastFailException;
 import roj.io.IOUtil;
 import roj.io.LimitInputStream;
-import roj.io.SourceInputStream;
 import roj.io.buf.BufferPool;
 import roj.io.source.Source;
+import roj.io.source.SourceInputStream;
 import roj.text.CharList;
 import roj.util.ByteList;
 
@@ -21,7 +22,6 @@ import java.io.EOFException;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
-import java.nio.channels.AsynchronousCloseException;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.Collections;
@@ -31,7 +31,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiConsumer;
 
 import static roj.archive.qz.BlockId.*;
-import static roj.reflect.ReflectionUtils.u;
+import static roj.reflect.Unaligned.U;
 
 /**
  * 我去除了大部分C++的味道，但是保留了一部分，这样你才知道自己用的是Java
@@ -789,7 +789,7 @@ public class QZArchive extends QZReader implements ArchiveFile {
 						for (var itr = set.iterator(); itr.hasNext(); ) {
 							var entry = files[itr.nextInt()];
 							entry.flag |= flag;
-							u.putLong(entry, off, buf.readLongLE());
+							U.putLong(entry, off, buf.readLongLE());
 						}
 					}
 					case kWinAttributes -> {
@@ -802,7 +802,7 @@ public class QZArchive extends QZReader implements ArchiveFile {
 						for (var itr = set.iterator(); itr.hasNext(); ) {
 							var entry = files[itr.nextInt()];
 							entry.flag |= QZEntry.ATTR;
-							u.putInt(entry, off, buf.readIntLE());
+							U.putInt(entry, off, buf.readIntLE());
 						}
 					}
 					default -> buf.rIndex += len;
@@ -894,7 +894,7 @@ public class QZArchive extends QZReader implements ArchiveFile {
 		if (byName.isEmpty()) {
 			byName.ensureCapacity(entries.length);
 			for (QZEntry entry : entries) {
-				if (byName.put(entry.name, entry) != null) {
+				if (byName.putIfAbsent(entry.name, entry) != null) {
 					throw new IllegalArgumentException("文件名重复！该文件可能已损坏，请通过entries()获取Entry并读取");
 				}
 			}
@@ -916,14 +916,20 @@ public class QZArchive extends QZReader implements ArchiveFile {
 		num.set(blocks.length);
 		for (WordBlock b : blocks) {
 			th.submit(() -> {
-				if (r == null) throw new AsynchronousCloseException();
+				if (num.get() < 0) return;
+				if (r == null) {
+					num.set(-1);
+					throw new FastFailException("其他线程关闭了压缩包");
+				}
 
-				try (InputStream in = getSolidStream(b, pass, false)) {
+				try (var in = getSolidStream(b, pass, false)) {
 					// noinspection all
 					LimitInputStream lin = new LimitInputStream(in, 0, false);
 					QZEntry entry = b.firstEntry;
 					long toSkip = 0;
 					do {
+						if (num.get() < 0) return;
+
 						lin.remain = entry.uSize;
 
 						InputStream fin = lin;
@@ -936,8 +942,11 @@ public class QZArchive extends QZReader implements ArchiveFile {
 
 						entry = entry.next;
 					} while (entry != null);
+				} catch (Exception e) {
+					num.set(-1);
+					throw e;
 				} finally {
-					if (num.decrementAndGet() == 0) {
+					if (num.decrementAndGet() <= 0) {
 						synchronized (num) {
 							num.notifyAll();
 						}
@@ -949,7 +958,7 @@ public class QZArchive extends QZReader implements ArchiveFile {
 		return num;
 	}
 	public static void awaitParallelComplete(AtomicInteger r1) throws InterruptedException {
-		while (r1.get() != 0) {
+		while (r1.get() > 0) {
 			synchronized (r1) {r1.wait();}
 		}
 	}
@@ -1078,7 +1087,7 @@ public class QZArchive extends QZReader implements ArchiveFile {
 			r1.close();
 			r = null;
 
-			Source s = (Source) u.getAndSetObject(this, FPREAD_OFFSET, r1);
+			Source s = (Source) U.getAndSetObject(this, FPREAD_OFFSET, r1);
 			if (s != null) s.close();
 
 			if (password != null) Arrays.fill(password, (byte) 0);

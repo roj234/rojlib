@@ -26,6 +26,7 @@ final class MSSEngineClient extends MSSEngine {
 	private KeyExchange keyExch;
 
 	@Override public final boolean isClient() {return true;}
+	@Override public boolean maySendMessage() {return encoder!=null;}
 
 	@Override
 	public final int handshake(DynByteBuf tx, DynByteBuf rx) throws MSSException {
@@ -99,13 +100,14 @@ final class MSSEngineClient extends MSSEngine {
 				int lim = rx.wIndex();
 				int type = readPacket(rx);
 				if (type < 0) return type;
+				int lim2 = rx.wIndex();
 
 				try {
 					return handleServerHello(tx, rx);
 				} catch (GeneralSecurityException e) {
 					return error(e);
 				} finally {
-					rx.rIndex = lim;
+					rx.rIndex = lim2;
 					rx.wIndex(lim);
 				}
 		}

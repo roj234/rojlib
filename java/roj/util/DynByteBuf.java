@@ -17,7 +17,6 @@ import java.io.OutputStream;
 import java.nio.ByteBuffer;
 import java.util.function.IntUnaryOperator;
 
-import static roj.reflect.ReflectionUtils.u;
 import static roj.reflect.Unaligned.U;
 
 /**
@@ -245,7 +244,7 @@ public abstract class DynByteBuf extends OutputStream implements CharSequence, M
 
 	public final DynByteBuf putZero(int count) {
 		long offset = _unsafeAddr() + preWrite(count);
-		u.setMemory(array(), offset, count, (byte)0);
+		U.setMemory(array(), offset, count, (byte)0);
 		return this;
 	}
 
@@ -281,9 +280,9 @@ public abstract class DynByteBuf extends OutputStream implements CharSequence, M
 	private DynByteBuf put24UB(int offset, int x) {
 		long addr = _unsafeAddr()+offset;
 		byte[] array = array();
-		u.putByte(array, addr++, (byte) (x >>> 16));
-		u.putByte(array, addr++, (byte) (x >>> 8));
-		u.putByte(array, addr, (byte) x);
+		U.putByte(array, addr++, (byte) (x >>> 16));
+		U.putByte(array, addr++, (byte) (x >>> 8));
+		U.putByte(array, addr, (byte) x);
 		return this;
 	}
 
@@ -292,9 +291,9 @@ public abstract class DynByteBuf extends OutputStream implements CharSequence, M
 	private DynByteBuf put24UL(int offset, int x) {
 		long addr = _unsafeAddr()+offset;
 		byte[] array = array();
-		u.putByte(array, addr++, (byte) x);
-		u.putByte(array, addr++, (byte) (x >>> 8));
-		u.putByte(array, addr, (byte) (x >>> 16));
+		U.putByte(array, addr++, (byte) x);
+		U.putByte(array, addr++, (byte) (x >>> 8));
+		U.putByte(array, addr, (byte) (x >>> 16));
 		return this;
 	}
 
@@ -470,9 +469,9 @@ public abstract class DynByteBuf extends OutputStream implements CharSequence, M
 	public final int readMedium(int i) {
 		long addr = testWI(i, 3)+_unsafeAddr();
 		byte[] array = array();
-		return (u.getByte(array, addr++) & 0xFF) << 16
-			| (u.getByte(array, addr++) & 0xFF) << 8
-			| (u.getByte(array, addr) & 0xFF);
+		return (U.getByte(array, addr++) & 0xFF) << 16
+			| (U.getByte(array, addr++) & 0xFF) << 8
+			| (U.getByte(array, addr) & 0xFF);
 	}
 
 	@Range(from = 0, to = 16777215) public final int readMediumLE() {return readMediumLE(preRead(3));}
@@ -480,9 +479,9 @@ public abstract class DynByteBuf extends OutputStream implements CharSequence, M
 	public final int readMediumLE(int i) {
 		long addr = testWI(i, 3)+_unsafeAddr();
 		byte[] array = array();
-		return (u.getByte(array, addr++) & 0xFF)
-			| (u.getByte(array, addr++) & 0xFF) << 8
-			| (u.getByte(array, addr) & 0xFF) << 16;
+		return (U.getByte(array, addr++) & 0xFF)
+			| (U.getByte(array, addr++) & 0xFF) << 8
+			| (U.getByte(array, addr) & 0xFF) << 16;
 	}
 
 	public final int readInt() {return readInt(preRead(4));}

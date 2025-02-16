@@ -11,7 +11,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.function.IntFunction;
 
-import static roj.reflect.ReflectionUtils.u;
+import static roj.reflect.Unaligned.U;
 
 /**
  * 比删除的UnsortedMultiKeyMap更快、更好、更方便 (除了现在key只有string外...)
@@ -59,11 +59,11 @@ public class MatchMapString<V> {
 
 			// 同时排序pos和entries两个数组
 			TimSortForEveryone.sort(0, size, (refLeft, offLeft, offRight) -> {
-				int o = u.getInt(refLeft, offLeft+2), o2 = u.getInt(null, offRight+2);
+				int o = U.getInt(refLeft, offLeft+2), o2 = U.getInt(null, offRight+2);
 				int cmp = entries[o].key.compareTo(entries[o2].key);
 				if (cmp != 0) return cmp;
 
-				return Integer.compare(u.getChar(refLeft, offLeft), u.getChar(offRight));
+				return Integer.compare(U.getChar(refLeft, offLeft), U.getChar(offRight));
 			}, ArrayRef.primitiveArray(pos), ArrayRef.objectArray(entries));
 
 			if (size > 255) {
@@ -197,7 +197,7 @@ public class MatchMapString<V> {
 			out[i] = key.charAt(i);
 			size[i] = prev.size;
 		}
-		TimSortForEveryone.sort(0, key.length(), (refLeft, offLeft, offRight) -> Integer.compare(u.getInt(refLeft, offLeft), u.getInt(offRight)),
+		TimSortForEveryone.sort(0, key.length(), (refLeft, offLeft, offRight) -> Integer.compare(U.getInt(refLeft, offLeft), U.getInt(offRight)),
 			ArrayRef.primitiveArray(size), ArrayRef.primitiveArray(out));
 
 		String s = new String(out, 0, key.length());
@@ -209,7 +209,7 @@ public class MatchMapString<V> {
 	private static final long VOL_OFFSET = ReflectionUtils.fieldOffset(MatchMapString.class, "vol0");
 	private Object[] vol0;
 	private Object[] getVolArray() {
-		Object[] vol0 = (Object[]) u.getAndSetObject(this, VOL_OFFSET, null);
+		Object[] vol0 = (Object[]) U.getAndSetObject(this, VOL_OFFSET, null);
 		if (vol0 == null) vol0 = new Object[] { new PosList(), new PosList(), new SimpleList<>(), new SimpleList<>(), new int[2] };
 		return vol0;
 	}
@@ -218,7 +218,7 @@ public class MatchMapString<V> {
 		((PosList) vol0[1]).clear();
 		((SimpleList<?>) vol0[2]).clear();
 		((SimpleList<?>) vol0[3]).clear();
-		u.compareAndSwapObject(this, VOL_OFFSET, null, vol0);
+		U.compareAndSwapObject(this, VOL_OFFSET, null, vol0);
 	}
 
 	public static final byte MATCH_SHORTER = 1, MATCH_LONGER = 2, MATCH_CONTINUOUS = 4;

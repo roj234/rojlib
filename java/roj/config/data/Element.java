@@ -51,10 +51,10 @@ public class Element extends Node {
 	// region 属性
 	Map<String, CEntry> attributes = Collections.emptyMap();
 
-	public Element attr(String name, String value) { attributes().put(name, CString.valueOf(value)); return this; }
-	public Element attr(String name, int value) { attributes().put(name, CInt.valueOf(value)); return this; }
-	public Element attr(String name, double value) { attributes().put(name, CDouble.valueOf(value)); return this; }
-	public Element attr(String name, boolean value) { attributes().put(name, CBoolean.valueOf(value)); return this; }
+	public Element attr(String name, String value) { attributes().put(name, CEntry.valueOf(value)); return this; }
+	public Element attr(String name, int value) { attributes().put(name, CEntry.valueOf(value)); return this; }
+	public Element attr(String name, double value) { attributes().put(name, CEntry.valueOf(value)); return this; }
+	public Element attr(String name, boolean value) { attributes().put(name, CEntry.valueOf(value)); return this; }
 	public CEntry attr(String name) { return attributes.getOrDefault(name, CNull.NULL); }
 	public void attr(String k, CEntry v) { attributes().put(k, v); }
 

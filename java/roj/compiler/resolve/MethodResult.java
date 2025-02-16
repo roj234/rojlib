@@ -1,15 +1,15 @@
 package roj.compiler.resolve;
 
 import org.jetbrains.annotations.Nullable;
-import roj.asm.tree.MethodNode;
-import roj.asm.tree.attr.Attribute;
+import roj.asm.MethodNode;
+import roj.asm.attr.Attribute;
 import roj.asm.type.IType;
 import roj.asm.type.Type;
 import roj.collect.IntMap;
 import roj.compiler.asm.MethodWriter;
 import roj.compiler.context.LocalContext;
 import roj.compiler.diagnostic.Kind;
-import roj.concurrent.Liu;
+import roj.concurrent.Flow;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -48,8 +48,7 @@ public final class MethodResult {
 		else {
 			var list = method.parsedAttr(ctx.classes.getClassInfo(method.owner).cp(), Attribute.Exceptions);
 			if (list == null) return Collections.emptyList();
-			// TODO StreamChain简单的示例
-			return Liu.of(list.value).map((Function<String, IType>) Type::new).toList();
+			return Flow.of(list.value).map((Function<String, IType>) Type::klass).toList();
 		}
 	}
 
@@ -68,7 +67,7 @@ public final class MethodResult {
 			opcode = INVOKEINTERFACE;
 		} else if ((method.modifier & ACC_STATIC) != 0) {
 			opcode = INVOKESTATIC;
-		} else if ((method.modifier & ACC_PRIVATE) != 0 && method.owner.equals(ctx.file.name)) {
+		} else if ((method.modifier & ACC_PRIVATE) != 0 && method.owner.equals(ctx.file.name())) {
 			opcode = INVOKESPECIAL;
 		} else {
 			opcode = INVOKEVIRTUAL;

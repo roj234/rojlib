@@ -7,22 +7,17 @@ import java.util.function.BiConsumer;
  * @since 2023/3/3 22:32
  */
 public class LRUCache<K, V> extends LinkedMyHashMap<K, V> implements Cache<K,V> {
-	private final int maximumCapacity, removeAtOnce;
+	private final int maximumCapacity;
 	private BiConsumer<K,V> listener;
 
 	public LRUCache(int maxCap) {
-		this(maxCap, 1);
-	}
-
-	public LRUCache(int maxCap, int evictOnce) {
 		this.maximumCapacity = maxCap;
-		this.removeAtOnce = evictOnce;
 		setAccessOrder(true);
 	}
 
 	@Override
 	public AbstractEntry<K, V> getOrCreateEntry(K key) {
-		if (maximumCapacity > 0 && size > maximumCapacity) evict(removeAtOnce);
+		if (maximumCapacity > 0 && size > maximumCapacity) evict(size - maximumCapacity);
 		return super.getOrCreateEntry(key);
 	}
 

@@ -7,5 +7,5 @@ import java.util.List;
  * @since 2023/8/4 0004 16:03
  */
 public interface ITweaker {
-	void init(List<String> args, ClassWrapper loader);
+	void init(List<String> args, Bootstrap loader);
 }

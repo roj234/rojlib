@@ -71,7 +71,7 @@ class Asar extends Scene {
 				dirCount++;
 				recursionTree(parents.append('/'), val, tree);
 			} else {
-				int size1 = val.getInteger("size");
+				int size1 = val.getInt("size");
 				size += size1;
 
 				// use string to store long value...

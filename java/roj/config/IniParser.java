@@ -138,15 +138,15 @@ public final class IniParser extends Parser {
 		switch (w.type()) {
 			case LITERAL:
 				if ((flag & UNESCAPE) != 0 && val.startsWith("\"") && val.endsWith("\"")) {
-					return CString.valueOf(val.substring(1, val.length()-1));
+					return CEntry.valueOf(val.substring(1, val.length()-1));
 				}
-			case STRING: return CString.valueOf(val);
+			case STRING: return CEntry.valueOf(val);
 			case DOUBLE:
-			case FLOAT: return CDouble.valueOf(w.asDouble());
-			case INTEGER: return CInt.valueOf(w.asInt());
-			case LONG: return CLong.valueOf(w.asLong());
+			case FLOAT: return CEntry.valueOf(w.asDouble());
+			case INTEGER: return CEntry.valueOf(w.asInt());
+			case LONG: return CEntry.valueOf(w.asLong());
 			case TRUE:
-			case FALSE: return CBoolean.valueOf(w.type() == TRUE);
+			case FALSE: return CEntry.valueOf(w.type() == TRUE);
 			case NULL: return CNull.NULL;
 			default: unexpected(val); return null;
 		}

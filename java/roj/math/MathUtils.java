@@ -1,7 +1,9 @@
 package roj.math;
 
+import org.jetbrains.annotations.Range;
 import roj.collect.Int2IntMap;
 import roj.collect.IntList;
+import roj.compiler.runtime.RtUtil;
 import roj.util.Helpers;
 
 import java.util.*;
@@ -39,6 +41,9 @@ public abstract class MathUtils {
 		int i = (int) value;
 		return value > i ? i + 1 : i;
 	}
+
+	public static long multiplyHigh(long x, long y) {return Math.multiplyHigh(x, y);}
+	public static long unsignedMultiplyHigh(long x, long y) {return Math.multiplyHigh(x, y) + ((x >> 63) & y) + ((y >> 63) & x);}
 
 	/**
 	 * Returns an iterator providing a number sequence. This sequence starts with <i>{@code from}</i> (given as
@@ -187,22 +192,46 @@ public abstract class MathUtils {
 	}
 	public static int randomRange(Random rand, int min, int max) {return min + rand.nextInt(max - min + 1);}
 
-	public static final long[] MASK64 = new long[64];
-	public static final int[] MASK32 = new int[32];
-	static {
-		for (int i = 0; i < 64; i++) MASK64[i] = (1L << i) - 1;
-		for (int i = 0; i < 32; i++) MASK32[i] = (1 << i) - 1;
+	public static int pow(int base, int exponent) {return RtUtil.pow(base, exponent);}
+
+	/**
+	 * 计算值离float_num最近的分数，分母不大于max_denominator.
+	 * @return {分子,分母}
+	 */
+	public static int[] closestFraction(double float_num, @Range(from = 2, to = Integer.MAX_VALUE) int max_denominator) {
+		double remainder = float_num % 1;
+		int[] result;
+		if (remainder < 0) {
+			result = closestFraction1(-remainder, max_denominator);
+			result[0] = -result[0];
+		} else {
+			result = closestFraction1(remainder, max_denominator);
+		}
+		result[0] += result[1] * (float_num-remainder);
+		return result;
 	}
 
-	public static int pow(int base, int exponent) {
-		int result = 1;
-		while (exponent > 0) {
-			if ((exponent & 1) == 1) {
-				result *= base;
-			}
-			base *= base;
-			exponent >>= 1;
+	public static int[] closestFraction1(@Range(from = 0, to = 1) double float_num, @Range(from = 2, to = Integer.MAX_VALUE) int max_denominator) {
+		double remainder = float_num;
+		int p0 = 1, q0 = 0;
+		int p1 = 0, q1 = 1;
+
+		while (Math.abs(remainder) >= 1E-8) {
+			remainder = 1 / remainder;
+			int ai = (int) remainder;
+			int p = ai * p1 + p0;
+			int q = ai * q1 + q0;
+
+			if (q > max_denominator) break;
+
+			q0 = q1;p0 = p1;
+			q1 = q ;p1 = p ;
+
+			remainder -= ai;
 		}
-		return result;
+
+		var error0 = Math.abs(float_num - (double) p0 / q0);
+		var error1 = Math.abs(float_num - (double) p1 / q1);
+		return error0 < error1 ? new int[]{p0, q0} : new int[]{p1, q1};
 	}
 }

@@ -12,8 +12,8 @@ package roj.archive.qz.xz;
 
 import roj.io.Finishable;
 import roj.io.UnsafeOutputStream;
+import roj.reflect.Unaligned;
 import roj.util.ArrayUtil;
-import sun.misc.Unsafe;
 
 import java.io.IOException;
 import java.io.OutputStream;
@@ -52,7 +52,7 @@ public final class LZMA2Writer extends LZMA2Out implements Finishable, UnsafeOut
 
 	public final void write(byte[] buf, int off, int len) throws IOException {
 		ArrayUtil.checkRange(buf, off, len);
-		write0(buf, (long)Unsafe.ARRAY_BYTE_BASE_OFFSET+off, len);
+		write0(buf, (long)Unaligned.ARRAY_BYTE_BASE_OFFSET+off, len);
 	}
 	public final void write(long off, int len) throws IOException { write0(null, off, len); }
 	public final void write0(Object buf, long off, int len) throws IOException {

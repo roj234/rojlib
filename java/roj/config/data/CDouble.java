@@ -9,10 +9,9 @@ import roj.text.CharList;
  */
 public final class CDouble extends CEntry {
 	public double value;
-
-	public CDouble(double number) { this.value = number; }
-	public static CDouble valueOf(double number) { return new CDouble(number); }
-	public static CDouble valueOf(String number) { return valueOf(Double.parseDouble(number)); }
+	public CDouble() {}
+	public CDouble(double number) {this.value = number;}
+	public static CEntry valueOf(String number) {return valueOf(Double.parseDouble(number));}
 
 	public Type getType() { return Type.DOUBLE; }
 	public boolean eqVal(CEntry o) { return Double.compare(value, o.asDouble()) == 0; }
@@ -38,6 +37,7 @@ public final class CDouble extends CEntry {
 	public Object raw() { return value; }
 
 	public CharList toJSON(CharList sb, int depth) { return sb.append(value); }
+	public String toString() {return String.valueOf(value).concat("D");}
 
 	public int hashCode() {
 		long l = Double.doubleToRawLongBits(value);

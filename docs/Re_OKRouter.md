@@ -12,6 +12,7 @@
  * 通过Request#getArguments()获取路由参数 （Unstable，之后大概会改）
 
 ```java
+import roj.http.server.auto.*;
 import roj.net.http.server.auto.*;
 
 public class Example {

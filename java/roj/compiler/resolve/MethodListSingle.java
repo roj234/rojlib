@@ -1,7 +1,7 @@
 package roj.compiler.resolve;
 
+import roj.asm.MethodNode;
 import roj.asm.Opcodes;
-import roj.asm.tree.MethodNode;
 import roj.asm.type.IType;
 import roj.asm.type.Type;
 import roj.asmx.mapper.ParamNameMapper;
@@ -23,7 +23,11 @@ import java.util.Map;
  */
 final class MethodListSingle extends ComponentList {
 	final MethodNode node;
-	MethodListSingle(MethodNode node) { this.node = node; }
+	final boolean isOverriden;
+	MethodListSingle(MethodNode node, boolean overriddenMethod) { this.node = node; this.isOverriden = overriddenMethod; }
+	@Override public List<MethodNode> getMethods() {return Collections.singletonList(node);}
+	@Override public boolean isOverriddenMethod(int id) {return isOverriden;}
+	@Override public String toString() {return "["+node.returnType()+' '+node.ownerClass()+'.'+node.name()+"("+TextUtil.join(node.parameters(), ", ")+")]";}
 
 	public MethodResult findMethod(LocalContext ctx, IType that, List<IType> params,
 								   Map<String, IType> namedType, int flags) {
@@ -106,10 +110,4 @@ final class MethodListSingle extends ComponentList {
 		}
 		return null;
 	}
-
-	@Override
-	public List<MethodNode> getMethods() {return Collections.singletonList(node);}
-
-	@Override
-	public String toString() {return "["+node.ownerClass()+" => ("+TextUtil.join(node.parameters(), ", ")+") => "+node.returnType()+']';}
 }

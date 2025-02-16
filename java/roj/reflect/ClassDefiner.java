@@ -1,11 +1,13 @@
 package roj.reflect;
 
 import roj.ReferenceByGeneratedClass;
+import roj.asm.ClassNode;
+import roj.asm.IClass;
 import roj.asm.Parser;
-import roj.asm.tree.ConstantData;
-import roj.asm.tree.IClass;
-import roj.asm.visitor.CodeWriter;
+import roj.asm.insn.CodeWriter;
+import roj.text.logging.Logger;
 import roj.util.ByteList;
+import roj.util.Helpers;
 
 import java.security.ProtectionDomain;
 
@@ -28,20 +30,20 @@ public final class ClassDefiner extends ClassLoader {
 	@ReferenceByGeneratedClass
 	public static void __(Object handle) { Callback.set(handle); }
 
-	public static void premake(ConstantData clz) {
+	public static void premake(ClassNode clz) {
 		clz.npConstructor();
 		if (__UseAllocateInstance) return;
 
 		CodeWriter cw = clz.newMethod(ACC_PUBLIC|ACC_STATIC, "<clinit>", "()V");
 		cw.visitSize(2,0);
 
-		cw.newObject(clz.name);
+		cw.newObject(clz.name());
 		cw.invoke(INVOKESTATIC, ClassDefiner.class.getName().replace('.', '/'), "__", "(Ljava/lang/Object;)V");
 		cw.one(RETURN);
 		cw.finish();
 	}
-	public static Object make(ConstantData data) {return make(data, APP_LOADER);}
-	public static Object make(ConstantData data, ClassLoader cl) {
+	public static Object make(ClassNode data) {return make(data, APP_LOADER);}
+	public static Object make(ClassNode data, ClassLoader cl) {
 		try {
 			ByteList buf = Parser.toByteArrayShared(data);
 			Class<?> klass = cl == null ? ReflectionUtils.defineWeakClass(buf) : defineClass(cl, null, buf);
@@ -53,8 +55,10 @@ public final class ClassDefiner extends ClassLoader {
 	public static Object postMake(Class<?> klass) {
 		if (__UseAllocateInstance) {
 			try {
-				return ReflectionUtils.u.allocateInstance(klass);
+				return VMInternals.u.allocateInstance(klass);
 			} catch (InstantiationException e) {
+				Logger.FALLBACK.fatal("创建对象失败", e);
+				return Helpers.maybeNull();
 			}
 		}
 
@@ -67,7 +71,9 @@ public final class ClassDefiner extends ClassLoader {
 	}
 
 	// 用weak(), 这样不会走ClassDefiner#defineClass分支
+	// 另外，这里不允许deferred
 	private static final H def = Bypass.builder(H.class).inline().delegate(ClassLoader.class, new String[] {"defineClass", "findLoadedClass"}).build();
+	@Java22Workaround
 	private interface H {
 		Class<?> defineClass(ClassLoader loader, String name, byte[] b, int off, int len, ProtectionDomain pd);
 		Class<?> findLoadedClass(ClassLoader loader, String name);

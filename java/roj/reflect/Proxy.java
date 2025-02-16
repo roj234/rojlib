@@ -1,9 +1,9 @@
 package roj.reflect;
 
-import roj.asm.tree.ConstantData;
+import roj.asm.ClassNode;
+import roj.asm.insn.CodeWriter;
 import roj.asm.type.Type;
 import roj.asm.type.TypeHelper;
-import roj.asm.visitor.CodeWriter;
 
 import java.lang.reflect.Method;
 import java.util.List;
@@ -16,14 +16,14 @@ import static roj.asm.Opcodes.*;
  * @since 2023/5/17 0017 9:57
  */
 public class Proxy {
-	public static int proxyClass(ConstantData data, Class<?>[] itfs, BiFunction<Method, CodeWriter, Boolean> overrider, int... extraFields) {
+	public static int proxyClass(ClassNode data, Class<?>[] itfs, BiFunction<Method, CodeWriter, Boolean> overrider, int... extraFields) {
 		if (!itfs[0].isInterface()) throw new IllegalArgumentException("not interface");
 
 		String itfStr = itfs[0].getName().replace('.', '/');
 		data.addInterface(itfStr);
 		data.addInterface("java/util/function/Function");
 
-		int fid = data.newField(0, "$proxy", new Type(itfStr));
+		int fid = data.newField(0, "$proxy", Type.klass(itfStr));
 		data.npConstructor();
 
 		CodeWriter c = data.newMethod(ACC_PUBLIC | ACC_FINAL, "apply", "(Ljava/lang/Object;)Ljava/lang/Object;");
@@ -35,7 +35,7 @@ public class Proxy {
 
 		c.clazz(NEW, data.name());
 		c.one(DUP);
-		c.invokeD(data.name, "<init>", "()V");
+		c.invokeD(data.name(), "<init>", "()V");
 		c.one(ASTORE_0);
 
 		c.one(ALOAD_0);
@@ -56,7 +56,7 @@ public class Proxy {
 		return fid;
 	}
 
-	public static void proxyMethods(ConstantData data, Class<?>[] itfs, int fid, BiFunction<Method, CodeWriter, Boolean> overrider) {
+	public static void proxyMethods(ClassNode data, Class<?>[] itfs, int fid, BiFunction<Method, CodeWriter, Boolean> overrider) {
 		String itfStr = data.fields.get(fid).fieldType().owner;
 
 		for (Class<?> itf : itfs) {

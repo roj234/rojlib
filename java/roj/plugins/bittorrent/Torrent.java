@@ -1,13 +1,13 @@
 package roj.plugins.bittorrent;
 
-import roj.concurrent.Liu;
+import roj.concurrent.Flow;
 import roj.config.ConfigMaster;
 import roj.config.ParseException;
 import roj.config.auto.Name;
 import roj.config.auto.Optional;
 import roj.io.IOUtil;
-import roj.text.ACalendar;
 import roj.text.CharList;
+import roj.text.DateParser;
 import roj.text.TextUtil;
 import roj.util.ByteList;
 
@@ -43,10 +43,10 @@ public class Torrent {
 	public String toString() {
 		var sb = new CharList().append("Torrent{").append(info).append(", server=[");
 		if (announce_list == null) sb.append(announce).append(']');
-		else sb.append(Liu.of(announce_list).map(t -> t[0]).join(", "));
+		else sb.append(Flow.of(announce_list).map(t -> t[0]).join(", "));
 		sb.append(']');
 		if (creation_date != 0) {
-			sb.append(", 发布于: ").append(ACalendar.toLocalTimeString(creation_date*1000));
+			sb.append(", 发布于: ").append(DateParser.toLocalTimeString(creation_date*1000));
 		}
 		if (comment != null) sb.append(", 发布者: ").append(comment);
 		if (created_by != null) sb.append(", 制作软件: ").append(created_by);
@@ -77,7 +77,7 @@ public class Torrent {
 
 		@Name("private")
 		@Optional(Optional.Mode.IF_EMPTY)
-		public java.util.Optional<Byte> isPrivate = java.util.Optional.empty();
+		public Byte isPrivate;
 
 		public String publisher;
 		@Name("publisher-url")
@@ -123,10 +123,10 @@ public class Torrent {
 			if (files == null) {
 				sb.append("[{'").append(name).append('\'').append(", ").append(TextUtil.scaledNumber1024(length)).append("}]");
 			} else {
-				sb.append('[').append(Liu.of(files).map(x -> x, 10, Liu.terminator("...")).join(", ")).append(']');
+				sb.append('[').append(Flow.of(files).map(x -> x, 10, Flow.terminator("...")).join(", ")).append(']');
 			}
 			sb.append(", [").append(pieces.length/20).append(" pieces of ").append(TextUtil.scaledNumber1024(piece_length)).append("]");
-			if (isPrivate.orElse((byte) 0) != 0) sb.append(", 私有");
+			if (isPrivate != 0) sb.append(", 私有");
 			return sb.toStringAndFree();
 		}
 

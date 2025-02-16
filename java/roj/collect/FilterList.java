@@ -2,13 +2,15 @@ package roj.collect;
 
 
 import java.util.AbstractList;
+import java.util.Set;
+import java.util.Spliterator;
 import java.util.function.BiFunction;
 
 /**
  * @author Roj234
  * @since 2020/8/23 0:44
  */
-public class FilterList<T> extends AbstractList<T> {
+public class FilterList<T> extends AbstractList<T> implements Set<T> {
 	public T found;
 	final BiFunction<T, T, Boolean> checker;
 
@@ -19,6 +21,8 @@ public class FilterList<T> extends AbstractList<T> {
 			found = element;
 		}
 	}
+
+	@Override public Spliterator<T> spliterator() {return super.spliterator();}
 
 	@Override
 	public T get(int index) {

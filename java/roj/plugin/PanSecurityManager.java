@@ -14,12 +14,12 @@ import roj.collect.*;
 import roj.reflect.ClassDefiner;
 import roj.reflect.ILSecurityManager;
 import roj.reflect.ReflectionUtils;
+import roj.reflect.Unaligned;
 import roj.text.Escape;
 import roj.text.logging.Logger;
 import roj.util.ArrayCache;
 import roj.util.ByteList;
 import roj.util.Helpers;
-import sun.misc.Unsafe;
 
 import java.io.*;
 import java.lang.reflect.Constructor;
@@ -50,8 +50,8 @@ public final class PanSecurityManager extends MethodHook {
 	static final Logger LOGGER = Logger.getLogger(Panger.LOGGER.context().child("Security"));
 
 	PanSecurityManager() {
-		hooks.put(new Desc("roj/reflect/ReflectionUtils", "u", "Lsun/misc/Unsafe;"),
-			new Desc("roj/plugin/PanSecurityManager", "ReflectionUtils_getUnsafe", "(Ljava/lang/Class;)Lsun/misc/Unsafe;", 2));
+		hooks.put(new Desc("roj/reflect/Unaligned", "U", "Lroj/reflect/Unaligned;"),
+			new Desc("roj/plugin/PanSecurityManager", "Unaligned_getUnsafe", "(Ljava/lang/Class;)Lroj/reflect/Unaligned;", 2));
 	}
 
 	static final class ILHook extends ILSecurityManager {
@@ -115,6 +115,8 @@ public final class PanSecurityManager extends MethodHook {
 	public static Method[] hook_callFrom_getMethods(Class<?> c, Class<?> caller) { return filterMethods(c.getMethods(), caller); }
 	public static Method[] hook_callFrom_getDeclaredMethods(Class<?> c, Class<?> caller) { return filterMethods(c.getDeclaredMethods(), caller); }
 	private static Method[] filterMethods(Method[] a, Class<?> caller) {
+		if (a.length == 0 || a[0].getDeclaringClass().getClassLoader() == caller.getClassLoader()) return a;
+
 		SimpleList<Method> list = SimpleList.asModifiableList(a);
 		for (int i = list.size()-1; i >= 0; i--) {
 			Method f = filterMethod(list.get(i), false, caller);
@@ -126,6 +128,8 @@ public final class PanSecurityManager extends MethodHook {
 		return list.toArray(a);
 	}
 	private static Method filterMethod(Method m, boolean _throw, Class<?> caller) {
+		if (m.getDeclaringClass().getClassLoader() == caller.getClassLoader()) return m;
+
 		Desc d = ClassUtil.getInstance().sharedDC;
 		d.owner = m.getDeclaringClass().getName().replace('.', '/');
 		d.name = m.getName();
@@ -151,6 +155,8 @@ public final class PanSecurityManager extends MethodHook {
 	}
 
 	public static Object hook_callFrom_invoke(Method m, Object inst, Object[] value, Class<?> caller) throws Exception {
+		if (m.getDeclaringClass().getClassLoader() == caller.getClassLoader()) return m.invoke(inst, value);
+
 		MyHashSet<Object[]> arr = null;
 		while (m.equals(INVOKE)) {
 			m = (Method) inst;
@@ -173,6 +179,8 @@ public final class PanSecurityManager extends MethodHook {
 	public static Field[] hook_callFrom_getFields(Class<?> c, Class<?> caller) { return filterFields(c.getFields(), caller); }
 	public static Field[] hook_callFrom_getDeclaredFields(Class<?> c, Class<?> caller) { return filterFields(c.getDeclaredFields(), caller); }
 	private static Field[] filterFields(Field[] a, Class<?> caller) {
+		if (a.length == 0 || a[0].getDeclaringClass().getClassLoader() == caller.getClassLoader()) return a;
+
 		SimpleList<Field> list = SimpleList.asModifiableList(a);
 		for (int i = list.size()-1; i >= 0; i--) {
 			Field f = filterField(list.get(i), false, caller);
@@ -184,6 +192,8 @@ public final class PanSecurityManager extends MethodHook {
 		return list.toArray(a);
 	}
 	private static Field filterField(Field f, boolean _throw, Class<?> caller) {
+		if (f.getDeclaringClass().getClassLoader() == caller.getClassLoader()) return f;
+
 		Desc d = ClassUtil.getInstance().sharedDC;
 		d.owner = f.getDeclaringClass().getName().replace('.', '/');
 		d.name = f.getName();
@@ -203,6 +213,8 @@ public final class PanSecurityManager extends MethodHook {
 	public static Constructor<?>[] hook_callFrom_getConstructors(Class<?> c, Class<?> caller) { return filterConstructors(c.getConstructors(), caller); }
 	public static Constructor<?>[] hook_callFrom_getDeclaredConstructors(Class<?> c, Class<?> caller) { return filterConstructors(c.getDeclaredConstructors(), caller); }
 	private static Constructor<?>[] filterConstructors(Constructor<?>[] a, Class<?> caller) {
+		if (a.length == 0 || a[0].getDeclaringClass().getClassLoader() == caller.getClassLoader()) return a;
+
 		SimpleList<Constructor<?>> list = SimpleList.asModifiableList(a);
 		for (int i = list.size()-1; i >= 0; i--) {
 			Constructor<?> f = filterConstructor(list.get(i), false, caller);
@@ -214,6 +226,8 @@ public final class PanSecurityManager extends MethodHook {
 		return list.toArray(a);
 	}
 	private static Constructor<?> filterConstructor(Constructor<?> c, boolean _throw, Class<?> caller) {
+		if (c.getDeclaringClass().getClassLoader() == caller.getClassLoader()) return c;
+
 		Desc d = ClassUtil.getInstance().sharedDC;
 		d.owner = c.getDeclaringClass().getName().replace('.', '/');
 		d.name = "<init>";
@@ -236,6 +250,8 @@ public final class PanSecurityManager extends MethodHook {
 		return c1 == null ? null : filterConstructor(c1, false, caller); }
 
 	public static Object hook_callFrom_newInstance(Class<?> c, Class<?> caller) throws Exception {
+		if (c.getDeclaringClass().getClassLoader() == caller.getClassLoader()) return c;
+
 		Desc d = ClassUtil.getInstance().sharedDC;
 		d.owner = c.getDeclaringClass().getName().replace('.', '/');
 		d.name = "<init>";
@@ -374,10 +390,10 @@ public final class PanSecurityManager extends MethodHook {
 	}
 	// endregion
 	// region Unsafe
-	public static Unsafe ReflectionUtils_getUnsafe(Class<?> caller) {
+	public static Unaligned Unaligned_getUnsafe(Class<?> caller) {
 		var pd = Panger.pm.getOwner(caller);
 		if (!pd.accessUnsafe) throw new SecurityException("accessUnsafe权限未为"+pd+"开启");
-		return ReflectionUtils.u;
+		return Unaligned.U;
 	}
 	// endregion
 	// region 类定义
@@ -476,7 +492,7 @@ public final class PanSecurityManager extends MethodHook {
 			return IntMap.UNDEFINED;
 		}
 
-		if (pd.skipCheck || GlobalReflectWhiteList.contains(d.owner) || pd.reflectiveClass.contains(d.owner)) {
+		if (pd.skipCheck || GlobalReflectWhiteList.strStartsWithThis(d.owner) || pd.reflectiveClass.strStartsWithThis(d.owner)) {
 			LOGGER.debug("允许{}反射 {}", pd.id, d);
 			return null;
 		}

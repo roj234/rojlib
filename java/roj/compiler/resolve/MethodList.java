@@ -1,15 +1,16 @@
 package roj.compiler.resolve;
 
+import roj.asm.IClass;
+import roj.asm.MethodNode;
 import roj.asm.Opcodes;
-import roj.asm.tree.IClass;
-import roj.asm.tree.MethodNode;
-import roj.asm.tree.attr.Attribute;
-import roj.asm.type.*;
+import roj.asm.attr.Attribute;
+import roj.asm.type.Generic;
+import roj.asm.type.IType;
+import roj.asm.type.Signature;
+import roj.asm.type.Type;
+import roj.asm.util.ClassUtil;
 import roj.asmx.mapper.ParamNameMapper;
-import roj.collect.IntMap;
-import roj.collect.MatchMap;
-import roj.collect.MyHashSet;
-import roj.collect.SimpleList;
+import roj.collect.*;
 import roj.compiler.LavaFeatures;
 import roj.compiler.api.Evaluable;
 import roj.compiler.ast.expr.ExprNode;
@@ -19,6 +20,7 @@ import roj.compiler.context.LocalContext;
 import roj.compiler.diagnostic.Kind;
 import roj.text.CharList;
 import roj.text.TextUtil;
+import roj.util.Helpers;
 
 import java.util.Collections;
 import java.util.List;
@@ -33,18 +35,33 @@ final class MethodList extends ComponentList {
 	final SimpleList<MethodNode> methods = new SimpleList<>();
 	private int childId;
 	private boolean hasVarargs, hasDefault;
-	private MyHashSet<String> ddtmp = new MyHashSet<>();
+	private MyHashMap<String, List<MethodNode>> ddtmp = new MyHashMap<>();
+	private MyBitSet overrider;
 
 	private volatile MatchMap<String, Object> namedLookup;
 
 	void add(IClass klass, MethodNode mn) {
 		// 忽略改变返回类型的重载的parent
-		if (!ddtmp.add(TypeHelper.getMethod(mn.parameters()))) return;
+		var list = ddtmp.computeIfAbsent(Type.toMethodDesc(mn.parameters()), Helpers.fnArrayList());
+		for (int i = 0; i < list.size(); i++) {
+			var prev = list.get(i);
+			if (ClassUtil.isOverridable(klass.name(), mn.modifier, prev.owner)) {
+				if (overrider == null) overrider = new MyBitSet();
+				overrider.add(methods.indexOfAddress(prev));
+				return;
+			}
+		}
+		list.add(mn);
+
 		methods.add(mn);
 		if ((mn.modifier & Opcodes.ACC_VARARGS) != 0) hasVarargs = true;
 		mn.parsedAttr(klass.cp(), Attribute.SIGNATURE);
 	}
 
+	/**
+	 * @param klass 所有者
+	 * @return 是否可以压缩为MethodListSingle
+	 */
 	boolean pack(IClass klass) {
 		ddtmp = null;
 		owner = klass;
@@ -59,6 +76,9 @@ final class MethodList extends ComponentList {
 		childId = methods.size();
 		return childId == 1;
 	}
+
+	@Override public boolean isOverriddenMethod(int id) {return overrider != null && overrider.contains(id);}
+	@Override public List<MethodNode> getMethods() {return methods;}
 
 	private static final class Filter extends SimpleList<Object> {
 		@Override
@@ -260,7 +280,7 @@ final class MethodList extends ComponentList {
 			else entry.value = SimpleList.asModifiableList(entry.value, mn);
 		}
 
-		lookup.compat();
+		lookup.compact();
 		namedLookup = lookup;
 	}
 
@@ -296,15 +316,11 @@ final class MethodList extends ComponentList {
 	}
 
 	@Override
-	public List<MethodNode> getMethods() {return methods;}
-
-	@Override
 	public String toString() {
 		CharList sb = new CharList().append('[');
 
 		for (MethodNode node : methods) {
-			sb.append(node.ownerClass()).append(" => (").append(TextUtil.join(node.parameters(), ", ")).append(") => ").append(node.returnType())
-			  .append(", ");
+			sb.append(node.returnType()).append(' ').append(node.owner).append('.').append(node.name()).append('(').append(TextUtil.join(node.parameters(), ", ")).append("), ");
 		}
 
 		return sb.append(']').toStringAndFree();
@@ -312,7 +328,7 @@ final class MethodList extends ComponentList {
 
 	static void checkBridgeMethod(LocalContext ctx, MethodResult mr) {
 		var mn = mr.method;
-		if ((mn.modifier&Opcodes.ACC_PRIVATE) == 0 || ctx.file.name.equals(mn.owner) ||
+		if ((mn.modifier&Opcodes.ACC_PRIVATE) == 0 || ctx.file.name().equals(mn.owner) ||
 			ctx.classes.hasFeature(LavaFeatures.NESTED_MEMBER)) return;
 
 		var prev = (Evaluable)mn.attrByName(Evaluable.NAME);

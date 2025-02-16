@@ -1,10 +1,9 @@
 package roj.compiler.plugins;
 
 import org.jetbrains.annotations.Nullable;
+import roj.asm.ClassNode;
+import roj.asm.MethodNode;
 import roj.asm.Opcodes;
-import roj.asm.tree.ConstantData;
-import roj.asm.tree.MethodNode;
-import roj.asm.tree.anno.AnnVal;
 import roj.asm.type.IType;
 import roj.asm.type.Type;
 import roj.compiler.api.Evaluable;
@@ -50,10 +49,10 @@ public final class UintPlugin extends Evaluable implements Library, ExprApi.Expr
 		}
 		@Override public IType type() {
 			return switch (is64) {
-				case 0 -> Type.std(Type.INT);
+				case 0 -> Type.primitive(Type.INT);
 				case 1 -> new Type.DirtyHacker('I', "uint32");
 				case 2 -> new Type.DirtyHacker('J', "uint64");
-				case 3 -> Type.std(Type.LONG);
+				case 3 -> Type.primitive(Type.LONG);
 				default -> throw OperationDone.NEVER;
 			};
 		}
@@ -63,8 +62,8 @@ public final class UintPlugin extends Evaluable implements Library, ExprApi.Expr
 		@Override public void write(MethodWriter cw, boolean noRet) {
 			mustBeStatement(noRet);
 			IType type = left.type();
-			if (type.getActualType() != 'L' && !type.isPrimitive()) type = Type.std(type.getActualType());
-			left.write(cw, LocalContext.get().castTo(type, Type.std(is64 < 2 ? Type.INT : Type.LONG), TypeCast.E_DOWNCAST));
+			if (type.getActualType() != 'L' && !type.isPrimitive()) type = Type.primitive(type.getActualType());
+			left.write(cw, LocalContext.get().castTo(type, Type.primitive(is64 < 2 ? Type.INT : Type.LONG), TypeCast.E_DOWNCAST));
 		}
 		//@Override public void write(MethodWriter cw, TypeCast.Cast returnType) {left.write(cw, returnType);}
 	}
@@ -86,12 +85,12 @@ public final class UintPlugin extends Evaluable implements Library, ExprApi.Expr
 	}
 
 	private final MethodNode[] exprRef = new MethodNode[6];
-	private final Constant zero = Constant.valueOf(AnnVal.valueOf(0));
+	private final Constant zero = Constant.valueOf(0);
 
-	private final ConstantData Uint32, Uint64;
+	private final ClassNode Uint32, Uint64;
 	private final MethodNode u32ToString, u32FromString, u64ToString, u64FromString;
 	public UintPlugin() {
-		Uint32 = new ConstantData();
+		Uint32 = new ClassNode();
 		Uint32.name("uint32");
 		Uint32.parent(null);
 
@@ -109,7 +108,7 @@ public final class UintPlugin extends Evaluable implements Library, ExprApi.Expr
 		m1.putAttr(this);
 		Uint32.methods.add(m1);
 
-		Uint64 = new ConstantData();
+		Uint64 = new ClassNode();
 		Uint64.name("uint64");
 		Uint64.parent(null);
 
@@ -130,7 +129,7 @@ public final class UintPlugin extends Evaluable implements Library, ExprApi.Expr
 		//for (MethodNode node : exprRef) node.putAttr(this);
 	}
 
-	@Override public ConstantData get(CharSequence name) {
+	@Override public ClassNode get(CharSequence name) {
 		if (name.equals("uint32")) {return Uint32;}
 		if (name.equals("uint64")) {return Uint64;}
 		return null;

@@ -6,8 +6,8 @@ import roj.asm.Opcodes;
  * @author Roj234
  * @since 2023/10/9 0009 19:30
  */
-public class Pcd {
-	public static final ThreadLocal<Boolean> REVERSE = new ThreadLocal<>();
+final class Pcd {
+	public static final ThreadLocal<Boolean> INVERT_EQUALS = new ThreadLocal<>();
 
 	public static final int
 		SHADOW = 0x01000000, COPY = 0x02000000, INJECT = 0x04000000,
@@ -25,7 +25,7 @@ public class Pcd {
 		Pcd pcd = (Pcd) o;
 
 		if (!desc.equals(pcd.desc)) return false;
-		if (REVERSE.get() != null) {
+		if (INVERT_EQUALS.get() != null) {
 			if (!mapOwner.equals(pcd.mapOwner)) return false;
 			return mapName.equals(pcd.mapName);
 		}
@@ -35,7 +35,7 @@ public class Pcd {
 	@Override
 	public int hashCode() {
 		int result = desc.hashCode();
-		if (REVERSE.get() != null) {
+		if (INVERT_EQUALS.get() != null) {
 			result = 31 * result + mapOwner.hashCode();
 			result = 31 * result + mapName.hashCode();
 		} else {

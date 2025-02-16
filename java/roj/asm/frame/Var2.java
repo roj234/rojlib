@@ -1,159 +1,193 @@
 package roj.asm.frame;
 
 import roj.asm.cp.Constant;
+import roj.asm.insn.Label;
 import roj.asm.type.Type;
-import roj.asm.type.TypeHelper;
-import roj.asm.visitor.Label;
-import roj.collect.MyHashSet;
 
 import java.util.Objects;
-import java.util.Set;
 
 /**
  * @author Roj234
  * @since 2021/6/2 23:28
  */
 public final class Var2 {
+	public static final byte T_TOP = 0, T_INT = 1, T_FLOAT = 2, T_DOUBLE = 3, T_LONG = 4, T_NULL = 5, T_UNINITIAL_THIS = 6, T_REFERENCE = 7, T_UNINITIAL = 8, T_ANY = 114, T_ANY2 = 115;
+
 	public static final String BYTE_ARRAY = "[B";
 
 	public byte type;
 	public String owner;
 	public int bci;
 	public Label monitor_bci;
-	public Set<String> limitation;
 	public Constant value;
 
 	public static final Var2
-		TOP = new Var2(VarType.TOP),
-		INT = new Var2(VarType.INT),
-		FLOAT = new Var2(VarType.FLOAT),
-		DOUBLE = new Var2(VarType.DOUBLE),
-		LONG = new Var2(VarType.LONG);
+		TOP = new Var2(T_TOP),
+		INT = new Var2(T_INT),
+		FLOAT = new Var2(T_FLOAT),
+		DOUBLE = new Var2(T_DOUBLE),
+		LONG = new Var2(T_LONG);
 
-	public static Var2 except(byte type, CharSequence owner) {
-		switch (type) {
-			case VarType.TOP: return Var2.TOP;
-			case VarType.INT: return Var2.INT;
-			case VarType.FLOAT: return Var2.FLOAT;
-			case VarType.DOUBLE: return Var2.DOUBLE;
-			case VarType.LONG: return Var2.LONG;
-			case VarType.NULL: return new Var2(VarType.NULL);
-			case VarType.REFERENCE:
-			case VarType.UNINITIAL:
-			case VarType.UNINITIAL_THIS: return new Var2(type, owner.toString());
-			default: throw new IllegalStateException("Unexpected type: " + type);
-		}
+	public static Var2 of(Type type) {
+		return switch (type.getActualType()) {
+			case Type.VOID -> null;
+			case Type.BOOLEAN, Type.BYTE, Type.CHAR, Type.SHORT, Type.INT -> INT;
+			case Type.FLOAT -> FLOAT;
+			case Type.DOUBLE -> DOUBLE;
+			case Type.LONG -> LONG;
+			case Type.CLASS -> new Var2(T_REFERENCE, type.getActualClass());
+			default -> throw new IllegalStateException("Unexpected type: "+type);
+		};
 	}
+	public static Var2 of(byte type, CharSequence klass) {
+		return switch (type) {
+			case T_TOP -> TOP;
+			case T_INT -> INT;
+			case T_FLOAT -> FLOAT;
+			case T_DOUBLE -> DOUBLE;
+			case T_LONG -> LONG;
+			case T_NULL -> new Var2(T_NULL);
+			case T_REFERENCE, T_UNINITIAL, T_UNINITIAL_THIS -> new Var2(type, klass.toString());
+			default -> throw new IllegalStateException("Unexpected type: "+type);
+		};
+	}
+	public static Var2 any() {return new Var2(T_ANY);}
 
-	public static Var2 any() {
-		return new Var2(VarType.ANY);
-	}
-
-	public Var2(byte type) {
-		this.type = type;
-	}
+	public Var2(byte type) {this.type = type;}
 	public Var2(byte type, String owner) {
 		this.type = type;
 		this.owner = Objects.requireNonNull(owner, "owner");
 	}
-
 	public Var2(Label init_bci) {
-		this.type = VarType.UNINITIAL;
+		this.type = T_UNINITIAL;
 		this.monitor_bci = init_bci;
 	}
 
+	public int bci() {return monitor_bci == null ? bci : monitor_bci.getValue();}
 
-	public int bci() {
-		return monitor_bci == null ? bci : monitor_bci.getValue();
-	}
-
-	public void merge(Var2 o) {
-		if (o == this) return;
-		if (o.type >= VarType.ANY) return;
-		if (type >= VarType.ANY) {
+	public boolean verify(Var2 o) {
+		if (o == this) return false;
+		if (o.type >= T_ANY) return false;
+		if (type >= T_ANY) {
 			copy(o);
-			return;
+			return true;
 		}
 
 		if (o.type < 5 || type < 5) {
 			if (type != o.type) throw new IllegalStateException("Could not merge " + this + " and " + o);
-			return;
+			return false;
 		}
 
 		// NULL = 5, UNINITIAL_THIS = 6, REFERENCE = 7, UNINITIAL = 8
-		if (o.type == VarType.NULL) return;
-		if (type == VarType.NULL) {
+		if (o.type == T_NULL) return false;
+		if (type == T_NULL) {
 			copy(o);
-			return;
+			return true;
 		}
 
-		if (type != VarType.REFERENCE) {
+		if (type != T_REFERENCE) {
 			// uninitial / uninitial_this
 			if (o.bci >= 0) {
-				type = VarType.REFERENCE;
+				type = T_REFERENCE;
 				bci = o.bci;
 			} else {
 				if (owner.equals("java/lang/Object")) throw new RuntimeException("new Object() breakpoint: in >1 basic blocks");
 			}
 		}
 
-		if (o.owner.equals("java/lang/Object")) return;
-		if (owner.equals(o.owner)) return;
+		if (o.owner.equals("java/lang/Object")) return false;
+		if (owner.equals(o.owner)) return false;
 		if (owner.equals("java/lang/Object")) {
 			copy(o);
-			return;
+			return true;
 		}
 
 		if (owner.startsWith("[") != o.owner.startsWith("[")) {
 			throw new IllegalStateException("Could not merge " + this + " and " + o);
 		}
-		if (o.owner.equals("[")) return;
+		if (o.owner.equals("[")) return false;
 		if (owner.equals("[")) {
 			copy(o);
-			return;
+			return true;
 		}
 		if (owner.equals(BYTE_ARRAY) || o.owner.equals(BYTE_ARRAY)) {
-			if (o.owner.equals("[Z") || owner.equals("[Z")) return;
+			if (o.owner.equals("[Z") || owner.equals("[Z")) return false;
 		}
 
-		try {
-			String s = FrameVisitor.getCommonUnsuperClass(owner, o.owner);
-			if (s != null && o.limitation != null) {
-				for (String s1 : o.limitation) {
-					s = FrameVisitor.getCommonUnsuperClass(s, s1);
-					if (s == null) break;
-				}
-			}
+		if (owner.equals("[Ljava/lang/Object;")) {
+			copy(o);
+			return true;
+		}
 
-			if (s == null) {
-				if (limitation == null) {
-					limitation = new MyHashSet<>();
-				}
-				limitation.add(o.owner);
-				if (o.limitation != null) {
-					limitation.addAll(o.limitation);
-				}
+		String newOwner = FrameVisitor.getCommonUnsuperClass(owner, o.owner);
+		boolean changed = !newOwner.equals(owner);
+		owner = newOwner;
+		return changed;
+	}
+	public Var2 uncombine(Var2 o) {
+		if (o == this) return null;
+		if (o.type >= T_ANY) return null;
+		if (type >= T_ANY) {
+			copy(o);
+			return this;
+		}
+
+		if (o.type < 5 || type < 5) {
+			if (type != o.type && type != T_TOP) return TOP;
+			return null;
+		}
+
+		if (o.type == T_NULL) return null;
+		if (type == T_NULL) {
+			copy(o);
+			return this;
+		}
+
+		if (type != T_REFERENCE) {
+			// uninitial / uninitial_this
+			if (o.bci >= 0) {
+				type = T_REFERENCE;
+				bci = o.bci;
 			} else {
-				owner = s;
+				if (owner.equals("java/lang/Object")) throw new RuntimeException("new Object() breakpoint: in >1 basic blocks");
 			}
-		} catch (Throwable e) {
-			throw new IllegalStateException("Unable determine class hierarchy for " + owner + " and " + o.owner, e);
 		}
+
+		if (o.owner.equals("java/lang/Object")) return null;
+		if (owner.equals(o.owner)) return null;
+		if (owner.equals("java/lang/Object")) {
+			copy(o);
+			return this;
+		}
+
+		if (owner.startsWith("[") != o.owner.startsWith("[")) {
+			return TOP;
+		}
+
+		// Only for ArrayLength
+		if (o.owner.equals("[")) return null;
+		if (owner.equals("[")) {
+			copy(o);
+			return this;
+		}
+		if (owner.equals(BYTE_ARRAY) || o.owner.equals(BYTE_ARRAY)) {
+			if (o.owner.equals("[Z") || owner.equals("[Z")) return null;
+		}
+
+		if (owner.startsWith("[")) {
+			if (owner.charAt(1) != 'L') return TOP;
+		}
+
+		String commonSuperClass = FrameVisitor.getCommonSuperClass(owner, o.owner);
+		boolean changed = !commonSuperClass.equals(owner);
+		owner = commonSuperClass;
+		return changed ? this : null;
 	}
 
 	private void copy(Var2 o) {
 		type = o.type;
 		bci = o.bci;
 		owner = o.owner;
-	}
-
-	public void drop() {
-		bci = -114514;
-		type = VarType.TOP;
-	}
-
-	public boolean isDropped() {
-		return bci == -114514;
 	}
 
 	public boolean eq(Var2 v) {
@@ -168,13 +202,14 @@ public final class Var2 {
 		return false;
 	}
 
+	private static final String[] toString = {"top", "int", "float", "double", "long", "{null}", "uninitial_this", "object", "uninitial"};
 	public String toString() {
-		if (type == VarType.UNINITIAL) {
+		if (type == T_UNINITIAL) {
 			return "【在 " + bci + " | " + monitor_bci + " 初始化】";
-		} else if (type == VarType.REFERENCE) {
+		} else if (type == T_REFERENCE) {
 			return owner;
 		} else {
-			return type > 100 ? "Any" : VarType.toString(type);
+			return type > 100 ? "Any" : toString[type];
 		}
 	}
 
@@ -185,22 +220,18 @@ public final class Var2 {
 		c.bci = bci;
 		c.monitor_bci = monitor_bci;
 		c.owner = owner;
-		if (limitation != null)
-			c.limitation = new MyHashSet<>(limitation);
 		return c;
 	}
 
-	public Type type() {
-		switch (type) {
-			case VarType.INT: return Type.std(Type.INT);
-			case VarType.FLOAT: return Type.std(Type.FLOAT);
-			case VarType.DOUBLE: return Type.std(Type.DOUBLE);
-			case VarType.LONG: return Type.std(Type.LONG);
-			case VarType.NULL: return new Type("java/lang/Object");
-			case VarType.REFERENCE: return owner.charAt(0) == '[' ? TypeHelper.parseField(owner) : new Type(owner);
-			case VarType.UNINITIAL_THIS:
-			case VarType.UNINITIAL:
-			default: throw new UnsupportedOperationException(String.valueOf(type));
-		}
+	public Type asmType() {
+		return switch (type) {
+			case T_INT -> Type.primitive(Type.INT);
+			case T_FLOAT -> Type.primitive(Type.FLOAT);
+			case T_DOUBLE -> Type.primitive(Type.DOUBLE);
+			case T_LONG -> Type.primitive(Type.LONG);
+			case T_NULL -> Type.klass("java/lang/Object");
+			case T_REFERENCE -> owner.charAt(0) == '[' ? Type.fieldDesc(owner) : Type.klass(owner);
+			default -> throw new UnsupportedOperationException(String.valueOf(type));
+		};
 	}
 }

@@ -14,12 +14,12 @@
 
 ```java
 import roj.ui.Terminal;
-import roj.ui.terminal.Argument;
-import roj.ui.terminal.Command;
-import roj.ui.terminal.CommandConsole;
+import roj.ui.Argument;
+import roj.ui.Command;
+import roj.ui.CommandConsole;
 
-import static roj.ui.terminal.CommandNode.argument;
-import static roj.ui.terminal.CommandNode.literal;
+import static roj.ui.CommandNode.argument;
+import static roj.ui.CommandNode.literal;
 
 /**
  * 代码来源roj.mod.FMDMain

@@ -4,7 +4,6 @@ import roj.collect.IntList;
 import roj.config.data.CByteArray;
 import roj.config.data.CEntry;
 import roj.config.data.CIntArray;
-import roj.config.data.CString;
 import roj.io.CorruptedInputException;
 import roj.io.MyDataInput;
 import roj.io.MyDataInputStream;
@@ -78,8 +77,8 @@ public class DerReader {
 		return new CIntArray(oids.toArray());
 	}
 
-	public CEntry readIso(int len) throws IOException {return CString.valueOf(len > 65536 ? new String(safeRead(len), StandardCharsets.ISO_8859_1) : in.readAscii(len));}
-	public CEntry readUTF(int len) throws IOException {return CString.valueOf(len > 65536 ? new String(safeRead(len), StandardCharsets.UTF_8) : in.readUTF(len));}
+	public CEntry readIso(int len) throws IOException {return CEntry.valueOf(len > 65536 ? new String(safeRead(len), StandardCharsets.ISO_8859_1) : in.readAscii(len));}
+	public CEntry readUTF(int len) throws IOException {return CEntry.valueOf(len > 65536 ? new String(safeRead(len), StandardCharsets.UTF_8) : in.readUTF(len));}
 	public CEntry readOpaque(int type, int length) throws IOException {return new DerValue.Opaque(type, readDirectBytes(length));}
 	private byte[] readDirectBytes(int length) throws IOException {
 		byte[] data;

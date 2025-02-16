@@ -1,6 +1,5 @@
 package roj.ui;
 
-import org.jetbrains.annotations.ApiStatus.OverrideOnly;
 import org.jetbrains.annotations.NotNull;
 import roj.io.DummyOutputStream;
 import roj.text.CharList;
@@ -25,7 +24,6 @@ public abstract class DelegatedPrintStream extends PrintStream {
 		super.close();
 	}
 
-	@OverrideOnly
 	protected void newLine() { sb.clear(); }
 	protected void partialLine() {}
 	protected void flushBytes() {

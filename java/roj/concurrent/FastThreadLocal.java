@@ -3,7 +3,8 @@ package roj.concurrent;
 import roj.collect.IntMap;
 import roj.collect.MyBitSet;
 import roj.reflect.Bypass;
-import roj.util.Helpers;
+import roj.reflect.Unaligned;
+import roj.util.ArrayCache;
 
 import java.util.function.BiConsumer;
 import java.util.function.BiFunction;
@@ -14,8 +15,6 @@ import java.util.function.Supplier;
  * @since 2021/9/13 12:48
  */
 public class FastThreadLocal<T> {
-	private final ThreadLocal<T> fallback = new ThreadLocal<>();
-
 	private static int registrations;
 	private static final MyBitSet reusable = new MyBitSet();
 	private static final Object NULL = IntMap.UNDEFINED;
@@ -25,6 +24,7 @@ public class FastThreadLocal<T> {
 	private static BiConsumer<Object, Object> remove;
 
 	private int seqNum;
+	private final ThreadLocal<T> fallback = ThreadLocal.withInitial(FastThreadLocal.this::initialValue);
 
 	public FastThreadLocal() {
 		synchronized (reusable) {
@@ -42,6 +42,20 @@ public class FastThreadLocal<T> {
 		return new FastThreadLocal<T>() {
 			protected T initialValue() { return s.get(); }
 		};
+	}
+
+	public static void clear() {
+		var t = Thread.currentThread();
+		try {
+			var field = Thread.class.getDeclaredField("threadLocals");
+			Unaligned.U.putObject(t, Unaligned.U.objectFieldOffset(field), null);
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+
+		if (t instanceof FastLocalThread flt) {
+			flt.localDataArray = ArrayCache.OBJECTS;
+		}
 	}
 
 	public void destroy() {
@@ -67,8 +81,7 @@ public class FastThreadLocal<T> {
 
 			c = g.enumerate(t);
 			while (c-- > 0) {
-				if (t[c] instanceof FastLocalThread) {
-					FastLocalThread flt = (FastLocalThread) t[c];
+				if (t[c] instanceof FastLocalThread flt) {
 					if (flt.localDataArray.length >= seqNum) {
 						synchronized (flt.arrayLock) {
 							// 要么没复制，要么复制完了而且新数组已设置
@@ -96,22 +109,15 @@ public class FastThreadLocal<T> {
 	@SuppressWarnings("unchecked")
 	public T get() {
 		Thread t = Thread.currentThread();
-		if (!(t instanceof FastLocalThread)) {
-			T t1 = fallback.get();
-			if (t1 == null) {
-				t1 = initialValue();
-				fallback.set(t1 == null ? Helpers.cast(NULL) : t1);
-			}
-			return t1 == NULL ? null : t1;
-		}
-		Object[] dataHolder = getDataHolder((FastLocalThread) t, seqNum);
+		if (!(t instanceof FastLocalThread)) return fallback.get();
 
+		Object[] dataHolder = getDataHolder((FastLocalThread) t, seqNum);
 		Object v = dataHolder[seqNum];
 		if (v == null) {
 			v = initialValue();
 			dataHolder[seqNum] = v == null ? NULL : v;
-		} else if (v == NULL) return null;
-		return (T) v;
+		}
+		return v == NULL ? null : (T) v;
 	}
 	public void set(T v) {
 		Thread t = Thread.currentThread();

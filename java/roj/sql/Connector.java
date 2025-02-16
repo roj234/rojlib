@@ -1,12 +1,14 @@
 package roj.sql;
 
-import roj.Beta;
+import org.jetbrains.annotations.ApiStatus;
+import roj.reflect.Bypass;
 import roj.reflect.ReflectionUtils;
 
 import java.io.File;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
+import java.util.Properties;
 
 /**
  * @author Roj233
@@ -14,10 +16,11 @@ import java.sql.SQLException;
  */
 public interface Connector {
 	Connection connect() throws SQLException;
+	default PooledConnector pooled(int connections) {return new PooledConnector(this, connections);}
 
 	static Connector _default() {return jdbc("java.lang.Object", "jdbc:default:connection", null, null);}
 
-	@Beta
+	@ApiStatus.Experimental
 	static Connector h2(File db) {return jdbc("org.h2.Driver", "jdbc:h2:"+db.getAbsolutePath(), null, null);}
 
 	static Connector sqlite(File db) {return sqlite(db, null);}
@@ -31,11 +34,27 @@ public interface Connector {
 
 	String MY_DB_CHARSET = "UTF-16LE";
 	private static Connector jdbc(String driverClass, String url, String user, String pass) {
+		ClassLoader classLoader = ReflectionUtils.getCallerClass(4).getClassLoader();
+		boolean flag = classLoader != Connector.class.getClassLoader();
 		try {
-			Class.forName(driverClass, true, ReflectionUtils.getCallerClass(4).getClassLoader());
+			Class.forName(driverClass, true, classLoader);
 		} catch (ClassNotFoundException e) {
 			throw new IllegalStateException("找不到数据库驱动程序:"+driverClass);
 		}
-		return () -> DriverManager.getConnection(url, user, pass);
+
+		var info = new Properties();
+		if (user != null) info.put("user", user);
+		if (pass != null) info.put("password", pass);
+
+		return flag ? () -> {
+			Thread.currentThread().setContextClassLoader(classLoader);
+			return GetConnection.INSTANCE.getConnection(url, info, null);
+		} : () -> (DriverManager.getConnection(url, info));
+	}
+
+	static interface GetConnection {
+		GetConnection INSTANCE = Bypass.builder(GetConnection.class).delegate(DriverManager.class, "getConnection").build();
+
+		Connection getConnection(String url, Properties info, Class<?> caller);
 	}
 }

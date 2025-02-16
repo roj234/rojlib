@@ -160,7 +160,7 @@ public class KeyType {
 	}
 
 	public Key fromPEM(String s) {
-		LineReader lr = LineReader.create(s, true);
+		LineReader.Impl lr = LineReader.create(s, true);
 		String s1 = lr.readLine();
 
 		ByteList out = new ByteList();

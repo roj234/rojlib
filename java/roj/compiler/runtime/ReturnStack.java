@@ -4,7 +4,7 @@ import roj.ReferenceByGeneratedClass;
 import roj.collect.SimpleList;
 import roj.util.NativeMemory;
 
-import static roj.reflect.ReflectionUtils.u;
+import static roj.reflect.Unaligned.U;
 
 /**
  * @author Roj234
@@ -25,7 +25,7 @@ public final class ReturnStack<T> implements GenericIgnore {
 		int memoryCap = (int) (address - memory.address());
 		System.out.println("CopyImmutable size="+memoryCap);
 		ReturnStack<T> stack = new ReturnStack<>(memoryCap);
-		u.copyMemory(memory.address(), stack.memory.address(), memoryCap);
+		U.copyMemory(memory.address(), stack.memory.address(), memoryCap);
 		stack.objects.addAll(objects);
 		stack.address += memoryCap;
 		return stack;
@@ -57,38 +57,38 @@ public final class ReturnStack<T> implements GenericIgnore {
 
 	public ReturnStack<T> put(boolean v) {return put(v ? 1 : 0);}
 	public ReturnStack<T> put(byte v) {
-		u.putByte(address, v);
+		U.putByte(address, v);
 		address += 1;
 		return this;
 	}
 	public ReturnStack<T> put(short v) {
-		u.putShort(address, v);
+		U.putShort(address, v);
 		address += 2;
 		return this;
 	}
 	public ReturnStack<T> put(char v) {
-		u.putChar(address, v);
+		U.putChar(address, v);
 		address += 2;
 		return this;
 	}
 	public ReturnStack<T> put(int v) {
-		u.putInt(address, v);
+		U.putInt(address, v);
 		address += 4;
 		return this;
 	}
 	public ReturnStack<T> put(float v) {
-		u.putFloat(address, v);
+		U.putFloat(address, v);
 		address += 4;
 		return this;
 	}
 
 	public ReturnStack<T> put(long v) {
-		u.putLong(address, v);
+		U.putLong(address, v);
 		address += 8;
 		return this;
 	}
 	public ReturnStack<T> put(double v) {
-		u.putDouble(address, v);
+		U.putDouble(address, v);
 		address += 8;
 		return this;
 	}
@@ -98,12 +98,12 @@ public final class ReturnStack<T> implements GenericIgnore {
 	}
 
 	public int getI() {
-		var v = u.getInt(address);
+		var v = U.getInt(address);
 		address += 4;
 		return v;
 	}
 	public long getJ() {
-		var v = u.getLong(address);
+		var v = U.getLong(address);
 		address += 8;
 		return v;
 	}

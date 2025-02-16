@@ -2,12 +2,13 @@ package roj.compiler.plugin;
 
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
-import roj.asm.tree.Attributed;
-import roj.asm.tree.ConstantData;
+import roj.asm.Attributed;
+import roj.asm.ClassNode;
 import roj.asm.type.IType;
 import roj.asmx.AnnotatedElement;
 import roj.asmx.AnnotationRepo;
 import roj.collect.IterablePriorityQueue;
+import roj.collect.MyBitSet;
 import roj.collect.MyHashMap;
 import roj.compiler.JavaLexer;
 import roj.compiler.asm.AnnotationPrimer;
@@ -42,11 +43,11 @@ public class GlobalContextApi extends GlobalContext implements LavaApi {
 		public int compareTo(ImplResolver<T> resolver) {return Integer.compare(priority, resolver.priority);}
 	}
 	@Override
-	protected ConstantData onClassLoaded(String name, ConstantData clazz) {
+	protected ClassNode onClassLoaded(String name, ClassNode clazz) {
 		for (var sortable : resolveApi) {
 			clazz = sortable.resolver.classResolved(clazz);
 		}
-		return clazz;
+		return super.onClassLoaded(name, clazz);
 	}
 	//endregion
 
@@ -64,7 +65,7 @@ public class GlobalContextApi extends GlobalContext implements LavaApi {
 
 	public void runAnnotationProcessor(CompileUnit file, Attributed node, List<AnnotationPrimer> annotations) {
 		for (AnnotationPrimer annotation : annotations) {
-			if (annotation.type().equals("java/lang/Override") && annotation.values != Collections.EMPTY_MAP) {
+			if (annotation.type().equals("java/lang/Override") && annotation.raw() != Collections.EMPTY_MAP) {
 				report(file, Kind.ERROR, annotation.pos, "annotation.override");
 			}
 
@@ -120,7 +121,8 @@ public class GlobalContextApi extends GlobalContext implements LavaApi {
 		return parser;
 	}
 
-	public boolean hasFeature(int specId) {return true;}
+	public MyBitSet features = new MyBitSet();
+	public boolean hasFeature(int specId) {return features.contains(specId);}
 
 	@Override
 	public ExprApi getExprApi() {return exprApi;}
@@ -178,17 +180,17 @@ public class GlobalContextApi extends GlobalContext implements LavaApi {
 		}
 	}
 
-	public ConstantData getArrayInfo(IType type) {
+	public ClassNode getArrayInfo(IType type) {
 		String arrayTypeDesc = type.toDesc();
 		Object o = libraryCache.get(arrayTypeDesc);
-		if (o != null) return (ConstantData) o;
+		if (o != null) return (ClassNode) o;
 
 		var rootInfo = super.getArrayInfo(null);
 
-		var arrayInfo = new ConstantData();
+		var arrayInfo = new ClassNode();
 		arrayInfo.name(arrayTypeDesc);
-		arrayInfo.parent(rootInfo.parent);
-		arrayInfo.interfaceWritable().addAll(rootInfo.interfaceWritable());
+		arrayInfo.parent(rootInfo.parent());
+		arrayInfo.itfList().addAll(rootInfo.itfList());
 		arrayInfo.methods.addAll(rootInfo.methods);
 		arrayInfo.fields.addAll(rootInfo.fields);
 

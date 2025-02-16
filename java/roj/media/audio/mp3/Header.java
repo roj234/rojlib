@@ -3,7 +3,6 @@ package roj.media.audio.mp3;
 import roj.reflect.Unaligned;
 import roj.util.DynByteBuf;
 import roj.util.Helpers;
-import sun.misc.Unsafe;
 
 import javax.sound.sampled.AudioFormat;
 
@@ -201,7 +200,7 @@ public final class Header {
 
 		if (endPos - off <= 4) return false;
 
-		hdr = Unaligned.U.get32UB(b, Unsafe.ARRAY_BYTE_BASE_OFFSET + off);
+		hdr = Unaligned.U.get32UB(b, Unaligned.ARRAY_BYTE_BASE_OFFSET + off);
 		idx = orig_off += 4;
 
 		while (true) {
@@ -237,7 +236,7 @@ public final class Header {
 			mask = 0xffe00000 | (hdr & 1969152);
 
 			// mode, mode_extension 不是每帧都相同.
-			if (findSyncFrame(Unaligned.U.get32UB(b, Unsafe.ARRAY_BYTE_BASE_OFFSET + orig_off - 4 + s_frame), mask)) {
+			if (findSyncFrame(Unaligned.U.get32UB(b, Unaligned.ARRAY_BYTE_BASE_OFFSET + orig_off - 4 + s_frame), mask)) {
 				if (syncMask == 0xffe00000) { // 是第一帧
 					off += 4 + s_sideInfo;
 					if (endPos - off < s_main) {

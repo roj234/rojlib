@@ -2,12 +2,15 @@ package roj.config.auto;
 
 import org.intellij.lang.annotations.MagicConstant;
 import roj.ReferenceByGeneratedClass;
+import roj.asm.ClassNode;
+import roj.asm.FieldNode;
 import roj.asm.Parser;
-import roj.asm.tree.ConstantData;
+import roj.asm.annotation.Annotation;
+import roj.asm.insn.CodeWriter;
+import roj.asm.insn.Label;
 import roj.asm.type.IType;
 import roj.asm.type.Signature;
-import roj.asm.visitor.CodeWriter;
-import roj.asm.visitor.Label;
+import roj.asm.type.TypeHelper;
 import roj.collect.MyHashMap;
 import roj.config.ConfigMaster;
 import roj.config.ParseException;
@@ -23,8 +26,10 @@ import roj.util.Helpers;
 
 import java.io.File;
 import java.nio.charset.Charset;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.Function;
 import java.util.function.IntFunction;
 import java.util.function.ToIntFunction;
@@ -49,8 +54,10 @@ public abstract class SerializerFactory {
 	static {
 		boolean unsafe = false;
 		try {
-			ConstantData c = Parser.parseConstants(IOUtil.getResource("roj/config/auto/Adapter.class"));
+			ClassNode c = Parser.parseConstants(IOUtil.getResource("roj/config/auto/Adapter.class"));
 			c.parent(Bypass.MAGIC_ACCESSOR_CLASS);
+			if (ReflectionUtils.JAVA_VERSION > 21)
+				c.modifier |= ACC_PUBLIC;
 			ClassDefiner.defineGlobalClass(c);
 			unsafe = true;
 		} catch (Throwable ignored) {}
@@ -82,6 +89,7 @@ public abstract class SerializerFactory {
 	public static SerializerFactory getInstance() {return getInstance0(GENERATE|CHECK_INTERFACE|CHECK_PARENT);}
 	public static SerializerFactory getInstance(@MagicConstant(flags = {GENERATE, CHECK_INTERFACE, CHECK_PARENT, NO_CONSTRUCTOR, ALLOW_DYNAMIC, PREFER_DYNAMIC, OBJECT_POOL, CHECK_PUBLIC, SERIALIZE_PARENT }) int flag) {return getInstance0(flag);}
 	private static SerializerFactory getInstance0(int flag) {return new SerializerFactoryImpl(flag, ReflectionUtils.getCallerClass(3).getClassLoader());}
+	public static SerializerFactory getInstance0(int flag, ClassLoader classLoader) {return new SerializerFactoryImpl(flag, classLoader);}
 
 	// 默认的flag仅支持在类中实际写出的具体类，不涉及任意对象的反序列化
 	// 实际上，如果在序列化的类中有字段是Object或接口或抽象类（除去CharSequence Map Collection等一些基本的类），它会报错
@@ -95,6 +103,16 @@ public abstract class SerializerFactory {
 	 * 添加一个允许（反）序列化的类
 	 */
 	public abstract SerializerFactory add(Class<?> type);
+	/**
+	 * 添加一个允许（反）序列化的类，带上它的配置
+	 * @implNote 警告：这个序列化器不会保存在全局缓存中
+	 */
+	public abstract SerializerFactory add(Class<?> type, SerializeSetting setting);
+	public interface SerializeSetting {
+		SerializeSetting IDENTITY = (a, b, c) -> c;
+		List<Annotation> processField(ClassNode owner, FieldNode field, List<Annotation> annotations);
+	}
+
 	/**
 	 * 添加一些允许（反）序列化的类
 	 */
@@ -181,8 +199,14 @@ public abstract class SerializerFactory {
 	public abstract Serializer<?> serializer(IType generic);
 	// for Lavac
 	//public abstract <T> Serializer<T> serializer(IType<T> generic);
-	public abstract <T> Serializer<List<T>> listOf(Class<T> content);
-	public abstract <T> Serializer<Map<String, T>> mapOf(Class<T> content);
+	@SuppressWarnings("unchecked")
+	public final <T> Serializer<List<T>> listOf(Class<T> content) { return (Serializer<List<T>>) serializer(Signature.parseGeneric("Ljava/util/List<" + TypeHelper.class2asm(content) + ">;")); }
+	@SuppressWarnings("unchecked")
+	public final <T> Serializer<Set<T>> setOf(Class<T> content) { return (Serializer<Set<T>>) serializer(Signature.parseGeneric("Ljava/util/Set<" + TypeHelper.class2asm(content) + ">;")); }
+	@SuppressWarnings("unchecked")
+	public final <T> Serializer<Collection<T>> collectionOf(Class<T> content) { return (Serializer<Collection<T>>) serializer(Signature.parseGeneric("Ljava/util/Collection<" + TypeHelper.class2asm(content) + ">;")); }
+	@SuppressWarnings("unchecked")
+	public final <T> Serializer<Map<String, T>> mapOf(Class<T> content) { return (Serializer<Map<String, T>>) serializer(Signature.parseGeneric("Ljava/util/Map<Ljava/lang/String;" + TypeHelper.class2asm(content) + ">;")); }
 
 	public static <T> IntFunction<T> dataContainer(Class<?> type) {
 		var dc = Isolation.computeIfAbsent(type.getClassLoader(), Fn).dataContainer;
@@ -209,7 +233,7 @@ public abstract class SerializerFactory {
 				return null;
 			}
 
-			var c = new ConstantData();
+			var c = new ClassNode();
 			c.name(type.getName().replace('.', '/')+"$DC");
 			c.addInterface("java/util/function/IntFunction");
 			ClassDefiner.premake(c);

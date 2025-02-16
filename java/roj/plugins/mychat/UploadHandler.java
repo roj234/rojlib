@@ -4,11 +4,11 @@ import roj.concurrent.FastThreadLocal;
 import roj.concurrent.TaskPool;
 import roj.crypt.BufferedDigest;
 import roj.crypt.ILCrypto;
+import roj.http.server.HttpCache;
+import roj.http.server.MultipartFormHandler;
+import roj.http.server.Request;
 import roj.io.IOUtil;
 import roj.net.ChannelCtx;
-import roj.net.http.server.HttpCache;
-import roj.net.http.server.MultipartFormHandler;
-import roj.net.http.server.Request;
 import roj.text.TextUtil;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
@@ -17,7 +17,7 @@ import javax.imageio.ImageIO;
 import javax.imageio.ImageReadParam;
 import javax.imageio.ImageReader;
 import javax.imageio.stream.ImageInputStream;
-import java.awt.image.*;
+import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -108,7 +108,7 @@ public class UploadHandler extends MultipartFormHandler {
 
 			bb.putInt(uid);
 
-			file = new File(Server.attDir, bb.base64UrlSafe());
+			file = new File(ChatManager.attDir, bb.base64UrlSafe());
 		} while (file.isFile());
 		return file;
 	}
@@ -159,7 +159,7 @@ public class UploadHandler extends MultipartFormHandler {
 
 				String hashFileName = tmp.base64UrlSafe();
 
-				File old = new File(Server.attDir, hashFileName);
+				File old = new File(ChatManager.attDir, hashFileName);
 				File cur = files[i];
 				if (old.isFile()) {
 					if (old.length() == cur.length()) {

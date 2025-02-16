@@ -1,10 +1,10 @@
 package roj.compiler.ast.expr;
 
 import org.jetbrains.annotations.Nullable;
+import roj.asm.ClassNode;
+import roj.asm.FieldNode;
 import roj.asm.Opcodes;
-import roj.asm.tree.ConstantData;
-import roj.asm.tree.FieldNode;
-import roj.asm.tree.attr.Attribute;
+import roj.asm.attr.Attribute;
 import roj.asm.type.IType;
 import roj.collect.MyHashSet;
 import roj.compiler.asm.MethodWriter;
@@ -88,7 +88,7 @@ final class Switch extends ExprNode {
 		return this;
 	}
 
-	private boolean iterSealed(GlobalContext ctx, ConstantData info, MyHashSet<String> patterns) {
+	private boolean iterSealed(GlobalContext ctx, ClassNode info, MyHashSet<String> patterns) {
 		var s = info.parsedAttr(info.cp, Attribute.PermittedSubclasses);
 		if (s != null) {
 			List<String> value = s.value;

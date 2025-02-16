@@ -3,7 +3,9 @@ package roj.config;
 import roj.collect.Int2IntMap;
 import roj.collect.MyBitSet;
 import roj.collect.SimpleList;
-import roj.config.data.*;
+import roj.config.data.CEntry;
+import roj.config.data.CList;
+import roj.config.data.CNull;
 import roj.config.serial.CVisitor;
 import roj.config.table.TableParser;
 import roj.config.table.TableReader;
@@ -22,7 +24,7 @@ import java.util.List;
  * @since 2022/1/6 13:46
  */
 public final class CsvParser extends Parser implements TableParser {
-	private static final short seperator = 9, line = 10;
+	private static final short separator = 9, line = 10;
 
 	private static final MyBitSet CSV_LENDS = MyBitSet.from("\r\n,;");
 	private static final Int2IntMap CSV_C2C = new Int2IntMap(16);
@@ -76,17 +78,19 @@ public final class CsvParser extends Parser implements TableParser {
 	private List<String> fastLine(Word w) throws ParseException {
 		List<String> list = Helpers.cast(tmpList); list.clear();
 
+		boolean hasValue = false;
 		for(;; w = next()) {
 			var type = w.type();
-			if (type == seperator) {list.add(null);continue;}
-			list.add(w.val());
+			if (type >= 0 && type < 8) {
+				if (hasValue) unexpected(w.toString(), "分隔符");
+				hasValue = true;
 
-			w = next();
-			type = w.type();
-
-			if (type == seperator) continue;
-			if (type == line || type == Word.EOF) break;
-			unexpected(w.toString(), "分隔符");
+				list.add(w.val());
+			} else {
+				if (!hasValue) list.add(null);
+				if (type != separator) break;
+				hasValue = false;
+			}
 		}
 
 		return list;
@@ -115,25 +119,27 @@ public final class CsvParser extends Parser implements TableParser {
 			try {
 				list.clear();
 				int j = 0;
+				boolean hasValue = false;
 
 				cv.valueMap();
 				for(;; w = next(), j++) {
-					if (w.type() == seperator) continue;
-
-					cv.key(keys.get(j));
-					switch (w.type()) {
-						case Word.LITERAL -> cv.value(w.val());
-						case Word.INTEGER -> cv.value(w.asInt());
-						case Word.DOUBLE -> cv.value(w.asDouble());
-						case Word.LONG -> cv.value(w.asLong());
-					}
-
-					w = next();
 					type = w.type();
+					if (type >= 0 && type < 8) {
+						if (hasValue) unexpected(w.toString(), "分隔符");
+						hasValue = true;
 
-					if (type == seperator) continue;
-					if (type == line || type == Word.EOF) break;
-					unexpected(w.val(), "分隔符");
+						cv.key(keys.get(j));
+						switch (w.type()) {
+							case Word.LITERAL -> cv.value(w.val());
+							case Word.INTEGER -> cv.value(w.asInt());
+							case Word.DOUBLE -> cv.value(w.asDouble());
+							case Word.LONG -> cv.value(w.asLong());
+						}
+					} else {
+						if (!hasValue) list.add(null);
+						if (type != separator) break;
+						hasValue = false;
+					}
 				}
 				cv.pop();
 			} catch (ParseException e) {
@@ -177,23 +183,28 @@ public final class CsvParser extends Parser implements TableParser {
 	private CList csvLine(Word w) throws ParseException {
 		var buf = tmpList; buf.clear();
 
+		var hasValue = false;
 		for(;; w = next()) {
 			var type = w.type();
-			buf.add(switch (type) {
-				case Word.LITERAL -> CString.valueOf(w.val());
-				case Word.INTEGER -> CInt.valueOf(w.asInt());
-				case Word.DOUBLE -> CDouble.valueOf(w.asDouble());
-				case Word.LONG -> CLong.valueOf(w.asLong());
-				default -> CNull.NULL;
-			});
-			if (type == seperator) continue;
+			mySegmentBlock: {
+				CEntry entry;
+				switch (type) {
+					default: break mySegmentBlock;
+					case Word.LITERAL: entry = CEntry.valueOf(w.val());break;
+					case Word.INTEGER: entry = CEntry.valueOf(w.asInt());break;
+					case Word.DOUBLE:  entry = CEntry.valueOf(w.asDouble());break;
+					case Word.LONG:    entry = CEntry.valueOf(w.asLong());break;
+				}
+				buf.add(entry);
 
-			w = next();
-			type = w.type();
+				if (hasValue) unexpected(w.toString(), "分隔符");
+				hasValue = true;
+				continue;
+			}
 
-			if (type == seperator) continue;
-			if (type == line || type == Word.EOF) break;
-			unexpected(w.val(), "分隔符");
+			if (!hasValue) buf.add(CNull.NULL);
+			if (type != separator) break;
+			hasValue = false;
 		}
 
 		return new CList(new SimpleList<>(buf));
@@ -213,7 +224,7 @@ public final class CsvParser extends Parser implements TableParser {
 			case 0: index = i; return csvQuote();
 			case 1: if (i < in.length() && in.charAt(i) == '\n') i++;
 			case 2: index = i; return formClip(line, "\n");
-			case 3: index = i; return formClip(seperator, ",");
+			case 3: index = i; return formClip(separator, ",");
 			case 4: index = i-1; return digitReader(false,0);
 		}
 	}

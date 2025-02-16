@@ -3,7 +3,7 @@ package roj.compiler.ast;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.jetbrains.annotations.Range;
-import roj.asm.visitor.Label;
+import roj.asm.insn.Label;
 import roj.collect.SimpleList;
 import roj.compiler.asm.MethodWriter;
 import roj.compiler.asm.Variable;

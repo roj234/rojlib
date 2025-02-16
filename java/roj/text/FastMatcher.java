@@ -5,7 +5,7 @@ import roj.util.DynByteBuf;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 
-import static roj.reflect.ReflectionUtils.u;
+import static roj.reflect.Unaligned.U;
 
 /**
  * 这是全新的BM字符串匹配实现
@@ -52,10 +52,10 @@ public class FastMatcher {
 		long end = off+len-p.length;
 		while(off <= end) {
 			int tmp = p_end;
-			while(u.getByte(ref, off+tmp) == p[tmp])
+			while(U.getByte(ref, off+tmp) == p[tmp])
 				if (--tmp < 0) return off;
 
-			off += skip[u.getByte(ref, off + p_end) & 0xFF];
+			off += skip[U.getByte(ref, off + p_end) & 0xFF];
 		}
 		return -1;
 	}

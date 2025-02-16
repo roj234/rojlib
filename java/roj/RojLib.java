@@ -5,7 +5,9 @@ import roj.compiler.plugins.asm.ASM;
 import roj.reflect.ReflectionUtils;
 import roj.reflect.litasm.Intrinsics;
 import roj.reflect.litasm.LibraryLoader;
+import roj.util.Helpers;
 import roj.util.OS;
+import roj.util.TypedKey;
 
 import java.io.File;
 import java.io.FileOutputStream;
@@ -16,13 +18,14 @@ import java.util.Map;
  * @since 2021/10/15 12:57
  */
 public final class RojLib {
-	public static final Map<String, Object> DATA = new MyHashMap<>();
+	public static final Map<Object, Object> BLACKBOARD = new MyHashMap<>();
 	/**
 	 * 用于某些类加载顺序强相关的依赖注入
 	 * @author Roj234
 	 * @since 2024/7/22 0022 6:49
 	 */
-	public static Object inject(String s) {return DATA.get(s);}
+	public static Object inject(String s) {return BLACKBOARD.get(s);}
+	public static <T> T inject(TypedKey<T> key) {return Helpers.cast(BLACKBOARD.get(key));}
 
 	/**
 	 * FastJNI

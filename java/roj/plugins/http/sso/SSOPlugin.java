@@ -1,54 +1,72 @@
 package roj.plugins.http.sso;
 
-import org.jetbrains.annotations.Nullable;
 import roj.collect.CollectionX;
 import roj.collect.XHashSet;
 import roj.config.Tokenizer;
+import roj.config.data.CEntry;
 import roj.config.serial.ToJson;
 import roj.crypt.Base64;
 import roj.crypt.MySaltedHash;
+import roj.http.Cookie;
+import roj.http.IllegalRequestException;
+import roj.http.server.Request;
+import roj.http.server.Response;
+import roj.http.server.ResponseHeader;
+import roj.http.server.ZipRouter;
+import roj.http.server.auto.*;
 import roj.io.IOUtil;
-import roj.net.http.Cookie;
-import roj.net.http.IllegalRequestException;
-import roj.net.http.server.Request;
-import roj.net.http.server.Response;
-import roj.net.http.server.ResponseHeader;
-import roj.net.http.server.ZipRouter;
-import roj.net.http.server.auto.*;
 import roj.plugin.Plugin;
-import roj.text.ACalendar;
 import roj.text.CharList;
+import roj.text.DateParser;
 import roj.text.Escape;
 import roj.text.TextUtil;
+import roj.ui.Argument;
 import roj.ui.Terminal;
-import roj.ui.terminal.Argument;
 import roj.util.ByteList;
 import roj.util.Helpers;
+import roj.util.TypedKey;
 
 import java.io.File;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.SecureRandom;
 import java.util.Collections;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
-import static roj.net.http.IllegalRequestException.BAD_REQUEST;
-import static roj.ui.terminal.CommandNode.argument;
-import static roj.ui.terminal.CommandNode.literal;
+import static roj.http.IllegalRequestException.BAD_REQUEST;
+import static roj.ui.CommandNode.argument;
+import static roj.ui.CommandNode.literal;
 
 /**
  * @author Roj234
  * @since 2024/7/9 0009 8:27
  */
 public class SSOPlugin extends Plugin {
-	private static final XHashSet.Shape<String, UserGroup> shape = XHashSet.noCreation(UserGroup.class, "name");
+	private static final XHashSet.Shape<String, Group> shape = XHashSet.noCreation(Group.class, "name");
 	public static final String COOKIE_ID = "xsso_token";
 
-	private final XHashSet<String, UserGroup> groups = shape.create();
+	private static final Pattern PERMISSION_NODE_PATTERN = Pattern.compile("(!)?(grant|revoke) ((?:[^/]+?/)*.+?)(?: (\\d+))?( noinherit)?");
+	private final XHashSet<String, Group> groups = shape.create();
 	private void loadGroups() {
 		groups.clear();
 		for (var entry : getConfig().getMap("groups").entrySet()) {
-			var group = new UserGroup(entry.getKey());
-			group.permissions.addAll(Helpers.cast(entry.getValue().asList().rawDeep()));
+			var group = new Group(entry.getKey());
+			Matcher m = PERMISSION_NODE_PATTERN.matcher("");
+			for (CEntry item : entry.getValue().asList()) {
+				if (!m.reset(item.asString()).matches()) {
+					getLogger().warn("权限定义 {} 不符合规则 {}", item, PERMISSION_NODE_PATTERN);
+				} else {
+					boolean isDelete = m.group(2).equals("revoke");
+					int value;
+					if (m.group(4) == null) value = isDelete ? 0 : 1;
+					else {
+						value = Integer.parseInt(m.group(4));
+						if (isDelete) value = ~value; // for bitset only ??? might be weird for users
+					}
+					group.add(m.group(3).equals("*") ? "" : m.group(3), value, m.group(1) != null, m.group(5) == null);
+				}
+			}
 			groups.add(group);
 		}
 	}
@@ -127,8 +145,8 @@ public class SSOPlugin extends Plugin {
 			 var g = groups.get(ctx.argument("用户组", String.class));
 			 if (g == null) {Terminal.warning("用户组不存在");return;}
 
-			 u.group = g.name;
-			 u.groupInst = g;
+			 u.groupName = g.name;
+			 u.group = g;
 
 			 users.setDirty(u, "group");
 			 System.out.println("用户组已更新");
@@ -143,11 +161,11 @@ public class SSOPlugin extends Plugin {
 
 			 System.out.println("用户ID: "+u.id);
 			 System.out.println("已绑定OTP: "+(u.totpKey != null));
-			 System.out.println("用户组: "+u.group);
+			 System.out.println("用户组: "+u.groupName);
 			 System.out.println("密码错误次数: "+u.loginAttempt);
-			 System.out.println("上次登录: "+ACalendar.toLocalTimeString(u.loginTime));
+			 System.out.println("上次登录: "+DateParser.toLocalTimeString(u.loginTime));
 			 System.out.println("登录IP: "+u.loginAddr);
-			 System.out.println("注册时间: "+ACalendar.toLocalTimeString(u.registerTime));
+			 System.out.println("注册时间: "+DateParser.toLocalTimeString(u.registerTime));
 			 System.out.println("注册IP: "+u.registerAddr);
 		 })))
 		 .then(literal("suspend").then(argument("用户名", userNameList).then(argument("timeout", Argument.number(30, Integer.MAX_VALUE)).executes(ctx -> {
@@ -157,7 +175,7 @@ public class SSOPlugin extends Plugin {
 			 u.suspendTimer = System.currentTimeMillis() + ctx.argument("timeout", Integer.class)*1000L;
 			 u.loginAttempt = 99;
 			 u.tokenSeq++;
-			 System.out.println("账户已锁定至"+ACalendar.toLocalTimeString(u.suspendTimer));
+			 System.out.println("账户已锁定至"+DateParser.toLocalTimeString(u.suspendTimer));
 		 }))))
 		 .then(literal("unsuspend").then(argument("用户名", userNameList).executes(ctx -> {
 			 User u = users.getUserByName(ctx.argument("用户名", String.class));
@@ -187,26 +205,72 @@ public class SSOPlugin extends Plugin {
 
 			 u.tempOtp = "\0PASSWORDEXPIRED\0";
 			 System.out.println("密码已过期(该状态服务器重启后失效)");
-		 })));
+		 })))
+		 .then(literal("maketoken").then(argument("用户名", userNameList).then(argument("过期时间", Argument.number(60, 86400)).executes(ctx -> {
+			 User u = users.getUserByName(ctx.argument("用户名", String.class));
+			 if (u == null) {Terminal.warning("账户不存在");return;}
+
+			 System.out.print("[L]ogin or [A]ccess: ");
+			 char c1 = Terminal.readChar("LA");
+
+			 System.out.println(makeToken(u, c1, ctx.argument("过期时间", Integer.class) * 1000L, new LocalData(), IOUtil.SharedCoder.get()));
+		 }))))
+		 .then(literal("save").executes(ctx -> {
+			 users.save();
+		 }));
 		registerCommand(c);
 	}
 
 	@Override
 	protected void onDisable() {
-		if (users != null) users.onShutdown();
+		if (users != null) users.save();
+	}
+
+	@Override
+	public <T> T ipc(TypedKey<T> key, Object parameter) {
+		return key.cast(switch (key.name) {
+			default -> super.ipc(key, parameter);
+
+			case "getDefaultPermissions" -> groups.get("guest");
+			case "authenticateUser" -> verifyToken(null, parameter.toString(), 'A');
+			case "getUser" -> {
+				var req = (Request) parameter;
+
+				Cookie token = null;
+				try {
+					token = req.cookie().get(COOKIE_ID);
+				} catch (IllegalRequestException e) {
+					Helpers.athrow(e);
+				}
+
+				if (token != null) {
+					User user = verifyToken(req, token.value(), 'L');
+					if (user == null) {
+						req.responseHeader().sendCookieToClient(Collections.singletonList(new Cookie(COOKIE_ID).expires(-1)));
+					}
+
+					yield user;
+				}
+
+				yield null;
+			}
+		});
 	}
 
 	@Interceptor("PermissionManager")
 	public Response ssoPermissionManager(Request req) throws IllegalRequestException {
 		String postfix = "";
 		var token = req.cookie().get(COOKIE_ID);
+
+		String permissionNode = "web/".concat(req.absolutePath());
+
 		checkLogin:
 		if (token != null) {
 			User user = verifyToken(req, token.value(), 'L');
 			if (user != null) {
-				var group = user.groupInst;
+				var group = user.group;
 				if (group == null) throw new IllegalRequestException(500, Response.internalError("用户组配置错误"));
-				if (group.isAdmin() || group.permissions.strStartsWithThis("/".concat(req.absolutePath()))) return null;
+				if (group.isAdmin() || group.has(permissionNode)) return null;
 
 				postfix = "#denied";
 				break checkLogin;
@@ -215,22 +279,11 @@ public class SSOPlugin extends Plugin {
 		}
 
 		var group = groups.get("guest");
-		if (group != null && group.permissions.strStartsWithThis("/".concat(req.absolutePath()))) return null;
+		if (group != null && group.has(permissionNode)) return null;
 
 		var url = IOUtil.getSharedCharBuf().append('/').append(req.absolutePath()).append(req.query().isEmpty() ? "" : "?"+req.query());
 		req.responseHeader().put("Location", "/"+sitePath+"?return="+Escape.encodeURIComponent(url)+postfix);
 		throw new IllegalRequestException(302);
-	}
-
-	@Nullable
-	public User authorizeExternal(Request req) throws IllegalRequestException {
-		var token = req.cookie().get(COOKIE_ID);
-		if (token != null) {
-			User user = verifyToken(req, token.value(), 'L');
-			if (user != null) return user;
-			req.responseHeader().sendCookieToClient(Collections.singletonList(new Cookie(COOKIE_ID).expires(-1)));
-		}
-		return null;
 	}
 
 	@GET
@@ -519,7 +572,7 @@ public class SSOPlugin extends Plugin {
 		return Base64.encode(buf, sb, Base64.B64_URL_SAFE).toString();
 	}
 
-	private User verifyToken(Request req, String v, char usage) {
+	public User verifyToken(Request req, String v, char usage) {
 		// for future SHA-256 checksum
 		if (v.length() < 40 || v.length() > 72) return null;
 
@@ -545,9 +598,9 @@ public class SSOPlugin extends Plugin {
 					if (usage == 'A') o.localNonce = nonce;
 
 					if (MessageDigest.isEqual(hmac.digestShared(), hash)) {
-						if (u.groupInst == null) {
-							var group = u.groupInst = groups.get(u.group);
-							if (group == null) getLogger().warn("找不到用户组{}", u.group);
+						if (u.group == null) {
+							var group = u.group = groups.get(u.groupName);
+							if (group == null) getLogger().warn("找不到用户组{}", u.groupName);
 						}
 
 						return u;

@@ -1,7 +1,6 @@
 package roj.compiler.ast.expr;
 
 import roj.asm.Opcodes;
-import roj.asm.tree.anno.AnnValInt;
 import roj.asm.type.IType;
 import roj.asm.type.Type;
 import roj.compiler.JavaLexer;
@@ -9,6 +8,7 @@ import roj.compiler.asm.MethodWriter;
 import roj.compiler.context.LocalContext;
 import roj.compiler.diagnostic.Kind;
 import roj.compiler.resolve.TypeCast;
+import roj.config.data.CInt;
 
 import static roj.compiler.JavaLexer.byId;
 
@@ -112,7 +112,7 @@ class Assign extends ExprNode {
 
 		int state = 0;
 		if (!noRet & returnBefore) state = expr.copyValue(cw, type.rawType().length() - 1 != 0);
-		if (primType != 0) ctx.castTo(type, Type.std(primType), 0).write(cw);
+		if (primType != 0) ctx.castTo(type, Type.primitive(primType), 0).write(cw);
 
 		int op;
 		if (amount < 0 && amount != Integer.MIN_VALUE) {
@@ -132,7 +132,7 @@ class Assign extends ExprNode {
 		cw.one((byte) (op + type2));
 
 		if (dataCap < 4 && primType == 0 && isVariable) cw.one((byte) (Opcodes.I2B-1 + dataCap));
-		else if (primType != 0) ctx.castTo(Type.std(primType), type, 0).write(cw);
+		else if (primType != 0) ctx.castTo(Type.primitive(primType), type, 0).write(cw);
 
 		if (!noRet & !returnBefore) state = expr.copyValue(cw, type.rawType().length() - 1 != 0);
 		expr.postStore(cw, state);
@@ -165,7 +165,7 @@ class Assign extends ExprNode {
 		// to IINC if applicable
 		block:
 		if (left instanceof LocalVariable lv && TypeCast.getDataCap(br.type().getActualType()) == 4 && operand.isConstant()) {
-			int value = ((AnnValInt) operand.constVal()).value;
+			int value = ((CInt) operand.constVal()).value;
 
 			switch (br.operator) {
 				default: break block;

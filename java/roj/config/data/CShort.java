@@ -9,9 +9,8 @@ import roj.text.CharList;
  */
 public final class CShort extends CEntry {
 	public short value;
-
+	public CShort() {}
 	public CShort(short s) { this.value = s; }
-	public static CShort valueOf(short number) { return new CShort(number); }
 
 	public Type getType() { return Type.Int2; }
 	protected boolean eqVal(CEntry o) { return o.asInt() == value; }
@@ -22,18 +21,19 @@ public final class CShort extends CEntry {
 	}
 
 	public boolean asBool() { return value != 0; }
-	public double asDouble() { return value; }
 	public int asInt() { return value; }
-	public float asFloat() { return value; }
 	public long asLong() { return value; }
+	public float asFloat() { return value; }
+	public double asDouble() { return value; }
 	public String asString() { return String.valueOf(value); }
 
 	public void accept(CVisitor ser) { ser.value(value); }
 	public Object raw() { return value; }
 
 	public CharList toJSON(CharList sb, int depth) { return sb.append(value); }
+	public String toString() {return String.valueOf(value).concat("S");}
 
-	public int hashCode() { return value ^ 1919; }
+	public int hashCode() { return value * 1919; }
 	public boolean equals(Object o) {
 		if (this == o) return true;
 		if (o == null || getClass() != o.getClass()) return false;

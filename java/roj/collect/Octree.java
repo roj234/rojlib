@@ -144,7 +144,7 @@ public class Octree<V extends OctreeEntry> implements _Generic_Map<Node>, Iterab
 
 			// 每个node的pos都是离原点最近的，方便gets的筛选
 			// 也方便删除后的重构
-			if (key.len2() < vPos.len2()) {
+			if (key.lengthSquared() < vPos.lengthSquared()) {
 				V v0 = (V) node.v;
 				node.v = v;
 				v = v0;
@@ -354,8 +354,8 @@ public class Octree<V extends OctreeEntry> implements _Generic_Map<Node>, Iterab
 					ArrayList<V> list = (ArrayList<V>) node.v;
 					for (int k = 0; k < list.size(); k++) {
 						V v = list.get(k);
-						if (v.getPos().len2() < n1Dist) {
-							n1Dist = (int) v.getPos().len2();
+						if (v.getPos().lengthSquared() < n1Dist) {
+							n1Dist = (int) v.getPos().lengthSquared();
 							n1 = node;
 							granted = v;
 							n1Dir = j;
@@ -364,8 +364,8 @@ public class Octree<V extends OctreeEntry> implements _Generic_Map<Node>, Iterab
 					}
 				} else {
 					V v = (V) node.v;
-					if (v.getPos().len2() < n1Dist) {
-						n1Dist = (int) v.getPos().len2();
+					if (v.getPos().lengthSquared() < n1Dist) {
+						n1Dist = (int) v.getPos().lengthSquared();
 						n1 = node;
 						granted = v;
 						n1Dir = j;
@@ -428,7 +428,7 @@ public class Octree<V extends OctreeEntry> implements _Generic_Map<Node>, Iterab
 	 * 你甚至不会获取到距离原点最近的limit个元素，因为我们是深度优先的递归 <br>
 	 */
 	public final LocationSet<V> getSome(Vec3i pos, float rMin, float rMax, LocationSet<V> rs) {
-		boolean origin = pos.len2() == 0;
+		boolean origin = pos.lengthSquared() == 0;
 
 		int unit = this.unit;
 		for (int i = 0; i < 8; i++) {
@@ -530,7 +530,7 @@ public class Octree<V extends OctreeEntry> implements _Generic_Map<Node>, Iterab
 		if (n.v.getClass() == ArrayList.class) {
 			ArrayList<V> list = (ArrayList<V>) n.v;
 			for (int i = 0; i < list.size(); i++) {
-				int d2 = (int) list.get(i).getPos().len2();
+				int d2 = (int) list.get(i).getPos().lengthSquared();
 				if (L2 <= d2 && d2 <= H2) {
 					if (!rs.add(d2, list.get(i))) break;
 				}
@@ -539,7 +539,7 @@ public class Octree<V extends OctreeEntry> implements _Generic_Map<Node>, Iterab
 		}
 
 		V v = (V) n.v;
-		int d2 = (int) v.getPos().len2();
+		int d2 = (int) v.getPos().lengthSquared();
 		if (d2 > H2) return;
 		if (L2 <= d2) if (!rs.add(d2, v)) return;
 

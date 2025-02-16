@@ -1,12 +1,12 @@
 package roj.compiler.ast.expr;
 
 import org.jetbrains.annotations.Nullable;
+import roj.asm.FieldNode;
+import roj.asm.IClass;
+import roj.asm.MethodNode;
 import roj.asm.Opcodes;
-import roj.asm.tree.FieldNode;
-import roj.asm.tree.IClass;
-import roj.asm.tree.MethodNode;
-import roj.asm.tree.anno.AnnVal;
-import roj.asm.tree.attr.AttrUnknown;
+import roj.asm.annotation.AnnVal;
+import roj.asm.attr.AttrUnknown;
 import roj.asm.type.IType;
 import roj.asm.type.Type;
 import roj.collect.Int2IntMap;
@@ -31,6 +31,7 @@ import roj.config.ParseException;
 import roj.config.Word;
 import roj.config.auto.Serializer;
 import roj.config.auto.SerializerFactory;
+import roj.config.data.CEntry;
 import roj.config.serial.CVisitor;
 import roj.text.CharList;
 import roj.util.ArrayRef;
@@ -43,7 +44,7 @@ import java.util.function.BiFunction;
 
 import static roj.compiler.JavaLexer.*;
 import static roj.config.Word.LITERAL;
-import static roj.reflect.ReflectionUtils.u;
+import static roj.reflect.Unaligned.U;
 
 /**
  * Lava Compiler - 表达式<p>
@@ -86,7 +87,7 @@ public final class ExprParser {
 		String s = "VZBCSIJFD";
 		for (int i = 0; i < s.length(); i++) {
 			//noinspection MagicConstant
-			PW.putInt(VOID+i, Type.std(s.charAt(i)));
+			PW.putInt(VOID+i, Type.primitive(s.charAt(i)));
 		}
 
 		SM.putInt(SM_UnaryPre | inc, -1);
@@ -200,8 +201,8 @@ public final class ExprParser {
 	 */
 	private final IntList binaryOps = new IntList();
 	private static final TimSortForEveryone.MyComparator BOP_SORTER = (refLeft, offLeft, offRight) -> {
-		var a = u.getInt(refLeft, offLeft) & 1023;
-		var b = u.getInt(offRight) & 1023;
+		var a = U.getInt(refLeft, offLeft) & 1023;
+		var b = U.getInt(offRight) & 1023;
 		return Integer.compare(b, a);
 	};
 
@@ -256,11 +257,11 @@ public final class ExprParser {
 						w = wr.next();
 						if (w.type() == INT_MIN_VALUE) {
 							w = wr.next();
-							cur = Constant.valueOf(AnnVal.valueOf(Integer.MIN_VALUE));
+							cur = Constant.valueOf(CEntry.valueOf(Integer.MIN_VALUE));
 							break endValueGen;
 						} else if (w.type() == LONG_MIN_VALUE) {
 							w = wr.next();
-							cur = Constant.valueOf(AnnVal.valueOf(Long.MIN_VALUE));
+							cur = Constant.valueOf(CEntry.valueOf(Long.MIN_VALUE));
 							break endValueGen;
 						} else {
 							wr.retractWord();
@@ -326,6 +327,7 @@ public final class ExprParser {
 				up = pf;
 			}
 			// endregion
+			// *AI命名建议：后缀表达式（Postfix Expression） | 如方法调用`foo()`、成员访问`obj.field`等需在前缀基础上处理的语法结构。
 			// region 一次性"值生成"(自造词)操作 (加载常量 new this 花括号(direct)数组内容 int[].class String.class)
 			switch (_sid = sm.getOrDefaultInt(w.type()|SM_ExprStart, 0)) {
 				case -1://NEW
@@ -367,7 +369,7 @@ public final class ExprParser {
 						newType = newType.clone();
 						newType.setArrayDim(array);
 						// 以后可以把这个检查删了 CompileSpec
-						if (newType instanceof LPGeneric && ((LPGeneric) newType).isGenericArray()) {
+						if (newType instanceof LPGeneric lp && lp.isGenericArray()) {
 							ctx.report(Kind.ERROR, "expr.newArray.generic");
 						}
 
@@ -397,12 +399,12 @@ public final class ExprParser {
 					cur.wordStart = start;
 				break endValueGen;
 				// constant
-				case -2: cur = new Constant(Type.std(Type.CHAR), AnnVal.valueOf(w.val().charAt(0))); break;
+				case -2: cur = new Constant(Type.primitive(Type.CHAR), AnnVal.valueOf(w.val().charAt(0))); break;
 				case -3: cur = Constant.valueOf(w.val()); break;
 				case -4: cur = Constant.valueOf(w.asInt()); break;
-				case -5: cur = new Constant(Type.std(Type.LONG), AnnVal.valueOf(w.asLong())); break;
-				case -6: cur = new Constant(Type.std(Type.FLOAT), AnnVal.valueOf(w.asFloat())); break;
-				case -7: cur = new Constant(Type.std(Type.DOUBLE), AnnVal.valueOf(w.asDouble())); break;
+				case -5: cur = new Constant(Type.primitive(Type.LONG), AnnVal.valueOf(w.asLong())); break;
+				case -6: cur = new Constant(Type.primitive(Type.FLOAT), AnnVal.valueOf(w.asFloat())); break;
+				case -7: cur = new Constant(Type.primitive(Type.DOUBLE), AnnVal.valueOf(w.asDouble())); break;
 				case -8: cur = Constant.valueOf(true); break;
 				case -9: cur = Constant.valueOf(false); break;
 				case -10: cur = new Constant(Asterisk.anyType, null); break;
@@ -523,7 +525,7 @@ public final class ExprParser {
 									wr.retract();
 
 									if (b) {
-										IType type = ctx.file.genericTypePart(((DotGet) cur).toClassRef().owner);
+										IType type = ctx.file.readGenericPart(((DotGet) cur).toClassRef().owner);
 
 										w = wr.next();
 										if (w.type() != LITERAL) throw wr.err("未预料的[类型]");
@@ -621,7 +623,7 @@ public final class ExprParser {
 						if (waitDot) ue(wr, w.val(), ".");
 						String className = wr.except(LITERAL, "cu.name").val();
 						wr.except(lParen);
-						cur = invoke(new Type(className), cur).setEnclosingArg();
+						cur = invoke(Type.klass(className), cur).setEnclosingArg();
 					break endValueConv;
 
 					// 我是无敌可爱的分隔线
@@ -684,6 +686,7 @@ public final class ExprParser {
 				nodes.add(cur);
 			}
 
+			// *AI命名建议：中缀运算符（Infix Operator） | 如`+`、`*`等连接子表达式的符号。
 			// 二元运算符 | 三元运算符 | 终结符
 			_sid = sm.getOrDefaultInt(SM_ExprTerm | w.type(), 0);
 			if (_sid == 0) {
@@ -730,6 +733,7 @@ public final class ExprParser {
 		if (ops.size() > bopCount) {
 			TimSortForEveryone.sort(bopCount, ops.size(), BOP_SORTER, ArrayRef.primitiveArray(ops.getRawArray()));
 
+			// *AI命名建议：自底向上归约（Bottom-Up Reduction） | 按优先级合并子表达式的过程，类似算符优先分析法。
 			int i = bopCount;
 			do {
 				int ord = ops.get(i) >>> 10;
@@ -959,7 +963,7 @@ public final class ExprParser {
 			// 因为我没有设计 (TYPE NAME [, TYPE NAME]) -> ... 的语法 这很鸡肋
 			if (w.type() == lss || w.type() == lBracket) {
 				wr.skip();
-				return ctx.file.genericTypePart(sb.toString());
+				return ctx.file.readGenericPart(sb.toString());
 			}
 			return null;
 		}
@@ -970,7 +974,7 @@ public final class ExprParser {
 		if (flag == 0) return null;
 
 		wr.skip(-2);
-		return new Type(sb.toString());
+		return Type.klass(sb.toString());
 	}
 
 	public ExprNode chain(ExprNode e, String name, int flag) {
@@ -1022,7 +1026,7 @@ public final class ExprParser {
 		var argNames = copyOf(parNames);
 
 		var file = ctx.file;
-		MethodNode mn = new MethodNode(Opcodes.ACC_PRIVATE|(ctx.in_static ? Opcodes.ACC_STATIC : 0)|Opcodes.ACC_SYNTHETIC, file.name, "lambda$", "()V");
+		MethodNode mn = new MethodNode(Opcodes.ACC_PRIVATE|(ctx.in_static ? Opcodes.ACC_STATIC : 0)|Opcodes.ACC_SYNTHETIC, file.name(), "lambda$", "()V");
 
 		if (wr.nextIf(lBrace)) {
 			ParseTask task = ParseTask.Method(file, mn, argNames);

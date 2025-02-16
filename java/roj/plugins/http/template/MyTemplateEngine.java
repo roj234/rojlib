@@ -2,8 +2,8 @@ package roj.plugins.http.template;
 
 import roj.collect.XHashSet;
 import roj.compiler.LavaCompiler;
-import roj.compiler.context.CompileUnit;
 import roj.compiler.context.GlobalContext;
+import roj.compiler.context.LavaCompileUnit;
 import roj.compiler.context.LocalContext;
 import roj.compiler.plugins.annotations.Getter;
 import roj.compiler.plugins.annotations.Setter;
@@ -11,10 +11,10 @@ import roj.concurrent.TaskPool;
 import roj.config.ConfigMaster;
 import roj.config.ParseException;
 import roj.config.auto.Optional;
+import roj.http.server.Request;
+import roj.http.server.Response;
+import roj.http.server.ResponseHeader;
 import roj.io.IOUtil;
-import roj.net.http.server.Request;
-import roj.net.http.server.Response;
-import roj.net.http.server.ResponseHeader;
 import roj.plugins.http.error.GreatErrorPage;
 import roj.reflect.ClassDefiner;
 import roj.text.CharList;
@@ -198,7 +198,7 @@ public class MyTemplateEngine {
 			System.out.println(out);
 		}
 
-		var cu = new CompileUnit(source, out.append("\n}}").toStringAndFree());
+		var cu = new LavaCompileUnit(source, out.append("\n}}").toStringAndFree());
 
 		var ctx = myContext.get();
 		if (ctx == null) myContext.set(ctx = compiler.createLocalContext());

@@ -4,7 +4,6 @@ import roj.collect.MyHashMap;
 import roj.io.IOUtil;
 import roj.io.MyDataInput;
 import roj.reflect.Unaligned;
-import sun.misc.Unsafe;
 
 import java.io.IOException;
 import java.util.Map;
@@ -26,12 +25,12 @@ public class APETag implements AudioMetadata {
 		if (b.length - off < 32) return 0;
 
 		// APETAGEX
-		if (Unaligned.U.get64UB(b, Unsafe.ARRAY_BYTE_BASE_OFFSET+off) == SIGNATURE) {
-			itemCount = Unaligned.U.get32UL(b, Unsafe.ARRAY_BYTE_BASE_OFFSET + off + 16);
-			int flags = Unaligned.U.get32UL(b, Unsafe.ARRAY_BYTE_BASE_OFFSET + off + 20);
+		if (Unaligned.U.get64UB(b, Unaligned.ARRAY_BYTE_BASE_OFFSET + off) == SIGNATURE) {
+			itemCount = Unaligned.U.get32UL(b, Unaligned.ARRAY_BYTE_BASE_OFFSET + off + 16);
+			int flags = Unaligned.U.get32UL(b, Unaligned.ARRAY_BYTE_BASE_OFFSET + off + 20);
 			// Illegal flag
 			if ((flags&0x60) != 0) return 0;
-			int len = Unaligned.U.get32UL(b, Unsafe.ARRAY_BYTE_BASE_OFFSET + off + 12);
+			int len = Unaligned.U.get32UL(b, Unaligned.ARRAY_BYTE_BASE_OFFSET + off + 12);
 			return (flags&0x80) != 0 ? len+32 : len;
 		}
 		return 0;

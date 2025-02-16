@@ -32,7 +32,6 @@ import java.util.zip.Deflater;
 import java.util.zip.ZipException;
 
 import static roj.archive.zip.ZEntry.MZ_NoCrc;
-import static roj.reflect.ReflectionUtils.u;
 
 /**
  * 支持分卷压缩文件

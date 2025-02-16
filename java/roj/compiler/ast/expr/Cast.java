@@ -2,7 +2,6 @@ package roj.compiler.ast.expr;
 
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
-import roj.asm.tree.anno.AnnVal;
 import roj.asm.type.IType;
 import roj.compiler.JavaLexer;
 import roj.compiler.asm.AnnotationPrimer;
@@ -10,6 +9,7 @@ import roj.compiler.asm.MethodWriter;
 import roj.compiler.context.LocalContext;
 import roj.compiler.diagnostic.Kind;
 import roj.compiler.resolve.TypeCast;
+import roj.config.data.CEntry;
 
 /**
  * 强制类型转换
@@ -43,7 +43,7 @@ final class Cast extends UnaryPre {
 		}
 
 		if (type.isPrimitive() && rType.isPrimitive() && right.isConstant()) {
-			return new Constant(type, AnnotationPrimer.toAnnVal((AnnVal) right.constVal(), type));
+			return new Constant(type, AnnotationPrimer.castPrimitive((CEntry) right.constVal(), type));
 		}
 		return this;
 	}

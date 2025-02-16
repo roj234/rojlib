@@ -12,9 +12,9 @@ import roj.io.IOUtil;
 import roj.plugin.Plugin;
 import roj.plugin.SimplePlugin;
 import roj.text.TextUtil;
+import roj.ui.Argument;
 import roj.ui.EasyProgressBar;
 import roj.ui.Terminal;
-import roj.ui.terminal.Argument;
 import roj.util.ByteList;
 
 import java.io.*;
@@ -26,8 +26,8 @@ import java.util.zip.Inflater;
 import java.util.zip.InflaterInputStream;
 import java.util.zip.ZipEntry;
 
-import static roj.ui.terminal.CommandNode.argument;
-import static roj.ui.terminal.CommandNode.literal;
+import static roj.ui.CommandNode.argument;
+import static roj.ui.CommandNode.literal;
 
 /**
  * @author Roj234
@@ -112,7 +112,7 @@ public class Main extends Plugin {
 			plains.putInt(off, data);
 		}
 
-		ZCKiller ctx = new ZCKiller(IOUtil.read(mzf.getFileStream(entry)), plains);
+		ZCKiller ctx = new ZCKiller(IOUtil.read(mzf.getRawStream(entry)), plains);
 		mzf.close();
 		ctx.stopOnFirstKey = stopOnFirstKey;
 
@@ -184,7 +184,7 @@ public class Main extends Plugin {
 					zc.copyState(state, true);
 					inf.reset();
 
-					try (InputStream in = new CipherInputStream(zip.getFileStream(entry), zc)) {
+					try (InputStream in = new CipherInputStream(zip.getRawStream(entry), zc)) {
 						in.skip(12);
 						InputStream iin = entry.getMethod() == 0 ? in : new InflaterInputStream(in, inf);
 						ZEntry entry1 = new ZEntry(entry.getName());

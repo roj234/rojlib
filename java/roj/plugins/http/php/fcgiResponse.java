@@ -1,10 +1,10 @@
 package roj.plugins.http.php;
 
+import roj.http.Headers;
+import roj.http.server.*;
 import roj.io.FastFailException;
 import roj.io.IOUtil;
 import roj.net.ChannelCtx;
-import roj.net.http.Headers;
-import roj.net.http.server.*;
 import roj.text.CharList;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;

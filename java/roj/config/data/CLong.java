@@ -9,11 +9,9 @@ import roj.text.CharList;
  */
 public class CLong extends CEntry {
 	public long value;
-
 	public CLong() {}
 	public CLong(long number) { this.value = number; }
-	public static CLong valueOf(long number) { return new CLong(number); }
-	public static CLong valueOf(String number) { return valueOf(Long.parseLong(number)); }
+	public static CEntry valueOf(String number) { return valueOf(Long.parseLong(number)); }
 
 	public Type getType() { return Type.LONG; }
 	public boolean eqVal(CEntry o) { return o.asLong() == value; }
@@ -27,9 +25,9 @@ public class CLong extends CEntry {
 		};
 	}
 
-	public int asInt() { return value >= Integer.MIN_VALUE && value <= Integer.MAX_VALUE ? (int) value : super.asInt(); }
+	public final int asInt() { return value >= Integer.MIN_VALUE && value <= Integer.MAX_VALUE ? (int) value : super.asInt(); }
 	public final long asLong() { return value; }
-	public float asFloat() { return value; }
+	public final float asFloat() { return value; }
 	public final double asDouble() { return value; }
 	public final String asString() { return String.valueOf(value); }
 
@@ -37,6 +35,7 @@ public class CLong extends CEntry {
 	public Object raw() { return value; }
 
 	public CharList toJSON(CharList sb, int depth) { return sb.append(value); }
+	public String toString() {return String.valueOf(value).concat("L");}
 
 	public int hashCode() { return (int) (value ^ (value >>> 32)); }
 	public boolean equals(Object o) {

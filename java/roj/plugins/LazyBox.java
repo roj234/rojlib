@@ -6,27 +6,28 @@ import roj.archive.zip.ZipArchive;
 import roj.archive.zip.ZipFile;
 import roj.asm.Parser;
 import roj.asm.util.Context;
-import roj.asmx.classpak.Cpk;
 import roj.asmx.nixim.NiximException;
 import roj.asmx.nixim.NiximSystemV2;
 import roj.collect.CollectionX;
 import roj.collect.IntMap;
-import roj.collect.MyBitSet;
 import roj.collect.MyHashMap;
 import roj.concurrent.TaskPool;
+import roj.crypt.CRC32s;
+import roj.crypt.ReedSolomonECC;
+import roj.http.curl.DownloadTask;
 import roj.io.FastFailException;
 import roj.io.IOUtil;
-import roj.io.down.DownloadTask;
+import roj.io.LimitInputStream;
+import roj.io.source.FileSource;
 import roj.plugin.Panger;
 import roj.plugin.Plugin;
 import roj.plugin.SimplePlugin;
 import roj.text.CharList;
 import roj.text.TextReader;
 import roj.text.TextWriter;
-import roj.ui.EasyProgressBar;
-import roj.ui.Terminal;
-import roj.ui.terminal.*;
+import roj.ui.*;
 import roj.util.ArrayCache;
+import roj.util.ByteList;
 import roj.util.DynByteBuf;
 import roj.util.Helpers;
 
@@ -45,8 +46,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Pattern;
 
-import static roj.ui.terminal.CommandNode.argument;
-import static roj.ui.terminal.CommandNode.literal;
+import static roj.ui.CommandNode.argument;
+import static roj.ui.CommandNode.literal;
 
 /**
  * @author Roj234
@@ -82,10 +83,15 @@ public class LazyBox extends Plugin {
 
 	@Override
 	protected void onEnable() throws Exception {
-		registerCommand(literal("zipupdate").then(argument("path", Argument.file()).executes(this::zipUpdate)));
 		registerCommand(literal("7zverify").then(argument("path", Argument.file()).executes(this::qzVerify)));
 		registerCommand(literal("7zdiff").then(argument("file1", Argument.file()).then(argument("file2", Argument.file()).executes(this::qzDiff))));
-		registerCommand(literal("zipdelfolder").then(argument("file", Argument.file()).executes(ctx -> {
+
+		registerCommand(literal("zipupdateexe")
+				.then(argument("自解压模板", Argument.file())
+						.then(argument("压缩包", Argument.file())
+								.executes(this::updateExe))));
+		registerCommand(literal("zipupdate").then(argument("path", Argument.file()).executes(this::zipUpdate)));
+		registerCommand(literal("ziprmfolder").then(argument("file", Argument.file()).executes(ctx -> {
 			try (var za = new ZipArchive(ctx.argument("file", File.class))) {
 				for (ZEntry ze : za.entries()) {
 					String name = ze.getName();
@@ -104,7 +110,147 @@ public class LazyBox extends Plugin {
 			}
 		})));
 
-		registerCommand(literal("mtime")
+		registerCommand(literal("reccgen").then(argument("file", Argument.file()).then(argument("ratio", Argument.real(0.001, 0.5)).executes(ctx -> {
+			float exceptingRatio = (float)(double)ctx.argument("ratio", Double.class);
+			var file = ctx.argument("file", File.class);
+
+			int lastDataByte = -1;
+			int lastEccByte = -1;
+			float lastDelta = 1;
+			float lastRatio = -1;
+
+			for (int dataBytes = 253; dataBytes > 0; dataBytes--) {
+				for (int eccBytes = 2; dataBytes+eccBytes <= 255; eccBytes += 2) {
+					float ratio = (eccBytes/2f) / (dataBytes+eccBytes);
+					float delta = ratio - exceptingRatio;
+					if (delta > 0 && delta < 0.005 && delta < lastDelta) {
+						lastDelta = delta;
+						lastRatio = ratio;
+						lastDataByte = dataBytes;
+						lastEccByte = eccBytes;
+					}
+				}
+			}
+
+			long fileSize = file.length();
+			var recc = new ReedSolomonECC(lastDataByte, lastEccByte);
+			int stride = (int) Math.min((fileSize+recc.dataSize()-1) / recc.dataSize(), (Math.min(fileSize, 1048576) / recc.maxError()));
+
+			var metadata = new ByteList(16).put(0x00/*KIND_RS*/).put(lastDataByte).put(lastEccByte).putVUInt(stride).putVULong(fileSize);
+			metadata.putInt(CRC32s.once(metadata.array(), 0, metadata.wIndex())).put(metadata.wIndex());
+
+			System.out.println("RS("+lastDataByte+","+(lastDataByte+lastEccByte)+") 将追加"+((float)lastEccByte)/(lastDataByte+lastEccByte)*100+"%的纠错码，允许在总体中出现"+lastRatio*100+"%的任意损坏");
+			System.out.println("牢记右侧参数：【"+ metadata.base64UrlSafe()+"】。它们追加在文件尾部不受纠错码保护，如果文件损坏严重，请手动输入以纠错");
+			//System.out.println("这个文件尾部看起来已经追加过纠错码了");
+			System.out.println("分块卷积算法的矩阵大小为"+stride+", 使能纠错长度不大于"+(recc.maxError()*stride)+"的连续错误");
+			System.out.println("按任意键（Ctrl+C以取消）以开始在文件"+file.getName()+"后追加纠错码");
+			char c = Terminal.readChar(null, new CharList(), false);
+			if (c == 0) return;
+
+			try (var in = new LimitInputStream(new FileInputStream(file), fileSize);
+				 var out = new FileOutputStream(file, true);
+				 var bar = new EasyProgressBar("生成纠错码")) {
+
+				bar.setTotal(fileSize);
+				recc.generateInterleavedCode(in, out, stride, bar);
+				metadata.writeToStream(out);
+				bar.end("生成完毕");
+			} catch (IOException e) {
+				getLogger().warn("生成失败", e);
+			}
+		}))));
+		registerCommand(literal("reccfix").then(argument("file", Argument.file()).executes(ctx -> {
+			var file = ctx.argument("file", File.class);
+
+			try (var in = new FileSource(file);
+				 var bar = new EasyProgressBar("校验&纠错")) {
+
+				var metadata = new ByteList();
+
+				in.seek(in.length()-1);
+				int dataLength = in.read();
+				in.seek(in.length()-1-dataLength);
+				in.readFully(metadata, dataLength);
+
+				var crc = CRC32s.once(metadata.array(), 0, dataLength - 4);
+				if (crc != metadata.readInt(dataLength - 4)) throw new FastFailException("文件尾校验失败");
+
+				int eccType = metadata.readUnsignedByte();
+				if (eccType != 0) throw new FastFailException("不是RS纠错码："+eccType);
+
+				var recc = new ReedSolomonECC(metadata.readUnsignedByte(), metadata.readUnsignedByte());
+				var stride = metadata.readVUInt();
+
+				var originalSize = metadata.readVULong();
+
+				in.seek(0);
+				bar.setTotal(originalSize);
+
+				int i = recc.interleavedErrorCorrection(in, originalSize, stride, bar);
+
+				bar.end("发现并纠正了"+(i&Integer.MAX_VALUE)+"个错误");
+				if (i != 0) {
+					System.out.println("纠正了一些错误，不过，纠错码中的错误并不会被纠正，建议你删除并重新生成纠错码");
+				}
+			} catch (Exception e) {
+				getLogger().warn("校验失败", e);
+			}
+		})));
+		registerCommand(literal("reccdel").then(argument("file", Argument.file()).executes(ctx -> {
+			var file = ctx.argument("file", File.class);
+
+			try (var in = new FileSource(file)) {
+				var metadata = new ByteList();
+
+				in.seek(in.length()-1);
+				int dataLength = in.read();
+				in.seek(in.length()-1-dataLength);
+				in.readFully(metadata, dataLength);
+
+				var crc = CRC32s.once(metadata.array(), 0, dataLength - 4);
+				if (crc != metadata.readInt(dataLength - 4)) throw new FastFailException("文件尾校验失败");
+
+				int eccType = metadata.readUnsignedByte();
+				if (eccType != 0) throw new FastFailException("不是RS纠错码："+eccType);
+
+				var recc = new ReedSolomonECC(metadata.readUnsignedByte(), metadata.readUnsignedByte());
+				int stride = metadata.readVUInt();
+
+				var originalSize = metadata.readVULong();
+
+				in.setLength(originalSize);
+				System.out.println("纠错码已删除");
+			} catch (Exception e) {
+				getLogger().warn("校验失败", e);
+			}
+		})));
+
+		//region 文件工具
+		{
+		CommandNode child = argument("源", Argument.path())
+			.then(argument("目标", Argument.path())
+				.executes(ctx -> {
+			File src = ctx.argument("源", File.class);
+			File dst = ctx.argument("目标", File.class);
+
+			if (!dst.exists() && !dst.mkdirs()) {
+				getLogger().error("目标不存在且无法创建");
+				return;
+			}
+
+			IOUtil.movePath(src, dst, ctx.context.startsWith("fmove"));
+		}));
+		registerCommand(literal("fcopy").then(child));
+		registerCommand(literal("fmove").then(child));
+		registerCommand(literal("frmdir").then(argument("路径", Argument.path()).executes(ctx -> {
+			File path = ctx.argument("路径", File.class);
+			System.out.println("删除"+path.getAbsolutePath()+"及其所有文件？[y/n]");
+			char c = Terminal.readChar("YyNn");
+			if (c != 'y' && c != 'Y') return;
+
+			System.out.println(IOUtil.deletePath(path));
+		})));
+		registerCommand(literal("fmtime")
 			.then(argument("文件", Argument.path())
 				.then(argument("源", Argument.path()).executes(ctx -> {
 
@@ -117,39 +263,14 @@ public class LazyBox extends Plugin {
 			long d = ctx.argument("时间", Long.class);
 			System.out.println(s.setLastModified(d));
 		}))));
-		registerCommand(literal("writecost").then(argument("file", Argument.path()).executes(ctx -> {
+		registerCommand(literal("ftimegap").then(argument("file", Argument.path()).executes(ctx -> {
 				File s = ctx.argument("file", File.class);
 				BasicFileAttributes attr = Files.readAttributes(s.toPath(), BasicFileAttributes.class);
 				long delta = attr.lastModifiedTime().to(TimeUnit.NANOSECONDS) - attr.creationTime().to(TimeUnit.NANOSECONDS);
 				System.out.println("delta= "+delta+"ns");
-			})));
-
-		CommandNode child = argument("源", Argument.path())
-			.then(argument("目标", Argument.path())
-				.executes(ctx -> {
-			File src = ctx.argument("源", File.class);
-			File dst = ctx.argument("目标", File.class);
-
-			if (!dst.exists() && !dst.mkdirs()) {
-				getLogger().error("目标不存在且无法创建");
-				return;
-			}
-
-			IOUtil.movePath(src, dst, ctx.context.startsWith("mv"));
-		}));
-		registerCommand(literal("cp").then(child));
-		registerCommand(literal("mv").then(child));
-
-		registerCommand(literal("rd").then(argument("路径", Argument.path()).executes(ctx -> {
-			File path = ctx.argument("路径", File.class);
-			System.out.println("删除"+path.getAbsolutePath()+"及其所有文件？[y/n]");
-			char c = Terminal.readChar(MyBitSet.from("YyNn"));
-			if (c != 'y' && c != 'Y') return;
-
-			System.out.println(IOUtil.deletePath(path));
 		})));
 
-		registerCommand(literal("batchrpl").then(
+		registerCommand(literal("fregreplace").then(
 			argument("文件夹", Argument.folder()).then(
 				argument("正则", Argument.string()).then(
 					argument("替换", Argument.string()).executes(ctx -> {
@@ -178,28 +299,14 @@ public class LazyBox extends Plugin {
 				}
 			}
 		})))));
+		}
+		//endregion
 
 		registerCommand(literal("curl").then(argument("网址", Argument.string())
 			.then(argument("保存到", Argument.fileOptional(true))
 				.executes(this::download)
 				.then(argument("线程数", Argument.number(1, 256))
 					.executes(this::download)))));
-
-		registerCommand(literal("lb_update_exe")
-			.then(argument("自解压模板", Argument.file())
-				.then(argument("压缩包", Argument.file())
-				.executes(this::updateExe))));
-
-		Command cpk = ctx -> {
-			Integer chunkSize = ctx.argument("分块大小", Integer.class);
-			File src = ctx.argument("输入", File.class);
-			File dst = ctx.argument("输出", File.class);
-			if (dst == null) dst = IOUtil.deriveOutput(src, "-cpk");
-			Cpk.main_alt(src, dst, chunkSize == null ? 262144 : chunkSize);
-		};
-		registerCommand(literal("cpk").then(argument("输入", Argument.file()).executes(cpk)
-			.then(argument("输出", Argument.fileOptional(true)).executes(cpk)
-				.then(argument("分块大小", Argument.number(4096, Integer.MAX_VALUE)).executes(cpk)))));
 
 		Command nixim = ctx -> {
 			var nx = new NiximSystemV2();
@@ -297,6 +404,7 @@ public class LazyBox extends Plugin {
 			za.close();
 			Terminal.setConsole(Panger.console());
 		}));
+		update.onKeyboardInterrupt(() -> update.executeSync("exit"));
 		update.sortCommands();
 		Terminal.setConsole(update);
 	}

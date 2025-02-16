@@ -1,17 +1,17 @@
 package roj.asmx.event;
 
+import roj.asm.ClassNode;
+import roj.asm.MethodNode;
 import roj.asm.Opcodes;
+import roj.asm.attr.Attribute;
 import roj.asm.cp.CstClass;
-import roj.asm.tree.ConstantData;
-import roj.asm.tree.MethodNode;
-import roj.asm.tree.attr.Attribute;
+import roj.asm.insn.AbstractCodeWriter;
+import roj.asm.insn.AttrCode;
+import roj.asm.insn.CodeWriter;
+import roj.asm.insn.InsnList;
 import roj.asm.type.IType;
 import roj.asm.type.Signature;
 import roj.asm.util.Context;
-import roj.asm.visitor.AbstractCodeWriter;
-import roj.asm.visitor.CodeWriter;
-import roj.asm.visitor.XAttrCode;
-import roj.asm.visitor.XInsnList;
 import roj.asmx.ITransformer;
 import roj.asmx.NodeFilter;
 import roj.asmx.NodeTransformer;
@@ -25,7 +25,7 @@ import java.util.Map;
  * @author Roj234
  * @since 2024/3/21 0021 13:20
  */
-public final class EventTransformer implements ITransformer, NodeTransformer<ConstantData> {
+public final class EventTransformer implements ITransformer, NodeTransformer<ClassNode> {
 	private final MyHashSet<String> knownEvents = new MyHashSet<>("roj/asmx/event/Event");
 
 	public static EventTransformer register(NodeFilter fd) {
@@ -36,11 +36,12 @@ public final class EventTransformer implements ITransformer, NodeTransformer<Con
 
 	@Override
 	public boolean transform(String name, Context ctx) throws TransformException {
-		ConstantData data = ctx.getData();
+		ClassNode data = ctx.getData();
 		String parent = data.parent();
-		synchronized (knownEvents) {
-			if (!knownEvents.contains(parent)) return false;
-			if ((data.modifier()&Opcodes.ACC_FINAL) == 0) knownEvents.add(parent);
+		if (!knownEvents.contains(parent)) return false;
+
+		if ((data.modifier()&Opcodes.ACC_FINAL) == 0) {
+			synchronized (knownEvents) {knownEvents.add(name);}
 		}
 
 		Signature signature = data.parsedAttr(data.cp, Attribute.SIGNATURE);
@@ -50,7 +51,7 @@ public final class EventTransformer implements ITransformer, NodeTransformer<Con
 			if (typeParams.size() > 0 &&
 				null == data.getMethodObj("getGenericType", "()Ljava/lang/String;") &&
 				null == data.getMethodObj("getGenericValueType", "()Ljava/lang/Class;")) {
-				throw new TransformException("具有泛型参数的事件类"+data.name+"必须实现getGenericType或getGenericValueType方法");
+				throw new TransformException("具有泛型参数的事件类"+data.name()+"必须实现getGenericType或getGenericValueType方法");
 			}
 
 			//return true;
@@ -59,7 +60,7 @@ public final class EventTransformer implements ITransformer, NodeTransformer<Con
 		return false;
 	}
 
-	private static void callRegister(ConstantData data) {
+	private static void callRegister(ClassNode data) {
 		MethodNode clinit = data.getMethodObj("<clinit>");
 		AbstractCodeWriter c;
 		if (clinit == null) {
@@ -67,21 +68,21 @@ public final class EventTransformer implements ITransformer, NodeTransformer<Con
 			c1.visitSize(1, 0);
 			c = c1;
 		} else {
-			c = new XInsnList();
+			c = new InsnList();
 		}
 
-		c.ldc(new CstClass(data.name));
+		c.ldc(new CstClass(data.name()));
 		c.invoke(Opcodes.INVOKESTATIC, "roj/asmx/event/EventBus", "registerEvent", "(Ljava/lang/Class;)V");
 
 		if (clinit != null) {
-			XAttrCode code = clinit.parsedAttr(data.cp, Attribute.Code);
+			AttrCode code = clinit.parsedAttr(data.cp, Attribute.Code);
 			if (code.stackSize == 0) code.stackSize = 1;
-			code.instructions.replaceRange(0,0, (XInsnList) c, false);
+			code.instructions.replaceRange(0,0, (InsnList) c, false);
 		}
 	}
 
 	@Override
-	public boolean transform(ConstantData data, ConstantData ctx) throws TransformException {
+	public boolean transform(ClassNode data, ClassNode ctx) throws TransformException {
 		int fid = data.newField(Opcodes.ACC_PRIVATE, "cancelled", "Z");
 
 		CodeWriter c = data.newMethod(Opcodes.ACC_PUBLIC, "cancel", "()V");

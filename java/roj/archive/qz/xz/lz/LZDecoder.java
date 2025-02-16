@@ -11,9 +11,8 @@
 package roj.archive.qz.xz.lz;
 
 import roj.io.CorruptedInputException;
-import roj.reflect.ReflectionUtils;
+import roj.reflect.Unaligned;
 import roj.util.ArrayCache;
-import sun.misc.Unsafe;
 
 import java.io.DataInput;
 import java.io.IOException;
@@ -131,13 +130,13 @@ public final class LZDecoder {
 		if (full < pos) full = pos;
 	}
 
-	public int flush(byte[] out, int outOff) { return flush0(out, (long)Unsafe.ARRAY_BYTE_BASE_OFFSET+outOff); }
+	public int flush(byte[] out, int outOff) { return flush0(out, (long)Unaligned.ARRAY_BYTE_BASE_OFFSET +outOff); }
 	public int flush0(Object out, long outOff) {
 		int copySize = pos - start;
 		if (pos == bufSize) pos = 0;
 
 		if (outOff != 0) // object header size > 0
-			ReflectionUtils.u.copyMemory(buf, (long)Unsafe.ARRAY_BYTE_BASE_OFFSET+start, out, outOff, copySize);
+			Unaligned.U.copyMemory(buf, (long)Unaligned.ARRAY_BYTE_BASE_OFFSET+start, out, outOff, copySize);
 		//System.arraycopy(buf, start, out, outOff, copySize);
 		start = pos;
 

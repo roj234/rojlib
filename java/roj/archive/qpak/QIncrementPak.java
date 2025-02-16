@@ -126,7 +126,7 @@ public class QIncrementPak {
 	public interface AOP {long aopGetStartPos();long aopGetEndPos();void aopSetEnabled(boolean enabled);}
 
 	@Autoload(Autoload.Target.NIXIM)
-	@Nixim("roj.archive.qz.QZFileWriter")
+	@Nixim(altValue = QZFileWriter.class)
 	private static final class AOP_Inject implements AOP {
 		@Shadow
 		private ByteList buf;

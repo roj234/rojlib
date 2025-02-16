@@ -8,6 +8,7 @@ import roj.collect.SimpleList;
 import roj.compiler.plugins.annotations.Attach;
 import roj.config.Tokenizer;
 import roj.io.IOUtil;
+import roj.reflect.Unaligned;
 import roj.util.ArrayCache;
 import roj.util.DynByteBuf;
 import roj.util.Helpers;
@@ -17,6 +18,7 @@ import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Objects;
 import java.util.Random;
 
 import static roj.ui.Terminal.getStringWidth;
@@ -60,20 +62,20 @@ public class TextUtil {
 										 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N',
 										 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z'};
 
-	public static String scaledNumber1024(long size) { return scaledNumber1024(IOUtil.getSharedCharBuf(), size).toString(); }
-	private static final String[] SCALE = {"B", "KB", "MB", "GB", "TB", "PB", "EB"};
+	public static String scaledNumber1024(long size) {return scaledNumber1024(IOUtil.getSharedCharBuf(), size).toString();}
 	public static CharList scaledNumber1024(CharList sb, long size) {
-		long cap = 1;
-		int i = 0;
-		for (;;) {
+		if (size < 1024) return sb.append(size).append('B');
+
+		long cap = 1024;
+		int i = 1;
+		for (;i < 6;i++) {
 			long next = cap << 10;
 			if (next > size) break;
 
 			cap = next;
-			i++;
 		}
 
-		return sb.append(TextUtil.toFixed(size / (double) cap, i == 0 ? 0 : 2)).append(SCALE[i]);
+		return sb.append(TextUtil.toFixed(size / (double) cap, 2)).append(" KMGTPE".charAt(i)).append('B');
 	}
 	public static double unscaledNumber1024(String seq) {
 		int offset = 1;
@@ -105,6 +107,7 @@ public class TextUtil {
 	public static String scaledNumber(long number) {
 		if (number < 0) return "-"+scaledNumber(number == Long.MIN_VALUE ? Long.MAX_VALUE : -number);
 
+		// 这个性能真的会比循环好吗？
 		int i;
 		if (number >= 1_000_000_000_000L) {
 			if (number >= 1_000_000_000_000_000_000L) i = 5;
@@ -304,16 +307,16 @@ public class TextUtil {
 		if (end != k) return end < k;
 
 		for (int i = off; i < k; i++) {
-			if (s.charAt(i) < maxs[i-off]) return true;
+			if (s.charAt(i) > maxs[i-off]) return false;
 		}
 
 		return maxs[maxs.length - 1] - s.charAt(k-1) >= (negative?0:1);
 	}
 
 	public static String toFixed(double d) { return toFixed(d, 5); }
-	public static String toFixed(double d, int fract) { return toFixed(new StringBuilder(), d, fract).toString(); }
+	public static String toFixed(double d, int fract) { return toFixed(new CharList(), d, fract).toStringAndFree(); }
 	// 保留n位小数
-	public static StringBuilder toFixed(StringBuilder sb, double d, int fract) {
+	public static CharList toFixed(CharList sb, double d, int fract) {
 		sb.append(d);
 		int dot = sb.lastIndexOf(".");
 
@@ -631,7 +634,7 @@ public class TextUtil {
 			String s = String.valueOf(o);
 			int sLen;
 			if (s.indexOf('\n') >= 0) {
-				List<String> _sLines = LineReader.toLines(String.valueOf(o), false);
+				List<String> _sLines = LineReader.getAllLines(String.valueOf(o), false);
 				row.add(s = _sLines.get(0));
 				sLen = getStringWidth(s);
 
@@ -711,16 +714,22 @@ public class TextUtil {
 		return sb;
 	}
 
-	public static String substr(String s, int off) {return substr(s, 0, off);}
-	public static String substr(String s, int begin, int end) {
-		if (end < 0) end = s.length() + end;
-		if (begin < 0) begin = s.length() + begin;
-		if (begin > end) {
-			int tmp = begin;
-			begin = end;
-			end = tmp;
+	private static final long CODER_OFFSET;
+	static {
+		long offset;
+		try {
+			offset = Unaligned.U.objectFieldOffset(String.class.getDeclaredField("coder"));
+		} catch (NoSuchFieldException e) {
+			offset = 0;
 		}
-		if (begin < 0 || end > s.length()) return "";
-		return s.substring(begin, end);
+		CODER_OFFSET = offset;
+	}
+	@Attach
+	public static boolean isLatin1(String s) {return CODER_OFFSET != 0 ? Unaligned.U.getByte(Objects.requireNonNull(s), CODER_OFFSET) == 0 : legacyIsLatin1(s);}
+	private static boolean legacyIsLatin1(String s) {
+		for (int i = 0; i < s.length(); i++) {
+			if (s.charAt(i) > 255) return false;
+		}
+		return true;
 	}
 }

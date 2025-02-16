@@ -1,6 +1,5 @@
 package roj.compiler.ast.expr;
 
-import roj.asm.tree.anno.AnnVal;
 import roj.asm.type.IType;
 import roj.asm.type.Type;
 import roj.compiler.api.Types;
@@ -11,8 +10,7 @@ import roj.compiler.resolve.ResolveException;
 import roj.config.Tokenizer;
 import roj.config.Word;
 import roj.text.TextUtil;
-
-import java.util.Arrays;
+import roj.util.DynByteBuf;
 
 /**
  * @author Roj234
@@ -75,12 +73,7 @@ class StringFormat extends ExprNode {
 			ctx.lexer.setText(ctx.file.getCode(), prevIndex);
 			return concat;
 		} else if (type.equals("b")) {
-			var data = TextUtil.hex2bytes(template);
-			ExprNode[] a = new ExprNode[data.length];
-			for (int i = 0; i < data.length; i++) {
-				a[i] = Constant.valueOf(AnnVal.valueOf(data[i]));
-			}
-			return new ArrayDef(new Type(Type.BYTE, 1), Arrays.asList(a), false).resolve(ctx);
+			return new CompiledArray(Type.primitive(Type.BYTE), DynByteBuf.wrap(TextUtil.hex2bytes(template)));
 		} else {
 			// cast to StringProcessor ...
 			ExprNode override = ctx.getOperatorOverride(prev, type, Word.STRING);

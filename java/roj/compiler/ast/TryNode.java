@@ -1,6 +1,6 @@
 package roj.compiler.ast;
 
-import roj.asm.visitor.Label;
+import roj.asm.insn.Label;
 import roj.collect.MyBitSet;
 import roj.collect.SimpleList;
 import roj.compiler.asm.Variable;

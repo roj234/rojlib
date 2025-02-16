@@ -3,7 +3,7 @@ package roj.plugins.ddns;
 import roj.collect.MyHashMap;
 import roj.collect.SimpleList;
 import roj.collect.ToIntMap;
-import roj.concurrent.timing.ScheduleTask;
+import roj.concurrent.ScheduleTask;
 import roj.config.data.CEntry;
 import roj.config.data.CMap;
 import roj.plugin.Plugin;

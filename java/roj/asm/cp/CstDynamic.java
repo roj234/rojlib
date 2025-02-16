@@ -23,26 +23,12 @@ public final class CstDynamic extends Constant {
 		this.desc = desc;
 	}
 
-	@Override
-	public byte type() {
-		return method ? Constant.INVOKE_DYNAMIC : Constant.DYNAMIC;
-	}
+	@Override public byte type() {return method ? Constant.INVOKE_DYNAMIC : Constant.DYNAMIC;}
+	@Override public final void write(DynByteBuf w) {w.put(type()).putShort(tableIdx).putShort(desc.getIndex());}
 
-	@Override
-	public final void write(DynByteBuf w) {
-		w.put(type()).putShort(tableIdx).putShort(desc.getIndex());
-	}
+	public final String toString() {return super.toString() + " T#" + (int) tableIdx + ", //" + desc + "]";}
 
-	public final String toString() {
-		return super.toString() + " T#" + (int) tableIdx + ", //" + desc + "]";
-	}
-
-	@Override
-	public String getEasyReadValue() { return toString(); }
-
-	public final CstNameAndType desc() {
-		return desc;
-	}
+	public final CstNameAndType desc() {return desc;}
 
 	public final int hashCode() {
 		return ((desc.hashCode() * 31 + tableIdx) * 31) * type();

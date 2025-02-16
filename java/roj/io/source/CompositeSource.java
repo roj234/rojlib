@@ -157,6 +157,7 @@ public final class CompositeSource extends Source {
 		s.seek(0);
 	}
 	public Source getSource() {return s;}
+	public int ordinal() {return sid;}
 
 	public void next() throws IOException {
 		offset = -1;

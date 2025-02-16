@@ -1,9 +1,10 @@
 package roj.text.logging;
 
+import roj.asm.type.Type;
 import roj.asm.type.TypeHelper;
 import roj.collect.MyHashMap;
 import roj.compiler.plugins.asm.ASM;
-import roj.concurrent.timing.ScheduleTask;
+import roj.concurrent.ScheduleTask;
 import roj.reflect.ReflectionUtils;
 import roj.text.CharList;
 import roj.text.LineReader;
@@ -227,7 +228,7 @@ class LogWriter extends PrintWriter {
 		}
 
 		if (arg.getClass().getComponentType() != null) {
-			switch (TypeHelper.parseField(TypeHelper.class2asm(arg.getClass())).getActualClass()) {
+			switch (Type.fieldDesc(TypeHelper.class2asm(arg.getClass())).getActualClass()) {
 				case "[I": sb.append(Arrays.toString((int[]) arg)); return;
 				case "[J": sb.append(Arrays.toString((long[]) arg)); return;
 				case "[F": sb.append(Arrays.toString((float[]) arg)); return;

@@ -24,14 +24,14 @@ public class ToEntry implements CVisitor {
 	private int maxDepth = 100;
 	private byte flag;
 
-	public final void value(boolean l) { add(CBoolean.valueOf(l)); }
-	public final void value(byte l) { add(CByte.valueOf(l)); }
-	public final void value(short l) { add(CShort.valueOf(l)); }
-	public final void value(int l) { add(CInt.valueOf(l)); }
-	public final void value(long l) { add(CLong.valueOf(l)); }
-	public final void value(float l) { add(CFloat.valueOf(l)); }
-	public final void value(double l) { add(CDouble.valueOf(l));}
-	public final void value(String l) { add(CString.valueOf(l)); }
+	public final void value(boolean l) { add(CEntry.valueOf(l)); }
+	public final void value(byte l) { add(CEntry.valueOf(l)); }
+	public final void value(short l) { add(CEntry.valueOf(l)); }
+	public final void value(int l) { add(CEntry.valueOf(l)); }
+	public final void value(long l) { add(CEntry.valueOf(l)); }
+	public final void value(float l) { add(CEntry.valueOf(l)); }
+	public final void value(double l) { add(CEntry.valueOf(l));}
+	public final void value(String l) { add(CEntry.valueOf(l)); }
 	public final void valueNull() { add(CNull.NULL); }
 	public final void valueDate(long value) {add(new CDate(value));}
 	public final void valueTimestamp(long value) {add(new CTimestamp(value));}

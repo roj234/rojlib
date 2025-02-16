@@ -26,7 +26,17 @@ import java.util.regex.Pattern;
  */
 public class CharList implements CharSequence, Appendable {
 	// region Number helper
-	public static void getChars(long l, int charPos, char[] buf) {
+	public static int getChars(long i, int radix, int charPos, char[] buf) {
+		if (radix == 10) return getChars(i, charPos, buf);
+
+		while (i >= radix) {
+			buf[--charPos] = (char) TextUtil.digits[(int)(i % radix)];
+			i /= radix;
+		}
+		buf[--charPos] = (char)TextUtil.digits[(int)i];
+		return charPos;
+	}
+	public static int getChars(long l, int charPos, char[] buf) {
 		long q;
 		int r;
 
@@ -40,9 +50,9 @@ public class CharList implements CharSequence, Appendable {
 			buf[--charPos] = DigitTens(r);
 		}
 
-		getChars((int) l, charPos, buf);
+		return getChars((int) l, charPos, buf);
 	}
-	public static void getChars(int i, int charPos, char[] buf) {
+	public static int getChars(int i, int charPos, char[] buf) {
 		int r;
 
 		int q;
@@ -63,13 +73,11 @@ public class CharList implements CharSequence, Appendable {
 			buf[--charPos] = (char) (r+'0');
 			i = q;
 		} while (i != 0);
+
+		return charPos;
 	}
-	private static char DigitTens(int r) {
-		return (char) ((r/10) + '0');
-	}
-	private static char DigitOnes(int r) {
-		return (char) ((r%10) + '0');
-	}
+	private static char DigitTens(int r) {return (char) ((r/10) + '0');}
+	private static char DigitOnes(int r) {return (char) ((r%10) + '0');}
 
 	// endregion
 
@@ -693,6 +701,19 @@ public class CharList implements CharSequence, Appendable {
 		return count;
 	}
 	// endregion
+
+	public CharList reverse() {
+		var val = list;
+		int length = len - 1;
+		for (int i = (length - 1) >> 1; i >= 0; i--) {
+			int j = length - i;
+			var ch = val[i];
+			val[i] = val[j];
+			val[j] = ch;
+		}
+		return this;
+	}
+
 	public final CharSequence subSequence(int start, int end) {
 		checkBounds(start,end,len);
 		if (start == 0 && end == len) return this;

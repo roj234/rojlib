@@ -1,6 +1,5 @@
 package roj.plugins.minecraft;
 
-import roj.collect.MyBitSet;
 import roj.collect.MyHashMap;
 import roj.collect.MyHashSet;
 import roj.collect.SimpleList;
@@ -14,16 +13,16 @@ import roj.plugin.Plugin;
 import roj.plugin.SimplePlugin;
 import roj.text.CharList;
 import roj.text.TextWriter;
+import roj.ui.Argument;
+import roj.ui.CommandConsole;
 import roj.ui.Terminal;
-import roj.ui.terminal.Argument;
-import roj.ui.terminal.CommandConsole;
 
 import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 
-import static roj.ui.terminal.CommandNode.argument;
-import static roj.ui.terminal.CommandNode.literal;
+import static roj.ui.CommandNode.argument;
+import static roj.ui.CommandNode.literal;
 
 @SimplePlugin(id = "mcTrim", desc = "删除Minecraft中不被引用的资源", version = "1.3")
 public class MCTrim extends Plugin {
@@ -124,7 +123,7 @@ public class MCTrim extends Plugin {
 
 		c:
 		while (true) {
-			var selection = Terminal.readChar(MyBitSet.from("LlSs\n"), new CharList("回车 删除, L 查看列表, S 保存列表, Ctrl+C 取消"), false);
+			var selection = Terminal.readChar("LlSs\n", "回车 删除, L 查看列表, S 保存列表, Ctrl+C 取消");
 			switch (selection) {
 				case 0: return;
 				case '\n': break c;

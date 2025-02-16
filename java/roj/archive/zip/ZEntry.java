@@ -3,7 +3,7 @@ package roj.archive.zip;
 import roj.archive.ArchiveEntry;
 import roj.collect.RSegmentTree;
 import roj.crypt.CRC32s;
-import roj.text.ACalendar;
+import roj.text.DateParser;
 import roj.text.TextUtil;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
@@ -420,16 +420,16 @@ public class ZEntry implements RSegmentTree.Range, ArchiveEntry, Cloneable {
 	}
 
 	public static long dos2JavaTime(int dtime) {
-		long day = ACalendar.daySinceAD(((dtime >> 25) & 0x7f) + 1980, ((dtime >> 21) & 0x0f), (dtime >> 16) & 0x1f) - ACalendar.GREGORIAN_OFFSET_DAY;
+		long day = DateParser.daySinceUnixZero(((dtime >> 25) & 0x7f) + 1980, ((dtime >> 21) & 0x0f), (dtime >> 16) & 0x1f);
 		return 86400000L * day + 3600_000L * ((dtime >> 11) & 0x1f) + 60_000L * ((dtime >> 5) & 0x3f) + 1000L * ((dtime << 1) & 0x3e);
 	}
 	public static int java2DosTime(long time) {
-		int[] arr = ACalendar.parse1(time + TimeZone.getDefault().getOffset(time));
-		int year = arr[ACalendar.YEAR] - 1980;
+		int[] arr = DateParser.parseGMT(time + TimeZone.getDefault().getOffset(time));
+		int year = arr[DateParser.YEAR] - 1980;
 		if (year < 0) {
 			return (1 << 21) | (1 << 16)/*ZipEntry.DOSTIME_BEFORE_1980*/;
 		}
-		return (year << 25) | (arr[ACalendar.MONTH] << 21) | (arr[ACalendar.DAY] << 16) | (arr[ACalendar.HOUR] << 11) | (arr[ACalendar.MINUTE] << 5) | (arr[ACalendar.SECOND] >> 1);
+		return (year << 25) | (arr[DateParser.MONTH] << 21) | (arr[DateParser.DAY] << 16) | (arr[DateParser.HOUR] << 11) | (arr[DateParser.MINUTE] << 5) | (arr[DateParser.SECOND] >> 1);
 	}
 
 	@Override

@@ -3,18 +3,22 @@ package roj.crypt;
 import org.jetbrains.annotations.Nullable;
 import roj.io.FastFailException;
 import roj.io.source.Source;
+import roj.reflect.Unaligned;
+import roj.text.logging.Logger;
 import roj.ui.EasyProgressBar;
+import roj.util.ArrayCache;
 import roj.util.DynByteBuf;
-import sun.misc.Unsafe;
 
 import javax.crypto.ShortBufferException;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.security.InvalidAlgorithmParameterException;
 import java.security.InvalidKeyException;
 import java.security.SecureRandom;
 import java.security.spec.AlgorithmParameterSpec;
 
-import static roj.reflect.ReflectionUtils.u;
+import static roj.reflect.Unaligned.U;
 
 /**
  * <We should never use C language>
@@ -75,23 +79,24 @@ public final class ReedSolomonECC extends RCipherSpi {
 	}
 	public void generateCode(byte[] buf) {
 		for (int i = codeBytes; i < buf.length; i++) buf[i] = 0;
-		var eccBytes = gen.length - 1;
 
 		var ecc = polyModNC(polyNew(buf), gen, tmp);
-		for (int x = 0; x < eccBytes; x++) {
-			var modIndex = x + _eccLength/*ecc.length*/ - eccBytes;
-			if (modIndex >= 0) buf[x + codeBytes] = ecc[modIndex];
-		}
+
+		int eccLength = gen.length - 1;
+		var zeroOff = eccLength - _eccLength/*real ecc length*/;
+
+		for (int x = 0; x < zeroOff; x++) buf[x + codeBytes] = 0;
+		System.arraycopy(ecc, 0, buf, zeroOff + codeBytes, eccLength - zeroOff);
 	}
 
 	/**
 	 * @return 发现并修复了n个错误
 	 */
 	public int errorCorrection(DynByteBuf data) {
-		u.copyMemory(data.array(), data._unsafeAddr(), buf, Unsafe.ARRAY_BYTE_BASE_OFFSET, buf.length);
+		U.copyMemory(data.array(), data._unsafeAddr(), buf, Unaligned.ARRAY_BYTE_BASE_OFFSET, buf.length);
 		var errorCount = errorCorrection(buf);
 		if (errorCount == 0) return 0;
-		u.copyMemory(buf, Unsafe.ARRAY_BYTE_BASE_OFFSET, data.array(), data._unsafeAddr(), buf.length);
+		U.copyMemory(buf, Unaligned.ARRAY_BYTE_BASE_OFFSET, data.array(), data._unsafeAddr(), buf.length);
 		return errorCount;
 	}
 	public int errorCorrection(byte[] buf) {
@@ -102,7 +107,7 @@ public final class ReedSolomonECC extends RCipherSpi {
 		int error = 0;
 		for (var i = 0; i < eccSize; i++) {
 			var val = polyEval(poly, EXP_TABLE[i]);
-			syndromeCoeff[syndromeCoeff.length-1 - i] = (byte) val;
+			syndromeCoeff[syndromeCoeff.length-1 - i] = val;
 			error |= val;
 		}
 		if (error == 0) return 0;
@@ -159,7 +164,7 @@ public final class ReedSolomonECC extends RCipherSpi {
 		byte[] tLast = P0, t = P1;
 
 		// Run Euclidean algorithm until r's degree is less than R/2
-		R = R / 2 + 1;
+		R = R / 2;
 		while (r.length >= R) {
 			var tmp = rLast;
 			rLast = r;
@@ -192,58 +197,54 @@ public final class ReedSolomonECC extends RCipherSpi {
 		return new byte[][] {sigma, omega};
 	}
 
+	private static final Logger LOGGER = Logger.getLogger("RECC");
 	//region 交错和反交错
 	/**
 	 * 通过交错，使连续错误分散，进而使得原本只能纠正n个错误的RS码能纠正(n * stride)个连续错误
-	 * @param in
-	 * @param out
-	 * @param stride
-	 * @param bar
-	 * @throws IOException
 	 */
-	public void generateInterleavedCode(Source in, Source out, int stride, @Nullable EasyProgressBar bar) throws IOException {
+	public void generateInterleavedCode(InputStream in, OutputStream out, int stride, @Nullable EasyProgressBar bar) throws IOException {
 		var codeword = dataSize();
-		var matrix = new byte[stride][chunkSize()];
-		var buffer = new byte[stride * Math.max(codeword, eccSize())];
+		// 一个codeword行，stride列的矩阵
+		var matrix = ArrayCache.getByteArray(Math.max(eccSize(), codeword) * stride, false);
+		var poly = buf;
 
 		while (true) {
-			int r = in.read(buffer, 0, stride * codeword);
+			int r = in.read(matrix, 0, stride * codeword);
 			if (bar != null) bar.increment(r);
 			if (r < stride * codeword) {
 				if (r < 0) break;
 				assert in.read() < 0 : "excepting EOF: "+in.getClass();
 
 				stride = (r + codeword - 1) / codeword;
-				for (; r < stride * codeword; r++) buffer[r] = 0;
+				for (; r < stride * codeword; r++) matrix[r] = 0;
 			}
 
-			int i = 0;
-			for (int j = 0; j < codeword; j++) {
-				for (int k = 0; k < stride; k++) {
-					matrix[k][j] = buffer[i++];
-				}
+			for (int i = 0; i < stride; i++) {
+				int j = 0;
+				for (; j < codeword; j++) poly[j] = matrix[j * stride + i];
+				for (; j < poly.length; j++) poly[j] = 0;
+
+				byte[] ecc = polyModNC(polyNew(poly), gen, tmp);
+
+				int eccLength = gen.length - 1;
+				var zeroOff = eccLength - _eccLength/*real ecc length*/;
+
+				for (int x = 0; x < zeroOff; x++) matrix[x * stride + i] = 0;
+				for (int x = zeroOff; x < eccLength; x++) matrix[x * stride + i] = ecc[x - zeroOff];
 			}
 
-			for (int j = 0; j < stride; j++) {
-				generateCode(matrix[j]);
-			}
-
-			i = 0;
-			for (int j = codeword; j < chunkSize(); j++) {
-				for (int k = 0; k < stride; k++) {
-					buffer[i++] = matrix[k][j];
-				}
-			}
-			out.write(buffer, 0, i);
+			out.write(matrix, 0, eccSize() * stride);
 		}
+
+		ArrayCache.putArray(matrix);
 	}
 
 	public int interleavedErrorCorrection(Source file, long dataSize, int stride, @Nullable EasyProgressBar bar) throws IOException {
 		var codeword = dataSize();
-		var matrix = new byte[stride][chunkSize()];
-		var buffer = new byte[stride * Math.max(codeword, eccSize())];
+		var matrix = ArrayCache.getByteArray(chunkSize() * stride, false);
+		var poly = buf;
 
-		var eccOffset = dataSize;
+		var eccFileOffset = dataSize;
 		var errorFixed = 0;
 
 		while (true) {
@@ -253,60 +254,51 @@ public final class ReedSolomonECC extends RCipherSpi {
 				if (r == 0) break;
 
 				stride = (r + codeword - 1) / codeword;
+				for (int i = r; i < stride * codeword; i++) matrix[i] = 0;
 			}
 
-			file.readFully(buffer, 0, r);
+			file.readFully(matrix, 0, r);
 			if (bar != null) bar.increment(r);
-			for (int i = stride * codeword - 1; i >= r; i--) buffer[i] = 0;
-
-			int i = 0;
-			for (int j = 0; j < codeword; j++) {
-				for (int k = 0; k < stride; k++) {
-					matrix[k][j] = buffer[i++];
-				}
-			}
+			int fileDataLength = stride * codeword;
 
 			var pos = file.position();
 
-			file.seek(eccOffset);
-			r = stride * eccSize();
-			file.readFully(buffer, 0, r);
-			eccOffset += r;
-
-			i = 0;
-			for (int j = codeword; j < chunkSize(); j++) {
-				for (int k = 0; k < stride; k++) {
-					matrix[k][j] = buffer[i++];
-				}
-			}
+			file.seek(eccFileOffset);
+			int eccr = stride * eccSize();
+			file.readFully(matrix, fileDataLength, eccr);
+			eccFileOffset += eccr;
 
 			boolean hasError = false;
-			for (int j = 0; j < stride; j++) {
+			for (int i = 0; i < stride; i++) {
+				int j = 0;
+				for (; j < codeword; j++) poly[j] = matrix[j * stride + i];
+				for (; j < poly.length; j++) poly[j] = matrix[fileDataLength + (j-codeword) * stride + i];
+
 				try {
-					int found = errorCorrection(matrix[j]);
-					if (found != 0) hasError = true;
+					int found = errorCorrection(poly);
+					if (found != 0) {
+						hasError = true;
+
+						for (int k = 0; k < codeword; k++) {
+							matrix[k * stride + i] = poly[k];
+						}
+					}
 					errorFixed += found;
 				} catch (Exception e) {
 					errorFixed |= Integer.MIN_VALUE;
-					System.out.println("unrecoverable error at ["+j+"/"+ stride +"] of "+(pos + stride * (j - codeword))+": "+e.getMessage());
+					LOGGER.warn("分块["+i+"/"+stride+"]发生不可纠正的错误："+e.getMessage()+", 偏移量：{}", (pos - codeword * (stride - i)));
 				}
 			}
 
 			if (hasError) {
-				i = 0;
-				for (int j = 0; j < codeword; j++) {
-					for (int k = 0; k < stride; k++) {
-						buffer[i++] = matrix[k][j];
-					}
-				}
-
-				file.seek(pos - i);
-				file.write(buffer, 0, i);
+				file.seek(pos - r);
+				file.write(matrix, 0, r);
 			} else {
 				file.seek(pos);
 			}
 		}
 
+		ArrayCache.putArray(matrix);
 		return errorFixed;
 	}
 	//endregion
@@ -455,7 +447,7 @@ public final class ReedSolomonECC extends RCipherSpi {
 		p1[p1.length-1 - degree] ^= coefficient;
 		return p1;
 	}
-	private static int polyEval(byte[] poly, int i) {
+	private static byte polyEval(byte[] poly, int i) {
 		if (poly.length == 0) return 0;
 
 		if (i == 0) return poly[poly.length - 1];
@@ -467,10 +459,10 @@ public final class ReedSolomonECC extends RCipherSpi {
 			}
 		} else {
 			for (var j = 1; j < poly.length; j++) {
-				val = mul(i, val) ^ poly[j];
+				val = (byte) (mul(i, val) ^ poly[j]);
 			}
 		}
-		return val;
+		return (byte) val;
 	}
 	//endregion
 }

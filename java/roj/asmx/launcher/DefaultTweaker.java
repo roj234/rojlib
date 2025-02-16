@@ -1,12 +1,12 @@
 package roj.asmx.launcher;
 
 import roj.RojLib;
+import roj.asm.ClassNode;
 import roj.asm.Opcodes;
 import roj.asm.Parser;
+import roj.asm.annotation.Annotation;
 import roj.asm.cp.CstClass;
-import roj.asm.tree.ConstantData;
-import roj.asm.tree.anno.Annotation;
-import roj.asm.visitor.CodeWriter;
+import roj.asm.insn.CodeWriter;
 import roj.asmx.AnnotatedElement;
 import roj.asmx.NodeFilter;
 import roj.asmx.nixim.NiximException;
@@ -33,7 +33,7 @@ public class DefaultTweaker implements ITweaker {
 	private record A(String name, int priority) {}
 
 	@Override
-	public void init(List<String> args, ClassWrapper loader) {
+	public void init(List<String> args, Bootstrap loader) {
 		try {
 			List<A> classes = new SimpleList<>(), transformers = new SimpleList<>();
 
@@ -63,7 +63,7 @@ public class DefaultTweaker implements ITweaker {
 				classes.sort(cmp);
 				transformers.sort(cmp);
 
-				ConstantData autoloader = new ConstantData();
+				ClassNode autoloader = new ClassNode();
 				autoloader.name("roj/asmx/autoload/Autoloader");
 
 				CodeWriter w = autoloader.newMethod(Opcodes.ACC_PUBLIC | Opcodes.ACC_STATIC, "<clinit>", "()V");
@@ -73,10 +73,9 @@ public class DefaultTweaker implements ITweaker {
 					w.invokeS("roj/reflect/ReflectionUtils", "ensureClassInitialized", "(Ljava/lang/Class;)V");
 				}
 				for (A d : transformers) {
-					w.field(Opcodes.GETSTATIC, "roj/asmx/launcher/Bootstrap", "classLoader", "Lroj/asmx/launcher/ClassWrapper;");
+					w.field(Opcodes.GETSTATIC, "roj/asmx/launcher/Bootstrap", "instance", "Lroj/asmx/launcher/Bootstrap;");
 					w.newObject(d.name);
-					w.clazz(Opcodes.CHECKCAST, "roj/asmx/ITransformer");
-					w.invokeV("roj/asmx/launcher/ClassWrapper", "registerTransformer", "(Lroj/asmx/ITransformer;)V");
+					w.invokeV("roj/asmx/launcher/Bootstrap", "registerTransformer", "(Lroj/asmx/ITransformer;)V");
 				}
 				w.one(Opcodes.RETURN);
 

@@ -6,26 +6,26 @@ import roj.util.Hasher;
  * An three-dimensional {@code double}-based rectangle.
  */
 public class Rect3d {
-	public double xmin, ymin, zmin, xmax, ymax, zmax;
+	public double minX, minY, minZ, maxX, maxY, maxZ;
 
 	/**
 	 * Constructs a new rectangle with the given properties.
 	 *
-	 * @param xmin the minimum {@code x}-axis value contained in the rectangle.
-	 * @param ymin the minimum {@code y}-axis value contained in the rectangle.
-	 * @param zmin the minimum {@code z}-axis value contained in the rectangle.
-	 * @param xmax the maximum {@code x}-axis value contained in the rectangle.
-	 * @param ymax the maximum {@code y}-axis value contained in the rectangle.
-	 * @param zmax the maximum {@code z}-axis value contained in the rectangle.
+	 * @param minX the minimum {@code x}-axis value contained in the rectangle.
+	 * @param minY the minimum {@code y}-axis value contained in the rectangle.
+	 * @param minZ the minimum {@code z}-axis value contained in the rectangle.
+	 * @param maxX the maximum {@code x}-axis value contained in the rectangle.
+	 * @param maxY the maximum {@code y}-axis value contained in the rectangle.
+	 * @param maxZ the maximum {@code z}-axis value contained in the rectangle.
 	 */
-	public Rect3d(double xmin, double ymin, double zmin, double xmax, double ymax, double zmax) {
-		this.xmin = xmin;
-		this.ymin = ymin;
-		this.zmin = zmin;
+	public Rect3d(double minX, double minY, double minZ, double maxX, double maxY, double maxZ) {
+		this.minX = minX;
+		this.minY = minY;
+		this.minZ = minZ;
 
-		this.xmax = xmax;
-		this.ymax = ymax;
-		this.zmax = zmax;
+		this.maxX = maxX;
+		this.maxY = maxY;
+		this.maxZ = maxZ;
 	}
 
 	/**
@@ -35,13 +35,13 @@ public class Rect3d {
 	 * @param max the maximum axis values contained in this rectangle.
 	 */
 	public Rect3d(Vec3d min, Vec3d max) {
-		this.xmin = min.x;
-		this.ymin = min.y;
-		this.zmin = min.z;
+		this.minX = min.x;
+		this.minY = min.y;
+		this.minZ = min.z;
 
-		this.xmax = max.x;
-		this.ymax = max.y;
-		this.zmax = max.z;
+		this.maxX = max.x;
+		this.maxY = max.y;
+		this.maxZ = max.z;
 	}
 
 	/**
@@ -50,13 +50,13 @@ public class Rect3d {
 	 * @param other the rectangle from which the new rectangle should be copy-constructed.
 	 */
 	public Rect3d(Rect3d other) {
-		this.xmin = other.xmin;
-		this.ymin = other.ymin;
-		this.zmin = other.zmin;
+		this.minX = other.minX;
+		this.minY = other.minY;
+		this.minZ = other.minZ;
 
-		this.xmax = other.xmax;
-		this.ymax = other.ymax;
-		this.zmax = other.zmax;
+		this.maxX = other.maxX;
+		this.maxY = other.maxY;
+		this.maxZ = other.maxZ;
 	}
 
 
@@ -73,13 +73,13 @@ public class Rect3d {
 	 * @return this rectangle.
 	 */
 	public Rect3d set(double xmin, double ymin, double zmin, double xmax, double ymax, double zmax) {
-		this.xmin = xmin;
-		this.ymin = ymin;
-		this.zmin = zmin;
+		this.minX = xmin;
+		this.minY = ymin;
+		this.minZ = zmin;
 
-		this.xmax = xmax;
-		this.ymax = ymax;
-		this.zmax = zmax;
+		this.maxX = xmax;
+		this.maxY = ymax;
+		this.maxZ = zmax;
 
 		return this;
 	}
@@ -93,13 +93,13 @@ public class Rect3d {
 	 * @return this rectangle.
 	 */
 	public Rect3d set(Vec3d min, Vec3d max) {
-		this.xmin = min.x;
-		this.ymin = min.y;
-		this.zmin = min.z;
+		this.minX = min.x;
+		this.minY = min.y;
+		this.minZ = min.z;
 
-		this.xmax = max.x;
-		this.ymax = max.y;
-		this.zmax = max.z;
+		this.maxX = max.x;
+		this.maxY = max.y;
+		this.maxZ = max.z;
 
 		return this;
 	}
@@ -112,13 +112,13 @@ public class Rect3d {
 	 * @return this rectangle.
 	 */
 	public Rect3d set(Rect3d other) {
-		this.xmin = other.xmin;
-		this.ymin = other.ymin;
-		this.zmin = other.zmin;
+		this.minX = other.minX;
+		this.minY = other.minY;
+		this.minZ = other.minZ;
 
-		this.xmax = other.xmax;
-		this.ymax = other.ymax;
-		this.zmax = other.zmax;
+		this.maxX = other.maxX;
+		this.maxY = other.maxY;
+		this.maxZ = other.maxZ;
 
 		return this;
 	}
@@ -126,20 +126,20 @@ public class Rect3d {
 	public Rect3d fix() {
 		double tmp;
 
-		if (xmin > xmax) {
-			tmp = xmax;
-			xmax = xmin;
-			xmin = tmp;
+		if (minX > maxX) {
+			tmp = maxX;
+			maxX = minX;
+			minX = tmp;
 		}
-		if (ymin > ymax) {
-			tmp = ymax;
-			ymax = ymin;
-			ymin = tmp;
+		if (minY > maxY) {
+			tmp = maxY;
+			maxY = minY;
+			minY = tmp;
 		}
-		if (zmin > zmax) {
-			tmp = zmax;
-			zmax = zmin;
-			zmin = tmp;
+		if (minZ > maxZ) {
+			tmp = maxZ;
+			maxZ = minZ;
+			minZ = tmp;
 		}
 
 		return this;
@@ -151,7 +151,7 @@ public class Rect3d {
 	 * @return the minimum axis values.
 	 */
 	public Vec3d min() {
-		return new Vec3d(xmin, ymin, zmin);
+		return new Vec3d(minX, minY, minZ);
 	}
 
 	/**
@@ -160,41 +160,41 @@ public class Rect3d {
 	 * @return the maximum axis values.
 	 */
 	public Vec3d max() {
-		return new Vec3d(xmax, ymax, zmax);
+		return new Vec3d(maxX, maxY, maxZ);
 	}
 
 	public Vec3d[] vertices() {
-		return new Vec3d[] {new Vec3d(xmin, ymin, zmin), // 000
-							new Vec3d(xmin, ymin, zmax), // 001
-							new Vec3d(xmin, ymax, zmin), // 010
-							new Vec3d(xmin, ymax, zmax), // 011
-							new Vec3d(xmax, ymin, zmin), // 100
-							new Vec3d(xmax, ymin, zmax), // 101
-							new Vec3d(xmax, ymax, zmin), // 110
-							new Vec3d(xmax, ymax, zmax)  // 111
+		return new Vec3d[] {new Vec3d(minX, minY, minZ), // 000
+							new Vec3d(minX, minY, maxZ), // 001
+							new Vec3d(minX, maxY, minZ), // 010
+							new Vec3d(minX, maxY, maxZ), // 011
+							new Vec3d(maxX, minY, minZ), // 100
+							new Vec3d(maxX, minY, maxZ), // 101
+							new Vec3d(maxX, maxY, minZ), // 110
+							new Vec3d(maxX, maxY, maxZ)  // 111
 		};
 	}
 
 	public Vec3d[] minMax() {
-		return new Vec3d[] {new Vec3d(xmin, ymin, zmin), // 000
-							new Vec3d(xmax, ymax, zmax) // 001
+		return new Vec3d[] {new Vec3d(minX, minY, minZ), // 000
+							new Vec3d(maxX, maxY, maxZ) // 001
 		};
 	}
 
 	public boolean contains(double x, double y, double z) {
-		return xmin <= x && x <= xmax && ymin <= y && y <= ymax && zmin <= z && z <= zmax;
+		return minX <= x && x <= maxX && minY <= y && y <= maxY && minZ <= z && z <= maxZ;
 	}
 
 	public boolean contains(Vec3d p) {
-		return xmin <= p.x && p.x <= xmax && ymin <= p.y && p.y <= ymax && zmin <= p.z && p.z <= zmax;
+		return minX <= p.x && p.x <= maxX && minY <= p.y && p.y <= maxY && minZ <= p.z && p.z <= maxZ;
 	}
 
 	public boolean contains(Rect3d o) {
-		return xmax >= o.xmax && xmin <= o.xmin && ymax >= o.ymax && ymin <= o.ymin && zmax >= o.zmax && zmin <= o.zmin;
+		return maxX >= o.maxX && minX <= o.minX && maxY >= o.maxY && minY <= o.minY && maxZ >= o.maxZ && minZ <= o.minZ;
 	}
 
 	public boolean intersects(Rect3d o) {
-		return !(xmax < o.xmin || xmin > o.xmax || ymax < o.ymin || ymin > o.ymax || zmax < o.zmin || zmin > o.zmax);
+		return !(maxX < o.minX || minX > o.maxX || maxY < o.minY || minY > o.maxY || maxZ < o.minZ || minZ > o.maxZ);
 	}
 
 	/**
@@ -202,7 +202,7 @@ public class Rect3d {
 	 */
 	public Rect3d intersectsWith(Rect3d o) {
 		if (intersects(o)) {
-			return new Rect3d(Math.max(xmin, o.xmin), Math.max(ymin, o.ymin), Math.max(zmin, o.zmin), Math.min(xmax, o.xmax), Math.min(ymax, o.ymax), Math.min(zmax, o.zmax));
+			return new Rect3d(Math.max(minX, o.minX), Math.max(minY, o.minY), Math.max(minZ, o.minZ), Math.min(maxX, o.maxX), Math.min(maxY, o.maxY), Math.min(maxZ, o.maxZ));
 		} else {
 			return null;
 		}
@@ -210,44 +210,44 @@ public class Rect3d {
 
 	public Rect3d expandIf(Vec3d... points) {
 		for (Vec3d v : points) {
-			if (xmin > v.x) xmin = v.x;
-			if (xmax < v.x) xmax = v.x;
+			if (minX > v.x) minX = v.x;
+			if (maxX < v.x) maxX = v.x;
 
-			if (ymin > v.y) ymin = v.y;
-			if (ymax < v.y) ymax = v.y;
+			if (minY > v.y) minY = v.y;
+			if (maxY < v.y) maxY = v.y;
 
-			if (zmin > v.z) zmin = v.z;
-			if (zmax < v.z) zmax = v.z;
+			if (minZ > v.z) minZ = v.z;
+			if (maxZ < v.z) maxZ = v.z;
 		}
 
 		return this;
 	}
 
 	public void expandIf(double x, double y, double z) {
-		if (x < xmin) {
-			xmin = x;
-		} else if (x > xmax) {
-			xmax = x;
+		if (x < minX) {
+			minX = x;
+		} else if (x > maxX) {
+			maxX = x;
 		}
-		if (y < ymin) {
-			ymin = y;
-		} else if (y > ymax) {
-			ymax = y;
+		if (y < minY) {
+			minY = y;
+		} else if (y > maxY) {
+			maxY = y;
 		}
-		if (z < zmin) {
-			zmin = z;
-		} else if (z > zmax) {
-			zmax = z;
+		if (z < minZ) {
+			minZ = z;
+		} else if (z > maxZ) {
+			maxZ = z;
 		}
 	}
 
 	public Rect3d grow(int i) {
-		xmin -= i;
-		ymin -= i;
-		zmin -= i;
-		xmax += i;
-		ymax += i;
-		zmax += i;
+		minX -= i;
+		minY -= i;
+		minZ -= i;
+		maxX += i;
+		maxY += i;
+		maxZ += i;
 		return this;
 	}
 
@@ -256,7 +256,7 @@ public class Rect3d {
 	}
 
 	public double volume() {
-		return (xmax - xmin + 1.0) * (ymax - ymin + 1.0) * (zmax - zmin + 1.0);
+		return (maxX - minX + 1.0) * (maxY - minY + 1.0) * (maxZ - minZ + 1.0);
 	}
 
 	public Rect3d copy() {
@@ -269,16 +269,16 @@ public class Rect3d {
 		if (!(obj instanceof Rect3d)) return false;
 
 		Rect3d other = (Rect3d) obj;
-		return this.xmin == other.xmin && this.ymin == other.ymin && this.zmin == other.zmin && this.xmax == other.xmax && this.ymax == other.ymax && this.zmax == other.zmax;
+		return this.minX == other.minX && this.minY == other.minY && this.minZ == other.minZ && this.maxX == other.maxX && this.maxY == other.maxY && this.maxZ == other.maxZ;
 	}
 
 	@Override
 	public int hashCode() {
-		return new Hasher().add(xmin).add(ymin).add(zmin).add(xmax).add(ymax).add(zmax).getHash();
+		return new Hasher().add(minX).add(minY).add(minZ).add(maxX).add(maxY).add(maxZ).getHash();
 	}
 
 	@Override
 	public String toString() {
-		return this.getClass() + " {" + xmin + ", " + ymin + ", " + zmin + ", " + xmax + ", " + ymax + ", " + zmin + "}";
+		return this.getClass() + " {" + minX + ", " + minY + ", " + minZ + ", " + maxX + ", " + maxY + ", " + minZ + "}";
 	}
 }

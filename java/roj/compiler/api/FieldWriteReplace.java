@@ -1,9 +1,9 @@
 package roj.compiler.api;
 
+import roj.asm.FieldNode;
 import roj.asm.Opcodes;
-import roj.asm.tree.FieldNode;
-import roj.asm.tree.attr.Attribute;
-import roj.asm.visitor.CodeWriter;
+import roj.asm.attr.Attribute;
+import roj.asm.insn.CodeWriter;
 
 /**
  * 被写入阶段的{@link roj.compiler.ast.expr.DotGet}调用，可以修改字段访问语句

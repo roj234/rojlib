@@ -1,19 +1,17 @@
 package roj.plugins.minecraft.diff;
 
-import roj.collect.MyBitSet;
 import roj.plugin.Plugin;
 import roj.plugin.SimplePlugin;
 import roj.plugins.KeyStorePlugin;
-import roj.text.CharList;
+import roj.ui.Argument;
 import roj.ui.Terminal;
-import roj.ui.terminal.Argument;
 import roj.util.Helpers;
 
 import java.io.File;
 import java.security.KeyPair;
 
-import static roj.ui.terminal.CommandNode.argument;
-import static roj.ui.terminal.CommandNode.literal;
+import static roj.ui.CommandNode.argument;
+import static roj.ui.CommandNode.literal;
 
 /**
  * @author Roj234
@@ -38,7 +36,7 @@ public class McDiffPlugin extends Plugin {
 
 	@Override
 	protected void onEnable() throws Exception {
-		var ks = (KeyStorePlugin) getPluginManager().getPlugin("keyStore").getInstance();
+		var ks = (KeyStorePlugin) getPluginManager().getPlugin("keyStore").instance();
 
 		File file1 = new File(getDataFolder(), "ignore.json");
 		ChunkTrim.init(file1);
@@ -80,7 +78,7 @@ public class McDiffPlugin extends Plugin {
 		})))));
 
 		registerCommand(literal("chunktrim").then(argument("chunk", Argument.folder()).executes(ctx -> {
-			char c = Terminal.readChar(MyBitSet.from("yn"), new CharList("您正在尝试原位替换世界，确认吗？"), false);
+			char c = Terminal.readChar("yn", "您正原位替换世界，确认吗？");
 			if (c != 'y') return;
 			System.out.println("您确认了操作.");
 			ChunkTrim.createInline(ctx.argument("chunk", File.class));

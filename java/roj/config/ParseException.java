@@ -38,7 +38,7 @@ public class ParseException extends Exception {
 		for (int i = 0; i < reason.length(); i++) {
 			char c = reason.charAt(i);
 			if (c < 32) {
-				StringBuilder sb = new StringBuilder().append(reason, 0, i);
+				var sb = new CharList().append(reason, 0, i);
 				for (int j = i; j < reason.length(); j++) {
 					c = reason.charAt(j);
 					if (c < 32 && c != '\t' && c != '\n') {
@@ -47,7 +47,7 @@ public class ParseException extends Exception {
 						sb.append(c);
 					}
 				}
-				return sb.toString();
+				return sb.toStringAndFree();
 			}
 		}
 		return reason;

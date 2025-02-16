@@ -1,8 +1,8 @@
 package roj.plugins.ddns;
 
 import roj.config.data.CMap;
-import roj.net.http.HttpRequest;
-import roj.net.http.SyncHttpClient;
+import roj.http.HttpRequest;
+import roj.http.SyncHttpClient;
 
 import java.io.IOException;
 import java.net.InetAddress;

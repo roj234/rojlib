@@ -45,14 +45,18 @@ final class VMInternals {
 		u = uu;
 
 		if (JAVA_VERSION > 8) {
-			if (JAVA_VERSION > 21) throw new UnsupportedOperationException("不支持Java22或更高版本，即便支持，在这些版本上，Bypass和其它反射工具的性能也会严重降低");
-			try (var in = VMInternals.class.getClassLoader().getResourceAsStream("roj/reflect/Injector.class")) {
+			try (var in = VMInternals.class.getClassLoader().getResourceAsStream("roj/reflect/Fish")) {
 				if (JAVA_VERSION >= 17) {
 					Field implLookup = MethodHandles.Lookup.class.getDeclaredField("IMPL_LOOKUP");
 					_ImplLookup = (MethodHandles.Lookup) uu.getObject(uu.staticFieldBase(implLookup), uu.staticFieldOffset(implLookup));
 				}
 
 				defineClass(readClassData(in));
+
+				if (JAVA_VERSION > 21) {
+					ReflectionUtils.killJigsaw(VMInternals.class);
+					System.out.println("[RojLib Warning] 模块系统已为RojLib模块禁用，这会造成严重的安全问题，请确保为RojLib使用了独立的模块！");
+				}
 			} catch (Exception e) {
 				catchException(e);
 			}
@@ -60,12 +64,12 @@ final class VMInternals {
 	}
 
 	private static byte[] readClassData(InputStream in) throws IOException {
-		byte[] b = new byte[2048];
+		byte[] b = new byte[1646];
 		int off = 0;
 		while (off < b.length) {
 			int r = in.read(b, off, b.length - off);
 			if (r < 0) {
-				assert off == 1645 : "class size not match original";
+				assert off == 1645 : "data corrupt";
 				return Arrays.copyOf(b, off);
 			}
 			off += r;
@@ -73,7 +77,7 @@ final class VMInternals {
 		return b;
 	}
 
-	private static MethodHandles.Lookup _ImplLookup;
+	static MethodHandles.Lookup _ImplLookup;
 	private static BiConsumer<Object, String> _ModuleOpener;
 	private static Function<Object[], Class<?>> _ClassDefiner;
 
@@ -83,22 +87,26 @@ final class VMInternals {
 			if (JAVA_VERSION < 17) {
 				type = DefineWeakClass("roj.reflect.VMInternals", bytes);
 			} else {
+				if (JAVA_VERSION > 21) {
+					bytes[175] = 0x3F;
+					bytes[1324] = 0x3F;
+				}
 				type = _ImplLookup.defineClass(bytes);
 			}
+
+			if (JAVA_VERSION > 21) _ImplLookup.ensureInitialized(type);
+			else u.ensureClassInitialized(type);
 		} catch (Exception e) {
 			catchException(e);
 			return;
 		}
-		InitializeClass(type);
 
 		Object o = System.getProperties().remove(PROP_NAME);
 		_ClassDefiner = Helpers.cast(o);
 		_ModuleOpener = Helpers.cast(o);
 	}
 
-	// not removed still in java 21, but merge to one place for future refactor
-	static void InitializeClass(Class<?> klass) { u.ensureClassInitialized(klass); }
-	static String HackMagicAccessor() { return JAVA_VERSION <= 8 ? "sun/reflect/MagicAccessorImpl" : CLASS_NAME; }
+	static String HackMagicAccessor() { return JAVA_VERSION > 21 ? "java/lang/Object" : JAVA_VERSION <= 8 ? "sun/reflect/MagicAccessorImpl" : CLASS_NAME; }
 	static void OpenModule(Class<?> src_module, String src_package, Class<?> target_module) { _ModuleOpener.accept(new Object[] {src_module, target_module}, src_package); }
 	static void OpenModule(Module src_module, String src_package, Module target_module) { _ModuleOpener.accept(new Object[] {src_module, target_module}, src_package); }
 	static Class<?> DefineWeakClass(String displayName, byte[] b) {

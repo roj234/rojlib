@@ -2,11 +2,9 @@ package roj.crypt;
 
 import roj.concurrent.OperationDone;
 import roj.io.IOUtil;
-import roj.reflect.ReflectionUtils;
 import roj.reflect.Unaligned;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
-import sun.misc.Unsafe;
 
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -28,7 +26,7 @@ public final class KDF {
 		int off = 0;
 		int n = 1;
 		while (off < len) {
-			Unaligned.U.put32UB(io, Unsafe.ARRAY_BYTE_BASE_OFFSET+io.length-4, n++);
+			Unaligned.U.put32UB(io, Unaligned.ARRAY_BYTE_BASE_OFFSET + io.length-4, n++);
 			H.update(io);
 			salt = H.digestShared();
 			System.arraycopy(salt, 0, tmp, 0, salt.length);
@@ -55,11 +53,11 @@ public final class KDF {
 	public static byte[] HKDF_expand(MessageAuthenticCode mac, byte[] PRK, int L) {return HKDF_expand(mac, PRK, ByteList.EMPTY, L);}
 	public static byte[] HKDF_expand(MessageAuthenticCode mac, byte[] PRK, DynByteBuf info, int L) {
 		byte[] out = new byte[L];
-		HKDF_expand(mac, PRK, info, L, out, Unsafe.ARRAY_BYTE_BASE_OFFSET);
+		HKDF_expand(mac, PRK, info, L, out, Unaligned.ARRAY_BYTE_BASE_OFFSET);
 		return out;
 	}
 	public static void HKDF_expand(MessageAuthenticCode mac, byte[] PRK, DynByteBuf info, int L, Object ref, long address) {
-		mac.setSignKey(PRK);
+		if (PRK != null) mac.setSignKey(PRK);
 
 		if (info != null) mac.update(info);
 		mac.update((byte) 0);
@@ -72,7 +70,7 @@ public final class KDF {
 			if (info != null) mac.update(info);
 			mac.update((byte) i++);
 
-			ReflectionUtils.u.copyMemory(mac.digestShared(), Unsafe.ARRAY_BYTE_BASE_OFFSET, ref, address+off, Math.min(io.length, L-off));
+			Unaligned.U.copyMemory(mac.digestShared(), Unaligned.ARRAY_BYTE_BASE_OFFSET, ref, address+off, Math.min(io.length, L-off));
 
 			off += io.length;
 		}

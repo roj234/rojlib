@@ -1,8 +1,8 @@
 package roj.asm.type;
 
 import roj.asm.Opcodes;
+import roj.asm.RawNode;
 import roj.asm.cp.CstRef;
-import roj.asm.tree.RawNode;
 
 /**
  * 对象描述符

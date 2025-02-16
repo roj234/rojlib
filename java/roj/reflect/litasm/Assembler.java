@@ -2,6 +2,7 @@ package roj.reflect.litasm;
 
 import roj.collect.IntMap;
 import roj.reflect.ReflectionUtils;
+import roj.reflect.Unaligned;
 import roj.util.DynByteBuf;
 
 import java.lang.annotation.Annotation;
@@ -317,7 +318,7 @@ abstract class Assembler {
 		}
 
 		if (type.isArray() && type.getComponentType().isPrimitive()) {
-			return ReflectionUtils.u.arrayBaseOffset(type);
+			return Unaligned.U.arrayBaseOffset(type);
 		}
 
 		throw new IllegalArgumentException("你忘记打注解了喵: "+type);

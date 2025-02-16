@@ -3,8 +3,8 @@ package roj.plugins.http.sso;
 import org.jetbrains.annotations.NotNull;
 import roj.crypt.HMAC;
 import roj.crypt.MySaltedHash;
-import roj.net.http.server.HttpCache;
-import roj.net.http.server.Request;
+import roj.http.server.HttpCache;
+import roj.http.server.Request;
 
 import java.security.SecureRandom;
 
@@ -21,6 +21,8 @@ final class LocalData {
 
 	@NotNull
 	static LocalData get(Request req) {
+		if (req == null) return new LocalData();
+
 		var o = (LocalData) req.localCtx().get("xsso:data");
 		if (o == null) req.localCtx().put("xsso:data", o = new LocalData());
 		return o;

@@ -4,35 +4,34 @@ import roj.archive.ArchiveEntry;
 import roj.archive.ArchiveFile;
 import roj.archive.ArchiveUtils;
 import roj.archive.CRC32InputStream;
+import roj.collect.ImmediateWeakReference;
 import roj.collect.SimpleList;
 import roj.collect.XHashSet;
 import roj.crypt.CipherInputStream;
 import roj.io.IOUtil;
-import roj.io.SourceInputStream;
 import roj.io.source.BufferedSource;
 import roj.io.source.Source;
+import roj.io.source.SourceInputStream;
 import roj.reflect.ReflectionUtils;
 import roj.util.ArrayCache;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
-import roj.util.NativeMemory;
+import roj.util.Helpers;
 
 import java.io.EOFException;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
-import java.nio.ByteOrder;
-import java.nio.MappedByteBuffer;
-import java.nio.channels.FileChannel.MapMode;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 import java.util.zip.Inflater;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipException;
 
-import static roj.reflect.ReflectionUtils.u;
+import static roj.reflect.Unaligned.U;
 
 /**
  * @author Roj234
@@ -44,6 +43,13 @@ public class ZipFile implements ArchiveFile {
 	private static final long FPREAD_OFFSET = ReflectionUtils.fieldOffset(ZipFile.class, "fpRead");
 
 	private static final XHashSet.Shape<String, ZEntry> ENTRY_SHAPE = XHashSet.noCreation(ZEntry.class, "name", "next");
+
+	private static final XHashSet<Source, CacheNode> OpenedCache = ImmediateWeakReference.shape(CacheNode.class).create();
+	static final class CacheNode extends ImmediateWeakReference<Source> {
+		public CacheNode(Source key, XHashSet<Source, CacheNode> owner) {super(key, owner);}
+		SimpleList<ZEntry> entries;
+		XHashSet<String, ZEntry> namedEntries;
+	}
 
 	XHashSet<String, ZEntry> namedEntries;
 	SimpleList<ZEntry> entries = new SimpleList<>();
@@ -71,15 +77,16 @@ public class ZipFile implements ArchiveFile {
 		FLAG_KILL_EXT	   = 1,
 		FLAG_VERIFY		   = 2,
 		FLAG_BACKWARD_READ = 4,
-		FLAG_FORCE_UTF     = 8;
+		FLAG_FORCE_UTF     = 8,
+
+		FLAG_DUPLICATE_FILE = 64,
+		FLAG_HAS_ERROR = 128;
 
 	static final int
 		GP_ENCRYPTED = 1,
 		GP_HAS_EXT   = 8,
 		GP_STRONG_ENC= 64,
-		GP_UTF       = 2048,
-
-	FLAG_HAS_ERROR = 128;
+		GP_UTF       = 2048;
 
 	public static final byte
 		CRYPT_NONE = 0,
@@ -123,44 +130,60 @@ public class ZipFile implements ArchiveFile {
 		r1.close();
 		r = null;
 
-		Source s = (Source) u.getAndSetObject(this, FPREAD_OFFSET, r1);
+		Source s = (Source) U.getAndSetObject(this, FPREAD_OFFSET, r1);
 		if (s != null) s.close();
 	}
 
 	public final void reload() throws IOException {
-		entries.clear();
-		namedEntries = null;
 		cDirLen = cDirOffset = 0;
 
-		buf = new ByteList(256);
-		try {
-			if ((flags & FLAG_BACKWARD_READ) != 0 && r.hasChannel() && r.length() > 128) readBackward();
-			else readForward();
-		} catch (IOException e) {
-			close();
-			throw e;
-		} finally {
-			buf._free();
-			buf = null;
+		var node = OpenedCache.get(r);
+		if (node == null) {
+			buf = new ByteList(256);
+			entries = new SimpleList<>();
+			namedEntries = null;
+			try {
+				if ((flags & FLAG_BACKWARD_READ) == 0 || r.length() < 1024 || !readBackward())
+					readForward();
+			} catch (IOException e) {
+				IOUtil.closeSilently(this);
+				Helpers.athrow(e);
+			} finally {
+				buf._free();
+				buf = null;
+			}
+
+			var namedEntries = ENTRY_SHAPE.createSized(entries.size());
+
+			node = new CacheNode(r, OpenedCache);
+			node.namedEntries = namedEntries;
+
+			for (int i = 0; i < entries.size(); i++) {
+				if (!namedEntries.add(entries.get(i))) {
+					node.namedEntries = null;
+					node.entries = entries;
+				}
+			}
+
+			synchronized (OpenedCache) {
+				node = OpenedCache.intern(node);
+			}
 		}
+
+		entries = node.entries;
+		namedEntries = node.namedEntries;
+
+		if (node.namedEntries == null)
+			flags |= FLAG_DUPLICATE_FILE;
 	}
 
 	@Override
 	public final ZEntry getEntry(String name) {
-		if (namedEntries == null) {
-			namedEntries = ENTRY_SHAPE.createSized(entries.size());
-			for (int i = 0; i < entries.size(); i++) {
-				ZEntry entry = entries.get(i);
-				if (!namedEntries.add(entry)) {
-					throw new IllegalArgumentException("文件名重复！该文件可能已损坏，请通过entries()获取Entry并读取");
-				}
-			}
-			entries = null;
-		}
+		if ((flags&FLAG_DUPLICATE_FILE) != 0) throw new IllegalArgumentException("这个压缩文件包含重复的名称！该文件可能已损坏，请通过entries()迭代获取Entry");
 		return namedEntries.get(name);
 	}
 	@Override
-	public final Collection<ZEntry> entries() { return entries == null ? namedEntries : entries; }
+	public final Collection<ZEntry> entries() { return Collections.unmodifiableCollection(entries == null ? namedEntries : entries); }
 
 	// region Load (LOC EXT CEN END)
 	private void readForward() throws IOException {
@@ -211,7 +234,7 @@ public class ZipFile implements ArchiveFile {
 					if (r != r1) r.close();
 					r = r1;
 
-					if ((state&1) == 0 ||
+					if (((state&1) == 0 && !locEntries.isEmpty()) ||
 						(state&6) == 0 ||
 						(flags&FLAG_HAS_ERROR) != 0 ||
 						locEntries.size() != entries.size()) {
@@ -232,18 +255,17 @@ public class ZipFile implements ArchiveFile {
 			}
 		}
 	}
-	private void readBackward() throws IOException {
-		long off = Math.max(r.length()-1024, 0);
-
-		MappedByteBuffer mb = r.channel().map(MapMode.READ_ONLY, off, r.length()-off);
-		mb.order(ByteOrder.BIG_ENDIAN);
-
+	private boolean readBackward() throws IOException {
+		var tmp = IOUtil.getSharedByteBuf();
+		long off = r.length()-1024;
+		r.seek(off);
+		r.readFully(tmp, 1024);
 		boolean hasEnd = false;
-		int pos = mb.capacity()-3;
+		int pos = 1020;
 		while (pos > 0) {
-			if ((mb.get(--pos) & 0xFF) != 'P') continue;
+			if (tmp.getU(--pos) != 'P') continue;
 
-			int field = mb.getInt(pos);
+			int field = tmp.readInt(pos);
 			if (field == HEADER_END) {
 				r.seek(off+pos+4);
 
@@ -259,45 +281,44 @@ public class ZipFile implements ArchiveFile {
 			}
 		}
 
-		NativeMemory.freeDirectBuffer(mb);
 		if (pos == 0) {
 			flags &= ~FLAG_BACKWARD_READ;
-			r.seek(0);
-			readForward();
-		} else {
-			entries.ensureCapacity(cDirOnDisk);
-
-			Source r1 = r;
-			if (!r.isBuffered()) r = BufferedSource.wrap(r);
-
-			try {
-				r.seek(cDirOffset);
-				while (r.position() < r.length()) {
-					int header = r.asDataInput().readInt();
-					switch (header) {
-						/*ByteList buf = read(16);
-
-						if (!zip64) {
-							System.out.println("HEADER_ZIP64_END_LOCATOR is not fully implemented!");
-							r.seek(buf.readLongLE(4));
-						}*/
-						// 0  u4 eof_disk
-						// 4  u8 position
-						// 12 u4 total_disk
-						case HEADER_ZIP64_END_LOCATOR: r.skip(16); break;
-						case HEADER_ZIP64_END: case HEADER_END: return;
-						case HEADER_CEN: readCEN(null); break;
-						default: throw new ZipException("未知的ZIP头: 0x"+Integer.toHexString(header));
-					}
-				}
-			} finally {
-				if (r1 != r) {
-					r.close();
-					r = r1;
-				}
-			}
+			return false;
 		}
-	}
+
+        entries.ensureCapacity(cDirOnDisk);
+
+        Source r1 = r;
+        if (!r.isBuffered()) r = BufferedSource.wrap(r);
+
+        try {
+            r.seek(cDirOffset);
+            while (r.position() < r.length()) {
+                int header = r.asDataInput().readInt();
+                switch (header) {
+                    /*ByteList buf = read(16);
+
+                    if (!zip64) {
+                        System.out.println("HEADER_ZIP64_END_LOCATOR is not fully implemented!");
+                        r.seek(buf.readLongLE(4));
+                    }*/
+                    // 0  u4 eof_disk
+                    // 4  u8 position
+                    // 12 u4 total_disk
+                    case HEADER_ZIP64_END_LOCATOR: r.skip(16); break;
+                    case HEADER_ZIP64_END, HEADER_END: return true;
+                    case HEADER_CEN: readCEN(null); break;
+                    default: throw new ZipException("未知的ZIP头: 0x"+Integer.toHexString(header));
+                }
+            }
+        } finally {
+            if (r1 != r) {
+                r.close();
+                r = r1;
+            }
+        }
+		return false;
+    }
 
 	private ByteList read(int len) throws IOException {
 		ByteList b = buf; b.clear();
@@ -561,10 +582,10 @@ public class ZipFile implements ArchiveFile {
 	public final String toString() { return "ZipArchive{" + "files=" + cDirTotal + ", comment='" + getCommentString() + '\'' + '}'; }
 
 	// region Read
-	public final InputStream getFileStream(ZEntry entry) throws IOException {
+	public final InputStream getRawStream(ZEntry entry) throws IOException {
 		if (entry.nameBytes == null) throw new ZipException("ZEntry不是从文件读取的");
 
-		Source src = (Source) u.getAndSetObject(this, FPREAD_OFFSET, null);
+		Source src = (Source) U.getAndSetObject(this, FPREAD_OFFSET, null);
 		if (src == null) src = r.threadSafeCopy();
 
 		validateEntry(src, entry);
@@ -595,7 +616,7 @@ public class ZipFile implements ArchiveFile {
 	public final InputStream getStream(ZEntry entry) throws IOException { return getStream(entry, null); }
 	public final InputStream getStream(ArchiveEntry entry, byte[] pw) throws IOException { return getStream((ZEntry) entry, pw); }
 	public InputStream getStream(ZEntry entry, byte[] pw) throws IOException {
-		InputStream in = getFileStream(entry);
+		InputStream in = getRawStream(entry);
 
 		if (entry.isEncrypted()) {
 			if (pw == null) throw new IllegalArgumentException("缺少密码: "+entry);

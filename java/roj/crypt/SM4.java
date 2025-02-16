@@ -1,7 +1,7 @@
 package roj.crypt;
 
+import roj.compiler.runtime.RtUtil;
 import roj.io.IOUtil;
-import roj.util.ArrayUtil;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
 
@@ -86,8 +86,8 @@ final class SM4 extends RCipherSpi {
 		out.putInt(T[3]).putInt(T[2]).putInt(T[1]).putInt(T[0]);
 	}
 
-	private static final byte[] SBOX =  ArrayUtil.unpackB("l%\36 w4C>\\FWb'\tR|\27\2&7=jm+`\2\31;S\21''%bAjMr\5Q{%>zDigU\6Q~]~2FeZH\26\35I$R\26A8sPTW\37@T\22a{@tgt\foQ6Jq4gCTv\7D/\u000439Z\34)`dW\20&]\13jjU=%\b\30M6GGE&\22 \b1\n\6r\bk\1\tf=\200'(*\24\7a\30\37BEe(^,},%AdO\27[ `fO}Y#[\20\3]^S'gBSW\\\24\32\r\37YfHG\36|9Fi\24\34\25aa\13%;Y6'O8v<4;\30>~H\fa@|*en7\27k\31io`\23^x8HyH3]!Hc\6Wa\26B\31c\25]lo{.;5\3,H\27j1E[3uQ3-x@\u001a8 \t(\13od\"\4\20\4xY;o\24%\bP:??lsh\25\t");
-	private static final int[] CK = ArrayUtil.unpackI("\1\2bb)qG+\31O\bu36)\\2\33/\b<{\f\rJgU\33F?n>c3{.P\4Po{\200\u00011QE1 \24\f'D[\n\23Q,XMWdNv\2E$sjn\23X3]q\31}wX:dv=@\20y\31\33\25\16IF\24\2]}F'\25l'\f\"_w?b\22:\25gB(X.8M\37,$Ypz^`(m\5\n\t\6dc*1g;!S\nv3vIl:\37\2");
+	private static final byte[] SBOX = RtUtil.unpackB("l%\36 w4C>\\FWb'\tR|\27\2&7=jm+`\2\31;S\21''%bAjMr\5Q{%>zDigU\6Q~]~2FeZH\26\35I$R\26A8sPTW\37@T\22a{@tgt\foQ6Jq4gCTv\7D/\u000439Z\34)`dW\20&]\13jjU=%\b\30M6GGE&\22 \b1\n\6r\bk\1\tf=\200'(*\24\7a\30\37BEe(^,},%AdO\27[ `fO}Y#[\20\3]^S'gBSW\\\24\32\r\37YfHG\36|9Fi\24\34\25aa\13%;Y6'O8v<4;\30>~H\fa@|*en7\27k\31io`\23^x8HyH3]!Hc\6Wa\26B\31c\25]lo{.;5\3,H\27j1E[3uQ3-x@\u001a8 \t(\13od\"\4\20\4xY;o\24%\bP:??lsh\25A");
+	private static final int[] CK = RtUtil.unpackI("\1\2bb)qG+\31O\bu36)\\2\33/\b<{\f\rJgU\33F?n>c3{.P\4Po{\200\u00011QE1 \24\f'D[\n\23Q,XMWdNv\2E$sjn\23X3]q\31}wX:dv=@\20y\31\33\25\16IF\24\2]}F'\25l'\f\"_w?b\22:\25gB(X.8M\37,$Ypz^`(m\5\n\t\6dc*1g;!S\nv3vIl:\37!");
 	private static final int[] FK = {0xa3b1bac6,0x56aa3350,0x677d9197,0xb27022dc};
 
 	private static int sm4_Lt(int ia) {

@@ -1,17 +1,13 @@
 package roj.compiler.plugins.annotations;
 
-import roj.asm.Opcodes;
+import roj.asm.*;
+import roj.asm.annotation.Annotation;
+import roj.asm.attr.BootstrapMethods;
+import roj.asm.attr.ConstantValue;
 import roj.asm.cp.Constant;
 import roj.asm.cp.CstInt;
-import roj.asm.tree.Attributed;
-import roj.asm.tree.FieldNode;
-import roj.asm.tree.IClass;
-import roj.asm.tree.MethodNode;
-import roj.asm.tree.anno.Annotation;
-import roj.asm.tree.attr.BootstrapMethods;
-import roj.asm.tree.attr.ConstantValue;
+import roj.asm.insn.CodeWriter;
 import roj.asm.type.Type;
-import roj.asm.visitor.CodeWriter;
 import roj.collect.MyHashSet;
 import roj.compiler.LavaFeatures;
 import roj.compiler.context.CompileUnit;
@@ -66,7 +62,7 @@ final class CompileStage implements Processor {
 				var c = cu.newMethod(Opcodes.ACC_PUBLIC, fnName, fnDesc);
 				c.visitSizeMax(fn.fieldType().length(), 1);
 				c.one(Opcodes.ALOAD_0);
-				c.field(Opcodes.GETFIELD, cu.name, fn.name(), fn.rawDesc());
+				c.field(Opcodes.GETFIELD, cu.name(), fn.name(), fn.rawDesc());
 				c.one(fn.fieldType().shiftedOpcode(Opcodes.IRETURN));
 				c.finish();
 			}
@@ -85,7 +81,7 @@ final class CompileStage implements Processor {
 				c.visitSizeMax(fType.length()+1, fType.length()+1);
 				c.one(Opcodes.ALOAD_0);
 				c.varLoad(fType, 1);
-				c.field(Opcodes.PUTFIELD, cu.name, fn.name(), fn.rawDesc());
+				c.field(Opcodes.PUTFIELD, cu.name(), fn.name(), fn.rawDesc());
 				c.one(Opcodes.RETURN);
 				c.finish();
 			}

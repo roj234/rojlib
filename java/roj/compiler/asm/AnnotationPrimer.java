@@ -2,7 +2,9 @@ package roj.compiler.asm;
 
 import org.jetbrains.annotations.Nullable;
 import roj.asm.Opcodes;
-import roj.asm.tree.anno.*;
+import roj.asm.annotation.AList;
+import roj.asm.annotation.AnnVal;
+import roj.asm.annotation.Annotation;
 import roj.asm.type.IType;
 import roj.asm.type.Type;
 import roj.collect.MyHashMap;
@@ -17,10 +19,12 @@ import roj.compiler.diagnostic.Kind;
 import roj.compiler.resolve.TypeCast;
 import roj.config.ParseException;
 import roj.config.Word;
+import roj.config.data.CEntry;
 import roj.util.Helpers;
 
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Map;
 
 public final class AnnotationPrimer extends Annotation {
 	public int pos;
@@ -28,7 +32,6 @@ public final class AnnotationPrimer extends Annotation {
 
 	public AnnotationPrimer(String type, int pos) {
 		this.setType(type);
-		this.values = new MyHashMap<>();
 		this.pos = pos - 1;
 	}
 
@@ -46,19 +49,15 @@ public final class AnnotationPrimer extends Annotation {
 			if (wr.next().type() == JavaLexer.at) {
 				wr.skip();
 
-				var list = new SimpleList<>();
+				var list = new SimpleList<AnnotationPrimer>();
 				while (true) {
-					file._annotations(Helpers.cast(list));
+					file.readAnnotations(list);
 					if (!wr.nextIf(JavaLexer.comma)) break;
 					wr.except(JavaLexer.at);
 				}
 				wr.except(JavaLexer.rBrace);
 
-				for (int i = 0; i < list.size(); i++) {
-					list.set(i, new AnnValAnnotation((Annotation) list.get(i)));
-				}
-
-				expr = new AnnValArray(Helpers.cast(list));
+				expr = new AList(Helpers.cast(list));
 				break checkExpr;
 			} else {
 				wr.retract();
@@ -69,9 +68,9 @@ public final class AnnotationPrimer extends Annotation {
 			var list = file.lc().tmpAnnotations;
 			int size = list.size();
 
-			file._annotations(list);
+			file.readAnnotations(list);
 			if (list.size() != size+1) file.lc().report(Kind.ERROR, "cu.annotation.multiAnnotation");
-			expr = new AnnValAnnotation(list.pop());
+			expr = list.pop();
 		} else {
 			int state = wr.setState(JavaLexer.STATE_EXPR);
 			// _ENV_TYPED_ARRAY允许直接使用数组生成式而不用给定类型
@@ -82,11 +81,14 @@ public final class AnnotationPrimer extends Annotation {
 		}
 		}
 
-		((MyHashMap<String,?>)values).put(key, Helpers.cast(expr));
+		((MyHashMap<String,?>)map).put(key, Helpers.cast(expr));
 	}
 
+	public void setValues(Map<String, CEntry> values) {this.map = values;}
+
 	@Nullable
-	public static AnnVal toAnnVal(LocalContext ctx, ExprNode node, Type type) {
+	@Deprecated
+	public static CEntry toAnnVal(LocalContext ctx, ExprNode node, Type type) {
 		if (node instanceof ArrayDef def) def.setType(type);
 
 		// begin 20250120 可以用 @ABC (DEF)这种方式直接引用枚举常量DEF
@@ -114,34 +116,39 @@ public final class AnnotationPrimer extends Annotation {
 		var r = ctx.castTo(ftype, type, 0);
 		if (r.type < 0) return null;
 
-		AnnVal val = toAnnVal(node.constVal(), type);
-		return tryAutoArray ? new AnnValArray(Collections.singletonList(val)) : val;
+		var val = toAnnVal(node.constVal(), type);
+		return tryAutoArray ? new AList(Collections.singletonList(val)) : val;
 	}
-	private static AnnVal toAnnVal(Object o, IType type) {
+	private static CEntry toAnnVal(Object o, IType type) {
 		if (o instanceof Object[] arr) {
 			type = type.clone();
 			type.setArrayDim(type.array()-1);
 			for (int i = 0; i < arr.length; i++) {
 				arr[i] = toAnnVal(arr[i], type);
 			}
-			return new AnnValArray(Helpers.cast(Arrays.asList(arr)));
+			return new AList(Helpers.cast(Arrays.asList(arr)));
 		}
-		if (o instanceof AnnVal a) return toAnnVal(a, type);
-		if (o instanceof String) return AnnVal.valueOf(o.toString());
-		if (o instanceof IType type1) return new AnnValClass(type1.rawType().toDesc());
-		if (o instanceof Boolean b) return AnnVal.valueOf((byte) (b ? 1 : 0));
+		if (o instanceof AnnVal x) return x; // AnnValEnum | AnnValClass
+		if (o instanceof CEntry a) return castPrimitive(a, type);
+		if (o instanceof String) return CEntry.valueOf(o.toString());
+		if (o instanceof IType type1) return AnnVal.valueOf(type1.rawType());
+		if (o instanceof Boolean b) return CEntry.valueOf(b);
 		throw new UnsupportedOperationException("未预料的常量类型:"+o);
 	}
-	public static AnnVal toAnnVal(AnnVal a, IType type) {
-		return switch (TypeCast.getDataCap(type.getActualType())) {
-			default -> a;
-			case 1 -> AnnVal.valueOf((byte) a.asInt());
-			case 2 -> AnnVal.valueOf((char) a.asInt());
-			case 3 -> AnnVal.valueOf((short) a.asInt());
-			case 4 -> AnnVal.valueOf(a.asInt());
-			case 5 -> AnnVal.valueOf(a.asLong());
-			case 6 -> AnnVal.valueOf(a.asFloat());
-			case 7 -> AnnVal.valueOf(a.asDouble());
+
+	public static CEntry castPrimitive(CEntry entry, IType type) {
+		int sourceType = TypeCast.getDataCap(entry.dataType());
+		int targetType = TypeCast.getDataCap(type.getActualType());
+		if (sourceType == targetType) return entry;
+		return switch (targetType) {
+			default -> entry;
+			case 1 -> CEntry.valueOf((byte) entry.asInt());
+			case 2 -> CEntry.valueOf((char) entry.asInt());
+			case 3 -> CEntry.valueOf((short) entry.asInt());
+			case 4 -> CEntry.valueOf(entry.asInt());
+			case 5 -> CEntry.valueOf(entry.asLong());
+			case 6 -> CEntry.valueOf(entry.asFloat());
+			case 7 -> CEntry.valueOf(entry.asDouble());
 		};
 	}
 }

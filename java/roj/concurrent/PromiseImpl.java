@@ -2,7 +2,6 @@ package roj.concurrent;
 
 import org.jetbrains.annotations.NotNull;
 import roj.collect.IntMap;
-import roj.concurrent.task.ITask;
 import roj.reflect.ReflectionUtils;
 import roj.text.logging.Logger;
 import roj.util.Helpers;
@@ -15,7 +14,7 @@ import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
-import static roj.reflect.ReflectionUtils.u;
+import static roj.reflect.Unaligned.U;
 
 /**
  * @author Roj234
@@ -109,7 +108,7 @@ final class PromiseImpl<T> implements Promise<T>, ITask, Promise.PromiseCallback
 
 		if ((_state&TASK_SUCCESS) != 0) {
 			if (handler_success == null) {
-				if ((_state&CALLBACK) != 0 && u.compareAndSwapInt(next, state_offset, WAIT, _state)) {
+				if ((_state&CALLBACK) != 0 && U.compareAndSwapInt(next, state_offset, WAIT, _state)) {
 					removeFlag(CALLBACK);
 
 					synchronized (this) {
@@ -184,14 +183,14 @@ final class PromiseImpl<T> implements Promise<T>, ITask, Promise.PromiseCallback
 		while (true) {
 			int st = _state;
 			if ((st&flag) != 0) return false;
-			if (u.compareAndSwapInt(this, state_offset, st, st|flag)) return true;
+			if (U.compareAndSwapInt(this, state_offset, st, st|flag)) return true;
 		}
 	}
 	private void removeFlag(int flag) {
 		while (true) {
 			int st = _state;
 			if ((st&flag) == 0) return;
-			if (u.compareAndSwapInt(this, state_offset, st, st^flag)) return;
+			if (U.compareAndSwapInt(this, state_offset, st, st^flag)) return;
 		}
 	}
 
@@ -211,13 +210,13 @@ final class PromiseImpl<T> implements Promise<T>, ITask, Promise.PromiseCallback
 	public void resolve(Object result) {
 		if (result instanceof PromiseImpl) {
 			int s = _state&CALLBACK;
-			if (u.compareAndSwapInt(this, state_offset, s, s|WAIT)) {
+			if (U.compareAndSwapInt(this, state_offset, s, s|WAIT)) {
 				PromiseImpl<?> c = (PromiseImpl<?>) result;
 				while (true) {
 					int val = c._state;
 					assert (val & WAIT) == 0;
 					if (val == PENDING) {
-						if (u.compareAndSwapInt(result, state_offset, PENDING, CALLBACK)) {
+						if (U.compareAndSwapInt(result, state_offset, PENDING, CALLBACK)) {
 							synchronized (c) {
 								if (c.next != null) {
 									_state = TASK_COMPLETE;
@@ -260,7 +259,7 @@ final class PromiseImpl<T> implements Promise<T>, ITask, Promise.PromiseCallback
 
 	private void promiseFinish(int target, Object o) {
 		int s = _state&CALLBACK;
-		if (u.compareAndSwapInt(this, state_offset, s, s|target)) _val = o;
+		if (U.compareAndSwapInt(this, state_offset, s, s|target)) _val = o;
 		_apply();
 	}
 	// endregion

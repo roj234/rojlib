@@ -1,24 +1,22 @@
 package roj.plugin;
 
+import org.jetbrains.annotations.ApiStatus;
 import org.jetbrains.annotations.Nullable;
 import roj.collect.Hasher;
 import roj.collect.MyHashSet;
-import roj.concurrent.TaskPool;
-import roj.concurrent.task.ITask;
-import roj.concurrent.timing.LoopTaskWrapper;
-import roj.concurrent.timing.ScheduleTask;
-import roj.concurrent.timing.Scheduler;
+import roj.concurrent.*;
 import roj.config.Flags;
 import roj.config.ParseException;
 import roj.config.YAMLParser;
 import roj.config.data.CMap;
 import roj.config.serial.ToYaml;
+import roj.http.server.Router;
+import roj.http.server.auto.OKRouter;
 import roj.io.IOUtil;
-import roj.net.http.server.Router;
-import roj.net.http.server.auto.OKRouter;
 import roj.text.TextWriter;
 import roj.text.logging.Logger;
-import roj.ui.terminal.CommandNode;
+import roj.ui.CommandNode;
+import roj.util.TypedKey;
 
 import java.io.*;
 import java.nio.charset.StandardCharsets;
@@ -51,6 +49,9 @@ public abstract class Plugin {
 	public final PluginManager getPluginManager() {return pluginManager;}
 	public final PluginDescriptor getDescription() {return desc;}
 	public Logger getLogger() {return logger;}
+
+	@ApiStatus.OverrideOnly public <T> T ipc(TypedKey<T> key) {return ipc(key, null);}
+	@ApiStatus.OverrideOnly public <T> T ipc(TypedKey<T> key, Object parameter) {throw new UnsupportedOperationException("unknown ipc id "+key.name);}
 
 	protected final CMap getConfig() {
 		if (config == null) reloadConfig();
@@ -243,7 +244,7 @@ public abstract class Plugin {
 				if (start > 1000) plugin.getLogger().warn("[Long]任务{}花费了太长的时间", task);
 			}
 		}
-		private final class PLoopTask extends LoopTaskWrapper {
+		private final class PLoopTask extends LoopTask {
 			ScheduleTask realTask;
 
 			PLoopTask(Scheduler sched, ITask task, long interval, int repeat) {

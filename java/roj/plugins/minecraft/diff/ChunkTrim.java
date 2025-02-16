@@ -7,11 +7,10 @@ import roj.config.ParseException;
 import roj.config.auto.Optional;
 import roj.io.IOUtil;
 import roj.io.MyRegionFile;
-import roj.text.CharList;
+import roj.ui.Argument;
+import roj.ui.CommandConsole;
 import roj.ui.EasyProgressBar;
 import roj.ui.Terminal;
-import roj.ui.terminal.Argument;
-import roj.ui.terminal.CommandConsole;
 import roj.util.ArrayCache;
 
 import java.io.File;
@@ -98,7 +97,7 @@ public class ChunkTrim {
 							}
 
 							if (chunk.xPos != x || chunk.zPos != z) {delete = "数据错误(Pos Error)";break delete;}
-							if (!chunk.Status.equals("minecraft:full")) {delete = "未生成完全("+chunk.Status+")";break delete;}
+							if (!chunk.Status.equals("minecraft:full") && !chunk.Status.equals("full")) {delete = "未生成完全("+chunk.Status+")";break delete;}
 							if (chunk.InhabitedTime == 0) {delete = "玩家从未踏足";break delete;}
 							if (chunk.InhabitedTime < 20 * 60) {delete = "存在玩家的时间<1分钟";break delete;}
 
@@ -175,10 +174,10 @@ public class ChunkTrim {
 
 		char yn;
 		if (trimToPath == null) {
-			yn = Terminal.readChar(MyBitSet.from("YyNn"), new CharList("是否需要立即清除？(Yn)"), false);
+			yn = Terminal.readChar("YyNn", "是否需要立即清除？(Yn)");
 			if (yn != 'y' && yn != 'Y') return null;
 
-			yn = Terminal.readChar(MyBitSet.from("YyNn"), new CharList("是否需要压缩区块？(Yn)"), false);
+			yn = Terminal.readChar("YyNn", "是否需要压缩区块？(Yn)");
 			if (yn == 0) return definedState;
 		} else {
 			yn = 'y';
@@ -272,7 +271,7 @@ public class ChunkTrim {
 		return definedState;
 	}
 	private static void removeOtherChunk(MyRegionFile[] fileList, File basePath, File trimToPath, TaskPool asyncPool) {
-		char yn = trimToPath == null ? Terminal.readChar(MyBitSet.from("YyNn"), new CharList("是否需要压缩区块？(Yn)"), false) : 'y';
+		char yn = trimToPath == null ? Terminal.readChar("YyNn", "是否需要压缩区块？(Yn)") : 'y';
 
 		bar.setName("删除区块");
 		bar.setTotal(fileList.length * 1024L);

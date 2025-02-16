@@ -1,10 +1,10 @@
 package roj.compiler.ast;
 
-import roj.asm.tree.MethodNode;
-import roj.asm.tree.attr.AttrUnknown;
+import roj.asm.MethodNode;
+import roj.asm.attr.AttrUnknown;
+import roj.asm.insn.AttrCodeWriter;
 import roj.asm.type.Type;
 import roj.asm.type.TypeHelper;
-import roj.asm.visitor.AttrCodeWriter;
 import roj.compiler.context.CompileUnit;
 import roj.compiler.context.LocalContext;
 import roj.config.ParseException;
@@ -36,7 +36,7 @@ public class GeneratorUtil {
 			public void parse(LocalContext ctx) throws ParseException {
 				var file = ctx.file;
 				int base = (mn.modifier&ACC_STATIC) != 0 ? 0 : 1;
-				if (base != 0) mn.parameters().add(0, new Type(file.name));
+				if (base != 0) mn.parameters().add(0, Type.klass(file.name()));
 
 				String initArg = mn.rawDesc();
 
@@ -46,7 +46,7 @@ public class GeneratorUtil {
 				var implInit = impl.newMethod(ACC_PUBLIC, "<init>", initArg);
 				implInit.visitSize(2, TypeHelper.paramSize(initArg)+1);
 				implInit.one(ALOAD_0);
-				implInit.invokeD(impl.parent, "<init>", "()V");
+				implInit.invokeD(impl.parent(), "<init>", "()V");
 
 				implInit.one(ALOAD_0);
 				implInit.field(GETFIELD, "roj/compiler/runtime/Generator", "stack", "L"+RETURNSTACK_TYPE+";");
@@ -85,7 +85,7 @@ public class GeneratorUtil {
 				c.one(ARETURN);
 				c.finish();
 
-				var newMethod = new MethodNode(ACC_PROTECTED | ACC_FINAL, impl.name, "invoke", "(L"+RETURNSTACK_TYPE+";)V");
+				var newMethod = new MethodNode(ACC_PROTECTED | ACC_FINAL, impl.name(), "invoke", "(L"+RETURNSTACK_TYPE+";)V");
 				impl.methods.add(newMethod);
 
 				ctx.lexer.init(pos, linePos, lineIdx);

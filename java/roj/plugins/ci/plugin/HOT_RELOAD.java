@@ -1,47 +1,168 @@
 package roj.plugins.ci.plugin;
 
-import roj.asm.tree.ConstantData;
+import roj.archive.zip.ZEntry;
+import roj.archive.zip.ZipFile;
+import roj.archive.zip.ZipFileWriter;
+import roj.asm.ClassNode;
+import roj.asm.IClass;
+import roj.asm.Parser;
 import roj.asm.util.Context;
 import roj.collect.SimpleList;
 import roj.config.Tokenizer;
 import roj.config.data.CEntry;
 import roj.io.IOUtil;
+import roj.net.ChannelCtx;
+import roj.net.ChannelHandler;
+import roj.net.MyChannel;
+import roj.net.ServerLaunch;
 import roj.plugins.ci.FMD;
-import roj.plugins.ci.HRServer;
+import roj.text.logging.Logger;
+import roj.util.ByteList;
+import roj.util.DynByteBuf;
 
 import java.io.File;
 import java.io.IOException;
-import java.util.ArrayList;
+import java.net.InetAddress;
+import java.net.StandardSocketOptions;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.function.Consumer;
 
 /**
  * @author Roj234
  * @since 2025/2/11 11:03
  */
 public class HOT_RELOAD implements Processor {
-	private HRServer server;
+	private static final Logger LOGGER = Logger.getLogger("热重载青春版");
+	private final SimpleList<Client> clients = new SimpleList<>();
+	private ServerLaunch channel4, channel6;
 
-	@Override public String name() {return "热重载";}
+	@Override public String name() {return "热重载青春版";}
 
 	@Override public void init(CEntry config) {
-		IOUtil.closeSilently(server);
 		try {
-			server = new HRServer(config.asInt());
+			stop();
+			start(config.asInt());
 		} catch (IOException e) {
 			throw new RuntimeException(e);
 		}
-		FMD.LOGGER.info("热重载启动成功，在任意JVM中加入该参数即可使用");
-		FMD.LOGGER.info("  -javaagent:\""+Tokenizer.addSlashes(new File(FMD.BASE, "bin/Agent.jar").getAbsolutePath())+"\"="+config.asInt());
+
+		File agent = new File(FMD.BASE, "bin/Agent.jar");
+		if (!agent.isFile()) {
+			try (var zfw = new ZipFileWriter(agent)) {
+				zfw.beginEntry(new ZEntry("META-INF/MANIFEST.MF"));
+				zfw.write(("""
+                        Manifest-Version: 1.0
+                        Premain-Class: roj.plugins.ci.plugin.HRAgent
+                        Agent-Class: roj.plugins.ci.plugin.HRAgent
+                        Can-Redefine-Classes: true
+                        """).getBytes(StandardCharsets.UTF_8));
+				try (var za = new ZipFile(IOUtil.getJar(HOT_RELOAD.class))) {
+					zfw.copy(za, za.getEntry("roj/plugins/ci/plugin/HRAgent.class"));
+				}
+			} catch (IOException e) {
+				e.printStackTrace();
+			}
+		}
+		FMD.LOGGER.info("\"热重载青春版\"启动成功，在任意JVM中加入该参数即可使用");
+		FMD.LOGGER.info("  -javaagent:\""+Tokenizer.addSlashes(agent.getAbsolutePath())+"\"="+config.asInt());
+	}
+
+	public void start(int port) throws IOException {
+		Consumer<MyChannel> handler = ctx -> {
+			LOGGER.info("收到客户端的连接：{}", ctx.remoteAddress());
+			Client t = new Client(ctx);
+			ctx.addLast("handler", t);
+			synchronized (this) {
+				clients.add(t);
+			}
+		};
+
+		channel4 = ServerLaunch.tcp("HotReload-V4")
+				.bind2(InetAddress.getByName("127.0.0.1"), port)
+				.option(StandardSocketOptions.SO_REUSEADDR, true)
+				.initializator(handler).launch();
+		try {
+			channel6 = ServerLaunch.tcp("HotReload-V6")
+					.bind2(InetAddress.getByName("::1"), port)
+					.option(StandardSocketOptions.SO_REUSEADDR, true)
+					.initializator(handler).launch();
+		} catch (Exception e) {
+			channel6 = null;
+		}
+	}
+	public void stop() throws IOException {
+		IOUtil.closeSilently(channel4);
+		IOUtil.closeSilently(channel6);
 	}
 
 	@Override public synchronized List<Context> process(List<Context> classes, ProcessEnvironment ctx) {
 		if (ctx.changedClassIndex > 0) {
-			List<ConstantData> classData = new SimpleList<>(ctx.changedClassIndex);
+			List<ClassNode> classData = new SimpleList<>(ctx.changedClassIndex);
 			for (int i = 0; i < ctx.changedClassIndex; i++) {
 				classData.add(classes.get(i).getData());
 			}
-			server.sendChanges(classData);
+			sendChanges(classData);
 		}
 		return classes;
+	}
+	public void sendChanges(List<? extends IClass> modified) {
+		if (modified.isEmpty()) return;
+		if (modified.size() > 9999) throw new IllegalArgumentException("Too many classes modified");
+
+		ByteList tmp = IOUtil.getSharedByteBuf();
+		tmp.put(1).putShort(modified.size());
+
+		for (int i = 0; i < modified.size(); i++) {
+			IClass clz = modified.get(i);
+			ByteList data = Parser.toByteArrayShared(clz);
+
+			try {
+				send(tmp.putUTF(clz.name().replace('/', '.')).putInt(data.readableBytes()).put(data));
+			} catch (Exception ignored) {
+				// concurrent modification
+			}
+			tmp.clear();
+		}
+	}
+
+	final class Client implements ChannelHandler {
+		final MyChannel ctx;
+
+		Client(MyChannel ctx) {this.ctx = ctx;}
+
+		@Override
+		public void channelRead(ChannelCtx ctx, Object msg) {
+			DynByteBuf buf = (DynByteBuf) msg;
+			if (buf.readableBytes() >= 2 && buf.readableBytes() >= buf.readShort(buf.rIndex)+2) {
+				System.out.println(ctx.remoteAddress()+": "+buf.readUTF());
+			}
+		}
+
+		@Override
+		public void channelClosed(ChannelCtx ctx) {
+			synchronized (HOT_RELOAD.this) {clients.remove(this);}
+			LOGGER.info("与客户端的连接断开：{}", ctx.remoteAddress());
+		}
+
+		@Override
+		public void exceptionCaught(ChannelCtx ctx, Throwable ex) throws Exception {
+			if (ex instanceof IOException) {
+				ctx.close();
+			} else {
+				ctx.exceptionCaught(ex);
+			}
+		}
+	}
+
+	private void send(DynByteBuf tmp) {
+		for (Client client : clients) {
+			try {
+				tmp.rIndex = 0;
+				client.ctx.fireChannelWrite(tmp);
+			} catch (IOException e) {
+				e.printStackTrace();
+			}
+		}
 	}
 }

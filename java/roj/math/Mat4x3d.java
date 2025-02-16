@@ -149,7 +149,7 @@ public class Mat4x3d implements Cloneable {
 	 *
 	 * @return this matrix.
 	 */
-	public Mat4x3d makeLookAt(Vec3d eye, Vec3d center, Vec3d up) { return makeLookInDirection(eye, (Vec3d) new Vec3d(center).sub(eye), up); }
+	public Mat4x3d makeLookAt(Vec3d eye, Vec3d center, Vec3d up) { return makeLookInDirection(eye, new Vec3d(center).sub(eye), up); }
 	/**
 	 * Set this matrix to a look-in-direction transformation matrix, looking from {@code eye} in direction of
 	 * {@code dir} with the {@code up} vector indicating the upward looking direction.

@@ -2,9 +2,9 @@ package roj.plugins.ddns;
 
 import roj.config.JSONParser;
 import roj.config.data.CMap;
+import roj.http.HttpRequest;
+import roj.http.SyncHttpClient;
 import roj.io.IOUtil;
-import roj.net.http.HttpRequest;
-import roj.net.http.SyncHttpClient;
 import roj.text.Escape;
 import roj.ui.Terminal;
 import roj.util.ByteList;
@@ -15,7 +15,7 @@ import java.net.InetAddress;
  * @author Roj234
  * @since 2023/1/28 0028 1:23
  */
-public class CTLightCat extends IpGetter {
+final class CTLightCat extends IpGetter {
 	private String accessToken;
 	private long refreshTime;
 

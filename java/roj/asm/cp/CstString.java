@@ -10,10 +10,7 @@ public final class CstString extends CstRefUTF {
 	public CstString(CstUTF v) { super(v); }
 	public CstString(String name) { super(name); }
 
-	@Override
-	public byte type() { return STRING; }
-	@Override
-	public String getEasyReadValue() { return '"'+ Tokenizer.addSlashes(name().str())+'"'; }
-	@Override
-	public String getEasyCompareValue() { return name().str(); }
+	@Override public byte type() { return STRING; }
+	@Override public String toString() { return '"'+Tokenizer.addSlashes(name().str())+'"'; }
+	@Override public String getEasyCompareValue() { return name().str(); }
 }

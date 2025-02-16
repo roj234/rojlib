@@ -11,20 +11,15 @@ final class Any implements IType {
 
 	private Any() {}
 
+	@Override public byte genericType() {return ANY_TYPE;}
+	@Override public void toDesc(CharList sb) {sb.append('*');}
+	@Override public void toString(CharList sb) {sb.append('?');}
 	@Override
-	public byte genericType() { return ANY_TYPE; }
-	@Override
-	public void toDesc(CharList sb) { sb.append("*"); }
-	@Override
-	public void toString(CharList sb) { sb.append("?"); }
-	@Override
-	public void checkPosition(int env, int pos) {
-		if (env != GENERIC_ENV) throw new IllegalStateException("'Any' can only be used in Generic");
+	public void validate(int position, int index) {
+		if (position != GENERIC_ENV) throw new IllegalStateException("<任意>只能在泛型中使用");
 	}
-	@Override
-	public IType clone() { return I; }
-	@Override
-	public int hashCode() { return 1145141919; }
+	@Override public IType clone() {return I;}
+	@Override public int hashCode() {return 1145141919;}
 	@Override
 	public String toString() { return "?"; }
 }

@@ -1,9 +1,9 @@
 package roj.plugins.http.template;
 
 import roj.config.data.CEntry;
-import roj.net.http.HttpUtil;
-import roj.net.http.server.DiskFileInfo;
-import roj.net.http.server.Response;
+import roj.http.HttpUtil;
+import roj.http.server.DiskFileInfo;
+import roj.http.server.Response;
 import roj.plugin.Plugin;
 
 import java.io.File;

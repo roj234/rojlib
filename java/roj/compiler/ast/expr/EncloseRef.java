@@ -78,7 +78,7 @@ final class EncloseRef extends ExprNode {
 		cw.vars(Opcodes.ALOAD, lc.thisSlot);
 
 		if (thisEnclosingRef > 0) {
-			var owner = lc.file.name;
+			var owner = lc.file.name();
 			var fields = lc.enclosing;
 			for (int i = fields.size()-1; i >= thisEnclosingRef; i--) {
 				var fn = fields.get(i).nestRef();

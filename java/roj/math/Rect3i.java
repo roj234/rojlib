@@ -6,18 +6,18 @@ import roj.util.Hasher;
  * An three-dimensional {@code int}-based rectangle.
  */
 public class Rect3i {
-	public int xmin, ymin, zmin, xmax, ymax, zmax;
+	public int minX, minY, minZ, maxX, maxY, maxZ;
 
 	public Rect3i() {}
 
-	public Rect3i(int xmin, int ymin, int zmin, int xmax, int ymax, int zmax) {
-		this.xmin = xmin;
-		this.ymin = ymin;
-		this.zmin = zmin;
+	public Rect3i(int minX, int minY, int minZ, int maxX, int maxY, int maxZ) {
+		this.minX = minX;
+		this.minY = minY;
+		this.minZ = minZ;
 
-		this.xmax = xmax;
-		this.ymax = ymax;
-		this.zmax = zmax;
+		this.maxX = maxX;
+		this.maxY = maxY;
+		this.maxZ = maxZ;
 		fix();
 	}
 
@@ -30,39 +30,39 @@ public class Rect3i {
 	}
 
 	public Rect3i set(int xmin, int ymin, int zmin, int xmax, int ymax, int zmax) {
-		this.xmin = xmin;
-		this.ymin = ymin;
-		this.zmin = zmin;
+		this.minX = xmin;
+		this.minY = ymin;
+		this.minZ = zmin;
 
-		this.xmax = xmax;
-		this.ymax = ymax;
-		this.zmax = zmax;
+		this.maxX = xmax;
+		this.maxY = ymax;
+		this.maxZ = zmax;
 		fix();
 
 		return this;
 	}
 
 	public Rect3i set(Vec3i min, Vec3i max) {
-		this.xmin = min.x;
-		this.ymin = min.y;
-		this.zmin = min.z;
+		this.minX = min.x;
+		this.minY = min.y;
+		this.minZ = min.z;
 
-		this.xmax = max.x;
-		this.ymax = max.y;
-		this.zmax = max.z;
+		this.maxX = max.x;
+		this.maxY = max.y;
+		this.maxZ = max.z;
 		fix();
 
 		return this;
 	}
 
 	public Rect3i set(Rect3i other) {
-		this.xmin = other.xmin;
-		this.ymin = other.ymin;
-		this.zmin = other.zmin;
+		this.minX = other.minX;
+		this.minY = other.minY;
+		this.minZ = other.minZ;
 
-		this.xmax = other.xmax;
-		this.ymax = other.ymax;
-		this.zmax = other.zmax;
+		this.maxX = other.maxX;
+		this.maxY = other.maxY;
+		this.maxZ = other.maxZ;
 		fix();
 
 		return this;
@@ -71,20 +71,20 @@ public class Rect3i {
 	public Rect3i fix() {
 		int tmp;
 
-		if (xmin > xmax) {
-			tmp = xmax;
-			xmax = xmin;
-			xmin = tmp;
+		if (minX > maxX) {
+			tmp = maxX;
+			maxX = minX;
+			minX = tmp;
 		}
-		if (ymin > ymax) {
-			tmp = ymax;
-			ymax = ymin;
-			ymin = tmp;
+		if (minY > maxY) {
+			tmp = maxY;
+			maxY = minY;
+			minY = tmp;
 		}
-		if (zmin > zmax) {
-			tmp = zmax;
-			zmax = zmin;
-			zmin = tmp;
+		if (minZ > maxZ) {
+			tmp = maxZ;
+			maxZ = minZ;
+			minZ = tmp;
 		}
 
 		return this;
@@ -96,7 +96,7 @@ public class Rect3i {
 	 * @return the minimum axis values.
 	 */
 	public Vec3i min() {
-		return new Vec3i(xmin, ymin, zmin);
+		return new Vec3i(minX, minY, minZ);
 	}
 
 	/**
@@ -105,41 +105,41 @@ public class Rect3i {
 	 * @return the maximum axis values.
 	 */
 	public Vec3i max() {
-		return new Vec3i(xmax, ymax, zmax);
+		return new Vec3i(maxX, maxY, maxZ);
 	}
 
 	public Vec3i[] vertices() {
-		return new Vec3i[] {new Vec3i(xmin, ymin, zmin), // 000
-							new Vec3i(xmin, ymin, zmax), // 001
-							new Vec3i(xmin, ymax, zmin), // 010
-							new Vec3i(xmin, ymax, zmax), // 011
-							new Vec3i(xmax, ymin, zmin), // 100
-							new Vec3i(xmax, ymin, zmax), // 101
-							new Vec3i(xmax, ymax, zmin), // 110
-							new Vec3i(xmax, ymax, zmax)  // 111
+		return new Vec3i[] {new Vec3i(minX, minY, minZ), // 000
+							new Vec3i(minX, minY, maxZ), // 001
+							new Vec3i(minX, maxY, minZ), // 010
+							new Vec3i(minX, maxY, maxZ), // 011
+							new Vec3i(maxX, minY, minZ), // 100
+							new Vec3i(maxX, minY, maxZ), // 101
+							new Vec3i(maxX, maxY, minZ), // 110
+							new Vec3i(maxX, maxY, maxZ)  // 111
 		};
 	}
 
 	public Vec3i[] minMax() {
-		return new Vec3i[] {new Vec3i(xmin, ymin, zmin), // 000
-							new Vec3i(xmax, ymax, zmax) // 001
+		return new Vec3i[] {new Vec3i(minX, minY, minZ), // 000
+							new Vec3i(maxX, maxY, maxZ) // 001
 		};
 	}
 
 	public boolean contains(double x, double y, double z) {
-		return xmin <= x && x <= xmax && ymin <= y && y <= ymax && zmin <= z && z <= zmax;
+		return minX <= x && x <= maxX && minY <= y && y <= maxY && minZ <= z && z <= maxZ;
 	}
 
 	public boolean contains(Vec3i p) {
-		return xmin <= p.x && p.x <= xmax && ymin <= p.y && p.y <= ymax && zmin <= p.z && p.z <= zmax;
+		return minX <= p.x && p.x <= maxX && minY <= p.y && p.y <= maxY && minZ <= p.z && p.z <= maxZ;
 	}
 
 	public boolean contains(Rect3i o) {
-		return xmax >= o.xmax && xmin <= o.xmin && ymax >= o.ymax && ymin <= o.ymin && zmax >= o.zmax && zmin <= o.zmin;
+		return maxX >= o.maxX && minX <= o.minX && maxY >= o.maxY && minY <= o.minY && maxZ >= o.maxZ && minZ <= o.minZ;
 	}
 
 	public boolean intersects(Rect3i o) {
-		return !(xmax < o.xmin || xmin > o.xmax || ymax < o.ymin || ymin > o.ymax || zmax < o.zmin || zmin > o.zmax);
+		return !(maxX < o.minX || minX > o.maxX || maxY < o.minY || minY > o.maxY || maxZ < o.minZ || minZ > o.maxZ);
 	}
 
 	/**
@@ -147,7 +147,7 @@ public class Rect3i {
 	 */
 	public Rect3i intersectsWith(Rect3i o) {
 		if (intersects(o)) {
-			return new Rect3i(Math.max(xmin, o.xmin), Math.max(ymin, o.ymin), Math.max(zmin, o.zmin), Math.min(xmax, o.xmax), Math.min(ymax, o.ymax), Math.min(zmax, o.zmax));
+			return new Rect3i(Math.max(minX, o.minX), Math.max(minY, o.minY), Math.max(minZ, o.minZ), Math.min(maxX, o.maxX), Math.min(maxY, o.maxY), Math.min(maxZ, o.maxZ));
 		} else {
 			return null;
 		}
@@ -155,49 +155,49 @@ public class Rect3i {
 
 	public Rect3i expandIf(Vec3i... points) {
 		for (Vec3i v : points) {
-			if (xmin > v.x) xmin = v.x;
-			if (xmax < v.x) xmax = v.x;
+			if (minX > v.x) minX = v.x;
+			if (maxX < v.x) maxX = v.x;
 
-			if (ymin > v.y) ymin = v.y;
-			if (ymax < v.y) ymax = v.y;
+			if (minY > v.y) minY = v.y;
+			if (maxY < v.y) maxY = v.y;
 
-			if (zmin > v.z) zmin = v.z;
-			if (zmax < v.z) zmax = v.z;
+			if (minZ > v.z) minZ = v.z;
+			if (maxZ < v.z) maxZ = v.z;
 		}
 
 		return this;
 	}
 
 	public void expandIf(int x, int y, int z) {
-		if (x < xmin) {
-			xmin = x;
-		} else if (x > xmax) {
-			xmax = x;
+		if (x < minX) {
+			minX = x;
+		} else if (x > maxX) {
+			maxX = x;
 		}
-		if (y < ymin) {
-			ymin = y;
-		} else if (y > ymax) {
-			ymax = y;
+		if (y < minY) {
+			minY = y;
+		} else if (y > maxY) {
+			maxY = y;
 		}
-		if (z < zmin) {
-			zmin = z;
-		} else if (z > zmax) {
-			zmax = z;
+		if (z < minZ) {
+			minZ = z;
+		} else if (z > maxZ) {
+			maxZ = z;
 		}
 	}
 
 	public Rect3i grow(int i) {
-		xmin -= i;
-		ymin -= i;
-		zmin -= i;
-		xmax += i;
-		ymax += i;
-		zmax += i;
+		minX -= i;
+		minY -= i;
+		minZ -= i;
+		maxX += i;
+		maxY += i;
+		maxZ += i;
 		return this;
 	}
 
 	public boolean isOnBorder(int x, int y, int z) {
-		return x == xmin || x == xmax || y == ymin || y == ymax || z == zmin || z == zmax;
+		return x == minX || x == maxX || y == minY || y == maxY || z == minZ || z == maxZ;
 	}
 
 	public static Rect3i from(Vec3i... points) {
@@ -205,7 +205,7 @@ public class Rect3i {
 	}
 
 	public int volume() {
-		return (xmax - xmin + 1) * (ymax - ymin + 1) * (zmax - zmin + 1);
+		return (maxX - minX + 1) * (maxY - minY + 1) * (maxZ - minZ + 1);
 	}
 
 	public Rect3i copy() {
@@ -218,16 +218,16 @@ public class Rect3i {
 		if (!(obj instanceof Rect3i)) return false;
 
 		Rect3i other = (Rect3i) obj;
-		return this.xmin == other.xmin && this.ymin == other.ymin && this.zmin == other.zmin && this.xmax == other.xmax && this.ymax == other.ymax && this.zmax == other.zmax;
+		return this.minX == other.minX && this.minY == other.minY && this.minZ == other.minZ && this.maxX == other.maxX && this.maxY == other.maxY && this.maxZ == other.maxZ;
 	}
 
 	@Override
 	public int hashCode() {
-		return new Hasher().add(xmin).add(ymin).add(zmin).add(xmax).add(ymax).add(zmax).getHash();
+		return new Hasher().add(minX).add(minY).add(minZ).add(maxX).add(maxY).add(maxZ).getHash();
 	}
 
 	@Override
 	public String toString() {
-		return this.getClass().getSimpleName() + " {" + xmin + ", " + ymin + ", " + zmin + ", " + xmax + ", " + ymax + ", " + zmax + "}";
+		return this.getClass().getSimpleName() + " {" + minX + ", " + minY + ", " + minZ + ", " + maxX + ", " + maxY + ", " + maxZ + "}";
 	}
 }

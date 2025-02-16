@@ -1,6 +1,6 @@
 package roj.compiler.plugins.stc;
 
-import roj.asm.tree.MethodNode;
+import roj.asm.MethodNode;
 
 /**
  * @author Roj234

@@ -1,8 +1,7 @@
 package roj.config.serial;
 
-import roj.compiler.plugins.asm.ASM;
 import roj.text.GB18030;
-import roj.text.J9String;
+import roj.text.TextUtil;
 import roj.util.DynByteBuf;
 
 import java.io.IOException;
@@ -63,7 +62,7 @@ public class ToNBT implements CVisitor {
 	public final void value(String l) {
 		if (XNbt) {
 			if (l == null) {valueNull();return;}
-			if (ASM.TARGET_JAVA_VERSION > 8 && J9String.isLatin1(l)) {
+			if (TextUtil.isLatin1(l)) {
 				onValue(X_LATIN1_STRING);
 				ob.putVUInt(l.length()).putAscii(l);
 				return;

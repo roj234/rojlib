@@ -1,12 +1,12 @@
 package roj.concurrent;
 
-import roj.concurrent.task.AsyncTask;
-import roj.concurrent.task.ITask;
 import roj.util.Helpers;
 
 import java.util.List;
+import java.util.Objects;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Future;
 
 /**
  * @author Roj234
@@ -23,6 +23,11 @@ public interface TaskHandler {
 		}
 	}
 
+	default <T> Future<T> submit(Callable<T> task) {
+		var ftask = new AsyncTask<>(Objects.requireNonNull(task));
+		submit(ftask);
+		return ftask;
+	}
 	void submit(ITask task);
 	void shutdown();
 	List<ITask> shutdownNow();

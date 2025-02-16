@@ -3,6 +3,7 @@ package roj.collect;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
 
 /**
@@ -11,7 +12,7 @@ import java.util.function.Function;
  */
 public class CollectionX {
 	@SuppressWarnings("unchecked")
-	private static final class CollectionView<To, From> extends AbstractCollection<To> {
+	private static final class CollectionView<To, From> extends AbstractSet<To> {
 		private final Collection<From> from;
 		private final Function<From, To> mapper;
 		private final Function<To, From> unmapper;
@@ -102,6 +103,14 @@ public class CollectionX {
 		}
 	}
 
+	/**
+	 * 很慢，因为只有iterator，甚至没缓存
+	 */
+	public static <From, To> Map<To, From> stupidMapFromView(Collection<From> collection, Function<From, To> extractor) {
+		var entrySet = (Set<Map.Entry<To, From>>) mapToView(collection, (Function<From, Map.Entry<To, From>>) node -> new AbstractMap.SimpleImmutableEntry<>(extractor.apply(node), node));
+		return new AbstractMap<>() {@NotNull @Override public Set<Entry<To, From>> entrySet() {return entrySet;}};
+	}
+
 	public static <K, V> Map<K, V> toMap(XHashSet<K, V> from) {return new XMap<>(from);}
 	private static final class XMap<K, V> extends AbstractMap<K, V> implements _Generic_Map<_Generic_Entry> {
 		private final XHashSet<K, V> from;
@@ -138,4 +147,11 @@ public class CollectionX {
 			};
 		}
 	}
+
+	public static <K, V> Function<K, V> lazyLfu(Function<K, V> mapper, int capacity) {return mapCache(new LFUCache<>(capacity), mapper);}
+	public static <K, V> Function<K, V> lazyLru(Function<K, V> mapper, int capacity) {return mapCache(new LRUCache<>(capacity), mapper);}
+	public static <K, V> Function<K, V> lazyCache(Function<K, V> mapper) {return mapCache(new ConcurrentHashMap<>(), mapper);}
+
+	@NotNull
+	private static <K, V> Function<K, V> mapCache(Map<K, V> map, Function<K, V> mapper) {return k -> map.computeIfAbsent(k, mapper);}
 }

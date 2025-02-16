@@ -9,9 +9,9 @@ import roj.text.CharList;
  */
 public final class CFloat extends CEntry {
 	public float value;
-
-	public CFloat(float v) { this.value = v; }
-	public static CFloat valueOf(float v) { return new CFloat(v); }
+	public CFloat() {}
+	public CFloat(float v) {this.value = v;}
+	public static CEntry valueOf(String number) {return valueOf(Float.parseFloat(number));}
 
 	public Type getType() { return Type.Float4; }
 	public boolean eqVal(CEntry o) { return Float.compare(o.asFloat(), value) == 0; }
@@ -36,12 +36,13 @@ public final class CFloat extends CEntry {
 	public Object raw() { return value; }
 
 	public CharList toJSON(CharList sb, int depth) { return sb.append(value); }
+	public String toString() { return String.valueOf(value).concat("F"); }
 
+	public int hashCode() {return Float.floatToRawIntBits(value) * 114514;}
 	public boolean equals(Object o) {
 		if (this == o) return true;
 		if (o == null || getClass() != o.getClass()) return false;
 		CFloat that = (CFloat) o;
 		return Float.compare(that.value, value) == 0;
 	}
-	public int hashCode() { return Float.floatToRawIntBits(value) ^ 1919810; }
 }

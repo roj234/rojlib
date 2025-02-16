@@ -1,9 +1,9 @@
 package roj.compiler.test;
 
+import roj.asm.MethodNode;
 import roj.asm.Opcodes;
-import roj.asm.tree.MethodNode;
+import roj.asm.insn.Label;
 import roj.asm.type.Type;
-import roj.asm.visitor.Label;
 import roj.compiler.ast.expr.ExprNode;
 import roj.compiler.ast.expr.Invoke;
 import roj.compiler.context.LocalContext;
@@ -91,7 +91,7 @@ public class ComparisonChainPlugin {
 			}
 
 			assert false;
-		}, Type.std(Type.INT));
+		}, Type.primitive(Type.INT));
 
 		for(var c : "IJFDZ".toCharArray()) {
 			chain.intermediateOp(new MethodNode(Opcodes.ACC_PUBLIC, name, "compare", "("+c+c+")L"+name+";"));

@@ -4,9 +4,9 @@ import org.jetbrains.annotations.NotNull;
 import roj.collect.LRUCache;
 import roj.collect.MyHashSet;
 import roj.concurrent.Promise;
+import roj.concurrent.ScheduleTask;
+import roj.concurrent.Scheduler;
 import roj.concurrent.TaskPool;
-import roj.concurrent.timing.ScheduleTask;
-import roj.concurrent.timing.Scheduler;
 import roj.config.data.CInt;
 import roj.io.MyRegionFile;
 import roj.io.source.FileSource;
@@ -24,7 +24,7 @@ public final class ChunkLoader implements Closeable {
 	private static final Logger LOGGER = Logger.getLogger();
 
 	private final File chunkFolder;
-	private final LRUCache<CInt, MyRegionFile> chunks = new LRUCache<>(50, 5);
+	private final LRUCache<CInt, MyRegionFile> chunks = new LRUCache<>(50);
 
 	private CInt _id = new CInt();
 

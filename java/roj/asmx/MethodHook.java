@@ -2,11 +2,11 @@ package roj.asmx;
 
 import roj.asm.Opcodes;
 import roj.asm.cp.CstClass;
+import roj.asm.insn.CodeWriter;
 import roj.asm.type.Desc;
 import roj.asm.type.Type;
 import roj.asm.type.TypeHelper;
 import roj.asm.util.Context;
-import roj.asm.visitor.CodeWriter;
 import roj.collect.MyHashMap;
 import roj.collect.SimpleList;
 import roj.text.CharList;
@@ -69,7 +69,7 @@ public abstract class MethodHook implements ITransformer {
 					}
 				} else {
 					if (toDesc.flags == 0) {
-						List<Type> param = TypeHelper.parseMethod(toDesc.param);
+						List<Type> param = Type.methodDesc(toDesc.param);
 						String owner = param.remove(0).owner();
 
 						i1 = sb.indexOf("callFrom_");
@@ -81,7 +81,7 @@ public abstract class MethodHook implements ITransformer {
 						Desc key = toDesc.copy();
 						key.owner = owner;
 						key.name = sb.substring(i, sb.length());
-						key.param = TypeHelper.getMethod(param);
+						key.param = Type.toMethodDesc(param);
 
 						hooks.put(key, toDesc);
 					} else {
@@ -94,10 +94,10 @@ public abstract class MethodHook implements ITransformer {
 
 	@Override
 	public boolean transform(String mappedName, Context ctx) {
-		String self = ctx.getData().name;
+		String self = ctx.getData().name();
 		Desc d = new Desc();
 
-		ctx.getData().forEachCode(new CodeWriter() {
+		ctx.getData().visitCodes(new CodeWriter() {
 			int stackSize;
 			boolean hasLdc;
 

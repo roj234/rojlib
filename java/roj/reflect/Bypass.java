@@ -2,21 +2,25 @@ package roj.reflect;
 
 import org.intellij.lang.annotations.MagicConstant;
 import org.jetbrains.annotations.Nullable;
+import roj.ReferenceByGeneratedClass;
+import roj.asm.ClassNode;
+import roj.asm.MethodNode;
 import roj.asm.Parser;
+import roj.asm.annotation.Annotation;
+import roj.asm.attr.Annotations;
 import roj.asm.cp.CstClass;
-import roj.asm.tree.ConstantData;
-import roj.asm.tree.MethodNode;
-import roj.asm.tree.anno.Annotation;
-import roj.asm.tree.attr.Annotations;
+import roj.asm.insn.CodeWriter;
 import roj.asm.type.Type;
 import roj.asm.type.TypeHelper;
-import roj.asm.visitor.CodeWriter;
 import roj.collect.MyBitSet;
 import roj.collect.MyHashMap;
+import roj.collect.ToIntMap;
+import roj.compiler.resolve.TypeCast;
 import roj.text.CharList;
 import roj.util.ArrayCache;
 import roj.util.ByteList;
 
+import java.lang.invoke.MethodHandles;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
@@ -25,7 +29,7 @@ import java.util.Collections;
 import java.util.List;
 
 import static roj.asm.Opcodes.*;
-import static roj.reflect.ReflectionUtils.u;
+import static roj.reflect.VMInternals.u;
 
 /**
  * 用接口替代反射，虽然看起来和{@link java.lang.invoke.MethodHandle}很相似，其实却是同一个原理 <br>
@@ -41,7 +45,7 @@ public final class Bypass<T> {
 
 	private final MyHashMap<String, Method> methodByName;
 	private final Class<T> itf;
-	ConstantData var;
+	ClassNode impl;
 
 	// Cast check
 	byte flags;
@@ -62,35 +66,36 @@ public final class Bypass<T> {
 				throw new IllegalArgumentException("方法名重复: '"+method.getName()+"' in "+itf.getName());
 			}
 		}
-		var = new ConstantData();
+		impl = new ClassNode();
 		Class<?> caller = ReflectionUtils.getCallerClass(3);
 		String clsName = caller.getName().replace('.', '/')+"$Bypass$"+ReflectionUtils.uniqueId();
 		String itfClass = itf.getName().replace('.', '/');
-		makeHeader(clsName, itfClass, var);
+		makeHeader(clsName, itfClass, impl);
 		//var.putAttr(new AttrString(Attribute.SourceFile, caller.getSimpleName()+".<dynamic>"));
-		ClassDefiner.premake(var);
+		ClassDefiner.premake(impl);
 	}
 
 	public final T build() { return build(ClassDefiner.APP_LOADER); }
 	@SuppressWarnings("unchecked")
 	public T build(ClassLoader def) {
-		if (var == null) throw new IllegalStateException("Already built");
+		if (impl == null) throw new IllegalStateException("Already built");
+		DMHBuild();
 		methodByName.clear();
 
 		if ((flags&INLINE) != 0) {
 			// jdk.internal.vm.annotation.ForceInline
 			Annotation annotation = new Annotation("Ljdk/internal/vm/annotation/ForceInline;", Collections.emptyMap());
-			for (MethodNode mn : var.methods) {
+			for (MethodNode mn : impl.methods) {
 				if (mn.name().startsWith("<")) continue;
 				mn.putAttr(new Annotations(true, annotation));
 			}
 		}
 
-		var data = Parser.toByteArrayShared(var);
+		var data = Parser.toByteArrayShared(impl);
 		try {
 			return (T) define(def, data);
 		} finally {
-			var = null;
+			impl = null;
 		}
 	}
 	Object define(ClassLoader def, ByteList b) {
@@ -108,6 +113,121 @@ public final class Bypass<T> {
 		if (method == null) throw new IllegalArgumentException(itf.getName()+'.'+name+" 不存在或已使用!");
 		return method;
 	}
+
+	@ReferenceByGeneratedClass
+	public static final MethodHandles.Lookup IMPL_LOOKUP = VMInternals._ImplLookup;
+	private CodeWriter dmh_si;
+	private ToIntMap<String> dmh_desc;
+
+	private boolean DMHInit() {
+		if (VMInternals.JAVA_VERSION < 22) return false;
+
+		if (dmh_si == null) {
+			System.err.println("[RojLib Warning] 建议使用Java21或更低版本以提高性能！");
+			dmh_si = impl.newMethod(ACC_PUBLIC|ACC_STATIC, "<clinit>", "()V");
+			dmh_si.visitSize(4,0);
+			dmh_desc = new ToIntMap<>();
+		}
+		return true;
+	}
+	private void DMHBuild() {
+		if (dmh_si != null) {
+			dmh_si.one(RETURN);
+			dmh_si.finish();
+		}
+	}
+	private int DMHNewConstructorHandle(String className, String methodDesc) {
+		String key = className+'<'+methodDesc;
+		int id = dmh_desc.getOrDefault(key, -1);
+		if (id >= 0) return id;
+
+		dmh_si.field(GETSTATIC, "roj/reflect/Bypass", "IMPL_LOOKUP", "Ljava/lang/invoke/MethodHandles$Lookup;");
+		ldcClass(className);
+		var args = Type.methodDesc(methodDesc);
+		ldcType(args.remove(args.size()-1));
+		dmh_si.newArraySized(Type.klass("java/lang/Class"), args.size());
+		for (int i = 0; i < args.size(); i++) {
+			dmh_si.one(DUP);
+			dmh_si.ldc(i);
+			ldcType(args.get(i));
+			dmh_si.one(AASTORE);
+		}
+		dmh_si.visitSizeMax(7, 0);
+		dmh_si.invokeS("java/lang/invoke/MethodType", "methodType", "(Ljava/lang/Class;[Ljava/lang/Class;)Ljava/lang/invoke/MethodType;");
+		dmh_si.invokeV("java/lang/invoke/MethodHandles$Lookup", "findConstructor", "(Ljava/lang/Class;Ljava/lang/invoke/MethodType;)Ljava/lang/invoke/MethodHandle;");
+
+		int fid = impl.newField(ACC_STATIC|ACC_FINAL, "vh$"+impl.fields.size(), "Ljava/lang/invoke/MethodHandle;");
+
+		dmh_si.field(PUTSTATIC, impl, fid);
+		dmh_desc.putInt(key, fid);
+		return fid;
+	}
+	private int DMHNewMethodHandle(String className, String methodName, String methodDesc, String methodId) {
+		String key = className+'.'+methodName+'<'+methodDesc;
+		int id = dmh_desc.getOrDefault(key, -1);
+		if (id >= 0) return id;
+
+		dmh_si.field(GETSTATIC, "roj/reflect/Bypass", "IMPL_LOOKUP", "Ljava/lang/invoke/MethodHandles$Lookup;");
+		ldcClass(className);
+		dmh_si.ldc(methodName);
+		var args = Type.methodDesc(methodDesc);
+		ldcType(args.remove(args.size()-1));
+		dmh_si.newArraySized(Type.klass("java/lang/Class"), args.size());
+		for (int i = 0; i < args.size(); i++) {
+			dmh_si.one(DUP);
+			dmh_si.ldc(i);
+			ldcType(args.get(i));
+			dmh_si.one(AASTORE);
+		}
+		dmh_si.visitSizeMax(8, 0);
+		dmh_si.invokeS("java/lang/invoke/MethodType", "methodType", "(Ljava/lang/Class;[Ljava/lang/Class;)Ljava/lang/invoke/MethodType;");
+		dmh_si.invokeV("java/lang/invoke/MethodHandles$Lookup", methodId, "(Ljava/lang/Class;Ljava/lang/String;Ljava/lang/invoke/MethodType;)Ljava/lang/invoke/MethodHandle;");
+
+		int fid = impl.newField(ACC_STATIC|ACC_FINAL, "vh$"+impl.fields.size(), "Ljava/lang/invoke/MethodHandle;");
+
+		dmh_si.field(PUTSTATIC, impl, fid);
+		dmh_desc.putInt(key, fid);
+		return fid;
+	}
+	private int DMHNewVarHandle(String className, String fieldName, Type fieldType, String fieldId) {
+		String key = className+'.'+fieldName;
+		int id = dmh_desc.getOrDefault(key, -1);
+		if (id >= 0) return id;
+
+		dmh_si.field(GETSTATIC, "roj/reflect/Bypass", "IMPL_LOOKUP", "Ljava/lang/invoke/MethodHandles$Lookup;");
+		ldcClass(className);
+		dmh_si.ldc(fieldName);
+		ldcType(fieldType);
+		dmh_si.invokeV("java/lang/invoke/MethodHandles$Lookup", fieldId, "(Ljava/lang/Class;Ljava/lang/String;Ljava/lang/Class;)Ljava/lang/invoke/VarHandle;");
+
+		int fid = impl.newField(ACC_STATIC|ACC_FINAL, "vh$"+impl.fields.size(), "Ljava/lang/invoke/VarHandle;");
+
+		dmh_si.field(PUTSTATIC, impl, fid);
+		dmh_desc.putInt(key, fid);
+		return fid;
+	}
+	private void ldcType(Type fieldType) {
+		if (fieldType.getActualType() == Type.CLASS) ldcClass(fieldType.getActualClass());
+		else {
+			String wrapperType = TypeCast.getWrapper(fieldType).owner;
+			dmh_si.field(GETSTATIC, wrapperType, "TYPE", "Ljava/lang/Class;");
+		}
+	}
+	private void ldcClass(String className) {
+		dmh_si.ldc(className.replace('/', '.'));
+		dmh_si.invokeS("java/lang/Class", "forName", "(Ljava/lang/String;)Ljava/lang/Class;");
+	}
+	private static Class<?>[] fuzzyIfNotAccessible(Class<?>[] params) {
+		for (int i = 0; i < params.length; i++) {
+			Class<?> param = params[i];
+			if ((param.getModifiers() & ACC_PUBLIC) == 0) {
+				params[i] = Object.class;
+			}
+		}
+		return params;
+	}
+	private static Class<?> fuzzyIfNotAccessible(Class<?> type) {return (type.getModifiers()&ACC_PUBLIC) == 0 ? Object.class : type;}
+
 
 	/**
 	 * @see #construct(Class, String[], List)
@@ -152,9 +272,9 @@ public final class Bypass<T> {
 	public Bypass<T> construct(Class<?> target, String[] names, List<Class<?>[]> fuzzy) throws IllegalArgumentException {
 		if (names.length == 0) return this;
 
-		String tName = target.getName().replace('.', '/');
+		String targetName = target.getName().replace('.', '/');
 
-		ILSecurityManager sm1 = ILSecurityManager.getSecurityManager();
+		ILSecurityManager sm = ILSecurityManager.getSecurityManager();
 		Constructor<?>[] constructors = fuzzy == null ? null : target.getDeclaredConstructors();
 		for (int i = 0; i < names.length; i++) {
 			String name = names[i];
@@ -193,25 +313,31 @@ public final class Bypass<T> {
 					}
 					if (!found) throw new NoSuchMethodException();
 				}
-				if (sm1 != null && !sm1.checkConstruct(c)) throw new NoSuchMethodException();
+				if (sm != null && !sm.checkConstruct(c)) throw new NoSuchMethodException();
 			} catch (NoSuchMethodException e) {
 				throw new IllegalArgumentException("无法找到 "+target.getName()+" 的构造器, 参数: "+TypeHelper.class2asm(types, void.class)+", 在报错前已成功"+i+"个");
 			}
 			methodByName.remove(name);
 
-			Class<?>[] tTypes = c.getParameterTypes();
 			types = m.getParameterTypes();
-			String sDesc = TypeHelper.class2asm(types, m.getReturnType());
+			Class<?>[] constructorArguments = c.getParameterTypes();
+			String targetDesc = TypeHelper.class2asm(constructorArguments, void.class);
+			String selfDesc = TypeHelper.class2asm(types, m.getReturnType());
 
-			CodeWriter cw = var.newMethod(ACC_PUBLIC, m.getName(), sDesc);
+			CodeWriter cw = impl.newMethod(ACC_PUBLIC, m.getName(), selfDesc);
 
-			cw.clazz(NEW, tName);
-			cw.one(DUP);
+			if (DMHInit()) {
+				int DMH_ID = DMHNewConstructorHandle(targetName, targetDesc);
+				cw.field(GETSTATIC, impl, DMH_ID);
+			} else {
+				cw.clazz(NEW, targetName);
+				cw.one(DUP);
+			}
 
 			int varId = 1;
-			for (int j = 0; j < tTypes.length; j++) {
-				Class<?> param = tTypes[j];
-				Type type = TypeHelper.class2type(param);
+			for (int j = 0; j < constructorArguments.length; j++) {
+				Class<?> param = constructorArguments[j];
+				Type type = Type.fromJavaType(param);
 				cw.varLoad(type, varId);
 				if ((flags&UNCHECKED_CAST) == 0 && !param.isAssignableFrom(types[j]))
 					cw.clazz(CHECKCAST, type.getActualClass());
@@ -219,8 +345,12 @@ public final class Bypass<T> {
 			}
 			cw.visitSize(varId+1, varId);
 
-			String tDesc = TypeHelper.class2asm(tTypes, void.class);
-			cw.invoke(INVOKESPECIAL, tName, "<init>", tDesc);
+			if (DMHInit()) {
+				cw.invokeV("java/lang/invoke/MethodHandle", "invoke", selfDesc);
+			} else {
+				cw.invoke(INVOKESPECIAL, targetName, "<init>", targetDesc);
+			}
+
 			cw.one(ARETURN);
 			cw.finish();
 		}
@@ -286,16 +416,16 @@ public final class Bypass<T> {
 	public Bypass<T> delegate(Class<?> target, String[] methodNames, @Nullable MyBitSet flags, String[] selfNames, List<Class<?>[]> fuzzyMode) throws IllegalArgumentException {
 		if (selfNames.length == 0) return this;
 
-		String tName = target.getName().replace('.', '/');
+		String targetName = target.getName().replace('.', '/');
 
 		ILSecurityManager sm1 = ILSecurityManager.getSecurityManager();
-		List<Method> methods = ReflectionUtils.getMethods(target, methodNames);
+		List<Method> targetMethods = ReflectionUtils.getMethods(target, methodNames);
 		for (int i = 0; i < selfNames.length; i++) {
 			String name = selfNames[i];
-			Method sm = methodByName.get(name), tm = null;
-			if (sm == null) throw new IllegalArgumentException(itf.getName()+'.'+name+" 不存在或已使用!");
+			Method selfMethod = methodByName.get(name), targetMethod = null;
+			if (selfMethod == null) throw new IllegalArgumentException(itf.getName()+'.'+name+" 不存在或已使用!");
 
-			Class<?>[] types = sm.getParameterTypes();
+			Class<?>[] types = selfMethod.getParameterTypes();
 
 			int off = 1;
 			String targetMethodName = methodNames[i];
@@ -313,8 +443,8 @@ public final class Bypass<T> {
 
 				int found = -1;
 				outer:
-				for (int j = 0; j < methods.size(); j++) {
-					Method m = methods.get(j);
+				for (int j = 0; j < targetMethods.size(); j++) {
+					Method m = targetMethods.get(j);
 					// NCI 无法用在静态方法上
 					int off1 = (m.getModifiers() & ACC_STATIC) != 0 ? 0 : off;
 					if (m.getName().equals(targetMethodName) && m.getParameterCount() == types.length - off1) {
@@ -329,73 +459,83 @@ public final class Bypass<T> {
 						if (off1 == 1 && !types[0].isAssignableFrom(target)) continue;
 
 						if (found != -1) {
-							if (!Arrays.equals(m.getParameterTypes(), tm.getParameterTypes())) {
+							if (!Arrays.equals(m.getParameterTypes(), targetMethod.getParameterTypes())) {
 								throw new IllegalArgumentException(
 									"无法为 "+itf.getName()+'.'+name+" 使用模糊模式: 对于指定非基本类型的数量和位置有多个符合的方法\n"+
-										"其一: "+TypeHelper.class2asm(tm.getParameterTypes(), tm.getReturnType())+"\n"+
+										"其一: "+TypeHelper.class2asm(targetMethod.getParameterTypes(), targetMethod.getReturnType())+"\n"+
 										"其二: "+TypeHelper.class2asm(m.getParameterTypes(), m.getReturnType()));
 							} else {
 								// 继承，却改变了返回值的类型
 								// 同参同反不考虑
-								m = findSuccessor(m, tm);
+								m = findSuccessor(m, targetMethod);
 							}
 						}
 						found = j;
-						tm = m;
+						targetMethod = m;
 					}
 				}
-				if (found == -1 || sm1 != null && !sm1.checkInvoke(tm)) throw new NoSuchMethodException();
-				methods.remove(found);
+				if (found == -1 || sm1 != null && !sm1.checkInvoke(targetMethod)) throw new NoSuchMethodException();
+				targetMethods.remove(found);
 			} catch (NoSuchMethodException e) {
-				throw new IllegalArgumentException("无法找到指定的方法: "+target.getName()+'.'+targetMethodName+" 参数 "+TypeHelper.class2asm(types, sm.getReturnType())+", 报错前已成功"+i+"个");
+				throw new IllegalArgumentException("无法找到指定的方法: "+target.getName()+'.'+targetMethodName+" 参数 "+TypeHelper.class2asm(types, selfMethod.getReturnType())+", 报错前已成功"+i+"个");
 			}
 
-			if (!sm.getReturnType().isAssignableFrom(tm.getReturnType()))
-				throw new IllegalArgumentException(itf.getName()+'.'+name+" 的返回值 ("+sm.getReturnType().getName()+") 不兼容 "+tm.getReturnType().getName());
+			if (!selfMethod.getReturnType().isAssignableFrom(targetMethod.getReturnType()))
+				throw new IllegalArgumentException(itf.getName()+'.'+name+" 的返回值 ("+selfMethod.getReturnType().getName()+") 不兼容 "+targetMethod.getReturnType().getName());
 
 			methodByName.remove(name);
 
-			Class<?>[] params = tm.getParameterTypes();
-			String tDesc = TypeHelper.class2asm(params, tm.getReturnType());
+			Class<?>[] params = targetMethod.getParameterTypes();
+			String targetDesc = TypeHelper.class2asm(params, targetMethod.getReturnType());
 
-			types = sm.getParameterTypes();
-			String sDesc = TypeHelper.class2asm(types, sm.getReturnType());
-			CodeWriter cw = var.newMethod(ACC_PUBLIC, selfNames[i], sDesc);
+			types = selfMethod.getParameterTypes();
+			String selfDesc = TypeHelper.class2asm(types, selfMethod.getReturnType());
+			CodeWriter cw = impl.newMethod(ACC_PUBLIC, selfNames[i], selfDesc);
 
-			int isStatic = (tm.getModifiers() & ACC_STATIC) != 0 ? 1 : 0;
-			int varId;
-			if (isStatic != 0) varId = 1;
-			else {
+			int isStatic = (targetMethod.getModifiers() & ACC_STATIC) != 0 ? 1 : 0;
+			int varId = 2 - isStatic;
+			boolean useSpecial = flags != null && flags.contains(i);
+
+			if (DMHInit()) {
+				int fid = DMHNewMethodHandle(targetName, targetMethodName, targetDesc, isStatic == 0 ? "findVirtual" : "findStatic");
+				cw.field(GETSTATIC, impl, fid);
+			}
+
+			if (isStatic == 0) {
 				cw.one(ALOAD_1);
-				if ((this.flags&UNCHECKED_CAST) == 0 && !target.isAssignableFrom(types[0])) cw.clazz(CHECKCAST, tName);
-				varId = 2;
+				if ((this.flags&UNCHECKED_CAST) == 0 && !target.isAssignableFrom(types[0])) cw.clazz(CHECKCAST, targetName);
 			}
 
 			int j = varId-1;
 			for (Class<?> param : params) {
-				Type type = TypeHelper.class2type(param);
+				Type type = Type.fromJavaType(param);
 				cw.varLoad(type, varId);
 				if ((this.flags&UNCHECKED_CAST) == 0 && !param.isAssignableFrom(types[j++])) // 强制转换再做检查...
 					cw.clazz(CHECKCAST, type.getActualClass());
 				varId += type.length();
 			}
 
-			cw.visitSize(varId == 1 && !sDesc.endsWith("V") ? 1 : varId, varId);
+			cw.visitSize(varId == 1 && !selfDesc.endsWith("V") ? 1 : varId, varId);
 
-			if (isStatic != 0) {
-				cw.invoke(INVOKESTATIC, tName, tm.getName(), tDesc, target.isInterface());
-			} else if (target.isInterface()) {
-				cw.invokeItf(tName, tm.getName(), tDesc);
+			if (DMHInit()) {
+				targetDesc = TypeHelper.class2asm(fuzzyIfNotAccessible(params), fuzzyIfNotAccessible(targetMethod.getReturnType()));
+				if (isStatic == 0) targetDesc = "(L"+targetName+";"+targetDesc.substring(1);
+				cw.invokeV("java/lang/invoke/MethodHandle", "invokeExact", targetDesc);
 			} else {
-				cw.invoke((flags != null && flags.contains(i) ? INVOKESPECIAL : INVOKEVIRTUAL), tName, tm.getName(), tDesc);
+				if (isStatic != 0) {
+					cw.invoke(INVOKESTATIC, targetName, targetMethod.getName(), targetDesc, target.isInterface());
+				} else if (target.isInterface()) {
+					cw.invokeItf(targetName, targetMethod.getName(), targetDesc);
+				} else {
+					cw.invoke(useSpecial ? INVOKESPECIAL : INVOKEVIRTUAL, targetName, targetMethod.getName(), targetDesc);
+				}
 			}
 
-			cw.return_(TypeHelper.class2type(tm.getReturnType()));
+			cw.return_(Type.fromJavaType(targetMethod.getReturnType()));
 			cw.finish();
 		}
 		return this;
 	}
-
 	private static Method findSuccessor(Method a, Method b) {
 		Class<?> aClass = a.getDeclaringClass();
 		Class<?> bClass = b.getDeclaringClass();
@@ -417,100 +557,131 @@ public final class Bypass<T> {
 	public final Bypass<T> access(Class<?> target, String field, String getter, String setter) { return access(target, new String[] {field}, new String[] {getter}, new String[] {setter}); }
 
 	/**
-	 * 把 setter/getters 中的方法标记为 target 的 fields 的 setter / getter
+	 * 把 setter/selfGetterNames 中的方法标记为 target 的 targetFieldNames 的 setter / getter
 	 */
-	public Bypass<T> access(Class<?> target, String[] fields, String[] getters, String[] setters) throws IllegalArgumentException {
-		if (fields.length == 0) return this;
+	public Bypass<T> access(Class<?> target, String[] targetFieldNames, String[] selfGetterNames, String[] selfSetterNames) throws IllegalArgumentException {
+		if (targetFieldNames.length == 0) return this;
 
-		String tName = target.getName().replace('.', '/');
-		Field[] fieldFs = ReflectionUtils.getFieldsByName(target, fields);
+		String targetName = target.getName().replace('.', '/');
+		Field[] targetFields = ReflectionUtils.getFieldsByName(target, targetFieldNames);
 
-		for (int i = 0; i < fields.length; i++) {
-			Field field = fieldFs[i];
-			Type fType = TypeHelper.class2type(field.getType());
+		for (int i = 0; i < targetFieldNames.length; i++) {
+			Field field = targetFields[i];
+			Type fieldType = Type.fromJavaType(field.getType());
 
 			String name;
 			int off = (field.getModifiers() & ACC_STATIC) != 0 ? 0 : 1;
 			boolean isStatic = (field.getModifiers() & ACC_STATIC) != 0;
 
-			name = getters == null ? null : getters[i];
+			name = selfGetterNames == null ? null : selfGetterNames[i];
 			if (name != null) {
 				Method method = methodByName.get(name);
 				if (method == null) throw new IllegalArgumentException(itf.getName()+'.'+name+" 不存在或已使用!");
 				if (method.getParameterCount() != off) throw new IllegalArgumentException(itf.getName()+'.'+name+" 是个 getter, 不应该有参数, got "+(method.getParameterCount() - off)+'!');
-				if (!method.getReturnType().isAssignableFrom(fieldFs[i].getType())) {
-					throw new IllegalArgumentException(itf.getName()+'.'+name+" 是个 getter, 但是返回值不兼容 "+fieldFs[i].getType().getName()+" ("+method.getReturnType().getName()+')');
+				if (!method.getReturnType().isAssignableFrom(targetFields[i].getType())) {
+					throw new IllegalArgumentException(itf.getName()+'.'+name+" 是个 getter, 但是返回值不兼容 "+targetFields[i].getType().getName()+" ("+method.getReturnType().getName()+')');
 				}
 
 				methodByName.remove(name);
 
-				Class<?>[] params2 = isStatic ? ArrayCache.CLASSES : method.getParameterTypes();
-				CodeWriter cw = var.newMethod(ACC_PUBLIC, method.getName(), TypeHelper.class2asm(params2, method.getReturnType()));
+				Class<?>[] params = isStatic ? ArrayCache.CLASSES : method.getParameterTypes();
+				CodeWriter cw = impl.newMethod(ACC_PUBLIC, method.getName(), TypeHelper.class2asm(params, method.getReturnType()));
 
-				int localSize;
-
-				if (!isStatic) {
-					localSize = 2;
-					cw.one(ALOAD_1);
-					if ((flags&UNCHECKED_CAST) == 0 && !target.isAssignableFrom(params2[0])) cw.clazz(CHECKCAST, tName);
-					cw.field(GETFIELD, tName, field.getName(), fType);
+				if (DMHInit()) {
+					int DMH_ID = DMHNewVarHandle(targetName, field.getName(), fieldType, isStatic ? "findStaticVarHandle" : "findVarHandle");
+					var targetName1 = fuzzyIfNotAccessible(target).getName().replace('.', '/');
+					fieldType = Type.fromJavaType(fuzzyIfNotAccessible(field.getType()));
+					cw.field(GETSTATIC, impl, DMH_ID);
+					if (isStatic) {
+						cw.invokeV("java/lang/invoke/VarHandle", "get", "()"+fieldType.toDesc());
+					} else {
+						cw.one(ALOAD_1);
+						cw.invokeV("java/lang/invoke/VarHandle", "get", "(L"+targetName1+";)"+fieldType.toDesc());
+					}
+					cw.visitSize(fieldType.length()+1, isStatic ? 1 : 2);
 				} else {
-					localSize = 1;
-					cw.field(GETSTATIC, tName, field.getName(), fType);
+					int localSize;
+
+					if (isStatic) {
+						localSize = 1;
+						cw.field(GETSTATIC, targetName, field.getName(), fieldType);
+					} else {
+						localSize = 2;
+						cw.one(ALOAD_1);
+						if ((flags&UNCHECKED_CAST) == 0 && !target.isAssignableFrom(params[0])) cw.clazz(CHECKCAST, targetName);
+						cw.field(GETFIELD, targetName, field.getName(), fieldType);
+					}
+					cw.visitSize(fieldType.length(), localSize);
 				}
-				cw.visitSize(fType.length(), localSize);
-				cw.return_(fType);
+
+				cw.return_(fieldType);
 				cw.finish();
 			}
 
-			name = setters == null ? null : setters[i];
+			name = selfSetterNames == null ? null : selfSetterNames[i];
 			if (name != null) {
 				Method method = methodByName.get(name);
 				if (method == null) throw new IllegalArgumentException(itf.getName()+'.'+name+" 不存在或已使用!");
 				if (method.getParameterCount() != off+1) throw new IllegalArgumentException(itf.getName()+'.'+name+" 是个 setter, 只应有1个参数, got "+method.getParameterCount()+'!');
-				if (!method.getParameterTypes()[off].isAssignableFrom(fieldFs[i].getType())) {
-					throw new IllegalArgumentException(itf.getName()+'.'+name+" 是个 setter, 但是参数["+(off+1)+"]不兼容 "+fieldFs[i].getType().getName()+" ("+method.getReturnType().getName()+')');
+				if (!method.getParameterTypes()[off].isAssignableFrom(targetFields[i].getType())) {
+					throw new IllegalArgumentException(itf.getName()+'.'+name+" 是个 setter, 但是参数["+(off+1)+"]不兼容 "+targetFields[i].getType().getName()+" ("+method.getReturnType().getName()+')');
 				}
 				if (method.getReturnType() != void.class) throw new IllegalArgumentException(itf.getName()+'.'+name+" 是个 setter, 但是它的返回值不是void: "+method.getReturnType().getName());
 
 				methodByName.remove(name);
 
 				Class<?>[] params2 = method.getParameterTypes();
-				CodeWriter cw = var.newMethod(ACC_PUBLIC, method.getName(), TypeHelper.class2asm(params2, void.class));
+				CodeWriter cw = impl.newMethod(ACC_PUBLIC, method.getName(), TypeHelper.class2asm(params2, void.class));
 
-				// MAI only ignore visibility, not final
-				if ((field.getModifiers()&ACC_FINAL) != 0) {
-					cw.visitSize(4, isStatic ? 2 : 3);
-					// stack = 4
-					// local = 2
-					cw.field(GETSTATIC, "roj/reflect/ReflectionUtils", "u", "Lsun/misc/Unsafe;");
-					if (isStatic) cw.ldc(new CstClass(tName));
-					else {
-						if ((flags&UNCHECKED_CAST) == 0 && !target.isAssignableFrom(params2[0]))
-							cw.clazz(CHECKCAST, tName);
-						cw.one(ALOAD_1);
-					}
-					cw.ldc(isStatic ? u.staticFieldOffset(field) : u.objectFieldOffset(field));
-					cw.varLoad(fType, isStatic ? 1 : 2);
-					if ((flags&UNCHECKED_CAST) == 0 && !fType.isPrimitive() && !field.getType().isAssignableFrom(params2[off]))
-						cw.clazz(CHECKCAST, fType.getActualClass());
-					cw.invoke(INVOKESPECIAL, "sun/misc/Unsafe", "put"+(fType.isPrimitive()?upper(fType.toString()):"Object"), "(Ljava/lang/Object;J"+(fType.isPrimitive()?fType.toDesc():"Ljava/lang/Object;")+")V");
-				} else {
-					int localSize, stackSize = fType.length()+1;
-
+				if (DMHInit()) {
+					int DMH_ID = DMHNewVarHandle(targetName, field.getName(), fieldType, isStatic ? "findStaticVarHandle" : "findVarHandle");
+					cw.field(GETSTATIC, impl, DMH_ID);
 					if (!isStatic) {
-						localSize = stackSize+1;
 						cw.one(ALOAD_1);
 						if ((flags&UNCHECKED_CAST) == 0 && !target.isAssignableFrom(params2[0]))
-							cw.clazz(CHECKCAST, tName);
-					} else {
-						localSize = stackSize--;
+							cw.clazz(CHECKCAST, targetName);
 					}
-					cw.visitSize(stackSize, localSize);
-					cw.varLoad(fType, isStatic ? 1 : 2);
-					if ((flags&UNCHECKED_CAST) == 0 && !fType.isPrimitive() && !field.getType().isAssignableFrom(params2[off]))
-						cw.clazz(CHECKCAST, fType.getActualClass());
-					cw.field(isStatic ? PUTSTATIC : PUTFIELD, tName, field.getName(), fType);
+					cw.varLoad(fieldType, isStatic ? 1 : 2);
+					if ((flags&UNCHECKED_CAST) == 0 && !fieldType.isPrimitive() && !field.getType().isAssignableFrom(params2[off]))
+						cw.clazz(CHECKCAST, fieldType.getActualClass());
+					cw.invokeV("java/lang/invoke/VarHandle", "set", isStatic ? "("+fieldType.toDesc()+")V" : "(L"+targetName+";"+fieldType.toDesc()+")V");
+					int size = fieldType.length() + 1 + (isStatic ? 0 : 1);
+					cw.visitSize(size, size);
+				} else {
+					// MAI only ignore visibility, not final
+					if ((field.getModifiers()&ACC_FINAL) != 0) {
+						cw.visitSize(4, isStatic ? 2 : 3);
+						// stack = 4
+						// local = 2
+						cw.field(GETSTATIC, "roj/reflect/Unaligned", "U", "Lroj/reflect/Unaligned;");
+						if (isStatic) cw.ldc(new CstClass(targetName));
+						else {
+							if ((flags&UNCHECKED_CAST) == 0 && !target.isAssignableFrom(params2[0]))
+								cw.clazz(CHECKCAST, targetName);
+							cw.one(ALOAD_1);
+						}
+						cw.ldc(isStatic ? u.staticFieldOffset(field) : u.objectFieldOffset(field));
+						cw.varLoad(fieldType, isStatic ? 1 : 2);
+						if ((flags&UNCHECKED_CAST) == 0 && !fieldType.isPrimitive() && !field.getType().isAssignableFrom(params2[off]))
+							cw.clazz(CHECKCAST, fieldType.getActualClass());
+						cw.invoke(INVOKESPECIAL, "roj/reflect/Unaligned", "put"+(fieldType.isPrimitive()?upper(fieldType.toString()):"Object"), "(Ljava/lang/Object;J"+(fieldType.isPrimitive()?fieldType.toDesc():"Ljava/lang/Object;")+")V");
+					} else {
+						int localSize, stackSize = fieldType.length()+1;
+
+						if (!isStatic) {
+							localSize = stackSize+1;
+							cw.one(ALOAD_1);
+							if ((flags&UNCHECKED_CAST) == 0 && !target.isAssignableFrom(params2[0]))
+								cw.clazz(CHECKCAST, targetName);
+						} else {
+							localSize = stackSize--;
+						}
+						cw.visitSize(stackSize, localSize);
+						cw.varLoad(fieldType, isStatic ? 1 : 2);
+						if ((flags&UNCHECKED_CAST) == 0 && !fieldType.isPrimitive() && !field.getType().isAssignableFrom(params2[off]))
+							cw.clazz(CHECKCAST, fieldType.getActualClass());
+						cw.field(isStatic ? PUTSTATIC : PUTFIELD, targetName, field.getName(), fieldType);
+					}
 				}
 
 				cw.one(RETURN);
@@ -533,12 +704,12 @@ public final class Bypass<T> {
 		ILSecurityManager sm = ILSecurityManager.getSecurityManager();
 		if (sm != null) sm.checkAccess(target, "<init>", desc);
 
-		CodeWriter cw = var.newMethod(ACC_PUBLIC, self.getName(), TypeHelper.class2asm(self.getParameterTypes(), self.getReturnType()));
+		CodeWriter cw = impl.newMethod(ACC_PUBLIC, self.getName(), TypeHelper.class2asm(self.getParameterTypes(), self.getReturnType()));
 
 		cw.clazz(NEW, target);
 		cw.one(DUP);
 
-		List<Type> argTypes = TypeHelper.parseMethod(desc);
+		List<Type> argTypes = Type.methodDesc(desc);
 		argTypes.remove(argTypes.size()-1);
 
 		int varId = 1;
@@ -567,9 +738,9 @@ public final class Bypass<T> {
 
 		String sDesc = TypeHelper.class2asm(self.getParameterTypes(), self.getReturnType());
 
-		CodeWriter cw = var.newMethod(ACC_PUBLIC, self.getName(), sDesc);
+		CodeWriter cw = impl.newMethod(ACC_PUBLIC, self.getName(), sDesc);
 
-		List<Type> argTypes = TypeHelper.parseMethod(desc);
+		List<Type> argTypes = Type.methodDesc(desc);
 		Type retype = argTypes.remove(argTypes.size()-1);
 
 		boolean isStatic = (flags&INVOKE_STATIC) != 0;
@@ -611,7 +782,7 @@ public final class Bypass<T> {
 
 		if (getter != null) {
 			Class<?>[] params2 = isStatic ? ArrayCache.CLASSES : getter.getParameterTypes();
-			CodeWriter cw = var.newMethod(ACC_PUBLIC, getter.getName(), TypeHelper.class2asm(params2, getter.getReturnType()));
+			CodeWriter cw = impl.newMethod(ACC_PUBLIC, getter.getName(), TypeHelper.class2asm(params2, getter.getReturnType()));
 
 			int stackSize = type.length();
 
@@ -631,7 +802,7 @@ public final class Bypass<T> {
 
 		if (setter != null) {
 			Class<?>[] params2 = setter.getParameterTypes();
-			CodeWriter cw = var.newMethod(ACC_PUBLIC, setter.getName(), TypeHelper.class2asm(params2, void.class));
+			CodeWriter cw = impl.newMethod(ACC_PUBLIC, setter.getName(), TypeHelper.class2asm(params2, void.class));
 
 			int stackSize = type.length()+1;
 			int localSize;
@@ -655,7 +826,7 @@ public final class Bypass<T> {
 	public static <V> Bypass<V> builder(Class<V> impl) {return new Bypass<>(impl, true);}
 	public static <V> Bypass<V> custom(Class<V> impl) {return new Bypass<>(impl, false);}
 
-	public final Bypass<T> unchecked() { flags |= UNCHECKED_CAST; return this; }
+	public final Bypass<T> unchecked() { if (!DMHInit()) flags |= UNCHECKED_CAST; return this; }
 	public final Bypass<T> weak() { flags |= WEAK_REF; return this; }
 	public final Bypass<T> inline() { flags |= INLINE; return this; }
 
@@ -674,8 +845,8 @@ public final class Bypass<T> {
 		return dest;
 	}
 
-	private static void makeHeader(String selfName, String invokerName, ConstantData clz) {
-		clz.version = 52 << 16;
+	private static void makeHeader(String selfName, String invokerName, ClassNode clz) {
+		clz.version = 52;
 		clz.name(selfName.replace('.', '/'));
 
 		clz.parent(MAGIC_ACCESSOR_CLASS);

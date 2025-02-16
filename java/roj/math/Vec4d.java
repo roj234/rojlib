@@ -5,7 +5,7 @@ public class Vec4d extends Vector {
 
 	public Vec4d() {}
 	@Override
-	public Vector newInstance() { return new Vec4d(); }
+	public Vector copy() { return new Vec4d(this); }
 
 	public Vec4d(double x, double y, double z) {
 		this.x = x;
@@ -18,15 +18,9 @@ public class Vec4d extends Vector {
 		this.z = z;
 		this.s = s;
 	}
-	public Vec4d(Vec2d xy, double z, double s) {
-		this(xy.x, xy.y, z, s);
-	}
-	public Vec4d(Vec3d xyz, double s) {
-		this(xyz.x, xyz.y, xyz.z, s);
-	}
-	public Vec4d(Vec4d xyzw) {
-		this(xyzw.x, xyzw.y, xyzw.z, xyzw.s);
-	}
+	public Vec4d(Vec2d xy, double z, double s) {this(xy.x, xy.y, z, s);}
+	public Vec4d(Vec3d xyz, double s) {this(xyz.x, xyz.y, xyz.z, s);}
+	public Vec4d(Vec4d xyzw) {this(xyzw.x, xyzw.y, xyzw.z, xyzw.s);}
 
 	public Vec4d set(double x, double y, double z, double w) {
 		this.x = x;
@@ -49,17 +43,19 @@ public class Vec4d extends Vector {
 		this.s = xyzw.s;
 		return this;
 	}
+    public Vec4d set(Vector xyzw) {
+        this.x = xyzw.x();
+        this.y = xyzw.y();
+        this.z = xyzw.z();
+        this.s = xyzw.w();
+        return this;
+    }
 
 	// q*
 	public Vec4d star() {
 		x = -x;
 		y = -y;
 		z = -z;
-		return this;
-	}
-
-	public Vec4d cross(Vector b) {
-		cross(this, (Vec4d) b, this);
 		return this;
 	}
 
@@ -74,10 +70,7 @@ public class Vec4d extends Vector {
 	}
 
 	// q^-1 = q* / |q|^2
-	public Vec4d inverse() {
-		double len_2 = x * x + y * y + z * z + s * s;
-		return (Vec4d) star().mul(1/len_2);
-	}
+	public Vec4d inverse() {return star().normalize();}
 
 	public Vec4d applyRotation(Vec4d rot) {
 		cross(rot, this, this);
@@ -90,38 +83,85 @@ public class Vec4d extends Vector {
 		angle /= 2;
 		s = Math.cos(angle);
 		double sin = Math.sin(angle);
-		double len = axis.len2();
+		double len = axis.lengthSquared();
 		x = sin*axis.x()/len;
 		y = sin*axis.y()/len;
 		z = sin*axis.z()/len;
 		return this;
 	}
 
-	public double x() {
-		return x;
-	}
-	public double y() {
-		return y;
-	}
-	public double z() {
-		return z;
-	}
-	public double w() {
-		return s;
-	}
-	public void x(double x) {
-		this.x = x;
-	}
-	public void y(double y) {
-		this.y = y;
-	}
-	public void z(double z) {
-		this.z = z;
-	}
-	public void w(double w) {
-		this.s = w;
-	}
-	public int axis() {
-		return 4;
+	public double x() {return x;}
+	public double y() {return y;}
+	public double z() {return z;}
+	public double w() {return s;}
+	public void x(double x) {this.x = x;}
+	public void y(double y) {this.y = y;}
+	public void z(double z) {this.z = z;}
+	public void w(double w) {this.s = w;}
+	public int axis() {return 4;}
+
+    public final Vec4d add(Vector v) {
+        x += v.x();
+        y += v.y();
+        z += v.z();
+        s += v.w();
+        return this;
+    }
+    public final Vec4d add(double x, double y, double z, double w) {
+        this.x += x;
+        this.y += y;
+        this.z += z;
+        this.s += w;
+        return this;
+    }
+    public final Vec4d sub(Vector v) {
+        x -= v.x();
+        y -= v.y();
+        z -= v.z();
+        s -= v.w();
+        return this;
+    }
+    public final Vec4d mul(Vector v) {
+        x *= v.x();
+        y *= v.y();
+        z *= v.z();
+        s *= v.w();
+        return this;
+    }
+    public final Vec4d mul(double scalar) {
+        x *= scalar;
+        y *= scalar;
+        z *= scalar;
+        s *= scalar;
+        return this;
+    }
+
+    public final double lengthSquared() {return x*x+y*y+z*z+s*s;}
+    public final double distanceSq(Vector v) {
+        double t,d;
+        t = v.x()-x;
+        d = t * t;
+        t = v.y()-y;
+        d += t*t;
+        t = v.z()-z;
+        d += t*t;
+        t = v.w()-s;
+        d += t*t;
+        return d;
+    }
+
+    public final Vec4d normalize() {
+        var len = 1/lengthSquared();
+        x *= len;
+        y *= len;
+        z *= len;
+        s *= len;
+        return this;
+    }
+
+    public final double dot(Vector v) {return x*v.x()+y*v.y()+z*v.z()+s*v.w();}
+	public final Vec4d cross(Vector b) {
+		cross(this, (Vec4d) b, this);
+		return this;
 	}
 }

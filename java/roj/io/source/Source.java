@@ -1,6 +1,5 @@
 package roj.io.source;
 
-import roj.io.SourceInputStream;
 import roj.util.ArrayCache;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
@@ -25,19 +24,22 @@ public abstract class Source extends DataOutputStream {
 		return read(b1, 0, 1) > 0 ? b1[0]&0xFF : -1;
 	}
 	public final int read(byte[] b) throws IOException { return read(b, 0, b.length); }
+	public void read(ByteList buf, int len) throws IOException {
+		buf.ensureWritable(len);
+		int count = read(buf.array(), buf.arrayOffset() + buf.wIndex(), len);
+		if (count > 0) buf.wIndex(buf.wIndex()+count);
+	}
 	public abstract int read(byte[] b, int off, int len) throws IOException;
-	public void read(ByteList buf, int len) throws IOException {read__(buf, len);}
+
+	// 目前所有的实现除非EOF了否则不会少读
+	public void readFully(ByteList buf, int len) throws IOException {read__(buf, len);}
 	protected void read__(DynByteBuf buf, int len) throws IOException {
 		if (!buf.hasArray()) throw new IllegalStateException("Not implemented!");
 		buf.ensureCapacity(buf.wIndex()+len);
 		readFully(buf.array(), buf.arrayOffset()+buf.wIndex(), len);
 		buf.wIndex(buf.wIndex()+len);
 	}
-
-	// 目前所有的实现除非EOF了否则不会少读
-	public final void readFully(byte[] b) throws IOException {
-		readFully(b, 0, b.length);
-	}
+	public final void readFully(byte[] b) throws IOException {readFully(b, 0, b.length);}
 	public final void readFully(byte[] b, int off, int len) throws IOException {
 		do {
 			int n = read(b, off, len);

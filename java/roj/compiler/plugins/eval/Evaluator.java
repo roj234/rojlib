@@ -1,19 +1,18 @@
 package roj.compiler.plugins.eval;
 
-import roj.asm.tree.*;
-import roj.asm.tree.insn.SwitchEntry;
+import roj.asm.*;
+import roj.asm.insn.CodeWriter;
+import roj.asm.insn.Label;
+import roj.asm.insn.SwitchBlock;
 import roj.asm.type.Type;
 import roj.asm.type.TypeHelper;
-import roj.asm.visitor.CodeWriter;
-import roj.asm.visitor.Label;
-import roj.asm.visitor.SwitchSegment;
 import roj.asmx.AnnotatedElement;
 import roj.collect.MyHashMap;
 import roj.collect.SimpleList;
 import roj.compiler.JavaLexer;
 import roj.compiler.ast.ParseTask;
 import roj.compiler.ast.expr.NaE;
-import roj.compiler.context.CompileUnit;
+import roj.compiler.context.LavaCompileUnit;
 import roj.compiler.diagnostic.Kind;
 import roj.compiler.plugin.GlobalContextApi;
 import roj.compiler.plugin.LavaPlugin;
@@ -44,29 +43,31 @@ public interface Evaluator {
 			if (element.isLeaf()) {
 				if (element.desc().indexOf('(') < 0) continue;
 
-				AccessData.MOF node = (AccessData.MOF) element.node();
+				ClassView.MOF node = (ClassView.MOF) element.node();
 				node.modifier |= (char) (node.owner().modifier&ACC_INTERFACE);
 				invoker.add(node);
 			}
 
 			var info = ctx.getClassInfo(element.owner());
 			if (!data.containsKey(element.owner()) && info != null) {
-				DynByteBuf bytes = info.getBytes(IOUtil.getSharedByteBuf());
+				DynByteBuf bytes = info.toByteArray(IOUtil.getSharedByteBuf());
 				data.put(element.owner(), bytes.toByteArray());
 			}
 		}
 
-		invoker.add(new MethodNode(0, "java/lang/String", "charAt", "(I)C"));
-		invoker.add(new MethodNode(0, "java/lang/String", "replace", "(CC)Ljava/lang/String;"));
-
-		if (invoker.size() > 0) {
-			ctx.report(null, Kind.WARNING, -1, "lava.sandbox");
+		for (MethodNode method : ctx.getClassInfo("java/lang/String").methods()) {
+			if ((method.modifier&(ACC_PUBLIC|ACC_STATIC)) == ACC_PUBLIC && (method.rawDesc().endsWith(")Ljava/lang/String;") || method.rawDesc().endsWith(")C"))) {
+				invoker.add(method);
+			}
 		}
 
-		// TODO unloadable
+		if (invoker.size() > 0) {
+			ctx.report(null, Kind.WARNING, invoker.size(), "lava.sandbox");
+		}
+
 		var scl = new Sandbox(Evaluator.class.getClassLoader(), data);
 
-		var invokerInst = new ConstantData();
+		var invokerInst = new ClassNode();
 		invokerInst.name("roj/compiler/plugins/eval/Evaluator$"+ReflectionUtils.uniqueId());
 		invokerInst.addInterface("roj/compiler/plugins/eval/Evaluator");
 		ClassDefiner.premake(invokerInst);
@@ -75,26 +76,26 @@ public interface Evaluator {
 		c.one(ALOAD_2);
 		c.one(ASTORE_0);
 		c.one(ILOAD_1);
-		var segment = new SwitchSegment(TABLESWITCH);
+		var segment = SwitchBlock.ofSwitch(TABLESWITCH);
 		c.addSegment(segment);
 
 		for (int i = 0; i < invoker.size(); i++) {
 			Label label = c.label();
 			segment.def = label;
-			segment.targets.add(new SwitchEntry(i, label));
+			segment.branch(i, label);
 
 			RawNode mof = invoker.get(i);
 			String desc = mof.rawDesc();
 
 			c.visitSizeMax(TypeHelper.paramSize(desc) + 2, 0);
 
-			List<Type> types = TypeHelper.parseMethod(desc);
+			List<Type> types = Type.methodDesc(desc);
 			Type retVal = types.remove(types.size() - 1);
 
 			boolean itf = (mof.modifier() & ACC_INTERFACE) != 0;
 			boolean isStatic = (mof.modifier() & ACC_STATIC) != 0;
 
-			if (!isStatic) types.add(0, new Type(mof.ownerClass()));
+			if (!isStatic) types.add(0, Type.klass(mof.ownerClass()));
 
 			for (int j = 0; j < types.size(); j++) {
 				c.vars(ALOAD, 2);
@@ -103,14 +104,19 @@ public interface Evaluator {
 
 				Type klass = types.get(j);
 				if (klass.isPrimitive()) {
-					c.clazz(CHECKCAST, "roj/asm/tree/anno/AnnVal");
-					String converter = switch (klass.type) {
-						case Type.LONG -> "asLong";
-						case Type.FLOAT -> "asFloat";
-						case Type.DOUBLE -> "asDouble";
-						default -> "asInt";
-					};
-					c.invoke(INVOKEVIRTUAL, "roj/asm/tree/anno/AnnVal", converter, "()I");
+					c.clazz(CHECKCAST, "roj/config/data/CEntry");
+					String converter;
+					char type = (char) klass.type;
+					switch (klass.type) {
+						case Type.LONG -> converter = "asLong";
+						case Type.FLOAT -> converter = "asFloat";
+						case Type.DOUBLE -> converter = "asDouble";
+						default -> {
+							converter = "asInt";
+							type = 'I';
+						}
+					}
+					c.invoke(INVOKEVIRTUAL, "roj/config/data/CEntry", converter, "()"+type);
 				} else {
 					c.clazz(CHECKCAST, klass.getActualClass());
 				}
@@ -119,8 +125,18 @@ public interface Evaluator {
 			c.invoke(isStatic ? INVOKESTATIC : itf ? INVOKEINTERFACE : INVOKEVIRTUAL, mof.ownerClass(), mof.name(), desc, itf);
 
 			Type wrapper = TypeCast.getWrapper(retVal);
+			myBlock:
 			if (wrapper != null) {
-				c.invoke(INVOKESTATIC, "roj/asm/tree/anno/AnnVal", "valueOf", "("+(char)retVal.type+")Lroj/asm/tree/anno/AnnVal;");
+				char type = (char) retVal.type;
+				switch (type) {
+					case Type.BOOLEAN -> {
+						c.invoke(INVOKESTATIC, "java/lang/Boolean", "valueOf", "(Z)Ljava/lang/Boolean;");
+						break myBlock;
+					}
+					case Type.LONG, Type.FLOAT, Type.DOUBLE -> {}
+					default -> type = 'I';
+				}
+				c.invoke(INVOKESTATIC, "roj/config/data/CEntry", "valueOf", "("+type+")Lroj/config/data/CEntry;");
 			} else if (retVal.owner.equals("java/lang/Class")) {
 				c.clazz(NEW, "roj/asm/cp/CstClass");
 				c.one(DUP);
@@ -136,16 +152,16 @@ public interface Evaluator {
 			RawNode mof = invoker.get(j);
 			IClass info = ctx.getClassInfo(mof.ownerClass());
 			int i = info.getMethod(mof.name(), mof.rawDesc());
-			info.methods().get(i).putAttr(new CompiledMethod(evaluator, j, TypeHelper.parseReturn(mof.rawDesc())));
+			info.methods().get(i).putAttr(new CompiledMethod(evaluator, j, Type.methodDescReturn(mof.rawDesc())));
 		}
 
 		ctx.getExprApi().addExprGen("!!macro ", (lexer, ctx1) -> {
-			var def = new CompileUnit(ctx1.file.getSourceFile()+" <macro#"+lexer.index+">", lexer.getText().toString());
+			var def = new LavaCompileUnit(ctx1.file.getSourceFile() + " <macro#" + lexer.index + ">", lexer.getText().toString());
 			def.name("java/lang/Thread"); // just a hack..
 			def.addInterface("roj/compiler/plugins/eval/Macro");
 			ClassDefiner.premake(def);
 
-			var toString = new MethodNode(ACC_PUBLIC, def.name, "toString", "(Lroj/text/CharList;)V");
+			var toString = new MethodNode(ACC_PUBLIC, def.name(), "toString", "(Lroj/text/CharList;)V");
 			def.methods.add(toString);
 
 			var lc = ctx1.classes.createLocalContext();

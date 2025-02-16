@@ -3,7 +3,6 @@ package roj.compiler.ast.expr;
 import org.jetbrains.annotations.Nullable;
 import roj.asm.Opcodes;
 import roj.asm.cp.CstClass;
-import roj.asm.tree.anno.AnnVal;
 import roj.asm.type.Generic;
 import roj.asm.type.IType;
 import roj.asm.type.Type;
@@ -13,6 +12,7 @@ import roj.compiler.context.LocalContext;
 import roj.compiler.resolve.ResolveException;
 import roj.compiler.resolve.TypeCast;
 import roj.config.Tokenizer;
+import roj.config.data.CEntry;
 
 import java.util.Collections;
 import java.util.Objects;
@@ -35,38 +35,21 @@ public final class Constant extends ExprNode {
 		this.c = c;
 	}
 
-	@Override
-	public String toString() { return c instanceof String ? '"'+ Tokenizer.addSlashes(c.toString())+'"' : isClassRef() ? type+".class" : String.valueOf(c); }
+	@Override public String toString() { return c instanceof String ? '"'+ Tokenizer.addSlashes(c.toString())+'"' : isClassRef() ? type+".class" : String.valueOf(c); }
+	@Override public boolean hasFeature(ExprFeat kind) {return kind == ExprFeat.IMMEDIATE_CONSTANT || (kind == ExprFeat.LDC_CLASS && isClassRef());}
+	@Override public IType type() { return type; }
+	@Override public boolean isConstant() { return !isClassRef(); }
+	@Override public Object constVal() { return c; }
 
-	@Override
-	public boolean hasFeature(ExprFeat kind) {return kind == ExprFeat.IMMEDIATE_CONSTANT || (kind == ExprFeat.LDC_CLASS && isClassRef());}
-	@Override
-	public IType type() { return type; }
-	@Override
-	public boolean isConstant() { return !isClassRef(); }
-	@Override
-	public Object constVal() { return c; }
-
-	public static Constant classRef(Type type) { return new Constant(new Generic("java/lang/Class", Collections.singletonList(type)), type); }
-	public static Constant valueOf(boolean v) { return new Constant(Type.std(Type.BOOLEAN), v); }
-	public static Constant valueOf(String v) { return new Constant(Types.STRING_TYPE, v); }
-	public static Constant valueOf(int v) {
-		IType type;
-		/*if ((short) v == v) {
-			if ((byte) v == v) type = Type.std(Type.BYTE);
-			else type = Type.std(Type.SHORT);
-		}
-		else */type = Type.std(Type.INT);
-
-		return new Constant(type, AnnVal.valueOf(v));
-	}
-	public static Constant valueOf(AnnVal v) {
-		return switch (v.type()) {
+	public static Constant classRef(Type type) {return new Constant(new Generic("java/lang/Class", Collections.singletonList(type)), type);}
+	public static Constant valueOf(String v) {return new Constant(Types.STRING_TYPE, v);}
+	public static Constant valueOf(boolean v) {return new Constant(Type.primitive(Type.BOOLEAN), v);}
+	public static Constant valueOf(int v) {return new Constant(Type.primitive(Type.INT), CEntry.valueOf(v));}
+	public static Constant valueOf(CEntry v) {
+		return switch (v.dataType()) {
 			case 's' -> valueOf(v.asString());
-			case 'e' -> new Constant(new Type(v.asEnum().owner()), v);
-			case 'c' -> classRef(v.asClass());
-			//case '@', '[' -> throw new IllegalArgumentException("not supported at this time");
-			default -> new Constant(Type.std(v.type()), v);
+			case 'I', 'B', 'C', 'S', 'J', 'F', 'D' -> new Constant(Type.primitive(v.dataType()), v);
+			default -> throw new IllegalArgumentException("暂时不支持这些类型："+v);
 		};
 	}
 
@@ -83,7 +66,7 @@ public final class Constant extends ExprNode {
 			if (t.isPrimitive()) {
 				cw.field(Opcodes.GETSTATIC, Objects.requireNonNull(TypeCast.getWrapper(t)).owner, "TYPE", "Ljava/lang/Class;");
 			} else {
-				cw.ldc(new CstClass(t.rawType().ownerForCstClass()));
+				cw.ldc(new CstClass(t.rawType().getActualClass()));
 			}
 		} else if (c instanceof CstClass cx) cw.ldc(cx);
 		else if (c == null) cw.one(Opcodes.ACONST_NULL);
@@ -121,10 +104,10 @@ public final class Constant extends ExprNode {
 
 	private void writePrimitive(MethodWriter cw, int cap) {
 		if ((cap & 7) != 0) switch (cap) {
-			case 5: cw.ldc(((AnnVal) c).asLong()); break;
-			case 6: cw.ldc(((AnnVal) c).asFloat()); break;
-			case 7: cw.ldc(((AnnVal) c).asDouble()); break;
-			default: cw.ldc(((AnnVal) c).asInt()); break;
+			case 5: cw.ldc(((CEntry) c).asLong()); break;
+			case 6: cw.ldc(((CEntry) c).asFloat()); break;
+			case 7: cw.ldc(((CEntry) c).asDouble()); break;
+			default: cw.ldc(((CEntry) c).asInt()); break;
 		}
 		else cw.ldc(c == Boolean.TRUE ? 1 : 0);
 	}
@@ -132,9 +115,8 @@ public final class Constant extends ExprNode {
 	@Override
 	public boolean equals(Object o) {
 		if (this == o) return true;
-		if (!(o instanceof ExprNode)) return false;
+		if (!(o instanceof ExprNode r)) return false;
 
-		ExprNode r = (ExprNode) o;
 		return r.isConstant() && type.equals(r.type()) && (c == null ? r.constVal() == null : c.equals(r.constVal()));
 	}
 

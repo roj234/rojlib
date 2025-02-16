@@ -1,19 +1,17 @@
 package roj.compiler;
 
 import roj.archive.zip.ZEntry;
+import roj.archive.zip.ZipFile;
 import roj.archive.zip.ZipFileWriter;
 import roj.asm.Parser;
-import roj.asmx.launcher.ClassWrapper;
 import roj.collect.MyHashMap;
-import roj.compiler.context.CompileUnit;
-import roj.compiler.context.GlobalContext;
-import roj.compiler.context.LibraryZipFile;
-import roj.compiler.context.LocalContext;
+import roj.compiler.context.*;
 import roj.compiler.diagnostic.TextDiagnosticReporter;
 import roj.compiler.plugin.GlobalContextApi;
 import roj.compiler.plugins.eval.Constexpr;
 import roj.io.IOUtil;
-import roj.text.ACalendar;
+import roj.reflect.ClassDefiner;
+import roj.text.DateParser;
 import roj.text.TextReader;
 import roj.text.TextUtil;
 import roj.util.ByteList;
@@ -29,10 +27,10 @@ import java.util.ArrayList;
  */
 public final class Lavac {
 	@Constexpr
-	public static String getCompileTime() {return ACalendar.toLocalTimeString(System.currentTimeMillis());}
-	public static String getCurrentTime() {return ACalendar.toLocalTimeString(System.currentTimeMillis());}
+	public static String getCompileTime() {return DateParser.toLocalTimeString(System.currentTimeMillis());}
+	public static String getCurrentTime() {return DateParser.toLocalTimeString(System.currentTimeMillis());}
 
-	public static final String VERSION = "0.14.0[RC] (compiled on "+getCompileTime()+")";
+	public static final String VERSION = "0.15.0[RC] (compiled on "+getCompileTime()+")";
 
 	private int debugOps = 10;
 	private GlobalContext ctx;
@@ -47,12 +45,10 @@ public final class Lavac {
 				      -cache <目录>              指定编译器缓存文件夹的位置
 				      -classpath/-cp <目录>      指定查找用户类文件和注释处理程序的位置
 				      -d <路径>                  指定放置编译的类文件的位置
-				      -sign <证书> <私钥>        为编译产物签名 (未实现)
 
 				      -encoding <编码>           指定源文件使用的字符编码
-				      -g                         选择生成哪些调试信息 (未实现)
-				        可用的值有：lines,vars,source,params 并以逗号分隔
-				      -debug                     生成编译器级别的调试信息
+				      -g                         选择生成哪些调试信息
+				        可用的值有：compiler,lines,vars,source,params 或 all 并以逗号分隔
 
 				      -maxWarn <数值>            最大允许显示的警告数量
 				      -maxError <数值>           最大允许显示的错误数量
@@ -97,22 +93,22 @@ public final class Lavac {
 				case "-cp", "-classpath" -> cp = args[++i];
 				case "-d" -> bin = args[++i];
 				case "-g" -> {
-					int debugOps = compiler.debugOps&1;
+					int debugOps = 0;
 					loop1:
 					for (var name : TextUtil.split(args[++i], ',')) {
 						switch (name.trim()) {
 							case "none" -> {debugOps = 0;break loop1;}
-							case "compiler" -> debugOps |= 1;
-							case "line" -> debugOps |= 2;
-							case "vars" -> debugOps |= 4;
-							case "source" -> debugOps |= 8;
-							case "all" -> debugOps |= 14;
+							case "compiler" -> debugOps |= 16;
+							case "line" -> debugOps |= 1<<LavaFeatures.ATTR_LINE_NUMBERS;
+							case "vars" -> debugOps |= 1<<LavaFeatures.ATTR_LOCAL_VARIABLES;
+							case "params" -> debugOps |= 1<<LavaFeatures.ATTR_METHOD_PARAMETERS;
+							case "source" -> debugOps |= 1<<LavaFeatures.ATTR_SOURCE_FILE;
+							case "all" -> debugOps |= 15;
 							default -> throw new IllegalStateException("Unexpected value: "+name);
 						}
 					}
 					compiler.debugOps = debugOps;
 				}
-				case "-debug" -> compiler.debugOps |= 1;
 				case "-ctx" -> context = (GlobalContext) Class.forName(args[++i]).newInstance();
 				case "-T" -> ctxOps.put(args[++i], args[++i]);
 				default -> {break loop;}
@@ -126,10 +122,25 @@ public final class Lavac {
 		}
 
 		compiler.ctx = context == null ? new GlobalContextApi() : context;
+		GlobalContextApi api = (GlobalContextApi) compiler.ctx;
+
+		for (int j = 0; j < 3; j++) {
+			if (((1 << j) & compiler.debugOps) != 0)
+				api.features.add(j);
+		}
+
+		api.features.add(LavaFeatures.ATTR_INNER_CLASS);
+		api.features.add(LavaFeatures.ATTR_STACK_FRAME);
+		api.features.add(LavaFeatures.OPTIONAL_SEMICOLON);
+		api.features.add(LavaFeatures.VERIFY_FILENAME);
+		api.features.add(LavaFeatures.OMISSION_NEW);
+		api.features.add(LavaFeatures.SHARED_STRING_CONCAT);
+		api.features.add(LavaFeatures.NESTED_MEMBER);
+		api.features.add(LavaFeatures.SEALED_ENUM);
 
 		// InitDefaultPlugins Requires LocalContext
 		LocalContext.set(compiler.ctx.createLocalContext());
-		LavaCompiler.initDefaultPlugins((GlobalContextApi) compiler.ctx);
+		LavaCompiler.initDefaultPlugins(api);
 
 		for (var path : TextUtil.split(cp, File.pathSeparatorChar)) compiler.addClass(new File(path));
 
@@ -145,8 +156,14 @@ public final class Lavac {
 
 		if (ok) {
 			try {
-				ClassWrapper.instance.enableFastZip(dst.toURL());
-				((Runnable) Class.forName("Test", true, Lavac.class.getClassLoader()).newInstance()).run();
+				var classLoader = new ClassDefiner(Lavac.class.getClassLoader(), "lavac test");
+				try (var za = new ZipFile(dst)) {
+					for (ZEntry entry : za.entries()) {
+						ClassDefiner.defineClass(classLoader, null, IOUtil.getSharedByteBuf().readStreamFully(za.getStream(entry)));
+					}
+
+					((Runnable) Class.forName("Test", true, classLoader).newInstance()).run();
+				}
 			} catch (Exception e) {
 				e.printStackTrace();
 			}
@@ -192,11 +209,19 @@ public final class Lavac {
 				for (int i = 0; i < files.size(); i++) {
 					var data = files.get(i);
 					data.S5_noStore();
-					zfw.beginEntry(new ZEntry(data.name.concat(".class")));
-					Parser.toByteArrayShared(data).writeToStream(zfw);
+					zfw.beginEntry(new ZEntry(data.name().concat(".class")));
+					if (data.name().equals("Test")) {
+						// FIXME NOVERIFY
+						data.parent("java/lang/🔓_IL🐟");
+					}
+					ByteList x = Parser.toByteArrayShared(data);
+					if (data.name().equals("Test")) {
+						System.out.println(Parser.parse(x));
+					}
+					x.writeToStream(zfw);
 				}
 				for (var data : ctx.getGeneratedClasses()) {
-					zfw.beginEntry(new ZEntry(data.name.concat(".class")));
+					zfw.beginEntry(new ZEntry(data.name().concat(".class")));
 					Parser.toByteArrayShared(data).writeToStream(zfw);
 				}
 
@@ -227,7 +252,7 @@ public final class Lavac {
 					e.printStackTrace();
 					return;
 				}
-				CompileUnits.add(new CompileUnit(file.getName(), code));
+				CompileUnits.add(new LavaCompileUnit(file.getName(), code));
 			}
 		}
 	}

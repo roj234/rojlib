@@ -1,9 +1,8 @@
 package roj.collect;
 
-import roj.asm.tree.ConstantData;
+import roj.asm.ClassNode;
+import roj.asm.insn.CodeWriter;
 import roj.asm.type.Type;
-import roj.asm.type.TypeHelper;
-import roj.asm.visitor.CodeWriter;
 import roj.reflect.ClassDefiner;
 
 import static roj.asm.Opcodes.*;
@@ -18,7 +17,7 @@ final class ArrayHasher {
 	static <T> Hasher<T> array(Class<T> type) {
 		if (!type.getComponentType().isPrimitive()) type = (Class<T>) Object[].class;
 
-		Type clz = TypeHelper.class2type(type);
+		Type clz = Type.fromJavaType(type);
 
 		Hasher<?> h = built.get((char) clz.type);
 		block:
@@ -27,7 +26,7 @@ final class ArrayHasher {
 				if ((h = built.get((char) clz.type)) != null) break block;
 			}
 
-			ConstantData hasher = new ConstantData();
+			ClassNode hasher = new ClassNode();
 			hasher.name("roj/collect/Hasher$A" + (char) clz.type);
 			hasher.addInterface("roj/collect/Hasher");
 

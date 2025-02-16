@@ -2,13 +2,14 @@ package roj.plugins.http.flow;
 
 import roj.collect.RingBuffer;
 import roj.collect.ToLongMap;
+import roj.http.server.ResponseHeader;
+import roj.http.server.ResponseWriter;
 import roj.net.ChannelCtx;
 import roj.net.ChannelHandler;
 import roj.net.MyChannel;
-import roj.net.http.server.ResponseHeader;
-import roj.net.http.server.ResponseWriter;
 import roj.net.util.SpeedLimiter;
 import roj.reflect.ReflectionUtils;
+import roj.reflect.Unaligned;
 
 import java.io.IOException;
 
@@ -45,7 +46,7 @@ public class FlowController extends SpeedLimiter implements ChannelHandler {
 
 	public int limit(int pendingBytes) {
 		if (bps == 0) return pendingBytes;
-		if (!ReflectionUtils.u.compareAndSwapInt(this, LOCK_OFFSET, 0, 1)) return 0;
+		if (!Unaligned.U.compareAndSwapInt(this, LOCK_OFFSET, 0, 1)) return 0;
 		try {
 			return super.limit(pendingBytes);
 		} finally {
@@ -120,7 +121,7 @@ public class FlowController extends SpeedLimiter implements ChannelHandler {
 		var delta = writer.getSendBytes() - entry.v;
 		entry.v = writer.getSendBytes();
 
-		if(limitAfter < 0 || ReflectionUtils.u.getAndAddInt(this, limitAfter_OFFSET, (int) -delta) < delta) {
+		if(limitAfter < 0 || Unaligned.U.getAndAddInt(this, limitAfter_OFFSET, (int) -delta) < delta) {
 			writer.setStreamLimit(this);
 		}
 	}

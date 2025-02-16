@@ -2,7 +2,7 @@ package roj.util;
 
 import java.lang.reflect.Array;
 
-import static roj.reflect.ReflectionUtils.u;
+import static roj.reflect.Unaligned.U;
 
 /**
  * @author Roj234
@@ -29,7 +29,7 @@ public final class ArrayRef {
 	public static ArrayRef primitiveArray(Object b) {
 		if (!b.getClass().getComponentType().isPrimitive()) throw new IllegalArgumentException(b.getClass()+" is not primitive array");
 		Class<?> arrayClass = b.getClass();
-		return create(b, u.arrayBaseOffset(arrayClass), u.arrayIndexScale(arrayClass), Array.getLength(b));
+		return create(b, U.arrayBaseOffset(arrayClass), U.arrayIndexScale(arrayClass), Array.getLength(b));
 	}
 	public static ArrayRef objectArray(Object[] b) { return create(b, 0, 4, b.length); }
 
@@ -40,13 +40,13 @@ public final class ArrayRef {
 
 		if (isObjectArray()) {
 			while (count-- > 0) {
-				u.putInt(dstRef, dstOff, off++);
+				U.putInt(dstRef, dstOff, off++);
 				dstOff += stride;
 			}
 		} else {
 			long offset = (long) off*compSize + addr;
 			while (count-- > 0) {
-				u.copyMemory(ref, offset, dstRef, dstOff, compSize);
+				U.copyMemory(ref, offset, dstRef, dstOff, compSize);
 				offset += compSize;
 				dstOff += stride;
 			}
@@ -60,13 +60,13 @@ public final class ArrayRef {
 			Object[] bak = arr.clone();
 
 			while (count-- > 0) {
-				arr[off++] = bak[u.getInt(srcRef, srcOff)];
+				arr[off++] = bak[U.getInt(srcRef, srcOff)];
 				srcOff += stride;
 			}
 		} else {
 			long offset = (long) off*compSize + addr;
 			while (count-- > 0) {
-				u.copyMemory(srcRef, srcOff, ref, offset, compSize);
+				U.copyMemory(srcRef, srcOff, ref, offset, compSize);
 				srcOff += stride;
 				offset += compSize;
 			}
@@ -75,11 +75,11 @@ public final class ArrayRef {
 
 	public void set(int pos, int val) {
 		if (CHECK) checkRange(pos, 1);
-		u.putByte(ref, addr+pos, (byte) val);
+		U.putByte(ref, addr+pos, (byte) val);
 	}
 	public byte get(int pos) {
 		if (CHECK) checkRange(pos, 1);
-		return u.getByte(ref, addr+pos);
+		return U.getByte(ref, addr+pos);
 	}
 
 	private void checkRange(long off, int len) { if ((off|len) < 0 || (off+len) > (long)this.length*compSize) throw new ArrayIndexOutOfBoundsException("off="+off+",len="+len+",cap="+this.length); }

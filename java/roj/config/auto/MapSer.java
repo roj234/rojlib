@@ -60,7 +60,7 @@ final class MapSer extends Adapter {
 	@Override
 	@SuppressWarnings("unchecked")
 	public void read(AdaptContext ctx, Object o) {
-		if (ctx.fieldId == 1) {ctx.ref2 = o;return;}
+		if (ctx.fieldState == 1) {ctx.ref2 = o;return;}
 
 		if (ctx.ref2 == null) {
 			assert o == null : "ConfigParser violates constraint";
@@ -72,7 +72,7 @@ final class MapSer extends Adapter {
 		var ref = (Map<Object,Object>) ctx.ref;
 
 		if (keyType != null) {
-			ctx.fieldId = 1;
+			ctx.fieldState = 1;
 
 			var name = ctx.ref2;
 

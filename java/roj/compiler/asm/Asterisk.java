@@ -56,8 +56,6 @@ public final class Asterisk implements IType {
 	public byte genericType() { return limited ? CONCRETE_ASTERISK_TYPE : ASTERISK_TYPE; }
 	@Override
 	public void toDesc(CharList sb) { throw new UnsupportedOperationException("Asterisk仅用于类型转换的比较"); }
-	@Override
-	public void checkPosition(int env, int pos) {throw new UnsupportedOperationException("Asterisk仅用于类型转换的比较");}
 
 	@Override
 	public boolean isPrimitive() { return bound != null && bound.isPrimitive(); }

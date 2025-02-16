@@ -1,13 +1,13 @@
 package roj.text;
 
 import roj.reflect.ReflectionUtils;
-import sun.misc.Unsafe;
+import roj.reflect.Unaligned;
 
 import java.nio.charset.Charset;
 import java.util.function.IntConsumer;
 
 import static java.lang.Character.*;
-import static roj.reflect.ReflectionUtils.u;
+import static roj.reflect.Unaligned.U;
 
 /**
  * 不验证并且仅内存拷贝的UTF16
@@ -23,28 +23,28 @@ public final class UTF16n extends UnsafeCharset {
 	@Override
 	public long unsafeEncode(char[] s, int i, int end, Object ref, long addr, int max_len) {
 		int copyChars = Math.min(max_len/2, end-i);
-		u.copyMemory(s, Unsafe.ARRAY_CHAR_BASE_OFFSET+(i * 2L), ref, addr, copyChars * 2L);
+		U.copyMemory(s, Unaligned.ARRAY_CHAR_BASE_OFFSET + (i * 2L), ref, addr, copyChars * 2L);
 		i += copyChars;
-		return ((long) i << 32) | (copyChars * 2L);
+		return ((long) i << 32) | (max_len - copyChars * 2L);
 	}
 
 	@Override
 	public long unsafeDecode(Object ref, long base, int pos, int end, char[] out, int off, int outMax) {
 		int copyChars = Math.min((end-pos)/2, outMax);
-		u.copyMemory(ref, base+pos, out, Unsafe.ARRAY_CHAR_BASE_OFFSET+(off * 2L), copyChars * 2L);
+		U.copyMemory(ref, base+pos, out, Unaligned.ARRAY_CHAR_BASE_OFFSET + (off * 2L), copyChars * 2L);
 		return ((pos+copyChars*2L)<<32) | (off+copyChars);
 	}
 
 	@Override
 	public void unsafeValidate(Object ref, long i, long max, IntConsumer cs) {
 		while (i+2 <= max) {
-			int c = u.getChar(ref, i); i += 2;
+			int c = U.getChar(ref, i); i += 2;
 
 			if (c >= MIN_HIGH_SURROGATE) {
 				if (c >= MIN_LOW_SURROGATE) {cs.accept(MALFORMED - 2); continue;}
 				if (i+2 > max) {i -= 2; break;}
 
-				int ls = u.getChar(ref, i); i += 2;
+				int ls = U.getChar(ref, i); i += 2;
 				if (ls < MIN_LOW_SURROGATE || ls >= MAX_LOW_SURROGATE) cs.accept(MALFORMED - 2);
 				c = codepoint(c, ls);
 			}

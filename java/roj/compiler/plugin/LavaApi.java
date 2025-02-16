@@ -2,8 +2,8 @@ package roj.compiler.plugin;
 
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
-import roj.asm.tree.IClass;
-import roj.asm.tree.attr.InnerClasses;
+import roj.asm.IClass;
+import roj.asm.attr.InnerClasses;
 import roj.asm.type.IType;
 import roj.collect.IntBiMap;
 import roj.compiler.context.Library;

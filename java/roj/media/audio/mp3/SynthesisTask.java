@@ -1,6 +1,6 @@
 package roj.media.audio.mp3;
 
-import roj.concurrent.task.ITask;
+import roj.concurrent.ITask;
 
 /**
  * 由于大量浮点运算，多相合成滤波耗时最多，使用并发运算加速解码

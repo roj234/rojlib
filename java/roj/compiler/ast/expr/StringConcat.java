@@ -1,7 +1,6 @@
 package roj.compiler.ast.expr;
 
 import roj.asm.Opcodes;
-import roj.asm.tree.anno.AnnVal;
 import roj.asm.type.IType;
 import roj.asm.type.Type;
 import roj.collect.SimpleList;
@@ -11,6 +10,7 @@ import roj.compiler.asm.MethodWriter;
 import roj.compiler.context.LocalContext;
 import roj.compiler.resolve.ResolveException;
 import roj.compiler.resolve.TypeCast;
+import roj.config.data.CEntry;
 import roj.io.IOUtil;
 import roj.text.CharList;
 import roj.text.TextUtil;
@@ -70,7 +70,7 @@ final class StringConcat extends ExprNode {
 		}
 		return nodes.size() == 1 ? nodes.get(0) : this;
 	}
-	private static String safeToString(Object o) { return o instanceof AnnVal ? ((AnnVal) o).toRawString() : o.toString(); }
+	private static String safeToString(Object o) {return o instanceof CEntry entry ? entry.asString() : String.valueOf(o);}
 
 	public ExprNode prepend(ExprNode left) {nodes.add(0, left);return this;}
 	public ExprNode append(ExprNode right) {nodes.add(right);return this;}

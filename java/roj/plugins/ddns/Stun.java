@@ -1,7 +1,7 @@
 package roj.plugins.ddns;
 
-import roj.net.p2p.STUN;
-import roj.net.p2p.Servers;
+import roj.plugins.p2p.STUN;
+import roj.plugins.p2p.Servers;
 
 import java.io.IOException;
 import java.net.InetAddress;
@@ -11,7 +11,7 @@ import java.net.InetSocketAddress;
  * @author Roj234
  * @since 2023/1/28 0028 1:23
  */
-public class Stun extends IpGetter {
+final class Stun extends IpGetter {
 	private final int[] lastGood = {-1,-1};
 
 	@Override

@@ -1,7 +1,7 @@
 package roj.io.source;
 
 import roj.io.MyDataInput;
-import roj.reflect.ReflectionUtils;
+import roj.reflect.Unaligned;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
 
@@ -66,7 +66,7 @@ public class MemorySource extends Source {
 	@Override
 	public void moveSelf(long from, long to, long length) {
 		if ((from | to | length) < 0) throw new IllegalArgumentException();
-		ReflectionUtils.u.copyMemory(list.array(), list._unsafeAddr()+from, list.array(), list._unsafeAddr()+to, length);
+		Unaligned.U.copyMemory(list.array(), list._unsafeAddr()+from, list.array(), list._unsafeAddr()+to, length);
 	}
 
 	@Override
@@ -76,4 +76,22 @@ public class MemorySource extends Source {
 
 	@Override
 	public String toString() { return "MemorySource@"+System.identityHashCode(list); }
+
+	@Override
+	public boolean equals(Object o) {
+		if (this == o) return true;
+		if (o == null || getClass() != o.getClass()) return false;
+
+		MemorySource source = (MemorySource) o;
+
+		if (cap != source.cap) return false;
+		return list == source.list;
+	}
+
+	@Override
+	public int hashCode() {
+		int result = System.identityHashCode(list);
+		result = 31 * result + cap;
+		return result;
+	}
 }

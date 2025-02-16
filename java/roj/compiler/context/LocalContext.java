@@ -4,18 +4,17 @@ import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.jetbrains.annotations.Range;
-import roj.asm.Opcodes;
+import roj.asm.*;
+import roj.asm.annotation.Annotation;
+import roj.asm.attr.Annotations;
+import roj.asm.attr.AttrClassList;
+import roj.asm.attr.Attribute;
+import roj.asm.attr.InnerClasses;
 import roj.asm.cp.*;
-import roj.asm.tree.*;
-import roj.asm.tree.anno.AnnVal;
-import roj.asm.tree.anno.Annotation;
-import roj.asm.tree.attr.AttrClassList;
-import roj.asm.tree.attr.Attribute;
-import roj.asm.tree.attr.InnerClasses;
+import roj.asm.insn.Label;
 import roj.asm.type.*;
 import roj.asm.util.ClassUtil;
-import roj.asm.visitor.Label;
-import roj.asmx.mapper.util.NameAndType;
+import roj.asmx.mapper.NameAndType;
 import roj.collect.*;
 import roj.compiler.JavaLexer;
 import roj.compiler.LavaFeatures;
@@ -33,6 +32,7 @@ import roj.compiler.ast.expr.NaE;
 import roj.compiler.diagnostic.Kind;
 import roj.compiler.resolve.*;
 import roj.config.ParseException;
+import roj.config.data.CEntry;
 import roj.config.data.CInt;
 import roj.reflect.GetCallerArgs;
 import roj.text.CharList;
@@ -67,7 +67,7 @@ public class LocalContext {
 	public final Inferrer inferrer = new Inferrer(this);
 
 	protected TypeResolver tr;
-	public final MyHashMap<String, ConstantData> importCache = new MyHashMap<>(), importCacheMethod = new MyHashMap<>();
+	public final MyHashMap<String, ClassNode> importCache = new MyHashMap<>(), importCacheMethod = new MyHashMap<>();
 	public final MyHashMap<String, Object[]> importCacheField = new MyHashMap<>();
 
 	public CompileUnit file;
@@ -89,6 +89,7 @@ public class LocalContext {
 		this.bp = ctx.createBlockParser(this);
 		this.variables = bp.getVariables();
 		this.caster.context = ctx;
+		this.caster.ctx = this;
 	}
 
 	public boolean disableConstantValue;
@@ -345,11 +346,11 @@ public class LocalContext {
 	// B <T1, T2> extends A <T1> implements Z<T2>
 	// C <T3> extends B <String, T3>
 	// 假设我要拿A的类型，那就要先通过已知的C（params）推断B，再推断A
-	private List<IType> inferGeneric0(ConstantData typeInst, List<IType> params, String target) {
+	private List<IType> inferGeneric0(ClassNode typeInst, List<IType> params, String target) {
 		Map<String, IType> visType = new MyHashMap<>();
 
 		int depthInfo = getParentList(typeInst).getValueOrDefault(target, -1);
-		if (depthInfo == -1) throw new IllegalStateException("无法从"+typeInst.name+"<"+params+">推断"+target);
+		if (depthInfo == -1) throw new IllegalStateException("无法从"+typeInst.name()+"<"+params+">推断"+target);
 
 		loop:
 		for(;;) {
@@ -388,9 +389,9 @@ public class LocalContext {
 
 	// region 解析符号引用 Class Field Method
 	@Nullable
-	public ConstantData getClassOrArray(IType type) { return type.array() > 0 ? classes.getArrayInfo(type) : classes.getClassInfo(type.owner()); }
+	public ClassNode getClassOrArray(IType type) { return type.array() > 0 ? classes.getArrayInfo(type) : classes.getClassInfo(type.owner()); }
 
-	public ConstantData resolveType(String klass) { return tr.resolve(this, klass); }
+	public ClassNode resolveType(String klass) { return tr.resolve(this, klass); }
 	@Contract("_ -> param1")
 	public IType resolveType(IType type) {
 		if (type.genericType() == 0 ? type.rawType().type != Type.CLASS : type.genericType() != 1) return type;
@@ -504,7 +505,7 @@ public class LocalContext {
 	 * @return 错误码,null为成功
 	 */
 	public String resolveDotGet(CharList desc, boolean allowClassExpr) {
-		ConstantData directClz = null;
+		ClassNode directClz = null;
 		String anySuccess = "";
 		_frOffset = 0;
 
@@ -649,7 +650,7 @@ public class LocalContext {
 	public IType transformPseudoType(IType type) {
 		if (type.owner() != null && !"java/lang/Object".equals(type.owner())) {
 			var info = classes.getClassInfo(type.owner());
-			if (info.parent == null) {
+			if (info.parent() == null) {
 				var vb = (ValueBased) info.attrByName(ValueBased.NAME);
 				if (vb != null) {
 					report(Kind.WARNING, "pseudoType.cast");
@@ -677,7 +678,7 @@ public class LocalContext {
 				}
 			} else {
 				for (String s : exceptions.value) {
-					if (caster.checkCast(type, new Type(s)).type >= 0) return;
+					if (caster.checkCast(type, Type.klass(s)).type >= 0) return;
 				}
 			}
 		}
@@ -725,7 +726,7 @@ public class LocalContext {
 		public Import(IClass owner) {
 			this.owner = Objects.requireNonNull(owner);
 			this.method = "<init>";
-			this.prev = new Type(owner.name());
+			this.prev = Type.klass(owner.name());
 		}
 
 		public ExprNode parent() {return (ExprNode) prev;}
@@ -808,7 +809,7 @@ public class LocalContext {
 		int capa = TypeCast.getDataCap(a.getActualType());
 		int capb = TypeCast.getDataCap(b.getActualType());
 		// 双方都是数字
-		if ((capa&7) != 0 && (capb&7) != 0) return new Type("java/lang/Number");
+		if ((capa&7) != 0 && (capb&7) != 0) return Type.klass("java/lang/Number");
 		// 没有任何一方是对象 (boolean | void)
 		if ((capa|capb) < 8) return Types.OBJECT_TYPE;
 
@@ -873,7 +874,7 @@ public class LocalContext {
 
 		String commonParent = getCommonParent(infoA, infoB);
 		assert commonParent != null;
-		if (typeParams.isEmpty() && extendType == 0) return new Type(commonParent);
+		if (typeParams.isEmpty() && extendType == 0) return Type.klass(commonParent);
 
 		Generic generic = new Generic(commonParent, a.array(), (byte) extendType);
 		generic.children = typeParams;
@@ -907,7 +908,7 @@ public class LocalContext {
 
 	// region 也许应该放在GlobalContext中的一些实现特殊语法的函数
 	public Annotation getAnnotation(IClass type, Attributed node, String annotation, boolean rt) {
-		return Annotation.find(Annotation.getAnnotations(type.cp(), node, rt), annotation);
+		return Annotation.find(Annotations.getAnnotations(type.cp(), node, rt), annotation);
 	}
 
 	private static final IntMap<ExprNode> EMPTY = new IntMap<>(0);
@@ -950,7 +951,7 @@ public class LocalContext {
 
 	public IClass getPrimitiveMethod(IType type, ExprNode caller, List<ExprNode> args) {
 		if (type.getActualType() == Type.INT) {
-			var type1 = new ConstantData();
+			var type1 = new ClassNode();
 			type1.name("java/lang/Integer");
 			type1.newMethod(Opcodes.ACC_PUBLIC|Opcodes.ACC_STATIC, "toHexString", "(I)Ljava/lang/String;");
 			return type1;
@@ -971,10 +972,10 @@ public class LocalContext {
 		if (cv == null) return null;
 
 		var c = switch (cv.c.type()) {
-			case Constant.INT -> AnnVal.valueOf(((CstInt) cv.c).value);
-			case Constant.FLOAT -> AnnVal.valueOf(((CstFloat) cv.c).value);
-			case Constant.LONG -> AnnVal.valueOf(((CstLong) cv.c).value);
-			case Constant.DOUBLE -> AnnVal.valueOf(((CstDouble) cv.c).value);
+			case Constant.INT -> CEntry.valueOf(((CstInt) cv.c).value);
+			case Constant.FLOAT -> CEntry.valueOf(((CstFloat) cv.c).value);
+			case Constant.LONG -> CEntry.valueOf(((CstLong) cv.c).value);
+			case Constant.DOUBLE -> CEntry.valueOf(((CstDouble) cv.c).value);
 			case Constant.CLASS -> cv.c;
 			case Constant.STRING -> cv.c.getEasyCompareValue();
 			default -> throw new IllegalArgumentException("Illegal ConstantValue "+cv.c);
@@ -1027,6 +1028,6 @@ public class LocalContext {
 		return tmpLabels;
 	}
 
-	public String currentCodeBlockForReport() {return "\1symbol.type\0 "+file.name;}
+	public String currentCodeBlockForReport() {return "\1symbol.type\0 "+file.name();}
 	// endregion
 }

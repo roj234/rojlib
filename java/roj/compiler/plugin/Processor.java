@@ -1,8 +1,8 @@
 package roj.compiler.plugin;
 
-import roj.asm.tree.Attributed;
-import roj.asm.tree.IClass;
-import roj.asm.tree.anno.Annotation;
+import roj.asm.Attributed;
+import roj.asm.IClass;
+import roj.asm.annotation.Annotation;
 import roj.compiler.context.CompileUnit;
 import roj.compiler.context.LocalContext;
 

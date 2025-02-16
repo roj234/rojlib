@@ -1,13 +1,12 @@
 package roj.plugin;
 
-import roj.archive.zip.ZipFile;
 import roj.collect.MyHashMap;
 import roj.config.Tokenizer;
+import roj.http.HttpUtil;
+import roj.http.server.*;
 import roj.io.IOUtil;
-import roj.net.http.HttpUtil;
-import roj.net.http.server.*;
 import roj.text.CharList;
-import roj.text.Template;
+import roj.text.Formatter;
 import roj.text.TextUtil;
 
 import java.io.File;
@@ -27,16 +26,16 @@ public class PathIndexRouter implements Router, Predicate<String> {
 	public PathIndexRouter(String path) {this(new File(path));}
 	public PathIndexRouter(File path) {this.path = path.getAbsolutePath();}
 
-	private static ZipFile zf;
 	private static FileInfo js, css;
-	private static Template template;
+	private static Formatter template;
 
 	static {
 		try {
-			zf = new ZipFile(new File(Panger.getInstance().getPluginFolder(), "Core/resource-pi.zip"));
-			js = new ZipRouter.ZipFileInfo(zf, zf.getEntry("pi.js"));
-			css = new ZipRouter.ZipFileInfo(zf, zf.getEntry("pi.css"));
-			template = Template.compile(IOUtil.readString(zf.getStream("pi.html")));
+			Panger.initHttp();
+			var zf = Panger.resources;
+			js = new ZipRouter.ZipFileInfo(zf, zf.getEntry("assets/pi.js"));
+			css = new ZipRouter.ZipFileInfo(zf, zf.getEntry("assets/pi.css"));
+			template = Formatter.simple(IOUtil.readString(zf.getStream("assets/pi.html")));
 		} catch (IOException e) {
 			throw new RuntimeException(e);
 		}

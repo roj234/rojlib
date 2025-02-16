@@ -68,7 +68,7 @@ public class DPIProxy extends Plugin {
 		for (int i = 0; i < proxies.size(); i++) {
 			var item = proxies.get(i).asMap();
 			var patterns = new SimpleList<DpiMatcher>();
-			var timeout = item.getInteger("timeout", 15000);
+			var timeout = item.getInt("timeout", 15000);
 
 			var port = item.getString("port");
 			var launcher = ServerLaunch.tcp("DPIProxy-"+port).bind(NetUtil.parseListeningAddress(port)).initializator(ch ->
@@ -85,7 +85,7 @@ public class DPIProxy extends Plugin {
 			}
 		}
 
-		compiler.gctx.reset();
+		compiler.api.reset();
 		LOGGER.info("插件启用成功：编译了{}个Matcher", matchers.size());
 		for (var server : servers) server.launch();
 	}
@@ -134,7 +134,7 @@ public class DPIProxy extends Plugin {
 							case 0 -> {
 								var handler = ServerLaunch.SHARED.get(resp.getMessage());
 								if (handler == null) {
-									LOGGER.warn("{}: 找不到管道", ch.remoteAddress(), resp.getMessage());
+									LOGGER.warn("{}: 找不到管道 {}", ch.remoteAddress(), resp.getMessage());
 								} else {
 									LOGGER.debug("{}: Pipe #{}", ch.remoteAddress(), resp.getMessage());
 									handler.addTCPConnection(ch);

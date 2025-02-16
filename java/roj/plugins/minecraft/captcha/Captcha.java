@@ -4,10 +4,10 @@ import org.jetbrains.annotations.NotNull;
 import roj.collect.MyBitSet;
 import roj.collect.MyHashMap;
 import roj.collect.SimpleList;
-import roj.concurrent.timing.ScheduleTask;
+import roj.concurrent.ScheduleTask;
+import roj.config.data.CEntry;
 import roj.config.data.CList;
 import roj.config.data.CMap;
-import roj.config.data.CShort;
 import roj.io.IOUtil;
 import roj.math.Vec4d;
 import roj.net.ChannelCtx;
@@ -23,22 +23,18 @@ import roj.plugins.minecraft.server.network.ConstantPacket;
 import roj.plugins.minecraft.server.network.Packet;
 import roj.plugins.minecraft.server.network.PlayerConnection;
 import roj.text.CharList;
+import roj.text.Formatter;
 import roj.text.LineReader;
-import roj.text.Template;
 import roj.text.TextUtil;
-import roj.ui.AnsiString;
-import roj.ui.Terminal;
-import roj.ui.terminal.Argument;
-import roj.ui.terminal.CommandNode;
-import roj.ui.terminal.SimpleCliParser;
+import roj.ui.*;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
 
-import static roj.ui.terminal.CommandNode.argument;
-import static roj.ui.terminal.CommandNode.literal;
+import static roj.ui.CommandNode.argument;
+import static roj.ui.CommandNode.literal;
 
 /**
  * @author Roj234
@@ -47,10 +43,10 @@ import static roj.ui.terminal.CommandNode.literal;
 public final class Captcha implements ChannelHandler {
 	private static final ConstantPacket MY_COMMAND_TREE = new ConstantPacket("CommandTree", buf -> {
 		CommandTree tree = new CommandTree();
-		tree.then(literal("mycaptcha:mcadmin").then(argument("command", Argument.string())).executes(SimpleCliParser.nullImpl()));
-		tree.then(literal("mcadmin").then(argument("command", Argument.string())).executes(SimpleCliParser.nullImpl()));
-		tree.then(literal("mycaptcha:verify").then(argument("command", Argument.string())).executes(SimpleCliParser.nullImpl()));
-		tree.then(literal("verify").then(argument("captcha", Argument.string())).executes(SimpleCliParser.nullImpl()));
+		tree.then(literal("mycaptcha:mcadmin").then(argument("command", Argument.string())).executes(CLIParser.nullImpl()));
+		tree.then(literal("mcadmin").then(argument("command", Argument.string())).executes(CLIParser.nullImpl()));
+		tree.then(literal("mycaptcha:verify").then(argument("command", Argument.string())).executes(CLIParser.nullImpl()));
+		tree.then(literal("verify").then(argument("captcha", Argument.string())).executes(CLIParser.nullImpl()));
 
 		String CMD = "? about bukkit:?||? bukkit:about||about bukkit:help||help bukkit:pl||plugins bukkit:plugins||plugins bukkit:ver||version bukkit:version||version help icanhasbukkit me|action minecraft:help minecraft:me||me minecraft:msg||msg minecraft:teammsg||teammsg minecraft:tell||tell minecraft:tm|tm minecraft:trigger|trigger minecraft:w||w msg|message pl||plugins plugins teammsg|message tell|player|message tm||teammsg trigger|action ver||version version w";
 		for (String str : TextUtil.split(new SimpleList<>(), CMD, ' ')) {
@@ -61,7 +57,7 @@ public final class Captcha implements ChannelHandler {
 
 			CommandNode base = literal(name);
 			if (arg1 != null) base = base.then(argument(arg1, Argument.string()));
-			tree.then(base.executes(SimpleCliParser.nullImpl()));
+			tree.then(base.executes(CLIParser.nullImpl()));
 		}
 
 		tree.write(buf);
@@ -101,11 +97,11 @@ public final class Captcha implements ChannelHandler {
 		CaptchaPlugin pl = CaptchaPlugin.INSTANCE;
 
 		CMap cfg = pl.getCfg();
-		int timeout = cfg.getInteger("timeout");
+		int timeout = cfg.getInt("timeout");
 
-		Template template = Template.compile(cfg.getString("messages.intro"));
+		Formatter template = Formatter.simple(cfg.getString("messages.intro"));
 		MyHashMap<String, Object> map = new MyHashMap<>();
-		map.put("reset", cfg.getInteger("timeout_reset"));
+		map.put("reset", cfg.getInt("timeout_reset"));
 		map.put("length", choices.length);
 		map.put("user", pc.getName());
 		map.put("ip", ((InetSocketAddress)ctx.remoteAddress()).getAddress().getHostAddress());
@@ -184,7 +180,7 @@ public final class Captcha implements ChannelHandler {
 		CList enchantment = tag.getOrCreateList("Enchantments");
 		CMap eff = new CMap();
 		eff.put("id", "minecraft:efficiency");
-		eff.put("lvl", new CShort((short) 5));
+		eff.put("lvl", CEntry.valueOf((short) 5));
 		enchantment.add(eff);
 		return _pickaxe;
 	}

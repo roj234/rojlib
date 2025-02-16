@@ -1,23 +1,20 @@
 package roj.asmx.nixim;
 
 import org.jetbrains.annotations.NotNull;
-import roj.asm.Opcodes;
-import roj.asm.Parser;
+import roj.asm.*;
+import roj.asm.annotation.AList;
+import roj.asm.annotation.Annotation;
+import roj.asm.attr.*;
 import roj.asm.cp.*;
 import roj.asm.frame.Frame;
 import roj.asm.frame.Var2;
-import roj.asm.tree.*;
-import roj.asm.tree.anno.AnnVal;
-import roj.asm.tree.anno.AnnValString;
-import roj.asm.tree.anno.Annotation;
-import roj.asm.tree.attr.*;
+import roj.asm.insn.*;
 import roj.asm.type.Desc;
 import roj.asm.type.Type;
 import roj.asm.type.TypeHelper;
 import roj.asm.util.ClassUtil;
 import roj.asm.util.Context;
 import roj.asm.util.InsnMatcher;
-import roj.asm.visitor.*;
 import roj.asmx.ITransformer;
 import roj.collect.*;
 import roj.config.data.CInt;
@@ -39,7 +36,7 @@ import static roj.reflect.Debug.dump;
  * @since 2023/10/9 18:49
  */
 public class NiximSystemV2 implements ITransformer {
-	public static final String A_NIXIM_CLASS_FLAG = unifyClassName(Nixim.class.getName());
+	public static final String A_NIXIM = unifyClassName(Nixim.class.getName());
 	public static final String A_INJECT = unifyClassName(Inject.class.getName());
 	public static final String A_SHADOW = unifyClassName(Shadow.class.getName());
 	public static final String A_COPY = unifyClassName(Copy.class.getName());
@@ -105,29 +102,27 @@ public class NiximSystemV2 implements ITransformer {
 	// endregion
 
 	public static final class NiximData {
+		NiximData next;
+
+		public NiximData(String self) {this.self = self;}
+
 		public final String self;
 		public String target;
-
 		public List<String> impls = Collections.emptyList();
 
-		public Map<Pcd, InjectState> inject = Collections.emptyMap();
+		Map<Pcd, InjectState> inject = Collections.emptyMap();
 		final Map<Pcd, InjectState> inject() { if (inject.isEmpty()) inject = new MyHashMap<>(); return inject; }
 
-		public MethodNode copyInit;
-		public Set<CNode> copied = Collections.emptySet();
+		MethodNode copyClinit;
+		Set<CNode> copied = Collections.emptySet();
 		final Set<CNode> copied() { if (copied.isEmpty()) copied = new MyHashSet<>(Hasher.identity()); return copied; }
 
 		// Shadow
-		public final MyHashSet<Pcd> preconditions = new MyHashSet<>();
+		final MyHashSet<Pcd> preconditions = new MyHashSet<>();
 
 		// lambda
-		public Map<BootstrapMethods.Item, List<Desc>> lambda = Collections.emptyMap();
+		Map<BootstrapMethods.Item, List<Desc>> lambda = Collections.emptyMap();
 
-		NiximData next;
-
-		public NiximData(String self) { this.self = self; }
-
-		@Override
 		public String toString() { return "Nixim{'"+self+"' => '"+target+"'}"; }
 	}
 	static final int SKIP_STATIC_CHECK = 16384;
@@ -149,12 +144,12 @@ public class NiximSystemV2 implements ITransformer {
 		public List<Label> headJump() { return (List<Label>) nodeList; }
 
 		// Middle
-		XInsnList matcher;
+		InsnList matcher;
 
 		// Tail
-		ToIntMap<XInsnNodeView> assignId;
+		ToIntMap<InsnNode> assignId;
 		@SuppressWarnings("unchecked")
-		public List<XInsnNodeView> retVal() { return (List<XInsnNodeView>) nodeList; }
+		public List<InsnNode> retVal() { return (List<InsnNode>) nodeList; }
 
 		Annotation extra;
 
@@ -197,7 +192,7 @@ public class NiximSystemV2 implements ITransformer {
 
 	protected final Map<String, NiximData> registry = new MyHashMap<>();
 
-	public final void load(ConstantData data) throws NiximException {
+	public final void load(ClassNode data) throws NiximException {
 		NiximData nx = read(data);
 		if (nx == null) return;
 		if (registry.putIfAbsent(nx.self, nx) != null) {
@@ -260,6 +255,7 @@ public class NiximSystemV2 implements ITransformer {
 				CstClass ref1 = (CstClass) c;
 				String name = ref1.name().str();
 				NiximData nx1 = ctx.get(name);
+				//NiximData nx1 = nx!=null&&name.equals(nx.self) ? nx : ctx.get(name);
 				if (nx1 != null && nx1.self.equals(name)) {
 					changed = true;
 
@@ -286,26 +282,25 @@ public class NiximSystemV2 implements ITransformer {
 		};
 	}
 
-	public NiximData read(ConstantData data) throws NiximException {
+	public NiximData read(ClassNode data) throws NiximException {
 		if (CLASS_DUMP) dump("nixim_mapping", data);
 
-		NiximData nx = new NiximData(data.name);
+		NiximData nx = new NiximData(data.name());
 
 		Map<String, Annotation> annotation = getAnnotations(data,data);
-		Annotation a = annotation.get(A_NIXIM_CLASS_FLAG);
-		if (a == null) throw new NiximException(data.name + " 不是有效的Nixim class （没有找到注解）");
+		Annotation a = annotation.get(A_NIXIM);
+		if (a == null || (!a.containsKey("value") && !a.containsKey("altValue"))) throw new NiximException(data.name()+"不是有效的Nixim类: 缺少注解或注解缺少参数");
 
-		nx.target = unifyClassName(a.getString("value"));
-		if (nx.target.equals("/")) nx.target = data.parent;
+		nx.target = unifyClassName(a.containsKey("altValue") ? a.getClass("altValue").owner : a.getString("value"));
+		if (nx.target.equals("/")) nx.target = data.parent();
 
-		if (a.getBoolean("copyItf", true)) nx.impls = ArrayUtil.copyOf(data.interfaces());
+		if (a.getBool("copyItf", true)) nx.impls = ArrayUtil.copyOf(data.interfaces());
 
 		//int flag = a.getInt("flags");
 
 		a = annotation.get(A_DYNAMIC);
 		if (a != null) {
-			List<AnnVal> annVals = a.getArray("value");
-			if (!shouldApply(A_NIXIM_CLASS_FLAG, data, Helpers.cast(annVals))) {
+			if (!shouldApply(A_NIXIM, data, a.getArray("value"))) {
 				return null;
 			}
 		}
@@ -351,7 +346,7 @@ public class NiximSystemV2 implements ITransformer {
 
 		// 查找无法访问的方法
 		MyHashSet<Desc> inaccessible = new MyHashSet<>();
-		boolean isSamePackage = ClassUtil.arePackagesSame(data.name, nx.target);
+		boolean isSamePackage = ClassUtil.arePackagesSame(data.name(), nx.target);
 		addInaccessible(data, data.methods, inaccessible, isSamePackage);
 		addInaccessible(data, data.fields, inaccessible, isSamePackage);
 
@@ -360,7 +355,7 @@ public class NiximSystemV2 implements ITransformer {
 		if (clInit >= 0) {
 			MethodNode mn = data.methods.remove(clInit);
 			nx.copied().add(mn);
-			nx.copyInit = mn;
+			nx.copyClinit = mn;
 		}
 
 		List<BootstrapMethods.Item> lambdaPending = new SimpleList<>();
@@ -372,7 +367,7 @@ public class NiximSystemV2 implements ITransformer {
 				cv.state = state;
 				cv.MyVisit(state.method);
 
-				XAttrCode code = (XAttrCode) state.method.parsed(data.cp).attrByName("Code");
+				AttrCode code = (AttrCode) state.method.parsed(data.cp).attrByName("Code");
 				if (code != null) checkLambda(data, code, nx, lambdaPending);
 
 				if (state.initBci == 0 && state.mapName.equals("<init>"))
@@ -381,7 +376,7 @@ public class NiximSystemV2 implements ITransformer {
 				try {
 					prepareInject(state, data);
 				} catch (NiximException e) {
-					throw new NiximException("处理方法"+data.name+"."+state.method.name()+"时出现了错误: ", e);
+					throw new NiximException("处理方法"+ data.name() +"."+state.method.name()+"时出现了错误: ", e);
 				}
 
 				state = state.next;
@@ -404,7 +399,7 @@ public class NiximSystemV2 implements ITransformer {
 					if (c.type() != Constant.METHOD_HANDLE) continue;
 
 					CstRef ref = ((CstMethodHandle) c).getRef();
-					if (!ref.className().equals(data.name)) break;
+					if (!ref.className().equals(data.name())) break;
 
 					List<MethodNode> nodes = data.methods;
 					for (int j = 0; j < nodes.size(); j++) {
@@ -417,6 +412,7 @@ public class NiximSystemV2 implements ITransformer {
 							pcd.mapName = "nx^lambda@"+randomId((System.nanoTime() << 32) | mn.name().hashCode());
 							nx.preconditions.add(pcd);
 
+							ref.clazz().setValue(data.cp.getUtf(nx.target));
 							// name changed in hasNewCopyMethod
 							ref.desc(data.cp.getDesc(pcd.mapName, mn.rawDesc()));
 
@@ -443,7 +439,7 @@ public class NiximSystemV2 implements ITransformer {
 				nx.copied().add(node);
 				hasNew = true;
 
-				XAttrCode code = (XAttrCode) node.parsed(data.cp).attrByName("Code");
+				AttrCode code = (AttrCode) node.parsed(data.cp).attrByName("Code");
 				if (code != null) checkLambda(data, code, nx, lambdaPending);
 			}
 		} while (hasNew || !lambdaPending.isEmpty());
@@ -479,7 +475,7 @@ public class NiximSystemV2 implements ITransformer {
 		fixNewCopyMethod(tmpPcd, nx, list);
 
 		// special case
-		nx.copied.remove(nx.copyInit);
+		nx.copied.remove(nx.copyClinit);
 
 		// fields
 		for (CNode node : nx.copied) node.parsed(data.cp);
@@ -489,7 +485,7 @@ public class NiximSystemV2 implements ITransformer {
 	private static void fixNewCopyMethod(Pcd tmp, NiximData nx, Collection<CNode> nodes) {
 		for (CNode n : nodes) {
 			if (!(n instanceof MethodNode)) continue;
-			XAttrCode code = n.parsedAttr(null, Attribute.Code);
+			AttrCode code = n.parsedAttr(null, Attribute.Code);
 			if (code == null) continue;
 
 			for (Map.Entry<Label, Object> entry : code.instructions.nodeData()) {
@@ -507,7 +503,6 @@ public class NiximSystemV2 implements ITransformer {
 				}
 			}
 
-			// TODO well, maybe automatic calculation future
 			List<Frame> frames = code.frames;
 			if (frames != null) {
 				for (Frame frame : frames) {
@@ -519,15 +514,16 @@ public class NiximSystemV2 implements ITransformer {
 							v.owner = nx.target;
 				}
 			}
+			// TODO set fv flag?
 		}
 	}
-	private static void prepareInject(InjectState s, ConstantData data) throws NiximException {
+	private static void prepareInject(InjectState s, ClassNode data) throws NiximException {
 		MethodNode method = s.method;
-		XAttrCode code = method.parsedAttr(data.cp, Attribute.Code);
+		AttrCode code = method.parsedAttr(data.cp, Attribute.Code);
 		if (s.initBci > 0) {
 			LineNumberTable ln = (LineNumberTable) code.attrByName("LineNumberTable");
 			if (ln != null) {
-				for (XInsnNodeView node : code.instructions) {
+				for (InsnNode node : code.instructions) {
 					if (node.bci() > s.initBci) break;
 
 					List<LineNumberTable.Item> list = ln.list;
@@ -549,7 +545,7 @@ public class NiximSystemV2 implements ITransformer {
 				boolean changedParam = false;
 
 				// 2.0不再限制对入参的更改
-				for (XInsnNodeView node : code.instructions) {
+				for (InsnNode node : code.instructions) {
 					int id = node.getVarId();
 					if (id >= 0) {
 						if (node.opName().startsWith("Store", 1)) {
@@ -558,9 +554,9 @@ public class NiximSystemV2 implements ITransformer {
 							changedParam = true;
 						}
 					} else if (node.opName().endsWith("Return")) {
-						XInsnNodeView node1 = node.prev();
+						InsnNode node1 = node.prev();
 						if (node1.opcode() == INVOKESTATIC && node1.desc().name.startsWith(SPEC_M_CONTINUE)) {
-							if (!TypeHelper.parseReturn(node1.desc().param).equals(method.returnType()))
+							if (!Type.methodDescReturn(node1.desc().param).equals(method.returnType()))
 								throw new NiximException("返回值指代#"+s.retVal().size()+"(bci: "+node1.bci()+")的返回值不适用于目的方法的"+method.returnType());
 
 							usedContinue.add(code.instructions.labelAt(node1.pos()));
@@ -581,10 +577,10 @@ public class NiximSystemV2 implements ITransformer {
 				if (!value.isEmpty()) checkLdcMatch(s, value);
 				break;
 			case "TAIL": {
-				ToIntMap<XInsnNodeView> usedVar = new ToIntMap<>();
+				ToIntMap<InsnNode> usedVar = new ToIntMap<>();
 				int paramLength = TypeHelper.paramSize(method.rawDesc());
 
-				for (XInsnNodeView node : code.instructions) {
+				for (InsnNode node : code.instructions) {
 					int id = node.getVarId();
 					if (id >= 0) {
 						int bci = node.bci();
@@ -595,7 +591,7 @@ public class NiximSystemV2 implements ITransformer {
 						} else if (bci > 0) {
 							node = node.prev();
 							if (node.opcode() == INVOKESTATIC && node.desc().name.startsWith(SPEC_M_RETVAL)) {
-								if (!TypeHelper.parseReturn(node.desc().param).equals(method.returnType()))
+								if (!Type.methodDescReturn(node.desc().param).equals(method.returnType()))
 									throw new NiximException("返回值指代#"+s.retVal().size()+"(bci: "+node.bci()+")的返回值不适用于目的方法的"+method.returnType());
 								s.retVal().add(node.unshared());
 							}
@@ -624,7 +620,7 @@ public class NiximSystemV2 implements ITransformer {
 				break;
 		}
 	}
-	private void readAnnotations(ConstantData data, NiximData nx, SimpleList<? extends CNode> nodes) throws NiximException {
+	private void readAnnotations(ClassNode data, NiximData nx, SimpleList<? extends CNode> nodes) throws NiximException {
 		Annotation a;
 		Map<String, Annotation> map;
 
@@ -657,13 +653,13 @@ public class NiximSystemV2 implements ITransformer {
 				nx.preconditions.add(pcd);
 
 				if ((a.getInt("flags") & Inject.RUNTIME_MAP) != 0)
-					pcd.mapName = mapName(data.name, pcd.mapOwner, pcd.mapName, node);
+					pcd.mapName = mapName(data.name(), pcd.mapOwner, pcd.mapName, node);
 
 				a = map.get(A_FINAL);
 				if (a != null) {
 					pcd.mode |= ACC_FINAL;
 					if (a.containsKey("setFinal")) {
-						if (a.getBoolean("setFinal")) throw new NiximException("Shadow不能配Final(setFinal=true): "+data.name+'.'+node.name()+": "+map.values());
+						if (a.getBool("setFinal")) throw new NiximException("Shadow不能配Final(setFinal=true): "+ data.name() +'.'+node.name()+": "+map.values());
 						pcd.mode |= Pcd.REAL_DEL_FINAL;
 					}
 				}
@@ -687,7 +683,7 @@ public class NiximSystemV2 implements ITransformer {
 				nx.preconditions.add(pcd);
 
 				if ((a.getInt("flags") & Inject.RUNTIME_MAP) != 0)
-					pcd.mapName = mapName(data.name, pcd.mapOwner, pcd.mapName, node);
+					pcd.mapName = mapName(data.name(), pcd.mapOwner, pcd.mapName, node);
 
 				boolean method = pcd.name.startsWith("(");
 
@@ -698,10 +694,10 @@ public class NiximSystemV2 implements ITransformer {
 
 				a = map.get(A_FINAL);
 				if (a != null) {
-					if (method) throw new NiximException("Copy&Final的组合不能用在方法上: "+data.name+'.'+node.name()+": "+map.values());
+					if (method) throw new NiximException("Copy&Final的组合不能用在方法上: "+ data.name() +'.'+node.name()+": "+map.values());
 					pcd.mode |= ACC_FINAL;
 					if (a.containsKey("setFinal")) {
-						pcd.mode |= a.getBoolean("setFinal") ? Pcd.REAL_ADD_FINAL : Pcd.REAL_DEL_FINAL;
+						pcd.mode |= a.getBool("setFinal") ? Pcd.REAL_ADD_FINAL : Pcd.REAL_DEL_FINAL;
 					}
 				}
 
@@ -726,7 +722,7 @@ public class NiximSystemV2 implements ITransformer {
 				pcd.mode = Pcd.INJECT | node.modifier;
 
 				if ((a.getInt("flags") & Inject.RUNTIME_MAP) != 0)
-					pcd.mapName = mapName(data.name, pcd.mapOwner, pcd.mapName, node);
+					pcd.mapName = mapName(data.name(), pcd.mapOwner, pcd.mapName, node);
 
 				pcd.name = pcd.mapName;
 				InjectState state = new InjectState((MethodNode) node, a);
@@ -741,39 +737,38 @@ public class NiximSystemV2 implements ITransformer {
 			}
 		}
 	}
-	private boolean annotationPreCheck(ConstantData data, Annotation a, Map<String, Annotation> annotation, CNode node, Pcd pcd, Annotation dyn) throws NiximException {
-		if (pcd != null) throw new NiximException("冲突的注解: "+data.name+'.'+node+": "+annotation.values());
+	private boolean annotationPreCheck(ClassNode data, Annotation a, Map<String, Annotation> annotation, CNode node, Pcd pcd, Annotation dyn) throws NiximException {
+		if (pcd != null) throw new NiximException("冲突的注解: "+ data.name() +'.'+node+": "+annotation.values());
 		if (dyn != null) {
-			List<AnnVal> annVals = dyn.getArray("value");
-			if (!shouldApply(a.type(), data, Helpers.cast(annVals))) return true;
+			if (!shouldApply(a.type(), data, dyn.getArray("value"))) return true;
 		}
 		if (node.name().equals("<init>"))
-			throw new NiximException("不支持操作: 自Nixim3.0起,你不能在构造器中使用Inject注解: "+data.name+'.'+node+"\n" +
+			throw new NiximException("不支持操作: 自Nixim3.0起,你不能在构造器中使用Inject注解: "+ data.name() +'.'+node+"\n" +
 				"替代方案: 使用非静态方法，Inject到<init>，并调用"+SPEC_M_CONSTRUCTOR+"或"+SPEC_M_CONSTRUCTOR_THIS+"\n" +
 				"为何删除: 1. 容易造成误解，2.无法使用this(...)");
 		return false;
 	}
-	private static void addInaccessible(ConstantData data, SimpleList<? extends CNode> nodes, MyHashSet<Desc> inaccessible, boolean isSamePackage) {
+	private static void addInaccessible(ClassNode data, SimpleList<? extends CNode> nodes, MyHashSet<Desc> inaccessible, boolean isSamePackage) {
 		for (int i = 0; i < nodes.size(); i++) {
 			CNode remain = nodes.get(i);
 			int acc = remain.modifier;
 			if (((acc & (ACC_PRIVATE | ACC_STATIC)) != ACC_STATIC) || ((acc & ACC_PUBLIC) == 0 && !isSamePackage)) {
-				inaccessible.add(new Desc(data.name, remain.name(), remain.rawDesc()));
+				inaccessible.add(new Desc(data.name(), remain.name(), remain.rawDesc()));
 			}
 		}
 	}
-	private static void checkLambda(ConstantData data, XAttrCode code, NiximData nx, List<BootstrapMethods.Item> pending) throws NiximException {
+	private static void checkLambda(ClassNode data, AttrCode code, NiximData nx, List<BootstrapMethods.Item> pending) throws NiximException {
 		for (Map.Entry<Label, Object> entry : code.instructions.nodeData()) {
 			Object o = entry.getValue();
 			if (o.getClass() == Desc.class) {
 				Desc desc = (Desc) o;
 				if (desc.owner == null) {
 					BootstrapMethods bsm = data.parsedAttr(data.cp, Attribute.BootstrapMethods);
-					if (bsm == null) throw new NiximException(data.name+"存在错误,BootstrapMethods不存在");
+					if (bsm == null) throw new NiximException(data.name() +"存在错误,BootstrapMethods不存在");
 
 					BootstrapMethods.Item key = bsm.methods.get(desc.flags);
 					// NiximClass不应有实例。 (static method也不建议使用)
-					desc.param = ClassUtil.getInstance().mapMethodParam(Collections.singletonMap(data.name, nx.target), desc.param);
+					desc.param = ClassUtil.getInstance().mapMethodParam(Collections.singletonMap(data.name(), nx.target), desc.param);
 
 					if (nx.lambda.isEmpty()) nx.lambda = new MyHashMap<>();
 					List<Desc> list = nx.lambda.computeIfAbsent(key, Helpers.fnArrayList());
@@ -789,18 +784,18 @@ public class NiximSystemV2 implements ITransformer {
 			case Constant.LONG: Long.parseLong(data1); break;
 			case Constant.DOUBLE: Double.parseDouble(data1); break;
 			case Constant.FLOAT: Float.parseFloat(data1); break;
-			case Constant.CLASS: TypeHelper.parseField(data1); break;
+			case Constant.CLASS: Type.fieldDesc(data1); break;
 			case Constant.STRING: break;
 			default: throw new NiximException("OverwriteConstant的matchType必须是Constant中的有效类别ID");
 		}
 	}
-	private static XInsnList makeMatcher(ConstantData data, MethodNode m, InjectState state) throws NiximException {
-		XAttrCode code = m.parsedAttr(data.cp, Attribute.Code);
+	private static InsnList makeMatcher(ClassNode data, MethodNode m, InjectState state) throws NiximException {
+		AttrCode code = m.parsedAttr(data.cp, Attribute.Code);
 		if (code == null) throw new NiximException("方法"+m.name()+"不能是抽象的");
 
 		Label start = null, end = null;
 		label:
-		for (XInsnNodeView node : code.instructions) {
+		for (InsnNode node : code.instructions) {
 			Desc desc = node.descOrNull();
 			if (desc != null) {
 				switch (desc.name) {
@@ -842,8 +837,8 @@ public class NiximSystemV2 implements ITransformer {
 		}
 	}
 
-	public void apply(ConstantData data, NiximData nx) throws NiximException {
-		if (!data.name.equals(nx.target)) throw new NiximException("期待目标为"+nx.target+"而不是"+data.name);
+	public void apply(ClassNode data, NiximData nx) throws NiximException {
+		if (!data.name().equals(nx.target)) throw new NiximException("期待目标为"+nx.target+"而不是"+ data.name());
 
 		if (CLASS_DUMP) dump("nixim_in", data);
 		while (nx != null) {
@@ -854,7 +849,7 @@ public class NiximSystemV2 implements ITransformer {
 		data.unparsed();
 		if (CLASS_DUMP) dump("nixim_out", data);
 	}
-	private void applyLoop(ConstantData data, NiximData nx) throws NiximException {
+	private void applyLoop(ClassNode data, NiximData nx) throws NiximException {
 		// 添加接口
 		List<String> itfs = nx.impls;
 		for (int i = 0; i < itfs.size(); i++) data.addInterface(itfs.get(i));
@@ -864,19 +859,19 @@ public class NiximSystemV2 implements ITransformer {
 
 		// region 检查 Shadow 兼容性
 		if (!nx.preconditions.isEmpty()) {
-			Pcd.REVERSE.set(true);
+			Pcd.INVERT_EQUALS.set(true);
 			MyHashSet<Pcd> pcdRev = new MyHashSet<>(nx.preconditions);
 
-			tmp.mapOwner = data.name;
+			tmp.mapOwner = data.name();
 			try {
 				verifyPcd(nx.self, pcdRev, tmp, data.fields);
 				verifyPcd(nx.self, pcdRev, tmp, methods);
 			} finally {
-				Pcd.REVERSE.remove();
+				Pcd.INVERT_EQUALS.remove();
 			}
 
 			for (Pcd pcd : pcdRev) {
-				if ((pcd.mode&Pcd.SHADOW) != 0 && pcd.mapOwner.equals(data.name)) {
+				if ((pcd.mode&Pcd.SHADOW) != 0 && pcd.mapOwner.equals(data.name())) {
 					throw new NiximException("@Shadow的目标缺失\n" +
 						"源: " + nx.self + "\n" +
 						"对象" + pcd + "\n" +
@@ -898,7 +893,7 @@ public class NiximSystemV2 implements ITransformer {
 				if (state == null) continue;
 
 				if ((state.flags&SKIP_STATIC_CHECK) == 0 && (state.method.modifier & ACC_STATIC) != (mn.modifier & ACC_STATIC)) {
-					throw new NiximException(nx.self+"."+state.method+"无法覆盖"+data.name+"."+mn+": static不匹配");
+					throw new NiximException(nx.self+"."+state.method+"无法覆盖"+ data.name() +"."+mn+": static不匹配");
 				}
 
 				while (state != null) {
@@ -956,21 +951,20 @@ public class NiximSystemV2 implements ITransformer {
 		}
 
 
-		if (nx.copyInit != null) {
-			XAttrCode injectClInit = nx.copyInit.parsedAttr(null, Attribute.Code);
+		if (nx.copyClinit != null) {
+			AttrCode injectClInit = nx.copyClinit.parsedAttr(null, Attribute.Code);
 
-			XAttrCode code;
-			XInsnNodeView.InsnMod clinit;
+			AttrCode code;
 			int last;
 			int clinit_id = data.getMethod("<clinit>");
 			if (clinit_id >= 0) {
 				code = data.methods.get(clinit_id).parsedAttr(data.cp, Attribute.Code);
-				XInsnList insn = code.instructions;
+				InsnList insn = code.instructions;
 				last = insn.getPcMap().last();
 				insn.replaceRange(last, insn.bci(), injectClInit.instructions, true);
 			} else {
-				MethodNode mn = new MethodNode(ACC_PUBLIC | ACC_STATIC, data.name, "<clinit>", "()V");
-				mn.putAttr(code = new XAttrCode());
+				MethodNode mn = new MethodNode(ACC_PUBLIC | ACC_STATIC, data.name(), "<clinit>", "()V");
+				mn.putAttr(code = new AttrCode());
 				methods.add(mn);
 				last = 0;
 
@@ -982,7 +976,7 @@ public class NiximSystemV2 implements ITransformer {
 
 
 		for (int i = 0; i < data.methods.size(); i++) {
-			XAttrCode m = data.methods.get(i).parsedAttr(null, Attribute.Code);
+			AttrCode m = data.methods.get(i).parsedAttr(null, Attribute.Code);
 			if (m != null) removeLVT(m);
 		}
 
@@ -1018,16 +1012,16 @@ public class NiximSystemV2 implements ITransformer {
 			}
 		}
 	}
-	private static MethodNode doInject(InjectState s, ConstantData data, MethodNode input) throws NiximException {
-		XAttrCode nxCode = (XAttrCode) s.method.attrByName("Code");
-		s.method.owner = data.name;
+	private static MethodNode doInject(InjectState s, ClassNode data, MethodNode input) throws NiximException {
+		AttrCode nxCode = (AttrCode) s.method.attrByName("Code");
+		s.method.owner = data.name();
 
 		if (s.mapName.equals("<init>") && !s.at.equals("TAIL")) {
 			Desc iin = nxCode.instructions.getNodeAt(s.initBci).desc();
 			st:
 			if (iin.name.startsWith(SPEC_M_CONSTRUCTOR_THIS)) {
 				if (iin.param.equals(s.method.rawDesc())) throw new NiximException("this()循环调用!");
-				iin.owner = data.name;
+				iin.owner = data.name();
 				for (int i = 0; i < data.methods.size(); i++) {
 					MethodNode mn = data.methods.get(i);
 					if (mn.rawDesc().equals(iin.param)) break st;
@@ -1035,8 +1029,8 @@ public class NiximSystemV2 implements ITransformer {
 				throw new NiximException("使用的this()构造器不存在");
 			} else {
 				// 无法检查上级构造器是否存在, 但是Object还是可以查一下
-				iin.owner = data.parent;
-				if (data.parent.equals("java/lang/Object") && !"()V".equals(iin.param)) {
+				iin.owner = data.parent();
+				if (data.parent().equals("java/lang/Object") && !"()V".equals(iin.param)) {
 					throw new NiximException("覆盖的构造器中的上级调用不存在(Object parent)\n" +
 						"你也许忘了: $$CONSTRUCTOR是【目标】中的super()");
 				}
@@ -1045,7 +1039,7 @@ public class NiximSystemV2 implements ITransformer {
 			iin.name = "<init>";
 		}
 
-		XAttrCode mnCode = input.parsedAttr(data.cp, Attribute.Code);
+		AttrCode mnCode = input.parsedAttr(data.cp, Attribute.Code);
 		switch (s.at) {
 			case "REMOVE": return null;
 			case "REPLACE": default:
@@ -1056,23 +1050,23 @@ public class NiximSystemV2 implements ITransformer {
 
 				block1:
 				if (s.initBci >= 0) {
-					for (XInsnNodeView node : mnCode.instructions) {
+					for (InsnNode node : mnCode.instructions) {
 						Desc d = node.descOrNull();
 						if (d != null && d.owner != null) {
-							if (d.name.equals("<init>") && (d.owner.equals(data.parent) || d.owner.equals(data.name))) {
+							if (d.name.equals("<init>") && (d.owner.equals(data.parent()) || d.owner.equals(data.name()))) {
 								endMy = node.end();
 								break block1;
 							}
 						}
 					}
-					throw new NiximException(data.name+" 存在错误: 无法找到替换构造器中<init>的调用");
+					throw new NiximException(data.name() +" 存在错误: 无法找到替换构造器中<init>的调用");
 				} else {
 					endMy = Label.atZero();
 				}
 
-				XInsnList replace = new XInsnList();
+				InsnList replace = new InsnList();
 
-				XInsnList out = nxCode.instructions.copy();
+				InsnList out = nxCode.instructions.copy();
 				List<Label> jumps = s.headJump();
 				// noinspection all
 				if (endMy.getValue() == 0 && jumps.size() == 2 && jumps.get(1).getValue() == out.bci()) {
@@ -1089,7 +1083,7 @@ public class NiximSystemV2 implements ITransformer {
 
 				mnCode.instructions.replaceRange(Label.atZero(),endMy,out,false);
 
-				mnCode.recomputeFrames(XAttrCode.COMPUTE_FRAMES, input);
+				mnCode.recomputeFrames(AttrCode.COMPUTE_FRAMES, input);
 				mnCode.stackSize = (char) Math.max(mnCode.stackSize, nxCode.stackSize);
 				mnCode.localSize = (char) Math.max(mnCode.localSize, nxCode.localSize);
 
@@ -1101,11 +1095,11 @@ public class NiximSystemV2 implements ITransformer {
 				MyBitSet occurrences = s.getOccurrences();
 				int ordinal = 0;
 
-				List<XInsnNodeView.InsnMod> rpls = new SimpleList<>();
+				List<InsnNode.InsnMod> rpls = new SimpleList<>();
 				int isStatic = (s.method.modifier & ACC_STATIC);
 				int used = 0;
-				for (XInsnList.NodeIterator itr = mnCode.instructions.iterator(); itr.hasNext(); ) {
-					XInsnNodeView node = itr.next();
+				for (InsnList.NodeIterator itr = mnCode.instructions.iterator(); itr.hasNext(); ) {
+					InsnNode node = itr.next();
 					Desc d = node.descOrNull();
 					if (d != null && d.owner != null) {
 						if ((m.owner.isEmpty() || m.owner.equals(d.owner)) &&
@@ -1132,15 +1126,15 @@ public class NiximSystemV2 implements ITransformer {
 							block:
 							if (!s.method.rawDesc().equals(desc)) {
 								List<Type> par1 = s.method.parameters();
-								List<Type> par2 = TypeHelper.parseMethod(desc);
+								List<Type> par2 = Type.methodDesc(desc);
 								par2.remove(par2.size()-1);
-								if (par1.size()-1 == par2.size() && data.name.equals(par1.get(par1.size()-1).owner)) {
+								if (par1.size()-1 == par2.size() && data.name().equals(par1.get(par1.size()-1).owner)) {
 									if ((input.modifier&ACC_STATIC) != 0) throw new NiximException("@InvokeRedirect.ContextInject 期待非静态方法: "+input.name()+"."+input.rawDesc());
 									// context_inject
 
 									itr = mnCode.instructions.since(node.bci());
 
-									XInsnList list = new XInsnList();
+									InsnList list = new InsnList();
 									list.one(ALOAD_0);
 									node.insertBefore(list, false);
 
@@ -1150,13 +1144,13 @@ public class NiximSystemV2 implements ITransformer {
 								throw new NiximException("@InvokeRedirect "+m+" 参数不匹配: except "+desc+" , got "+s.method.rawDesc());
 							}
 
-							d.owner = data.name;
+							d.owner = data.name();
 							d.name = s.method.name();
 							d.param = s.method.rawDesc();
 
 							// TODO 可能无法和aload_0一起使用
 							if (node.opcode() == INVOKEINTERFACE) {
-								XInsnNodeView.InsnMod rpl = node.replace();
+								InsnNode.InsnMod rpl = node.replace();
 								rpl.list.invoke(isStatic > 0 ? INVOKESTATIC : INVOKEVIRTUAL, d.owner, d.name, d.param);
 								rpls.add(rpl);
 							}
@@ -1177,7 +1171,7 @@ public class NiximSystemV2 implements ITransformer {
 				String find = s.extra.getString("matchValue");
 
 				String replace = s.extra.getString("replaceValue", "");
-				XInsnList replaceTo = new XInsnList();
+				InsnList replaceTo = new InsnList();
 				if (!replace.isEmpty()) {
 					switch (type) {
 						case Constant.INT: replaceTo.ldc(Integer.parseInt(replace)); break;
@@ -1191,9 +1185,9 @@ public class NiximSystemV2 implements ITransformer {
 				} else {
 					if ((s.method.modifier & ACC_STATIC) == 0) {
 						replaceTo.one(ALOAD_0);
-						replaceTo.invokeV(data.name, s.method.name(), s.method.rawDesc());
+						replaceTo.invokeV(data.name(), s.method.name(), s.method.rawDesc());
 					} else {
-						replaceTo.invokeS(data.name, s.method.name(), s.method.rawDesc());
+						replaceTo.invokeS(data.name(), s.method.name(), s.method.rawDesc());
 					}
 				}
 
@@ -1202,7 +1196,7 @@ public class NiximSystemV2 implements ITransformer {
 
 				int used = 0;
 
-				for (XInsnNodeView node : mnCode.instructions) {
+				for (InsnNode node : mnCode.instructions) {
 					switch (node.opcode()) {
 						case ICONST_M1, ICONST_0:
 						case ICONST_1, ICONST_2, ICONST_3, ICONST_4, ICONST_5:
@@ -1253,15 +1247,15 @@ public class NiximSystemV2 implements ITransformer {
 			case "TAIL": {
 				if (s.initBci >= 0) throw new NiximException(SPEC_M_CONSTRUCTOR+"不能在TAIL使用");
 
-				XInsnList insn = mnCode.instructions;
-				XInsnList hookInsn = nxCode.instructions.copy();
+				InsnList insn = mnCode.instructions;
+				InsnList hookInsn = nxCode.instructions.copy();
 				int paramSize = TypeHelper.paramSize(input.rawDesc());
 
 				// 寻找空位放返回值和变量
 				MyBitSet usedSlots = null;
 				int retValId = -1;
 
-				XInsnList tmpList = new XInsnList();
+				InsnList tmpList = new InsnList();
 
 				Type ret = input.returnType();
 				int returnHookType;
@@ -1276,14 +1270,14 @@ public class NiximSystemV2 implements ITransformer {
 						returnHookType |= 0x200; // STORE_AND_JUMP
 
 						usedSlots = collectUsedSlots(insn, paramSize);
-						retValId = getVarId(usedSlots, ret.nativeName());
+						retValId = getVarId(usedSlots, ret.opcodePrefix());
 						tmpList.varLoad(ret, retValId);
 					}
 				} else {
 					returnHookType = 0x000; // POP_JUMP
 				}
 
-				for (XInsnNodeView node : hookInsn) {
+				for (InsnNode node : hookInsn) {
 					Desc desc = node.descOrNull();
 					if (desc != null && desc.name.startsWith(SPEC_M_RETVAL)) {
 						node.replace(tmpList, true);
@@ -1295,7 +1289,7 @@ public class NiximSystemV2 implements ITransformer {
 				if (s.assignId != null) {
 					Int2IntMap overwriteCheck = new Int2IntMap();
 
-					for (ToIntMap.Entry<XInsnNodeView> entry : s.assignId.selfEntrySet()) {
+					for (ToIntMap.Entry<InsnNode> entry : s.assignId.selfEntrySet()) {
 						overwriteCheck.put(entry.v, -1);
 						String name = entry.k.opName();
 						if (name.charAt(0) == 'D' || name.charAt(0) == 'L')
@@ -1304,7 +1298,7 @@ public class NiximSystemV2 implements ITransformer {
 
 					// 备份参数，计算tail用到的参数id(已完成)，若修改过则暂存到新的变量中再恢复
 					tmpList.clear();
-					for (XInsnNodeView node : insn) {
+					for (InsnNode node : insn) {
 						String name = node.opName();
 						int vid = node.getVarId();
 						if (vid >= 0 && name.startsWith("Store", 1)) {
@@ -1350,8 +1344,8 @@ public class NiximSystemV2 implements ITransformer {
 				int end = insn.bci();
 				insn.replaceRange(end, end, hookInsn, false);
 
-				for (XInsnList.NodeIterator it = insn.since(begin); it.hasNext(); ) {
-					XInsnNodeView node = it.next();
+				for (InsnList.NodeIterator it = insn.since(begin); it.hasNext(); ) {
+					InsnNode node = it.next();
 					if (node.bci() >= end) break;
 
 					if (node.opName().endsWith("Return")) {
@@ -1373,7 +1367,7 @@ public class NiximSystemV2 implements ITransformer {
 					}
 				}
 
-				mnCode.recomputeFrames(XAttrCode.COMPUTE_FRAMES, input);
+				mnCode.recomputeFrames(AttrCode.COMPUTE_FRAMES, input);
 				mnCode.stackSize = (char) Math.max(mnCode.stackSize, nxCode.stackSize);
 				mnCode.localSize = (char) Math.max(mnCode.localSize, nxCode.localSize);
 				if ((returnHookType & 0x100) != 0) mnCode.stackSize = (char) Math.max(mnCode.stackSize, 1);
@@ -1389,8 +1383,8 @@ public class NiximSystemV2 implements ITransformer {
 				for (Map.Entry<Label, Object> entry : nxCode.instructions.nodeData()) {
 					if (entry.getValue().getClass() == Desc.class) {
 						Desc d = (Desc) entry.getValue();
-						if ((data.name.equals(d.owner) || d.owner.contains("SIJ")) && s.mapName.equals(d.name) && s.method.rawDesc().equals(d.param)) {
-							d.owner = data.name;
+						if ((data.name().equals(d.owner) || d.owner.contains("SIJ")) && s.mapName.equals(d.name) && s.method.rawDesc().equals(d.param)) {
+							d.owner = data.name();
 							d.name = mapName;
 						}
 					}
@@ -1398,13 +1392,13 @@ public class NiximSystemV2 implements ITransformer {
 			}
 			return input;
 			case "MIDDLE":
-				XInsnList toFind = mnCode.instructions;
-				XInsnList matcher = s.matcher;
+				InsnList toFind = mnCode.instructions;
+				InsnList matcher = s.matcher;
 				InsnMatcher ctx = new InsnMatcher() {
 					int iPos = -2;
 
 					@Override
-					public boolean isNodeSimilar(XInsnNodeView haystack, XInsnNodeView needle) {
+					public boolean isNodeSimilar(InsnNode haystack, InsnNode needle) {
 						if (needle.opcode() == INVOKESTATIC) {
 							Desc d = needle.desc();
 							if (d.name.startsWith(SPEC_M_ANYVAR)) {
@@ -1421,17 +1415,17 @@ public class NiximSystemV2 implements ITransformer {
 					}
 				};
 
-				XInsnNodeView matchFirst = matcher.getNodeAt(0);
-				for (XInsnNodeView node : toFind) {
+				InsnNode matchFirst = matcher.getNodeAt(0);
+				for (InsnNode node : toFind) {
 					ctx.reset();
 
 					findFirst:
 					if (ctx.isNodeSimilar(node, matchFirst)) {
-						XInsnList.NodeIterator
+						InsnList.NodeIterator
 							itrA = toFind.since(node.bci()+node.length()),
 							itrB = matcher.since(matchFirst.length());
 						while (itrA.hasNext()&&itrB.hasNext()) {
-							XInsnNodeView A = itrA.next(), B = itrB.next();
+							InsnNode A = itrA.next(), B = itrB.next();
 							if (!ctx.isNodeSimilar(A, B)) {
 								System.out.println("second failed on "+A+" and "+B);
 								break findFirst;
@@ -1440,12 +1434,12 @@ public class NiximSystemV2 implements ITransformer {
 
 						System.out.println("successfully match sequence "+toFind.copySlice(node.pos(), itrA.unsharedPos()));
 						// found
-						XInsnList toInj = nxCode.instructions.copy();
+						InsnList toInj = nxCode.instructions.copy();
 						ctx.mapVarId(toInj);
 
 						toFind.replaceRange(toFind.labelAt(node.pos()), itrA.unsharedPos(), toInj, false);
 
-						mnCode.recomputeFrames(XAttrCode.COMPUTE_FRAMES, input);
+						mnCode.recomputeFrames(AttrCode.COMPUTE_FRAMES, input);
 						mnCode.stackSize = (char) Math.max(mnCode.stackSize, nxCode.stackSize);
 						mnCode.localSize = (char) Math.max(mnCode.localSize, nxCode.localSize);
 
@@ -1456,10 +1450,10 @@ public class NiximSystemV2 implements ITransformer {
 				throw new NiximException("MIDDLE没有匹配成功: 目标方法: "+mnCode+"\n匹配方法: "+matcher);
 		}
 	}
-	private static MyBitSet collectUsedSlots(XInsnList insn, int paramSize) {
+	private static MyBitSet collectUsedSlots(InsnList insn, int paramSize) {
 		MyBitSet usedSlots = new MyBitSet();
 		usedSlots.fill(paramSize);
-		for (XInsnNodeView node : insn) {
+		for (InsnNode node : insn) {
 			String name = node.opName();
 			int vid = node.getVarId();
 			if (vid >= paramSize && name.startsWith("Store", 1)) {
@@ -1480,12 +1474,12 @@ public class NiximSystemV2 implements ITransformer {
 		usedSlots.addRange(newSlot, newSlot+len);
 		return newSlot;
 	}
-	private static boolean doLdcMatchBytecode(XInsnNodeView node, byte base, String find, MyBitSet occurrences, CInt ordinal) {
+	private static boolean doLdcMatchBytecode(InsnNode node, byte base, String find, MyBitSet occurrences, CInt ordinal) {
 		int value = node.opcode() - base;
 		if (!find.equals(String.valueOf(value))) return false;
 		return occurrences == null || occurrences.contains(++ordinal.value);
 	}
-	private static void copyLine(XAttrCode from, XAttrCode to, int pcOff) {
+	private static void copyLine(AttrCode from, AttrCode to, int pcOff) {
 		LineNumberTable lnFr = (LineNumberTable) from.attrByName("LineNumberTable");
 		LineNumberTable lnTo = (LineNumberTable) to.attrByName("LineNumberTable");
 
@@ -1513,7 +1507,7 @@ public class NiximSystemV2 implements ITransformer {
 
 		lnTo.sort();
 	}
-	private static void removeLVT(XAttrCode code) {
+	private static void removeLVT(AttrCode code) {
 		AttributeList list = code.attributesNullable();
 		if (list != null) {
 			list.removeByName("LocalVariableTable");
@@ -1522,7 +1516,7 @@ public class NiximSystemV2 implements ITransformer {
 	}
 
 
-	private static Map<String, Annotation> getAnnotations(Attributed node, ConstantData data) {
+	private static Map<String, Annotation> getAnnotations(Attributed node, ClassNode data) {
 		Annotations attr = node.parsedAttr(data.cp, Attribute.ClAnnotations);
 		if (attr == null || attr.isEmpty()) return Collections.emptyMap();
 		MyHashMap<String, Annotation> map = new MyHashMap<>(attr.annotations.size());
@@ -1546,7 +1540,7 @@ public class NiximSystemV2 implements ITransformer {
 	private static String unifyClassName(String t) { return t.replace('.', '/'); }
 
 	private static class MyCodeVisitor extends CodeVisitor {
-		private final ConstantData data;
+		private final ClassNode data;
 		private final MyHashSet<Desc> inaccessible;
 		private final NiximData nx;
 		private final SimpleList<MethodNode> autoCopy;
@@ -1561,7 +1555,7 @@ public class NiximSystemV2 implements ITransformer {
 
 		private MethodNode mn;
 
-		public MyCodeVisitor(ConstantData data, MyHashSet<Desc> inaccessible, NiximData nx, SimpleList<MethodNode> autoCopy) {
+		public MyCodeVisitor(ClassNode data, MyHashSet<Desc> inaccessible, NiximData nx, SimpleList<MethodNode> autoCopy) {
 			this.data = data;
 			this.inaccessible = inaccessible;
 			this.nx = nx;
@@ -1617,7 +1611,7 @@ public class NiximSystemV2 implements ITransformer {
 					if ((pcd.mode& ACC_STATIC) == 0 && initFlag == 1) return;
 					if ((pcd.mode& ACC_FINAL) != 0) {
 						Helpers.athrow(new NiximException("不能修改final或为实际上final的" + field + "\n" +
-							"源: "+data.name+"\n" +
+							"源: "+ data.name() +"\n" +
 							"函数: "+mn));
 					}
 				}
@@ -1625,7 +1619,7 @@ public class NiximSystemV2 implements ITransformer {
 		}
 
 		private void checkAccess(CstRef ref) {
-			if (ref.className().equals(data.name) && inaccessible.contains(tmp.read(ref))) {
+			if (ref.className().equals(data.name()) && inaccessible.contains(tmp.read(ref))) {
 				if (!autoCopy(tmp))
 					Helpers.athrow(new NiximException("请使用@Copy注解以在运行时访问"+tmp));
 			}
@@ -1643,7 +1637,7 @@ public class NiximSystemV2 implements ITransformer {
 		}
 	}
 
-	protected boolean shouldApply(String annotation, Attributed node, List<AnnValString> args) { throw new UnsupportedOperationException(); }
+	protected boolean shouldApply(String annotation, Attributed node, AList args) { throw new UnsupportedOperationException(); }
 	public Map<String, NiximData> registry() { return registry; }
 	protected String mapName(String owner, String newOwner, String name, CNode node) { return name; }
 }

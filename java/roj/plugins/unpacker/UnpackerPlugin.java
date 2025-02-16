@@ -5,15 +5,15 @@ import roj.concurrent.OperationDone;
 import roj.io.IOUtil;
 import roj.plugin.Plugin;
 import roj.plugin.SimplePlugin;
-import roj.ui.terminal.Argument;
-import roj.ui.terminal.CommandContext;
+import roj.ui.Argument;
+import roj.ui.CommandContext;
 
 import java.io.File;
 import java.io.IOException;
 import java.util.Arrays;
 
-import static roj.ui.terminal.CommandNode.argument;
-import static roj.ui.terminal.CommandNode.literal;
+import static roj.ui.CommandNode.argument;
+import static roj.ui.CommandNode.literal;
 
 /**
  * @author Roj234

@@ -1,8 +1,8 @@
 package roj.compiler.plugins.stc;
 
 import org.jetbrains.annotations.Nullable;
-import roj.asm.tree.ConstantData;
-import roj.asm.tree.MethodNode;
+import roj.asm.ClassNode;
+import roj.asm.MethodNode;
 import roj.asm.type.IType;
 import roj.asm.type.Type;
 import roj.collect.MyHashMap;
@@ -151,11 +151,11 @@ public class StreamChainPlugin implements Resolver {
 
 	public void pluginInit(LavaApi api) {api.addResolveListener(0, this);}
 
-	private final Map<String, ConstantData> chain = new MyHashMap<>();
-	@Override public ConstantData classResolved(ConstantData info) {return chain.getOrDefault(info.name, info);}
+	private final Map<String, ClassNode> chain = new MyHashMap<>();
+	@Override public ClassNode classResolved(ClassNode info) {return chain.getOrDefault(info.name(), info);}
 
 	public StreamChain newStreamChain(String chainType, boolean allowFallback, Consumer<StreamChainExpr> callback, Type exactType) {
-		var ref = new ConstantData();
+		var ref = new ClassNode();
 		ref.name(chainType);
 		ref.parent(null);
 		chain.put(chainType, ref);

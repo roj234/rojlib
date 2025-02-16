@@ -1,11 +1,11 @@
 package roj.compiler.asm;
 
-import roj.asm.tree.Attributed;
-import roj.asm.tree.MethodNode;
-import roj.asm.tree.anno.Annotation;
-import roj.asm.tree.attr.Annotations;
-import roj.asm.tree.attr.Attribute;
-import roj.asm.tree.attr.ParameterAnnotations;
+import roj.asm.Attributed;
+import roj.asm.MethodNode;
+import roj.asm.annotation.Annotation;
+import roj.asm.attr.Annotations;
+import roj.asm.attr.Attribute;
+import roj.asm.attr.ParameterAnnotations;
 
 import java.util.Collections;
 import java.util.List;

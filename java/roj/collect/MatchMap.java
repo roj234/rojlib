@@ -10,7 +10,7 @@ import roj.util.TimSortForEveryone;
 import java.util.*;
 import java.util.function.Function;
 
-import static roj.reflect.ReflectionUtils.u;
+import static roj.reflect.Unaligned.U;
 
 /**
  * 比删除的UnsortedMultiKeyMap更快、更好、更方便
@@ -60,15 +60,16 @@ public class MatchMap<K extends Comparable<K>, V> {
 
 			// 同时排序pos和entries两个数组
 			TimSortForEveryone.sort(0, size, (refLeft, offLeft, offRight) -> {
-				int o = u.getInt(refLeft, offLeft+2), o2 = u.getInt(null, offRight+2);
+				int o = U.getInt(refLeft, offLeft+2), o2 = U.getInt(null, offRight+2);
 				int cmp = KEYCMP.compare(entries[o], entries[o2]);
 				if (cmp != 0) return cmp;
 
-				return Integer.compare(u.getChar(refLeft, offLeft), u.getChar(offRight));
+				return Integer.compare(U.getChar(refLeft, offLeft), U.getChar(offRight));
 			}, ArrayRef.primitiveArray(pos), ArrayRef.objectArray(entries));
 
 			if (size > 255) {
-				indexOf = new ToIntMap<>(size);
+				if (indexOf == null)
+					indexOf = new ToIntMap<>(size);
 
 				Entry<?> prev = null;
 				for (int i = 0; i < entries.length; i++) {
@@ -119,15 +120,26 @@ public class MatchMap<K extends Comparable<K>, V> {
 		add(key, value);
 		return null;
 	}
+	public V computeIfAbsent_ForMe(Comparable<?>[] list, Function<Comparable<?>[], V> objectListFunction) {
+		Arrays.sort(list);
+		Entry<V> entry = getEntry(Helpers.cast(Arrays.asList(list)));
+		if (entry != null) return entry.value;
 
-	public void add(List<K> key, V value) {
+		V value = objectListFunction.apply(list);
+		add(list, value);
+		return value;
+	}
+
+	@Deprecated public void add(List<K> key, V value) {add(key.toArray(new Comparable<?>[key.size()]), value);}
+	@SuppressWarnings("unchecked")
+	public void add(Comparable<?>[] needle, V value) {
 		Entry<V> entry;
 
 		entry = new Entry<>();
-		entry.key = key.toArray(new Comparable<?>[key.size()]);
+		entry.key = needle;
 		entry.value = value;
-		for (int i = 0; i < key.size(); i++) {
-			map.computeIfAbsent(key.get(i), CIA_FUNC).add(entry, i);
+		for (int i = 0; i < needle.length; i++) {
+			map.computeIfAbsent((K) needle[i], CIA_FUNC).add(entry, i);
 		}
 
 		size++;
@@ -139,7 +151,7 @@ public class MatchMap<K extends Comparable<K>, V> {
 	}
 
 	@SuppressWarnings("unchecked")
-	public final Entry<V> getEntry(List<K> key) {
+	public Entry<V> getEntry(List<K> key) {
 		PosList list = null;
 		int minSize = 0;
 		for (int i = 0; i < key.size(); i++) {
@@ -155,30 +167,39 @@ public class MatchMap<K extends Comparable<K>, V> {
 
 		for (int i = 0; i < list.size; i++) {
 			Entry<?> entry1 = list.entries[i];
-			if (key.equals(entry1.key)) return (Entry<V>) entry1;
+			if (listEqualsArray(key, entry1.key)) return (Entry<V>) entry1;
 		}
 
 		return null;
 	}
 
+	private static boolean listEqualsArray(List<? extends Comparable<?>> needle, Comparable<?>[] key) {
+		if (needle.size() != key.length) return false;
+		for (int i = 0; i < key.length; i++) {
+			if (!needle.get(i).equals(key[i])) return false;
+		}
+		return true;
+	}
+
 	@SuppressWarnings("unchecked")
-	public V remove(List<K> key) {
+	public V remove(List<K> needle) {
 		Entry<?> entry = null;
 		int pos = 0;
 
 		outer:
-		for (int i = 0; i < key.size(); i++) {
-			PosList list = map.get(key.get(i));
+		for (int i = 0; i < needle.size(); i++) {
+			PosList list = map.get(needle.get(i));
 			if (list == null) break;
 
 			for (int j = 0; j < list.size; j++) {
 				Entry<?> entry1 = list.entries[j];
 				Object[] key1 = entry1.key;
-				if (i < key1.length && Objects.equals(key1[i], key.get(i)) && list.pos[j] == pos) {
+				if (i < key1.length && Objects.equals(key1[i], needle.get(i)) && list.pos[j] == pos) {
 
 					System.arraycopy(list.entries, j+1, list.entries, j, list.size-j-1);
 					System.arraycopy(list.pos, j+1, list.pos, j, list.size-j-1);
 					list.entries[--list.size] = null;
+					if (list.indexOf != null) list.indexOf.remove(key1[i]);
 
 					assert entry == null || entry == entry1;
 					entry = entry1;
@@ -196,237 +217,266 @@ public class MatchMap<K extends Comparable<K>, V> {
 		return (V) entry.value;
 	}
 
-	public List<K> prepareUnorderedQuery(List<K> key) {
-		Object[] out = new Object[key.size()];
-		int[] size = ArrayCache.getIntArray(key.size(), 0);
-		for (int i = 0; i < key.size(); i++) {
-			PosList prev = map.get(key.get(i));
-			if (prev == null) return null;
-			out[i] = key.get(i);
-			size[i] = prev.size;
+	/**
+	 * 添加或删除之后需要调用这个方法来保证获得正确的结果，因此，这个集合并不适合频繁修改的场景
+	 */
+	public void compact() {
+		for (PosList value : map.values()) {
+			value.compact();
 		}
-		TimSortForEveryone.sort(0, key.size(), (refLeft, offLeft, offRight) -> Integer.compare(u.getInt(refLeft, offLeft), u.getInt(offRight)),
-			ArrayRef.primitiveArray(size), ArrayRef.primitiveArray(out));
-
-		ArrayCache.putArray(size);
-		return Helpers.cast(Arrays.asList(out));
 	}
 
-	private static final long VOL_OFFSET = ReflectionUtils.fieldOffset(MatchMap.class, "vol0");
-	private Object[] vol0;
-	private Object[] getVolArray() {
-		Object[] vol0 = (Object[]) u.getAndSetObject(this, VOL_OFFSET, null);
-		if (vol0 == null) vol0 = new Object[] { new PosList(), new PosList(), new SimpleList<>(), new SimpleList<>(), new int[2] };
-		return vol0;
+	public void clear() { size = 0; map.clear(); }
+
+	private static final long CACHE_OFFSET = ReflectionUtils.fieldOffset(MatchMap.class, "stateCache");
+	private static class State {
+		final PosList a = new PosList(), b = new PosList();
+		final SimpleList<MyBitSet> aflag = new SimpleList<>(), bflag = new SimpleList<>();
 	}
-	private void setVolArray(Object[] vol0) {
-		((PosList) vol0[0]).clear();
-		((PosList) vol0[1]).clear();
-		((SimpleList<?>) vol0[2]).clear();
-		((SimpleList<?>) vol0[3]).clear();
-		u.compareAndSwapObject(this, VOL_OFFSET, null, vol0);
+	private State stateCache;
+	private State getStateCache() {
+		var stateCache = (State) U.getAndSetObject(this, CACHE_OFFSET, null);
+		return stateCache == null ? new State() : stateCache;
+	}
+	private void setStateCache(State state) {
+		state.a.clear();
+		state.b.clear();
+		state.aflag.clear();
+		state.bflag.clear();
+		U.compareAndSwapObject(this, CACHE_OFFSET, null, state);
 	}
 
 	public static final byte MATCH_SHORTER = 1, MATCH_LONGER = 2, MATCH_CONTINUOUS = 4;
 
 	/**
-	 * @see #matchUnordered(List, int, List)
+	 * @see #matchUnordered(List, int, Collection)
 	 */
 	public List<Entry<V>> matchUnordered(List<K> key, int flag) { return matchUnordered(key, flag, new SimpleList<>()); }
-
-	private static MyBitSet myAddBitset(int pos, int[] flag, MyBitSet extraFlag) {
-		if (pos < 16) {
-			if ((flag[0] & (1 << pos)) != 0) return extraFlag;
-			flag[0] |= 1 << pos;
-			flag[1] = 1;
-		} else {
-			if (extraFlag == null) extraFlag = new MyBitSet();
-			if (extraFlag.add(pos)) flag[1] = 1;
-		}
-		return extraFlag;
-	}
 	/**
-	 * 该方法的匹配模式:
-	 * 返回之前通过添加的字符串（S）中，包含key中每个字符出现的次数的
-	 * 参考：添加过abcde
-	 * [0] abc acd cde均可获取 (也即key中只能出现abcde，且最多一个，且需要按顺序)
-	 * [MATCH_SHORTER] adeg ((名称存在争议) 符合上述条件，且以S中最后一个字符结尾的子序列也可匹配)
+	 * 高性能批量查找无序子序列.
+	 * 如下示例中，haystack均指该集合中的一个字符串，不过方法实际上是对集合的匹配，而且仅需needle长度(而不是集合大小)的对数时间
+	 * 如果你查找的是有序子序列，请使用{@link #matchOrdered(List, int, Collection)}.
+	 * 此方法的needle每项除了是K类型，还可以是Iterable&lt;K&gt;，但是可能导致性能一定程度下降.
+	 * MatchShorter不适合无序子序列，因为这时它就退化为每个PosList的并集了
+	 *
+	 * @param needle 待匹配的元素列表，用于与存储的内容进行匹配操作。
+	 * @param matchLonger 匹配模式的标志位
+	 *     - 当 matchLonger 为 0 时：
+	 *       规则：返回包含 needle 子序列（子序列不一定连续）的元素。
+	 *       示例：假设存储了 "cba"，那么 "abc" 和 "bac" 都可以匹配成功，因为needle与haystack拥有类型和数量相同的字符。
+	 *
+	 *     - 当 matchLonger 为 MATCH_LONGER 时：
+	 *       附加规则：*也(OR)*返回那些匹配完needle中每个字符, 但未匹配完haystack中每个字符的结果。
+	 *       示例：needle 为 "ba"，haystack为 "abc"，在该模式下可以匹配成功，因为 needle 已经匹配完，但 haystack 还有剩余部分 "c"。
+	 * @param out 用于存储匹配结果的列表，匹配成功的元素将被添加到这个列表中。
+	 * @return 包含匹配结果的列表，和参数out相同
 	 */
 	@SuppressWarnings("unchecked")
-	public List<Entry<V>> matchUnordered(final List<K> key, final int flag, final List<Entry<V>> out) {
-		if (key.size() == 0) throw new IllegalArgumentException();
-
-		PosList prev = map.get(key.get(0));
-		if (prev == null) return out;
-
-		Object[] vol0 = getVolArray();
-		PosList next = (PosList) vol0[0];
-
-		List<MyBitSet>
-			prevBits = (List<MyBitSet>) vol0[2],
-			nextBits = (List<MyBitSet>) vol0[3];
-
-		int[] tmp00 = (int[]) vol0[4];
-
-		int i = 1;
-		block:
-		if (key.size() > 1) {
-			{
-				PosList list = map.get(key.get(i));
-				if (list == null) break block;
-
-				if (list.size > prev.size) {
-					PosList tmp = prev;
-					prev = list;
-					list = tmp;
-				}
-
-				int prevK = 0;
-				for (int j = 0; j < list.size; j++) {
-					Entry<?> entry = list.entries[j];
-
-					int length = entry.key.length;
-					if (length != key.size()) {
-						if (length < key.size()) {
-							if ((flag&MATCH_SHORTER) == 0) continue;
-						} else {
-							if ((flag&MATCH_LONGER) == 0) continue;
-						}
-					}
-
-					int k = prev.indexOf(entry, prevK);
-					if (k < 0) continue;
-					prevK = k+1;
-
-					if (next.indexOf(entry, 0) >= 0) continue;
-
-					tmp00[0] = 0;
-					MyBitSet bitSet = myAddBitset(list.pos[j], tmp00, null);
-					bitSet = myAddBitset(prev.pos[k], tmp00, bitSet);
-
-					prevBits.add(bitSet);
-					next.add(entry, tmp00[0]);
-				}
+	public <COL extends Collection<Entry<V>>> COL matchUnordered(final List<?> needle, @MagicConstant(intValues = {0, MATCH_LONGER}) final int matchLonger, final COL out) {
+		int bestStart = 0;
+		int bestSize = Integer.MAX_VALUE;
+		for (int i = 0; i < needle.size(); i++) {
+			var o = needle.get(i);
+			var size = 0;
+			Iterator<?> itr;
+			if (o instanceof Iterable<?> it) {
+				itr = it.iterator();
+				o = itr.next();
+			} else {
+				itr = Collections.emptyIterator();
 			}
-
-			if (next.size == 0 || ++i == key.size()) break block;
-
-			prev = next;
-			next = (PosList) vol0[1];
 
 			while (true) {
-				PosList list = map.get(key.get(i));
-				if (list == null) break;
+				var list = map.get(o);
+				if (list != null) size += list.size;
 
-				Entry<?>[] keys = list.entries;
-				char[] vals = list.pos;
-				int prevK = 0;
-
-				for (int j = 0; j < prev.size; j++) {
-					Entry<?> entry = prev.entries[j];
-
-					fail: {
-						int k = list.indexOf(entry, prevK);
-						if (k < 0) break fail;
-						prevK = k;
-
-						MyBitSet bitSet = prevBits.get(j);
-						tmp00[0] = prev.pos[j];
-						tmp00[1] = 0;
-
-						while (true) {
-							bitSet = myAddBitset(vals[k], tmp00, bitSet);
-							if (tmp00[1] != 0) break;
-
-							if (++k == list.size || keys[k] != entry) {
-								k = prevK;
-								do {
-									if (k == 0 || keys[--k] != entry) break fail;
-									bitSet = myAddBitset(vals[k], tmp00, bitSet);
-								} while (tmp00[1] == 0);
-
-								break;
-							}
-						}
-
-						next.add(entry, tmp00[0]);
-						nextBits.add(bitSet);
-						continue;
-					}
-
-					if ((flag&MATCH_SHORTER) != 0) out.add((Entry<V>) entry);
-				}
-
-				if (next.size == 0 || ++i == key.size()) break;
-
-				PosList temp = next;
-				next = prev;
-				next.clear();
-				prev = temp;
-
-				List<MyBitSet> tmp = nextBits;
-				nextBits = prevBits;
-				nextBits.clear();
-				prevBits = tmp;
-			}
-		} else {
-			for (i = 0; i < prev.size; i++) {
-				Entry<?> entry = prev.entries[i];
-				if (((flag & MATCH_LONGER) != 0 || entry.key.length == 1) && !out.contains(entry))
-					out.add((Entry<V>) entry);
+				if (!itr.hasNext()) break;
+				o = itr.next();
 			}
 
-			setVolArray(vol0);
-			return out;
+			if (size == 0) return out;
+			if (size < bestSize) {
+				bestSize = size;
+				bestStart = i;
+				if (bestSize == 1) break;
+			}
 		}
 
-		for (i = 0; i < next.size; i++) {
-			Entry<?> entry = next.entries[i];
-			if ((flag & MATCH_LONGER) == 0) {
-				int bits = Integer.bitCount(next.pos[i]);
-				MyBitSet bitSet = prevBits.get(i);
-				if (bitSet != null) bits += bitSet.size();
+		var o = needle.get(bestStart);
+
+		var tmp = getStateCache();
+		var prev = tmp.a;
+		SimpleList<MyBitSet> prevBits = tmp.aflag, nextBits = tmp.bflag;
+
+		if (o instanceof Iterable<?> it) {
+			var itr = it.iterator();
+			o = itr.next();
+
+			while (true) {
+				var list = map.get(o);
+				if (list != null) {
+					for (int j = 0; j < list.size; j++) {
+						Entry<?> entry = list.entries[j];
+
+						int length = entry.key.length;
+						if (length != needle.size()) {
+							if (length < needle.size() || (matchLonger & MATCH_LONGER) == 0) continue;
+						}
+
+						if (prev.indexOf(entry, 0) >= 0) continue;
+
+						var newPos = list.pos[j];
+						prev.add(entry, 1 << newPos);
+						if (newPos >= 16) {
+							var largeBits = new MyBitSet();
+							largeBits.add(newPos);
+
+							prevBits.ensureCapacity(prev.size);
+							prevBits._setSize(prev.size);
+							prevBits.set(prev.size-1, largeBits);
+						}
+					}
+				}
+
+				if (!itr.hasNext()) break;
+				o = itr.next();
+			}
+		} else {
+			prev = map.get(o);
+		}
+
+		prevBits.ensureCapacity(prev.size);
+		prevBits._setSize(prev.size);
+
+		for (int i = 0; i < needle.size(); i++) {
+			if (i == bestStart) continue;
+
+			o = needle.get(i);
+			Iterator<?> itr;
+			if (o instanceof Iterable<?> it) {
+				itr = it.iterator();
+				o = itr.next();
+			} else {
+				itr = Collections.emptyIterator();
+			}
+
+			var next = prev == tmp.a ? tmp.b : tmp.a;
+			next.clear();
+
+            while (true) {
+				var list = map.get(o);
+				if (list != null) {
+					// 我们可以假设所有list长度都大于prev了 （至少在不包含Iterable的情况下）
+					int prevK = 0;
+					outerLoop:
+					for (int j = 0; j < prev.size && prevK < list.size; j++) {
+						Entry<?> entry = prev.entries[j];
+
+						int k = list.indexOf(entry, prevK);
+						if (k < 0) continue;
+						prevK = k+1;
+
+						while (k > 0 && list.entries[k-1] == entry) k--;
+
+						// if I could find any unused pos
+						while (true) {
+							var newPos = list.pos[k];
+							if (newPos < 16) {
+								char knownPos = prev.pos[j];
+								if ((knownPos & (1 << newPos)) == 0) {
+									prev.pos[j] = (char) (knownPos | (1 << newPos));
+									break;
+								}
+							} else {
+								var largeBits = prevBits.get(j);
+								if (largeBits == null) prevBits.set(j, largeBits = new MyBitSet());
+								if (largeBits.add(newPos)) break;
+							}
+
+							if (++k >= list.size || list.entries[k] != entry) continue outerLoop;
+						}
+
+						nextBits.add(prevBits.get(j));
+						next.add(entry, prev.pos[j]);
+					}
+                }
+
+                if (!itr.hasNext()) break;
+                o = itr.next();
+            }
+			prev = next;
+		}
+
+		for (int i = 0; i < prev.size; i++) {
+			Entry<?> entry = prev.entries[i];
+			if ((matchLonger & MATCH_LONGER) == 0) {
+				int bits = Integer.bitCount(prev.pos[i]);
+				var largeBits = prevBits.get(i);
+				if (largeBits != null) bits += largeBits.size();
 				if (bits < entry.key.length) continue;
 			}
 
 			out.add((Entry<V>) entry);
 		}
 
-		setVolArray(vol0);
+		setStateCache(tmp);
 		return out;
 	}
 
 	/**
-	 * @param flag 该方法的匹配模式:
-	 * <pre>
-	 * [0] 返回Map内容（下称S）中，包含key的子序列 <b>（不一定连续）</b>
-	 *     比如添加了abc，则ac可获取,bc也可获取（结尾相同即可）
-	 * [MATCH_CONTINUOUS] 返回S中，<b>连续</b>包含key的子序列
-	 *     如同 LIKE %key%
-	 *     比如添加了abcde，则ac,bd不能获取，cde,bcde...可获取
-	 * [MATCH_SHORTER] 返回，匹配到S结尾，但未匹配到key结尾，的成功匹配
-	 *    key=abc可以在该模式下匹配S=ab
-	 * [MATCH_LONGER] 返回，未匹配到S结尾的成功匹配
-	 *    key=ab可以在该模式下匹配S=abc
-	 * 上述模式可组合使用
+	 * 高性能批量查找有序子序列.
+	 * 如下示例中，haystack均指该集合中的一个字符串，不过方法实际上是对集合的匹配，而且仅需needle长度(而不是集合大小)的对数时间.
+	 * 此方法的needle每项除了是K类型，还可以是Iterable&lt;K&gt;
+	 *
+	 * @param needle 待匹配的元素列表，用于与存储的内容进行匹配操作。
+	 * @param flag 匹配模式的标志位，支持以下几种模式，并且这些模式可以组合使用：
+	 *     - 当 flag 为 0 时：
+	 *       规则：返回包含 needle 子序列（子序列不一定连续）的元素。
+	 *       示例：假设存储了 "abc"，那么 "ac" 和 "bc" 都可以匹配成功，因为needle与haystack的结尾相同，且 "ac" 和 "bc" 是 "abc" 的不连续（但是有序）子序列。
+	 *
+	 *     - 当 flag 包含 MATCH_CONTINUOUS 时：
+	 *       附加规则：*仅(AND)*返回连续包含 needle 的子序列的元素，类似于 SQL 中的 LIKE %needle% 操作。
+	 *       示例：haystack 为 "abcde"，那么 "ac" 和 "bd" 不能匹配成功，因为它们在 "abcde" 中不是连续出现的；而 "cde"、"bcde" 等可以匹配成功，因为它们是 "abcde" 中连续的子序列。
+	 *     - 当 flag 包含 MATCH_SHORTER 时：
+	 *       附加规则：*也(OR)*返回那些匹配到haystack结尾，但未匹配到needle结尾的结果。
+	 *       示例：needle 为 "abc"，haystack为 "ab"，在该模式下可以匹配成功，因为匹配到了 haystack 的结尾 "b"，但未匹配到 needle 的结尾 "c"。
+	 *     - 当 flag 包含 MATCH_LONGER 时：
+	 *       附加规则：*也(OR)*返回那些未匹配到haystack结尾的结果。
+	 *       示例：needle 为 "ab"，haystack为 "abc"，在该模式下可以匹配成功，因为 needle 已经匹配完，但 haystack 还有剩余部分 "c"。
+	 * @param out 用于存储匹配结果的列表，匹配成功的元素将被添加到这个列表中。
+	 * @return 包含匹配结果的列表，和参数out相同
 	 */
 	@SuppressWarnings("unchecked")
-	public List<Entry<V>> matchOrdered(List<K> key, @MagicConstant(flags = {MATCH_CONTINUOUS, MATCH_SHORTER, MATCH_LONGER}) final int flag, List<Entry<V>> out) {
-		if (key.size() == 0) throw new IllegalArgumentException();
+	public <COL extends Collection<Entry<V>>> COL matchOrdered(List<?> needle, @MagicConstant(flags = {MATCH_CONTINUOUS, MATCH_SHORTER, MATCH_LONGER}) final int flag, COL out) {
+		if (out.size() < 2) return matchUnordered(needle, flag, out);
 
-		PosList prev = map.get(key.get(0));
-		if (prev == null) return out;
+		var tmp = getStateCache();
+		List<PosList> zero = Helpers.cast(tmp.aflag);
 
-		Object[] vol0 = getVolArray();
-		PosList next = (PosList) vol0[0];
+		Object o = needle.get(0);
+		Iterator<?> itr;
+		if (o instanceof Iterable<?> it) {
+            for (itr = it.iterator(); itr.hasNext(); ) {
+                var list = map.get(itr.next());
+                if (list != null) zero.add(list);
+            }
+		} else {
+			var list = map.get(o);
+			if (list != null) zero.add(list);
+		}
 
+		if (zero.isEmpty()) {
+			setStateCache(tmp);
+			return out;
+		}
+
+		var next = tmp.a;
 		int i = 1;
-		block:
-		if (key.size() > 1) {
-			Object o = key.get(i);
-			Iterator<?> itr;
-			if (o instanceof Collection) {
-				itr = ((Collection<?>) o).iterator();
+
+		while (true) {
+			o = needle.get(i);
+			if (o instanceof Iterable<?> it) {
+				itr = it.iterator();
 				o = itr.next();
 			} else {
 				itr = Collections.emptyIterator();
@@ -435,43 +485,50 @@ public class MatchMap<K extends Comparable<K>, V> {
 			while (true) {
 				PosList list = map.get(o);
 				if (list != null) {
-					Entry<?>[] keys = prev.entries;
-					char[] vals = prev.pos;
+					Entry<?>[] nextVals = list.entries;
+					char[] nextPoss = list.pos;
 					int prevK = 0;
 
-					fail:
-					for (int j = 0; j < list.size; j++) {
-						Entry<?> entry = list.entries[j];
+					// avoid combining first prevArray
+					for (int index_ = 0; index_ < zero.size(); index_++) {
+						var prev = zero.get(index_);
 
-						int length = entry.key.length;
-						if (length < key.size()) {
-							if ((flag & MATCH_SHORTER) == 0) continue;
-						}
+						fail:
+						for (int j = 0; j < prev.size; j++) {
+							Entry<?> entry = prev.entries[j];
 
-						int pos = list.pos[j];
+							int k = list.indexOf(entry, prevK);
+							if (k < 0) continue;
+							prevK = k+1;
 
-						int k = prev.indexOf(entry, prevK);
-						if (k < 0) continue;
-						prevK = k + 1;
+							int pos = prev.pos[j];
+							if (nextPoss[k] <= pos) {
+								do {
+									if (++k == list.size || nextVals[k] != entry) continue fail;
+								} while (nextPoss[k] <= pos);
+							} else {
+								while (k != 0 && nextVals[k-1] == entry && nextPoss[k-1] > pos) k--;
+							}
 
-						if (vals[k] <= pos) {
-							do {
-								if (k + 1 == prev.size || keys[k + 1] != entry) break;
-							} while (vals[++k] <= pos);
-						} else {
-							do {
-								if (k == 0 || keys[k - 1] != entry) continue fail;
-							} while (vals[--k] > pos);
-						}
+							int nextPos = nextPoss[k];
+							if ((flag&MATCH_CONTINUOUS) != 0 && nextPos != pos+1) continue;
 
-						if ((flag & MATCH_CONTINUOUS) != 0 && pos != vals[k] + 1) continue;
-
-						if (next.indexOf(entry, 0) >= 0) continue;
-
-						if ((flag & MATCH_SHORTER) != 0 && pos == entry.key.length - 1) {
-							out.add((Entry<V>) entry);
-						} else if (length + 1 - pos >= key.size()) {
-							next.add(entry, pos);
+							int existingPos = itr == Collections.emptyIterator() ? -1 : next.indexOf(entry, 0);
+							if (existingPos >= 0) {
+								if (next.pos[existingPos] > nextPos) {
+									next.pos[existingPos] = (char) nextPos;
+								}
+							} else {
+								if ((flag & MATCH_SHORTER) != 0) {
+									if (nextPos == entry.key.length-1) {
+										out.add((Entry<V>) entry);
+									} else {
+										next.add(entry, nextPos); // 不能使用下方的优化，因为不知道会不会提前匹配到结尾
+									}
+								} else if (entry.key.length - nextPos >= needle.size()-i) { // 还有机会匹配到结尾（还剩【needle.size() - i - 1】次匹配，还剩【length - nextPos - 1】个字符）
+									next.add(entry, nextPos);
+								}
+							}
 						}
 					}
 				}
@@ -480,69 +537,14 @@ public class MatchMap<K extends Comparable<K>, V> {
 				o = itr.next();
 			}
 
-			if (next.size == 0 || ++i == key.size()) break block;
+			zero.clear();
+			zero.add(next);
+			if (next.size == 0 || ++i == needle.size()) break;
 
-			prev = next;
-			next = (PosList) vol0[1];
-
-			while (true) {
-				o = key.get(i);
-				if (o instanceof Collection) {
-					itr = ((Collection<?>) o).iterator();
-					o = itr.next();
-				} else {
-					itr = Collections.emptyIterator();
-				}
-
-				while (true) {
-					PosList list = map.get(o);
-					if (list != null) {
-						Entry<?>[] keys = list.entries;
-						char[] vals = list.pos;
-						int prevK = 0;
-
-						fail:
-						for (int j = 0; j < prev.size; j++) {
-							Entry<?> entry = prev.entries[j];
-							int prevPos = prev.pos[j];
-
-							int k = list.indexOf(entry, prevK);
-							if (k < 0) continue;
-							prevK = k+1;
-
-							if (vals[k] <= prevPos) {
-								do {
-									if (++k == list.size || keys[k] != entry) continue fail;
-								} while (vals[k] <= prevPos);
-							} else {
-								do {
-									if (k == 0 || keys[k-1] != entry) break;
-								} while (vals[--k] > prevPos);
-							}
-
-							int pos = vals[k];
-							if ((flag&MATCH_CONTINUOUS) != 0 && pos != prevPos+1) continue;
-
-							if ((flag&MATCH_SHORTER) != 0 && pos == entry.key.length-1) {
-								out.add((Entry<V>) entry);
-							} else if (entry.key.length - pos >= key.size() - i) {
-								next.add(entry, pos);
-							}
-						}
-					}
-
-					if (!itr.hasNext()) break;
-					o = itr.next();
-				}
-
-				if (next.size == 0 || ++i == key.size()) break;
-
-				PosList temp = next;
-				next = prev;
-				next.clear();
-				prev = temp;
-			}
-		} else next = prev;
+			next = next == tmp.a ? tmp.b : tmp.a;
+			next.clear();
+			i++;
+		}
 
 		for (i = 0; i < next.size; i++) {
 			Entry<?> entry = next.entries[i];
@@ -551,15 +553,7 @@ public class MatchMap<K extends Comparable<K>, V> {
 			}
 		}
 
-		setVolArray(vol0);
+		setStateCache(tmp);
 		return out;
 	}
-
-	public void compat() {
-		for (PosList value : map.values()) {
-			value.compact();
-		}
-	}
-
-	public void clear() { size = 0; map.clear(); }
 }

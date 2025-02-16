@@ -1,7 +1,7 @@
 package roj.crypt;
 
 import org.intellij.lang.annotations.MagicConstant;
-import roj.reflect.ReflectionUtils;
+import roj.reflect.Unaligned;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
 
@@ -441,7 +441,7 @@ public class FeedbackCipher extends RCipherSpi {
 		} else {
 			Object ref = buf.array();
 			long addr = buf._unsafeAddr() + buf.wIndex();
-			while (padLen-- > 0) ReflectionUtils.u.putByte(ref, addr++, num);
+			while (padLen-- > 0) Unaligned.U.putByte(ref, addr++, num);
 
 			buf.wIndex(buf.wIndex() + (num&0xFF));
 		}
@@ -459,7 +459,7 @@ public class FeedbackCipher extends RCipherSpi {
 			Object ref = buf.array();
 			long addr = buf._unsafeAddr() + buf.wIndex() - 2;
 			while (num-- > 0) {
-				if ((ReflectionUtils.u.getByte(ref, addr--)&0xFF) != padLen) {
+				if ((Unaligned.U.getByte(ref, addr--)&0xFF) != padLen) {
 					throw new BadPaddingException();
 				}
 			}

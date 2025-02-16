@@ -3,7 +3,10 @@ package roj.config;
 import roj.collect.MyBitSet;
 import roj.collect.MyHashSet;
 import roj.collect.TrieTree;
-import roj.config.data.*;
+import roj.config.data.CBoolean;
+import roj.config.data.CEntry;
+import roj.config.data.CNull;
+import roj.config.data.Document;
 import roj.config.serial.CVisitor;
 import roj.config.serial.ToEntry;
 import roj.config.serial.ToXml;
@@ -255,11 +258,11 @@ public class XMLParser extends Parser {
 			case TRUE: return CBoolean.TRUE;
 			case FALSE: return CBoolean.FALSE;
 			case NULL: return CNull.NULL;
-			case FLOAT: return CFloat.valueOf(w.asFloat());
-			case DOUBLE: return CDouble.valueOf(w.asDouble());
-			case INTEGER: return CInt.valueOf(w.asInt());
-			case LONG: return CLong.valueOf(w.asLong());
-			case STRING, LITERAL: return CString.valueOf(w.val());
+			case FLOAT: return CEntry.valueOf(w.asFloat());
+			case DOUBLE: return CEntry.valueOf(w.asDouble());
+			case INTEGER: return CEntry.valueOf(w.asInt());
+			case LONG: return CEntry.valueOf(w.asLong());
+			case STRING, LITERAL: return CEntry.valueOf(w.val());
 		}
 		throw new IllegalArgumentException("不是简单类型:"+w);
 	}

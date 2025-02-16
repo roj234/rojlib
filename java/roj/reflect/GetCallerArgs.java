@@ -7,13 +7,14 @@ import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.stream.Stream;
 
-import static roj.reflect.ReflectionUtils.u;
+import static roj.reflect.VMInternals.u;
 
 /**
  * @author Roj234
  * @since 2024/6/4 0004 6:09
  */
 public final class GetCallerArgs {
+	@Java22Workaround
 	private interface H {
 		Object newInstance(Object a, Object b);
 		int size(Object o);
@@ -25,6 +26,7 @@ public final class GetCallerArgs {
 	private static final long oMonitors, oLocals, oStacks;
 	private static final H builder;
 	private static final Class<?> primitive;
+	public static final GetCallerArgs INSTANCE;
 	static {
 		try {
 			Class<?> options = Class.forName("java.lang.StackWalker$ExtendedOption");
@@ -48,8 +50,6 @@ public final class GetCallerArgs {
 	private final StackWalker walker;
 	public GetCallerArgs(EnumSet<StackWalker.Option> t) {walker = (StackWalker) builder.newInstance(t, localsAndOperands);}
 
-	public static final GetCallerArgs INSTANCE;
-
 	public <T> T walk(Function<? super Stream<XSF>, ? extends T> function) {return walker.walk(stream -> function.apply(stream.skip(1).map(XSF::new)));}
 	public void forEach(Consumer<? super XSF> action) {walker.walk(stream -> {stream.skip(1).map(XSF::new).forEach(action); return null;});}
 
@@ -58,16 +58,6 @@ public final class GetCallerArgs {
 		return walker.walk(stream -> {
 			StackFrame frame = stream.skip(skip).findFirst().orElse(null);
 			return frame == null ? null : new XSF(frame).getLocals()[0];
-		});
-	}
-
-	public static final StackWalker NOT_LIVE = StackWalker.getInstance(EnumSet.of(StackWalker.Option.RETAIN_CLASS_REFERENCE));
-	public static Class<?> getCallerClass() {return getCallerClass(3);}
-	public static Class<?> getCallerClass(int skip) {
-		if (NOT_LIVE == null) return GetCallerArgs.class;
-		return NOT_LIVE.walk(stream -> {
-			StackFrame frame = stream.skip(skip).findFirst().orElse(null);
-			return frame == null ? null : frame.getDeclaringClass();
 		});
 	}
 

@@ -32,6 +32,8 @@ public final class CLongArray extends CList {
 		this.value = value;
 	}
 
+	public long[] toLongArray() {return value.clone();}
+
 	public void accept(CVisitor ser) { ser.value(value); }
-	public long[] rawDeep() { return value; }
+	public Object unwrap() { return value; }
 }

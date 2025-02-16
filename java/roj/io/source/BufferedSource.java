@@ -29,7 +29,7 @@ public class BufferedSource extends Source {
 	public BufferedSource(Source s, int buf, BufferPool pool, boolean dispatchClose) throws IOException {
 		this.s = s;
 		this.bufPos = -1;
-		this.buf = (ByteList) pool.allocate(false, buf);
+		this.buf = (ByteList) pool.allocate(false, buf, 0);
 		this.pos = s.position();
 		this.len = s.length();
 		this.close = dispatchClose;
@@ -157,6 +157,8 @@ public class BufferedSource extends Source {
 
 	private ByteList buffer(long pos) throws IOException {
 		if (bufPos != (int) (pos>>>12)) {
+			bufPos = (int) (pos>>>12);
+
 			s.seek(pos & -PAGE);
 			sync |= 1;
 
@@ -181,4 +183,15 @@ public class BufferedSource extends Source {
 
 	@Override
 	public String toString() { return "BufferedSource@"+s; }
+
+	@Override
+	public boolean equals(Object o) {
+		if (this == o) return true;
+		if (o == null || getClass() != o.getClass()) return false;
+
+		BufferedSource that = (BufferedSource) o;
+		return s.equals(that.s);
+	}
+
+	@Override public int hashCode() {return s.hashCode()+1;}
 }

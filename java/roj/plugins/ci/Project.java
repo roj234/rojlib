@@ -9,11 +9,12 @@ import roj.asmx.mapper.Mapper;
 import roj.collect.LinkedMyHashMap;
 import roj.collect.MyHashMap;
 import roj.collect.SimpleList;
-import roj.concurrent.timing.ScheduleTask;
+import roj.concurrent.ScheduleTask;
 import roj.io.FastFailException;
 import roj.io.IOUtil;
-import roj.text.Template;
+import roj.text.Formatter;
 import roj.ui.Terminal;
+import roj.util.ArrayUtil;
 import roj.util.DynByteBuf;
 
 import java.io.File;
@@ -38,6 +39,7 @@ public final class Project {
 	final Charset charset;
 	List<Project> dependencies;
 	final File root, srcPath, resPath, libPath;
+	final List<File> binaryDepend;
 	final Compiler compiler;
 	public final Workspace workspace;
 	public Mapper mapper;
@@ -47,7 +49,7 @@ public final class Project {
 	final File unmappedJar;
 	private final String resPrefix;
 	ZipOutput mappedWriter, unmappedWriter;
-	FMD.SignatureInfo signatureInfo;
+	FMD.SignatureCache signatureCache;
 
 	public String getName() {return name;}
 	public File getRoot() {return root;}
@@ -76,6 +78,11 @@ public final class Project {
 		this.variables.put("name", name);
 		this.variables.put("version", version);
 		this.variables.putAll(config.variables);
+
+		this.binaryDepend = new SimpleList<>();
+		for (String depend : conf.binary_depend) {
+			binaryDepend.add(IOUtil.relativePath(depend.startsWith("/") ? FMD.BASE : libPath, depend));
+		}
 
 		if (root.mkdirs()) Workspace.addIDEAProject(this, false);
 
@@ -110,6 +117,7 @@ public final class Project {
 		}
 
 		this.dependencies = new SimpleList<>(projects.keySet());
+		ArrayUtil.inverse(dependencies);
 	}
 
 	public List<Project> getAllDependencies() {return dependencies;}
@@ -141,9 +149,10 @@ public final class Project {
 
 				ZipFileWriter zfw = mappedWriter.getZFW();
 				if (zfw != null) {
-					for (String depend : conf.binary_depend) {
-						try (var zf = new ZipFile(IOUtil.relativePath(depend.startsWith("/") ? FMD.BASE : libPath, depend))) {
+					for (var depend : binaryDepend) {
+						try (var zf = new ZipFile(depend)) {
 							for (ZEntry entry : zf.entries()) {
+								if (entry.isDirectory() || entry.getName().startsWith("META-INF/")) continue;
 								mappedWriter.getZFW().copy(zf, entry);
 							}
 						}
@@ -169,8 +178,8 @@ public final class Project {
 					return;
 				}
 
-				var template = Template.compile(string);
-				if (template.hasName()) {
+				var template = Formatter.simple(string);
+				if (template.isDynamic()) {
 					string = template.format(variables, IOUtil.getSharedCharBuf()).toString();
 				}
 
@@ -206,7 +215,7 @@ public final class Project {
 	public void fileChanged() {
 		if (delayedCompile != null) delayedCompile.cancel();
 		if (autoCompile) {
-			delayedCompile = FMD.DefaultScheduler.delay(() -> {
+			delayedCompile = FMD.TIMER.delay(() -> {
 				try {
 					block:
 					if (!isDirty(this)) {
@@ -216,14 +225,14 @@ public final class Project {
 						return;
 					}
 
-					FMD.build(Collections.singleton("zl"), this);
+					FMD.build(Collections.emptySet(), this);
 				} catch (FastFailException ignored) {
 					fileChanged();
 				} catch (Throwable e) {
 					Terminal.error("自动编译出错", e);
 					FMD.watcher.removeAll();
 				}
-			}, FMD.config.getInteger("自动编译防抖"));
+			}, FMD.config.getInt("自动编译防抖"));
 		}
 	}
 	private static boolean isDirty(Project p) {
@@ -237,5 +246,5 @@ public final class Project {
 
 	public FMD.EnvPojo.Project serialize() {return conf;}
 	public Map<String, String> getVariables() {return variables;}
-	public String getOutputFormat() {return Template.compile(conf.name_format).format(variables, IOUtil.getSharedCharBuf()).toString();}
+	public String getOutputFormat() {return Formatter.simple(conf.name_format).format(variables, IOUtil.getSharedCharBuf()).toString();}
 }

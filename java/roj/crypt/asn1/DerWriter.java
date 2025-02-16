@@ -3,7 +3,7 @@ package roj.crypt.asn1;
 import roj.collect.IntList;
 import roj.collect.SimpleList;
 import roj.io.IOUtil;
-import roj.reflect.ReflectionUtils;
+import roj.reflect.Unaligned;
 import roj.util.*;
 
 import java.io.IOException;
@@ -62,8 +62,8 @@ public final class DerWriter {
 	public void sort() {
 		int prev = stack.get(stack.size()-1);
 		TimSortForEveryone.sort(prev, T.wIndex(), (refLeft, offLeft, offRight) -> {
-			int objectIdL = ReflectionUtils.u.getInt(refLeft, offLeft);
-			int objectIdR = ReflectionUtils.u.getInt(offRight);
+			int objectIdL = Unaligned.U.getInt(refLeft, offLeft);
+			int objectIdR = Unaligned.U.getInt(offRight);
 
 			ByteList dataLeft = combine(L.get(objectIdL));
 			ByteList dataRight = combine(L.get(objectIdR));

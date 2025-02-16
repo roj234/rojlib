@@ -4,13 +4,13 @@ import roj.archive.qz.xz.lz.LZDecoder;
 import roj.archive.qz.xz.lzma.LZMADecoder;
 import roj.archive.qz.xz.rangecoder.RangeDecoder;
 import roj.collect.SimpleList;
+import roj.concurrent.ITask;
 import roj.concurrent.TaskHandler;
 import roj.concurrent.TaskPool;
-import roj.concurrent.task.ITask;
 import roj.io.CorruptedInputException;
 import roj.io.IOUtil;
 import roj.io.MBInputStream;
-import roj.reflect.ReflectionUtils;
+import roj.reflect.Unaligned;
 import roj.util.ArrayUtil;
 import roj.util.ByteList;
 
@@ -236,7 +236,7 @@ public class LZMA2ParallelReader extends MBInputStream {
 		this.presetDict = presetDict;
 		this.taskExecutor = taskExecutor;
 		this.taskFree = affinity;
-		ReflectionUtils.u.storeFence();
+		Unaligned.U.storeFence();
 		taskExecutor.submit(() -> { while (!noMoreInput) nextChunk(); });
 	}
 

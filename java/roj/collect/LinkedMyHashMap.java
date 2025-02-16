@@ -12,7 +12,7 @@ import static roj.collect.IntMap.UNDEFINED;
  * @since 2021/4/25 23:1
  */
 public class LinkedMyHashMap<K, V> extends MyHashMap<K, V> {
-	public static class LinkedEntry<K, V> extends MyHashMap.Entry<K, V> {
+    public static class LinkedEntry<K, V> extends MyHashMap.Entry<K, V> {
 		public LinkedEntry<K, V> p, n;
 	}
 
@@ -21,6 +21,7 @@ public class LinkedMyHashMap<K, V> extends MyHashMap<K, V> {
 
 	public LinkedMyHashMap() {this(16);}
 	public LinkedMyHashMap(int size) {super(size);}
+	public LinkedMyHashMap(LinkedMyHashMap<K, V> map) {putAll(map);}
 
 	public void setAccessOrder(boolean accessOrder) {this.accessOrder = accessOrder;}
 	public void setReverseIterate(boolean isReverse) {this.reversed = isReverse;}

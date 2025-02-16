@@ -2,16 +2,12 @@ package roj.asmx;
 
 import roj.archive.zip.ZEntry;
 import roj.archive.zip.ZipFile;
-import roj.asm.AsmShared;
+import roj.asm.*;
+import roj.asm.annotation.Annotation;
+import roj.asm.attr.Annotations;
+import roj.asm.attr.Attribute;
 import roj.asm.cp.ConstantPool;
 import roj.asm.cp.CstUTF;
-import roj.asm.tree.AccessData;
-import roj.asm.tree.Attributed;
-import roj.asm.tree.CNode;
-import roj.asm.tree.ConstantData;
-import roj.asm.tree.anno.Annotation;
-import roj.asm.tree.attr.Annotations;
-import roj.asm.tree.attr.Attribute;
 import roj.asmx.AnnotatedElement.Node;
 import roj.asmx.AnnotatedElement.Type;
 import roj.collect.MyHashMap;
@@ -55,13 +51,13 @@ public final class AnnotationRepo {
 		}
 	}
 
-	public void add(ConstantData data) {
+	public void add(ClassNode data) {
 		Type klass = new Type(data);
 		add2(data.cp, data, klass);
 		add1(data, data.fields, klass);
 		add1(data, data.methods, klass);
 	}
-	private void add1(ConstantData data, List<? extends CNode> nodes, Type klass) {
+	private void add1(ClassNode data, List<? extends CNode> nodes, Type klass) {
 		for (int i = nodes.size()-1; i >= 0; i--) {
 			CNode node = nodes.get(i);
 			Node subNode = new Node(klass, node);
@@ -102,7 +98,7 @@ public final class AnnotationRepo {
 		if (name.endsWith("-info") || !name.concat(".class").equals(fileName)) return;
 		var parent = intern(cp.getRefName(r));
 
-		var skeleton = new AccessData(null, -1, name, parent);
+		var skeleton = new ClassView(null, -1, name, parent);
 		skeleton.modifier = acc;
 
 		Type klass = new Type(skeleton);
@@ -110,7 +106,7 @@ public final class AnnotationRepo {
 		rawNodes.clear();
 		int len = r.readUnsignedShort();
 		for (int i = 0; i < len; i++) rawNodes.add(intern(cp.getRefName(r)));
-		skeleton.itf = Helpers.cast(ArrayUtil.copyOf(rawNodes));
+		skeleton.interfaces = Helpers.cast(ArrayUtil.copyOf(rawNodes));
 
 		for (int i = 0; i < 2; i++) {
 			len = r.readUnsignedShort();
@@ -174,7 +170,7 @@ public final class AnnotationRepo {
 		elements.put(null, 0);
 
 		var cp = AsmShared.local().constPool();
-		var rest = IOUtil.getSharedByteBuf();
+		int start = buf.wIndex();
 
 		for (var value : this.annotations.values()) {
 			for (var el : value) {
@@ -182,44 +178,48 @@ public final class AnnotationRepo {
 				int size = elements.size();
 				int idx = elements.putOrGet(parent, size, 0);
 				if (idx == 0) {
-					rest.put(0);
-					writeAcc(rest, parent, cp, elements);
+					buf.put(0);
+					writeAcc(buf, parent, cp, elements);
 					idx = parent == el ? size : elements.getInt(el.node());
 				}
-				rest.putVUInt(idx).putVUInt(el.annotations.size());
+				buf.putVUInt(idx).putVUInt(el.annotations.size());
 				for (var annotation : el.annotations.values()) {
 					idx = annotations.putOrGet(annotation, annotations.size(), 0);
 					if (idx == 0) {
-						rest.put(0);
-						annotation.toByteArray(cp, rest);
+						buf.put(0);
+						annotation.toByteArray(buf, cp);
 					} else {
-						rest.putVUInt(idx);
+						buf.putVUInt(idx);
 					}
 				}
 			}
 		}
 
+		int cpl = 8 + 8 + cp.byteLength();
+		buf.preInsert(start, cpl);
+		int widx = buf.wIndex();
+		buf.wIndex(start);
 		buf.putAscii("ANNOREP").put(0).putShort(annotations.size()).putShort(elements.size()).putShort(this.annotations.size());
 		cp.write(buf, false);
-		buf.put(rest);
+		buf.wIndex(widx);
 		AsmShared.local().constPool(cp);
 	}
 	private static void writeAcc(DynByteBuf buf, Type parent, ConstantPool cp, ToIntMap<Object> elements) {
-		var owner = (AccessData) parent.owner;
-		buf.putShort(cp.getUtfId(owner.name))
-		   .putShort(cp.getUtfId(owner.parent))
-		   .putShort(owner.modifier)
-		   .putShort(owner.itf.size());
-		for (String itf : owner.itf) buf.putShort(cp.getUtfId(itf));
-		buf.putShort(owner.methods.size());
-		for (var node : owner.methods) {
+		var owner = parent.owner;
+		buf.putShort(cp.getUtfId(owner.name()))
+		   .putShort(cp.getUtfId(owner.parent()))
+		   .putShort(owner.modifier())
+		   .putShort(owner.interfaces().size());
+		for (String itf : owner.interfaces()) buf.putShort(cp.getUtfId(itf));
+		buf.putShort(owner.methods().size());
+		for (var node : owner.methods()) {
 			elements.putIfAbsent(node, elements.size());
-			buf.putShort(cp.getUtfId(node.name)).putShort(cp.getUtfId(node.desc)).putShort(node.modifier);
+			buf.putShort(cp.getUtfId(node.name())).putShort(cp.getUtfId(node.rawDesc())).putShort(node.modifier());
 		}
-		buf.putShort(owner.fields.size());
-		for (var node : owner.fields) {
+		buf.putShort(owner.fields().size());
+		for (var node : owner.fields()) {
 			elements.putIfAbsent(node, elements.size());
-			buf.putShort(cp.getUtfId(node.name)).putShort(cp.getUtfId(node.desc)).putShort(node.modifier);
+			buf.putShort(cp.getUtfId(node.name())).putShort(cp.getUtfId(node.rawDesc())).putShort(node.modifier());
 		}
 	}
 	public boolean deserialize(DynByteBuf buf) {
@@ -265,13 +265,13 @@ public final class AnnotationRepo {
 		return true;
 	}
 	private int readAcc(DynByteBuf r, ConstantPool cp, AnnotatedElement[] elements, int elementCount) {
-		var skeleton = new AccessData(null, 0, ((CstUTF) cp.get(r)).str(), ((CstUTF) cp.get(r)).str());
+		var skeleton = new ClassView(null, 0, ((CstUTF) cp.get(r)).str(), ((CstUTF) cp.get(r)).str());
 		skeleton.modifier = r.readChar();
 
 		rawNodes.clear();
 		int len = r.readUnsignedShort();
 		for (int i = 0; i < len; i++) rawNodes.add(((CstUTF) cp.get(r)).str());
-		skeleton.itf = Helpers.cast(ArrayUtil.copyOf(rawNodes));
+		skeleton.interfaces = Helpers.cast(ArrayUtil.copyOf(rawNodes));
 
 		Type type = new Type(skeleton);
 		elements[elementCount++] = type;

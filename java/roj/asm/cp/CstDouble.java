@@ -10,17 +10,11 @@ public final class CstDouble extends Constant {
 	public double value;
 
 	public CstDouble(double value) { this.value = value; }
-	@Override
-	void write(DynByteBuf w) { w.put(DOUBLE).putDouble(value); }
-	@Override
-	public byte type() { return DOUBLE; }
+	@Override public byte type() { return DOUBLE; }
+	@Override void write(DynByteBuf w) {w.put(DOUBLE).putDouble(value);}
 
-	public String toString() { return super.toString() + " : " + value; }
-
-	@Override
-	public String getEasyReadValue() { return value == value ? Double.toString(value).concat("d") : "Double.NaN"; }
-	@Override
-	public String getEasyCompareValue() { return Double.toString(value); }
+	@Override public String toString() {return Double.toString(value).concat("d");}
+	@Override public String getEasyCompareValue() {return Double.toString(value);}
 
 	public int hashCode() {
 		long l = Double.doubleToRawLongBits(value);

@@ -19,9 +19,20 @@ import java.util.Map;
  * @since 2021/5/31 21:17
  */
 public abstract class CEntry {
+	public static CEntry valueOf(String v) {return new CString(v);}
+	public static CEntry valueOf(boolean v) {return v ? CBoolean.TRUE : CBoolean.FALSE;}
+	public static CEntry valueOf(byte v) {return new CByte(v);}
+	public static CEntry valueOf(short v) {return new CShort(v);}
+	public static CEntry valueOf(char v) {return new CChar(v);}
+	public static CEntry valueOf(int v) {return new CInt(v);}
+	public static CEntry valueOf(long v) {return new CLong(v);}
+	public static CEntry valueOf(float v) {return new CFloat(v);}
+	public static CEntry valueOf(double v) {return new CDouble(v);}
+
 	protected CEntry() {}
 
 	public abstract Type getType();
+	public char dataType() {return getType().symbol();}
 	public boolean contentEquals(CEntry o) {
 		return this == o || (o.getType().ordinal() > Type.INTEGER.ordinal()
 		? o.contentEquals(this)
@@ -31,12 +42,12 @@ public abstract class CEntry {
 	public boolean mayCastTo(Type o) { return o == getType(); }
 
 	public static final int Q_SET = 1, Q_SET_IF_ABSENT = 2, Q_SET_IF_NOT_SIMILAR = 4, Q_CREATE_MID = 8, Q_REPLACE_MID = 16, Q_RETURN_CONTAINER = 32;
-	public final CEntry query(CharSequence sql) { return query(sql, 0, null, IOUtil.getSharedCharBuf()); }
-	@Contract("_,_,!null,_ -> !null")
-	public final CEntry query(CharSequence sql, @MagicConstant(flags = {Q_SET,Q_SET_IF_ABSENT,Q_SET_IF_NOT_SIMILAR,Q_CREATE_MID,Q_REPLACE_MID,Q_RETURN_CONTAINER}) int flag, @Nullable CEntry def, CharList tmp) {
+	public final CEntry query(CharSequence sql) { return query(sql, 0, null); }
+	@Contract("_, _, !null -> !null")
+	public final CEntry query(CharSequence sql, @MagicConstant(flags = {Q_SET,Q_SET_IF_ABSENT,Q_SET_IF_NOT_SIMILAR,Q_CREATE_MID,Q_REPLACE_MID,Q_RETURN_CONTAINER}) int flag, @Nullable CEntry def) {
 		CEntry node = this;
 
-		tmp.clear();
+		var tmp = IOUtil.getSharedCharBuf();
 		boolean quoted = false;
 
 		int prevI = 0;
@@ -149,6 +160,7 @@ public abstract class CEntry {
 	public boolean asBool() { throw new ClassCastException(getType()+"不是布尔值"); }
 	@Deprecated public final int asInteger() { return asInt(); }
 	public int asInt() { throw new ClassCastException(getType()+"不是整数"); }
+	public char asChar() { throw new ClassCastException(getType()+"不是字符"); }
 	public long asLong() { throw new ClassCastException(getType()+"不是长整数"); }
 	public float asFloat() { throw new ClassCastException(getType()+"不是浮点数"); }
 	public double asDouble() { throw new ClassCastException(getType()+"不是双精度浮点数"); }
@@ -162,14 +174,29 @@ public abstract class CEntry {
 	public String toString() { return ConfigMaster.JSON.toString(this); }
 
 	public abstract void accept(CVisitor ser);
-	// Convert to java object wrapper (Map, List, Number, String, etc.)
+	/**
+	 * 获取这个CEntry的内部表示
+	 * * 对于非基本类型来说，不会创建新对象
+	 * @see #unwrap()
+	 * @return
+	 */
 	public abstract Object raw();
-	public Object rawDeep() { return raw(); }
+	/**
+	 * 递归式的将这个CEntry转换为Java标准库中的包装类型
+	 * * 会创建不少对象
+	 * @see #raw()
+	 * @return Java包装器表示
+	 */
+	public Object unwrap() {return raw();}
 
 	protected CharList toTOML(CharList sb, int depth, CharSequence chain) { return toJSON(sb, 0); }
 	public final CharList appendTOML(CharList sb, CharList tmp) { return toTOML(sb, 0, tmp); }
 
-	protected abstract CharList toJSON(CharList sb, int depth);
+	protected CharList toJSON(CharList sb, int depth) {throw new NoSuchMethodError();}
 
+	//region 未使用，预留
 	public CEntry __call(CEntry self, CEntry args) {throw new UnsupportedOperationException(getClass()+"不是函数");}
+	public CEntry __getattr(String name) {return null;}
+	public void __setattr(String name, CEntry value) {}
+	//endregion
 }

@@ -1,12 +1,12 @@
 package roj.io;
 
 import org.jetbrains.annotations.NotNull;
+import roj.reflect.Unaligned;
 import roj.text.GB18030;
 import roj.text.UTF8;
 import roj.util.ArrayCache;
 import roj.util.ArrayUtil;
 import roj.util.DynByteBuf;
-import sun.misc.Unsafe;
 
 import java.io.EOFException;
 import java.io.IOException;
@@ -140,8 +140,8 @@ public class MyDataInputStream extends MBInputStream implements MyDataInput, Fin
 	@Override public final int readUnsignedByte() throws IOException {int i = doRead(1);return buf[i]&0xFF;}
 	@Override public final short readShort() throws IOException {return (short) readUnsignedShort();}
 	@Override public final char readChar() throws IOException {return (char) readUnsignedShort();}
-	@Override public final int readUnsignedShort() throws IOException {int i = doRead(2);return U.get16UB(buf, Unsafe.ARRAY_BYTE_BASE_OFFSET+i);}
-	@Override public final int readUShortLE() throws IOException {int i = doRead(2);return U.get16UL(buf, Unsafe.ARRAY_BYTE_BASE_OFFSET+i);}
+	@Override public final int readUnsignedShort() throws IOException {int i = doRead(2);return U.get16UB(buf, Unaligned.ARRAY_BYTE_BASE_OFFSET + i);}
+	@Override public final int readUShortLE() throws IOException {int i = doRead(2);return U.get16UL(buf, Unaligned.ARRAY_BYTE_BASE_OFFSET + i);}
 	@Override
 	public final int readMedium() throws IOException {
 		int i = doRead(3);
@@ -154,12 +154,12 @@ public class MyDataInputStream extends MBInputStream implements MyDataInput, Fin
 		byte[] l = buf;
 		return (l[i++] & 0xFF)| (l[i++] & 0xFF) << 8 | (l[i] & 0xFF) << 16;
 	}
-	@Override public final int readInt() throws IOException {int i = doRead(4);return U.get32UB(buf, Unsafe.ARRAY_BYTE_BASE_OFFSET+i);}
-	@Override public final int readIntLE() throws IOException {int i = doRead(4);return U.get32UL(buf, Unsafe.ARRAY_BYTE_BASE_OFFSET+i);}
+	@Override public final int readInt() throws IOException {int i = doRead(4);return U.get32UB(buf, Unaligned.ARRAY_BYTE_BASE_OFFSET + i);}
+	@Override public final int readIntLE() throws IOException {int i = doRead(4);return U.get32UL(buf, Unaligned.ARRAY_BYTE_BASE_OFFSET + i);}
 	@Override public final long readUInt() throws IOException {return readInt() & 0xFFFFFFFFL;}
 	@Override public final long readUIntLE() throws IOException {return readIntLE() & 0xFFFFFFFFL;}
-	@Override public final long readLong() throws IOException {int i = doRead(8);return U.get64UB(buf, Unsafe.ARRAY_BYTE_BASE_OFFSET+i);}
-	@Override public final long readLongLE() throws IOException {int i = doRead(8);return U.get64UL(buf, Unsafe.ARRAY_BYTE_BASE_OFFSET+i);}
+	@Override public final long readLong() throws IOException {int i = doRead(8);return U.get64UB(buf, Unaligned.ARRAY_BYTE_BASE_OFFSET + i);}
+	@Override public final long readLongLE() throws IOException {int i = doRead(8);return U.get64UL(buf, Unaligned.ARRAY_BYTE_BASE_OFFSET + i);}
 	@Override public final float readFloat() throws IOException {return Float.intBitsToFloat(readInt());}
 	@Override public final double readDouble() throws IOException {return Double.longBitsToDouble(readLong());}
 

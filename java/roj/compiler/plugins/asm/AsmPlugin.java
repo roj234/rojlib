@@ -1,8 +1,8 @@
 package roj.compiler.plugins.asm;
 
 import org.jetbrains.annotations.Nullable;
+import roj.asm.MethodNode;
 import roj.asm.Opcodes;
-import roj.asm.tree.MethodNode;
 import roj.collect.MyHashMap;
 import roj.compiler.api.Evaluable;
 import roj.compiler.ast.expr.ExprNode;

@@ -91,7 +91,7 @@ final class InfoHash {
 
 				source.seek(start);
 				buf.clear();
-				source.read(buf, (int) count);
+				source.readFully(buf, (int) count);
 				sha1.update(buf.list, 0, (int) count);
 				throw OperationDone.INSTANCE;
 			}

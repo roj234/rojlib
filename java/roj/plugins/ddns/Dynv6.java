@@ -17,7 +17,7 @@ import java.util.Map;
  * @author Roj234
  * @since 2023/1/27 0027 19:03
  */
-public class Dynv6 implements DDNSService {
+final class Dynv6 implements DDNSService {
 	private String HttpToken;
 
 	private final Map<String, DDnsRecord> domain2Id = new MyHashMap<>();

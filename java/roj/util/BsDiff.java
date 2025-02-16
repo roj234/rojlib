@@ -3,8 +3,8 @@ package roj.util;
 import roj.io.CorruptedInputException;
 import roj.io.MyDataInput;
 import roj.io.source.Source;
+import roj.reflect.Unaligned;
 import roj.reflect.litasm.FastJNI;
-import sun.misc.Unsafe;
 
 import java.io.IOException;
 import java.io.OutputStream;
@@ -30,7 +30,6 @@ public final class BsDiff {
 		this.left = left;
 		this.sfx = new int[left.length];
 		implSetLeft(left, sfx, left.length);
-		System.out.println("ImplSetLeft OK");
 	}
 	public void setLeft(byte[] left, int off, int len) {
 		if (off == 0 && len == left.length) {
@@ -359,8 +358,8 @@ public final class BsDiff {
 			int i = sfx[mid];
 			int len = Math.min(left.length-i, right.length-rightOff);
 			int ret = ArrayUtil.vectorizedMismatch(
-				left, Unsafe.ARRAY_BYTE_BASE_OFFSET+i,
-				right, Unsafe.ARRAY_BYTE_BASE_OFFSET+rightOff,
+				left, Unaligned.ARRAY_BYTE_BASE_OFFSET + i,
+				right, Unaligned.ARRAY_BYTE_BASE_OFFSET + rightOff,
 				len, ArrayUtil.LOG2_ARRAY_BYTE_INDEX_SCALE);
 
 			if (ret >= 0 && left[i+ret] < right[rightOff+ret]) {

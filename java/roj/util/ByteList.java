@@ -4,9 +4,9 @@ import org.jetbrains.annotations.NotNull;
 import roj.compiler.plugins.eval.Constexpr;
 import roj.io.buf.BufferPool;
 import roj.math.MathUtils;
+import roj.reflect.Unaligned;
 import roj.text.CharList;
 import roj.text.TextUtil;
-import sun.misc.Unsafe;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -18,7 +18,7 @@ import java.nio.ReadOnlyBufferException;
 import java.nio.charset.StandardCharsets;
 import java.util.function.IntUnaryOperator;
 
-import static roj.reflect.ReflectionUtils.u;
+import static roj.reflect.Unaligned.U;
 
 /**
  * @author Roj234
@@ -48,14 +48,14 @@ public class ByteList extends DynByteBuf implements Appendable {
 	public int capacity() { return list.length; }
 	public int maxCapacity() { return Integer.MAX_VALUE - 16; }
 	public final boolean isDirect() { return false; }
-	public long _unsafeAddr() { return (long)Unsafe.ARRAY_BYTE_BASE_OFFSET+arrayOffset(); }
+	public long _unsafeAddr() { return (long)Unaligned.ARRAY_BYTE_BASE_OFFSET+arrayOffset(); }
 	public boolean hasArray() { return true; }
 	public byte[] array() { return list; }
 	public int arrayOffset() { return 0; }
 
 	@Override
 	public final void copyTo(long address, int len) {
-		DirectByteList.copyFromArray(list, Unsafe.ARRAY_BYTE_BASE_OFFSET, arrayOffset() + preRead(len), address, len);
+		DirectByteList.copyFromArray(list, Unaligned.ARRAY_BYTE_BASE_OFFSET, arrayOffset() + preRead(len), address, len);
 	}
 
 	public void clear() { wIndex = rIndex = 0; }
@@ -384,15 +384,15 @@ public class ByteList extends DynByteBuf implements Appendable {
 
 			if (c == 0 || c > 0x7F) {
 				if (c <= 0x7FF) {
-					u.putByte(ref, addr++, (byte) (0xC0 | ((c >> 6) & 0x1F)));
-					u.putByte(ref, addr++, (byte) (0x80 | (c & 0x3F)));
+					U.putByte(ref, addr++, (byte) (0xC0 | ((c >> 6) & 0x1F)));
+					U.putByte(ref, addr++, (byte) (0x80 | (c & 0x3F)));
 				} else {
-					u.putByte(ref, addr++, (byte) (0xE0 | ((c >> 12) & 0x0F)));
-					u.putByte(ref, addr++, (byte) (0x80 | ((c >> 6) & 0x3F)));
-					u.putByte(ref, addr++, (byte) (0x80 | (c & 0x3F)));
+					U.putByte(ref, addr++, (byte) (0xE0 | ((c >> 12) & 0x0F)));
+					U.putByte(ref, addr++, (byte) (0x80 | ((c >> 6) & 0x3F)));
+					U.putByte(ref, addr++, (byte) (0x80 | (c & 0x3F)));
 				}
 			} else {
-				u.putByte(ref, addr++, (byte) c);
+				U.putByte(ref, addr++, (byte) c);
 			}
 		}
 	}

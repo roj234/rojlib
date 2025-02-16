@@ -27,6 +27,7 @@ public abstract class MSSEngine {
 	public Object context;
 	final MSSContext config;
 	final SecureRandom random;
+	public MSSContext config() {return config;}
 
 	static final byte WRITE_PENDING = (byte) 128;
 	byte flag, stage;
@@ -40,6 +41,7 @@ public abstract class MSSEngine {
 	 */
 	public abstract boolean isClient();
 	public final boolean isHandshakeDone() {return stage >= HS_DONE;}
+	public abstract boolean maySendMessage();
 	public final boolean isClosed() {return stage == HS_FAIL;}
 
 	protected final RCipherSpi getSessionCipher(MSSSession session, int mode) throws MSSException {

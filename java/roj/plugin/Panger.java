@@ -1,34 +1,35 @@
 package roj.plugin;
 
-import roj.asm.tree.anno.Annotation;
+import roj.archive.zip.ZEntry;
+import roj.archive.zip.ZipFile;
+import roj.asm.annotation.Annotation;
 import roj.collect.CollectionX;
 import roj.collect.MyHashMap;
 import roj.collect.SimpleList;
+import roj.concurrent.TaskPool;
 import roj.config.Tokenizer;
 import roj.config.data.CBoolean;
 import roj.config.data.CEntry;
 import roj.config.data.Type;
+import roj.http.server.*;
+import roj.http.server.auto.OKRouter;
 import roj.io.IOUtil;
 import roj.math.Version;
 import roj.net.MyChannel;
 import roj.net.ServerLaunch;
-import roj.net.http.server.*;
-import roj.net.http.server.auto.OKRouter;
 import roj.reflect.ILSecurityManager;
 import roj.reflect.ReflectionUtils;
 import roj.text.CharList;
 import roj.text.Formatter;
-import roj.text.Template;
 import roj.text.TextReader;
 import roj.text.logging.Level;
 import roj.text.logging.Logger;
-import roj.ui.Console;
-import roj.ui.Terminal;
-import roj.ui.terminal.Argument;
-import roj.ui.terminal.CommandConsole;
+import roj.ui.*;
 import roj.util.Helpers;
 import roj.util.HighResolutionTimer;
+import roj.util.VMUtil;
 
+import java.awt.event.KeyEvent;
 import java.io.File;
 import java.io.IOException;
 import java.net.InetSocketAddress;
@@ -38,10 +39,11 @@ import java.util.Collections;
 import java.util.List;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
+import java.util.function.IntFunction;
 
 import static roj.plugin.PanTweaker.CONFIG;
-import static roj.ui.terminal.CommandNode.argument;
-import static roj.ui.terminal.CommandNode.literal;
+import static roj.ui.CommandNode.argument;
+import static roj.ui.CommandNode.literal;
 
 /**
  * @author Roj234
@@ -72,20 +74,23 @@ public final class Panger extends PluginManager {
 				return sb.append("]\u001b[0m: ");
 			};
 		} else {
-			f = Template.compile("[${0}][${THREAD}][${NAME}/${LEVEL}]: ");
+			f = Formatter.simple("[${0}][${THREAD}][${NAME}/${LEVEL}]: ");
 		}
 		Logger.getRootContext().setPrefix(f);
 		LOGGER.setLevel(Level.valueOf(CONFIG.getString("plugin_log", "INFO")));
 		PanSecurityManager.LOGGER.setLevel(Level.valueOf(CONFIG.getString("security_log", "INFO")));
 
+		var interrupter = new Interrupter();
+		CMD.onVirtualKey(interrupter);
+		Terminal.setConsole(interrupter);
+
 		File plugins = new File("plugins"); plugins.mkdir();
 		pm = new Panger(plugins);
-
 		pm.onLoad();
-		Runtime.getRuntime().addShutdownHook(new Thread(Panger::shutdown, "stop"));
 		ILSecurityManager.setSecurityManager(new PanSecurityManager.ILHook());
-
 		pm.readPlugins();
+
+		if (pm.stopping) return;
 
 		if (CONFIG.containsKey("webui")) {
 			boolean webTerminal = CONFIG.getBool("web_terminal");
@@ -98,6 +103,13 @@ public final class Panger extends PluginManager {
 				您已开启Web终端功能，远程终端的操作会与本地终端（若存在）同步。
 				如果受到干扰，按下Ctrl+Q可临时关闭5分钟Web终端""");
 			}
+		} else {
+			for (var itr = resources.entries().iterator(); itr.hasNext(); ) {
+				ZEntry entry = itr.next();
+				if (entry.getName().startsWith("webui/")) {
+					itr.remove();
+				}
+			}
 		}
 
 		if (!Terminal.ANSI_INPUT) LOGGER.error("使用支持ANSI转义的终端以获得更好的体验");
@@ -106,11 +118,11 @@ public final class Panger extends PluginManager {
 		Terminal.setConsole(CMD);
 
 		LOGGER.info("启动耗时: {}ms", System.currentTimeMillis()-time);
-		HighResolutionTimer.activate();
+		HighResolutionTimer.runThis();
 	}
 
 	private void onLoad() {
-		String CORE_VERSION = "1.8.2";
+		String CORE_VERSION = "1.10.0";
 		splash(CORE_VERSION);
 
 		var pd = new PluginDescriptor();
@@ -143,13 +155,9 @@ public final class Panger extends PluginManager {
 			var pd1 = ctx.argument("插件名称", PluginDescriptor.class);
 			System.out.println("  "+pd1.getFullDesc().replace("\n", "\n  ")+"\n\n");
 		})));
-		CMD.register(literal("cmdhelp").then(argument("指令名称", Argument.string()).executes(ctx -> {
-			String name = ctx.argument("指令名称", String.class);
-			for (var node : CMD.nodes()) {
-				if (node.getName().equals(name)) {
-					System.out.println(node.dump(new CharList(), 2).toStringAndFree());
-				}
-			}
+		CMD.register(literal("cmdhelp").then(argument("指令名称", Argument.oneOf(CollectionX.stupidMapFromView(CMD.nodes(), CommandNode::getName))).executes(ctx -> {
+			CommandNode node = ctx.argument("指令名称", CommandNode.class);
+			System.out.println(node.dump(new CharList(), 2).toStringAndFree());
 		})));
 		CMD.register(literal("stop").executes(ctx -> System.exit(0)));
 
@@ -180,7 +188,7 @@ public final class Panger extends PluginManager {
 
 		if (CONFIG.getBool("clear_screen")) System.out.print("\u001b[1;1H\u001b[0J");
 		System.out.print("\u001b]0;Panger VT\7");
-		System.out.println(s.append(" + Copyright (c) 2019-2024 Roj234\n\u001b[0m------------------------------------------------------------").toStringAndFree());
+		System.out.println(s.append(" + Copyright (c) 2019-2025 Roj234\n\u001b[0m------------------------------------------------------------").toStringAndFree());
 	}
 	private void loadBuiltin() {
 		PluginDescriptor pd;
@@ -232,9 +240,11 @@ public final class Panger extends PluginManager {
 
 	private static void shutdown() {
 		Terminal.setConsole(null);
-		LOGGER.info("正在关闭系统");
+		LOGGER.info("正在卸载插件");
+		pm.stopping = true;
 		pm.unloadPlugins();
 		IOUtil.closeSilently(httpServer);
+		if (!VMUtil.isShutdownInProgress()) System.exit(0);
 	}
 
 	public static void addChannelInitializator(Consumer<MyChannel> ch) {
@@ -244,6 +254,7 @@ public final class Panger extends PluginManager {
 	}
 
 	private static ServerLaunch httpServer;
+	static ZipFile resources;
 	private static OKRouter router;
 	static OKRouter initHttp() {
 		if (router == null) {
@@ -251,11 +262,13 @@ public final class Panger extends PluginManager {
 			HttpServer11.LOGGER.setLevel(level);
 			router = new OKRouter(level.canLog(Level.DEBUG));
 			try {
-				httpServer = HttpServer11.simple("PangerHTTP", new InetSocketAddress(CONFIG.getInteger("http_port", 8080)), 512, router);
+				httpServer = HttpServer11.simple("PangerHTTP", new InetSocketAddress(CONFIG.getInt("http_port", 8080)), 512, router);
 				MimeType.loadMimeMap(IOUtil.readUTF(new File("plugins/Core/mime.ini")));
 
 				router.setInterceptor("PermissionManager", null);
-				router.addPrefixDelegation("", new ZipRouter(new File("plugins/Core/resource.zip")));
+				var resources = new ZipRouter(new File("plugins/Core/resource.zip"));
+				router.addPrefixDelegation("", resources);
+				Panger.resources = resources.zip;
 
 				var http = new PanHttp();
 				var proxyToken = CONFIG.getString("http_reverse_proxy");
@@ -278,5 +291,30 @@ public final class Panger extends PluginManager {
 				motds.add(line);
 			}
 		} catch (Exception ignored) {}
+	}
+
+	private static final class Interrupter extends Thread implements IntFunction<Boolean>, Console {
+		public Interrupter() {
+			super(Panger::shutdown, "RojLib Interrupter");
+			Runtime.getRuntime().addShutdownHook(this);
+		}
+
+		@Override
+		public Boolean apply(int key) {
+			if (key == (Terminal.VK_CTRL | KeyEvent.VK_C)) {
+				CMD.removeKeyHandler(this);
+				Runtime.getRuntime().removeShutdownHook(this);
+				LOGGER.warn("正在关闭系统，再次按下Ctrl+C以强制退出");
+				TaskPool.Common().submit(Panger::shutdown);
+				return false;
+			}
+
+			return null;
+		}
+
+		@Override
+		public void keyEnter(int keyCode, boolean isVirtualKey) {
+			apply(keyCode);
+		}
 	}
 }

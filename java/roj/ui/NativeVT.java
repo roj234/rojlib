@@ -2,12 +2,15 @@ package roj.ui;
 
 import roj.RojLib;
 import roj.compiler.plugins.asm.ASM;
+import roj.io.IOUtil;
+import roj.io.buf.BufferPool;
 import roj.reflect.ReflectionUtils;
+import roj.reflect.Unaligned;
+import roj.text.CharList;
 import roj.text.TextWriter;
 import roj.text.UTF8;
 import roj.text.UnsafeCharset;
 import roj.util.ByteList;
-import roj.util.Helpers;
 import roj.util.NativeException;
 import roj.util.OS;
 
@@ -57,13 +60,13 @@ public final class NativeVT implements ITerminal, Runnable {
 		checkCharset:
 		try {
 			offset = ReflectionUtils.fieldOffset(PrintStream.class, "charOut");
-			tmp = ReflectionUtils.u.getObject(out, offset);
+			tmp = Unaligned.U.getObject(out, offset);
 
 			offset = ReflectionUtils.fieldOffset(tmp.getClass(), "se");
-			tmp =  ReflectionUtils.u.getObject(tmp, offset);
+			tmp =  Unaligned.U.getObject(tmp, offset);
 
 			offset = ReflectionUtils.fieldOffset(tmp.getClass(), "cs");
-			charset = (Charset) ReflectionUtils.u.getObject(tmp, offset);
+			charset = (Charset) Unaligned.U.getObject(tmp, offset);
 		} catch (Exception e) {
 			if (ASM.TARGET_JAVA_VERSION >= 17) {
 				var c = System.console();
@@ -82,25 +85,61 @@ public final class NativeVT implements ITerminal, Runnable {
 			System.err.println(VTERROR+"输出编码不受支持: "+charset);
 		}
 
-		if (instance != null) {
-			var in = System.in;
-			if (in instanceof FilterInputStream) {
-				offset = ReflectionUtils.fieldOffset(FilterInputStream.class, "in");
-				sysIn = (InputStream) ReflectionUtils.u.getObject(in, offset);
-			} else {
-				sysIn = in;
-			}
-
-			offset = ReflectionUtils.fieldOffset(FilterOutputStream.class, "out");
-			tmp = ReflectionUtils.u.getObject(out, offset);
-			if (tmp instanceof FilterOutputStream) tmp = ReflectionUtils.u.getObject(tmp, offset);
-			sysOut = (OutputStream) tmp;
+		var in = System.in;
+		if (in instanceof FilterInputStream) {
+			offset = ReflectionUtils.fieldOffset(FilterInputStream.class, "in");
+			sysIn = (InputStream) Unaligned.U.getObject(in, offset);
 		} else {
-			sysIn = Helpers.maybeNull();
-			sysOut = Helpers.maybeNull();
+			sysIn = in;
 		}
+
+		offset = ReflectionUtils.fieldOffset(FilterOutputStream.class, "out");
+		tmp = Unaligned.U.getObject(out, offset);
+		if (tmp instanceof FilterOutputStream) tmp = Unaligned.U.getObject(tmp, offset);
+		sysOut = (OutputStream) tmp;
 	}
 	public static ITerminal getInstance(){return instance;}
+
+	public static final class Fallback extends DelegatedPrintStream implements ITerminal, Runnable {
+		private final PrintStream sout;
+
+		public Fallback() {
+			this.sout = System.out;
+		}
+
+		@Override
+		public void run() {
+			var tmp = IOUtil.getSharedByteBuf();
+			while (true) {
+				try {
+					int i = sysIn.read(tmp.list);
+					if (i < 0) {
+						Terminal.onInput(new CharList().append('\3'));
+						continue;
+					}
+					tmp.wIndex(i);
+					Terminal.onInput(tmp, ucs);
+				} catch (Throwable e) {
+					System.err.println(VTERROR+"Fatal");
+					e.printStackTrace();
+					System.exit(2);
+				}
+			}
+		}
+		public void start() {
+			Thread thread = new Thread(this, "RojLib 异步标准输入(Fallback)");
+			thread.setDaemon(true);
+			thread.start();
+		}
+
+		@Override public boolean readBack(boolean sync) {return false;}
+		@Override public void write(CharSequence str) {
+			CharList x = new CharList(str);
+			sout.print(Terminal.stripAnsi(x).toStringAndFree());
+		}
+		@Override protected void partialLine() {sout.print(Terminal.stripAnsi(sb));sb.clear();}
+		@Override protected void newLine() {sout.println(Terminal.stripAnsi(sb));sb.clear();}
+	}
 
 	private boolean read;
 	private NativeVT() {}
@@ -129,7 +168,7 @@ public final class NativeVT implements ITerminal, Runnable {
 
 		var io = new NativeVT();
 
-		var t = new Thread(io, "RojLib - ANSI输入代理");
+		var t = new Thread(io, "RojLib 异步标准输入");
 		t.setPriority(Thread.MAX_PRIORITY);
 		t.setDaemon(true);
 		t.start();
@@ -167,7 +206,7 @@ public final class NativeVT implements ITerminal, Runnable {
 			ib.wIndex(r);
 			synchronized (this) {notify();}
 			// block until NativeVT and Terminal initialized
-			tw = new TextWriter(sysOut, Terminal.nativeCharset);
+			tw = new TextWriter(sysOut, Terminal.nativeCharset, BufferPool.UNPOOLED);
 
 			while (true) {
 				int off = ib.rIndex;

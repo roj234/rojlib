@@ -1,13 +1,14 @@
 package roj.compiler;
 
+import roj.asm.ClassNode;
+import roj.asm.MethodNode;
 import roj.asm.Opcodes;
-import roj.asm.tree.ConstantData;
-import roj.asm.tree.MethodNode;
 import roj.asm.type.TypeHelper;
 import roj.compiler.ast.ParseTask;
 import roj.compiler.ast.expr.Constant;
 import roj.compiler.ast.expr.ExprNode;
 import roj.compiler.context.CompileUnit;
+import roj.compiler.context.LavaCompileUnit;
 import roj.compiler.context.LibraryZipFile;
 import roj.compiler.context.LocalContext;
 import roj.compiler.diagnostic.TextDiagnosticReporter;
@@ -38,18 +39,29 @@ import java.util.Map;
  * @since 2024/5/20 0020 2:52
  */
 public class LavaCompiler {
-	public final GlobalContextApi gctx = new GlobalContextApi();
-	public final LocalContext lctx = gctx.createLocalContext();
+	public final GlobalContextApi api = new GlobalContextApi();
+	public final LocalContext lctx = api.createLocalContext();
 	public final ClassLoader maker = new ClassDefiner(LavaCompiler.class.getClassLoader(), "LavaLambdaLink");
 	public final Map<String, ExprNode> injector;
 	public String fileName = "<eval>";
 
 	public LavaCompiler() throws IOException {
 		LocalContext.set(lctx);
-		initDefaultPlugins(gctx);
-		injector = gctx.attachment(AsmPlugin.INJECT_PROPERTY);
+		initDefaultPlugins(api);
+		injector = api.attachment(AsmPlugin.INJECT_PROPERTY);
 		LocalContext.set(null);
-		((TextDiagnosticReporter) gctx.reporter).errorOnly = true;
+		((TextDiagnosticReporter) api.reporter).errorOnly = true;
+
+		api.features.add(LavaFeatures.ATTR_SOURCE_FILE);
+		api.features.add(LavaFeatures.ATTR_LINE_NUMBERS);
+		api.features.add(LavaFeatures.ATTR_INNER_CLASS);
+		api.features.add(LavaFeatures.ATTR_STACK_FRAME);
+		api.features.add(LavaFeatures.OPTIONAL_SEMICOLON);
+		api.features.add(LavaFeatures.OMISSION_NEW);
+		api.features.add(LavaFeatures.SHARED_STRING_CONCAT);
+		api.features.add(LavaFeatures.NESTED_MEMBER);
+		api.features.add(LavaFeatures.SEALED_ENUM);
+		api.features.add(LavaFeatures.NO_CHECKED_EXCEPTION);
 	}
 
 	public static final LibraryZipFile Implib_Archive;
@@ -80,7 +92,7 @@ public class LavaCompiler {
 	public <T> T linkLambda(Class<T> functionalInterface, String methodStr, String... parName) throws Exception {return linkLambda("roj/lavac/Lambda"+ReflectionUtils.uniqueId(), functionalInterface, methodStr, parName);}
 	@SuppressWarnings("unchecked")
 	public <T> T linkLambda(String className, Class<T> functionalInterface, String methodStr, String... parName) throws Exception {
-		gctx.reset();
+		api.reset();
 
 		LocalContext.set(lctx);
 
@@ -92,7 +104,7 @@ public class LavaCompiler {
 		}
 		if (myMethod == null) throw new IllegalArgumentException(functionalInterface.getName()+"看起来不像FunctionalInterface");
 
-		CompileUnit u = new CompileUnit(fileName, methodStr+"}");
+		CompileUnit u = new LavaCompileUnit(fileName, methodStr + "}");
 
 		u.version = CompileUnit.JavaVersion(8);
 		u.name(className);
@@ -100,7 +112,7 @@ public class LavaCompiler {
 		u.addInterface(functionalInterface.getName().replace('.', '/'));
 		u.npConstructor();
 
-		gctx.addCompileUnit(u, false);
+		api.addCompileUnit(u, false);
 
 		TypeResolver tr = u.getTypeResolver();
 		tr.setImportAny(true);
@@ -122,7 +134,7 @@ public class LavaCompiler {
 		lctx.clear();
 		LocalContext.set(null);
 
-		for (ConstantData data : gctx.getGeneratedClasses()) {
+		for (ClassNode data : api.getGeneratedClasses()) {
 			ClassDefiner.defineClass(maker, data);
 		}
 

@@ -1,6 +1,6 @@
 package roj.compiler.api;
 
-import roj.asm.tree.attr.Attribute;
+import roj.asm.attr.Attribute;
 import roj.asm.type.Type;
 
 /**

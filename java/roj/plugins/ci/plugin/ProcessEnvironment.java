@@ -1,7 +1,7 @@
 package roj.plugins.ci.plugin;
 
-import roj.asm.tree.ConstantData;
-import roj.asm.tree.anno.Annotation;
+import roj.asm.ClassNode;
+import roj.asm.attr.Annotations;
 import roj.asm.util.Context;
 import roj.collect.MyHashMap;
 import roj.plugins.ci.Project;
@@ -31,14 +31,14 @@ public class ProcessEnvironment {
 			byAnnotation = new MyHashMap<>();
 			for (int j = 0; j < list.size(); j++) {
 				Context ctx = list.get(j);
-				ConstantData data = ctx.getData();
+				ClassNode data = ctx.getData();
 
-				var anns = Annotation.getAnnotations(data.cp, data, false);
+				var anns = Annotations.getAnnotations(data.cp, data, false);
 				for (int i = 0; i < anns.size(); i++) {
 					byAnnotation.computeIfAbsent(anns.get(i).type(), Helpers.fnArrayList()).add(ctx);
 				}
 
-				anns = Annotation.getAnnotations(data.cp, data, true);
+				anns = Annotations.getAnnotations(data.cp, data, true);
 				for (int i = 0; i < anns.size(); i++) {
 					byAnnotation.computeIfAbsent(anns.get(i).type(), Helpers.fnArrayList()).add(ctx);
 				}

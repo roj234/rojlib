@@ -1,9 +1,9 @@
 package roj.plugins.ci.minecraft;
 
-import roj.asm.tree.ConstantData;
-import roj.asm.tree.MethodNode;
-import roj.asm.tree.attr.Attribute;
-import roj.asm.tree.attr.InnerClasses;
+import roj.asm.ClassNode;
+import roj.asm.MethodNode;
+import roj.asm.attr.Attribute;
+import roj.asm.attr.InnerClasses;
 import roj.asm.util.Context;
 import roj.collect.MyHashMap;
 
@@ -46,8 +46,8 @@ final class ClassMerger {
 	}
 
 	private void processOne(Context main, Context sub) {
-		ConstantData subData = sub.getData();
-		ConstantData mainData = main.getData();
+		ClassNode subData = sub.getData();
+		ClassNode mainData = main.getData();
 
 		var subMs = subData.methods;
 		var mainMs = mainData.methods;
@@ -84,7 +84,7 @@ final class ClassMerger {
 		processItf(mainData, subData);
 	}
 
-	private MethodNode detectPriority(ConstantData main, MethodNode mainMethod, ConstantData sub, MethodNode subMethod) {
+	private MethodNode detectPriority(ClassNode main, MethodNode mainMethod, ClassNode sub, MethodNode subMethod) {
 		Attribute subCode = subMethod.attrByName("Code");
 		if (subCode == null) return mainMethod;
 		Attribute mainCode = mainMethod.attrByName("Code");
@@ -100,7 +100,7 @@ final class ClassMerger {
 		return mainRealCode.instructions.bci() >= subRealCode.instructions.bci() ? mainMethod : subMethod;
 	}
 
-	private void processInnerClasses(ConstantData main, ConstantData sub) {
+	private void processInnerClasses(ClassNode main, ClassNode sub) {
 		List<InnerClasses.Item> scs = sub.getInnerClasses();
 		if (scs == null) return;
 		List<InnerClasses.Item> mcs = main.getInnerClasses();
@@ -115,9 +115,9 @@ final class ClassMerger {
 		}
 	}
 
-	private void processItf(ConstantData main, ConstantData sub) {
-		var mainItf = main.interfaceWritable();
-		var subItf = sub.interfaceWritable();
+	private void processItf(ClassNode main, ClassNode sub) {
+		var mainItf = main.itfList();
+		var subItf = sub.itfList();
 
 		for (int i = 0; i < subItf.size(); i++) {
 			var n = subItf.get(i);

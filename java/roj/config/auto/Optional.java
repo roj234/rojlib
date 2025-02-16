@@ -27,6 +27,7 @@ public @interface Optional {
          * 会额外调用一些简单的isEmpty函数判断.
          * @deprecated 建议使用writeIgnore (WIP)
          */
+        @Deprecated
         IF_EMPTY
     }
 

@@ -1,8 +1,8 @@
 package roj.crypt;
 
+import roj.reflect.Unaligned;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
-import sun.misc.Unsafe;
 
 import java.security.SecureRandom;
 
@@ -11,13 +11,12 @@ import java.security.SecureRandom;
  * @since 2023/4/29 0029 3:53
  */
 public class HKDFPRNG extends SecureRandom {
-	final HMAC kd;
-	final byte[] prk;
+	final MessageAuthenticCode kd;
 	final DynByteBuf info;
 
-	public HKDFPRNG(HMAC kd, byte[] prk, String name) {
+	public HKDFPRNG(MessageAuthenticCode kd, byte[] prk, String name) {
 		this.kd = kd;
-		this.prk = prk;
+		kd.setSignKey(prk);
 		info = new ByteList().putLong(0).putUTF(name);
 	}
 
@@ -26,13 +25,13 @@ public class HKDFPRNG extends SecureRandom {
 
 	@Override
 	public void nextBytes(byte[] b) {
-		KDF.HKDF_expand(kd,prk,info, b.length, b, Unsafe.ARRAY_BYTE_BASE_OFFSET);
+		KDF.HKDF_expand(kd, null, info, b.length, b, Unaligned.ARRAY_BYTE_BASE_OFFSET);
 		incr();
 	}
 
 	@Override
 	public byte[] generateSeed(int numBytes) {
-		byte[] b = KDF.HKDF_expand(kd,prk,info,numBytes);
+		byte[] b = KDF.HKDF_expand(kd,null,info,numBytes);
 		incr();
 		return b;
 	}

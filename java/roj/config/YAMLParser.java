@@ -191,11 +191,11 @@ public class YAMLParser extends Parser {
 			case force_cast: {
 				CEntry val = element(flag);
 				switch (cnt) {
-					case "str": return CString.valueOf(val.asString());
-					case "float": return CDouble.valueOf(val.asDouble());
-					case "int": return CInt.valueOf(val.asInt());
-					case "bool": return CBoolean.valueOf(val.asBool());
-					case "long": return CLong.valueOf(val.asLong());
+					case "str": return CEntry.valueOf(val.asString());
+					case "float": return CEntry.valueOf(val.asDouble());
+					case "int": return CEntry.valueOf(val.asInt());
+					case "bool": return CEntry.valueOf(val.asBool());
+					case "long": return CEntry.valueOf(val.asLong());
 					case "map": return val.asMap();
 					case "set":
 						CMap map = val.asMap();
@@ -216,28 +216,28 @@ public class YAMLParser extends Parser {
 				CMap v2 = map(this, flag);
 				this.flag ^= JSON_MODE;
 				return v2;
-			case multiline: case multiline_clump: return CString.valueOf(cnt);
+			case multiline: case multiline_clump: return CEntry.valueOf(cnt);
 			case Word.STRING, Word.LITERAL: {
 				CEntry map = checkMap();
-				return map != null ? map : CString.valueOf(cnt);
+				return map != null ? map : CEntry.valueOf(cnt);
 			}
 			case Word.DOUBLE, Word.FLOAT: {
 				double number = w.asDouble();
 				CEntry map = checkMap();
-				return map != null ? map : CDouble.valueOf(number);
+				return map != null ? map : CEntry.valueOf(number);
 			}
 			case Word.INTEGER: {
 				int number = w.asInt();
 				CEntry map = checkMap();
-				return map != null ? map : CInt.valueOf(number);
+				return map != null ? map : CEntry.valueOf(number);
 			}
 			case Word.RFCDATE_DATE: return new CDate(w.asLong());
 			case Word.RFCDATE_DATETIME, Word.RFCDATE_DATETIME_TZ: return new CTimestamp(w.asLong());
-			case Word.LONG: return CLong.valueOf(w.asLong());
+			case Word.LONG: return CEntry.valueOf(w.asLong());
 			case TRUE, FALSE: {
 				boolean b = w.type() == TRUE;
 				CEntry map = checkMap();
-				return map != null ? map : CBoolean.valueOf(b);
+				return map != null ? map : CEntry.valueOf(b);
 			}
 			case NULL: {
 				CEntry map = checkMap();
