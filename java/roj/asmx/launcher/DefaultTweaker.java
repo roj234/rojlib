@@ -4,6 +4,7 @@ import roj.RojLib;
 import roj.asm.ClassNode;
 import roj.asm.Opcodes;
 import roj.asm.Parser;
+import roj.asm.annotation.AList;
 import roj.asm.annotation.Annotation;
 import roj.asm.cp.CstClass;
 import roj.asm.insn.CodeWriter;
@@ -20,6 +21,8 @@ import roj.util.Helpers;
 import java.io.IOException;
 import java.util.Comparator;
 import java.util.List;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Function;
 
 /**
  * 处理Autoload注解
@@ -57,6 +60,29 @@ public class DefaultTweaker implements ITweaker {
 					}
 				}
 			}
+
+			ConcurrentHashMap<String, Boolean> existence = new ConcurrentHashMap<>();
+			Function<String, Boolean> existenceChecker = resource -> Bootstrap.instance.getResource(resource) != null;
+
+			CONDITIONAL.annotatedMethod("roj/asmx/launcher/Conditional", (cls, ctx) -> {
+				var annotation = Annotation.findInvisible(cls.cp, ctx, "roj/asmx/launcher/Conditional");
+				if (!existence.computeIfAbsent(annotation.getString("value"), existenceChecker)) {
+					cls.methods.remove(ctx);
+					return true;
+				}
+				return false;
+			});
+			CONDITIONAL.annotatedClass("roj/asmx/launcher/Conditional", (cls, ctx) -> {
+				var annotation = Annotation.findInvisible(cls.cp, ctx, "roj/asmx/launcher/Conditional");
+				if (!existence.computeIfAbsent(annotation.getString("value"), existenceChecker)) {
+					AList itf = annotation.getList("itf");
+					for (int i = 0; i < itf.size(); i++) {
+						cls.interfaces().remove(itf.getType(i).owner());
+					}
+					return true;
+				}
+				return false;
+			});
 
 			if ((classes.size()|transformers.size()) != 0) {
 				Comparator<A> cmp = (l, r) -> Integer.compare(r.priority, l.priority);

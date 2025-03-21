@@ -27,8 +27,9 @@ import java.util.regex.Pattern;
  * @since 2023/12/25 0025 16:08
  */
 public class PluginManager {
-	static final Logger LOGGER = Logger.getLogger("Panger");
-	static final XHashSet.Shape<String, PluginDescriptor> PM_SHAPE = XHashSet.noCreation(PluginDescriptor.class, "id");
+	static final String SYSTEM_NAME = "Panger";
+	static final Logger LOGGER = Logger.getLogger(SYSTEM_NAME);
+	private static final XHashSet.Shape<String, PluginDescriptor> PM_SHAPE = XHashSet.noCreation(PluginDescriptor.class, "id");
 	final XHashSet<String, PluginDescriptor> plugins = PM_SHAPE.create();
 	boolean stopping;
 
@@ -152,7 +153,14 @@ public class PluginManager {
 				throw new FastFailException("在插件主类"+pd.mainClass+"中找不到无参构造器");
 			} else {
 				pd.instance = (Plugin) fn.apply(0);
-				pd.instance.init(this, new File(pluginFolder, pd.id), pd);
+				File dataFolder;
+				if (pd.fileName.equals("/builtin_inherit")) {
+					pd.instance.config = PanTweaker.CONFIG;
+					dataFolder = new File(pluginFolder, "Core");
+				} else {
+					dataFolder = new File(pluginFolder, pd.id);
+				}
+				pd.instance.init(this, dataFolder, pd);
 				pd.instance.onLoad();
 
 				pd.state = LOADED;
@@ -225,6 +233,7 @@ public class PluginManager {
 			pd.depend = config.getList("depend").toStringList();
 			pd.loadBefore = config.getList("loadBefore").toStringList();
 			pd.loadAfter = config.getList("loadAfter").toStringList();
+			pd.javaModuleDepend = config.getList("moduleDepend").toStringList();
 
 			SimpleList<String> path = config.getList("extraPath").toStringList();
 			pd.extraPath = new TrieTreeSet();
@@ -311,13 +320,6 @@ public class PluginManager {
 			unloadPluginTrusted(pd);
 		System.gc();
 	}
-	public void unloadPlugin(String name) {
-		PluginDescriptor pd;
-		synchronized (plugins) {pd = plugins.removeKey(name);}
-		if (pd == null) return;
-		unloadPluginTrusted(pd);
-		System.gc();
-	}
 	public void unloadPlugin(PluginDescriptor pd) {
 		if (isCriticalPlugin(pd)) throw new IllegalArgumentException("不能禁用关键插件"+pd);
 		synchronized (plugins) {if (!plugins.remove(pd)) return;}
@@ -343,5 +345,5 @@ public class PluginManager {
 		}
 	}
 
-	public PluginDescriptor getOwner(Class<?> clazz) {return clazz.getClassLoader() instanceof PluginClassLoader pcl ? pcl.desc : getPlugin("Core");}
+	public PluginDescriptor getOwner(Class<?> clazz) {return clazz.getClassLoader() instanceof PluginClassLoader pcl ? pcl.desc : getPlugin(SYSTEM_NAME);}
 }

@@ -13,6 +13,7 @@ import static roj.reflect.Unaligned.U;
  */
 public class ProgressBar implements AutoCloseable {
 	protected final CharList batch = new CharList();
+	protected boolean animation = true;
 
 	protected static final int BAR_DELAY = 40;
 	protected volatile long barTime;
@@ -22,6 +23,7 @@ public class ProgressBar implements AutoCloseable {
 	public ProgressBar(String name) {this.name = name;}
 	public void setName(String name) {this.name = name;barTime = 0;}
 	public void setPrefix(String prefix) {this.prefix = prefix;barTime = 0;}
+	public void setAnimation(boolean animation) {this.animation = animation;}
 
 	protected int getPostFixWidth() {return 0;}
 	protected void renderPostFix(CharList sb) {}
@@ -69,7 +71,8 @@ public class ProgressBar implements AutoCloseable {
 		int tx = (int) Math.round(progress * progressWidth);
 
 		b.padEnd(' ', pad).append("\u001B[0m [");
-		Terminal.MinecraftColor.sonic("=".repeat(tx), b);
+		if (animation) Terminal.MinecraftColor.sonic("=".repeat(tx), b);
+		else b.padEnd('=', tx);
 		b.padEnd(' ', progressWidth - tx).append("]\u001B[93m ")
 		 .append(TIMER.charAt(timerId = (timerId+1) & 3));
 

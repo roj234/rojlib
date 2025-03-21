@@ -55,6 +55,7 @@ public class Int2IntMap extends AbstractMap<Integer, Integer> implements _Generi
 
 	public Int2IntMap() {this(16);}
 	public Int2IntMap(int size) {ensureCapacity(size);}
+	public Int2IntMap(Int2IntMap other) {putAll(other);}
 	public void ensureCapacity(int size) {
 		if (size <= mask) return;
 		int length = MathUtils.getMin2PowerOf(size);

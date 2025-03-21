@@ -3,7 +3,7 @@ package roj.plugins.obfuscator.flow;
 import roj.archive.zip.ZEntry;
 import roj.archive.zip.ZipArchive;
 import roj.asm.MethodNode;
-import roj.asm.attr.AttrUnknown;
+import roj.asm.attr.UnparsedAttribute;
 import roj.asm.cp.CstClass;
 import roj.asm.cp.CstRef;
 import roj.asm.insn.CodeVisitor;
@@ -111,7 +111,7 @@ public class StaticAnalyzer {
 		for (int i = 0; i < methods.size(); i++) {
 			MethodNode mn = methods.get(i);
 			if (desc.name == null || (mn.name().equals(desc.name) && mn.rawDesc().equals(desc.param))) {
-				AttrUnknown attr = (AttrUnknown) mn.attrByName("Code");
+				UnparsedAttribute attr = (UnparsedAttribute) mn.getRawAttribute("Code");
 				if (attr == null) {
 					if (desc.name != null) break;
 					continue;

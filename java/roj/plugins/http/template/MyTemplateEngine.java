@@ -1,9 +1,9 @@
 package roj.plugins.http.template;
 
 import roj.collect.XHashSet;
-import roj.compiler.LavaCompiler;
+import roj.compiler.LambdaLinker;
 import roj.compiler.context.GlobalContext;
-import roj.compiler.context.LavaCompileUnit;
+import roj.compiler.context.JavaCompileUnit;
 import roj.compiler.context.LocalContext;
 import roj.compiler.plugins.annotations.Getter;
 import roj.compiler.plugins.annotations.Setter;
@@ -50,7 +50,7 @@ public class MyTemplateEngine {
 	}
 
 	public MyTemplateEngine() {
-		compiler.addLibrary(LavaCompiler.Implib_Archive);
+		compiler.addLibrary(LambdaLinker.Implib_Archive);
 	}
 
 	public Response render(File file, Request req, ResponseHeader rh) {
@@ -198,7 +198,7 @@ public class MyTemplateEngine {
 			System.out.println(out);
 		}
 
-		var cu = new LavaCompileUnit(source, out.append("\n}}").toStringAndFree());
+		var cu = new JavaCompileUnit(source, out.append("\n}}").toStringAndFree());
 
 		var ctx = myContext.get();
 		if (ctx == null) myContext.set(ctx = compiler.createLocalContext());
@@ -206,8 +206,9 @@ public class MyTemplateEngine {
 		LocalContext.set(ctx);
 		try {
 			cu.S1_Struct();
-			cu.S2_ResolveSelf();
-			cu.S2_ResolveRef();
+			cu.S2_ResolveName();
+			cu.S2_ResolveType();
+			cu.S2_ResolveMethod();
 			cu.S3_Annotation();
 			cu.S4_Code();
 			cu.S5_noStore();

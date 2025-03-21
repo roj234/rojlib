@@ -82,7 +82,9 @@ final class ObjAny extends Adapter {
 		if (o == null) c.valueNull();
 		else {
 			Adapter ser = gen.get(o.getClass());
-			if (ser == this) throw new IllegalArgumentException();
+			if (ser == this && o.getClass() != Object.class) {
+				throw new IllegalArgumentException();
+			}
 
 			ToIntMap<Object> pool = AdaptContextEx.OBJECT_POOL.get();
 

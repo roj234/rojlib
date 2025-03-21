@@ -12,9 +12,9 @@ import roj.collect.SimpleList;
 import roj.compiler.JavaLexer;
 import roj.compiler.ast.ParseTask;
 import roj.compiler.ast.expr.NaE;
-import roj.compiler.context.LavaCompileUnit;
+import roj.compiler.context.JavaCompileUnit;
 import roj.compiler.diagnostic.Kind;
-import roj.compiler.plugin.GlobalContextApi;
+import roj.compiler.plugin.LavaApi;
 import roj.compiler.plugin.LavaPlugin;
 import roj.compiler.resolve.TypeCast;
 import roj.io.IOUtil;
@@ -35,7 +35,7 @@ import static roj.asm.Opcodes.*;
  */
 @LavaPlugin(name = "evaluator", desc = "预编译")
 public interface Evaluator {
-	public static void pluginInit(GlobalContextApi ctx) throws IOException {
+	public static void pluginInit(LavaApi ctx) throws IOException {
 		MyHashMap<String, byte[]> data = new MyHashMap<>();
 		SimpleList<RawNode> invoker = new SimpleList<>();
 
@@ -152,11 +152,13 @@ public interface Evaluator {
 			RawNode mof = invoker.get(j);
 			IClass info = ctx.getClassInfo(mof.ownerClass());
 			int i = info.getMethod(mof.name(), mof.rawDesc());
-			info.methods().get(i).putAttr(new CompiledMethod(evaluator, j, Type.methodDescReturn(mof.rawDesc())));
+			info.methods().get(i).addAttribute(new CompiledMethod(evaluator, j, Type.methodDescReturn(mof.rawDesc())));
 		}
 
-		ctx.getExprApi().addExprGen("!!macro ", (lexer, ctx1) -> {
-			var def = new LavaCompileUnit(ctx1.file.getSourceFile() + " <macro#" + lexer.index + ">", lexer.getText().toString());
+		ctx.newExprOp("!!macro ", (ctx1) -> {
+			var lexer = ctx1.lexer;
+
+			var def = new JavaCompileUnit(ctx1.file.getSourceFile() + " <macro#"+lexer.index+">", lexer.getText().toString());
 			def.name("java/lang/Thread"); // just a hack..
 			def.addInterface("roj/compiler/plugins/eval/Macro");
 			ClassDefiner.premake(def);

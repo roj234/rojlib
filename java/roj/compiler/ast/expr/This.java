@@ -26,6 +26,7 @@ final class This extends ExprNode {
 		var file = ctx.file;
 		type.owner = isThis ? file.name() : file.parent();
 		if (type.owner == null) throw ResolveException.ofIllegalInput("this.no_super", file);
+		ctx.thisResolved = true;
 		return this;
 	}
 
@@ -38,7 +39,7 @@ final class This extends ExprNode {
 
 		var ctx = LocalContext.get();
 		// 不在上面检查是为了Invoke local static method
-		if (ctx.in_static) ctx.report(Kind.ERROR, "this.static");
+		if (ctx.inStatic) ctx.report(this, Kind.ERROR, "this.static");
 
 		ctx.thisUsed = true;
 		cw.vars(Opcodes.ALOAD, ctx.thisSlot);

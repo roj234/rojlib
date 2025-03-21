@@ -54,39 +54,38 @@ public interface LavaFeatures {
 	 */
 	int SHARED_STRING_CONCAT = 10;
 	/**
-	 * 使用Java11新增的NestMember属性而不是生成access方法来允许内部类的访问
-	 * Use Java11's new NestMember attribute instead of generating an access method to allow access to an inner class.
-	 * <a href="https://www.baeldung.com/java-nest-based-access-control">Nest based access control</a>
-	 */
-	int NESTED_MEMBER = 11;
-	/**
 	 * 不编译assert语句
 	 * Dont compile assert statements
 	 * */
-	int DISABLE_ASSERT = 12;
-	/**
-	 * 使用Java17新增的PermittedClass属性来更好的控制抽象枚举类的可继承性
-	 * Use Java17's new PermittedClass attribute to better control the inheritability of abstract enumerated classes
-	 * */
-	int SEALED_ENUM = 13;
+	int DISABLE_ASSERT = 11;
 	/**
 	 * 将‘抛出检查的异常’的诊断等级从错误下调为严重警告
 	 * 同时将允许try捕获未抛出的检查异常
 	 * Downgraded the diagnostic level of 'Throwing unchecked exception' from ERROR to WARNING.
 	 */
-	int NO_CHECKED_EXCEPTION = 14;
+	int DISABLE_CHECKED_EXCEPTION = 12;
+	/**
+	 * 将record类型的字段从private final提升为public final
+	 */
+	int PUBLIC_RECORD_FIELD = 13;
 
-
-	// no stack frame
-	int COMPATIBILITY_LEVEL_JAVA_6 = 6;
 	// lambda
-	int COMPATIBILITY_LEVEL_JAVA_8 = 8;
+	int JAVA_8 = 8;
 	// module
-	int COMPATIBILITY_LEVEL_JAVA_9 = 9;
-	// constant_dynamic
-	int COMPATIBILITY_LEVEL_JAVA_11 = 11;
-	// record
-	int COMPATIBILITY_LEVEL_JAVA_17 = 17;
+	int JAVA_9 = 9;
+	/**
+	 * constant_dynamic,
+	 * 使用Java11新增的NestMember属性而不是生成access方法来允许内部类的访问
+	 * Use Java11's new NestMember attribute instead of generating an access method to allow access to an inner class.
+	 * <a href="https://www.baeldung.com/java-nest-based-access-control">Nest based access control</a>
+	 */
+	int JAVA_11 = 11;
+	/**
+	 * Record,
+	 * 使用Java17新增的PermittedClass属性来更好的控制抽象枚举类的可继承性
+	 * Use Java17's new PermittedClass attribute to better control the inheritability of abstract enumerated classes
+	 * */
+	int JAVA_17 = 17;
 	// string template via lambda
-	int COMPATIBILITY_LEVEL_JAVA_21 = 21;
+	int JAVA_21 = 21;
 }

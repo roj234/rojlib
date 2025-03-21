@@ -22,7 +22,7 @@ public final class LocalVariable extends VarNode {
 
 	@Override
 	public ExprNode resolve(LocalContext ctx) throws ResolveException {
-		if (v.constantValue != null) return new Constant(v.type, v.constantValue);
+		if (v.constantValue != null) return constant(v.type, v.constantValue);
 		return this;
 	}
 
@@ -32,8 +32,8 @@ public final class LocalVariable extends VarNode {
 
 	@Override public boolean isFinal() { return v.isFinal; }
 	@Override public void preStore(MethodWriter cw) {}
-	@Override public void preLoadStore(MethodWriter cw) {LocalContext.get().loadVar(v); cw.load(v); v.endPos = cw.bci();}
-	@Override public void postStore(MethodWriter cw, int state) {LocalContext.get().storeVar(v); cw.store(v); v.endPos = cw.bci();}
+	@Override public void preLoadStore(MethodWriter cw) {cw.load(v); LocalContext.get().loadVar(v);}
+	@Override public void postStore(MethodWriter cw, int state) {cw.store(v); LocalContext.get().storeVar(v);}
 	@Override public int copyValue(MethodWriter cw, boolean twoStack) {cw.one(twoStack?Opcodes.DUP2:Opcodes.DUP);return 0;}
 	@Override public boolean canBeReordered() {return true;}
 

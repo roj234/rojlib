@@ -17,6 +17,7 @@ import roj.io.IOUtil;
 import roj.math.Version;
 import roj.net.MyChannel;
 import roj.net.ServerLaunch;
+import roj.plugins.ci.annotation.ReplaceConstant;
 import roj.reflect.ILSecurityManager;
 import roj.reflect.ReflectionUtils;
 import roj.text.CharList;
@@ -49,8 +50,11 @@ import static roj.ui.CommandNode.literal;
  * @author Roj234
  * @since 2023/12/25 0025 18:01
  */
+@ReplaceConstant
 public final class Panger extends PluginManager {
 	static final CommandConsole CMD = new CommandConsole("Panger>");
+	static final boolean useModulePluginIfAvailable = true;
+
 	public static Console console() {return CMD;}
 
 	static Panger pm;
@@ -103,7 +107,7 @@ public final class Panger extends PluginManager {
 				您已开启Web终端功能，远程终端的操作会与本地终端（若存在）同步。
 				如果受到干扰，按下Ctrl+Q可临时关闭5分钟Web终端""");
 			}
-		} else {
+		} else if (router != null) {
 			for (var itr = resources.entries().iterator(); itr.hasNext(); ) {
 				ZEntry entry = itr.next();
 				if (entry.getName().startsWith("webui/")) {
@@ -122,11 +126,11 @@ public final class Panger extends PluginManager {
 	}
 
 	private void onLoad() {
-		String CORE_VERSION = "1.10.0";
+		String CORE_VERSION = "${panger_version}";
 		splash(CORE_VERSION);
 
 		var pd = new PluginDescriptor();
-		pd.id = "Core";
+		pd.id = SYSTEM_NAME;
 		pd.version = new Version(CORE_VERSION);
 		pd.authors = Collections.singletonList("Roj234");
 
@@ -142,8 +146,8 @@ public final class Panger extends PluginManager {
 			loadPluginFromFile(plugin);
 		})));
 		CMD.register(literal("unload").then(argument("id", Argument.oneOf(CollectionX.toMap(plugins))).executes(ctx -> {
-			String id = ctx.argument("id", PluginDescriptor.class).id;
-			unloadPlugin(id);
+			unloadPlugin(ctx.argument("id", PluginDescriptor.class));
+			System.gc();
 		})));
 		CMD.register(literal("help").executes(ctx -> {
 			System.out.println("加载的插件:");
@@ -196,11 +200,12 @@ public final class Panger extends PluginManager {
 		if (!entry.mayCastTo(Type.BOOL) || entry.asBool()) {
 			MyHashMap<String, PluginDescriptor> builtin = new MyHashMap<>();
 			for (var info : PanTweaker.annotations.annotatedBy("roj/plugin/SimplePlugin")) {
+				Annotation pin = info.annotations().get("roj/plugin/SimplePlugin");
+
 				pd = new PluginDescriptor();
-				pd.fileName = "annotated_builtin";
+				pd.fileName = pin.getBool("inheritConfig") ? "/builtin_inherit" : "/builtin";
 				pd.mainClass = info.owner().replace('/', '.');
 
-				Annotation pin = info.annotations().get("roj/plugin/SimplePlugin");
 				pd.id = pin.getString("id");
 				pd.version = new Version(pin.getString("version", "1.0-SNAPSHOT"));
 				pd.desc = pin.getString("desc", "");

@@ -18,8 +18,7 @@ public class AttrCodeWriter extends Attribute {
 	public AttrCodeWriter(ConstantPool cp, MethodNode mn, CodeWriter cw) {
 		ByteList buf = new ByteList();
 		this.cw = cw;
-		cw.init(buf, cp);
-		cw.mn = mn;
+		cw.init(buf, cp, mn);
 		this.data = buf;
 	}
 

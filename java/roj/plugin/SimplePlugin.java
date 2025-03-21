@@ -17,4 +17,5 @@ public @interface SimplePlugin {
 	String desc() default "";
 	String[] depend() default {};
 	String[] loadAfter() default {};
+	boolean inheritConfig() default false;
 }

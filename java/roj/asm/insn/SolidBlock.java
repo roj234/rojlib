@@ -29,7 +29,7 @@ public final class SolidBlock extends CodeBlock {
 	}
 	@Override public int length() { return array instanceof DynByteBuf ? ((DynByteBuf)array).readableBytes() : length; }
 
-	boolean isReadonly() { return array.getClass() == byte[].class; }
+	public boolean isReadonly() { return array.getClass() != ByteList.class; }
 	@Override public DynByteBuf getData() { return array.getClass() == byte[].class ? DynByteBuf.wrap((byte[]) array, off, length) : (DynByteBuf) array; }
 	@Override
 	SolidBlock setData(DynByteBuf b) {

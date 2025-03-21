@@ -1,5 +1,7 @@
 package roj.asm.cp;
 
+import org.intellij.lang.annotations.MagicConstant;
+import roj.asm.attr.BootstrapMethods;
 import roj.util.DynByteBuf;
 
 /**
@@ -10,11 +12,12 @@ public final class CstMethodHandle extends Constant {
 	public byte kind;
 	private Object ref;
 
-	public CstMethodHandle(byte kind, int refIndex) {
+	@Deprecated
+	CstMethodHandle(byte kind, int refIndex) {
 		this.kind = kind;
 		this.ref = refIndex;
 	}
-	public CstMethodHandle(byte kind, CstRef ref) {
+	public CstMethodHandle(@MagicConstant(valuesFromClass = BootstrapMethods.Kind.class) byte kind, CstRef ref) {
 		this.kind = kind;
 		this.ref = ref;
 	}
@@ -30,13 +33,14 @@ public final class CstMethodHandle extends Constant {
 	public final int hashCode() { return (ref.hashCode() << 3) | kind; }
 	public final boolean equals(Object o) {
 		if (o == this) return true;
-		if (!(o instanceof CstMethodHandle)) return false;
-		CstMethodHandle ref = (CstMethodHandle) o;
-		return ref.kind == this.kind && ref.getRefIndex() == this.getRefIndex();
+		if (!(o instanceof CstMethodHandle handle)) return false;
+		return handle.kind == this.kind && handle.getRefIndex() == this.getRefIndex();
 	}
 
 	public final CstRef getRef() { return (CstRef) ref; }
-	int getRefIndex() { return ref instanceof Constant ? ((Constant) ref).getIndex() : ((Number) ref).intValue(); }
+	int getRefIndex() {
+		return ref instanceof Constant ? ((Constant) ref).index : ((Number) ref).intValue();
+	}
 
 	public void setRef(CstRef ref) {
 		if (ref == null) throw new NullPointerException("ref");

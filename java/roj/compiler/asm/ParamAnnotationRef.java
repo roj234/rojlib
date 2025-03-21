@@ -22,11 +22,11 @@ public final class ParamAnnotationRef implements Attributed {
 	}
 
 	@Override
-	public void putAttr(Attribute attr) {
+	public void addAttribute(Attribute attr) {
 		boolean vis = ((Annotations) attr).vis;
 
-		ParameterAnnotations p = (ParameterAnnotations) method.attrByName((vis ? Attribute.RtParameterAnnotations : Attribute.ClParameterAnnotations).name);
-		if (p == null) method.putAttr(p = new ParameterAnnotations(vis));
+		ParameterAnnotations p = (ParameterAnnotations) method.getRawAttribute((vis ? Attribute.RtParameterAnnotations : Attribute.ClParameterAnnotations).name);
+		if (p == null) method.addAttribute(p = new ParameterAnnotations(vis));
 
 		List<List<Annotation>> list = p.annotations;
 		while (list.size() <= parameterId) list.add(Collections.emptyList());

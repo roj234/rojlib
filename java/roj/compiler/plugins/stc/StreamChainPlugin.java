@@ -15,7 +15,6 @@ import roj.compiler.ast.expr.VarNode;
 import roj.compiler.context.LocalContext;
 import roj.compiler.diagnostic.Kind;
 import roj.compiler.plugin.LavaApi;
-import roj.compiler.plugin.Resolver;
 import roj.util.ArrayUtil;
 
 import java.util.List;
@@ -26,7 +25,7 @@ import java.util.function.Consumer;
  * @author Roj234
  * @since 2024/6/15 0015 15:51
  */
-public class StreamChainPlugin implements Resolver {
+public class StreamChainPlugin implements LavaApi.Resolver {
 	private static class MyExprNode extends ExprNode implements StreamChainExpr {
 		private List<Invoke> chain;
 		private final VarNode sourceType;
@@ -141,7 +140,7 @@ public class StreamChainPlugin implements Resolver {
 			return new MyExprNode(visibleType, chain, loadFrom, callback, flag);
 		}
 
-		private static int getSTATE(Invoke x) {return ((ChainOp) x.getMethod().attrByName(Evaluable.NAME)).type;}
+		private static int getSTATE(Invoke x) {return ((ChainOp) x.getMethod().getRawAttribute(Evaluable.NAME)).type;}
 
 		@Override
 		public String toString() {
@@ -165,7 +164,7 @@ public class StreamChainPlugin implements Resolver {
 			@Override public StreamChain intermediateOp(MethodNode node) {return add(node, 1);}
 			@Override public StreamChain terminalOp(MethodNode node) {return add(node, 2);}
 			private StreamChain add(MethodNode node, int type) {
-				node.putAttr(new ChainOp(allowFallback, exactType, callback, type));
+				node.addAttribute(new ChainOp(allowFallback, exactType, callback, type));
 				ref.methods.add(node);
 				return this;
 			}

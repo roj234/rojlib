@@ -15,7 +15,7 @@ public final class ValueBased extends Attribute {
 
 	public ValueBased(Type type) {exactType = type;}
 
-	@Override public final boolean isEmpty() {return true;}
+	@Override public final boolean writeIgnore() {return true;}
 	@Override public final String name() {return NAME;}
 	@Override public String toString() {return name()+" "+exactType;}
 }

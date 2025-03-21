@@ -62,29 +62,29 @@ public final class ResolveHelper {
 	}
 	public MethodNode getLambdaMethod() {getLambdaType();return lambdaMethod;}
 
-	private byte foreachType;
-	public int getForeachType(GlobalContext ctx) {
-		if (foreachType != 0) return foreachType;
+	private byte iterateType;
+	public int getIterateType(GlobalContext ctx) {
+		if (iterateType != 0) return iterateType;
 
-		var classes = getClassList(ctx);
+		var classes = getHierarchyList(ctx);
 		if (classes.containsValue("java/util/List") && classes.containsValue("java/util/RandomAccess")) {
-			return foreachType = 1;
+			return iterateType = 1;
 		} else if (Annotation.findInvisible(owner.cp(), owner, "roj/compiler/api/ListIterable") != null) {
 			int tmp;
 			if ((tmp = owner.getMethod("get")) >= 0 && owner.methods().get(tmp).rawDesc().startsWith("(I)") && owner.getMethod("size", "()I") >= 0) {
-				return foreachType = 2;
+				return iterateType = 2;
 			}
 		}
 
-		return foreachType = -1;
+		return iterateType = -1;
 	}
 
 	// region 父类列表
-	private IntBiMap<String> classList;
+	private IntBiMap<String> hierarchyList;
 	private boolean query;
 
-	public synchronized IntBiMap<String> getClassList(GlobalContext ctx) {
-		if (classList != null) return classList;
+	public synchronized IntBiMap<String> getHierarchyList(GlobalContext ctx) {
+		if (hierarchyList != null) return hierarchyList;
 
 		if (query) throw ResolveException.ofIllegalInput("rh.cyclicDepend", owner.name());
 		query = true;
@@ -147,7 +147,7 @@ public final class ResolveHelper {
 
 		query = false;
 
-		return this.classList = list;
+		return this.hierarchyList = list;
 	}
 
 	// endregion
@@ -165,12 +165,12 @@ public final class ResolveHelper {
 			for (int j = 0; j < methods.size(); j++) {
 				MethodNode m = (MethodNode) methods.get(j);
 				if ((m.modifier() & Opcodes.ACC_STATIC) != 0) continue;
-				var dv = m.parsedAttr(owner.cp(), Attribute.AnnotationDefault);
+				var dv = m.getAttribute(owner.cp(), Attribute.AnnotationDefault);
 				if (dv != null) ac.values.put(m.name(), dv.val == null ? new LazyAnnotationValue(dv) : dv.val);
 				ac.types.put(m.name(), m.returnType());
 			}
 
-			Annotations attr = owner.parsedAttr(owner.cp(), Attribute.RtAnnotations);
+			Annotations attr = owner.getAttribute(owner.cp(), Attribute.RtAnnotations);
 			if (attr == null) return ac;
 
 			List<Annotation> list = attr.annotations;
@@ -193,7 +193,7 @@ public final class ResolveHelper {
 					case "java/lang/annotation/Target" -> {
 						int tmp = 0;
 						if (!a.containsKey("value")) throw new NullPointerException("Invalid @Target");
-						var list1 = a.getArray("value");
+						var list1 = a.getList("value");
 						for (int j = 0; j < list1.size(); j++) {
 							tmp |= switch (list1.getEnumValue(j)) {
 								case "TYPE" -> TYPE;
@@ -224,8 +224,6 @@ public final class ResolveHelper {
 	// region 方法
 	private MyHashMap<String, ComponentList> methods;
 
-	@Deprecated
-	public ComponentList findMethod(GlobalContext ctx, String name) {return getMethods(ctx).get(name);}
 	/*
 	 * <pre> 调用的实际方法由以下查找过程选择：
 	 * C = 符号引用的类名称
@@ -406,7 +404,7 @@ public final class ResolveHelper {
 			synchronized (this) {
 				if (typeParamOwner != null) return typeParamOwner;
 
-				Signature sign = owner.parsedAttr(owner.cp(), Attribute.SIGNATURE);
+				Signature sign = owner.getAttribute(owner.cp(), Attribute.SIGNATURE);
 				if (sign == null) return typeParamOwner = Collections.emptyMap();
 
 				typeParamOwner = new MyHashMap<>();
@@ -447,14 +445,14 @@ public final class ResolveHelper {
 		if (subclassDecl == null) {
 			synchronized (this) {
 				if (subclassDecl != null) return subclassDecl;
-				var classes = owner.parsedAttr(owner.cp(), Attribute.InnerClasses);
+				var classes = owner.getAttribute(owner.cp(), Attribute.InnerClasses);
 				if (classes == null) return subclassDecl = Collections.emptyMap();
 
 				MyHashMap<String, InnerClasses.Item> decl = new MyHashMap<>();
 				var list = classes.classes;
 				for (int i = 0; i < list.size(); i++) {
 					var ref = list.get(i);
-					if (ref.name != null && owner.name().equals(ref.parent)) {
+					if (ref.name != null/* && owner.name().equals(ref.parent)*/) {
 						decl.put("!"+ref.name, ref);
 						decl.put(ref.self, ref);
 					}

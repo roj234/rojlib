@@ -30,11 +30,11 @@ public final class InnerClasses extends Attribute {
 
 		while (count-- > 0) {
 			String selfName = ((CstClass) pool.get(r)).name().str();
-			CstClass outer = (CstClass) pool.get(r);
+			CstClass outer = (CstClass) pool.getNullable(r);
 			// If C is not a member of a class or an interface (that is, if C is a top-level class or interface (JLS §7.6) or a local class (JLS §14.3) or an anonymous class (JLS §15.9.5)), the value of the outer_class_info_index item must be 0.
 			String outerName = outer == null ? null : outer.name().str();
 
-			CstUTF nameS = (CstUTF) pool.get(r);
+			CstUTF nameS = (CstUTF) pool.getNullable(r);
 			// If C is anonymous (JLS §15.9.5), the item must be null
 			// Otherwise, the item must be a Utf8
 			String name = nameS == null ? null : nameS.str();
@@ -46,7 +46,7 @@ public final class InnerClasses extends Attribute {
 	public List<Item> classes;
 
 	@Override
-	public boolean isEmpty() { return classes.isEmpty(); }
+	public boolean writeIgnore() { return classes.isEmpty(); }
 
 	@Override
 	public String name() { return NAME; }
@@ -59,7 +59,7 @@ public final class InnerClasses extends Attribute {
 			w.putShort(pool.getClassId(clazz.self))
 			 .putShort(clazz.parent == null ? 0 : pool.getClassId(clazz.parent))
 			 .putShort(clazz.name == null ? 0 : pool.getUtfId(clazz.name))
-			 .putShort(clazz.flags);
+			 .putShort(clazz.modifier);
 		}
 	}
 
@@ -76,13 +76,13 @@ public final class InnerClasses extends Attribute {
 		public String self;
 		@Nullable
 		public String parent, name;
-		public char flags;
+		public char modifier;
 
-		public Item(@NotNull String self, @Nullable String parent, @Nullable String name, int flags) {
+		public Item(@NotNull String self, @Nullable String parent, @Nullable String name, int modifier) {
 			this.self = self;
 			this.parent = parent;
 			this.name = name;
-			this.flags = (char) flags;
+			this.modifier = (char) modifier;
 		}
 
 		public static Item innerClass(String name, int flags) {
@@ -101,7 +101,7 @@ public final class InnerClasses extends Attribute {
 
 		public String toString() {
 			StringBuilder sb = new StringBuilder();
-			Opcodes.showModifiers(flags, Opcodes.ACC_SHOW_INNERCLASS, sb).append("class ");
+			Opcodes.showModifiers(modifier, Opcodes.ACC_SHOW_INNERCLASS, sb).append("class ");
 			if (parent == null && name == null) {
 				sb.append("<anonymous>");
 			} else {

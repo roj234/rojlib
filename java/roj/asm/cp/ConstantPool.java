@@ -1,14 +1,16 @@
 package roj.asm.cp;
 
 import org.intellij.lang.annotations.MagicConstant;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 import roj.asm.AsmShared;
+import roj.asm.attr.BootstrapMethods;
 import roj.collect.IntMap;
 import roj.collect.MyHashSet;
 import roj.collect.SimpleList;
 import roj.text.TextUtil;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
-import roj.util.Helpers;
 
 import java.util.List;
 import java.util.function.Consumer;
@@ -17,10 +19,10 @@ import static roj.asm.cp.Constant.*;
 
 /**
  * @author Roj234
- * @version 1.4
+ * @version 2.0
  * @since 2021/5/29 17:16
  */
-public class ConstantPool {
+public final class ConstantPool {
 	public static final int ONLY_STRING = -1, BYTE_STRING = 0, CHAR_STRING = 1;
 
 	private final SimpleList<Constant> constants;
@@ -60,11 +62,22 @@ public class ConstantPool {
 		int twoPass = -1;
 		int i = 0;
 		while (i < len) {
-			Constant c = readConstant(r, csts, i, decodeUtf);
-			if (c == null) c = (Constant) csts[i];
+			Constant c;
+			try {
+				c = readConstant(r, csts, i, decodeUtf);
+			} catch (Exception e) {
+				String cst;
+				try {
+					cst = String.valueOf(csts[i]);
+				} catch (Exception ignored) {
+					cst = csts[i].getClass().getName();
+				}
+
+				throw new IllegalArgumentException("常量池["+i+"]解析失败！当前值: "+cst, e);
+			}
 
 			csts[i++] = c;
-			c.setIndex(i);
+			c.index = (char) i;
 			if (listener != null) listener.accept(c);
 			switch (c.type()) {
 				case LONG: case DOUBLE:
@@ -100,7 +113,7 @@ public class ConstantPool {
 					if (listener != null) listener.accept(c);
 
 					csts[i++] = c;
-					c.setIndex(i);
+					c.index = (char) i;
 					break;
 				case INT, FLOAT, NAME_AND_TYPE, FIELD, METHOD, INTERFACE, DYNAMIC, INVOKE_DYNAMIC:
 					r.rIndex += 5;
@@ -134,13 +147,10 @@ public class ConstantPool {
 					data = len <= 16 ? r.readBytes(len) : r.slice(len);
 				}
 
-				if (arr[i] != null) {
-					try {
-						((CstUTF) arr[i]).data = data;
-					} catch (Exception e) {
-						typeError(i, b, arr[i]);
-					}
-					return null;
+				CstUTF known = (CstUTF) arr[i];
+				if (known != null) {
+					known.data = data;
+					return known;
 				}
 				return new CstUTF(data);
 			}
@@ -155,19 +165,16 @@ public class ConstantPool {
 				if (arr[id] == null) arr[id] = utf = new CstUTF();
 				else utf = (CstUTF) arr[id];
 
-				if (arr[i] != null) {
-					try {
-						((CstRefUTF)arr[i]).setValue(utf);
-					} catch (Exception e) {
-						typeError(i, b, arr[i]);
-					}
-					return null;
+				CstRefUTF known = (CstRefUTF) arr[i];
+				if (known != null) {
+					known.setValue(utf);
+					return known;
 				}
 
 				return switch (b) {
 					case METHOD_TYPE -> new CstMethodType(utf);
-					case MODULE -> new CstModule(utf);
-					case PACKAGE -> new CstPackage(utf);
+					case MODULE -> new CstRefUTF.Module(utf);
+					case PACKAGE -> new CstRefUTF.Package(utf);
 					case CLASS -> new CstClass(utf);
 					default -> new CstString(utf);
 				};
@@ -183,15 +190,11 @@ public class ConstantPool {
 				if (arr[id] == null) arr[id] = type = new CstUTF();
 				else type = (CstUTF) arr[id];
 
-				if (arr[i] != null) {
-					try {
-						CstNameAndType nat = (CstNameAndType) arr[i];
-						nat.name(name);
-						nat.setType(type);
-					} catch (Exception e) {
-						typeError(i, b, arr[i]);
-					}
-					return null;
+				CstNameAndType known = (CstNameAndType) arr[i];
+				if (known != null) {
+					known.name(name);
+					known.setType(type);
+					return known;
 				}
 
 				return new CstNameAndType(name, type);
@@ -208,9 +211,9 @@ public class ConstantPool {
 				else nat = (CstNameAndType) arr[id];
 
 				return switch (b) {
-					case FIELD -> new CstRefField(clz, nat);
-					case METHOD -> new CstRefMethod(clz, nat);
-					default -> new CstRefItf(clz, nat);
+					case FIELD -> new CstRef.Field(clz, nat);
+					case METHOD -> new CstRef.Method(clz, nat);
+					default -> new CstRef.Interface(clz, nat);
 				};
 			}
 			case DYNAMIC, INVOKE_DYNAMIC: {
@@ -227,14 +230,27 @@ public class ConstantPool {
 			default: throw new IllegalArgumentException("无效的常量类型 " + b);
 		}
 	}
-	private static void typeError(int i, int b, Object o) { throw new IllegalArgumentException("pool["+i+"]的常量类型不匹配: 期待: "+Constant.toString(b)+" 得到: "+o); }
 
-	public final List<Constant> array() { return constants; }
-	public final Constant array(int i) { return i-- == 0 ? Helpers.maybeNull() : constants.get(i); }
-	public final Constant get(DynByteBuf r) { return array(r.readUnsignedShort()); }
-	public String getRefName(DynByteBuf r) {
+	public final List<Constant> data() {return constants;}
+	public final @Nullable Constant getNullable(DynByteBuf r) {
+		int i = r.readUnsignedShort()-1;
+		return i < 0 ? null : constants.get(i);
+	}
+	@SuppressWarnings("unchecked")
+	public final @NotNull <T extends Constant> T get(DynByteBuf r) {return (T) constants.getInternalArray()[r.readUnsignedShort()-1];}
+	public final @Nullable String getRefName(DynByteBuf r) {
 		int id = r.readUnsignedShort()-1;
-		return id < 0 ? null : ((CstRefUTF) constants.get(id)).name().str();
+		return id < 0 ? null : ((CstRefUTF) constants.getInternalArray()[id]).name().str();
+	}
+	public final @NotNull String getRefName(DynByteBuf r, int type) {
+		var c = (CstRefUTF) constants.getInternalArray()[r.readUnsignedShort()-1];
+		if (c.type() != type) throw new IllegalStateException("excepting"+Constant.toString(type)+" but got "+c);
+		return c.name().str();
+	}
+	public final @NotNull CstRef getRef(DynByteBuf r, boolean isField) {
+		var c = (CstRef) constants.getInternalArray()[r.readUnsignedShort()-1];
+		if (c.type() == FIELD != isField) throw new IllegalStateException("excepting" + (isField ? "field" : "method") + "but got "+c);
+		return c;
 	}
 
 	private void initRefMap() {
@@ -250,7 +266,7 @@ public class ConstantPool {
 			if (c == CstTop.TOP) continue;
 
 			Constant c1 = refMap.intern(c);
-			if (c != c1) c.setIndex(c1.getIndex());
+			if (c != c1) c.index = c1.index;
 		}
 
 		if (!isForWrite) {
@@ -258,36 +274,11 @@ public class ConstantPool {
 			AsmShared.local().getCpWriter(constants);
 		}
 	}
-
-	public void setUTFValue(CstUTF c, String str) {
-		int id = c.getIndex()-1;
-		if (id < 0 || id >= constants.size() || constants.getInternalArray()[id] != c) {
-			throw new IllegalArgumentException(c + "不在该常量池中");
-		}
-
-		boolean rm;
-		if (!refMap.isEmpty()) {
-			rm = refMap.remove(c);
-			assert rm : "不在该常量池中";
-		} else {
-			rm = false;
-		}
-
-		int prev = c._length();
-		int curr = ByteList.byteCountDioUTF(str);
-
-		length += curr - prev;
-
-		c.data = str;
-
-		if (rm) refMap.add(c);
-	}
-
 	private void addConstant(Constant c) {
 		refMap.add(c);
 		constants.add(c);
 		int size = constants.size();
-		c.setIndex(size);
+		c.index = (char) size;
 		if (size >= 0xFFFF) throw new UnsupportedOperationException("constant overflow!");
 
 		switch (c.type()) {
@@ -305,217 +296,162 @@ public class ConstantPool {
 		if (listener != null) listener.accept(c);
 	}
 
-	public CstUTF getUtf(CharSequence msg) {
+	public void setUTFValue(CstUTF utf, String str) {
+		int id = utf.index-1;
+		if (id < 0 || id >= constants.size() || constants.getInternalArray()[id] != utf) {
+			throw new IllegalArgumentException(utf+"不在该常量池中");
+		}
+
+		boolean rm;
+		if (!refMap.isEmpty()) {
+			rm = refMap.remove(utf);
+			assert rm : "不在该常量池中";
+		} else {
+			rm = false;
+		}
+
+		int prev = utf._length();
+		int curr = ByteList.byteCountDioUTF(str);
+
+		length += curr - prev;
+
+		utf.data = str;
+
+		if (rm) refMap.add(utf);
+	}
+
+	public CstUTF getUtf(CharSequence str) {
 		initRefMap();
 
 		CstUTF utf;
-		CstTop fp = AsmShared.local().fp;
-		Constant o = refMap.find(fp.set(msg));
-		if (o == fp) {
-			addConstant(utf = new CstUTF(msg.toString()));
-		} else if (!msg.equals((utf = (CstUTF) o).str())) {
-			throw new IllegalStateException("Unfit utf id!!! G: '" + utf.str() + "' E: '" + msg + '\'');
+		var find = AsmShared.local().fp;
+		var found = refMap.find(find.set(str));
+		if (found == find) {
+			addConstant(utf = new CstUTF(str.toString()));
+		} else if (!str.equals((utf = (CstUTF) found).str())) {
+			throw new IllegalStateException("UTF类型的值被外部修改，期待 '"+str+"' 实际 '"+utf.str()+'\'');
 		}
 
 		return utf;
 	}
-	public int getUtfId(CharSequence msg) { return getUtf(msg).getIndex(); }
+	public int getUtfId(CharSequence msg) {return getUtf(msg).index;}
 
 	public CstNameAndType getDesc(String name, String type) {
-		CstUTF uName = getUtf(name);
-		CstUTF uType = getUtf(type);
+		var uName = getUtf(name);
+		var uType = getUtf(type);
 
-		CstTop fp = AsmShared.local().fp;
-		Object ref = refMap.find(fp.set(uName, uType));
-		if (ref == fp) {
-			CstNameAndType t = new CstNameAndType();
-			t.name(uName);
-			t.setType(uType);
-			addConstant(t);
-			ref = t;
-		}
-
-		return (CstNameAndType) ref;
+		var find = AsmShared.local().fp;
+		var found = refMap.find(find.set(uName, uType));
+		if (found == find) addConstant(found = new CstNameAndType(uName, uType));
+		return (CstNameAndType) found;
 	}
-	public int getDescId(String name, String desc) { return getDesc(name, desc).getIndex(); }
+	public int getDescId(String name, String desc) {return getDesc(name, desc).index;}
 
 	public CstClass getClazz(String name) {
-		CstUTF uName = getUtf(name);
+		var utf = getUtf(name);
 
-		CstTop fp = AsmShared.local().fp;
-		Object ref = refMap.find(fp.set(CLASS, uName));
-		if (ref == fp) {
-			CstClass t = new CstClass();
-			t.setValue(uName);
-			addConstant(t);
-			ref = t;
-		}
-
-		return (CstClass) ref;
+		var find = AsmShared.local().fp;
+		var found = refMap.find(find.set(CLASS, utf));
+		if (found == find) addConstant(found = new CstClass(utf));
+		return (CstClass) found;
 	}
-	public int getClassId(String owner) { return getClazz(owner).getIndex(); }
+	public int getClassId(String owner) {return getClazz(owner).index;}
 
-	public CstRefMethod getMethodRef(String owner, String name, String desc) {
-		CstClass clazz = getClazz(owner);
-		CstNameAndType nat = getDesc(name, desc);
+	public CstRef getRefByType(String owner, String name, String desc, @MagicConstant(intValues = {METHOD, FIELD, INTERFACE}) byte type) {
+		var clazz = getClazz(owner);
+		var nat = getDesc(name, desc);
 
-		CstTop fp = AsmShared.local().fp;
-		Object ref = refMap.find(fp.set(METHOD, clazz, nat));
-		if (ref == fp) {
-			CstRefMethod t = new CstRefMethod();
-			t.clazz(clazz);
-			t.desc(nat);
-			addConstant(t);
-			ref = t;
+		var find = AsmShared.local().fp;
+		var found = refMap.find(find.set(type, clazz, nat));
+		if (found == find) {
+			found = switch (type) {
+				case FIELD -> new CstRef.Field(clazz, nat);
+				case METHOD -> new CstRef.Method(clazz, nat);
+				//case INTERFACE
+				default -> new CstRef.Interface(clazz, nat);
+			};
+			addConstant(found);
 		}
 
-		return (CstRefMethod) ref;
+		return (CstRef) found;
 	}
-	public int getMethodRefId(String owner, String name, String desc) { return getMethodRef(owner, name, desc).getIndex(); }
+	public int getMethodRefId(String owner, String name, String desc) {return getRefByType(owner, name, desc, METHOD).index;}
+	public int getFieldRefId(String owner, String name, String desc) {return getRefByType(owner, name, desc, FIELD).index;}
+	public int getItfRefId(String owner, String name, String desc) {return getRefByType(owner, name, desc, INTERFACE).index;}
 
-	public CstRefField getFieldRef(String owner, String name, String desc) {
-		CstClass clazz = getClazz(owner);
-		CstNameAndType nat = getDesc(name, desc);
+	public CstMethodHandle getMethodHandle(String owner, String name, String desc, @MagicConstant(valuesFromClass = BootstrapMethods.Kind.class) byte kind, @MagicConstant(intValues = {METHOD, FIELD, INTERFACE}) byte type) {
+		var ref = getRefByType(owner, name, desc, type);
 
-		CstTop fp = AsmShared.local().fp;
-		Object ref = refMap.find(fp.set(FIELD, clazz, nat));
-		if (ref == fp) {
-			CstRefField t = new CstRefField();
-			t.clazz(clazz);
-			t.desc(nat);
-			addConstant(t);
-			ref = t;
-		}
-
-		return (CstRefField) ref;
-	}
-	public int getFieldRefId(String owner, String name, String desc) { return getFieldRef(owner, name, desc).getIndex(); }
-
-	public CstRefItf getItfRef(String owner, String name, String desc) {
-		CstClass clazz = getClazz(owner);
-		CstNameAndType nat = getDesc(name, desc);
-
-		CstTop fp = AsmShared.local().fp;
-		Object ref = refMap.find(fp.set(INTERFACE, clazz, nat));
-		if (ref == fp) {
-			CstRefItf t = new CstRefItf();
-			t.clazz(clazz);
-			t.desc(nat);
-			addConstant(t);
-			ref = t;
-		}
-
-		return (CstRefItf) ref;
-	}
-	public int getItfRefId(String owner, String name, String desc) { return getItfRef(owner, name, desc).getIndex(); }
-
-	private CstRef getRefByType(String owner, String name, String desc, byte type) {
-		switch (type) {
-			case FIELD: return getFieldRef(owner, name, desc);
-			case METHOD: return getMethodRef(owner, name, desc);
-			default: // no default branch
-			case INTERFACE: return getItfRef(owner, name, desc);
-		}
-	}
-
-	public CstMethodHandle getMethodHandle(String owner, String name, String desc, byte kind, byte type) {
-		CstRef ref = getRefByType(owner, name, desc, type);
-
-		//fp.set(kind, ref);
-		CstMethodHandle handle = new CstMethodHandle(kind, -1);
-		handle.setRef(ref);
-
-		CstMethodHandle found = (CstMethodHandle) refMap.find(handle);
-
-		if (found == handle) {
-			addConstant(handle);
-		}
+		var find = new CstMethodHandle(kind, ref);
+		var found = (CstMethodHandle) refMap.find(find);
+		if (found == find) addConstant(find);
 		return found;
 	}
-	public int getMethodHandleId(String owner, String name, String desc, byte kind, byte type) { return getMethodHandle(owner, name, desc, kind, type).getIndex(); }
+	public int getMethodHandleId(String owner, String name, String desc, @MagicConstant(valuesFromClass = BootstrapMethods.Kind.class) byte kind, @MagicConstant(intValues = {METHOD, FIELD, INTERFACE}) byte type) {return getMethodHandle(owner, name, desc, kind, type).index;}
 
 	public CstDynamic getInvokeDyn(boolean isMethod, int table, String name, String desc) {
-		CstNameAndType nat = getDesc(name, desc);
+		var nat = getDesc(name, desc);
 
-		CstDynamic handle = new CstDynamic(isMethod, table, nat);
-
-		CstDynamic found = (CstDynamic) refMap.find(handle);
-
-		if (found == handle) {
-			addConstant(handle);
-		}
+		var find = new CstDynamic(isMethod, table, nat);
+		var found = (CstDynamic) refMap.find(find);
+		if (found == find) addConstant(find);
 		return found;
 	}
-	public int getInvokeDynId(int table, String name, String desc) { return getInvokeDyn(true, table, name, desc).getIndex(); }
-	public int getDynId(int table, String name, String desc) { return getInvokeDyn(false, table, name, desc).getIndex(); }
+	public int getInvokeDynId(int table, String name, String desc) {return getInvokeDyn(true, table, name, desc).index;}
+	public int getLoadDynId(int table, String name, String desc) {return getInvokeDyn(false, table, name, desc).index;}
 
-	public CstPackage getPackage(String owner) {
-		CstUTF name = getUtf(owner);
+	public int getPackageId(String owner) {
+		var utf = getUtf(owner);
 
-		CstTop fp = AsmShared.local().fp;
-		Object ref = refMap.find(fp.set(PACKAGE, name));
-		if (ref == fp) {
-			CstPackage t = new CstPackage();
-			t.setValue(name);
-			addConstant(t);
-			ref = t;
-		}
-
-		return (CstPackage) ref;
+		var find = AsmShared.local().fp;
+		var found = refMap.find(find.set(PACKAGE, utf));
+		if (found == find) addConstant(found = new CstRefUTF.Package(utf));
+		return found.index;
 	}
-	public int getPackageId(String owner) { return getPackage(owner).getIndex(); }
+	public int getModuleId(String owner) {
+		var utf = getUtf(owner);
 
-	public CstModule getModule(String owner) {
-		CstUTF name = getUtf(owner);
-
-		CstTop fp = AsmShared.local().fp;
-		Object ref = refMap.find(fp.set(MODULE, name));
-		if (ref == fp) {
-			CstModule t = new CstModule();
-			t.setValue(name);
-			addConstant(t);
-			ref = t;
-		}
-
-		return (CstModule) ref;
+		var find = AsmShared.local().fp;
+		var found = refMap.find(find.set(MODULE, utf));
+		if (found == find) addConstant(found = new CstRefUTF.Module(utf));
+		return found.index;
 	}
-	public int getModuleId(String owner) { return getModule(owner).getIndex(); }
 
 	public int getIntId(int i) {
 		initRefMap();
 
-		CstTop fp = AsmShared.local().fp;
-		Constant ref = refMap.find(fp.set(i));
-		if (ref == fp) addConstant(ref = new CstInt(i));
-		return ref.getIndex();
+		var find = AsmShared.local().fp;
+		var found = refMap.find(find.set(i));
+		if (found == find) addConstant(found = new CstInt(i));
+		return found.index;
 	}
 	public int getLongId(long i) {
 		initRefMap();
 
-		CstTop fp = AsmShared.local().fp;
-		Constant ref = refMap.find(fp.set(i));
-		if (ref == fp) addConstant(ref = new CstLong(i));
-		return ref.getIndex();
+		var find = AsmShared.local().fp;
+		var found = refMap.find(find.set(i));
+		if (found == find) addConstant(found = new CstLong(i));
+		return found.index;
 	}
 	public int getFloatId(float i) {
 		initRefMap();
 
-		CstTop fp = AsmShared.local().fp;
-		Constant ref = refMap.find(fp.set(i));
-		if (ref == fp) addConstant(ref = new CstFloat(i));
-		return ref.getIndex();
+		var find = AsmShared.local().fp;
+		var found = refMap.find(find.set(i));
+		if (found == find) addConstant(found = new CstFloat(i));
+		return found.index;
 	}
 	public int getDoubleId(double i) {
 		initRefMap();
 
-		CstTop fp = AsmShared.local().fp;
-		Constant ref = refMap.find(fp.set(i));
-		if (ref == fp) addConstant(ref = new CstDouble(i));
-		return ref.getIndex();
+		var find = AsmShared.local().fp;
+		var found = refMap.find(find.set(i));
+		if (found == find) addConstant(found = new CstDouble(i));
+		return found.index;
 	}
 
-	public int fit(Constant c) {return reset(c).getIndex();}
-
+	public int indexOf(Constant s) {return s.index;}
+	public int fit(Constant c) {return reset(c).index;}
 	@SuppressWarnings({"unchecked", "fallthrough"})
 	public <T extends Constant> T reset(T c) {
 		switch (c.type()) {
@@ -547,14 +483,14 @@ public class ConstantPool {
 			}
 			break;
 			case UTF:
-				((CstUTF) c).str();
+				verifyUtf(((CstUTF) c).str());
 			case INT, DOUBLE, FLOAT, LONG:
 				// No need to do anything, just append it
 				break;
 			default: throw new IllegalArgumentException("Unsupported type: " + c.type());
 		}
 
-		int id = c.getIndex()-1;
+		int id = c.index-1;
 		if (id >= 0 && id < constants.size() && constants.getInternalArray()[id] == c) {
 			return c;
 		}
@@ -565,6 +501,11 @@ public class ConstantPool {
 
 		addConstant(c);
 		return c;
+	}
+	static void verifyUtf(String str) {
+		if (str.length() >= 0x10000/3) {
+			if (str.length() >= 0x10000 || ByteList.byteCountDioUTF(str) >= 0x1000) throw new IllegalArgumentException("UTF8字符串太长，限制是65535字节，"+str.length()+"！");
+		}
 	}
 
 	public int byteLength() {
@@ -590,7 +531,7 @@ public class ConstantPool {
 		int i = 0;
 		for (int j = 0; j < constants.size(); j++) {
 			Constant c = constants.get(j);
-			String s1 = Integer.toString(c.getIndex());
+			String s1 = Integer.toString(c.index);
 			int k = s1.length()+2;
 			array[i++] = s1;
 			s1 = Constant.toString(c.type());
@@ -612,22 +553,6 @@ public class ConstantPool {
 
 	Consumer<Constant> listener;
 	public void setAddListener(Consumer<Constant> x) { listener = x; }
-
-	public void replace(int i, Constant c) {
-		if (constants.get(i) == CstTop.TOP) throw new IllegalArgumentException("cannot replace top ("+i+")");
-
-		boolean isDualElement = i + 1 < constants.size() && constants.get(i + 1) == CstTop.TOP;
-		boolean isDualElement2 = c.type() == LONG || c.type() == DOUBLE;
-		if (isDualElement^isDualElement2) throw new IllegalArgumentException("cannot change element size ("+i+")");
-
-		Constant prev = constants.set(i, c);
-		c.setIndex(prev.getIndex());
-
-		if (!refMap.isEmpty()) {
-			refMap.remove(prev);
-			refMap.add(c);
-		}
-	}
 
 	public void checkCollision(DynByteBuf w) {
 		for (int i = 0; i < constants.size(); i++) {

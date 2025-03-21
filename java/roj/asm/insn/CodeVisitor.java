@@ -36,7 +36,7 @@ public class CodeVisitor {
 		visitExceptions();
 		len = r.readUnsignedShort();
 		while (len-- > 0) {
-			visitException(r.readUnsignedShort(), r.readUnsignedShort(), r.readUnsignedShort(), (CstClass) cp.get(r));
+			visitException(r.readUnsignedShort(), r.readUnsignedShort(), r.readUnsignedShort(), (CstClass) cp.getNullable(r));
 		}
 
 		visitAttributes();
@@ -73,22 +73,22 @@ public class CodeVisitor {
 				else _visitNodePre();
 
 				switch (code) {
-					case PUTFIELD, GETFIELD, PUTSTATIC, GETSTATIC -> field(code, (CstRefField) cp.get(r));
-					case INVOKEVIRTUAL, INVOKESPECIAL, INVOKESTATIC -> invoke(code, (CstRef) cp.get(r));
-					case INVOKEINTERFACE -> invokeItf((CstRefItf) cp.get(r), r.readShort());
-					case INVOKEDYNAMIC -> invokeDyn((CstDynamic) cp.get(r), r.readUnsignedShort());
+					case PUTFIELD, GETFIELD, PUTSTATIC, GETSTATIC -> field(code, cp.getRef(r, true));
+					case INVOKEVIRTUAL, INVOKESPECIAL, INVOKESTATIC -> invoke(code, cp.getRef(r, false));
+					case INVOKEINTERFACE -> invokeItf((CstRef.Interface) cp.get(r), r.readShort());
+					case INVOKEDYNAMIC -> invokeDyn(cp.get(r), r.readUnsignedShort());
 					case GOTO, IFEQ, IFNE, IFLT, IFGE, IFGT, IFLE, IF_icmpeq, IF_icmpne, IF_icmplt, IF_icmpge, IF_icmpgt, IF_icmple, IF_acmpeq, IF_acmpne, IFNULL, IFNONNULL, JSR -> jump(code, r.readShort());
 					case GOTO_W, JSR_W -> jump(code, r.readInt());
 					case SIPUSH -> smallNum(code, r.readShort());
 					case RET -> ret(widen ? r.readShort() : r.readByte());
 					case BIPUSH -> smallNum(code, r.readByte());
 					case NEWARRAY -> newArray(r.readByte());
-					case LDC -> ldc(LDC, cp.array(r.readUnsignedByte()));
+					case LDC -> ldc(LDC, cp.data().get(r.readUnsignedByte()-1));
 					case LDC_W, LDC2_W -> ldc(code, cp.get(r));
 					case IINC -> iinc(widen ? r.readUnsignedShort() : r.readUnsignedByte(), widen ? r.readShort() : r.readByte());
 					case WIDE -> {}
-					case NEW, ANEWARRAY, INSTANCEOF, CHECKCAST -> clazz(code, (CstClass) cp.get(r));
-					case MULTIANEWARRAY -> multiArray((CstClass) cp.get(r), r.readUnsignedByte());
+					case NEW, ANEWARRAY, INSTANCEOF, CHECKCAST -> clazz(code, cp.get(r));
+					case MULTIANEWARRAY -> multiArray(cp.get(r), r.readUnsignedByte());
 					case ISTORE, LSTORE, FSTORE, DSTORE, ASTORE, ILOAD, LLOAD, FLOAD, DLOAD, ALOAD -> vars(code, widen ? r.readUnsignedShort() : r.readUnsignedByte());
 					case TABLESWITCH -> {
 						// align
@@ -133,9 +133,9 @@ public class CodeVisitor {
 	protected void iinc(int id, int count) {}
 	protected void ldc(byte code, Constant c) {}
 	protected void invokeDyn(CstDynamic dyn, int type) {}
-	protected void invokeItf(CstRefItf itf, short argc) {}
+	protected void invokeItf(CstRef method, short argc) {}
 	protected void invoke(byte code, CstRef method) {}
-	protected void field(byte code, CstRefField field) {}
+	protected void field(byte code, CstRef field) {}
 	protected void jump(byte code, int offset) {}
 	protected void one(byte code) {}
 	protected void smallNum(byte code, int value) {}

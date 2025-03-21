@@ -1,8 +1,7 @@
 package roj.asm;
 
-import roj.asm.attr.AttrUnknown;
-import roj.asm.attr.Attribute;
 import roj.asm.attr.AttributeList;
+import roj.asm.attr.UnparsedAttribute;
 import roj.asm.cp.ConstantPool;
 import roj.asm.cp.CstNameAndType;
 import roj.asm.cp.CstUTF;
@@ -27,7 +26,7 @@ public abstract class CNode implements RawNode {
 
 		var buf = AsmShared.buf();
 		for (int i = 0; i < attributes.size(); i++) {
-			attributes.set(i, AttrUnknown.downgrade(cp, buf, attributes.get(i)));
+			attributes.set(i, UnparsedAttribute.serialize(cp, buf, attributes.get(i)));
 		}
 		AsmShared.buf(buf);
 	}
@@ -40,8 +39,6 @@ public abstract class CNode implements RawNode {
 		if (attributes == null) w.putShort(0);
 		else attributes.toByteArray(w, pool);
 	}
-
-	public final Attribute attrByName(String name) { return attributes == null ? null : (Attribute) attributes.getByName(name); }
 
 	public final AttributeList attributes() { return attributes == null ? attributes = new AttributeList() : attributes; }
 	public final AttributeList attributesNullable() { return attributes; }

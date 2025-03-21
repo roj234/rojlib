@@ -44,7 +44,10 @@ public interface Flow<T> {
 		} catch (OperationDone ignored) {}
 	}
 
-	static <T> Flow<T> empty() {return c -> {};}
+	/**
+	 * Create empty flow
+	 */
+	static <T> Flow<T> of() {return c -> {};}
 	static <T> Flow<T> of(T t) {return c -> c.accept(t);}
 	@SafeVarargs static <T> Flow<T> of(T... t) {return of(Arrays.asList(t));}
 	static <T> Flow<T> of(Iterable<T> t) {return t::forEach;}

@@ -49,38 +49,38 @@ class UnaryPre extends UnaryPreNode {
 
 			iType = TypeCast.getWrappedPrimitive(type);
 			if (iType == 0) {
-				ctx.report(Kind.ERROR, "unary.error.notApplicable", byId(op), type);
+				ctx.report(this, Kind.ERROR, "unary.error.notApplicable", byId(op), type);
 				return NaE.RESOLVE_FAILED;
 			}
 
 			assert !right.isConstant() : "wrapped primitive is constant? weird";
-			if (incrNode) ctx.report(Kind.SEVERE_WARNING, "unary.warn.wrapper", type, byId(op));
+			if (incrNode) ctx.report(this, Kind.SEVERE_WARNING, "unary.warn.wrapper", type, byId(op));
 		}
 
 		switch (iType) {
-			case Type.VOID: ctx.report(Kind.ERROR, "unary.error.void"); return NaE.RESOLVE_FAILED;
+			case Type.VOID: ctx.report(this, Kind.ERROR, "unary.error.void"); return NaE.RESOLVE_FAILED;
 			case Type.BOOLEAN:
 				if (op != logic_not) {
-					ctx.report(Kind.ERROR, "unary.error.notApplicable", byId(op), type);
+					ctx.report(this, Kind.ERROR, "unary.error.notApplicable", byId(op), type);
 					return NaE.RESOLVE_FAILED;
 				}
 				break;
 			case Type.DOUBLE: case Type.FLOAT:
 				if (op == inv || op == logic_not) {
-					ctx.report(Kind.ERROR, "unary.error.notApplicable", byId(op), type);
+					ctx.report(this, Kind.ERROR, "unary.error.notApplicable", byId(op), type);
 					return NaE.RESOLVE_FAILED;
 				}
 				break;
 			default: if (type.isPrimitive()) type = Type.primitive(Type.INT);
 			case Type.LONG:
 				if (op == logic_not) {
-					ctx.report(Kind.ERROR, "unary.error.notApplicable:!", type);
+					ctx.report(this, Kind.ERROR, "unary.error.notApplicable:!", type);
 					return NaE.RESOLVE_FAILED;
 				}
 		}
 
 		if (incrNode && (!(right instanceof VarNode vn) || vn.isFinal())) {
-			ctx.report(Kind.ERROR, "unary.error.final", right);
+			ctx.report(this, Kind.ERROR, "unary.error.final", right);
 			return NaE.RESOLVE_FAILED;
 		}
 
@@ -100,7 +100,7 @@ class UnaryPre extends UnaryPreNode {
 				}
 				return right;
 			case Type.BOOLEAN:
-				return new Constant(type, !(boolean)right.constVal());
+				return constant(type, !(boolean)right.constVal());
 			case Type.LONG:
 				var lv = (CLong)right.constVal();
 				switch (op) {

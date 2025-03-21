@@ -161,7 +161,7 @@ public final class OKRouter implements Router {
 			if (a == null) continue;
 
 			if (a.type().equals("roj/http/server/auto/Interceptor")) {
-				var value = a.getArray("value");
+				var value = a.getList("value");
 				if (value.size() > 1) throw new IllegalArgumentException("Interceptor的values长度只能为0或1");
 
 				var name = value.isEmpty() ? mn.name() : value.getString(0);
@@ -169,7 +169,7 @@ public final class OKRouter implements Router {
 				interceptorId.putInt(name, id++);
 			} else {
 				if (predefInterceptor != null) {
-					var self = a.getArray("interceptor");
+					var self = a.getList("interceptor");
 					if (self.isEmpty()) a.put("interceptor", new AList(predefInterceptor));
 					else self.raw().addAll(predefInterceptor);
 				}
@@ -292,10 +292,10 @@ public final class OKRouter implements Router {
 
 			set.accepts = a.getInt("accepts", 255);
 			set.req = inst.inst.copyWith(i, o);
-			set.mime = a.getString("mime");
+			set.mime = a.getString("mime", "text/plain");
 
 			List<Dispatcher> precs = Collections.emptyList();
-			var vname = a.getArray("interceptor");
+			var vname = a.getList("interceptor");
 			if (!vname.isEmpty()) {
 				for (int j = 0; j < vname.size(); j++) {
 					String name = vname.getString(j);
@@ -385,7 +385,7 @@ public final class OKRouter implements Router {
 	@Nullable
 	private static List<CEntry> getPredefInterceptor(ClassNode data) {
 		var preDef = Annotation.findInvisible(data.cp, data, "roj/http/server/auto/Interceptor");
-		return preDef != null ? preDef.getArray("value").raw() : null;
+		return preDef != null ? preDef.getList("value").raw() : null;
 	}
 	private static Annotation parseAnnotations(List<Annotation> list) {
 		CEntry accepts = null, mime = null;
@@ -433,7 +433,7 @@ public final class OKRouter implements Router {
 	public final OKRouter addPrefixDelegation(String path, Router router) {return addPrefixDelegation(path, router, (String[])null);}
 	public final OKRouter addPrefixDelegation(String path, Router router, @Nullable String... interceptors) {
 		Node node = route.add(path, 0, path.length());
-		if (node.value != null) throw new IllegalArgumentException("子路径"+path+"已存在");
+		if (node.value != null) throw new IllegalArgumentException("子路径'"+path+"'已存在");
 
 		var aset = new Route();
 
@@ -502,7 +502,7 @@ public final class OKRouter implements Router {
 		List<List<Annotation>> annos = ParameterAnnotations.getParameterAnnotation(cp, m, false);
 		if (annos == null) annos = Collections.emptyList();
 
-		Signature signature = m.parsedAttr(cp, Attribute.SIGNATURE);
+		Signature signature = m.getAttribute(cp, Attribute.SIGNATURE);
 		List<IType> genTypes = signature == null ? Collections.emptyList() : signature.values;
 
 		List<String> parNames = ParamNameMapper.getParameterName(cp, m);
@@ -677,7 +677,7 @@ public final class OKRouter implements Router {
 		int accepts;
 		//accept this path for prefix router
 		Predicate<String> earlyCheck = Helpers.alwaysTrue();
-		String mime = "text/plain";
+		String mime;
 		Dispatcher req;
 		Dispatcher[] prec;
 

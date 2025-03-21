@@ -14,4 +14,5 @@ public interface Types {
 	Type ITERATOR_TYPE = Type.klass("java/util/Iterator");
 	Type CHARSEQUENCE_TYPE = Type.klass("java/lang/CharSequence");
 	Type RUNTIME_EXCEPTION = Type.klass("java/lang/RuntimeException");
+	Type ERROR = Type.klass("java/lang/Error");
 }

@@ -50,7 +50,7 @@ public class FrameVisitor {
 
 	@Deprecated
 	public Frame visitFirst(MethodNode owner, DynByteBuf r, ConstantPool cp) {
-		visitBegin(owner, 0);
+		init(owner);
 		firstBlockOnly = true;
 		visitBytecode(r, cp);
 
@@ -62,11 +62,8 @@ public class FrameVisitor {
 
 	/**
 	 * 初始化
-	 *
-	 * @param method
-	 * @param flags
 	 */
-	public void visitBegin(MethodNode method, int flags) {
+	private void init(MethodNode method) {
 		this.method = method;
 
 		firstBlockOnly = false;
@@ -97,7 +94,9 @@ public class FrameVisitor {
 	 * Visit CodeBlock [Jump | Switch]
 	 * CodeWriter在固定偏移量(stage2)之后调用
 	 */
-	public void visitBlocks(List<CodeBlock> blocks) {
+	public void visitBlocks(MethodNode mn, List<CodeBlock> blocks) {
+		init(mn);
+
 		for (int i = 0; i < blocks.size(); i++) {
 			CodeBlock block = blocks.get(i);
 			if (block instanceof JumpBlock js) {
@@ -145,30 +144,28 @@ public class FrameVisitor {
 	}
 
 	public List<Frame> finish(DynByteBuf code, ConstantPool cp) {
-		if (stateIn.size() <= 1) return null;
-
-		current = stateIn.get(0);
+		current = null;
 		controlFlowTerminate = false;
 		try {
 			visitBytecode(code, cp);
 			if (!stateIn.isEmpty()) throw new FastFailException("这些节点不是字节码开始或不存在: "+stateIn.values());
 		} catch (Throwable e) {
 			throw new IllegalStateException("Parse failed near BCI#"+bci+"\n in method "+method+"\n code "+code.dump(), e);
-		} finally {
-			//method = null;
-			current = null;
-			tmpList.clear();
-			tmpSb.clear();
-			stateIn.clear();
+		}
+
+		List<BasicBlock> blocks = stateOut;
+		if (blocks.size() <= 1) {
+			// only compute size
+			maxLocalSize = Math.max(current.outLocalSize,current.inLocalSize);
+			return null;
 		}
 
 		System.out.println("FV========================================");
 
-		List<BasicBlock> blocks = stateOut;
 		List<Frame> frames = new SimpleList<>();
 
 		maxLocalSize = 0;
-		for (int i = 1; i < blocks.size(); i++) {
+		for (int i = 0; i < blocks.size(); i++) {
 			BasicBlock block = blocks.get(i);
 			maxLocalSize = Math.max(maxLocalSize, Math.max(block.outLocalSize,block.inLocalSize));
 		}
@@ -192,14 +189,21 @@ public class FrameVisitor {
 			}
 		}
 
-
 		Var2[] lastLocal = initLocal;
 		for (int i = 1; i < blocks.size(); i++) {
 			var block = blocks.get(i);
 			if (block.noFrame) continue;
 
 			Var2[] stack = Arrays.copyOf(block.startStack, block.startStackSize);
-			Var2[] local = Arrays.copyOf(block.startLocal, block.startLocalSize);
+			Var2[] local;
+
+			int startLocalSize = -1;
+			for (int j = 0; j < block.startLocalSize;) {
+				Var2 item = block.startLocal[j++];
+				if (item != null && item.type != T_TOP) startLocalSize = item.type == T_DOUBLE || item.type == T_LONG ? j+1 : j;
+			}
+
+			local = startLocalSize < 0 ? NONE : Arrays.copyOf(block.startLocal, startLocalSize);
 			for (int j = 0; j < local.length; j++) {
 				Var2 item = local[j];
 				if (item == null) local[j] = TOP;
@@ -213,7 +217,7 @@ public class FrameVisitor {
 			maySimplifyFrameType: {
 				if (stack.length < 2) {
 					if (eq(lastLocal, lastLocal.length, local, local.length)) {
-						frame.type = (short) (stack.length == 0 ? same : same_local_1_stack);
+						frame.type = (stack.length == 0 ? same : same_local_1_stack);
 						break maySimplifyFrameType;
 					} else if (stack.length == 0) {
 						int delta = local.length - lastLocal.length;
@@ -226,8 +230,8 @@ public class FrameVisitor {
 									break mayNotSimplifyFrameType;
 							}
 
-							frame.type = (short) (delta < 0 ? chop : append);
-							if (delta > 0) frame.locals = local;
+							frame.type = delta < 0 ? (byte) (chop + 1 + delta) : append;
+							if (delta > 0) frame.locals = Arrays.copyOfRange(local, lastLocal.length, local.length);
 							break maySimplifyFrameType;
 						}
 
@@ -310,7 +314,7 @@ public class FrameVisitor {
 				case LADD, LSUB, LMUL, LDIV, LREM, LAND, LOR, LXOR -> math(T_LONG);
 				case LSHL, LSHR, LUSHR -> pop(T_INT);
 				case DADD, DSUB, DMUL, DDIV, DREM -> math(T_DOUBLE);
-				case LDC -> ldc(cp.array(r.readUnsignedByte()));
+				case LDC -> ldc(cp.data().get(r.readUnsignedByte()-1));
 				case LDC_W, LDC2_W -> ldc(cp.get(r));
 				case BIPUSH -> {
 					push(T_INT);
@@ -410,8 +414,8 @@ public class FrameVisitor {
 					String v = arrayType.owner;
 					value.verify(new Var2(T_REFERENCE, v.substring(2, v.length() - 1)));
 				}
-				case PUTFIELD, GETFIELD, PUTSTATIC, GETSTATIC -> field(code, (CstRefField) cp.get(r));
-				case INVOKEVIRTUAL, INVOKESPECIAL, INVOKESTATIC -> invoke(code, (CstRef) cp.get(r));
+				case PUTFIELD, GETFIELD, PUTSTATIC, GETSTATIC -> field(code, cp.getRef(r, true));
+				case INVOKEVIRTUAL, INVOKESPECIAL, INVOKESTATIC -> invoke(code, cp.getRef(r, false));
 				case INVOKEINTERFACE -> {
 					invoke(code, (CstRef) cp.get(r));
 					r.rIndex += 2;
@@ -656,7 +660,7 @@ public class FrameVisitor {
 		Var2 returnValue = castType(returnType);
 		if (returnValue != null) push(returnValue);
 	}
-	private void field(byte code, CstRefField field) {
+	private void field(byte code, CstRef field) {
 		Var2 fType = castType(Type.fieldDesc(field.desc().getType().str()));
 		switch (code) {
 			case GETSTATIC -> push(fType);
@@ -780,6 +784,8 @@ public class FrameVisitor {
 				}
 				v1.verify(exceptType);
 			}
+
+			s.maxStackSize -= v1.type == T_LONG || v1.type == T_DOUBLE ? 2 : 1;
 			return v1;
 		}
 
@@ -788,7 +794,8 @@ public class FrameVisitor {
 		if (s.inStackSize >= s.inStack.length) s.inStack = Arrays.copyOf(s.inStack, s.inStackSize+1);
 		s.inStack[s.inStackSize++] = exceptType;
 
-		maxStackSize = Math.max(maxStackSize, s.inStackSize +s.outStackSize);
+		s.maxStackSize += exceptType.type == T_LONG || exceptType.type == T_DOUBLE ? 2 : 1;
+		maxStackSize = Math.max(maxStackSize, s.maxStackSize);
 		return exceptType;
 	}
 
@@ -800,79 +807,73 @@ public class FrameVisitor {
 		if (s.outStackSize >= s.outStack.length) s.outStack = Arrays.copyOf(s.outStack, s.outStackSize +1);
 		s.outStack[s.outStackSize++] = v;
 
-		maxStackSize = Math.max(maxStackSize, s.inStackSize +s.outStackSize);
+		s.maxStackSize += v.type == T_LONG || v.type == T_DOUBLE ? 2 : 1;
+		maxStackSize = Math.max(maxStackSize, s.maxStackSize);
 	}
 	// endregion
 	// region Frame merge / compute
 
-	public static String getCommonUnsuperClass(String type1, String type2) {return ClassUtil.getInstance().getCommonChild(type1, type2);}
-	public static String getCommonSuperClass(String type1, String type2) {return ClassUtil.getInstance().getCommonParent(type1, type2);}
+	public static String getConcreteChild(String type1, String type2) {return ClassUtil.getInstance().getCommonChild(type1, type2);}
+	public static String getCommonParent(String type1, String type2) {return ClassUtil.getInstance().getCommonParent(type1, type2);}
 
 	// endregion
 	// region Frame writing
-	public static void readFrames(List<Frame> fr, DynByteBuf r, ConstantPool cp, AbstractCodeWriter pc, String owner, int lMax, int sMax) {
-		fr.clear();
+	public static void readFrames(List<Frame> frames, DynByteBuf r, ConstantPool cp, AbstractCodeWriter pc, String owner, int lMax, int sMax) {
+		frames.clear();
 
 		int allOffset = -1;
 		int tableLen = r.readUnsignedShort();
 		while (tableLen-- > 0) {
 			int type = r.readUnsignedByte();
-			Frame f = fromVarietyType(type);
-			fr.add(f);
+			Frame frame = fromByte(type);
+			frames.add(frame);
 
 			int off = -1;
-			switch (f.type) {
-				case same:
-					off = type;
-					break;
-				case same_ex:
-					// keep original chop count
-				case chop, chop2, chop3:
-					off = r.readUnsignedShort();
-					break;
-				case same_local_1_stack:
+			switch (frame.type) {
+				case same -> off = type;
+				// keep original chop count
+				case same_ex, chop, chop2, chop3 -> off = r.readUnsignedShort();
+				case same_local_1_stack -> {
 					off = type - 64;
-					f.stacks = new Var2[] { getVar(cp, r, pc, owner) };
-					break;
-				case same_local_1_stack_ex:
+					frame.stacks = new Var2[]{getVar(cp, r, pc, owner)};
+				}
+				case same_local_1_stack_ex -> {
 					off = r.readUnsignedShort();
-					f.stacks = new Var2[] { getVar(cp, r, pc, owner) };
-					break;
-				case append: {
+					frame.stacks = new Var2[]{getVar(cp, r, pc, owner)};
+				}
+				case append -> {
 					off = r.readUnsignedShort();
 					int len = type - 251;
-					f.locals = new Var2[len];
+					frame.locals = new Var2[len];
 					for (int j = 0; j < len; j++) {
-						f.locals[j] = getVar(cp, r, pc, owner);
+						frame.locals[j] = getVar(cp, r, pc, owner);
 					}
 				}
-				break;
-				case full: {
+				case full -> {
 					off = r.readUnsignedShort();
 
 					int len = r.readUnsignedShort();
 					if (len > lMax) throw new IllegalStateException("Full帧的变量数量超过限制("+len+") > ("+lMax+")");
 
-					f.locals = new Var2[len];
-					for (int j = 0; j < len; j++) f.locals[j] = getVar(cp, r, pc, owner);
+					frame.locals = new Var2[len];
+					for (int j = 0; j < len; j++) frame.locals[j] = getVar(cp, r, pc, owner);
 
 					len = r.readUnsignedShort();
 					if (len > sMax) throw new IllegalStateException("Full帧的栈大小超过限制("+len+") > ("+sMax+")");
 
-					f.stacks = new Var2[len];
-					for (int j = 0; j < len; j++) f.stacks[j] = getVar(cp, r, pc, owner);
+					frame.stacks = new Var2[len];
+					for (int j = 0; j < len; j++) frame.stacks[j] = getVar(cp, r, pc, owner);
 				}
-				break;
 			}
 
 			allOffset += off+1;
-			f.monitor_bci = pc._monitor(allOffset);
+			frame.monitoredBci = pc._monitor(allOffset);
 		}
 	}
 	private static Var2 getVar(ConstantPool pool, DynByteBuf r, AbstractCodeWriter pc, String owner) {
 		byte type = r.readByte();
 		return switch (type) {
-			case T_REFERENCE -> new Var2(type, pool.getRefName(r));
+			case T_REFERENCE -> new Var2(type, pool.getRefName(r, Constant.CLASS));
 			case T_UNINITIAL -> new Var2(pc._monitor(r.readUnsignedShort()));
 			case T_UNINITIAL_THIS -> new Var2(type, owner);
 			default -> of(type, null);
@@ -882,75 +883,62 @@ public class FrameVisitor {
 	@SuppressWarnings("fallthrough")
 	public static void writeFrames(List<Frame> frames, DynByteBuf w, ConstantPool cp) {
 		Frame prev = null;
+		w.putShort(frames.size());
 		for (int j = 0; j < frames.size(); j++) {
-			Frame curr = frames.get(j);
+			Frame frame = frames.get(j);
 
-			int offset = curr.bci();
+			int offset = frame.bci();
 			if (j > 0) offset -= prev.bci() + 1;
 
 			if ((offset & ~0xFFFF) != 0)
-				throw new IllegalArgumentException("Illegal frame delta " + offset + ":\n curr=" + curr + "\n prev=" + prev);
+				throw new IllegalArgumentException("Illegal delta "+offset+":\n frame="+frame+"\n prev="+prev);
 
-			short type = curr.type;
-			switch (type) {
-				case same:
-					if (offset < 64) {
-						type = (short) offset;
-					} else {
-						curr.type = type = same_ex;
-					}
-					break;
-				case same_local_1_stack:
-					if (offset < 64) {
-						type = (short) (offset + 64);
-					} else {
-						curr.type = type = same_local_1_stack_ex;
-					}
-					break;
-				case append:
-					type = (short) (251 + curr.locals.length);
-					break;
-			}
-			w.put((byte) type);
-			switch (curr.type) {
+			int type = frame.type;
+			type = switch (type) {
+				case same -> offset < 64 ? offset : (frame.type = same_ex);
+				case same_local_1_stack -> offset < 64 ? (offset + 64) : (frame.type = same_local_1_stack_ex);
+				case append -> (251 + frame.locals.length);
+				default -> type;
+			};
+			w.put(type);
+			switch (frame.type) {
 				case same: break;
 				case same_local_1_stack_ex:
 					w.putShort(offset);
 				case same_local_1_stack:
-					putVar(curr.stacks[0], w, cp);
-					break;
+					putVar(frame.stacks[0], w, cp);
+				break;
 				case chop, chop2, chop3:
 				case same_ex:
 					w.putShort(offset);
-					break;
+				break;
 				case append:
 					w.putShort(offset);
-					for (int i = curr.locals.length + 251 - type, e = curr.locals.length; i < e; i++) {
-						putVar(curr.locals[i], w, cp);
+					for (int i = frame.locals.length + 251 - type, e = frame.locals.length; i < e; i++) {
+						putVar(frame.locals[i], w, cp);
 					}
-					break;
+				break;
 				case full:
-					w.putShort(offset).putShort(curr.locals.length);
-					for (int i = 0, e = curr.locals.length; i < e; i++) {
-						putVar(curr.locals[i], w, cp);
+					w.putShort(offset).putShort(frame.locals.length);
+					for (int i = 0, e = frame.locals.length; i < e; i++) {
+						putVar(frame.locals[i], w, cp);
 					}
 
-					w.putShort(curr.stacks.length);
-					for (int i = 0, e = curr.stacks.length; i < e; i++) {
-						putVar(curr.stacks[i], w, cp);
+					w.putShort(frame.stacks.length);
+					for (int i = 0, e = frame.stacks.length; i < e; i++) {
+						putVar(frame.stacks[i], w, cp);
 					}
-					break;
+				break;
 			}
 
-			prev = curr;
+			prev = frame;
 		}
 	}
-
 	private static void putVar(Var2 v, DynByteBuf w, ConstantPool cp) {
 		w.put(v.type);
 		switch (v.type) {
-			case T_REFERENCE: w.putShort(cp.getClassId(v.owner)); break;
-			case T_UNINITIAL: w.putShort(v.bci()); break;
+			case T_REFERENCE -> w.putShort(cp.getClassId(v.owner));
+			case T_UNINITIAL -> w.putShort(v.bci());
 		}
 	}
 	// endregion

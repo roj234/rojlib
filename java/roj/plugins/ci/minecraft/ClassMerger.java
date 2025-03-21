@@ -85,13 +85,13 @@ final class ClassMerger {
 	}
 
 	private MethodNode detectPriority(ClassNode main, MethodNode mainMethod, ClassNode sub, MethodNode subMethod) {
-		Attribute subCode = subMethod.attrByName("Code");
+		Attribute subCode = subMethod.getRawAttribute("Code");
 		if (subCode == null) return mainMethod;
-		Attribute mainCode = mainMethod.attrByName("Code");
+		Attribute mainCode = mainMethod.getRawAttribute("Code");
 		if (mainCode == null) return subMethod;
 
-		var mainRealCode = mainMethod.parsedAttr(main.cp, Attribute.Code);
-		var subRealCode = mainMethod.parsedAttr(sub.cp, Attribute.Code);
+		var mainRealCode = mainMethod.getAttribute(main.cp, Attribute.Code);
+		var subRealCode = mainMethod.getAttribute(sub.cp, Attribute.Code);
 
 		if (mainRealCode.instructions.bci() != subRealCode.instructions.bci()) {
 			replaceMethod++;
@@ -105,7 +105,7 @@ final class ClassMerger {
 		if (scs == null) return;
 		List<InnerClasses.Item> mcs = main.getInnerClasses();
 		if (mcs == null) {
-			main.putAttr(sub.attrByName("InnerClasses"));
+			main.addAttribute(sub.getRawAttribute("InnerClasses"));
 			return;
 		}
 

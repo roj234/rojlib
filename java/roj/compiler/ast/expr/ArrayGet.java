@@ -42,19 +42,20 @@ final class ArrayGet extends VarNode {
 			ExprNode override = ctx.getOperatorOverride(array, index, JavaLexer.lBracket);
 			if (override != null) return override;
 
-			ctx.report(Kind.ERROR, "arrayGet.error.notArray:"+type);
+			ctx.report(this, Kind.ERROR, "arrayGet.error.notArray", type);
 			return NaE.RESOLVE_FAILED;
 		}
 		cast = ctx.castTo(index.type(), Type.primitive(Type.INT), 0);
+		if (cast.type < 0) return NaE.RESOLVE_FAILED;
 		componentType = TypeHelper.componentType(type);
 
 		if (array.isConstant()) {
 			if (index.isConstant()) {
-				ctx.report(Kind.WARNING, "arrayGet.warn.constant");
-				return new Constant(type(), ((Object[])array.constVal())[((CEntry) index.constVal()).asInt()]);
+				ctx.report(this, Kind.WARNING, "arrayGet.warn.constant");
+				return constant(type(), ((Object[])array.constVal())[((CEntry) index.constVal()).asInt()]);
 			}
 
-			if (!ctx.in_static) ctx.report(Kind.NOTE, "arrayGet.note.uselessCreation");
+			if (!ctx.inStatic) ctx.report(this, Kind.NOTE, "arrayGet.note.uselessCreation");
 		}
 		return this;
 	}

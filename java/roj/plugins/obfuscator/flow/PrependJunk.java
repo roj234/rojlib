@@ -44,7 +44,7 @@ public class PrependJunk implements ObfuscateTask {
 		for (MethodNode method : cn.methods) {
 			if (method.name().equals("<init>")) continue;
 
-			var code = method.parsedAttr(cn.cp, Attribute.Code);
+			var code = method.getAttribute(cn.cp, Attribute.Code);
 			if (code != null) {
 				code.instructions.replaceRange(0,0,sample,true);
 			}

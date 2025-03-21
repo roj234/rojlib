@@ -183,4 +183,10 @@ public final class TypeHelper {
 		type.setArrayDim(type.array()-1);
 		return type;
 	}
+
+	public static IType arrayTypeNC(IType t) {
+		if (t.isPrimitive()) t = t.clone();
+		t.setArrayDim(t.array()+1);
+		return t;
+	}
 }

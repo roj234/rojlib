@@ -68,7 +68,7 @@ public class KeyStorePlugin extends Plugin {
 
 			if (type.equals("standard")) {
 				loadCertificateAndKeys(IOUtil.relativePath(getDataFolder(), map.getString("certificate")), IOUtil.relativePath(getDataFolder(), map.getString("privateKey")), alias);
-			} else if (type.startsWith("roj234.")) {
+			} else if (type.startsWith("rojlib.")) {
 				var password = map.getString("pass");
 				KeyPair keyPair = KeyType.getInstance(type.substring(7)).loadKey(password.getBytes(StandardCharsets.UTF_8), IOUtil.relativePath(getDataFolder(), map.getString("file")));
 

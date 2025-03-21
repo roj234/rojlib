@@ -2,10 +2,10 @@ package roj.asm.util;
 
 import org.jetbrains.annotations.Nullable;
 import roj.asm.*;
-import roj.asm.attr.AttrUnknown;
 import roj.asm.attr.Attribute;
 import roj.asm.attr.AttributeList;
 import roj.asm.attr.BootstrapMethods;
+import roj.asm.attr.UnparsedAttribute;
 import roj.asm.cp.Constant;
 import roj.asm.cp.CstDynamic;
 import roj.asm.cp.CstNameAndType;
@@ -40,7 +40,7 @@ public class TransformUtil {
 		for (int i = 0; i < methods.size(); i++) {
 			MethodNode ms = methods.get(i);
 
-			if (ms.attrByName("Code") != null) {
+			if (ms.getRawAttribute("Code") != null) {
 				apiOnly(data, ms);
 				flag = true;
 			}
@@ -49,7 +49,7 @@ public class TransformUtil {
 	}
 	public static void apiOnly(ClassNode data, MethodNode ms) {
 		CodeWriter cw = new CodeWriter();
-		cw.init(new ByteList(16), data.cp);
+		cw.init(new ByteList(16), data.cp, ms);
 
 		Type t = ms.returnType();
 
@@ -73,7 +73,7 @@ public class TransformUtil {
 		cw.one(t.shiftedOpcode(IRETURN));
 		cw.finish();
 
-		ms.putAttr(new AttrUnknown("Code", cw.bw));
+		ms.addAttribute(new UnparsedAttribute("Code", cw.bw));
 	}
 
 	private static final MyHashSet<String>
@@ -88,8 +88,8 @@ public class TransformUtil {
 		filter(data, class_allow);
 
 		int minVersion = 6;
-		if (data.attrByName("BootstrapMethods") != null) minVersion = 8;
-		if (data.attrByName("NestMembers") != null || data.attrByName("NestHost") != null) minVersion = 11;
+		if (data.getRawAttribute("BootstrapMethods") != null) minVersion = 8;
+		if (data.getRawAttribute("NestMembers") != null || data.getRawAttribute("NestHost") != null) minVersion = 11;
 
 		int minVer = ClassNode.JavaVersion(minVersion);
 		if (data.version > minVer) {
@@ -106,7 +106,7 @@ public class TransformUtil {
 			MethodNode mn = methods.get(i);
 			filter(mn, method_allow);
 
-			AttrCode code = mn.parsedAttr(data.cp, Attribute.Code);
+			AttrCode code = mn.getAttribute(data.cp, Attribute.Code);
 			if (code == null) continue;
 
 			if (minVer == 6) code.frames = null;
@@ -137,7 +137,7 @@ public class TransformUtil {
 			for (int i = 0; i < classes.size(); i++) {
 				var clz = classes.get(i);
 				if (toOpen.contains(clz.self)) {
-					clz.flags = (char) toPublic(clz.flags, true);
+					clz.modifier = (char) toPublic(clz.modifier, true);
 				}
 			}
 		}
@@ -171,7 +171,7 @@ public class TransformUtil {
 	// endregion
 	@Nullable
 	public static ClassNode noStackFrameTableEver(ClassNode data, @Nullable String lambdaClassName) {
-		BootstrapMethods lambda = data.parsedAttr(data.cp, Attribute.BootstrapMethods);
+		BootstrapMethods lambda = data.getAttribute(data.cp, Attribute.BootstrapMethods);
 		if (lambda == null) return null;
 
 		ByteList tmp = new ByteList();
@@ -192,7 +192,7 @@ public class TransformUtil {
 
 		ClassNode newClass = new ClassNode();
 		newClass.name(lambdaClassName != null ? lambdaClassName : data.name() +"$Lambda");
-		newClass.putAttr(lambda);
+		newClass.addAttribute(lambda);
 		data.attributes().removeByName(Attribute.BootstrapMethods.name);
 
 		data.version = 49;
@@ -232,14 +232,13 @@ public class TransformUtil {
 		};
 
 		for (MethodNode mn : data.methods) {
-			Attribute code = mn.attrByName("Code");
+			Attribute code = mn.getRawAttribute("Code");
 			if (code != null) {
 				tmp.clear();
-				cw.init(tmp, data.cp);
-				cw.mn = mn;
+				cw.init(tmp, data.cp, mn);
 				cw.visit(data.cp, code.getRawData());
 				cw.finish();
-				mn.putAttr(new AttrUnknown("Code", new ByteList(tmp.toByteArray())));
+				mn.addAttribute(new UnparsedAttribute("Code", new ByteList(tmp.toByteArray())));
 			}
 		}
 
@@ -263,17 +262,16 @@ public class TransformUtil {
 		CodeWriter cw = new CodeWriter();
 		for (int i = 0; i < methods.size(); i++) {
 			MethodNode mn = methods.get(i);
-			Attribute code = mn.attrByName("Code");
+			Attribute code = mn.getRawAttribute("Code");
 			if (code != null) {
 				bw.clear();
-				cw.init(bw, cpw);
-				cw.mn = mn; // for UNINITIAL_THIS
+				cw.init(bw, cpw, mn);
 				cw.visit(data.cp, code.getRawData());
 				cw.finish();
 
 				byte[] array = bw.toByteArray();
 				// will not parse this
-				mn.putAttr(new Attribute() {
+				mn.addAttribute(new Attribute() {
 					@Override public String name() {return "Code";}
 					@Override public DynByteBuf getRawData() {return ByteList.wrap(array);}
 					@Override public String toString() {return "Tmpcw";}
@@ -287,8 +285,8 @@ public class TransformUtil {
 
 		for (int i = 0; i < methods.size(); i++) {
 			MethodNode mn = methods.get(i);
-			Attribute code = mn.attrByName("Code");
-			if (code != null) mn.putAttr(new AttrUnknown("Code", code.getRawData()));
+			Attribute code = mn.getRawAttribute("Code");
+			if (code != null) mn.addAttribute(new UnparsedAttribute("Code", code.getRawData()));
 		}
 	}
 

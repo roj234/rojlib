@@ -91,12 +91,13 @@ public class Win32FPM extends fcgiManager implements ITask {
 	protected void fcgi_attach(fcgiResponse response, Map<String, String> param) {
 		lock.lock();
 		try {
-			if (!pendingTask.offerLast(response)) {
-				response.fail(new FastFailException("排队的请求太多"));
-				return;
-			}
+			if (tryAttachGuarded(response, param)) return;
+
+			if (!pendingTask.offerLast(response)) throw new FastFailException("排队的请求太多");
 			pendingParam.offerLast(param);
 			stateChanged.signal();
+		} catch (Exception e) {
+			response.fail(e);
 		} finally {
 			lock.unlock();
 		}
@@ -127,23 +128,8 @@ public class Win32FPM extends fcgiManager implements ITask {
 				}
 			}
 
-			ok:
 			for(;;) try {
-				for (var itr = processes.entrySet().iterator(); itr.hasNext(); ) {
-					var entry = itr.next();
-					if (!entry.getKey().isAlive()) {
-						itr.remove();
-						continue;
-					}
-
-					var conn = entry.getValue();
-					int code = conn.attach(response, param);
-					if (code > 0) break ok;
-					if (code < 0) {
-						entry.getKey().destroy();
-						itr.remove();
-					}
-				}
+				if (tryAttachGuarded(response, param)) break;
 
 				if (processes.size() < maxProcess) {
 					SimpleList<String> myArgs = new SimpleList<>(command.size()+1);
@@ -173,6 +159,25 @@ public class Win32FPM extends fcgiManager implements ITask {
 				response.fail(e);
 			}
 		}
+	}
+
+	private boolean tryAttachGuarded(fcgiResponse response, Map<String, String> param) throws Exception {
+		for (var itr = processes.entrySet().iterator(); itr.hasNext(); ) {
+			var entry = itr.next();
+			if (!entry.getKey().isAlive()) {
+				itr.remove();
+				continue;
+			}
+
+			var conn = entry.getValue();
+			int code = conn.attach(response, param);
+			if (code > 0) return true;
+			if (code < 0) {
+				entry.getKey().destroy();
+				itr.remove();
+			}
+		}
+		return false;
 	}
 
 	private void hasSpace() {

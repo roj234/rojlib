@@ -2,6 +2,8 @@ package roj.asm.cp;
 
 import roj.util.DynByteBuf;
 
+import java.util.Objects;
+
 /**
  * @author Roj234
  * @since 2021/5/29 17:16
@@ -19,12 +21,12 @@ public final class CstDynamic extends Constant {
 	}
 
 	public final void setDesc(CstNameAndType desc) {
-		if (desc == null) throw new NullPointerException("desc");
-		this.desc = desc;
+		this.desc = Objects.requireNonNull(desc);
 	}
 
 	@Override public byte type() {return method ? Constant.INVOKE_DYNAMIC : Constant.DYNAMIC;}
-	@Override public final void write(DynByteBuf w) {w.put(type()).putShort(tableIdx).putShort(desc.getIndex());}
+	@Override public final void write(DynByteBuf w) {
+		w.put(type()).putShort(tableIdx).putShort(desc.index);}
 
 	public final String toString() {return super.toString() + " T#" + (int) tableIdx + ", //" + desc + "]";}
 

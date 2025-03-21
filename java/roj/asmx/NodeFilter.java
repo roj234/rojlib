@@ -65,7 +65,7 @@ public class NodeFilter implements ITransformer {
 		Object tr;
 		boolean mod = false;
 
-		var cpArr = data.cp.array();
+		var cpArr = data.cp.data();
 		for (int i = 0; i < cpArr.size(); i++) {
 			Constant c = cpArr.get(i);
 			switch (c.type()) {
@@ -125,7 +125,7 @@ public class NodeFilter implements ITransformer {
 		return mod;
 	}
 	private boolean checkAnnotation(ClassNode data, Attributed node, TypedKey<Annotations> flag, MyHashMap<Object, Object> ref) throws TransformException {
-		Annotations attr = node.parsedAttr(data.cp, flag);
+		Annotations attr = node.getAttribute(data.cp, flag);
 		boolean mod = false;
 		if (attr != null) {
 			List<Annotation> annotations = attr.annotations;

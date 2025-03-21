@@ -3,8 +3,8 @@ package roj.plugins.obfuscator.raw;
 import roj.asm.FieldNode;
 import roj.asm.MethodNode;
 import roj.asm.Parser;
-import roj.asm.attr.AttrUnknown;
 import roj.asm.attr.AttributeList;
+import roj.asm.attr.UnparsedAttribute;
 import roj.asm.cp.ConstantPool;
 import roj.asm.cp.CstUTF;
 import roj.asm.util.Context;
@@ -43,7 +43,7 @@ class RemoveDebugInfo implements ObfuscateTask {
 
 					m.unparsed(data.cp);
 
-			AttrUnknown au = (AttrUnknown) m.attrByName("Code");
+			UnparsedAttribute au = (UnparsedAttribute) m.getRawAttribute("Code");
 			if (au == null) continue;
 
 			DynByteBuf r = Parser.reader(au);

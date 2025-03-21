@@ -12,9 +12,9 @@ import roj.archive.zip.ZEntry;
 import roj.archive.zip.ZipFile;
 import roj.collect.TrieTreeSet;
 import roj.concurrent.TaskPool;
-import roj.gui.GuiPathTreeBuilder;
 import roj.gui.GuiProgressBar;
 import roj.gui.GuiUtil;
+import roj.gui.TreeBuilder;
 import roj.io.CorruptedInputException;
 import roj.io.FastFailException;
 import roj.io.IOUtil;
@@ -178,7 +178,7 @@ public class UnarchiverUI extends JFrame {
 			return;
 		}
 
-		var pathTree = new GuiPathTreeBuilder<>();
+		var pathTree = new TreeBuilder<>();
 		for (var entry : archiveFile.entries()) {
 			pathTree.add(entry.getName(), entry, entry.isDirectory());
 		}
@@ -195,7 +195,7 @@ public class UnarchiverUI extends JFrame {
 		} else {
 			set = new TrieTreeSet();
 			for (TreePath path : paths) {
-				GuiPathTreeBuilder.Node<QZEntry> node = Helpers.cast(path.getLastPathComponent());
+				TreeBuilder.Node<QZEntry> node = Helpers.cast(path.getLastPathComponent());
 				if (node == uiPathTree.getModel().getRoot()) {
 					set = null;
 					break;

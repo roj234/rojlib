@@ -8,8 +8,8 @@ import roj.asm.MethodNode;
 import roj.asm.Parser;
 import roj.asm.annotation.Annotation;
 import roj.asm.attr.Annotations;
-import roj.asm.attr.AttrString;
 import roj.asm.attr.Attribute;
+import roj.asm.attr.StringAttribute;
 import roj.asm.cp.CstClass;
 import roj.asm.cp.CstInt;
 import roj.asm.cp.CstString;
@@ -145,11 +145,11 @@ final class SerializerFactoryImpl extends SerializerFactory {
 		lock.lock();
 		try {
 			var ser = klass(type, flag1, setting);
+			localRegistry.put(type.getName(), ser);
 			if (ser instanceof GA g) {
 				g.init(new IntBiMap<>(fieldIds), optionalEx);
 				g.init2(this, null);
 			}
-			localRegistry.put(type.getName(), ser);
 		} finally {
 			lock.unlock();
 		}
@@ -213,8 +213,8 @@ final class SerializerFactoryImpl extends SerializerFactory {
 		ser = (Adapter) ((GA)ser).clone();
 
 		synchronized (localRegistry) {
-			((GA) ser).init2(this, adapter);
 			localRegistry.put(type.getName(), ser);
+			((GA) ser).init2(this, adapter);
 		}
 		return this;
 	}
@@ -245,8 +245,8 @@ final class SerializerFactoryImpl extends SerializerFactory {
 		ser = (Adapter) ((GA)ser).clone();
 
 		synchronized (localRegistry) {
-			((GA) ser).init2(this, adapter);
 			localRegistry.put(type.getName(), ser);
+			((GA) ser).init2(this, adapter);
 		}
 		return this;
 	}
@@ -444,8 +444,8 @@ final class SerializerFactoryImpl extends SerializerFactory {
 		}
 
 		synchronized (localRegistry) {
-			if (ser instanceof GA) ((GA) ser).init2(this, null);
 			localRegistry.put(name, ser);
+			if (ser instanceof GA) ((GA) ser).init2(this, null);
 		}
 		return ser;
 	}
@@ -621,7 +621,7 @@ final class SerializerFactoryImpl extends SerializerFactory {
 		int ser;
 		if (klassOut != null && !klassOut.equals("java/lang/String")) {
 			String genSig;
-			Signature signature = writer.parsedAttr(data.cp, Attribute.SIGNATURE);
+			Signature signature = writer.getAttribute(data.cp, Attribute.SIGNATURE);
 			if (signature != null) {
 				IType ret = signature.values.get(signature.values.size() - 1);
 				genSig = ret.toDesc();
@@ -763,7 +763,7 @@ final class SerializerFactoryImpl extends SerializerFactory {
 			currentObject = o.getName().replace('.', '/');
 		}
 
-		c.putAttr(new AttrString("SourceFile", o.getName()));
+		c.addAttribute(new StringAttribute("SourceFile", o.getName()));
 		var cw = c.newMethod(ACC_PUBLIC | ACC_FINAL, "toString", "()Ljava/lang/String;");
 		cw.visitSize(1, 1);
 		cw.ldc(o.getName());
@@ -846,7 +846,7 @@ final class SerializerFactoryImpl extends SerializerFactory {
 			var opt = list1.get(i1);
 			switch (opt.type()) {
 				case "roj/config/auto/FieldOrder" -> {
-					var nodeName = opt.getArray("value");
+					var nodeName = opt.getList("value");
 					FieldNode[] nodes = new FieldNode[nodeName.size()];
 					for (int i = 0; i < nodes.length; i++) {
 						int fieldId1 = data.getField(nodeName.getString(i));
@@ -1221,7 +1221,7 @@ final class SerializerFactoryImpl extends SerializerFactory {
 		if (actualType == Type.CLASS && !"java/lang/String".equals(type.getActualClass())) {
 			int id;
 			String serType = type.getActualClass();
-			Signature serSig = fn.parsedAttr(data.cp, Attribute.SIGNATURE);
+			Signature serSig = fn.getAttribute(data.cp, Attribute.SIGNATURE);
 			id = ser(serType, serSig != null ? typeParamToRaw(serSig) : null);
 
 			keySwitch.branch(fieldId, cw.label());

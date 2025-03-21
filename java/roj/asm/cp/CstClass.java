@@ -9,7 +9,7 @@ import roj.asm.type.Type;
 public final class CstClass extends CstRefUTF {
 	public CstClass(CstUTF v) { super(v); }
 	public CstClass(String name) { super(name); }
-	public CstClass() {}
+	CstClass() {}
 
 	@Override public byte type() {return Constant.CLASS;}
 	@Override public String toString() {

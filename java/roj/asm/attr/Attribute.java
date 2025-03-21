@@ -29,22 +29,22 @@ public abstract class Attribute {
 		ClParameterAnnotations = createAttributeName("RuntimeInvisibleParameterAnnotations");
 	public static final TypedKey<Signature> SIGNATURE = createAttributeName("Signature");
 	// class
-	public static final TypedKey<AttrRecord> Record = createAttributeName("Record");
+	public static final TypedKey<RecordAttribute> Record = createAttributeName("Record");
 	public static final TypedKey<InnerClasses> InnerClasses = createAttributeName("InnerClasses");
-	public static final TypedKey<AttrModule> Module = createAttributeName("Module");
-	public static final TypedKey<AttrClassList> ModulePackages = createAttributeName("ModulePackages");
-	public static final TypedKey<AttrString> ModuleMainClass = createAttributeName("ModuleMainClass");
-	public static final TypedKey<AttrString> NestHost = createAttributeName("NestHost");
-	public static final TypedKey<AttrClassList> PermittedSubclasses = createAttributeName("PermittedSubclasses");
-	public static final TypedKey<AttrClassList> NestMembers = createAttributeName("NestMembers");
-	public static final TypedKey<AttrString> SourceFile = createAttributeName("SourceFile");
+	public static final TypedKey<ModuleAttribute> Module = createAttributeName("Module");
+	public static final TypedKey<ClassListAttribute> ModulePackages = createAttributeName("ModulePackages");
+	public static final TypedKey<StringAttribute> ModuleMainClass = createAttributeName("ModuleMainClass");
+	public static final TypedKey<StringAttribute> NestHost = createAttributeName("NestHost");
+	public static final TypedKey<ClassListAttribute> PermittedSubclasses = createAttributeName("PermittedSubclasses");
+	public static final TypedKey<ClassListAttribute> NestMembers = createAttributeName("NestMembers");
+	public static final TypedKey<StringAttribute> SourceFile = createAttributeName("SourceFile");
 	public static final TypedKey<BootstrapMethods> BootstrapMethods = createAttributeName("BootstrapMethods");
 	public static final TypedKey<EnclosingMethod> EnclosingMethod = createAttributeName("EnclosingMethod");
-	public static final TypedKey<AttrString> ModuleTarget = createAttributeName("ModuleTarget");
+	public static final TypedKey<StringAttribute> ModuleTarget = createAttributeName("ModuleTarget");
 	// method
 	public static final TypedKey<AttrCode> Code = createAttributeName("Code");
 	public static final TypedKey<MethodParameters> MethodParameters = createAttributeName("MethodParameters");
-	public static final TypedKey<AttrClassList> Exceptions = createAttributeName("Exceptions");
+	public static final TypedKey<ClassListAttribute> Exceptions = createAttributeName("Exceptions");
 	public static final TypedKey<AnnotationDefault> AnnotationDefault = createAttributeName("AnnotationDefault");
 	// field
 	public static final TypedKey<ConstantValue> ConstantValue = createAttributeName("ConstantValue");
@@ -59,10 +59,9 @@ public abstract class Attribute {
 	}
 	public void toByteArrayNoHeader(DynByteBuf w, ConstantPool cp) { w.put(getRawData()); }
 
-	public boolean isEmpty() { return false; }
+	public boolean writeIgnore() { return false; }
 
 	public abstract String toString();
 
 	public DynByteBuf getRawData() { throw new UnsupportedOperationException(getClass().getName()); }
-
 }

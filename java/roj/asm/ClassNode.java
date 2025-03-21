@@ -1,9 +1,11 @@
 package roj.asm;
 
-import roj.asm.attr.AttrUnknown;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 import roj.asm.attr.Attribute;
 import roj.asm.attr.AttributeList;
 import roj.asm.attr.InnerClasses;
+import roj.asm.attr.UnparsedAttribute;
 import roj.asm.cp.ConstantPool;
 import roj.asm.cp.CstClass;
 import roj.asm.insn.AttrCodeWriter;
@@ -113,17 +115,16 @@ public class ClassNode implements IClass {
 	}
 	public static int JavaVersion(int version) { return 44+version; }
 
-	public ClassNode(int version, ConstantPool cp, int modifier, int nameIndex, int parentIndex) {
+	public ClassNode(int version, @NotNull ConstantPool cp, int modifier, @NotNull CstClass name, @Nullable CstClass parent) {
 		this.cp = cp;
 		this.version = version;
 		this.modifier = (char) modifier;
-		this.nameCst = ((CstClass) cp.array(nameIndex));
-		this.parentCst = parentIndex == 0 ? null : ((CstClass) cp.array(parentIndex));
+		this.nameCst = name;
+		this.parentCst = parent;
 	}
 
 	@Override
-	public <T extends Attribute> T parsedAttr(ConstantPool cp, TypedKey<T> type) {return Parser.parseAttribute(this,this.cp,type,attributes,Signature.CLASS);}
-	public Attribute attrByName(String name) {return attributes == null ? null : (Attribute) attributes.getByName(name);}
+	public <T extends Attribute> T getAttribute(ConstantPool cp, TypedKey<T> type) {return Parser.parseAttribute(this,this.cp,type,attributes,Signature.CLASS);}
 	public AttributeList attributes() {return attributes == null ? attributes = new AttributeList() : attributes;}
 	public AttributeList attributesNullable() {return attributes;}
 
@@ -137,7 +138,7 @@ public class ClassNode implements IClass {
 	}
 
 	public List<InnerClasses.Item> getInnerClasses() {
-		var ic = parsedAttr(cp, Attribute.InnerClasses);
+		var ic = getAttribute(cp, Attribute.InnerClasses);
 		return ic == null ? Collections.emptyList() : ic.classes;
 	}
 
@@ -215,7 +216,7 @@ public class ClassNode implements IClass {
 		AttributeList list = attributes;
 		if (list != null) {
 			var w = AsmShared.buf();
-			for (int i = 0; i < list.size(); i++) list.set(i, AttrUnknown.downgrade(cp, w, list.get(i)));
+			for (int i = 0; i < list.size(); i++) list.set(i, UnparsedAttribute.serialize(cp, w, list.get(i)));
 			AsmShared.buf(w);
 		}
 	}
@@ -302,7 +303,7 @@ public class ClassNode implements IClass {
 		methods.add(m);
 		if ((acc & (ACC_ABSTRACT|ACC_NATIVE)) != 0) return Helpers.nonnull();
 		AttrCodeWriter cw = new AttrCodeWriter(cp, m);
-		m.putAttr(cw);
+		m.addAttribute(cw);
 		return cw.cw;
 	}
 
@@ -338,9 +339,9 @@ public class ClassNode implements IClass {
 	public String toString() {
 		CharList sb = new CharList(1000);
 
-		var _a = parsedAttr(cp, Attribute.RtAnnotations);
+		var _a = getAttribute(cp, Attribute.RtAnnotations);
 		if (_a != null) _a.toString(sb, 0);
-		_a = parsedAttr(cp, Attribute.ClAnnotations);
+		_a = getAttribute(cp, Attribute.ClAnnotations);
 		if (_a != null) _a.toString(sb, 0);
 
 		int acc = modifier;
@@ -348,17 +349,17 @@ public class ClassNode implements IClass {
 		else if ((acc&ACC_INTERFACE) != 0) acc &= ~(ACC_ABSTRACT);
 		showModifiers(acc, ACC_SHOW_CLASS, sb);
 
-		var _seal = parsedAttr(cp, Attribute.PermittedSubclasses);
+		var _seal = getAttribute(cp, Attribute.PermittedSubclasses);
 		if (_seal != null) sb.append("sealed ");
 
-		var _module = parsedAttr(cp, Attribute.Module);
+		var _module = getAttribute(cp, Attribute.Module);
 		if (_module != null) sb.append(_module.self.toString());
 		else {
 			if ((acc&(ACC_ENUM|ACC_INTERFACE|ACC_MODULE|ACC_ANNOTATION)) == 0) sb.append("class ");
 			TypeHelper.toStringOptionalPackage(sb, name());
 		}
 
-		var _sign = parsedAttr(cp, Attribute.SIGNATURE);
+		var _sign = getAttribute(cp, Attribute.SIGNATURE);
 		if (_sign != null) sb.append(_sign);
 		else {
 			String parent = parent();

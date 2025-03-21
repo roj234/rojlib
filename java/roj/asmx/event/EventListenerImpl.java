@@ -101,7 +101,7 @@ final class EventListenerImpl implements EventListener {
 			cw.one(RETURN);
 		}
 
-		Signature sign = info.mn.parsedAttr(null, Attribute.SIGNATURE);
+		Signature sign = info.mn.getAttribute(null, Attribute.SIGNATURE);
 		if (sign != null && sign.values.get(0) instanceof Generic g) {
 			cw.visitSizeMax(2, 0);
 

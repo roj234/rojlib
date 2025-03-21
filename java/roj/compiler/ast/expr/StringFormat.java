@@ -46,18 +46,18 @@ class StringFormat extends ExprNode {
 
 				// TODO fix escape / offset
 				if (i > 0 && tag.charAt(i-1) == '\\') {
-					concat.append(Constant.valueOf("$"));
+					concat.append(valueOf("$"));
 					prevI = i+1;
 					continue;
 				}
 
 				int end = tag.indexOf('}', i);
 				if (end < 0) {
-					ctx.report(Kind.ERROR, "stringFormat.f.unclosed");
+					ctx.report(this, Kind.ERROR, "stringFormat.f.unclosed");
 					break;
 				}
 
-				if (prevI < i) concat.append(Constant.valueOf(tag.substring(prevI, i)));
+				if (prevI < i) concat.append(valueOf(tag.substring(prevI, i)));
 				try {
 					ctx.lexer.setText(tag, i+2);
 					var parse = ctx.ep.parse(ExprParser.STOP_RLB|ExprParser.NAE);
@@ -68,19 +68,19 @@ class StringFormat extends ExprNode {
 
 				prevI = end+1;
 			}
-			if (prevI < tag.length()) concat.append(Constant.valueOf(tag.substring(prevI)));
+			if (prevI < tag.length()) concat.append(valueOf(tag.substring(prevI)));
 
 			ctx.lexer.setText(ctx.file.getCode(), prevIndex);
 			return concat;
 		} else if (type.equals("b")) {
-			return new CompiledArray(Type.primitive(Type.BYTE), DynByteBuf.wrap(TextUtil.hex2bytes(template)));
+			return new PrimitiveArray(Type.BYTE, DynByteBuf.wrap(TextUtil.hex2bytes(template)));
 		} else {
 			// cast to StringProcessor ...
 			ExprNode override = ctx.getOperatorOverride(prev, type, Word.STRING);
 			if (override != null) return override;
 		}
 
-		ctx.report(Kind.ERROR, "stringFormat.unknown", type);
+		ctx.report(this, Kind.ERROR, "stringFormat.unknown", type);
 		return this;
 	}
 

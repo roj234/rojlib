@@ -4,8 +4,8 @@ import org.jetbrains.annotations.Nullable;
 import roj.asm.MethodNode;
 import roj.asm.Opcodes;
 import roj.asm.Parser;
-import roj.asm.attr.AttrUnknown;
 import roj.asm.attr.Attribute;
+import roj.asm.attr.UnparsedAttribute;
 import roj.asm.cp.ConstantPool;
 import roj.asm.cp.CstUTF;
 import roj.asm.type.Type;
@@ -60,13 +60,13 @@ public abstract class ParamNameMapper {
 		Attribute a;
 		DynByteBuf r;
 		if (!parNames.isEmpty()) {
-			a = m.attrByName("MethodParameters");
+			a = m.getRawAttribute("MethodParameters");
 			if (a != null) {
 				int i = 0;
 				int j = (m.modifier() & Opcodes.ACC_STATIC) == 0 ? 1 : 0;
 				List<Type> parameters = m.parameters();
 
-				r = a instanceof AttrUnknown ? Parser.reader(a) : AttrUnknown.downgrade(pool, IOUtil.getSharedByteBuf(), a).getRawData();
+				r = a instanceof UnparsedAttribute ? Parser.reader(a) : UnparsedAttribute.serialize(pool, IOUtil.getSharedByteBuf(), a).getRawData();
 				int len = r.readUnsignedByte();
 				while (len-- > 0) {
 					String name = ((CstUTF) pool.get(r)).str();
@@ -80,11 +80,11 @@ public abstract class ParamNameMapper {
 			}
 		}
 
-		a =  m.attrByName("Code");
+		a =  m.getRawAttribute("Code");
 		if (a != null) {
 			MyBitSet replaced = new MyBitSet(parNames.size());
 
-			r = a instanceof AttrUnknown ? Parser.reader(a) : AttrUnknown.downgrade(pool, IOUtil.getSharedByteBuf(), a).getRawData();
+			r = a instanceof UnparsedAttribute ? Parser.reader(a) : UnparsedAttribute.serialize(pool, IOUtil.getSharedByteBuf(), a).getRawData();
 			r.rIndex += 4; // stack size
 			int codeLen = r.readInt();
 			r.rIndex += codeLen; // code
@@ -192,7 +192,7 @@ public abstract class ParamNameMapper {
 			}
 			attr.put(0, (byte) i);
 
-			m.putAttr(new AttrUnknown("MethodParameters", ByteList.wrap(attr.toByteArray())));
+			m.addAttribute(new UnparsedAttribute("MethodParameters", ByteList.wrap(attr.toByteArray())));
 			return true;
 		}
 		return false;

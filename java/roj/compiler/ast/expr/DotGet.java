@@ -23,6 +23,7 @@ import roj.compiler.diagnostic.Kind;
 import roj.compiler.resolve.ComponentList;
 import roj.compiler.resolve.FieldResult;
 import roj.compiler.resolve.ResolveException;
+import roj.concurrent.Flow;
 import roj.text.CharList;
 import roj.text.TextUtil;
 
@@ -36,7 +37,7 @@ import java.util.function.Consumer;
  */
 final class DotGet extends VarNode {
 	static final ThreadLocal<Label> NULLISH_TARGET = new ThreadLocal<>();
-	static void writeNullishTarget(MethodWriter cw, Label ifNull, IType targetType) {
+	static void writeNullishTarget(MethodWriter cw, Label ifNull, IType targetType, ExprNode caller) {
 		NULLISH_TARGET.remove();
 
 		var tmp = new Label();
@@ -45,7 +46,7 @@ final class DotGet extends VarNode {
 		cw.one(Opcodes.POP);
 		int type1 = targetType.getActualType();
 		if (type1 != Type.VOID) {
-			if (type1 != Type.CLASS) LocalContext.get().report(Kind.ERROR, "symbol.error.derefPrimitive", targetType);
+			if (type1 != Type.CLASS) LocalContext.get().report(caller, Kind.ERROR, "symbol.error.derefPrimitive", targetType);
 			cw.one(Opcodes.ACONST_NULL);
 		}
 		cw.label(tmp);
@@ -70,6 +71,7 @@ final class DotGet extends VarNode {
 		TypeId.putInt(EncloseRef.class, 1);
 		TypeId.putInt(Constant.class, 1);
 		TypeId.putInt(ArrayDef.class, 1);
+		TypeId.putInt(NewAnonymousClass.class, 1);
 
 		TypeId.putInt(Invoke.class, 2);
 		TypeId.putInt(ArrayGet.class, 2);
@@ -100,7 +102,7 @@ final class DotGet extends VarNode {
 
 	public static ExprNode fieldChain(ExprNode parent, IClass begin, IType type, boolean isFinal, FieldNode... chain) {
 		DotGet el = new DotGet();
-		el.names = new SimpleList<>();
+		el.names = (SimpleList<String>) Flow.of(chain).map(FieldNode::name).toList();
 		el.parent = parent;
 		el.begin = begin;
 		el.chain = chain;
@@ -110,7 +112,7 @@ final class DotGet extends VarNode {
 	}
 
 	Type toClassRef() {
-		CharList sb = LocalContext.get().tmpSb; sb.clear();
+		CharList sb = LocalContext.get().getTmpSb();
 		int i = 0;
 		String part = names.get(0);
 		while (true) {
@@ -165,7 +167,7 @@ final class DotGet extends VarNode {
 
 				var fieldList = ctx.getFieldList(ctx.file, part);
 				if (fieldList != ComponentList.NOT_FOUND) {
-					inaccessibleThis = fieldList.findField(ctx, ctx.in_static ? ComponentList.IN_STATIC : 0);
+					inaccessibleThis = fieldList.findField(ctx, ctx.inStatic ? ComponentList.IN_STATIC : 0);
 					if (inaccessibleThis.error == null) {
 						begin = ctx.file;
 						parent = (inaccessibleThis.field.modifier&Opcodes.ACC_STATIC) != 0 ? null : ctx.ep.This();
@@ -195,7 +197,7 @@ final class DotGet extends VarNode {
 			sb.append(part);
 			if (++i == names.size()) break;
 			if ((part = names.get(i)).equals(";[")) {
-				ctx.report(Kind.ERROR, "symbol.error.arrayBrOutsideClassRef");
+				ctx.report(this, Kind.ERROR, "symbol.error.arrayBrOutsideClassRef");
 				return NaE.RESOLVE_FAILED;
 			}
 			sb.append('/');
@@ -211,26 +213,22 @@ final class DotGet extends VarNode {
 			} else {
 				fType = (parent = parent.resolve(ctx)).type();
 				if (fType.isPrimitive()) {
-					ctx.report(Kind.ERROR, "symbol.error.derefPrimitive", fType);
+					ctx.report(this, Kind.ERROR, "symbol.error.derefPrimitive", fType);
 					return NaE.RESOLVE_FAILED;
 				}
 
-				symbol = ctx.getClassOrArray(fType);
+				symbol = ctx.resolve(fType);
 				if (symbol == null) {
-					ctx.report(Kind.ERROR, "symbol.error.noSuchClass", fType);
+					ctx.report(this, Kind.ERROR, "symbol.error.noSuchClass", fType);
 					return NaE.RESOLVE_FAILED;
 				}
 
-				if (bits != 0 && flags == 1) {
-					final int offset = 0;
-					if (Long.numberOfTrailingZeros(bits) <= offset) ctx.report(Kind.ERROR, "dotGet.opChain.inClassDecl");
-					//bits >>>= offset;
-				}
+				checkNullishDecl(ctx);
 			}
 
 			String error = ctx.resolveField(symbol, fType, sb);
 			if (error != null) {
-				ctx.report(Kind.ERROR, error);
+				ctx.report(this, Kind.ERROR, error);
 				return NaE.RESOLVE_FAILED;
 			}
 
@@ -242,7 +240,7 @@ final class DotGet extends VarNode {
 
 			if (bits != 0) {
 				int offset = ctx.get_frOffset()+1;
-				if (Long.numberOfTrailingZeros(bits) <= offset) ctx.report(Kind.ERROR, "dotGet.opChain.inClassDecl");
+				if (Long.numberOfTrailingZeros(bits) <= offset) ctx.report(this, Kind.ERROR, "dotGet.opChain.inClassDecl");
 				bits >>>= offset;
 			}
 
@@ -263,7 +261,7 @@ final class DotGet extends VarNode {
 				}
 
 				if (inaccessibleThis != null) error = inaccessibleThis.error;
-				ctx.report(Kind.ERROR, error);
+				ctx.report(this, Kind.ERROR, error);
 				return NaE.RESOLVE_FAILED;
 			}
 
@@ -274,7 +272,7 @@ final class DotGet extends VarNode {
 		chain = ctx.get_frChain().toArray(new FieldNode[ctx.get_frChain().size()]);
 		type = ctx.get_frType();
 
-		ctx.checkType(part);
+		ctx.checkTypeRestriction(part);
 
 		flags = RESOLVED;
 
@@ -296,7 +294,7 @@ final class DotGet extends VarNode {
 		if (i1 < length) for (;;) {
 			fn = chain[i1];
 			if ((fn.modifier & Opcodes.ACC_STATIC) != 0) {
-				ctx.report(Kind.SEVERE_WARNING, "symbol.warn.static_on_half", part, fn.name(), "symbol.field");
+				ctx.report(this, Kind.SEVERE_WARNING, "symbol.warn.static_on_half", part, fn.name(), "symbol.field");
 			}
 
 			if (++i1 == length) break;
@@ -306,17 +304,17 @@ final class DotGet extends VarNode {
 			assert chain.length == 1;
 
 			// 替换常量 如你所见只有直接访问(<class>.<field>)才会替换,如果中途使用了非静态字段会警告，👆
-			if (!ctx.disableConstantValue) {
-				// 大概也用不到泛型... 不过还是留着
-				ExprNode node = ctx.getConstantValue(begin, fn, type);
-				if (node != null) return node;
-			}
+			// 大概也用不到泛型... 不过还是留着type参数
+			ExprNode node = ctx.getConstantValue(begin, fn, type);
+			if (node != null) return node;
 		}
+
+		if (ctx.fieldDFS) ctx.checkSelfField(chain[chain.length-1], false);
 
 		if (isStaticField()) bits &= ~1;
 		if (bits != 0) {
 			flags |= FINAL_FIELD;
-			if ((flags&ARRAY_LENGTH) != 0) ctx.report(Kind.ERROR, "dotGet.opChain.arrayLen");
+			if ((flags&ARRAY_LENGTH) != 0) ctx.report(this, Kind.ERROR, "dotGet.opChain.arrayLen");
 		} else if ((fn.modifier&Opcodes.ACC_FINAL) != 0) flags |= FINAL_FIELD;
 
 		// == is better
@@ -324,7 +322,7 @@ final class DotGet extends VarNode {
 		if (part != null && part == ctx.file.name()) {
 			flags |= SELF_FIELD;
 			// redirect check to LocalContext
-			if (ctx.in_constructor) flags &= ~FINAL_FIELD;
+			if (ctx.inConstructor) flags &= ~FINAL_FIELD;
 		}
 		return this;
 	}
@@ -362,8 +360,20 @@ final class DotGet extends VarNode {
 	@Override
 	public void preLoadStore(MethodWriter cw) {
 		if ((flags&SELF_FIELD) != 0) LocalContext.get().checkSelfField(chain[chain.length-1], false);
-		preStore(cw);
-		if (!isStaticField()) cw.one(Opcodes.DUP);
+		write0(cw, chain.length-1);
+		if (!isStaticField()) {
+			/*if (parent instanceof LocalVariable) parent.write(cw);
+			else */cw.one(Opcodes.DUP);
+		}
+
+		FieldNode fn = chain[chain.length-1];
+		String owner = chain.length == 1 ? begin.name() : chain[chain.length-2].fieldType().owner();
+
+		if (fn.getRawAttribute(FieldWriteReplace.NAME) instanceof FieldWriteReplace hook) {
+			hook.writeRead(cw, owner, fn);
+		} else {
+			cw.field((fn.modifier & Opcodes.ACC_STATIC) != 0 ? Opcodes.GETSTATIC : Opcodes.GETFIELD, owner, fn.name(), fn.rawDesc());
+		}
 	}
 
 	@Override
@@ -371,7 +381,7 @@ final class DotGet extends VarNode {
 		FieldNode fn = chain[chain.length-1];
 		String owner = chain.length == 1 ? begin.name() : chain[chain.length-2].fieldType().owner();
 
-		if (fn.attrByName(FieldWriteReplace.NAME) instanceof FieldWriteReplace hook) {
+		if (fn.getRawAttribute(FieldWriteReplace.NAME) instanceof FieldWriteReplace hook) {
 			hook.writeWrite(cw, owner, fn);
 		} else {
 			cw.field((fn.modifier & Opcodes.ACC_STATIC) != 0 ? Opcodes.PUTSTATIC : Opcodes.PUTFIELD, owner, fn.name(), fn.rawDesc());
@@ -423,7 +433,7 @@ final class DotGet extends VarNode {
 				cw.jump(Opcodes.IFNULL, ifNull);
 			}
 
-			if (fn.attrByName(FieldWriteReplace.NAME) instanceof FieldWriteReplace hook) {
+			if (fn.getRawAttribute(FieldWriteReplace.NAME) instanceof FieldWriteReplace hook) {
 				hook.writeRead(cw, owner, fn);
 			} else {
 				cw.field(opcode, owner, fn.name(), fn.rawDesc());
@@ -441,12 +451,12 @@ final class DotGet extends VarNode {
 			}
 		}
 
-		if (isSet) writeNullishTarget(cw, ifNull, fn.fieldType());
+		if (isSet) writeNullishTarget(cw, ifNull, fn.fieldType(), this);
 	}
 
 	public DotGet add(String name, int flag) {
 		if (flag != 0) {
-			if (names.size() > 64) LocalContext.get().report(Kind.ERROR, "dotGet.opChain.tooLong");
+			if (names.size() > 64) LocalContext.get().report(this, Kind.ERROR, "dotGet.opChain.tooLong");
 			bits |= 1L << names.size();
 		}
 		names.add(name);
@@ -457,6 +467,9 @@ final class DotGet extends VarNode {
 	public int isNullish() {
 		int off = (chain[0].modifier & Opcodes.ACC_STATIC) != 0 ? 1 : 0;
 		return ((1L << names.size() - off) & bits) != 0 ? 2 : bits != 0 ? 1 : 0;
+	}
+	public void checkNullishDecl(LocalContext ctx) {
+		if ((bits&1) != 0 && flags == 1) ctx.report(this, Kind.ERROR, "dotGet.opChain.inClassDecl");
 	}
 
 	@Override

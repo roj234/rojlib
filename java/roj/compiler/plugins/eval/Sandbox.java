@@ -1,20 +1,14 @@
 package roj.compiler.plugins.eval;
 
-import org.jetbrains.annotations.Nullable;
 import roj.collect.MyHashMap;
 import roj.collect.MyHashSet;
-
-import java.io.IOException;
-import java.io.InputStream;
-import java.net.URL;
-import java.util.Enumeration;
 
 /**
  * @author Roj234
  * @since 2024/5/30 0030 3:34
  */
 final class Sandbox extends ClassLoader {
-	private MyHashSet<String> allowed = new MyHashSet<>("java.lang", "java.util", "java.util.regex", "java.util.function", "java.text", "roj.compiler.plugins.eval", "roj.reflect", "roj.compiler", "roj.asm.cp", "roj.asm.tree.anno", "roj.text");
+	private MyHashSet<String> allowed = new MyHashSet<>("java.lang", "java.util", "java.util.regex", "java.util.function", "java.text", "roj.compiler.plugins.eval", "roj.compiler", "roj.text", "roj.config.data");
 	private MyHashSet<String> disallowed = new MyHashSet<>("java.lang.Process", "java.lang.ProcessBuilder", "java.lang.Thread", "java.lang.ClassLoader");
 
 	private final MyHashMap<String, byte[]> classData;
@@ -54,22 +48,5 @@ final class Sandbox extends ClassLoader {
 			if (resolve) resolveClass(c);
 			return c;
 		}
-	}
-
-	@Nullable
-	@Override
-	public URL getResource(String name) {
-		return super.getResource(name);
-	}
-
-	@Nullable
-	@Override
-	public InputStream getResourceAsStream(String name) {
-		return super.getResourceAsStream(name);
-	}
-
-	@Override
-	public Enumeration<URL> getResources(String name) throws IOException {
-		return super.getResources(name);
 	}
 }

@@ -77,19 +77,19 @@ final class ClassStage implements Processor {
 
 			var fn = new FieldNode(Opcodes.ACC_PUBLIC | (getterImpl.modifier()&Opcodes.ACC_STATIC) | (writeId < 0 ? Opcodes.ACC_FINAL : 0), name, getterImpl.returnType());
 
-			var sign = getterImpl.parsedAttr(file.cp(), Attribute.SIGNATURE);
+			var sign = getterImpl.getAttribute(file.cp(), Attribute.SIGNATURE);
 			if (sign != null) {
 				var returnType = sign.values.get(sign.values.size()-1);
 				if (returnType.genericType() != 0) {
 					sign = new Signature(Signature.FIELD);
 					sign.values = Collections.singletonList(returnType);
-					fn.putAttr(sign);
+					fn.addAttribute(sign);
 				}
 			}
 
-			fn.putAttr(new FieldBridge(file, readId, writeId));
+			fn.addAttribute(new FieldBridge(file, readId, writeId));
 			file.fields().add(Helpers.cast(fn));
-			if (file instanceof CompileUnit cu) cu.noStore(fn);
+			if (file instanceof CompileUnit cu) cu.markFakeNode(fn);
 		}
 	}
 
@@ -105,7 +105,7 @@ final class ClassStage implements Processor {
 		String desc = mn.rawDesc();
 
 		var params = Type.methodDesc(desc);
-		IClass info = ctx.getClassOrArray(params.get(0));
+		IClass info = ctx.resolve(params.get(0));
 		if (info != null) {
 			params.remove(0);
 
@@ -114,7 +114,7 @@ final class ClassStage implements Processor {
 			if (idx >= 0 && !annotation.getBool("override")) return;
 
 			MethodNode replace = new MethodNode(Opcodes.ACC_PUBLIC, info.name(), annotation.getString("value", mn.name()), desc);
-			replace.putAttr(new AttachedMethod(new MethodNode(mn)));
+			replace.addAttribute(new AttachedMethod(new MethodNode(mn)));
 			if (idx >= 0) info.methods().set(idx, Helpers.cast(replace));
 			else info.methods().add(Helpers.cast(replace));
 

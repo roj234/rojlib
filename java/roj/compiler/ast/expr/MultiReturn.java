@@ -32,7 +32,7 @@ final class MultiReturn extends ExprNode {
 
 	@Override
 	public ExprNode resolve(LocalContext ctx) throws ResolveException {
-		if (values.size() == 0 || values.size() > 255) ctx.report(Kind.ERROR, "泛型过长："+values.size());
+		if (values.size() == 0 || values.size() > 255) ctx.report(this, Kind.ERROR, "泛型过长："+values.size());
 
 		_callUnsafe = new MyBitSet(values.size());
 
@@ -41,11 +41,11 @@ final class MultiReturn extends ExprNode {
 			values.set(i, node);
 			if (!(node instanceof LocalVariable) && !node.isConstant()) {
 				_callUnsafe.add(i);
-				ctx.report(Kind.WARNING, "multiReturn.sideEffect");
+				ctx.report(this, Kind.WARNING, "multiReturn.sideEffect");
 			}
 
 			if (RETURNSTACK_TYPE.equals(node.type().owner())) {
-				ctx.report(Kind.ERROR, "multiReturn.russianToy");
+				ctx.report(this, Kind.ERROR, "multiReturn.russianToy");
 			}
 		}
 
@@ -58,7 +58,7 @@ final class MultiReturn extends ExprNode {
 			}
 		}
 
-		ctx.report(Kind.ERROR, "multiReturn.incompatible");
+		ctx.report(this, Kind.ERROR, "multiReturn.incompatible");
 		return NaE.RESOLVE_FAILED;
 	}
 

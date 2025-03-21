@@ -26,18 +26,15 @@ class Assign extends ExprNode {
 		this.right = right;
 	}
 
-	@Override
-	public String toString() { return left+" = "+right; }
-
-	@Override
-	public IType type() { return left.type(); }
+	@Override public String toString() { return left+" = "+right; }
+	@Override public IType type() { return left.type(); }
 
 	@Override
 	public ExprNode resolve(LocalContext ctx) {
 		ExprNode node = left.resolve(ctx);
 		if (node instanceof VarNode vn && !vn.isFinal()) left = vn;
 		else {
-			ctx.report(Kind.ERROR, "assign.error.final", left);
+			ctx.report(this, Kind.ERROR, "assign.error.final", left);
 			return NaE.RESOLVE_FAILED;
 		}
 
@@ -45,7 +42,7 @@ class Assign extends ExprNode {
 		if (prev instanceof Cast c) {
 			int castType = c.cast.type;
 			if ((castType == -1 || castType == -2) && !(left instanceof LocalVariable))
-				ctx.report(Kind.INCOMPATIBLE, "assign.incompatible.redundantCast");
+				ctx.report(this, Kind.INCOMPATIBLE, "assign.incompatible.redundantCast");
 		}
 
 		if (prev instanceof Binary op) {
@@ -60,7 +57,7 @@ class Assign extends ExprNode {
 			}
 
 			if (right == null) {
-				ctx.report(Kind.ERROR, "binary.error.notApplicable", op.left.type(), op.right.type(), byId(op.operator));
+				ctx.report(this, Kind.ERROR, "binary.error.notApplicable", op.left.type(), op.right.type(), byId(op.operator));
 				return NaE.RESOLVE_FAILED;
 			}
 		} else {
@@ -72,10 +69,19 @@ class Assign extends ExprNode {
 			ctx.assignVar(lv.v, right.constVal());
 		}
 
-		IType lType = left.type();
-		cast = ctx.castTo(right.type(), lType, TypeCast.getDataCap(lType.getActualType()) < 4 ? TypeCast.E_NUMBER_DOWNCAST : 0);
+		var lType = left.type();
+		var rType = right.minType();
+		var allow = right.isConstant() && lType.getActualType() == Type.CHAR;
+		cast = ctx.castTo(rType, lType, allow ? TypeCast.E_EXPLICIT_CAST : 0);
 
-		return cast.canCast() ? this : NaE.RESOLVE_FAILED;
+		if (allow && cast.type == TypeCast.E_EXPLICIT_CAST) {
+			var number = ((roj.config.data.CEntry)node.constVal()).asInt();
+			if (number >= 0 && number <= 65535) return this;
+			ctx.report(this, Kind.ERROR, "typeCast.error.-2", rType, lType);
+		}
+		//if (!isCastNeeded()) cast = null;
+
+		return cast.type >= 0 ? this : NaE.RESOLVE_FAILED;
 	}
 
 	static void incOrDec(VarNode expr, MethodWriter cw, boolean noRet, boolean returnBefore, int amount) {
@@ -95,15 +101,13 @@ class Assign extends ExprNode {
 		// == 4 (int) 防止byte自增导致溢出什么的...
 		if (expr instanceof LocalVariable lv) {
 			isVariable = true;
-			lv.v.endPos = cw.bci();
-
-			ctx.loadVar(lv.v);
-			ctx.storeVar(lv.v);
 
 			if (dataCap == 4 && (short)amount == amount) {
+				ctx.loadVar(lv.v);
 				if (!noRet & returnBefore) cw.load(lv.v);
 				cw.iinc(lv.v, amount);
 				if (!noRet & !returnBefore) cw.load(lv.v);
+				ctx.storeVar(lv.v);
 				return;
 			}
 		}
@@ -148,12 +152,12 @@ class Assign extends ExprNode {
 			} else if (br.left.isConstant() && br.right.equals(left)) {
 				if (sameVarShrink(cw, br, noRet, br.left)) return;
 			}
+
+			if (isCastNeeded()) cast.write(cw);
 		} else {
 			left.preStore(cw);
-			right.write(cw);
+			right.write(cw, isCastNeeded() ? cast : null);
 		}
-
-		if (isCastNeeded()) cast.write(cw);
 
 		int state = noRet ? 0 : left.copyValue(cw, left.type().rawType().length() - 1 != 0);
 		left.postStore(cw, state);
@@ -164,7 +168,7 @@ class Assign extends ExprNode {
 	private boolean sameVarShrink(MethodWriter cw, Binary br, boolean noRet, ExprNode operand) {
 		// to IINC if applicable
 		block:
-		if (left instanceof LocalVariable lv && TypeCast.getDataCap(br.type().getActualType()) == 4 && operand.isConstant()) {
+		if (left instanceof LocalVariable lv && TypeCast.getDataCap(br.left.type().getActualType()) == 4 && operand.isConstant()) {
 			int value = ((CInt) operand.constVal()).value;
 
 			switch (br.operator) {
@@ -175,11 +179,11 @@ class Assign extends ExprNode {
 			if ((short)value != value) break block;
 
 			var ctx = LocalContext.get();
-			ctx.loadVar(lv.v);
-			ctx.storeVar(lv.v);
 
+			ctx.loadVar(lv.v);
 			cw.iinc(lv.v, value);
 			if (!noRet) left.write(cw);
+			ctx.storeVar(lv.v);
 			return true;
 		}
 

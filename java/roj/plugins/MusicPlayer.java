@@ -31,7 +31,7 @@ import static roj.ui.CommandNode.literal;
  * @author Roj233
  * @since 2021/8/18 13:35
  */
-@SimplePlugin(id = "musicPlayer", version = "2.0.4", desc = "ImpLib音乐播放测试")
+@SimplePlugin(id = "musicPlayer", version = "2.0.4", desc = "ImpLib音乐播放测试", inheritConfig = true)
 public class MusicPlayer extends Plugin implements Runnable {
 	private static final long FLAG = ReflectionUtils.fieldOffset(MusicPlayer.class, "flag");
 	private static final int STOP = 1, SKIP_AUTO = 2;
@@ -54,12 +54,11 @@ public class MusicPlayer extends Plugin implements Runnable {
 
 	@Override
 	protected void onEnable() throws Exception {
-		String path;
-		//path = getConfig().getString("path");
-		path = "D:\\Music";
+		progress.setAnimation(false);
+		String path = getConfig().getString("music_path", "D:\\Music");
 		initList = IOUtil.findAllFiles(new File(path), file -> {
 			String ext = IOUtil.extensionName(file.getName());
-			return ext.equals("mp3") || ext.equals("wav") || ext.equals("ogg") || ext.equals("flac");
+			return ext.equals("mp3") || ext.equals("wav")/* || ext.equals("ogg") || ext.equals("flac")*/;
 		});
 		playList = new SimpleList<>(initList);
 		flag = STOP;

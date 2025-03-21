@@ -19,11 +19,16 @@ public class ImmediateWeakReference<K> extends WeakReference<K> implements Runna
 		super(key, null);
 		this.owner = Objects.requireNonNull(Helpers.cast(owner));
 		this.hash = System.identityHashCode(key);
-		NativeMemory.createCleaner(key, this);
+		cleanerRef = NativeMemory.createCleaner(key, this);
 	}
 
-	final XHashSet<K, ImmediateWeakReference<K>> owner;
+	protected final XHashSet<K, ImmediateWeakReference<K>> owner;
 	final int hash;
+	final Object cleanerRef;
+
+	public void destroy() {
+		NativeMemory.invokeClean(cleanerRef);
+	}
 
 	private ImmediateWeakReference<K> _next;
 

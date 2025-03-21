@@ -13,7 +13,6 @@
 
 ```java
 import roj.http.server.auto.*;
-import roj.net.http.server.auto.*;
 
 public class Example {
 	public static void main(String[] args) {

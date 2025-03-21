@@ -4,9 +4,9 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import roj.archive.zip.ZEntry;
 import roj.archive.zip.ZipFile;
+import roj.asmx.launcher.EntryPointM;
 import roj.collect.MyHashSet;
 import roj.io.source.FileSource;
-import roj.reflect.ModulePlus;
 import roj.text.Escape;
 import roj.util.ByteList;
 
@@ -40,30 +40,46 @@ public class PluginClassLoader extends ClassLoader {
 		this.archive = new ZipFile(plugin.source, ZipFile.FLAG_VERIFY|ZipFile.FLAG_BACKWARD_READ, plugin.charset);
 		this.archive.reload();
 
-		if (Panger.class.getModule().isNamed()) {
+		if (Panger.class.getModule().isNamed() && Panger.useModulePluginIfAvailable) {
 			var packages = new MyHashSet<String>();
 			for (ZEntry entry : this.archive.entries()) {
 				String name = entry.getName();
+				if (name.startsWith("META-INF/")) continue;
 				if (!name.endsWith(".class")) continue;
 				packages.add(name.substring(0, name.lastIndexOf('/')).replace('/', '.'));
 			}
 
 			if (!packages.isEmpty()) {
+				//ClassNode moduleInfo = Parser.parse(IOUtil.read(getResourceAsStream("module-info.class")));
 
+				if (plugin.isModulePlugin) {
+					var depend = new MyHashSet<>(plugin.javaModuleDepend);
+					depend.add("java.base");
+					depend.add("roj.core");
+
+					var builder = ModuleDescriptor.newModule(plugin.id).packages(packages);
+					for (String require : depend) builder.requires(require);
+					try {
+						var m = EntryPointM.defineSubModule(builder.build(), Panger.class.getModule().getLayer(), this, URI.create("panger://plugin/"+plugin.fileName));
+						for (String require : depend) EntryPointM.doAddReads(m.getLayer(), m, require);
+					} catch (Throwable e) {
+						throw new RuntimeException(e);
+					}
+				} else {
+					var builder = ModuleDescriptor.newAutomaticModule(plugin.id).packages(packages);
+					try {
+						var m = EntryPointM.defineSubModule(builder.build(), Panger.class.getModule().getLayer(), this, URI.create("panger://plugin/legacy/"+plugin.fileName));
+						for (var ml : m.getLayer().parents()) {
+							for (Module require : ml.modules()) {
+								EntryPointM.doAddReads(m.getLayer(), m, require.getName());
+							}
+						}
+					} catch (Throwable e) {
+						throw new RuntimeException(e);
+					}
+				}
 			}
-			var md = ModuleDescriptor.newAutomaticModule(Escape.escapeFileName(plugin.fileName)).packages(packages).build();
-			var module = ModulePlus.INSTANCE.createModule(null, this, md, URI.create("panger://plugin/"+plugin.fileName));
-			System.out.println(module);
 		}
-	}
-
-	@Override
-	protected Class<?> findClass(String moduleName, String name) {
-		System.out.println("moduleName = " + moduleName + ", name = " + name);
-		try {
-			return findClass(name);
-		} catch (ClassNotFoundException e) {}
-		return null;
 	}
 
 	@Override

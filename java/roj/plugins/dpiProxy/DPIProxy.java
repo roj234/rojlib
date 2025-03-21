@@ -3,7 +3,7 @@ package roj.plugins.dpiProxy;
 import roj.collect.MyBitSet;
 import roj.collect.MyHashMap;
 import roj.collect.SimpleList;
-import roj.compiler.LavaCompiler;
+import roj.compiler.LambdaLinker;
 import roj.compiler.ast.expr.ExprParser;
 import roj.concurrent.OperationDone;
 import roj.io.IOUtil;
@@ -39,7 +39,7 @@ public class DPIProxy extends Plugin {
 		LOGGER = getLogger();
 		LOGGER.setLevel(Level.valueOf(getConfig().getString("logLevel", "INFO")));
 
-		var compiler = new LavaCompiler();
+		var compiler = new LambdaLinker();
 		var matchers = new MyHashMap<String, DpiMatcher>();
 
 		for (var item : getConfig().getMap("inject").entrySet()) {

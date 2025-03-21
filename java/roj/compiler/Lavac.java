@@ -10,10 +10,10 @@ import roj.compiler.diagnostic.TextDiagnosticReporter;
 import roj.compiler.plugin.GlobalContextApi;
 import roj.compiler.plugins.eval.Constexpr;
 import roj.io.IOUtil;
-import roj.reflect.ClassDefiner;
 import roj.text.DateParser;
 import roj.text.TextReader;
 import roj.text.TextUtil;
+import roj.ui.Terminal;
 import roj.util.ByteList;
 
 import java.io.File;
@@ -30,7 +30,7 @@ public final class Lavac {
 	public static String getCompileTime() {return DateParser.toLocalTimeString(System.currentTimeMillis());}
 	public static String getCurrentTime() {return DateParser.toLocalTimeString(System.currentTimeMillis());}
 
-	public static final String VERSION = "0.15.0[RC] (compiled on "+getCompileTime()+")";
+	public static final String VERSION = "1.0.0-alpha (compiled on "+getCompileTime()+")";
 
 	private int debugOps = 10;
 	private GlobalContext ctx;
@@ -43,7 +43,8 @@ public final class Lavac {
 				用法: lavac <配置> <源文件>[,<java文件>|<文件夹>]
 				其中, 可能的选项包括:
 				      -cache <目录>              指定编译器缓存文件夹的位置
-				      -classpath/-cp <目录>      指定查找用户类文件和注释处理程序的位置
+				      -classpath/-cp <目录>      指定查找用户类文件和注解处理程序的位置
+				      -module                    使用模块编译模式，在上述文件夹中查找模块 (未实现)
 				      -d <路径>                  指定放置编译的类文件的位置
 
 				      -encoding <编码>           指定源文件使用的字符编码
@@ -52,16 +53,15 @@ public final class Lavac {
 
 				      -maxWarn <数值>            最大允许显示的警告数量
 				      -maxError <数值>           最大允许显示的错误数量
+				      -Werror                    出现警告时终止编译
+				      -nowarn                    不生成任何警告
 
 				      -ctx <class>               指定编译器上下文的全限定名称
 				      -T <key> <val>             传递给上下文的参数
 
-				      使用默认上下文时，下列选项一定可用: (未实现)
-				      -T LavaFeature +<feat1>[,-<feat2>...] 启用或禁用Lava语言特性
-
-				      -T VMSymbol <路径>                    指定基础符号表的位置
-				      -T TargetVersion <发行版>             生成支持不高于特定 JVM 版本的类文件
-
+				      使用默认上下文时，下列选项一定可用:
+				      -T lavaFeature +<feat1>[,-<feat2>...] 启用或禁用Lava语言特性
+				      -T target <发行版>                    生成支持不高于特定 JVM 版本的类文件
 				      -T sandbox <class1>[,<class2>...]     预编译沙盒白名单, 以逗号分隔的全限定名前缀
 				      -T processor <class1>[,<class2>...]   指定实现了 LavaApi[0.10.x] - Processor 的注解处理程序
 
@@ -70,11 +70,12 @@ public final class Lavac {
 			return;
 		}
 
+		Terminal.getConsole();
 		String cp = "";
 		String bin = null;
 		GlobalContext context = null;
 
-		int maxWarn = 100, maxError = 100;
+		int maxWarn = 100, maxError = 100, warnOps = 0;
 
 		MyHashMap<String, String> ctxOps = new MyHashMap<>();
 		Lavac compiler = new Lavac();
@@ -90,6 +91,9 @@ public final class Lavac {
 				case "-encoding" -> compiler.charset = Charset.forName(args[++i]);
 				case "-maxWarn" -> maxWarn = Integer.parseInt(args[++i]);
 				case "-maxError" -> maxError = Integer.parseInt(args[++i]);
+				case "-nowarn" -> warnOps |= 1;
+				case "-Werror" -> warnOps |= 2;
+				case "-cache" -> GlobalContext.cacheFolder = new File(args[++i]);
 				case "-cp", "-classpath" -> cp = args[++i];
 				case "-d" -> bin = args[++i];
 				case "-g" -> {
@@ -135,35 +139,46 @@ public final class Lavac {
 		api.features.add(LavaFeatures.VERIFY_FILENAME);
 		api.features.add(LavaFeatures.OMISSION_NEW);
 		api.features.add(LavaFeatures.SHARED_STRING_CONCAT);
-		api.features.add(LavaFeatures.NESTED_MEMBER);
-		api.features.add(LavaFeatures.SEALED_ENUM);
+		api.features.add(LavaFeatures.DISABLE_CHECKED_EXCEPTION);
+		api.setOptions(ctxOps);
 
 		// InitDefaultPlugins Requires LocalContext
 		LocalContext.set(compiler.ctx.createLocalContext());
-		LavaCompiler.initDefaultPlugins(api);
+		LambdaLinker.initDefaultPlugins(api);
 
 		for (var path : TextUtil.split(cp, File.pathSeparatorChar)) compiler.addClass(new File(path));
 
 		File dst = bin == null ? new File("Lava.jar") : new File(bin);
 
-		var reporter = new TextDiagnosticReporter(maxError, maxWarn, 0);
+		var reporter = new TextDiagnosticReporter(maxError, maxWarn, warnOps);
 		compiler.ctx.reporter = reporter;
 
 		boolean ok = compiler.compile(dst);
-
 		reporter.printSum();
-		System.out.println("编译状况="+ok);
 
 		if (ok) {
-			try {
-				var classLoader = new ClassDefiner(Lavac.class.getClassLoader(), "lavac test");
-				try (var za = new ZipFile(dst)) {
-					for (ZEntry entry : za.entries()) {
-						ClassDefiner.defineClass(classLoader, null, IOUtil.getSharedByteBuf().readStreamFully(za.getStream(entry)));
-					}
+			System.out.println("编译成功");
+			try (var archive = new ZipFile(dst)) {
+				var scl = new ClassLoader() {
+					@Override
+					protected Class<?> findClass(String name) throws ClassNotFoundException {
+						String klass = name.replace('.', '/').concat(".class");
+						ZEntry entry = archive.getEntry(klass);
+						if (entry == null) throw new ClassNotFoundException(name);
 
-					((Runnable) Class.forName("Test", true, classLoader).newInstance()).run();
-				}
+						ByteList buf = null;
+						try {
+							buf = new ByteList().readStreamFully(archive.getStream(entry));
+						} catch (IOException e) {
+							throw new RuntimeException(e);
+						}
+						var clazz = defineClass(name, buf.list, 0, buf.wIndex());
+						buf._free();
+						return clazz;
+					}
+				};
+
+				((Runnable) Class.forName("Test", true, scl).newInstance()).run();
 			} catch (Exception e) {
 				e.printStackTrace();
 			}
@@ -177,22 +192,22 @@ public final class Lavac {
 		boolean done = false;
 		try {
 			for (int i = files.size() - 1; i >= 0; i--) {
-				if (!files.get(i).S1_Struct())
-					// 下列可能性
-					// 文件是空的
-					// package-info
-					// module-info
-					files.remove(i);
+				// 如果解析失败或者不需要解析
+				if (!files.get(i).S1_Struct()) files.remove(i);
 			}
 			if (ctx.hasError()) return false;
 			// TODO 一个源文件生成的所有CompileUnit都应该由同一个线程处理
 			ctx.addGeneratedCompileUnits(files);
 			for (int i = 0; i < files.size(); i++) {
-				files.get(i).S2_ResolveSelf();
+				files.get(i).S2_ResolveName();
 			}
 			if (ctx.hasError()) return false;
 			for (int i = 0; i < files.size(); i++) {
-				files.get(i).S2_ResolveRef();
+				files.get(i).S2_ResolveType();
+			}
+			if (ctx.hasError()) return false;
+			for (int i = 0; i < files.size(); i++) {
+				files.get(i).S2_ResolveMethod();
 			}
 			if (ctx.hasError()) return false;
 			for (int i = 0; i < files.size(); i++) {
@@ -210,22 +225,18 @@ public final class Lavac {
 					var data = files.get(i);
 					data.S5_noStore();
 					zfw.beginEntry(new ZEntry(data.name().concat(".class")));
-					if (data.name().equals("Test")) {
-						// FIXME NOVERIFY
-						data.parent("java/lang/🔓_IL🐟");
-					}
 					ByteList x = Parser.toByteArrayShared(data);
+					x.writeToStream(zfw);
 					if (data.name().equals("Test")) {
 						System.out.println(Parser.parse(x));
 					}
-					x.writeToStream(zfw);
 				}
 				for (var data : ctx.getGeneratedClasses()) {
 					zfw.beginEntry(new ZEntry(data.name().concat(".class")));
 					Parser.toByteArrayShared(data).writeToStream(zfw);
 				}
 
-				zfw.setComment("Lavac v"+VERSION);
+				zfw.setComment("lavac "+VERSION);
 			}
 			done = true;
 		} catch (Exception e) {
@@ -252,7 +263,7 @@ public final class Lavac {
 					e.printStackTrace();
 					return;
 				}
-				CompileUnits.add(new LavaCompileUnit(file.getName(), code));
+				CompileUnits.add(new JavaCompileUnit(file.getName(), code));
 			}
 		}
 	}

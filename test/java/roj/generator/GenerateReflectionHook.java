@@ -266,7 +266,7 @@ class GenerateReflectionHook {
 		Annotation annotation = new Annotation("Ljdk/internal/vm/annotation/ForceInline;", Collections.emptyMap());
 		for (MethodNode mn : impl.methods) {
 			if (mn.name().startsWith("<")) continue;
-			mn.putAttr(new Annotations(true, annotation));
+			mn.addAttribute(new Annotations(true, annotation));
 		}
 		return impl;
 	}

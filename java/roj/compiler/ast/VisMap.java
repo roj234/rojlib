@@ -111,7 +111,7 @@ public final class VisMap {
 		varCount = prevVarCount;
 
 		if (!terminateFlag) mergeState(prevVarCount, prevVarDefined);
-		// TODO 由于我选择了立即序列化，在此刻进行循环中的变量状态分析是不可能的
+		// 由于我选择了立即序列化，在此刻进行循环中的变量状态分析是不可能的
 		for (var state : constantStates.pop()) {
 			state.variable.constantValue =
 				state.lastValue == IntMap.UNDEFINED

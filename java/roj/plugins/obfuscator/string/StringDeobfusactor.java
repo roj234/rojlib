@@ -4,8 +4,8 @@ import roj.asm.ClassNode;
 import roj.asm.MethodNode;
 import roj.asm.Opcodes;
 import roj.asm.Parser;
-import roj.asm.attr.AttrUnknown;
 import roj.asm.attr.Attribute;
+import roj.asm.attr.UnparsedAttribute;
 import roj.asm.cp.*;
 import roj.asm.insn.*;
 import roj.asm.type.Desc;
@@ -37,11 +37,11 @@ public class StringDeobfusactor {
 	public static class DecoderCandidate {
 		ClassNode data;
 		MethodNode mn;
-		AttrUnknown code;
+		UnparsedAttribute code;
 		Decoder impl;
 		int refCount;
 
-		public DecoderCandidate(ClassNode data, MethodNode mn, AttrUnknown code0) {
+		public DecoderCandidate(ClassNode data, MethodNode mn, UnparsedAttribute code0) {
 			this.data = data;
 			this.mn = mn;
 			this.code = code0;
@@ -57,7 +57,7 @@ public class StringDeobfusactor {
 			method.name("_decode_");
 			cls.methods.add(method);
 
-			InsnList ins = method.parsedAttr(data.cp, Attribute.Code).instructions;
+			InsnList ins = method.getAttribute(data.cp, Attribute.Code).instructions;
 			for (InsnNode node : ins) {
 				if (node.opcode() == Opcodes.INVOKEVIRTUAL) {
 					Desc desc = node.desc();
@@ -147,7 +147,7 @@ public class StringDeobfusactor {
 				String cn = method.className();
 				if (!cn.startsWith("java/")) throw OperationDone.INSTANCE;
 			}
-			protected void invokeItf(CstRefItf itf, short argc) { invoke((byte) 0, itf); }
+			protected void invokeItf(CstRef method, short argc) { invoke((byte) 0, method); }
 			protected void invokeDyn(CstDynamic dyn, int type) { throw OperationDone.INSTANCE; }
 		};
 
@@ -170,7 +170,7 @@ public class StringDeobfusactor {
 					}
 
 					mn.unparsed(data.cp);
-					AttrUnknown code0 = (AttrUnknown) mn.attrByName("Code");
+					UnparsedAttribute code0 = (UnparsedAttribute) mn.getRawAttribute("Code");
 					try {
 						filter.visit(data.cp, Parser.reader(code0));
 
@@ -197,7 +197,7 @@ public class StringDeobfusactor {
 
 			for (int j = 0; j < methods.size(); j++) {
 				MethodNode mn = methods.get(j);
-				AttrUnknown code0 = (AttrUnknown) mn.attrByName("Code");
+				UnparsedAttribute code0 = (UnparsedAttribute) mn.getRawAttribute("Code");
 				if (code0 != null) {
 					//filter.visit(data.cp, Parser.reader(code0));
 				}
@@ -218,7 +218,7 @@ public class StringDeobfusactor {
 			//intr.setClass(data);
 			for (int j = 0; j < methods.size(); j++) {
 				MethodNode m = methods.get(j);
-				AttrUnknown code0 = (AttrUnknown) m.attrByName("Code");
+				UnparsedAttribute code0 = (UnparsedAttribute) m.getRawAttribute("Code");
 				if (code0 == null) continue;
 
 				AttrCode code = new AttrCode(Parser.reader(code0), data.cp, m);
@@ -252,7 +252,7 @@ public class StringDeobfusactor {
 										continue;
 									}
 									//}
-									m.putAttr(code);
+									m.addAttribute(code);
 									next.remove();
 								}
 							}

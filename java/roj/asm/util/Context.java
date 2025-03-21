@@ -133,7 +133,7 @@ public final class Context implements ClassLike, Consumer<Constant>, Supplier<By
 		if (cstCache[0].isEmpty()) {
 			var cp = getConstantPool();
 			cp.setAddListener(this);
-			List<Constant> csts = cp.array();
+			List<Constant> csts = cp.data();
 			for (int i = 0; i < csts.size(); i++) accept(csts.get(i));
 		}
 	}

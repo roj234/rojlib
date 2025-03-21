@@ -44,15 +44,15 @@ public abstract class AbstractCodeWriter extends CodeVisitor {
 	protected final void clazz(byte code, CstClass clz) { clazz(code, clz.name().str()); }
 	protected final void ldc(byte code, Constant c) { if (code == LDC2_W) ldc2(c); else ldc1(code, c); }
 	protected final void invokeDyn(CstDynamic dyn, int type) { invokeDyn(dyn.tableIdx, dyn.desc().name().str(), dyn.desc().getType().str(), type); }
-	protected final void invokeItf(CstRefItf itf, short argc) {
-		CstNameAndType desc = itf.desc();
-		invokeItf(itf.className(), desc.name().str(), desc.getType().str());
+	protected final void invokeItf(CstRef method, short argc) {
+		CstNameAndType desc = method.desc();
+		invokeItf(method.className(), desc.name().str(), desc.getType().str());
 	}
 	protected final void invoke(byte code, CstRef method) {
 		CstNameAndType desc = method.desc();
 		invoke(code, method.className(), desc.name().str(), desc.getType().str(), method.type() == Constant.INTERFACE);
 	}
-	protected final void field(byte code, CstRefField field) {
+	protected final void field(byte code, CstRef field) {
 		CstNameAndType desc = field.desc();
 		field(code, field.className(), desc.name().str(), desc.getType().str());
 	}
@@ -141,9 +141,10 @@ public abstract class AbstractCodeWriter extends CodeVisitor {
 
 	public final void jump(Label target) { jump(GOTO, target); }
 	public void jump(@MagicConstant(intValues = {
-			IFEQ, IFNE, IFLT, IFGE, IFGT, IFLE ,
+			IFEQ, IFNE, IFLT, IFGE, IFGT, IFLE,
 			IF_icmpeq, IF_icmpne, IF_icmplt, IF_icmpge, IF_icmpgt, IF_icmple,
 			IF_acmpeq, IF_acmpne,
+			IFNULL, IFNONNULL,
 			GOTO, GOTO_W
 	}) byte code, Label target) { assertTrait(code, TRAIT_JUMP); addSegment(new JumpBlock(code, target)); }
 	public void vars(@MagicConstant(intValues = {ILOAD,LLOAD,FLOAD,DLOAD,ALOAD,ISTORE,LSTORE,FSTORE,DSTORE,ASTORE}) byte code, int value) {
@@ -349,21 +350,22 @@ public abstract class AbstractCodeWriter extends CodeVisitor {
 	}
 
 	final boolean updateOffset(Collection<Label> labels, int[] offSum, int len) {
-		sumOffset(codeBlocks, offSum);
+		int i = 0;
+		offSum[0] = 0;
+		if (i != codeBlocks.size()) {
+			do {
+				CodeBlock c = codeBlocks.get(i);
+				offSum[++i] = offSum[i-1] + c.length();
+			} while (i != codeBlocks.size());
+		} else {
+			offSum[1] = bci();
+		}
 
 		boolean changed = false;
 		for (Label label : labels) {
-			changed |= label.update(offSum, len, codeBlocks);
+			changed |= label.update(offSum, len);
 		}
 		return changed;
-	}
-	static void sumOffset(List<CodeBlock> codeBlocks, int[] offSum) {
-		int i = 0;
-		offSum[0] = 0;
-		do {
-			CodeBlock c = codeBlocks.get(i);
-			offSum[++i] = offSum[i-1] + c.length();
-		} while (i != codeBlocks.size());
 	}
 
 	public abstract int bci();

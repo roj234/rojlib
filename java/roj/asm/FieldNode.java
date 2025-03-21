@@ -50,7 +50,7 @@ public final class FieldNode extends CNode {
 		return this;
 	}
 
-	public <T extends Attribute> T parsedAttr(ConstantPool cp, TypedKey<T> type) { return Parser.parseAttribute(this,cp,type,attributes,Signature.FIELD); }
+	public <T extends Attribute> T getAttribute(ConstantPool cp, TypedKey<T> type) { return Parser.parseAttribute(this,cp,type,attributes,Signature.FIELD); }
 
 	public String rawDesc() { return desc.getClass() == CstUTF.class ? ((CstUTF) desc).str() : desc instanceof Type ? ((Type) desc).toDesc() : desc.toString(); }
 
@@ -65,15 +65,15 @@ public final class FieldNode extends CNode {
 		ConstantPool cp = owner == null ? null : owner.cp;
 
 		Annotations a;
-		a = parsedAttr(cp, Attribute.RtAnnotations);
+		a = getAttribute(cp, Attribute.RtAnnotations);
 		if (a != null) a.toString(sb, prefix);
-		a = parsedAttr(cp, Attribute.ClAnnotations);
+		a = getAttribute(cp, Attribute.ClAnnotations);
 		if (a != null) a.toString(sb, prefix);
 
-		Signature sig = writeSignature ? parsedAttr(cp, Attribute.SIGNATURE) : null;
+		Signature sig = writeSignature ? getAttribute(cp, Attribute.SIGNATURE) : null;
 		Opcodes.showModifiers(modifier, Opcodes.ACC_SHOW_FIELD, sb.padEnd(' ', prefix)).append(sig != null ? sig : fieldType()).append(' ').append(name());
 
-		ConstantValue cv = parsedAttr(cp, Attribute.ConstantValue);
+		ConstantValue cv = getAttribute(cp, Attribute.ConstantValue);
 		if (cv != null) sb.append(" = ").append(cv.c.toString());
 
 		return sb.append(';');

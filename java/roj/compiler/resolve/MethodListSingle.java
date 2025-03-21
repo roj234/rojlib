@@ -6,12 +6,14 @@ import roj.asm.type.IType;
 import roj.asm.type.Type;
 import roj.asmx.mapper.ParamNameMapper;
 import roj.collect.IntMap;
+import roj.collect.MyHashMap;
 import roj.collect.SimpleList;
 import roj.compiler.ast.expr.ExprNode;
 import roj.compiler.context.LocalContext;
 import roj.compiler.diagnostic.Kind;
 import roj.text.CharList;
 import roj.text.TextUtil;
+import roj.util.Helpers;
 
 import java.util.Collections;
 import java.util.List;
@@ -42,38 +44,37 @@ final class MethodListSingle extends ComponentList {
 			List<Type> mParam = mn.parameters();
 			IntMap<Object> defParamState = null;
 
-			varargCheck:
-			if (mParam.size() != params.size()) {
-				if ((mn.modifier & Opcodes.ACC_VARARGS) != 0) break varargCheck;
-
+			if (mParam.size() != params.size() || !namedType.isEmpty()) {
+				var isVarargs = (mn.modifier & Opcodes.ACC_VARARGS) != 0;
 				int defReq = mParam.size() - params.size() - namedType.size();
-				if(defReq < 0) break error;
+				if(!isVarargs && defReq < 0) break error;
 
-				IntMap<ExprNode> mdvalue = ctx.getDefaultValue(mnOwner, mn);
+				IntMap<String> mdvalue = ctx.getDefaultValue(mnOwner, mn);
 				if (defReq > mdvalue.size()) break error;
 
 				defParamState = new IntMap<>();
 				myParam = new SimpleList<>(params);
 
 				List<String> names = ParamNameMapper.getParameterName(mnOwner.cp(), mn);
-
-				if (names == null) {
-					for (int i = params.size(); i < mParam.size(); i++) {
-						ExprNode c = mdvalue.get(i);
-						if (c == null) break error;
-						defParamState.putInt(i, c);
-						myParam.add(c.type());
-					}
-				} else if (names.size() != mParam.size()) {
-					ctx.report(Kind.WARNING, "invoke.warn.illegalNameList", mn);
-					break error;
+				if (names.size() != mParam.size()) {
+					ctx.report(Kind.ERROR, "invoke.warn.illegalNameList", mn);
+					return null;
 				} else {
+					// 可能在Annotation Resolve阶段，此时tmpMap1可用，但2不行
+					MyHashMap<String, IType> tmpMap1 = Helpers.cast(ctx.tmpMap1);
+					tmpMap1.clear(); tmpMap1.putAll(namedType);
+
 					for (int i = params.size(); i < mParam.size(); i++) {
 						String name = names.get(i);
-						IType type = namedType.get(name);
+						IType type = tmpMap1.remove(name);
 						if (type == null) {
-							ExprNode c = mdvalue.get(i);
-							if (c == null) break error;
+							ExprNode c = ctx.parseDefaultValue(mdvalue.get(i));
+							if (c == null) {
+								if (i == mParam.size() - 1 && isVarargs) break;
+
+								ctx.report(Kind.ERROR, "invoke.error.paramMissing", mnOwner, mn.name(), name);
+								return null;
+							}
 							type = c.type();
 							defParamState.putInt(i, c);
 						} else {
@@ -81,13 +82,22 @@ final class MethodListSingle extends ComponentList {
 						}
 						myParam.add(type);
 					}
+
+					if (!tmpMap1.isEmpty()) {
+						ctx.report(Kind.ERROR, "invoke.error.paramExtra", mnOwner, mn.name(), tmpMap1);
+						tmpMap1.clear();
+						return null;
+					}
 				}
 			}
 
+			ctx.inferrer._minCastAllow = -1;
 			result = ctx.inferrer.infer(mnOwner, mn, that, myParam == null ? params : myParam);
+			ctx.inferrer._minCastAllow = 0;
 			if (result.method != null) {
 				result.namedParams = defParamState;
 				MethodList.checkBridgeMethod(ctx, result);
+				checkDeprecation(ctx, mnOwner, mn);
 				return result;
 			}
 		}
@@ -95,7 +105,7 @@ final class MethodListSingle extends ComponentList {
 		if ((flags & NO_REPORT) == 0) {
 			if (result == null) result = ctx.inferrer.infer(mnOwner, mn, that, params);
 
-			CharList sb = new CharList().append("invoke.incompatible.single:").append(mn.owner).append(':').append(mn.name()).append(':');
+			CharList sb = new CharList().append("invoke.incompatible.single\1").append(mn.owner).append("\0\1").append(mn.name()).append("\0\1");
 
 			sb.append("  ").append("\1invoke.except\0 ");
 			MethodList.getArg(mn, that, sb).append('\n');

@@ -1,5 +1,7 @@
 package roj.asm.insn;
 
+import org.intellij.lang.annotations.MagicConstant;
+import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import roj.asm.AsmShared;
 import roj.asm.Attributed;
@@ -30,8 +32,8 @@ public class AttrCode extends Attribute implements Attributed {
 	public InsnList instructions = new InsnList();
 	public char stackSize, localSize;
 
-	private MethodNode method;
-	private byte frameFlag;
+	private final MethodNode method;
+	private byte fvFlags;
 
 	public List<Frame> frames;
 
@@ -39,7 +41,7 @@ public class AttrCode extends Attribute implements Attributed {
 
 	private AttributeList attributes;
 
-	public AttrCode() {}
+	public AttrCode(@NotNull MethodNode mn) {method = mn;}
 	public AttrCode(DynByteBuf r, ConstantPool cp, MethodNode mn) {
 		stackSize = r.readChar();
 		localSize = r.readChar();
@@ -109,16 +111,13 @@ public class AttrCode extends Attribute implements Attributed {
 	@Override
 	public String name() { return "Code"; }
 
-	public void recomputeFrames(int flag, MethodNode owner) {
-		this.frameFlag = (byte) flag;
-		if (flag != 0 && owner == null) throw new IllegalArgumentException();
-		this.method = owner;
-	}
+	public void computeFrames(@MagicConstant(flags = {AttrCode.COMPUTE_SIZES, AttrCode.COMPUTE_FRAMES}) int flag) {this.fvFlags = (byte) flag;}
 
 	@Override
 	public void toByteArrayNoHeader(DynByteBuf w, ConstantPool cp) {
 		var c = AsmShared.local().cw();
-		c.init(w, cp, method, frameFlag);
+		c.init(w, cp, method);
+		c.computeFrames(fvFlags);
 
 		c.visitSize(stackSize, localSize);
 		instructions.write(c);
@@ -134,16 +133,16 @@ public class AttrCode extends Attribute implements Attributed {
 
 		c.visitAttributes();
 
-		if (frameFlag != 0) {
-			Logger.FALLBACK.warn("FrameVisitor is EXPERIMENTAL! {}, updating {}.{}{}", frameFlag, method.owner, method.name(), method.rawDesc());
+		if (fvFlags != 0) {
+			Logger.FALLBACK.warn("FrameVisitor is EXPERIMENTAL! {}, updating {}.{}{}", fvFlags, method.owner, method.name(), method.rawDesc());
 			FrameVisitor fv = c.getFv();
 
-			if ((frameFlag & COMPUTE_SIZES) != 0) {
+			if ((fvFlags & COMPUTE_SIZES) != 0) {
 				stackSize = (char) fv.maxStackSize;
 				localSize = (char) fv.maxLocalSize;
 			}
 
-			if ((frameFlag & COMPUTE_FRAMES) != 0) {
+			if ((fvFlags & COMPUTE_FRAMES) != 0) {
 				frames = c.frames;
 			}
 		} else {
@@ -151,7 +150,7 @@ public class AttrCode extends Attribute implements Attributed {
 			if (frames != null) {
 				int stack = c.visitAttributeI("StackMapTable");
 				if (stack < 0) break s;
-				FrameVisitor.writeFrames(frames, w.putShort(frames.size()), cp);
+				FrameVisitor.writeFrames(frames, w, cp);
 				c.visitAttributeIEnd(stack);
 			}
 		}
@@ -160,7 +159,7 @@ public class AttrCode extends Attribute implements Attributed {
 		if (attrs != null) {
 			for (int i = 0; i < attrs.size(); i++) {
 				Attribute attr = attrs.get(i);
-				if (attr.isEmpty()) continue;
+				if (attr.writeIgnore()) continue;
 				c.visitAttribute(attr);
 			}
 		}
@@ -227,9 +226,9 @@ public class AttrCode extends Attribute implements Attributed {
 		if (lvt != null) lvt.toString(sb.append('\n').padEnd(' ', prefix).append("变量: "), getLVTT(), prefix+4);
 
 		if (frames != null) {
-			sb.append('\n').padEnd(' ', prefix).append("堆栈映射:\n");
+			sb.append('\n').padEnd(' ', prefix).append("堆栈状态:\n");
 			for (int i = 0; i < frames.size(); i++)
-				frames.get(i).toString(sb, prefix+4);
+				frames.get(i).toString(sb, prefix).append('\n');
 		}
 		return sb;
 	}
@@ -296,14 +295,12 @@ public class AttrCode extends Attribute implements Attributed {
 		return sb;
 	}
 
-	public LocalVariableTable getLVT() { return (LocalVariableTable) attrByName("LocalVariableTable"); }
-	public LocalVariableTable getLVTT() { return (LocalVariableTable) attrByName("LocalVariableTypeTable"); }
-	public LineNumberTable getLines() { return (LineNumberTable) attrByName("LineNumberTable"); }
+	public LocalVariableTable getLVT() { return (LocalVariableTable) getRawAttribute("LocalVariableTable"); }
+	public LocalVariableTable getLVTT() { return (LocalVariableTable) getRawAttribute("LocalVariableTypeTable"); }
+	public LineNumberTable getLines() { return (LineNumberTable) getRawAttribute("LineNumberTable"); }
 
-	public Attribute attrByName(String name) { return attributes == null ? null : (Attribute) attributes.getByName(name); }
 	public AttributeList attributes() { return attributes == null ? attributes = new AttributeList() : attributes; }
-	@Nullable
-	public AttributeList attributesNullable() { return attributes; }
+	@Nullable public AttributeList attributesNullable() { return attributes; }
 
 	public char modifier() { throw new UnsupportedOperationException(); }
 }

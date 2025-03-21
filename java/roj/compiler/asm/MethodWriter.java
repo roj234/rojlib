@@ -10,6 +10,7 @@ import roj.collect.Hasher;
 import roj.collect.MyHashSet;
 import roj.collect.SimpleList;
 import roj.compiler.context.GlobalContext;
+import roj.compiler.context.LocalContext;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
 
@@ -24,16 +25,24 @@ import static roj.asm.Opcodes.assertTrait;
  * @since 2022/2/24 19:19
  */
 public class MethodWriter extends CodeWriter {
-	private final ClassNode owner;
+	public static final int GLOBAL_INIT_INSERT = 0;
+
+	public final LocalContext ctx;
 
 	private final SimpleList<TryCatchEntry> trys = new SimpleList<>();
 
 	public LineNumberTable lines;
+	public LineNumberTable lines() {
+		if (lines == null) lines = new LineNumberTable();
+		return lines;
+	}
+
 	private LocalVariableTable lvt1, lvt2;
 
-	protected final MyHashSet<Label> __attributeLabel = new MyHashSet<>(Hasher.identity());
+	private final MyHashSet<Label> unrefLabels = new MyHashSet<>(Hasher.identity());
 
 	public void addLVTEntry(LocalVariableTable.Item v) {
+		if (lvt1 == null) return;
 		lvt1.list.add(v);
 		if (v.type.genericType() != IType.STANDARD_TYPE) {
 			lvt2.list.add(v);
@@ -43,19 +52,36 @@ public class MethodWriter extends CodeWriter {
 	public void __addLabel(Label l) {labels.add(l);}
 	public Label __attrLabel() {
 		Label label = label();
-		__attributeLabel.add(label);
+		unrefLabels.add(label);
 		return label;
 	}
+	public void __updateVariableEnd(Variable v) {
+		if (!labels.contains(v.end)) {
+			v.end = new Label();
+			labels.add(v.end);
+			unrefLabels.add(v.end);
+		} else {
+			v.end.clear();
+		}
+		label(v.end);
+	}
 
-	public MethodWriter(ClassNode unit, MethodNode mn, boolean generateLVT) {
-		this.owner = unit;
-		this.init(new ByteList(),unit.cp,mn,(byte)0);
+	public MethodWriter(ClassNode unit, MethodNode mn, boolean generateLVT, LocalContext ctx) {
+		this.ctx = ctx;
+		this.init(new ByteList(),unit.cp,mn);
 		if (generateLVT) {
 			lvt1 = new LocalVariableTable("LocalVariableTable");
 			lvt2 = new LocalVariableTable("LocalVariableTypeTable");
 		}
-		//addSegment(StaticSegment.emptyWritable());
 	}
+	protected MethodWriter(MethodWriter parent) {
+		this.ctx = parent.ctx;
+		this.init(new ByteList(),parent.cpw,parent.mn);
+		lvt1 = parent.lvt1;
+		lvt2 = parent.lvt2;
+	}
+
+	public MethodWriter fork() {return new MethodWriter(this);}
 	protected boolean skipFirstSegmentLabels() {return false;}
 
 	public TryCatchEntry addException(Label str, Label end, Label proc, String s) {
@@ -81,23 +107,24 @@ public class MethodWriter extends CodeWriter {
 	public void visitAttributes() {
 		super.visitAttributes();
 
-		if (lvt1 != null && !lvt1.isEmpty()) {
+		if (lvt1 != null && !lvt1.writeIgnore()) {
 			visitAttribute(lvt1);
-			if (!lvt2.isEmpty()) visitAttribute(lvt2);
+			if (!lvt2.writeIgnore()) visitAttribute(lvt2);
 		}
-		if (lines != null && !lines.isEmpty()) visitAttribute(lines);
+		if (lines != null && !lines.writeIgnore()) visitAttribute(lines);
 	}
 
+	// 这个pos!=0其实是筛掉了lambda
 	public void load(Variable v) {
-		if (v.slot != 0) varLoad(v.type.rawType(), v.slot);
+		if (v.slot != 0 && v.pos != 0) varLoad(v.type.rawType(), v.slot);
 		else addSegment(new LazyLoadStore(v, false));
 	}
 	public void store(Variable v) {
-		if (v.slot != 0) varStore(v.type.rawType(), v.slot);
+		if (v.slot != 0 && v.pos != 0) varStore(v.type.rawType(), v.slot);
 		else addSegment(new LazyLoadStore(v, true));
 	}
 	public void iinc(Variable v, int delta) {
-		if (v.slot != 0) iinc(v.slot, delta);
+		if (v.slot != 0 && v.pos != 0) iinc(v.slot, delta);
 		else addSegment(new LazyIINC(v, delta));
 	}
 
@@ -150,14 +177,19 @@ public class MethodWriter extends CodeWriter {
 	public CodeBlock getSegment(int i) {return codeBlocks.get(i);}
 	public boolean isJumpingTo(Label point) {return !codeBlocks.isEmpty() && codeBlocks.get(codeBlocks.size()-1) instanceof JumpBlock js && js.target == point;}
 
-	public MethodWriter fork() {return new MethodWriter(owner, mn, lvt1 != null);}
+	private final int[] markerBlock = new int[1];
+	public void addPlaceholder(int slot) {
+		markerBlock[slot] = nextSegmentId();
+		addSegment(LazyPlaceholder.PLACEHOLDER);
+	}
+	public int getPlaceholderId(int slot) {return markerBlock[slot];}
 
 	// for insertBefore()
 	public DynByteBuf writeTo() {
-		if (getState() < 2) visitExceptions();
 		var b = bw;
-		b.remove(0, 8);
-		b.wIndex(b.wIndex()-2);
+		int pos = b.wIndex();
+		finish();
+		b.wIndex(pos);
 		return b;
 	}
 
@@ -166,27 +198,31 @@ public class MethodWriter extends CodeWriter {
 
 		if (cw.codeBlocks.isEmpty()) cw._addFirst();
 		List<CodeBlock> tarSeg = cw.codeBlocks;
-		int offset = tarSeg.size();
+		int offset = tarSeg.size()-1;
 
 		if (!codeBlocks.isEmpty()) {
 			for (int i = 1; i < codeBlocks.size(); i++) {
 				CodeBlock seg = codeBlocks.get(i);
-				//if (seg.length() == 0 && i != segments.size()-1) continue;
 
 				CodeBlock move = seg.move(cw, offset, true);
 				tarSeg.add(move);
 				cw._addOffset(move.length());
 			}
 
+			var sb = (SolidBlock) tarSeg.get(tarSeg.size() - 1);
+			if (sb.isReadonly()) {
+				if (sb.length() == 0) tarSeg.remove(tarSeg.size()-1);
+				tarSeg.add(SolidBlock.emptyWritable());
+			}
 			cw.codeOb = ((SolidBlock) tarSeg.get(tarSeg.size() - 1)).getData();
 		}
 
-		cw.labels.addAll(__attributeLabel);
-		for (Label label : __attributeLabel) {
-			System.out.println("Label "+label+" += "+offset);
+		cw.labels.addAll(unrefLabels);
+		cw.unrefLabels.addAll(unrefLabels);
+		for (Label label : unrefLabels) {
 			label.__move(offset);
 		}
-		__attributeLabel.clear();
 		labels.clear();
+		unrefLabels.clear();
 	}
 }

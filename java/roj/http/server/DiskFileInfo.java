@@ -20,8 +20,8 @@ import java.nio.file.StandardOpenOption;
  * @since 2022/3/8 0:21
  */
 public class DiskFileInfo implements FileInfo, ChannelHandler {
-	private final File file;
-	private long time;
+	protected final File file;
+	protected long lastModified;
 	private final boolean download;
 
 	private DirectByteList cc;
@@ -33,7 +33,7 @@ public class DiskFileInfo implements FileInfo, ChannelHandler {
 	public DiskFileInfo(File file) {this(file, false);}
 	public DiskFileInfo(File file, boolean download) {
 		this.file = file;
-		this.time = file.lastModified();
+		this.lastModified = file.lastModified();
 		this.download = download;
 	}
 
@@ -43,7 +43,7 @@ public class DiskFileInfo implements FileInfo, ChannelHandler {
 		if (file.length() >= Integer.MAX_VALUE-24) throw new IllegalArgumentException("File too large");
 		if (uc == null) {
 			uc = IOUtil.read(file);
-			time = file.lastModified();
+			lastModified = file.lastModified();
 		}
 		return this;
 	}
@@ -51,7 +51,7 @@ public class DiskFileInfo implements FileInfo, ChannelHandler {
 	@Override
 	public int stats() {
 		if (uc == null && (System.currentTimeMillis()&511) == 0)
-			time = file.lastModified();
+			lastModified = file.lastModified();
 
 		int stat = FILE_RA;
 		int v = state;
@@ -83,7 +83,7 @@ public class DiskFileInfo implements FileInfo, ChannelHandler {
 	}
 
 	@Override
-	public long lastModified() {return time;}
+	public long lastModified() {return lastModified;}
 
 	@Override
 	public void prepare(ResponseHeader rh, Headers h) {

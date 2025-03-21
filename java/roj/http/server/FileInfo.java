@@ -8,7 +8,7 @@ import java.io.InputStream;
 import java.nio.channels.FileChannel;
 
 /**
- * Defalted => NoWrap
+ * Deflated => NoWrap
  * @author Roj234
  * @since 2023/2/3 0003 15:38
  */

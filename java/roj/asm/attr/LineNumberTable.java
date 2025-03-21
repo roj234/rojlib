@@ -29,7 +29,7 @@ public final class LineNumberTable extends Attribute implements CodeAttribute {
 	}
 
 	@Override
-	public boolean isEmpty() { return list.isEmpty(); }
+	public boolean writeIgnore() { return list.isEmpty(); }
 	@Override
 	public String name() { return "LineNumberTable"; }
 

@@ -1,8 +1,8 @@
 package roj.asm.util;
 
 import roj.asm.*;
-import roj.asm.attr.AttrUnknown;
 import roj.asm.attr.Attribute;
+import roj.asm.attr.UnparsedAttribute;
 import roj.asm.cp.Constant;
 import roj.asm.cp.ConstantPool;
 import roj.asm.cp.CstClass;
@@ -60,7 +60,7 @@ public class GenericTemplate extends CodeWriter {
 		ClassNode d = curr = Parser.parseConstants(data);
 		d.version = 49;
 
-		List<Constant> list = d.cp.array();
+		List<Constant> list = d.cp.data();
 		for (int i = 0; i < list.size(); i++) {
 			Constant c = list.get(i);
 			if (c.type() == Constant.CLASS) {
@@ -79,12 +79,12 @@ public class GenericTemplate extends CodeWriter {
 			MethodNode mn = methods.get(i);
 			mn.rawDesc(replaceDesc(mn.rawDesc(), methodType));
 
-			Attribute buf = mn.attrByName("Code");
+			Attribute buf = mn.getRawAttribute("Code");
 			if (buf != null) {
 				tmp.clear();
-				init(tmp, d.cp);
+				init(tmp, d.cp, mn);
 				visitCopied(d.cp, buf.getRawData());
-				mn.putAttr(new AttrUnknown("Code", tmp.toByteArray()));
+				mn.addAttribute(new UnparsedAttribute("Code", tmp.toByteArray()));
 			}
 		}
 

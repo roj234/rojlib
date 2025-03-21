@@ -89,6 +89,7 @@ public class Diagnostic {
 	@Nls
 	public String getMessage(Locale locale) {
 		if (!locale.equals(Locale.SIMPLIFIED_CHINESE)) return code;
-		return JavaLexer.i18n.translate(code+(args == null ? "" : ":"+(TextUtil.join(Arrays.asList(getArgs()), ":"))));
+		//return TranslatableString.of(code, args).translate(JavaLexer.i18n, new CharList()).toStringAndFree();
+		return JavaLexer.i18n.translate(code+(args == null ? "" : "\1"+(TextUtil.join(Arrays.asList(getArgs()), "\0\1"))+"\0"));
 	}
 }

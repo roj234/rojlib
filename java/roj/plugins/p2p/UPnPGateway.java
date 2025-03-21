@@ -70,6 +70,7 @@ public class UPnPGateway {
 			}
 		} else {
 			System.out.println("UPnP 不可用");
+			return;
 		}
 
 		final ServerSocket ss = new ServerSocket(PORT);

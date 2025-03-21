@@ -445,4 +445,11 @@ public class Mat3d {
 	}
 	@Override
 	public int hashCode() {return new Hasher().add(m00).add(m01).add(m02).add(m10).add(m11).add(m12).add(m20).add(m21).add(m22).getHash();}
+
+	@Override
+	public String toString() {
+		return "["+m00+","+m01+","+m02+
+				"\n"+m10+","+m11+","+m12+
+				"\n"+m20+","+m21+","+m22+"]";
+	}
 }

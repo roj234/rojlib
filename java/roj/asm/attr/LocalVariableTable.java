@@ -53,7 +53,7 @@ public final class LocalVariableTable extends Attribute implements CodeAttribute
 	}
 
 	@Override
-	public boolean isEmpty() { return list.isEmpty(); }
+	public boolean writeIgnore() { return list.isEmpty(); }
 
 	@Override
 	public void toByteArray(CodeWriter c) {

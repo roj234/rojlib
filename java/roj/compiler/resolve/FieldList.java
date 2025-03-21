@@ -48,20 +48,23 @@ final class FieldList extends ComponentList {
 
 			if (ctx.checkAccessible(owner, fn, (flags&IN_STATIC) != 0, false)) {
 				checkBridgeMethod(ctx, owner, fn);
+				checkDeprecation(ctx, owner, fn);
 				return new FieldResult(owner, fn);
 			}
 		}
 
-		CharList sb = new CharList().append("dotGet.incompatible.plural:");
+		CharList sb = new CharList().append("dotGet.incompatible.plural\1");
 
-		sb.append(fields.get(0).name()).append(":");
+		sb.append(fields.get(0).name()).append("\0\1");
 
 		CharList tmp = new CharList();
 		ctx.errorCapture = (trans, param) -> {
 			tmp.clear();
+			tmp.append('\1');
 			tmp.append(trans);
 			for (Object o : param)
-				tmp.append(':').append(o);
+				tmp.append("\0\1").append(o);
+			tmp.append('\0');
 		};
 
 		for (int i = 0; i < size; i++) {
@@ -69,8 +72,8 @@ final class FieldList extends ComponentList {
 			FieldNode fn = fields.get(i);
 
 			ctx.checkAccessible(owner, fn, (flags&IN_STATIC) != 0, true);
-			sb.append("  {symbol.field}").append(owner.name()).append('.').append(fn.name());
-			sb.append("{invoke.notApplicable}{").append(tmp).append("}\n");
+			sb.append("  \1symbol.field\0").append(owner.name()).append('.').append(fn.name());
+			sb.append("\1invoke.notApplicable\0").append(tmp).append("}\n");
 			tmp.clear();
 		}
 
@@ -81,11 +84,11 @@ final class FieldList extends ComponentList {
 
 	static void checkBridgeMethod(LocalContext ctx, IClass owner, FieldNode fn) {
 		if ((fn.modifier&Opcodes.ACC_PRIVATE) == 0 || ctx.file == owner ||
-			ctx.classes.hasFeature(LavaFeatures.NESTED_MEMBER)) return;
+			ctx.classes.getMaximumBinaryCompatibility() >= LavaFeatures.JAVA_11) return;
 
-		if (fn.attrByName(FieldWriteReplace.NAME) != null) return;
+		if (fn.getRawAttribute(FieldWriteReplace.NAME) != null) return;
 
 		var fwr = new FieldBridge((CompileUnit) owner);
-		fn.putAttr(fwr);
+		fn.addAttribute(fwr);
 	}
 }

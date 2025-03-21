@@ -3,12 +3,9 @@ package roj.plugins.share;
 import org.jetbrains.annotations.Nullable;
 import roj.asm.Opcodes;
 import roj.collect.*;
-import roj.concurrent.OperationDone;
 import roj.concurrent.ScheduleTask;
 import roj.config.ConfigMaster;
 import roj.config.ParseException;
-import roj.config.auto.Name;
-import roj.config.auto.Optional;
 import roj.config.auto.SerializerFactory;
 import roj.config.data.CMap;
 import roj.config.serial.ToJson;
@@ -19,10 +16,10 @@ import roj.http.IllegalRequestException;
 import roj.http.server.*;
 import roj.http.server.auto.*;
 import roj.io.IOUtil;
-import roj.plugin.PathIndexRouter;
+import roj.io.vfs.VirtualFileSystem;
 import roj.plugin.PermissionHolder;
 import roj.plugin.Plugin;
-import roj.reflect.ReflectionUtils;
+import roj.plugin.VFSRouter;
 import roj.text.CharList;
 import roj.text.Escape;
 import roj.text.TextUtil;
@@ -35,12 +32,10 @@ import java.io.IOException;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Pattern;
 
-import static roj.reflect.Unaligned.U;
 import static roj.ui.CommandNode.argument;
 import static roj.ui.CommandNode.literal;
 
@@ -49,76 +44,8 @@ import static roj.ui.CommandNode.literal;
  * @since 2025/3/8 0008 0:39
  */
 public class FileShare extends Plugin {
-    static class ShareInfo {
-        String id, name;
-        long time;
-        long size;
-        @Optional volatile long expire;
-        @Optional String text;
-        @Optional String code;
-        @Optional transient File base;
-        @Optional List<ShareFile> files;
-        transient int owner;
-        transient Set<ChunkUpload.Task> uploading;
-
-        public int expireType() {return expire == 0 ? 0 : expire > 100000 ? 1 : 2;}
-        public boolean isExpired() {return expireType() == 1 && System.currentTimeMillis() > expire;}
-
-        public void fillFromServerPath(File path) {
-            files = new SimpleList<>();
-            size = 0;
-            base = path;
-            int prefixLength = path.getAbsolutePath().length()+1;
-            try {
-                IOUtil.findAllFiles(path, file -> {
-                    if (files.size() == 1000) throw OperationDone.INSTANCE;
-                    ShareFile file1 = new ShareFile(file, prefixLength);
-                    size += file1.size;
-                    files.add(file1);
-                    return false;
-                });
-            } catch (OperationDone ignored) {}
-        }
-
-        transient ShareInfo _next;
-
-        static final long EXPIRE_OFFSET = ReflectionUtils.fieldOffset(ShareInfo.class, "expire");
-        public void countDown(long timeout) {
-            while (true) {
-                long oldVal = this.expire;
-                long newVal = oldVal == 1 ? timeout : oldVal-1;
-                if (U.compareAndSwapLong(this, EXPIRE_OFFSET, oldVal, newVal)) {
-                    if (oldVal == 1) code = ""; // no new entry
-                    break;
-                }
-            }
-        }
-    }
-    static class ShareFile {
-        String name;
-        @Name("type") String mime;
-        @Optional String path;
-        long size, lastModified;
-
-        // Either<Integer, File> => uploadPath / file
-        @Optional transient int id;
-        @Optional transient File file;
-
-        public ShareFile() {}
-        public ShareFile(File file, int prefixLength) {
-            this.name = file.getName();
-            this.mime = MimeType.getMimeType(IOUtil.extensionName(name));
-            this.size = file.length();
-            this.lastModified = file.lastModified();
-            String path = file.getAbsolutePath();
-            if (path.length() > prefixLength+name.length())
-                this.path = path.substring(prefixLength, path.length() - name.length() - 1).replace(File.separatorChar, '/');
-            this.file = file;
-        }
-    }
-
-    static class Serialized {
-        List<ShareInfo> shares;
+    static final class Serialized {
+        List<Share> shares;
         int shareFileIndex;
 
         public Serialized() {}
@@ -130,11 +57,11 @@ public class FileShare extends Plugin {
 
     private final Object lock = new Object();
 
-    private static final XHashSet.Shape<String, ShareInfo> SHARE_INFO_SHAPE = XHashSet.noCreation(ShareInfo.class, "id");
-    private XHashSet<String, ShareInfo> shares = SHARE_INFO_SHAPE.create();
-    private final XHashSet<String, ShareInfo> incompleteShares = SHARE_INFO_SHAPE.create();
+    private static final XHashSet.Shape<String, Share> SHARE_INFO_SHAPE = XHashSet.noCreation(Share.class, "id");
+    private XHashSet<String, Share> shares = SHARE_INFO_SHAPE.create();
+    private final XHashSet<String, Share> incompleteShares = SHARE_INFO_SHAPE.create();
 
-    private File uploadPath;
+    File uploadPath;
     private final AtomicInteger shareFileIdx = new AtomicInteger(1);
     private final ChunkUpload uploadManager = new ChunkUpload();
 
@@ -147,12 +74,12 @@ public class FileShare extends Plugin {
         SerializerFactory.SerializeSetting transientRemover = (owner, field, annotations) -> {
             if (field != null) {
                 String name = field.name();
-                if (name.equals("_next") || name.equals("file") || name.equals("uploading")) return annotations;
+                if (name.equals("_next") || name.equals("file") || name.equals("uploading") || name.equals("vfs")) return annotations;
                 field.modifier &= ~Opcodes.ACC_TRANSIENT;
             }
             return annotations;
         };
-        ownerSerializer = SerializerFactory.getInstance().serializeFileToString().add(ShareFile.class, transientRemover).add(ShareInfo.class, transientRemover);
+        ownerSerializer = SerializerFactory.getInstance().serializeFileToString().add(ShareFile.class, transientRemover).add(Share.class, transientRemover);
     }
 
     @Override
@@ -172,7 +99,7 @@ public class FileShare extends Plugin {
 
         registerCommand(literal("fileshare")
                 .then(literal("remove").breakOn().then(argument("网页路径", Argument.oneOf(CollectionX.toMap(shares))).executes(ctx -> {
-                    removeShare(ctx.argument("网页路径", ShareInfo.class));
+                    removeShare(ctx.argument("网页路径", Share.class));
                 })))
                 .then(literal("reload").breakOn().executes(ctx -> {
                     synchronized (lock) {
@@ -185,7 +112,7 @@ public class FileShare extends Plugin {
                 .then(argument("网页路径", Argument.string()).then(argument("文件路径", Argument.path()).executes(ctx -> {
                     String id = ctx.argument("网页路径", String.class);
                     File path = ctx.argument("文件路径", File.class);
-                    var share = new ShareInfo();
+                    var share = new Share();
                     share.id = id;
                     share.name = "文件分享";
                     share.time = System.currentTimeMillis();
@@ -217,7 +144,7 @@ public class FileShare extends Plugin {
         }
     }
 
-    private void removeShare(ShareInfo info) {
+    private void removeShare(Share info) {
         synchronized (lock) {
             if (!shares.remove(info)) return;
             markDirty();
@@ -260,8 +187,8 @@ public class FileShare extends Plugin {
         }
     }
 
-    private ShareInfo getUnexpired(Request req) {
-        ShareInfo info = shares.get(req.argument("shareId"));
+    private Share getUnexpired(Request req) {
+        Share info = shares.get(req.argument("shareId"));
         if (info != null && info.isExpired()) {
             synchronized (lock) {
                 if (!shares.remove(info)) return null;
@@ -295,9 +222,13 @@ public class FileShare extends Plugin {
 
         if (share.expireType() == 2) return Response.httpError(404);
 
-        if (share.base == null) return Response.text("未实现虚拟文件系统");
-        PathIndexRouter pathIndexRouter = new PathIndexRouter(share.base);
-        return pathIndexRouter.response(req, req.server());
+        var router = share.vfs;
+        if (router == null) {
+            var vfs = share.base == null ? new ShareVFS(this, share) : VirtualFileSystem.disk(share.base);
+            //U.compareAndSwapObject(share, VFS_OFFSET, null, vfs);
+            router = share.vfs = new VFSRouter(vfs);
+        }
+        return router.response(req, req.server());
     }
 
     @Accepts(Accepts.GET|Accepts.POST)
@@ -325,13 +256,14 @@ public class FileShare extends Plugin {
                 token = info.code;
             }
 
+            info.view++;
             req.responseHeader().sendCookieToClient(Collections.singletonList(new Cookie("code").value(token).expires(0)));
         }
 
         return ConfigMaster.JSON.writeObject(info, new CharList().append("{\"ok\":true,\"data\":")).append('}');
     }
 
-    private boolean checkShareCode(Request req, ShareInfo info) throws IllegalRequestException {
+    private boolean checkShareCode(Request req, Share info) throws IllegalRequestException {
         String cookieCode = req.cookie().getOrDefault("code", Cookie.EMPTY).value();
         if (info.expireType() != 2 && !info.code.isEmpty()) return info.code.equals(cookieCode);
 
@@ -348,7 +280,7 @@ public class FileShare extends Plugin {
 
     @GET(":shareId/file/:fileId(\\d+)")
     public Response downloadFile(Request req) throws IllegalRequestException {
-        ShareInfo info = getUnexpired(req);
+        Share info = getUnexpired(req);
         if (info == null) return Response.httpError(404);
 
         if (info.code != null && !checkShareCode(req, info)) {
@@ -362,6 +294,8 @@ public class FileShare extends Plugin {
 
         var file = files.get(fileId);
 
+        info.download++;
+        //file.download++;
         var realFile = file.file;
         if (realFile == null) {
             realFile = file.id != 0
@@ -375,7 +309,7 @@ public class FileShare extends Plugin {
 
     @POST(":shareId/delete")
     public CharSequence shareDelete(Request req) {
-        ShareInfo info = getUnexpired(req);
+        Share info = getUnexpired(req);
         if (info == null || !isOwner(req, info)) return "{\"ok\":false,\"data\":\"不存在或不是你的共享\"}";
         boolean flag;
         synchronized (lock) {
@@ -387,7 +321,7 @@ public class FileShare extends Plugin {
         return "{\"ok\":true,\"data\":\"已删除\"}";
     }
 
-    private void deleteShare(ShareInfo info) {
+    private void deleteShare(Share info) {
         if (info.files != null) {
             for (ShareFile file : info.files) {
                 if (file.id == 0) continue;
@@ -411,7 +345,7 @@ public class FileShare extends Plugin {
         simpleSer.key("data");
         simpleSer.valueList();
         if (user != null) {
-            List<ShareInfo> myShares = new SimpleList<>();
+            List<Share> myShares = new SimpleList<>();
             synchronized (lock) {
                 for (var info : shares) {
                     if (info.owner == user.getId()) myShares.add(info);
@@ -424,16 +358,16 @@ public class FileShare extends Plugin {
         return simpleSer.getValue();
     }
 
-    private static CharList writeInfoHistory(ShareInfo shareInfo) {
+    private static CharList writeInfoHistory(Share share) {
         var simpleSer = new ToJson();
         simpleSer.valueMap();
         simpleSer.key("ok");
         simpleSer.value(true);
         simpleSer.key("data");
-        writeInfoHistory(shareInfo, simpleSer);
+        writeInfoHistory(share, simpleSer);
         return simpleSer.getValue();
     }
-    private static void writeInfoHistory(ShareInfo info, ToJson ser) {
+    private static void writeInfoHistory(Share info, ToJson ser) {
         ser.valueMap();
         ser.key("id");
         ser.value(info.id);
@@ -445,6 +379,10 @@ public class FileShare extends Plugin {
         }
         ser.key("time");
         ser.value(info.time);
+        ser.key("view");
+        ser.value(info.view);
+        ser.key("download");
+        ser.value(info.download);
 
         String name, type;
         var file = info.files;
@@ -509,7 +447,7 @@ public class FileShare extends Plugin {
         else if (code.length() < 4 || code.length() > 12) return error("参数错误");
         else if (code.equals("none")) code = null;
 
-        info = new ShareInfo();
+        info = new Share();
         info.id = id;
         info.owner = user.getId();
         String name = map.getOrDefault("name", "").trim();
@@ -561,14 +499,14 @@ public class FileShare extends Plugin {
     private static String error(String error) {return "{\"ok\":false,\"data\":\""+error+"\"}";}
 
     @POST(":shareId/add")
-    public Response shareNewUploadTask(Request req, String name, @Field(orDefault = "") String relativePath, long size, long lastModified) {
+    public Response shareNewUploadTask(Request req, String name, @Field(orDefault = "") String path, long size, long lastModified) {
         var shareInfo = incompleteShares.get(req.argument("shareId"));
         if (shareInfo != null) {
 
             var file = new ShareFile();
             file.name = name;
-            if (!relativePath.isEmpty())
-                file.path = relativePath;
+            if (!path.isEmpty())
+                file.path = path;
             file.size = size;
             file.lastModified = lastModified;
             file.mime = MimeType.getMimeType(IOUtil.extensionName(name));
@@ -614,16 +552,16 @@ public class FileShare extends Plugin {
     @POST(":shareId/submit")
     public CharSequence sharePackup(Request req) {
         String id = req.argument("shareId");
-        ShareInfo shareInfo;
+        Share share;
         synchronized (incompleteShares) {
-            shareInfo = incompleteShares.removeKey(id);
+            share = incompleteShares.removeKey(id);
         }
 
         block:
-        if (shareInfo != null) {
-            synchronized (shareInfo) {
-                var set = shareInfo.uploading;
-                shareInfo.uploading = null;
+        if (share != null) {
+            synchronized (share) {
+                var set = share.uploading;
+                share.uploading = null;
                 for (var task : set) {
                     try {
                         task.finish(false);
@@ -634,13 +572,13 @@ public class FileShare extends Plugin {
             }
 
             synchronized (lock) {
-                if (!shares.add(shareInfo)) {
+                if (!shares.add(share)) {
                     break block;
                 }
                 markDirty();
             }
 
-            return writeInfoHistory(shareInfo);
+            return writeInfoHistory(share);
         }
 
         return "{\"ok\":false}";
@@ -649,6 +587,6 @@ public class FileShare extends Plugin {
 
     // 权限控制
     @Nullable private PermissionHolder getUser(Request req) {return easySso.ipc(new TypedKey<>("getUser"), req);}
-    private boolean isOwner(Request req, ShareInfo info) {var user = getUser(req);return user != null && user.getId() == info.owner;}
+    private boolean isOwner(Request req, Share info) {var user = getUser(req);return user != null && user.getId() == info.owner;}
     private boolean isReadable(Request req, File path) {var user = getUser(req);return user != null && user.isReadable(path.getAbsolutePath());}
 }

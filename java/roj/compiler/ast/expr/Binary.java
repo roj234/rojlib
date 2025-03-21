@@ -109,7 +109,7 @@ final class Binary extends ExprNode {
 		}
 
 		if (lType.getActualType() == Type.VOID || rType.getActualType() == Type.VOID) {
-			ctx.report(Kind.ERROR, "binary.error.void");
+			ctx.report(this, Kind.ERROR, "binary.error.void");
 			return NaE.RESOLVE_FAILED;
 		}
 
@@ -127,15 +127,16 @@ final class Binary extends ExprNode {
 		}
 
 		type = lType;
-		int capL = getPrimitiveOrWrapperType(lType);
-		int capR = getPrimitiveOrWrapperType(rType);
+		// TODO 第一次赋值可以就是它吗？
+		int capL = getPrimitiveOrWrapperType(left.minType());
+		int capR = getPrimitiveOrWrapperType(right.minType());
 		int dpType = Math.max(capL, capR);
 
 		primitive: {
 			if (dpType < 8 && (operator < logic_and || operator > nullish_coalescing)) {
 				if (Math.min(capL, capR) == 0) {
 					if (dpType != 0 || operator > logic_or || operator < and) {
-						ctx.report(Kind.ERROR, "binary.error.notApplicable", lType, rType, byId(operator));
+						ctx.report(this, Kind.ERROR, "binary.error.notApplicable", lType, rType, byId(operator));
 						return NaE.RESOLVE_FAILED;
 					}
 					dpType = 8; // boolean
@@ -145,7 +146,7 @@ final class Binary extends ExprNode {
 					if (operator >= shl) {
 						// 6 = float, 7 = double
 						if (dpType > 5) {
-							ctx.report(Kind.ERROR, "binary.error.notApplicable", lType, rType, byId(operator));
+							ctx.report(this, Kind.ERROR, "binary.error.notApplicable", lType, rType, byId(operator));
 							return NaE.RESOLVE_FAILED;
 						} else if (dpType == 5 && BITSHIFT.contains(operator)) {
 							// 5 = long
@@ -172,7 +173,7 @@ final class Binary extends ExprNode {
 				break;
 				case logic_and, logic_or, nullish_coalescing:
 					if (operator == nullish_coalescing) {
-						if (lType.isPrimitive()) ctx.report(Kind.ERROR, "symbol.error.derefPrimitive", lType);
+						if (lType.isPrimitive()) ctx.report(this, Kind.ERROR, "symbol.error.derefPrimitive", lType);
 						type = ctx.getCommonParent(lType, rType);
 					} else {
 						type = Type.primitive(Type.BOOLEAN);
@@ -185,7 +186,7 @@ final class Binary extends ExprNode {
 					ExprNode override = ctx.getOperatorOverride(left, right, operator);
 					if (override == null) {
 						if (isAssignEx) return null;
-						ctx.report(Kind.ERROR, "binary.error.notApplicable", lType, rType, byId(operator));
+						ctx.report(this, Kind.ERROR, "binary.error.notApplicable", lType, rType, byId(operator));
 						return NaE.RESOLVE_FAILED;
 					}
 					return override;
@@ -216,7 +217,7 @@ final class Binary extends ExprNode {
 					case shl, shr, ushr -> {
 						int value = ((CEntry) right.constVal()).asInt();
 						if (value == 0 && castLeft == null) return left;
-						if (value > BIT_COUNT[dpType]) ctx.report(Kind.SEVERE_WARNING, "binary.shiftOverflow", type, BIT_COUNT[dpType]);
+						if (value > BIT_COUNT[dpType]) ctx.report(this, Kind.SEVERE_WARNING, "binary.shiftOverflow", type, BIT_COUNT[dpType]);
 					}
 					// equ 和 neq 应该可以直接删除跳转？反正boolean也就是0和非0 （AND 1就行）
 					case equ, neq, lss, geq, gtr, leq -> {
@@ -227,7 +228,7 @@ final class Binary extends ExprNode {
 					// expr ?? null => expr
 					case nullish_coalescing -> {
 						if (right.constVal() == null) {
-							ctx.report(Kind.WARNING, "binary.uselessNullish");
+							ctx.report(this, Kind.WARNING, "binary.uselessNullish");
 							return left;
 						}
 					}
@@ -242,12 +243,12 @@ final class Binary extends ExprNode {
 		switch (operator) {
 			case logic_and, logic_or:
 				var exprVal = (boolean) left.constVal();
-				var v = exprVal == (operator == logic_and) ? right : Constant.valueOf(exprVal);
-				ctx.report(Kind.WARNING, "binary.constant", v);
+				var v = exprVal == (operator == logic_and) ? right : ExprNode.valueOf(exprVal);
+				ctx.report(this, Kind.WARNING, "binary.constant", v);
 				return v;
 			case nullish_coalescing:
 				v = left.constVal() == null ? right : left;
-				ctx.report(Kind.WARNING, "binary.constant", v);
+				ctx.report(this, Kind.WARNING, "binary.constant", v);
 				return v;
 		}
 
@@ -271,7 +272,7 @@ final class Binary extends ExprNode {
 		switch (operator) {
 			case lss, gtr, geq, leq:
 				double l = ((CEntry) left.constVal()).asDouble(), r = ((CEntry) right.constVal()).asDouble();
-				return Constant.valueOf(switch (operator) {
+				return valueOf(switch (operator) {
 					case lss -> l < r;
 					case gtr -> l > r;
 					case geq -> l >= r;
@@ -280,7 +281,7 @@ final class Binary extends ExprNode {
 				});
 
 			case equ, neq:
-				return Constant.valueOf((operator == equ) == (dpType == 9 ?
+				return valueOf((operator == equ) == (dpType == 9 ?
 					left.constVal().equals(right.constVal()) :
 					((CEntry)left.constVal()).asDouble() == ((CEntry)right.constVal()).asDouble()));
 		}
@@ -304,11 +305,11 @@ final class Binary extends ExprNode {
 					case xor -> l^r;
 					default -> throw OperationDone.NEVER;
 				};
-				return new Constant(BIT_OP.contains(operator) ? type : Type.primitive(Type.INT), CEntry.valueOf(o));
+				return constant(BIT_OP.contains(operator) ? type : Type.primitive(Type.INT), CEntry.valueOf(o));
 			}
 			case 5: {
 				long l = ((CEntry) left.constVal()).asLong(), r = ((CEntry) right.constVal()).asLong();
-				return Constant.valueOf(CEntry.valueOf(switch (operator) {
+				return valueOf(CEntry.valueOf(switch (operator) {
 					case add -> l+r;
 					case sub -> l-r;
 					case mul -> l*r;
@@ -327,7 +328,7 @@ final class Binary extends ExprNode {
 			}
 			case 6: {
 				float l = ((CEntry) left.constVal()).asFloat(), r = ((CEntry) right.constVal()).asFloat();
-				return Constant.valueOf(CEntry.valueOf(switch (operator) {
+				return valueOf(CEntry.valueOf(switch (operator) {
 					case add -> l+r;
 					case sub -> l-r;
 					case mul -> l*r;
@@ -339,7 +340,7 @@ final class Binary extends ExprNode {
 			}
 			case 7: {
 				double l = ((CEntry) left.constVal()).asDouble(), r = ((CEntry) right.constVal()).asDouble();
-				return Constant.valueOf(CEntry.valueOf(switch (operator) {
+				return valueOf(CEntry.valueOf(switch (operator) {
 					case add -> l+r;
 					case sub -> l-r;
 					case mul -> l*r;
@@ -351,7 +352,7 @@ final class Binary extends ExprNode {
 			}
 			case 8: {
 				boolean l = (boolean) left.constVal(), r = (boolean) right.constVal();
-				return Constant.valueOf(switch (operator) {
+				return valueOf(switch (operator) {
 					case and -> l&r;
 					case or -> l|r;
 					case xor -> l^r;
@@ -365,7 +366,7 @@ final class Binary extends ExprNode {
 
 	private boolean checkDivZero(LocalContext ctx) {
 		if (dType <= 1 && operator == div && ((CEntry) right.constVal()).asInt() == 0) {
-			ctx.report(Kind.SEVERE_WARNING, "binary.divisionByZero");
+			ctx.report(this, Kind.SEVERE_WARNING, "binary.divisionByZero");
 			return true;
 		}
 		return false;

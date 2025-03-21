@@ -7,9 +7,9 @@ import roj.archive.zip.ZipOutput;
 import roj.asm.ClassNode;
 import roj.asm.Opcodes;
 import roj.asm.Parser;
-import roj.asm.attr.AttrModule;
-import roj.asm.attr.AttrString;
 import roj.asm.attr.Attribute;
+import roj.asm.attr.ModuleAttribute;
+import roj.asm.attr.StringAttribute;
 import roj.asm.util.Context;
 import roj.asm.util.TransformUtil;
 import roj.asmx.event.EventBus;
@@ -34,6 +34,7 @@ import roj.gui.Profiler;
 import roj.io.FastFailException;
 import roj.io.IOUtil;
 import roj.math.Version;
+import roj.plugins.ci.annotation.ReplaceConstant;
 import roj.plugins.ci.plugin.MAP;
 import roj.plugins.ci.plugin.ProcessEnvironment;
 import roj.plugins.ci.plugin.Processor;
@@ -75,8 +76,9 @@ import static roj.ui.CommandNode.literal;
  * @author Roj234
  * @since 2021/6/18 10:51
  */
+@ReplaceConstant
 public final class FMD {
-	public static final String VERSION = "2.1.2";
+	static final String VERSION = "${ci_version}";
 
 	//static final Pattern NAME_PATTERN = Pattern.compile("^[a-z_\\-][a-z0-9_\\-]*$");
 	//static final Pattern VERSION_PATTERN = Pattern.compile("^(\\d+\\.?)+?([-_][a-zA-Z0-9]+)?$");
@@ -260,22 +262,22 @@ public final class FMD {
 			}
 
 			var moduleInfo = new ClassNode();
-			var moduleAttr = new AttrModule(moduleName, 0);
+			var moduleAttr = new ModuleAttribute(moduleName, 0);
 
 			moduleInfo.version = ClassNode.JavaVersion(17);
 			moduleAttr.self.version = "1.0.0";
-			moduleAttr.requires.add(new AttrModule.Module("java.base", Opcodes.ACC_MANDATED));
+			moduleAttr.requires.add(new ModuleAttribute.Module("java.base", Opcodes.ACC_MANDATED));
 			for (String pack : packages) {
-				moduleAttr.exports.add(new AttrModule.Export(pack));
+				moduleAttr.exports.add(new ModuleAttribute.Export(pack));
 			}
 
 			moduleInfo.name("module-info");
 			moduleInfo.parent(null);
 			moduleInfo.modifier = Opcodes.ACC_MODULE;
-			moduleInfo.putAttr(new AttrString(Attribute.SourceFile, "module-info.java"));
+			moduleInfo.addAttribute(new StringAttribute(Attribute.SourceFile, "module-info.java"));
 			//moduleInfo.putAttr(new AttrString(Attribute.ModuleTarget, "windows-amd64"));
 			//moduleInfo.putAttr(new AttrClassList(Attribute.ModulePackages, new SimpleList<>(packages)));
-			moduleInfo.putAttr(moduleAttr);
+			moduleInfo.addAttribute(moduleAttr);
 
 			System.out.println(moduleAttr);
 			try (var za = new ZipArchive(file)) {

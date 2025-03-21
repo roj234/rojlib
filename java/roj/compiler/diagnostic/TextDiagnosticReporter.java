@@ -6,21 +6,21 @@ import roj.ui.Terminal;
 
 import java.io.PrintStream;
 import java.util.Locale;
-import java.util.function.Consumer;
+import java.util.function.Function;
 
 /**
  * @author solo6975
  * @since 2020/12/31 22:22
  */
-public class TextDiagnosticReporter implements Consumer<Diagnostic> {
-	public boolean errorOnly;
-
-	int err, warn;
-	int[] counter = new int[6];
+public class TextDiagnosticReporter implements Function<Diagnostic, Boolean> {
+	public int warnOps;
+	public int total, err, warn;
+	final int[] counter = new int[6];
 
 	public TextDiagnosticReporter(int maxError, int maxWarn, int warnOps) {
 		this.err = maxError;
 		this.warn = maxWarn;
+		this.warnOps = warnOps;
 	}
 
 	private String getErrorType(Kind kind) {
@@ -45,8 +45,10 @@ public class TextDiagnosticReporter implements Consumer<Diagnostic> {
 	 * arguments
 	 */
 	@Override
-	public void accept(Diagnostic diag) {
-		if (diag.getKind().ordinal() < Kind.ERROR.ordinal() && errorOnly) return;
+	public Boolean apply(Diagnostic diag) {
+		total++;
+
+		if (diag.getKind().ordinal() < Kind.ERROR.ordinal() && (warnOps&1) != 0) return false;
 
 		CharList sb = new CharList();
 
@@ -96,6 +98,8 @@ public class TextDiagnosticReporter implements Consumer<Diagnostic> {
 				break;
 			}
 		}
+
+		return diag.getKind().ordinal() >= (((warnOps&2) != 0) ? Kind.WARNING.ordinal() : Kind.ERROR.ordinal());
 	}
 
 	public void printSum() {

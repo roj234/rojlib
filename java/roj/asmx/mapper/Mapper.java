@@ -169,13 +169,13 @@ public class Mapper extends Mapping {
 			w.putVUInt(fieldMap.size());
 			for (Map.Entry<Desc, String> s : fieldMap.entrySet()) {
 				Desc desc = s.getKey();
-				pool.add(pool.add(pool.add(pool.add(w, desc.owner), desc.name), desc.param).put(desc.flags), s.getValue());
+				pool.add(pool.add(pool.add(pool.add(w, desc.owner), desc.name), desc.param).put(desc.modifier), s.getValue());
 			}
 
 			w.putVUInt(methodMap.size());
 			for (Map.Entry<Desc, String> s : methodMap.entrySet()) {
 				Desc desc = s.getKey();
-				pool.add(pool.add(pool.add(pool.add(w, desc.owner), desc.name), desc.param).put(desc.flags), s.getValue());
+				pool.add(pool.add(pool.add(pool.add(w, desc.owner), desc.name), desc.param).put(desc.modifier), s.getValue());
 			}
 		} else {
 			w.putMedium(0);
@@ -359,7 +359,7 @@ public class Mapper extends Mapping {
 		if ((flag&MF_ANNOTATION_INHERIT) != 0) {
 			var found = Annotation.findInvisible(data.cp, data, "roj/asmx/mapper/Inherited");
 			if (found != null) {
-				var value = found.getArray("value");
+				var value = found.getList("value");
 				for (int i = 0; i < value.size(); i++) {
 					list.add(value.getType(i).owner);
 				}
@@ -461,8 +461,8 @@ public class Mapper extends Mapping {
 					Desc d1 = upgraded.find(d);
 					if (d1 != d) {
 						char acc = mn.modifier();
-						boolean isProtected = (d1.flags& ACC_PUBLIC) == 0;
-						boolean isInherited = d1.flags == 6;
+						boolean isProtected = (d1.modifier & ACC_PUBLIC) == 0;
+						boolean isInherited = d1.modifier == 6;
 						if (isProtected) {
 							if ((acc&(ACC_PUBLIC|ACC_PROTECTED)) == 0) {
 								mn.modifier(acc|ACC_PROTECTED);
@@ -479,7 +479,7 @@ public class Mapper extends Mapping {
 							IClass ctx = s2_tmp_byName.get(d1.owner);
 							RawNode m = ctx.methods().get(ctx.getMethod(d1.name, d1.param));
 							if ((m.modifier()&5) == 0) m.modifier(m.modifier()|ACC_PROTECTED);
-							d1.flags = 0;
+							d1.modifier = 0;
 						}
 					}
 
@@ -549,7 +549,7 @@ public class Mapper extends Mapping {
 				}
 
 				if (method && (acc & (ACC_STATIC|ACC_FINAL)) == 0) {
-					d.flags = node.modifier();
+					d.modifier = node.modifier();
 					upgraded.add(d.copy());
 				}
 			}
@@ -586,7 +586,7 @@ public class Mapper extends Mapping {
 
 				boolean remove = false;
 				for (NameAndType desc : entry.getValue()) {
-					if (desc.flags == 0) {
+					if (desc.modifier == 0) {
 						// unmappable
 						remove = true;
 						break;
@@ -614,7 +614,7 @@ public class Mapper extends Mapping {
 			d.owner = owner;
 			d.name = m.name();
 			d.param = m.rawDesc();
-			d.flags = 0;
+			d.modifier = 0;
 
 			if (inheritTo != null) {
 				char acc = m.modifier();
@@ -627,7 +627,7 @@ public class Mapper extends Mapping {
 				Map.Entry<Desc, String> entry = map.find(d);
 				if (entry != null) {
 					d.name = entry.getValue();
-					d.flags = 1;
+					d.modifier = 1;
 					break;
 				}
 
@@ -649,7 +649,7 @@ public class Mapper extends Mapping {
 			val.owner = d.owner;
 			val.name = m.name();
 			val.param = key.param;
-			val.flags = d.flags;
+			val.modifier = d.modifier;
 			descs.computeIfAbsent(key, Helpers.fnMyHashSet()).add(val);
 		}
 	}
@@ -707,7 +707,7 @@ public class Mapper extends Mapping {
 						ClassNode data = (ClassNode) s2_tmp_byName.get(desc.owner);
 						int i = data.getMethod(desc.name, desc.param);
 						if (i < 0) throw new IllegalStateException("缺少元素(not in context...): " + desc);
-						desc.flags = data.methods.get(i).modifier();
+						desc.modifier = data.methods.get(i).modifier();
 
 						desc = desc.copy();
 					}
@@ -828,7 +828,7 @@ public class Mapper extends Mapping {
 		List<Desc> list = s2_tmp_methods.getOrDefault(name, Collections.emptyList());
 		for (int i = 0; i < list.size(); i++) {
 			Desc desc = list.get(i);
-			if (desc.flags == Desc.FLAG_UNSET) throw new IllegalStateException("缺少元素: "+desc);
+			if (desc.modifier == Desc.FLAG_UNSET) throw new IllegalStateException("缺少元素: "+desc);
 		}
 		return Helpers.cast(list);
 	}
@@ -863,10 +863,10 @@ public class Mapper extends Mapping {
 					d.owner = parents.get(j++);
 					continue;
 				} else {
-					int acc = entry.getKey().flags;
+					int acc = entry.getKey().modifier;
 					if (acc == Desc.FLAG_UNSET) {
 						if (j == 0) {
-							acc = entry.getKey().flags = m.modifier();
+							acc = entry.getKey().modifier = m.modifier();
 						} else {
 							if (simulate) {
 								LOGGER.warn("缺少元素 {}", entry);
@@ -943,16 +943,16 @@ public class Mapper extends Mapping {
 	}
 	/** Field name and type in 'Record' attribute */
 	private void mapRecord(Desc d, ClassNode data) {
-		AttrRecord r = data.parsedAttr(data.cp, Attribute.Record);
+		RecordAttribute r = data.getAttribute(data.cp, Attribute.Record);
 		if (r == null) return;
 
 		ClassUtil U = ClassUtil.getInstance();
 
 		d.owner = data.name();
 		d.param = "";
-		List<AttrRecord.Val> vars = r.variables;
+		List<RecordAttribute.Field> vars = r.fields;
 		for (int i = 0; i < vars.size(); i++) {
-			AttrRecord.Val v = vars.get(i);
+			RecordAttribute.Field v = vars.get(i);
 
 			d.name = v.name;
 			if (checkFieldType) d.param = v.type;
@@ -975,7 +975,7 @@ public class Mapper extends Mapping {
 
 		BootstrapMethods bs = null;
 
-		List<Constant> list = data.cp.array();
+		List<Constant> list = data.cp.data();
 		for (int j = 0; j < list.size(); j++) {
 			Constant c = list.get(j);
 			switch (c.type()) {
@@ -986,7 +986,7 @@ public class Mapper extends Mapping {
 					mapRef(data, (CstRef) c, false);
 					break;
 				case Constant.INVOKE_DYNAMIC:
-					if (bs == null) bs = data.parsedAttr(data.cp,Attribute.BootstrapMethods);
+					if (bs == null) bs = data.getAttribute(data.cp,Attribute.BootstrapMethods);
 					if (bs == null) throw new IllegalArgumentException("有lambda却无BootstrapMethod, " + data.name());
 					mapLambda(bs, data, (CstDynamic) c);
 					break;
@@ -1120,9 +1120,9 @@ public class Mapper extends Mapping {
 	}
 	/** Annotation type and field key */
 	private void mapAnnotations(ClassUtil U, ConstantPool cp, Attributed node) {
-		Attribute a = node.attrByName("RuntimeVisibleAnnotations");
+		Attribute a = node.getRawAttribute("RuntimeVisibleAnnotations");
 		if (a != null) mapAnnotations(U, cp, Parser.reader(a));
-		a = node.attrByName("RuntimeInvisibleAnnotations");
+		a = node.getRawAttribute("RuntimeInvisibleAnnotations");
 		if (a != null) mapAnnotations(U, cp, Parser.reader(a));
 	}
 	private void mapAnnotations(ClassUtil U, ConstantPool cp, DynByteBuf r) {
@@ -1189,7 +1189,7 @@ public class Mapper extends Mapping {
 	}
 	/** Generic signature type */
 	private void mapSignature(ConstantPool pool, Attributed node) {
-		Signature generic = node.parsedAttr(pool, Attribute.SIGNATURE);
+		Signature generic = node.getAttribute(pool, Attribute.SIGNATURE);
 		if (generic != null) generic.rename(GENERIC_TYPE_MAPPER);
 	}
 	/** Class name and parent */
@@ -1234,7 +1234,7 @@ public class Mapper extends Mapping {
 	/** Any other: interface, bootstrap method, class ref... */
 	private void mapConstant(ClassUtil U, ConstantPool cp) {
 		String oldCls, newCls;
-		List<Constant> arr = cp.array();
+		List<Constant> arr = cp.data();
 		for (int i = 0; i < arr.size(); i++) {
 			Constant c = arr.get(i);
 			switch (c.type()) {
@@ -1271,7 +1271,7 @@ public class Mapper extends Mapping {
 
 	public final void S5_1_resetDebugInfo(Context ctx) {
 		ClassNode data = ctx.getData();
-		AttrString sourceFile = data.parsedAttr(data.cp, Attribute.SourceFile);
+		StringAttribute sourceFile = data.getAttribute(data.cp, Attribute.SourceFile);
 		if (sourceFile != null) {
 			String name = data.name();
 			sourceFile.value = name.substring(Math.max(name.lastIndexOf('/'), name.lastIndexOf('$'))+1).concat(".java");
@@ -1344,7 +1344,7 @@ public class Mapper extends Mapping {
 			if (par) d.param = n.rawDesc();
 
 			Map.Entry<Desc, String> entry = flags.find(d);
-			if (entry != null) entry.getKey().flags = n.modifier();
+			if (entry != null) entry.getKey().modifier = n.modifier();
 		}
 	}
 
@@ -1388,10 +1388,10 @@ public class Mapper extends Mapping {
 
 		MyHashSet<Desc> unmatched = new MyHashSet<>();
 		for (Desc desc : methodMap.keySet())
-			if (desc.flags == Desc.FLAG_UNSET)
+			if (desc.modifier == Desc.FLAG_UNSET)
 				unmatched.add(desc);
 		for (Desc desc : fieldMap.keySet())
-			if (desc.flags == Desc.FLAG_UNSET)
+			if (desc.modifier == Desc.FLAG_UNSET)
 				unmatched.add(desc);
 
 		if (!unmatched.isEmpty()) {

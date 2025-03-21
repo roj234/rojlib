@@ -2,21 +2,20 @@ package roj.compiler.context;
 
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
+import org.jetbrains.annotations.Range;
 import roj.asm.*;
-import roj.asm.attr.AttrModule;
 import roj.asm.attr.InnerClasses;
+import roj.asm.attr.ModuleAttribute;
 import roj.asm.type.IType;
 import roj.asmx.AnnotationSelf;
 import roj.collect.*;
-import roj.compiler.JavaLexer;
 import roj.compiler.LavaFeatures;
 import roj.compiler.asm.AnnotationPrimer;
-import roj.compiler.asm.MethodWriter;
-import roj.compiler.ast.BlockParser;
-import roj.compiler.ast.expr.ExprParser;
 import roj.compiler.diagnostic.Diagnostic;
 import roj.compiler.diagnostic.Kind;
 import roj.compiler.diagnostic.TextDiagnosticReporter;
+import roj.compiler.doc.Javadoc;
+import roj.compiler.doc.JavadocProcessor;
 import roj.compiler.resolve.ComponentList;
 import roj.compiler.resolve.ResolveHelper;
 import roj.text.Interner;
@@ -28,7 +27,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import java.util.function.Consumer;
+import java.util.function.Function;
 
 /**
  * 提供class信息的上下文、编译环境 每个编译器一个，或者说它就是编译器
@@ -64,7 +63,7 @@ public class GlobalContext implements LavaFeatures {
 	protected final LibraryGenerated generated = new LibraryGenerated();
 	protected static final class LibraryGenerated implements Library {
 		final MyHashMap<String, ClassNode> classes = new MyHashMap<>();
-		AttrModule module;
+		ModuleAttribute module;
 
 		@Override public ClassNode get(CharSequence name) {return classes.get(name);}
 		@Override public String moduleName() {return module == null ? null : module.self.name;}
@@ -137,12 +136,12 @@ public class GlobalContext implements LavaFeatures {
 	@NotNull public synchronized final ResolveHelper getResolveHelper(IClass info) { return extraInfos.computeIfAbsent(info); }
 	public synchronized void invalidateResolveHelper(IClass file) {extraInfos.removeKey(file);}
 
-	@NotNull public IntBiMap<String> getParentList(IClass info) {return getResolveHelper(info).getClassList(this);}
-	@NotNull public ComponentList getMethodList(IClass info, String name) throws TypeNotPresentException {return getResolveHelper(info).getMethods(this).getOrDefault(name, ComponentList.NOT_FOUND);}
-	@NotNull public ComponentList getFieldList(IClass info, String name) throws TypeNotPresentException {return getResolveHelper(info).getFields(this).getOrDefault(name, ComponentList.NOT_FOUND);}
+	@NotNull public IntBiMap<String> getParentList(IClass info) {return getResolveHelper(info).getHierarchyList(this);}
+	@NotNull public ComponentList getMethodList(IClass info, String name) {return getResolveHelper(info).getMethods(this).getOrDefault(name, ComponentList.NOT_FOUND);}
+	@NotNull public ComponentList getFieldList(IClass info, String name) {return getResolveHelper(info).getFields(this).getOrDefault(name, ComponentList.NOT_FOUND);}
 	@Nullable public List<IType> getTypeParamOwner(IClass info, String superType) throws ClassNotFoundException {return getResolveHelper(info).getTypeParamOwner(this).get(superType);}
-	public Map<String, InnerClasses.Item> getInnerClassFlags(IClass info) {return getResolveHelper(info).getInnerClasses();}
-	public AnnotationSelf getAnnotationDescriptor(IClass clz) {return getResolveHelper(clz).annotationInfo();}
+	@NotNull public Map<String, InnerClasses.Item> getInnerClassFlags(IClass info) {return getResolveHelper(info).getInnerClasses();}
+	public AnnotationSelf getAnnotationDescriptor(IClass info) {return getResolveHelper(info).annotationInfo();}
 
 	/**
 	 * 通过短名称获取全限定名（若存在）
@@ -193,50 +192,40 @@ public class GlobalContext implements LavaFeatures {
 		generated.module = null;
 	}
 
-	public JavaLexer createLexer() {return new JavaLexer();}
 	public LocalContext createLocalContext() {return new LocalContext(this);}
+	public JavadocProcessor createJavadocProcessor(Javadoc javadoc, CompileUnit file) {return JavadocProcessor.NULL;}
 
-	public ExprParser createExprParser(LocalContext ctx) {return new ExprParser(ctx);}
-	public BlockParser createBlockParser(LocalContext ctx) {return new BlockParser(ctx);}
-	public MethodWriter createMethodWriter(ClassNode file, MethodNode node) {return new MethodWriter(file, node, hasFeature(LavaFeatures.ATTR_LOCAL_VARIABLES));}
-
-	public void setModule(AttrModule module) {
+	public void setModule(ModuleAttribute module) {
 		if (generated.module != null) report(null, Kind.ERROR, -1, "module.dup");
 		generated.module = module;
 	}
 
 	// example
-	public void runAnnotationProcessor(CompileUnit file, Attributed node, List<AnnotationPrimer> annotations) {
-		for (var annotation : annotations) {
-			if (annotation.type().equals("java/lang/Override") && annotation.raw() != Collections.EMPTY_MAP) {
-				report(file, Kind.ERROR, annotation.pos, "annotation.override");
-			}
-		}
-	}
+	public void runAnnotationProcessor(CompileUnit file, Attributed node, List<AnnotationPrimer> annotations) {}
 
 	public boolean hasFeature(int specId) {return true;}
+	@Range(from = 6, to = 21)
+	public int getMaximumBinaryCompatibility() {return LavaFeatures.JAVA_17;}
 
-	public Consumer<Diagnostic> reporter = new TextDiagnosticReporter(1, 1, 1);
+	public Function<Diagnostic, Boolean> reporter = new TextDiagnosticReporter(1, 1, 1);
 	public boolean hasError;
 
 	public boolean hasError() {return hasError;}
 	public void report(IClass source, Kind kind, int pos, String code) { report(source, kind, pos, code, (Object[]) null);}
 	public void report(IClass source, Kind kind, int pos, String code, Object... args) {
 		Diagnostic diagnostic = new Diagnostic(source, kind, pos, pos, code, args);
-		if (kind.ordinal() >= Kind.ERROR.ordinal()) hasError = true;
-		reporter.accept(diagnostic);
+		if (reporter.apply(diagnostic)) hasError = true;
 	}
 	public void report(IClass source, Kind kind, int start, int end, String code, Object... args) {
 		Diagnostic diagnostic = new Diagnostic(source, kind, start, end, code, args);
-		if (kind.ordinal() >= Kind.ERROR.ordinal()) hasError = true;
-		reporter.accept(diagnostic);
+		if (reporter.apply(diagnostic)) hasError = true;
 	}
 
 	private static final ClassNode AnyArray;
 	static {
 		var array = Object[].class;
 		var ref = new ClassNode();
-		ref.name("<\1arrayBase\0>");
+		ref.name("[Ljava/lang/Object;");
 		ref.parent(array.getSuperclass().getName().replace('.', '/'));
 		for (Class<?> itf : array.getInterfaces()) ref.addInterface(itf.getName().replace('.', '/'));
 		ref.fields.add(new FieldNode(Opcodes.ACC_PUBLIC|Opcodes.ACC_FINAL, "length", "I"));

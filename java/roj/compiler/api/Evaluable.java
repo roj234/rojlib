@@ -17,7 +17,7 @@ import java.util.List;
 public abstract class Evaluable extends Attribute {
 	public static final String NAME = "LavaEvaluable";
 
-	@Override public final boolean isEmpty() {return true;}
+	@Override public final boolean writeIgnore() {return true;}
 	@Override public final String name() {return NAME;}
 
 	@Nullable public abstract ExprNode eval(MethodNode owner, @Nullable ExprNode self, List<ExprNode> args, Invoke node);

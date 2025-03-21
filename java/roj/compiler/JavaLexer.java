@@ -6,6 +6,7 @@ import roj.collect.IntBiMap;
 import roj.collect.MyBitSet;
 import roj.collect.TrieTree;
 import roj.compiler.asm.MethodWriter;
+import roj.compiler.context.GlobalContext;
 import roj.compiler.context.LocalContext;
 import roj.compiler.diagnostic.Kind;
 import roj.compiler.doc.Javadoc;
@@ -21,7 +22,6 @@ import roj.text.TextUtil;
 
 import java.io.File;
 import java.io.IOException;
-import java.util.List;
 
 import static roj.config.Word.EOF;
 import static roj.config.Word.LITERAL;
@@ -147,16 +147,46 @@ public final class JavaLexer extends Tokenizer {
 		// start from Number Binary
 		binary_assign_base_offset = 143, binary_assign_count = 12,
 		binary_assign_delta = add-binary_assign_base_offset,
-		direct_assign = binary_assign_base_offset+binary_assign_count;
+		operator_end = binary_assign_base_offset+binary_assign_count;
 
-	public static final short INT_MIN_VALUE = 198, LONG_MIN_VALUE = 199;
+	public static final short INT_MIN_VALUE = 155, LONG_MIN_VALUE = 156;
+	public static /*not final*/ short MAX_TOKENS = 157;
 
-	public static final TrieTree<Word> JAVA_TOKEN = new TrieTree<>();
+	private static final TrieTree<Word> JAVA_TOKEN = new TrieTree<>();
 	private static final MyBitSet JAVA_LEND = new MyBitSet();
 	private static final Int2IntMap JAVA_C2C = new Int2IntMap();
+	private static final MyBitSet[] JAVA_LST = new MyBitSet[4];
+
+	public static final int STATE_CLASS = 0, STATE_MODULE = 1, STATE_EXPR = 2, STATE_TYPE = 3;
+	public int state = STATE_CLASS;
+	public MyBitSet[] literalState = JAVA_LST;
+
+	public static TrieTree<Word> getJavaToken() {return new TrieTree<>(JAVA_TOKEN);}
+	public static MyBitSet getJavaLend() {return JAVA_LEND.copy();}
+	public static MyBitSet[] getJavaLst() {
+		MyBitSet[] r = JAVA_LST.clone();
+		for (int i = 0; i < r.length; i++) {
+			r[i] = r[i].copy();
+		}
+		return r;
+	}
 
 	public static I18n i18n;
 	static {
+		for (int state = 0; state < JAVA_LST.length; state++) {
+			MyBitSet set = new MyBitSet();
+			for (int id = 0; id < MAX_TOKENS; id++) {
+				if (id <= CHARACTER || id >= 100 || switch (state) {
+					case STATE_CLASS -> id <= JavaLexer.DOUBLE;
+					case STATE_EXPR -> id >= VOID && id <= FINALLY || id == CLASS || id == FINAL || id == CONST || id == DEFAULT || id == SUPER;
+					case STATE_TYPE -> id >= VOID && id <= FINALLY || id == SUPER || id == EXTENDS;
+					case STATE_MODULE -> id >= REQUIRES && id <= TO || id == WITH || id == STATIC;
+					default -> false;
+				}) set.add(id);
+			}
+			JAVA_LST[state] = set;
+		}
+
 		String path = System.getProperty("roj.lavac.i18n");
 		try {
 			i18n = new I18n(path == null ? IOUtil.getTextResource("roj/compiler/kscript.lang") : IOUtil.readUTF(new File(path)));
@@ -210,19 +240,12 @@ public final class JavaLexer extends Tokenizer {
 		return this;
 	}
 
-	private static void literalAlias(String from, String to) {
-		JAVA_TOKEN.put(from, new Word().init(Word.LITERAL, 0, to));
-	}
 	private static void alias(String kw, short begin, MyBitSet noLiterals) {
 		JAVA_TOKEN.put(kw, new Word().init(begin, 0, kw));
 		if (noLiterals != null) noLiterals.add(kw.charAt(0));
 	}
 
-	public static short byName(String token) { return JAVA_TOKEN.get(token).type(); }
 	public static String byId(short id) { return id < 100 ? keywords[id - 10] : operators[id - 100]; }
-
-	public static final int STATE_CLASS = 0, STATE_MODULE = 1, STATE_EXPR = 2, STATE_TYPE = 3;
-	public int state = STATE_CLASS;
 
 	@Override
 	protected Word newWord() {
@@ -230,13 +253,7 @@ public final class JavaLexer extends Tokenizer {
 			@Override
 			public short type() {
 				short id = super.type();
-				return id <= CHARACTER || (id >= 100 && id <= 200) || switch (state) {
-					case STATE_CLASS -> id <= JavaLexer.DOUBLE;
-					case STATE_EXPR -> id >= VOID && id <= FINALLY || id == CLASS || id == FINAL || id == CONST || id == DEFAULT || id == SUPER || id > 999;
-					case STATE_TYPE -> id >= VOID && id <= FINALLY || id == SUPER || id == EXTENDS;
-					case STATE_MODULE -> id >= REQUIRES && id <= TO || id == WITH || id == STATIC;
-					default -> false;
-				} ? id : LITERAL;
+				return id < 0 || literalState[state].contains(id) ? id : LITERAL;
 			}
 		};
 	}
@@ -321,7 +338,7 @@ public final class JavaLexer extends Tokenizer {
 		return super.onInvalidNumber(flag, i, reason);
 	}
 
-	public List<Javadoc> javadocCollector;
+	public Javadoc javadoc;
 
 	@Override
 	protected Word onSpecialToken(Word w) throws ParseException {
@@ -330,8 +347,7 @@ public final class JavaLexer extends Tokenizer {
 				return formClip(LITERAL, readSlashString('`', false));
 			}
 			case 2 -> {
-				if (javadocCollector == null) multiLineComment(null, "*/");
-				else readJavadoc();
+				readJavadoc();
 				return null;
 			}
 			case 1 -> {
@@ -383,6 +399,8 @@ public final class JavaLexer extends Tokenizer {
 		} while (in.charAt(i) != '/');
 
 		doc.visitEnd();
+		if (javadoc != null) GlobalContext.debugLogger().error("冲走"+ javadoc);
+		javadoc = doc;
 		index = i+1;
 	}
 	private Word readStringBlock() throws ParseException {
@@ -469,7 +487,7 @@ public final class JavaLexer extends Tokenizer {
 		assert labelGen == cw;
 
 		if (labelGen.bci() == lines.lastBci()) lines.list.pop();
-		if (!lines.isEmpty()) cw.lines = lines;
+		if (!lines.writeIgnore()) cw.lines = lines;
 
 		lines = null;
 		labelGen = null;
@@ -494,7 +512,7 @@ public final class JavaLexer extends Tokenizer {
 		Word w = next();
 		if (w.type() == type) return w;
 		String s = type == LITERAL ? "标识符" : byId(type);
-		throw err("unexpected_2:"+w.val()+':'+s);
+		throw err("unexpected_2\1"+w.val()+"\0\1"+s+"\0");
 	}
 
 	public Word current() { return wd; }

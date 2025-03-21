@@ -8,12 +8,10 @@ import roj.asm.type.IType;
 import roj.asm.type.Type;
 import roj.compiler.api.Evaluable;
 import roj.compiler.asm.MethodWriter;
-import roj.compiler.ast.expr.Constant;
 import roj.compiler.ast.expr.ExprNode;
 import roj.compiler.ast.expr.Invoke;
 import roj.compiler.context.Library;
 import roj.compiler.context.LocalContext;
-import roj.compiler.plugin.ExprApi;
 import roj.compiler.plugin.LavaApi;
 import roj.compiler.plugin.LavaPlugin;
 import roj.compiler.resolve.TypeCast;
@@ -28,7 +26,7 @@ import static roj.compiler.JavaLexer.*;
  * @since 2024/12/1 0001 3:33
  */
 @LavaPlugin(name = "uint", desc = "为Lava语言提供两种无符号数据类型: uint32和uint64")
-public final class UintPlugin extends Evaluable implements Library, ExprApi.ExprOp {
+public final class UintPlugin extends Evaluable implements Library, LavaApi.ExprOp {
 	private static ExprNode _u32(ExprNode node) {return node instanceof uiCast cast ? cast.is64 == 0 ? cast.left : cast : new uiCast(node, 1);}
 	private static ExprNode _u64(ExprNode node) {return node instanceof uiCast cast ? cast.is64 == 0 ? cast.left : cast : new uiCast(node, 2);}
 	private static ExprNode _i32(ExprNode node) {return node instanceof uiCast cast ? cast.left : new uiCast(node, 0);}
@@ -68,7 +66,7 @@ public final class UintPlugin extends Evaluable implements Library, ExprApi.Expr
 		//@Override public void write(MethodWriter cw, TypeCast.Cast returnType) {left.write(cw, returnType);}
 	}
 
-	private static int u32Count(ExprApi.OperatorContext opctx) {return u32Count(opctx.leftType())+u32Count(opctx.rightType());}
+	private static int u32Count(LavaApi.OperatorContext opctx) {return u32Count(opctx.leftType())+u32Count(opctx.rightType());}
 	private static int u32Count(IType type) {
 		if (type == null) return -1;
 		if ("uint32".equals(type.owner())) return 1;
@@ -76,7 +74,7 @@ public final class UintPlugin extends Evaluable implements Library, ExprApi.Expr
 		return cap >= 1 && cap <= 4 ? 0 : -1;
 	}
 
-	private static int u64Count(ExprApi.OperatorContext opctx) {return u64Count(opctx.leftType())+u64Count(opctx.rightType());}
+	private static int u64Count(LavaApi.OperatorContext opctx) {return u64Count(opctx.leftType())+u64Count(opctx.rightType());}
 	private static int u64Count(IType type) {
 		if (type == null) return -1;
 		if ("uint64".equals(type.owner())) return 1;
@@ -85,7 +83,7 @@ public final class UintPlugin extends Evaluable implements Library, ExprApi.Expr
 	}
 
 	private final MethodNode[] exprRef = new MethodNode[6];
-	private final Constant zero = Constant.valueOf(0);
+	private final ExprNode zero = ExprNode.valueOf(0);
 
 	private final ClassNode Uint32, Uint64;
 	private final MethodNode u32ToString, u32FromString, u64ToString, u64FromString;
@@ -101,11 +99,11 @@ public final class UintPlugin extends Evaluable implements Library, ExprApi.Expr
 		exprRef[2] = new MethodNode(Opcodes.ACC_STATIC, "java/lang/Integer", "compareUnsigned", "(II)I");
 
 		var m1 = new MethodNode(Opcodes.ACC_PUBLIC, "uint32", "toString", "()Ljava/lang/String;");
-		m1.putAttr(this);
+		m1.addAttribute(this);
 		Uint32.methods.add(m1);
 
 		m1 = new MethodNode(Opcodes.ACC_PUBLIC|Opcodes.ACC_STATIC, "uint32", "parse", "(Ljava/lang/String;)Luint32;");
-		m1.putAttr(this);
+		m1.addAttribute(this);
 		Uint32.methods.add(m1);
 
 		Uint64 = new ClassNode();
@@ -119,11 +117,11 @@ public final class UintPlugin extends Evaluable implements Library, ExprApi.Expr
 		exprRef[5] = new MethodNode(Opcodes.ACC_STATIC, "java/lang/Long", "compareUnsigned", "(JJ)I");
 
 		m1 = new MethodNode(Opcodes.ACC_PUBLIC, "uint64", "toString", "()Ljava/lang/String;");
-		m1.putAttr(this);
+		m1.addAttribute(this);
 		Uint64.methods.add(m1);
 
 		m1 = new MethodNode(Opcodes.ACC_PUBLIC|Opcodes.ACC_STATIC, "uint64", "parse", "(Ljava/lang/String;)Luint32;");
-		m1.putAttr(this);
+		m1.addAttribute(this);
 		Uint64.methods.add(m1);
 
 		//for (MethodNode node : exprRef) node.putAttr(this);
@@ -149,33 +147,32 @@ public final class UintPlugin extends Evaluable implements Library, ExprApi.Expr
 	public void pluginInit(LavaApi api) {
 		api.addLibrary(this);
 
-		var expr = api.getExprApi();
-		expr.addOpHandler("(", this); // 窄化转型失败
-		expr.addOpHandler(")", this); // 宽化转型失败 (目前仅有var做了这个check)
-		expr.addOpHandler("==", this);
-		expr.addOpHandler("!=", this);
-		expr.addOpHandler(">=", this);
-		expr.addOpHandler("<=", this);
-		expr.addOpHandler(">", this);
-		expr.addOpHandler("<", this);
-		expr.addOpHandler("/", this);
-		expr.addOpHandler("%", this);
-		expr.addOpHandler("++", this);
-		expr.addOpHandler("--", this);
-		expr.addOpHandler("+", this);
-		expr.addOpHandler("-", this);
-		expr.addOpHandler("*", this);
-		expr.addOpHandler("<<", this);
-		expr.addOpHandler(">>", this);
-		expr.addOpHandler("~", this);
-		expr.addOpHandler("&", this);
-		expr.addOpHandler("|", this);
-		expr.addOpHandler("^", this);
-		//rtApi.onOperator(">>>", math);
+		api.addOpHandler("(", this); // 窄化转型失败
+		api.addOpHandler(")", this); // 宽化转型失败 (目前仅有var做了这个check)
+		api.addOpHandler("==", this);
+		api.addOpHandler("!=", this);
+		api.addOpHandler(">=", this);
+		api.addOpHandler("<=", this);
+		api.addOpHandler(">", this);
+		api.addOpHandler("<", this);
+		api.addOpHandler("/", this);
+		api.addOpHandler("%", this);
+		api.addOpHandler("++", this);
+		api.addOpHandler("--", this);
+		api.addOpHandler("+", this);
+		api.addOpHandler("-", this);
+		api.addOpHandler("*", this);
+		api.addOpHandler("<<", this);
+		api.addOpHandler(">>", this);
+		api.addOpHandler("~", this);
+		api.addOpHandler("&", this);
+		api.addOpHandler("|", this);
+		api.addOpHandler("^", this);
+		//api.onOperator(">>>", math);
 	}
 
 	@Override
-	public ExprNode test(LocalContext ctx, ExprApi.OperatorContext opctx, ExprNode left, Object right) {
+	public ExprNode test(LocalContext ctx, LavaApi.OperatorContext opctx, ExprNode left, Object right) {
 		short sym = opctx.symbol();
 		switch (sym) {
 			case inc, dec, add, sub, mul, shl, shr, inv, and, or, xor -> {

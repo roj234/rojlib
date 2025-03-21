@@ -49,7 +49,7 @@ public abstract class MethodHook implements ITransformer {
 				toDesc.name = m.getName();
 				toDesc.param = TypeHelper.class2asm(m.getParameterTypes(), m.getReturnType());
 				int i1 = sb.indexOf("static_");
-				toDesc.flags = (char) (i1>=0&&i1<=i ? 1 : 0);
+				toDesc.modifier = (char) (i1>=0&&i1<=i ? 1 : 0);
 
 				Function<Desc, List<Object>> fn = (x) -> {
 					List<Object> list = new SimpleList<>();
@@ -58,24 +58,24 @@ public abstract class MethodHook implements ITransformer {
 				};
 
 				i1 = sb.indexOf("newInstance_");
-				if (i1>=0&&i1<=i) toDesc.flags |= 4;
+				if (i1>=0&&i1<=i) toDesc.modifier |= 4;
 
 				RealDesc altDesc = m.getAnnotation(RealDesc.class);
 				if (altDesc != null) {
-					if (altDesc.callFrom()) toDesc.flags |= 2;
+					if (altDesc.callFrom()) toDesc.modifier |= 2;
 					for (String s : altDesc.value()) {
 						Desc key = Desc.fromJavapLike(s);
 						hooks.put(key, toDesc);
 					}
 				} else {
-					if (toDesc.flags == 0) {
+					if (toDesc.modifier == 0) {
 						List<Type> param = Type.methodDesc(toDesc.param);
 						String owner = param.remove(0).owner();
 
 						i1 = sb.indexOf("callFrom_");
 						if (i1>=0&&i1<=i) {
 							param.remove(param.size()-2);
-							toDesc.flags |= 2;
+							toDesc.modifier |= 2;
 						}
 
 						Desc key = toDesc.copy();
@@ -126,14 +126,14 @@ public abstract class MethodHook implements ITransformer {
 				d.param = type;
 				Desc to = hooks.get(d);
 				if (to != null) {
-					if ((to.flags & 2) != 0) {
+					if ((to.modifier & 2) != 0) {
 						super.ldc(new CstClass(self));
 						hasLdc = true;
 					}
 					super.invoke(Opcodes.INVOKESTATIC, to.owner, to.name, to.param, false);
 
-					d.flags = 1;
-					return (to.flags & 4) == 0;
+					d.modifier = 1;
+					return (to.modifier & 4) == 0;
 				}
 				return false;
 			}
@@ -145,6 +145,6 @@ public abstract class MethodHook implements ITransformer {
 			}
 		});
 
-		return d.flags != 0;
+		return d.modifier != 0;
 	}
 }

@@ -168,7 +168,7 @@ public final class Kuropack {
 
 				SimpleList<FieldNode> fields = data.fields;
 				for (int j = fields.size()-1; j >= 0; j--) {
-					if (fields.get(j).attrByName("ConstantValue") != null)
+					if (fields.get(j).getRawAttribute("ConstantValue") != null)
 						fields.remove(j);
 				}
 

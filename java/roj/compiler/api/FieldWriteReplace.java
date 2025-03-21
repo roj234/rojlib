@@ -16,7 +16,7 @@ public abstract class FieldWriteReplace extends Attribute {
 	public static final String NAME = "LavaFieldHook";
 
 	@Override
-	public final boolean isEmpty() {return true;}
+	public final boolean writeIgnore() {return true;}
 	@Override
 	public final String name() {return NAME;}
 

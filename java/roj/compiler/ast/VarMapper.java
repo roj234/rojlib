@@ -22,13 +22,16 @@ final class VarMapper {
 	private final List<Variable> tmp2 = new SimpleList<>();
 	private int _id;
 
-	public void add(Variable v) {vars.add(v);}
+	public void add(Variable v) {tmp2.add(v);}
 	public void reserve(int slot) {
 		if (_id < slot) freeId.addRange(_id, slot);
 		_id = slot+1;
 	}
 	public int map() {
 		var union = vars;
+		union.clear();
+		for (Variable v : tmp2) union.add(v);
+		tmp2.clear();
 
 		var freeId = this.freeId;
 		var curVars = tmp2;
@@ -85,5 +88,5 @@ final class VarMapper {
 
 		return peakId;
 	}
-	public void clear() {vars.clear();_id = 0;}
+	public void clear() {tmp2.clear();freeId.clear();_id = 0;}
 }

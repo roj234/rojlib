@@ -1,6 +1,7 @@
 package roj.asm.frame;
 
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 import roj.asm.insn.Label;
 import roj.io.IOUtil;
 import roj.text.CharList;
@@ -10,90 +11,84 @@ import roj.text.CharList;
  * @since 2021/6/2 23:28
  */
 public final class Frame {
-	public static final int same = 0;
-	public static final int same_local_1_stack = 64;
-	public static final int same_local_1_stack_ex = 247;
-	public static final int chop = 250, chop2 = 249, chop3 = 248;
-	public static final int same_ex = 251;
-	public static final int append = 252;
-	public static final int full = 255;
-
-	public static int toExactFrameType(int b) {
-		final int b1 = b & 0xFF;
-		if ((b1 & 128) == 0) return (b1 & 64) == 0 ? same : same_local_1_stack;
-		return switch (b1) {
-			case 247 -> same_local_1_stack_ex;
-			// chop 1-3
-			case 248, 249, 250 -> b1;
-			case 251 -> same_ex;
-			case 252, 253, 254 -> append;
-			case 255 -> full;
-			default -> throw new IllegalArgumentException("unknown frame "+b1);
-		};
-	}
-
-	public static String getName(int type) {
-		if ((type & 128) == 0) return (type & 64) == 0 ? "same" : "same_local_1_stack";
-		return switch (type) {
-			case 247 -> "same_local_1_stack_ex";
-			case 248, 249, 250 -> "chop " + (251 - type);
-			case 251 -> "same_ex";
-			case 252, 253, 254 -> "append " + (type - 251);
-			case 255 -> "full";
-			default -> "unknown";
-		};
-	}
+	public static final byte
+			same = 0, same_local_1_stack = 64, same_local_1_stack_ex = -9,
+			chop = -6, chop2 = -7, chop3 = -8, same_ex = -5, append = -4, full = -1;
 
 	public static final Var2[] NONE = new Var2[0];
 
-	public short type;
+	byte type;
 	public int bci;
-	public Label monitor_bci;
-	@NotNull
-	public Var2[] locals = NONE, stacks = NONE;
+	@Nullable public Label monitoredBci;
+	@NotNull public Var2[] locals = NONE, stacks = NONE;
 
-	public static Frame fromVarietyType(int type) {
-		return new Frame(toExactFrameType(type));
+	public static Frame fromByte(int type) {
+		if ((type & 128) == 0) {
+			type = (type & 64) == 0 ? same : same_local_1_stack;
+		} else {
+			type = switch ((byte) type) {
+				case same_local_1_stack_ex, full, chop, chop2, chop3, same_ex -> type;
+				case append, -3, -2 -> append;
+				default -> throw new IllegalArgumentException("unknown frame type "+type);
+			};
+		}
+		return new Frame(type);
 	}
 
-	public Frame() { this.type = -1; }
-	public Frame(int type) { this.type = (short) type; }
+	public Frame() {this.type = full;}
+	public Frame(int type) {this.type = (byte) type;}
 
-	public int bci() {
-		return monitor_bci == null ? bci : monitor_bci.getValue();
-	}
+	public byte type() {return type;}
+	public int bci() {return monitoredBci == null ? bci : monitoredBci.getValue();}
 
-	public String toString() { return toString(IOUtil.getSharedCharBuf(), 0).toString(); }
+	public String toString() {return toString(IOUtil.getSharedCharBuf(), 0).toString();}
 	public CharList toString(CharList sb, int prefix) {
-		sb.padEnd(' ', prefix).append(getName(type)).append(" #").append(bci());
-		if (locals.length > 0) {
-			sb.append('\n').padEnd(' ', prefix).append("Local: [");
-			int i = 0;
-			while (true) {
-				sb.append(locals[i++]);
-				if (i == locals.length) break;
-				sb.append(", ");
-			}
-			sb.append(']');
+		String typeStr;
+		if ((type & 128) == 0) {
+			typeStr = (type & 64) == 0 ? "same" : "same_local_1_stack";
+		} else {
+			typeStr = switch (type) {
+				case same_ex -> "same";
+				case same_local_1_stack_ex -> "same_local_1_stack";
+				case chop, chop2, chop3 -> "chop" + (type + 5);
+				case append -> "append";
+				case full -> "full";
+				default -> "illegal #"+type;
+			};
 		}
-		if (stacks.length > 0) {
-			sb.append('\n').padEnd(' ', prefix).append("Stack: [");
-			int i = 0;
-			while (true) {
-				sb.append(stacks[i++]);
-				if (i == stacks.length) break;
-				sb.append(", ");
+		sb.padEnd(' ', prefix).append(typeStr).append('@').append(bci());
+		if (typeStr.equals("append")) display(sb.append(": "), locals);
+		else if (typeStr.equals("same_local_1_stack")) sb.append(": ").append(stacks[0]);
+		else if (typeStr.equals("full")) {
+			if (locals.length > 0) {
+				sb.append('\n').padEnd(' ', prefix+4).append("Local: ");
+				display(sb, locals);
 			}
-			sb.append(']');
+			if (stacks.length > 0) {
+				sb.append('\n').padEnd(' ', prefix+4).append("Stack: ");
+				display(sb, stacks);
+			}
 		}
-		return sb.append('\n');
+		return sb;
+	}
 
+	private void display(CharList sb, @NotNull Var2[] locals) {
+		sb.append('[');
+		int i = 0;
+		while (true) {
+			sb.append(locals[i++]);
+			if (i == locals.length) break;
+			sb.append(", ");
+		}
+		sb.append(']');
 	}
 
 	public void locals(Var2... arr) {
+		if (type != full && type != append) throw new IllegalStateException(this+" cannot modify locals");
 		locals = arr;
 	}
 	public void stacks(Var2... arr) {
+		if (type != full && type != same_local_1_stack && type != same_local_1_stack_ex) throw new IllegalStateException(this+" cannot modify stacks");
 		stacks = arr;
 	}
 }

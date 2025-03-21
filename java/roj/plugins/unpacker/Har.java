@@ -14,6 +14,7 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.net.MalformedURLException;
 import java.net.URL;
+import java.nio.file.FileVisitResult;
 import java.util.Collections;
 import java.util.List;
 
@@ -83,6 +84,8 @@ class Har implements Unpacker {
 			} catch (IOException e) {
 				Helpers.athrow(e);
 			}
+
+			return FileVisitResult.CONTINUE;
 		});
 	}
 

@@ -132,10 +132,10 @@ public class InsnList extends AbstractCodeWriter implements Iterable<InsnNode> {
 			switch (c.getClass().getName()) {
 				case "roj.asm.type.Desc":
 					Desc d = (Desc) c;
-					if (d.owner == null) index = cp.getInvokeDynId(d.flags, d.name, d.param);
+					if (d.owner == null) index = cp.getInvokeDynId(d.modifier, d.name, d.param);
 					else {
-						switch (d.flags >>> 14) {
-							default: throw new IllegalStateException("unknown flag "+d.flags);
+						switch (d.modifier >>> 14) {
+							default: throw new IllegalStateException("unknown flag "+d.modifier);
 							case 0: index = cp.getMethodRefId(d.owner, d.name, d.param); break;
 							case 1: index = cp.getFieldRefId(d.owner, d.name, d.param); break;
 							case 2: bb.put(offset+3, 1+ TypeHelper.paramSize(d.param));

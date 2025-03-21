@@ -21,7 +21,7 @@ public interface Library {
 	default String moduleName() {
 		var data = get("module-info");
 		if (data != null) {
-			var module = data.parsedAttr(data.cp, Attribute.Module);
+			var module = data.getAttribute(data.cp, Attribute.Module);
 			return module.self.name;
 		}
 		return null;

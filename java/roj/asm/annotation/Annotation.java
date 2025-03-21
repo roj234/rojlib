@@ -1,5 +1,6 @@
 package roj.asm.annotation;
 
+import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.NotNull;
 import roj.asm.Attributed;
 import roj.asm.attr.Attribute;
@@ -37,6 +38,7 @@ public class Annotation extends CMap {
 		this.type = type;
 	}
 
+	@Contract(pure = true)
 	public String type() {
 		if (type.endsWith(";")) type = type.substring(1, type.length()-1);
 		return type;
@@ -62,10 +64,10 @@ public class Annotation extends CMap {
 	}
 
 	@NotNull
-	public final AList getArray(String name) {return (AList) map.getOrDefault(name, AList.EMPTY);}
+	public final AList getList(String name) {return (AList) map.getOrDefault(name, AList.EMPTY);}
 
-	@Deprecated public int[] getIntArray(String name) {return getArray(name).toIntArray();}
-	@Deprecated public String[] getStringArray(String name) {return getArray(name).toStringArray();}
+	@Deprecated public int[] getIntArray(String name) {return getList(name).toIntArray();}
+	@Deprecated public String[] getStringArray(String name) {return getList(name).toStringArray();}
 
 	@Override
 	protected CEntry put1(String k, CEntry v, int f) {
@@ -150,7 +152,19 @@ public class Annotation extends CMap {
 	}
 
 	public static Annotation findInvisible(ConstantPool cp, Attributed node, String type) {
-		var attr = node.parsedAttr(cp, Attribute.ClAnnotations);
+		var attr = node.getAttribute(cp, Attribute.ClAnnotations);
+		if (attr != null) {
+			var list = attr.annotations;
+			for (int i = 0; i < list.size(); i++) {
+				var a = list.get(i);
+				if (a.type().equals(type)) return a;
+			}
+		}
+		return null;
+	}
+
+	public static Annotation findVisible(ConstantPool cp, Attributed node, String type) {
+		var attr = node.getAttribute(cp, Attribute.RtAnnotations);
 		if (attr != null) {
 			var list = attr.annotations;
 			for (int i = 0; i < list.size(); i++) {

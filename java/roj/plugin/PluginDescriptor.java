@@ -30,6 +30,8 @@ public class PluginDescriptor {
 
 	Plugin instance;
 	List<String> depend = Collections.emptyList(), loadAfter = Collections.emptyList(), loadBefore = Collections.emptyList();
+	List<String> javaModuleDepend = Collections.emptyList();
+	boolean isModulePlugin;
 	transient PluginClassLoader cl;
 
 	// 基于transformer的安全管理

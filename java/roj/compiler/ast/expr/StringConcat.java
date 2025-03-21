@@ -66,7 +66,7 @@ final class StringConcat extends ExprNode {
 				next = nodes.get(i);
 			} while (next.isConstant());
 
-			nodes.set(i-1, Constant.valueOf(sb.toString()));
+			nodes.set(i-1, valueOf(sb.toString()));
 		}
 		return nodes.size() == 1 ? nodes.get(0) : this;
 	}
@@ -78,6 +78,19 @@ final class StringConcat extends ExprNode {
 	@Override
 	public void write(MethodWriter cw, boolean noRet) {
 		mustBeStatement(noRet);
+
+		// this trick worse if and only if node.get(1).type() instanceof CharSequence && using SharedStringConcat
+		if (nodes.size() == 2 && nodes.get(0).isConstant()) {
+			cw.ldc(((String) nodes.get(0).constVal()));
+			nodes.get(1).write(cw, false);
+			int type = nodes.get(1).type().getActualType();
+			if (type == 'B' || type == 'S') type = 'I';
+			String specType = type == 'L' ? "Ljava/lang/Object;" : String.valueOf((char)type);
+			cw.invokeS("java/lang/String", "valueOf", "("+specType+")Ljava/lang/String;");
+			cw.invokeV("java/lang/String", "concat", "(Ljava/lang/String;)Ljava/lang/String;");
+			return;
+		}
+
 		var lc = LocalContext.get();
 		if (lc.classes.hasFeature(LavaFeatures.SHARED_STRING_CONCAT)) {
 			viaCharList(cw, lc);

@@ -16,7 +16,7 @@ public final class ParameterAnnotations extends Attribute {
 	public static final String VISIBLE = "RuntimeVisibleParameterAnnotations", INVISIBLE = "RuntimeInvisibleParameterAnnotations";
 
 	public static List<List<Annotation>> getParameterAnnotation(ConstantPool cp, MethodNode m, boolean vis) {
-		ParameterAnnotations pa = m.parsedAttr(cp, vis ? RtParameterAnnotations : ClParameterAnnotations);
+		ParameterAnnotations pa = m.getAttribute(cp, vis ? RtParameterAnnotations : ClParameterAnnotations);
 		return pa == null ? null : pa.annotations;
 	}
 
@@ -39,7 +39,7 @@ public final class ParameterAnnotations extends Attribute {
 	public List<List<Annotation>> annotations;
 
 	@Override
-	public boolean isEmpty() { return annotations.isEmpty(); }
+	public boolean writeIgnore() { return annotations.isEmpty(); }
 	@Override
 	public String name() { return vis?VISIBLE:INVISIBLE; }
 

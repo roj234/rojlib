@@ -8,6 +8,8 @@ import roj.text.CharList;
 import java.util.function.UnaryOperator;
 
 /**
+ * 类型表示
+ * Type Representation
  * @author solo6975
  * @since 2021/9/4 19:03
  */

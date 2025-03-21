@@ -6,12 +6,10 @@ import roj.asm.type.IType;
 import roj.asm.type.Type;
 import roj.compiler.JavaLexer;
 import roj.compiler.asm.MethodWriter;
-import roj.compiler.ast.expr.Constant;
 import roj.compiler.ast.expr.ExprNode;
 import roj.compiler.ast.expr.Invoke;
 import roj.compiler.ast.expr.UnaryPreNode;
 import roj.compiler.context.LocalContext;
-import roj.compiler.plugin.ExprApi;
 import roj.compiler.plugin.LavaApi;
 import roj.config.Word;
 import roj.util.Helpers;
@@ -22,17 +20,17 @@ import roj.util.Helpers;
  */
 public class TestPlugin {
 	public void pluginInit(LavaApi api) {
-		ExprApi rtApi = api.getExprApi();
 		// <minecraft:stone>
-		rtApi.addExprStart("<", (lexer, lc) -> {
+		api.newStartOp("<", (ctx) -> {
+			var wr = ctx.lexer;
 			try {
-				String nsKey = lexer.except(Word.LITERAL).val();
-				lexer.except(JavaLexer.colon);
-				String nsVal = lexer.except(Word.LITERAL).val();
-				lexer.except(JavaLexer.gtr);
+				String nsKey = wr.except(Word.LITERAL).val();
+				wr.except(JavaLexer.colon);
+				String nsVal = wr.except(Word.LITERAL).val();
+				wr.except(JavaLexer.gtr);
 
 				MethodNode mn = new MethodNode(Opcodes.ACC_PUBLIC, "roj/compiler/test/CandyTestPlugin$Item", "<init>", "(Ljava/lang/String;Ljava/lang/String;)V");
-				return Invoke.constructor(mn, Constant.valueOf(nsKey), Constant.valueOf(nsVal));
+				return Invoke.constructor(mn, ExprNode.valueOf(nsKey), ExprNode.valueOf(nsVal));
 			} catch (Exception e) {
 				Helpers.athrow(e);
 				return null;
@@ -41,9 +39,9 @@ public class TestPlugin {
 
 		// <minecraft:stone> * 5
 		MethodNode mn = new MethodNode(Opcodes.ACC_STATIC, "roj/compiler/test/CandyTestPlugin$Item", "stack", "(Lroj/compiler/test/CandyTestPlugin$Item;I)Lroj/compiler/test/CandyTestPlugin$ItemStack;");
-		rtApi.onBinary(Type.klass("roj/compiler/test/CandyTestPlugin$Item"), "*", Type.primitive(Type.INT), mn, true);
+		api.onBinary(Type.klass("roj/compiler/test/CandyTestPlugin$Item"), "*", Type.primitive(Type.INT), mn, true);
 
-		api.getExprApi().addUnaryPre("__TypeOf", (lexer, node) -> new UnaryPreNode() {
+		api.newUnaryOp("__TypeOf", (ctx, node) -> new UnaryPreNode() {
 			ExprNode node;
 			@Override public String setRight(ExprNode node) {this.node = node;return null;}
 			@Override public String toString() {return null;}
@@ -52,37 +50,5 @@ public class TestPlugin {
 				throw new UnsupportedOperationException("[\n  表达式="+node+"\n  解析="+(node = node.resolve(LocalContext.get()))+"\n  返回类型="+node.type()+"\n]");
 			}
 		});
-	}
-
-	public static class Item {
-		final String nsKey, nsVal;
-
-		public Item(String nsKey, String nsVal) {
-			this.nsKey = nsKey;
-			this.nsVal = nsVal;
-		}
-
-		public static ItemStack stack(Item item, int count) {
-			return new ItemStack(item, count);
-		}
-
-		@Override
-		public String toString() {
-			return "Item{" + "nsKey='" + nsKey + '\'' + ", nsVal='" + nsVal + '\'' + '}';
-		}
-	}
-	public static class ItemStack {
-		Item item;
-		int count;
-
-		public ItemStack(Item item, int count) {
-			this.item = item;
-			this.count = count;
-		}
-
-		@Override
-		public String toString() {
-			return "ItemStack{" + "item=" + item + ", count=" + count + '}';
-		}
 	}
 }

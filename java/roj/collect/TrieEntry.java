@@ -145,7 +145,7 @@ public abstract class TrieEntry implements Iterable<TrieEntry>, Cloneable, _Gene
 	public int length() { return 1; }
 
 	@Override
-	public String toString() { return "TE('"+(TextUtil.isPrintableAscii(c)?c:"\\"+Integer.toOctalString(c))+"',next="+next+")"; }
+	public String toString() { return "'"+(TextUtil.isPrintableAscii(c)?c:"\\"+Integer.toOctalString(c))+"'"; }
 
 	@Override
 	public TrieEntry clone() {

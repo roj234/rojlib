@@ -146,6 +146,9 @@ public final class ClassUtil {
 	private static class MyGlobalContext extends GlobalContext { @Override protected void addRuntime() {} }
 	private static volatile GlobalContext defaultCtx;
 	private LocalContext getLocalContext() {
+		var now = LocalContext.get();
+		if (now != null) return now;
+
 		if (lc == null) lc = getGlobalContext().createLocalContext();
 		return lc;
 	}
@@ -178,7 +181,7 @@ public final class ClassUtil {
 	public IClass getClassInfo(CharSequence name) {return getGlobalContext().getClassInfo(name);}
 
 	private final Function<ClassNode, List<String>> getSuperClassListCached = CollectionX.lazyLru(info -> {
-		IntBiMap<String> classList = getGlobalContext().getResolveHelper(info).getClassList(gc);
+		IntBiMap<String> classList = getGlobalContext().getResolveHelper(info).getHierarchyList(gc);
 
 		List<String> parents = new SimpleList<>(classList.values());
 		parents.sort((o1, o2) -> Integer.compare(classList.getInt(o1) >>> 16, classList.getInt(o2) >>> 16));
@@ -215,12 +218,13 @@ public final class ClassUtil {
 		var left = type1.startsWith("[") ? Type.fieldDesc(type1) : Type.klass(type1);
 		var right = type2.startsWith("[") ? Type.fieldDesc(type2) : Type.klass(type2);
 		// copied from Inferrer
-		TypeCast.Cast cast = getLocalContext().caster.checkCast(left, right);
+		LocalContext lc = getLocalContext();
+		TypeCast.Cast cast = lc.caster.checkCast(left, right);
 		if (cast.type >= 0) return type2; // a更不具体
 		cast = lc.caster.checkCast(right, left);
 		if (cast.type >= 0) return type1; // b更不具体
 
 		//throw new UnableCastException(a, b, cast);
-		throw new UnsupportedOperationException("无法比较两个无关的类型:"+type1+","+type2);
+		throw new UnsupportedOperationException("这两个类型在继承链上没有交集:"+type1+","+type2);
 	}
 }

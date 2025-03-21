@@ -41,6 +41,8 @@ pseudoType.pseudo=伪类型不存在
 
 # Predefined annotation processor
 annotation.override=此方法未能覆盖超类的方法
+annotation.functionalInterface=在类%1中找不到lambda方法
+annotation.deprecated=使用弃用的%1%2
 
 # CompileUnit
 
@@ -72,6 +74,7 @@ modifier.conflict=修饰符%1不能与%2组合
 modifier.notAllowed=此处不允许修饰符%1
 
 #Cu Stage1 [Class]
+cu.binaryIncompatible=要求的类文件最低版本%1超过了编译器限制%2
 cu.filename=[CU]%1中的公共类名称应当与文件名相同
 cu.record.header=[CU]record类必须有至少一个字段
 cu.struct.antibody=[CU]结构不能包含子节点
@@ -81,6 +84,7 @@ cu.interfaceInit=[CU]接口中不允许有初始化程序
 cu.interfacePrivateNonstatic=[CU]仅接口中的静态方法和字段允许私有修饰
 cu.enumInit=[CU]枚举的初始化程序必须是私有的
 cu.enumMethod=覆盖的枚举默认方法修饰符不正确
+cu.interfaceInit=无法在接口中定义构造器
 
 cu.sealed.noPermits=密封类必须具有permits字句
 
@@ -106,7 +110,7 @@ cu.except.fieldName=字段名
 cu.except.fieldEnd=','或';'
 cu.except.record=','或')'
 
-#Cu Stage2 [Resolve]
+#Cu Stage 2.2
 cu.interface=继承 接口
 cu.class=实现 类
 cu.final=最终
@@ -115,21 +119,17 @@ cu.resolve.notInheritable=[CU]无法%1 %2
 cu.throwException=[CU]扔出的 %1 不是异常
 cu.noDefaultConstructor=[CU]%1 没有默认(无参)构造器
 
-cu.annotation.missing=注解 @%1 缺少参数'%2'的默认值
-cu.annotation.extra=注解 @%1 不存在参数'%2'
-cu.annotation.notApplicable=注解 @%1 无法应用于元素 %2
-cu.annotation.invalidDefault=注解值只能是基本类型、字符串、枚举、注解或它们的数组，其中注解只能是一维数组
-cu.annotation.cyclic=循环引用
-cu.annotation.noRepeat=注解@%1不可重复(@Repeatable|@Stackable)
-
 cu.sealed.indirectInherit=允许的子类%1必须直接继承或实现密封类%2
 cu.sealed.unlisted.c="无法继承自密封类%1\n  只允许下列类继承: %2"
 cu.sealed.unlisted.i="无法实现密封接口%1\n  只允许下列类实现: %2"
 cu.sealed.missing=需要sealed、non-sealed或final修饰符
+cu.inheritNonStatic=在上下文中找不到类型为%1的封闭类
 
-#Cu Stage3/4
+#Cu Stage 2.3
+cu.override.rawArgument="参数具有相同的疑符，但互不覆盖对方\n  原因: %1"
+cu.override.interfaceObject=接口%1中的方法%2覆盖了Object的对应方法
 cu.override.unable="%1无法实现%2中的方法%3\n  %4"
-cu.override.access=正在分配更低的访问权限 (%1=> %2)
+cu.override.access=正在分配更低的访问权限 (%1 => %2)
 cu.override.returnType="返回类型不兼容\n  原因: %1"
 cu.override.thrown=被覆盖的方法未抛出异常 %1
 cu.override.noImplement=%1 不是抽象的, 并且未覆盖%2中的抽象方法%3
@@ -137,9 +137,16 @@ cu.override.static.self=被覆盖的方法不是静态的
 cu.override.static.other=被覆盖的方法是静态的
 
 cu.unrelatedDefault=方法%1在%2实现的其它接口中也有默认值, 必须覆盖此方法
+cu.unrelatedDefault.inherit=继承的方法%1因为访问权限过低而无法覆盖接口%2中的方法
 
-cu.finalField.assigned=无法为最终变量%1分配值
-cu.finalField.missed=可能尚未初始化变量%1
+#Cu Stage 3
+cu.constLoop=包含%1在内的常量循环引用 (可能造成运行期死锁或栈溢出)
+cu.annotation.missing=注解 @%1 缺少参数'%2'的默认值
+cu.annotation.extra=注解 @%1 不存在参数'%2'
+cu.annotation.notApplicable=注解 @%1 无法应用于元素 %2
+cu.annotation.invalidDefault=注解值只能是基本类型、字符串、枚举、注解或它们的数组，其中注解只能是一维数组
+cu.annotation.cyclic=循环引用
+cu.annotation.noRepeat=注解@%1不可重复(@Repeatable|@Stackable)
 
 #Cu readType
 type.illegalType=非法的类型开始(在'%1')
@@ -160,6 +167,7 @@ type.except.afterLss=大于号或逗号
 lc.unReportedException=可能抛出未声明的异常 %1
 lc.packageRestricted=中间变量或返回值 %1 不在受限import的导入范围中
 lc.illegalModifier=在类%1中遇到非法的修饰符组合: 0x%2
+lc.recursiveConstructor=递归构造器调用
 
 # ParseTask
 ps.method.paramDef=[PS]默认参数不是立即常量
@@ -287,7 +295,7 @@ symbol.error.accessDenied.symbol=[Symbol] %1 的修饰符是%2; 无法在 %3 访
 symbol.error.accessDenied.package=[Symbol]%1在 %2 中不是公共的; 无法从外部程序包中对其进行访问
 symbol.error.nonStatic.type=[Symbol]'%1'不是静态类，无法在静态上下文中访问
 symbol.error.nonStatic.symbol=[Symbol]无法从静态上下文中引用非静态 %3 '%1.%2'
-symbol.error.field.writeAfterWrite=[Symbol]字段 '%1.%2' 已被赋值
+symbol.error.field.writeAfterWrite=无法为最终变量 %1.%2 分配值
 symbol.error.field.writeFinal=[Symbol]修改最终字段 '%1.%2'
 symbol.error.field.notReadable=[Symbol]字段 '%1.%2' 不可读（write-only）
 symbol.error.field.readBeforeWrite=[Symbol]非法前向引用 '%1.%2'
@@ -295,8 +303,7 @@ symbol.similar="\n但是，找到了名称相似的%1：\n    %2\n这也许是�
 symbol.warn.static_on_half=[Symbol]静态%3应由类型名称'%1.%2'而不是表达式限定
 encloseRef.nds=[EncloseRef] %2 不是 %1 的超类或超接口
 encloseRef.tooFar=[EncloseRef][Incompatible] %2 不是 %1 的直接超类或超接口
-encloseRef.staticEnv=[EncloseRef] 无法从静态上下文中引用非静态 变量 this
-encloseRef.noRef=[EncloseRef] %1 不是可选的this类型
+encloseRef.noRef=[EncloseRef] %1 不在内部类归属链上
 instanceof.error.unsafeCast=[InstanceOf]%1 无法安全地转换为 %2
 instanceOf.constant=[InstanceOf]对 %1 的检测总是常量
 invoke.error.constructor=[Invoke]对 %1 的调用必须是构造器中的第一个语句
@@ -306,6 +313,7 @@ invoke.compatible.plural="[Invoke]对 %1 的引用不明确\n%2"
 invoke.incompatible.single="[Invoke]无法将类 %1 中的方法 %2 应用到给定类型\n%3"
 invoke.incompatible.plural="[Invoke]对于%1找不到合适的方法\n%2"
 invoke.noExact=创建的类型参数不得包含非具体泛型(<>除外)
+invoke.wrongInstantiationEnclosing=创建的类%1不是内部类，是静态内部类，或上下文中的参数类型%2不匹配目标的封闭类型
 trinary.constant=[Trinary]值总是常量
 this.static=无法在静态上下文中引用this
 this.no_super=%1没有父类
@@ -314,7 +322,7 @@ unary.warn.wrapper=[Unary]对包装类型%1的%2操作
 unary.error.void=[Unary]空类型
 unary.error.final=无法为最终变量%1分配值
 var.notAssigned=可能尚未初始化变量%1
-var.refByNest=值已拷贝到隔离的上下文, 源变量%1不应再改变
+var.refByNest=变量的值在此前已拷贝到隔离的上下文(如内部类或lambda), 赋值将不会影响隔离的变量
 multiReturn.incompatible=只有多返回值方法才能使用多返回值语法糖
 multiReturn.russianToy="禁止套娃！\n  须知：ReturnStack是线程单例"
 multiReturn.sideEffect="潜在的副作用。\n  须知：ReturnStack是线程单例"
@@ -349,12 +357,16 @@ invoke.notApplicable=不适用:
 invoke.generic.s= (解析为
 invoke.generic.e=)
 and=和
+invoke.namedArgs=参数名称不匹配
 
-invoke.warn.illegalNameList=[Resolve]方法%1的参数列表不合法
+invoke.warn.illegalNameList=[ML]%1.%2的参数属性格式不合法
+invoke.error.paramMissing=[ML]对%1.%2的按名称调用缺少参数%3
+invoke.error.paramExtra=[ML]对%1.%2的按名称调用多余参数%3
+
 # 类型转换 (注意，当修改TypeCast中对应数值需要同步这里)
 typeCast.warn.rawTypes=[TypeCast]对原始类型的转换: %1 => %2
-typeCast.error.-1=%1无法隐式转换为%2 # char
-typeCast.error.-2=基本类型%1无法转换为%2
+typeCast.error.-1=%1无法隐式转换为%2
+typeCast.error.-2=从%1转换为%2可能会有损失
 typeCast.error.-3=%1无法转换为%2
 typeCast.error.-4=%1无法转换为基本类型%2
 typeCast.error.-5=基本类型%1无法转换为%2
@@ -362,6 +374,7 @@ typeCast.error.-6=实际参数列表和形式参数列表长度不同
 typeCast.error.-7=找不到符号，无法处理%1与%2的转换关系
 typeCast.error.-8=%1不可能转换为%2
 typeCast.error.-99=%2不是具有%1个参数的函数式接口
+typeCast.error.-98=%1与%2的基础类型相同，但是泛型不同
 
 
 # 插件

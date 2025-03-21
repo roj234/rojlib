@@ -44,10 +44,13 @@ final class CompileStage implements Processor {
 			case "AutoIncrement" -> {
 				CInt start = increment_count.computeIfAbsent(annotation, x -> new CInt(annotation.getInt("start")));
 
-				cu.cancelTask(node);
-				((FieldNode) node).putAttr(new ConstantValue(new CstInt(start.value)));
+				if (node.getRawAttribute("ConstantValue") != null) {
+					throw new IllegalStateException("字段"+node+"已经有值");
+				}
+				((FieldNode) node).addAttribute(new ConstantValue(new CstInt(start.value)));
+				cu.finalFields.remove(node);
 
-				start.value += annotation.getInt("step");
+				start.value += annotation.getInt("step", 1);
 			}
 			case "Getter" -> {
 				var fn = (FieldNode) node;
@@ -92,7 +95,7 @@ final class CompileStage implements Processor {
 					return;
 				}
 
-				cu.setMinimumBinaryCompatibility(LavaFeatures.COMPATIBILITY_LEVEL_JAVA_11);
+				cu.setMinimumBinaryCompatibility(LavaFeatures.JAVA_11);
 
 				var getter = annotation.getString("value");
 				int mid = cu.getMethod(getter, gi.rawDesc());

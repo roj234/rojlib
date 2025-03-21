@@ -58,7 +58,7 @@ public final class EnumHelper extends CodeVisitor {
 				state = 0;
 				nameId = ordinalId = -1;
 				try {
-					visit(klass.cp, Parser.reader(mn.attrByName("Code")));
+					visit(klass.cp, Parser.reader(mn.getRawAttribute("Code")));
 				} catch (OperationDone found) {
 					System.out.println(nameId);
 					System.out.println(ordinalId);
@@ -76,7 +76,7 @@ public final class EnumHelper extends CodeVisitor {
 					parPos.put(Type.toMethodDesc(param), v);
 				}
 			} else if (mn.name().equals("<clinit>")) {
-				staticInit = mn.parsedAttr(klass.cp, Attribute.Code);
+				staticInit = mn.getAttribute(klass.cp, Attribute.Code);
 
 				InsnList list = staticInit.instructions;
 				for (InsnNode node : list) {

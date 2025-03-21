@@ -5,8 +5,8 @@ import roj.asm.IClass;
 import roj.asm.MethodNode;
 import roj.asm.Opcodes;
 import roj.asm.attr.AnnotationDefault;
-import roj.asm.attr.AttrUnknown;
 import roj.asm.attr.ConstantValue;
+import roj.asm.attr.UnparsedAttribute;
 import roj.asm.cp.*;
 import roj.asm.type.IType;
 import roj.compiler.JavaLexer;
@@ -55,8 +55,8 @@ public interface ParseTask {
 
 		String jsonString = ExprParser.serialize((ExprNode) expr);
 
-		var attr = mn.parsedAttr(null, MethodDefault.METHOD_DEFAULT);
-		if (attr == null) mn.putAttr(attr = new MethodDefault());
+		var attr = mn.getAttribute(null, MethodDefault.METHOD_DEFAULT);
+		if (attr == null) mn.addAttribute(attr = new MethodDefault());
 
 		attr.defaultValue.putInt(id-1, jsonString);
 	}
@@ -69,7 +69,7 @@ public interface ParseTask {
 		wr.state = state;
 
 		var attr = new AnnotationDefault(null);
-		mn.putAttr(attr);
+		mn.addAttribute(attr);
 
 		return (ctx) -> {
 			ctx.errorReportIndex = index;
@@ -110,28 +110,41 @@ public interface ParseTask {
 	}
 	static ParseTask Field(CompileUnit file, FieldNode f) throws ParseException {
 		var wr = file.lc().lexer;
+		int index = wr.index;
 		int state = wr.setState(JavaLexer.STATE_EXPR);
 		var expr = file.lc().ep.parse(ExprParser.STOP_COMMA|ExprParser.STOP_SEMICOLON|ExprParser.NAE);
 		wr.state = state;
 
 		return new ParseTask() {
 			@Override
+			public boolean isStaticFinalField() {return (f.modifier&(Opcodes.ACC_STATIC|Opcodes.ACC_FINAL)) == (Opcodes.ACC_STATIC|Opcodes.ACC_FINAL);}
+			@Override
 			public int priority() {return (f.modifier&Opcodes.ACC_STATIC) != 0 ? 0 : 1;}
 			@Override
 			public void parse(LocalContext ctx) {
+				// 已经解析
+				if (f.getRawAttribute("ConstantValue") != null) return;
+
+				ctx.errorReportIndex = index;
+
+				var file = ctx.file;
 				var node = expr.resolve(ctx);
-				var cast = LocalContext.get().castTo(node.type(), f.fieldType(), 0);
+				var cast = ctx.castTo(node.type(), f.fieldType(), 0);
+
+				ctx.errorReportIndex = -1;
 
 				if ((f.modifier & Opcodes.ACC_STATIC) != 0) {
 					if ((f.modifier & Opcodes.ACC_FINAL) != 0) {
 						if (!file.finalFields.remove(f)) {
-							ctx.report(Kind.ERROR, "cu.finalField.assigned", f);
+							ctx.report(Kind.ERROR, "symbol.error.field.writeAfterWrite", file.name(), f.name());
 						}
 
 						if (node.isConstant() || node.hasFeature(ExprNode.ExprFeat.LDC_CLASS)) {
-							f.putAttr(new ConstantValue(ParseTask.toConstant(node.constVal())));
+							f.addAttribute(new ConstantValue(ParseTask.toConstant(node.constVal())));
 							return;
 						}
+
+						if (ctx.fieldDFS) return;
 					}
 
 					if (cast.type < 0) return;
@@ -153,9 +166,10 @@ public interface ParseTask {
 					var mp = file.getGlobalInit();
 					ctx.setMethod(mp.mn);
 
-					mp.one(Opcodes.ALOAD_0);
+					mp.vars(Opcodes.ALOAD, ctx.thisSlot);
 					node.write(mp, cast);
 					mp.field(Opcodes.PUTFIELD, file.name(), f.name(), f.rawDesc());
+					mp.visitSizeMax(1 + f.fieldType().length(), 1);
 				}
 			}
 		};
@@ -190,7 +204,7 @@ public interface ParseTask {
 				MethodWriter cw = ctx.bp.parseMethod(file, mn, argNames);
 
 				autoConstructor:
-				if (ctx.not_invoke_constructor) {
+				if (ctx.notInvokeConstructor) {
 					if ((file.modifier&Opcodes.ACC_ENUM) != 0) {
 						EnumUtil.writeAutoConstructor(file, cw);
 						break autoConstructor;
@@ -214,11 +228,12 @@ public interface ParseTask {
 
 				cw.finish();
 
-				mn.putAttr(new AttrUnknown("Code", cw.bw.toByteArray()));
+				mn.addAttribute(new UnparsedAttribute("Code", cw.bw.toByteArray()));
 			}
 		};
 	}
 
+	default boolean isStaticFinalField() {return false;}
 	default int priority() {return 0;}
 	void parse(LocalContext ctx) throws ParseException;
 }

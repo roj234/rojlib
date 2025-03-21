@@ -6,6 +6,7 @@ import roj.asm.*;
 import roj.asm.annotation.Annotation;
 import roj.asm.attr.Annotations;
 import roj.asm.attr.Attribute;
+import roj.asm.cp.Constant;
 import roj.asm.cp.ConstantPool;
 import roj.asm.cp.CstUTF;
 import roj.asmx.AnnotatedElement.Node;
@@ -71,11 +72,11 @@ public final class AnnotationRepo {
 		}
 	}
 	private void add2(ConstantPool cp, Attributed node, AnnotatedElement info) {
-		Annotations attr = node.parsedAttr(cp, Attribute.RtAnnotations);
+		Annotations attr = node.getAttribute(cp, Attribute.RtAnnotations);
 		if (attr != null) for (int i = 0; i < attr.annotations.size(); i++) {
 			add3(info, attr.annotations.get(i));
 		}
-		attr = node.parsedAttr(cp, Attribute.ClAnnotations);
+		attr = node.getAttribute(cp, Attribute.ClAnnotations);
 		if (attr != null) for (int i = 0; i < attr.annotations.size(); i++) {
 			add3(info, attr.annotations.get(i));
 		}
@@ -94,9 +95,10 @@ public final class AnnotationRepo {
 		cp.read(r, ConstantPool.BYTE_STRING);
 
 		var acc = r.readChar();
-		var name = intern(cp.getRefName(r));
+		var name = intern(cp.getRefName(r, Constant.CLASS));
 		if (name.endsWith("-info") || !name.concat(".class").equals(fileName)) return;
-		var parent = intern(cp.getRefName(r));
+		var parent = cp.getRefName(r);
+		if (parent != null) parent = intern(parent);
 
 		var skeleton = new ClassView(null, -1, name, parent);
 		skeleton.modifier = acc;
@@ -105,7 +107,7 @@ public final class AnnotationRepo {
 
 		rawNodes.clear();
 		int len = r.readUnsignedShort();
-		for (int i = 0; i < len; i++) rawNodes.add(intern(cp.getRefName(r)));
+		for (int i = 0; i < len; i++) rawNodes.add(intern(cp.getRefName(r, Constant.CLASS)));
 		skeleton.interfaces = Helpers.cast(ArrayUtil.copyOf(rawNodes));
 
 		for (int i = 0; i < 2; i++) {
@@ -181,6 +183,8 @@ public final class AnnotationRepo {
 					buf.put(0);
 					writeAcc(buf, parent, cp, elements);
 					idx = parent == el ? size : elements.getInt(el.node());
+				} else if (parent != el) {
+					idx = elements.getInt(el.node());
 				}
 				buf.putVUInt(idx).putVUInt(el.annotations.size());
 				for (var annotation : el.annotations.values()) {

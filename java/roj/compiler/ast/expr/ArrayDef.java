@@ -66,6 +66,7 @@ public final class ArrayDef extends ExprNode {
 
 	public void setType(IType type) {this.type = type;}
 
+	private static final char[] UNSIGNED_MAX = {0, 255, 65535, 65535};
 	@NotNull
 	@Override
 	public ExprNode resolve(LocalContext ctx) throws ResolveException {
@@ -80,33 +81,65 @@ public final class ArrayDef extends ExprNode {
 		} else {
 			ctx.resolveType(type);
 			if (type.array() == 0)
-				ctx.report(Kind.ERROR, "arrayDef.notArray", type);
+				ctx.report(this, Kind.ERROR, "arrayDef.notArray", type);
 		}
 
+		boolean failed = false;
 		// useless if sized creation
 		boolean isAllConstant = (flag&1) == 0;
 		IType exprType = isAllConstant ? componentType(type) : Type.primitive(Type.INT);
+		int dataCap = TypeCast.getDataCap(exprType.getActualType());
 		casts = new TypeCast.Cast[expr.size()];
 		for (int i = 0; i < expr.size(); i++) {
 			var node = expr.get(i);
-			if (node instanceof ArrayDef ad) ad.type = exprType;
+			if (node instanceof ArrayDef ad && ad.type == null) {
+				if (exprType.array() == 0)
+					ctx.report(this, Kind.ERROR, "arrayDef.notArray", exprType);
+				ad.type = exprType;
+			}
 			node = node.resolve(ctx);
 			expr.set(i, node);
 
-			if (!node.isConstant()) isAllConstant = false;
+			int castType;
+			IType sourceType;
+			ok: {
+				if (node.isConstant()) {
+					if (dataCap >= 1 && dataCap <= 3) {
+						sourceType = node.minType();
+						castType = TypeCast.E_EXPLICIT_CAST;
+						break ok;
+					}
 
-			var cast = ctx.castTo(node.type(), exprType, TypeCast.E_NUMBER_DOWNCAST);
-			if (cast.type < 0) ctx.report(Kind.NOTE, "arrayDef.autoCastNumber");
-			casts[i] = cast;
+					isAllConstant = false;
+				}
+				sourceType = node.type();
+				castType = 0;
+			}
+
+			var cast = ctx.castTo(sourceType, exprType, castType);
+
+			if (castType != 0 && cast.type == TypeCast.E_EXPLICIT_CAST) {
+				var value = ((roj.config.data.CEntry)node.constVal()).asInt();
+				if (value >= 0 && value <= UNSIGNED_MAX[dataCap]) {
+					if (exprType.getActualType() != Type.CHAR)
+						ctx.report(this, Kind.INCOMPATIBLE, "arrayDef.autoCastNumber", node, exprType);
+				} else {
+					ctx.report(this, Kind.ERROR, "typeCast.error.-2", node.type(), exprType);
+				}
+			}
+			else if (cast.type < 0) failed = true;
+
+			casts[i] = cast.intern();
 		}
 
+		if (failed) return NaE.RESOLVE_FAILED;
 		if (isAllConstant) flag |= 2;
 		return this;
 	}
 	private void autoType(LocalContext ctx) {
 		flag |= 8;
 
-		ctx.report(Kind.WARNING, "arrayDef.autoTypeTip");
+		ctx.report(this, Kind.WARNING, "arrayDef.autoTypeTip");
 		IType cp = null;
 
 		for (int i = 0; i < expr.size(); i++) {
@@ -160,14 +193,16 @@ public final class ArrayDef extends ExprNode {
 		if ((flag&8) != 0) {
 			var ctx = LocalContext.get();
 			if (returnType == null) {
-				ctx.report(Kind.ERROR, "arrayDef.inferFailed");
+				ctx.report(this, Kind.ERROR, "arrayDef.inferFailed");
 				return;
 			}
 			flag = 0;
 			type = returnType.getType1();
 			resolve(ctx);
 		}
-		super.write(cw, returnType);
+
+		write(cw, false);
+		if (returnType != null) returnType.write(cw);
 	}
 
 	private Type makeArray(MethodWriter cw, int dimension) {

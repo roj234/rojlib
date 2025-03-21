@@ -38,7 +38,7 @@ public final class TypeAnnotations extends Attribute {
 	public String name() { return vis?VISIBLE_NAME:INVISIBLE_NAME; }
 
 	@Override
-	public boolean isEmpty() {return annotations.isEmpty();}
+	public boolean writeIgnore() {return annotations.isEmpty();}
 	@Override
 	public void toByteArrayNoHeader(DynByteBuf w, ConstantPool pool) {
 		w.putShort(annotations.size());

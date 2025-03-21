@@ -8,7 +8,6 @@ import roj.compiler.ast.expr.ExprNode;
 import roj.compiler.ast.expr.Invoke;
 import roj.compiler.context.LocalContext;
 import roj.compiler.diagnostic.Kind;
-import roj.compiler.plugin.ExprApi;
 import roj.compiler.plugin.LavaApi;
 import roj.compiler.plugin.LavaPlugin;
 import roj.compiler.plugins.stc.StreamChain;
@@ -24,11 +23,9 @@ import java.util.List;
 @LavaPlugin(name = "comparisonTest", desc = "StreamChain测试插件")
 public class ComparisonChainPlugin {
 	public void pluginInit(LavaApi api) {
-		ExprApi rtApi = api.getExprApi();
-
 		String name = "roj/compiler/test/ComparisonChain";
 
-		StreamChain chain = rtApi.newStreamChain(name, false, ch -> {
+		StreamChain chain = api.newStreamChain(name, false, ch -> {
 			if (ch.targetType() == StreamChainExpr.IGNORE) {
 				ch.context().report(Kind.ERROR, "结果不能忽略");
 				return;

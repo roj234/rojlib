@@ -15,9 +15,9 @@ public abstract class CodeBlock {
 
 	public CodeBlock move(AbstractCodeWriter to, int blockMoved, boolean clone) { return this; }
 	protected static Label copyLabel(Label label, AbstractCodeWriter to, int blockMoved, boolean clone) {
-		if (label.isUnset()) return label;
+		if (label.isUnset() || to.labels.contains(label)) return label;
 
-		Label tx = clone&&!to.labels.contains(label)?new Label():label;
+		Label tx = clone?new Label():label;
 		tx.block = (short) (label.getBlock() + blockMoved);
 		tx.offset = label.offset;
 		to.labels.add(tx);

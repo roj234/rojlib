@@ -44,7 +44,7 @@ public final class EventTransformer implements ITransformer, NodeTransformer<Cla
 			synchronized (knownEvents) {knownEvents.add(name);}
 		}
 
-		Signature signature = data.parsedAttr(data.cp, Attribute.SIGNATURE);
+		Signature signature = data.getAttribute(data.cp, Attribute.SIGNATURE);
 		if (signature != null) {
 			Map<String, List<IType>> typeParams = signature.typeParams;
 			//if (typeParams.size() > 1) throw new TransformException("事件类"+data.name+"不能有超过一个泛型参数！");
@@ -75,7 +75,7 @@ public final class EventTransformer implements ITransformer, NodeTransformer<Cla
 		c.invoke(Opcodes.INVOKESTATIC, "roj/asmx/event/EventBus", "registerEvent", "(Ljava/lang/Class;)V");
 
 		if (clinit != null) {
-			AttrCode code = clinit.parsedAttr(data.cp, Attribute.Code);
+			AttrCode code = clinit.getAttribute(data.cp, Attribute.Code);
 			if (code.stackSize == 0) code.stackSize = 1;
 			code.instructions.replaceRange(0,0, (InsnList) c, false);
 		}

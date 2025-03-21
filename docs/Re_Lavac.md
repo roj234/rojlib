@@ -14,7 +14,8 @@ Lava编译器并非旨在取代Javac，其API主要为修改Java语法设计（�
 List.of({e1: null, e2: 3});
 List.of(null, null, {e3: null, e4: null})
 ```
-该表达式只能位于方法的最后一个参数
+该表达式只能位于方法的最后一个参数  
+如果方法有多个重载，因参数不匹配产生的错误可能不够直观
 ### for-else (已实现)
 这个语法来自python, 目前只有for支持, while和do-while不支持  
 for之后可以接else
@@ -69,6 +70,9 @@ static void test(int a = 3, Object o = some_variable) {
 ### lambdaify
   只有一个抽象方法的抽象类（不是接口），也可以使用lambda(不过会编译成new匿名类)  
   没有抽象方法的可继承类，可以使用*什么*指定一个方法？
+### 覆盖隐式方法 (已实现)
+所有隐式生成的方法，例如Enum.valueOf和values都可以由你手动覆盖，覆盖后编译器不再会生成相同的方法  
+访问权限修饰符必须和它应有的相同，否则会报错
 ### EasyMap (已实现)
   使用类似PHP的语法来构建Map&lt;?,?&gt;
 ```java
@@ -104,16 +108,13 @@ var list = [1, 2, 3]; // List<Integer> (不可变)
   * 前缀后缀运算符 ++ -- ~ !  
   * 修改赋值运算符 += -= *= /= %= **= <<= >>= >>>= &= ^= |=  
 
-不允许重载的
+不支持重载的
   * 三目 ? :
   * lambda ->
   * 赋值 =
   * 取值 . ?.
   * 扩展 ...
   * 方法引用 ::
-#### 默认的重载
-* ! String => String#isEmpty
-* String * int => String#repeat(int)
 ### 可选连接操作符 (已实现)
 ```javascript
  var nullable = a?.b?.c?.d;
@@ -122,14 +123,11 @@ var list = [1, 2, 3]; // List<Integer> (不可变)
 支持方法调用 a?.b()?.c;
 ### 基本类型泛型
   通过模板生成基本类型的泛型类，在运行时节约内存  
-### 递归泛型推断 (已实现)
-  我没找到什么好例子，反正正常一级也够用，javac很少报错
+### 连续泛型推断 (已实现)
+  例子：var x = XHashSet.noCreation(String.class, "_").createSized(233).iterator();  
+  Javac碰到这种泛型，会直接擦除到Object，而Lavac会记住String并连续传递，所以你将获得Iterator&lt;String&gt;
 ### finally优化 (已实现)
   在多个嵌套的finally块中，防止代码体积暴增
-### 预编译函数 (已实现)
-  在编译期间执行标为【可预编译 @roj.compiler.plugins.eval.Constexpr】并已知入参的函数，并生成常量结果
-### 数组压缩
-  将基本类型数组压缩为字符串(Base128)，减少文件体积
 ### 隐式导入|ImportAny (已实现)
   若全局没有同名的类，则该类视为已导入，妈妈再也不要去操心import了
 ### 受信执行环境|Package-Restricted (已实现)
@@ -150,19 +148,6 @@ with (System.out) {
 如果需要对某个类静态的使用，你可以 with (X.class) {} 或者，简单的import static
 ### 可选的分号 (已实现)
   大部分语句可以省略分号
-### 直接赋值操作符 AssignD
-```java
-Object yyy; // 这也可能是字段或任何东西
-
-int a = yyy = 3; // 这句话无法通过编译
-
-// 通常来说，你要这么写
-int a;
-yyy = a = 3;
-
-// 但是，现在有了第二种方式
-int a = yyy <<< 3;
-```
 ### defer (已实现)
 在代码块结束时，可以通过try-with-resource形式执行多个表达式。  
 如果其中一个表达式发生错误，不会影响其他表达式的执行，所有异常会一起抛出。  
@@ -226,9 +211,9 @@ System.out.println(""+number);
 ```
 ### async / await
    Promise (WIP)
-## 扩展功能 (通过Lavac API实现)
-### 注解处理: annotations
-#### @Attach
+# 扩展功能 (通过Lavac插件API实现)
+## Annotations插件
+### @Attach
   将静态函数附加到其它类上
 
 ```java
@@ -246,7 +231,7 @@ public class Attacher {
 
 这么做之后，无论这个类以源代码编译还是在classpath中  
 都可在字符串对象（或它的子类，虽然字符串是final的）上使用 isNotEmpty() 函数
-#### @AutoIncrement
+### @AutoIncrement
   以指定的start和step为每个字段分配整数常量值
 ```java
 @AutoIncrement(value = 100, step = 1)
@@ -254,9 +239,9 @@ public static final int A,B,C,D;
 ```
 等效于  
 public static final int A = 100,B = 101,C = 102,D = 103;
-#### @Getter/Setter
+### @Getter/Setter
   生成getXXX和setXXX方法  
-#### @Property
+### @Property
   以属性访问getter和setter  
   这个注解可以*堆叠*
 * getter和setter可以自动从value生成，但不会为布尔值生成isXXX，依然是getXXX
@@ -275,14 +260,12 @@ public class Some {
 }
 ```
   你可以直接以属性调用这些字段
-#### @Operator
+### @Operator
   自定义操作符  
   WIP
   * 目前仅能使用Lavac的API自定义操作符
-### 编译期执行: constant
-  使用@Constant标记纯函数  
-  自动推断还在研发  
-### 参数注入 / inline ASM / 泛型转换: asm
+## Asm插件
+### 参数注入 / inline ASM / 泛型转换
 	/**
 	 * 获取注入的属性
 	 * @return 返回类型为属性或def的真实类型，不一定是对象，并且可能随属性注入改变
@@ -301,6 +284,24 @@ public class Some {
 	 */
 	@SuppressWarnings("unchecked")
 	public static <T> T cast(Object input) {return (T) input;}
+## Evaluator插件
+### 编译期执行
+使用@Constexpr标记纯函数  
+纯函数可以在编译期执行  
+纯函数目前并不会编译两次，而是“只读取classpath中已经编译好的纯函数”  
+纯函数的入参和返回值只能是字符串或基本类型，和它们的数组  
+纯函数只能使用白名单内的少部分类
+### 数组压缩
+将基本类型数组压缩为字符串(Base128)，减小文件体积  
+目前支持int[]和byte[]，你可以这么写：  
+RtUtil.unpackI(RtUtil.pack(new byte[] { ... }));
+### 宏
+使用“!!macro { ... }”（macro后的空格不能省略）编写一个宏  
+宏类似于一个lambda代码块，其中有且仅有一个参数，CharList sb
+举例:  
+!!macro { sb.append("1+1"); }  
+将会编译为1+1
+## Uint插件
 ### 无符号数据类型
 ```java
     uint32 number = -7;
@@ -308,41 +309,149 @@ public class Some {
     System.out.println("(uint32) -7 + 12 = " + (number + 12).toString());
     System.out.println("number > 114514 = " + (number > 114514));
 ```
-* PseudoType (看上面介绍)
-### StreamChain API
+## MoreOp插件
+### 扩展的数组取值操作符
+数组取值 a[b] 现在可以对Map或List使用了，分别编译到get/set  
+集合可以使用 += 来add或者addAll  
+基本上就是表达式API的示例
+## StreamChain API
+编译期展开链式调用，实现零成本抽象
+### 下面的语句将编译为一些if，而不是这些方法调用
 ```java
     var awa = ComparisonChain.start().compare(2.0, 1)
     time += awa.compare(1, 2.0).result()
 ```
-* PseudoType (看上面介绍)
+## TypeDecl插件
+### 加入了支持编译期泛型推断的__Type( type )表达式
 
-## Java17支持，Lava暂时不支持
-### record
-### 模块系统
-### 非静态类，以及和它相关的泛型调用
-### 在内部类中使用this或变量
-### lambda
-### instanceof cast
-### 这(大概)是全列举，未写出的，比如匿名类、参数注解、封闭类、都已经实现
+# 不支持的特性
+### 开发中
+* 非静态类，以及和它相关的泛型调用
+* instanceof cast
+
+### 无支持计划
+* 方法中的具名类
+* java compiler API
+
+### 已支持
+* 匿名类
+* 记录
+* 枚举
+* lambda
+
+## 项目结构
+### 解析核心
+ * 结构解析器 CompileUnit
+   1. 解析定死的结构，比如类的结构，字段，函数名称，参数返回值，装饰器什么的，函数内部的内容通过括号匹配直接跳过，赋值语句调用表达式解析器，但不resolve，把这些包装为多个”解析任务“
+   2. 此时已经知道所有类的数据了，就可以解析导入表，将短名称resolve到全限定名，计算字段常量值，检测函数重载……
+   3. 调用预处理阶段装饰器的处理函数
+   4. 运行解析任务
+   5. 生成代码
 
 
-## Lava未来不会支持的
-### 方法中的具名类
-### javac API
+ * 解析任务 ParseTask  
+   解析任务包含了对代码分词器的位置引用以及解析结果存储到的目标  
+   任务的种类包括字段赋值语句，装饰器赋值语句等表达式解析任务  
+   以及方法和构造析构函数等方法解析任务
 
 
-## API
-TODO  
-ExprApi  
-StreamChain  
-ResolveApi  
-GlobalContext  
-LocalContext  
-TypeResolver  
-Library  
+ * 方法解析器 BlockParser  
+   方法解析器分析方法结构，比如for，if，break，switch等语句，并不时调用表达式解析器  
+   同时处理部分优化，比如死代码消除和寄存器分配  
 
 
-## 多线程编译 (CompileUnit)
+ * 表达式解析器 ExprParser  
+   表达式解析器负责分析表达式结构，比如加减乘除，函数调用，字段赋值，变量自增等  
+   if，switch同时能作为语句和表达式，会和方法解析共用代码  
+   表达式解析又由三个部分构成：
+   1. 预处理  
+      如果允许变量赋值，看看这个'表达式'是不是变量赋值语句
+   2. 算子  
+      由连续的'算子'序列构成一个'子表达式'，每个算子可能前进到相同或后续类型的算子：
+      1. 前缀算子（前缀自增等）
+      2. 值生成算子（立即数、数组等）
+      3. 值转换算子（方法调用、字段取值、圆括号等）
+      4. 终结算子（后缀自增、instanceof、三目运算符等）
+   3. 连接符
+      包括所有的二元运算符，比如加减乘除，可以连接下一个子表达式
+      还包括分号逗号等符号，将结束解析流程
+
+   解析结束后，根据运算符优先级从高到低在算子列表中选取对应位置的算子，并用"二元运算"算子将左右值合并为一个算子
+## 包结构
+API
+1. 注解处理器
+2. 自定义语法API
+   - 可以在全局编译上下文中修改优先级表，或者通过StateMap简单的插入自定义语法："遇到注册的自定义token时，给回调函数当前的AST和Lexer，解析然后把新的AST返回"
+   - 这些修改会在创建新的表达式解析器时应用
+3. StreamChain API
+   - 允许将链式调用，例如 a().doFoo().doBar().get() 中的对象消除，根据所有函数的名称和参数在编译期生成代码
+
+asm 代码生成
+1. 方法生成器 MethodWriter
+   - 方法解析器调用它立即生成代码
+   - 使用分段的"标签"来处理偏移
+2. 标签 Label
+   - 使用[段索引,偏移量]来表示一个代码位置
+3. 代码块 CodeBlock
+   - 代码块只能在后方追加代码（* 仅SolidBlock能追加），而已经有代码的部分不再改变
+   - 其余代码块只有长度可能改变
+   - 这样，标签引用的位置就是稳定的
+4. 变量 Variable
+5. 泛型 LPGeneric | LPSignature
+6. 用于类型转换判断的Asterisk类型
+
+ast 语法树
+1. 解析任务 ParseTask
+2. 方法解析器 BlockParser
+   - 方法解析器是即时写入的，不存在方法层结构的语法树节点
+   - 需要实现类似语法树节点的暂存时，会在新的方法生成器上写入，然后将整个生成器打包为代码块
+3. 表达式解析器 ExprParser
+4. 表达式语法树节点 ExprNode
+5. 变量初始化状态管理器 VisMap (neta TC)，全称是Variable Initialization State Map
+   - 保存和计算变量的赋值状态
+   - 表达式和方法解析器会在变量的赋值和读取时调用对应方法，比如读取未赋值的变量将会报错
+   - 赋值会进行SSA转换，辅助方法解析器的寄存器序号生成 (WIP)
+6. 寄存器映射计算器 VarMapper
+   - 目前使用基于变量实际生命周期的区间分配
+   - 未来SSA了会优化
+   - Javac是形式生命周期，所以在不考虑JVM优化的情况下，会多占用不少槽位
+
+context 上下文
+1. 全局编译上下文 GlobalContext
+   - 负责生成线程本地的编译上下文，词法分析器，方法分析器，表达式分析器
+   - 包含全局符号缓存和解析缓存
+2. 本地编译上下文 LocalContext
+   - 包含大部分不支持多线程和递归的对象，例如，方法分析器，供编译器调用
+   - 包含文件中只在当前阶段有效的状态，节省CompileUnit的空间。
+   - 包含对象缓存，复用一些SetListMap什么的
+   - 包含next和prev方法，用于单线程中的递归解析
+3. 核心符号缓存 LibrarySymbolCache：解析并缓存标准库的符号表
+4. 用户符号缓存 LibraryCompactKlass：由用户提供的库文件
+
+resolve 解析
+1. 解析缓存 ResolveHelper
+   - 按需生成
+   - 判断哪个函数可以用于lambda
+   - 生成一个类的所有递归父类，方便类型转换判断
+   - 按名称生成方法和字段的组件列表，并处理重载和桥接方法等多态相关
+2. 组件列表 ComponentList
+   - 【相同名称的方法或字段】的集合
+   - 根据输入的参数类型判断最终应当执行哪个重载，或者报错
+   - 同时还支持方法参数的默认值，以及按参数名称调用等高级功能
+   - 还能自动生成access访问方法 (* 仅&lt;Java11)
+3. 方法推断 Inferrer 
+   - 根据泛型，varargs，输入参数等，计算一个方法的'适用等级'，等级最高的会被组件列表选中
+   - 同时有一部分代码用来处理编译时的重载
+4. lambda生成器 LambdaGenerator
+   - 使用Java8或匿名类两种方式生成lambda
+5. 非静态类上下文 NestContext
+   - 管理非静态类或lambda对this和外部变量的引用
+6. 导入列表 ImportList
+   - 管理导入，包括导入，静态导入，全部导入，模块导入（WIP）和导入限制
+7. 类型转换 TypeCast
+   - 负责判断两个类型是否可以转换，并返回可行的最差转换类型，从宽化到窄化再到完全不可行
+
+## CompileUnit如何实现多线程编译
 
 ### Stage 1  
 解析基本结构
@@ -354,51 +463,54 @@ Library
 * method / constructor / {} / static {}
 * field
 * generic
-  同时会解析注解和field initializator中的表达式，但不resolve  
-  TODO 检测子类名称是否唯一？
+* 解析注解和立即字段赋值中的表达式，但不resolve
 
 ****
 线程同步
 ****
 
 ### Stage 2.1
-解析并验证对其它类的直接引用
-* extends / implements / permits (仅类型)
+解析其它类的名称
+* extends / implements / permits
 * field type / method parameter
-* signature (泛型)
-* annotation (仅类型)
+* signature
+* annotation
 
 ****
 线程同步
 ****
 
 ### Stage 2.2
-解析并验证对其它类的(可能的)间接引用
+解析其它类的引用
 * 循环引用
 * 泛型异常
-* 收集可被覆盖的方法
 * sealed和permits检查
 * 方法定义冲突 / throws (要判断instanceof Throwable，所以需要放在2.2)
 * field type, method parameter or throws
-* 生成默认构造器、Enum的values和valueOf和$VALUES
+* 生成默认构造器、Enum的values和valueOf和$VALUES，record的hashCode等
 
 ****
 线程同步
 ****
 
-### Stage 3
-PreCheck  
-该阶段还在TODO  
-该阶段的注解不能引用static final字段，十分遗憾  
-所以应该把static field的赋值放到这个阶段解析，并且应该给这些字段放属性，确保依赖能正确解析
-* 检查方法是否可以覆盖
-* * 处理Override
-* * 接口方法是否存在实现冲突而必须在本类实现
-* * 父类是否实现了本类接口的方法
-* * 是否有某些抽象方法未实现
-* * 访问权限是否降级
-* * 生成泛型桥接方法
-* 注解
+### Stage 2.3
+检查方法是否可以覆盖
+* 处理Override注解
+* 接口方法是否存在实现冲突而必须在本类实现
+* 父类是否实现了本类接口的方法
+* 是否有某些抽象方法未实现
+* 访问权限是否降级
+* 生成返回值或泛型参数的桥接方法
+
+****
+线程同步
+****
+
+### Stage 3.1 [注意，3.1和3.2阶段没有线程同步]
+* DFS递归解析static final字段，并在遇到循环引用时发出警告
+
+### Stage 3.2
+* 解析注解，并交给注解处理器
 
 ****
 线程同步
@@ -406,7 +518,14 @@ PreCheck
 
 ### Stage 4
 解析方法体
-* static {}和 {}的代码合并
+* 静态初始化块的代码合并
+* 构造器初始化块的代码合并，并加入所有构造器的前部
 * 匿名类
-* assert
-* final字段是否被赋值
+* final字段最终是否被赋值的检测
+
+****
+线程同步
+****
+
+### Stage 5
+序列化

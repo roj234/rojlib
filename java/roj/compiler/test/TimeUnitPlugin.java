@@ -4,10 +4,8 @@ import roj.asm.Opcodes;
 import roj.asm.type.IType;
 import roj.asm.type.Type;
 import roj.compiler.asm.MethodWriter;
-import roj.compiler.ast.expr.Constant;
 import roj.compiler.ast.expr.ExprNode;
 import roj.compiler.context.LocalContext;
-import roj.compiler.plugin.ExprApi;
 import roj.compiler.plugin.LavaApi;
 import roj.compiler.plugin.LavaPlugin;
 import roj.compiler.resolve.ResolveException;
@@ -32,9 +30,8 @@ public class TimeUnitPlugin extends ExprNode {
 	}
 
 	public static void pluginInit(LavaApi api) {
-		ExprApi rtApi = api.getExprApi();
 		for (var unit : TimeUnit.values()) {
-			rtApi.addExprTerminal(unit.name(), (lexer, node, lc) -> new TimeUnitPlugin(node, unit));
+			api.newTerminalOp(unit.name(), (ctx, node) -> new TimeUnitPlugin(node, unit));
 		}
 	}
 
@@ -45,7 +42,7 @@ public class TimeUnitPlugin extends ExprNode {
 	public ExprNode resolve(LocalContext ctx) throws ResolveException {
 		node = node.resolve(ctx);
 		cast = ctx.castTo(node.type(), type(), 0);
-		if (node.isConstant()) return Constant.valueOf(CEntry.valueOf(unit.toMillis(((CEntry) node.constVal()).asLong())));
+		if (node.isConstant()) return ExprNode.valueOf(CEntry.valueOf(unit.toMillis(((CEntry) node.constVal()).asLong())));
 		return this;
 	}
 

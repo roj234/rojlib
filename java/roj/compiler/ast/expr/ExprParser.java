@@ -1,12 +1,12 @@
 package roj.compiler.ast.expr;
 
+import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import roj.asm.FieldNode;
 import roj.asm.IClass;
 import roj.asm.MethodNode;
 import roj.asm.Opcodes;
-import roj.asm.annotation.AnnVal;
-import roj.asm.attr.AttrUnknown;
+import roj.asm.attr.UnparsedAttribute;
 import roj.asm.type.IType;
 import roj.asm.type.Type;
 import roj.collect.Int2IntMap;
@@ -17,15 +17,13 @@ import roj.compiler.JavaLexer;
 import roj.compiler.LavaFeatures;
 import roj.compiler.asm.Asterisk;
 import roj.compiler.asm.LPGeneric;
-import roj.compiler.asm.MethodWriter;
 import roj.compiler.ast.BlockParser;
 import roj.compiler.ast.ParseTask;
 import roj.compiler.ast.VariableDeclare;
 import roj.compiler.context.CompileUnit;
 import roj.compiler.context.LocalContext;
 import roj.compiler.diagnostic.Kind;
-import roj.compiler.plugin.LEC;
-import roj.compiler.plugin.LEG;
+import roj.compiler.plugin.LavaApi;
 import roj.config.ConfigMaster;
 import roj.config.ParseException;
 import roj.config.Word;
@@ -33,6 +31,7 @@ import roj.config.auto.Serializer;
 import roj.config.auto.SerializerFactory;
 import roj.config.data.CEntry;
 import roj.config.serial.CVisitor;
+import roj.io.IOUtil;
 import roj.text.CharList;
 import roj.util.ArrayRef;
 import roj.util.Helpers;
@@ -40,7 +39,6 @@ import roj.util.TimSortForEveryone;
 
 import java.util.Collections;
 import java.util.List;
-import java.util.function.BiFunction;
 
 import static roj.compiler.JavaLexer.*;
 import static roj.config.Word.LITERAL;
@@ -77,8 +75,9 @@ public final class ExprParser {
 	static final int OP_OPTIONAL = 1;
 
 	public static final int SM_UnaryPre = 1 << 29, SM_ExprStart = 2 << 29, SM_ExprNext = 3 << 29, SM_ExprTerm = 4 << 29, CU_TerminateFlag = 0x80000000;
+	public static final int CU_Binary = 0x800, SM_RightAssoc = 0x80000000;
 
-	public static Int2IntMap getStateMap() { return SM; }
+	public static Int2IntMap getStateMap() { return new Int2IntMap(SM); }
 	public static IntMap<Type> getPrimitiveWords() { return PW; }
 
 	private static final IntMap<Type> PW = new IntMap<>(8);
@@ -136,10 +135,6 @@ public final class ExprParser {
 		SM.putInt(SM_ExprNext | Word.STRING, -10);
 		SM.putInt(SM_ExprNext | NEW, -11);
 
-		// Spec
-		SM.putInt(SM_ExprTerm | INSTANCEOF, -1);
-		SM.putInt(SM_ExprTerm | ask, -1);
-
 		// 终结
 		// 0x400 = FLAG_TERMINATOR
 		// 0x040 = FLAG_ALWAYS_STOP
@@ -154,7 +149,7 @@ public final class ExprParser {
 
 		// 优先级
 		// 20250111 按照“正确”的优先级重新排序它们，但是并未改变val
-		SM.putInt(SM_ExprTerm | pow, 8);
+		SM.putInt(SM_ExprTerm | pow, SM_RightAssoc | 8);
 
 		SM.putInt(SM_ExprTerm | mul, 7);
 		SM.putInt(SM_ExprTerm | div, 7);
@@ -171,16 +166,23 @@ public final class ExprParser {
 		SM.putInt(SM_ExprTerm | gtr, 5);
 		SM.putInt(SM_ExprTerm | geq, 5);
 		SM.putInt(SM_ExprTerm | leq, 5);
+
+		SM.putInt(SM_ExprTerm | INSTANCEOF, -1);
+		// 不是吧，这也低人一等？
 		SM.putInt(SM_ExprTerm | equ, 5);
 		SM.putInt(SM_ExprTerm | neq, 5);
 
+		// 这三个个个不一样草了
 		SM.putInt(SM_ExprTerm | and, 10);
 		SM.putInt(SM_ExprTerm | or, 10);
 		SM.putInt(SM_ExprTerm | xor, 10);
 
-		SM.putInt(SM_ExprTerm | nullish_coalescing, 4);
 		SM.putInt(SM_ExprTerm | logic_and, 4);
 		SM.putInt(SM_ExprTerm | logic_or, 4);
+		SM.putInt(SM_ExprTerm | nullish_coalescing, 4);
+
+		// 然后是
+		SM.putInt(SM_ExprTerm | ask, -1);
 	}
 	private static void batch(int mask, int val, short... tokens) {
 		for (short token : tokens) SM.putInt(token|mask, val);
@@ -197,18 +199,22 @@ public final class ExprParser {
 	private final SimpleList<ExprNode> nodes = new SimpleList<>();
 	/**
 	 * 低10位放优先级
-	 * 高22位放节点序号
+	 * 高21位放节点索引
+	 * 最高位放右结合标记
 	 */
 	private final IntList binaryOps = new IntList();
 	private static final TimSortForEveryone.MyComparator BOP_SORTER = (refLeft, offLeft, offRight) -> {
-		var a = U.getInt(refLeft, offLeft) & 1023;
-		var b = U.getInt(offRight) & 1023;
-		return Integer.compare(b, a);
+		int l = U.getInt(refLeft, offLeft);
+		int r = U.getInt(offRight);
+		int priority = Integer.compare(r & 1023, l & 1023);
+		if (priority != 0) return priority;
+		// 正数不会改变顺序，但是如果是负数，那么就会反过来，这就变成右结合了
+		return Integer.compare(Math.abs(l), Math.abs(r));
 	};
 
 	private int depth = -1;
-	public Int2IntMap sm = SM;
-	public List<Object> custom;
+	public Int2IntMap stateMap = SM;
+	public List<Object> callbacks;
 
 	public ExprParser(LocalContext ctx) {this.ctx = ctx;}
 
@@ -252,16 +258,16 @@ public final class ExprParser {
 			loop:
 			while (true) {
 				UnaryPreNode pf;
-				switch (_sid = sm.getOrDefaultInt(w.type()|SM_UnaryPre, 0)) {
+				switch (_sid = stateMap.getOrDefaultInt(w.type()|SM_UnaryPre, 0)) {
 					case -5: //dec
 						w = wr.next();
 						if (w.type() == INT_MIN_VALUE) {
 							w = wr.next();
-							cur = Constant.valueOf(CEntry.valueOf(Integer.MIN_VALUE));
+							cur = ExprNode.valueOf(CEntry.valueOf(Integer.MIN_VALUE));
 							break endValueGen;
 						} else if (w.type() == LONG_MIN_VALUE) {
 							w = wr.next();
-							cur = Constant.valueOf(CEntry.valueOf(Long.MIN_VALUE));
+							cur = ExprNode.valueOf(CEntry.valueOf(Long.MIN_VALUE));
 							break endValueGen;
 						} else {
 							wr.retractWord();
@@ -290,7 +296,7 @@ public final class ExprParser {
 							pf.wordStart = startOff;
 						} else {// lambda 【(a,b,c.....) -> {}】 [terminal operator]
 							// [cast] <lambda> [invoke]
-							cur = lambda(wr, (List<String>) o);
+							cur = lambda(wr, (List<String>) o, flag);
 							break endValueConv;
 						}
 					break;
@@ -298,7 +304,7 @@ public final class ExprParser {
 						if ((flag&STOP_LAMBDA) == 0) {
 							w = w.copy(); // no more singleton
 							if (wr.nextIf(lambda)) {
-								cur = lambda(wr, Collections.singletonList(w.val()));
+								cur = lambda(wr, Collections.singletonList(w.val()), flag);
 								break endValueConv;
 							}
 						}
@@ -311,11 +317,11 @@ public final class ExprParser {
 					default: // 自定义前缀 | 自定义完整表达式
 						int alt_sid = _sid & ~CU_TerminateFlag;
 						if (_sid != alt_sid) {
-							cur = ((LEG) custom.get(alt_sid)).generate(wr, ctx);
+							cur = ((LavaApi.StartOp) callbacks.get(alt_sid)).parse(ctx);
 							break endValueConv;
 						}
 
-						pf = ((BiFunction<JavaLexer, UnaryPreNode, UnaryPreNode>) custom.get(alt_sid)).apply(wr, up);
+						pf = ((LavaApi.ContinueOp<UnaryPreNode>) callbacks.get(alt_sid)).parse(ctx, up);
 				}
 				w = wr.next();
 
@@ -329,7 +335,7 @@ public final class ExprParser {
 			// endregion
 			// *AI命名建议：后缀表达式（Postfix Expression） | 如方法调用`foo()`、成员访问`obj.field`等需在前缀基础上处理的语法结构。
 			// region 一次性"值生成"(自造词)操作 (加载常量 new this 花括号(direct)数组内容 int[].class String.class)
-			switch (_sid = sm.getOrDefaultInt(w.type()|SM_ExprStart, 0)) {
+			switch (_sid = stateMap.getOrDefaultInt(w.type()|SM_ExprStart, 0)) {
 				case -1://NEW
 					// double[]的部分不受支持
 					// new <double[]>test<int[]>(new int[0], (Object) assign2op((short) 2));
@@ -399,15 +405,15 @@ public final class ExprParser {
 					cur.wordStart = start;
 				break endValueGen;
 				// constant
-				case -2: cur = new Constant(Type.primitive(Type.CHAR), AnnVal.valueOf(w.val().charAt(0))); break;
-				case -3: cur = Constant.valueOf(w.val()); break;
-				case -4: cur = Constant.valueOf(w.asInt()); break;
-				case -5: cur = new Constant(Type.primitive(Type.LONG), AnnVal.valueOf(w.asLong())); break;
-				case -6: cur = new Constant(Type.primitive(Type.FLOAT), AnnVal.valueOf(w.asFloat())); break;
-				case -7: cur = new Constant(Type.primitive(Type.DOUBLE), AnnVal.valueOf(w.asDouble())); break;
-				case -8: cur = Constant.valueOf(true); break;
-				case -9: cur = Constant.valueOf(false); break;
-				case -10: cur = new Constant(Asterisk.anyType, null); break;
+				case -2: cur = ExprNode.constant(Type.primitive(Type.CHAR), CEntry.valueOf(w.val().charAt(0))); break;
+				case -3: cur = ExprNode.valueOf(w.val()); break;
+				case -4: cur = ExprNode.valueOf(w.asInt()); break;
+				case -5: cur = ExprNode.constant(Type.primitive(Type.LONG), CEntry.valueOf(w.asLong())); break;
+				case -6: cur = ExprNode.constant(Type.primitive(Type.FLOAT), CEntry.valueOf(w.asFloat())); break;
+				case -7: cur = ExprNode.constant(Type.primitive(Type.DOUBLE), CEntry.valueOf(w.asDouble())); break;
+				case -8: cur = ExprNode.valueOf(true); break;
+				case -9: cur = ExprNode.valueOf(false); break;
+				case -10: cur = ExprNode.constant(Asterisk.anyType, null); break;
 				// MIN_VALUE_NUMBER_LITERAL
 				case -17: LocalContext.get().report(Kind.ERROR, "lexer.number.overflow"); break;
 				// this
@@ -442,6 +448,7 @@ public final class ExprParser {
 							wr.except(colon);
 						}
 						if (w.type() != rBrace) ue(wr, "type.literal");
+						cur = npl;
 						break endValueConv;
 					}
 
@@ -540,7 +547,7 @@ public final class ExprParser {
 						w = wr.next();
 						if (w.type() != LITERAL) {
 							if (w.type() == CLASS) {
-								cur = Constant.classRef(((DotGet) cur).toClassRef());
+								cur = ExprNode.classRef(((DotGet) cur).toClassRef());
 								break;
 							} else if (w.type() == JavaLexer.THIS || w.type() == JavaLexer.SUPER) {
 								cur = newEncloseRef(w.type() == JavaLexer.THIS, ((DotGet) cur).toClassRef());
@@ -553,7 +560,7 @@ public final class ExprParser {
 				break;
 				case 0: break endValueGen;
 				default:
-					cur = ((LEG) custom.get(_sid)).generate(wr, ctx);
+					cur = ((LavaApi.StartOp) callbacks.get(_sid)).parse(ctx);
 				break;
 			}
 			w = wr.next();
@@ -563,7 +570,7 @@ public final class ExprParser {
 			boolean waitDot = cur != null && _sid != 0;
 			int opFlag = 0;
 			while (true) {
-				switch (_sid = sm.getOrDefaultInt(w.type()|SM_ExprNext, 0)) {
+				switch (_sid = stateMap.getOrDefaultInt(w.type()|SM_ExprNext, 0)) {
 					case -1://lss
 						// '小于'操作符
 						if (waitDot) break endValueConvNrt;
@@ -623,8 +630,9 @@ public final class ExprParser {
 						if (waitDot) ue(wr, w.val(), ".");
 						String className = wr.except(LITERAL, "cu.name").val();
 						wr.except(lParen);
-						cur = invoke(Type.klass(className), cur).setEnclosingArg();
-					break endValueConv;
+						cur = invoke(Type.klass(className), cur).setThisArg();
+						waitDot = true;
+					break;
 
 					// 我是无敌可爱的分隔线
 
@@ -656,7 +664,7 @@ public final class ExprParser {
 					break endValueConv;
 					case -9://method_referent this::stop
 						if (!waitDot) ue(wr, w.val(), "type.literal");
-						cur = new Lambda(chain(cur, wr.except(Word.LITERAL).val(), 0));
+						cur = new Lambda(cur, wr.except(Word.LITERAL).val());
 					break endValueConv;
 
 					// 我是无敌可爱的分隔线
@@ -664,7 +672,7 @@ public final class ExprParser {
 					default: // 自定义继续 | 自定义终止
 						int alt_sid = _sid & ~CU_TerminateFlag;
 
-						cur = ((LEC) custom.get(alt_sid)).generate(wr, cur, ctx);
+						cur = ((LavaApi.ContinueOp<ExprNode>) callbacks.get(alt_sid)).parse(ctx, cur);
 
 						if (_sid == alt_sid) break;
 						else break endValueConv;
@@ -686,16 +694,30 @@ public final class ExprParser {
 				nodes.add(cur);
 			}
 
+			// 优先级也不低
+			// if ("5"+3 instanceof String ? "5"+3 instanceof String : "5"+3 instanceof String);
+			if (w.type() == INSTANCEOF) {
+				cur = buildBinaryTree(nodes, nodeCount, bopCount);
+
+				IType targetType = ctx.file.readType(CompileUnit.TYPE_GENERIC);
+				String variable = wr.nextIf(LITERAL) ? w.val() : null;
+
+				cur = newInstanceOf(targetType.rawType(), cur, variable);
+				nodes.add(cur);
+
+				w = wr.next();
+			}
+
 			// *AI命名建议：中缀运算符（Infix Operator） | 如`+`、`*`等连接子表达式的符号。
 			// 二元运算符 | 三元运算符 | 终结符
-			_sid = sm.getOrDefaultInt(SM_ExprTerm | w.type(), 0);
+			_sid = stateMap.getOrDefaultInt(SM_ExprTerm | w.type(), 0);
 			if (_sid == 0) {
-				if (ctx.classes.hasFeature(LavaFeatures.OPTIONAL_SEMICOLON) && cur != null) {
+				if (ctx.classes.hasFeature(LavaFeatures.OPTIONAL_SEMICOLON) && depth == 0 && cur != null) {
 					wr.retractWord();
 					break;
 				}
 
-				ue(wr, w.val());
+				exceptingStopWord(wr, w.val(), flag);
 			}
 
 			if ((_sid&0x400) != 0) {
@@ -707,12 +729,12 @@ public final class ExprParser {
 				// 0x020 = FLAG_NEVER_SKIP
 				int shl = _sid & 31;
 				if ((flag & (1 << shl)) == 0) {
-					if (ctx.classes.hasFeature(LavaFeatures.OPTIONAL_SEMICOLON) && cur != null) {
+					if (ctx.classes.hasFeature(LavaFeatures.OPTIONAL_SEMICOLON) && depth == 0 && cur != null) {
 						wr.retractWord();
 						break;
 					}
 
-					ue(wr, w.val());
+					exceptingStopWord(wr, w.val(), flag);
 				}
 				if ((_sid & 0x20) != 0 || (flag & (1 << (shl+1))) == 0) wr.retractWord();
 
@@ -723,48 +745,11 @@ public final class ExprParser {
 			checkNullExpr(cur);
 
 			// range 0 - 1023
-			binaryOps.add((nodes.size() << 10) | _sid);
+			binaryOps.add((nodes.size() << 10) | (_sid&0x3FF));
 			nodes.add(new Binary(w.type()));
 		}
 
-		// region 表达式优先级
-		ExprNode cur;
-		var ops = binaryOps;
-		if (ops.size() > bopCount) {
-			TimSortForEveryone.sort(bopCount, ops.size(), BOP_SORTER, ArrayRef.primitiveArray(ops.getRawArray()));
-
-			// *AI命名建议：自底向上归约（Bottom-Up Reduction） | 按优先级合并子表达式的过程，类似算符优先分析法。
-			int i = bopCount;
-			do {
-				int ord = ops.get(i) >>> 10;
-
-				Binary op = (Binary) nodes.get(ord);
-
-				op.left = nodes.set(ord-1, op);
-				op.right = nodes.set(ord+1, op);
-				checkNullExpr(op.right);
-
-				cur = op;
-			} while (++i != ops.size());
-
-			ops.removeRange(bopCount, ops.size());
-			nodes.removeRange(nodeCount, nodes.size());
-		} else {
-			assert nodes.size() == nodeCount+1;
-			// 肯定有这一项，但是可能是null
-			cur = nodes.pop();
-		}
-		// endregion
-
-		// 优先级也不低
-		// if ("5"+3 instanceof String ? "5"+3 instanceof String : "5"+3 instanceof String);
-		if (w.type() == INSTANCEOF) {
-			checkNullExpr(cur);
-
-			IType targetType = ctx.file.readType(CompileUnit.TYPE_GENERIC);
-			String variable = wr.nextIf(LITERAL) ? w.val() : null;
-			cur = newInstanceOf(targetType.rawType(), cur, variable);
-		}
+		ExprNode cur = buildBinaryTree(nodes, nodeCount, bopCount);
 
 		if (w.type() == comma) {
 			if ((flag & STOP_COMMA) == 0) {
@@ -808,6 +793,40 @@ public final class ExprParser {
 		depth--;
 		return cur;
 	}
+	/**
+	 * 根据优先级构建二元表达式树.
+	 * 20250330: 现已支持右结合！
+	 */
+	private ExprNode buildBinaryTree(SimpleList<ExprNode> nodes, int nodeCount, int bopCount) {
+		ExprNode cur;
+		var ops = binaryOps;
+		if (ops.size() > bopCount) {
+			TimSortForEveryone.sort(bopCount, ops.size(), BOP_SORTER, ArrayRef.primitiveArray(ops.getRawArray()));
+
+			int i = bopCount;
+			do {
+				int ord = (ops.get(i) >>> 10) & 2097151;
+
+				Binary op = (Binary) nodes.get(ord);
+
+				op.left = nodes.set(ord-1, op);
+				op.right = nodes.set(ord+1, op);
+				checkNullExpr(op.right);
+
+				int sid = stateMap.getOrDefaultInt(op.operator, 0);
+				if ((sid& CU_Binary) != 0) cur = ((LavaApi.BinaryOp) callbacks.get(sid >>> 12)).parse(ctx, op.left, op.right);
+				else cur = op;
+			} while (++i != ops.size());
+
+			ops.removeRange(bopCount, ops.size());
+			nodes.removeRange(nodeCount, nodes.size());
+		} else {
+			assert nodes.size() == nodeCount+1;
+			// 肯定有这一项，但是可能是null
+			cur = nodes.pop();
+		}
+		return cur;
+	}
 
 	private boolean hasNullExpr;
 	private void checkNullExpr(ExprNode cur) {
@@ -842,7 +861,7 @@ public final class ExprParser {
 		}
 
 		// int [] . class
-		if (w.type() == dot && wr.nextIf(CLASS)) return Constant.classRef(type);
+		if (w.type() == dot && wr.nextIf(CLASS)) return ExprNode.classRef(type);
 
 		if (array != 0) ctx.report(Kind.ERROR, "expr.typeRef.arrayDecl");
 		return null;
@@ -970,22 +989,22 @@ public final class ExprParser {
 
 		// 必须是合法的表达式开始
 		int flag = wr.next().type();
-		flag = sm.getOrDefaultInt(flag|SM_UnaryPre, 0) | sm.getOrDefaultInt(flag|SM_ExprStart, 0);
+		flag = stateMap.getOrDefaultInt(flag|SM_UnaryPre, 0) | stateMap.getOrDefaultInt(flag|SM_ExprStart, 0);
 		if (flag == 0) return null;
 
 		wr.skip(-2);
 		return Type.klass(sb.toString());
 	}
 
-	public ExprNode chain(ExprNode e, String name, int flag) {
-		if (e instanceof DotGet d) {
+	public ExprNode chain(ExprNode expr, String name, int flag) {
+		if (expr instanceof DotGet d) {
 			d.wordEnd = ctx.lexer.index;
 			return d.add(name, flag);
 		}
-		return new DotGet(e, name, flag);
+		return new DotGet(expr, name, flag);
 	}
 	private Invoke invoke(Object fn, Object arg2) throws ParseException {
-		int wordStart = ctx.lexer.current().pos();
+		int wordStart = ctx.lexer.prevIndex;
 
 		List<ExprNode> args = tmp();
 		if (arg2 instanceof ExprNode x) args.add(x);
@@ -1021,44 +1040,65 @@ public final class ExprParser {
 		node.wordStart = wordStart;
 		return node;
 	}
-	//WIP
-	private ExprNode lambda(JavaLexer wr, List<String> parNames) throws ParseException {
+	private ExprNode lambda(JavaLexer wr, List<String> parNames, int stopWord) throws ParseException {
 		var argNames = copyOf(parNames);
 
 		var file = ctx.file;
-		MethodNode mn = new MethodNode(Opcodes.ACC_PRIVATE|(ctx.in_static ? Opcodes.ACC_STATIC : 0)|Opcodes.ACC_SYNTHETIC, file.name(), "lambda$", "()V");
+		var method = new MethodNode(Opcodes.ACC_PRIVATE|(ctx.inStatic ? Opcodes.ACC_STATIC : 0)|Opcodes.ACC_SYNTHETIC, file.name(), "", "()V");
+		ParseTask task;
 
 		if (wr.nextIf(lBrace)) {
-			ParseTask task = ParseTask.Method(file, mn, argNames);
-			return new Lambda(argNames, mn, task);
+			task = ParseTask.Method(file, method, argNames);
 		} else {
 			int start = wr.prevIndex;
 			int linePos = wr.LN;
 			int lineIdx = wr.LNIndex;
+			ExprNode node = parse1(stopWord&(STOP_RSB|STOP_COMMA|STOP_SEMICOLON));
+			if (node == null) {
+				ctx.report(Kind.ERROR, "lambda解析失败");
+				return NaE.RESOLVE_FAILED;
+			}
 
-			var expr = parse1(STOP_RSB|STOP_COMMA|STOP_SEMICOLON|NAE);
 			int end = wr.prevIndex;
 
-			var methodStr = "return "+wr.getText().subSequence(start, end)+";}";
-			System.out.println(methodStr);
-			ParseTask task = ctx -> {
-				var file1 = ctx.file;
-				ctx.lexer.init(start, linePos, lineIdx);
-				MethodWriter cw = ctx.bp.parseMethod(file1, mn, argNames);
-
-				cw.finish();
-
-				mn.putAttr(new AttrUnknown("Code", cw.bw.toByteArray()));
+			int offset = start-7; // 7是"return "的长度
+			var methodStrTmp = "return "+wr.getText().subSequence(start, end)+";}";
+			// TODO 一个更优雅的解决方案来将Expression lambda转换为Method lambda
+			var methodStr = new CharSequence() {
+				@Override public char charAt(int index) {return methodStrTmp.charAt(index - offset);}
+				@Override public int length() {return methodStrTmp.length() + offset;}
+				@Override public @NotNull CharSequence subSequence(int start, int end) {
+					return new CharList().append(this, start, end).toStringAndFree();
+				}
 			};
 
-			return new Lambda(argNames, expr);
+			task = ctx -> {
+				ctx.lexer.setText(methodStr, 0);
+				ctx.lexer.init(start-7, linePos, lineIdx);
+
+				var cw = ctx.bp.parseMethod(ctx.file, method, argNames);
+				cw.finish();
+				method.addAttribute(new UnparsedAttribute("Code", cw.bw.toByteArray()));
+			};
 		}
+		return new Lambda(argNames, method, task);
 	}
 
-	private static void ue(JavaLexer wr, String wd, String except) throws ParseException { throw wr.err("unexpected_2:"+wd+':'+except); }
-	private static void ue(JavaLexer wr, String wd) throws ParseException { throw wr.err("unexpected:"+wd); }
+	private static void ue(JavaLexer wr, String wd, String except) throws ParseException { throw wr.err("unexpected_2\1"+wd+"\0\1"+except+"\0"); }
+	private static void ue(JavaLexer wr, String wd) throws ParseException { throw wr.err("unexpected\1"+wd+"\0"); }
+	private static void exceptingStopWord(JavaLexer wr, String val, int flag) throws ParseException {
+		var sb = IOUtil.getSharedCharBuf().append('\1');
+		if ((flag&STOP_SEMICOLON) != 0) sb.append(';');
+		if ((flag&STOP_RSB) != 0) sb.append(')');
+		if ((flag&STOP_RMB) != 0) sb.append(']');
+		if ((flag&STOP_COMMA) != 0) sb.append(',');
+		if ((flag&STOP_RLB) != 0) sb.append('}');
+		if ((flag&STOP_COLON) != 0) sb.append(':');
+		if ((flag&STOP_LAMBDA) != 0) sb.append("->");
+		throw wr.err("unexpected_2:"+val+":"+sb.append('\0'));
+	}
 
-	public int binaryOperatorPriority(short op) {return sm.getOrDefaultInt(SM_ExprTerm | op, -1);}
+	public int binaryOperatorPriority(short op) {return stateMap.getOrDefaultInt(SM_ExprTerm | op, -1);}
 
 	public <T> List<T> copyOf(List<T> args) {
 		if (!(args instanceof SimpleList<T>)) return args;

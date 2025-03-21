@@ -11,7 +11,7 @@ import java.util.TimeZone;
  * @since 2021/6/16 2:48
  */
 public final class DateParser {
-	public static final int YEAR = 0, MONTH = 1, DAY = 2, HOUR = 3, MINUTE = 4, SECOND = 5, MILLISECOND = 6, DAY_OF_WEEK = 7, LEAP_YEAR = 8, FIELD_COUNT = 9;
+	public static final int YEAR = 0, MONTH = 1, DAY = 2, HOUR = 3, MINUTE = 4, SECOND = 5, MILLISECOND = 6, DAY_OF_WEEK = 7, DAY_OF_YEAR = 8, LEAP_YEAR = 9, FIELD_COUNT = 10;
 
 	private final int[] fields = new int[FIELD_COUNT];
 	private final TimeZone zone;
@@ -46,6 +46,8 @@ public final class DateParser {
 			fields[YEAR] --;
 			fields[MONTH] = 12;
 			fields[DAY] = 32 + daysInYear;
+
+			daysInYear += 366;
 		} else {
 			// 至少3月1日
 			if (daysInYear >= 59/*SUMMED_DAYS[3]*/ + (leapYear ? 1 : 0)) {
@@ -60,6 +62,7 @@ public final class DateParser {
 		}
 
 		fields[DAY_OF_WEEK] = dayOfWeek(ts-1);
+		fields[DAY_OF_YEAR] = daysInYear;
 		fields[LEAP_YEAR] = leapYear ? 1 : 0;
 
 		return fields;

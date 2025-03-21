@@ -12,10 +12,9 @@ import roj.util.DynByteBuf;
 public final class CstUTF extends Constant {
 	Object data;
 
-	public CstUTF() {}
-	public CstUTF(String s) { data = s; }
-
-	CstUTF(Object b) { data = b; }
+	CstUTF() {}
+	CstUTF(Object b) {data = b;}
+	CstUTF(String b) {data = b;ConstantPool.verifyUtf(b);}
 
 	public String str() {
 		block: {

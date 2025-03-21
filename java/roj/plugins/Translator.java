@@ -149,7 +149,7 @@ public class Translator extends Plugin {
 
 		boolean any = false;
 
-		List<Constant> array = data.cp.array();
+		List<Constant> array = data.cp.data();
 		for (IntMap.Entry<String> entry : map.selfEntrySet()) {
 			CstString ref = (CstString) array.get(entry.getIntKey()-1);
 			if (!ref.name().str().equals(entry.getValue())) {
@@ -201,11 +201,11 @@ public class Translator extends Plugin {
 		sb.append(path).append(data.name()).append(':').append('\n');
 		boolean any = false;
 
-		List<Constant> array = data.cp.array();
+		List<Constant> array = data.cp.data();
 		for (int i = 0; i < array.size(); i++) {
 			Constant s = array.get(i);
 			if (s.type() == Constant.STRING) {
-				sb.append('\t').append(s.getIndex()).append('=').append('"');
+				sb.append('\t').append(data.cp.indexOf(s)).append('=').append('"');
 				Tokenizer.addSlashes(sb, ((CstString) s).name().str()).append('"').append('\n');
 
 				any = true;

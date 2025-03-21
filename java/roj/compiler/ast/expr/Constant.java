@@ -3,10 +3,8 @@ package roj.compiler.ast.expr;
 import org.jetbrains.annotations.Nullable;
 import roj.asm.Opcodes;
 import roj.asm.cp.CstClass;
-import roj.asm.type.Generic;
 import roj.asm.type.IType;
 import roj.asm.type.Type;
-import roj.compiler.api.Types;
 import roj.compiler.asm.MethodWriter;
 import roj.compiler.context.LocalContext;
 import roj.compiler.resolve.ResolveException;
@@ -14,7 +12,6 @@ import roj.compiler.resolve.TypeCast;
 import roj.config.Tokenizer;
 import roj.config.data.CEntry;
 
-import java.util.Collections;
 import java.util.Objects;
 
 /**
@@ -22,7 +19,7 @@ import java.util.Objects;
  * @author Roj233
  * @since 2020/10/13 22:17
  */
-public final class Constant extends ExprNode {
+final class Constant extends ExprNode {
 	private static final Object CLASSREF = Constant.class;
 	// 给CompileContext的getConstantValue省几个对象
 	private boolean isClassRef() { return c == CLASSREF || c instanceof CstClass; }
@@ -30,28 +27,34 @@ public final class Constant extends ExprNode {
 	private final IType type;
 	private Object c;
 
-	public Constant(IType type, Object c) {
+	Constant(IType type, Object c) {
 		this.type = type;
 		this.c = c;
 	}
 
 	@Override public String toString() { return c instanceof String ? '"'+ Tokenizer.addSlashes(c.toString())+'"' : isClassRef() ? type+".class" : String.valueOf(c); }
 	@Override public boolean hasFeature(ExprFeat kind) {return kind == ExprFeat.IMMEDIATE_CONSTANT || (kind == ExprFeat.LDC_CLASS && isClassRef());}
+	@Override
+	public IType minType() {
+		if (c instanceof CEntry x && TypeCast.getDataCap(type.getActualType()) <= 4) {
+			if (x.mayCastTo(roj.config.data.Type.Int1)) {
+				return Type.primitive(Type.BYTE);
+			}
+			if (x.mayCastTo(roj.config.data.Type.Int2)) {
+				return Type.primitive(Type.SHORT);
+			}
+			if (x.mayCastTo(roj.config.data.Type.CHAR)) {
+				return Type.primitive(Type.CHAR);
+			}
+			if (x.mayCastTo(roj.config.data.Type.INTEGER)) {
+				return Type.primitive(Type.INT);
+			}
+		}
+		return type;
+	}
 	@Override public IType type() { return type; }
 	@Override public boolean isConstant() { return !isClassRef(); }
 	@Override public Object constVal() { return c; }
-
-	public static Constant classRef(Type type) {return new Constant(new Generic("java/lang/Class", Collections.singletonList(type)), type);}
-	public static Constant valueOf(String v) {return new Constant(Types.STRING_TYPE, v);}
-	public static Constant valueOf(boolean v) {return new Constant(Type.primitive(Type.BOOLEAN), v);}
-	public static Constant valueOf(int v) {return new Constant(Type.primitive(Type.INT), CEntry.valueOf(v));}
-	public static Constant valueOf(CEntry v) {
-		return switch (v.dataType()) {
-			case 's' -> valueOf(v.asString());
-			case 'I', 'B', 'C', 'S', 'J', 'F', 'D' -> new Constant(Type.primitive(v.dataType()), v);
-			default -> throw new IllegalArgumentException("暂时不支持这些类型："+v);
-		};
-	}
 
 	@Override
 	public ExprNode resolve(LocalContext ctx) throws ResolveException {

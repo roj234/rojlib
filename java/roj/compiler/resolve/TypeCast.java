@@ -13,6 +13,7 @@ import roj.compiler.context.LocalContext;
 import roj.concurrent.OperationDone;
 import roj.text.CharList;
 
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
@@ -47,12 +48,18 @@ public class TypeCast {
 		public int type;
 		public int distance;
 
-		byte op1, op2, box;
+		public static final Cast IDENTITY = new Cast(0, 0);
+
+		public byte box;
+		byte op1, op2;
 		IType type1;
 
 		Cast(int t, int d) { type = t; distance = d; }
 
-		public boolean isNoop() { return type1 == null ? op1 == op2 : op1 != 0; }
+		//对于仅仅write的实例，节约空间
+		public Cast intern() {return isNoop() ? IDENTITY : this;}
+
+		public boolean isNoop() { return (type == UPCAST || type == E_DOWNCAST) && (type1 == null ? op1 == op2 : op1 != 0); }
 		public IType getType1() { return type1; }
 		public byte getOp1() { return op1; }
 		public byte getOp2() { return op2; }
@@ -143,7 +150,9 @@ public class TypeCast {
 
 	public GlobalContext context;
 	public LocalContext ctx;
-	public Map<String, List<IType>> typeParamsL, typeParamsR;
+	public Map<String, List<IType>> typeParams = Collections.emptyMap();
+	// only used in resolveType
+	public Map<String, List<IType>> typeParamsForTargetType;
 
 	public Cast checkCast(IType from, IType to) { return checkCast(from, to, -1); }
 	private Cast checkCast(IType from, IType to, int etype) {
@@ -157,7 +166,7 @@ public class TypeCast {
 				to = gg.sub != null ? mergeSubClass(gg) : gg;
 			break;
 
-			case TYPE_PARAMETER_TYPE: to = getTypeParamBound(to, typeParamsR, typeParamsL);break;
+			case TYPE_PARAMETER_TYPE: to = getTypeParamBound(to, typeParamsForTargetType != null ? typeParamsForTargetType : typeParams);break;
 			case ANY_TYPE: return RESULT(UPCAST, 0); // *
 			// 不能从"某个"具体的类转到"任何"具体的类, 除非它也是Asterisk类型
 			case ASTERISK_TYPE:
@@ -182,7 +191,7 @@ public class TypeCast {
 				from = gg.sub != null ? mergeSubClass(gg) : gg;
 			break;
 
-			case TYPE_PARAMETER_TYPE: from = getTypeParamBound(from, typeParamsL, typeParamsR);break;
+			case TYPE_PARAMETER_TYPE: from = getTypeParamBound(from, typeParams);break;
 			case ANY_TYPE: return DOWNCAST(to);
 			case ASTERISK_TYPE:
 				asterisk = (Asterisk) from;
@@ -193,7 +202,7 @@ public class TypeCast {
 
 				from = to;
 				to = asterisk.getBound();
-				to = getTypeParamBound(to, typeParamsL, typeParamsR);
+				to = getTypeParamBound(to, typeParams);
 			break;
 			case CONCRETE_ASTERISK_TYPE:
 				asterisk = (Asterisk) from;
@@ -255,19 +264,8 @@ public class TypeCast {
 		}
 	}
 	private final TPCollector collector = new TPCollector();
-	private IType getTypeParamBound(/*TypeParam*/IType type, Map<String, List<IType>> first, Map<String, List<IType>> second) {
+	private IType getTypeParamBound(/*TypeParam*/IType type, Map<String, List<IType>> typeParams) {
 		if (type.genericType() == 0) return type;
-
-		var typeParams = second == null ? first : first == null ? second : new MyHashMap<>(second);
-		if (first != null) {
-
-			typeParams.putAll(first);
-		} else {
-			if (typeParams == null) {
-				new IllegalStateException("not tp defined:"+type).printStackTrace();
-				return type;
-			}
-		}
 
 		var visType = collector; visType.reset();
 		Inferrer.fillDefaultTypeParam(typeParams, visType);
@@ -419,19 +417,22 @@ public class TypeCast {
 					return NUMBER_DOWNCAST(distance, caster1, (Opcodes.I2B-1) + tCap);
 				}
 
-				return NUMBER(E_NUMBER_DOWNCAST, distance, (Opcodes.I2B-1) + tCap);
+				return NUMBER(E_EXPLICIT_CAST, distance, (Opcodes.I2B-1) + tCap);
 			}
 
 			int distance = tCap - fCap;
-			// E_EXPLICIT_CAST => char不能被动向上转型
 
 			// 还在int范围里
-			if (tCap <= 4) return RESULT(tCap == 2 ? E_EXPLICIT_CAST : UPCAST, distance);
+			if (tCap <= 4) return RESULT(
+					(fCap == 2 && tCap != 4)  // Char to Byte/Short
+					|| tCap == 2              // Byte/Short/Int to Char
+					? E_EXPLICIT_CAST : UPCAST, distance);
 
 			//	I2L = 0x85, I2F = 0x86, I2D = 0x87,
 			//	            L2F = 0x89, L2D = 0x8A,
 			//	                        F2D = 0x8D,
-			return NUMBER(fCap == 2 ? E_EXPLICIT_CAST : NUMBER_UPCAST, distance, (Opcodes.I2L-17) + (tCap + Math.max(fCap, 4)*3));
+			// Char to Long/Float/Double is OK (but might a warning ??)
+			return NUMBER(fCap == 2 ? E_NUMBER_DOWNCAST : NUMBER_UPCAST, distance, (Opcodes.I2L-17) + (tCap + Math.max(fCap, 4)*3));
 		} else if (to.isPrimitive()) {
 			// 泛型
 			if (inheritType >= 0) return ERROR(E_NEVER);

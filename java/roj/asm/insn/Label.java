@@ -3,7 +3,6 @@ package roj.asm.insn;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.Arrays;
-import java.util.List;
 
 /**
  * @author Roj234
@@ -61,7 +60,7 @@ public class Label implements Comparable<Label> {
 		else return -i - 2;
 	}
 
-	boolean update(int[] sum, int len, List<CodeBlock> codeBlocks) {
+	boolean update(int[] sum, int len) {
 		int pos = value;
 		if (block < 0) {
 			if (isUnset()) throw new IllegalStateException("无法序列化未初始化的标签");
@@ -73,13 +72,7 @@ public class Label implements Comparable<Label> {
 			pos = -1;
 		} else {
 			int blockSize = sum[block+1] - sum[block];
-			if (offset > blockSize) {
-				System.out.println("Offset is Larger than blockSize: "+(int)offset+", "+blockSize);
-				System.out.println(this);
-				//FIXME 谁动了我的length？
-				block++;
-				offset = 0;
-			}
+			if (offset > blockSize) throw new AssertionError(this.toString()+System.identityHashCode(this)+" overflow "+blockSize);
 		}
 
 		int off = value = (char) (offset + sum[block]);

@@ -3,7 +3,6 @@ package roj.compiler.asm;
 import roj.asm.type.IType;
 import roj.asm.type.Type;
 import roj.collect.SimpleList;
-import roj.compiler.context.GlobalContext;
 import roj.text.CharList;
 import roj.text.TextUtil;
 import roj.util.Helpers;
@@ -33,8 +32,7 @@ public final class Asterisk implements IType {
 	 */
 	public static IType genericReturn(IType visualType, IType rawType) {
 		if (visualType instanceof Asterisk as) {
-			if (as.bounds.size() == 1 && as.bound.equals(rawType)) return visualType;
-			GlobalContext.debugLogger().warn("GenericReturn vis={}, raw={}", visualType, rawType);
+			if (as.bounds.size() == 1 && as.bounds.get(0).equals(rawType)) return visualType;
 		}
 		return new Asterisk(visualType, rawType);
 	}

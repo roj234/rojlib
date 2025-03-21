@@ -52,12 +52,12 @@ final class Switch extends ExprNode {
 
 		type = node.sval.type();
 		if (coveredAll > 0 && !type.isPrimitive()) {
-			var info = ctx.getClassOrArray(type);
+			var info = ctx.resolve(type);
 			if (info == null) throw new IllegalStateException("parent node "+node.sval+" did not return NaE.RESOLVE_FAILED for null type");
 
 			if (node.kind < 0) {
 				// abstract sealed
-				if ((info.modifier&Opcodes.ACC_ABSTRACT) != 0 && info.attrByName("PermittedSubclasses") != null) {
+				if ((info.modifier&Opcodes.ACC_ABSTRACT) != 0 && info.getRawAttribute("PermittedSubclasses") != null) {
 					MyHashSet<String> patternType = new MyHashSet<>();
 					for (SwitchNode.Case branch : node.branches) {
 						patternType.add(branch.variable.type.owner());
@@ -83,13 +83,13 @@ final class Switch extends ExprNode {
 			}
 		}
 
-		if (coveredAll >= 0) ctx.report(Kind.ERROR, "block.switch.exprMode.uncovered");
+		if (coveredAll >= 0) ctx.report(this, Kind.ERROR, "block.switch.exprMode.uncovered");
 
 		return this;
 	}
 
 	private boolean iterSealed(GlobalContext ctx, ClassNode info, MyHashSet<String> patterns) {
-		var s = info.parsedAttr(info.cp, Attribute.PermittedSubclasses);
+		var s = info.getAttribute(info.cp, Attribute.PermittedSubclasses);
 		if (s != null) {
 			List<String> value = s.value;
 			for (int i = 0; i < value.size(); i++) {

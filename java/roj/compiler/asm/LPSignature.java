@@ -27,7 +27,7 @@ public final class LPSignature extends Signature {
 					n = n.parent;
 					if (n == null) return def;
 				}
-				return ((MyHashMap<String, List<IType>>)n.typeParams).getEntry((String) key).getValue();
+				return ((MyHashMap<String, List<IType>>)n.typeParams).getEntry(key).getValue();
 			}
 		};
 	}
@@ -128,14 +128,10 @@ public final class LPSignature extends Signature {
 	}
 
 	public void resolve(LocalContext ctx) {
-		var prev = ctx.caster.typeParamsL;
-		System.out.println(prev);
-		ctx.caster.typeParamsL = typeParams;
 		for (List<IType> value : typeParams.values()) {
 			if (value != UNBOUNDED_TYPE_PARAM) resolve(value, ctx);
 		}
 		resolve(values, ctx);
-		ctx.caster.typeParamsL = prev;
 	}
 	private void resolve(List<IType> list, LocalContext ctx) {
 		for (int i = 0; i < list.size(); i++) ctx.resolveType(list.get(i));

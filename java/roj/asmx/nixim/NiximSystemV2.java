@@ -160,7 +160,7 @@ public class NiximSystemV2 implements ITransformer {
 
 			flags = map.getInt("flags", 0);
 
-			boolean isAbstract = method.attrByName("Code") == null;
+			boolean isAbstract = method.getRawAttribute("Code") == null;
 			if (map.type().endsWith("OverwriteConstant")) {
 				at = "LDC";
 				extra = map;
@@ -223,7 +223,7 @@ public class NiximSystemV2 implements ITransformer {
 		AbstractMap<String, String> fakeMap = getFakeMap(nx, ctx);
 
 		Pcd tmpPCD = new Pcd();
-		List<Constant> constants = cp.array();
+		List<Constant> constants = cp.data();
 		for (int i = 0; i < constants.size(); i++) {
 			Constant c = constants.get(i);
 			switch (c.type()) {
@@ -300,7 +300,7 @@ public class NiximSystemV2 implements ITransformer {
 
 		a = annotation.get(A_DYNAMIC);
 		if (a != null) {
-			if (!shouldApply(A_NIXIM, data, a.getArray("value"))) {
+			if (!shouldApply(A_NIXIM, data, a.getList("value"))) {
 				return null;
 			}
 		}
@@ -312,7 +312,7 @@ public class NiximSystemV2 implements ITransformer {
 			MethodNode method = methods.get(i);
 			String name = method.name();
 			if (name.startsWith("$$$")) {
-				if (method.attrByName(Attribute.ClAnnotations.name) != null)
+				if (method.getRawAttribute(Attribute.ClAnnotations.name) != null)
 					throw new NiximException("特殊方法("+name+")不能包含注解");
 
 				if (!name.startsWith(SPEC_M_CONSTRUCTOR)) {
@@ -367,7 +367,7 @@ public class NiximSystemV2 implements ITransformer {
 				cv.state = state;
 				cv.MyVisit(state.method);
 
-				AttrCode code = (AttrCode) state.method.parsed(data.cp).attrByName("Code");
+				AttrCode code = (AttrCode) state.method.parsed(data.cp).getRawAttribute("Code");
 				if (code != null) checkLambda(data, code, nx, lambdaPending);
 
 				if (state.initBci == 0 && state.mapName.equals("<init>"))
@@ -432,14 +432,14 @@ public class NiximSystemV2 implements ITransformer {
 
 			hasNew = false;
 			for (MethodNode node : cv.copied) {
-				Attribute cc = node.attrByName("Code");
-				if (cc == null || cc.getClass() != AttrUnknown.class) continue;
+				Attribute cc = node.getRawAttribute("Code");
+				if (cc == null || cc.getClass() != UnparsedAttribute.class) continue;
 
 				cv.MyVisit(node);
 				nx.copied().add(node);
 				hasNew = true;
 
-				AttrCode code = (AttrCode) node.parsed(data.cp).attrByName("Code");
+				AttrCode code = (AttrCode) node.parsed(data.cp).getRawAttribute("Code");
 				if (code != null) checkLambda(data, code, nx, lambdaPending);
 			}
 		} while (hasNew || !lambdaPending.isEmpty());
@@ -485,7 +485,7 @@ public class NiximSystemV2 implements ITransformer {
 	private static void fixNewCopyMethod(Pcd tmp, NiximData nx, Collection<CNode> nodes) {
 		for (CNode n : nodes) {
 			if (!(n instanceof MethodNode)) continue;
-			AttrCode code = n.parsedAttr(null, Attribute.Code);
+			AttrCode code = n.getAttribute(null, Attribute.Code);
 			if (code == null) continue;
 
 			for (Map.Entry<Label, Object> entry : code.instructions.nodeData()) {
@@ -519,9 +519,9 @@ public class NiximSystemV2 implements ITransformer {
 	}
 	private static void prepareInject(InjectState s, ClassNode data) throws NiximException {
 		MethodNode method = s.method;
-		AttrCode code = method.parsedAttr(data.cp, Attribute.Code);
+		AttrCode code = method.getAttribute(data.cp, Attribute.Code);
 		if (s.initBci > 0) {
-			LineNumberTable ln = (LineNumberTable) code.attrByName("LineNumberTable");
+			LineNumberTable ln = (LineNumberTable) code.getRawAttribute("LineNumberTable");
 			if (ln != null) {
 				for (InsnNode node : code.instructions) {
 					if (node.bci() > s.initBci) break;
@@ -616,7 +616,7 @@ public class NiximSystemV2 implements ITransformer {
 				// search
 				s.matcher = makeMatcher(data, mn, null);
 				// replace
-				s.method.parsedAttr(data.cp, Attribute.Code).instructions = makeMatcher(data, s.method, s);
+				s.method.getAttribute(data.cp, Attribute.Code).instructions = makeMatcher(data, s.method, s);
 				break;
 		}
 	}
@@ -740,7 +740,7 @@ public class NiximSystemV2 implements ITransformer {
 	private boolean annotationPreCheck(ClassNode data, Annotation a, Map<String, Annotation> annotation, CNode node, Pcd pcd, Annotation dyn) throws NiximException {
 		if (pcd != null) throw new NiximException("冲突的注解: "+ data.name() +'.'+node+": "+annotation.values());
 		if (dyn != null) {
-			if (!shouldApply(a.type(), data, dyn.getArray("value"))) return true;
+			if (!shouldApply(a.type(), data, dyn.getList("value"))) return true;
 		}
 		if (node.name().equals("<init>"))
 			throw new NiximException("不支持操作: 自Nixim3.0起,你不能在构造器中使用Inject注解: "+ data.name() +'.'+node+"\n" +
@@ -763,10 +763,10 @@ public class NiximSystemV2 implements ITransformer {
 			if (o.getClass() == Desc.class) {
 				Desc desc = (Desc) o;
 				if (desc.owner == null) {
-					BootstrapMethods bsm = data.parsedAttr(data.cp, Attribute.BootstrapMethods);
+					BootstrapMethods bsm = data.getAttribute(data.cp, Attribute.BootstrapMethods);
 					if (bsm == null) throw new NiximException(data.name() +"存在错误,BootstrapMethods不存在");
 
-					BootstrapMethods.Item key = bsm.methods.get(desc.flags);
+					BootstrapMethods.Item key = bsm.methods.get(desc.modifier);
 					// NiximClass不应有实例。 (static method也不建议使用)
 					desc.param = ClassUtil.getInstance().mapMethodParam(Collections.singletonMap(data.name(), nx.target), desc.param);
 
@@ -790,7 +790,7 @@ public class NiximSystemV2 implements ITransformer {
 		}
 	}
 	private static InsnList makeMatcher(ClassNode data, MethodNode m, InjectState state) throws NiximException {
-		AttrCode code = m.parsedAttr(data.cp, Attribute.Code);
+		AttrCode code = m.getAttribute(data.cp, Attribute.Code);
 		if (code == null) throw new NiximException("方法"+m.name()+"不能是抽象的");
 
 		Label start = null, end = null;
@@ -930,8 +930,8 @@ public class NiximSystemV2 implements ITransformer {
 
 
 		if (nx.lambda != null && !nx.lambda.isEmpty()) {
-			BootstrapMethods selfBSM = data.parsedAttr(data.cp,Attribute.BootstrapMethods);
-			if (selfBSM == null) data.putAttr(selfBSM = new BootstrapMethods());
+			BootstrapMethods selfBSM = data.getAttribute(data.cp,Attribute.BootstrapMethods);
+			if (selfBSM == null) data.addAttribute(selfBSM = new BootstrapMethods());
 
 			for (Map.Entry<BootstrapMethods.Item, List<Desc>> entry : nx.lambda.entrySet()) {
 				int newId = selfBSM.methods.size();
@@ -939,7 +939,7 @@ public class NiximSystemV2 implements ITransformer {
 
 				List<Desc> info = entry.getValue();
 				for (int i = 0; i < info.size(); i++) {
-					info.get(i).flags = (char) newId;
+					info.get(i).modifier = (char) newId;
 				}
 			}
 		}
@@ -952,19 +952,19 @@ public class NiximSystemV2 implements ITransformer {
 
 
 		if (nx.copyClinit != null) {
-			AttrCode injectClInit = nx.copyClinit.parsedAttr(null, Attribute.Code);
+			AttrCode injectClInit = nx.copyClinit.getAttribute(null, Attribute.Code);
 
 			AttrCode code;
 			int last;
 			int clinit_id = data.getMethod("<clinit>");
 			if (clinit_id >= 0) {
-				code = data.methods.get(clinit_id).parsedAttr(data.cp, Attribute.Code);
+				code = data.methods.get(clinit_id).getAttribute(data.cp, Attribute.Code);
 				InsnList insn = code.instructions;
 				last = insn.getPcMap().last();
 				insn.replaceRange(last, insn.bci(), injectClInit.instructions, true);
 			} else {
 				MethodNode mn = new MethodNode(ACC_PUBLIC | ACC_STATIC, data.name(), "<clinit>", "()V");
-				mn.putAttr(code = new AttrCode());
+				mn.addAttribute(code = new AttrCode(mn));
 				methods.add(mn);
 				last = 0;
 
@@ -976,7 +976,7 @@ public class NiximSystemV2 implements ITransformer {
 
 
 		for (int i = 0; i < data.methods.size(); i++) {
-			AttrCode m = data.methods.get(i).parsedAttr(null, Attribute.Code);
+			AttrCode m = data.methods.get(i).getAttribute(null, Attribute.Code);
 			if (m != null) removeLVT(m);
 		}
 
@@ -1013,7 +1013,7 @@ public class NiximSystemV2 implements ITransformer {
 		}
 	}
 	private static MethodNode doInject(InjectState s, ClassNode data, MethodNode input) throws NiximException {
-		AttrCode nxCode = (AttrCode) s.method.attrByName("Code");
+		AttrCode nxCode = (AttrCode) s.method.getRawAttribute("Code");
 		s.method.owner = data.name();
 
 		if (s.mapName.equals("<init>") && !s.at.equals("TAIL")) {
@@ -1039,7 +1039,7 @@ public class NiximSystemV2 implements ITransformer {
 			iin.name = "<init>";
 		}
 
-		AttrCode mnCode = input.parsedAttr(data.cp, Attribute.Code);
+		AttrCode mnCode = input.getAttribute(data.cp, Attribute.Code);
 		switch (s.at) {
 			case "REMOVE": return null;
 			case "REPLACE": default:
@@ -1083,7 +1083,7 @@ public class NiximSystemV2 implements ITransformer {
 
 				mnCode.instructions.replaceRange(Label.atZero(),endMy,out,false);
 
-				mnCode.recomputeFrames(AttrCode.COMPUTE_FRAMES, input);
+				mnCode.computeFrames(AttrCode.COMPUTE_FRAMES);
 				mnCode.stackSize = (char) Math.max(mnCode.stackSize, nxCode.stackSize);
 				mnCode.localSize = (char) Math.max(mnCode.localSize, nxCode.localSize);
 
@@ -1367,7 +1367,7 @@ public class NiximSystemV2 implements ITransformer {
 					}
 				}
 
-				mnCode.recomputeFrames(AttrCode.COMPUTE_FRAMES, input);
+				mnCode.computeFrames(AttrCode.COMPUTE_FRAMES);
 				mnCode.stackSize = (char) Math.max(mnCode.stackSize, nxCode.stackSize);
 				mnCode.localSize = (char) Math.max(mnCode.localSize, nxCode.localSize);
 				if ((returnHookType & 0x100) != 0) mnCode.stackSize = (char) Math.max(mnCode.stackSize, 1);
@@ -1439,7 +1439,7 @@ public class NiximSystemV2 implements ITransformer {
 
 						toFind.replaceRange(toFind.labelAt(node.pos()), itrA.unsharedPos(), toInj, false);
 
-						mnCode.recomputeFrames(AttrCode.COMPUTE_FRAMES, input);
+						mnCode.computeFrames(AttrCode.COMPUTE_FRAMES);
 						mnCode.stackSize = (char) Math.max(mnCode.stackSize, nxCode.stackSize);
 						mnCode.localSize = (char) Math.max(mnCode.localSize, nxCode.localSize);
 
@@ -1480,8 +1480,8 @@ public class NiximSystemV2 implements ITransformer {
 		return occurrences == null || occurrences.contains(++ordinal.value);
 	}
 	private static void copyLine(AttrCode from, AttrCode to, int pcOff) {
-		LineNumberTable lnFr = (LineNumberTable) from.attrByName("LineNumberTable");
-		LineNumberTable lnTo = (LineNumberTable) to.attrByName("LineNumberTable");
+		LineNumberTable lnFr = (LineNumberTable) from.getRawAttribute("LineNumberTable");
+		LineNumberTable lnTo = (LineNumberTable) to.getRawAttribute("LineNumberTable");
 
 		if (lnTo == null) {
 			if (lnFr == null) return;
@@ -1517,8 +1517,8 @@ public class NiximSystemV2 implements ITransformer {
 
 
 	private static Map<String, Annotation> getAnnotations(Attributed node, ClassNode data) {
-		Annotations attr = node.parsedAttr(data.cp, Attribute.ClAnnotations);
-		if (attr == null || attr.isEmpty()) return Collections.emptyMap();
+		Annotations attr = node.getAttribute(data.cp, Attribute.ClAnnotations);
+		if (attr == null || attr.writeIgnore()) return Collections.emptyMap();
 		MyHashMap<String, Annotation> map = new MyHashMap<>(attr.annotations.size());
 		List<Annotation> annotations = attr.annotations;
 		for (int i = annotations.size()-1; i >= 0; i--) {
@@ -1573,7 +1573,7 @@ public class NiximSystemV2 implements ITransformer {
 			}
 			isConstructor = false;
 
-			Attribute code = node.attrByName("Code");
+			Attribute code = node.getRawAttribute("Code");
 			if (code != null) visit(data.cp, Parser.reader(code));
 		}
 
@@ -1598,7 +1598,7 @@ public class NiximSystemV2 implements ITransformer {
 		}
 
 		@Override
-		public void field(byte code, CstRefField field) {
+		public void field(byte code, CstRef field) {
 			checkAccess(field);
 
 			if (initFlag != 2) {

@@ -1,5 +1,6 @@
 package roj.asm.insn;
 
+import org.intellij.lang.annotations.MagicConstant;
 import org.jetbrains.annotations.ApiStatus;
 import org.jetbrains.annotations.Range;
 import roj.asm.AsmShared;
@@ -34,8 +35,7 @@ public class CodeWriter extends AbstractCodeWriter {
 	public ConstantPool cpw;
 
 	public MethodNode mn;
-	@Deprecated
-	public int interpretFlags;
+	private byte fvFlags;
 
 	public SimpleList<Frame> frames;
 	private FrameVisitor fv;
@@ -48,36 +48,28 @@ public class CodeWriter extends AbstractCodeWriter {
 
 	public CodeWriter() {}
 
-	public void init(DynByteBuf bw, ConstantPool cpw) {
+	public final void init(DynByteBuf bw, ConstantPool cpw, MethodNode method) {
 		this.bw = bw;
 		this.cpw = cpw;
+
+		this.mn = method;
+		this.fv = null;
+		this.fvFlags = 0;
 
 		bciR2W = null;
 
 		offset = 0;
-		interpretFlags = 0;
 		codeBlocks.clear();
 		labels.clear();
 
-		bw.putShort(0).putShort(0).putInt(0);
+		bw.putLong(0);
 		tmpLenOffset = bw.wIndex();
 
 		codeOb = bw;
 		state = 1;
 	}
-	public void initFrames(MethodNode owner, int flags) {
-		this.mn = owner;
-		this.interpretFlags = flags;
-		if (flags != 0) {
-			fv = new FrameVisitor();
-			fv.visitBegin(owner, flags);
-		} else {
-			fv = null;
-		}
-	}
-	public final void init(DynByteBuf bw, ConstantPool cpw, MethodNode owner, byte flags) {
-		init(bw, cpw);
-		initFrames(owner, flags);
+	public void computeFrames(@MagicConstant(flags = {AttrCode.COMPUTE_SIZES, AttrCode.COMPUTE_FRAMES}) int interpretFlags) {
+		this.fvFlags = (byte) interpretFlags;
 	}
 
 	/**
@@ -93,6 +85,9 @@ public class CodeWriter extends AbstractCodeWriter {
 
 		bw.preInsert(offset, length);
 		bw.put(offset, buf);
+		// update length
+		if (!codeBlocks.isEmpty())
+			codeBlocks.get(0).put(null, 0);
 
 		for (Label label : labels) {
 			if (label.block == 0) label.offset += length;
@@ -194,7 +189,7 @@ public class CodeWriter extends AbstractCodeWriter {
 				}
 				break;
 			case "StackMapTable":
-				if (interpretFlags == 0 && mn != null) {
+				if (fvFlags == 0 && mn != null) {
 					FrameVisitor.readFrames(frames = new SimpleList<>(r.readUnsignedShort(r.rIndex)), r, cp, this, mn.ownerClass(), 0xffff, 0xffff);
 				}
 				break;
@@ -256,6 +251,8 @@ public class CodeWriter extends AbstractCodeWriter {
 
 	private void satisfySegments() {
 		// 如何处理只有隐式跳转(exception handler)的情况？
+		fv = null;
+
 		if (!codeBlocks.isEmpty()) {
 			endSegment();
 
@@ -283,23 +280,32 @@ public class CodeWriter extends AbstractCodeWriter {
 				changed |= updateOffset(labels, offSum, len);
 			} while (changed);
 
-			if (fv != null) {
+			if (fvFlags != 0) {
 				codeOb = bw.slice(begin, bw.wIndex()-begin);
-				fv.visitBlocks(codeBlocks);
+				fv = new FrameVisitor();
+				fv.visitBlocks(mn, codeBlocks);
 			}
 
 			codeBlocks.clear();
-			labels.clear();
 		} else {
 			// used for getBci, and on simple method it fails
 			bci = bw.wIndex() - tmpLenOffset;
+			if (!labels.isEmpty()) __updateOffsets();
 
-			if (fv != null) {
+			if (fvFlags != 0) {
 				int begin = tmpLenOffset;
 				codeOb = bw.slice(begin, bw.wIndex()-begin);
-				fv.visitBlocks(codeBlocks);
+				fv = new FrameVisitor();
+				fv.visitBlocks(mn, codeBlocks);
 			}
 		}
+
+		labels.clear();
+	}
+	public void __updateOffsets() {
+		int len = codeBlocks.size()+1;
+		int[] offSum = AsmShared.local().getIntArray_(len);
+		updateOffset(labels, offSum, len);
 	}
 
 	protected void visitException(int start, int end, int handler, CstClass type) {
@@ -346,14 +352,13 @@ public class CodeWriter extends AbstractCodeWriter {
 		hasFrames = false;
 		if (fv != null) {
 			var frames = (SimpleList<Frame>) fv.finish(codeOb, cpw);
-			if ((interpretFlags & AttrCode.COMPUTE_SIZES) != 0) {
+			if ((fvFlags & AttrCode.COMPUTE_SIZES) != 0) {
 				U.put16UB(codeOb.array(), codeOb._unsafeAddr()-8, fv.maxStackSize);
 				U.put16UB(codeOb.array(), codeOb._unsafeAddr()-6, fv.maxLocalSize);
 			}
 
-			if ((interpretFlags & AttrCode.COMPUTE_FRAMES) != 0 && frames != null) {
+			if ((fvFlags & AttrCode.COMPUTE_FRAMES) != 0 && frames != null) {
 				int stack = visitAttributeI("StackMapTable");
-				bw.putShort(frames.size());
 				FrameVisitor.writeFrames(frames, bw, cpw);
 				visitAttributeIEnd(stack);
 			}
@@ -436,7 +441,7 @@ public class CodeWriter extends AbstractCodeWriter {
 
 				// must rewrite, bci change
 				pos = 0;
-				b = IOUtil.getSharedByteBuf().putShort(frames.size());
+				b = IOUtil.getSharedByteBuf();
 				FrameVisitor.writeFrames(frames, b, cpw);
 				len = b.readableBytes();
 				frames = null;
@@ -562,6 +567,7 @@ public class CodeWriter extends AbstractCodeWriter {
 		return false;
 	}
 
+	@Deprecated
 	public boolean isImmediateBeforeContinuous(int targetBlock) {
 		CodeBlock seg = codeBlocks.get(targetBlock);
 		// targetBlock-1 : 有机会走到这个长度为0的StaticSegment
@@ -577,4 +583,7 @@ public class CodeWriter extends AbstractCodeWriter {
 	}
 
 	public boolean isFinished() {return state == 5;}
+
+	@Override
+	public String toString() {return getClass().getName()+"@"+codeBlocks.toString();}
 }

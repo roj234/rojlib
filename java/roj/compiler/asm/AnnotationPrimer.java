@@ -6,7 +6,7 @@ import roj.asm.annotation.AList;
 import roj.asm.annotation.AnnVal;
 import roj.asm.annotation.Annotation;
 import roj.asm.type.IType;
-import roj.asm.type.Type;
+import roj.asm.type.TypeHelper;
 import roj.collect.MyHashMap;
 import roj.collect.SimpleList;
 import roj.compiler.JavaLexer;
@@ -87,13 +87,12 @@ public final class AnnotationPrimer extends Annotation {
 	public void setValues(Map<String, CEntry> values) {this.map = values;}
 
 	@Nullable
-	@Deprecated
-	public static CEntry toAnnVal(LocalContext ctx, ExprNode node, Type type) {
+	public static CEntry toAnnVal(LocalContext ctx, ExprNode node, IType type) {
 		if (node instanceof ArrayDef def) def.setType(type);
 
 		// begin 20250120 可以用 @ABC (DEF)这种方式直接引用枚举常量DEF
 		var prevDfi = ctx.dynamicFieldImport;
-		var typeRef = ctx.getClassOrArray(type);
+		var typeRef = type.isPrimitive() ? null : ctx.resolve(type);
 		if (typeRef != null && (typeRef.modifier & Opcodes.ACC_ENUM) != 0) {
 			ctx.dynamicFieldImport = ctx.getFieldDFI(typeRef, null, prevDfi);
 		}
@@ -107,11 +106,8 @@ public final class AnnotationPrimer extends Annotation {
 		}
 
 		IType ftype = node.type();
-		boolean tryAutoArray = ftype.array() == 0 && type.array() == 1;
-		if (tryAutoArray) {
-			type = type.clone();
-			type.setArrayDim(0);
-		}
+		boolean tryAutoArray = type.array() - ftype.array() == 1;
+		if (tryAutoArray) type = TypeHelper.componentType(type);
 
 		var r = ctx.castTo(ftype, type, 0);
 		if (r.type < 0) return null;

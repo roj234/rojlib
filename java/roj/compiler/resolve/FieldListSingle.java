@@ -26,13 +26,14 @@ final class FieldListSingle extends ComponentList {
 			tmp.clear();
 			tmp.append(trans);
 			for (Object o : param)
-				tmp.append(':').append(o);
+				tmp.append('\1').append(o).append('\0');
 		};
 
 		try {
 			if (ctx.checkAccessible(owner, node, (flag&IN_STATIC) != 0, true)) {
 				tmp._free();
 				FieldList.checkBridgeMethod(ctx, owner, node);
+				checkDeprecation(ctx, owner, node);
 				return new FieldResult(owner, node);
 			}
 			return new FieldResult(tmp.replace('/', '.').toStringAndFree());

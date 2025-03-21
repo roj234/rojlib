@@ -13,11 +13,11 @@ public class Desc implements RawNode {
 	public static final char FLAG_UNSET = Opcodes.ACC_PUBLIC | Opcodes.ACC_PRIVATE;
 
 	public String owner, name, param;
-	public char flags;
+	public char modifier;
 
 	public Desc() {
 		owner = name = param = "";
-		flags = FLAG_UNSET;
+		modifier = FLAG_UNSET;
 	}
 
 	// As a Wildcard Field Descriptor
@@ -25,21 +25,21 @@ public class Desc implements RawNode {
 		this.owner = owner;
 		this.name = name;
 		this.param = "";
-		this.flags = FLAG_UNSET;
+		this.modifier = FLAG_UNSET;
 	}
 
 	public Desc(String owner, String name, String param) {
 		this.owner = owner;
 		this.name = name;
 		this.param = param;
-		this.flags = FLAG_UNSET;
+		this.modifier = FLAG_UNSET;
 	}
 
-	public Desc(String owner, String name, String param, int flags) {
+	public Desc(String owner, String name, String param, int modifier) {
 		this.owner = owner;
 		this.name = name;
 		this.param = param;
-		this.flags = (char) flags;
+		this.modifier = (char) modifier;
 	}
 
 	public static Desc fromJavapLike(String jpdesc) {
@@ -62,8 +62,7 @@ public class Desc implements RawNode {
 
 	@Override
 	public boolean equals(Object o) {
-		if (!(o instanceof Desc)) return false;
-		Desc other = (Desc) o;
+		if (!(o instanceof Desc other)) return false;
 		return this.param.equals(other.param) && other.owner.equals(this.owner) && other.name.equals(this.name);
 	}
 
@@ -77,7 +76,7 @@ public class Desc implements RawNode {
 		return this;
 	}
 
-	public final Desc copy() { return new Desc(owner, name, param, flags); }
+	public final Desc copy() { return new Desc(owner, name, param, modifier); }
 
 	public static boolean paramEqual(String a, String b) {
 		if (a.equals(b)) return true;
@@ -86,14 +85,9 @@ public class Desc implements RawNode {
 		return i == b.lastIndexOf(')') && a.regionMatches(0, b, 0, i);
 	}
 
-	@Override
-	public final String ownerClass() {return owner;}
-	@Override
-	public final String name() { return name; }
-	@Override
-	public final String rawDesc() { return param; }
-	@Override
-	public void modifier(int flag) { this.flags = (char) flag; }
-	@Override
-	public final char modifier() { return flags; }
+	@Override public final String ownerClass() {return owner;}
+	@Override public final String name() { return name; }
+	@Override public final String rawDesc() { return param; }
+	@Override public final char modifier() { return modifier; }
+	@Override public void modifier(int flag) { this.modifier = (char) flag; }
 }

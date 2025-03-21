@@ -36,7 +36,7 @@ final class Trinary extends ExprNode {
 	public ExprNode resolve(LocalContext ctx) {
 		// must before resolve
 		if (val.hasFeature(ExprFeat.IMMEDIATE_CONSTANT))
-			ctx.report(Kind.WARNING, "trinary.constant");
+			ctx.report(this, Kind.WARNING, "trinary.constant");
 
 		val = val.resolve(ctx);
 		cast = ctx.castTo(val.type(), Type.primitive(Type.BOOLEAN), 0);
@@ -50,7 +50,7 @@ final class Trinary extends ExprNode {
 			return (boolean) val.constVal() ? ok : fail;
 
 		if (ok.equals(fail)) {
-			ctx.report(Kind.WARNING, "trinary.constant");
+			ctx.report(this, Kind.WARNING, "trinary.constant");
 		}
 
 		if (ok.isConstant()&fail.isConstant()) {
@@ -95,15 +95,20 @@ final class Trinary extends ExprNode {
 			return;
 		}
 
+		var vis = LocalContext.get().bp.vis();
+
 		var end = new Label();
 		var falsy = new Label();
 		val.writeShortCircuit(cw, cast, false, falsy);
+		vis.enter();
 		//GenericSafe(using getCommonParent)
 		ok.write(cw, noRet);
+		vis.orElse();
 		cw.jump(end);
 		cw.label(falsy);
 		fail.write(cw, noRet);
 		cw.label(end);
+		vis.exit();
 	}
 
 	@Override

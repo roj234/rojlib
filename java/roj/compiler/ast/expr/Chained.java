@@ -16,45 +16,45 @@ import java.util.List;
  * @since 2023/9/18 0018 9:07
  */
 final class Chained extends ExprNode {
-	private final List<ExprNode> par;
+	private final List<ExprNode> exprList;
 
-	public Chained(List<ExprNode> par) { this.par = par; }
-
-	@Override
-	public String toString() { return TextUtil.join(par, ", "); }
+	public Chained(List<ExprNode> exprList) { this.exprList = exprList; }
 
 	@Override
-	public IType type() { return par.get(par.size()-1).type(); }
+	public String toString() { return TextUtil.join(exprList, ", "); }
+
+	@Override
+	public IType type() { return exprList.get(exprList.size()-1).type(); }
 
 	@NotNull
 	@Override
 	public ExprNode resolve(LocalContext ctx) {
 		int i = 0;
-		while (i < par.size()) {
-			ExprNode node = par.get(i).resolve(ctx);
-			if (node.isConstant() && i != par.size()-1) {
-				ctx.report(Kind.SEVERE_WARNING, "chained.warn.constant_expr");
-				par.remove(i);
+		while (i < exprList.size()) {
+			ExprNode node = exprList.get(i).resolve(ctx);
+			if (node.isConstant() && i != exprList.size()-1) {
+				ctx.report(this, Kind.SEVERE_WARNING, "chained.warn.constant_expr");
+				exprList.remove(i);
 			} else {
-				par.set(i++, node);
+				exprList.set(i++, node);
 			}
 		}
-		return par.size() == 1 ? par.get(0) : this;
+		return exprList.size() == 1 ? exprList.get(0) : this;
 	}
 
 	@Override
 	public void write(MethodWriter cw, boolean noRet) {
 		int t = w(cw);
-		par.get(t).write(cw, false);
+		exprList.get(t).write(cw, false);
 	}
 	@Override
 	public void write(MethodWriter cw, @Nullable TypeCast.Cast returnType) {
 		int t = w(cw);
-		par.get(t).write(cw, returnType);
+		exprList.get(t).write(cw, returnType);
 	}
 	private int w(MethodWriter cw) {
-		int t = par.size()-1;
-		for (int i = 0; i < t; i++) par.get(i).write(cw, true);
+		int t = exprList.size()-1;
+		for (int i = 0; i < t; i++) exprList.get(i).write(cw, true);
 		return t;
 	}
 
@@ -63,11 +63,11 @@ final class Chained extends ExprNode {
 		if (this == o) return true;
 		if (!(o instanceof Chained)) return false;
 		Chained method = (Chained) o;
-		return par.equals(method.par);
+		return exprList.equals(method.exprList);
 	}
 
 	@Override
 	public int hashCode() {
-		return par.hashCode();
+		return exprList.hashCode();
 	}
 }

@@ -22,7 +22,7 @@ import java.lang.reflect.Method;
  * @author Roj234
  */
 public class UIEntry extends JFrame {
-	public static void main(String[] args) throws Exception {
+	public static void main(String[] args) throws Throwable {
 		if (System.console() != null && (args.length == 0 || !args[0].equals("gui"))) EntryPoint.main(args); // launch DefaultPluginSystem
 		else launchUI();
 	}

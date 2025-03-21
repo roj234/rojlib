@@ -348,7 +348,7 @@ public class Mapping {
 		MyHashMap<Desc, String> fieldMap1 = new MyHashMap<>(fieldMap.size());
 		for (Map.Entry<Desc, String> entry : fieldMap.entrySet()) {
 			Desc desc = entry.getKey();
-			Desc target = new Desc(classMap.getOrDefault(desc.owner, desc.owner), entry.getValue(), desc.param, desc.flags);
+			Desc target = new Desc(classMap.getOrDefault(desc.owner, desc.owner), entry.getValue(), desc.param, desc.modifier);
 			if (checkFieldType) {
 				String param = U.mapFieldType(classMap, desc.param);
 				if (param != null) target.param = param;
@@ -360,7 +360,7 @@ public class Mapping {
 		MyHashMap<Desc, String> methodMap1 = new MyHashMap<>(methodMap.size());
 		for (var entry : methodMap.entrySet()) {
 			Desc desc = entry.getKey();
-			Desc target = new Desc(classMap.getOrDefault(desc.owner, desc.owner), entry.getValue(), U.mapMethodParam(classMap, desc.param), desc.flags);
+			Desc target = new Desc(classMap.getOrDefault(desc.owner, desc.owner), entry.getValue(), U.mapMethodParam(classMap, desc.param), desc.modifier);
 			methodMap1.put(target, desc.name);
 		}
 		var backupMethodMap = methodMap;
@@ -369,7 +369,7 @@ public class Mapping {
 		MyHashMap<Desc, List<String>> paramMap1 = new MyHashMap<>(paramMap.size());
 		for (var entry : paramMap.entrySet()) {
 			Desc desc = entry.getKey();
-			Desc target = new Desc(classMap.getOrDefault(desc.owner, desc.owner), backupMethodMap.getOrDefault(desc, desc.name), U.mapMethodParam(classMap, desc.param), desc.flags);
+			Desc target = new Desc(classMap.getOrDefault(desc.owner, desc.owner), backupMethodMap.getOrDefault(desc, desc.name), U.mapMethodParam(classMap, desc.param), desc.modifier);
 			paramMap1.put(target, entry.getValue());
 		}
 		dst.paramMap = paramMap1;
@@ -436,7 +436,7 @@ public class Mapping {
 			var reversedMethodMap = new MyHashMap<Desc, String>();
 			for (var entry : methodMap.entrySet()) {
 				Desc desc = entry.getKey();
-				Desc target = new Desc(classMap.getOrDefault(desc.owner, desc.owner), entry.getValue(), U.mapMethodParam(classMap, desc.param), desc.flags);
+				Desc target = new Desc(classMap.getOrDefault(desc.owner, desc.owner), entry.getValue(), U.mapMethodParam(classMap, desc.param), desc.modifier);
 				reversedMethodMap.put(target, desc.name);
 			}
 

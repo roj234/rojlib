@@ -4,7 +4,6 @@ import org.jetbrains.annotations.Nullable;
 import roj.asm.MethodNode;
 import roj.asm.type.Type;
 import roj.compiler.api.Evaluable;
-import roj.compiler.ast.expr.Constant;
 import roj.compiler.ast.expr.ExprNode;
 import roj.compiler.ast.expr.Invoke;
 import roj.compiler.context.LocalContext;
@@ -54,7 +53,7 @@ final class CompiledMethod extends Evaluable {
 
 		try {
 			var result = evaluator.eval(methodId, val);
-			return new Constant(returnType, result);
+			return ExprNode.constant(returnType, result);
 		} catch (Throwable e) {
 			LocalContext.get().report(Kind.SEVERE_WARNING, "lava.sandbox.error", e.getMessage());
 			return null;

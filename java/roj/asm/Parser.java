@@ -2,9 +2,9 @@ package roj.asm;
 
 import org.jetbrains.annotations.NotNull;
 import roj.asm.attr.*;
+import roj.asm.cp.Constant;
 import roj.asm.cp.ConstantPool;
 import roj.asm.cp.CstClass;
-import roj.asm.cp.CstNameAndType;
 import roj.asm.cp.CstUTF;
 import roj.asm.insn.AttrCode;
 import roj.asm.type.Signature;
@@ -36,14 +36,14 @@ public final class Parser {
 		ConstantPool pool = new ConstantPool();
 		pool.read(r, ConstantPool.CHAR_STRING);
 
-		ClassNode data = new ClassNode(version, pool, r.readUnsignedShort(), r.readUnsignedShort(), r.readUnsignedShort());
+		ClassNode data = new ClassNode(version, pool, r.readUnsignedShort(), pool.get(r), (CstClass) pool.getNullable(r));
 
 		int len = r.readUnsignedShort();
 
 		if (len > 0) {
 			SimpleList<CstClass> itf = data.itfList();
 			itf.ensureCapacity(len);
-			while (len-- > 0) itf.add((CstClass) pool.get(r));
+			while (len-- > 0) itf.add(pool.get(r));
 		}
 
 		len = r.readUnsignedShort();
@@ -88,7 +88,7 @@ public final class Parser {
 			r.wIndex(end);
 
 			Attribute attr = attr(node, pool, name, r, origin);
-			list._add(null == attr ? new AttrUnknown(name, r.slice(length)) : attr);
+			list._add(null == attr ? new UnparsedAttribute(name, r.slice(length)) : attr);
 
 			// 忽略过长的属性.
 			r.rIndex = end;
@@ -99,7 +99,7 @@ public final class Parser {
 	public static void parseAttributes(Attributed node, ConstantPool cp, AttributeList list, int origin) {
 		for (int i = 0; i < list.size(); i++) {
 			Attribute attr = list.get(i);
-			if (attr.getClass() == AttrUnknown.class && attr.getRawData() != null) {
+			if (attr.getClass() == UnparsedAttribute.class && attr.getRawData() != null) {
 				DynByteBuf data = Parser.reader(attr);
 				attr = attr(node, cp, attr.name(), data, origin);
 				if (attr == null) continue;
@@ -111,7 +111,7 @@ public final class Parser {
 	public static <T extends Attribute> T parseAttribute(Attributed node, ConstantPool cp, TypedKey<T> type, AttributeList list, int origin) {
 		Attribute attr = list == null ? null : (Attribute) list.getByName(type.name);
 		if (attr == null) return null;
-		if (attr.getClass() == AttrUnknown.class) {
+		if (attr.getClass() == UnparsedAttribute.class) {
 			if (cp == null) return null;
 			attr = attr(node, cp, type.name, Parser.reader(attr), origin);
 			if (attr == null) {
@@ -139,25 +139,25 @@ public final class Parser {
 				case "Synthetic": case "Deprecated": break;
 				// method only
 				case "MethodParameters": limit(origin,Signature.METHOD); return new MethodParameters(data, cp);
-				case "Exceptions": limit(origin,Signature.METHOD); return new AttrClassList(name, data, cp);
+				case "Exceptions": limit(origin,Signature.METHOD); return new ClassListAttribute(name, data, cp);
 				case "AnnotationDefault": limit(origin,Signature.METHOD); return new AnnotationDefault(data, cp);
 				case "Code": limit(origin,Signature.METHOD); return new AttrCode(data, cp, (MethodNode)node);
 				// field only
 				case "ConstantValue": limit(origin,Signature.FIELD); return new ConstantValue(cp.get(data));
 				// class only
-				case "Record": limit(origin,Signature.CLASS); return new AttrRecord(data, cp);
+				case "Record": limit(origin,Signature.CLASS); return new RecordAttribute(data, cp);
 				case "InnerClasses": limit(origin,Signature.CLASS); return new InnerClasses(data, cp);
-				case "Module": limit(origin,Signature.CLASS); return new AttrModule(data, cp);
+				case "Module": limit(origin,Signature.CLASS); return new ModuleAttribute(data, cp);
 				case "ModulePackages":
 				case "PermittedSubclasses":
-				case "NestMembers": limit(origin,Signature.CLASS); return new AttrClassList(name, data, cp);
+				case "NestMembers": limit(origin,Signature.CLASS); return new ClassListAttribute(name, data, cp);
 				case "ModuleMainClass":
-				case "NestHost": limit(origin,Signature.CLASS); return new AttrString(name, ((CstClass) cp.get(data)).name().str());
+				case "NestHost": limit(origin,Signature.CLASS); return new StringAttribute(name, ((CstClass) cp.get(data)).name().str());
 				case "ModuleTarget":
-				case "SourceFile": limit(origin,Signature.CLASS); return new AttrString(name, ((CstUTF) cp.get(data)).str());
+				case "SourceFile": limit(origin,Signature.CLASS); return new StringAttribute(name, ((CstUTF) cp.get(data)).str());
 				case "BootstrapMethods": limit(origin,Signature.CLASS); return new BootstrapMethods(data, cp);
 				// 匿名类所属的方法
-				case "EnclosingMethod": limit(origin,Signature.CLASS); return new EnclosingMethod((CstClass) cp.get(data), (CstNameAndType) cp.get(data));
+				case "EnclosingMethod": limit(origin,Signature.CLASS); return new EnclosingMethod(cp.get(data), cp.get(data));
 				case "SourceDebugExtension": break;
 			}
 		} /*catch (OperationDone e) {
@@ -208,21 +208,21 @@ public final class Parser {
 	}
 	@NotNull
 	public static ClassNode parseConstantsNoCp(DynByteBuf r, ConstantPool pool, int version) {
-		ClassNode data = new ClassNode(version, pool, r.readUnsignedShort(), r.readUnsignedShort(), r.readUnsignedShort());
+		ClassNode data = new ClassNode(version, pool, r.readUnsignedShort(), pool.get(r), (CstClass) pool.getNullable(r));
 
 		int len = r.readUnsignedShort();
 
 		if (len > 0) {
 			SimpleList<CstClass> itf = data.itfList();
 			itf.ensureCapacity(len);
-			while (len-- > 0) itf.add((CstClass) pool.get(r));
+			while (len-- > 0) itf.add(pool.get(r));
 		}
 
 		len = r.readUnsignedShort();
 		SimpleList<FieldNode> fields = data.fields;
 		fields.ensureCapacity(len);
 		while (len-- > 0) {
-			FieldNode f = new FieldNode(r.readShort(), (CstUTF) pool.get(r), (CstUTF) pool.get(r));
+			FieldNode f = new FieldNode(r.readShort(), pool.get(r), pool.get(r));
 			fields.add(f);
 
 			attrUnparsed(pool, r, f);
@@ -232,7 +232,7 @@ public final class Parser {
 		SimpleList<MethodNode> methods = data.methods;
 		methods.ensureCapacity(len);
 		while (len-- > 0) {
-			MethodNode m = new MethodNode(r.readShort(), data.name(), (CstUTF) pool.get(r), (CstUTF) pool.get(r));
+			MethodNode m = new MethodNode(r.readShort(), data.name(), pool.get(r), pool.get(r));
 			methods.add(m);
 
 			attrUnparsed(pool, r, m);
@@ -249,10 +249,10 @@ public final class Parser {
 		AttributeList list = node.attributes();
 		list.ensureCapacity(len);
 		while (len-- > 0) {
-			CstUTF name = (CstUTF) pool.get(r);
+			CstUTF name = pool.get(r);
 			int length = r.readInt();
 			// ByteList$Slice consumes 40 bytes , byte[] array header consumes 24+length bytes
-			list._add(new AttrUnknown(name, length == 0 ? null : length <= 16 ? r.readBytes(length) : r.slice(length)));
+			list._add(new UnparsedAttribute(name, length == 0 ? null : length <= 16 ? r.readBytes(length) : r.slice(length)));
 		}
 	}
 
@@ -270,12 +270,12 @@ public final class Parser {
 		int cfo = r.rIndex; // acc
 		char acc = r.readChar();
 
-		ClassView data = new ClassView(modifiable?r.toByteArray():null, cfo, pool.getRefName(r), pool.getRefName(r));
+		ClassView data = new ClassView(modifiable?r.toByteArray():null, cfo, pool.getRefName(r, Constant.CLASS), pool.getRefName(r));
 		data.modifier = acc;
 
 		int len = r.readUnsignedShort();
 		SimpleList<String> itf = new SimpleList<>(len);
-		while (len-- > 0) itf.add(pool.getRefName(r));
+		while (len-- > 0) itf.add(pool.getRefName(r, Constant.CLASS));
 
 		data.interfaces = itf;
 

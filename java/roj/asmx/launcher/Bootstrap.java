@@ -63,7 +63,7 @@ public class Bootstrap implements Function<String, Class<?>> {
 	}
 
 	public static final Bootstrap instance = new Bootstrap();
-	static {EntryPoint.clImpl = instance;EntryPoint.rlImpl = instance::getResource;}
+	static {EntryPoint.classFinder = instance;EntryPoint.resourceFinder = instance::getResource;}
 
 	private static final Logger LOGGER = Logger.getLogger(/*Transforming Class Loader*/"TCL");
 
@@ -166,7 +166,7 @@ public class Bootstrap implements Function<String, Class<?>> {
 		}
 
 		c.newObject(L.name());
-		c.field(PUTSTATIC, "roj/asmx/launcher/EntryPoint", "loaderInst", "Ljava/lang/Runnable;");
+		c.field(PUTSTATIC, "roj/asmx/launcher/EntryPoint", "mainInvoker", "Ljava/lang/Runnable;");
 		c.one(RETURN);
 		c.finish();
 
@@ -449,7 +449,7 @@ public class Bootstrap implements Function<String, Class<?>> {
 			}
 		}
 
-		var in = ENTRY_POINT.PARENT.getResourceAsStream(name);
+		var in = ENTRY_POINT.getParentResource(name);
 		if (in == null) in = ClassLoader.getSystemResourceAsStream(name);
 		return in;
 	}

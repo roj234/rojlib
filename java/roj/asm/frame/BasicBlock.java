@@ -3,6 +3,7 @@ package roj.asm.frame;
 import roj.collect.MyHashSet;
 import roj.collect.SimpleList;
 import roj.concurrent.Flow;
+import roj.io.FastFailException;
 import roj.util.ArrayUtil;
 
 import java.util.Arrays;
@@ -23,6 +24,8 @@ public class BasicBlock {
 		inLocal = new Var2[8],
 		outLocal = new Var2[8];
 	int inStackSize, outStackSize, inLocalSize, outLocalSize;
+
+	int maxStackSize;
 
 	Var2[] startLocal, startStack;
 	int startLocalSize, startStackSize;
@@ -57,7 +60,7 @@ public class BasicBlock {
 		if (bci == 0) {
 			reachable = true;
 
-			startLocal = initLocal;
+			startLocal = Arrays.copyOf(initLocal, initLocal.length);
 			startLocalSize = initLocal.length;
 
 			endLocal = new Var2[initLocal.length];
@@ -104,9 +107,9 @@ public class BasicBlock {
 				//System.out.println("Error missing input type");
 				endLocal1[i] = usedType;
 			} else if (usedType != null) {
-				//Var2 copy = combined.copy();
-				endLocal1[i] = usedType;
-				//copy.combine(usedType);
+				Var2 copy = combined.copy();
+				//endLocal1[i] = usedType;
+				copy.verify(usedType);
 			}
 		}
 		for (int i = 0; i < outLocalSize; i++) {
@@ -134,18 +137,22 @@ public class BasicBlock {
 		for (int i = 0; i < updated.length; i++) {
 			Var2 item = storage[i];
 			if (updated[i] != null) {
-				if (item == null) storage[i] = updated[i].copy();
+				if (item == null) storage[i] = updated[i];
 				else {
-					Var2 uncombine = item.uncombine(updated[i]);
+					Var2 uncombine = item.copy().uncombine(updated[i]);
 					if (uncombine != null)
 						storage[i] = uncombine;
 				}
+			} else {
+				storage[i] = Var2.TOP;
 			}
+		}
+		for (int i = updated.length; i < storage.length; i++) {
+			storage[i] = Var2.TOP;
 		}
 	}
 
 	private void comeFrom(BasicBlock parent) {
-		reachable = true;
 		startStack = parent.endStack;
 		startStackSize = parent.endStackSize;
 		combineLocal(parent.endLocal, parent.endLocalSize);
@@ -153,16 +160,26 @@ public class BasicBlock {
 		Var2[] 前驱节点的栈 = parent.endStack;
 		int parentSize = parent.endStackSize;
 		Var2[] 我用掉的栈 = inStack;
+		if (parentSize < inStackSize) throw new FastFailException("Attempt to pop empty stack.");
 		for (int i = 0; i < inStackSize; i++) {
 			Var2 item = 前驱节点的栈[--parentSize].copy();
 			item.verify(我用掉的栈[i]);
 		}
 
-		var stackOut = new Var2[parentSize + outStackSize];
-		System.arraycopy(前驱节点的栈, 0, stackOut, 0, parentSize);
-		System.arraycopy(outStack, 0, stackOut, parentSize, outStackSize);
-		endStack = stackOut;
-		endStackSize = stackOut.length;
+		if (!reachable) {
+			var stackOut = new Var2[parentSize + outStackSize];
+			System.arraycopy(前驱节点的栈, 0, stackOut, 0, parentSize);
+			System.arraycopy(outStack, 0, stackOut, parentSize, outStackSize);
+			endStack = stackOut;
+			endStackSize = stackOut.length;
+		} else {
+			for (int i = 0; i < Math.min(endStackSize, inStackSize); i++) {
+				Var2 uncombine = endStack[i].uncombine(前驱节点的栈[i]);
+				if (uncombine != null) endStack[i] = uncombine;
+			}
+		}
+
+		reachable = true;
 	}
 
 	@Override

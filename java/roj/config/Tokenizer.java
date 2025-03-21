@@ -1043,12 +1043,9 @@ public class Tokenizer {
 	public final void unexpected(String val) throws ParseException { throw err("未预料的'"+val+"'"); }
 
 	public final ParseException err(String reason, int index) { return new ParseException(input, i18n(reason), index, null); }
-	@Deprecated
-	public ParseException err(String reason, Word word) { return new ParseException(input, i18n(reason) + "at" + word.val(), word.pos(), null); }
-
-	public final ParseException err(String reason) { return err(reason, (Throwable) null); }
-	public ParseException err(String reason, Throwable cause) { return new ParseException(input, i18n(reason), index, cause); }
+	public final ParseException err(String reason) { return err(reason, null); }
+	public ParseException err(String reason, Throwable cause) { return new ParseException(input, i18n(reason), prevIndex, cause); }
 	// endregion
 	@Override
-	public String toString() { return "Lexer{"+"pos="+index + ", str="+input+"}"; }
+	public String toString() { return "Lexer{"+"pos="+index+", str="+input+"}"; }
 }

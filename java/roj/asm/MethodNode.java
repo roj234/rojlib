@@ -59,7 +59,7 @@ public final class MethodNode extends CNode {
 	private Type out;
 
 	public MethodNode parsed(ConstantPool cp) {
-		if (RojLib.ASM_DEBUG && (attrByName("Code") == null) == (0 == (modifier & (Opcodes.ACC_ABSTRACT | Opcodes.ACC_NATIVE)))) {
+		if (RojLib.ASM_DEBUG && (getRawAttribute("Code") == null) == (0 == (modifier & (Opcodes.ACC_ABSTRACT | Opcodes.ACC_NATIVE)))) {
 			Logger.FALLBACK.warn("方法 "+owner+'.'+name+desc+" 缺少Code属性.");
 		}
 
@@ -70,20 +70,20 @@ public final class MethodNode extends CNode {
 	}
 
 	public boolean visitCode(CodeVisitor cv, ConstantPool cp, ByteList tmp) {
-		var code = attrByName("Code");
+		var code = getRawAttribute("Code");
 		if (code == null) return false;
 
-		if (!(code instanceof AttrUnknown)) {
-			code = AttrUnknown.downgrade(cp, tmp, code);
-			putAttr(code);
+		if (!(code instanceof UnparsedAttribute)) {
+			code = UnparsedAttribute.serialize(cp, tmp, code);
+			addAttribute(code);
 		}
 
 		if (cv instanceof CodeWriter cw) {
 			tmp.clear();
-			cw.init(tmp, cp, this, (byte) 0);
+			cw.init(tmp, cp, this);
 			cw.visit(cp, Parser.reader(code));
 			cw.finish();
-			((AttrUnknown) code).setRawData(DynByteBuf.wrap(tmp.toByteArray()));
+			((UnparsedAttribute) code).setRawData(DynByteBuf.wrap(tmp.toByteArray()));
 		} else {
 			cv.visit(cp, Parser.reader(code));
 		}
@@ -91,7 +91,7 @@ public final class MethodNode extends CNode {
 	}
 
 	@Override
-	public <T extends Attribute> T parsedAttr(ConstantPool cp, TypedKey<T> type) { return Parser.parseAttribute(this, cp, type, attributes, Signature.METHOD); }
+	public <T extends Attribute> T getAttribute(ConstantPool cp, TypedKey<T> type) { return Parser.parseAttribute(this, cp, type, attributes, Signature.METHOD); }
 
 	public String rawDesc() {
 		if (in != null) {
@@ -124,21 +124,21 @@ public final class MethodNode extends CNode {
 
 		Annotations a;
 
-		if (attrByName("Deprecated") != null) sb.padEnd(' ', prefix).append("@Deprecated").append('\n');
-		a = parsedAttr(cp, Attribute.RtAnnotations);
+		if (getRawAttribute("Deprecated") != null) sb.padEnd(' ', prefix).append("@Deprecated").append('\n');
+		a = getAttribute(cp, Attribute.RtAnnotations);
 		if (a != null) a.toString(sb, prefix);
-		a = parsedAttr(cp, Attribute.ClAnnotations);
+		a = getAttribute(cp, Attribute.ClAnnotations);
 		if (a != null) a.toString(sb, prefix);
 
 		sb.padEnd(' ', prefix);
 		if ((modifier&Opcodes.ACC_ABSTRACT) == 0 && owner != null && (owner.modifier&(Opcodes.ACC_INTERFACE|Opcodes.ACC_ANNOTATION)) == Opcodes.ACC_INTERFACE) sb.append("default ");
 		Opcodes.showModifiers(modifier, Opcodes.ACC_SHOW_METHOD, sb);
-		if (attrByName("Synthetic") != null) sb.append("/*synthetic*/ ");
+		if (getRawAttribute("Synthetic") != null) sb.append("/*synthetic*/ ");
 
 		if (!name().equals("<clinit>")) {
 			parameters();
 
-			Signature sig = parsedAttr(cp, Attribute.SIGNATURE);
+			Signature sig = getAttribute(cp, Attribute.SIGNATURE);
 			if (owner != null && name().equals("<init>")) {
 				assert out.type == Type.VOID;
 				TypeHelper.toStringOptionalPackage(sb, owner.name());
@@ -151,17 +151,17 @@ public final class MethodNode extends CNode {
 			sb.append('(');
 
 			if (!in.isEmpty()) {
-				var modifiers = parsedAttr(cp, Attribute.MethodParameters);
-				var a1 = parsedAttr(cp, Attribute.ClParameterAnnotations);
-				var a2 = parsedAttr(cp, Attribute.RtParameterAnnotations);
+				var modifiers = getAttribute(cp, Attribute.MethodParameters);
+				var a1 = getAttribute(cp, Attribute.ClParameterAnnotations);
+				var a2 = getAttribute(cp, Attribute.RtParameterAnnotations);
 				AttrCode code;
 				try {
-					code = parsedAttr(cp, Attribute.Code);
+					code = getAttribute(cp, Attribute.Code);
 				} catch (ClassCastException e) {
 					code = null;
 				}
 
-				LocalVariableTable lvt = code != null ? (LocalVariableTable) code.attrByName("LocalVariableTable") : null;
+				LocalVariableTable lvt = code != null ? (LocalVariableTable) code.getRawAttribute("LocalVariableTable") : null;
 				Label ZERO_READONLY = Label.atZero();
 
 				int slot = (modifier&Opcodes.ACC_STATIC) == 0 ? 1 : 0;
@@ -204,7 +204,7 @@ public final class MethodNode extends CNode {
 			sb.setLength(sb.length()-1);
 		}
 
-		AttrClassList exceptions = parsedAttr(cp, Attribute.Exceptions);
+		ClassListAttribute exceptions = getAttribute(cp, Attribute.Exceptions);
 		if (exceptions != null) {
 			sb.append(" throws ");
 			List<String> classes = exceptions.value;
@@ -216,15 +216,15 @@ public final class MethodNode extends CNode {
 			}
 		}
 
-		AnnotationDefault def = parsedAttr(cp, Attribute.AnnotationDefault);
+		AnnotationDefault def = getAttribute(cp, Attribute.AnnotationDefault);
 		if (def != null) sb.append(" default ").append(def.val);
 
 		try {
-			if (attrByName("Code") instanceof AttrCodeWriter cw) {
-				sb.append(" {\n").padEnd(' ', prefix+4).append("<complex ").append(cw.cw).append(">\n").padEnd(' ', prefix).append("}\n");
+			if (getRawAttribute("Code") instanceof AttrCodeWriter cw) {
+				sb.append(" {\n").padEnd(' ', prefix+4).append("<complex ").append(cw.cw).append(">\n").padEnd(' ', prefix).append('}');
 			} else {
-				AttrCode code = parsedAttr(cp, Attribute.Code);
-				if (code != null) code.toString(sb.append(" {\n"), prefix+4).padEnd(' ', prefix).append("}\n");
+				AttrCode code = getAttribute(cp, Attribute.Code);
+				if (code != null) code.toString(sb.append(" {\n"), prefix+4).padEnd(' ', prefix).append('}');
 				else sb.append(';');
 			}
 		} catch (Exception e) {

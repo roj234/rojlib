@@ -44,7 +44,7 @@ public final class BootstrapMethods extends Attribute {
 	public List<Item> methods;
 
 	@Override
-	public boolean isEmpty() { return methods.isEmpty(); }
+	public boolean writeIgnore() { return methods.isEmpty(); }
 
 	public static final class Kind {
 		public static final byte GETFIELD = 1, GETSTATIC = 2, PUTFIELD = 3, PUTSTATIC = 4, INVOKEVIRTUAL = 5, INVOKESTATIC = 6, INVOKESPECIAL = 7, NEW_INVOKESPECIAL = 8, INVOKEINTERFACE = 9;

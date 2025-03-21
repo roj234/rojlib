@@ -5,6 +5,8 @@ import roj.asm.type.IType;
 import roj.collect.MyBitSet;
 import roj.collect.MyHashMap;
 import roj.config.serial.CVisitor;
+import roj.config.serial.ToJson;
+import roj.io.FastFailException;
 
 import java.util.List;
 import java.util.Map;
@@ -120,15 +122,15 @@ final class MapSer extends Adapter {
 	}
 	private static class ToStringSerializer implements CVisitor {
 		String value;
-		@Override public void value(boolean l) {throw new IllegalArgumentException("String excepted");}
-		@Override public void value(int l) {throw new IllegalArgumentException("String excepted");}
-		@Override public void value(long l) {throw new IllegalArgumentException("String excepted");}
-		@Override public void value(double l) {throw new IllegalArgumentException("String excepted");}
+		@Override public void value(boolean l) {throw new FastFailException("String excepted");}
+		@Override public void value(int l) {throw new FastFailException("String excepted");}
+		@Override public void value(long l) {throw new FastFailException("String excepted");}
+		@Override public void value(double l) {throw new FastFailException("String excepted");}
 		@Override public void value(String l) {this.value = l;}
 		@Override public void valueNull() {value("null");}
-		@Override public void valueMap() {throw new IllegalArgumentException("String excepted");}
+		@Override public void valueMap() {throw new FastFailException("String excepted");}
 		@Override public void key(String key) {}
-		@Override public void valueList() {throw new IllegalArgumentException("String excepted");}
+		@Override public void valueList() {throw new FastFailException("String excepted");}
 		@Override public void pop() {}
 		@Override public CVisitor reset() {return this;}
 	}

@@ -169,7 +169,7 @@ public final class NATT implements Closeable, ChannelHandler, Consumer<MyChannel
 				this.remoteAddress = r.internetAddress;
 				this.localAddress = localAddr = new InetSocketAddress(localAddr.getAddress(), r.localAddress.getPort());
 				int port = localAddr.getPort();
-				this.upnp = UPnPGateway.available()&&UPnPGateway.openPort("NATT", port, port, false, 86400_000);
+				this.upnp = UPnPGateway.available()&&UPnPGateway.openPort("NATT", port, r.internetAddress.getPort(), false, 86400_000);
 
 				boolean publicIp = NetUtil.getNetworkEndpoints().contains(r.internetAddress.getAddress()) && r.internetAddress.getPort() == port;
 				check: {
@@ -261,7 +261,6 @@ public final class NATT implements Closeable, ChannelHandler, Consumer<MyChannel
 
 			this.localAddress = localAddr;
 			int port = localAddr.getPort();
-			this.upnp = UPnPGateway.available()&&UPnPGateway.openPort("NATT", port, port, tcp, 86400_000);
 
 			for (int i = servers.lastUdpOnly; i < servers.stunServerCount; i++) {
 				InetSocketAddress addr = servers.getStunServer(i, ipv6);
@@ -271,6 +270,7 @@ public final class NATT implements Closeable, ChannelHandler, Consumer<MyChannel
 
 				remoteAddress = r.internetAddress;
 				boolean publicIp = NetUtil.getNetworkEndpoints().contains(remoteAddress.getAddress()) && remoteAddress.getPort() == port;
+				this.upnp = UPnPGateway.available()&&UPnPGateway.openPort("NATT", port, remoteAddress.getPort(), tcp, 86400_000);
 
 				boolean[] remoteConnected = new boolean[1];
 

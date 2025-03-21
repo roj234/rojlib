@@ -36,7 +36,7 @@ final class UnaryPost extends ExprNode {
 		ExprNode node = left.resolve(ctx);
 		if (node instanceof VarNode vn && !vn.isFinal()) left = (VarNode) node;
 		else {
-			ctx.report(Kind.ERROR, "unary.error.final", node);
+			ctx.report(this, Kind.ERROR, "unary.error.final", node);
 			return NaE.RESOLVE_FAILED;
 		}
 
@@ -48,11 +48,11 @@ final class UnaryPost extends ExprNode {
 
 			iType = TypeCast.getWrappedPrimitive(type);
 			if (iType == 0) {
-				ctx.report(Kind.ERROR, "unary.error.notApplicable", byId(op), type);
+				ctx.report(this, Kind.ERROR, "unary.error.notApplicable", byId(op), type);
 				return NaE.RESOLVE_FAILED;
 			}
 
-			ctx.report(Kind.SEVERE_WARNING, "unary.warn.wrapper", type, byId(op));
+			ctx.report(this, Kind.SEVERE_WARNING, "unary.warn.wrapper", type, byId(op));
 		}
 		return this;
 	}

@@ -14,7 +14,7 @@ public class MethodDefault extends Attribute {
 	public static final TypedKey<MethodDefault> METHOD_DEFAULT = new TypedKey<>("MethodDefault");
 
 	@Override
-	public final boolean isEmpty() {return defaultValue.isEmpty();}
+	public final boolean writeIgnore() {return defaultValue.isEmpty();}
 
 	@Override
 	public String toString() {return name()+defaultValue;}

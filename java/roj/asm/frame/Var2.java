@@ -74,13 +74,14 @@ public final class Var2 {
 		}
 
 		if (o.type < 5 || type < 5) {
-			if (type != o.type) throw new IllegalStateException("Could not merge " + this + " and " + o);
+			if (type != o.type) throw new IllegalStateException("无法合并 " + this + " 与 " + o);
 			return false;
 		}
 
 		// NULL = 5, UNINITIAL_THIS = 6, REFERENCE = 7, UNINITIAL = 8
 		if (o.type == T_NULL) return false;
 		if (type == T_NULL) {
+			if (o.owner.equals("java/lang/Object")) return false;
 			copy(o);
 			return true;
 		}
@@ -103,7 +104,7 @@ public final class Var2 {
 		}
 
 		if (owner.startsWith("[") != o.owner.startsWith("[")) {
-			throw new IllegalStateException("Could not merge " + this + " and " + o);
+			throw new IllegalStateException("无法合并 " + this + " 与 " + o);
 		}
 		if (o.owner.equals("[")) return false;
 		if (owner.equals("[")) {
@@ -119,10 +120,14 @@ public final class Var2 {
 			return true;
 		}
 
-		String newOwner = FrameVisitor.getCommonUnsuperClass(owner, o.owner);
-		boolean changed = !newOwner.equals(owner);
-		owner = newOwner;
-		return changed;
+		try {
+			String newOwner = FrameVisitor.getConcreteChild(owner, o.owner);
+			boolean changed = !newOwner.equals(owner);
+			owner = newOwner;
+			return changed;
+		} catch (Exception e) {
+			throw new IllegalStateException(owner+"无法转换为"+o.owner, e);
+		}
 	}
 	public Var2 uncombine(Var2 o) {
 		if (o == this) return null;
@@ -153,16 +158,14 @@ public final class Var2 {
 			}
 		}
 
-		if (o.owner.equals("java/lang/Object")) return null;
-		if (owner.equals(o.owner)) return null;
-		if (owner.equals("java/lang/Object")) {
+		if (o.owner.equals("java/lang/Object")) {
 			copy(o);
 			return this;
 		}
+		if (owner.equals(o.owner)) return null;
+		if (owner.equals("java/lang/Object")) return null;
 
-		if (owner.startsWith("[") != o.owner.startsWith("[")) {
-			return TOP;
-		}
+		if (owner.startsWith("[") != o.owner.startsWith("[")) return TOP;
 
 		// Only for ArrayLength
 		if (o.owner.equals("[")) return null;
@@ -178,7 +181,7 @@ public final class Var2 {
 			if (owner.charAt(1) != 'L') return TOP;
 		}
 
-		String commonSuperClass = FrameVisitor.getCommonSuperClass(owner, o.owner);
+		String commonSuperClass = FrameVisitor.getCommonParent(owner, o.owner);
 		boolean changed = !commonSuperClass.equals(owner);
 		owner = commonSuperClass;
 		return changed ? this : null;

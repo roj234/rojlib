@@ -44,9 +44,9 @@ public class MIXIN implements Processor {
 			Annotation mixin = Annotation.findInvisible(data.cp, data, "org/spongepowered/asm/mixin/Mixin");
 
 			// noinspection all
-			var dest = mixin.getArray("value");
+			var dest = mixin.getList("value");
 			String type;
-			if (dest.isEmpty()) type = mixin.getArray("targets").getString(0);
+			if (dest.isEmpty()) type = mixin.getList("targets").getString(0);
 			else type = dest.getType(0).owner;
 			process(data, type, data.fields);
 			process(data, type, data.methods);
@@ -101,7 +101,7 @@ public class MIXIN implements Processor {
 					|| anno.type().equals("org/spongepowered/asm/mixin/injection/ModifyConstant")) {
 					anno.put("remap", AnnVal.valueOf(false));
 
-					var method = anno.getArray("method");
+					var method = anno.getList("method");
 					if (method.size() <= 1) {
 						String name = map(dest, node, method.isEmpty() ? null : method.getString(0));
 						if (name != null) {

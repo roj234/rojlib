@@ -13,10 +13,21 @@ public final class CChar extends CEntry {
 	public CChar(char v) {this.value = v;}
 
 	public Type getType() {return Type.CHAR;}
-	public boolean mayCastTo(Type o) {return o == Type.CHAR || o == Type.STRING;}
+	protected boolean eqVal(CEntry o) {return o.asInt() == value;}
+	public boolean mayCastTo(Type o) {
+		if (((1 << o.ordinal()) & 0b01011110000100) != 0) return true;
+		return switch (o) {
+			case Int1 -> value <= 127;
+			case Int2 -> value <= 32767;
+			default -> false;
+		};
+	}
 
 	public char asChar() {return value;}
 	public int asInt() {return value;}
+	public long asLong() {return value;}
+	public float asFloat() {return value;}
+	public double asDouble() {return value;}
 	public String asString() {return String.valueOf(value);}
 
 	public void accept(CVisitor ser) {ser.value(value);}

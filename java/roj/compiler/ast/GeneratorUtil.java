@@ -1,7 +1,7 @@
 package roj.compiler.ast;
 
 import roj.asm.MethodNode;
-import roj.asm.attr.AttrUnknown;
+import roj.asm.attr.UnparsedAttribute;
 import roj.asm.insn.AttrCodeWriter;
 import roj.asm.type.Type;
 import roj.asm.type.TypeHelper;
@@ -67,7 +67,7 @@ public class GeneratorUtil {
 				implInit.finish();
 
 				var attr = new AttrCodeWriter(file.cp, mn);
-				mn.putAttr(attr);
+				mn.addAttribute(attr);
 				var c = attr.cw;
 				c.clazz(NEW, implInit.mn.owner);
 				c.one(DUP);
@@ -96,7 +96,7 @@ public class GeneratorUtil {
 
 				var cw = ctx.bp.parseGeneratorMethod(file, mn, argNames, impl, newMethod);
 				cw.finish();
-				newMethod.putAttr(new AttrUnknown("Code", cw.bw.toByteArray()));
+				newMethod.addAttribute(new UnparsedAttribute("Code", cw.bw.toByteArray()));
 			}
 		};
 	}

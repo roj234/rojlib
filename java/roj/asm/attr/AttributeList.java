@@ -124,7 +124,7 @@ public final class AttributeList extends SimpleList<Attribute> {
 
 		for (int i = 0; i < this.size; i++) {
 			var attr = (Attribute) o[i];
-			if (attr.isEmpty()) size--;
+			if (attr.writeIgnore()) size--;
 			else attr.toByteArray(w, cw);
 		}
 

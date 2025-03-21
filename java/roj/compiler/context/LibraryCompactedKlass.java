@@ -71,7 +71,7 @@ public final class LibraryCompactedKlass implements Library {
 	public void add(ClassNode data) {
 		//Library.removeUnrelatedAttribute(data);
 
-		if (pool.getLast().array().size() + data.cp.array().size() >= 0xFFFF) {
+		if (pool.getLast().data().size() + data.cp.data().size() >= 0xFFFF) {
 			pool.add(new ConstantPool());
 		}
 		table.putInt(data.name(), this.data.wIndex() | (pool.size()-1) << 24);

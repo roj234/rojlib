@@ -23,7 +23,7 @@ public class ANNOTATION implements Processor {
 		var ctx = pc.getAnnotatedClass(classes, "roj/plugins/ci/annotation/ReplaceConstant");
 		for (int i = 0; i < ctx.size(); i++) {
 			ConstantPool cp = ctx.get(i).getData().cp();
-			List<Constant> array = cp.array();
+			List<Constant> array = cp.data();
 			for (Constant constant : array) {
 				if (constant.type() == Constant.STRING) {
 					CstRefUTF str = (CstRefUTF) constant;

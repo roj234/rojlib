@@ -1,5 +1,6 @@
 package roj.asm;
 
+import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.Nullable;
 import roj.asm.attr.Attribute;
 import roj.asm.attr.AttributeList;
@@ -11,17 +12,15 @@ import roj.util.TypedKey;
  * @since 2022/4/23 14:30
  */
 public interface Attributed {
-	default Attribute attrByName(String name) {
-		AttributeList list = attributesNullable();
-		return list == null ? null : (Attribute) list.getByName(name);
+	@Contract(pure = true) default @Nullable Attribute getRawAttribute(String name) {
+		var attributes = attributesNullable();
+		return attributes == null ? null : (Attribute) attributes.getByName(name);
 	}
+	default <T extends Attribute> T getAttribute(ConstantPool cp, TypedKey<T> type) {throw new UnsupportedOperationException("未实现");}
+	default void addAttribute(Attribute attr) {attributes().add(attr);}
 
-	default <T extends Attribute> T parsedAttr(ConstantPool cp, TypedKey<T> type) {throw new UnsupportedOperationException("未实现");}
-
-	default void putAttr(Attribute attr) {attributes().add(attr);}
 	default AttributeList attributes() {throw new UnsupportedOperationException(getClass().getName());}
-	@Nullable
-	default AttributeList attributesNullable() {return null;}
+	@Contract(pure = true) default @Nullable AttributeList attributesNullable() {return null;}
 
 	char modifier();
 	default void modifier(int flag) { throw new UnsupportedOperationException(getClass().getName()); }

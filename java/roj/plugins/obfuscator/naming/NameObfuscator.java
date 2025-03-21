@@ -135,7 +135,7 @@ public class NameObfuscator implements ObfuscateTask {
 			}
 
 			d.param = method.rawDesc();
-			d.flags = (char) acc;
+			d.modifier = (char) acc;
 
 			sb.clear();
 			if (this.method != null && (exclusions.getBits(sb.append(d.owner).append("//").append(d.name))&EX_METHOD) == 0) {
@@ -150,7 +150,7 @@ public class NameObfuscator implements ObfuscateTask {
 
 			d.name = field.name();
 			d.param = field.rawDesc();
-			d.flags = field.modifier;
+			d.modifier = field.modifier;
 
 			sb.clear();
 			if (this.field != null && (exclusions.getBits(sb.append(d.owner).append("//").append(d.name))&EX_FIELD) == 0) {

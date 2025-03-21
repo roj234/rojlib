@@ -436,7 +436,7 @@ public final class InsnNode {
 			break;
 			case 3:
 				d = desc();
-				TypeHelper.humanize(Type.methodDesc(d.param), "*."+d.name, simple, sb).append(" // [#").append((int)d.flags).append(']');
+				TypeHelper.humanize(Type.methodDesc(d.param), "*."+d.name, simple, sb).append(" // [#").append((int)d.modifier).append(']');
 			break;
 			case 6:
 				//noinspection MagicConstant

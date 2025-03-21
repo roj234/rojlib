@@ -29,12 +29,10 @@ final class NamedParamList extends ExprNode {
 	}
 
 	// 这个类不会在resolve阶段后存在
-	@Override
-	public IType type() { return null; }
-	@Override
-	public void write(MethodWriter cw, boolean noRet) { throw new UnsupportedOperationException(); }
+	@Override public IType type() { throw new UnsupportedOperationException(); }
+	@Override public void write(MethodWriter cw, boolean noRet) { throw new UnsupportedOperationException(); }
 
-	public Map<String, IType> getExtraParams() {
+	Map<String, IType> resolve() {
 		MyHashMap<String, IType> params = new MyHashMap<>(map.size());
 		for (Map.Entry<String, ExprNode> entry : map.entrySet()) {
 			params.put(entry.getKey(), entry.getValue().type());

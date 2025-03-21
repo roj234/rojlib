@@ -234,10 +234,7 @@ public class DefaultConsole implements Console {
 
 					String cmd = input.toString();
 					boolean ok = evaluate(cmd);
-					if (!ok) {
-						Terminal.beep();
-						if (ANSI_OUTPUT) return;
-					}
+					if (!ok) Terminal.beep();
 
 					input.clear();
 
@@ -376,33 +373,38 @@ public class DefaultConsole implements Console {
 					}
 					afterInput();
 				}
+				case VK_CTRL|VK_C -> {
+					if (_selectAll) {
+						if (!GuiUtil.setClipboardText(Terminal.stripAnsi(new CharList(input)).toStringAndFree()))
+							System.err.println("您的环境没有剪贴板，复制失败");
+						_selectAll = false;
+						break;
+					}
+
+					var r = interruptHandler;
+					if (r != null) r.run();
+					else if (!runKeyHandlers(keyCode)) {
+						System.exit(0);
+					}
+				}
 				default -> {
-					for (int i = 0; i < keyHandler.size(); i++) {
-						var result = keyHandler.get(i).apply(keyCode);
-						if (result != null) {
-							if (result) _isDirty = true;
-							return;
-						}
-					}
-
-					if (keyCode == (VK_CTRL|VK_C)) {
-						if (_selectAll) {
-							if (!GuiUtil.setClipboardText(Terminal.stripAnsi(new CharList(input)).toStringAndFree()))
-								System.err.println("您的环境没有剪贴板，复制失败");
-							_selectAll = false;
-							break;
-						}
-
-						var r = interruptHandler;
-						if (r == null) System.exit(0);
-						else r.run();
-					}
+					runKeyHandlers(keyCode);
 					return;
 				}
 			}
 		}
 
 		_isDirty = true;
+	}
+	private boolean runKeyHandlers(int keyCode) {
+		for (int i = 0; i < keyHandler.size(); i++) {
+			var result = keyHandler.get(i).apply(keyCode);
+			if (result != null) {
+				if (result) _isDirty = true;
+				return true;
+			}
+		}
+		return false;
 	}
 
 	protected final void printCommand() {

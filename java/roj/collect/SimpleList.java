@@ -1,6 +1,7 @@
 package roj.collect;
 
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 import roj.math.MathUtils;
 import roj.util.ArrayCache;
 import roj.util.ArrayUtil;
@@ -330,6 +331,7 @@ public class SimpleList<E> extends AbstractCollection<E> implements List<E>, Ran
 		return (E) list[i];
 	}
 
+	@Nullable
 	public E getLast() {return getLast(null);}
 	@SuppressWarnings("unchecked")
 	public E getLast(E def) {return size == 0 ? def : (E) list[size-1];}
@@ -411,7 +413,7 @@ public class SimpleList<E> extends AbstractCollection<E> implements List<E>, Ran
 
 		SubList(int fromIndex, int toIndex) {
 			if (fromIndex < 0) throw new IndexOutOfBoundsException("fromIndex = " + fromIndex);
-			if (toIndex >  SimpleList.this.size()) throw new IndexOutOfBoundsException("toIndex = " + toIndex);
+			if (toIndex > SimpleList.this.size()) throw new IndexOutOfBoundsException("toIndex = " + toIndex);
 			if (fromIndex > toIndex) throw new IllegalArgumentException("fromIndex(" + fromIndex + ") > toIndex(" + toIndex + ")");
 
 			offset = fromIndex;

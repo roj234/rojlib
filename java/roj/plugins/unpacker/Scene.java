@@ -12,6 +12,7 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.nio.file.FileVisitResult;
 
 /**
  * @author Roj234
@@ -70,6 +71,8 @@ class Scene implements Unpacker {
 				} catch (IOException e) {
 					e.printStackTrace();
 				}
+
+				return FileVisitResult.CONTINUE;
 			});
 		}
 	}

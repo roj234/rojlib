@@ -32,19 +32,19 @@ public final class AsmPlugin extends Evaluable {
 		MethodNode mn;
 
 		mn = new MethodNode(Opcodes.ACC_PUBLIC|Opcodes.ACC_STATIC, info.name(), "i2z", "(I)Z");
-		mn.putAttr(this);
+		mn.addAttribute(this);
 		methods.add(mn);
 
 		mn = new MethodNode(Opcodes.ACC_PUBLIC|Opcodes.ACC_STATIC, info.name(), "z2i", "(Z)I");
-		mn.putAttr(this);
+		mn.addAttribute(this);
 		methods.add(mn);
 
 		mn = new MethodNode(Opcodes.ACC_PUBLIC|Opcodes.ACC_STATIC, info.name(), "inject", "(Ljava/lang/String;Ljava/lang/Object;)Ljava/lang/Object;");
-		mn.putAttr(this);
+		mn.addAttribute(this);
 		methods.add(mn);
 
 		mn = new MethodNode(Opcodes.ACC_PUBLIC|Opcodes.ACC_STATIC, info.name(), "cast", "(Ljava/lang/Object;)Ljava/lang/Object;");
-		mn.putAttr(this);
+		mn.addAttribute(this);
 		methods.add(mn);
 
 		api.attachment(INJECT_PROPERTY, properties);

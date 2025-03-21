@@ -4,7 +4,7 @@
     而且不像FULLTEXT它并不会丢数据
     如果分词性能大概更好？
 * roj.collect.MatchMapString&lt;V>
-* roj.collect.MatchMap&lt;K,V> (未做)
+* roj.collect.MatchMap&lt;K,V>
 
 ```java
 import roj.collect.MatchMapString;

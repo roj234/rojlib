@@ -5,6 +5,8 @@ import roj.asm.type.TypeHelper;
 import roj.text.CharList;
 import roj.util.DynByteBuf;
 
+import java.util.Objects;
+
 /**
  * @author Roj234
  * @since 2021/5/29 17:16
@@ -26,12 +28,12 @@ public final class CstNameAndType extends Constant {
 
 	@Override
 	public final void write(DynByteBuf w) {
-		w.put(Constant.NAME_AND_TYPE).putShort(name.getIndex()).putShort(type.getIndex());
+		w.put(Constant.NAME_AND_TYPE).putShort(name.index).putShort(type.index);
 	}
 
 	public final String toString() {
 		CharList sb = new CharList().append(super.toString())
-			.append(" 引用[").append(name.getIndex()).append(",").append(type.getIndex()).append("] ");
+			.append(" 引用[").append((int) name.index).append(",").append((int) type.index).append("] ");
 		return parseNodeDesc(sb, null, name.str(), type.str());
 	}
 	static String parseNodeDesc(CharList sb, String owner, String name, String type) {
@@ -66,16 +68,10 @@ public final class CstNameAndType extends Constant {
 	}
 
 	public final CstUTF name() { return name; }
-	public final void name(CstUTF name) {
-		if (name == null) throw new NullPointerException("name");
-		this.name = name;
-	}
+	public final void name(CstUTF name) {this.name = Objects.requireNonNull(name);}
 
 	public final CstUTF getType() { return type; }
-	public final void setType(CstUTF type) {
-		if (type == null) throw new NullPointerException("type");
-		this.type = type;
-	}
+	public final void setType(CstUTF type) {this.type = Objects.requireNonNull(type);}
 
 	@Override
 	public final CstNameAndType clone() {

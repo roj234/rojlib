@@ -1,27 +1,28 @@
+### RojLib v2&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;你所见过最耦合的项目
+### 本项目可能存在无意留下的漏洞，仅供学习研究，如用作商业用途，不提供任何保证
 
-### 本项目存在大量无意留下的漏洞，仅供学习研究用途，如用作商业行为，不提供任何保证
-
-## 有单独文档的类(包)
+## 文档
 [Lava编译器](docs/Re_Lavac.md)  
 [自动识别中文编码](docs/Re_ChineseCharset.md)  
 [带指令注册的终端模拟器](docs/Re_CommandConsole.md)  
-[Java8-21通杀的高性能反射解决方案](docs/Re_DirectAccessor.md)  
+[Java8-21通杀的高性能反射解决方案](docs/Re_Bypass.md)  
 [高性能的字符串全文匹配方案](docs/Re_MatchMap.md)  
 [NAT打洞](docs/Re_NAT.md)  
 [注解定义的HTTP路由](docs/Re_OKRouter.md)  
 [(并不是很)安全的插件系统](docs/Re_PluginSystem.md)  
 [多线程高性能7z压缩和解压](docs/Re_QZArchiver.md)  
 [任意对象的安全序列化解决方案](docs/Re_SerializerFactory.md)  
-没列出来的还在WIP
+[注解定义的DataAccessObject](docs/Re_DAOMaker.md)  
+[在家自制编译器·第一章 (WIP)](docs/hbc/part1.md)
 
-## 上新
-roj.reflect.litasm.Intrinsics
-  Literally 'ASM'  
-  你可以写对应ABI的汇编  
-  除此之外还提供了@FastJNI注解以让你更快的调用DLL函数  
-   * 仅支持64位windows平台
+### 除此之外，还可以去roj.plugins包里看看插件系统
 
-# 这里都有啥
+## 最近做的
+roj.math.S128i | roj.math.FixedDecimal  
+  128位整数和定点小数  
+RemoteFileSystem
+
+# 目录
 ## roj.archive
 `ZipArchive/ZipFileWriter`: zip
 * 读写
@@ -55,9 +56,6 @@ roj.reflect.litasm.Intrinsics
       计算StackMapTable
     性能、内存占用、易用性（至少对我来说）均优于ow的asm
 
-### Parser.forEachConstant(DynByteBuf buf, Consumer&lt;Constant&gt; c)
-* 【只读】处理每一个常量
-
 ### AccessData Parser.parseAccess(DynByteBuf buf, boolean modifiable)
 * 【只读】类、方法、字段、继承、接口、修饰符等
 * 【读写】类和其中元素的修饰符
@@ -69,9 +67,9 @@ roj.reflect.litasm.Intrinsics
 * * 如果你要修改方法的结构，可以用roj.asm.visitor.CodeWriter
 * * 如果上面两个都不符合你的需求，你才应该用roj.asm.visitor.XInsnList
 * 上面讲的还都是Code属性，如果要先检测有没有注解再决定如何操作呢
-* 使用`T roj.asm.tree.Attributed#parsedAttr(@Nullable ConstantPool cp, TypedName&lt;T&gt; name)`获取存在的属性（它是可读写的）
-* TypedName在`roj.asm.tree.Attribute`中列举了（或者你也可以new一个，它只是为了通过泛型规范Attribute的类型）
-* 使用`roj.asm.tree.CNode#parsed(ConstantPool cp)`解析一个方法或字段的所有属性
+* 使用`T roj.asm.Attributed#parsedAttr(@Nullable ConstantPool cp, TypedName&lt;T&gt; name)`获取存在的属性（它是可读写的）
+* TypedName在`roj.asm.Attribute`中列举了（或者你也可以new一个，它只是为了通过泛型规范Attribute的类型）
+* 使用`roj.asm.CNode#parsed(ConstantPool cp)`解析一个方法或字段的所有属性
 
 实例见`roj.asmx.mapper.Mapper`
 
@@ -80,8 +78,6 @@ roj.reflect.litasm.Intrinsics
 
 ## roj.asmx
     基于Transformer的各种骚操作
-### classpak
-使用LZMA2压缩你的jar
 ### event
 基于ASM的高性能事件系统
 取消、继承、泛型
@@ -92,15 +88,8 @@ class映射(对方法/类改名)器 Mapper
 * 上面我说到ASM的ConstantData等级好就好在这里
 * 它的速度是SpecialSource的十倍 _(2023/2/11更新:更快了)_
 
-class混淆器 Obfuscator`
-* 还支持反混淆，也就是把所有接受常量字符串的函数eval一遍
-* [ ] 字符串解密
-* [ ] 字符串解密+堆栈
-* [ ] 流程分析(先保存至一个(本地)变量,也许很久之后再解密)
-
 #### 图片展示
 ![roj.asmx.mapper.MapperUI](docs/images/mapper v3.png)  
-![roj.asmx.mapper.ObfuscatorUI](docs/images/ofbuscator.png)
 
 ### nixim
  * 使用注解注入一个class，修改其中一些方法，或者让它实现接口  
@@ -156,10 +145,11 @@ Promise:
 			return null;
 		});
 ```
-其它：定时任务
-  
+基于时间轮的无锁任务计划系统 Scheduler  
+PacketBuffer
+
 ## roj.config  
-  JSON YAML TOML INI XML NBT Torrent(Bencode) CSV 解析器  
+  JSON YAML TOML INI XML NBT Torrent(Bencode) CSV Xlsx 解析器  
   ConfigMaster  
 
 ### 特点：
@@ -168,7 +158,7 @@ Promise:
 * 访问者模式的读取和写入（仅支持JSON YAML和NBT）
 * 支持dot-get: 形如`a.b[2].c` 详见`roj.config.data.CEntry#query`
 * XML的dot-get更高级 详见`roj.config.data.Node#querySelector`
-* 支持Xlsx和Csv的处理，它们在roj.excel包
+* 支持Xlsx和Csv的处理，它们在roj.config.table包
 * 人性化的错误提示
 * 自动对象序列化
 
@@ -196,51 +186,36 @@ at roj.config.JSONParser.jsonRead(JSONParser.java:217)
 * EdDSA / X25519DH
 * XXHash32
 
-## roj.excel
-    xlsx读写
-
 ## roj.exe
     PE文件格式(.exe .dll)和ELF文件格式(.so)的解析
 
 ## roj.io  
-  多线程下载 `Downloader`  
-`BinaryDB` 分块锁的实验品,似乎效率还行
-  “分页”缓冲池
+  “分页”缓冲池  
   RegionFile
 
 ## roj.math  
-    各种向量啊矩阵啊并不是我写的，不过我感觉我现在也能写出来...  
-
 `MutableBigInteger`: 如其名  
-`Version`: 1.2.3版本解析
-  
-## roj.misc  
-    不好分类的命令行工具
-  
-1. `FindClass` 查找类中元素的引用或定义，比jd-gui更好！
-2. `ModuleKiller` 一行代码干掉Jigsaw
-3. `UIEntry` 所有GUI的入口
-  
-## roj.mod
+`Version`: 1.2.3版本解析  
+`S128i`: 128位整数  
+`FixedDecimal`: 定点数
+
+## roj.plugins.ci
     我自己写的模组编译器  
     考虑到Minecraft开发的需求, 和ForgeGradle那'惊人'的速度  
     我决定制作它  
 
 功能:
-* 编译 (需要JDK,  不过相信我,  迟早有一天我会自己做javac的)
+* 编译
 * 增量编译
 * 屏蔽部分警告
 * 自动检测文件更新并编译
 * 在程序运行时根据编译修改其代码(热重载)
 
 特点:
-* 我没有做过时间的比较, 除了ForgeGradle
-* 在我2019年使用当时所知的最优配置时  
-  FG需要30秒  
-  FMD则是50ms-1s (增量模式) 4s (全量)
+* 很快，不要联网，而且占用空间少，不在用户文件夹拉屎
 
 ### 图片展示
-![roj.mod.FMDMain](docs/images/fmd.png)
+![roj.plugins.ci.FMDMain](docs/images/fmd.png)
 
 ## roj.net
     基于管线的网络请求
@@ -287,6 +262,14 @@ ddns
 * CodeStat
 * Unpacker
 * MinecraftServer
+### roj.plugins.unpkcker
+1. `AsarExporter` 导出ASAR
+2. `HarExporter` 导出开发者工具通过【Save as Har with contents】导出的har文件 (copy网站)
+3. `ScenePkg` 导出小红车的壁纸包
+
+### 图片展示 (/WIP)
+![roj.text.novel.NovelFrame](docs/images/novel manager.png)
+
 
 ## roj.reflect
 `EnumHelper`,  动态增删枚举  
@@ -302,29 +285,18 @@ ddns
     从PHP搬过来的简易连接池和链式查询
 
 ## roj.text  
-  `ACalendar`，又一个日历，提供: prettyTime,  formatDate  
-  `Logger`  
+  `Logger` 建议日志记录器  
   `FastMatcher` 基于改进版BM算法的字符串寻找
-
-### 图片展示 (/WIP)
-![roj.text.novel.NovelFrame](docs/images/novel manager.png)
-
 
 ## roj.ui  
     请在支持虚拟终端转义序列的Console中执行 （在windows上可能需要libcpp.dll）
-  `CLIUtil.Minecraft` 将Minecraft的小节号转义或JSON字符串原样映射到控制台中  
-  `EasyProgressBar` 进度条
-  `terminal.DefaultConsole` 基于虚拟终端序列的终端模拟器  
-
-## roj.unpkg
-1. `AsarExporter` 导出ASAR
-2. `HarExporter` 导出开发者工具通过【Save as Har with contents】导出的har文件 (copy网站)
-3. `ScenePkg` 导出小红车的壁纸包
+  `Terminal` 基于虚拟终端序列的终端模拟器  
+  `Terminal.MinecraftColor` 将Minecraft的小节号转义或JSON字符串原样映射到控制台中
+  `EasyProgressBar` 高端进度条
 
 ## roj.util  
   `DynByteBuf`，能扩展的ByteBuffer，也许Streamed，可作为Input/OutputStream, DataInput/Output  
   `GIFDecoder` 解码GIF文件  
-  `VarMapperX` 变量ID分配器
 
 # Properties （不全）
 int roj.nativeDisableBit [禁用native优化] (RojLib)
@@ -351,6 +323,9 @@ Windows：
 因为没有人问 ×  
 
 # 特别鸣谢
+DeepSeek
+  * S128i的基础结构
+
 JFormDesigner  
   * 让我不用碰恶心的AWT界面  
 
@@ -375,6 +350,8 @@ ETC
 CraftKuro
   * 帮助安装和配置OpenWRT
   * 提供情绪价值（吉祥物 ×）
+  * 提供Kuropack的命名（其实是我硬要贴上去的）
+  * 提供部分文本
 
 咖喱人
   * 提供很多很多支持 (真的)

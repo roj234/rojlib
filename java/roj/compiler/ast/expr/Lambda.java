@@ -1,16 +1,13 @@
 package roj.compiler.ast.expr;
 
 import org.jetbrains.annotations.Nullable;
+import roj.asm.ClassNode;
+import roj.asm.IClass;
+import roj.asm.MethodNode;
 import roj.asm.Opcodes;
-import roj.asm.cp.Constant;
-import roj.asm.cp.*;
-import roj.asm.tree.ConstantData;
-import roj.asm.tree.IClass;
-import roj.asm.tree.MethodNode;
-import roj.asm.tree.attr.BootstrapMethods;
+import roj.asm.cp.CstClass;
 import roj.asm.type.IType;
 import roj.asm.type.Type;
-import roj.asm.type.TypeHelper;
 import roj.collect.SimpleList;
 import roj.compiler.JavaLexer;
 import roj.compiler.LavaFeatures;
@@ -19,17 +16,13 @@ import roj.compiler.asm.MethodWriter;
 import roj.compiler.ast.ParseTask;
 import roj.compiler.context.LocalContext;
 import roj.compiler.diagnostic.Kind;
-import roj.compiler.resolve.NestContext;
-import roj.compiler.resolve.ResolveException;
-import roj.compiler.resolve.TypeCast;
+import roj.compiler.resolve.*;
 import roj.config.ParseException;
 import roj.text.TextUtil;
 import roj.util.Helpers;
 
-import java.lang.invoke.MethodHandle;
-import java.lang.invoke.MethodHandles;
-import java.lang.invoke.MethodType;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 
 /**
@@ -37,7 +30,7 @@ import java.util.List;
  * @author Roj234
  * @since 2024/1/23 0023 11:32
  */
-public class Lambda extends ExprNode {
+public final class Lambda extends ExprNode {
 	private static final Asterisk[] AnyLambda = new Asterisk[10];
 	static {
 		for (int i = 0; i < 10; i++) AnyLambda[i] = new Asterisk("<Lambda/"+i+">");
@@ -50,60 +43,65 @@ public class Lambda extends ExprNode {
 		return c != '/' ? c - '0' : Integer.parseInt(name.substring(8, name.length() - 1));
 	}
 
-	private List<String> args;
-	private ExprNode expr;
-	private MethodNode imp;
-	private String isMethodRef;
+	private List<?> args;
+	private MethodNode impl;
 	private ParseTask task;
 
-	// args[0] -> expr
-	public Lambda(List<String> args, ExprNode expr) {
-		this.args = args;
-		this.expr = expr;
-	}
+	private ExprNode methodRef;
+	private String methodName;
+
 	// args -> {...}
-	public Lambda(List<String> args, MethodNode imp, ParseTask task) {
+	public Lambda(List<String> args, MethodNode impl, ParseTask task) {
 		this.args = args;
-		this.imp = imp;
+		this.impl = impl;
 		this.task = task;
 	}
 	// parent::methodRef
-	public Lambda(ExprNode parent, String methodRef) {
-		this.expr = parent;
-		this.isMethodRef = methodRef;
+	public Lambda(ExprNode methodRef, String methodName) {
+		this.args = Collections.emptyList();
+		this.methodRef = methodRef;
+		this.methodName = methodName;
 	}
 
 	@Override
-	public String toString() { return (args.size() == 1 ? args.get(0) : "("+TextUtil.join(args, ", ")+")")+" -> "+expr; }
+	public String toString() {return methodRef == null ? (args.size() == 1 ? args.get(0) : "("+TextUtil.join(args, ", ")+")")+" -> "+impl : methodRef+"::"+methodName;}
 	@Override
-	public IType type() {return args.size() < 10 ? AnyLambda[args.size()] : new Asterisk("<Lambda//"+args.size()+">");}
+	public IType type() {
+		return methodRef != null && args == Collections.emptyList()
+				? new Asterisk("<Lambda//65536>")
+				: args.size() < 10 ? AnyLambda[args.size()] : new Asterisk("<Lambda//"+args.size()+">");
+	}
 	@Override
 	public ExprNode resolve(LocalContext ctx) throws ResolveException {
-		ctx.file.setMinimumBinaryCompatibility(LavaFeatures.COMPATIBILITY_LEVEL_JAVA_8);
-
-		if (isMethodRef != null) {
-			if (expr instanceof DotGet d) {
-				expr = null;
+		if (methodRef != null) {
+			if (methodRef instanceof DotGet d) {
+				methodRef = null;
 				ExprNode next = d.resolveEx(ctx, n1 -> {
-					var n = ((IClass) n1);
-					expr = new roj.compiler.ast.expr.Constant(new Type(n.name()), new CstClass(n.name()));
+					var n = (IClass) n1;
+					methodRef = constant(Type.klass(n.name()), new CstClass(n.name()));
 				}, null);
-				if (expr == null) expr = next;
+				if (methodRef == null) methodRef = next;
 			} else {
-				expr = expr.resolve(ctx);
+				methodRef = methodRef.resolve(ctx);
+			}
+
+			var data = ctx.resolve(methodRef.type());
+			int mid = -1;
+			var methods = data.methods();
+			for (int i = 0; i < methods.size(); i++) {
+				var method = methods.get(i);
+				if (methodName.equals(method.name())) {
+					if (mid >= 0) {
+						//ctx.report(this, Kind.WARNING, "lambda unfriendly overloading");
+						args = Collections.emptyList();
+						break;
+					}
+					mid = i;
+					args = method.parameters();
+				}
 			}
 		}
 		return this;
-	}
-
-	static sealed class Backend {
-		void generate(ConstantData lambdaType, MethodNode lambdaReceiver, String lambdaDescWithPrependArgs, CstRef implementor) {
-
-		}
-	}
-	static final class InvokeDynamicBackend extends Backend {}
-	static final class AnonymousClassBackend extends Backend {
-
 	}
 
 	@Override
@@ -111,130 +109,108 @@ public class Lambda extends ExprNode {
 	@Override
 	public void write(MethodWriter cw, @Nullable TypeCast.Cast _returnType) {
 		var ctx = LocalContext.get();
-
 		if (_returnType == null) {
-			ctx.report(Kind.ERROR, "lambda.untyped");
+			ctx.report(this, Kind.ERROR, "lambda.untyped");
 			return;
 		}
 
-		var lambdaType = ctx.classes.getClassInfo(_returnType.getType1().owner());
-		var lambdaRh = ctx.classes.getResolveHelper(lambdaType);
-		int lambdaCallType = lambdaRh.getLambdaType();
+		var lambda接口 = ctx.classes.getClassInfo(_returnType.getType1().owner());
 
-		switch (lambdaCallType) {
+		var resolveHelper = ctx.classes.getResolveHelper(lambda接口);
+		int lambda转换方式 = resolveHelper.getLambdaType();
+		var lambda方法 = resolveHelper.getLambdaMethod();
+		LambdaGenerator generator = LambdaGenerator.INVOKE_DYNAMIC;
+		switch (lambda转换方式) {
 			default -> {
-				ctx.report(Kind.ERROR, "lambda.unsupported."+lambdaCallType);
+				ctx.report(this, Kind.ERROR, "lambda.unsupported."+lambda转换方式);
 				return;
 			}
 			case 1 -> {
-				// interface lambda
+				if (ctx.classes.getMaximumBinaryCompatibility() < LavaFeatures.JAVA_8)
+					generator = LambdaGenerator.ANONYMOUS_CLASS;
+				else
+					ctx.file.setMinimumBinaryCompatibility(LavaFeatures.JAVA_8);
 			}
-			case 2 -> {
-				// abstract class lambda
-				ctx.report(Kind.INCOMPATIBLE, "抽象类自动lambda转化暂未实现，请耐心等待！");
-			}
+			case 2 -> generator = LambdaGenerator.ANONYMOUS_CLASS;
 		}
 
-		var lambdaReceiver = lambdaRh.getLambdaMethod();
+		var _genericDesc = ctx.inferrer.getGenericParameters(lambda接口, lambda方法, _returnType.getType1()).desc;
+		var lambda实参 = _genericDesc == null ? lambda方法.rawDesc() : Type.toMethodDesc(Arrays.asList(_genericDesc));
 
-		var _implementDesc = ctx.inferrer.getGenericParameters(lambdaType, lambdaReceiver, _returnType.getType1()).desc;
-		var impDesc = _implementDesc == null ? lambdaReceiver.rawDesc() : TypeHelper.getMethod(Arrays.asList(_implementDesc));
-		var impArg = new SimpleList<IType>();
+		var lambda入参 = new SimpleList<Type>();
+		List<ExprNode> lambda入参的取值表达式;
 
-		CstRef impRef;
-		if (isMethodRef != null) {
-			var refType = ctx.classes.getClassInfo(expr.type().owner());
+		ClassNode lambda实现所属的类;
 
-			var ml = ctx.methodListOrReport(refType, isMethodRef);
-			if (ml == null) {
-				ctx.report(Kind.ERROR, "lambda.notfound");
+		if (methodRef != null) {
+			lambda实现所属的类 = ctx.classes.getClassInfo(methodRef.type().owner());
+
+			var ml = ctx.getMethodList(lambda实现所属的类, methodName);
+			if (ml == ComponentList.NOT_FOUND) {
+				ctx.report(this, Kind.ERROR, "lambda.notfound");
 				return;
 			}
-			var r = ml.findMethod(ctx, Helpers.cast(lambdaReceiver.parameters()), 0);
+
+			List<Type> args = Type.methodDesc(lambda实参);
+			args.remove(args.size()-1);
+
+			var r = ml.findMethod(ctx, Helpers.cast(args), 0);
 			if (r == null) return;
 
-			// 方法引用，方法已存在
-			imp = r.method;
-			impRef = (refType.modifier()&Opcodes.ACC_INTERFACE) != 0
-				? ctx.file.cp.getItfRef(imp.owner, imp.name(), imp.rawDesc())
-				: ctx.file.cp.getMethodRef(imp.owner, imp.name(), imp.rawDesc());
+			// 方法引用
+			impl = r.method;
+
+			lambda入参的取值表达式 = Collections.emptyList();
+
+			// This
+			if ((impl.modifier&Opcodes.ACC_STATIC) == 0) {
+				methodRef.write(cw, false);
+				lambda入参.add(0, methodRef.type().rawType());
+			} else if (!(methodRef instanceof Constant)) {
+				ctx.report(this, Kind.WARNING, "symbol.warn.static_on_half", lambda实现所属的类, methodName, this);
+			}
 		} else {
-			if (imp == null) {
-				imp = new MethodNode(0, ctx.file.name, "lambda$1", impDesc);
-				var cw1 = ctx.classes.createMethodWriter(ctx.file, imp);
+			ctx.file.methods.add(impl);
+			// 块lambda
+			impl.name(ctx.method.name()+"^lambda"+ctx.nameIndex++);
+			impl.rawDesc(lambda实参);
 
-				// 表达式lambda
-				ctx.enclosing.add(NestContext.lambda(ctx, ctx.file, cw1, new SimpleList<>()));
-				try {
-					var node = expr.resolve(ctx);
-					node.write(cw1, ctx.castTo(node.type(), imp.returnType(), 0));
-				} finally {
-					ctx.enclosing.pop();
-				}
-			} else {
-				// 块lambda
-				imp.name("lambda$1");
-				imp.rawDesc(impDesc);
+			lambda入参的取值表达式 = new SimpleList<>();
+			// lambda参数注入 (逆向出来的，我也不知道去哪找文档看):
+			// lambda实现的签名：隐含的this,[注入参数,lambda参数]
+			// invokeDyn的签名: lambda类 lambda方法名 (this, 注入参数)
+			ctx.enclosing.add(NestContext.lambda(ctx, impl.parameters().subList(0, 0), lambda入参, lambda入参的取值表达式));
 
-				// TODO codeWriter should be singleton
-				//var cw1 = ctx.classes.createMethodPoet(ctx.file, imp);
-				//ctx.enclosing.add(NestContext.lambda(ctx, ctx.file, cw1, new SimpleList<>()));
-
-				var next = LocalContext.next();
-				try {
-					next.setClass(ctx.file);
-					next.setMethod(imp);
-					next.lexer.state = JavaLexer.STATE_EXPR;
-					task.parse(next);
-				} catch (ParseException e) {
-					e.printStackTrace();
-				} finally {
-					//ctx.enclosing.pop();
-					LocalContext.prev();
-				}
+			var next = LocalContext.next();
+			try {
+				next.isArgumentDynamic = true;
+				next.setClass(ctx.file);
+				next.lexer.state = JavaLexer.STATE_EXPR;
+				task.parse(next);
+				ctx.file._setCtx(ctx);
+			} catch (ParseException e) {
+				throw new ResolveException("Lambda表达式解析失败", e);
+			} finally {
+				next.isArgumentDynamic = false;
+				LocalContext.prev();
+				ctx.enclosing.pop();
 			}
 
-			impRef = ctx.file.cp.getMethodRef(ctx.file.name, imp.name(), imp.rawDesc());
-			ctx.file.methods.add(imp);
+			lambda实现所属的类 = ctx.file;
+
+			// This
+			if ((impl.modifier&Opcodes.ACC_STATIC) == 0) {
+				ctx.thisUsed = true;
+				cw.vars(Opcodes.ALOAD, ctx.thisSlot);
+				lambda入参.add(0, Type.klass(ctx.file.name()));
+			}
 		}
 
-		// TODO method throws and/or check static
-		//mn.modifier |= ACC_STATIC;
-		if ((imp.modifier&Opcodes.ACC_STATIC) == 0) {
-			cw.one(Opcodes.ALOAD_0);
-			impArg.add(new Type(ctx.file.name));
-		}
+		// 注入参数
+		for (var node : lambda入参的取值表达式) node.write(cw, false);
+		// lambda类 (returnType)
+		lambda入参.add(Type.klass(lambda接口.name()));
 
-		// ... 参数注入方式
-		// impRef[Decl]: 接口实现方法：[this,注入参数，接口参数]
-		// invokeDyn[Ref]: 接口方法名 (this,注入参数)接口类
-
-		// returnType
-		impArg.add(new Type(lambdaType.name()));
-
-		/**
-		 *  前三个参数由VM提供
-		 * 		 MethodHandles.Lookup caller
-		 * 		 String interfaceMethodName
-		 * 		 MethodType factoryType
-		 *  后三个参数由这里的arguments提供, 分别是(describeConstantable)
-		 * @see java.lang.invoke.LambdaMetafactory#metafactory(MethodHandles.Lookup, String, MethodType, MethodType, MethodHandle, MethodType)
-		 */
-		var item = new BootstrapMethods.Item("java/lang/invoke/LambdaMetafactory", "metafactory", "(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;" +
-			"Ljava/lang/invoke/MethodType;Ljava/lang/invoke/MethodHandle;Ljava/lang/invoke/MethodType;)Ljava/lang/invoke/CallSite;", BootstrapMethods.Kind.INVOKESTATIC,
-			Constant.METHOD, Arrays.asList(
-			// CMethodType: 接口方法的形参(不解析泛型)
-			//   (Ljava/lang/Object;)Ljava/lang/Object;
-			new CstMethodType(lambdaReceiver.rawDesc()),
-			// CMethodHandle: 实际调用的方法
-			//   REF_invokeStatic java/lang/String.valueOf:(Ljava/lang/Object;)Ljava/lang/String;
-			new CstMethodHandle((imp.modifier&Opcodes.ACC_STATIC) != 0 ? BootstrapMethods.Kind.INVOKESTATIC : BootstrapMethods.Kind.INVOKEVIRTUAL, impRef),
-			// CMethodType: 接口方法的实参(解析泛型)
-			//   (Ljava/lang/Integer;)Ljava/lang/String;
-			new CstMethodType(impDesc)
-		));
-
-		int tableIdx = ctx.file.addLambdaRef(item);
-		cw.invokeDyn(tableIdx, lambdaReceiver.name(), TypeHelper.getMethod(impArg), 0);
+		generator.generate(ctx, cw, lambda接口, lambda方法, lambda实参, lambda入参, lambda实现所属的类, impl);
 	}
 }

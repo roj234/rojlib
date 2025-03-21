@@ -55,7 +55,7 @@ final class MethodList extends ComponentList {
 
 		methods.add(mn);
 		if ((mn.modifier & Opcodes.ACC_VARARGS) != 0) hasVarargs = true;
-		mn.parsedAttr(klass.cp(), Attribute.SIGNATURE);
+		mn.getAttribute(klass.cp(), Attribute.SIGNATURE);
 	}
 
 	/**
@@ -141,45 +141,50 @@ final class MethodList extends ComponentList {
 			List<Type> mParam = mn.parameters();
 			IntMap<Object> defParamState = null;
 
-			varargCheck:
-			if (mParam.size() != params.size()) {
-				if ((mn.modifier & Opcodes.ACC_VARARGS) != 0) break varargCheck;
-
+			if (mParam.size() != params.size() || !namedType.isEmpty()) {
+				var isVarargs = (mn.modifier & Opcodes.ACC_VARARGS) != 0;
 				int defReq = mParam.size() - params.size() - namedType.size();
-				if(defReq < 0) continue;
+				if(!isVarargs && defReq < 0) continue;
 
-				IntMap<ExprNode> mdvalue = ctx.getDefaultValue(mnOwner, mn);
+				IntMap<String> mdvalue = ctx.getDefaultValue(mnOwner, mn);
 				if (defReq > mdvalue.size()) continue;
 
 				defParamState = new IntMap<>();
-				if (myParam == null) myParam = new SimpleList<>(params);
-				else myParam._setSize(params.size());
+				myParam = new SimpleList<>(params);
 
 				List<String> names = ParamNameMapper.getParameterName(mnOwner.cp(), mn);
-
-				if (names == null) {
-					for (int i = params.size(); i < mParam.size(); i++) {
-						ExprNode c = mdvalue.get(i);
-						if (c == null) continue loop;
-						defParamState.putInt(i, c);
-						myParam.add(c.type());
-					}
-				} else if (names.size() != mParam.size()) {
-					ctx.report(Kind.WARNING, "invoke.warn.illegalNameList", mn);
+				if (names.size() != mParam.size()) {
+					ctx.classes.report(mnOwner, Kind.ERROR, -1, "invoke.warn.illegalNameList", mn);
 					continue;
 				} else {
+					// 可能在Annotation Resolve阶段，此时tmpMap1可用，但2不行
+					MyHashMap<String, IType> tmpMap1 = Helpers.cast(ctx.tmpMap1);
+					tmpMap1.clear(); tmpMap1.putAll(namedType);
+
 					for (int i = params.size(); i < mParam.size(); i++) {
 						String name = names.get(i);
-						IType type = namedType.get(name);
+						IType type = tmpMap1.remove(name);
 						if (type == null) {
-							ExprNode c = mdvalue.get(i);
-							if (c == null) continue loop;
+							ExprNode c = ctx.parseDefaultValue(mdvalue.get(i));
+							if (c == null) {
+								if (i == mParam.size() - 1 && isVarargs) break;
+
+								ctx.report(Kind.ERROR, "invoke.error.paramMissing", mnOwner.name(), mn.name(), name);
+								//break varargCheck;
+								continue loop;
+							}
 							type = c.type();
 							defParamState.putInt(i, c);
 						} else {
 							defParamState.putInt(i, name);
 						}
 						myParam.add(type);
+					}
+
+					if (!tmpMap1.isEmpty()) {
+						ctx.report(Kind.ERROR, "invoke.error.paramExtra", mnOwner.name(), mn.name(), tmpMap1);
+						tmpMap1.clear();
+						continue loop;
 					}
 				}
 			}
@@ -203,7 +208,7 @@ final class MethodList extends ComponentList {
 		if (isConstructor) name = owner.name().substring(owner.name().lastIndexOf('/')+1);
 
 		if (!dup.isEmpty()) {
-			CharList sb = new CharList().append("invoke.compatible.plural:").append(name).append(':');
+			CharList sb = new CharList().append("invoke.compatible.plural\1").append(name).append('\0');
 
 			appendInput(params, sb);
 
@@ -219,18 +224,19 @@ final class MethodList extends ComponentList {
 		} else if (best == null) {
 			if ((flags & NO_REPORT) != 0) return null;
 
-			CharList sb = new CharList().append("invoke.incompatible.plural:").append(name).append('(');
+			CharList sb = new CharList().append("invoke.incompatible.plural\1").append(name).append('(');
 
 			if (params.isEmpty()) sb.append("\1invoke.no_param\0");
 			else sb.append(TextUtil.join(params, ","));
-			sb.append("):");
+			sb.append(")\0");
 
 			CharList tmp = new CharList();
 			ctx.errorCapture = (trans, param) -> {
 				tmp.clear();
+				tmp.append("\0\1");
 				tmp.append(trans);
 				for (Object o : param)
-					tmp.append(':').append(o);
+					tmp.append("\0\1").append(o);
 			};
 
 			for (int i = 0; i < size; i++) {
@@ -246,6 +252,7 @@ final class MethodList extends ComponentList {
 			ctx.errorCapture = null;
 			ctx.report(Kind.ERROR, sb.replace('/', '.').toStringAndFree());
 		} else {
+			checkDeprecation(ctx, owner, best.method);
 			checkBridgeMethod(ctx, best);
 		}
 
@@ -254,11 +261,11 @@ final class MethodList extends ComponentList {
 
 	private static void getErrorMsg(LocalContext ctx, IType genericHint, List<IType> params, boolean in_static, MethodNode mn, CharList sb, CharList errRpt) {
 		var info = ctx.classes.getClassInfo(mn.owner);
-		if (!ctx.checkAccessible(info, mn, in_static, true)) {
-			sb.append(errRpt);
-		} else {
+		if (ctx.checkAccessible(info, mn, in_static, true)) {
 			appendError(ctx.inferrer.infer(info, mn, genericHint, params), sb);
 		}
+		sb.append(errRpt);
+		errRpt.clear();
 	}
 
 	@SuppressWarnings("unchecked")
@@ -285,9 +292,10 @@ final class MethodList extends ComponentList {
 	}
 
 	static void appendError(MethodResult mr, CharList sb) {
+		if (mr.distance > 0) return;
 		sb.append("typeCast.error.").append(mr.distance);
 		if (mr.error != null && mr.error.length == 3)
-			sb.append(':').append(mr.error[0]).append(':').append(mr.error[1]);
+			sb.append("\0\1").append(mr.error[0]).append("\0\1").append(mr.error[1]);
 	}
 	static void appendInput(List<IType> params, CharList sb) {
 		sb.append("  ").append("\1invoke.found\0 ");
@@ -296,7 +304,7 @@ final class MethodList extends ComponentList {
 		sb.append('\n');
 	}
 	static CharList getArg(MethodNode mn, IType that, CharList sb) {
-		Signature sign = mn.parsedAttr(null, Attribute.SIGNATURE);
+		Signature sign = mn.getAttribute(null, Attribute.SIGNATURE);
 		List<? extends IType> params = sign == null ? mn.parameters() : sign.values.subList(0, sign.values.size()-1);
 		if (params.isEmpty()) return sb.append("\1invoke.no_param\0");
 
@@ -329,14 +337,14 @@ final class MethodList extends ComponentList {
 	static void checkBridgeMethod(LocalContext ctx, MethodResult mr) {
 		var mn = mr.method;
 		if ((mn.modifier&Opcodes.ACC_PRIVATE) == 0 || ctx.file.name().equals(mn.owner) ||
-			ctx.classes.hasFeature(LavaFeatures.NESTED_MEMBER)) return;
+			ctx.classes.getMaximumBinaryCompatibility() >= LavaFeatures.JAVA_11) return;
 
-		var prev = (Evaluable)mn.attrByName(Evaluable.NAME);
+		var prev = (Evaluable)mn.getRawAttribute(Evaluable.NAME);
 		if (prev != null) {
 			GlobalContext.debugLogger().warn("Method {} Already have Evaluable!!!", mn);
 		}
 
 		var fwr = new MethodBridge((CompileUnit) ctx.classes.getClassInfo(mn.owner), mn, prev);
-		mn.putAttr(fwr);
+		mn.addAttribute(fwr);
 	}
 }

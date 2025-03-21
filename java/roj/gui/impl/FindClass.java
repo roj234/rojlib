@@ -58,7 +58,7 @@ public class FindClass extends JFrame {
 				if (filter.test(data.name())) out.add(data.name());
 
 				if (!uiDeclOnly.isSelected()) {
-					for (Constant c : data.cp.array()) {
+					for (Constant c : data.cp.data()) {
 						if (c.type() == Constant.CLASS) {
 							if (filter.test(c.getEasyCompareValue())) {
 								out.add("REF: "+ data.name());
@@ -90,7 +90,7 @@ public class FindClass extends JFrame {
 				}
 				if (uiDeclOnly.isSelected()) continue;
 
-				for (Constant c : data.cp.array()) {
+				for (Constant c : data.cp.data()) {
 					if (c instanceof CstRef) {
 						CstRef ref = (CstRef) c;
 						String s = ref.descType();
@@ -108,7 +108,7 @@ public class FindClass extends JFrame {
 		}
 		if (uiSerString.isSelected()) {
 			for (ClassNode data : ref) {
-				for (Constant c : data.cp.array()) {
+				for (Constant c : data.cp.data()) {
 					if (c.type() == Constant.STRING) {
 						if (filter.test(c.getEasyCompareValue())) {
 							out.add(data.name());
@@ -120,7 +120,7 @@ public class FindClass extends JFrame {
 		}
 		if (uiSerConstant.isSelected()) {
 			for (ClassNode data : ref) {
-				for (Constant c : data.cp.array()) {
+				for (Constant c : data.cp.data()) {
 					if (c.type() >= 3 && c.type() <= 6) {
 						if (filter.test(c.getEasyCompareValue())) {
 							out.add(data.name());
@@ -132,20 +132,20 @@ public class FindClass extends JFrame {
 		}
 		if (uiserAnnotation.isSelected()) {
 			for (ClassNode data : ref) {
-				Annotations aa = data.parsedAttr(data.cp, Attribute.RtAnnotations);
+				Annotations aa = data.getAttribute(data.cp, Attribute.RtAnnotations);
 				checkAnnotation(filter, aa, out, data, data);
-				Annotations bb = data.parsedAttr(data.cp, Attribute.ClAnnotations);
+				Annotations bb = data.getAttribute(data.cp, Attribute.ClAnnotations);
 				checkAnnotation(filter, bb, out, data, data);
 				for (MethodNode method : data.methods) {
-					aa = method.parsedAttr(data.cp, Attribute.RtAnnotations);
+					aa = method.getAttribute(data.cp, Attribute.RtAnnotations);
 					checkAnnotation(filter, aa, out, method, data);
-					bb = method.parsedAttr(data.cp, Attribute.ClAnnotations);
+					bb = method.getAttribute(data.cp, Attribute.ClAnnotations);
 					checkAnnotation(filter, bb, out, method, data);
 				}
 				for (FieldNode method : data.fields) {
-					aa = method.parsedAttr(data.cp, Attribute.RtAnnotations);
+					aa = method.getAttribute(data.cp, Attribute.RtAnnotations);
 					checkAnnotation(filter, aa, out, method, data);
-					bb = method.parsedAttr(data.cp, Attribute.ClAnnotations);
+					bb = method.getAttribute(data.cp, Attribute.ClAnnotations);
 					checkAnnotation(filter, bb, out, method, data);
 				}
 			}

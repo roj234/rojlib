@@ -96,7 +96,7 @@ public class EventBus {
 
 			List<ListenerInfo> objectList = new SimpleList<>(), staticList = new SimpleList<>();
 			for (var mn : data.methods) {
-				var annotations = mn.parsedAttr(data.cp, Attribute.ClAnnotations);
+				var annotations = mn.getAttribute(data.cp, Attribute.ClAnnotations);
 				if (annotations == null) continue;
 				for (var annotation : annotations.annotations) {
 					if (annotation.type().equals(SUBSCRIBE_NAME)) {

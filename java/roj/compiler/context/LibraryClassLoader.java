@@ -17,7 +17,7 @@ public class LibraryClassLoader implements Library {
 	@Override
 	public ClassNode get(CharSequence name) {
 		try (var in = cl == null ? ClassLoader.getSystemResourceAsStream(name+".class") : cl.getResourceAsStream(name+".class")) {
-			if (in != null) return Parser.parse(IOUtil.read(in));
+			if (in != null) return Parser.parseConstants(IOUtil.read(in));
 		} catch (IOException e) {
 			e.printStackTrace();
 		}

@@ -20,7 +20,7 @@
 LZMA2Input/OutputStream均支持并行压缩和解压  
 2023/12/22: 支持在压缩时动态修改prop byte(仅支持单线程下)
 
-### 可以先试试这个类 `roj.archive.ui.QZArchiverUI`
+### 可以先试试这个类 `roj.gui.impl.QZArchiverUI`
     选项基本在7-zip的文档中都有介绍，我不再赘述
 
 这些项目可以看QZArchiver的代码，因为它们的设计不一定和7-zip相同
@@ -31,7 +31,7 @@ LZMA2Input/OutputStream均支持并行压缩和解压
 * 忽略压缩包内容  
 * 计算压缩包差异  
 
-![roj.archive.ui.QZArchiverUI](images/archiver.png)
+![roj.gui.impl.QZArchiverUI](images/archiver.png)
 ### 示例
 
 ```java

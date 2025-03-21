@@ -4,12 +4,14 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import roj.collect.TrieEntry.Itr;
 import roj.collect.TrieEntry.KeyItr;
+import roj.concurrent.OperationDone;
 import roj.config.data.CInt;
 import roj.io.IOUtil;
 import roj.text.CharList;
 import roj.text.TextUtil;
 import roj.util.Helpers;
 
+import java.nio.file.FileVisitResult;
 import java.util.*;
 import java.util.function.BiConsumer;
 import java.util.function.BiFunction;
@@ -88,23 +90,16 @@ public class TrieTree<V> extends AbstractMap<CharSequence, V> {
 		}
 
 		CharSequence text() { return val; }
-		@Override
 		public void append(CharList sb) { sb.append(val); }
-		@Override
 		public int length() { return val.length(); }
-		@Override
-		public String toString() { return "PE{"+val+'}'; }
+		public String toString() { return "\""+val+'"'; }
 	}
 
 	Entry<V> root = new Entry<>((char) 0);
 	int size = 0;
 
-	public TrieTree() {
-	}
-
-	public TrieTree(Map<CharSequence, V> map) {
-		putAll(map);
-	}
+	public TrieTree() {}
+	public TrieTree(Map<CharSequence, V> map) {putAll(map);}
 
 	public void addTrieTree(TrieTree<? extends V> m) {
 		size += root.copyFrom(Helpers.cast(m.root));
@@ -279,51 +274,30 @@ public class TrieTree<V> extends AbstractMap<CharSequence, V> {
 		if (entry.value == UNDEFINED) return null;
 		if (!Objects.equals(entry.value, except) && except != UNDEFINED) return null;
 
+		var old = entry.value;
+		entry.value = (V) UNDEFINED;
 		size--;
 
-		i = list.size - 1;
+		var sb = new CharList();
+		for (i = list.size-2; i >= 1; i--) {
+			var self = list.get(i);
+			var next = list.get(i+1);
+			if (self.size == 1 && !self.isLeaf()) {
+				var owner = list.get(i-1);
+				owner.removeChild(self);
 
-		Entry<V> prev = entry;
-		while (i >= 0) {
-			Entry<V> curr = list.get(i);
+				sb.clear();
+				self.append(sb);
+				next.append(sb);
 
-			// 清除单线连接:
-			// root <== a <== b <== cd <== efg
-			if (curr.size > 1 || curr.isLeaf()) {
-				curr.removeChild(prev);
-
-				// 压缩剩余的entry
-				// root <== a <== b (curr) <== def <== ghi
-				if (curr.size == 1 && curr.value == UNDEFINED && i >= COMPRESS_START_DEPTH) {
-					CharList sb = new CharList();
-
-					do {
-						curr.append(sb);
-
-						TrieEntry[] entries = curr.entries;
-						for (TrieEntry trieEntry : entries) {
-							if (trieEntry != null) {
-								curr = (Entry<V>) trieEntry;
-								break;
-							}
-						}
-					} while (curr.size == 1);
-					curr.append(sb);
-					// sb = "bdefghi"
-
-					// sb.length 必定大于 1
-					// 因为至少包含 curr 与 curr.next
-					list.get(i - 1).putChild(new PEntry<>(sb.toString(), curr));
-					sb._free();
-				}
-				return entry.value;
+				PEntry<V> replaceEntry = new PEntry<>(sb.toString(), next);
+				list.set(i, replaceEntry);
+				owner.putChild(replaceEntry);
 			}
-			prev = curr;
-			i--;
 		}
+		sb._free();
 
-		root.removeChild(entry);
-		return entry.value;
+		return old;
 	}
 
 	@Override
@@ -529,32 +503,43 @@ public class TrieTree<V> extends AbstractMap<CharSequence, V> {
 		return new EntrySet<>(this);
 	}
 
-	public void forEachSince(CharSequence s, BiConsumer<? super CharSequence, ? super V> consumer) {
+	public void forEachSince(CharSequence s, BiFunction<? super CharSequence, ? super V, FileVisitResult> consumer) {
 		forEachSince(s, 0, s.length(), consumer);
 	}
-	public void forEachSince(CharSequence s, int i, int len, BiConsumer<? super CharSequence, ? super V> consumer) {
+	public void forEachSince(CharSequence s, int i, int len, BiFunction<? super CharSequence, ? super V, FileVisitResult> consumer) {
 		CharList base = new CharList();
 		Entry<V> entry = matches(s, i, len, base);
 		if (entry == null) return;
-		recursionEntry(root, consumer, base);
+		try {
+			recursionEntry(entry, consumer, base);
+		} catch (OperationDone ignored) {}
 	}
 
 	@Override
 	public void forEach(BiConsumer<? super CharSequence, ? super V> consumer) {
-		recursionEntry(root, consumer, new CharList());
+		recursionEntry(root, (key, value) -> {
+			consumer.accept(key, value);
+			return FileVisitResult.CONTINUE;
+		}, new CharList());
 	}
 
 	@SuppressWarnings("unchecked")
-	private static <V> void recursionEntry(Entry<V> parent, BiConsumer<? super CharSequence, ? super V> consumer, CharList sb) {
+	private static <V> boolean recursionEntry(Entry<V> parent, BiFunction<? super CharSequence, ? super V, FileVisitResult> consumer, CharList sb) {
 		if (parent.value != UNDEFINED) {
-			consumer.accept(sb.toString(), parent.value);
+			var result = consumer.apply(sb.toString(), parent.value);
+			if (result == FileVisitResult.SKIP_SUBTREE) return false;
+			if (result == FileVisitResult.TERMINATE) throw OperationDone.INSTANCE;
+			if (result == FileVisitResult.SKIP_SIBLINGS) return true;
 		}
+
 		int length = sb.length();
 		for (TrieEntry entry : parent) {
 			entry.append(sb);
-			recursionEntry((Entry<V>) entry, consumer, sb);
+			if (recursionEntry((Entry<V>) entry, consumer, sb)) break;
 			sb.setLength(length);
 		}
+
+		return false;
 	}
 
 	static class EntrySet<V> extends AbstractSet<Map.Entry<CharSequence, V>> {

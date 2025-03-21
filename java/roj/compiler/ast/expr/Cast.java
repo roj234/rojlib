@@ -34,16 +34,30 @@ final class Cast extends UnaryPre {
 		IType rType = (right = right.resolve(ctx)).type();
 		ctx.resolveType(type);
 		cast = ctx.castTo(rType, type, TypeCast.E_NEVER);
+		castable:
 		if (cast.type < TypeCast.E_DOWNCAST) {
+			if (rType.isPrimitive()) {
+				int wrapper = TypeCast.getWrappedPrimitive(type);
+				if (wrapper != 0) {
+					// allowing (Byte)3
+					cast.type = TypeCast.BOXING;
+					cast.box = (byte) wrapper;
+					break castable;
+				}
+			}
+
 			var override = ctx.getOperatorOverride(right, type, JavaLexer.lParen);
 			if (override != null) return override;
 
-			ctx.report(Kind.ERROR, "typeCast.error."+cast.type, rType, type);
-			//return NaE.RESOLVE_FAILED;
+			ctx.report(this, Kind.ERROR, "typeCast.error."+cast.type, rType, type);
+			return NaE.RESOLVE_FAILED;
 		}
 
 		if (type.isPrimitive() && rType.isPrimitive() && right.isConstant()) {
-			return new Constant(type, AnnotationPrimer.castPrimitive((CEntry) right.constVal(), type));
+			if (this.cast.isNoop()) {
+				LocalContext.get().report(this, Kind.WARNING, "cast.warn.redundant", type);
+			}
+			return constant(type, AnnotationPrimer.castPrimitive((CEntry) right.constVal(), type));
 		}
 		return this;
 	}
@@ -56,8 +70,8 @@ final class Cast extends UnaryPre {
 
 	@Override
 	public void write(MethodWriter cw, @Nullable TypeCast.Cast returnType) {
-		if (returnType != null && this.cast.type >= 0 && this.cast.getOp1() != 42/*Do not check for AnyCast*/) {
-			LocalContext.get().report(Kind.WARNING, "cast.warn.redundant", type);
+		if (returnType != null && this.cast.isNoop()) {
+			LocalContext.get().report(this, Kind.WARNING, "cast.warn.redundant", type);
 		}
 
 		right.write(cw, this.cast);

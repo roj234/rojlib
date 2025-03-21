@@ -7,10 +7,12 @@ import roj.asm.*;
 import roj.asm.annotation.AList;
 import roj.asm.annotation.Annotation;
 import roj.asm.attr.*;
+import roj.asm.cp.Constant;
 import roj.asm.cp.CstClass;
-import roj.asm.insn.AttrCodeWriter;
-import roj.asm.insn.CodeWriter;
+import roj.asm.cp.CstString;
+import roj.asm.insn.*;
 import roj.asm.type.*;
+import roj.asm.util.ClassLike;
 import roj.asmx.AnnotationSelf;
 import roj.asmx.mapper.NameAndType;
 import roj.collect.*;
@@ -23,15 +25,17 @@ import roj.compiler.ast.ParseTask;
 import roj.compiler.ast.expr.ExprNode;
 import roj.compiler.ast.expr.ExprParser;
 import roj.compiler.diagnostic.Kind;
-import roj.compiler.resolve.ComponentList;
-import roj.compiler.resolve.ResolveHelper;
+import roj.compiler.doc.Javadoc;
+import roj.compiler.resolve.ImportList;
+import roj.compiler.resolve.MethodResult;
+import roj.compiler.resolve.NestContext;
 import roj.compiler.resolve.TypeCast;
-import roj.compiler.resolve.TypeResolver;
 import roj.config.ParseException;
 import roj.config.Word;
 import roj.config.data.CEntry;
 import roj.io.IOUtil;
 import roj.text.CharList;
+import roj.util.ByteList;
 import roj.util.DynByteBuf;
 import roj.util.Helpers;
 
@@ -42,7 +46,7 @@ import static roj.compiler.JavaLexer.*;
 import static roj.config.Word.LITERAL;
 
 /**
- * Lava Compiler - 类结构Parser<p>
+ * Lava Compiler - 类Resolver<p>
  * Parser levels: <ol>
  *     <li><b><i>Class Parser</i></b></li>
  *     <li>{@link ParseTask Segment Parser}</li>
@@ -52,10 +56,10 @@ import static roj.config.Word.LITERAL;
  * @author solo6975
  * @since 2020/12/31 17:34
  */
-public abstract class CompileUnit extends ClassNode {
+public abstract class CompileUnit extends ClassNode implements ClassLike {
 	/**
 	 * 暂存不完整的类名 - S1
-	 * XHashSet索引项
+	 * XHashSet索引项 - All
 	 */
 	protected String name;
 
@@ -70,19 +74,17 @@ public abstract class CompileUnit extends ClassNode {
 	// Class level flags
 	protected static final int _ACC_RECORD = 1 << 31, _ACC_STRUCT = 1 << 30, _ACC_INNER_CLASS = 1 << 29;
 	// read via _modifier()
-	protected static final int _ACC_DEFAULT = 1 << 16, _ACC_ANNOTATION = 1 << 17, _ACC_SEALED = 1 << 18, _ACC_NON_SEALED = 1 << 19, _ACC_JAVADOC = 1 << 20, _ACC_ASYNC = 1 << 21;
-	protected static final int CLASS_ACC = ACC_PUBLIC|ACC_FINAL|ACC_ABSTRACT|ACC_STRICT|_ACC_ANNOTATION|_ACC_SEALED|_ACC_NON_SEALED|_ACC_JAVADOC;
+	protected static final int _ACC_DEFAULT = 1 << 16, _ACC_ANNOTATION = 1 << 17, _ACC_SEALED = 1 << 18, _ACC_NON_SEALED = 1 << 19, _ACC_ASYNC = 1 << 21;
+	protected static final int CLASS_ACC = ACC_PUBLIC|ACC_FINAL|ACC_ABSTRACT|ACC_STRICT|_ACC_ANNOTATION|_ACC_SEALED|_ACC_NON_SEALED;
 	protected static final int
 		ACC_CLASS_ILLEGAL = ACC_NATIVE|ACC_TRANSIENT|ACC_VOLATILE|ACC_SYNCHRONIZED | _ACC_DEFAULT|_ACC_ASYNC,
 		ACC_METHOD_ILLEGAL = ACC_TRANSIENT|ACC_VOLATILE,
 		ACC_FIELD_ILLEGAL = ACC_STRICT|ACC_NATIVE|ACC_ABSTRACT | _ACC_DEFAULT|_ACC_ASYNC;
 
-	private static final char UNRELATED_MARKER = 32768, PARENT_MARKER = 16384;
-
 	protected final String source;
 	private final CharSequence code;
 
-	protected final TypeResolver types;
+	protected final ImportList importList;
 
 	protected int extraModifier;
 
@@ -96,18 +98,18 @@ public abstract class CompileUnit extends ClassNode {
 	// Supplementary
 	protected int miscFieldId;
 	public final MyHashSet<FieldNode> finalFields = new MyHashSet<>(Hasher.identity());
-	private final MyHashSet<Desc> abstractOrUnrelated = new MyHashSet<>();
-	private final ClassView overridableMethods = new ClassView(null, 0, "_", null);
-	private final List<MethodNode> methodCache = new SimpleList<>();
 
 	// code block task
-	private final List<ParseTask> lazyTasks = new SimpleList<>();
-	private final MyHashMap<Attributed, List<AnnotationPrimer>> annoTask = new MyHashMap<>();
+	private final SimpleList<ParseTask> lazyTasks = new SimpleList<>();
+	private final MyHashMap<Attributed, List<AnnotationPrimer>> annoTask = new LinkedMyHashMap<>();
 
 	protected final void addParseTask(ParseTask task) {lazyTasks.add(task);}
 	protected final void addAnnotations(Attributed node, List<AnnotationPrimer> list) {annoTask.put(node, list);}
 	protected final void commitAnnotations(Attributed node) {
-		if (!ctx.tmpAnnotations.isEmpty()) annoTask.put(node, new SimpleList<>(ctx.tmpAnnotations));
+		if (!ctx.tmpAnnotations.isEmpty()) {
+			annoTask.put(node, new SimpleList<>(ctx.tmpAnnotations));
+			ctx.tmpAnnotations.clear();
+		}
 	}
 
 	// Inner Class
@@ -118,20 +120,34 @@ public abstract class CompileUnit extends ClassNode {
 	protected LocalContext ctx;
 	public void _setCtx(LocalContext ctx) {this.ctx = ctx;}
 
-	public void setMinimumBinaryCompatibility(int level) {version = Math.max(JavaVersion(level), version);}
+	public void setMinimumBinaryCompatibility(int level) {
+		int javaVersion = JavaVersion(level);
+		if (javaVersion > version) {
+			version = javaVersion;
+			if (level > ctx.classes.getMaximumBinaryCompatibility())
+				ctx.report(Kind.ERROR, "cu.binaryIncompatible", level, ctx.classes.getMaximumBinaryCompatibility());
+		}
+	}
 
 	public CompileUnit(String name, String code) {
 		source = name;
 		this.code = code;
-		types = new TypeResolver();
+		importList = new ImportList();
 
 		_parent = this;
 	}
-
-	public TypeResolver getTypeResolver() {return types;}
+	public ImportList getImportList() {return importList;}
 	public LocalContext lc() {return ctx;}
 	public String getSourceFile() {return source;}
 	public CharSequence getCode() {return code;}
+
+	protected void attachJavadoc(Attributed node) {
+		Javadoc javadoc = ctx.lexer.javadoc;
+		if (javadoc != null) {
+			ctx.lexer.javadoc = null;
+			ctx.classes.createJavadocProcessor(javadoc, this).attach(node);
+		}
+	}
 
 	// region 文件中的其余类
 	protected CompileUnit(CompileUnit parent, boolean helperClass) {
@@ -139,7 +155,7 @@ public abstract class CompileUnit extends ClassNode {
 		ctx = parent.ctx;
 
 		if (ctx.classes.hasFeature(LavaFeatures.ATTR_SOURCE_FILE))
-			putAttr(parent.attrByName("SourceFile"));
+			addAttribute(parent.getRawAttribute("SourceFile"));
 
 		_parent = helperClass ? this : parent;
 
@@ -147,7 +163,7 @@ public abstract class CompileUnit extends ClassNode {
 		code = parent.ctx.lexer.getText();
 		classIdx = parent.ctx.lexer.index;
 
-		types = parent.types;
+		importList = parent.importList;
 	}
 
 	public abstract CompileUnit newAnonymousClass(@Nullable MethodNode mn) throws ParseException;
@@ -169,32 +185,33 @@ public abstract class CompileUnit extends ClassNode {
 				ownerMethod.parameters = mn.parameters();
 				ownerMethod.returnType = mn.returnType();
 			}
-			c.putAttr(ownerMethod);
+			c.addAttribute(ownerMethod);
 		}
 
-		if (ctx.classes.hasFeature(LavaFeatures.NESTED_MEMBER)) addNestMember(c);
+		if (ctx.classes.getMaximumBinaryCompatibility() >= LavaFeatures.JAVA_11)
+			addNestMember(c);
 
 		ctx.classes.addGeneratedClass(c);
 		return c;
 	}
 
 	public final void addNestMember(ClassNode c) {
-		assert ctx.classes.hasFeature(LavaFeatures.NESTED_MEMBER);
+		assert ctx.classes.getMaximumBinaryCompatibility() >= LavaFeatures.JAVA_11;
 
 		var top = _parent;
 		while (top._parent != top) top = top._parent;
 
-		if (c instanceof CompileUnit cu) cu.setMinimumBinaryCompatibility(LavaFeatures.COMPATIBILITY_LEVEL_JAVA_11);
-		top.setMinimumBinaryCompatibility(LavaFeatures.COMPATIBILITY_LEVEL_JAVA_11);
+		if (c instanceof CompileUnit cu) cu.setMinimumBinaryCompatibility(LavaFeatures.JAVA_11);
+		top.setMinimumBinaryCompatibility(LavaFeatures.JAVA_11);
 
-		c.putAttr(new AttrString("NestHost", top.name));
-		AttrClassList nestMembers = (AttrClassList) top.attrByName("NestMembers");
-		if (nestMembers == null) top.putAttr(nestMembers = new AttrClassList(Attribute.NestMembers));
+		c.addAttribute(new StringAttribute("NestHost", top.name));
+		ClassListAttribute nestMembers = (ClassListAttribute) top.getRawAttribute("NestMembers");
+		if (nestMembers == null) top.addAttribute(nestMembers = new ClassListAttribute(Attribute.NestMembers));
 		nestMembers.value.add(c.name());
 	}
 	public final List<InnerClasses.Item> innerClasses() {
-		InnerClasses c = parsedAttr(cp, Attribute.InnerClasses);
-		if (c == null) putAttr(c = new InnerClasses());
+		InnerClasses c = getAttribute(cp, Attribute.InnerClasses);
+		if (c == null) addAttribute(c = new InnerClasses());
 		return c.classes;
 	}
 	// endregion
@@ -202,9 +219,6 @@ public abstract class CompileUnit extends ClassNode {
 	// region 阶段1 类的结构 辅助方法 resolve MODIFIER TYPE GENERIC ANNOTATION
 	public final int readModifiers(JavaLexer wr, int mask) throws ParseException {
 		if ((mask & _ACC_ANNOTATION) != 0) ctx.tmpAnnotations.clear();
-		if ((mask & _ACC_JAVADOC) != 0) {
-			// TODO javadoc
-		}
 
 		Word w;
 		int acc = 0;
@@ -256,6 +270,7 @@ public abstract class CompileUnit extends ClassNode {
 
 	public static final int TYPE_PRIMITIVE = 1, TYPE_GENERIC = 2, TYPE_NO_ARRAY = 4, TYPE_ALLOW_VOID = 8;
 	protected static final int GENERIC_INNER = 8, SKIP_TYPE_PARAM = 16;
+	private static final int GENERIC_TERMINATE = 32;
 	// this function only invoke on Stage 4
 	public final IType readType(@MagicConstant(flags = {TYPE_PRIMITIVE, TYPE_GENERIC, TYPE_NO_ARRAY, TYPE_ALLOW_VOID}) int flags) throws ParseException {
 		IType type = readType(ctx.lexer, flags);
@@ -271,7 +286,7 @@ public abstract class CompileUnit extends ClassNode {
 		IType type = FastPrimitive.get(w.type());
 
 		if (type == null) {
-			if (w.type() != LITERAL) throw wr.err("type.illegalType:"+w.val());
+			if (w.type() != LITERAL) throw wr.err("type.illegalType0\1"+w.val()+"\0");
 			wr.retractWord();
 
 			String klass = readRef();
@@ -281,8 +296,11 @@ public abstract class CompileUnit extends ClassNode {
 				wr.state = STATE_TYPE;
 
 				try {
-					if (wr.nextIf(lss))
-						return readGeneric(klass, flags&(TYPE_NO_ARRAY|GENERIC_INNER));
+					w = wr.next();
+					if (w.type() == lss) {
+						return readGeneric(klass, w, flags&(TYPE_NO_ARRAY|GENERIC_INNER));
+					}
+					wr.retractWord();
 				} finally {
 					wr.state = prev;
 				}
@@ -337,7 +355,7 @@ public abstract class CompileUnit extends ClassNode {
 				sb.append("*");
 				break;
 			} else {
-				throw wr.err("unexpected:"+w.val());
+				throw wr.err("unexpected\1"+w.val()+"\0");
 			}
 
 			if (!wr.nextIf(dot)) break;
@@ -350,7 +368,7 @@ public abstract class CompileUnit extends ClassNode {
 	public final IType readGenericPart(String type) throws ParseException {
 		int prev = ctx.lexer.setState(STATE_TYPE);
 		try {
-			return readGeneric(type, 0);
+			return readGeneric(type, ctx.lexer.current(), GENERIC_INNER);
 		} finally {
 			ctx.lexer.state = prev;
 		}
@@ -358,68 +376,67 @@ public abstract class CompileUnit extends ClassNode {
 	/**
 	 * 解析泛型部件 (从&lt;开始，不包括&lt;)
 	 */
-	private IType readGeneric(String type, int flags) throws ParseException {
+	private IType readGeneric(String type, Word w, int flags) throws ParseException {
 		var wr = ctx.lexer;
 
 		var g = new LPGeneric();
 		g.pos = wr.index;
 		g.owner = type;
 
-		Word w = wr.next();
-
-		if (w.type() == gtr) {
-			// 钻石操作符<>
-			if (g.children.isEmpty()) {
+		if (w.type() == lss) {
+			if (wr.nextIf(gtr)) {
 				if ((flags&GENERIC_INNER) != 0) ctx.report(Kind.ERROR, "type.illegalAnyType");
 				else g.addChild(Asterisk.anyGeneric);
-			}
-		} else while (true) {
-			byte extendType = 0;
-			// <? extends|super Type
-			if (w.type() == ask) {
-				w = wr.next();
-				switch (w.type()) {
-					// A<? super
-					case SUPER: extendType = Generic.EX_SUPER; break;
-					case EXTENDS: extendType = Generic.EX_EXTENDS; break;
-					// A<?,
-					case comma: wr.retractWord(); g.addChild(Signature.any()); continue;
-					default: wr.unexpected(w.val(), "type.except.afterAsk");
-				}
+
+				flags |= GENERIC_TERMINATE;
 			} else {
-				wr.retractWord();
+				do {
+					byte extendType = 0;
+					// <? extends|super Type
+					if (wr.nextIf(ask)) {
+						w = wr.next();
+						switch (w.type()) {
+							// A<? super
+							case SUPER: extendType = Generic.EX_SUPER; break;
+							case EXTENDS: extendType = Generic.EX_EXTENDS; break;
+							// A<?,
+							case comma, gtr: g.addChild(Signature.any()); continue;
+							default: wr.unexpected(w.val(), "type.except.afterAsk");
+						}
+					}
+
+					// A <Type>
+					var child = readType(wr, (extendType == 0 ? TYPE_PRIMITIVE|TYPE_GENERIC|GENERIC_INNER : TYPE_GENERIC|GENERIC_INNER));
+
+					if (extendType != 0) {
+						if (child instanceof LPGeneric gp) {
+							gp.extendType = extendType;
+						} else if (child instanceof TypeParam tp) {
+							tp.extendType = extendType;
+						} else {
+							var gp = new LPGeneric();
+							gp.extendType = extendType;
+							gp.owner = child.owner();
+							gp.setArrayDim(child.array());
+
+							child = gp;
+						}
+					}
+
+					g.addChild(child);
+
+					w = wr.next();
+				} while (w.type() == comma);
+
+				if (w.type() != gtr) wr.unexpected(w.val(), "type.except.afterLss");
 			}
 
-			// A <Type>
-			var child = readType(wr, (extendType == 0 ? TYPE_PRIMITIVE|TYPE_GENERIC|GENERIC_INNER : TYPE_GENERIC|GENERIC_INNER));
-			if (extendType != 0) {
-				if (child instanceof LPGeneric gp) {
-					gp.extendType = extendType;
-				} else if (child instanceof TypeParam tp) {
-					tp.extendType = extendType;
-				} else {
-					var gp = new LPGeneric();
-					gp.extendType = extendType;
-					gp.owner = child.owner();
-					gp.setArrayDim(child.array());
-
-					child = gp;
-				}
-			}
-
-			g.addChild(child);
-
-			w = wr.next();
-			if (w.type() != comma) break;
 			w = wr.next();
 		}
 
-		if (w.type() != gtr) wr.unexpected(w.val(), "type.except.afterLss");
-		w = wr.next();
-
 		// GenericSub
-		if (w.type() == dot) {
-			IType sub = readGeneric(wr.except(LITERAL).val(), TYPE_NO_ARRAY);
+		if ((flags & GENERIC_TERMINATE) == 0 && w.type() == dot) {
+			IType sub = readGeneric(wr.except(LITERAL).val(), wr.next(), TYPE_NO_ARRAY);
 			// 无法从参数化的类型中选择静态类
 			if (!(sub instanceof LPGeneric gp)) ctx.report(Kind.ERROR, "type.partialGenericSub", sub);
 			else {
@@ -442,7 +459,8 @@ public abstract class CompileUnit extends ClassNode {
 		}
 
 		wr.retractWord();
-		return g;
+		// TODO 我记得以前写了个方法？不过我现在没有IDE
+		return g.children.isEmpty() && g.sub == null ? Type.klass(g.owner, g.array()) : g;
 	}
 
 	protected final LPSignature makeSignature() {
@@ -458,7 +476,7 @@ public abstract class CompileUnit extends ClassNode {
 		sign.type = (byte) kind;
 
 		sign.applyTypeParam(attr instanceof MethodNode mn ? mn : null);
-		if (attr != null) attr.putAttr(sign);
+		if (attr != null) attr.addAttribute(sign);
 		return sign;
 	}
 
@@ -534,32 +552,36 @@ public abstract class CompileUnit extends ClassNode {
 				}
 			}
 
-			if (w.type() != rParen) throw wr.err(a.valueOnly ? "cu.annotation.valueOnly" : "unexpected:"+w.val());
+			if (w.type() != rParen) throw wr.err(a.valueOnly ? "cu.annotation.valueOnly" : "unexpected\1"+w.val()+"\0");
 
 			if (!wr.nextIf(at)) return list;
 		}
 	}
 	// endregion
-	// region 阶段2 解析并验证类自身的引用
-	public void S2_ResolveSelf() {
+	// region 阶段2 解析引用
+	// region 2.1 名称引用
+	/**
+	 * Stage 2 (1/3) 并行解析本类的名称引用.
+	 * 该阶段使用Stage 1已知的包名和类名和导入
+	 * 本阶段将类【继承，实现，方法，字段，permits，注解】中的引用类名解析为全限定名称
+	 */
+	public void S2_ResolveName() {
 		var ctx = LocalContext.get();
 		ctx.setClass(this);
-
-		// init TypeResolver
-		types.init(ctx);
-		var wr = ctx.lexer;
-
 		ctx.errorReportIndex = classIdx;
+		// TypeResolver
+		importList.init(ctx);
 		var s1 = signature;
+		// class
 		if (s1 != null) {
 			currentNode = s1;
 			s1.resolve(ctx);
 		}
-
+		// fields
 		for (int i = 0; i < fieldIdx.size(); i++) {
 			ctx.errorReportIndex = fieldIdx.get(i);
 			var field = fields.get(i);
-			var s = (LPSignature) field.attrByName("Signature");
+			var s = (LPSignature) field.getRawAttribute("Signature");
 			if (s != null) {
 				currentNode = s;
 				s.resolve(ctx);
@@ -571,10 +593,11 @@ public abstract class CompileUnit extends ClassNode {
 
 			ctx.disableRawTypeWarning = false;
 		}
+		// methods
 		for (int i = 0; i < methodIdx.size(); i++) {
 			ctx.errorReportIndex = methodIdx.get(i);
 			var method = methods.get(i);
-			var s = (LPSignature) method.attrByName("Signature");
+			var s = (LPSignature) method.getRawAttribute("Signature");
 			List<Type> par = method.parameters();
 			if (s != null) {
 				currentNode = s;
@@ -592,7 +615,7 @@ public abstract class CompileUnit extends ClassNode {
 		ctx.errorReportIndex = classIdx;
 
 		// extends
-		var pInfo = types.resolve(ctx, parent());
+		var pInfo = importList.resolve(ctx, parent());
         if (pInfo == null) {
 			ctx.report(Kind.ERROR, "symbol.error.noSuchSymbol", "symbol.type", parent(), name+".parent");
 		} else {
@@ -610,7 +633,7 @@ public abstract class CompileUnit extends ClassNode {
 		var itfs = interfaces;
 		for (int i = 0; i < itfs.size(); i++) {
 			String iname = itfs.get(i).name().str();
-			var info = types.resolve(ctx, iname);
+			var info = importList.resolve(ctx, iname);
             if (info == null) {
 				ctx.report(Kind.ERROR, "symbol.error.noSuchSymbol", "symbol.type", iname, name+".interface["+i+"]");
 			} else {
@@ -625,12 +648,12 @@ public abstract class CompileUnit extends ClassNode {
 
 		// permits
 		if ((extraModifier&_ACC_SEALED) != 0) {
-			var ps = (AttrClassList) attrByName("PermittedSubclasses");
+			var ps = (ClassListAttribute) getRawAttribute("PermittedSubclasses");
 
 			List<String> value = ps.value;
 			for (int i = 0; i < value.size(); i++) {
 				String type = value.get(i);
-				var info = types.resolve(ctx, type);
+				var info = importList.resolve(ctx, type);
 
 				if (info == null) {
 					ctx.report(Kind.ERROR, "symbol.error.noSuchSymbol", "symbol.type", type, name+".permits["+i+"]");
@@ -645,7 +668,10 @@ public abstract class CompileUnit extends ClassNode {
 			resolveAnnotationTypes(ctx, list);
 		}
 	}
-	// call by BlockParser
+	/**
+	 * 解析注解类型引用.
+	 * 也会被{@link BlockParser}调用
+	 */
 	public void resolveAnnotationTypes(LocalContext ctx, List<AnnotationPrimer> list) {
 		for (int i = 0; i < list.size(); i++) {
 			var a = list.get(i);
@@ -666,34 +692,49 @@ public abstract class CompileUnit extends ClassNode {
 		}
 	}
 	private void resolveAnnotationType(LocalContext ctx, AnnotationPrimer a) {
-		var type = types.resolve(ctx, a.type());
+		var type = importList.resolve(ctx, a.type());
 		if (type == null) {
 			ctx.report(a.pos, Kind.ERROR, "symbol.error.noSuchSymbol", "symbol.type", a.type(), ctx.currentCodeBlockForReport());
 		} else {
 			a.setType(type.name());
 		}
 	}
-
-	public void S2_ResolveRef() {
+	// endregion
+	// region 2.2 类型引用
+	/**
+	 * Stage 2 (2/3) 并行解析本类的类引用.
+	 * 该阶段使用Stage 2.1解析的全限定名称，以获取类的对象
+	 * 本阶段将进行循环继承，泛型异常，密封类完整性等检查
+	 * 本阶段还将生成默认构造器和枚举、记录类的默认方法
+	 * 注：方法的throws也在2.2解析，虽然应当在2.1解析，但是在2.2能同时判断是否instanceof Throwable
+	 */
+	public void S2_ResolveType() {
 		var ctx = LocalContext.get();
 		ctx.setClass(this);
 
 		ctx.errorReportIndex = classIdx;
-
 		// 检测循环继承
 		ctx.getParentList(this);
 
 		String parent = parent();
-		// 泛型异常
+		// 检测泛型异常
 		if (signature != null && ctx.instanceOf(parent, "java/lang/Throwable")) {
 			ctx.report(Kind.ERROR, "cu.genericException");
 		}
+		// 不能静态继承非静态类
+		var parentInfo = ctx.classes.getClassInfo(parent);
+		var icFlag = ctx.classes.getInnerClassFlags(parentInfo).get(parent);
+		if (icFlag != null && (icFlag.modifier&ACC_STATIC) == 0) {
+			if (_parent != this) {
+				ctx.castTo(Type.klass(_parent.name()), Type.klass(icFlag.parent), 0);
+			} else {
+				ctx.report(Kind.ERROR, "cu.inheritNonStatic", icFlag.parent);
+			}
+		}
 
-		overridableMethods.methods = new SimpleList<>();
-		overridableMethods.interfaces = Collections.emptyList();
 		var names = ctx.getTmpSet();
 
-		// 收集继承方法
+		// 权限和密封类完整性检查
 		{
 		int i = 0;
 		var itfs = interfaces;
@@ -702,10 +743,9 @@ public abstract class CompileUnit extends ClassNode {
 			var info = ctx.classes.getClassInfo(name);
 
 			ctx.assertAccessible(info);
-			collectMethods(ctx, info, i != 0);
 
-			// 检查自身是否继承自密封类
-			var ps = info.parsedAttr(info.cp, Attribute.PermittedSubclasses);
+			// 检查是否继承自密封类
+			var ps = info.getAttribute(info.cp, Attribute.PermittedSubclasses);
 			if (ps != null) {
 				if ((extraModifier&(_ACC_SEALED|_ACC_NON_SEALED|ACC_FINAL)) == 0) {
 					ctx.report(Kind.ERROR, "cu.sealed.missing");
@@ -721,9 +761,9 @@ public abstract class CompileUnit extends ClassNode {
 		}
 		}
 
-		// 检查子类是否实现密封类
+		// 检查permits的子类是否真的继承了我
 		if ((extraModifier&_ACC_SEALED) != 0) {
-			var ps = (AttrClassList) attrByName("PermittedSubclasses");
+			var ps = (ClassListAttribute) getRawAttribute("PermittedSubclasses");
 
 			List<String> value = ps.value;
 			for (int i = 0; i < value.size(); i++) {
@@ -737,9 +777,10 @@ public abstract class CompileUnit extends ClassNode {
 			}
 		}
 
+		// 是否需要生成默认构造器
 		// use extraModifier so that anonymous class can disable it
-		boolean autoInit = (extraModifier & ACC_INTERFACE) == 0;
-		// 方法冲突在这里检查，因为stage0/1拿不到完整的rawDesc
+		boolean generateConstructor = (extraModifier & ACC_INTERFACE) == 0;
+
 		names.clear();
 		List<MethodNode> methods = this.methods;
 		for (int i = 0; i < methodIdx.size(); i++) {
@@ -747,23 +788,28 @@ public abstract class CompileUnit extends ClassNode {
 			var method = methods.get(i);
 
 			String par = method.rawDesc();
+			// 方法定义冲突在该阶段检查，因为更早的阶段拿不到完整的全限定参数类型
 			if (!names.add(method.name()+par.substring(0, par.lastIndexOf(')')+1)))
-				ctx.report(Kind.ERROR, "cu.nameConflict", this.name, "invoke.method", method.name());
+				ctx.report(Kind.ERROR, "cu.nameConflict", this.name, "invoke.method", TypeHelper.humanize(Type.methodDesc(par), method.name(), false));
+
+			if ((modifier&ACC_INTERFACE) != 0 && (method.modifier&ACC_ABSTRACT) == 0 && ctx.classes.getClassInfo("java/lang/Object").getMethodObj(method.name(), method.rawDesc()) != null) {
+				ctx.report(Kind.ERROR, "cu.override.interfaceObject", method.owner, method.name());
+			}
 
 			if ((modifier&ACC_ANNOTATION) != 0 && (method.modifier&ACC_STATIC) == 0) {
 				checkAnnotationReturnType(method.returnType());
 			}
 
 			if (method.name().equals("<init>")) {
-				autoInit = false;
+				generateConstructor = false;
 			}
 
-			// resolve异常
-			AttrClassList exThrown = (AttrClassList) method.attrByName("Exceptions");
+			// 解析方法抛出的异常
+			ClassListAttribute exThrown = (ClassListAttribute) method.getRawAttribute("Exceptions");
 			if (exThrown != null) {
 				List<String> classes = exThrown.value;
 				for (int j = 0; j < classes.size(); j++) {
-					IClass info = types.resolve(ctx, classes.get(j));
+					IClass info = importList.resolve(ctx, classes.get(j));
 					if (info == null) {
 						ctx.report(Kind.ERROR, "symbol.error.noSuchClass", classes.get(i));
 					} else {
@@ -777,39 +823,18 @@ public abstract class CompileUnit extends ClassNode {
 				}
 			}
 		}
-
-		autoInit:
-		if (autoInit) {
-			if ((modifier&ACC_ENUM) != 0) {
+		// region 枚举的默认方法生成
+		if ((modifier&ACC_ENUM) != 0) {
+			if (generateConstructor) {
 				var cw = glinit = newWritableMethod(ACC_PUBLIC|ACC_SYNTHETIC, "<init>", "(Ljava/lang/String;I)V");
 				cw.visitSize(3,3);
 				cw.one(ALOAD_0);
 				cw.one(ALOAD_1);
 				cw.one(ILOAD_2);
 				cw.invoke(INVOKESPECIAL, "java/lang/Enum", "<init>", "(Ljava/lang/String;I)V");
-				break autoInit;
+				generateConstructor = false;
 			}
 
-			var pInfo = ctx.classes.getClassInfo(parent);
-
-			int superInit = pInfo.getMethod("<init>", "()V");
-			if (superInit < 0) {
-				ctx.report(Kind.ERROR, "cu.noDefaultConstructor", parent);
-				break autoInit;
-			}
-
-			var mn = pInfo.methods().get(superInit);
-			ctx.checkAccessible(pInfo, mn, false, true);
-			if (_parent != this) j11PrivateConstructor(mn);
-
-			var cw = glinit = newWritableMethod(ACC_PUBLIC|ACC_SYNTHETIC, "<init>", "()V");
-			cw.visitSize(1,1);
-			cw.one(ALOAD_0);
-			cw.invoke(INVOKESPECIAL, parent, "<init>", "()V");
-		}
-
-		// 枚举类的默认方法
-		if ((modifier&ACC_ENUM) != 0) {
 			String arrayType_ = "[L"+name+";";
 
 			//int fid = getField("$VALUES");
@@ -846,83 +871,159 @@ public abstract class CompileUnit extends ClassNode {
 				ctx.report(methodIdx.get(mid), Kind.ERROR, "cu.enumMethod");
 			}
 		}
-	}
-	// 检测抽象方法，可以覆盖的方法和多个default
-	private void collectMethods(LocalContext ctx, IClass info, boolean itf) {
-		var d = ctx.tmpNat;
-		MyHashSet<Desc> hasDefault = Helpers.cast(ctx.tmpSet);
+		// endregion
+		// region 记录和结构体的默认方法生成
+		recordDefaults:
+		if ((extraModifier&_ACC_RECORD) != 0) {
+			var bArguments = new SimpleList<Constant>();
+			var fieldNames = new CharList();
+			bArguments.add(cp.getClazz(name));
+			bArguments.add(null);
 
-		for (ComponentList list : ctx.classes.getResolveHelper(info).getMethods(ctx.classes).values()) {
-			var list1 = list.getMethods();
-			for (int i = 0; i < list1.size(); i++) {
-				var node = list1.get(i);
-				if ((node.modifier&ACC_PRIVATE) != 0) continue;
-				if (node.name().startsWith("<")) continue;
-				if (itf && node.owner.equals("java/lang/Object")) continue;
+			for (int i = 0; i < miscFieldId; i++) {
+				var field = fields.get(i);
 
-				String param = node.rawDesc();
-				param = param.substring(0, param.lastIndexOf(')')+1);
+				fieldNames.append(field.name()).append(';');
+				bArguments.add(cp.getMethodHandle(name, field.name(), field.rawDesc(), BootstrapMethods.Kind.GETFIELD, Constant.FIELD));
 
-				d.owner = node.owner;
-				d.name = node.name();
-				d.param = param;
+				int mid = getMethod(field.name(), "()"+field.rawDesc());
+				CodeWriter w;
 
-				if ((node.modifier & ACC_ABSTRACT) != 0) {
-					// 不检测权限，就像你没法继承ByteBuffer一样
-					if ((modifier&ACC_ABSTRACT) == 0) {
-						// 如果已经有实现，那就不处理抽象
-						if (hasDefault.contains(d)) continue;
+				if (mid < 0) {
+					w = newMethod(ACC_PUBLIC|ACC_FINAL, field.name(), "()"+field.rawDesc());
+					Type fieldType = field.fieldType();
+					w.visitSize(fieldType.length(), 1);
+					w.one(ALOAD_0);
+					w.field(GETFIELD, this, i);
+					w.one(fieldType.shiftedOpcode(ARETURN));
+					w.finish();
 
-						// 虽然有点像下面的，但目的只是让owner更具体
-						var d1 = abstractOrUnrelated.intern(d);
-						if (d != d1) {
-							if (ctx.getParentList(info).containsValue(d1.owner)) {
-								assert itf;
-								d1.flags = (char) cacheMethod(node);
-								d1.owner = d.owner;
-							}
-						} else {
-							d.flags = (char) (cacheMethod(node) | (itf ? 0 : PARENT_MARKER));
-							d = new NameAndType();
-						}
+					var sign = ((LPSignature) field.getRawAttribute("Signature"));
+					if (sign != null) {
+						Signature attr = new Signature(Signature.METHOD);
+						attr.values = sign.values;
+						w.mn.addAttribute(attr);
 					}
-				} else if (itf && (node.modifier&ACC_STATIC) == 0) {
-					// 这里也是相同的部分，不过处理相反的顺序：
-					// 如果已经有实现，那就不处理抽象
-					var existing = abstractOrUnrelated.find(d);
-					if (existing != d && (existing.flags&(UNRELATED_MARKER|PARENT_MARKER)) == 0)
-						abstractOrUnrelated.remove(d);
-
-					var d1 = hasDefault.intern(d);
-					if (d != d1) {
-						if (ctx.getParentList(info).containsValue(d1.owner)) {
-							d1.flags = (char) (cacheMethod(node) | UNRELATED_MARKER);
-							d1.owner = d.owner;
-						} else if (!ctx.getParentList(ctx.classes.getClassInfo(d1.owner)).containsValue(d.owner)) {
-							abstractOrUnrelated.add(d1);
-						}
-					} else {
-						d.flags = (char) (cacheMethod(node) | UNRELATED_MARKER);
-						d = new NameAndType();
-					}
-				}
-
-				if (ctx.checkAccessible(info, node, false, false)) {
-					if (getMethod(node.name()) >= 0) {
-						List<?> methods1 = overridableMethods.methods;
-						methods1.add(Helpers.cast(node));
-					}
+				} else if (methods.get(mid).modifier != (ACC_PUBLIC)) {
+					ctx.report(methodIdx.get(mid), Kind.ERROR, "cu.enumMethod");
 				}
 			}
-		}
 
-		ctx.tmpNat = d;
+			if (generateConstructor) {
+				generateConstructor = false;
+
+				var cw = newWritableMethod(ACC_PUBLIC|ACC_SYNTHETIC, "<init>", "()V");
+				cw.one(ALOAD_0);
+				cw.invoke(INVOKESPECIAL, "java/lang/Record", "<init>", "()V");
+
+				List<Type> parameters = methods.get(methods.size() - 1).parameters();
+				for (int i = 0; i < miscFieldId; i++) parameters.add(fields.get(i).fieldType());
+
+				int slot = 1, stack = 1;
+				for (int i = 0; i < miscFieldId; i++) {
+					finalFields.remove(fields.get(i));
+					Type fieldType = fields.get(i).fieldType();
+
+					cw.one(ALOAD_0);
+					cw.varLoad(fieldType, slot);
+					cw.field(PUTFIELD, this, i);
+
+					slot += fieldType.length();
+					stack = Math.max(stack, 1+fieldType.length());
+				}
+				cw.visitSize(stack, slot);
+
+				cw.one(Opcodes.RETURN);
+				cw.finish();
+			}
+
+			if ((extraModifier & _ACC_STRUCT) != 0) break recordDefaults;
+
+			if (fieldNames.length() > 0) fieldNames.setLength(fieldNames.length()-1);
+			bArguments.set(1, new CstString(fieldNames.toStringAndFree()));
+
+			int refId = addLambdaRef(new BootstrapMethods.Item(
+					"java/lang/runtime/ObjectMethods",
+					"bootstrap",
+					"(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/TypeDescriptor;Ljava/lang/Class;Ljava/lang/String;[Ljava/lang/invoke/MethodHandle;)Ljava/lang/Object;",
+					BootstrapMethods.Kind.INVOKESTATIC,
+					Constant.METHOD,
+					bArguments
+			));
+
+			// 嗯，因为当然标准库有了
+			//  1. 以后降版本的话可以考虑一下模拟
+			//  2. 不降版本可以试试这么实现@EqualsAndHashCode注解，only for final
+			int mid = getMethod("toString", "()Ljava/lang/String;");
+			CodeWriter w;
+
+			if (mid < 0) {
+				var cw = newWritableMethod(ACC_PUBLIC|ACC_FINAL|ACC_SYNTHETIC, "toString", "()Ljava/lang/String;");
+				cw.visitSize(2, 1);
+				cw.one(ALOAD_0);
+				cw.invokeDyn(refId, "toString", "(L"+name+";)Ljava/lang/String;", 0);
+				cw.one(ARETURN);
+				cw.finish();
+			} else if (methods.get(mid).modifier != (ACC_PUBLIC|ACC_FINAL)) {
+				ctx.report(methodIdx.get(mid), Kind.ERROR, "cu.enumMethod");
+			}
+
+			mid = getMethod("hashCode", "()I");
+			if (mid < 0) {
+				w = newMethod(ACC_PUBLIC|ACC_FINAL|ACC_SYNTHETIC, "hashCode", "()I");
+				w.visitSize(1, 1);
+				w.one(ALOAD_0);
+				w.invokeDyn(refId, "hashCode", "(L"+name+";)I", 0);
+				w.one(IRETURN);
+				w.finish();
+			} else if (methods.get(mid).modifier != (ACC_PUBLIC|ACC_FINAL)) {
+				ctx.report(methodIdx.get(mid), Kind.ERROR, "cu.enumMethod");
+			}
+
+			mid = getMethod("equals", "(Ljava/lang/Object;)Z");
+			if (mid < 0) {
+				w = newMethod(ACC_PUBLIC|ACC_FINAL|ACC_SYNTHETIC, "equals", "(Ljava/lang/Object;)Z");
+				w.visitSize(2, 2);
+				w.one(ALOAD_0);
+				w.one(ALOAD_1);
+				w.invokeDyn(refId, "equals", "(L"+name+";Ljava/lang/Object;)Z", 0);
+				w.one(IRETURN);
+				w.finish();
+			} else if (methods.get(mid).modifier != (ACC_PUBLIC|ACC_FINAL)) {
+				ctx.report(methodIdx.get(mid), Kind.ERROR, "cu.enumMethod");
+			}
+		}
+		// endregion
+		if (isNonStaticInnerClass()) newField(Opcodes.ACC_SYNTHETIC | Opcodes.ACC_FINAL, NestContext.InnerClass.FIELD_HOST_REF, Type.klass(_parent.name()));
+		generateConstructor:
+		if (generateConstructor) {
+			var pInfo = ctx.classes.getClassInfo(parent);
+
+			var mn = pInfo.getMethodObj("<init>", "()V");
+			if (mn != null) {
+				ctx.checkAccessible(pInfo, mn, false, true);
+				if (_parent != this) j11PrivateConstructor(mn);
+			} else if (pInfo.getMethodObj("<init>") != null) {
+				// 2.2阶段其实没法保证方法的确定性，但是已知只会生成无参构造器，就能在这里做检查了.
+				// 如果存在任意有参构造器，就不会生成默认的无参public构造器了
+				ctx.report(Kind.ERROR, "cu.noDefaultConstructor", parent);
+				break generateConstructor;
+			}
+
+			var cw = glinit = newWritableMethod(ACC_PUBLIC|ACC_SYNTHETIC, "<init>", isNonStaticInnerClass() ? "(L"+_parent.name()+";)V" : "()V");
+			cw.visitSize(1,1);
+			cw.one(ALOAD_0);
+			if (!parentArg.equals("()V")) cw.one(ALOAD_1);
+			cw.invoke(INVOKESPECIAL, parent, "<init>", parentArg);
+			if (parentArg.equals("()V")) {
+				cw.one(ALOAD_0);
+				cw.one(ALOAD_1);
+				cw.field(PUTFIELD, this, fields.size()-1);
+			}
+		}
 	}
-	private int cacheMethod(MethodNode node) {
-		var cache = methodCache;
-		cache.add(node);
-		return cache.size();
-	}
+	public boolean isNonStaticInnerClass() {return _parent != this && (extraModifier&ACC_STATIC) == 0;}
+	// 如果本类是注解类型，那么检测方法返回值是否被JVM允许
 	private void checkAnnotationReturnType(Type type) {
 		if (type.owner != null && !type.owner.equals("java/lang/String")) {
 			if (name.equals(type.owner)) {
@@ -935,76 +1036,197 @@ public abstract class CompileUnit extends ClassNode {
 			}
 		}
 	}
-
-	private MethodWriter newWritableMethod(int acc, String name, String desc) {
+	// used to create enum constructor
+	public final MethodWriter newWritableMethod(int acc, String name, String desc) {
 		var mn = new MethodNode(acc, this.name, name, desc);
 		methods.add(mn);
 		if ((acc & (ACC_ABSTRACT|ACC_NATIVE)) != 0) return Helpers.nonnull();
-		var cw = ctx.classes.createMethodWriter(this, mn);
-		mn.putAttr(new AttrCodeWriter(cp, mn, cw));
+		var cw = ctx.createMethodWriter(this, mn);
+		mn.addAttribute(new AttrCodeWriter(cp, mn, cw));
 		return cw;
 	}
 	// endregion
-	// region 阶段3 注解处理 MethodDefault
-	void _setSign(Attributed merhod) {
-		var sign = (LPSignature) merhod.attrByName("Signature");
-		currentNode = sign != null ? sign : signature;
-	}
-	public void S3_Annotation() throws ParseException {
+	// region 2.3 方法引用
+	private static final char __ACC_UNRELATED = 32768, __ACC_INHERITED = 16384;
+	/**
+	 * Stage 2 (3/3) 并行解析本类的方法
+	 * 该阶段使用Stage 2.2生成的方法（如有）
+	 * 本阶段将构建重载列表，验证方法参数
+	 */
+	public void S2_ResolveMethod() {
 		var ctx = LocalContext.get();
 		ctx.setClass(this);
+		ctx.errorReportIndex = classIdx;
 
-		// region 方法覆盖检测
-		var ovrh = new ResolveHelper(overridableMethods);
-		var parh = ctx.classes.getResolveHelper(ctx.classes.getClassInfo(parent()));
+		final MyHashSet<Desc> implementCheck = Helpers.cast(ctx.tmpSet);
+		implementCheck.clear();
+		final var overridableMethods = new MyHashMap<NameAndType, MethodResult>();
+
+		// 搜索抽象方法，可重载的方法，Unrelated
+		{
+			List<ClassNode> inherits = new SimpleList<>();
+
+			// 从一级父类获取，这样不会混入本类的方法
+			int i = 0;
+			var itfs = interfaces;
+			var name = parent();
+			while (true) {
+				var info = ctx.classes.getClassInfo(name);
+				skip: {
+					for (int j = 0; j < inherits.size(); j++) {
+						// 如果被父类或其它接口实现了，那么跳过
+						if (ctx.getParentList(inherits.get(j)).containsValue(info.name())) {
+							break skip;
+						}
+					}
+
+					var myParent = ctx.getParentList(info);
+					// 这里是 > 而不是 >= 在当前类实现了接口而继承Object的情况下，如果是>=那么第0项会被替换掉，所以要避免
+					// 这个操作与下方的continue可以避免Object的方法被访问多次，不过好像没有意义（
+					for (int j = inherits.size()-1; j > 0; j--) {
+						// 如果又包括了别的接口
+						if (myParent.containsValue(inherits.get(j).name())) inherits.remove(j);
+					}
+
+					inherits.add(info);
+				}
+
+				if (i == itfs.size()) break;
+				name = itfs.get(i++).name().str();
+			}
+
+			var m = ctx.tmpNat;
+
+			for (i = 0; i < inherits.size(); i++) {
+				ClassNode info = inherits.get(i);
+				for (var cl : ctx.classes.getResolveHelper(info).getMethods(ctx.classes).values()) {
+					var methods = cl.getMethods();
+
+					for (int j = 0; j < methods.size(); j++) {
+						var method = methods.get(j);
+						if ((method.modifier&ACC_PRIVATE) != 0   // 私有方法
+								|| method.name().startsWith("<") // 构造器或静态初始化
+								|| (i != 0 && method.owner.equals("java/lang/Object")) // 接口中继承自Object的方法
+						) continue;
+
+						// MethodList里没有桥接方法，可以放心这么用
+						String param = method.rawDesc();
+						param = param.substring(0, param.lastIndexOf(')')+1);
+
+						m.owner = method.owner;
+						m.name = method.name();
+						m.param = param;
+
+						// 可能是继承自接口的方法
+						boolean isClass = i == 0 && (ctx.classes.getClassInfo(method.owner).modifier & ACC_INTERFACE) == 0;
+
+						if ((method.modifier&ACC_ABSTRACT) != 0) {
+							// 如果本类不是抽象的，那么必须实现所有的抽象方法，加入mustImplement以供后续代码检查是否真的实现了
+							// 这里不需要检测权限，就像没法继承ByteBuffer一样，没有public构造器过不了2.2阶段
+							if ((modifier&ACC_ABSTRACT) == 0) {
+								// implementCheck包括这些类型:
+								// 1. 父类的抽象方法 => 无法被接口默认实现 (PARENT)
+								// 2. 接口的抽象方法
+								// 3. 被多个接口实现的方法 (UNRELATED)
+								// 4. 非抽象方法
+								var existing = implementCheck.intern(m);
+								if (m == existing) {
+									// 状态 1 或 2
+									m.modifier = (char) ((isClass ? __ACC_INHERITED|(method.modifier&ACC_PUBLIC) : 0) | ACC_ABSTRACT);
+									m = new NameAndType();
+								}
+								// 状态转移 无
+							}
+						} else if ((method.modifier&ACC_STATIC) == 0) {
+							// 处理有实现的方法
+
+							// 当前类不再必须实现这个方法
+							var existing = implementCheck.intern(m);
+							if (existing == m) {
+								// 状态 4
+								m.modifier = (char) (isClass ? __ACC_INHERITED|(method.modifier&ACC_PUBLIC) : 0);
+								m = new NameAndType();
+							} else {
+								if ((existing.modifier & ACC_PUBLIC) == 0) {
+									existing.modifier |= __ACC_UNRELATED; // 状态转移: 2/4 => 3
+								}
+							}
+						}
+
+						// 重载&泛型
+						if (ctx.checkAccessible(info, method, false, false)) {
+							m.owner = method.owner;
+							m.name = method.name();
+							m.param = param;
+
+							var prev = overridableMethods.getEntry(m);
+							if (prev != null) {
+								char idx = prev.k.modifier;
+								ctx.errorReportIndex = idx == 0 ? classIdx : methodIdx.get(idx-1);
+								MethodResult value = genericCombine(prev.getValue(), method);
+								prev.setValue(value);
+								ctx.errorReportIndex = classIdx;
+							} else {
+								m.modifier = 0;
+								for (int k = 0; k < this.methods.size(); k++) {
+									var myMethod = this.methods.get(k);
+									if (method.name().equals(myMethod.name()) && myMethod.rawDesc().startsWith(param)) {
+										m.modifier = (char) (k+1);
+										break;
+									}
+								}
+
+								overridableMethods.put(m, genericCheckInit(method));
+								m = new NameAndType();
+							}
+						}
+					}
+				}
+			}
+
+			ctx.tmpNat = m;
+
+			/*// 删除2和4状态
+			for (var itr = implementCheck.iterator(); itr.hasNext(); ) {
+				if ((itr.next().modifier & (ACC_ABSTRACT | __ACC_UNRELATED)) == 0) {
+					itr.remove();
+				}
+			}
+			// 删除未被自己覆盖的overridable
+			for (Iterator<NameAndType> itr = overridableMethods.keySet().iterator(); itr.hasNext(); ) {
+				if (itr.next().modifier == 0) itr.remove();
+			}*/
+		}
+
 		var d = ctx.tmpNat;
 
-		int size = methods.size();
-		for (int i = 0; i < size; i++) {
-			var my = methods.get(i);
-			var ml = ovrh.findMethod(ctx.classes, my.name());
-			if (ml == null) continue;
+		for (int i = 0; i < methods.size(); i++) {
+			var impl = methods.get(i);
 
-			_setSign(my);
-			var rm = ctx.inferrer.getGenericParameters(this, my, null);
-
-			List<IType> params;
-			IType myRt;
-			if (rm.desc != null) {
-				var list = SimpleList.asModifiableList(rm.desc);
-				myRt = list.pop();
-				params = list;
-			} else {
-				myRt = my.returnType();
-				params = Helpers.cast(my.parameters());
-			}
-
-			ctx.inferrer.overrideMode = true;
-			var ri = ml.findMethod(ctx, Type.klass(name), params, ComponentList.NO_REPORT);
-			ctx.inferrer.overrideMode = false;
-			if (ri == null) continue;
-
-			ctx.errorReportIndex = methodIdx.get(i);
-
-			var it = ri.method;
-
-			String param = it.rawDesc();
-			d.name = it.name();
+			String param = impl.rawDesc();
+			d.name = impl.name();
 			d.param = param.substring(0, param.lastIndexOf(')')+1);
-			var d1 = abstractOrUnrelated.removeValue(d);
 
-			if (d1 != null && (d1.flags&PARENT_MARKER) != 0 && !ri.method.owner.equals(parent())) {
-				// 未能覆盖父类的方法——通常是权限不够
-				ri = parh.findMethod(ctx.classes, my.name()).findMethod(ctx, params, 0);
-				assert ri == null;
-				continue;
-			}
+			var inheritResult = overridableMethods.remove(d);
+			if (inheritResult == null) continue; // 如果不是重载方法
 
+			ctx.errorReportIndex = i >= methodIdx.size() ? -1 : methodIdx.get(i);
+
+			var myGenericInfo = ctx.inferrer.getGenericParameters(this, impl, null);
+			List<IType> myArgs = myGenericInfo.parameters();
+			IType myReturn = myGenericInfo.returnType();
+
+			var inherit = inheritResult.method;
+
+			var overrideGenericInfo = ctx.inferrer.inferOverride(ctx, inherit, Type.klass(name), myArgs);
+			if (overrideGenericInfo == null) continue;
+
+			implementCheck.removeValue(d);
 			// 检查覆盖静态或访问权限降低
-			checkDowngrade(my, it, ctx);
+			checkDowngrade(impl, inherit, ctx);
 
 			// 检测Override
-			var annotations = annoTask.getOrDefault(my, Collections.emptyList());
+			var annotations = annoTask.getOrDefault(impl, Collections.emptyList());
 			for (int j = 0; j < annotations.size(); j++) {
 				AnnotationPrimer a = annotations.get(j);
 				if (a.type().equals("java/lang/Override")) {
@@ -1014,66 +1236,183 @@ public abstract class CompileUnit extends ClassNode {
 				}
 			}
 
-			IType itRt = ri.desc != null ? ri.desc[ri.desc.length-1] : it.returnType();
+			IType overrideReturnType = overrideGenericInfo.returnType();
 
 			// 返回值更精确而需要桥接，或更不精确而无法覆盖
-			var cast = ctx.inferrer.overrideCast(myRt, itRt);
+			var cast = ctx.inferrer.overrideCast(myReturn, overrideReturnType);
 			if (cast.type != 0) {
-				String inline = "\1cu.override.returnType:\1typeCast.error."+cast.type+':'+myRt+':'+itRt+"\0\0";
-				ctx.report(Kind.ERROR, "cu.override.unable", name, it.owner, it, inline);
-			}
+				String inline = "cu.override.returnType:\1typeCast.error."+cast.type+':'+myReturn+':'+overrideReturnType+"\0";
+				ctx.report(Kind.ERROR, "cu.override.unable", name, inherit.owner, inherit, inline);
+			} else
 
 			// 生成桥接方法 这里不检测泛型(主要是TypeParam)
-			if (!it.rawDesc().equals(my.rawDesc())) {
-				createDelegation((it.modifier&(ACC_PUBLIC|ACC_PROTECTED)) | ACC_FINAL | ACC_SYNTHETIC | ACC_BRIDGE, my, it, true, false);
+			if (!inherit.rawDesc().equals(impl.rawDesc())) {
+				createDelegation((inherit.modifier&(ACC_PUBLIC|ACC_PROTECTED)) | ACC_FINAL | ACC_SYNTHETIC | ACC_BRIDGE, impl, inherit, true, false);
 			}
 
-			// 声明相同或更少的异常
-			var myThrows = rm.getExceptions(ctx);
-			if (!myThrows.isEmpty()) {
-				List<IType> itThrows = ri.getExceptions(ctx);
-				outer:
-				for (IType f : myThrows) {
-					if (ctx.castTo(f, Types.RUNTIME_EXCEPTION, TypeCast.E_NEVER).type == 0) continue;
+			if (!ctx.classes.hasFeature(LavaFeatures.DISABLE_CHECKED_EXCEPTION)) {
+				// 声明相同或更少的异常
+				var myThrows = myGenericInfo.getExceptions(ctx);
+				if (!myThrows.isEmpty()) {
+					List<IType> itThrows = overrideGenericInfo.getExceptions(ctx);
+					outer:
+					for (IType f : myThrows) {
+						if (ctx.castTo(f, Types.RUNTIME_EXCEPTION, TypeCast.E_NEVER).type == 0) continue;
 
-					for (IType type : itThrows) {
-						TypeCast.Cast c = ctx.castTo(f, type, TypeCast.E_NEVER);
-						if (c.type == 0) continue outer;
+						for (IType type : itThrows) {
+							TypeCast.Cast c = ctx.castTo(f, type, TypeCast.E_NEVER);
+							if (c.type == 0) continue outer;
+						}
+
+						String inline = "cu.override.thrown:"+f.owner().replace('/', '.');
+						ctx.report(Kind.ERROR, "cu.override.unable", name, inherit.owner.replace('/', '.'), inherit, inline);
 					}
-
-					String inline = "\1cu.override.thrown:"+f.owner().replace('/', '.')+'\0';
-					ctx.report(Kind.ERROR, "cu.override.unable", name, it.owner.replace('/', '.'), it, inline);
 				}
 			}
 		}
-		// endregion
 
 		ctx.errorReportIndex = classIdx;
-		for (Desc method : abstractOrUnrelated) {
-			if (!method.owner.equals(parent())) {
-				// check parent implement
-				var ml = parh.findMethod(ctx.classes, method.name);
-				if (ml != null) {
-					var mn = methodCache.get(method.flags&16383);
-					//Signature sign = mn.parsedAttr(info.cp(), Attribute.SIGNATURE);
-
-					var r = ml.findMethod(ctx, Helpers.cast(mn.parameters()), ComponentList.NO_REPORT);
-					if (r != null) {
-						checkDowngrade(r.method, mn, ctx);
-						continue;
-					}
-				}
-			}
-
-			if (method.flags == UNRELATED_MARKER) {
-				ctx.report(Kind.ERROR, "cu.unrelatedDefault", method, name.replace('/', '.'));
+		for (Desc method : implementCheck) {
+			if ((method.modifier&__ACC_UNRELATED) != 0) {
+				if ((method.modifier&__ACC_INHERITED) != 0) ctx.report(Kind.ERROR, "cu.unrelatedDefault.inherit", method, "");
+				else ctx.report(Kind.ERROR, "cu.unrelatedDefault", method, name.replace('/', '.'));
 			} else {
+				// 前面没做删除，所以在这里做检查
+				if ((method.modifier&ACC_ABSTRACT) == 0) continue;
+
 				ctx.report(Kind.ERROR, "cu.override.noImplement", name, method.owner.replace('/', '.'), method.name);
 			}
 		}
-		abstractOrUnrelated.clear();
+		implementCheck.clear();
+	}
+	private MethodResult genericCheckInit(MethodNode method) {
+		List<IType> resolvedGeneric = ctx.inferGeneric(Type.klass(name), method.owner);
+		return ctx.inferrer.getGenericParameters(ctx.classes.getClassInfo(method.owner), method, resolvedGeneric == null ? Type.klass(method.owner) : new Generic(method.owner, resolvedGeneric));
+	}
+	// 判断两个方法的泛型参数是否兼容
+	private MethodResult genericCombine(MethodResult prev, MethodNode method) {
+		var curr = genericCheckInit(method);
 
-		// check annotations
+		var arg1 = prev.parameters();
+		var arg2 = curr.parameters();
+
+		if (!arg1.equals(arg2)) {
+			String inline = "cu.override.rawArgument:\1typeCast.error.-98:"+arg1+':'+arg2+"\0";
+			ctx.report(Kind.ERROR, "cu.override.unable", prev.method.owner, method.owner, method.name(), inline);
+		}
+
+		IType oldReturnType = prev.returnType();
+		IType newReturnType = curr.returnType();
+		IType parent = ctx.getCommonParent(newReturnType, oldReturnType);
+
+		if (parent.equals(oldReturnType)) {
+			return curr;
+		} else if (parent.equals(newReturnType)) {
+			// no-op
+		} else {
+			String inline = "cu.override.returnType:\1typeCast.error.-3:"+oldReturnType+':'+newReturnType+"\0";
+			ctx.report(Kind.ERROR, "cu.override.unable", prev.method.owner, method.owner, method.name(), inline);
+		}
+
+		return prev;
+	}
+	// 访问权限是否降级以及能否override, 此处对override的函数已经具备访问权限
+	private void checkDowngrade(MethodNode my, MethodNode it, LocalContext ctx) {
+		if ((my.modifier&ACC_STATIC) != (it.modifier&ACC_STATIC)) {
+			String inline = "cu.override.static."+((my.modifier&ACC_STATIC) != 0 ? "self" : "other");
+			ctx.report(Kind.ERROR, "cu.override.unable", my.owner.replace('/', '.'), it.owner.replace('/', '.'), it, inline);
+		}
+
+		int myLevel = my.modifier&(ACC_PUBLIC|ACC_PROTECTED);
+		int itLevel = it.modifier&(ACC_PUBLIC|ACC_PROTECTED);
+		pass: {
+			if (myLevel == ACC_PUBLIC || myLevel == itLevel) break pass;
+			if (itLevel == 0 && myLevel == ACC_PROTECTED) break pass;
+
+			String inline = "cu.override.access:"+
+					(itLevel==0?"\1package-private\0":showModifiers(itLevel, ACC_SHOW_METHOD))+":"+
+					(myLevel==0?"\1package-private\0":showModifiers(myLevel, ACC_SHOW_METHOD));
+			ctx.report(Kind.ERROR, "cu.override.unable", my.owner.replace('/', '.'), it.owner.replace('/', '.'), it, inline);
+		}
+	}
+	// endregion
+	public final MethodWriter createDelegation(int acc, MethodNode it, MethodNode my, boolean end, boolean newObject) {
+		var c = newWritableMethod(acc, my.name(), my.rawDesc());
+		int base = 1;
+
+		if (newObject) {
+			c.clazz(Opcodes.NEW, it.owner);
+			c.one(DUP);
+			c.visitSize(TypeHelper.paramSize(it.rawDesc())+2, TypeHelper.paramSize(my.rawDesc()));
+		} else if ((it.modifier&ACC_STATIC) == 0) {
+			c.one(ALOAD_0);
+			c.visitSize(TypeHelper.paramSize(it.rawDesc())+1, TypeHelper.paramSize(my.rawDesc())+1);
+		} else {
+			base = 0;
+			c.visitSize(TypeHelper.paramSize(it.rawDesc()), TypeHelper.paramSize(my.rawDesc()));
+		}
+
+		List<Type> myPar = my.parameters();
+		List<Type> itPar = it.parameters();
+
+		for (int i = 0; i < myPar.size(); i++) {
+			Type from = myPar.get(i);
+			c.varLoad(from, base);
+			ctx.castTo(from, itPar.get(i), TypeCast.E_DOWNCAST).write(c);
+			base += from.length();
+		}
+
+		c.invoke(it.name().equals("<init>") ? INVOKESPECIAL : (it.modifier&ACC_STATIC) == 0 ? INVOKEVIRTUAL : INVOKESTATIC, it);
+
+		ctx.castTo(it.returnType(), my.returnType(), TypeCast.E_DOWNCAST).write(c);
+		if (end) {
+			c.one(my.returnType().shiftedOpcode(IRETURN));
+			c.finish();
+		}
+		return c;
+	}
+	// endregion
+	// region 阶段3 注解处理 & 常量字段
+	private int fieldParseState;
+	void _setSign(Attributed method) {
+		var sign = (LPSignature) method.getRawAttribute("Signature");
+		currentNode = sign != null ? sign : signature;
+	}
+	// 解析static final字段，不过顺便把非final也解析了
+	void S3_DFSField() throws ParseException {
+		var ctx = LocalContext.get();
+		ctx.setClass(this);
+
+		synchronized (this) {
+			if (fieldParseState < 0) {
+				ctx.errorReportIndex = classIdx;
+				ctx.report(Kind.WARNING, "cu.constLoop", name);
+				return;
+			}
+			if (fieldParseState != 0) return;
+			fieldParseState = -1;
+		}
+
+		ctx.setupFieldDFS();
+		addEnclosingContext(ctx);
+
+		currentNode = signature;
+		ctx.lexer.state = STATE_EXPR;
+		// 优先级的定义写在ParseTask中
+		lazyTasks.sort((o1, o2) -> Integer.compare(o1.priority(), o2.priority()));
+		int taskId;
+		for (taskId = 0; taskId < lazyTasks.size(); taskId++) {
+			var task = lazyTasks.get(taskId);
+			if (task.priority() > 0) break;
+			if (task.isStaticFinalField()) task.parse(ctx);
+		}
+
+		ctx.enclosing.clear();
+		fieldParseState = 1;
+	}
+	public void S3_Annotation() throws ParseException {
+		S3_DFSField();
+
 		MyHashMap<String, Object> dup = ctx.tmpMap1, extra = ctx.tmpMap2;
 		var missed = ctx.getTmpSet();
 		for (var annotated : annoTask.entrySet()) {
@@ -1125,13 +1464,13 @@ public abstract class CompileUnit extends ClassNode {
 						if (desc.kind == AnnotationSelf.CLASS) {
 							if (inv == null) {
 								inv = new Annotations(false);
-								annotated.getKey().putAttr(inv);
+								annotated.getKey().addAttribute(inv);
 							}
 							inv.annotations.add(a);
 						} else {
 							if (vis == null) {
 								vis = new Annotations(true);
-								annotated.getKey().putAttr(vis);
+								annotated.getKey().addAttribute(vis);
 							}
 							vis.annotations.add(a);
 						}
@@ -1160,25 +1499,6 @@ public abstract class CompileUnit extends ClassNode {
 		}
 		annoTask.clear();
 	}
-	// 访问权限是否降级以及能否override 注：preCheck检测了必须有访问权限
-	private void checkDowngrade(MethodNode my, MethodNode it, LocalContext ctx) {
-		if ((my.modifier&ACC_STATIC) != (it.modifier&ACC_STATIC)) {
-			String inline = "cu.override.static."+((my.modifier&ACC_STATIC) != 0 ? "self" : "other");
-			ctx.report(Kind.ERROR, "cu.override.unable", my.owner.replace('/', '.'), it.owner.replace('/', '.'), it, inline);
-		}
-
-		int myLevel = my.modifier&(ACC_PUBLIC|ACC_PROTECTED);
-		int itLevel = it.modifier&(ACC_PUBLIC|ACC_PROTECTED);
-		pass: {
-			if (myLevel == ACC_PUBLIC || myLevel == itLevel) break pass;
-			if (itLevel == 0 && myLevel == ACC_PROTECTED) break pass;
-
-			String inline = "\1cu.override.access:"+
-				(itLevel==0?"\1package-private\0":showModifiers(itLevel, ACC_SHOW_METHOD))+":"+
-				(myLevel==0?"\1package-private\0":showModifiers(myLevel, ACC_SHOW_METHOD))+"\0";
-			ctx.report(Kind.ERROR, "cu.override.unable", my.owner.replace('/', '.'), it.owner.replace('/', '.'), it, inline);
-		}
-	}
 	// 注解的适用类型
 	private static int applicableToNode(Attributed key) {
 		int mask;
@@ -1199,48 +1519,10 @@ public abstract class CompileUnit extends ClassNode {
 		}
 		return mask;
 	}
-	public CodeWriter createDelegation(int acc, MethodNode it, MethodNode my, boolean end, boolean newObject) {
-		CodeWriter c = newMethod(acc, my.name(), my.rawDesc());
-		int base = 1;
-
-		if (newObject) {
-			c.clazz(Opcodes.NEW, it.owner);
-			c.one(DUP);
-			c.visitSize(TypeHelper.paramSize(it.rawDesc())+2, TypeHelper.paramSize(my.rawDesc()));
-		} else if ((it.modifier&ACC_STATIC) == 0) {
-			c.one(ALOAD_0);
-			c.visitSize(TypeHelper.paramSize(it.rawDesc())+1, TypeHelper.paramSize(my.rawDesc())+1);
-		} else {
-			base = 0;
-			c.visitSize(TypeHelper.paramSize(it.rawDesc()), TypeHelper.paramSize(my.rawDesc()));
-		}
-
-		List<Type> myPar = my.parameters();
-		List<Type> itPar = it.parameters();
-
-		for (int i = 0; i < myPar.size(); i++) {
-			Type from = myPar.get(i);
-			c.varLoad(from, base);
-			ctx.castTo(from, itPar.get(i), TypeCast.E_DOWNCAST).write(c);
-			base += from.length();
-		}
-
-		c.invoke(it.name().equals("<init>") ? INVOKESPECIAL : (it.modifier&ACC_STATIC) == 0 ? INVOKEVIRTUAL : INVOKESTATIC, it);
-
-		ctx.castTo(it.returnType(), my.returnType(), TypeCast.E_DOWNCAST).write(c);
-		if (end) {
-			c.one(my.returnType().shiftedOpcode(IRETURN));
-			c.finish();
-		}
-		return c;
-	}
 	// endregion
-	public void cancelTask(Attributed node) {
-		// field method parseTask
-		throw new UnsupportedOperationException("not implemented yet!");
-	}
 	// region 阶段4 编译代码块
 	private MethodWriter clinit, glinit;
+	// 静态初始化
 	public MethodWriter getStaticInit() {
 		if (clinit != null) return clinit;
 
@@ -1251,11 +1533,12 @@ public abstract class CompileUnit extends ClassNode {
 		}
 
 		MethodNode node = methods.get(v);
-		clinit = ctx.classes.createMethodWriter(this, node);
-		node.putAttr(new AttrCodeWriter(cp, node, clinit));
-		clinit.visitSizeMax(10,0);
+		clinit = ctx.createMethodWriter(this, node);
+		node.addAttribute(new AttrCodeWriter(cp, node, clinit));
+		clinit.computeFrames(AttrCode.COMPUTE_SIZES|AttrCode.COMPUTE_FRAMES);
 		return clinit;
 	}
+	// 公共构造器初始化块
 	public MethodWriter getGlobalInit() {
 		// 隐式构造器会主动设置这个，不再需要额外检测
 		if (glinit != null) return glinit;
@@ -1265,8 +1548,7 @@ public abstract class CompileUnit extends ClassNode {
 		for (int i = 0, size = methods.size(); i < size; i++) {
 			MethodNode method = methods.get(i);
 			if (method.name().equals("<init>")) {
-
-				var list = method.parsedAttr(cp, Attribute.Exceptions);
+				var list = method.getAttribute(cp, Attribute.Exceptions);
 				if (list == null) {
 					_throws.clear();
 					break;
@@ -1303,16 +1585,59 @@ public abstract class CompileUnit extends ClassNode {
 
 			GlobalContext.debugLogger().info("Common parent of all constructor throws: "+Arrays.toString(strings));
 			// common parent of all constructor throws'
-			mn.putAttr(new AttrClassList(Attribute.Exceptions, SimpleList.asModifiableList(strings)));
+			mn.addAttribute(new ClassListAttribute(Attribute.Exceptions, SimpleList.asModifiableList(strings)));
 		}
-		return glinit = ctx.classes.createMethodWriter(this, mn);
+		return glinit = ctx.createMethodWriter(this, mn);
 	}
+
 	private DynByteBuf glInitBytes;
-	public void appendGlobalInit(CodeWriter target, LineNumberTable lines) {
+	private char glStack, glLocal;
+	private void serializeGlInit() {
+		if (glInitBytes == null) {
+			glinit.computeFrames(AttrCode.COMPUTE_SIZES);
+			glInitBytes = glinit.writeTo();
+			glStack = glInitBytes.readChar();
+			glLocal = glInitBytes.readChar();
+			glInitBytes.rIndex += 4;
+		}
+	}
+	// call from newAnonymousClass
+	public void NAC_SetGlobalInit(MethodWriter constructor) {glinit = constructor;}
+
+	public void appendGlobalInit(MethodWriter target, DynByteBuf insertBefore, LineNumberTable lines) {
 		if (glinit != null) {
-			if (glInitBytes == null) glInitBytes = glinit.writeTo();
-			target.insertBefore(glInitBytes);
-			if (glinit.lines != null) lines.list.addAll(glinit.lines.list);
+			serializeGlInit();
+
+			if (insertBefore != null) {
+				int initialLength = insertBefore.wIndex();
+				insertBefore.put(glInitBytes);
+				target.visitSizeMax(glStack, glLocal);
+
+				if (glinit.lines != null) {
+					for (LineNumberTable.Item item : glinit.lines.list) {
+						lines.add(new Label(initialLength+item.pos.getValue()), item.getLine());
+					}
+				}
+				return;
+			}
+
+			int moveCount;
+			if ((moveCount = target.getPlaceholderId(MethodWriter.GLOBAL_INIT_INSERT)) != 0) {
+				target.replaceSegment(moveCount, new SolidBlock(glInitBytes));
+			} else {
+				moveCount = target.nextSegmentId();
+				target.addSegment(new SolidBlock(glInitBytes));
+			}
+			target.visitSizeMax(glStack, glLocal);
+
+			if (glinit.lines != null) {
+				for (var item : glinit.lines.list) {
+					Label pos = new Label(item.pos);
+					pos.__move(moveCount);
+					target.__addLabel(pos);
+					lines.add(pos, item.getLine());
+				}
+			}
 		}
 	}
 
@@ -1337,8 +1662,8 @@ public abstract class CompileUnit extends ClassNode {
 	}
 
 	public int addLambdaRef(BootstrapMethods.Item item) {
-		var bsm = (BootstrapMethods) attrByName("BootstrapMethods");
-		if (bsm == null) putAttr(bsm = new BootstrapMethods());
+		var bsm = (BootstrapMethods) getRawAttribute("BootstrapMethods");
+		if (bsm == null) addAttribute(bsm = new BootstrapMethods());
 		int i = bsm.methods.indexOf(item);
 		if (i < 0) {
 			i = bsm.methods.size();
@@ -1354,39 +1679,49 @@ public abstract class CompileUnit extends ClassNode {
 		currentNode = signature;
 		ctx.lexer.state = STATE_EXPR;
 
-		// 优先级的定义写在ParseTask中
-		lazyTasks.sort((o1, o2) -> Integer.compare(o1.priority(), o2.priority()));
 		for (int i = 0; i < lazyTasks.size(); i++) lazyTasks.get(i).parse(ctx);
 		lazyTasks.clear();
 
 		if (clinit != null) clinit.one(Opcodes.RETURN);
 
 		for (FieldNode field : finalFields) {
-			ctx.report(fieldIdx.get(fields.indexOfAddress(field)), Kind.ERROR, "cu.finalField.missed", field.name());
+			ctx.report(fieldIdx.get(fields.indexOfAddress(field)), Kind.ERROR, "var.notAssigned", field.name());
 		}
 		finalFields.clear();
 
 		// 隐式构造器
 		if (glinit != null && glInitBytes == null && extraModifier != (ACC_FINAL|ACC_INTERFACE)) {
-			glinit.visitSizeMax(10,0);
+			glinit.computeFrames(AttrCode.COMPUTE_SIZES|AttrCode.COMPUTE_FRAMES);
 			glinit.one(Opcodes.RETURN);
 			glinit.finish();
+		}
+
+		ctx.enclosing.clear();
+	}
+
+	private void addEnclosingContext(LocalContext ctx) {
+		if (isNonStaticInnerClass()) {
+			var that = this;
+			if (!ctx.enclosing.isEmpty()) throw new AssertionError("Enclosing owner is not empty for non-static inner class ??");
+			do {
+				ctx.enclosing.add(0, NestContext.innerClass(ctx, that._parent.name(), that));
+				that = that._parent;
+			} while (that != that._parent);
 		}
 	}
 
 	public void j11PrivateConstructor(MethodNode method) {
 		// package-private on demand
-		if ((method.modifier&Opcodes.ACC_PRIVATE) != 0 && !ctx.classes.hasFeature(LavaFeatures.NESTED_MEMBER)) {
+		if ((method.modifier&Opcodes.ACC_PRIVATE) != 0 && ctx.classes.getMaximumBinaryCompatibility() < LavaFeatures.JAVA_11) {
 			method.modifier ^= Opcodes.ACC_PRIVATE;
 		}
 	}
 
-	private int accessorId;
-	public String getNextAccessorName() {return "`acc$"+accessorId++;}
+	public String getNextAccessorName() {return "`acc$"+ctx.nameIndex++;}
 	// endregion
-	//region 阶段5 序列化之前……
+	//region 阶段5 序列化
 	private List<RawNode> noStore = Collections.emptyList();
-	public void noStore(RawNode fn) {
+	public void markFakeNode(RawNode fn) {
 		if (noStore.isEmpty()) noStore = new SimpleList<>();
 		noStore.add(fn);
 	}
@@ -1397,5 +1732,8 @@ public abstract class CompileUnit extends ClassNode {
 			methods.remove(node);
 		}
 	}
+
+	@Override public String getFileName() {return name.concat(".class");}
+	@Override public ByteList get() { return Parser.toByteArrayShared(this); }
 	//endregion
 }

@@ -505,7 +505,7 @@ public final class PanSecurityManager extends MethodHook {
 	public boolean transform(String name, Context ctx) {
 		boolean changed = false;
 		if (PluginClassLoader.PLUGIN_CONTEXT.get() != null) {
-			for (Constant c : ctx.getData().cp.array()) {
+			for (Constant c : ctx.getData().cp.data()) {
 				if (c instanceof CstClass) {
 					CstUTF ref = ((CstClass) c).name();
 					if (GlobalClassBlackList.strStartsWithThis(ref.str())) {

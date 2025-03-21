@@ -44,12 +44,12 @@ public final class Inferrer {
 
 	public Inferrer(LocalContext ctx) {
 		this.ctx = ctx;
-		this.castChecker.typeParamsL = typeParamBounds;
+		this.castChecker.typeParams = typeParamBounds;
 		this.castChecker.context = ctx.classes;
 		this.castChecker.ctx = ctx;
 	}
 
-	public MethodResult getGenericParameters(ClassNode info, MethodNode method, IType instanceType) {
+	public MethodResult getGenericParameters(ClassNode info, MethodNode method, @Nullable IType instanceType) {
 		int argc = method.parameters().size();
 		return infer(info, method, instanceType instanceof Generic g ? g : null, new AbstractList<>() {
 			public IType get(int index) {return Asterisk.anyType;}
@@ -60,7 +60,9 @@ public final class Inferrer {
 	// 泛型附加上界, 可以用来缩小上界的范围，但是没啥用
 	public List<IType> manualTPBounds;
 	// 覆盖模式, 推断方法覆盖时使用
-	public boolean overrideMode;
+	boolean overrideMode;
+	// MethodListSingle的特殊处理，在推断阶段允许数字降级，到write阶段再根据常量值计算能否调用
+	int _minCastAllow;
 
 	/**
 	 * <a href="https://docs.oracle.com/javase/specs/jls/se21/html/jls-15.html#jls-15.12">Method Invocation Expressions</a>
@@ -74,7 +76,7 @@ public final class Inferrer {
 		List<? extends IType> mpar;
 		int mnSize;
 
-		sign = mn.parsedAttr(owner.cp, Attribute.SIGNATURE);
+		sign = mn.getAttribute(owner.cp, Attribute.SIGNATURE);
 		if (sign != null) {
 			typeParamBounds.clear();
 			typeParams.clear();
@@ -93,7 +95,7 @@ public final class Inferrer {
 					typeParams.put(name, manualTPBounds.get(i++));
 			}
 
-			Signature classSign = owner.parsedAttr(owner.cp, Attribute.SIGNATURE);
+			Signature classSign = owner.getAttribute(owner.cp, Attribute.SIGNATURE);
 			block:
 			if (classSign != null) {
 				for (Map.Entry<String, List<IType>> entry : classSign.typeParams.entrySet()) {
@@ -166,34 +168,39 @@ public final class Inferrer {
 
 			int i = vararg;
 			IType bound = input.get(i);
-			TypeCast.Cast cast;
-			block: {
+			TypeCast.Cast cast = null;
+			checkFirstArg: {
 				if (i+1 == inSize) {
 					cast = cast(bound, type);
 					if (cast.type >= 0) {
-						if (type.array() == 1 && type.owner().equals("java/lang/Object")) {
-							assert type.equals(bound);
+						if (type.array() == 1 && "java/lang/Object".equals(type.owner())) {
+							if (!type.equals(bound)) {
+								// TODO Dangerous!
+								ctx.report(roj.compiler.diagnostic.Kind.SEVERE_WARNING, "不确定的对象类型");
+							}
 						}
 						dvc = true;
-						break block;
+						break checkFirstArg;
 					}
 				}
-				cast = cast(bound, componentType);
-				if (cast.type < 0) return FAIL(i, bound, componentType, cast);
+
+				var maybeValue = cast(bound, componentType);
+				if (maybeValue.type < _minCastAllow)
+					return cast != null
+						? FAIL(i, bound, type, cast)
+						: FAIL(i, bound, componentType, maybeValue);
+				cast = maybeValue;
 			}
 			distance += cast.distance;
 			i++;
 
 			for (;i < inSize; i++) {
 				IType from = input.get(i);
-				cast = cast(from, bound);
-				if (cast.type < 0) {
-					bound = ctx.getCommonParent(from, bound);
+				cast = cast(from, componentType);
+				if (cast.type < _minCastAllow)
+					return FAIL(i, from, componentType, cast);
 
-					cast = cast(bound, componentType);
-					if (cast.type < 0) return FAIL(i, bound, componentType, cast);
-				}
-
+				bound = ctx.getCommonParent(from, bound);
 				distance += cast.distance;
 			}
 
@@ -207,6 +214,8 @@ public final class Inferrer {
 
 			var cast = overrideMode ? overrideCast(from, to) : cast(from, to);
 			switch (cast.type) {
+				case TypeCast.E_NUMBER_DOWNCAST: distance += LEVEL_DEPTH; break;
+				case TypeCast.E_EXPLICIT_CAST: if (_minCastAllow < 0) {distance += cast.distance; break;}
 				default: return FAIL(i, from, to, cast);
 
 				// 装箱/拆箱 第二步
@@ -220,6 +229,13 @@ public final class Inferrer {
 		if (hasBox) distance += LEVEL_DEPTH;
 
 		return addGeneric(new MethodResult(mn, distance, dvc));
+	}
+
+	public MethodResult inferOverride(LocalContext ctx, MethodNode overriden, Type type, List<IType> argument) {
+		overrideMode = true;
+		var mr = new MethodListSingle(overriden, false).findMethod(ctx, type, argument, 0);
+		overrideMode = false;
+		return mr;
 	}
 	// TODO 暂时能跑，不过能cover 100%么
 	public TypeCast.Cast overrideCast(IType from, IType to) {
@@ -249,8 +265,11 @@ public final class Inferrer {
 	private TypeCast.Cast cast(IType from, IType to) {
 		int lambdaArgCount = Lambda.getLambdaArgCount(from);
 		if (lambdaArgCount >= 0) {
+			if (lambdaArgCount == 0x10000/* Magic number, defined in expr.Lambda, indicates unknown */)
+				return TypeCast.RESULT(TypeCast.UPCAST, 0);
+
 			if (!to.isPrimitive()) {
-				var mn = ctx.classes.getResolveHelper(ctx.getClassOrArray(to)).getLambdaMethod();
+				var mn = ctx.classes.getResolveHelper(ctx.resolve(to)).getLambdaMethod();
 				if (mn != null) {
 					if (mn.parameters().size() == lambdaArgCount)
 						return TypeCast.RESULT(TypeCast.UPCAST, 0);
@@ -285,7 +304,7 @@ public final class Inferrer {
 			}
 		}
 
-		if (sign.exceptions != null) {
+		if (!sign.exceptions.isEmpty()) {
 			r.exception = new IType[sign.exceptions.size()];
 			List<IType> values = sign.exceptions;
 			for (int i = 0; i < values.size(); i++) {
@@ -300,9 +319,9 @@ public final class Inferrer {
 	@SuppressWarnings("fallthrough")
 	public static boolean hasUndefined(IType type) {
 		switch (type.genericType()) {
-			case IType.TYPE_PARAMETER_TYPE: return ((TypeParam) type).extendType != 0;
+			case IType.TYPE_PARAMETER_TYPE: return ((TypeParam) type).extendType != Generic.EX_NONE;
 			case IType.ANY_TYPE: return true;
-			case IType.GENERIC_TYPE: if (((Generic) type).extendType != 0) return true;
+			case IType.GENERIC_TYPE: if (((Generic) type).extendType != Generic.EX_NONE) return true;
 			case IType.GENERIC_SUBCLASS_TYPE:
 				IGeneric t = (IGeneric) type;
 				for (int i = 0; i < t.children.size(); i++)
@@ -452,7 +471,7 @@ public final class Inferrer {
 	}
 	private void addBound(TypeParam tp, IType type) {
 		IType bound = typeParams.get(tp.name);
-		if (tp.extendType != 0) {
+		if (tp.extendType != Generic.EX_NONE) {
 			type = new Generic(type.owner(), type.array()+tp.array(), tp.extendType);
 		} else if (tp.array() != 0) {
 			type = type.clone();
