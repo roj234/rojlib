@@ -106,7 +106,7 @@ public class Main extends Plugin {
 			} else if (str.startsWith("!")) {
 				data = str.substring(1).getBytes(StandardCharsets.UTF_8);
 			} else {
-				data = IOUtil.SharedCoder.get().decodeHex(str);
+				data = IOUtil.decodeHex(str);
 			}
 
 			plains.putInt(off, data);
@@ -167,7 +167,7 @@ public class Main extends Plugin {
 		File key = new File(f.getAbsolutePath()+".key");
 		if (!key.exists()) return;
 
-		ByteList r = ByteList.wrap(key.length() == 12 ? IOUtil.read(key) : IOUtil.SharedCoder.get().decodeHex(IOUtil.readString(key)));
+		ByteList r = ByteList.wrap(key.length() == 12 ? IOUtil.read(key) : IOUtil.decodeHex(IOUtil.readString(key)));
 		ZipCrypto zc = new ZipCrypto();
 		zc.encrypt = false;
 		int[] state = {r.readInt(), r.readInt(), r.readInt()};
@@ -175,8 +175,8 @@ public class Main extends Plugin {
 
 		var bar = new EasyProgressBar("解密数据", "文件");
 
-		ZipFile zip = new ZipFile(f);
-		try (var out = new ZipFileWriter(new File(f.getAbsolutePath()+".crk.zip"))) {
+		try (var zip = new ZipFile(f);
+			 var out = new ZipFileWriter(new File(f.getAbsolutePath() + ".crk.zip"))) {
 			bar.addTotal(zip.entries().size());
 
 			for (ZEntry entry : zip.entries()) {
@@ -184,7 +184,7 @@ public class Main extends Plugin {
 					zc.copyState(state, true);
 					inf.reset();
 
-					try (InputStream in = new CipherInputStream(zip.getRawStream(entry), zc)) {
+					try (var in = new CipherInputStream(zip.getRawStream(entry), zc)) {
 						in.skip(12);
 						InputStream iin = entry.getMethod() == 0 ? in : new InflaterInputStream(in, inf);
 						ZEntry entry1 = new ZEntry(entry.getName());
@@ -197,7 +197,6 @@ public class Main extends Plugin {
 				}
 			}
 		} finally {
-			zip.close();
 			inf.end();
 			bar.end("fin");
 		}

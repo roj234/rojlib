@@ -3,7 +3,7 @@ package roj.compiler.ast.expr;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import roj.asm.type.IType;
-import roj.compiler.JavaLexer;
+import roj.compiler.Tokens;
 import roj.compiler.asm.AnnotationPrimer;
 import roj.compiler.asm.MethodWriter;
 import roj.compiler.context.LocalContext;
@@ -46,7 +46,7 @@ final class Cast extends UnaryPre {
 				}
 			}
 
-			var override = ctx.getOperatorOverride(right, type, JavaLexer.lParen);
+			var override = ctx.getOperatorOverride(right, type, Tokens.lParen);
 			if (override != null) return override;
 
 			ctx.report(this, Kind.ERROR, "typeCast.error."+cast.type, rType, type);

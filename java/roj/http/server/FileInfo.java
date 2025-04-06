@@ -14,7 +14,7 @@ import java.nio.channels.FileChannel;
  */
 public interface FileInfo {
 	// FileResponse#def referred this
-	int FILE_RA = 1, FILE_DEFLATED = 2, FILE_CAN_DEFLATE = 4, FILE_HAS_CRC32 = 8;
+	int FILE_RA = 1, FILE_DEFLATED = 2, FILE_CAN_COMPRESS = 4, FILE_HAS_CRC32 = 8;
 	int stats();
 
 	long length(boolean deflated);
@@ -23,6 +23,7 @@ public interface FileInfo {
 
 	long lastModified();
 	default String getETag() {return null;}
+	default int getCrc32() {return 0;}
 	default void prepare(ResponseHeader rh, Headers h) {}
 	default void release(ChannelCtx ctx) {}
 }

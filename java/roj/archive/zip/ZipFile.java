@@ -404,7 +404,7 @@ public class ZipFile implements ArchiveFile {
 		entry.nameBytes = new byte[nameLen];
 		r.readFully(entry.nameBytes);
 		if (cs == StandardCharsets.UTF_8 || (flags & GP_UTF) != 0) {
-			entry.name = IOUtil.SharedCoder.get().decode(entry.nameBytes);
+			entry.name = IOUtil.decodeUTF8(entry.nameBytes);
 		} else {
 			entry.name = new String(entry.nameBytes, 0, nameLen, cs);
 		}
@@ -600,8 +600,7 @@ public class ZipFile implements ArchiveFile {
 	}
 	public final byte[] get(ZEntry file) throws IOException {
 		if (file.uSize > ARRAY_READ_MAX) throw new ZipException("Entry too large, either use a pre-sized array or use streaming method");
-		ByteList buf1 = ByteList.wrapWrite(new byte[(int) file.uSize], 0, (int) file.uSize);
-		return get(file, buf1).list;
+		return get(file, new ByteList((int) file.uSize)).list;
 	}
 	public ByteList get(ZEntry file, ByteList buf) throws IOException {
 		buf.ensureCapacity((int) (buf.wIndex() + file.uSize));

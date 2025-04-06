@@ -32,7 +32,7 @@ final class ChatUser extends ChatSubject {
 			if (worker != null) {
 				worker.sendExternalLogout("您已在他处登录<br />" +
 						"IP: " + req.connection().remoteAddress() + "<br />" +
-						"UA: " + req.getField("User-Agent") + "<br />" +
+						"UA: " + req.header("User-Agent") + "<br />" +
 						"时间: " + DateParser.toLocalTimeString(System.currentTimeMillis()));
 			}
 			worker = w;

@@ -294,7 +294,7 @@ public class NiximSystemV2 implements ITransformer {
 		nx.target = unifyClassName(a.containsKey("altValue") ? a.getClass("altValue").owner : a.getString("value"));
 		if (nx.target.equals("/")) nx.target = data.parent();
 
-		if (a.getBool("copyItf", true)) nx.impls = ArrayUtil.copyOf(data.interfaces());
+		if (a.getBool("copyItf", true)) nx.impls = ArrayUtil.immutableCopyOf(data.interfaces());
 
 		//int flag = a.getInt("flags");
 

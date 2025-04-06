@@ -1,14 +1,21 @@
 package roj.archive.qpak;
 
-import org.jetbrains.annotations.ApiStatus;
-import org.jetbrains.annotations.Nullable;
-import roj.archive.MultiFileSource;
+import org.jetbrains.annotations.NotNull;
 import roj.archive.qz.*;
 import roj.archive.qz.xz.LZMA2Options;
 import roj.collect.IntMap;
 import roj.collect.MyHashMap;
 import roj.collect.SimpleList;
+import roj.http.Headers;
+import roj.http.server.FileInfo;
+import roj.http.server.MimeType;
+import roj.http.server.ResponseHeader;
 import roj.io.IOUtil;
+import roj.io.source.Source;
+import roj.io.vfs.VirtualFile;
+import roj.io.vfs.WritableFile;
+import roj.io.vfs.WritableFileSystem;
+import roj.text.Escape;
 
 import java.io.*;
 import java.nio.file.Files;
@@ -21,10 +28,10 @@ import java.util.function.Predicate;
  * @author Roj234
  * @since 2023/11/4 0004 20:15
  */
-public class QPakFileSystem implements MultiFileSource {
+public final class QPakFileSystem implements WritableFileSystem {
 	private List<QZArchive> archives;
 	private final IntMap<QZFileWriter> metadataOverride = new IntMap<>();
-	private final MyHashMap<String, QPakPath> files = new MyHashMap<>();
+	private final MyHashMap<String, QFile> files = new MyHashMap<>();
 
 	private final File alsoReadFrom;
 	private final QZFileWriter patch;
@@ -50,7 +57,8 @@ public class QPakFileSystem implements MultiFileSource {
 
 	public boolean canWrite() {return writeToPatch || alsoReadFrom != null;}
 
-	public QPakPath getPath(String pathname) {
+	public VirtualFile getPath(String pathname) {return getPath_(pathname);}
+	final QFile getPath_(String pathname) {
 		var path = files.get(pathname);
 		if (path != null) return path;
 
@@ -60,12 +68,12 @@ public class QPakFileSystem implements MultiFileSource {
 			if (safePath.isEmpty()) safePath = "/";
 			File file = safePath.equals("/") ? alsoReadFrom : new File(alsoReadFrom, safePath);
 			if (file.exists()) {
-				files.put(safePath, path = new QPakPath(this, safePath, file));
+				files.put(safePath, path = new QFile(this, safePath, file));
 				return path;
 			}
 		}
 
-		path = new QPakPath(this, pathname);
+		path = new QFile(this, pathname);
 		for (int i = 0; i < archives.size(); i++) {
 			var entry = archives.get(i).getEntry(pathname);
 			if (entry == null) continue;
@@ -81,7 +89,24 @@ public class QPakFileSystem implements MultiFileSource {
 		return path;
 	}
 
-	void markMetadataDirty(QZEntry entry, short archiveIndex) {
+	public @NotNull VirtualFile getPath(VirtualFile parent, String child) {return ((WritableFile) parent).child(child);}
+
+	public @NotNull FileInfo toFileInfo(VirtualFile virtualFile) {return new QFileInfo((QFile) virtualFile);}
+	private final class QFileInfo implements FileInfo {
+		private final QFile path;
+		public QFileInfo(QFile path) {this.path = path;}
+
+		@Override public int stats() {return 0/*NO_DEFLATED, NO_RANDOM_ACCESS*/;}
+		@Override public long length(boolean deflated) {return path.length();}
+		@Override public InputStream get(boolean deflated, long offset) throws IOException {return getInputStream(path);}
+		@Override public long lastModified() {return path.lastModified();}
+		@Override public void prepare(ResponseHeader rh, Headers h) {
+			h.putIfAbsent("Content-Disposition", "attachment; filename=\""+Escape.encodeURIComponent(path.getName())+'"');
+			h.putIfAbsent("Content-Type", MimeType.getMimeType(path.getName()));
+		}
+	}
+
+	final void markMetadataDirty(QZEntry entry, short archiveIndex) {
 		var qzfw = metadataOverride.get(archiveIndex);
 		if (qzfw == null) {
 			try {
@@ -94,7 +119,8 @@ public class QPakFileSystem implements MultiFileSource {
 		}
 	}
 
-	public boolean createPath(QPakPath dest, boolean directory) throws IOException {
+	public boolean create(VirtualFile path, boolean directory) throws IOException {return create((QFile) path, directory);}
+	final boolean create(QFile dest, boolean directory) throws IOException {
 		if (dest.ref != null) return false;
 
 		if (writeToPatch) {
@@ -120,7 +146,8 @@ public class QPakFileSystem implements MultiFileSource {
 		return true;
 	}
 
-	public boolean delete(QPakPath path) throws IOException {
+	public boolean delete(VirtualFile path) throws IOException {return delete((QFile) path);}
+	final boolean delete(QFile path) throws IOException {
 		if (path.ref == null || !path.isFile()) return false;
 
 		if (path.ref.getClass() == File.class) {
@@ -140,16 +167,18 @@ public class QPakFileSystem implements MultiFileSource {
 		return true;
 	}
 
-	public InputStream getInputStream(QPakPath path) throws IOException {
+	public @NotNull InputStream getInputStream(VirtualFile path) throws IOException {return getInputStream((QFile) path);}
+	final InputStream getInputStream(QFile path) throws IOException {
 		if (path.ref == null || !path.isFile()) throw new FileNotFoundException();
 		if (path.ref.getClass() == File.class) return new FileInputStream((File) path.ref);
 
 		return archives.get(path.archiveIndex).getInputUncached((QZEntry) path.ref);
 	}
 
-	public OutputStream getOutputStream(QPakPath path, boolean append) throws IOException {
+	public OutputStream getOutputStream(VirtualFile path, boolean append) throws IOException {return getOutputStream(((QFile) path), append);}
+	final OutputStream getOutputStream(QFile path, boolean append) throws IOException {
 		if (path.archiveIndex != -1 && path.ref instanceof QZEntry) delete(path);
-		if (path.ref == null) createPath(path, false);
+		if (path.ref == null) create(path, false);
 		if (path.ref.getClass() == File.class) return new FileOutputStream((File) path.ref, append);
 
 		QZWriter out = patch.parallel();
@@ -157,17 +186,20 @@ public class QPakFileSystem implements MultiFileSource {
 		return out;
 	}
 
-	@ApiStatus.Experimental
-	public List<QPakPath> queryPath(QPakPath path, Predicate<String> filter) {
+	@Override
+	public Source getRandomAccess(VirtualFile path, boolean readOnly) throws IOException {throw new UnsupportedOperationException("QPackFileSystem did not support random access");}
+
+	public Iterable<? extends WritableFile> listPath(VirtualFile path, Predicate<String> nameFilter) {return listPath((QFile) path, nameFilter);}
+	final List<QFile> listPath(QFile path, Predicate<String> filter) {
 		if (!path.isDirectory()) return null;
 
 		String pathname = path.getPath();
 		if (!pathname.startsWith("/")) return Collections.emptyList();
 		int len = pathname.length();
 
-		SimpleList<QPakPath> paths = new SimpleList<>();
+		SimpleList<QFile> paths = new SimpleList<>();
 		// Not implemented yet!!
-		for (Map.Entry<String, QPakPath> entry : files.entrySet()) {
+		for (Map.Entry<String, QFile> entry : files.entrySet()) {
 			String name = entry.getKey();
 			if (name.length() > len && name.startsWith(pathname) && name.indexOf('/', len) == -1 && filter.test(entry.getValue().getPath()))
 				paths.add(entry.getValue());
@@ -180,8 +212,8 @@ public class QPakFileSystem implements MultiFileSource {
 				String pa = f.getAbsolutePath().substring(len1).replace(File.separatorChar, '/');
 				if (!filter.test(pa)) return false;
 
-				QPakPath path1 = new QPakPath(this, pa, f);
-				QPakPath prev = files.put(pa, path1);
+				QFile path1 = new QFile(this, pa, f);
+				QFile prev = files.put(pa, path1);
 
 				if (prev != null) paths.set(paths.lastIndexOf(prev), path1);
 				else paths.add(path1);
@@ -189,11 +221,5 @@ public class QPakFileSystem implements MultiFileSource {
 			});
 		}
 		return paths;
-	}
-
-	@Override
-	public @Nullable InputStream getStream(String pathname) throws IOException {
-		QPakPath path = getPath(pathname);
-		return path.exists() ? getInputStream(path) : null;
 	}
 }

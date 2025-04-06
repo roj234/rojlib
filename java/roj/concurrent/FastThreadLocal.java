@@ -2,12 +2,9 @@ package roj.concurrent;
 
 import roj.collect.IntMap;
 import roj.collect.MyBitSet;
-import roj.reflect.Bypass;
 import roj.reflect.Unaligned;
 import roj.util.ArrayCache;
 
-import java.util.function.BiConsumer;
-import java.util.function.BiFunction;
 import java.util.function.Supplier;
 
 /**
@@ -20,8 +17,6 @@ public class FastThreadLocal<T> {
 	private static final Object NULL = IntMap.UNDEFINED;
 
 	private static Thread[] threads;
-	private static BiFunction<Object, Object, Object> getMap;
-	private static BiConsumer<Object, Object> remove;
 
 	private int seqNum;
 	private final ThreadLocal<T> fallback = ThreadLocal.withInitial(FastThreadLocal.this::initialValue);
@@ -66,7 +61,6 @@ public class FastThreadLocal<T> {
 		seqNum = -1;
 	}
 
-	@SuppressWarnings("unchecked")
 	public void removeAll() {
 		ThreadGroup g = Thread.currentThread().getThreadGroup();
 		while (g.getParent() != null) g = g.getParent();
@@ -89,16 +83,8 @@ public class FastThreadLocal<T> {
 						}
 					}
 				} else {
-					if (getMap == null) {
-						try {
-							getMap = Bypass.builder(BiFunction.class).delegate_o(ThreadLocal.class, "getMap", "apply").build();
-							remove = Bypass.builder(BiConsumer.class).delegate_o(getMap.apply(fallback, Thread.currentThread()).getClass(), "remove", "accept").build();
-						} catch (Throwable e) {
-							e.printStackTrace();
-						}
-					}
-					if (getMap == null) continue;
-					remove.accept(getMap.apply(fallback, t[c]), fallback);
+					Object map = LazyThreadLocal.ACCESS.getMap(fallback, t[c]);
+					if (map != null) LazyThreadLocal.ACCESS.remove(map, fallback);
 				}
 			}
 		}

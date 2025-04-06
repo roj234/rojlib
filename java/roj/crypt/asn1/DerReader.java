@@ -38,7 +38,7 @@ public class DerReader {
 		BigInteger bi = new BigInteger(data, 0, length);
 		ArrayCache.putArray(data);
 
-		return DerValue.INTEGER(bi);
+		return /*length <= 4 && bi.bitLength() <= 31 ? CEntry.valueOf(bi.intValue()) : */DerValue.INTEGER(bi);
 	}
 
 	public CEntry readBits(int length) throws IOException {

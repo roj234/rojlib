@@ -1,7 +1,7 @@
 package roj.asm.cp;
 
 import roj.text.CharList;
-import roj.text.UTF8;
+import roj.text.FastCharset;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
 
@@ -29,7 +29,7 @@ public final class CstUTF extends Constant {
 
 			var out = new CharList();
 			int rPos = in.rIndex;
-			UTF8.CODER.decodeFixedIn(in, in.readableBytes(), out);
+			FastCharset.UTF8().decodeFixedIn(in, in.readableBytes(), out);
 			in.rIndex = rPos;
 			data = out.toStringAndFree();
 		}

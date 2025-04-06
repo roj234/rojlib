@@ -319,8 +319,14 @@ public class DirectByteList extends DynByteBuf {
 	// endregion
 	// region Buffer Ops
 
-	public final DynByteBuf slice(int off, int len) {
-		return new Slice(testWI(off, len)+address, len);
+	public final DynByteBuf slice(int off, int len) {return new Slice(testWI(off, len)+address, len);}
+	@Override
+	public final DynByteBuf copySlice() {
+		int length = wIndex - rIndex;
+		var result = new DirectByteList(length);
+		result.wIndex = length;
+		U.copyMemory(address+rIndex, result.address, length);
+		return result;
 	}
 
 	@Override

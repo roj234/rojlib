@@ -32,7 +32,7 @@ final class Poly1305 extends BufferedDigest implements MessageAuthenticCode {
 		key[4] &= 252;key[8] &= 252;key[12] &= 252;
 
 		int[] T;
-		ByteList b = IOUtil.SharedCoder.get().wrap(key);
+		ByteList b = IOUtil.SharedBuf.get().wrap(key);
 
 		T = R.getArray0();
 		T[3] = b.readIntLE();

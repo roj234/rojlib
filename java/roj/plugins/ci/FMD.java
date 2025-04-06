@@ -156,12 +156,13 @@ public final class FMD {
 				example.workspace = ctx.argument("工作空间名称", Workspace.class).id;
 
 				var project = new Project(example);
+				project.init();
 				projects.put(project.name, project);
 				saveConfig();
 			}))))
 			.then(literal("delete").then(argument("项目名称", Argument.oneOf(projects)).executes(ctx -> {
-				System.out.println("未实现");
-				Workspace.addIDEAProject(defaultProject, false);
+				Workspace.addIDEAProject(defaultProject, true);
+				System.out.println("IDEA项目已删除，请手动清理projects目录下的文件");
 			})))
 			.then(literal("setdefault").then(argument("项目名称", Argument.oneOf(projects)).executes(ctx -> {
 				defaultProject = ctx.argument("项目名称", Project.class);
@@ -618,6 +619,7 @@ public final class FMD {
 
 			if ((flag & 3) == 0) Terminal.info("更新了("+count+")个资源");
 			mappedWriter.end();
+			if (count == 0) return true;
 		} else {
 			Profiler.endStartSection("prepareCompileParam");
 
@@ -746,20 +748,20 @@ public final class FMD {
 
 			Terminal.success("编译成功["+p.getName()+"]! "+(System.currentTimeMillis()-time)+"ms");
 			if (!p.unmappedJar.setLastModified(time)) Terminal.warning("设置时间戳失败!");
-
-			Profiler.endStartSection("signature");
-			if ((flag&1) == 0 && p.variables.get("fmd:signature:keystore") != null) {
-				mappedWriter.end();
-
-				try {
-					signatureJar(p, dest, jarFile);
-					Terminal.success("签名成功");
-				} catch (Exception e) {
-					LOGGER.error("签名失败", e);
-				}
-			}
-			Profiler.endSection();
 		}
+
+		Profiler.endStartSection("signature");
+		if ((flag&1) == 0 && p.variables.get("fmd:signature:keystore") != null) {
+			mappedWriter.end();
+
+			try {
+				signatureJar(p, dest, jarFile);
+				Terminal.success("签名成功");
+			} catch (Exception e) {
+				LOGGER.error("签名失败", e);
+			}
+		}
+		Profiler.endSection();
 
 		p.compileSuccess();
 		return true;

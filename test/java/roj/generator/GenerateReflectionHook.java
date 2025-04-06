@@ -239,7 +239,7 @@ class GenerateReflectionHook {
 			i++;
 		}
 
-		ClassNode parentNode = Parser.parseConstants(IOUtil.getResource("roj/reflect/Unaligned.class"));
+		ClassNode parentNode = Parser.parseConstants(IOUtil.getResourceIL("roj/reflect/Unaligned.class"));
 		for (MethodNode method : parentNode.methods) {
 			if ((method.modifier&ACC_STATIC) != 0) continue;
 			int impled = impl.getMethod(method.name(), method.rawDesc());

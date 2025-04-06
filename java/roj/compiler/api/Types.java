@@ -12,7 +12,9 @@ public interface Types {
 	Type THROWABLE_TYPE = Type.klass("java/lang/Throwable");
 	Type VOID_TYPE = Type.klass("java/lang/Void");
 	Type ITERATOR_TYPE = Type.klass("java/util/Iterator");
+	Type ENUM_TYPE = Type.klass("java/lang/Enum");
 	Type CHARSEQUENCE_TYPE = Type.klass("java/lang/CharSequence");
 	Type RUNTIME_EXCEPTION = Type.klass("java/lang/RuntimeException");
 	Type ERROR = Type.klass("java/lang/Error");
+	String LOCK_TYPE = "java/util/concurrent/locks/Lock";
 }

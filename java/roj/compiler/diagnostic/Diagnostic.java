@@ -2,13 +2,12 @@ package roj.compiler.diagnostic;
 
 import org.jetbrains.annotations.Nls;
 import roj.asm.IClass;
-import roj.compiler.JavaLexer;
+import roj.compiler.Tokens;
 import roj.compiler.context.CompileUnit;
 import roj.math.MathUtils;
 import roj.text.CharList;
 import roj.text.TextUtil;
 
-import java.util.Arrays;
 import java.util.Locale;
 
 /**
@@ -37,7 +36,7 @@ public class Diagnostic {
 
 	public Kind getKind() { return kind; }
 
-	public String getFile() {return source == null ? JavaLexer.i18n.translate("lava.compiler") : source instanceof CompileUnit cu ? cu.getSourceFile() : source.name();}
+	public String getFile() {return source == null ? Tokens.i18n.translate("lava.compiler") : source instanceof CompileUnit cu ? cu.getSourceFile() : source.name();}
 	public IClass getSource() { return source; }
 	public int getStartPosition() { return offset; }
 	public int getEndPosition() { return offset+length; }
@@ -89,7 +88,6 @@ public class Diagnostic {
 	@Nls
 	public String getMessage(Locale locale) {
 		if (!locale.equals(Locale.SIMPLIFIED_CHINESE)) return code;
-		//return TranslatableString.of(code, args).translate(JavaLexer.i18n, new CharList()).toStringAndFree();
-		return JavaLexer.i18n.translate(code+(args == null ? "" : "\1"+(TextUtil.join(Arrays.asList(getArgs()), "\0\1"))+"\0"));
+		return TranslatableString.of(code, args).translate(Tokens.i18n, new CharList()).toStringAndFree();
 	}
 }

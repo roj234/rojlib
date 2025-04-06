@@ -88,7 +88,7 @@ public interface Unaligned {
 
 	Unaligned U = init();
 	private static Unaligned init() {
-		if (VMInternals.JAVA_VERSION > 8) {
+		if (ReflectionUtils.JAVA_VERSION > 8) {
 			try {
 				byte[] ref = IOUtil.getResource("roj/reflect/Unaligned$.class", Unaligned.class);
 				if (ref.length != 8776) throw new AssertionError("data corrupt");
@@ -97,7 +97,7 @@ public interface Unaligned {
 						ref[i] = (byte) (ref[i] == 'B' ? 'L' : 'B');
 					}
 				}
-				if (VMInternals.JAVA_VERSION > 21) {
+				if (ReflectionUtils.JAVA_VERSION > 21) {
 					ref[ 115] = 14; // super();
 					ref[4094] = 14; // extends Object
 					ref[4098] = 12; // implements Runnable
@@ -164,6 +164,11 @@ public interface Unaligned {
 		u.putByte(o, offset++, (byte) x);
 		u.putByte(o, offset, (byte) (x >>> 8));
 	}
+	default void put24UL(Object o, long offset, int x) {
+		U.putByte(o, offset++, (byte) x);
+		U.putByte(o, offset++, (byte) (x >>> 8));
+		U.putByte(o, offset, (byte) (x >>> 16));
+	}
 	default void put32UL(Object o, long offset, int x) {
 		u.putByte(o, offset++, (byte) x);
 		u.putByte(o, offset++, (byte) (x >>> 8));
@@ -184,6 +189,11 @@ public interface Unaligned {
 	default void put16UB(Object o, long offset, int x) {
 		u.putByte(o, offset++, (byte) (x >>> 8));
 		u.putByte(o, offset, (byte) x);
+	}
+	default void put24UB(Object o, long offset, int x) {
+		U.putByte(o, offset++, (byte) (x >>> 16));
+		U.putByte(o, offset++, (byte) (x >>> 8));
+		U.putByte(o, offset, (byte) x);
 	}
 	default void put32UB(Object o, long offset, int x) {
 		u.putByte(o, offset++, (byte) (x >>> 24));

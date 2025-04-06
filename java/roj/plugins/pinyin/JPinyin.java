@@ -6,7 +6,7 @@ import roj.config.Tokenizer;
 import roj.config.data.CInt;
 import roj.io.IOUtil;
 import roj.text.CharList;
-import roj.text.GB18030;
+import roj.text.FastCharset;
 import roj.util.DynByteBuf;
 
 import java.nio.CharBuffer;
@@ -36,13 +36,13 @@ public class JPinyin {
 
 			int mask = (1 << zbits) - 1;
 			CharBuffer zcp = CharBuffer.allocate(zcpLen);
-			GB18030.CODER.decodeFixedIn(bb,zcpLenByte,zcp);
+			FastCharset.GB18030().decodeFixedIn(bb,zcpLenByte,zcp);
 			char[] cp = zcp.array();
 
 			CPBits = ybits;
 			CPMask = (1 << ybits) - 1;
 			CharBuffer ycp = CharBuffer.allocate(ycpLen);
-			GB18030.CODER.decodeFixedIn(bb,ycpLenByte,ycp);
+			FastCharset.GB18030().decodeFixedIn(bb,ycpLenByte,ycp);
 			StringPool = ycp.array();
 
 			while (mapSize-- > 0) {

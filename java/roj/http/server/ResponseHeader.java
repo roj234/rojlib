@@ -7,33 +7,25 @@ import roj.net.util.SpeedLimiter;
 import java.io.IOException;
 
 public interface ResponseHeader {
-	MyChannel ch();
+	MyChannel connection();
 	String _getState();
 	Request request();
 
 	/**
 	 * Gets speed limit in Byte per second
 	 */
-	int getStreamLimit();
-	void setStreamLimit(int bps);
-	void setStreamLimit(SpeedLimiter limiter);
+	int getSpeedLimit();
+	void limitSpeed(int bps);
+	void limitSpeed(SpeedLimiter limiter);
 
-	void onFinish(HFinishHandler o);
+	void onFinish(RequestFinishHandler o);
 
 	ResponseHeader code(int code);
 	ResponseHeader die();
 	/**
 	 * 不立即发送请求头, 等待异步调用body()再响应.
 	 */
-	ResponseHeader enableAsyncResponse();
-	/**
-	 * Request对象不会在连接关闭后被共享
-	 */
-	void unsharedRequest();
-	/**
-	 * (默认)该请求对应的Request对象会在连接关闭后共享给其它请求使用
-	 */
-	void sharedRequest();
+	ResponseHeader enableAsyncResponse(int extraTimeMs);
 	/**
 	 * 异步调用返回响应.
 	 * 未调用enableAsyncResponse: 和return resp效果相同
@@ -41,20 +33,21 @@ public interface ResponseHeader {
 	 *
 	 * 或者在header阶段全双工启动，一边接受post数据一边发送响应
 	 */
-	void body(Response resp) throws IOException;
+	void body(Content resp) throws IOException;
 
 	ResponseHeader enableCompression();
 	/**
 	 * 禁用压缩.
-	 * 只有调用过enableCompression才会主动压缩
+	 * 不会主动压缩，仅仅是取消之前enable调用的效果。
 	 */
 	ResponseHeader disableCompression();
 
-	default ResponseHeader date() {return header("date", HttpCache.getInstance().toRFC(System.currentTimeMillis()));}
+	default ResponseHeader date() {return header("date", HSConfig.getInstance().toRFC(System.currentTimeMillis()));}
 	default ResponseHeader header(String k, String v) {headers().put(k, v);return this;}
 	default ResponseHeader header(String h) {headers().putAllS(h);return this;}
 	Headers headers();
 
-	default <T> T returnNull() {return null;}
-	default <T> T returns(T t) {return t;}
+	// 没有作用也不应该重载，只为了链式表达
+	default Content noContent() {return Content.EMPTY;}
+	default <T> T cast(T t) {return t;}
 }

@@ -2,7 +2,7 @@ package roj.http.h2;
 
 import roj.http.HttpHead;
 import roj.http.HttpUtil;
-import roj.http.IllegalRequestException;
+import roj.http.server.IllegalRequestException;
 import roj.io.IOUtil;
 import roj.reflect.ReflectionUtils;
 import roj.util.DynByteBuf;
@@ -136,7 +136,7 @@ public abstract class H2Stream {
 
 			U.putObject(hh, AA, "HTTP/2");
 			U.putObject(hh, BB, status);
-			U.putObject(hh, CC, HttpUtil.getDescription(intStatus));
+			U.putObject(hh, CC, HttpUtil.getCodeDescription(intStatus));
 			U.putBoolean(hh, RR, false);
 		}
 

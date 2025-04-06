@@ -109,5 +109,12 @@ public class Fail2Ban implements ChannelHandler, ITask {
 
 	@Override public void onEvent(ChannelCtx ctx, Event event) throws IOException {
 		if (event.id.equals("fail2ban:inspect")) event.setResult(Event.RESULT_DENY);
+		if (event.id.equals("fail2ban:ban")) {
+			var ip = getAddress(ctx);
+			var user = data.computeIfAbsent(ip, NEW);
+			user.count = maxFail;
+			user.forgive = System.currentTimeMillis();
+			LOGGER.info("{} 被代码封禁", ip);
+		}
 	}
 }

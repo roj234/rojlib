@@ -84,12 +84,12 @@ class AdaptContext implements Serializer<Object> {
 
 	void setRef(Object o) {ref = o;}
 
-	public final void value(boolean l) {curr.read(this,l);}
-	public final void value(int l) {curr.read(this,l);}
-	public final void value(long l) {curr.read(this,l);}
-	public final void value(float l) {curr.read(this,l);}
-	public final void value(double l) {curr.read(this,l);}
-	public final void value(String l) {curr.read(this,l);}
+	public final void value(boolean b) {curr.read(this, b);}
+	public final void value(int i) {curr.read(this, i);}
+	public final void value(long i) {curr.read(this, i);}
+	public final void value(float i) {curr.read(this, i);}
+	public final void value(double i) {curr.read(this, i);}
+	public final void value(String s) {curr.read(this, s);}
 	public final void valueNull() {curr.read(this, (Object) null);}
 	public final boolean supportArray() {return true;}
 	public final void value(byte[] ba) {curr.read(this,ba);}
@@ -101,6 +101,7 @@ class AdaptContext implements Serializer<Object> {
 	public final void valueList() {curr.list(this,-1);}
 	public final void valueList(int size) {curr.list(this,size);}
 
+	public final void intKey(int key) {curr.key(this,key);}
 	public final void key(String key) {curr.key(this,key);}
 	public final void pop() {
 		while (fieldId == -2)
@@ -165,10 +166,9 @@ class AdaptContext implements Serializer<Object> {
 			if (!fieldStateEx.add(id-32)) throwDupField(id);
 		}
 	}
-	private void throwDupField(int id) {
-		if (!(curr instanceof GA)) throw new IllegalStateException("字段 "+id+" 已存在");
-		throw new IllegalStateException("字段 "+((GA) curr).fn().get(id)+" 已存在");
-	}
+	private void throwDupField(int id) {throw new IllegalStateException("字段 "+fieldName(id)+" 已存在, state="+fieldState);}
+	private String fieldName(int fieldId) {return curr instanceof GA ga ? ga.fn().get(fieldId) : "0x"+Integer.toHexString(fieldId);}
+	public final void ofIllegalType(Adapter adapter) {throw new IllegalStateException(adapter+"("+ref+")的字段"+fieldName(fieldId)+"的类型不兼容！");}
 
 	public final void setKeyHook(int id) {
 		if (id < 0) throw new IllegalStateException("未知的字段ID");

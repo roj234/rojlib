@@ -3,8 +3,8 @@ package roj.collect;
 import org.intellij.lang.annotations.MagicConstant;
 import roj.reflect.ReflectionUtils;
 import roj.util.ArrayCache;
-import roj.util.ArrayRef;
 import roj.util.Helpers;
+import roj.util.NativeArray;
 import roj.util.TimSortForEveryone;
 
 import java.util.*;
@@ -65,7 +65,7 @@ public class MatchMap<K extends Comparable<K>, V> {
 				if (cmp != 0) return cmp;
 
 				return Integer.compare(U.getChar(refLeft, offLeft), U.getChar(offRight));
-			}, ArrayRef.primitiveArray(pos), ArrayRef.objectArray(entries));
+			}, NativeArray.primitiveArray(pos), NativeArray.objectArray(entries));
 
 			if (size > 255) {
 				if (indexOf == null)

@@ -428,23 +428,23 @@ public class JarVerifier {
 
 		var mb = new ManifestBytes(mfBytes);
 
-		var sf = new Manifest();
-		var sfMain = sf.getMainAttributes();
-		sfMain.put(Attributes.Name.SIGNATURE_VERSION, "1.0");
-		sfMain.put(new Attributes.Name("Created-By"), options.getOrDefault("jarSigner:creator", CREATED_BY));
-		sfMain.put(new Attributes.Name(hashAlg+"-Digest-Manifest"), Base64.encode(DynByteBuf.wrap(md.digest(mfBytes)), IOUtil.getSharedCharBuf()).toString());
-		sfMain.put(new Attributes.Name(hashAlg+"-Digest-Manifest-Main-Attributes"), Base64.encode(DynByteBuf.wrap(mb.digest(md, null)), IOUtil.getSharedCharBuf()).toString());
+		ob.clear();
+		ob.putAscii("Signature-Version: 1.0\r\n");
+		append72(ob, "Created-By: "+options.getOrDefault("jarSigner:creator", CREATED_BY));
+		append72(ob, hashAlg+"-Digest-Manifest: "+IOUtil.encodeBase64(md.digest(mfBytes)));
+		append72(ob, hashAlg+"-Digest-Manifest-Main-Attributes: "+IOUtil.encodeBase64(mb.digest(md, null)));
+		ob.putAscii("\r\n");
+
 		if (!"true".equals(options.get("jarSigner:skipPerFileAttributes"))) {
 			for (String name : mb.namedAttrMap.keySet()) {
-				var attr = new Attributes(1);
-				attr.put(digestKey, Base64.encode(DynByteBuf.wrap(mb.digest(md, name)), IOUtil.getSharedCharBuf()).toString());
-				sf.getEntries().put(name, attr);
+				append72(ob, "Name: "+name);
+				append72(ob, digestKey+": "+IOUtil.encodeBase64(mb.digest(md, name)));
+				ob.putAscii("\r\n");
 			}
 		}
 
 		var sfName = options.getOrDefault("jarSigner:signatureFileName", "SIGNFILE");
-		ob.clear();
-		sf.write(ob);
+
 		byte[] sfBytes = ob.toByteArray();
 		zf.put("META-INF/"+sfName+".SF", DynByteBuf.wrap(sfBytes));
 
@@ -454,6 +454,27 @@ public class JarVerifier {
 
 		var sb = new SignatureBlock(certs, signature, signer.getAlgorithm(), 0, null);
 		zf.put("META-INF/"+sfName+"."+signAlg, DynByteBuf.wrap(sb.getEncoded("PKCS7")));
+	}
+
+	private static void append72(DynByteBuf out, String line) {
+		if (!line.isEmpty()) {
+			var tmp = new ByteList().putUTFData(line);
+
+			var lineBytes = tmp.list;
+			int length = tmp.wIndex();
+			// first line can hold one byte more than subsequent lines which
+			// start with a continuation line break space
+			out.write(lineBytes[0]);
+			int pos = 1;
+			while (length - pos > 71) {
+				out.write(lineBytes, pos, 71);
+				pos += 71;
+				out.putAscii("\r\n");
+				out.write(' ');
+			}
+			out.write(lineBytes, pos, length - pos);
+		}
+		out.putAscii("\r\n");
 	}
 
 	public static void main(String[] args) throws Exception {

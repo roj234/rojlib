@@ -4,6 +4,8 @@ import org.jetbrains.annotations.Contract;
 import roj.ReferenceByGeneratedClass;
 import roj.compiler.plugins.eval.Constexpr;
 
+import java.nio.charset.StandardCharsets;
+
 /**
  * @author Roj234
  * @since 2024/6/10 0010 1:35
@@ -56,7 +58,7 @@ public class RtUtil {
 	@Constexpr
 	@Contract(pure = true)
 	public static String pack(int[] array) {
-		char[] sb = new char[(array.length * 32 + 6) / 7];
+		byte[] sb = new byte[(array.length * 32 + 6) / 7];
 		int sbIndex = 0;
 
 		int bitIndex = 6;
@@ -66,21 +68,21 @@ public class RtUtil {
 			for (int i = 31; i >= 0; i--) {
 				buffer |= ((value>>>i)&1) << bitIndex;
 				if (bitIndex-- == 0) {
-					sb[sbIndex++] = (char)(buffer+1);
+					sb[sbIndex++] = (byte)(buffer+1);
 					buffer = 0;
 					bitIndex = 6;
 				}
 			}
 		}
 
-		if (bitIndex != 6) sb[sbIndex] = (char)(buffer+1);
-		return new String(sb);
+		if (bitIndex != 6) sb[sbIndex] = (byte)(buffer+1);
+		return new String(sb, StandardCharsets.ISO_8859_1);
 	}
 
 	@Constexpr
 	@Contract(pure = true)
 	public static String pack(byte[] array) {
-		char[] sb = new char[(array.length * 8 + 6) / 7];
+		byte[] sb = new byte[(array.length * 8 + 6) / 7];
 		int sbIndex = 0;
 
 		int bitIndex = 6;
@@ -90,15 +92,15 @@ public class RtUtil {
 			for (int i = 7; i >= 0; i--) {
 				buffer |= ((value>>>i)&1) << bitIndex;
 				if (bitIndex-- == 0) {
-					sb[sbIndex++] = (char)(buffer+1);
+					sb[sbIndex++] = (byte)(buffer+1);
 					buffer = 0;
 					bitIndex = 6;
 				}
 			}
 		}
 
-		if (bitIndex != 6) sb[sbIndex] = (char)(buffer+1);
-		return new String(sb);
+		if (bitIndex != 6) sb[sbIndex] = (byte)(buffer+1);
+		return new String(sb, StandardCharsets.ISO_8859_1);
 	}
 
 	@Contract(pure = true)

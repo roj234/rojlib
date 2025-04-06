@@ -170,7 +170,7 @@ public final class ArrayUtil {
 
 	private static final Class<?> IMMUTABLE_ARRAY_TYPE = Arrays.asList().getClass();
 	@SuppressWarnings("unchecked")
-	public static <T> List<T> copyOf(Collection<T> list) {
+	public static <T> List<T> immutableCopyOf(Collection<T> list) {
 		if (list.isEmpty()) return Collections.emptyList();
 		if (list.getClass() == IMMUTABLE_ARRAY_TYPE) return (List<T>) list;
 		if (ASM.TARGET_JAVA_VERSION > 9) {

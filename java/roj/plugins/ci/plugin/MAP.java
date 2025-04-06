@@ -206,6 +206,7 @@ public class MAP implements Processor {
 
 		Mapper m;
 		var hash = digest.digest();
+		loaded:
 		try (var mzf = new ZipArchive(new File(DATA_PATH, ".mapCacheAll.zip"))) {
 			m = new Mapper(p.workspace.getMapper());
 			m.flag = (byte) flag;
@@ -216,6 +217,7 @@ public class MAP implements Processor {
 				try {
 					m.loadCache(in, true);
 					LOGGER.debug("{}: 从缓存恢复映射器", p.getName());
+					break loaded;
 				} catch (Exception e) {
 					LOGGER.warn("{}: 从缓存恢复映射器失败", e, p.getName());
 				} finally {

@@ -60,7 +60,7 @@ public final class ZipArchive extends ZipFile {
 	public ZipArchive(Source source, int flag, Charset cs) { super(source, flag & ~FLAG_BACKWARD_READ, cs); }
 
 	public void setComment(String str) {
-		comment = str == null || str.isEmpty() ? ArrayCache.BYTES : IOUtil.SharedCoder.get().encode(str);
+		comment = str == null || str.isEmpty() ? ArrayCache.BYTES : IOUtil.encodeUTF8(str);
 		if (comment.length > 65535) {
 			comment = Arrays.copyOf(comment, 65535);
 			throw new IllegalArgumentException("Comment too long");
@@ -208,14 +208,14 @@ public final class ZipArchive extends ZipFile {
 				namedEntries.put(e.name = mf.name, e);
 				if ((flags & FLAG_FORCE_UTF) != 0 || (mf.flag & EntryMod.UFS) != 0) {
 					e.flags = GP_UTF;
-					e.nameBytes = IOUtil.SharedCoder.get().encode(mf.name);
+					e.nameBytes = IOUtil.encodeUTF8(mf.name);
 				} else {
 					e.flags = 0;
 					e.nameBytes = mf.name.getBytes(cs);
 				}
 			} else if ((mf.flag & EntryMod.UFS) != 0 && (e.flags & GP_UTF) == 0) {
 				e.flags = GP_UTF;
-				e.nameBytes = IOUtil.SharedCoder.get().encode(e.name);
+				e.nameBytes = IOUtil.encodeUTF8(e.name);
 			} else {
 				e.flags = 0; // clear
 			}

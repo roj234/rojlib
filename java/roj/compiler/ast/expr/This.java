@@ -26,7 +26,6 @@ final class This extends ExprNode {
 		var file = ctx.file;
 		type.owner = isThis ? file.name() : file.parent();
 		if (type.owner == null) throw ResolveException.ofIllegalInput("this.no_super", file);
-		ctx.thisResolved = true;
 		return this;
 	}
 

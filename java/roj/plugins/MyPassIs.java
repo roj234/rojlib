@@ -118,7 +118,7 @@ public class MyPassIs extends Plugin {
 		c.setInputEcho(true);
 
 		this.mac = new HMAC(MessageDigest.getInstance("SHA-256"));
-		this.pass = KDF.HKDF_expand(mac, IOUtil.SharedCoder.get().encode(passStr), 32);
+		this.pass = KDF.HKDF_expand(mac, IOUtil.encodeUTF8(passStr), 32);
 		this.cipher = new FeedbackCipher(ILCrypto.Aes(), FeedbackCipher.MODE_CTR);
 
 		File plaintextKey = new File(getDataFolder(), "key.yml");

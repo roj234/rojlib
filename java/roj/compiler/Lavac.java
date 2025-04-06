@@ -128,6 +128,9 @@ public final class Lavac {
 		compiler.ctx = context == null ? new GlobalContextApi() : context;
 		GlobalContextApi api = (GlobalContextApi) compiler.ctx;
 
+		var reporter = new TextDiagnosticReporter(maxError, maxWarn, warnOps);
+		compiler.ctx.reporter = reporter;
+
 		for (int j = 0; j < 3; j++) {
 			if (((1 << j) & compiler.debugOps) != 0)
 				api.features.add(j);
@@ -150,16 +153,13 @@ public final class Lavac {
 
 		File dst = bin == null ? new File("Lava.jar") : new File(bin);
 
-		var reporter = new TextDiagnosticReporter(maxError, maxWarn, warnOps);
-		compiler.ctx.reporter = reporter;
-
 		boolean ok = compiler.compile(dst);
 		reporter.printSum();
 
 		if (ok) {
 			System.out.println("编译成功");
 			try (var archive = new ZipFile(dst)) {
-				var scl = new ClassLoader() {
+				var scl = new ClassLoader(Lavac.class.getClassLoader()) {
 					@Override
 					protected Class<?> findClass(String name) throws ClassNotFoundException {
 						String klass = name.replace('.', '/').concat(".class");
@@ -196,7 +196,6 @@ public final class Lavac {
 				if (!files.get(i).S1_Struct()) files.remove(i);
 			}
 			if (ctx.hasError()) return false;
-			// TODO 一个源文件生成的所有CompileUnit都应该由同一个线程处理
 			ctx.addGeneratedCompileUnits(files);
 			for (int i = 0; i < files.size(); i++) {
 				files.get(i).S2_ResolveName();

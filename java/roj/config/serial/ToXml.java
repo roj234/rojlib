@@ -28,22 +28,22 @@ public class ToXml implements CVisitor {
 
 	private int maxDepth = 100;
 
-	public final void value(String str) {
+	public final void value(String s) {
 		switch (state) {
-			case XML_CHILD: stackBottom.add(new Text(str)); break;
+			case XML_CHILD: stackBottom.add(new Text(s)); break;
 			case XML_NAME:
 				state = XML_ATTR;
 				if (stack.size() >= maxDepth) throw new IllegalStateException("栈溢出: 最大深度是 "+maxDepth);
 				stack.add(stackBottom);
-				stackBottom.add(stackBottom = createElement(str));
+				stackBottom.add(stackBottom = createElement(s));
 				break;
-			default: add(CEntry.valueOf(str)); break;
+			default: add(CEntry.valueOf(s)); break;
 		}
 	}
-	public final void value(int l) { add(CEntry.valueOf(l)); }
-	public final void value(long l) { add(CEntry.valueOf(l)); }
-	public final void value(double l) { add(CEntry.valueOf(l));}
-	public final void value(boolean l) { add(CEntry.valueOf(l)); }
+	public final void value(int i) { add(CEntry.valueOf(i)); }
+	public final void value(long i) { add(CEntry.valueOf(i)); }
+	public final void value(double i) { add(CEntry.valueOf(i));}
+	public final void value(boolean b) { add(CEntry.valueOf(b)); }
 	public final void valueNull() { add(CNull.NULL); }
 	private void add(CEntry v) {
 		if (state == XML_CHILD) {

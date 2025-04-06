@@ -8,7 +8,7 @@ import roj.math.MathUtils;
  */
 public final class SwitchMap {
 	public static final class Builder {
-		static final class Entry {
+		private static final class Entry {
 			final Object k;
 			final char v;
 
@@ -25,8 +25,7 @@ public final class SwitchMap {
 		private final boolean useEquals;
 
 		public static Builder builder(int size, boolean useEquals) { return new Builder(size, useEquals); }
-
-		public Builder(int size, boolean useEquals) {
+		private Builder(int size, boolean useEquals) {
 			this.size = size;
 			this.useEquals = useEquals;
 			if (size > 4096) throw new IllegalStateException("branch must <= 4096");
@@ -35,17 +34,18 @@ public final class SwitchMap {
 			this.mask = entries.length - 1;
 		}
 
-		public Object add(Object o, int v) {
-			int slot = (useEquals ? o.hashCode() : System.identityHashCode(o)) & mask;
-			Entry entry = new Entry(o, v);
+		// 返回值总是null, 不能删除，和代码生成相关
+		public Object add(Object key, int ord) {
+			int slot = (useEquals ? key.hashCode() : System.identityHashCode(key)) & mask;
+			Entry entry = new Entry(key, ord);
 			entry.next = entries[slot];
 			entries[slot] = entry;
 
 			// check duplicate case, for runtime
 			entry = entry.next;
 			while (entry != null) {
-				if (useEquals ? o.equals(entry.k) : o == entry.k)
-					throw new IncompatibleClassChangeError("case重复: "+o);
+				if (useEquals ? key.equals(entry.k) : key == entry.k)
+					throw new IncompatibleClassChangeError("case重复: "+key);
 				entry = entry.next;
 			}
 
@@ -86,7 +86,7 @@ public final class SwitchMap {
 	private final int mask;
 	private final boolean useEquals;
 
-	public SwitchMap(char[] idx, Object[] pk, char[] pv, boolean useEquals) {
+	private SwitchMap(char[] idx, Object[] pk, char[] pv, boolean useEquals) {
 		this.idx = idx;
 		this.pk = pk;
 		this.pv = pv;

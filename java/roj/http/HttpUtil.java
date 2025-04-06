@@ -1,7 +1,10 @@
 package roj.http;
 
 import roj.collect.CharMap;
+import roj.crypt.Base64;
 import roj.http.server.Request;
+import roj.io.IOUtil;
+import roj.util.ByteList;
 
 import java.util.regex.Pattern;
 
@@ -13,8 +16,7 @@ import java.util.regex.Pattern;
 public class HttpUtil {
 	// region Action/Method
 	public static final int GET = 0, POST = 1, PUT = 2, HEAD = 3, DELETE = 4, OPTIONS = 5, TRACE = 6, CONNECT = 7;
-
-	public static byte parseMethod(String method) {
+	public static byte getMethodId(String method) {
 		if (method == null) return -1;
 		return switch (method) {
 			case "GET" -> GET;
@@ -28,7 +30,6 @@ public class HttpUtil {
 			default -> -1;
 		};
 	}
-
 	public static String getMethodName(int id) {
 		return switch (id) {
 			case GET -> "GET";
@@ -51,10 +52,9 @@ public class HttpUtil {
 		BAD_REQUEST = 400, FORBIDDEN = 403, NOT_FOUND = 404, METHOD_NOT_ALLOWED = 405, TIMEOUT = 408, ENTITY_TOO_LARGE = 413, URI_TOO_LONG = 414, UPGRADE_REQUIRED = 426,
 		INTERNAL_ERROR = 500, UNAVAILABLE = 503;
 
-	public static String getDescription(int code) {return codes.getOrDefault((char) code, "Internal Server Error");}
+	public static String getCodeDescription(int code) {return codes.getOrDefault((char) code, "Internal Server Error");}
 
-	public static final CharMap<String> codes = new CharMap<>();
-
+	private static final CharMap<String> codes = new CharMap<>();
 	static {
 		codes.put((char) 100, "Continue");
 		codes.put((char) 101, "Switching Protocols");
@@ -101,17 +101,6 @@ public class HttpUtil {
 		codes.put((char) 505, "HTTP Version Not Supported");
 	}
 	// endregion
-	// region CORS
-	public static final String
-		ACCESS_CONTROL_ALLOW_HEADERS = "Access-Control-Allow-Headers",
-		ACCESS_CONTROL_ALLOW_ORIGIN = "Access-Control-Allow-Origin",
-		ACCESS_CONTROL_MAX_AGE = "Access-Control-Max-Age",
-		ACCESS_CONTROL_ALLOW_METHODS = "Access-Control-Allow-Methods",
-		ACCESS_CONTROL_ALLOW_CREDENTIALS = "Access-Control-Allow-Credentials";
-
-	// 204 No Content
-	public static boolean isCORSPreflight(Request req) {return req.action() == OPTIONS && req.containsKey("origin") && req.containsKey("access-control-request-method");}
-	// endregion
 	//region cache-control
 	// Vary用于请求头决定的缓存
 	public static final String
@@ -120,7 +109,15 @@ public class HttpUtil {
 		CACHED_REVALIDATE = "no-cache",
 		IMMUTABLE = "max-age=604800, immutable";
 	//endregion
+	//region Auth
+	public static String makeBasicAuth(String user, String pass) {
+		ByteList in = new ByteList().putUTFData(user).put(':').putUTFData(pass);
+		String auth = Base64.encode(in, IOUtil.getSharedCharBuf()).toString();
+		in._free();
+		return auth;
+	}
+	//endregion
 
 	private static final Pattern MOBILE = Pattern.compile("(mobile|wap|phone|ios|android)", Pattern.CASE_INSENSITIVE);
-	public static boolean isMobile(Request req) {return "?1".equals(req.getField("sec-ch-ua-mobile")) || MOBILE.matcher(req.getField("user-agent")).matches();}
+	public static boolean isMobile(Request req) {return "?1".equals(req.header("sec-ch-ua-mobile")) || MOBILE.matcher(req.header("user-agent")).matches();}
 }

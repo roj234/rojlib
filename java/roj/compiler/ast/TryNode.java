@@ -1,8 +1,10 @@
 package roj.compiler.ast;
 
 import roj.asm.insn.Label;
+import roj.collect.LinkedMyHashMap;
 import roj.collect.MyBitSet;
 import roj.collect.SimpleList;
+import roj.compiler.asm.MethodWriter;
 import roj.compiler.asm.Variable;
 import roj.compiler.ast.expr.ExprNode;
 
@@ -13,7 +15,7 @@ import java.util.List;
  * @author Roj234
  * @since 2024/4/30 0030 16:47
  */
-public final class TryNode {
+public final class TryNode extends FlowHookNode {
 	/** 是否有任何的defer */
 	boolean hasDefer;
 	/**
@@ -29,6 +31,9 @@ public final class TryNode {
 	final MyBitSet exception = new MyBitSet();
 	/** 表达式刚执行完的位置 (defer => null) */
 	final List<Label> pos = new SimpleList<>();
+
+	LinkedMyHashMap<String, MethodWriter> exceptionHandler;
+	MethodWriter finallyHandler;
 
 	public void add(Variable var, boolean nullable, Label defined) {
 		if (nullable) this.exception.add(vars.size());

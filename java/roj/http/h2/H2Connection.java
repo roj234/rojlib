@@ -599,7 +599,7 @@ public class H2Connection implements ChannelHandler {
 			var name = (String) entry.getKey();
 
 			if (name.charAt(0) == ':' != pseudo) continue;
-			hpack.encode(name, entry.getValue(), ob, header.getEncType(name));
+			hpack.encode(name, entry.getValue(), ob, header._getEncodeType(name));
 			int newSize = ob.wIndex();
 			if (newSize > size) {
 				ob.wIndex(oldSize);

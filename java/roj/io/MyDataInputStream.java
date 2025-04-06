@@ -2,8 +2,7 @@ package roj.io;
 
 import org.jetbrains.annotations.NotNull;
 import roj.reflect.Unaligned;
-import roj.text.GB18030;
-import roj.text.UTF8;
+import roj.text.FastCharset;
 import roj.util.ArrayCache;
 import roj.util.ArrayUtil;
 import roj.util.DynByteBuf;
@@ -47,7 +46,10 @@ public class MyDataInputStream extends MBInputStream implements MyDataInput, Fin
 		System.arraycopy(buf, pos, b, off, total);
 		pos = lim = 0;
 		int r = in.read(b, off + total, len - total);
-		if (r > 0) totalRead += r;
+		if (r > 0) {
+			totalRead += r;
+			mark = -1;
+		}
 		return r < 0 ? total == 0 ? r : total : total+r;
 	}
 	@Override
@@ -128,6 +130,7 @@ public class MyDataInputStream extends MBInputStream implements MyDataInput, Fin
 			if (l < count) throw new EOFException("need="+count+",read="+l);
 			pos = count;
 			lim = l;
+			mark = -1;
 			return 0;
 		} else {
 			pos = o+count;
@@ -247,7 +250,7 @@ public class MyDataInputStream extends MBInputStream implements MyDataInput, Fin
 		if (len < 0) throw new IllegalArgumentException("length="+len);
 		if (len > 0) {
 			int i = doRead(len);
-			UTF8.CODER.decodeFixedIn(DynByteBuf.wrap(buf, i, len),len,target);
+			FastCharset.UTF8().decodeFixedIn(DynByteBuf.wrap(buf, i, len),len,target);
 		}
 		return target;
 	}
@@ -265,7 +268,7 @@ public class MyDataInputStream extends MBInputStream implements MyDataInput, Fin
 		if (len < 0) throw new IllegalArgumentException("length="+len);
 		if (len > 0) {
 			int i = doRead(len);
-			GB18030.CODER.decodeFixedIn(DynByteBuf.wrap(buf, i, len),len,target);
+			FastCharset.GB18030().decodeFixedIn(DynByteBuf.wrap(buf, i, len),len,target);
 		}
 		return target;
 	}
@@ -277,6 +280,31 @@ public class MyDataInputStream extends MBInputStream implements MyDataInput, Fin
 
 	private long totalRead;
 	@Override public long position() throws IOException {return totalRead + pos - lim;}
+
+	private int mark = -1;
+
+	public boolean markSupported() {return true;}
+	public void mark(int readlimit) {
+		try {
+			pos = doRead(readlimit);
+			mark = pos;
+		} catch (IOException e) {
+			throw new RuntimeException(e);
+		}
+	}
+
+	@Override
+	public void reset() throws IOException {
+		if (mark < 0) throw new IOException("exceed readlimit");
+		pos = mark;
+	}
+
+	@Override
+	public void unread(int bytes) throws IOException {
+		if (mark < 0) throw new IOException("exceed readlimit");
+		if (pos-bytes < mark) throw new IllegalStateException("no many bytes");
+		pos -= bytes;
+	}
 
 	@Override
 	public boolean isReadable() {

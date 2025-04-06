@@ -39,7 +39,7 @@ public interface LavaApi {
 	@NotNull ResolveHelper getResolveHelper(@NotNull IClass info);
 	void invalidateResolveHelper(IClass info);
 
-	@NotNull IntBiMap<String> getParentList(IClass info);
+	@NotNull IntBiMap<String> getHierarchyList(IClass info);
 	@NotNull ComponentList getMethodList(IClass info, String name);
 	@NotNull ComponentList getFieldList(IClass info, String name);
 	@Nullable List<IType> getTypeParamOwner(IClass info, String superType) throws ClassNotFoundException;
@@ -53,6 +53,13 @@ public interface LavaApi {
 
 	void report(IClass source, Kind kind, int pos, String code);
 	void report(IClass source, Kind kind, int pos, String code, Object... args);
+
+	// 沙盒类加载器
+	void addSandboxWhitelist(String packageOrTypename, boolean childInheritance);
+	void addSandboxBlacklist(String packageOrTypename, boolean childInheritance);
+	Object createSandboxInstance(ClassNode data);
+	void addSandboxClass(String className, byte[] data);
+	Class<?> loadSandboxClass(String className, boolean resolve);
 
 	// 存放对象，什么都行
 	<T> T attachment(TypedKey<T> key);

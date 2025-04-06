@@ -334,7 +334,7 @@ public final class NATT implements Closeable, ChannelHandler, Consumer<MyChannel
 
 	public static Boolean checkTCPPort(int port) {
 		try {
-			ByteList data = HttpRequest.nts().url("http://portcheck.transmissionbt.com/"+port).execute(10000).bytes();
+			ByteList data = HttpRequest.builder().url("http://portcheck.transmissionbt.com/"+port).execute(10000).bytes();
 			char isOk = data.charAt(0);
 			if (isOk == '1') return true;
 			else if (isOk == '0') return false;

@@ -31,7 +31,7 @@ public class UIEntry extends JFrame {
 		GuiUtil.systemLook();
 		UIEntry f = new UIEntry();
 		try {
-			f.uiInfo.setText(IOUtil.getTextResource("change.log"));
+			f.uiInfo.setText(IOUtil.getTextResourceIL("change.log"));
 		} catch (Exception e) {
 			f.uiInfo.setText("changelog已丢失");
 		}

@@ -35,13 +35,20 @@ public final class ImportList {
 	private boolean importAny, restricted, inited;
 	private final MyHashMap<String, Object> importClass = new MyHashMap<>(), importStatic = new MyHashMap<>();
 	private final SimpleList<String> importPackage = new SimpleList<>(), importStaticClass = new SimpleList<>();
+	private final SimpleList<String> importModules = new SimpleList<>();
 
 	public ImportList() {}
-
+	/**
+	 * format: [c | alias] = a.b.c
+	 */
 	public MyHashMap<String, String> getImportClass() {return Helpers.cast(importClass);}
+	/**
+	 * format: of = java.util.List
+	 */
 	public MyHashMap<String, String> getImportStatic() {return Helpers.cast(importStatic);}
 	public List<String> getImportPackage() {return importPackage;}
 	public List<String> getImportStaticClass() {return importStaticClass;}
+	public List<String> getImportModules() {return importModules;}
 	public void setImportAny(boolean importAny) {this.importAny = importAny;}
 	public void setRestricted(boolean restricted) {this.restricted = restricted;}
 	public boolean isRestricted() {return restricted;}
@@ -56,21 +63,25 @@ public final class ImportList {
 		inited = false;
 	}
 
+	// 多线程环境
 	public void init(LocalContext ctx) {
 		if (inited) return;
-		inited = true;
+		synchronized (this) {
+			if (inited) return;
+			inited = true;
+		}
 
-		GlobalContext gc = ctx.classes;
-		resolveImport(ctx, gc, importClass);
-		resolveImport(ctx, gc, importStatic);
+		resolveImport(ctx, importClass);
+		resolveImport(ctx, importStatic);
 	}
-	private void resolveImport(LocalContext ctx, GlobalContext gc, MyHashMap<String, Object> aStatic) {
-		for (var itr = aStatic.entrySet().iterator(); itr.hasNext(); ) {
+	private void resolveImport(LocalContext ctx, MyHashMap<String, Object> importList) {
+		var gc = ctx.classes;
+		for (var itr = importList.entrySet().iterator(); itr.hasNext(); ) {
 			var entry = itr.next();
 			String name = (String) entry.getValue();
 			if (name == null) continue;
 
-			ClassNode info = gc.getClassInfo(name);
+			var info = gc.getClassInfo(name);
 			if (info == null) info = fixStaticImport(ctx, name);
 			if (info == null) {
 				itr.remove();
@@ -79,8 +90,9 @@ public final class ImportList {
 			else entry.setValue(info);
 		}
 	}
-	private ClassNode fixStaticImport(LocalContext ctx, String name) {
-		// import java.util.Map.Entry
+	// 处理内部类导入，例如import java.util.Map.Entry
+	// TODO 正确的方案不是我这样的，应该找到正数第一个类，然后在其InnerClass属性中查找子类
+	private static ClassNode fixStaticImport(LocalContext ctx, String name) {
 		int slash = name.lastIndexOf('/');
 		if (slash >= 0) {
 			CharList sb = ctx.getTmpSb();
@@ -107,22 +119,15 @@ public final class ImportList {
 		if (entry != null) return entry.getValue();
 
 		var info = resolve1(ctx, name);
-		block:
 		if (info == null) {
-			// import java.util.Map
-			// then Map.Entry
-			// TODO add InnerClass reference attribute if used such import
 			int slash = name.indexOf('/');
 			if (slash >= 0) {
-				String myName = ctx.file.name();
-				if (slash != myName.length() || !name.startsWith(myName)) {
-					var entry1 = resolve1(ctx, name.substring(0, slash));
-					if (entry1 == null) break block;
-					myName = entry1.name();
-				}
-				// else fastpath
+				// 如果以短名称开始
+				var starter = resolve1(ctx, name.substring(0, slash));
+				if (starter != null) info = ctx.classes.getClassInfo(starter.name() + name.substring(slash).replace('/', '$'));
+				else info = fixStaticImport(ctx, name);
 
-				info = ctx.classes.getClassInfo(myName + name.substring(slash).replace('/', '$'));
+				if (restricted && info != null) info = checkRestriction(info);
 			}
 		}
 
@@ -138,7 +143,7 @@ public final class ImportList {
 		ClassNode c;
 
 		// 已经是全限定名
-		if ((c = gc.getClassInfo(name)) != null) return restricted ? checkRestricted(c) : c;
+		if ((c = gc.getClassInfo(name)) != null) return restricted ? checkRestriction(c) : c;
 
 		if (name.indexOf('/') >= 0) return null;
 
@@ -228,7 +233,7 @@ public final class ImportList {
 		return c;
 	}
 
-	private ClassNode checkRestricted(ClassNode c) {
+	private ClassNode checkRestriction(ClassNode c) {
 		if (importClass.containsValue(c.name())) return c;
 		int index = c.name().lastIndexOf('/');
 		if (index > 0 && importPackage.contains(c.name().substring(index))) return c;
@@ -240,17 +245,7 @@ public final class ImportList {
 	 */
 	public ClassNode resolveField(LocalContext ctx, String name, List<FieldNode> out2) {
 		var imported = (ClassNode) importStatic.get(name);
-		if (imported != null) {
-			int fid = imported.getField(name);
-			if (fid < 0) return null;
-			var node = imported.fields().get(fid);
-
-			if ((node.modifier() & Opcodes.ACC_STATIC) != 0 && ctx.checkAccessible(imported, node, true, false)) {
-				out2.add(node);
-				return imported;
-			}
-			return null;
-		}
+		if (imported != null && imported.getField(name) >= 0) return imported;
 
 		var fieldCache = ctx.importCacheField;
 		if (fieldCache.isEmpty()) {
@@ -259,11 +254,6 @@ public final class ImportList {
 			MyHashSet<String> oneClass = new MyHashSet<>(), allClass = new MyHashSet<>();
 			for (String klassName : importStaticClass) {
 				ClassNode info = ctx.classes.getClassInfo(klassName);
-				if (info == null) {
-					ctx.report(Kind.ERROR, "symbol.error.noSuchClass", klassName);
-					continue;
-				}
-
 				for (RawNode node : info.fields()) {
 					if ((node.modifier()&Opcodes.ACC_STATIC) == 0) continue;
 
@@ -285,7 +275,7 @@ public final class ImportList {
 			}
 
 			if (ctx.checkAccessible((ClassNode) arr[0], (RawNode) arr[1], true, false)) {
-				out2.add((FieldNode) arr[1]);
+				//out2.add((FieldNode) arr[1]);
 				return (ClassNode) arr[0];
 			}
 		}
@@ -297,18 +287,13 @@ public final class ImportList {
 	 */
 	public ClassNode resolveMethod(LocalContext ctx, String name) {
 		ClassNode imported = (ClassNode) importStatic.get(name);
-		if (imported != null) return imported;
+		if (imported != null && imported.getMethod(name) >= 0) return imported;
 
 		var methodCache = ctx.importCacheMethod;
 		if (methodCache.isEmpty()) {
 			MyHashSet<String> oneClass = new MyHashSet<>(), allClass = new MyHashSet<>();
 			for (String klassName : importStaticClass) {
 				ClassNode info = ctx.classes.getClassInfo(klassName);
-				if (info == null) {
-					ctx.report(Kind.ERROR, "symbol.error.noSuchClass", klassName);
-					continue;
-				}
-
 				for (RawNode mn : info.methods()) {
 					if ((mn.modifier()&Opcodes.ACC_STATIC) == 0) continue;
 

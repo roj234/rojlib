@@ -78,7 +78,7 @@ public abstract class RCipherSpi extends CipherSpi {
 			insertAAD(new ByteList(b));
 		}
 	}
-	protected final void engineUpdateAAD(byte[] bytes, int off, int len) { insertAAD(roj.io.IOUtil.SharedCoder.get().wrap(bytes, off, len)); }
+	protected final void engineUpdateAAD(byte[] bytes, int off, int len) { insertAAD(DynByteBuf.wrap(bytes, off, len)); }
 
 	// region unify
 	protected final byte[] engineUpdate(byte[] b, int off, int len) { return updateIA(b,off,len,false); }
@@ -99,14 +99,14 @@ public abstract class RCipherSpi extends CipherSpi {
 	}
 
 	private byte[] updateIA(byte[] b, int off, int len, boolean doFinal) {
-		IOUtil uc = IOUtil.SharedCoder.get(); uc.byteBuf.clear();
-		bufferedUpdate(doFinal, uc.wrap(b, off, len), uc.byteBuf);
-		return uc.byteBuf.toByteArrayAndZero();
+		var TL = IOUtil.SharedBuf.get(); TL.byteBuf.clear();
+		bufferedUpdate(doFinal, TL.wrap(b, off, len), TL.byteBuf);
+		return TL.byteBuf.toByteArrayAndZero();
 	}
 	private int updateIAOA(byte[] b, int off, int len, byte[] out, int off1, boolean doFinal) {
-		IOUtil uc = IOUtil.SharedCoder.get();
-		ByteList ob = uc.shellB.set(out, off1, out.length - off1);
-		bufferedUpdate(doFinal, uc.wrap(b, off, len), ob);
+		var TL = IOUtil.SharedBuf.get();
+		ByteList ob = TL.slice1.set(out, off1, out.length - off1);
+		bufferedUpdate(doFinal, TL.wrap(b, off, len), ob);
 		return ob.wIndex();
 	}
 	private int updateNoCopy(ByteBuffer in, ByteBuffer out, boolean doFinal) {

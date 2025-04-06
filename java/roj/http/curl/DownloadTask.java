@@ -6,9 +6,9 @@ import roj.concurrent.ITask;
 import roj.concurrent.TaskHandler;
 import roj.concurrent.TaskPool;
 import roj.http.AutoRedirect;
-import roj.http.HttpClient11;
 import roj.http.HttpHead;
 import roj.http.HttpRequest;
+import roj.http.hCE;
 import roj.io.FastFailException;
 import roj.io.IOUtil;
 import roj.io.source.FileSource;
@@ -118,7 +118,7 @@ public final class DownloadTask implements ChannelHandler, ITask, Future<File> {
 	public final HttpRequest client;
 
 	public DownloadTask(URI address, File file, IProgress handler, File info) {
-		client = HttpRequest.nts().url(address).headers(defHeaders);
+		client = HttpRequest.builder().url(address).headers(defHeaders);
 		this.file = file;
 		this.handler = handler;
 		this.info = info;
@@ -157,10 +157,10 @@ public final class DownloadTask implements ChannelHandler, ITask, Future<File> {
 		ctx.channel().addBefore(ctx, "Timer", new Timeout(Downloader.timeout, 2000));
 
 		HttpHead h = client.response();
-		String lastMod = h.getField("last-modified");
+		String lastMod = h.header("last-modified");
 		if (!lastMod.isEmpty()) time = DateFormat.parseRFCDate(lastMod);
 
-		long len = h.getContentLengthLong();
+		long len = h.getContentLength();
 		String encoding = null;
 		if(!h.getContentEncoding().equals("identity")) {
 			if (!acceptDecompress) len = -1;
@@ -183,13 +183,13 @@ public final class DownloadTask implements ChannelHandler, ITask, Future<File> {
 				raf.seek((chunks+1) << 3);
 
 				String s = raf.readUTF();
-				if (!s.equals(h.getField("encoding"))) break _retry;
+				if (!s.equals(h.header("encoding"))) break _retry;
 
 				s = raf.readUTF();
-				if (checkTime && !s.equals(h.getField("last-modified"))) break _retry;
+				if (checkTime && !s.equals(h.header("last-modified"))) break _retry;
 
 				s = raf.readUTF();
-				if (ETag && !s.equals(h.getField("etag"))) break _retry;
+				if (ETag && !s.equals(h.header("etag"))) break _retry;
 
 				break _continue;
 			}
@@ -198,17 +198,17 @@ public final class DownloadTask implements ChannelHandler, ITask, Future<File> {
 			raf.writeLong(len);
 			raf.write(new byte[(chunks)<<3]);
 
-			raf.writeUTF(h.getField("encoding"));
-			raf.writeUTF(h.getField("last-modified"));
-			raf.writeUTF(h.getField("etag"));
+			raf.writeUTF(h.header("encoding"));
+			raf.writeUTF(h.header("last-modified"));
+			raf.writeUTF(h.header("etag"));
 			}
 		}
 
 		List<Downloader> tasks = new SimpleList<>();
 
 		if (operation == STREAM_DOWNLOAD || len < 0 || (
-			!"bytes".equals(h.getField("accept-ranges")) &&
-			h.getField("content-range").isEmpty()
+			!"bytes".equals(h.header("accept-ranges")) &&
+			h.header("content-range").isEmpty()
 		)) {
 			Source tmp = new FileSource(tmpFile);
 			Downloader d = len < 0 ? new Streaming(tmp) : new Chunked(1, tmp, info,0, len);
@@ -305,7 +305,7 @@ public final class DownloadTask implements ChannelHandler, ITask, Future<File> {
 					in = new GZIPInputStream(in, 1024);
 				} else if (encoding.equalsIgnoreCase("deflate")) {
 					int header = (fis.read() << 8) | fis.read();
-					inf = HttpClient11.checkWrap(header);
+					inf = hCE.checkWrap(header);
 					inf.setInput(new byte[] {(byte) (header>>>8), (byte) header});
 					in = new InflaterInputStream(in, inf, 1024);
 				} else {

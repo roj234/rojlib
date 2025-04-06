@@ -1,5 +1,8 @@
 package roj.archive.qz;
 
+import roj.plugins.ci.annotation.CompileOnly;
+
+@CompileOnly
 interface BlockId {
      byte kEnd = 0;
 

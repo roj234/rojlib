@@ -1,9 +1,9 @@
 package roj.plugin;
 
-import roj.http.ws.WebSocketHandler;
+import roj.http.WebSocketConnection;
 import roj.net.ChannelCtx;
 import roj.text.DateParser;
-import roj.text.UTF8;
+import roj.text.FastCharset;
 import roj.text.logging.Logger;
 import roj.ui.ITerminal;
 import roj.ui.Terminal;
@@ -19,7 +19,7 @@ import static roj.ui.CommandNode.literal;
  * @author Roj234
  * @since 2024/7/21 0021 7:32
  */
-final class WebTerminal extends WebSocketHandler implements ITerminal {
+final class WebTerminal extends WebSocketConnection implements ITerminal {
 	public static final ThreadLocal<WebTerminal> ACTIVE = new ThreadLocal<>();
 	static long timeout;
 	static {
@@ -27,7 +27,7 @@ final class WebTerminal extends WebSocketHandler implements ITerminal {
 			var wt = ACTIVE.get();
 			if (wt == null) Terminal.warning("该指令只能在Web终端中执行");
 			// 因为在当前线程上，所以有锁
-			else wt.error(WebTerminal.ERR_CLOSED, "goodbye");
+			else wt.close(WebTerminal.ERR_CLOSED, "goodbye");
 		}));
 		Panger.CMD.onVirtualKey(key -> {
 			if (key == (Terminal.VK_CTRL|KeyEvent.VK_Q)) {
@@ -76,14 +76,14 @@ final class WebTerminal extends WebSocketHandler implements ITerminal {
 			}
 		}
 
-		if (System.currentTimeMillis() < timeout) error(ERR_CLOSED, null);
+		if (System.currentTimeMillis() < timeout) close(ERR_CLOSED, null);
 	}
 
 	@Override
 	protected void onData(int ph, DynByteBuf in) {
 		ACTIVE.set(this);
 		try {
-			Terminal.onInput(in, UTF8.CODER);
+			Terminal.onInput(in, FastCharset.UTF8());
 		} finally {
 			ACTIVE.remove();
 		}

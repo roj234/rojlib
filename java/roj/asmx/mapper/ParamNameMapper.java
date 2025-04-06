@@ -23,7 +23,7 @@ import java.util.List;
  * @since 2023/2/22 0022 21:57
  */
 public abstract class ParamNameMapper {
-	public static List<String> getParameterName(ConstantPool cp, MethodNode m) {
+	public static List<String> getParameterNames(ConstantPool cp, MethodNode m) {
 		int j = (m.modifier() & Opcodes.ACC_STATIC) == 0 ? 1 : 0;
 
 		int len = TypeHelper.paramSize(m.rawDesc())+j;

@@ -11,10 +11,11 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.lang.invoke.MethodHandles;
 import java.lang.reflect.Field;
-import java.lang.reflect.Method;
 import java.util.Arrays;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
+
+import static roj.reflect.ReflectionUtils.JAVA_VERSION;
 
 /**
  * 在"不归路"上越走越远
@@ -25,14 +26,9 @@ final class VMInternals {
 	@ReferenceByGeneratedClass
 	private static final String PROP_NAME = "_ILJ9DC_", CLASS_NAME = "java/lang/🔓_IL🐟"; // "海阔凭鱼跃，天高任鸟飞"
 
-	static final int JAVA_VERSION;
 	static final Unsafe u;
 
 	static {
-		String v = System.getProperty("java.version");
-		String major = v.substring(0, v.indexOf('.'));
-		JAVA_VERSION = Integer.parseInt(major);
-
 		Unsafe uu;
 		try {
 			Field f = Unsafe.class.getDeclaredField("theUnsafe");
@@ -111,22 +107,14 @@ final class VMInternals {
 	static void OpenModule(Module src_module, String src_package, Module target_module) { _ModuleOpener.accept(new Object[] {src_module, target_module}, src_package); }
 	static Class<?> DefineWeakClass(String displayName, byte[] b) {
 		if (JAVA_VERSION < 17) {
-			if (ASM.__asm(mw -> {
-				mw.field(Opcodes.GETSTATIC, "${this}", "u", "Ljava/lang/Unsafe;");
+			ASM.asm(mw -> {
+				mw.field(Opcodes.GETSTATIC, "roj/reflect/VMInternals", "u", "Ljava/lang/Unsafe;");
 				mw.ldc(new CstClass("sun/misc/Unsafe"));
 				mw.one(Opcodes.ALOAD_1);
 				mw.one(Opcodes.ACONST_NULL);
 				mw.invoke(Opcodes.INVOKEVIRTUAL, "java/lang/Unsafe", "defineAnonymousClass", "(Ljava/lang/Class;[B[Ljava/lang/Object;)Ljava/lang/Class");
 				mw.one(Opcodes.ARETURN);
-			})) {
-				try {
-					Method m = Unsafe.class.getDeclaredMethod("defineAnonymousClass", Class.class, byte[].class, Object[].class);
-					m.setAccessible(true);
-					return (Class<?>) m.invoke(u, Unsafe.class, b, null);
-				} catch (Exception e) {
-					catchException(e);
-				}
-			}
+			});
 		}
 		/*
 		 * Flags for Lookup.ClassOptions

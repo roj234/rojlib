@@ -98,7 +98,7 @@ public final class CompositeSource extends Source {
 		return read == 0 ? -1 : read;
 	}
 
-	public void write(byte[] b, int off, int len) throws IOException { write(IOUtil.SharedCoder.get().wrap(b, off, len)); }
+	public void write(byte[] b, int off, int len) throws IOException { write(IOUtil.SharedBuf.get().wrap(b, off, len)); }
 	public void write(DynByteBuf data) throws IOException {
 		if (!writable) throw new IOException("源是只读的");
 

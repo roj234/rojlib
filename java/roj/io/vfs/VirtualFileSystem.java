@@ -3,7 +3,7 @@ package roj.io.vfs;
 import org.jetbrains.annotations.ApiStatus;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
-import roj.http.server.DiskFileInfo;
+import roj.http.server.FileInfo;
 
 import java.io.File;
 import java.io.IOException;
@@ -22,7 +22,7 @@ public interface VirtualFileSystem {
 
 	@NotNull VirtualFile getPath(String pathname);
 	@NotNull VirtualFile getPath(VirtualFile parent, String child);
-	@NotNull DiskFileInfo toDiskInfo(VirtualFile virtualFile);
+	@NotNull FileInfo toFileInfo(VirtualFile virtualFile);
 	@NotNull InputStream getInputStream(VirtualFile path) throws IOException;
 
 	@ApiStatus.Experimental

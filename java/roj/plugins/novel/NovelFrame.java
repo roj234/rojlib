@@ -653,7 +653,7 @@ public class NovelFrame extends JFrame {
 
 			for (int i = 0; i < chapters.size(); i++) {
 				Chapter ca = chapters.get(i);
-				byte[] ba = IOUtil.SharedCoder.get().encode(ca.text != null ? ca.text : novel_in.subSequence(ca.start, ca.end));
+				byte[] ba = IOUtil.encodeUTF8(ca.text != null ? ca.text : novel_in.subSequence(ca.start, ca.end));
 				if (ba.length <= 10) {
 					finished.add(chapters.size()-i-1);
 					continue;
@@ -666,7 +666,7 @@ public class NovelFrame extends JFrame {
 					Chapter cb = chapters.get(j);
 
 					pool.submit(() -> {
-						byte[] bb = IOUtil.SharedCoder.get().encode(cb.text != null ? cb.text : novel_in.subSequence(cb.start, cb.end));
+						byte[] bb = IOUtil.encodeUTF8(cb.text != null ? cb.text : novel_in.subSequence(cb.start, cb.end));
 						if (bb.length > 10) {
 							int siz = Math.min(ba.length, bb.length);
 							int dd = diff.parallel().getDiffLength(bb, siz / 2);

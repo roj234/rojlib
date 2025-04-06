@@ -17,6 +17,15 @@ import java.util.List;
  * @since 2023/12/25 0025 15:48
  */
 public class PluginDescriptor {
+	public enum Role {
+		PermissionManager(true);
+
+		public final boolean singleton;
+		Role(boolean singleton) {
+			this.singleton = singleton;
+		}
+	}
+
 	transient Source source;
 	transient String fileName;
 
@@ -27,6 +36,7 @@ public class PluginDescriptor {
 	List<String> authors = Collections.emptyList();
 	String website = "";
 	boolean library;
+	Role role;
 
 	Plugin instance;
 	List<String> depend = Collections.emptyList(), loadAfter = Collections.emptyList(), loadBefore = Collections.emptyList();

@@ -72,11 +72,8 @@ public class GZFileInfo implements FileInfo {
 		this.file = file;
 	}
 
-	@Override
-	public int stats() {return FILE_RA | FILE_DEFLATED;}
-
-	@Override
-	public long length(boolean deflated) {return deflated ? compSize : uncompSize;}
+	@Override public int stats() {return FILE_RA | FILE_DEFLATED | FILE_HAS_CRC32;}
+	@Override public long length(boolean deflated) {return deflated ? compSize : uncompSize;}
 
 	@Override
 	public InputStream get(boolean deflated, long offset) throws IOException {
@@ -94,6 +91,6 @@ public class GZFileInfo implements FileInfo {
 		}
 	}
 
-	@Override
-	public long lastModified() {return modTime * 1000L;}
+	@Override public long lastModified() {return modTime * 1000L;}
+	@Override public int getCrc32() {return dataCrc;}
 }

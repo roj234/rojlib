@@ -204,7 +204,7 @@ public final class BsDiff {
 				 .putIntLE(scan - lastScan - lenF - lenB) // patchLen
 				 .putIntLE(pos - lastPos - lenF - lenB); // skipLen
 
-			ArrayRef range = patch.byteRangeW(lenF-i);
+			NativeArray range = patch.byteRangeW(lenF-i);
 			for (int j = 0; j < lenF-i; j++) range.set(j, toPositive(left[lastPos + i + j]) - toPositive(right[lastScan + i + j]));
 
 			if (overlap == -1) patch.put(right, lastScan + lenF, scan - lastScan - lenF - lenB);

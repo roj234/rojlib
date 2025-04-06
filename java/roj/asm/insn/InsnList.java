@@ -152,7 +152,6 @@ public class InsnList extends AbstractCodeWriter implements Iterable<InsnNode> {
 
 		cw.labels.addAll(labels);
 
-		//System.out.println("serializing "+segments);
 		int blockFrom = cw.codeBlocks.size();
 		if (cw.codeBlocks.isEmpty())
 			cw.codeBlocks = new SimpleList<>();

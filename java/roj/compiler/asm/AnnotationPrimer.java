@@ -9,7 +9,7 @@ import roj.asm.type.IType;
 import roj.asm.type.TypeHelper;
 import roj.collect.MyHashMap;
 import roj.collect.SimpleList;
-import roj.compiler.JavaLexer;
+import roj.compiler.Tokens;
 import roj.compiler.ast.expr.ArrayDef;
 import roj.compiler.ast.expr.ExprNode;
 import roj.compiler.ast.expr.ExprParser;
@@ -43,19 +43,19 @@ public final class AnnotationPrimer extends Annotation {
 		wr.retractWord();
 
 		checkExpr:{
-		if (w.type() == JavaLexer.lBrace) {
+		if (w.type() == Tokens.lBrace) {
 			wr.mark();
 			System.out.println(wr.next());
-			if (wr.next().type() == JavaLexer.at) {
+			if (wr.next().type() == Tokens.at) {
 				wr.skip();
 
 				var list = new SimpleList<AnnotationPrimer>();
 				while (true) {
 					file.readAnnotations(list);
-					if (!wr.nextIf(JavaLexer.comma)) break;
-					wr.except(JavaLexer.at);
+					if (!wr.nextIf(Tokens.comma)) break;
+					wr.except(Tokens.at);
 				}
-				wr.except(JavaLexer.rBrace);
+				wr.except(Tokens.rBrace);
 
 				expr = new AList(Helpers.cast(list));
 				break checkExpr;
@@ -64,7 +64,7 @@ public final class AnnotationPrimer extends Annotation {
 			}
 		}
 
-		if (wr.nextIf(JavaLexer.at)) {
+		if (wr.nextIf(Tokens.at)) {
 			var list = file.lc().tmpAnnotations;
 			int size = list.size();
 
@@ -72,7 +72,7 @@ public final class AnnotationPrimer extends Annotation {
 			if (list.size() != size+1) file.lc().report(Kind.ERROR, "cu.annotation.multiAnnotation");
 			expr = list.pop();
 		} else {
-			int state = wr.setState(JavaLexer.STATE_EXPR);
+			int state = wr.setState(Tokens.STATE_EXPR);
 			// _ENV_TYPED_ARRAY允许直接使用数组生成式而不用给定类型
 			expr = file.lc().ep.parse(ExprParser.STOP_COMMA|ExprParser.STOP_RSB|ExprParser._ENV_TYPED_ARRAY);
 			wr.state = state;

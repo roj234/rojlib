@@ -1,6 +1,7 @@
 package roj.plugin;
 
 import org.jetbrains.annotations.Contract;
+import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import roj.archive.zip.ZipFile;
 import roj.collect.SimpleList;
@@ -20,6 +21,7 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.Charset;
+import java.util.EnumMap;
 import java.util.regex.Pattern;
 
 /**
@@ -31,6 +33,7 @@ public class PluginManager {
 	static final Logger LOGGER = Logger.getLogger(SYSTEM_NAME);
 	private static final XHashSet.Shape<String, PluginDescriptor> PM_SHAPE = XHashSet.noCreation(PluginDescriptor.class, "id");
 	final XHashSet<String, PluginDescriptor> plugins = PM_SHAPE.create();
+	final EnumMap<PluginDescriptor.Role, PluginDescriptor> rolePlugins = new EnumMap<>(PluginDescriptor.Role.class);
 	boolean stopping;
 
 	private final ClassLoader env = getClass().getClassLoader();
@@ -164,6 +167,7 @@ public class PluginManager {
 				pd.instance.onLoad();
 
 				pd.state = LOADED;
+				if (pd.role != null) rolePlugins.putIfAbsent(pd.role, pd);
 			}
 		} catch (Exception e) {
 			synchronized (pd.stateLock) {
@@ -229,6 +233,7 @@ public class PluginManager {
 			pd.library = config.getBool("library");
 			pd.mainClass = config.getString("mainClass");
 			if (pd.mainClass.isEmpty() && !pd.library) throw new FastFailException("mainClass未指定");
+			pd.role = config.containsKey("role") ? PluginDescriptor.Role.valueOf(config.getString("role")) : null;
 
 			pd.depend = config.getList("depend").toStringList();
 			pd.loadBefore = config.getList("loadBefore").toStringList();
@@ -263,6 +268,17 @@ public class PluginManager {
 	public Plugin getPluginInstance(String id) {
 		var pd = plugins.get(id);
 		return pd == null ? null : pd.instance;
+	}
+	@NotNull
+	@Contract(pure = true)
+	public Plugin getPluginInstance(PluginDescriptor.Role role) {
+		var pd = rolePlugins.get(role);
+		if (pd != null) {
+			if (pd.instance == null)
+				throw new NullPointerException("插件"+pd+"状态异常");
+			return pd.instance;
+		}
+		throw new IllegalStateException("没有"+role+"类型的实例");
 	}
 	public void enablePlugin(PluginDescriptor pd) throws Exception {
 		if (stopping) throw new FastFailException("系统正在关闭");
@@ -327,6 +343,7 @@ public class PluginManager {
 	}
 	private void unloadPluginTrusted(PluginDescriptor pd) {
 		synchronized (pd.stateLock) {
+			if (pd.role != null) rolePlugins.remove(pd.role, pd);
 			if (pd.state == UNLOAD) return;
 			LOGGER.debug("正在卸载插件 {}", pd);
 

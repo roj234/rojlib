@@ -63,7 +63,7 @@ public class TaskExecutor extends FastLocalThread implements TaskHandler {
 		var queue = tasks;
 		tasks = new ConcurrentLinkedQueue<>();
 		shutdown();
-		return ArrayUtil.copyOf(queue);
+		return ArrayUtil.immutableCopyOf(queue);
 	}
 	@Override
 	public boolean isShutdown() {return state != 0;}

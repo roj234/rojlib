@@ -187,7 +187,7 @@ public final class UPnPDevice {
 				UPnPGateway.LOGGER.debug("正在请求设备描述: {}", loc);
 				Element xml;
 				try {
-					xml = XMLParser.parses(HttpRequest.nts().url(loc).header("connection", "close").execute(500).str());
+					xml = XMLParser.parses(HttpRequest.builder().url(loc).header("connection", "close").execute(500).str());
 
 					Node node = xml.querySelector("/root/URLBase");
 					String loc1 = node == null ? loc.substring(0, loc.indexOf('/')) : node.textContent();
@@ -256,7 +256,7 @@ public final class UPnPDevice {
 			}
 			data.append("</m:").append(action).append("></SOAP-ENV:Body></SOAP-ENV:Envelope>");
 
-			HttpRequest query = HttpRequest.nts()
+			HttpRequest query = HttpRequest.builder()
 				.url(controlURL)
 				.header("Content-Type", "text/xml")
 				.header("SOAPAction", "\""+serviceType+"#"+action+"\"")

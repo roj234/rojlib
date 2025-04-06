@@ -1,7 +1,7 @@
 package roj.compiler.ast.expr;
 
 import org.jetbrains.annotations.Nullable;
-import roj.asm.IClass;
+import roj.asm.ClassNode;
 import roj.asm.Opcodes;
 import roj.asm.type.Generic;
 import roj.asm.type.IType;
@@ -63,7 +63,7 @@ final class NewAnonymousClass extends ExprNode {
 		if (Inferrer.hasUndefined(parentType)) ctx.report(this, Kind.ERROR, "invoke.noExact");
 
 		String parent = parentType.owner();
-		IClass info = ctx.classes.getClassInfo(parent);
+		ClassNode info = ctx.classes.getClassInfo(parent);
 		if (info == null) {
 			ctx.report(this, Kind.ERROR, "symbol.error.noSuchClass", parent);
 			return NaE.RESOLVE_FAILED;
@@ -77,15 +77,19 @@ final class NewAnonymousClass extends ExprNode {
 			klass.addAttribute(sign);
 		}
 
+		ctx.classes.addGeneratedClass(klass);
+		var next = LocalContext.next();
+		next.setClass(klass);
+
 		MethodWriter constructor;
 		if ((info.modifier() & Opcodes.ACC_INTERFACE) != 0) {
 			klass.addInterface(parent);
 
 			// 接口是不存在构造器的，只能这么写
 			if (!args.isEmpty()) {
-				ctx.report(this, Kind.ERROR, "invoke.incompatible.single", info, "<init>",
-						"  \1invoke.except\0 \1invoke.no_param\0\n"+
-						"  \1invoke.found\0 "+TextUtil.join(argTypes, ", "));
+				next.report(this, Kind.ERROR, "invoke.incompatible.single", info, "invoke.constructor",
+						"[\"  \",invoke.except,\" \",invoke.no_param,\"\n"+
+						"  \",invoke.found\" "+TextUtil.join(argTypes, ", ")+"\"]");
 				return NaE.RESOLVE_FAILED;
 			}
 
@@ -96,22 +100,20 @@ final class NewAnonymousClass extends ExprNode {
 		} else {
 			klass.parent(parent);
 
-			var list = ctx.getMethodList(info, "<init>");
-			if (list == ComponentList.NOT_FOUND) {
-				ctx.report(this, Kind.ERROR, "symbol.error.noSuchSymbol", "invoke.method", "<init>"+"("+TextUtil.join(argTypes, ",")+")", "\1symbol.type\0 "+parent);
-				return NaE.RESOLVE_FAILED;
-			}
-
-			var r = list.findMethod(ctx, argTypes, ComponentList.THIS_ONLY);
+			var r = next.getMethodListOrReport(info, "<init>", this).findMethod(next, argTypes, ComponentList.THIS_ONLY);
 			if (r == null) return NaE.RESOLVE_FAILED;
 
-			r.addExceptions(ctx, false);
+			r.addExceptions(next, false);
 			klass.j11PrivateConstructor(r.method);
 			constructor = klass.createDelegation(Opcodes.ACC_SYNTHETIC, r.method, r.method, false, false);
 		}
-		ctx.classes.addGeneratedClass(klass);
 
+		klass.S2_ResolveName();
+		klass.S2_ResolveType();
 		klass.NAC_SetGlobalInit(constructor);
+		klass.S2_ResolveMethod();
+		LocalContext.prev();
+
 		newExpr.fn = Type.klass(klass.name());
 		nestContext = NestContext.anonymous(ctx, klass, constructor, args);
 
@@ -124,9 +126,6 @@ final class NewAnonymousClass extends ExprNode {
 		ctx.enclosing.add(nestContext);
 		LocalContext.next();
 		try {
-			klass.S2_ResolveName();
-			klass.S2_ResolveType();
-			klass.S2_ResolveMethod();
 			klass.S3_Annotation();
 			klass.S4_Code();
 			klass.S5_noStore();

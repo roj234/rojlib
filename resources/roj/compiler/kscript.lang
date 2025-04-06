@@ -94,10 +94,11 @@ cu.method.mustNotBody=不能包含方法体
 cu.method.mustHasBody=缺少方法体, 或声明抽象
 cu.method.paramVoid=void 不能作为参数
 cu.method.paramConflict=参数名称重复
-cu.method.paramVararg=可变参数必须是最后一个 (未来会扩展varargs，只要继承链没有交集，那么可以设置多个可变参数！)
+cu.method.paramVararg=可变参数必须是最后一个
 cu.method.paramCount=方法参数过多
 cu.method.annotationThrow=注解方法不能抛出异常
 cu.method.noAbstract=在非抽象类%1中无法声明抽象方法%2
+cu.method.varargDefault=可变参数不能带有默认值
 
 cu.annotation.valueOnly=注解值必须采用 'name=value' 格式
 cu.annotation.multiAnnotation=非法的类型开始
@@ -310,7 +311,7 @@ invoke.error.constructor=[Invoke]对 %1 的调用必须是构造器中的第一�
 invoke.error.instantiationAbstract=[Invoke] %1 是抽象的; 无法实例化
 invoke.error.instantiationEnum=[Invoke] 无法实例化枚举类型 %1
 invoke.compatible.plural="[Invoke]对 %1 的引用不明确\n%2"
-invoke.incompatible.single="[Invoke]无法将类 %1 中的方法 %2 应用到给定类型\n%3"
+invoke.incompatible.single="[Invoke]无法将类 %1 中的%2应用到给定类型\n%3"
 invoke.incompatible.plural="[Invoke]对于%1找不到合适的方法\n%2"
 invoke.noExact=创建的类型参数不得包含非具体泛型(<>除外)
 invoke.wrongInstantiationEnclosing=创建的类%1不是内部类，是静态内部类，或上下文中的参数类型%2不匹配目标的封闭类型
@@ -360,7 +361,7 @@ and=和
 invoke.namedArgs=参数名称不匹配
 
 invoke.warn.illegalNameList=[ML]%1.%2的参数属性格式不合法
-invoke.error.paramMissing=[ML]对%1.%2的按名称调用缺少参数%3
+#invoke.error.paramMissing=[ML]对%1.%2的按名称调用缺少参数%3
 invoke.error.paramExtra=[ML]对%1.%2的按名称调用多余参数%3
 
 # 类型转换 (注意，当修改TypeCast中对应数值需要同步这里)

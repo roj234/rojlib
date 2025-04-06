@@ -14,7 +14,7 @@ import roj.config.data.CEntry;
 import roj.config.data.CList;
 import roj.config.data.CMap;
 import roj.config.data.Type;
-import roj.http.server.HttpCache;
+import roj.http.server.HSConfig;
 import roj.io.IOUtil;
 import roj.math.Version;
 import roj.text.CharList;
@@ -366,7 +366,7 @@ final class MinecraftClientInfo {
 			if (size != 0 && file.length() != size) throw new IllegalStateException("大小校验失败");
 
 			if (!sha1.isEmpty()) {
-				var digest = HttpCache.getInstance().sha1();
+				var digest = HSConfig.getInstance().sha1();
 
 				var buf = ArrayCache.getByteArray(4096, false);
 				try (var in = new FileInputStream(file)) {

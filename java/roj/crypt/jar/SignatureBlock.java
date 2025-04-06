@@ -10,6 +10,7 @@ import roj.crypt.asn1.DerValue;
 import roj.crypt.asn1.DerWriter;
 import roj.io.IOUtil;
 import roj.io.MyDataInputStream;
+import roj.util.ArrayUtil;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
 
@@ -34,7 +35,7 @@ final class SignatureBlock extends CertPath {
 	private static final Asn1Context PKCS_7_CTX;
 	static {
 		try {
-			PKCS_7_CTX = Asn1Context.createFromString(IOUtil.getTextResource("roj/crypt/jar/PKCS#7.asn"));
+			PKCS_7_CTX = Asn1Context.createFromString(IOUtil.getTextResourceIL("roj/crypt/jar/PKCS#7.asn"));
 		} catch (ParseException | IOException e) {
 			throw new RuntimeException(e);
 		}
@@ -73,7 +74,7 @@ final class SignatureBlock extends CertPath {
 		}
 
 		// 这个数组还要复制两遍，哎真是，GC GC，仗着有GC为所欲为.jpg
-		this.certs = List.copyOf((List<X509Certificate>) certs);
+		this.certs = ArrayUtil.immutableCopyOf((List<X509Certificate>) certs);
 		this.signature = signature;
 		this.signatureAlg = signatureAlg;
 		this.signer = (X509Certificate) certs.get(signerId);

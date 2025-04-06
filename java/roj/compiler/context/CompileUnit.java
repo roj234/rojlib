@@ -16,8 +16,8 @@ import roj.asm.util.ClassLike;
 import roj.asmx.AnnotationSelf;
 import roj.asmx.mapper.NameAndType;
 import roj.collect.*;
-import roj.compiler.JavaLexer;
 import roj.compiler.LavaFeatures;
+import roj.compiler.Tokens;
 import roj.compiler.api.Types;
 import roj.compiler.asm.*;
 import roj.compiler.ast.BlockParser;
@@ -35,6 +35,7 @@ import roj.config.Word;
 import roj.config.data.CEntry;
 import roj.io.IOUtil;
 import roj.text.CharList;
+import roj.util.ArrayCache;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
 import roj.util.Helpers;
@@ -42,7 +43,7 @@ import roj.util.Helpers;
 import java.util.*;
 
 import static roj.asm.Opcodes.*;
-import static roj.compiler.JavaLexer.*;
+import static roj.compiler.Tokens.*;
 import static roj.config.Word.LITERAL;
 
 /**
@@ -81,7 +82,7 @@ public abstract class CompileUnit extends ClassNode implements ClassLike {
 		ACC_METHOD_ILLEGAL = ACC_TRANSIENT|ACC_VOLATILE,
 		ACC_FIELD_ILLEGAL = ACC_STRICT|ACC_NATIVE|ACC_ABSTRACT | _ACC_DEFAULT|_ACC_ASYNC;
 
-	protected final String source;
+	protected final String filename;
 	private final CharSequence code;
 
 	protected final ImportList importList;
@@ -112,10 +113,11 @@ public abstract class CompileUnit extends ClassNode implements ClassLike {
 		}
 	}
 
-	// Inner Class
+	// inner class owner, equal this if not
 	@NotNull
 	protected final CompileUnit _parent;
-	public int _children;
+	// anonymous class index
+	protected int _children;
 
 	protected LocalContext ctx;
 	public void _setCtx(LocalContext ctx) {this.ctx = ctx;}
@@ -130,7 +132,7 @@ public abstract class CompileUnit extends ClassNode implements ClassLike {
 	}
 
 	public CompileUnit(String name, String code) {
-		source = name;
+		filename = name;
 		this.code = code;
 		importList = new ImportList();
 
@@ -138,7 +140,7 @@ public abstract class CompileUnit extends ClassNode implements ClassLike {
 	}
 	public ImportList getImportList() {return importList;}
 	public LocalContext lc() {return ctx;}
-	public String getSourceFile() {return source;}
+	public String getSourceFile() {return filename;}
 	public CharSequence getCode() {return code;}
 
 	protected void attachJavadoc(Attributed node) {
@@ -151,7 +153,7 @@ public abstract class CompileUnit extends ClassNode implements ClassLike {
 
 	// region 文件中的其余类
 	protected CompileUnit(CompileUnit parent, boolean helperClass) {
-		source = parent.source;
+		filename = parent.filename;
 		ctx = parent.ctx;
 
 		if (ctx.classes.hasFeature(LavaFeatures.ATTR_SOURCE_FILE))
@@ -167,16 +169,20 @@ public abstract class CompileUnit extends ClassNode implements ClassLike {
 	}
 
 	public abstract CompileUnit newAnonymousClass(@Nullable MethodNode mn) throws ParseException;
-	public final ClassNode newAnonymousClass_NoBody(@Nullable MethodNode mn) {
+	public final ClassNode newAnonymousClass_NoBody(@Nullable MethodNode mn, @Nullable InnerClasses.Item desc) {
 		var c = new ClassNode();
 
-		c.name(IOUtil.getSharedCharBuf().append(name).append("$").append(++_children).toString());
+		c.name(IOUtil.getSharedCharBuf().append(name).append('$').append(++_children).toString());
 		c.modifier = ACC_FINAL|ACC_SUPER;
 
 		if (ctx.classes.hasFeature(LavaFeatures.ATTR_INNER_CLASS)) {
-			var desc = InnerClasses.Item.anonymous(c.name(), c.modifier);
+			if (desc == null) desc = InnerClasses.Item.anonymous(c.name(), ACC_PRIVATE | ACC_STATIC | ACC_FINAL);
+			else desc.self = c.name();
 			this.innerClasses().add(desc);
-			//c.innerClasses().add(desc);
+
+			var ic = new InnerClasses();
+			ic.classes.add(desc);
+			c.addAttribute(ic);
 
 			var ownerMethod = new EnclosingMethod();
 			ownerMethod.owner = name;
@@ -190,6 +196,9 @@ public abstract class CompileUnit extends ClassNode implements ClassLike {
 
 		if (ctx.classes.getMaximumBinaryCompatibility() >= LavaFeatures.JAVA_11)
 			addNestMember(c);
+
+		if (ctx.classes.hasFeature(LavaFeatures.ATTR_SOURCE_FILE))
+			c.addAttribute(getRawAttribute("SourceFile"));
 
 		ctx.classes.addGeneratedClass(c);
 		return c;
@@ -217,7 +226,7 @@ public abstract class CompileUnit extends ClassNode implements ClassLike {
 	// endregion
 	public abstract boolean S1_Struct() throws ParseException;
 	// region 阶段1 类的结构 辅助方法 resolve MODIFIER TYPE GENERIC ANNOTATION
-	public final int readModifiers(JavaLexer wr, int mask) throws ParseException {
+	public final int readModifiers(Tokens wr, int mask) throws ParseException {
 		if ((mask & _ACC_ANNOTATION) != 0) ctx.tmpAnnotations.clear();
 
 		Word w;
@@ -281,7 +290,7 @@ public abstract class CompileUnit extends ClassNode implements ClassLike {
 	/**
 	 * 解析类型
 	 */
-	protected final IType readType(JavaLexer wr, int flags) throws ParseException {
+	protected final IType readType(Tokens wr, int flags) throws ParseException {
 		Word w = wr.next();
 		IType type = FastPrimitive.get(w.type());
 
@@ -481,7 +490,7 @@ public abstract class CompileUnit extends ClassNode implements ClassLike {
 	}
 
 	// <T extends YYY<T, V> & ZZZ, V extends T & XXX>
-	protected final void genericDecl(JavaLexer wr) throws ParseException {
+	protected final void genericDecl(Tokens wr) throws ParseException {
 		var s = makeSignature();
 		List<IType> bounds = Helpers.cast(ctx.tmpList);
 
@@ -511,7 +520,7 @@ public abstract class CompileUnit extends ClassNode implements ClassLike {
 	}
 
 	public final List<AnnotationPrimer> readAnnotations(List<AnnotationPrimer> list) throws ParseException {
-		JavaLexer wr = ctx.lexer;
+		Tokens wr = ctx.lexer;
 
 		while (true) {
 			int pos = wr.index;
@@ -714,7 +723,7 @@ public abstract class CompileUnit extends ClassNode implements ClassLike {
 
 		ctx.errorReportIndex = classIdx;
 		// 检测循环继承
-		ctx.getParentList(this);
+		ctx.getHierarchyList(this);
 
 		String parent = parent();
 		// 检测泛型异常
@@ -725,7 +734,7 @@ public abstract class CompileUnit extends ClassNode implements ClassLike {
 		var parentInfo = ctx.classes.getClassInfo(parent);
 		var icFlag = ctx.classes.getInnerClassFlags(parentInfo).get(parent);
 		if (icFlag != null && (icFlag.modifier&ACC_STATIC) == 0) {
-			if (_parent != this) {
+			if (isNonStaticInnerClass()) {
 				ctx.castTo(Type.klass(_parent.name()), Type.klass(icFlag.parent), 0);
 			} else {
 				ctx.report(Kind.ERROR, "cu.inheritNonStatic", icFlag.parent);
@@ -828,10 +837,7 @@ public abstract class CompileUnit extends ClassNode implements ClassLike {
 			if (generateConstructor) {
 				var cw = glinit = newWritableMethod(ACC_PUBLIC|ACC_SYNTHETIC, "<init>", "(Ljava/lang/String;I)V");
 				cw.visitSize(3,3);
-				cw.one(ALOAD_0);
-				cw.one(ALOAD_1);
-				cw.one(ILOAD_2);
-				cw.invoke(INVOKESPECIAL, "java/lang/Enum", "<init>", "(Ljava/lang/String;I)V");
+				cw.insertBefore(DynByteBuf.wrap(invokeDefaultConstructor()));
 				generateConstructor = false;
 			}
 
@@ -912,7 +918,7 @@ public abstract class CompileUnit extends ClassNode implements ClassLike {
 			if (generateConstructor) {
 				generateConstructor = false;
 
-				var cw = newWritableMethod(ACC_PUBLIC|ACC_SYNTHETIC, "<init>", "()V");
+				var cw = newWritableMethod(ACC_PUBLIC, "<init>", "()V");
 				cw.one(ALOAD_0);
 				cw.invoke(INVOKESPECIAL, "java/lang/Record", "<init>", "()V");
 
@@ -958,7 +964,7 @@ public abstract class CompileUnit extends ClassNode implements ClassLike {
 			CodeWriter w;
 
 			if (mid < 0) {
-				var cw = newWritableMethod(ACC_PUBLIC|ACC_FINAL|ACC_SYNTHETIC, "toString", "()Ljava/lang/String;");
+				var cw = newWritableMethod(ACC_PUBLIC|ACC_FINAL, "toString", "()Ljava/lang/String;");
 				cw.visitSize(2, 1);
 				cw.one(ALOAD_0);
 				cw.invokeDyn(refId, "toString", "(L"+name+";)Ljava/lang/String;", 0);
@@ -970,7 +976,7 @@ public abstract class CompileUnit extends ClassNode implements ClassLike {
 
 			mid = getMethod("hashCode", "()I");
 			if (mid < 0) {
-				w = newMethod(ACC_PUBLIC|ACC_FINAL|ACC_SYNTHETIC, "hashCode", "()I");
+				w = newMethod(ACC_PUBLIC|ACC_FINAL, "hashCode", "()I");
 				w.visitSize(1, 1);
 				w.one(ALOAD_0);
 				w.invokeDyn(refId, "hashCode", "(L"+name+";)I", 0);
@@ -982,7 +988,7 @@ public abstract class CompileUnit extends ClassNode implements ClassLike {
 
 			mid = getMethod("equals", "(Ljava/lang/Object;)Z");
 			if (mid < 0) {
-				w = newMethod(ACC_PUBLIC|ACC_FINAL|ACC_SYNTHETIC, "equals", "(Ljava/lang/Object;)Z");
+				w = newMethod(ACC_PUBLIC|ACC_FINAL, "equals", "(Ljava/lang/Object;)Z");
 				w.visitSize(2, 2);
 				w.one(ALOAD_0);
 				w.one(ALOAD_1);
@@ -994,35 +1000,70 @@ public abstract class CompileUnit extends ClassNode implements ClassLike {
 			}
 		}
 		// endregion
-		if (isNonStaticInnerClass()) newField(Opcodes.ACC_SYNTHETIC | Opcodes.ACC_FINAL, NestContext.InnerClass.FIELD_HOST_REF, Type.klass(_parent.name()));
-		generateConstructor:
-		if (generateConstructor) {
-			var pInfo = ctx.classes.getClassInfo(parent);
+		boolean isNewNonStaticInnerClass = isNonStaticInnerClass() && !isInheritedNonStaticInnerClass();
+		if (isNewNonStaticInnerClass) newField(ACC_SYNTHETIC|ACC_FINAL, NestContext.InnerClass.FIELD_HOST_REF, Type.klass(_parent.name()));
 
-			var mn = pInfo.getMethodObj("<init>", "()V");
+		if (generateConstructor) {
+			var cw = glinit = newWritableMethod(ACC_PUBLIC, "<init>", isNonStaticInnerClass() ? "(L"+_parent.name()+";)V" : "()V");
+			cw.visitSize(1,1);
+			cw.computeFrames(AttrCode.COMPUTE_SIZES);
+			cw.insertBefore(DynByteBuf.wrap(invokeDefaultConstructor()));
+		}
+
+		if (isNewNonStaticInnerClass) {
+			var glinit = getGlobalInit();
+			glinit.one(ALOAD_0);
+			glinit.one(ALOAD_1);
+			glinit.field(PUTFIELD, name, NestContext.InnerClass.FIELD_HOST_REF, "L"+_parent.name+";");
+		}
+	}
+	public boolean isNonStaticInnerClass() {return _parent != this && (extraModifier&(ACC_STATIC|_ACC_INNER_CLASS)) == _ACC_INNER_CLASS;}
+	public boolean isInheritedNonStaticInnerClass() {
+		if (isNonStaticInnerClass()) {
+			String parent = parent();
+			var parentInfo = ctx.classes.getClassInfo(parent);
+			var icFlag = ctx.classes.getInnerClassFlags(parentInfo).get(parent);
+			return icFlag != null && (icFlag.modifier & ACC_STATIC) == 0;
+		}
+		return false;
+	}
+	@Nullable private byte[] invokeDefaultConstructor;
+	public byte[] invokeDefaultConstructor() {
+		if (invokeDefaultConstructor != null) return invokeDefaultConstructor;
+
+		var tmp = IOUtil.getSharedByteBuf();
+		if ((modifier&ACC_ENUM) != 0) {
+			tmp.put(Opcodes.ALOAD_0)
+			   .put(Opcodes.ALOAD_1)
+			   .put(Opcodes.ILOAD_2)
+			   .put(Opcodes.INVOKESPECIAL)
+			   .putShort(cp.getMethodRefId("java/lang/Enum", "<init>", "(Ljava/lang/String;I)V"));
+		} else {
+			String parent = parent();
+			ClassNode pInfo = ctx.classes.getClassInfo(parent);
+
+			var icFlag = ctx.classes.getInnerClassFlags(pInfo).get(parent);
+
+			String parentArg = icFlag != null && (icFlag.modifier & ACC_STATIC) == 0 ? "(L"+icFlag.parent+";)V" : "()V";
+
+			var mn = pInfo.getMethodObj("<init>", parentArg);
 			if (mn != null) {
 				ctx.checkAccessible(pInfo, mn, false, true);
-				if (_parent != this) j11PrivateConstructor(mn);
+				if (_parent != this && pInfo instanceof CompileUnit) j11PrivateConstructor(mn);
 			} else if (pInfo.getMethodObj("<init>") != null) {
 				// 2.2阶段其实没法保证方法的确定性，但是已知只会生成无参构造器，就能在这里做检查了.
 				// 如果存在任意有参构造器，就不会生成默认的无参public构造器了
 				ctx.report(Kind.ERROR, "cu.noDefaultConstructor", parent);
-				break generateConstructor;
+				return invokeDefaultConstructor = ArrayCache.BYTES;
 			}
 
-			var cw = glinit = newWritableMethod(ACC_PUBLIC|ACC_SYNTHETIC, "<init>", isNonStaticInnerClass() ? "(L"+_parent.name()+";)V" : "()V");
-			cw.visitSize(1,1);
-			cw.one(ALOAD_0);
-			if (!parentArg.equals("()V")) cw.one(ALOAD_1);
-			cw.invoke(INVOKESPECIAL, parent, "<init>", parentArg);
-			if (parentArg.equals("()V")) {
-				cw.one(ALOAD_0);
-				cw.one(ALOAD_1);
-				cw.field(PUTFIELD, this, fields.size()-1);
-			}
+			tmp.put(ALOAD_0);
+			if (!parentArg.equals("()V")) tmp.put(ALOAD_1);
+			tmp.put(INVOKESPECIAL).putShort(cp.getMethodRefId(parent(), "<init>", parentArg));
 		}
+
+		return invokeDefaultConstructor = tmp.toByteArray();
 	}
-	public boolean isNonStaticInnerClass() {return _parent != this && (extraModifier&ACC_STATIC) == 0;}
 	// 如果本类是注解类型，那么检测方法返回值是否被JVM允许
 	private void checkAnnotationReturnType(Type type) {
 		if (type.owner != null && !type.owner.equals("java/lang/String")) {
@@ -1058,7 +1099,7 @@ public abstract class CompileUnit extends ClassNode implements ClassLike {
 		ctx.setClass(this);
 		ctx.errorReportIndex = classIdx;
 
-		final MyHashSet<Desc> implementCheck = Helpers.cast(ctx.tmpSet);
+		final MyHashSet<NameAndType> implementCheck = Helpers.cast(ctx.tmpSet);
 		implementCheck.clear();
 		final var overridableMethods = new MyHashMap<NameAndType, MethodResult>();
 
@@ -1075,12 +1116,12 @@ public abstract class CompileUnit extends ClassNode implements ClassLike {
 				skip: {
 					for (int j = 0; j < inherits.size(); j++) {
 						// 如果被父类或其它接口实现了，那么跳过
-						if (ctx.getParentList(inherits.get(j)).containsValue(info.name())) {
+						if (ctx.getHierarchyList(inherits.get(j)).containsValue(info.name())) {
 							break skip;
 						}
 					}
 
-					var myParent = ctx.getParentList(info);
+					var myParent = ctx.getHierarchyList(info);
 					// 这里是 > 而不是 >= 在当前类实现了接口而继承Object的情况下，如果是>=那么第0项会被替换掉，所以要避免
 					// 这个操作与下方的continue可以避免Object的方法被访问多次，不过好像没有意义（
 					for (int j = inherits.size()-1; j > 0; j--) {
@@ -1155,6 +1196,11 @@ public abstract class CompileUnit extends ClassNode implements ClassLike {
 
 						// 重载&泛型
 						if (ctx.checkAccessible(info, method, false, false)) {
+							// 算了，慢就慢吧，我已经佛了
+							MethodResult val = genericCheckInit(method);
+							param = val.rawDesc();
+							param = param.substring(0, param.lastIndexOf(')')+1);
+
 							m.owner = method.owner;
 							m.name = method.name();
 							m.param = param;
@@ -1176,7 +1222,7 @@ public abstract class CompileUnit extends ClassNode implements ClassLike {
 									}
 								}
 
-								overridableMethods.put(m, genericCheckInit(method));
+								overridableMethods.put(implementCheck.find(m), val);
 								m = new NameAndType();
 							}
 						}
@@ -1560,11 +1606,11 @@ public abstract class CompileUnit extends ClassNode implements ClassLike {
 				} else {
 					loop:
 					for (int j = _throws.size() - 1; j >= 0; j--) {
-						var exParent = ctx.getParentList(_throws.get(j));
+						var exParent = ctx.getHierarchyList(_throws.get(j));
 						for (String s : list.value) {
 							var self = ctx.classes.getClassInfo(s);
 
-							if (ctx.getParentList(self).containsValue(exParent.get(0))) {
+							if (ctx.getHierarchyList(self).containsValue(exParent.get(0))) {
 								if (!_throws.contains(self)) _throws.add(self);
 							} else if (exParent.containsValue(s)) continue loop;
 						}
@@ -1676,6 +1722,8 @@ public abstract class CompileUnit extends ClassNode implements ClassLike {
 		var ctx = LocalContext.get();
 		ctx.setClass(this);
 
+		addEnclosingContext(ctx);
+
 		currentNode = signature;
 		ctx.lexer.state = STATE_EXPR;
 
@@ -1706,7 +1754,7 @@ public abstract class CompileUnit extends ClassNode implements ClassLike {
 			do {
 				ctx.enclosing.add(0, NestContext.innerClass(ctx, that._parent.name(), that));
 				that = that._parent;
-			} while (that != that._parent);
+			} while (that != that._parent && that.isNonStaticInnerClass());
 		}
 	}
 
@@ -1731,6 +1779,7 @@ public abstract class CompileUnit extends ClassNode implements ClassLike {
 			fields.remove(node);
 			methods.remove(node);
 		}
+		verify();
 	}
 
 	@Override public String getFileName() {return name.concat(".class");}

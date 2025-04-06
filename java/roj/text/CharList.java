@@ -152,6 +152,12 @@ public class CharList implements CharSequence, Appendable {
 		_free();
 		return s;
 	}
+	public final String toStringAndZero() {
+		String s = toString();
+		var arr1 = list;
+		for (int i = 0; i < len; i++) arr1[i] = 0;
+		return s;
+	}
 
 	public Appendable appendToAndFree(Appendable sb) {
 		try {
@@ -357,7 +363,7 @@ public class CharList implements CharSequence, Appendable {
 	}
 
 	public final CharList append(float f) {
-		StringBuilder sb = IOUtil.SharedCoder.get().numberHelper;
+		StringBuilder sb = IOUtil.SharedBuf.get().numberHelper;
 		sb.delete(0,sb.length()).append(f);
 		ensureCapacity(len+sb.length());
 		sb.getChars(0,sb.length(),list,len);
@@ -366,7 +372,7 @@ public class CharList implements CharSequence, Appendable {
 	}
 
 	public final CharList append(double d) {
-		StringBuilder sb = IOUtil.SharedCoder.get().numberHelper;
+		StringBuilder sb = IOUtil.SharedBuf.get().numberHelper;
 		sb.delete(0,sb.length()).append(d);
 		ensureCapacity(len+sb.length());
 		sb.getChars(0,sb.length(),list,len);

@@ -1,7 +1,6 @@
 package roj.crypt;
 
-import roj.io.IOUtil;
-import roj.util.ByteList;
+import roj.reflect.Unaligned;
 import roj.util.DynByteBuf;
 
 import javax.crypto.ShortBufferException;
@@ -41,8 +40,9 @@ class ChaCha extends RCipherSpi {
 	public void init(int flags, byte[] key, AlgorithmParameterSpec par, SecureRandom random) throws InvalidAlgorithmParameterException, InvalidKeyException {
 		if (key.length != 32) throw new InvalidKeyException("Key should be 256 bits length");
 
-		ByteList b = IOUtil.SharedCoder.get().wrap(key);
-		for (int i = 4; i < 12; i++) this.key[i] = b.readIntLE();
+		for (int i = 4; i < 12; i++) {
+			this.key[i] = Unaligned.U.get32UL(key, Unaligned.ARRAY_BYTE_BASE_OFFSET + ((long) i << 2));
+		}
 
 		if (par != null) {
 			if (random != null) throw new IllegalArgumentException("IV和随机器必须也只能提供一个");
@@ -90,10 +90,9 @@ class ChaCha extends RCipherSpi {
 	}
 	void setIv(byte[] iv) throws InvalidAlgorithmParameterException {
 		if (iv.length != 12) throw new InvalidAlgorithmParameterException("iv.length("+iv.length+") != 12");
-		var b = IOUtil.SharedCoder.get().wrap(iv);
-		key[13] = b.readIntLE();
-		key[14] = b.readIntLE();
-		key[15] = b.readIntLE();
+		key[13] = Unaligned.U.get32UL(iv, Unaligned.ARRAY_BYTE_BASE_OFFSET);
+		key[14] = Unaligned.U.get32UL(iv, Unaligned.ARRAY_BYTE_BASE_OFFSET + 4);
+		key[15] = Unaligned.U.get32UL(iv, Unaligned.ARRAY_BYTE_BASE_OFFSET + 8);
 	}
 
 	@Override

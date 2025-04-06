@@ -15,6 +15,7 @@ import roj.net.mss.MSSContext;
 import roj.net.mss.MSSKeyPair;
 import roj.plugin.PermissionHolder;
 import roj.plugin.Plugin;
+import roj.plugin.PluginDescriptor;
 import roj.plugin.PluginManager;
 import roj.plugins.rfs.proto.Packet;
 import roj.plugins.rfs.proto.ServerPacket;
@@ -63,7 +64,7 @@ public class RemoteFileSystem extends Plugin implements Consumer<MyChannel> {
                 context.setCertificate(new MSSKeyPair(KeyType.getInstance("EdDSA").loadOrGenerateKey(new File(getDataFolder(), "roj234.EdDSA.key"), config.getString("key_pass").getBytes(StandardCharsets.UTF_8))));
             }
         }
-        easySso = getPluginManager().getPluginInstance("EasySSO");
+        easySso = getPluginManager().getPluginInstance(PluginDescriptor.Role.PermissionManager);
         if (easySso != null) {
             anonymousPermissions = easySso.ipc(new TypedKey<>("getDefaultPermissions"));
         }

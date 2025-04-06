@@ -10,11 +10,13 @@ import roj.util.ByteList;
 
 import java.util.List;
 
+import static roj.plugins.bkcrack.Macros.*;
+
 /**
  * @author Roj234
  * @since 2022/11/13 0013 17:52
  */
-class PlainPassRecover implements Macros, ITask {
+class PlainPassRecover implements ITask {
 	final int[] xlist, ylist, zlist;
 
 	// 256

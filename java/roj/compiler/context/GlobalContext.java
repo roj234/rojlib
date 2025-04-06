@@ -1,5 +1,6 @@
 package roj.compiler.context;
 
+import org.intellij.lang.annotations.MagicConstant;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.jetbrains.annotations.Range;
@@ -36,7 +37,7 @@ import java.util.function.Function;
  *   MethodList，FieldList，他们只以名字区分，不考虑权限或参数数量，前者是为了更好的错误提示而不是仅仅“找不到”，后者是为了varargs和named type，
  *   父类列表，之所以IntBiMap而不是数组是为了有序的同时，还能O(n)获取最近共同祖先
  *   List<IType> getTypeParamOwner(IClass info, IType superType)
- *   InnerClassFlags 获取内部类的真实权限 （TODO 尝试自动应用到类ASM数据上）
+ *   InnerClassFlags 获取内部类的真实权限
  * 3. 短名称缓存 (通过短名称获取全限定名) TypeResolver importAny需要用到
  * 4. 创建MethodWriter，为了以后切换编译目标，比如到C甚至x86
  * 5. 注解处理
@@ -57,7 +58,7 @@ public class GlobalContext implements LavaFeatures {
 	private final List<Library> unenumerableLibraries = new SimpleList<>();
 
 	protected final XHashSet<IClass, ResolveHelper> extraInfos = CLASS_EXTRA_INFO_SHAPE.create();
-	protected MyHashMap<String, List<String>> packageFastPath = new MyHashMap<>();
+	protected Map<String, List<String>> packageFastPath = Collections.emptyMap();
 	protected final SimpleList<CompileUnit> generatedCUs = new SimpleList<>();
 
 	protected final LibraryGenerated generated = new LibraryGenerated();
@@ -69,9 +70,12 @@ public class GlobalContext implements LavaFeatures {
 		@Override public String moduleName() {return module == null ? null : module.self.name;}
 	}
 
-	{addRuntime();}
-	private boolean hasRuntimeLibrary;
-	protected void addRuntime() {unenumerableLibraries.addAll(LibrarySymbolCache.MODULES);hasRuntimeLibrary = true;}
+	public GlobalContext() {this(true);}
+	public GlobalContext(boolean addJVMRuntime) {
+		if (addJVMRuntime) addRuntime();
+	}
+	private void addRuntime() {unenumerableLibraries.addAll(LibrarySymbolCache.MODULES);}
+
 	public void addLibrary(Library library) {
 		var content = library.content();
 		if (content.isEmpty()) {
@@ -136,50 +140,59 @@ public class GlobalContext implements LavaFeatures {
 	@NotNull public synchronized final ResolveHelper getResolveHelper(IClass info) { return extraInfos.computeIfAbsent(info); }
 	public synchronized void invalidateResolveHelper(IClass file) {extraInfos.removeKey(file);}
 
-	@NotNull public IntBiMap<String> getParentList(IClass info) {return getResolveHelper(info).getHierarchyList(this);}
+	@NotNull public IntBiMap<String> getHierarchyList(IClass info) {return getResolveHelper(info).getHierarchyList(this);}
 	@NotNull public ComponentList getMethodList(IClass info, String name) {return getResolveHelper(info).getMethods(this).getOrDefault(name, ComponentList.NOT_FOUND);}
 	@NotNull public ComponentList getFieldList(IClass info, String name) {return getResolveHelper(info).getFields(this).getOrDefault(name, ComponentList.NOT_FOUND);}
 	@Nullable public List<IType> getTypeParamOwner(IClass info, String superType) throws ClassNotFoundException {return getResolveHelper(info).getTypeParamOwner(this).get(superType);}
-	@NotNull public Map<String, InnerClasses.Item> getInnerClassFlags(IClass info) {return getResolveHelper(info).getInnerClasses();}
+	@NotNull public Map<String, InnerClasses.Item> getInnerClassFlags(IClass info) {return getResolveHelper(info).getInnerClasses(this);}
 	public AnnotationSelf getAnnotationDescriptor(IClass info) {return getResolveHelper(info).annotationInfo();}
+	public void fillAnnotationDefault(AnnotationPrimer annotation) {
+		var self = getAnnotationDescriptor(getClassInfo(annotation.type()));
+		for (var entry : self.values.entrySet()) annotation.raw().putIfAbsent(entry.getKey(), entry.getValue());
+	}
 
 	/**
 	 * 通过短名称获取全限定名（若存在）
 	 * @return 包含候选包名的列表 例如 [java/lang]
 	 */
 	public List<String> getAvailablePackages(String shortName) {
-		if (packageFastPath.isEmpty()) buildPackageCache();
-		return packageFastPath.getOrDefault(shortName, Collections.emptyList());
+		var fastPath = packageFastPath;
+		if (fastPath.isEmpty()) fastPath = buildPackageCache();
+		return fastPath.getOrDefault(shortName, Collections.emptyList());
 	}
-	private synchronized void buildPackageCache() {
-		if (!packageFastPath.isEmpty()) return;
+	private synchronized Map<String, List<String>> buildPackageCache() {
+		var fastPath = packageFastPath;
+		if (!fastPath.isEmpty()) return fastPath;
 
-		// TODO byModule
+		fastPath = new MyHashMap<>();
+
 		for (Library library : libraries) {
 			for (String name : library.getPackageCache()) {
-				if (!name.contains("$") && !name.startsWith("[")) addFastPath(name);
+				if (!name.contains("$") && !name.startsWith("[")) addFastPath(name, fastPath);
 			}
 		}
-		if (hasRuntimeLibrary) {
-			for (Library module : unenumerableLibraries) {
-				for (String name : module.getPackageCache()) {
-					addFastPath(name);
-				}
+		// mostly empty, but LibrarySymbolCache will not
+		for (Library module : unenumerableLibraries) {
+			for (String name : module.getPackageCache()) {
+				addFastPath(name, fastPath);
 			}
 		}
 
-		for (Map.Entry<String, List<String>> entry : packageFastPath.entrySet()) {
+		for (Map.Entry<String, List<String>> entry : fastPath.entrySet()) {
 			var value = entry.getValue();
 			if (value.size() == 1) entry.setValue(Collections.singletonList(Interner.intern(value.get(0))));
 			else for (int i = 0; i < value.size(); i++) value.set(i, Interner.intern(value.get(i)));
 		}
+
+		//Unaligned.U.storeFence();
+		return packageFastPath = fastPath;
 	}
-	private void addFastPath(String n) {
+	private void addFastPath(String n, Map<String, List<String>> fastPath) {
 		int i = n.lastIndexOf('/');
 		String packag = i < 0 ? "" : n.substring(0, i);
 		String name = n.substring(i+1);
 
-		var allPackages = packageFastPath.computeIfAbsent(name, Helpers.fnArrayList());
+		var allPackages = fastPath.computeIfAbsent(name, Helpers.fnArrayList());
 		if (!allPackages.contains(packag)) allPackages.add(packag);
 	}
 
@@ -200,14 +213,13 @@ public class GlobalContext implements LavaFeatures {
 		generated.module = module;
 	}
 
-	// example
 	public void runAnnotationProcessor(CompileUnit file, Attributed node, List<AnnotationPrimer> annotations) {}
 
-	public boolean hasFeature(int specId) {return true;}
+	public boolean hasFeature(@MagicConstant(valuesFromClass = LavaFeatures.class) int specId) {return true;}
 	@Range(from = 6, to = 21)
 	public int getMaximumBinaryCompatibility() {return LavaFeatures.JAVA_17;}
 
-	public Function<Diagnostic, Boolean> reporter = new TextDiagnosticReporter(1, 1, 1);
+	public Function<Diagnostic, Boolean> reporter = new TextDiagnosticReporter(0, 0, 0);
 	public boolean hasError;
 
 	public boolean hasError() {return hasError;}

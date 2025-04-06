@@ -18,11 +18,11 @@ public final class ToBEncode implements CVisitor {
 
 	private int depth;
 
-	public final void value(boolean l) {value(l?1:0);}
-	public final void value(int l) {ob.put('i').putAscii(Integer.toString(l)).put('e');}
-	public final void value(long l) {ob.put('i').putAscii(Long.toString(l)).put('e');}
-	public final void value(double l) {throw new UnsupportedOperationException("BEncode不支持浮点数");}
-	public final void value(String l) {ob.putAscii(Integer.toString(DynByteBuf.byteCountUTF8(l))).put(':').putUTFData(l);}
+	public final void value(boolean b) {value(b ?1:0);}
+	public final void value(int i) {ob.put('i').putAscii(Integer.toString(i)).put('e');}
+	public final void value(long i) {ob.put('i').putAscii(Long.toString(i)).put('e');}
+	public final void value(double i) {throw new UnsupportedOperationException("BEncode不支持浮点数");}
+	public final void value(String s) {ob.putAscii(Integer.toString(DynByteBuf.byteCountUTF8(s))).put(':').putUTFData(s);}
 	public final void valueNull() {throw new UnsupportedOperationException("BEncode不支持null");}
 	public final boolean supportArray() {return true;}
 	public final void value(byte[] ba) {ob.putAscii(Integer.toString(ba.length)).put(':').put(ba);}

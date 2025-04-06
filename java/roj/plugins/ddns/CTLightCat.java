@@ -2,8 +2,8 @@ package roj.plugins.ddns;
 
 import roj.config.JSONParser;
 import roj.config.data.CMap;
+import roj.http.HttpClient;
 import roj.http.HttpRequest;
-import roj.http.SyncHttpClient;
 import roj.io.IOUtil;
 import roj.text.Escape;
 import roj.ui.Terminal;
@@ -21,7 +21,7 @@ final class CTLightCat extends IpGetter {
 
 	private boolean refreshAccessToken() throws Exception {
 		ByteList body = IOUtil.getSharedByteBuf().putAscii("username=useradmin&psd=").putAscii(Escape.encodeURIComponent(pass));
-		SyncHttpClient shc = HttpRequest.nts()
+		HttpClient shc = HttpRequest.builder()
 										.url("http://"+catUrl+"/cgi-bin/luci")
 										.header("Content-Type","application/x-www-form-urlencoded")
 										.body(ByteList.wrap(body.toByteArray()))
@@ -29,7 +29,7 @@ final class CTLightCat extends IpGetter {
 
 		if (shc.head().getCode() == 302) {
 			refreshTime = System.currentTimeMillis();
-			accessToken = shc.head().getFieldValue("set-cookie", "sysauth");
+			accessToken = shc.head().getHeaderValue("set-cookie", "sysauth");
 			if (accessToken != null) return true;
 		}
 
@@ -49,7 +49,7 @@ final class CTLightCat extends IpGetter {
 	public InetAddress[] getAddress(boolean checkV6) throws Exception {
 		if (System.currentTimeMillis() - refreshTime > 60000) refreshAccessToken();
 
-		SyncHttpClient shc = HttpRequest.nts()
+		HttpClient shc = HttpRequest.builder()
 			.url("http://"+catUrl+"/cgi-bin/luci/admin/settings/gwinfo?get=part")
 			.header("Cookie", "sysauth="+accessToken)
 			.executePooled();

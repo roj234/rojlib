@@ -26,14 +26,14 @@ public final class ToIni implements CVisitor {
 	private int depth;
 	private boolean hasTop;
 
-	public final void value(boolean l) {sb.append(l).append('\n');}
-	public final void value(int l) {sb.append(l).append('\n');}
-	public final void value(long l) {sb.append(l).append('\n');}
-	public final void value(float l) {sb.append(l).append('\n');}
-	public final void value(double l) {sb.append(l).append('\n');}
-	public final void value(String value) {
-		if (IniParser.literalSafe(value)) sb.append(value);
-		else Tokenizer.addSlashes(sb.append('"'), value).append('"');
+	public final void value(boolean b) {sb.append(b).append('\n');}
+	public final void value(int i) {sb.append(i).append('\n');}
+	public final void value(long i) {sb.append(i).append('\n');}
+	public final void value(float i) {sb.append(i).append('\n');}
+	public final void value(double i) {sb.append(i).append('\n');}
+	public final void value(String s) {
+		if (IniParser.literalSafe(s)) sb.append(s);
+		else Tokenizer.addSlashes(sb.append('"'), s).append('"');
 		sb.append('\n');
 	}
 	public final void valueNull() {sb.append("null\n");}

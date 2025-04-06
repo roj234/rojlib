@@ -7,8 +7,7 @@ import roj.crypt.Base64;
 import roj.io.IOUtil;
 import roj.io.MyDataInput;
 import roj.text.CharList;
-import roj.text.GB18030;
-import roj.text.UTF8;
+import roj.text.FastCharset;
 
 import java.io.DataOutput;
 import java.io.IOException;
@@ -24,12 +23,6 @@ import static roj.reflect.Unaligned.U;
  * @since 2022/5/19 1:44
  */
 public abstract class DynByteBuf extends OutputStream implements CharSequence, MyDataInput, DataOutput {
-	public static ByteList wrap(byte[] b) {return new ByteList(b);}
-	public static ByteList wrap(byte[] b, int off, int len) {return new ByteList.Slice(b, off, len);}
-
-	public static ByteList wrapWrite(byte[] b) {return wrapWrite(b, 0, b.length);}
-	public static ByteList wrapWrite(byte[] b, int off, int len) {return new ByteList.Slice().set(b,off,len);}
-
 	public static ByteList allocate() { return new ByteList(); }
 	public static ByteList allocate(int cap) { return new ByteList(cap); }
 	public static ByteList allocate(int capacity, int maxCapacity) {
@@ -37,6 +30,8 @@ public abstract class DynByteBuf extends OutputStream implements CharSequence, M
 			@Override public int maxCapacity() { return maxCapacity; }
 		};
 	}
+	public static ByteList wrap(byte[] b) {return new ByteList(b);}
+	public static ByteList wrap(byte[] b, int off, int len) {return new ByteList.Slice(b, off, len);}
 
 	public static DirectByteList allocateDirect() { return new DirectByteList(); }
 	public static DirectByteList allocateDirect(int capacity) { return new DirectByteList(capacity); }
@@ -146,11 +141,11 @@ public abstract class DynByteBuf extends OutputStream implements CharSequence, M
 
 	public abstract void ensureCapacity(int capacity);
 
-	public final ArrayRef byteRangeR(int len) { return byteRange(preRead(len), len); }
-	public final ArrayRef byteRangeW(int len) { return byteRange(preWrite(len), len); }
-	public final ArrayRef byteRange(int off, int len) {
+	public final NativeArray byteRangeR(int len) { return byteRange(preRead(len), len); }
+	public final NativeArray byteRangeW(int len) { return byteRange(preWrite(len), len); }
+	public final NativeArray byteRange(int off, int len) {
 		if (off<0 || len < 0 || off+len < 0 || off+len > wIndex) throw new IndexOutOfBoundsException("pos="+off+",len="+len+",cap="+wIndex);
-		return ArrayRef.create(array(), _unsafeAddr()+off, 1, len);
+		return NativeArray.create(array(), _unsafeAddr()+off, 1, len);
 	}
 
 	@Override
@@ -195,6 +190,10 @@ public abstract class DynByteBuf extends OutputStream implements CharSequence, M
 	}
 
 	public final InputStream asInputStream() { return new BufferInputStream(); }
+
+	// MyDataInput misc
+	public void mark(int limit) {}
+	public void unread(int bytes) {rIndex -= bytes;}
 
 	// region DataOutput
 	public final void write(int b) { put((byte) b); }
@@ -277,25 +276,11 @@ public abstract class DynByteBuf extends OutputStream implements CharSequence, M
 
 	public final DynByteBuf putMedium(int x) {return put24UB(preWrite(3), x);}
 	public final DynByteBuf putMedium(int wi, int x) {return put24UB(testWI(wi, 3), x);}
-	private DynByteBuf put24UB(int offset, int x) {
-		long addr = _unsafeAddr()+offset;
-		byte[] array = array();
-		U.putByte(array, addr++, (byte) (x >>> 16));
-		U.putByte(array, addr++, (byte) (x >>> 8));
-		U.putByte(array, addr, (byte) x);
-		return this;
-	}
+	private DynByteBuf put24UB(int offset, int x) {U.put24UB(array(), _unsafeAddr()+offset, x);return this;}
 
 	public final DynByteBuf putMediumLE(int x) {return put24UL(preWrite(3), x);}
 	public final DynByteBuf putMediumLE(int wi, int x) {return put24UL(testWI(wi, 3), x);}
-	private DynByteBuf put24UL(int offset, int x) {
-		long addr = _unsafeAddr()+offset;
-		byte[] array = array();
-		U.putByte(array, addr++, (byte) x);
-		U.putByte(array, addr++, (byte) (x >>> 8));
-		U.putByte(array, addr, (byte) (x >>> 16));
-		return this;
-	}
+	private DynByteBuf put24UL(int offset, int x) {U.put24UL(array(), _unsafeAddr()+offset, x);return this;}
 
 	public final DynByteBuf putInt(int x) {return put32UB(preWrite(4), x);}
 	public final DynByteBuf putInt(int wi, int x) {return put32UB(testWI(wi, 4), x);}
@@ -399,22 +384,22 @@ public abstract class DynByteBuf extends OutputStream implements CharSequence, M
 	public DynByteBuf putAscii(CharSequence s) {return putAscii(preWrite(s.length()), s);}
 	public abstract DynByteBuf putAscii(int wi, CharSequence s);
 
-	public static int byteCountUTF8(CharSequence s) { return UTF8.CODER.byteCount(s); }
+	public static int byteCountUTF8(CharSequence s) { return FastCharset.UTF8().byteCount(s); }
 	public final DynByteBuf putUTF(CharSequence s) {
 		if (s.length() > 0xFFFF) throw new ArrayIndexOutOfBoundsException("UTF too long: " + s.length());
-		int len = UTF8.CODER.byteCount(s);
+		int len = FastCharset.UTF8().byteCount(s);
 		if (len > 0xFFFF) throw new ArrayIndexOutOfBoundsException("UTF too long: " + len);
 		return putShort(len).putUTFData0(s, len);
 	}
 	public final DynByteBuf putVarIntUTF(CharSequence s) { int len = byteCountUTF8(s); return putVarInt(len).putUTFData0(s, len); }
 	public final DynByteBuf putVUIUTF(CharSequence s) { int len = byteCountUTF8(s); return putVUInt(len).putUTFData0(s, len); }
-	public DynByteBuf putUTFData(CharSequence s) { UTF8.CODER.encodeFixedIn(s, this); return this; }
-	public final DynByteBuf putUTFData0(CharSequence s, int len) { ensureWritable(len); UTF8.CODER.encodePreAlloc(s, this, len); return this; }
+	public DynByteBuf putUTFData(CharSequence s) { FastCharset.UTF8().encodeFixedIn(s, this); return this; }
+	public final DynByteBuf putUTFData0(CharSequence s, int len) { ensureWritable(len); FastCharset.UTF8().encodePreAlloc(s, this, len); return this; }
 
-	public static int byteCountGB(CharSequence s) { return GB18030.CODER.byteCount(s); }
+	public static int byteCountGB(CharSequence s) { return FastCharset.GB18030().byteCount(s); }
 	public final DynByteBuf putVUIGB(CharSequence s) { int len = byteCountGB(s); return putVUInt(len).putGBData0(s, len); }
-	public final DynByteBuf putGBData(CharSequence s) { GB18030.CODER.encodeFixedIn(s, this); return this; }
-	public final DynByteBuf putGBData0(CharSequence s, int len) { ensureWritable(len); GB18030.CODER.encodePreAlloc(s, this, len); return this; }
+	public final DynByteBuf putGBData(CharSequence s) { FastCharset.GB18030().encodeFixedIn(s, this); return this; }
+	public final DynByteBuf putGBData0(CharSequence s, int len) { ensureWritable(len); FastCharset.GB18030().encodePreAlloc(s, this, len); return this; }
 
 	public abstract DynByteBuf put(ByteBuffer buf);
 
@@ -591,7 +576,7 @@ public abstract class DynByteBuf extends OutputStream implements CharSequence, M
 		if (len < 0) throw new IllegalArgumentException("length < 0: "+len);
 		if (len > 0) {
 			testWI(rIndex,len);
-			UTF8.CODER.decodeFixedIn(this,len,target);
+			FastCharset.UTF8().decodeFixedIn(this,len,target);
 		}
 		return target;
 	}
@@ -606,7 +591,7 @@ public abstract class DynByteBuf extends OutputStream implements CharSequence, M
 	public final <T extends Appendable> T readGB(int len, T target) {
 		if (len > 0) {
 			testWI(rIndex,len);
-			GB18030.CODER.decodeFixedIn(this,len,target);
+			FastCharset.GB18030().decodeFixedIn(this,len,target);
 		}
 		return target;
 	}
@@ -630,6 +615,7 @@ public abstract class DynByteBuf extends OutputStream implements CharSequence, M
 	public final DynByteBuf slice() { return slice(rIndex, readableBytes()); }
 	public final DynByteBuf slice(int len) { return slice(preRead(len), len); }
 	public abstract DynByteBuf slice(int off, int len);
+	public abstract DynByteBuf copySlice();
 
 	public abstract DynByteBuf compact();
 

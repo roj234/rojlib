@@ -16,8 +16,8 @@ import roj.asm.type.*;
 import roj.asm.util.ClassUtil;
 import roj.asmx.mapper.NameAndType;
 import roj.collect.*;
-import roj.compiler.JavaLexer;
 import roj.compiler.LavaFeatures;
+import roj.compiler.Tokens;
 import roj.compiler.api.MethodDefault;
 import roj.compiler.api.Types;
 import roj.compiler.api.ValueBased;
@@ -34,8 +34,8 @@ import roj.compiler.diagnostic.Kind;
 import roj.compiler.resolve.*;
 import roj.config.ParseException;
 import roj.config.data.CEntry;
-import roj.reflect.GetCallerArgs;
 import roj.text.CharList;
+import roj.text.TextUtil;
 import roj.util.ArrayCache;
 import roj.util.Helpers;
 
@@ -56,7 +56,7 @@ public class LocalContext {
 
 	public final ExprParser ep;
 	public final BlockParser bp;
-	public final JavaLexer lexer;
+	public final Tokens lexer;
 
 	public final TypeCast caster = new TypeCast();
 	public final Inferrer inferrer = new Inferrer(this);
@@ -67,28 +67,29 @@ public class LocalContext {
 
 	public CompileUnit file;
 	public MethodNode method;
-	// finalWriteRead和GlobalInit append检查
-	public boolean inStatic, inConstructor, noCallConstructor;
-	// expressionBeforeThisOrSuper()检查
-	public boolean thisResolved;
-	// GlobalInit append检查 callThis()
-	public boolean thisConstructor;
+	// 功能应该自解释了
+	// 后两个：如果没显式调用super就插入默认构造器，如果没调用this就插入GlobalInit
+	public boolean inStatic, inConstructor, noCallConstructor, thisConstructor;
 	// 递归构造器检查
 	private final MyHashMap<MethodNode, MethodNode> constructorChain = MyHashMap.withCustomHasher(Hasher.identity());
 
-	// stage2 resolve generic
+	// stage2.1解析方法和字段的基础类型时不生成警告
 	public boolean disableRawTypeWarning;
 
 	// Tail Call Elimination, MultiReturn等使用
 	public boolean inReturn;
-	// This(AST)使用 也许能换成callback 目前主要给Generator用
+	// This(AST节点)使用 也许能换成callback 目前只有Generator不是0
 	public int thisSlot;
+	// expressionBeforeThisOrSuper()检查
+	// 只有在未使用this类型前才能调用this或super
+	// 不要求必须是构造器的第一个语句
 	public boolean thisUsed;
-	// 绕过枚举的new检测
+	// 绕过枚举的构造器检测，有子类的枚举构造器不是private的，所以不能省去
 	public boolean enumConstructor;
 
-	// lambda
+	// lambda方法的序号
 	public int nameIndex;
+	// lambda用到，阻止预定义ID的变量被直接序列化入SolidBlock
 	public boolean isArgumentDynamic;
 
 	// stage3 constant resolution
@@ -104,12 +105,12 @@ public class LocalContext {
 		this.caster.ctx = this;
 	}
 
-	protected JavaLexer createLexer() {return new JavaLexer();}
+	protected Tokens createLexer() {return new Tokens();}
 	protected ExprParser createExprParser() {return new ExprParser(this);}
 	protected BlockParser createBlockParser() {return new BlockParser(this);}
 	public MethodWriter createMethodWriter(ClassNode file, MethodNode node) {return new MethodWriter(file, node, classes.hasFeature(LavaFeatures.ATTR_LOCAL_VARIABLES), this);}
 
-	@NotNull public IntBiMap<String> getParentList(IClass info) {return classes.getParentList(info);}
+	@NotNull public IntBiMap<String> getHierarchyList(IClass info) {return classes.getHierarchyList(info);}
 	@NotNull public ComponentList getFieldList(IClass info, String name) {return classes.getFieldList(info, name);}
 	@NotNull public ComponentList getMethodList(IClass info, String name) {return classes.getMethodList(info, name);}
 
@@ -163,15 +164,14 @@ public class LocalContext {
 
 		inReturn = false;
 		thisSlot = 0;
-		thisUsed = inConstructor;
+		thisUsed = false;
 
 		nameIndex = 0;
 
-		thisResolved = false;
 		thisConstructor = false;
 	}
 
-	public String currentCodeBlockForReport() {return "\1symbol.type\0 "+file.name();}
+	public String currentCodeBlockForReport() {return "[symbol.type,\" \","+file.name()+"]";}
 
 	/**
 	 * 伪类型检查，WIP
@@ -199,13 +199,6 @@ public class LocalContext {
 
 	public void report(Kind kind, String message) {
 		if (errorCapture != null) {errorCapture.accept(message, ArrayCache.OBJECTS);return;}
-
-		Object caller = GetCallerArgs.INSTANCE.getCallerInstance();
-		if (caller instanceof ExprNode node) {
-			classes.report(file, kind, node.getWordStart(), node.getWordEnd(), message, ArrayCache.OBJECTS);
-			return;
-		}
-
 		classes.report(file, kind, errorReportIndex >= 0 ? errorReportIndex : lexer.index, message);
 	}
 	public void report(Kind kind, String message, Object... args) {
@@ -231,11 +224,12 @@ public class LocalContext {
 	public void report(int knownPos, Kind kind, String message, Object... args) {classes.report(file, kind, knownPos, message, args);}
 	//endregion
 	// region 访问权限和final字段赋值检查
+	@SuppressWarnings("fallthrough")
 	public void assertAccessible(IClass type) {
 		if (type == file) return;
 
 		int modifier = type.modifier();
-		InnerClasses.Item item = classes.getResolveHelper(type).getInnerClasses().get(type.name());
+		InnerClasses.Item item = classes.getInnerClassFlags(type).get(type.name());
 		if (item != null) {
 			modifier = item.modifier;
 			checkAccessModifier(modifier, type, null, "symbol.error.accessDenied.type", true);
@@ -336,6 +330,36 @@ public class LocalContext {
 	}
 	// endregion
 	// region 解析 符号引用 类型表示 类型实例
+	@NotNull
+	public ComponentList getMethodListOrReport(IClass type, String name, ExprNode caller) {
+		var list = classes.getMethodList(type, name);
+		if (list == ComponentList.NOT_FOUND) {
+			int argc = 0;
+			report(caller, Kind.ERROR, "symbol.error.noSuchSymbol", name.equals("<init>") ? "invoke.constructor" : "invoke.method", name, "[symbol.type,\" \","+type.name()+"]", reportSimilarMethod(type, name, argc));
+		}
+		return list;
+	}
+	private String reportSimilarMethod(IClass type, String method, int argc) {
+		var similar = new SimpleList<String>();
+		loop:
+		for (var entry : classes.getResolveHelper(type).getMethods(classes).entrySet()) {
+			for (MethodNode node : entry.getValue().getMethods()) {
+				int parSize = node.parameters().size();
+				/*if ((node.modifier & Opcodes.ACC_VARARGS) != 0 ? argc < parSize - 1 : argc != parSize) {
+					continue loop;
+				}*/
+			}
+			if (TextUtil.editDistance(method, entry.getKey()) < (method.length()+1)/2) {
+				similar.add(entry.getKey());
+			}
+		}
+		if (similar.isEmpty()) return "";
+
+		var sb = getTmpSb().append("[symbol.similar,[invoke.method,\"");
+		sb.append(TextUtil.join(similar, "\n    "));
+		return sb.append("\"]]").toString();
+	}
+
 	/**
 	 * 将一个全限定名称或短名称解析到其类型实例.
 	 * 通过{@link ImportList#resolve(LocalContext, String)}，
@@ -384,7 +408,7 @@ public class LocalContext {
 			Generic type1 = (Generic) type;
 			List<IType> params = type1.children;
 
-			boolean genericIgnore = info.interfaces().contains("roj/compiler/runtime/GenericIgnore");
+			boolean genericIgnore = isGenericIgnore(info);
 			if (!genericIgnore && params.size() != count) {
 				if (count == 0) report(Kind.ERROR, "symbol.error.generic.paramCount.0", type.rawType());
 				else if (params.size() != 1 || params.get(0) != Asterisk.anyGeneric) report(Kind.ERROR, "symbol.error.generic.paramCount", type.rawType(), params.size(), count);
@@ -449,7 +473,7 @@ public class LocalContext {
 			while (x != null) {
 				var ic = classes.getInnerClassFlags(info).get(x.owner);
 				if (ic == null || (info = classes.getClassInfo(ic.self)) == null) {
-					report(Kind.ERROR, "symbol.error.noSuchSymbol", "symbol.type", x.owner, "\1symbol.type\0 "+type1);
+					report(Kind.ERROR, "symbol.error.noSuchSymbol", "symbol.type", x.owner, "[symbol.type,\""+type1+"\"]");
 					break;
 				}
 
@@ -538,7 +562,7 @@ public class LocalContext {
 
 				return "symbol.error.expression:".concat(desc.toString());
 			}
-			return "symbol.error.noSuchSymbol::"+desc+":"+currentCodeBlockForReport();
+			return "symbol.error.noSuchSymbol:[symbol.field,"+desc+","+currentCodeBlockForReport()+"]";
 		}
 		return anySuccess;
 	}
@@ -568,7 +592,7 @@ public class LocalContext {
 					field = fr.field;
 					break block;
 				}
-				return "symbol.error.noSuchSymbol:symbol.field:"+name+":\1symbol.type\0 "+clz.name();
+				return "symbol.error.noSuchSymbol:[symbol.field,"+name+",[symbol.type,\" \","+clz.name()+"]]";
 			}
 
 			Signature cSign = clz.getAttribute(clz.cp(), Attribute.SIGNATURE);
@@ -729,7 +753,7 @@ public class LocalContext {
 		var exceptions = (ClassListAttribute) method.getRawAttribute("Exceptions");
 		if (exceptions != null) {
 			if (type.genericType() == 0) {
-				var parents = getParentList(classes.getClassInfo(type.owner()));
+				var parents = getHierarchyList(classes.getClassInfo(type.owner()));
 				for (String s : exceptions.value) {
 					if (parents.containsValue(s)) return;
 				}
@@ -763,6 +787,10 @@ public class LocalContext {
 		return cast;
 	}
 
+	private static final AbstractList<IType> ANY_GENERIC_LIST = new AbstractList<>() {
+		@Override public IType get(int index) {return Asterisk.anyType;}
+		@Override public int size() {return 0;}
+	};
 	/**
 	 * 将泛型类型typeInst继承链上的targetType擦除到具体类型.
 	 * 若有 A&lt;K extends Number, V> extends B&lt;String> implements C&lt;K>
@@ -793,22 +821,31 @@ public class LocalContext {
 
 		if (bounds == null || bounds.getClass() == SimpleList.class) return bounds;
 
-		if (!(typeInst instanceof Generic g) || (g.children.size() == 1 && g.children.get(0) == Asterisk.anyGeneric)) {
-			var sign = info.getAttribute(info.cp, Attribute.SIGNATURE);
+		// bounds是SimpleList$1，代表其中含有类型参数，需要动态解析
+		List<IType> children;
+		if (typeInst instanceof Generic g) {
+			children = g.children;
 
-			MyHashMap<String, IType> realType = Helpers.cast(tmpMap1);
-			Inferrer.fillDefaultTypeParam(sign.typeParams, realType);
+			if (g.children.size() == 1 && g.children.get(0) == Asterisk.anyGeneric) {
+				// 20250411 这里应该用目标类型……之前写错了，现在是擦除到上界，因为anyGeneric嘛
+				info = classes.getClassInfo(targetType);
+				var sign = info.getAttribute(info.cp, Attribute.SIGNATURE);
 
-			bounds = new SimpleList<>(bounds);
-			for (int i = 0; i < bounds.size(); i++) {
-				bounds.set(i, Inferrer.clearTypeParam(bounds.get(i), realType, sign.typeParams));
+				MyHashMap<String, IType> realType = Helpers.cast(tmpMap1);
+				Inferrer.fillDefaultTypeParam(sign.typeParams, realType);
+
+				bounds = new SimpleList<>(bounds);
+				for (int i = 0; i < bounds.size(); i++) {
+					bounds.set(i, Inferrer.clearTypeParam(bounds.get(i), realType, sign.typeParams));
+				}
+
+				return bounds;
 			}
-
-			return bounds;
+		} else {
+			children = ANY_GENERIC_LIST;
 		}
 
-		// 含有类型参数，需要动态解析
-		return inferGeneric0(classes.getClassInfo(g.owner), g.children, targetType);
+		return inferGeneric0(info, children, targetType);
 	}
 	// B <T1, T2> extends A <T1> implements Z<T2>
 	// C <T3> extends B <String, T3>
@@ -816,7 +853,7 @@ public class LocalContext {
 	private List<IType> inferGeneric0(ClassNode typeInst, List<IType> params, String target) {
 		Map<String, IType> visType = new MyHashMap<>();
 
-		int depthInfo = getParentList(typeInst).getValueOrDefault(target, -1);
+		int depthInfo = getHierarchyList(typeInst).getValueOrDefault(target, -1);
 		if (depthInfo == -1) throw new IllegalStateException("无法从"+typeInst.name()+"<"+params+">推断"+target);
 
 		loop:
@@ -841,7 +878,7 @@ public class LocalContext {
 				}
 
 				typeInst = classes.getClassInfo(type.owner());
-				depthInfo = getParentList(typeInst).getValueOrDefault(target, -1);
+				depthInfo = getHierarchyList(typeInst).getValueOrDefault(target, -1);
 				if (depthInfo != -1) {
 					var rubber = (Generic) Inferrer.clearTypeParam(type, visType, g.typeParams);
 					params = rubber.children;
@@ -864,7 +901,7 @@ public class LocalContext {
 			return false;
 		}
 
-		return classes.getParentList(info).containsValue(instClass);
+		return classes.getHierarchyList(info).containsValue(instClass);
 	}
 
 	/**
@@ -965,8 +1002,8 @@ public class LocalContext {
 	 */
 	public final String getCommonParent(IClass infoA, IClass infoB) {
 		IntBiMap<String> tmp,
-			listA = getParentList(infoA),
-			listB = getParentList(infoB);
+			listA = getHierarchyList(infoA),
+			listB = getHierarchyList(infoB);
 
 		if (listA.size() > listB.size()) {
 			tmp = listA;
@@ -990,6 +1027,12 @@ public class LocalContext {
 	}
 	//endregion
 	// region [可重载] 表达式语法扩展
+
+	/**
+	 * 忽略泛型限制
+	 */
+	protected boolean isGenericIgnore(ClassNode info) {return info.name().equals("roj/compiler/runtime/ReturnStack");}
+
 	/**
 	 * 获取ASM节点的注解
 	 * @param type 类型
@@ -1006,7 +1049,7 @@ public class LocalContext {
 	/**
 	 * 获取klass.method方法的参数默认值
 	 */
-	public IntMap<String> getDefaultValue(IClass klass, MethodNode method) {
+	public IntMap<String> getDefaultArguments(IClass klass, MethodNode method) {
 		MethodDefault attr = method.getAttribute(klass.cp(), MethodDefault.METHOD_DEFAULT);
 		return attr != null ? attr.defaultValue : EMPTY;
 	}
@@ -1016,7 +1059,7 @@ public class LocalContext {
 	 * @return 反序列化
 	 */
 	@Nullable
-	public ExprNode parseDefaultValue(@Nullable String defVal) {
+	public ExprNode parseDefaultArgument(@Nullable String defVal) {
 		if (defVal != null) {
 			var tmpPrev = tmpList;
 			tmpList = new SimpleList<>();

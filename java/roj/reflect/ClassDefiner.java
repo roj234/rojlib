@@ -12,6 +12,7 @@ import roj.util.Helpers;
 import java.security.ProtectionDomain;
 
 import static roj.asm.Opcodes.*;
+import static roj.reflect.Unaligned.U;
 
 /**
  * @author Roj234
@@ -55,7 +56,7 @@ public final class ClassDefiner extends ClassLoader {
 	public static Object postMake(Class<?> klass) {
 		if (__UseAllocateInstance) {
 			try {
-				return VMInternals.u.allocateInstance(klass);
+				return U.allocateInstance(klass);
 			} catch (InstantiationException e) {
 				Logger.FALLBACK.fatal("创建对象失败", e);
 				return Helpers.maybeNull();

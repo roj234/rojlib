@@ -68,7 +68,7 @@ public final class DerWriter {
 			ByteList dataLeft = combine(L.get(objectIdL));
 			ByteList dataRight = combine(L.get(objectIdR));
 			return Arrays.compare(dataLeft.list, dataLeft.relativeArrayOffset(), dataLeft.readableBytes(), dataRight.list, dataRight.relativeArrayOffset(), dataRight.readableBytes());
-		}, ArrayRef.objectArray(V.getInternalArray()), ArrayRef.primitiveArray(T.list), ArrayRef.primitiveArray(L.getRawArray()));
+		}, NativeArray.objectArray(V.getInternalArray()), NativeArray.primitiveArray(T.list), NativeArray.primitiveArray(L.getRawArray()));
 	}
 	private static ByteList combine(Object o) {
 		if (o instanceof ByteList bl) return bl;

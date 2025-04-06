@@ -78,7 +78,7 @@ public final class KDF {
 
 	public static byte[] HKDF_HmacSha256(byte[] key, byte[] salt, int len) {
 		try {
-			return HKDF_expand(new HMAC(MessageDigest.getInstance("SHA-256")), key, salt == null ? ByteList.EMPTY : IOUtil.SharedCoder.get().wrap(salt), len);
+			return HKDF_expand(new HMAC(MessageDigest.getInstance("SHA-256")), key, salt == null ? ByteList.EMPTY : IOUtil.SharedBuf.get().wrap(salt), len);
 		} catch (NoSuchAlgorithmException e) {
 			throw OperationDone.NEVER;
 		}

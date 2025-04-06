@@ -9,10 +9,5 @@ import roj.util.Helpers;
 public final class OperationDone extends RuntimeException {
 	public static final RuntimeException NEVER = Helpers.nonnull();
 	public static final OperationDone INSTANCE = new OperationDone("操作完成.");
-
-	private OperationDone(String s) {super(s);}
-
-	// backtrace will strong reference some class, weird……
-	@Override
-	public synchronized Throwable fillInStackTrace() {return this;}
+	private OperationDone(String s) {super(s, null, false, false);}
 }

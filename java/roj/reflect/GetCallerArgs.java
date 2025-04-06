@@ -7,7 +7,7 @@ import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.stream.Stream;
 
-import static roj.reflect.VMInternals.u;
+import static roj.reflect.Unaligned.U;
 
 /**
  * @author Roj234
@@ -30,7 +30,7 @@ public final class GetCallerArgs {
 	static {
 		try {
 			Class<?> options = Class.forName("java.lang.StackWalker$ExtendedOption");
-			localsAndOperands = u.getObject(options, ReflectionUtils.fieldOffset(options, "LOCALS_AND_OPERANDS"));
+			localsAndOperands = U.getObject(options, ReflectionUtils.fieldOffset(options, "LOCALS_AND_OPERANDS"));
 
 			Class<?> impl = Class.forName("java.lang.LiveStackFrameInfo");
 			oMonitors = ReflectionUtils.fieldOffset(impl, "monitors");
@@ -89,9 +89,9 @@ public final class GetCallerArgs {
 		@Override
 		public String toString() {return f.toString();}
 
-		public Object[] getMonitors() {return (Object[]) u.getObject(f, oMonitors);}
-		public Object[] getLocals() {return (Object[]) u.getObject(f, oLocals);}
-		public Object[] getStacks() {return (Object[]) u.getObject(f, oStacks);}
+		public Object[] getMonitors() {return (Object[]) U.getObject(f, oMonitors);}
+		public Object[] getLocals() {return (Object[]) U.getObject(f, oLocals);}
+		public Object[] getStacks() {return (Object[]) U.getObject(f, oStacks);}
 
 		public static boolean isPrimitive(Object o) {return o != null && primitive.isAssignableFrom(o.getClass());}
 		public static int getSize(Object o) {return builder.size(o);}

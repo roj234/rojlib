@@ -3,7 +3,7 @@ package roj.collect;
 import org.intellij.lang.annotations.MagicConstant;
 import roj.reflect.ReflectionUtils;
 import roj.util.ArrayCache;
-import roj.util.ArrayRef;
+import roj.util.NativeArray;
 import roj.util.TimSortForEveryone;
 
 import java.util.Arrays;
@@ -64,7 +64,7 @@ public class MatchMapString<V> {
 				if (cmp != 0) return cmp;
 
 				return Integer.compare(U.getChar(refLeft, offLeft), U.getChar(offRight));
-			}, ArrayRef.primitiveArray(pos), ArrayRef.objectArray(entries));
+			}, NativeArray.primitiveArray(pos), NativeArray.objectArray(entries));
 
 			if (size > 255) {
 				indexOf = new ToIntMap<>(size);
@@ -198,7 +198,7 @@ public class MatchMapString<V> {
 			size[i] = prev.size;
 		}
 		TimSortForEveryone.sort(0, key.length(), (refLeft, offLeft, offRight) -> Integer.compare(U.getInt(refLeft, offLeft), U.getInt(offRight)),
-			ArrayRef.primitiveArray(size), ArrayRef.primitiveArray(out));
+			NativeArray.primitiveArray(size), NativeArray.primitiveArray(out));
 
 		String s = new String(out, 0, key.length());
 		ArrayCache.putArray(size);

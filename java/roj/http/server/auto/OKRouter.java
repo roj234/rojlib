@@ -17,7 +17,10 @@ import roj.asm.insn.CodeWriter;
 import roj.asm.insn.Label;
 import roj.asm.insn.SwitchBlock;
 import roj.asm.insn.TryCatchEntry;
-import roj.asm.type.*;
+import roj.asm.type.IType;
+import roj.asm.type.Signature;
+import roj.asm.type.Type;
+import roj.asm.type.TypeHelper;
 import roj.asmx.mapper.ParamNameMapper;
 import roj.collect.IntMap;
 import roj.collect.MyHashMap;
@@ -30,10 +33,9 @@ import roj.config.auto.SerializerFactory;
 import roj.config.data.CEntry;
 import roj.http.Headers;
 import roj.http.HttpUtil;
-import roj.http.IllegalRequestException;
 import roj.http.server.*;
 import roj.io.FastFailException;
-import roj.reflect.Bypass;
+import roj.io.IOUtil;
 import roj.reflect.ClassDefiner;
 import roj.reflect.VirtualReference;
 import roj.util.Helpers;
@@ -43,6 +45,7 @@ import java.io.IOException;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.function.Predicate;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -50,11 +53,23 @@ import java.util.regex.Pattern;
 import static roj.asm.Opcodes.*;
 
 /**
+ * 注解定义的Http路由器.
+ * 在函数上使用{@link Route}、{@link GET}或{@link POST}注解，将这个函数变为请求处理函数
+ * 如果选择Route注解，还可以用{@link Accepts}注解允许多个请求方法，例如POST与GET；还可以使用前缀匹配路径而不是精确匹配
+ * 上述注解使用函数名称.replace("__", "/")作为默认的匹配路径
+ * 在请求处理函数的参数上使用{@link QueryParam}、{@link Body}、注解从请求的GET或POST字段中提取对应名称的数据，支持基本类型、字符串、以及从Post的JSON/MsgPack格式反序列化对象
+ * 在处理函数上使用{@link Body}注解，来避免重复填写From属性
+ * 在类或函数上使用{@link Mime}注解，这会影响返回字符串函数的MimeType，没有默认值，而不影响返回{@link Content}的.
+ * 在类或函数上使用{@link Interceptor}注解，
+ *   如果这是一个请求处理函数，或者在类上使用，那么为它增加预处理器（拦截器），它们会按定义顺序（类 + 函数）在接收完该请求的头部时调用，而处理函数会在整个请求接收完后再调用.
+ *   否则，将这个函数注册为预处理函数
+ *
  * @author solo6975
  * @since 2022/3/27 14:26
  */
 public final class OKRouter implements Router {
 	private static final String REQ = "roj/http/server/Request";
+	private static final int ACCEPTS_ALL = 511;
 
 	private final TypedKey<Route> RouterImplKey = new TypedKey<>("or:router");
 	private final MyHashMap<String, Dispatcher> interceptors = new MyHashMap<>();
@@ -64,18 +79,8 @@ public final class OKRouter implements Router {
 	private final boolean debug;
 	private List<ITask> onFinishes = Collections.emptyList();
 
-	private OKRouter parent;
-
 	public OKRouter() {this(true);}
 	public OKRouter(boolean debug) {this.debug = debug;}
-	/**
-	 * 继承请求拦截器
-	 */
-	public OKRouter(OKRouter parent) {
-		this(parent.debug);
-		this.parent = parent;
-		this.onFinishes = null;
-	}
 
 	/**
 	 * 警告：如果使用addPrefixDelegation添加OKRouter，那么onFinish可能不会被触发
@@ -85,269 +90,622 @@ public final class OKRouter implements Router {
 		onFinishes.add(callback);
 	}
 
-	public final OKRouter register(Object o) {return register(o, "");}
-	private ImplRef makeRouterInst(Class<?> o) {
-		var data = Parser.parseConstants(o);
-		if (data == null) throw new IllegalStateException("找不到"+ o.getName()+"的类文件");
+	//region 代码生成
+	/**
+	 * 从注解生成用户路由器的调用实例(Dispatcher)以及方法ID映射
+	 */
+	private static final class CallerBuilder {
+		private final boolean debug;
 
-		var hndInst = new ClassNode();
-		hndInst.name(o.getName().replace('.', '/')+"$Router");
-		hndInst.interfaces().add("roj/http/server/auto/OKRouter$Dispatcher");
-		hndInst.parent(Bypass.MAGIC_ACCESSOR_CLASS);
-		//not needed, only invoke o.xxx
-		//hndInst.putAttr(new AttrString("SourceFile", o.getName()));
-		ClassDefiner.premake(hndInst);
+		private CodeWriter cw;
+		private final List<TryCatchEntry> exceptionHandlers = new SimpleList<>();
+		private final Annotation defaultSource = new Annotation();
+		// slot0 this, slot1 request, slot2 handler
+		private int slot, nextSlot = 3;
+		// instance, req, rh
+		private int bodyUsed;
 
-		hndInst.newField(0, "$methodId", "I");
-		hndInst.newField(0, "$handler", TypeHelper.class2asm(o));
+		CallerBuilder(boolean debug) {this.debug = debug;}
+		RouterInfo build(Class<?> type) {
+			var userRoute = Parser.parseConstants(type);
+			if (userRoute == null) throw new IllegalStateException("找不到"+type.getName()+"的类文件");
 
-		var cw = hndInst.newMethod(ACC_PUBLIC, "copyWith", "(ILjava/lang/Object;)Lroj/http/server/auto/OKRouter$Dispatcher;");
-		cw.visitSize(2, 3);
+			var caller = this.cn = new ClassNode();
+			caller.name(type.getName().replace('.', '/')+"$Router");
+			caller.interfaces().add("roj/http/server/auto/OKRouter$Dispatcher");
+			//caller.parent(Bypass.MAGIC_ACCESSOR_CLASS);
+			//not needed, only invoke type.xxx
+			//caller.putAttr(new AttrString("SourceFile", type.getName()));
+			ClassDefiner.premake(caller);
 
-		cw.newObject(hndInst.name());
-		cw.one(ASTORE_0);
+			caller.newField(ACC_PRIVATE, "$m", "I");
+			caller.newField(ACC_PRIVATE, "$i", TypeHelper.class2asm(type));
 
-		cw.one(ALOAD_0);
-		cw.one(ILOAD_1);
-		cw.field(PUTFIELD, hndInst, 0);
+			var cw = caller.newMethod(ACC_PUBLIC, "copyWith", "(ILjava/lang/Object;)Lroj/http/server/auto/OKRouter$Dispatcher;");
+			cw.visitSize(2, 3);
 
-		cw.one(ALOAD_0);
-		cw.one(ALOAD_2);
-		cw.clazz(CHECKCAST, o.getName().replace('.', '/'));
-		cw.field(PUTFIELD, hndInst, 1);
+			cw.newObject(caller.name());
+			cw.one(ASTORE_0);
 
-		cw.one(ALOAD_0);
-		cw.one(ARETURN);
-		cw.finish();
+			cw.one(ALOAD_0);
+			cw.one(ILOAD_1);
+			cw.field(PUTFIELD, caller, 0);
 
-		cw = hndInst.newMethod(ACC_PUBLIC, "invoke", "(L"+REQ+";Lroj/http/server/ResponseHeader;Ljava/lang/Object;)Ljava/lang/Object;");
-		cw.visitSize(5, 4);
+			cw.one(ALOAD_0);
+			cw.one(ALOAD_2);
+			cw.clazz(CHECKCAST, type.getName().replace('.', '/'));
+			cw.field(PUTFIELD, caller, 1);
 
-		cw.one(ALOAD_0);
-		cw.field(GETFIELD, hndInst, 1);
-
-		cw.one(ALOAD_0);
-		cw.field(GETFIELD, hndInst, 0);
-
-		var seg = SwitchBlock.ofSwitch(TABLESWITCH);
-		cw.addSegment(seg);
-
-		SwitchBlock seg2;
-		CodeWriter cw2;
-		if (debug) {
-			cw2 = hndInst.newMethod(ACC_PUBLIC | ACC_FINAL, "toString", "()Ljava/lang/String;");
-			cw2.visitSize(1, 1);
-			cw2.one(ALOAD_0);
-			cw2.field(GETFIELD, hndInst, 0);
-			seg2 = SwitchBlock.ofSwitch(TABLESWITCH);
-			cw2.addSegment(seg2);
-		} else {
-			seg2 = null;
-			cw2 = null;
-		}
-
-		int id = 0;
-		IntMap<Annotation> handlers = new IntMap<>();
-		ToIntMap<String> interceptorId = new ToIntMap<>();
-
-		List<TryCatchEntry> exhandlers = new SimpleList<>();
-		var predefInterceptor = getPredefInterceptor(data);
-
-		var methods = data.methods;
-		for (int i = 0; i < methods.size(); i++) {
-			var mn = methods.get(i);
-
-			var a = parseAnnotations(Annotations.getAnnotations(data.cp, mn, false));
-			if (a == null) continue;
-
-			if (a.type().equals("roj/http/server/auto/Interceptor")) {
-				var value = a.getList("value");
-				if (value.size() > 1) throw new IllegalArgumentException("Interceptor的values长度只能为0或1");
-
-				var name = value.isEmpty() ? mn.name() : value.getString(0);
-				if (this.interceptors.containsKey(name)) throw new IllegalStateException("拦截器名称"+name+"在当前OKRouter重复");
-				interceptorId.putInt(name, id++);
-			} else {
-				if (predefInterceptor != null) {
-					var self = a.getList("interceptor");
-					if (self.isEmpty()) a.put("interceptor", new AList(predefInterceptor));
-					else self.raw().addAll(predefInterceptor);
-				}
-
-				handlers.putInt(id++, a);
-				if (!a.containsKey("value"))
-					a.put("value", AnnVal.valueOf(mn.name().replace("__", "/")));
-			}
-
-			Label self = cw.label();
-			seg.branch(seg.targets.size(), self);
-			seg.def = self;
-			List<Type> par = mn.parameters();
-
-			noBody:{
-				int begin = 2;
-
-				hasBody: {
-					if (par.isEmpty()) break noBody;
-
-					if (!REQ.equals(par.get(0).owner)) {
-						begin = 0;
-						break hasBody;
-					}
-
-					if (par.size() == 1) {
-						cw.one(ALOAD_1);
-						break noBody;
-					}
-
-					if(!"roj/http/server/ResponseHeader".equals(par.get(1).owner)) {
-						cw.one(ALOAD_1);
-						begin = 1;
-						break hasBody;
-					}
-
-					cw.one(ALOAD_1);
-					cw.one(ALOAD_2);
-					if (par.size() <= 2) break noBody;
-				}
-
-				if (a.type().equals("roj/http/server/auto/Interceptor")) {
-					cw.one(ALOAD_3);
-					cw.clazz(CHECKCAST, PostSetting.class.getName().replace('.', '/'));
-				} else {
-					provideBodyPars(cw, data.cp, mn, begin, exhandlers);
-				}
-			}
-
-			cw.invoke(INVOKEVIRTUAL, mn.ownerClass(), mn.name(), mn.rawDesc());
-			if (mn.returnType().type != Type.CLASS) {
-				if (mn.returnType().type != Type.VOID)
-					throw new IllegalArgumentException("方法返回值不是void或对象:"+mn);
-				else cw.one(ACONST_NULL);
-			}
+			cw.one(ALOAD_0);
 			cw.one(ARETURN);
+			cw.finish();
 
-			if (seg2 != null) {
-				Label label = cw2.label();
-				seg2.branch(seg2.targets.size(), label);
-				seg2.def = label;
-				cw2.ldc(mn.ownerClass()+"."+mn.name()+mn.rawDesc());
-				cw2.one(ARETURN);
+			cw = this.cw = caller.newMethod(ACC_PUBLIC, "invoke", "(L"+REQ+";Lroj/http/server/ResponseHeader;Ljava/lang/Object;)Ljava/lang/Object;");
+			cw.visitSize(5, 4);
+
+			cw.one(ALOAD_0);
+			cw.field(GETFIELD, caller, 1);
+
+			cw.one(ALOAD_0);
+			cw.field(GETFIELD, caller, 0);
+
+			var seg = SwitchBlock.ofSwitch(TABLESWITCH);
+			cw.addSegment(seg);
+
+			SwitchBlock seg2;
+			CodeWriter cw2;
+			if (debug) {
+				cw2 = caller.newMethod(ACC_PUBLIC | ACC_FINAL, "toString", "()Ljava/lang/String;");
+				cw2.visitSize(1, 1);
+				cw2.one(ALOAD_0);
+				cw2.field(GETFIELD, caller, 0);
+				seg2 = SwitchBlock.ofSwitch(TABLESWITCH);
+				cw2.addSegment(seg2);
+			} else {
+				seg2 = null;
+				cw2 = null;
 			}
+
+			int methodId = 0;
+			IntMap<Annotation> handlers = new IntMap<>();
+			ToIntMap<String> interceptors = new ToIntMap<>();
+
+			var prependInterceptors = getPrependInterceptors(userRoute);
+
+			var methods = userRoute.methods;
+			for (int i = 0; i < methods.size(); i++) {
+				var mn = methods.get(i);
+
+				var map = parseAnnotations(Annotations.getAnnotations(userRoute.cp, mn, false));
+				if (map == null) continue;
+
+				if (map.type().equals("roj/http/server/auto/Interceptor")) {
+					var value = map.getList("value");
+					if (value.size() > 1) throw new IllegalArgumentException("作为预处理器函数的@Interceptor的values长度只能为0或1");
+
+					var name = value.isEmpty() ? mn.name() : value.getString(0);
+					Integer prev = interceptors.putInt(name, methodId++ | (map.getBool("global") ? Integer.MIN_VALUE : 0));
+					if (prev != null) throw new IllegalArgumentException("预处理器名称重复: "+prev);
+				} else {
+					if (prependInterceptors != null) {
+						var self = map.getList("interceptor");
+						if (self.isEmpty()) map.put("interceptor", new AList(prependInterceptors));
+						else self.raw().addAll(0, prependInterceptors);
+					}
+
+					handlers.putInt(methodId++, map);
+					if (!map.containsKey("value"))
+						map.put("value", AnnVal.valueOf(mn.name().replace("__", "/")));
+				}
+
+				Label self = cw.label();
+				seg.branch(seg.targets.size(), self);
+				seg.def = self;
+				List<Type> par = mn.parameters();
+
+				noBody:{
+					int begin = 2;
+
+					hasBody: {
+						if (par.isEmpty()) break noBody;
+
+						if (!REQ.equals(par.get(0).owner)) {
+							begin = 0;
+							break hasBody;
+						}
+
+						if (par.size() == 1) {
+							cw.one(ALOAD_1);
+							break noBody;
+						}
+
+						if(!"roj/http/server/ResponseHeader".equals(par.get(1).owner)) {
+							cw.one(ALOAD_1);
+							begin = 1;
+							break hasBody;
+						}
+
+						cw.one(ALOAD_1);
+						cw.one(ALOAD_2);
+						if (par.size() <= 2) break noBody;
+					}
+
+					if (map.type().equals("roj/http/server/auto/Interceptor")) {
+						cw.one(ALOAD_3);
+						cw.clazz(CHECKCAST, PostSetting.class.getName().replace('.', '/'));
+					} else {
+						defaultSource.put("source", map.getString("deserializeFrom", "UNDEFINED"));
+						convertParams(userRoute.cp, mn, begin);
+					}
+				}
+
+				cw.invoke(INVOKEVIRTUAL, mn.ownerClass(), mn.name(), mn.rawDesc());
+				if (mn.returnType().type != Type.CLASS) {
+					if (mn.returnType().type != Type.VOID)
+						throw new IllegalArgumentException("方法返回值必须是空值或对象:"+mn);
+					else cw.one(ACONST_NULL);
+				}
+				cw.one(ARETURN);
+
+				if (seg2 != null) {
+					Label label = cw2.label();
+					seg2.branch(seg2.targets.size(), label);
+					seg2.def = label;
+					cw2.ldc(mn.ownerClass()+"."+mn.name()+mn.rawDesc());
+					cw2.one(ARETURN);
+				}
+			}
+			if (seg.def == null) throw new IllegalArgumentException(userRoute.name()+"没有任何处理函数");
+
+			List<TryCatchEntry> exceptionHandlers = this.exceptionHandlers;
+			if (debug) {
+				for (var tce : exceptionHandlers) {
+					cw.label(tce.handler);
+					cw.one(ALOAD_1);
+					cw.ldc(tce.type);
+					cw.invoke(INVOKESTATIC, "roj/http/server/auto/OKRouter", "requestDebug", "(Ljava/lang/Throwable;Lroj/http/server/Request;Ljava/lang/String;)Lroj/http/server/IllegalRequestException;");
+					cw.one(ATHROW);
+				}
+			} else {
+				for (var tce : exceptionHandlers) {
+					cw.label(tce.handler);
+					cw.field(GETSTATIC, "roj/http/server/IllegalRequestException", "BAD_REQUEST", "Lroj/http/server/IllegalRequestException;");
+					cw.one(ATHROW);
+				}
+			}
+			cw.visitExceptions();
+			for (var tce : exceptionHandlers) cw.visitException(tce.start,tce.end,tce.handler,null);
+			cw.finish();
+
+			if (clinit != null) {
+				clinit.one(RETURN);
+				clinit.finish();
+			}
+
+			var inst = (Dispatcher) ClassDefiner.make(caller, type.getClassLoader());
+			var defaultMime = Annotation.findInvisible(userRoute.cp, userRoute, "roj/http/server/auto/Mime");
+			return new RouterInfo(handlers, interceptors, inst, defaultMime != null ? defaultMime.getString("value") : null);
 		}
-		if (seg.def == null) throw new IllegalArgumentException(data.name()+"没有任何处理函数");
 
-		if (debug) {
-			for (var tce : exhandlers) {
-				cw.label(tce.handler);
-				cw.ldc("参数'"+tce.type+"'解析失败");
-				cw.invoke(INVOKESTATIC, "roj/http/server/auto/OKRouter", "requestDebug", "(Ljava/lang/Throwable;Ljava/lang/String;)Lroj/http/IllegalRequestException;");
-				cw.one(ATHROW);
+		// WARNING: clinit is wrong when ClassDefiner not use allocateInstance!
+		private ClassNode cn;
+		private final ToIntMap<String> typeFids = new ToIntMap<>();
+		private CodeWriter clinit;
+		private void loadType(String type) {
+			int fid = typeFids.getOrDefault(type, -1);
+			if (fid < 0) {
+				fid = cn.newField(ACC_PRIVATE | ACC_STATIC | ACC_FINAL, "$"+cn.fields.size(), "Lroj/asm/type/IType;");
+				typeFids.putInt(type, fid);
+
+				if (clinit == null) {
+					clinit = cn.newMethod(ACC_PUBLIC|ACC_STATIC, "<clinit>", "()V");
+					clinit.visitSize(1, 0);
+				}
+
+				clinit.ldc(new CstString(type));
+				clinit.invokeS("roj/asm/type/Signature", "parseGeneric", "(Ljava/lang/CharSequence;)Lroj/asm/type/IType;");
+				clinit.field(PUTSTATIC, cn, fid);
 			}
-		} else {
-			for (var tce : exhandlers) {
-				cw.label(tce.handler);
-				cw.field(GETSTATIC, "roj/http/IllegalRequestException", "BAD_REQUEST", "Lroj/http/IllegalRequestException;");
-				cw.one(ATHROW);
-			}
+
+			cw.field(GETSTATIC, cn, fid);
 		}
-		cw.visitExceptions();
-		for (var tce : exhandlers) cw.visitException(tce.start,tce.end,tce.handler,null);
-		cw.finish();
 
-		var inst = (Dispatcher) ClassDefiner.make(hndInst, o.getClassLoader());
-		return new ImplRef(handlers, interceptorId, inst);
+		private void convertParams(ConstantPool cp, MethodNode method, int begin) {
+			List<List<Annotation>> annos = ParameterAnnotations.getParameterAnnotation(cp, method, false);
+			if (annos == null) annos = Collections.emptyList();
+
+			Signature signature = method.getAttribute(cp, Attribute.SIGNATURE);
+			List<IType> genTypes = signature == null ? Collections.emptyList() : signature.values;
+
+			List<String> parNames = ParamNameMapper.getParameterNames(cp, method);
+			if (parNames == null) parNames = Collections.emptyList();
+
+			slot = 0;
+			nextSlot = 3;
+			bodyUsed = 0;
+
+			List<Type> parTypes = method.parameters();
+			for (; begin < parTypes.size(); begin++) {
+				convertParam(begin>=annos.size()?null:parseParameterAnnotations(annos.get(begin)),
+						begin>=parNames.size()?null:parNames.get(begin),
+						parTypes.get(begin),
+						begin>=genTypes.size() ? null : genTypes.get(begin));
+			}
+
+			cw.visitSizeMax(TypeHelper.paramSize(method.rawDesc())+3, nextSlot);
+		}
+		private void convertParam(@Nullable Annotation field, String name, Type rawType, IType type) {
+			if (field == null) field = defaultSource;
+			name = field.getString("value", name);
+			if (type == null) type = rawType;
+
+			String source = field.getString("source");
+			int fromSlot = 0;
+
+			if (name == null && !source.equals("BODY")) throw new IllegalArgumentException("编译时是否保存了方法参数名称？");
+
+			CodeWriter c = cw;
+			switch (source) {
+				case "HEAD" -> fromSlot = 1;
+				case "POST" -> {
+					fromSlot = (slot >>> 8) & 0xFF;
+					if (fromSlot == 0) {
+						bodyUsed |= 2;
+
+						c.one(ALOAD_1);
+						c.invoke(INVOKEVIRTUAL, REQ, "formData", "()Ljava/util/Map;");
+						c.vars(ASTORE, fromSlot = nextSlot);
+						slot |= nextSlot++ << 8;
+					}
+				}
+				case "GET" -> {
+					fromSlot = (slot) & 0xFF;
+					if (fromSlot == 0) {
+						bodyUsed |= 1;
+
+						c.one(ALOAD_1);
+						c.invoke(INVOKEVIRTUAL, REQ, "queryParam", "()Ljava/util/Map;");
+						c.vars(ASTORE, fromSlot = nextSlot);
+						slot |= nextSlot++;
+					}
+				}
+				case "COOKIE" -> {
+					fromSlot = (slot >>> 16) & 0xFF;
+					if (fromSlot == 0) {
+						c.one(ALOAD_1);
+						c.invoke(INVOKEVIRTUAL, REQ, "cookie", "()Ljava/util/Map;");
+						c.vars(ASTORE, fromSlot = nextSlot);
+						slot |= nextSlot++ << 16;
+					}
+				}
+				case "BODY" -> {
+					if ((bodyUsed & 4) == 0) {
+						bodyUsed |= 4;
+
+						if (rawType.getActualType() != Type.CLASS)
+							throw new IllegalArgumentException("基本类型无法使用JSON解析");
+
+						var tce = new TryCatchEntry();
+						tce.start = cw.label();
+						tce.handler = new Label();
+						tce.type = type+" "+name;
+
+						c.one(ALOAD_1);
+						loadType(type.toDesc());
+						c.invoke(INVOKESTATIC, "roj/http/server/auto/OKRouter", "parse", "(L"+REQ+";Lroj/asm/type/IType;)Ljava/lang/Object;");
+						c.clazz(CHECKCAST, rawType);
+
+						tce.end = cw.label();
+						exceptionHandlers.add(tce);
+						return;
+					} else {
+						throw new IllegalArgumentException("JSON类型仅能出现一次(这是反序列化请求体啊)");
+					}
+				}
+			}
+			if ((bodyUsed & 6) == 6) throw new IllegalArgumentException("不能同时使用POST和BODY类型");
+
+			var tce = new TryCatchEntry();
+			tce.start = cw.label();
+			tce.handler = new Label();
+			tce.type = type+" "+name;
+
+			if (source.equals("PARAM")) {
+				c.one(ALOAD_1);
+				// 这个不需要解析，所以也不需要缓存到本地变量
+				c.invoke(INVOKEVIRTUAL, REQ, "arguments", "()Lroj/http/Headers;");
+			} else {
+				if (fromSlot == 0) throw new IllegalStateException("不支持的类型:"+source);
+				c.vars(ALOAD, fromSlot);
+			}
+
+			c.ldc(name);
+			String orDefault = field.getString("orDefault", null);
+			if (orDefault != null) {
+				c.ldc(orDefault);
+				c.invokeItf("java/util/Map", "getOrDefault", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;");
+			} else {
+				c.invokeItf("java/util/Map", "get", "(Ljava/lang/Object;)Ljava/lang/Object;");
+				if (!field.getBool("optional", false)) {
+					cw.one(DUP);
+					var label = new Label();
+					cw.jump(IFNONNULL, label);
+					cw.one(POP);
+					cw.clazz(NEW, "roj/io/FastFailException");
+					cw.one(DUP);
+					cw.ldc("参数缺失");
+					cw.invokeD("roj/io/FastFailException", "<init>", "(Ljava/lang/String;)V");
+					cw.one(ATHROW);
+					cw.label(label);
+				}
+			}
+
+			addExHandler: {
+				int type1 = rawType.getActualType();
+				if (type1 == Type.CLASS) {
+					if (rawType.owner != null) {
+						if (rawType.owner.equals("java/lang/String") || rawType.owner.equals("java/lang/CharSequence")) {
+							cw.invoke(INVOKEVIRTUAL, "java/lang/Object", "toString", "()Ljava/lang/String;");
+							break addExHandler;
+						}
+					}
+					throw new IllegalArgumentException("无法将String转换为"+rawType);
+				}
+				if (type1 == Type.CHAR) {
+					// stack=4;
+					cw.invoke(INVOKESTATIC, "java/lang/Integer", "parseInt", "(Ljava/lang/String;)I");
+					cw.one(DUP);
+					cw.one(DUP);
+					cw.one(I2C);
+					Label label = new Label();
+					cw.jump(IF_icmpeq, label);
+					cw.clazz(NEW, "roj/io/FastFailException");
+					cw.one(DUP);
+					cw.ldc("参数超出范围");
+					cw.invokeD("roj/io/FastFailException", "<init>", "(Ljava/lang/String;)V");
+					cw.one(ATHROW);
+					cw.label(label);
+				} else {
+					name = Type.getName(type1);
+					name = Character.toUpperCase(name.charAt(0))+name.substring(1);
+					cw.clazz(CHECKCAST, "java/lang/String");
+					cw.invoke(INVOKESTATIC, "java/lang/"+(name.equals("Int")?"Integer":name), "parse"+name, "(Ljava/lang/String;)"+(char)rawType.type);
+				}
+			}
+			tce.end = cw.label();
+			exceptionHandlers.add(tce);
+		}
+
+		@Nullable
+		private static List<CEntry> getPrependInterceptors(ClassNode data) {
+			var preDef = Annotation.findInvisible(data.cp, data, "roj/http/server/auto/Interceptor");
+			return preDef != null ? preDef.getList("value").raw() : null;
+		}
+		private static Annotation parseAnnotations(List<Annotation> list) {
+			CEntry accepts = null, mime = null;
+			Annotation interceptor = null, route = null, easyMapping = null;
+
+			for (int j = 0; j < list.size(); j++) {
+				var a = list.get(j);
+				switch (a.type()) {
+					case "roj/http/server/auto/Interceptor" -> interceptor = a;
+					case "roj/http/server/auto/Route" -> route = a;
+					case "roj/http/server/auto/Accepts" -> accepts = a.get("value");
+					case "roj/http/server/auto/Mime" -> mime = a.get("value");
+					case "roj/http/server/auto/GET", "roj/http/server/auto/POST" -> {
+						if (easyMapping != null) throw new IllegalArgumentException(easyMapping+"不能和"+a+"共用");
+						easyMapping = a;
+					}
+				}
+			}
+
+			if (easyMapping != null) {
+				if (route != null) throw new IllegalArgumentException(easyMapping+"不能和@Route共用");
+				if (accepts != null) throw new IllegalArgumentException(easyMapping+"不能和@Accepts共用");
+
+				boolean isGet = easyMapping.type().endsWith("GET");
+				easyMapping.putIfAbsent("deserializeFrom", isGet ? "GET" : "POST");
+				easyMapping.put("accepts", AnnVal.valueOf(isGet ? Accepts.GET : Accepts.POST));
+
+				route = easyMapping;
+				route.setType("roj/http/server/auto/Route");
+			} else if (route == null) return interceptor;
+
+			if (interceptor != null) route.put("interceptor", interceptor.get("value"));
+			if (accepts != null) route.put("accepts", accepts);
+			if (mime != null) route.put("mime", mime);
+
+			return route;
+		}
+		private static Annotation parseParameterAnnotations(List<Annotation> list) {
+			Annotation holder = null;
+			String source = null;
+			boolean optional = false;
+			long min = Long.MIN_VALUE;
+			long max = Long.MAX_VALUE;
+
+			for (int j = 0; j < list.size(); j++) {
+				var a = list.get(j);
+				switch (a.type()) {
+					default -> {continue;}
+					case "roj/http/server/auto/RequestParam" -> {
+						if (holder != null) throw new IllegalStateException("注解"+a+"与已有的"+holder+"重复");
+						source = "PARAM";
+						optional = true; //实际上是不可空？
+					}
+					case "roj/http/server/auto/Header" -> {
+						if (holder != null) throw new IllegalStateException("注解"+a+"与已有的"+holder+"重复");
+						source = "HEAD";
+					}
+					case "roj/http/server/auto/QueryParam" -> {
+						if (holder != null) throw new IllegalStateException("注解"+a+"与已有的"+holder+"重复");
+						source = "GET";
+					}
+					case "roj/http/server/auto/Body" -> {
+						if (holder != null) throw new IllegalStateException("注解"+a+"与已有的"+holder+"重复");
+						source = "BODY";
+					}
+					case "org/jetbrains/annotations/Nullable" -> {
+						optional = true;
+						continue;
+					}
+					case "org/jetbrains/annotations/Range" -> {
+						min = a.getLong("min");
+						max = a.getLong("max");
+						continue;
+					}
+				}
+
+				holder = a;
+			}
+
+			if (holder == null) return null;
+
+			holder.put("source", source);
+			if (optional) holder.put("optional", true);
+
+			return holder;
+		}
 	}
+	// 生成请求调试信息
+	@ReferenceByGeneratedClass
+	public static IllegalRequestException requestDebug(Throwable exc, Request req, String msg) {
+		var isBrowserRequest = Headers.getOneValue(req.get("accept"), "text/html") != null;
+		return new IllegalRequestException(400, /*isBrowserRequest ? */Content.internalError("参数'"+msg+"'解析失败", exc));
+	}
+	// 解析JSON请求体
+	@ReferenceByGeneratedClass
+	public static Object parse(Request req, IType type) throws Exception {
+		if (req.body() == null) throw new FastFailException("没有请求体");
 
-	private static final VirtualReference<MyHashMap<String, ImplRef>> Isolation = new VirtualReference<>();
-	private static final class ImplRef {
+		var serializer = SerializerFactory.SAFE.serializer(type); serializer.reset();
+		BinaryParser parser;
+
+		switch (req.getFirstHeaderValue("content-type")) {
+			default -> {
+				parser = (BinaryParser) req.threadLocal().get("or:parser:json");
+				if (parser == null) req.threadLocal().put("or:parser:json", parser = ConfigMaster.JSON.parser(true));
+			}
+			case "application/x-msgpack"/* Unofficial */, "application/vnd.msgpack" -> {
+				parser = (BinaryParser) req.threadLocal().get("or:parser:msgpack");
+				if (parser == null) req.threadLocal().put("or:parser:msgpack", parser = ConfigMaster.MSGPACK.parser(true));
+			}
+			case "application/x-www-form-urlencoded", "multipart/form-data" -> {
+				var data = req.formData();
+				serializer.valueMap(data.size());
+				for (Map.Entry<String, String> entry : data.entrySet()) {
+					serializer.key(entry.getKey());
+					serializer.value(entry.getValue());
+				}
+				serializer.pop();
+				return serializer.get();
+			}
+		}
+
+		parser.parse(req.body(), 0, serializer);
+		return serializer.get();
+	}
+	//endregion
+	private static final VirtualReference<MyHashMap<String, RouterInfo>> UserCallers = new VirtualReference<>();
+	private static final class RouterInfo {
 		final IntMap<Annotation> handlers;
 		final ToIntMap<String> interceptors;
 		final Dispatcher inst;
+		final String defaultMime;
 
-		ImplRef(IntMap<Annotation> handlers, ToIntMap<String> interceptors, Dispatcher inst) {
+		RouterInfo(IntMap<Annotation> handlers, ToIntMap<String> interceptors, Dispatcher inst, String defaultMime) {
 			this.handlers = handlers;
 			this.interceptors = interceptors;
 			this.inst = inst;
+			this.defaultMime = defaultMime;
 		}
 	}
 
+	public final OKRouter register(Object o) {return register(o, "");}
 	public final OKRouter register(Object o, String pathRel) {
 		var type = o.getClass();
-		var map = Isolation.computeIfAbsent(type.getClassLoader(), Helpers.cast(Helpers.fnMyHashMap()));
+		var map = UserCallers.computeIfAbsent(type.getClassLoader(), Helpers.cast(Helpers.fnMyHashMap()));
 		var inst = map.get(type.getName());
 		if (inst == null) {
 			synchronized (map) {
 				if ((inst = map.get(type.getName())) == null) {
-					inst = makeRouterInst(type);
+					inst = new CallerBuilder(debug).build(type);
 					map.put(type.getName(), inst);
 				}
 			}
 		}
 
+		// 存放已经实例化的拦截器
+		MyHashMap<String, Dispatcher> interceptorInstance = new MyHashMap<>();
 		for (var entry : inst.handlers.selfEntrySet()) {
 			int i = entry.getIntKey();
-			var a = entry.getValue();
-			var set = new Route();
+			var annotation = entry.getValue();
+			var subroute = new Route();
 
-			set.accepts = a.getInt("accepts", 255);
-			set.req = inst.inst.copyWith(i, o);
-			set.mime = a.getString("mime", "text/plain");
+			subroute.accepts = annotation.getInt("accepts", 3/* GET|POST */);
+			subroute.req = inst.inst.copyWith(i, o);
+			subroute.mime = annotation.getString("mime", inst.defaultMime);
 
 			List<Dispatcher> precs = Collections.emptyList();
-			var vname = a.getList("interceptor");
-			if (!vname.isEmpty()) {
-				for (int j = 0; j < vname.size(); j++) {
-					String name = vname.getString(j);
-					var prec = interceptors.get(name);
-					if (prec == null) {
-						// dummy interceptor
-						if (interceptors.containsKey(name)) continue;
+			var interceptorNames = annotation.getList("interceptor");
+			if (!interceptorNames.isEmpty()) {
+				for (int j = 0; j < interceptorNames.size(); j++) {
+					String name = interceptorNames.getString(j);
 
-						int vid = inst.interceptors.getOrDefault(name, -1);
-						if (vid < 0) {
-							if ((prec = getParentInterceptor(name)) == null) {
-								throw new IllegalArgumentException("未找到"+a+"引用的拦截器"+vname.get(j));
+					var interceptor = interceptorInstance.get(name);
+					if (interceptor == null) {
+						int methodId = inst.interceptors.getOrDefault(name, -1);
+						if (methodId == -1) {
+							if ((interceptor = interceptors.get(name)) == null) {
+								// 忽略这个拦截器
+								if (interceptors.containsKey(name)) continue;
+								throw new IllegalArgumentException("未找到"+annotation+"引用的拦截器"+interceptorNames.get(j));
 							}
 						} else {
-							prec = inst.inst.copyWith(vid, o);
-							interceptors.put(name, prec);
+							interceptor = inst.inst.copyWith(methodId & Integer.MAX_VALUE, o);
 						}
+						interceptorInstance.put(name, interceptor);
 					}
 
 					if (precs.size() == 0) {
-						precs = Collections.singletonList(prec);
+						precs = Collections.singletonList(interceptor);
 					} else {
 						if (precs.size() == 1) precs = new SimpleList<>(precs);
-						precs.add(prec);
+						precs.add(interceptor);
 					}
 				}
 			}
-			set.prec = precs.toArray(new Dispatcher[precs.size()]);
+			subroute.prec = precs.toArray(new Dispatcher[precs.size()]);
 
-			int flag = a.getBool("prefix")?Node.PREFIX:0;
-			String url = pathRel.concat(a.getString("value"));
+			int flag = annotation.getBool("prefix")?Node.PREFIX:0;
+			String subpath = annotation.getString("value");
+			if (subpath.endsWith("/**")) {
+				flag |= Node.PREFIX;
+				subpath = subpath.substring(0, subpath.length()-2);
+			}
+			String url = pathRel.concat(subpath);
 			if (url.endsWith("/")) flag |= Node.DIRECTORY;
+			else if (annotation.getBool("strict")) flag |= Node.FILE;
 
 			Node node = route.add(url, 0, url.length());
 
 			Object prev = node.value;
 			if (prev == null) {
 				node.flag |= (byte) flag;
-				node.value = set;
+				node.value = subroute;
 			} else {
-				if (node.flag != flag) throw new IllegalArgumentException("prefix定义不同/"+o+" in "+prev+"|"+set);
+				if (node.flag != flag) throw new IllegalArgumentException("prefix定义不同/"+o+" in "+prev+"|"+subroute);
 
 				if (prev instanceof Route prevReq) {
 					Route[] newReq = new Route[8];
 					node.value = newReq;
 
-					if ((prevReq.accepts & set.accepts) != 0)
-						throw new IllegalArgumentException("冲突的请求类型处理器/"+o+" in "+prevReq+"|"+set+" accepts="+prevReq.accepts+"|"+set.accepts);
+					if ((prevReq.accepts & subroute.accepts) != 0)
+						throw new IllegalArgumentException("冲突的请求类型处理器/"+o+" in "+prevReq+"|"+subroute+" accepts="+prevReq.accepts+"|"+subroute.accepts);
 
 					for (int j = 0; j < 8; j++) {
-						if ((set.accepts & (1<<j)) != 0) {
-							newReq[j] = set;
+						if ((subroute.accepts & (1<<j)) != 0) {
+							newReq[j] = subroute;
 						} else if ((prevReq.accepts & (1<<j)) != 0) {
 							newReq[j] = prevReq;
 						}
@@ -355,10 +713,10 @@ public final class OKRouter implements Router {
 				} else {
 					Route[] newReq = ((Route[]) prev);
 					for (int j = 0; j < 8; j++) {
-						if ((set.accepts & (1<<j)) != 0) {
+						if ((subroute.accepts & (1<<j)) != 0) {
 							if (newReq[j] != null)
-								throw new IllegalArgumentException("冲突的请求类型处理器/"+o+" in "+newReq[j]+"|"+set+":"+HttpUtil.getMethodName(j));
-							newReq[j] = set;
+								throw new IllegalArgumentException("冲突的请求类型处理器/"+o+" in "+newReq[j]+"|"+subroute+":"+HttpUtil.getMethodName(j));
+							newReq[j] = subroute;
 						}
 					}
 				}
@@ -366,92 +724,55 @@ public final class OKRouter implements Router {
 		}
 
 		for (var entry : inst.interceptors.selfEntrySet()) {
-			if (!interceptors.containsKey(entry.k)) {
-				interceptors.put(entry.k, inst.inst.copyWith(entry.v, o));
+			if ((entry.v & Integer.MIN_VALUE) != 0) {
+				String name = entry.k;
+				if (interceptors.containsKey(name)) throw new IllegalStateException(o+"的"+name+"拦截器在当前上下文重复");
+				interceptors.put(name, inst.inst.copyWith(entry.v & Integer.MAX_VALUE, o));
 			}
 		}
 		return this;
-	}
-	private Dispatcher getParentInterceptor(String name) {
-		var p = parent;
-		while (p != null) {
-			var i = p.interceptors.get(name);
-			if (i != null) return i;
-			p = p.parent;
-		}
-		return null;
-	}
-
-	@Nullable
-	private static List<CEntry> getPredefInterceptor(ClassNode data) {
-		var preDef = Annotation.findInvisible(data.cp, data, "roj/http/server/auto/Interceptor");
-		return preDef != null ? preDef.getList("value").raw() : null;
-	}
-	private static Annotation parseAnnotations(List<Annotation> list) {
-		CEntry accepts = null, mime = null;
-		Annotation body = null, interceptor = null, route = null, easyMapping = null;
-
-		for (int j = 0; j < list.size(); j++) {
-			var a = list.get(j);
-			switch (a.type()) {
-				case "roj/http/server/auto/Interceptor" -> interceptor = a;
-				case "roj/http/server/auto/Route" -> route = a;
-				case "roj/http/server/auto/Accepts" -> accepts = a.get("value");
-				case "roj/http/server/auto/Body" -> body = a;
-				case "roj/http/server/auto/Mime" -> mime = a.get("value");
-				case "roj/http/server/auto/GET", "roj/http/server/auto/POST" -> {
-					if (easyMapping != null) throw new IllegalArgumentException(easyMapping+"不能和"+a+"共用");
-					easyMapping = a;
-				}
-			}
-		}
-
-		if (easyMapping != null) {
-			if (route != null) throw new IllegalArgumentException(easyMapping+"不能和@Route共用");
-			if (accepts != null) throw new IllegalArgumentException(easyMapping+"不能和@Accepts共用");
-
-			boolean isGet = easyMapping.type().endsWith("GET");
-			if (body == null) list.add(new Annotation("roj/http/server/auto/Body", Collections.singletonMap("value", AnnVal.ofEnum("roj/http/server/auto/From", isGet ? "GET" : "POST_KV"))));
-
-			easyMapping.put("accepts", AnnVal.valueOf(isGet ? Accepts.GET : Accepts.POST));
-
-			route = easyMapping;
-			route.setType("roj/http/server/auto/Route");
-		} else if (route == null) return interceptor;
-
-		if (interceptor != null) route.put("interceptor", interceptor.get("value"));
-		if (accepts != null) route.put("accepts", accepts);
-		if (mime != null) route.put("mime", mime);
-
-		return route;
 	}
 
 	public final Dispatcher getInterceptor(String name) {return interceptors.get(name);}
 	public final void setInterceptor(String name, Dispatcher interceptor) {interceptors.put(name, interceptor);}
 	public final void removeInterceptor(String name) {interceptors.remove(name);}
 
+	/**
+	 * @see #addPrefixDelegation(String, Router, String...)
+	 */
 	public final OKRouter addPrefixDelegation(String path, Router router) {return addPrefixDelegation(path, router, (String[])null);}
+
+	/**
+	 * 注册path/**拦截器
+	 * 路径结尾是否有斜杠会被忽略，总是按照有对待
+	 * @param path
+	 * @param router
+	 * @param interceptors
+	 * @return
+	 */
 	public final OKRouter addPrefixDelegation(String path, Router router, @Nullable String... interceptors) {
 		Node node = route.add(path, 0, path.length());
 		if (node.value != null) throw new IllegalArgumentException("子路径'"+path+"'已存在");
 
 		var aset = new Route();
 
-		node.flag |= (byte) (Node.PREFIX|(path.endsWith("/")?Node.DIRECTORY:0));
+		node.flag |= Node.PREFIX|Node.DIRECTORY;
 		node.value = aset;
-		aset.accepts = 511;
+		aset.accepts = ACCEPTS_ALL;
+
+		if (router instanceof OKRouter child) {
+			Node otherRoot = child.route;
+			node.flag = otherRoot.flag;
+			node.value = otherRoot.value;
+			node.table = otherRoot.table;
+			node.size = otherRoot.size;
+			node.mask = otherRoot.mask;
+			node.any = otherRoot.any;
+			//prependInterceptorArray(interceptors);
+			return this;
+		}
 
 		if (interceptors == null || interceptors.length == 0) {
-			if (router instanceof OKRouter okRouter) {
-				Node otherRoot = okRouter.route;
-				node.flag = otherRoot.flag;
-				node.value = otherRoot.value;
-				node.table = otherRoot.table;
-				node.size = otherRoot.size;
-				node.mask = otherRoot.mask;
-				node.any = otherRoot.any;
-				return this;
-			}
 
 			aset.prec = new Dispatcher[] {_getChecker(router)};
 		} else {
@@ -493,185 +814,6 @@ public final class OKRouter implements Router {
 
 	public final boolean removePrefixDelegation(String path) {return route.remove(path, 0, path.length());}
 
-	private void provideBodyPars(CodeWriter c, ConstantPool cp, MethodNode m, int begin, List<TryCatchEntry> tries) {
-		List<Type> parTypes = m.parameters();
-
-		Annotation body = Annotation.findInvisible(cp, m, "roj/http/server/auto/Body");
-		if (body == null) throw new IllegalArgumentException("没有@Body注解 " + m);
-
-		List<List<Annotation>> annos = ParameterAnnotations.getParameterAnnotation(cp, m, false);
-		if (annos == null) annos = Collections.emptyList();
-
-		Signature signature = m.getAttribute(cp, Attribute.SIGNATURE);
-		List<IType> genTypes = signature == null ? Collections.emptyList() : signature.values;
-
-		List<String> parNames = ParamNameMapper.getParameterName(cp, m);
-		if (parNames == null) parNames = Collections.emptyList();
-
-		BodyPre bw = new BodyPre();
-		bw.cw = c;
-
-		String from = body.getEnumValue("value", "INHERIT");
-		if (from.equals("INHERIT")) throw new IllegalArgumentException(body + "不能使用INHERIT");
-		bw.from = from;
-		bw.nonnull = body.getBool("nonnull", false);
-		bw.tries = tries;
-
-		for (; begin < parTypes.size(); begin++) {
-			bw.process(begin>=annos.size()?null: Annotation.find(annos.get(begin), "roj/http/server/auto/Field"),
-				begin>=parNames.size()?null:parNames.get(begin),
-				parTypes.get(begin),
-				begin>=genTypes.size()|| !(genTypes.get(begin) instanceof Generic) ? null: (Generic) genTypes.get(begin));
-		}
-
-		c.visitSizeMax(TypeHelper.paramSize(m.rawDesc())+3, bw.nextSlot);
-	}
-	private static final class BodyPre {
-		// slot0 this, slot1 request, slot2 handler
-		int slot, nextSlot = 3;
-		// instance, req, rh
-		int bodyKind;
-		CodeWriter cw;
-		String from;
-		boolean nonnull;
-		List<TryCatchEntry> tries;
-
-		private static final Annotation DEFAULT = new Annotation();
-
-		void process(@Nullable Annotation field, String name, Type type, Generic genType) {
-			if (field == null) field = DEFAULT;
-
-			String from1 = field.getEnumValue("from", "INHERIT");
-			if (from1.equals("INHERIT")) from1 = from;
-			int fromSlot = 0;
-
-			if (name == null && (name = field.getString("value", null)) == null && !from1.equals("JSON"))
-				throw new IllegalArgumentException("编译时是否保存了方法参数名称？");
-
-			CodeWriter c = cw;
-			switch (from1) {
-				case "POST_KV":
-					fromSlot = (slot >>> 8) & 0xFF;
-					if (fromSlot == 0) {
-						bodyKind |= 2;
-
-						c.one(ALOAD_1);
-						c.invoke(INVOKEVIRTUAL, REQ, "PostFields", "()Ljava/util/Map;");
-						c.vars(ASTORE, fromSlot = nextSlot);
-						slot |= nextSlot++ << 8;
-					}
-				break;
-				case "GET":
-					fromSlot = (slot) & 0xFF;
-					if (fromSlot == 0) {
-						bodyKind |= 1;
-
-						c.one(ALOAD_1);
-						c.invoke(INVOKEVIRTUAL, REQ, "GetFields", "()Ljava/util/Map;");
-						c.vars(ASTORE, fromSlot = nextSlot);
-						slot |= nextSlot++;
-					}
-				break;
-				case "REQUEST":
-					fromSlot = (slot >>> 16) & 0xFF;
-					if (fromSlot == 0) {
-						bodyKind |= 3;
-
-						c.one(ALOAD_1);
-						c.invoke(INVOKEVIRTUAL, REQ, "fields", "()Ljava/util/Map;");
-						c.vars(ASTORE, fromSlot = nextSlot);
-						slot |= nextSlot++ << 16;
-					}
-				break;
-				case "JSON":
-					if ((bodyKind & 4) == 0) {
-						bodyKind |= 4;
-
-						if (type.getActualType() != Type.CLASS) throw new IllegalArgumentException("基本类型无法使用JSON解析");
-
-						var tce = new TryCatchEntry();
-						tce.start = cw.label();
-						tce.handler = new Label();
-						tce.type = type+" "+name;
-
-						c.one(ALOAD_1);
-						c.ldc(new CstString(genType==null?type.toDesc():genType.toDesc()));
-						c.invoke(INVOKESTATIC, "roj/http/server/auto/OKRouter", "parse", "(L"+REQ+";Ljava/lang/String;)Ljava/lang/Object;");
-						c.clazz(CHECKCAST, type);
-
-						tce.end = cw.label();
-						tries.add(tce);
-						return;
-					} else {
-						throw new IllegalArgumentException("JSON类型仅能出现一次(这是反序列化请求体啊)");
-					}
-			}
-			if ((bodyKind & 6) == 6) throw new IllegalArgumentException("不能同时使用POST_KV和JSON");
-
-			if (fromSlot == 0) throw new IllegalStateException("不支持的类型/"+from1);
-
-			var tce = new TryCatchEntry();
-			tce.start = cw.label();
-			tce.handler = new Label();
-			tce.type = type+" "+name;
-
-			c.vars(ALOAD, fromSlot);
-			c.ldc(name);
-			String orDefault = field.getString("orDefault", null);
-			if (orDefault != null) {
-				c.ldc(orDefault);
-				c.invokeItf("java/util/Map", "getOrDefault", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;");
-			} else {
-				c.invokeItf("java/util/Map", "get", "(Ljava/lang/Object;)Ljava/lang/Object;");
-				cw.one(DUP);
-				var label = new Label();
-				cw.jump(IFNONNULL, label);
-				cw.one(POP);
-				cw.clazz(NEW, "roj/io/FastFailException");
-				cw.one(DUP);
-				cw.ldc("该必选参数不存在");
-				cw.invokeD("roj/io/FastFailException", "<init>", "(Ljava/lang/String;)V");
-				cw.one(ATHROW);
-				cw.label(label);
-			}
-
-			addExHandler:{
-			if (type.owner != null || type.array() > 0) {
-				if (type.owner != null) {
-					if (type.owner.equals("java/lang/String") ||
-						type.owner.equals("java/lang/CharSequence")) {
-						cw.invoke(INVOKEVIRTUAL, "java/lang/Object", "toString", "()Ljava/lang/String;");
-						break addExHandler;
-					}
-				}
-				throw new IllegalArgumentException("不知道如何将String转换为"+type);
-			}
-			if (type.type == Type.CHAR) {
-				// stack=4;
-				cw.invoke(INVOKESTATIC, "java/lang/Integer", "parseInt", "(Ljava/lang/String;)I");
-				cw.one(DUP);
-				cw.one(DUP);
-				cw.one(I2C);
-				Label label = new Label();
-				cw.jump(IF_icmpeq, label);
-				cw.clazz(NEW, "roj/io/FastFailException");
-				cw.one(DUP);
-				cw.ldc("值不能为零");
-				cw.invokeD("roj/io/FastFailException", "<init>", "(Ljava/lang/String;)V");
-				cw.one(ATHROW);
-				cw.label(label);
-			} else {
-				name = Type.getName(type.type);
-				name = Character.toUpperCase(name.charAt(0))+name.substring(1);
-				cw.clazz(CHECKCAST, "java/lang/String");
-				cw.invoke(INVOKESTATIC, "java/lang/"+(name.equals("Int")?"Integer":name), "parse"+name, "(Ljava/lang/String;)"+(char)type.type);
-			}
-			}
-			tce.end = cw.label();
-			tries.add(tce);
-		}
-	}
-
 	private static final class Route {
 		//bitset for http method
 		int accepts;
@@ -684,7 +826,7 @@ public final class OKRouter implements Router {
 		@Override
 		public String toString() {return "processor="+req;}
 	}
-	private static Route getASet(Object o, int action) { return o instanceof Route ? ((Route) o) : ((Route[]) o)[action]; }
+	private static Route getRoute(Object o, int action) { return o instanceof Route ? ((Route) o) : ((Route[]) o)[action]; }
 
 	private static final class RouteMatcher {
 		private final SimpleList<Node> env1 = new SimpleList<>(), env2 = new SimpleList<>();
@@ -692,13 +834,14 @@ public final class OKRouter implements Router {
 
 		int prefixLen;
 		Object value;
-		Headers params;
 
 		private Node prefixNode;
 		private SimpleList<String> prefixPar;
 		private int prefixParSize;
 		private boolean definitivelyMatch;
+
 		boolean methodNotAllowedMatch;
+		int allowMethod;
 
 		final boolean match(Request req, Node root, String path, int i, int end) {
 			var nodeS = env1;
@@ -752,7 +895,7 @@ public final class OKRouter implements Router {
 				if (nodeD.isEmpty()) {
 					parS.clear();
 					nodeS.clear();
-					return buildPrefix();
+					return buildPrefix(req);
 				}
 
 				var tmp = nodeS;
@@ -773,16 +916,22 @@ public final class OKRouter implements Router {
 			int priority = definitivelyMatch ? 5 : -1;
 			SimpleList<String> par = null;
 
-			boolean noDir = path.charAt(end - 1) != '/';
+			boolean isFile = path.charAt(end - 1) != '/';
 			for (int j = 0; j < nodeS.size(); j++) {
 				Node n = nodeS.get(j);
 				if (n.value != null) {
-					// prefix只接受目录
-					if ((n.flag&Node.DIRECTORY) != 0 && noDir) continue;
+					// 目录和文件匹配
+					if ((n.flag & Node.DIRECTORY) != 0) {
+						if (isFile) continue;
+					} else if ((n.flag & Node.FILE) != 0) {
+						if (!isFile) continue;
+					}
 
 					int prio = n.priority();
 					if (prio > priority) {
-						methodNotAllowedMatch = ((1 << req.action()) & getASet(n.value, req.action()).accepts) == 0;
+						int accepts = getRoute(n.value, req.action()).accepts;
+						allowMethod = accepts;
+						methodNotAllowedMatch = ((1 << req.action()) & accepts) == 0;
 						if (methodNotAllowedMatch) continue;
 
 						node = n;
@@ -793,7 +942,7 @@ public final class OKRouter implements Router {
 							if (par == null) par = new SimpleList<>();
 
 							par.add(rex.name);
-							par.add(path.substring(prevI, noDir ? end : end-1));
+							par.add(path.substring(prevI, isFile ? end : end-1));
 						}
 					} else if (prio == priority && node != null) { // equals
 						throw new IllegalStateException("该路径被多个请求处理器命中: "+node+"|"+n);
@@ -804,18 +953,18 @@ public final class OKRouter implements Router {
 			parS.clear();
 			nodeS.clear();
 
-			if (node == null) return buildPrefix();
+			if (node == null) return buildPrefix(req);
 
+			// 兼容之前的代码，非严格模式
+			if ((node.flag&Node.DIRECTORY) == 0 && !isFile) end--;
 			prefixLen = end;
 			value = getNodeValue(node);
 			if (par != null) {
-				params = new Headers();
+				var pathVariable = req.arguments();
 				int j = 0;
 				while (j < par.size()) {
-					params.add(par.get(j++), par.get(j++));
+					pathVariable.add(par.get(j++), par.get(j++));
 				}
-			} else {
-				params = null;
 			}
 			return true;
 		}
@@ -825,19 +974,18 @@ public final class OKRouter implements Router {
 			return v instanceof Route r && (definitivelyMatch = r.earlyCheck.test(path.substring(i)));
 		}
 
-		private boolean buildPrefix() {
+		private boolean buildPrefix(Request req) {
+			methodNotAllowedMatch = false;
 			if (prefixNode == null) return false;
 			value = getNodeValue(prefixNode);
 
 			var par = prefixPar;
 			if (par != null) {
-				params = new Headers();
+				var pathVariable = req.arguments();
 				int i = 0;
 				while (i < prefixParSize) {
-					params.add(par.get(i++), par.get(i++));
+					pathVariable.add(par.get(i++), par.get(i++));
 				}
-			} else {
-				params = null;
 			}
 
 			prefixNode = null;
@@ -852,13 +1000,13 @@ public final class OKRouter implements Router {
 			return v;
 		}
 	}
-	private static abstract class Node {
+	private static abstract sealed class Node {
 		String name;
 		// Route or Route[]
 		Object value;
 
 		byte flag;
-		static final byte PREFIX = 1, DIRECTORY = 2;
+		static final byte PREFIX = 1, DIRECTORY = 2, FILE = 4;
 
 		private int mask;
 		private Text[] table;
@@ -1101,44 +1249,60 @@ public final class OKRouter implements Router {
 		Route set;
 		if (len == 0) {
 			Object o = route.value;
-			set = o == null ? null : getASet(o, req.action());
+			set = o == null ? null : getRoute(o, req.action());
 		} else {
-			var m = (RouteMatcher) req.localCtx().get("or:fn");
-			if (m == null) req.localCtx().put("or:fn", m = new RouteMatcher());
+			var m = (RouteMatcher) req.threadLocal().get("or:fn");
+			if (m == null) req.threadLocal().put("or:fn", m = new RouteMatcher());
 
 			if (m.match(req, route, path, 0, len) && m.value != null) {
-				set = getASet(m.value, req.action());
+				set = getRoute(m.value, req.action());
 				req.setPath(path.substring(m.prefixLen));
-				req.setArguments(m.params);
 			} else {
-				if (m.methodNotAllowedMatch) throw new IllegalRequestException(HttpUtil.METHOD_NOT_ALLOWED);
+				if (m.methodNotAllowedMatch) {
+					req.responseHeader().put("allow", serializeAllow(m.allowMethod));
+					throw new IllegalRequestException(HttpUtil.METHOD_NOT_ALLOWED);
+				}
 
 				set = null;
 			}
 		}
 
 		if (set == null) throw new IllegalRequestException(403);
-		if (((1 << req.action()) & set.accepts) == 0) throw new IllegalRequestException(HttpUtil.METHOD_NOT_ALLOWED);
+		if (((1 << req.action()) & set.accepts) == 0) {
+			req.responseHeader().put("allow", serializeAllow(set.accepts));
+			throw new IllegalRequestException(HttpUtil.METHOD_NOT_ALLOWED);
+		}
 
 		req.connection().attachment(RouterImplKey, set);
 		for (Dispatcher prec : set.prec) {
 			Object ret = prec.invoke(req, req.server(), cfg);
 			if (ret != null) {
-				if (ret instanceof Response r) throw new IllegalRequestException(200, r);
-				throw new IllegalRequestException(200, ret.toString());
+				if (ret instanceof Content r) throw new IllegalRequestException(0, r);
+				throw new IllegalRequestException(0, ret.toString());
 			}
 		}
 
 		if (cfg != null && !cfg.postAccepted()) Router.super.checkHeader(req, cfg);
 	}
+	private static String serializeAllow(int accepts) {
+		var sb = IOUtil.getSharedByteBuf();
+		for (int i = 0; i < 8; i++) {
+			if (((1<<i) & accepts) != 0) {
+				sb.putAscii(HttpUtil.getMethodName(i)).putAscii(", ");
+			}
+		}
+
+		if(sb.wIndex() > 0) sb.wIndex(sb.wIndex()-2);
+		return sb.toString();
+	}
 
 	@Override
-	public Response response(Request req, ResponseHeader rh) throws IOException {
+	public Content response(Request req, ResponseHeader rh) throws IOException {
 		Route set = req.connection().attachment(RouterImplKey, null);
 
 		Object ret;
 		try {
-			ret = set.req.invoke(req, rh, req.arguments());
+			ret = set.req.invoke(req, rh, null);
 		} finally {
 			for (var c : onFinishes) {
 				try {
@@ -1148,28 +1312,13 @@ public final class OKRouter implements Router {
 				}
 			}
 		}
-		if (ret instanceof Response r) return r;
+		if (ret instanceof Content r) return r;
 		if (ret == null) return null;
-		return new StringResponse(ret.toString(), set.mime);
-	}
-
-	@ReferenceByGeneratedClass
-	public static IllegalRequestException requestDebug(Throwable exc, String msg) {return new IllegalRequestException(400, Response.internalError(msg, exc));}
-	@ReferenceByGeneratedClass
-	public static Object parse(Request req, String type) throws Exception {
-		if (req.postBuffer() == null) throw new FastFailException("没有请求体");
-
-		var parser = (BinaryParser) req.localCtx().get("or:parser");
-		if (parser == null) req.localCtx().put("or:parser", parser = ConfigMaster.JSON.parser(true));
-
-		var adapter = SerializerFactory.SAFE.serializer(Signature.parseGeneric(type));
-		adapter.reset();
-		parser.parse(req.postBuffer(), 0, adapter);
-		return adapter.get();
+		return new TextContent(ret instanceof CharSequence cs ? cs : ret.toString(), set.mime);
 	}
 
 	public interface Dispatcher {
-		Object invoke(Request req, ResponseHeader srv, Object extra) throws IllegalRequestException;
-		default Dispatcher copyWith(int methodId, Object ref) { return this; }
+		Object invoke(Request req, ResponseHeader server, Object argument) throws IllegalRequestException;
+		default Dispatcher copyWith(int methodId, Object instance) { return this; }
 	}
 }

@@ -16,7 +16,7 @@ import roj.config.data.CInt;
 import roj.config.data.CLong;
 
 import static roj.asm.Opcodes.*;
-import static roj.compiler.JavaLexer.*;
+import static roj.compiler.Tokens.*;
 
 /**
  * @author Roj234
@@ -74,7 +74,7 @@ class UnaryPre extends UnaryPreNode {
 			default: if (type.isPrimitive()) type = Type.primitive(Type.INT);
 			case Type.LONG:
 				if (op == logic_not) {
-					ctx.report(this, Kind.ERROR, "unary.error.notApplicable:!", type);
+					ctx.report(this, Kind.ERROR, "unary.error.notApplicable", "!", type);
 					return NaE.RESOLVE_FAILED;
 				}
 		}

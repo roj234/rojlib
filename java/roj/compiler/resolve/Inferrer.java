@@ -14,7 +14,7 @@ import roj.compiler.context.GlobalContext;
 import roj.compiler.context.LocalContext;
 import roj.util.ArrayCache;
 
-import java.util.AbstractList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
@@ -50,11 +50,10 @@ public final class Inferrer {
 	}
 
 	public MethodResult getGenericParameters(ClassNode info, MethodNode method, @Nullable IType instanceType) {
-		int argc = method.parameters().size();
-		return infer(info, method, instanceType instanceof Generic g ? g : null, new AbstractList<>() {
-			public IType get(int index) {return Asterisk.anyType;}
-			public int size() {return argc;}
-		});
+		overrideMode = true;
+		MethodResult mr = infer(info, method, instanceType instanceof Generic g ? g : null, Collections.emptyList());
+		overrideMode = false;
+		return mr;
 	}
 
 	// 泛型附加上界, 可以用来缩小上界的范围，但是没啥用
@@ -148,8 +147,9 @@ public final class Inferrer {
 		int inSize = input.size();
 		boolean dvc = false;
 
+		if (!overrideMode)
 		checkSpecial:
-		if ((mn.modifier&Opcodes.ACC_VARARGS) != 0 && !overrideMode) {
+		if ((mn.modifier&Opcodes.ACC_VARARGS) != 0) {
 			int vararg = mnSize-1;
 			if (inSize < vararg) return FAIL_ARGCOUNT;
 
@@ -231,6 +231,9 @@ public final class Inferrer {
 		return addGeneric(new MethodResult(mn, distance, dvc));
 	}
 
+	/**
+	 * 警告: override mode现在不检查参数数量
+	 */
 	public MethodResult inferOverride(LocalContext ctx, MethodNode overriden, Type type, List<IType> argument) {
 		overrideMode = true;
 		var mr = new MethodListSingle(overriden, false).findMethod(ctx, type, argument, 0);

@@ -13,4 +13,8 @@ import java.lang.annotation.Target;
 @Target({ElementType.METHOD, ElementType.TYPE})
 public @interface Interceptor {
 	String[] value() default "";
+	/**
+	 * 是否为全局拦截器，全局拦截器在整个OKRouter实例都可用，否则只能在注册的对象中使用
+	 */
+	boolean global() default false;
 }

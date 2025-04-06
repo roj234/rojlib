@@ -1,14 +1,16 @@
 package roj.plugins.bkcrack;
 
+import roj.plugins.ci.annotation.CompileOnly;
+
 /**
  * @author Roj234
  * @since 2022/11/12 0012 17:26
  */
+@CompileOnly
 interface Macros {
 	int MASK_0_16  = 0x0000ffff,
 		MASK_0_24  = 0x00ffffff,
 		MASK_0_26  = 0x03ffffff,
-		MASK_0_32  = 0xffffffff,
 		MASK_26_32 = 0xfc000000,
 		MASK_24_32 = 0xff000000,
 		MASK_10_32 = 0xfffffc00,

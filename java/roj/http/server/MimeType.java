@@ -12,8 +12,8 @@ import java.util.Objects;
  * @since 2024/7/10 0010 3:01
  */
 public final class MimeType {
-	// 在传递过程中，XHashSet.Shape<String, Mime>的K参数（String）被javac直接擦除到了Object，这是Lavac已解决的问题
 	private static MimeType fallback = new MimeType("*", "application/octet-stream");
+	// 在传递过程中，XHashSet.Shape<String, Mime>的K参数（String）被javac直接擦除到了Object，这是Lavac已解决的问题
 	public static final XHashSet<String, MimeType> REPOSITORY = Helpers.cast(XHashSet.noCreation(MimeType.class, "ext").createSized(128));
 
 	public final String ext;

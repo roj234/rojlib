@@ -34,8 +34,7 @@ public class Example {
 
 	@Route
 	@Interceptor("cors")
-	@Body(From.JSON)
-	public String push_detail(AutoDeserializeTest body) throws Exception {
+	public String push_detail(@Body AutoDeserializeTest body) throws Exception {
 		System.out.println(body.num);
 		Thread.sleep(body.wait);
 
@@ -44,8 +43,7 @@ public class Example {
 
 	@Route
 	@Interceptor({"cors","threadUpload"})
-	@Body(From.GET)
-	public String uploadTest(Request req, String path) throws Exception {
+	public String uploadTest(Request req, @QueryParam String path) throws Exception {
 		MultipartFormHandler ph = (MultipartFormHandler) req.postHandler();
 		if (ph != null) {
 			MultipartFormHandler.FormData postData = ph.file("file");

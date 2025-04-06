@@ -16,17 +16,17 @@ public class TimSortForEveryone {
 	/**
 	 * @implNote 对象数组的ArrayRef compSize固定为4，并且内存中保存的是int index
 	 */
-	public static void sort(int fromIndex, int toIndex, MyComparator cmp, ArrayRef... arrayRefs) {
+	public static void sort(int fromIndex, int toIndex, MyComparator cmp, NativeArray... arrays) {
 		if (toIndex - fromIndex <= 1) return;
-		if (arrayRefs.length == 0) throw new IllegalArgumentException("no array to sort");
-		if (arrayRefs.length == 1 && !arrayRefs[0].isObjectArray()) {
-			ArrayRef op = arrayRefs[0];
+		if (arrays.length == 0) throw new IllegalArgumentException("no array to sort");
+		if (arrays.length == 1 && !arrays[0].isObjectArray()) {
+			NativeArray op = arrays[0];
 			sort(fromIndex, toIndex, cmp, op.ref, op.addr, op.compSize);
 			return;
 		}
 
 		int compSize = 0;
-		for (ArrayRef op : arrayRefs) compSize += op.compSize;
+		for (NativeArray op : arrays) compSize += op.compSize;
 
 		long halfCap = (long) (toIndex - fromIndex) * compSize;
 		if (halfCap > Integer.MAX_VALUE/2) throw new IllegalArgumentException("array is too large to sort (as my implement is very naive)");
@@ -36,7 +36,7 @@ public class TimSortForEveryone {
 
 		try {
 			int offset = 0;
-			for (ArrayRef op : arrayRefs) {
+			for (NativeArray op : arrays) {
 				op.copyTo(fromIndex, toIndex - fromIndex, null, addr+offset, compSize);
 				offset += op.compSize;
 			}
@@ -44,7 +44,7 @@ public class TimSortForEveryone {
 			timSort(fromIndex, toIndex, cmp, null, addr, addr+halfCap, compSize);
 
 			offset = 0;
-			for (ArrayRef op : arrayRefs) {
+			for (NativeArray op : arrays) {
 				op.copyFrom(null, addr+offset, fromIndex, toIndex - fromIndex, compSize);
 				offset += op.compSize;
 			}

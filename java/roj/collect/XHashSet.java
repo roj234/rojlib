@@ -2,7 +2,6 @@ package roj.collect;
 
 import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.NotNull;
-import org.jetbrains.annotations.Nullable;
 import roj.math.MathUtils;
 import roj.reflect.Bypass;
 import roj.reflect.Java22Workaround;
@@ -74,7 +73,7 @@ public final class XHashSet<K, V> extends AbstractSet<V> {
 			return set;
 		}
 
-		final int hashCode(@Nullable K k) { return hasher.hashCode(k); }
+		final int hashCode(K k) { return hasher.hashCode(k); }
 		final boolean equals(K from_argument, Object stored_in) { return hasher.equals(from_argument, stored_in); }
 		@SuppressWarnings("unchecked")
 		final V checkCast(Object s) {
@@ -136,12 +135,12 @@ public final class XHashSet<K, V> extends AbstractSet<V> {
 	public boolean add(@NotNull V value) { return null == put1(shape.GET_KEY(shape.checkCast(value)), value, false, false); }
 	public boolean set(@NotNull V value) { return null == put1(shape.GET_KEY(shape.checkCast(value)), value, true, false); }
 
-	@Nullable public V put(K key, @NotNull V val) {
-		if (val == null) throw new NullPointerException("val cannot be null");
+	public V put(K key, @NotNull V val) {
+		if (val == null) throw new NullPointerException("val");
 		return put1(key, val, true, false);
 	}
-	@Nullable public V putIfAbsent(K key, @NotNull V val) {
-		if (val == null) throw new NullPointerException("val cannot be null");
+	public V putIfAbsent(K key, @NotNull V val) {
+		if (val == null) throw new NullPointerException("val");
 		return put1(key, val, false, false);
 	}
 	public V computeIfAbsent(K key) { return put1(key, null, false, true); }

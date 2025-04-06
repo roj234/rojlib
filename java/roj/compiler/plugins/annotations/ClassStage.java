@@ -32,7 +32,7 @@ final class ClassStage implements Processor {
 		String type = annotation.type();
 		if (type.endsWith("Attach")) {
 			if (file == node) {
-				if (annotation.getString("value") != null)
+				if (annotation.getString("value", null) != null)
 					ctx.report(Kind.ERROR, "plugins.annotation.namedAttachOnType", file);
 				for (RawNode mn : file.methods()) attach(mn, ctx, annotation);
 			} else {
@@ -48,9 +48,9 @@ final class ClassStage implements Processor {
 				return;
 			}
 
-			var getter = annotation.getString("getter");
+			var getter = annotation.getString("getter", null);
 			if (getter == null) getter = accessorName("get", name);
-			var setter = annotation.getString("setter");
+			var setter = annotation.getString("setter", null);
 			if (setter == null) setter = accessorName("set", name);
 
 			int readId = file.getMethod(getter);

@@ -11,7 +11,7 @@ import java.lang.annotation.Target;
  * @since 2024/6/24 8:35
  */
 @Retention(RetentionPolicy.CLASS)
-@Target(ElementType.PARAMETER)
+@Target({ElementType.FIELD, ElementType.PARAMETER})
 public @interface WillChange {
 	String value() default "";
 }

@@ -10,7 +10,10 @@ import roj.asm.type.Signature;
 import roj.asm.type.Type;
 import roj.asm.util.ClassUtil;
 import roj.asmx.mapper.ParamNameMapper;
-import roj.collect.*;
+import roj.collect.IntMap;
+import roj.collect.MyBitSet;
+import roj.collect.MyHashMap;
+import roj.collect.SimpleList;
 import roj.compiler.LavaFeatures;
 import roj.compiler.api.Evaluable;
 import roj.compiler.ast.expr.ExprNode;
@@ -34,14 +37,11 @@ final class MethodList extends ComponentList {
 	IClass owner;
 	final SimpleList<MethodNode> methods = new SimpleList<>();
 	private int childId;
-	private boolean hasVarargs, hasDefault;
 	private MyHashMap<String, List<MethodNode>> ddtmp = new MyHashMap<>();
 	private MyBitSet overrider;
 
-	private volatile MatchMap<String, Object> namedLookup;
-
 	void add(IClass klass, MethodNode mn) {
-		// 忽略改变返回类型的重载的parent
+		// 忽略改变返回类型的重载的parent (akka如果有对应的桥接方法，就不去父类查询了)
 		var list = ddtmp.computeIfAbsent(Type.toMethodDesc(mn.parameters()), Helpers.fnArrayList());
 		for (int i = 0; i < list.size(); i++) {
 			var prev = list.get(i);
@@ -54,7 +54,6 @@ final class MethodList extends ComponentList {
 		list.add(mn);
 
 		methods.add(mn);
-		if ((mn.modifier & Opcodes.ACC_VARARGS) != 0) hasVarargs = true;
 		mn.getAttribute(klass.cp(), Attribute.SIGNATURE);
 	}
 
@@ -65,6 +64,10 @@ final class MethodList extends ComponentList {
 	boolean pack(IClass klass) {
 		ddtmp = null;
 		owner = klass;
+
+		// 重载太多了，用查找表，但是懒加载，直到第一次findMethod的时候
+		// 不过感觉用一个简单的结构不好filter，所以先咕咕咕
+		// if (methods.size() > 10) lookupFlag = -128;
 
 		String owner = klass.name();
 		for (int i = 0; i < methods.size(); i++) {
@@ -80,125 +83,101 @@ final class MethodList extends ComponentList {
 	@Override public boolean isOverriddenMethod(int id) {return overrider != null && overrider.contains(id);}
 	@Override public List<MethodNode> getMethods() {return methods;}
 
-	private static final class Filter extends SimpleList<Object> {
-		@Override
-		public boolean add(Object entry) {
-			if (entry instanceof MatchMap.AbstractEntry<?> entry1) {
-				if (entry1.value instanceof List<?>) {
-					for (Object o : (Iterable<?>) entry1.value)
-						super.add(o);
-				} else {
-					super.add(entry1.value);
-				}
-				return true;
-			}
-			return super.add(entry);
-		}
-	}
-	public MethodResult findMethod(LocalContext ctx, IType that, List<IType> params,
-								   Map<String, IType> namedType, int flags) {
-		SimpleList<MethodNode> candidates;
-
-		// 还是别过早优化了
-		block: {
-			/*if (methods.size() > 5) {
-				createLookup();
-
-				CharList tmp = new CharList();
-				tmp.append((char) 127);
-				for (int j = 0; j < params.size(); j++) {
-					IType type = params.get(j);
-					if (type == NullType.nulltype) tmp.append('O');
-					else paramType(type, tmp);
-					tmp.append((char) (j + 128));
-				}
-
-				int flag = 0;
-				if (hasVarargs) flag |= MatchMapString.MATCH_SHORTER;
-				if (hasDefault) flag |= MatchMapString.MATCH_LONGER;
-
-				candidates = Helpers.cast(new Filter());
-				unnamedLookup.matchOrdered(tmp.toString(), flag, Helpers.cast(candidates));
-				break block;
-			}*/
-
-			candidates = methods;
-		}
+	public MethodResult findMethod(LocalContext ctx, IType that, final List<IType> actualArguments,
+								   final Map<String, IType> namedArguments, int flags) {
+		SimpleList<MethodNode> candidates = methods;
 
 		MethodResult best = null;
 		List<MethodNode> dup = new SimpleList<>();
-		SimpleList<IType> myParam = null;
 
 		int size = (flags&THIS_ONLY) != 0 ? childId : candidates.size();
 
-		loop:
 		for (int j = 0; j < size; j++) {
-			MethodNode mn = candidates.get(j);
-			var mnOwner = ctx.classes.getClassInfo(mn.owner);
+			MethodNode method = candidates.get(j);
+			var owner = ctx.classes.getClassInfo(method.owner);
 
-			if (!ctx.checkAccessible(mnOwner, mn, (flags&IN_STATIC) != 0, false)) continue;
+			if (!ctx.checkAccessible(owner, method, (flags&IN_STATIC) != 0, false)) continue;
 
-			List<Type> mParam = mn.parameters();
-			IntMap<Object> defParamState = null;
+			List<Type> declaredArguments = method.parameters();
+			IntMap<Object> fillArguments = null;
+			SimpleList<IType> myParam = null;
 
-			if (mParam.size() != params.size() || !namedType.isEmpty()) {
-				var isVarargs = (mn.modifier & Opcodes.ACC_VARARGS) != 0;
-				int defReq = mParam.size() - params.size() - namedType.size();
-				if(!isVarargs && defReq < 0) continue;
-
-				IntMap<String> mdvalue = ctx.getDefaultValue(mnOwner, mn);
-				if (defReq > mdvalue.size()) continue;
-
-				defParamState = new IntMap<>();
-				myParam = new SimpleList<>(params);
-
-				List<String> names = ParamNameMapper.getParameterName(mnOwner.cp(), mn);
-				if (names.size() != mParam.size()) {
-					ctx.classes.report(mnOwner, Kind.ERROR, -1, "invoke.warn.illegalNameList", mn);
-					continue;
-				} else {
-					// 可能在Annotation Resolve阶段，此时tmpMap1可用，但2不行
-					MyHashMap<String, IType> tmpMap1 = Helpers.cast(ctx.tmpMap1);
-					tmpMap1.clear(); tmpMap1.putAll(namedType);
-
-					for (int i = params.size(); i < mParam.size(); i++) {
-						String name = names.get(i);
-						IType type = tmpMap1.remove(name);
-						if (type == null) {
-							ExprNode c = ctx.parseDefaultValue(mdvalue.get(i));
-							if (c == null) {
-								if (i == mParam.size() - 1 && isVarargs) break;
-
-								ctx.report(Kind.ERROR, "invoke.error.paramMissing", mnOwner.name(), mn.name(), name);
-								//break varargCheck;
-								continue loop;
-							}
-							type = c.type();
-							defParamState.putInt(i, c);
-						} else {
-							defParamState.putInt(i, name);
-						}
-						myParam.add(type);
-					}
-
-					if (!tmpMap1.isEmpty()) {
-						ctx.report(Kind.ERROR, "invoke.error.paramExtra", mnOwner.name(), mn.name(), tmpMap1);
-						tmpMap1.clear();
-						continue loop;
-					}
+			int missedArguments = declaredArguments.size() - actualArguments.size();
+			dontCheckForNamedArguments: {
+			maybeCorrect:
+			if (missedArguments != 0) {
+				var isVarargs = (method.modifier & Opcodes.ACC_VARARGS) != 0;
+				if (missedArguments < 0) {
+					// 普通方法，参数多了一定不匹配
+					if (!isVarargs) continue;
+					break maybeCorrect;
 				}
+				// 但是可变参数方法能多，甚至还可以少1个
+				// 可变参数方法的最后一个参数（可变参数）不能具有默认值，所以在这里就不调用下面比较复杂的部分了
+				if (missedArguments == 1 && isVarargs && namedArguments.isEmpty()) break maybeCorrect;
+
+				// 现在一定缺少参数
+
+				// 仅读取字符串，不反序列化
+				IntMap<String> defaultArguments = ctx.getDefaultArguments(this.owner, method);
+				// 如果加起来都不够，那么一定不够
+				if (namedArguments.size() + defaultArguments.size() < missedArguments) continue;
+
+				List<String> paramNames = ParamNameMapper.getParameterNames(this.owner.cp(), method);
+				if (paramNames.size() != declaredArguments.size()) {
+					ctx.report(Kind.INTERNAL_ERROR, "invoke.warn.illegalNameList", method);
+					return null;
+				}
+
+				fillArguments = new IntMap<>();
+				myParam = new SimpleList<>(actualArguments);
+
+				// 可能在Annotation Resolve阶段，此时tmpMap1可用，但2不行
+				MyHashMap<String, IType> tmpMap = Helpers.cast(ctx.tmpMap1); tmpMap.clear();
+				tmpMap.putAll(namedArguments);
+
+				// 填充缺少的参数
+				for (int i = actualArguments.size(); i < declaredArguments.size(); i++) {
+					String paramName = paramNames.get(i);
+					IType argType = tmpMap.remove(paramName);
+					if (argType == null) {
+						// 使用参数默认值
+						ExprNode parsed = ctx.parseDefaultArgument(defaultArguments.get(i));
+						if (parsed == null) {
+							// 可变参数，如果没有参数调用
+							if (isVarargs && i == declaredArguments.size() - 1) break;
+
+							//弃用，按"参数数量不同"错误走error分支
+							//ctx.report(Kind.ERROR, "invoke.error.paramMissing", owner, method.name(), paramName);
+							continue;
+						}
+
+						argType = parsed.type();
+						fillArguments.putInt(i, parsed);
+					} else {
+						// 使用参数调用
+						fillArguments.putInt(i, paramName);
+					}
+					myParam.add(argType);
+				}
+
+				if (!tmpMap.isEmpty()) continue;
+				break dontCheckForNamedArguments;
+			}
+			// 如果参数调用有剩的
+			if (!namedArguments.isEmpty()) continue;
 			}
 
-			var result = ctx.inferrer.infer(mnOwner, mn, that, myParam == null ? params : myParam);
+			var result = ctx.inferrer.infer(owner, method, that, myParam == null ? actualArguments : myParam);
 			if (result.method == null) continue;
 
 			int score = result.distance;
 			if (best == null || score <= best.distance) {
-				if (best != null && score == best.distance) dup.add(mn);
+				if (best != null && score == best.distance) dup.add(method);
 				else {
 					dup.clear();
 					best = result;
-					best.namedParams = defParamState;
+					best.namedParams = fillArguments;
 				}
 			}
 		}
@@ -208,46 +187,41 @@ final class MethodList extends ComponentList {
 		if (isConstructor) name = owner.name().substring(owner.name().lastIndexOf('/')+1);
 
 		if (!dup.isEmpty()) {
-			CharList sb = new CharList().append("invoke.compatible.plural\1").append(name).append('\0');
+			CharList sb = new CharList().append("invoke.compatible.plural:[\"").append(name).append("\",[");
 
-			appendInput(params, sb);
+			appendInput(actualArguments, sb);
 
-			sb.append("  ").append(best.method.owner).append("\1invoke.method\0").append(name).append('(');
-			getArg(best.method, that, sb).append(')');
+			sb.append("\"  \",\"").append(best.method.owner).append("\",invoke.method,\"").append(name).append("(\",");
+			getArg(best.method, that, sb).append("\")\",");
 
 			for (MethodNode mn : dup) {
-				sb.append(" \1and\0\n  ").append(mn.owner).append("\1invoke.method\0").append(name).append('(');
-				getArg(mn, that, sb).append(')');
+				sb.append("\" \",and,\"\n  \",\"").append(mn.owner).append("\",invoke.method,\"").append(name).append("(\",");
+				getArg(mn, that, sb).append("\")\",");
 			}
 
-			ctx.report(Kind.ERROR, sb.replace('/', '.').append(" \1invoke.matches\0").toStringAndFree());
+			ctx.report(Kind.ERROR, sb.replace('/', '.').append("\" \",invoke.matches]").toStringAndFree());
 		} else if (best == null) {
 			if ((flags & NO_REPORT) != 0) return null;
 
-			CharList sb = new CharList().append("invoke.incompatible.plural\1").append(name).append('(');
+			CharList sb = new CharList().append("invoke.incompatible.plural:[[\"").append(name).append("(\",");
 
-			if (params.isEmpty()) sb.append("\1invoke.no_param\0");
-			else sb.append(TextUtil.join(params, ","));
-			sb.append(")\0");
+			if (actualArguments.isEmpty()) sb.append("invoke.no_param");
+			else sb.append('"').append(TextUtil.join(actualArguments, ",")).append('"');
+			sb.append(",\")\"],[");
 
 			CharList tmp = new CharList();
-			ctx.errorCapture = (trans, param) -> {
-				tmp.clear();
-				tmp.append("\0\1");
-				tmp.append(trans);
-				for (Object o : param)
-					tmp.append("\0\1").append(o);
-			};
+			ctx.errorCapture = makeErrorCapture(tmp);
 
 			for (int i = 0; i < size; i++) {
 				MethodNode mn = methods.get(i);
-				if (isConstructor) sb.append("  \1invoke.constructor\0").append(mn.owner);
-				else sb.append("  \1invoke.method\0").append(mn.owner).append('.').append(mn.name());
-				getArg(mn, that, sb.append('(')).append(")\1invoke.notApplicable\0\n    ");
+				if (isConstructor) sb.append("\"  \",invoke.constructor,\"").append(mn.owner);
+				else sb.append("\"  \",invoke.method,\"").append(mn.owner).append('.').append(mn.name());
+				getArg(mn, that, sb.append("\",\"(\",")).append("\")\",invoke.notApplicable,\"\n    \",");
 
-				getErrorMsg(ctx, that, params, (flags&IN_STATIC) != 0, mn, sb.append("(\1"), tmp);
-				sb.append("\0)\n");
+				getErrorMsg(ctx, that, actualArguments, (flags&IN_STATIC) != 0, mn, sb.append("\"(\","), tmp);
+				sb.append("\")\n\",");
 			}
+			sb.set(sb.length()-1, ']');
 
 			ctx.errorCapture = null;
 			ctx.report(Kind.ERROR, sb.replace('/', '.').toStringAndFree());
@@ -268,56 +242,31 @@ final class MethodList extends ComponentList {
 		errRpt.clear();
 	}
 
-	@SuppressWarnings("unchecked")
-	private void createNamedLookup(GlobalContext ctx) {
-		if (namedLookup != null) return;
-
-		MatchMap<String, Object> lookup = new MatchMap<>();
-		for (int i = 0; i < methods.size(); i++) {
-			MethodNode mn = methods.get(i);
-			List<String> name1 = ParamNameMapper.getParameterName(ctx.getClassInfo(mn.owner).cp(), mn);
-			if (name1 == null) continue;
-
-			name1.sort(null);
-			name1.add("\0");
-
-			MatchMap.Entry<Object> entry = lookup.getEntry(name1);
-			if (entry == null) lookup.add(name1, mn);
-			else if (entry.value instanceof List) ((List<Object>) entry.value).add(mn);
-			else entry.value = SimpleList.asModifiableList(entry.value, mn);
-		}
-
-		lookup.compact();
-		namedLookup = lookup;
-	}
-
 	static void appendError(MethodResult mr, CharList sb) {
 		if (mr.distance > 0) return;
 		sb.append("typeCast.error.").append(mr.distance);
 		if (mr.error != null && mr.error.length == 3)
-			sb.append("\0\1").append(mr.error[0]).append("\0\1").append(mr.error[1]);
+			sb.append(":[\"").append(mr.error[0]).append("\",\"").append(mr.error[1]).append("\"]");
+		sb.append(',');
 	}
 	static void appendInput(List<IType> params, CharList sb) {
-		sb.append("  ").append("\1invoke.found\0 ");
-		if (params.isEmpty()) sb.append("\1invoke.no_param\0");
-		else sb.append(TextUtil.join(params, ","));
-		sb.append('\n');
+		sb.append("\"  \",invoke.found,\" \",");
+		if (params.isEmpty()) sb.append("invoke.no_param");
+		else sb.append('"').append(TextUtil.join(params, ",")).append('"');
+		sb.append(",\"\n\",");
 	}
 	static CharList getArg(MethodNode mn, IType that, CharList sb) {
 		Signature sign = mn.getAttribute(null, Attribute.SIGNATURE);
 		List<? extends IType> params = sign == null ? mn.parameters() : sign.values.subList(0, sign.values.size()-1);
-		if (params.isEmpty()) return sb.append("\1invoke.no_param\0");
+		if (params.isEmpty()) return sb.append("invoke.no_param,");
 
 		var myList = that instanceof Generic g ? g.children : Collections.emptyList();
-
 		int i = 0;
 		while (true) {
-			sb.append(params.get(i));
-			if (i < myList.size()) {
-				sb.append("\1invoke.generic.s\0").append(myList.get(i)).append("\1invoke.generic.e\0");
-			}
+			sb.append('"').append(params.get(i)).append("\",");
+			if (i < myList.size()) sb.append(",invoke.generic.s,\"").append(myList.get(i)).append("\",invoke.generic.e,");
 			if (++i == params.size()) break;
-			sb.append(",");
+			sb.append("\",\",");
 		}
 
 		return sb;

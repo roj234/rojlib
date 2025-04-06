@@ -13,8 +13,8 @@ import roj.collect.Int2IntMap;
 import roj.collect.IntList;
 import roj.collect.IntMap;
 import roj.collect.SimpleList;
-import roj.compiler.JavaLexer;
 import roj.compiler.LavaFeatures;
+import roj.compiler.Tokens;
 import roj.compiler.asm.Asterisk;
 import roj.compiler.asm.LPGeneric;
 import roj.compiler.ast.BlockParser;
@@ -33,14 +33,14 @@ import roj.config.data.CEntry;
 import roj.config.serial.CVisitor;
 import roj.io.IOUtil;
 import roj.text.CharList;
-import roj.util.ArrayRef;
 import roj.util.Helpers;
+import roj.util.NativeArray;
 import roj.util.TimSortForEveryone;
 
 import java.util.Collections;
 import java.util.List;
 
-import static roj.compiler.JavaLexer.*;
+import static roj.compiler.Tokens.*;
 import static roj.config.Word.LITERAL;
 import static roj.reflect.Unaligned.U;
 
@@ -110,8 +110,8 @@ public final class ExprParser {
 		SM.putInt(SM_ExprStart | TRUE, -8);
 		SM.putInt(SM_ExprStart | FALSE, -9);
 		SM.putInt(SM_ExprStart | NULL, -10);
-		SM.putInt(SM_ExprStart | JavaLexer.SUPER, -11);
-		SM.putInt(SM_ExprStart | JavaLexer.THIS, -12);
+		SM.putInt(SM_ExprStart | Tokens.SUPER, -11);
+		SM.putInt(SM_ExprStart | Tokens.THIS, -12);
 		SM.putInt(SM_ExprStart | lBrace, -13);
 		SM.putInt(SM_ExprStart | lBracket, -14);
 		batch(SM_ExprStart, -15, /*VOID, */BOOLEAN, BYTE, CHAR, SHORT, INT, LONG, FLOAT, DOUBLE);
@@ -228,7 +228,11 @@ public final class ExprParser {
 			nodes.clear();
 			binaryOps.clear();
 			tmp0.clear();
-			throw e;
+
+			//throw e;
+			ctx.report(Kind.ERROR, e.getMessage());
+			// IDEA一边说不该滥用Nullable一边在这里疯狂infer
+			return (flag & NAE) != 0 ? NaE.RESOLVE_FAILED : Helpers.maybeNull();
 		}
 		return node;
 	}
@@ -447,20 +451,21 @@ public final class ExprParser {
 							firstName = w.val();
 							wr.except(colon);
 						}
-						if (w.type() != rBrace) ue(wr, "type.literal");
+						if (w.type() != rBrace) ue(wr, w.val(), "type.literal");
 						cur = npl;
 						break endValueConv;
 					}
 
-					if ((flag & _ENV_TYPED_ARRAY) != 0) {
-						cur = newArray(null);
-						break endValueConv;
+					if ((flag & _ENV_TYPED_ARRAY) == 0) {
+						ctx.report(Kind.ERROR, "expr.newArray.noTypePresent");
 					}
 
 					// 可以直接写json，好像没啥用，先不加了
 					// { "key" => "val" } like this
 					// [t => 3, async => 4, testVal => [ ref => 1, tar => 2 ]];
-					throw wr.err("expr.newArray.noTypePresent");
+
+					cur = newArray(null);
+					break endValueConv;
 				case -14://lBracket
 					//if ((flag & _ENV_FIELD) == 0) wr.unexpected(w.val());
 
@@ -549,8 +554,8 @@ public final class ExprParser {
 							if (w.type() == CLASS) {
 								cur = ExprNode.classRef(((DotGet) cur).toClassRef());
 								break;
-							} else if (w.type() == JavaLexer.THIS || w.type() == JavaLexer.SUPER) {
-								cur = newEncloseRef(w.type() == JavaLexer.THIS, ((DotGet) cur).toClassRef());
+							} else if (w.type() == Tokens.THIS || w.type() == Tokens.SUPER) {
+								cur = newEncloseRef(w.type() == Tokens.THIS, ((DotGet) cur).toClassRef());
 								break;
 							}
 							_sid = 0;
@@ -717,7 +722,8 @@ public final class ExprParser {
 					break;
 				}
 
-				exceptingStopWord(wr, w.val(), flag);
+				exceptingStopWord(w.val(), flag);
+				break;
 			}
 
 			if ((_sid&0x400) != 0) {
@@ -734,7 +740,7 @@ public final class ExprParser {
 						break;
 					}
 
-					exceptingStopWord(wr, w.val(), flag);
+					exceptingStopWord(w.val(), flag);
 				}
 				if ((_sid & 0x20) != 0 || (flag & (1 << (shl+1))) == 0) wr.retractWord();
 
@@ -801,7 +807,7 @@ public final class ExprParser {
 		ExprNode cur;
 		var ops = binaryOps;
 		if (ops.size() > bopCount) {
-			TimSortForEveryone.sort(bopCount, ops.size(), BOP_SORTER, ArrayRef.primitiveArray(ops.getRawArray()));
+			TimSortForEveryone.sort(bopCount, ops.size(), BOP_SORTER, NativeArray.primitiveArray(ops.getRawArray()));
 
 			int i = bopCount;
 			do {
@@ -866,7 +872,7 @@ public final class ExprParser {
 		if (array != 0) ctx.report(Kind.ERROR, "expr.typeRef.arrayDecl");
 		return null;
 	}
-	private boolean detectGeneric(JavaLexer wr) throws ParseException {
+	private boolean detectGeneric(Tokens wr) throws ParseException {
 		wr.mark();
 		int depth = 1;
 		// T<
@@ -907,7 +913,7 @@ public final class ExprParser {
 			}
 		}
 	}
-	private Object detectParen(JavaLexer wr) throws ParseException {
+	private Object detectParen(Tokens wr) throws ParseException {
 		Word w = wr.next();
 		if (w.type() >= VOID && w.type() <= DOUBLE) {
 			wr.retractWord();
@@ -1040,7 +1046,7 @@ public final class ExprParser {
 		node.wordStart = wordStart;
 		return node;
 	}
-	private ExprNode lambda(JavaLexer wr, List<String> parNames, int stopWord) throws ParseException {
+	private ExprNode lambda(Tokens wr, List<String> parNames, int stopWord) throws ParseException {
 		var argNames = copyOf(parNames);
 
 		var file = ctx.file;
@@ -1084,10 +1090,9 @@ public final class ExprParser {
 		return new Lambda(argNames, method, task);
 	}
 
-	private static void ue(JavaLexer wr, String wd, String except) throws ParseException { throw wr.err("unexpected_2\1"+wd+"\0\1"+except+"\0"); }
-	private static void ue(JavaLexer wr, String wd) throws ParseException { throw wr.err("unexpected\1"+wd+"\0"); }
-	private static void exceptingStopWord(JavaLexer wr, String val, int flag) throws ParseException {
-		var sb = IOUtil.getSharedCharBuf().append('\1');
+	private static void ue(Tokens wr, String wd, String except) throws ParseException { throw wr.err("unexpected_2:[\""+wd+"\","+except+"]"); }
+	private void exceptingStopWord(String val, int flag) {
+		var sb = IOUtil.getSharedCharBuf().append("unexpected_2:[\"").append(val).append("\",\"");
 		if ((flag&STOP_SEMICOLON) != 0) sb.append(';');
 		if ((flag&STOP_RSB) != 0) sb.append(')');
 		if ((flag&STOP_RMB) != 0) sb.append(']');
@@ -1095,7 +1100,7 @@ public final class ExprParser {
 		if ((flag&STOP_RLB) != 0) sb.append('}');
 		if ((flag&STOP_COLON) != 0) sb.append(':');
 		if ((flag&STOP_LAMBDA) != 0) sb.append("->");
-		throw wr.err("unexpected_2:"+val+":"+sb.append('\0'));
+		ctx.report(Kind.ERROR, sb.append("\"]").toString());
 	}
 
 	public int binaryOperatorPriority(short op) {return stateMap.getOrDefaultInt(SM_ExprTerm | op, -1);}

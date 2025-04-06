@@ -33,7 +33,7 @@ public class TextReader extends Reader implements CharSequence, Closeable, Finis
 	private final byte type;
 
 	private final CharsetDecoder cd;
-	private final UnsafeCharset ucs;
+	private final FastCharset ucs;
 	private ByteBuffer ib;
 	private CharBuffer ob;
 
@@ -104,7 +104,7 @@ public class TextReader extends Reader implements CharSequence, Closeable, Finis
 			}
 		}
 
-		var _ucs = UnsafeCharset.getInstance(charset);
+		var _ucs = FastCharset.getInstance(charset);
 		if (_ucs != null) {
 			ucs = _ucs;
 			cd = null;
@@ -186,7 +186,7 @@ public class TextReader extends Reader implements CharSequence, Closeable, Finis
 			int prevOff = off;
 			boolean flag = true;
 			while (true) {
-				long x = ucs.unsafeDecode(ba.array(),ba._unsafeAddr(),b.position(),b.limit(),buf,off,len-off);
+				long x = ucs.fastDecode(ba.array(),ba._unsafeAddr(),b.position(),b.limit(),buf,off,len-off);
 				b.position((int) (x >>> 32));
 				off = (int) x;
 

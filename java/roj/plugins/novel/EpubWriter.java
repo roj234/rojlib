@@ -30,7 +30,7 @@ public class EpubWriter implements Closeable, Finishable {
 	private static ZipFile TEMPLATE;
 	static {
 		try {
-			TEMPLATE = new ZipFile(new MemorySource(IOUtil.getResource("roj/plugins/novel/template.epub")), 0, StandardCharsets.UTF_8);
+			TEMPLATE = new ZipFile(new MemorySource(IOUtil.getResourceIL("roj/plugins/novel/template.epub")), 0, StandardCharsets.UTF_8);
 			TEMPLATE.reload();
 		} catch (IOException ignored) {}
 	}

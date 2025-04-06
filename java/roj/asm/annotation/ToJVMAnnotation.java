@@ -31,15 +31,15 @@ public final class ToJVMAnnotation implements CVisitor {
 		return id;
 	}
 
-	public final void value(boolean l) {ob.put(Type.BOOLEAN).putShort(cp.getIntId(l?1:0));}
-	public final void value(byte l) {ob.put(Type.BYTE).putShort(cp.getIntId(l));}
-	public final void value(short l) {ob.put(Type.SHORT).putShort(cp.getIntId(l));}
-	public final void value(char l) {ob.put(Type.CHAR).putShort(cp.getIntId(l));}
-	public final void value(int l) {ob.put(Type.INT).putShort(cp.getIntId(l));}
-	public final void value(long l) {ob.put(Type.LONG).putShort(cp.getLongId(l));}
-	public final void value(float l) {ob.put(Type.FLOAT).putShort(cp.getFloatId(l));}
-	public final void value(double l) {ob.put(Type.DOUBLE).putShort(cp.getDoubleId(l));}
-	public final void value(String l) {ob.put(AnnVal.STRING).putShort(cp.getUtfId(l));}
+	public final void value(boolean b) {ob.put(Type.BOOLEAN).putShort(cp.getIntId(b ?1:0));}
+	public final void value(byte i) {ob.put(Type.BYTE).putShort(cp.getIntId(i));}
+	public final void value(short i) {ob.put(Type.SHORT).putShort(cp.getIntId(i));}
+	public final void value(char i) {ob.put(Type.CHAR).putShort(cp.getIntId(i));}
+	public final void value(int i) {ob.put(Type.INT).putShort(cp.getIntId(i));}
+	public final void value(long i) {ob.put(Type.LONG).putShort(cp.getLongId(i));}
+	public final void value(float i) {ob.put(Type.FLOAT).putShort(cp.getFloatId(i));}
+	public final void value(double i) {ob.put(Type.DOUBLE).putShort(cp.getDoubleId(i));}
+	public final void value(String s) {ob.put(AnnVal.STRING).putShort(cp.getUtfId(s));}
 	public final void valueClass(String klass) {ob.put(AnnVal.ANNOTATION_CLASS).putShort(cp.getUtfId(klass));}
 	public final void valueEnum(String klass, String field) {ob.put(AnnVal.ENUM).putShort(cp.getUtfId(AnnVal.checkSemicolon(klass))).putShort(cp.getUtfId(field));}
 	public final void valueAnnotation(String klass) {

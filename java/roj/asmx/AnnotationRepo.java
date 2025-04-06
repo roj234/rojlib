@@ -108,7 +108,7 @@ public final class AnnotationRepo {
 		rawNodes.clear();
 		int len = r.readUnsignedShort();
 		for (int i = 0; i < len; i++) rawNodes.add(intern(cp.getRefName(r, Constant.CLASS)));
-		skeleton.interfaces = Helpers.cast(ArrayUtil.copyOf(rawNodes));
+		skeleton.interfaces = Helpers.cast(ArrayUtil.immutableCopyOf(rawNodes));
 
 		for (int i = 0; i < 2; i++) {
 			len = r.readUnsignedShort();
@@ -143,8 +143,8 @@ public final class AnnotationRepo {
 				}
 			}
 
-			if (i == 0) skeleton.fields = Helpers.cast(ArrayUtil.copyOf(rawNodes));
-			else skeleton.methods = Helpers.cast(ArrayUtil.copyOf(rawNodes));
+			if (i == 0) skeleton.fields = Helpers.cast(ArrayUtil.immutableCopyOf(rawNodes));
+			else skeleton.methods = Helpers.cast(ArrayUtil.immutableCopyOf(rawNodes));
 		}
 
 		int attrSize = r.readUnsignedShort();
@@ -275,7 +275,7 @@ public final class AnnotationRepo {
 		rawNodes.clear();
 		int len = r.readUnsignedShort();
 		for (int i = 0; i < len; i++) rawNodes.add(((CstUTF) cp.get(r)).str());
-		skeleton.interfaces = Helpers.cast(ArrayUtil.copyOf(rawNodes));
+		skeleton.interfaces = Helpers.cast(ArrayUtil.immutableCopyOf(rawNodes));
 
 		Type type = new Type(skeleton);
 		elements[elementCount++] = type;
@@ -291,8 +291,8 @@ public final class AnnotationRepo {
 				elements[elementCount++] = new Node(type, mof);
 			}
 
-			if (i == 0) skeleton.fields = Helpers.cast(ArrayUtil.copyOf(rawNodes));
-			else skeleton.methods = Helpers.cast(ArrayUtil.copyOf(rawNodes));
+			if (i == 0) skeleton.fields = Helpers.cast(ArrayUtil.immutableCopyOf(rawNodes));
+			else skeleton.methods = Helpers.cast(ArrayUtil.immutableCopyOf(rawNodes));
 		}
 
 		return elementCount;

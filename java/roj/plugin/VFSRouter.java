@@ -43,10 +43,10 @@ public class VFSRouter implements Router, Predicate<String> {
 	}
 
 	@Override
-	public Response response(Request req, ResponseHeader rh) throws IOException {
+	public Content response(Request req, ResponseHeader rh) throws IOException {
 		String url = req.path();
-		if (url.equals("@@pi.js")) return Response.file(req, js);
-		else if (url.equals("@@pi.css")) return Response.file(req, css);
+		if (url.equals("@@pi.js")) return Content.file(req, js);
+		else if (url.equals("@@pi.css")) return Content.file(req, css);
 
 		var file = fs.getPath(url);
 
@@ -86,16 +86,16 @@ public class VFSRouter implements Router, Predicate<String> {
 
 				var ob = new CharList();
 				html.format(env, ob);
-				return Response.html(ob);
+				return Content.html(ob);
 			}
 		}
 		if (!file.isFile()) {
 			rh.code(404);
-			return Response.httpError(HttpUtil.NOT_FOUND);
+			return Content.httpError(HttpUtil.NOT_FOUND);
 		}
 
 		rh.code(200).header("cache-control", HttpUtil.CACHED_REVALIDATE);
-		return Response.file(req, fs.toDiskInfo(file));
+		return Content.file(req, fs.toFileInfo(file));
 	}
 
 	// (Optional) for OKRouter Prefix Delegation check

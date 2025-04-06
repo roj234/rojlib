@@ -4,8 +4,8 @@ import roj.ToBeRemoved;
 import roj.collect.TrieTreeSet;
 import roj.config.data.CList;
 import roj.config.data.CMap;
+import roj.http.server.Content;
 import roj.http.server.Request;
-import roj.http.server.Response;
 import roj.http.server.ResponseHeader;
 import roj.http.server.auto.GET;
 import roj.http.server.auto.OKRouter;
@@ -112,7 +112,7 @@ public class ADnsGuard extends Plugin {
 	}
 
 	@GET("/")
-	public Response index(String msg) throws Exception {
+	public Content index(String msg) throws Exception {
 		var sb = new StringBuilder().append("<head><meta charset='UTF-8' /><title>ADnsGuard 2.0</title></head><h1>Welcome! <br> ADnsGuard - 基于DNS的广告屏蔽器</h1>");
 
 		if (msg != null && !msg.isEmpty()) {
@@ -132,7 +132,7 @@ public class ADnsGuard extends Plugin {
 		  .append("<h2 style='color:#eecc44;margin: 10px auto;'>Powered by ImpLib/DPS</h2>Memory: ")
 		  .append(TextUtil.scaledNumber(Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory()));
 
-		return Response.html(sb);
+		return Content.html(sb);
 	}
 
 	@GET

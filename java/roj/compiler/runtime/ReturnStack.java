@@ -10,7 +10,7 @@ import static roj.reflect.Unaligned.U;
  * @author Roj234
  * @since 2024/6/8 0008 19:30
  */
-public final class ReturnStack<T> implements GenericIgnore {
+public final class ReturnStack<T> {
 	private static final int MEMORY_CAPACITY = 8 * 256;
 
 	public static final ThreadLocal<ReturnStack<?>> TL = ThreadLocal.withInitial(ReturnStack::new);

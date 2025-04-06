@@ -1,5 +1,6 @@
 package roj.config;
 
+import roj.concurrent.OperationDone;
 import roj.config.auto.Serializer;
 import roj.config.auto.SerializerFactory;
 import roj.config.data.CEntry;
@@ -19,7 +20,7 @@ import java.util.TimeZone;
  * @since 2024/3/23 0023 21:00
  */
 public enum ConfigMaster {
-	BENCODE, NBT, XNBT, JSON, YAML, XML, TOML, INI, CSV;
+	BENCODE, NBT, XNBT, MSGPACK, JSON, YAML, XML, TOML, INI, CSV;
 
 	public static ConfigMaster fromExtension(File path) {
 		String ext = IOUtil.extensionName(path.getName());
@@ -44,7 +45,7 @@ public enum ConfigMaster {
 	 */
 	public void serialize(Object out, CEntry entry) throws IOException {
 		switch (this) {
-			case JSON, YAML, NBT, XNBT, BENCODE -> {
+			case JSON, YAML, NBT, XNBT, MSGPACK, BENCODE -> {
 				try (CVisitor v = serializer(out)) {
 					entry.accept(v);
 				}
@@ -74,21 +75,29 @@ public enum ConfigMaster {
 	public CVisitor serializer(Object out) throws IOException { return serializer(out, ""); }
 	// 也不是所有格式都支持indent 哈哈
 	public CVisitor serializer(Object out, String indent) throws IOException {
-		switch (this) {
-			case JSON, YAML, INI -> {
-				TextWriter tw = out instanceof File f ? TextWriter.to(f) : new TextWriter((Closeable) out, TextUtil.DefaultOutputCharset);
-				return textSerializer(tw, indent);
+		if (ordinal() > MSGPACK.ordinal()) {
+			// text or none
+			switch (this) {
+				case JSON, YAML, INI -> {
+					TextWriter tw = out instanceof File f ? TextWriter.to(f) : new TextWriter((Closeable) out, TextUtil.DefaultOutputCharset);
+					return textSerializer(tw, indent);
+				}
+				default -> throw new UnsupportedOperationException(this+"不支持流式序列化");
 			}
-			case NBT, XNBT, BENCODE -> {
-				DynByteBuf ob = out instanceof DynByteBuf buf
-					? buf
-					: new ByteList.ToStream(out instanceof File f
-					? new FileOutputStream(f)
-					: (OutputStream) out);
-				return this == BENCODE ? new ToBEncode(ob) : new ToNBT(ob).setXNbt(this == XNBT);
-			}
-			default -> throw new UnsupportedOperationException(this+"不支持流式序列化");
 		}
+
+		DynByteBuf ob = out instanceof DynByteBuf buf
+				? buf
+				: new ByteList.ToStream(out instanceof File f
+				? new FileOutputStream(f)
+				: (OutputStream) out);
+
+		return switch (this) {
+			case BENCODE -> new ToBEncode(ob);
+			case NBT, XNBT -> new ToNBT(ob).setXNbt(this == XNBT);
+			case MSGPACK -> new ToMsgPack.Compressed(ob);
+			default -> throw OperationDone.NEVER;
+		};
 	}
 	public boolean hasSerializer() { return ordinal() >= NBT.ordinal() && ordinal() <= YAML.ordinal(); }
 
@@ -154,6 +163,7 @@ public enum ConfigMaster {
 			case CSV -> new CsvParser();
 			case NBT -> new NBTParser();
 			case XNBT -> new XNBTParser();
+			case MSGPACK -> new MsgPackParser();
 			case BENCODE -> new BencodeParser();
 		};
 	}

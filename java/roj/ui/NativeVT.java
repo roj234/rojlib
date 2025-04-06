@@ -7,9 +7,8 @@ import roj.io.buf.BufferPool;
 import roj.reflect.ReflectionUtils;
 import roj.reflect.Unaligned;
 import roj.text.CharList;
+import roj.text.FastCharset;
 import roj.text.TextWriter;
-import roj.text.UTF8;
-import roj.text.UnsafeCharset;
 import roj.util.ByteList;
 import roj.util.NativeException;
 import roj.util.OS;
@@ -49,7 +48,7 @@ public final class NativeVT implements ITerminal, Runnable {
 	private static final InputStream sysIn;
 	private static final OutputStream sysOut;
 	static Charset charset;
-	static UnsafeCharset ucs;
+	static FastCharset ucs;
 
 	private static final ITerminal instance = init();
 	private static Thread reader;
@@ -79,9 +78,9 @@ public final class NativeVT implements ITerminal, Runnable {
 			var encoding = System.getProperty("stdout.encoding");
 			charset = encoding == null ? Charset.defaultCharset() : Charset.forName(encoding);
 		}
-		ucs = UnsafeCharset.getInstance(charset);
+		ucs = FastCharset.getInstance(charset);
 		if (ucs == null) {
-			ucs = UTF8.CODER;
+			ucs = FastCharset.UTF8();
 			System.err.println(VTERROR+"输出编码不受支持: "+charset);
 		}
 
@@ -122,7 +121,9 @@ public final class NativeVT implements ITerminal, Runnable {
 				} catch (Throwable e) {
 					System.err.println(VTERROR+"Fatal");
 					e.printStackTrace();
-					System.exit(2);
+					if (!(e instanceof IOException))
+						System.exit(2);
+					break;
 				}
 			}
 		}

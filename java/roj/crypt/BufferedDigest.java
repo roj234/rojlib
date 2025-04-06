@@ -1,6 +1,5 @@
 package roj.crypt;
 
-import roj.io.IOUtil;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
 
@@ -30,9 +29,7 @@ public abstract class BufferedDigest extends MessageDigest implements Cloneable 
 			buf.clear();
 		}
 	}
-	protected final void engineUpdate(byte[] b, int off, int len) {
-		update(IOUtil.SharedCoder.get().wrap(b, off, len));
-	}
+	protected final void engineUpdate(byte[] b, int off, int len) {update(DynByteBuf.wrap(b, off, len));}
 	protected final void engineUpdate(ByteBuffer b) {
 		if (b.hasArray()) {
 			super.engineUpdate(b);
@@ -83,7 +80,7 @@ public abstract class BufferedDigest extends MessageDigest implements Cloneable 
 		if (len < dLen) throw new DigestException("partial digests not returned");
 		if (b.length - off < dLen) throw new DigestException("insufficient space in the output buffer to store the digest");
 
-		ByteList bb = IOUtil.SharedCoder.get().wrap(b, off, len);
+		ByteList bb = DynByteBuf.wrap(b, off, len);
 		bb.wIndex(0);
 		digest(bb);
 		return 16;

@@ -109,7 +109,7 @@ public final class DAOMaker {
 			init.field(PUTFIELD, impl, psid);
 
 			var cw = impl.newMethod(ACC_PUBLIC| ACC_FINAL, method.name(), method.rawDesc());
-			var parNames = ParamNameMapper.getParameterName(ref.cp, method);
+			var parNames = ParamNameMapper.getParameterNames(ref.cp, method);
 			var parTypes = method.parameters();
 			parIds.clear();
 			i = 1;

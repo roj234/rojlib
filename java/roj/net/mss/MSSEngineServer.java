@@ -184,7 +184,7 @@ final class MSSEngineServer extends MSSEngine {
 		}
 
 		boolean clientWillReply;
-		if ((flag & VERIFY_CLIENT) != 0 && !verifyClientCertificate(extIn, false)) {
+		if ((flag & VERIFY_CLIENT) != 0 && !verifyClientCertificate(extIn, true)) {
 			clientWillReply = true;
 			extOut.put(Extension.certificate_request, config.buffer(4).putInt(config.getSupportCertificateType()));
 		} else {

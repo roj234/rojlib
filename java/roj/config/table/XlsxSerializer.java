@@ -35,11 +35,11 @@ final class XlsxSerializer implements CVisitor {
 		} else throw new IllegalStateException("state="+state);
 	}
 
-	@Override public void value(boolean l) {doSet(l ? "true" : "false");}
-	@Override public void value(int l) {doSet(l);}
-	@Override public void value(long l) {doSet(l);}
-	@Override public void value(double l) {doSet(l);}
-	@Override public void value(String l) {doSet(l);}
+	@Override public void value(boolean b) {doSet(b ? "true" : "false");}
+	@Override public void value(int i) {doSet(i);}
+	@Override public void value(long i) {doSet(i);}
+	@Override public void value(double i) {doSet(i);}
+	@Override public void value(String s) {doSet(s);}
 	@Override public void valueNull() {doSet(null);}
 	private void doSet(Object o) {
 		dataBuffer.set(state, o);

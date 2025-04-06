@@ -2,11 +2,13 @@ package roj.plugins.bkcrack;
 
 import roj.collect.IntList;
 
+import static roj.plugins.bkcrack.Macros.MASK_0_16;
+
 /**
  * @author Roj234
  * @since 2022/11/12 0012 17:27
  */
-final class KeyTable implements Macros {
+final class KeyTable {
 	/// \return the keystream byte ki associated to a Zi value
 	/// \note Only Zi[2,16) is used
 	static byte getByte(int zi) {

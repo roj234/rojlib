@@ -21,12 +21,14 @@ import java.util.concurrent.atomic.AtomicInteger;
  * @since 2023/3/15 15:32
  */
 public final class QzAES extends QZCoder {
+    private static final int CYCLE_POWER_MAX = 24;
+
     //PBKDF2-HMAC-SHA256: 600,000 iterations
     public QzAES(String pass) {this(pass, 19, 0);}
     public QzAES(String pass, int cyclePower, int saltLength) {this(pass.getBytes(StandardCharsets.UTF_16LE), cyclePower, saltLength);}
     public QzAES(byte[] pass, int cyclePower, int saltLength) {
-        if (cyclePower < 1 || cyclePower > 63) throw new IllegalStateException("别闹");
-        if (saltLength < 0 || saltLength > 16) throw new IllegalStateException("salt length [0,16]");
+        if ((cyclePower < 0 || cyclePower > CYCLE_POWER_MAX) && cyclePower != 63) throw new IllegalStateException("cyclePower的范围是[0,"+CYCLE_POWER_MAX+"]|63");
+        if (saltLength < 0 || saltLength > 16) throw new IllegalStateException("saltLength的范围是[0,16]");
 
         this.cyclePower = (byte) cyclePower;
 
@@ -47,7 +49,7 @@ public final class QzAES extends QZCoder {
     public OutputStream encode(OutputStream out) throws IOException {
         if (lastKey == null) throw new IllegalArgumentException("缺少密码");
 
-        var cip = new FeedbackCipher(dec.copyWith(true), FeedbackCipher.MODE_CBC);
+        var cip = new FeedbackCipher(aes.copyWith(true), FeedbackCipher.MODE_CBC);
         try {
             cip.init(Cipher.ENCRYPT_MODE, null, new IvParameterSpecNC(iv), null);
         } catch (Exception e) {
@@ -59,7 +61,7 @@ public final class QzAES extends QZCoder {
         if (key == null) throw new IllegalArgumentException("缺少密码");
         init(key);
 
-        var cip = new FeedbackCipher(dec, FeedbackCipher.MODE_CBC);
+        var cip = new FeedbackCipher(aes, FeedbackCipher.MODE_CBC);
         try {
             cip.init(Cipher.DECRYPT_MODE, null, new IvParameterSpecNC(iv), null);
         } catch (Exception e) {
@@ -69,7 +71,7 @@ public final class QzAES extends QZCoder {
     }
 
     private byte[] lastKey;
-    private final RCipherSpi dec = ILCrypto.Aes();
+    private final RCipherSpi aes = ILCrypto.Aes();
     private void init(byte[] key) {
         if (Arrays.equals(lastKey, key)) return;
         lastKey = key;
@@ -78,9 +80,10 @@ public final class QzAES extends QZCoder {
 
         if (cyclePower == 0x3f) {
             realKey = new byte[32];
-            System.arraycopy(salt, 2, realKey, 0, salt.length);
+            System.arraycopy(salt, 0, realKey, 0, salt.length);
             System.arraycopy(key, 0, realKey, salt.length, Math.min(key.length, 32-salt.length));
         } else {
+            if (cyclePower > CYCLE_POWER_MAX) throw new IllegalArgumentException("Cycle Power too large in "+this);
             MessageDigest sha;
             try {
                 sha = MessageDigest.getInstance("SHA-256");
@@ -93,7 +96,7 @@ public final class QzAES extends QZCoder {
             for (long i = 1L << cyclePower; i > 0; i--) {
                 sha.update(salt);
                 sha.update(key);
-                sha.update(counter, 0, 8);
+                sha.update(counter);
                 for (int j = 0; j < 8; j++)
                     if (++counter[j] != 0) break;
             }
@@ -101,7 +104,7 @@ public final class QzAES extends QZCoder {
         }
 
         try {
-            dec.init(Cipher.DECRYPT_MODE, realKey);
+            aes.init(Cipher.DECRYPT_MODE, realKey);
         } catch (Exception e) {
             Helpers.athrow(e);
         }
@@ -133,15 +136,14 @@ public final class QzAES extends QZCoder {
     @Override
     void writeOptions(DynByteBuf buf) {
         int info = cyclePower << 8;
-        info |= 0x400F; // iv=16
 
-        int s = salt.length;
-        if (s == 16) {
-            info |= 0x8000;
-            s--;
-        }
-        info |= s << 4;
+        int ivLen = 16;
+        while (ivLen > 0 && iv[ivLen-1] == 0) ivLen--;
+        info |= ivLen == 16 ? 0x400F : ivLen;
 
-        buf.putShort(info).put(salt).put(iv);
+        int saltLen = salt.length;
+        info |= saltLen == 16 ? 0x80F0 : saltLen << 4;
+
+        buf.putShort(info).put(salt).put(iv, 0, ivLen);
     }
 }

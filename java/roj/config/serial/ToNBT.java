@@ -1,6 +1,6 @@
 package roj.config.serial;
 
-import roj.text.GB18030;
+import roj.text.FastCharset;
 import roj.text.TextUtil;
 import roj.util.DynByteBuf;
 
@@ -34,47 +34,47 @@ public class ToNBT implements CVisitor {
 	private int[] states = new int[4];
 	private int stateLen;
 
-	public final void value(boolean l) { value((byte)(l?1:0)); }
-	public final void value(byte l) {
+	public final void value(boolean b) { value((byte)(b ?1:0)); }
+	public final void value(byte i) {
 		onValue(BYTE);
-		ob.write(l);
+		ob.write(i);
 	}
-	public final void value(short l) {
+	public final void value(short i) {
 		onValue(SHORT);
-		ob.writeShort(l);
+		ob.writeShort(i);
 	}
-	public final void value(int l) {
+	public final void value(int i) {
 		onValue(INT);
-		ob.writeInt(l);
+		ob.writeInt(i);
 	}
-	public final void value(long l) {
+	public final void value(long i) {
 		onValue(LONG);
-		ob.writeLong(l);
+		ob.writeLong(i);
 	}
-	public final void value(float l) {
+	public final void value(float i) {
 		onValue(FLOAT);
-		ob.writeFloat(l);
+		ob.writeFloat(i);
 	}
-	public final void value(double l) {
+	public final void value(double i) {
 		onValue(DOUBLE);
-		ob.writeDouble(l);
+		ob.writeDouble(i);
 	}
-	public final void value(String l) {
+	public final void value(String s) {
 		if (XNbt) {
-			if (l == null) {valueNull();return;}
-			if (TextUtil.isLatin1(l)) {
+			if (s == null) {valueNull();return;}
+			if (TextUtil.isLatin1(s)) {
 				onValue(X_LATIN1_STRING);
-				ob.putVUInt(l.length()).putAscii(l);
+				ob.putVUInt(s.length()).putAscii(s);
 				return;
 			}
 
-			int utfExtra = l.length() * 2 / 3;
+			int utfExtra = s.length() * 2 / 3;
 			int numCn = 0;
-			for (int i = 0; i < l.length(); i++) {
-				if (GB18030.isTwoByte(l.charAt(i))) {
+			for (int i = 0; i < s.length(); i++) {
+				if (FastCharset.GB18030().encodeSize(s.charAt(i)) == 2) {
 					if (++numCn > utfExtra) {
 						onValue(X_GB18030_STRING);
-						ob.putVUIGB(l);
+						ob.putVUIGB(s);
 						return;
 					}
 				}
@@ -82,7 +82,7 @@ public class ToNBT implements CVisitor {
 		}
 
 		onValue(STRING);
-		ob.writeUTF(l);
+		ob.writeUTF(s);
 	}
 	public final void valueNull() {
 		if (!XNbt) throw new NullPointerException("NBT不支持Null (请使用XNBT)");

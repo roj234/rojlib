@@ -14,6 +14,7 @@ public final class Var2 {
 	public static final byte T_TOP = 0, T_INT = 1, T_FLOAT = 2, T_DOUBLE = 3, T_LONG = 4, T_NULL = 5, T_UNINITIAL_THIS = 6, T_REFERENCE = 7, T_UNINITIAL = 8, T_ANY = 114, T_ANY2 = 115;
 
 	public static final String BYTE_ARRAY = "[B";
+	public static final String T_ANYARRAY = "[";
 
 	public byte type;
 	public String owner;
@@ -65,6 +66,7 @@ public final class Var2 {
 
 	public int bci() {return monitor_bci == null ? bci : monitor_bci.getValue();}
 
+	// 这个函数只修改自己
 	public boolean verify(Var2 o) {
 		if (o == this) return false;
 		if (o.type >= T_ANY) return false;
@@ -73,12 +75,12 @@ public final class Var2 {
 			return true;
 		}
 
+		// NULL = 5, UNINITIAL_THIS = 6, REFERENCE = 7, UNINITIAL = 8
 		if (o.type < 5 || type < 5) {
 			if (type != o.type) throw new IllegalStateException("无法合并 " + this + " 与 " + o);
 			return false;
 		}
 
-		// NULL = 5, UNINITIAL_THIS = 6, REFERENCE = 7, UNINITIAL = 8
 		if (o.type == T_NULL) return false;
 		if (type == T_NULL) {
 			if (o.owner.equals("java/lang/Object")) return false;
@@ -86,14 +88,10 @@ public final class Var2 {
 			return true;
 		}
 
-		if (type != T_REFERENCE) {
-			// uninitial / uninitial_this
-			if (o.bci >= 0) {
-				type = T_REFERENCE;
-				bci = o.bci;
-			} else {
-				if (owner.equals("java/lang/Object")) throw new RuntimeException("new Object() breakpoint: in >1 basic blocks");
-			}
+		// 是 uninitial / uninitial_this 那么初始化自身
+		if (type != T_REFERENCE && o.bci >= 0) {
+			type = T_REFERENCE;
+			bci = o.bci;
 		}
 
 		if (o.owner.equals("java/lang/Object")) return false;
@@ -121,6 +119,7 @@ public final class Var2 {
 		}
 
 		try {
+			// 更具体的
 			String newOwner = FrameVisitor.getConcreteChild(owner, o.owner);
 			boolean changed = !newOwner.equals(owner);
 			owner = newOwner;
@@ -132,59 +131,47 @@ public final class Var2 {
 	public Var2 uncombine(Var2 o) {
 		if (o == this) return null;
 		if (o.type >= T_ANY) return null;
-		if (type >= T_ANY) {
-			copy(o);
-			return this;
-		}
+		if (type >= T_ANY) return o;
 
-		if (o.type < 5 || type < 5) {
-			if (type != o.type && type != T_TOP) return TOP;
-			return null;
-		}
+		// 基本类型不能合并
+		if (o.type < 5 || type < 5) return type != o.type && this != TOP ? TOP : null;
 
 		if (o.type == T_NULL) return null;
+		// 这里用copy(o)以生成更小的frame，但可能有bug，如果出现了改成return o试试
 		if (type == T_NULL) {
 			copy(o);
 			return this;
+			//return o;
 		}
 
-		if (type != T_REFERENCE) {
-			// uninitial / uninitial_this
-			if (o.bci >= 0) {
-				type = T_REFERENCE;
-				bci = o.bci;
-			} else {
-				if (owner.equals("java/lang/Object")) throw new RuntimeException("new Object() breakpoint: in >1 basic blocks");
-			}
-		}
+		// 感觉不能合并
+		if (type != T_REFERENCE && o.bci >= 0) throw new IllegalStateException("may not able to merge "+this+" and "+o);
 
-		if (o.owner.equals("java/lang/Object")) {
-			copy(o);
-			return this;
-		}
-		if (owner.equals(o.owner)) return null;
-		if (owner.equals("java/lang/Object")) return null;
+		// o更不具体
+		if (o.owner.equals("java/lang/Object")) return o;
+		// 没法更common了
+		if (owner.equals(o.owner) || owner.equals("java/lang/Object")) return null;
 
 		if (owner.startsWith("[") != o.owner.startsWith("[")) return TOP;
 
-		// Only for ArrayLength
+		// '[' only for ArrayLength, 并且不是合法的类型
 		if (o.owner.equals("[")) return null;
-		if (owner.equals("[")) {
-			copy(o);
-			return this;
-		}
+		if (owner.equals("[")) return o;
+
+		// byteArray和booleanArray，头大
 		if (owner.equals(BYTE_ARRAY) || o.owner.equals(BYTE_ARRAY)) {
 			if (o.owner.equals("[Z") || owner.equals("[Z")) return null;
 		}
 
-		if (owner.startsWith("[")) {
-			if (owner.charAt(1) != 'L') return TOP;
-		}
+		// 基本类型数组
+		if (owner.startsWith("[") && owner.charAt(1) != 'L') return TOP;
 
 		String commonSuperClass = FrameVisitor.getCommonParent(owner, o.owner);
-		boolean changed = !commonSuperClass.equals(owner);
-		owner = commonSuperClass;
-		return changed ? this : null;
+		if (commonSuperClass.equals(owner)) return null;
+
+		var copy = copy();
+		copy.owner = commonSuperClass;
+		return copy;
 	}
 
 	private void copy(Var2 o) {

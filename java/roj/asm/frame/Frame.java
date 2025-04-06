@@ -71,8 +71,7 @@ public final class Frame {
 		}
 		return sb;
 	}
-
-	private void display(CharList sb, @NotNull Var2[] locals) {
+	private static void display(CharList sb, @NotNull Var2[] locals) {
 		sb.append('[');
 		int i = 0;
 		while (true) {
@@ -84,11 +83,14 @@ public final class Frame {
 	}
 
 	public void locals(Var2... arr) {
-		if (type != full && type != append) throw new IllegalStateException(this+" cannot modify locals");
+		if (type != full && type != append || arr.length > 3)
+			throw new IllegalStateException(this+" cannot set "+arr.length+" locals");
 		locals = arr;
 	}
 	public void stacks(Var2... arr) {
-		if (type != full && type != same_local_1_stack && type != same_local_1_stack_ex) throw new IllegalStateException(this+" cannot modify stacks");
+		if (type != full && (type != same_local_1_stack && type != same_local_1_stack_ex) || arr.length != 1) {
+			throw new IllegalStateException(this+" cannot set "+arr.length+" stacks");
+		}
 		stacks = arr;
 	}
 }

@@ -870,6 +870,7 @@ public class Mapper extends Mapping {
 						} else {
 							if (simulate) {
 								LOGGER.warn("缺少元素 {}", entry);
+								if (j >= parents.size()) break;
 								d.owner = parents.get(j++);
 								continue;
 							}

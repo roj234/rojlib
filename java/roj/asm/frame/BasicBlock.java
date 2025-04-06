@@ -1,7 +1,7 @@
 package roj.asm.frame;
 
+import roj.collect.MyBitSet;
 import roj.collect.MyHashSet;
-import roj.collect.SimpleList;
 import roj.concurrent.Flow;
 import roj.io.FastFailException;
 import roj.util.ArrayUtil;
@@ -16,170 +16,197 @@ public class BasicBlock {
 	public int bci;
 	private String desc;
 	private final MyHashSet<BasicBlock> successor = new MyHashSet<>();
-	public boolean noFrame;
 
+	public boolean isFrame;
+
+	// 异常处理器使用到的
+	private MyBitSet reassignedLocal;
+	public void reassignedLocal(int i) {
+		if (reassignedLocal == null) reassignedLocal = new MyBitSet();
+		reassignedLocal.add(i);
+	}
+
+	// 基本块内部状态
 	Var2[]
-		inStack = new Var2[8],
-		outStack = new Var2[8],
-		inLocal = new Var2[8],
-		outLocal = new Var2[8];
-	int inStackSize, outStackSize, inLocalSize, outLocalSize;
+		consumedStack = new Var2[2],
+		outStack = new Var2[4],
+		usedLocal = new Var2[8],
+		assignedLocal = new Var2[8];
+	int consumedStackSize, outStackSize, usedLocalCount, assignedLocalCount;
 
 	int maxStackSize;
 
-	Var2[] startLocal, startStack;
-	int startLocalSize, startStackSize;
-	Var2[] endLocal, endStack;
-	int endLocalSize, endStackSize;
+	// frame计算时状态
+	Var2[] startLocal = Frame.NONE, startStack = Frame.NONE;
+	Var2[] endLocal = Frame.NONE, endStack = Frame.NONE;
 	boolean reachable;
-
-	int refCount;
 
 	public BasicBlock(int bci, String desc) {
 		this.bci = bci;
 		this.desc = desc;
 	}
+	public void merge(String desc) {this.desc = this.desc+" | "+desc;}
 
-	public void to(BasicBlock fs) {
-		// add successor (previous block)
-		successor.add(fs);
+	public void to(BasicBlock bb) {successor.add(bb);}
+
+	public void initFirst(Var2[] initLocal) {
+		assert bci == 0;
+		reachable = true;
+
+		if (consumedStackSize != 0) throw new IllegalStateException("Illegal first block: "+this);
+
+		startLocal = Arrays.copyOf(initLocal, initLocal.length);
+		combineLocal(initLocal);
+		endStack = Arrays.copyOf(outStack, outStackSize);
 	}
+	public void traverse(MyHashSet<BasicBlock> visited) {
+		if (!visited.add(this)) return;
 
-	public void merge(String desc, boolean noFrame) {
-		this.desc = this.desc + " | " + desc;
-		if (!noFrame) this.noFrame = false;
-		refCount++;
-	}
-
-	public void ensureCapacity(int maxStackSize, int maxLocalSize, Var2[] initLocal) {
-		startLocal = Frame.NONE;
-		startLocalSize = 0;
-		startStack = Frame.NONE;
-		startStackSize = 0;
-
-		if (bci == 0) {
-			reachable = true;
-
-			startLocal = Arrays.copyOf(initLocal, initLocal.length);
-			startLocalSize = initLocal.length;
-
-			endLocal = new Var2[initLocal.length];
-			combineLocal(initLocal, maxLocalSize);
-			if (inStackSize != 0) throw new IllegalStateException("Illegal first block: "+this);
-			endStack = Arrays.copyOf(outStack, outStackSize);
-			endStackSize = outStackSize;
-		}
-	}
-	public void traverse(SimpleList<BasicBlock> route, int maxDepth) {
-		if (route.contains(this)) return;
-		route.add(this);
-
-		maxDepth--;
 		for (BasicBlock block : successor) {
 			try {
 				block.comeFrom(this);
-				if (maxDepth > 0) block.traverse(route, maxDepth);
+				block.traverse(visited);
 			} catch (Exception e) {
 				throw new IllegalStateException(block.toString(), e);
 			}
 		}
 
-		route.remove(route.size()-1);
+		visited.remove(this);
 	}
 
-	private void combineLocal(Var2[] local, int localSize) {
-		if (startLocal.length < local.length) {
-			startLocal = Arrays.copyOf(startLocal, local.length);
-			startLocalSize = startLocal.length;
-		}
+	private boolean combineLocal(Var2[] newStartLocal) {
+		if (startLocal.length < newStartLocal.length) startLocal = Arrays.copyOf(startLocal, newStartLocal.length);
 
-		uncombineIO(local, startLocal);
+		int endLocalCount = Math.max(Math.max(usedLocalCount, assignedLocalCount), startLocal.length);
+		if (endLocal.length < endLocalCount) endLocal = Arrays.copyOf(endLocal, endLocalCount);
+		var endLocal = this.endLocal;
 
-		int endLocalSize1 = Math.max(inLocalSize, outLocalSize);
-		endLocalSize1 = Math.max(localSize, endLocalSize1);
-		var endLocal1 = Arrays.copyOf(startLocal, endLocalSize1);
+		var changed = false;
 
-		// 限制local必须符合要求
-		for (int i = 0; i < inLocalSize; i++) {
-			Var2 combined = endLocal1[i];
-			Var2 usedType = inLocal[i];
-			if (combined == null) {
-				//System.out.println("Error missing input type");
-				endLocal1[i] = usedType;
-			} else if (usedType != null) {
-				Var2 copy = combined.copy();
-				//endLocal1[i] = usedType;
-				copy.verify(usedType);
-			}
-		}
-		for (int i = 0; i < outLocalSize; i++) {
-			Var2 usedType = outLocal[i];
-			if (usedType != null) {
-				var prev = endLocal1[i];
-				endLocal1[i] = usedType;
-
-				if (prev != null && (prev.type == Var2.T_LONG || prev.type == Var2.T_DOUBLE)) {
-					endLocal1[i+1] = null;
-				}
-			}
-		}
-
-		if (endLocal == null) {
-			endLocal = endLocal1;
-		} else {
-			if (endLocal.length < endLocal1.length) endLocal = Arrays.copyOf(endLocal, endLocal1.length);
-			uncombineIO(endLocal1, endLocal);
-		}
-		endLocalSize = endLocal.length;
-	}
-
-	private static void uncombineIO(Var2[] updated, Var2[] storage) {
-		for (int i = 0; i < updated.length; i++) {
-			Var2 item = storage[i];
-			if (updated[i] != null) {
-				if (item == null) storage[i] = updated[i];
-				else {
-					Var2 uncombine = item.copy().uncombine(updated[i]);
-					if (uncombine != null)
-						storage[i] = uncombine;
+		// 把起始状态互相合并
+		for (int i = 0; i < newStartLocal.length; i++) {
+			Var2 existing = startLocal[i];
+			Var2 newType = newStartLocal[i];
+			if (newType != null) {
+				if (existing == null) {
+					startLocal[i] = newType;
+					changed = true;
+				} else {
+					Var2 change = existing.uncombine(newType);
+					if (change != null) {
+						startLocal[i] = change;
+						changed = true;
+					}
 				}
 			} else {
-				storage[i] = Var2.TOP;
+				// 如果某一个来源没有赋值
+				if (startLocal[i] != Var2.TOP) changed = true;
+				startLocal[i] = Var2.TOP;
 			}
 		}
-		for (int i = updated.length; i < storage.length; i++) {
-			storage[i] = Var2.TOP;
+		// 如果某一个来源没有赋值
+		for (int i = newStartLocal.length; i < startLocal.length; i++) {
+			if (startLocal[i] != Var2.TOP) changed = true;
+			startLocal[i] = Var2.TOP;
 		}
+
+		System.arraycopy(startLocal, 0, endLocal, 0, startLocal.length);
+
+		// 进入时的变量必须符合该基本块用到的变量的类型
+		for (int i = 0; i < usedLocalCount; i++) {
+			Var2 except = usedLocal[i];
+			if (except != null) {
+				Var2 type = startLocal[i];
+				if (type == null) {
+					//可能是未完成遍历
+					endLocal[i] = except;
+				} else {
+					type.copy().verify(except);
+				}
+			}
+		}
+
+		// 覆盖赋值过的变量
+		for (int i = 0; i < assignedLocalCount; i++) {
+			Var2 assigned = assignedLocal[i];
+			if (assigned != null) {
+				var prev = endLocal[i];
+				endLocal[i] = assigned;
+
+				// 如果usedType是long或double的话，assignedLocal[i+1]不会为null
+				if (prev != null && (prev.type == Var2.T_LONG || prev.type == Var2.T_DOUBLE)) {
+					endLocal[i+1] = null;
+				}
+			}
+		}
+
+		return changed;
 	}
 
-	private void comeFrom(BasicBlock parent) {
-		startStack = parent.endStack;
-		startStackSize = parent.endStackSize;
-		combineLocal(parent.endLocal, parent.endLocalSize);
-
-		Var2[] 前驱节点的栈 = parent.endStack;
-		int parentSize = parent.endStackSize;
-		Var2[] 我用掉的栈 = inStack;
-		if (parentSize < inStackSize) throw new FastFailException("Attempt to pop empty stack.");
-		for (int i = 0; i < inStackSize; i++) {
-			Var2 item = 前驱节点的栈[--parentSize].copy();
-			item.verify(我用掉的栈[i]);
-		}
-
-		if (!reachable) {
-			var stackOut = new Var2[parentSize + outStackSize];
-			System.arraycopy(前驱节点的栈, 0, stackOut, 0, parentSize);
-			System.arraycopy(outStack, 0, stackOut, parentSize, outStackSize);
-			endStack = stackOut;
-			endStackSize = stackOut.length;
-		} else {
-			for (int i = 0; i < Math.min(endStackSize, inStackSize); i++) {
-				Var2 uncombine = endStack[i].uncombine(前驱节点的栈[i]);
-				if (uncombine != null) endStack[i] = uncombine;
+	public void combineExceptionLocals(BasicBlock block) {
+		combineLocal(block.endLocal);
+		if (block.reassignedLocal != null) {
+			// 这里省去了uncombine的过程并直接赋值为TOP
+			// 基于以下推导
+			// 1. 若BasicBlock A存在至少一个重赋值，则它与之前的赋值类型至少有一次不同
+			// 也就是说明显是TOP了，啊哈哈，不会有人去研究的
+			for (var itr = block.reassignedLocal.iterator(); itr.hasNext(); ) {
+				startLocal[itr.nextInt()] = Var2.TOP;
 			}
 		}
+		combineLocal(block.startLocal);
+	}
 
-		reachable = true;
+	private boolean comeFrom(BasicBlock parent) {
+		var changed = combineLocal(parent.endLocal);
+
+		Var2[] parentEndState = parent.endStack;
+		int parentEndCount = parentEndState.length;
+
+		Var2[] consumed = consumedStack;
+		if (parentEndCount < consumedStackSize) throw new FastFailException("Attempt to pop empty stack.");
+		for (int i = 0; i < consumedStackSize; i++) {
+			parentEndState[--parentEndCount].copy().verify(consumed[i]);
+		}
+
+		// first time
+		if (!reachable) {
+			reachable = true;
+
+			startStack = Arrays.copyOf(parentEndState, parentEndState.length);
+
+			var stackOut = new Var2[parentEndCount + outStackSize];
+			System.arraycopy(parentEndState, 0, stackOut, 0, parentEndCount);
+			System.arraycopy(outStack, 0, stackOut, parentEndCount, outStackSize);
+			endStack = stackOut;
+
+			return true;
+		} else {
+			if (startStack.length != parentEndState.length)
+				throw new FastFailException("Stack size not match between "+parent+" and initial source\nLen1="+startStack.length+", Len2="+parentEndCount+"\n\nSelf="+this);
+
+			for (int i = 0; i < parentEndState.length; i++) {
+				Var2 change = startStack[i].uncombine(parentEndState[i]);
+				if (change != null) {
+					if (change == Var2.TOP) throw new FastFailException("Cannot commonify "+startStack[i]+" and "+parentEndState[i]);
+
+					startStack[i] = change;
+					changed = true;
+				}
+			}
+
+			for (int i = 0; i < parentEndCount; i++) {
+				Var2 change = endStack[i].uncombine(parentEndState[i]);
+				if (change != null) {
+					if (change == Var2.TOP) throw new FastFailException("Cannot commonify "+endStack[i]+" and "+parentEndState[i]);
+
+					endStack[i] = change;
+					changed = true;
+				}
+			}
+
+			return changed;
+		}
 	}
 
 	@Override
@@ -188,16 +215,16 @@ public class BasicBlock {
 		if (!reachable) sb.append("\n    ！不可达的代码！");
 		sb.append("\n    后续: ").append(Flow.of(successor).map(x -> "#"+x.bci).toList());
 		sb.append("\n    调试:");
-		if (inLocalSize > 0) sb.append("\n     读变量").append(ArrayUtil.toString(inLocal, 0, inLocalSize));
-		if (outLocalSize > 0) sb.append("\n     写变量").append(ArrayUtil.toString(outLocal, 0, outLocalSize));
-		if (inStackSize > 0) sb.append("\n     出栈").append(ArrayUtil.toString(inStack, 0, inStackSize));
+		if (usedLocalCount > 0) sb.append("\n     读变量").append(ArrayUtil.toString(usedLocal, 0, usedLocalCount));
+		if (assignedLocalCount > 0) sb.append("\n     写变量").append(ArrayUtil.toString(assignedLocal, 0, assignedLocalCount));
+		if (consumedStackSize > 0) sb.append("\n     出栈").append(ArrayUtil.toString(consumedStack, 0, consumedStackSize));
 		if (outStackSize > 0) sb.append("\n     入栈").append(ArrayUtil.toString(outStack, 0, outStackSize));
 		sb.append("\n    起始:");
-		if (startLocalSize > 0) sb.append("\n     变量状态").append(ArrayUtil.toString(startLocal, 0, startLocalSize));
-		if (startStackSize > 0) sb.append("\n       栈状态").append(ArrayUtil.toString(startStack, 0, startStackSize));
+		if (startLocal.length > 0) sb.append("\n     变量状态").append(Arrays.toString(startLocal));
+		if (startStack.length > 0) sb.append("\n       栈状态").append(Arrays.toString(startStack));
 		sb.append("\n    结束:");
-		if (endLocalSize > 0) sb.append("\n     变量状态").append(ArrayUtil.toString(endLocal, 0, endLocalSize));
-		if (endStackSize > 0) sb.append("\n       栈状态").append(ArrayUtil.toString(endStack, 0, endStackSize));
+		if (endLocal.length > 0) sb.append("\n     变量状态").append(Arrays.toString(endLocal));
+		if (endStack.length > 0) sb.append("\n       栈状态").append(Arrays.toString(endStack));
 		return sb.toString();
 	}
 }

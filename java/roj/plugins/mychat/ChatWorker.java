@@ -4,7 +4,7 @@ import roj.collect.IntSet;
 import roj.collect.RingBuffer;
 import roj.collect.SimpleList;
 import roj.concurrent.PacketBuffer;
-import roj.http.ws.WebSocketHandler;
+import roj.http.WebSocketConnection;
 import roj.io.IOUtil;
 import roj.net.ChannelCtx;
 import roj.util.ByteList;
@@ -18,7 +18,7 @@ import java.util.List;
  * @author Roj234
  * @since 2022/2/7 18:48
  */
-class ChatWorker extends WebSocketHandler {
+class ChatWorker extends WebSocketConnection {
 	public static final int
 		P_USER_STATE = 1, P_USER_INFO = 2,
 		P_MESSAGE = 3, P_SYS_MESSAGE = 4,
@@ -44,7 +44,7 @@ class ChatWorker extends WebSocketHandler {
 	@Override
 	protected final void onData(int ph, DynByteBuf in) throws IOException {
 		switch (in.readUnsignedByte()) {
-			case P_LOGOUT -> error(ERR_OK, null);
+			case P_LOGOUT -> close(ERR_OK, null);
 			case P_HEARTBEAT -> {
 				in.rIndex--;
 				send(FRAME_BINARY, in);
@@ -57,7 +57,7 @@ class ChatWorker extends WebSocketHandler {
 				while (in.isReadable()) {
 					var u = server.getSubject(in.readInt());
 					if (u == null) {
-						error(ERR_INVALID_DATA, "无效的数据包[UserId]");
+						close(ERR_INVALID_DATA, "无效的数据包[UserId]");
 						break;
 					}
 					sendUserInfo(u);
@@ -66,7 +66,7 @@ class ChatWorker extends WebSocketHandler {
 			case P_MESSAGE -> {
 				var u = server.getSubject(in.readInt());
 				if (u == null) {
-					error(ERR_INVALID_DATA, "无效的数据包[UserId]");
+					close(ERR_INVALID_DATA, "无效的数据包[UserId]");
 				} else {
 					u.sendMessage(server, new Message(user.id, decodeToUTF(in).toString()), false);
 				}
@@ -79,7 +79,7 @@ class ChatWorker extends WebSocketHandler {
 				getHistory(id, decodeToUTF(in), off, len);
 			}
 			case P_COLD_HISTORY -> unloadHistory(in.readInt());
-			default -> error(ERR_INVALID_DATA, "未实现的函数 "+in.get(0));
+			default -> close(ERR_INVALID_DATA, "未实现的函数 "+in.get(0));
 		}
 	}
 
@@ -172,16 +172,15 @@ class ChatWorker extends WebSocketHandler {
 		super.channelTick(ctx);
 
 		if (!pb.isEmpty()) {
-			DynByteBuf b = IOUtil.getSharedByteBuf();
-			b.ensureCapacity(256);
+			var b = IOUtil.getSharedByteBuf();
 
 			while (true) {
 				b.clear();
-				if (pb.take(b) == null || !b.isReadable()) break;
-
-				send(FRAME_BINARY, b);
+				var take = pb.take(b);
+				if (take == null) break;
+				send(FRAME_BINARY, take);
 			}
-		} else if (shutdownInProgress) error(ERR_OK, null);
+		} else if (shutdownInProgress) close(ERR_OK, null);
 	}
 
 	public final void sendUserInfo(ChatSubject user) {

@@ -5,7 +5,6 @@ import roj.asm.type.IType;
 import roj.collect.MyBitSet;
 import roj.collect.MyHashMap;
 import roj.config.serial.CVisitor;
-import roj.config.serial.ToJson;
 import roj.io.FastFailException;
 
 import java.util.List;
@@ -122,15 +121,15 @@ final class MapSer extends Adapter {
 	}
 	private static class ToStringSerializer implements CVisitor {
 		String value;
-		@Override public void value(boolean l) {throw new FastFailException("String excepted");}
-		@Override public void value(int l) {throw new FastFailException("String excepted");}
-		@Override public void value(long l) {throw new FastFailException("String excepted");}
-		@Override public void value(double l) {throw new FastFailException("String excepted");}
-		@Override public void value(String l) {this.value = l;}
+		@Override public void value(boolean b) {throw new FastFailException("键必须是字符串！");}
+		@Override public void value(int i) {throw new FastFailException("键必须是字符串！");}
+		@Override public void value(long i) {throw new FastFailException("键必须是字符串！");}
+		@Override public void value(double i) {throw new FastFailException("键必须是字符串！");}
+		@Override public void value(String s) {this.value = s;}
 		@Override public void valueNull() {value("null");}
-		@Override public void valueMap() {throw new FastFailException("String excepted");}
+		@Override public void valueMap() {throw new FastFailException("键必须是字符串！");}
 		@Override public void key(String key) {}
-		@Override public void valueList() {throw new FastFailException("String excepted");}
+		@Override public void valueList() {throw new FastFailException("键必须是字符串！");}
 		@Override public void pop() {}
 		@Override public CVisitor reset() {return this;}
 	}

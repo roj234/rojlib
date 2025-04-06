@@ -26,7 +26,7 @@ public class ObfUtil {
 
 	static {
 		try {
-			ClassNode total = Parser.parseConstants(IOUtil.getResource("roj/plugins/obfuscator/ObfUtil.class"));
+			ClassNode total = Parser.parseConstants(IOUtil.getResourceIL("roj/plugins/obfuscator/ObfUtil.class"));
 			MethodNode txa = total.getMethodObj("TextXORA").parsed(total.cp);
 			//txa.code.attributes.clear();
 			textXOR_A = txa;

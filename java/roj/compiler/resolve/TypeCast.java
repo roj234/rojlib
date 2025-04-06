@@ -126,6 +126,7 @@ public class TypeCast {
 
 	// region 'macro'
 	public static Cast RESULT(int type, int distance) { return new Cast(type, distance); }
+	public static Cast ANYCAST(int type, IType to) { return new Cast(type, 0).setAnyCast(to); }
 	private static final Cast[] SOLID = new Cast[6];
 	static {
 		for (int i = E_NEVER; i <= E_DOWNCAST; i++) {
@@ -517,7 +518,7 @@ public class TypeCast {
 		// 本来是不该发生的（前面检测了），但是说不定未来会支持class aliasing呢/doge
 		if (fromClass == toClass) return RESULT(UPCAST, 0);
 
-		int distance = context.getParentList(fromClass).getValueOrDefault(toClass.name(), -1)&0xFFFF;
+		int distance = context.getHierarchyList(fromClass).getValueOrDefault(toClass.name(), -1)&0xFFFF;
 		if (distance != 0xFFFF) return RESULT(UPCAST, distance);
 
 		// to.parent == null => !Object (alias object or ??)

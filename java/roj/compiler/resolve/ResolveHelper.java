@@ -126,7 +126,7 @@ public final class ResolveHelper {
 
 				list.putByValue((justAnId++ << 16) | castDistance, name);
 
-				for (var entry : ctx.getParentList(itfInfo).selfEntrySet()) {
+				for (var entry : ctx.getHierarchyList(itfInfo).selfEntrySet()) {
 					int id = entry.getIntKey();
 					name = entry.getValue();
 
@@ -303,7 +303,7 @@ public final class ResolveHelper {
 											prev.add(ctx.getClassInfo(node.owner), node);
 									}
 								} else {
-									MethodNode node = ((MethodListSingle) list).node;
+									MethodNode node = ((MethodListSingle) list).method;
 									tmpDesc.param = node.rawDesc();
 									if (!bridgeIgnore.contains(tmpDesc))
 										prev.add(ctx.getClassInfo(node.owner), node);
@@ -441,18 +441,23 @@ public final class ResolveHelper {
 	// endregion
 	private volatile Map<String, InnerClasses.Item> subclassDecl;
 
-	public Map<String, InnerClasses.Item> getInnerClasses() {
+	/**
+	 * 自己或继承的内部类，只包含真正的内部类，不包含对外部的内部类的引用，感觉也用不上，给反编译用的，大家好像都在用$判断
+	 */
+	public Map<String, InnerClasses.Item> getInnerClasses(GlobalContext ctx) {
 		if (subclassDecl == null) {
 			synchronized (this) {
 				if (subclassDecl != null) return subclassDecl;
 				var classes = owner.getAttribute(owner.cp(), Attribute.InnerClasses);
 				if (classes == null) return subclassDecl = Collections.emptyMap();
 
-				MyHashMap<String, InnerClasses.Item> decl = new MyHashMap<>();
+				var parentDecl = ctx.getInnerClassFlags(ctx.getClassInfo(owner.parent()));
+				var decl = new MyHashMap<>(parentDecl);
+
 				var list = classes.classes;
 				for (int i = 0; i < list.size(); i++) {
 					var ref = list.get(i);
-					if (ref.name != null/* && owner.name().equals(ref.parent)*/) {
+					if (ref.name != null && (owner.name().equals(ref.parent) || owner.name().equals(ref.self))) {
 						decl.put("!"+ref.name, ref);
 						decl.put(ref.self, ref);
 					}

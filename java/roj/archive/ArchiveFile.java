@@ -11,7 +11,7 @@ import java.util.Collection;
  * @author Roj234
  * @since 2023/3/15 0015 8:37
  */
-public interface ArchiveFile extends Closeable, MultiFileSource {
+public interface ArchiveFile extends Closeable {
 	void close() throws IOException;
 	/**
 	 * Reload this archive file from disk, discarding any unsaved changes

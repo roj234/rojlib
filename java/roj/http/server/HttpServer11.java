@@ -2,7 +2,6 @@ package roj.http.server;
 
 import roj.ReferenceByGeneratedClass;
 import roj.config.Tokenizer;
-import roj.crypt.CRC32s;
 import roj.http.*;
 import roj.io.FastFailException;
 import roj.io.IOUtil;
@@ -29,15 +28,16 @@ import java.net.StandardSocketOptions;
 import java.util.List;
 import java.util.zip.Deflater;
 
-public final class HttpServer11 extends PacketMerger implements PostSetting, ResponseHeader, ResponseWriter {
+public final class HttpServer11 extends PacketMerger implements PostSetting, ResponseHeader, ContentWriter {
 	public static final Logger LOGGER = Logger.getLogger("IIS");
-	//region 用户可修改？？
+	//region 使用Nixim注入的函数
 	public static final String SERVER_NAME = "openresty";
 	@ReferenceByGeneratedClass
-	static Response onUncaughtError(Request req, Throwable e) {return Response.httpError(500);}
+	static Content onUncaughtError(Request req, Throwable e) {return Content.httpError(500);}
+	@ReferenceByGeneratedClass
 	private void accessLog() {
 		var sb = IOUtil.getSharedCharBuf();
-		req.headerLine(sb.append(((InetSocketAddress) ch.remoteAddress()).getHostString())
+		req.firstLine(sb.append(((InetSocketAddress) ch.remoteAddress()).getHostString())
 		  .append(" ")
 		  .append("\""))
 		  .append("\" ")
@@ -47,9 +47,9 @@ public final class HttpServer11 extends PacketMerger implements PostSetting, Res
 		  .append(' ')
 		  .append(sendBytes)
 		  .append(" \"")
-		  .append(Tokenizer.addSlashes(req.getField("user-agent")))
+		  .append(Tokenizer.addSlashes(req.header("user-agent")))
 		  .append("\"[");
-		if (def != null) sb.append('Z');
+		if (ch.channel().handler(hDeflate.ANCHOR) != null) sb.append('Z');
 		if (state == HANG_PRE) sb.append('A');
 		LOGGER.trace(sb.append(']').toString());
 
@@ -62,13 +62,13 @@ public final class HttpServer11 extends PacketMerger implements PostSetting, Res
 		return ServerLaunch.tcp(name)
 						   .bind(addr, backlog)
 						   .option(StandardSocketOptions.SO_REUSEADDR, true)
-						   .initializator((ctx) -> ctx.addLast("h2c@test", new H2C(router)).addLast("h11@server", create(router)));
+						   .initializator((ctx) -> ctx.addLast("http:h2_test", new H2Test(router)).addLast("http:server", create(router)));
 	}
 
 	// state
 	private static final byte UNOPENED = 0, RECV_HEAD = 1, RECV_BODY = 2, PROCESSING = 3, SEND_BODY = 4, HANG_PRE = 5, HANG = 6, CLOSED = 7;
 	// flag
-	static final byte KEPT_ALIVE = 1, FLAG_ERRORED = 2, FLAG_COMPRESS = 8, FLAG_GZIP = 16, FLAG_ASYNC = 32, FLAG_UNSHARED = 64;
+	static final byte KEPT_ALIVE = 1, FLAG_ERRORED = 2, FLAG_COMPRESS = 8, FLAG_GZIP = 16, FLAG_ASYNC = 32;
 
 	private byte state, flag;
 	private long time;
@@ -78,13 +78,13 @@ public final class HttpServer11 extends PacketMerger implements PostSetting, Res
 
 	private Request req;
 
-	private HFinishHandler fh;
-	private HPostHandler ph;
+	private RequestFinishHandler fh;
+	private BodyParser ph;
 
 	private ByteList postBuffer;
 
 	private short code;
-	private Response body;
+	private Content body;
 
 	//仅用于生成访问日志
 	private long receivedBytes, sendBytes;
@@ -121,10 +121,10 @@ public final class HttpServer11 extends PacketMerger implements PostSetting, Res
 					}
 
 					time += 100;
-					if (state != PROCESSING) body = Response.httpError(code = HttpUtil.TIMEOUT);
-					else {
+					if (state != PROCESSING) body = Content.httpError(code = HttpUtil.TIMEOUT);
+					else if (fh == null || !fh.onResponseTimeout(this)) {
 						code = 504;
-						body = Response.internalError("异步处理超时\n在规定的时间内未收到响应头，请求代理失败");
+						body = Content.internalError("异步处理超时\n在规定的时间内未收到响应头，请求代理失败");
 					}
 					die();
 					sendHead();
@@ -135,7 +135,7 @@ public final class HttpServer11 extends PacketMerger implements PostSetting, Res
 					if (ctx.isInputOpen()) {
 						time = System.currentTimeMillis() + router.keepaliveTimeout();
 
-						var prev = HttpCache.getInstance().hanging.ringAddLast(this);
+						var prev = HSConfig.getInstance().keepalive.ringAddLast(this);
 						if (prev != null) prev.ch.close();
 						state = HANG;
 						break;
@@ -153,13 +153,13 @@ public final class HttpServer11 extends PacketMerger implements PostSetting, Res
 	@Override
 	@SuppressWarnings("fallthrough")
 	public void channelRead(ChannelCtx ctx, Object o) throws IOException {
-		DynByteBuf data = (DynByteBuf) o;
+		DynByteBuf buf = (DynByteBuf) o;
 		switch (state) {
-			case HANG: HttpCache.getInstance().hanging.remove(this);
+			case HANG: HSConfig.getInstance().keepalive.remove(this);
 			case HANG_PRE:
 				time = System.currentTimeMillis() + router.readTimeout(null);
 				state = RECV_HEAD;
-			case RECV_HEAD:
+			case RECV_HEAD: {
 				// first line
 				if (req == null) {
 					headerLen = router.maxHeaderSize();
@@ -167,7 +167,7 @@ public final class HttpServer11 extends PacketMerger implements PostSetting, Res
 					String method, path, version, query;
 
 					success: {
-						String line = HttpHead.readCRLF(data);
+						String line = HttpHead.readCRLF(buf);
 						if (line == null) return;
 						if (line.length() > 8192) throw new IllegalRequestException(HttpUtil.URI_TOO_LONG);
 
@@ -191,20 +191,20 @@ public final class HttpServer11 extends PacketMerger implements PostSetting, Res
 						throw IllegalRequestException.badRequest("无效请求头 "+line);
 					}
 
-					byte act = HttpUtil.parseMethod(method);
+					byte act = HttpUtil.getMethodId(method);
 					if (act < 0) throw IllegalRequestException.badRequest("无效请求类型 "+method);
 
-					req = HttpCache.getInstance().request().init(act, path, query, version);
-					req.handler = this;
+					req = HSConfig.getInstance().request().init(act, path, query, version);
+					req.server = this;
 				}
 
 				// headers
 				Headers h = req;
 				try {
-					int avail = data.readableBytes();
-					boolean finish = h.parseHead(data, IOUtil.getSharedByteBuf());
+					int avail = buf.readableBytes();
+					boolean finish = Headers.parseHeader(h, buf, IOUtil.getSharedByteBuf());
 
-					if((headerLen -= avail-data.readableBytes()) < 0) throw new IllegalRequestException(431);
+					if((headerLen -= avail-buf.readableBytes()) < 0) throw new IllegalRequestException(431);
 
 					if (!finish) return;
 				} catch (IllegalArgumentException e) {
@@ -223,8 +223,11 @@ public final class HttpServer11 extends PacketMerger implements PostSetting, Res
 					return;
 				}
 
-				if (TextUtil.isNumber(lenStr) != 0) throw IllegalRequestException.badRequest("content-length非法");
-				exceptPostSize = lenStr != null ? Long.parseLong(lenStr) : -1;
+				if (lenStr != null) {
+					if (TextUtil.isNumber(lenStr) != 0) throw IllegalRequestException.badRequest("content-length非法");
+					exceptPostSize = Long.parseLong(lenStr);
+				}
+				else exceptPostSize = -1;
 				postSize = -1;
 
 				if (checkHeader(ctx, this)) return;
@@ -234,62 +237,41 @@ public final class HttpServer11 extends PacketMerger implements PostSetting, Res
 
 				if (lenStr != null) {
 					if (exceptPostSize > postSize) throw new IllegalRequestException(req.isExpecting() ? 417 : HttpUtil.ENTITY_TOO_LARGE);
-					if (req.isExpecting()) {
-						try {
-							ByteList hdr = IOUtil.getSharedByteBuf();
-							ch.channelWrite(hdr.putAscii("HTTP/1.1 100 Continue\r\n\r\n"));
-						} catch (IOException e) {
-							Helpers.athrow(e);
-						}
-					}
-
 					preparePostBuffer(ctx, postSize = exceptPostSize);
 				} else if (chunk) {
+					// 不知道请求体长度，准备一个最大长度的缓冲区
 					preparePostBuffer(ctx, postSize);
 				} else {
-					throw IllegalRequestException.badRequest("不支持的传输编码 "+encoding);
+					throw req.isExpecting() ? new IllegalRequestException(417) : IllegalRequestException.badRequest("不支持的传输编码 "+encoding);
+				}
+
+				if (req.isExpecting()) {
+					try {
+						ByteList hdr = IOUtil.getSharedByteBuf();
+						ch.channelWrite(hdr.putAscii("HTTP/1.1 100 Continue\r\n\r\n"));
+					} catch (IOException e) {
+						Helpers.athrow(e);
+					}
 				}
 
 				state = RECV_BODY;
 
-				if (chunk) {
-					ctx = HttpClient11.setChunk(ctx, -1);
-					ctx.handler().channelRead(ctx, o);
-					return;
-				}
+				// 只有提供BodyParser时才自动解压缩
+				ctx = hCE.apply(ctx, req, ph == null, postSize);
+				ctx = hTE.apply(ctx, req, -1);
+
+				ctx.handler().channelRead(ctx, o);
+				return;
+			}
 			case RECV_BODY:
-				receivedBytes += data.readableBytes();
-				long remain = postSize-data.readableBytes();
-				//noinspection TextLabelInSwitchStatement
-				_if:
-				if (remain <= 0) {
-					if (!req.containsKey("content-length")) {
-						if (remain == 0) break _if;
-						die().code(HttpUtil.ENTITY_TOO_LARGE);
-					} else {
-						int w = data.wIndex();
-						data.wIndex(data.rIndex+(int)postSize);
-
-						if (ph != null) mergedRead(ctx, data);
-						else if (postBuffer != null) postBuffer.put(data);
-
-						data.rIndex = data.wIndex();
-						data.wIndex(w);
-
-						req.postFields = ph == null ? postBuffer : ph;
-						process();
-					}
-					return;
-				}
-
-				postSize -= data.readableBytes();
+				receivedBytes += buf.readableBytes();
 				if (ph != null) {
-					mergedRead(ctx, data);
+					mergedRead(ctx, buf);
 				} else if (postBuffer != null) {
-					postBuffer.put(data);
+					postBuffer.put(buf);
 				}
-				data.clear();
-				break;
+				buf.rIndex = buf.wIndex();
+			break;
 			case PROCESSING: throw new IOException("Unexpected PROCESSING");
 			default: ch.readInactive();
 		}
@@ -318,7 +300,7 @@ public final class HttpServer11 extends PacketMerger implements PostSetting, Res
 		time += t;
 	}
 	public boolean postAccepted() {return state == RECV_BODY;}
-	public void postHandler(HPostHandler o) {ph = o; ch.channel().addAfter(ch, "h11@body_handler", o);}
+	public void postHandler(BodyParser o) {ph = o; ch.channel().addAfter(ch, "http:body_parser", o);}
 
 	private static void validateHeader(Headers h) throws IllegalRequestException {
 		int c = h.getCount("content-length");
@@ -329,21 +311,25 @@ public final class HttpServer11 extends PacketMerger implements PostSetting, Res
 				if (!list.get(i).equals(list.get(0))) throw IllegalRequestException.badRequest("content-length头部长度不统一");
 			}
 		}
+		//if (h.getCount("host") != 1) throw IllegalRequestException.badRequest("host数量不为一");
 		if (c > 0 && h.containsKey("transfer-encoding")) throw IllegalRequestException.badRequest("已知长度时使用transfer-encoding头部");
 	}
 
 	@Override
 	public void onEvent(ChannelCtx ctx, Event event) throws IOException {
 		String id = event.id;
-		if (id.equals(MyChannel.IN_EOF) || id.equals(HChunk.EVENT_IN_END)) {
-			if (state == RECV_BODY) {
-				req.postFields = ph == null ? postBuffer : ph;
-				process();
-			} else if (state < RECV_BODY || state > SEND_BODY) {
-				assert id.equals(MyChannel.IN_EOF); // close
-				return;
+		switch (id) {
+			case MyChannel.IN_EOF, hTE.IN_END -> {
+				if (state == RECV_BODY) {
+					processWithBody();
+				} else if (state < RECV_BODY || state > SEND_BODY) {
+					assert id.equals(MyChannel.IN_EOF); // close
+					return;
+				}
+				event.setResult(Event.RESULT_ACCEPT);
 			}
-			event.setResult(Event.RESULT_ACCEPT);
+			case hCE.IN_END -> processWithBody();
+			case hCE.TOO_MANY_DATA -> die().code(HttpUtil.ENTITY_TOO_LARGE);
 		}
 	}
 	//endregion
@@ -388,6 +374,10 @@ public final class HttpServer11 extends PacketMerger implements PostSetting, Res
 		}
 		return false;
 	}
+	private void processWithBody() throws IOException {
+		req.bodyData = ph == null ? postBuffer : ph;
+		process();
+	}
 	private void process() throws IOException {
 		// 两个请求可能连在一起
 		ch.readInactive();
@@ -395,8 +385,9 @@ public final class HttpServer11 extends PacketMerger implements PostSetting, Res
 		state = PROCESSING;
 		try {
 			if (ph != null) {
-				mergedRead(ch, ByteList.EMPTY);
-				ph.onSuccess();
+				ph.onSuccess(merged);
+				BufferPool.reserve(merged);
+				merged = null;
 			}
 			if ((flag&SEND_BODY) != 0) return;
 
@@ -409,9 +400,9 @@ public final class HttpServer11 extends PacketMerger implements PostSetting, Res
 		}
 
 		// handlerRemoved() in response()
-		if (ch != null) {
-			time = System.currentTimeMillis() + router.writeTimeout(req, body);
-			if ((flag & FLAG_ASYNC) == 0 || body != null) sendHead();
+		if (ch != null && ((flag & FLAG_ASYNC) == 0 || body != null)) {
+			time += System.currentTimeMillis() + router.writeTimeout(req, body);
+			sendHead();
 		}
 	}
 	private void onError(Throwable e) throws IOException {
@@ -420,14 +411,14 @@ public final class HttpServer11 extends PacketMerger implements PostSetting, Res
 		}
 
 		if (e instanceof IllegalRequestException ire) {
-			code = (short) ire.code;
+			if (ire.code != 0) code = (short) ire.code;
 			body = ire.createResponse();
 		} else {
 			code = 500;
 			body = onUncaughtError(req, e);
 
 			if (LOGGER.canLog(Level.WARN))
-				LOGGER.warn(req.headerLine(new CharList("处理请求")).append("时发生异常").toStringAndFree(), e);
+				LOGGER.warn(req.firstLine(new CharList("处理请求")).append("时发生异常").toStringAndFree(), e);
 		}
 
 		sendHead();
@@ -436,32 +427,32 @@ public final class HttpServer11 extends PacketMerger implements PostSetting, Res
 	//region Write head
 	private void sendHead() throws IOException {
 		if (code == 0) code = 200;
-		if (body == Response.EMPTY) body = null; // fast path
+		if (body == Content.EMPTY) body = null; // fast path
 
 		req.packToHeader();
 		Headers h = req.responseHeader;
 
-		if ("close".equalsIgnoreCase(req.getField("connection"))) h.put("connection", "close");
+		if ("close".equalsIgnoreCase(req.header("connection"))) h.put("connection", "close");
 		else if ((flag & KEPT_ALIVE) == 0) {
 			h.put("server", SERVER_NAME);
 			h.putIfAbsent("connection", "keep-alive");
 			//h.putIfAbsent("keep-alive", "timeout="+router.keepaliveTimeout()/1000);
 		}
 
-		int enc = HttpCache.ENC_PLAIN;
+		int enc = HSConfig.ENC_PLAIN;
 		if (body == null) h.put("content-length", "0");
 		else {
 			body.prepare(this, h);
-			if ((flag & FLAG_COMPRESS) != 0 && req.containsKey("accept-encoding") && !h.containsKey("content-encoding") && !h.getField("content-length").equals("0")) {
-				enc = HttpCache.getInstance().parseAcceptEncoding(req.get("accept-encoding"));
+			if ((flag & FLAG_COMPRESS) != 0 && req.containsKey("accept-encoding") && !h.containsKey("content-encoding") && !h.header("content-length").equals("0")) {
+				enc = HSConfig.getInstance().parseAcceptEncoding(req.get("accept-encoding"));
 			}
 		}
 
-		var hdr = new ByteList().putAscii("HTTP/1.1 ").putAscii(Integer.toString(code)).put(' ').putAscii(HttpUtil.getDescription(code)).putAscii("\r\n");
+		var hdr = new ByteList().putAscii("HTTP/1.1 ").putAscii(Integer.toString(code)).put(' ').putAscii(HttpUtil.getCodeDescription(code)).putAscii("\r\n");
 
-		boolean chunk = enc != HttpCache.ENC_PLAIN || (!"close".equals(h.get("connection")) && !h.containsKey("content-length"));
-		ChannelCtx out = chunk ? HttpClient11.setChunk(ch, 1) : ch;
-		setCompr(ch, enc, hdr);
+		boolean chunk = enc != HSConfig.ENC_PLAIN || (!"close".equals(h.get("connection")) && !h.containsKey("content-length"));
+		ChannelCtx out = chunk ? hTE.apply(ch, null, 1) : ch;
+		deflate(ch, enc, hdr);
 
 		if (chunk) {
 			h.remove("content-length");
@@ -478,7 +469,7 @@ public final class HttpServer11 extends PacketMerger implements PostSetting, Res
 			flag |= SEND_BODY;
 		}
 
-		if (enc == HttpCache.ENC_GZIP) {
+		if (enc == HSConfig.ENC_GZIP) {
 			hdr.clear();
 			hdr.putShort(0x1f8b).putLong((long) Deflater.DEFLATED << 56);
 			out.handler().channelWrite(out, hdr);
@@ -487,7 +478,7 @@ public final class HttpServer11 extends PacketMerger implements PostSetting, Res
 	}
 	//endregion
 	//region ResponseHeader
-	@Override public MyChannel ch() {return ch.channel();}
+	@Override public MyChannel connection() {return ch.channel();}
 	@Override public String _getState() {
 		return switch (state) {
 			case UNOPENED -> "UNOPENED";
@@ -505,10 +496,8 @@ public final class HttpServer11 extends PacketMerger implements PostSetting, Res
 
 	@Override public ResponseHeader code(int code) {this.code = (short) code;return this;}
 	@Override public ResponseHeader die() {req.responseHeader.put("connection", "close");return this;}
-	@Override public void unsharedRequest() {flag |= FLAG_UNSHARED;}
-	@Override public void sharedRequest() {flag &= ~FLAG_UNSHARED;}
-	@Override public ResponseHeader enableAsyncResponse() {flag |= FLAG_ASYNC;return this;}
-	@Override public void body(Response resp) throws IOException {
+	@Override public ResponseHeader enableAsyncResponse(int extraTimeMs) {flag |= FLAG_ASYNC;time = System.currentTimeMillis()+extraTimeMs;return this;}
+	@Override public void body(Content resp) throws IOException {
 		if ((flag & FLAG_ASYNC) == 0) {
 			if (state != RECV_HEAD) {
 				this.body = resp;
@@ -548,13 +537,13 @@ public final class HttpServer11 extends PacketMerger implements PostSetting, Res
 	private static final int NOOB_LIMIT = 4080;
 	private SpeedLimiter limiter;
 
-	@Override public int getStreamLimit() {return limiter == null ? 0 : limiter.getBytePerSecond();}
-	@Override public void setStreamLimit(int bps) {
+	@Override public int getSpeedLimit() {return limiter == null ? 0 : limiter.getBytePerSecond();}
+	@Override public void limitSpeed(int bps) {
 		if (limiter == null) limiter = new SpeedLimiter(NOOB_LIMIT, 5_000_000);
 		limiter.setBytePerSecond(bps);
 	}
-	@Override public void setStreamLimit(SpeedLimiter limiter) {this.limiter = limiter;}
-	@Override public SpeedLimiter getStreamLimiter() {return limiter;}
+	@Override public void limitSpeed(SpeedLimiter limiter) {this.limiter = limiter;}
+	@Override public SpeedLimiter getSpeedLimiter() {return limiter;}
 
 	public void write(DynByteBuf buf) throws IOException {
 		if ((flag&SEND_BODY) == 0) throw new IllegalStateException();
@@ -562,7 +551,6 @@ public final class HttpServer11 extends PacketMerger implements PostSetting, Res
 		int len = buf.readableBytes();
 		if (ch.isFlushing() || limiter != null && (len = limiter.limit(len)) <= 0) return;
 
-		if ((flag & FLAG_GZIP) != 0) crc = CRC32s.update(crc, buf);
 		ch.channelWrite(len < buf.readableBytes() ? buf.slice(len) : buf);
 		sendBytes += len;
 	}
@@ -585,9 +573,6 @@ public final class HttpServer11 extends PacketMerger implements PostSetting, Res
 
 				totalRead += r;
 
-				if ((flag & FLAG_GZIP) != 0) {
-					crc = CRC32s.update(crc, buf.array(), buf.arrayOffset(), r);
-				}
 				ch.channelWrite(buf);
 				if (ch.isFlushing()) break;
 				buf.clear();
@@ -605,26 +590,34 @@ public final class HttpServer11 extends PacketMerger implements PostSetting, Res
 		time = System.currentTimeMillis() + 100;
 
 		if (ch.isOutputOpen()) {
-			if (def != null) ch.postEvent(HCompress.EVENT_CLOSE_OUT);
+			ch.postEvent(hDeflate.OUT_FINISH);
 			if ((flag & FLAG_GZIP) != 0) {
-				var buf = ch.allocate(false, 8).putIntLE(CRC32s.retVal(crc)).putIntLE(def.getTotalIn());
+				var hd = (hDeflate) ch.channel().handler(hDeflate.ANCHOR).handler();
+				var buf = ch.allocate(false, 8).putIntLE(hd.getOutCrc()).putIntLE(hd.getDef().getTotalIn());
 				try {
-					var ctx = ch.channel().handler("h11@chunk");
+					var ctx = ch.channel().handler(hTE.ANCHOR);
 					// noinspection all
 					ctx.handler().channelWrite(ctx, buf);
 				} finally {
 					BufferPool.reserve(buf);
 				}
 			}
-			ch.postEvent(HChunk.EVENT_CLOSE_OUT);
+			ch.postEvent(hTE.OUT_FINISH);
 		}
 
-		if (fh != null && fh.onRequestFinish(this)) {
-			state = CLOSED;
-			finish(true);
-			ch.readActive();
-			ch.removeSelf();
-			return true;
+		try {
+			if (fh != null && fh.onRequestFinish(this, !hasError())) {
+				state = CLOSED;
+				finish(true);
+				MyChannel channel = ch.channel();
+				ch.removeSelf();
+				channel.fireOpen();
+				channel.readActive();
+				return true;
+			}
+			fh = null;
+		} catch (Exception e) {
+			LOGGER.warn("onRequestFinish时发生了异常", e);
 		}
 
 		if ("close".equalsIgnoreCase(req.responseHeader.get("connection"))) {
@@ -648,52 +641,51 @@ public final class HttpServer11 extends PacketMerger implements PostSetting, Res
 		finish(true);
 
 		ch = null;
-		ctx.channel().remove("h11@compr");
-		ctx.channel().remove("h11@chunk");
+		ctx.channel().remove(hDeflate.ANCHOR);
+		ctx.channel().remove(hCE.ANCHOR);
+		ctx.channel().remove(hTE.ANCHOR);
 	}
 
-	private int crc;
-	private Deflater def;
+	private void deflate(ChannelCtx ctx, int enc, ByteList hdr) {
+		hDeflate hd;
 
-	private void setCompr(ChannelCtx ctx, int enc, ByteList hdr) {
-		if (def != null) {
-			HttpCache.getInstance().reserve(def, (flag&FLAG_GZIP) != 0);
-			def = null;
-		}
-
-		HCompress sc;
-
-		var hwarp = ctx.channel().handler("h11@compr");
-		if (hwarp == null) {
-			if (enc == HttpCache.ENC_PLAIN) return;
-			ctx.channel().addBefore(ctx, "h11@compr", sc = new HCompress(1024));
+		var exist = ctx.channel().handler(hDeflate.ANCHOR);
+		if (exist == null) {
+			if (enc == HSConfig.ENC_PLAIN) return;
+			ctx.channel().addBefore(ctx, hDeflate.ANCHOR, hd = new hDeflate(1024));
 		} else {
-			sc = (HCompress) hwarp.handler();
+			hd = (hDeflate) exist.handler();
+
+			if (enc == HSConfig.ENC_PLAIN) {
+				if (hd.getDef() != null) {
+					HSConfig.getInstance().reserve(hd.getDef(), (flag&FLAG_GZIP) != 0);
+					hd.setDef(null);
+				}
+				return;
+			}
 		}
 
-		if (enc != HttpCache.ENC_PLAIN) {
-			int level = Deflater.DEFAULT_COMPRESSION;
-			if (req != null) {
-				String levelStr = req.responseHeader.remove(":compression-level");
-				if (levelStr != null) level = Integer.parseInt(levelStr);
-			}
+		int level = Deflater.DEFAULT_COMPRESSION;
+		if (req != null) {
+			String levelStr = req.responseHeader.remove(":compression-level");
+			if (levelStr != null) level = Integer.parseInt(levelStr);
+		}
 
-			switch (enc) {
-				case HttpCache.ENC_GZIP:
-					def = HttpCache.getInstance().deflater(true);
-					flag |= FLAG_GZIP;
-					crc = CRC32s.INIT_CRC;
-					hdr.putAscii("content-encoding: gzip\r\n");
-					break;
-				case HttpCache.ENC_DEFLATE:
-					def = HttpCache.getInstance().deflater(false);
-					flag &= ~FLAG_GZIP;
-					hdr.putAscii("content-encoding: deflate\r\n");
-					break;
-			}
-			def.setLevel(level);
-			sc.setDef(def);
-		} else sc.setDef(null);
+		Deflater def;
+		if (enc == HSConfig.ENC_GZIP) {
+			def = HSConfig.getInstance().deflater(true);
+			hd.setOutCrc(true);
+			flag |= FLAG_GZIP;
+			hdr.putAscii("content-encoding: gzip\r\n");
+		} else {
+			def = HSConfig.getInstance().deflater(false);
+			hd.setOutCrc(false);
+			flag &= ~FLAG_GZIP;
+			hdr.putAscii("content-encoding: deflate\r\n");
+		}
+
+		def.setLevel(level);
+		hd.setDef(def);
 	}
 	//endregion
 	//region Finish & Close
@@ -704,13 +696,13 @@ public final class HttpServer11 extends PacketMerger implements PostSetting, Res
 	}
 
 	private void finish(boolean close) {
-		var t = HttpCache.getInstance();
+		var t = HSConfig.getInstance();
 
-		if (state == HANG) t.hanging.remove(this);
+		if (state == HANG) t.keepalive.remove(this);
 
 		Exception e = null;
 		if (ph != null) {
-			ch.channel().remove("h11@body_handler");
+			ch.channel().remove("http:body_parser");
 			try {
 				ph.onComplete();
 			} catch (Exception e1) {
@@ -730,7 +722,7 @@ public final class HttpServer11 extends PacketMerger implements PostSetting, Res
 
 		if (req != null) {
 			if (LOGGER.canLog(Level.TRACE)) accessLog();
-			if ((flag&FLAG_UNSHARED) == 0) t.reserve(req);
+			t.reserve(req);
 			req = null;
 		}
 
@@ -744,8 +736,11 @@ public final class HttpServer11 extends PacketMerger implements PostSetting, Res
 		flag = KEPT_ALIVE;
 		limiter = null;
 
-		HttpClient11.setChunk(ch, 0);
-		setCompr(ch, HttpCache.ENC_PLAIN, null);
+		hCE.reset(ch);
+		hTE.reset(ch);
+		deflate(ch, HSConfig.ENC_PLAIN, null);
+
+		if (fh != null) fh.onRequestFinish(this, false);
 
 		try {
 			super.channelClosed(ch);
@@ -756,7 +751,7 @@ public final class HttpServer11 extends PacketMerger implements PostSetting, Res
 		if (e != null) Helpers.athrow(e);
 	}
 
-	public void onFinish(HFinishHandler o) {fh = o;}
+	public void onFinish(RequestFinishHandler o) {fh = o;}
 	public boolean hasError() {return (flag & FLAG_ERRORED) != 0;}
 	//endregion
 }

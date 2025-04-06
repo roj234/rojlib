@@ -29,7 +29,7 @@ public class TextWriter extends CharList implements Closeable, Finishable {
 	private final byte type;
 
 	private final CharsetEncoder ce;
-	private final UnsafeCharset ucs;
+	private final FastCharset ucs;
 	private final ByteBuffer ob;
 	private CharBuffer ib;
 
@@ -59,7 +59,7 @@ public class TextWriter extends CharList implements Closeable, Finishable {
 		this.list = ArrayCache.getCharArray(512, false);
 		this.out = out;
 
-		var _ucs = UnsafeCharset.getInstance(charset);
+		var _ucs = FastCharset.getInstance(charset);
 		if (_ucs != null) {
 			ucs = _ucs;
 			ce = null;

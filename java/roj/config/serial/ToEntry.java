@@ -24,17 +24,17 @@ public class ToEntry implements CVisitor {
 	private int maxDepth = 100;
 	private byte flag;
 
-	public final void value(boolean l) { add(CEntry.valueOf(l)); }
-	public final void value(byte l) { add(CEntry.valueOf(l)); }
-	public final void value(short l) { add(CEntry.valueOf(l)); }
-	public final void value(int l) { add(CEntry.valueOf(l)); }
-	public final void value(long l) { add(CEntry.valueOf(l)); }
-	public final void value(float l) { add(CEntry.valueOf(l)); }
-	public final void value(double l) { add(CEntry.valueOf(l));}
-	public final void value(String l) { add(CEntry.valueOf(l)); }
+	public final void value(boolean b) { add(CEntry.valueOf(b)); }
+	public final void value(byte i) { add(CEntry.valueOf(i)); }
+	public final void value(short i) { add(CEntry.valueOf(i)); }
+	public final void value(int i) { add(CEntry.valueOf(i)); }
+	public final void value(long i) { add(CEntry.valueOf(i)); }
+	public final void value(float i) { add(CEntry.valueOf(i)); }
+	public final void value(double i) { add(CEntry.valueOf(i));}
+	public final void value(String s) { add(CEntry.valueOf(s)); }
 	public final void valueNull() { add(CNull.NULL); }
-	public final void valueDate(long value) {add(new CDate(value));}
-	public final void valueTimestamp(long value) {add(new CTimestamp(value));}
+	public final void valueDate(long mills) {add(new CDate(mills));}
+	public final void valueTimestamp(long mills) {add(new CTimestamp(mills));}
 	public final boolean supportArray() {return true;}
 	public final void value(byte[] ba) { add(new CByteArray(ba)); }
 	public final void value(int[] ia) { add(new CIntArray(ia)); }

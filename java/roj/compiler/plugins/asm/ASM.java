@@ -18,19 +18,18 @@ public class ASM {
 	}
 
 	/**
-	 * 获取注入的属性
-	 * @return 返回类型为属性或def的真实类型，不一定是对象，并且可能随属性注入改变
+	 * 获取通过编译器参数或插件注入的'属性'，虽然方法签名是泛型，但实际值可以是任意表达式，并且可能和def类型不同
 	 */
 	public static <T> T inject(String name, T def) {return def;}
 
 	/**
-	 * 执行AsmExpr, *编译时/受限执行环境
+	 * 在编译期间修改生成的字节码，若ASM插件已加载，它将返回false常量，你可以用它实现条件编译，这个lambda表达式无法使用方法中的变量，并且会在受限环境中执行
 	 * @return true => 不在Lavac环境中
 	 */
-	public static boolean __asm(Consumer<CodeWriter> asm) {return true;}
+	public static boolean asm(Consumer<CodeWriter> asm) {return true;}
 
 	/**
-	 * 强制泛型转换
+	 * 泛型类型的无条件转换，例如将List&lt;String&gt;转换为List&lt;Integer&gt;
 	 * @see roj.util.Helpers#cast(Object)
 	 */
 	@SuppressWarnings("unchecked")

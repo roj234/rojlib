@@ -130,7 +130,7 @@ public class LambdaLinker {
 
 		lctx.setClass(u);
 		lctx.lexer.index = 0;
-		lctx.lexer.setState(JavaLexer.STATE_EXPR);
+		lctx.lexer.setState(Tokens.STATE_EXPR);
 		ParseTask.Method(u, mn, Arrays.asList(parName)).parse(lctx);
 
 		lctx.clear();

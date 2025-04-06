@@ -4,14 +4,13 @@ import org.jetbrains.annotations.Nullable;
 import roj.collect.MyHashMap;
 import roj.collect.SimpleList;
 import roj.config.data.Type;
-import roj.http.IllegalRequestException;
+import roj.http.WebSocketConnection;
 import roj.http.server.*;
 import roj.http.server.auto.OKRouter;
-import roj.http.ws.WebSocketHandler;
 import roj.io.IOUtil;
 import roj.net.ChannelCtx;
 import roj.plugin.Plugin;
-import roj.text.UTF8;
+import roj.text.FastCharset;
 import roj.text.logging.Logger;
 import roj.ui.Terminal;
 import roj.util.ArrayCache;
@@ -70,7 +69,7 @@ public class Websocketd extends Plugin implements Router {
 			var lock = ch.lock();
 			if (lock.tryLock()) {
 				try {
-					worker.error(WebSocketHandler.ERR_CLOSED, "插件卸载");
+					worker.close(WebSocketConnection.ERR_CLOSED, "插件卸载");
 				} catch (Throwable e) {
 					logger.error(e);
 				}
@@ -79,42 +78,35 @@ public class Websocketd extends Plugin implements Router {
 		}
 	}
 
-	private static final MyHashMap<String, String> tmp = new MyHashMap<>();
-	private static String res(String name) throws IOException {
-		String v = tmp.get(name);
-		if (v == null) tmp.put(name, v = IOUtil.getTextResource("META-INF/html/"+name));
-		return v;
-	}
-
 	@Override
 	public void checkHeader(Request req, @Nullable PostSetting cfg) throws IllegalRequestException {
 		if (manager != null) manager.invoke(req, req.server(), cfg);
 	}
 	@Override
-	public Response response(Request req, ResponseHeader rh) throws IOException {
+	public Content response(Request req, ResponseHeader rh) throws IOException {
 		var cmd = cmdList.get(req.absolutePath());
 		if (cmd != null) {
-			if ("websocket".equals(req.getField("upgrade"))) return Response.websocket(req, new Worker(cmd));
+			if ("websocket".equals(req.header("upgrade"))) return Content.websocket(req, new Worker(cmd));
 			var archive = getDescription().getArchive();
 			return ZipRouter.zip(req, archive, archive.getEntry("index.html"));
 		}
-		return rh.code(404).returnNull();
+		return rh.code(404).noContent();
 	}
 
-	static final class Worker extends WebSocketHandler implements Function<Request, WebSocketHandler> {
-		Process process;
+	static final class Worker extends WebSocketConnection implements Function<Request, WebSocketConnection> {
+		private Process process;
 
-		CharsetEncoder sysEnc;
-		CharsetDecoder sysDec;
+		private CharsetEncoder sysEnc;
+		private CharsetDecoder sysDec;
 
-		CharBuffer tmp1;
-		ByteBuffer tmp2, sndRem;
+		private CharBuffer tmp1;
+		private ByteBuffer tmp2, sndRem;
 
-		private List<String> _cmd;
+		private final List<String> _cmd;
 		Worker(List<String> cmd) {this._cmd = cmd;}
 
 		@Override
-		public WebSocketHandler apply(Request request) {
+		public WebSocketConnection apply(Request request) {
 			if (workers == Collections.EMPTY_LIST) return null;
 			try {
 				process = new ProcessBuilder().command(_cmd).redirectErrorStream(true)
@@ -155,7 +147,7 @@ public class Websocketd extends Plugin implements Router {
 			super.channelTick(ctx);
 
 			if (!process.isAlive()) {
-				error(ERR_OK, "进程终止");
+				close(ERR_OK, "进程终止");
 				return;
 			}
 
@@ -182,7 +174,7 @@ public class Websocketd extends Plugin implements Router {
 
 							CoderResult r = sysDec.decode(inByte, tmpChar, false);
 							if (r.isError() || r.isMalformed() || r.isUnmappable()) {
-								error(ERR_UNEXPECTED, "charset decode error for " + Terminal.nativeCharset);
+								close(ERR_UNEXPECTED, "charset decode error for " + Terminal.nativeCharset);
 							}
 
 							if (tmpChar.position() == 0) {
@@ -212,7 +204,7 @@ public class Websocketd extends Plugin implements Router {
 			}
 
 			if (in.available() < 0) {
-				error(ERR_OK, "进程终止");
+				close(ERR_OK, "进程终止");
 			}
 		}
 
@@ -243,14 +235,14 @@ public class Websocketd extends Plugin implements Router {
 
 				while (in.isReadable()) {
 					tmp1.clear();
-					UTF8.CODER.decodeFixedIn(in, Math.min(in.readableBytes(), tmp1.capacity()), tmp1);
+					FastCharset.UTF8().decodeFixedIn(in, Math.min(in.readableBytes(), tmp1.capacity()), tmp1);
 					tmp1.flip();
 
 					sndBuf.clear();
 
 					CoderResult r = sysEnc.encode(tmp1, sndBuf, false);
 					if (r.isError() || r.isMalformed() || r.isUnmappable()) {
-						error(ERR_UNEXPECTED, "charset encode error for " + Terminal.nativeCharset);
+						close(ERR_UNEXPECTED, "charset encode error for " + Terminal.nativeCharset);
 						return;
 					}
 

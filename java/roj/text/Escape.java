@@ -4,6 +4,7 @@ import roj.collect.MyBitSet;
 import roj.collect.MyHashMap;
 import roj.collect.TrieTree;
 import roj.compiler.plugins.annotations.Attach;
+import roj.concurrent.LazyThreadLocal;
 import roj.config.Tokenizer;
 import roj.config.data.CInt;
 import roj.io.IOUtil;
@@ -22,6 +23,8 @@ import java.util.regex.Pattern;
  * @since 2023/2/23 0023 18:06
  */
 public class Escape {
+	public static final LazyThreadLocal<FastCharset> CHARSET = new LazyThreadLocal<>(FastCharset.UTF8());
+
 	public static String decodeURI(CharSequence src) throws MalformedURLException {
 		ByteList bb = new ByteList();
 		try {
@@ -48,7 +51,7 @@ public class Escape {
 				}
 
 				try {
-					UTF8.CODER.decodeFixedIn(tmp, tmp.wIndex(), sb);
+					CHARSET.get().decodeFixedIn(tmp, tmp.wIndex(), sb);
 				} catch (Exception e) {
 					// not compatible with RFC 2396
 					throw new MalformedURLException("无法解析UTF8:"+e.getMessage());
@@ -78,7 +81,8 @@ public class Escape {
 	public static <T extends Appendable> T encodeURI(T sb, CharSequence src) {
 		ByteList bb = new ByteList();
 		try {
-			return escape(sb, bb.putUTFData(src), URI_SAFE);
+			CHARSET.get().encodeFixedIn(src, bb);
+			return escape(sb, bb, URI_SAFE);
 		} finally {
 			bb._free();
 		}
@@ -87,7 +91,8 @@ public class Escape {
 	public static <T extends Appendable> T encodeURIComponent(T sb, CharSequence src) {
 		ByteList bb = new ByteList();
 		try {
-			return escape(sb, bb.putUTFData(src), URI_COMPONENT_SAFE);
+			CHARSET.get().encodeFixedIn(src, bb);
+			return escape(sb, bb, URI_COMPONENT_SAFE);
 		} finally {
 			bb._free();
 		}
@@ -215,7 +220,7 @@ public class Escape {
 			// Warning: &nbsp did not reference ' '
 			String TABLE = null;
 			try {
-				TABLE = IOUtil.getTextResource("roj/text/HtmlEscape.txt");
+				TABLE = IOUtil.getTextResourceIL("roj/text/HtmlEscape.txt");
 			} catch (IOException e) {
 				Helpers.athrow(e);
 			}

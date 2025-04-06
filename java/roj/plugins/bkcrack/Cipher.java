@@ -4,7 +4,7 @@ package roj.plugins.bkcrack;
  * @author Roj234
  * @since 2022/11/12 0012 17:25
  */
-final class Cipher implements Macros {
+final class Cipher {
 	int x, y, z;
 
 	Cipher() {}

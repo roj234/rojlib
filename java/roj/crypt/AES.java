@@ -1,8 +1,7 @@
 package roj.crypt;
 
 import roj.compiler.runtime.RtUtil;
-import roj.io.IOUtil;
-import roj.util.ByteList;
+import roj.reflect.Unaligned;
 import roj.util.DynByteBuf;
 
 import javax.crypto.BadPaddingException;
@@ -62,9 +61,9 @@ class AES extends RCipherSpi {
 		int[] tk = new int[KC];
 		int i, j;
 
-		ByteList bb = IOUtil.SharedCoder.get().wrap(key);
-		i = 0;
-		while (bb.isReadable()) tk[i++] = bb.readInt();
+		for (i = 0; i < KC; i++) {
+			tk[i] = Unaligned.U.get32UB(key, Unaligned.ARRAY_BYTE_BASE_OFFSET + ((long) i << 2));
+		}
 
 		int k = 0;
 		for (j = 0; j < KC && k < ROUND_KEY_COUNT; j++, k++) {

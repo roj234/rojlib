@@ -12,37 +12,56 @@ import static roj.reflect.Unaligned.U;
 
 /**
  * 一个适合【多线程写入，单线程读取】的无界FIFO队列
+ * 多线程读取现在会出bug……除非把recycleSize设为0
  * @author Roj234
  * @since 2023/5/17 0017 18:48
  */
-public final class PacketBuffer {
-	static class Entry extends FIFOQueue.Node {
+public final class PacketBuffer extends ReuseFIFOQueue<PacketBuffer.Entry> {
+	static final class Entry extends ReuseFIFOQueue.Node {
 		volatile DynByteBuf buffer;
 		volatile Thread waiter;
 	}
 
-	final FIFOQueue<Entry> queue = new FIFOQueue<>(), recycle = new FIFOQueue<>();
-
 	private static final long SIZE_OFFSET = ReflectionUtils.fieldOffset(PacketBuffer.class, "recycleSize");
 	private volatile int recycleSize;
-	private final int max;
 
-	public PacketBuffer(int maxUnused) {this.max = maxUnused;}
+	public PacketBuffer() {recycleSize = 4;}
+	public PacketBuffer(int maxUnused) {this.recycleSize = maxUnused;}
+
+	@Override
+	protected void recycle(Node node) {
+		if (node instanceof Entry && recycleSize > 0) {
+			U.getAndAddInt(this, SIZE_OFFSET, -1);
+			node.next = (Node)U.getAndSetObject(this, RECYCLE_OFFSET, node);
+		}
+	}
+	private Entry retain() {
+		while (true) {
+			var bin = recycle;
+			if (bin != null) {
+				if (U.compareAndSwapObject(this, RECYCLE_OFFSET, bin, bin.next)) {
+					U.getAndAddInt(this, SIZE_OFFSET, 1);
+					return (Entry) bin;
+				}
+			} else {
+				return null;
+			}
+		}
+	}
 
 	public void offer(DynByteBuf b) {doOffer(b, false);}
 	public void offerSync(DynByteBuf b) {doOffer(b, true);}
 	private boolean doOffer(DynByteBuf b, boolean wait) {
-		var entry = recycle.removeFirst();
+		var entry = retain();
 		if (entry == null) entry = new Entry();
 
 		entry.buffer = BufferPool.buffer(true, b.readableBytes()).put(b);
 		Thread waiter = wait ? Thread.currentThread() : null;
 		entry.waiter = waiter;
 
-		// really need this ?
 		U.storeFence();
 
-		queue.addLast(entry);
+		addLast(entry);
 
 		if (wait) while (entry.waiter == waiter) LockSupport.park(this);
 
@@ -56,14 +75,14 @@ public final class PacketBuffer {
 	private DynByteBuf removeWith(DynByteBuf buf, boolean must) {
 		Entry entry;
 		while (true) {
-			entry = queue.peek();
+			entry = peek();
 			if (entry == null) return null;
 
 			var data = entry.buffer;
 			if (data == null) continue;
 			if (buf.writableBytes() < data.readableBytes() && !must) return null;
 
-			if (queue.removeIf(entry) != null) break;
+			if (removeIf(entry) != null) break;
 		}
 
 		var data = entry.buffer;
@@ -86,19 +105,14 @@ public final class PacketBuffer {
 
 		U.storeFence();
 
-		if (recycleSize < max) {
-			recycle.addLast(entry);
-			U.getAndAddInt(this, SIZE_OFFSET, 1);
-		}
-
 		return buf;
 	}
 
-	public boolean isEmpty() {return queue.peek() == null;}
+	public boolean isEmpty() {return peek() == null;}
 
 	public void clear() {
 		while (true) {
-			var entry = queue.removeFirst();
+			var entry = removeFirst();
 			if (entry == null) break;
 
 			var data = entry.buffer;
@@ -110,5 +124,7 @@ public final class PacketBuffer {
 			entry.waiter = null;
 			LockSupport.unpark(thread);
 		}
+
+		recycle = null;
 	}
 }

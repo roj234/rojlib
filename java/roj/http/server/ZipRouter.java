@@ -4,7 +4,6 @@ import roj.archive.zip.ZEntry;
 import roj.archive.zip.ZipFile;
 import roj.http.Headers;
 import roj.http.HttpUtil;
-import roj.http.IllegalRequestException;
 import roj.io.IOUtil;
 
 import java.io.File;
@@ -32,10 +31,10 @@ public class ZipRouter implements Router, Predicate<String> {
 	public String getPrefix() {return prefix;}
 	public void setPrefix(String prefix) {this.prefix = prefix;}
 
-	public static Response zip(Request req, ZipFile zf, ZEntry ze) {return Response.file(req, new ZipFileInfo(zf, ze));}
+	public static Content zip(Request req, ZipFile zf, ZEntry ze) {return Content.file(req, new ZipFileInfo(zf, ze));}
 
 	@Override
-	public Response response(Request req, ResponseHeader rh) throws IOException {
+	public Content response(Request req, ResponseHeader rh) throws IOException {
 		String url = req.path();
 
 		boolean isDir = url.isEmpty() || url.endsWith("/");
@@ -47,16 +46,16 @@ public class ZipRouter implements Router, Predicate<String> {
 				ze = zip.getEntry(url);
 				if (ze != null && ze.getName().endsWith("/")) {
 					rh.code(403);
-					return Response.httpError(HttpUtil.FORBIDDEN);
+					return Content.httpError(HttpUtil.FORBIDDEN);
 				}
 			}
 			rh.code(404);
-			return Response.httpError(HttpUtil.NOT_FOUND);
+			return Content.httpError(HttpUtil.NOT_FOUND);
 		}
 
 		rh.code(200).header("cache-control", getCacheControl(ze));
 		if (ze.isEncrypted()) throw new IllegalRequestException(500, "该文件已加密");
-		return Response.file(req, new ZipFileInfo(zip, ze));
+		return Content.file(req, new ZipFileInfo(zip, ze));
 	}
 
 	// (Optional) for OKRouter Prefix Delegation check
@@ -77,14 +76,10 @@ public class ZipRouter implements Router, Predicate<String> {
 			this.ze = ze;
 		}
 
-		@Override
-		public int stats() { return ze.getMethod() == ZipEntry.DEFLATED ? FILE_DEFLATED : FILE_RA; }
+		@Override public int stats() { return (ze.getMethod() == ZipEntry.DEFLATED ? FILE_DEFLATED : FILE_RA) | FILE_HAS_CRC32; }
+		@Override public long length(boolean deflated) { return deflated ? ze.getCompressedSize() : ze.getSize(); }
 
-		@Override
-		public long length(boolean deflated) { return deflated ? ze.getCompressedSize() : ze.getSize(); }
-
-		@Override
-		public InputStream get(boolean deflated, long offset) throws IOException {
+		@Override public InputStream get(boolean deflated, long offset) throws IOException {
 			InputStream in;
 			if (deflated) {
 				assert ze.getMethod() == ZipEntry.DEFLATED;
@@ -96,12 +91,9 @@ public class ZipRouter implements Router, Predicate<String> {
 			return in;
 		}
 
-		@Override
-		public long lastModified() {return ze.getModificationTime();}
-		@Override
-		public String getETag() {return '"'+Integer.toUnsignedString(ze.getCrc32(), 36)+'"';}
-
-		@Override
-		public void prepare(ResponseHeader rh, Headers h) {h.put("content-type", MimeType.getMimeType(ze.getName()));}
+		@Override public long lastModified() {return ze.getModificationTime();}
+		@Override public int getCrc32() {return ze.getCrc32();}
+		@Override public String getETag() {return '"'+Integer.toUnsignedString(ze.getCrc32(), 36)+'"';}
+		@Override public void prepare(ResponseHeader rh, Headers h) {h.put("content-type", MimeType.getMimeType(ze.getName()));}
 	}
 }

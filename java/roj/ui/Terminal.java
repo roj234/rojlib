@@ -11,9 +11,8 @@ import roj.config.data.CMap;
 import roj.io.IOUtil;
 import roj.io.MBInputStream;
 import roj.text.CharList;
-import roj.text.GB18030;
+import roj.text.FastCharset;
 import roj.text.TextUtil;
-import roj.text.UnsafeCharset;
 import roj.util.ArrayUtil;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
@@ -299,7 +298,7 @@ public final class Terminal extends DelegatedPrintStream {
 	@Override
 	protected void flushBytes() {
 		NativeVT.ucs.decodeLoop(bb, bb.readableBytes(), sb, Integer.MAX_VALUE, true);
-		if (bb.isReadable()) sb.append(UnsafeCharset.INVALID);
+		if (bb.isReadable()) sb.append(FastCharset.REPLACEMENT);
 		bb.clear();
 	}
 	//endregion
@@ -380,7 +379,7 @@ public final class Terminal extends DelegatedPrintStream {
 	@Override
 	protected void newLine() {
 		begin();
-		write(sb.append("\u001b[0K\r\n"));
+		write(sb.append("\r\n")); // [0K /r/n
 		sb.clear();
 		PrevWidth = 0;
 	}
@@ -578,7 +577,7 @@ public final class Terminal extends DelegatedPrintStream {
 	private static void key(int vk, String seq) {KeyMap.putIfAbsent(new ByteList().putAscii(seq), vk);}
 
 	private static final CharList ISEQ = new CharList(256);
-	public static void onInput(DynByteBuf buf, UnsafeCharset ucs) {
+	public static void onInput(DynByteBuf buf, FastCharset ucs) {
 		var iseq = ISEQ; iseq.clear();
 		ucs.decodeLoop(buf, buf.readableBytes(), iseq, Integer.MAX_VALUE, true);
 		onInput(iseq);
@@ -838,7 +837,7 @@ public final class Terminal extends DelegatedPrintStream {
 		if (TextUtil.isPrintableAscii(c)) return 1;
 		// 大概是乱码，而且在能渲染的终端中，两个合起来正好是方形
 		if (Character.isSurrogate(c)) return 1;
-		if (GB18030.isTwoByte(c) || CharLength.size() == 0) return 2;
+		if (FastCharset.GB18030().encodeSize(c) == 2 || CharLength.size() == 0) return 2;
 
 		int len = CharLength.getOrDefaultInt(c, -1);
 		if (len >= 0) return len;

@@ -45,8 +45,8 @@ public class CRC32s {
 	public static int update(int crc, DynByteBuf buf) {
 		int len = buf.readableBytes();
 		return buf.hasArray()
-			? CRC32s.update(crc, buf.array(), buf.arrayOffset() + buf.rIndex, len)
-			: CRC32s.update(crc, buf.address(), len);
+			? update(crc, buf.array(), buf.arrayOffset() + buf.rIndex, len)
+			: update(crc, buf.address() + buf.rIndex, len);
 	}
 	@Contract(pure = true)
 	public static int update(int crc, long off, int len) {

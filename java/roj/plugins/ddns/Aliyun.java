@@ -9,8 +9,8 @@ import roj.config.JSONParser;
 import roj.config.data.CList;
 import roj.config.data.CMap;
 import roj.crypt.HMAC;
+import roj.http.HttpClient;
 import roj.http.HttpRequest;
-import roj.http.SyncHttpClient;
 import roj.io.IOUtil;
 import roj.text.CharList;
 import roj.text.DateParser;
@@ -51,7 +51,7 @@ final class Aliyun implements DDNSService {
 
 		byte[] nonce = new byte[16];
 		rnd.nextBytes(nonce);
-		queries.put("SignatureNonce", IOUtil.SharedCoder.get().encodeHex(nonce));
+		queries.put("SignatureNonce", IOUtil.encodeHex(nonce));
 		queries.put("Timestamp", DateParser.GMT().format("Y-m-dTH:i:sP", System.currentTimeMillis()).toString());
 
 		//计算签名
@@ -82,13 +82,11 @@ final class Aliyun implements DDNSService {
 		String signStr = "GET&%2F&"+encodeSignature(sb);
 
 		try {
-			IOUtil uc = IOUtil.SharedCoder.get();
-
 			HMAC hmac = new HMAC(MessageDigest.getInstance("SHA-1"));
 			hmac.setSignKey(accessSecret.concat("&").getBytes(StandardCharsets.UTF_8));
 
-			hmac.update(uc.encode(signStr));
-			return encodeSignature(uc.encodeBase64(hmac.digestShared())).toString();
+			hmac.update(IOUtil.encodeUTF8(signStr));
+			return encodeSignature(IOUtil.encodeBase64(hmac.digestShared())).toString();
 		} catch (Exception e) {
 			e.printStackTrace();
 			return null;
@@ -238,7 +236,7 @@ final class Aliyun implements DDNSService {
 		par.put("Type", type);
 
 		try {
-			SyncHttpClient shc = HttpRequest.nts().url(makeUrl(par)).executePooled();
+			HttpClient shc = HttpRequest.builder().url(makeUrl(par)).executePooled();
 			CMap cfg = _parse(shc);
 		} catch (Exception e) {
 			Terminal.error("请求参数: " + par, e);
@@ -260,7 +258,7 @@ final class Aliyun implements DDNSService {
 		}
 	}
 
-	private CMap _parse(SyncHttpClient shc) throws Exception {
+	private CMap _parse(HttpClient shc) throws Exception {
 		CMap map = new JSONParser().parse(shc.stream()).asMap();
 		if (map.containsKey("Message"))
 			throw new IllegalArgumentException("API错误: " + map.getString("Message"));

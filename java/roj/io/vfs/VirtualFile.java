@@ -8,6 +8,7 @@ public interface VirtualFile {
 	default boolean exists() {return true;}
 	default boolean isFile() {return exists() && !isDirectory();}
 	default boolean isDirectory() {return false;}
+	default boolean canRead() {return true;}
 	String getName();
 	String getPath();
 	long length();

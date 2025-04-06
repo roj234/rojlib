@@ -6,15 +6,12 @@ import roj.config.ConfigMaster;
 import roj.config.Tokenizer;
 import roj.config.data.CMap;
 import roj.config.serial.ToJson;
-import roj.http.IllegalRequestException;
 import roj.http.server.*;
-import roj.http.server.auto.Accepts;
-import roj.http.server.auto.Interceptor;
-import roj.http.server.auto.OKRouter;
-import roj.http.server.auto.Route;
+import roj.http.server.auto.*;
 import roj.io.IOUtil;
 import roj.plugin.PermissionHolder;
 import roj.plugin.Plugin;
+import roj.plugin.PluginDescriptor;
 import roj.plugin.SimplePlugin;
 import roj.text.CharList;
 import roj.text.TextUtil;
@@ -47,7 +44,7 @@ public class ChatManager extends Plugin {
 		attDir = new File(getDataFolder(), "att");
 		if (!attDir.isDirectory() && !attDir.mkdirs()) throw new IOException("Failed to create attachment directory");
 
-		easySso = getPluginManager().getPluginInstance("EasySSO");
+		easySso = getPluginManager().getPluginInstance(PluginDescriptor.Role.PermissionManager);
 
 		ChatGroup T = new ChatGroup();
 		T.id = 114514;
@@ -88,14 +85,14 @@ public class ChatManager extends Plugin {
 	public void logon(Request req, PostSetting ps) throws IllegalRequestException {
 		var value = initUsr(req);
 		if (value == null) throw new IllegalRequestException(403);
-		req.localCtx().put("USER", value);
+		req.threadLocal().put("USER", value);
 
 		if (ps != null) ps.postAccept(65536, 0);
 	}
 
 	@Interceptor
 	public Object parallelLimit(Request req, ResponseHeader rh, PostSetting ps) {
-		ChatUser u = (ChatUser) req.localCtx().get("USER");
+		ChatUser u = (ChatUser) req.threadLocal().get("USER");
 
 		if (u.uploadTasks.get() < 0) {
 			rh.code(503).header("Retry-After", "60");
@@ -103,7 +100,7 @@ public class ChatManager extends Plugin {
 		}
 
 		u.uploadTasks.getAndDecrement();
-		rh.onFinish((__) -> {
+		rh.onFinish((__, success) -> {
 			u.uploadTasks.getAndIncrement();
 			return false;
 		});
@@ -111,25 +108,24 @@ public class ChatManager extends Plugin {
 		return null;
 	}
 
-	@Route(value = "file/", prefix = true)
-	@Accepts(Accepts.GET)
+	@GET("file/**")
 	@Interceptor({"logon","parallelLimit"})
-	public Response getFile(Request req, ResponseHeader rh) {
+	public Content getFile(Request req, ResponseHeader rh) {
 		String safePath = req.path();
 		File file = new File(attDir, safePath);
-		if (!file.isFile()) return rh.code(404).returnNull();
+		if (!file.isFile()) return rh.code(404).noContent();
 		DiskFileInfo info = new DiskFileInfo(file);
-		return Response.file(req, info);
+		return Content.file(req, info);
 	}
 
-	@Route(value = "file/", prefix = true)
+	@Route(value = "file/**")
 	@Accepts(Accepts.DELETE)
 	@Interceptor("logon")
 	public Object deleteFile(Request req) {
-		ChatUser u = (ChatUser) req.localCtx().get("USER");
+		ChatUser u = (ChatUser) req.threadLocal().get("USER");
 
 		String safePath = req.path();
-		DynByteBuf bb = IOUtil.SharedCoder.get().decodeBase64(safePath);
+		DynByteBuf bb = IOUtil.decodeBase64(safePath);
 		if (bb.readInt() != u.id) {
 			return error("没有权限");
 		} else {
@@ -141,7 +137,7 @@ public class ChatManager extends Plugin {
 
 	@Interceptor
 	public void fileUpload(Request req, ResponseHeader rh, PostSetting ps) {
-		ChatUser u = (ChatUser) req.localCtx().get("USER");
+		ChatUser u = (ChatUser) req.threadLocal().get("USER");
 
 		var paths = TextUtil.split(req.path(), '/');
 		boolean img = paths.get(1).contains("img");
@@ -151,8 +147,7 @@ public class ChatManager extends Plugin {
 		ps.postHandler(new UploadHandler(req, count, u.id, img));
 	}
 
-	@Route(value = "file/", prefix = true)
-	@Accepts(Accepts.POST)
+	@POST(value = "file/**")
 	@Interceptor({"logon","parallelLimit","fileUpload"})
 	public String postFile(Request req) {
 		UploadHandler ph = (UploadHandler) req.postHandler();
@@ -180,13 +175,12 @@ public class ChatManager extends Plugin {
 		return ser.getValue().toStringAndFree();
 	}
 
-	@Route
-	@Accepts(Accepts.GET)
-	public Response user__info(Request req) {
+	@GET
+	public Content user__info(Request req) {
 		ChatUser u = initUsr(req);
 
-		if (req.getField("upgrade").equals("websocket")) {
-			return Response.websocket(req, req1 -> {
+		if (req.header("upgrade").equals("websocket")) {
+			return Content.websocket(req, req1 -> {
 				var user = initUsr(req1);
 				var w = new ChatWorker(this, user);
 				user.onLogin(this, w, req1);
@@ -200,29 +194,27 @@ public class ChatManager extends Plugin {
 			m.put("user", u.put());
 			m.put("address", new File("C:\\Server").isDirectory() ? "wss://popupcandy.dynv6.net:25565/chat/user/info" : "ws://127.0.0.1:8080/chat/user/info");
 			m.put("protocol", "WSChat2");
-			return Response.json(ConfigMaster.JSON.toString(m, new CharList()));
+			return Content.json(ConfigMaster.JSON.toString(m, new CharList()));
 		}
 	}
 
-	@Route(prefix = true)
-	@Accepts(Accepts.GET)
-	public Response user__head(Request req, ResponseHeader rh) {
+	@GET("user/head/**")
+	public Content user__head(Request req, ResponseHeader rh) {
 		File img = new File(attDir, req.path());
 		System.out.println(img.getAbsolutePath());
 		if (!img.isFile()) img = new File(attDir, "default");
 
 		rh.header("Access-Control-Allow-Origin", "*");
 		DiskFileInfo info = new DiskFileInfo(img);
-		return Response.file(req, info);
+		return Content.file(req, info);
 	}
 
-	@Route
+	@POST
 	@Interceptor("logon")
-	@Accepts(Accepts.POST)
 	public Object user__set_info(Request req) throws IllegalRequestException {
 		ChatUser u = initUsr(req);
 
-		Map<String, Object> x = Helpers.cast(req.PostFields());
+		Map<String, Object> x = Helpers.cast(req.formData());
 
 		// TODO HPostHandler
 		/*var face = (ByteList) x.get("face");
@@ -239,10 +231,10 @@ public class ChatManager extends Plugin {
 		//{desc=这个人很懒，不写介绍, friend=0, resort=false, name=roj234, search=false}
 		u.onDataChanged(this);
 
-		return Response.json("{\"ok\":1}");
+		return Content.json("{\"ok\":1}");
 	}
 
-	private static Response error(String s) {return Response.json("{\"ok\":0,\"err\":\""+Tokenizer.addSlashes(s)+"\"}");}
+	private static Content error(String s) {return Content.json("{\"ok\":0,\"err\":\""+Tokenizer.addSlashes(s)+"\"}");}
 
 
 	public ChatSubject getSubject(int id) {

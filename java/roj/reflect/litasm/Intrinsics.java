@@ -21,16 +21,12 @@ import java.lang.reflect.Method;
  */
 public class Intrinsics {
 	private static final Logger LOGGER = Logger.getLogger("LitASM");
-	private static final Assembler assembler = Assembler.getInstance();
+	private static final Assembler assembler;
 	private static final CodeInjector linker;
 	static {
-		if (!assembler.platform().equals("win64")) {
-			System.out.println("[警告]截至目前,只有win64平台的汇编器经过了实际验证,其它平台可能无法正常使用");
-		}
-
 		CodeInjector tmp;
 		try {
-			var c = Parser.parseConstants(IOUtil.getResource("roj/reflect/litasm/internal/JVMCI.class"));
+			var c = Parser.parseConstants(IOUtil.getResourceIL("roj/reflect/litasm/internal/JVMCI.class"));
 			c.parent(Bypass.MAGIC_ACCESSOR_CLASS);
 			ClassDefiner.defineGlobalClass(c);
 			tmp = new JVMCI();
@@ -46,6 +42,16 @@ public class Intrinsics {
 			}
 		}
 		linker = tmp;
+
+		if (tmp != null) {
+			assembler = Assembler.getInstance();
+
+			if (!assembler.platform().equals("win64")) {
+				System.out.println("[警告]截至目前,只有win64平台的汇编器经过了实际验证,其它平台可能无法正常使用");
+			}
+		} else {
+			assembler = null;
+		}
 	}
 	public static boolean available() {return linker != null;}
 	public static boolean linkNative(@Nullable String library) {return linkNative(library, ReflectionUtils.getCallerClass(2));}

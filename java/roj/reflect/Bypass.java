@@ -29,7 +29,7 @@ import java.util.Collections;
 import java.util.List;
 
 import static roj.asm.Opcodes.*;
-import static roj.reflect.VMInternals.u;
+import static roj.reflect.Unaligned.U;
 
 /**
  * 用接口替代反射，虽然看起来和{@link java.lang.invoke.MethodHandle}很相似，其实却是同一个原理 <br>
@@ -120,7 +120,7 @@ public final class Bypass<T> {
 	private ToIntMap<String> dmh_desc;
 
 	private boolean DMHInit() {
-		if (VMInternals.JAVA_VERSION < 22) return false;
+		if (ReflectionUtils.JAVA_VERSION < 22) return false;
 
 		if (dmh_si == null) {
 			System.err.println("[RojLib Warning] 建议使用Java21或更低版本以提高性能！");
@@ -660,7 +660,7 @@ public final class Bypass<T> {
 								cw.clazz(CHECKCAST, targetName);
 							cw.one(ALOAD_1);
 						}
-						cw.ldc(isStatic ? u.staticFieldOffset(field) : u.objectFieldOffset(field));
+						cw.ldc(isStatic ? U.staticFieldOffset(field) : U.objectFieldOffset(field));
 						cw.varLoad(fieldType, isStatic ? 1 : 2);
 						if ((flags&UNCHECKED_CAST) == 0 && !fieldType.isPrimitive() && !field.getType().isAssignableFrom(params2[off]))
 							cw.clazz(CHECKCAST, fieldType.getActualClass());

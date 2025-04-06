@@ -4,23 +4,25 @@
 ## 文档
 [Lava编译器](docs/Re_Lavac.md)  
 [自动识别中文编码](docs/Re_ChineseCharset.md)  
-[带指令注册的终端模拟器](docs/Re_CommandConsole.md)  
-[Java8-21通杀的高性能反射解决方案](docs/Re_Bypass.md)  
+[支持指令补全的终端模拟器](docs/Re_CommandConsole.md)  
+[Java8-21通杀的高性能反射解决方案](docs/Re_Bypass.md)
+*现已兼容Java22  
 [高性能的字符串全文匹配方案](docs/Re_MatchMap.md)  
 [NAT打洞](docs/Re_NAT.md)  
-[注解定义的HTTP路由](docs/Re_OKRouter.md)  
-[(并不是很)安全的插件系统](docs/Re_PluginSystem.md)  
+[(并不)安全的插件系统](docs/Re_PluginSystem.md)  
 [多线程高性能7z压缩和解压](docs/Re_QZArchiver.md)  
-[任意对象的安全序列化解决方案](docs/Re_SerializerFactory.md)  
+[任意对象和配置文件的序列化解决方案](docs/Re_SerializerFactory.md)  
+[注解定义的HTTP路由](docs/Re_OKRouter.md)  
 [注解定义的DataAccessObject](docs/Re_DAOMaker.md)  
+
 [在家自制编译器·第一章 (WIP)](docs/hbc/part1.md)
 
-### 除此之外，还可以去roj.plugins包里看看插件系统
+### 除此之外，还可以去roj.plugins包里看看插件
 
 ## 最近做的
-roj.math.S128i | roj.math.FixedDecimal  
-  128位整数和定点小数  
-RemoteFileSystem
+VirtualFileSystem  
+LavaCompiler  
+CoreDump
 
 # 目录
 ## roj.archive

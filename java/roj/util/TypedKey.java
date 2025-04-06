@@ -7,6 +7,7 @@ package roj.util;
 public class TypedKey<T> {
 	public final String name;
 
+	public static <T> TypedKey<T> of(String name) {return new TypedKey<>(name);}
 	public TypedKey(String name) { this.name = name; }
 
 	@SuppressWarnings("unchecked")

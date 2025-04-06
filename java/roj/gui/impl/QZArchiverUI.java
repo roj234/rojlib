@@ -772,7 +772,7 @@ public class QZArchiverUI extends JFrame {
         uiPassword.setBounds(320, 205, 150, uiPassword.getPreferredSize().height);
 
         //---- label12 ----
-        label12.setText("\u6d3e\u751f\u5faa\u73af\u6b21\u65b9");
+        label12.setText("\u52a0\u5bc6\u5f3a\u5ea6");
         contentPane.add(label12);
         label12.setBounds(new Rectangle(new Point(320, 233), label12.getPreferredSize()));
 
@@ -782,7 +782,7 @@ public class QZArchiverUI extends JFrame {
         label13.setBounds(new Rectangle(new Point(320, 258), label13.getPreferredSize()));
 
         //---- uiCyclePower ----
-        uiCyclePower.setModel(new SpinnerNumberModel(19, 10, 22, 1));
+        uiCyclePower.setModel(new SpinnerNumberModel(19, 16, 24, 1));
         uiCyclePower.setEnabled(false);
         contentPane.add(uiCyclePower);
         uiCyclePower.setBounds(395, 230, 75, uiCyclePower.getPreferredSize().height);

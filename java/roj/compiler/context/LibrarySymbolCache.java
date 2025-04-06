@@ -5,6 +5,9 @@ import roj.archive.zip.ZipFile;
 import roj.archive.zip.ZipFileWriter;
 import roj.asm.ClassNode;
 import roj.asm.Opcodes;
+import roj.asm.Parser;
+import roj.asm.attr.Attribute;
+import roj.asm.attr.ModuleAttribute;
 import roj.collect.MyHashMap;
 import roj.collect.MyHashSet;
 import roj.collect.SimpleList;
@@ -23,6 +26,7 @@ import java.io.IOException;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
+import java.util.Set;
 import java.util.function.Function;
 
 /**
@@ -72,8 +76,25 @@ final class LibrarySymbolCache extends LibraryClassLoader {
 
 			MyHashMap<String, LibrarySymbolCache> caches = new MyHashMap<>();
 			Function<String, LibrarySymbolCache> newCache = LibrarySymbolCache::new;
+			MyHashMap<String, Set<String>> publicPackages = new MyHashMap<>();
 
 			try (var ir = (AutoCloseable) j9.open(j9.moduleImageFile())) {
+				Function<String, Set<String>> newPackageList = mod -> {
+					byte[] resource = j9.getResource(ir, "/"+mod+"/module-info.class");
+					if (resource == null) return null;
+
+					var set = new MyHashSet<String>();
+					var data = Parser.parseConstants(resource);
+					ModuleAttribute module = data.getAttribute(data.cp, Attribute.Module);
+					for (ModuleAttribute.Export export : module.exports) {
+						if (export.to.isEmpty()) {
+							set.add(export.pkg);
+						}
+					}
+
+					return set;
+				};
+
 				for (String path : j9.getEntryNames(ir)) {
 					if (path.startsWith("/package/") || path.startsWith("/modules/") || !path.endsWith(".class")) continue;
 
@@ -84,9 +105,16 @@ final class LibrarySymbolCache extends LibraryClassLoader {
 					var cache = caches.computeIfAbsent(moduleName, newCache);
 					cache.classNamesAll.add(className);
 
-					if (!className.contains("$") && (className.startsWith("java/") || className.startsWith("javax/") || moduleName.startsWith("jdk.unsupported"))) {
-						var in = cache.get(className);
-						if (in == null || (in.modifier & Opcodes.ACC_PUBLIC) == 0) continue;
+					Set<String> packageList = publicPackages.computeIfAbsent(moduleName, newPackageList);
+					if (packageList != null) {
+						int packageIndex = className.lastIndexOf('/');
+						if (packageIndex < 0) continue; // module-info itself
+						if (!packageList.contains(className.substring(0, packageIndex))) continue;
+					}
+
+					if (!className.contains("$")) {
+						var in = Parser.parseAccess(DynByteBuf.wrap(j9.getResource(ir, path)), false);
+						if ((in.modifier & Opcodes.ACC_PUBLIC) == 0) continue;
 
 						cache.classNamesPublic.add(className);
 					}
@@ -169,7 +197,7 @@ final class LibrarySymbolCache extends LibraryClassLoader {
 
 		var data = super.get(name);
 		if (data != null) Library.removeUnrelatedAttribute(data);
-		else GlobalContext.debugLogger().warn("无法获取模块{}的类{}", module, name);
+		else GlobalContext.debugLogger().warn("无法读取模块{}的类{}", module, name);
 		return data;
 	}
 }

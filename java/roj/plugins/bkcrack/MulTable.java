@@ -6,25 +6,19 @@ import roj.util.ByteList;
  * @author Roj234
  * @since 2022/11/12 0012 17:38
  */
-final class MulTable implements Macros {
+final class MulTable {
 	/// \return MULT^-1 * x using a lookup table
-	static int getMultinv(int x) {
-		return mulProductInv[x & 0xFF];
-	}
+	static int getMultinv(int x) {return mulProductInv[x & 0xFF];}
 
 	/// \return a vector of bytes x such that
 	/// msb(x*MULT^-1) is equal to msbprod or msbprod-1
-	static byte[] getMsbProdFiber2(int msbprodinv) {
-		return msbProduct2[msbprodinv & 0xFF];
-	}
+	static byte[] getMsbProdFiber2(int msbprodinv) {return msbProduct2[msbprodinv & 0xFF];}
 
 	/// \return a vector of bytes x such that
 	/// msb(x*MULT^-1) is equal to msbprod, msbprod-1 or msbprod+1
-	static byte[] getMsbProdFiber3(int msbprodinv) {
-		return msbProduct3[msbprodinv & 0xFF];
-	}
+	static byte[] getMsbProdFiber3(int msbprodinv) {return msbProduct3[msbprodinv & 0xFF];}
 
-	static final int MULT    = 0x08088405, MULTINV = 0xd94fa8cd;
+	static final int MULT = 0x08088405, MULTINV = 0xd94fa8cd;
 
 	// lookup tables
 	static final int[]  mulProductInv = new int[256];

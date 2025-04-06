@@ -1,11 +1,13 @@
 package roj.plugins.mychat;
 
+import org.jetbrains.annotations.NotNull;
 import roj.concurrent.FastThreadLocal;
 import roj.concurrent.TaskPool;
 import roj.crypt.BufferedDigest;
 import roj.crypt.ILCrypto;
-import roj.http.server.HttpCache;
-import roj.http.server.MultipartFormHandler;
+import roj.http.Headers;
+import roj.http.server.HSConfig;
+import roj.http.server.MultipartParser;
 import roj.http.server.Request;
 import roj.io.IOUtil;
 import roj.net.ChannelCtx;
@@ -28,7 +30,7 @@ import java.util.Map;
  * @author Roj233
  * @since 2022/3/16 19:46
  */
-public class UploadHandler extends MultipartFormHandler {
+public class UploadHandler extends MultipartParser {
 	private final int uid;
 	private final boolean image;
 
@@ -51,7 +53,7 @@ public class UploadHandler extends MultipartFormHandler {
 	public void init(String req) {
 		super.init(req);
 
-		Map<String, Object> ctx = HttpCache.getInstance().ctx;
+		Map<String, Object> ctx = HSConfig.getInstance().ctx;
 		if (!ctx.containsKey("SM3U")) {
 			ctx.put("SM3U", sm3 = ILCrypto.SM3());
 		} else {
@@ -60,7 +62,7 @@ public class UploadHandler extends MultipartFormHandler {
 	}
 
 	@Override
-	public void onSuccess() {
+	public void onSuccess(DynByteBuf rest) {
 		close0();
 	}
 
@@ -75,8 +77,11 @@ public class UploadHandler extends MultipartFormHandler {
 	}
 
 	@Override
-	protected void onKey(ChannelCtx ctx, String name) throws IOException {
+	protected @NotNull Object begin(ChannelCtx ctx, Headers header) throws IOException {
 		close0();
+
+		String name = header.getHeaderValue("content-disposition", "name");
+		if (name == null) throw new UnsupportedOperationException("没有content-disposition.name,如果需要处理隐式的text/plain或特殊的头，请覆盖此方法");
 
 		int i = this.i = TextUtil.parseInt(name);
 		if (i < 0 || i > files.length) throw new ArrayIndexOutOfBoundsException();
@@ -86,6 +91,8 @@ public class UploadHandler extends MultipartFormHandler {
 			if (errors == null) errors = new String[files.length];
 			errors[i] = e.getMessage();
 		}
+
+		return fos;
 	}
 
 	private File getFile() throws IOException {
@@ -114,7 +121,7 @@ public class UploadHandler extends MultipartFormHandler {
 	}
 
 	@Override
-	protected void onValue(ChannelCtx ctx, DynByteBuf buf) {
+	protected void data(ChannelCtx ctx, DynByteBuf buf) {
 		if (fos == null) return;
 		try {
 			if (buf.hasArray()) {

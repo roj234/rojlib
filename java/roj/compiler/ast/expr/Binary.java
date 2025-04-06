@@ -13,12 +13,13 @@ import roj.compiler.diagnostic.Kind;
 import roj.compiler.resolve.ResolveException;
 import roj.compiler.resolve.TypeCast;
 import roj.compiler.runtime.RtUtil;
+import roj.concurrent.LazyThreadLocal;
 import roj.concurrent.OperationDone;
 import roj.config.data.CEntry;
 import roj.text.CharList;
 
 import static roj.asm.Opcodes.*;
-import static roj.compiler.JavaLexer.*;
+import static roj.compiler.Tokens.*;
 
 /**
  * 操作符 - 二元操作 a + b
@@ -76,7 +77,7 @@ final class Binary extends ExprNode {
 		return TypeCast.getDataCap(i);
 	}
 
-	private static final ThreadLocal<Boolean> IN_ANY_BINARY = new ThreadLocal<>();
+	private static final LazyThreadLocal<Boolean> IN_ANY_BINARY = new LazyThreadLocal<>();
 	@NotNull
 	@Override
 	public ExprNode resolve(LocalContext ctx) throws ResolveException {return resolveEx(ctx, false);}

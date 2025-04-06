@@ -18,7 +18,7 @@ import java.util.List;
  * @author Roj234
  * @since 2022/11/12 0012 17:42
  */
-final class ZCKiller implements Macros {
+final class ZCKiller {
 	static final int ENCRYPTION_HEADER_SIZE = 12;
 
 	ZCKiller(byte[] cipher, IntMap<byte[]> knownPlains) {

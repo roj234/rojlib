@@ -1,13 +1,14 @@
 package roj.asmx.nixim;
 
 import roj.asm.Opcodes;
+import roj.concurrent.LazyThreadLocal;
 
 /**
  * @author Roj234
  * @since 2023/10/9 0009 19:30
  */
 final class Pcd {
-	public static final ThreadLocal<Boolean> INVERT_EQUALS = new ThreadLocal<>();
+	public static final LazyThreadLocal<Boolean> INVERT_EQUALS = new LazyThreadLocal<>();
 
 	public static final int
 		SHADOW = 0x01000000, COPY = 0x02000000, INJECT = 0x04000000,

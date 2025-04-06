@@ -130,16 +130,22 @@ public class MethodWriter extends CodeWriter {
 
 	public void jump(byte code, Label target) { assertTrait(code, TRAIT_JUMP); addSegment(new JumpBlockAO(code, target)); }
 
-	public int nextSegmentId() {return codeBlocks.isEmpty() ? 1 : codeBlocks.size();}
+	public int nextSegmentId() {return codeBlocks.isEmpty() ? 1 : codeBlocks.size() - (codeBlocks.get(codeBlocks.size()-1).length() == 0 ? 1 : 0);}
 	public void replaceSegment(int id, CodeBlock codeBlock) {
-		codeBlocks.set(id, codeBlock);
+		var prev = codeBlocks.set(id, codeBlock);
 
 		for (Label label : labels) {
-			if (label.getBlock() == id && label.getOffset() != 0) throw new IllegalStateException("Cannot handle "+label);
+			if (label.getBlock() == id && label.getOffset() != 0) {
+				if (label.getOffset() == prev.length()) {
+					label.__move(1);
+				} else {
+					throw new IllegalStateException("Cannot handle "+label);
+				}
+			}
 			if (label.isRaw()) throw new IllegalStateException("raw label "+label+" is not supported");
 		}
 	}
-	public void replaceSegment(int id, MethodWriter mw) {
+	public int replaceSegment(int id, MethodWriter mw) {
 		boolean firstIsEmpty;
 		if (mw.bw.readableBytes() > 8) {
 			codeBlocks.set(id, new SolidBlock(mw.bw.slice(8, mw.bw.readableBytes()-8)));
@@ -173,6 +179,7 @@ public class MethodWriter extends CodeWriter {
 		for (Label label : mw.labels) label.__move(id);
 		labels.addAll(mw.labels);
 		mw.labels.clear();
+		return toInsert.size();
 	}
 	public CodeBlock getSegment(int i) {return codeBlocks.get(i);}
 	public boolean isJumpingTo(Label point) {return !codeBlocks.isEmpty() && codeBlocks.get(codeBlocks.size()-1) instanceof JumpBlock js && js.target == point;}

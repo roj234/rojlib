@@ -3,14 +3,14 @@ package roj.plugins.unpacker;
 import roj.collect.TrieTree;
 import roj.crypt.Base64;
 import roj.http.Headers;
-import roj.http.server.MultipartFormHandler;
+import roj.http.server.MultipartParser;
 import roj.io.IOUtil;
 import roj.net.ChannelCtx;
 import roj.net.EmbeddedChannel;
 import roj.text.TextUtil;
-import roj.util.ArrayRef;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
+import roj.util.NativeArray;
 
 import java.io.EOFException;
 import java.io.File;
@@ -25,7 +25,7 @@ import java.nio.file.StandardOpenOption;
  * @author Roj234
  * @since 2023/2/2 0002 7:21
  */
-class MHtml extends MultipartFormHandler implements Unpacker {
+class MHtml extends MultipartParser implements Unpacker {
 	FileInputStream in;
 	ByteList buf = new ByteList();
 	Headers h;
@@ -39,7 +39,7 @@ class MHtml extends MultipartFormHandler implements Unpacker {
 			if (buf.readStream(in, 1024) == 0)
 				throw new EOFException();
 
-			if (h.parseHead(buf)) {
+			if (Headers.parseHeader(h, buf)) {
 				buf.readShort(); // CRLF
 				break;
 			}
@@ -59,7 +59,7 @@ class MHtml extends MultipartFormHandler implements Unpacker {
 
 		init(h.get("Content-Type"));
 
-		try (EmbeddedChannel ch = EmbeddedChannel.createReadonly()) {
+		try (var ch = EmbeddedChannel.createReadonly()) {
 			ch.addLast("_", this);
 			for (;;) {
 				buf.compact();
@@ -68,7 +68,7 @@ class MHtml extends MultipartFormHandler implements Unpacker {
 				ch.fireChannelRead(buf);
 			}
 
-			onSuccess();
+			onSuccess(buf);
 			onComplete();
 		} finally {
 			IOUtil.closeSilently(in);
@@ -88,8 +88,8 @@ class MHtml extends MultipartFormHandler implements Unpacker {
 	private int enc;
 
 	@Override
-	protected String getName(Headers hdr) throws IOException {
-		String enc = hdr.get("content-transfer-encoding");
+	protected Object begin(ChannelCtx ctx, Headers header) throws IOException {
+		String enc = header.get("content-transfer-encoding");
 		if (enc.equalsIgnoreCase("quoted-printable")) {
 			this.enc = 0;
 		} else if (enc.equalsIgnoreCase("base64")) {
@@ -98,7 +98,7 @@ class MHtml extends MultipartFormHandler implements Unpacker {
 			throw new IOException("Unknown encoding "+enc);
 		}
 
-		String url = hdr.get("content-location");
+		String url = header.get("content-location");
 		try {
 			URI url1 = new URI(url);
 			url = url1.getHost() + url1.getPath();
@@ -113,21 +113,18 @@ class MHtml extends MultipartFormHandler implements Unpacker {
 
 		IOUtil.closeSilently(out);
 		out = FileChannel.open(file.toPath(), StandardOpenOption.WRITE, StandardOpenOption.CREATE);
-		return url;
-	}
 
-	@Override
-	protected void onKey(ChannelCtx ctx, String name) {
-		// do not create direct buffer
+		data.put(url, out);
+		return out;
 	}
 
 	private final ByteList encBuf = new ByteList();
 	@Override
-	protected void onValue(ChannelCtx ctx, DynByteBuf buf) throws IOException {
+	protected void data(ChannelCtx ctx, DynByteBuf buf) throws IOException {
 		ByteList buf1 = IOUtil.getSharedByteBuf();
 		if (enc == 1) {
 			ByteList tmp = encBuf;
-			ArrayRef range = buf.byteRangeR(buf.readableBytes());
+			NativeArray range = buf.byteRangeR(buf.readableBytes());
 			for (int i = 0; i < range.length; i++) {
 				byte b = range.get(i);
 				if ((b&0xFF) >= 32) tmp.put(b);
@@ -140,11 +137,6 @@ class MHtml extends MultipartFormHandler implements Unpacker {
 		}
 		else if (enc == 0) QuotedPrintable.decode(buf, buf1);
 		out.write(buf1.nioBuffer());
-	}
-
-	@Override
-	protected void onValueEnd(ChannelCtx ctx, DynByteBuf buf) throws IOException {
-		onValue(ctx, buf);
 	}
 
 	public static class QuotedPrintable {

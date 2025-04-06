@@ -350,6 +350,17 @@ public class ByteList extends DynByteBuf implements Appendable {
 		return len == 0 ? EMPTY : new Slice(list, testWI(off, len)+arrayOffset(), len);
 	}
 	public final ByteList sliceNoIndexCheck(int off, int len) {return new Slice(list, off, len);}
+	@Override
+	public final DynByteBuf copySlice() {
+		int length = wIndex - rIndex;
+		byte[] b = ArrayCache.getByteArray(length, false);
+		System.arraycopy(list, arrayOffset() + rIndex, b, 0, b.length);
+
+		var result = new ByteList(b);
+		result.wIndex = length;
+		return result;
+	}
+
 
 	@Override
 	public final ByteList compact() {

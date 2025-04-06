@@ -156,21 +156,13 @@ public class WavDecoder implements AudioDecoder {
 			}
 		}
 
-		@Override
-		public @Nullable String getTitle() { return tags.get("TITL"); }
-		@Override
-		public @Nullable String getArtist() { return tags.get("IART"); }
-		@Override
-		public @Nullable String getAlbum() { return null; }
-		@Override
-		public @Nullable String getYear() { return tags.get("YEAR"); }
-		@Override
-		public @Nullable String getCoder() { return tags.getOrDefault("CODE", tags.get("ISFT")); }
-		@Override
-		public @Nullable String getNamedAttribute(String name) { return tags.get(name); }
-
-		@Override
-		public String toString() { return "WavTag: "+tags.toString(); }
+		@Override public String getTitle() { return tags.get("TITL"); }
+		@Override public String getArtist() { return tags.get("IART"); }
+		@Override public String getAlbum() { return null; }
+		@Override public String getYear() { return tags.get("YEAR"); }
+		@Override public String getCoder() { return tags.getOrDefault("CODE", tags.get("ISFT")); }
+		@Override public String getNamedAttribute(String name) { return tags.get(name); }
+		@Override public String toString() { return "WavTag: "+tags.toString(); }
 	}
 
 	@Override

@@ -53,33 +53,27 @@ final class FieldList extends ComponentList {
 			}
 		}
 
-		CharList sb = new CharList().append("dotGet.incompatible.plural\1");
+		CharList sb = new CharList().append("dotGet.incompatible.plural:[");
 
-		sb.append(fields.get(0).name()).append("\0\1");
+		sb.append(fields.get(0).name()).append(",[");
 
 		CharList tmp = new CharList();
-		ctx.errorCapture = (trans, param) -> {
-			tmp.clear();
-			tmp.append('\1');
-			tmp.append(trans);
-			for (Object o : param)
-				tmp.append("\0\1").append(o);
-			tmp.append('\0');
-		};
+		ctx.errorCapture = makeErrorCapture(tmp);
 
 		for (int i = 0; i < size; i++) {
 			IClass owner = owners.get(i);
 			FieldNode fn = fields.get(i);
 
 			ctx.checkAccessible(owner, fn, (flags&IN_STATIC) != 0, true);
-			sb.append("  \1symbol.field\0").append(owner.name()).append('.').append(fn.name());
-			sb.append("\1invoke.notApplicable\0").append(tmp).append("}\n");
+			sb.append("\"  \",symbol.field,").append(owner.name()).append('.').append(fn.name());
+			sb.append(",invoke.notApplicable,").append(tmp).append(",\"\n\",");
 			tmp.clear();
 		}
+		sb.setLength(sb.length()-1);
 
 		ctx.errorCapture = null;
 		tmp._free();
-		return new FieldResult(sb.replace('/', '.').toStringAndFree());
+		return new FieldResult(sb.append("]]").replace('/', '.').toStringAndFree());
 	}
 
 	static void checkBridgeMethod(LocalContext ctx, IClass owner, FieldNode fn) {

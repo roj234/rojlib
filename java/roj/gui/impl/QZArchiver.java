@@ -146,10 +146,13 @@ public class QZArchiver {
 
 		File out = new File(outputFolder, outputName.concat(splitSize == 0 ? "" : ".001"));
 		if (out.isFile()) {
+			var io = ArchiveUtils.tryOpenSplitArchive(out, false);
 			try {
-				oldArchive = new QZArchive(ArchiveUtils.tryOpenSplitArchive(out, false), password);
+				oldArchive = new QZArchive(io, password);
 			} catch (Exception e) {
-				e.printStackTrace();
+				IOUtil.closeSilently(io);
+				throw e;
+				//e.printStackTrace();
 			}
 		}
 

@@ -34,6 +34,7 @@ import roj.util.Helpers;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
+import java.lang.reflect.Field;
 import java.net.URL;
 import java.net.URLClassLoader;
 import java.security.CodeSigner;
@@ -205,7 +206,18 @@ public class Bootstrap implements Function<String, Class<?>> {
 				break findURL;
 			} else {
 				if (loader.getClass().getName().endsWith("AppClassLoader")) {
-					var _ucp = ReflectionUtils.getFieldIfMatch(loader.getClass(), "URLClassPath");
+					Field _ucp = null;
+					Class<?> type = loader.getClass();
+					loop:
+					while (type != Object.class) {
+						for (Field field : type.getDeclaredFields()) {
+							if (field.getType().getName().endsWith("URLClassPath")) {
+								_ucp = field;
+								break loop;
+							}
+						}
+						type = type.getSuperclass();
+					}
 					if (_ucp != null) {
 						for (var _path : _ucp.getType().getDeclaredFields()) {
 							if (_path.getName().equals("path")) {
@@ -273,7 +285,7 @@ public class Bootstrap implements Function<String, Class<?>> {
 
 		try {
 			// preload asm classes
-			new Context("_classwrapper_", IOUtil.getResource("roj/asmx/launcher/Bootstrap.class")).getData().parsed();
+			new Context("_classwrapper_", IOUtil.getResourceIL("roj/asmx/launcher/Bootstrap.class")).getData().parsed();
 		} catch (Exception e) {
 			throw new IllegalStateException("预加载转换器相关类时出现异常", e);
 		}

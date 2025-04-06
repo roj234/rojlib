@@ -5,7 +5,6 @@ import roj.asm.type.IType;
 import roj.compiler.asm.MethodWriter;
 import roj.compiler.asm.Variable;
 import roj.compiler.context.LocalContext;
-import roj.compiler.resolve.ResolveException;
 
 /**
  * @author Roj234
@@ -16,18 +15,12 @@ public final class LocalVariable extends VarNode {
 
 	public LocalVariable(Variable v) { super(0); this.v = v; }
 
-	@Override public String toString() { return v.name; }
+	@Override public String toString() { return v.name + (v.constantValue == null ? "" : "( = "+v.constantValue+")"); }
 	@Override public IType type() { return v.type; }
 	public Variable getVariable() {return v;}
 
-	@Override
-	public ExprNode resolve(LocalContext ctx) throws ResolveException {
-		if (v.constantValue != null) return constant(v.type, v.constantValue);
-		return this;
-	}
-
 	@Override public boolean isConstant() { return v.constantValue != null; }
-	@Override public Object constVal() { return v.constantValue; }
+	@Override public Object constVal() { v.ignoreUnusedCheck = true; return v.constantValue; }
 	@Override public void write(MethodWriter cw, boolean noRet) {mustBeStatement(noRet);preLoadStore(cw);}
 
 	@Override public boolean isFinal() { return v.isFinal; }

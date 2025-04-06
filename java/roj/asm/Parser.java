@@ -2,10 +2,7 @@ package roj.asm;
 
 import org.jetbrains.annotations.NotNull;
 import roj.asm.attr.*;
-import roj.asm.cp.Constant;
-import roj.asm.cp.ConstantPool;
-import roj.asm.cp.CstClass;
-import roj.asm.cp.CstUTF;
+import roj.asm.cp.*;
 import roj.asm.insn.AttrCode;
 import roj.asm.type.Signature;
 import roj.collect.SimpleList;
@@ -152,12 +149,12 @@ public final class Parser {
 				case "PermittedSubclasses":
 				case "NestMembers": limit(origin,Signature.CLASS); return new ClassListAttribute(name, data, cp);
 				case "ModuleMainClass":
-				case "NestHost": limit(origin,Signature.CLASS); return new StringAttribute(name, ((CstClass) cp.get(data)).name().str());
+				case "NestHost": limit(origin,Signature.CLASS); return new StringAttribute(name, cp.getRefName(data, Constant.CLASS));
 				case "ModuleTarget":
 				case "SourceFile": limit(origin,Signature.CLASS); return new StringAttribute(name, ((CstUTF) cp.get(data)).str());
 				case "BootstrapMethods": limit(origin,Signature.CLASS); return new BootstrapMethods(data, cp);
 				// 匿名类所属的方法
-				case "EnclosingMethod": limit(origin,Signature.CLASS); return new EnclosingMethod(cp.get(data), cp.get(data));
+				case "EnclosingMethod": limit(origin,Signature.CLASS); return new EnclosingMethod(cp.get(data), (CstNameAndType) cp.getNullable(data));
 				case "SourceDebugExtension": break;
 			}
 		} /*catch (OperationDone e) {

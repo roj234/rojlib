@@ -1,7 +1,6 @@
 package roj.collect;
 
 import org.jetbrains.annotations.NotNull;
-import org.jetbrains.annotations.Nullable;
 import roj.math.MathUtils;
 import roj.util.ArrayCache;
 import roj.util.ArrayUtil;
@@ -331,7 +330,6 @@ public class SimpleList<E> extends AbstractCollection<E> implements List<E>, Ran
 		return (E) list[i];
 	}
 
-	@Nullable
 	public E getLast() {return getLast(null);}
 	@SuppressWarnings("unchecked")
 	public E getLast(E def) {return size == 0 ? def : (E) list[size-1];}

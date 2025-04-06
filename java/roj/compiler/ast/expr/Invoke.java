@@ -239,7 +239,7 @@ public final class Invoke extends ExprNode {
 				}
 			}
 		} else if (fn.getClass() == This.class) {// this / super
-			if (ctx.inConstructor && ctx.thisResolved) {
+			if (ctx.inConstructor && ctx.thisUsed) {
 				ctx.report(this, Kind.ERROR, "invoke.error.constructor", fn);
 				return NaE.RESOLVE_FAILED;
 			}
@@ -254,7 +254,7 @@ public final class Invoke extends ExprNode {
 			}
 
 			if (ctx.file.isInheritedNonStaticInnerClass()) {
-				args = EnumUtil.prepend(args, new LocalVariable(ctx.variables.get(NestContext.InnerClass.FIELD_HOST_REF)));
+				args = EnumUtil.prepend(args, new LocalVariable(ctx.getVariable(NestContext.InnerClass.FIELD_HOST_REF)));
 			}
 		} else {// new type
 			if ((flag&ARG0_IS_THIS) != 0) {
@@ -263,8 +263,10 @@ public final class Invoke extends ExprNode {
 
 				// that.new fn() => 全限定名称
 				var myType = (IType) fn;
-				var icFlags = ctx.classes.getInnerClassFlags(ctx.classes.getClassInfo(that.type().owner())).get("!"+myType.owner());
-				if (icFlags == null || (icFlags.modifier&ACC_STATIC) != 0 || !Objects.equals(icFlags.parent, that.type().owner())) {
+
+				var encloseInfo = ctx.classes.getClassInfo(that.type().owner());
+				var icFlags = ctx.classes.getInnerClassFlags(encloseInfo).get("!"+myType.owner());
+				if (icFlags == null || (icFlags.modifier&ACC_STATIC) != 0 || !ctx.classes.getHierarchyList(encloseInfo).containsValue(icFlags.parent)) {
 					ctx.report(this, Kind.ERROR, "invoke.wrongInstantiationEnclosing", fn, that.type());
 					return NaE.RESOLVE_FAILED;
 				}
@@ -291,7 +293,7 @@ public final class Invoke extends ExprNode {
 			if ((flag & ARG0_IS_THIS) == 0) {
 				var icFlags = ctx.classes.getInnerClassFlags(type).get(type.name());
 				if (icFlags != null && (icFlags.modifier&ACC_STATIC) == 0) {
-					if (!ctx.file.name().equals(icFlags.parent)) {
+					if (!ctx.getHierarchyList(ctx.file).containsValue(icFlags.parent)) {
 						ctx.report(this, Kind.ERROR, "cu.inheritNonStatic", icFlags.parent);
 						return NaE.RESOLVE_FAILED;
 					} else {
@@ -319,18 +321,11 @@ public final class Invoke extends ExprNode {
 		block: {
 			ctx.assertAccessible(type);
 
-			var list = ctx.getMethodList(type, method);
-			if (list == ComponentList.NOT_FOUND) {
-				ctx.report(this, Kind.ERROR, "symbol.error.noSuchSymbol", method.equals("<init>") ? "invoke.constructor" : "invoke.method", method+"("+TextUtil.join(tmp, ",")+")", "\1symbol.type\0 "+type.name(),
-					reportSimilarMethod(ctx, type, method));
-				return NaE.RESOLVE_FAILED;
-			}
-
 			int flags = fn == null ? ComponentList.IN_STATIC : 0;
 			if ((flag&INVOKE_SPECIAL) != 0) flags |= ComponentList.THIS_ONLY;
 
 			ctx.inferrer.manualTPBounds = tpHint;
-			MethodResult r = list.findMethod(ctx, ownMirror, tmp, namedType, flags);
+			MethodResult r = ctx.getMethodListOrReport(type, method, this).findMethod(ctx, ownMirror, tmp, namedType, flags);
 			ctx.inferrer.manualTPBounds = null;
 			if (r == null) return NaE.RESOLVE_FAILED;
 
@@ -352,7 +347,7 @@ public final class Invoke extends ExprNode {
 				// 数组的clone方法的特殊处理
 				params = Collections.singletonList(Asterisk.genericReturn(ownMirror, Types.OBJECT_TYPE));
 			} else {
-				params = r.desc != null ? Arrays.asList(r.desc) : Helpers.cast(Type.methodDesc(mn.rawDesc()));
+				params = r.desc();
 			}
 
 			if ((mn.modifier&Opcodes.ACC_STATIC) != 0) {
@@ -410,27 +405,6 @@ public final class Invoke extends ExprNode {
 
 		tmp.clear();
 		return this;
-	}
-	private String reportSimilarMethod(LocalContext ctx, IClass type, String method) {
-		var maybeWrongMethod = new SimpleList<String>();
-		loop:
-		for (var entry : ctx.classes.getResolveHelper(type).getMethods(ctx.classes).entrySet()) {
-			for (MethodNode node : entry.getValue().getMethods()) {
-				int parSize = node.parameters().size();
-				int argSize = args.size();
-				if ((node.modifier & Opcodes.ACC_VARARGS) != 0 ? argSize < parSize - 1 : argSize != parSize) {
-					continue loop;
-				}
-			}
-			if (TextUtil.editDistance(method, entry.getKey()) < (method.length()+1)/2) {
-				maybeWrongMethod.add(entry.getKey());
-			}
-		}
-		if (maybeWrongMethod.isEmpty()) return "";
-
-		var sb = ctx.getTmpSb().append("\1symbol.similar:\1invoke.method\0:");
-		sb.append(TextUtil.join(maybeWrongMethod, "\n    "));
-		return sb.append('\0').toString();
 	}
 
 	@Override

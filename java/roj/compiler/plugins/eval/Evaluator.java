@@ -9,7 +9,7 @@ import roj.asm.type.TypeHelper;
 import roj.asmx.AnnotatedElement;
 import roj.collect.MyHashMap;
 import roj.collect.SimpleList;
-import roj.compiler.JavaLexer;
+import roj.compiler.Tokens;
 import roj.compiler.ast.ParseTask;
 import roj.compiler.ast.expr.NaE;
 import roj.compiler.context.JavaCompileUnit;
@@ -33,7 +33,7 @@ import static roj.asm.Opcodes.*;
  * @author Roj234
  * @since 2024/5/30 0030 3:47
  */
-@LavaPlugin(name = "evaluator", desc = "预编译")
+@LavaPlugin(name = "evaluator", desc = "预编译和宏")
 public interface Evaluator {
 	public static void pluginInit(LavaApi ctx) throws IOException {
 		MyHashMap<String, byte[]> data = new MyHashMap<>();
@@ -61,11 +61,7 @@ public interface Evaluator {
 			}
 		}
 
-		if (invoker.size() > 0) {
-			ctx.report(null, Kind.WARNING, invoker.size(), "lava.sandbox");
-		}
-
-		var scl = new Sandbox(Evaluator.class.getClassLoader(), data);
+		ctx.addSandboxWhitelist("roj.compiler.plugins.eval", true);
 
 		var invokerInst = new ClassNode();
 		invokerInst.name("roj/compiler/plugins/eval/Evaluator$"+ReflectionUtils.uniqueId());
@@ -146,7 +142,7 @@ public interface Evaluator {
 			c.one(ARETURN);
 		}
 
-		var evaluator = (Evaluator) ClassDefiner.make(invokerInst, scl);
+		var evaluator = (Evaluator) ctx.createSandboxInstance(invokerInst);
 
 		for (int j = 0; j < invoker.size(); j++) {
 			RawNode mof = invoker.get(j);
@@ -177,7 +173,7 @@ public interface Evaluator {
 				lc.lexer.index = lexer.index;
 				lc.lexer.LN = lexer.LN;
 				lc.lexer.LNIndex = lexer.LNIndex;
-				lc.lexer.state = JavaLexer.STATE_EXPR;
+				lc.lexer.state = Tokens.STATE_EXPR;
 				lc.lexer.next();
 
 				ParseTask.Method(def, toString, Collections.singletonList("code")).parse(lc);
@@ -185,7 +181,7 @@ public interface Evaluator {
 				int after = lc.lexer.index;
 
 				if (!lc.classes.hasError) {
-					var impl = (Macro) ClassDefiner.make(def, scl);
+					var impl = (Macro) ctx.createSandboxInstance(def);
 					impl.toString(sb);
 				}
 

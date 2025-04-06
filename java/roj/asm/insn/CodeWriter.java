@@ -351,13 +351,13 @@ public class CodeWriter extends AbstractCodeWriter {
 
 		hasFrames = false;
 		if (fv != null) {
-			var frames = (SimpleList<Frame>) fv.finish(codeOb, cpw);
+			var frames = (SimpleList<Frame>) fv.finish(codeOb, cpw, (fvFlags&AttrCode.COMPUTE_FRAMES) != 0);
 			if ((fvFlags & AttrCode.COMPUTE_SIZES) != 0) {
 				U.put16UB(codeOb.array(), codeOb._unsafeAddr()-8, fv.maxStackSize);
 				U.put16UB(codeOb.array(), codeOb._unsafeAddr()-6, fv.maxLocalSize);
 			}
 
-			if ((fvFlags & AttrCode.COMPUTE_FRAMES) != 0 && frames != null) {
+			if (frames != null) {
 				int stack = visitAttributeI("StackMapTable");
 				FrameVisitor.writeFrames(frames, bw, cpw);
 				visitAttributeIEnd(stack);

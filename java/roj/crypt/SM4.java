@@ -1,8 +1,7 @@
 package roj.crypt;
 
 import roj.compiler.runtime.RtUtil;
-import roj.io.IOUtil;
-import roj.util.ByteList;
+import roj.reflect.Unaligned;
 import roj.util.DynByteBuf;
 
 import javax.crypto.Cipher;
@@ -42,9 +41,10 @@ final class SM4 extends RCipherSpi {
 	public void init(int mode, byte[] key, AlgorithmParameterSpec par, SecureRandom random) throws InvalidAlgorithmParameterException, InvalidKeyException {
 		if (key.length != 16) throw new IllegalArgumentException("128bit key is required");
 
-		int i = 0;
-		ByteList bb = IOUtil.SharedCoder.get().wrap(key);
-		while (bb.isReadable()) temp[i] = bb.readInt() ^ FK[i++];
+		int i;
+		for (i = 0; i < 4; i++) {
+			temp[i] = FK[i] ^ Unaligned.U.get32UB(key, Unaligned.ARRAY_BYTE_BASE_OFFSET + ((long) i << 2));
+		}
 
 		var sKey = this.sKey = new int[32];
 

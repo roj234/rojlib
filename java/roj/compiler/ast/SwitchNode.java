@@ -30,19 +30,21 @@ public final class SwitchNode {
 	 * 2 传统Enum选择
 	 * 3 identityHashCode的SwitchMap
 	 * 4 默认hashCode的SwitchMap
+	 * 5 SwitchMapI: int
+	 * 6 SwitchMapJ: long
 	 */
-	@Range(from = -1, to = 4)
+	@Range(from = -1, to = 6)
 	public final int kind;
 	/** break; 跳到的位置 */
 	public final Label breakTo;
-	public final SimpleList<Case> branches;
+	public final SimpleList<Branch> branches;
 	/** case null 所属的分支 注意: 它可能也在branches里 */
 	@Nullable
-	public final Case nullBranch;
+	public final SwitchNode.Branch nullBranch;
 	/** 是否含有default (对应Case的labels==null) */
 	public final boolean defaultBranch;
 
-	public SwitchNode(ExprNode sval, int kind, @Nullable Object cst, Label breakTo, SimpleList<Case> branches, @Nullable Case nullBranch, boolean defaultBranch) {
+	public SwitchNode(ExprNode sval, int kind, @Nullable Object cst, Label breakTo, SimpleList<Branch> branches, @Nullable SwitchNode.Branch nullBranch, boolean defaultBranch) {
 		this.sval = sval;
 		this.kind = kind;
 		this.cst = cst;
@@ -56,7 +58,7 @@ public final class SwitchNode {
 	 * @author Roj234
 	 * @since 2024/4/30 0030 16:48
 	 */
-	public static final class Case {
+	public static final class Branch {
 		/** 如果是Pattern switch那么非空，该分支的变量类型和名称 */
 		public Variable variable;
 		/** 如果是Type switch那么非空，该分支的常量或表达式 */
@@ -73,7 +75,7 @@ public final class SwitchNode {
 		/** case或default关键字结束时的行号 */
 		public int lineNumber;
 
-		public Case(List<ExprNode> labels) {this.labels = labels;}
-		public Case(Variable v) {this.variable = v;}
+		public Branch(List<ExprNode> labels) {this.labels = labels;}
+		public Branch(Variable v) {this.variable = v;}
 	}
 }

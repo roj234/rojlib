@@ -21,13 +21,8 @@ final class FieldListSingle extends ComponentList {
 
 	@NotNull
 	public FieldResult findField(LocalContext ctx, int flag) {
-		CharList tmp = new CharList();
-		ctx.errorCapture = (trans, param) -> {
-			tmp.clear();
-			tmp.append(trans);
-			for (Object o : param)
-				tmp.append('\1').append(o).append('\0');
-		};
+		var tmp = new CharList();
+		ctx.errorCapture = makeErrorCapture(tmp);
 
 		try {
 			if (ctx.checkAccessible(owner, node, (flag&IN_STATIC) != 0, true)) {

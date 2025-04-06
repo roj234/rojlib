@@ -13,7 +13,7 @@ import java.io.IOException;
  * @since 2022/5/17 15:57
  */
 public abstract class PacketMerger implements ChannelHandler {
-	private DynByteBuf merged;
+	protected DynByteBuf merged;
 
 	protected final void mergedRead(ChannelCtx ctx, DynByteBuf pkt) throws IOException {
 		DynByteBuf m = merged;

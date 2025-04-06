@@ -57,7 +57,7 @@ public class DiskFileInfo implements FileInfo, ChannelHandler {
 		int v = state;
 		if (v == 0) v = MimeType.get(file.getName()).zip ? 1 : -1;
 		if (v > 0) {
-			stat |= FILE_CAN_DEFLATE;
+			stat |= FILE_CAN_COMPRESS;
 			if (v == 4) stat |= FILE_DEFLATED;
 		}
 		return stat;
@@ -89,7 +89,7 @@ public class DiskFileInfo implements FileInfo, ChannelHandler {
 	public void prepare(ResponseHeader rh, Headers h) {
 		if (Unaligned.U.compareAndSwapInt(this, STATE_OFFSET, 2, 3)) {
 			cc = DynByteBuf.allocateDirect();
-			rh.ch().addBefore("h11@compr", "compress-capture", this);
+			rh.connection().addBefore("h11@compr", "compress-capture", this);
 		}
 
 		if (download) h.putIfAbsent("Content-Disposition", "attachment; filename=\""+Escape.encodeURIComponent(file.getName())+'"');

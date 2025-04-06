@@ -90,4 +90,14 @@ public interface MyDataInput extends DataInput, Closeable {
 	long position() throws IOException;
 
 	boolean isReadable();
+
+	/**
+	 * 要求至多能回退limit个字节
+	 */
+	void mark(int limit);
+	/**
+	 * 回退N个字节
+	 * 主要是我不想往DynByteBuf里加字段记start了，所以没有reset
+	 */
+	void unread(int bytes) throws IOException;
 }

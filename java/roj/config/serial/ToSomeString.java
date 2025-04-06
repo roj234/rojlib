@@ -56,7 +56,7 @@ public abstract class ToSomeString implements CVisitor {
 		}
 	}
 
-	public final void value(int l) { preValue(false); sb.append(l); }
+	public final void value(int i) { preValue(false); sb.append(i); }
 	public final void value(String s) {
 		preValue(false);
 		if (s == null) valNull();
@@ -64,9 +64,9 @@ public abstract class ToSomeString implements CVisitor {
 	}
 	public void valString(CharSequence l) {Tokenizer.addSlashes(l, 0, sb.append('"'), '\'').append('"');}
 
-	public final void value(long l) { preValue(false); sb.append(l); }
-	public final void value(double l) { preValue(false); sb.append(l); }
-	public final void value(boolean l) { preValue(false); sb.append(l); }
+	public final void value(long i) { preValue(false); sb.append(i); }
+	public final void value(double i) { preValue(false); sb.append(i); }
+	public final void value(boolean b) { preValue(false); sb.append(b); }
 	public final void valueNull() { preValue(false); valNull(); }
 	protected void valNull() { sb.append("null"); }
 
@@ -127,6 +127,7 @@ public abstract class ToSomeString implements CVisitor {
 
 	protected abstract void key0(String key);
 
+	public final CharList mapValue() {preValue(false);return sb;}
 	public final CharList getValue() {
 		while (depth > 0) pop();
 		return sb;

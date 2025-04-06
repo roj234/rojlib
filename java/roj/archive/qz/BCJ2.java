@@ -84,7 +84,7 @@ public final class BCJ2 extends QZComplexCoder {
 				if (--len == 0) return;
 			}
 
-			ByteList ob = IOUtil.SharedCoder.get().wrap(b, off, len);
+			ByteList ob = IOUtil.SharedBuf.get().wrap(b, off, len);
 			tryEncode(ob);
 
 			if (ob.isReadable()) this.ob.put(ob);

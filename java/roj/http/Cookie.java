@@ -8,7 +8,7 @@ import roj.text.Escape;
  * @author Roj234
  * @since 2023/2/3 0003 16:31
  */
-public class Cookie {
+public final class Cookie {
 	public static final Cookie EMPTY = new Cookie("");
 
 	public final String name;
@@ -23,6 +23,12 @@ public class Cookie {
 		this.name = name.toString();
 		this.value = value;
 		this.flag = 16;
+
+		if (name.startsWith("__Secure-")) flag |= 8;
+		if (name.startsWith("__Host-")) {
+			flag |= 8;
+			path = "/";
+		}
 	}
 
 	public String value() { return value; }
@@ -47,6 +53,10 @@ public class Cookie {
 	public Cookie value(String v) { value = v; flag |= 16; return this; }
 	public Cookie domain(String v) { domain = v; flag |= 16; return this; }
 	public Cookie path(String v) { path = v; flag |= 16; return this; }
+	/**
+	 * 0: 会话
+	 * -1: 删除
+	 */
 	public Cookie expires(long time) { expires = time; flag |= 16; return this; }
 	public Cookie httpOnly(boolean b) {
 		if (b) flag |= 4;

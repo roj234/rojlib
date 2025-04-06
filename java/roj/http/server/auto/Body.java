@@ -10,8 +10,8 @@ import java.lang.annotation.Target;
  * @since 2023/2/5 0005 11:34
  */
 @Retention(RetentionPolicy.CLASS)
-@Target(ElementType.METHOD)
+@Target(ElementType.PARAMETER)
 public @interface Body {
-	From value();
-	boolean nonnull() default false;
+	boolean msgpack() default false;
+	boolean schemaless() default false;
 }

@@ -146,23 +146,21 @@ public class TextUtil {
 		return c - 0x30;
 	}
 
-
 	public static byte[] hex2bytes(String str) { return hex2bytes(str, IOUtil.getSharedByteBuf()).toByteArray(); }
-	public static DynByteBuf hex2bytes(CharSequence hex, DynByteBuf bl) {
-		bl.ensureCapacity(bl.wIndex() + (hex.length() >> 1));
+	public static DynByteBuf hex2bytes(CharSequence hex, DynByteBuf bytes) {
+		bytes.ensureCapacity(bytes.wIndex() + (hex.length() >> 1));
 
 		for (int i = 0; i < hex.length(); ) {
 			char c = hex.charAt(i++);
 			if (Tokenizer.WHITESPACE.contains(c) || c == ':') continue;
-			bl.put((byte) ((h2b(c) << 4) | h2b(hex.charAt(i++))));
+			bytes.put((h2b(c) << 4) | h2b(hex.charAt(i++)));
 		}
-		return bl;
+		return bytes;
 	}
 
 	@Attach("hex")
 	public static String bytes2hex(byte[] b) {return bytes2hex(b, 0, b.length, new CharList()).toStringAndFree();}
-
-	// not recommend to use!
+	public static CharList bytes2hex(byte[] b, CharList sb) {return bytes2hex(b, 0, b.length, sb);}
 	public static CharList bytes2hex(byte[] b, int off, int end, CharList sb) {
 		sb.ensureCapacity(sb.len + (end-off) << 1);
 		char[] tmp = sb.list;
@@ -714,18 +712,20 @@ public class TextUtil {
 		return sb;
 	}
 
-	private static final long CODER_OFFSET;
-	static {
-		long offset;
-		try {
-			offset = Unaligned.U.objectFieldOffset(String.class.getDeclaredField("coder"));
-		} catch (NoSuchFieldException e) {
-			offset = 0;
-		}
-		CODER_OFFSET = offset;
-	}
+	private static long CODER_OFFSET = -1;
 	@Attach
-	public static boolean isLatin1(String s) {return CODER_OFFSET != 0 ? Unaligned.U.getByte(Objects.requireNonNull(s), CODER_OFFSET) == 0 : legacyIsLatin1(s);}
+	public static boolean isLatin1(String s) {
+		long offset = CODER_OFFSET;
+		if (offset < 0) {
+			try {
+				offset = Unaligned.U.objectFieldOffset(String.class.getDeclaredField("coder"));
+			} catch (NoSuchFieldException e) {
+				offset = 0;
+			}
+			CODER_OFFSET = offset;
+		}
+		return offset != 0 ? Unaligned.U.getByte(Objects.requireNonNull(s), offset) == 0 : legacyIsLatin1(s);
+	}
 	private static boolean legacyIsLatin1(String s) {
 		for (int i = 0; i < s.length(); i++) {
 			if (s.charAt(i) > 255) return false;

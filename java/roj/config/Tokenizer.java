@@ -773,12 +773,15 @@ public class Tokenizer {
 					w = Word.numberWord(index, _parseNumber(v, flag, neg), represent);
 				}
 				case 2 -> {
+					if (neg) v.insert(0, '-');
 					float fv = Float.parseFloat(v.toString());
 					if (fv == Float.POSITIVE_INFINITY || fv == Float.NEGATIVE_INFINITY) return onInvalidNumber(oFlag, index, "lexer.number.floatLarge");
 					if (fv == 0 && !isZero(v)) return onInvalidNumber(oFlag, index, "lexer.number.floatSmall");
 					w = Word.numberWord(index, fv, represent);
 				}
 				case 3 -> {
+					// workaround before my double parser
+					if (neg) v.insert(0, '-');
 					double dv = Double.parseDouble(v.toString());
 					if (dv == Double.POSITIVE_INFINITY || dv == Double.NEGATIVE_INFINITY) return onInvalidNumber(oFlag, index, "lexer.number.floatLarge");
 					if (dv == 0 && !isZero(v)) return onInvalidNumber(oFlag, index, "lexer.number.floatSmall");

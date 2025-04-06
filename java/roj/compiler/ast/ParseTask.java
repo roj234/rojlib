@@ -1,7 +1,6 @@
 package roj.compiler.ast;
 
 import roj.asm.FieldNode;
-import roj.asm.IClass;
 import roj.asm.MethodNode;
 import roj.asm.Opcodes;
 import roj.asm.attr.AnnotationDefault;
@@ -9,7 +8,7 @@ import roj.asm.attr.ConstantValue;
 import roj.asm.attr.UnparsedAttribute;
 import roj.asm.cp.*;
 import roj.asm.type.IType;
-import roj.compiler.JavaLexer;
+import roj.compiler.Tokens;
 import roj.compiler.api.MethodDefault;
 import roj.compiler.asm.AnnotationPrimer;
 import roj.compiler.asm.MethodWriter;
@@ -21,7 +20,8 @@ import roj.compiler.context.LocalContext;
 import roj.compiler.diagnostic.Kind;
 import roj.config.ParseException;
 import roj.config.data.CEntry;
-import roj.io.IOUtil;
+import roj.util.ByteList;
+import roj.util.DynByteBuf;
 
 import java.util.List;
 
@@ -47,7 +47,7 @@ public interface ParseTask {
 	static void MethodDefault(CompileUnit file, MethodNode mn, int id) throws ParseException {
 		var lc = file.lc();
 		var wr = lc.lexer;
-		int state = wr.setState(JavaLexer.STATE_EXPR);
+		int state = wr.setState(Tokens.STATE_EXPR);
 		UnresolvedExprNode expr = lc.ep.parse(ExprParser.STOP_RSB|ExprParser.STOP_COMMA|ExprParser.NAE);
 		wr.state = state;
 
@@ -64,7 +64,7 @@ public interface ParseTask {
 	static ParseTask AnnotationDefault(CompileUnit file, MethodNode mn) throws ParseException {
 		var wr = file.lc().lexer;
 		int index = wr.index;
-		int state = wr.setState(JavaLexer.STATE_EXPR);
+		int state = wr.setState(Tokens.STATE_EXPR);
 		var expr = file.lc().ep.parse(ExprParser.STOP_SEMICOLON|ExprParser.SKIP_SEMICOLON|ExprParser._ENV_TYPED_ARRAY|ExprParser.NAE);
 		wr.state = state;
 
@@ -111,7 +111,8 @@ public interface ParseTask {
 	static ParseTask Field(CompileUnit file, FieldNode f) throws ParseException {
 		var wr = file.lc().lexer;
 		int index = wr.index;
-		int state = wr.setState(JavaLexer.STATE_EXPR);
+		int line = wr.LN;
+		int state = wr.setState(Tokens.STATE_EXPR);
 		var expr = file.lc().ep.parse(ExprParser.STOP_COMMA|ExprParser.STOP_SEMICOLON|ExprParser.NAE);
 		wr.state = state;
 
@@ -152,6 +153,7 @@ public interface ParseTask {
 					var mp = file.getStaticInit();
 					ctx.setMethod(mp.mn);
 
+					mp.lines().add(mp.label(), line);
 					node.write(mp, cast);
 					mp.field(Opcodes.PUTSTATIC, file.name(), f.name(), f.rawDesc());
 				} else {
@@ -166,6 +168,7 @@ public interface ParseTask {
 					var mp = file.getGlobalInit();
 					ctx.setMethod(mp.mn);
 
+					mp.lines().add(mp.label(), line);
 					mp.vars(Opcodes.ALOAD, ctx.thisSlot);
 					node.write(mp, cast);
 					mp.field(Opcodes.PUTFIELD, file.name(), f.name(), f.rawDesc());
@@ -203,27 +206,13 @@ public interface ParseTask {
 				ctx.lexer.init(pos, linePos, lineIdx);
 				MethodWriter cw = ctx.bp.parseMethod(file, mn, argNames);
 
-				autoConstructor:
-				if (ctx.notInvokeConstructor) {
-					if ((file.modifier&Opcodes.ACC_ENUM) != 0) {
-						EnumUtil.writeAutoConstructor(file, cw);
-						break autoConstructor;
-					}
+				if (ctx.noCallConstructor) {
+					ByteList buf = DynByteBuf.wrap(file.invokeDefaultConstructor());
+					file.appendGlobalInit(cw, buf, cw.lines);
 
-					IClass pInfo = ctx.classes.getClassInfo(file.parent());
-					int superInit = pInfo.getMethod("<init>", "()V");
-					if (superInit < 0) {
-						ctx.report(Kind.ERROR, "cu.noDefaultConstructor", file.parent());
-						break autoConstructor;
-					}
-					if (!ctx.checkAccessible(pInfo, pInfo.methods().get(superInit), false, true)) break autoConstructor;
-
-					var buf = IOUtil.getSharedByteBuf()
-						.put(Opcodes.ALOAD_0)
-						.put(Opcodes.INVOKESPECIAL)
-						.putShort(file.cp.getMethodRefId(file.parent(), "<init>", "()V"));
 					cw.insertBefore(buf);
-					cw.visitSizeMax(1, 0);
+				} else if (ctx.inConstructor && !ctx.thisConstructor) {
+					file.appendGlobalInit(cw, null, cw.lines);
 				}
 
 				cw.finish();

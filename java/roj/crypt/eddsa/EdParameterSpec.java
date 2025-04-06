@@ -10,7 +10,7 @@ public class EdParameterSpec implements AlgorithmParameterSpec {
 	private static final EdCurve ed25519curve = new EdCurve(toByte("a3785913ca4deb75abd841414d0a700098e879777940c78c73fe6f2bee6c0352"), toByte("b0a00e4a271beec478e42fad0618432fa7d7fb3d99004d2b0bdfc14f8024832b"));
 	public static final EdParameterSpec ED25519_CURVE_SPEC = new EdParameterSpec(Type.EdDSA, 255, 3, ed25519curve, "SHA-512", toByte("5866666666666666666666666666666666666666666666666666666666666666"));
 	public static final EdParameterSpec X25519_CURVE_SPEC = new EdParameterSpec(Type.XDH, 255, 3, ed25519curve, "SHA-512", toByte("0000000000000000000000000000000000000000000000000000000000000009"));
-	private static byte[] toByte(String s) { return IOUtil.SharedCoder.get().decodeHex(s); }
+	private static byte[] toByte(String s) { return IOUtil.decodeHex(s); }
 
 	private final Type type;
 	private final int bits;

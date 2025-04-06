@@ -261,9 +261,9 @@ final class MSSEngineClient extends MSSEngine {
 	//          key_update(24),
 	//          message_hash(254),
 	static final byte SSL_HANDSHAKE_CLIENT_HELLO = 1, SSL_HANDSHAKE_SERVER_HELLO = 2, SSL_HANDSHAKE_FINISHED = 20, SSL_HANDSHAKE = 22, SSL_DATA = 23;
-	static final byte[] HELLO_RETRY_REQUEST = IOUtil.SharedCoder.get().decodeHex("CF21AD74E59A6111BE1D8C021E65B891C2A211167ABB8C5E079E09E2C8A8339C");
-	static final byte[] DOWNGRADE_12 = IOUtil.SharedCoder.get().decodeHex("444F574E47524401");
-	static final byte[] DOWNGRADE_11 = IOUtil.SharedCoder.get().decodeHex("444F574E47524400");
+	static final byte[] HELLO_RETRY_REQUEST = IOUtil.decodeHex("CF21AD74E59A6111BE1D8C021E65B891C2A211167ABB8C5E079E09E2C8A8339C");
+	static final byte[] DOWNGRADE_12 = IOUtil.decodeHex("444F574E47524401");
+	static final byte[] DOWNGRADE_11 = IOUtil.decodeHex("444F574E47524400");
 	byte[] serverCookie;
 	public final int handshakeTLS13(DynByteBuf out, DynByteBuf in) throws MSSException {
 		// to be filled

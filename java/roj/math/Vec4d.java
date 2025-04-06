@@ -72,6 +72,12 @@ public class Vec4d extends Vector {
 	// q^-1 = q* / |q|^2
 	public Vec4d inverse() {return star().normalize();}
 
+	/**
+	 * 对自身应用旋转.
+	 * PS: 虽然旋转向量看起来不变，经过了两次取反，并且一定会变成单位向量
+	 * @param rot 旋转向量
+	 * @return 自身
+	 */
 	public Vec4d applyRotation(Vec4d rot) {
 		cross(rot, this, this);
 		cross(rot.inverse());
@@ -79,6 +85,12 @@ public class Vec4d extends Vector {
 		return this;
 	}
 
+	/**
+	 * 将该向量设置为一个旋转向量
+	 * @param angle 旋转的弧度
+	 * @param axis 旋转轴
+	 * @return 自身
+	 */
 	public Vec4d makeRotation(double angle, Vector axis) {
 		angle /= 2;
 		s = Math.cos(angle);

@@ -1,11 +1,9 @@
 package roj.text;
 
 import roj.archive.qz.xz.LZMAInputStream;
-import roj.collect.MyHashSet;
 import roj.util.ArrayCache;
 
 import java.io.IOException;
-import java.nio.charset.Charset;
 import java.util.function.IntConsumer;
 
 import static roj.reflect.Unaligned.U;
@@ -14,17 +12,19 @@ import static roj.reflect.Unaligned.U;
  * @author Roj234
  * @since 2023/4/27 0027 15:48
  */
-public final class GB18030 extends UnsafeCharset {
-	public static final UnsafeCharset CODER = new GB18030(), THROW_ON_FAIL = new GB18030();
+final class GB18030 extends FastCharset {
+	static final FastCharset INSTANCE = new GB18030(), EXCEPTIONAL = new GB18030();
+	private GB18030() {}
 
-	@Override
-	public String name() {return "GB18030";}
+	@Override public String name() {return "GB18030";}
+	@Override public FastCharset throwException(boolean doThrow) {return doThrow ? EXCEPTIONAL : INSTANCE;}
 
 	private static final int TAB2 = 24066;
-	private static final char[] TABLE = new char[63486];
-	private static final char[] REVERSE_TABLE = new char[65408];
+	private static final char[] TABLE, REVERSE_TABLE;
 
 	static {
+		TABLE = (char[]) U.allocateUninitializedArray(char.class, 63486);
+		REVERSE_TABLE = (char[]) U.allocateUninitializedArray(char.class, 65408);
 		try (var in = new LZMAInputStream(GB18030.class.getClassLoader().getResourceAsStream("roj/text/GB18030.lzma"))) {
 			byte[] b = ArrayCache.getByteArray(4096, false);
 			int off = 0;
@@ -49,52 +49,30 @@ public final class GB18030 extends UnsafeCharset {
 		}
 	}
 
-	public static boolean isTwoByte(char c) {
-		if (c <= 128) return false;
-		var cp = REVERSE_TABLE[c-128] - 1;
-		return cp >= 0 && cp < TAB2;
-	}
-
-	private static final MyHashSet<String> GB18030_IDS = new MyHashSet<>("GBK", "GB2312", "GB18030", "x-mswin-936");
-	public static boolean is(Charset cs) { return cs != null && GB18030_IDS.contains(cs.name()); }
-
 	@Override
-	public long unsafeEncode(char[] s, int i, int end, Object ref, long addr, int outMax) {
+	public long fastEncode(char[] s, int i, int end, Object ref, long addr, int outMax) {
+		// +5% for ASCII, +11% for chinese
+		int previ = i;
 		while (i < end) {
-			int c = s[i];
-			if (c > 0x7F) break;
-			if (outMax == 0) return ((long) i << 32);
-
-			i++;
-			outMax--;
-
-			U.putByte(ref, addr++, (byte) c);
-		}
-
-		while (i < end) {
-			int c = s[i];
-
+			int c = s[i++];
 			if (c <= 0x7F) {
 				if (outMax == 0) break;
-
-				i++;
 				outMax--;
 
+				previ = i;
 				U.putByte(ref, addr++, (byte) c);
 				continue;
 			}
 
-			int sum = 1;
 			int cp;
-			check:{
+			surrogateCheck: {
 				if (isSurrogate(c)) {
-					if (i+1 == end) break;
+					if (i == end) break;
+					c = this == EXCEPTIONAL ? codepoint(c, s[i++]) : codepointNoExc(c, s[i++]);
 
-					c = codepoint(c, s[i+1]);
-					sum++;
 					if (c > 0xFFFF) {
 						cp = c + 123464 + TAB2;
-						break check;
+						break surrogateCheck;
 					}
 				}
 				cp = REVERSE_TABLE[c-128] - 1;
@@ -120,28 +98,22 @@ public final class GB18030 extends UnsafeCharset {
 				U.putByte(ref, addr++, (byte) (129 + cp / 10));
 				U.putByte(ref, addr++, (byte) (48 + cp % 10));
 			}
-			i += sum;
+
+			previ = i;
 		}
 
-		return ((long)i << 32) | outMax;
+		return ((long)previ << 32) | outMax;
 	}
 
 	@Override
-	public long unsafeDecode(Object ref, long base, int pos, int end, char[] out, int off, int outMax) {
+	public long fastDecode(Object ref, long base, int pos, int end, char[] out, int off, int outMax) {
 		long i = base+pos;
-		long max = base+end;
 		outMax += off;
 
 		int c;
-		while (i < max && off < outMax) {
-			c = U.getByte(ref, i);
-			if (c < 0) break;
-			i++;
-			out[off++] = (char) c;
-		}
-
+		long previ = i;
 		malformed: {
-		while (i < max && off < outMax) {
+		for (long max = base+end; i < max && off < outMax; previ = i) {
 			c = U.getByte(ref,i++);
 			// US_ASCII
 			if (c >= 0) {
@@ -156,24 +128,18 @@ public final class GB18030 extends UnsafeCharset {
 				continue;
 			}
 			if (c == 255) break malformed;
-			if (i == max) {
-				i--;
-				break;
-			}
+			if (i == max) break;
 
 			int c2 = U.getByte(ref,i++) & 255;
 			if (c2 <= 57) {
-				if (c2 < 48) { i--; break malformed; }
+				if (c2 < 48) break malformed;
 
-				if (max-i < 2) {
-					i -= 2;
-					break;
-				}
+				if (max-i < 2) break;
 
 				int c3 = U.getByte(ref,i++) & 255;
 				int c4 = U.getByte(ref,i++) & 255;
 
-				if (c3 == 128 || c3 == 255 || c4 < 48 || c4 > 57) { i -= 3; break malformed; }
+				if (c3 == 128 || c3 == 255 || c4 < 48 || c4 > 57) break malformed;
 
 				int cp = (((c-129) * 10 + (c2-48)) * 126 + c3 - 129) * 10 + c4 - 48;
 
@@ -181,39 +147,36 @@ public final class GB18030 extends UnsafeCharset {
 					out[off++] = TABLE[TAB2+cp];
 				} else {
 					cp -= 123464;
-					if (cp < 0 || cp > Character.MAX_CODE_POINT) { i -= 3; break malformed; }
+					if (cp < 0 || cp > Character.MAX_CODE_POINT) break malformed;
 
 					if (cp < Character.MIN_SUPPLEMENTARY_CODE_POINT) {
 						out[off++] = (char) cp;
 						continue;
 					}
 
-					if (outMax-off < 2) return (i-base) << 32;
+					if (outMax-off < 2) break;
 
 					out[off++] = Character.highSurrogate(cp);
 					out[off++] = Character.lowSurrogate(cp);
 				}
 			} else {
 				// double
-				if (c2 == 127 || c2 == 255 || c2 < 64) {
-					i--;
-					break malformed;
-				}
+				if (c2 == 127 || c2 == 255 || c2 < 64) break malformed;
 
 				int cp = (c-129) * (255-64) + (c2-64);
 				out[off++] = TABLE[cp];
 			}
 		}
 
-		return ((i-base) << 32) | off;}
+		return ((previ-base) << 32) | off;}
 
-		if (this == THROW_ON_FAIL) throw new IllegalArgumentException((int) (i-base) + " 附近解码错误");
+		if (this == EXCEPTIONAL) throw new IllegalArgumentException((int) (previ-base) + " 附近解码错误");
 		out[off++] = (char) c;
-		return ((i-base) << 32) | off;
+		return ((previ-base) << 32) | off;
 	}
 
 	@Override
-	public void unsafeValidate(Object ref, long i, long max, IntConsumer cs) {
+	public void fastValidate(Object ref, long i, long max, IntConsumer cs) {
 		int c;
 
 		while (i < max) {
@@ -288,7 +251,7 @@ public final class GB18030 extends UnsafeCharset {
 		int end = i+len;
 		while (i < end) {
 			int c = s.charAt(i++);
-			if (c <= 0x7F) continue;
+			if (c <= 0x80) continue;
 
 			int cp;
 			check: {
@@ -302,13 +265,24 @@ public final class GB18030 extends UnsafeCharset {
 						break check;
 					}
 				}
-				cp = REVERSE_TABLE[c-128] - 1;
+				cp = REVERSE_TABLE[c-128];
 			}
 
-			if (cp < TAB2) len++;
+			if (cp <= TAB2) len++;
 			else len += 3;
 		}
 
 		return len;
+	}
+
+	@Override
+	public int addBOM(Object ref, long addr) {U.put32UB(ref, addr, 0x84319533);return 4;}
+
+	@Override
+	public int encodeSize(int codepoint) {
+		if (codepoint <= 0x80) return 1;
+		var cp = REVERSE_TABLE[codepoint-0x80];
+		if (cp == 0) return -1;
+		return cp <= TAB2 ? 2 : 4;
 	}
 }

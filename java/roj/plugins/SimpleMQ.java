@@ -1,28 +1,37 @@
 package roj.plugins;
 
+import org.jetbrains.annotations.Nullable;
 import roj.collect.SimpleList;
 import roj.concurrent.PacketBuffer;
+import roj.concurrent.TaskPool;
 import roj.config.ConfigMaster;
 import roj.config.ParseException;
 import roj.config.data.CMap;
-import roj.http.HttpUtil;
+import roj.http.HttpClient;
+import roj.http.HttpRequest;
+import roj.http.WebSocketConnection;
+import roj.http.server.Content;
+import roj.http.server.IllegalRequestException;
 import roj.http.server.Request;
-import roj.http.server.Response;
 import roj.http.server.auto.*;
-import roj.http.ws.WebSocketHandler;
 import roj.io.IOUtil;
 import roj.net.ChannelCtx;
+import roj.plugin.PermissionHolder;
 import roj.plugin.Plugin;
+import roj.plugin.PluginDescriptor;
 import roj.plugin.SimplePlugin;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
 import roj.util.Helpers;
+import roj.util.TypedKey;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.locks.Lock;
+import java.util.zip.GZIPOutputStream;
 
 /**
  * @author Roj234
@@ -30,9 +39,30 @@ import java.util.concurrent.locks.Lock;
  */
 @SimplePlugin(id = "simpleMQ", desc = "基于websocket的实时消息队列", version = "1.1")
 public class SimpleMQ extends Plugin {
+	private Plugin easySso;
+
 	@Override
 	protected void onEnable() throws Exception {
-		registerRoute("mq/", new OKRouter().register(this));
+		easySso = getPluginManager().getPluginInstance(PluginDescriptor.Role.PermissionManager);
+		registerRoute("mq", new OKRouter().register(this), "PermissionManager");
+
+		var buf = IOUtil.getSharedByteBuf();
+		var gzos = new GZIPOutputStream(buf);
+		gzos.write("new byte[1234]=5&asdf=+6&asdf=+7".getBytes(StandardCharsets.UTF_8));
+		gzos.close();
+
+		// cookies, auto compress, get serializer via accept header
+		HttpClient execute = HttpRequest.builder().url("http://127.0.0.1:8080/mq/datatest").bodyG3(() -> buf.asInputStream()).execute();
+		TaskPool.Common().submit(() -> {
+			System.out.println(execute.head());
+			System.out.println(execute.str());
+		});
+	}
+
+	@POST
+	public Object datatest(Request req) throws IllegalRequestException {
+		System.out.println("result:"+req.formData());
+		return 1;
 	}
 
 	@Override
@@ -49,7 +79,7 @@ public class SimpleMQ extends Plugin {
 			Lock lock = worker.ch.channel().lock();
 			lock.lock();
 			try {
-				worker.error(WebSocketHandler.ERR_CLOSED, "插件卸载");
+				worker.close(WebSocketConnection.ERR_CLOSED, "插件卸载");
 				worker.ch.close();
 			} catch (Throwable e) {
 				e.printStackTrace();
@@ -62,9 +92,24 @@ public class SimpleMQ extends Plugin {
 	boolean disabled;
 	final SimpleList<Worker> workers = new SimpleList<>();
 	final ConcurrentHashMap<String, List<Worker>> subscribers = new ConcurrentHashMap<>();
+	final ConcurrentHashMap<String, DynByteBuf> dataCache = new ConcurrentHashMap<>();
 
-	final class Worker extends WebSocketHandler {
-		PacketBuffer pb = new PacketBuffer(15);
+	final class Worker extends WebSocketConnection {
+		final PacketBuffer pb = new PacketBuffer(4);
+		final PermissionHolder user;
+
+		public Worker(PermissionHolder user) {this.user = user;}
+
+		@Override
+		public void channelOpened(ChannelCtx ctx) throws IOException {
+			System.out.println("channelopend");
+			send("computer info");
+		}
+
+		@Override
+		public void handlerAdded(ChannelCtx ctx) {
+			super.handlerAdded(ctx);
+		}
 
 		@Override
 		public void channelTick(ChannelCtx ctx) throws IOException {
@@ -90,28 +135,33 @@ public class SimpleMQ extends Plugin {
 		protected void onData(int ph, DynByteBuf in) throws IOException {
 			CMap map;
 			try {
-				map = ph == FRAME_TEXT ? ConfigMaster.JSON.parse(in).asMap() : ConfigMaster.NBT.parse(in).asMap();
+				map = (ph == FRAME_TEXT ? ConfigMaster.JSON : ConfigMaster.MSGPACK).parse(in).asMap();
 			} catch (IOException|ParseException e) {
 				getLogger().warn("{}的消息解析失败", e, ch.remoteAddress());
-				error(ERR_INVALID_DATA, "消息解析失败");
+				close(ERR_INVALID_DATA, "消息解析失败");
 				return;
 			}
 
-			String val = map.getString("subscribe");
-			if (!val.isEmpty()) {
-				var event = subscribers.computeIfAbsent(val, Helpers.fnArrayList());
+			String eventId = map.getString("subscribe");
+			if (!eventId.isEmpty()) {
+				var event = subscribers.computeIfAbsent(eventId, Helpers.fnArrayList());
 
 				boolean success;
 				synchronized (event) { //noinspection AssignmentUsedAsCondition
-					if (success = !event.contains(this)) event.add(this);
+					if (success = (!event.contains(this) && user.hasPermission("mq/subscribe/"+eventId))) {
+						event.add(this);
+
+						var buf = dataCache.get(eventId);
+						if (buf != null) pb.offer(buf);
+					}
 				}
 
 				send(success ? "true" : "false");
 			}
 
-			val = map.getString("unsubscribe");
-			if (!val.isEmpty()) {
-				var event = subscribers.getOrDefault(val, Collections.emptyList());
+			eventId = map.getString("unsubscribe");
+			if (!eventId.isEmpty()) {
+				var event = subscribers.getOrDefault(eventId, Collections.emptyList());
 
 				boolean success;
 				if (event.isEmpty()) success = false;
@@ -130,10 +180,23 @@ public class SimpleMQ extends Plugin {
 
 	@POST
 	@Interceptor("cors")
-	@Body(From.GET)
-	public Response post(Request req, String event) {
-		ByteList data = req.postBuffer();
+	public Content post(Request req, String event, @QueryParam(orDefault = "false") boolean cache) {
+		event = event.replace('/', '.');
+
+		var data = req.body();
 		List<Worker> handlers = subscribers.getOrDefault(event, Collections.emptyList());
+
+		var ph = getUser(req);
+		if (ph == null || !ph.hasPermission("mq/post/"+event+(cache?"/cached":""))) {
+			return Content.json("\"权限不足\"");
+		}
+
+		if (cache) {
+			var prev = dataCache.put(event, data.copySlice());
+			if (prev != null) ((ByteList) prev)._free();
+		} else {
+			dataCache.remove(event);
+		}
 
 		int count;
 		if (!handlers.isEmpty()) synchronized (handlers) {
@@ -143,16 +206,32 @@ public class SimpleMQ extends Plugin {
 			}
 		} else count = 0;
 
-		return Response.json(String.valueOf(count));
+		return Content.json(String.valueOf(count));
 	}
 
-	@Route
+	@GET
 	@Interceptor("cors")
-	public Object subscribe(Request req) {
-		if (!"websocket".equals(req.getField("upgrade")))
-			return req.server().code(503).returns("websocket server");
-		return Response.websocket(req, request -> {
-			var listener = new Worker();
+	public Content query(Request req, String event) {
+		event = event.replace('/', '.');
+
+		var ph = getUser(req);
+		if (ph == null || !ph.hasPermission("mq/query/"+event)) return Content.json("\"权限不足\"");
+
+		var buffer = dataCache.get(event);
+		return buffer == null ? req.server().code(204).noContent() : Content.bytes(buffer);
+	}
+
+	@Route("")
+	@Interceptor("cors")
+	public Object index(Request req) {
+		if (!"websocket".equals(req.header("upgrade")))
+			return req.server().code(503).cast("websocket server");
+
+		return Content.websocket(req, request -> {
+			var user = getUser(request);
+			if (user == null) return null;
+
+			var listener = new Worker(user);
 
 			synchronized (workers) {
 				if (disabled) return null;
@@ -164,16 +243,8 @@ public class SimpleMQ extends Plugin {
 	}
 
 	@Interceptor
-	public Object cors(Request req) {
-		if (HttpUtil.isCORSPreflight(req)) {
-			req.server().code(204).header(
-				"Access-Control-Allow-Headers: "+req.getField("access-control-request-headers")+"\r\n" +
-					"Access-Control-Allow-Origin: "+req.getField("origin")+"\r\n" +
-					"Access-Control-Max-Age: 2592000\r\n" +
-					"Access-Control-Allow-Methods: *");
-			return Response.EMPTY;
-		}
-		req.server().header("Access-Control-Allow-Origin", "*");
-		return null;
-	}
+	public Object cors(Request req) {return req.checkOrigin(null);}
+
+	@Nullable
+	private PermissionHolder getUser(Request req) {return easySso.ipc(new TypedKey<>("getUser"), req);}
 }

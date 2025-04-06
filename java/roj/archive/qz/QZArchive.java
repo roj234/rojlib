@@ -319,6 +319,10 @@ public class QZArchive extends QZReader implements ArchiveFile {
 				buf = size > 65536 ? new ByteList(size) : (ByteList) BufferPool.buffer(false, size);
 				int read = buf.readStream(in, size);
 				if (read != size || in.read() >= 0) throw new EOFException("数据流过早终止");
+			} catch (Exception e) {
+				if (b.hasProcessor(QzAES.class) && that.password != null)
+					throw new CorruptedInputException("压缩包打开失败，可能是密码错误", e);
+				throw e;
 			}
 		}
 

@@ -1,5 +1,8 @@
 package roj.plugins.ci.plugin;
 
+import roj.asm.ClassNode;
+import roj.asm.annotation.Annotation;
+import roj.asm.attr.Annotations;
 import roj.asm.cp.Constant;
 import roj.asm.cp.ConstantPool;
 import roj.asm.cp.CstRefUTF;
@@ -22,7 +25,18 @@ public class ANNOTATION implements Processor {
 	public List<Context> process(List<Context> classes, ProcessEnvironment pc) {
 		var ctx = pc.getAnnotatedClass(classes, "roj/plugins/ci/annotation/ReplaceConstant");
 		for (int i = 0; i < ctx.size(); i++) {
-			ConstantPool cp = ctx.get(i).getData().cp();
+			ClassNode data = ctx.get(i).getData();
+			ConstantPool cp = data.cp();
+
+			List<Annotation> annotations = Annotations.getAnnotations(cp, data, false);
+			for (int j = 0; j < annotations.size(); j++) {
+				Annotation annotation = annotations.get(j);
+				if (annotation.type().equals("roj/plugins/ci/annotation/ReplaceConstant")) {
+					annotations.remove(j);
+					break;
+				}
+			}
+
 			List<Constant> array = cp.data();
 			for (Constant constant : array) {
 				if (constant.type() == Constant.STRING) {

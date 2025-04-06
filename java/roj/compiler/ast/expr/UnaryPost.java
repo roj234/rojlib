@@ -2,14 +2,14 @@ package roj.compiler.ast.expr;
 
 import roj.asm.type.IType;
 import roj.asm.type.Type;
-import roj.compiler.JavaLexer;
+import roj.compiler.Tokens;
 import roj.compiler.asm.MethodWriter;
 import roj.compiler.context.LocalContext;
 import roj.compiler.diagnostic.Kind;
 import roj.compiler.resolve.ResolveException;
 import roj.compiler.resolve.TypeCast;
 
-import static roj.compiler.JavaLexer.byId;
+import static roj.compiler.Tokens.byId;
 
 /**
  * @author Roj234
@@ -26,7 +26,7 @@ final class UnaryPost extends ExprNode {
 	}
 
 	@Override
-	public String toString() { return left+JavaLexer.byId(op); }
+	public String toString() { return left+ Tokens.byId(op); }
 
 	@Override
 	public IType type() { return left.type(); }
@@ -58,7 +58,7 @@ final class UnaryPost extends ExprNode {
 	}
 
 	@Override
-	public void write(MethodWriter cw, boolean noRet) { Assign.incOrDec(left, cw, noRet, true, op == JavaLexer.inc ? 1 : -1); }
+	public void write(MethodWriter cw, boolean noRet) { Assign.incOrDec(left, cw, noRet, true, op == Tokens.inc ? 1 : -1); }
 
 	@Override
 	public boolean equals(Object o) {

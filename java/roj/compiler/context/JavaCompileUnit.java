@@ -11,8 +11,8 @@ import roj.collect.IntList;
 import roj.collect.MyHashMap;
 import roj.collect.MyHashSet;
 import roj.collect.SimpleList;
-import roj.compiler.JavaLexer;
 import roj.compiler.LavaFeatures;
+import roj.compiler.Tokens;
 import roj.compiler.api.Types;
 import roj.compiler.asm.LPSignature;
 import roj.compiler.asm.ParamAnnotationRef;
@@ -35,7 +35,7 @@ import java.util.Collections;
 import java.util.List;
 
 import static roj.asm.Opcodes.*;
-import static roj.compiler.JavaLexer.*;
+import static roj.compiler.Tokens.*;
 import static roj.config.Word.*;
 
 /**
@@ -96,7 +96,7 @@ public final class JavaCompileUnit extends CompileUnit {
 	public JavaCompileUnit newAnonymousClass(@Nullable MethodNode mn) throws ParseException {
 		JavaCompileUnit c = new JavaCompileUnit(this, false);
 
-		c.name(c.name = IOUtil.getSharedCharBuf().append(name).append("$").append(++_children).toString());
+		c.name(c.name = IOUtil.getSharedCharBuf().append(name).append('$').append(++_children).toString());
 		c.modifier = ACC_FINAL|ACC_SUPER;
 		// magic number to disable auto constructor
 		c.extraModifier = ACC_FINAL|ACC_INTERFACE;
@@ -142,7 +142,7 @@ public final class JavaCompileUnit extends CompileUnit {
 		// 空
 		if (w.type() == EOF) return false;
 
-		boolean isNormalClass = !source.contains("-info");
+		boolean isNormalClass = !filename.contains("-info");
 		boolean packageAnnotation = w.type() == at;
 		if (packageAnnotation) {
 			attachJavadoc(this);
@@ -175,7 +175,7 @@ public final class JavaCompileUnit extends CompileUnit {
 		}
 
 		if (ctx.classes.hasFeature(LavaFeatures.ATTR_SOURCE_FILE))
-			addAttribute(new StringAttribute(Annotations.SourceFile, source));
+			addAttribute(new StringAttribute(Annotations.SourceFile, filename));
 
 		importList.clear();
 		if (w.type() == PACKAGE_RESTRICTED) {
@@ -246,7 +246,7 @@ public final class JavaCompileUnit extends CompileUnit {
 
 		return shouldAdd;
 	}
-	private void parseModuleInfo(JavaLexer wr, boolean moduleIsOpen) throws ParseException {
+	private void parseModuleInfo(Tokens wr, boolean moduleIsOpen) throws ParseException {
 		setMinimumBinaryCompatibility(LavaFeatures.JAVA_9);
 		modifier = ACC_MODULE;
 		name(name = "module-info");
@@ -257,11 +257,6 @@ public final class JavaCompileUnit extends CompileUnit {
 
 		var names = ctx.getTmpSet();
 
-		// TODO ModulePackages ModuleMainClass
-		// 某些重复可能并非错误
-		// 我从未用过模块系统，因为它不让我引用未命名模块
-		// 当然，也许很快就变了
-		// https://blog.csdn.net/qq_60914456/article/details/126206715
 		loop:
 		while (true) {
 			Word w = wr.next();
@@ -343,7 +338,7 @@ public final class JavaCompileUnit extends CompileUnit {
 	// endregion
 	// region 阶段1 类的结构
 	private void header(int acc) throws ParseException {
-		JavaLexer wr = ctx.lexer;
+		Tokens wr = ctx.lexer;
 
 		// 虽然看起来很怪，但是确实满足了this inner和helper正确的javadoc提交逻辑
 		_parent.attachJavadoc(this);
@@ -380,7 +375,7 @@ public final class JavaCompileUnit extends CompileUnit {
 				parent("roj/compiler/runtime/Struct");
 			}
 			case CLASS -> acc |= ACC_SUPER;
-			default -> throw wr.err("unexpected_2\1"+w.val()+"\0\1cu.except.type\0");
+			default -> throw wr.err("unexpected_2:[\""+w.val()+"\",cu.except.type]");
 		}
 		modifier = (char)acc;
 		extraModifier = acc;
@@ -389,8 +384,8 @@ public final class JavaCompileUnit extends CompileUnit {
 		w = wr.except(LITERAL, "cu.name");
 		classIdx = w.pos()+1;
 
-		if (ctx.classes.hasFeature(LavaFeatures.VERIFY_FILENAME) && (acc&ACC_PUBLIC) != 0 && _parent == this && !IOUtil.fileName(source).equals(w.val())) {
-			ctx.report(Kind.SEVERE_WARNING, "cu.filename", source);
+		if (ctx.classes.hasFeature(LavaFeatures.VERIFY_FILENAME) && (acc&ACC_PUBLIC) != 0 && _parent == this && !IOUtil.fileName(filename).equals(w.val())) {
+			ctx.report(Kind.SEVERE_WARNING, "cu.filename", filename);
 		}
 
 		name(name = name.concat(w.val()));
@@ -488,7 +483,7 @@ public final class JavaCompileUnit extends CompileUnit {
 
 			currentNode = classSelf;
 
-			if (w.type() != rParen) throw wr.err("unexpected_2\1"+w.val()+"\0\1cu.except.record\0");
+			if (w.type() != rParen) throw wr.err("unexpected_2:[\""+w.val()+"\",cu.except.record]");
 
 			miscFieldId = fields.size();
 
@@ -549,7 +544,7 @@ public final class JavaCompileUnit extends CompileUnit {
 	}
 	private void body() throws ParseException {
 		LocalContext ctx = this.ctx;
-		JavaLexer wr = ctx.lexer;
+		Tokens wr = ctx.lexer;
 		Word w;
 
 		wr.except(lBrace);
@@ -677,7 +672,7 @@ public final class JavaCompileUnit extends CompileUnit {
 						g.addChild(readType(wr, TYPE_PRIMITIVE|TYPE_GENERIC));
 						w = wr.next();
 					} while (w.type() == comma);
-					if (w.type() != rBracket) throw wr.err("unexpected_2\1"+w.type()+"\0\1cu.except.multiArg\0");
+					if (w.type() != rBracket) throw wr.err("unexpected_2:[\""+w.val()+"\",cu.except.multiArg]");
 				} else {
 					wr.retractWord();
 					type1 = readType(wr, TYPE_PRIMITIVE|TYPE_GENERIC|TYPE_ALLOW_VOID|SKIP_TYPE_PARAM);
@@ -697,7 +692,7 @@ public final class JavaCompileUnit extends CompileUnit {
 				methodIdx.add(w.pos());
 				if ((acc&ACC_METHOD_ILLEGAL) != 0) ctx.report(Kind.ERROR, "modifier.notAllowed", showModifiers(acc&ACC_METHOD_ILLEGAL, ACC_SHOW_FIELD));
 				if ((acc & ACC_ABSTRACT) != 0) {
-					if ((acc&ACC_STRICT) != 0) ctx.report(Kind.ERROR, "modifier.conflict:strictfp:abstract");
+					if ((acc&ACC_STRICT) != 0) ctx.report(Kind.ERROR, "modifier.conflict:[strictfp,abstract]");
 					if ((modifier & ACC_ABSTRACT) == 0) ctx.report(Kind.ERROR, "cu.method.noAbstract", this.name, name);
 				}
 
@@ -728,7 +723,7 @@ public final class JavaCompileUnit extends CompileUnit {
 				if (w.type() != rParen) {
 					wr.retractWord();
 
-					boolean lsVarargs = false;
+					boolean isVarargs = false;
 					MethodParameters parAccName;
 					if (ctx.classes.hasFeature(LavaFeatures.ATTR_METHOD_PARAMETERS)) {
 						parAccName = new MethodParameters();
@@ -742,7 +737,7 @@ public final class JavaCompileUnit extends CompileUnit {
 					}
 
 					do {
-						if (lsVarargs) ctx.report(Kind.ERROR, "cu.method.paramVararg");
+						if (isVarargs) ctx.report(Kind.ERROR, "cu.method.paramVararg");
 
 						int acc1 = readModifiers(wr, ACC_FINAL | _ACC_ANNOTATION);
 
@@ -751,7 +746,7 @@ public final class JavaCompileUnit extends CompileUnit {
 
 						w = wr.next();
 						if (w.type() == varargs) {
-							lsVarargs = true;
+							isVarargs = true;
 							w = wr.next();
 							parType = TypeHelper.arrayTypeNC(parType);
 						}
@@ -777,19 +772,21 @@ public final class JavaCompileUnit extends CompileUnit {
 								parAccName.flags.add(new MethodParam(pname, (char) acc1));
 							}
 						} else {
-							throw wr.err("unexpected\1"+w.val()+"\0");
+							throw wr.err("unexpected:\""+w.val()+"\"");
 						}
 
 						w = wr.next();
 						if (w.type() == assign) {
+							if (isVarargs) ctx.report(Kind.ERROR, "cu.method.varargDefault");
+
 							ParseTask.MethodDefault(this, method, paramNames.size());
 							w = wr.next();
 						}
 					} while (w.type() == comma);
 
-					if (w.type() != rParen) throw wr.err("unexpected\1"+w.val()+"\0");
+					if (w.type() != rParen) throw wr.err("unexpected:\""+w.val()+"\"");
 
-					if (lsVarargs) acc |= ACC_VARARGS;
+					if (isVarargs) acc |= ACC_VARARGS;
 				}
 
 				method.modifier = (char) acc;
@@ -853,8 +850,8 @@ public final class JavaCompileUnit extends CompileUnit {
 					}
 
 					addParseTask((acc & _ACC_ASYNC) != 0
-						? GeneratorUtil.Generator(this, method, ArrayUtil.copyOf(paramNames))
-						: ParseTask.Method(this, method, ArrayUtil.copyOf(paramNames)));
+						? GeneratorUtil.Generator(this, method, ArrayUtil.immutableCopyOf(paramNames))
+						: ParseTask.Method(this, method, ArrayUtil.immutableCopyOf(paramNames)));
 					continue;
 				}
 
@@ -914,7 +911,7 @@ public final class JavaCompileUnit extends CompileUnit {
 			}
 		}
 	}
-	private void enumFields(JavaLexer wr, MyHashSet<String> names, LocalContext ctx) throws ParseException {
+	private void enumFields(Tokens wr, MyHashSet<String> names, LocalContext ctx) throws ParseException {
 		assert fields.isEmpty();
 
 		Type selfType = Type.klass(name);

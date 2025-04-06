@@ -240,7 +240,7 @@ public sealed abstract class NestContext {
 
 			for (Variable value : variables.values()) {
 				if (value.slot >= 0x10000) value.slot -= 0x10000;
-				else value.slot += localSize;
+				else value.slot += localSize - 0x10000;
 			}
 		}
 	}

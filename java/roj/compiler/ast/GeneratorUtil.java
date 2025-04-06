@@ -21,7 +21,7 @@ public class GeneratorUtil {
 	public static final String RETURNSTACK_TYPE = "roj/compiler/runtime/ReturnStack";
 
 	public static ParseTask Generator(CompileUnit file, MethodNode mn, List<String> argNames) throws ParseException {
-		var impl = file.newAnonymousClass_NoBody(mn);
+		var impl = file.newAnonymousClass_NoBody(mn, null);
 		impl.parent("roj/compiler/runtime/Generator");
 
 		var wr = file.lc().lexer;

@@ -3,7 +3,6 @@ package roj.text;
 import roj.reflect.ReflectionUtils;
 import roj.reflect.Unaligned;
 
-import java.nio.charset.Charset;
 import java.util.function.IntConsumer;
 
 import static java.lang.Character.*;
@@ -13,30 +12,24 @@ import static roj.reflect.Unaligned.U;
  * 不验证并且仅内存拷贝的UTF16
  * @author Roj234
  */
-public final class UTF16n extends UnsafeCharset {
-	public static final UnsafeCharset CODER = Boolean.getBoolean("roj.text.disableUTF16n") ? null : new UTF16n();
-	public static boolean is(Charset charset) {return CODER != null && charset.name().equals(CODER.name());}
+final class UTF16n extends FastCharset {
+	static final boolean DISABLE_AUTO = Boolean.getBoolean("roj.text.disableUTF16n");
+	static final FastCharset INSTANCE = new UTF16n();
+	private UTF16n() {}
 
-	@Override
-	public String name() {return ReflectionUtils.BIG_ENDIAN ? "UTF-16BE" : "UTF-16LE";}
-
-	@Override
-	public long unsafeEncode(char[] s, int i, int end, Object ref, long addr, int max_len) {
+	@Override public String name() {return ReflectionUtils.BIG_ENDIAN ? "UTF-16BE" : "UTF-16LE";}
+	@Override public long fastEncode(char[] s, int i, int end, Object ref, long addr, int max_len) {
 		int copyChars = Math.min(max_len/2, end-i);
 		U.copyMemory(s, Unaligned.ARRAY_CHAR_BASE_OFFSET + (i * 2L), ref, addr, copyChars * 2L);
 		i += copyChars;
 		return ((long) i << 32) | (max_len - copyChars * 2L);
 	}
-
-	@Override
-	public long unsafeDecode(Object ref, long base, int pos, int end, char[] out, int off, int outMax) {
+	@Override public long fastDecode(Object ref, long base, int pos, int end, char[] out, int off, int outMax) {
 		int copyChars = Math.min((end-pos)/2, outMax);
 		U.copyMemory(ref, base+pos, out, Unaligned.ARRAY_CHAR_BASE_OFFSET + (off * 2L), copyChars * 2L);
 		return ((pos+copyChars*2L)<<32) | (off+copyChars);
 	}
-
-	@Override
-	public void unsafeValidate(Object ref, long i, long max, IntConsumer cs) {
+	@Override public void fastValidate(Object ref, long i, long max, IntConsumer cs) {
 		while (i+2 <= max) {
 			int c = U.getChar(ref, i); i += 2;
 
@@ -52,7 +45,7 @@ public final class UTF16n extends UnsafeCharset {
 		}
 		if (i != max) cs.accept(TRUNCATED);
 	}
-
-	@Override
-	public int byteCount(CharSequence s, int i, int len) {return len*2;}
+	@Override public int byteCount(CharSequence s, int i, int len) {return len*2;}
+	@Override public int addBOM(Object ref, long addr) {U.putChar(ref, addr, (char) 0xFEFF);return 2;}
+	@Override public int encodeSize(int codepoint) {return codepoint > 0xFFFF ? 4 : 2;}
 }

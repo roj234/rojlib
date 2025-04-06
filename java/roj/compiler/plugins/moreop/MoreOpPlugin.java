@@ -3,7 +3,7 @@ package roj.compiler.plugins.moreop;
 import roj.asm.MethodNode;
 import roj.asm.Opcodes;
 import roj.asm.type.Type;
-import roj.compiler.JavaLexer;
+import roj.compiler.Tokens;
 import roj.compiler.api.Types;
 import roj.compiler.ast.expr.ExprNode;
 import roj.compiler.ast.expr.Invoke;
@@ -39,7 +39,7 @@ public final class MoreOpPlugin implements LavaApi.ExprOp {
 	@Override
 	public ExprNode test(LocalContext ctx, LavaApi.OperatorContext opctx, ExprNode left, Object right) {
 		var sym = opctx.symbol();
-		if (sym == JavaLexer.lBracket) {
+		if (sym == Tokens.lBracket) {
 			if (ctx.castTo(opctx.leftType(), LIST_TYPE, TypeCast.E_NEVER).type >= 0) {
 				return new ListGet(left, (ExprNode) right);
 			}

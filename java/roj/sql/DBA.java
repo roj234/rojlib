@@ -5,7 +5,7 @@ import roj.asmx.nixim.Inject;
 import roj.asmx.nixim.Nixim;
 import roj.collect.*;
 import roj.config.Tokenizer;
-import roj.plugins.http.error.GreatErrorPage;
+import roj.plugins.web.error.GreatErrorPage;
 import roj.text.CharList;
 import roj.text.TextUtil;
 

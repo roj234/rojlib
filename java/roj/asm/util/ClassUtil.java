@@ -11,6 +11,9 @@ import roj.asm.type.Type;
 import roj.collect.CollectionX;
 import roj.collect.IntBiMap;
 import roj.collect.SimpleList;
+import roj.compiler.Tokens;
+import roj.compiler.ast.BlockParser;
+import roj.compiler.ast.expr.ExprParser;
 import roj.compiler.context.GlobalContext;
 import roj.compiler.context.LibraryClassLoader;
 import roj.compiler.context.LocalContext;
@@ -143,13 +146,16 @@ public final class ClassUtil {
 		return arePackagesSame(owner, referent);
 	}
 
-	private static class MyGlobalContext extends GlobalContext { @Override protected void addRuntime() {} }
 	private static volatile GlobalContext defaultCtx;
 	private LocalContext getLocalContext() {
 		var now = LocalContext.get();
 		if (now != null) return now;
 
-		if (lc == null) lc = getGlobalContext().createLocalContext();
+		if (lc == null) lc = new LocalContext(getGlobalContext()) {
+			@Override protected BlockParser createBlockParser() {return null;}
+			@Override protected ExprParser createExprParser() {return null;}
+			@Override protected Tokens createLexer() {return null;}
+		};
 		return lc;
 	}
 	private GlobalContext getGlobalContext() {
@@ -157,7 +163,7 @@ public final class ClassUtil {
 			if (defaultCtx == null) {
 				synchronized (ClassUtil.class) {
 					if (defaultCtx == null) {
-						defaultCtx = new MyGlobalContext();
+						defaultCtx = new GlobalContext(false);
 						defaultCtx.addLibrary(new LibraryClassLoader(ClassUtil.class.getClassLoader()));
 					}
 				}
@@ -172,7 +178,7 @@ public final class ClassUtil {
 
 	public ClassUtil() {}
 	public ClassUtil(ClassLoader... classLoaders) {
-		gc = new MyGlobalContext();
+		gc = new GlobalContext(false);
 		for (ClassLoader loader : classLoaders) {
 			gc.addLibrary(new LibraryClassLoader(loader));
 		}
@@ -199,7 +205,7 @@ public final class ClassUtil {
 	public Boolean isInherited(Desc method, @Nullable List<String> parents, Boolean defVal) {
 		ClassNode info = getGlobalContext().getClassInfo(method.owner);
 		if (info == null) return defVal;
-		ComponentList ml = getLocalContext().getMethodList(info, method.name);
+		ComponentList ml = gc.getMethodList(info, method.name);
 		if (ml == ComponentList.NOT_FOUND) return defVal;
 
 		for (MethodNode mn : ml.getMethods()) {
@@ -220,9 +226,9 @@ public final class ClassUtil {
 		// copied from Inferrer
 		LocalContext lc = getLocalContext();
 		TypeCast.Cast cast = lc.caster.checkCast(left, right);
-		if (cast.type >= 0) return type2; // a更不具体
+		if (cast.type >= 0) return type1; // a更不具体
 		cast = lc.caster.checkCast(right, left);
-		if (cast.type >= 0) return type1; // b更不具体
+		if (cast.type >= 0) return type2; // b更不具体
 
 		//throw new UnableCastException(a, b, cast);
 		throw new UnsupportedOperationException("这两个类型在继承链上没有交集:"+type1+","+type2);

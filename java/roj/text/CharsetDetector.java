@@ -69,12 +69,12 @@ public final class CharsetDetector implements IntConsumer, AutoCloseable {
 			bLen += readUpto(b.length - bLen);
 
 			ps = ns = 0;
-			UTF8.CODER.unsafeValidate(b, Unaligned.ARRAY_BYTE_BASE_OFFSET + len, Unaligned.ARRAY_BYTE_BASE_OFFSET + bLen, this);
+			FastCharset.UTF8().fastValidate(b, Unaligned.ARRAY_BYTE_BASE_OFFSET + len, Unaligned.ARRAY_BYTE_BASE_OFFSET + bLen, this);
 			utf8_score += ps - 5*ns;
 			utf8_negate += ns;
 
 			ps = ns = 0;
-			GB18030.CODER.unsafeValidate(b, Unaligned.ARRAY_BYTE_BASE_OFFSET + len, Unaligned.ARRAY_BYTE_BASE_OFFSET + bLen, this);
+			FastCharset.GB18030().fastValidate(b, Unaligned.ARRAY_BYTE_BASE_OFFSET + len, Unaligned.ARRAY_BYTE_BASE_OFFSET + bLen, this);
 			gb18030_score += ps - 5*ns;
 			gb18030_negate += ns;
 
@@ -249,7 +249,7 @@ public final class CharsetDetector implements IntConsumer, AutoCloseable {
 	@Override
 	public void accept(int c) {
 		if (c < 0) {
-			if (c != UnsafeCharset.TRUNCATED)
+			if (c != FastCharset.TRUNCATED)
 				ns += 10;
 		} else if (c < 32 && c != '\r' && c != '\n' && c != '\t') { // control
 			ns++;

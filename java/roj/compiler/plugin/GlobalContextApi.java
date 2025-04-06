@@ -12,19 +12,22 @@ import roj.asm.type.Type;
 import roj.asmx.AnnotatedElement;
 import roj.asmx.AnnotationRepo;
 import roj.collect.*;
-import roj.compiler.JavaLexer;
 import roj.compiler.LavaFeatures;
+import roj.compiler.Tokens;
 import roj.compiler.asm.AnnotationPrimer;
 import roj.compiler.ast.expr.ExprNode;
 import roj.compiler.ast.expr.ExprParser;
 import roj.compiler.ast.expr.Invoke;
 import roj.compiler.ast.expr.UnaryPreNode;
 import roj.compiler.context.*;
+import roj.compiler.diagnostic.Kind;
 import roj.compiler.plugins.stc.StreamChain;
 import roj.compiler.plugins.stc.StreamChainExpr;
 import roj.compiler.plugins.stc.StreamChainPlugin;
 import roj.config.Word;
 import roj.io.IOUtil;
+import roj.reflect.ClassDefiner;
+import roj.text.TextUtil;
 import roj.util.Helpers;
 import roj.util.TypedKey;
 
@@ -53,16 +56,19 @@ public class GlobalContextApi extends GlobalContext implements LavaApi {
 	private final IterablePriorityQueue<ImplResolver<Resolver>> resolveApi = new IterablePriorityQueue<>();
 
 	// Tokenizer API
-	private final TrieTree<Word> myJavaToken = JavaLexer.getJavaToken();
-	private final MyBitSet myJavaLend = JavaLexer.getJavaLend();
-	private final MyBitSet[] myJavaLst = JavaLexer.getJavaLst();
-	private int nextTokenId = JavaLexer.MAX_TOKENS;
+	private final TrieTree<Word> myJavaToken = Tokens.getTokenMap();
+	private final MyBitSet myJavaLend = Tokens.getLiteralEnd();
+	private final MyBitSet[] myJavaLst = Tokens.getLiteralState();
+	private int nextTokenId = Tokens.getInitialTokenCount();
 
 	// ExprParser API
 	private final Int2IntMap stateMap = ExprParser.getStateMap();
 	private final List<Object> callbacks = new SimpleList<>();
 	private final IntMap<List<ExprOp>> operators = new IntMap<>();
 	private final StreamChainPlugin scp = new StreamChainPlugin();
+
+	// Misc API
+	private Sandbox sandbox;
 
 	public GlobalContextApi() {
 		addAnnotationProcessor(new JavaLangAnnotations());
@@ -103,8 +109,9 @@ public class GlobalContextApi extends GlobalContext implements LavaApi {
 					addAnnotationProcessor(processor);
 					break;
 				case "sandbox":
-					// TODO options parser api
-					System.out.println("未实现"); // 预编译沙盒白名单, 以逗号分隔的全限定名前缀
+					for (String packageOrTypeName : TextUtil.split(entry.getValue(), ',')) {
+						addSandboxWhitelist(packageOrTypeName, false);
+					}
 			}
 		}
 	}
@@ -117,6 +124,12 @@ public class GlobalContextApi extends GlobalContext implements LavaApi {
 		public LC() {super(GlobalContextApi.this);}
 
 		@Override
+		protected boolean isGenericIgnore(ClassNode info) {
+			// for TypeDeclPlugin, WIP
+			return super.isGenericIgnore(info) || info.name().equals("roj/asm/type/IType");
+		}
+
+		@Override
 		public ExprParser createExprParser() {
 			var parser = new ExprParser(this);
 			parser.stateMap = stateMap;
@@ -125,7 +138,7 @@ public class GlobalContextApi extends GlobalContext implements LavaApi {
 		}
 
 		@Override
-		protected JavaLexer createLexer() {
+		protected Tokens createLexer() {
 			var lexer = super.createLexer();
 			lexer.literalState = myJavaLst;
 			lexer.literalEnd(myJavaLend).tokenIds(myJavaToken);
@@ -286,7 +299,7 @@ public class GlobalContextApi extends GlobalContext implements LavaApi {
 	private int tokenId(String token) {
 		Word w = myJavaToken.get(token);
 		if (w != null) return w.type();
-		return tokenCreate(token, 1 << JavaLexer.STATE_TYPE);
+		return tokenCreate(token, 1 << Tokens.STATE_EXPR);
 	}
 
 	private void register(int mask, String token, Object fn, int flags) {
@@ -321,6 +334,32 @@ public class GlobalContextApi extends GlobalContext implements LavaApi {
 
 	@Override public StreamChain newStreamChain(String type, boolean existInRuntime, Consumer<StreamChainExpr> parser, Type realType) {return scp.newStreamChain(type, existInRuntime, parser, realType);}
 	//endregion
+
+	private synchronized Sandbox getSandbox() {
+		if (sandbox == null) {
+			report(null, Kind.SEVERE_WARNING, -1, "lava.sandbox");
+			sandbox = new Sandbox(GlobalContextApi.class.getClassLoader());
+			for (var packages : new String[] {"java.lang", "java.util", "java.util.regex", "java.util.function", "java.text", "roj.compiler", "roj.text", "roj.config.data"}) {
+				addSandboxWhitelist(packages, false);
+			}
+			for (var classes : new String[] {"java.lang.Process", "java.lang.ProcessBuilder", "java.lang.Thread", "java.lang.ClassLoader"}) {
+				addSandboxWhitelist(classes, false);
+			}
+		}
+		return sandbox;
+	}
+
+	public void addSandboxWhitelist(String packageOrTypename, boolean childInheritance) {getSandbox().permits.add(packageOrTypename, 1, false, childInheritance);}
+	public void addSandboxBlacklist(String packageOrTypename, boolean childInheritance) {getSandbox().permits.add(packageOrTypename, 0, false, childInheritance);}
+	public Object createSandboxInstance(ClassNode data) {return ClassDefiner.make(data, getSandbox());}
+	public void addSandboxClass(String className, byte[] data) {getSandbox().classBytes.put(className, data);}
+	public Class<?> loadSandboxClass(String className, boolean resolve) {
+		try {
+			return getSandbox().loadClass(className, resolve);
+		} catch (ClassNotFoundException e) {
+			throw new AssertionError(e);
+		}
+	}
 
 	private Map<TypedKey<?>, Object> attachments = Collections.emptyMap();
 	@SuppressWarnings("unchecked")

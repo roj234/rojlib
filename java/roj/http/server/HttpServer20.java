@@ -1,10 +1,13 @@
 package roj.http.server;
 
 import roj.crypt.CRC32s;
-import roj.http.*;
+import roj.http.Headers;
+import roj.http.HttpHead;
+import roj.http.HttpUtil;
 import roj.http.h2.H2Connection;
 import roj.http.h2.H2Exception;
 import roj.http.h2.H2Stream;
+import roj.http.hDeflate;
 import roj.io.FastFailException;
 import roj.io.IOUtil;
 import roj.io.buf.BufferPool;
@@ -18,14 +21,14 @@ import java.io.InputStream;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.zip.Deflater;
 
-import static roj.http.server.HttpCache.*;
+import static roj.http.server.HSConfig.*;
 import static roj.http.server.HttpServer11.*;
 
 /**
  * @author Roj234
  * @since 2024/7/14 0014 8:38
  */
-public final class HttpServer20 extends H2Stream implements PostSetting, ResponseHeader, ResponseWriter, ChannelHandler {
+final class HttpServer20 extends H2Stream implements PostSetting, ResponseHeader, ContentWriter, ChannelHandler {
 	private final Router router;
 
 	public HttpServer20(Router router, int id) {
@@ -37,7 +40,8 @@ public final class HttpServer20 extends H2Stream implements PostSetting, Respons
 	private long time;
 	private H2Connection man;
 	private Request req;
-	private Response body;
+	private Content body;
+	private RequestFinishHandler fh;
 
 	@Override
 	protected void onHeaderDone(H2Connection man, HttpHead head, boolean hasData) throws IOException {
@@ -48,10 +52,10 @@ public final class HttpServer20 extends H2Stream implements PostSetting, Respons
 			query = path.substring(i+1);
 			path = path.substring(0, i);
 		}
-		var req = HttpCache.getInstance().request().init(HttpUtil.parseMethod(head.getMethod()), path, query, head.versionStr());
+		var req = HSConfig.getInstance().request().init(HttpUtil.getMethodId(head.getMethod()), path, query, head.versionStr());
 		req._moveFrom(head);
 
-		req.handler = this;
+		req.server = this;
 		this.man = man;
 		this.req = req;
 		this.flag = 0;
@@ -62,7 +66,7 @@ public final class HttpServer20 extends H2Stream implements PostSetting, Respons
 		}
 
 		postSize = -1;
-		exceptPostSize = head.getContentLengthLong();
+		exceptPostSize = head.getContentLength();
 		router.checkHeader(req, this);
 		time = System.currentTimeMillis() + router.readTimeout(req);
 
@@ -85,11 +89,11 @@ public final class HttpServer20 extends H2Stream implements PostSetting, Respons
 	}
 
 	//region PostSetting
-	private HPostHandler ph;
+	private BodyParser ph;
 	private ByteList postBuffer;
 
 	@Override
-	public void postHandler(HPostHandler ph) {this.ph = ph;}
+	public void postHandler(BodyParser ph) {this.ph = ph;}
 
 	private long postSize, exceptPostSize;
 
@@ -132,10 +136,10 @@ public final class HttpServer20 extends H2Stream implements PostSetting, Respons
 	@Override
 	protected void onDone(H2Connection man) throws IOException {
 		if ((flag & FLAG_ERRORED) == 0) {
-			req.postFields = ph == null ? postBuffer : ph;
+			req.bodyData = ph == null ? postBuffer : ph;
 
 			try {
-				if (ph != null) ph.onSuccess();
+				if (ph != null) ph.onSuccess(postBuffer);
 				if ((flag&FLAG_HEADER_SENT) != 0) return;
 
 				var resp = router.response(req, this);
@@ -145,8 +149,8 @@ public final class HttpServer20 extends H2Stream implements PostSetting, Respons
 				onError(man, e);
 			}
 
-			time = System.currentTimeMillis() + router.writeTimeout(req, body);
 			if ((flag & FLAG_ASYNC) != 0 && body == null) return;
+			time = System.currentTimeMillis() + router.writeTimeout(req, body);
 		}
 		sendHead(man);
 	}
@@ -160,12 +164,12 @@ public final class HttpServer20 extends H2Stream implements PostSetting, Respons
 		boolean noBody = false;
 		if (body != null) {
 			body.prepare(this, h);
-			if (h.getField("content-length").equals("0")) {
+			if (h.header("content-length").equals("0")) {
 				noBody = true;
 				h.remove("content-length");
 				body.release(man.channel());
 			} else if ((flag & FLAG_COMPRESS) != 0 && req.containsKey("accept-encoding") && !h.containsKey("content-encoding")) {
-				enc = HttpCache.getInstance().parseAcceptEncoding(req.get("accept-encoding"));
+				enc = HSConfig.getInstance().parseAcceptEncoding(req.get("accept-encoding"));
 				setCompr(enc);
 				h.remove("content-length");
 			}
@@ -198,8 +202,8 @@ public final class HttpServer20 extends H2Stream implements PostSetting, Respons
 				}
 				case DATA_FIN -> {
 					if (getOutState() == OPEN) {
-						code(504).body(Response.internalError("处理超时\n在规定的时间内未收到响应头，请求代理失败"));
-					} else {
+						code(504).body(Content.internalError("处理超时\n在规定的时间内未收到响应头，请求代理失败"));
+					} else if (fh == null || !fh.onResponseTimeout(this)) {
 						H2Connection.LOGGER.warn("发送超时[在规定的时间内未能将响应体全部发送]: {}", body);
 						man.streamError(id, H2Exception.ERROR_INTERNAL/*TIMEOUT*/);
 					}
@@ -215,7 +219,7 @@ public final class HttpServer20 extends H2Stream implements PostSetting, Respons
 			req.responseHeader.clear();
 
 			if (e instanceof IllegalRequestException ire) {
-				code(ire.code);
+				if (ire.code != 0) code(ire.code);
 				body = ire.createResponse();
 			} else {
 				code(500);
@@ -229,17 +233,19 @@ public final class HttpServer20 extends H2Stream implements PostSetting, Respons
 	}
 
 	@Override
-	public MyChannel ch() {return man.channel().channel();}
+	public MyChannel connection() {return man.channel().channel();}
 
 	@Override
 	protected void onFinish(H2Connection man) {
-		var t = HttpCache.getInstance();
+		var t = HSConfig.getInstance();
+
+		onFinish(false);
 
 		if (body != null) {
 			try {
 				body.release(man.channel());
 			} catch (Exception e) {
-				H2Connection.LOGGER.warn("{}完成时出现了异常", e, ph.getClass());
+				H2Connection.LOGGER.warn("{}完成时出现了异常", e, body.getClass());
 			}
 			body = null;
 		}
@@ -253,7 +259,7 @@ public final class HttpServer20 extends H2Stream implements PostSetting, Respons
 		}
 
 		if (req != null) {
-			if ((flag&FLAG_UNSHARED) == 0) t.reserve(req);
+			t.reserve(req);
 			req = null;
 		}
 
@@ -269,6 +275,17 @@ public final class HttpServer20 extends H2Stream implements PostSetting, Respons
 		pending._free();
 	}
 
+	private void onFinish(boolean success) {
+		if (fh != null) {
+			try {
+				fh.onRequestFinish(this, success);
+			} catch (Exception e) {
+				H2Connection.LOGGER.warn("{}完成时出现了异常", e, fh.getClass());
+			}
+			fh = null;
+		}
+	}
+
 	private long sendBytes;
 	@Override public long getSendBytes() {return sendBytes;}
 
@@ -281,10 +298,11 @@ public final class HttpServer20 extends H2Stream implements PostSetting, Respons
 		return pending.wIndex() > 0;
 	}
 	private void sendLastData() throws IOException {
-		if (embed != null) embed.postEvent(new Event(HCompress.EVENT_CLOSE_OUT));
+		if (embed != null) embed.postEvent(new Event(hDeflate.OUT_FINISH));
 		if ((flag & FLAG_GZIP) != 0) pending.putIntLE(CRC32s.retVal(crc)).putIntLE(def.getTotalIn());
 		man.sendData(this, pending, true);
 		dataEnd = true;
+		onFinish((flag&ERRORED) == 0);
 	}
 
 	private boolean dataEnd;
@@ -303,13 +321,13 @@ public final class HttpServer20 extends H2Stream implements PostSetting, Respons
 		switch (enc) {
 			default -> {return;}
 			case ENC_GZIP -> {
-				def = HttpCache.getInstance().deflater(true);
+				def = HSConfig.getInstance().deflater(true);
 				flag |= FLAG_GZIP;
 				crc = CRC32s.INIT_CRC;
 				header("content-encoding", "gzip");
 			}
 			case ENC_DEFLATE -> {
-				def = HttpCache.getInstance().deflater(false);
+				def = HSConfig.getInstance().deflater(false);
 				flag &= ~FLAG_GZIP;
 				header("content-encoding", "gzip");
 			}
@@ -320,7 +338,7 @@ public final class HttpServer20 extends H2Stream implements PostSetting, Respons
 		if (levelStr != null) level = Integer.parseInt(levelStr);
 		def.setLevel(level);
 
-		var compress = new HCompress(1024);
+		var compress = new hDeflate(1024);
 		compress.setDef(def);
 
 		embed = EmbeddedChannel.createReadonly().addLast("write_hook", this).addLast("hcompr", compress);
@@ -330,13 +348,13 @@ public final class HttpServer20 extends H2Stream implements PostSetting, Respons
 	private static final int NOOB_LIMIT = 4080;
 	private SpeedLimiter limiter;
 
-	@Override public int getStreamLimit() {return limiter == null ? 0 : limiter.getBytePerSecond();}
-	@Override public void setStreamLimit(int bps) {
+	@Override public int getSpeedLimit() {return limiter == null ? 0 : limiter.getBytePerSecond();}
+	@Override public SpeedLimiter getSpeedLimiter() {return limiter;}
+	@Override public void limitSpeed(int bps) {
 		if (limiter == null) limiter = new SpeedLimiter(1450, 50_000_000);
 		limiter.setBytePerSecond(bps);
 	}
-	@Override public void setStreamLimit(SpeedLimiter limiter) {this.limiter = limiter;}
-	@Override public SpeedLimiter getStreamLimiter() {return limiter;}
+	@Override public void limitSpeed(SpeedLimiter limiter) {this.limiter = limiter;}
 
 	public void write(DynByteBuf buf) throws IOException {
 		assert ((ReentrantLock) man.channel().channel().lock()).isHeldByCurrentThread();
@@ -395,15 +413,13 @@ public final class HttpServer20 extends H2Stream implements PostSetting, Respons
 
 	//endregion
 	//region ResponseHeader
-	@Override public void onFinish(HFinishHandler o) {throw new UnsupportedOperationException("HTTP/2不支持FinishHandler");}
+	@Override public void onFinish(RequestFinishHandler o) {fh = o;}
 	@Override public Request request() {return req;}
 
 	@Override public ResponseHeader code(int code) {req.responseHeader.put(":status", String.valueOf(code));return this;}
 	@Override public ResponseHeader die() {flag |= FLAG_GOAWAY;return this;}
-	@Override public void unsharedRequest() {flag |= FLAG_UNSHARED;}
-	@Override public void sharedRequest() {flag &= ~FLAG_UNSHARED;}
-	@Override public ResponseHeader enableAsyncResponse() {flag |= FLAG_ASYNC;return this;}
-	@Override public void body(Response resp) throws IOException {
+	@Override public ResponseHeader enableAsyncResponse(int extraTimeMs) {flag |= FLAG_ASYNC;time = System.currentTimeMillis()+extraTimeMs;return this;}
+	@Override public void body(Content resp) throws IOException {
 		if ((flag & FLAG_ASYNC) == 0) {
 			if (getState() >= DATA_FIN) {
 				this.body = resp;

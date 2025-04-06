@@ -68,6 +68,14 @@ public interface LavaFeatures {
 	 * 将record类型的字段从private final提升为public final
 	 */
 	int PUBLIC_RECORD_FIELD = 13;
+	/**
+	 * 当synchronized对Lock的子类使用时，会调用其lock和unlock方法，而不是monitorEnter/exit
+	 */
+	int SYNCHRONIZED_LOCK = 14;
+	/**
+	 * 常量传播，通过VisMap，int test = 5 这种语句也能被提取常量，建议在调试时关闭
+	 */
+	int CONSTANT_SPREAD = 15;
 
 	// lambda
 	int JAVA_8 = 8;

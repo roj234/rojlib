@@ -34,66 +34,65 @@ import java.util.function.Predicate;
  * @since 2021/5/29 22:1
  */
 public final class IOUtil {
-	public static final FastThreadLocal<IOUtil> SharedCoder = FastThreadLocal.withInitial(IOUtil::new);
+	public static final FastThreadLocal<IOUtil> SharedBuf = FastThreadLocal.withInitial(IOUtil::new);
 
 	// region ThreadLocal part
 	public final CharList charBuf = new CharList(1024);
-	public final ByteList byteBuf = new ByteList();
-	{byteBuf.ensureCapacity(1024);}
+	public final ByteList byteBuf = new ByteList(1024);
 
-	private final ByteList.Slice shell = new ByteList.Slice();
-	public final ByteList.Slice shellB = new ByteList.Slice();
+	private final ByteList.Slice slice = new ByteList.Slice();
+	@Deprecated
+	public final ByteList.Slice slice1 = new ByteList.Slice();
 
 	public final StringBuilder numberHelper = new StringBuilder(32);
 
-	public byte[] encode(CharSequence str) {
-		ByteList b = byteBuf; b.clear();
-		return b.putUTFData(str).toByteArray();
-	}
-	public String decode(byte[] b) {
-		CharList c = charBuf; c.clear();
-		UTF8.CODER.decodeFixedIn(shell.setR(b,0,b.length), b.length, c);
-		return c.toString();
+	public static byte[] encodeUTF8(CharSequence str) {return getSharedByteBuf().putUTFData(str).toByteArray();}
+	public static String decodeUTF8(byte[] bytes) {
+		var TL = SharedBuf.get();
+		var sb = TL.charBuf; sb.clear();
+		FastCharset.UTF8().decodeFixedIn(TL.slice.setR(bytes, 0, bytes.length), bytes.length, sb);
+		return sb.toString();
 	}
 
-	public String encodeHex(byte[] b) { return shell.setR(b,0,b.length).hex(); }
-	public String encodeBase64(byte[] b) { return shell.setR(b,0,b.length).base64(); }
-
-	public byte[] decodeHex(CharSequence c) {
-		ByteList b = byteBuf; b.clear();
-		return TextUtil.hex2bytes(c, b).toByteArray();
+	public static String encodeBase64(byte[] bytes) {
+		var TL = SharedBuf.get();
+		var sb = TL.charBuf; sb.clear();
+		return Base64.encode(TL.slice.setR(bytes,0, bytes.length), sb).toString();
+	}
+	public static ByteList decodeBase64(CharSequence str) {
+		var buf = getSharedByteBuf();
+		Base64.decode(str, 0, str.length(), buf, Base64.B64_CHAR_REV);
+		return buf;
 	}
 
-	public ByteList decodeBase64(CharSequence c) { return decodeBase64(c, Base64.B64_CHAR_REV); }
-	public ByteList decodeBase64(CharSequence c, byte[] chars) {
-		ByteList b = byteBuf; b.clear();
-		Base64.decode(c, 0, c.length(), b, chars);
-		return b;
-	}
+	public static String encodeHex(byte[] bytes) {return TextUtil.bytes2hex(bytes, getSharedCharBuf()).toString();}
+	public static byte[] decodeHex(CharSequence str) {return TextUtil.hex2bytes(str, getSharedByteBuf()).toByteArray();}
 
-	public ByteList wrap(byte[] b) { return shell.setR(b,0,b.length); }
-	public ByteList wrap(byte[] b, int off, int len) { return shell.setR(b,off,len); }
+	@Deprecated public ByteList wrap(byte[] b) { return slice.setR(b,0,b.length); }
+	@Deprecated public ByteList wrap(byte[] b, int off, int len) { return slice.setR(b,off,len); }
 	// endregion
 
 	public static ByteList getSharedByteBuf() {
-		ByteList o = SharedCoder.get().byteBuf; o.clear();
+		ByteList o = SharedBuf.get().byteBuf; o.clear();
 		return o;
 	}
 
 	public static CharList getSharedCharBuf() {
-		CharList o = SharedCoder.get().charBuf; o.clear();
+		CharList o = SharedBuf.get().charBuf; o.clear();
 		return o;
 	}
 
 	//region InputStream/TextReader
+	public static byte[] getResourceIL(String path) throws IOException { return getResource(path, IOUtil.class); }
 	public static byte[] getResource(String path) throws IOException { return getResource(path, ReflectionUtils.getCallerClass(2)); }
 	public static byte[] getResource(String path, Class<?> caller) throws IOException {
 		var in = caller.getClassLoader().getResourceAsStream(path);
 		if (in == null) throw new FileNotFoundException(path+" is not in jar "+caller.getName());
 		return new ByteList(Math.max(in.available(), 4096)).readStreamFully(in).toByteArrayAndFree();
 	}
-	public static String getTextResource(String path) throws IOException { return getTextResource(ReflectionUtils.getCallerClass(2), path); }
-	public static String getTextResource(Class<?> caller, String path) throws IOException {
+	public static String getTextResourceIL(String path) throws IOException { return getTextResource(path, IOUtil.class); }
+	public static String getTextResource(String path) throws IOException { return getTextResource(path, ReflectionUtils.getCallerClass(2)); }
+	public static String getTextResource(String path, Class<?> caller) throws IOException {
 		var in = caller.getClassLoader().getResourceAsStream(path);
 		if (in == null) throw new FileNotFoundException(path+" is not in jar "+caller.getName());
 		try (var r = TextReader.from(in, StandardCharsets.UTF_8)) {

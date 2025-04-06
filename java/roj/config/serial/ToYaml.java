@@ -53,16 +53,16 @@ public final class ToYaml extends ToSomeString {
 
 	private DateParser cal;
 	@Override
-	public final void valueDate(long value) {
+	public final void valueDate(long mills) {
 		preValue(false);
 		if (cal == null) cal = DateParser.GMT();
-		cal.format("Y-m-d", value, sb);
+		cal.format("Y-m-d", mills, sb);
 	}
 	@Override
-	public final void valueTimestamp(long value) {
+	public final void valueTimestamp(long mills) {
 		preValue(false);
 		if (cal == null) cal = DateParser.GMT();
-		cal.toISOString(sb, value);
+		cal.toISOString(sb, mills);
 	}
 
 	@Override

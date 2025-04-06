@@ -3,8 +3,7 @@ package roj.http;
 import org.jetbrains.annotations.ApiStatus;
 import roj.collect.RingBuffer;
 import roj.collect.SimpleList;
-import roj.http.server.HttpCache;
-import roj.http.ws.WebSocketHandler;
+import roj.http.server.HSConfig;
 import roj.io.FastFailException;
 import roj.io.IOUtil;
 import roj.io.buf.BufferPool;
@@ -66,7 +65,7 @@ public abstract class HttpRequest {
 	}
 
 	public final HttpRequest method(String type) {
-		if (HttpUtil.parseMethod(type) < 0) throw new IllegalArgumentException(type);
+		if (HttpUtil.getMethodId(type) < 0) throw new IllegalArgumentException(type);
 		action = type;
 		return this;
 	}
@@ -191,15 +190,12 @@ public abstract class HttpRequest {
 	}
 
 	// region execute simple
-	public final SyncHttpClient executeThreadSafe() throws IOException { return clone().execute(); }
-	public final SyncHttpClient executeThreadSafe(int timeout) throws IOException { return clone().execute(timeout); }
-
-	public final SyncHttpClient execute() throws IOException { return execute(DEFAULT_TIMEOUT); }
-	public final SyncHttpClient execute(int timeout) throws IOException {
+	public final HttpClient execute() throws IOException { return execute(DEFAULT_TIMEOUT); }
+	public final HttpClient execute(int timeout) throws IOException {
 		headers.putIfAbsent("connection", "close");
 
 		var ch = MyChannel.openTCP();
-		var client = new SyncHttpClient();
+		var client = new HttpClient();
 		ch.addLast("h11@timer", new Timeout(timeout, 1000))
 		  .addLast("h11@merger", client);
 		connect(ch, timeout);
@@ -208,15 +204,14 @@ public abstract class HttpRequest {
 	}
 
 	@ApiStatus.Experimental
-	public ClientWSHandler executeWebsocket(int timeout, ClientWSHandler handler) throws IOException {
+	public WSClient executeWebsocket(int timeout, WSClient handler) throws IOException {
 		var randKey = IOUtil.getSharedByteBuf().putLong(System.currentTimeMillis() ^ hashCode() ^ ((long) handler.hashCode() << 32)).base64UrlSafe();
 
-		var uc = IOUtil.SharedCoder.get();
-		ByteList in = uc.byteBuf; in.clear();
-		var sha1 = HttpCache.getInstance().sha1();
+		var buf = IOUtil.getSharedByteBuf();
+		var sha1 = HSConfig.getInstance().sha1();
 
-		sha1.update(in.putAscii(randKey).putAscii("258EAFA5-E914-47DA-95CA-C5AB0DC85B11").list, 0, in.wIndex());
-		handler.acceptKey = uc.encodeBase64(sha1.digest());
+		sha1.update(buf.putAscii(randKey).putAscii("258EAFA5-E914-47DA-95CA-C5AB0DC85B11").list, 0, buf.wIndex());
+		handler.acceptKey = IOUtil.encodeBase64(sha1.digest());
 
 		headers.put("connection", "upgrade");
 		headers.put("upgrade", "websocket");
@@ -232,7 +227,7 @@ public abstract class HttpRequest {
 		return handler;
 	}
 
-	public abstract static class ClientWSHandler extends WebSocketHandler {
+	public abstract static class WSClient extends WebSocketConnection {
 		String acceptKey;
 		byte state;
 		Throwable exception;
@@ -242,21 +237,21 @@ public abstract class HttpRequest {
 		@Override public final void channelOpened(ChannelCtx ctx) throws IOException {
 			ctx.channel().handler("h11@timer").removeSelf();
 
-			var httpClient = SyncHttpClient.findHandler(ctx);
+			var httpClient = HttpClient.findHandler(ctx);
 			var head = ((HttpRequest) httpClient.handler()).response();
 			httpClient.removeSelf();
 
 			var accept = head.get("sec-websocket-accept");
-			if (accept == null || !accept.equals(acceptKey)) throw new FastFailException("Remote not accept websocket");
+			if (accept == null || !accept.equals(acceptKey)) throw new FastFailException("对等端不是websocket("+head.getCode()+")", head);
 
-			var deflate = head.getFieldValue("sec-websocket-extensions", "permessage-deflate");
+			var deflate = head.getHeaderValue("sec-websocket-extensions", "permessage-deflate");
 			if (deflate != null) enableZip();
 
-			checkResponseHead(head);
+			onOpened(head);
 			state = 1;
 			synchronized (this) {notifyAll();}
 		}
-		protected void checkResponseHead(HttpHead head) {}
+		protected void onOpened(HttpHead head) throws IOException {}
 
 		@Override
 		public void channelClosed(ChannelCtx ctx) throws IOException {
@@ -268,27 +263,33 @@ public abstract class HttpRequest {
 
 		@Override
 		public void exceptionCaught(ChannelCtx ctx, Throwable ex) throws Exception {
-			super.exceptionCaught(ctx, ex);
 			if (exception == null) exception = ex;
+			ctx.close();
 		}
 
-		public void awaitOpen() throws Exception {
+		public final void awaitOpen() throws IOException {
 			while (state == 0) {
 				synchronized (this) {
-					wait();
+					try {
+						wait();
+					} catch (InterruptedException e) {
+						ch.close();
+						throw new ClosedByInterruptException();
+					}
 				}
 			}
-			if (exception != null) Helpers.athrow(exception);
+
+			if (exception != null) throw new IOException("请求失败: "+this, exception);
 		}
 	}
 
-	public final SyncHttpClient executePooled() throws IOException { return executePooled(DEFAULT_TIMEOUT); }
-	public final SyncHttpClient executePooled(int timeout) throws IOException { return executePooled(timeout, action.equals("GET") || action.equals("HEAD") || action.equals("OPTIONS") ? 1 : -1); }
-	public final SyncHttpClient executePooled(int timeout, int maxRedirect) throws IOException { return executePooled(timeout, maxRedirect, 0); }
-	public final SyncHttpClient executePooled(int timeout, int maxRedirect, int maxRetry) throws IOException {
+	public final HttpClient executePooled() throws IOException { return executePooled(DEFAULT_TIMEOUT); }
+	public final HttpClient executePooled(int timeout) throws IOException { return executePooled(timeout, action.equals("GET") || action.equals("HEAD") || action.equals("OPTIONS") ? 1 : -1); }
+	public final HttpClient executePooled(int timeout, int maxRedirect) throws IOException { return executePooled(timeout, maxRedirect, 0); }
+	public final HttpClient executePooled(int timeout, int maxRedirect, int maxRetry) throws IOException {
 		headers.putIfAbsent("connection", "keep-alive");
 
-		SyncHttpClient client = new SyncHttpClient();
+		HttpClient client = new HttpClient();
 
 		Pool man = pool.computeIfAbsent(_getAddress(), fn);
 		man.executePooled(this, client, timeout, new AutoRedirect(this, timeout, maxRedirect, maxRetry));
@@ -370,7 +371,7 @@ public abstract class HttpRequest {
 		}
 	}
 	final void _getBody() {
-		if (bodyType == 1) _body = ((Supplier<?>) body).get();
+		if (bodyType == 1 || bodyType == 2) _body = ((Supplier<?>) body).get();
 		else _body = body;
 	}
 	@SuppressWarnings("unchecked")
@@ -387,8 +388,8 @@ public abstract class HttpRequest {
 				InputStream in = (InputStream) body;
 				ByteList buf = (ByteList) ctx.allocate(false, 1024);
 				try {
-					buf.readStream(in, buf.readableBytes());
-					if (!buf.isWritable()) return null;
+					buf.readStream(in, buf.writableBytes());
+					if (!buf.isReadable()) return null;
 					ctx.channelWrite(buf);
 				} finally {
 					BufferPool.reserve(buf);
@@ -434,7 +435,7 @@ public abstract class HttpRequest {
 	public abstract HttpHead response();
 	public abstract void waitFor() throws InterruptedException;
 
-	public static HttpRequest nts() { return new HttpClient11(); }
+	public static HttpRequest builder() { return new HttpClient11(); }
 
 	public static int POOLED_KEEPALIVE_TIMEOUT = 60000;
 	private static final Function<InetSocketAddress, Pool> fn = (x) -> new Pool(8);
@@ -465,7 +466,7 @@ public abstract class HttpRequest {
 
 		@Override
 		public void onEvent(ChannelCtx ctx, Event event) {
-			if (event.id.equals(SyncHttpClient.SHC_CLOSE_CHECK)) {
+			if (event.id.equals(HttpClient.SHC_FINISH)) {
 				_add(ctx, event);
 			} else if (event.id.equals(Timeout.READ_TIMEOUT)) {
 				AtomicLong aLong = ctx.attachment(SLEEP);
@@ -503,7 +504,7 @@ public abstract class HttpRequest {
 			}
 		}
 
-		void executePooled(HttpRequest request, SyncHttpClient client, int timeout, ChannelHandler timer) throws IOException {
+		void executePooled(HttpRequest request, HttpClient client, int timeout, ChannelHandler timer) throws IOException {
 			while (true) {
 				if (size > 0) {
 					lock.lock();
@@ -513,7 +514,7 @@ public abstract class HttpRequest {
 						if (!(ch.isOpen() & ch.isInputOpen() & ch.isOutputOpen())) continue;
 						lock.unlock();
 
-						SyncHttpClient shc = (SyncHttpClient) ch.handler("h11@merger").handler();
+						HttpClient shc = (HttpClient) ch.handler("h11@merger").handler();
 						if (shc.retain(request, client)) {
 							ch.remove("super_timer");
 							ch.addBefore("h11@merger", "super_timer", timer);

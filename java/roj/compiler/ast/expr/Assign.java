@@ -3,14 +3,14 @@ package roj.compiler.ast.expr;
 import roj.asm.Opcodes;
 import roj.asm.type.IType;
 import roj.asm.type.Type;
-import roj.compiler.JavaLexer;
+import roj.compiler.Tokens;
 import roj.compiler.asm.MethodWriter;
 import roj.compiler.context.LocalContext;
 import roj.compiler.diagnostic.Kind;
 import roj.compiler.resolve.TypeCast;
 import roj.config.data.CInt;
 
-import static roj.compiler.JavaLexer.byId;
+import static roj.compiler.Tokens.byId;
 
 /**
  * @author Roj234
@@ -52,7 +52,7 @@ class Assign extends ExprNode {
 			if (node.equals(op.left)) {
 				// a = a + b
 				// check binary_assign override
-				var override = ctx.getOperatorOverride(node, op.right, op.operator - JavaLexer.binary_assign_delta);
+				var override = ctx.getOperatorOverride(node, op.right, op.operator - Tokens.binary_assign_delta);
 				if (override != null) return override;
 			}
 
@@ -173,8 +173,8 @@ class Assign extends ExprNode {
 
 			switch (br.operator) {
 				default: break block;
-				case JavaLexer.add: break;
-				case JavaLexer.sub: value = -value; break;
+				case Tokens.add: break;
+				case Tokens.sub: value = -value; break;
 			}
 			if ((short)value != value) break block;
 

@@ -30,7 +30,7 @@ public class DiskVFS implements VirtualFileSystem {
 	public @NotNull VirtualFile getPath(VirtualFile parent, String child) {return new DiskFile(new File(((DiskFile) parent).getFile(), child));}
 
 	@Override
-	public @NotNull DiskFileInfo toDiskInfo(VirtualFile virtualFile) {return (DiskFile) virtualFile;}
+	public @NotNull DiskFileInfo toFileInfo(VirtualFile virtualFile) {return (DiskFile) virtualFile;}
 
 	@Override
 	public @NotNull InputStream getInputStream(VirtualFile path) throws IOException {return new FileInputStream(((DiskFile) path).getFile());}

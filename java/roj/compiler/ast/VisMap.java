@@ -1,7 +1,16 @@
 package roj.compiler.ast;
 
-import roj.collect.*;
+import org.jetbrains.annotations.Nullable;
+import roj.collect.IntBiMap;
+import roj.collect.IntList;
+import roj.collect.IntMap;
+import roj.collect.SimpleList;
 import roj.compiler.asm.Variable;
+import roj.util.TypedKey;
+
+import java.util.Objects;
+
+import static roj.collect.IntMap.UNDEFINED;
 
 /**
  * Variable Initialization State.
@@ -11,31 +20,22 @@ import roj.compiler.asm.Variable;
  * @since 2024/6/23 0023 17:10
  */
 public final class VisMap {
-	private final IntBiMap<Variable> vuid = new IntBiMap<>();
-
-	private final IntList varCounts = new IntList();
-	private final SimpleList<MyBitSet> varStates = new SimpleList<>();
-	private final SimpleList<XHashSet<Variable, ConstantState>> constantStates = new SimpleList<>();
-
-	private MyBitSet varState = new MyBitSet();
-	private int varCount;
-
-	private boolean terminateFlag;
-
-	private final SimpleList<LabelNode> extraHooks = new SimpleList<>();
-	private LabelNode immediateHook;
+	private static final TypedKey<Object> DEFINED = TypedKey.of("DEFINED");
 
 	public static final class State {
-		final MyBitSet data;
-		State(MyBitSet data) {this.data = data;}
+		final IntMap<Object> data;
+		State(IntMap<Object> data) {this.data = data;}
 	}
 
-	private static final XHashSet.Shape<Variable, ConstantState> CONSTANT_STATE_SHAPE = XHashSet.shape(Variable.class, ConstantState.class, "variable", "_next");
-	private static final class ConstantState {
-		Variable variable;
-		Object initialValue, lastValue;
-		ConstantState _next;
-	}
+	private final IntBiMap<Variable> vuid = new IntBiMap<>();
+
+	private final SimpleList<LabelNode> headHook = new SimpleList<>();
+	private final IntList varCounts = new IntList();
+	private final SimpleList<IntMap<Object>> varStates = new SimpleList<>();
+
+	private IntMap<Object> varState = new IntMap<>();
+	private int varCount;
+	private boolean terminated;
 
 	public void clear() {
 		vuid.clear();
@@ -43,29 +43,20 @@ public final class VisMap {
 		varStates.clear();
 		varState.clear();
 		varCount = 0;
-		terminateFlag = false;
-		extraHooks.clear();
-		immediateHook = null;
+		terminated = false;
+		headHook.clear();
 	}
 
-	public void enter() {
-		extraHooks.add(immediateHook);
-		immediateHook = null;
-
+	// 进入代码块
+	public void enter(@Nullable LabelNode immediateLabel) {
+		headHook.add(immediateLabel);
 		varCounts.add(varCount);
 
-		varStates.add(varState); // prev
-
-		var tmp = new MyBitSet();
-		tmp.or(varState);
-		varStates.add(tmp); // init
-
-		tmp = new MyBitSet();
-		tmp.or(varState);
-		varState = tmp; // current
-
-		constantStates.add(CONSTANT_STATE_SHAPE.create());
+		varStates.add(varState); // 代码块开始前的状态
+		varStates.add(new IntMap<>(varState)); // 代码块开始处的状态
+		varState = new IntMap<>(varState); // 当前状态
 	}
+	// 分支
 	public void orElse() {
 		var prevVarCount = varCounts.get(varCounts.size()-1);
 
@@ -73,33 +64,39 @@ public final class VisMap {
 			vuid.remove(i);
 		varCount = prevVarCount;
 
-		if (!terminateFlag) {
+		if (!terminated) {
 			var prevVarDefined = varStates.get(varStates.size()-2);
 			mergeState(prevVarCount, prevVarDefined);
 		}
-		terminateFlag = false;
+		terminated = false;
 
 		var initVarDefined = varStates.getLast();
-		var tmp = new MyBitSet();
-		tmp.or(initVarDefined);
-		varState = tmp;
-	}
-	private void mergeState(int prevVarCount, MyBitSet prevVarDefined) {
+		varState = new IntMap<>(initVarDefined); // 恢复代码块开始处的状态
+
 		for (int i = 0; i < prevVarCount; i++) {
-			prevVarDefined.add(varState.contains(i << 1/*DEFINED*/) ? (i << 1/*DEFINED*/) : (i << 1) + 1/*UNSET*/);
+			Object defined = varState.getOrDefault(i, UNDEFINED);
+			vuid.get(i).constantValue = defined == UNDEFINED || defined == DEFINED ? null : defined;
 		}
-		var map = constantStates.getLast();
-		for (var state : map) {
-			var a = state.lastValue;
-			var b = state.variable.constantValue;
-			state.lastValue = a == null || a.equals(b) ? b : IntMap.UNDEFINED;
-			state.variable.constantValue = state.initialValue;
+	}
+	private void mergeState(int prevVarCount, IntMap<Object> prevVarDefined) {
+		for (int i = 0; i < prevVarCount; i++) {
+			var defined = varState.getOrDefault(i, UNDEFINED);
+			if (defined == UNDEFINED) {
+				prevVarDefined.putInt(i, UNDEFINED);
+			} else {
+				var prevDefined = prevVarDefined.getOrDefault(i, defined);
+				if (prevDefined != UNDEFINED) {
+					// 不相同则去除
+					if (!Objects.equals(defined, prevDefined)) defined = DEFINED;
+					prevVarDefined.putInt(i, defined);
+				}
+			}
 		}
-		//map.clear();
 	}
 
+	// 离开代码块
 	public void exit() {
-		var pop = extraHooks.pop();
+		var pop = headHook.pop();
 		if (pop != null) pop.combineState(this);
 
 		var prevVarCount = varCounts.remove(varCounts.size()-1);
@@ -110,81 +107,68 @@ public final class VisMap {
 			vuid.remove(i);
 		varCount = prevVarCount;
 
-		if (!terminateFlag) mergeState(prevVarCount, prevVarDefined);
-		// 由于我选择了立即序列化，在此刻进行循环中的变量状态分析是不可能的
-		for (var state : constantStates.pop()) {
-			state.variable.constantValue =
-				state.lastValue == IntMap.UNDEFINED
-				|| (state.initialValue != null && !state.initialValue.equals(state.lastValue))
-					? null
-					: state.lastValue;
-		}
+		if (!terminated) mergeState(prevVarCount, prevVarDefined);
 
 		for (int i = 0; i < prevVarCount; i++) {
-			var hasValue = prevVarDefined.contains(i << 1/*DEFINED*/)
-				&& !prevVarDefined.remove((i << 1) + 1/*UNSET*/);
+			var defined = prevVarDefined.getOrDefault(i, UNDEFINED);
+			var hasValue = defined != UNDEFINED;
 			var _var = vuid.get(i);
 			if (hasValue) {
 				_var.hasValue = true;
+				_var.constantValue = defined == DEFINED ? null : defined;
 			} else {
-				prevVarDefined.remove(i<<1/*DEFINED*/);
+				prevVarDefined.remove(i);
 				_var.hasValue = false;
+				_var.constantValue = null;
 			}
 		}
 
 		varState = prevVarDefined;
-		terminateFlag = false;
+		terminated = false;
 	}
 
-	// 控制流中止
+	// 控制流终止，不合并定义的变量
 	public void terminate() {
-		// 控制流结束，定义的变量无法合并
-		terminateFlag = true;
+		terminated = true;
 	}
 
-	// 控制流转移
-	void blockHook(LabelNode label) {
-		if (immediateHook != null) throw new IllegalStateException("immediateHook != null");
-		immediateHook = label;
-	}
+	// 控制流转移 to
 	public State jump() {
-		terminateFlag = true;
+		terminated = true;
 
 		var prevVarCount = varCounts.get(varCounts.size()-1);
-		var copyOf = new MyBitSet();
+		var copyOf = new IntMap<>();
 		mergeState(prevVarCount, copyOf);
 
 		return new State(copyOf);
 	}
+	// 控制流转移 from
 	public void orElse(State state) {
 		var prevVarCount = varCounts.get(varCounts.size()-1);
 		var prevVarDefined = varStates.get(varStates.size()-2);
 
-		state.data.removeRange(prevVarCount << 1, state.data.last()+1);
-		prevVarDefined.or(state.data);
+		for (var itr = state.data.selfEntrySet().iterator(); itr.hasNext(); ) {
+			if (itr.next().getIntKey() >= prevVarCount) {
+				itr.remove();
+			}
+		}
+		prevVarDefined.putAll(state.data);
 	}
 
+	// 变量
 	public void add(Variable v) {
 		if (v.hasValue) return;
 		vuid.putByValue(varCount++, v);
 	}
 	public boolean hasValue(Variable v) {
 		var vid = vuid.getValueOrDefault(v, -1);
-		return v.hasValue || vid >= 0 && varState.contains(vid << 1);
+		return v.hasValue || vid >= 0 && varState.getOrDefault(vid, UNDEFINED) != UNDEFINED;
 	}
 	public void assign(Variable var) {
 		var vid = vuid.getValueOrDefault(var, -1);
-		if (vid >= 0) varState.add(vid << 1);
+		if (vid >= 0) varState.putInt(vid, var.constantValue == null ? DEFINED : var.constantValue);
 		else {
 			if (!var.hasValue) throw new AssertionError();
-		}
-	}
-	public void assignWithValue(Variable var) {
-		var vid = vuid.getValueOrDefault(var, -1);
-		if (vid >= 0 && !constantStates.isEmpty()) {
-			var set = constantStates.getLast();
-			if (!set.containsKey(var))
-				set.computeIfAbsent(var).initialValue = var.constantValue;
 		}
 	}
 }

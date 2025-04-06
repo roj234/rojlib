@@ -5,7 +5,7 @@ import roj.asm.Opcodes;
 import roj.asm.type.IType;
 import roj.asm.type.Type;
 import roj.asm.type.TypeHelper;
-import roj.compiler.JavaLexer;
+import roj.compiler.Tokens;
 import roj.compiler.asm.MethodWriter;
 import roj.compiler.context.LocalContext;
 import roj.compiler.diagnostic.Kind;
@@ -39,7 +39,7 @@ final class ArrayGet extends VarNode {
 
 		IType type = array.type();
 		if (type.array() == 0) {
-			ExprNode override = ctx.getOperatorOverride(array, index, JavaLexer.lBracket);
+			ExprNode override = ctx.getOperatorOverride(array, index, Tokens.lBracket);
 			if (override != null) return override;
 
 			ctx.report(this, Kind.ERROR, "arrayGet.error.notArray", type);

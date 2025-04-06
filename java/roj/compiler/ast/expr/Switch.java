@@ -37,7 +37,7 @@ final class Switch extends ExprNode {
 		int coveredAll = 0;
 
 		IType type = Helpers.maybeNull();
-		for (SwitchNode.Case branch : node.branches) {
+		for (var branch : node.branches) {
 			ExprNode expr = branch.value;
 			if (expr != null) {
 				if (type == null) type = expr.type();
@@ -59,7 +59,7 @@ final class Switch extends ExprNode {
 				// abstract sealed
 				if ((info.modifier&Opcodes.ACC_ABSTRACT) != 0 && info.getRawAttribute("PermittedSubclasses") != null) {
 					MyHashSet<String> patternType = new MyHashSet<>();
-					for (SwitchNode.Case branch : node.branches) {
+					for (var branch : node.branches) {
 						patternType.add(branch.variable.type.owner());
 					}
 					coveredAll = iterSealed(ctx.classes, info, patternType) ? -1 : 0;
@@ -118,7 +118,7 @@ final class Switch extends ExprNode {
 		var type = this.type;
 		if (returnType != null && returnType.getType1() != null) type = returnType.getType1();
 
-		for (SwitchNode.Case branch : node.branches) {
+		for (var branch : node.branches) {
 			ExprNode expr = branch.value;
 			if (expr != null) {
 				expr.write(branch.block, ctx.castTo(expr.type(), type, 0));

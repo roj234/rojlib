@@ -1,12 +1,12 @@
 package roj.http;
 
+import org.jetbrains.annotations.NotNull;
 import roj.collect.MyHashMap;
 import roj.collect.MyHashSet;
 import roj.collect.SimpleList;
 import roj.collect.ToIntMap;
 import roj.concurrent.OperationDone;
 import roj.config.Tokenizer;
-import roj.http.server.HttpCache;
 import roj.io.IOUtil;
 import roj.reflect.ReflectionUtils;
 import roj.reflect.Unaligned;
@@ -14,6 +14,7 @@ import roj.text.CharList;
 import roj.text.Escape;
 import roj.text.LineReader;
 import roj.text.TextUtil;
+import roj.util.ArrayCache;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
 import roj.util.Helpers;
@@ -29,7 +30,7 @@ import static roj.collect.IntMap.UNDEFINED;
  * @author solo6975
  * @since 2021/10/23 21:20
  */
-public class Headers extends MyHashMap<CharSequence, String> {
+public class Headers extends Multimap<CharSequence, String> {
 	public static void encodeVal(Iterator<Map.Entry<String, String>> itr, Appendable sb) {
 		if (!itr.hasNext()) return;
 		try {
@@ -64,7 +65,7 @@ public class Headers extends MyHashMap<CharSequence, String> {
 	}
 
 	public static String getOneValue(CharSequence field, String key) {
-		E vo = new E();
+		var vo = new Entry<>();
 		vo.k = key;
 		try {
 			complexValue(field, vo, false);
@@ -73,22 +74,23 @@ public class Headers extends MyHashMap<CharSequence, String> {
 		}
 		return null;
 	}
-	public static List<Map.Entry<String, String>> getValues(CharSequence field) {
+	private static List<Map.Entry<String, String>> getValues(CharSequence field) {
 		List<Map.Entry<String, String>> kvs = new SimpleList<>();
 		complexValue(field, (k, v) -> kvs.add(new SimpleImmutableEntry<>(k, v)), false);
 		return kvs;
 	}
 
-	public static Map<String, String> simpleValue(CharSequence query, String delim, boolean throwOrSkip) throws MalformedURLException {
+	@Deprecated
+	public static Multimap<String, String> simpleValue(CharSequence query, String delim, boolean throwOrSkip) throws MalformedURLException {
 		List<String> queries = TextUtil.split(query, delim);
-		MyHashMap<String, String> map = new MyHashMap<>(queries.size());
+		Multimap<String, String> map = new Multimap<>(queries.size());
 
 		for (int i = 0; i < queries.size(); i++) {
 			String s = queries.get(i);
 			int j = s.indexOf('=');
 			try {
-				if (j == -1) map.put(Escape.decodeURI(s), "");
-				else map.put(Escape.decodeURI(s.substring(0, j)), Escape.decodeURI(s.substring(j+1)));
+				if (j == -1) map.add(Escape.decodeURI(s), "");
+				else map.add(Escape.decodeURI(s.substring(0, j)), Escape.decodeURI(s.substring(j+1)));
 			} catch (MalformedURLException e) {
 				if (throwOrSkip) throw e;
 			}
@@ -158,16 +160,18 @@ public class Headers extends MyHashMap<CharSequence, String> {
 	}
 	private static String Sub(CharSequence c, int s, int e) throws MalformedURLException { return Escape.decodeURI(c.subSequence(s, e)); }
 
-	public Headers() { super(4); }
-	public Headers(CharSequence data) { putAllS(data); }
-	public Headers(Map<CharSequence, String> data) {
-		putAll(data);
-	}
+	public Headers() {this(8);}
+	public Headers(int size) {super(size);}
+	public Headers(CharSequence data) {putAllS(data);}
+	public Headers(Map<CharSequence, String> data) {putAll(data);}
 
-	public boolean parseHead(DynByteBuf buf) {
-		return parseHead(buf, new ByteList(32));
+	public static boolean parseHeader(Headers map, DynByteBuf buf) {
+		var tmp = new ByteList(ArrayCache.getByteArray(256, false));
+		boolean b = parseHeader(map, buf, tmp);
+		tmp._free();
+		return b;
 	}
-	public boolean parseHead(DynByteBuf buf, ByteList tmp) {
+	public static boolean parseHeader(Headers map, DynByteBuf buf, ByteList tmp) {
 		if (!buf.isReadable()) return false;
 
 		int i = buf.rIndex;
@@ -214,7 +218,7 @@ public class Headers extends MyHashMap<CharSequence, String> {
 					String val = tmp.readUTF(tmp.readableBytes()); tmp.clear();
 					checkVal(val);
 
-					put(key, val);
+					map.add(key, val);
 
 					if (c == '\r') {
 						if (i+1 >= len) return false;
@@ -243,62 +247,7 @@ public class Headers extends MyHashMap<CharSequence, String> {
 		}
 	}
 
-	public final List<Cookie> getCookieFromServer() {
-		String field = getField("set-cookie");
-		if (field.isEmpty()) return Collections.emptyList();
-
-		List<Cookie> cookies = new SimpleList<>();
-		complexValue(field, new BiConsumer<>() {
-            Cookie cookie;
-
-            @Override
-            public void accept(String k, String v) {
-                if (cookie != null && cookie.read(k, v)) return;
-
-                try {
-                    if (cookie != null) cookie.clearDirty();
-                    cookie = new Cookie(Escape.decodeURI(k), Escape.decodeURI(v));
-                    cookies.add(cookie);
-                } catch (MalformedURLException e) {
-                    cookie = new Cookie("invalid");
-                }
-            }
-        }, false);
-
-		int i = cookies.size()-1;
-		if (i >= 0) cookies.get(i).clearDirty();
-
-		return cookies;
-	}
-	public final Map<String, String> getCookieFromClient() throws MalformedURLException {
-		String field = getField("cookie");
-		if (field.isEmpty()) return Collections.emptyMap();
-		return simpleValue(field, "; ", true);
-	}
-	public final void sendCookieToClient(List<Cookie> cookies) {
-		if (cookies.isEmpty()) return;
-
-		E entry = (E) getOrCreateEntry("set-cookie");
-		if (entry.k == UNDEFINED) {
-			entry.k = "set-cookie";
-			size++;
-		}
-
-		CharList sb = new CharList();
-		cookies.get(0).write(sb, true);
-		entry.setValue(sb.toString());
-
-		if (cookies.size() > 1) {
-			entry.all = new SimpleList<>(cookies.size()-1);
-			for (int i = 1; i < cookies.size(); i++) {
-				sb.clear();
-				cookies.get(i).write(sb, true);
-				entry.all.add(sb.toString());
-			}
-		}
-
-		sb._free();
-	}
+	@Deprecated
 	public final void sendCookieToServer(Collection<Cookie> cookies) {
 		if (cookies.isEmpty()) return;
 
@@ -314,69 +263,19 @@ public class Headers extends MyHashMap<CharSequence, String> {
 		put("cookie", sb.toStringAndFree());
 	}
 
-	public String getField(String key) { return getOrDefault(key,""); }
+	@NotNull public String header(String key) { return getOrDefault(key,""); }
 
-	public String getFieldValue(String key, String minorKey) { return getOneValue(getField(key),minorKey); }
-	public List<Map.Entry<String,String>> getFieldValue(String key) { return getValues(getField(key)); }
-	public void getFieldValue(String key, BiConsumer<String, String> consumer) { complexValue(getField(key),consumer,false); }
+	public String getFirstHeaderValue(String key) { return getOneValue(header(key),null); }
+	public String getHeaderValue(String key, String minorKey) { return getOneValue(header(key),minorKey); }
+	public List<Map.Entry<String,String>> getHeaderValues(String key) { return getValues(header(key)); }
+	public void getHeaderValues(String key, BiConsumer<String, String> consumer) { complexValue(header(key),consumer,false); }
 
-	// region just a simple multi-value lowercase map
-
-	private static final class E extends MyHashMap.Entry<CharSequence, String> implements BiConsumer<String, String> {
-		List<String> all = Collections.emptyList();
-
-		// awa, 省一个类, 我真无聊
-		public final void accept(String k, String v) {
-			if (this.k.equals(k)) {
-				this.k = v;
-				throw OperationDone.INSTANCE;
-			}
-		}
-	}
-
-	public final List<String> getAll(final String s) {
-		E e = (E) getEntry(s);
-		if (e == null) return null;
-
-		SimpleList<String> list = new SimpleList<>(e.all.size()+1);
-		list.add(e.v);
-		list.addAll(e.all);
-		return list;
-	}
-
-
-	public final String getAt(String key, int index) {
-		final E e = (E) getEntry(key);
-		if (e == null) return null;
-		return (index == 0) ? e.v : e.all.get(index - 1);
-	}
-
-	public final int getCount(String key) {
-		E e = (E) getEntry(key);
-		if (e == null) return 0;
-		return 1+e.all.size();
-	}
+	public long getContentLength() {return Long.parseLong(getOrDefault("content-length", "-1"));}
+	public String getContentEncoding() {return getOrDefault("content-encoding", "identity").toLowerCase(Locale.ROOT);}
 
 	// region lowerMap
 	public AbstractEntry<CharSequence, String> getEntry(Object key) {return super.getEntry(lower(key.toString())); }
 	public AbstractEntry<CharSequence, String> getOrCreateEntry(CharSequence key) { return super.getOrCreateEntry(lower(key)); }
-
-	@Override
-	protected AbstractEntry<CharSequence, String> useEntry() {
-		E entry = Helpers.cast(HttpCache.getInstance().headers.pop());
-
-		if (entry == null) entry = new E();
-		entry.k = entry.v = Helpers.cast(UNDEFINED);
-		return entry;
-	}
-	@Override
-	protected void onDel(AbstractEntry<CharSequence, String> entry) {
-		E e = (E) entry;
-		e.k = null;
-		e.next = null;
-		e.all.clear();
-		HttpCache.getInstance().headers.add(e);
-	}
 
 	@Override
 	protected void onPut(AbstractEntry<CharSequence, String> entry, String newV) {
@@ -387,48 +286,52 @@ public class Headers extends MyHashMap<CharSequence, String> {
 			checkKey(entry.k);
 		}
 	}
-	// endregion
 
-	public final void add(String key, String value) {
+	@Override
+	@SuppressWarnings({"rawtypes", "unchecked"})
+	public final void add(CharSequence key, String value) {
 		value = checkVal(value);
 
-		E e = (E) getOrCreateEntry(key);
+		Entry e = (Entry) getOrCreateEntry(key);
 		if (e.k == UNDEFINED) {
 			e.k = lower(key).toString();
 			e.v = value;
 			size++;
 		} else {
-			if (e.all.isEmpty()) e.all = new LinkedList<>();
-			e.all.add(value);
+			if (e.rest.isEmpty()) e.rest = new LinkedList<>();
+			e.rest.add(value);
 		}
 	}
 
-	public final void set(String key, String value) {
+	@Override
+	@SuppressWarnings({"rawtypes"})
+	public final void set(CharSequence key, String value) {
 		value = checkVal(value);
 
-		E e = (E) getOrCreateEntry(key);
+		Entry e = (Entry) getOrCreateEntry(key);
 		if (e.k == UNDEFINED) {
 			e.k = lower(key);
 			size++;
 		}
-		e.all = Collections.emptyList();
+		e.rest = Collections.emptyList();
 		e.v = value;
 	}
 
-	public final void set(String key, List<String> value) {
-
-		E e = (E) getOrCreateEntry(key);
+	@Override
+	@SuppressWarnings({"rawtypes", "unchecked"})
+	public final void set(CharSequence key, List<String> value) {
+		Entry e = (Entry) getOrCreateEntry(key);
 		if (e.k == UNDEFINED) {
 			e.k = lower(key);
 			size++;
 		}
 		if (value.size() == 1) {
-			e.all = Collections.emptyList();
+			e.rest = Collections.emptyList();
 		} else {
-			e.all = new ArrayList<>(value);
-			e.all.remove(0);
-			for (int i = 0; i < e.all.size(); i++)
-				e.all.set(i, checkVal(e.all.get(i)));
+			e.rest = new SimpleList(value);
+			e.rest.remove(0);
+			for (int i = 0; i < e.rest.size(); i++)
+				e.rest.set(i, checkVal((String) e.rest.get(i)));
 		}
 		e.v = checkVal(value.get(0));
 	}
@@ -470,7 +373,7 @@ public class Headers extends MyHashMap<CharSequence, String> {
 	public final void encode(Appendable sb) {
 		try {
 			for (var it = entrySet().iterator(); it.hasNext(); ) {
-				E entry = (E) it.next();
+				Entry<String, String> entry = Helpers.cast(it.next());
 				var key = entry.getKey();
 
 				char c = key.charAt(0);
@@ -478,7 +381,7 @@ public class Headers extends MyHashMap<CharSequence, String> {
 
 				h(sb, key, offset, entry.getValue());
 
-				List<String> all = entry.all;
+				List<String> all = entry.rest;
 				for (int i = 0; i < all.size(); i++) {
 					h(sb, key, offset, all.get(i));
 				}
@@ -523,8 +426,8 @@ public class Headers extends MyHashMap<CharSequence, String> {
 	}
 
 	private ToIntMap<String> encType;
-	public int getEncType(String name) {return encType == null ? 0 : encType.getOrDefault(name, 0);}
-	public void setEncType(String name, int enc) {
+	public int _getEncodeType(String name) {return encType == null ? 0 : encType.getOrDefault(name, 0);}
+	public void _setEncodeType(String name, int enc) {
 		if (encType == null) encType = new ToIntMap<>();
 		encType.putInt(name, enc);
 	}

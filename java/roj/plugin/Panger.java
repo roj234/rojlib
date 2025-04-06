@@ -99,7 +99,7 @@ public final class Panger extends PluginManager {
 		if (CONFIG.containsKey("webui")) {
 			boolean webTerminal = CONFIG.getBool("web_terminal");
 			initHttp().register(new WebUI(webTerminal), "webui/");
-			router.addPrefixDelegation("xui", new PathRouter(new File("plugins/Core/xui")));
+			router.addPrefixDelegation("xui/", new PathRouter(new File("plugins/Core/xui/")));
 			var noPerm = router.getInterceptor("PermissionManager") == null;
 			if (noPerm) LOGGER.fatal("警告：您未安装任何权限管理插件，这会导致webui能被任何人访问！");
 			if (webTerminal) {
@@ -277,7 +277,7 @@ public final class Panger extends PluginManager {
 
 				var http = new PanHttp();
 				var proxyToken = CONFIG.getString("http_reverse_proxy");
-				if (!proxyToken.isEmpty()) HttpCache.proxySecret = proxyToken;
+				if (!proxyToken.isEmpty()) HSConfig.proxySecret = proxyToken;
 				if (CONFIG.getBool("http_status")) router.register(http);
 			} catch (IOException e) {
 				LOGGER.error("HTTP服务启动失败", e);

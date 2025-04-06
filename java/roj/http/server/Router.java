@@ -1,7 +1,6 @@
 package roj.http.server;
 
 import org.jetbrains.annotations.Nullable;
-import roj.http.IllegalRequestException;
 
 /**
  * @author Roj234
@@ -11,10 +10,10 @@ import roj.http.IllegalRequestException;
 public interface Router {
 	int DEFAULT_POST_SIZE = 4096;
 
-	default int writeTimeout(@Nullable Request req, @Nullable Response resp) {return resp == null ? 60000 : 3600_000;}
+	default int writeTimeout(@Nullable Request req, @Nullable Content resp) {return resp == null ? 60000 : 3600_000;}
 	default int readTimeout(Request req) {return req != null ? 30000 : 3000;}
 
-	Response response(Request req, ResponseHeader rh) throws Exception;
+	Content response(Request req, ResponseHeader rh) throws Exception;
 
 	default void checkHeader(Request req, @Nullable PostSetting cfg) throws IllegalRequestException {
 		if (cfg != null) cfg.postAccept(DEFAULT_POST_SIZE, 0);

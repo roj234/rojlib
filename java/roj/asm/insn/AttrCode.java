@@ -134,7 +134,6 @@ public class AttrCode extends Attribute implements Attributed {
 		c.visitAttributes();
 
 		if (fvFlags != 0) {
-			Logger.FALLBACK.warn("FrameVisitor is EXPERIMENTAL! {}, updating {}.{}{}", fvFlags, method.owner, method.name(), method.rawDesc());
 			FrameVisitor fv = c.getFv();
 
 			if ((fvFlags & COMPUTE_SIZES) != 0) {

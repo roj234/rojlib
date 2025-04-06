@@ -100,7 +100,7 @@ final class Trinary extends ExprNode {
 		var end = new Label();
 		var falsy = new Label();
 		val.writeShortCircuit(cw, cast, false, falsy);
-		vis.enter();
+		vis.enter(null);
 		//GenericSafe(using getCommonParent)
 		ok.write(cw, noRet);
 		vis.orElse();

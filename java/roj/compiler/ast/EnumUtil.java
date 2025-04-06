@@ -1,15 +1,11 @@
 package roj.compiler.ast;
 
-import roj.asm.Opcodes;
 import roj.asm.type.Type;
 import roj.collect.SimpleList;
 import roj.compiler.api.Types;
-import roj.compiler.asm.MethodWriter;
 import roj.compiler.asm.Variable;
 import roj.compiler.ast.expr.ExprNode;
 import roj.compiler.ast.expr.LocalVariable;
-import roj.compiler.context.CompileUnit;
-import roj.io.IOUtil;
 
 import java.util.Arrays;
 import java.util.List;
@@ -19,17 +15,6 @@ import java.util.List;
  * @since 2024/11/17 0017 19:02
  */
 public class EnumUtil {
-	static void writeAutoConstructor(CompileUnit file, MethodWriter cw) {
-		var buf = IOUtil.getSharedByteBuf()
-			.put(Opcodes.ALOAD_0)
-			.put(Opcodes.ALOAD_1)
-			.put(Opcodes.ILOAD_2)
-			.put(Opcodes.INVOKESPECIAL)
-			.putShort(file.cp.getMethodRefId("java/lang/Enum", "<init>", "(Ljava/lang/String;I)V"));
-		cw.insertBefore(buf);
-		cw.visitSizeMax(3, 0);
-	}
-
 	private static final List<LocalVariable> _NAME_ORDINAL;
 	static {
 		var v1 = new Variable("@name", Types.STRING_TYPE);

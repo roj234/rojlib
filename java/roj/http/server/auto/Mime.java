@@ -10,7 +10,7 @@ import java.lang.annotation.Target;
  * @since 2024/7/10 1:42
  */
 @Retention(RetentionPolicy.CLASS)
-@Target(ElementType.METHOD)
+@Target({ElementType.METHOD, ElementType.TYPE})
 public @interface Mime {
 	String value();
 }

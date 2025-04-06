@@ -19,7 +19,7 @@ import roj.concurrent.OperationDone;
 
 import java.util.List;
 
-import static roj.compiler.JavaLexer.*;
+import static roj.compiler.Tokens.*;
 
 /**
  * @author Roj234

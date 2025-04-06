@@ -240,7 +240,7 @@ public final class ConstantPool {
 	public final @NotNull <T extends Constant> T get(DynByteBuf r) {return (T) constants.getInternalArray()[r.readUnsignedShort()-1];}
 	public final @Nullable String getRefName(DynByteBuf r) {
 		int id = r.readUnsignedShort()-1;
-		return id < 0 ? null : ((CstRefUTF) constants.getInternalArray()[id]).name().str();
+		return id < 0 ? null : ((CstClass) constants.getInternalArray()[id]).name().str();
 	}
 	public final @NotNull String getRefName(DynByteBuf r, int type) {
 		var c = (CstRefUTF) constants.getInternalArray()[r.readUnsignedShort()-1];

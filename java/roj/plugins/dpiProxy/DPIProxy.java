@@ -120,6 +120,12 @@ public class DPIProxy extends Plugin {
 					data.rIndex = rIdx;
 
 					var ch = ctx.channel();
+					if (resp.errno == 0) {
+						ctx.postEvent("fail2ban:ban");
+						ctx.close();
+						return;
+					}
+
 					ch.readInactive();
 					ch.removeAll();
 
@@ -131,7 +137,7 @@ public class DPIProxy extends Plugin {
 						LOGGER.debug("{}: Proxy {}:{}", ch.remoteAddress(), resp.getMessage(), resp.errno);
 					} else {
 						switch (resp.errno) {
-							case 0 -> {
+							case -1 -> {
 								var handler = ServerLaunch.SHARED.get(resp.getMessage());
 								if (handler == null) {
 									LOGGER.warn("{}: 找不到管道 {}", ch.remoteAddress(), resp.getMessage());
@@ -140,7 +146,7 @@ public class DPIProxy extends Plugin {
 									handler.addTCPConnection(ch);
 								}
 							}
-							case -1 -> {
+							case -2 -> {
 								if (resp.byteMessage != null)
 									ctx.channelWrite(resp.byteMessage);
 								else if (resp.getMessage() != null)

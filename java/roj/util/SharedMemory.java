@@ -42,13 +42,13 @@ public class SharedMemory implements Closeable {
 		if (ref.ptr != 0) throw new IllegalStateException("pipe is open");
 	}
 
-	public synchronized void close() {ref.run();}
+	public void close() {ref.run();}
 
 	static final class Releaser implements Runnable {
 		long ptr;
 
 		@Override
-		public void run() {
+		public synchronized void run() {
 			if (ptr != 0) {
 				nClose(ptr);
 				ptr = 0;

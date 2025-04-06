@@ -43,7 +43,7 @@ import static roj.asm.Opcodes.*;
 
 /**
  * @author Roj233
- * @version 2.6
+ * @version 2.7
  * @since 2022/1/11 17:49
  */
 @Java22Workaround
@@ -468,7 +468,7 @@ final class SerializerFactoryImpl extends SerializerFactory {
 		Adapter ser;
 
 		if (!type.isEnum() && (type.getComponentType() == null || !type.getComponentType().isPrimitive())) {
-			name = ((this.flag&OBJECT_POOL) | (flag&(SERIALIZE_PARENT|OPTIONAL_BY_DEFAULT)))+";"+name;
+			name = ((this.flag&OBJECT_POOL) | (flag&(SERIALIZE_PARENT|OPTIONAL_BY_DEFAULT|NO_SCHEMA)))+";"+name;
 		}
 
 		var GENERATED = Isolation.computeIfAbsent(type.getClassLoader(), Fn).generated;
@@ -552,7 +552,7 @@ final class SerializerFactoryImpl extends SerializerFactory {
 
 		if (primitiveArrayTemplate == null) {
 			try {
-				primitiveArrayTemplate = IOUtil.getResource("roj/config/auto/PrimArr.class");
+				primitiveArrayTemplate = IOUtil.getResourceIL("roj/config/auto/PrimArr.class");
 			} catch (IOException e) {
 				throw new RuntimeException(e);
 			}
@@ -779,15 +779,32 @@ final class SerializerFactoryImpl extends SerializerFactory {
 		cw.finish();
 		// endregion
 		// region key函数
-		cw = keyCw = c.newMethod(ACC_PUBLIC|ACC_FINAL, "key", "(Lroj/config/auto/AdaptContext;Ljava/lang/String;)V");
-		cw.visitSize(3,4);
+		if ((flag&NO_SCHEMA) != 0) {
+			cw = c.newMethod(ACC_PUBLIC|ACC_FINAL, "key", "(Lroj/config/auto/AdaptContext;Ljava/lang/String;)V");
+			cw.visitSize(3,3);
 
-		cw.field(GETSTATIC, c, fieldIdKey);
-		cw.one(ALOAD_2);
-		cw.one(ICONST_M1);
-		cw.invoke(DIRECT_IF_OVERRIDE, "roj/collect/IntBiMap", "getValueOrDefault", "(Ljava/lang/Object;I)I");
-		cw.one(DUP);
-		cw.one(ISTORE_3);
+			cw.one(ALOAD_0);
+			cw.one(ALOAD_1);
+			cw.one(ALOAD_2);
+			cw.invokeS("java/lang/Integer", "parseInt", "(Ljava/lang/String;)I");
+			cw.invokeV(c.name(), "key", "(Lroj/config/auto/AdaptContext;I)V");
+			cw.one(RETURN);
+			cw.finish();
+
+			cw = keyCw = c.newMethod(ACC_PUBLIC|ACC_FINAL, "key", "(Lroj/config/auto/AdaptContext;I)V");
+			cw.visitSize(3,3);
+			cw.one(ILOAD_2);
+		} else {
+			cw = keyCw = c.newMethod(ACC_PUBLIC|ACC_FINAL, "key", "(Lroj/config/auto/AdaptContext;Ljava/lang/String;)V");
+			cw.visitSize(3,4);
+
+			cw.field(GETSTATIC, c, fieldIdKey);
+			cw.one(ALOAD_2);
+			cw.one(ICONST_M1);
+			cw.invoke(DIRECT_IF_OVERRIDE, "roj/collect/IntBiMap", "getValueOrDefault", "(Ljava/lang/Object;I)I");
+			cw.one(DUP);
+			cw.one(ISTORE_3);
+		}
 
 		keyPrimitive = null;
 		keySwitch = SwitchBlock.ofAuto();
@@ -795,14 +812,13 @@ final class SerializerFactoryImpl extends SerializerFactory {
 		keySwitch.def = cw.label();
 
 		if (parentSerInst != null) {
-			invokeParent(cw, ALOAD);
+			invokeParent(cw, (flag&NO_SCHEMA) != 0 ? ILOAD : ALOAD);
 		} else {
 			cw.one(ALOAD_1);
 			cw.field(GETSTATIC, "roj/config/auto/SkipSer", "INST", "Lroj/config/auto/Adapter;");
 			cw.invoke(DIRECT_IF_OVERRIDE, "roj/config/auto/AdaptContext", "push", "(Lroj/config/auto/Adapter;)V");
 		}
 		cw.one(RETURN);
-
 		// endregion
 		// region write()
 		write = c.newMethod(ACC_PUBLIC|ACC_FINAL, "writeMap", "(Lroj/config/serial/CVisitor;Ljava/lang/Object;)V");
@@ -944,7 +960,8 @@ final class SerializerFactoryImpl extends SerializerFactory {
 						"解决方案: 换用支持的JVM");
 			}
 
-			value(fieldId, data, f, name, get, set, writeIgnore, readIgnore, as, (unsafe&4) != 0 ? o : null);
+			if ((flag & NO_SCHEMA) != 0) name = null;
+			asmStruct(fieldId, data, f, name, get, set, writeIgnore, readIgnore, as, (unsafe&4) != 0 ? o : null);
 
 			if (!readIgnore)
 				fieldId++;
@@ -1009,10 +1026,10 @@ final class SerializerFactoryImpl extends SerializerFactory {
 		cw.invoke(INVOKEVIRTUAL, "roj/config/auto/Adapter", cw.mn.name(), cw.mn.rawDesc());
 	}
 
-	private void value(int fieldId, ClassNode data, FieldNode fn,
-					   String actualName, MethodNode get, MethodNode set,
-					   String writeIgnore, boolean noRead, AsType as,
-					   Class<?> unsafePut) {
+	private void asmStruct(int fieldId, ClassNode data, FieldNode fn,
+						   String actualName, MethodNode get, MethodNode set,
+						   String writeIgnore, boolean noRead, AsType as,
+						   Class<?> unsafePut) {
 		Type type = as != null ? as.output : fn.fieldType();
 		int actualType = type.getActualType();
 		int methodType = switch (actualType) {
@@ -1212,8 +1229,13 @@ final class SerializerFactoryImpl extends SerializerFactory {
 			}
 
 			cw.one(ALOAD_1);
-			cw.ldc(new CstString(actualName));
-			cw.invokeItf("roj/config/serial/CVisitor", "key", "(Ljava/lang/String;)V");
+			if (actualName == null) {
+				cw.ldc(fieldId);
+				cw.invokeItf("roj/config/serial/CVisitor", "intKey", "(I)V");
+			} else {
+				cw.ldc(new CstString(actualName));
+				cw.invokeItf("roj/config/serial/CVisitor", "key", "(Ljava/lang/String;)V");
+			}
 		}
 
 		cw = keyCw;
@@ -1226,7 +1248,7 @@ final class SerializerFactoryImpl extends SerializerFactory {
 
 			keySwitch.branch(fieldId, cw.label());
 			cw.one(ALOAD_1);
-			cw.one(ILOAD_3);
+			cw.one(actualName == null ? ILOAD_2 : ILOAD_3);
 			cw.one(ALOAD_0);
 			cw.field(GETFIELD, c, id);
 			cw.invoke(DIRECT_IF_OVERRIDE, "roj/config/auto/AdaptContext", "pushHook", "(ILroj/config/auto/Adapter;)V");
@@ -1259,7 +1281,7 @@ final class SerializerFactoryImpl extends SerializerFactory {
 			if (keyPrimitive == null) {
 				keyPrimitive = cw.label();
 				cw.one(ALOAD_1);
-				cw.one(ILOAD_3);
+				cw.one(actualName == null ? ILOAD_2 : ILOAD_3);
 				cw.invoke(DIRECT_IF_OVERRIDE, "roj/config/auto/AdaptContext", "setKeyHook", "(I)V");
 
 				cw.one(RETURN);
@@ -1303,7 +1325,6 @@ final class SerializerFactoryImpl extends SerializerFactory {
 
 		if (skip != null) cw.label(skip);
 	}
-
 	private String typeParamToRaw(Signature sig) {
 		var mapper = new AbstractMap<String, IType>() {
 			@Override public Set<Entry<String, IType>> entrySet() {return Collections.emptySet();}
@@ -1352,15 +1373,10 @@ final class SerializerFactoryImpl extends SerializerFactory {
 			invokeParent(cw, Type.methodDesc(desc).get(1).shiftedOpcode(ILOAD));
 			cw.one(RETURN);
 		} else {
-			cw.clazz(NEW, "java/lang/IllegalStateException");
-			cw.one(DUP);
 			cw.one(ALOAD_1);
-			cw.field(GETFIELD, "roj/config/auto/AdaptContext", "fieldId", "I");
-			cw.invoke(INVOKESTATIC, "java/lang/Integer", "toString", "(I)Ljava/lang/String;");
-			//cw.ldc(" not valid field (t="+(char)methodType+")");
-			//cw.invoke(INVOKEVIRTUAL, "java/lang/String", "concat", "(Ljava/lang/String;)Ljava/lang/String;");
-			cw.invoke(INVOKESPECIAL, "java/lang/IllegalStateException", "<init>", "(Ljava/lang/String;)V");
-			cw.one(ATHROW);
+			cw.one(ALOAD_0);
+			cw.invoke(DIRECT_IF_OVERRIDE, "roj/config/auto/AdaptContext", "ofIllegalType", "(Lroj/config/auto/Adapter;)V");
+			cw.one(RETURN);
 		}
 
 		if (methodType == Type.CLASS) {

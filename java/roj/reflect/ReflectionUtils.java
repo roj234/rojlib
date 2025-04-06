@@ -1,6 +1,5 @@
 package roj.reflect;
 
-import org.jetbrains.annotations.Nullable;
 import roj.asm.Opcodes;
 import roj.asm.type.Type;
 import roj.asm.type.TypeHelper;
@@ -19,39 +18,30 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import static roj.asm.type.Type.ARRAY;
 import static roj.asm.type.Type.CLASS;
-import static roj.reflect.VMInternals.u;
+import static roj.reflect.Unaligned.U;
 
 /**
  * @author Roj234
  * @since 2021/6/17 19:51
  */
 public final class ReflectionUtils {
-	public static final int JAVA_VERSION = VMInternals.JAVA_VERSION;
+	public static final int JAVA_VERSION;
+	static {
+		String v = System.getProperty("java.version");
+		String major = v.substring(0, v.indexOf('.'));
+		JAVA_VERSION = Integer.parseInt(major);
+	}
 
 	public static final boolean BIG_ENDIAN = ByteOrder.nativeOrder() == ByteOrder.BIG_ENDIAN;
 
 	public static long fieldOffset(Class<?> type, String fieldName) {
 		try {
 			var field = getField(type, fieldName);
-			return (field.getModifiers() & Opcodes.ACC_STATIC) == 0 ? u.objectFieldOffset(field) : u.staticFieldOffset(field);
+			return (field.getModifiers() & Opcodes.ACC_STATIC) == 0 ? U.objectFieldOffset(field) : U.staticFieldOffset(field);
 		} catch (Exception e) {
 			Helpers.athrow(e);
 			return 0;
 		}
-	}
-
-	@Nullable
-	public static Field getFieldIfMatch(Class<?> type, String fieldType) {
-		while (type != null && type != Object.class) {
-			for (Field field : type.getDeclaredFields()) {
-				if (field.getType().getName().endsWith(fieldType)) {
-					var sm = ILSecurityManager.getSecurityManager();
-					return sm == null || sm.checkAccess(field) ? field : null;
-				}
-			}
-			type = type.getSuperclass();
-		}
-		return null;
 	}
 
 	public static Field getField(Class<?> type, String name) throws NoSuchFieldException {
@@ -71,40 +61,45 @@ public final class ReflectionUtils {
 	}
 
 	public static Field[] getFieldsByName(Class<?> type, String[] names) {
-		Field[] out = new Field[names.length];
-		ToIntMap<String> map = ToIntMap.fromArray(names);
+		Field[] result = new Field[names.length];
+		ToIntMap<String> filter = ToIntMap.fromArray(names);
 		var sm = ILSecurityManager.getSecurityManager();
 		var origClass = type;
 
 		while (type != null && type != Object.class) {
 			for (Field field : type.getDeclaredFields()) {
-				int i = map.removeInt(field.getName());
+				int i = filter.removeInt(field.getName());
 				if (i >= 0) {
 					if (sm != null && !sm.checkAccess(field)) break;
 
-					out[i] = field;
-					if (map.isEmpty()) return out;
+					result[i] = field;
+					if (filter.isEmpty()) return result;
 				}
 			}
 
 			type = type.getSuperclass();
 		}
 
-		throw new IllegalStateException("未找到某些字段:"+origClass+"."+map.keySet());
+		throw new IllegalStateException("未找到某些字段:"+origClass+"."+filter.keySet());
 	}
 
 	/**
 	 * 获取current + 父类 所有Method
 	 */
 	public static List<Method> getMethods(Class<?> clazz, String... methodNames) {
-		MyHashSet<Method> methods = new MyHashSet<>();
+		MyHashSet<Method> result = new MyHashSet<>();
+		MyHashSet<String> filter = new MyHashSet<>(methodNames);
 		while (clazz != null && clazz != Object.class) {
-			methods.addAll(clazz.getDeclaredMethods());
+			for (Method method : clazz.getDeclaredMethods()) {
+				if (filter.contains(method.getName())) {
+					result.add(method);
+				}
+			}
 			clazz = clazz.getSuperclass();
 		}
 		ILSecurityManager sm = ILSecurityManager.getSecurityManager();
-		if (sm != null) sm.filterMethods(methods);
-		return new SimpleList<>(methods);
+		if (sm != null) sm.filterMethods(result);
+		return new SimpleList<>(result);
 	}
 
 	public static Field checkFieldName(Class<?> type, String... names) throws NoSuchFieldException {
@@ -134,7 +129,7 @@ public final class ReflectionUtils {
 		if (sm != null) b = sm.checkDefineClass(null, b);
 		return VMInternals.DefineWeakClass(null, b.toByteArray());
 	}
-	public static void ensureClassInitialized(Class<?> klass) { Unaligned.U.ensureClassInitialized(klass); }
+	public static void ensureClassInitialized(Class<?> klass) { U.ensureClassInitialized(klass); }
 	/**
 	 * 对target_module开放src_module中的src_package
 	 */
@@ -169,7 +164,7 @@ public final class ReflectionUtils {
 		}
 	}
 	private static final class T9 {
-		static final StackWalker NOT_LIVE = StackWalker.getInstance(EnumSet.of(StackWalker.Option.RETAIN_CLASS_REFERENCE));
+		static final StackWalker NOT_LIVE = StackWalker.getInstance(EnumSet.of(StackWalker.Option.RETAIN_CLASS_REFERENCE), 5);
 		public static Class<?> getCallerClass(int skip) {
 			return NOT_LIVE.walk(stream -> {
 				StackWalker.StackFrame frame = stream.skip(skip).findFirst().orElse(null);

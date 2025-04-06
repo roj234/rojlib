@@ -4,11 +4,14 @@ import roj.concurrent.TaskPool;
 import roj.config.serial.ToJson;
 import roj.crypt.Base64;
 import roj.crypt.VoidCrypt;
-import roj.http.server.AsyncResponse;
+import roj.http.server.AsyncContent;
+import roj.http.server.Content;
 import roj.http.server.Request;
-import roj.http.server.Response;
 import roj.http.server.ResponseHeader;
-import roj.http.server.auto.*;
+import roj.http.server.auto.Body;
+import roj.http.server.auto.GET;
+import roj.http.server.auto.Interceptor;
+import roj.http.server.auto.POST;
 import roj.io.IOUtil;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
@@ -35,7 +38,7 @@ final class WebUI {
 	public WebUI(boolean terminal) {this.terminal = terminal;}
 
 	@GET
-	public Response list(Request req) {
+	public Content list(Request req) {
 		var ser = new ToJson();
 		ser.valueMap();
 		ser.key("ok");
@@ -44,20 +47,20 @@ final class WebUI {
 		ser.value(Panger.motds.get(((int)System.nanoTime()&Integer.MAX_VALUE)%Panger.motds.size()));
 		ser.key("menus");
 		CONFIG.getList("webui").accept(ser);
-		return Response.json(ser.getValue());
+		return Content.json(ser.getValue());
 	}
 
 	@GET
 	public void terminal(Request req, ResponseHeader rh) throws IOException {
 		if (!terminal || System.currentTimeMillis() < WebTerminal.timeout) {
-			rh.code(403).body(Response.internalError("该功能未启用"));
+			rh.code(403).body(Content.internalError("该功能未启用"));
 			return;
 		}
 
-		if (req.getField("upgrade").equals("websocket")) {
-			rh.body(Response.websocket(req, request -> new WebTerminal()));
+		if (req.header("upgrade").equals("websocket")) {
+			rh.body(Content.websocket(req, request -> new WebTerminal()));
 		} else {
-			rh.body(Response.text("200 OK"));
+			rh.body(Content.text("200 OK"));
 		}
 	}
 
@@ -66,8 +69,7 @@ final class WebUI {
 		String algorithm;
 	}
 	@POST
-	@Body(From.JSON)
-	public Object denCrypt(Request req, EncryptRequest json) {
+	public Object denCrypt(Request req, @Body EncryptRequest json) {
 		req.responseHeader().put("content-type", "text/plain");
 
 		if (json.keys.isEmpty() || json.keys.size() != json.texts.size()) return "参数错误";
@@ -82,8 +84,8 @@ final class WebUI {
 				case "UTF8" -> text = IOUtil.getSharedByteBuf().putUTFData(str).toByteArray();
 				case "GB18030" -> text = IOUtil.getSharedByteBuf().putGBData(str).toByteArray();
 				case "UTF-16LE" -> text = str.getBytes(StandardCharsets.UTF_16LE);
-				case "hex" -> text = IOUtil.SharedCoder.get().decodeHex(str);
-				case "base64" -> text = IOUtil.SharedCoder.get().decodeBase64(str).toByteArray();
+				case "hex" -> text = IOUtil.decodeHex(str);
+				case "base64" -> text = IOUtil.decodeBase64(str).toByteArray();
 				default -> {return "参数错误";}
 			}
 
@@ -94,7 +96,7 @@ final class WebUI {
 
 		if (!json.algorithm.equals("r")) req.server().enableCompression();
 
-		var callback = new AsyncResponse();
+		var callback = new AsyncContent();
 		TaskPool.Common().submit(() -> {
 			ByteList buf = IOUtil.getSharedByteBuf();
 			try {
@@ -116,9 +118,8 @@ final class WebUI {
 
 	@POST
 	public Object denDecrypt(Request req, String key, String text, String type, String padding) {
-		var sc = IOUtil.SharedCoder.get();
 		try {
-			DynByteBuf plaintext = VoidCrypt.statistic_decrypt(key.getBytes(StandardCharsets.UTF_8), sc.decodeBase64(text), new ByteList());
+			DynByteBuf plaintext = VoidCrypt.statistic_decrypt(key.getBytes(StandardCharsets.UTF_8), IOUtil.decodeBase64(text), new ByteList());
 			switch (padding) {
 				case "zero":
 					int i = plaintext.wIndex();
@@ -133,7 +134,7 @@ final class WebUI {
 				case "UTF8","GB18030","UTF-16LE":
 					req.responseHeader().put("content-type", "text/plain; charset="+type);
 					req.responseHeader().put("content-length", String.valueOf(plaintext.readableBytes()));
-					return (Response) rh -> {
+					return (Content) rh -> {
 						rh.write(plaintext);
 						return plaintext.isReadable();
 					};

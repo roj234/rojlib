@@ -46,6 +46,8 @@ public final class MethodResult {
 		this.error = error;
 	}
 
+	public @NotNull String rawDesc() {return desc != null ? Type.toMethodDesc(Arrays.asList(desc)) : method.rawDesc();}
+	public @NotNull List<IType> desc() {return desc != null ? Arrays.asList(desc) : Helpers.cast(Type.methodDesc(method.rawDesc()));}
 	public @NotNull List<IType> parameters() {
 		if (desc == null) return Helpers.cast(method.parameters());
 		// 不复制数组

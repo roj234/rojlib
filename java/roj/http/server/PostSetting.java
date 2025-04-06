@@ -10,6 +10,6 @@ public interface PostSetting {
 	 * @param extraTime 再给多少ms用来接收请求
 	 */
 	void postAccept(long maxLen, int extraTime);
-	void postHandler(HPostHandler ph);
+	void postHandler(BodyParser ph);
 	boolean postAccepted();
 }

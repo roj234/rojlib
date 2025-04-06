@@ -3,7 +3,6 @@ package roj.config.auto;
 import org.jetbrains.annotations.Nullable;
 import roj.ReferenceByGeneratedClass;
 import roj.asm.type.IType;
-import roj.asm.type.TypeHelper;
 import roj.collect.MyBitSet;
 import roj.config.serial.CVisitor;
 import roj.reflect.Java22Workaround;
@@ -26,9 +25,7 @@ abstract class Adapter {
 	public void read(AdaptContext ctx, long l) {read(ctx, (Object)l);}
 	public void read(AdaptContext ctx, float l) {read(ctx, (double)l);}
 	public void read(AdaptContext ctx, double l) {read(ctx, (Object)l);}
-	public void read(AdaptContext ctx, Object o) {
-		throw new IllegalArgumentException(this+"不支持的类型:"+(o==null?null:TypeHelper.class2asm(o.getClass()))+"【"+ctx.ref+"】");
-	}
+	public void read(AdaptContext ctx, Object o) {ctx.ofIllegalType(this);}
 	public void read(AdaptContext ctx, byte[] o) {
 		list(ctx,o.length);
 		for (byte b : o) read(ctx,b);
@@ -47,6 +44,7 @@ abstract class Adapter {
 
 	public void map(AdaptContext ctx, int size) {une(ctx,"mapping["+size+"]");}
 	public void list(AdaptContext ctx, int size) {une(ctx,"array["+size+"]");}
+	public void key(AdaptContext ctx, int key) {key(ctx,Integer.toString(key));}
 	public void key(AdaptContext ctx, String key) {une(ctx,"key["+key+"]");}
 	public void push(AdaptContext ctx) {}
 	public void pop(AdaptContext ctx) {}

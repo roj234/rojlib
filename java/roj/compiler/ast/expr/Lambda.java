@@ -9,19 +9,21 @@ import roj.asm.cp.CstClass;
 import roj.asm.type.IType;
 import roj.asm.type.Type;
 import roj.collect.SimpleList;
-import roj.compiler.JavaLexer;
 import roj.compiler.LavaFeatures;
+import roj.compiler.Tokens;
 import roj.compiler.asm.Asterisk;
 import roj.compiler.asm.MethodWriter;
 import roj.compiler.ast.ParseTask;
 import roj.compiler.context.LocalContext;
 import roj.compiler.diagnostic.Kind;
-import roj.compiler.resolve.*;
+import roj.compiler.resolve.LambdaGenerator;
+import roj.compiler.resolve.NestContext;
+import roj.compiler.resolve.ResolveException;
+import roj.compiler.resolve.TypeCast;
 import roj.config.ParseException;
 import roj.text.TextUtil;
 import roj.util.Helpers;
 
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
@@ -49,6 +51,8 @@ public final class Lambda extends ExprNode {
 
 	private ExprNode methodRef;
 	private String methodName;
+
+	public MethodNode getImpl() {return impl;}
 
 	// args -> {...}
 	public Lambda(List<String> args, MethodNode impl, ParseTask task) {
@@ -114,7 +118,8 @@ public final class Lambda extends ExprNode {
 			return;
 		}
 
-		var lambda接口 = ctx.classes.getClassInfo(_returnType.getType1().owner());
+		IType lambda目标类型 = _returnType.getType1();
+		var lambda接口 = ctx.classes.getClassInfo(lambda目标类型.owner());
 
 		var resolveHelper = ctx.classes.getResolveHelper(lambda接口);
 		int lambda转换方式 = resolveHelper.getLambdaType();
@@ -134,8 +139,7 @@ public final class Lambda extends ExprNode {
 			case 2 -> generator = LambdaGenerator.ANONYMOUS_CLASS;
 		}
 
-		var _genericDesc = ctx.inferrer.getGenericParameters(lambda接口, lambda方法, _returnType.getType1()).desc;
-		var lambda实参 = _genericDesc == null ? lambda方法.rawDesc() : Type.toMethodDesc(Arrays.asList(_genericDesc));
+		var lambda实参 = ctx.inferrer.getGenericParameters(lambda接口, lambda方法, lambda目标类型).rawDesc();
 
 		var lambda入参 = new SimpleList<Type>();
 		List<ExprNode> lambda入参的取值表达式;
@@ -145,16 +149,10 @@ public final class Lambda extends ExprNode {
 		if (methodRef != null) {
 			lambda实现所属的类 = ctx.classes.getClassInfo(methodRef.type().owner());
 
-			var ml = ctx.getMethodList(lambda实现所属的类, methodName);
-			if (ml == ComponentList.NOT_FOUND) {
-				ctx.report(this, Kind.ERROR, "lambda.notfound");
-				return;
-			}
-
 			List<Type> args = Type.methodDesc(lambda实参);
 			args.remove(args.size()-1);
 
-			var r = ml.findMethod(ctx, Helpers.cast(args), 0);
+			var r = ctx.getMethodListOrReport(lambda实现所属的类, methodName, this).findMethod(ctx, Helpers.cast(args), 0);
 			if (r == null) return;
 
 			// 方法引用
@@ -185,7 +183,7 @@ public final class Lambda extends ExprNode {
 			try {
 				next.isArgumentDynamic = true;
 				next.setClass(ctx.file);
-				next.lexer.state = JavaLexer.STATE_EXPR;
+				next.lexer.state = Tokens.STATE_EXPR;
 				task.parse(next);
 				ctx.file._setCtx(ctx);
 			} catch (ParseException e) {
@@ -205,6 +203,8 @@ public final class Lambda extends ExprNode {
 				lambda入参.add(0, Type.klass(ctx.file.name()));
 			}
 		}
+
+		if (cw == null) return;
 
 		// 注入参数
 		for (var node : lambda入参的取值表达式) node.write(cw, false);

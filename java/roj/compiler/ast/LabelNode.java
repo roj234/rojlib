@@ -10,7 +10,7 @@ import java.util.List;
  * @author Roj234
  * @since 2022/10/22 15:01
  */
-final class LabelNode {
+public final class LabelNode {
 	final Label head;
 	Label onBreak, onContinue;
 

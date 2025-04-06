@@ -8,7 +8,7 @@ import roj.collect.TrieTree;
 import roj.io.IOUtil;
 import roj.math.MathUtils;
 import roj.text.CharList;
-import roj.text.GB18030;
+import roj.text.FastCharset;
 import roj.text.TextReader;
 import roj.text.TextUtil;
 import roj.ui.EasyProgressBar;
@@ -195,8 +195,8 @@ class UpdatePinyinData {
 			LZMA2Writer myOut = (LZMA2Writer) out;
 
 			bb.clear();
-			bb.putVUInt(GB18030.CODER.byteCount(ziPool)).putVUInt(ziPool.length())
-			  .putVUInt(GB18030.CODER.byteCount(yinPool)).putVUInt(yinPool.length())
+			bb.putVUInt(FastCharset.GB18030().byteCount(ziPool)).putVUInt(ziPool.length())
+			  .putVUInt(FastCharset.GB18030().byteCount(yinPool)).putVUInt(yinPool.length())
 			  .putVUInt(map.size()).put(nbits).put(ybits);
 			bb.writeToStream(out);
 

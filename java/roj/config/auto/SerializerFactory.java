@@ -54,7 +54,7 @@ public abstract class SerializerFactory {
 	static {
 		boolean unsafe = false;
 		try {
-			ClassNode c = Parser.parseConstants(IOUtil.getResource("roj/config/auto/Adapter.class"));
+			ClassNode c = Parser.parseConstants(IOUtil.getResourceIL("roj/config/auto/Adapter.class"));
 			c.parent(Bypass.MAGIC_ACCESSOR_CLASS);
 			if (ReflectionUtils.JAVA_VERSION > 21)
 				c.modifier |= ACC_PUBLIC;
@@ -76,7 +76,8 @@ public abstract class SerializerFactory {
 		OBJECT_POOL = 64,
 		CHECK_PUBLIC = 128,
 		SERIALIZE_PARENT = 256,
-		OPTIONAL_BY_DEFAULT = 512;
+		OPTIONAL_BY_DEFAULT = 512,
+		NO_SCHEMA = 1024;
 
 	int flag;
 	public ToIntFunction<Class<?>> perClassFlag;
@@ -87,7 +88,7 @@ public abstract class SerializerFactory {
 	}
 
 	public static SerializerFactory getInstance() {return getInstance0(GENERATE|CHECK_INTERFACE|CHECK_PARENT);}
-	public static SerializerFactory getInstance(@MagicConstant(flags = {GENERATE, CHECK_INTERFACE, CHECK_PARENT, NO_CONSTRUCTOR, ALLOW_DYNAMIC, PREFER_DYNAMIC, OBJECT_POOL, CHECK_PUBLIC, SERIALIZE_PARENT }) int flag) {return getInstance0(flag);}
+	public static SerializerFactory getInstance(@MagicConstant(flags = {GENERATE, CHECK_INTERFACE, CHECK_PARENT, NO_CONSTRUCTOR, ALLOW_DYNAMIC, PREFER_DYNAMIC, OBJECT_POOL, CHECK_PUBLIC, SERIALIZE_PARENT, NO_SCHEMA }) int flag) {return getInstance0(flag);}
 	private static SerializerFactory getInstance0(int flag) {return new SerializerFactoryImpl(flag, ReflectionUtils.getCallerClass(3).getClassLoader());}
 	public static SerializerFactory getInstance0(int flag, ClassLoader classLoader) {return new SerializerFactoryImpl(flag, classLoader);}
 
@@ -177,12 +178,12 @@ public abstract class SerializerFactory {
 	}
 
 	public final SerializerFactory asHex() {return as("hex",byte[].class,SerializerFactory.class,"ToHex","FromHex");}
-	public static String ToHex(byte[] b) {return IOUtil.SharedCoder.get().encodeHex(b);}
-	public static byte[] FromHex(String str) {return IOUtil.SharedCoder.get().decodeHex(str);}
+	public static String ToHex(byte[] b) {return IOUtil.encodeHex(b);}
+	public static byte[] FromHex(String str) {return IOUtil.decodeHex(str);}
 
 	public final SerializerFactory asBase64() {return as("base64",byte[].class,SerializerFactory.class,"ToBase64","FromBase64");}
-	public static String ToBase64(byte[] b) {return IOUtil.SharedCoder.get().encodeBase64(b);}
-	public static byte[] FromBase64(String str) {return IOUtil.SharedCoder.get().decodeBase64(str).toByteArray();}
+	public static String ToBase64(byte[] b) {return IOUtil.encodeBase64(b);}
+	public static byte[] FromBase64(String str) {return IOUtil.decodeBase64(str).toByteArray();}
 
 	public final SerializerFactory asRGB() {return as("rgb",int.class,SerializerFactory.class,"ToRGB","FromRGB");}
 	public final SerializerFactory asRGBA() {return as("rgba",int.class,SerializerFactory.class,"ToRGBA","FromRGB");}

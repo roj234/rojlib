@@ -181,7 +181,7 @@ public class ZipFileWriter extends OutputStream implements ArchiveWriter {
 		if (large) ze.cSize = ze.uSize = U32_MAX;
 		if (ze.nameBytes == null) {
 			entry.flags |= GP_UTF;
-			entry.nameBytes = IOUtil.SharedCoder.get().encode(entry.name);
+			entry.nameBytes = IOUtil.encodeUTF8(entry.name);
 		}
 
 		ZipArchive.writeLOC(file, buf, ze);

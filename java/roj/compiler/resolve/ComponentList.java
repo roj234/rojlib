@@ -9,10 +9,13 @@ import roj.asm.MethodNode;
 import roj.asm.type.IType;
 import roj.compiler.context.LocalContext;
 import roj.compiler.diagnostic.Kind;
+import roj.config.Tokenizer;
+import roj.text.CharList;
 
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.function.BiConsumer;
 
 /**
  * @author Roj234
@@ -47,5 +50,18 @@ public abstract class ComponentList {
 		if (methodOrField.getRawAttribute("Deprecated") != null) {
 			ctx.report(Kind.WARNING, "annotation.deprecated", "invoke.method", methodOrField);
 		}
+	}
+
+	static BiConsumer<String, Object[]> makeErrorCapture(CharList sb) {
+		return (translate, param) -> {
+			sb.clear();
+			sb.append(translate);
+			if (param.length > 0) {
+				sb.append(":[");
+				for (Object o : param)
+					Tokenizer.addSlashes(sb.append('"'), o.toString()).append('"');
+				sb.append(']');
+			}
+		};
 	}
 }
