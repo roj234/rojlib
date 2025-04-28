@@ -34,22 +34,23 @@ public class AnsiString {
 		this.extra = copy.extra.isEmpty() ? Collections.emptyList() : new SimpleList<>(copy.extra);
 	}
 
-	public CharList writeAnsi(CharList sb) {
+	public CharList writeAnsi(CharList sb) {return writeAnsi(sb, "\n");}
+	public CharList writeAnsi(CharList sb, String prefix) {
 		int i = 0;
 		while (true) {
 			writeSGI(sb);
 			i = TextUtil.gAppendToNextCRLF(value, i, sb);
-			if (i < value.length()) sb.append('\n');
+			if (i < value.length()) sb.append(prefix);
 			else break;
 		}
 
 		if (i > 0 && value.charAt(i-1) == '\n') {
 			writeSGI(sb);
-			sb.append('\n');
+			sb.append(prefix);
 		}
 
 		for (i = 0; i < extra.size(); i++)
-			extra.get(i).writeAnsi(sb);
+			extra.get(i).writeAnsi(sb, prefix);
 		return sb;
 	}
 	public CharList writeRaw(CharList sb) {
@@ -81,7 +82,7 @@ public class AnsiString {
 			if (isColorRGB()) {
 				ser.value("#"+Integer.toHexString(fgColor));
 			} else {
-				ser.value(Terminal.MinecraftColor.getByConsoleCode(fgColor&0xFF));
+				ser.value(Terminal.Color.getByConsoleCode(fgColor&0xFF));
 			}
 		}
 
@@ -187,11 +188,13 @@ public class AnsiString {
 	}
 
 	// return this+s
+	public AnsiString append(CharSequence s) {return append(new AnsiString(s));}
 	public AnsiString append(AnsiString s) {
 		extra().add(s);
 		return this;
 	}
 	// return s+this
+	public AnsiString prepend(CharSequence s) {return prepend(new AnsiString(s));}
 	public AnsiString prepend(AnsiString s) {
 		s.extra().add(this);
 		return s;
@@ -214,8 +217,8 @@ public class AnsiString {
 	public AnsiString shiny(Boolean b) { return setFlag(64, b); }
 	public AnsiString reverseColor(Boolean b) { return setFlag(256, b); }
 	public AnsiString deleteLine(Boolean b) { return setFlag(1024, b); }
-	public AnsiString reset() { flag = 0; bgColor = fgColor = 0; return this; }
-	public AnsiString clear() { flag = 4096; return this; }
+	public AnsiString clearStyle() { flag = 0; bgColor = fgColor = 0; return this; }
+	public AnsiString reset() { flag = 4096; return this; }
 
 	public Boolean bold() { return getFlag(1); }
 	public Boolean italic() { return getFlag(4); }

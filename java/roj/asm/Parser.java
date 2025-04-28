@@ -5,24 +5,32 @@ import roj.asm.attr.*;
 import roj.asm.cp.*;
 import roj.asm.insn.AttrCode;
 import roj.asm.type.Signature;
+import roj.collect.MyHashMap;
 import roj.collect.SimpleList;
 import roj.io.IOUtil;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
+import roj.util.Helpers;
 import roj.util.TypedKey;
 
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.List;
+import java.util.function.BiFunction;
 
 /**
  * 字节码解析器
  * @author Roj234
- * @version 3.0
+ * @version 3.1
  * @since 2021/5/29 17:16
  */
 public final class Parser {
 	public static final int RECORD_ATTR = 8;
+
+	private static final MyHashMap<String, BiFunction<ConstantPool, DynByteBuf, Attribute>> USER_DESERIALIZER = new MyHashMap<>();
+	public static <T extends Attribute> void registerCustomAttribute(TypedKey<T> id, BiFunction<ConstantPool, DynByteBuf, T> o) {
+		USER_DESERIALIZER.put(id.name, Helpers.cast(o));
+	}
 
 	// region CLAZZ parse LOD 2
 	public static ClassNode parse(byte[] b) { return parse(new ByteList(b)); }
@@ -126,6 +134,10 @@ public final class Parser {
 		int len = data.rIndex;
 		try {
 			switch (name) {
+				default:
+					var deserializer = USER_DESERIALIZER.get(name);
+					if (deserializer != null) return deserializer.apply(cp, data);
+				break;
 				case "RuntimeVisibleTypeAnnotations":
 				case "RuntimeInvisibleTypeAnnotations": return new TypeAnnotations(name, data, cp);
 				case "RuntimeVisibleAnnotations":

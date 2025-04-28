@@ -19,8 +19,9 @@ import roj.compiler.asm.ParamAnnotationRef;
 import roj.compiler.ast.BlockParser;
 import roj.compiler.ast.GeneratorUtil;
 import roj.compiler.ast.ParseTask;
-import roj.compiler.ast.expr.ExprNode;
+import roj.compiler.ast.expr.Expr;
 import roj.compiler.ast.expr.ExprParser;
+import roj.compiler.ast.expr.Invoke;
 import roj.compiler.diagnostic.Kind;
 import roj.compiler.doc.Javadoc;
 import roj.compiler.doc.JavadocProcessor;
@@ -916,7 +917,7 @@ public final class JavaCompileUnit extends CompileUnit {
 
 		Type selfType = Type.klass(name);
 
-		List<ExprNode> enumInit = new SimpleList<>();
+		List<Expr> enumInit = new SimpleList<>();
 
 		Word w = wr.next();
 		while (w.type() == LITERAL) {
@@ -930,18 +931,18 @@ public final class JavaCompileUnit extends CompileUnit {
 
 			// maybe should putin ParseTask?
 
-			List<ExprNode> args = new SimpleList<>();
-			args.add(ExprNode.valueOf(f.name()));
-			args.add(ExprNode.valueOf(fields.size()));
+			List<Expr> args = new SimpleList<>();
+			args.add(Expr.valueOf(f.name()));
+			args.add(Expr.valueOf(fields.size()));
 
-			int start1 = wr.current().pos();
+			int start = wr.current().pos();
 
 			w = wr.next();
 			if (w.type() == lParen) {
 				int state = wr.setState(STATE_EXPR);
 
 				while (true) {
-					var expr1 = (ExprNode) ctx.ep.parse(ExprParser.STOP_RSB|ExprParser.STOP_COMMA|ExprParser.SKIP_COMMA|ExprParser._ENV_INVOKE|ExprParser._ENV_TYPED_ARRAY);
+					var expr1 = (Expr) ctx.ep.parse(ExprParser.STOP_RSB|ExprParser.STOP_COMMA|ExprParser.SKIP_COMMA|ExprParser._ENV_INVOKE|ExprParser._ENV_TYPED_ARRAY);
 					// noinspection all
 					if (expr1 == null || (args.add(expr1) & expr1.getClass().getName().endsWith("NamedParamList"))) {
 						wr.except(rParen);
@@ -953,8 +954,8 @@ public final class JavaCompileUnit extends CompileUnit {
 				wr.state = state;
 			}
 
-			ExprNode expr = ctx.ep.newInvoke(selfType, ctx.ep.copyOf(args));
-			expr.wordStart = start1;
+			Invoke expr = ctx.ep.newInstance(selfType, ctx.ep.copyOf(args));
+			expr.wordStart = start;
 
 			if (w.type() == lBrace) {
 				modifier &= ~ACC_FINAL;
@@ -963,7 +964,7 @@ public final class JavaCompileUnit extends CompileUnit {
 				assert wr.state == STATE_CLASS;
 
 				var _type = newAnonymousClass(null);
-				expr = ctx.ep.newAnonymousClass(expr, _type);
+				enumInit.add(ctx.ep.newAnonymousClass(expr, _type));
 
 				if (ctx.classes.getMaximumBinaryCompatibility() >= LavaFeatures.JAVA_17) {
 					setMinimumBinaryCompatibility(LavaFeatures.JAVA_17);
@@ -974,10 +975,10 @@ public final class JavaCompileUnit extends CompileUnit {
 				}
 
 				w = wr.next();
+			} else {
+				// new抽象类的检测在Invoke里
+				enumInit.add(expr);
 			}
-			// abstract enum 的检测在invoke里解决了
-
-			enumInit.add(expr);
 			fields.add(f);
 
 			if (w.type() != comma) break;
@@ -1003,10 +1004,10 @@ public final class JavaCompileUnit extends CompileUnit {
 				cw.newArraySized(selfType, enumInit.size());
 				cw.visitSizeMax(4, 0); // array array index value
 				for (int i = 0; i < enumInit.size(); i++) {
-					cw.one(DUP);
+					cw.insn(DUP);
 					cw.ldc(i);
 					cw.field(GETSTATIC, this, i);
-					cw.one(AASTORE);
+					cw.insn(AASTORE);
 				}
 
 				cw.field(PUTSTATIC, this, miscFieldId/* $VALUES */);

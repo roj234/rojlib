@@ -63,7 +63,7 @@ public class StringDeobfusactor {
 					Desc desc = node.desc();
 					if (desc.name.equals("getStackTrace") && desc.param.equals("[Ljava/lang/StackTraceElement;")) {
 						var replaceList = new InsnList();
-						replaceList.one(Opcodes.POP);
+						replaceList.insn(Opcodes.POP);
 						replaceList.invoke(Opcodes.INVOKESTATIC, "_syncGetStackTrace", "roj/mapper/Obfuscator", desc.param);
 						node.replace(replaceList, false);
 						System.out.println("找到stack trace 调用！");
@@ -77,7 +77,7 @@ public class StringDeobfusactor {
 			c.visitSize(Math.max(2, par.size()), 2);
 			c.unpackArray(1, 0, par);
 			c.invoke(Opcodes.INVOKESTATIC, method);
-			c.one(Opcodes.ARETURN);
+			c.insn(Opcodes.ARETURN);
 
 			ClassDefiner.premake(cls);
 			return impl = (Decoder) ClassDefiner.make(cls);

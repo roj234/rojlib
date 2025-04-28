@@ -12,7 +12,7 @@ import roj.compiler.resolve.ResolveException;
  * @author Roj234
  * @since 2023/1/30 0030 14:08
  */
-final class This extends ExprNode {
+final class This extends Expr {
 	private final boolean isThis;
 	This(boolean isThis) {super(0);this.isThis = isThis;}
 
@@ -22,7 +22,7 @@ final class This extends ExprNode {
 	public String toString() { return (isThis?"this<":"super<")+type+'>'; }
 
 	@Override
-	public ExprNode resolve(LocalContext ctx) throws ResolveException {
+	public Expr resolve(LocalContext ctx) throws ResolveException {
 		var file = ctx.file;
 		type.owner = isThis ? file.name() : file.parent();
 		if (type.owner == null) throw ResolveException.ofIllegalInput("this.no_super", file);

@@ -1,45 +1,77 @@
 package roj.net.util;
 
+import roj.config.auto.Optional;
+
 /**
  * @author Roj234
- * @since 2024/11/12 0012 13:36
+ * @since 2025/4/29 0029 12:10
  */
 public class SpeedLimiter {
-	public SpeedLimiter(int bestMTU, int maxLatency) {
-		this.bestMTU = bestMTU;
-		this.maxLatency = maxLatency;
+	protected final Setting setting;
+	protected long lastRefill;
+	protected int tokens;
+
+	public SpeedLimiter(Setting setting) {
+		this.setting = setting;
+		this.lastRefill = System.currentTimeMillis();
+		this.tokens = setting.maxTokens;
 	}
 
-	protected final int bestMTU, maxLatency;
-	protected int bps;
-	protected long lastTime;
+	public static class Setting {
+		@Optional
+		public int minPacketSize, maxLatencyMs;
+		public float refillRatePerMs;
+		public int maxTokens;
 
-	private static final long NANO_TO_SEC = 1_000_000_000;
-
-	public void setBytePerSecond(int count) {
-		bps = count;
-		lastTime = System.nanoTime();
+		public Setting() {
+			minPacketSize = 1400;
+			maxLatencyMs = 10;
+		}
+		public Setting(int minPacketSize, int maxLatencyMs, float refillRatePerSecond, int maxTokens) {
+			this.minPacketSize = minPacketSize;
+			this.maxLatencyMs = maxLatencyMs;
+			this.refillRatePerMs = refillRatePerSecond / 1000f;
+			this.maxTokens = maxTokens;
+		}
 	}
-	public int getBytePerSecond() {return bps;}
 
 	public int limit(int pendingBytes) {
-		if (bps == 0) return pendingBytes;
+		var timeDiff = System.currentTimeMillis() - lastRefill;
+		int minCost = setting.maxLatencyMs != 0 && timeDiff > setting.maxLatencyMs ? 0 : setting.minPacketSize;
+		return consume(setting, minCost, pendingBytes);
+	}
 
-		var timePassed = System.nanoTime() - lastTime;
-
-		int sendBytes = (int) Math.min(Integer.MAX_VALUE, bps * timePassed / NANO_TO_SEC);
-		if (sendBytes < bestMTU && timePassed < maxLatency) return 0;
-
-		sendBytes = Math.min(pendingBytes, sendBytes);
-
-		if (timePassed > NANO_TO_SEC) {
-			sendBytes = Math.min(bps * 2, sendBytes);
-			lastTime = System.nanoTime();
+	public boolean consume(Setting setting, int cost) {return consume(setting, cost, cost) != 0;}
+	/**
+	 * 消耗令牌，最少消耗minCost个，最多消耗maxCost个，如果令牌&gt;minCost但&lt;maxCost就全部消耗
+	 */
+	public int consume(Setting setting, int minCost, int maxCost) {
+		long now = System.currentTimeMillis();
+		long elapsed = now - lastRefill;
+		int tokens1 = tokens;
+		if (elapsed >= 0) {
+			float increment = elapsed * setting.refillRatePerMs;
+			int refills = (int) increment;
+			if (refills > 0) {
+				// 补充令牌
+				tokens1 += refills;
+				if (tokens1 < 0/* 如果经过了很长的时间导致加法溢出 */ || tokens1 > setting.maxTokens)
+					tokens1 = setting.maxTokens;
+					// 令牌未满时，将小数部分转换为时间差
+				else now -= (long) ((increment - refills) / setting.refillRatePerMs);
+			}
 		} else {
-			int timeConsumed = (int) (sendBytes * NANO_TO_SEC / bps);
-			lastTime += timeConsumed;
+			lastRefill = now;
 		}
 
-		return sendBytes;
+		if (tokens1 >= minCost) {
+			int consumed = Math.min(tokens1, maxCost);
+			lastRefill = now;
+			tokens = tokens1 - consumed;
+			return consumed;
+		}
+
+		this.tokens = tokens1;
+		return 0;
 	}
 }

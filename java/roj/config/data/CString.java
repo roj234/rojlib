@@ -38,7 +38,7 @@ public final class CString extends CEntry {
 	public double asDouble() { return Double.parseDouble(value); }
 	public String asString() { return value; }
 
-	public void accept(CVisitor ser) { ser.value(value); }
+	public void accept(CVisitor visitor) { visitor.value(value); }
 	public Object raw() { return value; }
 
 	protected CharList toJSON(CharList sb, int depth) { return Tokenizer.addSlashes(sb.append('"'), value).append('"'); }

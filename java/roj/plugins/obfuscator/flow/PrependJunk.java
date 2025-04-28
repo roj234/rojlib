@@ -29,11 +29,11 @@ public class PrependJunk implements ObfuscateTask {
 			sample.ldc(JUNK);
 			sample.ldc(LOL);
 			sample.ldc(JUNK);
-			sample.one(Opcodes.POP);
-			sample.one(Opcodes.SWAP);
-			sample.one(Opcodes.POP);
+			sample.insn(Opcodes.POP);
+			sample.insn(Opcodes.SWAP);
+			sample.insn(Opcodes.POP);
 			sample.ldc(LOL);
-			sample.one(Opcodes.POP2);
+			sample.insn(Opcodes.POP2);
 		}
 	}
 

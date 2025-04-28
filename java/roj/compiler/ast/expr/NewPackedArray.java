@@ -15,38 +15,64 @@ import roj.util.DynByteBuf;
  * @author Roj233
  * @since 2025/3/13 5:04
  */
-final class PrimitiveArray extends ExprNode {
+final class NewPackedArray extends Expr {
 	private final Type dataType;
-	private final DynByteBuf array;
+	private final DynByteBuf elements;
 
-	PrimitiveArray(int dataType, DynByteBuf array) {
+	NewPackedArray(int dataType, DynByteBuf elements) {
 		this.dataType = Type.primitive(dataType);
-		this.array = array;
+		this.elements = elements;
 	}
 
 	@Override
 	public String toString() {
 		CharList sb = new CharList().append("new <compiledArray>");
 		sb.append(dataType).append(" {");
-		var arr = array.slice();
+		var arr = elements.slice();
+		int cap = TypeCast.getDataCap(dataType.type);
 		if (arr.isReadable()) {
 			while (true) {
-				sb.append(arr.readByte());
+				sb.append( switch (cap) {
+					// 0 or 1
+					default -> arr.readByte();
+					case 2 -> arr.readShort();
+					case 3 -> arr.readChar();
+					case 4 -> arr.readInt();
+					case 5 -> arr.readLong();
+					case 6 -> arr.readFloat();
+					case 7 -> arr.readDouble();
+				});
 				if (!arr.isReadable()) break;
 				sb.append(',');
 			}
 		}
-		return sb.append("}").toStringAndFree();
+		return sb.append('}').toStringAndFree();
 	}
 
 	@Override public IType type() {return dataType;}
 	@Override public boolean isConstant() {return true;}
 	@Override public Object constVal() {
-		var arr = array.slice();
-		Object[] array = new Object[arr.readableBytes()];
+		var arr = elements.slice();
+		int cap = TypeCast.getDataCap(dataType.type);
+		Object[] array = new Object[arr.readableBytes() / switch (cap) {
+			// 0 or 1
+			default   -> 1;
+			case 2, 3 -> 2;
+			case 4, 6 -> 4;
+			case 5, 7 -> 8;
+		}];
 		int i = 0;
 		while (arr.isReadable()) {
-			array[i++] = valueOf(CEntry.valueOf(arr.readByte()));
+			array[i++] = switch (cap) {
+				// 0 or 1
+				default -> CEntry.valueOf(arr.readByte());
+				case 2 -> CEntry.valueOf(arr.readShort());
+				case 3 -> CEntry.valueOf(arr.readChar());
+				case 4 -> CEntry.valueOf(arr.readInt());
+				case 5 -> CEntry.valueOf(arr.readLong());
+				case 6 -> CEntry.valueOf(arr.readFloat());
+				case 7 -> CEntry.valueOf(arr.readDouble());
+			};
 		}
 		return array;
 	}
@@ -56,7 +82,7 @@ final class PrimitiveArray extends ExprNode {
 	public void write(MethodWriter cw, boolean noRet) {
 		mustBeStatement(noRet);
 
-		var arr = array.slice();
+		var arr = elements.slice();
 
 		// 这里没用getActualType
 		int cap = TypeCast.getDataCap(dataType.type);
@@ -66,7 +92,7 @@ final class PrimitiveArray extends ExprNode {
 		byte storeType = AbstractCodeWriter.ArrayStore(dataType);
 		int i = 0;
 		while (arr.isReadable()) {
-			cw.one(Opcodes.DUP);
+			cw.insn(Opcodes.DUP);
 			cw.ldc(i++);
 			switch (cap) {
 				case 0, 1 -> cw.ldc(arr.readByte());
@@ -77,7 +103,7 @@ final class PrimitiveArray extends ExprNode {
 				case 6 -> cw.ldc(arr.readFloat());
 				case 7 -> cw.ldc(arr.readDouble());
 			}
-			cw.one(storeType);
+			cw.insn(storeType);
 		}
 	}
 
@@ -86,16 +112,16 @@ final class PrimitiveArray extends ExprNode {
 		if (this == o) return true;
 		if (o == null || getClass() != o.getClass()) return false;
 
-		PrimitiveArray that = (PrimitiveArray) o;
+		NewPackedArray that = (NewPackedArray) o;
 
 		if (!dataType.equals(that.dataType)) return false;
-		return array.equals(that.array);
+		return elements.equals(that.elements);
 	}
 
 	@Override
 	public int hashCode() {
 		int result = dataType.hashCode();
-		result = 31 * result + array.hashCode();
+		result = 31 * result + elements.hashCode();
 		return result;
 	}
 }

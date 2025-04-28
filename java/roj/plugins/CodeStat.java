@@ -55,7 +55,7 @@ public class CodeStat extends Plugin {
 		if (!Terminal.ANSI_OUTPUT) {
 			if (!hasUI) {
 				hasUI = true;
-				GuiUtil.systemLook();
+				GuiUtil.systemLaf();
 				JFrame frame = new JFrame() {
 					{
 						JScrollPane scrollPane1 = new JScrollPane();

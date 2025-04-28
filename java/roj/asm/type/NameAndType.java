@@ -1,7 +1,6 @@
-package roj.asmx.mapper;
+package roj.asm.type;
 
 import roj.asm.RawNode;
-import roj.asm.type.Desc;
 
 /**
  * @author Roj233

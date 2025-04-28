@@ -300,7 +300,7 @@ public class MappingUI extends JFrame {
 	}
 
 	public static void main(String[] args) throws Exception {
-		GuiUtil.systemLook();
+		GuiUtil.systemLaf();
 		MappingUI f = new MappingUI();
 
 		f.setDefaultCloseOperation(WindowConstants.EXIT_ON_CLOSE);

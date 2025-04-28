@@ -102,9 +102,9 @@ public final class JCompiler implements Compiler, DiagnosticListener<JavaFileObj
 			if (m.equals(proxyGetOutput)) {
 				int s = TypeHelper.paramSize(cw.mn.rawDesc())+1;
 				cw.visitSize(s+2,s);
-				cw.one(Opcodes.ALOAD_0);
+				cw.insn(Opcodes.ALOAD_0);
 				cw.field(Opcodes.GETFIELD, data, listId);
-				cw.one(Opcodes.ALOAD_0);
+				cw.insn(Opcodes.ALOAD_0);
 				cw.field(Opcodes.GETFIELD, data, nameId);
 				cw.invoke(Opcodes.INVOKESTATIC, "roj/plugins/ci/JCompiler", "proxyGetOutput", TypeHelper.class2asm(new Class<?>[]{StandardJavaFileManager.class, JavaFileManager.Location.class, String.class, JavaFileObject.Kind.class, FileObject.class, List.class, String.class}, JavaFileObject.class));
 				return true;

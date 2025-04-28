@@ -27,7 +27,7 @@ import static roj.asm.Opcodes.*;
  * @author Roj234
  * @since 2024/6/3 0003 2:27
  */
-final class NewAnonymousClass extends ExprNode {
+final class NewAnonymousClass extends Expr {
 	// 创建该匿名类的表达式 new XXX<>(1,2,3)
 	private final Invoke newExpr;
 	// 匿名类的实体 { ... }
@@ -44,20 +44,20 @@ final class NewAnonymousClass extends ExprNode {
 	@Override public IType type() {return newExpr.type();}
 
 	@Override
-	public ExprNode resolve(LocalContext ctx) throws ResolveException {
-		List<ExprNode> args = newExpr.args;
+	public Expr resolve(LocalContext ctx) throws ResolveException {
+		List<Expr> args = newExpr.args;
 		// writable
-		if (!(args instanceof SimpleList<ExprNode>))
+		if (!(args instanceof SimpleList<Expr>))
 			newExpr.args = args = new SimpleList<>(args);
 
 		List<IType> argTypes = Arrays.asList(new IType[args.size()]);
 		for (int i = 0; i < args.size(); i++) {
-			ExprNode node = args.get(i).resolve(ctx);
+			Expr node = args.get(i).resolve(ctx);
 			args.set(i, node);
 			argTypes.set(i, node.type());
 		}
 
-		IType parentType = ctx.resolveType((IType) newExpr.fn);
+		IType parentType = ctx.resolveType((IType) newExpr.expr);
 
 		// 实际上可以处理它，for assign only
 		if (Inferrer.hasUndefined(parentType)) ctx.report(this, Kind.ERROR, "invoke.noExact");
@@ -95,7 +95,7 @@ final class NewAnonymousClass extends ExprNode {
 
 			constructor = klass.newWritableMethod(ACC_PUBLIC, "<init>", "()V");
 			constructor.visitSize(1, 1);
-			constructor.one(ALOAD_0);
+			constructor.insn(ALOAD_0);
 			constructor.invoke(INVOKESPECIAL, "java/lang/Object", "<init>", "()V");
 		} else {
 			klass.parent(parent);
@@ -114,7 +114,7 @@ final class NewAnonymousClass extends ExprNode {
 		klass.S2_ResolveMethod();
 		LocalContext.prev();
 
-		newExpr.fn = Type.klass(klass.name());
+		newExpr.expr = Type.klass(klass.name());
 		nestContext = NestContext.anonymous(ctx, klass, constructor, args);
 
 		return parentType instanceof Generic g && g.children.size() == 1 && g.children.get(0) == Asterisk.anyGeneric
@@ -122,7 +122,7 @@ final class NewAnonymousClass extends ExprNode {
 				: resolveNow(ctx);
 	}
 
-	private ExprNode resolveNow(LocalContext ctx) {
+	private Expr resolveNow(LocalContext ctx) {
 		ctx.enclosing.add(nestContext);
 		LocalContext.next();
 		try {
@@ -131,7 +131,7 @@ final class NewAnonymousClass extends ExprNode {
 			klass.S5_noStore();
 
 			var constructor = nestContext.constructor();
-			constructor.one(RETURN);
+			constructor.insn(RETURN);
 			constructor.finish();
 		} catch (ParseException e) {
 			throw new ResolveException("匿名类解析失败", e);
@@ -152,7 +152,7 @@ final class NewAnonymousClass extends ExprNode {
 			return;
 		}
 
-		((Generic) newExpr.fn).children = g.children;
+		((Generic) newExpr.expr).children = g.children;
 		resolveNow(LocalContext.get()).write(cw, false);
 	}
 }

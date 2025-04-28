@@ -40,7 +40,7 @@ public final class ClassDefiner extends ClassLoader {
 
 		cw.newObject(clz.name());
 		cw.invoke(INVOKESTATIC, ClassDefiner.class.getName().replace('.', '/'), "__", "(Ljava/lang/Object;)V");
-		cw.one(RETURN);
+		cw.insn(RETURN);
 		cw.finish();
 	}
 	public static Object make(ClassNode data) {return make(data, APP_LOADER);}

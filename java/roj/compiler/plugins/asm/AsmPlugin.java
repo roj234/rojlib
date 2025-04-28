@@ -7,9 +7,9 @@ import roj.asm.Opcodes;
 import roj.asm.type.Generic;
 import roj.asm.type.Type;
 import roj.collect.MyHashMap;
-import roj.compiler.api.Evaluable;
+import roj.compiler.api.InvokeHook;
 import roj.compiler.asm.MethodWriter;
-import roj.compiler.ast.expr.ExprNode;
+import roj.compiler.ast.expr.Expr;
 import roj.compiler.ast.expr.Invoke;
 import roj.compiler.ast.expr.Lambda;
 import roj.compiler.context.LocalContext;
@@ -31,9 +31,9 @@ import java.util.function.Consumer;
  * @since 2024/6/4 22:15
  */
 @LavaPlugin(name = "asm", desc = "名字起的奇奇怪怪其实大概挺基础的")
-public final class AsmPlugin extends Evaluable {
-	public static final TypedKey<MyHashMap<String, ExprNode>> INJECT_PROPERTY = new TypedKey<>("asmHook:injected_property");
-	private final MyHashMap<String, ExprNode> properties = new MyHashMap<>();
+public final class AsmPlugin extends InvokeHook {
+	public static final TypedKey<MyHashMap<String, Expr>> INJECT_PROPERTY = new TypedKey<>("asmHook:injected_property");
+	private final MyHashMap<String, Expr> properties = new MyHashMap<>();
 
 	public void pluginInit(LavaApi api) {
 		var info = api.getClassInfo("roj/compiler/plugins/asm/ASM");
@@ -69,7 +69,7 @@ public final class AsmPlugin extends Evaluable {
 	@Override public String toString() {return "__asm hook";}
 
 	@SuppressWarnings("unchecked")
-	@Override public ExprNode eval(MethodNode owner, @Nullable ExprNode self, List<ExprNode> args, Invoke node) {
+	@Override public Expr eval(MethodNode owner, @Nullable Expr self, List<Expr> args, Invoke node) {
 		LocalContext ctx = LocalContext.get();
 		switch (owner.name()) {
 			default: throw OperationDone.NEVER;
@@ -104,7 +104,7 @@ public final class AsmPlugin extends Evaluable {
 					ctx.report(Kind.ERROR, "asm("+lambda+")还没实现喵");
 				}
 
-				return ExprNode.valueOf(false);
+				return Expr.valueOf(false);
 			case "inject":
 				if (!args.get(0).isConstant()) {
 					ctx.report(Kind.ERROR, "inject("+args+")的第一个参数必须是字符串常量");

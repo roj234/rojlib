@@ -45,10 +45,10 @@ public class GeneratorUtil {
 
 				var implInit = impl.newMethod(ACC_PUBLIC, "<init>", initArg);
 				implInit.visitSize(2, TypeHelper.paramSize(initArg)+1);
-				implInit.one(ALOAD_0);
+				implInit.insn(ALOAD_0);
 				implInit.invokeD(impl.parent(), "<init>", "()V");
 
-				implInit.one(ALOAD_0);
+				implInit.insn(ALOAD_0);
 				implInit.field(GETFIELD, "roj/compiler/runtime/Generator", "stack", "L"+RETURNSTACK_TYPE+";");
 				implInit.invokeV(RETURNSTACK_TYPE, "forWrite", "()L"+RETURNSTACK_TYPE+";");
 				implInit.ldc(0);
@@ -63,14 +63,14 @@ public class GeneratorUtil {
 					implInit.invokeV(RETURNSTACK_TYPE, "put", "("+(varType=='L'?"Ljava/lang/Object;":(char)varType)+")L"+RETURNSTACK_TYPE+";");
 				}
 
-				implInit.one(RETURN);
+				implInit.insn(RETURN);
 				implInit.finish();
 
 				var attr = new AttrCodeWriter(file.cp, mn);
 				mn.addAttribute(attr);
 				var c = attr.cw;
 				c.clazz(NEW, implInit.mn.owner);
-				c.one(DUP);
+				c.insn(DUP);
 				c.visitSize(TypeHelper.paramSize(implInit.mn.rawDesc())+2, TypeHelper.paramSize(mn.rawDesc()));
 
 				List<Type> myPar = mn.parameters();
@@ -82,7 +82,7 @@ public class GeneratorUtil {
 				}
 
 				c.invoke(INVOKESPECIAL, implInit.mn);
-				c.one(ARETURN);
+				c.insn(ARETURN);
 				c.finish();
 
 				var newMethod = new MethodNode(ACC_PROTECTED | ACC_FINAL, impl.name(), "invoke", "(L"+RETURNSTACK_TYPE+";)V");

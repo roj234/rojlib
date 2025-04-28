@@ -14,6 +14,8 @@ import roj.util.NativeException;
 import roj.util.OS;
 
 import java.io.*;
+import java.nio.ByteBuffer;
+import java.nio.CharBuffer;
 import java.nio.charset.Charset;
 import java.util.Objects;
 
@@ -79,10 +81,7 @@ public final class NativeVT implements ITerminal, Runnable {
 			charset = encoding == null ? Charset.defaultCharset() : Charset.forName(encoding);
 		}
 		ucs = FastCharset.getInstance(charset);
-		if (ucs == null) {
-			ucs = FastCharset.UTF8();
-			System.err.println(VTERROR+"输出编码不受支持: "+charset);
-		}
+		if (ucs == null) System.err.println(VTERROR+"输出编码不受支持: "+charset);
 
 		var in = System.in;
 		if (in instanceof FilterInputStream) {
@@ -133,7 +132,7 @@ public final class NativeVT implements ITerminal, Runnable {
 			thread.start();
 		}
 
-		@Override public boolean readBack(boolean sync) {return false;}
+		@Override public boolean read(boolean sync) {return false;}
 		@Override public void write(CharSequence str) {
 			CharList x = new CharList(str);
 			sout.print(Terminal.stripAnsi(x).toStringAndFree());
@@ -145,7 +144,7 @@ public final class NativeVT implements ITerminal, Runnable {
 	private boolean read;
 	private NativeVT() {}
 	private static ITerminal init() {
-		if (Boolean.getBoolean("roj.noAnsi")) return null;
+		if (Boolean.getBoolean("roj.noAnsi") || Boolean.getBoolean("roj.disableNativeVT")) return null;
 		// 避免初始化System.console()造成16KB的内存浪费
 		if (RojLib.hasNative(RojLib.WIN32) ? GetConsoleWindow() == 0 : System.console() == null) return null;
 		// current: win32 only
@@ -224,7 +223,14 @@ public final class NativeVT implements ITerminal, Runnable {
 				}
 
 				ib.wIndex(ib.wIndex()+r);
-				Terminal.onInput(ib, ucs);
+				if (ucs == null) {
+					CharBuffer decode = charset.newDecoder().decode(ByteBuffer.wrap(buf, 0, off + r));
+					CharList buf1 = new CharList(decode.array());
+					buf1.setLength(decode.length());
+					Terminal.onInput(buf1);
+				} else {
+					Terminal.onInput(ib, ucs);
+				}
 			}
 		} catch (Throwable e) {
 			e.printStackTrace();
@@ -235,14 +241,21 @@ public final class NativeVT implements ITerminal, Runnable {
 	}
 
 	@Override
-	public boolean readBack(boolean sync) throws IOException {
+	public boolean read(boolean sync) throws IOException {
 		if (!sync) {
 			if (Thread.currentThread() != reader) return false;
 			int r = sysIn.read(ib.list, 0, 256);
 			ib.rIndex = 0;
 			ib.wIndex(r);
 		}
-		Terminal.onInput(ib, ucs);
+		if (ucs == null) {
+			CharBuffer decode = charset.newDecoder().decode(ByteBuffer.wrap(ib.list, 0, ib.wIndex()));
+			CharList buf1 = new CharList(decode.array());
+			buf1.setLength(decode.length());
+			Terminal.onInput(buf1);
+		} else {
+			Terminal.onInput(ib, ucs);
+		}
 		return true;
 	}
 

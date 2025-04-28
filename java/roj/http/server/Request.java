@@ -207,8 +207,8 @@ public final class Request extends Headers {
 
 				boolean isHCE = !get("content-encoding", "identity").equals("identity");
 				if (isHCE) {
-					ch.addBefore("body", "merge", new PacketMerger() {
-						int readLimit = Router.DEFAULT_POST_SIZE;
+					ch.addBefore("body", "readLimit", new PacketMerger() {
+						int readLimit = data.capacity();
 
 						@Override
 						public void onEvent(ChannelCtx ctx, Event event) throws IOException {
@@ -227,7 +227,7 @@ public final class Request extends Headers {
 							mergedRead(ctx, buf);
 						}
 					});
-					hCE.apply(ch.handler("merge"), this, false, Long.MAX_VALUE);
+					hCE.apply(ch.handler("readLimit"), this, false, Long.MAX_VALUE);
 				}
 
 				ch.fireChannelRead(data);

@@ -250,12 +250,12 @@ public final class DateFormat {
 	private static int dateNum(CharSequence sb, int[] pos, int maxLen, int min, int max) {
 		int i = pos[0];
 		int prevI = i;
-		while (i < sb.length()) {
+		while (i < sb.length() && i-prevI < maxLen) {
 			if (!Tokenizer.NUMBER.contains(sb.charAt(i))) break;
 			i++;
 		}
 
-		if (i-prevI <= 0 || i-prevI > maxLen) throw new IllegalArgumentException("错误的时间范围");
+		if (i==prevI) throw new IllegalArgumentException("错误的时间范围");
 
 		int num = TextUtil.parseInt(sb, prevI, i);
 		if (num < min || num > max) throw new IllegalArgumentException("错误的时间范围");

@@ -60,13 +60,13 @@ public class SystemAudioOutput implements AudioOutput {
 	public void flush() {out.drain();}
 
 	public void mute(boolean mute) {
-		if (out == null) return;
 		muted = mute;
+		if (out == null) return;
 		((BooleanControl) out.getControl(BooleanControl.Type.MUTE)).setValue(mute);
 	}
 	public void setVolume(float vol) {
-		if (out == null) return;
 		gain = vol;
+		if (out == null) return;
 		((FloatControl) out.getControl(Type.MASTER_GAIN)).setValue(vol);
 	}
 	public float getVolume() {return ((FloatControl) out.getControl(Type.MASTER_GAIN)).getValue();}

@@ -11,7 +11,12 @@ import roj.util.TypedKey;
  * @since 2024/6/5 20:00
  */
 public class MethodDefault extends Attribute {
-	public static final TypedKey<MethodDefault> METHOD_DEFAULT = new TypedKey<>("MethodDefault");
+	public static final TypedKey<MethodDefault> ID = new TypedKey<>("Lava:MethodDefault");
+
+	public MethodDefault() {}
+	public MethodDefault(ConstantPool cp, DynByteBuf buf) {
+
+	}
 
 	@Override
 	public final boolean writeIgnore() {return defaultValue.isEmpty();}

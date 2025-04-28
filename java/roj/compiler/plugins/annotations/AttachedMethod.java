@@ -2,8 +2,8 @@ package roj.compiler.plugins.annotations;
 
 import org.jetbrains.annotations.Nullable;
 import roj.asm.MethodNode;
-import roj.compiler.api.Evaluable;
-import roj.compiler.ast.expr.ExprNode;
+import roj.compiler.api.InvokeHook;
+import roj.compiler.ast.expr.Expr;
 import roj.compiler.ast.expr.Invoke;
 
 import java.util.Arrays;
@@ -13,7 +13,7 @@ import java.util.List;
  * @author Roj234
  * @since 2024/6/10 0010 3:38
  */
-final class AttachedMethod extends Evaluable {
+final class AttachedMethod extends InvokeHook {
 	private final MethodNode target;
 	public AttachedMethod(MethodNode owner) {target = owner;}
 
@@ -21,9 +21,9 @@ final class AttachedMethod extends Evaluable {
 	public String toString() {return "attached<"+target+">";}
 
 	@Override
-	public ExprNode eval(MethodNode owner, @Nullable ExprNode self, List<ExprNode> args, Invoke node) {
+	public Expr eval(MethodNode owner, @Nullable Expr self, List<Expr> args, Invoke node) {
 		if (self != null) {
-			var nodes = new ExprNode[args.size()+1];
+			var nodes = new Expr[args.size()+1];
 			nodes[0] = self;
 			for (int i = 0; i < args.size(); i++)
 				nodes[i+1] = args.get(i);

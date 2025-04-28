@@ -137,7 +137,7 @@ public abstract class AbstractCodeWriter extends CodeVisitor {
 	protected abstract void ldc1(@MagicConstant(intValues = {Opcodes.LDC, Opcodes.LDC_W}) byte code, Constant c);
 	protected abstract void ldc2(Constant c);
 
-	public void one(@MagicConstant(valuesFromClass = Opcodes.class) byte code) { assertTrait(code, TRAIT_ZERO_ADDRESS); codeOb.put(code); }
+	public void insn(@MagicConstant(valuesFromClass = Opcodes.class) byte code) { assertTrait(code, TRAIT_ZERO_ADDRESS); codeOb.put(code); }
 
 	public final void jump(Label target) { jump(GOTO, target); }
 	public void jump(@MagicConstant(intValues = {
@@ -241,24 +241,24 @@ public abstract class AbstractCodeWriter extends CodeVisitor {
 	public final void ldc(String c) { ldc1(LDC, new CstString(c)); }
 	public final void ldc(long n) {
 		if (n != 0 && n != 1) ldc2(new CstLong(n));
-		else one((byte) (LCONST_0 + (int)n));
+		else insn((byte) (LCONST_0 + (int)n));
 	}
 	public final void ldc(float n) {
 		if (n != 0 && n != 1 && n != 2) ldc1(LDC, new CstFloat(n));
-		else one((byte) (FCONST_0 + (int)n));
+		else insn((byte) (FCONST_0 + (int)n));
 	}
 	public final void ldc(double n) {
 		if (n != 0 && n != 1) ldc2(new CstDouble(n));
-		else one((byte) (DCONST_0 + (int)n));
+		else insn((byte) (DCONST_0 + (int)n));
 	}
 
-	public final void return_(Type type) { one(type.shiftedOpcode(IRETURN)); }
+	public final void return_(Type type) { insn(type.shiftedOpcode(IRETURN)); }
 	public final void varLoad(Type type, int id) { vars(type.shiftedOpcode(ILOAD), id); }
 	public final void varStore(Type type, int id) { vars(type.shiftedOpcode(ISTORE), id); }
-	public final void arrayLoad(Type type) {one(ArrayLoad(type));}
-	public final void arrayStore(Type type) {one(ArrayStore(type));}
-	public final void arrayLoadP(int type) {one((byte) (ArrayLoadP(type)+33));}
-	public final void arrayStoreP(int type) {one(ArrayLoadP(type));}
+	public final void arrayLoad(Type type) {insn(ArrayLoad(type));}
+	public final void arrayStore(Type type) {insn(ArrayStore(type));}
+	public final void arrayLoadP(int type) {insn((byte) (ArrayLoadP(type)+33));}
+	public final void arrayStoreP(int type) {insn(ArrayLoadP(type));}
 
 	public static byte ArrayStore(Type type) {return (byte) (ArrayLoad(type)+33);}
 	public static byte ArrayLoad(Type type) {return ArrayLoadP(type.type);}
@@ -278,7 +278,7 @@ public abstract class AbstractCodeWriter extends CodeVisitor {
 
 	public final void newObject(String name) {
 		clazz(NEW, name);
-		one(DUP);
+		insn(DUP);
 		invoke(INVOKESPECIAL, name, "<init>", "()V");
 	}
 	public final void unpackArray(int slot, Class<?>... types) {
@@ -291,7 +291,7 @@ public abstract class AbstractCodeWriter extends CodeVisitor {
 		for (int i = 0; i < types.size(); i++) {
 			vars(ALOAD, slot);
 			ldc(begin+i);
-			one(AALOAD);
+			insn(AALOAD);
 
 			Type klass = types.get(i);
 			if (klass.isPrimitive()) {

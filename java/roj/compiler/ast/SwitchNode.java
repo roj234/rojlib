@@ -7,7 +7,7 @@ import roj.asm.insn.Label;
 import roj.collect.SimpleList;
 import roj.compiler.asm.MethodWriter;
 import roj.compiler.asm.Variable;
-import roj.compiler.ast.expr.ExprNode;
+import roj.compiler.ast.expr.Expr;
 
 import java.util.List;
 
@@ -18,7 +18,7 @@ import java.util.List;
  */
 public final class SwitchNode {
 	/** 用于switch的表达式 */
-	public final ExprNode sval;
+	public final Expr sval;
 	/** sval.constVal() 获取的常量 */
 	@Nullable
 	public final Object cst;
@@ -44,7 +44,7 @@ public final class SwitchNode {
 	/** 是否含有default (对应Case的labels==null) */
 	public final boolean defaultBranch;
 
-	public SwitchNode(ExprNode sval, int kind, @Nullable Object cst, Label breakTo, SimpleList<Branch> branches, @Nullable SwitchNode.Branch nullBranch, boolean defaultBranch) {
+	public SwitchNode(Expr sval, int kind, @Nullable Object cst, Label breakTo, SimpleList<Branch> branches, @Nullable SwitchNode.Branch nullBranch, boolean defaultBranch) {
 		this.sval = sval;
 		this.kind = kind;
 		this.cst = cst;
@@ -62,10 +62,10 @@ public final class SwitchNode {
 		/** 如果是Pattern switch那么非空，该分支的变量类型和名称 */
 		public Variable variable;
 		/** 如果是Type switch那么非空，该分支的常量或表达式 */
-		public List<ExprNode> labels;
+		public List<Expr> labels;
 
 		/** 该分支的最后一个表达式，是switch表达式且能正常完成时非空，用来计算switch的返回类型 */
-		@Nullable public ExprNode value;
+		@Nullable public Expr value;
 
 		/** 代码 */
 		@NotNull public MethodWriter block;
@@ -75,7 +75,7 @@ public final class SwitchNode {
 		/** case或default关键字结束时的行号 */
 		public int lineNumber;
 
-		public Branch(List<ExprNode> labels) {this.labels = labels;}
+		public Branch(List<Expr> labels) {this.labels = labels;}
 		public Branch(Variable v) {this.variable = v;}
 	}
 }

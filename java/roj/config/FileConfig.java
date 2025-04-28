@@ -1,6 +1,5 @@
 package roj.config;
 
-import roj.config.data.CCommMap;
 import roj.config.data.CMap;
 
 import java.io.File;
@@ -29,7 +28,7 @@ public abstract class FileConfig {
 	}
 	public final void reload() {
 		try {
-			load(map = type.parse(file).asMap().withComments());
+			load(map = type.parse(file).asMap().toCommentable());
 		} catch (IOException | ParseException | ClassCastException e) {
 			e.printStackTrace();
 			if (map == null) {
@@ -56,7 +55,7 @@ public abstract class FileConfig {
 	protected void save(CMap map) { load(map); }
 
 	public final CMap getConfig() {
-		if (map == null) map = new CCommMap();
+		if (map == null) map = new CMap.Commentable();
 		return map;
 	}
 

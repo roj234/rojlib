@@ -14,7 +14,7 @@ final class AClass extends AnnVal {
 
 	public char dataType() {return ANNOTATION_CLASS;}
 
-	@Override public void accept(CVisitor ser) {((ToJVMAnnotation) ser).valueClass(value.toDesc());}
+	@Override public void accept(CVisitor visitor) {((ToJVMAnnotation) visitor).valueClass(value.toDesc());}
 	@Override public Object raw() {return value;}
 
 	public String toString() {return value.toString().concat(".class");}

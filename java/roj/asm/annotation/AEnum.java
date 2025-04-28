@@ -27,7 +27,7 @@ final class AEnum extends AnnVal {
 
 	public void setOwner(String owner) {this.owner = owner;}
 
-	@Override public void accept(CVisitor ser) {((ToJVMAnnotation) ser).valueEnum(owner, field);}
+	@Override public void accept(CVisitor visitor) {((ToJVMAnnotation) visitor).valueEnum(owner, field);}
 
 	@Override public Object raw() {return new Desc(owner(), field, owner);}
 

@@ -57,20 +57,20 @@ public class TransformUtil {
 
 		if (ms.name().equals("<init>")) {
 			cw.visitSizeMax(1, 0);
-			cw.one(ALOAD_0);
+			cw.insn(ALOAD_0);
 			cw.invokeD(data.parent(), "<init>", "()V");
 		}
 
 		switch (t.type) {
-			case CLASS: cw.one(ACONST_NULL); break;
+			case CLASS: cw.insn(ACONST_NULL); break;
 			case VOID: break;
 			case BOOLEAN: case BYTE: case CHAR: case SHORT:
-			case INT: cw.one(ICONST_0); break;
-			case FLOAT: cw.one(FCONST_0); break;
-			case DOUBLE: cw.one(DCONST_0); break;
-			case LONG: cw.one(LCONST_0); break;
+			case INT: cw.insn(ICONST_0); break;
+			case FLOAT: cw.insn(FCONST_0); break;
+			case DOUBLE: cw.insn(DCONST_0); break;
+			case LONG: cw.insn(LCONST_0); break;
 		}
-		cw.one(t.shiftedOpcode(IRETURN));
+		cw.insn(t.shiftedOpcode(IRETURN));
 		cw.finish();
 
 		ms.addAttribute(new UnparsedAttribute("Code", cw.bw));

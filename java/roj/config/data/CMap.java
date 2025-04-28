@@ -10,68 +10,74 @@ import roj.config.serial.CVisitor;
 import roj.text.CharList;
 import roj.util.Helpers;
 
-import java.util.*;
+import java.util.Collection;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 
 /**
  * @author Roj234
  * @since 2021/5/31 21:17
  */
 public class CMap extends CEntry {
+	/**
+	 * 部分配置格式，例如TOML的顶层元素的名称
+	 */
 	public static final String CONFIG_TOPLEVEL = "<root>";
 
-	protected Map<String, CEntry> map;
+	protected Map<String, CEntry> properties;
 	boolean dot;
 
-	public CMap() { this.map = new MyHashMap<>(); }
-	public CMap(Map<String, CEntry> map) { this.map = map; }
-	public CMap(int size) { this.map = new MyHashMap<>(size); }
+	public CMap() { properties = new MyHashMap<>(); }
+	public CMap(int initialCapacity) { properties = new MyHashMap<>(initialCapacity); }
+	public CMap(Map<String, CEntry> properties) { this.properties = properties; }
 
 	public Type getType() { return Type.MAP; }
 
 	public CMap asMap() { return this; }
 
 	@Override
-	public void accept(CVisitor ser) {
-		ser.valueMap(map.size());
-		if (!map.isEmpty()) {
-			for (Map.Entry<String, CEntry> entry : map.entrySet()) {
-				ser.key(entry.getKey());
-				entry.getValue().accept(ser);
+	public void accept(CVisitor visitor) {
+		visitor.valueMap(properties.size());
+		if (!properties.isEmpty()) {
+			for (var entry : properties.entrySet()) {
+				visitor.key(entry.getKey());
+				entry.getValue().accept(visitor);
 			}
 		}
-		ser.pop();
+		visitor.pop();
 	}
-	public void acceptOrdered(CVisitor ser, String... names) {
-		ser.valueMap();
-		for (String name : names) {
-			CEntry value = map.get(name);
+	public void accept(CVisitor visitor, String... elementOrder) {
+		visitor.valueMap();
+		for (String name : elementOrder) {
+			CEntry value = properties.get(name);
 			if (value != null) {
-				ser.key(name);
-				value.accept(ser);
+				visitor.key(name);
+				value.accept(visitor);
 			}
 		}
-		ser.pop();
+		visitor.pop();
 	}
 
-	public final Map<String, CEntry> raw() { return map; }
+	public final Map<String, CEntry> raw() { return properties; }
 	public final Map<String, Object> unwrap() {
-		MyHashMap<String, Object> caster = Helpers.cast(new MyHashMap<>(map));
-		for (Map.Entry<String, Object> entry : caster.entrySet()) {
+		MyHashMap<String, Object> rawdata = Helpers.cast(new MyHashMap<>(properties));
+		for (var entry : rawdata.entrySet()) {
 			entry.setValue(((CEntry) entry.getValue()).unwrap());
 		}
-		return caster;
+		return rawdata;
 	}
 
-	public final Set<Map.Entry<String, CEntry>> entrySet() { return map.entrySet(); }
-	public final Set<String> keySet() { return map.keySet(); }
-	public final Collection<CEntry> values() { return map.values(); }
+	public final Set<Map.Entry<String, CEntry>> entrySet() { return properties.entrySet(); }
+	public final Set<String> keySet() { return properties.keySet(); }
+	public final Collection<CEntry> values() { return properties.values(); }
 
-	public boolean isEmpty() {return map.isEmpty();}
-	public final int size() {return map.size();}
+	public boolean isEmpty() {return properties.isEmpty();}
+	public final int size() {return properties.size();}
 	public void dot(boolean dotMode) {this.dot = dotMode;}
 
 	// region PUT
-	public final CEntry put(String key, CEntry entry) { return put1(key, entry == null ? CNull.NULL : entry, 0); }
+	public final CEntry put(String key, CEntry entry) { return put(key, entry == null ? CNull.NULL : entry, 0); }
 	public final CEntry put(String key, @NotNull String entry) {
 		Objects.requireNonNull(entry);
 
@@ -80,17 +86,17 @@ public class CMap extends CEntry {
 			((CString) prev).value = entry;
 			return null;
 		} else {
-			return put1(key, CEntry.valueOf(entry), 0);
+			return put(key, CEntry.valueOf(entry), 0);
 		}
 	}
-	public final CEntry put(String key, boolean entry) { return put1(key, CEntry.valueOf(entry), 0); }
+	public final CEntry put(String key, boolean entry) { return put(key, CEntry.valueOf(entry), 0); }
 	public final CEntry put(String key, int entry) {
 		CEntry prev = get(key);
 		if (prev.getType() == Type.INTEGER) {
 			((CInt) prev).value = entry;
 			return null;
 		} else {
-			return put1(key, CEntry.valueOf(entry), 0);
+			return put(key, CEntry.valueOf(entry), 0);
 		}
 	}
 	public final CEntry put(String key, long entry) {
@@ -99,7 +105,7 @@ public class CMap extends CEntry {
 			((CLong) prev).value = entry;
 			return null;
 		} else {
-			return put1(key, CEntry.valueOf(entry), 0);
+			return put(key, CEntry.valueOf(entry), 0);
 		}
 	}
 	public final CEntry put(String key, double entry) {
@@ -108,30 +114,30 @@ public class CMap extends CEntry {
 			((CDouble) prev).value = entry;
 			return null;
 		} else {
-			return put1(key, CEntry.valueOf(entry), 0);
+			return put(key, CEntry.valueOf(entry), 0);
 		}
 	}
 
-	public final CEntry putIfAbsent(String key, CEntry v) { return put1(key, v, Q_SET_IF_ABSENT);}
-	public final String putIfAbsent(String key, String v) { return put1(key, CEntry.valueOf(v), Q_SET_IF_ABSENT).asString();}
-	public final boolean putIfAbsent(String key, boolean v) { return put1(key, CEntry.valueOf(v), Q_SET_IF_ABSENT).asBool();}
-	public final int putIfAbsent(String key, int v) { return put1(key, CEntry.valueOf(v), Q_SET_IF_ABSENT).asInt();}
-	public final long putIfAbsent(String key, long v) { return put1(key, CEntry.valueOf(v), Q_SET_IF_ABSENT).asLong();}
-	public final double putIfAbsent(String key, double v) { return put1(key, CEntry.valueOf(v), Q_SET_IF_ABSENT).asDouble();}
+	public final CEntry putIfAbsent(String key, CEntry v) { return put(key, v, Q_SET_IF_ABSENT);}
+	public final String putIfAbsent(String key, String v) { return put(key, CEntry.valueOf(v), Q_SET_IF_ABSENT).asString();}
+	public final boolean putIfAbsent(String key, boolean v) { return put(key, CEntry.valueOf(v), Q_SET_IF_ABSENT).asBool();}
+	public final int putIfAbsent(String key, int v) { return put(key, CEntry.valueOf(v), Q_SET_IF_ABSENT).asInt();}
+	public final long putIfAbsent(String key, long v) { return put(key, CEntry.valueOf(v), Q_SET_IF_ABSENT).asLong();}
+	public final double putIfAbsent(String key, double v) { return put(key, CEntry.valueOf(v), Q_SET_IF_ABSENT).asDouble();}
 
-	public final CMap getOrCreateMap(String key) { return put1(key, new CMap(), Q_SET_IF_ABSENT).asMap();}
-	public final CList getOrCreateList(String key) { return put1(key, new CList(), Q_SET_IF_ABSENT).asList();}
+	public final CMap getOrCreateMap(String key) { return put(key, new CMap(), Q_SET_IF_ABSENT).asMap();}
+	public final CList getOrCreateList(String key) { return put(key, new CList(), Q_SET_IF_ABSENT).asList();}
 
-	protected CEntry put1(String k, CEntry v, int f) {
+	protected CEntry put(String k, CEntry v, int flag) {
 		if (!dot) {
-			if ((f & Q_SET_IF_ABSENT) == 0 || !map.getOrDefault(k, CNull.NULL).mayCastTo(v.getType())) {
-				map.put(k, v);
+			if ((flag & Q_SET_IF_ABSENT) == 0 || !properties.getOrDefault(k, CNull.NULL).mayCastTo(v.getType())) {
+				properties.put(k, v);
 				return v;
 			}
-			return map.getOrDefault(k, v);
+			return properties.getOrDefault(k, v);
 		}
 
-		return query(k, Q_CREATE_MID|Q_SET|f, v);
+		return query(k, Q_CREATE_MID|Q_SET|flag, v);
 	}
 	// endregion
 	// region GET
@@ -181,17 +187,26 @@ public class CMap extends CEntry {
 	@Nullable public final CEntry getOr(String k) {return getOr(k,null);}
 	@Contract("_,!null -> !null") public CEntry getOr(String k, CEntry def) {
 		if (k == null) return def;
-		return !dot ? map.getOrDefault(k, def) : query(k, 0, CNull.NULL);
+		return !dot ? properties.getOrDefault(k, def) : query(k, 0, CNull.NULL);
 	}
 	// endregion
+	public final void remove(String name) { properties.remove(name); }
+
+	////// comments
+
+	public boolean isCommentable() {return false;}
+	public CMap toCommentable() {return new Commentable();}
+	public String getComment(String key) {return null;}
+	public void setComment(String key, String val) {throw new UnsupportedOperationException();}
+	public void clearComments() {}
 
 	/**
-	 * 使自身符合def中定义的规则（字段名称，类型，数量）
+	 * 使自身符合rule中定义的规则（字段名称，类型，数量）
 	 * 多出的将被删除（可选）
 	 */
-	public final void format(CMap def, boolean deep, boolean remove) {
-		Map<String, CEntry> map = this.map;
-		for (Map.Entry<String, CEntry> entry : def.map.entrySet()) {
+	public final void format(CMap rule, boolean deep, boolean remove) {
+		Map<String, CEntry> map = this.properties;
+		for (var entry : rule.properties.entrySet()) {
 			String k = entry.getKey();
 
 			CEntry myEnt = map.putIfAbsent(entry.getKey(), entry.getValue());
@@ -205,8 +220,8 @@ public class CMap extends CEntry {
 			}
 		}
 		if (remove) {
-			for (Iterator<Map.Entry<String, CEntry>> itr = map.entrySet().iterator(); itr.hasNext(); ) {
-				if (!def.map.containsKey(itr.next().getKey())) {
+			for (var itr = map.entrySet().iterator(); itr.hasNext(); ) {
+				if (!rule.properties.containsKey(itr.next().getKey())) {
 					itr.remove();
 				}
 			}
@@ -219,17 +234,17 @@ public class CMap extends CEntry {
 	public void merge(CMap o, boolean self, boolean deep) {
 		if (!deep) {
 			if (!self) {
-				map.putAll(o.map);
+				properties.putAll(o.properties);
 			} else {
-				for (Map.Entry<String, CEntry> entry : o.map.entrySet()) {
-					map.putIfAbsent(entry.getKey(), entry.getValue());
+				for (var entry : o.properties.entrySet()) {
+					properties.putIfAbsent(entry.getKey(), entry.getValue());
 				}
 			}
 		} else {
 			if (self) {
-				for (Map.Entry<String, CEntry> entry : o.map.entrySet()) {
+				for (var entry : o.properties.entrySet()) {
 					CEntry oEnt = entry.getValue();
-					CEntry myEnt = map.putIfAbsent(entry.getKey(), oEnt);
+					CEntry myEnt = properties.putIfAbsent(entry.getKey(), oEnt);
 					if (myEnt != null) {
 						if (myEnt.getType() == Type.MAP && oEnt.getType() == Type.MAP) {
 							myEnt.asMap().merge(oEnt.asMap(), true, true);
@@ -237,13 +252,13 @@ public class CMap extends CEntry {
 					}
 				}
 			} else {
-				for (Map.Entry<String, CEntry> entry : o.map.entrySet()) {
+				for (var entry : o.properties.entrySet()) {
 					CEntry oEnt = entry.getValue();
-					CEntry myEnt = map.put(entry.getKey(), oEnt);
+					CEntry myEnt = properties.put(entry.getKey(), oEnt);
 					if (myEnt != null) {
 						if (myEnt.getType() == Type.MAP && oEnt.getType() == Type.MAP) {
 							myEnt.asMap().merge(oEnt.asMap(), false, true);
-							map.put(entry.getKey(), myEnt);
+							properties.put(entry.getKey(), myEnt);
 						}
 					}
 				}
@@ -251,17 +266,9 @@ public class CMap extends CEntry {
 		}
 	}
 
-	public final void remove(String name) { map.remove(name); }
-
-	public boolean isCommentSupported() {return false;}
-	public String getComment(String key) {return null;}
-	public void putComment(String key, String val) {throw new UnsupportedOperationException();}
-	public CMap withComments() { return new CCommMap(map); }
-	public void clearComments() {}
-
 	@Override
 	public CharList toTOML(CharList sb, int depth, CharSequence chain) {
-		if (!map.isEmpty()) {
+		if (!properties.isEmpty()) {
 			if (chain.length() > 0 && depth < 2) {
 				if (TOMLParser.literalSafe(chain)) {
 					sb.append('[').append(chain).append("]\n");
@@ -269,11 +276,11 @@ public class CMap extends CEntry {
 					Tokenizer.addSlashes(sb.append('['), chain).append("]\n");
 				}
 			}
-			if (depth == 0 && map.containsKey(CONFIG_TOPLEVEL))
-				map.get(CONFIG_TOPLEVEL).toTOML(sb, 0, chain).append('\n');
+			if (depth == 0 && properties.containsKey(CONFIG_TOPLEVEL))
+				properties.get(CONFIG_TOPLEVEL).toTOML(sb, 0, chain).append('\n');
 
 			if (depth == 3) sb.append('{');
-			for (Map.Entry<String, CEntry> entry : map.entrySet()) {
+			for (var entry : properties.entrySet()) {
 				String comment = getComment(entry.getKey());
 				if (comment != null && comment.length() > 0) {
 					addComments(sb, 0, comment, "#", "\n");
@@ -338,10 +345,56 @@ public class CMap extends CEntry {
 		}
 	}
 
-	public int hashCode() { return map.hashCode(); }
+	public int hashCode() { return properties.hashCode(); }
 	public boolean equals(Object o) {
 		if (this == o) return true;
 		if (!(o instanceof CMap mapping)) return false;
-		return map.equals(mapping.map);
+		return properties.equals(mapping.properties);
+	}
+
+	public static class Commentable extends CMap {
+		public Map<String, String> comments = new MyHashMap<>();
+
+		public Commentable() {}
+		public Commentable(Map<String, CEntry> properties) { super(properties); }
+		public Commentable(Map<String, CEntry> properties, Map<String, String> comments) {
+			super(properties);
+			this.comments = comments;
+		}
+
+		@Override
+		public void accept(CVisitor visitor) {
+			visitor.valueMap();
+			if (!properties.isEmpty()) {
+				for (var entry : properties.entrySet()) {
+					String comment = comments.get(entry.getKey());
+					if (comment != null) visitor.comment(comment);
+
+					visitor.key(entry.getKey());
+					entry.getValue().accept(visitor);
+				}
+			}
+			visitor.pop();
+		}
+
+		public void accept(CVisitor visitor, String... elementOrder) {
+			visitor.valueMap();
+			for (String key : elementOrder) {
+				CEntry value = properties.get(key);
+				if (value != null) {
+					String comment = comments.get(key);
+					if (comment != null) visitor.comment(comment);
+					visitor.key(key);
+					value.accept(visitor);
+				}
+			}
+			visitor.pop();
+		}
+
+		public boolean isCommentable() {return true;}
+		public CMap toCommentable() {return this;}
+		public String getComment(String key) {return comments.get(key);}
+		public void setComment(String key, String val) {comments.put(key, val);}
+		public void clearComments() {comments.clear();}
 	}
 }

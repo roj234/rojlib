@@ -287,7 +287,7 @@ final class HttpServer20 extends H2Stream implements PostSetting, ResponseHeader
 	}
 
 	private long sendBytes;
-	@Override public long getSendBytes() {return sendBytes;}
+	@Override public long getBytesSent() {return sendBytes;}
 
 	private boolean sendData(DynByteBuf buf) throws IOException {
 		sendBytes += buf.readableBytes();
@@ -341,20 +341,14 @@ final class HttpServer20 extends H2Stream implements PostSetting, ResponseHeader
 		var compress = new hDeflate(1024);
 		compress.setDef(def);
 
-		embed = EmbeddedChannel.createReadonly().addLast("write_hook", this).addLast("hcompr", compress);
+		embed = EmbeddedChannel.createReadonly().addLast("write_hook", this).addLast(hDeflate.ANCHOR, compress);
 	}
 
 	//region ResponseWriter
-	private static final int NOOB_LIMIT = 4080;
 	private SpeedLimiter limiter;
 
-	@Override public int getSpeedLimit() {return limiter == null ? 0 : limiter.getBytePerSecond();}
-	@Override public SpeedLimiter getSpeedLimiter() {return limiter;}
-	@Override public void limitSpeed(int bps) {
-		if (limiter == null) limiter = new SpeedLimiter(1450, 50_000_000);
-		limiter.setBytePerSecond(bps);
-	}
 	@Override public void limitSpeed(SpeedLimiter limiter) {this.limiter = limiter;}
+	@Override public SpeedLimiter getSpeedLimiter() {return limiter;}
 
 	public void write(DynByteBuf buf) throws IOException {
 		assert ((ReentrantLock) man.channel().channel().lock()).isHeldByCurrentThread();

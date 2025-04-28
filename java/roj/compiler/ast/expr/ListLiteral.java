@@ -16,20 +16,20 @@ import static roj.asm.Opcodes.*;
  * @author Roj234
  * @since 2024/11/28 22:45
  */
-final class EasyList extends ExprNode {
-	private final List<ExprNode> exprList;
+final class ListLiteral extends Expr {
+	private final List<Expr> elements;
 	private Generic type;
-	public EasyList(List<ExprNode> exprList) {this.exprList = exprList;}
+	public ListLiteral(List<Expr> elements) {this.elements = elements;}
 
-	@Override public String toString() {return exprList.toString();}
+	@Override public String toString() {return elements.toString();}
 
-	@Override public ExprNode resolve(LocalContext ctx) throws ResolveException {
+	@Override public Expr resolve(LocalContext ctx) throws ResolveException {
 		IType vType = null;
 		boolean allIsConstant = true;
 
-		for (int i = 0; i < exprList.size(); i++) {
-			var node = exprList.get(i).resolve(ctx);
-			exprList.set(i, node);
+		for (int i = 0; i < elements.size(); i++) {
+			var node = elements.get(i).resolve(ctx);
+			elements.set(i, node);
 
 			if (!node.isConstant()) allIsConstant = false;
 
@@ -52,19 +52,34 @@ final class EasyList extends ExprNode {
 	@Override
 	public void write(MethodWriter cw, boolean noRet) {
 		mustBeStatement(noRet);
-		cw.ldc(exprList.size());
+		cw.ldc(elements.size());
 		cw.clazz(ANEWARRAY, type.children.get(0).rawType().owner);
 
 		var vType = type.children.get(0);
 		var lc = LocalContext.get();
-		for (int i = 0; i < exprList.size(); i++) {
-			cw.one(DUP);
+		for (int i = 0; i < elements.size(); i++) {
+			cw.insn(DUP);
 			cw.ldc(i);
-			var node = exprList.get(i);
+			var node = elements.get(i);
 			node.write(cw, lc.castTo(node.type(), vType, 0));
-			cw.one(AASTORE);
+			cw.insn(AASTORE);
 		}
 
 		cw.invokeS("java/util/Arrays", "asList", "([Ljava/lang/Object;)Ljava/util/List;");
+	}
+
+	@Override
+	public boolean equals(Object o) {
+		if (this == o) return true;
+		if (o == null || getClass() != o.getClass()) return false;
+
+		ListLiteral that = (ListLiteral) o;
+
+		return elements.equals(that.elements);
+	}
+
+	@Override
+	public int hashCode() {
+		return elements.hashCode();
 	}
 }

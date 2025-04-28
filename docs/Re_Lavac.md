@@ -36,7 +36,7 @@ for (int i = 0; i < arr.length; i++) {
 一个方法可以返回多个返回值（不超过256个）
 ```java
 static [int, long, String] multiReturnTest() {
-	return {3, 5, "233"};
+    return {3, 5, "233"};
 }
 
 var [a, b, c] = multiReturnTest();
@@ -64,7 +64,7 @@ if (false) {
   如下代码会*成功编译*
 ```java
 static void test(int a = 3, Object o = some_variable) {
-	// ...
+    // ...
 }
 
 {
@@ -96,12 +96,12 @@ var list = [1, 2, 3]; // List<Integer> (不可变)
 - 使用【...switch】关键字可以强制启用此功能，即使没有Switchable注解。
 - 支持基本数据类型和非编译时常量。
 ```java
-		var v = Test.A;
-		switch (v) {
-			case Test.A -> System.out.println("A");
-			case Test.B -> System.out.println("B");
-			case Test.NulL -> System.out.println("null (real)");
-		}
+        var v = Test.A;
+        switch (v) {
+            case Test.A -> System.out.println("A");
+            case Test.B -> System.out.println("B");
+            case Test.NulL -> System.out.println("null (real)");
+        }
 ```
 #### SwitchEx (WIP)
   看到隔壁CSharp那么多switch的语法糖，我给switch加了一个goto default  
@@ -129,8 +129,24 @@ var list = [1, 2, 3]; // List<Integer> (不可变)
 ### 基本类型泛型
   通过模板生成基本类型的泛型类，在运行时节约内存  
 ### 连续泛型推断 (已实现)
-  例子：var x = XHashSet.noCreation(String.class, "_").createSized(233).iterator();  
-  Javac碰到这种泛型，会直接擦除到Object，而Lavac会记住String并连续传递，所以你将获得Iterator&lt;String&gt;
+
+```java
+public class Test {
+    static <T> T inferType(T example) { return example; }
+    
+    static <K, V> TypedMapBuilder<K, V> builder(Class<K> keyType) {return null;}
+    interface TypedMapBuilder<K, V> { Map<K, V> build(); }
+
+    public static void main(String[] args) {
+        // 在Javac中将会类型推断失败，返回Map<String, Object>
+        Map<String, Integer> map1_1 = Test.builder(String.class).build();
+        Map<String, Integer> map1_2 = inferType(Test.builder(String.class)).build();
+
+        // 成功
+        Map<String, Integer> map2 = Test.<String, Integer>builder(String.class).build();
+    }
+}
+```
 ### finally优化 (已实现)
   在多个嵌套的finally块中，防止代码体积暴增
 ### 隐式导入|ImportAny (已实现)
@@ -150,7 +166,7 @@ var list = [1, 2, 3]; // List<Integer> (不可变)
 ### with (已实现)
 ```javascript
 with (System.out) {
-	println("hello world!");
+    println("hello world!");
 }
 ```
 如果需要对某个类静态的使用，你可以 with (X.class) {} 或者，简单的import static
@@ -173,7 +189,7 @@ try (
       defer System.out.println("a");
       defer System.out.println("b");
 ) {
-	
+    
 }
 ```
 ### 尾递归优化 (已实现)
@@ -185,9 +201,9 @@ try (
 * 定义 (_async是一个修饰符，并且是必须的)
 ```java
     _async static Generator<String> generatorTest(String inputArg) {
-    	yield inputArg+="a";
-    	yield inputArg+="b";
-    	yield inputArg+="c";
+        yield inputArg+="a";
+        yield inputArg+="b";
+        yield inputArg+="c";
     }
 ```
 * 使用方法
@@ -233,7 +249,7 @@ import roj.compiler.plugins.annotations.Attach;
 @Attach
 public class Attacher {
     public static boolean isNotEmpty(String s) {
-		return !s.isEmpty();
+        return !s.isEmpty();
     }
 }
 
@@ -259,14 +275,14 @@ public static final int A = 100,B = 101,C = 102,D = 103;
 ```java
 @Property(value = "some", getter = "getSome", setter = "setSome")
 public class Some {
-	public String getSome() { return "我是一个字段"; }
-	public void setSome(String setter) {}
+    public String getSome() { return "我是一个字段"; }
+    public void setSome(String setter) {}
 
-	{
-		System.out.println(this.some);
-		this.some = "awsl";
-		System.out.println(this.some);
-	}
+    {
+        System.out.println(this.some);
+        this.some = "awsl";
+        System.out.println(this.some);
+    }
 }
 ```
   你可以直接以属性调用这些字段

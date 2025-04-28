@@ -18,7 +18,8 @@ public final class CBoolean extends CEntry {
 	public boolean asBool() { return this == TRUE; }
 	public String asString() { return this == TRUE ? "true" : "false"; }
 
-	public void accept(CVisitor ser) {ser.value(this == TRUE);}
+	public void accept(CVisitor visitor) {
+		visitor.value(this == TRUE);}
 	public Object raw() {return this == TRUE;}
 	public String toString() {return asString();}
 

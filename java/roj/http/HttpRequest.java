@@ -21,9 +21,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.net.*;
 import java.nio.channels.ClosedByInterruptException;
-import java.util.AbstractMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
@@ -226,6 +224,24 @@ public abstract class HttpRequest {
 		ServerLaunch.DEFAULT_LOOPER.register(ch, null);
 		return handler;
 	}
+
+	public HttpRequest cookies(Collection<Cookie> cookies) {
+		if (cookies.isEmpty()) return this;
+
+		var itr = cookies.iterator();
+
+		var sb = new CharList();
+		while (true) {
+			itr.next().write(sb, false);
+			if (!itr.hasNext()) break;
+			sb.append("; ");
+		}
+
+		headers.add("cookie", sb.toStringAndFree());
+		return this;
+	}
+	public HttpRequest cookies(Cookie cookie) {return cookies(Collections.singletonList(cookie));}
+	public HttpRequest cookies(Cookie... cookies) {return cookies(Arrays.asList(cookies));}
 
 	public abstract static class WSClient extends WebSocketConnection {
 		String acceptKey;

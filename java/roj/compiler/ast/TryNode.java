@@ -6,7 +6,7 @@ import roj.collect.MyBitSet;
 import roj.collect.SimpleList;
 import roj.compiler.asm.MethodWriter;
 import roj.compiler.asm.Variable;
-import roj.compiler.ast.expr.ExprNode;
+import roj.compiler.ast.expr.Expr;
 
 import java.util.List;
 
@@ -15,7 +15,7 @@ import java.util.List;
  * @author Roj234
  * @since 2024/4/30 0030 16:47
  */
-public final class TryNode extends FlowHookNode {
+public final class TryNode extends FlowHook {
 	/** 是否有任何的defer */
 	boolean hasDefer;
 	/**
@@ -40,7 +40,7 @@ public final class TryNode extends FlowHookNode {
 		vars.add(var);
 		pos.add(defined);
 	}
-	public void add(ExprNode node) {
+	public void add(Expr node) {
 		hasDefer = true;
 		exception.add(vars.size());
 		vars.add(node);

@@ -22,7 +22,7 @@ import java.util.function.Consumer;
 
 import static roj.ui.CommandNode.argument;
 import static roj.ui.CommandNode.literal;
-import static roj.ui.Terminal.MinecraftColor.minecraftJsonStyleToString;
+import static roj.ui.Terminal.Color.minecraftJsonStyleToString;
 
 /**
  * @author Roj234

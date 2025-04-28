@@ -15,7 +15,6 @@ import roj.asmx.nixim.NiximSystemV2;
 import roj.collect.SimpleList;
 import roj.io.IOUtil;
 import roj.reflect.ReflectionUtils;
-import roj.reflect.litasm.Intrinsics;
 import roj.util.Helpers;
 
 import java.io.IOException;
@@ -46,7 +45,7 @@ public class DefaultTweaker implements ITweaker {
 				String owner = element.owner();
 
 				var intrinsic = a.getInt("intrinsic", -1);
-				if (intrinsic >= 0 && (!Intrinsics.available() || !RojLib.hasNative(intrinsic))) continue;
+				if (intrinsic >= 0 && (!RojLib.fastJni() || !RojLib.hasNative(intrinsic))) continue;
 
 				switch (a.getEnumValue("value", null)) {
 					case "INIT" -> classes.add(new A(owner, priority));
@@ -103,7 +102,7 @@ public class DefaultTweaker implements ITweaker {
 					w.newObject(d.name);
 					w.invokeV("roj/asmx/launcher/Bootstrap", "registerTransformer", "(Lroj/asmx/ITransformer;)V");
 				}
-				w.one(Opcodes.RETURN);
+				w.insn(Opcodes.RETURN);
 
 				Class<?> klass = ReflectionUtils.defineWeakClass(Parser.toByteArrayShared(autoloader));
 				ReflectionUtils.ensureClassInitialized(klass);

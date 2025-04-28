@@ -189,8 +189,7 @@ public class DefaultConsole implements Console {
 			switch (keyCode) {
 				case VK_CTRL|VK_A -> _selectAll = true;
 				case VK_CTRL|VK_V -> {
-					var clipboard = GuiUtil.getClipboard();
-					if (clipboard != null) {
+					try {
 						var text = GuiUtil.getClipboardText();
 						if (text != null && !text.isEmpty()) {
 							var itr = LineReader.create(text, false);
@@ -206,7 +205,9 @@ public class DefaultConsole implements Console {
 								keyEnter(VK_ENTER, true);
 							}
 						}
-					} else System.err.println("您的环境没有剪贴板，粘贴失败");
+					} catch (Throwable e) {
+						System.err.println("您的环境没有剪贴板，粘贴失败");
+					}
 				}
 				case VK_CTRL|VK_UP -> {
 					var tmp = invisible.nextFalse(scrollLeft);

@@ -247,22 +247,6 @@ public class Headers extends Multimap<CharSequence, String> {
 		}
 	}
 
-	@Deprecated
-	public final void sendCookieToServer(Collection<Cookie> cookies) {
-		if (cookies.isEmpty()) return;
-
-		Iterator<Cookie> itr = cookies.iterator();
-
-		CharList sb = new CharList();
-		while (true) {
-			itr.next().write(sb, false);
-			if (!itr.hasNext()) break;
-			sb.append("; ");
-		}
-
-		put("cookie", sb.toStringAndFree());
-	}
-
 	@NotNull public String header(String key) { return getOrDefault(key,""); }
 
 	public String getFirstHeaderValue(String key) { return getOneValue(header(key),null); }

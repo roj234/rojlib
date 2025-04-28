@@ -14,7 +14,6 @@ import roj.asm.cp.*;
 import roj.asm.insn.Label;
 import roj.asm.type.*;
 import roj.asm.util.ClassUtil;
-import roj.asmx.mapper.NameAndType;
 import roj.collect.*;
 import roj.compiler.LavaFeatures;
 import roj.compiler.Tokens;
@@ -26,7 +25,7 @@ import roj.compiler.asm.Asterisk;
 import roj.compiler.asm.MethodWriter;
 import roj.compiler.asm.Variable;
 import roj.compiler.ast.BlockParser;
-import roj.compiler.ast.expr.ExprNode;
+import roj.compiler.ast.expr.Expr;
 import roj.compiler.ast.expr.ExprParser;
 import roj.compiler.ast.expr.LocalVariable;
 import roj.compiler.ast.expr.NaE;
@@ -100,7 +99,7 @@ public class LocalContext {
 		this.lexer = createLexer();
 		this.ep = createExprParser();
 		this.bp = createBlockParser();
-		this.variables = bp.getVariables();
+		this.variables = bp == null ? Collections.emptyMap() : bp.getVariables();
 		this.caster.context = ctx;
 		this.caster.ctx = this;
 	}
@@ -110,7 +109,7 @@ public class LocalContext {
 	protected BlockParser createBlockParser() {return new BlockParser(this);}
 	public MethodWriter createMethodWriter(ClassNode file, MethodNode node) {return new MethodWriter(file, node, classes.hasFeature(LavaFeatures.ATTR_LOCAL_VARIABLES), this);}
 
-	@NotNull public IntBiMap<String> getHierarchyList(IClass info) {return classes.getHierarchyList(info);}
+	@NotNull public ToIntMap<String> getHierarchyList(IClass info) {return classes.getHierarchyList(info);}
 	@NotNull public ComponentList getFieldList(IClass info, String name) {return classes.getFieldList(info, name);}
 	@NotNull public ComponentList getMethodList(IClass info, String name) {return classes.getMethodList(info, name);}
 
@@ -209,11 +208,11 @@ public class LocalContext {
 		if (errorCapture != null) {errorCapture.accept(message, args);return;}
 		classes.report(file, kind, errorReportIndex >= 0 ? errorReportIndex : lexer.index, message, args);
 	}
-	public void report(ExprNode node, Kind kind, String message) {
+	public void report(Expr node, Kind kind, String message) {
 		if (errorCapture != null) {errorCapture.accept(message, ArrayCache.OBJECTS);return;}
 		classes.report(file, kind, node.getWordStart(), node.getWordEnd(), message, ArrayCache.OBJECTS);
 	}
-	public void report(ExprNode node, Kind kind, String message, Object... args) {
+	public void report(Expr node, Kind kind, String message, Object... args) {
 		for (Object arg : args) {
 			if (arg == NaE.UNRESOLVABLE) return;
 		}
@@ -229,7 +228,7 @@ public class LocalContext {
 		if (type == file) return;
 
 		int modifier = type.modifier();
-		InnerClasses.Item item = classes.getInnerClassFlags(type).get(type.name());
+		InnerClasses.Item item = classes.getInnerClassInfo(type).get(type.name());
 		if (item != null) {
 			modifier = item.modifier;
 			checkAccessModifier(modifier, type, null, "symbol.error.accessDenied.type", true);
@@ -331,7 +330,7 @@ public class LocalContext {
 	// endregion
 	// region 解析 符号引用 类型表示 类型实例
 	@NotNull
-	public ComponentList getMethodListOrReport(IClass type, String name, ExprNode caller) {
+	public ComponentList getMethodListOrReport(IClass type, String name, Expr caller) {
 		var list = classes.getMethodList(type, name);
 		if (list == ComponentList.NOT_FOUND) {
 			int argc = 0;
@@ -471,7 +470,7 @@ public class LocalContext {
 			// class G1<T> { class G2 { class G3<T2> {} } }
 			GenericSub x = type1.sub;
 			while (x != null) {
-				var ic = classes.getInnerClassFlags(info).get(x.owner);
+				var ic = classes.getInnerClassInfo(info).get(x.owner);
 				if (ic == null || (info = classes.getClassInfo(ic.self)) == null) {
 					report(Kind.ERROR, "symbol.error.noSuchSymbol", "symbol.type", x.owner, "[symbol.type,\""+type1+"\"]");
 					break;
@@ -652,10 +651,10 @@ public class LocalContext {
 		public final String method;
 		public final Object prev;
 
-		public static Import replace(@NotNull ExprNode node) {return new Import(null, null, Objects.requireNonNull(node));}
+		public static Import replace(@NotNull Expr node) {return new Import(null, null, Objects.requireNonNull(node));}
 		public static Import staticCall(@NotNull IClass owner, @NotNull String name) {return new Import(Objects.requireNonNull(owner), Objects.requireNonNull(name), null);}
-		public static Import virtualCall(@NotNull IClass owner, @NotNull String name, @Nullable ExprNode prev) {return new Import(Objects.requireNonNull(owner), Objects.requireNonNull(name), prev);}
-		public static Import constructor(@NotNull IClass owner, @NotNull String name, @Nullable ExprNode prev) {return new Import(Objects.requireNonNull(owner), "<init>", Type.klass(owner.name()));}
+		public static Import virtualCall(@NotNull IClass owner, @NotNull String name, @Nullable Expr prev) {return new Import(Objects.requireNonNull(owner), Objects.requireNonNull(name), prev);}
+		public static Import constructor(@NotNull IClass owner, @NotNull String name, @Nullable Expr prev) {return new Import(Objects.requireNonNull(owner), "<init>", Type.klass(owner.name()));}
 
 		public Import(IClass owner, String method, Object prev) {
 			this.owner = owner;
@@ -663,7 +662,7 @@ public class LocalContext {
 			this.prev = prev;
 		}
 
-		public ExprNode parent() {return (ExprNode) prev;}
+		public Expr parent() {return (Expr) prev;}
 	}
 
 	// 动态导入对象
@@ -723,7 +722,7 @@ public class LocalContext {
 	 * @return '导入'对象
 	 */
 	@Nullable
-	public Import tryImportMethod(String name, List<ExprNode> args) {
+	public Import tryImportMethod(String name, List<Expr> args) {
 		if (dynamicMethodImport != null) {
 			Import result = dynamicMethodImport.apply(name);
 			if (result != null) return result;
@@ -766,7 +765,7 @@ public class LocalContext {
 		report(classes.hasFeature(LavaFeatures.DISABLE_CHECKED_EXCEPTION) ? Kind.WARNING : Kind.ERROR, "lc.unReportedException", type);
 	}
 
-	public final MyHashMap<String, Variable> variables;
+	public final Map<String, Variable> variables;
 	public final Variable getVariable(String name) {return variables.get(name);}
 	public final void loadVar(Variable v) {bp.loadVar(v);}
 	public final void storeVar(Variable v) {bp.storeVar(v);}
@@ -775,15 +774,76 @@ public class LocalContext {
 	//endregion
 	//region 类型转换和推断
 	/**
-	 * from类型转换到to类型
-	 * @param from 源类型
-	 * @param to 目标类型
-	 * @param lower_limit 允许的最低转换等级
-	 * @return 包含IR的转换对象
+	 * 执行类型转换语义检查并生成对应的中间表示（IR）
+	 *
+	 * <p>该方法功能如下：
+	 * <ul>
+	 *   <li>当转换类型等级 {@code cast.type} 低于 {@code lowest_limit} 时，触发编译错误</li>
+	 *   <li>支持自动装箱/拆箱、数值精度转换等隐式转换规则</li>
+	 *   <li>若涉及泛型类型，会进行类型擦除和通配符捕获检查（如 {@code List<String> → List<? extends CharSequence>}）</li>
+	 * </ul>
+	 *
+	 * <p><b>转换类型等级</b>（完整定义见{@link TypeCast}）：
+	 * <table>
+	 * <tr><th>类型</th>        <th>常量</th>               <th>值</th> <th>语义</th></tr>
+	 * <tr><td rowspan="4">成功</td>
+	 *     <td>{@link TypeCast#UPCAST}</td>         <td>0</td> <td>类/接口直接向上转型</td></tr>
+	 * <tr><td>{@link TypeCast#NUMBER_UPCAST}</td> <td>1</td> <td>数值宽化（如 int → long）</td></tr>
+	 * <tr><td>{@link TypeCast#UNBOXING}</td>      <td>2</td> <td>拆箱操作（如 Integer → int）</td></tr>
+	 * <tr><td>{@link TypeCast#BOXING}</td>        <td>3</td> <td>装箱操作（如 int → Integer）</td></tr>
+	 * <tr><td rowspan="3">可恢复错误</td>
+	 *     <td>{@link TypeCast#E_EXPLICIT_CAST}</td> <td>-1</td> <td>数值窄化（但是在JVM里都是int的情况）（如 int → char）</td></tr>
+	 * <tr><td>{@link TypeCast#E_NUMBER_DOWNCAST}</td><td>-2</td><td>数值窄化（如 double → float）</td></tr>
+	 * <tr><td>{@link TypeCast#E_DOWNCAST}</td>     <td>-3</td> <td>向下转型（如 Collection → ArrayList）</td></tr>
+	 * <tr><td>致命错误</td>
+	 *     <td>{@link TypeCast#E_OBJ2INT}等</td>    <td>≤-4</td><td>不可恢复的类型错误（如 String → int）</td></tr>
+	 * </table>
+	 *
+	 * <p><b>转换代价（distance）规则 *主要用于{@link Inferrer}的方法重载优先级计算</b>：
+	 * <ul>
+	 *   <li>仅在成功转换时有效（type ≥ 0）</li>
+	 *   <li>计算方式：继承链层级差 + 装箱/拆箱次数 + 数值精度转换次数</li>
+	 *   <li>示例：{@code byte → Integer} 转换代价为 2（1次装箱 + 1次数值宽化）</li>
+	 * </ul>
+	 *
+	 * <p><b>示例</b>：
+	 * <pre>{@code
+	 * // 自动装箱+数值转换
+	 * castTo(byte, Integer) → BOXING(distance=2)
+	 * // 向上转型+泛型
+	 * castTo(List<String>, Collection<Object>) → UPCAST(distance=1)
+	 * // 注意这里没有计算泛型内部参数的distance，因为不允许这种重载所以没必要
+	 * // 好像给我加锅了，Stage3那边挺麻烦的？
+	 *
+	 * // 强制向下转型
+	 * castTo(Object, String) → E_DOWNCAST
+	 * // 强制数字窄化转换
+	 * castTo(long, int) → E_NUMBER_DOWNCAST
+	 * // 源类型小于等于int，实际类型小于源类型
+	 * castTo(int, byte) → E_EXPLICIT_CAST
+	 * // 致命错误
+	 * castTo(String, int) → E_OBJ2INT
+	 * }</pre>
+	 *
+	 * @param lowest_limit 允许的最低转换等级
+	 *                    <ul>
+	 *                      <li>{@link TypeCast#E_NEVER}：允许任何转换，即便不合法</li>
+	 *                      <li>{@link TypeCast#E_DOWNCAST}：允许生成可行的转换</li>
+	 *                      <li>{@link TypeCast#UPCAST}：仅允许向上转换</li>
+	 *                    </ul>
+	 * @return 转换描述对象，包含：
+	 * <ul>
+	 *   <li>{@link TypeCast.Cast#type}：转换类型代码</li>
+	 *   <li>{@link TypeCast.Cast#distance}：转换代价（越小越优先）</li>
+	 *   <li>{@link TypeCast.Cast#write(roj.asm.insn.CodeWriter)}：生成字节码的方法</li>
+	 *   <li>{@link TypeCast.Cast#getType1()}：获取泛型目标类型（用于类型推断）</li>
+	 * </ul>
+	 *
+	 * @see TypeCast.Cast 查看转换描述对象的完整结构
 	 */
-	public final TypeCast.Cast castTo(@NotNull IType from, @NotNull IType to, @Range(from = -8, to = 0) int lower_limit) {
+	public final TypeCast.Cast castTo(@NotNull IType from, @NotNull IType to, @Range(from = -8, to = 0) int lowest_limit) {
 		var cast = caster.checkCast(from, to);
-		if (cast.type < lower_limit) report(Kind.ERROR, "typeCast.error."+cast.type, from, to);
+		if (cast.type < lowest_limit) report(Kind.ERROR, "typeCast.error."+cast.type, from, to);
 		return cast;
 	}
 
@@ -792,21 +852,39 @@ public class LocalContext {
 		@Override public int size() {return 0;}
 	};
 	/**
-	 * 将泛型类型typeInst继承链上的targetType擦除到具体类型.
-	 * 若有 A&lt;K extends Number, V> extends B&lt;String> implements C&lt;K>
-	 * 第一个判断按顺序检测它们
-	 *     inferGeneric (A&lt;x, y>, D) = null     // D不在继承链上，或D不是泛型类型
-	 *     inferGeneric (A&lt;x, y>, B) = [String] // 具体类型，不存在IType
-	 * 第二个判断检测它们
-	 *     inferGeneric (A, C) = [Number]          // raw类型，会返回C的泛型边界
-	 *     inferGeneric (A&lt;>, C) = [Number]     // anyGeneric类型，同上
-	 * 最后的动态解析处理它
-	 *     inferGeneric (A&lt;x, y>, C) = [x]      // 变量类型，需要解析
+	 * 解析泛型实例继承关系，获取目标类型在泛型上下文中的实际类型参数.
 	 *
-	 * @param typeInst 泛型实例
-	 * @param targetType 需要擦除到的具体类型
+	 * <p>当{@code targetType}出现在{@code typeInst}的继承链（父类或接口）中时，返回其实际绑定的类型参数。
+	 * 该方法的处理逻辑遵循以下优先级：
+	 * <ol>
+	 *   <li><b>继承链检查</b> - 若{@code targetType}不在继承链中，或目标类型非泛型，返回{@code null}
+	 *     <pre>{@code inferGeneric(A<x,y>, D) → null}</pre></li>
+	 *   <li><b>具体类型解析</b> - 若目标类型参数已具化，返回具体类型列表
+	 *     <pre>{@code inferGeneric(A<x,y>, B) → [String]}</pre></li>
+	 *   <li><b>原始类型处理</b> - 若{@code typeInst}为原始类型或无泛型参数（如A或A&lt;>），返回目标类型参数的上界
+	 *     <pre>{@code inferGeneric(A, C) → [Number]}</pre></li>
+	 *   <li><b>动态变量解析</b> - 若目标类型参数依赖{@code typeInst}的泛型变量，返回解析后的变量引用
+	 *     <pre>{@code inferGeneric(A<x,y>, C) → [x]}</pre></li>
+	 * </ol>
 	 *
-	 * @return targetType在typeInst中的实际类型
+	 * <p><b>示例场景</b>：对于类型声明 {@code A<K extends Number, V> extends B<String> implements C<K>}
+	 * <ul>
+	 *   <li>若目标类型为父类{@code B}，返回具体类型参数 {@code [String]}</li>
+	 *   <li>若目标类型为接口{@code C}且{@code typeInst}为原始类型，返回边界类型 {@code [Number]}</li>
+	 *   <li>若{@code typeInst}携带泛型参数{@code A<x,y>}，返回变量引用 {@code [x]}</li>
+	 * </ul>
+	 *
+	 * @param typeInst    待解析的泛型实例（支持具化泛型、原始类型、通配符泛型）
+	 * @param targetType 需要解析的目标类型全限定名（如"java/util/List"）
+	 *
+	 * @return 目标类型的实际泛型参数列表。可能返回：
+	 * <ul>
+	 *   <li>{@code null} - 目标类型不存在于继承链或非泛型类型</li>
+	 *   <li>具化类型列表（如 {@code [String, Integer]}）</li>
+	 * </ul>
+	 *
+	 * @throws IllegalStateException 当继承关系数据异常时抛出（targetType并非typeInst的父类/接口）
+	 * @implNote 若{@code targetType}在类路径中不存在，将通过{@link #report}方法抛出编译错误
 	 */
 	@Nullable
 	public final List<IType> inferGeneric(@NotNull IType typeInst, @NotNull String targetType) {
@@ -814,7 +892,7 @@ public class LocalContext {
 
 		List<IType> bounds = null;
 		try {
-			bounds = classes.getTypeParamOwner(info, targetType);
+			bounds = classes.getTypeArgumentsFor(info, targetType);
 		} catch (ClassNotFoundException e) {
 			report(Kind.ERROR, "symbol.error.noSuchClass", e.getMessage());
 		}
@@ -853,7 +931,7 @@ public class LocalContext {
 	private List<IType> inferGeneric0(ClassNode typeInst, List<IType> params, String target) {
 		Map<String, IType> visType = new MyHashMap<>();
 
-		int depthInfo = getHierarchyList(typeInst).getValueOrDefault(target, -1);
+		int depthInfo = getHierarchyList(typeInst).getOrDefault(target, -1);
 		if (depthInfo == -1) throw new IllegalStateException("无法从"+typeInst.name()+"<"+params+">推断"+target);
 
 		loop:
@@ -878,7 +956,7 @@ public class LocalContext {
 				}
 
 				typeInst = classes.getClassInfo(type.owner());
-				depthInfo = getHierarchyList(typeInst).getValueOrDefault(target, -1);
+				depthInfo = getHierarchyList(typeInst).getOrDefault(target, -1);
 				if (depthInfo != -1) {
 					var rubber = (Generic) Inferrer.clearTypeParam(type, visType, g.typeParams);
 					params = rubber.children;
@@ -892,7 +970,9 @@ public class LocalContext {
 	}
 
 	/**
-	 * 返回instClass是否为testClass或它的任意父类
+	 * 判断{@code instClass}是否属于{@code testClass}的子类（或自身）
+	 *
+	 * <p>该方法能处理接口和数组等，传入的参数为内部(/)全限定名称
 	 */
 	public final boolean instanceOf(String testClass, String instClass) {
 		IClass info = classes.getClassInfo(testClass);
@@ -905,7 +985,25 @@ public class LocalContext {
 	}
 
 	/**
-	 * 返回ab两个类型(Type)的共同父类型, 考虑了各种情况包括但不限于基本类型，数组和泛型
+	 * 计算两个类型的最近公共父类型
+	 *
+	 * <p>算法支持各种类型，包括但不限于
+	 * <ol>
+	 *   <li><b>基本类型</b> - 优先返回数值公共父类（如int+double→Number）</li>
+	 *   <li><b>数组</b> - 不同维度数组返回Cloneable/Object</li>
+	 *   <li><b>泛型</b>：
+	 *     <ul>
+	 *       <li>泛型参数取交集（List&lt;String>+List&lt;Integer>→List&lt;?>）</li>
+	 *       <li>通配符边界处理（? super T + ? extends S → Object）</li>
+	 *     </ul>
+	 *   </li>
+	 * </ol>
+	 *
+	 * @return 最近公共父类型。特殊情形：
+	 *         <ul>
+	 *           <li>若存在原始类型 → 返回擦除后的原始类型</li>
+	 *           <li>若存在不匹配的泛型参数 → 触发错误并返回首个类型</li>
+	 *         </ul>
 	 */
 	public final IType getCommonParent(IType a, IType b) {
 		if (a.equals(b)) return a;
@@ -948,50 +1046,53 @@ public class LocalContext {
 			return a;
 		}
 
+		String commonParent = getCommonParent(infoA, infoB);
+		assert commonParent != null;
+
+		var info = classes.getClassInfo(commonParent);
+
+		int extendType = a instanceof Generic ga ? ga.extendType : Generic.EX_NONE;
+		int extendType2 = b instanceof Generic gb ? gb.extendType : Generic.EX_NONE;
+		if (extendType != extendType2) {
+			boolean hasSuper = extendType == Generic.EX_SUPER || extendType2 == Generic.EX_SUPER;
+			boolean hasExtends = extendType == Generic.EX_EXTENDS || extendType2 == Generic.EX_EXTENDS;
+
+			// LCA(T, ? extends T) = ? extends T
+			// LCA(T, ? super T) = ?
+			// LCA(? extends, ? super T) = ?
+			if (hasSuper) return Signature.any(); // 通配符类型
+			if (hasExtends) extendType = Generic.EX_EXTENDS;
+		}
+
+		// 如果不是泛型类，那么直接返回
+		if (extendType == Generic.EX_NONE && info.getRawAttribute("Signature") == null) {
+			// 少创建对象
+			if (info == infoA) return a;
+			if (info == infoB) return b;
+			return Type.klass(commonParent, a.array());
+		}
+
+		// 否则进行泛型推断
 		// CP(List<String>, SimpleList<String>) => List<String>
 		// CP(List<?>, SimpleList<String>) => List<?>
 		// CP(List<String>, SimpleList<?>) => List<?>
-		List<IType> typeParams = Collections.emptyList();
-		int extendType = Generic.EX_NONE;
-		if (a.genericType() == 1 & b.genericType() == 1) {
-			// noinspection all
-			Generic ga = (Generic) a, gb = (Generic) b;
-			if (ga.children.size() != gb.children.size()) {
-				report(Kind.ERROR, "symbol.error.generic.paramCount", ga.children.size(), gb.children.size());
-				return a;
-			}
-			// TODO => GenericSub
-			typeParams = SimpleList.asModifiableList(new IType[ga.children.size()]);
-			for (int i = 0; i < ga.children.size(); i++) {
-				IType aa = ga.children.get(i);
-				IType bb = gb.children.get(i);
-				typeParams.set(i, getCommonParent(aa, bb));
-			}
 
-			// java未定义这些行为！
-			// CP(List<String>, List<? extends String>) => List<? extends String>
-			// CP(List<? super String>, List<String>) => List<String>
-			// CP(List<? super String>, List<? extends String>) => List<String>
+		List<IType> aGeneric = inferGeneric(a, commonParent);
+		List<IType> bGeneric = inferGeneric(b, commonParent);
 
-			// CP(List<String>, List<? extends Integer>) => List<Object>
-			// CP(List<String>, List<? super Integer>) => List<Object>
-			// CP(List<? super String>, List<? extends Integer>) => List<Object>
-			if (ga.extendType != gb.extendType) {
-				if (ga.extendType == Generic.EX_SUPER || gb.extendType == Generic.EX_SUPER) {
-					extendType = Generic.EX_NONE;
-				} else if (ga.extendType == Generic.EX_EXTENDS || gb.extendType == Generic.EX_EXTENDS) {
-					extendType = Generic.EX_EXTENDS;
-				}
-			} else {
-				extendType = ga.extendType;
-			}
-		} else {
-			// TODO check primitive generic
+		assert aGeneric != null && bGeneric != null && aGeneric.size() == bGeneric.size();
+
+		//Arrays.asList也许也可以？
+		List<IType> typeParams = SimpleList.asModifiableList(new IType[aGeneric.size()]);
+		for (int i = 0; i < aGeneric.size(); i++) {
+			IType aa = aGeneric.get(i);
+			IType bb = bGeneric.get(i);
+			typeParams.set(i, getCommonParent(aa, bb));
 		}
 
-		String commonParent = getCommonParent(infoA, infoB);
-		assert commonParent != null;
-		if (typeParams.isEmpty() && extendType == 0) return Type.klass(commonParent, a.array());
+		// TODO primitive generic
+		// 	CP(ArrayList<int>, List<Integer>) => List<Integer>
+		//  CP(List<int>, List<Integer>) => Collection<Integer>
 
 		Generic generic = new Generic(commonParent, a.array(), extendType);
 		generic.children = typeParams;
@@ -1001,7 +1102,7 @@ public class LocalContext {
 	 * 返回ab两个类(Class)的共同父类
 	 */
 	public final String getCommonParent(IClass infoA, IClass infoB) {
-		IntBiMap<String> tmp,
+		ToIntMap<String> tmp,
 			listA = getHierarchyList(infoA),
 			listB = getHierarchyList(infoB);
 
@@ -1014,9 +1115,9 @@ public class LocalContext {
 		String commonParent = infoA.name();
 		int minIndex = listB.size();
 		for (var entry : listA.selfEntrySet()) {
-			String klass = entry.getValue();
+			String klass = entry.getKey();
 
-			int val = listB.getValueOrDefault(klass, minIndex)&0x7FFF_FFFF;
+			int val = listB.getOrDefault(klass, minIndex)&0x7FFF_FFFF;
 			int j = val&0xFFFF;
 			if (j < minIndex || (j == minIndex && val < minIndex)) {
 				commonParent = klass;
@@ -1029,7 +1130,7 @@ public class LocalContext {
 	// region [可重载] 表达式语法扩展
 
 	/**
-	 * 忽略泛型限制
+	 * 解析时忽略这个类的泛型限制，用于某些编译器内部类，需要在泛型中保存可变参数
 	 */
 	protected boolean isGenericIgnore(ClassNode info) {return info.name().equals("roj/compiler/runtime/ReturnStack");}
 
@@ -1046,20 +1147,32 @@ public class LocalContext {
 	}
 
 	private static final IntMap<String> EMPTY = new IntMap<>(0);
+	static {Parser.registerCustomAttribute(MethodDefault.ID, MethodDefault::new);}
 	/**
-	 * 获取klass.method方法的参数默认值
+	 * 获取方法的默认参数索引表
+	 *
+	 * <p>映射参数位置到默认值表达式，用于支持如下语法：
+	 * <pre>{@code
+	 * void foo(int a, String b = "def") {}
+	 * foo(1); // 使用b的默认值
+	 * }</pre>
+	 *
+	 * @param klass  方法所属类
+	 * @param method 目标方法
+	 * @return 参数默认值索引表（参数位置 → 序列化表达式）
+	 * @see #parseDefaultArgument(String) 反序列化方法
 	 */
 	public IntMap<String> getDefaultArguments(IClass klass, MethodNode method) {
-		MethodDefault attr = method.getAttribute(klass.cp(), MethodDefault.METHOD_DEFAULT);
+		MethodDefault attr = method.getAttribute(klass.cp(), MethodDefault.ID);
 		return attr != null ? attr.defaultValue : EMPTY;
 	}
 	/**
 	 * 反序列化参数默认值
 	 * @param defVal 序列化的ExprNode
-	 * @return 反序列化
+	 * @return 反序列化结果，失败返回null
 	 */
 	@Nullable
-	public ExprNode parseDefaultArgument(@Nullable String defVal) {
+	public Expr parseDefaultArgument(@Nullable String defVal) {
 		if (defVal != null) {
 			var tmpPrev = tmpList;
 			tmpList = new SimpleList<>();
@@ -1076,41 +1189,68 @@ public class LocalContext {
 
 	public static final int UNARY_PRE = 0, UNARY_POST = 65536;
 	/**
-	 * 操作符重载的统一处理
-	 * 注意：重载是次低优先级，仅高于报错，所以无法覆盖默认行为
-	 * @param e1 左侧
-	 * @param e2 右侧， 当operator属于一元运算符时为null
-	 * @param operator JavaLexer中的tokenId,可以是一元运算符、一元运算符|UNARY_POST、二元运算符、lBracket(数组取值)、lParen(cast表达式)、rParen(变量赋值)
-	 * @return 替代的表达式
+	 * 操作符重载扩展点
+	 *
+	 * <p><b>重载优先级</b>：
+	 * <ol>
+	 *   <li>内置运算符语义（如数值运算）</li>
+	 *   <li>用户重载实现（通过override此方法）</li>
+	 *   <li>错误处理（类型不匹配）</li>
+	 * </ol>
+	 * 注意：重载是次低优先级，仅高于报错，无法覆盖默认行为！
+	 *
+	 * @param e1        左操作数表达式
+	 * @param e2        右操作数表达式（一元运算符时为null）
+	 * @param operator  运算符标识（一元和二元运算符列表见{@link Tokens}）
+	 *                  <p>特例
+	 *                  <ul>
+	 *                    <li>{@link #UNARY_PRE 一元运算符}：前缀运算 ++a</li>
+	 *                    <li>{@link #UNARY_POST} + 一元运算符：后缀运算 a++</li>
+	 *                    <li>{@link Tokens#lBracket}：数组下标访问 a[b]</li>
+	 *                    <li>{@link Tokens#lParen}：类型转换 (Type) expr</li>
+	 *                    <li>{@link Tokens#rParen}：变量赋值 a = b</li>
+	 *                  </ul>
+	 * @return 自定义的表达式树，返回null表示报错
 	 */
 	@Nullable
-	public ExprNode getOperatorOverride(@NotNull ExprNode e1, @Nullable Object e2, int operator) {return null;}
+	public Expr getOperatorOverride(@NotNull Expr e1, @Nullable Object e2, int operator) {return null;}
 
 	/**
-	 * 获取基本类型的函数
-	 * @param type 基本类型
-	 * @param caller 产生类型的表达式
-	 * @param args 调用的参数
-	 * @return 一个类对象，包含静态以基本类型为参数的函数
+	 * 基本类型函数扩展点
+	 *
+	 * <p>用于为基本类型添加伪方法，例如：
+	 * <pre>{@code
+	 * getPrimitiveMethod(int.class, expr, args) → Integer#toHexString
+	 * }</pre>
+	 * 就可以使用{@code 4 .toHexString()}了
+	 * 数字字面量后的一个空格是必须的，为了防止Tokenizer把小数点当成浮点数的一部分。
+	 *
+	 * @param type    基本类型（如int.class）
+	 * @return 包含一些静态方法的类，这些方法的第一个参数必须是该基本类型，返回null表示报错
+	 * @implNote 默认实现把基本类型包装类中的所有静态函数返回了
 	 */
 	@Nullable
-	public IClass getPrimitiveMethod(IType type, ExprNode caller, List<ExprNode> args) {
-		if (type.getActualType() == Type.INT) {
-			var type1 = new ClassNode();
-			type1.name("java/lang/Integer");
-			type1.newMethod(Opcodes.ACC_PUBLIC|Opcodes.ACC_STATIC, "toHexString", "(I)Ljava/lang/String;");
-			return type1;
-		}
-		return null;
+	public IClass getPrimitiveMethod(IType type) {
+		assert type.isPrimitive();
+		return classes.getClassInfo(TypeCast.getWrapper(type).owner());
 	}
 
 	/**
-	 * 常量传播的统一处理
-	 * @param fieldType field的泛型类型 可能为null
-	 * @return klass.field的常量值，若有
+	 * 常量传播扩展点
+	 *
+	 * <p>在编译期解析常量字段值，用于优化：
+	 * <pre>{@code
+	 * public static final int MAX = 100;
+	 * int a = MAX; → 直接替换为100
+	 * }</pre>
+	 *
+	 * @param klass      字段所属类
+	 * @param field      目标字段
+	 * @param fieldType  字段的类型（包含泛型信息）
+	 * @return 常量表达式。
 	 */
 	@Nullable
-	public ExprNode getConstantValue(IClass klass, FieldNode field, @Nullable IType fieldType) {
+	public Expr getConstantValue(IClass klass, FieldNode field, IType fieldType) {
 		if (fieldDFS && klass != file && klass instanceof CompileUnit cu) {
 			SimpleList<NestContext> bak = enclosing;
 			try {
@@ -1137,7 +1277,7 @@ public class LocalContext {
 			case Constant.STRING -> cv.c.getEasyCompareValue();
 			default -> throw new IllegalArgumentException("Illegal ConstantValue "+cv.c);
 		};
-		return ExprNode.constant(fieldType == null ? field.fieldType() : fieldType, c);
+		return Expr.constant(fieldType, c);
 	}
 	// endregion
 	//region 递归状态管理

@@ -13,15 +13,16 @@ import roj.config.data.CInt;
 import static roj.compiler.Tokens.byId;
 
 /**
+ * AST - 赋值
  * @author Roj234
  * @since 2023/9/18 0018 9:07
  */
-class Assign extends ExprNode {
-	VarNode left;
-	ExprNode right;
+class Assign extends Expr {
+	LeftValue left;
+	Expr right;
 	TypeCast.Cast cast;
 
-	Assign(VarNode left, ExprNode right) {
+	Assign(LeftValue left, Expr right) {
 		this.left = left;
 		this.right = right;
 	}
@@ -30,22 +31,19 @@ class Assign extends ExprNode {
 	@Override public IType type() { return left.type(); }
 
 	@Override
-	public ExprNode resolve(LocalContext ctx) {
-		ExprNode node = left.resolve(ctx);
-		if (node instanceof VarNode vn && !vn.isFinal()) left = vn;
-		else {
-			ctx.report(this, Kind.ERROR, "assign.error.final", left);
-			return NaE.RESOLVE_FAILED;
-		}
+	public Expr resolve(LocalContext ctx) {
+		Expr node = left.resolve(ctx);
+		left = node.asLeftValue(ctx);
+		if (left == null) return NaE.RESOLVE_FAILED;
 
-		ExprNode prev = right;
+		Expr prev = right;
 		if (prev instanceof Cast c) {
 			int castType = c.cast.type;
 			if ((castType == -1 || castType == -2) && !(left instanceof LocalVariable))
 				ctx.report(this, Kind.INCOMPATIBLE, "assign.incompatible.redundantCast");
 		}
 
-		if (prev instanceof Binary op) {
+		if (prev instanceof BinaryOp op) {
 			right = op.resolveEx(ctx, true);
 			if (right == NaE.RESOLVE_FAILED) return right;
 
@@ -57,7 +55,7 @@ class Assign extends ExprNode {
 			}
 
 			if (right == null) {
-				ctx.report(this, Kind.ERROR, "binary.error.notApplicable", op.left.type(), op.right.type(), byId(op.operator));
+				ctx.report(this, Kind.ERROR, "op.notApplicable.binary", op.left.type(), op.right.type(), byId(op.operator));
 				return NaE.RESOLVE_FAILED;
 			}
 		} else {
@@ -84,7 +82,7 @@ class Assign extends ExprNode {
 		return cast.type >= 0 ? this : NaE.RESOLVE_FAILED;
 	}
 
-	static void incOrDec(VarNode expr, MethodWriter cw, boolean noRet, boolean returnBefore, int amount) {
+	static void incOrDec(LeftValue expr, MethodWriter cw, boolean noRet, boolean returnBefore, int amount) {
 		var ctx = LocalContext.get();
 		boolean isVariable = false;
 
@@ -133,9 +131,9 @@ class Assign extends ExprNode {
 			case 6: cw.ldc((float)amount); break;
 			case 7: cw.ldc((double)amount); break;
 		}
-		cw.one((byte) (op + type2));
+		cw.insn((byte) (op + type2));
 
-		if (dataCap < 4 && primType == 0 && isVariable) cw.one((byte) (Opcodes.I2B-1 + dataCap));
+		if (dataCap < 4 && primType == 0 && isVariable) cw.insn((byte) (Opcodes.I2B-1 + dataCap));
 		else if (primType != 0) ctx.castTo(Type.primitive(primType), type, 0).write(cw);
 
 		if (!noRet & !returnBefore) state = expr.copyValue(cw, type.rawType().length() - 1 != 0);
@@ -146,11 +144,11 @@ class Assign extends ExprNode {
 	@SuppressWarnings("fallthrough")
 	public void write(MethodWriter cw, boolean noRet) {
 		// a = a + 1
-		if (right instanceof Binary br) {
-			if (br.left.equals(left)) {
-				if (sameVarShrink(cw, br, noRet, br.right)) return;
-			} else if (br.left.isConstant() && br.right.equals(left)) {
-				if (sameVarShrink(cw, br, noRet, br.left)) return;
+		if (right instanceof BinaryOp op) {
+			if (op.left.equals(left)) {
+				if (sameVarShrink(cw, op, noRet, op.right)) return;
+			} else if (op.left.isConstant() && op.right.equals(left)) {
+				if (sameVarShrink(cw, op, noRet, op.left)) return;
 			}
 
 			if (isCastNeeded()) cast.write(cw);
@@ -165,7 +163,7 @@ class Assign extends ExprNode {
 
 	private boolean isCastNeeded() { return (cast.type != -1 && cast.type != -2) || left.getClass() == LocalVariable.class; }
 
-	private boolean sameVarShrink(MethodWriter cw, Binary br, boolean noRet, ExprNode operand) {
+	private boolean sameVarShrink(MethodWriter cw, BinaryOp br, boolean noRet, Expr operand) {
 		// to IINC if applicable
 		block:
 		if (left instanceof LocalVariable lv && TypeCast.getDataCap(br.left.type().getActualType()) == 4 && operand.isConstant()) {

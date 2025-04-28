@@ -2,6 +2,7 @@ package roj;
 
 import roj.collect.MyHashMap;
 import roj.compiler.plugins.asm.ASM;
+import roj.plugins.ci.annotation.ReplaceConstant;
 import roj.reflect.ReflectionUtils;
 import roj.reflect.litasm.Intrinsics;
 import roj.reflect.litasm.LibraryLoader;
@@ -17,6 +18,7 @@ import java.util.Map;
  * @author Roj233
  * @since 2021/10/15 12:57
  */
+@ReplaceConstant
 public final class RojLib {
 	public static final Map<Object, Object> BLACKBOARD = new MyHashMap<>();
 	/**
@@ -43,6 +45,8 @@ public final class RojLib {
 	public static final boolean IS_DEV;
 	public static final int GENERIC = 0, WIN32 = 1, ANSI_READBACK = 2, SHARED_MEMORY = 3, FAST_LZMA = 4, AES_NI = 5, FastJNI = 6;
 	public static boolean hasNative(int bit) {return (bits&(1L << bit)) != 0;}
+
+	public static boolean fastJni() {return Intrinsics.available();}
 	private static final long bits;
 
 	static {

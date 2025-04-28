@@ -76,7 +76,7 @@ public final class DAOMaker {
 		var init = impl.newMethod(ACC_PUBLIC, "init", "(Ljava/sql/Connection;)Lroj/sql/DAOMaker$DAO;");
 		init.visitSize(3, 2);
 		init.newObject(impl.name());
-		init.one(ASTORE_0);
+		init.insn(ASTORE_0);
 
 		var variables = new SimpleList<String>();
 		var parIds = new ToIntMap<String>();
@@ -102,8 +102,8 @@ public final class DAOMaker {
 			}
 			int psid = impl.newField(ACC_PRIVATE, "ps$"+impl.fields.size(), "Ljava/sql/PreparedStatement;");
 
-			init.one(ALOAD_0);
-			init.one(ALOAD_1);
+			init.insn(ALOAD_0);
+			init.insn(ALOAD_1);
 			init.ldc(sql.toString());
 			init.invokeItf("java/sql/Connection", "prepareStatement", "(Ljava/lang/String;)Ljava/sql/PreparedStatement;");
 			init.field(PUTFIELD, impl, psid);
@@ -119,9 +119,9 @@ public final class DAOMaker {
 			}
 			cw.visitSize(3, i);
 
-			cw.one(ALOAD_0);
+			cw.insn(ALOAD_0);
 			cw.field(GETFIELD, impl, psid);
-			cw.one(ASTORE_0);
+			cw.insn(ASTORE_0);
 
 			boolean isSelectStatement = sql.startsWith("select ") || sql.startsWith("SELECT ");
 			boolean isBatch;
@@ -136,9 +136,9 @@ public final class DAOMaker {
 
 				if (parTypes.get(0).owner.equals("java/util/List")) {
 					cw.visitSizeMax(3, 5);
-					cw.one(ALOAD_1);
+					cw.insn(ALOAD_1);
 					cw.ldc(0);
-					cw.one(ISTORE_3);
+					cw.insn(ISTORE_3);
 					cw.invokeItf("java/util/List", "size", "()I");
 					cw.vars(ISTORE, 4);
 
@@ -146,11 +146,11 @@ public final class DAOMaker {
 					cw.jump(loopCheck);
 					var loopStart = cw.label();
 
-					cw.one(ALOAD_1);
-					cw.one(ILOAD_3);
+					cw.insn(ALOAD_1);
+					cw.insn(ILOAD_3);
 					cw.invokeItf("java/util/List", "get", "(I)Ljava/lang/Object;");
 					cw.clazz(CHECKCAST, itrType.owner());
-					cw.one(ASTORE_2);
+					cw.insn(ASTORE_2);
 
 					// Real code
 					for (int j = 0; j < variables.size(); j++) {
@@ -158,9 +158,9 @@ public final class DAOMaker {
 						if (!name.startsWith(parNames.get(0))) throw new IllegalArgumentException(method+"参数"+name+"不合法");
 						name = name.substring(parNames.get(0).length()+1);
 
-						cw.one(ALOAD_0);
+						cw.insn(ALOAD_0);
 						cw.ldc(j+1);
-						cw.one(ALOAD_2);
+						cw.insn(ALOAD_2);
 
 						Type asmType = Type.fromJavaType(parTypeInst.getDeclaredField(name).getType());
 						cw.field(GETFIELD, itrType.owner(), name, asmType);
@@ -168,26 +168,26 @@ public final class DAOMaker {
 					}
 					// Real code
 
-					cw.one(ALOAD_0);
+					cw.insn(ALOAD_0);
 					cw.invokeItf("java/sql/PreparedStatement", "addBatch", "()V");
 
 					cw.label(loopCheck);
-					cw.one(ILOAD_3);
+					cw.insn(ILOAD_3);
 					cw.vars(ILOAD, 4);
 					cw.jump(IF_icmplt, loopStart);
 				} else {
-					cw.one(ALOAD_1);
+					cw.insn(ALOAD_1);
 					cw.invokeItf("java/lang/Iterable", "iterator", "()Ljava/util/Iterator;");
-					cw.one(ASTORE_1);
+					cw.insn(ASTORE_1);
 
 					var loopCheck = new Label();
 					cw.jump(loopCheck);
 					var loopStart = cw.label();
 
-					cw.one(ALOAD_1);
+					cw.insn(ALOAD_1);
 					cw.invokeItf("java/util/Iterator", "next", "()Ljava/lang/Object;");
 					cw.clazz(CHECKCAST, itrType.owner());
-					cw.one(ASTORE_2);
+					cw.insn(ASTORE_2);
 
 					// Real code
 					for (int j = 0; j < variables.size(); j++) {
@@ -195,9 +195,9 @@ public final class DAOMaker {
 						if (!name.startsWith(parNames.get(0))) throw new IllegalArgumentException(method+"参数"+name+"不合法");
 						name = name.substring(parNames.get(0).length()+1);
 
-						cw.one(ALOAD_0);
+						cw.insn(ALOAD_0);
 						cw.ldc(j+1);
-						cw.one(ALOAD_2);
+						cw.insn(ALOAD_2);
 
 						Type asmType = Type.fromJavaType(parTypeInst.getDeclaredField(name).getType());
 						cw.field(GETFIELD, itrType.owner(), name, asmType);
@@ -205,11 +205,11 @@ public final class DAOMaker {
 					}
 					// Real code
 
-					cw.one(ALOAD_0);
+					cw.insn(ALOAD_0);
 					cw.invokeItf("java/sql/PreparedStatement", "addBatch", "()V");
 
 					cw.label(loopCheck);
-					cw.one(ALOAD_1);
+					cw.insn(ALOAD_1);
 					cw.invokeItf("java/util/Iterator", "hasNext", "()Z");
 					cw.jump(IFNE, loopStart);
 				}
@@ -226,7 +226,7 @@ public final class DAOMaker {
 						nameLast = name.substring(idx+1);
 					}
 
-					cw.one(ALOAD_0);
+					cw.insn(ALOAD_0);
 					cw.ldc(j+1);
 
 					int parId = parIds.getInt(nameFirst);
@@ -247,7 +247,7 @@ public final class DAOMaker {
 			if (isSelectStatement) {
 				if (returnType.owner == null) throw new IllegalArgumentException(method+"需要返回对象");
 
-				cw.one(ALOAD_0);
+				cw.insn(ALOAD_0);
 				if (returnType.owner.equals("java/util/List") || returnType.owner.equals("java/util/Collection")) {
 					if (extraType == null) throw new IllegalArgumentException(method+"缺少泛型签名,无法确定List<T>的类型");
 
@@ -261,39 +261,39 @@ public final class DAOMaker {
 				}
 
 				doClear(cw, false);
-				cw.one(ARETURN);
+				cw.insn(ARETURN);
 			} else {
-				cw.one(ALOAD_0);
+				cw.insn(ALOAD_0);
 				int type = returnType.getActualType();
 				if (type == Type.VOID) {
 					cw.invokeItf("java/sql/PreparedStatement", "executeUpdate", "()I");
-					cw.one(POP);
+					cw.insn(POP);
 					doClear(cw, isBatch);
-					cw.one(RETURN);
+					cw.insn(RETURN);
 				} else if (type == Type.INT) {
 					cw.invokeItf("java/sql/PreparedStatement", "executeUpdate", "()I");
 					doClear(cw, isBatch);
-					cw.one(IRETURN);
+					cw.insn(IRETURN);
 				} else if (type == Type.LONG) {
 					cw.invokeItf("java/sql/PreparedStatement", "executeLargeUpdate", "()J");
 					doClear(cw, isBatch);
-					cw.one(LRETURN);
+					cw.insn(LRETURN);
 				} else {
 					throw new IllegalArgumentException(method+"不能返回对象");
 				}
 			}
 		}
 
-		init.one(ALOAD_0);
-		init.one(ARETURN);
+		init.insn(ALOAD_0);
+		init.insn(ARETURN);
 		return (DAO) ClassDefiner.make(impl, daoItf.getClassLoader());
 	}
 
 	private static void doClear(CodeWriter cw, boolean clearBatch) {
-		cw.one(ALOAD_0);
+		cw.insn(ALOAD_0);
 		cw.invokeItf("java/sql/PreparedStatement", "clearParameters", "()V");
 		if (clearBatch) {
-			cw.one(ALOAD_0);
+			cw.insn(ALOAD_0);
 			cw.invokeItf("java/sql/PreparedStatement", "clearBatch", "()V");
 		}
 	}

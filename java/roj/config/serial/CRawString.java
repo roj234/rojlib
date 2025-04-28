@@ -20,8 +20,8 @@ public final class CRawString extends CEntry {
 	@Override
 	public Type getType() { throw new UnsupportedOperationException("TRawString是适用于特定配置格式的已序列化字符串"); }
 
-	public void accept(CVisitor ser) {
-		if ((ser instanceof ToSomeString x)) {
+	public void accept(CVisitor visitor) {
+		if ((visitor instanceof ToSomeString x)) {
 			x.preValue(false);
 			x.sb.append(v);
 		} else getType();

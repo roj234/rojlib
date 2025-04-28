@@ -28,12 +28,12 @@ public final class CLongArray extends CList {
 
 	public CLongArray(long[] value) {
 		super(null);
-		list = new Longs();
+		elements = new Longs();
 		this.value = value;
 	}
 
 	public long[] toLongArray() {return value.clone();}
 
-	public void accept(CVisitor ser) { ser.value(value); }
+	public void accept(CVisitor visitor) { visitor.value(value); }
 	public Object unwrap() { return value; }
 }

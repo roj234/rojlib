@@ -6,7 +6,7 @@ import roj.asm.IClass;
 import roj.asm.Opcodes;
 import roj.collect.SimpleList;
 import roj.compiler.LavaFeatures;
-import roj.compiler.api.FieldWriteReplace;
+import roj.compiler.api.FieldAccessHook;
 import roj.compiler.context.CompileUnit;
 import roj.compiler.context.LocalContext;
 import roj.text.CharList;
@@ -80,7 +80,7 @@ final class FieldList extends ComponentList {
 		if ((fn.modifier&Opcodes.ACC_PRIVATE) == 0 || ctx.file == owner ||
 			ctx.classes.getMaximumBinaryCompatibility() >= LavaFeatures.JAVA_11) return;
 
-		if (fn.getRawAttribute(FieldWriteReplace.NAME) != null) return;
+		if (fn.getRawAttribute(FieldAccessHook.NAME) != null) return;
 
 		var fwr = new FieldBridge((CompileUnit) owner);
 		fn.addAttribute(fwr);

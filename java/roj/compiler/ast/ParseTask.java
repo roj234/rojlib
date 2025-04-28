@@ -12,9 +12,9 @@ import roj.compiler.Tokens;
 import roj.compiler.api.MethodDefault;
 import roj.compiler.asm.AnnotationPrimer;
 import roj.compiler.asm.MethodWriter;
-import roj.compiler.ast.expr.ExprNode;
+import roj.compiler.ast.expr.Expr;
 import roj.compiler.ast.expr.ExprParser;
-import roj.compiler.ast.expr.UnresolvedExprNode;
+import roj.compiler.ast.expr.RawExpr;
 import roj.compiler.context.CompileUnit;
 import roj.compiler.context.LocalContext;
 import roj.compiler.diagnostic.Kind;
@@ -48,14 +48,14 @@ public interface ParseTask {
 		var lc = file.lc();
 		var wr = lc.lexer;
 		int state = wr.setState(Tokens.STATE_EXPR);
-		UnresolvedExprNode expr = lc.ep.parse(ExprParser.STOP_RSB|ExprParser.STOP_COMMA|ExprParser.NAE);
+		RawExpr expr = lc.ep.parse(ExprParser.STOP_RSB|ExprParser.STOP_COMMA|ExprParser.NAE);
 		wr.state = state;
 
 		if (!expr.isConstant()) lc.report(wr.current().pos(), Kind.WARNING, "ps.method.paramDef");
 
-		String jsonString = ExprParser.serialize((ExprNode) expr);
+		String jsonString = ExprParser.serialize((Expr) expr);
 
-		var attr = mn.getAttribute(null, MethodDefault.METHOD_DEFAULT);
+		var attr = mn.getAttribute(null, MethodDefault.ID);
 		if (attr == null) mn.addAttribute(attr = new MethodDefault());
 
 		attr.defaultValue.putInt(id-1, jsonString);
@@ -74,7 +74,7 @@ public interface ParseTask {
 		return (ctx) -> {
 			ctx.errorReportIndex = index;
 			ctx.setMethod(file.getStaticInit().mn);
-			attr.val = AnnotationPrimer.toAnnVal(ctx, (ExprNode) expr, mn.returnType());
+			attr.val = AnnotationPrimer.toAnnVal(ctx, (Expr) expr, mn.returnType());
 			ctx.errorReportIndex = -1;
 		};
 	}
@@ -140,7 +140,7 @@ public interface ParseTask {
 							ctx.report(Kind.ERROR, "symbol.error.field.writeAfterWrite", file.name(), f.name());
 						}
 
-						if (node.isConstant() || node.hasFeature(ExprNode.ExprFeat.LDC_CLASS)) {
+						if (node.isConstant() || node.hasFeature(Expr.Feature.LDC_CLASS)) {
 							f.addAttribute(new ConstantValue(ParseTask.toConstant(node.constVal())));
 							return;
 						}

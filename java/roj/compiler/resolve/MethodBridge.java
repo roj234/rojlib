@@ -4,8 +4,8 @@ import org.jetbrains.annotations.Nullable;
 import roj.asm.MethodNode;
 import roj.asm.Opcodes;
 import roj.asm.type.Type;
-import roj.compiler.api.Evaluable;
-import roj.compiler.ast.expr.ExprNode;
+import roj.compiler.api.InvokeHook;
+import roj.compiler.ast.expr.Expr;
 import roj.compiler.ast.expr.Invoke;
 import roj.compiler.context.CompileUnit;
 
@@ -15,12 +15,12 @@ import java.util.List;
  * @author Roj234
  * @since 2024/7/4 0004 14:22
  */
-final class MethodBridge extends Evaluable {
+final class MethodBridge extends InvokeHook {
 	private final CompileUnit owner;
-	private final Evaluable prev;
+	private final InvokeHook prev;
 	private final int accessor;
 
-	MethodBridge(CompileUnit owner, MethodNode mn, Evaluable prev) {
+	MethodBridge(CompileUnit owner, MethodNode mn, InvokeHook prev) {
 		this.owner = owner;
 		this.prev = prev;
 
@@ -40,9 +40,9 @@ final class MethodBridge extends Evaluable {
 	public String toString() {return "Evaluable<Generic MethodBridge>";}
 
 	@Override
-	public ExprNode eval(MethodNode owner, @Nullable ExprNode self, List<ExprNode> args, Invoke node) {
+	public Expr eval(MethodNode owner, @Nullable Expr self, List<Expr> args, Invoke node) {
 		if (prev != null) {
-			ExprNode eval = prev.eval(owner, self, args, node);
+			Expr eval = prev.eval(owner, self, args, node);
 			if (eval != null) return eval;
 		}
 

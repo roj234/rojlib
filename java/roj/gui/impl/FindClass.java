@@ -33,7 +33,7 @@ import java.util.regex.Pattern;
  */
 public class FindClass extends JFrame {
 	public static void main(String[] args) {
-		GuiUtil.systemLook();
+		GuiUtil.systemLaf();
 		FindClass f = new FindClass();
 
 		f.pack();

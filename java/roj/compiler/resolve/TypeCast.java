@@ -106,8 +106,8 @@ public class TypeCast {
 		}
 		private void writeOp(CodeWriter cw) {
 			if (op1 != 0) {
-				cw.one(op1);
-				if (op2 != 0) cw.one(op2);
+				cw.insn(op1);
+				if (op2 != 0) cw.insn(op2);
 			}
 		}
 
@@ -518,7 +518,7 @@ public class TypeCast {
 		// 本来是不该发生的（前面检测了），但是说不定未来会支持class aliasing呢/doge
 		if (fromClass == toClass) return RESULT(UPCAST, 0);
 
-		int distance = context.getHierarchyList(fromClass).getValueOrDefault(toClass.name(), -1)&0xFFFF;
+		int distance = context.getHierarchyList(fromClass).getOrDefault(toClass.name(), -1)&0xFFFF;
 		if (distance != 0xFFFF) return RESULT(UPCAST, distance);
 
 		// to.parent == null => !Object (alias object or ??)

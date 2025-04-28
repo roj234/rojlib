@@ -5,6 +5,7 @@ import roj.collect.LFUCache;
 import roj.collect.MyHashMap;
 import roj.config.auto.SerializerFactory;
 import roj.http.server.Request;
+import roj.net.util.SpeedLimiter;
 import roj.plugin.*;
 import roj.util.TypedKey;
 
@@ -12,7 +13,6 @@ import java.net.InetSocketAddress;
 import java.util.Arrays;
 import java.util.Map;
 import java.util.Objects;
-import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 
 /**
@@ -30,13 +30,14 @@ public class FlowControl extends Plugin {
 
 	LimitGroup guestGroup;
 	Map<String, LimitGroup> limitGroup = new MyHashMap<>();
-	static final class LimitGroup {
-		int limitSpeed, limitAfter;
+	static final class LimitGroup extends SpeedLimiter.Setting {
 		int maxConnections, maxConcurrentConnections;
-		int counterReset;
+		transient String name;
+
+		public LimitGroup() {}
 	}
 
-	Function<byte[], FlowController> newLimiter = x -> createLimiter(guestGroup);
+	Function<byte[], FlowController> newAddressLimiter = x -> createLimiter(guestGroup);
 
 	boolean hasEasySSO;
 
@@ -45,38 +46,28 @@ public class FlowControl extends Plugin {
 		var desc = getPluginManager().getPlugin("EasySSO");
 		hasEasySSO = desc != null && desc.getState() == PluginManager.ENABLED;
 
-		var ser = SerializerFactory.SAFE.mapOf(LimitGroup.class);
+		var ser = SerializerFactory.getInstance(SerializerFactory.GENERATE|SerializerFactory.CHECK_INTERFACE|SerializerFactory.SERIALIZE_PARENT).mapOf(LimitGroup.class);
 		getConfig().accept(ser);
 		limitGroup = ser.get();
+		for (Map.Entry<String, LimitGroup> entry : limitGroup.entrySet()) {
+			entry.getValue().name = entry.getKey();
+		}
 		guestGroup = Objects.requireNonNull(limitGroup.get("guest"), "Guest group cannot be null");
 
 		Panger.addChannelInitializator(ch -> {
 			var addr = ((InetSocketAddress) ch.remoteAddress()).getAddress().getAddress();
-			ch.addAfter("h11@server", "h11@flowControl", getController(addr));
+			ch.addAfter("http:server", "http:flowControl", getController(addr));
 		});
-
-		getScheduler().loop(() -> {
-			synchronized (addressLimiters) {
-				for (var itr = addressLimiters.values().iterator(); itr.hasNext(); ) {
-					if (itr.next().isTimeout()) itr.remove();
-				}
-			}
-			synchronized (groupLimiters) {
-				for (var itr = groupLimiters.values().iterator(); itr.hasNext(); ) {
-					if (itr.next().isTimeout()) itr.remove();
-				}
-			}
-		}, 60000);
 	}
 
 	// /24 or /64
 	private FlowController getController(byte[] addr) {
 		synchronized (addressLimiters) {
-			return addressLimiters.computeIfAbsent(Arrays.copyOf(addr, addr.length == 4 ? 3 : 8), newLimiter);
+			return addressLimiters.computeIfAbsent(Arrays.copyOf(addr, addr.length == 4 ? 3 : 8), newAddressLimiter);
 		}
 	}
 
-	public FlowController loginCheck(FlowController fc, Request request) {
+	FlowController loginCheck(FlowController fc, Request request) {
 		var proxiedAddr = request.proxyRemoteAddress();
 		if (proxiedAddr == null) return fc;
 		fc = getController(proxiedAddr.getAddress().getAddress());
@@ -110,9 +101,5 @@ public class FlowControl extends Plugin {
 		return fc;
 	}
 
-	private FlowController createLimiter(LimitGroup info) {
-		var fc = new FlowController(this, null, info.limitAfter, info.maxConcurrentConnections, info.maxConnections, info.counterReset, 4096, (int) TimeUnit.MILLISECONDS.toNanos(50));
-		fc.setBytePerSecond(info.limitSpeed);
-		return fc;
-	}
+	private FlowController createLimiter(LimitGroup info) {return new FlowController(this, info);}
 }

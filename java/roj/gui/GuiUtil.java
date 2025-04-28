@@ -46,7 +46,7 @@ public final class GuiUtil {
 			clipboard = Toolkit.getDefaultToolkit().getSystemClipboard();
 		} catch (HeadlessException ignored) {}
 	}
-	@Nullable public static Clipboard getClipboard() {return clipboard;}
+	public static boolean hasClipboard() {return clipboard != null;}
 	@Nullable public static String getClipboardText() {
 		if (clipboard != null) {
 			DataFlavor stringFlavor = DataFlavor.stringFlavor;
@@ -67,9 +67,7 @@ public final class GuiUtil {
 		return true;
 	}
 
-	public static boolean isGui() {return clipboard != null;}
-
-	public static void systemLook() {
+	public static void systemLaf() {
 		int dpi;
 		try {
 			dpi = Toolkit.getDefaultToolkit().getScreenResolution();
@@ -96,7 +94,7 @@ public final class GuiUtil {
 		}
 	}
 
-	public static void setLogo(JFrame frame, String fileName) {
+	public static void setIcon(JFrame frame, String fileName) {
 		InputStream stream = GuiUtil.class.getClassLoader().getResourceAsStream(fileName);
 		if (stream != null) {
 			try {

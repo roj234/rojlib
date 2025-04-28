@@ -64,9 +64,9 @@ final class CompileStage implements Processor {
 
 				var c = cu.newMethod(Opcodes.ACC_PUBLIC, fnName, fnDesc);
 				c.visitSizeMax(fn.fieldType().length(), 1);
-				c.one(Opcodes.ALOAD_0);
+				c.insn(Opcodes.ALOAD_0);
 				c.field(Opcodes.GETFIELD, cu.name(), fn.name(), fn.rawDesc());
-				c.one(fn.fieldType().shiftedOpcode(Opcodes.IRETURN));
+				c.insn(fn.fieldType().shiftedOpcode(Opcodes.IRETURN));
 				c.finish();
 			}
 			case "Setter" -> {
@@ -82,10 +82,10 @@ final class CompileStage implements Processor {
 
 				var c = cu.newMethod(Opcodes.ACC_PUBLIC, fnName, fnDesc);
 				c.visitSizeMax(fType.length()+1, fType.length()+1);
-				c.one(Opcodes.ALOAD_0);
+				c.insn(Opcodes.ALOAD_0);
 				c.varLoad(fType, 1);
 				c.field(Opcodes.PUTFIELD, cu.name(), fn.name(), fn.rawDesc());
-				c.one(Opcodes.RETURN);
+				c.insn(Opcodes.RETURN);
 				c.finish();
 			}
 			case "Singleton" -> {
@@ -116,7 +116,7 @@ final class CompileStage implements Processor {
 
 				newMn.visitSize(gi.returnType().length(), 0);
 				newMn.ldc(cu.cp.getInvokeDyn(false, idx, gi.name(), gi.returnType().toDesc()));
-				newMn.one(Opcodes.ARETURN);
+				newMn.insn(Opcodes.ARETURN);
 				newMn.finish();
 			}
 		}

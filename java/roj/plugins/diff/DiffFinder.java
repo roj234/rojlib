@@ -47,7 +47,7 @@ import static roj.reflect.Unaligned.U;
  */
 public class DiffFinder extends JFrame {
 	public static void main(String[] args) {
-		GuiUtil.systemLook();
+		GuiUtil.systemLaf();
 		DiffFinder f = new DiffFinder();
 
 		f.pack();

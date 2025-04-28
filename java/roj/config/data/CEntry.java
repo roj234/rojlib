@@ -173,12 +173,11 @@ public abstract class CEntry {
 	@Override
 	public String toString() { return ConfigMaster.JSON.toString(this); }
 
-	public abstract void accept(CVisitor ser);
+	public abstract void accept(CVisitor visitor);
 	/**
 	 * 获取这个CEntry的内部表示
 	 * * 对于非基本类型来说，不会创建新对象
 	 * @see #unwrap()
-	 * @return
 	 */
 	public abstract Object raw();
 	/**
@@ -194,7 +193,7 @@ public abstract class CEntry {
 
 	protected CharList toJSON(CharList sb, int depth) {throw new NoSuchMethodError();}
 
-	//region 未使用，预留
+	//region 未使用的API，为脚本语言预留
 	public CEntry __call(CEntry self, CEntry args) {throw new UnsupportedOperationException(getClass()+"不是函数");}
 	public CEntry __getattr(String name) {return null;}
 	public void __setattr(String name, CEntry value) {}

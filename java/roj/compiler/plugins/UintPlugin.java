@@ -6,9 +6,9 @@ import roj.asm.MethodNode;
 import roj.asm.Opcodes;
 import roj.asm.type.IType;
 import roj.asm.type.Type;
-import roj.compiler.api.Evaluable;
+import roj.compiler.api.InvokeHook;
 import roj.compiler.asm.MethodWriter;
-import roj.compiler.ast.expr.ExprNode;
+import roj.compiler.ast.expr.Expr;
 import roj.compiler.ast.expr.Invoke;
 import roj.compiler.context.Library;
 import roj.compiler.context.LocalContext;
@@ -25,16 +25,19 @@ import static roj.compiler.Tokens.*;
  * @author Roj234
  * @since 2024/12/1 0001 3:33
  */
-@LavaPlugin(name = "uint", desc = "为Lava语言提供两种无符号数据类型: uint32和uint64")
-public final class UintPlugin extends Evaluable implements Library, LavaApi.ExprOp {
-	private static ExprNode _u32(ExprNode node) {return node instanceof uiCast cast ? cast.is64 == 0 ? cast.left : cast : new uiCast(node, 1);}
-	private static ExprNode _u64(ExprNode node) {return node instanceof uiCast cast ? cast.is64 == 0 ? cast.left : cast : new uiCast(node, 2);}
-	private static ExprNode _i32(ExprNode node) {return node instanceof uiCast cast ? cast.left : new uiCast(node, 0);}
-	private static ExprNode _i64(ExprNode node) {return node instanceof uiCast cast ? cast.left : new uiCast(node, 3);}
-	private static final class uiCast extends ExprNode {
-		private ExprNode left;
+@LavaPlugin(name = "uint", desc = """
+		PseudoType测试插件
+
+		为Lava语言提供两种无符号数据类型: uint32和uint64""")
+public final class UintPlugin extends InvokeHook implements Library, LavaApi.ExprOp {
+	private static Expr _u32(Expr node) {return node instanceof uiCast cast ? cast.is64 == 0 ? cast.left : cast : new uiCast(node, 1);}
+	private static Expr _u64(Expr node) {return node instanceof uiCast cast ? cast.is64 == 0 ? cast.left : cast : new uiCast(node, 2);}
+	private static Expr _i32(Expr node) {return node instanceof uiCast cast ? cast.left : new uiCast(node, 0);}
+	private static Expr _i64(Expr node) {return node instanceof uiCast cast ? cast.left : new uiCast(node, 3);}
+	private static final class uiCast extends Expr {
+		private Expr left;
 		private final int is64;
-		public uiCast(ExprNode left, int is64) {this.left = left;this.is64 = is64;}
+		public uiCast(Expr left, int is64) {this.left = left;this.is64 = is64;}
 
 		@Override public String toString() {
 			return switch (is64) {
@@ -54,7 +57,7 @@ public final class UintPlugin extends Evaluable implements Library, LavaApi.Expr
 				default -> throw OperationDone.NEVER;
 			};
 		}
-		@Override public ExprNode resolve(LocalContext ctx) {left = left.resolve(ctx);return this;}
+		@Override public Expr resolve(LocalContext ctx) {left = left.resolve(ctx);return this;}
 		@Override public boolean isConstant() {return left.isConstant();}
 		@Override public Object constVal() {return left.constVal();}
 		@Override public void write(MethodWriter cw, boolean noRet) {
@@ -83,7 +86,7 @@ public final class UintPlugin extends Evaluable implements Library, LavaApi.Expr
 	}
 
 	private final MethodNode[] exprRef = new MethodNode[6];
-	private final ExprNode zero = ExprNode.valueOf(0);
+	private final Expr zero = Expr.valueOf(0);
 
 	private final ClassNode Uint32, Uint64;
 	private final MethodNode u32ToString, u32FromString, u64ToString, u64FromString;
@@ -133,7 +136,7 @@ public final class UintPlugin extends Evaluable implements Library, LavaApi.Expr
 		return null;
 	}
 	@Override public String toString() {return "Plugin<uint>";}
-	@Override public ExprNode eval(MethodNode owner, @Nullable ExprNode self, List<ExprNode> args, Invoke node) {
+	@Override public Expr eval(MethodNode owner, @Nullable Expr self, List<Expr> args, Invoke node) {
 		boolean is32 = owner.owner.equals("uint32");
 		if (owner.name().equals("parse")) {
 			return is32
@@ -172,42 +175,42 @@ public final class UintPlugin extends Evaluable implements Library, LavaApi.Expr
 	}
 
 	@Override
-	public ExprNode test(LocalContext ctx, LavaApi.OperatorContext opctx, ExprNode left, Object right) {
+	public Expr test(LocalContext ctx, LavaApi.OperatorContext opctx, Expr left, Object right) {
 		short sym = opctx.symbol();
 		switch (sym) {
 			case inc, dec, add, sub, mul, shl, shr, inv, and, or, xor -> {
 				if (u32Count(opctx) > 0) {
-					var node = ctx.ep.binary(sym == shr ? ushr : sym, _i32(left), _i32((ExprNode) right));
+					var node = ctx.ep.binaryOp(sym == shr ? ushr : sym, _i32(left), _i32((Expr) right));
 					return _u32(node);
 				}
 				if (u64Count(opctx) > 0) {
-					var node = ctx.ep.binary(sym == shr ? ushr : sym, _i64(left), _i64((ExprNode) right));
+					var node = ctx.ep.binaryOp(sym == shr ? ushr : sym, _i64(left), _i64((Expr) right));
 					return _u64(node);
 				}
 			}
 			case equ, neq, lss, leq, gtr, geq -> {
 				if (u32Count(opctx) > 0) {
 					left = _i32(left);
-					var rNode = _i32((ExprNode) right);
-					return ctx.ep.binary(sym, Invoke.staticMethod(exprRef[3], left, rNode), zero);
+					var rNode = _i32((Expr) right);
+					return ctx.ep.binaryOp(sym, Invoke.staticMethod(exprRef[3], left, rNode), zero);
 				}
 
 				if (u64Count(opctx) > 0) {
 					left = _i64(left);
-					var rNode = _i64((ExprNode) right);
-					return ctx.ep.binary(sym, Invoke.staticMethod(exprRef[5], left, rNode), zero);
+					var rNode = _i64((Expr) right);
+					return ctx.ep.binaryOp(sym, Invoke.staticMethod(exprRef[5], left, rNode), zero);
 				}
 			}
 			case div, rem -> {
 				if (u32Count(opctx) > 0) {
 					left = _i32(left);
-					var rNode = _i32((ExprNode) right);
+					var rNode = _i32((Expr) right);
 					return _u32(Invoke.staticMethod(exprRef[sym == rem ? 1 : 0], left, rNode));
 				}
 
 				if (u64Count(opctx) > 0) {
 					left = _i64(left);
-					var rNode = _i64((ExprNode) right);
+					var rNode = _i64((Expr) right);
 					return _u64(Invoke.staticMethod(exprRef[sym == rem ? 4 : 3], left, rNode));
 				}
 			}

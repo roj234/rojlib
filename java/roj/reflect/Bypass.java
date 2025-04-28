@@ -132,7 +132,7 @@ public final class Bypass<T> {
 	}
 	private void DMHBuild() {
 		if (dmh_si != null) {
-			dmh_si.one(RETURN);
+			dmh_si.insn(RETURN);
 			dmh_si.finish();
 		}
 	}
@@ -147,10 +147,10 @@ public final class Bypass<T> {
 		ldcType(args.remove(args.size()-1));
 		dmh_si.newArraySized(Type.klass("java/lang/Class"), args.size());
 		for (int i = 0; i < args.size(); i++) {
-			dmh_si.one(DUP);
+			dmh_si.insn(DUP);
 			dmh_si.ldc(i);
 			ldcType(args.get(i));
-			dmh_si.one(AASTORE);
+			dmh_si.insn(AASTORE);
 		}
 		dmh_si.visitSizeMax(7, 0);
 		dmh_si.invokeS("java/lang/invoke/MethodType", "methodType", "(Ljava/lang/Class;[Ljava/lang/Class;)Ljava/lang/invoke/MethodType;");
@@ -174,10 +174,10 @@ public final class Bypass<T> {
 		ldcType(args.remove(args.size()-1));
 		dmh_si.newArraySized(Type.klass("java/lang/Class"), args.size());
 		for (int i = 0; i < args.size(); i++) {
-			dmh_si.one(DUP);
+			dmh_si.insn(DUP);
 			dmh_si.ldc(i);
 			ldcType(args.get(i));
-			dmh_si.one(AASTORE);
+			dmh_si.insn(AASTORE);
 		}
 		dmh_si.visitSizeMax(8, 0);
 		dmh_si.invokeS("java/lang/invoke/MethodType", "methodType", "(Ljava/lang/Class;[Ljava/lang/Class;)Ljava/lang/invoke/MethodType;");
@@ -331,7 +331,7 @@ public final class Bypass<T> {
 				cw.field(GETSTATIC, impl, DMH_ID);
 			} else {
 				cw.clazz(NEW, targetName);
-				cw.one(DUP);
+				cw.insn(DUP);
 			}
 
 			int varId = 1;
@@ -351,7 +351,7 @@ public final class Bypass<T> {
 				cw.invoke(INVOKESPECIAL, targetName, "<init>", targetDesc);
 			}
 
-			cw.one(ARETURN);
+			cw.insn(ARETURN);
 			cw.finish();
 		}
 
@@ -502,7 +502,7 @@ public final class Bypass<T> {
 			}
 
 			if (isStatic == 0) {
-				cw.one(ALOAD_1);
+				cw.insn(ALOAD_1);
 				if ((this.flags&UNCHECKED_CAST) == 0 && !target.isAssignableFrom(types[0])) cw.clazz(CHECKCAST, targetName);
 			}
 
@@ -595,7 +595,7 @@ public final class Bypass<T> {
 					if (isStatic) {
 						cw.invokeV("java/lang/invoke/VarHandle", "get", "()"+fieldType.toDesc());
 					} else {
-						cw.one(ALOAD_1);
+						cw.insn(ALOAD_1);
 						cw.invokeV("java/lang/invoke/VarHandle", "get", "(L"+targetName1+";)"+fieldType.toDesc());
 					}
 					cw.visitSize(fieldType.length()+1, isStatic ? 1 : 2);
@@ -607,7 +607,7 @@ public final class Bypass<T> {
 						cw.field(GETSTATIC, targetName, field.getName(), fieldType);
 					} else {
 						localSize = 2;
-						cw.one(ALOAD_1);
+						cw.insn(ALOAD_1);
 						if ((flags&UNCHECKED_CAST) == 0 && !target.isAssignableFrom(params[0])) cw.clazz(CHECKCAST, targetName);
 						cw.field(GETFIELD, targetName, field.getName(), fieldType);
 					}
@@ -637,7 +637,7 @@ public final class Bypass<T> {
 					int DMH_ID = DMHNewVarHandle(targetName, field.getName(), fieldType, isStatic ? "findStaticVarHandle" : "findVarHandle");
 					cw.field(GETSTATIC, impl, DMH_ID);
 					if (!isStatic) {
-						cw.one(ALOAD_1);
+						cw.insn(ALOAD_1);
 						if ((flags&UNCHECKED_CAST) == 0 && !target.isAssignableFrom(params2[0]))
 							cw.clazz(CHECKCAST, targetName);
 					}
@@ -658,7 +658,7 @@ public final class Bypass<T> {
 						else {
 							if ((flags&UNCHECKED_CAST) == 0 && !target.isAssignableFrom(params2[0]))
 								cw.clazz(CHECKCAST, targetName);
-							cw.one(ALOAD_1);
+							cw.insn(ALOAD_1);
 						}
 						cw.ldc(isStatic ? U.staticFieldOffset(field) : U.objectFieldOffset(field));
 						cw.varLoad(fieldType, isStatic ? 1 : 2);
@@ -670,7 +670,7 @@ public final class Bypass<T> {
 
 						if (!isStatic) {
 							localSize = stackSize+1;
-							cw.one(ALOAD_1);
+							cw.insn(ALOAD_1);
 							if ((flags&UNCHECKED_CAST) == 0 && !target.isAssignableFrom(params2[0]))
 								cw.clazz(CHECKCAST, targetName);
 						} else {
@@ -684,7 +684,7 @@ public final class Bypass<T> {
 					}
 				}
 
-				cw.one(RETURN);
+				cw.insn(RETURN);
 				cw.finish();
 			}
 		}
@@ -707,7 +707,7 @@ public final class Bypass<T> {
 		CodeWriter cw = impl.newMethod(ACC_PUBLIC, self.getName(), TypeHelper.class2asm(self.getParameterTypes(), self.getReturnType()));
 
 		cw.clazz(NEW, target);
-		cw.one(DUP);
+		cw.insn(DUP);
 
 		List<Type> argTypes = Type.methodDesc(desc);
 		argTypes.remove(argTypes.size()-1);
@@ -722,7 +722,7 @@ public final class Bypass<T> {
 		cw.visitSize(varId+1, varId);
 
 		cw.invoke(INVOKESPECIAL, target, "<init>", desc);
-		cw.one(ARETURN);
+		cw.insn(ARETURN);
 		cw.finish();
 
 		return this;
@@ -747,7 +747,7 @@ public final class Bypass<T> {
 		int varId;
 		if (isStatic) varId = 1;
 		else {
-			cw.one(ALOAD_1);
+			cw.insn(ALOAD_1);
 			varId = 2;
 		}
 		for (int i = 0; i < argTypes.size(); i++) {
@@ -789,7 +789,7 @@ public final class Bypass<T> {
 			int localSize;
 			if (!isStatic) {
 				localSize = 2;
-				cw.one(ALOAD_1);
+				cw.insn(ALOAD_1);
 				cw.field(GETFIELD, target, name, type);
 			} else {
 				localSize = 1;
@@ -809,14 +809,14 @@ public final class Bypass<T> {
 
 			if (!isStatic) {
 				localSize = (char) (stackSize+1);
-				cw.one(ALOAD_1);
+				cw.insn(ALOAD_1);
 			} else {
 				localSize = stackSize--;
 			}
 			cw.visitSize(stackSize, localSize);
 			cw.varLoad(type, isStatic ? 1 : 2);
 			cw.field(isStatic ? PUTSTATIC : PUTFIELD, target, name, type);
-			cw.one(RETURN);
+			cw.insn(RETURN);
 			cw.finish();
 		}
 

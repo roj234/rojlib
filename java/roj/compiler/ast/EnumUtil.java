@@ -4,7 +4,7 @@ import roj.asm.type.Type;
 import roj.collect.SimpleList;
 import roj.compiler.api.Types;
 import roj.compiler.asm.Variable;
-import roj.compiler.ast.expr.ExprNode;
+import roj.compiler.ast.expr.Expr;
 import roj.compiler.ast.expr.LocalVariable;
 
 import java.util.Arrays;
@@ -27,25 +27,25 @@ public class EnumUtil {
 
 		_NAME_ORDINAL = Arrays.asList(new LocalVariable(v1), new LocalVariable(v2));
 	}
-	public static List<ExprNode> prependEnumConstructor(List<ExprNode> nodes) {
-		if (nodes instanceof SimpleList<ExprNode>) {
+	public static List<Expr> prependEnumConstructor(List<Expr> nodes) {
+		if (nodes instanceof SimpleList<Expr>) {
 			nodes.addAll(0, _NAME_ORDINAL);
 			return nodes;
 		}
 
-		var ref = new SimpleList<ExprNode>(nodes.size()+2);
+		var ref = new SimpleList<Expr>(nodes.size()+2);
 		ref.addAll(_NAME_ORDINAL);
 		ref.addAll(nodes);
 		return ref;
 	}
 
-	public static List<ExprNode> prepend(List<ExprNode> nodes, ExprNode that) {
-		if (nodes instanceof SimpleList<ExprNode>) {
+	public static List<Expr> prepend(List<Expr> nodes, Expr that) {
+		if (nodes instanceof SimpleList<Expr>) {
 			nodes.add(0, that);
 			return nodes;
 		}
 
-		var ref = new SimpleList<ExprNode>(nodes.size()+1);
+		var ref = new SimpleList<Expr>(nodes.size()+1);
 		ref.add(that);
 		ref.addAll(nodes);
 		return ref;

@@ -17,18 +17,18 @@ public final class AList extends CList {
 
 	public AList(List<CEntry> v) {super(v);}
 
-	public Type getType(int i) {return ((AClass)list.get(i)).value;}
-	public String getEnumValue(int j) {return ((AEnum)list.get(j)).field;}
-	public AList getArray(int i) {return (AList) list.get(i);}
-	public Annotation getAnnotation(int i) {return (Annotation) list.get(i);}
+	public Type getType(int i) {return ((AClass) elements.get(i)).value;}
+	public String getEnumValue(int j) {return ((AEnum) elements.get(j)).field;}
+	public AList getArray(int i) {return (AList) elements.get(i);}
+	public Annotation getAnnotation(int i) {return (Annotation) elements.get(i);}
 
 	public String toString() {
 		CharList sb = new CharList().append('{');
-		if (list.size() > 0) {
+		if (elements.size() > 0) {
 			int i = 0;
 			while (true) {
-				sb.append(list.get(i));
-				if (++i == list.size()) break;
+				sb.append(elements.get(i));
+				if (++i == elements.size()) break;
 				sb.append(", ");
 			}
 		}

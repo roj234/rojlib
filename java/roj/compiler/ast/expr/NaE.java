@@ -11,8 +11,8 @@ import roj.compiler.resolve.TypeCast;
  * @author Roj234
  * @since 2024/5/30 0030 1:40
  */
-public final class NaE extends ExprNode {
-	public static final ExprNode NOEXPR = new NaE(), RESOLVE_FAILED = new NaE();
+public final class NaE extends Expr {
+	public static final Expr NOEXPR = new NaE(), RESOLVE_FAILED = new NaE();
 	public static final Generic UNRESOLVABLE = new Generic("<nae.unresolvable>");
 
 	@Override public String toString() {return "<nae.unresolvable>";}

@@ -16,7 +16,7 @@ final class LazyAnnotationValue extends CEntry {
 
 	@Override public Type getType() {return ref.val.getType();}
 	@Override public char dataType() {return ref.val.dataType();}
-	@Override public void accept(CVisitor ser) {ref.val.accept(ser);}
+	@Override public void accept(CVisitor visitor) {ref.val.accept(visitor);}
 	@Override public Object raw() {return ref.val.raw();}
 	@Override public String toString() {return ref.val.toString();}
 }

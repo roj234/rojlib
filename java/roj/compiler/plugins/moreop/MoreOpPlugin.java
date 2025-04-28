@@ -5,7 +5,7 @@ import roj.asm.Opcodes;
 import roj.asm.type.Type;
 import roj.compiler.Tokens;
 import roj.compiler.api.Types;
-import roj.compiler.ast.expr.ExprNode;
+import roj.compiler.ast.expr.Expr;
 import roj.compiler.ast.expr.Invoke;
 import roj.compiler.context.LocalContext;
 import roj.compiler.plugin.LavaApi;
@@ -16,7 +16,11 @@ import roj.compiler.resolve.TypeCast;
  * @author Roj234
  * @since 2024/11/11 0011 22:34
  */
-@LavaPlugin(name = "moreop", desc = "为Lava语言提供一些操作符语法糖")
+@LavaPlugin(name = "moreop", desc = """
+		More OP, More Power!
+		操作符重载测试插件
+
+		为Lava语言提供一些操作符语法糖""")
 public final class MoreOpPlugin implements LavaApi.ExprOp {
 	private static final MethodNode STRING_CHARAT = new MethodNode(Opcodes.ACC_PUBLIC, "java/lang/String", "charAt", "()C");
 
@@ -37,17 +41,17 @@ public final class MoreOpPlugin implements LavaApi.ExprOp {
 	}
 
 	@Override
-	public ExprNode test(LocalContext ctx, LavaApi.OperatorContext opctx, ExprNode left, Object right) {
+	public Expr test(LocalContext ctx, LavaApi.OperatorContext opctx, Expr left, Object right) {
 		var sym = opctx.symbol();
 		if (sym == Tokens.lBracket) {
 			if (ctx.castTo(opctx.leftType(), LIST_TYPE, TypeCast.E_NEVER).type >= 0) {
-				return new ListGet(left, (ExprNode) right);
+				return new ListGet(left, (Expr) right);
 			}
 			if (ctx.castTo(opctx.leftType(), MAP_TYPE, TypeCast.E_NEVER).type >= 0) {
-				return new MapGet(left, (ExprNode) right);
+				return new MapGet(left, (Expr) right);
 			}
 			if (ctx.castTo(opctx.leftType(), Types.STRING_TYPE, TypeCast.E_NEVER).type >= 0) {
-				return Invoke.virtualMethod(STRING_CHARAT, left, (ExprNode) right);
+				return Invoke.virtualMethod(STRING_CHARAT, left, (Expr) right);
 			}
 		}
 		return null;

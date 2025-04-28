@@ -224,8 +224,7 @@ public final class ImportList {
 		if (qualifiedName != null) c = gc.getClassInfo(qualifiedName);
 		else /*if (packages == Collections.EMPTY_LIST) */{
 			// 有的Library可能没实现content()那就只能慢一些了
-			// 而且在最后节约资源也没有必要，因为找不到直接报错了，不会有明天
-			// 另外packages对于runtime只导入java和javax和sun.misc
+			// 而且在最后节约资源也没有必要，因为找不到直接报错了
 			for (String pkg : importPackage) {
 				if ((c = gc.getClassInfo(pkg+'/'+name)) != null) break;
 			}

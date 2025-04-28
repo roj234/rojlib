@@ -28,7 +28,7 @@ public class UIEntry extends JFrame {
 	}
 
 	private static void launchUI() {
-		GuiUtil.systemLook();
+		GuiUtil.systemLaf();
 		UIEntry f = new UIEntry();
 		try {
 			f.uiInfo.setText(IOUtil.getTextResourceIL("change.log"));

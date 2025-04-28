@@ -136,9 +136,9 @@ public class PooledConnector implements Connector {
 					if (m.getName().equals("close")) {
 						c.visitSize(2, 1);
 						c.clear();
-						c.one(Opcodes.ALOAD_0);
+						c.insn(Opcodes.ALOAD_0);
 						c.field(Opcodes.GETFIELD, data, closeHandler);
-						c.one(Opcodes.ALOAD_0);
+						c.insn(Opcodes.ALOAD_0);
 						c.invokeV("roj/sql/PooledConnector", "_reserve", "(Ljava/sql/Connection;)V");
 						return true;
 					} else if (m.getName().equals("isClosed")) {
@@ -148,11 +148,11 @@ public class PooledConnector implements Connector {
 
 						Label label = new Label();
 						c.jump(Opcodes.IFEQ, label);
-						c.one(Opcodes.ICONST_1);
-						c.one(Opcodes.IRETURN);
+						c.insn(Opcodes.ICONST_1);
+						c.insn(Opcodes.IRETURN);
 
 						c.label(label);
-						c.one(Opcodes.ALOAD_0);
+						c.insn(Opcodes.ALOAD_0);
 						c.field(Opcodes.GETFIELD, data, closeHandler);
 						c.invokeV("roj/sql/PooledConnector", "_isClosed", "()Z");
 						return true;

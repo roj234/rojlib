@@ -37,7 +37,7 @@ public class Coredump implements NodeTransformer<MethodNode> {
 		if ((it.modifier&ACC_STATIC) == 0) {
 			size++;
 			base = 1;
-			c.one(ALOAD_0);
+			c.insn(ALOAD_0);
 		} else {
 			base = 0;
 		}
@@ -59,14 +59,14 @@ public class Coredump implements NodeTransformer<MethodNode> {
 
 		Label start = c.label();
 		c.invoke((it.modifier&ACC_STATIC) == 0 ? INVOKESPECIAL : INVOKESTATIC, it.owner, it.name(), it.rawDesc());
-		c.one(it.returnType().shiftedOpcode(IRETURN));
+		c.insn(it.returnType().shiftedOpcode(IRETURN));
 		Label end = c.label();
 
 		c.visitExceptions();
 		c.visitException(start, end, end, null);
 
 		c.invokeS("roj/plugins/coredump/Coredump", "__onExceptionCaptured", "(Ljava/lang/Throwable;)Ljava/lang/Throwable;");
-		c.one(ATHROW);
+		c.insn(ATHROW);
 
 		c.finish();
 		return true;

@@ -190,7 +190,7 @@ public class GenericTemplate extends CodeWriter {
 		return code;
 	}
 
-	public void one(byte code) { super.one(replaceCode(code)); }
+	public void insn(byte code) { super.insn(replaceCode(code)); }
 	public void vars(byte code, int value) { super.vars(replaceCode(code), value); }
 
 	@Override

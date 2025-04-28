@@ -56,7 +56,7 @@ public class CardSleep extends JFrame {
 		@Override
 		protected void onLoad() {
 			if (!VMUtil.isRoot()) System.err.println("本程序需要管理员权限才能完美工作");
-			GuiUtil.systemLook();
+			GuiUtil.systemLaf();
 		}
 
 		@Override

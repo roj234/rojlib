@@ -140,11 +140,11 @@ public class GlobalContext implements LavaFeatures {
 	@NotNull public synchronized final ResolveHelper getResolveHelper(IClass info) { return extraInfos.computeIfAbsent(info); }
 	public synchronized void invalidateResolveHelper(IClass file) {extraInfos.removeKey(file);}
 
-	@NotNull public IntBiMap<String> getHierarchyList(IClass info) {return getResolveHelper(info).getHierarchyList(this);}
+	@NotNull public ToIntMap<String> getHierarchyList(IClass info) {return getResolveHelper(info).getHierarchyList(this);}
 	@NotNull public ComponentList getMethodList(IClass info, String name) {return getResolveHelper(info).getMethods(this).getOrDefault(name, ComponentList.NOT_FOUND);}
 	@NotNull public ComponentList getFieldList(IClass info, String name) {return getResolveHelper(info).getFields(this).getOrDefault(name, ComponentList.NOT_FOUND);}
-	@Nullable public List<IType> getTypeParamOwner(IClass info, String superType) throws ClassNotFoundException {return getResolveHelper(info).getTypeParamOwner(this).get(superType);}
-	@NotNull public Map<String, InnerClasses.Item> getInnerClassFlags(IClass info) {return getResolveHelper(info).getInnerClasses(this);}
+	@Nullable public List<IType> getTypeArgumentsFor(IClass info, String superType) throws ClassNotFoundException {return getResolveHelper(info).getTypeParamOwner(this).get(superType);}
+	@NotNull public Map<String, InnerClasses.Item> getInnerClassInfo(IClass info) {return getResolveHelper(info).getInnerClasses(this);}
 	public AnnotationSelf getAnnotationDescriptor(IClass info) {return getResolveHelper(info).annotationInfo();}
 	public void fillAnnotationDefault(AnnotationPrimer annotation) {
 		var self = getAnnotationDescriptor(getClassInfo(annotation.type()));

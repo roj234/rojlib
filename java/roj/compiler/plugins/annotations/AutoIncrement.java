@@ -6,7 +6,7 @@ import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
 /**
- * 未实现，计划是替代XXLexer中硬编码的short id
+ * 以指定的value和step为它覆盖的每个字段赋整数值
  * @author Roj234
  * @since 2024/4/12 0012 19:19
  */

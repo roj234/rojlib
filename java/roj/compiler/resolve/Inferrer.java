@@ -266,9 +266,9 @@ public final class Inferrer {
 		return TypeCast.ERROR(TypeCast.E_NEVER);
 	}
 	private TypeCast.Cast cast(IType from, IType to) {
-		int lambdaArgCount = Lambda.getLambdaArgCount(from);
+		int lambdaArgCount = Lambda.getLambdaArgc(from);
 		if (lambdaArgCount >= 0) {
-			if (lambdaArgCount == 0x10000/* Magic number, defined in expr.Lambda, indicates unknown */)
+			if (lambdaArgCount == Lambda.ARGC_UNKNOWN)
 				return TypeCast.RESULT(TypeCast.UPCAST, 0);
 
 			if (!to.isPrimitive()) {

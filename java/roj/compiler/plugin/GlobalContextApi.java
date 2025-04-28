@@ -15,10 +15,10 @@ import roj.collect.*;
 import roj.compiler.LavaFeatures;
 import roj.compiler.Tokens;
 import roj.compiler.asm.AnnotationPrimer;
-import roj.compiler.ast.expr.ExprNode;
+import roj.compiler.ast.expr.Expr;
 import roj.compiler.ast.expr.ExprParser;
 import roj.compiler.ast.expr.Invoke;
-import roj.compiler.ast.expr.UnaryPreNode;
+import roj.compiler.ast.expr.PrefixOperator;
 import roj.compiler.context.*;
 import roj.compiler.diagnostic.Kind;
 import roj.compiler.plugins.stc.StreamChain;
@@ -147,8 +147,8 @@ public class GlobalContextApi extends GlobalContext implements LavaApi {
 
 		@Override
 		@Nullable
-		public ExprNode getOperatorOverride(@NotNull ExprNode e1, @Nullable Object e2, int operator) {
-			IType left = e1.type(), right = e2 instanceof ExprNode n ? n.type() : (IType) e2;
+		public Expr getOperatorOverride(@NotNull Expr e1, @Nullable Object e2, int operator) {
+			IType left = e1.type(), right = e2 instanceof Expr n ? n.type() : (IType) e2;
 
 			var ctx1 = new OperatorContext() {
 				@Override public short symbol() {return (short) operator;}
@@ -287,12 +287,11 @@ public class GlobalContextApi extends GlobalContext implements LavaApi {
 	@Override
 	public void tokenAlias(int token, String alias) {
 		myJavaToken.put(alias, new Word().init(token, 0, alias));
-		myJavaLend.add(alias.charAt(0));
 	}
 
 	@Override
-	public void tokenAliasLiteral(String alias, String literal) {
-		myJavaToken.put(literal, new Word().init(Word.LITERAL, 0, alias));
+	public void tokenLiteralEnd(String lend) {
+		myJavaLend.add(lend.charAt(0));
 	}
 	// endregion
 	//region 表达式解析API
@@ -308,11 +307,11 @@ public class GlobalContextApi extends GlobalContext implements LavaApi {
 		callbacks.add(fn);
 	}
 
-	@Override public void newUnaryOp(String token, ContinueOp<UnaryPreNode> parser) {register(ExprParser.SM_UnaryPre, token, parser, callbacks.size());}
+	@Override public void newUnaryOp(String token, ContinueOp<PrefixOperator> parser) {register(ExprParser.SM_UnaryPre, token, parser, callbacks.size());}
 	@Override public void newExprOp(String token, StartOp parser) {register(ExprParser.SM_UnaryPre, token, parser, ExprParser.CU_TerminateFlag | callbacks.size());}
 	@Override public void newStartOp(String token, StartOp parser) {register(ExprParser.SM_ExprStart, token, parser, callbacks.size());}
-	@Override public void newContinueOp(String token, ContinueOp<ExprNode> parser) {register(ExprParser.SM_ExprNext, token, parser, callbacks.size());}
-	@Override public void newTerminalOp(String token, ContinueOp<ExprNode> parser) {register(ExprParser.SM_ExprNext, token, parser, ExprParser.CU_TerminateFlag | callbacks.size());}
+	@Override public void newContinueOp(String token, ContinueOp<Expr> parser) {register(ExprParser.SM_ExprNext, token, parser, callbacks.size());}
+	@Override public void newTerminalOp(String token, ContinueOp<Expr> parser) {register(ExprParser.SM_ExprNext, token, parser, ExprParser.CU_TerminateFlag | callbacks.size());}
 	@Override public void newBinaryOp(String token, int priority, BinaryOp parser, boolean rightAssoc) {register(ExprParser.SM_ExprTerm, token, parser, priority | ExprParser.CU_Binary | (rightAssoc ? ExprParser.SM_RightAssoc : 0) | (callbacks.size() << 12));}
 
 	private static ExprOp SimpleOp(Type left1, Type right1, MethodNode node) {
@@ -321,8 +320,8 @@ public class GlobalContextApi extends GlobalContext implements LavaApi {
 					(right == null ? right1 == null : ctx.castTo(opctx.rightType(), right1, -8).type >= 0)) {
 
 				boolean isObject = (node.modifier() & Opcodes.ACC_STATIC) == 0;
-				if (isObject) return Invoke.virtualMethod(node, left, (ExprNode) right);
-				return Invoke.staticMethod(node, left, (ExprNode) right);
+				if (isObject) return Invoke.virtualMethod(node, left, (Expr) right);
+				return Invoke.staticMethod(node, left, (Expr) right);
 			}
 			return null;
 		};

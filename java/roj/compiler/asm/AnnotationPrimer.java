@@ -10,9 +10,9 @@ import roj.asm.type.TypeHelper;
 import roj.collect.MyHashMap;
 import roj.collect.SimpleList;
 import roj.compiler.Tokens;
-import roj.compiler.ast.expr.ArrayDef;
-import roj.compiler.ast.expr.ExprNode;
+import roj.compiler.ast.expr.Expr;
 import roj.compiler.ast.expr.ExprParser;
+import roj.compiler.ast.expr.NewArray;
 import roj.compiler.context.CompileUnit;
 import roj.compiler.context.LocalContext;
 import roj.compiler.diagnostic.Kind;
@@ -81,14 +81,14 @@ public final class AnnotationPrimer extends Annotation {
 		}
 		}
 
-		((MyHashMap<String,?>)map).put(key, Helpers.cast(expr));
+		((MyHashMap<String,?>) properties).put(key, Helpers.cast(expr));
 	}
 
-	public void setValues(Map<String, CEntry> values) {this.map = values;}
+	public void setValues(Map<String, CEntry> values) {this.properties = values;}
 
 	@Nullable
-	public static CEntry toAnnVal(LocalContext ctx, ExprNode node, IType type) {
-		if (node instanceof ArrayDef def) def.setType(type);
+	public static CEntry toAnnVal(LocalContext ctx, Expr node, IType type) {
+		if (node instanceof NewArray def) def.setType(type);
 
 		// begin 20250120 可以用 @ABC (DEF)这种方式直接引用枚举常量DEF
 		var prevDfi = ctx.dynamicFieldImport;
@@ -100,7 +100,7 @@ public final class AnnotationPrimer extends Annotation {
 		node = node.resolve(ctx);
 		ctx.dynamicFieldImport = prevDfi;
 
-		if (!node.isConstant() && !node.hasFeature(ExprNode.ExprFeat.ENUM_REFERENCE)) {
+		if (!node.isConstant() && !node.hasFeature(Expr.Feature.ENUM_REFERENCE)) {
 			ctx.report(Kind.ERROR, "ap.annotation.noConstant");
 			return null;
 		}

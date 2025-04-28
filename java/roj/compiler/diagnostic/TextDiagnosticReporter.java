@@ -71,12 +71,12 @@ public class TextDiagnosticReporter implements Function<Diagnostic, Boolean> {
 				// 多行
 				if (diag.getColumnNumber()+diag.getLength() <= line.length()) {
 					AnsiString as = new AnsiString(line.substring(diag.getColumnNumber(), diag.getColumnNumber() + diag.getLength()));
-					as.bgColorRGB(0xff3333).append(new AnsiString("").clear()).writeAnsi(sb);
+					as.bgColorRGB(0xff3333).append(new AnsiString("").reset()).writeAnsi(sb);
 
 					sb.append(line, diag.getColumnNumber()+diag.getLength(), line.length());
 				} else {
 					AnsiString as = new AnsiString(line.substring(diag.getColumnNumber()));
-					as.bgColorRGB(0xff3333).append(new AnsiString("").clear()).writeAnsi(sb);
+					as.bgColorRGB(0xff3333).append(new AnsiString("").reset()).writeAnsi(sb);
 				}
 			} else {
 				sb.append(line).append('\n');

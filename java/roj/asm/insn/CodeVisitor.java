@@ -99,7 +99,7 @@ public class CodeVisitor {
 						r.rIndex += (4 - ((r.rIndex - rBegin) & 3)) & 3;
 						lookupSwitch(r);
 					}
-					default -> one(code);
+					default -> insn(code);
 				}
 
 				prev = code;
@@ -137,7 +137,7 @@ public class CodeVisitor {
 	protected void invoke(byte code, CstRef method) {}
 	protected void field(byte code, CstRef field) {}
 	protected void jump(byte code, int offset) {}
-	protected void one(byte code) {}
+	protected void insn(byte code) {}
 	protected void smallNum(byte code, int value) {}
 	protected void vars(byte code, int value) {}
 	protected void ret(int value) {}

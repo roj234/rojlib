@@ -2,12 +2,7 @@ package roj.util;
 
 import roj.compiler.plugins.annotations.Attach;
 import roj.compiler.plugins.asm.ASM;
-import roj.compiler.runtime.RtUtil;
-import roj.config.Tokenizer;
-import roj.gui.GuiUtil;
 import roj.reflect.Bypass;
-import roj.text.CharList;
-import roj.ui.Terminal;
 
 import java.util.*;
 import java.util.function.ToIntFunction;
@@ -32,17 +27,6 @@ public final class ArrayUtil {
 							   Object b, long bOffset,
 							   int length,
 							   int log2ArrayIndexScale);
-	}
-
-	public static void pack(int[] arr) {
-		var sb = RtUtil.pack(arr);
-		GuiUtil.setClipboardText(Tokenizer.addSlashes(sb, 0, new CharList().append('"'), '\'').append('"').toStringAndFree());
-		Terminal.pause();
-	}
-	public static void pack(byte[] arr) {
-		var sb = RtUtil.pack(arr);
-		GuiUtil.setClipboardText(Tokenizer.addSlashes(sb, 0, new CharList().append('"'), '\'').append('"').toStringAndFree());
-		Terminal.pause();
 	}
 
 	@Attach

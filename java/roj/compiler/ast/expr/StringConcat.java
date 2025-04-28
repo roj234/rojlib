@@ -21,11 +21,11 @@ import java.util.Collections;
  * @author Roj234
  * @since 2024/1/27 0027 2:57
  */
-final class StringConcat extends ExprNode {
-	SimpleList<ExprNode> nodes = new SimpleList<>();
+final class StringConcat extends Expr {
+	SimpleList<Expr> nodes = new SimpleList<>();
 
 	StringConcat() {}
-	StringConcat(ExprNode left, ExprNode right) {
+	StringConcat(Expr left, Expr right) {
 		nodes.add(left);
 		nodes.add(right);
 	}
@@ -37,9 +37,9 @@ final class StringConcat extends ExprNode {
 	public IType type() { return Types.STRING_TYPE; }
 
 	@Override
-	public ExprNode resolve(LocalContext ctx) throws ResolveException {
+	public Expr resolve(LocalContext ctx) throws ResolveException {
 		for (int i = 0; i < nodes.size();) {
-			ExprNode node = nodes.get(i).resolve(ctx);
+			Expr node = nodes.get(i).resolve(ctx);
 			if (node instanceof StringConcat sc) {
 				nodes.remove(i);
 				nodes.addAll(i, sc.nodes);
@@ -52,7 +52,7 @@ final class StringConcat extends ExprNode {
 
 		CharList sb = IOUtil.getSharedCharBuf();
 		for (int i = 0; i < nodes.size()-1;) {
-			ExprNode node = nodes.get(i), next = nodes.get(++i);
+			Expr node = nodes.get(i), next = nodes.get(++i);
 			if (!node.isConstant() || !next.isConstant()) continue;
 
 			sb.clear();
@@ -72,8 +72,8 @@ final class StringConcat extends ExprNode {
 	}
 	private static String safeToString(Object o) {return o instanceof CEntry entry ? entry.asString() : String.valueOf(o);}
 
-	public ExprNode prepend(ExprNode left) {nodes.add(0, left);return this;}
-	public ExprNode append(ExprNode right) {nodes.add(right);return this;}
+	public Expr prepend(Expr left) {nodes.add(0, left);return this;}
+	public Expr append(Expr right) {nodes.add(right);return this;}
 
 	@Override
 	public void write(MethodWriter cw, boolean noRet) {
@@ -101,7 +101,7 @@ final class StringConcat extends ExprNode {
 	private void viaStringBuilder(MethodWriter cw, LocalContext lc) {
 		cw.newObject("java/lang/StringBuilder");
 		for (int i = 0; i < nodes.size(); i++) {
-			ExprNode node = nodes.get(i);
+			Expr node = nodes.get(i);
 			var type = node.type();
 			if (type.getClass() == Type.DirtyHacker.class) {
 				node = callPseudoToString(lc, node);
@@ -136,15 +136,15 @@ final class StringConcat extends ExprNode {
 		cw.invoke(Opcodes.INVOKEVIRTUAL, "java/lang/StringBuilder", "toString", "()Ljava/lang/String;");
 	}
 
-	private static ExprNode callPseudoToString(LocalContext ctx, ExprNode node) {
-		DotGet fn = new DotGet(node, "toString", 0);
+	private static Expr callPseudoToString(LocalContext ctx, Expr node) {
+		MemberAccess fn = new MemberAccess(node, "toString", 0);
 		return new Invoke(fn, Collections.emptyList()).resolve(ctx);
 	}
 
 	private void viaCharList(MethodWriter cw, LocalContext lc) {
 		cw.newObject("roj/text/CharList");
 		for (int i = 0; i < nodes.size(); i++) {
-			ExprNode node = nodes.get(i);
+			Expr node = nodes.get(i);
 			var type = node.type();
 			if (type.getClass() == Type.DirtyHacker.class) {
 				node = callPseudoToString(lc, node);

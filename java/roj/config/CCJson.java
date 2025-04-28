@@ -127,7 +127,6 @@ final class CCJson extends JSONParser implements CCParser {
 				case FALSE -> cc.value(false);
 				case INTEGER -> cc.value(w.asInt());
 				case LONG -> cc.value(w.asLong());
-				case FLOAT -> cc.value(w.asFloat());
 				case DOUBLE -> cc.value(w.asDouble());
 			}
 		} catch (Exception e) {

@@ -125,28 +125,28 @@ public final class OKRouter implements Router {
 			cw.visitSize(2, 3);
 
 			cw.newObject(caller.name());
-			cw.one(ASTORE_0);
+			cw.insn(ASTORE_0);
 
-			cw.one(ALOAD_0);
-			cw.one(ILOAD_1);
+			cw.insn(ALOAD_0);
+			cw.insn(ILOAD_1);
 			cw.field(PUTFIELD, caller, 0);
 
-			cw.one(ALOAD_0);
-			cw.one(ALOAD_2);
+			cw.insn(ALOAD_0);
+			cw.insn(ALOAD_2);
 			cw.clazz(CHECKCAST, type.getName().replace('.', '/'));
 			cw.field(PUTFIELD, caller, 1);
 
-			cw.one(ALOAD_0);
-			cw.one(ARETURN);
+			cw.insn(ALOAD_0);
+			cw.insn(ARETURN);
 			cw.finish();
 
 			cw = this.cw = caller.newMethod(ACC_PUBLIC, "invoke", "(L"+REQ+";Lroj/http/server/ResponseHeader;Ljava/lang/Object;)Ljava/lang/Object;");
 			cw.visitSize(5, 4);
 
-			cw.one(ALOAD_0);
+			cw.insn(ALOAD_0);
 			cw.field(GETFIELD, caller, 1);
 
-			cw.one(ALOAD_0);
+			cw.insn(ALOAD_0);
 			cw.field(GETFIELD, caller, 0);
 
 			var seg = SwitchBlock.ofSwitch(TABLESWITCH);
@@ -157,7 +157,7 @@ public final class OKRouter implements Router {
 			if (debug) {
 				cw2 = caller.newMethod(ACC_PUBLIC | ACC_FINAL, "toString", "()Ljava/lang/String;");
 				cw2.visitSize(1, 1);
-				cw2.one(ALOAD_0);
+				cw2.insn(ALOAD_0);
 				cw2.field(GETFIELD, caller, 0);
 				seg2 = SwitchBlock.ofSwitch(TABLESWITCH);
 				cw2.addSegment(seg2);
@@ -215,23 +215,23 @@ public final class OKRouter implements Router {
 						}
 
 						if (par.size() == 1) {
-							cw.one(ALOAD_1);
+							cw.insn(ALOAD_1);
 							break noBody;
 						}
 
 						if(!"roj/http/server/ResponseHeader".equals(par.get(1).owner)) {
-							cw.one(ALOAD_1);
+							cw.insn(ALOAD_1);
 							begin = 1;
 							break hasBody;
 						}
 
-						cw.one(ALOAD_1);
-						cw.one(ALOAD_2);
+						cw.insn(ALOAD_1);
+						cw.insn(ALOAD_2);
 						if (par.size() <= 2) break noBody;
 					}
 
 					if (map.type().equals("roj/http/server/auto/Interceptor")) {
-						cw.one(ALOAD_3);
+						cw.insn(ALOAD_3);
 						cw.clazz(CHECKCAST, PostSetting.class.getName().replace('.', '/'));
 					} else {
 						defaultSource.put("source", map.getString("deserializeFrom", "UNDEFINED"));
@@ -243,16 +243,16 @@ public final class OKRouter implements Router {
 				if (mn.returnType().type != Type.CLASS) {
 					if (mn.returnType().type != Type.VOID)
 						throw new IllegalArgumentException("方法返回值必须是空值或对象:"+mn);
-					else cw.one(ACONST_NULL);
+					else cw.insn(ACONST_NULL);
 				}
-				cw.one(ARETURN);
+				cw.insn(ARETURN);
 
 				if (seg2 != null) {
 					Label label = cw2.label();
 					seg2.branch(seg2.targets.size(), label);
 					seg2.def = label;
 					cw2.ldc(mn.ownerClass()+"."+mn.name()+mn.rawDesc());
-					cw2.one(ARETURN);
+					cw2.insn(ARETURN);
 				}
 			}
 			if (seg.def == null) throw new IllegalArgumentException(userRoute.name()+"没有任何处理函数");
@@ -261,16 +261,16 @@ public final class OKRouter implements Router {
 			if (debug) {
 				for (var tce : exceptionHandlers) {
 					cw.label(tce.handler);
-					cw.one(ALOAD_1);
+					cw.insn(ALOAD_1);
 					cw.ldc(tce.type);
 					cw.invoke(INVOKESTATIC, "roj/http/server/auto/OKRouter", "requestDebug", "(Ljava/lang/Throwable;Lroj/http/server/Request;Ljava/lang/String;)Lroj/http/server/IllegalRequestException;");
-					cw.one(ATHROW);
+					cw.insn(ATHROW);
 				}
 			} else {
 				for (var tce : exceptionHandlers) {
 					cw.label(tce.handler);
 					cw.field(GETSTATIC, "roj/http/server/IllegalRequestException", "BAD_REQUEST", "Lroj/http/server/IllegalRequestException;");
-					cw.one(ATHROW);
+					cw.insn(ATHROW);
 				}
 			}
 			cw.visitExceptions();
@@ -278,7 +278,7 @@ public final class OKRouter implements Router {
 			cw.finish();
 
 			if (clinit != null) {
-				clinit.one(RETURN);
+				clinit.insn(RETURN);
 				clinit.finish();
 			}
 
@@ -352,7 +352,7 @@ public final class OKRouter implements Router {
 					if (fromSlot == 0) {
 						bodyUsed |= 2;
 
-						c.one(ALOAD_1);
+						c.insn(ALOAD_1);
 						c.invoke(INVOKEVIRTUAL, REQ, "formData", "()Ljava/util/Map;");
 						c.vars(ASTORE, fromSlot = nextSlot);
 						slot |= nextSlot++ << 8;
@@ -363,7 +363,7 @@ public final class OKRouter implements Router {
 					if (fromSlot == 0) {
 						bodyUsed |= 1;
 
-						c.one(ALOAD_1);
+						c.insn(ALOAD_1);
 						c.invoke(INVOKEVIRTUAL, REQ, "queryParam", "()Ljava/util/Map;");
 						c.vars(ASTORE, fromSlot = nextSlot);
 						slot |= nextSlot++;
@@ -372,7 +372,7 @@ public final class OKRouter implements Router {
 				case "COOKIE" -> {
 					fromSlot = (slot >>> 16) & 0xFF;
 					if (fromSlot == 0) {
-						c.one(ALOAD_1);
+						c.insn(ALOAD_1);
 						c.invoke(INVOKEVIRTUAL, REQ, "cookie", "()Ljava/util/Map;");
 						c.vars(ASTORE, fromSlot = nextSlot);
 						slot |= nextSlot++ << 16;
@@ -390,7 +390,7 @@ public final class OKRouter implements Router {
 						tce.handler = new Label();
 						tce.type = type+" "+name;
 
-						c.one(ALOAD_1);
+						c.insn(ALOAD_1);
 						loadType(type.toDesc());
 						c.invoke(INVOKESTATIC, "roj/http/server/auto/OKRouter", "parse", "(L"+REQ+";Lroj/asm/type/IType;)Ljava/lang/Object;");
 						c.clazz(CHECKCAST, rawType);
@@ -411,7 +411,7 @@ public final class OKRouter implements Router {
 			tce.type = type+" "+name;
 
 			if (source.equals("PARAM")) {
-				c.one(ALOAD_1);
+				c.insn(ALOAD_1);
 				// 这个不需要解析，所以也不需要缓存到本地变量
 				c.invoke(INVOKEVIRTUAL, REQ, "arguments", "()Lroj/http/Headers;");
 			} else {
@@ -427,15 +427,15 @@ public final class OKRouter implements Router {
 			} else {
 				c.invokeItf("java/util/Map", "get", "(Ljava/lang/Object;)Ljava/lang/Object;");
 				if (!field.getBool("optional", false)) {
-					cw.one(DUP);
+					cw.insn(DUP);
 					var label = new Label();
 					cw.jump(IFNONNULL, label);
-					cw.one(POP);
+					cw.insn(POP);
 					cw.clazz(NEW, "roj/io/FastFailException");
-					cw.one(DUP);
+					cw.insn(DUP);
 					cw.ldc("参数缺失");
 					cw.invokeD("roj/io/FastFailException", "<init>", "(Ljava/lang/String;)V");
-					cw.one(ATHROW);
+					cw.insn(ATHROW);
 					cw.label(label);
 				}
 			}
@@ -454,16 +454,16 @@ public final class OKRouter implements Router {
 				if (type1 == Type.CHAR) {
 					// stack=4;
 					cw.invoke(INVOKESTATIC, "java/lang/Integer", "parseInt", "(Ljava/lang/String;)I");
-					cw.one(DUP);
-					cw.one(DUP);
-					cw.one(I2C);
+					cw.insn(DUP);
+					cw.insn(DUP);
+					cw.insn(I2C);
 					Label label = new Label();
 					cw.jump(IF_icmpeq, label);
 					cw.clazz(NEW, "roj/io/FastFailException");
-					cw.one(DUP);
+					cw.insn(DUP);
 					cw.ldc("参数超出范围");
 					cw.invokeD("roj/io/FastFailException", "<init>", "(Ljava/lang/String;)V");
-					cw.one(ATHROW);
+					cw.insn(ATHROW);
 					cw.label(label);
 				} else {
 					name = Type.getName(type1);
@@ -760,19 +760,18 @@ public final class OKRouter implements Router {
 		node.value = aset;
 		aset.accepts = ACCEPTS_ALL;
 
-		if (router instanceof OKRouter child) {
-			Node otherRoot = child.route;
-			node.flag = otherRoot.flag;
-			node.value = otherRoot.value;
-			node.table = otherRoot.table;
-			node.size = otherRoot.size;
-			node.mask = otherRoot.mask;
-			node.any = otherRoot.any;
-			//prependInterceptorArray(interceptors);
-			return this;
-		}
-
 		if (interceptors == null || interceptors.length == 0) {
+			if (router instanceof OKRouter child) {
+				Node otherRoot = child.route;
+				node.flag = otherRoot.flag;
+				node.value = otherRoot.value;
+				node.table = otherRoot.table;
+				node.size = otherRoot.size;
+				node.mask = otherRoot.mask;
+				node.any = otherRoot.any;
+				//prependInterceptorArray(interceptors);
+				return this;
+			}
 
 			aset.prec = new Dispatcher[] {_getChecker(router)};
 		} else {

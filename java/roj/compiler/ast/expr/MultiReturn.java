@@ -21,23 +21,23 @@ import static roj.compiler.ast.GeneratorUtil.RETURNSTACK_TYPE;
  * @author Roj234
  * @since 2024/6/9 0009 1:42
  */
-final class MultiReturn extends ExprNode {
-	private final List<ExprNode> values;
+final class MultiReturn extends Expr {
+	private final List<Expr> values;
 	private MyBitSet _callUnsafe;
 	private Generic exactType;
 
-	public MultiReturn(List<ExprNode> values) {this.values = values;}
+	public MultiReturn(List<Expr> values) {this.values = values;}
 
 	@Override public String toString() {return "{"+TextUtil.join(values, ", ")+"}";}
 
 	@Override
-	public ExprNode resolve(LocalContext ctx) throws ResolveException {
+	public Expr resolve(LocalContext ctx) throws ResolveException {
 		if (values.size() == 0 || values.size() > 255) ctx.report(this, Kind.ERROR, "泛型过长："+values.size());
 
 		_callUnsafe = new MyBitSet(values.size());
 
 		for (int i = 0; i < values.size(); i++) {
-			ExprNode node = values.get(i).resolve(ctx);
+			Expr node = values.get(i).resolve(ctx);
 			values.set(i, node);
 			if (!(node instanceof LocalVariable) && !node.isConstant()) {
 				_callUnsafe.add(i);
@@ -84,7 +84,7 @@ final class MultiReturn extends ExprNode {
 
 	public int capacity() {
 		int cap = 0;
-		for (ExprNode value : values) {
+		for (Expr value : values) {
 			switch (TypeCast.getDataCap(value.type().getActualType())) {
 				case 0, 1 -> cap += 1;
 				case 2, 3 -> cap += 2;

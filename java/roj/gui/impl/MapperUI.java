@@ -202,7 +202,7 @@ public class MapperUI extends JFrame {
 	}
 
 	public static void main(String[] args) throws Exception {
-		GuiUtil.systemLook();
+		GuiUtil.systemLaf();
 		MapperUI f = new MapperUI();
 
 		f.setDefaultCloseOperation(EXIT_ON_CLOSE);

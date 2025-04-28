@@ -6,22 +6,22 @@ import roj.asm.type.IType;
 import roj.asm.type.Type;
 import roj.compiler.api.Types;
 import roj.compiler.asm.MethodWriter;
-import roj.compiler.ast.expr.ExprNode;
-import roj.compiler.ast.expr.VarNode;
+import roj.compiler.ast.expr.Expr;
+import roj.compiler.ast.expr.LeftValue;
 import roj.compiler.context.LocalContext;
 import roj.compiler.resolve.TypeCast;
 
 /**
- * 操作符 - 获取列表某项
+ * AST - 获取列表某项
  * @author Roj234
  * @since 2024/12/1 8:24
  */
-final class ListGet extends VarNode {
-	private ExprNode list, index;
+final class ListGet extends LeftValue {
+	private Expr list, index;
 	private TypeCast.Cast cast;
 	private IType componentType;
 
-	ListGet(ExprNode list, ExprNode index) {
+	ListGet(Expr list, Expr index) {
 		this.list = list;
 		this.index = index;
 	}
@@ -31,7 +31,7 @@ final class ListGet extends VarNode {
 
 	@NotNull
 	@Override
-	public ExprNode resolve(LocalContext ctx) {
+	public Expr resolve(LocalContext ctx) {
 		list = list.resolve(ctx);
 		index = index.resolve(ctx);
 
@@ -60,20 +60,20 @@ final class ListGet extends VarNode {
 	@Override
 	public void preLoadStore(MethodWriter cw) {
 		preStore(cw);
-		cw.one(Opcodes.DUP2);
+		cw.insn(Opcodes.DUP2);
 		cw.invokeItf("java/util/List", "get", "(I)Ljava/lang/Object;");
 	}
 
 	@Override
 	public void postStore(MethodWriter cw, int state) {
 		cw.invokeItf("java/util/List", "set", "(ILjava/lang/Object;)Ljava/lang/Object;");
-		if (state == 0) cw.one(Opcodes.POP);
+		if (state == 0) cw.insn(Opcodes.POP);
 	}
 
 	@Override
 	public int copyValue(MethodWriter cw, boolean twoStack) {
 		if (MoreOpPlugin.UseOriginalPut) return 1;
-		cw.one(twoStack?Opcodes.DUP2_X2:Opcodes.DUP_X2);
+		cw.insn(twoStack?Opcodes.DUP2_X2:Opcodes.DUP_X2);
 		return 0;
 	}
 

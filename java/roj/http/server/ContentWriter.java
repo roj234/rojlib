@@ -14,15 +14,10 @@ import java.io.InputStream;
 public interface ContentWriter {
 	MyChannel connection();
 
-	/**
-	 * Gets speed limit in Byte per second
-	 */
-	int getSpeedLimit();
-	SpeedLimiter getSpeedLimiter();
-	void limitSpeed(int bps);
 	void limitSpeed(SpeedLimiter limiter);
+	SpeedLimiter getSpeedLimiter();
 
-	long getSendBytes();
+	long getBytesSent();
 
 	void write(DynByteBuf buf) throws IOException;
 	default int write(InputStream in) throws IOException {return write(in, 0);}

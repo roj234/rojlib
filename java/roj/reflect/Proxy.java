@@ -29,28 +29,28 @@ public class Proxy {
 		CodeWriter c = data.newMethod(ACC_PUBLIC | ACC_FINAL, "apply", "(Ljava/lang/Object;)Ljava/lang/Object;");
 		c.visitSize(3, 2);
 
-		c.one(ALOAD_1);
+		c.insn(ALOAD_1);
 		c.clazz(CHECKCAST, "[Ljava/lang/Object;");
-		c.one(ASTORE_1);
+		c.insn(ASTORE_1);
 
 		c.clazz(NEW, data.name());
-		c.one(DUP);
+		c.insn(DUP);
 		c.invokeD(data.name(), "<init>", "()V");
-		c.one(ASTORE_0);
+		c.insn(ASTORE_0);
 
-		c.one(ALOAD_0);
+		c.insn(ALOAD_0);
 		c.unpackArray(1, 0, data.fields.get(fid).fieldType());
 		c.field(PUTFIELD, data, fid);
 
 		for (int i = 0; i < extraFields.length; i++) {
 			int fid_ = extraFields[i];
-			c.one(ALOAD_0);
+			c.insn(ALOAD_0);
 			c.unpackArray(1, i+1, data.fields.get(fid_).fieldType());
 			c.field(PUTFIELD, data, fid_);
 		}
 
-		c.one(ALOAD_0);
-		c.one(ARETURN);
+		c.insn(ALOAD_0);
+		c.insn(ARETURN);
 
 		proxyMethods(data, itfs, fid, overrider);
 		return fid;
@@ -67,7 +67,7 @@ public class Proxy {
 				CodeWriter c = data.newMethod(ACC_PUBLIC | ACC_FINAL, m.getName(), desc);
 				int s = TypeHelper.paramSize(desc)+1;
 				c.visitSize(s,s);
-				c.one(ALOAD_0);
+				c.insn(ALOAD_0);
 				c.field(GETFIELD, data, fid);
 				List<Type> par = c.mn.parameters();
 				for (int i = 0; i < par.size(); i++) {

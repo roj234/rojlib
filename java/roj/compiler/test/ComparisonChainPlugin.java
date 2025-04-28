@@ -4,7 +4,7 @@ import roj.asm.MethodNode;
 import roj.asm.Opcodes;
 import roj.asm.insn.Label;
 import roj.asm.type.Type;
-import roj.compiler.ast.expr.ExprNode;
+import roj.compiler.ast.expr.Expr;
 import roj.compiler.ast.expr.Invoke;
 import roj.compiler.context.LocalContext;
 import roj.compiler.diagnostic.Kind;
@@ -38,9 +38,9 @@ public class ComparisonChainPlugin {
 
 			if (ch.sourceType() != null) {
 				ch.sourceType().write(cw, false);
-				cw.one(Opcodes.DUP);
+				cw.insn(Opcodes.DUP);
 				cw.jump(Opcodes.IFNE, EndLoc);
-				cw.one(Opcodes.POP);
+				cw.insn(Opcodes.POP);
 			}
 
 			List<Invoke> methods = ch.chain();
@@ -50,15 +50,15 @@ public class ComparisonChainPlugin {
 				if (mn.name().startsWith("compare")) {
 					Type myParamType = mn.parameters().get(0);
 
-					List<ExprNode> arguments = m.getArguments();
+					List<Expr> arguments = m.getArguments();
 					Type wrapper = TypeCast.getWrapper(myParamType);
 					if (wrapper != null) {
 						for (int i = 0; i < arguments.size(); i++) {
-							ExprNode argument = arguments.get(i);
+							Expr argument = arguments.get(i);
 							argument.write(cw, LocalContext.get().castTo(argument.type(), myParamType, 0));
 						}
 						cw.invokeS(wrapper.owner(), "compare", "("+(char)myParamType.type+(char)myParamType.type+")I");
-						if (mn.name().equals("compareFalseFirst")) cw.one(Opcodes.INEG);
+						if (mn.name().equals("compareFalseFirst")) cw.insn(Opcodes.INEG);
 					} else {
 						if (myParamType.owner.equals("java/lang/Object")) {
 							//public abstract <T> ComparisonChain compare(@Nullable T a, @Nullable T b, Comparator<T> cmp);
@@ -81,9 +81,9 @@ public class ComparisonChainPlugin {
 						return;
 					}
 
-					cw.one(Opcodes.DUP);
+					cw.insn(Opcodes.DUP);
 					cw.jump(Opcodes.IFNE, EndLoc);
-					cw.one(Opcodes.POP);
+					cw.insn(Opcodes.POP);
 				}
 			}
 

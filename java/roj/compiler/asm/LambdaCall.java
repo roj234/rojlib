@@ -1,4 +1,4 @@
-package roj.compiler.resolve;
+package roj.compiler.asm;
 
 import roj.asm.ClassNode;
 import roj.asm.MethodNode;
@@ -21,7 +21,7 @@ import java.util.List;
  * @author Roj234
  * @since 2025/3/29 0029 17:30
  */
-public enum LambdaGenerator {
+public enum LambdaCall {
 	INVOKE_DYNAMIC {
 		/**
 		 *  前三个参数由VM提供

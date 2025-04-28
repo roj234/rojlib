@@ -13,15 +13,20 @@ import roj.http.server.auto.GET;
 import roj.http.server.auto.Interceptor;
 import roj.http.server.auto.POST;
 import roj.io.IOUtil;
+import roj.net.ChannelCtx;
+import roj.text.DateParser;
+import roj.ui.Terminal;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
 
+import java.awt.event.KeyEvent;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.security.SecureRandom;
 import java.util.List;
 
 import static roj.plugin.PanTweaker.CONFIG;
+import static roj.ui.CommandNode.literal;
 
 /**
  * @author Roj234
@@ -29,11 +34,6 @@ import static roj.plugin.PanTweaker.CONFIG;
  */
 @Interceptor("PermissionManager")
 final class WebUI {
-	static final class Menu {
-		String name, url, className;
-		List<Menu> child;
-	}
-
 	private final boolean terminal;
 	public WebUI(boolean terminal) {this.terminal = terminal;}
 
@@ -52,24 +52,67 @@ final class WebUI {
 
 	@GET
 	public void terminal(Request req, ResponseHeader rh) throws IOException {
-		if (!terminal || System.currentTimeMillis() < WebTerminal.timeout) {
+		if (!terminal || System.currentTimeMillis() < XTerm.timeout) {
 			rh.code(403).body(Content.internalError("该功能未启用"));
 			return;
 		}
 
 		if (req.header("upgrade").equals("websocket")) {
-			rh.body(Content.websocket(req, request -> new WebTerminal()));
+			rh.body(Content.websocket(req, request -> new XTerm()));
 		} else {
 			rh.body(Content.text("200 OK"));
 		}
 	}
+	private static final class XTerm extends WebTerminal {
+		static final ThreadLocal<WebTerminal> ACTIVE = new ThreadLocal<>();
 
-	public static final class EncryptRequest {
+		static long timeout;
+		static {
+			Panger.CMD.register(literal("disconnect").executes(ctx -> {
+				var wt = ACTIVE.get();
+				if (wt == null) Terminal.warning("该指令只能在Web终端中执行");
+				// 因为在当前线程上，所以有锁
+				else wt.close(ERR_CLOSED, "goodbye");
+			}));
+			Panger.CMD.onVirtualKey(key -> {
+				if (key == (Terminal.VK_CTRL| KeyEvent.VK_Q)) {
+					timeout = System.currentTimeMillis() + 300000;
+					Terminal.error("Web终端功能关闭至"+ DateParser.toLocalTimeString(timeout));
+					return false;
+				}
+				if (key == (Terminal.VK_CTRL|KeyEvent.VK_C)) {
+					if (ACTIVE.get() != null) {
+						Terminal.warning("为了防止误触发, Ctrl+C已在Web终端中禁用, 请使用stop指令");
+						return false;
+					}
+				}
+				return null;
+			});
+		}
+
+		@Override
+		public void channelTick(ChannelCtx ctx) throws IOException {
+			super.channelTick(ctx);
+			if (System.currentTimeMillis() < timeout) close(ERR_CLOSED, "disabled");
+		}
+
+		@Override
+		protected void onData(int ph, DynByteBuf in) {
+			ACTIVE.set(this);
+			try {
+				super.onData(ph, in);
+			} finally {
+				ACTIVE.remove();
+			}
+		}
+	}
+
+	static final class DEncrypt {
 		List<String> keys, texts, types, paddings;
 		String algorithm;
 	}
 	@POST
-	public Object denCrypt(Request req, @Body EncryptRequest json) {
+	public Object denCrypt(Request req, @Body DEncrypt json) {
 		req.responseHeader().put("content-type", "text/plain");
 
 		if (json.keys.isEmpty() || json.keys.size() != json.texts.size()) return "参数错误";

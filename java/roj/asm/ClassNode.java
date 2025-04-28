@@ -312,9 +312,9 @@ public class ClassNode implements IClass {
 
 		var c = newMethod(ACC_PUBLIC, "<init>", "()V");
 		c.visitSize(1, 1);
-		c.one(ALOAD_0);
+		c.insn(ALOAD_0);
 		c.invoke(INVOKESPECIAL, parent(), "<init>", "()V");
-		c.one(RETURN);
+		c.insn(RETURN);
 		c.finish();
 	}
 
@@ -328,10 +328,10 @@ public class ClassNode implements IClass {
 		var c = newMethod(ACC_PUBLIC, "clone", "()Ljava/lang/Object;");
 
 		c.visitSize(1, 1);
-		c.one(Opcodes.ALOAD_0);
+		c.insn(Opcodes.ALOAD_0);
 		c.invoke(Opcodes.INVOKESPECIAL, invokeSuper ? parent() : "java/lang/Object", "clone", "()Ljava/lang/Object;");
 		c.clazz(Opcodes.CHECKCAST, name());
-		c.one(Opcodes.ARETURN);
+		c.insn(Opcodes.ARETURN);
 		c.finish();
 	}
 	//endregion

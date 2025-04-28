@@ -5,7 +5,7 @@ import roj.asm.MethodNode;
 import roj.asm.Opcodes;
 import roj.asm.type.TypeHelper;
 import roj.compiler.ast.ParseTask;
-import roj.compiler.ast.expr.ExprNode;
+import roj.compiler.ast.expr.Expr;
 import roj.compiler.context.CompileUnit;
 import roj.compiler.context.JavaCompileUnit;
 import roj.compiler.context.LibraryZipFile;
@@ -41,7 +41,7 @@ public class LambdaLinker {
 	public final GlobalContextApi api = new GlobalContextApi();
 	public final LocalContext lctx = api.createLocalContext();
 	public final ClassLoader maker = new ClassDefiner(LambdaLinker.class.getClassLoader(), "LavaLambdaLinker");
-	public final Map<String, ExprNode> injector;
+	public final Map<String, Expr> injector;
 	public String fileName = "<eval>";
 
 	public LambdaLinker() throws IOException {
@@ -89,7 +89,7 @@ public class LambdaLinker {
 		TimeUnitPlugin.pluginInit(api);
 		new ComparisonChainPlugin().pluginInit(api);
 
-		api.attachment(AsmPlugin.INJECT_PROPERTY).put("咕咕咕", ExprNode.valueOf("咕咕咕咕，我是🕊"));
+		api.attachment(AsmPlugin.INJECT_PROPERTY).put("咕咕咕", Expr.valueOf("咕咕咕咕，我是🕊"));
 	}
 
 	public <T> T linkLambda(Class<T> functionalInterface, String methodStr, String... parName) throws Exception {return linkLambda("roj/lavac/Lambda"+ReflectionUtils.uniqueId(), functionalInterface, methodStr, parName);}

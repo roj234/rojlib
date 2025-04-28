@@ -48,7 +48,7 @@ import java.util.function.BiConsumer;
  */
 public class UnarchiverUI extends JFrame {
 	public static void main(String[] args) throws Exception {
-		GuiUtil.systemLook();
+		GuiUtil.systemLaf();
 		UnarchiverUI f = new UnarchiverUI();
 
 		f.pack();

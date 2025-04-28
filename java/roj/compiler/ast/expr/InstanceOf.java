@@ -16,12 +16,12 @@ import java.util.List;
  * @author Roj234
  * @since 2022/2/24 19:55
  */
-public final class InstanceOf extends ExprNode {
+public final class InstanceOf extends Expr {
 	private IType type;
-	private ExprNode left;
+	private Expr left;
 	private String variable;
 
-	public InstanceOf(IType type, ExprNode left, String variable) {
+	public InstanceOf(IType type, Expr left, String variable) {
 		this.type = type;
 		this.left = left;
 		this.variable = variable;
@@ -38,7 +38,7 @@ public final class InstanceOf extends ExprNode {
 
 	@Override
 	@SuppressWarnings("fallthrough")
-	public ExprNode resolve(LocalContext ctx) {
+	public Expr resolve(LocalContext ctx) {
 		left = left.resolve(ctx);
 
 		IType lType = left.type();

@@ -169,7 +169,7 @@ public class YAMLParser extends Parser {
 		}
 
 		clearComment();
-		return comment == null ? new CMap(map) : new CCommMap(map, comment);
+		return comment == null ? new CMap(map) : new CMap.Commentable(map, comment);
 	}
 
 	public CEntry parse(CharSequence text, int flag) throws ParseException {

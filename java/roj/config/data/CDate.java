@@ -18,7 +18,7 @@ public final class CDate extends CLong {
 	@NotNull
 	@Override public Type getType() { return Type.DATE; }
 	@Override public boolean mayCastTo(Type o) { return o == Type.DATE; }
-	@Override public void accept(CVisitor ser) { ser.valueDate(value); }
+	@Override public void accept(CVisitor visitor) { visitor.valueDate(value); }
 
 	@Override
 	public String toString() {return DateParser.GMT().toISOString(value);}

@@ -20,5 +20,5 @@ public class MemoryAudioOutput implements AudioOutput {
 		this.buf.clear();
 	}
 	@Override public void close() {}
-	@Override public int write(byte[] b, int off, int len, boolean flush) {buf.put(b, off, len);return len;}
+	@Override public int write(byte[] b, int off, int len, boolean blocking) {buf.put(b, off, len);return len;}
 }

@@ -71,9 +71,8 @@ public class Escape {
 		return sb;
 	}
 
-	public static final MyBitSet URI_SAFE = MyBitSet.from(TextUtil.digits).addAll("~!@$&*()_+-=/.,:;'|^`");
-	// = & + / ? removed
-	public static final MyBitSet URI_COMPONENT_SAFE = MyBitSet.from(TextUtil.digits).addAll("~!@$*()_-.,:;'|^`");
+	public static final MyBitSet URI_SAFE = MyBitSet.from(TextUtil.digits).addAll("~!$&*()_+-.,:;'");
+	public static final MyBitSet URI_COMPONENT_SAFE = MyBitSet.from(TextUtil.digits).addAll("~!*()_-.'");
 
 	public static String encodeURI(CharSequence src) { return encodeURI(new CharList(), src).toStringAndFree(); }
 	public static String encodeURIComponent(CharSequence src) { return encodeURIComponent(new CharList(), src).toStringAndFree(); }
@@ -110,8 +109,7 @@ public class Escape {
 		return sb;
 	}
 
-	// 为了与其他解析器兼容，我会序列化+号
-	private static final MyBitSet FILE_NAME_INVALID = MyBitSet.from("\\/:*?\"<>|+"), FILE_PATH_INVALID = MyBitSet.from(":*?\"<>|+");
+	private static final MyBitSet FILE_NAME_INVALID = MyBitSet.from("\\/:*?\"<>|"), FILE_PATH_INVALID = MyBitSet.from(":*?\"<>|");
 
 	public static String escapeFilePath(CharSequence src) { return escapeb(src, new CharList(), FILE_PATH_INVALID).toStringAndFree(); }
 	public static String escapeFileName(CharSequence src) { return escapeb(src, new CharList(), FILE_NAME_INVALID).toStringAndFree(); }

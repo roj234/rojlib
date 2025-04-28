@@ -88,7 +88,7 @@ public final class HttpServer11 extends PacketMerger implements PostSetting, Res
 
 	//仅用于生成访问日志
 	private long receivedBytes, sendBytes;
-	@Override public long getSendBytes() {return sendBytes;}
+	@Override public long getBytesSent() {return sendBytes;}
 
 	private HttpServer11(Router router) {this.router = router;}
 	public static HttpServer11 create(Router r) {return new HttpServer11(r);}
@@ -534,14 +534,9 @@ public final class HttpServer11 extends PacketMerger implements PostSetting, Res
 	@Override public Headers headers() {return req.responseHeader;}
 	//endregion
 	//region ResponseWriter
-	private static final int NOOB_LIMIT = 4080;
+	static final int NOOB_LIMIT = 4080;
 	private SpeedLimiter limiter;
 
-	@Override public int getSpeedLimit() {return limiter == null ? 0 : limiter.getBytePerSecond();}
-	@Override public void limitSpeed(int bps) {
-		if (limiter == null) limiter = new SpeedLimiter(NOOB_LIMIT, 5_000_000);
-		limiter.setBytePerSecond(bps);
-	}
 	@Override public void limitSpeed(SpeedLimiter limiter) {this.limiter = limiter;}
 	@Override public SpeedLimiter getSpeedLimiter() {return limiter;}
 

@@ -7,7 +7,8 @@ import java.io.IOException;
  * @since 2024/7/21 0021 7:37
  */
 public interface ITerminal {
-	boolean readBack(boolean sync) throws IOException;
+	default boolean unicode() {return false;}
+	boolean read(boolean sync) throws IOException;
 	void write(CharSequence str);
 	default void flush() {}
 }

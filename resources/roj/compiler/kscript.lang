@@ -251,7 +251,7 @@ block.except.switch=case, default或'}'
 expr.stackOverflow=表达式太复杂
 expr.lambda.pattern=需要->
 expr.lambda.illegal=lambda表达式格式错误
-expr.easyMap.kvOrRet='->'或','
+expr.mapLiteral.kvOrRet='->'或','
 expr.notVariable='%1'期待变量类型
 expr.newArray.generic=[NewArray]创建泛型数组
 expr.newArray.unInit=[NewArray]期待数组初始化
@@ -269,10 +269,6 @@ arrayGet.error.notArray=[ArrayGet] %1 不是数组
 arrayGet.warn.constant=[ArrayGet]值总是常量
 arrayGet.note.uselessCreation=[ArrayGet]建议将该数组转换为static final字段
 assign.incompatible.redundantCast=[Assign][Incompatible]Lavac支持在赋值时自动降级
-assign.error.final=[Assign]无法为最终变量%1分配值
-assignD.error.cast=[AssignD]直接赋值操作符无法进行%1到%2的类型转换
-binary.error.void=[Binary]void不是有效的值
-binary.error.notApplicable=[Binary]%1和%2不是操作符%3的有效参数
 binary.constant=[Binary]值总是%1
 binary.divisionByZero=除数为零
 binary.uselessNullish=无意义的??表达式
@@ -318,12 +314,18 @@ invoke.wrongInstantiationEnclosing=创建的类%1不是内部类，是静态内�
 trinary.constant=[Trinary]值总是常量
 this.static=无法在静态上下文中引用this
 this.no_super=%1没有父类
-unary.error.notApplicable=运算符'%1'不适用于'%2'
+
+op.notApplicable.unary=运算符 %1 不适用于 %2
+op.notApplicable.binary=运算符 %1 不适用于 %2 和 %3
+
 unary.warn.wrapper=[Unary]对包装类型%1的%2操作
-unary.error.void=[Unary]空类型
-unary.error.final=无法为最终变量%1分配值
+
+var.voidType=空类型 %1
+var.assignFinal=无法为最终变量%1分配值
+var.notAssignable=期待变量，但找到了值 %1
 var.notAssigned=可能尚未初始化变量%1
 var.refByNest=变量的值在此前已拷贝到隔离的上下文(如内部类或lambda), 赋值将不会影响隔离的变量
+
 multiReturn.incompatible=只有多返回值方法才能使用多返回值语法糖
 multiReturn.russianToy="禁止套娃！\n  须知：ReturnStack是线程单例"
 multiReturn.sideEffect="潜在的副作用。\n  须知：ReturnStack是线程单例"
@@ -363,6 +365,7 @@ invoke.namedArgs=参数名称不匹配
 invoke.warn.illegalNameList=[ML]%1.%2的参数属性格式不合法
 #invoke.error.paramMissing=[ML]对%1.%2的按名称调用缺少参数%3
 invoke.error.paramExtra=[ML]对%1.%2的按名称调用多余参数%3
+invoke.error.varargCount=可变参数数量限制：%1 实际参数数量: %2
 
 # 类型转换 (注意，当修改TypeCast中对应数值需要同步这里)
 typeCast.warn.rawTypes=[TypeCast]对原始类型的转换: %1 => %2

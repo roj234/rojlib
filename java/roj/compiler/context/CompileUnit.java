@@ -14,7 +14,6 @@ import roj.asm.insn.*;
 import roj.asm.type.*;
 import roj.asm.util.ClassLike;
 import roj.asmx.AnnotationSelf;
-import roj.asmx.mapper.NameAndType;
 import roj.collect.*;
 import roj.compiler.LavaFeatures;
 import roj.compiler.Tokens;
@@ -22,7 +21,7 @@ import roj.compiler.api.Types;
 import roj.compiler.asm.*;
 import roj.compiler.ast.BlockParser;
 import roj.compiler.ast.ParseTask;
-import roj.compiler.ast.expr.ExprNode;
+import roj.compiler.ast.expr.Expr;
 import roj.compiler.ast.expr.ExprParser;
 import roj.compiler.diagnostic.Kind;
 import roj.compiler.doc.Javadoc;
@@ -732,7 +731,7 @@ public abstract class CompileUnit extends ClassNode implements ClassLike {
 		}
 		// 不能静态继承非静态类
 		var parentInfo = ctx.classes.getClassInfo(parent);
-		var icFlag = ctx.classes.getInnerClassFlags(parentInfo).get(parent);
+		var icFlag = ctx.classes.getInnerClassInfo(parentInfo).get(parent);
 		if (icFlag != null && (icFlag.modifier&ACC_STATIC) == 0) {
 			if (isNonStaticInnerClass()) {
 				ctx.castTo(Type.klass(_parent.name()), Type.klass(icFlag.parent), 0);
@@ -856,7 +855,7 @@ public abstract class CompileUnit extends ClassNode implements ClassLike {
 				w.field(GETSTATIC, this, fid);
 				w.invoke(INVOKEVIRTUAL, arrayType_, "clone", "()Ljava/lang/Object;");
 				w.clazz(CHECKCAST, arrayType_);
-				w.one(ARETURN);
+				w.insn(ARETURN);
 				w.finish();
 			} else if (methods.get(mid).modifier != (ACC_PUBLIC|ACC_STATIC)) {
 				ctx.report(methodIdx.get(mid), Kind.ERROR, "cu.enumMethod");
@@ -868,10 +867,10 @@ public abstract class CompileUnit extends ClassNode implements ClassLike {
 				w = newMethod(ACC_PUBLIC|ACC_STATIC, "valueOf", "(Ljava/lang/String;)L"+name+";");
 				w.visitSize(2, 1);
 				w.ldc(cp.getClazz(name));
-				w.one(ALOAD_0);
+				w.insn(ALOAD_0);
 				w.invokeS("java/lang/Enum", "valueOf", "(Ljava/lang/Class;Ljava/lang/String;)Ljava/lang/Enum;");
 				w.clazz(CHECKCAST, name);
-				w.one(ARETURN);
+				w.insn(ARETURN);
 				w.finish();
 			} else if (methods.get(mid).modifier != (ACC_PUBLIC|ACC_STATIC)) {
 				ctx.report(methodIdx.get(mid), Kind.ERROR, "cu.enumMethod");
@@ -899,9 +898,9 @@ public abstract class CompileUnit extends ClassNode implements ClassLike {
 					w = newMethod(ACC_PUBLIC|ACC_FINAL, field.name(), "()"+field.rawDesc());
 					Type fieldType = field.fieldType();
 					w.visitSize(fieldType.length(), 1);
-					w.one(ALOAD_0);
+					w.insn(ALOAD_0);
 					w.field(GETFIELD, this, i);
-					w.one(fieldType.shiftedOpcode(ARETURN));
+					w.insn(fieldType.shiftedOpcode(ARETURN));
 					w.finish();
 
 					var sign = ((LPSignature) field.getRawAttribute("Signature"));
@@ -919,7 +918,7 @@ public abstract class CompileUnit extends ClassNode implements ClassLike {
 				generateConstructor = false;
 
 				var cw = newWritableMethod(ACC_PUBLIC, "<init>", "()V");
-				cw.one(ALOAD_0);
+				cw.insn(ALOAD_0);
 				cw.invoke(INVOKESPECIAL, "java/lang/Record", "<init>", "()V");
 
 				List<Type> parameters = methods.get(methods.size() - 1).parameters();
@@ -930,7 +929,7 @@ public abstract class CompileUnit extends ClassNode implements ClassLike {
 					finalFields.remove(fields.get(i));
 					Type fieldType = fields.get(i).fieldType();
 
-					cw.one(ALOAD_0);
+					cw.insn(ALOAD_0);
 					cw.varLoad(fieldType, slot);
 					cw.field(PUTFIELD, this, i);
 
@@ -939,7 +938,7 @@ public abstract class CompileUnit extends ClassNode implements ClassLike {
 				}
 				cw.visitSize(stack, slot);
 
-				cw.one(Opcodes.RETURN);
+				cw.insn(Opcodes.RETURN);
 				cw.finish();
 			}
 
@@ -966,9 +965,9 @@ public abstract class CompileUnit extends ClassNode implements ClassLike {
 			if (mid < 0) {
 				var cw = newWritableMethod(ACC_PUBLIC|ACC_FINAL, "toString", "()Ljava/lang/String;");
 				cw.visitSize(2, 1);
-				cw.one(ALOAD_0);
+				cw.insn(ALOAD_0);
 				cw.invokeDyn(refId, "toString", "(L"+name+";)Ljava/lang/String;", 0);
-				cw.one(ARETURN);
+				cw.insn(ARETURN);
 				cw.finish();
 			} else if (methods.get(mid).modifier != (ACC_PUBLIC|ACC_FINAL)) {
 				ctx.report(methodIdx.get(mid), Kind.ERROR, "cu.enumMethod");
@@ -978,9 +977,9 @@ public abstract class CompileUnit extends ClassNode implements ClassLike {
 			if (mid < 0) {
 				w = newMethod(ACC_PUBLIC|ACC_FINAL, "hashCode", "()I");
 				w.visitSize(1, 1);
-				w.one(ALOAD_0);
+				w.insn(ALOAD_0);
 				w.invokeDyn(refId, "hashCode", "(L"+name+";)I", 0);
-				w.one(IRETURN);
+				w.insn(IRETURN);
 				w.finish();
 			} else if (methods.get(mid).modifier != (ACC_PUBLIC|ACC_FINAL)) {
 				ctx.report(methodIdx.get(mid), Kind.ERROR, "cu.enumMethod");
@@ -990,10 +989,10 @@ public abstract class CompileUnit extends ClassNode implements ClassLike {
 			if (mid < 0) {
 				w = newMethod(ACC_PUBLIC|ACC_FINAL, "equals", "(Ljava/lang/Object;)Z");
 				w.visitSize(2, 2);
-				w.one(ALOAD_0);
-				w.one(ALOAD_1);
+				w.insn(ALOAD_0);
+				w.insn(ALOAD_1);
 				w.invokeDyn(refId, "equals", "(L"+name+";Ljava/lang/Object;)Z", 0);
-				w.one(IRETURN);
+				w.insn(IRETURN);
 				w.finish();
 			} else if (methods.get(mid).modifier != (ACC_PUBLIC|ACC_FINAL)) {
 				ctx.report(methodIdx.get(mid), Kind.ERROR, "cu.enumMethod");
@@ -1012,8 +1011,8 @@ public abstract class CompileUnit extends ClassNode implements ClassLike {
 
 		if (isNewNonStaticInnerClass) {
 			var glinit = getGlobalInit();
-			glinit.one(ALOAD_0);
-			glinit.one(ALOAD_1);
+			glinit.insn(ALOAD_0);
+			glinit.insn(ALOAD_1);
 			glinit.field(PUTFIELD, name, NestContext.InnerClass.FIELD_HOST_REF, "L"+_parent.name+";");
 		}
 	}
@@ -1022,7 +1021,7 @@ public abstract class CompileUnit extends ClassNode implements ClassLike {
 		if (isNonStaticInnerClass()) {
 			String parent = parent();
 			var parentInfo = ctx.classes.getClassInfo(parent);
-			var icFlag = ctx.classes.getInnerClassFlags(parentInfo).get(parent);
+			var icFlag = ctx.classes.getInnerClassInfo(parentInfo).get(parent);
 			return icFlag != null && (icFlag.modifier & ACC_STATIC) == 0;
 		}
 		return false;
@@ -1042,7 +1041,7 @@ public abstract class CompileUnit extends ClassNode implements ClassLike {
 			String parent = parent();
 			ClassNode pInfo = ctx.classes.getClassInfo(parent);
 
-			var icFlag = ctx.classes.getInnerClassFlags(pInfo).get(parent);
+			var icFlag = ctx.classes.getInnerClassInfo(pInfo).get(parent);
 
 			String parentArg = icFlag != null && (icFlag.modifier & ACC_STATIC) == 0 ? "(L"+icFlag.parent+";)V" : "()V";
 
@@ -1388,10 +1387,10 @@ public abstract class CompileUnit extends ClassNode implements ClassLike {
 
 		if (newObject) {
 			c.clazz(Opcodes.NEW, it.owner);
-			c.one(DUP);
+			c.insn(DUP);
 			c.visitSize(TypeHelper.paramSize(it.rawDesc())+2, TypeHelper.paramSize(my.rawDesc()));
 		} else if ((it.modifier&ACC_STATIC) == 0) {
-			c.one(ALOAD_0);
+			c.insn(ALOAD_0);
 			c.visitSize(TypeHelper.paramSize(it.rawDesc())+1, TypeHelper.paramSize(my.rawDesc())+1);
 		} else {
 			base = 0;
@@ -1412,7 +1411,7 @@ public abstract class CompileUnit extends ClassNode implements ClassLike {
 
 		ctx.castTo(it.returnType(), my.returnType(), TypeCast.E_DOWNCAST).write(c);
 		if (end) {
-			c.one(my.returnType().shiftedOpcode(IRETURN));
+			c.insn(my.returnType().shiftedOpcode(IRETURN));
 			c.finish();
 		}
 		return c;
@@ -1530,7 +1529,7 @@ public abstract class CompileUnit extends ClassNode implements ClassLike {
 					String name = entry.getKey();
 
 					Object node = Helpers.cast(extra.remove(name));
-					if (node instanceof ExprNode expr) a.raw().put(name, AnnotationPrimer.toAnnVal(ctx, expr, entry.getValue()));
+					if (node instanceof Expr expr) a.raw().put(name, AnnotationPrimer.toAnnVal(ctx, expr, entry.getValue()));
 					else if (node == null && !desc.values.containsKey(entry.getKey())) missed.add(name);
 				}
 
@@ -1730,7 +1729,7 @@ public abstract class CompileUnit extends ClassNode implements ClassLike {
 		for (int i = 0; i < lazyTasks.size(); i++) lazyTasks.get(i).parse(ctx);
 		lazyTasks.clear();
 
-		if (clinit != null) clinit.one(Opcodes.RETURN);
+		if (clinit != null) clinit.insn(Opcodes.RETURN);
 
 		for (FieldNode field : finalFields) {
 			ctx.report(fieldIdx.get(fields.indexOfAddress(field)), Kind.ERROR, "var.notAssigned", field.name());
@@ -1740,7 +1739,7 @@ public abstract class CompileUnit extends ClassNode implements ClassLike {
 		// 隐式构造器
 		if (glinit != null && glInitBytes == null && extraModifier != (ACC_FINAL|ACC_INTERFACE)) {
 			glinit.computeFrames(AttrCode.COMPUTE_SIZES|AttrCode.COMPUTE_FRAMES);
-			glinit.one(Opcodes.RETURN);
+			glinit.insn(Opcodes.RETURN);
 			glinit.finish();
 		}
 

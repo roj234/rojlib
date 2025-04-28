@@ -119,7 +119,7 @@ public class JSONParser extends Parser {
 		}
 
 		wr.clearComment();
-		return comment == null ? new CMap(map) : new CCommMap(map, comment);
+		return comment == null ? new CMap(map) : new CMap.Commentable(map, comment);
 	}
 
 	@SuppressWarnings("fallthrough")
@@ -134,11 +134,98 @@ public class JSONParser extends Parser {
 			case FALSE: return CBoolean.FALSE;
 			case INTEGER: return CEntry.valueOf(w.asInt());
 			case LONG: return CEntry.valueOf(w.asLong());
-			case FLOAT: return CEntry.valueOf(w.asFloat());
 			case DOUBLE: return CEntry.valueOf(w.asDouble());
 		}
 	}
 
 	@Override
 	protected final Word readStringLegacy(char key) throws ParseException { return formClip(STRING, readSlashString(key, key != '\'')); }
+
+	/*/region NG API
+	@Override
+	public ParseException error(String message) {return err(message);}
+
+	@Override
+	public int peekToken() {
+		return switch (wd.type()) {
+			case lBracket -> TOKEN_ARRAY;
+			case lBrace -> TOKEN_MAP;
+			case LITERAL, STRING -> TOKEN_STRING;
+			case NULL -> TOKEN_NULL;
+			case TRUE, FALSE -> TOKEN_BOOL;
+			case INTEGER -> TOKEN_INT;
+			case LONG -> TOKEN_INT64;
+			case DOUBLE -> TOKEN_FLOAT64;
+			default -> -1;
+		};
+	}
+
+	@Override
+	public int nextToken() throws ParseException, IOException {next();return peekToken();}
+
+	@Override
+	public boolean getBoolean() throws ParseException {
+		Word w = wd;
+		if (w.type() == TRUE) return true;
+		if (w.type() == FALSE) return false;
+		throw err(w+" is not boolean");
+	}
+
+	@Override
+	public int getInt() throws ParseException {return wd.asInt();}
+
+	@Override
+	public long getLong() throws ParseException {return wd.asLong();}
+
+	@Override
+	public double getDouble() throws ParseException {return wd.asDouble();}
+
+	@Override
+	public @Nullable String getString() throws ParseException {
+		Word w = wd;
+		if (w.type() == NULL) return null;
+		if (w.type() == Word.STRING || w.type() == Word.LITERAL) return w.val();
+		throw err("Excepting string");
+	}
+
+	@Override
+	public int getMap() throws ParseException {
+		Word w = wd;
+		if (w.type() == NULL) return -2;
+		if (w.type() == lBrace) return -1;
+		next();
+		throw err("Excepting map start {");
+	}
+
+	@Override
+	public void nextMapKey() throws ParseException, IOException {
+		except(colon, "Excepting map key delim :");
+		next();
+	}
+
+	@Override
+	public boolean nextIsMapEnd() throws ParseException, IOException {
+		Word w = next();
+		if (w.type() == comma) return false;
+		if (w.type() == rBrace) return true;
+		throw err("Excepting map end }");
+	}
+
+	@Override
+	public int getArray() throws ParseException {
+		Word w = wd;
+		if (w.type() == NULL) return -2;
+		if (w.type() == lBracket) return -1;
+		next();
+		throw err("Excepting array start [");
+	}
+
+	@Override
+	public boolean nextIsArrayEnd() throws ParseException, IOException {
+		Word w = next();
+		if (w.type() == comma) return false;
+		if (w.type() == rBracket) return true;
+		throw err("Excepting array end ]");
+	}
+	//endregion*/
 }

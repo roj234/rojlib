@@ -13,8 +13,7 @@ import roj.collect.SimpleList;
 import roj.collect.ToIntMap;
 import roj.compiler.asm.MethodWriter;
 import roj.compiler.asm.Variable;
-import roj.compiler.ast.expr.ExprNode;
-import roj.compiler.ast.expr.ExprParser;
+import roj.compiler.ast.expr.Expr;
 import roj.compiler.ast.expr.LocalVariable;
 import roj.compiler.context.CompileUnit;
 import roj.compiler.context.LocalContext;
@@ -34,11 +33,11 @@ public sealed abstract class NestContext {
 	// 外部类名称
 	final String host;
 	// 构造时的参数列表
-	final List<ExprNode> hostArguments;
+	final List<Expr> hostArguments;
 	// 外部类此时可用的变量
 	final Map<String, Variable> hostVariables;
 
-	NestContext(String host, List<ExprNode> hostArguments, Map<String, Variable> hostVariables) {
+	NestContext(String host, List<Expr> hostArguments, Map<String, Variable> hostVariables) {
 		this.host = host;
 		this.hostArguments = hostArguments;
 		this.hostVariables = hostVariables;
@@ -52,9 +51,9 @@ public sealed abstract class NestContext {
 	public abstract LocalContext.Import resolveField(LocalContext ctx, SimpleList<NestContext> nestHost, int i, String name);
 	public LocalContext.Import resolveMethod(LocalContext ctx, SimpleList<NestContext> nestHost, int i, String name) {return null;}
 
-	public static NestContext anonymous(LocalContext ctx, CompileUnit nest, MethodWriter nestConstructor, List<ExprNode> hostArgsLoad) {return new NestContext.InnerClass(ctx.file.name(), hostArgsLoad, ctx.variables, nest, nestConstructor);}
+	public static NestContext anonymous(LocalContext ctx, CompileUnit nest, MethodWriter nestConstructor, List<Expr> hostArgsLoad) {return new NestContext.InnerClass(ctx.file.name(), hostArgsLoad, ctx.variables, nest, nestConstructor);}
 	public static NestContext innerClass(LocalContext ctx, String host, CompileUnit nest) {return new NestContext.InnerClass(host, nest);}
-	public static NestContext lambda(LocalContext ctx, List<Type> nestArgs, List<Type> hostArgs, List<ExprNode> hostArgsLoad) {return new NestContext.Lambda(ctx.variables, nestArgs, hostArgs, hostArgsLoad);}
+	public static NestContext lambda(LocalContext ctx, List<Type> nestArgs, List<Type> hostArgs, List<Expr> hostArgsLoad) {return new NestContext.Lambda(ctx.variables, nestArgs, hostArgs, hostArgsLoad);}
 
 	public static final class InnerClass extends NestContext {
 		public static final String FIELD_HOST_REF = "$host";
@@ -67,7 +66,7 @@ public sealed abstract class NestContext {
 		// 内部字段
 		private final ToIntMap<Object> fieldIds = new ToIntMap<>();
 
-		InnerClass(String host, List<ExprNode> hostArgs, Map<String, Variable> hostVars, CompileUnit nest, MethodWriter nestConstructor) {
+		InnerClass(String host, List<Expr> hostArgs, Map<String, Variable> hostVars, CompileUnit nest, MethodWriter nestConstructor) {
 			super(host, hostArgs, hostVars);
 			this.nest = nest;
 			this.constructor = nestConstructor;
@@ -93,7 +92,7 @@ public sealed abstract class NestContext {
 				fid = nest.newField(Opcodes.ACC_SYNTHETIC|Opcodes.ACC_FINAL, FIELD_HOST_REF, type);
 				fieldIds.putInt(this, fid);
 
-				copyIn(new ExprNode() {
+				copyIn(new Expr() {
 					@Override public String toString() {return "this<"+type+">";}
 					@Override public IType type() {return type;}
 					@Override public void write(MethodWriter cw, boolean noRet) {
@@ -111,13 +110,13 @@ public sealed abstract class NestContext {
 				fid = nest.newField(Opcodes.ACC_SYNTHETIC|Opcodes.ACC_FINAL, "arg$"+v.name, v.type.rawType().toDesc());
 				fieldIds.put(v, fid);
 
-				v.refByNest = true;
+				v.implicitCopied = true;
 				// to invoke constructor
 				copyIn(new LocalVariable(v), fid);
 			}
 			return fid;
 		}
-		private void copyIn(ExprNode external, int fid) {
+		private void copyIn(Expr external, int fid) {
 			var ctx = LocalContext.get();
 			ctx.thisUsed = true;
 
@@ -126,7 +125,7 @@ public sealed abstract class NestContext {
 			var type = external.type().rawType();
 			constructor.mn.parameters().add(type);
 
-			constructor.one(Opcodes.ALOAD_0);
+			constructor.insn(Opcodes.ALOAD_0);
 			constructor.varLoad(type, localSize);
 			constructor.field(Opcodes.PUTFIELD, nest, fid);
 			int length = type.length();
@@ -186,7 +185,7 @@ public sealed abstract class NestContext {
 			for (int i = nestHost.size() - 1; i >= 0; i--) {
 				if (nestHost.get(i) instanceof InnerClass ic) {
 					// must use This(), will reference topmost fieldIds
-					return new LocalContext.Import(owner, name, ExprParser.fieldChain(ctx.ep.This().resolve(ctx), ic.nest, null, isFinal, chain));
+					return new LocalContext.Import(owner, name, Expr.fieldChain(ctx.ep.This().resolve(ctx), ic.nest, null, isFinal, chain));
 				}
 			}
 			throw new AssertionError();
@@ -197,7 +196,7 @@ public sealed abstract class NestContext {
 		private final List<Type> nestArgs, hostArgs;
 		private int localSize;
 
-		public Lambda(Map<String, Variable> hostVars, List<Type> nestArgs, List<Type> hostArgs, List<ExprNode> hostArgsLoad) {
+		public Lambda(Map<String, Variable> hostVars, List<Type> nestArgs, List<Type> hostArgs, List<Expr> hostArgsLoad) {
 			super("OIIAOIIA", hostArgsLoad, hostVars);
 
 			this.fieldIds = new LinkedMyHashMap<>();
@@ -212,7 +211,7 @@ public sealed abstract class NestContext {
 			if (hostVar == null) return null;
 
 			var nestVar = fieldIds.computeIfAbsent(hostVar, hostVariable -> {
-				hostVariable.refByNest = true;
+				hostVariable.implicitCopied = true;
 
 				Type rawType = hostVariable.type.rawType();
 

@@ -246,13 +246,13 @@ public abstract class SerializerFactory {
 				if (hasSized) {
 					cw.visitSize(3, 2);
 					Label label = new Label();
-					cw.one(ILOAD_1);
+					cw.insn(ILOAD_1);
 					cw.jump(IFLT, label);
 					cw.clazz(NEW, asmName);
-					cw.one(DUP);
-					cw.one(ILOAD_1);
+					cw.insn(DUP);
+					cw.insn(ILOAD_1);
 					cw.invokeD(asmName, "<init>", "(I)V");
-					cw.one(ARETURN);
+					cw.insn(ARETURN);
 					cw.label(label);
 				}
 				cw.visitSizeMax(2, 2);
@@ -261,20 +261,20 @@ public abstract class SerializerFactory {
 				cw.visitSize(3, 2);
 				Label label = new Label();
 
-				cw.one(ILOAD_1);
+				cw.insn(ILOAD_1);
 				cw.jump(IFGE, label);
 
 				cw.ldc(16);
-				cw.one(ISTORE_1);
+				cw.insn(ISTORE_1);
 				cw.label(label);
 
 				cw.clazz(NEW, asmName);
-				cw.one(DUP);
-				cw.one(ILOAD_1);
+				cw.insn(DUP);
+				cw.insn(ILOAD_1);
 				cw.invokeD(asmName, "<init>", "(I)V");
 			}
 
-			cw.one(ARETURN);
+			cw.insn(ARETURN);
 
 			IntFunction<T> fn = Helpers.cast(ClassDefiner.make(c, type.getClassLoader()));
 			dc.put(type.getName(), fn);

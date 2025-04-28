@@ -404,7 +404,7 @@ public class NiximSystemV2 implements ITransformer {
 					List<MethodNode> nodes = data.methods;
 					for (int j = 0; j < nodes.size(); j++) {
 						MethodNode mn = nodes.get(j);
-						if (mn.descMatch(ref.desc())) {
+						if (mn.matches(ref.desc())) {
 							Pcd pcd = new Pcd();
 							pcd.name = mn.name();
 							pcd.desc = mn.rawDesc();
@@ -1135,7 +1135,7 @@ public class NiximSystemV2 implements ITransformer {
 									itr = mnCode.instructions.since(node.bci());
 
 									InsnList list = new InsnList();
-									list.one(ALOAD_0);
+									list.insn(ALOAD_0);
 									node.insertBefore(list, false);
 
 									break block;
@@ -1184,7 +1184,7 @@ public class NiximSystemV2 implements ITransformer {
 					}
 				} else {
 					if ((s.method.modifier & ACC_STATIC) == 0) {
-						replaceTo.one(ALOAD_0);
+						replaceTo.insn(ALOAD_0);
 						replaceTo.invokeV(data.name(), s.method.name(), s.method.rawDesc());
 					} else {
 						replaceTo.invokeS(data.name(), s.method.name(), s.method.rawDesc());
@@ -1352,7 +1352,7 @@ public class NiximSystemV2 implements ITransformer {
 						tmpList.clear();
 
 						switch (returnHookType>>>8) {
-							case 0: tmpList.one(POP); break; // 放弃返回值
+							case 0: tmpList.insn(POP); break; // 放弃返回值
 							case 1: break; // 形如int v=$$VALUE_I(),并且就在方法开头  或者  是VOID 直接跳
 							case 2: tmpList.vars((byte) returnHookType, retValId); break; // 储存至变量
 						}
@@ -1628,7 +1628,7 @@ public class NiximSystemV2 implements ITransformer {
 		private boolean autoCopy(Desc d) {
 			for (int i = 0; i < autoCopy.size(); i++) {
 				MethodNode node = autoCopy.get(i);
-				if (node.descMatch(d)) {
+				if (node.matches(d)) {
 					copied.add(node);
 					return true;
 				}

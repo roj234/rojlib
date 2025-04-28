@@ -52,12 +52,12 @@ public abstract class CNode implements RawNode {
 	public final char modifier() { return modifier; }
 	public final void modifier(int flag) { modifier = (char) flag; }
 
-	public final boolean descMatch(CstNameAndType nat) {
+	public final boolean matches(CstNameAndType nat) {
 		CstUTF u = nat.name();
 		if (u != name && !u.str().equals(name())) return false;
 		u = nat.getType();
 		return u == desc || u.str().equals(rawDesc());
 	}
 
-	public final boolean descMatch(Desc desc) { return name().equals(desc.name) && desc.param.isEmpty() || rawDesc().equals(desc.param); }
+	public final boolean matches(Desc desc) { return name().equals(desc.name) && desc.param.isEmpty() || rawDesc().equals(desc.param); }
 }

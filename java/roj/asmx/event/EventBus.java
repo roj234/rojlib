@@ -1,6 +1,6 @@
 package roj.asmx.event;
 
-import roj.ToBeRemoved;
+import roj.Unused;
 import roj.asm.Opcodes;
 import roj.asm.Parser;
 import roj.asm.RawNode;
@@ -194,6 +194,6 @@ public class EventBus {
 		}
 
 		log.error("事件的详细信息:");
-		log.error(ToBeRemoved.deepToString(event));
+		log.error(Unused.deepToString(event));
 	}
 }

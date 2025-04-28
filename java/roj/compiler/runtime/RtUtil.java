@@ -13,6 +13,18 @@ import java.nio.charset.StandardCharsets;
 public class RtUtil {
 	public static final String CLASS_NAME = "roj/compiler/runtime/RtUtil";
 
+	public static String flagToString(int flag, String... flagNames) {
+		var sb = new StringBuilder();
+		for (int i = 0; i < flagNames.length; i++) {
+			if ((flag & (1 << i)) != 0) {
+				String name = flagNames[i];
+				if (name != null) sb.append(name).append(' ');
+			}
+		}
+		if (sb.length() > 0) sb.setLength(sb.length()-1);
+		return sb.toString();
+	}
+
 	@ReferenceByGeneratedClass
 	public static Throwable twr(Throwable local, AutoCloseable closeable) {
 		if (closeable != null) {

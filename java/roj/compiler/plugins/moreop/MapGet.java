@@ -5,22 +5,22 @@ import roj.asm.Opcodes;
 import roj.asm.type.IType;
 import roj.compiler.api.Types;
 import roj.compiler.asm.MethodWriter;
-import roj.compiler.ast.expr.ExprNode;
-import roj.compiler.ast.expr.VarNode;
+import roj.compiler.ast.expr.Expr;
+import roj.compiler.ast.expr.LeftValue;
 import roj.compiler.context.LocalContext;
 import roj.compiler.resolve.TypeCast;
 
 /**
- * 操作符 - 获取映射某项
+ * AST - 获取映射某项
  * @author Roj234
  * @since 2024/12/1 8:29
  */
-final class MapGet extends VarNode {
-	private ExprNode map, index;
+final class MapGet extends LeftValue {
+	private Expr map, index;
 	private TypeCast.Cast cast;
 	private IType componentType;
 
-	MapGet(ExprNode map, ExprNode index) {
+	MapGet(Expr map, Expr index) {
 		this.map = map;
 		this.index = index;
 	}
@@ -30,7 +30,7 @@ final class MapGet extends VarNode {
 
 	@NotNull
 	@Override
-	public ExprNode resolve(LocalContext ctx) {
+	public Expr resolve(LocalContext ctx) {
 		map = map.resolve(ctx);
 		index = index.resolve(ctx);
 
@@ -63,20 +63,20 @@ final class MapGet extends VarNode {
 	@Override
 	public void preLoadStore(MethodWriter cw) {
 		preStore(cw);
-		cw.one(Opcodes.DUP2);
+		cw.insn(Opcodes.DUP2);
 		cw.invokeItf("java/util/Map", "get", "(Ljava/lang/Object;)Ljava/lang/Object;");
 	}
 
 	@Override
 	public void postStore(MethodWriter cw, int state) {
 		cw.invokeItf("java/util/Map", "put", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;");
-		if (state == 0) cw.one(Opcodes.POP);
+		if (state == 0) cw.insn(Opcodes.POP);
 	}
 
 	@Override
 	public int copyValue(MethodWriter cw, boolean twoStack) {
 		if (MoreOpPlugin.UseOriginalPut) return 1;
-		cw.one(twoStack?Opcodes.DUP2_X2:Opcodes.DUP_X2);
+		cw.insn(twoStack?Opcodes.DUP2_X2:Opcodes.DUP_X2);
 		return 0;
 	}
 

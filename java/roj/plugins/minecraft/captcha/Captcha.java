@@ -164,9 +164,9 @@ public final class Captcha implements ChannelHandler {
 		ctx.channelWrite(MY_COMMAND_TREE);
 
 		PlayerEntity player = pc.getEntity();
-		player.inventory[36] = getMyPickaxe("minecraft:diamond_pickaxe", new AnsiString("神奇").clear().colorRGB(0xFFEEEE).append(new AnsiString("稿子").colorRGB(0xC876BE)));
-		player.inventory[37] = getMyPickaxe("minecraft:diamond_axe", new AnsiString("神奇").clear().colorRGB(0xFFEEEE).append(new AnsiString("斧子").colorRGB(0xECBB5A)));
-		player.inventory[38] = getMyPickaxe("minecraft:diamond_shovel", new AnsiString("神奇").clear().colorRGB(0xFFEEEE).append(new AnsiString("铲子").colorRGB(0xDC6432)));
+		player.inventory[36] = getMyPickaxe("minecraft:diamond_pickaxe", new AnsiString("神奇").reset().colorRGB(0xFFEEEE).append(new AnsiString("稿子").colorRGB(0xC876BE)));
+		player.inventory[37] = getMyPickaxe("minecraft:diamond_axe", new AnsiString("神奇").reset().colorRGB(0xFFEEEE).append(new AnsiString("斧子").colorRGB(0xECBB5A)));
+		player.inventory[38] = getMyPickaxe("minecraft:diamond_shovel", new AnsiString("神奇").reset().colorRGB(0xFFEEEE).append(new AnsiString("铲子").colorRGB(0xDC6432)));
 		pc.syncInventory();
 	}
 

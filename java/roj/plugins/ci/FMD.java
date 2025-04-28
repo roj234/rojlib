@@ -348,7 +348,7 @@ public final class FMD {
 				// 光标移动到第一行
 				synchronized (System.out) {
 					CharList sb1 = new CharList().append("\u001b7\u001b[?25l\u001b["+1+";1H");
-					Terminal.MinecraftColor.rainbow(slogan, sb1);
+					Terminal.Color.rainbow(slogan, sb1);
 					Terminal.directWrite(sb1.append("\u001b[?25h\u001b8"));
 					sb1._free();
 				}

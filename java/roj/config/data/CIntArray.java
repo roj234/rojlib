@@ -31,12 +31,12 @@ public class CIntArray extends CList {
 
 	public CIntArray(int[] value) {
 		super(null);
-		list = new Ints();
+		elements = new Ints();
 		this.value = value;
 	}
 
 	public int[] toIntArray() {return value.clone();}
 
-	public void accept(CVisitor ser) { ser.value(value); }
+	public void accept(CVisitor visitor) { visitor.value(value); }
 	public Object unwrap() { return value; }
 }

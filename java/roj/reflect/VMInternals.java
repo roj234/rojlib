@@ -110,10 +110,10 @@ final class VMInternals {
 			ASM.asm(mw -> {
 				mw.field(Opcodes.GETSTATIC, "roj/reflect/VMInternals", "u", "Ljava/lang/Unsafe;");
 				mw.ldc(new CstClass("sun/misc/Unsafe"));
-				mw.one(Opcodes.ALOAD_1);
-				mw.one(Opcodes.ACONST_NULL);
+				mw.insn(Opcodes.ALOAD_1);
+				mw.insn(Opcodes.ACONST_NULL);
 				mw.invoke(Opcodes.INVOKEVIRTUAL, "java/lang/Unsafe", "defineAnonymousClass", "(Ljava/lang/Class;[B[Ljava/lang/Object;)Ljava/lang/Class");
-				mw.one(Opcodes.ARETURN);
+				mw.insn(Opcodes.ARETURN);
 			});
 		}
 		/*

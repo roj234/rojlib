@@ -6,9 +6,9 @@ import roj.asm.type.IType;
 import roj.asm.type.Type;
 import roj.compiler.Tokens;
 import roj.compiler.asm.MethodWriter;
-import roj.compiler.ast.expr.ExprNode;
+import roj.compiler.ast.expr.Expr;
 import roj.compiler.ast.expr.Invoke;
-import roj.compiler.ast.expr.UnaryPreNode;
+import roj.compiler.ast.expr.PrefixOperator;
 import roj.compiler.context.LocalContext;
 import roj.compiler.plugin.LavaApi;
 import roj.config.Word;
@@ -31,7 +31,7 @@ public class TestPlugin {
 				wr.except(Tokens.gtr);
 
 				MethodNode mn = new MethodNode(Opcodes.ACC_PUBLIC, "roj/compiler/test/CandyTestPlugin$Item", "<init>", "(Ljava/lang/String;Ljava/lang/String;)V");
-				return Invoke.constructor(mn, ExprNode.valueOf(nsKey), ExprNode.valueOf(nsVal));
+				return Invoke.constructor(mn, Expr.valueOf(nsKey), Expr.valueOf(nsVal));
 			} catch (Exception e) {
 				Helpers.athrow(e);
 				return null;
@@ -42,9 +42,9 @@ public class TestPlugin {
 		MethodNode mn = new MethodNode(Opcodes.ACC_STATIC, "roj/compiler/test/CandyTestPlugin$Item", "stack", "(Lroj/compiler/test/CandyTestPlugin$Item;I)Lroj/compiler/test/CandyTestPlugin$ItemStack;");
 		api.onBinary(Type.klass("roj/compiler/test/CandyTestPlugin$Item"), "*", Type.primitive(Type.INT), mn, true);
 
-		api.newUnaryOp("__TypeOf", (ctx, node) -> new UnaryPreNode() {
-			ExprNode node;
-			@Override public String setRight(ExprNode node) {this.node = node;return null;}
+		api.newUnaryOp("__TypeOf", (ctx, node) -> new PrefixOperator() {
+			Expr node;
+			@Override public String setRight(Expr node) {this.node = node;return null;}
 			@Override public String toString() {return null;}
 			@Override public IType type() {return null;}
 			@Override public void write(MethodWriter cw, boolean noRet) {

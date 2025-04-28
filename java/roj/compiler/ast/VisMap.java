@@ -29,7 +29,7 @@ public final class VisMap {
 
 	private final IntBiMap<Variable> vuid = new IntBiMap<>();
 
-	private final SimpleList<LabelNode> headHook = new SimpleList<>();
+	private final SimpleList<BlockScope> entryHook = new SimpleList<>();
 	private final IntList varCounts = new IntList();
 	private final SimpleList<IntMap<Object>> varStates = new SimpleList<>();
 
@@ -44,12 +44,12 @@ public final class VisMap {
 		varState.clear();
 		varCount = 0;
 		terminated = false;
-		headHook.clear();
+		entryHook.clear();
 	}
 
 	// 进入代码块
-	public void enter(@Nullable LabelNode immediateLabel) {
-		headHook.add(immediateLabel);
+	public void enter(@Nullable BlockScope immediateLabel) {
+		entryHook.add(immediateLabel);
 		varCounts.add(varCount);
 
 		varStates.add(varState); // 代码块开始前的状态
@@ -75,7 +75,7 @@ public final class VisMap {
 
 		for (int i = 0; i < prevVarCount; i++) {
 			Object defined = varState.getOrDefault(i, UNDEFINED);
-			vuid.get(i).constantValue = defined == UNDEFINED || defined == DEFINED ? null : defined;
+			vuid.get(i).value = defined == UNDEFINED || defined == DEFINED ? null : defined;
 		}
 	}
 	private void mergeState(int prevVarCount, IntMap<Object> prevVarDefined) {
@@ -96,8 +96,8 @@ public final class VisMap {
 
 	// 离开代码块
 	public void exit() {
-		var pop = headHook.pop();
-		if (pop != null) pop.combineState(this);
+		var pop = entryHook.pop();
+		if (pop != null) pop.onExit(this);
 
 		var prevVarCount = varCounts.remove(varCounts.size()-1);
 		varStates.pop();
@@ -115,11 +115,11 @@ public final class VisMap {
 			var _var = vuid.get(i);
 			if (hasValue) {
 				_var.hasValue = true;
-				_var.constantValue = defined == DEFINED ? null : defined;
+				_var.value = defined == DEFINED ? null : defined;
 			} else {
 				prevVarDefined.remove(i);
 				_var.hasValue = false;
-				_var.constantValue = null;
+				_var.value = null;
 			}
 		}
 
@@ -166,7 +166,7 @@ public final class VisMap {
 	}
 	public void assign(Variable var) {
 		var vid = vuid.getValueOrDefault(var, -1);
-		if (vid >= 0) varState.putInt(vid, var.constantValue == null ? DEFINED : var.constantValue);
+		if (vid >= 0) varState.putInt(vid, var.value == null ? DEFINED : var.value);
 		else {
 			if (!var.hasValue) throw new AssertionError();
 		}

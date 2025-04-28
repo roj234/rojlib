@@ -69,9 +69,9 @@ public interface Evaluator {
 		ClassDefiner.premake(invokerInst);
 		CodeWriter c = invokerInst.newMethod(ACC_PUBLIC, "eval", "(I[Ljava/lang/Object;)Ljava/lang/Object;");
 		c.visitSize(1, 3);
-		c.one(ALOAD_2);
-		c.one(ASTORE_0);
-		c.one(ILOAD_1);
+		c.insn(ALOAD_2);
+		c.insn(ASTORE_0);
+		c.insn(ILOAD_1);
 		var segment = SwitchBlock.ofSwitch(TABLESWITCH);
 		c.addSegment(segment);
 
@@ -96,7 +96,7 @@ public interface Evaluator {
 			for (int j = 0; j < types.size(); j++) {
 				c.vars(ALOAD, 2);
 				c.ldc(j);
-				c.one(AALOAD);
+				c.insn(AALOAD);
 
 				Type klass = types.get(j);
 				if (klass.isPrimitive()) {
@@ -135,11 +135,11 @@ public interface Evaluator {
 				c.invoke(INVOKESTATIC, "roj/config/data/CEntry", "valueOf", "("+type+")Lroj/config/data/CEntry;");
 			} else if (retVal.owner.equals("java/lang/Class")) {
 				c.clazz(NEW, "roj/asm/cp/CstClass");
-				c.one(DUP);
+				c.insn(DUP);
 				c.invoke(INVOKESPECIAL, "roj/asm/cp/CstClass", "<init>", "(Ljava/lang/String;)V");
 			}
 
-			c.one(ARETURN);
+			c.insn(ARETURN);
 		}
 
 		var evaluator = (Evaluator) ctx.createSandboxInstance(invokerInst);

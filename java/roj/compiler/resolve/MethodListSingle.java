@@ -9,7 +9,7 @@ import roj.asmx.mapper.ParamNameMapper;
 import roj.collect.IntMap;
 import roj.collect.MyHashMap;
 import roj.collect.SimpleList;
-import roj.compiler.ast.expr.ExprNode;
+import roj.compiler.ast.expr.Expr;
 import roj.compiler.context.LocalContext;
 import roj.compiler.diagnostic.Kind;
 import roj.text.CharList;
@@ -84,7 +84,7 @@ final class MethodListSingle extends ComponentList {
 					IType argType = namedArguments.remove(paramName);
 					if (argType == null) {
 						// 使用参数默认值
-						ExprNode parsed = ctx.parseDefaultArgument(defaultArguments.get(i));
+						Expr parsed = ctx.parseDefaultArgument(defaultArguments.get(i));
 						if (parsed == null) {
 							// 可变参数，如果没有参数调用
 							if (isVarargs && i == declaredArguments.size() - 1) break;
@@ -115,7 +115,7 @@ final class MethodListSingle extends ComponentList {
 			result = ctx.inferrer.infer(owner, method, that, actualArguments);
 			ctx.inferrer._minCastAllow = 0;
 			if (result.method != null) {
-				result.namedParams = fillArguments;
+				result.filledArguments = fillArguments;
 				MethodList.checkBridgeMethod(ctx, result);
 				checkDeprecation(ctx, owner, method);
 				return result;

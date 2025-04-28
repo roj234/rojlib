@@ -30,7 +30,8 @@ public final class CChar extends CEntry {
 	public double asDouble() {return value;}
 	public String asString() {return String.valueOf(value);}
 
-	public void accept(CVisitor ser) {ser.value(value);}
+	public void accept(CVisitor visitor) {
+		visitor.value(value);}
 	public Object raw() {return value;}
 
 	public CharList toJSON(CharList sb, int depth) {return sb.append('\'').append(value).append('\'');}

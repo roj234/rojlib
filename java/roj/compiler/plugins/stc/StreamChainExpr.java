@@ -4,7 +4,7 @@ import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.Nullable;
 import roj.compiler.asm.MethodWriter;
 import roj.compiler.ast.expr.Invoke;
-import roj.compiler.ast.expr.VarNode;
+import roj.compiler.ast.expr.LeftValue;
 import roj.compiler.context.LocalContext;
 
 import java.util.List;
@@ -24,7 +24,7 @@ public interface StreamChainExpr {
 	 * !null 之前暂存的变量(WIP)
 	 */
 	@Contract(pure = true)
-	@Nullable VarNode sourceType();
+	@Nullable LeftValue sourceType();
 	/**
 	 * StreamChain表达式目标类型
 	 * @return

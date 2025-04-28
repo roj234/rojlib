@@ -11,11 +11,6 @@ public interface ResponseHeader {
 	String _getState();
 	Request request();
 
-	/**
-	 * Gets speed limit in Byte per second
-	 */
-	int getSpeedLimit();
-	void limitSpeed(int bps);
 	void limitSpeed(SpeedLimiter limiter);
 
 	void onFinish(RequestFinishHandler o);

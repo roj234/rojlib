@@ -43,13 +43,13 @@ public class ToEntry implements CVisitor {
 	private void add(CEntry v) {
 		if (pendingComment != null) {
 			if (stackBottom.getType() == Type.MAP) {
-				CMap map = stackBottom.asMap().withComments();
+				CMap map = stackBottom.asMap().toCommentable();
 				stackBottom = map;
-				map.putComment(key, pendingComment);
+				map.setComment(key, pendingComment);
 			} else if (stackBottom.getType() == Type.LIST) {
-				CList list = stackBottom.asList().withComments();
+				CList list = stackBottom.asList().toCommentable();
 				stackBottom = list;
-				list.putComment(list.size(), pendingComment);
+				list.setComment(list.size(), pendingComment);
 			}
 			pendingComment = null;
 		}

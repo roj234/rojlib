@@ -10,10 +10,10 @@ import roj.asm.type.Generic;
 import roj.asm.type.IType;
 import roj.asm.type.Signature;
 import roj.asmx.AnnotationSelf;
-import roj.collect.IntBiMap;
 import roj.collect.MyHashMap;
 import roj.collect.MyHashSet;
 import roj.collect.SimpleList;
+import roj.collect.ToIntMap;
 import roj.compiler.context.GlobalContext;
 import roj.compiler.diagnostic.Kind;
 
@@ -69,7 +69,7 @@ public final class ResolveHelper {
 		var classes = getHierarchyList(ctx);
 		if (classes.containsValue("java/util/List") && classes.containsValue("java/util/RandomAccess")) {
 			return iterateType = 1;
-		} else if (Annotation.findInvisible(owner.cp(), owner, "roj/compiler/api/ListIterable") != null) {
+		} else if (Annotation.findInvisible(owner.cp(), owner, "roj/compiler/api/RandomAccessible") != null) {
 			int tmp;
 			if ((tmp = owner.getMethod("get")) >= 0 && owner.methods().get(tmp).rawDesc().startsWith("(I)") && owner.getMethod("size", "()I") >= 0) {
 				return iterateType = 2;
@@ -80,23 +80,23 @@ public final class ResolveHelper {
 	}
 
 	// region 父类列表
-	private IntBiMap<String> hierarchyList;
+	private ToIntMap<String> hierarchyList;
 	private boolean query;
 
-	public synchronized IntBiMap<String> getHierarchyList(GlobalContext ctx) {
+	public synchronized ToIntMap<String> getHierarchyList(GlobalContext ctx) {
 		if (hierarchyList != null) return hierarchyList;
 
 		if (query) throw ResolveException.ofIllegalInput("rh.cyclicDepend", owner.name());
 		query = true;
 
-		IntBiMap<String> list = new IntBiMap<>();
+		ToIntMap<String> list = new ToIntMap<>();
 
 		IClass info = owner;
 		while (true) {
 			String owner = info.name();
 			try {
 				int i = list.size();
-				list.putInt((i << 16) | i, owner);
+				list.putInt(owner, (i << 16) | i);
 			} catch (IllegalArgumentException e) {
 				throw ResolveException.ofIllegalInput("rh.cyclicDepend", owner);
 			}
@@ -124,16 +124,16 @@ public final class ResolveHelper {
 					break;
 				}
 
-				list.putByValue((justAnId++ << 16) | castDistance, name);
+				list.putInt(name, (justAnId++ << 16) | castDistance);
 
 				for (var entry : ctx.getHierarchyList(itfInfo).selfEntrySet()) {
-					int id = entry.getIntKey();
-					name = entry.getValue();
+					name = entry.getKey();
+					int id = entry.v;
 
 					// id's castDistance is smaller
 					// parentList是包含自身的
 					if ((list.getInt(name)&0xFFFF) > (id&0xFFFF)) {
-						list.putByValue((castDistance == 1 ? 0x80000000 : 0) | (justAnId++ << 16) | (castDistance + (id & 0xFFFF)), name);
+						list.putInt(name, (castDistance == 1 ? 0x80000000 : 0) | (justAnId++ << 16) | (castDistance + (id & 0xFFFF)));
 					}
 				}
 			}
@@ -451,7 +451,7 @@ public final class ResolveHelper {
 				var classes = owner.getAttribute(owner.cp(), Attribute.InnerClasses);
 				if (classes == null) return subclassDecl = Collections.emptyMap();
 
-				var parentDecl = ctx.getInnerClassFlags(ctx.getClassInfo(owner.parent()));
+				var parentDecl = ctx.getInnerClassInfo(ctx.getClassInfo(owner.parent()));
 				var decl = new MyHashMap<>(parentDecl);
 
 				var list = classes.classes;

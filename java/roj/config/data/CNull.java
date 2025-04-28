@@ -27,7 +27,8 @@ public final class CNull extends CEntry {
 	public CMap asMap() {return NULL_MAP;}
 	public CList asList() {return NULL_LIST;}
 
-	public void accept(CVisitor ser) {ser.valueNull();}
+	public void accept(CVisitor visitor) {
+		visitor.valueNull();}
 	public Object raw() {return null;}
 
 	public CharList toJSON(CharList sb, int depth) {return sb.append("null");}

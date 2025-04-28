@@ -2,8 +2,11 @@ package roj.ui;
 
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
+import org.jetbrains.annotations.Range;
 import roj.RojLib;
 import roj.collect.*;
+import roj.compiler.plugins.annotations.AsMethod;
+import roj.compiler.plugins.eval.Constexpr;
 import roj.config.Tokenizer;
 import roj.config.data.CInt;
 import roj.config.data.CList;
@@ -30,12 +33,6 @@ import static java.awt.event.KeyEvent.*;
 /**
  * <a href="https://learn.microsoft.com/zh-cn/windows/console/console-virtual-terminal-sequences">控制台虚拟终端序列参考</a>
  * Sequence	代码	说明	行为
- * ESC [ <n> A	CUU	光标向上	光标向上 <n> 行
- * ESC [ <n> B	CUD	光标向下	光标向下 <n> 行
- * ESC [ <n> C	CUF	光标向前	光标向前（右）<n> 行
- * ESC [ <n> D	CUB	光标向后	光标向后（左）<n> 行
- * ESC [ <n> E	CNL	光标下一行	光标从当前位置向下 <n> 行
- * ESC [ <n> F	CPL	光标当前行	光标从当前位置向上 <n> 行
  * ESC [ <n> G	CHA	绝对光标水平	光标在当前行中水平移动到第 <n> 个位置
  * ESC [ <n> d	VPA	绝对垂直行位置	光标在当前列中垂直移动到第 <n> 个位置
  * ESC [ <y> ; <x> H	CUP	光标位置	游标移动到视区中的 <x>；<y> 坐标，其中 <x> 是 <y> 行的列
@@ -55,7 +52,7 @@ public final class Terminal extends DelegatedPrintStream {
 	public static final int BLACK = 30, BLUE = 34, GREEN = 32, CYAN = 36, RED = 31, PURPLE = 35, YELLOW = 33, WHITE = 37;
 	public static final int HIGHLIGHT = 60;
 
-	public static final class MinecraftColor {
+	public static final class Color {
 		private static final IntBiMap<String> MC_COLOR_JSON = new IntBiMap<>();
 		private static final byte[] MC_COLOR = new byte[16];
 		static {
@@ -126,7 +123,7 @@ public final class Terminal extends DelegatedPrintStream {
 				do {
 					char c = raw.charAt(++i);
 					if (c <= 'f') {
-						tmp.color16(MC_COLOR[TextUtil.h2b(c)]).clear();
+						tmp.color16(MC_COLOR[TextUtil.h2b(c)]).reset();
 					} else {
 						switch (c) {
 							case 'l': tmp.bold(true); break;
@@ -134,7 +131,7 @@ public final class Terminal extends DelegatedPrintStream {
 							case 'm': tmp.deleteLine(true); break;
 							case 'o': tmp.italic(true); break;
 							case 'k': tmp.shiny(true); break;
-							case 'r': tmp.clear(); break;
+							case 'r': tmp.reset(); break;
 						}
 					}
 				} while (++i < m.end());
@@ -159,12 +156,12 @@ public final class Terminal extends DelegatedPrintStream {
 		public static void minecraftTooltip(char[] codex, String str, int speed, CharList sb) {
 			int si = codex.length - (((int) System.currentTimeMillis() & Integer.MAX_VALUE) / speed) % codex.length;
 			for (int i = 0; i < str.length(); i++) {
-				sb.append("\u001B[;").append(MC_COLOR[TextUtil.h2b(codex[si++ % codex.length])]).append('m').append(str.charAt(i));
+				sb.append("\033[;").append(MC_COLOR[TextUtil.h2b(codex[si++ % codex.length])]).append('m').append(str.charAt(i));
 			}
-			sb.append("\u001B[0m");
+			sb.append("\033[0m");
 		}
 
-		public static void rainbow(String s, CharList sb) {
+		public static CharList rainbow(String s, CharList sb) {
 			if (!ANSI_OUTPUT) sb.append(s);
 			else {
 				//minecraftTooltip(rainbow, s, 70, sb);
@@ -179,6 +176,7 @@ public final class Terminal extends DelegatedPrintStream {
 				}
 				str.writeAnsi(sb);
 			}
+			return sb;
 		}
 		public static int HueToRGB(float hue) {
 			int r = 0, g = 0, b = 0;
@@ -214,16 +212,17 @@ public final class Terminal extends DelegatedPrintStream {
 			return (r << 16) | (g << 8) | b;
 		}
 
-		public static void sonic(String s, CharList sb) {
+		public static CharList sonic(String s, CharList sb) {
 			if (!ANSI_OUTPUT) sb.append(s);
 			else minecraftTooltip(sonic, s, 50, sb);
+			return sb;
 		}
 	}
 
 	private Terminal() {}
 
 	//region AnsiOutput基础
-	public static void reset() {if (ANSI_OUTPUT) System.out.print("\u001B[0m");}
+	public static void reset() {if (ANSI_OUTPUT) System.out.print("\033[0m");}
 	public static void info(String s) {color(s, WHITE+HIGHLIGHT, true);}
 	public static void success(String s) {color(s, GREEN+HIGHLIGHT, true);}
 	public static void warning(String s) {color(s, YELLOW+HIGHLIGHT, true);}
@@ -240,12 +239,46 @@ public final class Terminal extends DelegatedPrintStream {
 	}
 	private static void color(String s, int fg, boolean reset) {
 		var o = System.out;
-		if (ANSI_OUTPUT) o.print("\u001B[;"+fg+'m');
+		if (ANSI_OUTPUT) o.print("\033[;"+fg+'m');
 		o.println(s);
-		if (ANSI_OUTPUT&reset) o.print("\u001B[0m");
+		if (ANSI_OUTPUT&reset) o.print("\033[0m");
 	}
 
-	// [BEL]
+	/**
+	 * 转义序列生成.
+	 * 这里的绝对坐标从零开始
+	 */
+	public static class Cursor {
+		@AsMethod public static final String hide = "\033[?25l", show = "\033[?25h";
+		// 一个可选的替代： \033[s和\033[u
+		@AsMethod public static final String save = "\0337", restore = "\0338";
+
+		/** 移动到本行开头 */
+		@AsMethod public static final String toLeft = "\033[G";
+		@Constexpr public static String toHorizontal(int width) {return "\033["+width+"G";}
+		/** 绝对移动 */
+		@Constexpr public static String to(@Range(from = 0, to = Integer.MAX_VALUE) int x, @Range(from = -1, to = Integer.MAX_VALUE) int y) {
+			return y == -1/* 不修改 */ ? "\033["+(x+1)+"G" : "\033["+(y+1)+";"+(x+1)+"H";
+		}
+
+		/** 相对移动 */
+		@Constexpr public static String move(int rx, int ry) {
+			var sb = new StringBuilder();
+			if (rx != 0) sb.append("\033[").append(rx < 0 ? (-rx)+"D" : rx+"C");
+			if (ry != 0) sb.append("\033[").append(ry < 0 ? (-ry)+"A" : ry+"B");
+			return sb.toString();
+		}
+		/** 移动到相对dy行的开头 */
+		@Constexpr public static String moveVertical(int dy) {return dy == 0 ? "" : dy < 0 ? "\033["+(-dy)+"F" : "\033["+dy+"E";}
+	}
+	public static final class Screen {
+		@AsMethod public static final String clearScreen = "\033[2J", clearBefore = "\033[1J", clearAfter = "\033[J";
+		@AsMethod public static final String clearLine = "\033[2K", clearLineBefore = "\033[1K", clearLineAfter = "\033[K";
+
+		@Constexpr public static String scrollUp(@Range(from = 1, to = Integer.MAX_VALUE) int lines) {return "\033["+lines+"S";}
+		@Constexpr public static String scrollDown(@Range(from = 1, to = Integer.MAX_VALUE) int lines) {return "\033["+lines+"T";}
+	}
+
 	public static void beep() {
 		if (!ANSI_OUTPUT) {
 			System.out.write(7);
@@ -268,7 +301,7 @@ public final class Terminal extends DelegatedPrintStream {
 		}
 	}
 
-	public static final Pattern ANSI_ESCAPE = Pattern.compile("\u001B(?:\\[[^a-zA-Z]+?[a-zA-Z]|].*?\u0007)");
+	public static final Pattern ANSI_ESCAPE = Pattern.compile("\033(?:\\[[^a-zA-Z]*?[a-zA-Z]|].*?\u0007)");
 	private static ByteList stripAnsi(ByteList b) {
 		var m = ANSI_ESCAPE.matcher(b);
 		var out = b.slice(); out.clear();
@@ -321,7 +354,7 @@ public final class Terminal extends DelegatedPrintStream {
 	public static void renderBottomLine(CharList line, boolean atTop, int cursor) {
 		if (!ANSI_OUTPUT) {System.out.println(stripAnsi(line));return;}
 		synchronized (out) {
-			var sb = OSEQ.append("\u001b[?25l");
+			var sb = OSEQ.append("\033[?25l");
 
 			int pos = LINES.indexOfAddress(line);
 			if (pos < 0) {
@@ -332,15 +365,15 @@ public final class Terminal extends DelegatedPrintStream {
 					CURSORS.add(cursor);
 					if (LINES.size() > 1) {
 						int i = LINES.size()-1;
-						sb.append("\u001b[").append(i).append("F\r\n");
+						sb.append("\033[").append(i).append("F\r\n");
 						while (true) {
-							sb.append(LINES.get(i)).append("\u001b[0K");
+							sb.append(LINES.get(i)).append("\033[0K");
 							if (i-- == 0) break;
 							sb.append("\r\n");
 						}
 					} else {
 						if (PrevWidth > 0) sb.append("\r\n");
-						sb.append(line).append("\u001b[").append(cursor).append('G');
+						sb.append(line).append("\033[").append(cursor).append('G');
 					}
 				} else {
 					sb.append('\n').append(line);
@@ -349,14 +382,14 @@ public final class Terminal extends DelegatedPrintStream {
 				}
 			} else {
 				CURSORS.set(pos, cursor);
-				if (pos > 0) sb.append("\u001b7\u001b[").append(pos).append('F');
-				else sb.append("\u001b[1G");
-				sb.append(line).append("\u001b[0K");
-				if (pos > 0) sb.append("\u001b8");
-				else sb.append("\u001b[").append(cursor).append('G');
+				if (pos > 0) sb.append("\0337\033[").append(pos).append('F');
+				else sb.append("\033[1G");
+				sb.append(line).append("\033[0K");
+				if (pos > 0) sb.append("\0338");
+				else sb.append("\033[").append(cursor).append('G');
 			}
 
-			writeSeq(sb.append("\u001b[?25h"));
+			writeSeq(sb.append("\033[?25h"));
 			_flush();
 		}
 	}
@@ -367,9 +400,9 @@ public final class Terminal extends DelegatedPrintStream {
 			LINES.remove(pos);
 			CURSORS.remove(pos);
 
-			var seq = LINES.isEmpty() & PrevWidth == 0 ? OSEQ.append("\u001b[1M") : OSEQ.append("\u001b7\u001b[").append(pos-1).append("F\u001b[1M\u001b8\u001bM");
+			var seq = LINES.isEmpty() & PrevWidth == 0 ? OSEQ.append("\033[1M") : OSEQ.append("\0337\033[").append(pos-1).append("F\033[1M\0338\033M");
 			int cursor = !CURSORS.isEmpty() ? CURSORS.get(0) : PrevWidth+1;
-			if (cursor > 1) seq.append("\u001b[").append(cursor).append('G');
+			if (cursor > 1) seq.append("\033[").append(cursor).append('G');
 			writeSeq(seq);
 			_flush();
 		}
@@ -406,10 +439,10 @@ public final class Terminal extends DelegatedPrintStream {
 		else {
 			int advance = LINES.size() + (PrevWidth > 0 ? 1 : 0);
 			if (advance > 0 && !started) {
-				seq.append("\u001b[?25l");
-				if (advance > 1) seq.append("\u001b[").append(advance-1).append('F');
-				else seq.append("\u001b[1G");
-				writeSeq(seq.append("\u001b[2K"));
+				seq.append("\033[?25l");
+				if (advance > 1) seq.append("\033[").append(advance-1).append('F');
+				else seq.append("\033[1G");
+				writeSeq(seq.append("\033[2K"));
 				started = true;
 			}
 		}
@@ -424,16 +457,16 @@ public final class Terminal extends DelegatedPrintStream {
 				if (PrevWidth > 0) seq.append("\r\n");
 				while (true) {
 					seq.append(LINES.get(i));
-					seq.append("\u001b[0K");
+					seq.append("\033[0K");
 					if (i-- == 0) {
 						int cursor = CURSORS.get(0);
-						if (cursor > 0) seq.append("\u001b[").append(cursor).append('G');
+						if (cursor > 0) seq.append("\033[").append(cursor).append('G');
 						break;
 					}
 					seq.append("\r\n");
 				}
 			}
-			writeSeq(seq.append("\u001b[?25h"));
+			writeSeq(seq.append("\033[?25h"));
 			started = false;
 		}
 		_flush();
@@ -655,7 +688,7 @@ public final class Terminal extends DelegatedPrintStream {
 
 		for (int i = 0; i < files.size(); i++) {
 			String name = files.get(i).toString();
-			if (ANSI_OUTPUT) System.out.print("\u001B["+(WHITE+(i&1)*HIGHLIGHT)+'m');
+			if (ANSI_OUTPUT) System.out.print("\033["+(WHITE+(i&1)*HIGHLIGHT)+'m');
 			System.out.println(i+". "+name);
 			reset();
 		}
@@ -668,7 +701,7 @@ public final class Terminal extends DelegatedPrintStream {
 	 * 如果输入Ctrl+C，退出程序
 	 */
 	private static <T> T readLine(String prompt, Argument<T> arg) {
-		T v = readLine(new CommandConsole("\u001B[;"+(WHITE+HIGHLIGHT)+'m'+prompt), arg);
+		T v = readLine(new CommandConsole("\033[;"+(WHITE+HIGHLIGHT)+'m'+prompt), arg);
 		//if (v == null) System.exit(1);
 		return v;
 	}
@@ -793,7 +826,7 @@ public final class Terminal extends DelegatedPrintStream {
 	// public版本等用到的时候再写
 	private int readCursor() throws IOException {
 		int val;
-		if (!terminals.get(0).readBack(false)) {
+		if (!terminals.get(0).read(false)) {
 			long endTime = System.currentTimeMillis() + 10;
 			do {
 				// 等待escEnter通知
@@ -809,7 +842,7 @@ public final class Terminal extends DelegatedPrintStream {
 
 	// 宽度是字符，高度是行，下面仅仅是windows的默认值作为fallback，没有特殊意义
 	public static int windowHeight = 30, windowWidth = 120;
-	public static final String GET_CONSOLE_DIMENSION = "\u001b[?25l\u001b7\u001b[999E\u001b[999C\u001b[6n\u001b8\u001b[?25h";
+	public static final String GET_CONSOLE_DIMENSION = "\033[?25l\0337\033[999E\033[999C\033[6n\0338\033[?25h";
 	public static void updateConsoleSize() throws IOException {
 		var t = terminals.get(0);
 		synchronized (CURSOR_LOCK) {
@@ -828,7 +861,9 @@ public final class Terminal extends DelegatedPrintStream {
 	}
 	//endregion
 	//region AnsiInput进阶 - 计算字符宽度以便换行
-	private static final Int2IntMap CharLength = new Int2IntMap();
+	private static boolean terminalResponse;
+	// 16KB for EXIST|WIDTH bits, 原先Int2IntMap一个字符20字节Entry
+	private static final BitArray IsWidthChar = new BitArray(2, 65536);
 	/**
 	 * 计算字符的长度(按终端英文记)
 	 */
@@ -837,35 +872,44 @@ public final class Terminal extends DelegatedPrintStream {
 		if (TextUtil.isPrintableAscii(c)) return 1;
 		// 大概是乱码，而且在能渲染的终端中，两个合起来正好是方形
 		if (Character.isSurrogate(c)) return 1;
-		if (FastCharset.GB18030().encodeSize(c) == 2 || CharLength.size() == 0) return 2;
 
-		int len = CharLength.getOrDefaultInt(c, -1);
-		if (len >= 0) return len;
+		var data = IsWidthChar.get(c);
+		if ((data & 2) == 0) {
+			// 这个是二分查找，所以也缓存吧
+			var ub = Character.UnicodeBlock.of(c);
+			if (ub == null || ub.toString().startsWith("CJK"))
+				data = 3;
+			else {
+				if (!terminalResponse) return 2;
 
-		var t = terminals.get(0);
-		// https://unix.stackexchange.com/questions/245013/get-the-display-width-of-a-string-of-characters
-		// 这也太邪门了……
-		synchronized (CURSOR_LOCK) {
-			if (CharLength.size() == 0) return 2;
+				var t = terminals.get(0);
+				// https://unix.stackexchange.com/questions/245013/get-the-display-width-of-a-string-of-characters
+				// 这也太邪门了……
+				synchronized (CURSOR_LOCK) {
+					if (out.cursorPos == 0) throw new IllegalStateException("递归读取光标?");
+					out.cursorPos = 0;
 
-			if (out.cursorPos == 0) throw new IllegalStateException("递归读取光标?");
-			out.cursorPos = 0;
+					synchronized (out) {
+						t.write(OSEQ.append("\0337\033[1E").append(c).append("\033[6n\033[1K\0338"));
+						OSEQ.clear();
+						t.flush();
+					}
 
-			synchronized (out) {
-				t.write(OSEQ.append("\u001b7\u001b[1E").append(c).append("\u001b[6n\u001b[1K\u001b8"));
-				OSEQ.clear();
-				t.flush();
+					try {
+						data = (out.readCursor() & 0xFFFF) - 1;
+						if (data > 1) throw new IllegalArgumentException("一个字符的宽度既不是1也不是2: " + data);
+
+						data |= 2;
+					} catch (Exception e) {
+						data = 3;
+					}
+				}
 			}
 
-			try {
-				len = (out.readCursor()&0xFFFF)-1;
-				CharLength.put(c, len);
-				return len;
-			} catch (Exception e) {
-				CharLength.clear();
-				return 2;
-			}
+			IsWidthChar.set(c, data);
 		}
+
+		return 1 + (data & 1);
 	}
 	/**
 	 * 计算字符串的长度(按终端英文记)，忽略其中的ANSI转义序列.
@@ -887,14 +931,12 @@ public final class Terminal extends DelegatedPrintStream {
 		}
 		return Math.max(maxLen, len);
 	}
-	public static void enableAutoStringWidth() {synchronized (CURSOR_LOCK) {if (CharLength.size() == 0) CharLength.put(0, 0);}}
-	public static void disableAutoStringWidth() {synchronized (CURSOR_LOCK) {CharLength.clear();}}
 	/**
 	 * 根据width切分字符串，目前的版本可能会把ANSI转义序列弄丢.
 	 * @param width 长度，按终端英文记
 	 */
 	public static List<String> splitByWidth(String s, int width) {
-		var m = s.indexOf('\u001b') >= 0 ? ANSI_ESCAPE.matcher(s) : null;
+		var m = s.indexOf('\033') >= 0 ? ANSI_ESCAPE.matcher(s) : null;
 
 		List<String> out = new SimpleList<>();
 		int prevI = 0, tmpWidth = 0;
@@ -904,7 +946,7 @@ public final class Terminal extends DelegatedPrintStream {
 				out.add(s.substring(prevI, i));
 				prevI = ++i;
 				tmpWidth = 0;
-			} else if (c == '\u001b') {
+			} else if (c == '\033') {
 				//noinspection all
 				if (m.find(i)) i = m.end();
 				else throw new RuntimeException("未识别的转义"+Tokenizer.addSlashes(s)+",请更新ANSI_ESCAPE PATTERN");
@@ -934,19 +976,13 @@ public final class Terminal extends DelegatedPrintStream {
 	 */
 	public static void printError(String text) {serr.println(text);}
 
-	// T和其它终端不同之处在于，光标（字符长度）会通过它获取
-	@Nullable
-	private static final ITerminal T;
 	private static final SimpleList<ITerminal> terminals = new SimpleList<>();
 	public static void addListener(ITerminal t) {
 		int i = terminals.indexOfAddress(t);
 		if (i < 0) terminals.add(t);
 	}
-	public static void removeListener(ITerminal t) {
-		if (T == t) throw new IllegalStateException("Cannot remove Main Terminal");
-		int i = terminals.indexOfAddress(t);
-		if (i >= 0) terminals.remove(t);
-	}
+	public static void removeListener(ITerminal t) {terminals.remove(t);}
+	public static boolean isFullUnicode() {return terminals.get(0).unicode();}
 
 	private static void write(CharSequence b) {
 		for (var t : terminals) {
@@ -967,16 +1003,15 @@ public final class Terminal extends DelegatedPrintStream {
 	public static final Terminal out = new Terminal();
 	static {
 		nativeCharset = NativeVT.charset;
-		var t = T = NativeVT.getInstance();
+		var t = NativeVT.getInstance();
 		if (t == null) t = (ITerminal) RojLib.inject("roj.ui.Terminal.fallback");
 		if (t != null) {
 			addListener(t);
-			CharLength.put(0, 0);
 			ALT = new AnsiIn();
 
 			ANSI_OUTPUT = true;
 			try {
-				ANSI_INPUT = t.readBack(true);
+				ANSI_INPUT = t.read(true);
 			} catch (IOException e) {
 				throw new IllegalStateException(e);
 			}
@@ -991,6 +1026,7 @@ public final class Terminal extends DelegatedPrintStream {
 			if (winSize > 0) {
 				windowWidth = winSize&0xFFFF;
 				windowHeight = winSize >>> 16;
+				terminalResponse = true;
 			}
 
 			in = null;

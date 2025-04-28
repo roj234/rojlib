@@ -15,8 +15,8 @@ import roj.collect.MyBitSet;
 import roj.collect.MyHashMap;
 import roj.collect.SimpleList;
 import roj.compiler.LavaFeatures;
-import roj.compiler.api.Evaluable;
-import roj.compiler.ast.expr.ExprNode;
+import roj.compiler.api.InvokeHook;
+import roj.compiler.ast.expr.Expr;
 import roj.compiler.context.CompileUnit;
 import roj.compiler.context.GlobalContext;
 import roj.compiler.context.LocalContext;
@@ -142,7 +142,7 @@ final class MethodList extends ComponentList {
 					IType argType = tmpMap.remove(paramName);
 					if (argType == null) {
 						// 使用参数默认值
-						ExprNode parsed = ctx.parseDefaultArgument(defaultArguments.get(i));
+						Expr parsed = ctx.parseDefaultArgument(defaultArguments.get(i));
 						if (parsed == null) {
 							// 可变参数，如果没有参数调用
 							if (isVarargs && i == declaredArguments.size() - 1) break;
@@ -177,7 +177,7 @@ final class MethodList extends ComponentList {
 				else {
 					dup.clear();
 					best = result;
-					best.namedParams = fillArguments;
+					best.filledArguments = fillArguments;
 				}
 			}
 		}
@@ -288,7 +288,7 @@ final class MethodList extends ComponentList {
 		if ((mn.modifier&Opcodes.ACC_PRIVATE) == 0 || ctx.file.name().equals(mn.owner) ||
 			ctx.classes.getMaximumBinaryCompatibility() >= LavaFeatures.JAVA_11) return;
 
-		var prev = (Evaluable)mn.getRawAttribute(Evaluable.NAME);
+		var prev = (InvokeHook)mn.getRawAttribute(InvokeHook.NAME);
 		if (prev != null) {
 			GlobalContext.debugLogger().warn("Method {} Already have Evaluable!!!", mn);
 		}

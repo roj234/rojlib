@@ -38,7 +38,7 @@ import java.util.List;
  */
 public class QZArchiverUI extends JFrame {
 	public static void main(String[] args) throws Exception {
-		GuiUtil.systemLook();
+		GuiUtil.systemLaf();
 		QZArchiverUI f = new QZArchiverUI();
 
 		f.pack();

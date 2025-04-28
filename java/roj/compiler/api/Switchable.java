@@ -14,7 +14,7 @@ import java.lang.annotation.Target;
 @Target(ElementType.TYPE)
 public @interface Switchable {
 	/**
-	 * 使用identityHashcode还是Object#hashCode
+	 * 使用{@link System#identityHashCode(Object)}还是{@link Object#hashCode}
 	 */
 	boolean identity() default true;
 	/**

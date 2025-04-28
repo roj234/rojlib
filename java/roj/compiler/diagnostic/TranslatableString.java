@@ -4,7 +4,7 @@ import roj.asm.FieldNode;
 import roj.asm.IClass;
 import roj.asm.MethodNode;
 import roj.asm.type.IType;
-import roj.compiler.ast.expr.ExprNode;
+import roj.compiler.ast.expr.Expr;
 import roj.config.*;
 import roj.text.CharList;
 import roj.util.ArrayCache;
@@ -51,7 +51,7 @@ public class TranslatableString {
 					str = fieldNode.toString();
 				} else if (arg instanceof IType type) {
 					str = type.toString();
-				}  else if (arg instanceof ExprNode expr) {
+				}  else if (arg instanceof Expr expr) {
 					str = expr.toString();
 				} else if (arg instanceof String) {
 					str = of(arg.toString()).translate(i18n, new CharList()).toStringAndFree();

@@ -12,11 +12,11 @@ import roj.collect.SimpleList;
 import roj.compiler.LavaFeatures;
 import roj.compiler.Tokens;
 import roj.compiler.asm.Asterisk;
+import roj.compiler.asm.LambdaCall;
 import roj.compiler.asm.MethodWriter;
 import roj.compiler.ast.ParseTask;
 import roj.compiler.context.LocalContext;
 import roj.compiler.diagnostic.Kind;
-import roj.compiler.resolve.LambdaGenerator;
 import roj.compiler.resolve.NestContext;
 import roj.compiler.resolve.ResolveException;
 import roj.compiler.resolve.TypeCast;
@@ -32,24 +32,28 @@ import java.util.List;
  * @author Roj234
  * @since 2024/1/23 0023 11:32
  */
-public final class Lambda extends ExprNode {
-	private static final Asterisk[] AnyLambda = new Asterisk[10];
+public final class Lambda extends Expr {
+	public static final int ARGC_UNKNOWN = 0x10000;
+	public static final IType ARGC_UNKNOWN_TYPE = new Asterisk("<Lambda//"+ARGC_UNKNOWN+">");
+
+	private static final Asterisk[] cache = new Asterisk[10];
 	static {
-		for (int i = 0; i < 10; i++) AnyLambda[i] = new Asterisk("<Lambda/"+i+">");
+		for (int i = 0; i < 10; i++) cache[i] = new Asterisk("<Lambda/"+i+">");
 	}
-	public static int getLambdaArgCount(IType anyLambda) {
+	public static int getLambdaArgc(IType lambdaArgcType) {
 		String name;
-		if (anyLambda.genericType() != IType.ASTERISK_TYPE || !(name = anyLambda.toString()).startsWith("<Lambda/")) return -1;
+		if (lambdaArgcType.genericType() != IType.ASTERISK_TYPE || !(name = lambdaArgcType.toString()).startsWith("<Lambda/")) return -1;
 
 		char c = name.charAt(8);
 		return c != '/' ? c - '0' : Integer.parseInt(name.substring(8, name.length() - 1));
 	}
+	public static IType getLambdaArgcType(int argc) {return argc < 10 ? cache[argc] : new Asterisk("<Lambda//"+argc+">");}
 
 	private List<?> args;
 	private MethodNode impl;
 	private ParseTask task;
 
-	private ExprNode methodRef;
+	private Expr methodRef;
 	private String methodName;
 
 	public MethodNode getImpl() {return impl;}
@@ -61,7 +65,7 @@ public final class Lambda extends ExprNode {
 		this.task = task;
 	}
 	// parent::methodRef
-	public Lambda(ExprNode methodRef, String methodName) {
+	public Lambda(Expr methodRef, String methodName) {
 		this.args = Collections.emptyList();
 		this.methodRef = methodRef;
 		this.methodName = methodName;
@@ -72,15 +76,15 @@ public final class Lambda extends ExprNode {
 	@Override
 	public IType type() {
 		return methodRef != null && args == Collections.emptyList()
-				? new Asterisk("<Lambda//65536>")
-				: args.size() < 10 ? AnyLambda[args.size()] : new Asterisk("<Lambda//"+args.size()+">");
+				? ARGC_UNKNOWN_TYPE
+				: getLambdaArgcType(args.size());
 	}
 	@Override
-	public ExprNode resolve(LocalContext ctx) throws ResolveException {
+	public Expr resolve(LocalContext ctx) throws ResolveException {
 		if (methodRef != null) {
-			if (methodRef instanceof DotGet d) {
+			if (methodRef instanceof MemberAccess d) {
 				methodRef = null;
-				ExprNode next = d.resolveEx(ctx, n1 -> {
+				Expr next = d.resolveEx(ctx, n1 -> {
 					var n = (IClass) n1;
 					methodRef = constant(Type.klass(n.name()), new CstClass(n.name()));
 				}, null);
@@ -124,7 +128,7 @@ public final class Lambda extends ExprNode {
 		var resolveHelper = ctx.classes.getResolveHelper(lambda接口);
 		int lambda转换方式 = resolveHelper.getLambdaType();
 		var lambda方法 = resolveHelper.getLambdaMethod();
-		LambdaGenerator generator = LambdaGenerator.INVOKE_DYNAMIC;
+		LambdaCall generator = LambdaCall.INVOKE_DYNAMIC;
 		switch (lambda转换方式) {
 			default -> {
 				ctx.report(this, Kind.ERROR, "lambda.unsupported."+lambda转换方式);
@@ -132,17 +136,17 @@ public final class Lambda extends ExprNode {
 			}
 			case 1 -> {
 				if (ctx.classes.getMaximumBinaryCompatibility() < LavaFeatures.JAVA_8)
-					generator = LambdaGenerator.ANONYMOUS_CLASS;
+					generator = LambdaCall.ANONYMOUS_CLASS;
 				else
 					ctx.file.setMinimumBinaryCompatibility(LavaFeatures.JAVA_8);
 			}
-			case 2 -> generator = LambdaGenerator.ANONYMOUS_CLASS;
+			case 2 -> generator = LambdaCall.ANONYMOUS_CLASS;
 		}
 
 		var lambda实参 = ctx.inferrer.getGenericParameters(lambda接口, lambda方法, lambda目标类型).rawDesc();
 
 		var lambda入参 = new SimpleList<Type>();
-		List<ExprNode> lambda入参的取值表达式;
+		List<Expr> lambda入参的取值表达式;
 
 		ClassNode lambda实现所属的类;
 
@@ -164,7 +168,7 @@ public final class Lambda extends ExprNode {
 			if ((impl.modifier&Opcodes.ACC_STATIC) == 0) {
 				methodRef.write(cw, false);
 				lambda入参.add(0, methodRef.type().rawType());
-			} else if (!(methodRef instanceof Constant)) {
+			} else if (!(methodRef instanceof Literal)) {
 				ctx.report(this, Kind.WARNING, "symbol.warn.static_on_half", lambda实现所属的类, methodName, this);
 			}
 		} else {

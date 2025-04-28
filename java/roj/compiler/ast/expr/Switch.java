@@ -22,7 +22,7 @@ import java.util.List;
  * @author Roj234
  * @since 2024/6/9 0009 20:58
  */
-final class Switch extends ExprNode {
+final class Switch extends Expr {
 	private final SwitchNode node;
 	private IType type;
 	public Switch(SwitchNode node) {this.node = node;}
@@ -31,14 +31,14 @@ final class Switch extends ExprNode {
 	public String toString() {return "<SwitchExpr> "+node;}
 
 	@Override
-	public ExprNode resolve(LocalContext ctx) throws ResolveException {
+	public Expr resolve(LocalContext ctx) throws ResolveException {
 		if (type != null) return this;
 
 		int coveredAll = 0;
 
 		IType type = Helpers.maybeNull();
 		for (var branch : node.branches) {
-			ExprNode expr = branch.value;
+			Expr expr = branch.value;
 			if (expr != null) {
 				if (type == null) type = expr.type();
 				else type = ctx.getCommonParent(type, expr.type());
@@ -119,7 +119,7 @@ final class Switch extends ExprNode {
 		if (returnType != null && returnType.getType1() != null) type = returnType.getType1();
 
 		for (var branch : node.branches) {
-			ExprNode expr = branch.value;
+			Expr expr = branch.value;
 			if (expr != null) {
 				expr.write(branch.block, ctx.castTo(expr.type(), type, 0));
 				branch.block.jump(node.breakTo);

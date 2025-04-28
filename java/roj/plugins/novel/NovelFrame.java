@@ -44,7 +44,7 @@ import java.util.regex.Pattern;
  */
 public class NovelFrame extends JFrame {
 	public static void main(String[] args) {
-		GuiUtil.systemLook();
+		GuiUtil.systemLaf();
 		var f = new NovelFrame();
 		f.setDefaultCloseOperation(WindowConstants.EXIT_ON_CLOSE);
 		f.show();

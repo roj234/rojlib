@@ -28,12 +28,12 @@ public class CByteArray extends CList {
 
 	public CByteArray(byte[] value) {
 		super(null);
-		list = new Bytes();
+		elements = new Bytes();
 		this.value = value;
 	}
 
 	public byte[] toByteArray() {return value.clone();}
 
-	public void accept(CVisitor ser) { ser.value(value); }
+	public void accept(CVisitor visitor) { visitor.value(value); }
 	public Object unwrap() { return value; }
 }

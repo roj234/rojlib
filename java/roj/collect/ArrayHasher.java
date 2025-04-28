@@ -32,19 +32,19 @@ final class ArrayHasher {
 
 			CodeWriter cw = hasher.newMethod(ACC_PUBLIC | ACC_FINAL, "hashCode", "(Ljava/lang/Object;)I");
 			cw.visitSize(1, 2);
-			cw.one(ALOAD_1);
+			cw.insn(ALOAD_1);
 			cw.clazz(CHECKCAST, clz);
 			cw.invokeS("java/util/Arrays", "hashCode", "("+clz.toDesc()+")I");
-			cw.one(IRETURN);
+			cw.insn(IRETURN);
 
 			cw = hasher.newMethod(ACC_PUBLIC | ACC_FINAL, "equals", "(Ljava/lang/Object;Ljava/lang/Object;)Z");
 			cw.visitSize(2, 3);
-			cw.one(ALOAD_1);
+			cw.insn(ALOAD_1);
 			cw.clazz(CHECKCAST, clz);
-			cw.one(ALOAD_2);
+			cw.insn(ALOAD_2);
 			cw.clazz(CHECKCAST, clz);
 			cw.invokeS("java/util/Arrays", "equals", "("+clz.toDesc()+clz.toDesc()+")Z");
-			cw.one(IRETURN);
+			cw.insn(IRETURN);
 
 			ClassDefiner.premake(hasher);
 			h = (Hasher<?>) ClassDefiner.make(hasher);

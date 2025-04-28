@@ -12,12 +12,11 @@ import roj.compiler.resolve.TypeCast;
 import roj.config.data.CEntry;
 
 /**
- * 强制类型转换
- *
+ * AST - 强制类型转换
  * @author Roj234
  * @since 2022/2/24 19:48
  */
-final class Cast extends UnaryPre {
+final class Cast extends PrefixOp {
 	TypeCast.Cast cast;
 
 	public Cast(IType type) {
@@ -30,7 +29,7 @@ final class Cast extends UnaryPre {
 
 	@NotNull
 	@Override
-	public ExprNode resolve(LocalContext ctx) {
+	public Expr resolve(LocalContext ctx) {
 		IType rType = (right = right.resolve(ctx)).type();
 		ctx.resolveType(type);
 		cast = ctx.castTo(rType, type, TypeCast.E_NEVER);
@@ -90,11 +89,4 @@ final class Cast extends UnaryPre {
 	}
 	@Override
 	public int hashCode() {return 31 * super.hashCode() + type.hashCode();}
-
-	@Override
-	public String setRight(ExprNode right) {
-		if (right == null) return "unexpected_2:EOF:type.expr";
-		this.right = right;
-		return null;
-	}
 }

@@ -64,15 +64,15 @@ public class Annotation extends CMap {
 	}
 
 	@NotNull
-	public final AList getList(String name) {return (AList) map.getOrDefault(name, AList.EMPTY);}
+	public final AList getList(String name) {return (AList) properties.getOrDefault(name, AList.EMPTY);}
 
 	@Deprecated public int[] getIntArray(String name) {return getList(name).toIntArray();}
 	@Deprecated public String[] getStringArray(String name) {return getList(name).toStringArray();}
 
 	@Override
-	protected CEntry put1(String k, CEntry v, int f) {
-		if (map == Collections.EMPTY_MAP) map = new LinkedMyHashMap<>();
-		return super.put1(k, v, f);
+	protected CEntry put(String k, CEntry v, int flag) {
+		if (properties == Collections.EMPTY_MAP) properties = new LinkedMyHashMap<>();
+		return super.put(k, v, flag);
 	}
 
 	public static Annotation parse(ConstantPool pool, DynByteBuf r) {
@@ -102,20 +102,20 @@ public class Annotation extends CMap {
 	}
 
 	@Override
-	public void accept(CVisitor ser) {
-		((ToJVMAnnotation) ser).valueAnnotation(type);
-		super.accept(ser);
+	public void accept(CVisitor visitor) {
+		((ToJVMAnnotation) visitor).valueAnnotation(type);
+		super.accept(visitor);
 	}
 
 	public String toString() {
 		CharList sb = new CharList().append('@');
 		TypeHelper.toStringOptionalPackage(sb, type());
-		if (!map.isEmpty()) {
+		if (!properties.isEmpty()) {
 			sb.append('(');
-			if (map.size() == 1 && map.containsKey("value")) {
-				sb.append(map.get("value"));
+			if (properties.size() == 1 && properties.containsKey("value")) {
+				sb.append(properties.get("value"));
 			} else {
-				for (var itr = map.entrySet().iterator(); itr.hasNext(); ) {
+				for (var itr = properties.entrySet().iterator(); itr.hasNext(); ) {
 					var entry = itr.next();
 					sb.append(entry.getKey()).append(" = ").append(entry.getValue());
 					if (!itr.hasNext()) break;
@@ -133,13 +133,13 @@ public class Annotation extends CMap {
 		if (!(o instanceof Annotation that)) return false;
 
 		if (!type.equals(that.type)) return false;
-		return map.equals(that.map);
+		return properties.equals(that.properties);
 	}
 
 	@Override
 	public int hashCode() {
 		int result = type.hashCode();
-		result = 31 * result + map.hashCode();
+		result = 31 * result + properties.hashCode();
 		return result;
 	}
 

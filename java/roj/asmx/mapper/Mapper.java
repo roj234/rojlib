@@ -12,6 +12,7 @@ import roj.asm.annotation.Annotation;
 import roj.asm.attr.*;
 import roj.asm.cp.*;
 import roj.asm.type.Desc;
+import roj.asm.type.NameAndType;
 import roj.asm.type.Signature;
 import roj.asm.type.Type;
 import roj.asm.util.ClassUtil;
@@ -24,7 +25,6 @@ import roj.io.MyDataInputStream;
 import roj.text.CharList;
 import roj.text.StringPool;
 import roj.text.logging.Level;
-import roj.ui.Terminal;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
 import roj.util.Helpers;
@@ -1301,7 +1301,7 @@ public class Mapper extends Mapping {
 								try (InputStream in = archive.getStream(entry)) {
 									readLibFile(new Context(entry.getName(), in), classes, m);
 								} catch (Throwable e) {
-									Terminal.warning(f+"#!"+entry.getName()+" 无法读取", e);
+									LOGGER.warn(f+"#!"+entry.getName()+" 无法读取", e);
 								}
 							}
 						}

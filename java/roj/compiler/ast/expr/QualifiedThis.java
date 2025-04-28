@@ -13,9 +13,9 @@ import roj.compiler.resolve.TypeCast;
  * @author Roj234
  * @since 2024/2/2 0002 6:15
  */
-final class EncloseRef extends ExprNode {
+final class QualifiedThis extends Expr {
 	// isThis true => XXX.this (has bytecode), false => XXX.super (only ALoad_0)
-	public EncloseRef(boolean isThis, Type type) {
+	public QualifiedThis(boolean isThis, Type type) {
 		this.nestDepth = isThis ? -1 : 0;
 		this.type = type;
 	}
@@ -27,7 +27,7 @@ final class EncloseRef extends ExprNode {
 	public String toString() { return type + (nestDepth!=0?".this":".super"); }
 
 	@Override
-	public ExprNode resolve(LocalContext ctx) throws ResolveException {
+	public Expr resolve(LocalContext ctx) throws ResolveException {
 		if (nestDepth > 0) return this;
 
 		if (ctx.inStatic) ctx.report(this, Kind.ERROR, "this.static");
@@ -93,7 +93,7 @@ final class EncloseRef extends ExprNode {
 	@Override
 	public boolean equals(Object o) {
 		if (this == o) return true;
-		if (!(o instanceof EncloseRef ref)) return false;
+		if (!(o instanceof QualifiedThis ref)) return false;
 		return type.equals(ref.type);
 	}
 

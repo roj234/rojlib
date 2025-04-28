@@ -5,7 +5,7 @@ import roj.asm.IClass;
 import roj.asm.Opcodes;
 import roj.asm.insn.CodeWriter;
 import roj.asm.type.Type;
-import roj.compiler.api.FieldWriteReplace;
+import roj.compiler.api.FieldAccessHook;
 import roj.compiler.context.CompileUnit;
 import roj.compiler.context.LocalContext;
 import roj.compiler.diagnostic.Kind;
@@ -14,7 +14,7 @@ import roj.compiler.diagnostic.Kind;
  * @author Roj234
  * @since 2024/7/4 0004 14:22
  */
-public final class FieldBridge extends FieldWriteReplace {
+public final class FieldBridge extends FieldAccessHook {
 	private final IClass owner;
 	private int readAccessor = -1, writeAccessor = -1;
 	private boolean exist;
@@ -55,7 +55,7 @@ public final class FieldBridge extends FieldWriteReplace {
 				} else {
 					cw1 = _realOwner.newMethod(Opcodes.ACC_FINAL | Opcodes.ACC_SYNTHETIC, _realOwner.getNextAccessorName(), "()"+type.toDesc());
 					cw1.visitSize(type.length(), 1);
-					cw1.one(Opcodes.ALOAD_0);
+					cw1.insn(Opcodes.ALOAD_0);
 					cw1.field(Opcodes.GETFIELD, owner, fn.name(), fn.rawDesc());
 				}
 
@@ -85,11 +85,11 @@ public final class FieldBridge extends FieldWriteReplace {
 				} else {
 					cw1 = _realOwner.newMethod(Opcodes.ACC_FINAL | Opcodes.ACC_SYNTHETIC, _realOwner.getNextAccessorName(), "("+type.toDesc()+")V");
 					cw1.visitSize(type.length()+1, type.length()+1);
-					cw1.one(Opcodes.ALOAD_0);
+					cw1.insn(Opcodes.ALOAD_0);
 					cw1.varLoad(type, 1);
 					cw1.field(Opcodes.PUTFIELD, owner, fn.name(), fn.rawDesc());
 				}
-				cw1.one(Opcodes.RETURN);
+				cw1.insn(Opcodes.RETURN);
 				cw1.finish();
 			}
 			bridge(cw, fn, writeAccessor);

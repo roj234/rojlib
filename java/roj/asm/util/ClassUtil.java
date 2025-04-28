@@ -9,8 +9,8 @@ import roj.asm.type.Desc;
 import roj.asm.type.IType;
 import roj.asm.type.Type;
 import roj.collect.CollectionX;
-import roj.collect.IntBiMap;
 import roj.collect.SimpleList;
+import roj.collect.ToIntMap;
 import roj.compiler.Tokens;
 import roj.compiler.ast.BlockParser;
 import roj.compiler.ast.expr.ExprParser;
@@ -39,9 +39,6 @@ public final class ClassUtil {
 
 	public final Desc sharedDC = new Desc();
 	private final CharList sharedCL = new CharList(128), sharedCL2 = new CharList(12);
-
-	@Deprecated public static final Object FAILED = null;
-	@Deprecated public static final Map<String, IClass> classInfo = Collections.emptyMap();
 
 	// region 映射各种名字
 
@@ -187,9 +184,9 @@ public final class ClassUtil {
 	public IClass getClassInfo(CharSequence name) {return getGlobalContext().getClassInfo(name);}
 
 	private final Function<ClassNode, List<String>> getSuperClassListCached = CollectionX.lazyLru(info -> {
-		IntBiMap<String> classList = getGlobalContext().getResolveHelper(info).getHierarchyList(gc);
+		ToIntMap<String> classList = getGlobalContext().getResolveHelper(info).getHierarchyList(gc);
 
-		List<String> parents = new SimpleList<>(classList.values());
+		List<String> parents = new SimpleList<>(classList.keySet());
 		parents.sort((o1, o2) -> Integer.compare(classList.getInt(o1) >>> 16, classList.getInt(o2) >>> 16));
 		return parents;
 	}, 1000);

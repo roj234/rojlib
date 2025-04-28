@@ -143,7 +143,7 @@ public class Bootstrap implements Function<String, Class<?>> {
 		CodeWriter c = L.newMethod(ACC_PUBLIC|ACC_STATIC, "<clinit>", "()V");
 		c.visitSize(3, 2);
 		c.field(GETSTATIC, "roj/asmx/launcher/Bootstrap", "args", "Lroj/collect/SimpleList;");
-		c.one(ASTORE_0);
+		c.insn(ASTORE_0);
 
 		for (String name : tweakerNames) {
 			instance.addTransformerExclusion(name.substring(0, name.lastIndexOf('.')+1));
@@ -153,22 +153,22 @@ public class Bootstrap implements Function<String, Class<?>> {
 				c.invokeV("roj/text/logging/Logger", "debug", "(Ljava/lang/String;)V");
 			}
 			c.newObject(name.replace('.', '/'));
-			c.one(ASTORE_1);
+			c.insn(ASTORE_1);
 
-			c.one(ALOAD_1);
-			c.one(ALOAD_0);
+			c.insn(ALOAD_1);
+			c.insn(ALOAD_0);
 			c.field(GETSTATIC, "roj/asmx/launcher/Bootstrap", "instance", "Lroj/asmx/launcher/Bootstrap;");
 			c.invokeItf("roj/asmx/launcher/ITweaker", "init", "(Ljava/util/List;Lroj/asmx/launcher/Bootstrap;)V");
 
 			c.field(GETSTATIC, "roj/asmx/launcher/Bootstrap", "tweakers", "Ljava/util/List;");
-			c.one(ALOAD_1);
+			c.insn(ALOAD_1);
 			c.invokeItf("java/util/List", "add", "(Ljava/lang/Object;)Z");
-			c.one(POP);
+			c.insn(POP);
 		}
 
 		c.newObject(L.name());
 		c.field(PUTSTATIC, "roj/asmx/launcher/EntryPoint", "mainInvoker", "Ljava/lang/Runnable;");
-		c.one(RETURN);
+		c.insn(RETURN);
 		c.finish();
 
 		c = L.newMethod(ACC_PUBLIC, "run", "()V");
@@ -180,7 +180,7 @@ public class Bootstrap implements Function<String, Class<?>> {
 		}
 		c.invokeS("roj/asmx/launcher/Bootstrap", "getArg", "()[Ljava/lang/String;");
 		c.invokeS(target.replace('.', '/'), "main", "([Ljava/lang/String;)V");
-		c.one(RETURN);
+		c.insn(RETURN);
 		c.finish();
 
 		ByteList list = Parser.toByteArrayShared(L);

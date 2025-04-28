@@ -110,7 +110,7 @@ public class HttpHead extends Headers {
 		return null;
 	}
 
-	public final List<Cookie> getCookieFromServer() {
+	public final List<Cookie> cookies() {
 		String field = header("set-cookie");
 		if (field.isEmpty()) return Collections.emptyList();
 

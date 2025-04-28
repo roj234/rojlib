@@ -27,11 +27,11 @@ import static roj.asm.Opcodes.*;
  */
 public final class MethodResult {
 	public MethodNode method;
-	public boolean directVarargCall;
+	public boolean varargExplicitlyProvided;
 	@Nullable
 	public IType[] desc, exception;
 
-	public IntMap<Object> namedParams;
+	public IntMap<Object> filledArguments;
 
 	public int distance;
 	public Object[] error;
@@ -39,7 +39,7 @@ public final class MethodResult {
 	public MethodResult(MethodNode mn, int distance, boolean dvc) {
 		this.method = mn;
 		this.distance = distance;
-		this.directVarargCall = dvc;
+		this.varargExplicitlyProvided = dvc;
 	}
 	public MethodResult(int errorCode, Object... error) {
 		this.distance = errorCode;

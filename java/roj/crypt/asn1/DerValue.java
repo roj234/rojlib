@@ -40,7 +40,7 @@ public interface DerValue {
 		public Type getType() {return Type.INTEGER;}
 
 		@Override
-		public void accept(CVisitor ser) {ser.value("bigInt:"+value);}
+		public void accept(CVisitor visitor) {visitor.value("bigInt:"+value);}
 
 		@Override
 		public Object raw() {return value;}
@@ -74,7 +74,7 @@ public interface DerValue {
 		}
 
 		@Override
-		public void accept(CVisitor ser) {ser.value("unknown("+type+"):"+TextUtil.bytes2hex(value));}
+		public void accept(CVisitor visitor) {visitor.value("unknown("+type+"):"+TextUtil.bytes2hex(value));}
 	}
 
 	final class Sequence extends CMap {
@@ -109,7 +109,7 @@ public interface DerValue {
 		public CList asList() {return ref.asList();}
 
 		@Override
-		public void accept(CVisitor ser) {ref.accept(ser);}
+		public void accept(CVisitor visitor) {ref.accept(visitor);}
 		@Override
 		public Object raw() {return ref.raw();}
 		@Override

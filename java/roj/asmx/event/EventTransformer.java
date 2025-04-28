@@ -87,21 +87,21 @@ public final class EventTransformer implements ITransformer, NodeTransformer<Cla
 
 		CodeWriter c = data.newMethod(Opcodes.ACC_PUBLIC, "cancel", "()V");
 		c.visitSize(2, 1);
-		c.one(Opcodes.ALOAD_0);
+		c.insn(Opcodes.ALOAD_0);
 		c.ldc(1);
 		c.field(Opcodes.PUTFIELD, data, fid);
-		c.one(Opcodes.RETURN);
+		c.insn(Opcodes.RETURN);
 
 		c = data.newMethod(Opcodes.ACC_PUBLIC, "isCanceled", "()Z");
 		c.visitSize(1, 1);
-		c.one(Opcodes.ALOAD_0);
+		c.insn(Opcodes.ALOAD_0);
 		c.field(Opcodes.GETFIELD, data, fid);
-		c.one(Opcodes.IRETURN);
+		c.insn(Opcodes.IRETURN);
 
 		c = data.newMethod(Opcodes.ACC_PUBLIC, "isCancellable", "()Z");
 		c.visitSize(1, 1);
 		c.ldc(1);
-		c.one(Opcodes.IRETURN);
+		c.insn(Opcodes.IRETURN);
 		return true;
 	}
 }

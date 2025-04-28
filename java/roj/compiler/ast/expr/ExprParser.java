@@ -2,8 +2,6 @@ package roj.compiler.ast.expr;
 
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
-import roj.asm.FieldNode;
-import roj.asm.IClass;
 import roj.asm.MethodNode;
 import roj.asm.Opcodes;
 import roj.asm.attr.UnparsedAttribute;
@@ -196,7 +194,7 @@ public final class ExprParser {
 		var t = tmp0; t.clear(); return Helpers.cast(t);
 	}
 
-	private final SimpleList<ExprNode> nodes = new SimpleList<>();
+	private final SimpleList<Expr> nodes = new SimpleList<>();
 	/**
 	 * 低10位放优先级
 	 * 高21位放节点索引
@@ -218,9 +216,9 @@ public final class ExprParser {
 
 	public ExprParser(LocalContext ctx) {this.ctx = ctx;}
 
-	public UnresolvedExprNode parse(int flag) throws ParseException {
+	public RawExpr parse(int flag) throws ParseException {
 		hasNullExpr = false;
-		UnresolvedExprNode node;
+		RawExpr node;
 		try {
 			node = parse1(flag);
 		} catch (ParseException e) {
@@ -238,7 +236,7 @@ public final class ExprParser {
 	}
 	@Nullable
 	@SuppressWarnings({"fallthrough", "unchecked"})
-	private ExprNode parse1(int flag) throws ParseException {
+	private Expr parse1(int flag) throws ParseException {
 		var wr = ctx.lexer;
 		Word w;
 
@@ -249,8 +247,8 @@ public final class ExprParser {
 		int nodeCount = nodes.size();
 
 		while (true) {
-			UnaryPreNode up = null;
-			ExprNode cur = null;
+			PrefixOperator up = null;
+			Expr cur = null;
 			int _sid;
 
 			w = wr.next();
@@ -261,25 +259,25 @@ public final class ExprParser {
 			// 一次性前缀操作(++ --)的判断在setRight中
 			loop:
 			while (true) {
-				UnaryPreNode pf;
+				PrefixOperator pf;
 				switch (_sid = stateMap.getOrDefaultInt(w.type()|SM_UnaryPre, 0)) {
 					case -5: //dec
 						w = wr.next();
 						if (w.type() == INT_MIN_VALUE) {
 							w = wr.next();
-							cur = ExprNode.valueOf(CEntry.valueOf(Integer.MIN_VALUE));
+							cur = Expr.valueOf(CEntry.valueOf(Integer.MIN_VALUE));
 							break endValueGen;
 						} else if (w.type() == LONG_MIN_VALUE) {
 							w = wr.next();
-							cur = ExprNode.valueOf(CEntry.valueOf(Long.MIN_VALUE));
+							cur = Expr.valueOf(CEntry.valueOf(Long.MIN_VALUE));
 							break endValueGen;
 						} else {
 							wr.retractWord();
-							pf = unaryPre(sub);
+							pf = prefixOp(sub);
 							break;
 						}
 					case -1: //inc, add, sub, logic_not, rev
-						pf = unaryPre(w.type());
+						pf = prefixOp(w.type());
 					break;
 					case -2: //lParen
 						int startOff = w.pos();
@@ -325,7 +323,7 @@ public final class ExprParser {
 							break endValueConv;
 						}
 
-						pf = ((LavaApi.ContinueOp<UnaryPreNode>) callbacks.get(alt_sid)).parse(ctx, up);
+						pf = ((LavaApi.ContinueOp<PrefixOperator>) callbacks.get(alt_sid)).parse(ctx, up);
 				}
 				w = wr.next();
 
@@ -354,11 +352,11 @@ public final class ExprParser {
 					// 从零开始，有数字则继续，至[]结束，往后均为null
 					// 若有容量，则不能手动指定内容
 					if (w.type() == lBracket) {
-						List<ExprNode> args = tmp();
+						List<Expr> args = tmp();
 						int array = 1;
 						arrayDef: {
 							while (true) {
-								ExprNode expr = parse1(STOP_RMB|SKIP_RMB);
+								Expr expr = parse1(STOP_RMB|SKIP_RMB);
 								if (expr == null) break; // END OF COUNTED DEFINITION
 								args.add(expr);
 
@@ -384,40 +382,45 @@ public final class ExprParser {
 						}
 
 						if (!args.isEmpty()) {
-							cur = newArrayDef(newType, copyOf(args), true);
+							cur = newArray(newType, copyOf(args), true);
 						} else {
 							if (w.type() != lBrace) throw wr.err("expr.newArray.unInit");
 							cur = newArray(newType);
 							w = wr.next();
 						}
 					} else if (w.type() == lParen) {
-						cur = invoke(newType, null);
+						List<Expr> args = tmp();
+						parseInvokeArguments(args);
+						var node = newInstance(newType, copyOrEmpty(args));
+
 						w = wr.next();
 						if (w.type() == lBrace) {
 							wr.retractWord();
 							wr.state = STATE_CLASS;
-							var _type = ctx.file.newAnonymousClass(ctx.method);
-							cur = newAnonymousClass(cur, _type);
+							var anonymousClass = ctx.file.newAnonymousClass(ctx.method);
+							cur = newAnonymousClass(node, anonymousClass);
 							wr.state = STATE_EXPR;
 
 							w = wr.next();
+						} else {
+							cur = node;
 						}
 					} else {
 						// 语法糖: new n => 无参数调用
-						cur = newInvoke(newType, Collections.emptyList());
+						cur = newInstance(newType, Collections.emptyList());
 					}
 					cur.wordStart = start;
 				break endValueGen;
 				// constant
-				case -2: cur = ExprNode.constant(Type.primitive(Type.CHAR), CEntry.valueOf(w.val().charAt(0))); break;
-				case -3: cur = ExprNode.valueOf(w.val()); break;
-				case -4: cur = ExprNode.valueOf(w.asInt()); break;
-				case -5: cur = ExprNode.constant(Type.primitive(Type.LONG), CEntry.valueOf(w.asLong())); break;
-				case -6: cur = ExprNode.constant(Type.primitive(Type.FLOAT), CEntry.valueOf(w.asFloat())); break;
-				case -7: cur = ExprNode.constant(Type.primitive(Type.DOUBLE), CEntry.valueOf(w.asDouble())); break;
-				case -8: cur = ExprNode.valueOf(true); break;
-				case -9: cur = ExprNode.valueOf(false); break;
-				case -10: cur = ExprNode.constant(Asterisk.anyType, null); break;
+				case -2: cur = Expr.constant(Type.primitive(Type.CHAR), CEntry.valueOf(w.val().charAt(0))); break;
+				case -3: cur = Expr.valueOf(w.val()); break;
+				case -4: cur = Expr.valueOf(w.asInt()); break;
+				case -5: cur = Expr.constant(Type.primitive(Type.LONG), CEntry.valueOf(w.asLong())); break;
+				case -6: cur = Expr.constant(Type.primitive(Type.FLOAT), CEntry.valueOf(w.asFloat())); break;
+				case -7: cur = Expr.constant(Type.primitive(Type.DOUBLE), CEntry.valueOf(w.asDouble())); break;
+				case -8: cur = Expr.valueOf(true); break;
+				case -9: cur = Expr.valueOf(false); break;
+				case -10: cur = Expr.constant(Asterisk.anyType, null); break;
 				// MIN_VALUE_NUMBER_LITERAL
 				case -17: LocalContext.get().report(Kind.ERROR, "lexer.number.overflow"); break;
 				// this
@@ -440,9 +443,9 @@ public final class ExprParser {
 						}
 						wr.skip();
 
-						var npl = new NamedParamList();
+						var npl = new NamedArgumentList();
 						while (true) {
-							ExprNode val = parse1(STOP_RLB|STOP_COMMA|SKIP_COMMA|NAE);
+							Expr val = parse1(STOP_RLB|STOP_COMMA|SKIP_COMMA|NAE);
 							if (!npl.add(firstName, val))
 								ctx.report(Kind.ERROR, "expr.invoke.paramName", firstName);
 
@@ -469,35 +472,37 @@ public final class ExprParser {
 				case -14://lBracket
 					//if ((flag & _ENV_FIELD) == 0) wr.unexpected(w.val());
 
-					ExprNode key;
-					//noinspection TextLabelInSwitchStatement
-					checkEasyMap: {
-					var easyMap = new EasyMap();
-					// 形如 [ exprkey -> exprval, ... ] 的直接Map<K, V>构建
-					do {
-						key = parse1(STOP_LAMBDA|STOP_COMMA|SKIP_COMMA|NAE);
-						if (w.type() != lambda) {
-							if (w.type() == comma && easyMap.map.isEmpty()) break checkEasyMap;
-							else ue(wr, w.val(), "expr.easyMap.kvOrRet");
-						}
-						ExprNode val = parse1(STOP_RMB|STOP_COMMA|NAE);
+					List<Expr> keys = tmp();
 
-						easyMap.map.put(key, val);
-						w = wr.next();
-					} while (w.type() != rBracket);
-					cur = easyMap;
-					break;
+					//noinspection TextLabelInSwitchStatement
+					checkMapLiteral: {
+						List<Expr> values = new SimpleList<>();
+						// 形如 [ exprkey -> exprval, ... ] 的直接Map<K, V>构建
+						do {
+							var key = parse1(STOP_LAMBDA|STOP_COMMA|SKIP_COMMA|NAE);
+							keys.add(key);
+
+							if (w.type() != lambda) {
+								if (w.type() == comma && keys.size() == 1) break checkMapLiteral;
+								else ue(wr, w.val(), "expr.mapLiteral.kvOrRet");
+							}
+
+							var val = parse1(STOP_RMB|STOP_COMMA|NAE);
+
+							values.add(val);
+							w = wr.next();
+						} while (w.type() != rBracket);
+
+						cur = new MapLiteral(copyOf(keys), values);
+						break;
 					}
 
-					List<ExprNode> args = tmp();
-					args.add(key);
-
 					while (w.type() == comma) {
-						args.add(parse1(STOP_RMB|STOP_COMMA|SKIP_COMMA|NAE));
+						keys.add(parse1(STOP_RMB|STOP_COMMA|SKIP_COMMA|NAE));
 					}
 
 					wr.except(rBracket, "]");
-					cur = new EasyList(copyOf(args));
+					cur = new ListLiteral(copyOf(keys));
 				break;
 				case -15://primitive type ref
 					Type typeRef = PW.get(w.type());
@@ -517,7 +522,7 @@ public final class ExprParser {
 								// some[ ].class
 								// some[ ] variable
 								// some[ index] ...
-								typeRef = ((DotGet) cur).toClassRef();
+								typeRef = ((MemberAccess) cur).toClassRef();
 								var tmp = _typeRef(w = w.copy(), typeRef, flag);
 								if (tmp != null) {
 									if (tmp.getClass() == VariableDeclare.class) return tmp;
@@ -527,7 +532,7 @@ public final class ExprParser {
 							} else if (nodes.isEmpty() && (flag&CHECK_VARIABLE_DECLARE) != 0) {
 								if (w.type() == LITERAL) {
 									// some  variable
-									return new VariableDeclare(((DotGet) cur).toClassRef(), w.val());
+									return new VariableDeclare(((MemberAccess) cur).toClassRef(), w.val());
 								} else if (w.type() == lss) {
 									// some< generic type> variable;
 									w = w.copy();
@@ -537,7 +542,7 @@ public final class ExprParser {
 									wr.retract();
 
 									if (b) {
-										IType type = ctx.file.readGenericPart(((DotGet) cur).toClassRef().owner);
+										IType type = ctx.file.readGenericPart(((MemberAccess) cur).toClassRef().owner);
 
 										w = wr.next();
 										if (w.type() != LITERAL) throw wr.err("未预料的[类型]");
@@ -552,10 +557,10 @@ public final class ExprParser {
 						w = wr.next();
 						if (w.type() != LITERAL) {
 							if (w.type() == CLASS) {
-								cur = ExprNode.classRef(((DotGet) cur).toClassRef());
+								cur = Expr.classRef(((MemberAccess) cur).toClassRef());
 								break;
 							} else if (w.type() == Tokens.THIS || w.type() == Tokens.SUPER) {
-								cur = newEncloseRef(w.type() == Tokens.THIS, ((DotGet) cur).toClassRef());
+								cur = qualifiedThis(w.type() == Tokens.THIS, ((MemberAccess) cur).toClassRef());
 								break;
 							}
 							_sid = 0;
@@ -576,7 +581,7 @@ public final class ExprParser {
 			int opFlag = 0;
 			while (true) {
 				switch (_sid = stateMap.getOrDefaultInt(w.type()|SM_ExprNext, 0)) {
-					case -1://lss
+					case -1:{//lss
 						// '小于'操作符
 						if (waitDot) break endValueConvNrt;
 
@@ -595,15 +600,23 @@ public final class ExprParser {
 						cur = chain(cur, wr.except(Word.LITERAL).val(), (opFlag&OP_OPTIONAL));
 						opFlag = 0;
 						wr.except(lParen);
-						cur = invoke(cur, bounds);
+
+						List<Expr> args = tmp();
+						parseInvokeArguments(args);
+						var node = invoke(cur, copyOrEmpty(args));
+
+						node.wordStart = cur.wordStart;
+						if (bounds != null) node.setExplicitArgumentType(bounds);
+
+						cur = node;
 
 						waitDot = true;
-					break;
+					break;}
 					case -2://lBracket a[b]
 						if (!waitDot) ue(wr, w.val(), "type.literal");
 						var index = parse1(STOP_RMB|SKIP_RMB);
 						if (index == null) chain(cur, ";[", 0); // 无意义，完全可以在这里报错
-						else cur = newArrayGet(cur, index);
+						else cur = accessArray(cur, index);
 					break;
 					case -3://optional_chaining
 						opFlag |= OP_OPTIONAL;
@@ -627,24 +640,39 @@ public final class ExprParser {
 
 						ue(wr, w.val(), ".");
 					break;
-					case -6://lParen a(b...)
+					case -6:{//lParen a(b...)
 						if (!waitDot) ue(wr, w.val(), "type.literal");
-						cur = invoke(cur, null);
-					break;
-					case -11://xxx.new SomeClass(...)
+
+						int wordStart = ctx.lexer.prevIndex;
+						List<Expr> args = tmp();
+						parseInvokeArguments(args);
+
+						var node = invoke(cur, copyOrEmpty(args));
+						node.wordStart = wordStart;
+						if (null instanceof List) node.setExplicitArgumentType(Helpers.cast(null));
+						cur = node;
+					break;}
+					case -11:{//xxx.new SomeClass(...)
 						if (waitDot) ue(wr, w.val(), ".");
 						String className = wr.except(LITERAL, "cu.name").val();
 						wr.except(lParen);
-						cur = invoke(Type.klass(className), cur).setThisArg();
+
+						List<Expr> args = tmp();
+						args.add(cur);
+						parseInvokeArguments(args);
+
+						var node = newInstance(Type.klass(className), copyOf(args));
+						node.wordStart = cur.wordStart;
+						cur = node.setThisArg();
 						waitDot = true;
-					break;
+					break;}
 
 					// 我是无敌可爱的分隔线
 
 					case -10://字符串格式化 FMT. ""
-						if (cur instanceof DotGet dg && dg.maybeStringTemplate()) {
+						if (cur instanceof MemberAccess dg && dg.maybeStringTemplate()) {
 							//if (waitDot) ue(wr, w.val(), "."); // 使得.可加可不加
-							cur = new StringFormat(dg, w.val());
+							cur = new TemplateStringLiteral(dg, w.val());
 							break endValueConv;
 						}
 					case 0://其他token
@@ -652,20 +680,20 @@ public final class ExprParser {
 					break endValueConvNrt;
 
 					case -7: {//assign及其变种
-						if (!(cur instanceof VarNode vn)) {
+						if (!(cur instanceof LeftValue vn)) {
 							ctx.report(Kind.ERROR, "expr.notVariable", cur);
 							break endValueConv;
 						}
 
 						short vtype = w.type();
 
-						ExprNode right = parse1(flag & ~(CHECK_VARIABLE_DECLARE|SKIP_SEMICOLON|SKIP_COMMA|SKIP_RMB|SKIP_RSB) | STOP_COMMA | NAE);
-						cur = newAssign(vn, vtype == assign ? right : binary((short) (vtype + binary_assign_delta), cur, right));
+						Expr right = parse1(flag & ~(CHECK_VARIABLE_DECLARE|SKIP_SEMICOLON|SKIP_COMMA|SKIP_RMB|SKIP_RSB) | STOP_COMMA | NAE);
+						cur = assign(vn, vtype == assign ? right : binaryOp((short) (vtype + binary_assign_delta), cur, right));
 					}
 					break endValueConv;
 					case -8://inc, dec
-						if (!(cur instanceof VarNode vn)) ctx.report(Kind.ERROR, "expr.notVariable", cur);
-						else cur = newUnaryPost(w.type(), vn);
+						if (!(cur instanceof LeftValue vn)) ctx.report(Kind.ERROR, "expr.notVariable", cur);
+						else cur = postfixOp(w.type(), vn);
 					break endValueConv;
 					case -9://method_referent this::stop
 						if (!waitDot) ue(wr, w.val(), "type.literal");
@@ -677,7 +705,7 @@ public final class ExprParser {
 					default: // 自定义继续 | 自定义终止
 						int alt_sid = _sid & ~CU_TerminateFlag;
 
-						cur = ((LavaApi.ContinueOp<ExprNode>) callbacks.get(alt_sid)).parse(ctx, cur);
+						cur = ((LavaApi.ContinueOp<Expr>) callbacks.get(alt_sid)).parse(ctx, cur);
 
 						if (_sid == alt_sid) break;
 						else break endValueConv;
@@ -707,7 +735,7 @@ public final class ExprParser {
 				IType targetType = ctx.file.readType(CompileUnit.TYPE_GENERIC);
 				String variable = wr.nextIf(LITERAL) ? w.val() : null;
 
-				cur = newInstanceOf(targetType.rawType(), cur, variable);
+				cur = instanceOf(targetType.rawType(), cur, variable);
 				nodes.add(cur);
 
 				w = wr.next();
@@ -752,16 +780,16 @@ public final class ExprParser {
 
 			// range 0 - 1023
 			binaryOps.add((nodes.size() << 10) | (_sid&0x3FF));
-			nodes.add(new Binary(w.type()));
+			nodes.add(new BinaryOp(w.type()));
 		}
 
-		ExprNode cur = buildBinaryTree(nodes, nodeCount, bopCount);
+		Expr cur = buildBinaryTree(nodes, nodeCount, bopCount);
 
 		if (w.type() == comma) {
 			if ((flag & STOP_COMMA) == 0) {
 				checkNullExpr(cur);
 
-				List<ExprNode> args = tmp();
+				List<Expr> args = tmp();
 				args.add(cur);
 
 				int start = wr.current().pos();
@@ -771,7 +799,7 @@ public final class ExprParser {
 				} while (w.type() == comma);
 				if (w.type() != semicolon) ue(wr, w.val(), ";");
 
-				cur = new Chained(copyOf(args));
+				cur = new SequenceExpr(copyOf(args));
 				cur.wordStart = start;
 			} else if ((flag & SKIP_COMMA) == 0) {
 				wr.retractWord();
@@ -781,12 +809,12 @@ public final class ExprParser {
 		// 这也是终结. 但是优先级最高
 		if (w.type() == ask) {
 			checkNullExpr(cur);
-			ExprNode middle = parse1(flag|STOP_COLON);
+			Expr middle = parse1(flag|STOP_COLON);
 			checkNullExpr(middle);
 			wr.except(colon);
-			ExprNode right = parse1(flag);
+			Expr right = parse1(flag);
 			checkNullExpr(right);
-			cur = newTrinary(cur, middle, right);
+			cur = conditional(cur, middle, right);
 		}
 
 		if (hasNullExpr) cur = null;
@@ -799,12 +827,17 @@ public final class ExprParser {
 		depth--;
 		return cur;
 	}
+
+	private List<Expr> copyOrEmpty(List<Expr> args) {
+		return args.isEmpty() ? Collections.emptyList() : copyOf(args);
+	}
+
 	/**
 	 * 根据优先级构建二元表达式树.
 	 * 20250330: 现已支持右结合！
 	 */
-	private ExprNode buildBinaryTree(SimpleList<ExprNode> nodes, int nodeCount, int bopCount) {
-		ExprNode cur;
+	private Expr buildBinaryTree(SimpleList<Expr> nodes, int nodeCount, int bopCount) {
+		Expr cur;
 		var ops = binaryOps;
 		if (ops.size() > bopCount) {
 			TimSortForEveryone.sort(bopCount, ops.size(), BOP_SORTER, NativeArray.primitiveArray(ops.getRawArray()));
@@ -813,7 +846,7 @@ public final class ExprParser {
 			do {
 				int ord = (ops.get(i) >>> 10) & 2097151;
 
-				Binary op = (Binary) nodes.get(ord);
+				var op = (BinaryOp) nodes.get(ord);
 
 				op.left = nodes.set(ord-1, op);
 				op.right = nodes.set(ord+1, op);
@@ -835,7 +868,7 @@ public final class ExprParser {
 	}
 
 	private boolean hasNullExpr;
-	private void checkNullExpr(ExprNode cur) {
+	private void checkNullExpr(Expr cur) {
 		if (cur == null && !hasNullExpr) {
 			ctx.report(Kind.ERROR, "noExpression");
 			hasNullExpr = true;
@@ -843,7 +876,7 @@ public final class ExprParser {
 	}
 
 	@Nullable
-	private ExprNode _typeRef(Word w, Type type, int flag) throws ParseException {
+	private Expr _typeRef(Word w, Type type, int flag) throws ParseException {
 		var wr = ctx.lexer;
 
 		int array = 0;
@@ -867,7 +900,7 @@ public final class ExprParser {
 		}
 
 		// int [] . class
-		if (w.type() == dot && wr.nextIf(CLASS)) return ExprNode.classRef(type);
+		if (w.type() == dot && wr.nextIf(CLASS)) return Expr.classRef(type);
 
 		if (array != 0) ctx.report(Kind.ERROR, "expr.typeRef.arrayDecl");
 		return null;
@@ -1002,39 +1035,31 @@ public final class ExprParser {
 		return Type.klass(sb.toString());
 	}
 
-	public ExprNode chain(ExprNode expr, String name, int flag) {
-		if (expr instanceof DotGet d) {
+	public Expr chain(Expr expr, String name, int flag) {
+		if (expr instanceof MemberAccess d) {
 			d.wordEnd = ctx.lexer.index;
 			return d.add(name, flag);
 		}
-		return new DotGet(expr, name, flag);
+		return new MemberAccess(expr, name, flag);
 	}
-	private Invoke invoke(Object fn, Object arg2) throws ParseException {
-		int wordStart = ctx.lexer.prevIndex;
 
-		List<ExprNode> args = tmp();
-		if (arg2 instanceof ExprNode x) args.add(x);
+	private void parseInvokeArguments(List<Expr> args) throws ParseException {
 		while (true) {
 			// _ENV_TYPED_ARRAY may not stable
-			ExprNode expr = parse1(STOP_RSB|STOP_COMMA|SKIP_COMMA|_ENV_INVOKE|_ENV_TYPED_ARRAY);
+			Expr expr = parse1(STOP_RSB|STOP_COMMA|SKIP_COMMA|_ENV_INVOKE|_ENV_TYPED_ARRAY);
 			// noinspection all
-			if (expr == null || (args.add(expr) & expr.getClass() == NamedParamList.class)) {
+			if (expr == null || (args.add(expr) & expr.getClass() == NamedArgumentList.class)) {
 				ctx.lexer.except(rParen, ")");
 				break;
 			}
 		}
-
-		var node = newInvoke(fn, args.isEmpty() ? Collections.emptyList() : copyOf(args));
-		node.wordStart = wordStart;
-		if (arg2 instanceof List) node.setBounds(Helpers.cast(arg2));
-		return node;
 	}
 
-	private ExprNode newArray(IType arrayType) throws ParseException {
+	private Expr newArray(IType arrayType) throws ParseException {
 		Word w = ctx.lexer.current();
 		int wordStart = w.pos();
 
-		List<ExprNode> args = tmp();
+		List<Expr> args = tmp();
 		do {
 			var node = parse1(STOP_RLB|STOP_COMMA|SKIP_COMMA|_ENV_TYPED_ARRAY);
 			if (node == null) break;
@@ -1042,11 +1067,11 @@ public final class ExprParser {
 		} while (w.type() == comma);
 		ctx.lexer.except(rBrace);
 
-		var node = newArrayDef(arrayType, copyOf(args), false);
+		var node = newArray(arrayType, copyOf(args), false);
 		node.wordStart = wordStart;
 		return node;
 	}
-	private ExprNode lambda(Tokens wr, List<String> parNames, int stopWord) throws ParseException {
+	private Expr lambda(Tokens wr, List<String> parNames, int stopWord) throws ParseException {
 		var argNames = copyOf(parNames);
 
 		var file = ctx.file;
@@ -1059,7 +1084,7 @@ public final class ExprParser {
 			int start = wr.prevIndex;
 			int linePos = wr.LN;
 			int lineIdx = wr.LNIndex;
-			ExprNode node = parse1(stopWord&(STOP_RSB|STOP_COMMA|STOP_SEMICOLON));
+			Expr node = parse1(stopWord&(STOP_RSB|STOP_COMMA|STOP_SEMICOLON));
 			if (node == null) {
 				ctx.report(Kind.ERROR, "lambda解析失败");
 				return NaE.RESOLVE_FAILED;
@@ -1067,6 +1092,7 @@ public final class ExprParser {
 
 			int end = wr.prevIndex;
 
+			// 这里伪造offset是为了诊断能对上真实文件里的位置
 			int offset = start-7; // 7是"return "的长度
 			var methodStrTmp = "return "+wr.getText().subSequence(start, end)+";}";
 			// TODO 一个更优雅的解决方案来将Expression lambda转换为Method lambda
@@ -1080,7 +1106,7 @@ public final class ExprParser {
 
 			task = ctx -> {
 				ctx.lexer.setText(methodStr, 0);
-				ctx.lexer.init(start-7, linePos, lineIdx);
+				ctx.lexer.init(offset, linePos, lineIdx);
 
 				var cw = ctx.bp.parseMethod(ctx.file, method, argNames);
 				cw.finish();
@@ -1103,7 +1129,9 @@ public final class ExprParser {
 		ctx.report(Kind.ERROR, sb.append("\"]").toString());
 	}
 
-	public int binaryOperatorPriority(short op) {return stateMap.getOrDefaultInt(SM_ExprTerm | op, -1);}
+	public int binaryOperatorPriority(short op) {return stateMap.getOrDefaultInt(SM_ExprTerm | op, -1) & 1023;}
+	public boolean isLeftAssociative(short op) {return stateMap.getOrDefaultInt(SM_ExprTerm | op, -1) >= 0;}
+	public boolean isCommutative(short op) {return op == add || op == mul;}
 
 	public <T> List<T> copyOf(List<T> args) {
 		if (!(args instanceof SimpleList<T>)) return args;
@@ -1113,30 +1141,29 @@ public final class ExprParser {
 	}
 
 	private final This THIS = new This(true), SUPER = new This(false);
-	public ExprNode This() {return THIS;}
-	public ExprNode Super() {return SUPER;}
+	public Expr This() {return THIS;}
+	public Expr Super() {return SUPER;}
 
-	public UnaryPreNode unaryPre(short type) {return new UnaryPre(type);}
-	public UnaryPreNode cast(IType type) {return new Cast(type);}
+	public PrefixOperator prefixOp(short type) {return new PrefixOp(type);}
+	public PrefixOperator cast(IType type) {return new Cast(type);}
 
-	public ExprNode newArrayGet(ExprNode array, ExprNode index) {return new ArrayGet(array, index);}
-	public ExprNode newArrayDef(IType type, List<ExprNode> args, boolean sized) {return new ArrayDef(type, args, sized);}
-	public ExprNode newAssign(VarNode cur, ExprNode node) {return new Assign(cur, node);}
-	public ExprNode newEncloseRef(boolean ThisEnclosing, Type type) {return new EncloseRef(ThisEnclosing, type);}
-	public Invoke newInvoke(Object fn, List<ExprNode> pars) {return new Invoke(fn, pars);}
-	public ExprNode binary(short op, ExprNode left, ExprNode right) {return new Binary(op, left, right);}
-	public ExprNode newUnaryPost(short op, VarNode prev) {return new UnaryPost(op, prev);}
-	public ExprNode newInstanceOf(Type type, ExprNode cur, String variable) {return new InstanceOf(type, cur, variable);}
-	public ExprNode newTrinary(ExprNode cur, ExprNode middle, ExprNode right) {return new Trinary(cur, middle, right);}
-	public ExprNode newAnonymousClass(ExprNode expr, CompileUnit type) {return new NewAnonymousClass((Invoke) expr, type);}
+	public Expr accessArray(Expr array, Expr index) {return new ArrayAccess(array, index);}
+	public Expr newArray(IType type, List<Expr> args, boolean sized) {return new NewArray(type, args, sized);}
+	public Expr assign(LeftValue cur, Expr node) {return new Assign(cur, node);}
+	public Expr qualifiedThis(boolean ThisEnclosing, Type type) {return new QualifiedThis(ThisEnclosing, type);}
+	public Invoke invoke(Expr expr, List<Expr> pars) {return new Invoke(expr, pars);}
+	public Expr binaryOp(short op, Expr left, Expr right) {return new BinaryOp(op, left, right);}
+	public Expr postfixOp(short op, LeftValue node) {return new PostfixOp(op, node);}
+	public Expr instanceOf(Type type, Expr cur, String variable) {return new InstanceOf(type, cur, variable);}
+	public Expr conditional(Expr cur, Expr middle, Expr right) {return new If(cur, middle, right);}
+	public Invoke newInstance(IType type, List<Expr> pars) {return new Invoke(type, pars);}
+	public Expr newAnonymousClass(Invoke expr, CompileUnit type) {return new NewAnonymousClass(expr, type);}
 
-	public static ExprNode fieldChain(ExprNode parent, IClass begin, IType type, boolean isFinal, FieldNode... chain) {return DotGet.fieldChain(parent, begin, type, isFinal, chain);}
+	private static final Serializer<Expr> serializer = SerializerFactory.POOLED.serializer(Expr.class);
+	public static String serialize(Expr node) { return ConfigMaster.JSON.writeObject(serializer(), node, new CharList()).toStringAndFree(); }
+	public static void serialize(Expr node, CVisitor visitor) { serializer().write(visitor, node); }
+	public static Serializer<Expr> serializer() { return serializer; }
 
-	private static final Serializer<ExprNode> serializer = SerializerFactory.POOLED.serializer(ExprNode.class);
-	public static String serialize(ExprNode node) { return ConfigMaster.JSON.writeObject(serializer(), node, new CharList()).toStringAndFree(); }
-	public static void serialize(ExprNode node, CVisitor visitor) { serializer().write(visitor, node); }
-	public static Serializer<ExprNode> serializer() { return serializer; }
-
-	private final Serializer<ExprNode> deserializer = SerializerFactory.POOLED.serializer(ExprNode.class);
-	public UnresolvedExprNode deserialize(String string) throws ParseException {return ConfigMaster.JSON.readObject(deserializer, string);}
+	private final Serializer<Expr> deserializer = SerializerFactory.POOLED.serializer(Expr.class);
+	public RawExpr deserialize(String string) throws ParseException {return ConfigMaster.JSON.readObject(deserializer, string);}
 }

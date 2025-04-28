@@ -17,23 +17,15 @@ import java.io.IOException;
  * @author Roj234
  * @since 2024/11/26 0026 16:44
  */
-public class FlowController extends SpeedLimiter implements ChannelHandler {
+class FlowController extends SpeedLimiter implements ChannelHandler {
 	private final FlowControl owner;
-	String group;
-	volatile int limitAfter;
-	int timeout;
-	int maxConcurrentConnections, maxConnections;
 
-	public FlowController(FlowControl owner, String group, int limitAfter, int maxConcurrentConnections, int maxConnections, int timeout, int bestMTU, int maxLatency) {
-		super(bestMTU, maxLatency);
+	public FlowController(FlowControl owner, FlowControl.LimitGroup group) {
+		super(group);
 		this.owner = owner;
-		this.group = group;
-		this.limitAfter = limitAfter;
-		this.timeout = timeout;
-		this.maxConcurrentConnections = maxConcurrentConnections;
-		this.maxConnections = maxConnections;
-		pendingConnections = RingBuffer.lazy(maxConnections);
+		this.pendingConnections = RingBuffer.lazy(group.maxConnections);
 	}
+	private FlowControl.LimitGroup getLimitGroup() {return (FlowControl.LimitGroup) setting;}
 
 	long timestamp;
 
@@ -42,10 +34,10 @@ public class FlowController extends SpeedLimiter implements ChannelHandler {
 
 	private volatile int lock;
 	private static final long LOCK_OFFSET = ReflectionUtils.fieldOffset(FlowController.class, "lock");
-	private static final long limitAfter_OFFSET = ReflectionUtils.fieldOffset(FlowController.class, "limitAfter");
 
 	public int limit(int pendingBytes) {
-		if (bps == 0) return pendingBytes;
+		if (setting.maxTokens == 0) return pendingBytes;
+
 		if (!Unaligned.U.compareAndSwapInt(this, LOCK_OFFSET, 0, 1)) return 0;
 		try {
 			return super.limit(pendingBytes);
@@ -54,15 +46,9 @@ public class FlowController extends SpeedLimiter implements ChannelHandler {
 		}
 	}
 
-	public boolean isTimeout() {
-		return channel.isEmpty() && System.currentTimeMillis() - timestamp > timeout;
-	}
-
 	@Override
-	public void handlerAdded(ChannelCtx ctx) {
-		var rh = ctx.prev(ResponseHeader.class);
-		rh.limitSpeed(limitAfter < 0 ? this : null);
-	}
+	public void handlerAdded(ChannelCtx ctx) {ctx.prev(ResponseHeader.class).limitSpeed(this);}
+
 	@Override
 	public synchronized void handlerRemoved(ChannelCtx ctx) {
 		channel.remove(ctx.channel());
@@ -78,7 +64,9 @@ public class FlowController extends SpeedLimiter implements ChannelHandler {
 	@Override
 	public void channelOpened(ChannelCtx ctx) throws IOException {
 		var request = ctx.prev(ResponseHeader.class).request();
-		if (group == null) {
+
+		// is address limiter
+		if (getLimitGroup().name == null) {
 			var pipe = owner.loginCheck(this, request);
 			if (pipe == null) ctx.removeSelf();
 			else {
@@ -90,7 +78,7 @@ public class FlowController extends SpeedLimiter implements ChannelHandler {
 
 	private synchronized void checkNow(ChannelCtx ctx) {
 		var ch = ctx.channel();
-		if (channel.size() >= maxConcurrentConnections) {
+		if (channel.size() >= getLimitGroup().maxConcurrentConnections) {
 			ch.readInactive();
 
 			var first = pendingConnections.ringAddLast(ch);
@@ -104,25 +92,7 @@ public class FlowController extends SpeedLimiter implements ChannelHandler {
 
 	@Override
 	public void channelTick(ChannelCtx ctx) throws Exception {
-		var writer = ctx.prev(ContentWriter.class);
-		if(writer == null) {
-			ctx.removeSelf();
-			return;
-		}
-
-		if(limitAfter < 0) {
-			writer.limitSpeed(this);
-			return;
-		}
-
-		var entry = (ToLongMap.Entry<MyChannel>)channel.getEntry(ctx.channel());
-		if (entry == null) return;
-
-		var delta = writer.getSendBytes() - entry.v;
-		entry.v = writer.getSendBytes();
-
-		if(limitAfter < 0 || Unaligned.U.getAndAddInt(this, limitAfter_OFFSET, (int) -delta) < delta) {
-			writer.limitSpeed(this);
-		}
+		// websocket
+		if(ctx.prev(ContentWriter.class) == null) ctx.removeSelf();
 	}
 }

@@ -65,7 +65,7 @@ public final class TOMLParser extends Parser {
 	 */
 	@Override
 	CEntry element(int flag) throws ParseException {
-		CMap map = comment == null ? new CMap() : new CCommMap();
+		CMap map = comment == null ? new CMap() : new CMap.Commentable();
 
 		CMap root = tomlObject(flag);
 		if (root.size() > 0) map.put(CMap.CONFIG_TOPLEVEL, root);
@@ -107,7 +107,7 @@ public final class TOMLParser extends Parser {
 	@SuppressWarnings("fallthrough")
 	private CMap tomlObject(int flag) throws ParseException {
 		Map<String, CEntry> valmap = createMap(flag);
-		CMap map = (flag & INLINE) != 0 ? new IMap(valmap) : comment == null ? new CMap(valmap) : new CCommMap(valmap);
+		CMap map = (flag & INLINE) != 0 ? new IMap(valmap) : comment == null ? new CMap(valmap) : new CMap.Commentable(valmap);
 
 		o:
 		while (true) {
@@ -267,7 +267,7 @@ public final class TOMLParser extends Parser {
 			CEntry entry = map.get(key);
 			if (entry == null) {
 				Map<String, CEntry> valmap = createMap(flag);
-				map.put(key, entry = comment == null ? new CMap(valmap): new CCommMap(valmap));
+				map.put(key, entry = comment == null ? new CMap(valmap): new CMap.Commentable(valmap));
 			} else if (entry.getType() == Type.LIST) {
 				CList list = entry.asList();
 				if (list.size() == 0) throw err("空的行内数组");
@@ -287,8 +287,8 @@ public final class TOMLParser extends Parser {
 		firstChar = SIGNED_NUMBER_C2C;
 
 		if (comment != null && comment.length() > 0) {
-			if (val.isCommentSupported())
-				val.putComment(key, comment.toString());
+			if (val.isCommentable())
+				val.setComment(key, comment.toString());
 			comment.clear();
 		}
 

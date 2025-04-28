@@ -106,7 +106,7 @@ public final class EnumHelper extends CodeVisitor {
 	private int state, nameId, ordinalId;
 
 	@Override
-	protected void one(byte code) { decompressVar(code); }
+	protected void insn(byte code) { decompressVar(code); }
 
 	// protected Enum(String name, int ordinal)
 	@Override
@@ -159,10 +159,10 @@ public final class EnumHelper extends CodeVisitor {
 		int nid = (int)(mi>>>16)&0xFF, oid = (int)(mi>>>8)&0xFF, len = (int)mi&0xFF;
 
 		InsnList l = addCode;
-		l.one(DUP);
+		l.insn(DUP);
 		l.ldc(this.len.value);
 		l.clazz(NEW, ref.name());
-		l.one(DUP);
+		l.insn(DUP);
 
 		int stackSize = 7 + TypeHelper.paramSize(desc);
 		if (staticInit.stackSize < stackSize) {
@@ -179,7 +179,7 @@ public final class EnumHelper extends CodeVisitor {
 				l.ldc(this.len.value);
 				continue;
 			} else if (param[j] == null) {
-				l.one(ACONST_NULL);
+				l.insn(ACONST_NULL);
 			} else {
 				Type klass = types.get(j);
 				Object v = param[j];
@@ -206,7 +206,7 @@ public final class EnumHelper extends CodeVisitor {
 			j++;
 		}
 		l.invoke(INVOKESPECIAL, ref, (int)(mi>>>24));
-		l.one(AASTORE);
+		l.insn(AASTORE);
 
 		return this.len.value++;
 	}
