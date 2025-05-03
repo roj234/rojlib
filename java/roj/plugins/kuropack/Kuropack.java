@@ -8,12 +8,11 @@ import roj.archive.zip.ZipFileWriter;
 import roj.asm.ClassNode;
 import roj.asm.FieldNode;
 import roj.asm.Opcodes;
-import roj.asm.Parser;
-import roj.asm.util.Context;
-import roj.asm.util.TransformUtil;
+import roj.asmx.Context;
+import roj.asmx.TransformUtil;
+import roj.asmx.injector.CodeWeaver;
+import roj.asmx.injector.WeaveException;
 import roj.asmx.mapper.Mapper;
-import roj.asmx.nixim.NiximException;
-import roj.asmx.nixim.NiximSystemV2;
 import roj.collect.Flippable;
 import roj.collect.SimpleList;
 import roj.concurrent.TaskPool;
@@ -46,7 +45,7 @@ import static roj.ui.CommandNode.literal;
 
 /**
  * @author Roj234
- * @since 2024/3/17 0017 0:49
+ * @since 2024/3/17 0:49
  */
 public final class Kuropack {
 	public static void main(String[] args) {
@@ -120,32 +119,32 @@ public final class Kuropack {
 				cMap.put("roj.io.MBInputStream".replace('.', '/'), "java/io/InputStream");
 
 				byte[] bytes = self.get("roj/plugins/kuropack/ArrayCacheN_.class");
-				ClassNode cd = Parser.parseConstants(bytes);
+				ClassNode cd = ClassNode.parseSkeleton(bytes);
 				cd.name("cpk/G");
 				ctxs.add(new Context(cd));
 
-				NiximSystemV2 nx = new NiximSystemV2();
+				CodeWeaver nx = new CodeWeaver();
 
 				try {
 					byte[] patchBytes = self.get("roj/plugins/kuropack/LZDecoderN_.class");
-					NiximSystemV2.NiximData patch = nx.read(Parser.parseConstants(patchBytes));
+					CodeWeaver.Patch patch = nx.read(ClassNode.parseSkeleton(patchBytes));
 
 					bytes = self.get("roj/archive/qz/xz/lz/LZDecoder.class");
-					cd = Parser.parseConstants(bytes);
-					nx.apply(cd, patch);
+					cd = ClassNode.parseSkeleton(bytes);
+					CodeWeaver.patch(cd, patch);
 					ctxs.add(new Context(cd));
 
 					patchBytes = self.get("roj/plugins/kuropack/LZMA2InN_.class");
-					patch = nx.read(Parser.parseConstants(patchBytes));
+					patch = nx.read(ClassNode.parseSkeleton(patchBytes));
 
 					bytes = self.get("roj/archive/qz/xz/LZMA2InputStream.class");
-					cd = Parser.parseConstants(bytes);
-					nx.apply(cd, patch);
+					cd = ClassNode.parseSkeleton(bytes);
+					CodeWeaver.patch(cd, patch);
 					ctxs.add(new Context(cd));
-				} catch (NiximException e) {
+				} catch (WeaveException e) {
 					e.printStackTrace();
 				}
-				cpkLoader = Parser.parseConstants(self.get("roj/plugins/kuropack/FakeMain.class"));
+				cpkLoader = ClassNode.parseSkeleton(self.get("roj/plugins/kuropack/FakeMain.class"));
 				cpkLoader.modifier |= Opcodes.ACC_PUBLIC;
 
 				for (ZEntry entry : self.entries()) {
@@ -208,7 +207,7 @@ public final class Kuropack {
 					}
 					if (name.endsWith(".class")) {
 						try {
-							ClassNode data = Parser.parseConstants(IOUtil.read(za.getStream(entry)));
+							ClassNode data = ClassNode.parseSkeleton(IOUtil.read(za.getStream(entry)));
 							if (data.name().concat(".class").equals(name)) {
 								loadable.add(data);
 								continue;

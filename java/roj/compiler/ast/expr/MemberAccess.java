@@ -3,8 +3,8 @@ package roj.compiler.ast.expr;
 import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
+import roj.asm.ClassDefinition;
 import roj.asm.FieldNode;
-import roj.asm.IClass;
 import roj.asm.Opcodes;
 import roj.asm.annotation.AnnVal;
 import roj.asm.insn.Label;
@@ -70,7 +70,7 @@ final class MemberAccess extends LeftValue {
 	private byte flags;
 
 	// 解析时填充
-	private IClass owner; // 静态字段的所属
+	private ClassDefinition owner; // 静态字段的所属
 	private FieldNode[] chain; // 字段访问链
 	private IType resultType; // 表达式结果类型
 
@@ -110,7 +110,7 @@ final class MemberAccess extends LeftValue {
 	}
 	MemberAccess() {}
 
-	public static Expr fieldChain(Expr parent, IClass begin, IType type, boolean isFinal, FieldNode... chain) {
+	public static Expr fieldChain(Expr parent, ClassDefinition begin, IType type, boolean isFinal, FieldNode... chain) {
 		MemberAccess el = new MemberAccess();
 		el.nameChain = (SimpleList<String>) Flow.of(chain).map(FieldNode::name).toList();
 		el.parent = parent;
@@ -220,7 +220,7 @@ final class MemberAccess extends LeftValue {
 
 		if (flags >= 0) { // parent不为null, 下面是处理importField
 			IType fType;
-			IClass symbol;
+			ClassDefinition symbol;
 
 			if (parent == null) {
 				fType = Type.klass(owner.name());

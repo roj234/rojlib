@@ -1,11 +1,7 @@
 package roj.plugins.obfuscator.naming;
 
-import roj.asm.ClassNode;
-import roj.asm.FieldNode;
-import roj.asm.MethodNode;
-import roj.asm.type.Desc;
-import roj.asm.util.ClassUtil;
-import roj.asm.util.Context;
+import roj.asm.*;
+import roj.asmx.Context;
 import roj.collect.MyHashMap;
 import roj.collect.SimpleList;
 import roj.text.CharList;
@@ -34,7 +30,7 @@ public final class Move extends SimpleNamer {
 		for (Context ctx : ctxs1) {
 			ClassNode data = ctx.getData();
 			className.add(data.name());
-			for (MethodNode m : data.methods) if (!m.name().startsWith("<") && !ClassUtil.getInstance().isInherited(new Desc(m.ownerClass(), m.name(), m.rawDesc()), null, false)) methodName.add(m.name());
+			for (MethodNode m : data.methods) if (!m.name().startsWith("<") && !ClassUtil.getInstance().isInherited(new MemberDescriptor(m.owner(), m.name(), m.rawDesc()), null, false)) methodName.add(m.name());
 			for (FieldNode m : data.fields) fieldName.add(m.name());
 		}
 	}

@@ -8,8 +8,8 @@ import roj.collect.Int2IntMap;
 import roj.collect.IntSet;
 import roj.collect.RingBuffer;
 import roj.collect.SimpleList;
-import roj.concurrent.TaskExecutor;
 import roj.concurrent.TaskPool;
+import roj.concurrent.TaskThread;
 import roj.config.CsvParser;
 import roj.gui.CMBoxValue;
 import roj.gui.DoubleClickHelper;
@@ -38,7 +38,7 @@ import java.util.function.Consumer;
  * @author Roj234
  */
 public class CardSleep extends JFrame {
-	private static TaskExecutor monitorRead;
+	private static TaskThread monitorRead;
 	private static Process monitor;
 	private static long prevUpdate;
 
@@ -63,7 +63,7 @@ public class CardSleep extends JFrame {
 		protected void onEnable() {
 			assert instance == null;
 
-			monitorRead = new TaskExecutor();
+			monitorRead = new TaskThread();
 			monitorRead.setName("ProcessRead");
 			monitorRead.setDaemon(true);
 			monitorRead.start();

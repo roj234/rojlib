@@ -6,7 +6,7 @@ import java.util.concurrent.locks.AbstractQueuedSynchronizer;
 
 /**
  * @author Roj234
- * @since 2023/3/5 0005 2:39
+ * @since 2023/3/5 2:39
  */
 interface AQSHelper {
 	AQSHelper INSTANCE = Bypass.builder(AQSHelper.class).delegate(AbstractQueuedSynchronizer.class, "apparentlyFirstQueuedIsExclusive").build();

@@ -4,7 +4,7 @@ import roj.asm.ClassNode;
 import roj.asm.MethodNode;
 import roj.asm.attr.Attribute;
 import roj.asm.attr.InnerClasses;
-import roj.asm.util.Context;
+import roj.asmx.Context;
 import roj.collect.MyHashMap;
 
 import java.util.Collection;

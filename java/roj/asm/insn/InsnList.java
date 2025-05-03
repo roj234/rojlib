@@ -1,11 +1,11 @@
 package roj.asm.insn;
 
 import org.jetbrains.annotations.NotNull;
-import roj.asm.AsmShared;
+import roj.asm.AsmCache;
+import roj.asm.MemberDescriptor;
 import roj.asm.Opcodes;
 import roj.asm.cp.Constant;
 import roj.asm.cp.ConstantPool;
-import roj.asm.type.Desc;
 import roj.asm.type.TypeHelper;
 import roj.collect.AbstractIterator;
 import roj.collect.IntMap;
@@ -43,7 +43,7 @@ public class InsnList extends AbstractCodeWriter implements Iterable<InsnNode> {
 	// region pre-parse
 	@Override
 	public void visitBytecode(ConstantPool cp, DynByteBuf r, int len) {
-		AsmShared dd = AsmShared.local();
+		AsmCache dd = AsmCache.getInstance();
 		boolean myIsReading = false;
 
 		if (!dd.xInsn_isReading && dd.xInsn_sharedRefPos.length > refPos.length) {
@@ -130,16 +130,16 @@ public class InsnList extends AbstractCodeWriter implements Iterable<InsnNode> {
 
 			int index;
 			switch (c.getClass().getName()) {
-				case "roj.asm.type.Desc":
-					Desc d = (Desc) c;
-					if (d.owner == null) index = cp.getInvokeDynId(d.modifier, d.name, d.param);
+				case "roj.asm.MemberDescriptor":
+					MemberDescriptor d = (MemberDescriptor) c;
+					if (d.owner == null) index = cp.getInvokeDynId(d.modifier, d.name, d.rawDesc);
 					else {
 						switch (d.modifier >>> 14) {
 							default: throw new IllegalStateException("unknown flag "+d.modifier);
-							case 0: index = cp.getMethodRefId(d.owner, d.name, d.param); break;
-							case 1: index = cp.getFieldRefId(d.owner, d.name, d.param); break;
-							case 2: bb.put(offset+3, 1+ TypeHelper.paramSize(d.param));
-							case 3: index = cp.getItfRefId(d.owner, d.name, d.param); break;
+							case 0: index = cp.getMethodRefId(d.owner, d.name, d.rawDesc); break;
+							case 1: index = cp.getFieldRefId(d.owner, d.name, d.rawDesc); break;
+							case 2: bb.put(offset+3, 1+ TypeHelper.paramSize(d.rawDesc));
+							case 3: index = cp.getItfRefId(d.owner, d.name, d.rawDesc); break;
 						}
 					}
 				break;
@@ -239,11 +239,11 @@ public class InsnList extends AbstractCodeWriter implements Iterable<InsnNode> {
 	public final void multiArray(String clz, int dimension) { addRef(clz); codeOb.put(MULTIANEWARRAY).putShort(0).put(dimension); }
 	public final void clazz(byte code, String clz) { assertCate(code, Opcodes.CATE_CLASS); addRef(clz); codeOb.put(code).putShort(0); }
 	public final void invokeDyn(int idx, String name, String desc, int type) {
-		addRef(new Desc(null, name, desc, idx));
+		addRef(new MemberDescriptor(null, name, desc, idx));
 		codeOb.put(INVOKEDYNAMIC).putShort(0).putShort(type);
 	}
 	public final void invokeItf(String owner, String name, String desc) {
-		addRef(new Desc(owner, name, desc, 2<<14));
+		addRef(new MemberDescriptor(owner, name, desc, 2<<14));
 		codeOb.put(INVOKEINTERFACE).putInt(0);
 	}
 	public final void invoke(byte code, String owner, String name, String desc, boolean isInterfaceMethod) {
@@ -254,12 +254,12 @@ public class InsnList extends AbstractCodeWriter implements Iterable<InsnNode> {
 		}
 
 		assertCate(code, Opcodes.CATE_METHOD);
-		addRef(new Desc(owner, name, desc, isInterfaceMethod ? 3<<14 : 0));
+		addRef(new MemberDescriptor(owner, name, desc, isInterfaceMethod ? 3<<14 : 0));
 		codeOb.put(code).putShort(0);
 	}
 	public void field(byte code, String owner, String name, String type) {
 		assertCate(code, Opcodes.CATE_FIELD);
-		addRef(new Desc(owner, name, type, 1<<14));
+		addRef(new MemberDescriptor(owner, name, type, 1<<14));
 		codeOb.put(code).putShort(0);
 	}
 
@@ -368,7 +368,7 @@ public class InsnList extends AbstractCodeWriter implements Iterable<InsnNode> {
 	private void satisfySegments() {
 		if (codeBlocks.size() > 0) {
 			int segLen = codeBlocks.size()+1;
-			int[] offSum = AsmShared.local().getIntArray_(segLen);
+			int[] offSum = AsmCache.getInstance().getIntArray_(segLen);
 			boolean updated = updateOffset(labels, offSum, segLen);
 			offset = offSum[codeBlocks.size()-1]; // last block begin
 		} else {
@@ -437,7 +437,7 @@ public class InsnList extends AbstractCodeWriter implements Iterable<InsnNode> {
 
 			if (sstart.offset != 0) {
 				// 拆分start
-				var bytecode = AsmShared.local().copy(srcCodeBlocks.get(blockFrom++).getData());
+				var bytecode = AsmCache.getInstance().copy(srcCodeBlocks.get(blockFrom++).getData());
 				bytecode.rIndex = sstart.offset;
 				toInsert.add(new SolidBlock().setData(bytecode));
 
@@ -455,7 +455,7 @@ public class InsnList extends AbstractCodeWriter implements Iterable<InsnNode> {
 			var toBlock = srcCodeBlocks.get(blockTo);
 			if (offTo != toBlock.length()) {
 				//拆分end
-				var bytecode = AsmShared.local().copy(toBlock.getData());
+				var bytecode = AsmCache.getInstance().copy(toBlock.getData());
 				bytecode.wIndex(offTo);
 				toInsert.add(new SolidBlock().setData(bytecode));
 			} else {
@@ -469,7 +469,7 @@ public class InsnList extends AbstractCodeWriter implements Iterable<InsnNode> {
 		if (dstart.block != dend.block || dstart.offset != dend.offset || dstart.offset != 0) {
 			var tmp = dst.codeBlocks.get(dstart.block);
 
-			var bytecode = AsmShared.local().copy(tmp.getData());
+			var bytecode = AsmCache.getInstance().copy(tmp.getData());
 
 			tmp.setData(bytecode.slice(dstart.offset)); // left 可能长度为零
 
@@ -489,7 +489,7 @@ public class InsnList extends AbstractCodeWriter implements Iterable<InsnNode> {
 
 						tmp = dst.codeBlocks.get(dend.block);
 
-						bytecode = AsmShared.local().copy(tmp.getData());
+						bytecode = AsmCache.getInstance().copy(tmp.getData());
 						bytecode.rIndex = dend.offset;
 						tmp.setData(bytecode); // right
 					}
@@ -508,17 +508,14 @@ public class InsnList extends AbstractCodeWriter implements Iterable<InsnNode> {
 				// 受影响的label
 				check:
 				if (labelBlock >= dstart.block && labelBlock <= dend.block) {
-					if (label.block == dend.block) {
-						if (label.offset >= dend.offset) {
-							label.offset -= dend.offset;
-							// 如果这部分还存在
-							if (leftSplit) label.offset += dstart.offset;
-							break check;
-						}
-					} else {
-						if (label.block == dstart.block && label.offset < dstart.offset) {
-							break check;
-						}
+					if (label.block == dstart.block && label.offset < dstart.offset) {
+						continue;
+					}
+					if (label.block == dend.block && label.offset >= dend.offset) {
+						label.offset -= dend.offset;
+						// 如果这部分还存在
+						//if (leftSplit) label.offset += dstart.offset;
+						break check;
 					}
 
 					label.clear();
@@ -640,7 +637,7 @@ public class InsnList extends AbstractCodeWriter implements Iterable<InsnNode> {
 
 	private static Object copyData(Object o) {
 		if (o instanceof Constant) return ((Constant) o).clone();
-		if (o instanceof Desc) return ((Desc) o).copy();
+		if (o instanceof MemberDescriptor) return ((MemberDescriptor) o).copy();
 		return o;
 	}
 

@@ -1,6 +1,6 @@
 package roj.plugins.ci.minecraft;
 
-import roj.asm.type.Desc;
+import roj.asm.MemberDescriptor;
 import roj.asmx.mapper.Mapping;
 import roj.collect.IntList;
 import roj.collect.SimpleList;
@@ -36,7 +36,7 @@ final class YarnMapping extends Mapping {
 		return map1;
 	}
 
-	public void readYarnMap(File file, List<String> tmp, String version, Map<Desc, List<String>> paramMap) throws IOException {
+	public void readYarnMap(File file, List<String> tmp, String version, Map<MemberDescriptor, List<String>> paramMap) throws IOException {
 		boolean any = false;
 		try (ZipFile zf = new ZipFile(file)) {
 			Enumeration<? extends ZipEntry> e = zf.entries();
@@ -56,12 +56,12 @@ final class YarnMapping extends Mapping {
 		if (!any) throw new RuntimeException("Not found any yarn for mc" + version);
 	}
 
-	public void readYarnEntry(String name, TextReader slr, List<String> tmp, Map<Desc, List<String>> paramMap) {
+	public void readYarnEntry(String name, TextReader slr, List<String> tmp, Map<MemberDescriptor, List<String>> paramMap) {
 		IntList stack = new IntList();
 		CharList srcClass = new CharList();
 		CharList dstClass = new CharList();
 		String srcCls = null;
-		Desc method = null;
+		MemberDescriptor method = null;
 
 		int ln = 0;
 		for (String line : slr) {
@@ -102,9 +102,9 @@ final class YarnMapping extends Mapping {
 				}
 				case "METHOD" -> {
 					if (tmp.size() > 3) {
-						methodMap.put(method = new Desc(srcCls, tmp.get(1), tmp.get(3)), tmp.get(2));
+						methodMap.put(method = new MemberDescriptor(srcCls, tmp.get(1), tmp.get(3)), tmp.get(2));
 					} else {
-						method = new Desc(srcCls, tmp.get(1), tmp.get(2));
+						method = new MemberDescriptor(srcCls, tmp.get(1), tmp.get(2));
 					}
 				}
 				case "ARG" -> {
@@ -121,7 +121,7 @@ final class YarnMapping extends Mapping {
 				case "FIELD" -> {
 					// FIELD intermediary_name new_name type
 					if (tmp.size() > 3) {
-						fieldMap.put(new Desc(srcCls, tmp.get(1), checkFieldType ? tmp.get(3) : ""), tmp.get(2));
+						fieldMap.put(new MemberDescriptor(srcCls, tmp.get(1), checkFieldType ? tmp.get(3) : ""), tmp.get(2));
 					}
 				}
 				case "COMMENT" -> {
@@ -147,11 +147,11 @@ final class YarnMapping extends Mapping {
 					break;
 				case "METHOD":
 					// METHOD owner original_name param intermediary_name
-					methodMap.put(new Desc(tmp.get(1), tmp.get(3), tmp.get(2)), tmp.get(4));
+					methodMap.put(new MemberDescriptor(tmp.get(1), tmp.get(3), tmp.get(2)), tmp.get(4));
 					break;
 				case "FIELD":
 					// FIELD owner original_name type intermediary_name
-					fieldMap.put(new Desc(tmp.get(1), tmp.get(3), checkFieldType?tmp.get(2):""), tmp.get(4));
+					fieldMap.put(new MemberDescriptor(tmp.get(1), tmp.get(3), checkFieldType?tmp.get(2):""), tmp.get(4));
 					break;
 				default:
 					Terminal.error(name + ":" + i + ": 未知标记类型. " + tmp);

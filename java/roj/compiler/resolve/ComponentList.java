@@ -4,7 +4,7 @@ import org.intellij.lang.annotations.MagicConstant;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import roj.asm.Attributed;
-import roj.asm.IClass;
+import roj.asm.ClassDefinition;
 import roj.asm.MethodNode;
 import roj.asm.type.IType;
 import roj.compiler.context.LocalContext;
@@ -43,7 +43,7 @@ public abstract class ComponentList {
 	public List<MethodNode> getMethods() {throw new UnsupportedOperationException("这不是方法列表");}
 	public boolean isOverriddenMethod(int id) {return false;}
 
-	static void checkDeprecation(LocalContext ctx, IClass owner, Attributed methodOrField) {
+	static void checkDeprecation(LocalContext ctx, ClassDefinition owner, Attributed methodOrField) {
 		if (owner.getRawAttribute("Deprecated") != null) {
 			ctx.report(Kind.WARNING, "annotation.deprecated", "symbol.type", owner);
 		}

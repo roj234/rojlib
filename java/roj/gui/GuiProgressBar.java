@@ -6,7 +6,7 @@ import javax.swing.*;
 
 /**
  * @author Roj234
- * @since 2024/1/17 0017 18:37
+ * @since 2024/1/17 18:37
  */
 public class GuiProgressBar extends EasyProgressBar {
 	private final JTextArea uiLog;

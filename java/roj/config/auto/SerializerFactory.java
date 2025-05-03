@@ -4,7 +4,6 @@ import org.intellij.lang.annotations.MagicConstant;
 import roj.ReferenceByGeneratedClass;
 import roj.asm.ClassNode;
 import roj.asm.FieldNode;
-import roj.asm.Parser;
 import roj.asm.annotation.Annotation;
 import roj.asm.insn.CodeWriter;
 import roj.asm.insn.Label;
@@ -39,10 +38,10 @@ import static roj.asm.Opcodes.*;
 /**
  * 这样抽象是为了能先加载Adapter
  * @author Roj234
- * @since 2024/3/24 0024 18:53
+ * @since 2024/3/24 18:53
  */
 public abstract class SerializerFactory {
-	static final VirtualReference<GenSerRepo> Isolation = new VirtualReference<>();
+	static final VirtualReference<GenSerRepo> IMPLEMENTATION_CACHE = new VirtualReference<>();
 	static final Function<ClassLoader, GenSerRepo> Fn = GenSerRepo::new;
 	static final class GenSerRepo {
 		GenSerRepo(ClassLoader loader) {}
@@ -54,7 +53,7 @@ public abstract class SerializerFactory {
 	static {
 		boolean unsafe = false;
 		try {
-			ClassNode c = Parser.parseConstants(IOUtil.getResourceIL("roj/config/auto/Adapter.class"));
+			ClassNode c = ClassNode.parseSkeleton(IOUtil.getResourceIL("roj/config/auto/Adapter.class"));
 			c.parent(Bypass.MAGIC_ACCESSOR_CLASS);
 			if (ReflectionUtils.JAVA_VERSION > 21)
 				c.modifier |= ACC_PUBLIC;
@@ -210,7 +209,7 @@ public abstract class SerializerFactory {
 	public final <T> Serializer<Map<String, T>> mapOf(Class<T> content) { return (Serializer<Map<String, T>>) serializer(Signature.parseGeneric("Ljava/util/Map<Ljava/lang/String;" + TypeHelper.class2asm(content) + ">;")); }
 
 	public static <T> IntFunction<T> dataContainer(Class<?> type) {
-		var dc = Isolation.computeIfAbsent(type.getClassLoader(), Fn).dataContainer;
+		var dc = IMPLEMENTATION_CACHE.computeIfAbsent(type.getClassLoader(), Fn).dataContainer;
 
 		var entry = dc.getEntry(type.getName());
 		if (entry != null) return Helpers.cast(entry.getValue());

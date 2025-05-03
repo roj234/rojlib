@@ -1,20 +1,15 @@
 package roj.plugins.obfuscator.naming;
 
-import roj.asm.ClassNode;
-import roj.asm.FieldNode;
-import roj.asm.MethodNode;
-import roj.asm.Opcodes;
-import roj.asm.type.Desc;
-import roj.asm.util.ClassUtil;
-import roj.asm.util.Context;
+import roj.asm.*;
+import roj.asmx.Context;
 import roj.asmx.mapper.Mapper;
 import roj.collect.MyHashMap;
 import roj.collect.MyHashSet;
 import roj.compiler.context.GlobalContext;
 import roj.compiler.context.LibraryClassLoader;
 import roj.compiler.resolve.ComponentList;
-import roj.concurrent.TaskHandler;
-import roj.crypt.MT19937;
+import roj.concurrent.TaskExecutor;
+import roj.crypt.CryptoFactory;
 import roj.gui.Profiler;
 import roj.io.IOUtil;
 import roj.plugins.obfuscator.ObfuscateTask;
@@ -39,7 +34,7 @@ public class NameObfuscator implements ObfuscateTask {
 
 	private final MyHashSet<String> tempF = new MyHashSet<>(), tempM = new MyHashSet<>();
 
-	public Random rand = new MT19937();
+	public Random rand = CryptoFactory.MT19937Random();
 	public NamingPolicy clazz, method, field, param;
 	public PermissionSet exclusions = new PermissionSet("/");
 
@@ -54,7 +49,7 @@ public class NameObfuscator implements ObfuscateTask {
 	@Override public void apply(Context ctx, Random rand) {}
 
 	@Override
-	public void forEach(List<Context> arr, MT19937 rand, TaskHandler executor) {
+	public void forEach(List<Context> arr, Random rand, TaskExecutor executor) {
 		if (this.rand != null) ArrayUtil.shuffle(arr, this.rand);
 
 		Mapper.LOGGER.setLevel(Level.ALL);
@@ -111,7 +106,7 @@ public class NameObfuscator implements ObfuscateTask {
 			System.out.println("重复的class name " + from);
 		}
 
-		Desc d = ClassUtil.getInstance().sharedDC;
+		MemberDescriptor d = ClassUtil.getInstance().sharedDesc;
 		d.owner = from;
 		CharList sb = IOUtil.getSharedCharBuf();
 
@@ -134,7 +129,7 @@ public class NameObfuscator implements ObfuscateTask {
 				}
 			}
 
-			d.param = method.rawDesc();
+			d.rawDesc = method.rawDesc();
 			d.modifier = (char) acc;
 
 			sb.clear();
@@ -149,7 +144,7 @@ public class NameObfuscator implements ObfuscateTask {
 			FieldNode field = fields.get(i);
 
 			d.name = field.name();
-			d.param = field.rawDesc();
+			d.rawDesc = field.rawDesc();
 			d.modifier = field.modifier;
 
 			sb.clear();

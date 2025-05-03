@@ -13,7 +13,6 @@ import roj.asm.attr.InnerClasses;
 import roj.asm.cp.*;
 import roj.asm.insn.Label;
 import roj.asm.type.*;
-import roj.asm.util.ClassUtil;
 import roj.collect.*;
 import roj.compiler.LavaFeatures;
 import roj.compiler.Tokens;
@@ -99,9 +98,8 @@ public class LocalContext {
 		this.lexer = createLexer();
 		this.ep = createExprParser();
 		this.bp = createBlockParser();
-		this.variables = bp == null ? Collections.emptyMap() : bp.getVariables();
+		this.variables = bp.getVariables();
 		this.caster.context = ctx;
-		this.caster.ctx = this;
 	}
 
 	protected Tokens createLexer() {return new Tokens();}
@@ -109,9 +107,9 @@ public class LocalContext {
 	protected BlockParser createBlockParser() {return new BlockParser(this);}
 	public MethodWriter createMethodWriter(ClassNode file, MethodNode node) {return new MethodWriter(file, node, classes.hasFeature(LavaFeatures.ATTR_LOCAL_VARIABLES), this);}
 
-	@NotNull public ToIntMap<String> getHierarchyList(IClass info) {return classes.getHierarchyList(info);}
-	@NotNull public ComponentList getFieldList(IClass info, String name) {return classes.getFieldList(info, name);}
-	@NotNull public ComponentList getMethodList(IClass info, String name) {return classes.getMethodList(info, name);}
+	@NotNull public ToIntMap<String> getHierarchyList(ClassDefinition info) {return classes.getHierarchyList(info);}
+	@NotNull public ComponentList getFieldList(ClassDefinition info, String name) {return classes.getFieldList(info, name);}
+	@NotNull public ComponentList getMethodList(ClassDefinition info, String name) {return classes.getMethodList(info, name);}
 
 	public void clear() {
 		this.file = null;
@@ -224,7 +222,7 @@ public class LocalContext {
 	//endregion
 	// region 访问权限和final字段赋值检查
 	@SuppressWarnings("fallthrough")
-	public void assertAccessible(IClass type) {
+	public void assertAccessible(ClassDefinition type) {
 		if (type == file) return;
 
 		int modifier = type.modifier();
@@ -242,7 +240,7 @@ public class LocalContext {
 		}
 	}
 	// 这里不会检测某些东西 (override, static has been written等)
-	public boolean checkAccessible(IClass type, RawNode node, boolean staticEnv, boolean report) {
+	public boolean checkAccessible(ClassDefinition type, Member node, boolean staticEnv, boolean report) {
 		if (type == file) return true;
 
 		if (!checkAccessModifier(node.modifier(), type, node.name(), "symbol.error.accessDenied.symbol", report)) {
@@ -255,7 +253,7 @@ public class LocalContext {
 		}
 		return true;
 	}
-	private boolean checkAccessModifier(int flag, IClass type, String node, String message, boolean report) {
+	private boolean checkAccessModifier(int flag, ClassDefinition type, String node, String message, boolean report) {
 		String modifier;
 		switch ((flag & (Opcodes.ACC_PUBLIC|Opcodes.ACC_PROTECTED|Opcodes.ACC_PRIVATE))) {
 			default: throw ResolveException.ofIllegalInput("lc.illegalModifier", Integer.toHexString(flag));
@@ -330,7 +328,7 @@ public class LocalContext {
 	// endregion
 	// region 解析 符号引用 类型表示 类型实例
 	@NotNull
-	public ComponentList getMethodListOrReport(IClass type, String name, Expr caller) {
+	public ComponentList getMethodListOrReport(ClassDefinition type, String name, Expr caller) {
 		var list = classes.getMethodList(type, name);
 		if (list == ComponentList.NOT_FOUND) {
 			int argc = 0;
@@ -338,7 +336,7 @@ public class LocalContext {
 		}
 		return list;
 	}
-	private String reportSimilarMethod(IClass type, String method, int argc) {
+	private String reportSimilarMethod(ClassDefinition type, String method, int argc) {
 		var similar = new SimpleList<String>();
 		loop:
 		for (var entry : classes.getResolveHelper(type).getMethods(classes).entrySet()) {
@@ -498,7 +496,7 @@ public class LocalContext {
 	//endregion
 	//region DotGet字符串解析
 	private final CharList frTemp = new CharList();
-	private IClass _frBegin;
+	private ClassDefinition _frBegin;
 	private final SimpleList<FieldNode> _frChain = new SimpleList<>();
 	private IType _frType;
 	private int _frOffset;
@@ -571,9 +569,9 @@ public class LocalContext {
 	 * @param generic 起始类型的泛型参数
 	 * @param desc DotGet格式的字段访问字符串
 	 */
-	public final String resolveField(IClass clz, IType generic, CharList desc) { return resolveField(clz, generic, desc, 0); }
+	public final String resolveField(ClassDefinition clz, IType generic, CharList desc) { return resolveField(clz, generic, desc, 0); }
 
-	private String resolveField(IClass clz, IType fieldType, CharList desc, int prevI) {
+	private String resolveField(ClassDefinition clz, IType fieldType, CharList desc, int prevI) {
 		_frBegin = clz;
 		List<FieldNode> result = _frChain; result.clear();
 
@@ -639,7 +637,7 @@ public class LocalContext {
 			if (clz == null) return "symbol.error.noSuchClass:".concat(type.toString());
 		}
 	}
-	public final IClass get_frBegin() {return _frBegin;}
+	public final ClassDefinition get_frBegin() {return _frBegin;}
 	public final SimpleList<FieldNode> get_frChain() {return _frChain;}
 	public final IType get_frType() {return _frType;}
 	// optional chaining offset
@@ -647,16 +645,16 @@ public class LocalContext {
 	//endregion
 	//region [可重载] 静态导入 内部类
 	public static final class Import {
-		public final IClass owner;
+		public final ClassDefinition owner;
 		public final String method;
 		public final Object prev;
 
 		public static Import replace(@NotNull Expr node) {return new Import(null, null, Objects.requireNonNull(node));}
-		public static Import staticCall(@NotNull IClass owner, @NotNull String name) {return new Import(Objects.requireNonNull(owner), Objects.requireNonNull(name), null);}
-		public static Import virtualCall(@NotNull IClass owner, @NotNull String name, @Nullable Expr prev) {return new Import(Objects.requireNonNull(owner), Objects.requireNonNull(name), prev);}
-		public static Import constructor(@NotNull IClass owner, @NotNull String name, @Nullable Expr prev) {return new Import(Objects.requireNonNull(owner), "<init>", Type.klass(owner.name()));}
+		public static Import staticCall(@NotNull ClassDefinition owner, @NotNull String name) {return new Import(Objects.requireNonNull(owner), Objects.requireNonNull(name), null);}
+		public static Import virtualCall(@NotNull ClassDefinition owner, @NotNull String name, @Nullable Expr prev) {return new Import(Objects.requireNonNull(owner), Objects.requireNonNull(name), prev);}
+		public static Import constructor(@NotNull ClassDefinition owner, @NotNull String name, @Nullable Expr prev) {return new Import(Objects.requireNonNull(owner), "<init>", Type.klass(owner.name()));}
 
-		public Import(IClass owner, String method, Object prev) {
+		public Import(ClassDefinition owner, String method, Object prev) {
 			this.owner = owner;
 			this.method = method;
 			this.prev = prev;
@@ -679,7 +677,7 @@ public class LocalContext {
 	 * @param prev 之前的动态导入对象
 	 */
 	@NotNull
-	public final Function<String, Import> getFieldDFI(IClass info, Variable ref, Function<String, Import> prev) {
+	public final Function<String, Import> getFieldDFI(ClassDefinition info, Variable ref, Function<String, Import> prev) {
 		return name -> {
 			var cl = getFieldList(info, name);
 			if (cl != ComponentList.NOT_FOUND) {
@@ -847,285 +845,23 @@ public class LocalContext {
 		return cast;
 	}
 
-	private static final AbstractList<IType> ANY_GENERIC_LIST = new AbstractList<>() {
-		@Override public IType get(int index) {return Asterisk.anyType;}
-		@Override public int size() {return 0;}
-	};
 	/**
-	 * 解析泛型实例继承关系，获取目标类型在泛型上下文中的实际类型参数.
-	 *
-	 * <p>当{@code targetType}出现在{@code typeInst}的继承链（父类或接口）中时，返回其实际绑定的类型参数。
-	 * 该方法的处理逻辑遵循以下优先级：
-	 * <ol>
-	 *   <li><b>继承链检查</b> - 若{@code targetType}不在继承链中，或目标类型非泛型，返回{@code null}
-	 *     <pre>{@code inferGeneric(A<x,y>, D) → null}</pre></li>
-	 *   <li><b>具体类型解析</b> - 若目标类型参数已具化，返回具体类型列表
-	 *     <pre>{@code inferGeneric(A<x,y>, B) → [String]}</pre></li>
-	 *   <li><b>原始类型处理</b> - 若{@code typeInst}为原始类型或无泛型参数（如A或A&lt;>），返回目标类型参数的上界
-	 *     <pre>{@code inferGeneric(A, C) → [Number]}</pre></li>
-	 *   <li><b>动态变量解析</b> - 若目标类型参数依赖{@code typeInst}的泛型变量，返回解析后的变量引用
-	 *     <pre>{@code inferGeneric(A<x,y>, C) → [x]}</pre></li>
-	 * </ol>
-	 *
-	 * <p><b>示例场景</b>：对于类型声明 {@code A<K extends Number, V> extends B<String> implements C<K>}
-	 * <ul>
-	 *   <li>若目标类型为父类{@code B}，返回具体类型参数 {@code [String]}</li>
-	 *   <li>若目标类型为接口{@code C}且{@code typeInst}为原始类型，返回边界类型 {@code [Number]}</li>
-	 *   <li>若{@code typeInst}携带泛型参数{@code A<x,y>}，返回变量引用 {@code [x]}</li>
-	 * </ul>
-	 *
-	 * @param typeInst    待解析的泛型实例（支持具化泛型、原始类型、通配符泛型）
-	 * @param targetType 需要解析的目标类型全限定名（如"java/util/List"）
-	 *
-	 * @return 目标类型的实际泛型参数列表。可能返回：
-	 * <ul>
-	 *   <li>{@code null} - 目标类型不存在于继承链或非泛型类型</li>
-	 *   <li>具化类型列表（如 {@code [String, Integer]}）</li>
-	 * </ul>
-	 *
-	 * @throws IllegalStateException 当继承关系数据异常时抛出（targetType并非typeInst的父类/接口）
-	 * @implNote 若{@code targetType}在类路径中不存在，将通过{@link #report}方法抛出编译错误
+	 * @see GlobalContext#inferGeneric(IType, String)
 	 */
 	@Nullable
-	public final List<IType> inferGeneric(@NotNull IType typeInst, @NotNull String targetType) {
-		var info = classes.getClassInfo(typeInst.owner());
-
-		List<IType> bounds = null;
-		try {
-			bounds = classes.getTypeArgumentsFor(info, targetType);
-		} catch (ClassNotFoundException e) {
-			report(Kind.ERROR, "symbol.error.noSuchClass", e.getMessage());
-		}
-
-		if (bounds == null || bounds.getClass() == SimpleList.class) return bounds;
-
-		// bounds是SimpleList$1，代表其中含有类型参数，需要动态解析
-		List<IType> children;
-		if (typeInst instanceof Generic g) {
-			children = g.children;
-
-			if (g.children.size() == 1 && g.children.get(0) == Asterisk.anyGeneric) {
-				// 20250411 这里应该用目标类型……之前写错了，现在是擦除到上界，因为anyGeneric嘛
-				info = classes.getClassInfo(targetType);
-				var sign = info.getAttribute(info.cp, Attribute.SIGNATURE);
-
-				MyHashMap<String, IType> realType = Helpers.cast(tmpMap1);
-				Inferrer.fillDefaultTypeParam(sign.typeParams, realType);
-
-				bounds = new SimpleList<>(bounds);
-				for (int i = 0; i < bounds.size(); i++) {
-					bounds.set(i, Inferrer.clearTypeParam(bounds.get(i), realType, sign.typeParams));
-				}
-
-				return bounds;
-			}
-		} else {
-			children = ANY_GENERIC_LIST;
-		}
-
-		return inferGeneric0(info, children, targetType);
-	}
-	// B <T1, T2> extends A <T1> implements Z<T2>
-	// C <T3> extends B <String, T3>
-	// 假设我要拿A的类型，那就要先通过已知的C（params）推断B，再推断A
-	private List<IType> inferGeneric0(ClassNode typeInst, List<IType> params, String target) {
-		Map<String, IType> visType = new MyHashMap<>();
-
-		int depthInfo = getHierarchyList(typeInst).getOrDefault(target, -1);
-		if (depthInfo == -1) throw new IllegalStateException("无法从"+typeInst.name()+"<"+params+">推断"+target);
-
-		loop:
-		for(;;) {
-			var g = typeInst.getAttribute(typeInst.cp, Attribute.SIGNATURE);
-
-			int i = 0;
-			visType.clear();
-			for (String s : g.typeParams.keySet())
-				visType.put(s, params.get(i++));
-
-			// < 0 => flag[0x80000000] => 从接口的接口继承，而不是父类的接口
-			i = depthInfo < 0 ? 1 : 0;
-			for(;;) {
-				IType type = g.values.get(i);
-				if (target.equals(type.owner())) {
-					// rawtypes
-					if (type.genericType() == IType.STANDARD_TYPE) return Collections.emptyList();
-
-					var rubber = (Generic) Inferrer.clearTypeParam(type, visType, g.typeParams);
-					return rubber.children;
-				}
-
-				typeInst = classes.getClassInfo(type.owner());
-				depthInfo = getHierarchyList(typeInst).getOrDefault(target, -1);
-				if (depthInfo != -1) {
-					var rubber = (Generic) Inferrer.clearTypeParam(type, visType, g.typeParams);
-					params = rubber.children;
-					continue loop;
-				}
-
-				i++;
-				assert i < g.values.size();
-			}
-		}
-	}
-
+	public final List<IType> inferGeneric(@NotNull IType typeInst, @NotNull String targetType) {return classes.inferGeneric(typeInst, targetType, tmpMap1);}
 	/**
-	 * 判断{@code instClass}是否属于{@code testClass}的子类（或自身）
-	 *
-	 * <p>该方法能处理接口和数组等，传入的参数为内部(/)全限定名称
+	 * @see GlobalContext#instanceOf(String, String)
 	 */
-	public final boolean instanceOf(String testClass, String instClass) {
-		IClass info = classes.getClassInfo(testClass);
-		if (info == null) {
-			report(Kind.ERROR, "symbol.error.noSuchClass", testClass);
-			return false;
-		}
-
-		return classes.getHierarchyList(info).containsValue(instClass);
-	}
-
+	public final boolean instanceOf(String testClass, String instClass) {return classes.instanceOf(testClass, instClass);}
 	/**
-	 * 计算两个类型的最近公共父类型
-	 *
-	 * <p>算法支持各种类型，包括但不限于
-	 * <ol>
-	 *   <li><b>基本类型</b> - 优先返回数值公共父类（如int+double→Number）</li>
-	 *   <li><b>数组</b> - 不同维度数组返回Cloneable/Object</li>
-	 *   <li><b>泛型</b>：
-	 *     <ul>
-	 *       <li>泛型参数取交集（List&lt;String>+List&lt;Integer>→List&lt;?>）</li>
-	 *       <li>通配符边界处理（? super T + ? extends S → Object）</li>
-	 *     </ul>
-	 *   </li>
-	 * </ol>
-	 *
-	 * @return 最近公共父类型。特殊情形：
-	 *         <ul>
-	 *           <li>若存在原始类型 → 返回擦除后的原始类型</li>
-	 *           <li>若存在不匹配的泛型参数 → 触发错误并返回首个类型</li>
-	 *         </ul>
+	 * @see GlobalContext#getCommonParent(IType, IType)
 	 */
-	public final IType getCommonParent(IType a, IType b) {
-		if (a.equals(b)) return a;
-
-		if (a.genericType() >= IType.ASTERISK_TYPE) {
-			a = ((Asterisk) a).getBound();
-			if (a == null) return b.isPrimitive() ? TypeCast.getWrapper(b) : b;
-		}
-		if (b.genericType() >= IType.ASTERISK_TYPE) {
-			b = ((Asterisk) b).getBound();
-			if (b == null) return a.isPrimitive() ? TypeCast.getWrapper(a) : a;
-		}
-
-		int capa = TypeCast.getDataCap(a.getActualType());
-		int capb = TypeCast.getDataCap(b.getActualType());
-		// 双方都是数字
-		if ((capa&7) != 0 && (capb&7) != 0) return Type.klass("java/lang/Number");
-		// 没有任何一方是对象 (boolean | void)
-		if ((capa|capb) < 8) return Types.OBJECT_TYPE;
-
-		if (a.isPrimitive()) a = TypeCast.getWrapper(a);
-		if (b.isPrimitive()) b = TypeCast.getWrapper(b);
-
-		// noinspection all
-		if (a.array() != b.array()) {
-			// common parent of Object[][] | Object[]
-			return Math.min(a.array(), b.array()) == 0
-				? Types.OBJECT_TYPE
-				: Type.klass("java/lang/Cloneable");
-		}
-
-		IClass infoA = classes.getClassInfo(a.owner());
-		if (infoA == null) {
-			report(Kind.ERROR, "symbol.error.noSuchClass", a);
-			return a;
-		}
-		IClass infoB = classes.getClassInfo(b.owner());
-		if (infoB == null) {
-			report(Kind.ERROR, "symbol.error.noSuchClass", b);
-			return a;
-		}
-
-		String commonParent = getCommonParent(infoA, infoB);
-		assert commonParent != null;
-
-		var info = classes.getClassInfo(commonParent);
-
-		int extendType = a instanceof Generic ga ? ga.extendType : Generic.EX_NONE;
-		int extendType2 = b instanceof Generic gb ? gb.extendType : Generic.EX_NONE;
-		if (extendType != extendType2) {
-			boolean hasSuper = extendType == Generic.EX_SUPER || extendType2 == Generic.EX_SUPER;
-			boolean hasExtends = extendType == Generic.EX_EXTENDS || extendType2 == Generic.EX_EXTENDS;
-
-			// LCA(T, ? extends T) = ? extends T
-			// LCA(T, ? super T) = ?
-			// LCA(? extends, ? super T) = ?
-			if (hasSuper) return Signature.any(); // 通配符类型
-			if (hasExtends) extendType = Generic.EX_EXTENDS;
-		}
-
-		// 如果不是泛型类，那么直接返回
-		if (extendType == Generic.EX_NONE && info.getRawAttribute("Signature") == null) {
-			// 少创建对象
-			if (info == infoA) return a;
-			if (info == infoB) return b;
-			return Type.klass(commonParent, a.array());
-		}
-
-		// 否则进行泛型推断
-		// CP(List<String>, SimpleList<String>) => List<String>
-		// CP(List<?>, SimpleList<String>) => List<?>
-		// CP(List<String>, SimpleList<?>) => List<?>
-
-		List<IType> aGeneric = inferGeneric(a, commonParent);
-		List<IType> bGeneric = inferGeneric(b, commonParent);
-
-		assert aGeneric != null && bGeneric != null && aGeneric.size() == bGeneric.size();
-
-		//Arrays.asList也许也可以？
-		List<IType> typeParams = SimpleList.asModifiableList(new IType[aGeneric.size()]);
-		for (int i = 0; i < aGeneric.size(); i++) {
-			IType aa = aGeneric.get(i);
-			IType bb = bGeneric.get(i);
-			typeParams.set(i, getCommonParent(aa, bb));
-		}
-
-		// TODO primitive generic
-		// 	CP(ArrayList<int>, List<Integer>) => List<Integer>
-		//  CP(List<int>, List<Integer>) => Collection<Integer>
-
-		Generic generic = new Generic(commonParent, a.array(), extendType);
-		generic.children = typeParams;
-		return generic;
-	}
+	public final IType getCommonParent(IType a, IType b) {return classes.getCommonParent(a, b);}
 	/**
-	 * 返回ab两个类(Class)的共同父类
+	 * @see GlobalContext#getCommonParent(ClassDefinition, ClassDefinition)
 	 */
-	public final String getCommonParent(IClass infoA, IClass infoB) {
-		ToIntMap<String> tmp,
-			listA = getHierarchyList(infoA),
-			listB = getHierarchyList(infoB);
-
-		if (listA.size() > listB.size()) {
-			tmp = listA;
-			listA = listB;
-			listB = tmp;
-		}
-
-		String commonParent = infoA.name();
-		int minIndex = listB.size();
-		for (var entry : listA.selfEntrySet()) {
-			String klass = entry.getKey();
-
-			int val = listB.getOrDefault(klass, minIndex)&0x7FFF_FFFF;
-			int j = val&0xFFFF;
-			if (j < minIndex || (j == minIndex && val < minIndex)) {
-				commonParent = klass;
-				minIndex = j;
-			}
-		}
-		return commonParent;
-	}
+	public final String getCommonParent(ClassDefinition infoA, ClassDefinition infoB) {return classes.getCommonParent(infoA, infoB);}
 	//endregion
 	// region [可重载] 表达式语法扩展
 
@@ -1142,12 +878,13 @@ public class LocalContext {
 	 * @param rt 是否为运行时可见注解
 	 * @return 注解对象
 	 */
-	public Annotation getAnnotation(IClass type, Attributed node, String annotation, boolean rt) {
+	public Annotation getAnnotation(ClassDefinition type, Attributed node, String annotation, boolean rt) {
 		return Annotation.find(Annotations.getAnnotations(type.cp(), node, rt), annotation);
 	}
 
 	private static final IntMap<String> EMPTY = new IntMap<>(0);
-	static {Parser.registerCustomAttribute(MethodDefault.ID, MethodDefault::new);}
+	static {
+		Attribute.addCustomAttribute(MethodDefault.ID, MethodDefault::new);}
 	/**
 	 * 获取方法的默认参数索引表
 	 *
@@ -1162,7 +899,7 @@ public class LocalContext {
 	 * @return 参数默认值索引表（参数位置 → 序列化表达式）
 	 * @see #parseDefaultArgument(String) 反序列化方法
 	 */
-	public IntMap<String> getDefaultArguments(IClass klass, MethodNode method) {
+	public IntMap<String> getDefaultArguments(ClassDefinition klass, MethodNode method) {
 		MethodDefault attr = method.getAttribute(klass.cp(), MethodDefault.ID);
 		return attr != null ? attr.defaultValue : EMPTY;
 	}
@@ -1230,7 +967,7 @@ public class LocalContext {
 	 * @implNote 默认实现把基本类型包装类中的所有静态函数返回了
 	 */
 	@Nullable
-	public IClass getPrimitiveMethod(IType type) {
+	public ClassDefinition getPrimitiveMethod(IType type) {
 		assert type.isPrimitive();
 		return classes.getClassInfo(TypeCast.getWrapper(type).owner());
 	}
@@ -1250,7 +987,7 @@ public class LocalContext {
 	 * @return 常量表达式。
 	 */
 	@Nullable
-	public Expr getConstantValue(IClass klass, FieldNode field, IType fieldType) {
+	public Expr getConstantValue(ClassDefinition klass, FieldNode field, IType fieldType) {
 		if (fieldDFS && klass != file && klass instanceof CompileUnit cu) {
 			SimpleList<NestContext> bak = enclosing;
 			try {

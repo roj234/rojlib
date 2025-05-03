@@ -179,20 +179,20 @@ public final class Blake3 extends BufferedDigest implements MessageAuthenticCode
     }
 
     @Override
-    public void setSignKey(byte[] b, int off, int len) {
+    public void init(byte[] b, int off, int len) {
         if (b == null || len == 0) {
             setKeyDefault();
             flags = 0;
         } else {
             if (len != 32) throw new IllegalStateException("length must be 0 or 32");
-			ByteList bl = IOUtil.SharedBuf.get().wrap(b, off, len);
+            ByteList bl = IOUtil.SharedBuf.get().wrap(b, off, len);
             for (int i = 0; i < 8; ++i) Key[i] = bl.readIntLE();
             flags = KEYED_HASH;
         }
 
         reset();
     }
-    public Blake3 KDF(DynByteBuf key) {
+    public Blake3 initKDF(DynByteBuf key) {
         engineReset();
 
         setKeyDefault();

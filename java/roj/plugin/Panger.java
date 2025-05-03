@@ -48,14 +48,14 @@ import static roj.ui.CommandNode.literal;
 
 /**
  * @author Roj234
- * @since 2023/12/25 0025 18:01
+ * @since 2023/12/25 18:01
  */
 @ReplaceConstant
 public final class Panger extends PluginManager {
-	static final CommandConsole CMD = new CommandConsole("Panger>");
+	static final Shell CMD = new Shell("Panger>");
 	static final boolean useModulePluginIfAvailable = true;
 
-	public static Console console() {return CMD;}
+	public static KeyHandler console() {return CMD;}
 
 	static Panger pm;
 	public static PluginManager getInstance() {return pm;}
@@ -298,7 +298,7 @@ public final class Panger extends PluginManager {
 		} catch (Exception ignored) {}
 	}
 
-	private static final class Interrupter extends Thread implements IntFunction<Boolean>, Console {
+	private static final class Interrupter extends Thread implements IntFunction<Boolean>, KeyHandler {
 		public Interrupter() {
 			super(Panger::shutdown, "RojLib Interrupter");
 			Runtime.getRuntime().addShutdownHook(this);

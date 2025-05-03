@@ -4,7 +4,7 @@ import roj.collect.IntList;
 import roj.collect.IntMap;
 import roj.collect.RSegmentTree;
 import roj.collect.SimpleList;
-import roj.concurrent.TaskHandler;
+import roj.concurrent.TaskExecutor;
 import roj.io.FastFailException;
 import roj.io.IOUtil;
 import roj.ui.EasyProgressBar;
@@ -16,7 +16,7 @@ import java.util.List;
 
 /**
  * @author Roj234
- * @since 2022/11/12 0012 17:42
+ * @since 2022/11/12 17:42
  */
 final class ZCKiller {
 	static final int ENCRYPTION_HEADER_SIZE = 12;
@@ -111,7 +111,7 @@ final class ZCKiller {
 		}
 	}
 
-	List<Cipher> find(TaskHandler th) {
+	List<Cipher> find(TaskExecutor th) {
 		var bar = progress = new EasyProgressBar("进度");
 
 		bar.set("进度: Z-创建");

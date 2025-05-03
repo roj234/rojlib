@@ -4,8 +4,7 @@ import roj.archive.zip.ZEntry;
 import roj.archive.zip.ZipFileWriter;
 import roj.asm.ClassNode;
 import roj.asm.MethodNode;
-import roj.asm.Parser;
-import roj.asm.util.Context;
+import roj.asmx.Context;
 import roj.collect.ToIntMap;
 import roj.io.IOUtil;
 import roj.io.source.FileSource;
@@ -26,7 +25,7 @@ public class ObfUtil {
 
 	static {
 		try {
-			ClassNode total = Parser.parseConstants(IOUtil.getResourceIL("roj/plugins/obfuscator/ObfUtil.class"));
+			ClassNode total = ClassNode.parseSkeleton(IOUtil.getResourceIL("roj/plugins/obfuscator/ObfUtil.class"));
 			MethodNode txa = total.getMethodObj("TextXORA").parsed(total.cp);
 			//txa.code.attributes.clear();
 			textXOR_A = txa;

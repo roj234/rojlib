@@ -11,6 +11,7 @@
 package roj.archive.qz.xz;
 
 import roj.io.Finishable;
+import roj.io.IOUtil;
 import roj.io.UnsafeOutputStream;
 import roj.reflect.Unaligned;
 import roj.util.ArrayUtil;
@@ -69,9 +70,7 @@ public final class LZMA2Writer extends LZMA2Out implements Finishable, UnsafeOut
 				if (lzma.encodeForLZMA2()) writeChunk(compressionDisabled);
 			}
 		} catch (Throwable e) {
-			try {
-				close();
-			} catch (Throwable ignored) {}
+			IOUtil.closeSilently(this);
 			throw e;
 		}
 	}
@@ -90,9 +89,7 @@ public final class LZMA2Writer extends LZMA2Out implements Finishable, UnsafeOut
 
 			out.flush();
 		} catch (Throwable e) {
-			try {
-				close();
-			} catch (Throwable ignored) {}
+			IOUtil.closeSilently(this);
 			throw e;
 		}
 	}
@@ -102,7 +99,7 @@ public final class LZMA2Writer extends LZMA2Out implements Finishable, UnsafeOut
 	 */
 	public void finish() throws IOException {
 		synchronized (this) {
-			if ((closed &1) != 0) return;
+			if ((closed&1) != 0) return;
 			closed |= 1;
 		}
 
@@ -117,9 +114,7 @@ public final class LZMA2Writer extends LZMA2Out implements Finishable, UnsafeOut
 
 			out.write(0x00);
 		} catch (Throwable e) {
-			try {
-				close();
-			} catch (Throwable ignored) {}
+			IOUtil.closeSilently(this);
 			throw e;
 		} finally {
 			lzma.release();
@@ -129,12 +124,9 @@ public final class LZMA2Writer extends LZMA2Out implements Finishable, UnsafeOut
 		}
 
 		try {
-			if (out instanceof Finishable f)
-				f.finish();
+			if (out instanceof Finishable f) f.finish();
 		} catch (Throwable e) {
-			try {
-				close();
-			} catch (Throwable ignored) {}
+			IOUtil.closeSilently(this);
 			throw e;
 		}
 	}

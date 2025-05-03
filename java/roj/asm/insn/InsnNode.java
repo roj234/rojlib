@@ -1,12 +1,11 @@
 package roj.asm.insn;
 
 import org.jetbrains.annotations.NotNull;
+import roj.asm.MemberDescriptor;
 import roj.asm.Opcodes;
 import roj.asm.cp.*;
-import roj.asm.type.Desc;
 import roj.asm.type.Type;
 import roj.asm.type.TypeHelper;
-import roj.asm.util.InsnMatcher;
 import roj.compiler.runtime.RtUtil;
 import roj.text.CharList;
 import roj.util.DynByteBuf;
@@ -16,7 +15,7 @@ import static roj.asm.Opcodes.*;
 
 /**
  * @author Roj234
- * @since 2023/8/25 0025 18:10
+ * @since 2023/8/25 18:10
  */
 public final class InsnNode {
 	private final InsnList owner;
@@ -137,14 +136,14 @@ public final class InsnNode {
 
 	/** 直接改，但是不要动flag | owner为null时，是invokeDynamic */
 	@NotNull
-	public final Desc desc() {
+	public final MemberDescriptor desc() {
 		byte code = opcode();
-		if (!(ref instanceof Desc)) invalidArg(code);
-		return (Desc) ref;
+		if (!(ref instanceof MemberDescriptor)) invalidArg(code);
+		return (MemberDescriptor) ref;
 	}
-	public final Desc descOrNull() {
+	public final MemberDescriptor descOrNull() {
 		opcode();
-		return ref instanceof Desc ? (Desc) ref : null;
+		return ref instanceof MemberDescriptor ? (MemberDescriptor) ref : null;
 	}
 
 	/**
@@ -426,17 +425,17 @@ public final class InsnNode {
 	public CharList myToString(CharList sb, boolean simple) {
 		switch (OPLENGTH[code&0xFF]&0xF) {
 			case 1:
-				Desc d = desc();
+				MemberDescriptor d = desc();
 				sb.append(parseOwner(d.owner, simple)).append('.').append(d.name).append(" // ");
-				Type.fieldDesc(d.param).toString(sb);
+				Type.fieldDesc(d.rawDesc).toString(sb);
 			break;
 			case 2:
 				d = desc();
-				TypeHelper.humanize(Type.methodDesc(d.param), parseOwner(d.owner, simple)+'.'+d.name, simple, sb);
+				TypeHelper.humanize(Type.methodDesc(d.rawDesc), parseOwner(d.owner, simple)+'.'+d.name, simple, sb);
 			break;
 			case 3:
 				d = desc();
-				TypeHelper.humanize(Type.methodDesc(d.param), "*."+d.name, simple, sb).append(" // [#").append((int)d.modifier).append(']');
+				TypeHelper.humanize(Type.methodDesc(d.rawDesc), "*."+d.name, simple, sb).append(" // [#").append((int)d.modifier).append(']');
 			break;
 			case 6:
 				//noinspection MagicConstant

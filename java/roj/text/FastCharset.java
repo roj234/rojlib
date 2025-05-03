@@ -20,7 +20,7 @@ import static java.lang.Character.*;
  * FixedOut: 固定输出,适用循环和缓冲的组合
  *
  * @author Roj234
- * @since 2023/5/14 0014 22:03
+ * @since 2023/5/14 22:03
  */
 public abstract class FastCharset {
 	public static FastCharset ISO_8859_1() {return LATIN1.INSTANCE;}

@@ -22,7 +22,7 @@ import java.util.Objects;
  * @author Roj234
  * @since 2021/6/18 9:51
  */
-public final class MethodNode extends CNode {
+public final class MethodNode extends MemberNode {
 	public MethodNode(int acc, String owner, String name, String desc) { this(acc, owner, (Object) name, desc); }
 	public MethodNode(int acc, String owner, CstUTF name, CstUTF desc) { this(acc, owner, (Object) name, desc); }
 	private MethodNode(int acc, String owner, Object name, Object type) {
@@ -31,9 +31,9 @@ public final class MethodNode extends CNode {
 		this.name = name;
 		this.desc = type;
 	}
-	public MethodNode(RawNode m) {
+	public MethodNode(Member m) {
 		modifier = m.modifier();
-		owner = m.ownerClass();
+		owner = m.owner();
 		name = m.name();
 		desc = m.rawDesc();
 	}
@@ -53,7 +53,7 @@ public final class MethodNode extends CNode {
 	}
 
 	public String owner;
-	public String ownerClass() { return owner; }
+	public String owner() { return owner; }
 
 	private List<Type> in;
 	private Type out;
@@ -64,7 +64,7 @@ public final class MethodNode extends CNode {
 		}
 
 		if (attributes != null) {
-			Parser.parseAttributes(this, cp, attributes, Signature.METHOD);
+			Attribute.parseAll(this, cp, attributes, Signature.METHOD);
 		}
 		return this;
 	}
@@ -81,17 +81,17 @@ public final class MethodNode extends CNode {
 		if (cv instanceof CodeWriter cw) {
 			tmp.clear();
 			cw.init(tmp, cp, this);
-			cw.visit(cp, Parser.reader(code));
+			cw.visit(cp, AsmCache.reader(code));
 			cw.finish();
 			((UnparsedAttribute) code).setRawData(DynByteBuf.wrap(tmp.toByteArray()));
 		} else {
-			cv.visit(cp, Parser.reader(code));
+			cv.visit(cp, AsmCache.reader(code));
 		}
 		return true;
 	}
 
 	@Override
-	public <T extends Attribute> T getAttribute(ConstantPool cp, TypedKey<T> type) { return Parser.parseAttribute(this, cp, type, attributes, Signature.METHOD); }
+	public <T extends Attribute> T getAttribute(ConstantPool cp, TypedKey<T> type) { return Attribute.parseSingle(this, cp, type, attributes, Signature.METHOD); }
 
 	public String rawDesc() {
 		if (in != null) {

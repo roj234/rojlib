@@ -5,7 +5,7 @@ import roj.collect.MyBitSet;
 
 /**
  * @author Roj234
- * @since 2022/11/12 0012 18:01
+ * @since 2022/11/12 18:01
  */
 final class Zreduction {
 	static final int WAIT_SIZE  = 1 << 8, TRACK_SIZE = 1 << 16;

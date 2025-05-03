@@ -1,9 +1,9 @@
 package roj.reflect;
 
+import roj.asm.AsmCache;
 import roj.asm.ClassNode;
 import roj.asm.MethodNode;
 import roj.asm.Opcodes;
-import roj.asm.Parser;
 import roj.asm.attr.Attribute;
 import roj.asm.cp.CstClass;
 import roj.asm.cp.CstInt;
@@ -58,7 +58,7 @@ public final class EnumHelper extends CodeVisitor {
 				state = 0;
 				nameId = ordinalId = -1;
 				try {
-					visit(klass.cp, Parser.reader(mn.getRawAttribute("Code")));
+					visit(klass.cp, AsmCache.reader(mn.getRawAttribute("Code")));
 				} catch (OperationDone found) {
 					System.out.println(nameId);
 					System.out.println(ordinalId);
@@ -141,7 +141,7 @@ public final class EnumHelper extends CodeVisitor {
 
 	@Override
 	protected void invoke(byte code, CstRef method) {
-		if (method.className().equals("java/lang/Enum") && method.desc().name().str().equals("<init>")) {
+		if (method.owner().equals("java/lang/Enum") && method.nameAndType().name().str().equals("<init>")) {
 			assert state == 3 : "state is "+state;
 			throw OperationDone.INSTANCE;
 		}

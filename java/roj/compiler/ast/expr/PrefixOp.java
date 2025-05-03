@@ -20,7 +20,7 @@ import static roj.compiler.Tokens.*;
 
 /**
  * @author Roj234
- * @since 2023/9/18 0018 7:53
+ * @since 2023/9/18 7:53
  */
 class PrefixOp extends PrefixOperator {
 	private final short op;

@@ -15,7 +15,7 @@ import static roj.reflect.Unaligned.U;
 
 /**
  * @author Roj234
- * @since 2025/4/4 0004 21:27
+ * @since 2025/4/4 21:27
  */
 final class Share {
 	String id, name;
@@ -41,7 +41,7 @@ final class Share {
 		int prefixLength = path.getAbsolutePath().length() + 1;
 		try {
 			IOUtil.findAllFiles(path, file -> {
-				if (files.size() == 1000) throw OperationDone.INSTANCE;
+				if (files.size() == FileShare.LOCAL_FILE_MAX) throw OperationDone.INSTANCE;
 				ShareFile file1 = new ShareFile(file, prefixLength);
 				size += file1.size;
 				files.add(file1);

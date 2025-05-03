@@ -12,7 +12,7 @@ import java.util.function.Predicate;
 
 /**
  * @author Roj234
- * @since 2025/4/4 0004 19:55
+ * @since 2025/4/4 19:55
  */
 public interface VirtualFileSystem {
 	static VirtualFileSystem disk(File base) {return new DiskVFS(base);}

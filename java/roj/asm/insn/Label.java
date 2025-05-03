@@ -6,7 +6,7 @@ import java.util.Arrays;
 
 /**
  * @author Roj234
- * @since 2022/11/17 0017 12:53
+ * @since 2022/11/17 12:53
  */
 public class Label implements Comparable<Label> {
 	short block;

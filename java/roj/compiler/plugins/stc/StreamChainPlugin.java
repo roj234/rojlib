@@ -23,7 +23,7 @@ import java.util.function.Consumer;
 
 /**
  * @author Roj234
- * @since 2024/6/15 0015 15:51
+ * @since 2024/6/15 15:51
  */
 public class StreamChainPlugin implements LavaApi.Resolver {
 	private static class MyExprNode extends Expr implements StreamChainExpr {
@@ -128,7 +128,7 @@ public class StreamChainPlugin implements LavaApi.Resolver {
 			int flag = getSTATE(chain.get(chain.size() - 1)) != 2 ? 1 : 0;
 			Type visibleType;
 			if (flag == 0) visibleType = owner.returnType();
-			else visibleType = new Type.DirtyHacker(exactType.getActualType(), owner.ownerClass());
+			else visibleType = new Type.DirtyHacker(exactType.getActualType(), owner.owner());
 
 			if (_self.getParent() instanceof MyExprNode altChain) {
 				altChain.targetType = flag;

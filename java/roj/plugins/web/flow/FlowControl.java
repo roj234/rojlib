@@ -17,7 +17,7 @@ import java.util.function.Function;
 
 /**
  * @author Roj234
- * @since 2024/11/26 0026 17:03
+ * @since 2024/11/26 17:03
  */
 @SimplePlugin(id = "flowControl", loadAfter = "EasySSO")
 public class FlowControl extends Plugin {

@@ -157,7 +157,7 @@ public abstract class DynByteBuf extends OutputStream implements CharSequence, M
 		if (len != b.readableBytes()) return false;
 		assert len <= capacity() : info();
 
-		return ArrayUtil.vectorizedMismatch(array(), _unsafeAddr()+rIndex, b.array(), b._unsafeAddr()+b.rIndex, len, ArrayUtil.LOG2_ARRAY_BYTE_INDEX_SCALE) < 0;
+		return ArrayUtil.compare(array(), _unsafeAddr()+rIndex, b.array(), b._unsafeAddr()+b.rIndex, len, ArrayUtil.LOG2_ARRAY_BYTE_INDEX_SCALE) < 0;
 	}
 	@Override
 	public int hashCode() {
@@ -338,18 +338,18 @@ public abstract class DynByteBuf extends OutputStream implements CharSequence, M
 		if (x <= 0x3FFF) {
 			if (x < 0) break negative;
 			// 7
-			if (x <= 0x7F) return put((byte) x);
+			if (x <= 0x7F) return put(x);
 			// 14: 0b10xxxxxx B
 			return putShort(0x8000 | x);
 		} else if (x <= 0xFFFFFFF) {
 			// 21: 0b110xxxxx B B
-			if (x <= 0x1FFFFF) return put((byte) (0xC0 | (x>>>16))).putShortLE(x);
+			if (x <= 0x1FFFFF) return put(0b11000000 | (x>>>16)).putShortLE(x);
 			// 28: 0b1110xxxx B B B
-			return put((byte) (0xE0 | (x>>>24))).putMediumLE(x);
+			return put(0b11100000 | (x>>>24)).putMediumLE(x);
 		}
 
 		// 35: 0b11110xxx B B B B
-		return put((byte) 0xF0).putIntLE(x);
+		return put(0xF0).putIntLE(x);
 	}
 	public final DynByteBuf putVULong(long x) {
 		if ((x & 0xFFFFFFFF00000000L) == 0) return putVUInt((int) x);
@@ -369,9 +369,9 @@ public abstract class DynByteBuf extends OutputStream implements CharSequence, M
 			max <<= 7;
 		}
 
-		put((byte) firstByte);
+		put(firstByte);
 		for (; i > 0; i--) {
-			put((byte) x);
+			put((byte)x);
 			x >>>= 8;
 		}
 		return this;

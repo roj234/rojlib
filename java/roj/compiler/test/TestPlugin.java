@@ -17,7 +17,7 @@ import roj.util.Helpers;
 
 /**
  * @author Roj234
- * @since 2024/2/20 0020 1:28
+ * @since 2024/2/20 1:28
  */
 public class TestPlugin {
 	public void pluginInit(LavaApi api) {

@@ -8,10 +8,10 @@ import java.util.zip.InflaterInputStream;
 
 /**
  * @author Roj234
- * @since 2023/3/14 0014 0:42
+ * @since 2023/3/14 0:42
  */
 final class InflateIn extends InflaterInputStream {
-	InflateIn(InputStream in) { super(in, new Inflater(true), 512); }
+	InflateIn(InputStream in) { super(in, new Inflater(true), 4096); }
 
 	public InflateIn reset(InputStream in) {
 		myClosed = false;

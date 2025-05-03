@@ -5,7 +5,7 @@ import java.util.Comparator;
 
 /**
  * @author Roj234
- * @since 2024/7/12 0012 8:50
+ * @since 2024/7/12 8:50
  */
 public final class OnlyBest<T> {
 	private final Comparator<T> cmp;

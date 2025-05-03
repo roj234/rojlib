@@ -288,7 +288,7 @@ public class Headers extends Multimap<CharSequence, String> {
 	}
 
 	@Override
-	@SuppressWarnings({"rawtypes"})
+	@SuppressWarnings({"rawtypes", "unchecked"})
 	public final void set(CharSequence key, String value) {
 		value = checkVal(value);
 

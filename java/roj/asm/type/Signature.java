@@ -2,7 +2,7 @@ package roj.asm.type;
 
 import org.intellij.lang.annotations.MagicConstant;
 import org.jetbrains.annotations.NotNull;
-import roj.asm.AsmShared;
+import roj.asm.AsmCache;
 import roj.asm.attr.Attribute;
 import roj.asm.cp.ConstantPool;
 import roj.collect.LinkedMyHashMap;
@@ -278,7 +278,7 @@ public class Signature extends Attribute {
 			}
 		}
 
-		List<IType> v = AsmShared.local().methodTypeTmp();
+		List<IType> v = AsmCache.getInstance().methodTypeTmp();
 		boolean isMethod = s.charAt(i) == '(';
 		if (isMethod) {
 			if (expect != 99 && expect != METHOD) fail("未预料的<方法参数>(预期类型是"+expect+")", i, s);

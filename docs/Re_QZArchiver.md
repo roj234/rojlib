@@ -39,7 +39,6 @@ package roj.archive.qz;
 
 import roj.collect.MyHashMap;
 import roj.concurrent.TaskPool;
-import roj.ui.EasyProgressBar;
 import roj.util.Helpers;
 
 public class QZUtils {
@@ -89,15 +88,15 @@ public class QZUtils {
 			appender.setSolidSize(1919810);
 
 			// 当然只有名称也许不够，还可以设置一下三个修改时间和文件属性
-			appender.beginEntry(new QZEntry("aweawe"));
+			appender.beginEntry(QZEntry.of("aweawe"));
 			// 这是OutputStream
 			appender.write(new byte[10248]);
 			appender.closeEntry();
 
 			// 多线程
-			try (QZWriter out = appender.parallel()) {
+			try (QZWriter out = appender.newParallelWriter()) {
 				// 使用方式同上，但是内存缓存，在close时提交给父亲
-				// 或者也可以appender.parallel(Source)为它指定一个磁盘缓存
+				// 或者也可以appender.newParallelWriter(Source)为它指定一个磁盘缓存
 
 				// 如果交给别的类，你可能需要让它忽略close()
 				// out.setIgnoreClose(true);
@@ -107,7 +106,7 @@ public class QZUtils {
 			// 算法并非必须设定，不设定则是上面几行设置的单独LZMA2
 			appender.setCodec(new LZMA2(), new QzAES("12345"));
 			appender.setCompressHeader(1);
-			
+
 			// close时也会自动finish
 			appender.finish();
 		}
@@ -124,11 +123,12 @@ LZMA2有构造器支持LZMA2Options做参数
 
 * `QZArchive`**不支持**流级别的并行解压
 * `QZFileWriter`支持流级别的并行压缩
+
 ```java
 class LZMA2Options {
 	/**
 	 * <pre>启用对于单独压缩流的多线程压缩模式
-	 * <b>注意，对比{@link roj.archive.qz.QZFileWriter#parallel()}的不同文件并行模式,单压缩流并行会损失千分之一左右压缩率</b>
+	 * <b>注意，对比{@link roj.archive.qz.QZFileWriter#newParallelWriter()}的不同文件并行模式,单压缩流并行会损失千分之一左右压缩率</b>
 	 * @param blockSize 任务按照该大小分块并行，设置为-1来自动选择(不推荐自动选择)
 	 * @param executor 线程池
 	 * @param affinity 最大并行任务数量 (1-255)
@@ -138,9 +138,12 @@ class LZMA2Options {
 	 * {@link #ASYNC_DICT_ASYNCSET} 在异步任务线程上设置词典, 速度中等, 压缩率好, 内存大
 	 */
 	public void setAsyncMode(int blockSize, TaskHandler executor, int affinity, int dictMode) {
-		if (blockSize != 0 && blockSize < ASYNC_BLOCK_SIZE_MIN || blockSize > ASYNC_BLOCK_SIZE_MAX) throw new IllegalArgumentException("无效的分块大小 "+blockSize);
-		if (affinity != 0 && affinity < 2 || affinity > 255) throw new IllegalArgumentException("无效的并行任务数量 "+affinity);
-		if (dictMode < 0 || dictMode > ASYNC_DICT_ASYNCSET) throw new IllegalArgumentException("无效的词典处理模式 "+dictMode);
+		if (blockSize != 0 && blockSize < ASYNC_BLOCK_SIZE_MIN || blockSize > ASYNC_BLOCK_SIZE_MAX)
+			throw new IllegalArgumentException("无效的分块大小 " + blockSize);
+		if (affinity != 0 && affinity < 2 || affinity > 255)
+			throw new IllegalArgumentException("无效的并行任务数量 " + affinity);
+		if (dictMode < 0 || dictMode > ASYNC_DICT_ASYNCSET)
+			throw new IllegalArgumentException("无效的词典处理模式 " + dictMode);
 		asyncBlockSize = blockSize;
 		asyncExecutor = executor;
 		asyncAffinity = (byte) affinity;

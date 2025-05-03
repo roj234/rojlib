@@ -20,7 +20,7 @@ import java.util.function.Function;
 
 /**
  * @author Roj234
- * @since 2023/8/4 0004 15:41
+ * @since 2023/8/4 15:41
  */
 public final class EntryPointM extends EntryPoint {
 	static final Module MyModule = EntryPointM.class.getModule();

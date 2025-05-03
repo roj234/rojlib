@@ -20,7 +20,7 @@ import java.util.concurrent.locks.ReentrantLock;
 
 import static roj.reflect.Unaligned.U;
 
-public class TaskPool implements TaskHandler {
+public class TaskPool implements TaskExecutor {
 	@FunctionalInterface
 	public interface MyThreadFactory {
 		TaskPool.ExecutorImpl get(TaskPool pool);
@@ -28,7 +28,7 @@ public class TaskPool implements TaskHandler {
 
 	@FunctionalInterface
 	public interface RejectPolicy {
-		void onReject(TaskPool pool, ITask task);
+		void onReject(TaskPool pool, Task task);
 	}
 
 	final MyHashSet<ExecutorImpl> threads = new MyHashSet<>();
@@ -44,7 +44,7 @@ public class TaskPool implements TaskHandler {
 
 	final ReentrantLock lock = new ReentrantLock();
 	final Condition noFull = lock.newCondition();
-	final RingBuffer<ITask> tasks;
+	final RingBuffer<Task> tasks;
 	final TransferQueue<Object> fastPath = new LinkedTransferQueue<>();
 
 	public TaskPool(int coreThreads, int maxThreads, int newThreshold, int rejectThreshold, int stopTimeout, MyThreadFactory factory) {
@@ -90,7 +90,7 @@ public class TaskPool implements TaskHandler {
 	public static TaskPool MaxSize(int rejectThreshold, String prefix) { return new TaskPool(0, Runtime.getRuntime().availableProcessors(), 0, rejectThreshold, 60000, namedPrefixFactory(prefix)); }
 
 	@Override
-	public void submit(@Async.Schedule ITask task) {
+	public void submit(@Async.Schedule Task task) {
 		if (task.isCancelled()) return;
 
 		int len = running;
@@ -119,7 +119,7 @@ public class TaskPool implements TaskHandler {
 		}
 	}
 
-	private ITask pollTask() {
+	private Task pollTask() {
 		boolean timeout = false;
 
 		for(;;) {
@@ -127,7 +127,7 @@ public class TaskPool implements TaskHandler {
 				lock.lock();
 				try {
 					while (!tasks.isEmpty()) {
-						ITask task = tasks.removeFirst();
+						Task task = tasks.removeFirst();
 						if (!task.isCancelled()) return task;
 					}
 				} finally {
@@ -161,7 +161,7 @@ public class TaskPool implements TaskHandler {
 			if (task == null || task == IntMap.UNDEFINED) {
 				timeout = true;
 			} else {
-				ITask tt = (ITask) task;
+				Task tt = (Task) task;
 				if (!tt.isCancelled()) return tt;
 				timeout = false;
 			}
@@ -181,8 +181,8 @@ public class TaskPool implements TaskHandler {
 	}
 
 	public void setRejectPolicy(RejectPolicy policy) { this.policy = policy; }
-	public static void throwPolicy(TaskPool pool, ITask task) {throw new RejectedExecutionException(pool+" is full, rejecting "+task);}
-	public static void waitPolicy(TaskPool pool, ITask task) {
+	public static void throwPolicy(TaskPool pool, Task task) {throw new RejectedExecutionException(pool+" is full, rejecting "+task);}
+	public static void waitPolicy(TaskPool pool, Task task) {
 		while (!pool.fastPath.tryTransfer(task) && !pool.tasks.offerLast(task)) {
 			pool.noFull.awaitUninterruptibly();
 			if (pool.running < 0) throw new RejectedExecutionException(pool+" was shutdown.");
@@ -198,10 +198,10 @@ public class TaskPool implements TaskHandler {
 
 		synchronized (this) {notifyAll();}
 	}
-	public List<ITask> shutdownNow() {
+	public List<Task> shutdownNow() {
 		shutdown();
 
-		SimpleList<ITask> tasks1;
+		SimpleList<Task> tasks1;
 		lock.lock();
 		try {
 			tasks1 = new SimpleList<>(tasks);
@@ -215,7 +215,7 @@ public class TaskPool implements TaskHandler {
 
 		while (true) {
 			var task = fastPath.poll();
-			if (!(task instanceof ITask task1)) break;
+			if (!(task instanceof Task task1)) break;
 			tasks1.add(task1);
 		}
 
@@ -261,7 +261,7 @@ public class TaskPool implements TaskHandler {
 		@Override
 		public void run() {
 			while (true) {
-				ITask task = pollTask();
+				Task task = pollTask();
 				if (task == null) break;
 
 				try {
@@ -275,7 +275,7 @@ public class TaskPool implements TaskHandler {
 			synchronized (threads) {threads.remove(this);}
 		}
 
-		private void executeForDebug(@Async.Execute ITask task) throws Exception { task.execute(); }
+		private void executeForDebug(@Async.Execute Task task) throws Exception { task.execute(); }
 	}
 
 	public static MyThreadFactory namedPrefixFactory(String prefix) {

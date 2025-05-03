@@ -14,7 +14,7 @@ import java.net.URI;
 
 /**
  * @author Roj234
- * @since 2023/5/11 0011 14:29
+ * @since 2023/5/11 14:29
  */
 public class AutoRedirect extends Timeout implements ChannelHandler {
 	private final HttpRequest req;

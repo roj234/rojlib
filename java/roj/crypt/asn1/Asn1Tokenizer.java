@@ -8,7 +8,7 @@ import roj.config.Word;
 
 /**
  * @author Roj234
- * @since 2024/3/22 0022 22:46
+ * @since 2024/3/22 22:46
  */
 final class Asn1Tokenizer extends Tokenizer {
 	static final short

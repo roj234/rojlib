@@ -5,7 +5,7 @@ import roj.util.DynByteBuf;
 
 /**
  * @author Roj234
- * @since 2024/2/19 0019 1:20
+ * @since 2024/2/19 1:20
  */
 public interface AudioMetadata {
 	String toString();

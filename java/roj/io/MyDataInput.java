@@ -9,7 +9,7 @@ import java.io.IOException;
 
 /**
  * @author Roj234
- * @since 2024/3/10 0010 3:53
+ * @since 2024/3/10 3:53
  */
 public interface MyDataInput extends DataInput, Closeable {
 	int DEFAULT_MAX_STRING_LEN = 65536;

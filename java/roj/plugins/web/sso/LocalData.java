@@ -10,7 +10,7 @@ import java.security.SecureRandom;
 
 /**
  * @author Roj234
- * @since 2024/7/8 0008 6:38
+ * @since 2024/7/8 6:38
  */
 final class LocalData {
 	final SecureRandom srnd = new SecureRandom();

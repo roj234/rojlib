@@ -7,7 +7,7 @@ import java.util.List;
 
 /**
  * @author Roj234
- * @since 2024/7/1 0001 15:07
+ * @since 2024/7/1 15:07
  */
 public interface LogHelper {
 	LogHelper INSTANCE = Bypass.builder(LogHelper.class).access(Throwable.class, "suppressedExceptions", "getSuppressed", null).delegate(Throwable.class, "getOurStackTrace", "getStackTrace").build();

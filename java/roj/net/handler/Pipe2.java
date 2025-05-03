@@ -9,7 +9,7 @@ import java.io.IOException;
 
 /**
  * @author Roj234
- * @since 2022/10/11 0011 19:16
+ * @since 2022/10/11 19:16
  */
 public class Pipe2 implements ChannelHandler {
 	public static final ThreadLocal<Pipe2> WRITER = new ThreadLocal<>();

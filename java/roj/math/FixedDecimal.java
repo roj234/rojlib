@@ -3,7 +3,7 @@ package roj.math;
 /**
  * 定点数
  * @author Roj234
- * @since 2025/2/11 0011 14:56
+ * @since 2025/2/11 14:56
  */
 public class FixedDecimal implements Comparable<FixedDecimal> {
 	public long integral;

@@ -5,7 +5,7 @@ import roj.archive.zip.ZipCrypto;
 import roj.archive.zip.ZipFile;
 import roj.archive.zip.ZipFileWriter;
 import roj.collect.IntMap;
-import roj.concurrent.TaskHandler;
+import roj.concurrent.TaskExecutor;
 import roj.concurrent.TaskPool;
 import roj.crypt.CipherInputStream;
 import roj.io.IOUtil;
@@ -31,7 +31,7 @@ import static roj.ui.CommandNode.literal;
 
 /**
  * @author Roj234
- * @since 2022/11/12 0012 18:12
+ * @since 2022/11/12 18:12
  */
 @SimplePlugin(id = "bkCrack", desc = """
 	对ZipCrypto算法的已知明文攻击[Biham、Kocher]
@@ -69,7 +69,7 @@ public class Main extends Plugin {
 		}));
 	}
 
-	private static void tryGetPlain(TaskHandler pool, File f, int off) throws IOException {
+	private static void tryGetPlain(TaskExecutor pool, File f, int off) throws IOException {
 		File key = new File(f.getAbsolutePath() + ".key");
 		if (!key.exists()) return;
 

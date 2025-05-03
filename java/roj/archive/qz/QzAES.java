@@ -5,7 +5,6 @@ import roj.util.ArrayCache;
 import roj.util.DynByteBuf;
 import roj.util.Helpers;
 
-import javax.crypto.Cipher;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -51,7 +50,7 @@ public final class QzAES extends QZCoder {
 
         var cip = new FeedbackCipher(aes.copyWith(true), FeedbackCipher.MODE_CBC);
         try {
-            cip.init(Cipher.ENCRYPT_MODE, null, new IvParameterSpecNC(iv), null);
+            cip.init(RCipherSpi.ENCRYPT_MODE, null, new IvParameterSpecNC(iv), null);
         } catch (Exception e) {
             Helpers.athrow(e);
         }
@@ -63,7 +62,7 @@ public final class QzAES extends QZCoder {
 
         var cip = new FeedbackCipher(aes, FeedbackCipher.MODE_CBC);
         try {
-            cip.init(Cipher.DECRYPT_MODE, null, new IvParameterSpecNC(iv), null);
+            cip.init(RCipherSpi.DECRYPT_MODE, null, new IvParameterSpecNC(iv), null);
         } catch (Exception e) {
             Helpers.athrow(e);
         }
@@ -71,7 +70,7 @@ public final class QzAES extends QZCoder {
     }
 
     private byte[] lastKey;
-    private final RCipherSpi aes = ILCrypto.Aes();
+    private final RCipherSpi aes = CryptoFactory.AES();
     private void init(byte[] key) {
         if (Arrays.equals(lastKey, key)) return;
         lastKey = key;
@@ -104,7 +103,7 @@ public final class QzAES extends QZCoder {
         }
 
         try {
-            aes.init(Cipher.DECRYPT_MODE, realKey);
+            aes.init(RCipherSpi.DECRYPT_MODE, realKey);
         } catch (Exception e) {
             Helpers.athrow(e);
         }

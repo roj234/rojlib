@@ -15,7 +15,7 @@ import java.util.function.IntConsumer;
 
 /**
  * @author Roj234
- * @since 2023/5/14 0014 23:31
+ * @since 2023/5/14 23:31
  */
 public final class CharsetDetector implements IntConsumer, AutoCloseable {
 	private byte[] b;

@@ -5,7 +5,7 @@ import java.io.IOException;
 
 /**
  * @author Roj234
- * @since 2022/11/15 0015 22:37
+ * @since 2022/11/15 22:37
  */
 public interface CVisitor extends Closeable {
 	void value(boolean b);

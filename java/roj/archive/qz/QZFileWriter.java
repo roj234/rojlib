@@ -26,40 +26,75 @@ import static roj.reflect.Unaligned.U;
 
 /**
  * @author Roj234
- * @since 2023/3/14 0014 22:08
+ * @since 2023/3/14 22:08
  */
 public class QZFileWriter extends QZWriter {
     private int compressHeaderMin = 1;
 
     public QZFileWriter(String path) throws IOException {this(new FileSource(path));}
     public QZFileWriter(File file) throws IOException {this(new FileSource(file));}
-    public QZFileWriter(Source s) throws IOException {
-        super(s);
-        if (s.length() < 32) s.setLength(32);
-        s.seek(32);
+    /**
+     * 构建自定义数据源写入器（自动创建32字节头保留空间，并初始化为LZMA2 Level5编码器）
+     * @param source 数据源对象
+     * @throws IOException 当数据源初始化失败时抛出
+     */
+    public QZFileWriter(Source source) throws IOException {
+        super(source);
+        if (source.length() < 32) source.setLength(32);
+        source.seek(32);
         setCodec(new LZMA2());
     }
 
     /**
-     * 是否压缩头（使用最后设置的codec）
-     *  0: 是
-     * -1: 否
-     * 大于零: 文件数量大于时压缩 (默认1)
-     * 头大小正比于文件数量,但是头大小没法预先计算
+     * 设置头部压缩策略
      *
-     * 注意: 如果不需要加密文件名请设置它为false 或者调用finish前删除加密的codec
-     * 反之，需要则设为true
-     * 否则可能会出现该加密没加密或相反
+     * <p>参数说明：
+     * <ul>
+     *   <li>0: 总是压缩头部</li>
+     *   <li>-1: 永不压缩头部</li>
+     *   <li>大于0: 当文件总数超过该值时压缩头部（默认1）</li>
+     * </ul>
+     *
+     * <p>注意事项：
+     * <ul>
+     *   <li>头部大小与文件数量成正比，但无法预先计算</li>
+     *   <li>如需禁用文件名加密，应在调用{@link #finish()}前设置此值为-1或通过{@link #setCodec(QZCoder...)}移除加密编码器</li>
+     *   <li>错误设置可能导致文件内容和名称的加密策略不一致</li>
+     * </ul>
+     *
+     * @param mode 压缩策略参数
      */
-    public void setCompressHeader(int i) { compressHeaderMin = i; }
+    public void setCompressHeader(int mode) { compressHeaderMin = mode; }
 
     private List<ParallelWriter> parallelWriter;
 
     /**
-     * 注意事项：本地的QZWriter不能和parallelWriter同时写入文件
+     * 创建基于内存缓存的多线程并行写入器
+     *
+     * @return 并行写入器实例
+     * @throws IOException 当流已关闭或初始化失败时抛出
+     * @throws IllegalStateException 如果当前存在未关闭的WordBlock
+     *
+     * @see #newParallelWriter(Source)
      */
-    public final QZWriter parallel() throws IOException { return parallel(new MemorySource(DynByteBuf.allocateDirect())); }
-    public synchronized QZWriter parallel(Source cache) throws IOException {
+    public final QZWriter newParallelWriter() throws IOException {
+        return newParallelWriter(new MemorySource(DynByteBuf.allocateDirect()));
+    }
+    /**
+     * 创建自定义缓存的多线程并行写入器
+     *
+     * <p>注意事项：
+     * <ul>
+     *   <li>主写入器与并行写入器不能同时操作</li>
+     *   <li>进入多线程模式前必须{@link #flush() 关闭当前WordBlock}</li>
+     * </ul>
+     *
+     * @param cache 并行写入数据的缓存
+     * @return 并行写入器实例
+     * @throws IOException 当流已关闭或初始化失败时抛出
+     * @throws IllegalStateException 如果当前存在未关闭的WordBlock
+     */
+    public synchronized QZWriter newParallelWriter(Source cache) throws IOException {
         if (out != null) throw new IllegalStateException("进入多线程模式前需要结束QZFW的WordBlock，否则会导致文件数据损坏");
         if (finished) throw new IOException("Stream closed");
         if (parallelWriter == null)
@@ -82,17 +117,17 @@ public class QZFileWriter extends QZWriter {
     }
 
     private class ParallelWriter extends QZWriter {
-        ParallelWriter(Source s) { super(s, QZFileWriter.this); }
+        ParallelWriter(Source source) { super(source, QZFileWriter.this); }
 
         @Override
-        void closeWordBlock0() throws IOException {
+        void finishWordBlock() throws IOException {
             if (out == null) return;
 
-            super.closeWordBlock0();
+            super.finishWordBlock();
             QZFileWriter that = QZFileWriter.this;
             synchronized (that) {
-                that.s.put(s);
-                s.seek(0);
+                that.source.put(source);
+                source.seek(0);
 
                 that.blocks.addAll(blocks);
                 that.files.addAll(files);
@@ -123,24 +158,31 @@ public class QZFileWriter extends QZWriter {
                     if (parallelWriter.isEmpty()) that.notifyAll();
                 }
 
-                s.close();
+                source.close();
             }
 
             if (!removed) throw new AsynchronousCloseException();
         }
     }
 
+    /**
+     * 移除最后一个写入的WordBlock及其关联文件条目
+     *
+     * @throws IOException 当流已关闭或操作失败时抛出
+     * @throws IllegalStateException 当没有可移除的WordBlock时抛出
+     */
     public void removeLastWordBlock() throws IOException {
-        closeWordBlock();
+        flush();
 
         WordBlock b = blocks.pop();
+        if (b == null) throw new IllegalStateException("没有可移除的WordBlock");
 
         int i = files.size() - 1;
         for (; i >= 0; i--) {
-            QZEntry ent = files.get(i);
-            if (ent.block != b) break;
+            QZEntry entry = files.get(i);
+            if (entry.block != b) break;
 
-            countFlag(ent.flag, -1);
+            countFlag(entry.flag, -1);
         }
 
         files.removeRange(i+1, files.size());
@@ -148,13 +190,19 @@ public class QZFileWriter extends QZWriter {
         if ((b.hasCrc & 1) != 0) flagSum[8]--;
         flagSum[9] -= b.extraSizes.length;
 
-        if (blocks.isEmpty()) s.seek(32);
+        if (blocks.isEmpty()) source.seek(32);
         else {
             b = blocks.get(blocks.size()-1);
-            s.seek(b.offset+b.size());
+            source.seek(b.offset+b.size());
         }
     }
 
+    /**
+     * 通过名称移除空文件条目
+     *
+     * @param name 要移除的空文件名称
+     * @return 被移除的条目，未找到时返回null
+     */
     public QZEntry removeEmptyFile(String name) {
 		for (int i = 0; i < emptyFiles.size(); i++) {
 			QZEntry entry = emptyFiles.get(i);
@@ -165,6 +213,12 @@ public class QZFileWriter extends QZWriter {
 		}
         return null;
     }
+    /**
+     * 通过索引移除空文件条目
+     *
+     * @param i 要移除的条目索引（基于插入顺序）
+     * @throws IndexOutOfBoundsException 当索引越界时抛出
+     */
     public void removeEmptyFile(int i) {
         QZEntry entry = emptyFiles.remove(i);
         countFlag(entry.flag, -1);
@@ -172,6 +226,20 @@ public class QZFileWriter extends QZWriter {
     }
 
     private ByteList buf;
+    /**
+     * 结束压缩包的写入操作
+     *
+     * <p>执行流程：
+     * <ol>
+     *   <li>等待所有并行写入任务完成</li>
+     *   <li>根据压缩策略处理头部信息</li>
+     *   <li>生成最终文件校验信息</li>
+     *   <li>裁剪文件到实际数据大小（除非设置了{@link #NO_TRIM_FILE}标志）</li>
+     * </ol>
+     *
+     * @throws IOException 当流已关闭或写入失败时抛出
+     * @throws IllegalStateException 如果存在未关闭的WordBlock
+     */
     public void finish() throws IOException {
         if (finished) return;
 
@@ -189,13 +257,13 @@ public class QZFileWriter extends QZWriter {
         };
         var out = buf = new ByteList.ToStream(crcOut);
 
-        long hstart = s.position();
+        long hstart = source.position();
         try {
             if (compressHeaderMin == -1 ||
                 files.size()+emptyFiles.size() <= compressHeaderMin ||
                 coders[0] instanceof Copy) {
 
-                crcOut.out = s;
+                crcOut.out = source;
                 if ((files.size()|emptyFiles.size()) != 0)
                     writeHeader();
             } else {
@@ -206,12 +274,12 @@ public class QZFileWriter extends QZWriter {
 
                 out.flush();
                 blocks.add(metadata);
-                closeWordBlock0();
+                finishWordBlock();
                 metadata.uSize = out.wIndex();
 
-                long pos1 = s.position();
+                long pos1 = source.position();
                 blockCrc32 = CRC32s.INIT_CRC;
-                crcOut.out = s;
+                crcOut.out = source;
 
                 out.write(kEncodedHeader);
                 writeStreamInfo(hstart-32);
@@ -228,11 +296,11 @@ public class QZFileWriter extends QZWriter {
             IOUtil.closeSilently(out);
         }
 
-        long hend = s.position();
-        if ((flag&NO_TRIM_FILE) == 0 && s.length() > hend) s.setLength(hend);
+        long hend = source.position();
+        if ((flag&NO_TRIM_FILE) == 0 && source.length() > hend) source.setLength(hend);
 
         // start header
-        s.seek(0);
+        source.seek(0);
         // signature and version
         ByteList buf = IOUtil.getSharedByteBuf();
         buf.putLong(QZArchive.QZ_HEADER)
@@ -242,7 +310,7 @@ public class QZFileWriter extends QZWriter {
            .putIntLE(CRC32s.retVal(blockCrc32))
            .putIntLE(8, CRC32s.once(buf.list, 12, 20));
 
-        s.write(buf);
+        source.write(buf);
     }
 
     private void writeHeader() {
@@ -295,7 +363,7 @@ public class QZFileWriter extends QZWriter {
         ByteList w = IOUtil.getSharedByteBuf();
         for (WordBlock b : blocks) {
             var cc = b.complexCoder();
-            if (cc != null) {cc.writeCoder(b, buf);continue;}
+            if (cc != null) {cc.writeCoders(b, buf);continue;}
 
             buf.putVUInt(b.coder.length);
             // always simple codec

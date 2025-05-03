@@ -1,5 +1,6 @@
 package roj.io;
 
+import org.jetbrains.annotations.ApiStatus;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import roj.collect.SimpleList;
@@ -17,7 +18,6 @@ import roj.util.NativeMemory;
 import java.io.*;
 import java.net.URL;
 import java.nio.ByteBuffer;
-import java.nio.channels.ClosedByInterruptException;
 import java.nio.channels.FileChannel;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
@@ -26,8 +26,11 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
+import java.util.concurrent.LinkedBlockingDeque;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
+
+import static roj.reflect.Unaligned.U;
 
 /**
  * @author Roj234
@@ -37,6 +40,8 @@ public final class IOUtil {
 	public static final FastThreadLocal<IOUtil> SharedBuf = FastThreadLocal.withInitial(IOUtil::new);
 
 	// region ThreadLocal part
+	public final byte[] singleByteBuffer = new byte[1];
+
 	public final CharList charBuf = new CharList(1024);
 	public final ByteList byteBuf = new ByteList(1024);
 
@@ -67,6 +72,22 @@ public final class IOUtil {
 
 	public static String encodeHex(byte[] bytes) {return TextUtil.bytes2hex(bytes, getSharedCharBuf()).toString();}
 	public static byte[] decodeHex(CharSequence str) {return TextUtil.hex2bytes(str, getSharedByteBuf()).toByteArray();}
+
+	public static void writeSingleByteHelper(OutputStream out, int b) throws IOException {
+		byte[] b1 = SharedBuf.get().singleByteBuffer;
+		b1[0] = (byte) b;
+		out.write(b1, 0, 1);
+	}
+	public static int readSingleByteHelper(InputStream in) throws IOException {
+		byte[] b1 = SharedBuf.get().singleByteBuffer;
+		return in.read(b1, 0, 1) < 0 ? -1 : b1[0] & 0xFF;
+	}
+
+	public static IOException rethrowAsIOException(InterruptedException e) {
+		var ex = new InterruptedIOException();
+		ex.setStackTrace(e.getStackTrace());
+		return ex;
+	}
 
 	@Deprecated public ByteList wrap(byte[] b) { return slice.setR(b,0,b.length); }
 	@Deprecated public ByteList wrap(byte[] b, int off, int len) { return slice.setR(b,off,len); }
@@ -537,14 +558,67 @@ public final class IOUtil {
 			try {
 				waiter.wait();
 			} catch (InterruptedException e) {
-				var ex2 = new ClosedByInterruptException();
-				try {
-					closeable.close();
-				} catch (Throwable ex) {
-					ex2.addSuppressed(ex);
-				}
-				throw ex2;
+				closeSilently(closeable);
+				throw IOUtil.rethrowAsIOException(e);
 			}
 		}
+	}
+
+	private static long pendingKeys_offset;
+	/**
+	 * 创建一个同步的{@link WatchService}，不需要独立轮询线程，直接接收事件回调。<br>
+	 * 当JDK版本不支持时，将自动创建守护线程进行轮询。
+	 *
+	 * <p><b>警告：</b>回调必须遵守以下约束：
+	 * <ol>
+	 *   <li>不应进行耗时操作——可能造成事件丢失</li>
+	 *   <li>禁止在回调调用{@link WatchService#close()}或{@link WatchKey#cancel()}——必然导致死锁</li>
+	 *   <li>禁止在任何线程调用{@link WatchService#take()}或{@link WatchService#poll()}——会无限期等待</li>
+	 * </ol>
+	 *
+	 * @param threadName 当需要创建轮询线程时使用的名称（null时自动生成）
+	 * @param consumer 事件消费者，接收WatchKey并处理文件事件
+	 * @throws IOException 如果WatchService创建失败
+	 */
+	@ApiStatus.Experimental
+	public static WatchService syncWatchPoll(String threadName, Consumer<WatchKey> consumer) throws IOException {
+		var watcher = FileSystems.getDefault().newWatchService();
+		try {
+			long off;
+			if ((off=pendingKeys_offset) == 0) {
+				off = pendingKeys_offset = ReflectionUtils.fieldOffset(Class.forName("sun.nio.fs.AbstractWatchService"), "pendingKeys");
+			}
+			if (off > 0) {
+				U.putObject(watcher, off, new LinkedBlockingDeque<>() {
+					@Override
+					public boolean offer(Object o) {
+						consumer.accept((WatchKey) o);
+						return true;
+					}
+				});
+				return watcher;
+			}
+		} catch (Exception e) {
+			pendingKeys_offset = -1;
+		}
+
+		var t = new Thread(() -> {
+			while (true) {
+				WatchKey key;
+				try {
+					key = watcher.take();
+					if (key.watchable() == null) break;
+				} catch (Exception e) {
+					break;
+				}
+				consumer.accept(key);
+			}
+		});
+		if (threadName == null) threadName = "FileWatcher2-"+watcher.hashCode();
+		t.setName(threadName);
+		t.setDaemon(true);
+		t.start();
+
+		return watcher;
 	}
 }

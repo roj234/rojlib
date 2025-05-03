@@ -13,7 +13,7 @@ import java.util.zip.Deflater;
 
 /**
  * @author Roj234
- * @since 2023/3/14 0014 8:04
+ * @since 2023/3/14 8:04
  */
 public abstract class QZCoder {
 	private static final MyHashMap<ByteList, QZCoder> coders = new MyHashMap<>();
@@ -34,7 +34,7 @@ public abstract class QZCoder {
 	void writeOptions(DynByteBuf buf) {}
 	void readOptions(DynByteBuf buf, int length) throws IOException {}
 
-	public static QZCoder create(DynByteBuf buf, int len) {
+	public static QZCoder create(DynByteBuf buf) {
 		if (coders.isEmpty()) {
 			synchronized (coders) {
 				if (coders.isEmpty()) {
@@ -52,13 +52,8 @@ public abstract class QZCoder {
 			}
 		}
 
-		int idx = buf.wIndex();
-		int end = buf.rIndex+len;
-		buf.wIndex(end);
 		var coder = coders.get(buf);
-		buf.wIndex(idx);
-		if (coder == null) return new Unknown(buf.readBytes(len));
-		buf.rIndex = end;
+		if (coder == null) return new Unknown(buf.toByteArray());
 		return coder.factory();
 	}
 }

@@ -4,6 +4,7 @@ import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.NotNull;
 import roj.reflect.Bypass;
 import roj.reflect.Java22Workaround;
+import roj.util.ArrayUtil;
 import roj.util.DynByteBuf;
 
 import java.util.zip.CRC32;
@@ -27,12 +28,14 @@ public class CRC32s {
 			crcTab[i] = c;
 		}
 	}
+	public static int updateS(int crc, int b) { return (crc >>> 8) ^ crcTab[(crc ^ (b & 0xFF)) & 0xFF]; }
 
 	@Contract(pure = true)
 	public static int once(DynByteBuf buf, int off, int len) {
-		if ((off| len|(off+len)) < 0 || off + len > buf.readableBytes())
-			throw new IndexOutOfBoundsException("off="+off+",len="+len+",cap="+buf.readableBytes());
-		return buf.isDirect() ? CRC32s.once(buf.address() + off, len) : CRC32s.once(buf.array(), buf.arrayOffset() + off, len);
+		ArrayUtil.checkRange(buf.wIndex(), off, len);
+		return buf.isDirect()
+				? once(buf.address() + off, len)
+				: once(buf.array(), buf.arrayOffset() + off, len);
 	}
 	@Contract(pure = true)
 	public static int once(@NotNull byte[] b) {return once(b, 0, b.length);}
@@ -67,21 +70,19 @@ public class CRC32s {
 	@Contract(pure = true)
 	public static int update(int crc, int b) { return HWAC != null ? HWAC.update(crc, b) : updateS(crc, b); }
 
-	public static int updateS(int crc, int b) { return (crc >>> 8) ^ crcTab[(crc ^ (b & 0xFF)) & 0xFF]; }
-
 	public static int retVal(int crc) { return HWAC != null ? crc : ~crc; }
 
 	@Java22Workaround
-	private interface CRC32h {
+	private interface hw {
 		int update(int crc, int b);
 		int updateBytes(int crc, byte[] b, int off, int len);
 		int updateByteBuffer(int alder, long addr, int off, int len);
 	}
-	private static final CRC32h HWAC;
+	private static final hw HWAC;
 	static {
-		CRC32h hwac;
+		hw hwac;
 		try {
-			hwac = Bypass.builder(CRC32h.class).inline().delegate(CRC32.class, "update", "updateBytes", "updateByteBuffer").build();
+			hwac = Bypass.builder(hw.class).inline().delegate(CRC32.class, "update", "updateBytes", "updateByteBuffer").build();
 		} catch (Exception e) {
 			e.printStackTrace();
 			hwac = null;

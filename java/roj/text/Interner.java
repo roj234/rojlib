@@ -9,7 +9,7 @@ import static roj.collect.IntMap.UNDEFINED;
  * Visitor模式可能也需要对于value执行此操作，但不是必须的
  * 目前使用LFU缓存，也许LRU是更好的选择
  * @author Roj234
- * @since 2024/7/16 0016 1:13
+ * @since 2024/7/16 1:13
  */
 public final class Interner extends LFUCache<CharSequence,String> {
 	private static final ThreadLocal<Interner> instances = ThreadLocal.withInitial(Interner::new);

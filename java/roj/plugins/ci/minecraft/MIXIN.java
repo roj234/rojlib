@@ -1,18 +1,14 @@
 package roj.plugins.ci.minecraft;
 
 import org.jetbrains.annotations.Nullable;
-import roj.asm.ClassNode;
-import roj.asm.MethodNode;
-import roj.asm.RawNode;
+import roj.asm.*;
 import roj.asm.annotation.AList;
 import roj.asm.annotation.AnnVal;
 import roj.asm.annotation.Annotation;
 import roj.asm.attr.Annotations;
 import roj.asm.cp.CstNameAndType;
-import roj.asm.type.Desc;
 import roj.asm.type.Type;
-import roj.asm.util.ClassUtil;
-import roj.asm.util.Context;
+import roj.asmx.Context;
 import roj.asmx.mapper.Mapper;
 import roj.collect.SimpleList;
 import roj.plugins.ci.FMD;
@@ -56,9 +52,9 @@ public class MIXIN implements Processor {
 		return classes;
 	}
 
-	private void process(ClassNode data, String dest, List<? extends RawNode> nodes) {
+	private void process(ClassNode data, String dest, List<? extends Member> nodes) {
 		for (int i = 0; i < nodes.size(); i++) {
-			RawNode node = nodes.get(i);
+			Member node = nodes.get(i);
 
 			List<Annotation> list = Annotations.getAnnotations(data.cp, node, true);
 			for (int j = 0; j < list.size(); j++) {
@@ -88,11 +84,11 @@ public class MIXIN implements Processor {
 					owner = string.substring(1, klass).replace('.', '/');
 					int pvrvm = string.indexOf('(', klass);
 
-					Desc desc = new Desc(owner,  string.substring(klass+1, pvrvm), string.substring(pvrvm));
+					MemberDescriptor desc = new MemberDescriptor(owner,  string.substring(klass+1, pvrvm), string.substring(pvrvm));
 
 					String s = tryMap(desc.owner, desc, false);
 					if (s != null) {
-						at.put("target", AnnVal.valueOf("L"+desc.owner+";"+s+desc.param));
+						at.put("target", AnnVal.valueOf("L"+desc.owner+";"+s+desc.rawDesc));
 					} else {
 						FMD.LOGGER.warn("无法为对象{}.{}找到映射", desc);
 					}
@@ -116,7 +112,7 @@ public class MIXIN implements Processor {
 		}
 	}
 
-	private String map(String dest, RawNode node, String altName) {
+	private String map(String dest, Member node, String altName) {
 		if (altName != null && altName.equals("/")) return node.name();
 
 		String nodeDesc = node.rawDesc();
@@ -129,16 +125,16 @@ public class MIXIN implements Processor {
 			}
 		}
 
-		Desc desc = ClassUtil.getInstance().sharedDC;
+		MemberDescriptor desc = ClassUtil.getInstance().sharedDesc;
 		desc.owner = dest;
 		desc.name = altName == null || altName.isEmpty() ? node.name() : altName;
-		desc.param = m.checkFieldType || nodeDesc.startsWith("(") ? nodeDesc : "";
+		desc.rawDesc = m.checkFieldType || nodeDesc.startsWith("(") ? nodeDesc : "";
 
 		boolean inputWithDesc = false;
 		int i1 = desc.name.indexOf('(');
 		if (i1 >= 0) {
 			inputWithDesc = true;
-			desc.param = desc.name.substring(i1);
+			desc.rawDesc = desc.name.substring(i1);
 			desc.name = desc.name.substring(0, i1);
 		}
 
@@ -146,8 +142,8 @@ public class MIXIN implements Processor {
 	}
 
 	@Nullable
-	private String tryMap(String dest, Desc desc, boolean inputWithDesc) {
-		Map<Desc, String> map = desc.param.startsWith("(") ? m.getMethodMap() : m.getFieldMap();
+	private String tryMap(String dest, MemberDescriptor desc, boolean inputWithDesc) {
+		Map<MemberDescriptor, String> map = desc.rawDesc.startsWith("(") ? m.getMethodMap() : m.getFieldMap();
 
 		List<String> parents = m.getSelfSupers().getOrDefault(dest, Collections.emptyList());
 		int i = 0;

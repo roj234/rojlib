@@ -1,39 +1,50 @@
-# Lava™编译器  (WIP)
-![lavac](images%2Flavac.png)* 纯属玩梗，并未注册任何商标
+# Lava™ 编译器 (WIP)
 
-## 用前须知
-Lava编译器并非旨在取代Javac，其API主要为修改Java语法设计（个人认为比Javac的API更优）。
-与Javac不同，Lava编译器不支持所有Javac的API和部分Java语言特性。
-因此，如果您习惯使用编译插件来辅助编码，Lava编译器可能无法支持。
-对于那些习惯使用特定语言特性的人来说，迁移代码到Lava编译器可能并不十分顺畅。
+![lavac](images/lavac.png)
+> *注：本项目纯属玩梗，未注册任何商标*
+
+## 使用须知
+
+Lava 编译器并非 Javac 的替代品，其 API 专为语法扩展设计（相比 Javac API 更易扩展）。请注意：
+- 不支持完整的 Javac API 和部分 Java 语言特性
+- 编译插件生态兼容性有限
+- 特定语法特性的迁移可能存在适配成本
 
 ## 绝赞语法
-### 参数调用 (已实现)
-  使用 `method({参数名:表达式,(可叠加)})` 来按参数调用方法
+
+### 🎯 参数命名调用
 ```java
 List.of({e1: null, e2: 3});
 List.of(null, null, {e3: null, e4: null})
 ```
-该表达式只能位于方法的最后一个参数  
-如果方法有多个重载，因参数不匹配产生的错误可能不够直观
-### synchronized扩展 (已实现)
+- 仅支持作为方法的最后一个参数
+- 重载方法可能产生非常不直观的推断错误
+
+### 🔒 synchronized 扩展
 **警告：修改默认行为**  
-通过`LavaFeatures.SYNCHRONIZED_LOCK`标记启用  
-开启后，当synchronized对Lock的子类使用时，会调用其lock和unlock方法，而不是monitorEnter/exit  
-你不再需要使用try-finally加锁和解锁了
-### for-else (已实现)
-这个语法来自python, 目前只有for支持, while和do-while不支持  
-for之后可以接else
+通过 `LavaFeatures.SYNCHRONIZED_LOCK` 启用：
 ```java
-for (int i = 0; i < arr.length; i++) {
-  // do something
-  if (i == 8) break;
-} else {
-  System.out.println("循环未开始，或未通过break终止");
+synchronized(lockInstance) {
+    // 自动调用 lock()/unlock() 代替 monitorEnter/Exit
 }
 ```
-### 多返回值 (已实现)
-一个方法可以返回多个返回值（不超过256个）
+你不再需要使用try-finally加锁和解锁了
+
+### 🔁 for-else (部分实现)
+这个语法来自python, 目前只有for支持, while和do-while不支持
+```java
+for (int i=0; i<arr.length; i++) {
+    if (i == 8) break;
+} else {
+    System.out.println("循环未通过 break 终止");
+}
+```
+
+### 🎁 多返回值
+一个方法可以返回多个值。  
+其中基本类型占用的字节数不能超过1KB(256个int/128个long)，对象类型无限制。  
+使用ThreadLocal对象，而非浪费内存的不可变对象，所以
+禁止套娃 (带编译期错误)
 ```java
 static [int, long, String] multiReturnTest() {
     return {3, 5, "233"};
@@ -42,26 +53,29 @@ static [int, long, String] multiReturnTest() {
 var [a, b, c] = multiReturnTest();
 var a = multiReturnTest()[0];
 ```
-### 分支完全忽略 (已实现)
-如果一个if、while、do-while或switch语句处理的是立即或非立即常量，那么比较会在编译期完成  
+
+### ⚡ 分支忽略
+如果一个块选择语句（if、while、switch）的值是编译期常量，那么比较会在编译期完成  
+for、do-while等其它语句也会根据常量进行一定优化  
 下列代码能够通过编译  
-它的目的是作为编译前预处理器（宏）的简易替代  
-你可以使用static final变量，或通过编译参数定义一些编译期常量  
-如此这般，就可以方便用到多版本内部代码的应用
+可以方便支持多版本依赖的项目
 ```java
 if (false) {
- fsdjghsdfnnv95&%^&%^&fnnvbnvbada;ear
+  /* 不可能的分支将被忽略 */
+  fsdjghsdfnnv95&%^&%^&fnnvbnvbada;ear
 } else {  
- System.out.println("1");
+  System.out.println("1");
 }
 ```
-### List foreach (已实现)
-针对同时实现List和RandomAccess接口的类，其foreach循环将按顺序访问而非使用Iterator进行编译。  
-若遇到这种类，并且需要在多线程环境中进行访问（必须使用Iterator），请考虑使用【...for】关键字以禁用该优化。
-### 参数默认值 (已实现)
+
+### 📜 For-each优化
+针对【同时实现List和RandomAccess接口】，或具有【RandomAccessible】注解的类，其foreach循环将按顺序访问而非使用Iterator进行编译。  
+若要在多线程环境中迭代（必须使用Iterator），请考虑使用 DisableOptimization 注解以禁用该优化。
+
+###  🎛️ 参数默认值
   在方法定义处使用形如 `method(int a = 3)` 的语句来为参数指定默认值  
   默认值可以是*任意*表达式，实际上它相当于一个宏，你可以使用仅在函数调用上下文可用的变量  
-  如下代码会*成功编译*
+  如下代码将**编译成功**
 ```java
 static void test(int a = 3, Object o = some_variable) {
     // ...
@@ -72,29 +86,39 @@ static void test(int a = 3, Object o = some_variable) {
     test(5);
 }
 ```
-### lambdaify
-  只有一个抽象方法的抽象类（不是接口），也可以使用lambda(不过会编译成new匿名类)  
-  没有抽象方法的可继承类，可以使用*什么*指定一个方法？
-### 覆盖隐式方法 (已实现)
+
+### 🦄 单方法抽象类 Lambda (WIP)
+  只有一个抽象方法的抽象类（不是接口），也可以使用lambda(不过会编译成new匿名类)
+```java
+AbstractType obj = () -> System.out.println("Magic!");
+```
+  TODO: 没有抽象方法的可继承类，使用*什么*指定一个方法？
+
+### 覆盖隐式方法
 所有隐式生成的方法，例如Enum.valueOf和values都可以由你手动覆盖，覆盖后编译器不再会生成相同的方法  
-访问权限修饰符必须和它应有的相同，否则会报错
-### EasyMap (已实现)
+访问权限修饰符必须和它应有的相同，否则会编译失败
+
+### MapLiteral / ListLiteral
   使用类似PHP的语法来构建Map&lt;?,?&gt;
 ```java
 var map = [ 1+1 -> 3+4 , "mixed type" -> also.can.be.used() ]; // Map<Object, unknown> (可变)
 var list = [1, 2, 3]; // List<Integer> (不可变)
 ```
-### goto语句 (部分实现)
+
+### 跳转
   使用goto语句在任意标签之间跳转  
   * 警告，由于VisMap并没有那么可靠，goto可能会导致编译器在StackMapTable生成阶段崩溃
-### 基本类型函数 (已实现)
+
+### 基本类型附加函数
   12345 . toHexString() => Integer.toHexString (static)
-### Switchable (已实现)
+
+### Switch扩展
 - Lavac生成的switch语句具有更小的文件大小和更优越的性能。
-- 通过在任何类上加上@Switchable注解，该类可以像枚举一样进行switch操作。
+- 任何类都可以像枚举一样进行switch操作。
 - 时间复杂度为O(1)。
-- 使用【...switch】关键字可以强制启用此功能，即使没有Switchable注解。
-- 支持基本数据类型和非编译时常量。
+- 使用@Switchable注解改变默认行为
+- 使用 DisableOptimization 注解禁用此功能。
+- 支持基本数据类型和运行时常量。
 ```java
         var v = Test.A;
         switch (v) {
@@ -106,7 +130,8 @@ var list = [1, 2, 3]; // List<Integer> (不可变)
 #### SwitchEx (WIP)
   看到隔壁CSharp那么多switch的语法糖，我给switch加了一个goto default  
   你可以用goto default跳到default分支的开始，不能在default分支中使用
-### 操作符重载 (已实现)
+
+### 操作符重载
   重载已有的运算符，或添加自定义的运算符，它们能被替换为任意表达式，还支持右结合  
   允许重载的运算符（重载优先级最低，你无法覆盖!true这种运算）：  
   * 二元运算符 + - * / % ** << >> >>> & | ^ && || ?? == != < >= > <=
@@ -120,16 +145,18 @@ var list = [1, 2, 3]; // List<Integer> (不可变)
   * 取值 . ?.
   * 扩展 ...
   * 方法引用 ::
-### 可选连接操作符 (已实现)
+
+### 可选连接操作符
 ```javascript
  var nullable = a?.b?.c?.d;
 ```
 任意为null => 结果为null  
 支持方法调用 a?.b()?.c;
-### 基本类型泛型
-  通过模板生成基本类型的泛型类，在运行时节约内存  
-### 连续泛型推断 (已实现)
 
+### 基本类型泛型 (WIP)
+  通过模板生成基本类型的泛型类，在运行时节约内存  
+
+### 连续泛型推断
 ```java
 public class Test {
     static <T> T inferType(T example) { return example; }
@@ -147,32 +174,39 @@ public class Test {
     }
 }
 ```
-### finally优化 (已实现)
+
+### finally优化
   在多个嵌套的finally块中，防止代码体积暴增
-### 隐式导入|ImportAny (已实现)
+
+### 隐式导入|ImportAny (部分实现)
 使用import *开启  
 若全局没有同名的类，则该类视为已导入，妈妈再也不要去操心import了  
 你还可以使用 import module java.base  仅导入一个模块下所有export的包  
 使用该功能无需激活模块编译
-### 受信执行环境|Package-Restricted (已实现)
+
+### 受信执行环境|Package-Restricted
 在任何import语句之前，可以插入package-restricted关键字。  
 启用此选项后，只能使用通过import语句导入的类。  
 若需取消导入特定类（可能是由于使用import *通配符导入），可通过使用import - className来实现。此外，可以省略减号旁边的空格。  
 在使用方法返回值或字段时，同样会对它们的类型进行导入检查，从而有效地防止某些潜在的漏洞。
-### 别名 (已实现)
+
+### 别名导入
   import a.b as c;  
   或  
   import static a.b as c;
-### with (已实现)
+
+### with
 ```javascript
 with (System.out) {
     println("hello world!");
 }
 ```
 如果需要对某个类静态的使用，你可以 with (X.class) {} 或者，简单的import static
-### 可选的分号 (已实现)
+
+### 可选的分号
 大部分语句可以省略分号  
-但是目前来说，这会造成diagnostic的位置漂移到下一行
+缺点：目前这会造成diagnostic的位置漂移到下一行
+
 ### defer (已实现)
 在代码块结束时，可以通过try-with-resource形式执行多个表达式。  
 如果其中一个表达式发生错误，不会影响其他表达式的执行，所有异常会一起抛出。  
@@ -192,12 +226,14 @@ try (
     
 }
 ```
-### 尾递归优化 (已实现)
+
+### 尾递归优化
 在return中调用当前函数会被转换为循环而不是再次调用
 * 对于不可继承的方法（含有任意修饰符：static，final，private），它是自动启用的
 * 对于其它方法，你可以使用@Tailrec注解来启用优化
 * 你也可以使value=false来禁用优化
-### 生成器函数 (已实现)
+
+### 生成器函数
 * 定义 (_async是一个修饰符，并且是必须的)
 ```java
     _async static Generator<String> generatorTest(String inputArg) {
@@ -218,6 +254,7 @@ try (
 ```
 * 优先级低于switch中的yield
 * 通过匿名类实现，可参考有栈协程，由于这个东西，它貌似不再那么牛逼了
+
 ### PseudoType (伪类型)
 相关API：
   * Type#DirtyHacker
@@ -237,6 +274,7 @@ System.out.println(""+number);
 ```
 ### async / await
    Promise (WIP)
+
 # 扩展功能 (通过Lavac插件API实现)
 ## Annotations插件
 ### @Attach
@@ -337,20 +375,28 @@ RtUtil.unpackI(RtUtil.pack(new byte[] { ... }));
 ## TypeDecl插件
 ### 加入了支持编译期泛型推断的__Type( type )表达式
 
+## 🌟 本机映像
+我们计划在未来版本中支持Lava语言直接编译到二进制(x86/arm/LLVM asm)。  
+计划（未来可能更改）：
+- 这不是GraalVM，仅仅是语法相同的Lava——这真香。
+- 你能写汇编
+- 本机标准库将由我们实现，而不是JVM
+- 提供手动内存管理接口——例如析构函数以及free
+- 可选简单的引用计数&STW GC
+- lambda接口可以转换为函数指针
+- 提供统一的确定性反射API —— 参考VDOM在SSR中的应用
+- 预计将在2027年内提供实验性支持。
+
 # 不支持的特性
 ### 开发中
 * 非静态类，以及和它相关的泛型调用
-* instanceof cast
+* instanceof cast (VisMap)
+* 方法中的具名类
 
 ### 无支持计划
-* 方法中的具名类
 * java compiler API
 
-### 已支持
-* 匿名类
-* 记录
-* 枚举
-* lambda
+当前正在解决反射和动态代理的兼容性问题，预计将在 2024 Q4 提供实验性支持。
 
 ## 项目结构
 ### 解析核心

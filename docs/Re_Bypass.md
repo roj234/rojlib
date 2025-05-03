@@ -38,8 +38,6 @@
     }
 ```
 
-*在java17或更高版本需要添加JVM参数（JVM太安全了）
-
 ### 定义接口
 由于不能直接写出方法参数的类型（它们会随着NMS版本改变），你需要使用模糊匹配(all-object)模式, 它的特点是所有非基本类型都需要表示为Object
 如果不使用模糊匹配模式，可以和调用的参数一样
@@ -89,7 +87,7 @@ class Example {
 大部分参数同上，介绍不同的：
 * flags: 第i项是true时，代表使用‘直接’访问  
   也就是静态绑定(INVOKESPECIAL)到target  
-  不懂静态绑定是啥的话传入`DirectAccessor.EMPTY_BITS`
+  不懂静态绑定是啥的话传入`Bypass.EMPTY_BITS`
 
 
 * fuzzyMode 指的是 模糊匹配(all-object) 模式  

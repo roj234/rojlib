@@ -1,6 +1,6 @@
 package roj.plugins.web.template;
 
-import roj.collect.XHashSet;
+import roj.collect.XashMap;
 import roj.compiler.LambdaLinker;
 import roj.compiler.context.GlobalContext;
 import roj.compiler.context.JavaCompileUnit;
@@ -27,7 +27,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * @author Roj234
- * @since 2024/3/3 0003 3:27
+ * @since 2024/3/3 3:27
  */
 public class MyTemplateEngine {
 	private final GlobalContext compiler = new GlobalContext();
@@ -38,8 +38,8 @@ public class MyTemplateEngine {
 	@Setter
 	private TemplateConfig defaultConfig = new TemplateConfig();
 
-	private static final XHashSet.Shape<File, Cache> SHAPE = XHashSet.shape(File.class, Cache.class, "file", "_next");
-	private final XHashSet<File, Cache> cache = SHAPE.create();
+	private static final XashMap.Builder<File, Cache> BUILDER = XashMap.builder(File.class, Cache.class, "file", "_next");
+	private final XashMap<File, Cache> cache = BUILDER.create();
 
 	static final class Cache {
 		Cache _next;

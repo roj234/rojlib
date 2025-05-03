@@ -2,8 +2,8 @@ package roj.plugins.bkcrack;
 
 import roj.collect.MyBitSet;
 import roj.collect.SimpleList;
-import roj.concurrent.ITask;
-import roj.concurrent.TaskHandler;
+import roj.concurrent.Task;
+import roj.concurrent.TaskExecutor;
 import roj.io.FastFailException;
 import roj.ui.EasyProgressBar;
 import roj.util.ByteList;
@@ -14,9 +14,9 @@ import static roj.plugins.bkcrack.Macros.*;
 
 /**
  * @author Roj234
- * @since 2022/11/13 0013 17:52
+ * @since 2022/11/13 17:52
  */
-class PlainPassRecover implements ITask {
+class PlainPassRecover implements Task {
 	final int[] xlist, ylist, zlist;
 
 	// 256
@@ -215,7 +215,7 @@ class PlainPassRecover implements ITask {
 	}
 
 	/// Try to recover the password associated with the given keys
-	static byte[] recoverPassword(TaskHandler pool, Cipher c, byte[] charset, int minLength, int maxLength) {
+	static byte[] recoverPassword(TaskExecutor pool, Cipher c, byte[] charset, int minLength, int maxLength) {
 		Manager w = new Manager(c, charset);
 
 		for(int length = minLength; length <= maxLength; length++) {

@@ -12,7 +12,7 @@ import java.util.List;
  * 被解析阶段的{@link roj.compiler.ast.expr.Invoke}调用，可以修改或替换它
  * 该属性不会序列化
  * @author Roj234
- * @since 2024/4/15 0015 10:35
+ * @since 2024/4/15 10:35
  */
 public abstract class InvokeHook extends Attribute {
 	public static final String NAME = "LavaMethodHook";

@@ -5,7 +5,7 @@ import static roj.plugins.bkcrack.Macros.MASK_10_32;
 
 /**
  * @author Roj234
- * @since 2022/11/12 0012 17:25
+ * @since 2022/11/12 17:25
  */
 final class CrcTable {
 	static final int[] inverse = new int[256];

@@ -12,7 +12,7 @@ import java.util.Objects;
 
 /**
  * @author Roj234
- * @since 2024/2/2 0002 3:59
+ * @since 2024/2/2 3:59
  */
 public final class MySaltedHash {
 	private final SecureRandom srnd;
@@ -73,7 +73,7 @@ public final class MySaltedHash {
 	// may use Argon2id
 	private DirectByteList rawHash(byte[] pass, byte[] salt, int cpuCost, int memCost) {
 		Blake3 b3 = hasher;
-		b3.setSignKey(salt);
+		b3.init(salt);
 
 		var tmp = DirectByteList.allocateDirect(64 + (memCost <<= 8));
 		int rounds = cpuCost << 8;

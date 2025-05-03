@@ -2,7 +2,7 @@ package roj.plugins.kuropack;
 
 /**
  * @author Roj234
- * @since 2024/3/17 0017 11:08
+ * @since 2024/3/17 11:08
  */
 final class ArrayCacheN_ {
 	static byte[] getByteArray(int size, boolean x) { return new byte[size]; }

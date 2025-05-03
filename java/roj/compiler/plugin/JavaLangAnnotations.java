@@ -1,7 +1,7 @@
 package roj.compiler.plugin;
 
 import roj.asm.Attributed;
-import roj.asm.IClass;
+import roj.asm.ClassDefinition;
 import roj.asm.MethodNode;
 import roj.asm.annotation.Annotation;
 import roj.asm.attr.UnparsedAttribute;
@@ -15,7 +15,7 @@ import java.util.Set;
 
 /**
  * @author Roj234
- * @since 2025/4/3 0003 23:03
+ * @since 2025/4/3 23:03
  */
 public class JavaLangAnnotations implements Processor {
 	@Override
@@ -24,7 +24,7 @@ public class JavaLangAnnotations implements Processor {
 	}
 
 	@Override
-	public void handle(LocalContext ctx, IClass file, Attributed node, Annotation a) {
+	public void handle(LocalContext ctx, ClassDefinition file, Attributed node, Annotation a) {
 		var annotation = (AnnotationPrimer) a;
 		switch (annotation.type()) {
 			case "java/lang/Override" -> {

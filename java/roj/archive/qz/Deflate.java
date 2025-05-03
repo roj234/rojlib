@@ -12,7 +12,7 @@ import java.util.zip.DeflaterOutputStream;
 
 /**
  * @author Roj234
- * @since 2023/5/23 0023 14:32
+ * @since 2023/5/23 14:32
  */
 public final class Deflate extends QZCoder {
 	public Deflate(int level) { this.level = level; }

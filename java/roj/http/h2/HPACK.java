@@ -18,7 +18,7 @@ import static roj.http.h2.H2Exception.ERROR_PROTOCOL;
 
 /**
  * @author Roj234
- * @since 2022/10/8 0008 6:52
+ * @since 2022/10/8 6:52
  */
 final class HPACK {
 	private static Field F(String k) {return F(k, "");}

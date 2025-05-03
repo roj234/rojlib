@@ -9,7 +9,7 @@ import java.net.InetSocketAddress;
 
 /**
  * @author Roj234
- * @since 2023/1/28 0028 1:23
+ * @since 2023/1/28 1:23
  */
 final class Stun extends IpGetter {
 	private final int[] lastGood = {-1,-1};

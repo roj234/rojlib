@@ -2,14 +2,13 @@ package roj.compiler.resolve;
 
 import org.jetbrains.annotations.Nullable;
 import org.jetbrains.annotations.Range;
-import roj.asm.IClass;
+import roj.asm.ClassDefinition;
 import roj.asm.Opcodes;
 import roj.asm.insn.CodeWriter;
 import roj.asm.type.*;
 import roj.collect.*;
 import roj.compiler.asm.Asterisk;
 import roj.compiler.context.GlobalContext;
-import roj.compiler.context.LocalContext;
 import roj.concurrent.OperationDone;
 import roj.text.CharList;
 
@@ -29,7 +28,7 @@ import static roj.asm.type.Type.*;
 /**
  * 类型转换
  * @author Roj234
- * @since 2023/5/18 0018 11:11
+ * @since 2023/5/18 11:11
  */
 public class TypeCast {
 	// 成功: 返回总distance最小的结果
@@ -150,7 +149,6 @@ public class TypeCast {
 	// endregion
 
 	public GlobalContext context;
-	public LocalContext ctx;
 	public Map<String, List<IType>> typeParams = Collections.emptyMap();
 	// only used in resolveType
 	public Map<String, List<IType>> typeParamsForTargetType;
@@ -344,12 +342,12 @@ public class TypeCast {
 		genericCastCheck:
 		if (to.owner() != null && from.owner() != null) {
 			if (tc == null) {
-				tc = ctx.inferGeneric(to, from.owner());
+				tc = context.inferGeneric(to, from.owner());
 				if (tc == null) break genericCastCheck;
 			}
 
 			if (fc == null) {
-				fc = ctx.inferGeneric(from, to.owner());
+				fc = context.inferGeneric(from, to.owner());
 				if (fc == null) break genericCastCheck;
 			}
 
@@ -509,8 +507,8 @@ public class TypeCast {
 		return checkInheritable(from, to);
 	}
 	public Cast checkInheritable(Type from, Type to) {
-		IClass fromClass = context.getClassInfo(from.owner);
-		IClass toClass = context.getClassInfo(to.owner);
+		ClassDefinition fromClass = context.getClassInfo(from.owner);
+		ClassDefinition toClass = context.getClassInfo(to.owner);
 
 		if (fromClass == null) return ERROR(E_NODATA);
 		if (toClass == null) return ERROR(E_NODATA);

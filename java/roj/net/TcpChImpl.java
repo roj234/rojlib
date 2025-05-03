@@ -1,6 +1,5 @@
 package roj.net;
 
-import roj.io.NIOUtil;
 import roj.io.buf.BufferPool;
 import roj.reflect.Bypass;
 import roj.reflect.ReflectionUtils;
@@ -72,7 +71,7 @@ class TcpChImpl extends MyChannel {
 	@Override
 	public <T> MyChannel setOption(SocketOption<T> k, T v) throws IOException {
 		if (k == ServerLaunch.TCP_RECEIVE_BUFFER) buffer = (Integer) v;
-		else if (k == StandardSocketOptions.SO_REUSEPORT) NIOUtil.setReusePort(sc, (boolean) v);
+		else if (k == StandardSocketOptions.SO_REUSEPORT) Net.setReusePort(sc, (boolean) v);
 		else sc.setOption(k, v);
 		return this;
 	}

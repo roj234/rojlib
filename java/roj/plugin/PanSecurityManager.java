@@ -1,15 +1,15 @@
 package roj.plugin;
 
-import roj.asm.Parser;
+import roj.asm.ClassUtil;
+import roj.asm.ClassView;
+import roj.asm.MemberDescriptor;
 import roj.asm.cp.Constant;
 import roj.asm.cp.CstClass;
 import roj.asm.cp.CstUTF;
-import roj.asm.type.Desc;
 import roj.asm.type.TypeHelper;
-import roj.asm.util.ClassUtil;
-import roj.asm.util.Context;
-import roj.asmx.ITransformer;
+import roj.asmx.Context;
 import roj.asmx.MethodHook;
+import roj.asmx.Transformer;
 import roj.collect.*;
 import roj.reflect.ClassDefiner;
 import roj.reflect.ILSecurityManager;
@@ -39,7 +39,7 @@ import java.util.List;
 /**
  * 这只是一个示例，应该还有不少文件访问函数没有包括在内
  * @author Roj234
- * @since 2023/8/4 0004 15:36
+ * @since 2023/8/4 15:36
  */
 public final class PanSecurityManager extends MethodHook {
 	static final TrieTreeSet
@@ -50,8 +50,8 @@ public final class PanSecurityManager extends MethodHook {
 	static final Logger LOGGER = Logger.getLogger(Panger.LOGGER.context().child("Security"));
 
 	PanSecurityManager() {
-		hooks.put(new Desc("roj/reflect/Unaligned", "U", "Lroj/reflect/Unaligned;"),
-			new Desc("roj/plugin/PanSecurityManager", "Unaligned_getUnsafe", "(Ljava/lang/Class;)Lroj/reflect/Unaligned;", 2));
+		hooks.put(new MemberDescriptor("roj/reflect/Unaligned", "U", "Lroj/reflect/Unaligned;"),
+			new MemberDescriptor("roj/plugin/PanSecurityManager", "Unaligned_getUnsafe", "(Ljava/lang/Class;)Lroj/reflect/Unaligned;", 2));
 	}
 
 	static final class ILHook extends ILSecurityManager {
@@ -76,10 +76,10 @@ public final class PanSecurityManager extends MethodHook {
 		public boolean checkConstruct(Constructor<?> c) { return filterConstructor(c, false, ReflectionUtils.getCallerClass(3)) != null; }
 
 		public void checkAccess(String owner, String name, String desc) {
-			Desc d = ClassUtil.getInstance().sharedDC;
+			MemberDescriptor d = ClassUtil.getInstance().sharedDesc;
 			d.owner = owner;
 			d.name = name;
-			d.param = desc;
+			d.rawDesc = desc;
 
 			Class<?> caller = ReflectionUtils.getCallerClass(3);
 			Object v = ban(d, caller);
@@ -130,10 +130,10 @@ public final class PanSecurityManager extends MethodHook {
 	private static Method filterMethod(Method m, boolean _throw, Class<?> caller) {
 		if (m.getDeclaringClass().getClassLoader() == caller.getClassLoader()) return m;
 
-		Desc d = ClassUtil.getInstance().sharedDC;
+		MemberDescriptor d = ClassUtil.getInstance().sharedDesc;
 		d.owner = m.getDeclaringClass().getName().replace('.', '/');
 		d.name = m.getName();
-		d.param = TypeHelper.class2asm(m.getParameterTypes(), m.getReturnType());
+		d.rawDesc = TypeHelper.class2asm(m.getParameterTypes(), m.getReturnType());
 
 		Object v = ban(d, caller);
 		if (v == null) return m;
@@ -194,10 +194,10 @@ public final class PanSecurityManager extends MethodHook {
 	private static Field filterField(Field f, boolean _throw, Class<?> caller) {
 		if (f.getDeclaringClass().getClassLoader() == caller.getClassLoader()) return f;
 
-		Desc d = ClassUtil.getInstance().sharedDC;
+		MemberDescriptor d = ClassUtil.getInstance().sharedDesc;
 		d.owner = f.getDeclaringClass().getName().replace('.', '/');
 		d.name = f.getName();
-		d.param = TypeHelper.class2asm(f.getType());
+		d.rawDesc = TypeHelper.class2asm(f.getType());
 
 		Object v = ban(d, caller);
 		if (v == null) return f;
@@ -228,10 +228,10 @@ public final class PanSecurityManager extends MethodHook {
 	private static Constructor<?> filterConstructor(Constructor<?> c, boolean _throw, Class<?> caller) {
 		if (c.getDeclaringClass().getClassLoader() == caller.getClassLoader()) return c;
 
-		Desc d = ClassUtil.getInstance().sharedDC;
+		MemberDescriptor d = ClassUtil.getInstance().sharedDesc;
 		d.owner = c.getDeclaringClass().getName().replace('.', '/');
 		d.name = "<init>";
-		d.param = TypeHelper.class2asm(c.getParameterTypes(), void.class);
+		d.rawDesc = TypeHelper.class2asm(c.getParameterTypes(), void.class);
 
 		Object v = ban(d, caller);
 		if (v == null) return c;
@@ -252,10 +252,10 @@ public final class PanSecurityManager extends MethodHook {
 	public static Object hook_callFrom_newInstance(Class<?> c, Class<?> caller) throws Exception {
 		if (c.getDeclaringClass().getClassLoader() == caller.getClassLoader()) return c;
 
-		Desc d = ClassUtil.getInstance().sharedDC;
+		MemberDescriptor d = ClassUtil.getInstance().sharedDesc;
 		d.owner = c.getDeclaringClass().getName().replace('.', '/');
 		d.name = "<init>";
-		d.param = "()V";
+		d.rawDesc = "()V";
 
 		Object v = ban(d, caller);
 		if (v == null) return c.newInstance();
@@ -413,14 +413,14 @@ public final class PanSecurityManager extends MethodHook {
 			// 因为final了，所以就不用clone
 			buf = new ByteList(buf.toByteArray());
 
-			name = Parser.parseAccess(buf, false).name;
+			name = ClassView.parse(buf, false).name;
 			transform(name, buf);
 		}
 		return buf;
 	}
 	// endregion
 
-	static List<ITransformer> transformers = Collections.singletonList(new PanSecurityManager());
+	static List<Transformer> transformers = Collections.singletonList(new PanSecurityManager());
 	static void transform(String name, ByteList buf) {
 		var ctx = new Context(name, buf);
 		boolean changed = false;
@@ -433,7 +433,7 @@ public final class PanSecurityManager extends MethodHook {
 			}
 		}
 		if (changed) {
-			ByteList b = ctx.get();
+			ByteList b = ctx.getClassBytes();
 			if (b != buf) {
 				buf.clear();
 				buf.put(b);
@@ -449,10 +449,10 @@ public final class PanSecurityManager extends MethodHook {
 	}
 
 	private static Class<?> checkClass(String name, boolean init, ClassLoader loader, Class<?> caller) throws Exception {
-		Desc d = ClassUtil.getInstance().sharedDC;
+		MemberDescriptor d = ClassUtil.getInstance().sharedDesc;
 		d.owner = name.replace('.', '/');
 		d.name = "";
-		d.param = "";
+		d.rawDesc = "";
 
 		Object result = ban(d, caller);
 		if (result == IntMap.UNDEFINED) loader = null;
@@ -471,10 +471,10 @@ public final class PanSecurityManager extends MethodHook {
 		return false;
 	}
 
-	private static Object ban(Desc d, Class<?> caller) {
+	private static Object ban(MemberDescriptor d, Class<?> caller) {
 		if (d.owner.equals("java/lang/reflect/Constructor") || d.owner.equals("java/lang/reflect/Method")) {
 			// prevent getting internal fields
-			if (d.param.indexOf('(') == -1) {
+			if (d.rawDesc.indexOf('(') == -1) {
 				LOGGER.debug("禁止反射 {} (REFLECTION_INTERNAL)", d);
 				return IntMap.UNDEFINED;
 			}

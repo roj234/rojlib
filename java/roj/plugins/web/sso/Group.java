@@ -5,7 +5,7 @@ import roj.util.PermissionSet;
 
 /**
  * @author Roj234
- * @since 2024/7/22 0022 4:21
+ * @since 2024/7/22 4:21
  */
 final class Group extends PermissionSet implements PermissionHolder {
 	final String name;

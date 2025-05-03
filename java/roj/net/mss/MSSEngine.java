@@ -1,8 +1,8 @@
 package roj.net.mss;
 
+import roj.crypt.CryptoFactory;
 import roj.crypt.HKDFPRNG;
 import roj.crypt.HMAC;
-import roj.crypt.KDF;
 import roj.crypt.RCipherSpi;
 import roj.io.buf.BufferPool;
 import roj.util.ByteList;
@@ -51,7 +51,7 @@ public abstract class MSSEngine {
 		RCipherSpi cipher = session.suite.cipher.get();
 		try {
 			cipher.init(mode,
-				KDF.HKDF_expand(pfKd, pfSk, new ByteList(2).putAscii("PF"), session.suite.cipher.getKeySize()), null,
+				CryptoFactory.HKDF_expand(pfKd, pfSk, new ByteList(2).putAscii("PF"), session.suite.cipher.getKeySize()), null,
 				new HKDFPRNG(pfKd, pfSk, "PF"));
 		} catch (GeneralSecurityException e) {
 			error(e);
@@ -62,11 +62,11 @@ public abstract class MSSEngine {
 	public static final byte[] EMPTY_32 = new byte[32];
 	final void initKeyDeriver(CipherSuite suite, byte[] sharedKey_pre) {
 		keyDeriver = new HMAC(suite.sign.get());
-		sharedKey = KDF.HKDF_expand(keyDeriver, sharedKey_pre, ByteList.wrap(sharedKey), 64);
+		sharedKey = CryptoFactory.HKDF_expand(keyDeriver, sharedKey_pre, ByteList.wrap(sharedKey), 64);
 	}
 	public final byte[] deriveKey(String name, int len) {
 		var info = config.buffer(ByteList.byteCountUTF8(name)+2).putUTF(name);
-		byte[] secret = KDF.HKDF_expand(keyDeriver, sharedKey, info, len);
+		byte[] secret = CryptoFactory.HKDF_expand(keyDeriver, sharedKey, info, len);
 		BufferPool.reserve(info);
 		return secret;
 	}
@@ -126,7 +126,7 @@ public abstract class MSSEngine {
 		int flag;
 		byte[] signLocal;
 		if (keyDeriver != null) {
-			keyDeriver.setSignKey(deriveKey("alert", keyDeriver.getDigestLength()));
+			keyDeriver.init(deriveKey("alert", keyDeriver.getDigestLength()));
 			DynByteBuf slice = in.slice(in.rIndex, in.readableBytes() - keyDeriver.getDigestLength());
 			keyDeriver.update(slice);
 			flag = 0;

@@ -20,7 +20,6 @@ import roj.util.TypedKey;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.*;
-import java.nio.channels.ClosedByInterruptException;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -152,7 +151,7 @@ public abstract class HttpRequest {
 			ch.addFirst("h11@tls", /*RojLib.EXTRA_BUG_CHECK ? new MSSCipher().sslMode() : */new JSslClient());
 		}
 
-		var addr = NetUtil.applyProxy(proxy, _getAddress(), ch);
+		var addr = Net.applyProxy(proxy, _getAddress(), ch);
 		return ch.connect(addr, timeout);
 	}
 
@@ -180,7 +179,7 @@ public abstract class HttpRequest {
 				ch = ch1;
 			}
 
-			var addr = NetUtil.applyProxy(proxy, _address, ch);
+			var addr = Net.applyProxy(proxy, _address, ch);
 			ch.connect(addr, timeout);
 
 			ServerLaunch.DEFAULT_LOOPER.register(ch, null);
@@ -290,7 +289,7 @@ public abstract class HttpRequest {
 						wait();
 					} catch (InterruptedException e) {
 						ch.close();
-						throw new ClosedByInterruptException();
+						throw IOUtil.rethrowAsIOException(e);
 					}
 				}
 			}
@@ -567,7 +566,7 @@ public abstract class HttpRequest {
 				try {
 					available.await();
 				} catch (InterruptedException e) {
-					throw new ClosedByInterruptException();
+					throw IOUtil.rethrowAsIOException(e);
 				} finally {
 					lock.unlock();
 				}

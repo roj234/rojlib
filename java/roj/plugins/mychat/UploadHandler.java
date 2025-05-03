@@ -4,7 +4,7 @@ import org.jetbrains.annotations.NotNull;
 import roj.concurrent.FastThreadLocal;
 import roj.concurrent.TaskPool;
 import roj.crypt.BufferedDigest;
-import roj.crypt.ILCrypto;
+import roj.crypt.CryptoFactory;
 import roj.http.Headers;
 import roj.http.server.HSConfig;
 import roj.http.server.MultipartParser;
@@ -55,7 +55,7 @@ public class UploadHandler extends MultipartParser {
 
 		Map<String, Object> ctx = HSConfig.getInstance().ctx;
 		if (!ctx.containsKey("SM3U")) {
-			ctx.put("SM3U", sm3 = ILCrypto.SM3());
+			ctx.put("SM3U", sm3 = CryptoFactory.SM3());
 		} else {
 			sm3 = (BufferedDigest) ctx.get("SM3U");
 		}

@@ -16,7 +16,7 @@ import java.lang.annotation.Target;
  * TYPE some_method(RIGHT_TYPE right)
  * 不支持反转(这是为了逻辑更清晰)
  * @author Roj234
- * @since 2022/10/23 0023 13:27
+ * @since 2022/10/23 13:27
  */
 @Retention(RetentionPolicy.CLASS)
 @Target(ElementType.METHOD)

@@ -4,7 +4,7 @@ import java.nio.channels.FileChannel;
 
 /**
  * @author Roj234
- * @since 2024/7/15 0015 1:53
+ * @since 2024/7/15 1:53
  */
 public final class SendfilePkt {
 	public FileChannel channel;

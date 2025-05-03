@@ -7,7 +7,7 @@ import java.io.IOException;
 
 /**
  * @author Roj234
- * @since 2023/6/26 0026 17:16
+ * @since 2023/6/26 17:16
  */
 public class ChinaNumeric {
 	public static final Int2IntMap UNIT_MAP = new Int2IntMap(16);

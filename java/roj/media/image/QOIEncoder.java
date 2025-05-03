@@ -4,7 +4,7 @@ import roj.io.CorruptedInputException;
 import roj.util.ArrayCache;
 import roj.util.DynByteBuf;
 
-import java.awt.color.*;
+import java.awt.color.ColorSpace;
 import java.awt.image.*;
 import java.io.IOException;
 import java.util.Arrays;
@@ -12,7 +12,7 @@ import java.util.Arrays;
 /**
  * See <a href="https://qoiformat.org/">The Quite OK Image Format</a> for details
  * @author Roj234
- * @since 2024/5/19 0019 16:59
+ * @since 2024/5/19 16:59
  */
 public class QOIEncoder implements ImageEncoder {
 	private final int[] hashTable = new int[64];

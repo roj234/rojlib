@@ -22,7 +22,7 @@ import java.util.WeakHashMap;
 
 /**
  * @author Roj234
- * @since 2024/6/10 0010 4:27
+ * @since 2024/6/10 4:27
  */
 final class CompileStage implements Processor {
 	private static final Set<String> ACCEPTS = new MyHashSet<>(
@@ -36,7 +36,7 @@ final class CompileStage implements Processor {
 	private final WeakHashMap<Annotation, CInt> increment_count = new WeakHashMap<>();
 
 	@Override
-	public void handle(LocalContext ctx, IClass file, Attributed node, Annotation annotation) {
+	public void handle(LocalContext ctx, ClassDefinition file, Attributed node, Annotation annotation) {
 		String type = annotation.type();
 		type = type.substring(type.lastIndexOf('/')+1);
 		CompileUnit cu = (CompileUnit) file;

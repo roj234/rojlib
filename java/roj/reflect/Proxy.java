@@ -13,7 +13,7 @@ import static roj.asm.Opcodes.*;
 
 /**
  * @author Roj234
- * @since 2023/5/17 0017 9:57
+ * @since 2023/5/17 9:57
  */
 public class Proxy {
 	public static int proxyClass(ClassNode data, Class<?>[] itfs, BiFunction<Method, CodeWriter, Boolean> overrider, int... extraFields) {

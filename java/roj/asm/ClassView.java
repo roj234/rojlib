@@ -1,7 +1,11 @@
 package roj.asm;
 
+import roj.asm.cp.Constant;
+import roj.asm.cp.ConstantPool;
+import roj.asm.cp.CstUTF;
 import roj.asm.type.Type;
 import roj.asm.type.TypeHelper;
+import roj.collect.SimpleList;
 import roj.io.IOUtil;
 import roj.text.CharList;
 import roj.util.DynByteBuf;
@@ -14,7 +18,54 @@ import java.util.List;
  * @author Roj234
  * @since 2021/5/12 0:23
  */
-public final class ClassView implements IClass {
+public final class ClassView implements ClassDefinition {
+	public static ClassView parse(DynByteBuf r, boolean modifiable) {
+		if (r.readInt() != 0xcafebabe) throw new IllegalArgumentException("Illegal header");
+
+		r.rIndex += 4; // ver
+
+		var pool = AsmCache.getInstance().constPool();
+		pool.read(r, ConstantPool.ONLY_STRING);
+
+		int cfo = r.rIndex; // acc
+		char acc = r.readChar();
+
+		ClassView node = new ClassView(modifiable?r.toByteArray():null, cfo, pool.getRefName(r, Constant.CLASS), pool.getRefName(r));
+		node.modifier = acc;
+
+		int len = r.readUnsignedShort();
+		SimpleList<String> itf = new SimpleList<>(len);
+		while (len-- > 0) itf.add(pool.getRefName(r, Constant.CLASS));
+
+		node.interfaces = itf;
+
+		for (int k = 0; k < 2; k++) {
+			len = r.readUnsignedShort();
+			List<MOF> com = new SimpleList<>(len);
+			while (len-- > 0) {
+				int offset = r.rIndex;
+
+				acc = r.readChar();
+
+				MOF d = node.new MOF(((CstUTF) pool.get(r)).str(), ((CstUTF) pool.get(r)).str(), offset);
+				d.modifier = acc;
+				com.add(d);
+
+				int attrs = r.readUnsignedShort();
+				for (int j = 0; j < attrs; j++) {
+					r.rIndex += 2;
+					int ol = r.readInt();
+					r.rIndex += ol;
+				}
+			}
+			if (k == 0) node.fields = com;
+			else node.methods = com;
+		}
+
+		AsmCache.getInstance().constPool(pool);
+		return node;
+	}
+
 	public final String name, parent;
 	public List<String> interfaces;
 	public List<MOF> methods, fields;
@@ -36,7 +87,7 @@ public final class ClassView implements IClass {
 	@Override public List<MOF> fields() { return fields; }
 	@Override public List<MOF> methods() { return methods; }
 
-	public final class MOF implements RawNode {
+	public final class MOF implements Member {
 		public final String name, desc;
 		/**
 		 * Read only
@@ -44,7 +95,7 @@ public final class ClassView implements IClass {
 		public char modifier;
 		private final int off;
 
-		public MOF(CNode node) {
+		public MOF(MemberNode node) {
 			this(node.name(), node.rawDesc(), -1);
 			modifier = node.modifier();
 		}
@@ -54,8 +105,8 @@ public final class ClassView implements IClass {
 			this.off = off;
 		}
 
-		public ClassView owner() {return ClassView.this;}
-		@Override public String ownerClass() {return ClassView.this.name;}
+		public ClassView ownerNode() {return ClassView.this;}
+		@Override public String owner() {return ClassView.this.name;}
 		@Override public String name() { return name; }
 		@Override public String rawDesc() { return desc; }
 

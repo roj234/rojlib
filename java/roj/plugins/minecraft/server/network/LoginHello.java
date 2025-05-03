@@ -3,8 +3,8 @@ package roj.plugins.minecraft.server.network;
 import roj.collect.IntMap;
 import roj.concurrent.Promise;
 import roj.concurrent.TaskPool;
+import roj.crypt.CryptoFactory;
 import roj.crypt.FeedbackCipher;
-import roj.crypt.ILCrypto;
 import roj.crypt.IvParameterSpecNC;
 import roj.crypt.RCipherSpi;
 import roj.io.IOUtil;
@@ -13,7 +13,7 @@ import roj.net.ChannelHandler;
 import roj.net.MyChannel;
 import roj.plugins.minecraft.server.MinecraftServer;
 import roj.text.TextUtil;
-import roj.ui.AnsiString;
+import roj.ui.Text;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
 
@@ -30,7 +30,7 @@ import java.util.UUID;
 
 /**
  * @author Roj234
- * @since 2024/3/19 0019 15:58
+ * @since 2024/3/19 15:58
  */
 public class LoginHello implements ChannelHandler {
 	private static final byte READY = 0, KEY = 1, VERIFY = 2;
@@ -84,7 +84,7 @@ public class LoginHello implements ChannelHandler {
 				String serverHash;
 				try {
 					Cipher rsa = Cipher.getInstance("RSA");
-					rsa.init(Cipher.DECRYPT_MODE, serverPrivateKey);
+					rsa.init(RCipherSpi.DECRYPT_MODE, serverPrivateKey);
 
 					boolean success;
 					if (playerKey == null) {
@@ -115,7 +115,7 @@ public class LoginHello implements ChannelHandler {
 				authenticateUser(MinecraftServer.INSTANCE, player, serverHash, ctx.remoteAddress() instanceof InetSocketAddress addr ? addr.getAddress() : null).then((v, cb) -> {
 					ctx.channel().lock().lock();
 					try {
-						AnsiString reject = MinecraftServer.INSTANCE.preLogin(ctx, player);
+						Text reject = MinecraftServer.INSTANCE.preLogin(ctx, player);
 						if (reject != null) {
 							player.disconnect(reject);
 						} else {
@@ -153,7 +153,7 @@ public class LoginHello implements ChannelHandler {
 
 	static void insertCipher(MyChannel channel, byte[] aesKey) throws IOException {
 		try {
-			var aes = ILCrypto.Aes();
+			var aes = CryptoFactory.AES();
 			aes.init(RCipherSpi.ENCRYPT_MODE, aesKey); // avoid extra compute
 
 			var encrypt = new FeedbackCipher(aes, FeedbackCipher.MODE_CFB);

@@ -9,7 +9,7 @@ import roj.io.IOUtil;
 import roj.net.ChannelCtx;
 import roj.net.ChannelHandler;
 import roj.net.Event;
-import roj.net.NetUtil;
+import roj.net.Net;
 import roj.text.logging.Level;
 import roj.text.logging.Logger;
 import roj.util.ByteList;
@@ -23,7 +23,7 @@ import java.util.function.IntFunction;
 /**
  * <a href="https://www.rfc-editor.org/rfc/rfc9113">RFC9113</a>
  * @author Roj234
- * @since 2022/10/7 0007 21:38
+ * @since 2022/10/7 21:38
  */
 public class H2Connection implements ChannelHandler {
 	public static final Logger LOGGER = Logger.getLogger("SPDY");
@@ -692,7 +692,7 @@ public class H2Connection implements ChannelHandler {
 	public boolean isServer() {return (flag & FLAG_SERVER) != 0;}
 	public ChannelCtx channel() {return ctx;}
 	@Override
-	public String toString() {return getClass().getSimpleName()+"/"+(ctx == null ? "<disconnected>" : NetUtil.toString(ctx.remoteAddress()));}
+	public String toString() {return getClass().getSimpleName()+"/"+(ctx == null ? "<disconnected>" : Net.toString(ctx.remoteAddress()));}
 
 	@Override
 	public void channelTick(ChannelCtx ctx) throws IOException {

@@ -4,7 +4,7 @@ import roj.util.NativeMemory;
 
 /**
  * @author Roj234
- * @since 2023/5/16 0016 7:25
+ * @since 2023/5/16 7:25
  */
 interface PooledBuffer {
 	default Object set(NativeMemory ref, long address, int length) { throw new UnsupportedOperationException("not direct buffer"); }

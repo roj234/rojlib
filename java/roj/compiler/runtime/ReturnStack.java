@@ -8,7 +8,7 @@ import static roj.reflect.Unaligned.U;
 
 /**
  * @author Roj234
- * @since 2024/6/8 0008 19:30
+ * @since 2024/6/8 19:30
  */
 public final class ReturnStack<T> {
 	private static final int MEMORY_CAPACITY = 8 * 256;

@@ -3,11 +3,7 @@ package roj.plugins.p2p;
 import roj.collect.IntSet;
 import roj.crypt.CRC32s;
 import roj.io.IOUtil;
-import roj.io.NIOUtil;
-import roj.net.ChannelCtx;
-import roj.net.ChannelHandler;
-import roj.net.DatagramPkt;
-import roj.net.ServerLaunch;
+import roj.net.*;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
 
@@ -22,7 +18,7 @@ import java.util.Random;
 /**
  * <a href="https://www.rfc-editor.org/rfc/rfc5389">Session Traversal Utilities for NAT (STUN)</a>
  * @author Roj234
- * @since 2024/1/6 0006 5:10
+ * @since 2024/1/6 5:10
  */
 public final class STUN implements ChannelHandler {
 	private static final int MAGIC = 0x2112A442;
@@ -83,7 +79,7 @@ public final class STUN implements ChannelHandler {
 			try (SocketChannel ch = SocketChannel.open()) {
 				ch.setOption(StandardSocketOptions.SO_REUSEADDR, true);
 				if (localAddr != null) {
-					NIOUtil.setReusePort(ch, true);
+					Net.setReusePort(ch, true);
 					ch.bind(localAddr);
 				}
 

@@ -2,12 +2,12 @@ package roj.media.image;
 
 import roj.util.DynByteBuf;
 
-import java.awt.image.*;
+import java.awt.image.BufferedImage;
 import java.io.IOException;
 
 /**
  * @author Roj234
- * @since 2024/5/19 0019 17:00
+ * @since 2024/5/19 17:00
  */
 public interface ImageEncoder {
 	void encodeImage(BufferedImage image, DynByteBuf out) throws IOException;

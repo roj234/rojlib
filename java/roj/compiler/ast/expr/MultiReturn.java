@@ -19,7 +19,7 @@ import static roj.compiler.ast.GeneratorUtil.RETURNSTACK_TYPE;
 
 /**
  * @author Roj234
- * @since 2024/6/9 0009 1:42
+ * @since 2024/6/9 1:42
  */
 final class MultiReturn extends Expr {
 	private final List<Expr> values;

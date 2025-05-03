@@ -6,7 +6,7 @@ import java.util.Arrays;
 
 /**
  * @author Roj234
- * @since 2024/1/23 0023 6:12
+ * @since 2024/1/23 6:12
  */
 public class ResolveException extends RuntimeException {
 	public ResolveException(String message) { super(message); }

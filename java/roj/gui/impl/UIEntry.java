@@ -5,7 +5,7 @@
 package roj.gui.impl;
 
 import roj.asm.ClassNode;
-import roj.asm.util.Context;
+import roj.asmx.Context;
 import roj.asmx.launcher.EntryPoint;
 import roj.concurrent.TaskPool;
 import roj.gui.GuiUtil;

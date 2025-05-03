@@ -4,13 +4,13 @@ import roj.collect.CharMap;
 import roj.concurrent.OperationDone;
 import roj.crypt.HMAC;
 import roj.crypt.KeyExchange;
+import roj.crypt.RCipherSpi;
 import roj.io.IOUtil;
 import roj.io.buf.BufferPool;
 import roj.util.ArrayUtil;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
 
-import javax.crypto.Cipher;
 import java.security.GeneralSecurityException;
 
 /**
@@ -74,7 +74,7 @@ final class MSSEngineClient extends MSSEngine {
 				var session = config.getOrCreateSession(context, null, 0);
 				if (session != null) {
 					if (session.key != null) {
-						encoder = getSessionCipher(session, Cipher.ENCRYPT_MODE);
+						encoder = getSessionCipher(session, RCipherSpi.ENCRYPT_MODE);
 					}
 					ext.put(Extension.session, new ByteList(session.id));
 				}
@@ -152,8 +152,8 @@ final class MSSEngineClient extends MSSEngine {
 		decoder = suite.cipher.get();
 
 		var prng = getPRNG("comm_prng");
-		encoder.init(Cipher.ENCRYPT_MODE, deriveKey("c2s0", suite.cipher.getKeySize()), null, prng);
-		decoder.init(Cipher.DECRYPT_MODE, deriveKey("s2c0", suite.cipher.getKeySize()), null, prng);
+		encoder.init(RCipherSpi.ENCRYPT_MODE, deriveKey("c2s0", suite.cipher.getKeySize()), null, prng);
+		decoder.init(RCipherSpi.DECRYPT_MODE, deriveKey("s2c0", suite.cipher.getKeySize()), null, prng);
 
 		decoder.cryptInline(rx, rx.readableBytes());
 		CharMap<DynByteBuf> extIn = Extension.read(rx);
@@ -195,7 +195,7 @@ final class MSSEngineClient extends MSSEngine {
 		// client_hello body
 		// empty byte 32
 		// server_hello body (not encrypted)
-		sign.setSignKey(deriveKey("verify_s", sign.getDigestLength()));
+		sign.init(deriveKey("verify_s", sign.getDigestLength()));
 
 		// client_hello
 		toWrite.rIndex = 1;

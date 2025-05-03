@@ -1,6 +1,6 @@
 package roj.plugins.ci.minecraft;
 
-import roj.asm.type.Desc;
+import roj.asm.MemberDescriptor;
 import roj.asmx.mapper.Mapping;
 import roj.config.JSONParser;
 import roj.config.ParseException;
@@ -27,7 +27,7 @@ import java.util.zip.ZipFile;
  * @since 2022/3/3 12:39
  */
 final class TSrgMapping extends Mapping {
-	public boolean readMcpConfig(File mapFile, Map<Desc, List<String>> paramMap, List<String> tmp) throws IOException {
+	public boolean readMcpConfig(File mapFile, Map<MemberDescriptor, List<String>> paramMap, List<String> tmp) throws IOException {
 		try(var cfg = new MCPConfig(mapFile);) {
 			InputStream in = cfg.getData("mappings");
 			if (in == null) {
@@ -87,19 +87,19 @@ final class TSrgMapping extends Mapping {
 
 				if (tmp.size() == 2) {
 					if (!tmp.get(0).equals(tmp.get(1)))
-						fieldMap.put(new Desc(prevF, tmp.get(0)), tmp.get(1));
+						fieldMap.put(new MemberDescriptor(prevF, tmp.get(0)), tmp.get(1));
 				} else {
 					if (!tmp.get(0).equals(tmp.get(2)))
-						methodMap.put(new Desc(prevF, tmp.get(0), tmp.get(1)), tmp.get(2));
+						methodMap.put(new MemberDescriptor(prevF, tmp.get(0), tmp.get(1)), tmp.get(2));
 				}
 			}
 		}
 		return true;
 	}
 
-	public boolean tSrgV2(LineReader slr, List<String> tmp, Map<Desc, List<String>> paramMap) throws IOException {
+	public boolean tSrgV2(LineReader slr, List<String> tmp, Map<MemberDescriptor, List<String>> paramMap) throws IOException {
 		String prevF = null;
-		Desc method = null;
+		MemberDescriptor method = null;
 
 		int ln = 1;
 		slr.skipLines(1);
@@ -128,9 +128,9 @@ final class TSrgMapping extends Mapping {
 
 				if (tmp.size() == 2) {
 					if (!tmp.get(0).equals(tmp.get(1)))
-						fieldMap.put(new Desc(prevF, tmp.get(0)), tmp.get(1));
+						fieldMap.put(new MemberDescriptor(prevF, tmp.get(0)), tmp.get(1));
 				} else {
-					method = new Desc(prevF, tmp.get(0), tmp.get(1));
+					method = new MemberDescriptor(prevF, tmp.get(0), tmp.get(1));
 					if (!tmp.get(0).equals(tmp.get(2))) {
 						methodMap.put(method, tmp.get(2));
 					}

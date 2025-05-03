@@ -10,7 +10,7 @@ import java.util.Map;
 
 /**
  * @author Roj234
- * @since 2024/1/23 0023 8:31
+ * @since 2024/1/23 8:31
  */
 final class NamedArgumentList extends Expr {
 	final MyHashMap<String, Expr> map = new MyHashMap<>();

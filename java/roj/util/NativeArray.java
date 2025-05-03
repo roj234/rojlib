@@ -6,7 +6,7 @@ import static roj.reflect.Unaligned.U;
 
 /**
  * @author Roj234
- * @since 2024/1/7 0007 2:46
+ * @since 2024/1/7 2:46
  */
 public final class NativeArray {
 	private static final boolean CHECK = true;

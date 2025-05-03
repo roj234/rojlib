@@ -1,6 +1,6 @@
 package roj.asm.insn;
 
-import roj.asm.AsmShared;
+import roj.asm.AsmCache;
 import roj.asm.Opcodes;
 import roj.asm.cp.*;
 import roj.util.DynByteBuf;
@@ -25,7 +25,7 @@ public class CodeVisitor {
 
 	public CodeVisitor() {}
 
-	public final void visitCopied(ConstantPool cp, DynByteBuf buf) { visit(cp, AsmShared.local().copy(buf)); }
+	public final void visitCopied(ConstantPool cp, DynByteBuf buf) { visit(cp, AsmCache.getInstance().copy(buf)); }
 
 	public void visit(ConstantPool cp, DynByteBuf r) {
 		visitSize(r.readUnsignedShort(), r.readUnsignedShort());

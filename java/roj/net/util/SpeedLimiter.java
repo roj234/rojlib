@@ -4,7 +4,7 @@ import roj.config.auto.Optional;
 
 /**
  * @author Roj234
- * @since 2025/4/29 0029 12:10
+ * @since 2025/4/29 12:10
  */
 public class SpeedLimiter {
 	protected final Setting setting;

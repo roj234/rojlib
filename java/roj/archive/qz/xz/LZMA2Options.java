@@ -4,7 +4,7 @@ import org.intellij.lang.annotations.MagicConstant;
 import roj.RojLib;
 import roj.archive.qz.xz.lz.LZEncoder;
 import roj.archive.qz.xz.lzma.LZMAEncoder;
-import roj.concurrent.TaskHandler;
+import roj.concurrent.TaskExecutor;
 import roj.concurrent.TaskPool;
 import roj.io.DummyOutputStream;
 import roj.io.buf.BufferPool;
@@ -110,7 +110,7 @@ public class LZMA2Options implements Cloneable {
 	private int depthLimit;
 	private boolean nativeAccelerate;
 
-	private TaskHandler asyncExecutor;
+	private TaskExecutor asyncExecutor;
 	private BufferPool asyncBufferPool;
 	private LZMA2Parallel asyncMan;
 
@@ -376,7 +376,7 @@ public class LZMA2Options implements Cloneable {
 
 	/**
 	 * <pre>启用对于单独压缩流的多线程压缩模式
-	 * <b>注意，对比{@link roj.archive.qz.QZFileWriter#parallel()}的不同文件并行模式,单压缩流并行会损失千分之一左右压缩率</b>
+	 * <b>注意，对比{@link roj.archive.qz.QZFileWriter#newParallelWriter()}的不同文件并行模式,单压缩流并行会损失千分之一左右压缩率</b>
 	 * @param blockSize 任务按照该大小分块并行，设置为-1来自动选择(不推荐自动选择)
 	 * @param executor 线程池
 	 * @param affinity 最大并行任务数量 (1-255)
@@ -385,12 +385,12 @@ public class LZMA2Options implements Cloneable {
 	 * {@link #ASYNC_DICT_SET} 在write的调用线程上设置词典, 速度慢, 压缩率好, 内存占用中等
 	 * {@link #ASYNC_DICT_ASYNCSET} 在异步任务线程上设置词典, 速度中等, 压缩率好, 内存大
 	 */
-	public void setAsyncMode(int blockSize, TaskHandler executor, int affinity, BufferPool bufferPool, @MagicConstant(intValues = {ASYNC_DICT_NONE,ASYNC_DICT_SET,ASYNC_DICT_ASYNCSET}) int dictMode) {
+	public void setAsyncMode(int blockSize, TaskExecutor executor, int affinity, BufferPool bufferPool, @MagicConstant(intValues = {ASYNC_DICT_NONE,ASYNC_DICT_SET,ASYNC_DICT_ASYNCSET}) int dictMode) {
 		asyncExecutor = executor;
 		asyncBufferPool = bufferPool;
 		asyncMan = new LZMA2Parallel(this, blockSize, dictMode, affinity);
 	}
-	public void setAsyncMode(TaskHandler executor, BufferPool bufferPool, LZMA2Parallel parallel) {
+	public void setAsyncMode(TaskExecutor executor, BufferPool bufferPool, LZMA2Parallel parallel) {
 		asyncExecutor = executor;
 		asyncBufferPool = bufferPool;
 		asyncMan = parallel;
@@ -400,7 +400,7 @@ public class LZMA2Options implements Cloneable {
 		asyncBufferPool = null;
 		asyncMan = null;
 	}
-	public TaskHandler getAsyncExecutor() { return asyncExecutor; }
+	public TaskExecutor getAsyncExecutor() { return asyncExecutor; }
 	public BufferPool getAsyncBufferPool() { return asyncBufferPool; }
 	public LZMA2Parallel getAsyncMan() { return asyncMan; }
 

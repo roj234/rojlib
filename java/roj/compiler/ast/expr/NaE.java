@@ -9,7 +9,7 @@ import roj.compiler.resolve.TypeCast;
 /**
  * Not an Expression
  * @author Roj234
- * @since 2024/5/30 0030 1:40
+ * @since 2024/5/30 1:40
  */
 public final class NaE extends Expr {
 	public static final Expr NOEXPR = new NaE(), RESOLVE_FAILED = new NaE();

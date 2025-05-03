@@ -1,16 +1,16 @@
 package roj.plugins.minecraft.server.util;
 
 import roj.config.serial.CVisitor;
-import roj.ui.AnsiString;
+import roj.ui.Text;
 
 /**
  * @author Roj234
- * @since 2024/3/19 0019 23:54
+ * @since 2024/3/19 23:54
  */
-public class TranslatedString extends AnsiString {
-	private AnsiString[] with;
+public class TranslatedString extends Text {
+	private Text[] with;
 
-	public TranslatedString(CharSequence translate, AnsiString ... with) {
+	public TranslatedString(CharSequence translate, Text... with) {
 		super(translate);
 		this.with = with;
 	}
@@ -24,7 +24,7 @@ public class TranslatedString extends AnsiString {
 		if (with.length > 0) {
 			ser.key("with");
 			ser.valueList(with.length);
-			for (AnsiString string : with) {
+			for (Text string : with) {
 				string.writeJson(ser);
 			}
 			ser.pop();

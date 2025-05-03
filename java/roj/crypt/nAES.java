@@ -1,17 +1,15 @@
 package roj.crypt;
 
 import roj.RojLib;
+import roj.asmx.injector.Copy;
+import roj.asmx.injector.Inject;
+import roj.asmx.injector.Shadow;
+import roj.asmx.injector.Weave;
 import roj.asmx.launcher.Autoload;
-import roj.asmx.nixim.Copy;
-import roj.asmx.nixim.Inject;
-import roj.asmx.nixim.Nixim;
-import roj.asmx.nixim.Shadow;
 import roj.reflect.litasm.FastJNI;
-import roj.reflect.litasm.Intrinsics;
 import roj.reflect.litasm.ObjectField;
 import roj.util.DynByteBuf;
 
-import javax.crypto.Cipher;
 import javax.crypto.ShortBufferException;
 import java.security.InvalidAlgorithmParameterException;
 import java.security.InvalidKeyException;
@@ -24,7 +22,7 @@ import java.util.Arrays;
  * @since 2024/10/02 02:17
  */
 @Autoload(value = Autoload.Target.NIXIM, intrinsic = RojLib.AES_NI)
-@Nixim(altValue = AES.class)
+@Weave(target = AES.class)
 final class nAES {
 	public static final int AES_BLOCK_SIZE = 16;
 
@@ -37,7 +35,7 @@ final class nAES {
 	public void init(int mode, byte[] key, AlgorithmParameterSpec par, SecureRandom random) throws InvalidAlgorithmParameterException, InvalidKeyException {
 		if (par != null || random != null) throw new InvalidAlgorithmParameterException();
 
-		this.encrypt = mode != Cipher.DECRYPT_MODE;
+		this.encrypt = mode != RCipherSpi.DECRYPT_MODE;
 		if (Arrays.equals(lastKey, key)) return;
 
 		switch (key.length) {
@@ -86,7 +84,7 @@ final class nAES {
 		in.rIndex += AES_BLOCK_SIZE;
 	}
 
-	@Inject("<clinit>") static void __clinit() {Intrinsics.linkNative(RojLib.getLibrary(), AES.class);}
+	@Inject("<clinit>") static void __clinit() {RojLib.linkLibrary(AES.class);}
 
 	@Copy
 	@FastJNI

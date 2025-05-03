@@ -1,6 +1,6 @@
 package roj.plugins.obfuscator.naming;
 
-import roj.asm.type.Desc;
+import roj.asm.MemberDescriptor;
 import roj.collect.ToIntMap;
 import roj.text.CharList;
 
@@ -49,11 +49,11 @@ public final class ABC implements NamingPolicy {
 	}
 
 	@Override
-	public String obfName(Set<String> noDuplicate, Desc d, Random rand) {
-		if (noDuplicate.isEmpty() && !d.param.contains(")")) counter.clear();
+	public String obfName(Set<String> noDuplicate, MemberDescriptor d, Random rand) {
+		if (noDuplicate.isEmpty() && !d.rawDesc.contains(")")) counter.clear();
 		noDuplicate.add("");
 
-		String param = d.param;
+		String param = d.rawDesc;
 		int v = counter.increment(param, 1)-1;
 		buf.clear();
 		return num2str(v);

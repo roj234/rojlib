@@ -10,7 +10,7 @@ import roj.config.auto.SerializerFactory;
 import roj.config.data.CMap;
 import roj.config.serial.ToJson;
 import roj.crypt.Base64;
-import roj.crypt.XXHash;
+import roj.crypt.CryptoFactory;
 import roj.http.Cookie;
 import roj.http.server.*;
 import roj.http.server.auto.*;
@@ -41,10 +41,13 @@ import static roj.ui.CommandNode.literal;
 
 /**
  * @author Roj234
- * @since 2025/3/8 0008 0:39
+ * @since 2025/3/8 0:39
  */
 @Mime("application/json")
 public class FileShare extends Plugin {
+    static final int LOCAL_FILE_MAX = 100000;
+    static final int REMOTE_FILE_MAX = 1000;
+
     static final class Serialized {
         List<Share> shares;
         int shareFileIndex;
@@ -62,9 +65,9 @@ public class FileShare extends Plugin {
     private final Object lock = new Object();
     private final long idMagic = System.nanoTime() ^ (long) System.identityHashCode(this) << 32;
 
-    private static final XHashSet.Shape<String, Share> SHARE_INFO_SHAPE = XHashSet.noCreation(Share.class, "id");
-    private XHashSet<String, Share> shares = SHARE_INFO_SHAPE.create();
-    private final XHashSet<String, Share> incompleteShares = SHARE_INFO_SHAPE.create();
+    private static final XashMap.Builder<String, Share> SHARE_INFO_BUILDER = XashMap.noCreation(Share.class, "id");
+    private XashMap<String, Share> shares = SHARE_INFO_BUILDER.create();
+    private final XashMap<String, Share> incompleteShares = SHARE_INFO_BUILDER.create();
 
     File uploadPath;
     private final AtomicInteger shareFileIdx = new AtomicInteger(1);
@@ -139,7 +142,7 @@ public class FileShare extends Plugin {
                     share.name = "文件分享";
                     share.time = System.currentTimeMillis();
                     share.fillFromServerPath(path);
-                    if (share.files.size() == 1000) getLogger().warn("文件数量超过了1000项，请通过在线预览访问全部项目");
+                    if (share.files.size() == LOCAL_FILE_MAX) getLogger().warn("文件数量超过了"+LOCAL_FILE_MAX+"，请通过在线预览访问全部项目");
 
                     synchronized (lock) {
                         if (!shares.add(share)) {
@@ -159,10 +162,10 @@ public class FileShare extends Plugin {
         var persist = new File(getDataFolder(), "db.yml");
         if (persist.isFile()) {
             var db = ConfigMaster.YAML.readObject(ownerSerializer.serializer(Serialized.class), persist);
-            shares = SHARE_INFO_SHAPE.createValued(db.shares);
+            shares = SHARE_INFO_BUILDER.createValued(db.shares);
             shareFileIdx.set(db.shareFileIndex);
         } else {
-            shares = SHARE_INFO_SHAPE.create();
+            shares = SHARE_INFO_BUILDER.create();
         }
     }
 
@@ -272,7 +275,7 @@ public class FileShare extends Plugin {
                 dirty = true;
 
                 int salt = ThreadLocalRandom.current().nextInt() * 1145141919;
-                int hash = XXHash.xxHash32(info.hashCode() ^ salt, IOUtil.getSharedByteBuf().putLong(timeout).array(), 0, 8);
+                int hash = CryptoFactory.xxHash32(info.hashCode() ^ salt, IOUtil.getSharedByteBuf().putLong(timeout).array(), 0, 8);
                 token = IOUtil.getSharedByteBuf().putInt(salt).putLong(timeout).putInt(hash).base64UrlSafe();
             } else {
                 token = info.code;
@@ -294,7 +297,7 @@ public class FileShare extends Plugin {
         if (token.readableBytes() != 16) return false;
 
         int salt = token.readInt();
-        int hash = XXHash.xxHash32(info.hashCode() ^ salt, token.array(), 4, 8);
+        int hash = CryptoFactory.xxHash32(info.hashCode() ^ salt, token.array(), 4, 8);
         long time = token.readLong();
         int exceptHash = token.readInt();
 
@@ -324,7 +327,7 @@ public class FileShare extends Plugin {
         if (realFile == null) {
             realFile = file.id != 0
                     ? new File(uploadPath, Integer.toString(file.id, 36))
-                    : new File(info.base, file.path + '/' + file.name);
+                    : new File(info.base, (file.path == null ? "" : file.path + '/') + file.name);
             file.file = realFile;
         }
         return Content.file(req, new DiskFileInfo(realFile));
@@ -395,6 +398,8 @@ public class FileShare extends Plugin {
         if (addThreads) {
             simpleSer.key("threads");
             simpleSer.value(FILE_UPLOAD_TASKS);
+            simpleSer.key("maxFiles");
+            simpleSer.value(REMOTE_FILE_MAX);
         }
         simpleSer.pop();
         return simpleSer.getValue();
@@ -452,12 +457,11 @@ public class FileShare extends Plugin {
 
     //region new
     @Interceptor
-    private void newHandler(Request req, PostSetting ps) {
+    public void newHandler(Request req, PostSetting ps) {
         if (ps != null) ps.postAccept(110000, 1000);
     }
 
     private static final Pattern ID_PATTERN = Pattern.compile("^[a-zA-Z0-9-_@]+$");
-    private static final int MAX_FILES_PER_SHARE = 500;
     @POST("new")
     @Interceptor("newHandler")
     public CharSequence shareCreate(Request req) throws IllegalRequestException {
@@ -586,7 +590,7 @@ public class FileShare extends Plugin {
                 var uploading = shareInfo.uploading;
                 if (uploading == null || uploading.size() > FILE_UPLOAD_TASKS) return Content.json("{\"ok\":false,\"data\":\"线程数超过限制\"}");
 
-                if (shareInfo.files.size() > MAX_FILES_PER_SHARE) return Content.json("{\"ok\":false,\"data\":\"一次分享的文件太多了\"}");
+                if (shareInfo.files.size() > REMOTE_FILE_MAX) return Content.json("{\"ok\":false,\"data\":\"一次分享的文件太多了\"}");
                 shareInfo.size += size;
                 shareInfo.files.add(file);
             }

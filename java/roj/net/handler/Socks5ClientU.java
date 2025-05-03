@@ -9,7 +9,7 @@ import java.net.InetSocketAddress;
 
 /**
  * @author Roj234
- * @since 2024/6/28 0028 3:09
+ * @since 2024/6/28 3:09
  */
 public final class Socks5ClientU extends Socks5Client {
 	public Socks5ClientU(InetSocketAddress remote) {super(remote);}

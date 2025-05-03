@@ -6,7 +6,7 @@ import roj.compiler.ast.expr.Expr;
 
 /**
  * @author Roj234
- * @since 2024/6/4 0004 22:52
+ * @since 2024/6/4 22:52
  */
 final class GenericCat extends Expr {
 	private final Expr node;

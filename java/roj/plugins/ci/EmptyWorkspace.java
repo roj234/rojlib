@@ -6,7 +6,7 @@ import java.util.Collections;
 
 /**
  * @author Roj234
- * @since 2025/2/12 0012 3:47
+ * @since 2025/2/12 3:47
  */
 public final class EmptyWorkspace {
 	public static Workspace build(CMap config) {

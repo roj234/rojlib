@@ -82,7 +82,7 @@ public final class CstTop extends Constant {
 
 		strVal = clazz.name().str();
 		strVal2 = desc.name().str();
-		strVal3 = desc.getType().str();
+		strVal3 = desc.rawDesc().str();
 		hash = 31 * (31 * desc.hashCode() + clazz.name().hashCode()) + cat;
 		return this;
 	}
@@ -90,9 +90,9 @@ public final class CstTop extends Constant {
 		type = METHOD_HANDLE;
 
 		intVal = kind;
-		strVal = ref.className();
-		strVal2 = ref.desc().name().str();
-		strVal3 = ref.desc().getType().str();
+		strVal = ref.owner();
+		strVal2 = ref.nameAndType().name().str();
+		strVal3 = ref.nameAndType().rawDesc().str();
 		hash = ref.hashCode() << 3 | kind;
 		return this;
 	}
@@ -101,7 +101,7 @@ public final class CstTop extends Constant {
 
 		intVal = table;
 		strVal = desc.name().str();
-		strVal2 = desc.getType().str();
+		strVal2 = desc.rawDesc().str();
 		hash = (desc.hashCode() * 31 + table) * 31 * cat;
 		return this;
 	}
@@ -127,24 +127,24 @@ public final class CstTop extends Constant {
 				return strVal.equals(((CstRefUTF) c).name().str());
 			case NAME_AND_TYPE: {
 				CstNameAndType r = (CstNameAndType) c;
-				return strVal.equals(r.name().str()) && strVal2.equals(r.getType().str());
+				return strVal.equals(r.name().str()) && strVal2.equals(r.rawDesc().str());
 			}
 			case FIELD:
 			case METHOD:
 			case INTERFACE: {
 				CstRef r = (CstRef) c;
-				return strVal.equals(r.className()) && strVal2.equals(r.desc().name().str()) && strVal3.equals(r.desc().getType().str());
+				return strVal.equals(r.owner()) && strVal2.equals(r.nameAndType().name().str()) && strVal3.equals(r.nameAndType().rawDesc().str());
 			}
 			case METHOD_HANDLE: {
 				CstMethodHandle r = (CstMethodHandle) c;
-				return intVal == r.kind && strVal.equals(r.getRef().className()) && strVal2.equals(r.getRef().desc().name().str()) && strVal3.equals(
-					r.getRef().desc().getType().str());
+				return intVal == r.kind && strVal.equals(r.getRef().owner()) && strVal2.equals(r.getRef().nameAndType().name().str()) && strVal3.equals(
+					r.getRef().nameAndType().rawDesc().str());
 			}
 			case DYNAMIC:
 			case INVOKE_DYNAMIC: {
 				CstDynamic r = (CstDynamic) c;
 				CstNameAndType t = r.desc();
-				return intVal == r.tableIdx && strVal.equals(t.name().str()) && strVal2.equals(t.getType().str());
+				return intVal == r.tableIdx && strVal.equals(t.name().str()) && strVal2.equals(t.rawDesc().str());
 			}
 		}
 		return false;

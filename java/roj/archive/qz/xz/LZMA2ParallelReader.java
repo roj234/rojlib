@@ -4,8 +4,8 @@ import roj.archive.qz.xz.lz.LZDecoder;
 import roj.archive.qz.xz.lzma.LZMADecoder;
 import roj.archive.qz.xz.rangecoder.RangeDecoder;
 import roj.collect.SimpleList;
-import roj.concurrent.ITask;
-import roj.concurrent.TaskHandler;
+import roj.concurrent.Task;
+import roj.concurrent.TaskExecutor;
 import roj.concurrent.TaskPool;
 import roj.io.CorruptedInputException;
 import roj.io.IOUtil;
@@ -27,14 +27,14 @@ public class LZMA2ParallelReader extends MBInputStream {
 
 	private final int dictSize;
 	private final byte[] presetDict;
-	private final TaskHandler taskExecutor;
+	private final TaskExecutor taskExecutor;
 
 	private int taskRunning, doneId;
 
 	private final SimpleList<SubDecoder> tasksFree = new SimpleList<>();
 	private int taskFree, taskId;
 
-	final class SubDecoder implements ITask {
+	final class SubDecoder implements Task {
 		int id;
 		final ByteList in;
 		private ByteList tmpOut;

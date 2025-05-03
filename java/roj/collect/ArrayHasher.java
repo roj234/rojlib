@@ -4,30 +4,32 @@ import roj.asm.ClassNode;
 import roj.asm.insn.CodeWriter;
 import roj.asm.type.Type;
 import roj.reflect.ClassDefiner;
+import roj.reflect.Unaligned;
 
 import static roj.asm.Opcodes.*;
 
 /**
  * @author Roj234
- * @since 2024/4/5 0005 19:22
+ * @since 2024/4/5 19:22
  */
 final class ArrayHasher {
-	private static final CharMap<Hasher<?>> built = new CharMap<>();
+	private static final Hasher<?>[] INSTANCES = new Hasher<?>[26];
 	@SuppressWarnings("unchecked")
 	static <T> Hasher<T> array(Class<T> type) {
 		if (!type.getComponentType().isPrimitive()) type = (Class<T>) Object[].class;
 
 		Type clz = Type.fromJavaType(type);
 
-		Hasher<?> h = built.get((char) clz.type);
+		int OFFSET = clz.type - Type.BYTE;
+		Hasher<?> h = INSTANCES[OFFSET];
 		block:
 		if (h == null) {
-			synchronized (built) {
-				if ((h = built.get((char) clz.type)) != null) break block;
+			synchronized (INSTANCES) {
+				if ((h = INSTANCES[OFFSET]) != null) break block;
 			}
 
 			ClassNode hasher = new ClassNode();
-			hasher.name("roj/collect/Hasher$A" + (char) clz.type);
+			hasher.name("roj/collect/Hasher$A"+(char) clz.type);
 			hasher.addInterface("roj/collect/Hasher");
 
 			CodeWriter cw = hasher.newMethod(ACC_PUBLIC | ACC_FINAL, "hashCode", "(Ljava/lang/Object;)I");
@@ -48,7 +50,7 @@ final class ArrayHasher {
 
 			ClassDefiner.premake(hasher);
 			h = (Hasher<?>) ClassDefiner.make(hasher);
-			built.put((char) clz.type, h);
+			Unaligned.U.putObjectVolatile(INSTANCES, Unaligned.ARRAY_OBJECT_BASE_OFFSET + (long) OFFSET * Unaligned.ARRAY_OBJECT_INDEX_SCALE, h);
 		}
 		return (Hasher<T>) h;
 	}

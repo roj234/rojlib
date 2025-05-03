@@ -6,7 +6,7 @@ import roj.compiler.resolve.ResolveException;
 
 /**
  * @author Roj234
- * @since 2024/2/8 0008 1:06
+ * @since 2024/2/8 1:06
  */
 public interface RawExpr {
 	IType type();

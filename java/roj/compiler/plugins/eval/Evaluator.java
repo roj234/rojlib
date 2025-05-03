@@ -31,20 +31,20 @@ import static roj.asm.Opcodes.*;
 
 /**
  * @author Roj234
- * @since 2024/5/30 0030 3:47
+ * @since 2024/5/30 3:47
  */
 @LavaPlugin(name = "evaluator", desc = "预编译和宏")
 public interface Evaluator {
 	public static void pluginInit(LavaApi ctx) throws IOException {
 		MyHashMap<String, byte[]> data = new MyHashMap<>();
-		SimpleList<RawNode> invoker = new SimpleList<>();
+		SimpleList<Member> invoker = new SimpleList<>();
 
 		for (AnnotatedElement element : ctx.getClasspathAnnotations().annotatedBy("roj/compiler/plugins/eval/Constexpr")) {
 			if (element.isLeaf()) {
 				if (element.desc().indexOf('(') < 0) continue;
 
 				ClassView.MOF node = (ClassView.MOF) element.node();
-				node.modifier |= (char) (node.owner().modifier&ACC_INTERFACE);
+				node.modifier |= (char) (node.ownerNode().modifier&ACC_INTERFACE);
 				invoker.add(node);
 			}
 
@@ -80,7 +80,7 @@ public interface Evaluator {
 			segment.def = label;
 			segment.branch(i, label);
 
-			RawNode mof = invoker.get(i);
+			Member mof = invoker.get(i);
 			String desc = mof.rawDesc();
 
 			c.visitSizeMax(TypeHelper.paramSize(desc) + 2, 0);
@@ -91,7 +91,7 @@ public interface Evaluator {
 			boolean itf = (mof.modifier() & ACC_INTERFACE) != 0;
 			boolean isStatic = (mof.modifier() & ACC_STATIC) != 0;
 
-			if (!isStatic) types.add(0, Type.klass(mof.ownerClass()));
+			if (!isStatic) types.add(0, Type.klass(mof.owner()));
 
 			for (int j = 0; j < types.size(); j++) {
 				c.vars(ALOAD, 2);
@@ -118,7 +118,7 @@ public interface Evaluator {
 				}
 			}
 
-			c.invoke(isStatic ? INVOKESTATIC : itf ? INVOKEINTERFACE : INVOKEVIRTUAL, mof.ownerClass(), mof.name(), desc, itf);
+			c.invoke(isStatic ? INVOKESTATIC : itf ? INVOKEINTERFACE : INVOKEVIRTUAL, mof.owner(), mof.name(), desc, itf);
 
 			Type wrapper = TypeCast.getWrapper(retVal);
 			myBlock:
@@ -145,8 +145,8 @@ public interface Evaluator {
 		var evaluator = (Evaluator) ctx.createSandboxInstance(invokerInst);
 
 		for (int j = 0; j < invoker.size(); j++) {
-			RawNode mof = invoker.get(j);
-			IClass info = ctx.getClassInfo(mof.ownerClass());
+			Member mof = invoker.get(j);
+			ClassDefinition info = ctx.getClassInfo(mof.owner());
 			int i = info.getMethod(mof.name(), mof.rawDesc());
 			info.methods().get(i).addAttribute(new CompiledMethod(evaluator, j, Type.methodDescReturn(mof.rawDesc())));
 		}

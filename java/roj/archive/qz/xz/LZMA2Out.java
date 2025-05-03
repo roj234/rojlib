@@ -8,7 +8,7 @@ import java.io.OutputStream;
 
 /**
  * @author Roj234
- * @since 2023/11/17 0017 2:10
+ * @since 2023/11/17 2:10
  */
 abstract class LZMA2Out extends OutputStream {
 	static final int COMPRESSED_SIZE_MAX = 64 << 10;

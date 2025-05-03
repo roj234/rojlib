@@ -1,5 +1,6 @@
 package roj.asm.frame;
 
+import roj.asm.ClassUtil;
 import roj.asm.MethodNode;
 import roj.asm.Opcodes;
 import roj.asm.cp.*;
@@ -8,7 +9,6 @@ import roj.asm.insn.CodeBlock;
 import roj.asm.insn.JumpBlock;
 import roj.asm.insn.SwitchBlock;
 import roj.asm.type.Type;
-import roj.asm.util.ClassUtil;
 import roj.collect.IntMap;
 import roj.collect.MyHashSet;
 import roj.collect.SimpleList;
@@ -27,7 +27,7 @@ import static roj.asm.frame.Var2.*;
 
 /**
  * @author Roj234
- * @since 2022/11/17 0017 13:09
+ * @since 2022/11/17 13:09
  */
 public class FrameVisitor {
 	private static final boolean DEADCODE_LENIENT = true;
@@ -65,7 +65,7 @@ public class FrameVisitor {
 		int slotBegin = 0 == (method.modifier()&ACC_STATIC) ? 1 : 0;
 
 		if (slotBegin != 0) { // this
-			set(0, new Var2(isConstructor ? T_UNINITIAL_THIS : T_REFERENCE, method.ownerClass()));
+			set(0, new Var2(isConstructor ? T_UNINITIAL_THIS : T_REFERENCE, method.owner()));
 		} else if (isConstructor) {
 			throw new IllegalArgumentException("静态的构造器");
 		}
@@ -609,7 +609,7 @@ public class FrameVisitor {
 		int type = c.type();
 		switch (type) {
 			case Constant.DYNAMIC -> {
-				String typeStr = ((CstDynamic) c).desc().getType().str();
+				String typeStr = ((CstDynamic) c).desc().rawDesc().str();
 				switch (TypeCast.getDataCap(typeStr.charAt(0))) {
 					case 0,1,2,3,4 -> push(T_INT);
 					case 5 -> push(T_LONG);
@@ -635,10 +635,10 @@ public class FrameVisitor {
 	}
 
 	private void invokeDynamic(CstDynamic dyn, int type/* unused */) {invoke(INVOKESTATIC, null, dyn.desc());}
-	private void invoke(byte code, CstRef method) {invoke(code, method, method.desc());}
+	private void invoke(byte code, CstRef method) {invoke(code, method, method.nameAndType());}
 	private void invoke(byte code, CstRef method, CstNameAndType desc) {
 		SimpleList<Type> arguments = tmpList; arguments.clear();
-		Type.methodDesc(desc.getType().str(), arguments);
+		Type.methodDesc(desc.rawDesc().str(), arguments);
 
 		Type returnType = arguments.remove(arguments.size()-1);
 		for (int i = arguments.size() - 1; i >= 0; i--) {
@@ -655,7 +655,7 @@ public class FrameVisitor {
 		if (returnValue != null) push(returnValue);
 	}
 	private void field(byte code, CstRef field) {
-		Var2 fieldType = of(Type.fieldDesc(field.desc().getType().str()));
+		Var2 fieldType = of(Type.fieldDesc(field.nameAndType().rawDesc().str()));
 		switch (code) {
 			case GETSTATIC -> push(fieldType);
 			case PUTSTATIC -> pop(fieldType);

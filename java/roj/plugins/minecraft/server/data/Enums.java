@@ -2,7 +2,7 @@ package roj.plugins.minecraft.server.data;
 
 /**
  * @author Roj234
- * @since 2024/3/19 0019 23:35
+ * @since 2024/3/19 23:35
  */
 public class Enums {
 	public static final byte DIFFICULTY_PEACEFUL = 0;

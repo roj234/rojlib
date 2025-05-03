@@ -42,7 +42,7 @@ public class Scheduler implements Runnable {
 			lock = wheel;
 			prev = next = this;
 		}
-		TaskHolder(ITask task, long delay) {
+		TaskHolder(Task task, long delay) {
 			this.task = task;
 			timeLeft = delay;
 		}
@@ -62,11 +62,11 @@ public class Scheduler implements Runnable {
 		Object lock;
 		TaskHolder prev, next;
 
-		ITask task;
+		Task task;
 		volatile long timeLeft;
 		static final long ITERATE_LOCK = 1L, REMOVE_LOCK = 2L;
 
-		public ITask getTask() { return task; }
+		public Task getTask() { return task; }
 		public boolean isExpired() { return timeLeft == 0 || timeLeft == -2; }
 		public boolean isCancelled() { return timeLeft < 0; }
 		public boolean cancel() {
@@ -182,7 +182,7 @@ public class Scheduler implements Runnable {
 		@Override
 		public String toString() { return next == null ? Integer.toString(tick) : next.toString()+":"+Integer.toHexString(tick); }
 
-		final void fastForward(int ticks, Collection<TaskHolder> lazyTask, Consumer<ITask> exec) {
+		final void fastForward(int ticks, Collection<TaskHolder> lazyTask, Consumer<Task> exec) {
 			int ff = ticks >>> (slot*DEPTH_SHL);
 			int t = tick;
 			tick = (t+ff) & DEPTH_MASK;
@@ -220,7 +220,7 @@ public class Scheduler implements Runnable {
 			if (next != null) next.fastForward(ticks, lazyTask, exec);
 		}
 
-		final void tick(Consumer<ITask> exec) {
+		final void tick(Consumer<Task> exec) {
 			int t = tick;
 			if (t != DEPTH_MASK) {
 				tick = t+1;
@@ -268,9 +268,9 @@ public class Scheduler implements Runnable {
 			root.timeLeft = 0;
 		}
 
-		static long safeApply(Consumer<ITask> exec, TaskHolder task) {
+		static long safeApply(Consumer<Task> exec, TaskHolder task) {
 			try {
-				ITask _task = task.task;
+				Task _task = task.task;
 				long nextRun = _task instanceof LoopTask loop ? loop.getNextRun() : 0;
 				if (nextRun >= 0) exec.accept(_task);
 				return nextRun;
@@ -340,13 +340,13 @@ public class Scheduler implements Runnable {
 
 	private final TimingWheel wheel = new TimingWheel(null);
 	private volatile boolean stopped;
-	private final Consumer<ITask> executor;
+	private final Consumer<Task> executor;
 
 	private static final TaskHolder SENTIAL_HEAD_END = new TaskHolder(null);
 	private volatile TaskHolder head = SENTIAL_HEAD_END;
 
-	public Scheduler(Consumer<ITask> executor) {this.executor = executor;}
-	public Scheduler(TaskHandler th) {executor = th::submit;}
+	public Scheduler(Consumer<Task> executor) {this.executor = executor;}
+	public Scheduler(TaskExecutor th) {executor = th::submit;}
 
 	public void run() {
 		int delta = 1;
@@ -423,7 +423,7 @@ public class Scheduler implements Runnable {
 		}
 	}
 
-	public ScheduleTask delay(ITask task, long delayMs) {
+	public ScheduleTask delay(Task task, long delayMs) {
 		if (delayMs < 0) throw new IllegalArgumentException("delayMs < 0");
 		TaskHolder holder = new TaskHolder(task, delayMs);
 		if (delayMs == 0) {
@@ -438,10 +438,10 @@ public class Scheduler implements Runnable {
 
 		return holder;
 	}
-	public ScheduleTask runAsync(ITask task) { return delay(task, 1); }
-	public ScheduleTask loop(ITask task, long intervalMs) { return delay(new LoopTask(this, task, intervalMs, -1, true), 0); }
-	public ScheduleTask loop(ITask task, long intervalMs, int count) { return delay(new LoopTask(this, task, intervalMs, count, true), 0); }
-	public ScheduleTask loop(ITask task, long intervalMs, int count, long delayMs) { return delay(new LoopTask(this, task, intervalMs, count, true), delayMs); }
+	public ScheduleTask runAsync(Task task) { return delay(task, 1); }
+	public ScheduleTask loop(Task task, long intervalMs) { return delay(new LoopTask(this, task, intervalMs, -1, true), 0); }
+	public ScheduleTask loop(Task task, long intervalMs, int count) { return delay(new LoopTask(this, task, intervalMs, count, true), 0); }
+	public ScheduleTask loop(Task task, long intervalMs, int count, long delayMs) { return delay(new LoopTask(this, task, intervalMs, count, true), delayMs); }
 
 	public void stop(Collection<ScheduleTask> collector) {
 		stopped = true;

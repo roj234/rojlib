@@ -15,7 +15,7 @@ import java.util.zip.Deflater;
 
 /**
  * @author Roj234
- * @since 2024/7/13 0013 17:34
+ * @since 2024/7/13 17:34
  */
 public final class HSConfig implements BiConsumer<String, String> {
 	private static final int KEEPALIVE_MAX = 32;

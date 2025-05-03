@@ -2,8 +2,8 @@ package roj.compiler.ast;
 
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
+import roj.asm.ClassDefinition;
 import roj.asm.ClassNode;
-import roj.asm.IClass;
 import roj.asm.MethodNode;
 import roj.asm.Opcodes;
 import roj.asm.annotation.Annotation;
@@ -16,7 +16,6 @@ import roj.asm.type.Generic;
 import roj.asm.type.IType;
 import roj.asm.type.Signature;
 import roj.asm.type.Type;
-import roj.asmx.AnnotationSelf;
 import roj.collect.*;
 import roj.compiler.LavaFeatures;
 import roj.compiler.Tokens;
@@ -434,23 +433,23 @@ public final class BlockParser {
 			var type = ctx.classes.getClassInfo(a.type());
 			var desc = ctx.classes.getAnnotationDescriptor(type);
 
-			if (0 == (desc.applicableTo&AnnotationSelf.TYPE_USE)) {
+			if (0 == (desc.applicableTo()&AnnotationType.TYPE_USE)) {
 				ctx.report(Kind.ERROR, "cu.annotation.notApplicable", type, "@@method_internal akka TYPE_USE@@");
 			}
 
-			if (desc.kind != AnnotationSelf.SOURCE) {
+			if (desc.retention() != AnnotationType.SOURCE) {
 				ctx.report(Kind.ERROR, "cu.annotation.notApplicable", type, "@@method_internal@@");
 			}
 
 			dup.clear();
 			extra.putAll(a.raw());
 
-			for (Map.Entry<String, Type> entry : desc.types.entrySet()) {
+			for (Map.Entry<String, Type> entry : desc.elementType.entrySet()) {
 				String name = entry.getKey();
 
 				Object node = Helpers.cast(extra.remove(name));
 				if (node instanceof Expr expr) a.raw().put(name, AnnotationPrimer.toAnnVal(ctx, expr, entry.getValue()));
-				else if (node == null && !desc.values.containsKey(entry.getKey())) missed.add(name);
+				else if (node == null && !desc.elementDefault.containsKey(entry.getKey())) missed.add(name);
 			}
 
 			if (!extra.isEmpty()) ctx.report(Kind.ERROR, "cu.annotation.extra", type, extra.keySet());
@@ -1264,7 +1263,7 @@ public final class BlockParser {
 		}
 	}
 	private void invokeClose(Variable v, boolean report) {
-		IClass info = ctx.classes.getClassInfo(v.type.owner());
+		ClassDefinition info = ctx.classes.getClassInfo(v.type.owner());
 		var result = ctx.getMethodList(info, "close").findMethod(ctx, Collections.emptyList(), 0);
 		assert result != null;
 
@@ -2687,7 +2686,7 @@ public final class BlockParser {
 		beginCodeBlock();
 
 		var lockType = ctx.classes.getClassInfo(loadLock.type().owner());
-		Boolean lockIsItf = ctx.classes.hasFeature(LavaFeatures.SYNCHRONIZED_LOCK) && ctx.classes.getHierarchyList(lockType).containsValue(Types.LOCK_TYPE)
+		Boolean lockIsItf = ctx.classes.hasFeature(LavaFeatures.SYNCHRONIZED_LOCK) && ctx.classes.getHierarchyList(lockType).containsKey(Types.LOCK_TYPE)
 				? (lockType.modifier & ACC_INTERFACE) != 0 : null;
 
 		// ALOAD_3 DUP ASTORE_3 ... 能把后两者约掉，不过到优化器里再说吧
@@ -2759,7 +2758,7 @@ public final class BlockParser {
 			cw.store(ref);
 		}
 
-		IClass info = ctx.classes.getClassInfo(node.type().owner());
+		ClassDefinition info = ctx.classes.getClassInfo(node.type().owner());
 
 		var prevDFI = ctx.dynamicFieldImport;
 		var prevDMI = ctx.dynamicMethodImport;

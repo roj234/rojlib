@@ -6,7 +6,7 @@ import java.io.IOException;
 
 /**
  * @author Roj234
- * @since 2024/3/19 0019 21:04
+ * @since 2024/3/19 21:04
  */
 public class MinecraftException extends IOException {
 	public final String sendToPlayer;

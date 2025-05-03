@@ -6,7 +6,7 @@ import roj.collect.MyBitSet;
 import roj.collect.SimpleList;
 import roj.config.ConfigMaster;
 import roj.crypt.Base64;
-import roj.crypt.XXHash;
+import roj.crypt.CryptoFactory;
 import roj.http.server.*;
 import roj.io.FastFailException;
 import roj.io.IOUtil;
@@ -25,9 +25,9 @@ import java.util.List;
 import java.util.function.BiConsumer;
 
 /**
- * 未测试，大概有很多bug
+ * 分块上传
  * @author Roj234
- * @since 2024/8/6 0006 0:07
+ * @since 2024/8/6 0:07
  */
 public class ChunkUpload {
 	public static final class Task {
@@ -143,7 +143,7 @@ public class ChunkUpload {
 
 	public CharSequence getUploadStatus(Request req) throws IllegalRequestException {
 		var task = getTask(req.argument("taskId"));
-		if (task == null) throw IllegalRequestException.BAD_REQUEST;
+		if (task == null) return "{\"ok\":false,\"data\":\"任务不存在\"}";
 		var sb = new CharList("{\"ok\":true,\"data\":[");
 		synchronized (task) {
 			var itr = task.bitmap.iterator();
@@ -232,7 +232,7 @@ public class ChunkUpload {
 			int hash = buf.readInt(8);
 
 			var task = tasks.get(taskIdNum);
-			if (task != null && XXHash.xxHash32(taskIdNum ^ task.sk, buf.list, 4, 4) == hash) {
+			if (task != null && CryptoFactory.xxHash32(taskIdNum ^ task.sk, buf.list, 4, 4) == hash) {
 				return task;
 			}
 		} catch (Exception ignored) {}
@@ -243,7 +243,7 @@ public class ChunkUpload {
 		var buf = IOUtil.getSharedByteBuf();
 		return buf.putInt(task.id)
 				  .putInt(srnd.nextInt())
-				  .putInt(XXHash.xxHash32(task.id ^ task.sk, buf.list, 4, 4))
+				  .putInt(CryptoFactory.xxHash32(task.id ^ task.sk, buf.list, 4, 4))
 				  .base64UrlSafe();
 	}
 }

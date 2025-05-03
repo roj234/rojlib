@@ -1,7 +1,7 @@
 package roj.config.serial;
 
 import roj.collect.SimpleList;
-import roj.collect.XHashSet;
+import roj.collect.XashMap;
 import roj.config.data.CEntry;
 
 import java.util.ArrayList;
@@ -12,16 +12,16 @@ import java.util.regex.Pattern;
 /**
  * 访问者模式的TreeQuery，性能也许不会很好？还有些方法没写
  * @author Roj234
- * @since 2025/4/25 0025 23:06
+ * @since 2025/4/25 23:06
  */
 public class TreeQuery implements CVisitor {
 	private static class PathNode {
-		private static final XHashSet.Shape<Object, PathNode> SHAPE = XHashSet.shape(Object.class, PathNode.class, "key", "_next");
+		private static final XashMap.Builder<Object, PathNode> BUILDER = XashMap.builder(Object.class, PathNode.class, "key", "_next");
 
 		final Object key;
 		private PathNode _next;
 
-		final XHashSet<Object, PathNode> children = SHAPE.createSized(2);
+		final XashMap<Object, PathNode> children = BUILDER.createSized(2);
 
 		CVisitor visitor;
 

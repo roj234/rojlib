@@ -1,12 +1,12 @@
 package roj.plugins.kuropack;
 
 import roj.archive.qz.xz.lz.LZDecoder;
-import roj.asmx.nixim.Final;
-import roj.asmx.nixim.Inject;
-import roj.asmx.nixim.Nixim;
-import roj.asmx.nixim.Shadow;
+import roj.asmx.injector.Final;
+import roj.asmx.injector.Inject;
+import roj.asmx.injector.Shadow;
+import roj.asmx.injector.Weave;
 
-@Nixim(altValue = LZDecoder.class)
+@Weave(target = LZDecoder.class)
 abstract class LZDecoderN_ {
 	@Shadow
 	int pos,start;

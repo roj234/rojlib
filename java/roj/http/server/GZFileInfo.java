@@ -13,7 +13,7 @@ import java.util.zip.ZipException;
 
 /**
  * @author Roj234
- * @since 2024/11/28 0028 6:21
+ * @since 2024/11/28 6:21
  */
 public class GZFileInfo implements FileInfo {
 	private final File file;

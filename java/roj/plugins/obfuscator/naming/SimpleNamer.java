@@ -1,6 +1,6 @@
 package roj.plugins.obfuscator.naming;
 
-import roj.asm.type.Desc;
+import roj.asm.MemberDescriptor;
 import roj.text.CharList;
 
 import java.util.Random;
@@ -56,14 +56,14 @@ public abstract class SimpleNamer implements NamingPolicy {
 	}
 
 	@Override
-	public String obfName(Set<String> existNames, Desc d, Random rnd) {
+	public String obfName(Set<String> existNames, MemberDescriptor d, Random rnd) {
 		int i = maxRetryAttempts;
 		while (true) {
 			buf.clear();
-			if (!generateName(rnd, buf, d.param.startsWith("(")?1:2)) return null;
+			if (!generateName(rnd, buf, d.rawDesc.startsWith("(")?1:2)) return null;
 
 			String nn = buf.toString();
-			if (existNames.add(nn.concat(d.param))) return nn;
+			if (existNames.add(nn.concat(d.rawDesc))) return nn;
 
 			if (i-- == 0) {
 				if (fallback == null) return null;

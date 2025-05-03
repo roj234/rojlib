@@ -4,7 +4,7 @@ import java.io.File;
 
 /**
  * @author Roj234
- * @since 2025/3/11 0011 0:14
+ * @since 2025/3/11 0:14
  */
 public interface PermissionHolder {
 	PermissionHolder NONE = new PermissionHolder() {

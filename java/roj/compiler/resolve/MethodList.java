@@ -1,6 +1,7 @@
 package roj.compiler.resolve;
 
-import roj.asm.IClass;
+import roj.asm.ClassDefinition;
+import roj.asm.ClassUtil;
 import roj.asm.MethodNode;
 import roj.asm.Opcodes;
 import roj.asm.attr.Attribute;
@@ -8,7 +9,6 @@ import roj.asm.type.Generic;
 import roj.asm.type.IType;
 import roj.asm.type.Signature;
 import roj.asm.type.Type;
-import roj.asm.util.ClassUtil;
 import roj.asmx.mapper.ParamNameMapper;
 import roj.collect.IntMap;
 import roj.collect.MyBitSet;
@@ -31,16 +31,16 @@ import java.util.Map;
 
 /**
  * @author Roj234
- * @since 2024/1/28 0028 5:41
+ * @since 2024/1/28 5:41
  */
 final class MethodList extends ComponentList {
-	IClass owner;
+	ClassDefinition owner;
 	final SimpleList<MethodNode> methods = new SimpleList<>();
 	private int childId;
 	private MyHashMap<String, List<MethodNode>> ddtmp = new MyHashMap<>();
 	private MyBitSet overrider;
 
-	void add(IClass klass, MethodNode mn) {
+	void add(ClassDefinition klass, MethodNode mn) {
 		// 忽略改变返回类型的重载的parent (akka如果有对应的桥接方法，就不去父类查询了)
 		var list = ddtmp.computeIfAbsent(Type.toMethodDesc(mn.parameters()), Helpers.fnArrayList());
 		for (int i = 0; i < list.size(); i++) {
@@ -61,7 +61,7 @@ final class MethodList extends ComponentList {
 	 * @param klass 所有者
 	 * @return 是否可以压缩为MethodListSingle
 	 */
-	boolean pack(IClass klass) {
+	boolean pack(ClassDefinition klass) {
 		ddtmp = null;
 		owner = klass;
 

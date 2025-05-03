@@ -1,13 +1,13 @@
 package roj.plugins.obfuscator.raw;
 
+import roj.asm.AsmCache;
 import roj.asm.FieldNode;
 import roj.asm.MethodNode;
-import roj.asm.Parser;
 import roj.asm.attr.AttributeList;
 import roj.asm.attr.UnparsedAttribute;
 import roj.asm.cp.ConstantPool;
 import roj.asm.cp.CstUTF;
-import roj.asm.util.Context;
+import roj.asmx.Context;
 import roj.collect.MyHashSet;
 import roj.plugins.obfuscator.ObfuscateTask;
 import roj.text.CharList;
@@ -19,7 +19,7 @@ import java.util.Random;
 
 /**
  * @author Roj234
- * @since 2025/3/18 0018 14:16
+ * @since 2025/3/18 14:16
  */
 class RemoveDebugInfo implements ObfuscateTask {
 	public MyHashSet<String> removeAttributes = new MyHashSet<>();
@@ -46,7 +46,7 @@ class RemoveDebugInfo implements ObfuscateTask {
 			UnparsedAttribute au = (UnparsedAttribute) m.getRawAttribute("Code");
 			if (au == null) continue;
 
-			DynByteBuf r = Parser.reader(au);
+			DynByteBuf r = AsmCache.reader(au);
 			ByteList w = new ByteList(r.readableBytes());
 			r.rIndex += 4; // stack size
 			int codeLen = r.readInt();

@@ -2,13 +2,13 @@ package roj.plugins.ci.plugin;
 
 import roj.archive.zip.ZipArchive;
 import roj.archive.zip.ZipFileWriter;
-import roj.asm.type.Desc;
-import roj.asm.util.Context;
+import roj.asm.MemberDescriptor;
+import roj.asmx.Context;
 import roj.asmx.event.Subscribe;
 import roj.asmx.mapper.Mapper;
 import roj.collect.SimpleList;
 import roj.config.data.CEntry;
-import roj.crypt.ILCrypto;
+import roj.crypt.CryptoFactory;
 import roj.io.IOUtil;
 import roj.plugins.ci.Compiler;
 import roj.plugins.ci.FMD;
@@ -108,7 +108,7 @@ public class MAP implements Processor {
 
 					for (int j = 0; j < classes.size(); j++) {
 						var klass = classes.get(j);
-						zfw.writeNamed(klass.getFileName(), klass.get());
+						zfw.writeNamed(klass.getFileName(), klass.getClassBytes());
 					}
 				}
 				LOGGER.info("已处理{}", in);
@@ -129,12 +129,12 @@ public class MAP implements Processor {
 			}
 
 			Mapper m = workspace.getMapper();
-			for (Map.Entry<Desc, String> entry : m.getMethodMap().entrySet()) {
-				if (word.matcher(entry.getKey().owner+"."+entry.getKey().name+entry.getKey().param).find()) {
+			for (Map.Entry<MemberDescriptor, String> entry : m.getMethodMap().entrySet()) {
+				if (word.matcher(entry.getKey().owner+"."+entry.getKey().name+entry.getKey().rawDesc).find()) {
 					System.out.println(entry.getKey()+" => "+entry.getValue());
 				}
 			}
-			for (Map.Entry<Desc, String> entry : m.getFieldMap().entrySet()) {
+			for (Map.Entry<MemberDescriptor, String> entry : m.getFieldMap().entrySet()) {
 				if (word.matcher(entry.getKey().owner+"."+entry.getKey().name).find()) {
 					System.out.println(entry.getKey()+" => "+entry.getValue());
 				}
@@ -191,7 +191,7 @@ public class MAP implements Processor {
 		if (mapper != null) return mapper;
 
 		var libraries = new SimpleList<File>();
-		var digest = ILCrypto.SM3();
+		var digest = CryptoFactory.SM3();
 		Predicate<File> predicate = file -> {
 			digest.update(IOUtil.getSharedByteBuf().putUTF(file.getName()).putLong(file.length()).putLong(file.lastModified()));
 

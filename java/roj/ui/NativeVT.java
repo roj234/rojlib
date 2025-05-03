@@ -21,9 +21,9 @@ import java.util.Objects;
 
 /**
  * @author Roj234
- * @since 2024/7/21 0021 7:38
+ * @since 2024/7/21 7:38
  */
-public final class NativeVT implements ITerminal, Runnable {
+public final class NativeVT implements StdIO, Runnable {
 	private static final int STDIN = 0, STDOUT = 1, STDERR = 2;
 	private static final int MODE_GET = 0, MODE_SET = 1;
 	private static final int
@@ -52,7 +52,7 @@ public final class NativeVT implements ITerminal, Runnable {
 	static Charset charset;
 	static FastCharset ucs;
 
-	private static final ITerminal instance = init();
+	private static final StdIO instance = init();
 	private static Thread reader;
 	static {
 		var out = Objects.requireNonNull(System.out);
@@ -96,9 +96,9 @@ public final class NativeVT implements ITerminal, Runnable {
 		if (tmp instanceof FilterOutputStream) tmp = Unaligned.U.getObject(tmp, offset);
 		sysOut = (OutputStream) tmp;
 	}
-	public static ITerminal getInstance(){return instance;}
+	public static StdIO getInstance(){return instance;}
 
-	public static final class Fallback extends DelegatedPrintStream implements ITerminal, Runnable {
+	public static final class Fallback extends DelegatedPrintStream implements StdIO, Runnable {
 		private final PrintStream sout;
 
 		public Fallback() {
@@ -143,7 +143,7 @@ public final class NativeVT implements ITerminal, Runnable {
 
 	private boolean read;
 	private NativeVT() {}
-	private static ITerminal init() {
+	private static StdIO init() {
 		if (Boolean.getBoolean("roj.noAnsi") || Boolean.getBoolean("roj.disableNativeVT")) return null;
 		// 避免初始化System.console()造成16KB的内存浪费
 		if (RojLib.hasNative(RojLib.WIN32) ? GetConsoleWindow() == 0 : System.console() == null) return null;

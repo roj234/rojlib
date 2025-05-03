@@ -6,7 +6,7 @@ import roj.plugins.minecraft.server.data.PlayerEntity;
 
 /**
  * @author Roj234
- * @since 2024/3/22 0022 2:42
+ * @since 2024/3/22 2:42
  */
 @Cancellable
 public class PlayerMoveEvent extends Event {

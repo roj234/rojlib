@@ -4,7 +4,7 @@ import roj.text.CharList;
 
 /**
  * @author Roj234
- * @since 2022/11/1 0001 11:04
+ * @since 2022/11/1 11:04
  */
 final class Any implements IType {
 	static final Any I = new Any();

@@ -1,7 +1,7 @@
 package roj.plugins.web.php;
 
 import org.jetbrains.annotations.Nullable;
-import roj.concurrent.TaskExecutor;
+import roj.concurrent.TaskThread;
 import roj.config.data.CEntry;
 import roj.config.data.CMap;
 import roj.config.data.Type;
@@ -19,7 +19,7 @@ import java.util.function.Predicate;
 
 /**
  * @author Roj234
- * @since 2024/7/10 0010 3:17
+ * @since 2024/7/10 3:17
  */
 public class PHPPlugin extends Plugin implements Router, Predicate<String> {
 	private Win32FPM fpm;
@@ -49,7 +49,7 @@ public class PHPPlugin extends Plugin implements Router, Predicate<String> {
 		fpm.docRoot = document_root.toFile();
 		fpm.portBase = 40000 + (int)System.nanoTime()%20000;
 
-		var dispatcher = new TaskExecutor();
+		var dispatcher = new TaskThread();
 		dispatcher.setName("PHP-FPM 请求分配");
 		dispatcher.start();
 		dispatcher.submit(fpm);

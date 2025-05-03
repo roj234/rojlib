@@ -14,41 +14,42 @@
 
 ```java
 import roj.ui.Terminal;
+import roj.ui.Shell;
 import roj.ui.Argument;
 import roj.ui.Command;
-import roj.ui.CommandConsole;
 
 import static roj.ui.CommandNode.argument;
 import static roj.ui.CommandNode.literal;
 
 /**
- * 代码来源roj.mod.FMDMain
+ * 代码来源roj.plugins.ci.FMD
  */
 public final class Example {
-	public static CommandConsole console = new CommandConsole("");
+	public static Shell console = new Shell("");
 
 	@SuppressWarnings("fallthrough")
 	public static void main(String[] args) throws Exception {
-		CommandConsole c = console;
+		Shell c = console;
 
 		// 简单的指令
 		c.register(literal("reflect").executes(ctx -> ReflectTool.start(!isCLI)));
 		c.register(literal("auto").then(argument("auto", Argument.bool()).executes(
-			ctx -> AutoCompile.setEnabled(ctx.argument("auto", Boolean.class)))));
+				ctx -> AutoCompile.setEnabled(ctx.argument("auto", Boolean.class)))));
 
 		// 复杂一点的Argument
-		Command cDeobf = ctx -> {};
+		Command cDeobf = ctx -> {
+		};
 		c.register(literal("deobf").executes(cDeobf)
-								   .then(argument("reverse", Argument.string("mcp2srg", "srg2mcp")).executes(cDeobf)));
+				.then(argument("reverse", Argument.string("mcp2srg", "srg2mcp")).executes(cDeobf)));
 
 		// 变长参数
 		c.register(literal("build").then(
-			argument("flags", Argument.stringFlags("zl", "showErrorCode", "noupdate")).executes(ctx -> {
-				List<String> flags = Helpers.cast(ctx.argument("flags", List.class));
-				Map<String, Object> map = new MyHashMap<>();
-				for (String flag : flags) map.put(flag, "");
-				build(map);
-			})));
+				argument("flags", Argument.stringFlags("zl", "showErrorCode", "noupdate")).executes(ctx -> {
+					List<String> flags = Helpers.cast(ctx.argument("flags", List.class));
+					Map<String, Object> map = new MyHashMap<>();
+					for (String flag : flags) map.put(flag, "");
+					build(map);
+				})));
 
 		// 甚至是自定义参数
 		Argument.ArgSetOf<File> dynamicProject = new Argument.ArgSetOf<>(1, new MyHashMap<>()) {

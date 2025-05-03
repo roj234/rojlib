@@ -2,7 +2,7 @@ package roj.gui;
 
 /**
  * @author Roj234
- * @since 2023/11/28 0028 2:15
+ * @since 2023/11/28 2:15
  */
 public class CMBoxValue {
 	public final String name;

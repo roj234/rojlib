@@ -14,7 +14,7 @@ import java.util.Random;
 /**
  * <a href="https://www.youtube.com/watch?v=b3_lVSrPB6w">...</a>
  * @author Roj234
- * @since 2022/12/26 0026 14:06
+ * @since 2022/12/26 14:06
  */
 public class ConvolutionalECC extends RCipherSpi {
 	private final int inBits, outBits, outMask;
@@ -23,7 +23,7 @@ public class ConvolutionalECC extends RCipherSpi {
 	private final int[] history;
 	private final int historyCapacity;
 	private final byte[] decision;
-	private Random rnd = new MT19937();
+	private Random rnd = CryptoFactory.MT19937Random();
 
 	public ConvolutionalECC(int inBits, int outBits) {
 		this.inBits = inBits;

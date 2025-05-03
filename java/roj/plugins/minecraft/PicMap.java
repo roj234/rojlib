@@ -8,7 +8,7 @@ import roj.ui.Terminal;
 
 import javax.imageio.ImageIO;
 import java.awt.*;
-import java.awt.image.*;
+import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -16,7 +16,7 @@ import java.util.zip.GZIPOutputStream;
 
 /**
  * @author Roj234
- * @since 2024/8/22 0022 17:37
+ * @since 2024/8/22 17:37
  */
 public class PicMap {
 	public static final class MapRoot {

@@ -10,7 +10,7 @@ import java.lang.annotation.Target;
 /**
  * 注：默认允许POST和GET请求，手动用@Accepts指定
  * @author Roj234
- * @since 2023/2/5 0005 11:35
+ * @since 2023/2/5 11:35
  * 方法签名: [Request, [ResponseHeader]][请求参数]
  */
 @Retention(RetentionPolicy.CLASS)

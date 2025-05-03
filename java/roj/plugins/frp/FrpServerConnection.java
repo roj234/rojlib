@@ -22,7 +22,7 @@ import java.util.concurrent.locks.Lock;
 
 /**
  * @author Roj234
- * @since 2024/9/15 0015 0:23
+ * @since 2024/9/15 0:23
  */
 class FrpServerConnection extends FrpCommon {
 	public FrpServer server;

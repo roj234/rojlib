@@ -1,14 +1,13 @@
 package roj.archive.zip;
 
+import roj.crypt.CryptoFactory;
 import roj.crypt.FeedbackCipher;
 import roj.crypt.HMAC;
-import roj.crypt.ILCrypto;
-import roj.crypt.KDF;
+import roj.crypt.RCipherSpi;
 import roj.io.IOUtil;
 import roj.util.DynByteBuf;
 import roj.util.Helpers;
 
-import javax.crypto.Cipher;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -21,7 +20,7 @@ import java.util.Arrays;
 
 /**
  * @author Roj234
- * @since 2022/11/14 0012 0:16
+ * @since 2022/11/14 0:16
  */
 final class ZipAES extends FeedbackCipher {
 	static final int SALT_LENGTH = 16;
@@ -34,7 +33,7 @@ final class ZipAES extends FeedbackCipher {
 	byte[] salt;
 
 	public ZipAES() {
-		super(ILCrypto.Aes(), MODE_CTR);
+		super(CryptoFactory.AES(), MODE_CTR);
 		try {
 			hmac = new HMAC(MessageDigest.getInstance("SHA1"));
 		} catch (NoSuchAlgorithmException e) {
@@ -44,18 +43,18 @@ final class ZipAES extends FeedbackCipher {
 
 	@Override
 	public void init(int mode, byte[] key, AlgorithmParameterSpec par, SecureRandom random) {
-		decrypt = mode == Cipher.DECRYPT_MODE;
+		decrypt = mode == RCipherSpi.DECRYPT_MODE;
 
 		if (salt == null) salt = SecureRandom.getSeed(SALT_LENGTH);
 
-		byte[] compositeKey = KDF.PBKDF2_Derive(hmac, key, salt, PBKDF2_ITERATION_COUNT, COMPOSITE_KEY_LENGTH);
+		byte[] compositeKey = CryptoFactory.PBKDF2_Derive(hmac, key, salt, PBKDF2_ITERATION_COUNT, COMPOSITE_KEY_LENGTH);
 
 		try {
-			cip.init(Cipher.ENCRYPT_MODE, Arrays.copyOf(compositeKey, KEY_LENGTH)); // AES Key
+			cip.init(RCipherSpi.ENCRYPT_MODE, Arrays.copyOf(compositeKey, KEY_LENGTH)); // AES Key
 		} catch (InvalidKeyException e) {
 			Helpers.athrow(e);
 		}
-		hmac.setSignKey(compositeKey, KEY_LENGTH, KEY_LENGTH); // HMAC key
+		hmac.init(compositeKey, KEY_LENGTH, KEY_LENGTH); // HMAC key
 		System.arraycopy(compositeKey, 2*KEY_LENGTH, verifier, 0, 2); // Verification key
 
 		tmp.clear();

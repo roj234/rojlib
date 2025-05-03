@@ -9,7 +9,7 @@ import java.lang.annotation.Target;
 /**
  * 允许Literally ’堆叠‘在属性中，而不是{@link java.lang.annotation.Repeatable}
  * @author Roj234
- * @since 2024/6/21 0021 20:06
+ * @since 2024/6/21 20:06
  */
 @Retention(RetentionPolicy.RUNTIME)
 @Target(ElementType.ANNOTATION_TYPE)

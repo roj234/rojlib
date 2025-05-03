@@ -12,7 +12,7 @@ import java.util.function.Consumer;
 
 /**
  * @author Roj234
- * @since 2024/3/17 0017 1:12
+ * @since 2024/3/17 1:12
  */
 public class CPMain extends ClassLoader {
 	public static Consumer<Object> callback;

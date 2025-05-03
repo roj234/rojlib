@@ -5,7 +5,6 @@ import roj.util.DynByteBuf;
 
 import javax.crypto.AEADBadTagException;
 import javax.crypto.BadPaddingException;
-import javax.crypto.Cipher;
 import javax.crypto.ShortBufferException;
 import java.security.InvalidAlgorithmParameterException;
 import java.security.InvalidKeyException;
@@ -32,7 +31,7 @@ final class ChaCha_Poly1305 extends RCipherSpi {
 
 	public final void init(int mode, byte[] key, AlgorithmParameterSpec par, SecureRandom random) throws InvalidAlgorithmParameterException, InvalidKeyException {
 		c.init(mode, key, par, random);
-		this.decrypt = mode == Cipher.DECRYPT_MODE;
+		this.decrypt = mode == RCipherSpi.DECRYPT_MODE;
 	}
 
 	public int engineGetOutputSize(int data) { return decrypt ? data - 16 : data + 16; }
@@ -114,7 +113,7 @@ final class ChaCha_Poly1305 extends RCipherSpi {
 		tmp.clear();
 		for (int i = 0; i < 8; i++) tmp.putInt(c.tmp[i]);
 
-		p.setSignKey(tmp.list);
+		p.init(tmp.list);
 
 		lenAAD = processed = 0;
 	}

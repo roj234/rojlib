@@ -5,7 +5,7 @@ import roj.config.serial.CVisitor;
 
 /**
  * @author Roj234
- * @since 2025/3/13 0013 6:44
+ * @since 2025/3/13 6:44
  */
 final class AClass extends AnnVal {
 	public AClass(Type type) {value = type;}

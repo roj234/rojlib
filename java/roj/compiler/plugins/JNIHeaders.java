@@ -22,7 +22,7 @@ import static roj.asm.type.Type.*;
 
 /**
  * @author Roj234
- * @since 2025/4/8 0008 18:24
+ * @since 2025/4/8 18:24
  */
 public class JNIHeaders {
 	public static void writeJNIHeaders(GlobalContext ctx, List<ClassNode> classes, Supplier<? extends CharList> supplier) throws IOException {

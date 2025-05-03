@@ -1,15 +1,15 @@
 package roj.plugins.ci.plugin;
 
 import roj.asm.ClassNode;
-import roj.asm.RawNode;
+import roj.asm.ClassUtil;
+import roj.asm.Member;
+import roj.asm.MemberDescriptor;
 import roj.asm.annotation.AnnVal;
 import roj.asm.annotation.Annotation;
 import roj.asm.attr.Annotations;
-import roj.asm.type.Desc;
-import roj.asm.util.ClassUtil;
-import roj.asm.util.Context;
+import roj.asmx.Context;
+import roj.asmx.injector.CodeWeaver;
 import roj.asmx.mapper.Mapper;
-import roj.asmx.nixim.NiximSystemV2;
 import roj.plugins.ci.FMD;
 import roj.ui.Terminal;
 
@@ -30,11 +30,11 @@ public class NIXIM implements Processor {
 	@Override
 	public List<Context> process(List<Context> classes, ProcessEnvironment pc) {
 		m = FMD.MapPlugin.getProjectMapper(pc.project);
-		var ctx = pc.getAnnotatedClass(classes, NiximSystemV2.A_NIXIM);
+		var ctx = pc.getAnnotatedClass(classes, CodeWeaver.A_INJECTION);
 
 		for (int i = 0; i < ctx.size(); i++) {
 			ClassNode data = ctx.get(i).getData();
-			Annotation nixim = Annotation.findInvisible(data.cp, data, NiximSystemV2.A_NIXIM);
+			Annotation nixim = Annotation.findInvisible(data.cp, data, CodeWeaver.A_INJECTION);
 
 			// noinspection all
 			String dest = nixim.getString("value");
@@ -48,21 +48,21 @@ public class NIXIM implements Processor {
 		return classes;
 	}
 
-	private void process(ClassNode data, String dest, List<? extends RawNode> nodes) {
+	private void process(ClassNode data, String dest, List<? extends Member> nodes) {
 		for (int i = 0; i < nodes.size(); i++) {
-			RawNode node = nodes.get(i);
+			Member node = nodes.get(i);
 			if (node.name().startsWith("func_") || node.name().startsWith("field_")) continue;
 
 			List<Annotation> list = Annotations.getAnnotations(data.cp, node, false);
 			for (int j = 0; j < list.size(); j++) {
 				Annotation anno = list.get(j);
-				if (anno.type().equals(NiximSystemV2.A_SHADOW)) {
+				if (anno.type().equals(CodeWeaver.A_SHADOW)) {
 					String value = anno.getString("value", "");
 					if (value.isEmpty()) {
 						String prevOwner = anno.getString("owner", dest).replace('.', '/');
 						String name = map(prevOwner, node);
 						if (name != null) {
-							String owner = ClassUtil.getInstance().sharedDC.owner;
+							String owner = ClassUtil.getInstance().sharedDesc.owner;
 							if (!prevOwner.equals(owner)) {
 								anno.put("owner", AnnVal.valueOf(owner));
 							}
@@ -72,7 +72,7 @@ public class NIXIM implements Processor {
 						}
 					}
 					break;
-				} else if (anno.type().equals(NiximSystemV2.A_COPY)) {
+				} else if (anno.type().equals(CodeWeaver.A_COPY)) {
 					if (anno.getBool("map", false)) {
 						String name = map(dest, node);
 						if (name != null) {
@@ -82,7 +82,7 @@ public class NIXIM implements Processor {
 						}
 					}
 					break;
-				} else if (anno.type().equals(NiximSystemV2.A_INJECT)) {
+				} else if (anno.type().equals(CodeWeaver.A_INJECT_POINT)) {
 					String value = anno.getString("value", "");
 					if (value.isEmpty()) {
 						String name = map(dest, node);
@@ -98,13 +98,13 @@ public class NIXIM implements Processor {
 		}
 	}
 
-	private String map(String dest, RawNode node) {
-		Desc desc = ClassUtil.getInstance().sharedDC;
+	private String map(String dest, Member node) {
+		MemberDescriptor desc = ClassUtil.getInstance().sharedDesc;
 		desc.owner = dest;
 		desc.name = node.name();
-		desc.param = m.checkFieldType || node.rawDesc().startsWith("(") ? node.rawDesc() : "";
+		desc.rawDesc = m.checkFieldType || node.rawDesc().startsWith("(") ? node.rawDesc() : "";
 
-		Map<Desc, String> map = desc.param.startsWith("(") ? m.getMethodMap() : m.getFieldMap();
+		Map<MemberDescriptor, String> map = desc.rawDesc.startsWith("(") ? m.getMethodMap() : m.getFieldMap();
 
 		List<String> parents = m.getSelfSupers().getOrDefault(dest, Collections.emptyList());
 		int i = 0;

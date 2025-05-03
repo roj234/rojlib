@@ -10,7 +10,7 @@ import static roj.reflect.Unaligned.U;
 
 /**
  * @author Roj234
- * @since 2023/4/27 0027 15:48
+ * @since 2023/4/27 15:48
  */
 final class GB18030 extends FastCharset {
 	static final FastCharset INSTANCE = new GB18030(), EXCEPTIONAL = new GB18030();

@@ -23,7 +23,7 @@ import roj.plugins.minecraft.server.network.PlayerConnection;
 import roj.plugins.minecraft.server.network.PlayerInit;
 import roj.text.TextWriter;
 import roj.text.logging.Logger;
-import roj.ui.AnsiString;
+import roj.ui.Text;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
 import roj.util.HighResolutionTimer;
@@ -40,7 +40,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * @author Roj234
- * @since 2024/3/19 0019 15:04
+ * @since 2024/3/19 15:04
  */
 public class MinecraftServer extends Plugin {
 	public static final TypedKey<PlayerConnection> PLAYER = new TypedKey<>("player");
@@ -164,13 +164,13 @@ public class MinecraftServer extends Plugin {
 		return metaBytes.slice();
 	}
 
-	public AnsiString preLogin(ChannelCtx ctx, PlayerConnection connection) {
+	public Text preLogin(ChannelCtx ctx, PlayerConnection connection) {
 		ctx.channel().addLast("create_world", new PlayerInit(connection));
 
 		PlayerLoginEvent.Pre event = new PlayerLoginEvent.Pre(connection, ctx.channel());
 		if (eventBus.post(event)) {
-			AnsiString message = event.getMessage();
-			return message == null ? new AnsiString("你被拒绝加入服务器") : message;
+			Text message = event.getMessage();
+			return message == null ? new Text("你被拒绝加入服务器") : message;
 		}
 		return null;
 	}

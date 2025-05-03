@@ -18,7 +18,7 @@ import static roj.archive.zip.ZipFile.*;
 
 /**
  * @author Roj234
- * @since 2023/3/14 0014 0:43
+ * @since 2023/3/14 0:43
  */
 public class ZEntry implements RSegmentTree.Range, ArchiveEntry, Cloneable {
 	//00: no compression

@@ -6,7 +6,7 @@ import roj.archive.ArchiveUtils;
 import roj.archive.CRC32InputStream;
 import roj.collect.ImmediateWeakReference;
 import roj.collect.SimpleList;
-import roj.collect.XHashSet;
+import roj.collect.XashMap;
 import roj.crypt.CipherInputStream;
 import roj.io.IOUtil;
 import roj.io.source.BufferedSource;
@@ -42,16 +42,16 @@ public class ZipFile implements ArchiveFile {
 	Source fpRead;
 	private static final long FPREAD_OFFSET = ReflectionUtils.fieldOffset(ZipFile.class, "fpRead");
 
-	private static final XHashSet.Shape<String, ZEntry> ENTRY_SHAPE = XHashSet.noCreation(ZEntry.class, "name", "next");
+	private static final XashMap.Builder<String, ZEntry> ENTRY_BUILDER = XashMap.noCreation(ZEntry.class, "name", "next");
 
-	private static final XHashSet<Source, CacheNode> OpenedCache = ImmediateWeakReference.shape(CacheNode.class).create();
+	private static final XashMap<Source, CacheNode> OpenedCache = ImmediateWeakReference.shape(CacheNode.class).create();
 	static final class CacheNode extends ImmediateWeakReference<Source> {
-		public CacheNode(Source key, XHashSet<Source, CacheNode> owner) {super(key, owner);}
+		public CacheNode(Source key, XashMap<Source, CacheNode> owner) {super(key, owner);}
 		SimpleList<ZEntry> entries;
-		XHashSet<String, ZEntry> namedEntries;
+		XashMap<String, ZEntry> namedEntries;
 	}
 
-	XHashSet<String, ZEntry> namedEntries;
+	XashMap<String, ZEntry> namedEntries;
 	SimpleList<ZEntry> entries = new SimpleList<>();
 
 	private ByteList buf;
@@ -153,7 +153,7 @@ public class ZipFile implements ArchiveFile {
 				buf = null;
 			}
 
-			var namedEntries = ENTRY_SHAPE.createSized(entries.size());
+			var namedEntries = ENTRY_BUILDER.createSized(entries.size());
 
 			node = new CacheNode(r, OpenedCache);
 			node.namedEntries = namedEntries;

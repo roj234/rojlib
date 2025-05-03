@@ -5,7 +5,7 @@ package roj.concurrent;
  * @since 2024/3/6 2:27
  */
 public interface ScheduleTask {
-	ITask getTask();
+	Task getTask();
 
 	/**
 	 * 当任务过期时，返回 {@code true}.

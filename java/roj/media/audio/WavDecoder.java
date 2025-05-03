@@ -9,7 +9,6 @@ import roj.util.ByteList;
 import roj.util.DynByteBuf;
 
 import javax.sound.sampled.AudioFormat;
-import javax.sound.sampled.LineUnavailableException;
 import java.io.IOException;
 import java.util.Map;
 
@@ -17,7 +16,7 @@ import static roj.util.ByteList.FOURCC;
 
 /**
  * @author Roj234
- * @since 2024/2/19 0019 3:25
+ * @since 2024/2/19 3:25
  */
 public class WavDecoder implements AudioDecoder {
 	private static final int RIFF = FOURCC("RIFF");
@@ -30,11 +29,10 @@ public class WavDecoder implements AudioDecoder {
 	private final ByteList buf = new ByteList(19);
 	private volatile Source in;
 	private AudioFormat af;
-	private AudioOutput out;
 	private int bytePerSecond, dataBegin, dataEnd, sampleCount;
 
 	@Override
-	public @Nullable AudioMetadata open(Source in, AudioOutput out, boolean parseMetadata) throws IOException, LineUnavailableException {
+	public @Nullable AudioMetadata open(Source in, boolean parseMetadata) throws IOException {
 		ByteList buf = this.buf;
 		buf.clear();
 
@@ -52,7 +50,6 @@ public class WavDecoder implements AudioDecoder {
 		if (format != 1) throw new IOException("compressed WAVE file (0x"+Integer.toHexString(format)+")");
 
 		this.in = in;
-		this.out = out;
 
 		int channels = buf.readUShortLE();
 		int sampleRate = buf.readIntLE();
@@ -80,8 +77,6 @@ public class WavDecoder implements AudioDecoder {
 				//System.out.println("unknown wave block:"+buf.dump());
 			}
 		}
-
-		out.init(af, frameSize / 2);
 
 		this.af = af;
 		bytePerSecond = frameSize;
@@ -166,39 +161,41 @@ public class WavDecoder implements AudioDecoder {
 	}
 
 	@Override
-	public boolean isOpen() { return in != null; }
+	public int getState() {
+		if (in == null) return READY;
+		try {
+			long pos = in.position();
+			if (pos >= dataEnd) return FINISHED;
+			return pos == dataBegin ? DECODING : OPENED;
+		} catch (IOException e) {
+			return UNKNOWN;
+		}
+	}
 
 	@Override
-	public void stop() {
+	public void connect(AudioSink sink) throws IOException {
+		sink.open(af);
+
+		Source source = in;
+		while (in != null && source.position() < dataEnd) {
+			buf.clear();
+			int len = (int) Math.min(bytePerSecond, dataEnd-source.position());
+			source.readFully(buf, len);
+			sink.write(buf.list, 0, len);
+		}
+	}
+
+	@Override
+	public void disconnect() {
 		in = null;
-		out = null;
 		dataBegin = dataEnd = bytePerSecond = 0;
 	}
 
 	@Override
-	public boolean isDecoding() {
-		try {
-			return in != null && in.position() < dataEnd;
-		} catch (IOException e) {
-			return false;
-		}
-	}
+	public boolean isSeekable() { return getState() == DECODING; }
 	@Override
-	public void decodeLoop() throws IOException {
-		Source in1 = in;
-		while (in != null && in1.position() < dataEnd) {
-			buf.clear();
-			int len = (int) Math.min(bytePerSecond, dataEnd-in1.position());
-			in1.readFully(buf, len);
-			out.write(buf.list, 0, len, true);
-		}
-	}
-
-	@Override
-	public boolean isSeekable() { return isDecoding(); }
-	@Override
-	public void seek(double second) throws IOException {
-		int pos = (int) (second * bytePerSecond);
+	public void seek(double timeSec) throws IOException {
+		int pos = (int) (timeSec * bytePerSecond);
 		if (pos < 0) pos = 0;
 		else if (pos > dataEnd) pos = dataEnd;
 		// ~ ( fs - 1 ) => - fs

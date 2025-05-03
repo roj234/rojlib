@@ -4,7 +4,7 @@ import roj.asm.type.Generic;
 
 /**
  * @author Roj234
- * @since 2022/9/17 0017 20:37
+ * @since 2022/9/17 20:37
  */
 public final class LPGeneric extends Generic {
 	public int pos;

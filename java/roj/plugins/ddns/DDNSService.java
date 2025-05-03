@@ -8,7 +8,7 @@ import java.util.Map;
 
 /**
  * @author Roj234
- * @since 2023/1/27 0027 21:56
+ * @since 2023/1/27 21:56
  */
 public interface DDNSService {
 	void loadConfig(CMap config);

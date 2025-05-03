@@ -15,7 +15,7 @@ import roj.config.data.CInt;
 /**
  * AST - 三元(条件)运算符和if表达式
  * @author Roj234
- * @since 2023/9/18 0018 9:06
+ * @since 2023/9/18 9:06
  */
 final class If extends Expr {
 	private Expr condition, trueBranch, falseBranch;

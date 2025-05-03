@@ -11,7 +11,7 @@ import java.util.Map;
 /**
  * <a href="https://magiclen.org/mp3-tag/">MP3标签格式(ID3、APE)超详细解析 | MagicLen</a>
  * @author Roj234
- * @since 2024/2/20 0020 0:49
+ * @since 2024/2/20 0:49
  */
 public class APETag implements AudioMetadata {
 	public static final long SIGNATURE = 0x4150455441474558L;

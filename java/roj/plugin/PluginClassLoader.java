@@ -24,7 +24,7 @@ import java.util.Enumeration;
 
 /**
  * @author Roj234
- * @since 2023/12/25 0025 15:48
+ * @since 2023/12/25 15:48
  */
 public class PluginClassLoader extends ClassLoader {
 	public static final ThreadLocal<PluginClassLoader> PLUGIN_CONTEXT = new ThreadLocal<>();

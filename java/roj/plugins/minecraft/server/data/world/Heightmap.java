@@ -7,7 +7,7 @@ import java.util.function.Predicate;
 
 /**
  * @author Roj234
- * @since 2024/3/20 0020 7:30
+ * @since 2024/3/20 7:30
  */
 public enum Heightmap {
 	WORLD_SURFACE(b -> b == Block.AIR),

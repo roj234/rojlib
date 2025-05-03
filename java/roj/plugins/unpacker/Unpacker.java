@@ -8,7 +8,7 @@ import java.io.IOException;
 
 /**
  * @author Roj234
- * @since 2024/5/31 0031 0:38
+ * @since 2024/5/31 0:38
  */
 public interface Unpacker extends Closeable {
 	TrieTree<?> load(File file) throws IOException;

@@ -30,7 +30,7 @@ import static roj.ui.CommandNode.literal;
 
 /**
  * @author Roj234
- * @since 2024/7/23 0023 1:40
+ * @since 2024/7/23 1:40
  */
 @Interceptor("PermissionManager")
 final class WebUI {

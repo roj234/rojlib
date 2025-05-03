@@ -14,7 +14,7 @@ import java.util.zip.ZipException;
 /**
  * check HMAC when AES is in use
  * @author Roj234
- * @since 2023/3/14 0014 0:42
+ * @since 2023/3/14 0:42
  */
 final class AESInputSt extends CipherInputStream {
 	private boolean checked;
@@ -37,7 +37,7 @@ final class AESInputSt extends CipherInputStream {
 		byte[] remote = new byte[10];
 		IOUtil.readFully(in, remote, 0, 10);
 
-		byte[] local = ((ZipAES) c).getTrailers();
+		byte[] local = ((ZipAES) cipher).getTrailers();
 
 		if (!MessageDigest.isEqual(local, remote)) throw new ZipException("HMAC checksum: excepting " + Arrays.toString(local) + ", got " + Arrays.toString(remote) + "\n" + "You can disable this by unset VERIFY bit");
 	}

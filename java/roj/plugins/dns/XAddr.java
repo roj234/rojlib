@@ -7,7 +7,7 @@ import java.net.InetSocketAddress;
 
 /**
  * @author Roj234
- * @since 2023/3/4 0004 18:00
+ * @since 2023/3/4 18:00
  */
 final class XAddr implements Cloneable {
 	InetAddress addr;

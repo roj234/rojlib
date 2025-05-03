@@ -3,11 +3,11 @@ package roj.archive.qpak;
 import roj.archive.qz.QZArchive;
 import roj.archive.qz.QZFileWriter;
 import roj.archive.qz.xz.LZMA2Writer;
+import roj.asmx.injector.Copy;
+import roj.asmx.injector.Redirect;
+import roj.asmx.injector.Shadow;
+import roj.asmx.injector.Weave;
 import roj.asmx.launcher.Autoload;
-import roj.asmx.nixim.Copy;
-import roj.asmx.nixim.InvokeRedirect;
-import roj.asmx.nixim.Nixim;
-import roj.asmx.nixim.Shadow;
 import roj.concurrent.OperationDone;
 import roj.crypt.CRC32s;
 import roj.io.IOUtil;
@@ -22,7 +22,7 @@ import java.io.OutputStream;
 
 /**
  * @author Roj234
- * @since 2024/4/21 0021 1:23
+ * @since 2024/4/21 1:23
  */
 public class QIncrementPak {
 	// 文件结构
@@ -44,18 +44,17 @@ public class QIncrementPak {
 
 	// 请在调用之前关闭所有的ParallelWriter
 	public static void closeIncremental(QZFileWriter qfw) throws IOException {
-		qfw.closeWordBlock();
-		((CompositeSource) qfw.s).next();
+		qfw.flush();
+		((CompositeSource) qfw.source()).next();
 		qfw.close();
 	}
 
 	/**
-	 * Notice: V2 method was banned by 7-zip v21+, WinRar 7.0+
-	 * 但是不知道为什么
-	 * <p>
 	 * The file format is
+	 * <p>
 	 * .001 32byte QZHeader + QZTailHeader
 	 * .002 - .xxx Block data
+	 * @apiNote  V2 method was banned by 7-zip v21+, WinRar 7.0+
 	 */
 	public static QZFileWriter openIncrementalV2(File baseFile) throws IOException {
 		var source = CompositeSource.dynamic(baseFile, true);
@@ -65,10 +64,10 @@ public class QIncrementPak {
 	}
 
 	public static void closeIncrementalV2(QZFileWriter qzfw) throws IOException {
-		qzfw.closeWordBlock();
+		qzfw.flush();
 		qzfw.setCodec(roj.archive.qz.Copy.INSTANCE);
 
-		CompositeSource s = (CompositeSource) qzfw.s;
+		CompositeSource s = (CompositeSource) qzfw.source();
 
 		s.setSourceId(0);
 		Source meta = s.getSource();
@@ -97,6 +96,7 @@ public class QIncrementPak {
 			meta.seek(32);
 			ByteList buf = IOUtil.getSharedByteBuf();
 
+			// 重新计算头部CRC
 			int myCrc = CRC32s.INIT_CRC;
 			int read = hend;
 
@@ -126,7 +126,7 @@ public class QIncrementPak {
 	public interface AOP {long aopGetStartPos();long aopGetEndPos();void aopSetEnabled(boolean enabled);}
 
 	@Autoload(Autoload.Target.NIXIM)
-	@Nixim(altValue = QZFileWriter.class)
+	@Weave(target = QZFileWriter.class)
 	private static final class AOP_Inject implements AOP {
 		@Shadow
 		private ByteList buf;
@@ -142,7 +142,7 @@ public class QIncrementPak {
 		@Copy
 		private int aopEnabled;
 
-		@InvokeRedirect(value = "writeStreamInfo", injectDesc = "(J)V", matcher = "putVULong(J)Lroj/util/DynByteBuf;", occurrences = 0)
+		@Redirect(value = "writeStreamInfo", injectDesc = "(J)V", matcher = "putVULong(J)Lroj/util/DynByteBuf;", occurrences = 0)
 		private static DynByteBuf aopInc_writeOffset(ByteList ob, long offset, AOP_Inject self) throws IOException {
 			if (self.aopEnabled == 0) return ob.putVULong(offset);
 
@@ -150,6 +150,7 @@ public class QIncrementPak {
 				ob.put(0xF0).flush();
 
 				if (self.out instanceof LZMA2Writer w) {
+					// 强制flush并禁止接下来块的压缩，以便我能确定性的得到一个int的offset
 					w.setCompressionDisabled(true);
 				}
 
@@ -167,7 +168,7 @@ public class QIncrementPak {
 			return ob;
 		}
 
-		@InvokeRedirect(value = "finish", injectDesc = "()V", matcher = "position()J", occurrences = 2)
+		@Redirect(value = "finish", injectDesc = "()V", matcher = "position()J", occurrences = 2)
 		private static long aopInc_setLength(Source s, AOP_Inject self) throws IOException {
 			long pos = self.aopEndPos = s.position();
 			if (self.aopEnabled == 1) throw OperationDone.INSTANCE;

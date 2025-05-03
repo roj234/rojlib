@@ -15,7 +15,7 @@ import java.security.NoSuchAlgorithmException;
 
 /**
  * @author Roj234
- * @since 2024/7/8 0008 3:27
+ * @since 2024/7/8 3:27
  */
 public final class TOTP {
 	public static HMAC createHMAC() throws NoSuchAlgorithmException {
@@ -23,7 +23,7 @@ public final class TOTP {
 	}
 
 	public static String makeTOTP(HMAC hmac_sha1, byte[] secretKey, long time) {
-		hmac_sha1.setSignKey(secretKey, 0, secretKey.length);
+		hmac_sha1.init(secretKey, 0, secretKey.length);
 		hmac_sha1.update(IOUtil.getSharedByteBuf().putLong(time / 30000));
 		byte[] digest = hmac_sha1.digestShared();
 

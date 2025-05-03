@@ -15,7 +15,7 @@ import java.util.function.Function;
 
 /**
  * @author Roj234
- * @since 2024/3/25 0025 16:57
+ * @since 2024/3/25 16:57
  */
 final class ManifestBytes {
 	byte[] data;

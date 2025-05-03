@@ -20,7 +20,7 @@ import java.util.Map;
 
 /**
  * @author Roj234
- * @since 2023/11/20 0020 15:06
+ * @since 2023/11/20 15:06
  */
 public interface Argument<T> {
 	static Argument<File> path() {return file(0);}
@@ -104,8 +104,8 @@ public interface Argument<T> {
 						fname = sb.toString();
 					}
 
-					AnsiString desc = path.isAbsolute() ? null : new AnsiString("绝对路径: ").append(new AnsiString(file.getAbsolutePath()).colorRGB(0xffccee));
-					completions.add(new Completion(new AnsiString(fname).color16(file.isFile() ? Terminal.CYAN : Terminal.YELLOW), desc, offset));
+					Text desc = path.isAbsolute() ? null : new Text("绝对路径: ").append(new Text(file.getAbsolutePath()).colorRGB(0xffccee));
+					completions.add(new Completion(new Text(fname).color16(file.isFile() ? Terminal.CYAN : Terminal.YELLOW), desc, offset));
 				}
 			}
 

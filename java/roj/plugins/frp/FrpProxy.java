@@ -15,7 +15,7 @@ import java.util.concurrent.locks.Lock;
 
 /**
  * @author Roj234
- * @since 2024/9/15 0015 0:22
+ * @since 2024/9/15 0:22
  */
 sealed class FrpProxy extends H2Stream implements ChannelHandler permits FrpClient.UDP, FrpHostConnection.Client, FrpServerConnection.TCP {
 	private static final Logger LOGGER = Logger.getLogger("AE/Proxy");

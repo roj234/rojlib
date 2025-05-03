@@ -67,7 +67,7 @@ public final class Var2 {
 	public int bci() {return monitor_bci == null ? bci : monitor_bci.getValue();}
 
 	// 这个函数只修改自己
-	public boolean verify(Var2 o) {
+	boolean verify(Var2 o) {
 		if (o == this) return false;
 		if (o.type >= T_ANY) return false;
 		if (type >= T_ANY) {
@@ -118,17 +118,13 @@ public final class Var2 {
 			return true;
 		}
 
-		try {
-			// 更具体的
-			String newOwner = FrameVisitor.getConcreteChild(owner, o.owner);
-			boolean changed = !newOwner.equals(owner);
-			owner = newOwner;
-			return changed;
-		} catch (Exception e) {
-			throw new IllegalStateException(owner+"无法转换为"+o.owner, e);
-		}
+		// 更具体的
+		String newOwner = FrameVisitor.getConcreteChild(owner, o.owner);
+		boolean changed = !newOwner.equals(owner);
+		owner = newOwner;
+		return changed;
 	}
-	public Var2 uncombine(Var2 o) {
+	Var2 uncombine(Var2 o) {
 		if (o == this) return null;
 		if (o.type >= T_ANY) return null;
 		if (type >= T_ANY) return o;
@@ -180,7 +176,7 @@ public final class Var2 {
 		owner = o.owner;
 	}
 
-	public boolean eq(Var2 v) {
+	boolean eq(Var2 v) {
 		if (this == v) return true;
 		if (v != null && v.type == type) {
 			if (owner != null) {
@@ -211,17 +207,5 @@ public final class Var2 {
 		c.monitor_bci = monitor_bci;
 		c.owner = owner;
 		return c;
-	}
-
-	public Type asmType() {
-		return switch (type) {
-			case T_INT -> Type.primitive(Type.INT);
-			case T_FLOAT -> Type.primitive(Type.FLOAT);
-			case T_DOUBLE -> Type.primitive(Type.DOUBLE);
-			case T_LONG -> Type.primitive(Type.LONG);
-			case T_NULL -> Type.klass("java/lang/Object");
-			case T_REFERENCE -> owner.charAt(0) == '[' ? Type.fieldDesc(owner) : Type.klass(owner);
-			default -> throw new UnsupportedOperationException(String.valueOf(type));
-		};
 	}
 }

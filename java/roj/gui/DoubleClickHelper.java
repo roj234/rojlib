@@ -7,7 +7,7 @@ import java.util.function.Consumer;
 
 /**
  * @author Roj234
- * @since 2023/9/14 0014 21:53
+ * @since 2023/9/14 21:53
  */
 public class DoubleClickHelper extends MouseAdapter {
 	private final JList<?> component;

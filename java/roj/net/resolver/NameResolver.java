@@ -9,7 +9,7 @@ import java.util.List;
 
 /**
  * @author Roj234
- * @since 2023/6/2 0002 13:53
+ * @since 2023/6/2 13:53
  */
 public interface NameResolver {
 	NameResolver JVM = hostname -> {

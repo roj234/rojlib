@@ -1,6 +1,6 @@
 package roj.plugins.obfuscator.naming;
 
-import roj.asm.type.Desc;
+import roj.asm.MemberDescriptor;
 import roj.text.CharList;
 
 import java.util.Random;
@@ -31,9 +31,9 @@ public final class Deobfuscate implements NamingPolicy {
 	}
 
 	@Override
-	public String obfName(Set<String> existNames, Desc d, Random rnd) {
+	public String obfName(Set<String> existNames, MemberDescriptor d, Random rnd) {
 		if (d.name.equals("main")) return null;
 
-		return (d.param.charAt(0) == '(' ? ("method_" + a++) : ("field_" + b++)) + "_";
+		return (d.rawDesc.charAt(0) == '(' ? ("method_" + a++) : ("field_" + b++)) + "_";
 	}
 }

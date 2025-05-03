@@ -10,7 +10,7 @@ import java.util.List;
 
 /**
  * @author Roj234
- * @since 2023/6/2 0002 14:12
+ * @since 2023/6/2 14:12
  */
 final class CsvWriter implements TableWriter {
 	private static final MyBitSet CSV_ESCAPE = MyBitSet.from(",;\n\"");

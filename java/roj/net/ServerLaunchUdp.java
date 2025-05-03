@@ -1,7 +1,5 @@
 package roj.net;
 
-import roj.io.NIOUtil;
-
 import java.io.IOException;
 import java.net.SocketAddress;
 import java.net.SocketOption;
@@ -28,7 +26,7 @@ final class ServerLaunchUdp extends ServerLaunch {
 	public MyChannel udpCh() { return udp; }
 
 	public final <T> ServerLaunch option(SocketOption<T> k, T v) throws IOException {
-		if (k == StandardSocketOptions.SO_REUSEPORT) NIOUtil.setReusePort(uc, (boolean) v);
+		if (k == StandardSocketOptions.SO_REUSEPORT) Net.setReusePort(uc, (boolean) v);
 		else udp.setOption(k, v); return this; }
 	public final <T> T option(SocketOption<T> k) throws IOException { return udp.getOption(k); }
 

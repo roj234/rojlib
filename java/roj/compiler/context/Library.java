@@ -15,7 +15,7 @@ import java.util.List;
 
 /**
  * @author Roj234
- * @since 2022/9/16 0016 21:51
+ * @since 2022/9/16 21:51
  */
 public interface Library {
 	default String moduleName() {

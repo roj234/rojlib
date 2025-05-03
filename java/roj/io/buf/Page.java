@@ -14,7 +14,7 @@ import static roj.text.TextUtil.scaledNumber1024;
 
 /**
  * @author Roj234
- * @since 2023/11/7 0007 11:32
+ * @since 2023/11/7 11:32
  */
 public sealed class Page {
 	private static final byte LONG_SHIFT = 6, MINIMUM_SHIFT = 3;

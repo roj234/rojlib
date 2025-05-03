@@ -5,7 +5,7 @@ import java.util.function.Consumer;
 
 /**
  * @author Roj234
- * @since 2022/10/8 0008 4:23
+ * @since 2022/10/8 4:23
  */
 public final class H2Ping {
 	public final long sendTime, nonce;

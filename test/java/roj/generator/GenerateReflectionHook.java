@@ -1,9 +1,9 @@
 package roj.generator;
 
 import roj.ReferenceByGeneratedClass;
+import roj.asm.AsmCache;
 import roj.asm.ClassNode;
 import roj.asm.MethodNode;
-import roj.asm.Parser;
 import roj.asm.annotation.Annotation;
 import roj.asm.attr.Annotations;
 import roj.asm.cp.CstString;
@@ -22,7 +22,7 @@ import static roj.asm.Opcodes.*;
 
 /**
  * @author Roj234
- * @since 2024/5/23 0023 0:29
+ * @since 2024/5/23 0:29
  */
 class GenerateReflectionHook {
 	@ReferenceByGeneratedClass
@@ -131,16 +131,16 @@ class GenerateReflectionHook {
 		w.finish();
 
 		try (var fos = new FileOutputStream(roj.generator.Main.resourcePath.getAbsolutePath()+"/roj/reflect/Fish")) {
-			Parser.toByteArrayShared(ILCD).writeToStream(fos);
+			AsmCache.toByteArrayShared(ILCD).writeToStream(fos);
 		}
 	}
 	public static void run2() throws Exception {
 		var fos = new FileOutputStream(roj.generator.Main.resourcePath.getAbsolutePath()+"/roj/reflect/Unaligned$.class");
-		Parser.toByteArrayShared(makeImpl(true)).writeToStream(fos);
+		AsmCache.toByteArrayShared(makeImpl(true)).writeToStream(fos);
 		fos.close();
 
 		fos = new FileOutputStream(roj.generator.Main.resourcePath.getAbsolutePath()+"/roj/reflect/Unaligned$2.class");
-		Parser.toByteArrayShared(makeAdapter()).writeToStream(fos);
+		AsmCache.toByteArrayShared(makeAdapter()).writeToStream(fos);
 		fos.close();
 	}
 
@@ -239,7 +239,7 @@ class GenerateReflectionHook {
 			i++;
 		}
 
-		ClassNode parentNode = Parser.parseConstants(IOUtil.getResourceIL("roj/reflect/Unaligned.class"));
+		ClassNode parentNode = ClassNode.parseSkeleton(IOUtil.getResourceIL("roj/reflect/Unaligned.class"));
 		for (MethodNode method : parentNode.methods) {
 			if ((method.modifier&ACC_STATIC) != 0) continue;
 			int impled = impl.getMethod(method.name(), method.rawDesc());

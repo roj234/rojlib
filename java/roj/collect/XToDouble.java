@@ -7,7 +7,7 @@ import java.util.Map;
 /**
  * [Object]To[Primitive]的临时简易解决方案
  * @author Roj234
- * @since 2024/2/7 0007 6:27
+ * @since 2024/2/7 6:27
  */
 public class XToDouble<T> implements Map.Entry<T, Double> {
 	private static final XToDouble<?> DEF0 = defaultValue(0), DEF_1 = defaultValue(-1);
@@ -19,9 +19,9 @@ public class XToDouble<T> implements Map.Entry<T, Double> {
 		return Helpers.cast(entry);
 	}
 
-	private static final XHashSet.Shape<?, XToDouble<?>> SHAPE = Helpers.cast(XHashSet.shape(Object.class, XToDouble.class, "key", "next"));
-	public static <T1> XHashSet<T1, XToDouble<T1>> newMap() { return Helpers.cast(SHAPE.create()); }
-	public static <T1> XHashSet<T1, XToDouble<T1>> newMap(int initialCapacity) { return Helpers.cast(SHAPE.createSized(initialCapacity)); }
+	private static final XashMap.Builder<?, XToDouble<?>> BUILDER = Helpers.cast(XashMap.builder(Object.class, XToDouble.class, "key", "next"));
+	public static <T1> XashMap<T1, XToDouble<T1>> newMap() { return Helpers.cast(BUILDER.create()); }
+	public static <T1> XashMap<T1, XToDouble<T1>> newMap(int initialCapacity) { return Helpers.cast(BUILDER.createSized(initialCapacity)); }
 
 	private XToDouble<?> next;
 

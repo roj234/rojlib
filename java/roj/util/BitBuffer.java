@@ -2,7 +2,7 @@ package roj.util;
 
 /**
  * @author Roj234
- * @since 2022/10/8 0008 8:22
+ * @since 2022/10/8 8:22
  */
 public class BitBuffer {
 	public DynByteBuf list;

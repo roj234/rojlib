@@ -4,7 +4,7 @@ import roj.http.WebSocketConnection;
 import roj.net.ChannelCtx;
 import roj.text.FastCharset;
 import roj.text.logging.Logger;
-import roj.ui.ITerminal;
+import roj.ui.StdIO;
 import roj.ui.Terminal;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
@@ -13,9 +13,9 @@ import java.io.IOException;
 
 /**
  * @author Roj234
- * @since 2024/7/21 0021 7:32
+ * @since 2024/7/21 7:32
  */
-public class WebTerminal extends WebSocketConnection implements ITerminal {
+public class WebTerminal extends WebSocketConnection implements StdIO {
 	private static final Logger LOGGER = Logger.getLogger();
 	private final ByteList buffer = new ByteList();
 

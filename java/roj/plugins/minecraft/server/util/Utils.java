@@ -14,7 +14,7 @@ import java.util.function.IntConsumer;
 
 /**
  * @author Roj234
- * @since 2024/3/20 0020 3:55
+ * @since 2024/3/20 3:55
  */
 public class Utils {
 	public static byte[] constantize(String path) {

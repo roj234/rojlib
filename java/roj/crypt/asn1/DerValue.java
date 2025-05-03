@@ -14,7 +14,7 @@ import java.util.List;
 
 /**
  * @author Roj234
- * @since 2024/3/22 0022 21:05
+ * @since 2024/3/22 21:05
  */
 public interface DerValue {
 	int COMPOSITE = 32;

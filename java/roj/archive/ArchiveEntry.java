@@ -4,7 +4,7 @@ import java.nio.file.attribute.FileTime;
 
 /**
  * @author Roj234
- * @since 2023/3/14 0014 0:58
+ * @since 2023/3/14 0:58
  */
 public interface ArchiveEntry {
 	String getName();

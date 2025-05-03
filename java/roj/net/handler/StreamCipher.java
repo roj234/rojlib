@@ -9,7 +9,7 @@ import java.io.IOException;
 
 /**
  * @author Roj234
- * @since 2023/4/26 0026 23:19
+ * @since 2023/4/26 23:19
  */
 public final class StreamCipher extends PacketMerger {
 	private final RCipherSpi encrypt, decrypt;

@@ -3,7 +3,7 @@ package roj.math;
 /**
  * 四则运算和函数
  * @author Roj234
- * @since 2024/12/23 0023 2:30
+ * @since 2024/12/23 2:30
  */
 public class Calculator {
 	private final String str;

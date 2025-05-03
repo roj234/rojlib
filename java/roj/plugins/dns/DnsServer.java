@@ -88,7 +88,7 @@ public class DnsServer implements ChannelHandler {
 				key.url = line.substring(i+1);
 
 				Record record = new Record();
-				byte[] value = NetUtil.ip2bytes(line.substring(0, i));
+				byte[] value = Net.ip2bytes(line.substring(0, i));
 				record.qType = value.length == 4 ? Q_A : Q_AAAA;
 				record.data = value;
 				record.TTL = Integer.MAX_VALUE;
@@ -170,7 +170,7 @@ public class DnsServer implements ChannelHandler {
 		private static String QDataToString(short qType, byte[] data) {
 			DynByteBuf r = new ByteList(data);
 			switch (qType) {
-				case Q_A, Q_AAAA: return NetUtil.bytes2ip(data);
+				case Q_A, Q_AAAA: return Net.bytes2ip(data);
 				case Q_CNAME:
 				case Q_MB, Q_MD, Q_MF, Q_MG, Q_MR:
 				case Q_NS, Q_PTR: {
@@ -231,7 +231,7 @@ public class DnsServer implements ChannelHandler {
 					return sb.toString();
 				}
 				case Q_WKS: {
-					CharList sb = new CharList(32).append("Address: ").append(NetUtil.bytes2ip(data));
+					CharList sb = new CharList(32).append("Address: ").append(Net.bytes2ip(data));
 					r.rIndex = 4;
 					return sb.append(", Proto: ").append(Integer.toString(r.readUnsignedByte())).append(", BitMap: <HIDDEN>, len = ").append(r.readableBytes()).toString();
 				}

@@ -3,7 +3,7 @@ package roj.archive.qz.bcj;
 /**
  * BCJ filter for x86 (32-bit and 64-bit) instructions.
  * @author Lasse Collin <lasse.collin@tukaani.org>, Roj234
- * @since 2023/3/16 0016 2:19
+ * @since 2023/3/16 2:19
  */
 public class X86Filter extends Filter {
     private static final boolean[] MASK_TO_ALLOWED_STATUS = {true, true, true, false, true, false, false, false};

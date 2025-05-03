@@ -7,7 +7,7 @@ import roj.collect.MyHashMap;
 import roj.concurrent.TaskPool;
 import roj.config.NBTParser;
 import roj.config.serial.ToNBT;
-import roj.crypt.ILCrypto;
+import roj.crypt.CryptoFactory;
 import roj.crypt.KeyType;
 import roj.io.CorruptedInputException;
 import roj.io.IOUtil;
@@ -30,7 +30,7 @@ import java.util.zip.GZIPOutputStream;
 
 /**
  * @author Roj234
- * @since 2023/12/21 0021 1:31
+ * @since 2023/12/21 1:31
  */
 public class McDiffClient {
 	QZArchive archive;
@@ -193,8 +193,8 @@ public class McDiffClient {
 		}
 
 		long count = blocks[blocks.length - 1].getOffset()-32;
-		var hash1 = ILCrypto.Blake3(32);
-		var hash2 = ILCrypto.SM3();
+		var hash1 = CryptoFactory.Blake3(32);
+		var hash2 = CryptoFactory.SM3();
 
 		byte[] tmp = ArrayCache.getByteArray(4096, false);
 		try (InputStream in = new FileInputStream(file)) {

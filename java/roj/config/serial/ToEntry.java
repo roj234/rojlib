@@ -10,7 +10,7 @@ import java.util.Arrays;
 
 /**
  * @author Roj234
- * @since 2022/11/15 0015 2:07
+ * @since 2022/11/15 2:07
  */
 public class ToEntry implements CVisitor {
 	private final SimpleList<CEntry> stack = new SimpleList<>();

@@ -5,11 +5,11 @@ import roj.asmx.event.Event;
 import roj.net.MyChannel;
 import roj.plugins.minecraft.server.data.PlayerEntity;
 import roj.plugins.minecraft.server.network.PlayerConnection;
-import roj.ui.AnsiString;
+import roj.ui.Text;
 
 /**
  * @author Roj234
- * @since 2024/3/21 0021 11:50
+ * @since 2024/3/21 11:50
  */
 public class PlayerLoginEvent extends Event {
 	private final PlayerConnection connection;
@@ -29,14 +29,14 @@ public class PlayerLoginEvent extends Event {
 
 		public MyChannel getChannel() { return channel; }
 
-		private AnsiString message;
+		private Text message;
 
-		public void cancelWithMessage(AnsiString message) {
+		public void cancelWithMessage(Text message) {
 			cancel();
 			this.message = message;
 		}
 
-		public AnsiString getMessage() { return message; }
+		public Text getMessage() { return message; }
 	}
 
 	public static class Post extends PlayerLoginEvent {

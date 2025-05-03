@@ -21,7 +21,7 @@ import static roj.reflect.Unaligned.U;
  * 来源：nginx抓包分析
  * 网上的教程都是扯淡，什么8字节对齐什么每个param一个包都是骗人的
  * @author Roj234
- * @since 2024/7/1 0001 20:12
+ * @since 2024/7/1 20:12
  */
 public final class fcgiConnection implements ChannelHandler, Consumer<MyChannel> {
 	private static final int

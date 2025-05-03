@@ -2,8 +2,8 @@ package roj.plugins;
 
 import roj.archive.zip.ZEntry;
 import roj.archive.zip.ZipArchive;
+import roj.asm.AsmCache;
 import roj.asm.ClassNode;
-import roj.asm.Parser;
 import roj.asm.cp.Constant;
 import roj.asm.cp.CstString;
 import roj.collect.IntMap;
@@ -142,7 +142,7 @@ public class Translator extends Plugin {
 		}
 	}
 	private static byte[] apply(String path, ByteList ib) {
-		ClassNode data = Parser.parseConstants(ib);
+		ClassNode data = ClassNode.parseSkeleton(ib);
 
 		IntMap<String> map = value.get(path+data.name());
 		if (map == null) return null;
@@ -158,7 +158,7 @@ public class Translator extends Plugin {
 			}
 		}
 
-		return any ? Parser.toByteArray(data) : null;
+		return any ? AsmCache.toByteArray(data) : null;
 	}
 
 	private static void read(File f) throws IOException {
@@ -195,7 +195,7 @@ public class Translator extends Plugin {
 		}
 	}
 	private static void read(String path, ByteList ib) {
-		ClassNode data = Parser.parseConstants(ib);
+		ClassNode data = ClassNode.parseSkeleton(ib);
 
 		CharList sb = IOUtil.getSharedCharBuf();
 		sb.append(path).append(data.name()).append(':').append('\n');

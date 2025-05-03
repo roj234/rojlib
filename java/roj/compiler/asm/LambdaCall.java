@@ -19,7 +19,7 @@ import java.util.List;
 
 /**
  * @author Roj234
- * @since 2025/3/29 0029 17:30
+ * @since 2025/3/29 17:30
  */
 public enum LambdaCall {
 	INVOKE_DYNAMIC {

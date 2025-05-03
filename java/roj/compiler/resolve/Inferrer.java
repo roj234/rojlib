@@ -46,7 +46,6 @@ public final class Inferrer {
 		this.ctx = ctx;
 		this.castChecker.typeParams = typeParamBounds;
 		this.castChecker.context = ctx.classes;
-		this.castChecker.ctx = ctx;
 	}
 
 	public MethodResult getGenericParameters(ClassNode info, MethodNode method, @Nullable IType instanceType) {

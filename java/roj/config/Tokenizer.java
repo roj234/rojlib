@@ -159,7 +159,7 @@ public class Tokenizer {
 	private Word lastWord;
 	private short lwType;
 	private int lwBegin, lwEnd;
-	private String lwStr;
+	private CharSequence lwStr;
 
 	private byte seek;
 	private short prevSeekPos, seekPos;
@@ -537,7 +537,7 @@ public class Tokenizer {
 			case ST_SINGLE_LINE_COMMENT: singleLineComment(comment); return null;
 			case ST_MULTI_LINE_COMMENT: multiLineComment(comment, w.val); return null;
 			case ST_STRING, ST_LITERAL_STRING:
-				String s = w.val;
+				CharSequence s = w.val;
 				if (s.length() != 1) throw new UnsupportedOperationException("readSlashString not support len > 1 terminator");
 				return formClip(STRING, readSlashString(s.charAt(0), w.pos == ST_STRING));
 		}
@@ -742,7 +742,7 @@ public class Tokenizer {
 		if ((flag & _NF_END) != 0) i++;
 
 		try {
-			String represent = input.subSequence(index, i).toString();
+			CharSequence represent = input.subSequence(index, i);
 
 			Word w;
 			for(;;) {
@@ -773,16 +773,16 @@ public class Tokenizer {
 					w = Word.numberWord(index, _parseNumber(v, flag, neg), represent);
 				}
 				case 2 -> {
-					if (neg) v.insert(0, '-');
 					float fv = Float.parseFloat(v.toString());
+					if (neg) fv = -fv;
 					if (fv == Float.POSITIVE_INFINITY || fv == Float.NEGATIVE_INFINITY) return onInvalidNumber(oFlag, index, "lexer.number.floatLarge");
 					if (fv == 0 && !isZero(v)) return onInvalidNumber(oFlag, index, "lexer.number.floatSmall");
 					w = Word.numberWord(index, fv, represent);
 				}
 				case 3 -> {
 					// workaround before my double parser
-					if (neg) v.insert(0, '-');
 					double dv = Double.parseDouble(v.toString());
+					if (neg) dv = -dv;
 					if (dv == Double.POSITIVE_INFINITY || dv == Double.NEGATIVE_INFINITY) return onInvalidNumber(oFlag, index, "lexer.number.floatLarge");
 					if (dv == 0 && !isZero(v)) return onInvalidNumber(oFlag, index, "lexer.number.floatSmall");
 					w = Word.numberWord(index, dv, represent);
@@ -1004,7 +1004,7 @@ public class Tokenizer {
 		}
 		index = i;
 	}
-	protected final void multiLineComment(CharList row, String end) throws ParseException {
+	protected final void multiLineComment(CharList row, CharSequence end) throws ParseException {
 		CharSequence in = input;
 		int prevI = index;
 

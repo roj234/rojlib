@@ -6,11 +6,11 @@ import static roj.reflect.Unaligned.U;
 
 /**
  * @author Roj234
- * @since 2024/3/6 0006 2:07
+ * @since 2024/3/6 2:07
  */
-public class LoopTask implements ITask {
+public class LoopTask implements Task {
 	protected final Scheduler sched;
-	protected final ITask task;
+	protected final Task task;
 
 	protected final long interval;
 	protected int repeat;
@@ -26,7 +26,7 @@ public class LoopTask implements ITask {
 	 */
 	private volatile int state;
 
-	public LoopTask(Scheduler sched, ITask task, long interval, int repeat, boolean slowTaskProof) {
+	public LoopTask(Scheduler sched, Task task, long interval, int repeat, boolean slowTaskProof) {
 		if (interval <= 0) throw new IllegalArgumentException("interval <= 0");
 		this.sched = sched;
 		this.task = task;

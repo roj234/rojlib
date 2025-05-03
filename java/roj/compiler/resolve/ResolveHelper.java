@@ -2,14 +2,11 @@ package roj.compiler.resolve;
 
 import roj.asm.*;
 import roj.asm.annotation.Annotation;
-import roj.asm.attr.Annotations;
 import roj.asm.attr.Attribute;
 import roj.asm.attr.InnerClasses;
-import roj.asm.type.Desc;
 import roj.asm.type.Generic;
 import roj.asm.type.IType;
 import roj.asm.type.Signature;
-import roj.asmx.AnnotationSelf;
 import roj.collect.MyHashMap;
 import roj.collect.MyHashSet;
 import roj.collect.SimpleList;
@@ -22,17 +19,15 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
-import static roj.asmx.AnnotationSelf.*;
-
 /**
  * @author Roj234
- * @since 2024/2/6 0006 2:40
+ * @since 2024/2/6 2:40
  */
 public final class ResolveHelper {
 	private Object _next;
-	public final IClass owner;
+	public final ClassDefinition owner;
 
-	public ResolveHelper(IClass owner) {this.owner = Objects.requireNonNull(owner);}
+	public ResolveHelper(ClassDefinition owner) {this.owner = Objects.requireNonNull(owner);}
 
 	private MethodNode lambdaMethod;
 	private byte lambdaType;
@@ -41,8 +36,8 @@ public final class ResolveHelper {
 			if ((owner.modifier()&Opcodes.ACC_ABSTRACT) == 0) {
 				lambdaType = 3;
 			} else {
-				RawNode mn = null;
-				for (RawNode method : owner.methods()) {
+				Member mn = null;
+				for (Member method : owner.methods()) {
 					if ((method.modifier()&Opcodes.ACC_ABSTRACT) != 0) {
 						if (mn != null) return lambdaType = 5;
 						mn = method;
@@ -67,7 +62,7 @@ public final class ResolveHelper {
 		if (iterateType != 0) return iterateType;
 
 		var classes = getHierarchyList(ctx);
-		if (classes.containsValue("java/util/List") && classes.containsValue("java/util/RandomAccess")) {
+		if (classes.containsKey("java/util/List") && classes.containsKey("java/util/RandomAccess")) {
 			return iterateType = 1;
 		} else if (Annotation.findInvisible(owner.cp(), owner, "roj/compiler/api/RandomAccessible") != null) {
 			int tmp;
@@ -91,7 +86,7 @@ public final class ResolveHelper {
 
 		ToIntMap<String> list = new ToIntMap<>();
 
-		IClass info = owner;
+		ClassDefinition info = owner;
 		while (true) {
 			String owner = info.name();
 			try {
@@ -118,7 +113,7 @@ public final class ResolveHelper {
 			for (int i = 0; i < itf.size(); i++) {
 				String name = itf.get(i);
 
-				IClass itfInfo = ctx.getClassInfo(name);
+				ClassDefinition itfInfo = ctx.getClassInfo(name);
 				if (itfInfo == null) {
 					ctx.report(this.owner, Kind.SEVERE_WARNING, -1, "symbol.error.noSuchClass", name);
 					break;
@@ -152,71 +147,14 @@ public final class ResolveHelper {
 
 	// endregion
 	// region 注解
-	private AnnotationSelf ac;
+	private AnnotationType ac;
 
-	public AnnotationSelf annotationInfo() {
+	public AnnotationType annotationInfo() {
 		if (ac != null || (owner.modifier() & Opcodes.ACC_ANNOTATION) == 0) return ac;
 
 		synchronized (this) {
 			if (ac != null) return ac;
-			AnnotationSelf ac = this.ac = new AnnotationSelf();
-
-			List<? extends RawNode> methods = owner.methods();
-			for (int j = 0; j < methods.size(); j++) {
-				MethodNode m = (MethodNode) methods.get(j);
-				if ((m.modifier() & Opcodes.ACC_STATIC) != 0) continue;
-				var dv = m.getAttribute(owner.cp(), Attribute.AnnotationDefault);
-				if (dv != null) ac.values.put(m.name(), dv.val == null ? new LazyAnnotationValue(dv) : dv.val);
-				ac.types.put(m.name(), m.returnType());
-			}
-
-			Annotations attr = owner.getAttribute(owner.cp(), Attribute.RtAnnotations);
-			if (attr == null) return ac;
-
-			List<Annotation> list = attr.annotations;
-			for (int i = 0; i < list.size(); i++) {
-				Annotation a = list.get(i);
-				switch (a.type()) {
-					case "java/lang/annotation/Retention" -> {
-						if (!a.containsKey("value")) throw new NullPointerException("Invalid @Retention");
-						ac.kind = switch (a.getEnumValue("value", "RUNTIME")) {
-							case "SOURCE" -> SOURCE;
-							case "CLASS" -> CLASS;
-							case "RUNTIME" -> RUNTIME;
-							default -> throw new IllegalStateException("Unexpected Retention: "+a.getEnumValue("value", "RUNTIME"));
-						};
-					}
-					case "java/lang/annotation/Repeatable" -> {
-						if (!a.containsKey("value")) throw new NullPointerException("Invalid @Repeatable");
-						ac.repeatOn = a.getClass("value").owner;
-					}
-					case "java/lang/annotation/Target" -> {
-						int tmp = 0;
-						if (!a.containsKey("value")) throw new NullPointerException("Invalid @Target");
-						var list1 = a.getList("value");
-						for (int j = 0; j < list1.size(); j++) {
-							tmp |= switch (list1.getEnumValue(j)) {
-								case "TYPE" -> TYPE;
-								case "FIELD" -> FIELD;
-								case "METHOD" -> METHOD;
-								case "PARAMETER" -> PARAMETER;
-								case "CONSTRUCTOR" -> CONSTRUCTOR;
-								case "LOCAL_VARIABLE" -> LOCAL_VARIABLE;
-								case "ANNOTATION_TYPE" -> ANNOTATION_TYPE;
-								case "PACKAGE" -> PACKAGE;
-								case "TYPE_PARAMETER" -> TYPE_PARAMETER;
-								case "TYPE_USE" -> TYPE_USE;
-								case "MODULE" -> MODULE;
-								case "RECORD_COMPONENT" -> RECORD_COMPONENT;
-								default -> 0;
-							};
-						}
-						ac.applicableTo = tmp;
-					}
-					case "roj/compiler/api/Stackable" -> ac.stackable = true;
-				}
-			}
-			return ac;
+			return ac = new AnnotationType(owner);
 		}
 	}
 
@@ -254,14 +192,14 @@ public final class ResolveHelper {
 				if (methods != null) return methods;
 				methods = new MyHashMap<>();
 
-				IClass type = owner;
-				List<? extends RawNode> methods1 = type.methods();
-				MyHashSet<Desc> bridgeIgnore = new MyHashSet<>();
+				ClassDefinition type = owner;
+				List<? extends Member> methods1 = type.methods();
+				MyHashSet<MemberDescriptor> bridgeIgnore = new MyHashSet<>();
 				for (int i = 0; i < methods1.size(); i++) {
 					var mn = (MethodNode) methods1.get(i);
 
 					// 下面会continue，<init>又不可能带bridge
-					if ((mn.modifier & Opcodes.ACC_BRIDGE) != 0) bridgeIgnore.add(new Desc("",mn.name(),mn.rawDesc()));
+					if ((mn.modifier & Opcodes.ACC_BRIDGE) != 0) bridgeIgnore.add(new MemberDescriptor("",mn.name(),mn.rawDesc()));
 
 					// <init> 允许 synthetic
 					if (mn.name().startsWith("<") ? mn.name().equals("<clinit>") : (mn.modifier & (Opcodes.ACC_BRIDGE | Opcodes.ACC_SYNTHETIC)) != 0)
@@ -272,7 +210,7 @@ public final class ResolveHelper {
 					ml.add(type, mn);
 				}
 
-				var tmpDesc = new Desc();
+				var tmpDesc = new MemberDescriptor();
 				tmpDesc.owner = "";
 
 				// Object不会实现接口
@@ -284,7 +222,7 @@ public final class ResolveHelper {
 					List<String> itf = type.interfaces();
 
 					while (true) {
-						IClass info = ctx.getClassInfo(className);
+						ClassDefinition info = ctx.getClassInfo(className);
 						if (info == null) {
 							ctx.report(type, Kind.SEVERE_WARNING, -1, "symbol.error.noSuchClass", className);
 						} else for (Map.Entry<String, ComponentList> entry : ctx.getResolveHelper(info).getMethods(ctx).entrySet()) {
@@ -298,13 +236,13 @@ public final class ResolveHelper {
 							if (cl instanceof MethodList prev && prev.owner == null) {
 								if (list instanceof MethodList ml) {
 									for (MethodNode node : ml.methods) {
-										tmpDesc.param = node.rawDesc();
+										tmpDesc.rawDesc = node.rawDesc();
 										if (!bridgeIgnore.contains(tmpDesc))
 											prev.add(ctx.getClassInfo(node.owner), node);
 									}
 								} else {
 									MethodNode node = ((MethodListSingle) list).method;
-									tmpDesc.param = node.rawDesc();
+									tmpDesc.rawDesc = node.rawDesc();
 									if (!bridgeIgnore.contains(tmpDesc))
 										prev.add(ctx.getClassInfo(node.owner), node);
 								}
@@ -336,8 +274,8 @@ public final class ResolveHelper {
 				if (fields != null) return fields;
 				fields = new MyHashMap<>();
 
-				IClass type = owner;
-				List<? extends RawNode> fields1 = type.fields();
+				ClassDefinition type = owner;
+				List<? extends Member> fields1 = type.fields();
 				for (int i = 0; i < fields1.size(); i++) {
 					FieldNode fn = (FieldNode) fields1.get(i);
 
@@ -352,7 +290,7 @@ public final class ResolveHelper {
 					List<String> itf = type.interfaces();
 
 					while (true) {
-						IClass info = ctx.getClassInfo(className);
+						ClassDefinition info = ctx.getClassInfo(className);
 						if (info == null) {
 							ctx.report(type, Kind.SEVERE_WARNING, -1, "symbol.error.noSuchClass", className);
 						} else {
@@ -399,7 +337,7 @@ public final class ResolveHelper {
 	// a. class Ch<T> extends Su<T>
 	// b. class Ch<T> extends Su<String>
 	// c. class Ch<T> extends Su<List<T>>
-	public Map<String, List<IType>> getTypeParamOwner(GlobalContext ctx) throws ClassNotFoundException {
+	public Map<String, List<IType>> getTypeParamOwner(GlobalContext ctx) {
 		if (typeParamOwner == null) {
 			synchronized (this) {
 				if (typeParamOwner != null) return typeParamOwner;
@@ -412,8 +350,11 @@ public final class ResolveHelper {
 				for (IType value : sign.values) {
 					if (value.genericType() == IType.PLACEHOLDER_TYPE) continue;
 
-					IClass ref = ctx.getClassInfo(value.owner());
-					if (ref == null) throw new ClassNotFoundException(value.toString());
+					ClassDefinition ref = ctx.getClassInfo(value.owner());
+					if (ref == null) {
+						ctx.report(this.owner, Kind.SEVERE_WARNING, -1, "symbol.error.noSuchClass", owner);
+						continue;
+					}
 
 					if (value.genericType() == IType.GENERIC_TYPE) {
 						// 大概是不允许用extendType的

@@ -4,7 +4,6 @@ import roj.archive.zip.ZEntry;
 import roj.archive.zip.ZipFile;
 import roj.archive.zip.ZipFileWriter;
 import roj.asm.ClassNode;
-import roj.asm.Parser;
 import roj.asm.cp.ConstantPool;
 import roj.collect.SimpleList;
 import roj.collect.ToIntMap;
@@ -21,7 +20,7 @@ import java.util.List;
 
 /**
  * @author Roj234
- * @since 2024/10/10 0010 1:01
+ * @since 2024/10/10 1:01
  */
 public final class LibraryCompactedKlass implements Library {
 	public static List<Library> loadCache(File symTable) throws IOException {
@@ -145,6 +144,6 @@ public final class LibraryCompactedKlass implements Library {
 		offset &= 0xFFFFFF;
 
 		var slice = data.slice(offset, data.wIndex() - offset);
-		return Parser.parseConstantsNoCp(slice, cp, slice.readInt());
+		return ClassNode.parseSkeletonWith(slice, slice.readInt(), cp);
 	}
 }

@@ -23,7 +23,7 @@ import java.util.function.Function;
 
 /**
  * @author Roj234
- * @since 2024/3/17 0017 2:18
+ * @since 2024/3/17 2:18
  */
 public class EpubWriter implements Closeable, Finishable {
 	private static final boolean SHOW_MAKER_INFO = false;

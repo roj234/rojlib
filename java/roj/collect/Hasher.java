@@ -5,7 +5,7 @@ import roj.util.Helpers;
 
 /**
  * @author Roj234
- * @since 2023/12/21 0021 8:52
+ * @since 2023/12/21 8:52
  */
 public interface Hasher<K> {
 	Hasher<?> DEFAULT = new Hasher<Object>() {

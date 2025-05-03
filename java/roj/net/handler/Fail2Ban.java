@@ -1,8 +1,8 @@
 package roj.net.handler;
 
-import roj.concurrent.ITask;
 import roj.concurrent.ScheduleTask;
 import roj.concurrent.Scheduler;
+import roj.concurrent.Task;
 import roj.net.ChannelCtx;
 import roj.net.ChannelHandler;
 import roj.net.Event;
@@ -23,7 +23,7 @@ import java.util.function.Function;
  * @author Roj233
  * @since 2022/5/17 13:11
  */
-public class Fail2Ban implements ChannelHandler, ITask {
+public class Fail2Ban implements ChannelHandler, Task {
 	private static final Logger LOGGER = Logger.getLogger();
 	private final ConcurrentHashMap<InetAddress, Attempt> data = new ConcurrentHashMap<>();
 

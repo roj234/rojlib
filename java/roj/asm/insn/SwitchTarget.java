@@ -4,7 +4,7 @@ import org.jetbrains.annotations.NotNull;
 
 /**
  * @author Roj234
- * @since 2025/3/20 0020 14:43
+ * @since 2025/3/20 14:43
  */
 public final class SwitchTarget implements Comparable<SwitchTarget> {
 	public final int value;

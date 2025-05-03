@@ -3,7 +3,6 @@ package roj.compiler.context;
 import roj.archive.zip.ZEntry;
 import roj.archive.zip.ZipFile;
 import roj.asm.ClassNode;
-import roj.asm.Parser;
 import roj.collect.MyHashSet;
 import roj.io.IOUtil;
 import roj.text.Interner;
@@ -15,7 +14,7 @@ import java.util.Collection;
 
 /**
  * @author Roj234
- * @since 2022/9/16 0016 21:52
+ * @since 2022/9/16 21:52
  */
 public class LibraryZipFile implements Library {
 	public final ZipFile zf;
@@ -40,7 +39,7 @@ public class LibraryZipFile implements Library {
 	@Override
 	public ClassNode get(CharSequence name) {
 		try (var in = zf.getStream(name.toString().concat(".class"))) {
-			return in == null ? null : Parser.parseConstants(IOUtil.read(in));
+			return in == null ? null : ClassNode.parseSkeleton(IOUtil.read(in));
 		} catch (IOException e) {
 			return null;
 		}

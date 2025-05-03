@@ -1,9 +1,9 @@
 package roj.plugins.web.error;
 
 import roj.ReferenceByGeneratedClass;
+import roj.asmx.injector.Inject;
+import roj.asmx.injector.Weave;
 import roj.asmx.launcher.Autoload;
-import roj.asmx.nixim.Inject;
-import roj.asmx.nixim.Nixim;
 import roj.collect.MyHashMap;
 import roj.http.server.Content;
 import roj.http.server.HttpServer11;
@@ -21,7 +21,7 @@ import java.util.function.Function;
 
 /**
  * @author Roj234
- * @since 2023/2/11 0011 1:14
+ * @since 2023/2/11 1:14
  */
 public class GreatErrorPage {
 	private static final String CODEBASE = "../projects/rojlib/java";
@@ -37,7 +37,7 @@ public class GreatErrorPage {
 	}
 
 	@Autoload(Autoload.Target.NIXIM)
-	@Nixim(altValue = HttpServer11.class)
+	@Weave(target = HttpServer11.class)
 	private static final class Injector {
 		@Inject
 		static Content onUncaughtError(Request req, Throwable e) {return GreatErrorPage.display(req, e);}

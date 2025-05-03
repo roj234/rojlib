@@ -9,7 +9,7 @@ import java.util.zip.ZipException;
 
 /**
  * @author Roj234
- * @since 2023/3/14 0014 0:43
+ * @since 2023/3/14 0:43
  */
 public final class CRC32InputStream extends InputStream {
 	private final InputStream in;

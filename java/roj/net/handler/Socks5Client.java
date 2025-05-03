@@ -3,7 +3,7 @@ package roj.net.handler;
 import roj.io.IOUtil;
 import roj.net.ChannelCtx;
 import roj.net.ChannelHandler;
-import roj.net.NetUtil;
+import roj.net.Net;
 import roj.util.ArrayCache;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
@@ -15,7 +15,7 @@ import java.nio.charset.StandardCharsets;
 
 /**
  * @author Roj234
- * @since 2024/6/27 0027 20:56
+ * @since 2024/6/27 20:56
  */
 public sealed class Socks5Client implements ChannelHandler permits Socks5ClientU {
 	private final byte[] username, password;
@@ -116,7 +116,7 @@ public sealed class Socks5Client implements ChannelHandler permits Socks5ClientU
 		//0x03表示UDP转发
 		buf.put(requestType());
 		buf.put(0x00);//RESERVED
-		String hostName = NetUtil.getOriginalHostName(remote.getAddress());
+		String hostName = Net.getOriginalHostName(remote.getAddress());
 		if (hostName != null) {
 			buf.put(0x03).put(hostName.length()).putAscii(hostName);
 		} else {

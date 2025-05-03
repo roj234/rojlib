@@ -20,7 +20,7 @@ import java.util.regex.Pattern;
 
 /**
  * @author Roj234
- * @since 2023/2/23 0023 18:06
+ * @since 2023/2/23 18:06
  */
 public class Escape {
 	public static final LazyThreadLocal<FastCharset> CHARSET = new LazyThreadLocal<>(FastCharset.UTF8());
@@ -71,7 +71,7 @@ public class Escape {
 		return sb;
 	}
 
-	public static final MyBitSet URI_SAFE = MyBitSet.from(TextUtil.digits).addAll("~!$&*()_+-.,:;'");
+	public static final MyBitSet URI_SAFE = MyBitSet.from(TextUtil.digits).addAll("~!@$&*()_+-=/.,:;'");
 	public static final MyBitSet URI_COMPONENT_SAFE = MyBitSet.from(TextUtil.digits).addAll("~!*()_-.'");
 
 	public static String encodeURI(CharSequence src) { return encodeURI(new CharList(), src).toStringAndFree(); }

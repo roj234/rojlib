@@ -22,7 +22,7 @@ import java.nio.file.StandardOpenOption;
 
 /**
  * @author Roj234
- * @since 2022/12/11 0011 9:12
+ * @since 2022/12/11 9:12
  */
 public class TextReader extends Reader implements CharSequence, Closeable, Finishable, LineReader {
 	private char[] buf;

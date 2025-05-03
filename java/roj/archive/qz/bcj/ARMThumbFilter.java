@@ -3,7 +3,7 @@ package roj.archive.qz.bcj;
 /**
  * BCJ filter for little endian ARM-Thumb instructions.
  * @author Lasse Collin <lasse.collin@tukaani.org>, Roj234
- * @since 2023/3/16 0016 2:23
+ * @since 2023/3/16 2:23
  */
 public class ARMThumbFilter extends Filter {
     public ARMThumbFilter(boolean isEncoder, int startPos) {

@@ -1,17 +1,17 @@
 package roj.asmx.launcher;
 
 import roj.RojLib;
+import roj.asm.AsmCache;
 import roj.asm.ClassNode;
 import roj.asm.Opcodes;
-import roj.asm.Parser;
 import roj.asm.annotation.AList;
 import roj.asm.annotation.Annotation;
 import roj.asm.cp.CstClass;
 import roj.asm.insn.CodeWriter;
 import roj.asmx.AnnotatedElement;
-import roj.asmx.NodeFilter;
-import roj.asmx.nixim.NiximException;
-import roj.asmx.nixim.NiximSystemV2;
+import roj.asmx.ConstantPoolHooks;
+import roj.asmx.injector.CodeWeaver;
+import roj.asmx.injector.WeaveException;
 import roj.collect.SimpleList;
 import roj.io.IOUtil;
 import roj.reflect.ReflectionUtils;
@@ -26,11 +26,11 @@ import java.util.function.Function;
 /**
  * 处理Autoload注解
  * @author Roj234
- * @since 2024/5/2 0002 4:09
+ * @since 2024/5/2 4:09
  */
 public class DefaultTweaker implements ITweaker {
-	public static final NiximSystemV2 NIXIM = new NiximSystemV2();
-	public static final NodeFilter CONDITIONAL = new NodeFilter();
+	public static final CodeWeaver NIXIM = new CodeWeaver();
+	public static final ConstantPoolHooks CONDITIONAL = new ConstantPoolHooks();
 
 	private record A(String name, int priority) {}
 
@@ -52,8 +52,8 @@ public class DefaultTweaker implements ITweaker {
 					case "TRANSFORMER" -> transformers.add(new A(owner, priority));
 					case "NIXIM" -> {
 						try {
-							NIXIM.load(Parser.parseConstants(IOUtil.read(loader.getResource(owner.concat(".class")))));
-						} catch (NiximException e) {
+							NIXIM.load(ClassNode.parseSkeleton(IOUtil.read(loader.getResource(owner.concat(".class")))));
+						} catch (WeaveException e) {
 							Helpers.athrow(e);
 						}
 					}
@@ -63,20 +63,20 @@ public class DefaultTweaker implements ITweaker {
 			ConcurrentHashMap<String, Boolean> existence = new ConcurrentHashMap<>();
 			Function<String, Boolean> existenceChecker = resource -> Bootstrap.instance.getResource(resource) != null;
 
-			CONDITIONAL.annotatedMethod("roj/asmx/launcher/Conditional", (cls, ctx) -> {
-				var annotation = Annotation.findInvisible(cls.cp, ctx, "roj/asmx/launcher/Conditional");
+			CONDITIONAL.annotatedMethod("roj/asmx/launcher/Conditional", (context, node) -> {
+				var annotation = Annotation.findInvisible(context.cp, node, "roj/asmx/launcher/Conditional");
 				if (!existence.computeIfAbsent(annotation.getString("value"), existenceChecker)) {
-					cls.methods.remove(ctx);
+					context.methods.remove(node);
 					return true;
 				}
 				return false;
 			});
-			CONDITIONAL.annotatedClass("roj/asmx/launcher/Conditional", (cls, ctx) -> {
-				var annotation = Annotation.findInvisible(cls.cp, ctx, "roj/asmx/launcher/Conditional");
+			CONDITIONAL.annotatedClass("roj/asmx/launcher/Conditional", (context, node) -> {
+				var annotation = Annotation.findInvisible(context.cp, node, "roj/asmx/launcher/Conditional");
 				if (!existence.computeIfAbsent(annotation.getString("value"), existenceChecker)) {
 					AList itf = annotation.getList("itf");
 					for (int i = 0; i < itf.size(); i++) {
-						cls.interfaces().remove(itf.getType(i).owner());
+						context.interfaces().remove(itf.getType(i).owner());
 					}
 					return true;
 				}
@@ -104,7 +104,7 @@ public class DefaultTweaker implements ITweaker {
 				}
 				w.insn(Opcodes.RETURN);
 
-				Class<?> klass = ReflectionUtils.defineWeakClass(Parser.toByteArrayShared(autoloader));
+				Class<?> klass = ReflectionUtils.defineWeakClass(AsmCache.toByteArrayShared(autoloader));
 				ReflectionUtils.ensureClassInitialized(klass);
 			}
 

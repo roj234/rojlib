@@ -4,14 +4,14 @@ import org.jetbrains.annotations.NotNull;
 import roj.archive.zip.ZEntry;
 import roj.archive.zip.ZipArchive;
 import roj.archive.zip.ZipOutput;
+import roj.asm.AsmCache;
 import roj.asm.ClassNode;
 import roj.asm.Opcodes;
-import roj.asm.Parser;
 import roj.asm.attr.Attribute;
 import roj.asm.attr.ModuleAttribute;
 import roj.asm.attr.StringAttribute;
-import roj.asm.util.Context;
-import roj.asm.util.TransformUtil;
+import roj.asmx.Context;
+import roj.asmx.TransformUtil;
 import roj.asmx.event.EventBus;
 import roj.asmx.launcher.Bootstrap;
 import roj.collect.MyHashMap;
@@ -44,7 +44,7 @@ import roj.text.TextUtil;
 import roj.text.logging.Level;
 import roj.text.logging.Logger;
 import roj.ui.Argument;
-import roj.ui.CommandConsole;
+import roj.ui.Shell;
 import roj.ui.Terminal;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
@@ -95,7 +95,7 @@ public final class FMD {
 	static IFileWatcher watcher;
 
 	public static CMap config;
-	public static final CommandConsole CommandManager = new CommandConsole("");
+	public static final Shell CommandManager = new Shell("");
 
 	public static Project defaultProject;
 	public static final MyHashMap<String, Project> projects = new MyHashMap<>();
@@ -161,8 +161,12 @@ public final class FMD {
 				saveConfig();
 			}))))
 			.then(literal("delete").then(argument("项目名称", Argument.oneOf(projects)).executes(ctx -> {
-				Workspace.addIDEAProject(defaultProject, true);
-				System.out.println("IDEA项目已删除，请手动清理projects目录下的文件");
+				var proj = ctx.argument("项目名称", Project.class);
+				Workspace.addIDEAProject(proj, true);
+				proj.unmappedJar.delete();
+				projects.remove(proj.name);
+				saveConfig();
+				System.out.println("IDEA项目&FMD配置文件已删除，请手动清理projects目录下的iml&文件夹");
 			})))
 			.then(literal("setdefault").then(argument("项目名称", Argument.oneOf(projects)).executes(ctx -> {
 				defaultProject = ctx.argument("项目名称", Project.class);
@@ -282,7 +286,7 @@ public final class FMD {
 
 			System.out.println(moduleAttr);
 			try (var za = new ZipArchive(file)) {
-				za.put("module-info.class", DynByteBuf.wrap(Parser.toByteArray(moduleInfo)));
+				za.put("module-info.class", DynByteBuf.wrap(AsmCache.toByteArray(moduleInfo)));
 				za.save();
 			}
 			System.out.println("IL自动模块，应用成功！");
@@ -690,8 +694,8 @@ public final class FMD {
 
 				for (int i = 0; i < outputs.size(); i++) {
 					var out = outputs.get(i);
-					unmappedWriter.set(out.getFileName(), out.get());
-					list.set(i, new Context(out.getFileName(), out.get()));
+					unmappedWriter.set(out.getFileName(), out.getClassBytes());
+					list.set(i, new Context(out.getFileName(), out.getClassBytes()));
 				}
 
 				if (incrementLevel == 1) {
@@ -802,7 +806,6 @@ public final class FMD {
 		if (options.isEmpty()) {
 			options.put("jarSigner:creator", "MCMake/"+VERSION);
 			options.put("jarSigner:signatureFileName", p.variables.getOrDefault("fmd:signature:certificate_name", IOUtil.fileName(keystore.getName())));
-			options.put("jarSigner:skipPerFileAttributes", p.variables.getOrDefault("fmd:signature:skip_per_file_attributes", "false"));
 			options.put("jarSigner:manifestHashAlgorithm", p.variables.getOrDefault("fmd:signature:manifest_hash_algorithm", "SHA-256"));
 			options.put("jarSigner:signatureHashAlgorithm", p.variables.getOrDefault("fmd:signature:signature_hash_algorithm", "SHA-256"));
 			//options.put("jarSigner:cacheHash", "true");

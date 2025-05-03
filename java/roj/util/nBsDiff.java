@@ -1,22 +1,21 @@
 package roj.util;
 
 import roj.RojLib;
+import roj.asmx.injector.Copy;
+import roj.asmx.injector.Inject;
+import roj.asmx.injector.Shadow;
+import roj.asmx.injector.Weave;
 import roj.asmx.launcher.Autoload;
-import roj.asmx.nixim.Copy;
-import roj.asmx.nixim.Inject;
-import roj.asmx.nixim.Nixim;
-import roj.asmx.nixim.Shadow;
 import roj.reflect.litasm.FastJNI;
-import roj.reflect.litasm.Intrinsics;
 
 /**
  * @author Roj234
- * @since 2023/8/2 0002 6:08
+ * @since 2023/8/2 6:08
  */
 @Autoload(value = Autoload.Target.NIXIM, intrinsic = RojLib.GENERIC)
-@Nixim(altValue = BsDiff.class)
+@Weave(target = BsDiff.class)
 final class nBsDiff {
-	@Inject("<clinit>") static void __clinit() {Intrinsics.linkNative(RojLib.getLibrary(), BsDiff.class);}
+	@Inject("<clinit>") static void __clinit() {RojLib.linkLibrary(BsDiff.class);}
 
 	@Shadow private byte[] left;
 	@Shadow private int[] sfx;
@@ -29,7 +28,8 @@ final class nBsDiff {
 	@Inject(at = Inject.At.REMOVE)
 	private static native int getV(int[] V, int pos);
 
-	@Inject public void makePatch(byte[] right, DynByteBuf patch) {
+	@Inject
+	public void makePatch(byte[] right, DynByteBuf patch) {
 		patch.putIntLE(right.length);
 		var ctx = nCreateContext();
 		try {
@@ -45,7 +45,8 @@ final class nBsDiff {
 			nFreeContext(ctx);
 		}
 	}
-	@Inject public int getDiffLength(byte[] right, int off, int end, int stopOn) {return nGetDiffLength(sfx, left, right, off, end, stopOn);}
+	@Inject
+	public int getDiffLength(byte[] right, int off, int end, int stopOn) {return nGetDiffLength(sfx, left, right, off, end, stopOn);}
 
 	@Copy
 	@FastJNI("IL_bsdiff_newCtx")

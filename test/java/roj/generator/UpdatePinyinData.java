@@ -26,7 +26,7 @@ import java.util.regex.Pattern;
 
 /**
  * @author Roj234
- * @since 2023/12/22 0022 16:31
+ * @since 2023/12/22 16:31
  */
 class UpdatePinyinData {
 	public static void run(String pinyinData, String phrasePinyinData) throws Exception {

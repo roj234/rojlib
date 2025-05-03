@@ -22,7 +22,7 @@ import java.lang.invoke.MethodHandles;
  *
  * }</pre>
  * @author Roj234
- * @since 2024/6/16 0016 10:00
+ * @since 2024/6/16 10:00
  */
 @Retention(RetentionPolicy.SOURCE)
 @Target(ElementType.METHOD)

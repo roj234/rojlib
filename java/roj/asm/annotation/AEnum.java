@@ -1,13 +1,13 @@
 package roj.asm.annotation;
 
-import roj.asm.type.Desc;
+import roj.asm.MemberDescriptor;
 import roj.asm.type.TypeHelper;
 import roj.config.serial.CVisitor;
 import roj.text.CharList;
 
 /**
  * @author Roj234
- * @since 2025/3/13 0013 6:44
+ * @since 2025/3/13 6:44
  */
 final class AEnum extends AnnVal {
 	public AEnum(String type, String field) {
@@ -29,7 +29,7 @@ final class AEnum extends AnnVal {
 
 	@Override public void accept(CVisitor visitor) {((ToJVMAnnotation) visitor).valueEnum(owner, field);}
 
-	@Override public Object raw() {return new Desc(owner(), field, owner);}
+	@Override public Object raw() {return new MemberDescriptor(owner(), field, owner);}
 
 	public String toString() {
 		CharList sb = new CharList();

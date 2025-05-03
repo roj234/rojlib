@@ -13,7 +13,7 @@ import java.util.zip.Inflater;
 
 /**
  * @author Roj234
- * @since 2024/3/19 0019 22:21
+ * @since 2024/3/19 22:21
  */
 public class Compress extends GDeflate {
 	private final int thr;

@@ -3,9 +3,9 @@ package roj.reflect;
 import org.intellij.lang.annotations.MagicConstant;
 import org.jetbrains.annotations.Nullable;
 import roj.ReferenceByGeneratedClass;
+import roj.asm.AsmCache;
 import roj.asm.ClassNode;
 import roj.asm.MethodNode;
-import roj.asm.Parser;
 import roj.asm.annotation.Annotation;
 import roj.asm.attr.Annotations;
 import roj.asm.cp.CstClass;
@@ -91,7 +91,7 @@ public final class Bypass<T> {
 			}
 		}
 
-		var data = Parser.toByteArrayShared(impl);
+		var data = AsmCache.toByteArrayShared(impl);
 		try {
 			return (T) define(def, data);
 		} finally {
@@ -256,18 +256,25 @@ public final class Bypass<T> {
 	}
 
 	/**
-	 * 将target的构造器代理到names方法，按照它们的参数，或fuzzy指定的参数 <br>
-	 * <br>
-	 * all-object 模式: 输入和输出均为 Object, 当你无法在代码中访问目标类时有奇效<br>
-	 * #双重动态<br>
-	 * <br>
+	 * 将目标类的构造器代理到接口方法，支持参数类型精确匹配或模糊匹配(all-object模式)<br>
 	 *
-	 * @param fuzzy <br>
-	 * 当这个值为null: 不使用 all-object 模式 <br>
-	 * 当这个值为空列表: 使用 模糊的 all-object 模式 <br>
-	 * 当这个值为非空列表 (长度必须等于 names.length): <br>
-	 * 对其中值为null的项使用模糊的 all-object 模式 <br>
-	 * 否则使用精确的 all-object 模式 <br>
+	 * <p>当启用模糊匹配模式时，所有非基本类型参数和返回值将使用Object类型进行匹配，
+	 * 适用于无法直接访问目标类的情况。
+	 *
+	 * @param target  目标构造器所属的类
+	 * @param names   接口中对应构造器代理方法的方法名数组
+	 * @param fuzzy   模糊匹配控制列表，允许三种模式：
+	 *                <ul>
+	 *                  <li>null - 禁用all-object模式，使用精确参数类型匹配</li>
+	 *                  <li>空列表 - 对所有参数启用模糊匹配</li>
+	 *                  <li>非空列表 - 长度必须与names数组一致：
+	 *                    <ul>
+	 *                      <li>列表中null元素对应的方法参数启用模糊匹配</li>
+	 *                      <li>非null元素（Class数组）指定对应方法的精确参数类型</li>
+	 *                    </ul>
+	 *                  </li>
+	 *                </ul>
+	 * @throws IllegalArgumentException 当参数长度不匹配或参数类型无效时抛出
 	 */
 	public Bypass<T> construct(Class<?> target, String[] names, List<Class<?>[]> fuzzy) throws IllegalArgumentException {
 		if (names.length == 0) return this;
@@ -407,11 +414,23 @@ public final class Bypass<T> {
 	public final Bypass<T> delegate_o(Class<?> target, String[] names, String[] selfNames) { return delegate(target, names, EMPTY_BITS, selfNames, Collections.emptyList()); }
 
 	/**
-	 * 将target.methodNames方法代理到selfNames，参数从方法获取，或通过fuzzyMode <br>
-	 * <br>
+	 * 将目标类的方法代理到接口方法，支持静态绑定和参数匹配模式
 	 *
-	 * @param flags 当set中对应index项为true时代表直接调用此方法(忽略继承)
-	 * @param fuzzyMode : {@link #construct(Class, String[], List)}
+	 * @param target      目标方法所属的类
+	 * @param methodNames 需要代理的目标方法名数组
+	 * @param flags       方法调用模式控制位集合（使用{@link MyBitSet}）：
+	 *                    <ul>
+	 *                      <li>true - 使用INVOKESPECIAL指令直接调用目标方法（忽略继承）</li>
+	 *                      <li>false - 使用常规虚方法调用</li>
+	 *                    </ul>
+	 * @param selfNames   接口中对应代理方法的方法名数组
+	 * @param fuzzyMode   参数匹配模式（参考{@link #construct(Class, String[], List)}）：
+	 *                    <ul>
+	 *                      <li>null - 禁用模糊匹配</li>
+	 *                      <li>空列表 - 启用全参数模糊匹配</li>
+	 *                      <li>非空列表 - 根据每项的值为方法指定精确/模糊类型</li>
+	 *                    </ul>
+	 * @throws IllegalArgumentException 当参数长度不匹配或参数类型无效时抛出
 	 */
 	public Bypass<T> delegate(Class<?> target, String[] methodNames, @Nullable MyBitSet flags, String[] selfNames, List<Class<?>[]> fuzzyMode) throws IllegalArgumentException {
 		if (selfNames.length == 0) return this;
@@ -557,7 +576,13 @@ public final class Bypass<T> {
 	public final Bypass<T> access(Class<?> target, String field, String getter, String setter) { return access(target, new String[] {field}, new String[] {getter}, new String[] {setter}); }
 
 	/**
-	 * 把 setter/selfGetterNames 中的方法标记为 target 的 targetFieldNames 的 setter / getter
+	 * 将接口方法映射为目标类的字段访问器
+	 *
+	 * @param target           目标字段所属的类
+	 * @param targetFieldNames 目标字段名数组
+	 * @param selfGetterNames  接口中字段getter方法名数组（允许单项为null表示不生成对应getter）
+	 * @param selfSetterNames  接口中字段setter方法名数组（允许单项为null表示不生成对应setter）
+	 * @throws IllegalArgumentException 当字段不存在或访问权限不足时抛出
 	 */
 	public Bypass<T> access(Class<?> target, String[] targetFieldNames, String[] selfGetterNames, String[] selfSetterNames) throws IllegalArgumentException {
 		if (targetFieldNames.length == 0) return this;
@@ -826,8 +851,20 @@ public final class Bypass<T> {
 	public static <V> Bypass<V> builder(Class<V> impl) {return new Bypass<>(impl, true);}
 	public static <V> Bypass<V> custom(Class<V> impl) {return new Bypass<>(impl, false);}
 
+	/**
+	 * 禁用运行时类型检查（提升性能但可能造成NoSuchMethodError）
+	 * @return this
+	 */
 	public final Bypass<T> unchecked() { if (!DMHInit()) flags |= UNCHECKED_CAST; return this; }
+	/**
+	 * 启用弱类加载器引用模式（允许生成的类被单独卸载）
+	 * @return this
+	 */
 	public final Bypass<T> weak() { flags |= WEAK_REF; return this; }
+	/**
+	 * 强制JVM内联代理函数（提升调用性能）
+	 * @return this
+	 */
 	public final Bypass<T> inline() { flags |= INLINE; return this; }
 
 	/**

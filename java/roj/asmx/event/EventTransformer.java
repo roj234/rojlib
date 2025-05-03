@@ -11,11 +11,10 @@ import roj.asm.insn.CodeWriter;
 import roj.asm.insn.InsnList;
 import roj.asm.type.IType;
 import roj.asm.type.Signature;
-import roj.asm.util.Context;
-import roj.asmx.ITransformer;
-import roj.asmx.NodeFilter;
-import roj.asmx.NodeTransformer;
+import roj.asmx.ConstantPoolHooks;
+import roj.asmx.Context;
 import roj.asmx.TransformException;
+import roj.asmx.Transformer;
 import roj.collect.MyHashSet;
 
 import java.util.List;
@@ -23,12 +22,12 @@ import java.util.Map;
 
 /**
  * @author Roj234
- * @since 2024/3/21 0021 13:20
+ * @since 2024/3/21 13:20
  */
-public final class EventTransformer implements ITransformer, NodeTransformer<ClassNode> {
+public final class EventTransformer implements Transformer, ConstantPoolHooks.Hook<ClassNode> {
 	private final MyHashSet<String> knownEvents = new MyHashSet<>("roj/asmx/event/Event");
 
-	public static EventTransformer register(NodeFilter fd) {
+	public static EventTransformer register(ConstantPoolHooks fd) {
 		EventTransformer tr = new EventTransformer();
 		fd.annotatedClass("roj/asmx/event/Cancellable", tr);
 		return tr;
@@ -82,23 +81,23 @@ public final class EventTransformer implements ITransformer, NodeTransformer<Cla
 	}
 
 	@Override
-	public boolean transform(ClassNode data, ClassNode ctx) throws TransformException {
-		int fid = data.newField(Opcodes.ACC_PRIVATE, "cancelled", "Z");
+	public boolean transform(ClassNode context, ClassNode node) throws TransformException {
+		int fid = context.newField(Opcodes.ACC_PRIVATE, "cancelled", "Z");
 
-		CodeWriter c = data.newMethod(Opcodes.ACC_PUBLIC, "cancel", "()V");
+		CodeWriter c = context.newMethod(Opcodes.ACC_PUBLIC, "cancel", "()V");
 		c.visitSize(2, 1);
 		c.insn(Opcodes.ALOAD_0);
 		c.ldc(1);
-		c.field(Opcodes.PUTFIELD, data, fid);
+		c.field(Opcodes.PUTFIELD, context, fid);
 		c.insn(Opcodes.RETURN);
 
-		c = data.newMethod(Opcodes.ACC_PUBLIC, "isCanceled", "()Z");
+		c = context.newMethod(Opcodes.ACC_PUBLIC, "isCanceled", "()Z");
 		c.visitSize(1, 1);
 		c.insn(Opcodes.ALOAD_0);
-		c.field(Opcodes.GETFIELD, data, fid);
+		c.field(Opcodes.GETFIELD, context, fid);
 		c.insn(Opcodes.IRETURN);
 
-		c = data.newMethod(Opcodes.ACC_PUBLIC, "isCancellable", "()Z");
+		c = context.newMethod(Opcodes.ACC_PUBLIC, "isCancellable", "()Z");
 		c.visitSize(1, 1);
 		c.ldc(1);
 		c.insn(Opcodes.IRETURN);

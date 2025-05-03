@@ -7,7 +7,7 @@ import java.lang.reflect.Array;
 
 /**
  * @author Roj234
- * @since 2023/3/19 0019 20:31
+ * @since 2023/3/19 20:31
  */
 final class ObjArr extends Adapter {
 	private final Class<?> type;

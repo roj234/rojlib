@@ -1,7 +1,7 @@
 package roj.plugins.web.sso;
 
 import roj.collect.CollectionX;
-import roj.collect.XHashSet;
+import roj.collect.XashMap;
 import roj.config.Tokenizer;
 import roj.config.data.CEntry;
 import roj.config.serial.ToJson;
@@ -39,15 +39,15 @@ import static roj.ui.CommandNode.literal;
 
 /**
  * @author Roj234
- * @since 2024/7/9 0009 8:27
+ * @since 2024/7/9 8:27
  */
 @Mime("application/json")
 public class SSOPlugin extends Plugin {
-	private static final XHashSet.Shape<String, Group> shape = XHashSet.noCreation(Group.class, "name");
+	private static final XashMap.Builder<String, Group> BUILDER = XashMap.noCreation(Group.class, "name");
 	public static final String COOKIE_ID = "xsso_token";
 
 	private static final Pattern PERMISSION_NODE_PATTERN = Pattern.compile("(!)?(grant|revoke) ((?:[^/]+?/)*.+?)(?: (\\d+))?( noinherit)?");
-	private final XHashSet<String, Group> groups = shape.create();
+	private final XashMap<String, Group> groups = BUILDER.create();
 	private void loadGroups() {
 		groups.clear();
 		for (var entry : getConfig().getMap("groups").entrySet()) {
@@ -141,8 +141,10 @@ public class SSOPlugin extends Plugin {
 		c.then(literal("setpasswd").then(argument("用户名", userNameList).then(argument("密码", Argument.string()).executes(ctx -> {
 			 var name = ctx.argument("用户名", String.class);
 			 var pass = ctx.argument("密码", String.class);
-			 if (name.length() < 2 || name.length() > 31) {Terminal.warning("用户名长度要在2-31个字符之间");return;}
-			 if (pass.length() < 6 || pass.length() > 99) {Terminal.warning("密码长度要在6-99个字符之间");return;}
+			 if (name.length() < 2 || name.length() > 31) {
+				 Terminal.warning("用户名长度要在2-31个字符之间");return;}
+			 if (pass.length() < 6 || pass.length() > 99) {
+				 Terminal.warning("密码长度要在6-99个字符之间");return;}
 			 var u = users.getUserByName(name);
 			 boolean create = u == null;
 			 if (create) u = users.createUser(name);
@@ -153,10 +155,12 @@ public class SSOPlugin extends Plugin {
 		 }))))
 		 .then(literal("setgroup").then(argument("用户名", userNameList).then(argument("用户组", Argument.string()).executes(ctx -> {
 			 var u = users.getUserByName(ctx.argument("用户名", String.class));
-			 if (u == null) {Terminal.warning("账户不存在");return;}
+			 if (u == null) {
+				 Terminal.warning("账户不存在");return;}
 
 			 var g = groups.get(ctx.argument("用户组", String.class));
-			 if (g == null) {Terminal.warning("用户组不存在");return;}
+			 if (g == null) {
+				 Terminal.warning("用户组不存在");return;}
 
 			 u.groupName = g.name;
 			 u.group = g;
@@ -170,7 +174,8 @@ public class SSOPlugin extends Plugin {
 		 }))
 		 .then(literal("userinfo").then(argument("用户名", userNameList).executes(ctx -> {
 			 User u = users.getUserByName(ctx.argument("用户名", String.class));
-			 if (u == null) {Terminal.warning("账户不存在");return;}
+			 if (u == null) {
+				 Terminal.warning("账户不存在");return;}
 
 			 System.out.println("用户ID: "+u.id);
 			 System.out.println("已绑定OTP: "+(u.totpKey != null));
@@ -183,7 +188,8 @@ public class SSOPlugin extends Plugin {
 		 })))
 		 .then(literal("suspend").then(argument("用户名", userNameList).then(argument("timeout", Argument.number(30, Integer.MAX_VALUE)).executes(ctx -> {
 			 User u = users.getUserByName(ctx.argument("用户名", String.class));
-			 if (u == null) {Terminal.warning("账户不存在");return;}
+			 if (u == null) {
+				 Terminal.warning("账户不存在");return;}
 
 			 u.suspendTimer = System.currentTimeMillis() + ctx.argument("timeout", Integer.class)*1000L;
 			 u.loginAttempt = 99;
@@ -192,21 +198,24 @@ public class SSOPlugin extends Plugin {
 		 }))))
 		 .then(literal("unsuspend").then(argument("用户名", userNameList).executes(ctx -> {
 			 User u = users.getUserByName(ctx.argument("用户名", String.class));
-			 if (u == null) {Terminal.warning("账户不存在");return;}
+			 if (u == null) {
+				 Terminal.warning("账户不存在");return;}
 
 			 u.suspendTimer = 0;
 			 System.out.println("账户已解锁");
 		 })))
 		 .then(literal("unbindotp").then(argument("用户名", userNameList).executes(ctx -> {
 			 User u = users.getUserByName(ctx.argument("用户名", String.class));
-			 if (u == null) {Terminal.warning("账户不存在");return;}
+			 if (u == null) {
+				 Terminal.warning("账户不存在");return;}
 
 			 u.totpKey = null;
 			 users.setDirty(u, "totpKey");
 		 })))
 		 .then(literal("genotp").then(argument("用户名", userNameList).executes(ctx -> {
 			 User u = users.getUserByName(ctx.argument("用户名", String.class));
-			 if (u == null) {Terminal.warning("账户不存在");return;}
+			 if (u == null) {
+				 Terminal.warning("账户不存在");return;}
 
 			 u.tempOtp = TextUtil.bytes2hex(new SecureRandom().generateSeed(8));
 			 u.tokenSeq++;
@@ -214,14 +223,16 @@ public class SSOPlugin extends Plugin {
 		 })))
 		 .then(literal("expirepass").then(argument("用户名", userNameList).executes(ctx -> {
 			 User u = users.getUserByName(ctx.argument("用户名", String.class));
-			 if (u == null) {Terminal.warning("账户不存在");return;}
+			 if (u == null) {
+				 Terminal.warning("账户不存在");return;}
 
 			 u.tempOtp = "\0PASSWORDEXPIRED\0";
 			 System.out.println("密码已过期(该状态服务器重启后失效)");
 		 })))
 		 .then(literal("maketoken").then(argument("用户名", userNameList).then(argument("过期时间", Argument.number(60, 86400)).executes(ctx -> {
 			 User u = users.getUserByName(ctx.argument("用户名", String.class));
-			 if (u == null) {Terminal.warning("账户不存在");return;}
+			 if (u == null) {
+				 Terminal.warning("账户不存在");return;}
 
 			 System.out.print("[L]ogin or [A]ccess: ");
 			 char c1 = Terminal.readChar("LA");
@@ -573,7 +584,7 @@ public class SSOPlugin extends Plugin {
 		}
 
 		var o = LocalData.get(req);
-		o.hmac.setSignKey(openIdKey);
+		o.hmac.init(openIdKey);
 		o.hmac.update(IOUtil.getSharedByteBuf().putInt(u.id));
 
 		var ser = new ToJson();
@@ -689,7 +700,7 @@ public class SSOPlugin extends Plugin {
 
 		expire += getUnixSecond();
 		var hmac = o.hmac;
-		hmac.setSignKey(sessionKey);
+		hmac.init(sessionKey);
 		hmac.update(buf.putInt(u.id).putLong(expire).put(nonce)
 					  .put(usage).putLong(u.tokenSeq)
 					  .putAscii(u.passHash));
@@ -717,7 +728,7 @@ public class SSOPlugin extends Plugin {
 					var o = LocalData.get(req);
 
 					var hmac = o.hmac;
-					hmac.setSignKey(sessionKey);
+					hmac.init(sessionKey);
 					hmac.update(buf.putInt(u.id).putLong(expire).putLong(nonce)
 								   .put(usage).putLong(u.tokenSeq)
 								   .putAscii(u.passHash));

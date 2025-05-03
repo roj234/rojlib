@@ -1,7 +1,7 @@
 package roj.plugins.ci.minecraft;
 
-import roj.asm.type.Desc;
-import roj.asm.util.ClassUtil;
+import roj.asm.ClassUtil;
+import roj.asm.MemberDescriptor;
 import roj.asmx.mapper.Mapping;
 import roj.collect.MyHashMap;
 import roj.io.IOUtil;
@@ -25,10 +25,10 @@ import java.util.zip.ZipFile;
  */
 final class MCPMapping extends Mapping {
 	private final File file;
-	private final Map<Desc, List<String>> paramMap;
+	private final Map<MemberDescriptor, List<String>> paramMap;
 	public static Boolean printAll;
 
-	public MCPMapping(File file, Map<Desc, List<String>> paramMap) {
+	public MCPMapping(File file, Map<MemberDescriptor, List<String>> paramMap) {
 		this.file = file;
 		this.paramMap = paramMap;
 	}
@@ -39,14 +39,14 @@ final class MCPMapping extends Mapping {
 
 		save.getClassMap().putAll(classMap);
 
-		Map<String, List<Desc>> fields = new MyHashMap<>(srg.getFieldMap().size());
-		for (Map.Entry<Desc, String> entry : srg.getFieldMap().entrySet()) {
+		Map<String, List<MemberDescriptor>> fields = new MyHashMap<>(srg.getFieldMap().size());
+		for (Map.Entry<MemberDescriptor, String> entry : srg.getFieldMap().entrySet()) {
 			if (entry.getValue().startsWith("field_"))
 				fields.computeIfAbsent(entry.getValue(), Helpers.fnArrayList()).add(entry.getKey());
 		}
 
-		Map<String, List<Desc>> methods = new MyHashMap<>(srg.getMethodMap().size());
-		for (Map.Entry<Desc, String> entry : srg.getMethodMap().entrySet()) {
+		Map<String, List<MemberDescriptor>> methods = new MyHashMap<>(srg.getMethodMap().size());
+		for (Map.Entry<MemberDescriptor, String> entry : srg.getMethodMap().entrySet()) {
 			if (entry.getValue().startsWith("func_"))
 				methods.computeIfAbsent(entry.getValue(), Helpers.fnArrayList()).add(entry.getKey());
 		}
@@ -62,7 +62,7 @@ final class MCPMapping extends Mapping {
 		}
 	}
 
-	private static void parseMoF(ZipFile zf, String name, List<String> tmp, Map<String, List<Desc>> map, Map<Desc, String> target) throws IOException {
+	private static void parseMoF(ZipFile zf, String name, List<String> tmp, Map<String, List<MemberDescriptor>> map, Map<MemberDescriptor, String> target) throws IOException {
 		try (TextReader slr = TextReader.from(zf.getInputStream(zf.getEntry(name)), StandardCharsets.UTF_8)) {
 			int ln = 1;
 			slr.skipLines(1);
@@ -77,12 +77,12 @@ final class MCPMapping extends Mapping {
 					continue;
 				}
 
-				List<Desc> desc = map.get(tmp.get(0));
+				List<MemberDescriptor> desc = map.get(tmp.get(0));
 				if (desc == null) {
 					if (printAll != Boolean.FALSE) Terminal.warning(name+":"+ln+": 不存在的Srg: "+tmp.get(0));
 					if (printAll == null) printAll = false;
 				} else {
-					for (Desc d : desc) {
+					for (MemberDescriptor d : desc) {
 						target.put(d, tmp.get(1));
 					}
 				}
@@ -108,13 +108,13 @@ final class MCPMapping extends Mapping {
 		}
 	}
 
-	private void formatParamMap(Map<String, String> mcpParams, Map<Desc, List<String>> params, List<String> tmp, Map<String, List<Desc>> methods, Mapping srgName) {
+	private void formatParamMap(Map<String, String> mcpParams, Map<MemberDescriptor, List<String>> params, List<String> tmp, Map<String, List<MemberDescriptor>> methods, Mapping srgName) {
 		ClassUtil U = ClassUtil.getInstance();
 
-		Map<String, Set<Desc>> methodData = new MyHashMap<>(1000);
+		Map<String, Set<MemberDescriptor>> methodData = new MyHashMap<>(1000);
 
 		// func_10001_i
-		for (Map.Entry<String, List<Desc>> entry : methods.entrySet()) {
+		for (Map.Entry<String, List<MemberDescriptor>> entry : methods.entrySet()) {
 			String key = entry.getKey();
 
 			tmp.clear();
@@ -125,14 +125,14 @@ final class MCPMapping extends Mapping {
 				continue;
 			}
 
-			for (Desc desc : entry.getValue()) {
+			for (MemberDescriptor desc : entry.getValue()) {
 				String name = srgName.getMethodMap().get(desc);
 				if (name == null) continue;
 
-				Set<Desc> list = methodData.computeIfAbsent(tmp.get(1), Helpers.fnMyHashSet());
+				Set<MemberDescriptor> list = methodData.computeIfAbsent(tmp.get(1), Helpers.fnMyHashSet());
 
-				String param = U.mapMethodParam(classMap, desc.param);
-				list.add(new Desc(classMap.get(desc.owner), name, param));
+				String param = U.mapMethodParam(classMap, desc.rawDesc);
+				list.add(new MemberDescriptor(classMap.get(desc.owner), name, param));
 			}
 		}
 
@@ -141,7 +141,7 @@ final class MCPMapping extends Mapping {
 			tmp.clear();
 			TextUtil.split(tmp, entry.getKey(), '_');
 
-			Set<Desc> data = methodData.get(tmp.get(1));
+			Set<MemberDescriptor> data = methodData.get(tmp.get(1));
 			if (data == null) {
 				if (!tmp.get(1).startsWith("i")) {
 					if (printAll != Boolean.FALSE) Terminal.warning("参数不存在: " + tmp.get(1));
@@ -152,7 +152,7 @@ final class MCPMapping extends Mapping {
 
 			int slotId = TextUtil.parseInt(tmp.get(2));
 
-			for (Desc desc : data) {
+			for (MemberDescriptor desc : data) {
 				List<String> list = params.computeIfAbsent(desc, Helpers.fnArrayList());
 				while (list.size() <= slotId) list.add(null);
 				list.set(slotId, entry.getValue());

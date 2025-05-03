@@ -19,7 +19,6 @@ import roj.util.ArrayCache;
 import roj.util.Helpers;
 
 import java.io.*;
-import java.nio.channels.ClosedByInterruptException;
 import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -35,7 +34,7 @@ import java.util.function.Consumer;
 
 /**
  * @author Roj234
- * @since 2023/6/4 0004 3:54
+ * @since 2023/6/4 3:54
  */
 public class QZArchiver {
 	public static final int AOP_REPLACE = 0, AOP_UPDATE = 1, AOP_UPDATE_EXISTING = 2, AOP_SYNC = 3, AOP_IGNORE = 4, AOP_DIFF = 5;
@@ -50,7 +49,7 @@ public class QZArchiver {
 	public String password;
 	public int cryptPower, cryptSalt;
 	public boolean encryptFileName;
-	public boolean useBCJ, useBCJ2;
+	public boolean useBCJ, useBCJ2, twoPass;
 	public LZMA2Options options;
 	public boolean fastAppendCheck;
 	public int appendOptions, pathType;
@@ -264,7 +263,9 @@ public class QZArchiver {
 
 		QZCoder lzma2 = new LZMA2(options);
 		QZCoder[] coders = qzAes == null ? new QZCoder[] {lzma2} : new QZCoder[] {lzma2, qzAes};
-		makeBlock(compressed, chunkSize, coders, tmpa, tmpb);
+
+		if (twoPass) makeBlock2Pass(compressed, chunkSize, coders, tmpa, tmpb);
+		else makeBlock(compressed, chunkSize, coders, tmpa, tmpb);
 
 		if (useBCJ) coders = getBcjCoder(qzAes, lzma2);
 		makeBlock(executable, chunkSize, coders, tmpa, tmpb);
@@ -382,6 +383,19 @@ public class QZArchiver {
 
 		}
 		if (!tmpa.isEmpty()) addBlock(coders, tmpa, tmpb, size);
+	}
+	private void makeBlock2Pass(List<File> compressed, long chunkSize, QZCoder[] coders, List<Object> tmpa, List<QZEntry> tmpb) {
+		List<List<File>> x = BlockCombiner.twoPass(compressed, chunkSize);
+		for (List<File> files : x) {
+			long size = 0;
+			for (File file : files) {
+				QZEntry entry = entryFor(file);
+				tmpb.add(entry);
+				size += file.length();
+			}
+
+			addBlock(coders, Helpers.cast(files), tmpb, size);
+		}
 	}
 	private void addBlock(QZCoder[] coders, List<Object> tmpa, List<QZEntry> tmpb, long size) {
 		WordBlockAppend block = new WordBlockAppend();
@@ -576,7 +590,7 @@ public class QZArchiver {
 			bar.setProgress(0);
 		}
 
-		writer.closeWordBlock();
+		writer.flush();
 		writer.setIgnoreClose(true);
 		for (int i = 0; i < appends.size(); i++) {
 			int myi = i;
@@ -613,7 +627,7 @@ public class QZArchiver {
 
 	private QZWriter parallel(QZFileWriter qfw) throws IOException {
 		return threads == 1 ? qfw :
-			cacheFolder == null ? qfw.parallel() : qfw.parallel(new CacheSource(1048576, 134217728, "qzx-", cacheFolder));
+			cacheFolder == null ? qfw.newParallelWriter() : qfw.newParallelWriter(new CacheSource(1048576, 134217728, "qzx-", cacheFolder));
 	}
 
 	private void writeBlock(EasyProgressBar bar, WordBlockAppend block, QZWriter writer, TaskPool canSplit) throws IOException {
@@ -624,6 +638,8 @@ public class QZArchiver {
 			File data = (File) block.data[i];
 			try (FileInputStream in = new FileInputStream(data)) {
 				copyStreamWithProgress(in, writer, bar);
+			} catch (IOException e) {
+				e.printStackTrace();
 			}
 
 			if (canSplit != null && canSplit.busyCount() <= autoSplitTaskSize) {
@@ -645,7 +661,7 @@ public class QZArchiver {
 		byte[] tmp = ArrayCache.getByteArray(65536, false);
 		try {
 			while (true) {
-				if (Thread.interrupted()) throw new ClosedByInterruptException();
+				if (Thread.interrupted()) throw new InterruptedIOException();
 
 				int len = in.read(tmp);
 				if (len < 0) break;

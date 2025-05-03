@@ -1,13 +1,13 @@
 package roj.io.buf;
 
 import roj.collect.ImmediateWeakReference;
-import roj.collect.XHashSet;
+import roj.collect.XashMap;
 
 import java.util.concurrent.ThreadLocalRandom;
 
 /**
  * @author Roj234
- * @since 2023/2/10 0010 1:00
+ * @since 2023/2/10 1:00
  */
 public final class LeakDetector {
 	private static final int mode;
@@ -22,8 +22,8 @@ public final class LeakDetector {
 		}
 	}
 
-	private static final XHashSet.Shape<Object, LD> shape = ImmediateWeakReference.shape(LD.class);
-	private final XHashSet<Object, LD> monitor = shape.create();
+	private static final XashMap.Builder<Object, LD> BUILDER = ImmediateWeakReference.shape(LD.class);
+	private final XashMap<Object, LD> monitor = BUILDER.create();
 	private static int counter = ThreadLocalRandom.current().nextInt();
 
 	public static LeakDetector create() {
@@ -53,7 +53,7 @@ public final class LeakDetector {
 		private final String thread, type;
 		private final Throwable trace;
 
-		public LD(Object ref, XHashSet<Object, LD> monitor) {
+		public LD(Object ref, XashMap<Object, LD> monitor) {
 			super(ref, monitor);
 
 			thread = Thread.currentThread().getName();

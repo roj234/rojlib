@@ -38,15 +38,15 @@ import static roj.ui.CommandNode.literal;
 
 /**
  * @author Roj234
- * @since 2024/3/19 0019 16:50
+ * @since 2024/3/19 16:50
  */
 public final class Captcha implements ChannelHandler {
 	private static final ConstantPacket MY_COMMAND_TREE = new ConstantPacket("CommandTree", buf -> {
 		CommandTree tree = new CommandTree();
-		tree.then(literal("mycaptcha:mcadmin").then(argument("command", Argument.string())).executes(CLIParser.nullImpl()));
-		tree.then(literal("mcadmin").then(argument("command", Argument.string())).executes(CLIParser.nullImpl()));
-		tree.then(literal("mycaptcha:verify").then(argument("command", Argument.string())).executes(CLIParser.nullImpl()));
-		tree.then(literal("verify").then(argument("captcha", Argument.string())).executes(CLIParser.nullImpl()));
+		tree.then(literal("mycaptcha:mcadmin").then(argument("command", Argument.string())).executes(OptionParser.nullImpl()));
+		tree.then(literal("mcadmin").then(argument("command", Argument.string())).executes(OptionParser.nullImpl()));
+		tree.then(literal("mycaptcha:verify").then(argument("command", Argument.string())).executes(OptionParser.nullImpl()));
+		tree.then(literal("verify").then(argument("captcha", Argument.string())).executes(OptionParser.nullImpl()));
 
 		String CMD = "? about bukkit:?||? bukkit:about||about bukkit:help||help bukkit:pl||plugins bukkit:plugins||plugins bukkit:ver||version bukkit:version||version help icanhasbukkit me|action minecraft:help minecraft:me||me minecraft:msg||msg minecraft:teammsg||teammsg minecraft:tell||tell minecraft:tm|tm minecraft:trigger|trigger minecraft:w||w msg|message pl||plugins plugins teammsg|message tell|player|message tm||teammsg trigger|action ver||version version w";
 		for (String str : TextUtil.split(new SimpleList<>(), CMD, ' ')) {
@@ -57,7 +57,7 @@ public final class Captcha implements ChannelHandler {
 
 			CommandNode base = literal(name);
 			if (arg1 != null) base = base.then(argument(arg1, Argument.string()));
-			tree.then(base.executes(CLIParser.nullImpl()));
+			tree.then(base.executes(OptionParser.nullImpl()));
 		}
 
 		tree.write(buf);
@@ -107,7 +107,7 @@ public final class Captcha implements ChannelHandler {
 		map.put("ip", ((InetSocketAddress)ctx.remoteAddress()).getAddress().getHostAddress());
 
 		for (String line : LineReader.create(template.format(map, new CharList()).toString())) {
-			pc.sendMessage(new AnsiString(line).color16(Terminal.PURPLE + Terminal.HIGHLIGHT), false);
+			pc.sendMessage(new Text(line).color16(Terminal.PURPLE + Terminal.HIGHLIGHT), false);
 		}
 
 		timeoutTask = pl.getScheduler().loop(() -> {
@@ -132,10 +132,10 @@ public final class Captcha implements ChannelHandler {
 				pc.playGlobalSound("entity.ender_dragon.death", Enums.BLOCKS, 1);
 			} else if (remain == 30) {
 				pc.playGlobalSound("block.anvil.land", Enums.BLOCKS, 0);
-				pc.sendMessage(new AnsiString("还有30秒！"), true);
+				pc.sendMessage(new Text("还有30秒！"), true);
 			} else if (remain < 10) {
 				pc.playGlobalSound("block.note_block.pling", Enums.BLOCKS, remain&3);
-				pc.sendMessage(new AnsiString("还有"+remain+"秒！"), true);
+				pc.sendMessage(new Text("还有"+remain+"秒！"), true);
 			}
 
 			time++;
@@ -158,20 +158,20 @@ public final class Captcha implements ChannelHandler {
 			CharList buf = IOUtil.getSharedCharBuf();
 			for (MyBitSet choice : choices) buf.append((char) choice.first());
 			System.out.println(buf);
-			pc.sendMessage(new AnsiString(buf.toString()), true);
+			pc.sendMessage(new Text(buf.toString()), true);
 		}
 
 		ctx.channelWrite(MY_COMMAND_TREE);
 
 		PlayerEntity player = pc.getEntity();
-		player.inventory[36] = getMyPickaxe("minecraft:diamond_pickaxe", new AnsiString("神奇").reset().colorRGB(0xFFEEEE).append(new AnsiString("稿子").colorRGB(0xC876BE)));
-		player.inventory[37] = getMyPickaxe("minecraft:diamond_axe", new AnsiString("神奇").reset().colorRGB(0xFFEEEE).append(new AnsiString("斧子").colorRGB(0xECBB5A)));
-		player.inventory[38] = getMyPickaxe("minecraft:diamond_shovel", new AnsiString("神奇").reset().colorRGB(0xFFEEEE).append(new AnsiString("铲子").colorRGB(0xDC6432)));
+		player.inventory[36] = getMyPickaxe("minecraft:diamond_pickaxe", new Text("神奇").reset().colorRGB(0xFFEEEE).append(new Text("稿子").colorRGB(0xC876BE)));
+		player.inventory[37] = getMyPickaxe("minecraft:diamond_axe", new Text("神奇").reset().colorRGB(0xFFEEEE).append(new Text("斧子").colorRGB(0xECBB5A)));
+		player.inventory[38] = getMyPickaxe("minecraft:diamond_shovel", new Text("神奇").reset().colorRGB(0xFFEEEE).append(new Text("铲子").colorRGB(0xDC6432)));
 		pc.syncInventory();
 	}
 
 	@NotNull
-	private static ItemStack getMyPickaxe(String id, AnsiString name) {
+	private static ItemStack getMyPickaxe(String id, Text name) {
 		ItemStack _pickaxe = new ItemStack(Item.getItem(id), 1);
 		CMap tag = _pickaxe.tag();
 		tag.put("Unbreakable", true);

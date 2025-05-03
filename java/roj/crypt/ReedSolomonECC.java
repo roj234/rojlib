@@ -23,7 +23,7 @@ import static roj.reflect.Unaligned.U;
 /**
  * <We should never use C language>
  * @author Roj234
- * @since 2024/12/19 0019 14:02
+ * @since 2024/12/19 14:02
  */
 public final class ReedSolomonECC extends RCipherSpi {
 	private int _eccLength;

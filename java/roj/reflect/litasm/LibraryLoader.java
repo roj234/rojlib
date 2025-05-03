@@ -6,7 +6,7 @@ import java.io.File;
 
 /**
  * @author Roj234
- * @since 2024/10/25 0025 4:56
+ * @since 2024/10/25 4:56
  */
 public interface LibraryLoader {
 	LibraryLoader INSTANCE = getInstance();

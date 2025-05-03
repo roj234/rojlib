@@ -2,7 +2,7 @@ package roj.config.table;
 
 /**
  * @author Roj234
- * @since 2024/11/8 0008 18:46
+ * @since 2024/11/8 18:46
  */
 public class XlsxStyle {
 	// numFmt

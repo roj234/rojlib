@@ -1,6 +1,6 @@
 package roj.asmx.mapper;
 
-import roj.asm.type.Desc;
+import roj.asm.MemberDescriptor;
 import roj.collect.SimpleList;
 
 import java.util.List;
@@ -12,7 +12,7 @@ import java.util.Set;
  */
 public class SubImpl {
 	public final List<Set<String>> owners = new SimpleList<>();
-	public Desc type;
+	public MemberDescriptor type;
 
 	@Override
 	public boolean equals(Object o) {

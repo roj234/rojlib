@@ -10,7 +10,7 @@ import roj.compiler.resolve.ResolveException;
 
 /**
  * @author Roj234
- * @since 2023/1/30 0030 14:08
+ * @since 2023/1/30 14:08
  */
 final class This extends Expr {
 	private final boolean isThis;

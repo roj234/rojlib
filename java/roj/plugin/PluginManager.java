@@ -6,7 +6,7 @@ import org.jetbrains.annotations.Nullable;
 import roj.archive.zip.ZipFile;
 import roj.collect.SimpleList;
 import roj.collect.TrieTreeSet;
-import roj.collect.XHashSet;
+import roj.collect.XashMap;
 import roj.config.ConfigMaster;
 import roj.config.auto.SerializerFactory;
 import roj.config.data.CMap;
@@ -26,13 +26,13 @@ import java.util.regex.Pattern;
 
 /**
  * @author Roj234
- * @since 2023/12/25 0025 16:08
+ * @since 2023/12/25 16:08
  */
 public class PluginManager {
 	static final String SYSTEM_NAME = "Panger";
 	static final Logger LOGGER = Logger.getLogger(SYSTEM_NAME);
-	private static final XHashSet.Shape<String, PluginDescriptor> PM_SHAPE = XHashSet.noCreation(PluginDescriptor.class, "id");
-	final XHashSet<String, PluginDescriptor> plugins = PM_SHAPE.create();
+	private static final XashMap.Builder<String, PluginDescriptor> PM_BUILDER = XashMap.noCreation(PluginDescriptor.class, "id");
+	final XashMap<String, PluginDescriptor> plugins = PM_BUILDER.create();
 	final EnumMap<PluginDescriptor.Role, PluginDescriptor> rolePlugins = new EnumMap<>(PluginDescriptor.Role.class);
 	boolean stopping;
 

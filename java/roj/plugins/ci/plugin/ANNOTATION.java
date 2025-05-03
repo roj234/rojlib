@@ -6,7 +6,7 @@ import roj.asm.attr.Annotations;
 import roj.asm.cp.Constant;
 import roj.asm.cp.ConstantPool;
 import roj.asm.cp.CstRefUTF;
-import roj.asm.util.Context;
+import roj.asmx.Context;
 import roj.io.IOUtil;
 import roj.plugins.ci.FMD;
 import roj.text.Formatter;

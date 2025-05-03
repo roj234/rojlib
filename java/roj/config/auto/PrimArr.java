@@ -5,7 +5,7 @@ import roj.util.DynByteBuf;
 
 /**
  * @author Roj234
- * @since 2023/3/19 0019 20:31
+ * @since 2023/3/19 20:31
  */
 final class PrimArr extends Adapter {
 	@Override

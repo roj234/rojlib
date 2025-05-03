@@ -3,13 +3,13 @@ package roj.media.image;
 import roj.io.CorruptedInputException;
 import roj.io.MyDataInput;
 
-import java.awt.color.*;
+import java.awt.color.ColorSpace;
 import java.awt.image.*;
 import java.io.IOException;
 
 /**
  * @author Roj234
- * @since 2024/5/19 0019 17:37
+ * @since 2024/5/19 17:37
  */
 public class QOIDecoder implements ImageDecoder {
 	private final byte[] hashTable = new byte[64<<2];

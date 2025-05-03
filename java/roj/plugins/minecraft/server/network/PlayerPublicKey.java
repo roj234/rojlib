@@ -13,7 +13,7 @@ import java.util.UUID;
 
 /**
  * @author Roj234
- * @since 2024/3/19 0019 20:56
+ * @since 2024/3/19 20:56
  */
 public record PlayerPublicKey(long expiresAt, PublicKey key, byte[] keySignature) {
 	private static final KeyFactory rsa;

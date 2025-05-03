@@ -4,7 +4,7 @@ import roj.text.CharList;
 
 /**
  * @author Roj234
- * @since 2022/11/1 0001 10:47
+ * @since 2022/11/1 10:47
  */
 final class Placeholder implements IType {
 	static final Placeholder I = new Placeholder();

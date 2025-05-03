@@ -31,7 +31,7 @@ public class HMAC extends MessageDigest implements MessageAuthenticCode {
 	@Override protected byte[] engineDigest() {return digestShared().clone();}
 
 	@Override
-	public void setSignKey(byte[] key, int off, int len) {
+	public void init(byte[] key, int off, int len) {
 		if (len > ipad.length) {
 			md.reset();
 			md.update(key, off, len);

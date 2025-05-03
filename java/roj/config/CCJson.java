@@ -9,7 +9,7 @@ import static roj.config.Word.*;
 
 /**
  * @author Roj234
- * @since 2023/3/19 0019 10:24
+ * @since 2023/3/19 10:24
  */
 final class CCJson extends JSONParser implements CCParser {
 	public CCJson(int flag) {super(flag);}

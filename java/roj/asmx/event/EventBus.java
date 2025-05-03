@@ -1,9 +1,9 @@
 package roj.asmx.event;
 
 import roj.Unused;
+import roj.asm.ClassNode;
+import roj.asm.Member;
 import roj.asm.Opcodes;
-import roj.asm.Parser;
-import roj.asm.RawNode;
 import roj.asm.annotation.Annotation;
 import roj.asm.attr.Attribute;
 import roj.asm.type.Type;
@@ -12,7 +12,7 @@ import roj.asmx.AnnotatedElement;
 import roj.asmx.AnnotationRepo;
 import roj.collect.Hasher;
 import roj.collect.SimpleList;
-import roj.collect.XHashSet;
+import roj.collect.XashMap;
 import roj.text.logging.Logger;
 import roj.util.Helpers;
 
@@ -21,15 +21,15 @@ import java.util.List;
 
 /**
  * @author Roj234
- * @since 2024/3/21 0021 11:50
+ * @since 2024/3/21 11:50
  */
 public class EventBus {
 	public static final String SUBSCRIBE_NAME = "roj/asmx/event/Subscribe";
 
-	private static final XHashSet.Shape<String, ListenerList> LM_SHAPE = XHashSet.noCreation(ListenerList.class, "type", "mapNext", Hasher.defaul());
-	private static final XHashSet.Shape<String, ListenerInfo.MapEntry> INFO_SHAPE = XHashSet.noCreation(ListenerInfo.MapEntry.class, "owner", "next", Hasher.defaul());
+	private static final XashMap.Builder<String, ListenerList> LM_BUILDER = XashMap.noCreation(ListenerList.class, "type", "mapNext", Hasher.defaul());
+	private static final XashMap.Builder<String, ListenerInfo.MapEntry> INFO_BUILDER = XashMap.noCreation(ListenerInfo.MapEntry.class, "owner", "next", Hasher.defaul());
 
-	private final XHashSet<String, ListenerList> eventListenerList = LM_SHAPE.create();
+	private final XashMap<String, ListenerList> eventListenerList = LM_BUILDER.create();
 	public ListenerList getListeners(Event event) { return eventListenerList.get(event.getClass().getName()); }
 	private ListenerList createListenerList(Class<?> event) {
 		ListenerList list;
@@ -44,7 +44,7 @@ public class EventBus {
 		eventListenerList.add(list);
 		return list;
 	}
-	private ListenerList createListenerList(Class<?> c, RawNode mn, String event) {
+	private ListenerList createListenerList(Class<?> c, Member mn, String event) {
 		Class<?> type = null;
 		block:
 		try {
@@ -87,11 +87,11 @@ public class EventBus {
 			));
 		}
 	}
-	private final XHashSet<String, ListenerInfo.MapEntry> entries = INFO_SHAPE.create();
+	private final XashMap<String, ListenerInfo.MapEntry> entries = INFO_BUILDER.create();
 	private ListenerInfo[] getListenerInfo(Class<?> type, boolean object) {
 		var entry = entries.get(type.getName());
 		if (entry == null) {
-			var data = Parser.parseConstants(type);
+			var data = ClassNode.fromType(type);
 			if (data == null) throw new IllegalArgumentException("无法解析"+type.getName()+"的源文件！");
 
 			List<ListenerInfo> objectList = new SimpleList<>(), staticList = new SimpleList<>();
@@ -123,7 +123,7 @@ public class EventBus {
 		}
 		return object ? entry.objectList : entry.staticList;
 	}
-	private static void toListenerInfo(RawNode mn, Annotation subscribe, List<ListenerInfo> objectList, List<ListenerInfo> staticList) {
+	private static void toListenerInfo(Member mn, Annotation subscribe, List<ListenerInfo> objectList, List<ListenerInfo> staticList) {
 		List<Type> types = Type.methodDesc(mn.rawDesc());
 		if (types.size() != 2 || types.get(0).isPrimitive() || types.get(1).type != Type.VOID)
 			throw new IllegalArgumentException("事件监听函数的参数不合法: 期待[Event, void]而不是"+types);

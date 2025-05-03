@@ -15,14 +15,14 @@ import static roj.reflect.Unaligned.U;
  * @since 2021/5/27 0:8
  */
 public class ImmediateWeakReference<K> extends WeakReference<K> implements Runnable {
-	public ImmediateWeakReference(K key, XHashSet<K, ? extends ImmediateWeakReference<K>> owner) {
+	public ImmediateWeakReference(K key, XashMap<K, ? extends ImmediateWeakReference<K>> owner) {
 		super(key, null);
 		this.owner = Objects.requireNonNull(Helpers.cast(owner));
 		this.hash = System.identityHashCode(key);
 		cleanerRef = NativeMemory.createCleaner(key, this);
 	}
 
-	protected final XHashSet<K, ImmediateWeakReference<K>> owner;
+	protected final XashMap<K, ImmediateWeakReference<K>> owner;
 	final int hash;
 	final Object cleanerRef;
 
@@ -41,11 +41,11 @@ public class ImmediateWeakReference<K> extends WeakReference<K> implements Runna
 		}
 	}
 
-	public static <K, V extends ImmediateWeakReference<K>> XHashSet.Shape<K, V> shape(Class<V> vType) {
+	public static <K, V extends ImmediateWeakReference<K>> XashMap.Builder<K, V> shape(Class<V> vType) {
 		try {
 			Field key = Reference.class.getDeclaredField("referent");
 			Field next = ImmediateWeakReference.class.getDeclaredField("_next");
-			return new XHashSet.Shape<>(vType, U.objectFieldOffset(next), U.objectFieldOffset(key), Hasher.identity(), null);
+			return new XashMap.Builder<>(vType, U.objectFieldOffset(next), U.objectFieldOffset(key), Hasher.identity(), null);
 		} catch (NoSuchFieldException e) {
 			throw new IllegalArgumentException("无法找到字段", e);
 		}

@@ -8,7 +8,7 @@ import java.security.spec.AlgorithmParameterSpec;
 
 /**
  * @author Roj234
- * @since 2023/3/16 0016 0:06
+ * @since 2023/3/16 0:06
  */
 public abstract class Filter extends RCipherSpi {
     final boolean encode;

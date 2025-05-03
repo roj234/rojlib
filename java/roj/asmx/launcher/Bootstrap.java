@@ -5,13 +5,14 @@ import roj.ReferenceByGeneratedClass;
 import roj.archive.zip.ZEntry;
 import roj.archive.zip.ZipFile;
 import roj.archive.zip.ZipFileWriter;
+import roj.asm.AsmCache;
 import roj.asm.ClassNode;
-import roj.asm.Parser;
+import roj.asm.ClassView;
 import roj.asm.insn.CodeWriter;
 import roj.asm.type.Type;
-import roj.asm.util.Context;
 import roj.asmx.AnnotationRepo;
-import roj.asmx.ITransformer;
+import roj.asmx.Context;
+import roj.asmx.Transformer;
 import roj.collect.SimpleList;
 import roj.collect.TrieTreeSet;
 import roj.compiler.plugins.asm.ASM;
@@ -183,7 +184,7 @@ public class Bootstrap implements Function<String, Class<?>> {
 		c.insn(RETURN);
 		c.finish();
 
-		ByteList list = Parser.toByteArrayShared(L);
+		ByteList list = AsmCache.toByteArrayShared(L);
 		Class<?> loaderClass = entryPoint.defineClassA(L.name().replace('/', '.'), list.list, 0, list.wIndex(), Bootstrap.class.getProtectionDomain().getCodeSource());
 		ReflectionUtils.ensureClassInitialized(loaderClass);
 	}
@@ -275,7 +276,7 @@ public class Bootstrap implements Function<String, Class<?>> {
 	private final List<JarVerifier> verifiers = new ArrayList<>();
 
 	private INameTransformer nameTransformer;
-	private final List<ITransformer> transformers = new ArrayList<>();
+	private final List<Transformer> transformers = new ArrayList<>();
 
 	private final TrieTreeSet transformExcept = new TrieTreeSet();
 	private final TrieTreeSet loadExcept = new TrieTreeSet();
@@ -291,7 +292,7 @@ public class Bootstrap implements Function<String, Class<?>> {
 		}
 	}
 
-	public void registerTransformer(ITransformer tr) {
+	public void registerTransformer(Transformer tr) {
 		if (transformers.contains(tr)) throw new IllegalArgumentException("Transformer already exist: "+tr);
 		transformers.add(tr);
 		if (tr instanceof INameTransformer) {
@@ -412,7 +413,7 @@ public class Bootstrap implements Function<String, Class<?>> {
 		Context ctx = new Context(name, list);
 		boolean changed = false;
 
-		List<ITransformer> ts = transformers;
+		List<Transformer> ts = transformers;
 		var reentrant = IS_TRANSFORMING.get();
 		if (reentrant.value >= 0) {
 			LOGGER.warn("类转换器'{}'正在引用'{}'", ts.get(reentrant.value).getClass().getName(), transformedName);
@@ -428,7 +429,7 @@ public class Bootstrap implements Function<String, Class<?>> {
 
 				LOGGER.fatal("转换类'{}'时发生异常({}/{})", e, name, i);
 				try {
-					Debug.dump("transform_failed", ctx.get());
+					Debug.dump("transform_failed", ctx.getClassBytes());
 				} catch (Throwable e1) {
 					LOGGER.fatal("保存'{}'的内容用于调试时发生异常", e1, name);
 				}
@@ -438,7 +439,7 @@ public class Bootstrap implements Function<String, Class<?>> {
 		reentrant.value = -1;
 		if (changed) {
 			// See ConstantPool#checkCollision
-			ByteList b = ctx.get();
+			ByteList b = ctx.getClassBytes();
 			if (b != list) {
 				list.clear();
 				list.put(b);
@@ -466,7 +467,7 @@ public class Bootstrap implements Function<String, Class<?>> {
 		return in;
 	}
 
-	public List<ITransformer> getTransformers() {return transformers;}
+	public List<Transformer> getTransformers() {return transformers;}
 	public void addTransformerExclusion(String toExclude) {transformExcept.add(toExclude);}
 
 	public void enableFastZip(URL url, boolean skipCodeSource) throws IOException {
@@ -521,7 +522,7 @@ public class Bootstrap implements Function<String, Class<?>> {
 
 								buf.clear();
 								buf.readStreamFully(in);
-								String name = Parser.parseAccess(buf, false).name;
+								String name = ClassView.parse(buf, false).name;
 
 								buf.rIndex = 0;
 								if (name.concat(".class").equals(entry.getName())) {

@@ -71,7 +71,7 @@ CoreDump
 * 上面讲的还都是Code属性，如果要先检测有没有注解再决定如何操作呢
 * 使用`T roj.asm.Attributed#parsedAttr(@Nullable ConstantPool cp, TypedName&lt;T&gt; name)`获取存在的属性（它是可读写的）
 * TypedName在`roj.asm.Attribute`中列举了（或者你也可以new一个，它只是为了通过泛型规范Attribute的类型）
-* 使用`roj.asm.CNode#parsed(ConstantPool cp)`解析一个方法或字段的所有属性
+* 使用`roj.asm.MemberNode#parsed(ConstantPool cp)`解析一个方法或字段的所有属性
 
 实例见`roj.asmx.mapper.Mapper`
 
@@ -217,7 +217,7 @@ at roj.config.JSONParser.jsonRead(JSONParser.java:217)
 * 很快，不要联网，而且占用空间少，不在用户文件夹拉屎
 
 ### 图片展示
-![roj.plugins.ci.FMDMain](docs/images/fmd.png)
+![roj.plugins.ci.FMD](docs/images/fmd.png)
 
 ## roj.net
     基于管线的网络请求

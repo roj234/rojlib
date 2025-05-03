@@ -5,14 +5,14 @@ import roj.asm.MethodNode;
 import roj.asm.Opcodes;
 import roj.asm.attr.Attribute;
 import roj.asm.insn.InsnList;
-import roj.asm.util.Context;
+import roj.asmx.Context;
 import roj.plugins.obfuscator.ObfuscateTask;
 
 import java.util.Random;
 
 /**
  * @author Roj234
- * @since 2025/3/18 0018 14:28
+ * @since 2025/3/18 14:28
  */
 public class PrependJunk implements ObfuscateTask {
 	private static final String LOL = "lol";

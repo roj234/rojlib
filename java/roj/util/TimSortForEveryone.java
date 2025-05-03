@@ -6,7 +6,7 @@ import static roj.reflect.Unaligned.U;
 
 /**
  * @author Roj234
- * @since 2023/11/6 0006 0:59
+ * @since 2023/11/6 0:59
  */
 public class TimSortForEveryone {
 	public interface MyComparator {

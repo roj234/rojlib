@@ -6,7 +6,7 @@ import roj.math.MathUtils;
  * 这个实现采用开放寻址法，比闭合寻址的SwitchMap慢一丢丢
  * 但是因为修改了数据结构，所以更省内存
  * @author Roj234
- * @since 2025/4/9 0009 17:05
+ * @since 2025/4/9 17:05
  */
 public final class SwitchMapJ {
 	public static final class Builder {

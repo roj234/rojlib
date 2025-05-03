@@ -11,7 +11,7 @@ import java.util.function.Consumer;
 
 /**
  * @author Roj234
- * @since 2024/3/19 0019 15:52
+ * @since 2024/3/19 15:52
  */
 public class ConstantPacket extends Packet implements ChannelHandler {
 	byte[] constantData;

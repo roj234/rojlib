@@ -37,7 +37,7 @@ import java.util.concurrent.ThreadLocalRandom;
  * 网址导航插件.
  * 本地csv转换自<a href="https://github.com/hitokoto-osc/">Hitokoto-OSC</a>的语句库（AGPL），不过并不包含在公开的项目中
  * @author Roj234
- * @since 2025/3/10 0010 16:28
+ * @since 2025/3/10 16:28
  */
 @Mime("text/plain")
 public class YellowPage extends Plugin implements TableReader {

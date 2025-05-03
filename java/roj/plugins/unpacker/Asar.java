@@ -14,6 +14,7 @@ import roj.text.TextUtil;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.Map;
 
 /**
@@ -30,14 +31,15 @@ class Asar extends Scene {
 		try (MyDataInputStream f = new MyDataInputStream(new FileInputStream(file))) {
 			if (0x04000000 != f.readInt()) throw new IOException("Not ASAR header (04000000)");
 
-			f.skipBytes(8); // 自动处理不定长的JSON
+			int headerSize = f.readIntLE();
+			int someLen = f.readIntLE();
 			int jsonLen = f.readIntLE();
 
-			baseOffset = f.position() + jsonLen + 1;
+			baseOffset = headerSize + 8;
 
 			CMap root;
 			try {
-				root = new JSONParser().parse(f).asMap();
+				root = new JSONParser().charset(StandardCharsets.UTF_8).parse(f).asMap();
 			} catch (ParseException e) {
 				throw new CorruptedInputException("无法解析文件", e);
 			}

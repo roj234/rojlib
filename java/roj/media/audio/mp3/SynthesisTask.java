@@ -1,11 +1,11 @@
 package roj.media.audio.mp3;
 
-import roj.concurrent.ITask;
+import roj.concurrent.Task;
 
 /**
  * 由于大量浮点运算，多相合成滤波耗时最多，使用并发运算加速解码
  */
-final class SynthesisTask implements ITask {
+final class SynthesisTask implements Task {
 	private final int ch;
 	private final float[] samples;
 	private float[][] bufA, bufB; // 调用者无锁双缓冲

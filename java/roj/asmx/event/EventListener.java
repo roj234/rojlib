@@ -2,7 +2,7 @@ package roj.asmx.event;
 
 /**
  * @author Roj234
- * @since 2024/3/21 0021 12:48
+ * @since 2024/3/21 12:48
  */
 interface EventListener {
 	void invoke(Event event);

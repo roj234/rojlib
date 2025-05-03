@@ -1,9 +1,9 @@
 package roj.net.mss;
 
 import roj.collect.ToIntMap;
+import roj.crypt.CryptoFactory;
 import roj.crypt.DHGroup;
 import roj.crypt.ECGroup;
-import roj.crypt.ILCrypto;
 import roj.crypt.KeyExchange;
 import roj.crypt.eddsa.XDHUnofficial;
 import roj.util.Helpers;
@@ -69,14 +69,14 @@ public final class CipherSuite {
 
 	static {
 		MSSCipherFactory
-			CIPHER_AES_128_GCM = new SimpleCipherFactory(16, ILCrypto::AesGcm),
-			CIPHER_AES_256_GCM = new SimpleCipherFactory(32, ILCrypto::AesGcm),
-			CIPHER_CHACHA20_POLY1305 = new SimpleCipherFactory(32, ILCrypto::ChaCha1305),
-			CIPHER_XCHACHA20_POLY1305 = new SimpleCipherFactory(32, ILCrypto::XChaCha1305);
+			CIPHER_AES_128_GCM = new SimpleCipherFactory(16, CryptoFactory::AES_GCM),
+			CIPHER_AES_256_GCM = new SimpleCipherFactory(32, CryptoFactory::AES_GCM),
+			CIPHER_CHACHA20_POLY1305 = new SimpleCipherFactory(32, CryptoFactory::ChaCha_Poly1305),
+			CIPHER_XCHACHA20_POLY1305 = new SimpleCipherFactory(32, CryptoFactory::XChaCha_Poly1305);
 
 		Supplier<MessageDigest> SIGN_SHA256 = _HASH("SHA-256"), SIGN_SHA384 = _HASH("SHA-384");
 		try {
-			ILCrypto.register();
+			CryptoFactory.register();
 			register(PUB_X509_RSA, new X509KeyFormat("RSA", "NONEwithRSA"));
 			register(PUB_X509_CERTIFICATE, new X509CertFormat());
 			register(PUB_X509_EdDSA, new X509KeyFormat("EdDSA", "EdDSA"));

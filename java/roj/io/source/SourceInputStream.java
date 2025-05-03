@@ -10,7 +10,7 @@ import static roj.reflect.Unaligned.U;
 
 /**
  * @author Roj234
- * @since 2022/12/7 0007 14:27
+ * @since 2022/12/7 14:27
  */
 public sealed class SourceInputStream extends InputStream {
 	public SourceInputStream(Source src, long length) {
@@ -74,7 +74,7 @@ public sealed class SourceInputStream extends InputStream {
 
 	/**
 	 * @author Roj234
-	 * @since 2023/9/14 0014 14:01
+	 * @since 2023/9/14 14:01
 	 */
 	public static final class Shared extends SourceInputStream {
 		private Object ref;

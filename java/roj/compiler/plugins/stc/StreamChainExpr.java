@@ -11,7 +11,7 @@ import java.util.List;
 
 /**
  * @author Roj234
- * @since 2024/2/20 0020 13:36
+ * @since 2024/2/20 13:36
  */
 public interface StreamChainExpr {
 	@Contract(pure = true)

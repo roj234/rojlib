@@ -7,7 +7,7 @@ import java.lang.annotation.Target;
 
 /**
  * @author Roj234
- * @since 2023/12/26 0026 12:43
+ * @since 2023/12/26 12:43
  */
 @Retention(RetentionPolicy.CLASS)
 @Target(ElementType.TYPE)

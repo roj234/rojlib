@@ -11,7 +11,7 @@ import roj.concurrent.TaskPool;
 import roj.config.NBTParser;
 import roj.config.serial.ToNBT;
 import roj.crypt.CRC32s;
-import roj.crypt.ILCrypto;
+import roj.crypt.CryptoFactory;
 import roj.crypt.KeyType;
 import roj.io.*;
 import roj.io.buf.BufferPool;
@@ -33,7 +33,7 @@ import java.util.zip.GZIPInputStream;
 
 /**
  * @author Roj234
- * @since 2023/12/21 0021 1:30
+ * @since 2023/12/21 1:30
  */
 public final class McDiffServer {
 	static final byte REGION = 1, GZIP = 2, DIFF = 3;
@@ -63,7 +63,7 @@ public final class McDiffServer {
 			qzfw.beginEntry(QZEntry.ofNoAttribute(".vcs/"+entry.getKey()));
 			qzfw.write(entry.getValue().getBytes(StandardCharsets.UTF_16LE));
 		}
-		qzfw.closeWordBlock();
+		qzfw.flush();
 		for (String path : empty) {
 			qzfw.beginEntry(QZEntry.ofNoAttribute(path));
 		}
@@ -73,7 +73,7 @@ public final class McDiffServer {
 		System.out.println("Allocating "+TextUtil.scaledNumber1024(myMem)+" of memory");
 		LZMA2Options opt = new LZMA2Options();
 		opt.setAsyncMode(1<<24, TaskPool.Common(), affinity, new BufferPool(myMem,0,myMem, 0,0, 0, 10,0), LZMA2Options.ASYNC_DICT_NONE);
-		QZWriter genericParallel = qzfw.parallel();
+		QZWriter genericParallel = qzfw.newParallelWriter();
 		genericParallel.setCodec(new LZMA2(opt));
 
 		System.out.println("正在处理新增 (3/4)");
@@ -145,7 +145,7 @@ public final class McDiffServer {
 
 				MyRegionFile javac傻逼 = prevRin;
 				File javac大傻逼 = tempFile;
-				QZWriter w = qzfw.parallel();
+				QZWriter w = qzfw.newParallelWriter();
 				w.setCodec(new LZMA2(7));
 				w.beginEntry(entry);
 
@@ -248,12 +248,12 @@ public final class McDiffServer {
 		// 验证了Metadata的文件名、大小、顺序，和WordBlock的数据
 		// 修改日期之类的就没有验证了
 
-		qzfw.closeWordBlock();
+		qzfw.flush();
 
-		var hash1 = ILCrypto.Blake3(32);
-		var hash2 = ILCrypto.SM3();
+		var hash1 = CryptoFactory.Blake3(32);
+		var hash2 = CryptoFactory.SM3();
 
-		long count = qzfw.s.position()-32;
+		long count = qzfw.source().position()-32;
 		byte[] tmp = ArrayCache.getByteArray(4096, false);
 		try (InputStream in = new FileInputStream(file)) {
 			IOUtil.readFully(in, tmp, 0, 32); // 跳过文件头

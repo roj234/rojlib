@@ -26,7 +26,7 @@ import java.util.function.Consumer;
 
 /**
  * @author Roj234
- * @since 2023/12/25 0025 16:00
+ * @since 2023/12/25 16:00
  */
 public abstract class Plugin {
 	private Logger logger;
@@ -188,28 +188,28 @@ public abstract class Plugin {
 
 		private final Scheduler sched;
 		public PSched(Plugin plugin, Scheduler sched) {
-			super((Consumer<ITask>) null);
+			super((Consumer<Task>) null);
 			this.plugin = plugin;
 			this.sched = sched;
 		}
 
 		@Override
-		public ScheduleTask delay(ITask task, long delayMs) {
+		public ScheduleTask delay(Task task, long delayMs) {
 			ScheduleTask delay = sched.delay(task, delayMs);
 			synchronized (userTasks) { userTasks.add(delay); }
 			if (task instanceof PLoopTask p) p.realTask = delay;
 			return delay;
 		}
 		@Override
-		public ScheduleTask runAsync(ITask task) {
+		public ScheduleTask runAsync(Task task) {
 			PLongTask wrapper = new PLongTask(task);
 			synchronized (userTasks) { userTasks.add(wrapper); }
 			TaskPool.Common().submit(wrapper);
 			return wrapper;
 		}
-		public ScheduleTask loop(ITask task, long intervalMs) { return delay(new PLoopTask(sched, task, intervalMs, -1), 0); }
-		public ScheduleTask loop(ITask task, long intervalMs, int count) { return delay(new PLoopTask(sched, task, intervalMs, count), 0); }
-		public ScheduleTask loop(ITask task, long intervalMs, int count, long delayMs) { return delay(new PLoopTask(sched, task, intervalMs, count), delayMs); }
+		public ScheduleTask loop(Task task, long intervalMs) { return delay(new PLoopTask(sched, task, intervalMs, -1), 0); }
+		public ScheduleTask loop(Task task, long intervalMs, int count) { return delay(new PLoopTask(sched, task, intervalMs, count), 0); }
+		public ScheduleTask loop(Task task, long intervalMs, int count, long delayMs) { return delay(new PLoopTask(sched, task, intervalMs, count), delayMs); }
 
 		public void cancelAll() {
 			synchronized (userTasks) {
@@ -218,12 +218,12 @@ public abstract class Plugin {
 			}
 		}
 
-		private final class PLongTask implements ITask, ScheduleTask {
-			private final ITask task;
+		private final class PLongTask implements Task, ScheduleTask {
+			private final Task task;
 
-			public PLongTask(ITask task) { this.task = task; }
+			public PLongTask(Task task) { this.task = task; }
 
-			public ITask getTask() { return task; }
+			public Task getTask() { return task; }
 			public boolean isExpired() { return !userTasks.contains(this); }
 			public boolean isCancelled() { return task.isCancelled(); }
 			public boolean cancel() { return task.cancel(); }
@@ -247,7 +247,7 @@ public abstract class Plugin {
 		private final class PLoopTask extends LoopTask {
 			ScheduleTask realTask;
 
-			PLoopTask(Scheduler sched, ITask task, long interval, int repeat) {
+			PLoopTask(Scheduler sched, Task task, long interval, int repeat) {
 				super(sched, task, interval, repeat, true);
 			}
 

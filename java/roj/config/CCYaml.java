@@ -10,7 +10,7 @@ import static roj.config.Word.EOF;
 
 /**
  * @author Roj234
- * @since 2023/3/19 0019 10:30
+ * @since 2023/3/19 10:30
  */
 final class CCYaml extends YAMLParser implements CCParser {
 	public CCYaml(int flag) {super(flag);}
@@ -125,7 +125,6 @@ final class CCYaml extends YAMLParser implements CCParser {
 	}
 	public void ccElement(int flag) throws ParseException {
 		Word w = next();
-		String cnt = w.val();
 		try {
 			switch (w.type()) {
 				case join, force_cast, ref, anchor -> throw err("访问者模式不支持seek-past");
@@ -139,8 +138,9 @@ final class CCYaml extends YAMLParser implements CCParser {
 					jsonMap(this, flag);
 					this.flag ^= JSON_MODE;
 				}
-				case multiline, multiline_clump -> cc.value(cnt);
+				case multiline, multiline_clump -> cc.value(w.val());
 				case Word.STRING, Word.LITERAL -> {
+					var cnt = w.val();
 					if (!checkMap()) cc.value(cnt);
 				}
 				case Word.DOUBLE, Word.FLOAT -> {
@@ -169,7 +169,7 @@ final class CCYaml extends YAMLParser implements CCParser {
 					ccLineArray();
 				}
 				case Word.EOF -> cc.valueNull();
-				default -> unexpected(cnt);
+				default -> unexpected(w.val());
 			}
 		} catch (Exception e) {
 			if (e instanceof ParseException) throw e;

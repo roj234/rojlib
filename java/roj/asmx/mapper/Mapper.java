@@ -11,14 +11,11 @@ import roj.asm.annotation.AnnVal;
 import roj.asm.annotation.Annotation;
 import roj.asm.attr.*;
 import roj.asm.cp.*;
-import roj.asm.type.Desc;
-import roj.asm.type.NameAndType;
 import roj.asm.type.Signature;
 import roj.asm.type.Type;
-import roj.asm.util.ClassUtil;
-import roj.asm.util.Context;
+import roj.asmx.Context;
 import roj.collect.*;
-import roj.concurrent.TaskHandler;
+import roj.concurrent.TaskExecutor;
 import roj.concurrent.TaskPool;
 import roj.io.IOUtil;
 import roj.io.MyDataInputStream;
@@ -40,7 +37,7 @@ import java.util.function.UnaryOperator;
 
 import static roj.asm.Opcodes.*;
 import static roj.asm.type.Type.ARRAY;
-import static roj.asm.util.Context.runAsync;
+import static roj.asmx.Context.runAsync;
 
 /**
  * @author Roj234
@@ -81,12 +78,12 @@ public class Mapper extends Mapping {
 		@Override
 		protected List<String> getParamNames(MethodNode m) {
 			if (paramMap != null) {
-				String owner = m.ownerClass();
+				String owner = m.owner();
 
-				Desc md = ClassUtil.getInstance().sharedDC;
+				MemberDescriptor md = ClassUtil.getInstance().sharedDesc;
 				md.owner = classMap.getOrDefault(owner, owner);
 				md.name = m.name();
-				md.param = m.rawDesc();
+				md.rawDesc = m.rawDesc();
 
 				List<String> parents = selfSupers.getOrDefault(owner, Collections.emptyList());
 				int i = 0;
@@ -116,14 +113,14 @@ public class Mapper extends Mapping {
 	/**
 	 * 来自依赖的数据
 	 */
-	public final MyHashSet<Desc> libStopAnchor;
+	public final MyHashSet<MemberDescriptor> libStopAnchor;
 	public final MyHashMap<String, List<String>> libSupers;
 
 	/**
 	 * 工作中数据
 	 */
-	private Map<Desc, String> selfInherited;
-	private Set<Desc> stopAnchor;
+	private Map<MemberDescriptor, String> selfInherited;
+	private Set<MemberDescriptor> stopAnchor;
 	Map<String, List<String>> selfSupers;
 
 	public byte flag = FLAG_FULL_CLASS_MAP;
@@ -167,15 +164,15 @@ public class Mapper extends Mapping {
 			}
 
 			w.putVUInt(fieldMap.size());
-			for (Map.Entry<Desc, String> s : fieldMap.entrySet()) {
-				Desc desc = s.getKey();
-				pool.add(pool.add(pool.add(pool.add(w, desc.owner), desc.name), desc.param).put(desc.modifier), s.getValue());
+			for (Map.Entry<MemberDescriptor, String> s : fieldMap.entrySet()) {
+				MemberDescriptor desc = s.getKey();
+				pool.add(pool.add(pool.add(pool.add(w, desc.owner), desc.name), desc.rawDesc).put(desc.modifier), s.getValue());
 			}
 
 			w.putVUInt(methodMap.size());
-			for (Map.Entry<Desc, String> s : methodMap.entrySet()) {
-				Desc desc = s.getKey();
-				pool.add(pool.add(pool.add(pool.add(w, desc.owner), desc.name), desc.param).put(desc.modifier), s.getValue());
+			for (Map.Entry<MemberDescriptor, String> s : methodMap.entrySet()) {
+				MemberDescriptor desc = s.getKey();
+				pool.add(pool.add(pool.add(pool.add(w, desc.owner), desc.name), desc.rawDesc).put(desc.modifier), s.getValue());
 			}
 		} else {
 			w.putMedium(0);
@@ -192,8 +189,8 @@ public class Mapper extends Mapping {
 			}
 
 			w.putVUInt(libStopAnchor.size());
-			for (Desc s : libStopAnchor) {
-				pool.add(pool.add(pool.add(w, s.owner), s.name), s.param);
+			for (MemberDescriptor s : libStopAnchor) {
+				pool.add(pool.add(pool.add(w, s.owner), s.name), s.rawDesc);
 			}
 		} else {
 			w.putShort(0);
@@ -220,13 +217,13 @@ public class Mapper extends Mapping {
 		count = r.readVUInt();
 		fieldMap.ensureCapacity(count);
 		while(count-- > 0) {
-			fieldMap.put(new Desc(pool.get(r), pool.get(r), pool.get(r), r.readUnsignedByte()), pool.get(r));
+			fieldMap.put(new MemberDescriptor(pool.get(r), pool.get(r), pool.get(r), r.readUnsignedByte()), pool.get(r));
 		}
 
 		count = r.readVUInt();
 		methodMap.ensureCapacity(count);
 		while(count-- > 0) {
-			methodMap.put(new Desc(pool.get(r), pool.get(r), pool.get(r), r.readUnsignedByte()), pool.get(r));
+			methodMap.put(new MemberDescriptor(pool.get(r), pool.get(r), pool.get(r), r.readUnsignedByte()), pool.get(r));
 		}
 
 		if (!readClassInheritanceMap) return false;
@@ -247,7 +244,7 @@ public class Mapper extends Mapping {
 
 		count = r.readVUInt();
 		while(count-- > 0) {
-			libStopAnchor.add(new Desc(pool.get(r), pool.get(r), pool.get(r)));
+			libStopAnchor.add(new MemberDescriptor(pool.get(r), pool.get(r), pool.get(r)));
 		}
 
 		return true;
@@ -258,7 +255,7 @@ public class Mapper extends Mapping {
 	 * 全量
 	 */
 	public void map(List<Context> ctxs) {map(ctxs, TaskPool.Common());}
-	public void map(List<Context> ctxs, TaskHandler pool) {
+	public void map(List<Context> ctxs, TaskExecutor pool) {
 		if ((flag&MF_SINGLE_THREAD)!=0 || ctxs.size() <= ASYNC_THRESHOLD) {
 			_map(ctxs, true);
 			return;
@@ -315,7 +312,7 @@ public class Mapper extends Mapping {
 
 			initSelfSuperMap();
 			if (!full) {
-				Predicate<Desc> rem = key -> modified.contains(key.owner);
+				Predicate<MemberDescriptor> rem = key -> modified.contains(key.owner);
 				selfInherited.keySet().removeIf(rem);
 				stopAnchor.removeIf(rem);
 			}
@@ -370,10 +367,10 @@ public class Mapper extends Mapping {
 		selfSupers.put(data.name(), list);
 	}
 
-	private MyHashMap<String, IClass> s2_tmp_byName;
-	private MyHashMap<String, List<Desc>> s2_tmp_methods;
+	private MyHashMap<String, ClassDefinition> s2_tmp_byName;
+	private MyHashMap<String, List<MemberDescriptor>> s2_tmp_methods;
 	public final void S2_begin(List<Context> ctxs) {
-		MyHashMap<String, IClass> classInfo = new MyHashMap<>(ctxs.size());
+		MyHashMap<String, ClassDefinition> classInfo = new MyHashMap<>(ctxs.size());
 		for (int i = 0; i < ctxs.size(); i++) {
 			ClassNode data = ctxs.get(i).getData();
 			classInfo.put(data.name(), data);
@@ -387,7 +384,7 @@ public class Mapper extends Mapping {
 	 * @param downgradeToo downgrade access level also (no supported yet)
 	 */
 	public final void S2_1_FixAccess(List<Context> ctxs, boolean downgradeToo) {
-		MyHashSet<Desc> upgraded = new MyHashSet<>();
+		MyHashSet<MemberDescriptor> upgraded = new MyHashSet<>();
 		MyHashSet<Object> processed = new MyHashSet<>();
 
 		for (int i = 0; i < ctxs.size(); i++) {
@@ -403,7 +400,7 @@ public class Mapper extends Mapping {
 
 				if (processed.contains(name)) continue;
 
-				IClass cn = s2_tmp_byName.get(name);
+				ClassDefinition cn = s2_tmp_byName.get(name);
 				//SIG:reflectClassInfo
 				if (cn == null) continue;
 
@@ -427,12 +424,12 @@ public class Mapper extends Mapping {
 				MethodNode mn = methods.get(j);
 				// inheritable package-private method
 				if ((mn.modifier() & (ACC_PUBLIC|ACC_PROTECTED|ACC_PRIVATE|ACC_STATIC|ACC_FINAL)) == 0) {
-					upgraded.add(new Desc(data.name(), mn.name(), mn.rawDesc(), 6));
+					upgraded.add(new MemberDescriptor(data.name(), mn.name(), mn.rawDesc(), 6));
 				}
 			}
 		}
 
-		Desc d = ClassUtil.getInstance().sharedDC;
+		MemberDescriptor d = ClassUtil.getInstance().sharedDesc;
 		List<String> exist = new SimpleList<>();
 		for (int i = 0; i < ctxs.size(); i++) {
 			ClassNode data = ctxs.get(i).getData();
@@ -453,12 +450,12 @@ public class Mapper extends Mapping {
 
 				d.owner = data.name();
 				d.name = mn.name();
-				d.param = mn.rawDesc();
+				d.rawDesc = mn.rawDesc();
 				if (d.name.startsWith("<")) continue;
 
 				int k = 0;
 				while (true) {
-					Desc d1 = upgraded.find(d);
+					MemberDescriptor d1 = upgraded.find(d);
 					if (d1 != d) {
 						char acc = mn.modifier();
 						boolean isProtected = (d1.modifier & ACC_PUBLIC) == 0;
@@ -476,8 +473,8 @@ public class Mapper extends Mapping {
 						}
 
 						if (isInherited) {
-							IClass ctx = s2_tmp_byName.get(d1.owner);
-							RawNode m = ctx.methods().get(ctx.getMethod(d1.name, d1.param));
+							ClassDefinition ctx = s2_tmp_byName.get(d1.owner);
+							Member m = ctx.methods().get(ctx.getMethod(d1.name, d1.rawDesc));
 							if ((m.modifier()&5) == 0) m.modifier(m.modifier()|ACC_PROTECTED);
 							d1.modifier = 0;
 						}
@@ -494,14 +491,14 @@ public class Mapper extends Mapping {
 	private void checkAccess(List<CstRef> ref, boolean method,
 							 MyHashSet<Object> processed,
 							 String selfName, String selfNewName,
-							 MyHashSet<Desc> upgraded) {
-		Desc d = ClassUtil.getInstance().sharedDC;
+							 MyHashSet<MemberDescriptor> upgraded) {
+		MemberDescriptor d = ClassUtil.getInstance().sharedDesc;
 		nextNode:
 		for (int j = 0; j < ref.size(); j++) {
 			if (processed.contains(ref.get(j))) continue;
 			d.read(ref.get(j));
 
-			RawNode node;
+			Member node;
 
 			int k = 0;
 			List<String> parents = selfSupers.getOrDefault(d.owner, Collections.emptyList());
@@ -509,12 +506,12 @@ public class Mapper extends Mapping {
 			found:
 			while (true) {
 				//SIG:reflectClassInfo | getMethodInfo
-				IClass aa = s2_tmp_byName.get(d.owner);
+				ClassDefinition aa = s2_tmp_byName.get(d.owner);
 				if (aa != null) {
-					List<RawNode> methods = Helpers.cast(method?aa.methods():aa.fields());
+					List<Member> methods = Helpers.cast(method?aa.methods():aa.fields());
 					for (int i1 = 0; i1 < methods.size(); i1++) {
 						node = methods.get(i1);
-						if (node.rawDesc().equals(d.param) && node.name().equals(d.name)) {
+						if (node.rawDesc().equals(d.rawDesc) && node.name().equals(d.name)) {
 							break found;
 						}
 					}
@@ -538,7 +535,7 @@ public class Mapper extends Mapping {
 			if (ClassUtil.arePackagesSame(newName, selfNewName)) continue; // package-private
 
 			//SIG:不检测class: protected的判断太麻烦了，还要检测是不是aload_0
-			boolean protectedEnough = selfName.equals(ref.get(j).className());
+			boolean protectedEnough = selfName.equals(ref.get(j).owner());
 			if ((acc & ACC_PROTECTED) == 0 || !protectedEnough) {
 				LOGGER.log(Level.TRACE, "[FAcc-N] 提升了 {} 引用的 {} (+{})", null, selfName, d, protectedEnough ? "protected" : "public");
 				if (protectedEnough) {
@@ -605,15 +602,15 @@ public class Mapper extends Mapping {
 	private void tryMap(String inheritTo,
 						String owner, List<?> list,
 						MyHashMap<NameAndType, Set<NameAndType>> descs,
-						FindMap<Desc, String> map) {
+						FindMap<MemberDescriptor, String> map) {
 		List<String> parents = selfSupers.getOrDefault(owner, Collections.emptyList());
-		Desc d = ClassUtil.getInstance().sharedDC;
+		MemberDescriptor d = ClassUtil.getInstance().sharedDesc;
 		for (int i = 0; i < list.size(); i++) {
-			RawNode m = (RawNode) list.get(i);
+			Member m = (Member) list.get(i);
 
 			d.owner = owner;
 			d.name = m.name();
-			d.param = m.rawDesc();
+			d.rawDesc = m.rawDesc();
 			d.modifier = 0;
 
 			if (inheritTo != null) {
@@ -624,7 +621,7 @@ public class Mapper extends Mapping {
 
 			int j = 0;
 			while (true) {
-				Map.Entry<Desc, String> entry = map.find(d);
+				Map.Entry<MemberDescriptor, String> entry = map.find(d);
 				if (entry != null) {
 					d.name = entry.getValue();
 					d.modifier = 1;
@@ -643,12 +640,12 @@ public class Mapper extends Mapping {
 
 			NameAndType key = new NameAndType();
 			key.name = d.name;
-			key.param = d.param;
+			key.rawDesc = d.rawDesc;
 
 			NameAndType val = new NameAndType();
 			val.owner = d.owner;
 			val.name = m.name();
-			val.param = key.param;
+			val.rawDesc = key.rawDesc;
 			val.modifier = d.modifier;
 			descs.computeIfAbsent(key, Helpers.fnMyHashSet()).add(val);
 		}
@@ -660,11 +657,11 @@ public class Mapper extends Mapping {
 	 * @param mapIsMutable allow to remove mapping
 	 * @return added mapping
 	 */
-	public final List<Desc> S2_3_FixSubImpl(List<Context> ctxs, boolean mapIsMutable) {
-		List<Desc> added = new SimpleList<>();
+	public final List<MemberDescriptor> S2_3_FixSubImpl(List<Context> ctxs, boolean mapIsMutable) {
+		List<MemberDescriptor> added = new SimpleList<>();
 
 		for (SubImpl method : collectSubImpl(ctxs)) {
-			Desc desc = method.type.copy();
+			MemberDescriptor desc = method.type.copy();
 
 			for (Set<String> classList : method.owners) {
 				if (classList.remove(null)) {
@@ -705,7 +702,7 @@ public class Mapper extends Mapping {
 						added.add(desc);
 
 						ClassNode data = (ClassNode) s2_tmp_byName.get(desc.owner);
-						int i = data.getMethod(desc.name, desc.param);
+						int i = data.getMethod(desc.name, desc.rawDesc);
 						if (i < 0) throw new IllegalStateException("缺少元素(not in context...): " + desc);
 						desc.modifier = data.methods.get(i).modifier();
 
@@ -717,13 +714,11 @@ public class Mapper extends Mapping {
 		return added;
 	}
 	private Set<SubImpl> collectSubImpl(List<Context> ctx) {
-		ClassUtil U = ClassUtil.getInstance();
-
 		MyHashSet<SubImpl> out = new MyHashSet<>();
 
 		SubImpl sTest = new SubImpl();
 		NameAndType nTest = new NameAndType();
-		Desc dTest = U.sharedDC;
+		MemberDescriptor dTest = ClassUtil.getInstance().sharedDesc;
 
 		SimpleList<NameAndType> interfaceMethods = new SimpleList<>();
 
@@ -742,16 +737,16 @@ public class Mapper extends Mapping {
 			for (int j = 0; j < itfs.size(); j++) {
 				String name = itfs.get(j);
 				if (!parents.contains(name)) {
-					List<RawNode> nodes = getMethodInfoEx(name);
+					List<Member> nodes = getMethodInfoEx(name);
 
 					for (int k = 0; k < nodes.size(); k++) {
-						RawNode node = nodes.get(k);
+						Member node = nodes.get(k);
 						if ((node.modifier() & (ACC_PRIVATE|ACC_STATIC)) != 0) continue;
 
 						NameAndType key = new NameAndType();
 						key.owner = name;
 						key.name = node.name();
-						key.param = node.rawDesc();
+						key.rawDesc = node.rawDesc();
 						interfaceMethods.add(key);
 					}
 				}
@@ -761,13 +756,13 @@ public class Mapper extends Mapping {
 			int j = 0;
 			String parent = data.parent();
 			while (true) {
-				List<RawNode> nodes = getMethodInfoEx(parent);
+				List<Member> nodes = getMethodInfoEx(parent);
 				for (int k = 0; k < nodes.size(); k++) {
-					RawNode node = nodes.get(k);
+					Member node = nodes.get(k);
 					if ((node.modifier() & (ACC_PUBLIC|ACC_STATIC)) != ACC_PUBLIC) continue;
 
 					if ((nTest.name = node.name()).startsWith("<")) continue;
-					nTest.param = node.rawDesc();
+					nTest.rawDesc = node.rawDesc();
 
 					int id = -1;
 					while ((id = interfaceMethods.indexOf(nTest, id+1)) >= 0) {
@@ -775,7 +770,7 @@ public class Mapper extends Mapping {
 
 						dTest.owner = issuer.owner;
 						dTest.name = issuer.name;
-						dTest.param = issuer.param;
+						dTest.rawDesc = issuer.rawDesc;
 
 						if (!methodMap.containsKey(dTest)) {
 							dTest.owner = parent;
@@ -815,20 +810,20 @@ public class Mapper extends Mapping {
 		return out;
 	}
 	@NotNull
-	private List<RawNode> getMethodInfoEx(String name) {
-		IClass c = s2_tmp_byName.get(name);
+	private List<Member> getMethodInfoEx(String name) {
+		ClassDefinition c = s2_tmp_byName.get(name);
 		if (c == null) c = ClassUtil.getInstance().getClassInfo(name);
 		if (c != null) return Helpers.cast(c.methods());
 
 		if (s2_tmp_methods.isEmpty()) {
-			for (Desc key : methodMap.keySet()) {
+			for (MemberDescriptor key : methodMap.keySet()) {
 				s2_tmp_methods.computeIfAbsent(key.owner, Helpers.fnArrayList()).add(key);
 			}
 		}
-		List<Desc> list = s2_tmp_methods.getOrDefault(name, Collections.emptyList());
+		List<MemberDescriptor> list = s2_tmp_methods.getOrDefault(name, Collections.emptyList());
 		for (int i = 0; i < list.size(); i++) {
-			Desc desc = list.get(i);
-			if (desc.modifier == Desc.FLAG_UNSET) throw new IllegalStateException("缺少元素: "+desc);
+			MemberDescriptor desc = list.get(i);
+			if (desc.modifier == MemberDescriptor.FLAG_UNSET) throw new IllegalStateException("缺少元素: "+desc);
 		}
 		return Helpers.cast(list);
 	}
@@ -844,7 +839,7 @@ public class Mapper extends Mapping {
 
 		List<String> parents = selfSupers.getOrDefault(data.name(), Collections.emptyList());
 
-		Desc d = ClassUtil.getInstance().sharedDC;
+		MemberDescriptor d = ClassUtil.getInstance().sharedDesc;
 
 		List<MethodNode> methods = data.methods;
 		for (int i = 0; i < methods.size(); i++) {
@@ -852,11 +847,11 @@ public class Mapper extends Mapping {
 
 			d.owner = data.name();
 			d.name = m.name();
-			d.param = m.rawDesc();
+			d.rawDesc = m.rawDesc();
 
 			int j = 0;
 			while (true) {
-				Map.Entry<Desc, String> entry = methodMap.find(d);
+				Map.Entry<MemberDescriptor, String> entry = methodMap.find(d);
 				add_stop_anchor:
 				if (entry == null) {
 					if (j >= parents.size()) break;
@@ -864,7 +859,7 @@ public class Mapper extends Mapping {
 					continue;
 				} else {
 					int acc = entry.getKey().modifier;
-					if (acc == Desc.FLAG_UNSET) {
+					if (acc == MemberDescriptor.FLAG_UNSET) {
 						if (j == 0) {
 							acc = entry.getKey().modifier = m.modifier();
 						} else {
@@ -903,22 +898,22 @@ public class Mapper extends Mapping {
                     if (inheritable) break;
                 }
 
-				LOGGER.log(Level.TRACE, "[M-S]: {}.{}{} 无法继承 {} 类的对应方法", null, data.name(), d.name, d.param, j==0?"~":d.owner);
+				LOGGER.log(Level.TRACE, "[M-S]: {}.{}{} 无法继承 {} 类的对应方法", null, data.name(), d.name, d.rawDesc, j==0?"~":d.owner);
 				d.owner = data.name();
 				stopAnchor.add(d.copy()); // 这个方法未被子类（以及当前类）继承，通过继承链查找到的这个方法是无效的
 				break;
 			}
 		}
 
-		d.param = "";
+		d.rawDesc = "";
 
-		List<? extends RawNode> fields = data.fields;
+		List<? extends Member> fields = data.fields;
 		for (int i = 0; i < fields.size(); i++) {
 			FieldNode f = (FieldNode) fields.get(i);
 
 			d.owner = data.name();
 			d.name = f.name();
-			if (checkFieldType) d.param = f.rawDesc();
+			if (checkFieldType) d.rawDesc = f.rawDesc();
 
 			int j = 0;
 			while (true) {
@@ -926,7 +921,7 @@ public class Mapper extends Mapping {
 				if (newName != null) {
 					// j == 0 <==> d.owner == data.name (library only)
 					if (j > 0) {
-						LOGGER.log(Level.TRACE, "[F-S]: {}.{}{} 无法继承 {} 类的对应字段", null, data.name(), d.name, d.param, d.owner);
+						LOGGER.log(Level.TRACE, "[F-S]: {}.{}{} 无法继承 {} 类的对应字段", null, data.name(), d.name, d.rawDesc, d.owner);
 						d.owner = data.name();
 						stopAnchor.add(d.copy());
 					} else {
@@ -943,20 +938,20 @@ public class Mapper extends Mapping {
 		if (!simulate) mapRecord(d, data);
 	}
 	/** Field name and type in 'Record' attribute */
-	private void mapRecord(Desc d, ClassNode data) {
+	private void mapRecord(MemberDescriptor d, ClassNode data) {
 		RecordAttribute r = data.getAttribute(data.cp, Attribute.Record);
 		if (r == null) return;
 
 		ClassUtil U = ClassUtil.getInstance();
 
 		d.owner = data.name();
-		d.param = "";
+		d.rawDesc = "";
 		List<RecordAttribute.Field> vars = r.fields;
 		for (int i = 0; i < vars.size(); i++) {
 			RecordAttribute.Field v = vars.get(i);
 
 			d.name = v.name;
-			if (checkFieldType) d.param = v.type;
+			if (checkFieldType) d.rawDesc = v.type;
 
 			String newName = fieldMap.get(d);
 			if (newName != null) {
@@ -1002,16 +997,16 @@ public class Mapper extends Mapping {
 		BootstrapMethods.Item ibm = bs.methods.get(dyn.tableIdx);
 		if (!ibm.isInvokeMethod()) return;
 
-		Desc d = ClassUtil.getInstance().sharedDC;
+		MemberDescriptor d = ClassUtil.getInstance().sharedDesc;
 
 		d.name = dyn.desc().name().str();
 		// FP: init / clinit
 		if (d.name.startsWith("<")) return;
 
-		String allDesc = dyn.desc().getType().str();
+		String allDesc = dyn.desc().rawDesc().str();
 		if (!allDesc.endsWith(";")) return;
 
-		d.param = ibm.interfaceDesc();
+		d.rawDesc = ibm.interfaceDesc();
 		d.owner = Type.methodDescReturn(allDesc).owner;
 
 		List<String> parents = selfSupers.getOrDefault(d.owner, Collections.emptyList());
@@ -1024,7 +1019,7 @@ public class Mapper extends Mapping {
 			}
 
 			if (stopAnchor.contains(d)) {
-				LOGGER.log(Level.TRACE, "[L-S][{}]: {}.{}{}", null, data.name(), i==0?"~":d.owner, d.name, d.param);
+				LOGGER.log(Level.TRACE, "[L-S][{}]: {}.{}{}", null, data.name(), i==0?"~":d.owner, d.name, d.rawDesc);
 				break;
 			}
 
@@ -1034,7 +1029,7 @@ public class Mapper extends Mapping {
 	}
 	/** method/field reference */
 	private void mapRef(ClassNode data, CstRef ref, boolean method) {
-		Desc d = ClassUtil.getInstance().sharedDC;
+		MemberDescriptor d = ClassUtil.getInstance().sharedDesc;
 		d.read(ref);
 
 		if (method) {
@@ -1049,10 +1044,10 @@ public class Mapper extends Mapping {
 				return;
 			}
 		} else {
-			if (!checkFieldType) d.param = "";
+			if (!checkFieldType) d.rawDesc = "";
 		}
 
-		FindMap<Desc, String> map = method ? methodMap : fieldMap;
+		FindMap<MemberDescriptor, String> map = method ? methodMap : fieldMap;
 		List<String> parents = selfSupers.getOrDefault(d.owner, Collections.emptyList());
 		int i = 0;
 		while (true) {
@@ -1067,7 +1062,7 @@ public class Mapper extends Mapping {
 
 			// 是放在这里，因为d.owner一开始是data.name
 			if (stopAnchor.contains(d)) {
-				LOGGER.log(Level.TRACE, method?"[R-M-S][{}]: {}.{}{}":"[R-F-S][{}]: {}.{} {}", null, data.name(), d.owner, d.name, d.param);
+				LOGGER.log(Level.TRACE, method?"[R-M-S][{}]: {}.{}{}":"[R-F-S][{}]: {}.{} {}", null, data.name(), d.owner, d.name, d.rawDesc);
 				break;
 			}
 
@@ -1122,16 +1117,16 @@ public class Mapper extends Mapping {
 	/** Annotation type and field key */
 	private void mapAnnotations(ClassUtil U, ConstantPool cp, Attributed node) {
 		Attribute a = node.getRawAttribute("RuntimeVisibleAnnotations");
-		if (a != null) mapAnnotations(U, cp, Parser.reader(a));
+		if (a != null) mapAnnotations(U, cp, AsmCache.reader(a));
 		a = node.getRawAttribute("RuntimeInvisibleAnnotations");
-		if (a != null) mapAnnotations(U, cp, Parser.reader(a));
+		if (a != null) mapAnnotations(U, cp, AsmCache.reader(a));
 	}
 	private void mapAnnotations(ClassUtil U, ConstantPool cp, DynByteBuf r) {
 		int len = r.readUnsignedShort();
 		while (len-- > 0) mapAnnotation(U, cp, r);
 	}
 	private void mapAnnotation(ClassUtil U, ConstantPool cp, DynByteBuf r) {
-		CstUTF owner = (CstUTF) cp.get(r);
+		CstUTF owner = cp.get(r);
 		String newOwner = U.mapFieldType(classMap, owner.str());
 		if (newOwner != null) r.putShort(r.rIndex-2, cp.getUtfId(newOwner));
 
@@ -1141,7 +1136,7 @@ public class Mapper extends Mapping {
 			String name = ((CstUTF) cp.get(r)).str();
 
 			// assert is annotation class...
-			for (Map.Entry<Desc, String> entry : methodMap.entrySet()) {
+			for (Map.Entry<MemberDescriptor, String> entry : methodMap.entrySet()) {
 				if (entry.getKey().name.equals(name) && entry.getKey().owner.equals(owner_name)) {
 					r.putShort(r.rIndex-2, cp.getUtfId(entry.getValue()));
 					break;
@@ -1155,7 +1150,7 @@ public class Mapper extends Mapping {
 		switch (r.readUnsignedByte()) {
 			default: r.rIndex += 2; break;
 			case AnnVal.ANNOTATION_CLASS: {
-				CstUTF owner = (CstUTF) cp.get(r);
+				CstUTF owner = cp.get(r);
 				String newOwner = U.mapFieldType(classMap, owner.str());
 				if (newOwner != null) {
 					r.putShort(r.rIndex-2, cp.getUtfId(newOwner));
@@ -1163,17 +1158,17 @@ public class Mapper extends Mapping {
 			}
 			break;
 			case AnnVal.ENUM: {
-				CstUTF owner = (CstUTF) cp.get(r);
+				CstUTF owner = cp.get(r);
 				String newOwner = U.mapFieldType(classMap, owner.str());
 				if (newOwner != null) r.putShort(r.rIndex-2, cp.getUtfId(newOwner));
 
-				CstUTF enum_name = (CstUTF) cp.get(r);
+				CstUTF enum_name = cp.get(r);
 
-				Desc fd = U.sharedDC;
+				MemberDescriptor fd = U.sharedDesc;
 				// old name
 				fd.owner = owner.str().substring(1,owner.str().length()-1);
 				fd.name = enum_name.str();
-				fd.param = checkFieldType ? owner.str() : "";
+				fd.rawDesc = checkFieldType ? owner.str() : "";
 
 				String newFieldName = fieldMap.get(fd);
 				if (newFieldName != null) {
@@ -1202,9 +1197,9 @@ public class Mapper extends Mapping {
 	private void mapNodeAndAttrAndParam(ClassUtil U, ClassNode data) {
 		String oldCls, newCls;
 
-		List<CNode> nodes = Helpers.cast(data.fields);
+		List<MemberNode> nodes = Helpers.cast(data.fields);
 		for (int i = 0; i < nodes.size(); i++) {
-			CNode field = nodes.get(i);
+			MemberNode field = nodes.get(i);
 
 			oldCls = field.rawDesc();
 			newCls = U.mapFieldType(classMap, oldCls);
@@ -1217,7 +1212,7 @@ public class Mapper extends Mapping {
 
 		nodes = Helpers.cast(data.methods);
 		for (int i = 0; i < nodes.size(); i++) {
-			CNode method = nodes.get(i);
+			MemberNode method = nodes.get(i);
 
 			oldCls = method.rawDesc();
 			newCls = U.mapMethodParam(classMap, oldCls);
@@ -1242,10 +1237,10 @@ public class Mapper extends Mapping {
 				case Constant.NAME_AND_TYPE: {
 					CstNameAndType ref = (CstNameAndType) c;
 
-					oldCls = ref.getType().str();
+					oldCls = ref.rawDesc().str();
 					newCls = oldCls.startsWith("(")?U.mapMethodParam(classMap, oldCls):U.mapFieldType(classMap, oldCls);
 
-					if (newCls != null && !newCls.equals(oldCls)) ref.setType(cp.getUtf(newCls));
+					if (newCls != null && !newCls.equals(oldCls)) ref.rawDesc(cp.getUtf(newCls));
 				}
 				break;
 				case Constant.CLASS: {
@@ -1282,7 +1277,7 @@ public class Mapper extends Mapping {
 	// region libraries
 	public void loadLibraries(List<?> files) {
 		SimpleList<Context> classes = new SimpleList<>();
-		Desc m = ClassUtil.getInstance().sharedDC;
+		MemberDescriptor m = ClassUtil.getInstance().sharedDesc;
 
 		var prevSS = selfSupers;
 		var prevSA = stopAnchor;
@@ -1325,7 +1320,7 @@ public class Mapper extends Mapping {
 		selfSupers = prevSS;
 		stopAnchor = prevSA;
 	}
-	private void readLibFile(Context ctx, List<Context> classes, Desc d) {
+	private void readLibFile(Context ctx, List<Context> classes, MemberDescriptor d) {
 		classes.add(ctx);
 		S1_parse(ctx);
 
@@ -1335,16 +1330,16 @@ public class Mapper extends Mapping {
 		// 更新访问权限
 		d.owner = data.name();
 		findAndReplace(methodMap, d, data.methods(), true);
-		d.param = "";
+		d.rawDesc = "";
 		findAndReplace(fieldMap, d, data.fields(), checkFieldType);
 	}
-	private void findAndReplace(FindMap<Desc, String> flags, Desc d, List<? extends RawNode> nodes, boolean par) {
+	private void findAndReplace(FindMap<MemberDescriptor, String> flags, MemberDescriptor d, List<? extends Member> nodes, boolean par) {
 		for (int i = 0; i < nodes.size(); i++) {
-			RawNode n = nodes.get(i);
+			Member n = nodes.get(i);
 			d.name = n.name();
-			if (par) d.param = n.rawDesc();
+			if (par) d.rawDesc = n.rawDesc();
 
-			Map.Entry<Desc, String> entry = flags.find(d);
+			Map.Entry<MemberDescriptor, String> entry = flags.find(d);
 			if (entry != null) entry.getKey().modifier = n.modifier();
 		}
 	}
@@ -1357,17 +1352,17 @@ public class Mapper extends Mapping {
 		if (classNameChanged()) flag |= MF_RENAME_CLASS;
 		else flag &= ~MF_RENAME_CLASS;
 
-		Desc m = ClassUtil.getInstance().sharedDC;
+		MemberDescriptor m = ClassUtil.getInstance().sharedDesc;
 
 		// check inherit & overloads
-		for (Desc d : new SimpleList<>(methodMap.keySet())) {
+		for (MemberDescriptor d : new SimpleList<>(methodMap.keySet())) {
 			List<String> parents = libSupers.get(d.owner);
 			if (parents == null) continue;
 
 			m.name = d.name;
-			m.param = d.param;
+			m.rawDesc = d.rawDesc;
 
-			Map.Entry<Desc, String> prev = null, entry;
+			Map.Entry<MemberDescriptor, String> prev = null, entry;
 			for (int i = parents.size()-1; i >= -1; i--) {
 				m.owner = i < 0 ? d.owner : parents.get(i);
 
@@ -1378,7 +1373,7 @@ public class Mapper extends Mapping {
 					} else if (prev.getValue().equals(entry.getValue())) {
 						if ((flag&FLAG_FIX_INHERIT) != 0) methodMap.remove(m);
 					} else {
-						if ((flag&FLAG_FIX_INHERIT) == 0) LOGGER.log(Level.WARN, "[Packup]: 映射继承冲突: [{}|{}].{}{}", null, m.owner, d.owner, m.name, m.param);
+						if ((flag&FLAG_FIX_INHERIT) == 0) LOGGER.log(Level.WARN, "[Packup]: 映射继承冲突: [{}|{}].{}{}", null, m.owner, d.owner, m.name, m.rawDesc);
 						methodMap.remove(m);
 					}
 				}
@@ -1387,12 +1382,12 @@ public class Mapper extends Mapping {
 			}
 		}
 
-		MyHashSet<Desc> unmatched = new MyHashSet<>();
-		for (Desc desc : methodMap.keySet())
-			if (desc.modifier == Desc.FLAG_UNSET)
+		MyHashSet<MemberDescriptor> unmatched = new MyHashSet<>();
+		for (MemberDescriptor desc : methodMap.keySet())
+			if (desc.modifier == MemberDescriptor.FLAG_UNSET)
 				unmatched.add(desc);
-		for (Desc desc : fieldMap.keySet())
-			if (desc.modifier == Desc.FLAG_UNSET)
+		for (MemberDescriptor desc : fieldMap.keySet())
+			if (desc.modifier == MemberDescriptor.FLAG_UNSET)
 				unmatched.add(desc);
 
 		if (!unmatched.isEmpty()) {
@@ -1408,7 +1403,7 @@ public class Mapper extends Mapping {
 	 * Set reference name
 	 */
 	static void setRefName(ClassNode data, CstRef ref, String newName) {
-		ref.desc(data.cp.getDesc(newName, ref.desc().getType().str()));
+		ref.nameAndType(data.cp.getDesc(newName, ref.nameAndType().rawDesc().str()));
 	}
 
 	public void clear() {
@@ -1438,7 +1433,7 @@ public class Mapper extends Mapping {
 		selfInherited = new MyHashMap<>();
 	}
 
-	public Set<Desc> getStopAnchor() { return stopAnchor; }
+	public Set<MemberDescriptor> getStopAnchor() { return stopAnchor; }
 	public Map<String, List<String>> getSelfSupers() { return selfSupers; }
 	public final List<State> getSeperatedLibraries() { return extraStates; }
 	public ParamNameMapper getParamTypeMapper() { return PARAM_TYPE_MAPPER; }
@@ -1447,7 +1442,7 @@ public class Mapper extends Mapping {
 	 * By slot
 	 * Caution: unmapped class name + mapped method name / descriptor
 	 */
-	public final void setParamMap(Map<Desc, List<String>> paramMap) {this.paramMap = paramMap;}
+	public final void setParamMap(Map<MemberDescriptor, List<String>> paramMap) {this.paramMap = paramMap;}
 
 	public final State snapshot() { return snapshot(null); }
 	public final State snapshot(State s) {
@@ -1468,8 +1463,8 @@ public class Mapper extends Mapping {
 
 	public static final class State {
 		final MyHashMap<String, List<String>> parents = new MyHashMap<>();
-		final MyHashSet<Desc> stopAnchor = new MyHashSet<>(Hasher.identity());
-		final MyHashMap<Desc, String> inheritor = new MyHashMap<>();
+		final MyHashSet<MemberDescriptor> stopAnchor = new MyHashSet<>(Hasher.identity());
+		final MyHashMap<MemberDescriptor, String> inheritor = new MyHashMap<>();
 	}
 
 	public void debugRelative(String owner, String name) {
@@ -1483,8 +1478,8 @@ public class Mapper extends Mapping {
 		}
 		LOGGER.info("==== 映射表 ====");
 		LOGGER.info("F: 终结; D: 直接; I: 继承; S: 无关标记");
-		for (Map.Entry<Desc, String> entry : methodMap.entrySet()) {
-			Desc d = entry.getKey();
+		for (Map.Entry<MemberDescriptor, String> entry : methodMap.entrySet()) {
+			MemberDescriptor d = entry.getKey();
 			if (name != null && !d.name.equals(name)) continue;
 
 			String type;

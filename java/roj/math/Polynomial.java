@@ -4,7 +4,7 @@ import roj.text.CharList;
 
 /**
  * @author Roj234
- * @since 2025/3/23 0023 14:18
+ * @since 2025/3/23 14:18
  */
 public class Polynomial implements Equation {
 	public String[] varName;

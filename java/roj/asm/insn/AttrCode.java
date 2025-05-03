@@ -3,7 +3,7 @@ package roj.asm.insn;
 import org.intellij.lang.annotations.MagicConstant;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
-import roj.asm.AsmShared;
+import roj.asm.AsmCache;
 import roj.asm.Attributed;
 import roj.asm.MethodNode;
 import roj.asm.Opcodes;
@@ -54,7 +54,7 @@ public class AttrCode extends Attribute implements Attributed {
 
 		int codePos = r.rIndex;
 		r.rIndex += codeLength;
-		instructions.bciR2W = AsmShared.local().getBciMap();
+		instructions.bciR2W = AsmCache.getInstance().getBciMap();
 
 		int len = r.readUnsignedShort();
 		if (len > 0) {
@@ -80,17 +80,17 @@ public class AttrCode extends Attribute implements Attributed {
 					switch (name) {
 						case "LineNumberTable" -> attributes._add(new LineNumberTable(instructions, r));
 						case "LocalVariableTable", "LocalVariableTypeTable" -> attributes._add(new LocalVariableTable(name, instructions, cp, r, codeLength));
-						case "StackMapTable" -> FrameVisitor.readFrames(frames = new SimpleList<>(), r, cp, instructions, mn.ownerClass(), localSize, stackSize);
+						case "StackMapTable" -> FrameVisitor.readFrames(frames = new SimpleList<>(), r, cp, instructions, mn.owner(), localSize, stackSize);
 						case "RuntimeInvisibleTypeAnnotations", "RuntimeVisibleTypeAnnotations" -> attributes._add(new TypeAnnotations(name, r, cp));
 						default -> {
-							Logger.FALLBACK.debug("{}.{} 中发现不支持的属性 {}", mn.ownerClass(), mn.name(), name);
+							Logger.FALLBACK.debug("{}.{} 中发现不支持的属性 {}", mn.owner(), mn.name(), name);
 							r.rIndex = r.wIndex();
 							continue;
 						}
 					}
 
 					if (r.isReadable()) {
-						Logger.FALLBACK.warn("无法读取"+mn.ownerClass()+"."+mn.name()+"的'Code'的子属性'"+name+"' ,剩余了"+r.readableBytes()+",数据:"+r.dump());
+						Logger.FALLBACK.warn("无法读取"+mn.owner()+"."+mn.name()+"的'Code'的子属性'"+name+"' ,剩余了"+r.readableBytes()+",数据:"+r.dump());
 						r.rIndex = r.wIndex();
 					}
 				} catch (Throwable e) {
@@ -115,7 +115,7 @@ public class AttrCode extends Attribute implements Attributed {
 
 	@Override
 	public void toByteArrayNoHeader(DynByteBuf w, ConstantPool cp) {
-		var c = AsmShared.local().cw();
+		var c = AsmCache.getInstance().cw();
 		c.init(w, cp, method);
 		c.computeFrames(fvFlags);
 
@@ -166,7 +166,7 @@ public class AttrCode extends Attribute implements Attributed {
 		c.visitEnd();
 		c.bw = null;
 		c.cpw = null;
-		AsmShared.local().cw(c);
+		AsmCache.getInstance().cw(c);
 	}
 
 	public String toString() { return toString(IOUtil.getSharedCharBuf().append("代码"), 4).toString(); }

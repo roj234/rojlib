@@ -4,7 +4,7 @@ import roj.plugins.ci.annotation.CompileOnly;
 
 /**
  * @author Roj234
- * @since 2022/11/12 0012 17:26
+ * @since 2022/11/12 17:26
  */
 @CompileOnly
 interface Macros {

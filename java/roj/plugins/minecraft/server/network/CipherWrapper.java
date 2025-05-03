@@ -10,7 +10,7 @@ import java.security.GeneralSecurityException;
 
 /**
  * @author Roj234
- * @since 2024/3/19 0019 21:50
+ * @since 2024/3/19 21:50
  */
 public class CipherWrapper implements ChannelHandler {
 	private final RCipherSpi encrypt, decrypt;

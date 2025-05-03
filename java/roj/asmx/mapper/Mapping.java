@@ -1,8 +1,8 @@
 package roj.asmx.mapper;
 
 import org.jetbrains.annotations.Nullable;
-import roj.asm.type.Desc;
-import roj.asm.util.ClassUtil;
+import roj.asm.ClassUtil;
+import roj.asm.MemberDescriptor;
 import roj.collect.*;
 import roj.config.ParseException;
 import roj.config.Tokenizer;
@@ -29,12 +29,12 @@ public class Mapping {
 	static { LOGGER.setLevel(Level.ERROR); }
 
 	protected Flippable<String, String> classMap;
-	protected FindMap<Desc, String> fieldMap, methodMap;
+	protected FindMap<MemberDescriptor, String> fieldMap, methodMap;
 	protected TrieTree<String> packageMap;
-	protected Map<Desc, List<String>> paramMap;
+	protected Map<MemberDescriptor, List<String>> paramMap;
 	public boolean checkFieldType;
 
-	public Map<Desc, List<String>> getParamMap() {return paramMap;}
+	public Map<MemberDescriptor, List<String>> getParamMap() {return paramMap;}
 
 	public Mapping copy() {
 		Mapping m = new Mapping(checkFieldType);
@@ -82,7 +82,7 @@ public class Mapping {
 	public final void loadMap(LineReader slr, boolean reverse) {
 		ArrayList<String> q = new ArrayList<>();
 		String last0 = null, last1 = null;
-		Desc lastMethod = null;
+		MemberDescriptor lastMethod = null;
 
 		while (true) {
 			String s;
@@ -123,9 +123,9 @@ public class Mapping {
 					id2 = q.get(1).lastIndexOf('/');
 
 					if (reverse) {
-						fieldMap.put(new Desc(q.get(1).substring(0, id2), q.get(1).substring(id2 + 1)), q.get(0).substring(id + 1));
+						fieldMap.put(new MemberDescriptor(q.get(1).substring(0, id2), q.get(1).substring(id2 + 1)), q.get(0).substring(id + 1));
 					} else {
-						fieldMap.put(new Desc(q.get(0).substring(0, id), q.get(0).substring(id + 1)), q.get(1).substring(id2 + 1));
+						fieldMap.put(new MemberDescriptor(q.get(0).substring(0, id), q.get(0).substring(id + 1)), q.get(1).substring(id2 + 1));
 					}
 					break;
 				case "MD":
@@ -133,13 +133,13 @@ public class Mapping {
 					id2 = q.get(2).lastIndexOf('/');
 
 					if (reverse) {
-						methodMap.put(new Desc(q.get(2).substring(0, id2), q.get(2).substring(id2 + 1), q.get(3)), q.get(0).substring(id + 1));
+						methodMap.put(new MemberDescriptor(q.get(2).substring(0, id2), q.get(2).substring(id2 + 1), q.get(3)), q.get(0).substring(id + 1));
 					} else {
-						methodMap.put(new Desc(q.get(0).substring(0, id), q.get(0).substring(id + 1), q.get(1)), q.get(2).substring(id2 + 1));
+						methodMap.put(new MemberDescriptor(q.get(0).substring(0, id), q.get(0).substring(id + 1), q.get(1)), q.get(2).substring(id2 + 1));
 					}
 					break;
 				case "FL", "F":
-					FindMap<Desc, String> fm = fieldMap;
+					FindMap<MemberDescriptor, String> fm = fieldMap;
 					try {
 						for (int j = 0; j < q.size(); j++) q.set(j, Tokenizer.removeSlashes(q.get(j)));
 					} catch (ParseException e) {
@@ -148,26 +148,26 @@ public class Mapping {
 					switch (q.size()) {
 						case 2:
 							if (checkFieldType) throw new IllegalArgumentException("FL(2) is not supported when checkFieldType=true");
-							if (reverse) fm.put(new Desc(last1, q.get(1)), q.get(0));
-							else fm.put(new Desc(last0, q.get(0)), q.get(1));
+							if (reverse) fm.put(new MemberDescriptor(last1, q.get(1)), q.get(0));
+							else fm.put(new MemberDescriptor(last0, q.get(0)), q.get(1));
 						break;
 						case 3: q.add("~");
 						case 4:
-							if (reverse) fm.put(new Desc(last1, q.get(2), !checkFieldType ? "" : q.get(3).equals("~") ? q.get(1) : q.get(3)), q.get(0));
-							else fm.put(new Desc(last0, q.get(0), !checkFieldType ? "" : q.get(1)), q.get(2));
+							if (reverse) fm.put(new MemberDescriptor(last1, q.get(2), !checkFieldType ? "" : q.get(3).equals("~") ? q.get(1) : q.get(3)), q.get(0));
+							else fm.put(new MemberDescriptor(last0, q.get(0), !checkFieldType ? "" : q.get(1)), q.get(2));
 						break;
 					}
 					break;
 				case "ML", "M":
-					FindMap<Desc, String> mm = methodMap;
+					FindMap<MemberDescriptor, String> mm = methodMap;
 					try {
 						for (int j = 0; j < q.size(); j++) q.set(j, Tokenizer.removeSlashes(q.get(j)));
 					} catch (ParseException e) {
 						e.printStackTrace();
 					}
 					if (q.size() == 3) q.add("~");
-					if (reverse) mm.put(lastMethod = new Desc(last1, q.get(2), q.get(3).equals("~") ? q.get(1) : q.get(3)), q.get(0));
-					else mm.put(lastMethod = new Desc(last0, q.get(0), q.get(1)), q.get(2));
+					if (reverse) mm.put(lastMethod = new MemberDescriptor(last1, q.get(2), q.get(3).equals("~") ? q.get(1) : q.get(3)), q.get(0));
+					else mm.put(lastMethod = new MemberDescriptor(last0, q.get(0), q.get(1)), q.get(2));
 				break;
 				case "A":
 					SimpleList<String> value = new SimpleList<>(q);
@@ -190,14 +190,14 @@ public class Mapping {
 		MyHashMap<String, CharList> classFos = new MyHashMap<>(classMap.size());
 
 		ClassUtil U = ClassUtil.getInstance();
-		for (Map.Entry<Desc, String> entry : fieldMap.entrySet()) {
-			Desc d = entry.getKey();
+		for (Map.Entry<MemberDescriptor, String> entry : fieldMap.entrySet()) {
+			MemberDescriptor d = entry.getKey();
 
 			String cn = d.owner;
 			CharList sb = classFos.get(cn);
 			if (sb == null) classFos.put(cn, sb = new CharList(100));
 
-			String param = U.mapFieldType(classMap, d.param);
+			String param = U.mapFieldType(classMap, d.rawDesc);
 
 			String v = entry.getValue();
 			// don't write unchanged field
@@ -205,7 +205,7 @@ public class Mapping {
 
 			if (checkFieldType) {
 				Tokenizer.addSlashes(sb.append("F: "), d.name);
-				Tokenizer.addSlashes(sb.append(' '), d.param);
+				Tokenizer.addSlashes(sb.append(' '), d.rawDesc);
 				Tokenizer.addSlashes(sb.append(' '), v);
 				if (param != null) Tokenizer.addSlashes(sb.append(' '), param);
 				sb.append('\n');
@@ -215,23 +215,23 @@ public class Mapping {
 			}
 		}
 
-		for (Map.Entry<Desc, String> entry : methodMap.entrySet()) {
-			Desc d = entry.getKey();
+		for (Map.Entry<MemberDescriptor, String> entry : methodMap.entrySet()) {
+			MemberDescriptor d = entry.getKey();
 
 			String cn = d.owner;
 			CharList sb = classFos.get(cn);
 			if (sb == null) classFos.put(cn, sb = new CharList(100));
 
-			String param = U.mapMethodParam(classMap, d.param);
+			String param = U.mapMethodParam(classMap, d.rawDesc);
 
 			String v = entry.getValue();
 			// don't write unchanged method
-			if (v.equals(d.name) && param.equals(d.param)) continue;
+			if (v.equals(d.name) && param.equals(d.rawDesc)) continue;
 
 			Tokenizer.addSlashes(sb.append("M: "), d.name);
-			Tokenizer.addSlashes(sb.append(' '), d.param);
+			Tokenizer.addSlashes(sb.append(' '), d.rawDesc);
 			Tokenizer.addSlashes(sb.append(' '), entry.getValue());
-			if (!param.equals(d.param)) Tokenizer.addSlashes(sb.append(' '), param);
+			if (!param.equals(d.rawDesc)) Tokenizer.addSlashes(sb.append(' '), param);
 			sb.append('\n');
 
 			List<String> args = paramMap.get(d);
@@ -318,10 +318,10 @@ public class Mapping {
 	public final Flippable<String, String> getClassMap() {
 		return classMap;
 	}
-	public final FindMap<Desc, String> getFieldMap() {
+	public final FindMap<MemberDescriptor, String> getFieldMap() {
 		return fieldMap;
 	}
-	public final FindMap<Desc, String> getMethodMap() {
+	public final FindMap<MemberDescriptor, String> getMethodMap() {
 		return methodMap;
 	}
 
@@ -345,31 +345,31 @@ public class Mapping {
 		if (dst.checkFieldType != checkFieldType) throw new IllegalStateException("checkFieldType are not same");
 		ClassUtil U = ClassUtil.getInstance();
 
-		MyHashMap<Desc, String> fieldMap1 = new MyHashMap<>(fieldMap.size());
-		for (Map.Entry<Desc, String> entry : fieldMap.entrySet()) {
-			Desc desc = entry.getKey();
-			Desc target = new Desc(classMap.getOrDefault(desc.owner, desc.owner), entry.getValue(), desc.param, desc.modifier);
+		MyHashMap<MemberDescriptor, String> fieldMap1 = new MyHashMap<>(fieldMap.size());
+		for (Map.Entry<MemberDescriptor, String> entry : fieldMap.entrySet()) {
+			MemberDescriptor desc = entry.getKey();
+			MemberDescriptor target = new MemberDescriptor(classMap.getOrDefault(desc.owner, desc.owner), entry.getValue(), desc.rawDesc, desc.modifier);
 			if (checkFieldType) {
-				String param = U.mapFieldType(classMap, desc.param);
-				if (param != null) target.param = param;
+				String param = U.mapFieldType(classMap, desc.rawDesc);
+				if (param != null) target.rawDesc = param;
 			}
 			fieldMap1.put(target, desc.name);
 		}
 		dst.fieldMap = fieldMap1;
 
-		MyHashMap<Desc, String> methodMap1 = new MyHashMap<>(methodMap.size());
+		MyHashMap<MemberDescriptor, String> methodMap1 = new MyHashMap<>(methodMap.size());
 		for (var entry : methodMap.entrySet()) {
-			Desc desc = entry.getKey();
-			Desc target = new Desc(classMap.getOrDefault(desc.owner, desc.owner), entry.getValue(), U.mapMethodParam(classMap, desc.param), desc.modifier);
+			MemberDescriptor desc = entry.getKey();
+			MemberDescriptor target = new MemberDescriptor(classMap.getOrDefault(desc.owner, desc.owner), entry.getValue(), U.mapMethodParam(classMap, desc.rawDesc), desc.modifier);
 			methodMap1.put(target, desc.name);
 		}
 		var backupMethodMap = methodMap;
 		dst.methodMap = methodMap1;
 
-		MyHashMap<Desc, List<String>> paramMap1 = new MyHashMap<>(paramMap.size());
+		MyHashMap<MemberDescriptor, List<String>> paramMap1 = new MyHashMap<>(paramMap.size());
 		for (var entry : paramMap.entrySet()) {
-			Desc desc = entry.getKey();
-			Desc target = new Desc(classMap.getOrDefault(desc.owner, desc.owner), backupMethodMap.getOrDefault(desc, desc.name), U.mapMethodParam(classMap, desc.param), desc.modifier);
+			MemberDescriptor desc = entry.getKey();
+			MemberDescriptor target = new MemberDescriptor(classMap.getOrDefault(desc.owner, desc.owner), backupMethodMap.getOrDefault(desc, desc.name), U.mapMethodParam(classMap, desc.rawDesc), desc.modifier);
 			paramMap1.put(target, entry.getValue());
 		}
 		dst.paramMap = paramMap1;
@@ -395,17 +395,17 @@ public class Mapping {
 		if (from.checkFieldType != checkFieldType) throw new IllegalStateException("checkFieldType are not same");
 		ClassUtil U = ClassUtil.getInstance();
 
-		Desc d = U.sharedDC;
-		d.param = "";
-		for (Iterator<Map.Entry<Desc, String>> itr = fieldMap.entrySet().iterator(); itr.hasNext(); ) {
-			Map.Entry<Desc, String> entry = itr.next();
-			Desc fd = entry.getKey();
+		MemberDescriptor d = U.sharedDesc;
+		d.rawDesc = "";
+		for (Iterator<Map.Entry<MemberDescriptor, String>> itr = fieldMap.entrySet().iterator(); itr.hasNext(); ) {
+			Map.Entry<MemberDescriptor, String> entry = itr.next();
+			MemberDescriptor fd = entry.getKey();
 			String nn = U.mapClassName(classMap, fd.owner);
 			d.owner = nn != null ? nn : fd.owner;
 			d.name = entry.getValue();
 			if (checkFieldType) {
-				String param = U.mapFieldType(classMap, d.param = fd.param);
-				if (param != null) d.param = param;
+				String param = U.mapFieldType(classMap, d.rawDesc = fd.rawDesc);
+				if (param != null) d.rawDesc = param;
 			}
 
 			if (keepNotfound) {
@@ -416,13 +416,13 @@ public class Mapping {
 				else entry.setValue(v);
 			}
 		}
-		for (Iterator<Map.Entry<Desc, String>> itr = methodMap.entrySet().iterator(); itr.hasNext(); ) {
-			Map.Entry<Desc, String> entry = itr.next();
-			Desc md = entry.getKey();
+		for (Iterator<Map.Entry<MemberDescriptor, String>> itr = methodMap.entrySet().iterator(); itr.hasNext(); ) {
+			Map.Entry<MemberDescriptor, String> entry = itr.next();
+			MemberDescriptor md = entry.getKey();
 			String nn = U.mapClassName(classMap, md.owner);
 			d.owner = nn != null ? nn : md.owner;
 			d.name = entry.getValue();
-			d.param = U.mapMethodParam(classMap, md.param);
+			d.rawDesc = U.mapMethodParam(classMap, md.rawDesc);
 			if (keepNotfound) {
 				entry.setValue(from.methodMap.getOrDefault(d, entry.getValue()));
 			} else {
@@ -433,20 +433,20 @@ public class Mapping {
 		}
 
 		if (!from.paramMap.isEmpty()) {
-			var reversedMethodMap = new MyHashMap<Desc, String>();
+			var reversedMethodMap = new MyHashMap<MemberDescriptor, String>();
 			for (var entry : methodMap.entrySet()) {
-				Desc desc = entry.getKey();
-				Desc target = new Desc(classMap.getOrDefault(desc.owner, desc.owner), entry.getValue(), U.mapMethodParam(classMap, desc.param), desc.modifier);
+				MemberDescriptor desc = entry.getKey();
+				MemberDescriptor target = new MemberDescriptor(classMap.getOrDefault(desc.owner, desc.owner), entry.getValue(), U.mapMethodParam(classMap, desc.rawDesc), desc.modifier);
 				reversedMethodMap.put(target, desc.name);
 			}
 
 			System.out.println(from.paramMap.toString().substring(0, 1000));
 			for (var entry : from.paramMap.entrySet()) {
-				Desc md = entry.getKey();
+				MemberDescriptor md = entry.getKey();
 
 				var changed = reversedMethodMap.get(md);
 				if (changed != null) {
-					paramMap.putIfAbsent(new Desc(md.owner, changed, md.param), entry.getValue());
+					paramMap.putIfAbsent(new MemberDescriptor(md.owner, changed, md.rawDesc), entry.getValue());
 				} else if (keepNotfound) {
 					paramMap.putIfAbsent(md, entry.getValue());
 				}
@@ -530,8 +530,8 @@ public class Mapping {
 		}
 	}
 
-	private void mergeFM(FindMap<Desc, String> other, FindMap<Desc, String> fieldMap, Boolean priority) {
-		for (Map.Entry<Desc, String> entry : other.entrySet()) {
+	private void mergeFM(FindMap<MemberDescriptor, String> other, FindMap<MemberDescriptor, String> fieldMap, Boolean priority) {
+		for (Map.Entry<MemberDescriptor, String> entry : other.entrySet()) {
 			String v = fieldMap.putIfAbsent(entry.getKey(), entry.getValue());
 			if (v != null) {
 				if (!v.equals(entry.getValue())) {

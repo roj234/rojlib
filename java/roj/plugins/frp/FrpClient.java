@@ -30,14 +30,39 @@ import java.util.function.Consumer;
 
 /**
  * @author Roj234
- * @since 2024/9/15 0015 0:23
+ * @since 2024/9/15 0:23
  */
 public class FrpClient extends FrpCommon implements Consumer<MyChannel> {
 	private static final Logger LOGGER = Logger.getLogger();
 	private final MSSContext context = new MSSContext();
 
 	public static void main(String[] args) throws Exception {
-		var kpg = KeyPairGenerator.getInstance("EdDSA");
+		Formatter f;
+		if (Terminal.ANSI_OUTPUT) {
+			f = (env, sb) -> {
+				((BiConsumer<Object, CharList>) env.get("0")).accept(env, sb.append('['));
+
+				Level level = (Level) env.get("LEVEL");
+				sb.append("]\u001b[").append(level.color).append("m[").append(env.get("NAME"));
+				if (level.ordinal() > Level.WARN.ordinal())
+					sb.append("][").append(env.get("THREAD"));
+
+				return sb.append("]\u001b[0m: ");
+			};
+		} else {
+			f = Formatter.simple("[${0}][${THREAD}][${NAME}/${LEVEL}]: ");
+		}
+		Logger.getRootContext().setPrefix(f);
+
+		var role = args[0];
+
+		KeyType kp = KeyType.getInstance("EdDSA");
+
+		MSSKeyPair server_key = new MSSKeyPair(kp.loadOrGenerateKey(new File("server_key.bin"), new byte[0]));
+		MSSKeyPair host_key = new MSSKeyPair(kp.loadOrGenerateKey(new File("host_key.bin"), new byte[0]));
+		MSSKeyPair client_key = new MSSKeyPair(kp.loadOrGenerateKey(new File("client_key.bin"), new byte[0]));
+
+		if (role.equals("server")) {
 
 		var server = new FrpServer(null);
 		server.addLocalRoom(new FrpRoom("NAS"));

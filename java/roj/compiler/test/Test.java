@@ -10,7 +10,7 @@ import java.util.Map;
 
 /**
  * @author Roj234
- * @since 2023/9/23 0023 19:11
+ * @since 2023/9/23 19:11
  */
 @PrimitiveGeneric.User(to = "T", type = {int.class, float.class})
 @Switchable(suggest = true)

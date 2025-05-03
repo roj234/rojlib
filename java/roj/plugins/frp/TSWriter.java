@@ -11,7 +11,7 @@ import java.io.IOException;
 
 /**
  * @author Roj234
- * @since 2024/11/21 0021 4:02
+ * @since 2024/11/21 4:02
  */
 final class TSWriter implements ChannelHandler {
 	private final PacketBuffer packetBuffer = new PacketBuffer(2);

@@ -4,7 +4,7 @@ import roj.config.serial.CVisitor;
 
 /**
  * @author Roj234
- * @since 2023/3/19 0019 18:53
+ * @since 2023/3/19 18:53
  */
 public interface Serializer<T> extends CVisitor {
 	T get();

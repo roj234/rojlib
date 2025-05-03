@@ -1,84 +1,78 @@
 package roj.crypt;
 
 import org.jetbrains.annotations.NotNull;
+import roj.io.IOUtil;
 import roj.io.MBInputStream;
 import roj.io.buf.BufferPool;
 import roj.util.ByteList;
 import roj.util.Helpers;
 
+import java.io.EOFException;
 import java.io.IOException;
 import java.io.InputStream;
 
 /**
  * @author Roj234
- * @since 2022/11/12 0012 15:27
+ * @since 2022/11/12 15:27
  */
 public class CipherInputStream extends MBInputStream {
 	protected InputStream in;
-	boolean eof;
+	@Deprecated boolean eof;
 
-	private final ByteList.Slice i = new ByteList.Slice();
-	private ByteList o;
+	private final ByteList.Slice inputBuffer = new ByteList.Slice();
+	private ByteList outputBuffer;
 
-	protected final RCipherSpi c;
-	private int cw,cr;
+	protected final RCipherSpi cipher;
 
-	public CipherInputStream(InputStream in, RCipherSpi c) {
+	public CipherInputStream(InputStream in, RCipherSpi cipher) {
 		this.in = in;
-		this.c = c;
+		this.cipher = cipher;
 
-		this.o = (ByteList) BufferPool.buffer(false, CipherOutputStream.BUFFER_SIZE);
-		this.i.set(o.array(), o.arrayOffset(), o.capacity());
+		this.outputBuffer = (ByteList) BufferPool.buffer(false, CipherOutputStream.BUFFER_SIZE);
+		this.inputBuffer.set(outputBuffer.array(), outputBuffer.arrayOffset(), outputBuffer.capacity());
 	}
 
 	@Override
 	public int read(@NotNull byte[] b, int off, int len) throws IOException {
-		if (eof) return -1;
-
-		int myLen = len;
+		int remaining = len;
 		try {
 			while (true) {
-				if (o.readableBytes() >= myLen) {
-					o.readFully(b, off, myLen);
+				int available = outputBuffer.readableBytes();
+
+				// 如果缓冲区有足够数据
+				if (available >= remaining) {
+					outputBuffer.readFully(b, off, remaining);
 					return len;
 				}
 
-				int avl = o.readableBytes();
-				o.readFully(b, off, avl);
-				off += avl;
-				myLen -= avl;
+				// 拷贝已处理的数据
+				outputBuffer.readFully(b, off, available);
 
-				o.rIndex = cr;
-				o.wIndex(cw);
-				o.compact();
+				off += available;
+				remaining -= available;
 
-				i.clear();
+				// 重置视图并压缩
+				inputBuffer.compact();
+				outputBuffer.clear();
 
-				if (o.readStream(in, o.writableBytes()) <= 0) {
+				if (eof || inputBuffer.readStream(in, inputBuffer.writableBytes()) <= 0) {
 					eof = true;
 
-					if (!o.isReadable()) {
+					// 没有剩余字节了
+					if (!inputBuffer.isReadable()) {
 						close();
-						return len-myLen;
+						return len == remaining ? -1 : len - remaining;
 					}
 
-					c.cryptFinal(o, i);
-					if (o.isReadable()) throw new IOException("Cipher拒绝处理 " + o.readableBytes() + " 大小的块");
+					cipher.cryptFinal(inputBuffer, outputBuffer);
+					if (inputBuffer.isReadable())
+						throw new EOFException(cipher+"拒绝处理"+outputBuffer.readableBytes()+"大小的最终块");
 				} else {
-					c.crypt(o, i);
+					cipher.crypt(inputBuffer, outputBuffer);
 				}
-
-				// hide ciphertext
-				cr = o.rIndex;
-				cw = o.wIndex();
-
-				o.rIndex = i.rIndex;
-				o.wIndex(i.wIndex());
 			}
 		} catch (Throwable e) {
-			try {
-				close();
-			} catch (Throwable ignored) {}
+			IOUtil.closeSilently(this);
 			Helpers.athrow(e);
 			return -1;
 		}
@@ -86,19 +80,15 @@ public class CipherInputStream extends MBInputStream {
 
 	@Override
 	public int available() throws IOException {
-		if (eof) return o.isReadable()?o.readableBytes():-1;
-		else return o.readableBytes()+in.available();
+		return outputBuffer.readableBytes() + (eof ? 0 : in.available());
 	}
 
 	@Override
 	public void close() throws IOException {
-		try {
-			in.close();
-		} finally {
-			synchronized (this) {
-				if (o != null) o.close();
-				o = null;
-			}
-		}
+		// 释放缓冲区
+		IOUtil.closeSilently(outputBuffer);
+		outputBuffer = ByteList.EMPTY;
+
+		in.close();
 	}
 }

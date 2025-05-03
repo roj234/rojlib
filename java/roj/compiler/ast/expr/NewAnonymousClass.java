@@ -25,7 +25,7 @@ import static roj.asm.Opcodes.*;
 
 /**
  * @author Roj234
- * @since 2024/6/3 0003 2:27
+ * @since 2024/6/3 2:27
  */
 final class NewAnonymousClass extends Expr {
 	// 创建该匿名类的表达式 new XXX<>(1,2,3)

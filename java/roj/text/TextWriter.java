@@ -22,7 +22,7 @@ import java.nio.file.StandardOpenOption;
 
 /**
  * @author Roj234
- * @since 2023/3/18 0018 0:11
+ * @since 2023/3/18 0:11
  */
 public class TextWriter extends CharList implements Closeable, Finishable {
 	private final Closeable out;

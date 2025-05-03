@@ -16,7 +16,7 @@ import java.util.Collections;
 
 /**
  * @author Roj234
- * @since 2024/12/1 0001 8:35
+ * @since 2024/12/1 8:35
  */
 @LavaPlugin(name = "typedecl", desc = """
 		加入支持编译和运行期泛型推断的__Type( type )表达式

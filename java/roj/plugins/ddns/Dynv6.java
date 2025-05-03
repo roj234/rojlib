@@ -15,7 +15,7 @@ import java.util.Map;
 
 /**
  * @author Roj234
- * @since 2023/1/27 0027 19:03
+ * @since 2023/1/27 19:03
  */
 final class Dynv6 implements DDNSService {
 	private String HttpToken;

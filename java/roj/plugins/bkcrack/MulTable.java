@@ -4,7 +4,7 @@ import roj.util.ByteList;
 
 /**
  * @author Roj234
- * @since 2022/11/12 0012 17:38
+ * @since 2022/11/12 17:38
  */
 final class MulTable {
 	/// \return MULT^-1 * x using a lookup table

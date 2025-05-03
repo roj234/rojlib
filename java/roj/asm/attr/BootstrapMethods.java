@@ -73,9 +73,9 @@ public final class BootstrapMethods extends Attribute {
 		Item(byte kind, CstRef ref, List<Constant> list) {
 			this.kind = kind;
 			this.methodType = ref.type();
-			this.owner = ref.className();
-			this.name = ref.descName();
-			this.desc = ref.descType();
+			this.owner = ref.owner();
+			this.name = ref.name();
+			this.desc = ref.rawDesc();
 			checkInvariant(desc);
 			this.arguments = list;
 		}

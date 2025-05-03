@@ -223,6 +223,31 @@ public final class Opcodes {
 	public static int shift(int i) { return CAN_SHIFT.getOrDefaultInt(i&0xFF, 0); }
 	// endregion
 
+	public static boolean exceptionCheck(byte code) {
+		return switch (code) {
+			// ClassCastException
+			case CHECKCAST,
+					// NullPointerException
+					ATHROW, ARRAYLENGTH, MONITORENTER, MONITOREXIT,
+					// NullPointerException, ArrayStoreException
+					IALOAD, LALOAD, FALOAD, DALOAD, AALOAD, BALOAD, CALOAD, SALOAD,
+					IASTORE, LASTORE, FASTORE, DASTORE, AASTORE, BASTORE, CASTORE, SASTORE,
+					// LinkageError for Load_Dynamic
+					LDC, LDC_W, LDC2_W,
+					// NullPointerException | LinkageError
+					GETFIELD, PUTFIELD, GETSTATIC, PUTSTATIC,
+					// NullPointerException | ExceptionInExecution | LinkageError
+					INVOKEVIRTUAL, INVOKEINTERFACE, INVOKESPECIAL,
+					// ExceptionInExecution | LinkageError
+					INVOKESTATIC, INVOKEDYNAMIC,
+					// OutOfMemoryError | LinkageError
+					NEW, INSTANCEOF,
+					// OutOfMemoryError | NegativeArraySizeException | LinkageError
+					NEWARRAY, ANEWARRAY, MULTIANEWARRAY -> true;
+			default -> false;
+		};
+	}
+
 	static {
 		// @=零地址
 		String desc = "Nop AConst_NULL IConst_M1 IConst_0 IConst_1 IConst_2 IConst_3 IConst_4 IConst_5 "+

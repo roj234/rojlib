@@ -5,7 +5,7 @@ import roj.archive.zip.ZipArchive;
 import roj.archive.zip.ZipFile;
 import roj.collect.SimpleList;
 import roj.collect.TrieTreeSet;
-import roj.collect.XHashSet;
+import roj.collect.XashMap;
 import roj.concurrent.Promise;
 import roj.config.ConfigMaster;
 import roj.config.ParseException;
@@ -42,7 +42,7 @@ import static roj.plugins.ci.FMD.LOGGER;
 
 /**
  * @author Roj234
- * @since 2025/2/12 0012 5:02
+ * @since 2025/2/12 5:02
  */
 final class MinecraftClientInfo {
 	static final class Library {
@@ -56,10 +56,10 @@ final class MinecraftClientInfo {
 		Library(String name) {this.name = name;}
 	}
 
-	private static final XHashSet.Shape<String, Library> SHAPE = XHashSet.shape(String.class, Library.class, "name", "_next");
+	private static final XashMap.Builder<String, Library> BUILDER = XashMap.builder(String.class, Library.class, "name", "_next");
 
 	File libraryPath;
-	XHashSet<String, Library> libraries = SHAPE.create();
+	XashMap<String, Library> libraries = BUILDER.create();
 	Function<String, Promise<File>> downloader;
 	File nativePath;
 

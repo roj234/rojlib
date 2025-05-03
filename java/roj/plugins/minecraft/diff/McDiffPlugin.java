@@ -15,7 +15,7 @@ import static roj.ui.CommandNode.literal;
 
 /**
  * @author Roj234
- * @since 2024/7/16 0016 4:53
+ * @since 2024/7/16 4:53
  */
 @SimplePlugin(id = "mcdiff", desc = """
 	为Minecraft存档设计的支持数字签名的差异文件格式

@@ -98,10 +98,10 @@ public class FeedbackCipher extends RCipherSpi {
 
 	@Override
 	public void init(int mode, byte[] key, AlgorithmParameterSpec par, SecureRandom random) throws InvalidAlgorithmParameterException, InvalidKeyException {
-		decrypt = mode == Cipher.DECRYPT_MODE;
+		decrypt = mode == RCipherSpi.DECRYPT_MODE;
 		switch (type) {
 			case MODE_OFB: case MODE_CFB: case MODE_CTR:
-				mode = Cipher.ENCRYPT_MODE;
+				mode = RCipherSpi.ENCRYPT_MODE;
 			break;
 		}
 		if (key != null) cip.init(mode, key);

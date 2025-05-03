@@ -1,5 +1,6 @@
 package roj.io.source;
 
+import roj.io.IOUtil;
 import roj.util.ArrayCache;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
@@ -12,16 +13,14 @@ import java.nio.channels.FileChannel;
  * @since 2021/8/18 13:36
  */
 public abstract class Source extends DataOutputStream {
-	private byte[] b1;
-
 	public Source() {
 		super(null);
 		out = this;
 	}
 
 	public int read() throws IOException {
-		if (b1 == null) b1 = new byte[1];
-		return read(b1, 0, 1) > 0 ? b1[0]&0xFF : -1;
+		byte[] b1 = IOUtil.SharedBuf.get().singleByteBuffer;
+		return read(b1, 0, 1) > 0 ? b1[0] & 0xFF : -1;
 	}
 	public final int read(byte[] b) throws IOException { return read(b, 0, b.length); }
 	public void read(ByteList buf, int len) throws IOException {
@@ -49,11 +48,7 @@ public abstract class Source extends DataOutputStream {
 		} while (len > 0);
 	}
 
-	public void write(int b) throws IOException {
-		if (b1 == null) b1 = new byte[1];
-		b1[0] = (byte) b;
-		write(b1,0,1);
-	}
+	public void write(int b) throws IOException {IOUtil.writeSingleByteHelper(this, b);}
 	public abstract void write(byte[] b, int off, int len) throws IOException;
 	public abstract void write(DynByteBuf data) throws IOException;
 

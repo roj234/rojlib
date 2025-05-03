@@ -8,7 +8,7 @@ import java.util.function.Function;
 
 /**
  * @author Roj234
- * @since 2024/5/15 0015 14:33
+ * @since 2024/5/15 14:33
  */
 public class CollectionX {
 	@SuppressWarnings("unchecked")
@@ -111,11 +111,11 @@ public class CollectionX {
 		return new AbstractMap<>() {@NotNull @Override public Set<Entry<To, From>> entrySet() {return entrySet;}};
 	}
 
-	public static <K, V> Map<K, V> toMap(XHashSet<K, V> from) {return new XMap<>(from);}
+	public static <K, V> Map<K, V> toMap(XashMap<K, V> from) {return new XMap<>(from);}
 	private static final class XMap<K, V> extends AbstractMap<K, V> implements _Generic_Map<_Generic_Entry> {
-		private final XHashSet<K, V> from;
+		private final XashMap<K, V> from;
 
-		public XMap(XHashSet<K, V> from) {this.from = from;}
+		public XMap(XashMap<K, V> from) {this.from = from;}
 
 		@NotNull
 		public Set<Entry<K, V>> entrySet() {return _Generic_EntrySet.create(this);}

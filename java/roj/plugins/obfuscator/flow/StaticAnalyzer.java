@@ -2,13 +2,13 @@ package roj.plugins.obfuscator.flow;
 
 import roj.archive.zip.ZEntry;
 import roj.archive.zip.ZipArchive;
+import roj.asm.MemberDescriptor;
 import roj.asm.MethodNode;
 import roj.asm.attr.UnparsedAttribute;
 import roj.asm.cp.CstClass;
 import roj.asm.cp.CstRef;
 import roj.asm.insn.CodeVisitor;
-import roj.asm.type.Desc;
-import roj.asm.util.Context;
+import roj.asmx.Context;
 import roj.collect.MyHashMap;
 import roj.collect.MyHashSet;
 import roj.collect.SimpleList;
@@ -44,7 +44,7 @@ public class StaticAnalyzer {
 			list.set(i, list.get(i).replace('.', '/'));
 		}
 
-		MyHashSet<Desc> used = new MyHashSet<>();
+		MyHashSet<MemberDescriptor> used = new MyHashSet<>();
 		if (System.getProperty("analyze_method") == null) {
 			analyzeClass(list, map, used);
 		} else {
@@ -53,7 +53,7 @@ public class StaticAnalyzer {
 		System.out.println(used.size() + " used");
 
 		MyHashSet<String> removed = new MyHashSet<>(map.keySet());
-		for (Desc desc : used) removed.remove(desc.owner);
+		for (MemberDescriptor desc : used) removed.remove(desc.owner);
 		System.out.println(removed.size() + " removed");
 
 		for (String name : removed) zf.put(name + ".class", null);
@@ -61,7 +61,7 @@ public class StaticAnalyzer {
 		zf.close();
 	}
 
-	public static void analyzeClass(List<String> entryPoint, Map<String, Context> data, MyHashSet<Desc> used) {
+	public static void analyzeClass(List<String> entryPoint, Map<String, Context> data, MyHashSet<MemberDescriptor> used) {
 		List<String> pending = new SimpleList<>(entryPoint), next = new SimpleList<>();
 		do {
 			for (int i = 0; i < pending.size(); i++) {
@@ -71,7 +71,7 @@ public class StaticAnalyzer {
 
 			pending.clear();
 			for (int i = 0; i < next.size(); i++) {
-				if (used.add(new Desc(next.get(i), "")))
+				if (used.add(new MemberDescriptor(next.get(i), "")))
 					pending.add(next.get(i));
 			}
 		} while (!pending.isEmpty());
@@ -84,33 +84,33 @@ public class StaticAnalyzer {
 		}
 	}
 
-	public static void analyzeMethod(List<String> entryPoint, Map<String, Context> data, MyHashSet<Desc> used) {
-		List<Desc> pending = new SimpleList<>();
+	public static void analyzeMethod(List<String> entryPoint, Map<String, Context> data, MyHashSet<MemberDescriptor> used) {
+		List<MemberDescriptor> pending = new SimpleList<>();
 		for (int i = 0; i < entryPoint.size(); i++) {
-			pending.add(new Desc(entryPoint.get(i), null));
+			pending.add(new MemberDescriptor(entryPoint.get(i), null));
 		}
 
-		MyHashSet<Desc> next = new MyHashSet<>();
+		MyHashSet<MemberDescriptor> next = new MyHashSet<>();
 		do {
 			for (int i = 0; i < pending.size(); i++) {
-				Desc desc = pending.get(i);
+				MemberDescriptor desc = pending.get(i);
 				Context ctx = data.get(desc.owner);
 				if (ctx != null) analyzeMethod0(ctx, desc, next);
 			}
 
 			pending.clear();
-			for (Desc desc : next) {
+			for (MemberDescriptor desc : next) {
 				if (used.add(desc))
 					pending.add(desc);
 			}
 		} while (!pending.isEmpty());
 	}
 
-	private static void analyzeMethod0(Context ctx, Desc desc, MyHashSet<Desc> next) {
+	private static void analyzeMethod0(Context ctx, MemberDescriptor desc, MyHashSet<MemberDescriptor> next) {
 		List<? extends MethodNode> methods = ctx.getData().methods;
 		for (int i = 0; i < methods.size(); i++) {
 			MethodNode mn = methods.get(i);
-			if (desc.name == null || (mn.name().equals(desc.name) && mn.rawDesc().equals(desc.param))) {
+			if (desc.name == null || (mn.name().equals(desc.name) && mn.rawDesc().equals(desc.rawDesc))) {
 				UnparsedAttribute attr = (UnparsedAttribute) mn.getRawAttribute("Code");
 				if (attr == null) {
 					if (desc.name != null) break;
@@ -127,18 +127,18 @@ public class StaticAnalyzer {
 	}
 
 	static class MyVisitor extends CodeVisitor {
-		MyVisitor(String owner, MyHashSet<Desc> next) {
+		MyVisitor(String owner, MyHashSet<MemberDescriptor> next) {
 			self = owner;
 			user = next;
 		}
 
 		String self;
-		MyHashSet<Desc> user;
+		MyHashSet<MemberDescriptor> user;
 
 		@Override
 		public void invoke(byte code, CstRef method) {
-			if (!method.className().equals(self)) {
-				user.add(new Desc().read(method));
+			if (!method.owner().equals(self)) {
+				user.add(new MemberDescriptor().read(method));
 			}
 		}
 	}

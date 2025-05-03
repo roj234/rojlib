@@ -20,7 +20,7 @@ import static roj.reflect.Unaligned.U;
 /**
  * <a href="https://datatracker.ietf.org/doc/html/rfc6455">RFC6455 - Websocket</a>
  * @author Roj234
- * @since 2022/11/11 0011 1:30
+ * @since 2022/11/11 1:30
  */
 public abstract class WebSocketConnection implements ChannelHandler {
 	public static final byte

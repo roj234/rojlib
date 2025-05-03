@@ -68,10 +68,10 @@ public final class ArrayUtil {
 	public static final int LOG2_ARRAY_DOUBLE_INDEX_SCALE = 3;
 	private static final int LOG2_BYTE_BIT_SIZE = 3;
 
-	public static int vectorizedMismatch(Object a, long aOffset,
-										 Object b, long bOffset,
-										 int length,
-										 int log2ArrayIndexScale) {
+	public static int compare(Object a, long aOffset,
+							  Object b, long bOffset,
+							  int length,
+							  int log2ArrayIndexScale) {
 		int i = 0;
 		// 当null时也就意味着是Java8 ... 无法确定处理器是否支持不对齐访问呢
 		if (length > (8 >> log2ArrayIndexScale) - 1 && H.SCOPED_MEMORY_ACCESS != null) {
@@ -147,10 +147,12 @@ public final class ArrayUtil {
 		return -(low + 1);
 	}
 
-	public static void checkRange(byte[] b, int off, int len) {
-		if ((off|len|(off+len)) < 0 || off + len > b.length)
-			throw new IndexOutOfBoundsException("off="+off+",len="+len+",cap="+b.length);
+	public static void checkRange(byte[] b, int off, int len) {checkRange(b.length, off, len);}
+	public static void checkRange(int capacity, int off, int len) {
+		if ((off|len|(off+len)) < 0 || off + len > capacity)
+			throw new IndexOutOfBoundsException("off="+off+",len="+len+",cap="+capacity);
 	}
+
 
 	private static final Class<?> IMMUTABLE_ARRAY_TYPE = Arrays.asList().getClass();
 	@SuppressWarnings("unchecked")

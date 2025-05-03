@@ -2,7 +2,7 @@ package roj.concurrent;
 
 /**
  * @author Roj234
- * @since 2024/11/21 0021 16:30
+ * @since 2024/11/21 16:30
  */
 @Deprecated
 @FunctionalInterface

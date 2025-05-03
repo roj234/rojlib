@@ -12,7 +12,7 @@ import java.util.List;
 
 /**
  * @author Roj234
- * @since 2024/1/27 0001 11:04
+ * @since 2024/1/27 11:04
  */
 public final class Asterisk implements IType {
 	// 尽管AnyGeneric有专门的检测，AnyType是没有的

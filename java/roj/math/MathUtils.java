@@ -59,29 +59,20 @@ public abstract class MathUtils {
 	 * {@link Iterator#hasNext() hasNext()} returns false, if the sequence has finished, but
 	 * {@link Iterator#next() next()} will return <i>{@code to}</i>
 	 *
-	 * @throws IllegalArgumentException if <i>{@code from}</i> {@code >=} <i>{@code to}</i>
-	 * @throws IllegalArgumentException if <i>{@code from}</i> {@code <} <i>{@code 0}</i>
 	 * @throws IllegalArgumentException if <i>{@code steps}</i> {@code <} <i>{@code 0}</i>
 	 */
-	public static PrimitiveIterator.OfInt createSigmoidSequence(int from, int to, int steps) {
-		if (from >= to) throw new IllegalArgumentException("from >= to");
-		if (from < 0) throw new IllegalArgumentException("from < 0");
+	public static PrimitiveIterator.OfDouble createSigmoidSequence(double from, double to, int steps) {
 		if (steps < 0) throw new IllegalArgumentException("steps < 0");
 
-		return new PrimitiveIterator.OfInt() {
+		return new PrimitiveIterator.OfDouble() {
 			// e^t(x) / (1 + e^t(x)) in [0, xmax] for t(x) = 8 * x / xmax - 4
 
 			private int step = 0;
-			private final int delta = to - from;
+			private final double delta = to - from;
 			private final int maxStep = steps + 1;
 
-			@Override
-			public boolean hasNext() {
-				return step <= maxStep;
-			}
-
-			@Override
-			public int nextInt() {
+			@Override public boolean hasNext() {return step <= maxStep;}
+			@Override public double nextDouble() {
 				if (step > maxStep) throw new NoSuchElementException();
 				int s = step++;
 
@@ -90,7 +81,7 @@ public abstract class MathUtils {
 				else {
 					double x = s / (double) maxStep;
 					double tmp = Math.exp(8 * x - 4);
-					return (int) (delta * (tmp / (1 + tmp)) + from);
+					return delta * (tmp / (1 + tmp)) + from;
 				}
 			}
 

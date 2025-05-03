@@ -4,13 +4,13 @@
 
 package roj.plugins.ci.minecraft;
 
-import roj.asm.type.Desc;
+import roj.asm.MemberDescriptor;
 import roj.asmx.mapper.Mapper;
 import roj.asmx.mapper.Mapping;
 import roj.collect.IntSet;
 import roj.collect.MyHashMap;
 import roj.collect.SimpleList;
-import roj.crypt.MT19937;
+import roj.crypt.CryptoFactory;
 import roj.gui.DoubleClickHelper;
 import roj.gui.GuiUtil;
 import roj.text.TextReader;
@@ -268,7 +268,7 @@ public class MappingUI extends JFrame {
 		IntSet id = null;
 
 		if (m.mapping.getClassMap().size() > i) {
-			Random r = new MT19937();
+			Random r = CryptoFactory.L64W64X128MixRandom();
 			id = new IntSet(i);
 			while (i-- > 0) while (!id.add(r.nextInt(m.mapping.getClassMap().size())));
 		}
@@ -279,12 +279,12 @@ public class MappingUI extends JFrame {
 			if (id == null || id.remove(i++))
 				tmp.computeIfAbsent(entry.getKey(), Helpers.fnArrayList()).add(entry.getKey() + " => " + entry.getValue());
 		}
-		for (Map.Entry<Desc, String> entry : m.mapping.getMethodMap().entrySet()) {
-			Desc d = entry.getKey();
+		for (Map.Entry<MemberDescriptor, String> entry : m.mapping.getMethodMap().entrySet()) {
+			MemberDescriptor d = entry.getKey();
 			List<String> list = tmp.get(d.owner);
-			if (list != null) list.add("  "+d.name+d.param + " => " + entry.getValue());
+			if (list != null) list.add("  "+d.name+d.rawDesc + " => " + entry.getValue());
 		}
-		for (Map.Entry<Desc, String> entry : m.mapping.getFieldMap().entrySet()) {
+		for (Map.Entry<MemberDescriptor, String> entry : m.mapping.getFieldMap().entrySet()) {
 			List<String> list = tmp.get(entry.getKey().owner);
 			if (list != null) list.add("  "+entry.getKey().name + " => " + entry.getValue());
 		}

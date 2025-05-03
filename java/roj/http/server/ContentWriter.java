@@ -9,7 +9,7 @@ import java.io.InputStream;
 
 /**
  * @author Roj234
- * @since 2023/2/6 0006 2:15
+ * @since 2023/2/6 2:15
  */
 public interface ContentWriter {
 	MyChannel connection();

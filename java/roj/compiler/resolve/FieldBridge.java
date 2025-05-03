@@ -1,7 +1,7 @@
 package roj.compiler.resolve;
 
+import roj.asm.ClassDefinition;
 import roj.asm.FieldNode;
-import roj.asm.IClass;
 import roj.asm.Opcodes;
 import roj.asm.insn.CodeWriter;
 import roj.asm.type.Type;
@@ -12,10 +12,10 @@ import roj.compiler.diagnostic.Kind;
 
 /**
  * @author Roj234
- * @since 2024/7/4 0004 14:22
+ * @since 2024/7/4 14:22
  */
 public final class FieldBridge extends FieldAccessHook {
-	private final IClass owner;
+	private final ClassDefinition owner;
 	private int readAccessor = -1, writeAccessor = -1;
 	private boolean exist;
 
@@ -23,7 +23,7 @@ public final class FieldBridge extends FieldAccessHook {
 		this.owner = owner;
 		this.exist = true;
 	}
-	public FieldBridge(IClass owner, int readAccessor, int writeAccessor) {
+	public FieldBridge(ClassDefinition owner, int readAccessor, int writeAccessor) {
 		this.owner = owner;
 		this.readAccessor = readAccessor;
 		this.writeAccessor = writeAccessor;

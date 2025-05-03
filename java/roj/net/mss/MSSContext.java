@@ -12,7 +12,7 @@ import java.security.SecureRandom;
 
 /**
  * @author Roj234
- * @since 2024/11/20 0020 23:39
+ * @since 2024/11/20 23:39
  */
 public class MSSContext {
 	private static MSSContext DEFAULT_CONTEXT = new MSSContext();

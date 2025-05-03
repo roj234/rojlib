@@ -3,7 +3,6 @@ package roj;
 import roj.collect.MyHashMap;
 import roj.compiler.plugins.asm.ASM;
 import roj.plugins.ci.annotation.ReplaceConstant;
-import roj.reflect.ReflectionUtils;
 import roj.reflect.litasm.Intrinsics;
 import roj.reflect.litasm.LibraryLoader;
 import roj.util.Helpers;
@@ -24,19 +23,26 @@ public final class RojLib {
 	/**
 	 * 用于某些类加载顺序强相关的依赖注入
 	 * @author Roj234
-	 * @since 2024/7/22 0022 6:49
+	 * @since 2024/7/22 6:49
 	 */
 	public static Object inject(String s) {return BLACKBOARD.get(s);}
 	public static <T> T inject(TypedKey<T> key) {return Helpers.cast(BLACKBOARD.get(key));}
 
+	//region FastJNI
+	public static boolean fastJni() {return Intrinsics.available();}
 	/**
 	 * FastJNI
 	 */
-	public static void linkLibrary(int bit) {
+	public static void linkLibrary(Class<?> caller, int bit) {
 		if ((bits&(1L<<bit)) == 0 || !Intrinsics.available()) return;
-		Intrinsics.linkNative(getLibrary(), ReflectionUtils.getCallerClass(2));
+		Intrinsics.linkNative(getLibrary(), caller);
 	}
-	public static Object getLibrary() {return LibraryLoader.INSTANCE.loadLibraryEx(RojLib.class, LibFile);}
+	public static void linkLibrary(Class<?> target) {
+		if (!Intrinsics.available()) return;
+		Intrinsics.linkNative(getLibrary(), target);
+	}
+	private static Object getLibrary() {return LibraryLoader.INSTANCE.loadLibraryEx(RojLib.class, LibFile);}
+	//endregion
 
 	private static final String LibName = "libcpp";
 	private static File LibFile = new File("D:\\mc\\MCMake\\projects\\rojlib-jni\\bin\\libcpp.dll");
@@ -46,7 +52,6 @@ public final class RojLib {
 	public static final int GENERIC = 0, WIN32 = 1, ANSI_READBACK = 2, SHARED_MEMORY = 3, FAST_LZMA = 4, AES_NI = 5, FastJNI = 6;
 	public static boolean hasNative(int bit) {return (bits&(1L << bit)) != 0;}
 
-	public static boolean fastJni() {return Intrinsics.available();}
 	private static final long bits;
 
 	static {

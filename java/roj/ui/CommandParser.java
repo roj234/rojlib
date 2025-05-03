@@ -4,7 +4,7 @@ import roj.collect.IntList;
 import roj.collect.IntMap;
 import roj.collect.MyHashMap;
 import roj.collect.SimpleList;
-import roj.concurrent.TaskHandler;
+import roj.concurrent.TaskExecutor;
 import roj.config.ParseException;
 import roj.config.Word;
 
@@ -12,12 +12,12 @@ import java.util.List;
 
 /**
  * @author Roj234
- * @since 2023/11/20 0020 15:05
+ * @since 2023/11/20 15:05
  */
 public class CommandParser {
 	public static final Word EOF = new Word().init(Word.EOF, 0, "");
 
-	public TaskHandler executor;
+	public TaskExecutor executor;
 
 	private String context;
 	private List<Word> words;
@@ -27,7 +27,7 @@ public class CommandParser {
 
 	private final MyHashMap<String, Object> map = new MyHashMap<>();
 
-	public CommandParser(TaskHandler executor) { this.executor = executor; }
+	public CommandParser(TaskExecutor executor) { this.executor = executor; }
 
 	public void init(String context, List<Word> words) {
 		this.context = context;

@@ -18,7 +18,7 @@ import java.util.Random;
 /**
  * 验证码字体
  * @author Roj234
- * @since 2024/3/19 0019 16:38
+ * @since 2024/3/19 16:38
  */
 public final class CaptchaFont {
 	final String id;

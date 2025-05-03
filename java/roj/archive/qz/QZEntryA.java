@@ -8,7 +8,7 @@ import static roj.archive.zip.ZEntry.*;
 
 /**
  * @author Roj234
- * @since 2023/3/14 0014 7:56
+ * @since 2023/3/14 7:56
  */
 final class QZEntryA extends QZEntry {
     static final long[] SPARSE_ATTRIBUTE_OFFSET = new long[] {

@@ -1,7 +1,7 @@
 package roj.plugins.p2p;
 
 import roj.collect.SimpleList;
-import roj.net.NetUtil;
+import roj.net.Net;
 
 import java.io.IOException;
 import java.net.Inet4Address;
@@ -12,7 +12,7 @@ import java.util.List;
 
 /**
  * @author Roj234
- * @since 2024/1/12 0012 2:59
+ * @since 2024/1/12 2:59
  */
 public final class Servers {
 	public static Servers getDefault() { return INSTANCE; }
@@ -38,8 +38,8 @@ public final class Servers {
 	);
 
 	public Servers(String tcpKeepAliveHost, String udpKeepAliveHost, String... objects) {
-		this.tcpKeepaliveServer = new InetSocketAddress[] {NetUtil.parseUnresolvedAddress(tcpKeepAliveHost, 80)};
-		this.udpKeepaliveServer = new InetSocketAddress[] {NetUtil.parseUnresolvedAddress(udpKeepAliveHost, 53)};
+		this.tcpKeepaliveServer = new InetSocketAddress[] {Net.parseUnresolvedAddress(tcpKeepAliveHost, 80)};
+		this.udpKeepaliveServer = new InetSocketAddress[] {Net.parseUnresolvedAddress(udpKeepAliveHost, 53)};
 
 		int udpPos = 0;
 		List<String> list = new SimpleList<>();

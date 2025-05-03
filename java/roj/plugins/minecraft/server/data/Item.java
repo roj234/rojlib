@@ -1,6 +1,6 @@
 package roj.plugins.minecraft.server.data;
 
-import roj.collect.XHashSet;
+import roj.collect.XashMap;
 import roj.plugins.minecraft.server.MinecraftServer;
 import roj.text.TextReader;
 import roj.util.Helpers;
@@ -10,10 +10,10 @@ import java.nio.charset.StandardCharsets;
 
 /**
  * @author Roj234
- * @since 2024/3/20 0020 8:01
+ * @since 2024/3/20 8:01
  */
 public final class Item {
-	public static final XHashSet<String, Item> byName = Helpers.cast(XHashSet.noCreation(Item.class, "name").createSized(512));
+	public static final XashMap<String, Item> byName = Helpers.cast(XashMap.noCreation(Item.class, "name").createSized(512));
 	public static final Item[] byId = new Item[1153];
 	static {
 		try (TextReader in = TextReader.from(MinecraftServer.INSTANCE.getResource("assets/Items_1.19.2.txt"), StandardCharsets.UTF_8)) {

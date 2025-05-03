@@ -12,7 +12,7 @@ import java.util.List;
 
 /**
  * @author Roj234
- * @since 2024/11/17 0017 19:02
+ * @since 2024/11/17 19:02
  */
 public class EnumUtil {
 	private static final List<LocalVariable> _NAME_ORDINAL;

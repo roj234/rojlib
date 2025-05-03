@@ -26,7 +26,7 @@ import static roj.crypt.asn1.Asn1Tokenizer.*;
  * <a href="https://trustee.ietf.org/about/faq/#reproducing-rfcs:~:text=It%20is%20common,statement%20if%20present">Am I allowed to reproduce extracts from RFCs?</a>
  *
  * @author Roj234
- * @since 2024/3/22 0022 22:58
+ * @since 2024/3/22 22:58
  */
 public class Asn1Context {
 	protected final Map<String, Type> map = new MyHashMap<>();

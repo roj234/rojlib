@@ -8,7 +8,7 @@ import java.lang.annotation.Target;
 /**
  * 让这个类的实例可以被switch
  * @author Roj234
- * @since 2022/10/23 0023 13:27
+ * @since 2022/10/23 13:27
  */
 @Retention(RetentionPolicy.CLASS)
 @Target(ElementType.TYPE)

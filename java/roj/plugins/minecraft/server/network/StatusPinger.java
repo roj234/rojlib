@@ -9,7 +9,7 @@ import java.io.IOException;
 
 /**
  * @author Roj234
- * @since 2024/3/19 0019 16:04
+ * @since 2024/3/19 16:04
  */
 final class StatusPinger implements ChannelHandler {
 	StatusPinger() {}

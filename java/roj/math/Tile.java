@@ -2,7 +2,7 @@ package roj.math;
 
 /**
  * @author Roj234
- * @since 2022/12/9 0009 16:31
+ * @since 2022/12/9 16:31
  */
 public interface Tile {
 	int getTileWidth();

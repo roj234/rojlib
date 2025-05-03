@@ -8,7 +8,7 @@ import java.nio.charset.StandardCharsets;
 
 /**
  * @author Roj234
- * @since 2024/6/10 0010 1:35
+ * @since 2024/6/10 1:35
  */
 public class RtUtil {
 	public static final String CLASS_NAME = "roj/compiler/runtime/RtUtil";

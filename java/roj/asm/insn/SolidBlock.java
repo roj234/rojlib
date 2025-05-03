@@ -1,6 +1,6 @@
 package roj.asm.insn;
 
-import roj.asm.AsmShared;
+import roj.asm.AsmCache;
 import roj.asm.Opcodes;
 import roj.util.ArrayCache;
 import roj.util.ByteList;
@@ -8,7 +8,7 @@ import roj.util.DynByteBuf;
 
 /**
  * @author Roj234
- * @since 2022/11/17 0017 12:53
+ * @since 2022/11/17 12:53
  */
 public final class SolidBlock extends CodeBlock {
 	public static final SolidBlock EMPTY = new SolidBlock(ArrayCache.BYTES);
@@ -22,7 +22,7 @@ public final class SolidBlock extends CodeBlock {
 	public SolidBlock(byte... data) { array = data; length = (char) data.length; }
 	public static SolidBlock emptyWritable() {return new SolidBlock();}
 
-	@Override protected boolean put(CodeWriter to, int segmentId) {
+	@Override public boolean put(CodeWriter to, int segmentId) {
 		if (array instanceof DynByteBuf b) to.bw.put(b);
 		else to.bw.put((byte[]) array,off,length);
 		return false;
@@ -35,7 +35,7 @@ public final class SolidBlock extends CodeBlock {
 	SolidBlock setData(DynByteBuf b) {
 		SolidBlock that = this;
 
-		AsmShared local = AsmShared.local();
+		AsmCache local = AsmCache.getInstance();
 
 		that.length = (char) b.readableBytes();
 		byte[] arr = local.getArray(that.length);

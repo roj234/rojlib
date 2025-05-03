@@ -24,7 +24,7 @@ final class Poly1305 extends BufferedDigest implements MessageAuthenticCode {
 	protected int engineGetDigestLength() { return 16; }
 
 	@Override
-	public void setSignKey(byte[] key, int off, int len) {
+	public void init(byte[] key, int off, int len) {
 		if (len != 32) throw new IllegalStateException("Poly1305 requires 256 bits of key");
 		System.arraycopy(key, off, key = new byte[32], 0, 32);
 

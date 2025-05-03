@@ -14,24 +14,27 @@ import java.util.Arrays;
 
 /**
  * @author Roj234
- * @since 2023/3/14 0014 22:08
+ * @since 2023/3/14 22:08
  */
 public abstract class QZWriter extends OutputStream implements ArchiveWriter {
-    public Source s;
+    Source source;
+    public final Source source() {return source;}
 
     final SimpleList<WordBlock> blocks = new SimpleList<>();
     /**
-     * 0 : 空项目
-     * 1 : 空文件(而不是文件夹)
-     * 2 : anti
-     * 3 : 包含创建时间
-     * 4 : 访问时间
-     * 5 : 修改时间
-     * 6 : windows属性
-     * 7 : crc32
-     *
-     * 8 : block uCrc32
-     * 9: Complex coder
+     * 文件条目标志统计数组，索引对应含义：
+     * <ul>
+     *   <li>[0]: 空项目数</li>
+     *   <li>[1]: 空文件数（非目录）</li>
+     *   <li>[2]: 反(在解压时应删除的)文件数</li>
+     *   <li>[3]: 包含创建时间的条目数</li>
+     *   <li>[4]: 包含访问时间的条目数</li>
+     *   <li>[5]: 包含修改时间的条目数</li>
+     *   <li>[6]: 包含Windows属性的条目数</li>
+     *   <li>[7]: 包含CRC校验的条目数</li>
+     *   <li>[8]: 包含块级CRC校验的块数</li>
+     *   <li>[9]: 复杂编码器导致原始流增加的数量</li>
+     * </ul>
      */
     final int[] flagSum = new int[10];
 
@@ -48,8 +51,11 @@ public abstract class QZWriter extends OutputStream implements ArchiveWriter {
 
     public byte flag;
     public static final int IGNORE_CLOSE = 1, NO_TRIM_FILE = 2;
-    public void setIgnoreClose(boolean ignoreClose) { if (ignoreClose) flag |= IGNORE_CLOSE; else flag &= ~IGNORE_CLOSE; }
-    public int[] getFlagSum() {return flagSum;}
+
+    /**
+     * 设置是否忽略对{@link #close()}的调用
+     */
+    public final void setIgnoreClose(boolean ignoreClose) { if (ignoreClose) flag |= IGNORE_CLOSE; else flag &= ~IGNORE_CLOSE; }
 
     private long solidSize;
 
@@ -59,18 +65,29 @@ public abstract class QZWriter extends OutputStream implements ArchiveWriter {
     private CoderInfo complexCoder;
     private int cOffsets, cOutSizes;
 
-    QZWriter(Source s) {this.s = s;}
-    QZWriter(Source s, QZWriter parent) {
-        this.s = s;
+    QZWriter(Source source) {this.source = source;}
+    QZWriter(Source source, QZWriter parent) {
+        this.source = source;
         this.solidSize = parent.solidSize;
         this.coders = parent.coders;
     }
 
-    public ArchiveEntry createEntry(String fileName) { return QZEntry.of(fileName); }
-
+    /**
+     * 设置压缩编码器链
+     *
+     * <p>复杂编码器执行顺序为后序（栈式）排列，例如：
+     * <pre>
+     * [BCJ2, LZMA2, null, LZMA, null, LZMA, null, null]
+     * 表示：BCJ2 → [LZMA2, LZMA, LZMA] → 文件 的编码流程
+     * </pre>
+     *
+     * @param methods 压缩方法链（仅在包含复杂编码器时，使用null表示原始流）
+     * @throws IllegalStateException 当编码器链配置失败时抛出
+     * @throws IllegalArgumentException 当使用复杂编码器且根节点有多个输入时抛出
+     */
     public final void setCodec(QZCoder... methods) {
         try {
-            closeWordBlock();
+            flush();
         } catch (IOException e) {
             throw new IllegalStateException("nextWordBlock() failed", e);
         }
@@ -96,16 +113,11 @@ public abstract class QZWriter extends OutputStream implements ArchiveWriter {
         }
 
         coders = new QZCoder[methods.length];
+        // 翻转数组
         for (int i = 0; i < methods.length; i++) {
             coders[methods.length-i-1] = methods[i];
         }
     }
-
-    /**
-     * 语法: 后序(栈)直到null(文件流)
-     * 举例: [BCJ2, LZMA2, null, LZMA, null, LZMA, null, null]
-     * 举例: [一进二出, 二进二出, null, null]
-     */
     private void setComplexCodec(QZCoder[] methods) {
         CoderInfo[] nodes = new CoderInfo[methods.length];
         SimpleList<CoderInfo> nonNull = new SimpleList<>();
@@ -122,7 +134,7 @@ public abstract class QZWriter extends OutputStream implements ArchiveWriter {
         }
 
         CoderInfo root = nodes[0];
-        if (root.provides > 1) throw new IllegalArgumentException("root只能有一个输入!");
+        if (root.provides > 1) throw new IllegalArgumentException("根编码器只能有一个输入!");
 
         CInt blockId = new CInt();
         inflateTree(root, nodes, blockId, 1);
@@ -148,18 +160,31 @@ public abstract class QZWriter extends OutputStream implements ArchiveWriter {
     }
 
     /**
-     * 固实大小
-     * 0: 固实 (合计一个字块)
-     * -1: 非固实 (每文件一个字块)
-     * 大于零: 按此(输入)大小
+     * 设置固实压缩策略
+     *
+     * <p>参数说明：
+     * <ul>
+     *   <li>0: 所有文件合并为单个固实块</li>
+     *   <li>-1: 非固实模式（每个文件独立块）</li>
+     *   <li>>0: 当累计输入大小达到指定值时创建新块</li>
+     * </ul>
+     *
+     * @param size 固实大小（单位：字节）
      */
-    public void setSolidSize(long l) {solidSize = l;}
-    public long getSolidSize() {return solidSize;}
+    public final void setSolidSize(long size) {solidSize = size;}
+    public final long getSolidSize() {return solidSize;}
 
-    // do not remove!
-    public SimpleList<QZEntry> getFiles() { return files; }
-    public SimpleList<QZEntry> getEmptyFiles() { return emptyFiles; }
+    // do not modify those list!
+    public final SimpleList<QZEntry> getFiles() { return files; }
+    public final SimpleList<QZEntry> getEmptyFiles() { return emptyFiles; }
 
+    /**
+     * 复制已有归档条目到当前写入流
+     *
+     * @param owner 源归档文件对象
+     * @param entry 要复制的条目
+     * @throws IOException 当源块包含多个文件 (防止误操作, 如果确需复制多个文件, 使用{@link #copy(QZArchive, WordBlock) 显式重载})
+     */
     public final void copy(ArchiveFile owner, ArchiveEntry entry) throws IOException {
         QZArchive archive = (QZArchive) owner;
         QZEntry entry1 = (QZEntry) entry;
@@ -177,9 +202,9 @@ public abstract class QZWriter extends OutputStream implements ArchiveWriter {
         if (b == null) throw new NullPointerException("b");
         if (finished) throw new IOException("Stream closed");
 
-        closeWordBlock();
+        flush();
 
-        s.put(archive.r, b.offset, b.size());
+        source.put(archive.r, b.offset, b.size());
 
         blocks.add(b);
         countBlockFlag(b);
@@ -245,7 +270,7 @@ public abstract class QZWriter extends OutputStream implements ArchiveWriter {
         entry.flag |= QZEntry.CRC;
         crc32 = CRC32s.INIT_CRC;
 
-        if (solidSize != 0 && b.uSize >= solidSize) closeWordBlock0();
+        if (solidSize != 0 && b.uSize >= solidSize) finishWordBlock();
 
         entryUSize = 0;
     }
@@ -269,9 +294,10 @@ public abstract class QZWriter extends OutputStream implements ArchiveWriter {
     }
 
     /**
-     * 修改了QZEntry的属性之后,通知已修改
+     * 重新计数所有标志<p>
+     * 外部代码修改QZEntry的属性后调用
      */
-    public final void countFlags() {
+    public final void recountFlags() {
         Arrays.fill(flagSum, 0);
 
         for (WordBlock b : blocks) countBlockFlag(b);
@@ -283,11 +309,14 @@ public abstract class QZWriter extends OutputStream implements ArchiveWriter {
         }
     }
 
-    public final void closeWordBlock() throws IOException {
+    /**
+     * 结束当前Entry和字块
+     */
+    public final void flush() throws IOException {
         closeEntry();
-        closeWordBlock0();
+        finishWordBlock();
     }
-    void closeWordBlock0() throws IOException {
+    void finishWordBlock() throws IOException {
         if (out == null) return;
 
         WordBlock b = blocks.getLast();
@@ -313,13 +342,13 @@ public abstract class QZWriter extends OutputStream implements ArchiveWriter {
             wb.complexCoder = complexCoder;
             wb.extraSizes = new long[cOffsets];
             wb.outSizes = new long[cOutSizes];
-            return this.out = complexCoder.getOutputStream(wb, s);
+            return this.out = complexCoder.getOutputStream(wb, source);
         }
 
         if (coders.length > 1)
             wb.outSizes = new long[coders.length-1];
 
-        OutputStream out = s;
+        OutputStream out = source;
         for (int i = 0; i < wb.coder.length; i++) {
             out = wb.new Counter(out, i-1);
             out = wb.coder[i].encode(out);
@@ -330,18 +359,18 @@ public abstract class QZWriter extends OutputStream implements ArchiveWriter {
     @Override
     public void finish() throws IOException {
         if (finished) return;
-        closeWordBlock();
+        flush();
         finished = true;
     }
 
     @Override
-    public void close() throws IOException {
+    public final void close() throws IOException {
         if ((flag&IGNORE_CLOSE) != 0) return;
 
         try {
             finish();
         } finally {
-            s.close();
+            source.close();
         }
     }
 }

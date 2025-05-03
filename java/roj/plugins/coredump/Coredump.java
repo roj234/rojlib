@@ -7,7 +7,7 @@ import roj.asm.insn.AttrCode;
 import roj.asm.insn.Label;
 import roj.asm.type.Type;
 import roj.asm.type.TypeHelper;
-import roj.asmx.NodeTransformer;
+import roj.asmx.ConstantPoolHooks;
 import roj.asmx.TransformException;
 import roj.asmx.launcher.Autoload;
 import roj.asmx.launcher.DefaultTweaker;
@@ -20,46 +20,46 @@ import static roj.asm.Opcodes.*;
 
 /**
  * @author Roj234
- * @since 2024/6/30 0030 19:15
+ * @since 2024/6/30 19:15
  */
 @Autoload(Autoload.Target.INIT)
-public class Coredump implements NodeTransformer<MethodNode> {
+public class Coredump implements ConstantPoolHooks.Hook<MethodNode> {
 	static {
 		DefaultTweaker.CONDITIONAL.annotatedMethod("roj/plugins/coredump/Exceptional", new Coredump());
 	}
 
 	@Override
-	public boolean transform(ClassNode cls, MethodNode it) throws TransformException {
-		var c = cls.newMethod(it.modifier, it.name(), it.rawDesc());
+	public boolean transform(ClassNode context, MethodNode node) throws TransformException {
+		var c = context.newMethod(node.modifier, node.name(), node.rawDesc());
 
 		int base;
-		int size = TypeHelper.paramSize(it.rawDesc());
-		if ((it.modifier&ACC_STATIC) == 0) {
+		int size = TypeHelper.paramSize(node.rawDesc());
+		if ((node.modifier&ACC_STATIC) == 0) {
 			size++;
 			base = 1;
 			c.insn(ALOAD_0);
 		} else {
 			base = 0;
 		}
-		if (!it.rawDesc().endsWith(")V") && size == 0) {
+		if (!node.rawDesc().endsWith(")V") && size == 0) {
 			size = 1;
 		}
 		c.visitSize(size, size);
 		c.computeFrames(AttrCode.COMPUTE_FRAMES);
 
-		var pars = it.parameters();
+		var pars = node.parameters();
 		for (int i = 0; i < pars.size(); i++) {
 			Type type = pars.get(i);
 			c.varLoad(type, base);
 			base += type.length();
 		}
 
-		it.name(it.name()+"$exceptional");
-		it.modifier = (char) (it.modifier & ~(ACC_PROTECTED|ACC_PUBLIC) | ACC_PRIVATE);
+		node.name(node.name()+"$exceptional");
+		node.modifier = (char) (node.modifier & ~(ACC_PROTECTED|ACC_PUBLIC) | ACC_PRIVATE);
 
 		Label start = c.label();
-		c.invoke((it.modifier&ACC_STATIC) == 0 ? INVOKESPECIAL : INVOKESTATIC, it.owner, it.name(), it.rawDesc());
-		c.insn(it.returnType().shiftedOpcode(IRETURN));
+		c.invoke((node.modifier&ACC_STATIC) == 0 ? INVOKESPECIAL : INVOKESTATIC, node.owner, node.name(), node.rawDesc());
+		c.insn(node.returnType().shiftedOpcode(IRETURN));
 		Label end = c.label();
 
 		c.visitExceptions();

@@ -14,7 +14,7 @@ import java.util.List;
 
 /**
  * @author Roj234
- * @since 2023/12/25 0025 15:48
+ * @since 2023/12/25 15:48
  */
 public class PluginDescriptor {
 	public enum Role {

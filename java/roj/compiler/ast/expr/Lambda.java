@@ -1,8 +1,8 @@
 package roj.compiler.ast.expr;
 
 import org.jetbrains.annotations.Nullable;
+import roj.asm.ClassDefinition;
 import roj.asm.ClassNode;
-import roj.asm.IClass;
 import roj.asm.MethodNode;
 import roj.asm.Opcodes;
 import roj.asm.cp.CstClass;
@@ -30,7 +30,7 @@ import java.util.List;
 /**
  * Lambda要么是方法参数，要么是Assign的目标
  * @author Roj234
- * @since 2024/1/23 0023 11:32
+ * @since 2024/1/23 11:32
  */
 public final class Lambda extends Expr {
 	public static final int ARGC_UNKNOWN = 0x10000;
@@ -85,7 +85,7 @@ public final class Lambda extends Expr {
 			if (methodRef instanceof MemberAccess d) {
 				methodRef = null;
 				Expr next = d.resolveEx(ctx, n1 -> {
-					var n = (IClass) n1;
+					var n = (ClassDefinition) n1;
 					methodRef = constant(Type.klass(n.name()), new CstClass(n.name()));
 				}, null);
 				if (methodRef == null) methodRef = next;

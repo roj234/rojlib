@@ -11,7 +11,7 @@ import java.util.Objects;
 
 /**
  * @author Roj234
- * @since 2023/11/20 0020 15:03
+ * @since 2023/11/20 15:03
  */
 public abstract class CommandNode {
 	private final List<CommandNode> children = new SimpleList<>();
@@ -221,7 +221,7 @@ public abstract class CommandNode {
 				completions.add(tip);
 			}
 
-			var paramDesc = new AnsiString("参数名称：<"+name+">，类型："+argument.type());
+			var paramDesc = new Text("参数名称：<"+name+">，类型："+argument.type());
 			for (; size < completions.size(); size++) {
 				Completion completion = completions.get(size);
 				if (completion.description == null)

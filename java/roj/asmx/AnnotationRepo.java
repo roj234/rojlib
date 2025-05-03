@@ -30,7 +30,7 @@ import static roj.text.Interner.intern;
 
 /**
  * @author Roj234
- * @since 2023/12/26 0026 12:47
+ * @since 2023/12/26 12:47
  */
 public final class AnnotationRepo {
 	private final MyHashMap<String, Set<AnnotatedElement>> annotations = new MyHashMap<>();
@@ -58,9 +58,9 @@ public final class AnnotationRepo {
 		add1(data, data.fields, klass);
 		add1(data, data.methods, klass);
 	}
-	private void add1(ClassNode data, List<? extends CNode> nodes, Type klass) {
+	private void add1(ClassNode data, List<? extends MemberNode> nodes, Type klass) {
 		for (int i = nodes.size()-1; i >= 0; i--) {
-			CNode node = nodes.get(i);
+			MemberNode node = nodes.get(i);
 			Node subNode = new Node(klass, node);
 			add2(data.cp, node, subNode);
 
@@ -91,7 +91,7 @@ public final class AnnotationRepo {
 		if (r.readInt() != 0xcafebabe) throw new IllegalArgumentException("Illegal header");
 		r.rIndex += 4;
 
-		var cp = AsmShared.local().constPool();
+		var cp = AsmCache.getInstance().constPool();
 		cp.read(r, ConstantPool.BYTE_STRING);
 
 		var acc = r.readChar();
@@ -158,7 +158,7 @@ public final class AnnotationRepo {
 				r.rIndex += length;
 			}
 		}
-		AsmShared.local().constPool(cp);
+		AsmCache.getInstance().constPool(cp);
 	}
 
 	public Set<AnnotatedElement> annotatedBy(String type) { return annotations.getOrDefault(type, Collections.emptySet()); }
@@ -171,7 +171,7 @@ public final class AnnotationRepo {
 		annotations.put(null, 0);
 		elements.put(null, 0);
 
-		var cp = AsmShared.local().constPool();
+		var cp = AsmCache.getInstance().constPool();
 		int start = buf.wIndex();
 
 		for (var value : this.annotations.values()) {
@@ -206,7 +206,7 @@ public final class AnnotationRepo {
 		buf.putAscii("ANNOREP").put(0).putShort(annotations.size()).putShort(elements.size()).putShort(this.annotations.size());
 		cp.write(buf, false);
 		buf.wIndex(widx);
-		AsmShared.local().constPool(cp);
+		AsmCache.getInstance().constPool(cp);
 	}
 	private static void writeAcc(DynByteBuf buf, Type parent, ConstantPool cp, ToIntMap<Object> elements) {
 		var owner = parent.owner;
@@ -238,7 +238,7 @@ public final class AnnotationRepo {
 		int repoSize = buf.readShort();
 		this.annotations.ensureCapacity(repoSize);
 
-		var cp = AsmShared.local().constPool();
+		var cp = AsmCache.getInstance().constPool();
 		cp.read(buf, ConstantPool.CHAR_STRING);
 
 		while (buf.isReadable()) {
@@ -265,7 +265,7 @@ public final class AnnotationRepo {
 			}
 		}
 
-		AsmShared.local().constPool(cp);
+		AsmCache.getInstance().constPool(cp);
 		return true;
 	}
 	private int readAcc(DynByteBuf r, ConstantPool cp, AnnotatedElement[] elements, int elementCount) {

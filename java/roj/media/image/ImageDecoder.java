@@ -2,13 +2,14 @@ package roj.media.image;
 
 import roj.io.MyDataInput;
 
-import java.awt.color.*;
-import java.awt.image.*;
+import java.awt.color.ColorSpace;
+import java.awt.image.BufferedImage;
+import java.awt.image.ColorModel;
 import java.io.IOException;
 
 /**
  * @author Roj234
- * @since 2024/5/19 0019 17:36
+ * @since 2024/5/19 17:36
  */
 public interface ImageDecoder {
 	boolean init(MyDataInput in) throws IOException;

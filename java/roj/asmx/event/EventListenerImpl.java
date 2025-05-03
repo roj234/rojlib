@@ -1,7 +1,7 @@
 package roj.asmx.event;
 
 import roj.asm.ClassNode;
-import roj.asm.RawNode;
+import roj.asm.Member;
 import roj.asm.attr.Attribute;
 import roj.asm.insn.AbstractCodeWriter;
 import roj.asm.insn.CodeWriter;
@@ -22,7 +22,7 @@ import static roj.asm.Opcodes.*;
 
 /**
  * @author Roj234
- * @since 2024/3/21 0021 11:56
+ * @since 2024/3/21 11:56
  */
 final class EventListenerImpl implements EventListener {
 	private final Object handler;
@@ -39,7 +39,7 @@ final class EventListenerImpl implements EventListener {
 	@Override
 	public boolean isFor(Object handler, String methodName, String methodDesc) {
 		if (this.handler == handler && infos.size() == 1) {
-			RawNode mn = infos.get(0).mn;
+			Member mn = infos.get(0).mn;
 			return mn.rawDesc().equals(methodDesc) && mn.name().equals(methodName);
 		}
 		return false;
@@ -128,13 +128,13 @@ final class EventListenerImpl implements EventListener {
 			cw.insn(ASTORE_0);
 
 			for (int i = 0; i < infos.size(); i++) {
-				RawNode mn = infos.get(i).mn;
+				Member mn = infos.get(i).mn;
 
 				cw.insn(ALOAD_0);
 				cw.ldc(i);
 				cw.insn(AALOAD);
 				// always true
-				cw.clazz(CHECKCAST, mn.ownerClass());
+				cw.clazz(CHECKCAST, mn.owner());
 				callEvent(c, cw, mn, 0);
 			}
 			cw.insn(RETURN);
@@ -177,8 +177,8 @@ final class EventListenerImpl implements EventListener {
 		cw.finish();
 		return (ASM) ClassDefiner.make(c);
 	}
-	private static int callEvent(ClassNode out, CodeWriter c, RawNode listener, int fid) {
-		String clz = listener.ownerClass();
+	private static int callEvent(ClassNode out, CodeWriter c, Member listener, int fid) {
+		String clz = listener.owner();
 		if ((listener.modifier()&ACC_STATIC) != 0) {
 			c.insn(ALOAD_1);
 			c.invokeS(clz, listener.name(), listener.rawDesc());

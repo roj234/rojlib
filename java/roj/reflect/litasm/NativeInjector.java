@@ -6,7 +6,7 @@ import java.lang.reflect.Method;
 
 /**
  * @author Roj234
- * @since 2024/10/12 0012 17:11
+ * @since 2024/10/12 17:11
  */
 final class NativeInjector implements CodeInjector {
 	@Override public void injectCode(Method method, byte[] asm, int len) throws Exception {

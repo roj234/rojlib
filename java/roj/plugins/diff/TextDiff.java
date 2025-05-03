@@ -1,98 +1,194 @@
 package roj.plugins.diff;
 
-import roj.collect.SimpleList;
-import roj.config.Tokenizer;
-import roj.text.CharList;
-import roj.text.TextUtil;
-import roj.util.ByteList;
+import org.intellij.lang.annotations.MagicConstant;
+import roj.config.serial.CVisitor;
 
-import java.io.IOException;
-import java.nio.charset.Charset;
+import java.util.ArrayList;
 import java.util.List;
 
 /**
- * TODO wip
+ * 文本差异对象
  * @author Roj234
- * @since 2024/3/5 0005 2:49
+ * @since 2024/3/5 2:49
  */
 public class TextDiff {
-	public static final byte SAME = 0, CHANGE = 1, INSERT = 2, DELETE = 3;
-	public final byte type;
-	public final int leftOff, rightOff, len;
-	public int advance;
+	// 定义补丁类型
+	interface Patch { }
 
-	public static TextDiff link(TextDiff a, TextDiff next) {
-		a.next = next;
-		next.prev = a;
-		return next;
+	static class Copy implements Patch {
+		final int start, count;
+
+		Copy(int start, int count) {
+			this.start = start;
+			this.count = count;
+		}
+
+		@Override
+		public String toString() {return "copy { "+start+","+count+" }";}
+	}
+	static class Append implements Patch {
+		final char[] data;
+		Append(char[] data) {this.data = data;}
+		@Override
+		public String toString() {return "append { "+data+" }";}
 	}
 
-	private TextDiff(byte type, int leftOff, int rightOff, int len) {
+	// 定义差异类型
+	public static final byte EQUAL = 0, REPLACE = 1, INSERT = 2, DELETE = 3;
+	public static final String[] TYPES = {"EQUAL","REPLACE","INSERT","DELETE"};
+
+	final byte type;
+	final int[] ranges;
+
+	public TextDiff(@MagicConstant(intValues = {EQUAL, REPLACE, INSERT, DELETE}) byte type, int originalStart, int originalEnd, int modifiedStart, int modifiedEnd) {
 		this.type = type;
-		this.leftOff = leftOff;
-		this.rightOff = rightOff;
-		this.len = len;
+		this.ranges = new int[]{ originalStart, originalEnd, modifiedStart, modifiedEnd };
 	}
 
-	public static TextDiff same(int leftOff, int rightOff, int len) { return new TextDiff(SAME, leftOff, rightOff, len); }
-	public static TextDiff change(int leftOff, int rightOff, int len) { return new TextDiff(CHANGE, leftOff, rightOff, len); }
-	public static TextDiff insert(int rightOff, int len) { return new TextDiff(INSERT, -1, rightOff, len); }
-	public static TextDiff delete(int leftOff, int len) { return new TextDiff(DELETE, leftOff, -1, len); }
+	@MagicConstant(intValues = {EQUAL, REPLACE, INSERT, DELETE})
+	public byte getType() {return type;}
+	public int[] getRanges() {return ranges;}
 
-	TextDiff prev, next;
-
-	public List<TextDiff> getDiff(byte[] right) {
-		TextDiff head = TextDiff.insert(0,0), tail = head;
-
-
-
-		return toRealDiff(right, head.next);
+	public void accept(CVisitor cv) {
+		cv.valueMap(3);
+		cv.key("type");
+		cv.value(TYPES[type]);
+		cv.key("originalRange");
+		cv.valueList(2);
+		cv.value(ranges[0]);
+		cv.value(ranges[1]);
+		cv.pop();
+		cv.key("modifiedRange");
+		cv.valueList(2);
+		cv.value(ranges[2]);
+		cv.value(ranges[3]);
+		cv.pop();
 	}
-	private List<TextDiff> toRealDiff(byte[] right, TextDiff in) {
-		// todo merge nearby diff and insert SAME diff
-		SimpleList<TextDiff> list = new SimpleList<>();
 
-		return list;
+	public void acceptSchemaless(CVisitor cv) {
+		cv.valueMap(3);
+		cv.intKey(0);
+		cv.value(TYPES[type]);
+		cv.intKey(1);
+		cv.valueList(2);
+		cv.value(ranges[0]);
+		cv.value(ranges[1]);
+		cv.pop();
+		cv.intKey(2);
+		cv.valueList(2);
+		cv.value(ranges[2]);
+		cv.value(ranges[3]);
+		cv.pop();
 	}
-	public void toMarkdown(byte[] left, byte[] right, List<TextDiff> diffs, CharList sb) throws IOException {
-		Charset cs = Charset.forName("GB18030");
 
-		System.out.println(diffs.size());
-		long l = 0;
-		for (TextDiff diff : diffs) {
-			l += diff.len;
-		}
-		System.out.println(TextUtil.scaledNumber(l) + "B");
+	@Override
+	public String toString() {
+		return type+"{originalRange=["+ranges[0]+", "+ranges[1]+"], modifiedRange=["+ranges[2]+", "+ranges[3]+"]}";
+	}
 
-		ByteList buf1 = new ByteList(), buf2 = new ByteList();
-		int type = TextDiff.SAME;
-		for (TextDiff diff : diffs) {
-			if (diff.type != type) {
-				finishBlock(sb, buf1, buf2, type, cs);
-				type = diff.type;
+	public static void main(String[] args) {
+		var original = "快速棕毛狐狸了懒狗";
+		//[
+		//	append { "敏捷的" },
+		//	copy { 2, 4 }, // "棕毛狐狸"
+		//	append { "跃过" },
+		//	copy { 6, 2 } // "了懒"
+		//]
+		System.out.println(generateDiff(original.toCharArray(), new Patch[]{
+				new Append("敏捷的".toCharArray()),
+				new Copy(2, 4),
+				new Append("跃过".toCharArray()),
+				new Copy(6, 2)
+		}));
+	}
+
+	public static List<TextDiff> generateDiff(char[] original, Patch[] patches) {
+		List<TextDiff> diffs = new ArrayList<>();
+		int origPos = 0, modPos = 0;
+		int pendingInsertStart = -1, pendingInsertEnd = -1;
+
+		for (Patch patch : patches) {
+			if (patch instanceof Append append) {
+				if (pendingInsertStart == -1) {
+					pendingInsertStart = modPos;
+					pendingInsertEnd = modPos + append.data.length;
+				} else {
+					pendingInsertEnd += append.data.length;
+				}
+				modPos += append.data.length;
+			} else if (patch instanceof Copy copy) {
+				// 处理挂起的插入
+				if (pendingInsertStart != -1) {
+					if (origPos < copy.start) {
+						// 替换
+						diffs.add(new TextDiff(
+								REPLACE,
+								origPos, copy.start,
+								pendingInsertStart, pendingInsertEnd
+						));
+						origPos = copy.start;
+					} else {
+						// 插入
+						diffs.add(new TextDiff(
+								INSERT,
+								origPos, origPos,
+								pendingInsertStart, pendingInsertEnd
+						));
+					}
+					pendingInsertStart = -1;
+					pendingInsertEnd = -1;
+				}
+				// 处理origPos < copy.start的情况（删除）
+				if (origPos < copy.start) {
+					diffs.add(new TextDiff(
+							DELETE,
+							origPos, copy.start,
+							modPos, modPos
+					));
+					origPos = copy.start;
+				}
+				// 处理copy操作
+				int origEnd = copy.start + copy.count;
+				int modEnd = modPos + copy.count;
+				diffs.add(new TextDiff(
+						EQUAL,
+						copy.start, origEnd,
+						modPos, modEnd
+				));
+				origPos = origEnd;
+				modPos = modEnd;
 			}
+		}
 
-			switch (diff.type) {
-				default: buf1.put(left, diff.leftOff, diff.len); break;
-				case TextDiff.CHANGE:
-					buf1.put(left, diff.leftOff, diff.len);
-					buf2.put(right, diff.rightOff, diff.len);
-					break;
-				case TextDiff.INSERT: buf1.put(right, diff.rightOff, diff.len); break;
+		// 处理剩余的挂起插入
+		if (pendingInsertStart != -1) {
+			if (origPos < original.length) {
+				// 替换
+				diffs.add(new TextDiff(
+						REPLACE,
+						origPos, original.length,
+						pendingInsertStart, pendingInsertEnd
+				));
+				origPos = original.length;
+			} else {
+				// 插入
+				diffs.add(new TextDiff(
+						INSERT,
+						origPos, origPos,
+						pendingInsertStart, pendingInsertEnd
+				));
 			}
 		}
 
-		finishBlock(sb, buf1, buf2, type, cs);
-	}
-	private static void finishBlock(CharList sb, ByteList buf1, ByteList buf2, int type, Charset cs) throws IOException {
-		switch (type) {
-			default: case TextDiff.SAME: sb.append(new String(buf1.list, 0, buf1.length(), cs)); break;
-			case TextDiff.CHANGE: sb.append("<i title=\"").append(Tokenizer.addSlashes(new String(buf1.list, 0, buf1.length(), cs))).append("\">")
-									.append(new String(buf2.list, 0, buf2.length(), cs)).append("</i>"); break;
-			case TextDiff.INSERT: sb.append("<b>").append(new String(buf1.list, 0, buf1.length(), cs)).append("</b>"); break;
-			case TextDiff.DELETE: sb.append("<del>").append(new String(buf1.list, 0, buf1.length(), cs)).append("</del>"); break;
+		// 处理剩余的original部分
+		if (origPos < original.length) {
+			diffs.add(new TextDiff(
+					DELETE,
+					origPos, original.length,
+					modPos, modPos
+			));
 		}
-		buf1.clear();
-		buf2.clear();
+
+		return diffs;
 	}
 }

@@ -4,8 +4,8 @@ import roj.archive.zip.ZEntry;
 import roj.archive.zip.ZipFile;
 import roj.archive.zip.ZipFileWriter;
 import roj.asm.ClassNode;
+import roj.asm.ClassView;
 import roj.asm.Opcodes;
-import roj.asm.Parser;
 import roj.asm.attr.Attribute;
 import roj.asm.attr.ModuleAttribute;
 import roj.collect.MyHashMap;
@@ -31,7 +31,7 @@ import java.util.function.Function;
 
 /**
  * @author Roj234
- * @since 2024/10/10 0010 1:01
+ * @since 2024/10/10 1:01
  */
 final class LibrarySymbolCache extends LibraryClassLoader {
 	@Java22Workaround
@@ -84,7 +84,7 @@ final class LibrarySymbolCache extends LibraryClassLoader {
 					if (resource == null) return null;
 
 					var set = new MyHashSet<String>();
-					var data = Parser.parseConstants(resource);
+					var data = ClassNode.parseSkeleton(resource);
 					ModuleAttribute module = data.getAttribute(data.cp, Attribute.Module);
 					for (ModuleAttribute.Export export : module.exports) {
 						if (export.to.isEmpty()) {
@@ -113,7 +113,7 @@ final class LibrarySymbolCache extends LibraryClassLoader {
 					}
 
 					if (!className.contains("$")) {
-						var in = Parser.parseAccess(DynByteBuf.wrap(j9.getResource(ir, path)), false);
+						var in = ClassView.parse(DynByteBuf.wrap(j9.getResource(ir, path)), false);
 						if ((in.modifier & Opcodes.ACC_PUBLIC) == 0) continue;
 
 						cache.classNamesPublic.add(className);

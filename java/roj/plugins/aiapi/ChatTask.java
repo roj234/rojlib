@@ -15,7 +15,7 @@ import java.util.List;
 
 /**
  * @author Roj234
- * @since 2025/3/12 0012 7:24
+ * @since 2025/3/12 7:24
  */
 public class ChatTask {
 	public transient URI endpointUrl = URI.create("http://127.0.0.1:5001/v1/chat/completions");

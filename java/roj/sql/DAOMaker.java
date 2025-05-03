@@ -1,7 +1,6 @@
 package roj.sql;
 
 import roj.asm.ClassNode;
-import roj.asm.Parser;
 import roj.asm.annotation.Annotation;
 import roj.asm.attr.Attribute;
 import roj.asm.cp.CstClass;
@@ -20,9 +19,11 @@ import roj.config.serial.CVisitor;
 import roj.reflect.ClassDefiner;
 import roj.reflect.VirtualReference;
 import roj.text.CharList;
-import roj.util.Helpers;
 
-import java.sql.*;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.ResultSetMetaData;
+import java.sql.SQLException;
 import java.util.List;
 import java.util.Map;
 import java.util.WeakHashMap;
@@ -30,50 +31,26 @@ import java.util.WeakHashMap;
 import static roj.asm.Opcodes.*;
 
 /**
- * @author Roj234
- * @since 2024/9/2 0002 3:03
+ * @author Roj234-N
+ * @since 2025/5/8 8:50
  */
-public final class DAOMaker {
-	public interface DAO<T> {
-		DAO<T> init(Connection connector);
-		@SuppressWarnings("unchecked") default T unwrap() {return (T)this;}
-	}
+final class DAOMaker {
+	private static final MyHashSet<String> ITERABLE_TYPES = new MyHashSet<>("java/lang/Iterable", "java/util/Collection", "java/util/List", "java/util/Set");
+	private static final MyBitSet VARIABLE_LEND = MyBitSet.from(")`'\" \t\r\n");
 
-	private static final MyHashSet<String> iterable = new MyHashSet<>("java/lang/Iterable", "java/util/Collection", "java/util/List", "java/util/Set");
-	private static final VirtualReference<Map<Class<?>, Object>> ref = new VirtualReference<>();
-	@SuppressWarnings("unchecked")
-	public static <T> DAO<T> makeDAO(Class<T> dao) {
-		var map = ref.computeIfAbsent(dao.getClassLoader(), Helpers.fnMyHashMap());
-
-		var impl = map.get(dao);
-		if (impl == null) {
-			synchronized (map) {
-				if ((impl = map.get(dao)) == null) {
-					try {
-						impl = make(dao);
-					} catch (ReflectiveOperationException e) {
-						Helpers.athrow(e);
-					}
-					map.put(dao, impl);
-				}
-			}
-		}
-
-		return (DAO<T>) impl;
-	}
-
-	private static final MyBitSet VAR_ID_END = MyBitSet.from(")`'\" \t\r\n");
-	private static DAO<?> make(Class<?> daoItf) throws ReflectiveOperationException {
-		var ref = Parser.parseConstants(daoItf);
+	static final VirtualReference<Map<Class<?>, Object>> IMPLEMENTATION_CACHE = new VirtualReference<>();
+	static DAO<?> make(Class<?> daoItf) throws ReflectiveOperationException {
+		if (!daoItf.isInterface()) throw new IllegalArgumentException(daoItf+"不是接口");
+		var ref = ClassNode.fromType(daoItf);
 		if (ref == null) throw new IllegalArgumentException("找不到"+daoItf+"的代码");
 
 		var impl = new ClassNode();
 		impl.name(ref.name()+"$Impl");
-		impl.addInterface("roj/sql/DAOMaker$DAO");
+		impl.addInterface("roj/sql/DAO");
 		impl.addInterface(daoItf.getName().replace('.', '/'));
 		ClassDefiner.premake(impl);
 
-		var init = impl.newMethod(ACC_PUBLIC, "init", "(Ljava/sql/Connection;)Lroj/sql/DAOMaker$DAO;");
+		var init = impl.newMethod(ACC_PUBLIC, "newInstance", "(Ljava/sql/Connection;)Ljava/lang/Object;");
 		init.visitSize(3, 2);
 		init.newObject(impl.name());
 		init.insn(ASTORE_0);
@@ -92,7 +69,7 @@ public final class DAOMaker {
 				int j = sql.indexOf(":", i);
 				if (j < 0) break;
 
-				int end = sql.indexOf(VAR_ID_END, j+1);
+				int end = sql.indexOf(VARIABLE_LEND, j+1);
 				if (end < 0) end = sql.length();
 
 				variables.add(sql.substring(j+1, end));
@@ -127,7 +104,7 @@ public final class DAOMaker {
 			boolean isBatch;
 			var extraType = method.getAttribute(ref.cp, Attribute.SIGNATURE);
 
-			if (isBatch = (parTypes.size() == 1 && iterable.contains(parTypes.get(0).owner))) {
+			if (isBatch = (parTypes.size() == 1 && ITERABLE_TYPES.contains(parTypes.get(0).owner))) {
 				if (isSelectStatement) throw new IllegalArgumentException(method+"的参数不能使用select语句");
 				if (extraType == null) throw new IllegalArgumentException(method+"缺少泛型签名,无法确定List<T>的类型");
 
@@ -229,7 +206,7 @@ public final class DAOMaker {
 					cw.insn(ALOAD_0);
 					cw.ldc(j+1);
 
-					int parId = parIds.getInt(nameFirst);
+					int parId = parIds.getOrDefault(nameFirst, 0);
 					if (parId == 0) throw new IllegalStateException("无法找到参数:"+nameFirst+" (傻逼javac), 已知"+parNames);
 
 					Type parType = parTypes.get(parId&0xFFFF);
@@ -380,10 +357,10 @@ public final class DAOMaker {
 		return null;
 	}
 	private static SerializerFactory getSerializerFactory(Class<?> type) {
-        if (type.getClassLoader() == null || type.getClassLoader() == DAOMaker.class.getClassLoader()) return SerializerFactory.SAFE;
+		if (type.getClassLoader() == null || type.getClassLoader() == DAOMaker.class.getClassLoader()) return SerializerFactory.SAFE;
 
-		var map = ref.getEntry(type.getClassLoader()).getValue();
-        assert map != null;
+		var map = IMPLEMENTATION_CACHE.getEntry(type.getClassLoader()).getValue();
+		assert map != null;
 
 		Object v = map.get(null);
 		if (v == null) {
@@ -394,7 +371,7 @@ public final class DAOMaker {
 			}
 		}
 		return (SerializerFactory) v;
-    }
+	}
 
 	private interface A {void adapt(CVisitor visitor, ResultSet set) throws SQLException;}
 	private static List<Object> createAdapter(Class<?> klass, ResultSetMetaData meta) throws Exception {

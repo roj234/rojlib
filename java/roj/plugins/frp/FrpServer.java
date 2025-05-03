@@ -24,7 +24,7 @@ import java.util.function.Consumer;
 
 /**
  * @author Roj234
- * @since 2024/9/15 0015 1:49
+ * @since 2024/9/15 1:49
  */
 public class FrpServer extends MSSContext implements Consumer<MyChannel> {
 	static final Logger LOGGER = Logger.getLogger("FRP/Server");

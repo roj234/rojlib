@@ -1,6 +1,6 @@
 package roj.plugins.ci;
 
-import roj.asm.util.ClassLike;
+import roj.asmx.ClassResource;
 import roj.collect.SimpleList;
 import roj.compiler.context.CompileUnit;
 import roj.compiler.context.JavaCompileUnit;
@@ -11,8 +11,8 @@ import roj.compiler.plugin.GlobalContextApi;
 import roj.config.ParseException;
 import roj.io.IOUtil;
 import roj.text.CharList;
-import roj.ui.AnsiString;
 import roj.ui.Terminal;
+import roj.ui.Text;
 
 import java.io.File;
 import java.io.IOException;
@@ -39,7 +39,7 @@ public final class LCompiler extends TextDiagnosticReporter implements Compiler 
 
 	@Override public Factory factory() {return factory;}
 
-	public synchronized List<? extends ClassLike> compile(List<String> options, List<File> sources, boolean showDiagnosticId) {
+	public synchronized List<? extends ClassResource> compile(List<String> options, List<File> sources, boolean showDiagnosticId) {
 		if (sources.isEmpty()) return Collections.emptyList();
 
 		total = err = warn = 0;
@@ -94,7 +94,7 @@ public final class LCompiler extends TextDiagnosticReporter implements Compiler 
 		boolean isOK = !ctx.hasError();
 
 		super.printSum();
-		System.out.println(new AnsiString(buf).bgColor16(isOK ? Terminal.BLUE : Terminal.RED).color16(Terminal.WHITE + Terminal.HIGHLIGHT).toAnsiString());
+		System.out.println(new Text(buf).bgColor16(isOK ? Terminal.BLUE : Terminal.RED).color16(Terminal.WHITE + Terminal.HIGHLIGHT).toAnsiString());
 		buf._free();
 		return isOK ? files : null;
 	}

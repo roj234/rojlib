@@ -3,12 +3,8 @@ package roj.asm.insn;
 import org.intellij.lang.annotations.MagicConstant;
 import org.jetbrains.annotations.ApiStatus;
 import org.jetbrains.annotations.Range;
-import roj.asm.IClass;
-import roj.asm.MethodNode;
-import roj.asm.Opcodes;
-import roj.asm.RawNode;
+import roj.asm.*;
 import roj.asm.cp.*;
-import roj.asm.type.Desc;
 import roj.asm.type.Type;
 import roj.collect.*;
 import roj.util.DynByteBuf;
@@ -24,7 +20,7 @@ import static roj.asm.type.Type.*;
 
 /**
  * @author Roj234
- * @since 2023/10/2 0002 0:57
+ * @since 2023/10/2 0:57
  */
 public abstract class AbstractCodeWriter extends CodeVisitor {
 	protected DynByteBuf codeOb;
@@ -43,18 +39,18 @@ public abstract class AbstractCodeWriter extends CodeVisitor {
 	protected final void multiArray(CstClass clz, int dimension) { multiArray(clz.name().str(), dimension); }
 	protected final void clazz(byte code, CstClass clz) { clazz(code, clz.name().str()); }
 	protected final void ldc(byte code, Constant c) { if (code == LDC2_W) ldc2(c); else ldc1(code, c); }
-	protected final void invokeDyn(CstDynamic dyn, int type) { invokeDyn(dyn.tableIdx, dyn.desc().name().str(), dyn.desc().getType().str(), type); }
+	protected final void invokeDyn(CstDynamic dyn, int type) { invokeDyn(dyn.tableIdx, dyn.desc().name().str(), dyn.desc().rawDesc().str(), type); }
 	protected final void invokeItf(CstRef method, short argc) {
-		CstNameAndType desc = method.desc();
-		invokeItf(method.className(), desc.name().str(), desc.getType().str());
+		CstNameAndType desc = method.nameAndType();
+		invokeItf(method.owner(), desc.name().str(), desc.rawDesc().str());
 	}
 	protected final void invoke(byte code, CstRef method) {
-		CstNameAndType desc = method.desc();
-		invoke(code, method.className(), desc.name().str(), desc.getType().str(), method.type() == Constant.INTERFACE);
+		CstNameAndType desc = method.nameAndType();
+		invoke(code, method.owner(), desc.name().str(), desc.rawDesc().str(), method.type() == Constant.INTERFACE);
 	}
 	protected final void field(byte code, CstRef field) {
-		CstNameAndType desc = field.desc();
-		field(code, field.className(), desc.name().str(), desc.getType().str());
+		CstNameAndType desc = field.nameAndType();
+		field(code, field.owner(), desc.name().str(), desc.rawDesc().str());
 	}
 	protected final void jump(byte code, int offset) { jump(code, _rel(offset)); }
 	protected final void smallNum(byte code, int value) { ldc(value); }
@@ -113,7 +109,7 @@ public abstract class AbstractCodeWriter extends CodeVisitor {
 	public final void ldc(Constant c) {
 		switch (c.type()) {
 			case Constant.DYNAMIC:
-				String dyn = ((CstDynamic) c).desc().getType().str();
+				String dyn = ((CstDynamic) c).desc().rawDesc().str();
 				if (dyn.charAt(0) == DOUBLE || dyn.charAt(0) == LONG) {
 					ldc2(c);
 					return;
@@ -203,10 +199,10 @@ public abstract class AbstractCodeWriter extends CodeVisitor {
 		clazz(code, clz.getActualClass());
 	}
 
-	public final void invoke(@MagicConstant(intValues = {INVOKESTATIC,INVOKEVIRTUAL,INVOKESPECIAL}) byte code, Desc desc) { invoke(code, desc.owner, desc.name, desc.param); }
-	public final void invoke(@MagicConstant(intValues = {INVOKESTATIC,INVOKEVIRTUAL,INVOKESPECIAL}) byte code, MethodNode m) { invoke(code, m.ownerClass(), m.name(), m.rawDesc()); }
-	public final void invoke(@MagicConstant(intValues = {INVOKESTATIC,INVOKEVIRTUAL,INVOKESPECIAL}) byte code, IClass cz, int id) {
-		RawNode node = cz.methods().get(id);
+	public final void invoke(@MagicConstant(intValues = {INVOKESTATIC,INVOKEVIRTUAL,INVOKESPECIAL}) byte code, MemberDescriptor desc) { invoke(code, desc.owner, desc.name, desc.rawDesc); }
+	public final void invoke(@MagicConstant(intValues = {INVOKESTATIC,INVOKEVIRTUAL,INVOKESPECIAL}) byte code, MethodNode m) { invoke(code, m.owner(), m.name(), m.rawDesc()); }
+	public final void invoke(@MagicConstant(intValues = {INVOKESTATIC,INVOKEVIRTUAL,INVOKESPECIAL}) byte code, ClassDefinition cz, int id) {
+		Member node = cz.methods().get(id);
 		invoke(code, cz.name(), node.name(), node.rawDesc());
 	}
 
@@ -214,10 +210,10 @@ public abstract class AbstractCodeWriter extends CodeVisitor {
 	public final void invokeS(String owner, String name, String desc) { invoke(INVOKESTATIC, owner, name, desc); }
 	public final void invokeD(String owner, String name, String desc) { invoke(INVOKESPECIAL, owner, name, desc); }
 
-	public final void field(@MagicConstant(intValues = {GETFIELD, GETSTATIC, PUTFIELD, PUTSTATIC}) byte code, Desc desc) { field(code, desc.owner, desc.name, desc.param); }
+	public final void field(@MagicConstant(intValues = {GETFIELD, GETSTATIC, PUTFIELD, PUTSTATIC}) byte code, MemberDescriptor desc) { field(code, desc.owner, desc.name, desc.rawDesc); }
 	public final void field(@MagicConstant(intValues = {GETFIELD, GETSTATIC, PUTFIELD, PUTSTATIC}) byte code, String owner, String name, Type type) { field(code, owner, name, type.toDesc()); }
-	public final void field(@MagicConstant(intValues = {GETFIELD, GETSTATIC, PUTFIELD, PUTSTATIC}) byte code, IClass cz, int id) {
-		RawNode node = cz.fields().get(id);
+	public final void field(@MagicConstant(intValues = {GETFIELD, GETSTATIC, PUTFIELD, PUTSTATIC}) byte code, ClassDefinition cz, int id) {
+		Member node = cz.fields().get(id);
 		field(code, cz.name(), node.name(), node.rawDesc());
 	}
 	public final void field(@MagicConstant(intValues = {GETFIELD, GETSTATIC, PUTFIELD, PUTSTATIC}) byte code, String desc) {

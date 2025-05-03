@@ -19,7 +19,7 @@ import java.util.Collections;
 
 /**
  * @author Roj234
- * @since 2024/1/27 0027 2:57
+ * @since 2024/1/27 2:57
  */
 final class StringConcat extends Expr {
 	SimpleList<Expr> nodes = new SimpleList<>();

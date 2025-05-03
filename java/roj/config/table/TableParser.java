@@ -11,7 +11,7 @@ import java.nio.charset.Charset;
 
 /**
  * @author Roj234
- * @since 2024/11/8 0008 19:47
+ * @since 2024/11/8 19:47
  */
 public interface TableParser {
 	static TableParser xlsxParser() {return new XlsxParser();}

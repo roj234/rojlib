@@ -8,14 +8,13 @@ import roj.archive.zip.ZipFile;
 import roj.collect.MyHashMap;
 import roj.collect.MyHashSet;
 import roj.crypt.Base64;
+import roj.crypt.CryptoFactory;
 import roj.io.IOUtil;
 import roj.io.source.FileSource;
-import roj.net.mss.X509CertFormat;
 import roj.text.CharList;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
 
-import javax.net.ssl.X509TrustManager;
 import java.io.*;
 import java.net.URL;
 import java.security.*;
@@ -31,7 +30,7 @@ import java.util.jar.Manifest;
 
 /**
  * @author Roj234
- * @since 2024/3/22 0022 19:44
+ * @since 2024/3/22 19:44
  */
 public class JarVerifier {
 	private static final String CREATED_BY = "ImpLib/JarSigner (v1.3)";
@@ -62,8 +61,7 @@ public class JarVerifier {
 	public boolean isSignTrusted() {
 		List<X509Certificate> certs = block.getCertificates();
 		try {
-			X509TrustManager tm = X509CertFormat.getDefault();
-			tm.checkServerTrusted(certs.toArray(new X509Certificate[0]), "UNKNOWN");
+			CryptoFactory.checkCertificateValidity(certs.toArray(new X509Certificate[0]));
 			return true;
 		} catch (Exception e) {
 			return false;
@@ -435,12 +433,10 @@ public class JarVerifier {
 		append72(ob, hashAlg+"-Digest-Manifest-Main-Attributes: "+IOUtil.encodeBase64(mb.digest(md, null)));
 		ob.putAscii("\r\n");
 
-		if (!"true".equals(options.get("jarSigner:skipPerFileAttributes"))) {
-			for (String name : mb.namedAttrMap.keySet()) {
-				append72(ob, "Name: "+name);
-				append72(ob, digestKey+": "+IOUtil.encodeBase64(mb.digest(md, name)));
-				ob.putAscii("\r\n");
-			}
+		for (String name : mb.namedAttrMap.keySet()) {
+			append72(ob, "Name: "+name);
+			append72(ob, digestKey+": "+IOUtil.encodeBase64(mb.digest(md, name)));
+			ob.putAscii("\r\n");
 		}
 
 		var sfName = options.getOrDefault("jarSigner:signatureFileName", "SIGNFILE");

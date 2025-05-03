@@ -1,9 +1,9 @@
 package roj.reflect;
 
 import roj.ReferenceByGeneratedClass;
+import roj.asm.AsmCache;
+import roj.asm.ClassDefinition;
 import roj.asm.ClassNode;
-import roj.asm.IClass;
-import roj.asm.Parser;
 import roj.asm.insn.CodeWriter;
 import roj.text.logging.Logger;
 import roj.util.ByteList;
@@ -46,7 +46,7 @@ public final class ClassDefiner extends ClassLoader {
 	public static Object make(ClassNode data) {return make(data, APP_LOADER);}
 	public static Object make(ClassNode data, ClassLoader cl) {
 		try {
-			ByteList buf = Parser.toByteArrayShared(data);
+			ByteList buf = AsmCache.toByteArrayShared(data);
 			Class<?> klass = cl == null ? ReflectionUtils.defineWeakClass(buf) : defineClass(cl, null, buf);
 			return postMake(klass);
 		} catch (Throwable e) {
@@ -84,8 +84,8 @@ public final class ClassDefiner extends ClassLoader {
 	// DPS Hooked, also used by DPS Hooks
 	public static Class<?> defineClass(ClassLoader loader, String name, byte[] b, int off, int len, ProtectionDomain pd) { return def.defineClass(loader, name, b, off, len, pd); }
 
-	public static Class<?> defineGlobalClass(IClass data) {return defineClass(APP_LOADER, data);}
-	public static Class<?> defineClass(ClassLoader cl, IClass data) {return defineClass(cl, null, Parser.toByteArrayShared(data));}
+	public static Class<?> defineGlobalClass(ClassDefinition data) {return defineClass(APP_LOADER, data);}
+	public static Class<?> defineClass(ClassLoader cl, ClassDefinition data) {return defineClass(cl, null, AsmCache.toByteArrayShared(data));}
 	public static Class<?> defineClass(ClassLoader cl, String name, ByteList buf) throws ClassFormatError {
 		if (cl == null) throw new NullPointerException("classLoader cannot be null");
 		if (Debug.CLASS_DUMP) Debug.dump("define", buf);

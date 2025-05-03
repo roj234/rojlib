@@ -6,7 +6,7 @@ import roj.config.serial.CVisitor;
 
 /**
  * @author Roj234
- * @since 2024/3/26 0026 0:09
+ * @since 2024/3/26 0:09
  */
 final class ObjectPoolWrapper extends Adapter {
 	static final Adapter PrevObjectId = new Adapter() {

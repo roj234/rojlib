@@ -10,7 +10,7 @@ import static roj.reflect.Unaligned.U;
 /**
  * 这是全新的BM字符串匹配实现
  * @author Roj234
- * @since 2023/1/24 0024 4:02
+ * @since 2023/1/24 4:02
  */
 public class FastMatcher {
 	private byte[] pattern;

@@ -8,7 +8,7 @@ import roj.compiler.context.LocalContext;
 
 /**
  * @author Roj234
- * @since 2024/1/28 0028 16:27
+ * @since 2024/1/28 16:27
  */
 public final class LocalVariable extends LeftValue {
 	Variable v;

@@ -11,19 +11,19 @@ import static roj.ui.Terminal.VK_CTRL;
 
 /**
  * @author Roj234
- * @since 2025/4/29 0029 0:04
+ * @since 2025/4/29 0:04
  */
-public abstract class Interactive implements Console {
+public abstract class Interactive implements KeyHandler {
 	private static final boolean THEME2 = true;
 	private static final boolean UNICODE = Terminal.isFullUnicode();
 
 	private static final String LINE = "│", END = "└";
 	public static final String RESET = "\033[0m";
-	private static final String BLACK = "\033["+(Terminal.BLACK+Terminal.HIGHLIGHT)+"m";
+	private static final String BLACK = "\033["+(Terminal.BLACK+ Terminal.HIGHLIGHT)+"m";
 	private static final String BLACK_LINE = BLACK+LINE+"  "+RESET;
 	private static final String BLACK_END = BLACK+END;
 
-	private static final String SELECTED = THEME2 ? "●" : "\033["+Terminal.GREEN+"m>\033[0m", UNSELECTED = THEME2 ? "○" : " ";
+	private static final String SELECTED = THEME2 ? "●" : "\033["+ Terminal.GREEN+"m>\033[0m", UNSELECTED = THEME2 ? "○" : " ";
 	private static final String SELECTED_MULTI = UNICODE ? "◼" : "[+]", UNSELECTED_MULTI = UNICODE ? "◻" : "[ ]", HOVERED_MULTI = UNICODE ? "◻" : "[•]";
 
 	private static final String BLUE = "\033["+(Terminal.CYAN)+"m";
@@ -31,25 +31,25 @@ public abstract class Interactive implements Console {
 	private static final String PENDING_LINE = BLUE+LINE+"  ";
 
 	private static final String
-			SUCCESS = "\033["+Terminal.GREEN+"m◆",
-			FAILURE = "\033["+Terminal.RED+"m▲",
-			WARNING = "\033["+Terminal.YELLOW+"m▲",
-			ERROR = "\033["+Terminal.RED+"m■",
-			INFO = "\033["+Terminal.CYAN+"m●";
+			SUCCESS = "\033["+ Terminal.GREEN+"m◆",
+			FAILURE = "\033["+ Terminal.RED+"m▲",
+			WARNING = "\033["+ Terminal.YELLOW+"m▲",
+			ERROR = "\033["+ Terminal.RED+"m■",
+			INFO = "\033["+ Terminal.CYAN+"m●";
 
-	public static void start(AnsiString message) {
+	public static void start(Text message) {
 		var sb = new CharList().append(BLACK+"┌  "+RESET);
 		message.writeAnsi(sb, "\n"+BLACK+LINE+" "+RESET);
 		sb.append("\n"+BLACK+LINE+" "+RESET+"\n");
 		Terminal.directWrite(sb);
 	}
-	public static void end(AnsiString message) {
+	public static void end(Text message) {
 		var sb = new CharList().append(BLACK+"└  "+RESET);
 		message.writeAnsi(sb, "\n"+BLACK+LINE+" "+RESET);
 		Terminal.directWrite(sb.append('\n'+RESET));
 	}
 
-	private static int writeWithTrace(AnsiString message, String icon) {
+	private static int writeWithTrace(Text message, String icon) {
 		var sb = new CharList().append(icon).append(" "+RESET);
 		message.writeAnsi(sb, "\n"+BLACK+LINE+" "+RESET);
 		sb.append("\n"+BLACK+LINE+" "+RESET+"\n");
@@ -61,12 +61,12 @@ public abstract class Interactive implements Console {
 	 * 输入之前step返回的数值即可撤销这个step
 	 */
 	public static void stepUndo(int lh) {Terminal.directWrite(Cursor.moveVertical(-lh)+Screen.clearLineAfter);}
-	public static int stepSuccess(AnsiString message) {return writeWithTrace(message, SUCCESS);}
-	public static int stepWarn(AnsiString message) {return writeWithTrace(message, WARNING);}
-	public static int stepInfo(AnsiString message) {return writeWithTrace(message, INFO);}
-	public static int stepError(AnsiString message) {return writeWithTrace(message, ERROR);}
+	public static int stepSuccess(Text message) {return writeWithTrace(message, SUCCESS);}
+	public static int stepWarn(Text message) {return writeWithTrace(message, WARNING);}
+	public static int stepInfo(Text message) {return writeWithTrace(message, INFO);}
+	public static int stepError(Text message) {return writeWithTrace(message, ERROR);}
 
-	public static boolean confirm(AnsiString message) {
+	public static boolean confirm(Text message) {
 		var prev = Terminal.getConsole();
 		var callback = new Interactive() {
 			int width;
@@ -110,8 +110,8 @@ public abstract class Interactive implements Console {
 		Terminal.setConsole(callback);
 		return callback.getValue() != 0;
 	}
-	public static int radio(AnsiString message, Completion... choices) {return radio(message, 0, choices);}
-	public static int radio(AnsiString message, int def, Completion... choices) {
+	public static int radio(Text message, Completion... choices) {return radio(message, 0, choices);}
+	public static int radio(Text message, int def, Completion... choices) {
 		if (choices.length == 1) return 0;
 
 		var prev = Terminal.getConsole();
@@ -121,11 +121,11 @@ public abstract class Interactive implements Console {
 		return callback.getValue();
 	}
 	private static class Select extends Interactive {
-		final Console prev;
-		final AnsiString message;
+		final KeyHandler prev;
+		final Text message;
 		final Completion[] choices;
 
-		public Select(Console prev, AnsiString message, Completion... choices) {
+		public Select(KeyHandler prev, Text message, Completion... choices) {
 			this.message = message;
 			this.prev = prev;
 			this.choices = choices;
@@ -190,8 +190,8 @@ public abstract class Interactive implements Console {
 			Terminal.directWrite(sb.append("\n\n\n"));
 		}
 	}
-	public static int checkbox(AnsiString message, Completion... choices) {return checkbox(message, 0, choices);}
-	public static int checkbox(AnsiString message, int def, Completion... choices) {
+	public static int checkbox(Text message, Completion... choices) {return checkbox(message, 0, choices);}
+	public static int checkbox(Text message, int def, Completion... choices) {
 		var prev = Terminal.getConsole();
 		var callback = new Select(prev, message, choices) {
 			int selected;
@@ -280,16 +280,16 @@ public abstract class Interactive implements Console {
 		return callback.getValue();
 	}
 
-	public static Progress progress(AnsiString title, int extraLines) {
+	public static Progress progress(Text title, int extraLines) {
 		CharList sb = new CharList().append(PENDING);
 		title.writeAnsi(sb).append(RESET+'\n');
 		Terminal.directWrite(sb);
 		return new Progress(title, extraLines);
 	}
 	public static class Progress extends Interactive {
-		public Progress(AnsiString title, int extraLines) {
+		public Progress(Text title, int extraLines) {
 			this.title = title;
-			this.extraLines = new AnsiString[extraLines];
+			this.extraLines = new Text[extraLines];
 		}
 
 		@Override
@@ -304,18 +304,18 @@ public abstract class Interactive implements Console {
 
 		boolean animation;
 		float progress;
-		AnsiString title, before, after;
-		AnsiString[] extraLines;
+		Text title, before, after;
+		Text[] extraLines;
 
-		public void setTitle(AnsiString title) {this.title = title;}
+		public void setTitle(Text title) {this.title = title;}
 		public void setProgress(float progress) {this.progress = progress;}
 		public float getProgress() {return progress;}
 
-		public void setBeforeProgress(AnsiString before) {this.before = before;}
+		public void setBeforeProgress(Text before) {this.before = before;}
 
-		public void setAfterProgress(AnsiString title) {this.after = title;}
-		public void setExtraLine(int line, AnsiString text) {extraLines[line] = text;}
-		public void setExtraLines(int count) {this.extraLines = new AnsiString[count];}
+		public void setAfterProgress(Text title) {this.after = title;}
+		public void setExtraLine(int line, Text text) {extraLines[line] = text;}
+		public void setExtraLines(int count) {this.extraLines = new Text[count];}
 
 		public void setAnimation(boolean animation) {this.animation = animation;}
 
@@ -335,7 +335,7 @@ public abstract class Interactive implements Console {
 
 			sb.append('\n');
 			for (int i = 0; i < extraLines.length; i++) {
-				AnsiString extra = extraLines[i];
+				Text extra = extraLines[i];
 				sb.append(PENDING_LINE);
 				if (extra != null) extra.writeAnsi(sb.append(RESET)).append(RESET);
 				else sb.append(Screen.clearLineAfter);
@@ -351,10 +351,10 @@ public abstract class Interactive implements Console {
 		}
 
 		public void success() {withMessage(null, SUCCESS);}
-		public void warning(AnsiString message) {withMessage(message, WARNING);}
-		public void error(AnsiString message) {withMessage(message, ERROR);}
+		public void warning(Text message) {withMessage(message, WARNING);}
+		public void error(Text message) {withMessage(message, ERROR);}
 
-		private void withMessage(AnsiString message, String head) {
+		private void withMessage(Text message, String head) {
 			var sb = new CharList().append(Cursor.moveVertical(-lineHeight - 1)).append(head).append("\n"+Screen.clearAfter+BLACK_LINE);
 			if (message != null) message.writeAnsi(sb, "\n"+BLACK_LINE).append("\n"+BLACK_LINE);
 			Terminal.directWrite(sb.append('\n'));
@@ -389,7 +389,7 @@ public abstract class Interactive implements Console {
 		synchronized (this) {notifyAll();}
 	}
 	final void cancel() {
-		Terminal.directWrite(Cursor.moveVertical(-lineHeight)+FAILURE+"\n"+Screen.clearAfter+choice()+BLACK_END+"  \033["+Terminal.RED+"m操作被用户取消！\033[0m\n");
+		Terminal.directWrite(Cursor.moveVertical(-lineHeight)+FAILURE+"\n"+Screen.clearAfter+choice()+BLACK_END+"  \033["+ Terminal.RED+"m操作被用户取消！\033[0m\n");
 		System.exit(1);
 	}
 

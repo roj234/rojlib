@@ -9,7 +9,7 @@ import java.util.Collection;
 
 /**
  * @author Roj234
- * @since 2023/3/15 0015 8:37
+ * @since 2023/3/15 8:37
  */
 public interface ArchiveFile extends Closeable {
 	void close() throws IOException;

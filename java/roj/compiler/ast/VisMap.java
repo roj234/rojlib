@@ -17,7 +17,7 @@ import static roj.collect.IntMap.UNDEFINED;
  * 和Thaumcraft没有关系（雾
  * Is this some kind of SSA?
  * @author Roj234
- * @since 2024/6/23 0023 17:10
+ * @since 2024/6/23 17:10
  */
 public final class VisMap {
 	private static final TypedKey<Object> DEFINED = TypedKey.of("DEFINED");

@@ -6,7 +6,7 @@ import java.io.IOException;
 
 /**
  * @author Roj234
- * @since 2024/7/13 0013 2:23
+ * @since 2024/7/13 2:23
  */
 public interface H2FlowControl {
 	default void initSetting(H2Setting setting) {}

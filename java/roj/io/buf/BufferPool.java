@@ -3,9 +3,9 @@ package roj.io.buf;
 import roj.collect.IntMap;
 import roj.collect.SimpleList;
 import roj.concurrent.FastThreadLocal;
-import roj.concurrent.ITask;
 import roj.concurrent.Scheduler;
 import roj.concurrent.SegmentReadWriteLock;
+import roj.concurrent.Task;
 import roj.plugin.Status;
 import roj.reflect.Unaligned;
 import roj.text.CharList;
@@ -108,7 +108,7 @@ public final class BufferPool {
 
 	private boolean hasDelay;
 	private final int maxStall;
-	private final ITask stallReleaseTask;
+	private final Task stallReleaseTask;
 	private long accessTimestamp;
 
 	private BufferPool() {this(DIRECT_INIT, DIRECT_INCR, DIRECT_FLEX_MAX, HEAP_INIT, HEAP_INCR, HEAP_FLEX_MAX, 15, 60000);}
@@ -142,7 +142,7 @@ public final class BufferPool {
 			accessTimestamp = System.currentTimeMillis();
 		}
 	}
-	private static ITask getTask(WeakReference<BufferPool> pool) {
+	private static Task getTask(WeakReference<BufferPool> pool) {
 		return () -> {
 			BufferPool p = pool.get();
 			if (p == null || System.currentTimeMillis() - p.accessTimestamp < p.maxStall) return;

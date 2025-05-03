@@ -6,7 +6,7 @@ import static roj.plugins.bkcrack.Macros.MASK_0_16;
 
 /**
  * @author Roj234
- * @since 2022/11/12 0012 17:27
+ * @since 2022/11/12 17:27
  */
 final class KeyTable {
 	/// \return the keystream byte ki associated to a Zi value
@@ -31,7 +31,7 @@ final class KeyTable {
 	static final long[] keysInvExist = new long[256];
 	static {
 		for (int i = 0; i < keysInvFilter.length; i++) {
-			keysInvFilter[i] = new IntList();
+			keysInvFilter[i] = new IntList(1);
 		}
 
 		for(int z_2_16 = 0; z_2_16 < 1 << 16; z_2_16 += 4) {

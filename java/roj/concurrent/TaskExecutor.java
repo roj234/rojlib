@@ -1,78 +1,57 @@
 package roj.concurrent;
 
-import roj.reflect.ReflectionUtils;
-import roj.util.ArrayUtil;
+import roj.util.Helpers;
 
 import java.util.List;
-import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.concurrent.RejectedExecutionException;
-import java.util.concurrent.locks.LockSupport;
+import java.util.Objects;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Future;
 
-import static roj.reflect.Unaligned.U;
-
-public class TaskExecutor extends FastLocalThread implements TaskHandler {
-	ConcurrentLinkedQueue<ITask> tasks = new ConcurrentLinkedQueue<>();
-
-	static final long STATE_OFFSET = ReflectionUtils.fieldOffset(TaskExecutor.class, "state");
-	//0 => running, 1 => terminating, 2 => stopped
-	volatile int state = 0;
-
-	public TaskExecutor() {
-		setName("RojLib - 未命名任务线程#"+hashCode());
-		setDaemon(true);
-	}
-
-	@Override
-	public void run() {
-		while (true) {
-			ITask task = tasks.peek();
-			if (task == null) {
-				synchronized (this) {notifyAll();}
-				LockSupport.park();
-				if (state != 0) break;
-				continue;
-			}
-
-			if (!task.isCancelled()) {
-				try {
-					task.execute();
-				} catch (Throwable e) {
-					if (!(e instanceof InterruptedException)) e.printStackTrace();
-				}
-			}
-
-			if (tasks.poll() == null) break;
+/**
+ * @author Roj234
+ * @since 2020/11/30 23:07
+ */
+public interface TaskExecutor {
+	default void pushTask(Callable<Task> lazyTask) throws Exception {
+		var waiter = new AsyncTask<>(lazyTask);
+		submit(waiter);
+		try {
+			submit(waiter.get());
+		} catch (ExecutionException e) {
+			Helpers.athrow(e.getCause());
 		}
-
-		state = 2;
 	}
 
-	@Override
-	public void submit(ITask task) {
-		if (state != 0) throw new RejectedExecutionException("TaskExecutor was shutdown.");
-		tasks.add(task);
-		LockSupport.unpark(this);
+	default <T> Future<T> submit(Callable<T> task) {
+		var ftask = new AsyncTask<>(Objects.requireNonNull(task));
+		submit(ftask);
+		return ftask;
 	}
-	@Override
-	public void shutdown() {
-		if (U.compareAndSwapInt(this, STATE_OFFSET, 0, 1))
-			LockSupport.unpark(this);
-	}
-	@Override
-	public List<ITask> shutdownNow() {
-		var queue = tasks;
-		tasks = new ConcurrentLinkedQueue<>();
-		shutdown();
-		return ArrayUtil.immutableCopyOf(queue);
-	}
-	@Override
-	public boolean isShutdown() {return state != 0;}
-	@Override
-	public boolean isTerminated() {return state == 2;}
-
-	public void awaitTermination() throws InterruptedException {
-		synchronized (this) {
-			while (!tasks.isEmpty()) wait();
+	void submit(Task task);
+	void shutdown();
+	List<Task> shutdownNow();
+	default void shutdownAndCancel() { for (Task task : shutdownNow()) task.cancel(); }
+	boolean isShutdown();
+	boolean isTerminated();
+	/**
+	 * 等待当前的任务执行完成，不论是terminate还是正常运行
+	 * @deprecated 由于不关闭线程池的add方法，到底等待了谁执行完成是未定义的
+	 */
+	@Deprecated
+	void awaitTermination() throws InterruptedException;
+	/**
+	 * 等待当前的任务执行完成，不论是terminate还是正常运行
+	 * 但是不抛出异常
+	 */
+	@Deprecated
+	default boolean awaitFinish() {
+		try {
+			awaitTermination();
+			return true;
+		} catch (InterruptedException e) {
+			Thread.currentThread().interrupt();
+			return false;
 		}
 	}
 }

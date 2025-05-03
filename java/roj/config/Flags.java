@@ -2,7 +2,7 @@ package roj.config;
 
 /**
  * @author Roj234
- * @since 2024/11/8 0008 20:09
+ * @since 2024/11/8 20:09
  */
 public interface Flags {
 	/**

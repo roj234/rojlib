@@ -16,7 +16,7 @@ import static roj.asm.Opcodes.*;
 
 /**
  * @author Roj234
- * @since 2024/1/23 0023 8:31
+ * @since 2024/1/23 8:31
  */
 final class MapLiteral extends Expr {
 	private final List<Expr> keys, values;

@@ -4,15 +4,15 @@ import roj.asm.ClassNode;
 import roj.asm.Opcodes;
 import roj.asm.type.Type;
 import roj.asm.type.TypeHelper;
-import roj.asm.util.ClassLike;
+import roj.asmx.ClassResource;
 import roj.collect.SimpleList;
 import roj.reflect.ClassDefiner;
 import roj.reflect.Proxy;
 import roj.text.CharList;
 import roj.text.Escape;
 import roj.text.TextReader;
-import roj.ui.AnsiString;
 import roj.ui.Terminal;
+import roj.ui.Text;
 import roj.util.ByteList;
 import roj.util.Helpers;
 
@@ -51,7 +51,7 @@ public final class JCompiler implements Compiler, DiagnosticListener<JavaFileObj
 
 	@Override public Compiler.Factory factory() {return factory;}
 
-	public synchronized List<? extends ClassLike> compile(List<String> options, List<File> sources, boolean showDiagnosticId) {
+	public synchronized List<? extends ClassResource> compile(List<String> options, List<File> sources, boolean showDiagnosticId) {
 		if (sources.isEmpty()) return Collections.emptyList();
 
 		ignored = warnings = errors = 0;
@@ -69,7 +69,7 @@ public final class JCompiler implements Compiler, DiagnosticListener<JavaFileObj
 
 		if (errors > 0) buf.append('\n').append(errors).append(" 个 错误");
 		if (warnings > 0) buf.append('\n').append(warnings).append('/').append(warnings+ ignored).append(" 个 警告");
-		System.out.println(new AnsiString(buf).bgColor16(result ? Terminal.BLUE : Terminal.RED).color16(Terminal.WHITE + Terminal.HIGHLIGHT).toAnsiString());
+		System.out.println(new Text(buf).bgColor16(result ? Terminal.BLUE : Terminal.RED).color16(Terminal.WHITE + Terminal.HIGHLIGHT).toAnsiString());
 		buf._free();
 		return result ? compiled : null;
 	}
@@ -193,7 +193,7 @@ public final class JCompiler implements Compiler, DiagnosticListener<JavaFileObj
 	 * @author solo6975
 	 * @since 2021/10/2 14:00
 	 */
-	private static final class MyJFO extends SimpleJavaFileObject implements ClassLike {
+	private static final class MyJFO extends SimpleJavaFileObject implements ClassResource {
 		private final String name;
 		private final ByteList output;
 
@@ -203,11 +203,8 @@ public final class JCompiler implements Compiler, DiagnosticListener<JavaFileObj
 			this.name = className.replace('.', '/')+".class";
 		}
 
-		@Override
-		public String getFileName() { return name; }
-		@Override
-		public OutputStream openOutputStream() { return output; }
-		@Override
-		public ByteList get() { return output; }
+		@Override public OutputStream openOutputStream() {return output;}
+		@Override public String getFileName() {return name;}
+		@Override public ByteList getClassBytes() {return output;}
 	}
 }

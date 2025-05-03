@@ -9,7 +9,7 @@ import javax.sound.sampled.AudioFormat;
 /**
  * MPEG-1/2/2.5 Audio Layer I/II/III 帧同步和帧头信息解码
  */
-public final class Header {
+final class Header {
 	public static final int MPEG1 = 3, MPEG2 = 2, MPEG2_5 = 0, MAX_FRAME_SIZE = 1732;
 
 	/*

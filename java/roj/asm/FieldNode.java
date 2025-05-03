@@ -18,7 +18,7 @@ import java.util.Objects;
  * @author Roj234
  * @since 2021/6/18 9:51
  */
-public final class FieldNode extends CNode {
+public final class FieldNode extends MemberNode {
 	public FieldNode(int acc, String name, String type) { this(acc, (Object) name, type); }
 	public FieldNode(int acc, String name, Type type) { this(acc, (Object) name, type); }
 	public FieldNode(int acc, CstUTF name, CstUTF type) { this(acc, (Object) name, type); }
@@ -45,12 +45,12 @@ public final class FieldNode extends CNode {
 
 	public FieldNode parsed(ConstantPool cp) {
 		if (attributes != null) {
-			Parser.parseAttributes(this, cp, attributes, Signature.FIELD);
+			Attribute.parseAll(this, cp, attributes, Signature.FIELD);
 		}
 		return this;
 	}
 
-	public <T extends Attribute> T getAttribute(ConstantPool cp, TypedKey<T> type) { return Parser.parseAttribute(this,cp,type,attributes,Signature.FIELD); }
+	public <T extends Attribute> T getAttribute(ConstantPool cp, TypedKey<T> type) { return Attribute.parseSingle(this,cp,type,attributes,Signature.FIELD); }
 
 	public String rawDesc() { return desc.getClass() == CstUTF.class ? ((CstUTF) desc).str() : desc instanceof Type ? ((Type) desc).toDesc() : desc.toString(); }
 

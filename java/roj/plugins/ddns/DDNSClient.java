@@ -16,7 +16,7 @@ import java.util.*;
 
 /**
  * @author Roj234
- * @since 2023/1/28 0028 1:41
+ * @since 2023/1/28 1:41
  */
 public class DDNSClient extends Plugin {
 	private boolean hasV6;

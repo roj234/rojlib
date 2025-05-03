@@ -13,7 +13,7 @@ import java.util.List;
 
 /**
  * @author Roj234
- * @since 2023/9/18 0018 9:07
+ * @since 2023/9/18 9:07
  */
 final class SequenceExpr extends Expr {
 	private final List<Expr> sequence;

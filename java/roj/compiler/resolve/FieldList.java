@@ -1,8 +1,8 @@
 package roj.compiler.resolve;
 
 import org.jetbrains.annotations.NotNull;
+import roj.asm.ClassDefinition;
 import roj.asm.FieldNode;
-import roj.asm.IClass;
 import roj.asm.Opcodes;
 import roj.collect.SimpleList;
 import roj.compiler.LavaFeatures;
@@ -17,16 +17,16 @@ import roj.text.CharList;
  * @since 2024/2/6 2:21
  */
 final class FieldList extends ComponentList {
-	final SimpleList<IClass> owners = new SimpleList<>();
+	final SimpleList<ClassDefinition> owners = new SimpleList<>();
 	final SimpleList<FieldNode> fields = new SimpleList<>();
 	private int childId;
 
-	void add(IClass klass, FieldNode mn) {
+	void add(ClassDefinition klass, FieldNode mn) {
 		owners.add(klass);
 		fields.add(mn);
 	}
 
-	boolean pack(IClass klass) {
+	boolean pack(ClassDefinition klass) {
 		for (int i = 0; i < fields.size(); i++) {
 			if (!owners.get(i).equals(klass)) {
 				childId = i;
@@ -43,7 +43,7 @@ final class FieldList extends ComponentList {
 		int size = (flags&THIS_ONLY) != 0 ? childId : fields.size();
 
 		for (int j = 0; j < size; j++) {
-			IClass owner = owners.get(j);
+			ClassDefinition owner = owners.get(j);
 			FieldNode fn = fields.get(j);
 
 			if (ctx.checkAccessible(owner, fn, (flags&IN_STATIC) != 0, false)) {
@@ -61,7 +61,7 @@ final class FieldList extends ComponentList {
 		ctx.errorCapture = makeErrorCapture(tmp);
 
 		for (int i = 0; i < size; i++) {
-			IClass owner = owners.get(i);
+			ClassDefinition owner = owners.get(i);
 			FieldNode fn = fields.get(i);
 
 			ctx.checkAccessible(owner, fn, (flags&IN_STATIC) != 0, true);
@@ -76,7 +76,7 @@ final class FieldList extends ComponentList {
 		return new FieldResult(sb.append("]]").replace('/', '.').toStringAndFree());
 	}
 
-	static void checkBridgeMethod(LocalContext ctx, IClass owner, FieldNode fn) {
+	static void checkBridgeMethod(LocalContext ctx, ClassDefinition owner, FieldNode fn) {
 		if ((fn.modifier&Opcodes.ACC_PRIVATE) == 0 || ctx.file == owner ||
 			ctx.classes.getMaximumBinaryCompatibility() >= LavaFeatures.JAVA_11) return;
 

@@ -4,10 +4,11 @@ import org.jetbrains.annotations.NotNull;
 import roj.archive.zip.ZEntry;
 import roj.archive.zip.ZipArchive;
 import roj.archive.zip.ZipFileWriter;
-import roj.asm.Parser;
-import roj.asm.type.Desc;
-import roj.asm.util.Context;
-import roj.asm.util.TransformUtil;
+import roj.asm.AsmCache;
+import roj.asm.ClassNode;
+import roj.asm.MemberDescriptor;
+import roj.asmx.Context;
+import roj.asmx.TransformUtil;
 import roj.asmx.event.Subscribe;
 import roj.asmx.mapper.Mapper;
 import roj.collect.MyHashMap;
@@ -91,11 +92,11 @@ public class AT implements Processor {
 
 					int i = e.indexOf('(');
 					if (i > 0) {
-						Map.Entry<Desc, String> mcpName = map.getMethodMap().find(new Desc(className, e.substring(0, i), e.substring(i)));
+						Map.Entry<MemberDescriptor, String> mcpName = map.getMethodMap().find(new MemberDescriptor(className, e.substring(0, i), e.substring(i)));
 						if (mcpName != null) e = mcpName.getValue()+mcpName.getKey().rawDesc();
 						else if (!e.startsWith("<")) LOGGER.debug("未找到该字段的MCP名称: {}.{}", className, e);
 					} else {
-						Map.Entry<Desc, String> mcpName = map.getFieldMap().find(new Desc(className, e));
+						Map.Entry<MemberDescriptor, String> mcpName = map.getFieldMap().find(new MemberDescriptor(className, e));
 						if (mcpName != null) e = mcpName.getValue();
 						else LOGGER.debug("未找到该字段的MCP名称: {}.{}", className, e);
 					}
@@ -179,12 +180,12 @@ public class AT implements Processor {
 				InputStream stream = helper.getStream(entry.getKey());
 				if (stream != null) {
 					LOGGER.debug("Found AT {} in {}", entry.getKey(), file);
-					var data = Parser.parseConstants(IOUtil.getSharedByteBuf().readStreamFully(stream));
+					var data = ClassNode.parseSkeleton(IOUtil.getSharedByteBuf().readStreamFully(stream));
 
 					TransformUtil.makeAccessible(data, entry.getValue());
 					//if (!forIDE) TransformUtil.apiOnly(data);
 
-					zfw.writeNamed(entry.getKey(), Parser.toByteArrayShared(data));
+					zfw.writeNamed(entry.getKey(), AsmCache.toByteArrayShared(data));
 
 					itr.remove();
 				}

@@ -9,7 +9,7 @@ import static roj.reflect.Unaligned.U;
 
 /**
  * @author Roj234
- * @since 2023/10/28 0028 1:55
+ * @since 2023/10/28 1:55
  */
 public class EasyProgressBar extends ProgressBar {
 	private static final int AVG_SPEED_WINDOW = 2000;

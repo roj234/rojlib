@@ -2,9 +2,9 @@ package roj.reflect;
 
 import roj.archive.zip.ZEntry;
 import roj.archive.zip.ZipFileWriter;
-import roj.asm.AsmShared;
+import roj.asm.AsmCache;
 import roj.asm.ClassNode;
-import roj.asm.Parser;
+import roj.asm.ClassView;
 import roj.util.ByteList;
 import roj.util.Helpers;
 
@@ -21,7 +21,7 @@ public final class Debug {
 	static {
 		if (CLASS_DUMP) {
 			try {
-				AsmShared.reset(); // ZFW may call ClassDefiners
+				AsmCache.reset(); // ZFW may call ClassDefiners
 				dumper = new ZipFileWriter(new File("IL-Debug-ClassDump.zip"));
 				Runtime.getRuntime().addShutdownHook(new Thread(() -> {
 					try {
@@ -39,13 +39,13 @@ public final class Debug {
 	public static void dump(String id, ClassNode data) {
 		try {
 			dumper.beginEntry(new ZEntry(id+"/"+data.name()+".class"));
-			Parser.toByteArrayShared(data).writeToStream(dumper);
+			AsmCache.toByteArrayShared(data).writeToStream(dumper);
 			dumper.closeEntry();
 		} catch (Exception ignored) {}
 	}
 	public static void dump(String id, ByteList data) {
 		try {
-			dumper.beginEntry(new ZEntry(id+"/"+Parser.parseAccess(data.slice(), false).name+".class"));
+			dumper.beginEntry(new ZEntry(id+"/"+ClassView.parse(data.slice(), false).name+".class"));
 			data.writeToStream(dumper);
 			dumper.closeEntry();
 		} catch (Exception ignored) {}

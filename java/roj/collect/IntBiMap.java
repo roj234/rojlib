@@ -64,12 +64,12 @@ public class IntBiMap<V> extends AbstractMap<Integer, V> implements _Generic_Map
 
 	public V getOrDefault(int key, V v) {
 		Entry<V> entry = getKeyEntry(key);
-		return entry == null ? v : entry.v;
+		return entry == null ? v : entry.value;
 	}
 
 	public int getValueOrDefault(Object val, int def) {
 		Entry<V> entry = getValueEntry(val);
-		return entry == null ? def : entry.k;
+		return entry == null ? def : entry.key;
 	}
 
 	public Set<Entry<V>> selfEntrySet() { return _Generic_EntrySet.create(this); }
@@ -82,7 +82,7 @@ public class IntBiMap<V> extends AbstractMap<Integer, V> implements _Generic_Map
 		for (int i = 0; i < map.length; i++) {
 			IntMap.Entry<?> entry = map.entries[i];
 			while (entry != null) {
-				putInt(entry.k, (V) entry.v);
+				putInt(entry.key, (V) entry.value);
 
 				entry = entry.next;
 			}
@@ -126,7 +126,7 @@ public class IntBiMap<V> extends AbstractMap<Integer, V> implements _Generic_Map
 				entry = (Entry<V>) entries[i];
 				while (entry != null) {
 					next = entry.__next();
-					int newIndex = indexFor(entry.k);
+					int newIndex = indexFor(entry.key);
 					Entry<V> old = (Entry<V>) newEntries[newIndex];
 					newEntries[newIndex] = entry;
 					entry.next = old;
@@ -137,7 +137,7 @@ public class IntBiMap<V> extends AbstractMap<Integer, V> implements _Generic_Map
 				while (entry != null) {
 					next = entry.valueNext;
 
-					int newIndex = indexFor(hashFor(entry.v));
+					int newIndex = indexFor(hashFor(entry.value));
 					Entry<V> old = (Entry<V>) newValues[newIndex];
 					newValues[newIndex] = entry;
 					entry.valueNext = old;
@@ -182,21 +182,21 @@ public class IntBiMap<V> extends AbstractMap<Integer, V> implements _Generic_Map
 				removeEntry(keyEntry);
 				// keyEntry will be deleted
 
-				removeKeyEntry(valueEntry, valueEntry.k);
+				removeKeyEntry(valueEntry, valueEntry.key);
 
-				int old = valueEntry.k;
-				valueEntry.k = key;
+				int old = valueEntry.key;
+				valueEntry.key = key;
 
 				putKeyEntry(valueEntry);
 
 				return old;
 			} else {
-				if (!replace) throw new IllegalArgumentException("Multiple value(" + v + ", " + keyEntry.v + ") bind to same key(" + keyEntry.k + ")! use forcePut()!");
+				if (!replace) throw new IllegalArgumentException("Multiple value(" + v + ", " + keyEntry.value + ") bind to same key(" + keyEntry.key + ")! use forcePut()!");
 
 				// key找到, 没找到value
-				removeValueEntry(keyEntry, keyEntry.v);
+				removeValueEntry(keyEntry, keyEntry.value);
 
-				keyEntry.v = v;
+				keyEntry.value = v;
 
 				putValueEntry(keyEntry);
 
@@ -206,10 +206,10 @@ public class IntBiMap<V> extends AbstractMap<Integer, V> implements _Generic_Map
 			if (valueEntry != null) {
 
 				// key没找到, 找到value
-				int oldKey = valueEntry.k;
+				int oldKey = valueEntry.key;
 				removeKeyEntry(valueEntry, oldKey);
 
-				valueEntry.k = key;
+				valueEntry.key = key;
 
 				putKeyEntry(valueEntry);
 
@@ -246,22 +246,22 @@ public class IntBiMap<V> extends AbstractMap<Integer, V> implements _Generic_Map
 				removeEntry(valueEntry);
 			}
 			// key找到, 没找到value
-			V oldV = keyEntry.v;
+			V oldV = keyEntry.value;
 
 			removeValueEntry(keyEntry, oldV);
 
-			keyEntry.v = v;
+			keyEntry.value = v;
 			putValueEntry(keyEntry);
 
 			return oldV;
 		} else {
 			if (valueEntry != null) {
-				if (!replace) throw new IllegalArgumentException("Multiple key(" + key + ", " + valueEntry.k + ") bind to same value(" + valueEntry.v + ")! use forcePut()!");
+				if (!replace) throw new IllegalArgumentException("Multiple key(" + key + ", " + valueEntry.key + ") bind to same value(" + valueEntry.value + ")! use forcePut()!");
 
 				// key没找到, 找到value
-				removeKeyEntry(valueEntry, valueEntry.k);
+				removeKeyEntry(valueEntry, valueEntry.key);
 
-				valueEntry.k = key;
+				valueEntry.key = key;
 
 				putKeyEntry(valueEntry);
 
@@ -278,24 +278,24 @@ public class IntBiMap<V> extends AbstractMap<Integer, V> implements _Generic_Map
 		Entry<V> entry = getKeyEntry(id);
 		if (entry == null) return null;
 		removeEntry(entry);
-		return entry.v;
+		return entry.value;
 	}
 
 	public int removeByValue(V v) {
 		Entry<V> entry = getValueEntry(v);
 		if (entry == null) return nullId;
 		removeEntry(entry);
-		return entry.k;
+		return entry.key;
 	}
 
 	public int getInt(V key) {
 		Entry<V> entry = getValueEntry(key);
-		return entry == null ? nullId : entry.k;
+		return entry == null ? nullId : entry.key;
 	}
 
 	public V get(int id) {
 		Entry<V> entry = getKeyEntry(id);
-		return entry == null ? null : entry.v;
+		return entry == null ? null : entry.value;
 	}
 
 	public boolean containsKey(int i) {
@@ -332,8 +332,8 @@ public class IntBiMap<V> extends AbstractMap<Integer, V> implements _Generic_Map
 	}
 
 	protected void removeEntry(Entry<V> toRemove) {
-		removeKeyEntry(toRemove, toRemove.k);
-		removeValueEntry(toRemove, toRemove.v);
+		removeKeyEntry(toRemove, toRemove.key);
+		removeValueEntry(toRemove, toRemove.value);
 		this.size--;
 	}
 
@@ -395,7 +395,7 @@ public class IntBiMap<V> extends AbstractMap<Integer, V> implements _Generic_Map
 
 	@SuppressWarnings("unchecked")
 	void putValueEntry(Entry<V> entry) {
-		int index = indexFor(hashFor(entry.v));
+		int index = indexFor(hashFor(entry.value));
 		if (valueEntries == null) valueEntries = new Entry<?>[length];
 		Entry<V> currentEntry;
 		if ((currentEntry = (Entry<V>) valueEntries[index]) == null) {
@@ -411,7 +411,7 @@ public class IntBiMap<V> extends AbstractMap<Integer, V> implements _Generic_Map
 
 	@SuppressWarnings("unchecked")
 	void putKeyEntry(Entry<V> entry) {
-		int index = indexFor(entry.k);
+		int index = indexFor(entry.key);
 		if (entries == null) entries = new Entry<?>[length];
 		Entry<V> currentEntry;
 		if ((currentEntry = (Entry<V>) entries[index]) == null) {
@@ -433,7 +433,7 @@ public class IntBiMap<V> extends AbstractMap<Integer, V> implements _Generic_Map
 		Entry<V> entry = (Entry<V>) valueEntries[id];
 
 		while (entry != null) {
-			if (Objects.equals(v, entry.v)) {
+			if (Objects.equals(v, entry.value)) {
 				return entry;
 			}
 			entry = entry.valueNext;
@@ -445,7 +445,7 @@ public class IntBiMap<V> extends AbstractMap<Integer, V> implements _Generic_Map
 		Entry<V> entry = getEntryFirst(id, false);
 		if (entry == null) return null;
 		while (entry != null) {
-			if (entry.k == id) return entry;
+			if (entry.key == id) return entry;
 			entry = entry.__next();
 		}
 		return null;
@@ -454,8 +454,8 @@ public class IntBiMap<V> extends AbstractMap<Integer, V> implements _Generic_Map
 	protected Entry<V> createEntry(int id, V v) {
 		Entry<V> entry = getEntryFirst(id, true);
 		size++;
-		if (entry.v == UNDEFINED) {
-			entry.v = v;
+		if (entry.value == UNDEFINED) {
+			entry.value = v;
 			return entry;
 		}
 		while (entry.next != null) {

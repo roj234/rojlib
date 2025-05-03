@@ -12,7 +12,7 @@ import java.security.spec.AlgorithmParameterSpec;
 
 /**
  * @author Roj234
- * @since 2023/4/29 0029 0:08
+ * @since 2023/4/29 0:08
  */
 public abstract class RCipherSpi extends CipherSpi {
 	public static final int ENCRYPT_MODE = Cipher.ENCRYPT_MODE;
@@ -23,7 +23,7 @@ public abstract class RCipherSpi extends CipherSpi {
 	public Cipher toJavaCipher(boolean feedbackModeAndPadding) {
 		return _toJavaCipher(isBareBlockCipher() ? new FeedbackCipher(this, FeedbackCipher.MODE_ECB) : this);
 	}
-	static Cipher _toJavaCipher(RCipherSpi spi) { return new Cipher(spi, ILCrypto.INSTANCE, spi.getAlgorithm()) {}; }
+	static Cipher _toJavaCipher(RCipherSpi spi) { return new Cipher(spi, CryptoFactory.getInstance(), spi.getAlgorithm()) {}; }
 
 	@Override
 	protected void engineSetMode(String s) throws NoSuchAlgorithmException {

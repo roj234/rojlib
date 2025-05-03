@@ -21,7 +21,7 @@ import java.util.function.Predicate;
 
 /**
  * @author Roj234
- * @since 2024/11/20 0020 0:34
+ * @since 2024/11/20 0:34
  */
 @FunctionalInterface
 public interface Flow<T> {

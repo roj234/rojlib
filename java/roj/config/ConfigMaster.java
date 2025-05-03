@@ -17,7 +17,7 @@ import java.util.TimeZone;
 
 /**
  * @author Roj234
- * @since 2024/3/23 0023 21:00
+ * @since 2024/3/23 21:00
  */
 public enum ConfigMaster {
 	BENCODE, NBT, XNBT, MSGPACK, JSON, YAML, XML, TOML, INI, CSV;

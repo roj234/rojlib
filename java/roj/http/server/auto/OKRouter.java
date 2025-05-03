@@ -4,7 +4,6 @@ import org.jetbrains.annotations.Nullable;
 import roj.ReferenceByGeneratedClass;
 import roj.asm.ClassNode;
 import roj.asm.MethodNode;
-import roj.asm.Parser;
 import roj.asm.annotation.AList;
 import roj.asm.annotation.AnnVal;
 import roj.asm.annotation.Annotation;
@@ -26,7 +25,7 @@ import roj.collect.IntMap;
 import roj.collect.MyHashMap;
 import roj.collect.SimpleList;
 import roj.collect.ToIntMap;
-import roj.concurrent.ITask;
+import roj.concurrent.Task;
 import roj.config.BinaryParser;
 import roj.config.ConfigMaster;
 import roj.config.auto.SerializerFactory;
@@ -77,7 +76,7 @@ public final class OKRouter implements Router {
 	private final Node route = new Text("");
 
 	private final boolean debug;
-	private List<ITask> onFinishes = Collections.emptyList();
+	private List<Task> onFinishes = Collections.emptyList();
 
 	public OKRouter() {this(true);}
 	public OKRouter(boolean debug) {this.debug = debug;}
@@ -85,7 +84,7 @@ public final class OKRouter implements Router {
 	/**
 	 * 警告：如果使用addPrefixDelegation添加OKRouter，那么onFinish可能不会被触发
 	 */
-	public void onFinish(ITask callback) {
+	public void onFinish(Task callback) {
 		if (onFinishes.isEmpty()) onFinishes = new SimpleList<>();
 		onFinishes.add(callback);
 	}
@@ -107,7 +106,7 @@ public final class OKRouter implements Router {
 
 		CallerBuilder(boolean debug) {this.debug = debug;}
 		RouterInfo build(Class<?> type) {
-			var userRoute = Parser.parseConstants(type);
+			var userRoute = ClassNode.fromType(type);
 			if (userRoute == null) throw new IllegalStateException("找不到"+type.getName()+"的类文件");
 
 			var caller = this.cn = new ClassNode();
@@ -239,7 +238,7 @@ public final class OKRouter implements Router {
 					}
 				}
 
-				cw.invoke(INVOKEVIRTUAL, mn.ownerClass(), mn.name(), mn.rawDesc());
+				cw.invoke(INVOKEVIRTUAL, mn.owner(), mn.name(), mn.rawDesc());
 				if (mn.returnType().type != Type.CLASS) {
 					if (mn.returnType().type != Type.VOID)
 						throw new IllegalArgumentException("方法返回值必须是空值或对象:"+mn);
@@ -251,7 +250,7 @@ public final class OKRouter implements Router {
 					Label label = cw2.label();
 					seg2.branch(seg2.targets.size(), label);
 					seg2.def = label;
-					cw2.ldc(mn.ownerClass()+"."+mn.name()+mn.rawDesc());
+					cw2.ldc(mn.owner()+"."+mn.name()+mn.rawDesc());
 					cw2.insn(ARETURN);
 				}
 			}
@@ -606,7 +605,7 @@ public final class OKRouter implements Router {
 		return serializer.get();
 	}
 	//endregion
-	private static final VirtualReference<MyHashMap<String, RouterInfo>> UserCallers = new VirtualReference<>();
+	private static final VirtualReference<MyHashMap<String, RouterInfo>> IMPLEMENTATION_CACHE = new VirtualReference<>();
 	private static final class RouterInfo {
 		final IntMap<Annotation> handlers;
 		final ToIntMap<String> interceptors;
@@ -624,7 +623,7 @@ public final class OKRouter implements Router {
 	public final OKRouter register(Object o) {return register(o, "");}
 	public final OKRouter register(Object o, String pathRel) {
 		var type = o.getClass();
-		var map = UserCallers.computeIfAbsent(type.getClassLoader(), Helpers.cast(Helpers.fnMyHashMap()));
+		var map = IMPLEMENTATION_CACHE.computeIfAbsent(type.getClassLoader(), Helpers.cast(Helpers.fnMyHashMap()));
 		var inst = map.get(type.getName());
 		if (inst == null) {
 			synchronized (map) {

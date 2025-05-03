@@ -1,20 +1,18 @@
 package roj.crypt;
 
-import roj.reflect.ReflectionUtils;
-
 import java.util.Random;
 
+import static roj.crypt.L64W64X128Mix.HAVE_NEXT_NEXT_GAUSSIAN;
+import static roj.crypt.L64W64X128Mix.SEED;
 import static roj.reflect.Unaligned.U;
 
 /**
  * @implNote MT19937 is not thread safe
  * @author Roj234
- * @since 2022/11/14 0014 22:21
+ * @since 2022/11/14 22:21
  */
-public class MT19937 extends Random {
-	private static final long u_seed = ReflectionUtils.fieldOffset(Random.class, "seed"),
-		u_nextGaussian = ReflectionUtils.fieldOffset(Random.class, "haveNextNextGaussian");
-
+@Deprecated
+final class MT19937 extends Random {
 	private int i;
 	private final int[] MT = new int[624];
 	private long _seed;
@@ -36,7 +34,7 @@ public class MT19937 extends Random {
 		// Random will invoke setSeed() before this class initialize
 		if (MT == null) {
 			_seed = seed;
-			if (u_seed > 0) U.putObject(this, u_seed, null);
+			U.putObject(this, SEED, null);
 			return;
 		}
 
@@ -45,9 +43,8 @@ public class MT19937 extends Random {
 			MT[i] = 1812433253 * (MT[i-1] ^ (MT[i-1] >>> 30)) + i;
 		this.i = 0;
 
-		// clear hasNextGaussian
-		if (u_nextGaussian > 0) U.putBoolean(this, u_nextGaussian, false);
-		else super.setSeed(seed);
+
+		U.putBoolean(this, HAVE_NEXT_NEXT_GAUSSIAN, false);
 	}
 
 	private void nextIter() {

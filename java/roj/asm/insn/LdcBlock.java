@@ -9,7 +9,7 @@ import static roj.asm.Opcodes.LDC_W;
 
 /**
  * @author Roj234
- * @since 2023/10/1 0001 23:07
+ * @since 2023/10/1 23:07
  */
 final class LdcBlock extends CodeBlock {
 	byte code;

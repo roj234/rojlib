@@ -116,9 +116,9 @@ public class RenameExclusion extends CodeVisitor {
 
 	@Override
 	public void invoke(byte code, CstRef method) {
-		String owner = method.className();
-		String name = method.descName();
-		String param = method.descType();
+		String owner = method.owner();
+		String name = method.name();
+		String param = method.rawDesc();
 
 		if (bci - ldcPos <= 3 && ldc.size() > 0) {
 			if (code == Opcodes.INVOKESTATIC) {

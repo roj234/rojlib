@@ -13,7 +13,7 @@ import java.nio.file.Files;
 /**
  * 缓存: 能随大小切换内存和磁盘缓存，并在close时清空数据
  * @author Roj234
- * @since 2024/1/18 0018 19:40
+ * @since 2024/1/18 19:40
  */
 public class CacheSource extends Source {
 	private volatile Source source;

@@ -26,7 +26,7 @@ import java.util.function.Predicate;
 
 /**
  * @author Roj234
- * @since 2023/11/4 0004 20:15
+ * @since 2023/11/4 20:15
  */
 public final class QPakFileSystem implements WritableFileSystem {
 	private List<QZArchive> archives;
@@ -181,7 +181,7 @@ public final class QPakFileSystem implements WritableFileSystem {
 		if (path.ref == null) create(path, false);
 		if (path.ref.getClass() == File.class) return new FileOutputStream((File) path.ref, append);
 
-		QZWriter out = patch.parallel();
+		QZWriter out = patch.newParallelWriter();
 		out.beginEntry(((QZEntry) path.ref));
 		return out;
 	}

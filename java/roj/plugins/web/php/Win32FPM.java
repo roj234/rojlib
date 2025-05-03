@@ -2,8 +2,8 @@ package roj.plugins.web.php;
 
 import roj.collect.RingBuffer;
 import roj.collect.SimpleList;
-import roj.concurrent.ITask;
 import roj.concurrent.Scheduler;
+import roj.concurrent.Task;
 import roj.http.server.IllegalRequestException;
 import roj.http.server.Request;
 import roj.io.FastFailException;
@@ -19,7 +19,7 @@ import java.util.concurrent.locks.ReentrantLock;
  * @author Roj234
  * @since 2024/7/2 1:55
  */
-public class Win32FPM extends fcgiManager implements ITask {
+public class Win32FPM extends fcgiManager implements Task {
 	final List<String> command;
 	final int minProcess, maxProcess, timeout;
 	final ConcurrentHashMap<Process, fcgiConnection> processes = new ConcurrentHashMap<>();

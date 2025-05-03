@@ -6,7 +6,7 @@ import static roj.reflect.Unaligned.U;
 
 /**
  * @author Roj234
- * @since 2025/3/13 0013 8:23
+ * @since 2025/3/13 8:23
  */
 public abstract class ReuseFIFOQueue<T extends ReuseFIFOQueue.Node> {
 	public static class Node {volatile Node next;}

@@ -7,7 +7,7 @@ import java.net.InetAddress;
 
 /**
  * @author Roj234
- * @since 2023/1/28 0028 1:23
+ * @since 2023/1/28 1:23
  */
 final class ZxInc extends IpGetter {
 	JSONParser parser = new JSONParser();

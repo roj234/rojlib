@@ -2,10 +2,11 @@ package roj.plugins;
 
 import org.jetbrains.annotations.Nullable;
 import roj.collect.SimpleList;
-import roj.crypt.MT19937;
+import roj.crypt.CryptoFactory;
 import roj.io.IOUtil;
 import roj.io.source.FileSource;
 import roj.io.source.Source;
+import roj.math.Vec2d;
 import roj.media.audio.*;
 import roj.media.audio.mp3.MP3Decoder;
 import roj.plugin.Plugin;
@@ -23,6 +24,7 @@ import java.io.File;
 import java.util.List;
 import java.util.concurrent.locks.LockSupport;
 
+import static roj.media.audio.FFT.displaySpectrum;
 import static roj.reflect.Unaligned.U;
 import static roj.ui.CommandNode.argument;
 import static roj.ui.CommandNode.literal;
@@ -31,25 +33,27 @@ import static roj.ui.CommandNode.literal;
  * @author Roj233
  * @since 2021/8/18 13:35
  */
-@SimplePlugin(id = "musicPlayer", version = "2.0.4", desc = "ImpLib音乐播放测试", inheritConfig = true)
+@SimplePlugin(id = "musicPlayer", version = "2.1.0", desc = "ImpLib音乐播放测试", inheritConfig = true)
 public class MusicPlayer extends Plugin implements Runnable {
 	private static final long FLAG = ReflectionUtils.fieldOffset(MusicPlayer.class, "flag");
 	private static final int STOP = 1, SKIP_AUTO = 2;
 	private static final int END_STOP = 1, END_NEXT = 2, IS_RANDOM = 4;
 
 	private int flag, mode = END_NEXT;
+	private boolean graph;
 
 	private int playIndex;
 	private List<File> playList, initList;
 
-	private final SystemAudioOutput audio = new SystemAudioOutput();
+	private final SpeakerSink audio = new SpeakerSink();
 	private AudioDecoder decoder;
 	private AudioMetadata metadata;
 
 	private Thread player;
 	private final ProgressBar progress = new ProgressBar("") {
 		@Override
-		protected void render(CharList b) {Terminal.renderBottomLine(b, true, 0);}
+		protected void render(CharList b) {
+			Terminal.renderBottomLine(b, true, 0);}
 	};
 
 	@Override
@@ -125,7 +129,7 @@ public class MusicPlayer extends Plugin implements Runnable {
 			var prevMode = mode;
 			 switch (ctx.argument("模式", String.class)) {
 				 case "random" -> {
-					 ArrayUtil.shuffle(playList, new MT19937());
+					 ArrayUtil.shuffle(playList, CryptoFactory.L64W64X128MixRandom());
 					 mode = END_NEXT|IS_RANDOM;
 					 return;
 				 }
@@ -142,10 +146,9 @@ public class MusicPlayer extends Plugin implements Runnable {
 
 		final boolean[] mute = {false};
 		c.then(literal("mute").executes(ctx -> audio.mute(mute[0] = !mute[0])));
-		c.then(literal("vol").then(argument("音量", Argument.real(0, 1)).executes(ctx -> audio.setVolume(SoundUtil.dbSound(ctx.argument("音量", Double.class))))));
+		c.then(literal("vol").then(argument("音量", Argument.real(0, 1)).executes(ctx -> audio.setVolume(SoundUtil.linear2db(ctx.argument("音量", Double.class))))));
 
 		Command prevNext = ctx -> {
-			unpause();
 			int n = playIndex + (ctx.context.endsWith("next") ? 1 : -1);
 			if (n >= playList.size()) n = 0;
 			else if (n < 0) n = playList.size()-1;
@@ -164,14 +167,19 @@ public class MusicPlayer extends Plugin implements Runnable {
 		}));
 		c.then(literal("stop").executes(ctx -> {
 			unpause();
-			if (U.compareAndSwapInt(this, FLAG, 0, SKIP_AUTO|STOP)) decoder.stop();
+			if (U.compareAndSwapInt(this, FLAG, 0, SKIP_AUTO|STOP)) decoder.disconnect();
 		}));
 
 		c.then(literal("seek").then(argument("时间", Argument.real(0,86400)).executes(ctx -> {
 			var dec = getDecoderIfPlaying();
-			if (dec == null) {Terminal.warning("当前没有播放歌曲");return;}
+			if (dec == null) {
+				Terminal.warning("当前没有播放歌曲");return;}
 			unpause();
 			dec.seek(ctx.argument("时间", Double.class));
+		})));
+
+		c.then(literal("graph").then(argument("开启", Argument.bool()).executes(ctx -> {
+			graph = ctx.argument("开启", Boolean.class);
 		})));
 
 		Command list = ctx -> {
@@ -190,7 +198,8 @@ public class MusicPlayer extends Plugin implements Runnable {
 		c.then(literal("list").executes(list).then(argument("search", Argument.string()).executes(list)));
 		c.then(literal("info").executes(ctx -> {
 			var dec = getDecoderIfPlaying();
-			if (dec == null) {Terminal.warning("当前没有播放歌曲");return;}
+			if (dec == null) {
+				Terminal.warning("当前没有播放歌曲");return;}
 			System.out.println(dec.getDebugInfo());
 			System.out.println(metadata);
 		}));
@@ -217,14 +226,14 @@ public class MusicPlayer extends Plugin implements Runnable {
 			flag = 0;
 			LockSupport.unpark(player);
 		} else {
-			decoder.stop();
+			decoder.disconnect();
 		}
 	}
 
 	@Nullable
 	public AudioDecoder getDecoderIfPlaying() {
 		var dec = decoder;
-		return dec != null && dec.isDecoding() ? dec : null;
+		return dec != null && dec.getState() == AudioDecoder.DECODING ? dec : null;
 	}
 
 	@Override
@@ -247,9 +256,20 @@ public class MusicPlayer extends Plugin implements Runnable {
 			Source source = null;
 			try {
 				source = new FileSource(song);
-				metadata = decoder.open(source, audio, true);
+				metadata = decoder.open(source, true);
 				try {
-					decoder.decodeLoop();
+					AudioSink audio = this.audio;
+					if (graph) {
+						audio = new FFTAudioSink(audio, 1024) {
+							@Override
+							protected void process(Vec2d[] complex) {
+								applyGain(complex, 44100, 50, 1000, 1, 2);
+								Terminal.directWrite(Terminal.Cursor.to(0,0));
+								displaySpectrum(complex, Terminal.windowWidth, Terminal.windowHeight-2);
+							}
+						};
+					}
+					decoder.connect(audio);
 				} finally {
 					decoder.close();
 				}

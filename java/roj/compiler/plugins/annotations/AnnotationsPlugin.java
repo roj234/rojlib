@@ -5,7 +5,7 @@ import roj.compiler.plugin.LavaPlugin;
 
 /**
  * @author Roj234
- * @since 2024/12/1 0001 8:40
+ * @since 2024/12/1 8:40
  */
 @LavaPlugin(name = "annotations", desc = """
 		注解处理测试插件

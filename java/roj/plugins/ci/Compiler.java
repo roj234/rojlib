@@ -1,6 +1,6 @@
 package roj.plugins.ci;
 
-import roj.asm.util.ClassLike;
+import roj.asmx.ClassResource;
 import roj.collect.SimpleList;
 import roj.config.data.CMap;
 import roj.reflect.Bypass;
@@ -16,11 +16,11 @@ import java.util.function.BiFunction;
  */
 public interface Compiler {
 	Factory factory();
-	List<? extends ClassLike> compile(List<String> options, List<File> sources, boolean showDiagnosticId);
+	List<? extends ClassResource> compile(List<String> options, List<File> sources, boolean showDiagnosticId);
 
 	/**
 	 * @author Roj234
-	 * @since 2025/2/12 0012 13:19
+	 * @since 2025/2/12 13:19
 	 */
 	class Factory {
 		final Set<String> ignoredDiagnostics;

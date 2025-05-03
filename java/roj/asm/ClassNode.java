@@ -8,6 +8,7 @@ import roj.asm.attr.InnerClasses;
 import roj.asm.attr.UnparsedAttribute;
 import roj.asm.cp.ConstantPool;
 import roj.asm.cp.CstClass;
+import roj.asm.cp.CstUTF;
 import roj.asm.insn.AttrCodeWriter;
 import roj.asm.insn.CodeVisitor;
 import roj.asm.insn.CodeWriter;
@@ -16,12 +17,15 @@ import roj.asm.type.Type;
 import roj.asm.type.TypeHelper;
 import roj.collect.MyHashSet;
 import roj.collect.SimpleList;
+import roj.io.IOUtil;
 import roj.text.CharList;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
 import roj.util.Helpers;
 import roj.util.TypedKey;
 
+import java.io.IOException;
+import java.io.InputStream;
 import java.util.AbstractList;
 import java.util.Collections;
 import java.util.List;
@@ -32,7 +36,165 @@ import static roj.asm.Opcodes.*;
  * @author Roj234
  * @since 2021/5/30 19:59
  */
-public class ClassNode implements IClass {
+public class ClassNode implements ClassDefinition {
+	//region 解析工厂
+	public static ClassNode fromType(Class<?> type) {
+		String typeName = type.getName().replace('.', '/').concat(".class");
+		ClassLoader cl = type.getClassLoader();
+		try (InputStream in = cl==null?ClassLoader.getSystemResourceAsStream(typeName):cl.getResourceAsStream(typeName)) {
+			if (in != null) return parseSkeleton(IOUtil.getSharedByteBuf().readStreamFully(in).toByteArray());
+		} catch (IOException ignored) {}
+		return null;
+	}
+
+	public static ClassNode parseAll(byte[] buf) {return parseAll(DynByteBuf.wrap(buf));}
+	/**
+	 * 全量解析（包括属性），并清空常量池
+	 * 如果你的目的是压缩常量池，请用{@link roj.asmx.TransformUtil#compress(ClassNode)}而不是这个方法
+	 * * 它的效果甚至更好！
+	 *
+	 * 这个方法很浪费内存，你只应该在特殊的时候使用它
+	 */
+	public static ClassNode parseAll(DynByteBuf buf) {
+		if (buf.readInt() != 0xcafebabe) throw new IllegalArgumentException("Illegal header");
+		int version = buf.readInt();
+
+		ConstantPool cp = new ConstantPool();
+		cp.read(buf, ConstantPool.CHAR_STRING);
+
+		ClassNode klass = new ClassNode(version, cp, buf.readUnsignedShort(), cp.get(buf), (CstClass) cp.getNullable(buf));
+
+		int len = buf.readUnsignedShort();
+		if (len > 0) {
+			var itf = klass.itfList();
+			itf.ensureCapacity(len);
+			while (len-- > 0) itf.add(cp.get(buf));
+		}
+
+		len = buf.readUnsignedShort();
+		var fields = klass.fields;
+		fields.ensureCapacity(len);
+		while (len-- > 0) {
+			var field = new FieldNode(buf.readShort(), ((CstUTF) cp.get(buf)).str(), ((CstUTF) cp.get(buf)).str());
+			fields.add(field);
+			pattr(cp, buf, field, Signature.FIELD);
+		}
+
+		len = buf.readUnsignedShort();
+		var methods = klass.methods;
+		methods.ensureCapacity(len);
+		while (len-- > 0) {
+			var method = new MethodNode(buf.readShort(), klass.name(), ((CstUTF) cp.get(buf)).str(), ((CstUTF) cp.get(buf)).str());
+			methods.add(method);
+			pattr(cp, buf, method, Signature.METHOD);
+		}
+
+		pattr(cp, buf, klass, Signature.CLASS);
+
+		// 释放常量占用的空间
+		klass.cp.clear();
+		return klass;
+	}
+
+	public static ClassNode parseSkeleton(byte[] buf) {return parseSkeleton(new ByteList(buf));}
+	/**
+	 * 解析类骨架结构（仅处理常量池和类元数据，不处理属性）<br>
+	 * 这是我的ASM比ObjectWeb快的关键之处
+	 * 另外的好处是，所有的引用都只有一份，所以你可以直接修改{@link ConstantPool 常量池}里的常量，而不需要迭代每一个InsnNode
+	 *
+	 * @param buf 包含类文件数据的字节缓冲区（会移动读指针）
+	 * @see Attributed#getAttribute(ConstantPool, TypedKey) 按需解析属性
+	 * @see #parseAll(DynByteBuf)
+	 * @return 包含基础结构的ClassNode对象
+	 */
+	public static ClassNode parseSkeleton(DynByteBuf buf) {
+		if (buf.readInt() != 0xcafebabe) throw new IllegalArgumentException("Illegal header");
+		int version = buf.readInt();
+		var cp = new ConstantPool();
+		cp.read(buf, ConstantPool.BYTE_STRING);
+		return parseSkeletonWith(buf, version, cp);
+	}
+	/**
+	 * 使用外部常量池进行骨架解析.
+	 * 关于这个为什么会独立出来，请看@see，简而言之：方便压缩，共享字符串表
+	 *
+	 * @param buf    包含类文件数据的字节缓冲区（从name开始读取）
+	 * @param version 类文件版本号（需与常量池来源版本一致）
+	 * @param pool   预解析的常量池实例（必须与当前类数据匹配）
+	 * @see roj.compiler.context.LibraryCompactedKlass
+	 * @return 包含基础结构的ClassNode对象
+	 */
+	@NotNull
+	public static ClassNode parseSkeletonWith(DynByteBuf buf, int version, ConstantPool pool) {
+		var klass = new ClassNode(version, pool, buf.readUnsignedShort(), pool.get(buf), (CstClass) pool.getNullable(buf));
+
+		int len = buf.readUnsignedShort();
+		if (len > 0) {
+			var itf = klass.itfList();
+			itf.ensureCapacity(len);
+			while (len-- > 0) itf.add(pool.get(buf));
+		}
+
+		len = buf.readUnsignedShort();
+		var fields = klass.fields;
+		fields.ensureCapacity(len);
+		while (len-- > 0) {
+			var field = new FieldNode(buf.readShort(), pool.get(buf), pool.get(buf));
+			fields.add(field);
+			uattr(pool, buf, field);
+		}
+
+		len = buf.readUnsignedShort();
+		var methods = klass.methods;
+		methods.ensureCapacity(len);
+		while (len-- > 0) {
+			var method = new MethodNode(buf.readShort(), klass.name(), pool.get(buf), pool.get(buf));
+			methods.add(method);
+			uattr(pool, buf, method);
+		}
+
+		uattr(pool, buf, klass);
+		return klass;
+	}
+
+	private static void pattr(ConstantPool pool, DynByteBuf buf, Attributed node, int position) {
+		int len = buf.readUnsignedShort();
+		if (len == 0) return;
+
+		var attributes = node.attributes();
+		attributes.ensureCapacity(len);
+
+		int origEnd = buf.wIndex();
+		while (len-- > 0) {
+			String name = ((CstUTF) pool.get(buf)).str();
+			int length = buf.readInt();
+
+			int end = buf.rIndex + length;
+			buf.wIndex(end);
+
+			var parsedAttribute = Attribute.parse(node, pool, name, buf, position);
+			attributes._add(parsedAttribute == null ? new UnparsedAttribute(name, buf.slice(length)) : parsedAttribute);
+
+			// 忽略过长的属性.
+			buf.rIndex = end;
+			buf.wIndex(origEnd);
+		}
+	}
+	private static void uattr(ConstantPool pool, DynByteBuf r, Attributed node) {
+		int len = r.readUnsignedShort();
+		if (len == 0) return;
+
+		var attributes = node.attributes();
+		attributes.ensureCapacity(len);
+		while (len-- > 0) {
+			CstUTF name = pool.get(r);
+			int length = r.readInt();
+			// ByteList$Slice consumes 40 bytes , byte[] array header consumes 24+length bytes
+			attributes._add(new UnparsedAttribute(name, length == 0 ? null : length <= 16 ? r.readBytes(length) : r.slice(length)));
+		}
+	}
+	//endregion
+
 	public int version;
 	public ConstantPool cp;
 	public char modifier;
@@ -44,67 +206,6 @@ public class ClassNode implements IClass {
 	public final SimpleList<MethodNode> methods = new SimpleList<>();
 
 	private AttributeList attributes;
-
-	@SuppressWarnings("fallthrough")
-	public boolean verify() {
-		/*
-		 * If the ACC_MODULE flag is set in the access_flags item, then no other flag in the access_flags item may be
-		 * set, and the following rules apply to the rest of the ClassFile structure:
-		 *
-		 * major_version, minor_version: ≥ 53.0 (i.e., Java SE 9 and above)
-		 *
-		 * this_class: module-info
-		 *
-		 * super_class, interfaces_count, fields_count, methods_count: zero
-		 */
-		boolean module = (modifier & ACC_MODULE) != 0;
-		if (module) {
-			if (modifier != ACC_MODULE) throw new IllegalArgumentException("Module should only have 'module' flag");
-			if (!interfaces.isEmpty()) throw new IllegalArgumentException("Module should not have interfaces");
-			if (!fields.isEmpty()) throw new IllegalArgumentException("Module should not have fields");
-			if (!methods.isEmpty()) throw new IllegalArgumentException("Module should not have methods");
-		}
-
-		if (parent() == null && !"java/lang/Object".equals(name()) && !module)
-			throw new IllegalArgumentException("parent is null in " + name());
-
-		int acc = modifier;
-		if (Integer.bitCount(acc&(ACC_PUBLIC|ACC_PROTECTED|ACC_PRIVATE)) > 1)
-			throw new IllegalArgumentException("无效的描述符组合(Acc) "+this);
-		if (Integer.bitCount(acc&(ACC_FINAL|ACC_ABSTRACT)) > 1)
-			throw new IllegalArgumentException("无效的描述符组合(Fin) "+this);
-		if (Integer.bitCount(acc&(ACC_INTERFACE|ACC_ENUM)) > 1)
-			throw new IllegalArgumentException("无效的描述符组合(Itf) "+this);
-
-		int v = modifier & (ACC_ANNOTATION|ACC_INTERFACE);
-		if (v == ACC_ANNOTATION)
-			throw new IllegalArgumentException("无效的描述符组合(ANN) "+this);
-
-		// 如果设置了 ACC_INTERFACE 标志，还必须设置 ACC_ABSTRACT 标志，并且不得设置 ACC_FINAL、ACC_SUPER、ACC_ENUM 和 ACC_MODULE 标志。
-		// 如果不设置 ACC_INTERFACE 标志，则可以设置表 4.1-B 中除 ACC_ANNOTATION 和 ACC_MODULE 以外的任何其他标志。
-		// 但是，这样的类文件不能同时设置 ACC_FINAL 和 ACC_ABSTRACT 标志（JLS §8.1.1.2）。
-		if (v != 0 && (modifier & (ACC_ABSTRACT|ACC_SUPER|ACC_ENUM)) != ACC_ABSTRACT)
-			throw new IllegalArgumentException("无效的描述符组合(Itf) "+this);
-
-		MyHashSet<String> descs = new MyHashSet<>();
-		fastValidate(Helpers.cast(methods), descs);
-		descs.clear();
-		fastValidate(Helpers.cast(fields), descs);
-		return true;
-	}
-	private void fastValidate(SimpleList<RawNode> nodes, MyHashSet<String> out) {
-		for (int i = 0; i < nodes.size(); i++) {
-			RawNode n = nodes.get(i);
-			if (!out.add(n.name().concat(n.rawDesc())))
-				throw new IllegalArgumentException("重复的方法或字段 "+n);
-
-			int acc = n.modifier();
-			if (Integer.bitCount(acc&(ACC_PUBLIC|ACC_PROTECTED|ACC_PRIVATE)) > 1)
-				throw new IllegalArgumentException("无效的描述符组合(Acc) "+n);
-			if ((acc& ACC_ABSTRACT) != 0 && Integer.bitCount(acc&(ACC_FINAL|ACC_NATIVE|ACC_STATIC)) > 0)
-				throw new IllegalArgumentException("无效的描述符组合(Fin) "+n);
-		}
-	}
 
 	public ClassNode() {
 		this.cp = new ConstantPool();
@@ -124,7 +225,7 @@ public class ClassNode implements IClass {
 	}
 
 	@Override
-	public <T extends Attribute> T getAttribute(ConstantPool cp, TypedKey<T> type) {return Parser.parseAttribute(this,this.cp,type,attributes,Signature.CLASS);}
+	public <T extends Attribute> T getAttribute(ConstantPool cp, TypedKey<T> type) {return Attribute.parseSingle(this,this.cp,type,attributes,Signature.CLASS);}
 	public AttributeList attributes() {return attributes == null ? attributes = new AttributeList() : attributes;}
 	public AttributeList attributesNullable() {return attributes;}
 
@@ -142,7 +243,7 @@ public class ClassNode implements IClass {
 		return ic == null ? Collections.emptyList() : ic.classes;
 	}
 
-	@Override public ConstantPool cp() { return cp; }
+	@Override @NotNull public ConstantPool cp() { return cp; }
 
 	@Override
 	public DynByteBuf toByteArray(DynByteBuf w) {
@@ -203,7 +304,7 @@ public class ClassNode implements IClass {
 		for (int i = 0; i < ff.size(); i++) ff.get(i).parsed(cp);
 
 		AttributeList list = attributes;
-		if (list != null) Parser.parseAttributes(this,cp,list,Signature.CLASS);
+		if (list != null) Attribute.parseAll(this,cp,list,Signature.CLASS);
 
 		cp.clear();
 	}
@@ -215,9 +316,9 @@ public class ClassNode implements IClass {
 
 		AttributeList list = attributes;
 		if (list != null) {
-			var w = AsmShared.buf();
+			var w = AsmCache.buf();
 			for (int i = 0; i < list.size(); i++) list.set(i, UnparsedAttribute.serialize(cp, w, list.get(i)));
-			AsmShared.buf(w);
+			AsmCache.buf(w);
 		}
 	}
 
@@ -278,6 +379,67 @@ public class ClassNode implements IClass {
 	public final List<FieldNode> fields() { return fields; }
 	public final List<MethodNode> methods() { return methods; }
 
+	@SuppressWarnings("fallthrough")
+	public boolean verify() {
+		/*
+		 * If the ACC_MODULE flag is set in the access_flags item, then no other flag in the access_flags item may be
+		 * set, and the following rules apply to the rest of the ClassFile structure:
+		 *
+		 * major_version, minor_version: ≥ 53.0 (i.e., Java SE 9 and above)
+		 *
+		 * this_class: module-info
+		 *
+		 * super_class, interfaces_count, fields_count, methods_count: zero
+		 */
+		boolean module = (modifier & ACC_MODULE) != 0;
+		if (module) {
+			if (modifier != ACC_MODULE) throw new IllegalArgumentException("Module should only have 'module' flag");
+			if (!interfaces.isEmpty()) throw new IllegalArgumentException("Module should not have interfaces");
+			if (!fields.isEmpty()) throw new IllegalArgumentException("Module should not have fields");
+			if (!methods.isEmpty()) throw new IllegalArgumentException("Module should not have methods");
+		}
+
+		if (parent() == null && !"java/lang/Object".equals(name()) && !module)
+			throw new IllegalArgumentException("parent is null in " + name());
+
+		int acc = modifier;
+		if (Integer.bitCount(acc&(ACC_PUBLIC|ACC_PROTECTED|ACC_PRIVATE)) > 1)
+			throw new IllegalArgumentException("无效的描述符组合(Acc) "+this);
+		if (Integer.bitCount(acc&(ACC_FINAL|ACC_ABSTRACT)) > 1)
+			throw new IllegalArgumentException("无效的描述符组合(Fin) "+this);
+		if (Integer.bitCount(acc&(ACC_INTERFACE|ACC_ENUM)) > 1)
+			throw new IllegalArgumentException("无效的描述符组合(Itf) "+this);
+
+		int v = modifier & (ACC_ANNOTATION|ACC_INTERFACE);
+		if (v == ACC_ANNOTATION)
+			throw new IllegalArgumentException("无效的描述符组合(ANN) "+this);
+
+		// 如果设置了 ACC_INTERFACE 标志，还必须设置 ACC_ABSTRACT 标志，并且不得设置 ACC_FINAL、ACC_SUPER、ACC_ENUM 和 ACC_MODULE 标志。
+		// 如果不设置 ACC_INTERFACE 标志，则可以设置表 4.1-B 中除 ACC_ANNOTATION 和 ACC_MODULE 以外的任何其他标志。
+		// 但是，这样的类文件不能同时设置 ACC_FINAL 和 ACC_ABSTRACT 标志（JLS §8.1.1.2）。
+		if (v != 0 && (modifier & (ACC_ABSTRACT|ACC_SUPER|ACC_ENUM)) != ACC_ABSTRACT)
+			throw new IllegalArgumentException("无效的描述符组合(Itf) "+this);
+
+		MyHashSet<String> descs = new MyHashSet<>();
+		fastValidate(Helpers.cast(methods), descs);
+		descs.clear();
+		fastValidate(Helpers.cast(fields), descs);
+		return true;
+	}
+	private void fastValidate(SimpleList<Member> nodes, MyHashSet<String> out) {
+		for (int i = 0; i < nodes.size(); i++) {
+			Member n = nodes.get(i);
+			if (!out.add(n.name().concat(n.rawDesc())))
+				throw new IllegalArgumentException("重复的方法或字段 "+n);
+
+			int acc = n.modifier();
+			if (Integer.bitCount(acc&(ACC_PUBLIC|ACC_PROTECTED|ACC_PRIVATE)) > 1)
+				throw new IllegalArgumentException("无效的描述符组合(Acc) "+n);
+			if ((acc& ACC_ABSTRACT) != 0 && Integer.bitCount(acc&(ACC_FINAL|ACC_NATIVE|ACC_STATIC)) > 0)
+				throw new IllegalArgumentException("无效的描述符组合(Fin) "+n);
+		}
+	}
+
 	//region ASM Util
 	public final MethodNode getMethodObj(String name) { return getMethodObj(name, null); }
 	public final MethodNode getMethodObj(String name, String desc) {
@@ -335,6 +497,7 @@ public class ClassNode implements IClass {
 		c.finish();
 	}
 	//endregion
+
 	@Override
 	public String toString() {
 		CharList sb = new CharList(1000);

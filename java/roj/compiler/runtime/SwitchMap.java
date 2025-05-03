@@ -4,7 +4,7 @@ import roj.math.MathUtils;
 
 /**
  * @author Roj234
- * @since 2024/5/31 0031 6:18
+ * @since 2024/5/31 6:18
  */
 public final class SwitchMap {
 	public static final class Builder {

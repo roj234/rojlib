@@ -11,7 +11,7 @@ import java.lang.reflect.Method;
 
 /**
  * @author Roj234
- * @since 2023/12/29 0029 18:00
+ * @since 2023/12/29 18:00
  */
 public class ILSecurityManager {
 	private static volatile ILSecurityManager inst;

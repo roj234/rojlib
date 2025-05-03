@@ -26,7 +26,7 @@ import static roj.ui.Terminal.Color.minecraftJsonStyleToString;
 
 /**
  * @author Roj234
- * @since 2023/1/26 0026 20:27
+ * @since 2023/1/26 20:27
  */
 @SimplePlugin(id = "mcPing", desc = """
 	Minecraft协议端口扫描工具
@@ -51,7 +51,7 @@ public class MCPinger extends Plugin {
 			String addr = ctx.argument("addr", String.class);
 
 			conn.acquire();
-			ClientLaunch.tcp().loop(loop).timeout(1000).connect(NetUtil.parseAddress(addr, 25565)).initializator(new PingTask()).launch();
+			ClientLaunch.tcp().loop(loop).timeout(1000).connect(Net.parseAddress(addr, 25565)).initializator(new PingTask()).launch();
 		}))).then(argument("addr", Argument.string()).executes(ctx -> {
 			String addr = ctx.argument("addr", String.class);
 			InetAddress[] ips;

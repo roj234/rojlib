@@ -33,7 +33,7 @@ import java.util.function.Function;
 
 /**
  * @author Roj234
- * @since 2022/10/7 0007 22:32
+ * @since 2022/10/7 22:32
  */
 @SimplePlugin(id = "codeStat", desc = "让你可以直观的看到自己写了多少代码\n指令: codestat [文件夹]", version = "2.1")
 public class CodeStat extends Plugin {

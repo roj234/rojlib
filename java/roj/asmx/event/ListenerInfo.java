@@ -1,18 +1,18 @@
 package roj.asmx.event;
 
-import roj.asm.RawNode;
+import roj.asm.Member;
 
 /**
  * @author Roj234
- * @since 2024/3/21 0021 15:08
+ * @since 2024/3/21 15:08
  */
 final class ListenerInfo {
 	final String event;
-	final RawNode mn;
+	final Member mn;
 	final byte flags;
 	volatile EventListener impl;
 
-	ListenerInfo(String event, RawNode mn, byte flags) {
+	ListenerInfo(String event, Member mn, byte flags) {
 		this.event = event;
 		this.mn = mn;
 		this.flags = flags;

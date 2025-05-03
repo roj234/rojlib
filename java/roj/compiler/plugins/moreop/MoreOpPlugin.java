@@ -14,7 +14,7 @@ import roj.compiler.resolve.TypeCast;
 
 /**
  * @author Roj234
- * @since 2024/11/11 0011 22:34
+ * @since 2024/11/11 22:34
  */
 @LavaPlugin(name = "moreop", desc = """
 		More OP, More Power!

@@ -17,7 +17,7 @@ import static roj.ui.CommandNode.literal;
 
 /**
  * @author Roj234
- * @since 2024/5/31 0031 0:26
+ * @since 2024/5/31 0:26
  */
 @SimplePlugin(id = "unpacker", version = "1.0", desc = """
 	通用文件解包器
@@ -39,8 +39,8 @@ public class UnpackerPlugin extends Plugin {
 		registerCommand(literal("unpack").then(
 			argument("in", Argument.file()).executes(this::autoUnpack).then(
 				argument("out", Argument.folder()).executes(this::autoUnpack).then(
-					argument("packType", Argument.anyOf(type)).executes(this::unpack).then(
-						argument("mode", Argument.anyOf(mode)).executes(ctx -> getLogger().warn("未实现"))
+					argument("packType", Argument.oneOf(type)).executes(this::unpack).then(
+						argument("mode", Argument.oneOf(mode)).executes(ctx -> getLogger().warn("未实现"))
 		)))));
 	}
 

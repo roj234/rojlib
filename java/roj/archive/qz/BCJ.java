@@ -13,7 +13,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * @author Roj234
- * @since 2023/3/16 0016 0:06
+ * @since 2023/3/16 0:06
  */
 public final class BCJ extends QZCoder {
 	public static final BCJ X86 = new BCJ(1), ARM = new BCJ(5), ARM_THUMB = new BCJ(7);

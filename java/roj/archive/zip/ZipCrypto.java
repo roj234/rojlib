@@ -4,7 +4,6 @@ import roj.crypt.CRC32s;
 import roj.crypt.RCipherSpi;
 import roj.util.DynByteBuf;
 
-import javax.crypto.Cipher;
 import javax.crypto.ShortBufferException;
 import java.security.SecureRandom;
 import java.security.spec.AlgorithmParameterSpec;
@@ -12,7 +11,7 @@ import java.security.spec.AlgorithmParameterSpec;
 /**
  * @implNote ZipCrypto has known vulnerability
  * @author Roj234
- * @since 2022/11/12 0012 1:45
+ * @since 2022/11/12 1:45
  */
 public final class ZipCrypto extends RCipherSpi {
 	int key0,key1,key2;
@@ -34,7 +33,7 @@ public final class ZipCrypto extends RCipherSpi {
 		this.key0 = key0;
 		this.key1 = key1;
 		this.key2 = key2;
-		this.encrypt = Cipher.ENCRYPT_MODE == mode;
+		this.encrypt = RCipherSpi.ENCRYPT_MODE == mode;
 	}
 	public void init(int mode, byte[] key, AlgorithmParameterSpec config, SecureRandom random) { init(mode, key); }
 

@@ -13,7 +13,7 @@ import java.util.Arrays;
 /**
  * 不像java的DerOutputStream把byte[]拷来拷去，这个（大概）高性能的实现选择至多拷贝一次
  * @author Roj234
- * @since 2024/3/25 0025 3:22
+ * @since 2024/3/25 3:22
  */
 public final class DerWriter {
 	private final ByteList T = new ByteList();

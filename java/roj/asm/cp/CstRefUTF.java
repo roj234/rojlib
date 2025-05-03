@@ -20,11 +20,9 @@ public abstract sealed class CstRefUTF extends Constant permits CstClass, CstMet
 	public final void setValue(CstUTF value) {this.value = Objects.requireNonNull(value, "value");}
 
 	@Override
-	public final void write(DynByteBuf w) {
-		w.put(type()).putShort(value.index);}
+	public final void write(DynByteBuf w) {w.put(type()).putShort(value.index);}
 
-	public String toString() {
-		return super.toString() + " 引用["+ (int) value.index +"] " + value.str();}
+	public String toString() {return super.toString() + " 引用["+ (int) value.index +"] " + value.str();}
 
 	public final int hashCode() {return 31 * value.hashCode() + type();}
 	public final boolean equals(Object o) {return o instanceof CstRefUTF && equals0((CstRefUTF) o);}

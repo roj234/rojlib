@@ -14,7 +14,7 @@ import java.util.List;
 /**
  * 存放switch的数据
  * @author Roj234
- * @since 2024/6/16 0016 6:03
+ * @since 2024/6/16 6:03
  */
 public final class SwitchNode {
 	/** 用于switch的表达式 */
@@ -56,7 +56,7 @@ public final class SwitchNode {
 
 	/**
 	 * @author Roj234
-	 * @since 2024/4/30 0030 16:48
+	 * @since 2024/4/30 16:48
 	 */
 	public static final class Branch {
 		/** 如果是Pattern switch那么非空，该分支的变量类型和名称 */

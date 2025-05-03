@@ -12,7 +12,6 @@ import roj.asm.attr.Annotations;
 import roj.asm.attr.Attribute;
 import roj.asm.cp.Constant;
 import roj.asm.cp.CstRef;
-import roj.asm.type.Desc;
 import roj.collect.MyHashSet;
 import roj.collect.SimpleList;
 import roj.gui.GuiUtil;
@@ -76,7 +75,7 @@ public class FindClass extends JFrame {
 					sb.clear();
 					sb.append(data.name()).append('.').append(n.name()).append(n.rawDesc());
 					if (filter.test(sb)) {
-						out.add("M: "+new Desc(data.name(), n.name(), n.rawDesc()));
+						out.add("M: "+new MemberDescriptor(data.name(), n.name(), n.rawDesc()));
 						break;
 					}
 				}
@@ -84,7 +83,7 @@ public class FindClass extends JFrame {
 					sb.clear();
 					sb.append(data.name()).append('.').append(n.name()).append(' ').append(n.rawDesc());
 					if (filter.test(sb)) {
-						out.add("F: "+new Desc(data.name(), n.name(), n.rawDesc()));
+						out.add("F: "+new MemberDescriptor(data.name(), n.name(), n.rawDesc()));
 						break;
 					}
 				}
@@ -93,9 +92,9 @@ public class FindClass extends JFrame {
 				for (Constant c : data.cp.data()) {
 					if (c instanceof CstRef) {
 						CstRef ref = (CstRef) c;
-						String s = ref.descType();
+						String s = ref.rawDesc();
 						sb.clear();
-						sb.append(ref.className()).append('.').append(ref.descName());
+						sb.append(ref.owner()).append('.').append(ref.name());
 						if (!s.startsWith("(")) sb.append(' ');
 						sb.append(s);
 						if (filter.test(sb)) {
@@ -162,8 +161,8 @@ public class FindClass extends JFrame {
 					ClassNode node1 = (ClassNode) node;
 					out.add(node1.name());
 				} else {
-					RawNode n = (RawNode) node;
-					out.add((n instanceof FieldNode ? "F: ":"M: ")+new Desc(data.name(), n.name(), n.rawDesc()));
+					Member n = (Member) node;
+					out.add((n instanceof FieldNode ? "F: ":"M: ")+new MemberDescriptor(data.name(), n.name(), n.rawDesc()));
 				}
 			}
 		}
@@ -183,7 +182,7 @@ public class FindClass extends JFrame {
 		try (ZipFile za = new ZipFile(file)) {
 			for (ZEntry value : za.entries()) {
 				if (value.getName().toLowerCase().endsWith(".class")) {
-					ClassNode data = Parser.parseConstants(IOUtil.getSharedByteBuf().readStreamFully(za.getStream(value)).toByteArray());
+					ClassNode data = ClassNode.parseSkeleton(IOUtil.getSharedByteBuf().readStreamFully(za.getStream(value)).toByteArray());
 					ref.add(data);
 				}
 			}

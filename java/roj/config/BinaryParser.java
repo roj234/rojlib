@@ -14,7 +14,7 @@ import java.util.Map;
 
 /**
  * @author Roj234
- * @since 2023/3/17 0017 23:30
+ * @since 2023/3/17 23:30
  */
 public interface BinaryParser {
 	default CEntry parse(File file) throws IOException, ParseException { return parse(file, 0); }

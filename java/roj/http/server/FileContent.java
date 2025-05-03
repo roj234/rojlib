@@ -22,7 +22,7 @@ import java.util.concurrent.ThreadLocalRandom;
 
 /**
  * @author Roj234
- * @since 2023/2/3 0003 17:18
+ * @since 2023/2/3 17:18
  */
 final class FileContent implements Content {
 	private FileInfo file;
@@ -141,18 +141,13 @@ final class FileContent implements Content {
 			return this;
 		}
 
-		if (!v.startsWith("bytes=")) {
-			rh.code(416);
-			return Content.httpError(416);
-		}
-
 		long len = file.length(compress == 1);
 
+		if (!v.startsWith("bytes=")) return rangeNotSatisfiable(rh, len);
+
 		List<String> ranges = TextUtil.split(v.substring(6), ", ");
-		if (ranges.size() > 16) {
-			rh.code(416);
-			return Content.httpError(416);
-		}
+		if (ranges.size() > 16) return rangeNotSatisfiable(rh, len);
+
 		long[] data = this.ranges = new long[ranges.size() << 1];
 
 		long total = 0;
@@ -174,10 +169,8 @@ final class FileContent implements Content {
 			data[(i << 1) + 1] = end;
 
 			long seglen = end - start + 1;
-			if (seglen <= 0) {
-				rh.code(416);
-				return Content.httpError(416);
-			}
+			if (seglen <= 0) return rangeNotSatisfiable(rh, len);
+
 			total += seglen;
 		}
 
@@ -201,6 +194,12 @@ final class FileContent implements Content {
 		}
 
 		return plus(206, req);
+	}
+
+	private static Content rangeNotSatisfiable(ResponseHeader rh, long length) {
+		rh.code(416);
+		rh.header("content-range", "bytes */"+length);
+		return Content.httpError(416);
 	}
 
 	private static boolean hasETag(List<String> tags, String eTag) {

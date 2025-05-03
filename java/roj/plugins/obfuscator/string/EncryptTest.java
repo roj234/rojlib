@@ -2,7 +2,7 @@ package roj.plugins.obfuscator.string;
 
 /**
  * @author Roj234
- * @since 2025/3/18 0018 15:13
+ * @since 2025/3/18 15:13
  */
 public class EncryptTest {
 	public static String 我是解密函数一号(String arg) {

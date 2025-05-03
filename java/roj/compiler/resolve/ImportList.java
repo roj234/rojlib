@@ -2,8 +2,8 @@ package roj.compiler.resolve;
 
 import roj.asm.ClassNode;
 import roj.asm.FieldNode;
+import roj.asm.Member;
 import roj.asm.Opcodes;
-import roj.asm.RawNode;
 import roj.collect.MyHashMap;
 import roj.collect.MyHashSet;
 import roj.collect.SimpleList;
@@ -20,7 +20,7 @@ import java.util.List;
 
 /**
  * @author Roj234
- * @since 2024/5/12 0012 14:43
+ * @since 2024/5/12 14:43
  */
 public final class ImportList {
 	private static final MyHashSet<String> JAVA_LANG_WHITELIST = new MyHashSet<>();
@@ -253,7 +253,7 @@ public final class ImportList {
 			MyHashSet<String> oneClass = new MyHashSet<>(), allClass = new MyHashSet<>();
 			for (String klassName : importStaticClass) {
 				ClassNode info = ctx.classes.getClassInfo(klassName);
-				for (RawNode node : info.fields()) {
+				for (Member node : info.fields()) {
 					if ((node.modifier()&Opcodes.ACC_STATIC) == 0) continue;
 
 					name = node.name();
@@ -273,7 +273,7 @@ public final class ImportList {
 				return null;
 			}
 
-			if (ctx.checkAccessible((ClassNode) arr[0], (RawNode) arr[1], true, false)) {
+			if (ctx.checkAccessible((ClassNode) arr[0], (Member) arr[1], true, false)) {
 				//out2.add((FieldNode) arr[1]);
 				return (ClassNode) arr[0];
 			}
@@ -293,7 +293,7 @@ public final class ImportList {
 			MyHashSet<String> oneClass = new MyHashSet<>(), allClass = new MyHashSet<>();
 			for (String klassName : importStaticClass) {
 				ClassNode info = ctx.classes.getClassInfo(klassName);
-				for (RawNode mn : info.methods()) {
+				for (Member mn : info.methods()) {
 					if ((mn.modifier()&Opcodes.ACC_STATIC) == 0) continue;
 
 					name = mn.name();

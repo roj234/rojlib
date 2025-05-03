@@ -2,7 +2,7 @@ package roj.plugins.ci;
 
 import com.sun.nio.file.ExtendedWatchEventModifier;
 import roj.collect.*;
-import roj.io.NIOUtil;
+import roj.io.IOUtil;
 import roj.plugins.ci.event.LibraryModifiedEvent;
 import roj.ui.Terminal;
 
@@ -47,16 +47,16 @@ final class FileWatcher extends IFileWatcher implements Consumer<WatchKey> {
 	}
 
 	private final X via;
-	private final XHashSet<WatchKey, X> actions;
+	private final XashMap<WatchKey, X> actions;
 	private final WatchService watcher;
 	private final String libPath;
 
 	private final MyHashMap<String, X[]> listeners;
 
 	public FileWatcher() throws IOException {
-		watcher = NIOUtil.syncWatchPoll("文件修改监控", this);
-		XHashSet.Shape<WatchKey, X> shape = XHashSet.noCreation(X.class, "key", "_next", Hasher.identity());
-		actions = shape.create();
+		watcher = IOUtil.syncWatchPoll("文件修改监控", this);
+		XashMap.Builder<WatchKey, X> builder = XashMap.noCreation(X.class, "key", "_next", Hasher.identity());
+		actions = builder.create();
 		listeners = new MyHashMap<>();
 		via = new X();
 		actions.add(via);

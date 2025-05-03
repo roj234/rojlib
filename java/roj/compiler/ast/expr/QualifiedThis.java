@@ -11,7 +11,7 @@ import roj.compiler.resolve.TypeCast;
 
 /**
  * @author Roj234
- * @since 2024/2/2 0002 6:15
+ * @since 2024/2/2 6:15
  */
 final class QualifiedThis extends Expr {
 	// isThis true => XXX.this (has bytecode), false => XXX.super (only ALoad_0)

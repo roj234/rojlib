@@ -6,7 +6,7 @@ import roj.text.CharList;
 
 /**
  * @author Roj234
- * @since 2024/3/3 0003 3:27
+ * @since 2024/3/3 3:27
  */
 public interface Template {
 	default boolean isFast(Request req, ResponseHeader rh) { return false; }

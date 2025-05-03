@@ -13,7 +13,7 @@ import java.net.InetAddress;
 
 /**
  * @author Roj234
- * @since 2023/1/28 0028 1:23
+ * @since 2023/1/28 1:23
  */
 final class CTLightCat extends IpGetter {
 	private String accessToken;

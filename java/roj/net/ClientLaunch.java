@@ -9,7 +9,7 @@ import static roj.net.ServerLaunch.DEFAULT_LOOPER;
 
 /**
  * @author Roj234
- * @since 2022/10/11 0011 18:16
+ * @since 2022/10/11 18:16
  */
 public final class ClientLaunch {
 	private SelectorLoop loop = DEFAULT_LOOPER;

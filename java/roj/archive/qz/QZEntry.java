@@ -9,7 +9,7 @@ import java.nio.file.attribute.FileTime;
 
 /**
  * @author Roj234
- * @since 2023/3/14 0014 7:56
+ * @since 2023/3/14 7:56
  */
 public sealed class QZEntry implements ArchiveEntry, Cloneable permits QZEntryA {
 	String name;
@@ -62,7 +62,7 @@ public sealed class QZEntry implements ArchiveEntry, Cloneable permits QZEntryA 
     public final boolean hasModificationTime() {return (flag&MT) != 0;}
     public final boolean hasAttributes() {return (flag&ATTR) != 0;}
     public final boolean isDirectory() {return (flag&DIRECTORY) != 0;}
-    public final boolean isAntiItem() {return (flag & ANTI) != 0;}
+    public final boolean isAntiItem() {return (flag&ANTI) != 0;}
 
     public void setAccessTime(long t) {throw getException();}
     public void setCreationTime(long t) {throw getException();}

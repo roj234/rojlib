@@ -5,7 +5,6 @@ import roj.reflect.Unaligned;
 import roj.util.DynByteBuf;
 
 import javax.crypto.BadPaddingException;
-import javax.crypto.Cipher;
 import javax.crypto.ShortBufferException;
 import java.security.InvalidAlgorithmParameterException;
 import java.security.InvalidKeyException;
@@ -15,7 +14,7 @@ import java.util.Arrays;
 
 /**
  * @author Roj234
- * @since 2022/11/12 0012 15:34
+ * @since 2022/11/12 15:34
  */
 class AES extends RCipherSpi {
 	public static final int AES_BLOCK_SIZE = 16;
@@ -41,7 +40,7 @@ class AES extends RCipherSpi {
 	public void init(int mode, byte[] key, AlgorithmParameterSpec par, SecureRandom random) throws InvalidAlgorithmParameterException, InvalidKeyException {
 		if (par != null || random != null) throw new InvalidAlgorithmParameterException();
 
-		this.encrypt = mode != Cipher.DECRYPT_MODE;
+		this.encrypt = mode != RCipherSpi.DECRYPT_MODE;
 		if (Arrays.equals(lastKey, key)) return;
 
 		switch (key.length) {

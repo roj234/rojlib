@@ -15,7 +15,7 @@ import static roj.compiler.Tokens.byId;
 /**
  * AST - 赋值
  * @author Roj234
- * @since 2023/9/18 0018 9:07
+ * @since 2023/9/18 9:07
  */
 class Assign extends Expr {
 	LeftValue left;

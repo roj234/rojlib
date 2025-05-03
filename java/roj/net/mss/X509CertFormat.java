@@ -1,13 +1,12 @@
 package roj.net.mss;
 
+import roj.crypt.CryptoFactory;
 import roj.util.ArrayCache;
 import roj.util.DynByteBuf;
 import roj.util.Helpers;
 
-import javax.net.ssl.TrustManager;
-import javax.net.ssl.TrustManagerFactory;
-import javax.net.ssl.X509TrustManager;
-import java.security.*;
+import java.security.GeneralSecurityException;
+import java.security.SecureRandom;
 import java.security.cert.CertificateEncodingException;
 import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
@@ -27,25 +26,6 @@ public final class X509CertFormat implements MSSKeyFormat {
 		}
 	}
 
-	private static X509TrustManager systemDefault;
-	public static X509TrustManager getDefault() throws NoSuchAlgorithmException {
-		if (systemDefault == null) {
-			TrustManagerFactory tmf = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
-			try {
-				tmf.init((KeyStore) null);
-			} catch (KeyStoreException e) {
-				throw new NoSuchAlgorithmException("Unable to find system default trust manger", e);
-			}
-			for (TrustManager manager : tmf.getTrustManagers()) {
-				if (manager instanceof X509TrustManager) {
-					return systemDefault = (X509TrustManager) manager;
-				}
-			}
-			throw new NoSuchAlgorithmException("Unable to find system default trust manger");
-		}
-		return systemDefault;
-	}
-
 	@Override
 	public String getAlgorithm() { return null; }
 
@@ -62,8 +42,7 @@ public final class X509CertFormat implements MSSKeyFormat {
 
 	@Override
 	public boolean verify(MSSPublicKey key, byte[] data, byte[] sign) throws GeneralSecurityException {
-		X509Certificate key1 = ((X509Certificate) key.key);
-		getDefault().checkClientTrusted(new X509Certificate[] {key1}, key1.getPublicKey().getAlgorithm());
+		CryptoFactory.checkCertificateValidity(new X509Certificate[]{(X509Certificate) key.key});
 		return true;
 	}
 	@Override

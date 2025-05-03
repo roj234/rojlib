@@ -6,7 +6,7 @@ import java.util.List;
 
 /**
  * @author Roj234
- * @since 2023/3/4 0004 18:02
+ * @since 2023/3/4 18:02
  */
 public final class DnsResponse extends DnsQuery {
 	boolean authorizedAnswer, truncated;

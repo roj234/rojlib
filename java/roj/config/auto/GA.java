@@ -7,7 +7,7 @@ import roj.reflect.Java22Workaround;
 
 /**
  * @author Roj234
- * @since 2023/3/21 0021 12:50
+ * @since 2023/3/21 12:50
  */
 @Java22Workaround
 interface GA extends Cloneable {

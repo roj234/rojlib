@@ -8,8 +8,8 @@ import roj.config.auto.Optional;
 import roj.io.IOUtil;
 import roj.io.MyRegionFile;
 import roj.ui.Argument;
-import roj.ui.CommandConsole;
 import roj.ui.EasyProgressBar;
+import roj.ui.Shell;
 import roj.ui.Terminal;
 import roj.util.ArrayCache;
 
@@ -23,7 +23,7 @@ import java.util.regex.Pattern;
 
 /**
  * @author Roj234
- * @since 2024/8/15 0015 20:34
+ * @since 2024/8/15 20:34
  */
 public class ChunkTrim {
 	static final Pattern REGION_MATCHER = Pattern.compile("r\\.(-?\\d+)\\.(-?\\d+)\\.mca$");
@@ -183,7 +183,7 @@ public class ChunkTrim {
 			yn = 'y';
 		}
 
-		var c = new CommandConsole("");
+		var c = new Shell("");
 		c.setPrompt("\u001b[;97m输入需要删除的区块类型,Ctrl+C以结束 > ");
 		c.setInputEcho(true);
 

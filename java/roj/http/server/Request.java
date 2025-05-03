@@ -78,7 +78,7 @@ public final class Request extends Headers {
 	 * @return path + query parameter
 	 */
 	public String getURL() {
-		var sb = new CharList().append('/').append(path);
+		var sb = new CharList().append('/').append(initPath);
 		return (query.isEmpty() ? sb : sb.append('?').append(query)).toStringAndFree();
 	}
 

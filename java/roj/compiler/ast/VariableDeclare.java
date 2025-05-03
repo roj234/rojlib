@@ -7,7 +7,7 @@ import roj.compiler.resolve.ResolveException;
 
 /**
  * @author Roj234
- * @since 2024/2/21 0021 23:18
+ * @since 2024/2/21 23:18
  */
 public final class VariableDeclare extends Expr {
 	public final IType type;

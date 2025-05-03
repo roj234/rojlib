@@ -1,6 +1,6 @@
 package roj.plugins.obfuscator.naming;
 
-import roj.asm.type.Desc;
+import roj.asm.MemberDescriptor;
 
 import java.util.Random;
 import java.util.Set;
@@ -11,7 +11,7 @@ import java.util.Set;
  */
 public interface NamingPolicy {
 	String obfClass(String name, Set<String> noDuplicate, Random rand);
-	String obfName(Set<String> noDuplicate, Desc d, Random rand);
+	String obfName(Set<String> noDuplicate, MemberDescriptor d, Random rand);
 	default NamingPolicy setKeepPackage(boolean keepPackage) {
 		throw new UnsupportedOperationException(getClass().getName());
 	}

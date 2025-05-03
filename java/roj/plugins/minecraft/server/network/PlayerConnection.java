@@ -23,7 +23,7 @@ import roj.plugins.minecraft.server.event.PlayerLoginEvent;
 import roj.plugins.minecraft.server.event.PlayerMoveEvent;
 import roj.plugins.minecraft.server.util.TranslatedString;
 import roj.plugins.minecraft.server.util.Utils;
-import roj.ui.AnsiString;
+import roj.ui.Text;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
 
@@ -34,7 +34,7 @@ import java.util.UUID;
 
 /**
  * @author Roj234
- * @since 2024/3/19 0019 15:11
+ * @since 2024/3/19 15:11
  */
 public class PlayerConnection implements ChannelHandler/*, ViaCommandSender*/ {
 	private final String name;
@@ -423,7 +423,7 @@ public class PlayerConnection implements ChannelHandler/*, ViaCommandSender*/ {
 	public void sendMessage(String s) {
 		sendPacket(new Packet("GameMessage", IOUtil.getSharedByteBuf().putVarIntUTF(simpleJsonMessage(s)).putBool(false)));
 	}
-	public void sendMessage(AnsiString message, boolean overlay) {
+	public void sendMessage(Text message, boolean overlay) {
 		sendPacket(new Packet("GameMessage", IOUtil.getSharedByteBuf().putVarIntUTF(message.toMinecraftJson()).putBool(overlay)));
 	}
 	public void playGlobalSound(String soundId, byte category, @Range(from = 0, to = 2) float pitch) {
@@ -441,7 +441,7 @@ public class PlayerConnection implements ChannelHandler/*, ViaCommandSender*/ {
 	}
 
 	public void disconnect(String message) { sendDisconnect(simpleJsonMessage(message)); }
-	public void disconnect(AnsiString message) { sendDisconnect(message.toMinecraftJson()); }
+	public void disconnect(Text message) { sendDisconnect(message.toMinecraftJson()); }
 	private static String simpleJsonMessage(String message) { return "{\"text\":\"" + Tokenizer.addSlashes(message) + "\"}"; }
 	private void sendDisconnect(CharSequence message) {
 		if (!connection().isOutputOpen()) return;

@@ -48,8 +48,6 @@ public class ZipFileWriter extends OutputStream implements ArchiveWriter {
 		this.def = new Deflater(compression, true);
 	}
 
-	public ArchiveEntry createEntry(String fileName) { return new ZEntry(fileName); }
-
 	public void setComment(String comment) { this.comment = comment.getBytes(StandardCharsets.UTF_8); }
 	public void setComment(byte[] comment) { this.comment = comment; }
 

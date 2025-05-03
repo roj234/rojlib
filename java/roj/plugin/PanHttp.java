@@ -16,7 +16,7 @@ import java.util.function.BiConsumer;
 
 /**
  * @author Roj234
- * @since 2024/8/6 0006 16:18
+ * @since 2024/8/6 16:18
  */
 public final class PanHttp {
 	static long startTime = System.currentTimeMillis();

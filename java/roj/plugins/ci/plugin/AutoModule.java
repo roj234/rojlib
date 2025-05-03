@@ -1,13 +1,13 @@
 package roj.plugins.ci.plugin;
 
+import roj.asm.AsmCache;
 import roj.asm.ClassNode;
 import roj.asm.Opcodes;
-import roj.asm.Parser;
 import roj.asm.attr.Attribute;
 import roj.asm.attr.ClassListAttribute;
 import roj.asm.attr.ModuleAttribute;
 import roj.asm.attr.StringAttribute;
-import roj.asm.util.Context;
+import roj.asmx.Context;
 import roj.collect.MyHashSet;
 import roj.collect.SimpleList;
 import roj.text.TextUtil;
@@ -62,7 +62,7 @@ public class AutoModule implements Processor {
 			moduleInfo.addAttribute(new ClassListAttribute(Attribute.ModulePackages, new SimpleList<>(packages)));
 			moduleInfo.addAttribute(moduleAttr);
 
-			ctx.generatedFiles.put("module-info.class", DynByteBuf.wrap(Parser.toByteArray(moduleInfo)));
+			ctx.generatedFiles.put("module-info.class", DynByteBuf.wrap(AsmCache.toByteArray(moduleInfo)));
 		}
 		return classes;
 	}

@@ -11,7 +11,7 @@ import static roj.reflect.VMInternals.u;
 /**
  * 允许运行时不存在sun.misc.Unsafe的情况(WIP)
  * @author Roj234
- * @since 2024/8/4 0004 13:38
+ * @since 2024/8/4 13:38
  */
 public interface Unaligned {
 	//region fields initialize first

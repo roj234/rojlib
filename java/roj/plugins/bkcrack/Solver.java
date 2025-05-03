@@ -1,16 +1,16 @@
 package roj.plugins.bkcrack;
 
 import roj.collect.IntMap;
-import roj.concurrent.ITask;
+import roj.concurrent.Task;
 import roj.io.FastFailException;
 
 import static roj.plugins.bkcrack.Macros.*;
 
 /**
  * @author Roj234
- * @since 2022/11/12 0012 17:25
+ * @since 2022/11/12 17:25
  */
-final class Solver implements ITask {
+final class Solver implements Task {
 	static final int MIN_CONTIGUOUS_PLAIN_LENGTH = 8, CIPHER_KEY_SIZE = 12;
 
 	private final ZCKiller ctx;

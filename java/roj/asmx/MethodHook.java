@@ -1,12 +1,11 @@
 package roj.asmx;
 
+import roj.asm.MemberDescriptor;
 import roj.asm.Opcodes;
 import roj.asm.cp.CstClass;
 import roj.asm.insn.CodeWriter;
-import roj.asm.type.Desc;
 import roj.asm.type.Type;
 import roj.asm.type.TypeHelper;
-import roj.asm.util.Context;
 import roj.collect.MyHashMap;
 import roj.collect.SimpleList;
 import roj.text.CharList;
@@ -21,14 +20,14 @@ import java.util.function.Function;
 
 /**
  * @author Roj234
- * @since 2023/8/4 0004 15:36
+ * @since 2023/8/4 15:36
  */
-public abstract class MethodHook implements ITransformer {
+public abstract class MethodHook implements Transformer {
 	@Retention(RetentionPolicy.RUNTIME)
 	@Target(ElementType.METHOD)
 	protected @interface RealDesc { String[] value(); boolean callFrom() default false; }
 
-	protected final MyHashMap<Desc, Desc> hooks = new MyHashMap<>();
+	protected final MyHashMap<MemberDescriptor, MemberDescriptor> hooks = new MyHashMap<>();
 
 	public MethodHook() { addDefaultHook(); }
 	protected void addDefaultHook() {
@@ -44,14 +43,14 @@ public abstract class MethodHook implements ITransformer {
 				if (i < 0) i = sb.lastIndexOf("_")+1;
 				else i += 2;
 
-				Desc toDesc = new Desc();
+				MemberDescriptor toDesc = new MemberDescriptor();
 				toDesc.owner = this.getClass().getName().replace('.', '/');
 				toDesc.name = m.getName();
-				toDesc.param = TypeHelper.class2asm(m.getParameterTypes(), m.getReturnType());
+				toDesc.rawDesc = TypeHelper.class2asm(m.getParameterTypes(), m.getReturnType());
 				int i1 = sb.indexOf("static_");
 				toDesc.modifier = (char) (i1>=0&&i1<=i ? 1 : 0);
 
-				Function<Desc, List<Object>> fn = (x) -> {
+				Function<MemberDescriptor, List<Object>> fn = (x) -> {
 					List<Object> list = new SimpleList<>();
 					list.add(toDesc);
 					return list;
@@ -64,12 +63,12 @@ public abstract class MethodHook implements ITransformer {
 				if (altDesc != null) {
 					if (altDesc.callFrom()) toDesc.modifier |= 2;
 					for (String s : altDesc.value()) {
-						Desc key = Desc.fromJavapLike(s);
+						MemberDescriptor key = MemberDescriptor.fromJavapLike(s);
 						hooks.put(key, toDesc);
 					}
 				} else {
 					if (toDesc.modifier == 0) {
-						List<Type> param = Type.methodDesc(toDesc.param);
+						List<Type> param = Type.methodDesc(toDesc.rawDesc);
 						String owner = param.remove(0).owner();
 
 						i1 = sb.indexOf("callFrom_");
@@ -78,10 +77,10 @@ public abstract class MethodHook implements ITransformer {
 							toDesc.modifier |= 2;
 						}
 
-						Desc key = toDesc.copy();
+						MemberDescriptor key = toDesc.copy();
 						key.owner = owner;
 						key.name = sb.substring(i, sb.length());
-						key.param = Type.toMethodDesc(param);
+						key.rawDesc = Type.toMethodDesc(param);
 
 						hooks.put(key, toDesc);
 					} else {
@@ -95,7 +94,7 @@ public abstract class MethodHook implements ITransformer {
 	@Override
 	public boolean transform(String mappedName, Context ctx) {
 		String self = ctx.getData().name();
-		Desc d = new Desc();
+		MemberDescriptor d = new MemberDescriptor();
 
 		ctx.getData().visitCodes(new CodeWriter() {
 			int stackSize;
@@ -123,14 +122,14 @@ public abstract class MethodHook implements ITransformer {
 			private boolean hook(String owner, String name, String type) {
 				d.owner = owner;
 				d.name = name;
-				d.param = type;
-				Desc to = hooks.get(d);
+				d.rawDesc = type;
+				MemberDescriptor to = hooks.get(d);
 				if (to != null) {
 					if ((to.modifier & 2) != 0) {
 						super.ldc(new CstClass(self));
 						hasLdc = true;
 					}
-					super.invoke(Opcodes.INVOKESTATIC, to.owner, to.name, to.param, false);
+					super.invoke(Opcodes.INVOKESTATIC, to.owner, to.name, to.rawDesc, false);
 
 					d.modifier = 1;
 					return (to.modifier & 4) == 0;

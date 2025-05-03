@@ -3,7 +3,7 @@ package roj.plugins.obfuscator.raw;
 import roj.asm.FieldNode;
 import roj.asm.MethodNode;
 import roj.asm.attr.UnparsedAttribute;
-import roj.asm.util.Context;
+import roj.asmx.Context;
 import roj.plugins.obfuscator.ObfuscateTask;
 import roj.util.ByteList;
 
@@ -11,7 +11,7 @@ import java.util.Random;
 
 /**
  * @author Roj234
- * @since 2025/3/18 0018 14:21
+ * @since 2025/3/18 14:21
  */
 class AddDeprecated implements ObfuscateTask {
 	static final UnparsedAttribute DEPRECATED = new UnparsedAttribute("Deprecated", ByteList.EMPTY);

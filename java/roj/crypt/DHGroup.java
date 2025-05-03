@@ -7,7 +7,7 @@ import java.util.function.Supplier;
 
 /**
  * @author Roj234
- * @since 2023/4/3 0003 12:23
+ * @since 2023/4/3 12:23
  */
 public final class DHGroup implements Supplier<KeyExchange> {
 	public static final DHGroup
@@ -156,10 +156,7 @@ public final class DHGroup implements Supplier<KeyExchange> {
 
 	public BigInteger q() {
 		if (q == null) {
-			synchronized (this) {
-				if (q != null) return q;
-				q = p.subtract(BigInteger.valueOf(1)).divide(BigInteger.valueOf(2));
-			}
+			q = p.subtract(BigInteger.valueOf(1)).divide(BigInteger.valueOf(2));
 		}
 		return q;
 	}

@@ -5,7 +5,7 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Range;
 import roj.collect.IntMap;
 import roj.collect.SimpleList;
-import roj.concurrent.ITask;
+import roj.concurrent.Task;
 import roj.io.Finishable;
 import roj.io.IOUtil;
 import roj.io.buf.BufferPool;
@@ -23,7 +23,7 @@ import static roj.reflect.Unaligned.U;
 
 /**
  * @author Roj234
- * @since 2024/1/19 0019 2:51
+ * @since 2024/1/19 2:51
  */
 public final class LZMA2Parallel {
 	public final LZMA2Options options;
@@ -201,7 +201,7 @@ public final class LZMA2Parallel {
 			}
 		}
 
-		final ITask prepareTask(Compressor task) {
+		final Task prepareTask(Compressor task) {
 			byte dictMode = man.dictMode;
 			int dictSize = man.dictSize;
 
@@ -307,7 +307,7 @@ public final class LZMA2Parallel {
 			}
 		}
 	}
-	static final class Compressor extends LZMA2Out implements ITask {
+	static final class Compressor extends LZMA2Out implements Task {
 		final LZMA2Parallel man;
 		DynByteBuf in;
 		int pendingSize;

@@ -9,7 +9,7 @@ import java.util.concurrent.locks.Lock;
 
 /**
  * @author Roj234
- * @since 2023/5/16 0016 4:26
+ * @since 2023/5/16 4:26
  */
 public final class SegmentReadWriteLock extends AbstractQueuedSynchronizer {
 	private volatile boolean writeLockPending;

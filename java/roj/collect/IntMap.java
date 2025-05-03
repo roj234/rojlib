@@ -23,20 +23,20 @@ public class IntMap<V> extends AbstractMap<Integer, V> implements _Generic_Map<I
 	static final float NUMKEY_LOADFACTOR = 1f;
 
 	public static class Entry<V> implements _Generic_Entry, Map.Entry<Integer, V> {
-		int k;
-		public V v;
+		int key;
+		public V value;
 
-		public Entry(int k, V v) {this.k = k;this.v = v;}
+		public Entry(int key, V value) {this.key = key;this.value = value;}
 
 		@Override
 		@Deprecated
-		public Integer getKey() {return k;}
-		public int getIntKey() {return k;}
+		public Integer getKey() {return key;}
+		public int getIntKey() {return key;}
 
-		public V getValue() {return v;}
+		public V getValue() {return value;}
 		public V setValue(V now) {
-			V v = this.v;
-			this.v = now;
+			V v = this.value;
+			this.value = now;
 			return v;
 		}
 
@@ -45,7 +45,7 @@ public class IntMap<V> extends AbstractMap<Integer, V> implements _Generic_Map<I
 		public _Generic_Entry __next() {return next;}
 
 		@Override
-		public String toString() {return k+"="+v;}
+		public String toString() {return key +"="+ value;}
 	}
 
 	Entry<?>[] entries;
@@ -76,7 +76,7 @@ public class IntMap<V> extends AbstractMap<Integer, V> implements _Generic_Map<I
 	@Override
 	public _Generic_Entry[] __entries() {return entries;}
 	@Override
-	public void __remove(Entry<V> vEntry) {remove(vEntry.k);}
+	public void __remove(Entry<V> vEntry) {remove(vEntry.key);}
 	// GenericMap interface
 	public int size() {return size;}
 
@@ -111,7 +111,7 @@ public class IntMap<V> extends AbstractMap<Integer, V> implements _Generic_Map<I
 	public final Entry<V> getEntry(int key) {
 		Entry<V> entry = getFirst(key, false);
 		while (entry != null) {
-			if (entry.k == key) return entry;
+			if (entry.key == key) return entry;
 			entry = entry.next;
 		}
 		return null;
@@ -131,10 +131,10 @@ public class IntMap<V> extends AbstractMap<Integer, V> implements _Generic_Map<I
 		Entry<V> entry = getFirst(key, false);
 		if (entry == null) return null;
 
-		if (entry.k == key) {
+		if (entry.key == key) {
 			size--;
 			entries[intHash(key)&mask] = entry.next;
-			return entry.v;
+			return entry.value;
 		}
 
 		Entry<V> prev = entry;
@@ -142,10 +142,10 @@ public class IntMap<V> extends AbstractMap<Integer, V> implements _Generic_Map<I
 			entry = entry.next;
 			if (entry == null) return null;
 
-			if (entry.k == key) {
+			if (entry.key == key) {
 				size--;
 				prev.next = entry.next;
-				return entry.v;
+				return entry.value;
 			}
 
 			prev = entry;
@@ -165,7 +165,7 @@ public class IntMap<V> extends AbstractMap<Integer, V> implements _Generic_Map<I
 		for (int i = 0; i <= map.mask; i++) {
 			Entry<?> entry = map.entries[i];
 			while (entry != null) {
-				getOrCreateEntry(entry.k).v = (V) entry.v;
+				getOrCreateEntry(entry.key).value = (V) entry.value;
 				entry = entry.next;
 			}
 		}
@@ -183,20 +183,20 @@ public class IntMap<V> extends AbstractMap<Integer, V> implements _Generic_Map<I
 	public V getOrDefault(Object key, V def) {return getOrDefault((int) key, def);}
 	public V getOrDefault(int key, V def) {
 		Entry<V> entry = getEntry(key);
-		return entry == null ? def : entry.v;}
+		return entry == null ? def : entry.value;}
 
 	public V computeIfAbsentInt(int k, @NotNull IntFunction<V> fn) {
 		Entry<V> entry = getEntry(k);
 		V v;
 		if (entry == null) putInt(k, v = fn.apply(k));
-		else v = entry.v;
+		else v = entry.value;
 		return v;
 	}
 	public V computeIfAbsentIntS(int k, @NotNull Supplier<V> supplier) {
 		Entry<V> entry = getEntry(k);
 		V v;
 		if (entry == null) putInt(k, v = supplier.get());
-		else v = entry.v;
+		else v = entry.value;
 		return v;
 	}
 
@@ -214,7 +214,7 @@ public class IntMap<V> extends AbstractMap<Integer, V> implements _Generic_Map<I
 			entry = (Entry<V>) entries[i];
 			while (entry != null) {
 				next = entry.next;
-				int newKey = intHash(entry.k)&newMask;
+				int newKey = intHash(entry.key)&newMask;
 				entry.next = (Entry<V>) newEntries[newKey];
 				newEntries[newKey] = entry;
 				entry = next;
@@ -231,7 +231,7 @@ public class IntMap<V> extends AbstractMap<Integer, V> implements _Generic_Map<I
 	public Entry<V> getOrCreateEntry(int key) {
 		Entry<V> entry = getFirst(key, true);
 		while (true) {
-			if (entry.k == key) return entry;
+			if (entry.key == key) return entry;
 			if (entry.next == null) {
 				entry = entry.next = new Entry<>(key, (V)UNDEFINED);
 

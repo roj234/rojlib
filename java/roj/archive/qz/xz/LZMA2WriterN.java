@@ -17,7 +17,7 @@ import static roj.reflect.Unaligned.U;
 
 /**
  * @author Roj234
- * @since 2023/11/17 0017 2:10
+ * @since 2023/11/17 2:10
  */
 class LZMA2WriterN extends OutputStream {
 	static {initNatives();}

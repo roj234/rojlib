@@ -5,7 +5,7 @@ import roj.plugins.minecraft.server.network.PlayerConnection;
 
 /**
  * @author Roj234
- * @since 2024/3/22 0022 3:49
+ * @since 2024/3/22 3:49
  */
 public class CommandEvent extends Event {
 	private final PlayerConnection player;

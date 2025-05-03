@@ -7,7 +7,7 @@ import java.util.UUID;
 
 /**
  * @author Roj234
- * @since 2024/3/19 0019 23:24
+ * @since 2024/3/19 23:24
  */
 public class Entity {
 	public int id, type, bitset0;

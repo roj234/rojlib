@@ -19,7 +19,7 @@ import java.util.Set;
 
 /**
  * @author Roj234
- * @since 2024/6/10 0010 3:27
+ * @since 2024/6/10 3:27
  */
 final class ClassStage implements Processor {
 	@Override public boolean acceptClasspath() {return true;}
@@ -28,15 +28,15 @@ final class ClassStage implements Processor {
 	@Override public Set<String> acceptedAnnotations() {return ACCEPTS;}
 
 	@Override
-	public void handle(LocalContext ctx, IClass file, Attributed node, Annotation annotation) {
+	public void handle(LocalContext ctx, ClassDefinition file, Attributed node, Annotation annotation) {
 		String type = annotation.type();
 		if (type.endsWith("Attach")) {
 			if (file == node) {
 				if (annotation.getString("value", null) != null)
 					ctx.report(Kind.ERROR, "plugins.annotation.namedAttachOnType", file);
-				for (RawNode mn : file.methods()) attach(mn, ctx, annotation);
+				for (Member mn : file.methods()) attach(mn, ctx, annotation);
 			} else {
-				attach((RawNode) node, ctx, annotation);
+				attach((Member) node, ctx, annotation);
 			}
 		} else if (type.endsWith("Operator")) {
 			String token = annotation.getString("value");
@@ -100,12 +100,12 @@ final class ClassStage implements Processor {
 		return s.toStringAndFree();
 	}
 
-	private static void attach(RawNode mn, LocalContext ctx, Annotation annotation) {
+	private static void attach(Member mn, LocalContext ctx, Annotation annotation) {
 		if ((mn.modifier()&Opcodes.ACC_STATIC) == 0) return;
 		String desc = mn.rawDesc();
 
 		var params = Type.methodDesc(desc);
-		IClass info = ctx.resolve(params.get(0));
+		ClassDefinition info = ctx.resolve(params.get(0));
 		if (info != null) {
 			params.remove(0);
 

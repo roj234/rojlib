@@ -2,7 +2,7 @@ package roj.http.server;
 
 import roj.collect.MyBitSet;
 import roj.crypt.Base64;
-import roj.crypt.MT19937;
+import roj.crypt.CryptoFactory;
 import roj.io.IOUtil;
 import roj.util.ByteList;
 
@@ -12,7 +12,7 @@ import java.util.concurrent.locks.ReentrantLock;
 
 /**
  * @author Roj234
- * @since 2023/5/15 0015 14:12
+ * @since 2023/5/15 14:12
  */
 public abstract class SessionStorage {
 	private static final int ID_LENGTH = 32;
@@ -28,7 +28,7 @@ public abstract class SessionStorage {
 	}
 
 	ReentrantLock idLock = new ReentrantLock();
-	Random rnd = new MT19937();
+	Random rnd = CryptoFactory.MT19937Random();
 
 	public String newId() {
 		ByteList ob = IOUtil.getSharedByteBuf();

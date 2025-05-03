@@ -15,7 +15,7 @@ import java.io.IOException;
 
 /**
  * @author Roj234
- * @since 2024/11/26 0026 16:44
+ * @since 2024/11/26 16:44
  */
 class FlowController extends SpeedLimiter implements ChannelHandler {
 	private final FlowControl owner;

@@ -2,7 +2,7 @@ package roj.plugins.minecraft.server.data;
 
 /**
  * @author Roj234
- * @since 2024/3/20 0020 7:12
+ * @since 2024/3/20 7:12
  */
 public class Biome {
 	public static final Registry<Biome> REGISTRY = new Registry<>("biome", 256);

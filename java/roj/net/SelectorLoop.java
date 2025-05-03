@@ -4,7 +4,6 @@ import roj.collect.SimpleList;
 import roj.concurrent.FastLocalThread;
 import roj.concurrent.Shutdownable;
 import roj.io.IOUtil;
-import roj.text.logging.Logger;
 import roj.util.Helpers;
 import roj.util.HighResolutionTimer;
 
@@ -17,12 +16,13 @@ import java.util.concurrent.locks.LockSupport;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
+import static roj.net.Net.LOGGER;
+
 /**
  * @author Roj233
  * @since 2022/1/24 11:38
  */
 public class SelectorLoop implements Shutdownable {
-	public static final Logger LOGGER = Logger.getLogger("NIO");
 	public static final BiConsumer<String, Throwable> PRINT_HANDLER = (reason, error) -> LOGGER.warn("在{}阶段发生了未处理的异常", error, reason);
 
 	final class Poller extends FastLocalThread implements Consumer<SelectionKey> {

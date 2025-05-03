@@ -3,15 +3,11 @@ package roj.plugins;
 import org.jetbrains.annotations.Nullable;
 import roj.collect.SimpleList;
 import roj.concurrent.PacketBuffer;
-import roj.concurrent.TaskPool;
 import roj.config.ConfigMaster;
 import roj.config.ParseException;
 import roj.config.data.CMap;
-import roj.http.HttpClient;
-import roj.http.HttpRequest;
 import roj.http.WebSocketConnection;
 import roj.http.server.Content;
-import roj.http.server.IllegalRequestException;
 import roj.http.server.Request;
 import roj.http.server.auto.*;
 import roj.io.IOUtil;
@@ -26,17 +22,16 @@ import roj.util.Helpers;
 import roj.util.TypedKey;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.locks.Lock;
-import java.util.zip.GZIPOutputStream;
 
 /**
  * @author Roj234
- * @since 2024/4/4 0004 2:21
+ * @since 2024/4/4 2:21
  */
+@Deprecated
 @SimplePlugin(id = "simpleMQ", desc = "基于websocket的实时消息队列", version = "1.1")
 public class SimpleMQ extends Plugin {
 	private Plugin easySso;
@@ -45,24 +40,6 @@ public class SimpleMQ extends Plugin {
 	protected void onEnable() throws Exception {
 		easySso = getPluginManager().getPluginInstance(PluginDescriptor.Role.PermissionManager);
 		registerRoute("mq", new OKRouter().register(this), "PermissionManager");
-
-		var buf = IOUtil.getSharedByteBuf();
-		var gzos = new GZIPOutputStream(buf);
-		gzos.write("new byte[1234]=5&asdf=+6&asdf=+7".getBytes(StandardCharsets.UTF_8));
-		gzos.close();
-
-		// cookies, auto compress, get serializer via accept header
-		HttpClient execute = HttpRequest.builder().url("http://127.0.0.1:8080/mq/datatest").bodyG3(() -> buf.asInputStream()).execute();
-		TaskPool.Common().submit(() -> {
-			System.out.println(execute.head());
-			System.out.println(execute.str());
-		});
-	}
-
-	@POST
-	public Object datatest(Request req) throws IllegalRequestException {
-		System.out.println("result:"+req.formData());
-		return 1;
 	}
 
 	@Override

@@ -15,7 +15,7 @@ import java.util.Arrays;
 
 /**
  * @author Roj234
- * @since 2022/12/28 0028 14:20
+ * @since 2022/12/28 14:20
  */
 final class AES_GCM extends AES {
 	AES_GCM() {}

@@ -23,7 +23,7 @@ import static roj.asm.Opcodes.*;
 
 /**
  * @author Roj234
- * @since 2024/2/7 0007 4:59
+ * @since 2024/2/7 4:59
  */
 public final class MethodResult {
 	public MethodNode method;

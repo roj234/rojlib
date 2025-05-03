@@ -1,9 +1,10 @@
 
 usage:
 
-			dao = DAOMaker.makeDAO(DAO.class).init(/*java.sql.Connection*/).unwrap();
 ```java
-	interface DAO {
+	interface X {
+	    X instance = DAO.forType(X.class).newInstance(/*java.sql.Connection*/);
+
 		@Query("SELECT * from `comments` where `user` = :userId LIMIT 50")
 		List<Comment> getCommentsById(int userId);
 

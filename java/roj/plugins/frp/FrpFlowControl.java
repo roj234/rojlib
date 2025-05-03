@@ -10,7 +10,7 @@ import java.io.IOException;
 
 /**
  * @author Roj234
- * @since 2024/9/15 0015 0:17
+ * @since 2024/9/15 0:17
  */
 final class FrpFlowControl extends H2FlowControlSimple {
 	public FrpFlowControl() {this(65535, 0.75f);}

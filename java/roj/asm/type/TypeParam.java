@@ -9,7 +9,7 @@ import static roj.asm.type.Generic.*;
 
 /**
  * @author Roj234
- * @since 2022/11/1 0001 10:47
+ * @since 2022/11/1 10:47
  */
 public final class TypeParam implements IType {
 	public String name;

@@ -2,8 +2,8 @@ package roj.http.curl;
 
 import org.jetbrains.annotations.NotNull;
 import roj.collect.SimpleList;
-import roj.concurrent.ITask;
-import roj.concurrent.TaskHandler;
+import roj.concurrent.Task;
+import roj.concurrent.TaskExecutor;
 import roj.concurrent.TaskPool;
 import roj.http.AutoRedirect;
 import roj.http.HttpHead;
@@ -33,8 +33,8 @@ import java.util.zip.InflaterInputStream;
  * @author solo6975
  * @since 2022/5/1 0:55
  */
-public final class DownloadTask implements ChannelHandler, ITask, Future<File> {
-	public static final TaskHandler QUERY = new TaskPool(0, 2, 50, 60000, "NIO连接器");
+public final class DownloadTask implements ChannelHandler, Task, Future<File> {
+	public static final TaskExecutor QUERY = new TaskPool(0, 2, 50, 60000, "NIO连接器");
 
 	public static int defChunkStart = 65536;
 	public static int defMaxChunks = 16;

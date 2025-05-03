@@ -5,7 +5,7 @@ import roj.config.serial.CVisitor;
 
 /**
  * @author Roj234
- * @since 2023/3/23 0023 18:18
+ * @since 2023/3/23 18:18
  */
 final class PrimObj extends Adapter {
 	static final PrimObj STR = new PrimObj(Type.CLASS);

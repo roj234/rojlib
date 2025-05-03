@@ -10,7 +10,7 @@ import java.util.function.Function;
  * 类型为Either的字段不建议为null
  * 不带泛型参数的Either在序列化时会报错
  * @author Roj234
- * @since 2024/6/21 0021 22:37
+ * @since 2024/6/21 22:37
  */
 public final class Either<Left, Right> {
 	private Object data;

@@ -10,7 +10,7 @@ import java.io.File;
 
 /**
  * @author Roj234
- * @since 2025/4/4 0004 21:27
+ * @since 2025/4/4 21:27
  */
 final class ShareFile implements VirtualFile {
 	String name;

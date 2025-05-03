@@ -6,7 +6,7 @@ import roj.text.CharList;
 
 /**
  * @author Roj234
- * @since 2025/2/13 0013 0:30
+ * @since 2025/2/13 0:30
  */
 public class ProjectUpdateEvent extends Event {
 	private final Project project;

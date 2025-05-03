@@ -3,8 +3,8 @@ package roj.plugins.ddns;
 import roj.collect.MyBitSet;
 import roj.collect.MyHashMap;
 import roj.collect.SimpleList;
-import roj.concurrent.ITask;
-import roj.concurrent.TaskExecutor;
+import roj.concurrent.Task;
+import roj.concurrent.TaskThread;
 import roj.config.JSONParser;
 import roj.config.data.CList;
 import roj.config.data.CMap;
@@ -30,7 +30,7 @@ import static roj.plugins.ddns.IpGetter.pooledRequest;
 
 /**
  * @author Roj234
- * @since 2023/1/27 0027 19:03
+ * @since 2023/1/27 19:03
  */
 final class Aliyun implements DDNSService {
 	private static final String API_URL = "https://alidns.aliyuncs.com";
@@ -83,7 +83,7 @@ final class Aliyun implements DDNSService {
 
 		try {
 			HMAC hmac = new HMAC(MessageDigest.getInstance("SHA-1"));
-			hmac.setSignKey(accessSecret.concat("&").getBytes(StandardCharsets.UTF_8));
+			hmac.init(accessSecret.concat("&").getBytes(StandardCharsets.UTF_8));
 
 			hmac.update(IOUtil.encodeUTF8(signStr));
 			return encodeSignature(IOUtil.encodeBase64(hmac.digestShared())).toString();
@@ -103,7 +103,7 @@ final class Aliyun implements DDNSService {
 		Object v4Id, v6Id;
 	}
 
-	private final TaskExecutor th = new TaskExecutor();
+	private final TaskThread th = new TaskThread();
 
 	@Override
 	public void loadConfig(CMap config) {
@@ -265,7 +265,7 @@ final class Aliyun implements DDNSService {
 		return map;
 	}
 
-	private ITask _init(Map<String, String> param) {
+	private Task _init(Map<String, String> param) {
 		var url = makeUrl(param);
 		return () -> {
 			CMap cfg = _parse(pooledRequest(url));

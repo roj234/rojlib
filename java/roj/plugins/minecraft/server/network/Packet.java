@@ -4,7 +4,7 @@ import roj.util.DynByteBuf;
 
 /**
  * @author Roj234
- * @since 2024/3/19 0019 15:52
+ * @since 2024/3/19 15:52
  */
 public class Packet {
 	public final String name;

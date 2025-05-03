@@ -10,7 +10,7 @@ import roj.asm.insn.CodeWriter;
  * 该属性不会序列化
  * 用于实现自动属性与Java11以下的private字段访问
  * @author Roj234
- * @since 2024/4/15 0015 10:35
+ * @since 2024/4/15 10:35
  */
 public abstract class FieldAccessHook extends Attribute {
 	public static final String NAME = "LavaFieldHook";

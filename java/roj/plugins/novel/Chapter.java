@@ -8,7 +8,7 @@ import roj.text.ChinaNumeric;
 
 /**
  * @author Roj234
- * @since 2023/6/26 0026 21:29
+ * @since 2023/6/26 21:29
  */
 @Optional
 public class Chapter extends TreeNodeImpl<Chapter> {

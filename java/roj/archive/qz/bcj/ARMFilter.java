@@ -3,7 +3,7 @@ package roj.archive.qz.bcj;
 /**
  * BCJ filter for little endian ARM instructions.
  * @author Lasse Collin <lasse.collin@tukaani.org>, Roj234
- * @since 2023/3/16 0016 2:22
+ * @since 2023/3/16 2:22
  */
 public class ARMFilter extends Filter {
     public ARMFilter(boolean isEncoder, int startPos) {

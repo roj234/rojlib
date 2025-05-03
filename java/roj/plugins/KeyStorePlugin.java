@@ -41,7 +41,7 @@ import static roj.ui.CommandNode.literal;
 
 /**
  * @author Roj234
- * @since 2024/7/16 0016 5:08
+ * @since 2024/7/16 5:08
  */
 @SimplePlugin(id = "keyStore", desc = "统一密钥管理器，同时提供jar签名和验证功能")
 public class KeyStorePlugin extends Plugin {

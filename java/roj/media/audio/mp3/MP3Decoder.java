@@ -8,13 +8,12 @@ import roj.io.source.Source;
 import roj.media.audio.APETag;
 import roj.media.audio.AudioDecoder;
 import roj.media.audio.AudioMetadata;
-import roj.media.audio.AudioOutput;
+import roj.media.audio.AudioSink;
 import roj.reflect.ReflectionUtils;
 import roj.text.logging.Logger;
 import roj.util.ArrayCache;
 import roj.util.DynByteBuf;
 
-import javax.sound.sampled.LineUnavailableException;
 import java.io.IOException;
 
 import static roj.reflect.Unaligned.U;
@@ -25,19 +24,19 @@ import static roj.reflect.Unaligned.U;
  * @since 2024/2/18 23:37
  */
 public final class MP3Decoder implements AudioDecoder {
-	private static final Logger LOGGER = Logger.getLogger("MP3Decoder");
+	private static final Logger LOGGER = Logger.getLogger("MP3");
 	private static final int BUFFER_LEN = 16384;
-	private static final long STATE_OFFSET = ReflectionUtils.fieldOffset(MP3Decoder.class, "eof");
+	private static final long STATE_OFFSET = ReflectionUtils.fieldOffset(MP3Decoder.class, "state");
 
 	private Source in;
-	private AudioOutput out;
+	private AudioSink out;
 
-	private TaskPool asyncSyh;
+	private TaskPool asyncPool;
 
 	private final Header header = new Header();
 	private final byte[] buf = ArrayCache.getByteArray(BUFFER_LEN, false);
 	private int off, maxOff;
-	private volatile int eof;
+	private volatile int state;
 	private volatile long seekPos;
 
 	byte[] pcm;
@@ -46,14 +45,13 @@ public final class MP3Decoder implements AudioDecoder {
 	public MP3Decoder() {}
 
 	@Override
-	public AudioMetadata open(Source in, AudioOutput out, boolean parseMetadata) throws IOException, LineUnavailableException {
-		if (eof == 1) throw new IllegalStateException("Already decoding");
+	public AudioMetadata open(Source in, boolean parseMetadata) throws IOException {
+		if (state == 1) throw new IllegalStateException("Already decoding");
 		maxOff = off = 0;
-		eof = 0;
+		state = 0;
 		seekPos = -1;
 
 		this.in = in;
-		this.out = out;
 
 		in.seek(0);
 		AudioMetadata metadata = null;
@@ -65,11 +63,6 @@ public final class MP3Decoder implements AudioDecoder {
 			}
 		}
 
-		header.reset((int)in.position()-off, (int)in.length());
-		// 定位并解码第一帧
-		nextHeader();
-		if (eof == 0) out.init(header.getAudioFormat(), (header.getMode()==3?1:2)*header.getSamplingRate());
-
 		return metadata;
 	}
 	private AudioMetadata parseTag() throws IOException {
@@ -78,7 +71,7 @@ public final class MP3Decoder implements AudioDecoder {
 
 		int len;
 		if ((len = in.read(buf, 0, Math.min(BUFFER_LEN, 4096))) <= 10) {
-			eof = 2;
+			state = 2;
 			return null;
 		}
 
@@ -142,45 +135,50 @@ public final class MP3Decoder implements AudioDecoder {
 		return tag;
 	}
 
-	@Override public boolean isOpen() { return in != null; }
-
-	@Override
-	public void stop() {
-		synchronized (this) {
-			if (U.compareAndSwapInt(this, STATE_OFFSET, 1, 2)) {
-				try {
-					wait();
-				} catch (InterruptedException ignored) {}
-			}
-		}
-		in = null;
-		out = null;
-	}
-
 	@Override
 	public void close() {
 		AudioDecoder.super.close();
 		ArrayCache.putArray(buf);
+		state = 4;
 	}
 
-	@Override public boolean isDecoding() { return eof == 1; }
+	@Override
+	public int getState() {
+		if (in == null) return READY;
+		return switch (state) {
+			case 0 -> OPENED;
+			case 1 -> DECODING;
+			case 2,3 -> FINISHED;
+			default -> UNKNOWN;
+		};
+	}
 
 	@Override
-	public void decodeLoop() throws IOException {
-		if (!U.compareAndSwapInt(this, STATE_OFFSET, 0, 1)) return;
+	public void connect(AudioSink sink) throws IOException {
+		if (!U.compareAndSwapInt(this, STATE_OFFSET, 0, 1))
+			throw new IllegalStateException("wrong state "+state);
+
+		header.reset((int)in.position()-off, (int)in.length());
+		// 定位并解码第一帧
+		nextHeader();
+		// 如果没找到第一帧
+		if (state != 1) return;
+		// 初始化Sink
+		sink.open(header.getAudioFormat());
 
 		Layer layer = switch (header.getLayer()) {
 			case 1 -> new Layer1(header, this);
 			case 2 -> new Layer2(header, this);
-			case 3 -> new Layer3(header, this, asyncSyh == null ? TaskPool.Common() : asyncSyh);
+			case 3 -> new Layer3(header, this, asyncPool == null ? TaskPool.Common() : asyncPool);
 			default -> throw new IOException("未预料的错误");
 		};
 
 		pcmOff[0] = 0;
 		pcmOff[1] = 2;
 		pcm = ArrayCache.getByteArray(header.getPcmSize(), false);
+		out = sink;
 		try {
-			while (eof == 1) {
+			while (state == 1) {
 				// 1. 解码一帧
 				off = layer.decodeFrame(buf, off);
 
@@ -194,18 +192,20 @@ public final class MP3Decoder implements AudioDecoder {
 				// 4. 定位到下一帧并解码帧头
 				nextHeader();
 			}
+
+			flush();
 		} finally {
 			layer.close();
-			if (pcmOff[0] > 0 && out != null) out.write(pcm, 0, pcmOff[0], true);
 			ArrayCache.putArray(pcm);
-			eof = 3;
+			state = 3;
+			out = null;
 			synchronized (this) {notifyAll();}
 		}
 	}
 
 	// 2. 输出到音频对象
 	final void flush() {
-		if (pcmOff[0] > 0) out.write(pcm, 0, pcmOff[0], true);
+		if (pcmOff[0] > 0) out.write(pcm, 0, pcmOff[0]);
 		pcmOff[0] = 0;
 		pcmOff[1] = 2;
 	}
@@ -230,7 +230,7 @@ public final class MP3Decoder implements AudioDecoder {
 			off = 0;
 
 			if (maxOff <= len || (chunk += read) > 0x10000) {
-				eof = 2;
+				state = 2;
 				break;
 			}
 		}
@@ -239,8 +239,20 @@ public final class MP3Decoder implements AudioDecoder {
 		this.maxOff = maxOff;
 	}
 
-	@Override public boolean isSeekable() { return isDecoding(); }
-	@Override public void seek(double second) throws IOException {this.seekPos = header.seek(second);}
+	@Override
+	public void disconnect() {
+		synchronized (this) {
+			if (U.compareAndSwapInt(this, STATE_OFFSET, 1, 2)) {
+				try {
+					wait();
+				} catch (InterruptedException ignored) {}
+			}
+		}
+		in = null;
+	}
+
+	@Override public boolean isSeekable() { return getState() == DECODING; }
+	@Override public void seek(double timeSec) throws IOException {this.seekPos = header.seek(timeSec);}
 
 	@Override public double getCurrentTime() {return header.getTimePlayed();}
 	@Override public double getDuration() {
@@ -251,5 +263,4 @@ public final class MP3Decoder implements AudioDecoder {
 	@Override
 	@NotNull
 	public String getDebugInfo() { return header.toString(); }
-	public Header getHeader() { return header; }
 }

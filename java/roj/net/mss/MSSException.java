@@ -40,7 +40,7 @@ public class MSSException extends IOException {
 		else buf.put(0);
 
 		if (kd != null) {
-			kd.setSignKey(engine.deriveKey("alert", kd.getDigestLength()));
+			kd.init(engine.deriveKey("alert", kd.getDigestLength()));
 			kd.update(buf.slice(pos+4,2+data.length));
 			buf.put(kd.digestShared());
 		}

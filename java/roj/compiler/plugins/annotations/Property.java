@@ -12,7 +12,7 @@ import java.lang.annotation.Target;
  * getter和setter通常自动从value生成，但是不会为布尔值生成isXXX，依然是getXXX
  * 你也可以手动输入名称
  * @author Roj234
- * @since 2024/6/24 0024 22:59
+ * @since 2024/6/24 22:59
  */
 @Retention(RetentionPolicy.SOURCE)
 @Target(ElementType.TYPE)

@@ -7,7 +7,7 @@ import java.io.Closeable;
 /**
  * 共享内存
  * @author Roj234
- * @since 2024/4/24 0024 2:42
+ * @since 2024/4/24 2:42
  */
 public class SharedMemory implements Closeable {
 	private static native long nCreate(String name, long size) throws NativeException;

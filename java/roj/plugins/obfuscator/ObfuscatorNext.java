@@ -2,12 +2,12 @@ package roj.plugins.obfuscator;
 
 import roj.archive.zip.ZEntry;
 import roj.archive.zip.ZipFileWriter;
+import roj.asm.AsmCache;
 import roj.asm.ClassNode;
-import roj.asm.Parser;
-import roj.asm.util.Context;
+import roj.asmx.Context;
 import roj.collect.SimpleList;
 import roj.concurrent.TaskPool;
-import roj.crypt.MT19937;
+import roj.crypt.CryptoFactory;
 import roj.gui.Profiler;
 import roj.io.IOUtil;
 import roj.plugins.obfuscator.naming.ABC;
@@ -21,11 +21,11 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
 
-import static roj.asm.util.Context.runAsync;
+import static roj.asmx.Context.runAsync;
 
 /**
  * @author Roj234
- * @since 2025/3/18 0018 1:03
+ * @since 2025/3/18 1:03
  */
 public class ObfuscatorNext {
 	private List<ObfuscateTask> tasks = new SimpleList<>();
@@ -54,7 +54,7 @@ public class ObfuscatorNext {
 				System.out.println("Name conflict for "+className+", skip.");
 				arr.remove(i--);
 				zfw.beginEntry(new ZEntry(className+".class"));
-				Parser.toByteArrayShared(data).writeToStream(zfw);
+				AsmCache.toByteArrayShared(data).writeToStream(zfw);
 				zfw.closeEntry();
 				continue;
 			}
@@ -102,7 +102,7 @@ public class ObfuscatorNext {
 
 	public void obfuscate(List<Context> ctxs) {
 		var pool = TaskPool.Common();
-		var rand = new MT19937();
+		var rand = CryptoFactory.MT19937Random();
 
 		List<List<Context>> contextTasks = new ArrayList<>((ctxs.size()-1)/ASYNC_THRESHOLD + 1);
 

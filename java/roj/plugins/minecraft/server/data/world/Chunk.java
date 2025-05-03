@@ -15,7 +15,7 @@ import java.util.function.IntFunction;
 
 /**
  * @author Roj234
- * @since 2024/3/20 0020 5:37
+ * @since 2024/3/20 5:37
  */
 public final class Chunk {
 	private static final IntFunction<ChunkSection> ALLOC = pos -> new ChunkSection(true, pos);

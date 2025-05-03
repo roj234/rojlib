@@ -4,7 +4,7 @@ import java.io.File;
 
 /**
  * @author Roj234
- * @since 2024/5/23 0023 0:29
+ * @since 2024/5/23 0:29
  */
 public class Main {
 	public static File resourcePath = new File("D:\\mc\\MCMake\\projects\\rojlib\\resources");

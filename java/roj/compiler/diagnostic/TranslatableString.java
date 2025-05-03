@@ -1,7 +1,7 @@
 package roj.compiler.diagnostic;
 
+import roj.asm.ClassDefinition;
 import roj.asm.FieldNode;
-import roj.asm.IClass;
 import roj.asm.MethodNode;
 import roj.asm.type.IType;
 import roj.compiler.ast.expr.Expr;
@@ -13,7 +13,7 @@ import java.util.Arrays;
 
 /**
  * @author Roj234
- * @since 2025/4/4 0004 3:22
+ * @since 2025/4/4 3:22
  */
 public class TranslatableString {
 	public final String i18nKey;
@@ -43,7 +43,7 @@ public class TranslatableString {
 				CharSequence str;
 				if (arg instanceof TranslatableString ts) {
 					str = ts.translate(i18n, new CharList()).toStringAndFree();
-				} else if (arg instanceof IClass classNode) {
+				} else if (arg instanceof ClassDefinition classNode) {
 					str = classNode.name().replace('/', '.');
 				} else if (arg instanceof MethodNode methodNode) {
 					str = methodNode.toString();

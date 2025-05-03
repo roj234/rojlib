@@ -3,10 +3,10 @@ package roj.plugins.ci.plugin;
 import roj.archive.zip.ZEntry;
 import roj.archive.zip.ZipFile;
 import roj.archive.zip.ZipFileWriter;
+import roj.asm.AsmCache;
+import roj.asm.ClassDefinition;
 import roj.asm.ClassNode;
-import roj.asm.IClass;
-import roj.asm.Parser;
-import roj.asm.util.Context;
+import roj.asmx.Context;
 import roj.collect.SimpleList;
 import roj.config.Tokenizer;
 import roj.config.data.CEntry;
@@ -106,7 +106,7 @@ public class HOT_RELOAD implements Processor {
 		}
 		return classes;
 	}
-	public void sendChanges(List<? extends IClass> modified) {
+	public void sendChanges(List<? extends ClassDefinition> modified) {
 		if (modified.isEmpty()) return;
 		if (modified.size() > 9999) throw new IllegalArgumentException("Too many classes modified");
 
@@ -114,8 +114,8 @@ public class HOT_RELOAD implements Processor {
 		tmp.put(1).putShort(modified.size());
 
 		for (int i = 0; i < modified.size(); i++) {
-			IClass clz = modified.get(i);
-			ByteList data = Parser.toByteArrayShared(clz);
+			ClassDefinition clz = modified.get(i);
+			ByteList data = AsmCache.toByteArrayShared(clz);
 
 			try {
 				send(tmp.putUTF(clz.name().replace('/', '.')).putInt(data.readableBytes()).put(data));

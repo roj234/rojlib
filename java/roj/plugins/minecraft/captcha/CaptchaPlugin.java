@@ -17,13 +17,13 @@ import roj.plugins.minecraft.server.event.PlayerLoginEvent;
 import roj.plugins.minecraft.server.event.PlayerMoveEvent;
 import roj.plugins.minecraft.server.network.Packet;
 import roj.plugins.minecraft.server.network.PlayerConnection;
-import roj.ui.AnsiString;
+import roj.ui.Text;
 
 import java.util.Random;
 
 /**
  * @author Roj234
- * @since 2024/3/21 0021 11:47
+ * @since 2024/3/21 11:47
  */
 public class CaptchaPlugin extends Plugin {
 	private BlockSet[] blockSets;
@@ -73,7 +73,7 @@ public class CaptchaPlugin extends Plugin {
 			for (int i = 0; i < choices.length; i++) {
 				if (!choices[i].contains(cmd.charAt(7+i))) {
 					player.playGlobalSound("entity.villager.no", Enums.BLOCKS, 1);
-					player.sendMessage(new AnsiString("非常抱歉，您输入的验证码不正确！").colorRGB(0xCCE442), false);
+					player.sendMessage(new Text("非常抱歉，您输入的验证码不正确！").colorRGB(0xCCE442), false);
 					return;
 				}
 			}
@@ -88,10 +88,10 @@ public class CaptchaPlugin extends Plugin {
 
 			if (prob < 0) {
 				player.playGlobalSound("entity.villager.death", Enums.BLOCKS, 1);
-				player.disconnect(new AnsiString("非常抱歉，您未通过行为验证！\n("+(float)prob+","+captcha.hashCode()+")").colorRGB(0xEECD89));
+				player.disconnect(new Text("非常抱歉，您未通过行为验证！\n("+(float)prob+","+captcha.hashCode()+")").colorRGB(0xEECD89));
 			} else {
 				player.playGlobalSound("entity.villager.yes", Enums.BLOCKS, 1);
-				player.sendMessage(new AnsiString("验证码正确！欢迎回家，"+player.getName()).colorRGB(0xBBD3E9), false);
+				player.sendMessage(new Text("验证码正确！欢迎回家，"+player.getName()).colorRGB(0xBBD3E9), false);
 				player.sendPacket(new Packet("CustomPayload", IOUtil.getSharedByteBuf().putVarIntUTF("captcha:success").putDouble(prob)));
 			}
 

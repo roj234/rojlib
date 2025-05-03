@@ -3,14 +3,14 @@ package roj.plugins.obfuscator.raw;
 import roj.asm.FieldNode;
 import roj.asm.MethodNode;
 import roj.asm.Opcodes;
-import roj.asm.util.Context;
+import roj.asmx.Context;
 import roj.plugins.obfuscator.ObfuscateTask;
 
 import java.util.Random;
 
 /**
  * @author Roj234
- * @since 2025/3/18 0018 14:12
+ * @since 2025/3/18 14:12
  */
 class AllPublic implements ObfuscateTask {
 	@Override

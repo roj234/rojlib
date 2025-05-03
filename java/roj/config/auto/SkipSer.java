@@ -4,7 +4,7 @@ import roj.ReferenceByGeneratedClass;
 
 /**
  * @author Roj234
- * @since 2023/3/25 0025 12:59
+ * @since 2023/3/25 12:59
  */
 final class SkipSer extends Adapter {
 	@ReferenceByGeneratedClass

@@ -10,7 +10,7 @@ import roj.util.ArrayCache;
  * 有符号128位整数
  * 除法写的不好，很慢
  * @author Roj234
- * @since 2025/3/17 0017 4:26
+ * @since 2025/3/17 4:26
  */
 public class S128i implements Comparable<S128i> {
 	public static final S128i MIN_VALUE = new S128i(Long.MIN_VALUE, 0);

@@ -5,7 +5,7 @@ import roj.util.DynByteBuf;
 
 /**
  * @author Roj234
- * @since 2024/3/22 0022 1:19
+ * @since 2024/3/22 1:19
  */
 public class CustomPayloadEvent extends Event {
 	private final String channel;

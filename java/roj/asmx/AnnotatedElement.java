@@ -1,9 +1,9 @@
 package roj.asmx;
 
 import roj.asm.Attributed;
-import roj.asm.IClass;
+import roj.asm.ClassDefinition;
+import roj.asm.Member;
 import roj.asm.Opcodes;
-import roj.asm.RawNode;
 import roj.asm.annotation.Annotation;
 import roj.collect.MyHashMap;
 import roj.io.IOUtil;
@@ -15,7 +15,7 @@ import java.util.Set;
 
 /**
  * @author Roj234
- * @since 2023/12/26 0026 12:47
+ * @since 2023/12/26 12:47
  */
 public abstract sealed class AnnotatedElement permits AnnotatedElement.Type, AnnotatedElement.Node {
 	final MyHashMap<String, Annotation> annotations = new MyHashMap<>(2);
@@ -30,10 +30,10 @@ public abstract sealed class AnnotatedElement permits AnnotatedElement.Type, Ann
 	public abstract Attributed node();
 
 	public static final class Type extends AnnotatedElement {
-		final IClass owner;
+		final ClassDefinition owner;
 		Set<Node> children = Collections.emptySet();
 
-		public Type(IClass owner) { this.owner = owner; }
+		public Type(ClassDefinition owner) { this.owner = owner; }
 
 		public String owner() { return owner.name(); }
 		public Set<Node> children() { return children; }
@@ -42,7 +42,7 @@ public abstract sealed class AnnotatedElement permits AnnotatedElement.Type, Ann
 		 * 只保证一定包含注解的
 		 * 不带注解的字段或方法可能不存在
 		 */
-		public IClass node() { return owner; }
+		public ClassDefinition node() { return owner; }
 
 		@Override
 		public boolean equals(Object o) {
@@ -64,9 +64,9 @@ public abstract sealed class AnnotatedElement permits AnnotatedElement.Type, Ann
 
 	public static final class Node extends AnnotatedElement {
 		private final Type parent;
-		RawNode node;
+		Member node;
 
-		public Node(Type parent, RawNode node) {
+		public Node(Type parent, Member node) {
 			this.parent = parent;
 			this.node = node;
 		}
@@ -77,7 +77,7 @@ public abstract sealed class AnnotatedElement permits AnnotatedElement.Type, Ann
 
 		public boolean isLeaf() { return true; }
 		public Type parent() { return parent; }
-		public RawNode node() { return node; }
+		public Member node() { return node; }
 
 		@Override
 		public boolean equals(Object o) {

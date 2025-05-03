@@ -30,7 +30,7 @@ final class MethodListSingle extends ComponentList {
 	MethodListSingle(MethodNode method, boolean overriddenMethod) { this.method = method; this.isOverriden = overriddenMethod; }
 	@Override public List<MethodNode> getMethods() {return Collections.singletonList(method);}
 	@Override public boolean isOverriddenMethod(int id) {return isOverriden;}
-	@Override public String toString() {return "["+method.returnType()+' '+method.ownerClass()+'.'+method.name()+"("+TextUtil.join(method.parameters(), ", ")+")]";}
+	@Override public String toString() {return "["+method.returnType()+' '+method.owner()+'.'+method.name()+"("+TextUtil.join(method.parameters(), ", ")+")]";}
 
 	public MethodResult findMethod(LocalContext ctx, IType that, List<IType> actualArguments,
 								   Map<String, IType> namedArguments, int flags) {

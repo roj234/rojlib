@@ -11,7 +11,7 @@ import java.util.function.Consumer;
 
 /**
  * @author Roj234
- * @since 2022/10/11 0011 18:16
+ * @since 2022/10/11 18:16
  */
 public abstract class ServerLaunch implements Closeable {
 	public static final SelectorLoop DEFAULT_LOOPER = new SelectorLoop("RojLib 网络", 0, 4, 60000, 127);

@@ -14,7 +14,7 @@ import roj.plugin.SimplePlugin;
 import roj.text.CharList;
 import roj.text.TextWriter;
 import roj.ui.Argument;
-import roj.ui.CommandConsole;
+import roj.ui.Shell;
 import roj.ui.Terminal;
 
 import java.io.File;
@@ -33,7 +33,7 @@ public class MCTrim extends Plugin {
 			File libraries = ctx.argument("libraries", File.class).getAbsoluteFile();
 			System.out.println(libraries);
 
-			var c = new CommandConsole("");
+			var c = new Shell("");
 
 			c.setPrompt("\u001b[;97m添加MC版本目录,Ctrl+C以结束 > ");
 			c.setInputEcho(true);
@@ -132,7 +132,7 @@ public class MCTrim extends Plugin {
 					for (String key : librariesToRemove.keySet()) System.out.println("库文件 "+key);
 					break;
 				case 'S', 's':
-					File file = Terminal.readLine(new CommandConsole("保存到 > "), Argument.fileOptional(true));
+					File file = Terminal.readLine(new Shell("保存到 > "), Argument.fileOptional(true));
 					try (var tw = TextWriter.to(file)) {
 						tw.append("assets\n");
 						for (String key : assetsToRemove.keySet())  tw.append(key).append('\n');

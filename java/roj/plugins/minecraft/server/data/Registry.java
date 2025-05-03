@@ -5,7 +5,7 @@ import roj.collect.ToIntMap;
 
 /**
  * @author Roj234
- * @since 2024/3/20 0020 6:55
+ * @since 2024/3/20 6:55
  */
 public class Registry<T> {
 	public ToIntMap<T> REGISTRY = new ToIntMap<>();
@@ -22,7 +22,7 @@ public class Registry<T> {
 
 	public int nextId() { return nextId; }
 	public T getById(int id) { return id < 0 || id >= VALUES.size() ? null : VALUES.get(id); }
-	public int getId(T block) { return REGISTRY.getInt(block); }
+	public int getId(T block) { return REGISTRY.getOrDefault(block, 0); }
 
 	public void register(T t, int id) {
 		REGISTRY.putInt(t, id);

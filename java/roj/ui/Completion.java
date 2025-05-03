@@ -2,20 +2,20 @@ package roj.ui;
 
 /**
  * @author Roj234
- * @since 2023/11/20 0020 2:14
+ * @since 2023/11/20 2:14
  */
 public final class Completion {
-	public AnsiString description, completion;
+	public Text description, completion;
 	public int offset;
 	public boolean isTip;
 
-	public Completion(String str) { completion = new AnsiString(str).color16(Terminal.BLACK+Terminal.HIGHLIGHT); }
-	public Completion(AnsiString str) { completion = str; }
-	public Completion(AnsiString str, AnsiString desc) {
+	public Completion(String str) { completion = new Text(str).color16(Terminal.BLACK+ Terminal.HIGHLIGHT); }
+	public Completion(Text str) { completion = str; }
+	public Completion(Text str, Text desc) {
 		completion = str;
 		description = desc;
 	}
-	public Completion(AnsiString str, AnsiString desc, int off) {
+	public Completion(Text str, Text desc, int off) {
 		if (off > 0) throw new IllegalArgumentException("off must <= 0: "+off);
 		completion = str;
 		description = desc;

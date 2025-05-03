@@ -3,7 +3,7 @@ package roj.asm.insn;
 import org.intellij.lang.annotations.MagicConstant;
 import org.jetbrains.annotations.ApiStatus;
 import org.jetbrains.annotations.Range;
-import roj.asm.AsmShared;
+import roj.asm.AsmCache;
 import roj.asm.MethodNode;
 import roj.asm.Opcodes;
 import roj.asm.attr.Attribute;
@@ -123,7 +123,7 @@ public class CodeWriter extends AbstractCodeWriter {
 		int rPos = r.rIndex;
 		r.rIndex += len;
 
-		bciR2W = AsmShared.local().getBciMap();
+		bciR2W = AsmCache.getInstance().getBciMap();
 
 		int len1 = r.readUnsignedShort();
 		while (len1 > 0) {
@@ -190,7 +190,7 @@ public class CodeWriter extends AbstractCodeWriter {
 				break;
 			case "StackMapTable":
 				if (fvFlags == 0 && mn != null) {
-					FrameVisitor.readFrames(frames = new SimpleList<>(r.readUnsignedShort(r.rIndex)), r, cp, this, mn.ownerClass(), 0xffff, 0xffff);
+					FrameVisitor.readFrames(frames = new SimpleList<>(r.readUnsignedShort(r.rIndex)), r, cp, this, mn.owner(), 0xffff, 0xffff);
 				}
 				break;
 		}
@@ -261,7 +261,7 @@ public class CodeWriter extends AbstractCodeWriter {
 			int wi = bw.wIndex();
 
 			int len = codeBlocks.size()+1;
-			int[] offSum = AsmShared.local().getIntArray_(len);
+			int[] offSum = AsmCache.getInstance().getIntArray_(len);
 			updateOffset(labels, offSum, len);
 
 			codeOb = bw;
@@ -304,7 +304,7 @@ public class CodeWriter extends AbstractCodeWriter {
 	}
 	public void __updateOffsets() {
 		int len = codeBlocks.size()+1;
-		int[] offSum = AsmShared.local().getIntArray_(len);
+		int[] offSum = AsmCache.getInstance().getIntArray_(len);
 		updateOffset(labels, offSum, len);
 	}
 
@@ -447,7 +447,7 @@ public class CodeWriter extends AbstractCodeWriter {
 				frames = null;
 				break;
 			default:
-				Logger.FALLBACK.debug("{}.{} 中发现不支持的属性 {}", mn.ownerClass(), mn.name(), name);
+				Logger.FALLBACK.debug("{}.{} 中发现不支持的属性 {}", mn.owner(), mn.name(), name);
 				return;
 		}
 		b.rIndex = pos;

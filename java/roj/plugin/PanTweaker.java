@@ -2,9 +2,9 @@ package roj.plugin;
 
 import roj.RojLib;
 import roj.asm.Opcodes;
-import roj.asm.util.Context;
 import roj.asmx.AnnotationRepo;
-import roj.asmx.ITransformer;
+import roj.asmx.Context;
+import roj.asmx.Transformer;
 import roj.asmx.event.EventTransformer;
 import roj.asmx.launcher.Bootstrap;
 import roj.asmx.launcher.DefaultTweaker;
@@ -26,9 +26,9 @@ import java.util.List;
 
 /**
  * @author Roj234
- * @since 2023/12/31 0031 1:20
+ * @since 2023/12/31 1:20
  */
-public final class PanTweaker extends DefaultTweaker implements ITransformer {
+public final class PanTweaker extends DefaultTweaker implements Transformer {
 	static CMap CONFIG;
 	static AnnotationRepo annotations;
 

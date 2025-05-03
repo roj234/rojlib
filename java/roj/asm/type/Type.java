@@ -2,7 +2,7 @@ package roj.asm.type;
 
 import org.intellij.lang.annotations.MagicConstant;
 import org.jetbrains.annotations.Range;
-import roj.asm.AsmShared;
+import roj.asm.AsmCache;
 import roj.asm.Opcodes;
 import roj.collect.SimpleList;
 import roj.io.IOUtil;
@@ -114,7 +114,7 @@ public sealed class Type implements IType permits Type.DirtyHacker {
 	//region from Class descriptor
 	public static Type fieldDesc(String desc) {return parse(desc, 0);}
 	public static List<Type> methodDesc(String desc) {
-		SimpleList<Type> p = AsmShared.local().methodTypeTmp();
+		SimpleList<Type> p = AsmCache.getInstance().methodTypeTmp();
 		methodDesc(desc, p); return new SimpleList<>(p);
 	}
 	public static void methodDesc(String desc, List<Type> params) {

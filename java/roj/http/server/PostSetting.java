@@ -2,7 +2,7 @@ package roj.http.server;
 
 /**
  * @author Roj234
- * @since 2023/2/6 0006 2:15
+ * @since 2023/2/6 2:15
  */
 public interface PostSetting {
 	long postExceptLength();

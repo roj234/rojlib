@@ -6,8 +6,8 @@ import roj.net.ChannelHandler;
 import roj.plugins.minecraft.server.MinecraftServer;
 import roj.plugins.minecraft.server.util.TranslatedString;
 import roj.plugins.minecraft.server.util.Utils;
-import roj.ui.AnsiString;
 import roj.ui.Terminal;
+import roj.ui.Text;
 import roj.util.ByteList;
 
 import java.io.IOException;
@@ -16,7 +16,7 @@ import static roj.plugins.minecraft.server.data.Enums.GAMEMODE_SURVIVAL;
 
 /**
  * @author Roj234
- * @since 2024/3/19 0019 23:12
+ * @since 2024/3/19 23:12
  */
 public class PlayerInit implements ChannelHandler {
 	private static final byte[] NBT = Utils.constantize("assets/DynamicRegistry.json");
@@ -101,7 +101,7 @@ public class PlayerInit implements ChannelHandler {
 			// END GameProfile
 			.putVarInt(1) // gamemode
 			.putVarInt(player.getPing()) // ping
-			.putBool(true).putVarIntUTF(new AnsiString("看我干啥，你不会以为这是真实的服务器吧！").toMinecraftJson()) // optional[Text] displayName
+			.putBool(true).putVarIntUTF(new Text("看我干啥，你不会以为这是真实的服务器吧！").toMinecraftJson()) // optional[Text] displayName
 			.putBool(false) // optional[PublicKeyData] publicKey
 		));
 
@@ -132,7 +132,7 @@ public class PlayerInit implements ChannelHandler {
 			.putLong(Utils.pos2long(0,32,0)).putFloat(90)
 		));
 
-		player.sendMessage(new TranslatedString("multiplayer.player.joined", new AnsiString(player.getName())).color16(Terminal.YELLOW+ Terminal.HIGHLIGHT), false);
+		player.sendMessage(new TranslatedString("multiplayer.player.joined", new Text(player.getName())).color16(Terminal.YELLOW+ Terminal.HIGHLIGHT), false);
 
 		ctx.removeSelf();
 		ctx.channelOpened();

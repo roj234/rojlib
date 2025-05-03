@@ -17,7 +17,7 @@ import static java.lang.Integer.MIN_VALUE;
 import static roj.archive.qz.xz.rangecoder.RangeCoder.initProbs;
 /**
  * @author Roj234
- * @since 2023/5/29 0029 12:26
+ * @since 2023/5/29 12:26
  */
 public final class BCJ2 extends QZComplexCoder {
 	private final int segmentSize;
@@ -170,10 +170,10 @@ public final class BCJ2 extends QZComplexCoder {
 				ob._free();
 				rc.finish();
 				rc.release();
-				if (main instanceof Finishable) ((Finishable) main).finish();
-				if (call instanceof Finishable) ((Finishable) call).finish();
-				if (jump instanceof Finishable) ((Finishable) jump).finish();
-				if (rc.out instanceof Finishable) ((Finishable) rc.out).finish();
+				if (main instanceof Finishable f) f.finish();
+				if (call instanceof Finishable f) f.finish();
+				if (jump instanceof Finishable f) f.finish();
+				if (rc.out instanceof Finishable f) f.finish();
 				b = -2;
 			}
 		}

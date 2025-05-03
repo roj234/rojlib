@@ -1,6 +1,6 @@
 package roj.http.curl;
 
-import roj.concurrent.ITask;
+import roj.concurrent.Task;
 import roj.http.HttpHead;
 import roj.http.HttpRequest;
 import roj.io.source.Source;
@@ -15,7 +15,7 @@ import java.io.IOException;
  * @author Roj233
  * @since 2022/2/28 21:49
  */
-abstract class Downloader implements ITask, Closeable, ChannelHandler {
+abstract class Downloader implements Task, Closeable, ChannelHandler {
 	// todo 支持HTTP2.0后移走
 	public static int timeout = 10000;
 

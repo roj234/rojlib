@@ -3,9 +3,9 @@ package roj.config.auto;
 import org.jetbrains.annotations.NotNull;
 import roj.ReferenceByGeneratedClass;
 import roj.asm.ClassNode;
+import roj.asm.ClassUtil;
 import roj.asm.FieldNode;
 import roj.asm.MethodNode;
-import roj.asm.Parser;
 import roj.asm.annotation.Annotation;
 import roj.asm.attr.Annotations;
 import roj.asm.attr.Attribute;
@@ -20,8 +20,7 @@ import roj.asm.type.Generic;
 import roj.asm.type.IType;
 import roj.asm.type.Signature;
 import roj.asm.type.Type;
-import roj.asm.util.ClassUtil;
-import roj.asm.util.GenericTemplate;
+import roj.asmx.GenericTemplate;
 import roj.collect.*;
 import roj.compiler.resolve.Inferrer;
 import roj.io.IOUtil;
@@ -106,13 +105,13 @@ final class SerializerFactoryImpl extends SerializerFactory {
 			this.fieldType = actualTypeMode;
 		}
 
-		public String type() { return reader.ownerClass(); }
+		public String type() { return reader.owner(); }
 	}
 
 	SerializerFactoryImpl(int flag, ClassLoader cl) {
 		super(flag);
 		this.classLoader = cl;
-		this.GENERATED = Isolation.computeIfAbsent(cl, Fn).generated;
+		this.GENERATED = IMPLEMENTATION_CACHE.computeIfAbsent(cl, Fn).generated;
 
 		// 不开启AllowDynamic仍然可以序列化集合，只是不能反序列化
 		ObjAny any = dynamicRoot = new ObjAny(this);
@@ -172,7 +171,7 @@ final class SerializerFactoryImpl extends SerializerFactory {
 		if (type.isPrimitive() || type == String.class) throw new IllegalStateException("type不能是基本类型或字符串");
 
 		var adapterType = adapter.getClass() == Class.class ? (Class<?>) adapter : adapter.getClass();
-		var data = Parser.parseConstants(adapterType);
+		var data = ClassNode.fromType(adapterType);
 		if (data == null) throw new IllegalArgumentException("无法获取"+adapterType.getName()+"的类文件");
 
 		int wid = data.getMethod(writeMethod), rid = data.getMethod(readMethod);
@@ -257,7 +256,7 @@ final class SerializerFactoryImpl extends SerializerFactory {
 	@Override
 	public SerializerFactory as(String name, Class<?> type, Object adapter, String writeMethod, String readMethod) {
 		var adapterType = adapter.getClass() == Class.class ? (Class<?>) adapter : adapter.getClass();
-		var data = Parser.parseConstants(adapterType);
+		var data = ClassNode.fromType(adapterType);
 		if (data == null) throw new IllegalArgumentException("无法获取"+adapterType.getName()+"的类文件");
 
 		MethodNode w = data.getMethodObj(writeMethod), r = data.getMethodObj(readMethod);
@@ -302,7 +301,7 @@ final class SerializerFactoryImpl extends SerializerFactory {
 
 	private record RW(ClassNode data, MethodNode writer, MethodNode reader) {}
 	private static RW autoRW(Class<?> type, Class<?> adapter) {
-		ClassNode data = Parser.parseConstants(adapter);
+		ClassNode data = ClassNode.fromType(adapter);
 		if (data == null) throw new IllegalArgumentException("无法获取"+adapter.getName()+"的类文件");
 
 		Type clsType = Type.fromJavaType(type);
@@ -471,7 +470,7 @@ final class SerializerFactoryImpl extends SerializerFactory {
 			name = ((this.flag&OBJECT_POOL) | (flag&(SERIALIZE_PARENT|OPTIONAL_BY_DEFAULT|NO_SCHEMA)))+";"+name;
 		}
 
-		var GENERATED = Isolation.computeIfAbsent(type.getClassLoader(), Fn).generated;
+		var GENERATED = IMPLEMENTATION_CACHE.computeIfAbsent(type.getClassLoader(), Fn).generated;
 		if ((ser = GENERATED.get(name)) == null) {
 			lock.lock();
 			try {
@@ -713,7 +712,7 @@ final class SerializerFactoryImpl extends SerializerFactory {
 		if ((flag&t) == t) throw new IllegalArgumentException("CHECK_PARENT SERIALIZE_PARENT 不能同时为真");
 
 		if ((o.getModifiers()&ACC_PUBLIC) == 0 && (flag&CHECK_PUBLIC) != 0) throw new IllegalArgumentException("类"+o.getName()+"不是公共的");
-		ClassNode data = Parser.parseConstants(o);
+		ClassNode data = ClassNode.fromType(o);
 		if (data == null) throw new IllegalArgumentException("无法获取"+o.getName()+"的类文件");
 
 		int _init = data.getMethod("<init>", "()V");

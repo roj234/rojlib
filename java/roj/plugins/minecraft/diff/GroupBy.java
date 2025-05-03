@@ -2,7 +2,7 @@ package roj.plugins.minecraft.diff;
 
 import roj.collect.LongMap;
 import roj.collect.MyHashSet;
-import roj.concurrent.TaskHandler;
+import roj.concurrent.TaskExecutor;
 import roj.concurrent.TaskPool;
 import roj.config.ConfigMaster;
 import roj.config.data.CEntry;
@@ -28,7 +28,7 @@ import static roj.plugins.minecraft.diff.ChunkTrim.*;
 
 /**
  * @author Roj234
- * @since 2024/8/15 0015 20:34
+ * @since 2024/8/15 20:34
  */
 public class GroupBy {
 	public static void createBackup(File from, File to) {
@@ -141,7 +141,7 @@ public class GroupBy {
 		System.out.println("RemapTable size="+chunkRemap.size());
 		return chunkRemap;
 	}
-	private static void applyRemap(LongMap<Long> remap, File fromPath, File toPath, TaskHandler asyncPool) {
+	private static void applyRemap(LongMap<Long> remap, File fromPath, File toPath, TaskExecutor asyncPool) {
 		var map = new ConcurrentHashMap<Integer, MyRegionFile>();
 		Function<Integer, MyRegionFile> open = integer -> {
 			short x = (short) (integer >>> 16);

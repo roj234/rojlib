@@ -14,7 +14,7 @@ import static roj.reflect.Unaligned.U;
  * 一个适合【多线程写入，单线程读取】的无界FIFO队列
  * 多线程读取现在会出bug……除非把recycleSize设为0
  * @author Roj234
- * @since 2023/5/17 0017 18:48
+ * @since 2023/5/17 18:48
  */
 public final class PacketBuffer extends ReuseFIFOQueue<PacketBuffer.Entry> {
 	static final class Entry extends ReuseFIFOQueue.Node {

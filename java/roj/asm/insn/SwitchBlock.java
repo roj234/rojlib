@@ -16,7 +16,7 @@ import static roj.asm.Opcodes.*;
 
 /**
  * @author Roj234
- * @since 2022/11/17 0017 12:53
+ * @since 2022/11/17 12:53
  */
 public final class SwitchBlock extends CodeBlock {
 	byte code;

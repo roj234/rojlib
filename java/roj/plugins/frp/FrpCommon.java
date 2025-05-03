@@ -15,7 +15,7 @@ import java.io.IOException;
 
 /**
  * @author Roj234
- * @since 2024/9/15 0015 0:23
+ * @since 2024/9/15 0:23
  */
 public abstract class FrpCommon extends H2Connection {
 	static final SelectorLoop loop = new SelectorLoop("AE 网络IO", 2, 1000000, 1);

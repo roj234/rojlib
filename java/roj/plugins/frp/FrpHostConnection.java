@@ -22,7 +22,7 @@ import java.util.function.Consumer;
 
 /**
  * @author Roj234
- * @since 2024/9/15 0015 0:23
+ * @since 2024/9/15 0:23
  */
 class FrpHostConnection extends FrpCommon implements Consumer<MyChannel> {
 	private final FrpServer server;

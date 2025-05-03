@@ -2,7 +2,7 @@ package roj.test;
 
 import roj.config.ParseException;
 import roj.crypt.ConvolutionalECC;
-import roj.crypt.MT19937;
+import roj.crypt.CryptoFactory;
 import roj.crypt.ReedSolomonECC;
 import roj.util.ByteList;
 
@@ -10,7 +10,7 @@ import java.nio.charset.StandardCharsets;
 
 /**
  * @author Roj234
- * @since 2025/3/21 0021 9:37
+ * @since 2025/3/21 9:37
  */
 public class ECCTest {
 
@@ -55,7 +55,7 @@ public class ECCTest {
 	private static void shuffle(ByteList tmp, float rate) {
 		int len = tmp.wIndex();
 		byte[] list = tmp.list;
-		MT19937 rnd = new MT19937();
+		var rnd = CryptoFactory.L64W64X128MixRandom();
 		for (int i = 0; i < len<<3; i++) {
 			if (rnd.nextFloat() < rate)
 				list[i>>>3] ^= (rnd.nextBoolean()?1:0)<<(i&7);

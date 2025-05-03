@@ -1,6 +1,6 @@
 package roj.plugins.ci.plugin;
 
-import roj.asm.util.Context;
+import roj.asmx.Context;
 import roj.collect.SimpleList;
 import roj.config.data.CEntry;
 import roj.plugins.ci.Compiler;
@@ -10,7 +10,7 @@ import java.util.List;
 
 /**
  * @author Roj234
- * @since 2023/1/19 0019 8:16
+ * @since 2023/1/19 8:16
  */
 public interface Processor {
 	String name();

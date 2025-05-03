@@ -36,7 +36,7 @@ import java.util.function.Consumer;
 
 /**
  * @author Roj234
- * @since 2025/3/4 0004 3:54
+ * @since 2025/3/4 3:54
  */
 public class RemoteFileSystem extends Plugin implements Consumer<MyChannel> {
     private static final ChannelHandler PACKET_SERIALIZER = Packet.SERIALIZER.server();
@@ -70,7 +70,7 @@ public class RemoteFileSystem extends Plugin implements Consumer<MyChannel> {
         }
 
         if (!config.getString("address").isEmpty()) {
-            var bindAddress = NetUtil.parseAddress(config.getString("address"), InetAddress.getLocalHost());
+            var bindAddress = Net.parseAddress(config.getString("address"), InetAddress.getLocalHost());
             launch = ServerLaunch.tcp(config.getString("server_name"))
                     .bind(bindAddress)
                     .option(StandardSocketOptions.SO_REUSEADDR, true)

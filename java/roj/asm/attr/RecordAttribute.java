@@ -2,9 +2,8 @@ package roj.asm.attr;
 
 import org.jetbrains.annotations.Nullable;
 import roj.asm.FieldNode;
+import roj.asm.Member;
 import roj.asm.Opcodes;
-import roj.asm.Parser;
-import roj.asm.RawNode;
 import roj.asm.cp.ConstantPool;
 import roj.asm.cp.CstUTF;
 import roj.collect.SimpleList;
@@ -18,6 +17,8 @@ import java.util.List;
  * @since 2021/1/1 23:12
  */
 public final class RecordAttribute extends Attribute {
+	public static final int RECORD_ATTR = 8;
+
 	public RecordAttribute() { fields = new SimpleList<>(); }
 	public RecordAttribute(DynByteBuf r, ConstantPool cp) {
 		int len = r.readUnsignedShort();
@@ -33,7 +34,7 @@ public final class RecordAttribute extends Attribute {
 				rd.attributes = new AttributeList(len1);
 				while (len1-- > 0) {
 					String name0 = ((CstUTF) cp.get(r)).str();
-					rd.attributes._add(Parser.attr(rd, cp, name0, r.slice(r.readInt()), Parser.RECORD_ATTR));
+					rd.attributes._add(Attribute.parse(rd, cp, name0, r.slice(r.readInt()), RECORD_ATTR));
 				}
 			}
 		}
@@ -65,7 +66,7 @@ public final class RecordAttribute extends Attribute {
 		return sb.deleteCharAt(sb.length() - 1).toString();
 	}
 
-	public static final class Field implements RawNode {
+	public static final class Field implements Member {
 		public String name, type;
 
 		// Signature
@@ -84,7 +85,7 @@ public final class RecordAttribute extends Attribute {
 		@Override public AttributeList attributes() { return attributes == null ? attributes = new AttributeList() : attributes; }
 		@Nullable
 		@Override public AttributeList attributesNullable() { return attributes; }
-		@Override public <T extends Attribute> T getAttribute(ConstantPool cp, TypedKey<T> type) { return Parser.parseAttribute(this,cp,type,attributes,Parser.RECORD_ATTR); }
+		@Override public <T extends Attribute> T getAttribute(ConstantPool cp, TypedKey<T> type) { return Attribute.parseSingle(this,cp,type,attributes, RECORD_ATTR); }
 		@Override public char modifier() {return Opcodes.ACC_PUBLIC|Opcodes.ACC_FINAL;}
 		@Override public String name() { return name; }
 		@Override public void name(String name) {this.name = name;}

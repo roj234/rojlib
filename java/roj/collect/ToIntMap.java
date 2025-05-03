@@ -61,8 +61,8 @@ public class ToIntMap<K> extends MyHashMap<K, Integer> implements ToIntFunction<
 	public final Set<Entry<K>> selfEntrySet() { return _Generic_EntrySet.create(this); }
 
 	@Override
-	public final int applyAsInt(K value) { return getOrDefault(value, -1); }
-	public final int getInt(Object key) { return getOrDefault(key, 0); }
+	public final int applyAsInt(K value) { return getInt(value); }
+	public final int getInt(Object key) { return getOrDefault(key, -1); }
 	public final int getOrDefault(Object key, int def) {
 		Entry<K> entry = (Entry<K>) getEntry(key);
 		return entry == null ? def : entry.v;

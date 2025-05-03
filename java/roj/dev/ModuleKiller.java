@@ -6,7 +6,7 @@ import java.lang.reflect.Method;
 
 /**
  * @author Roj234
- * @since 2024/1/21 0021 23:19
+ * @since 2024/1/21 23:19
  */
 public class ModuleKiller {
 	public static void main(String[] args) throws Exception {

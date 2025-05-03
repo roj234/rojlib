@@ -1,8 +1,8 @@
 package roj.compiler.resolve;
 
 import org.jetbrains.annotations.NotNull;
+import roj.asm.ClassDefinition;
 import roj.asm.FieldNode;
-import roj.asm.IClass;
 import roj.compiler.context.LocalContext;
 import roj.text.CharList;
 
@@ -11,12 +11,12 @@ import roj.text.CharList;
  * @since 2024/2/6 3:02
  */
 final class FieldListSingle extends ComponentList {
-	FieldListSingle(IClass owner, FieldNode node) {
+	FieldListSingle(ClassDefinition owner, FieldNode node) {
 		this.owner = owner;
 		this.node = node;
 	}
 
-	final IClass owner;
+	final ClassDefinition owner;
 	final FieldNode node;
 
 	@NotNull

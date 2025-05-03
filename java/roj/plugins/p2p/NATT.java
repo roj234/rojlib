@@ -5,7 +5,6 @@ import roj.collect.SimpleList;
 import roj.crypt.Base64;
 import roj.http.HttpRequest;
 import roj.io.IOUtil;
-import roj.io.NIOUtil;
 import roj.net.*;
 import roj.ui.Terminal;
 import roj.util.ByteList;
@@ -23,11 +22,11 @@ import java.util.function.Function;
 /**
  * NAT Traversal
  * @author Roj234
- * @since 2024/1/10 0010 4:42
+ * @since 2024/1/10 4:42
  */
 public final class NATT implements Closeable, ChannelHandler, Consumer<MyChannel> {
 	public static void main(String[] args) throws Exception {
-		SimpleList<NetworkInterface> interfaces = NetUtil.getNetworkInterfaces();
+		SimpleList<NetworkInterface> interfaces = Net.getNetworkInterfaces();
 		if (interfaces.isEmpty()) {
 			System.out.println("No network interface available, abort");
 			return;
@@ -51,7 +50,7 @@ public final class NATT implements Closeable, ChannelHandler, Consumer<MyChannel
 		InetSocketAddress remote;
 		if (c == 'x') {
 			String addr = Terminal.readString("请输入对方地址: ");
-			remote = NetUtil.parseAddress(addr, null);
+			remote = Net.parseAddress(addr, null);
 		} else remote = null;
 
 		long t = System.currentTimeMillis();
@@ -149,7 +148,7 @@ public final class NATT implements Closeable, ChannelHandler, Consumer<MyChannel
 	 */
 	// UDP
 	public NATT(InetSocketAddress localAddr, @Nullable InetSocketAddress remoteAddr, Consumer<MyChannel> chInit, SelectorLoop loop, Servers servers, int ignored) throws IOException {
-		if (!NetUtil.getNetworkEndpoints().contains(localAddr.getAddress()))
+		if (!Net.getNetworkEndpoints().contains(localAddr.getAddress()))
 			throw new IOException("必须选择一个endpoint而不是0.0.0.0作为地址");
 
 		this.tcp = false;
@@ -171,7 +170,7 @@ public final class NATT implements Closeable, ChannelHandler, Consumer<MyChannel
 				int port = localAddr.getPort();
 				this.upnp = UPnPGateway.available()&&UPnPGateway.openPort("NATT", port, r.internetAddress.getPort(), false, 86400_000);
 
-				boolean publicIp = NetUtil.getNetworkEndpoints().contains(r.internetAddress.getAddress()) && r.internetAddress.getPort() == port;
+				boolean publicIp = Net.getNetworkEndpoints().contains(r.internetAddress.getAddress()) && r.internetAddress.getPort() == port;
 				check: {
 					for (i++; i < servers.stunServerCount; i++) {
 						addr = servers.getStunServer(i, ipv6);
@@ -227,7 +226,7 @@ public final class NATT implements Closeable, ChannelHandler, Consumer<MyChannel
 	}
 	// TCP
 	public NATT(InetSocketAddress localAddr, @Nullable InetSocketAddress remoteAddr, Consumer<MyChannel> chInit, SelectorLoop loop, Servers servers) throws IOException {
-		if (!NetUtil.getNetworkEndpoints().contains(localAddr.getAddress()))
+		if (!Net.getNetworkEndpoints().contains(localAddr.getAddress()))
 			throw new IOException("必须选择一个endpoint而不是0.0.0.0作为地址");
 
 		this.tcp = true;
@@ -248,7 +247,7 @@ public final class NATT implements Closeable, ChannelHandler, Consumer<MyChannel
 			} else {
 				// send SYN
 				SocketChannel keep = SocketChannel.open().setOption(StandardSocketOptions.TCP_NODELAY, true);
-				NIOUtil.setReusePort(keep, true);
+				Net.setReusePort(keep, true);
 
 				keepaliveAddress = null;
 				keepalive = keep.bind(localAddr);
@@ -269,7 +268,7 @@ public final class NATT implements Closeable, ChannelHandler, Consumer<MyChannel
 				if (r.errCode != 0) continue;
 
 				remoteAddress = r.internetAddress;
-				boolean publicIp = NetUtil.getNetworkEndpoints().contains(remoteAddress.getAddress()) && remoteAddress.getPort() == port;
+				boolean publicIp = Net.getNetworkEndpoints().contains(remoteAddress.getAddress()) && remoteAddress.getPort() == port;
 				this.upnp = UPnPGateway.available()&&UPnPGateway.openPort("NATT", port, remoteAddress.getPort(), tcp, 86400_000);
 
 				boolean[] remoteConnected = new boolean[1];

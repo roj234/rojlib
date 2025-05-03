@@ -22,7 +22,6 @@ import roj.util.DynByteBuf;
 import roj.util.Helpers;
 
 import java.io.*;
-import java.nio.channels.ClosedByInterruptException;
 import java.nio.charset.Charset;
 import java.util.List;
 import java.util.regex.Matcher;
@@ -85,8 +84,8 @@ public final class Terminal extends DelegatedPrintStream {
 		}
 
 		public static String getByConsoleCode(int color) { return MC_COLOR_JSON.get(color); }
-		public static AnsiString minecraftJsonStyleToString(CMap map) {
-			AnsiString sts = minecraftRawStyleToString(map.getString("text"));
+		public static Text minecraftJsonStyleToString(CMap map) {
+			Text sts = minecraftRawStyleToString(map.getString("text"));
 
 			int colorCode = MC_COLOR_JSON.getInt(map.getString("color").toLowerCase());
 			if (colorCode != 0) sts.color16(colorCode);
@@ -106,17 +105,17 @@ public final class Terminal extends DelegatedPrintStream {
 		}
 
 		private static final Pattern MINECRAFT_U00A7 = Pattern.compile("(?:\u00a7[0-9a-fA-FlmnokrLMNOKR])+");
-		public static AnsiString minecraftRawStyleToString(String raw) {
+		public static Text minecraftRawStyleToString(String raw) {
 			Matcher m = MINECRAFT_U00A7.matcher(raw);
-			if (!m.find()) return new AnsiString(raw);
+			if (!m.find()) return new Text(raw);
 
 			int prevI = 0;
-			AnsiString root = null;
+			Text root = null;
 
 			do {
 				int i = m.start();
 
-				AnsiString tmp = new AnsiString(raw.substring(prevI, i));
+				Text tmp = new Text(raw.substring(prevI, i));
 				if (root == null) root = tmp;
 				else root.append(tmp);
 
@@ -139,7 +138,7 @@ public final class Terminal extends DelegatedPrintStream {
 				prevI = m.end();
 			} while (m.find(prevI));
 
-			if (prevI < raw.length()) root.append(new AnsiString(raw.substring(prevI)));
+			if (prevI < raw.length()) root.append(new Text(raw.substring(prevI)));
 			return root;
 		}
 
@@ -166,13 +165,13 @@ public final class Terminal extends DelegatedPrintStream {
 			else {
 				//minecraftTooltip(rainbow, s, 70, sb);
 				var length = s.length();
-				var str = new AnsiString("");
+				var str = new Text("");
 
 				float hue = (float) ((int) System.currentTimeMillis() / 70 % length) / length;
 				for (int i = 0; i < length; i++) {
 					int rgb = HueToRGB(hue);
 					hue += 0.02f;
-					str.append(new AnsiString(String.valueOf(s.charAt(i))).colorRGB(rgb));
+					str.append(new Text(String.valueOf(s.charAt(i))).colorRGB(rgb));
 				}
 				str.writeAnsi(sb);
 			}
@@ -493,7 +492,7 @@ public final class Terminal extends DelegatedPrintStream {
 						try {
 							wait();
 						} catch (InterruptedException e) {
-							throw new ClosedByInterruptException();
+							throw IOUtil.rethrowAsIOException(e);
 						}
 					}
 				} finally {
@@ -516,7 +515,7 @@ public final class Terminal extends DelegatedPrintStream {
 			notify();
 		}
 	}
-	private static final Console PIPE = new DefaultConsole("") {
+	private static final KeyHandler PIPE = new VirtualTerminal("") {
 		@Override
 		public void keyEnter(int keyCode, boolean isVirtualKey) {
 			if (keyCode == (VK_CTRL|VK_C)) {
@@ -536,14 +535,14 @@ public final class Terminal extends DelegatedPrintStream {
 		}
 
 		@Override
-		public void idleCallback() {
-			if (ALT.reader != 0) super.idleCallback();
+		public void render() {
+			if (ALT.reader != 0) super.render();
 		}
 	};
 	// endregion
 	@NotNull
-	private static volatile Console console = PIPE;
-	public static void setConsole(Console c) {
+	private static volatile KeyHandler console = PIPE;
+	public static void setConsole(KeyHandler c) {
 		if (c == null) c = PIPE;
 
 		synchronized (Terminal.class) {
@@ -556,7 +555,7 @@ public final class Terminal extends DelegatedPrintStream {
 
 		if (c != PIPE) c.registered();
 	}
-	public static Console getConsole() {return console;}
+	public static KeyHandler getConsole() {return console;}
 	//region AnsiInput - 处理字符键入
 	public static final int VK_CTRL = 0x100;
 	public static final int VK_SHIFT = 0x200;
@@ -619,7 +618,7 @@ public final class Terminal extends DelegatedPrintStream {
 	// 这个方法不加锁是有意的，加锁的话获取字符串宽度会变得非常麻烦
 	public static void onInput(CharList buf) {
 		out.processInput(buf);
-		console.idleCallback();
+		console.render();
 	}
 
 	private final MyHashMap.Entry<CInt, Integer> matcher = new MyHashMap.Entry<>(new CInt(), null);
@@ -701,7 +700,7 @@ public final class Terminal extends DelegatedPrintStream {
 	 * 如果输入Ctrl+C，退出程序
 	 */
 	private static <T> T readLine(String prompt, Argument<T> arg) {
-		T v = readLine(new CommandConsole("\033[;"+(WHITE+HIGHLIGHT)+'m'+prompt), arg);
+		T v = readLine(new Shell("\033[;"+(WHITE+HIGHLIGHT)+'m'+prompt), arg);
 		//if (v == null) System.exit(1);
 		return v;
 	}
@@ -713,7 +712,7 @@ public final class Terminal extends DelegatedPrintStream {
 	 */
 	@Nullable
 	@SuppressWarnings("unchecked")
-	public static <T> T readLine(CommandConsole c, Argument<T> arg) {
+	public static <T> T readLine(Shell c, Argument<T> arg) {
 		if (!ANSI_INPUT) {
 			while (true) {
 				System.out.print(c.getPrompt());
@@ -790,7 +789,7 @@ public final class Terminal extends DelegatedPrintStream {
 		}
 
 		var ref = new char[1];
-		Console c = (keyCode, isVirtualKey) -> {
+		KeyHandler c = (keyCode, isVirtualKey) -> {
 			synchronized (ref) {
 				ref[0] = (char) keyCode;
 				ref.notifyAll();
@@ -976,12 +975,12 @@ public final class Terminal extends DelegatedPrintStream {
 	 */
 	public static void printError(String text) {serr.println(text);}
 
-	private static final SimpleList<ITerminal> terminals = new SimpleList<>();
-	public static void addListener(ITerminal t) {
+	private static final SimpleList<StdIO> terminals = new SimpleList<>();
+	public static void addListener(StdIO t) {
 		int i = terminals.indexOfAddress(t);
 		if (i < 0) terminals.add(t);
 	}
-	public static void removeListener(ITerminal t) {terminals.remove(t);}
+	public static void removeListener(StdIO t) {terminals.remove(t);}
 	public static boolean isFullUnicode() {return terminals.get(0).unicode();}
 
 	private static void write(CharSequence b) {
@@ -1004,7 +1003,7 @@ public final class Terminal extends DelegatedPrintStream {
 	static {
 		nativeCharset = NativeVT.charset;
 		var t = NativeVT.getInstance();
-		if (t == null) t = (ITerminal) RojLib.inject("roj.ui.Terminal.fallback");
+		if (t == null) t = (StdIO) RojLib.inject("roj.ui.Terminal.fallback");
 		if (t != null) {
 			addListener(t);
 			ALT = new AnsiIn();

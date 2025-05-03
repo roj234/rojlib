@@ -12,7 +12,7 @@ import static roj.reflect.Unaligned.U;
  * @author Roj234
  * @since 2020/8/19 1:01
  */
-public class AsyncTask<T> implements Future<T>, ITask {
+public class AsyncTask<T> implements Future<T>, Task {
 	private static final int INITIAL = 0, RUNNING = 1, COMPLETED = 2, FAILED = 3, CANCELLED = 4;
 	private static final long u_stateOffset = ReflectionUtils.fieldOffset(AsyncTask.class, "state");
 	private volatile int state;

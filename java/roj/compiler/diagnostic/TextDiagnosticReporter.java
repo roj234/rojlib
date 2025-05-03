@@ -1,8 +1,8 @@
 package roj.compiler.diagnostic;
 
 import roj.text.CharList;
-import roj.ui.AnsiString;
 import roj.ui.Terminal;
+import roj.ui.Text;
 
 import java.io.PrintStream;
 import java.util.Locale;
@@ -70,13 +70,13 @@ public class TextDiagnosticReporter implements Function<Diagnostic, Boolean> {
 
 				// 多行
 				if (diag.getColumnNumber()+diag.getLength() <= line.length()) {
-					AnsiString as = new AnsiString(line.substring(diag.getColumnNumber(), diag.getColumnNumber() + diag.getLength()));
-					as.bgColorRGB(0xff3333).append(new AnsiString("").reset()).writeAnsi(sb);
+					Text as = new Text(line.substring(diag.getColumnNumber(), diag.getColumnNumber() + diag.getLength()));
+					as.bgColorRGB(0xff3333).append(new Text("").reset()).writeAnsi(sb);
 
 					sb.append(line, diag.getColumnNumber()+diag.getLength(), line.length());
 				} else {
-					AnsiString as = new AnsiString(line.substring(diag.getColumnNumber()));
-					as.bgColorRGB(0xff3333).append(new AnsiString("").reset()).writeAnsi(sb);
+					Text as = new Text(line.substring(diag.getColumnNumber()));
+					as.bgColorRGB(0xff3333).append(new Text("").reset()).writeAnsi(sb);
 				}
 			} else {
 				sb.append(line).append('\n');

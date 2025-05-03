@@ -7,7 +7,7 @@ import roj.plugins.minecraft.server.network.PlayerConnection;
 
 /**
  * @author Roj234
- * @since 2024/3/22 0021 03:55
+ * @since 2024/3/22 03:55
  */
 public class BlockBreakEvent extends Event {
 	private final PlayerConnection connection;

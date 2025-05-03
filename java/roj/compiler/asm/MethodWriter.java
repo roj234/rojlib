@@ -191,6 +191,9 @@ public class MethodWriter extends CodeWriter {
 	}
 	public int getPlaceholderId(int slot) {return markerBlock[slot];}
 
+	// JumpSegmentAO
+	List<CodeBlock> getCodeBlocks() {return codeBlocks;}
+
 	// for insertBefore()
 	public DynByteBuf writeTo() {
 		var b = bw;

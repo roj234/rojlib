@@ -4,14 +4,14 @@ import roj.archive.qz.xz.LZMA2InputStream;
 import roj.archive.qz.xz.lz.LZDecoder;
 import roj.archive.qz.xz.lzma.LZMADecoder;
 import roj.archive.qz.xz.rangecoder.RangeDecoder;
-import roj.asmx.nixim.Inject;
-import roj.asmx.nixim.Nixim;
-import roj.asmx.nixim.Shadow;
+import roj.asmx.injector.Inject;
+import roj.asmx.injector.Shadow;
+import roj.asmx.injector.Weave;
 
 import java.io.DataInputStream;
 import java.io.IOException;
 
-@Nixim(altValue = LZMA2InputStream.class)
+@Weave(target = LZMA2InputStream.class)
 abstract class LZMA2InN_ {
 	@Shadow
 	private DataInputStream in;

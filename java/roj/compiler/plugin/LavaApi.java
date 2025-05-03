@@ -3,8 +3,8 @@ package roj.compiler.plugin;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import roj.asm.Attributed;
+import roj.asm.ClassDefinition;
 import roj.asm.ClassNode;
-import roj.asm.IClass;
 import roj.asm.MethodNode;
 import roj.asm.annotation.Annotation;
 import roj.asm.attr.InnerClasses;
@@ -32,7 +32,7 @@ import java.util.function.Consumer;
 
 /**
  * @author Roj234
- * @since 2024/2/20 0020 16:57
+ * @since 2024/2/20 16:57
  */
 public interface LavaApi {
 	/**
@@ -52,28 +52,28 @@ public interface LavaApi {
 	 */
 	void addLibrary(Library library);
 
-	@NotNull ResolveHelper getResolveHelper(@NotNull IClass info);
+	@NotNull ResolveHelper getResolveHelper(@NotNull ClassDefinition info);
 	/**
 	 * 修改指定类结构后，使指定类的ResolveHelper失效，并在下一次getResolveHelper中重新生成
 	 * @param info 发生结构变化的类信息
 	 * @apiNote 不是线程安全的，最好别用
 	 */
-	void invalidateResolveHelper(IClass info);
+	void invalidateResolveHelper(ClassDefinition info);
 	/**
 	 * 获取类继承层级信息
 	 * 由于Java并没有给这些自定义类型只读的包装器 禁止修改返回值！
-	 * 值的高16位存放递增的index{@link LocalContext#getCommonParent(IClass, IClass)}，低16位存放info类到key类需要向上转型的最低次数
+	 * 值的高16位存放递增的index{@link LocalContext#getCommonParent(ClassDefinition, ClassDefinition)}，低16位存放info类到key类需要向上转型的最低次数
 	 * @param info 目标类信息
 	 */
-	@NotNull ToIntMap<String> getHierarchyList(IClass info);
+	@NotNull ToIntMap<String> getHierarchyList(ClassDefinition info);
 	/**
 	 * 获取方法重载列表，不存在时返回{@link ComponentList#NOT_FOUND}
 	 */
-	@NotNull ComponentList getMethodList(IClass info, String name);
+	@NotNull ComponentList getMethodList(ClassDefinition info, String name);
 	/**
 	 * 获取字段重载列表，不存在时返回{@link ComponentList#NOT_FOUND}
 	 */
-	@NotNull ComponentList getFieldList(IClass info, String name);
+	@NotNull ComponentList getFieldList(ClassDefinition info, String name);
 	/**
 	 * 获取泛型类型参数的实际类型
 	 * @apiNote 最好用这个：{@link LocalContext#inferGeneric(IType, String)}
@@ -81,13 +81,13 @@ public interface LavaApi {
 	 * @return 类型参数列表，当superType不是info的父类/接口时返回null
 	 * @throws ClassNotFoundException 当superType不存在时抛出
 	 */
-	@Nullable List<IType> getTypeArgumentsFor(IClass info, String superType) throws ClassNotFoundException;
+	@Nullable List<IType> getTypeArgumentsFor(ClassDefinition info, String superType) throws ClassNotFoundException;
 	/**
 	 * 获取内部类元信息
 	 * @param info 外层类元数据（不可为null）
 	 * @return 内部类名到元信息的不可变映射（键为全限定名，或以!开头的简单类名，只包含具名类，不包含匿名类或引用）
 	 */
-	@NotNull Map<String, InnerClasses.Item> getInnerClassInfo(IClass info);
+	@NotNull Map<String, InnerClasses.Item> getInnerClassInfo(ClassDefinition info);
 
 	/**
 	 * 根据短名称查找可能存在的包路径
@@ -96,8 +96,8 @@ public interface LavaApi {
 	 */
 	List<String> getAvailablePackages(String shortName);
 
-	void report(IClass source, Kind kind, int pos, String code);
-	void report(IClass source, Kind kind, int pos, String code, Object... args);
+	void report(ClassDefinition source, Kind kind, int pos, String code);
+	void report(ClassDefinition source, Kind kind, int pos, String code, Object... args);
 
 	// 沙盒类加载器
 	/**
@@ -188,7 +188,7 @@ public interface LavaApi {
 	 *   <li>处理classpath中的方法参数注解时可能抛出未支持异常</li>
 	 * </ul>
 	 *
-	 * @see Processor#handle(LocalContext, IClass file, Attributed node, Annotation)
+	 * @see Processor#handle(LocalContext, ClassDefinition file, Attributed node, Annotation)
 	 */
 	void addAnnotationProcessor(Processor processor);
 
@@ -276,7 +276,7 @@ public interface LavaApi {
 	 * <p>
 	 * 所有名称为token的参数都是运算符，<br>
 	 * 它们可以是任意字符串、可以包含空白字符、并且不能与其它注册的运算符重复
-	 * @since 2024/2/20 0020 1:31
+	 * @since 2024/2/20 1:31
 	 */
 	@FunctionalInterface
 	interface StartOp { Expr parse(LocalContext ctx) throws ParseException;}

@@ -504,14 +504,14 @@ public final class ExprParser {
 					wr.except(rBracket, "]");
 					cur = new ListLiteral(copyOf(keys));
 				break;
-				case -15://primitive type ref
+				case -15:{//primitive type ref
 					Type typeRef = PW.get(w.type());
 					assert typeRef != null;
 
 					cur = _typeRef(wr.next(), typeRef, flag);
 					if (cur == null) ctx.report(Kind.ERROR, "expr.typeRef.illegal");
 					else if (cur.getClass() == VariableDeclare.class) return cur;
-				break;
+				break;}
 				case -16://type ref
 					while (true) {
 						cur = chain(cur, w.val(), 0);
@@ -522,7 +522,7 @@ public final class ExprParser {
 								// some[ ].class
 								// some[ ] variable
 								// some[ index] ...
-								typeRef = ((MemberAccess) cur).toClassRef();
+								Type typeRef = ((MemberAccess) cur).toClassRef();
 								var tmp = _typeRef(w = w.copy(), typeRef, flag);
 								if (tmp != null) {
 									if (tmp.getClass() == VariableDeclare.class) return tmp;
@@ -911,8 +911,9 @@ public final class ExprParser {
 		// T<
 		while (true) {
 			var w = wr.next();
-			if (w.type() == ask) return true;
+			if (w.type() == ask) return true; // T<? 只能是泛型
 
+			// T<a
 			if (w.type() == LITERAL) {
 				while (true) {
 					w = wr.next();
@@ -921,38 +922,50 @@ public final class ExprParser {
 					if (w.type() != LITERAL) return false;
 				}
 
-				// A<T>.X<T>
+				// 嵌套 T<A<B
 				if (w.type() == lss) {
 					depth++;
 					continue;
 				}
-			} else if (w.type() < VOID || w.type() > DOUBLE) return false;
+			}
+			// 如果不是基本类型，也不是LITERAL，那么不是泛型
+			else if (w.type() < VOID || w.type() > DOUBLE) return false;
+			// 基本类型不能接. 所以没有上面那个循环
 			else w = wr.next();
 
+			// 看看是不是泛型数组 T<A>[]
 			while (w.type() == lBracket) {
 				w = wr.next();
+				// 如果不是数组格式
 				if (w.type() != rBracket) return false;
 				w = wr.next();
 			}
 
+			// T<A, B
 			if (w.type() != comma) {
+				// 必须以>结束泛型，明显这不是合法的表达式，所以实际上没有二义性
 				if (w.type() != gtr) return false;
 
 				do {
+					// 直到泛型完全结束
 					if (--depth == 0) return true;
 					w = wr.next();
 				} while (w.type() == gtr);
+				// 循环继续
 				wr.retractWord();
 			}
 		}
 	}
+	// 返回 null(表达式), Type(类型转换)或List<String>(lambda)
 	private Object detectParen(Tokens wr) throws ParseException {
 		Word w = wr.next();
+		// 基本类型
 		if (w.type() >= VOID && w.type() <= DOUBLE) {
 			wr.retractWord();
 			wr.skip();
 			return ctx.file.readType(CompileUnit.TYPE_PRIMITIVE);
 		}
+		// 非字面量
 		if (w.type() != Word.LITERAL) {
 			// () -> ...
 			if (w.type() == rParen) {
@@ -972,18 +985,19 @@ public final class ExprParser {
 		sb.append(first);
 
 		wr.state = STATE_TYPE;
+		// lambda (a, b) ->
 		notLambda:{
 			try {
 				while (true) {
 					w = wr.next();
 					if (w.type() != dot) {
-						// 如果是逗号，那么要么是表达式，要么是lambda
+						// 如果遇到逗号，那么不可能是类型转换
 						// (a, b.c ...
 						if (w.type() == comma) break;
 						break notLambda;
 					}
 					w = wr.next();
-					// often .class
+					// 通常是 .class
 					if (w.type() != LITERAL) return null;
 
 					sb.append('/').append(w.val());
@@ -995,6 +1009,7 @@ public final class ExprParser {
 			List<String> names = tmp();
 			names.add(first);
 
+			// lambda或表达式，尝试读取参数列表
 			while (true) {
 				w = wr.next();
 				if (w.type() != LITERAL) return null;
@@ -1018,7 +1033,7 @@ public final class ExprParser {
 
 		if (w.type() != rParen) {
 			// 只能是 泛型 或 数组
-			// 因为我没有设计 (TYPE NAME [, TYPE NAME]) -> ... 的语法 这很鸡肋
+			// 因为我没有设计 (TYPE NAME [, TYPE NAME]) -> ... 的lambda语法 这很鸡肋(也许可以用于method resolution？)
 			if (w.type() == lss || w.type() == lBracket) {
 				wr.skip();
 				return ctx.file.readGenericPart(sb.toString());
@@ -1026,7 +1041,7 @@ public final class ExprParser {
 			return null;
 		}
 
-		// 必须是合法的表达式开始
+		// 类型转换语句后，必须是合法的表达式开始
 		int flag = wr.next().type();
 		flag = stateMap.getOrDefaultInt(flag|SM_UnaryPre, 0) | stateMap.getOrDefaultInt(flag|SM_ExprStart, 0);
 		if (flag == 0) return null;

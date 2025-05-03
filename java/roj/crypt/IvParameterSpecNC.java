@@ -4,7 +4,7 @@ import java.security.spec.AlgorithmParameterSpec;
 
 /**
  * @author Roj234
- * @since 2023/4/29 0029 1:58
+ * @since 2023/4/29 1:58
  */
 public class IvParameterSpecNC implements AlgorithmParameterSpec {
 	private final byte[] iv;

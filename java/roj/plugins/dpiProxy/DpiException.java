@@ -4,7 +4,7 @@ import roj.util.DynByteBuf;
 
 /**
  * @author Roj234
- * @since 2024/10/3 0003 22:05
+ * @since 2024/10/3 22:05
  */
 public class DpiException extends Exception {
 	public int errno;

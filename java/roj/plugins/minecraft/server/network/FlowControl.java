@@ -8,7 +8,7 @@ import java.io.IOException;
 
 /**
  * @author Roj234
- * @since 2024/3/22 0022 1:21
+ * @since 2024/3/22 1:21
  */
 public class FlowControl implements ChannelHandler {
 	private long lastTime = System.currentTimeMillis();

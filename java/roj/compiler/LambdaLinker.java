@@ -35,7 +35,7 @@ import java.util.Map;
 
 /**
  * @author Roj234
- * @since 2024/5/20 0020 2:52
+ * @since 2024/5/20 2:52
  */
 public class LambdaLinker {
 	public final GlobalContextApi api = new GlobalContextApi();

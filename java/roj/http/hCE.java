@@ -17,13 +17,13 @@ import static java.util.zip.GZIPInputStream.GZIP_MAGIC;
 /**
  * Content-Encoding
  * @author Roj234
- * @since 2025/4/27 0027 5:53
+ * @since 2025/4/27 5:53
  */
 public final class hCE implements ChannelHandler {
 	public static final String ANCHOR = "http:ce_handler";
 	public static final String IN_END = "hce:inEnd", TOO_MANY_DATA = "hce:inOverflow";
 
-	private static final byte DEFLATE_INIT = 0, GZIP_INIT = 1, CHECKSUM = 2, IDENTITY = 3, DEFLATE = 4, GZIP = 5, END = 6;
+	private static final byte DEFLATE_INIT = 0, GZIP_INIT = 1, CHECKSUM = 2, IDENTITY = 6, DEFLATE = 4, GZIP = 5, END = 3;
 	private byte state;
 	private long readLimit;
 	private boolean exactLimit;
@@ -147,6 +147,7 @@ public final class hCE implements ChannelHandler {
 				}
 				end(ctx);
 			}
+			case END -> ctx.channelRead(buf);
 			default -> {
 				long remain = readLimit-buf.readableBytes();
 				if (remain <= 0) {

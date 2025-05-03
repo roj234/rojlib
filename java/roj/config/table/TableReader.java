@@ -7,7 +7,7 @@ import java.util.List;
 
 /**
  * @author Roj234
- * @since 2024/11/8 0008 19:43
+ * @since 2024/11/8 19:43
  */
 public interface TableReader {
 	default boolean readSheet(int sheetId, @Nullable String sheetName) {return true;}

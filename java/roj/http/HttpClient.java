@@ -13,7 +13,6 @@ import roj.util.DynByteBuf;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.nio.channels.ClosedByInterruptException;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.util.concurrent.locks.Condition;
@@ -22,7 +21,7 @@ import java.util.function.Consumer;
 
 /**
  * @author Roj234
- * @since 2022/10/15 0015 11:24
+ * @since 2022/10/15 11:24
  */
 public final class HttpClient implements ChannelHandler {
 	public static final String SHC_FINISH = "shc:finish";
@@ -171,7 +170,7 @@ public final class HttpClient implements ChannelHandler {
 			}
 		} catch (InterruptedException e) {
 			disconnect();
-			throw new ClosedByInterruptException();
+			throw IOUtil.rethrowAsIOException(e);
 		}
 		ensureOpen();
 		return head;
@@ -187,7 +186,7 @@ public final class HttpClient implements ChannelHandler {
 			waitFor();
 		} catch (InterruptedException e) {
 			disconnect();
-			throw new ClosedByInterruptException();
+			throw IOUtil.rethrowAsIOException(e);
 		}
 
 		ensureOpen();

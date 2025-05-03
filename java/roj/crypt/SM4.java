@@ -4,7 +4,6 @@ import roj.compiler.runtime.RtUtil;
 import roj.reflect.Unaligned;
 import roj.util.DynByteBuf;
 
-import javax.crypto.Cipher;
 import javax.crypto.ShortBufferException;
 import java.security.InvalidAlgorithmParameterException;
 import java.security.InvalidKeyException;
@@ -32,7 +31,7 @@ final class SM4 extends RCipherSpi {
 		var myKey = sKey;
 		if (encrypt != isEncryptMode) {
 			myKey = myKey.clone();
-			KDF.reverse(myKey, 0, 32);
+			CryptoFactory.reverse(myKey, 0, 32);
 		}
 		return new SM4(sKey, isEncryptMode);
 	}
@@ -57,8 +56,8 @@ final class SM4 extends RCipherSpi {
 			sKey[i] = sKey[i-4] ^ sm4_iRK(sKey[i-3] ^ sKey[i-2] ^ sKey[i-1] ^ CK[i]);
 		}
 
-		encrypt = mode != Cipher.DECRYPT_MODE;
-		if (encrypt) KDF.reverse(sKey, 0, 32);
+		encrypt = mode != RCipherSpi.DECRYPT_MODE;
+		if (encrypt) CryptoFactory.reverse(sKey, 0, 32);
 	}
 
 	@Override protected boolean isBareBlockCipher() { return true; }

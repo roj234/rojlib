@@ -4,7 +4,7 @@ import roj.math.Version;
 
 /**
  * @author Roj234
- * @since 2023/1/7 0007 22:12
+ * @since 2023/1/7 22:12
  */
 public final class VersionRange {
 	Version from, to;

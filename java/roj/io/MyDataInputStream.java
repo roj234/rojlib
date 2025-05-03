@@ -22,7 +22,7 @@ import static roj.reflect.Unaligned.U;
  *  3. 模板生成代码
  *
  * @author Roj234
- * @since 2024/3/10 0010 3:10
+ * @since 2024/3/10 3:10
  */
 public class MyDataInputStream extends MBInputStream implements MyDataInput, Finishable {
 	public static MyDataInput wrap(InputStream in) {

@@ -2,7 +2,7 @@ package roj.compiler.ast.expr;
 
 import org.jetbrains.annotations.Nullable;
 import roj.WillChange;
-import roj.asm.IClass;
+import roj.asm.ClassDefinition;
 import roj.asm.MethodNode;
 import roj.asm.Opcodes;
 import roj.asm.annotation.Annotation;
@@ -146,7 +146,7 @@ public final class Invoke extends Expr {
 		IType instanceType = null;
 		// 取值表达式expr是否有副作用 (目前只有自动生成this时为false)
 		boolean hasSideEffect = true;
-		IClass methodOwner;
+		ClassDefinition methodOwner;
 		String methodOwnerName, methodName;
 		block:
 		if (expr.getClass() == MemberAccess.class) {
@@ -219,7 +219,7 @@ public final class Invoke extends Expr {
 						methodOwner = Objects.requireNonNull(ctx.resolve(t));
 					} else {
 						// 静态方法
-						methodOwner = (IClass) expr;
+						methodOwner = (ClassDefinition) expr;
 						expr = null;
 					}
 					break block;
@@ -283,7 +283,7 @@ public final class Invoke extends Expr {
 				var encloseInfo = ctx.classes.getClassInfo(that.type().owner());
 				// !开头表示是短名称而非全限定名称
 				var innerClassInfo = ctx.classes.getInnerClassInfo(encloseInfo).get("!"+myType.owner());
-				if (innerClassInfo == null || (innerClassInfo.modifier&ACC_STATIC) != 0 || !ctx.classes.getHierarchyList(encloseInfo).containsValue(innerClassInfo.parent)) {
+				if (innerClassInfo == null || (innerClassInfo.modifier&ACC_STATIC) != 0 || !ctx.classes.getHierarchyList(encloseInfo).containsKey(innerClassInfo.parent)) {
 					ctx.report(this, Kind.ERROR, "invoke.wrongInstantiationEnclosing", expr, that.type());
 					return NaE.RESOLVE_FAILED;
 				}

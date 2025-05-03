@@ -1,10 +1,7 @@
-/*
- * Synthesis.java -- Layer I/II/III 一个子带多相合成滤波
- */
 package roj.media.audio.mp3;
 
 /**
- * 合成滤波器
+ * 子带多相合成滤波器
  */
 final class Synthesis {
 	private final MP3Decoder owner;

@@ -6,7 +6,7 @@ import java.util.function.Supplier;
 
 /**
  * @author Roj234
- * @since 2022/11/11 0011 13:28
+ * @since 2022/11/11 13:28
  */
 public class ECGroup extends ECParameterSpec implements Supplier<KeyExchange> {
 	public static final ECGroup secp256r1, secp384r1, secp521r1;

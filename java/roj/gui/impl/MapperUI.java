@@ -5,8 +5,8 @@
 package roj.gui.impl;
 
 import roj.archive.zip.ZipFileWriter;
-import roj.asm.type.Desc;
-import roj.asm.util.Context;
+import roj.asm.MemberDescriptor;
+import roj.asmx.Context;
 import roj.asmx.mapper.Mapper;
 import roj.collect.Int2IntMap;
 import roj.collect.MyHashMap;
@@ -177,7 +177,7 @@ public class MapperUI extends JFrame {
 
 
 	private static final Pattern STACKTRACE = Pattern.compile("at (.+)\\.(.+)\\((?:(.+)\\.java|Unknown Source)(?::(\\d+))?\\)");
-	private static final MyHashMap<Desc, Int2IntMap> LINES = new MyHashMap<>();
+	private static final MyHashMap<MemberDescriptor, Int2IntMap> LINES = new MyHashMap<>();
 	private void loadLines() {
 		File file = GuiUtil.fileLoadFrom("选择行号表", dlgMapTrace);
 		if (file == null) return;
@@ -193,7 +193,7 @@ public class MapperUI extends JFrame {
 				if (s.charAt(0) == ' ') {
 					current.putInt(Integer.parseInt(split.get(1)), Integer.parseInt(split.get(0)));
 				} else {
-					LINES.put(new Desc(split.get(0), split.get(1), split.get(2)), current = new Int2IntMap());
+					LINES.put(new MemberDescriptor(split.get(0), split.get(1), split.get(2)), current = new Int2IntMap());
 				}
 			}
 		} catch (IOException e) {
@@ -269,7 +269,7 @@ public class MapperUI extends JFrame {
 				String lineNumber = m.group(4);
 
 				String newClassName = MAPPER.getClassMap().get(className);
-				for (Map.Entry<Desc, String> entry : MAPPER.getMethodMap().entrySet()) {
+				for (Map.Entry<MemberDescriptor, String> entry : MAPPER.getMethodMap().entrySet()) {
 					if (entry.getKey().owner.equals(className) && entry.getKey().name.equals(method)) {
 						method = entry.getValue();
 

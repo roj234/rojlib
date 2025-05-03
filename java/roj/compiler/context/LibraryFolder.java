@@ -1,7 +1,6 @@
 package roj.compiler.context;
 
 import roj.asm.ClassNode;
-import roj.asm.Parser;
 import roj.io.IOUtil;
 
 import java.io.File;
@@ -11,7 +10,7 @@ import java.io.InputStream;
 
 /**
  * @author Roj234
- * @since 2022/9/16 0016 21:52
+ * @since 2022/9/16 21:52
  */
 public class LibraryFolder implements Library {
 	private final File path;
@@ -20,7 +19,7 @@ public class LibraryFolder implements Library {
 	@Override public ClassNode get(CharSequence name) {
 		try {
 			var file = new File(path, name.toString().concat(".class"));
-			if (file.isFile()) return Parser.parseConstants(IOUtil.read(file));
+			if (file.isFile()) return ClassNode.parseSkeleton(IOUtil.read(file));
 		} catch (IOException e) {
 			e.printStackTrace();
 		}

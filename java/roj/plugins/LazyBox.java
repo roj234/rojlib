@@ -4,10 +4,10 @@ import roj.archive.qz.*;
 import roj.archive.zip.ZEntry;
 import roj.archive.zip.ZipArchive;
 import roj.archive.zip.ZipFile;
-import roj.asm.Parser;
-import roj.asm.util.Context;
-import roj.asmx.nixim.NiximException;
-import roj.asmx.nixim.NiximSystemV2;
+import roj.asm.ClassNode;
+import roj.asmx.Context;
+import roj.asmx.injector.CodeWeaver;
+import roj.asmx.injector.WeaveException;
 import roj.collect.CollectionX;
 import roj.collect.IntMap;
 import roj.collect.MyHashMap;
@@ -51,7 +51,7 @@ import static roj.ui.CommandNode.literal;
 
 /**
  * @author Roj234
- * @since 2024/5/15 0015 14:10
+ * @since 2024/5/15 14:10
  */
 @SimplePlugin(id = "lazyBox", version = "1.4", desc = """
 	高仿瑞士军刀/doge
@@ -309,14 +309,14 @@ public class LazyBox extends Plugin {
 					.executes(this::download)))));
 
 		Command nixim = ctx -> {
-			var nx = new NiximSystemV2();
+			var nx = new CodeWeaver();
 			File src = ctx.argument("注入(Nixim)", File.class);
 			if (src.isDirectory()) {
 				IOUtil.findAllFiles(src, file -> {
 					if (IOUtil.extensionName(file.getName()).equals("class")) {
 						try {
-							nx.read(Parser.parseConstants(IOUtil.read(file)));
-						} catch (NiximException | IOException e) {
+							nx.read(ClassNode.parseSkeleton(IOUtil.read(file)));
+						} catch (WeaveException | IOException e) {
 							Helpers.athrow(e);
 						}
 					}
@@ -324,12 +324,12 @@ public class LazyBox extends Plugin {
 				});
 			} else {
 				if (IOUtil.extensionName(src.getName()).equals("class")) {
-					nx.read(Parser.parseConstants(IOUtil.read(src)));
+					nx.read(ClassNode.parseSkeleton(IOUtil.read(src)));
 				} else {
 					try (var zf = new ZipFile(src)) {
 						for (var ze : zf.entries()) {
 							if (IOUtil.extensionName(ze.getName()).equals("class")) {
-								nx.read(Parser.parseConstants(zf.get(ze)));
+								nx.read(ClassNode.parseSkeleton(zf.get(ze)));
 							}
 						}
 					}
@@ -379,7 +379,7 @@ public class LazyBox extends Plugin {
 		Collection<String> entryName = CollectionX.mapToView(za.entries(), ZEntry::getName, ZEntry::new);
 		Map<String, String> fileView = CollectionX.toMap(entryName, x -> x.endsWith("/") ? null : x);
 
-		var update = new CommandConsole("\u001b[96mZUpdate \u001b[97m> ");
+		var update = new Shell("\u001b[96mZUpdate \u001b[97m> ");
 		update.register(literal("set").then(argument("name", Argument.suggest(fileView)).then(argument("path", Argument.file()).executes(c -> {
 			String out = c.argument("name", String.class);
 			File in = c.argument("path", File.class);
@@ -502,7 +502,7 @@ public class LazyBox extends Plugin {
 		}
 
 		System.out.println("\u001b[93m新增\u001b[94m"+add+" \u001b[93m删除\u001b[94m"+del+" \u001b[93m修改\u001b[94m"+change+" \u001b[93m移动\u001b[94m"+move);
-		CommandConsole c1 = new CommandConsole("\u001b[96m7zDiff \u001b[97m> ");
+		Shell c1 = new Shell("\u001b[96m7zDiff \u001b[97m> ");
 		Terminal.setConsole(c1);
 		c1.register(literal("save").then(argument("out", Argument.string()).executes(c -> {
 			QZFileWriter out = new QZFileWriter(c.argument("out", String.class));
@@ -520,7 +520,7 @@ public class LazyBox extends Plugin {
 				}
 			}
 
-			out.closeWordBlock();
+			out.flush();
 
 			EasyProgressBar bar = new EasyProgressBar("复制块", "块");
 			bar.addTotal(in1_should_copy.size()+in2_should_copy.size());
@@ -551,7 +551,7 @@ public class LazyBox extends Plugin {
 			String prefix = should_copy.get(entry);
 			if (prefix == null) return;
 
-			try (QZWriter w = out.parallel()) {
+			try (QZWriter w = out.newParallelWriter()) {
 				w.beginEntry(QZEntry.ofNoAttribute(prefix));
 				IOUtil.copyStream(in, w);
 				bar.increment(1);

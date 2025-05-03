@@ -50,6 +50,7 @@ public class Octree<V extends OctreeEntry> implements _Generic_Map<Node>, Iterab
 
 	public int unit() {return unit;}
 	public int size() {return vCount;}
+	@Deprecated
 	public int maxDepth() {return maxDepth;}
 
 	/**
@@ -63,6 +64,7 @@ public class Octree<V extends OctreeEntry> implements _Generic_Map<Node>, Iterab
 	 * @see Node#k node偏移量
 	 * @see #clear()
 	 */
+	@Deprecated
 	public void init(int unit, int maxDepth, int capacity) {
 		// not empty
 		if (nodes != null) {
@@ -125,6 +127,7 @@ public class Octree<V extends OctreeEntry> implements _Generic_Map<Node>, Iterab
 			}
 			Node prev = node;
 			node = getOrCreateEntry(next);
+			// TODO 树不需要满，而是等到元素超过一个阈值之后再拆
 			if (node.v == null) {
 				if (prev != null) // may be first node [0b1xxx]
 				// 看上面I_XXX的定义
@@ -438,8 +441,9 @@ public class Octree<V extends OctreeEntry> implements _Generic_Map<Node>, Iterab
 				rs.cy = ((i & 2) != 0 ? -unit : unit);
 				rs.cz = ((i & 1) != 0 ? -unit : unit);
 				if (overlaps(pos, rs, rMax, unit)) {
-					if (origin) {rcGetOrigin(n, rMin, rMax, rs, unit >>> 1);} else if (!rs.nearest) {rcGetAny(n, pos, rMin, rMax, rs, unit >>> 1);} else
-						rMax = rcGetNearest(n, pos, rMin, rMax, rs, unit >>> 1);
+					if (origin) rcGetOrigin(n, rMin, rMax, rs, unit >>> 1);
+					else if (!rs.nearest) rcGetAny(n, pos, rMin, rMax, rs, unit >>> 1);
+					else rMax = rcGetNearest(n, pos, rMin, rMax, rs, unit >>> 1);
 				}
 			}
 		}

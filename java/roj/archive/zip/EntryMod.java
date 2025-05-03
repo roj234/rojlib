@@ -4,7 +4,7 @@ import org.intellij.lang.annotations.MagicConstant;
 
 /**
  * @author Roj234
- * @since 2023/3/14 0014 0:42
+ * @since 2023/3/14 0:42
  */
 public final class EntryMod {
 	String name;
@@ -18,7 +18,7 @@ public final class EntryMod {
 
 	public byte[] pass;
 	@MagicConstant(intValues = {ZipArchive.CRYPT_NONE, ZipArchive.CRYPT_ZIP2, ZipArchive.CRYPT_AES, ZipArchive.CRYPT_AES2})
-	public int cryptType;
+	public byte cryptType;
 
 	public String getName() { return name; }
 

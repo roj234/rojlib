@@ -9,7 +9,7 @@ import static roj.reflect.Unaligned.U;
 
 /**
  * @author Roj234
- * @since 2024/6/9 0009 21:26
+ * @since 2024/6/9 21:26
  */
 public abstract class Generator<T> implements Iterator<T> {
 	private byte stage;

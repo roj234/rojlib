@@ -39,7 +39,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import static roj.plugins.diff.DiffResult.bar;
+import static roj.plugins.diff.DiffInfo.bar;
 import static roj.reflect.Unaligned.U;
 
 /**
@@ -285,22 +285,22 @@ public class DiffFinder extends JFrame {
 	class TaskRunner {
 		Runnable finish_callback;
 		TaskRunner(int core) {
-			generator = new TaskExecutor();
+			generator = new TaskThread();
 			generator.setName("DIFFTaskGen");
 			generator.start();
 
-			cleanup = new TaskExecutor();
+			cleanup = new TaskThread();
 			cleanup.setName("DIFFCleanup");
 			cleanup.start();
 
 			comparator = TaskPool.MaxThread(core, "DIFFCompare-");
 		}
-		private final TaskExecutor generator, cleanup;
+		private final TaskThread generator, cleanup;
 		private final TaskPool comparator;
 
 		private volatile boolean terminateFlag;
 
-		private final Serializer<DiffResult> writer = SerializerFactory.SAFE.serializer(DiffResult.class);
+		private final Serializer<DiffInfo> writer = SerializerFactory.SAFE.serializer(DiffInfo.class);
 		private CVisitor result;
 
 		final void initComparator(File base, FileMeta[] metas, int preWindow, TaskPool POOL) {
@@ -451,7 +451,7 @@ public class DiffFinder extends JFrame {
 						BsDiff diff = new BsDiff(); diff.setLeft(left.data);
 						int group = left.group;
 
-						List<DiffResult> founds = new SimpleList<>();
+						List<DiffInfo> founds = new SimpleList<>();
 
 						for (int k = 0; k < prev.size(); k++) {
 							FileMeta right = prev.get(k);
@@ -463,7 +463,7 @@ public class DiffFinder extends JFrame {
 
 							int byteDiff = diff.getDiffLength(dataB, slideWindow, dataB.length-slideWindow, maxHeadDiff);
 							if (byteDiff >= 0) {
-								DiffResult diff1 = new DiffResult();
+								DiffInfo diff1 = new DiffInfo();
 								diff1.left = left.path;
 								diff1.right = right.path;
 								diff1.diff = byteDiff;
@@ -481,7 +481,7 @@ public class DiffFinder extends JFrame {
 
 							int byteDiff = diff.getDiffLength(dataB, slideWindow, dataB.length-slideWindow, maxHeadDiff);
 							if (byteDiff >= 0) {
-								DiffResult diff1 = new DiffResult();
+								DiffInfo diff1 = new DiffInfo();
 								diff1.left = left.path;
 								diff1.right = right.path;
 								diff1.diff = byteDiff;

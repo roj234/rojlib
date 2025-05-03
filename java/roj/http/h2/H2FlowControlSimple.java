@@ -6,7 +6,7 @@ import java.io.IOException;
 
 /**
  * @author Roj234
- * @since 2024/7/13 0013 2:25
+ * @since 2024/7/13 2:25
  */
 public class H2FlowControlSimple implements H2FlowControl {
 	public H2FlowControlSimple() {this(65535, 0.5f);}

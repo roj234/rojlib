@@ -6,6 +6,8 @@ import roj.io.IOUtil;
 import roj.io.MyDataInput;
 import roj.io.source.Source;
 import roj.media.audio.AudioMetadata;
+import roj.text.CharList;
+import roj.text.FastCharset;
 import roj.text.TextUtil;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
@@ -159,12 +161,18 @@ public class ID3Tag implements AudioMetadata {
 
 	private String readAsciiOrGBK(ByteList buf, int i) {
 		if (i <= 3) return buf.readAscii(i);
-		int e = 0;
+		int cn = 0;
 		for (int j = buf.rIndex; j < buf.rIndex+i; j++) {
 			int u = buf.getU(j);
-			if (u <= 0x20 || u > 0x7F) e++;
+			if (u > 0x7F) cn++;
 		}
-		return e*3 > i ? buf.readGB(i) : buf.readAscii(i);
+		if (cn * 3 > i) {
+			CharList sb = IOUtil.getSharedCharBuf();
+			FastCharset.GB18030().decodeFixedOut(buf, i, sb, Integer.MAX_VALUE);
+			return sb.toString();
+		} else {
+			return buf.readAscii(i);
+		}
 	}
 	// endregion
 	// region ID3v2

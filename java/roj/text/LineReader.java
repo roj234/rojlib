@@ -14,7 +14,7 @@ import java.util.NoSuchElementException;
 
 /**
  * @author Roj234
- * @since 2023/9/7 0007 9:36
+ * @since 2023/9/7 9:36
  */
 public interface LineReader extends Iterable<String> {
 	@Nullable

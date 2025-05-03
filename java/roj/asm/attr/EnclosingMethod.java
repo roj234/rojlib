@@ -23,7 +23,7 @@ public final class EnclosingMethod extends Attribute {
 			name = PREDEFINED;
 		} else {
 			name = method.name().str();
-			parameters = Type.methodDesc(method.getType().str());
+			parameters = Type.methodDesc(method.rawDesc().str());
 			returnType = parameters.remove(parameters.size() - 1);
 		}
 	}

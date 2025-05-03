@@ -14,12 +14,12 @@ import java.util.function.Function;
 
 /**
  * @author Roj234
- * @since 2022/10/7 0007 23:54
+ * @since 2022/10/7 23:54
  */
 public interface Promise<T> {
 	@SuppressWarnings("unchecked")
 	static <T, X extends Promise<T> & PromiseCallback> X sync() { return (X) new PromiseImpl<>(null, null); }
-	static <T> Promise<T> async(TaskHandler e, Consumer<PromiseCallback> handler) { return new PromiseImpl<>(e, handler); }
+	static <T> Promise<T> async(TaskExecutor e, Consumer<PromiseCallback> handler) { return new PromiseImpl<>(e, handler); }
 	static <T> Promise<T> resolve(T t) {
 		PromiseImpl<T> p = new PromiseImpl<>();
 		p._state = FULFILLED;
@@ -32,8 +32,8 @@ public interface Promise<T> {
 		p._val = t;
 		return p;
 	}
-	static Promise<Object[]> all(TaskHandler e, Promise<?>... arr) { return all(e, Arrays.asList(arr)); }
-	static <T extends Promise<?>> Promise<Object[]> all(TaskHandler e, List<T> arr) {
+	static Promise<Object[]> all(TaskExecutor e, Promise<?>... arr) { return all(e, Arrays.asList(arr)); }
+	static <T extends Promise<?>> Promise<Object[]> all(TaskExecutor e, List<T> arr) {
 		if (arr.size() == 0) throw new IllegalArgumentException();
 
 		AtomicInteger remain = new AtomicInteger(arr.size());
@@ -52,7 +52,7 @@ public interface Promise<T> {
 		return ret;
 	}
 	@SafeVarargs
-	static <T> Promise<T> race(TaskHandler e, Promise<T>... arr) {
+	static <T> Promise<T> race(TaskExecutor e, Promise<T>... arr) {
 		if (arr.length == 0) throw new IllegalArgumentException();
 		if (arr.length == 1) return arr[0];
 
@@ -80,7 +80,7 @@ public interface Promise<T> {
 	interface PromiseCallback {
 		void resolve(Object result);
 		void reject(Object reason);
-		void resolveOn(Object result, TaskHandler handler);
-		void rejectOn(Object reason, TaskHandler handler);
+		void resolveOn(Object result, TaskExecutor handler);
+		void rejectOn(Object reason, TaskExecutor handler);
 	}
 }

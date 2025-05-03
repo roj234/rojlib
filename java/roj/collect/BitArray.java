@@ -11,18 +11,11 @@ import java.util.function.IntUnaryOperator;
 /**
  * int大概能快点？
  * @author Roj234
- * @since 2023/10/3 0003 12:14
+ * @since 2023/10/3 12:14
  */
 public class BitArray {
 	private final int[] data;
 	private final int bits, mask, length;
-
-	public BitArray(String unpack) {
-		data = RtUtil.unpackI(unpack);
-		bits = data[data.length-1];
-		length = (data.length-1) * 32 / bits;
-		mask = bits == 32 ? -1 : ((1 << bits)-1);
-	}
 
 	public BitArray(@Range(from = 1, to = 32) int bits, @Range(from = 0, to = Integer.MAX_VALUE) int length) {
 		if (bits < 1 || bits > 32 || length < 0) throw new IllegalArgumentException();
@@ -32,7 +25,9 @@ public class BitArray {
 		this.length = length;
 		this.mask = bits == 32 ? -1 : ((1 << bits)-1);
 	}
-	public BitArray(int bits, int length, int[] data) {
+	public BitArray(@Range(from = 1, to = 32) int bits, @Range(from = 0, to = Integer.MAX_VALUE) int length, int[] data) {
+		if (bits < 1 || bits > 32 || length < 0) throw new IllegalArgumentException();
+
 		int len = (bits*length + 31) / 32;
 		if (data.length != len) throw new IllegalArgumentException("data.length != "+len+" (is "+data.length+")");
 
@@ -225,11 +220,7 @@ public class BitArray {
 		}
 	}
 
-	public String pack() {
-		int[] data1 = Arrays.copyOf(data, data.length+1);
-		data1[data1.length-1] = bits;
-		return RtUtil.pack(data1);
-	}
+	public String pack() {return RtUtil.pack(data);}
 
 	private void check(int i) {
 		if (i < 0 || i >= length) throw new ArrayIndexOutOfBoundsException(i);

@@ -22,7 +22,7 @@ import java.util.*;
 
 /**
  * @author Roj234
- * @since 2024/3/25 0025 4:13
+ * @since 2024/3/25 4:13
  */
 final class SignatureBlock extends CertPath {
 	private final List<X509Certificate> certs;

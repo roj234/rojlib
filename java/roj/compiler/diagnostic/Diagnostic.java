@@ -1,7 +1,7 @@
 package roj.compiler.diagnostic;
 
 import org.jetbrains.annotations.Nls;
-import roj.asm.IClass;
+import roj.asm.ClassDefinition;
 import roj.compiler.Tokens;
 import roj.compiler.context.CompileUnit;
 import roj.math.MathUtils;
@@ -12,10 +12,10 @@ import java.util.Locale;
 
 /**
  * @author Roj234
- * @since 2024/2/7 0007 4:53
+ * @since 2024/2/7 4:53
  */
 public class Diagnostic {
-	private final IClass source;
+	private final ClassDefinition source;
 	private final Kind kind;
 	private final String code;
 	private final Object[] args;
@@ -24,7 +24,7 @@ public class Diagnostic {
 	private int lineNumber, columnNumber;
 	private String line;
 
-	public Diagnostic(IClass source, Kind kind, int wordStart, int wordEnd, String code, Object[] args) {
+	public Diagnostic(ClassDefinition source, Kind kind, int wordStart, int wordEnd, String code, Object[] args) {
 		this.source = source;
 		this.kind = kind;
 		this.code = code;
@@ -37,7 +37,7 @@ public class Diagnostic {
 	public Kind getKind() { return kind; }
 
 	public String getFile() {return source == null ? Tokens.i18n.translate("lava.compiler") : source instanceof CompileUnit cu ? cu.getSourceFile() : source.name();}
-	public IClass getSource() { return source; }
+	public ClassDefinition getSource() { return source; }
 	public int getStartPosition() { return offset; }
 	public int getEndPosition() { return offset+length; }
 
@@ -47,7 +47,7 @@ public class Diagnostic {
 		Object[] clone = args.clone();
 		for (int i = 0; i < clone.length; i++) {
 			Object o = clone[i];
-			if (o instanceof IClass t) clone[i] = t.name().replace('/', '.');
+			if (o instanceof ClassDefinition t) clone[i] = t.name().replace('/', '.');
 		}
 		return clone;
 	}

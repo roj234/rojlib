@@ -12,6 +12,7 @@
  * 通过Request#getArguments()获取路由参数 （Unstable，之后大概会改）
 
 ```java
+import roj.http.server.*;
 import roj.http.server.auto.*;
 
 public class Example {
@@ -52,17 +53,8 @@ public class Example {
 	}
 
 	@Interceptor
-	public Response cors(Request req, PostSetting post) {
-		if (HttpUtil.isCORSPreflight(req)) {
-			req.responseHeader().putAllS(
-				"Access-Control-Allow-Headers: "+req.getField("access-control-request-headers")+"\r\n" +
-				"Access-Control-Allow-Origin: " + req.getField("Origin") + "\r\n" +
-				"Access-Control-Max-Age: 2592000\r\n" +
-				"Access-Control-Allow-Methods: *");
-			return Response.EMPTY;
-		}
-		req.responseHeader().put("Access-Control-Allow-Origin", "*");
-		return null;
+	public Content cors(Request req) {
+		return req.checkOrigin(null/* a CORSPolicy instance */);
 	}
 
 	@Interceptor

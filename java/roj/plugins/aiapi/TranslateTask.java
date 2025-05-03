@@ -14,7 +14,7 @@ import java.util.Map;
 
 /**
  * @author Roj234
- * @since 2024/2/26 0026 23:55
+ * @since 2024/2/26 23:55
  */
 public class TranslateTask {
 	public static void main(String[] args) throws Exception {

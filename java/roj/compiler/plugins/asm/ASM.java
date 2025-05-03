@@ -6,7 +6,7 @@ import java.util.function.Consumer;
 
 /**
  * @author Roj234
- * @since 2023/9/23 0023 19:21
+ * @since 2023/9/23 19:21
  */
 public class ASM {
 	public static final int TARGET_JAVA_VERSION;

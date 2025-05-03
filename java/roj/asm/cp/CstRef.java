@@ -26,18 +26,18 @@ public abstract sealed class CstRef extends Constant permits CstRef.Field, CstRe
 	public final String toString() {
 		CharList sb = new CharList().append(super.toString())
 			.append(" 引用[").append((int) clazz.index).append(",").append((int) desc.index).append("] ");
-		return CstNameAndType.parseNodeDesc(sb, clazz.name().str(), desc.name().str(), desc.getType().str());
+		return CstNameAndType.parseNodeDesc(sb, clazz.name().str(), desc.name().str(), desc.rawDesc().str());
 	}
 
-	public final String className() { return clazz.name().str(); }
-	public final String descName() { return desc.name().str(); }
-	public final String descType() { return desc.getType().str(); }
+	public final String owner() { return clazz.name().str(); }
+	public final String name() { return desc.name().str(); }
+	public final String rawDesc() { return desc.rawDesc().str(); }
 
 	public CstClass clazz() {return clazz;}
-	public CstNameAndType desc() {return desc;}
+	public CstNameAndType nameAndType() {return desc;}
 
 	public final void clazz(CstClass clazz) {this.clazz = Objects.requireNonNull(clazz);}
-	public final void desc(CstNameAndType desc) {this.desc = Objects.requireNonNull(desc);}
+	public final void nameAndType(CstNameAndType desc) {this.desc = Objects.requireNonNull(desc);}
 
 	public final boolean equals(Object o) {
 		if (o == this) return true;
@@ -53,10 +53,6 @@ public abstract sealed class CstRef extends Constant permits CstRef.Field, CstRe
 		slf.clazz = (CstClass) clazz.clone();
 		slf.desc = desc.clone();
 		return slf;
-	}
-
-	public boolean matches(String clazz, String name, String desc) {
-		return this.clazz.name().str().equals(clazz) && this.desc.name().str().equals(name) && this.desc.getType().str().equals(desc);
 	}
 
 	public static final class Field extends CstRef {

@@ -16,7 +16,7 @@ import java.util.zip.Deflater;
 
 /**
  * @author Roj234
- * @since 2023/5/5 0005 15:15
+ * @since 2023/5/5 15:15
  */
 public interface TableWriter extends Closeable, Flushable {
 	static TableWriter csvWriter(String pathname) throws IOException {return csvWriter(new File(pathname));}

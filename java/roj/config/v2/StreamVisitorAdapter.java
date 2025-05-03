@@ -9,7 +9,7 @@ import static roj.config.v2.StreamParser.*;
 
 /**
  * @author Roj234
- * @since 2025/4/29 0029 5:40
+ * @since 2025/4/29 5:40
  */
 public class StreamVisitorAdapter {
 	public static void accept(StreamParser parser, CVisitor visitor) throws ParseException, IOException {

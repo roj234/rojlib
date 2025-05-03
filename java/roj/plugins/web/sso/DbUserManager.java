@@ -3,7 +3,7 @@ package roj.plugins.web.sso;
 import roj.collect.IntMap;
 import roj.collect.MyHashMap;
 import roj.config.data.CMap;
-import roj.sql.DBA;
+import roj.sql.QueryBuilder;
 import roj.text.TextUtil;
 import roj.util.Helpers;
 
@@ -12,7 +12,7 @@ import java.util.Map;
 
 /**
  * @author Roj234
- * @since 2024/7/8 0008 7:04
+ * @since 2024/7/8 7:04
  */
 class DbUserManager implements UserManager {
 	private final String userTable;
@@ -25,7 +25,7 @@ class DbUserManager implements UserManager {
 	public User getUserById(int uid) {
 		User cached = users.get(uid);
 		if (cached != null) {
-			try (var dba = DBA.getInstance()) {
+			try (var dba = QueryBuilder.getInstance()) {
 				var data = dba.table(userTable).where("id", uid).select().nextMap();
 				if (data == null) return null;
 
@@ -58,7 +58,7 @@ class DbUserManager implements UserManager {
 	public User getUserByName(String user) {
 		User cached = userByName.get(user);
 		if (cached == null) {
-			try (var dba = DBA.getInstance()) {
+			try (var dba = QueryBuilder.getInstance()) {
 				var data = dba.table(userTable).where("name", user).select().nextMap();
 				if (data == null) return null;
 				return addFromDb(data);
@@ -71,7 +71,7 @@ class DbUserManager implements UserManager {
 
 	@Override
 	public User createUser(String name) {
-		try (var dba = DBA.getInstance()) {
+		try (var dba = QueryBuilder.getInstance()) {
 			var ok = dba.table(userTable).field("name").insert(name);
 			if (!ok) throw new IllegalStateException("already exist?");
 
@@ -89,7 +89,7 @@ class DbUserManager implements UserManager {
 
 	@Override
 	public void setDirty(User user, String... field) {
-		try (var dba = DBA.getInstance()) {
+		try (var dba = QueryBuilder.getInstance()) {
 			dba.table(userTable).where("id", user.id).fields(field).update("value");
 		} catch (SQLException e) {
 			Helpers.athrow(e);

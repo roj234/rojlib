@@ -4,7 +4,7 @@ import roj.util.DynByteBuf;
 
 /**
  * @author Roj234
- * @since 2022/10/7 0007 23:12
+ * @since 2022/10/7 23:12
  */
 public final class H2Setting {
 	public int header_table_size = 4096;

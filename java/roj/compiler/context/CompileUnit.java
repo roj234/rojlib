@@ -12,8 +12,7 @@ import roj.asm.cp.CstClass;
 import roj.asm.cp.CstString;
 import roj.asm.insn.*;
 import roj.asm.type.*;
-import roj.asm.util.ClassLike;
-import roj.asmx.AnnotationSelf;
+import roj.asmx.ClassResource;
 import roj.collect.*;
 import roj.compiler.LavaFeatures;
 import roj.compiler.Tokens;
@@ -25,10 +24,7 @@ import roj.compiler.ast.expr.Expr;
 import roj.compiler.ast.expr.ExprParser;
 import roj.compiler.diagnostic.Kind;
 import roj.compiler.doc.Javadoc;
-import roj.compiler.resolve.ImportList;
-import roj.compiler.resolve.MethodResult;
-import roj.compiler.resolve.NestContext;
-import roj.compiler.resolve.TypeCast;
+import roj.compiler.resolve.*;
 import roj.config.ParseException;
 import roj.config.Word;
 import roj.config.data.CEntry;
@@ -56,7 +52,7 @@ import static roj.config.Word.LITERAL;
  * @author solo6975
  * @since 2020/12/31 17:34
  */
-public abstract class CompileUnit extends ClassNode implements ClassLike {
+public abstract class CompileUnit extends ClassNode implements ClassResource {
 	/**
 	 * 暂存不完整的类名 - S1
 	 * XHashSet索引项 - All
@@ -817,7 +813,7 @@ public abstract class CompileUnit extends ClassNode implements ClassLike {
 			if (exThrown != null) {
 				List<String> classes = exThrown.value;
 				for (int j = 0; j < classes.size(); j++) {
-					IClass info = importList.resolve(ctx, classes.get(j));
+					ClassDefinition info = importList.resolve(ctx, classes.get(j));
 					if (info == null) {
 						ctx.report(Kind.ERROR, "symbol.error.noSuchClass", classes.get(i));
 					} else {
@@ -1155,7 +1151,7 @@ public abstract class CompileUnit extends ClassNode implements ClassLike {
 
 						m.owner = method.owner;
 						m.name = method.name();
-						m.param = param;
+						m.rawDesc = param;
 
 						// 可能是继承自接口的方法
 						boolean isClass = i == 0 && (ctx.classes.getClassInfo(method.owner).modifier & ACC_INTERFACE) == 0;
@@ -1202,7 +1198,7 @@ public abstract class CompileUnit extends ClassNode implements ClassLike {
 
 							m.owner = method.owner;
 							m.name = method.name();
-							m.param = param;
+							m.rawDesc = param;
 
 							var prev = overridableMethods.getEntry(m);
 							if (prev != null) {
@@ -1250,7 +1246,7 @@ public abstract class CompileUnit extends ClassNode implements ClassLike {
 
 			String param = impl.rawDesc();
 			d.name = impl.name();
-			d.param = param.substring(0, param.lastIndexOf(')')+1);
+			d.rawDesc = param.substring(0, param.lastIndexOf(')')+1);
 
 			var inheritResult = overridableMethods.remove(d);
 			if (inheritResult == null) continue; // 如果不是重载方法
@@ -1317,7 +1313,7 @@ public abstract class CompileUnit extends ClassNode implements ClassLike {
 		}
 
 		ctx.errorReportIndex = classIdx;
-		for (Desc method : implementCheck) {
+		for (MemberDescriptor method : implementCheck) {
 			if ((method.modifier&__ACC_UNRELATED) != 0) {
 				if ((method.modifier&__ACC_INHERITED) != 0) ctx.report(Kind.ERROR, "cu.unrelatedDefault.inherit", method, "");
 				else ctx.report(Kind.ERROR, "cu.unrelatedDefault", method, name.replace('/', '.'));
@@ -1485,9 +1481,9 @@ public abstract class CompileUnit extends ClassNode implements ClassLike {
 							var repeat = new AnnotationPrimer(desc.repeatOn, removable.pos);
 							repeat.setValues(Collections.singletonMap("value", new AList(values)));
 							list.set(p, repeat);
-							if (desc.kind != AnnotationSelf.SOURCE) {
+							if (desc.retention() != AnnotationType.SOURCE) {
 								//noinspection all
-								List<Annotation> list1 = (desc.kind == AnnotationSelf.CLASS ? inv : vis).annotations;
+								List<Annotation> list1 = (desc.retention() == AnnotationType.CLASS ? inv : vis).annotations;
 								list1.set(list1.indexOf(removable), repeat);
 							}
 
@@ -1501,12 +1497,12 @@ public abstract class CompileUnit extends ClassNode implements ClassLike {
 					}
 				} else {
 					int targetType = applicableToNode(annotated.getKey());
-					if ((desc.applicableTo & targetType) == 0) {
+					if ((desc.applicableTo() & targetType) == 0) {
 						ctx.report(Kind.ERROR, "cu.annotation.notApplicable", type, targetType);
 					}
 
-					if (desc.kind != AnnotationSelf.SOURCE) {
-						if (desc.kind == AnnotationSelf.CLASS) {
+					if (desc.retention() != AnnotationType.SOURCE) {
+						if (desc.retention() == AnnotationType.CLASS) {
 							if (inv == null) {
 								inv = new Annotations(false);
 								annotated.getKey().addAttribute(inv);
@@ -1525,12 +1521,12 @@ public abstract class CompileUnit extends ClassNode implements ClassLike {
 				dup.clear();
 				extra.putAll(a.raw());
 
-				for (Map.Entry<String, Type> entry : desc.types.entrySet()) {
+				for (Map.Entry<String, Type> entry : desc.elementType.entrySet()) {
 					String name = entry.getKey();
 
 					Object node = Helpers.cast(extra.remove(name));
 					if (node instanceof Expr expr) a.raw().put(name, AnnotationPrimer.toAnnVal(ctx, expr, entry.getValue()));
-					else if (node == null && !desc.values.containsKey(entry.getKey())) missed.add(name);
+					else if (node == null && !desc.elementDefault.containsKey(entry.getKey())) missed.add(name);
 				}
 
 				if (!extra.isEmpty()) ctx.report(Kind.ERROR, "cu.annotation.extra", type, extra.keySet());
@@ -1548,17 +1544,17 @@ public abstract class CompileUnit extends ClassNode implements ClassLike {
 	private static int applicableToNode(Attributed key) {
 		int mask;
 		if (key instanceof FieldNode) {
-			mask = AnnotationSelf.FIELD;
+			mask = AnnotationType.FIELD;
 		} else if (key instanceof MethodNode m) {
-			mask = m.name().startsWith("<") ? AnnotationSelf.CONSTRUCTOR : AnnotationSelf.METHOD;
-		} else if (key instanceof IClass c) {
-			if (c.name().endsWith("/package-info")) mask = AnnotationSelf.PACKAGE;
-			else if (c.name().equals("module-info")) mask = AnnotationSelf.MODULE;
-			else mask = (c.modifier()&Opcodes.ACC_ANNOTATION) != 0 ? AnnotationSelf.ANNOTATION_TYPE : AnnotationSelf.TYPE;
+			mask = m.name().startsWith("<") ? AnnotationType.CONSTRUCTOR : AnnotationType.METHOD;
+		} else if (key instanceof ClassDefinition c) {
+			if (c.name().endsWith("/package-info")) mask = AnnotationType.PACKAGE;
+			else if (c.name().equals("module-info")) mask = AnnotationType.MODULE;
+			else mask = (c.modifier()&Opcodes.ACC_ANNOTATION) != 0 ? AnnotationType.ANNOTATION_TYPE : AnnotationType.TYPE;
 		} else if (key instanceof ParamAnnotationRef) {
-			mask = AnnotationSelf.PARAMETER;
+			mask = AnnotationType.PARAMETER;
 		} else if (key instanceof Variable) {
-			mask = AnnotationSelf.LOCAL_VARIABLE;
+			mask = AnnotationType.LOCAL_VARIABLE;
 		} else {
 			throw new AssertionError("不支持的注解目标："+key.getClass());
 		}
@@ -1767,14 +1763,14 @@ public abstract class CompileUnit extends ClassNode implements ClassLike {
 	public String getNextAccessorName() {return "`acc$"+ctx.nameIndex++;}
 	// endregion
 	//region 阶段5 序列化
-	private List<RawNode> noStore = Collections.emptyList();
-	public void markFakeNode(RawNode fn) {
+	private List<Member> noStore = Collections.emptyList();
+	public void markFakeNode(Member fn) {
 		if (noStore.isEmpty()) noStore = new SimpleList<>();
 		noStore.add(fn);
 	}
 
 	public void S5_noStore() {
-		for (RawNode node : noStore) {
+		for (Member node : noStore) {
 			fields.remove(node);
 			methods.remove(node);
 		}
@@ -1782,6 +1778,6 @@ public abstract class CompileUnit extends ClassNode implements ClassLike {
 	}
 
 	@Override public String getFileName() {return name.concat(".class");}
-	@Override public ByteList get() { return Parser.toByteArrayShared(this); }
+	@Override public ByteList getClassBytes() {return AsmCache.toByteArrayShared(this);}
 	//endregion
 }

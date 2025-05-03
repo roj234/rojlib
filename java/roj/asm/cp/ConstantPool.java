@@ -3,7 +3,7 @@ package roj.asm.cp;
 import org.intellij.lang.annotations.MagicConstant;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
-import roj.asm.AsmShared;
+import roj.asm.AsmCache;
 import roj.asm.attr.BootstrapMethods;
 import roj.collect.IntMap;
 import roj.collect.MyHashSet;
@@ -193,7 +193,7 @@ public final class ConstantPool {
 				CstNameAndType known = (CstNameAndType) arr[i];
 				if (known != null) {
 					known.name(name);
-					known.setType(type);
+					known.rawDesc(type);
 					return known;
 				}
 
@@ -271,7 +271,7 @@ public final class ConstantPool {
 
 		if (!isForWrite) {
 			isForWrite = true;
-			AsmShared.local().getCpWriter(constants);
+			AsmCache.getInstance().getCpWriter(constants);
 		}
 	}
 	private void addConstant(Constant c) {
@@ -324,7 +324,7 @@ public final class ConstantPool {
 		initRefMap();
 
 		CstUTF utf;
-		var find = AsmShared.local().fp;
+		var find = AsmCache.getInstance().fp;
 		var found = refMap.find(find.set(str));
 		if (found == find) {
 			addConstant(utf = new CstUTF(str.toString()));
@@ -340,7 +340,7 @@ public final class ConstantPool {
 		var uName = getUtf(name);
 		var uType = getUtf(type);
 
-		var find = AsmShared.local().fp;
+		var find = AsmCache.getInstance().fp;
 		var found = refMap.find(find.set(uName, uType));
 		if (found == find) addConstant(found = new CstNameAndType(uName, uType));
 		return (CstNameAndType) found;
@@ -350,7 +350,7 @@ public final class ConstantPool {
 	public CstClass getClazz(String name) {
 		var utf = getUtf(name);
 
-		var find = AsmShared.local().fp;
+		var find = AsmCache.getInstance().fp;
 		var found = refMap.find(find.set(CLASS, utf));
 		if (found == find) addConstant(found = new CstClass(utf));
 		return (CstClass) found;
@@ -361,7 +361,7 @@ public final class ConstantPool {
 		var clazz = getClazz(owner);
 		var nat = getDesc(name, desc);
 
-		var find = AsmShared.local().fp;
+		var find = AsmCache.getInstance().fp;
 		var found = refMap.find(find.set(type, clazz, nat));
 		if (found == find) {
 			found = switch (type) {
@@ -403,7 +403,7 @@ public final class ConstantPool {
 	public int getPackageId(String owner) {
 		var utf = getUtf(owner);
 
-		var find = AsmShared.local().fp;
+		var find = AsmCache.getInstance().fp;
 		var found = refMap.find(find.set(PACKAGE, utf));
 		if (found == find) addConstant(found = new CstRefUTF.Package(utf));
 		return found.index;
@@ -411,7 +411,7 @@ public final class ConstantPool {
 	public int getModuleId(String owner) {
 		var utf = getUtf(owner);
 
-		var find = AsmShared.local().fp;
+		var find = AsmCache.getInstance().fp;
 		var found = refMap.find(find.set(MODULE, utf));
 		if (found == find) addConstant(found = new CstRefUTF.Module(utf));
 		return found.index;
@@ -420,7 +420,7 @@ public final class ConstantPool {
 	public int getIntId(int i) {
 		initRefMap();
 
-		var find = AsmShared.local().fp;
+		var find = AsmCache.getInstance().fp;
 		var found = refMap.find(find.set(i));
 		if (found == find) addConstant(found = new CstInt(i));
 		return found.index;
@@ -428,7 +428,7 @@ public final class ConstantPool {
 	public int getLongId(long i) {
 		initRefMap();
 
-		var find = AsmShared.local().fp;
+		var find = AsmCache.getInstance().fp;
 		var found = refMap.find(find.set(i));
 		if (found == find) addConstant(found = new CstLong(i));
 		return found.index;
@@ -436,7 +436,7 @@ public final class ConstantPool {
 	public int getFloatId(float i) {
 		initRefMap();
 
-		var find = AsmShared.local().fp;
+		var find = AsmCache.getInstance().fp;
 		var found = refMap.find(find.set(i));
 		if (found == find) addConstant(found = new CstFloat(i));
 		return found.index;
@@ -444,7 +444,7 @@ public final class ConstantPool {
 	public int getDoubleId(double i) {
 		initRefMap();
 
-		var find = AsmShared.local().fp;
+		var find = AsmCache.getInstance().fp;
 		var found = refMap.find(find.set(i));
 		if (found == find) addConstant(found = new CstDouble(i));
 		return found.index;
@@ -473,13 +473,13 @@ public final class ConstantPool {
 			case METHOD, INTERFACE, FIELD: {
 				CstRef ref = (CstRef) c;
 				ref.clazz(reset(ref.clazz()));
-				ref.desc(reset(ref.desc()));
+				ref.nameAndType(reset(ref.nameAndType()));
 			}
 			break;
 			case NAME_AND_TYPE: {
 				CstNameAndType nat = (CstNameAndType) c;
 				nat.name(reset(nat.name()));
-				nat.setType(reset(nat.getType()));
+				nat.rawDesc(reset(nat.rawDesc()));
 			}
 			break;
 			case UTF:
@@ -521,7 +521,7 @@ public final class ConstantPool {
 
 		if (isForWrite) {
 			isForWrite = false;
-			AsmShared.local().freeCpWriter(constants, discard);
+			AsmCache.getInstance().freeCpWriter(constants, discard);
 		}
 	}
 

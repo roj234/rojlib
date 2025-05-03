@@ -1,8 +1,8 @@
 package roj.plugins.ci.minecraft;
 
-import roj.asm.type.Desc;
+import roj.asm.ClassUtil;
+import roj.asm.MemberDescriptor;
 import roj.asm.type.TypeHelper;
-import roj.asm.util.ClassUtil;
 import roj.asmx.mapper.Mapping;
 import roj.collect.FilterList;
 import roj.collect.SimpleList;
@@ -73,7 +73,7 @@ final class OjngMapping extends Mapping {
 						final String s = TextUtil.split(tmp, val, ' ', 2).get(1);
 						int index = s.indexOf(" -> ");
 
-						fieldMap.putIfAbsent(new Desc(currentClass[1], s.substring(index + 4)), s.substring(0, index));
+						fieldMap.putIfAbsent(new MemberDescriptor(currentClass[1], s.substring(index + 4)), s.substring(0, index));
 						continue;
 					}
 				}
@@ -95,7 +95,7 @@ final class OjngMapping extends Mapping {
 
 				String srcName = arr20.substring(0, j);
 				if (!srcName.equals(dstName)) {
-					methodMap.putIfAbsent(new Desc(currentClass[1], dstName, param), srcName);
+					methodMap.putIfAbsent(new MemberDescriptor(currentClass[1], dstName, param), srcName);
 				}
 			} else {
 				int index = line.indexOf(" -> ");
@@ -109,14 +109,14 @@ final class OjngMapping extends Mapping {
 		}
 
 		// might have ConcurrentModificationException
-		for (Iterator<Map.Entry<Desc, String>> itr = methodMap.entrySet().iterator(); itr.hasNext(); ) {
-			Map.Entry<Desc, String> entry = itr.next();
-			Desc k = entry.getKey();
-			String param = U.mapMethodParam(classMap.flip(), k.param);
-			if (param != k.param) {
+		for (Iterator<Map.Entry<MemberDescriptor, String>> itr = methodMap.entrySet().iterator(); itr.hasNext(); ) {
+			Map.Entry<MemberDescriptor, String> entry = itr.next();
+			MemberDescriptor k = entry.getKey();
+			String param = U.mapMethodParam(classMap.flip(), k.rawDesc);
+			if (param != k.rawDesc) {
 				itr.remove();
 
-				k.param = param;
+				k.rawDesc = param;
 				String v = entry.getValue();
 				methodMap.put(k, v);
 			}

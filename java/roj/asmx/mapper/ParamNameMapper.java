@@ -1,9 +1,9 @@
 package roj.asmx.mapper;
 
 import org.jetbrains.annotations.Nullable;
+import roj.asm.AsmCache;
 import roj.asm.MethodNode;
 import roj.asm.Opcodes;
-import roj.asm.Parser;
 import roj.asm.attr.Attribute;
 import roj.asm.attr.UnparsedAttribute;
 import roj.asm.cp.ConstantPool;
@@ -20,7 +20,7 @@ import java.util.List;
 
 /**
  * @author Roj234
- * @since 2023/2/22 0022 21:57
+ * @since 2023/2/22 21:57
  */
 public abstract class ParamNameMapper {
 	public static List<String> getParameterNames(ConstantPool cp, MethodNode m) {
@@ -66,7 +66,7 @@ public abstract class ParamNameMapper {
 				int j = (m.modifier() & Opcodes.ACC_STATIC) == 0 ? 1 : 0;
 				List<Type> parameters = m.parameters();
 
-				r = a instanceof UnparsedAttribute ? Parser.reader(a) : UnparsedAttribute.serialize(pool, IOUtil.getSharedByteBuf(), a).getRawData();
+				r = a instanceof UnparsedAttribute ? AsmCache.reader(a) : UnparsedAttribute.serialize(pool, IOUtil.getSharedByteBuf(), a).getRawData();
 				int len = r.readUnsignedByte();
 				while (len-- > 0) {
 					String name = ((CstUTF) pool.get(r)).str();
@@ -84,7 +84,7 @@ public abstract class ParamNameMapper {
 		if (a != null) {
 			MyBitSet replaced = new MyBitSet(parNames.size());
 
-			r = a instanceof UnparsedAttribute ? Parser.reader(a) : UnparsedAttribute.serialize(pool, IOUtil.getSharedByteBuf(), a).getRawData();
+			r = a instanceof UnparsedAttribute ? AsmCache.reader(a) : UnparsedAttribute.serialize(pool, IOUtil.getSharedByteBuf(), a).getRawData();
 			r.rIndex += 4; // stack size
 			int codeLen = r.readInt();
 			r.rIndex += codeLen; // code

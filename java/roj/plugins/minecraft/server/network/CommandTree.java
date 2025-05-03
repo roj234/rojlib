@@ -15,7 +15,7 @@ import java.util.Queue;
 
 /**
  * @author Roj234
- * @since 2024/3/22 0022 12:52
+ * @since 2024/3/22 12:52
  */
 public class CommandTree extends CommandNode {
 	public CommandTree() {}

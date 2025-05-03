@@ -2,8 +2,8 @@ package roj.reflect.litasm;
 
 import org.jetbrains.annotations.Nullable;
 import roj.RojLib;
+import roj.asm.ClassNode;
 import roj.asm.Opcodes;
-import roj.asm.Parser;
 import roj.io.IOUtil;
 import roj.reflect.Bypass;
 import roj.reflect.ClassDefiner;
@@ -17,7 +17,7 @@ import java.lang.reflect.Method;
 
 /**
  * @author Roj234
- * @since 2024/10/12 0012 16:59
+ * @since 2024/10/12 16:59
  */
 public class Intrinsics {
 	private static final Logger LOGGER = Logger.getLogger("LitASM");
@@ -26,7 +26,7 @@ public class Intrinsics {
 	static {
 		CodeInjector tmp;
 		try {
-			var c = Parser.parseConstants(IOUtil.getResourceIL("roj/reflect/litasm/internal/JVMCI.class"));
+			var c = ClassNode.parseSkeleton(IOUtil.getResourceIL("roj/reflect/litasm/internal/JVMCI.class"));
 			c.parent(Bypass.MAGIC_ACCESSOR_CLASS);
 			ClassDefiner.defineGlobalClass(c);
 			tmp = new JVMCI();

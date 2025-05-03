@@ -18,11 +18,11 @@ import static roj.reflect.Unaligned.U;
 
 /**
  * @author Roj234
- * @since 2022/10/8 0008 0:08
+ * @since 2022/10/8 0:08
  */
-final class PromiseImpl<T> implements Promise<T>, ITask, Promise.PromiseCallback {
+final class PromiseImpl<T> implements Promise<T>, Task, Promise.PromiseCallback {
 	PromiseImpl() {}
-	PromiseImpl(TaskHandler pool, Consumer<PromiseCallback> cb) {
+	PromiseImpl(TaskExecutor pool, Consumer<PromiseCallback> cb) {
 		executor = pool;
 		if (cb != null) {
 			if (pool == null) head(cb);
@@ -54,7 +54,7 @@ final class PromiseImpl<T> implements Promise<T>, ITask, Promise.PromiseCallback
 	Object _val;
 
 	private PromiseImpl<?> next;
-	private TaskHandler executor;
+	private TaskExecutor executor;
 
 	@Override
 	public Promise<Object> then(BiConsumer<T, PromiseCallback> fn, Consumer<Promise<?>> fail) {
@@ -245,14 +245,14 @@ final class PromiseImpl<T> implements Promise<T>, ITask, Promise.PromiseCallback
 		promiseFinish(TASK_COMPLETE|TASK_SUCCESS, result);
 	}
 	@Override
-	public void resolveOn(Object result, TaskHandler handler) {
+	public void resolveOn(Object result, TaskExecutor handler) {
 		executor = handler;
 		resolve(result);
 	}
 	@Override
 	public void reject(Object reason) { promiseFinish(TASK_COMPLETE, reason == null ? new RuntimeException() : reason); }
 	@Override
-	public void rejectOn(Object reason, TaskHandler handler) {
+	public void rejectOn(Object reason, TaskExecutor handler) {
 		executor = handler;
 		reject(reason);
 	}

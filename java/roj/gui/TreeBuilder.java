@@ -6,7 +6,7 @@ import java.util.Arrays;
 
 /**
  * @author Roj234
- * @since 2024/1/17 0017 18:37
+ * @since 2024/1/17 18:37
  */
 public class TreeBuilder<V> {
 	MyHashMap<String, V> packages = new MyHashMap<>();

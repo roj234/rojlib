@@ -11,7 +11,7 @@ import roj.http.server.auto.GET;
 import roj.http.server.auto.OKRouter;
 import roj.http.server.auto.POST;
 import roj.io.IOUtil;
-import roj.net.NetUtil;
+import roj.net.Net;
 import roj.plugin.Plugin;
 import roj.plugins.dns.DnsServer.Record;
 import roj.text.CharList;
@@ -155,7 +155,7 @@ public class ADnsGuard extends Plugin {
 				short qType = (short) TextUtil.parseInt(type);
 				e.qType = qType;
 				if (qType == Q_A || qType == Q_AAAA) {
-					e.data = NetUtil.ip2bytes(cnt);
+					e.data = Net.ip2bytes(cnt);
 				} else {
 					switch (qType) {
 						case Q_CNAME, Q_MB, Q_MD, Q_MF, Q_MG, Q_MR, Q_NS, Q_PTR:

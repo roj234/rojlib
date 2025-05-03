@@ -2,7 +2,7 @@ package roj.asm.attr;
 
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
-import roj.asm.IClass;
+import roj.asm.ClassDefinition;
 import roj.asm.Opcodes;
 import roj.asm.cp.ConstantPool;
 import roj.asm.cp.CstClass;
@@ -94,7 +94,7 @@ public final class InnerClasses extends Attribute {
 			return new Item(name, null, null, flags);
 		}
 
-		public static Item reference(String from, IClass referent) {
+		public static Item reference(String from, ClassDefinition referent) {
 			int i = referent.name().lastIndexOf('$');
 			return new Item(referent.name(), from, referent.name().substring(i+1), referent.modifier());
 		}

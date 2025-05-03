@@ -13,11 +13,10 @@ import roj.io.IOUtil;
 import roj.plugin.Plugin;
 import roj.text.CharList;
 import roj.ui.Argument;
-import roj.ui.CommandConsole;
+import roj.ui.Shell;
 import roj.ui.Terminal;
 import roj.util.ByteList;
 
-import javax.crypto.Cipher;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
@@ -39,7 +38,7 @@ public class MyPassIs extends Plugin {
 	private CMap data;
 	private byte[] pass;
 
-	private final CommandConsole c = new CommandConsole("");
+	private final Shell c = new Shell("");
 	private final MyHashMap<String, String> hints = new MyHashMap<>();
 
 	@Override
@@ -118,8 +117,8 @@ public class MyPassIs extends Plugin {
 		c.setInputEcho(true);
 
 		this.mac = new HMAC(MessageDigest.getInstance("SHA-256"));
-		this.pass = KDF.HKDF_expand(mac, IOUtil.encodeUTF8(passStr), 32);
-		this.cipher = new FeedbackCipher(ILCrypto.Aes(), FeedbackCipher.MODE_CTR);
+		this.pass = CryptoFactory.HKDF_expand(mac, IOUtil.encodeUTF8(passStr), 32);
+		this.cipher = new FeedbackCipher(CryptoFactory.AES(), FeedbackCipher.MODE_CTR);
 
 		File plaintextKey = new File(getDataFolder(), "key.yml");
 		CMap data;
@@ -142,7 +141,7 @@ public class MyPassIs extends Plugin {
 			try (InputStream in = new FileInputStream(keyFile)) {
 				byte[] iv = new byte[16];
 				IOUtil.readFully(in, iv);
-				cipher.init(Cipher.DECRYPT_MODE, pass, new IvParameterSpecNC(iv), null);
+				cipher.init(RCipherSpi.DECRYPT_MODE, pass, new IvParameterSpecNC(iv), null);
 
 				data = new NBTParser().parse(new CipherInputStream(in, cipher)).asMap();
 			} catch (Exception e) {
@@ -216,7 +215,7 @@ public class MyPassIs extends Plugin {
 			ByteList b = IOUtil.getSharedByteBuf();
 			if (prev.asMap().getInt("v") == 2) b.putUTFData(site).put(0);
 
-			byte[] gen_pass = KDF.HKDF_expand(mac, keys, b.putUTFData(account).putInt(iter), length);
+			byte[] gen_pass = CryptoFactory.HKDF_expand(mac, keys, b.putUTFData(account).putInt(iter), length);
 
 			CharList sb = new CharList();
 			for (int i = 0; i < gen_pass.length; i++) {
@@ -265,7 +264,7 @@ public class MyPassIs extends Plugin {
 			byte[] iv1 = new SecureRandom().generateSeed(16);
 			out.write(iv1);
 
-			cipher.init(Cipher.ENCRYPT_MODE, pass, new IvParameterSpecNC(iv1), null);
+			cipher.init(RCipherSpi.ENCRYPT_MODE, pass, new IvParameterSpecNC(iv1), null);
 
 			ByteList buf = IOUtil.getSharedByteBuf();
 			ConfigMaster.NBT.toBytes(data, buf);

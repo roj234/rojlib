@@ -12,7 +12,7 @@ import java.util.Arrays;
 
 /**
  * @author Roj234
- * @since 2023/8/2 0002 6:08
+ * @since 2023/8/2 6:08
  */
 public final class BsDiff {
 	private byte[] left;
@@ -357,7 +357,7 @@ public final class BsDiff {
 
 			int i = sfx[mid];
 			int len = Math.min(left.length-i, right.length-rightOff);
-			int ret = ArrayUtil.vectorizedMismatch(
+			int ret = ArrayUtil.compare(
 				left, Unaligned.ARRAY_BYTE_BASE_OFFSET + i,
 				right, Unaligned.ARRAY_BYTE_BASE_OFFSET + rightOff,
 				len, ArrayUtil.LOG2_ARRAY_BYTE_INDEX_SCALE);

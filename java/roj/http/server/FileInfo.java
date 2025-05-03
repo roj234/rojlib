@@ -10,7 +10,7 @@ import java.nio.channels.FileChannel;
 /**
  * Deflated => NoWrap
  * @author Roj234
- * @since 2023/2/3 0003 15:38
+ * @since 2023/2/3 15:38
  */
 public interface FileInfo {
 	// FileResponse#def referred this

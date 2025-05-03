@@ -11,7 +11,7 @@ import java.security.spec.ECPoint;
 
 /**
  * @author Roj234
- * @since 2022/11/11 0011 12:30
+ * @since 2022/11/11 12:30
  */
 final class ECDH implements KeyExchange {
 	private final ECGroup group;

@@ -3,7 +3,8 @@ package roj.compiler;
 import roj.archive.zip.ZEntry;
 import roj.archive.zip.ZipFile;
 import roj.archive.zip.ZipFileWriter;
-import roj.asm.Parser;
+import roj.asm.AsmCache;
+import roj.asm.ClassNode;
 import roj.collect.MyHashMap;
 import roj.compiler.context.*;
 import roj.compiler.diagnostic.TextDiagnosticReporter;
@@ -224,15 +225,15 @@ public final class Lavac {
 					var data = files.get(i);
 					data.S5_noStore();
 					zfw.beginEntry(new ZEntry(data.name().concat(".class")));
-					ByteList x = Parser.toByteArrayShared(data);
+					ByteList x = AsmCache.toByteArrayShared(data);
 					x.writeToStream(zfw);
 					if (data.name().equals("Test")) {
-						System.out.println(Parser.parse(x));
+						System.out.println(ClassNode.parseAll(x));
 					}
 				}
 				for (var data : ctx.getGeneratedClasses()) {
 					zfw.beginEntry(new ZEntry(data.name().concat(".class")));
-					Parser.toByteArrayShared(data).writeToStream(zfw);
+					AsmCache.toByteArrayShared(data).writeToStream(zfw);
 				}
 
 				zfw.setComment("lavac "+VERSION);

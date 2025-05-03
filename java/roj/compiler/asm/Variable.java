@@ -7,7 +7,7 @@ import roj.collect.RSegmentTree;
 
 /**
  * @author Roj234
- * @since 2023/9/24 0024 4:27
+ * @since 2023/9/24 4:27
  */
 public class Variable extends LocalVariableTable.Item implements RSegmentTree.Range {
 	public Variable(String name, IType type) { super(name, type); }

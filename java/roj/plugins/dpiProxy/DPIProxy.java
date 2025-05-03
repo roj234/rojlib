@@ -26,7 +26,7 @@ import java.util.function.Function;
 
 /**
  * @author Roj234
- * @since 2024/9/15 0015 16:15
+ * @since 2024/9/15 16:15
  */
 public class DPIProxy extends Plugin {
 	private static Logger LOGGER;
@@ -71,7 +71,7 @@ public class DPIProxy extends Plugin {
 			var timeout = item.getInt("timeout", 15000);
 
 			var port = item.getString("port");
-			var launcher = ServerLaunch.tcp("DPIProxy-"+port).bind(NetUtil.parseListeningAddress(port)).initializator(ch ->
+			var launcher = ServerLaunch.tcp("DPIProxy-"+port).bind(Net.parseListeningAddress(port)).initializator(ch ->
 				ch.addLast("fail2ban", f2b)
 				  .addLast("dpi_timer", new Timeout(timeout))
 				  .addLast("dpi", new Matcher(patterns))

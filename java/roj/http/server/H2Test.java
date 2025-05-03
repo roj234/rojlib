@@ -11,7 +11,7 @@ import java.io.IOException;
 
 /**
  * @author Roj234
- * @since 2024/7/12 0012 20:40
+ * @since 2024/7/12 20:40
  */
 final class H2Test implements ChannelHandler {
 	static final String MAGIC = "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n";

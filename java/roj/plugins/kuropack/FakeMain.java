@@ -6,7 +6,7 @@ import java.util.function.Consumer;
 
 /**
  * @author Roj234
- * @since 2024/3/18 0018 7:38
+ * @since 2024/3/18 7:38
  */
 final class FakeMain implements Consumer<Object> {
 	public static void init() {CPMain.callback = new FakeMain();}

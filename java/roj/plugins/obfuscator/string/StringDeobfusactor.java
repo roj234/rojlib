@@ -1,16 +1,12 @@
 package roj.plugins.obfuscator.string;
 
-import roj.asm.ClassNode;
-import roj.asm.MethodNode;
-import roj.asm.Opcodes;
-import roj.asm.Parser;
+import roj.asm.*;
 import roj.asm.attr.Attribute;
 import roj.asm.attr.UnparsedAttribute;
 import roj.asm.cp.*;
 import roj.asm.insn.*;
-import roj.asm.type.Desc;
 import roj.asm.type.Type;
-import roj.asm.util.Context;
+import roj.asmx.Context;
 import roj.collect.MyHashMap;
 import roj.concurrent.OperationDone;
 import roj.reflect.ClassDefiner;
@@ -60,11 +56,11 @@ public class StringDeobfusactor {
 			InsnList ins = method.getAttribute(data.cp, Attribute.Code).instructions;
 			for (InsnNode node : ins) {
 				if (node.opcode() == Opcodes.INVOKEVIRTUAL) {
-					Desc desc = node.desc();
-					if (desc.name.equals("getStackTrace") && desc.param.equals("[Ljava/lang/StackTraceElement;")) {
+					MemberDescriptor desc = node.desc();
+					if (desc.name.equals("getStackTrace") && desc.rawDesc.equals("[Ljava/lang/StackTraceElement;")) {
 						var replaceList = new InsnList();
 						replaceList.insn(Opcodes.POP);
-						replaceList.invoke(Opcodes.INVOKESTATIC, "_syncGetStackTrace", "roj/mapper/Obfuscator", desc.param);
+						replaceList.invoke(Opcodes.INVOKESTATIC, "_syncGetStackTrace", "roj/mapper/Obfuscator", desc.rawDesc);
 						node.replace(replaceList, false);
 						System.out.println("找到stack trace 调用！");
 					}
@@ -87,14 +83,14 @@ public class StringDeobfusactor {
 	static class CryptFinder extends CodeVisitor {
 		boolean user;
 		int ldcPos;
-		Desc tmp;
-		MyHashMap<Desc, Decoder> decoders;
+		MemberDescriptor tmp;
+		MyHashMap<MemberDescriptor, Decoder> decoders;
 		CryptFinder() {
 			this.decoders = new MyHashMap<>();
-			this.tmp = new Desc();
+			this.tmp = new MemberDescriptor();
 		}
 
-		public CryptFinder(MyHashMap<Desc, DecoderCandidate> candidate) {
+		public CryptFinder(MyHashMap<MemberDescriptor, DecoderCandidate> candidate) {
 
 		}
 
@@ -113,22 +109,22 @@ public class StringDeobfusactor {
 
 		@Override
 		public void invoke(byte code, CstRef method) {
-			if (code == Opcodes.INVOKESTATIC && method.desc().getType().str().equals("(Ljava/lang/String;)Ljava/lang/String;")) {
+			if (code == Opcodes.INVOKESTATIC && method.nameAndType().rawDesc().str().equals("(Ljava/lang/String;)Ljava/lang/String;")) {
 				if (bci - ldcPos > 3) return;
 				decoders.putIfAbsent(tmp.read(method).copy(), null);
 				user = true;
 			}
 		}
 
-		public String tryDecode(Desc iin, MethodNode caller, CstUTF utf) {
+		public String tryDecode(MemberDescriptor iin, MethodNode caller, CstUTF utf) {
 			if (caller != null) {
 				// 如果用到了line的话那只好自己再弄啦，也就是麻烦一点，多读取一些属性的事
 				syncStackTrace[0] = new StackTraceElement(iin.owner.replace('/', '.'), iin.name, "SourceFile", -1);
-				syncStackTrace[1] = new StackTraceElement(caller.ownerClass().replace('/', '.'), caller.name(), "SourceFile", -1);
+				syncStackTrace[1] = new StackTraceElement(caller.owner().replace('/', '.'), caller.name(), "SourceFile", -1);
 			}
 			tmp.owner = iin.owner;
 			tmp.name = iin.name;
-			tmp.param = iin.param;
+			tmp.rawDesc = iin.rawDesc;
 			Decoder dec = decoders.get(tmp);
 			if (dec != null) {
 				try {
@@ -144,14 +140,14 @@ public class StringDeobfusactor {
 	protected void decryptString(List<Context> arr) {
 		CodeVisitor filter = new CodeVisitor() {
 			public void invoke(byte code, CstRef method) {
-				String cn = method.className();
+				String cn = method.owner();
 				if (!cn.startsWith("java/")) throw OperationDone.INSTANCE;
 			}
 			protected void invokeItf(CstRef method, short argc) { invoke((byte) 0, method); }
 			protected void invokeDyn(CstDynamic dyn, int type) { throw OperationDone.INSTANCE; }
 		};
 
-		MyHashMap<Desc, DecoderCandidate> decoderCandidate = new MyHashMap<>();
+		MyHashMap<MemberDescriptor, DecoderCandidate> decoderCandidate = new MyHashMap<>();
 
 		for (int i = 0; i < arr.size(); i++) {
 			ClassNode data = arr.get(i).getData();
@@ -172,12 +168,12 @@ public class StringDeobfusactor {
 					mn.unparsed(data.cp);
 					UnparsedAttribute code0 = (UnparsedAttribute) mn.getRawAttribute("Code");
 					try {
-						filter.visit(data.cp, Parser.reader(code0));
+						filter.visit(data.cp, AsmCache.reader(code0));
 
-						Desc d = new Desc();
-						d.owner = mn.ownerClass();
+						MemberDescriptor d = new MemberDescriptor();
+						d.owner = mn.owner();
 						d.name = mn.name();
-						d.param = mn.rawDesc();
+						d.rawDesc = mn.rawDesc();
 						decoderCandidate.put(d, new DecoderCandidate(data, mn, code0));
 					} catch (OperationDone ignored) {}
 				}
@@ -204,8 +200,8 @@ public class StringDeobfusactor {
 			}
 		}
 
-		Desc desc = new Desc();
-		desc.param = "(Ljava/lang/String;)Ljava/lang/String;";
+		MemberDescriptor desc = new MemberDescriptor();
+		desc.rawDesc = "(Ljava/lang/String;)Ljava/lang/String;";
 
 		// 连续LDC+invoke static
 		// todo stack analyze
@@ -221,7 +217,7 @@ public class StringDeobfusactor {
 				UnparsedAttribute code0 = (UnparsedAttribute) m.getRawAttribute("Code");
 				if (code0 == null) continue;
 
-				AttrCode code = new AttrCode(Parser.reader(code0), data.cp, m);
+				AttrCode code = new AttrCode(AsmCache.reader(code0), data.cp, m);
 				try {
 					//if (intr.interpret(code)) {
 					//	code.instructions.removeAll(intr.toDelete);
@@ -239,9 +235,9 @@ public class StringDeobfusactor {
 					if (cst != null) {
 						if (cst.type() == Constant.STRING) {
 							InsnNode next = node.next();
-							Desc desc1 = next.descOrNull();
+							MemberDescriptor desc1 = next.descOrNull();
 							if (desc1 != null) {
-								if (next.opcode() == Opcodes.INVOKESTATIC && desc1.param.equals("(Ljava/lang/String;)Ljava/lang/String;")) {
+								if (next.opcode() == Opcodes.INVOKESTATIC && desc1.rawDesc.equals("(Ljava/lang/String;)Ljava/lang/String;")) {
 									CstUTF utf = ((CstString) cst).name();
 									//if (!intr.done.contains(utf.getString())) {
 									String value = null;

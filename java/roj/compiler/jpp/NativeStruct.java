@@ -7,7 +7,7 @@ import roj.util.DynByteBuf;
 
 /**
  * @author Roj234
- * @since 2025/3/31 0031 4:57
+ * @since 2025/3/31 4:57
  */
 public class NativeStruct extends Attribute {
 	public static final String NAME = "LavaNativeStruct";

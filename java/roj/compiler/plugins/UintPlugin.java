@@ -23,7 +23,7 @@ import static roj.compiler.Tokens.*;
 
 /**
  * @author Roj234
- * @since 2024/12/1 0001 3:33
+ * @since 2024/12/1 3:33
  */
 @LavaPlugin(name = "uint", desc = """
 		PseudoType测试插件

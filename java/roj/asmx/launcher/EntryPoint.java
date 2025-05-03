@@ -10,7 +10,7 @@ import java.util.function.Function;
 
 /**
  * @author Roj234
- * @since 2023/8/4 0004 15:41
+ * @since 2023/8/4 15:41
  */
 public class EntryPoint extends SecureClassLoader {
 	public final ClassLoader PARENT = EntryPoint.class.getClassLoader();
