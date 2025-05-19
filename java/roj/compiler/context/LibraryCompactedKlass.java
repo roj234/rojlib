@@ -83,7 +83,7 @@ public final class LibraryCompactedKlass implements Library {
 	public void serializeK(DynByteBuf buf) {
 		buf.putAscii("LAVASYM4").putVUIUTF(module).putVUInt(table.size());
 		for (var entry : table.selfEntrySet()) {
-			buf.putVUIUTF(entry.k).putVUInt(entry.v);
+			buf.putVUIUTF(entry.getKey()).putVUInt(entry.value);
 		}
 	}
 	public void serializeV(DynByteBuf buf) {

@@ -3,7 +3,7 @@ package roj.config.serial;
 import org.jetbrains.annotations.NotNull;
 import roj.config.Tokenizer;
 import roj.config.YAMLParser;
-import roj.text.DateParser;
+import roj.text.DateTime;
 import roj.text.TextUtil;
 
 import java.util.TimeZone;
@@ -17,7 +17,7 @@ public final class ToYaml extends ToSomeString {
 	public ToYaml(@NotNull String indent) { super(indent.isEmpty() ? " " : indent);  }
 
 	public ToYaml multiline(boolean b) { this.multiline = b; return this; }
-	public ToYaml timezone(TimeZone tz) { cal = DateParser.forTimezone(tz); return this; }
+	public ToYaml timezone(TimeZone tz) { cal = DateTime.forTimezone(tz); return this; }
 
 	private boolean topLevel, multiline;
 
@@ -51,17 +51,17 @@ public final class ToYaml extends ToSomeString {
 	public final void valueMap() { push(MAP|32); }
 	public final void valueList() { push(LIST|NEXT|32); }
 
-	private DateParser cal;
+	private DateTime cal;
 	@Override
 	public final void valueDate(long mills) {
 		preValue(false);
-		if (cal == null) cal = DateParser.GMT();
+		if (cal == null) cal = DateTime.GMT();
 		cal.format("Y-m-d", mills, sb);
 	}
 	@Override
 	public final void valueTimestamp(long mills) {
 		preValue(false);
-		if (cal == null) cal = DateParser.GMT();
+		if (cal == null) cal = DateTime.GMT();
 		cal.toISOString(sb, mills);
 	}
 
@@ -93,7 +93,7 @@ public final class ToYaml extends ToSomeString {
 	@Override
 	protected final void key0(String key) {
 		indent(depth);
-		(YAMLParser.literalSafe(key, false)<0 ? sb.append(key) : Tokenizer.addSlashes(key, 0, sb.append('"'), '\'').append('"')).append(":");
+		(YAMLParser.literalSafe(key, false)<0 ? sb.append(key) : Tokenizer.escape(sb.append('"'), key, 0, '\'').append('"')).append(":");
 	}
 
 	@Override

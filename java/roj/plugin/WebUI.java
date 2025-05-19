@@ -14,7 +14,7 @@ import roj.http.server.auto.Interceptor;
 import roj.http.server.auto.POST;
 import roj.io.IOUtil;
 import roj.net.ChannelCtx;
-import roj.text.DateParser;
+import roj.text.DateTime;
 import roj.ui.Terminal;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
@@ -72,12 +72,12 @@ final class WebUI {
 				var wt = ACTIVE.get();
 				if (wt == null) Terminal.warning("该指令只能在Web终端中执行");
 				// 因为在当前线程上，所以有锁
-				else wt.close(ERR_CLOSED, "goodbye");
+				else wt.sendClose(ERR_CLOSED, "goodbye");
 			}));
 			Panger.CMD.onVirtualKey(key -> {
 				if (key == (Terminal.VK_CTRL| KeyEvent.VK_Q)) {
 					timeout = System.currentTimeMillis() + 300000;
-					Terminal.error("Web终端功能关闭至"+ DateParser.toLocalTimeString(timeout));
+					Terminal.error("Web终端功能关闭至"+ DateTime.toLocalTimeString(timeout));
 					return false;
 				}
 				if (key == (Terminal.VK_CTRL|KeyEvent.VK_C)) {
@@ -93,14 +93,14 @@ final class WebUI {
 		@Override
 		public void channelTick(ChannelCtx ctx) throws IOException {
 			super.channelTick(ctx);
-			if (System.currentTimeMillis() < timeout) close(ERR_CLOSED, "disabled");
+			if (System.currentTimeMillis() < timeout) sendClose(ERR_CLOSED, "disabled");
 		}
 
 		@Override
-		protected void onData(int ph, DynByteBuf in) {
+		protected void onData(int frameType, DynByteBuf in) {
 			ACTIVE.set(this);
 			try {
-				super.onData(ph, in);
+				super.onData(frameType, in);
 			} finally {
 				ACTIVE.remove();
 			}

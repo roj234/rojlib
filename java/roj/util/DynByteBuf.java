@@ -125,7 +125,12 @@ public abstract class DynByteBuf extends OutputStream implements CharSequence, M
 	public abstract boolean isDirect();
 
 	public boolean immutableCapacity() { return capacity() == maxCapacity(); }
-	public boolean hasBuffer() { return true; }
+	/**
+	 * 这是否是一个真实的内存缓冲区
+	 * 如果不是，那么它可能只能顺序读取或顺序写入
+	 * @see ByteList.ToStream
+	 */
+	public boolean isReal() { return true; }
 
 	public long address() { throw new UnsupportedOperationException(); }
 	public abstract long _unsafeAddr();

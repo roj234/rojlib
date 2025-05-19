@@ -15,9 +15,9 @@ import roj.net.Net;
 import roj.plugin.Plugin;
 import roj.plugins.dns.DnsServer.Record;
 import roj.text.CharList;
-import roj.text.Escape;
 import roj.text.TextReader;
 import roj.text.TextUtil;
+import roj.text.URICoder;
 import roj.util.DynByteBuf;
 import roj.util.Helpers;
 
@@ -117,7 +117,7 @@ public class ADnsGuard extends Plugin {
 
 		if (msg != null && !msg.isEmpty()) {
 			sb.append("<div style='background: 0xAA8888; margin: 16px; padding: 16px; border: #000 1px dashed; font-size: 24px; text-align: center;'>")
-			  .append(Escape.decodeURI(msg))
+			  .append(URICoder.decodeURI(msg))
 			  .append("</div>");
 		}
 
@@ -179,6 +179,6 @@ public class ADnsGuard extends Plugin {
 			}
 		}
 
-		rh.code(302).header("Location", "./?msg="+Escape.encodeURI(msg));
+		rh.code(302).header("Location", "./?msg="+ URICoder.encodeURI(msg));
 	}
 }

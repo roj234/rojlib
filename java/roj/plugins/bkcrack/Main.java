@@ -109,7 +109,7 @@ public class Main extends Plugin {
 				data = IOUtil.decodeHex(str);
 			}
 
-			plains.putInt(off, data);
+			plains.put(off, data);
 		}
 
 		ZCKiller ctx = new ZCKiller(IOUtil.read(mzf.getRawStream(entry)), plains);

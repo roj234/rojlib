@@ -7,7 +7,7 @@ import roj.archive.ArchiveUtils;
 import roj.archive.CRC32InputStream;
 import roj.collect.*;
 import roj.concurrent.TaskExecutor;
-import roj.crypt.CRC32s;
+import roj.crypt.CRC32;
 import roj.io.*;
 import roj.io.buf.BufferPool;
 import roj.io.source.Source;
@@ -174,7 +174,7 @@ public class QZArchive extends QZReader implements ArchiveFile {
 					throw new CorruptedInputException("目录表偏移错误"+offset+'+'+length+",len="+that.r.length());
 				}
 
-				int crc = CRC32s.once(buf.list, buf.arrayOffset()+12, 20);
+				int crc = CRC32.crc32(buf.list, buf.arrayOffset()+12, 20);
 				int myCrc = buf.readIntLE(8);
 				if (crc != myCrc) {
 					// https://www.7-zip.org/recover.html : if crc, offset and length are zero

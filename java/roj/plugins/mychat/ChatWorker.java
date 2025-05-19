@@ -4,7 +4,7 @@ import roj.collect.IntSet;
 import roj.collect.RingBuffer;
 import roj.collect.SimpleList;
 import roj.concurrent.PacketBuffer;
-import roj.http.WebSocketConnection;
+import roj.http.WebSocket;
 import roj.io.IOUtil;
 import roj.net.ChannelCtx;
 import roj.util.ByteList;
@@ -18,7 +18,7 @@ import java.util.List;
  * @author Roj234
  * @since 2022/2/7 18:48
  */
-class ChatWorker extends WebSocketConnection {
+class ChatWorker extends WebSocket {
 	public static final int
 		P_USER_STATE = 1, P_USER_INFO = 2,
 		P_MESSAGE = 3, P_SYS_MESSAGE = 4,
@@ -42,9 +42,9 @@ class ChatWorker extends WebSocketConnection {
 	}
 
 	@Override
-	protected final void onData(int ph, DynByteBuf in) throws IOException {
+	protected final void onData(int frameType, DynByteBuf in) throws IOException {
 		switch (in.readUnsignedByte()) {
-			case P_LOGOUT -> close(ERR_OK, null);
+			case P_LOGOUT -> sendClose(ERR_OK, null);
 			case P_HEARTBEAT -> {
 				in.rIndex--;
 				send(FRAME_BINARY, in);
@@ -57,7 +57,7 @@ class ChatWorker extends WebSocketConnection {
 				while (in.isReadable()) {
 					var u = server.getSubject(in.readInt());
 					if (u == null) {
-						close(ERR_INVALID_DATA, "无效的数据包[UserId]");
+						sendClose(ERR_INVALID_DATA, "无效的数据包[UserId]");
 						break;
 					}
 					sendUserInfo(u);
@@ -66,7 +66,7 @@ class ChatWorker extends WebSocketConnection {
 			case P_MESSAGE -> {
 				var u = server.getSubject(in.readInt());
 				if (u == null) {
-					close(ERR_INVALID_DATA, "无效的数据包[UserId]");
+					sendClose(ERR_INVALID_DATA, "无效的数据包[UserId]");
 				} else {
 					u.sendMessage(server, new Message(user.id, decodeToUTF(in).toString()), false);
 				}
@@ -79,7 +79,7 @@ class ChatWorker extends WebSocketConnection {
 				getHistory(id, decodeToUTF(in), off, len);
 			}
 			case P_COLD_HISTORY -> unloadHistory(in.readInt());
-			default -> close(ERR_INVALID_DATA, "未实现的函数 "+in.get(0));
+			default -> sendClose(ERR_INVALID_DATA, "未实现的函数 "+in.get(0));
 		}
 	}
 
@@ -180,7 +180,7 @@ class ChatWorker extends WebSocketConnection {
 				if (take == null) break;
 				send(FRAME_BINARY, take);
 			}
-		} else if (shutdownInProgress) close(ERR_OK, null);
+		} else if (shutdownInProgress) sendClose(ERR_OK, null);
 	}
 
 	public final void sendUserInfo(ChatSubject user) {

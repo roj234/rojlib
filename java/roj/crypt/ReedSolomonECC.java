@@ -99,7 +99,13 @@ public final class ReedSolomonECC extends RCipherSpi {
 		U.copyMemory(buf, Unaligned.ARRAY_BYTE_BASE_OFFSET, data.array(), data._unsafeAddr(), buf.length);
 		return errorCount;
 	}
-	public int errorCorrection(byte[] buf) {
+	public int errorCorrection(byte[] buf) {return errorCorrection(buf, null);}
+
+	/**
+	 * 纠正错误
+	 * @param errorPositions 已知错误的索引，如果不为null，那么必须是<b>所有</b>错误的索引
+	 */
+	public int errorCorrection(byte[] buf, @Nullable byte[] errorPositions) {
 		var poly = polyNew(buf);
 		var eccSize = eccSize();
 		var syndromeCoeff = tmp;
@@ -112,46 +118,71 @@ public final class ReedSolomonECC extends RCipherSpi {
 		}
 		if (error == 0) return 0;
 
-		var syndromePoly = polyNew(syndromeCoeff);
-		var sigmaOmega = runEuclideanAlgorithm(polyNewMono(eccSize, 1), syndromePoly, eccSize);
+		byte[] sigma, omega, errorLocations;
 
-		var sigma = sigmaOmega[0];
-		var errorCount = sigma.length-1;
-		var errorLocations = new byte[errorCount];
-		// use Chien's search to find errored locations
-		if (errorCount == 1) {
-			errorLocations[0] = sigma[0];
+		if (errorPositions != null) {
+			sigma = P1;
+			errorLocations = new byte[errorPositions.length];
+
+			byte[] polyTmp = {0, 1};
+			for (int i = 0; i < errorPositions.length; i++) {
+				byte X_j = exp(buf.length - 1 - errorPositions[i]);
+				errorLocations[i] = X_j;
+
+				polyTmp[0] = X_j;
+				sigma = polyMul(sigma, polyTmp);
+			}
+
+			// 计算 Ω(x) = S(x) * σ(x) mod x^eccSize
+			omega = polyMul(syndromeCoeff, sigma);
+
+			int start = Math.max(0, omega.length - eccSize);
+			for (int i = 0; i < start; i++) omega[i] = 0;
+
+			omega = polyNew(omega);
 		} else {
-			assert errorCount != 0;
+			var syndromePoly = polyNew(syndromeCoeff);
+			var sigmaOmega = runEuclideanAlgorithm(polyNewMono(eccSize, 1), syndromePoly, eccSize);
 
-			int found = 0, bytes = 1;
-			while (true) {
-				if (polyEval(sigma, bytes) == 0) {
-					errorLocations[found] = inv(bytes);
-					if (++found >= errorCount) break;
+			sigma = sigmaOmega[0];
+			omega = sigmaOmega[1];
+
+			int errorCount = sigma.length-1;
+			errorLocations = new byte[errorCount];
+			// use Chien's search to find errored locations
+			if (errorCount == 1) {
+				errorLocations[0] = sigma[0];
+			} else {
+				assert errorCount != 0;
+
+				int found = 0, bytes = 1;
+				while (true) {
+					if (polyEval(sigma, bytes) == 0) {
+						errorLocations[found] = inv(bytes);
+						if (++found >= errorCount) break;
+					}
+
+					if (++bytes > 255) throw new FastFailException("[ECC]错误数量太多 "+found+"/"+errorCount);
 				}
-
-				if (++bytes > 255) throw new FastFailException("[ECC]错误数量太多 "+found+"/"+errorCount);
 			}
 		}
-		//System.out.println("检测到"+errorCount+"个字节发生了错误！");
 
-		var omega = sigmaOmega[1];
 		// use Forney's Formula to get magnitude diff
+		int errorCount = errorLocations.length;
 		for (var i = 0; i < errorCount; i++) {
 			var pos = buf.length-1 - log(errorLocations[i]);
 			if (pos < 0) throw new FastFailException("[ECC]Bad location "+errorLocations[i]);
 
-			var invLoc = inv(errorLocations[i]);
+			var invX = inv(errorLocations[i]);
 			var denominator = 1;
 
 			for (var j = 0; j < errorCount; j++) {
 				if (i != j) {
-					denominator = mul(denominator, 1 ^ mul(errorLocations[j], invLoc));
+					denominator = mul(denominator, 1 ^ mul(errorLocations[j], invX));
 				}
 			}
 
-			buf[pos] ^= mul(polyEval(omega, invLoc), inv(denominator));
+			buf[pos] ^= mul(polyEval(omega, invX), inv(denominator));
 		}
 		return errorCount;
 	}

@@ -4,7 +4,7 @@ import org.jetbrains.annotations.NotNull;
 import roj.collect.MyBitSet;
 import roj.collect.SimpleList;
 import roj.config.data.CInt;
-import roj.crypt.CRC32s;
+import roj.crypt.CRC32;
 import roj.io.IOUtil;
 import roj.io.source.FileSource;
 import roj.io.source.MemorySource;
@@ -250,7 +250,7 @@ public class QZFileWriter extends QZWriter {
             OutputStream out;
             public void write(int b) {}
             public void write(@NotNull byte[] b, int off, int len) throws IOException {
-                blockCrc32 = CRC32s.update(blockCrc32, b, off, len);
+                blockCrc32 = CRC32.update(blockCrc32, b, off, len);
                 out.write(b, off, len);
             }
             public void close() throws IOException {if (out != null) out.close();}
@@ -278,7 +278,7 @@ public class QZFileWriter extends QZWriter {
                 metadata.uSize = out.wIndex();
 
                 long pos1 = source.position();
-                blockCrc32 = CRC32s.INIT_CRC;
+                blockCrc32 = CRC32.initial;
                 crcOut.out = source;
 
                 out.write(kEncodedHeader);
@@ -307,8 +307,8 @@ public class QZFileWriter extends QZWriter {
            .putIntLE(0)
            .putLongLE(hstart-32)
            .putLongLE(hend-hstart)
-           .putIntLE(CRC32s.retVal(blockCrc32))
-           .putIntLE(8, CRC32s.once(buf.list, 12, 20));
+           .putIntLE(CRC32.finish(blockCrc32))
+           .putIntLE(8, CRC32.crc32(buf.list, 12, 20));
 
         source.write(buf);
     }

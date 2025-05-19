@@ -6,7 +6,7 @@ import roj.net.ChannelCtx;
 import roj.net.ChannelHandler;
 import roj.reflect.ReflectionUtils;
 import roj.reflect.Unaligned;
-import roj.text.Escape;
+import roj.text.URICoder;
 import roj.util.DirectByteList;
 import roj.util.DynByteBuf;
 
@@ -92,7 +92,7 @@ public class DiskFileInfo implements FileInfo, ChannelHandler {
 			rh.connection().addBefore("h11@compr", "compress-capture", this);
 		}
 
-		if (download) h.putIfAbsent("Content-Disposition", "attachment; filename=\""+Escape.encodeURIComponent(file.getName())+'"');
+		if (download) h.putIfAbsent("Content-Disposition", "attachment; filename=\""+ URICoder.encodeURIComponent(file.getName())+'"');
 		h.putIfAbsent("Content-Type", MimeType.getMimeType(file.getName()));
 	}
 

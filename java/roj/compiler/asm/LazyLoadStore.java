@@ -1,7 +1,7 @@
 package roj.compiler.asm;
 
-import roj.asm.insn.CodeBlock;
 import roj.asm.insn.CodeWriter;
+import roj.asm.insn.Segment;
 import roj.compiler.resolve.TypeCast;
 import roj.util.DynByteBuf;
 
@@ -11,7 +11,7 @@ import static roj.asm.Opcodes.*;
  * @author Roj234
  * @since 2022/2/5 12:22
  */
-final class LazyLoadStore extends CodeBlock {
+final class LazyLoadStore extends Segment {
 	private final Variable v;
 	private final boolean store;
 

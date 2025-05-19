@@ -13,34 +13,34 @@ import static roj.collect.IntMap.UNDEFINED;
  */
 public class ToLongMap<K> extends MyHashMap<K, Long> implements ToLongFunction<K> {
 	public static final class Entry<K> extends AbstractEntry<K, Long> {
-		public long v;
+		public long value;
 
 		@Override
 		@Deprecated
-		public Long getValue() { return v; }
+		public Long getValue() { return value; }
 		@Override
 		@Deprecated
 		public Long setValue(Long value) {
-			long oldV = v;
-			v = value;
+			long oldV = this.value;
+			this.value = value;
 			return oldV;
 		}
 
 		@Override
-		public String toString() { return String.valueOf(k)+'='+v; }
+		public String toString() { return String.valueOf(key)+'='+value; }
 		@Override
 		public boolean equals(Object o) {
 			if (this == o) return true;
 			if (o == null || getClass() != o.getClass()) return false;
 
 			var entry = (Entry<?>) o;
-			if (!(k != null ? k.equals(entry.k) : entry.k == null)) return false;
-			return v == entry.v;
+			if (!(key != null ? key.equals(entry.key) : entry.key == null)) return false;
+			return value == entry.value;
 		}
 		@Override
 		public int hashCode() {
-			int hash = k != null ? k.hashCode() : 0;
-			return (int)(v ^ v >>> 32) ^ hash;
+			int hash = key != null ? key.hashCode() : 0;
+			return (int)(value ^ value >>> 32) ^ hash;
 		}
 	}
 
@@ -55,38 +55,38 @@ public class ToLongMap<K> extends MyHashMap<K, Long> implements ToLongFunction<K
 	public final long getLong(K key) { return getOrDefault(key, 0); }
 	public final long getOrDefault(K key, long def) {
 		Entry<K> entry = (Entry<K>) getEntry(key);
-		return entry == null ? def : entry.v;
+		return entry == null ? def : entry.value;
 	}
 
 	public long increment(K key, long i) {
 		Entry<K> entry = (Entry<K>) getOrCreateEntry(key);
-		if (entry.k == UNDEFINED) {
-			entry.k = key;
+		if (entry.key == UNDEFINED) {
+			entry.key = key;
 			size++;
 		}
-		return entry.v += i;
+		return entry.value += i;
 	}
 
 	public Long putLong(K key, long val) {
 		Entry<K> entry = (Entry<K>) getOrCreateEntry(key);
 		Long oldV;
-		if (entry.k == UNDEFINED) {
-			entry.k = key;
+		if (entry.key == UNDEFINED) {
+			entry.key = key;
 			size++;
 
 			oldV = null;
 		} else {
-			oldV = entry.v;
+			oldV = entry.value;
 		}
 
-		entry.v = val;
+		entry.value = val;
 		return oldV;
 	}
 	public boolean putLongIfAbsent(K key, int val) {
 		Entry<K> entry = (Entry<K>) getOrCreateEntry(key);
-		if (entry.k == UNDEFINED) {
-			entry.k = key;
-			entry.v = val;
+		if (entry.key == UNDEFINED) {
+			entry.key = key;
+			entry.value = val;
 			size++;
 			return true;
 		}
@@ -97,7 +97,7 @@ public class ToLongMap<K> extends MyHashMap<K, Long> implements ToLongFunction<K
 	public long removeLong(Object k, int def) {
 		Entry<K> entry = (Entry<K>) remove0(k, UNDEFINED);
 		if (entry == null) return def;
-		return entry.v;
+		return entry.value;
 	}
 
 	@SuppressWarnings("unchecked")
@@ -107,7 +107,7 @@ public class ToLongMap<K> extends MyHashMap<K, Long> implements ToLongFunction<K
 		for (int i = ent.length - 1; i >= 0; i--) {
 			Entry<K> entry = (Entry<K>) ent[i];
 			while (entry != null) {
-				if (entry.v == val) return true;
+				if (entry.value == val) return true;
 				entry = (Entry<K>) entry.next;
 			}
 		}
@@ -116,7 +116,7 @@ public class ToLongMap<K> extends MyHashMap<K, Long> implements ToLongFunction<K
 
 	protected AbstractEntry<K, Long> useEntry() {
 		AbstractEntry<K, Long> entry = new Entry<>();
-		entry.k = Helpers.cast(UNDEFINED);
+		entry.key = Helpers.cast(UNDEFINED);
 		return entry;
 	}
 }

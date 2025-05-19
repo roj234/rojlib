@@ -1,5 +1,7 @@
 package roj.archive.zip;
 
+import roj.concurrent.ExceptionalConsumer;
+import roj.concurrent.ExceptionalSupplier;
 import roj.io.IOUtil;
 import roj.util.ByteList;
 import roj.util.Helpers;
@@ -7,6 +9,7 @@ import roj.util.Helpers;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.concurrent.Callable;
 import java.util.function.Supplier;
 import java.util.zip.ZipEntry;
 
@@ -60,7 +63,7 @@ public final class ZipOutput implements AutoCloseable {
 		else some.put(name, data).flag |= compress ? 8 : 0;
 	}
 
-	public void set(String name, Supplier<ByteList> data) throws IOException {
+	public void set(String name, ExceptionalSupplier<ByteList, IOException> data) throws IOException {
 		if (useZFW) {
 			all.writeNamed(name, data.get(), compress ? ZipEntry.DEFLATED : ZipEntry.STORED);
 		} else {
@@ -68,7 +71,7 @@ public final class ZipOutput implements AutoCloseable {
 		}
 	}
 
-	public void set(String name, Supplier<ByteList> data, long modTime) throws IOException {
+	public void set(String name, ExceptionalSupplier<ByteList, IOException> data, long modTime) throws IOException {
 		if (useZFW) {
 			all.writeNamed(name, data.get(), compress ? ZipEntry.DEFLATED : ZipEntry.STORED, modTime);
 		} else {
@@ -76,7 +79,7 @@ public final class ZipOutput implements AutoCloseable {
 		}
 	}
 
-	public void setStream(String name, Supplier<InputStream> data, long modTime) throws IOException {
+	public void setStream(String name, ExceptionalSupplier<InputStream, IOException> data, long modTime) throws IOException {
 		if (useZFW) {
 			ZEntry ze = new ZEntry(name);
 			ze.setMethod(compress ? ZipEntry.DEFLATED : ZipEntry.STORED);

@@ -215,7 +215,7 @@ public class XlsxWriter implements TableWriter {
 		tmpB.clear();
 		tmpB.putAscii("<workbook xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\"><fileVersion appName=\"xl\" lastEdited=\"3\" lowestEdited=\"5\" rupBuild=\"9302\"/><sheets>");
 		for (int i = 0; i < sheets.size(); i += SHEET_OBJECT_SIZE) {
-			tmpB.putAscii("<sheet name=\"").putUTFData(Tokenizer.addSlashes(sheets.get(i).toString())).putAscii("\" sheetId=\""+(i/SHEET_OBJECT_SIZE+1)+"\" r:id=\"rId"+(i/SHEET_OBJECT_SIZE+1)+"\"/>");
+			tmpB.putAscii("<sheet name=\"").putUTFData(Tokenizer.escape(sheets.get(i).toString())).putAscii("\" sheetId=\""+(i/SHEET_OBJECT_SIZE+1)+"\" r:id=\"rId"+(i/SHEET_OBJECT_SIZE+1)+"\"/>");
 		}
 		tmpB.putAscii("</sheets></workbook>").writeToStream(zip);
 		zip.closeEntry();

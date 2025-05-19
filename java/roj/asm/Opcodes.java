@@ -184,7 +184,7 @@ public final class Opcodes {
 	private static final int OPCODE_COUNT = 201;
 	private static final String[] _Names = new String[256];
 	public static byte validateOpcode(byte code) {
-		if ((code&0xFF) > OPCODE_COUNT) throw new IllegalStateException("Unknown bytecode 0x"+Integer.toHexString(code&0xFF));
+		if (_Names[code&0xFF] == null) throw new IllegalStateException("Unknown bytecode 0x"+Integer.toHexString(code&0xFF));
 		return code;
 	}
 	public static String showOpcode(int code) {return _Names[code&0xFF];}
@@ -213,11 +213,11 @@ public final class Opcodes {
 		CATE_IF=8, CATE_RETURN=9, CATE_GOTO=10,
 		CATE_CLASS=11, CATE_METHOD=12, CATE_FIELD=13, CATE_ARRAY_SL = 14;
 	public static int category(int code) { return _Flags[code&0xFF]&0xF; }
-	public static void assertCate(int code, int i) { if (i != (i = category(code))) throw new IllegalArgumentException("参数错误,不支持的操作码类型/"+i+"/"+ showOpcode(code)); }
+	public static void assertCate(int code, int i) { if (i != (i = category(code))) throw new IllegalArgumentException("参数错误,不支持的操作码类型/"+i+"/"+showOpcode(code)); }
 
 	public static final int TRAIT_ZERO_ADDRESS=16, TRAIT_JUMP=64, TRAIT_ILFDA=128;
 	public static int trait(int code) { return _Flags[code&0xFF]&0xF0; }
-	public static void assertTrait(int code, int i) { if ((i & trait(code)) == 0) throw new IllegalArgumentException("参数错误,不支持的操作码特性/"+ trait(code)+"/"+ showOpcode(code)); }
+	public static void assertTrait(int code, int i) { if ((i & trait(code)) == 0) throw new IllegalArgumentException("参数错误,不支持的操作码特性/"+trait(code)+"/"+showOpcode(code)); }
 
 	private static final Int2IntMap CAN_SHIFT = new Int2IntMap();
 	public static int shift(int i) { return CAN_SHIFT.getOrDefaultInt(i&0xFF, 0); }
@@ -342,5 +342,12 @@ public final class Opcodes {
 		for (int i = 0; i < len; i++) {
 			CAN_SHIFT.put(base+i, data);
 		}
+	}
+
+	public static void registerOpcode(int code, String name, int flags, int shift) {
+		_Names[code] = name;
+		_Flags[code] = (byte) flags;
+		byName = null;
+		if (shift > 0) fshift(code, shift);
 	}
 }

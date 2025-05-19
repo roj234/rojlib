@@ -19,24 +19,24 @@ import static roj.config.NBTParser.*;
  * @since 2024/4/30 20:17
  */
 public final class XNBTParser implements BinaryParser {
-	public static final byte X_GB18030_STRING = 13, X_LATIN1_STRING = 14, X_NULL = 15, X_SAME_LIST = 16;
+	public static final byte X_GB18030_STRING = 13, X_LATIN1_STRING = 14, X_NULL = 15, X_DEDUP_LIST = 16;
 
 	@Override
-	public <T extends CVisitor> T parse(InputStream in, int flag, T cc) throws IOException { root(MyDataInputStream.wrap(in), cc); return cc; }
-	public <T extends CVisitor> T parse(DynByteBuf buf, int flag, T cc) throws IOException { root(buf, cc); return cc; }
+	public <T extends CVisitor> T parse(InputStream in, int flag, T cc) throws IOException { parse(MyDataInputStream.wrap(in), cc); return cc; }
+	public <T extends CVisitor> T parse(DynByteBuf buf, int flag, T cc) throws IOException { parse(buf, cc); return cc; }
 
 	public ConfigMaster format() { return ConfigMaster.XNBT; }
 
-	public static void root(MyDataInput in, CVisitor cc) throws IOException {
+	public static void parse(MyDataInput in, CVisitor cc) throws IOException {
 		byte type = in.readByte();
 		if (type == 0) return;
 
 		char n = in.readChar();
 		if (n != 0) throw new IOException("根节点不应该有名称");
-		element(in, type, cc);
+		parse(in, type, cc);
 	}
 
-	private static void element(MyDataInput in, byte type, CVisitor cc) throws IOException {
+	private static void parse(MyDataInput in, byte type, CVisitor cc) throws IOException {
 		switch (type) {
 			default -> throw new IOException("Corrupted NBT(invalid id "+type+")");
 			case X_NULL -> cc.valueNull();
@@ -54,7 +54,7 @@ public final class XNBTParser implements BinaryParser {
 			case STRING -> cc.value(in.readUTF());
 			case X_GB18030_STRING -> cc.value(in.readGB(in.readVUInt()));
 			case X_LATIN1_STRING -> cc.value(in.readAscii(in.readVUInt()));
-			case X_SAME_LIST -> {
+			case X_DEDUP_LIST -> {
 				int mapKeySize = in.readUnsignedByte();
 				String[] mapKey = new String[mapKeySize];
 				for (int i = 0; i < mapKeySize; i++)
@@ -67,7 +67,7 @@ public final class XNBTParser implements BinaryParser {
 				type = in.readByte();
 				int len = in.readInt();
 				cc.valueList(len);
-				while (len-- > 0) element(in, type != 0 ? type : in.readByte(), cc);
+				while (len-- > 0) parse(in, type != 0 ? type : in.readByte(), cc);
 				cc.pop();
 			}
 			case COMPOUND -> {
@@ -76,7 +76,7 @@ public final class XNBTParser implements BinaryParser {
 					type = in.readByte();
 					if (type == 0) break;
 					cc.key(in.readUTF());
-					element(in, type, cc);
+					parse(in, type, cc);
 				}
 				cc.pop();
 			}
@@ -99,7 +99,7 @@ public final class XNBTParser implements BinaryParser {
 			cc.key(key);
 
 			byte type = in.readByte();
-			element(in, type, cc);
+			parse(in, type, cc);
 		}
 		cc.pop();
 	}

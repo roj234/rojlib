@@ -4,7 +4,7 @@ import org.jetbrains.annotations.NotNull;
 import roj.archive.ArchiveEntry;
 import roj.archive.ArchiveFile;
 import roj.archive.ArchiveWriter;
-import roj.crypt.CRC32s;
+import roj.crypt.CRC32;
 import roj.io.IOUtil;
 import roj.io.source.CompositeSource;
 import roj.io.source.FileSource;
@@ -57,7 +57,7 @@ public class ZipFileWriter extends OutputStream implements ArchiveWriter {
 		if (entry != null) closeEntry();
 		if (name.endsWith("/")) throw new ZipException("目录不是空的: "+name);
 
-		int crc = CRC32s.once(b.list, b.arrayOffset()+b.rIndex, b.readableBytes());
+		int crc = CRC32.crc32(b.list, b.arrayOffset()+b.rIndex, b.readableBytes());
 
 		int time = ZEntry.java2DosTime(modTime);
 		ByteList buf = this.buf;
@@ -156,7 +156,7 @@ public class ZipFileWriter extends OutputStream implements ArchiveWriter {
 
 	private ZEntry entry;
 	private long entryBeginOffset, dataBeginOffset;
-	private int crc = CRC32s.INIT_CRC;
+	private int crc = CRC32.initial;
 
 	public void beginEntry(ZipEntry ze) throws IOException {
 		ZEntry entry = new ZEntry(ze.getName());
@@ -199,7 +199,7 @@ public class ZipFileWriter extends OutputStream implements ArchiveWriter {
 	public void write(@NotNull byte[] b, int off, int len) throws IOException {
 		if (entry == null) throw new ZipException("Entry closed");
 
-		crc = CRC32s.update(crc, b, off, len);
+		crc = CRC32.update(crc, b, off, len);
 
 		if (entry.getMethod() == ZipEntry.STORED) {
 			file.write(b, off, len);
@@ -255,7 +255,7 @@ public class ZipFileWriter extends OutputStream implements ArchiveWriter {
 		entry.cSize = cSize;
 		entry.uSize = uSize;
 		entry.crc32 = crc;
-		crc = CRC32s.INIT_CRC;
+		crc = CRC32.initial;
 
 		int off = CENs.wIndex();
 		ZipArchive.writeCEN(CENs, entry);

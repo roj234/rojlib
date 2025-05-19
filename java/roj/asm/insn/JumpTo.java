@@ -9,13 +9,13 @@ import static roj.asm.Opcodes.*;
  * @author Roj234
  * @since 2022/11/17 12:53
  */
-public class JumpBlock extends CodeBlock {
+public class JumpTo extends Segment {
 	public byte code;
 	public Label target;
 
 	public int fv_bci;
 
-	public JumpBlock(byte code, Label target) {
+	public JumpTo(byte code, Label target) {
 		this.code = code;
 		this.target = target;
 		assert target != null;
@@ -64,9 +64,9 @@ public class JumpBlock extends CodeBlock {
 	@Override public final boolean isTerminate() { return code == GOTO || code == GOTO_W; }
 	@Override public final boolean willJumpTo(int block, int offset) { return (offset == -1 || target.offset == offset) && target.getBlock() == block; }
 
-	@Override public CodeBlock move(AbstractCodeWriter to, int blockMoved, boolean clone) {
+	@Override public Segment move(AbstractCodeWriter to, int blockMoved, boolean clone) {
 		Label rx = copyLabel(target, to, blockMoved, clone);
-		return clone?new JumpBlock(code,rx):this;
+		return clone?new JumpTo(code,rx):this;
 	}
 
 	@Override public final String toString() { return Opcodes.showOpcode(code)+"("+target+")"; }

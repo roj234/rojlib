@@ -140,7 +140,7 @@ public class LZMA2ParallelReader extends MBInputStream {
 
 		final void release() {
 			lz.putArraysToCache();
-			rc.putArraysToCache();
+			rc.finish();
 			in._free();
 			if (tmpOut != null) tmpOut._free();
 		}

@@ -1,5 +1,7 @@
 package roj.http;
 
+import org.intellij.lang.annotations.MagicConstant;
+import org.jetbrains.annotations.Nullable;
 import roj.io.IOUtil;
 import roj.io.buf.BufferPool;
 import roj.net.ChannelCtx;
@@ -22,7 +24,7 @@ import static roj.reflect.Unaligned.U;
  * @author Roj234
  * @since 2022/11/11 1:30
  */
-public abstract class WebSocketConnection implements ChannelHandler {
+public abstract class WebSocket implements ChannelHandler {
 	public static final byte
 		FRAME_CONTINUE = 0x0,
 		FRAME_TEXT = 0x1,
@@ -67,7 +69,7 @@ public abstract class WebSocketConnection implements ChannelHandler {
 	public static final int REMOTE_NO_CTX = 0x01, // 对等端压缩无上下文 (跨消息复用字典)
 		LOCAL_NO_CTX = 0x02, // 本地压缩无上下文
 		LOCAL_SIMPLE_MASK = 0x04, // 作为客户端时,跳过mask步骤
-		ACCEPT_PARTIAL_MSG = 0x08, // 允许处理组合之前的分片 (此时onPacket函数的ph参数将会有0x80位,并可以通过cf字段获取)
+		ACCEPT_PARTIAL_MSG = 0x08, // 禁用分片组装 (此时isLast可能为假)
 		__SEND_COMPRESS = 0x10, // 发送需要压缩 (内部使用)
 		__CONTINUOUS_SENDING = 0x20, // 正在发送分片帧 (内部使用)
 		COMPRESS_AVAILABLE = 0x40, // 对等端允许压缩 (permessage-deflate)
@@ -118,7 +120,7 @@ public abstract class WebSocketConnection implements ChannelHandler {
 	public int errCode;
 	public String errMsg;
 
-	public WebSocketConnection() {
+	public WebSocket() {
 		// default 128k
 		maxDataOnce = 131072;
 		maxData = 1048576;
@@ -144,7 +146,7 @@ public abstract class WebSocketConnection implements ChannelHandler {
 		if (idle == 30000) {
 			send(FRAME_PING, null);
 		} else if (idle == 35000) {
-			close(ERR_UNEXPECTED, "timeout");
+			sendClose(ERR_UNEXPECTED, "timeout");
 		}
 	}
 
@@ -174,7 +176,7 @@ public abstract class WebSocketConnection implements ChannelHandler {
 
 				int len = header&0xFF;
 				if ((len & 0x80) != (flag & REMOTE_MASK)) {
-					close(ERR_PROTOCOL, "not masked properly");
+					sendClose(ERR_PROTOCOL, "not masked properly");
 					return;
 				}
 				len = switch (len & 0x7F) {
@@ -186,11 +188,11 @@ public abstract class WebSocketConnection implements ChannelHandler {
 				int head = header >>> 8;
 				if ((head & 15) >= 0x8) {
 					if (len != 0) {
-						close(ERR_TOO_LARGE, "control frame size");
+						sendClose(ERR_TOO_LARGE, "control frame size");
 						return;
 					}
 					if ((head & 0x80) == 0) {
-						close(ERR_PROTOCOL, "control frame fragmented");
+						sendClose(ERR_PROTOCOL, "control frame fragmented");
 						return;
 					}
 				}
@@ -205,7 +207,7 @@ public abstract class WebSocketConnection implements ChannelHandler {
 					case 127:
 						long l = rb.readLong();
 						if (l > Integer.MAX_VALUE - len) {
-							close(ERR_TOO_LARGE, ">2G");
+							sendClose(ERR_TOO_LARGE, ">2G");
 							return;
 						}
 						len = (int) l;
@@ -214,7 +216,7 @@ public abstract class WebSocketConnection implements ChannelHandler {
 				if ((flag & REMOTE_MASK) != 0) len += 4;
 
 				if (len > maxDataOnce) {
-					close(ERR_TOO_LARGE, null);
+					sendClose(ERR_TOO_LARGE, null);
 					return;
 				}
 
@@ -230,29 +232,29 @@ public abstract class WebSocketConnection implements ChannelHandler {
 		}
 
 		int wPos = rb.wIndex();
-		int head = header>>>8;
+		int frameType = header>>>8;
 
 		rb.wIndex(rb.rIndex+length);
 		if ((flag & REMOTE_MASK) != 0) mask(rb);
 
 		if (continuousFrame == null) {
-			if ((head & 0xF) == 0) {
-				close(ERR_PROTOCOL, "Unexpected continuous frame");
+			if ((frameType & 0xF) == 0) {
+				sendClose(ERR_PROTOCOL, "Unexpected continuous frame");
 				return;
-			} else if ((head & 0x80) == 0) {
-				continuousFrame = new ContinuousFrame(head);
+			} else if ((frameType & 0x80) == 0) {
+				continuousFrame = new ContinuousFrame(frameType);
 			}
-		} else if ((head & 0xF) != 0 && (head & 0xF) < 8) {
-			close(ERR_PROTOCOL, "Receive new message in continuous frame");
+		} else if ((frameType & 0xF) != 0 && (frameType & 0xF) < 8) {
+			sendClose(ERR_PROTOCOL, "Receive new message in continuous frame");
 			return;
 		} else {
-			head = (head & 0x80) | (continuousFrame.data & 0x7F);
+			frameType = (frameType & 0x80) | (continuousFrame.data & 0x7F);
 		}
 
-		boolean compressed = (head & RSV_COMPRESS) != 0;
+		boolean compressed = (frameType & RSV_COMPRESS) != 0;
 		if (compressed) {
 			if (inf == null) {
-				close(ERR_PROTOCOL, "Illegal rsv bits");
+				sendClose(ERR_PROTOCOL, "Illegal rsv bits");
 				return;
 			}
 
@@ -268,7 +270,7 @@ public abstract class WebSocketConnection implements ChannelHandler {
 
 					pushEOS:
 					if (!rb.isReadable()) {
-						if ((head & 0x80) != 0) {
+						if ((frameType & 0x80) != 0) {
 							// not enough space, process input data first
 							if (zi.length - $len < 4) break pushEOS;
 
@@ -293,7 +295,7 @@ public abstract class WebSocketConnection implements ChannelHandler {
 
 							if (!zo.isWritable()) {
 								if (zo.capacity() << 1 > maxDataOnce) {
-									close(ERR_TOO_LARGE, "decompressed data > "+zo.capacity()+" bytes");
+									sendClose(ERR_TOO_LARGE, "decompressed data > "+zo.capacity()+" bytes");
 									return;
 								}
 								zo = ctx.alloc().expand(zo, zo.capacity());
@@ -305,7 +307,7 @@ public abstract class WebSocketConnection implements ChannelHandler {
 				}
 
 				// not continuous
-				if ((head & 0x80) != 0 && (flag & REMOTE_NO_CTX) != 0) {
+				if ((frameType & 0x80) != 0 && (flag & REMOTE_NO_CTX) != 0) {
 					inf.reset();
 				}
 			} catch (Exception e) {
@@ -318,26 +320,30 @@ public abstract class WebSocketConnection implements ChannelHandler {
 
 		try {
 			if (continuousFrame != null) {
+				var frame = continuousFrame;
+				boolean isLast = (frameType & 0x80) != 0;
+
 				if ((flag & ACCEPT_PARTIAL_MSG) != 0) {
-					onPacket(0x80 | (continuousFrame.data&0xF), rb);
-					continuousFrame.fragments++;
+					onFrame(frame.data, rb, isLast);
+					if (isLast) continuousFrame = null;
+					frame.fragments++;
 				} else {
-					continuousFrame.append(ctx, rb);
-					if (continuousFrame.length > maxData) {
-						close(ERR_TOO_LARGE, null);
+					frame.append(ctx, rb);
+					if (frame.length > maxData) {
+						sendClose(ERR_TOO_LARGE, null);
 					}
 
-					if ((head & 0x80) != 0) {
+					if (isLast) {
 						try {
-							onPacket(continuousFrame.data&0xF, continuousFrame.payload());
+							onFrame(frame.data, frame.payload(), true);
 						} finally {
-							continuousFrame.clear();
+							frame.clear();
 							continuousFrame = null;
 						}
 					}
 				}
 			} else {
-				onPacket(head & 15, rb);
+				onFrame(frameType, rb, true);
 			}
 		} finally {
 			state = HEADER;
@@ -365,36 +371,52 @@ public abstract class WebSocketConnection implements ChannelHandler {
 		}
 	}
 
-	protected void onPacket(int ph, DynByteBuf in) throws IOException {
-		switch (ph & 0xF) {
-			case FRAME_CLOSE:
-				if (in.readableBytes() < 2) {
-					close(ERR_CLOSED, "closed");
+	private void onFrame(int frameType, DynByteBuf data, boolean isLast) throws IOException {
+		switch (frameType & 0xF) {
+			case FRAME_TEXT -> onText(data, isLast);
+			case FRAME_BINARY -> onBinary(data, isLast);
+			case FRAME_CLOSE -> {
+				if (data.readableBytes() < 2) {
+					sendClose(ERR_CLOSED, "closed");
 					return;
 				}
+
 				if (errCode == 0) {
-					errCode = in.readChar();
-					errMsg = in.readUTF(in.readableBytes());
+					errCode = data.readChar();
+					errMsg = data.readUTF(data.readableBytes());
 				}
+
 				try {
-					send(FRAME_CLOSE, in);
+					send(FRAME_CLOSE, data);
 				} catch (IOException ignored) {}
 				ch.close();
-				break;
-			case FRAME_PONG: break;
-			case FRAME_PING: send(FRAME_PONG, null); break;
-			case FRAME_TEXT, FRAME_BINARY: onData(ph, in); break;
-			default: throw new IOException("Unsupported packet id #"+ph);
+			}
+			case FRAME_PING -> onPing();
+			case FRAME_PONG -> onPong();
+			default -> throw new IOException("Unsupported frameType #"+frameType);
 		}
 	}
 
-	protected abstract void onData(int ph, DynByteBuf in) throws IOException;
-
-	protected int randomMask() {
-		return ThreadLocalRandom.current().nextInt();
+	//region Data Listener
+	@Deprecated
+	protected void onData(int frameType, DynByteBuf in) throws IOException {
+		sendClose(ERR_INVALID_DATA, "Unexpected "+((frameType&0xF) == FRAME_TEXT ? "text" : "binary")+" message");
 	}
+	protected void onText(DynByteBuf data, boolean isLast) throws IOException {onData(FRAME_TEXT, data);}
+	protected void onBinary(DynByteBuf data, boolean isLast) throws IOException {onData(FRAME_BINARY, data);}
+	protected void onPing() throws IOException {send(FRAME_PONG, null);}
+	protected void onPong() throws IOException {}
 
-	public final void close(int code, String msg) throws IOException {
+	protected int generateMask() {return ThreadLocalRandom.current().nextInt();}
+	//endregion
+
+	public final void sendText(CharSequence data) throws IOException {
+		ByteList b = new ByteList();
+		send(FRAME_TEXT, b.putUTFData(data));
+		b._free();
+	}
+	public final void sendBinary(DynByteBuf data) throws IOException { send(FRAME_BINARY, data); }
+	public final void sendClose(int code, @Nullable String msg) throws IOException {
 		if (errCode != 0) {
 			ch.close();
 			return;
@@ -411,29 +433,59 @@ public abstract class WebSocketConnection implements ChannelHandler {
 		send(FRAME_CLOSE, data);
 		ch.channel().closeGracefully();
 	}
+	/**
+	 * 手动分片发送数据
+	 * @param frameType 数据类型，是<code>FRAME_XXX</code>，并可选配<code>RSV_COMPRESS</code>以压缩
+	 * @param data 本分片的数据内容
+	 * @param isLast 这是最后一个分片
+	 */
+	public final void sendFragment(
+			@MagicConstant(flags = {FRAME_CONTINUE, FRAME_TEXT, FRAME_BINARY, FRAME_CLOSE, FRAME_PING, FRAME_PONG, RSV_COMPRESS})
+			int frameType, DynByteBuf data, boolean isLast) throws IOException
+	{
+		boolean isFirst = (flag & __CONTINUOUS_SENDING) == 0;
+		if (isFirst) {
+			if (isLast) {
+				send(frameType, data);
+			} else {
+				if ((frameType & RSV_COMPRESS) != 0) {
+					if ((flag & RSV_COMPRESS) == 0) throw new IOException("Invalid compress state");
+					flag |= __SEND_COMPRESS;
+				}
+				//frameType &= ~0x80;
+				flag |= __CONTINUOUS_SENDING;
+			}
+		} else {
+			frameType = isLast ? 0x80 : FRAME_CONTINUE;
+		}
+		send0(frameType, data, (flag & __SEND_COMPRESS) != 0);
 
-	public final void send(CharSequence data) throws IOException {
-		ByteList b = new ByteList();
-		send(FRAME_TEXT, b.putUTFData(data));
-		b._free();
+		if (isLast) flag &= ~(__CONTINUOUS_SENDING | __SEND_COMPRESS);
 	}
-	public final void send(DynByteBuf data) throws IOException { send(FRAME_BINARY, data); }
-	public final void send(int opcode, DynByteBuf data) throws IOException {
+	/**
+	 * 发送数据，对于长数据将会自动分片
+	 * @param frameType 数据类型，是<code>FRAME_XXX</code>，并可选配<code>RSV_COMPRESS</code>以压缩
+	 * @param data 数据内容
+	 */
+	public final void send(
+			@MagicConstant(flags = {FRAME_CONTINUE, FRAME_TEXT, FRAME_BINARY, FRAME_CLOSE, FRAME_PING, FRAME_PONG, RSV_COMPRESS})
+			int frameType, DynByteBuf data) throws IOException
+	{
 		if ((flag & __CONTINUOUS_SENDING) != 0) throw new IOException("sendContinuous() not reach EOF");
-		if ((opcode & RSV_COMPRESS) > (flag & RSV_COMPRESS)) throw new IOException("Invalid compress state");
+		if ((frameType & RSV_COMPRESS) > (flag & RSV_COMPRESS)) throw new IOException("Invalid compress state");
 
 		if (data == null) data = ByteList.EMPTY;
-		else if (compressSize != 0 && data.readableBytes() > compressSize && (flag & RSV_COMPRESS) != 0) opcode |= RSV_COMPRESS;
+		else if (compressSize != 0 && data.readableBytes() > compressSize && (flag & RSV_COMPRESS) != 0) frameType |= RSV_COMPRESS;
 
 		int rem = data.readableBytes();
-		boolean comp = rem > 0 && (opcode & RSV_COMPRESS) != 0;
+		boolean comp = rem > 0 && (frameType & RSV_COMPRESS) != 0;
 		if (fragmentSize > 0 && rem > fragmentSize) {
-			// frame[0]: continuous flag + original opcode
+			// frame[0]: continuous flag + original frameType
 			data.wIndex(data.rIndex + fragmentSize);
-			send0(opcode, data, comp);
+			send0(frameType, data, comp);
 			rem -= fragmentSize;
 
-			// frame[1] ... frame[count - 1]: opcode=0
+			// frame[1] ... frame[count - 1]: frameType=0
 			while (rem > fragmentSize) {
 				data.wIndex(data.rIndex + fragmentSize);
 				send0(FRAME_CONTINUE, data, comp);
@@ -444,32 +496,11 @@ public abstract class WebSocketConnection implements ChannelHandler {
 			data.wIndex(data.rIndex + rem);
 			send0(0x80, data, comp);
 		} else {
-			send0(opcode | 0x80, data, comp);
+			send0(frameType | 0x80, data, comp);
 		}
 	}
 
-	public final void sendContinuous(int opcode, DynByteBuf data, boolean endOfFrame) throws IOException {
-		boolean first = (flag & __CONTINUOUS_SENDING) == 0;
-		if (first) {
-			if (endOfFrame) {
-				send(opcode, data);
-			} else {
-				if ((opcode & RSV_COMPRESS) > (flag & RSV_COMPRESS)) throw new IOException("Invalid compress state");
-				opcode &= ~0x80;
-				if ((opcode & RSV_COMPRESS) != 0) flag |= __SEND_COMPRESS;
-				flag |= __CONTINUOUS_SENDING;
-			}
-		} else {
-			opcode = endOfFrame ? 0x80 : 0;
-		}
-		send0(opcode, data, (flag & __SEND_COMPRESS) != 0);
-
-		if (endOfFrame) flag &= ~(__CONTINUOUS_SENDING | __SEND_COMPRESS);
-	}
-
-	public ChannelCtx ch;
-
-	private void send0(int opcode, DynByteBuf data, boolean compress) throws IOException {
+	private void send0(int frameType, DynByteBuf data, boolean compress) throws IOException {
 		int $len = data.readableBytes();
 
 		if (compress) {
@@ -510,7 +541,7 @@ public abstract class WebSocketConnection implements ChannelHandler {
 					}
 				}
 
-				if ((opcode & 0x80) != 0) {
+				if ((frameType & 0x80) != 0) {
 					if ((flag & LOCAL_NO_CTX) != 0) def.reset();
 					$len -= 4;
 				}
@@ -521,9 +552,9 @@ public abstract class WebSocketConnection implements ChannelHandler {
 			data = ByteList.wrap(zb, 0, $len);
 		}
 
-		var out = ch.allocate(true, $len + 10).put((byte) opcode);
+		var out = ch.allocate(true, $len + 10).put(frameType);
 		if ($len <= 125) {
-			out.put((byte) $len);
+			out.put($len);
 		} else if ($len <= 65535) {
 			out.put(126).putShort($len);
 		} else {
@@ -534,7 +565,7 @@ public abstract class WebSocketConnection implements ChannelHandler {
 			out.put(1, (byte) (out.get(1) | REMOTE_MASK));
 			if ((flag & LOCAL_SIMPLE_MASK) != 0) out.putInt(0);
 			else {
-				int mask = randomMask();
+				int mask = generateMask();
 				out.putInt(mask);
 				byte[] bm = this.mask;
 				bm[0] = (byte) (mask >>> 24);
@@ -554,6 +585,7 @@ public abstract class WebSocketConnection implements ChannelHandler {
 		}
 	}
 
+	public ChannelCtx ch;
 	@Override public void handlerAdded(ChannelCtx ctx) {ch = ctx;}
 	@Override public void handlerRemoved(ChannelCtx ctx) {ch = null;}
 }

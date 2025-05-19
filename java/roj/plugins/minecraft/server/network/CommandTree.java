@@ -64,7 +64,7 @@ public class CommandTree extends CommandNode {
 	private static List<CommandNodeData> collectNodes(ToIntMap<CommandNode> commands) {
 		CommandNodeData[] dataArray = new CommandNodeData[commands.size()];
 		for (ToIntMap.Entry<CommandNode> entry : commands.selfEntrySet()) {
-			dataArray[entry.v] = createNodeData(entry.k, commands);
+			dataArray[entry.value] = createNodeData(entry.getKey(), commands);
 		}
 		return Arrays.asList(dataArray);
 	}

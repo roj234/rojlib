@@ -19,7 +19,7 @@ public class LFUCache<K, V> extends MyHashMap<K, V> implements Cache<K, V> {
 		Entry<K, V> lfuPrev, lfuNext;
 
 		@Override
-		public String toString() {return String.valueOf(k)+'='+v+" (lfu="+(owner==null?"null":owner.freq)+")";}
+		public String toString() {return String.valueOf(key)+'='+ value +" (lfu="+(owner==null?"null":owner.freq)+")";}
 	}
 
 	private static final class Bucket {
@@ -99,7 +99,7 @@ public class LFUCache<K, V> extends MyHashMap<K, V> implements Cache<K, V> {
 
 		Entry<K, V> entry = new Entry<>();
 
-		entry.k = Helpers.cast(UNDEFINED);
+		entry.key = Helpers.cast(UNDEFINED);
 		append(entry, head);
 		return entry;
 	}
@@ -112,7 +112,7 @@ public class LFUCache<K, V> extends MyHashMap<K, V> implements Cache<K, V> {
 		ent.owner = null;
 		ent.lfuPrev = ent.lfuNext = null;
 		ent.next = null;
-		ent.k = null;
+		ent.key = null;
 	}
 
 	private void unlink(Entry<K, V> entry) {
@@ -173,8 +173,8 @@ public class LFUCache<K, V> extends MyHashMap<K, V> implements Cache<K, V> {
 			while (entry != null && amount-- > 0) {
 				Entry<?, ?> next = entry.lfuNext;
 
-				Object k = entry.k;
-				Object v = entry.v;
+				Object k = entry.key;
+				Object v = entry.value;
 
 				remove(k);
 				if (listener != null) listener.accept(Helpers.cast(k), Helpers.cast(v));
@@ -196,14 +196,14 @@ public class LFUCache<K, V> extends MyHashMap<K, V> implements Cache<K, V> {
 		if (count < 0) throw new IllegalStateException("count < 0: "+count);
 
 		AbstractEntry<K, V> entry = getOrCreateEntry(key);
-		if (entry.k != UNDEFINED) {
+		if (entry.key != UNDEFINED) {
 			Bucket b = ((Entry<K, V>) entry).owner;
 
 			int nextF = b.freq+count;
 
 			setNewFreq((Entry<K, V>) entry, b, nextF);
 		} else {
-			entry.k = key;
+			entry.key = key;
 			size++;
 			onPut(entry, null);
 			entry.setValue(null);

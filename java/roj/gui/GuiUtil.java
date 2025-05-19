@@ -108,12 +108,16 @@ public final class GuiUtil {
 	public static void setClickThrough(Window window) throws Exception {
 		if (!RojLib.hasNative(RojLib.WIN32)) throw new NativeException("不支持所请求的操作");
 
-		Object peer = U.getObject(window, U.objectFieldOffset(Component.class.getDeclaredField("peer")));
-		long hwnd = U.getLong(peer, U.objectFieldOffset(ReflectionUtils.getField(peer.getClass(), "hwnd")));
+		long hwnd = getWindowHandle(window);
 
 		long flags = GetWindowLong(hwnd, -20/*GWL_EXSTYLE*/);
 		flags |= 524320/*WS_EX_LAYERED|WS_EX_TRANSPARENT*/;
 		SetWindowLong(hwnd, -20, flags);
+	}
+
+	public static long getWindowHandle(Window window) throws NoSuchFieldException {
+		Object peer = U.getObject(window, U.objectFieldOffset(Component.class.getDeclaredField("peer")));
+		return U.getLong(peer, U.objectFieldOffset(ReflectionUtils.getField(peer.getClass(), "hwnd")));
 	}
 
 	//static {Intrinsics.linkNative("USER32");}

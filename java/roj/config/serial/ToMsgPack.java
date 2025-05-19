@@ -53,7 +53,12 @@ public class ToMsgPack implements CVisitor {
 	protected DynByteBuf ob;
 	public DynByteBuf buffer() { return ob; }
 	public ToMsgPack buffer(DynByteBuf buf) { ob = buf; return this; }
+	public ToMsgPack setLenientFieldCountHandling(boolean enable) {
+		this.ignoreContainerSize = enable;
+		return this;
+	}
 
+	private boolean ignoreContainerSize;
 	private boolean exceptKey = true;
 
 	private byte state;
@@ -97,9 +102,11 @@ public class ToMsgPack implements CVisitor {
 		ob.putUTFData0(s, len);
 	}
 	public final void valueNull() {onValue();ob.write(NULL);}
-	public void value(byte[] data) {
+
+	public final boolean supportArray() {return true;}
+	public void value(byte[] array) {
 		onValue();
-		int len = data.length;
+		int len = array.length;
 
 		if (len <= 0xFF) {
 			ob.put(BIN8).put(len);
@@ -108,14 +115,25 @@ public class ToMsgPack implements CVisitor {
 		} else {
 			ob.put(BIN32).putInt(len);
 		}
-		ob.put(data);
+		ob.put(array);
+	}
+	public final void value(int[] array) {
+		onExt(-8, array.length);
+		for (int i : array) ob.putInt(i);
+	}
+	public final void value(long[] array) {
+		onExt(-4, array.length);
+		for (long i : array) ob.putLong(i);
 	}
 
 	public final void valueMap() {
-		ob.put(MAP16).putShort(0); // 占位符，后续填充实际数量
+		if (ob.isReal()) ob.put(MAP16).putShort(0); // 占位符，后续填充实际数量
+		else onExt(-5, 1); // 不支持随机访问的话就用流式扩展
 		push((byte) 1, -1);
 	}
 	public final void valueMap(int size) {
+		if (ignoreContainerSize) {valueMap();return;}
+
 		if (size <= 0xF) {
 			ob.put(FIXMAP_PREFIX | size);
 		} else if (size < 0xFFFF) {
@@ -140,10 +158,13 @@ public class ToMsgPack implements CVisitor {
 	}
 
 	public final void valueList() {
-		ob.put(ARRAY16).putShort(0); // 占位符
+		if (ob.isReal()) ob.put(ARRAY16).putShort(0); // 占位符
+		else onExt(-5, 2); // 不支持随机访问的话就用流式扩展
 		push((byte) 2, -1);
 	}
 	public final void valueList(int size) {
+		if (ignoreContainerSize) {valueList();return;}
+
 		if (size <= 0xF) {
 			ob.put(FIXARRAY_PREFIX | size);
 		} else if (size < 0xFFFF) {
@@ -182,7 +203,8 @@ public class ToMsgPack implements CVisitor {
 		int prevState = states[--stateLen];
 
 		if ((prevState & 4) != 0) {
-			ob.putShort(prevData, size);
+			if (ob.isReal()) ob.putShort(prevData, size);
+			else ob.put(STREAM);
 		} else {
 			if (size != prevData) throw new IllegalStateException("预期大小("+prevData+"),实际大小("+size+")");
 		}

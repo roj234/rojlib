@@ -59,7 +59,7 @@ public abstract class ComponentList {
 			if (param.length > 0) {
 				sb.append(":[");
 				for (Object o : param)
-					Tokenizer.addSlashes(sb.append('"'), o.toString()).append('"');
+					Tokenizer.escape(sb.append('"'), o.toString()).append('"');
 				sb.append(']');
 			}
 		};

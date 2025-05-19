@@ -28,7 +28,7 @@ class TemplateStringLiteral extends Expr {
 	}
 
 	@Override
-	public String toString() {return processor +".\""+Tokenizer.addSlashes(template)+'"';}
+	public String toString() {return processor +".\""+Tokenizer.escape(template)+'"';}
 	@Override
 	public IType type() {return Types.STRING_TYPE;}
 

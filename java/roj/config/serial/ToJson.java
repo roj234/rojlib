@@ -32,7 +32,7 @@ public final class ToJson extends ToSomeString {
 
 	public final void key0(String key) {
 		indent(depth);
-		Tokenizer.addSlashes(key, 0, sb.append('"'), '\'').append("\":");
+		Tokenizer.escape(sb.append('"'), key, 0, '\'').append("\":");
 		if (indentCount > 0) sb.append(' ');
 	}
 }

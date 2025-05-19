@@ -12,7 +12,7 @@ import roj.collect.CollectionX;
 import roj.collect.IntMap;
 import roj.collect.MyHashMap;
 import roj.concurrent.TaskPool;
-import roj.crypt.CRC32s;
+import roj.crypt.CRC32;
 import roj.crypt.ReedSolomonECC;
 import roj.http.curl.DownloadTask;
 import roj.io.FastFailException;
@@ -137,7 +137,7 @@ public class LazyBox extends Plugin {
 			int stride = (int) Math.min((fileSize+recc.dataSize()-1) / recc.dataSize(), (Math.min(fileSize, 1048576) / recc.maxError()));
 
 			var metadata = new ByteList(16).put(0x00/*KIND_RS*/).put(lastDataByte).put(lastEccByte).putVUInt(stride).putVULong(fileSize);
-			metadata.putInt(CRC32s.once(metadata.array(), 0, metadata.wIndex())).put(metadata.wIndex());
+			metadata.putInt(CRC32.crc32(metadata.array(), 0, metadata.wIndex())).put(metadata.wIndex());
 
 			System.out.println("RS("+lastDataByte+","+(lastDataByte+lastEccByte)+") 将追加"+((float)lastEccByte)/(lastDataByte+lastEccByte)*100+"%的纠错码，允许在总体中出现"+lastRatio*100+"%的任意损坏");
 			System.out.println("牢记右侧参数：【"+ metadata.base64UrlSafe()+"】。它们追加在文件尾部不受纠错码保护，如果文件损坏严重，请手动输入以纠错");
@@ -172,7 +172,7 @@ public class LazyBox extends Plugin {
 				in.seek(in.length()-1-dataLength);
 				in.readFully(metadata, dataLength);
 
-				var crc = CRC32s.once(metadata.array(), 0, dataLength - 4);
+				var crc = CRC32.crc32(metadata.array(), 0, dataLength - 4);
 				if (crc != metadata.readInt(dataLength - 4)) throw new FastFailException("文件尾校验失败");
 
 				int eccType = metadata.readUnsignedByte();
@@ -207,7 +207,7 @@ public class LazyBox extends Plugin {
 				in.seek(in.length()-1-dataLength);
 				in.readFully(metadata, dataLength);
 
-				var crc = CRC32s.once(metadata.array(), 0, dataLength - 4);
+				var crc = CRC32.crc32(metadata.array(), 0, dataLength - 4);
 				if (crc != metadata.readInt(dataLength - 4)) throw new FastFailException("文件尾校验失败");
 
 				int eccType = metadata.readUnsignedByte();
@@ -468,7 +468,7 @@ public class LazyBox extends Plugin {
 
 			QZEntry oldEntry = remain.remove(entry.getName());
 			if (oldEntry == null) {
-				QZEntry prev = in2_by_crc32.putInt(entry.getCrc32(), entry);
+				QZEntry prev = in2_by_crc32.put(entry.getCrc32(), entry);
 				if (prev != null) System.out.println("警告：在"+entry.getCrc32()+"["+entry.getName()+"]上出现了CRC冲突");
 
 				in2_should_copy.put(entry, "add/"+entry.getName());

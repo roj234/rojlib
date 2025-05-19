@@ -183,12 +183,12 @@ public final class QueryBuilder implements AutoCloseable {
 					List<String> component = TextUtil.split(v, '|');
 					for (int j = 0; j < component.size(); j++) {
 						aa.clear();
-						bb.replace("?"+j, m.endsWith("like") ? Tokenizer.addSlashes(aa, component.get(j)) : myescape(aa, component.get(j)));
+						bb.replace("?"+j, m.endsWith("like") ? Tokenizer.escape(aa, component.get(j)) : myescape(aa, component.get(j)));
 					}
 					if (bb.contains("?"+component.size())) throw new IllegalArgumentException("$myWhere: 缺少组件 " + matcher);
 				} else {
 					aa.clear();
-					bb.replace("?0", m.endsWith("like") ? Tokenizer.addSlashes(aa, v) : myescape(aa, v));
+					bb.replace("?0", m.endsWith("like") ? Tokenizer.escape(aa, v) : myescape(aa, v));
 				}
 
 				where.append(bb);
@@ -659,7 +659,7 @@ public final class QueryBuilder implements AutoCloseable {
 	private CharList myescape(CharList sb, CharSequence seq) {
 		//FIXME SQL注入
 		if (TextUtil.isNumber(seq) != -1) return sb.append(seq);
-		return Tokenizer.addSlashes(sb.append('"'), seq).append('"');
+		return Tokenizer.escape(sb.append('"'), seq).append('"');
 	}
 
 	// endregion

@@ -133,11 +133,11 @@ public class CodeStat extends Plugin {
 		int TOP = noLimit ? Integer.MAX_VALUE : 10;
 		long totalLinesX = 0;
 		for (ToIntMap.Entry<String> entry : inst.totalLines.selfEntrySet()) {
-			totalLinesX += entry.v;
+			totalLinesX += entry.value;
 		}
 		long totalCharsX = 0;
 		for (ToIntMap.Entry<String> entry : inst.totalChars.selfEntrySet()) {
-			totalCharsX += entry.v;
+			totalCharsX += entry.value;
 		}
 		int fileCount = 0;
 		for (ToIntMap<String> value : inst.lines.values()) {
@@ -168,12 +168,12 @@ public class CodeStat extends Plugin {
 
 	private static void printStatistic(CodeStat inst, String title, List<ToIntMap.Entry<String>> list, int limit) {
 		System.out.println("========= "+title+" ============");
-		list.sort((o1, o2) -> Integer.compare(o2.v, o1.v));
+		list.sort((o1, o2) -> Integer.compare(o2.value, o1.value));
 		double sum = 0;
-		for (int i = 0; i < list.size(); i++) sum += list.get(i).v;
+		for (int i = 0; i < list.size(); i++) sum += list.get(i).value;
 		sum /= 100;
 		for (int i = 0; i < Math.min(list.size(), limit); i++) {
-			System.out.println((i + 1) + ". " + list.get(i).k + ": " + list.get(i).v + " (" + TextUtil.toFixed(list.get(i).v / sum, 2) + "%)");
+			System.out.println((i + 1) + ". " + list.get(i).getKey() + ": " + list.get(i).value + " (" + TextUtil.toFixed(list.get(i).value / sum, 2) + "%)");
 		}
 		System.out.println("========= "+title+" 结束 ============");
 	}

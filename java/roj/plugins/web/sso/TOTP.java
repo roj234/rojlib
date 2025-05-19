@@ -4,8 +4,8 @@ import roj.crypt.HMAC;
 import roj.io.IOUtil;
 import roj.reflect.Unaligned;
 import roj.text.CharList;
-import roj.text.Escape;
 import roj.text.TextUtil;
+import roj.text.URICoder;
 import roj.util.ArrayCache;
 import roj.util.BitBuffer;
 import roj.util.DynByteBuf;
@@ -45,7 +45,7 @@ public final class TOTP {
 
 	public static String makeURL(byte[] secretKey, String account, String website) {
 		var sb = IOUtil.getSharedCharBuf();
-		Escape.encodeURIComponent(sb.append("otpauth://totp/"), account).append("?secret=");
+		URICoder.encodeURIComponent(sb.append("otpauth://totp/"), account).append("?secret=");
 
 		var br = new BitBuffer(DynByteBuf.wrap(secretKey));
 		// Base32NoPadding
@@ -54,6 +54,6 @@ public final class TOTP {
 			if (i > 25) sb.append((char)('2'-26 + i));
 			else sb.append((char)('A'+i));
 		}
-		return Escape.encodeURIComponent(sb.append("&issuer="), website).toStringAndZero();
+		return URICoder.encodeURIComponent(sb.append("&issuer="), website).toStringAndZero();
 	}
 }

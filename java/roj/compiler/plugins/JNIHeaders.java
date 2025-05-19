@@ -11,7 +11,7 @@ import roj.compiler.context.GlobalContext;
 import roj.compiler.resolve.TypeCast;
 import roj.io.IOUtil;
 import roj.text.CharList;
-import roj.text.DateParser;
+import roj.text.DateTime;
 import roj.util.Helpers;
 
 import java.io.IOException;
@@ -43,7 +43,7 @@ public class JNIHeaders {
 			if (h == null) {
 				h = supplier.get();
 				h.append("/* THIS FILE IS MACHINE GENERATED, DO NOT EDIT IT MANUALLY!!!\n");
-				h.append(" * Update on: ").append(DateParser.toLocalTimeString(System.currentTimeMillis())).append(" */\n");
+				h.append(" * Update on: ").append(DateTime.toLocalTimeString(System.currentTimeMillis())).append(" */\n");
 				h.append("""
 				#include <jni.h>
 
@@ -64,7 +64,7 @@ public class JNIHeaders {
 							.append(" * Class:     ").append(klass.name()).append("\n")
 							.append(" * Method: ").append(TypeHelper.humanize(Type.methodDesc(method.rawDesc()), method.name(), true)).append("\n")
 							.append(" */");
-					h.append("JNIEXPORT ").append(jniType(cast, method.returnType())).append(" JNICALL ").append(encodeMethod(method, list.size() == 1));
+					h.append("JNIEXPORT ").append(jniType(cast, method.returnType())).append(" JNICALL ").append(encodeMethod(method, list.size() > 1));
 					h.append("  (JNIEnv *, ");
 					h.append(((method.modifier&Opcodes.ACC_STATIC) != 0) ? "jclass" : "jobject");
 					for (Type arg : method.parameters()) {

@@ -77,7 +77,7 @@ final class VarMapper {
 					if (prev != null) prev.end = v.start;
 					v.slot = nextId;
 				}
-				known.putInt(v.slot, v);
+				known.put(v.slot, v);
 
 				if (peakId < id) peakId = id;
 			}

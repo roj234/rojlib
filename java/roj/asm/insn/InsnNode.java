@@ -55,10 +55,10 @@ public final class InsnNode {
 		return this;
 	}
 
-	final void _init(Label pos, CodeBlock seg) {
+	final void _init(Label pos, Segment seg) {
 		this.pos = pos;
 
-		if (seg.getClass() == SolidBlock.class) {
+		if (seg.getClass() == StaticSegment.class) {
 			DynByteBuf r = seg.getData();
 
 			int i = pos.offset;
@@ -95,10 +95,10 @@ public final class InsnNode {
 			}
 
 			return;
-		} else if (seg instanceof LdcBlock) {
+		} else if (seg instanceof Ldc) {
 			code = seg.length() == 3 ? LDC_W : LDC;
-		} else if (seg instanceof JumpBlock) {
-			code = ((JumpBlock) seg).code;
+		} else if (seg instanceof JumpTo) {
+			code = ((JumpTo) seg).code;
 		} else if (seg instanceof SwitchBlock) {
 			code = ((SwitchBlock) seg).code;
 		} else {
@@ -132,7 +132,7 @@ public final class InsnNode {
 	public final Label end() { return new Label(pos.getValue()+len); }
 	public final int length() { return len; }
 
-	private DynByteBuf getData() { return owner.codeBlocks.get(pos.block).getData(); }
+	private DynByteBuf getData() { return owner.segments.get(pos.block).getData(); }
 
 	/** 直接改，但是不要动flag | owner为null时，是invokeDynamic */
 	@NotNull
@@ -153,7 +153,7 @@ public final class InsnNode {
 	public final Constant constant() {
 		byte code = opcode();
 		return switch (code) {
-			case LDC, LDC_W -> ((LdcBlock) ref).c;
+			case LDC, LDC_W -> ((Ldc) ref).c;
 			case LDC2_W -> (Constant) ref;
 			default -> invalidArg(code);
 		};
@@ -161,7 +161,7 @@ public final class InsnNode {
 	public final Constant constantOrNull() {
 		byte code = opcode();
 		return switch (code) {
-			case LDC, LDC_W -> ((LdcBlock) ref).c;
+			case LDC, LDC_W -> ((Ldc) ref).c;
 			case LDC2_W -> (Constant) ref;
 			default -> null;
 		};
@@ -318,18 +318,18 @@ public final class InsnNode {
 	@NotNull
 	public Label target() {
 		byte code = opcode();
-		if (!(ref instanceof JumpBlock)) invalidArg(code);
-		return ((JumpBlock) ref).target;
+		if (!(ref instanceof JumpTo)) invalidArg(code);
+		return ((JumpTo) ref).target;
 	}
 	public Label targetOrNull() {
 		opcode();
-		if (!(ref instanceof JumpBlock)) return null;
-		return ((JumpBlock) ref).target;
+		if (!(ref instanceof JumpTo)) return null;
+		return ((JumpTo) ref).target;
 	}
 	public void setTarget(Label label) {
 		byte code = opcode();
-		if (!(ref instanceof JumpBlock)) invalidArg(code);
-		((JumpBlock) ref).target = label;
+		if (!(ref instanceof JumpTo)) invalidArg(code);
+		((JumpTo) ref).target = label;
 	}
 	@NotNull
 	public SwitchBlock switchTargets() {
@@ -444,8 +444,8 @@ public final class InsnNode {
 			case 7: sb.append('#').append(id).append(number >= 0 ? " += " : " -= ").append(Math.abs(number)); break;
 			case 10: Type.fieldDesc(ref.toString()).toString(sb); sb.append(" // [维度=").append(id).append(']'); break;
 			default:
-				if (ref instanceof LdcBlock) sb.append(((LdcBlock) ref).c.toString());
-				else if (ref instanceof JumpBlock) sb.append(((JumpBlock) ref).target);
+				if (ref instanceof Ldc) sb.append(((Ldc) ref).c.toString());
+				else if (ref instanceof JumpTo) sb.append(((JumpTo) ref).target);
 				else if (ref instanceof SwitchBlock) sb.append(ref);
 				else if (ref instanceof Constant) {
 					sb.append(((Constant) ref).toString());
@@ -485,8 +485,8 @@ public final class InsnNode {
 	public void appendTo(InsnList list) {
 		opcode();
 
-		if (ref instanceof CodeBlock) {
-			list.addSegment((CodeBlock) ref);
+		if (ref instanceof Segment) {
+			list.addSegment((Segment) ref);
 			return;
 		} else if (ref != null) {
 			list.addRef(ref);

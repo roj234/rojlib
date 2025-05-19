@@ -14,6 +14,7 @@ import roj.archive.qz.xz.lz.LZDecoder;
 import roj.archive.qz.xz.lzma.LZMADecoder;
 import roj.archive.qz.xz.rangecoder.RangeDecoderFromStream;
 import roj.io.CorruptedInputException;
+import roj.io.Finishable;
 import roj.io.IOUtil;
 import roj.io.MBInputStream;
 import roj.reflect.Unaligned;
@@ -29,7 +30,7 @@ import java.io.InputStream;
  *
  * @since 1.4
  */
-public class LZMAInputStream extends MBInputStream {
+public class LZMAInputStream extends MBInputStream implements Finishable {
 	/**
 	 * Largest dictionary size supported by this implementation.
 	 * <p>
@@ -349,7 +350,7 @@ public class LZMAInputStream extends MBInputStream {
 					// files that this implementation and XZ Utils don't.
 					if (lz.hasPending() || (!relaxedEndCondition && !rc.isFinished())) throw new CorruptedInputException("trailing compressed data");
 
-					putArraysToCache();
+					finish();
 					return size == 0 ? -1 : size;
 				}
 			}
@@ -379,16 +380,16 @@ public class LZMAInputStream extends MBInputStream {
 	@Override
 	public int available() throws IOException { return (int) Math.min(remainingSize, Integer.MAX_VALUE); }
 
-	private synchronized void putArraysToCache() {
+	public final synchronized void finish() {
 		if (lz != null) {
 			lz.putArraysToCache();
 			lz = null;
-			rc.putArraysToCache();
+			rc.finish();
 		}
 	}
 
 	public synchronized void close() throws IOException {
-		putArraysToCache();
+		finish();
 		if (in != null) {
 			try {
 				in.close();

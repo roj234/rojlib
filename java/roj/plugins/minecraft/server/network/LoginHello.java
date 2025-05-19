@@ -129,8 +129,8 @@ public class LoginHello implements ChannelHandler {
 					} finally {
 						ctx.channel().lock().unlock();
 					}
-				}).catch_ES(exc -> {
-					MinecraftServer.INSTANCE.getLogger().error("Promise Failure", (Throwable) exc);
+				}).rejected(exc -> {
+					MinecraftServer.INSTANCE.getLogger().error("Promise Failure", exc);
 					player.disconnect(exc instanceof MinecraftException me ? me.sendToPlayer : exc.toString());
 					return IntMap.UNDEFINED;
 				});

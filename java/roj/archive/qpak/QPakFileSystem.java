@@ -15,7 +15,7 @@ import roj.io.source.Source;
 import roj.io.vfs.VirtualFile;
 import roj.io.vfs.WritableFile;
 import roj.io.vfs.WritableFileSystem;
-import roj.text.Escape;
+import roj.text.URICoder;
 
 import java.io.*;
 import java.nio.file.Files;
@@ -101,7 +101,7 @@ public final class QPakFileSystem implements WritableFileSystem {
 		@Override public InputStream get(boolean deflated, long offset) throws IOException {return getInputStream(path);}
 		@Override public long lastModified() {return path.lastModified();}
 		@Override public void prepare(ResponseHeader rh, Headers h) {
-			h.putIfAbsent("Content-Disposition", "attachment; filename=\""+Escape.encodeURIComponent(path.getName())+'"');
+			h.putIfAbsent("Content-Disposition", "attachment; filename=\""+ URICoder.encodeURIComponent(path.getName())+'"');
 			h.putIfAbsent("Content-Type", MimeType.getMimeType(path.getName()));
 		}
 	}
@@ -110,7 +110,7 @@ public final class QPakFileSystem implements WritableFileSystem {
 		var qzfw = metadataOverride.get(archiveIndex);
 		if (qzfw == null) {
 			try {
-				metadataOverride.putInt(archiveIndex, qzfw = archives.get(archiveIndex).append());
+				metadataOverride.put(archiveIndex, qzfw = archives.get(archiveIndex).append());
 			} catch (IOException e) {
 				return;
 			}

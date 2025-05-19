@@ -192,7 +192,7 @@ public final class OKRouter implements Router {
 						else self.raw().addAll(0, prependInterceptors);
 					}
 
-					handlers.putInt(methodId++, map);
+					handlers.put(methodId++, map);
 					if (!map.containsKey("value"))
 						map.put("value", AnnVal.valueOf(mn.name().replace("__", "/")));
 				}
@@ -723,10 +723,10 @@ public final class OKRouter implements Router {
 		}
 
 		for (var entry : inst.interceptors.selfEntrySet()) {
-			if ((entry.v & Integer.MIN_VALUE) != 0) {
-				String name = entry.k;
+			if ((entry.value & Integer.MIN_VALUE) != 0) {
+				String name = entry.getKey();
 				if (interceptors.containsKey(name)) throw new IllegalStateException(o+"的"+name+"拦截器在当前上下文重复");
-				interceptors.put(name, inst.inst.copyWith(entry.v & Integer.MAX_VALUE, o));
+				interceptors.put(name, inst.inst.copyWith(entry.value & Integer.MAX_VALUE, o));
 			}
 		}
 		return this;

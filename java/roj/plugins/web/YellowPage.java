@@ -25,7 +25,6 @@ import roj.text.CharList;
 import roj.text.Formatter;
 import roj.text.TextUtil;
 import roj.util.ByteList;
-import roj.util.Helpers;
 import roj.util.TypedKey;
 
 import java.io.File;
@@ -177,8 +176,6 @@ public class YellowPage extends Plugin implements TableReader {
 					for (List<String> strings : parse) {
 						csv.writeRow(strings);
 					}
-				} catch (IOException e) {
-					Helpers.athrow(e);
 				}
 			});
 		} catch (IOException | ParseException | ClassCastException e) {

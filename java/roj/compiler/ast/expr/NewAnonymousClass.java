@@ -128,7 +128,7 @@ final class NewAnonymousClass extends Expr {
 		try {
 			klass.S3_Annotation();
 			klass.S4_Code();
-			klass.S5_noStore();
+			klass.S5_preStore();
 
 			var constructor = nestContext.constructor();
 			constructor.insn(RETURN);

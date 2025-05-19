@@ -186,7 +186,7 @@ abstract class Assembler {
 
 						var item = new Mov(jsp, rsp);
 						if (!type.isPrimitive()) item.add = baseOffset(type, annotations[i]);
-						regmap.putInt(rsp, item);
+						regmap.put(rsp, item);
 
 						jsp -= type.isPrimitive() && type != long.class && type != double.class ? 8 : 16;
 						rsp += 8;

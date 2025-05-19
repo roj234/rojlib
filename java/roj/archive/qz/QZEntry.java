@@ -2,10 +2,12 @@ package roj.archive.qz;
 
 import roj.archive.ArchiveEntry;
 import roj.text.CharList;
-import roj.text.DateParser;
+import roj.text.DateTime;
 import roj.util.Helpers;
 
 import java.nio.file.attribute.FileTime;
+
+import static roj.archive.qz.WinAttributes.*;
 
 /**
  * @author Roj234
@@ -51,7 +53,7 @@ public sealed class QZEntry implements ArchiveEntry, Cloneable permits QZEntryA 
     public long getAccessTime() {return 0;}
     public long getCreationTime() {return 0;}
     public long getModificationTime() {return 0;}
-    public int getAttributes() {return 0;}
+    public int getWinAttributes() {return 0;}
 
     public FileTime getPrecisionAccessTime() {return null;}
     public FileTime getPrecisionCreationTime() {return null;}
@@ -92,9 +94,9 @@ public sealed class QZEntry implements ArchiveEntry, Cloneable permits QZEntryA 
         else sb.append("文件");
         sb.append(": '").append(name).append('\'');
 
-        if ((flag & AT) != 0) sb.append("\n  访问: ").append(DateParser.toLocalTimeString(getAccessTime()));
-        if ((flag & CT) != 0) sb.append("\n  创建: ").append(DateParser.toLocalTimeString(getCreationTime()));
-        if ((flag & MT) != 0) sb.append("\n  修改: ").append(DateParser.toLocalTimeString(getModificationTime()));
+        if ((flag & AT) != 0) sb.append("\n  访问: ").append(DateTime.toLocalTimeString(getAccessTime()));
+        if ((flag & CT) != 0) sb.append("\n  创建: ").append(DateTime.toLocalTimeString(getCreationTime()));
+        if ((flag & MT) != 0) sb.append("\n  修改: ").append(DateTime.toLocalTimeString(getModificationTime()));
         if ((flag & ATTR) != 0) appendWindowsAttribute(sb.append("\n  属性: "));
         if ((flag & CRC) != 0) sb.append("\n  校验: ").append(Integer.toHexString(crc32));
 
@@ -108,12 +110,12 @@ public sealed class QZEntry implements ArchiveEntry, Cloneable permits QZEntryA 
 
     private void appendWindowsAttribute(CharList sb) {
         int len = sb.length();
-        var attributes = getAttributes();
-        if ((attributes&   1) != 0) sb.append("只读|");
-        if ((attributes&   2) != 0) sb.append("隐藏|");
-        if ((attributes&   4) != 0) sb.append("系统|");
-        if ((attributes&  32) != 0) sb.append("存档|");
-        if ((attributes&1024) != 0) sb.append("链接|");
+        var attributes = getWinAttributes();
+        if ((attributes&FILE_ATTRIBUTE_READONLY) != 0) sb.append("只读|");
+        if ((attributes&FILE_ATTRIBUTE_HIDDEN) != 0) sb.append("隐藏|");
+        if ((attributes&FILE_ATTRIBUTE_SYSTEM) != 0) sb.append("系统|");
+        if ((attributes&FILE_ATTRIBUTE_ARCHIVE) != 0) sb.append("存档|");
+        if ((attributes&FILE_ATTRIBUTE_REPARSE_POINT) != 0) sb.append("链接|");
         if (sb.length() > len) sb.setLength(sb.length()-1);
     }
 

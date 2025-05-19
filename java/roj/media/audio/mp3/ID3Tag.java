@@ -1,7 +1,7 @@
 package roj.media.audio.mp3;
 
 import roj.collect.MyHashMap;
-import roj.crypt.CRC32s;
+import roj.crypt.CRC32;
 import roj.io.IOUtil;
 import roj.io.MyDataInput;
 import roj.io.source.Source;
@@ -152,8 +152,18 @@ public class ID3Tag implements AudioMetadata {
 		if (album == null && i != 0) album = readAsciiOrGBK(buf, i);
 
 		buf.rIndex = 90;
-		i = buf.readZeroTerminate(30);
+		i = buf.readZeroTerminate(4);
 		if (year == null && i != 0) year = buf.readAscii(i);
+
+		buf.rIndex = 94;
+		i = buf.readZeroTerminate(28);
+		if (i != 0) attributes.put("COMM", readAsciiOrGBK(buf, i));
+
+		buf.rIndex = 122;
+
+		int reserve = buf.readUnsignedByte();
+		int track = buf.readUnsignedByte();
+		int Genre = buf.readUnsignedByte();
 
 		hasID3v1 = true;
 		return true;
@@ -389,7 +399,7 @@ public class ID3Tag implements AudioMetadata {
 			writeSynchSafeInt(tmp, tmp.wIndex()-4, tmp.wIndex());
 		}*/
 		if (crc) {
-			var crc32 = CRC32s.once(tmp.list, 24, tmp.wIndex()-24);
+			var crc32 = CRC32.crc32(tmp.list, 24, tmp.wIndex()-24);
 			tmp.putInt(20, crc32);
 		}
 

@@ -5,7 +5,6 @@ import roj.asm.type.IType;
 import roj.collect.MyBitSet;
 import roj.collect.MyHashMap;
 import roj.config.serial.CVisitor;
-import roj.io.FastFailException;
 
 import java.util.List;
 import java.util.Map;
@@ -109,28 +108,12 @@ final class MapSer extends Adapter {
 		Map<?,?> ref = (Map<?,?>) o;
 		for (Map.Entry<?,?> entry : ref.entrySet()) {
 			// 能不能反序列化回来，就不是我考虑的事情了
-			if (keyType == null) {
+			if (keyType == null || !(entry.getKey() instanceof Integer idx)) {
 				c.key(String.valueOf(entry.getKey()));
 			} else {
-				var c1 = new ToStringSerializer();
-				keyType.write(c1, entry.getKey());
-				c.key(c1.value);
+				c.intKey(idx);
 			}
 			valueType.write(c, entry.getValue());
 		}
-	}
-	private static class ToStringSerializer implements CVisitor {
-		String value;
-		@Override public void value(boolean b) {throw new FastFailException("键必须是字符串！");}
-		@Override public void value(int i) {throw new FastFailException("键必须是字符串！");}
-		@Override public void value(long i) {throw new FastFailException("键必须是字符串！");}
-		@Override public void value(double i) {throw new FastFailException("键必须是字符串！");}
-		@Override public void value(String s) {this.value = s;}
-		@Override public void valueNull() {value("null");}
-		@Override public void valueMap() {throw new FastFailException("键必须是字符串！");}
-		@Override public void key(String key) {}
-		@Override public void valueList() {throw new FastFailException("键必须是字符串！");}
-		@Override public void pop() {}
-		@Override public CVisitor reset() {return this;}
 	}
 }

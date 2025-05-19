@@ -76,8 +76,8 @@ public class DDNSClient extends Plugin {
 			List<Map.Entry<String, InetAddress[]>> changes = new SimpleList<>(monitorIps.size());
 			for (ToIntMap.Entry<String> entry : monitorIps.selfEntrySet()) {
 				InetAddress[] addr1 = new InetAddress[2];
-				if ((entry.v & 1) != 0) addr1[0] = address[0];
-				if ((entry.v & 2) != 0 && hasV6) addr1[1] = address[1];
+				if ((entry.value & 1) != 0) addr1[0] = address[0];
+				if ((entry.value & 2) != 0 && hasV6) addr1[1] = address[1];
 
 				// both null
 				if (addr1[0] == addr1[1]) continue;

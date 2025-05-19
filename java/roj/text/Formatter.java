@@ -65,11 +65,11 @@ public interface Formatter {
 			int i = 0;
 			for (int j = 0; j < pos.length; j++) {
 				Object val = env.get(names[j]);
-				if (val == null) throw new IllegalArgumentException("参数 '"+names[j]+"' 缺失");
 
 				sb.append(data, i, i += pos[j]);
 
-				if (val instanceof BiConsumer) ((BiConsumer<Object, CharList>) val).accept(env, sb);
+				if (val == null) sb.append("${").append(names[j]).append("}");
+				else if (val instanceof BiConsumer) ((BiConsumer<Object, CharList>) val).accept(env, sb);
 				else sb.append(val);
 			}
 			return sb.append(data, i, data.length);

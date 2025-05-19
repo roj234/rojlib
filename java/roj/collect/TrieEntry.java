@@ -12,8 +12,8 @@ import java.util.Iterator;
  * @since 2020/11/9 23:10
  */
 public abstract class TrieEntry implements Iterable<TrieEntry>, Cloneable, _Generic_Entry {
-	final char c;
-	TrieEntry(char ch) { this.c = ch; }
+	public final char firstChar;
+	TrieEntry(char ch) { this.firstChar = ch; }
 
 	private TrieEntry next;
 	@Override
@@ -30,7 +30,7 @@ public abstract class TrieEntry implements Iterable<TrieEntry>, Cloneable, _Gene
 			resize();
 		}
 
-		char key = te.c;
+		char key = te.firstChar;
 		if (entries == null) entries = new TrieEntry[mask+1];
 		TrieEntry prev = null, entry = entries[idx(key)];
 		if (entry == null) {
@@ -39,7 +39,7 @@ public abstract class TrieEntry implements Iterable<TrieEntry>, Cloneable, _Gene
 			return;
 		}
 		while (true) {
-			if (entry.c == key) {
+			if (entry.firstChar == key) {
 				if (prev == null) {
 					entries[idx(key)] = te;
 				} else {
@@ -58,9 +58,9 @@ public abstract class TrieEntry implements Iterable<TrieEntry>, Cloneable, _Gene
 
 	public final boolean removeChild(TrieEntry te) {
 		TrieEntry prevEntry = null;
-		TrieEntry entry = first(te.c);
+		TrieEntry entry = first(te.firstChar);
 		while (entry != null) {
-			if (entry.c == te.c) {
+			if (entry.firstChar == te.firstChar) {
 				break;
 			}
 			prevEntry = entry;
@@ -74,7 +74,7 @@ public abstract class TrieEntry implements Iterable<TrieEntry>, Cloneable, _Gene
 		if (prevEntry != null) {
 			prevEntry.next = entry.next;
 		} else {
-			this.entries[idx(te.c)] = entry.next;
+			this.entries[idx(te.firstChar)] = entry.next;
 		}
 
 		entry.next = null;
@@ -85,7 +85,7 @@ public abstract class TrieEntry implements Iterable<TrieEntry>, Cloneable, _Gene
 	public final TrieEntry getChild(char key) {
 		TrieEntry entry = first(key);
 		while (entry != null) {
-			if (entry.c == key) return entry;
+			if (entry.firstChar == key) return entry;
 			entry = entry.next;
 		}
 		return null;
@@ -111,7 +111,7 @@ public abstract class TrieEntry implements Iterable<TrieEntry>, Cloneable, _Gene
 			entry = entries[i];
 			while (entry != null) {
 				next = entry.next;
-				int newKey = idx(entry.c);
+				int newKey = idx(entry.firstChar);
 				TrieEntry entry2 = newEntries[newKey];
 				newEntries[newKey] = entry;
 				entry.next = entry2;
@@ -141,11 +141,11 @@ public abstract class TrieEntry implements Iterable<TrieEntry>, Cloneable, _Gene
 	public abstract boolean isLeaf();
 
 	CharSequence text() { return null; }
-	public void append(CharList sb) { sb.append(c); }
+	public void append(CharList sb) { sb.append(firstChar); }
 	public int length() { return 1; }
 
 	@Override
-	public String toString() { return "'"+(TextUtil.isPrintableAscii(c)?c:"\\"+Integer.toOctalString(c))+"'"; }
+	public String toString() { return "'"+(TextUtil.isPrintableAscii(firstChar)?firstChar:"\\"+Integer.toOctalString(firstChar))+"'"; }
 
 	@Override
 	public TrieEntry clone() {

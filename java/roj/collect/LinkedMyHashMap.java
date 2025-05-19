@@ -29,8 +29,8 @@ public class LinkedMyHashMap<K, V> extends MyHashMap<K, V> {
 	public LinkedEntry<K, V> firstEntry() {return tail == head ? null : head;}
 	public LinkedEntry<K, V> lastEntry() {return tail == head ? null : tail;}
 
-	public V firstValue() {return tail == head ? null : head.v;}
-	public V lastValue() {return tail == head ? null : tail.v;}
+	public V firstValue() {return tail == head ? null : head.value;}
+	public V lastValue() {return tail == head ? null : tail.value;}
 
 	public V valueAt(int id) {
 		if (id >= size) return null;
@@ -39,7 +39,7 @@ public class LinkedMyHashMap<K, V> extends MyHashMap<K, V> {
 		while (id-- > 0) {
 			entry = entry.n;
 		}
-		return entry == null ? null : entry.v;
+		return entry == null ? null : entry.value;
 	}
 	public V lastValueAt(int id) {
 		if (id >= size) return null;
@@ -48,7 +48,7 @@ public class LinkedMyHashMap<K, V> extends MyHashMap<K, V> {
 		while (id-- > 0) {
 			entry = entry.p;
 		}
-		return entry == null ? null : entry.v;
+		return entry == null ? null : entry.value;
 	}
 
 	@Override
@@ -65,7 +65,7 @@ public class LinkedMyHashMap<K, V> extends MyHashMap<K, V> {
 
 				LinkedEntry<K, V> prev = entry;
 				entry = rev ? entry.p : entry.n;
-				if (prev.v == IntMap.UNDEFINED) continue;
+				if (prev.value == IntMap.UNDEFINED) continue;
 
 				result = prev;
 				return true;
@@ -73,7 +73,7 @@ public class LinkedMyHashMap<K, V> extends MyHashMap<K, V> {
 		}
 
 		@Override
-		protected void remove(Entry<K, V> obj) {LinkedMyHashMap.this.remove(obj.k);}
+		protected void remove(Entry<K, V> obj) {LinkedMyHashMap.this.remove(obj.key);}
 	}
 
 	public void clear() {
@@ -87,7 +87,7 @@ public class LinkedMyHashMap<K, V> extends MyHashMap<K, V> {
 		LinkedEntry<K, V> e = rev ? tail : head;
 
 		while (e != null) {
-			action.accept(e.k, e.v);
+			action.accept(e.key, e.value);
 			e = rev ? e.p : e.n;
 		}
 	}
@@ -95,7 +95,7 @@ public class LinkedMyHashMap<K, V> extends MyHashMap<K, V> {
 	@Override
 	protected void onPut(AbstractEntry<K, V> entry, V newV) {
 		LinkedEntry<K, V> myEntry = (LinkedEntry<K, V>) entry;
-		if (myEntry.v != UNDEFINED) return;
+		if (myEntry.value != UNDEFINED) return;
 		insert(myEntry);
 	}
 
@@ -130,8 +130,8 @@ public class LinkedMyHashMap<K, V> extends MyHashMap<K, V> {
 
 	protected AbstractEntry<K, V> useEntry() {
 		LinkedEntry<K, V> entry = new LinkedEntry<>();
-		entry.k = Helpers.cast(UNDEFINED);
-		entry.v = Helpers.cast(UNDEFINED);
+		entry.key = Helpers.cast(UNDEFINED);
+		entry.value = Helpers.cast(UNDEFINED);
 		return entry;
 	}
 }

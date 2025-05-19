@@ -11,7 +11,7 @@ import java.util.Set;
  * @author Roj233
  * @since 2021/7/18 19:29
  */
-public final class ABC implements NamingPolicy {
+public class ABC implements NamingPolicy {
 	private int npClassId;
 	private final ToIntMap<String> counter = new ToIntMap<>();
 	private final char[] chars;
@@ -59,7 +59,7 @@ public final class ABC implements NamingPolicy {
 		return num2str(v);
 	}
 
-	private String num2str(int i) {
+	protected String num2str(int i) {
 		i = -i;
 		while (i <= -chars.length) {
 			buf.append(chars[-(i % chars.length)]);

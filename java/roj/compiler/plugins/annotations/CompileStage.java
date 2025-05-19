@@ -66,7 +66,7 @@ final class CompileStage implements Processor {
 				c.visitSizeMax(fn.fieldType().length(), 1);
 				c.insn(Opcodes.ALOAD_0);
 				c.field(Opcodes.GETFIELD, cu.name(), fn.name(), fn.rawDesc());
-				c.insn(fn.fieldType().shiftedOpcode(Opcodes.IRETURN));
+				c.insn(fn.fieldType().getOpcode(Opcodes.IRETURN));
 				c.finish();
 			}
 			case "Setter" -> {

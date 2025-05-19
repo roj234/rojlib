@@ -22,8 +22,8 @@ public final class TypeHelper {
 	public static void toStringOptionalPackage(CharList sb, String type) {
 		if (TYPE_TOSTRING_NO_PACKAGE) {
 			int start = type.lastIndexOf('/')+1;
-			if (Tokenizer.haveSlashes(type, start)) {
-				Tokenizer.addSlashes(type, start, sb.append('"'), '\0').append('"');
+			if (Tokenizer.needEscape(type, start)) {
+				Tokenizer.escape(sb.append('"'), type, start, '\0').append('"');
 			} else {
 				sb.append(type, start, type.length());
 			}

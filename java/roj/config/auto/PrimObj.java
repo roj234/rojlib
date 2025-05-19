@@ -25,6 +25,7 @@ final class PrimObj extends Adapter {
 				case Type.BYTE -> o = n.byteValue();
 				case Type.SHORT -> o = n.shortValue();
 				case Type.INT -> o = n.intValue();
+				case Type.CLASS -> o = n.toString();
 				default -> throw new IllegalArgumentException("Cannot convert "+o+" to "+(char)type);
 			}
 		} else {

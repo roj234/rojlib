@@ -10,7 +10,7 @@ import roj.collect.SimpleList;
 import roj.concurrent.TaskPool;
 import roj.config.NBTParser;
 import roj.config.serial.ToNBT;
-import roj.crypt.CRC32s;
+import roj.crypt.CRC32;
 import roj.crypt.CryptoFactory;
 import roj.crypt.KeyType;
 import roj.io.*;
@@ -364,7 +364,7 @@ public final class McDiffServer {
 					String prev = moveCheck.putIfAbsent(crc, name);
 					if (prev != null) {
 						System.out.println("警告：在"+crc+"["+name+"]上出现了CRC冲突, 这可能会导致diff略大");
-						moveCheck.putInt(crc, null);
+						moveCheck.put(crc, null);
 					}
 				}
 			}
@@ -396,15 +396,15 @@ public final class McDiffServer {
 	}
 
 	static int computeCrc32(File file, byte[] tmp) throws IOException {
-		int crc = CRC32s.INIT_CRC;
+		int crc = CRC32.initial;
 		try (FileInputStream in = new FileInputStream(file)) {
 			while (true) {
 				int r = in.read(tmp);
 				if (r < 0) break;
-				crc = CRC32s.update(crc, tmp, 0, r);
+				crc = CRC32.update(crc, tmp, 0, r);
 			}
 		}
-		crc = CRC32s.retVal(crc);
+		crc = CRC32.finish(crc);
 		return crc;
 	}
 

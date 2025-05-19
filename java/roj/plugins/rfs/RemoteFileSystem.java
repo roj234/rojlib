@@ -185,7 +185,7 @@ public class RemoteFileSystem extends Plugin implements Consumer<MyChannel> {
             }
 
             var source = new FileSource(new File(path), packet.openMode == Packet.OpenHandle.OPEN_WRITE);
-            handles.putInt(handle, source);
+            handles.put(handle, source);
 
             ctx.channelWrite(new Packet.FileHandle(handle, source.length()));
         }

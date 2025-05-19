@@ -1,6 +1,6 @@
 package roj.plugin;
 
-import roj.http.WebSocketConnection;
+import roj.http.WebSocket;
 import roj.net.ChannelCtx;
 import roj.text.FastCharset;
 import roj.text.logging.Logger;
@@ -15,7 +15,7 @@ import java.io.IOException;
  * @author Roj234
  * @since 2024/7/21 7:32
  */
-public class WebTerminal extends WebSocketConnection implements StdIO {
+public class WebTerminal extends WebSocket implements StdIO {
 	private static final Logger LOGGER = Logger.getLogger();
 	private final ByteList buffer = new ByteList();
 
@@ -40,17 +40,17 @@ public class WebTerminal extends WebSocketConnection implements StdIO {
 		if (ob.isReadable() && !ctx.channel().isFlushing()) {
 			synchronized (ob) {
 				while (ob.readableBytes() > 4096) {
-					send(ob.slice(4096));
+					sendBinary(ob.slice(4096));
 					if (ctx.channel().isFlushing()) {ob.compact();return;}
 				}
-				send(ob);
+				sendBinary(ob);
 				ob.clear();
 			}
 		}
 	}
 
 	@Override
-	protected void onData(int ph, DynByteBuf in) {
+	protected void onData(int frameType, DynByteBuf in) {
 		Terminal.onInput(in, FastCharset.UTF8());
 		if (in.isReadable()) LOGGER.warn("{}接收到不完整的UTF-8字符", ch.remoteAddress());
 	}

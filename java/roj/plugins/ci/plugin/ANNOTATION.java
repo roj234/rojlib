@@ -43,11 +43,10 @@ public class ANNOTATION implements Processor {
 					CstRefUTF str = (CstRefUTF) constant;
 					String template = str.name().str();
 					if (template.contains("${")) {
-						try {
-							str.setValue(cp.getUtf(Formatter.simple(template).format(pc.project.variables, IOUtil.getSharedCharBuf()).toString()));
-						} catch (IllegalArgumentException e) {
-							FMD.LOGGER.warn(e.getMessage()+" (在文件"+ctx.get(i).getFileName()+"中)");
-						}
+						String string = Formatter.simple(template).format(pc.project.variables, IOUtil.getSharedCharBuf()).toString();
+						str.setValue(cp.getUtf(string));
+						if (string.contains("${"))
+							FMD.LOGGER.warn(string+" (在文件"+ctx.get(i).getFileName()+"中)");
 					}
 				}
 			}

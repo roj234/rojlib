@@ -18,7 +18,7 @@ import static roj.asm.Opcodes.*;
  * @author Roj234
  * @since 2022/11/17 12:53
  */
-public final class SwitchBlock extends CodeBlock {
+public final class SwitchBlock extends Segment {
 	byte code;
 	private char length;
 
@@ -58,7 +58,7 @@ public final class SwitchBlock extends CodeBlock {
 				if (def == null) {
 					length = 0;
 				} else {
-					JumpBlock seg = new JumpBlock(GOTO, def);
+					JumpTo seg = new JumpTo(GOTO, def);
 					seg.put(to, segmentId);
 					length = (char) seg.length();
 				}
@@ -139,7 +139,7 @@ public final class SwitchBlock extends CodeBlock {
 	}
 
 	@Override
-	public CodeBlock move(AbstractCodeWriter to, int blockMoved, boolean clone) {
+	public Segment move(AbstractCodeWriter to, int blockMoved, boolean clone) {
 		if (clone) {
 			var copy = ofSwitch(code);
 			for (int i = 0; i < targets.size(); i++) {

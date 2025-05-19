@@ -60,6 +60,8 @@ public class EasyProgressBar extends ProgressBar {
 			deltaTime = time - (AVG_SPEED_WINDOW / 2);
 		}
 
+		if (Taskbar.acquire(this)) Taskbar.setProgressValue(fin, tot);
+
 		prefix = (tot < 0
 			? unit.equals("B") ? TextUtil.scaledNumber1024(fin) : String.valueOf(fin)
 			: unit.equals("B") ? TextUtil.scaledNumber1024(fin)+"/"+TextUtil.scaledNumber1024(tot) : fin+"/"+tot);
@@ -102,5 +104,19 @@ public class EasyProgressBar extends ProgressBar {
 		  .append(" \u001B[93mETA: \u001B[94m").append(postfix);
 	}
 
-	@Override public void close() {setTotal(0);super.close();}
+	@Override public void close() {
+		if (Taskbar.release(this)) {
+			Taskbar.setProgressType(Taskbar.TBPF_OFF);
+		}
+		setTotal(0);
+		super.close();
+	}
+
+	@Override
+	public void end(String message, int color) {
+		if (Taskbar.release(this)) {
+			Taskbar.setProgressType(Taskbar.TBPF_OFF);
+		}
+		super.end(message, color);
+	}
 }

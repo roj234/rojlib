@@ -89,20 +89,20 @@ public class ToNBT implements CVisitor {
 		onValue(X_NULL);
 	}
 	public final boolean supportArray() {return true;}
-	public final void value(byte[] ba) {
+	public final void value(byte[] array) {
 		onValue(BYTE_ARRAY);
-		ob.writeInt(ba.length);
-		ob.write(ba);
+		ob.writeInt(array.length);
+		ob.write(array);
 	}
-	public final void value(int[] ia) {
+	public final void value(int[] array) {
 		onValue(INT_ARRAY);
-		ob.writeInt(ia.length);
-		for (int i : ia) ob.writeInt(i);
+		ob.writeInt(array.length);
+		for (int i : array) ob.writeInt(i);
 	}
-	public final void value(long[] la) {
+	public final void value(long[] array) {
 		onValue(LONG_ARRAY);
-		ob.writeInt(la.length);
-		for (long l : la) ob.writeLong(l);
+		ob.writeInt(array.length);
+		for (long l : array) ob.writeLong(l);
 	}
 
 	@SuppressWarnings("fallthrough")

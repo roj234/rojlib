@@ -21,10 +21,9 @@ import roj.plugin.Plugin;
 import roj.plugin.PluginDescriptor;
 import roj.plugin.VFSRouter;
 import roj.text.CharList;
-import roj.text.Escape;
+import roj.text.HtmlEntities;
 import roj.text.TextUtil;
 import roj.ui.Argument;
-import roj.util.Helpers;
 import roj.util.TypedKey;
 
 import java.io.File;
@@ -200,12 +199,8 @@ public class FileShare extends Plugin {
 
         try {
             IOUtil.writeFileEvenMoreSafe(getDataFolder(), "db.yml", file -> {
-                try {
-                    ConfigMaster.YAML.writeObject(ownerSerializer.serializer(Serialized.class), snapshot, file);
-                    getLogger().debug("配置已保存");
-                } catch (IOException e) {
-                    Helpers.athrow(e);
-                }
+                ConfigMaster.YAML.writeObject(ownerSerializer.serializer(Serialized.class), snapshot, file);
+                getLogger().debug("配置已保存");
             });
         } catch (IOException e) {
             markDirty();
@@ -512,7 +507,7 @@ public class FileShare extends Plugin {
         info.owner = user.getId();
         String name = map.getOrDefault("name", "").trim();
         if (name.length() > MAX_NAME_LENGTH) name = name.substring(0, MAX_NAME_LENGTH);
-        info.name = name.isEmpty() ? null : Escape.htmlEntities(name).toString();
+        info.name = name.isEmpty() ? null : HtmlEntities.escapeHtml(name).toString();
         info.code = code;
         info.time = System.currentTimeMillis();
 

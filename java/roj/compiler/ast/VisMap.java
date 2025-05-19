@@ -82,13 +82,13 @@ public final class VisMap {
 		for (int i = 0; i < prevVarCount; i++) {
 			var defined = varState.getOrDefault(i, UNDEFINED);
 			if (defined == UNDEFINED) {
-				prevVarDefined.putInt(i, UNDEFINED);
+				prevVarDefined.put(i, UNDEFINED);
 			} else {
 				var prevDefined = prevVarDefined.getOrDefault(i, defined);
 				if (prevDefined != UNDEFINED) {
 					// 不相同则去除
 					if (!Objects.equals(defined, prevDefined)) defined = DEFINED;
-					prevVarDefined.putInt(i, defined);
+					prevVarDefined.put(i, defined);
 				}
 			}
 		}
@@ -166,7 +166,7 @@ public final class VisMap {
 	}
 	public void assign(Variable var) {
 		var vid = vuid.getValueOrDefault(var, -1);
-		if (vid >= 0) varState.putInt(vid, var.value == null ? DEFINED : var.value);
+		if (vid >= 0) varState.put(vid, var.value == null ? DEFINED : var.value);
 		else {
 			if (!var.hasValue) throw new AssertionError();
 		}

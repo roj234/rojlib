@@ -401,8 +401,12 @@ public class JarVerifier {
 			if (cacheHash) {
 				var prevHash = options.get(digestKey+":"+entry.getName());
 				if (prevHash != null) {
-					subattr.put(digestKey, prevHash);
-					continue;
+					int endIndex = prevHash.indexOf('|');
+					int time = Integer.parseInt(prevHash.substring(0, endIndex), 36);
+					if (time == ((int)(entry.getModificationTime() * entry.getCrc32()))) {
+						subattr.put(digestKey, prevHash.substring(endIndex+1));
+						continue;
+					}
 				}
 			}
 
@@ -415,7 +419,9 @@ public class JarVerifier {
 
 				var digest = Base64.encode(DynByteBuf.wrap(md.digest()), IOUtil.getSharedCharBuf()).toString();
 				subattr.put(digestKey, digest);
-				if (cacheHash) options.put(digestKey+":"+entry.getName(), digest);
+				if (cacheHash) {
+					options.put(digestKey+":"+entry.getName(), Integer.toString((int)(entry.getModificationTime() * entry.getCrc32()), 36)+"|"+digest);
+				}
 			}
 		}
 

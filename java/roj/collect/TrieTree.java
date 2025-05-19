@@ -24,16 +24,22 @@ import static roj.collect.IntMap.UNDEFINED;
  * @since 2021/2/21 10:39
  */
 public class TrieTree<V> extends AbstractMap<CharSequence, V> {
-	static final int COMPRESS_START_DEPTH = 1, MIN_REMOVE_ARRAY_SIZE = 5;
+	static final int COMPRESS_START_DEPTH = 1;
 
 	public static class Entry<V> extends TrieEntry {
 		V value;
 
 		@SuppressWarnings("unchecked")
-		Entry(char c) {
+		public Entry(char c) {
 			super(c);
 			this.value = (V) UNDEFINED;
 		}
+		// only external use
+		public Entry(char c, V value) {
+			super(c);
+			this.value = value;
+		}
+
 
 		Entry(char c, Entry<V> entry) {
 			super(c);
@@ -56,7 +62,7 @@ public class TrieTree<V> extends AbstractMap<CharSequence, V> {
 			}
 
 			for (TrieEntry entry : node) {
-				TrieEntry sub = getChild(entry.c);
+				TrieEntry sub = getChild(entry.firstChar);
 				if (sub == null) putChild(sub = entry.clone());
 				v += sub.copyFrom(entry);
 			}
@@ -133,7 +139,7 @@ public class TrieTree<V> extends AbstractMap<CharSequence, V> {
 				} else {
 					// 拆分P1: 前半部分[0, lastMatch)
 					if (lastMatch == 1) {
-						prev.putChild(new Entry<>(entry.c));
+						prev.putChild(new Entry<>(entry.firstChar));
 					} else {
 						((PEntry<V>) entry).val = text.subSequence(0, lastMatch);
 					}
@@ -151,7 +157,7 @@ public class TrieTree<V> extends AbstractMap<CharSequence, V> {
 					entry.value = (V) UNDEFINED;
 
 					// 目的：避免之前修改entry的值
-					(entry = (Entry<V>) prev.getChild(entry.c)).putChild(child);
+					(entry = (Entry<V>) prev.getChild(entry.firstChar)).putChild(child);
 
 					// 插入新的entry
 					lastMatch += i;
@@ -323,7 +329,7 @@ public class TrieTree<V> extends AbstractMap<CharSequence, V> {
 	 */
 	@SuppressWarnings("unchecked")
 	public int match(CharSequence s, int i, int len, MyHashMap.Entry<CInt, V> feed) {
-		feed.k.value = -1;
+		feed.key.value = -1;
 
 		int d = 0;
 
@@ -346,8 +352,8 @@ public class TrieTree<V> extends AbstractMap<CharSequence, V> {
 			}
 
 			if (entry.value != UNDEFINED) {
-				feed.k.value = d;
-				feed.v = entry.value;
+				feed.key.value = d;
+				feed.value = entry.value;
 			}
 		}
 		return d;

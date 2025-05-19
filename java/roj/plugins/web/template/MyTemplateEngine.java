@@ -211,7 +211,7 @@ public class MyTemplateEngine {
 			cu.S2_ResolveMethod();
 			cu.S3_Annotation();
 			cu.S4_Code();
-			cu.S5_noStore();
+			cu.S5_preStore();
 		} finally {
 			LocalContext.set(null);
 		}

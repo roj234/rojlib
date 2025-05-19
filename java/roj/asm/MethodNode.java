@@ -9,6 +9,7 @@ import roj.asm.type.IType;
 import roj.asm.type.Signature;
 import roj.asm.type.Type;
 import roj.asm.type.TypeHelper;
+import roj.collect.SimpleList;
 import roj.text.CharList;
 import roj.text.logging.Logger;
 import roj.util.ByteList;
@@ -95,9 +96,7 @@ public final class MethodNode extends MemberNode {
 
 	public String rawDesc() {
 		if (in != null) {
-			in.add(out);
-			desc = Type.toMethodDesc(in, desc.getClass() == String.class ? desc.toString() : null);
-			in.remove(in.size()-1);
+			desc = Type.toMethodDesc(in, out, desc.getClass() == String.class ? desc.toString() : null);
 			return desc.toString();
 		}
 		return desc.getClass() == CstUTF.class ? ((CstUTF) desc).str() : desc.toString();
@@ -110,8 +109,9 @@ public final class MethodNode extends MemberNode {
 
 	public List<Type> parameters() {
 		if (in == null) {
-			in = Type.methodDesc(rawDesc());
-			out = in.remove(in.size()-1);
+			SimpleList<Type> in = AsmCache.getInstance().methodTypeTmp();
+			out = Type.methodDesc(rawDesc(), in);
+			this.in = new SimpleList<>(in);
 		}
 		return in;
 	}

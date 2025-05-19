@@ -907,7 +907,7 @@ public final class BlockParser {
 
 				// 副本的 n/3: break劫持
 				for (int i = 0; i < tryNode.breakHook.size(); i++) {
-					var segment = (JumpBlock) cw.getSegment(tryNode.breakHook.get(i)-1);
+					var segment = (JumpTo) cw.getSegment(tryNode.breakHook.get(i)-1);
 
 					var target = segment.target;
 					if (target.isValid() && target.compareTo(tryBegin) >= 0) continue;
@@ -946,7 +946,7 @@ public final class BlockParser {
 				// 副本的 1/3: 正常执行(可选)
 				if (anyNormal) {
 					if (nowNormal) // 删掉一个多余的跳转
-						cw.replaceSegment(cw.nextSegmentId()-1, SolidBlock.EMPTY);
+						cw.replaceSegment(cw.nextSegmentId()-1, StaticSegment.EMPTY);
 
 					cw.label(blockEnd);
 					cw.ldc(branchId++);
@@ -981,7 +981,7 @@ public final class BlockParser {
 						var segmentId = tryNode.breakHook.get(i)-1;
 						System.out.println(tryNode.breakHook);
 						System.out.println(cw.toString());
-						Label target = ((JumpBlock) cw.getSegment(segmentId)).target;
+						Label target = ((JumpTo) cw.getSegment(segmentId)).target;
 						//  当它跳转到try外部时，才需要执行finally
 						//   外部：Label未定义（后） or 在tryBegin之前
 						//   同时,goto target替换成ldc + switch -> target
@@ -1043,13 +1043,13 @@ public final class BlockParser {
 
 						if (flowHook != null) {
 							for (var entry : breakHookId.selfEntrySet()) {
-								segment.branch(entry.v, cw.label());
+								segment.branch(entry.value, cw.label());
 								flowHook.breakHook.add(cw.nextSegmentId());
-								cw.jump(entry.k);
+								cw.jump(entry.getKey());
 							}
 						} else {
 							for (var entry : breakHookId.selfEntrySet()) {
-								segment.branch(entry.v, entry.k);
+								segment.branch(entry.value, entry.getKey());
 							}
 						}
 
@@ -1096,7 +1096,7 @@ public final class BlockParser {
 				if (flowHook != null) {
 					flowHook.returnHook.addAll(tryNode.returnHook);
 				} else {
-					SolidBlock ret = new SolidBlock(returnType.shiftedOpcode(IRETURN));
+					StaticSegment ret = new StaticSegment(returnType.getOpcode(IRETURN));
 					for (int i = 0; i < tryNode.returnHook.size(); i++) cw.replaceSegment(tryNode.returnHook.get(i), ret);
 				}
 			} else {
@@ -1114,7 +1114,7 @@ public final class BlockParser {
 			flowHook.returnHook.add(cw.nextSegmentId());
 			cw.jump(flowHook.returnTarget);
 		} else {
-			cw.insn(returnType.shiftedOpcode(IRETURN));
+			cw.insn(returnType.getOpcode(IRETURN));
 		}
 	}
 
@@ -1370,7 +1370,7 @@ public final class BlockParser {
 			cw.jump(flowHook.returnTarget);
 		} else {
 			//noinspection MagicConstant
-			cw.insn(rt.shiftedOpcode(IRETURN));
+			cw.insn(rt.getOpcode(IRETURN));
 		}
 
 		visMap.terminate();
@@ -1880,7 +1880,7 @@ public final class BlockParser {
 
 		visMap.enter(imLabel);
 		loop:
-		while (wr.hasNext()) {
+		while (true) {
 			SwitchNode.Branch kase;
 			boolean match = false;
 			boolean blockBegin = true;
@@ -1907,7 +1907,7 @@ public final class BlockParser {
 							for (Object o : labelDeDup) {
 								if (o instanceof IType t1) {
 									// 没有反向检查，因为本来就是一个一个instanceof
-									if (ctx.getHierarchyList(ctx.resolve(t1)).containsValue(type.owner())) {
+									if (ctx.getHierarchyList(ctx.resolve(t1)).containsKey(type.owner())) {
 										ctx.report(Kind.ERROR, "block.switch.collisionType", t1, type);
 									}
 								}
@@ -2006,7 +2006,7 @@ public final class BlockParser {
 
 		// 忽略最后一个分支的最后的break;
 		var last = branches.getLast();
-		if (lastBreak) last.block.replaceSegment(last.block.nextSegmentId()-1, SolidBlock.EMPTY);
+		if (lastBreak) last.block.replaceSegment(last.block.nextSegmentId()-1, StaticSegment.EMPTY);
 
 		setCw(tmp);
 
@@ -2393,7 +2393,7 @@ public final class BlockParser {
 					int hash = key.hashCode();
 
 					var dup = tmp.get(hash);
-					if (dup == null) tmp.putInt(hash, dup = new SimpleList<>(2));
+					if (dup == null) tmp.put(hash, dup = new SimpleList<>(2));
 
 					dup.add(new AbstractMap.SimpleEntry<>(key, pos));
 				}

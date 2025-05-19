@@ -11,9 +11,9 @@ import roj.io.IOUtil;
 import roj.reflect.ReflectionUtils;
 import roj.reflect.Unaligned;
 import roj.text.CharList;
-import roj.text.Escape;
 import roj.text.LineReader;
 import roj.text.TextUtil;
+import roj.text.URICoder;
 import roj.util.ArrayCache;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
@@ -66,11 +66,11 @@ public class Headers extends Multimap<CharSequence, String> {
 
 	public static String getOneValue(CharSequence field, String key) {
 		var vo = new Entry<>();
-		vo.k = key;
+		vo.key = key;
 		try {
 			complexValue(field, vo, false);
 		} catch (OperationDone e) {
-			return Helpers.cast(vo.k);
+			return Helpers.cast(vo.getKey());
 		}
 		return null;
 	}
@@ -89,8 +89,8 @@ public class Headers extends Multimap<CharSequence, String> {
 			String s = queries.get(i);
 			int j = s.indexOf('=');
 			try {
-				if (j == -1) map.add(Escape.decodeURI(s), "");
-				else map.add(Escape.decodeURI(s.substring(0, j)), Escape.decodeURI(s.substring(j+1)));
+				if (j == -1) map.add(URICoder.decodeURI(s), "");
+				else map.add(URICoder.decodeURI(s.substring(0, j)), URICoder.decodeURI(s.substring(j+1)));
 			} catch (MalformedURLException e) {
 				if (throwOrSkip) throw e;
 			}
@@ -108,7 +108,7 @@ public class Headers extends Multimap<CharSequence, String> {
 			if (flag == 1) {
 				if (c == '"') {
 					if (k == null) throw new IllegalArgumentException("Escaped key");
-					kvs.accept(Escape.decodeURI(k), Sub(field, j, i - 1));
+					kvs.accept(URICoder.decodeURI(k), Sub(field, j, i - 1));
 					j = i;
 					k = null;
 					flag = 2;
@@ -136,7 +136,7 @@ public class Headers extends Multimap<CharSequence, String> {
 					case ',':
 					case ';':
 						if (k != null) {
-							kvs.accept(Escape.decodeURI(k), Sub(field, j, i - 1));
+							kvs.accept(URICoder.decodeURI(k), Sub(field, j, i - 1));
 							k = null;
 						} else {
 							if (i - 1 > j) kvs.accept(Sub(field, j, i - 1), "");
@@ -150,7 +150,7 @@ public class Headers extends Multimap<CharSequence, String> {
 		}
 
 		if (k != null) {
-			kvs.accept(Escape.decodeURI(k), Sub(field, j, i));
+			kvs.accept(URICoder.decodeURI(k), Sub(field, j, i));
 		} else if (i > j) {
 			kvs.accept(Sub(field, j, i).toLowerCase(Locale.ROOT), "");
 		}
@@ -158,7 +158,7 @@ public class Headers extends Multimap<CharSequence, String> {
 			if (throwOrSkip) Helpers.athrow(e);
 		}
 	}
-	private static String Sub(CharSequence c, int s, int e) throws MalformedURLException { return Escape.decodeURI(c.subSequence(s, e)); }
+	private static String Sub(CharSequence c, int s, int e) throws MalformedURLException { return URICoder.decodeURI(c.subSequence(s, e)); }
 
 	public Headers() {this(8);}
 	public Headers(int size) {super(size);}
@@ -266,8 +266,8 @@ public class Headers extends Multimap<CharSequence, String> {
 		checkVal(newV);
 
 		if (entry.getValue() == UNDEFINED) {
-			entry.k = dedup.find(lower(entry.k)).toString();
-			checkKey(entry.k);
+			entry.key = dedup.find(lower(entry.getKey())).toString();
+			checkKey(entry.getKey());
 		}
 	}
 
@@ -277,9 +277,9 @@ public class Headers extends Multimap<CharSequence, String> {
 		value = checkVal(value);
 
 		Entry e = (Entry) getOrCreateEntry(key);
-		if (e.k == UNDEFINED) {
-			e.k = lower(key).toString();
-			e.v = value;
+		if (e.getKey() == UNDEFINED) {
+			e.key = lower(key).toString();
+			e.value = value;
 			size++;
 		} else {
 			if (e.rest.isEmpty()) e.rest = new LinkedList<>();
@@ -293,20 +293,20 @@ public class Headers extends Multimap<CharSequence, String> {
 		value = checkVal(value);
 
 		Entry e = (Entry) getOrCreateEntry(key);
-		if (e.k == UNDEFINED) {
-			e.k = lower(key);
+		if (e.getKey() == UNDEFINED) {
+			e.key = lower(key);
 			size++;
 		}
 		e.rest = Collections.emptyList();
-		e.v = value;
+		e.value = value;
 	}
 
 	@Override
 	@SuppressWarnings({"rawtypes", "unchecked"})
 	public final void set(CharSequence key, List<String> value) {
 		Entry e = (Entry) getOrCreateEntry(key);
-		if (e.k == UNDEFINED) {
-			e.k = lower(key);
+		if (e.getKey() == UNDEFINED) {
+			e.key = lower(key);
 			size++;
 		}
 		if (value.size() == 1) {
@@ -317,7 +317,7 @@ public class Headers extends Multimap<CharSequence, String> {
 			for (int i = 0; i < e.rest.size(); i++)
 				e.rest.set(i, checkVal((String) e.rest.get(i)));
 		}
-		e.v = checkVal(value.get(0));
+		e.value = checkVal(value.get(0));
 	}
 
 	private static CharSequence lower(CharSequence key) {
@@ -400,7 +400,7 @@ public class Headers extends Multimap<CharSequence, String> {
 		if (found != val.length()-1) return val.substring(0, found+1);
 		return val;
 	}
-	private static void illegalChar(CharSequence key, int i, char c) {throw new IllegalArgumentException("HTTP头/无效字符 #"+(int)c+" 偏移 "+i+" 内容 "+Tokenizer.addSlashes(key));}
+	private static void illegalChar(CharSequence key, int i, char c) {throw new IllegalArgumentException("HTTP头/无效字符 #"+(int)c+" 偏移 "+i+" 内容 "+Tokenizer.escape(key));}
 
 	@Override
 	public String toString() {

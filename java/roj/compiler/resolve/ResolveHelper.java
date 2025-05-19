@@ -30,7 +30,7 @@ public final class ResolveHelper {
 	public ResolveHelper(ClassDefinition owner) {this.owner = Objects.requireNonNull(owner);}
 
 	private MethodNode lambdaMethod;
-	private byte lambdaType;
+	private byte lambdaType; // 只有1，2有效，3，4，5均是提供错误诊断
 	public int getLambdaType() {
 		if (lambdaType == 0) {
 			if ((owner.modifier()&Opcodes.ACC_ABSTRACT) == 0) {
@@ -123,7 +123,7 @@ public final class ResolveHelper {
 
 				for (var entry : ctx.getHierarchyList(itfInfo).selfEntrySet()) {
 					name = entry.getKey();
-					int id = entry.v;
+					int id = entry.value;
 
 					// id's castDistance is smaller
 					// parentList是包含自身的

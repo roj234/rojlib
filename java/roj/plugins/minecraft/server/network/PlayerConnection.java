@@ -442,7 +442,7 @@ public class PlayerConnection implements ChannelHandler/*, ViaCommandSender*/ {
 
 	public void disconnect(String message) { sendDisconnect(simpleJsonMessage(message)); }
 	public void disconnect(Text message) { sendDisconnect(message.toMinecraftJson()); }
-	private static String simpleJsonMessage(String message) { return "{\"text\":\"" + Tokenizer.addSlashes(message) + "\"}"; }
+	private static String simpleJsonMessage(String message) { return "{\"text\":\"" + Tokenizer.escape(message) + "\"}"; }
 	private void sendDisconnect(CharSequence message) {
 		if (!connection().isOutputOpen()) return;
 		sendPacket(new Packet("Disconnect", IOUtil.getSharedByteBuf().putVarIntUTF(message)));

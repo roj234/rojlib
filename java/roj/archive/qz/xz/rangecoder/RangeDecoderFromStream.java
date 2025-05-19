@@ -21,18 +21,17 @@ public final class RangeDecoderFromStream extends RangeDecoder {
 		range = 0xFFFFFFFF;
 	}
 
-	public void pushback() {
-		assert isFinished();
-		if (pos == len) return;
+	@Override
+	public void finish() {
+		if (pos < len && isFinished() && in instanceof PushbackInputStream pin) {
+			byte[] buf = new byte[len-pos];
+			System.arraycopy(this.buf, pos, buf, 0, len-pos);
+			pin.setBuffer(buf, 0, buf.length);
+		}
 
-		PushbackInputStream pin = (PushbackInputStream) in;
-		byte[] buf = new byte[len-pos];
-		System.arraycopy(this.buf, pos, buf, 0, len-pos);
-		pin.setBuffer(buf, 0, buf.length);
+		super.finish();
 	}
 
-	@Override
-	public boolean isFinished() { return code == 0; }
-	@Override
-	int doFill() throws IOException { return in.read(buf); }
+	@Override public boolean isFinished() { return code == 0; }
+	@Override int doFill() throws IOException { return in.read(buf); }
 }

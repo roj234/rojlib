@@ -9,7 +9,7 @@ import roj.asmx.injector.Shadow;
 import roj.asmx.injector.Weave;
 import roj.asmx.launcher.Autoload;
 import roj.concurrent.OperationDone;
-import roj.crypt.CRC32s;
+import roj.crypt.CRC32;
 import roj.io.IOUtil;
 import roj.io.source.CompositeSource;
 import roj.io.source.Source;
@@ -97,14 +97,14 @@ public class QIncrementPak {
 			ByteList buf = IOUtil.getSharedByteBuf();
 
 			// 重新计算头部CRC
-			int myCrc = CRC32s.INIT_CRC;
+			int myCrc = CRC32.initial;
 			int read = hend;
 
 			while (read > 0) {
 				int r = meta.read(buf.list, 0, Math.min(read, buf.list.length));
 				if (r < 0) throw new IllegalStateException();
 
-				myCrc = CRC32s.update(myCrc, buf.list, 0, r);
+				myCrc = CRC32.update(myCrc, buf.list, 0, r);
 				read -= r;
 			}
 
@@ -113,9 +113,9 @@ public class QIncrementPak {
 			   .putIntLE(0)
 			   .putLongLE(0)
 			   .putLongLE(hend)
-			   .putIntLE(CRC32s.retVal(myCrc));
+			   .putIntLE(CRC32.finish(myCrc));
 
-			buf.putIntLE(8, CRC32s.once(buf.list, 12, 20));
+			buf.putIntLE(8, CRC32.crc32(buf.list, 12, 20));
 
 			s.write(buf);
 		}

@@ -335,7 +335,7 @@ public class DiffFinder extends JFrame {
 						try (TextReader in = TextReader.auto(new File(base, meta.path))) {
 							int i = 0;
 							while (in.readLine(sb)) {
-								sb.replaceMulti(textRpl);
+								sb.replaceBatch(textRpl);
 
 								int canCopy = Math.min(sb.length(), preWindow-i);
 								U.copyMemory(sb.list, Unaligned.ARRAY_CHAR_BASE_OFFSET, out, Unaligned.ARRAY_BYTE_BASE_OFFSET + i * 2L, canCopy * 2L);
@@ -430,7 +430,7 @@ public class DiffFinder extends JFrame {
 				List<FileMeta> prev = i==0?Collections.emptyList():layered.get(i-1);
 				List<FileMeta> self = layered.get(i);
 
-				List<Promise<Void>> tasks = new SimpleList<>();
+				List<Promise<?>> tasks = new SimpleList<>();
 
 				for (int j = 0; j < self.size(); j++) {
 					if (terminateFlag) return;
@@ -516,7 +516,7 @@ public class DiffFinder extends JFrame {
 					}
 				};
 
-				if (!tasks.isEmpty()) Promise.all(cleanup, tasks).thenR(cb);
+				if (!tasks.isEmpty()) Promise.all(cleanup, tasks).thenRun(cb);
 			}
 
 			comparator.awaitFinish();

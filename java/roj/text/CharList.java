@@ -580,12 +580,12 @@ public class CharList implements CharSequence, Appendable {
 		}
 		return this;
 	}
-	public final CharList replaceMulti(String[] str, String[] target) {
+	public final CharList replaceBatch(String[] str, String[] target) {
 		TrieTree<String> map = new TrieTree<>();
 		for (int i = 0; i < str.length; i++) map.put(str[i], target[i]);
-		return replaceMulti(map);
+		return replaceBatch(map);
 	}
-	public final CharList replaceMulti(TrieTree<String> map) {
+	public final CharList replaceBatch(TrieTree<String> map) {
 		CharList out = null;
 		int prevI = 0;
 
@@ -617,7 +617,7 @@ public class CharList implements CharSequence, Appendable {
 
 		return this;
 	}
-	public final CharList replaceMulti(CharMap<String> map) {
+	public final CharList replaceBatch(CharMap<String> map) {
 		CharList out = null;
 		int prevI = 0;
 		int pos = 0;

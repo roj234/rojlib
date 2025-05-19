@@ -62,7 +62,7 @@ public class RFSSourceClient implements ChannelHandler, Consumer<MyChannel> {
 		return new RemoteSource(rpc.handle, rpc.p1);
 	}
 
-	private Promise.PromiseCallback callback;
+	private Promise.Callback callback;
 	@SuppressWarnings("unchecked")
 	public Promise<RFSSourceClient> connect(InetSocketAddress address) throws IOException {
 		ClientLaunch.tcp().connect(address).initializator(this).launch();
@@ -92,7 +92,7 @@ public class RFSSourceClient implements ChannelHandler, Consumer<MyChannel> {
 	public void channelClosed(ChannelCtx ctx) throws IOException {
 		LOGGER.info("Disconnected");
 		if (callback != null) {
-			callback.reject(this);
+			callback.reject(null);
 		}
 	}
 

@@ -145,7 +145,7 @@ final class UTF8 extends FastCharset {
 
 		if (this == EXCEPTIONAL) throw new IllegalArgumentException((int) (previ-base) + " 附近解码错误");
 		out[off++] = REPLACEMENT;
-		return ((previ-base) << 32) | off;
+		return ((1+previ-base) << 32) | off;
 	}
 	@Override public void fastValidate(Object ref, long i, long max, IntConsumer cs) {
 		int c, c2, c3, c4;

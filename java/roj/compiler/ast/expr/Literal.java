@@ -32,7 +32,7 @@ final class Literal extends Expr {
 		this.c = c;
 	}
 
-	@Override public String toString() { return c instanceof String ? '"'+ Tokenizer.addSlashes(c.toString())+'"' : isClassRef() ? type+".class" : String.valueOf(c); }
+	@Override public String toString() { return c instanceof String ? '"'+Tokenizer.escape(c.toString())+'"' : isClassRef() ? type+".class" : String.valueOf(c); }
 	@Override public boolean hasFeature(Feature feature) {return feature == Feature.IMMEDIATE_CONSTANT || (feature == Feature.LDC_CLASS && isClassRef());}
 	@Override
 	public IType minType() {

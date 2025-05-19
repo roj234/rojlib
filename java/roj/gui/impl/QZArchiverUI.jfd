@@ -7,7 +7,7 @@ new FormModel {
 			"autoSize": false
 		} ) {
 			name: "this"
-			"title": "Roj234 SevenZ Archiver 2.6"
+			"title": "Roj234 SevenZ Archiver 2.7"
 			add( new FormComponent( "javax.swing.JLabel" ) {
 				name: "label4"
 				"text": "压缩这个目录或文件"
@@ -175,7 +175,7 @@ new FormModel {
 			} )
 			add( new FormComponent( "javax.swing.JLabel" ) {
 				name: "label2"
-				"text": "并行"
+				"text": "线程"
 				auxiliary() {
 					"JavaCodeGenerator.variableLocal": true
 				}
@@ -185,9 +185,9 @@ new FormModel {
 			} )
 			add( new FormComponent( "javax.swing.JCheckBox" ) {
 				name: "uiSplitTask"
-				"text": "单压缩流并行"
+				"text": "压缩流并行"
 			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
-				"x": 220
+				"x": 232
 				"y": 148
 			} )
 			add( new FormComponent( "javax.swing.JComboBox" ) {
@@ -485,7 +485,7 @@ new FormModel {
 				"y": 230
 			} )
 			add( new FormComponent( "javax.swing.JCheckBox" ) {
-				name: "uiStoreMT"
+				name: "bStoreMT"
 				"text": "修改时间"
 				"selected": true
 			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
@@ -493,28 +493,28 @@ new FormModel {
 				"y": 245
 			} )
 			add( new FormComponent( "javax.swing.JCheckBox" ) {
-				name: "uiStoreCT"
+				name: "bStoreCT"
 				"text": "创建时间"
 			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
 				"x": 5
 				"y": 265
 			} )
 			add( new FormComponent( "javax.swing.JCheckBox" ) {
-				name: "uiStoreAT"
+				name: "bStoreAT"
 				"text": "访问时间"
 			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
 				"x": 5
 				"y": 285
 			} )
 			add( new FormComponent( "javax.swing.JCheckBox" ) {
-				name: "uiStoreAttr"
+				name: "bStoreAttr"
 				"text": "文件权限 (DOS)"
 			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
 				"x": 5
 				"y": 305
 			} )
 			add( new FormComponent( "javax.swing.JCheckBox" ) {
-				name: "uiStoreFolder"
+				name: "bStoreFolder"
 				"text": "文件夹"
 				"selected": true
 			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
@@ -601,9 +601,56 @@ new FormModel {
 				"x": 395
 				"y": 290
 			} )
+			add( new FormComponent( "javax.swing.JCheckBox" ) {
+				name: "bCheckSymbolicLink"
+				"text": "检测并处理符号链接"
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 495
+				"y": 180
+			} )
+			add( new FormComponent( "javax.swing.JCheckBox" ) {
+				name: "bCheckHardLink"
+				"text": "检测并处理硬链接"
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 495
+				"y": 200
+			} )
+			add( new FormComponent( "javax.swing.JCheckBox" ) {
+				name: "bCompressArchiveOnly"
+				"text": "仅压缩归档的文件"
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 495
+				"y": 220
+			} )
+			add( new FormComponent( "javax.swing.JCheckBox" ) {
+				name: "bClearArchive"
+				"text": "完成后去除归档属性"
+				"enabled": false
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 495
+				"y": 240
+			} )
+			add( new FormComponent( "javax.swing.JCheckBox" ) {
+				name: "bRecoveryRecord"
+				"text": "添加恢复记录"
+				"enabled": false
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"x": 495
+				"y": 260
+			} )
+			add( new FormComponent( "javax.swing.JSpinner" ) {
+				name: "iRecoveryRecord"
+				"model": new javax.swing.SpinnerNumberModel( 3, 1, 30, 1 )
+				"enabled": false
+			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
+				"width": 75
+				"height": 20
+				"x": 530
+				"y": 280
+			} )
 		}, new FormLayoutConstraints( null ) {
 			"location": new java.awt.Point( 50, 30 )
-			"size": new java.awt.Dimension( 510, 495 )
+			"size": new java.awt.Dimension( 635, 495 )
 		} )
 	}
 }

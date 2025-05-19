@@ -1,6 +1,6 @@
 package roj.http.server;
 
-import roj.crypt.CRC32s;
+import roj.crypt.CRC32;
 import roj.http.Headers;
 import roj.http.HttpHead;
 import roj.http.HttpUtil;
@@ -293,13 +293,13 @@ final class HttpServer20 extends H2Stream implements PostSetting, ResponseHeader
 		sendBytes += buf.readableBytes();
 		if (embed == null) return man.sendData(this, buf, false);
 
-		if ((flag & FLAG_GZIP) != 0) crc = CRC32s.update(crc, buf);
+		if ((flag & FLAG_GZIP) != 0) crc = CRC32.update(crc, buf);
 		embed.fireChannelWrite(buf);
 		return pending.wIndex() > 0;
 	}
 	private void sendLastData() throws IOException {
 		if (embed != null) embed.postEvent(new Event(hDeflate.OUT_FINISH));
-		if ((flag & FLAG_GZIP) != 0) pending.putIntLE(CRC32s.retVal(crc)).putIntLE(def.getTotalIn());
+		if ((flag & FLAG_GZIP) != 0) pending.putIntLE(CRC32.finish(crc)).putIntLE(def.getTotalIn());
 		man.sendData(this, pending, true);
 		dataEnd = true;
 		onFinish((flag&ERRORED) == 0);
@@ -323,7 +323,7 @@ final class HttpServer20 extends H2Stream implements PostSetting, ResponseHeader
 			case ENC_GZIP -> {
 				def = HSConfig.getInstance().deflater(true);
 				flag |= FLAG_GZIP;
-				crc = CRC32s.INIT_CRC;
+				crc = CRC32.initial;
 				header("content-encoding", "gzip");
 			}
 			case ENC_DEFLATE -> {

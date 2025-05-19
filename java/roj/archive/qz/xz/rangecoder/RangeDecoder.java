@@ -16,7 +16,7 @@ import roj.util.ArrayCache;
 import java.io.DataInput;
 import java.io.IOException;
 
-public class RangeDecoder extends RangeCoder {
+public sealed class RangeDecoder extends RangeCoder permits RangeDecoderFromStream {
 	final byte[] buf;
 	int pos, len;
 
@@ -30,7 +30,7 @@ public class RangeDecoder extends RangeCoder {
 		pos = len = buf.length;
 	}
 
-	public final void putArraysToCache() { ArrayCache.putArray(buf); }
+	public void finish() { ArrayCache.putArray(buf); }
 
 	public void lzma2_manualFill(DataInput in, int len) throws IOException {
 		if (len < INIT_SIZE) throw new CorruptedInputException();

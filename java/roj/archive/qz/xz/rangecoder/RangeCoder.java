@@ -12,7 +12,7 @@ package roj.archive.qz.xz.rangecoder;
 
 import java.util.Arrays;
 
-public abstract class RangeCoder {
+public abstract sealed class RangeCoder permits RangeDecoder, RangeEncoder {
 	static final int INIT_SIZE = 5;
 
 	static final int SHIFT_BITS = 8;

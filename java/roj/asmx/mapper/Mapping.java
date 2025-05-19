@@ -141,7 +141,7 @@ public class Mapping {
 				case "FL", "F":
 					FindMap<MemberDescriptor, String> fm = fieldMap;
 					try {
-						for (int j = 0; j < q.size(); j++) q.set(j, Tokenizer.removeSlashes(q.get(j)));
+						for (int j = 0; j < q.size(); j++) q.set(j, Tokenizer.unescape(q.get(j)));
 					} catch (ParseException e) {
 						e.printStackTrace();
 					}
@@ -161,7 +161,7 @@ public class Mapping {
 				case "ML", "M":
 					FindMap<MemberDescriptor, String> mm = methodMap;
 					try {
-						for (int j = 0; j < q.size(); j++) q.set(j, Tokenizer.removeSlashes(q.get(j)));
+						for (int j = 0; j < q.size(); j++) q.set(j, Tokenizer.unescape(q.get(j)));
 					} catch (ParseException e) {
 						e.printStackTrace();
 					}
@@ -204,14 +204,14 @@ public class Mapping {
 			if (v.equals(d.name) && param == null) continue;
 
 			if (checkFieldType) {
-				Tokenizer.addSlashes(sb.append("F: "), d.name);
-				Tokenizer.addSlashes(sb.append(' '), d.rawDesc);
-				Tokenizer.addSlashes(sb.append(' '), v);
-				if (param != null) Tokenizer.addSlashes(sb.append(' '), param);
+				Tokenizer.escape(sb.append("F: "), d.name);
+				Tokenizer.escape(sb.append(' '), d.rawDesc);
+				Tokenizer.escape(sb.append(' '), v);
+				if (param != null) Tokenizer.escape(sb.append(' '), param);
 				sb.append('\n');
 			} else {
-				Tokenizer.addSlashes(sb.append("F: "), d.name);
-				Tokenizer.addSlashes(sb.append(' '), v).append('\n');
+				Tokenizer.escape(sb.append("F: "), d.name);
+				Tokenizer.escape(sb.append(' '), v).append('\n');
 			}
 		}
 
@@ -228,10 +228,10 @@ public class Mapping {
 			// don't write unchanged method
 			if (v.equals(d.name) && param.equals(d.rawDesc)) continue;
 
-			Tokenizer.addSlashes(sb.append("M: "), d.name);
-			Tokenizer.addSlashes(sb.append(' '), d.rawDesc);
-			Tokenizer.addSlashes(sb.append(' '), entry.getValue());
-			if (!param.equals(d.rawDesc)) Tokenizer.addSlashes(sb.append(' '), param);
+			Tokenizer.escape(sb.append("M: "), d.name);
+			Tokenizer.escape(sb.append(' '), d.rawDesc);
+			Tokenizer.escape(sb.append(' '), entry.getValue());
+			if (!param.equals(d.rawDesc)) Tokenizer.escape(sb.append(' '), param);
 			sb.append('\n');
 
 			List<String> args = paramMap.get(d);
@@ -246,8 +246,8 @@ public class Mapping {
 		for (Map.Entry<String, String> entry : classMap.entrySet()) {
 			String v = entry.getValue();
 			if (v.equals(entry.getKey())) v = "~";
-			Tokenizer.addSlashes(ob.append("CL: "), entry.getKey());
-			Tokenizer.addSlashes(ob.append(' '), v).append('\n');
+			Tokenizer.escape(ob.append("CL: "), entry.getKey());
+			Tokenizer.escape(ob.append(' '), v).append('\n');
 			CharList list = classFos.get(entry.getKey());
 			if (list != null) ob.append(list);
 		}

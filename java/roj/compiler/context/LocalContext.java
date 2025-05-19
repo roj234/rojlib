@@ -752,7 +752,7 @@ public class LocalContext {
 			if (type.genericType() == 0) {
 				var parents = getHierarchyList(classes.getClassInfo(type.owner()));
 				for (String s : exceptions.value) {
-					if (parents.containsValue(s)) return;
+					if (parents.containsKey(s)) return;
 				}
 			} else {
 				for (String s : exceptions.value) {

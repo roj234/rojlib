@@ -1,5 +1,8 @@
 package roj.archive;
 
+import org.intellij.lang.annotations.MagicConstant;
+import roj.archive.qz.WinAttributes;
+
 import java.nio.file.attribute.FileTime;
 
 /**
@@ -19,6 +22,8 @@ public interface ArchiveEntry {
 	long getAccessTime();
 	long getCreationTime();
 	long getModificationTime();
+	@MagicConstant(flagsFromClass = WinAttributes.class)
+	int getWinAttributes();
 
 	// (maybe) in nanoseconds
 	FileTime getPrecisionAccessTime();

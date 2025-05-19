@@ -15,7 +15,7 @@ import static roj.collect.IntMap.NUMKEY_LOADFACTOR;
 public class HashBiMap<K, V> extends AbstractMap<K, V> implements Flippable<K, V>, _Generic_Map<MyHashMap.AbstractEntry<K, V>>, FindMap<K, V> {
 	public static class Entry<K, V> extends MyHashMap.Entry<K, V> {
 		protected Entry(K k, V v) { super(k, v); }
-		public V setValue(V now) { throw new UnsupportedOperationException(); }
+		public V setValue(V value) { throw new UnsupportedOperationException(); }
 
 		protected Entry<K, V> valueNext;
 	}
@@ -71,7 +71,7 @@ public class HashBiMap<K, V> extends AbstractMap<K, V> implements Flippable<K, V
 							}
 
 							if (t != null) {
-								result = Helpers.cast(new SimpleImmutableEntry<>(t.v, t.k));
+								result = Helpers.cast(new SimpleImmutableEntry<>(t.value, t.key));
 								return true;
 							}
 						}
@@ -90,13 +90,13 @@ public class HashBiMap<K, V> extends AbstractMap<K, V> implements Flippable<K, V
 				Map.Entry<?, ?> e = (Map.Entry<?, ?>) o;
 				Object key = e.getKey();
 				HashBiMap.Entry<?, ?> comp = map.getValueEntry((V) key);
-				return comp != null && comp.v == e.getValue();
+				return comp != null && comp.value == e.getValue();
 			}
 
 			public final boolean remove(Object o) {
 				if (o instanceof Map.Entry) {
 					HashBiMap.Entry<?, ?> e = (HashBiMap.Entry<?, ?>) o;
-					return map.remove(e.v) != null;
+					return map.remove(e.value) != null;
 				}
 				return false;
 			}
@@ -151,7 +151,7 @@ public class HashBiMap<K, V> extends AbstractMap<K, V> implements Flippable<K, V
 				entry = (Entry<K, V>) kTab[i];
 				while (entry != null) {
 					next = (Entry<K, V>) entry.__next();
-					int newIndex = indexFor(entry.k)&mask1;
+					int newIndex = indexFor(entry.key)&mask1;
 					Entry<K, V> old = (Entry<K, V>) kTab1[newIndex];
 					kTab1[newIndex] = entry;
 					entry.next = old;
@@ -162,7 +162,7 @@ public class HashBiMap<K, V> extends AbstractMap<K, V> implements Flippable<K, V
 				while (entry != null) {
 					next = entry.valueNext;
 
-					int newIndex = indexFor(entry.v)&mask1;
+					int newIndex = indexFor(entry.value)&mask1;
 					Entry<K, V> old = (Entry<K, V>) vTab1[newIndex];
 					vTab1[newIndex] = entry;
 					entry.valueNext = old;
@@ -214,21 +214,21 @@ public class HashBiMap<K, V> extends AbstractMap<K, V> implements Flippable<K, V
 				removeEntry(vEntry);
 			}
 
-			V old = kEntry.v;
+			V old = kEntry.value;
 			removeValueEntry(kEntry, old);
 
-			kEntry.v = v;
+			kEntry.value = v;
 			putValueEntry(kEntry);
 
 			return old;
 		}
 
 		if (vEntry != null) {
-			if (!replace) throw new IllegalArgumentException("Multiple key(" + key + ", " + vEntry.k + ") bind to same value(" + vEntry.v + ")! use forcePut()!");
+			if (!replace) throw new IllegalArgumentException("Multiple key(" + key + ", " + vEntry.key + ") bind to same value(" + vEntry.value + ")! use forcePut()!");
 
-			removeKeyEntry(vEntry, vEntry.k);
+			removeKeyEntry(vEntry, vEntry.key);
 
-			vEntry.k = key;
+			vEntry.key = key;
 			putKeyEntry(vEntry);
 
 			return v;
@@ -252,21 +252,21 @@ public class HashBiMap<K, V> extends AbstractMap<K, V> implements Flippable<K, V
 				removeEntry(kEntry);
 			}
 
-			K old = vEntry.k;
+			K old = vEntry.key;
 			removeKeyEntry(vEntry, old);
 
-			vEntry.k = key;
+			vEntry.key = key;
 			putKeyEntry(vEntry);
 
 			return old;
 		}
 
 		if (kEntry != null) {
-			if (!replace) throw new IllegalArgumentException("Multiple value(" + v + ", " + kEntry.v + ") bind to same key(" + kEntry.k + ")! use forcePut()!");
+			if (!replace) throw new IllegalArgumentException("Multiple value(" + v + ", " + kEntry.value + ") bind to same key(" + kEntry.key + ")! use forcePut()!");
 
-			removeValueEntry(kEntry, kEntry.v);
+			removeValueEntry(kEntry, kEntry.value);
 
-			kEntry.v = v;
+			kEntry.value = v;
 			putValueEntry(kEntry);
 
 			return key;
@@ -281,23 +281,23 @@ public class HashBiMap<K, V> extends AbstractMap<K, V> implements Flippable<K, V
 		Entry<K, V> entry = getKeyEntry((K) id);
 		if (entry == null) return null;
 		removeEntry(entry);
-		return entry.v;
+		return entry.value;
 	}
 	public K removeByValue(V v) {
 		Entry<K, V> entry = getValueEntry(v);
 		if (entry == null) return null;
 		removeEntry(entry);
-		return entry.k;
+		return entry.key;
 	}
 
 	@SuppressWarnings("unchecked")
 	public V get(Object id) {
 		Entry<K, V> entry = getKeyEntry((K) id);
-		return entry == null ? null : entry.v;
+		return entry == null ? null : entry.value;
 	}
 	public K getByValue(V key) {
 		Entry<K, V> entry = getValueEntry(key);
-		return entry == null ? null : entry.k;
+		return entry == null ? null : entry.key;
 	}
 
 	@SuppressWarnings("unchecked")
@@ -321,8 +321,8 @@ public class HashBiMap<K, V> extends AbstractMap<K, V> implements Flippable<K, V
 	public void __remove(MyHashMap.AbstractEntry<K, V> entry) { removeEntry((Entry<K, V>) entry); }
 
 	protected void removeEntry(Entry<K, V> toRemove) {
-		removeKeyEntry(toRemove, toRemove.k);
-		removeValueEntry(toRemove, toRemove.v);
+		removeKeyEntry(toRemove, toRemove.key);
+		removeValueEntry(toRemove, toRemove.value);
 		this.size--;
 	}
 
@@ -383,7 +383,7 @@ public class HashBiMap<K, V> extends AbstractMap<K, V> implements Flippable<K, V
 
 	@SuppressWarnings("unchecked")
 	private void putKeyEntry(Entry<K, V> entry) {
-		int h = indexFor(entry.k)&mask;
+		int h = indexFor(entry.key)&mask;
 		if (kTab == null) kTab = new Entry<?, ?>[length];
 		Entry<K, V> curr;
 		if ((curr = (Entry<K, V>) kTab[h]) == null) {
@@ -398,7 +398,7 @@ public class HashBiMap<K, V> extends AbstractMap<K, V> implements Flippable<K, V
 	}
 	@SuppressWarnings("unchecked")
 	private void putValueEntry(Entry<K, V> entry) {
-		int h = indexFor(entry.v)&mask;
+		int h = indexFor(entry.value)&mask;
 		if (vTab == null) vTab = new Entry<?, ?>[length];
 		Entry<K, V> curr;
 		if ((curr = (Entry<K, V>) vTab[h]) == null) {
@@ -418,7 +418,7 @@ public class HashBiMap<K, V> extends AbstractMap<K, V> implements Flippable<K, V
 		int h = indexFor(k)&mask;
 		Entry<K, V> entry = (Entry<K, V>) kTab[h];
 		while (entry != null) {
-			if (Objects.equals(k, entry.k)) {
+			if (Objects.equals(k, entry.key)) {
 				return entry;
 			}
 			entry = (Entry<K, V>) entry.__next();
@@ -431,7 +431,7 @@ public class HashBiMap<K, V> extends AbstractMap<K, V> implements Flippable<K, V
 		int h = indexFor(v)&mask;
 		Entry<K, V> entry = (Entry<K, V>) vTab[h];
 		while (entry != null) {
-			if (Objects.equals(v, entry.v)) {
+			if (Objects.equals(v, entry.value)) {
 				return entry;
 			}
 			entry = entry.valueNext;

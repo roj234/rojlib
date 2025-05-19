@@ -1,6 +1,7 @@
 package roj.http;
 
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 import org.jetbrains.annotations.UnmodifiableView;
 import roj.io.IOUtil;
 import roj.io.MBInputStream;
@@ -178,6 +179,8 @@ public final class HttpClient implements ChannelHandler {
 	public boolean isSuccess() { return state == SUCCESS; }
 	public boolean isDone() { return state >= FAIL; }
 
+	public @Nullable Throwable exception() {return ex;}
+
 	public synchronized ByteList bytes() throws IOException {
 		if (async) throw new IllegalStateException("async handler active");
 		if (is != null) throw new IllegalStateException("stream active");
@@ -263,6 +266,7 @@ public final class HttpClient implements ChannelHandler {
 	public synchronized void await(Consumer<HttpClient> o) throws IOException {
 		ensureOpen();
 		callback = o;
+		if (state >= HEAD) o.accept(this);
 	}
 
 	public void disconnect() throws IOException {

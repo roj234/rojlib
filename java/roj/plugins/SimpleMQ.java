@@ -6,7 +6,7 @@ import roj.concurrent.PacketBuffer;
 import roj.config.ConfigMaster;
 import roj.config.ParseException;
 import roj.config.data.CMap;
-import roj.http.WebSocketConnection;
+import roj.http.WebSocket;
 import roj.http.server.Content;
 import roj.http.server.Request;
 import roj.http.server.auto.*;
@@ -56,7 +56,7 @@ public class SimpleMQ extends Plugin {
 			Lock lock = worker.ch.channel().lock();
 			lock.lock();
 			try {
-				worker.close(WebSocketConnection.ERR_CLOSED, "插件卸载");
+				worker.sendClose(WebSocket.ERR_CLOSED, "插件卸载");
 				worker.ch.close();
 			} catch (Throwable e) {
 				e.printStackTrace();
@@ -71,7 +71,7 @@ public class SimpleMQ extends Plugin {
 	final ConcurrentHashMap<String, List<Worker>> subscribers = new ConcurrentHashMap<>();
 	final ConcurrentHashMap<String, DynByteBuf> dataCache = new ConcurrentHashMap<>();
 
-	final class Worker extends WebSocketConnection {
+	final class Worker extends WebSocket {
 		final PacketBuffer pb = new PacketBuffer(4);
 		final PermissionHolder user;
 
@@ -80,7 +80,7 @@ public class SimpleMQ extends Plugin {
 		@Override
 		public void channelOpened(ChannelCtx ctx) throws IOException {
 			System.out.println("channelopend");
-			send("computer info");
+			sendText("computer info");
 		}
 
 		@Override
@@ -109,13 +109,13 @@ public class SimpleMQ extends Plugin {
 		}
 
 		@Override
-		protected void onData(int ph, DynByteBuf in) throws IOException {
+		protected void onData(int frameType, DynByteBuf in) throws IOException {
 			CMap map;
 			try {
-				map = (ph == FRAME_TEXT ? ConfigMaster.JSON : ConfigMaster.MSGPACK).parse(in).asMap();
+				map = (frameType == FRAME_TEXT ? ConfigMaster.JSON : ConfigMaster.MSGPACK).parse(in).asMap();
 			} catch (IOException|ParseException e) {
 				getLogger().warn("{}的消息解析失败", e, ch.remoteAddress());
-				close(ERR_INVALID_DATA, "消息解析失败");
+				sendClose(ERR_INVALID_DATA, "消息解析失败");
 				return;
 			}
 
@@ -133,7 +133,7 @@ public class SimpleMQ extends Plugin {
 					}
 				}
 
-				send(success ? "true" : "false");
+				sendText(success ? "true" : "false");
 			}
 
 			eventId = map.getString("unsubscribe");
@@ -144,7 +144,7 @@ public class SimpleMQ extends Plugin {
 				if (event.isEmpty()) success = false;
 				else synchronized (event) {success = event.remove(this);}
 
-				send(success ? "true" : "false");
+				sendText(success ? "true" : "false");
 			}
 		}
 

@@ -1,6 +1,6 @@
 package roj.compiler.jpp.machine.windows;
 
-import roj.compiler.jpp.machine.CodeFile;
+import roj.compiler.jpp.machine.NativeExecutable;
 import roj.io.IOUtil;
 import roj.io.source.FileSource;
 import roj.io.source.Source;
@@ -14,7 +14,7 @@ import java.util.List;
  * @author Roj233
  * @since 2021/10/15 13:18
  */
-public class PEFile extends CodeFile {
+public class PEFile extends NativeExecutable {
 	long headerOff, headerLikeEndOffset;
 	DOSHeader dosHeader;
 	PEHeader peHeader;

@@ -15,7 +15,7 @@ import roj.util.ArrayCache;
 import java.io.IOException;
 import java.io.OutputStream;
 
-public class RangeEncoder extends RangeCoder {
+public sealed class RangeEncoder extends RangeCoder permits RangeEncoderToStream {
 	private static final int MOVE_REDUCING_BITS = 4;
 	private static final int BIT_PRICE_SHIFT_BITS = 4;
 

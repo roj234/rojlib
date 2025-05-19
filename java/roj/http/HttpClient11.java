@@ -14,29 +14,25 @@ final class HttpClient11 extends HttpRequest implements ChannelHandler {
 
 	private HttpHead response;
 
-	private boolean end;
-
 	HttpClient11() {}
 
-	// channelWrite加一个布尔值，表示写不出去了已经开始缓冲了，然后DynByteBuf加一个引用计数，就不需要复制了
+	// TODO channelWrite加一个布尔返回值，表示写不出去了已经开始缓冲了，然后DynByteBuf加一个引用计数，就不需要复制了
 	@Override
 	public void channelOpened(ChannelCtx ctx) throws IOException {
 		state = SEND_HEAD;
-		end = false;
 		response = null;
 
 		hCE.reset(ctx);
 		hTE.reset(ctx);
 
 		ByteList text = IOUtil.getSharedByteBuf().putAscii(method()).putAscii(" ");
-		_appendPath(text).putAscii(" HTTP/1.1\r\n");
-		Headers hdr = _getHeaders();
+		encodeQuery(text).putAscii(" HTTP/1.1\r\n");
+		Headers hdr = getHeaders();
 		hdr.encode(text);
 
 		ctx.channelWrite(text.putShort(0x0D0A));
 
-		_getBody();
-		if (_body instanceof DynByteBuf b) {
+		if (initBody() instanceof DynByteBuf b) {
 			ctx.channelWrite(b.slice());
 		} else {
 			/*if ("deflate".equalsIgnoreCase(hdr.get("content-encoding")))
@@ -50,17 +46,13 @@ final class HttpClient11 extends HttpRequest implements ChannelHandler {
 
 	@Override
 	public void channelTick(ChannelCtx ctx) throws IOException {
-		if (_body != null) {
-			Object body1 = _write(ctx, _body);
-			if (body1 == null) {
-				ctx.postEvent(hDeflate.OUT_FINISH);
-				ctx.postEvent(hTE.OUT_FINISH);
+		if (_body != null && !writeBody(ctx, _body)) {
+			ctx.postEvent(hDeflate.OUT_FINISH);
+			ctx.postEvent(hTE.OUT_FINISH);
 
-				if (_body instanceof AutoCloseable c)
-					IOUtil.closeSilently(c);
-			}
-
-			_body = body1;
+			if (_body instanceof AutoCloseable c)
+				IOUtil.closeSilently(c);
+			_body = null;
 		}
 	}
 
@@ -96,10 +88,12 @@ final class HttpClient11 extends HttpRequest implements ChannelHandler {
 					return;
 				}
 
-				if (method().equals("HEAD")) {state = IDLE;return;}
+				if (method().equals("HEAD")) {end(ctx);return;}
 
 				state = RECV_BODY;
-				ctx = hCE.apply(ctx, response, false, Long.MAX_VALUE);
+				long contentLength = response.getContentLength();
+				if (contentLength > responseBodyLimit) throw new IOException("多余"+(contentLength-responseBodyLimit)+"字节");
+				ctx = hCE.apply(ctx, response, (flag&SKIP_CE) != 0, responseBodyLimit);
 				ctx = hTE.apply(ctx, response, -1);
 				ctx.handler().channelRead(ctx, buf);
 				return;
@@ -114,8 +108,8 @@ final class HttpClient11 extends HttpRequest implements ChannelHandler {
 	private static void throwTrailerData(DynByteBuf buf) throws IOException {throw new IOException("多余的数据:"+buf.slice(Math.min(buf.readableBytes(), 128)));}
 
 	private void end(ChannelCtx ctx) throws IOException {
-		if (!end) {
-			end = true;
+		if (state != IDLE) {
+			state = IDLE;
 
 			Event event = new Event(DOWNLOAD_EOF).capture();
 			event.setData(true);
@@ -129,14 +123,13 @@ final class HttpClient11 extends HttpRequest implements ChannelHandler {
 				} catch (IOException ignored) {}
 			}
 		}
-		state = IDLE;
 	}
 
 	@Override
 	public void channelClosed(ChannelCtx ctx) throws IOException {
-		_close();
-		if (!end) {
-			end = true;
+		closeBody();
+		if (state != IDLE) {
+			state = IDLE;
 
 			Event event = new Event(DOWNLOAD_EOF).capture();
 			event.setData(false);
@@ -158,12 +151,12 @@ final class HttpClient11 extends HttpRequest implements ChannelHandler {
 	@Override
 	public void waitFor() throws InterruptedException {
 		synchronized (this) {
-			while (!end) { wait(); }
+			while (state != IDLE) { wait(); }
 		}
 	}
 
 	@Override
 	public HttpRequest clone() {
-		return _copyTo(new HttpClient11());
+		return copyTo(new HttpClient11());
 	}
 }

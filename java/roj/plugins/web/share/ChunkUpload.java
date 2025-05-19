@@ -135,7 +135,7 @@ public class ChunkUpload {
 		synchronized (tasks) {
 			task.id = taskIds.nextFalse(0);
 			taskIds.add(task.id);
-			tasks.putInt(task.id, task);
+			tasks.put(task.id, task);
 		}
 
 		return Content.json("{\"ok\":true,\"id\":\""+getId(task)+"\",\"fragment\":"+task.fragmentSize+",\"threads\":"+task.threads+"}");

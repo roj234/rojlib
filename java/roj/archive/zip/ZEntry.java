@@ -2,8 +2,8 @@ package roj.archive.zip;
 
 import roj.archive.ArchiveEntry;
 import roj.collect.RSegmentTree;
-import roj.crypt.CRC32s;
-import roj.text.DateParser;
+import roj.crypt.CRC32;
+import roj.text.DateTime;
 import roj.text.TextUtil;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
@@ -116,6 +116,9 @@ public class ZEntry implements RSegmentTree.Range, ArchiveEntry, Cloneable {
 	public final void setPrecisionAccessTime(FileTime t) { pAccTime = t == null ? 0 : fileTime2WinTime(t); mzFlag |= MZ_PrTime; }
 	public final void setPrecisionCreationTime(FileTime t) { pCreTime = t == null ? 0 : fileTime2WinTime(t); mzFlag |= MZ_PrTime; }
 	public final void setPrecisionModificationTime(FileTime t) { pModTime = t == null ? 0 : fileTime2WinTime(t); modTime = t == null ? 0 : java2DosTime(t.toMillis()); mzFlag |= MZ_PrTime; }
+
+	@Override
+	public int getWinAttributes() {return externalAttr;}
 
 	public final int getMethod() { return method; }
 	public final void setMethod(int m) { this.method = (char) m; }
@@ -302,7 +305,7 @@ public class ZEntry implements RSegmentTree.Range, ArchiveEntry, Cloneable {
 
 	private void readUnicodePath(ByteList buf, int len, ZipFile o) {
 		if(len >= 5) {
-			int crc = CRC32s.once(nameBytes, 0, nameBytes.length);
+			int crc = CRC32.crc32(nameBytes, 0, nameBytes.length);
 
 			buf.skipBytes(1);
 			int expectedCrc = buf.readIntLE();
@@ -326,7 +329,7 @@ public class ZEntry implements RSegmentTree.Range, ArchiveEntry, Cloneable {
 		int pos = buf.wIndex();
 		buf.wIndex(pos+2);
 
-		int crc = CRC32s.once(nameBytes, 0, nameBytes.length);
+		int crc = CRC32.crc32(nameBytes, 0, nameBytes.length);
 		buf.put(0)
 		   .putIntLE(crc)
 		   .putUTFData(name)
@@ -420,16 +423,16 @@ public class ZEntry implements RSegmentTree.Range, ArchiveEntry, Cloneable {
 	}
 
 	public static long dos2JavaTime(int dtime) {
-		long day = DateParser.daySinceUnixZero(((dtime >> 25) & 0x7f) + 1980, ((dtime >> 21) & 0x0f), (dtime >> 16) & 0x1f);
+		long day = DateTime.daySinceUnixZero(((dtime >> 25) & 0x7f) + 1980, ((dtime >> 21) & 0x0f), (dtime >> 16) & 0x1f);
 		return 86400000L * day + 3600_000L * ((dtime >> 11) & 0x1f) + 60_000L * ((dtime >> 5) & 0x3f) + 1000L * ((dtime << 1) & 0x3e);
 	}
 	public static int java2DosTime(long time) {
-		int[] arr = DateParser.parseGMT(time + TimeZone.getDefault().getOffset(time));
-		int year = arr[DateParser.YEAR] - 1980;
+		int[] arr = DateTime.of(time + TimeZone.getDefault().getOffset(time));
+		int year = arr[DateTime.YEAR] - 1980;
 		if (year < 0) {
 			return (1 << 21) | (1 << 16)/*ZipEntry.DOSTIME_BEFORE_1980*/;
 		}
-		return (year << 25) | (arr[DateParser.MONTH] << 21) | (arr[DateParser.DAY] << 16) | (arr[DateParser.HOUR] << 11) | (arr[DateParser.MINUTE] << 5) | (arr[DateParser.SECOND] >> 1);
+		return (year << 25) | (arr[DateTime.MONTH] << 21) | (arr[DateTime.DAY] << 16) | (arr[DateTime.HOUR] << 11) | (arr[DateTime.MINUTE] << 5) | (arr[DateTime.SECOND] >> 1);
 	}
 
 	@Override

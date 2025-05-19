@@ -7,7 +7,7 @@ import roj.archive.zip.ZipFile;
 import roj.asmx.launcher.EntryPointM;
 import roj.collect.MyHashSet;
 import roj.io.source.FileSource;
-import roj.text.Escape;
+import roj.text.URICoder;
 import roj.util.ByteList;
 
 import java.io.IOException;
@@ -124,7 +124,7 @@ public class PluginClassLoader extends ClassLoader {
 
 	@NotNull
 	private URL getUrl(String name) throws MalformedURLException {
-		return new URL("jar:file:/"+(desc.source instanceof FileSource fs ? fs.getFile().getAbsolutePath() : desc.fileName)+"!/"+Escape.encodeURI(name));
+		return new URL("jar:file:/"+(desc.source instanceof FileSource fs ? fs.getFile().getAbsolutePath() : desc.fileName)+"!/"+ URICoder.encodeURI(name));
 	}
 
 	@Override

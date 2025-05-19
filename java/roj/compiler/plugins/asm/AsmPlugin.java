@@ -5,6 +5,7 @@ import roj.asm.ClassNode;
 import roj.asm.MethodNode;
 import roj.asm.Opcodes;
 import roj.asm.type.Generic;
+import roj.asm.type.IType;
 import roj.asm.type.Type;
 import roj.collect.MyHashMap;
 import roj.compiler.api.InvokeHook;
@@ -96,15 +97,26 @@ public final class AsmPlugin extends InvokeHook {
 				// TODO delegation
 				//impl.modifier = Opcodes.ACC_PUBLIC;
 
+				Consumer<MethodWriter> writer;
 				try {
 					GlobalContextApi capi = (GlobalContextApi) ctx.classes;
 					capi.addSandboxWhitelist("roj.compiler.plugins.asm.WriterImpl", false);
-					((Consumer<MethodWriter>) capi.createSandboxInstance(newClass)).accept(null);
+					writer = (Consumer<MethodWriter>) capi.createSandboxInstance(newClass);
 				} catch (Throwable e) {
 					ctx.report(Kind.ERROR, "asm("+lambda+")还没实现喵");
+					return Expr.valueOf(true);
 				}
 
-				return Expr.valueOf(false);
+				return new Expr() {
+					@Override public String toString() {return "asmWriter("+writer+")";}
+
+					@Override public IType type() {return Type.primitive(Type.BOOLEAN);}
+					@Override public boolean isConstant() {return true;}
+					@Override public Object constVal() {return false;}
+
+					@Override public boolean hasFeature(Feature feature) {return feature == Feature.CONSTANT_WRITABLE;}
+					@Override public void write(MethodWriter cw, boolean noRet) {writer.accept(cw);}
+				};
 			case "inject":
 				if (!args.get(0).isConstant()) {
 					ctx.report(Kind.ERROR, "inject("+args+")的第一个参数必须是字符串常量");

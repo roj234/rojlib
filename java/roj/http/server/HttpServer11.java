@@ -47,7 +47,7 @@ public final class HttpServer11 extends PacketMerger implements PostSetting, Res
 		  .append(' ')
 		  .append(sendBytes)
 		  .append(" \"")
-		  .append(Tokenizer.addSlashes(req.header("user-agent")))
+		  .append(Tokenizer.escape(req.header("user-agent")))
 		  .append("\"[");
 		if (ch.channel().handler(hDeflate.ANCHOR) != null) sb.append('Z');
 		if (state == HANG_PRE) sb.append('A');

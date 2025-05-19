@@ -1,9 +1,11 @@
 package roj.asm.attr;
 
+import roj.asm.AsmCache;
 import roj.asm.cp.ConstantPool;
 import roj.asm.cp.CstClass;
 import roj.asm.cp.CstNameAndType;
 import roj.asm.type.Type;
+import roj.collect.SimpleList;
 import roj.util.DynByteBuf;
 
 import java.util.List;
@@ -23,8 +25,9 @@ public final class EnclosingMethod extends Attribute {
 			name = PREDEFINED;
 		} else {
 			name = method.name().str();
-			parameters = Type.methodDesc(method.rawDesc().str());
-			returnType = parameters.remove(parameters.size() - 1);
+			SimpleList<Type> in = AsmCache.getInstance().methodTypeTmp();
+			returnType = Type.methodDesc(method.rawDesc().str(), in);
+			parameters = new SimpleList<>(in);
 		}
 	}
 
@@ -41,9 +44,7 @@ public final class EnclosingMethod extends Attribute {
 		if (PREDEFINED == name) {
 			w.putShort(0);
 		} else {
-			parameters.add(returnType);
-			w.putShort(pool.getDescId(name, Type.toMethodDesc(parameters)));
-			parameters.remove(parameters.size() - 1);
+			w.putShort(pool.getDescId(name, Type.toMethodDesc(parameters, returnType)));
 		}
 	}
 

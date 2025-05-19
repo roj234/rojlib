@@ -46,9 +46,14 @@ public class LoopTask implements Task {
 			try {
 				task.execute();
 			} finally {
-				// 任务执行时间超过一个周期，在完成之后重新添加
-				if (U.getAndSetInt(this, STATE_OFFSET, 1) == 4)
-					sched.delay(this, interval);
+				while (true) {
+					state = this.state;
+					if (state < 0 || U.compareAndSwapInt(this, STATE_OFFSET, state, 1)) {
+						// 任务执行时间超过一个周期，在完成之后重新添加
+						if (state == 4) sched.delay(this, interval);
+						break;
+					}
+				}
 			}
 		}
 	}

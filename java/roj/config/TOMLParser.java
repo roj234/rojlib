@@ -71,7 +71,7 @@ public final class TOMLParser extends Parser {
 		if (root.size() > 0) map.put(CMap.CONFIG_TOPLEVEL, root);
 
 		o:
-		while (hasNext()) {
+		while (true) {
 			Word w = next();
 			switch (w.type()) {
 				case lBracket:
@@ -214,7 +214,7 @@ public final class TOMLParser extends Parser {
 		while (i < in.length()) {
 			char c = in.charAt(i++);
 			if (slash) {
-				i = _removeSlash(input, c, v, i);
+				i = unescapeChar(input, c, v, i);
 				slash = false;
 			} else {
 				if (end3 == c) {

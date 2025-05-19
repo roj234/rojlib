@@ -3,7 +3,7 @@ package roj.plugins.aiapi;
 import roj.config.ConfigMaster;
 import roj.config.auto.SerializerFactory;
 import roj.config.table.TableWriter;
-import roj.text.DateParser;
+import roj.text.DateTime;
 import roj.text.TextUtil;
 import roj.ui.EasyProgressBar;
 
@@ -27,7 +27,7 @@ public class TranslateTask {
 		Map<String, String> map = ConfigMaster.JSON.readObject(ser, new File("input.json"));
 
 		var out = TableWriter.csvWriterAppend("output.csv");
-		out.writeRow(Arrays.asList("text","translated","success", DateParser.toLocalTimeString(System.currentTimeMillis())));
+		out.writeRow(Arrays.asList("text","translated","success", DateTime.toLocalTimeString(System.currentTimeMillis())));
 
 		int finishedCount = recovery.readInt();
 		int i = finishedCount;

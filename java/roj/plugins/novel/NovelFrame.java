@@ -123,7 +123,7 @@ public class NovelFrame extends JFrame {
 			IntList tmp2 = new IntList();
 			tmp.clear();
 			int matches = novel_in.preg_match_callback(novel_regexp, m -> {
-				tmp.append(m.start()).append("@").append(Tokenizer.addSlashes(m.group())).append('\n');
+				tmp.append(m.start()).append("@").append(Tokenizer.escape(m.group())).append('\n');
 				tmp2.add(m.start());
 			});
 
@@ -459,7 +459,7 @@ public class NovelFrame extends JFrame {
 		List<Chapter> chapters = root.children = new SimpleList<>();
 
 		Chapter c = root;
-		c.name = DateParser.toLocalTimeString(System.currentTimeMillis());
+		c.name = DateTime.toLocalTimeString(System.currentTimeMillis());
 		CharList tmp = this.tmp;
 
 		Matcher m = novel_regexp.matcher(novel_in);
@@ -635,7 +635,9 @@ public class NovelFrame extends JFrame {
 
 			long total = (chapters.size() - 1) * chapters.size() / 2;
 
-			TaskPool pool = TaskPool.Common();
+			TaskPool pool = TaskPool.MaxThread(20, "ND-Worker");
+			pool.setRejectPolicy(TaskPool::waitPolicy);
+
 			SimpleList<IntMap.Entry<String>> list = new SimpleList<>();
 
 			AtomicReference<ScheduleTask> task = new AtomicReference<>();
@@ -644,6 +646,7 @@ public class NovelFrame extends JFrame {
 				progressStr.setText(finished + "/" + total);
 				if (finished.sum() == total) {
 					task.get().cancel();
+					pool.shutdown();
 					list.sort((o1, o2) -> Integer.compare(o2.getIntKey(), o1.getIntKey()));
 					errout.setText("相似度(仅记录超过50%) - 章节名称\n"+TextUtil.join(list, "\n"));
 					btnDeDupChapter.setEnabled(true);
@@ -1328,7 +1331,7 @@ public class NovelFrame extends JFrame {
             {
 
                 //---- presetRegexpInp ----
-                presetRegexpInp.setText("\u5e38\u7528|1|3\n(?:\u6b63\u6587\\s*)?\u7b2c(?:\\s+)?([\u2015\uff0d\\-\u2500\u2014\u58f9\u8d30\u53c1\u8086\u4f0d\u9646\u67d2\u634c\u7396\u4e00\u4e8c\u4e24\u4e09\u56db\u4e94\u516d\u4e03\u516b\u4e5d\u5341\u25cb\u3007\u96f6\u767e\u5343O0-9\uff10-\uff19 ]{1,12})(?:\\s+)?([\u7ae0\u5377])[ \u3000\\t]*(.*)$\n\u7b2c$1$2 $3\n\u7eaf\u4e2d\u6587|1|1\n(?<=[ \u3000\ue4c6\ue4c6\\t\\n])([0-9 \\x4e00-\\x9fa5\uff08\uff09\\(\\)\\[\\]]{1,15})[ \u3000\\t]*$\n$1\n\u786c\u56de\u8f66\u7b80\u6613\u4fee\u590d|0|0\n^([ \u3000\ue4c6\ue4c6\\t]+.+)\\r?\\n([^ \u3000\\t\\r\\n].+)$\n$1$2\n\u664b\u6c5f\u5e38\u7528|1|2\n\u7b2c$1\u7ae0 $2\n^[ \u3000\ue4c6\ue4c6\\t]*([0-9\u4e00\u4e8c\u4e09\u56db\u4e94\u516d\u4e03\u516b\u4e5d\u96f6]{1,5})[\uff0e.\u3001\u203b](.+)");
+                presetRegexpInp.setText("\u5e38\u7528|1|3\n\u6b63\u6587?\\s*\u7b2c\\s*([\u2015\uff0d\\-\u2500\u2014\u58f9\u8d30\u53c1\u8086\u4f0d\u9646\u67d2\u634c\u7396\u4e00\u4e8c\u4e24\u4e09\u56db\u4e94\u516d\u4e03\u516b\u4e5d\u5341\u25cb\u3007\u96f6\u767e\u5343O0-9\uff10-\uff19]{1,12})\\s*([\u7ae0\u5377])\\s*(.*)$\n\u7b2c$1$2 $3\n\u7eaf\u4e2d\u6587|1|1\n(?<=[ \u3000\ue4c6\ue4c6\\t\\n])([0-9 \\x4e00-\\x9fa5\uff08\uff09\\(\\)\\[\\]]{1,15})[ \u3000\\t]*$\n$1\n\u786c\u56de\u8f66\u7b80\u6613\u4fee\u590d|0|0\n^([ \u3000\ue4c6\ue4c6\\t]+.+)\\r?\\n([^ \u3000\\t\\r\\n].+)$\n$1$2\n\u664b\u6c5f\u5e38\u7528|1|2\n\u7b2c$1\u7ae0 $2\n^[ \u3000\ue4c6\ue4c6\\t]*([0-9\u4e00\u4e8c\u4e09\u56db\u4e94\u516d\u4e03\u516b\u4e5d\u96f6]{1,5})[\uff0e.\u3001\u203b](.+)");
                 scrollPane3.setViewportView(presetRegexpInp);
             }
             advancedMenuContentPane.add(scrollPane3);

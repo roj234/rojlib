@@ -19,7 +19,6 @@ import roj.util.DynByteBuf;
 
 import java.io.File;
 import java.io.FileInputStream;
-import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.nio.charset.Charset;
 import java.util.*;
@@ -50,6 +49,7 @@ public final class Project {
 	private final String resPrefix;
 	ZipOutput mappedWriter, unmappedWriter;
 	FMD.SignatureCache signatureCache;
+	final DependencyGraph dependencyGraph = new DependencyGraph();
 
 	public String getName() {return name;}
 	public File getRoot() {return root;}
@@ -75,9 +75,12 @@ public final class Project {
 		this.workspace = obj2;
 
 		this.variables = new MyHashMap<>(obj2.variables);
-		this.variables.put("name", name);
-		this.variables.put("version", version);
+		this.variables.put("project_name", name);
+		this.variables.put("project_version", version);
 		this.variables.putAll(config.variables);
+		/*for (var itr = this.variables.keySet().iterator(); itr.hasNext(); ) {
+			if (itr.next().startsWith("fmd:")) itr.remove();
+		}*/
 
 		this.binaryDepend = new SimpleList<>();
 		for (String depend : conf.binary_depend) {
@@ -189,11 +192,7 @@ public final class Project {
 			}
 
 			mappedWriter.setStream(relPath, () -> {
-				try {
-					return new FileInputStream(absolutePath);
-				} catch (FileNotFoundException e) {
-					throw new RuntimeException(e);
-				}
+				return new FileInputStream(absolutePath);
 			}, time);
 		} catch (IOException e) {
 			FMD.LOGGER.warn("资源文件{}复制失败", e, relPath);

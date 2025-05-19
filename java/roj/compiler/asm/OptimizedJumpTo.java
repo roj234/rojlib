@@ -12,17 +12,17 @@ import static roj.asm.Opcodes.*;
  * @author Roj234
  * @since 2024/2/25 0:17
  */
-final class JumpBlockAO extends JumpBlock {
-	private SolidBlock writeReplace;
+final class OptimizedJumpTo extends JumpTo {
+	private StaticSegment writeReplace;
 
-	public JumpBlockAO(byte code, Label target) { super(code, target); }
+	public OptimizedJumpTo(byte code, Label target) { super(code, target); }
 
 	@Override
 	@SuppressWarnings("fallthrough")
 	public boolean put(CodeWriter x, int segmentId) {
 		var to = (MethodWriter) x;
 		int bci = to.bci();
-		List<CodeBlock> codeBlocks = to.getCodeBlocks();
+		List<Segment> segments = to.getCodeBlocks();
 
 		if (writeReplace != null) return writeReplace.put(to, segmentId);
 		if (!target.isValid()) throw new IllegalStateException("target label is not valid: "+target);
@@ -35,21 +35,21 @@ final class JumpBlockAO extends JumpBlock {
 		}
 
 		while (target.getOffset() == 0 && target.getBlock() > 0) {
-			CodeBlock codeBlock = codeBlocks.get(target.getBlock());
-			if (!(codeBlock instanceof JumpBlockAO j) || !j.isTerminate()) break;
+			Segment segment = segments.get(target.getBlock());
+			if (!(segment instanceof OptimizedJumpTo j) || !j.isTerminate()) break;
 			target = j.target;
 		}
 
 		// if-goto-segment自动翻转
 		if (!isTerminate() &&
 			target.getOffset() == 0 && target.getBlock() == segmentId+2 &&
-			!(codeBlocks.get(segmentId+2) instanceof JumpBlock) &&
-			codeBlocks.get(segmentId+1) instanceof JumpBlock t &&
+			!(segments.get(segmentId+2) instanceof JumpTo) &&
+			segments.get(segmentId+1) instanceof JumpTo t &&
 			t.isTerminate()) {
 
 			target = t.target;
 			code = (byte) (IFEQ + ((code-IFEQ) ^ 1));
-			codeBlocks.set(segmentId+1, SolidBlock.EMPTY);
+			segments.set(segmentId+1, StaticSegment.EMPTY);
 		}
 
 		DynByteBuf o = to.bw;
@@ -94,13 +94,13 @@ final class JumpBlockAO extends JumpBlock {
 		}
 		return len != newLen;
 	}
-	private void doWriteReplace() {writeReplace = code < GOTO ? new SolidBlock(code >= IF_icmpeq ? POP2 : POP) : SolidBlock.EMPTY;}
+	private void doWriteReplace() {writeReplace = code < GOTO ? new StaticSegment(code >= IF_icmpeq ? POP2 : POP) : StaticSegment.EMPTY;}
 
 	@Override public final int length() { return writeReplace != null ? writeReplace.length() : super.length(); }
 
 	@Override
-	public CodeBlock move(AbstractCodeWriter to, int blockMoved, boolean clone) {
+	public Segment move(AbstractCodeWriter to, int blockMoved, boolean clone) {
 		Label rx = copyLabel(target, to, blockMoved, clone);
-		return clone?new JumpBlockAO(code,rx):this;
+		return clone?new OptimizedJumpTo(code,rx):this;
 	}
 }

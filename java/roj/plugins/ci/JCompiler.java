@@ -9,8 +9,8 @@ import roj.collect.SimpleList;
 import roj.reflect.ClassDefiner;
 import roj.reflect.Proxy;
 import roj.text.CharList;
-import roj.text.Escape;
 import roj.text.TextReader;
+import roj.text.URICoder;
 import roj.ui.Terminal;
 import roj.ui.Text;
 import roj.util.ByteList;
@@ -198,7 +198,7 @@ public final class JCompiler implements Compiler, DiagnosticListener<JavaFileObj
 		private final ByteList output;
 
 		MyJFO(String className, String basePath) throws URISyntaxException {
-			super(new URI("file://"+Escape.encodeURIComponent(basePath)+className.replace('.', '/')+".class"), Kind.CLASS);
+			super(new URI("file://"+ URICoder.encodeURIComponent(basePath)+className.replace('.', '/')+".class"), Kind.CLASS);
 			this.output = new ByteList();
 			this.name = className.replace('.', '/')+".class";
 		}

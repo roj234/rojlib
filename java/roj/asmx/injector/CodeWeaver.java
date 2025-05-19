@@ -1413,7 +1413,7 @@ public class CodeWeaver implements Transformer {
 					if (!s.retVal().isEmpty()) throw new WeaveException("VOID返回值不能使用"+MARKER_ReturnValue);
 					returnHookType = 0x100; // JUMP
 				} else if (!s.retVal().isEmpty()) {
-					returnHookType = ret.shiftedOpcode(ISTORE);
+					returnHookType = ret.getOpcode(ISTORE);
 					if (s.retVal().size() == 1 && s.retVal().get(0).bci() == 0) {
 						returnHookType |= 0x100; // JUMP
 					} else {
@@ -1440,10 +1440,10 @@ public class CodeWeaver implements Transformer {
 					Int2IntMap overwriteCheck = new Int2IntMap();
 
 					for (ToIntMap.Entry<InsnNode> entry : s.assignId.selfEntrySet()) {
-						overwriteCheck.put(entry.v, -1);
-						String name = entry.k.opName();
+						overwriteCheck.put(entry.value, -1);
+						String name = entry.getKey().opName();
 						if (name.charAt(0) == 'D' || name.charAt(0) == 'L')
-							overwriteCheck.put(entry.v+1, -2);
+							overwriteCheck.put(entry.value +1, -2);
 					}
 
 					// 备份参数，计算tail用到的参数id(已完成)，若修改过则暂存到新的变量中再恢复

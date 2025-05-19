@@ -25,7 +25,7 @@ public class I18n {
 
 				int i = line.indexOf('=');
 				String k = line.substring(0, i++);
-				map.put(k, line.charAt(i) == '"' ? Tokenizer.removeSlashes(line.substring(i+1, line.length()-1)) : line.substring(i));
+				map.put(k, line.charAt(i) == '"' ? Tokenizer.unescape(line.substring(i+1, line.length()-1)) : line.substring(i));
 			}
 		} catch (Exception e) {
 			e.printStackTrace();

@@ -23,28 +23,20 @@ public interface CVisitor extends Closeable {
 	default void valueTimestamp(long mills) { value(mills); }
 	default void valueTimestamp(long seconds, int nanos) {valueTimestamp(seconds * 1000 + nanos / 1_000_000);}
 
-	// 新API
-	default void valueUUID(long MSB, long LSB) {
-		valueList(2);
-		value(MSB);
-		value(LSB);
-		pop();
-	}
-
 	default boolean supportArray() {return false;}
-	default void value(byte[] ba) {
-		valueList(ba.length);
-		for (byte b : ba) value(b);
+	default void value(byte[] array) {
+		valueList(array.length);
+		for (byte b : array) value(b);
 		pop();
 	}
-	default void value(int[] ia) {
-		valueList(ia.length);
-		for (int i : ia) value(i);
+	default void value(int[] array) {
+		valueList(array.length);
+		for (int i : array) value(i);
 		pop();
 	}
-	default void value(long[] la) {
-		valueList(la.length);
-		for (long l : la) value(l);
+	default void value(long[] array) {
+		valueList(array.length);
+		for (long l : array) value(l);
 		pop();
 	}
 

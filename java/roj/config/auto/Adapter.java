@@ -52,6 +52,8 @@ abstract class Adapter {
 	private void une(AdaptContext ctx, String msg) { throw new IllegalArgumentException(this+"不支持的结构:"+msg+"【"+ctx.ref+"】"); }
 
 	public int fieldCount() { return 1; }
+	// TODO 20250531 如果未来哪天决定删除ObjectPool机制，可以把很多方法一起扬了，比如这个
+	public boolean isOptional() { return false; }
 	public int plusOptional(int fieldState, @Nullable MyBitSet fieldStateEx) { return fieldState; }
 	public boolean valueIsMap() { return getClass().getName().contains("GA$"); }
 
@@ -63,7 +65,8 @@ abstract class Adapter {
 	public void write(CVisitor c, Object o) {
 		if (o == null) c.valueNull();
 		else {
-			c.valueMap(fieldCount());
+			if (isOptional()) c.valueMap();
+			else c.valueMap(fieldCount());
 			writeMap(c, o);
 			c.pop();
 		}

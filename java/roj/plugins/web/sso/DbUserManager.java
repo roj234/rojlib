@@ -47,7 +47,7 @@ class DbUserManager implements UserManager {
 		//user.permissions = data.get("");
 
 		synchronized (this) {
-			users.putInt(user.id, user);
+			users.put(user.id, user);
 			userByName.put(user.name, user);
 		}
 

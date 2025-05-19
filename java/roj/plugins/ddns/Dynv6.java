@@ -4,7 +4,7 @@ import roj.collect.MyHashMap;
 import roj.config.data.CMap;
 import roj.io.IOUtil;
 import roj.text.CharList;
-import roj.text.Escape;
+import roj.text.URICoder;
 
 import java.io.InputStream;
 import java.net.InetAddress;
@@ -44,7 +44,7 @@ final class Dynv6 implements DDNSService {
 			addr1 = addr[1];
 			if (addr1 != null && !addr1.equals(record.v6Addr)) {
 				record.v6Addr = addr1;
-				sb.append("&ipv6=").append(Escape.encodeURIComponent("["+addr1.getHostAddress()+"]")).append("&ipv6prefix=auto");
+				sb.append("&ipv6=").append(URICoder.encodeURIComponent("["+addr1.getHostAddress()+"]")).append("&ipv6prefix=auto");
 			}
 
 			try {

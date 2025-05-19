@@ -16,8 +16,8 @@ import roj.net.Event;
 import roj.net.MyChannel;
 import roj.net.handler.PacketMerger;
 import roj.text.CharList;
-import roj.text.Escape;
 import roj.text.FastCharset;
+import roj.text.URICoder;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
 import roj.util.Helpers;
@@ -54,7 +54,7 @@ public final class Request extends Headers {
 		this.action = action;
 		this.version = version;
 		try {
-			this.path = initPath = IOUtil.safePath(Escape.decodeURI(path));
+			this.path = initPath = IOUtil.safePath(URICoder.decodeURI(path));
 			this.query = query.isEmpty() ? "" : query;
 		} catch (MalformedURLException e) {
 			throw IllegalRequestException.badRequest(e.getMessage());
@@ -196,7 +196,7 @@ public final class Request extends Headers {
 					if (charset != StandardCharsets.UTF_8) {
 						var fc = FastCharset.getInstance(charset);
 						if (fc == null) throw new FastFailException("不支持的字符集"+charset);
-						Escape.CHARSET.set(fc);
+						URICoder.CHARSET.set(fc);
 					}
 
 					// 处理加号这种遗留行为
@@ -245,7 +245,7 @@ public final class Request extends Headers {
 			} catch (Exception e) {
 				throw IllegalRequestException.badRequest(e.getMessage());
 			} finally {
-				Escape.CHARSET.remove();
+				URICoder.CHARSET.remove();
 			}
 		}
 		return bodyData == null ? Collections.emptyMap() : Helpers.cast(bodyData);
@@ -380,7 +380,7 @@ public final class Request extends Headers {
 		}
 
 		CharList sb = new CharList().append("Basic realm=\"");
-		Tokenizer.addSlashes(sb, Escape.encodeURI(message));
+		Tokenizer.escape(sb, URICoder.encodeURI(message));
 		responseHeader.put("www-authenticate", sb.append("\"").toStringAndFree());
 
 		throw new IllegalRequestException(401);

@@ -402,7 +402,7 @@ public class H2Connection implements ChannelHandler {
 		stream.receiveWindow = localSetting.initial_window_size;
 		if (stream.headerSize == 0)
 			stream.headerSize = localSetting.max_header_list_size < 0 ? 32767 : localSetting.max_header_list_size;
-		streams.putInt(stream.id, stream);
+		streams.put(stream.id, stream);
 	}
 	private void checkGoaway() throws IOException {
 		if ((flag&(FLAG_GOAWAY_SENT|FLAG_GOAWAY_RECEIVED)) == 0) return;

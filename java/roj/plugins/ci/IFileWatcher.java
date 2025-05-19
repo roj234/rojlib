@@ -11,6 +11,10 @@ import java.util.Set;
 class IFileWatcher {
 	public static final int ID_RES = 0, ID_SRC = 1, ID_LIB = 2;
 
+	/**
+	 * null means overflow
+	 * contains deleted files!
+	 */
 	public Set<String> getModified(Project proj, int id) {return Collections.singleton(null);}
 	public void add(Project proj) throws IOException {}
 	public void remove(Project project) {}

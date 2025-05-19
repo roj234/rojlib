@@ -51,7 +51,7 @@ public class ChatManager extends Plugin {
 		T.name = "测试群聊";
 		T.desc = "测试JSON数据\n<I>调试模式已经开启!!</I>\nPowered by Async/2.1";
 		T.face = "/chat/user/head/1000000";
-		chatters.putInt(T.id, T);
+		chatters.put(T.id, T);
 		testGroup = T;
 
 		registerRoute("chat", new OKRouter().register(this).addPrefixDelegation("ui", new ZipRouter(new File(getDataFolder(), "webui.zip"))), "PermissionManager");
@@ -74,7 +74,7 @@ public class ChatManager extends Plugin {
 		A.face = "/chat/user/head/"+A.id;
 
 		synchronized (chatters) {
-			chatters.putInt(A.id, A);
+			chatters.put(A.id, A);
 			testGroup.joinGroup(A);
 		}
 
@@ -234,7 +234,7 @@ public class ChatManager extends Plugin {
 		return Content.json("{\"ok\":1}");
 	}
 
-	private static Content error(String s) {return Content.json("{\"ok\":0,\"err\":\""+Tokenizer.addSlashes(s)+"\"}");}
+	private static Content error(String s) {return Content.json("{\"ok\":0,\"err\":\""+Tokenizer.escape(s)+"\"}");}
 
 
 	public ChatSubject getSubject(int id) {

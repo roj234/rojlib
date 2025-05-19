@@ -114,14 +114,14 @@ final class ZCKiller {
 	List<Cipher> find(TaskExecutor th) {
 		var bar = progress = new EasyProgressBar("进度");
 
-		bar.set("进度: Z-创建");
+		bar.setTitle("进度: Z-创建");
 		Zreduction zr = new Zreduction(keystream);
 		if(keystream.length > Solver.MIN_CONTIGUOUS_PLAIN_LENGTH) {
-			bar.set("进度: Z-筛选");
+			bar.setTitle("进度: Z-筛选");
 			zr.filter();
 		}
 
-		bar.set("进度: Z-生成");
+		bar.setTitle("进度: Z-生成");
 		zr.generate();
 
 		int zIndex = zr.getIndex();

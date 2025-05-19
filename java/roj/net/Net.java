@@ -8,8 +8,8 @@ import roj.net.handler.Socks5Client;
 import roj.reflect.Bypass;
 import roj.reflect.Java22Workaround;
 import roj.text.CharList;
-import roj.text.Escape;
 import roj.text.TextUtil;
+import roj.text.URICoder;
 import roj.text.logging.Logger;
 import roj.util.NativeException;
 import roj.util.OS;
@@ -187,7 +187,7 @@ public final class Net {
 	// endregion
 
 	public static URI socks5(InetSocketAddress server) {return URI.create("socks5://"+server);}
-	public static URI socks5(InetSocketAddress server, String username, String password) {return URI.create("socks5://"+ Escape.encodeURIComponent(username)+":"+Escape.encodeURIComponent(password)+"@"+server);}
+	public static URI socks5(InetSocketAddress server, String username, String password) {return URI.create("socks5://"+ URICoder.encodeURIComponent(username)+":"+ URICoder.encodeURIComponent(password)+"@"+server);}
 
 	public static InetSocketAddress applyProxy(@Nullable URI proxy, InetSocketAddress originalAddr, MyChannel ch) throws IOException {
 		if (proxy == null) return originalAddr;
@@ -199,10 +199,10 @@ public final class Net {
 				if (info != null) {
 					int i = info.indexOf(':');
 					if (i < 0) {
-						user = Escape.decodeURI(info);
+						user = URICoder.decodeURI(info);
 					} else {
-						user = Escape.decodeURI(info.substring(0, i));
-						pass = Escape.decodeURI(info.substring(i+1));
+						user = URICoder.decodeURI(info.substring(0, i));
+						pass = URICoder.decodeURI(info.substring(i+1));
 					}
 				}
 				ch.addFirst("@proxy", new Socks5Client(originalAddr, user, pass));

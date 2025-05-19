@@ -25,7 +25,7 @@ public class OptionParser {
 
 	private static void add(String s, List<Word> words, int i) throws ParseException {
 		if (s.startsWith("\"")) {
-			words.add(new Word().init(Word.STRING, i, Tokenizer.removeSlashes(s)));
+			words.add(new Word().init(Word.STRING, i, Tokenizer.unescape(s)));
 		} else {
 			int number = TextUtil.isNumber(s);
 			if (number == 0) {

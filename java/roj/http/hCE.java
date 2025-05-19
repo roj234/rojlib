@@ -1,6 +1,6 @@
 package roj.http;
 
-import roj.crypt.CRC32s;
+import roj.crypt.CRC32;
 import roj.net.ChannelCtx;
 import roj.net.ChannelHandler;
 import roj.net.Event;
@@ -93,7 +93,7 @@ public final class hCE implements ChannelHandler {
 			}
 		} else if (event.id.equals(hTE.IN_END) || event.id.equals(MyChannel.IN_EOF)) {
 			if (state == END) return;
-			if (exactLimit && 0 != readLimit) throw new EOFException("预期额外"+readLimit+"字节 ");
+			if (exactLimit && 0 != readLimit) throw new EOFException("预期额外"+readLimit+"字节");
 			if (state != IDENTITY) throw new EOFException(event.id);
 			end(ctx);
 		}
@@ -220,7 +220,7 @@ public final class hCE implements ChannelHandler {
 
 		// header CRC
 		if ((flg & FHCRC) != 0) {
-			int v = CRC32s.once(buf, rPos, buf.rIndex - rPos)&0xFFFF;
+			int v = CRC32.crc32(buf, rPos, buf.rIndex - rPos)&0xFFFF;
 			if (buf.readUShortLE() != v) throw new ZipException("Corrupt GZIP header");
 			n += 2;
 		}

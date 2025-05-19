@@ -74,7 +74,7 @@ public interface Unaligned {
 	int ARRAY_INT_INDEX_SCALE = 4;
 	int ARRAY_LONG_INDEX_SCALE = 8;
 	int ARRAY_FLOAT_INDEX_SCALE = 4;
-	int ARRAY_DOuBLE_INDEX_SCALE = 8;
+	int ARRAY_DOUBLE_INDEX_SCALE = 8;
 	/**
 	 * The value of {@code arrayIndexScale(Object[].class)}
 	 */
@@ -89,9 +89,10 @@ public interface Unaligned {
 	Unaligned U = init();
 	private static Unaligned init() {
 		if (ReflectionUtils.JAVA_VERSION > 8) {
-			try {
-				byte[] ref = IOUtil.getResource("roj/reflect/Unaligned$.class", Unaligned.class);
-				if (ref.length != 8776) throw new AssertionError("data corrupt");
+			try (var in = Unaligned.class.getClassLoader().getResourceAsStream("roj/reflect/Unaligned$.class")) {
+				byte[] ref = new byte[8776];
+				IOUtil.readFully(in, ref);
+				if (in.read() >= 0) throw new AssertionError("data corrupt");
 				if (ReflectionUtils.BIG_ENDIAN) {
 					for (int i = 3804; i < 3804 + 10 * 12; i += 10) {
 						ref[i] = (byte) (ref[i] == 'B' ? 'L' : 'B');

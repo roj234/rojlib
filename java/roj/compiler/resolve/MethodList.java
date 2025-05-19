@@ -153,10 +153,10 @@ final class MethodList extends ComponentList {
 						}
 
 						argType = parsed.type();
-						fillArguments.putInt(i, parsed);
+						fillArguments.put(i, parsed);
 					} else {
 						// 使用参数调用
-						fillArguments.putInt(i, paramName);
+						fillArguments.put(i, paramName);
 					}
 					myParam.add(argType);
 				}

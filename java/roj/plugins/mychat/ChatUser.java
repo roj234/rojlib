@@ -5,7 +5,7 @@ import roj.collect.RingBuffer;
 import roj.config.serial.CRawString;
 import roj.config.serial.ToJson;
 import roj.http.server.Request;
-import roj.text.DateParser;
+import roj.text.DateTime;
 import roj.util.ByteList;
 
 import java.util.concurrent.atomic.AtomicInteger;
@@ -33,7 +33,7 @@ final class ChatUser extends ChatSubject {
 				worker.sendExternalLogout("您已在他处登录<br />" +
 						"IP: " + req.connection().remoteAddress() + "<br />" +
 						"UA: " + req.header("User-Agent") + "<br />" +
-						"时间: " + DateParser.toLocalTimeString(System.currentTimeMillis()));
+						"时间: " + DateTime.toLocalTimeString(System.currentTimeMillis()));
 			}
 			worker = w;
 		}

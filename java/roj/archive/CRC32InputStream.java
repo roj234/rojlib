@@ -1,7 +1,7 @@
 package roj.archive;
 
 import org.jetbrains.annotations.NotNull;
-import roj.crypt.CRC32s;
+import roj.crypt.CRC32;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -14,7 +14,7 @@ import java.util.zip.ZipException;
 public final class CRC32InputStream extends InputStream {
 	private final InputStream in;
 	private final int except;
-	private int crc = CRC32s.INIT_CRC;
+	private int crc = CRC32.initial;
 
 	public CRC32InputStream(InputStream in, int except) {
 		this.in = in;
@@ -26,20 +26,20 @@ public final class CRC32InputStream extends InputStream {
 
 	public int read() throws IOException {
 		int b = in.read();
-		if (b >= 0) crc = CRC32s.update(crc, b);
+		if (b >= 0) crc = CRC32.update(crc, b);
 		else check();
 		return b;
 	}
 
 	public int read(@NotNull byte[] b, int off, int len) throws IOException {
 		len = in.read(b, off, len);
-		if (len >= 0) crc = CRC32s.update(crc, b, off, len);
+		if (len >= 0) crc = CRC32.update(crc, b, off, len);
 		else check();
 		return len;
 	}
 
 	private void check() throws ZipException {
-		crc = CRC32s.retVal(crc);
+		crc = CRC32.finish(crc);
 		if (except != crc) throw new ZipException("CRC32校验错误: except="+Integer.toHexString(except)+", read="+Integer.toHexString(crc));
 	}
 }

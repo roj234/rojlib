@@ -98,7 +98,7 @@ public class GlobalContext implements LavaFeatures {
 					if (value instanceof ClassNode c) return c;
 
 					clz = ((Library) value).get(name);
-					clz = onClassLoaded(entry.k, clz);
+					clz = onClassLoaded(entry.getKey(), clz);
 					entry.setValue(clz);
 				}
 				return clz;
@@ -453,10 +453,10 @@ public class GlobalContext implements LavaFeatures {
 	}
 	//endregion
 
-	public synchronized void addCompileUnit(CompileUnit unit, boolean generated) {
+	public synchronized void addCompileUnit(CompileUnit unit, boolean needLexicalParse) {
 		CompileUnit prev = ctx.putIfAbsent(unit.name(), unit);
 		if (prev != null) throw new IllegalStateException("重复的编译单位: "+unit.name());
-		if (generated) generatedCUs.add(unit);
+		if (needLexicalParse) generatedCUs.add(unit);
 	}
 	public void addGeneratedCompileUnits(List<CompileUnit> ctxs) {
 		ctxs.addAll(generatedCUs);

@@ -13,9 +13,9 @@ import roj.http.server.auto.*;
 import roj.io.IOUtil;
 import roj.plugin.Plugin;
 import roj.text.CharList;
-import roj.text.DateParser;
-import roj.text.Escape;
+import roj.text.DateTime;
 import roj.text.TextUtil;
+import roj.text.URICoder;
 import roj.ui.Argument;
 import roj.ui.Terminal;
 import roj.util.ByteList;
@@ -181,9 +181,9 @@ public class SSOPlugin extends Plugin {
 			 System.out.println("已绑定OTP: "+(u.totpKey != null));
 			 System.out.println("用户组: "+u.groupName);
 			 System.out.println("密码错误次数: "+u.loginAttempt);
-			 System.out.println("上次登录: "+DateParser.toLocalTimeString(u.loginTime));
+			 System.out.println("上次登录: "+ DateTime.toLocalTimeString(u.loginTime));
 			 System.out.println("登录IP: "+u.loginAddr);
-			 System.out.println("注册时间: "+DateParser.toLocalTimeString(u.registerTime));
+			 System.out.println("注册时间: "+ DateTime.toLocalTimeString(u.registerTime));
 			 System.out.println("注册IP: "+u.registerAddr);
 		 })))
 		 .then(literal("suspend").then(argument("用户名", userNameList).then(argument("timeout", Argument.number(30, Integer.MAX_VALUE)).executes(ctx -> {
@@ -194,7 +194,7 @@ public class SSOPlugin extends Plugin {
 			 u.suspendTimer = System.currentTimeMillis() + ctx.argument("timeout", Integer.class)*1000L;
 			 u.loginAttempt = 99;
 			 u.tokenSeq++;
-			 System.out.println("账户已锁定至"+DateParser.toLocalTimeString(u.suspendTimer));
+			 System.out.println("账户已锁定至"+ DateTime.toLocalTimeString(u.suspendTimer));
 		 }))))
 		 .then(literal("unsuspend").then(argument("用户名", userNameList).executes(ctx -> {
 			 User u = users.getUserByName(ctx.argument("用户名", String.class));
@@ -301,7 +301,7 @@ public class SSOPlugin extends Plugin {
 		var group = groups.get("guest");
 		if (group != null && group.has(permissionNode)) return null;
 
-		return Content.redirect(req, "/"+sitePath+"?return="+Escape.encodeURIComponent(req.getURL())+postfix);
+		return Content.redirect(req, "/"+sitePath+"?return="+ URICoder.encodeURIComponent(req.getURL())+postfix);
 	}
 
 	//region Request handler
@@ -309,12 +309,12 @@ public class SSOPlugin extends Plugin {
 	@Interceptor("login")
 	public String checkLogin(Request req) {
 		User u = (User) req.threadLocal().get("xsso:user");
-		return "{\"ok\":true,\"name\":\""+Tokenizer.addSlashes(u.name)+"\",\"token\":\""+makeToken(u, 'A', OPENAPI_TOKEN_TTL, LocalData.get(req))+"\"}";
+		return "{\"ok\":true,\"name\":\""+Tokenizer.escape(u.name)+"\",\"token\":\""+makeToken(u, 'A', OPENAPI_TOKEN_TTL, LocalData.get(req))+"\"}";
 	}
 
 	@GET
 	@Mime("text/javascript")
-	public String commonJs(Request req) {req.responseHeader().put("cache-control", "max-age=86400");return "const siteName=\""+(siteName != null ? Tokenizer.addSlashes(siteName) : "X-SSO")+"\";";}
+	public String commonJs(Request req) {req.responseHeader().put("cache-control", "max-age=86400");return "const siteName=\""+(siteName != null ? Tokenizer.escape(siteName) : "X-SSO")+"\";";}
 
 	@GET
 	public void logout(Request req, ResponseHeader rh) {

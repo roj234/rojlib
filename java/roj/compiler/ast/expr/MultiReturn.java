@@ -23,7 +23,7 @@ import static roj.compiler.ast.GeneratorUtil.RETURNSTACK_TYPE;
  */
 final class MultiReturn extends Expr {
 	private final List<Expr> values;
-	private MyBitSet _callUnsafe;
+	private MyBitSet unsafeCall;
 	private Generic exactType;
 
 	public MultiReturn(List<Expr> values) {this.values = values;}
@@ -34,13 +34,13 @@ final class MultiReturn extends Expr {
 	public Expr resolve(LocalContext ctx) throws ResolveException {
 		if (values.size() == 0 || values.size() > 255) ctx.report(this, Kind.ERROR, "泛型过长："+values.size());
 
-		_callUnsafe = new MyBitSet(values.size());
-
 		for (int i = 0; i < values.size(); i++) {
 			Expr node = values.get(i).resolve(ctx);
 			values.set(i, node);
 			if (!(node instanceof LocalVariable) && !node.isConstant()) {
-				_callUnsafe.add(i);
+				if (unsafeCall == null)
+					unsafeCall = new MyBitSet(values.size());
+				unsafeCall.add(i);
 				ctx.report(this, Kind.WARNING, "multiReturn.sideEffect");
 			}
 
@@ -66,8 +66,18 @@ final class MultiReturn extends Expr {
 
 	@Override
 	public void write(MethodWriter cw, @Nullable TypeCast.Cast returnType) {
-		Variable[] varTmp = new Variable[_callUnsafe.size()];
 		var ctx = LocalContext.get();
+
+		if (unsafeCall != null) for (var itr = unsafeCall.iterator(); itr.hasNext(); ) {
+			int i = itr.nextInt();
+
+			Expr expr = values.get(i);
+			Variable variable = ctx.bp.tempVar(expr.type());
+			expr.write(cw);
+			cw.store(variable);
+
+			values.set(i, new LocalVariable(variable));
+		}
 
 		cw.ldc(exactType.children.hashCode());
 		cw.invokeS(RETURNSTACK_TYPE, "get", "(I)L"+RETURNSTACK_TYPE+";");
@@ -75,23 +85,10 @@ final class MultiReturn extends Expr {
 			var node = values.get(i);
 			var type = exactType.children.get(i);
 			node.write(cw, ctx.castTo(node.type(), type, 0));
-			cw.invokeV(RETURNSTACK_TYPE, "put", "(" + (type.isPrimitive() ? (char) type.rawType().type : "Ljava/lang/Object;") + ")L"+RETURNSTACK_TYPE+";");
+			cw.invokeV(RETURNSTACK_TYPE, "put", "("+(type.isPrimitive() ? (char) type.rawType().type : "Ljava/lang/Object;")+")L"+RETURNSTACK_TYPE+";");
 		}
 	}
 
 	@Override
 	public void write(MethodWriter cw, boolean noRet) {throw new ResolveException("未预料的情况");}
-
-	public int capacity() {
-		int cap = 0;
-		for (Expr value : values) {
-			switch (TypeCast.getDataCap(value.type().getActualType())) {
-				case 0, 1 -> cap += 1;
-				case 2, 3 -> cap += 2;
-				case 4, 6 -> cap += 4;
-				case 5, 7 -> cap += 8;
-			}
-		}
-		return cap;
-	}
 }

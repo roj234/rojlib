@@ -1,7 +1,7 @@
 package roj.http.server;
 
 import roj.http.HttpUtil;
-import roj.http.WebSocketConnection;
+import roj.http.WebSocket;
 import roj.io.IOUtil;
 import roj.text.TextUtil;
 
@@ -15,7 +15,7 @@ import java.util.function.Function;
  */
 final class WebSocketResponse implements RequestFinishHandler {
 	static final Set<String> EMPTY_PROTOCOL = Collections.singleton("");
-	static Content websocket(Request req, Function<Request, WebSocketConnection> newHandler, Set<String> protocols) {
+	static Content websocket(Request req, Function<Request, WebSocket> newHandler, Set<String> protocols) {
 		var rh = req.server();
 
 		String ver = req.header("sec-websocket-version");
@@ -52,10 +52,10 @@ final class WebSocketResponse implements RequestFinishHandler {
 		return null;
 	}
 
-	private final Function<Request, WebSocketConnection> newHandler;
+	private final Function<Request, WebSocket> newHandler;
 	private final Request req;
 	private final boolean zip;
-	private WebSocketResponse(Function<Request, WebSocketConnection> handler, Request req, boolean zip) {
+	private WebSocketResponse(Function<Request, WebSocket> handler, Request req, boolean zip) {
 		newHandler = handler;
 		this.req = req;
 		this.zip = zip;
@@ -63,7 +63,7 @@ final class WebSocketResponse implements RequestFinishHandler {
 
 	@Override
 	public boolean onRequestFinish(ResponseHeader tcp, boolean success) {
-		WebSocketConnection h;
+		WebSocket h;
 		if (!success || (h = newHandler.apply(req)) == null) return false;
 		if (zip) h.enableZip();
 		tcp.connection().addLast("WS-Handler", h);

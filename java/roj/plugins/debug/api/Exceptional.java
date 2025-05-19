@@ -1,4 +1,4 @@
-package roj.plugins.coredump;
+package roj.plugins.debug.api;
 
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;

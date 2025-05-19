@@ -18,8 +18,9 @@ import roj.gui.TreeBuilder;
 import roj.io.CorruptedInputException;
 import roj.io.FastFailException;
 import roj.io.IOUtil;
-import roj.text.Escape;
+import roj.io.source.FileSource;
 import roj.text.TextUtil;
+import roj.text.URICoder;
 import roj.text.logging.Logger;
 import roj.ui.EasyProgressBar;
 import roj.util.Helpers;
@@ -35,13 +36,20 @@ import java.awt.dnd.DropTargetAdapter;
 import java.awt.dnd.DropTargetDropEvent;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
-import java.io.*;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.IOException;
+import java.io.InputStream;
 import java.nio.charset.Charset;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.attribute.BasicFileAttributeView;
 import java.util.Arrays;
 import java.util.List;
 import java.util.function.BiConsumer;
+
+import static roj.archive.qz.WinAttributes.FILE_ATTRIBUTE_NORMAL;
+import static roj.archive.qz.WinAttributes.FILE_ATTRIBUTE_REPARSE_POINT;
 
 /**
  * @author Roj234
@@ -211,15 +219,22 @@ public class UnarchiverUI extends JFrame {
 		if (uiStoreCTime.isSelected()) storeFlag |= 4;
 		if (uiStoreAnti.isSelected())  storeFlag |= 8;
 		if (uiStoreAttr.isSelected())  storeFlag |= 16;
+		if (bFollowLink.isSelected())  storeFlag |= 32;
 
 		int storeFlag1 = storeFlag;
 		TrieTreeSet javacSb = set;
 		BiConsumer<ArchiveEntry, InputStream> cb = (entry, in) -> {
 			if (javacSb == null || javacSb.strStartsWithThis(entry.getName())) {
 				String name = entry.getName();
-				if (uiPathFilter.isSelected()) name = Escape.escapeFilePath(IOUtil.safePath(name));
+				if (uiPathFilter.isSelected()) name = URICoder.escapeFilePath(IOUtil.safePath(name));
 
 				File file1 = new File(basePath, name);
+
+				if (entry.isDirectory()) {
+					file1.mkdirs();
+					return;
+				}
+
 				int ord = 0;
 				loop:
 				while (file1.exists()) {
@@ -234,12 +249,20 @@ public class UnarchiverUI extends JFrame {
 
 				file1.getParentFile().mkdirs();
 				try {
-					IOUtil.createSparseFile(file1, entry.getSize());
-					assert in.available() == Math.min(entry.getSize(), Integer.MAX_VALUE);
-					try (var out = new FileOutputStream(file1)) {
-						QZArchiver.copyStreamWithProgress(in, out, bar);
+					if ((storeFlag1&32) != 0 && (entry.getWinAttributes()&FILE_ATTRIBUTE_REPARSE_POINT) != 0) {
+						if ((entry.getWinAttributes()&FILE_ATTRIBUTE_NORMAL) != 0) {
+							Files.createLink(file1.toPath(), Path.of(basePath.getAbsolutePath()+File.separatorChar+IOUtil.readUTF(in)));
+						} else {
+							Files.createSymbolicLink(file1.toPath(), Path.of(IOUtil.readUTF(in)));
+						}
+					} else {
+						IOUtil.createSparseFile(file1, entry.getSize());
+						assert in.available() == Math.min(entry.getSize(), Integer.MAX_VALUE);
+						try (var out = new FileSource(file1)) {
+							QZArchiver.copyStreamWithProgress(in, out, bar);
+						}
+						assert file1.length() == entry.getSize();
 					}
-					assert file1.length() == entry.getSize();
 
 					if ((storeFlag1&7) != 0) {
 						var view = Files.getFileAttributeView(file1.toPath(), BasicFileAttributeView.class);
@@ -310,7 +333,7 @@ public class UnarchiverUI extends JFrame {
 
 				if ((storeFlag&8) != 0 && entry.isAntiItem()) {
 					String name = entry.getName();
-					if (uiPathFilter.isSelected()) name = Escape.escapeFilePath(IOUtil.safePath(name));
+					if (uiPathFilter.isSelected()) name = URICoder.escapeFilePath(IOUtil.safePath(name));
 
 					File file1 = new File(basePath, name);
 					try {
@@ -363,6 +386,7 @@ public class UnarchiverUI extends JFrame {
         uiStoreATime = new JCheckBox();
         uiStoreAttr = new JCheckBox();
         uiStoreAnti = new JCheckBox();
+        bFollowLink = new JCheckBox();
         progressBar1 = new JProgressBar();
         uiPathFilter = new JCheckBox();
         var scrollPane2 = new JScrollPane();
@@ -372,7 +396,7 @@ public class UnarchiverUI extends JFrame {
         uiCharset = new JTextField();
 
         //======== this ========
-        setTitle("Roj234 Unarchiver 1.2");
+        setTitle("Roj234 Unarchiver 1.3");
         var contentPane = getContentPane();
         contentPane.setLayout(null);
 
@@ -442,12 +466,17 @@ public class UnarchiverUI extends JFrame {
         uiStoreAttr.setText("DOS\u5c5e\u6027");
         uiStoreAttr.setEnabled(false);
         contentPane.add(uiStoreAttr);
-        uiStoreAttr.setBounds(new Rectangle(new Point(315, 90), uiStoreAttr.getPreferredSize()));
+        uiStoreAttr.setBounds(new Rectangle(new Point(210, 90), uiStoreAttr.getPreferredSize()));
 
         //---- uiStoreAnti ----
         uiStoreAnti.setText("\u5220\u9664\u6587\u4ef6");
         contentPane.add(uiStoreAnti);
         uiStoreAnti.setBounds(new Rectangle(new Point(315, 110), uiStoreAnti.getPreferredSize()));
+
+        //---- bFollowLink ----
+        bFollowLink.setText("\u8f6f\u786c\u94fe\u63a5");
+        contentPane.add(bFollowLink);
+        bFollowLink.setBounds(new Rectangle(new Point(315, 90), bFollowLink.getPreferredSize()));
 
         //---- progressBar1 ----
         progressBar1.setMaximum(10000);
@@ -499,6 +528,7 @@ public class UnarchiverUI extends JFrame {
     private JCheckBox uiStoreATime;
     private JCheckBox uiStoreAttr;
     private JCheckBox uiStoreAnti;
+    private JCheckBox bFollowLink;
     private JProgressBar progressBar1;
     private JCheckBox uiPathFilter;
     private JTextArea uiPasswords;

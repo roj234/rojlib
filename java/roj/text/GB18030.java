@@ -172,7 +172,7 @@ final class GB18030 extends FastCharset {
 
 		if (this == EXCEPTIONAL) throw new IllegalArgumentException((int) (previ-base) + " 附近解码错误");
 		out[off++] = (char) c;
-		return ((previ-base) << 32) | off;
+		return ((1+previ-base) << 32) | off;
 	}
 
 	@Override

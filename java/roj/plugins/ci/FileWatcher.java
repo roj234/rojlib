@@ -108,9 +108,7 @@ final class FileWatcher extends IFileWatcher implements Consumer<WatchKey> {
 						if (handler.no == ID_SRC && !id.endsWith(".java")) continue;
 
 						synchronized (s) {
-							if (name.equals("ENTRY_DELETE")) {
-								if (!s.remove(id)) handler.del.add(id);
-							} else s.add(id);
+							s.add(id);
 						}
 					}
 				}
@@ -160,11 +158,12 @@ final class FileWatcher extends IFileWatcher implements Consumer<WatchKey> {
 			}
 		} else {
 			arr = new X[3];
-			WatchKey key = proj.resPath.toPath().register(watcher, new WatchEvent.Kind<?>[] {ENTRY_CREATE, ENTRY_MODIFY, ENTRY_DELETE, OVERFLOW}, ExtendedWatchEventModifier.FILE_TREE);
+			WatchEvent.Kind<?>[] ALL_KIND = {ENTRY_CREATE, ENTRY_MODIFY, ENTRY_DELETE, OVERFLOW};
+			WatchKey key = proj.resPath.toPath().register(watcher, ALL_KIND, ExtendedWatchEventModifier.FILE_TREE);
 			actions.add(arr[0] = new X(proj, key, ID_RES));
-			key = proj.srcPath.toPath().register(watcher, new WatchEvent.Kind<?>[] {ENTRY_CREATE, ENTRY_MODIFY, ENTRY_DELETE, OVERFLOW}, ExtendedWatchEventModifier.FILE_TREE);
+			key = proj.srcPath.toPath().register(watcher, ALL_KIND, ExtendedWatchEventModifier.FILE_TREE);
 			actions.add(arr[1] = new X(proj, key, ID_SRC));
-			key = proj.libPath.toPath().register(watcher, new WatchEvent.Kind<?>[] {ENTRY_CREATE, ENTRY_MODIFY, ENTRY_DELETE, OVERFLOW}, ExtendedWatchEventModifier.FILE_TREE);
+			key = proj.libPath.toPath().register(watcher, ALL_KIND, ExtendedWatchEventModifier.FILE_TREE);
 			actions.add(arr[2] = new X(proj, key, ID_LIB));
 
 			listeners.put(proj.name, arr);

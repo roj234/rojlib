@@ -1,7 +1,6 @@
 package roj.archive.qz.xz;
 
 import org.intellij.lang.annotations.MagicConstant;
-import roj.RojLib;
 import roj.archive.qz.xz.lz.LZEncoder;
 import roj.archive.qz.xz.lzma.LZMAEncoder;
 import roj.concurrent.TaskExecutor;
@@ -404,13 +403,17 @@ public class LZMA2Options implements Cloneable {
 	public BufferPool getAsyncBufferPool() { return asyncBufferPool; }
 	public LZMA2Parallel getAsyncMan() { return asyncMan; }
 
-	public void setNativeAccelerate(boolean nativeAccelerate) {this.nativeAccelerate = nativeAccelerate;}
+	public void setNativeAccelerate(boolean accelerate) {
+		if (accelerate && !LZMA2WriterN.AVAILABLE) throw new IllegalStateException("本机加速不可用");
+		this.nativeAccelerate = accelerate;
+	}
 	public boolean isNativeAccelerate() {return nativeAccelerate;}
+	public static boolean isNativeAccelerateAvailable() {return LZMA2WriterN.AVAILABLE;}
 
 	public int getEncoderMemoryUsage() { return mode == MODE_UNCOMPRESSED ? LZMA2StoredWriter.getMemoryUsage() : LZMA2Writer.getMemoryUsage(this); }
 	public OutputStream getOutputStream(OutputStream out) {
 		if (mode == MODE_UNCOMPRESSED) return new LZMA2StoredWriter(out);
-		if (nativeAccelerate && RojLib.hasNative(RojLib.FAST_LZMA)) return new LZMA2WriterN(out, this);
+		if (nativeAccelerate) return new LZMA2WriterN(out, this);
 		return asyncMan != null ? asyncMan.createEncoder(out) : new LZMA2Writer(out, this);
 	}
 

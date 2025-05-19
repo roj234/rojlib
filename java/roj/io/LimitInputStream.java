@@ -32,7 +32,7 @@ public class LimitInputStream extends FilterInputStream {
 
 		if (v < 0) {
 			remain = 0;
-			in.close();
+			close();
 		} else remain--;
 
 		return v;
@@ -47,7 +47,7 @@ public class LimitInputStream extends FilterInputStream {
 
 		if (len < 0) {
 			remain = 0;
-			in.close();
+			close();
 		} else remain -= len;
 
 		return len;
@@ -64,7 +64,7 @@ public class LimitInputStream extends FilterInputStream {
 		if (n <= 0) return 0;
 
 		if (n < (n = in.skip(n)))
-			in.close();
+			close();
 		remain -= n;
 		return n;
 	}

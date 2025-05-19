@@ -272,7 +272,7 @@ public final class LZMA2InputStream extends MBInputStream {
 			lz.putArraysToCache();
 			lz = null;
 
-			rc.putArraysToCache();
+			rc.finish();
 			rc = null;
 		}
 	}

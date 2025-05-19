@@ -36,7 +36,7 @@ final class ObjectPoolWrapper extends Adapter {
 	public void map(AdaptContext ctx, int size) {((AdaptContextEx) ctx).captureRef();ada.map(ctx,size);}
 	public void list(AdaptContext ctx, int size) {ada.list(ctx,size);}
 	public void key(AdaptContext ctx, String key) {
-		if (key.equals("==")) {
+		if (key.isEmpty()) {
 			((AdaptContextEx) ctx).objectsR.pop();
 			ctx.replace(PrevObjectId);
 		} else {
@@ -58,7 +58,7 @@ final class ObjectPoolWrapper extends Adapter {
 			int objectId = pool.putOrGet(o, pool.size(), -1);
 			if (objectId >= 0) {
 				c.valueMap(1);
-				c.key("==");
+				c.key("");
 				c.value(objectId);
 				c.pop();
 				return;

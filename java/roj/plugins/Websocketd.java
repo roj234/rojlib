@@ -4,7 +4,7 @@ import org.jetbrains.annotations.Nullable;
 import roj.collect.MyHashMap;
 import roj.collect.SimpleList;
 import roj.config.data.Type;
-import roj.http.WebSocketConnection;
+import roj.http.WebSocket;
 import roj.http.server.*;
 import roj.http.server.auto.OKRouter;
 import roj.io.IOUtil;
@@ -69,7 +69,7 @@ public class Websocketd extends Plugin implements Router {
 			var lock = ch.lock();
 			if (lock.tryLock()) {
 				try {
-					worker.close(WebSocketConnection.ERR_CLOSED, "插件卸载");
+					worker.sendClose(WebSocket.ERR_CLOSED, "插件卸载");
 				} catch (Throwable e) {
 					logger.error(e);
 				}
@@ -93,7 +93,7 @@ public class Websocketd extends Plugin implements Router {
 		return rh.code(404).noContent();
 	}
 
-	static final class Worker extends WebSocketConnection implements Function<Request, WebSocketConnection> {
+	static final class Worker extends WebSocket implements Function<Request, WebSocket> {
 		private Process process;
 
 		private CharsetEncoder sysEnc;
@@ -106,7 +106,7 @@ public class Websocketd extends Plugin implements Router {
 		Worker(List<String> cmd) {this._cmd = cmd;}
 
 		@Override
-		public WebSocketConnection apply(Request request) {
+		public WebSocket apply(Request request) {
 			if (workers == Collections.EMPTY_LIST) return null;
 			try {
 				process = new ProcessBuilder().command(_cmd).redirectErrorStream(true)
@@ -147,7 +147,7 @@ public class Websocketd extends Plugin implements Router {
 			super.channelTick(ctx);
 
 			if (!process.isAlive()) {
-				close(ERR_OK, "进程终止");
+				sendClose(ERR_OK, "进程终止");
 				return;
 			}
 
@@ -174,7 +174,7 @@ public class Websocketd extends Plugin implements Router {
 
 							CoderResult r = sysDec.decode(inByte, tmpChar, false);
 							if (r.isError() || r.isMalformed() || r.isUnmappable()) {
-								close(ERR_UNEXPECTED, "charset decode error for " + Terminal.nativeCharset);
+								sendClose(ERR_UNEXPECTED, "charset decode error for " + Terminal.nativeCharset);
 							}
 
 							if (tmpChar.position() == 0) {
@@ -204,12 +204,12 @@ public class Websocketd extends Plugin implements Router {
 			}
 
 			if (in.available() < 0) {
-				close(ERR_OK, "进程终止");
+				sendClose(ERR_OK, "进程终止");
 			}
 		}
 
 		@Override
-		protected void onData(int ph, DynByteBuf in) throws IOException {
+		protected void onData(int frameType, DynByteBuf in) throws IOException {
 			OutputStream out = process.getOutputStream();
 			if (in.hasArray() && sysDec == null) {
 				// UTF-8 Array Stream
@@ -242,7 +242,7 @@ public class Websocketd extends Plugin implements Router {
 
 					CoderResult r = sysEnc.encode(tmp1, sndBuf, false);
 					if (r.isError() || r.isMalformed() || r.isUnmappable()) {
-						close(ERR_UNEXPECTED, "charset encode error for " + Terminal.nativeCharset);
+						sendClose(ERR_UNEXPECTED, "charset encode error for " + Terminal.nativeCharset);
 						return;
 					}
 

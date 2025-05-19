@@ -981,6 +981,11 @@ final class SerializerFactoryImpl extends SerializerFactory {
 		init.field(PUTSTATIC, c, fieldIdKey);
 
 		if (optional != 0 || optionalEx != null) {
+			cw = c.newMethod(ACC_PUBLIC|ACC_FINAL, "isOptional", "()Z");
+			cw.visitSize(1, 1);
+			cw.insn(ICONST_1);
+			cw.insn(IRETURN);
+
 			// region optional
 			cw = c.newMethod(ACC_PUBLIC|ACC_FINAL, "plusOptional", "(ILroj/collect/MyBitSet;)I");
 			cw.visitSize(2,3);
@@ -1045,7 +1050,7 @@ final class SerializerFactoryImpl extends SerializerFactory {
 		CodeWriter cw;
 		int asId = -1;
 
-		byte myCode = type.shiftedOpcode(ILOAD);
+		byte myCode = type.getOpcode(ILOAD);
 		if (!noRead) while (true) {
 		Tmp2 t = readMethods.get(methodType);
 		if (t == null) t = createReadMethod(data, methodType);
@@ -1355,7 +1360,7 @@ final class SerializerFactoryImpl extends SerializerFactory {
 		}
 
 		Tmp2 t = new Tmp2();
-		readMethods.putInt(methodType,t);
+		readMethods.put(methodType,t);
 		CodeWriter cw = t.cw = c.newMethod(ACC_PUBLIC|ACC_FINAL, "read", desc);
 
 		t.seg = SwitchBlock.ofAuto();
@@ -1374,7 +1379,7 @@ final class SerializerFactoryImpl extends SerializerFactory {
 
 		cw.label(t.seg.def);
 		if (parentExist.remove(methodType)) {
-			invokeParent(cw, Type.methodDesc(desc).get(1).shiftedOpcode(ILOAD));
+			invokeParent(cw, Type.methodDesc(desc).get(1).getOpcode(ILOAD));
 			cw.insn(RETURN);
 		} else {
 			cw.insn(ALOAD_1);

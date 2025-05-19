@@ -23,45 +23,45 @@ public class MyHashMap<K, V> extends AbstractMap<K, V> implements FindMap<K, V>,
 	static final int TREEIFY_THRESHOLD = 8, UNTREEIFY_THRESHOLD = 6, MIN_TREEIFY_CAPACITY = 64;
 
 	public static abstract class AbstractEntry<K, V> implements Map.Entry<K, V>, _Generic_Entry {
-		public K k;
-		public final K getKey() { return k; }
+		public K key;
+		public final K getKey() { return key; }
 
 		public AbstractEntry<K, V> next;
 		public final AbstractEntry<K, V> __next() { return next; }
 	}
 	public static class Entry<K, V> extends AbstractEntry<K, V> {
-		public V v;
+		public V value;
 
 		public Entry() {}
-		public Entry(K k, V v) {
-			this.k = k;
-			this.v = v;
+		public Entry(K key, V value) {
+			this.key = key;
+			this.value = value;
 		}
 
 		@Override
-		public V getValue() { return v; }
+		public V getValue() { return value; }
 		@Override
-		public V setValue(V v) {
-			V old = this.v;
-			this.v = v;
+		public V setValue(V value) {
+			V old = this.value;
+			this.value = value;
 			return old;
 		}
 
 		@Override
-		public String toString() {return String.valueOf(k)+'='+v;}
+		public String toString() {return String.valueOf(key)+'='+ value;}
 		@Override
 		public boolean equals(Object o) {
 			if (this == o) return true;
 			if (o == null || getClass() != o.getClass()) return false;
 
 			var entry = (Entry<?, ?>) o;
-			if (!(k != null ? k.equals(entry.k) : entry.k == null)) return false;
-			return v != null ? v.equals(entry.v) : entry.v == null;
+			if (!(key != null ? key.equals(entry.key) : entry.key == null)) return false;
+			return value != null ? value.equals(entry.value) : entry.value == null;
 		}
 		@Override
 		public int hashCode() {
-			int hash = k != null ? k.hashCode() : 0;
-			hash = hash ^ (v != null ? v.hashCode() : 0);
+			int hash = key != null ? key.hashCode() : 0;
+			hash = hash ^ (value != null ? value.hashCode() : 0);
 			return hash;
 		}
 	}
@@ -73,7 +73,7 @@ public class MyHashMap<K, V> extends AbstractMap<K, V> implements FindMap<K, V>,
 
 		@Override
 		public Iterator<AbstractEntry<Object[], Object>> __iterator() {
-			return Helpers.cast(new ArrayIterator<>(k.clone(), 0, len));
+			return Helpers.cast(new ArrayIterator<>(key.clone(), 0, len));
 		}
 
 		public Object getValue() { return null; }
@@ -82,7 +82,7 @@ public class MyHashMap<K, V> extends AbstractMap<K, V> implements FindMap<K, V>,
 		AbstractEntry<?, ?> get(Object key) {
 			lastPos = -1;
 
-			AbstractEntry<?, ?>[] arr = Helpers.cast(k);
+			AbstractEntry<?, ?>[] arr = Helpers.cast(this.key);
 			int pos = ArrayUtil.binarySearch(arr, 0, len, key, this);
 			AbstractEntry<?, ?> entry;
 			if (pos < 0) {
@@ -94,16 +94,16 @@ public class MyHashMap<K, V> extends AbstractMap<K, V> implements FindMap<K, V>,
 				if (pos >= len) return null;
 				for (int i = pos; i >= 0; i--) {
 					entry = arr[i];
-					if (key.equals(entry.k)) return entry;
+					if (key.equals(entry.key)) return entry;
 				}
 				for (int i = pos+1; i < len; i++) {
 					entry = arr[i];
-					if (key.equals(entry.k)) return entry;
+					if (key.equals(entry.key)) return entry;
 				}
 			} else {
 				// is comparably equal
 				entry = arr[pos];
-				if (key.equals(entry.k)) {
+				if (key.equals(entry.key)) {
 					lastPos = pos;
 					return entry;
 				}
@@ -112,36 +112,36 @@ public class MyHashMap<K, V> extends AbstractMap<K, V> implements FindMap<K, V>,
 				// but not exactly 'equals' (same hash, cmp state and identity hash)
 				for (int i = pos-1; i >= 0; i--) {
 					entry = arr[i];
-					if (key.equals(entry.k)) {
+					if (key.equals(entry.key)) {
 						lastPos = i;
 						return entry;
 					}
-					if (System.identityHashCode(entry.k) != hash) break;
+					if (System.identityHashCode(entry.key) != hash) break;
 				}
 				for (int i = pos+1; i < len; i++) {
 					entry = arr[i];
-					if (key.equals(entry.k)) {
+					if (key.equals(entry.key)) {
 						lastPos = i;
 						return entry;
 					}
-					if (System.identityHashCode(entry.k) != hash) break;
+					if (System.identityHashCode(entry.key) != hash) break;
 				}
 			}
 
 			return null;
 		}
 		void insert(Object key, AbstractEntry<?, ?> entry) {
-			Object[] arr = k;
+			Object[] arr = this.key;
 			int pos = lastPos;
 
-			if (len == arr.length) k = arr = Arrays.copyOf(arr, len << 1);
+			if (len == arr.length) this.key = arr = Arrays.copyOf(arr, len << 1);
 
 			if (len - pos > 0) System.arraycopy(arr, pos, arr, pos+1, len-pos);
 			arr[pos] = entry;
 			len++;
 		}
 		void remove(AbstractEntry<?, ?> entry) {
-			Object[] arr = k;
+			Object[] arr = key;
 			int pos = lastPos;
 			assert arr[pos] == entry;
 
@@ -155,10 +155,10 @@ public class MyHashMap<K, V> extends AbstractMap<K, V> implements FindMap<K, V>,
 			failOnIdentity = false;
 
 			AbstractEntry<?, ?> o1 = (AbstractEntry<?, ?>) o;
-			int v = Integer.compare(hasher.hashCode((K) o1.k), hasher.hashCode((K) o2));
+			int v = Integer.compare(hasher.hashCode((K) o1.key), hasher.hashCode((K) o2));
 			if (v != 0) return v;
-			if (isComp) return ((Comparable<?>) o1.k).compareTo(Helpers.cast(o2));
-			v = Integer.compare(System.identityHashCode(o1.k), System.identityHashCode(o2));
+			if (isComp) return ((Comparable<?>) o1.key).compareTo(Helpers.cast(o2));
+			v = Integer.compare(System.identityHashCode(o1.key), System.identityHashCode(o2));
 			if (v != 0) failOnIdentity = true;
 			return v;
 		}
@@ -195,7 +195,7 @@ public class MyHashMap<K, V> extends AbstractMap<K, V> implements FindMap<K, V>,
 	@Override
 	public _Generic_Entry[] __entries() { return entries; }
 	@Override
-	public void __remove(AbstractEntry<K, V> entry) { remove(entry.k); }
+	public void __remove(AbstractEntry<K, V> entry) { remove(entry.key); }
 	// GenericMap interface
 
 	@SuppressWarnings("unchecked")
@@ -213,7 +213,7 @@ public class MyHashMap<K, V> extends AbstractMap<K, V> implements FindMap<K, V>,
 			} else {
 				do {
 					AbstractEntry<K, V> next = entry.next;
-					int newKey = hasher.hashCode(entry.k) & newMask;
+					int newKey = hasher.hashCode(entry.key) & newMask;
 					entry.next = (AbstractEntry<K, V>) newEntries[newKey];
 					newEntries[newKey] = entry;
 					entry = next;
@@ -260,8 +260,8 @@ public class MyHashMap<K, V> extends AbstractMap<K, V> implements FindMap<K, V>,
 	}
 	private AbstractEntry<K, V> myCreateEntry(K key, V val) {
 		AbstractEntry<K, V> entry = getOrCreateEntry(key);
-		if (entry.k == UNDEFINED) {
-			entry.k = key;
+		if (entry.key == UNDEFINED) {
+			entry.key = key;
 			size++;
 
 			onPut(entry, val);
@@ -318,7 +318,7 @@ public class MyHashMap<K, V> extends AbstractMap<K, V> implements FindMap<K, V>,
 			return prev;
 		} else {
 			while (entry != null) {
-				if (hasher.equals((K) k, entry.k)) break chk;
+				if (hasher.equals((K) k, entry.key)) break chk;
 				prev = entry;
 				entry = entry.next;
 			}
@@ -355,9 +355,9 @@ public class MyHashMap<K, V> extends AbstractMap<K, V> implements FindMap<K, V>,
 	@Override
 	public final V computeIfAbsent(K key, @NotNull Function<? super K, ? extends V> mapper) {
 		AbstractEntry<K, V> entry = getOrCreateEntry(key);
-		if (entry.k != UNDEFINED) return entry.getValue();
+		if (entry.key != UNDEFINED) return entry.getValue();
 
-		entry.k = key;
+		entry.key = key;
 		size++;
 
 		V v = mapper.apply(key);
@@ -382,21 +382,9 @@ public class MyHashMap<K, V> extends AbstractMap<K, V> implements FindMap<K, V>,
 	}
 
 	@Override
-	@SuppressWarnings("unchecked")
 	public void putAll(@NotNull Map<? extends K, ? extends V> map) {
 		ensureCapacity(size+map.size());
-		if (map instanceof MyHashMap) putAll((MyHashMap<K, V>) map);
-		else super.putAll(map);
-	}
-	@SuppressWarnings("unchecked")
-	public final void putAll(MyHashMap<K, V> otherMap) {
-		if (otherMap.entries == null) return;
-		for (AbstractEntry<?, ?> entry : otherMap.entries) {
-			while (entry != null) {
-				put((K) entry.k, (V) entry.getValue());
-				entry = entry.next;
-			}
-		}
+		super.putAll(map);
 	}
 
 	@Override
@@ -422,7 +410,7 @@ public class MyHashMap<K, V> extends AbstractMap<K, V> implements FindMap<K, V>,
 		if (entries == null) return;
 		for (AbstractEntry<?, ?> entry : entries) {
 			while (entry != null) {
-				action.accept((K)entry.k, (V)entry.getValue());
+				action.accept((K)entry.key, (V)entry.getValue());
 				entry = entry.next;
 			}
 		}
@@ -457,7 +445,7 @@ public class MyHashMap<K, V> extends AbstractMap<K, V> implements FindMap<K, V>,
 		}
 
 		while (entry != null) {
-			if (hasher.equals((K)key, entry.k)) {
+			if (hasher.equals((K)key, entry.key)) {
 				onGet(entry);
 				return entry;
 			}
@@ -480,11 +468,11 @@ public class MyHashMap<K, V> extends AbstractMap<K, V> implements FindMap<K, V>,
 				return next;
 			}
 
-			if (entry.k == UNDEFINED) return entry;
+			if (entry.key == UNDEFINED) return entry;
 
 			int loop = 0;
 			while (true) {
-				if (hasher.equals(key, entry.k)) return entry;
+				if (hasher.equals(key, entry.key)) return entry;
 
 				if (entry.next == null) {
 					if (loop >= TREEIFY_THRESHOLD && size > MIN_TREEIFY_CAPACITY && treeify(key, loop))
@@ -524,15 +512,15 @@ public class MyHashMap<K, V> extends AbstractMap<K, V> implements FindMap<K, V>,
 
 		boolean b = key instanceof Comparable;
 		Arrays.sort(arr, 0, i, (o1, o2) -> {
-			int v = Integer.compare(hasher.hashCode(o1.k), hasher.hashCode(o2.k));
+			int v = Integer.compare(hasher.hashCode(o1.key), hasher.hashCode(o2.key));
 			if (v != 0) return v;
-			if (b) v = ((Comparable<?>) o1.k).compareTo(Helpers.cast(o2.k));
+			if (b) v = ((Comparable<?>) o1.key).compareTo(Helpers.cast(o2.key));
 			if (v != 0) return v;
-			return Integer.compare(System.identityHashCode(o1.k), System.identityHashCode(o2.k));
+			return Integer.compare(System.identityHashCode(o1.key), System.identityHashCode(o2.key));
 		});
 
 		Entry2 entry2 = new Entry2(b);
-		entry2.k = arr;
+		entry2.key = arr;
 		entry2.len = i;
 		entry2.slot = slot;
 		entries[slot] = entry2;
@@ -540,10 +528,10 @@ public class MyHashMap<K, V> extends AbstractMap<K, V> implements FindMap<K, V>,
 	}
 	@SuppressWarnings("unchecked")
 	private void untreeify(AbstractEntry<K, V> entry, int newMask, AbstractEntry<?, ?>[] newEntries) {
-		AbstractEntry<K, V>[] arr = (AbstractEntry<K, V>[]) entry.k;
+		AbstractEntry<K, V>[] arr = (AbstractEntry<K, V>[]) entry.key;
 		for (int k = ((Entry2) entry).len - 1; k >= 0; k--) {
 			entry = arr[k];
-			int newKey = hasher.hashCode(entry.k) & newMask;
+			int newKey = hasher.hashCode(entry.key) & newMask;
 			AbstractEntry<K, V> old = (AbstractEntry<K, V>) newEntries[newKey];
 			newEntries[newKey] = entry;
 			entry.next = old;
@@ -572,7 +560,7 @@ public class MyHashMap<K, V> extends AbstractMap<K, V> implements FindMap<K, V>,
 
 	protected AbstractEntry<K, V> useEntry() {
 		AbstractEntry<K, V> entry = new Entry<>();
-		entry.k = Helpers.cast(UNDEFINED);
+		entry.key = Helpers.cast(UNDEFINED);
 		return entry;
 	}
 }

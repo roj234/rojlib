@@ -72,7 +72,6 @@ import static roj.ui.CommandNode.literal;
 
 /**
  * FMD Main class
- * TODO file delete event
  * @author Roj234
  * @since 2021/6/18 10:51
  */
@@ -529,10 +528,10 @@ public final class FMD {
 	//endregion
 	public static int build(Set<String> args, Project project) throws Exception {
 		_lock();
-		boolean v;
+		boolean success;
 		try {
-			v = build(args, project, BASE, 0);
-			if (!v && args.contains("full")) {
+			success = build(args, project, BASE, 0);
+			if (!success && args.contains("full")) {
 				watcher.remove(project);
 			}
 		} finally {
@@ -545,7 +544,7 @@ public final class FMD {
 			_unlock();
 		}
 
-		return v ? 0 : 1;
+		return success ? 0 : 1;
 	}
 	// region Build
 	/**
@@ -582,6 +581,7 @@ public final class FMD {
 		mappedWriter.setComment("Build by MCMake "+VERSION+"\r\nBy Roj234 @ https://www.github.com/roj234/rojlib");
 
 		Future<Integer> updateResource;
+		Set<String> classWasDeleted;
 
 		Profiler.endStartSection("findModifiedSources");
 		long time = System.currentTimeMillis();
@@ -591,12 +591,40 @@ public final class FMD {
 			if (increment) {
 				stamp = p.unmappedJar.lastModified();
 				updateResource = EXECUTOR.submit(p.getResourceTask(stamp));
-				Set<String> set = watcher.getModified(p, FileWatcher.ID_SRC);
-				if (!set.contains(null)) {
-					sources = new ArrayList<>(set.size());
-					synchronized (set) {
-						for (String path : set) sources.add(new File(path));
-						LOGGER.trace("FileWatcher: {}", set);
+				Set<String> sourceChanged = watcher.getModified(p, FileWatcher.ID_SRC);
+				if (!sourceChanged.contains(null)) {
+					if (p.dependencyGraph.isEmpty()) {
+						ZipArchive mzf = p.unmappedWriter.getMZF();
+						for (ZEntry file : mzf.entries()) {
+							p.dependencyGraph.add(ClassNode.parseSkeleton(mzf.get(file)));
+						}
+						p.unmappedWriter.close();
+					}
+
+					String srcPrefix = p.srcPath.getAbsolutePath();
+					int srcPrefixLen = srcPrefix.length()+1;
+
+					synchronized (sourceChanged) {
+						for (String path : new SimpleList<>(sourceChanged)) {
+							var className = path.substring(srcPrefixLen, path.length()-5).replace(File.separatorChar, '/'); // get roj/test/Asdf
+
+							LOGGER.trace("Modified: {}", className);
+							for (String referent : p.dependencyGraph.get(className)) {
+								LOGGER.trace("Referenced by: {}", referent);
+								referent = srcPrefix+File.separatorChar+referent+".java";
+								sourceChanged.add(referent);
+							}
+						}
+
+						sources = new SimpleList<>(sourceChanged.size());
+
+						for (String path : sourceChanged) {
+							File file = new File(path);
+							if (file.isFile())
+								sources.add(file);
+						}
+
+						p.dependencyGraph.remove(sourceChanged);
 					}
 					break findSourceDone;
 				}
@@ -608,6 +636,7 @@ public final class FMD {
 			Predicate<File> incrFilter = file -> IOUtil.extensionName(file.getName()).equals("java") && file.lastModified() > stamp;
 			sources = IOUtil.findAllFiles(p.srcPath, incrFilter);
 			for (String s : p.conf.source_depend) IOUtil.findAllFiles(projects.get(s).srcPath, sources, incrFilter);
+			p.dependencyGraph.clear();
 		}
 
 		if (sources.isEmpty()) {
@@ -627,46 +656,13 @@ public final class FMD {
 		} else {
 			Profiler.endStartSection("prepareCompileParam");
 
-			var classpath = new CharList(200);
-
-			var prefix = BASE.getAbsolutePath().length()+1;
-			Predicate<File> callback = file1 -> {
-				String ext = IOUtil.extensionName(file1.getName());
-				if ((ext.equals("zip") || ext.equals("jar")) && file1.length() != 0) {
-					classpath.append(file1.getAbsolutePath().substring(prefix)).append(File.pathSeparatorChar);
-				}
-				return false;
-			};
-
-			for (File file : p.workspace.depend) {
-				classpath.append(file.getAbsolutePath().substring(prefix)).append(File.pathSeparatorChar);
-			}
-			for (File file : p.workspace.mappedDepend) {
-				classpath.append(file.getAbsolutePath().substring(prefix)).append(File.pathSeparatorChar);
-			}
-			IOUtil.findAllFiles(new File(BASE, "libs"), callback);
-			IOUtil.findAllFiles(new File(p.root, "libs"), callback);
-
-			var dependencies = p.getAllDependencies();
-			for (int i = 0; i < dependencies.size(); i++) {
-				classpath.append(dependencies.get(i).unmappedJar.getAbsolutePath().substring(prefix)).append(File.pathSeparatorChar);
-			}
-			for (int i = 0; i < p.binaryDepend.size(); i++) {
-				var dep = p.binaryDepend.get(i);
-				if (IOUtil.extensionName(dep.getName()).equals("jar")) {
-					classpath.append(dep.getAbsolutePath().substring(prefix)).append(File.pathSeparatorChar);
-				}
-			}
-
-			if (increment) classpath.append(p.unmappedJar.getAbsolutePath().substring(prefix));
-			else if (classpath.length() > 0) classpath.setLength(classpath.length()-1);
+			String classPath = getClassPath(p, increment);
 
 			SimpleList<String> options = p.conf.compiler_options_overwrite ? new SimpleList<>() : p.compiler.factory().getDefaultOptions();
 			options.addAll(p.conf.compiler_options);
-			String classPathStr = classpath.toStringAndFree();
-			options.addAll("-cp", classPathStr, "-encoding", p.charset.name());
+			options.addAll("-cp", classPath, "-encoding", p.charset.name());
 			if ("true".equals(p.conf.variables.get("javac:use_module")))
-				options.addAll("--module-path", classPathStr);
+				options.addAll("--module-path", classPath);
 
 			Profiler.endStartSection("Plugin.beforeCompile");
 
@@ -686,7 +682,7 @@ public final class FMD {
 			Profiler.endStartSection("writeUnmappedJar");
 
 			pc.changedClassIndex = outputs.size();
-			List<Context> list = Helpers.cast(outputs);
+			List<Context> compilerOutput = Helpers.cast(outputs);
 
 			ZipOutput unmappedWriter = p.unmappedWriter;
 			try {
@@ -695,20 +691,24 @@ public final class FMD {
 				for (int i = 0; i < outputs.size(); i++) {
 					var out = outputs.get(i);
 					unmappedWriter.set(out.getFileName(), out.getClassBytes());
-					list.set(i, new Context(out.getFileName(), out.getClassBytes()));
+					Context ctx = new Context(out.getFileName(), out.getClassBytes().slice());
+					compilerOutput.set(i, ctx);
+
+					p.dependencyGraph.add(ctx.getData());
 				}
 
 				if (incrementLevel == 1) {
 					Profiler.startSection("loadMapperState");
 
-					MyHashSet<String> changed = new MyHashSet<>(list.size());
-					for (int i = 0; i < list.size(); i++) changed.add(list.get(i).getFileName());
+					MyHashSet<String> changed = new MyHashSet<>(compilerOutput.size());
+					for (int i = 0; i < compilerOutput.size(); i++) changed.add(compilerOutput.get(i).getFileName());
 
+					// copy all
 					ZipArchive mzf = unmappedWriter.getMZF();
 					for (ZEntry file : mzf.entries()) {
 						if (!changed.contains(file.getName())) {
 							Context ctx = new Context(file.getName(), mzf.get(file));
-							list.add(ctx);
+							compilerOutput.add(ctx);
 						}
 					}
 
@@ -724,7 +724,7 @@ public final class FMD {
 			Profiler.endStartSection("Plugin.process");
 
 			for (int i = 0; i < processors.size(); i++) {
-				list = processors.get(i).process(list, pc);
+				compilerOutput = processors.get(i).process(compilerOutput, pc);
 			}
 
 			Profiler.endStartSection("writeResource");
@@ -741,8 +741,8 @@ public final class FMD {
 			Profiler.endStartSection("writeMappedJar");
 			Context ctx = Helpers.maybeNull();
 			try {
-				for (int i = 0; i < list.size(); i++) {
-					ctx = list.get(i);
+				for (int i = 0; i < compilerOutput.size(); i++) {
+					ctx = compilerOutput.get(i);
 					mappedWriter.set(ctx.getFileName(), ctx::getCompressedShared);
 				}
 			} catch (Throwable e) {
@@ -770,6 +770,45 @@ public final class FMD {
 		p.compileSuccess();
 		return true;
 	}
+
+	private static String getClassPath(Project p, boolean increment) {
+		var classpath = new CharList(200);
+
+		var prefix = BASE.getAbsolutePath().length()+1;
+		Predicate<File> callback = file1 -> {
+			String ext = IOUtil.extensionName(file1.getName());
+			if ((ext.equals("zip") || ext.equals("jar")) && file1.length() != 0) {
+				classpath.append(file1.getAbsolutePath().substring(prefix)).append(File.pathSeparatorChar);
+			}
+			return false;
+		};
+
+		for (File file : p.workspace.depend) {
+			classpath.append(file.getAbsolutePath().substring(prefix)).append(File.pathSeparatorChar);
+		}
+		for (File file : p.workspace.mappedDepend) {
+			classpath.append(file.getAbsolutePath().substring(prefix)).append(File.pathSeparatorChar);
+		}
+		IOUtil.findAllFiles(new File(BASE, "libs"), callback);
+		IOUtil.findAllFiles(new File(p.root, "libs"), callback);
+
+		var dependencies = p.getAllDependencies();
+		for (int i = 0; i < dependencies.size(); i++) {
+			classpath.append(dependencies.get(i).unmappedJar.getAbsolutePath().substring(prefix)).append(File.pathSeparatorChar);
+		}
+		for (int i = 0; i < p.binaryDepend.size(); i++) {
+			var dep = p.binaryDepend.get(i);
+			if (IOUtil.extensionName(dep.getName()).equals("jar")) {
+				classpath.append(dep.getAbsolutePath().substring(prefix)).append(File.pathSeparatorChar);
+			}
+		}
+
+		if (increment) classpath.append(p.unmappedJar.getAbsolutePath().substring(prefix));
+		else if (classpath.length() > 0) classpath.setLength(classpath.length()-1);
+
+		return classpath.toStringAndFree();
+	}
+
 	private static ZipOutput lockOutput(Project p, File jarFile) {
 		int amount = 30 * 20;
 		while (jarFile.isFile() && !IOUtil.isReallyWritable(jarFile)) {
@@ -808,7 +847,7 @@ public final class FMD {
 			options.put("jarSigner:signatureFileName", p.variables.getOrDefault("fmd:signature:certificate_name", IOUtil.fileName(keystore.getName())));
 			options.put("jarSigner:manifestHashAlgorithm", p.variables.getOrDefault("fmd:signature:manifest_hash_algorithm", "SHA-256"));
 			options.put("jarSigner:signatureHashAlgorithm", p.variables.getOrDefault("fmd:signature:signature_hash_algorithm", "SHA-256"));
-			//options.put("jarSigner:cacheHash", "true");
+			options.put("jarSigner:cacheHash", "true");
 		}
 
 		try (var zf = name_format == null ? p.mappedWriter.getMZF() : new ZipArchive(jarFile)) {

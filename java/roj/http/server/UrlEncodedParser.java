@@ -3,7 +3,7 @@ package roj.http.server;
 import roj.http.Multimap;
 import roj.io.IOUtil;
 import roj.net.ChannelCtx;
-import roj.text.Escape;
+import roj.text.URICoder;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
 
@@ -45,7 +45,7 @@ public class UrlEncodedParser implements BodyParser {
 					c = '=';
 				} else {
 					if (buf.readableBytes() > 384) throw invalidKey();
-					key = Escape.decodeURI(IOUtil.getSharedCharBuf(), IOUtil.getSharedByteBuf(), buf, true).toString();
+					key = URICoder.decodeURI(IOUtil.getSharedCharBuf(), IOUtil.getSharedByteBuf(), buf, true).toString();
 					c = '&';
 				}
 			} catch (MalformedURLException e) {
@@ -69,14 +69,14 @@ public class UrlEncodedParser implements BodyParser {
 	public void onSuccess(DynByteBuf buf) throws IOException {
 		if (key == null) {
 			if (buf.readableBytes() > 384) throw invalidKey();
-			key = Escape.decodeURI(IOUtil.getSharedCharBuf(), IOUtil.getSharedByteBuf(), buf, true).toString();
+			key = URICoder.decodeURI(IOUtil.getSharedCharBuf(), IOUtil.getSharedByteBuf(), buf, true).toString();
 		}
 		submit();
 		val._free();
 	}
 
 	private void submit() throws MalformedURLException {
-		fields.add(key, Escape.decodeURI(IOUtil.getSharedCharBuf(), IOUtil.getSharedByteBuf(), val, true).toString());
+		fields.add(key, URICoder.decodeURI(IOUtil.getSharedCharBuf(), IOUtil.getSharedByteBuf(), val, true).toString());
 	}
 
 	private static IllegalRequestException invalidKey() {return IllegalRequestException.badRequest("invalid form key");}

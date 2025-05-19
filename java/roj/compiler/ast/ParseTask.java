@@ -58,7 +58,7 @@ public interface ParseTask {
 		var attr = mn.getAttribute(null, MethodDefault.ID);
 		if (attr == null) mn.addAttribute(attr = new MethodDefault());
 
-		attr.defaultValue.putInt(id-1, jsonString);
+		attr.defaultValue.put(id-1, jsonString);
 	}
 
 	static ParseTask AnnotationDefault(CompileUnit file, MethodNode mn) throws ParseException {

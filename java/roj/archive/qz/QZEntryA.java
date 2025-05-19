@@ -27,7 +27,7 @@ final class QZEntryA extends QZEntry {
     public final long getAccessTime() {return winTime2JavaTime(accessTime);}
     public final long getCreationTime() {return winTime2JavaTime(createTime);}
     public final long getModificationTime() {return winTime2JavaTime(modifyTime);}
-    public final int getAttributes() {return attributes;}
+    public final int getWinAttributes() {return attributes;}
 
     public FileTime getPrecisionAccessTime() {return !hasAccessTime() ? null : winTime2FileTime(accessTime);}
     public FileTime getPrecisionCreationTime() {return !hasCreationTime() ? null : winTime2FileTime(createTime);}

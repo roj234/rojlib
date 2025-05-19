@@ -6,6 +6,7 @@ import roj.asm.MethodNode;
 import roj.asm.attr.*;
 import roj.asm.attr.MethodParameters.MethodParam;
 import roj.asm.cp.CstClass;
+import roj.asm.insn.CodeWriter;
 import roj.asm.type.*;
 import roj.collect.IntList;
 import roj.collect.MyHashMap;
@@ -15,6 +16,7 @@ import roj.compiler.LavaFeatures;
 import roj.compiler.Tokens;
 import roj.compiler.api.Types;
 import roj.compiler.asm.LPSignature;
+import roj.compiler.asm.MethodWriter;
 import roj.compiler.asm.ParamAnnotationRef;
 import roj.compiler.ast.BlockParser;
 import roj.compiler.ast.GeneratorUtil;
@@ -57,7 +59,7 @@ public final class JavaCompileUnit extends CompileUnit {
 	// region 文件中的其余类
 	private JavaCompileUnit(JavaCompileUnit parent, boolean helperClass) {super(parent, helperClass);}
 
-	private JavaCompileUnit _newHelper(int acc) throws ParseException {
+	private void _newHelper(int acc) throws ParseException {
 		JavaCompileUnit c = new JavaCompileUnit(this, true);
 
 		int i = name.lastIndexOf('/') + 1;
@@ -65,9 +67,8 @@ public final class JavaCompileUnit extends CompileUnit {
 		c.header(acc);
 
 		ctx.classes.addCompileUnit(c, true);
-		return c;
 	}
-	private JavaCompileUnit _newInner(int acc) throws ParseException {
+	private void _newInner(int acc) throws ParseException {
 		JavaCompileUnit c = new JavaCompileUnit(this, false);
 
 		c.name = name.concat("$");
@@ -92,7 +93,6 @@ public final class JavaCompileUnit extends CompileUnit {
 		c.modifier = (char) (acc&~(ACC_PRIVATE|ACC_STATIC));
 
 		ctx.classes.addCompileUnit(c, true);
-		return c;
 	}
 	public JavaCompileUnit newAnonymousClass(@Nullable MethodNode mn) throws ParseException {
 		JavaCompileUnit c = new JavaCompileUnit(this, false);
@@ -360,9 +360,14 @@ public final class JavaCompileUnit extends CompileUnit {
 				addInterface("java/lang/annotation/Annotation");
 			}
 			case ENUM -> {
-				notSealable(acc);
+				if ((acc & _ACC_SEALED) == 0) {
+					notSealable(acc);
+					parent("java/lang/Enum");
+				} else {
+					ctx.report(Kind.WARNING, "ADT enumeration");
+					acc |= _ACC_ALGEBRA_DERIVED_TYPE;
+				}
 				acc |= ACC_ENUM|ACC_FINAL;
-				parent("java/lang/Enum");
 			}
 			case RECORD -> {
 				notSealable(acc);
@@ -406,6 +411,16 @@ public final class JavaCompileUnit extends CompileUnit {
 			}
 
 			w = wr.next();
+		}
+
+		// TODO
+		if (w.type() == lBrace) {
+			if ((acc & (ACC_INTERFACE)) != 0) ctx.report(Kind.ERROR, "派生继承无法在此处使用");
+
+			Word next = wr.next();
+			// 基本类型或String
+
+			wr.except(rBrace);
 		}
 
 		// 继承
@@ -564,7 +579,7 @@ public final class JavaCompileUnit extends CompileUnit {
 
 		int acc;
 		mfsdcLoop:
-		while (wr.hasNext()) {
+		while (true) {
 			w = wr.next();
 			switch (w.type()) {
 				case semicolon: continue;
@@ -1023,4 +1038,114 @@ public final class JavaCompileUnit extends CompileUnit {
 		return val.regionMatches(0, name, i+1, name.length() - i - 1);
 	}
 	// endregion
+	private void ADTFields(Tokens wr, MyHashSet<String> names, LocalContext ctx) throws ParseException {
+		assert fields.isEmpty();
+
+		Type selfType = Type.klass(name);
+
+		List<Expr> enumInit = new SimpleList<>();
+
+		Word w = wr.next();
+		while (w.type() == LITERAL) {
+			String name = w.val();
+			if (!names.add(name)) ctx.report(Kind.ERROR, "cu.nameConflict", ctx.currentCodeBlockForReport(), "symbol.field", name);
+
+			int acc = ACC_SUPER|ACC_FINAL|ACC_ENUM;
+			JavaCompileUnit container = new JavaCompileUnit(this, false);
+
+			container.name = this.name+"$"+name;
+			container.modifier = (char) acc;
+
+			if (ctx.classes.hasFeature(LavaFeatures.ATTR_INNER_CLASS)) {
+				acc |= ACC_STATIC;
+
+				var desc = InnerClasses.Item.innerClass(container.name, acc);
+				innerClasses().add(desc);
+				container.innerClasses().add(desc);
+			}
+
+			if (ctx.classes.getMaximumBinaryCompatibility() >= LavaFeatures.JAVA_11)
+				addNestMember(container);
+
+			ctx.classes.addCompileUnit(container, true);
+
+			int start = wr.current().pos();
+
+
+			//TODO not final!
+			modifier &= ~ACC_FINAL;
+
+
+			w = wr.next();
+			if (w.type() == lParen && !wr.nextIf(rParen)) {
+				var m = newMethod(ACC_PUBLIC|ACC_STATIC|ACC_ENUM, name, "()V");
+				MethodNode method = m.mn;
+
+				do {
+					readModifiers(wr, _ACC_ANNOTATION);
+					IType type = readType(wr, TYPE_PRIMITIVE|TYPE_GENERIC|SKIP_TYPE_PARAM);
+
+					method.parameters().add(type.rawType());
+
+					commitAnnotations(new ParamAnnotationRef(method, w.pos(), 0));
+
+					// static final record Rgb(int r, int g, int b);
+
+					w = wr.next();
+				} while (w.type() == comma);
+				assert w.type() == rParen;
+
+				finishSignature(null, Signature.METHOD, method);
+
+				CodeWriter init = container.newMethod(ACC_PUBLIC | ACC_FINAL, "<init>", method.rawDesc());
+
+			} else {
+				container.npConstructor();
+
+				// 生成单例
+				FieldNode field = new FieldNode(ACC_PUBLIC|ACC_STATIC|ACC_FINAL|ACC_ENUM, name, selfType);
+				attachJavadoc(field);
+
+				addParseTask(ctx1 -> {
+					MethodWriter mw = ctx1.file.getStaticInit();
+					mw.newObject(ctx1.file.name+"$"+field.name());
+					mw.field(PUTSTATIC, ctx1.file.name, field.name(), field.rawDesc());
+				});
+			}
+
+			if (w.type() != comma) break;
+			w = wr.next();
+		}
+
+		if (!enumInit.isEmpty()) {
+			addParseTask((lc) -> {
+				var cw = getStaticInit();
+				lc.setMethod(cw.mn);
+				lc.enumConstructor = true;
+
+				for (int i = 0; i < enumInit.size(); i++) {
+					lc.errorReportIndex = fieldIdx.get(i);
+
+					enumInit.get(i).resolve(lc).write(cw);
+					cw.field(PUTSTATIC, this, i);
+
+					finalFields.remove(fields.get(i));
+				}
+				lc.errorReportIndex = -1;
+
+				cw.newArraySized(selfType, enumInit.size());
+				cw.visitSizeMax(4, 0); // array array index value
+				for (int i = 0; i < enumInit.size(); i++) {
+					cw.insn(DUP);
+					cw.ldc(i);
+					cw.field(GETSTATIC, this, i);
+					cw.insn(AASTORE);
+				}
+
+				cw.field(PUTSTATIC, this, miscFieldId/* $VALUES */);
+			});
+		}
+
+		if (w.type() != semicolon) wr.retractWord();
+	}
 }

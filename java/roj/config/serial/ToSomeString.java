@@ -62,7 +62,7 @@ public abstract class ToSomeString implements CVisitor {
 		if (s == null) valNull();
 		else valString(s);
 	}
-	public void valString(CharSequence l) {Tokenizer.addSlashes(l, 0, sb.append('"'), '\'').append('"');}
+	public void valString(CharSequence l) {Tokenizer.escape(sb.append('"'), l, 0, '\'').append('"');}
 
 	public final void value(long i) { preValue(false); sb.append(i); }
 	public final void value(double i) { preValue(false); sb.append(i); }

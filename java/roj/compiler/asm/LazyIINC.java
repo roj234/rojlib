@@ -1,14 +1,14 @@
 package roj.compiler.asm;
 
-import roj.asm.insn.CodeBlock;
 import roj.asm.insn.CodeWriter;
+import roj.asm.insn.Segment;
 import roj.util.DynByteBuf;
 
 /**
  * @author Roj234
  * @since 2022/2/5 12:22
  */
-class LazyIINC extends CodeBlock {
+class LazyIINC extends Segment {
 	private final Variable v;
 	private final short amount;
 

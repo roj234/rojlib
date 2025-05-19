@@ -12,7 +12,7 @@ import roj.collect.MyHashMap;
 import roj.collect.SimpleList;
 import roj.config.ParseException;
 import roj.config.data.CMap;
-import roj.crypt.CRC32s;
+import roj.crypt.CRC32;
 import roj.io.IOUtil;
 import roj.io.source.FileSource;
 import roj.io.source.MemorySource;
@@ -193,7 +193,7 @@ public abstract sealed class MinecraftWorkspace {
 
 			if (!atList.isEmpty()) LOGGER.error("未成功应用的AT: {}", atList);
 
-			var hash = Integer.toHexString(CRC32s.once(IOUtil.read(com2int)));
+			var hash = Integer.toHexString(CRC32.crc32(IOUtil.read(com2int)));
 
 			var mapCache = new File(DATA_PATH, ".MC"+mcVersion+"FG"+forgeVersion+(serverSrgCombined!=null?"+S":"")+"_map"+hash+".lzma");
 			try (var fs = new FileSource(mapCache)) {

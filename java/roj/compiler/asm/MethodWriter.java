@@ -128,11 +128,11 @@ public class MethodWriter extends CodeWriter {
 		else addSegment(new LazyIINC(v, delta));
 	}
 
-	public void jump(byte code, Label target) { assertTrait(code, TRAIT_JUMP); addSegment(new JumpBlockAO(code, target)); }
+	public void jump(byte code, Label target) { assertTrait(code, TRAIT_JUMP); addSegment(new OptimizedJumpTo(code, target)); }
 
-	public int nextSegmentId() {return codeBlocks.isEmpty() ? 1 : codeBlocks.size() - (codeBlocks.get(codeBlocks.size()-1).length() == 0 ? 1 : 0);}
-	public void replaceSegment(int id, CodeBlock codeBlock) {
-		var prev = codeBlocks.set(id, codeBlock);
+	public int nextSegmentId() {return segments.isEmpty() ? 1 : segments.size() - (segments.get(segments.size()-1).length() == 0 ? 1 : 0);}
+	public void replaceSegment(int id, Segment segment) {
+		var prev = segments.set(id, segment);
 
 		for (Label label : labels) {
 			if (label.getBlock() == id && label.getOffset() != 0) {
@@ -148,13 +148,13 @@ public class MethodWriter extends CodeWriter {
 	public int replaceSegment(int id, MethodWriter mw) {
 		boolean firstIsEmpty;
 		if (mw.bw.readableBytes() > 8) {
-			codeBlocks.set(id, new SolidBlock(mw.bw.slice(8, mw.bw.readableBytes()-8)));
+			segments.set(id, new StaticSegment(mw.bw.slice(8, mw.bw.readableBytes()-8)));
 			firstIsEmpty = false;
 		} else {
 			firstIsEmpty = true;
 		}
 
-		List<CodeBlock> toInsert = mw.codeBlocks;
+		List<Segment> toInsert = mw.segments;
 		if (!toInsert.isEmpty()) {
 			toInsert.remove(0);
 			if (toInsert.get(toInsert.size()-1).length() == 0)
@@ -165,9 +165,9 @@ public class MethodWriter extends CodeWriter {
 				toInsert.set(i, toInsert.get(i).move(this, blockMoved, false));
 			}*/
 
-			if (firstIsEmpty) codeBlocks.set(id, toInsert.remove(0));
+			if (firstIsEmpty) segments.set(id, toInsert.remove(0));
 
-			codeBlocks.addAll(id+1, toInsert);
+			segments.addAll(id+1, toInsert);
 
 			for (Label label : labels) {
 				if (label.getBlock() == id && label.getOffset() != 0) throw new IllegalStateException("Cannot handle this!");
@@ -181,8 +181,8 @@ public class MethodWriter extends CodeWriter {
 		mw.labels.clear();
 		return toInsert.size();
 	}
-	public CodeBlock getSegment(int i) {return codeBlocks.get(i);}
-	public boolean isJumpingTo(Label point) {return !codeBlocks.isEmpty() && codeBlocks.get(codeBlocks.size()-1) instanceof JumpBlock js && js.target == point;}
+	public Segment getSegment(int i) {return segments.get(i);}
+	public boolean isJumpingTo(Label point) {return !segments.isEmpty() && segments.get(segments.size()-1) instanceof JumpTo js && js.target == point;}
 
 	private final int[] markerBlock = new int[1];
 	public void addPlaceholder(int slot) {
@@ -192,7 +192,7 @@ public class MethodWriter extends CodeWriter {
 	public int getPlaceholderId(int slot) {return markerBlock[slot];}
 
 	// JumpSegmentAO
-	List<CodeBlock> getCodeBlocks() {return codeBlocks;}
+	List<Segment> getCodeBlocks() {return segments;}
 
 	// for insertBefore()
 	public DynByteBuf writeTo() {
@@ -206,25 +206,25 @@ public class MethodWriter extends CodeWriter {
 	public void writeTo(MethodWriter cw) {
 		if (bw.wIndex() > 8) cw.codeOb.put(bw, 8, bw.wIndex()-8);
 
-		if (cw.codeBlocks.isEmpty()) cw._addFirst();
-		List<CodeBlock> tarSeg = cw.codeBlocks;
+		if (cw.segments.isEmpty()) cw._addFirst();
+		List<Segment> tarSeg = cw.segments;
 		int offset = tarSeg.size()-1;
 
-		if (!codeBlocks.isEmpty()) {
-			for (int i = 1; i < codeBlocks.size(); i++) {
-				CodeBlock seg = codeBlocks.get(i);
+		if (!segments.isEmpty()) {
+			for (int i = 1; i < segments.size(); i++) {
+				Segment seg = segments.get(i);
 
-				CodeBlock move = seg.move(cw, offset, true);
+				Segment move = seg.move(cw, offset, true);
 				tarSeg.add(move);
 				cw._addOffset(move.length());
 			}
 
-			var sb = (SolidBlock) tarSeg.get(tarSeg.size() - 1);
+			var sb = (StaticSegment) tarSeg.get(tarSeg.size() - 1);
 			if (sb.isReadonly()) {
 				if (sb.length() == 0) tarSeg.remove(tarSeg.size()-1);
-				tarSeg.add(SolidBlock.emptyWritable());
+				tarSeg.add(StaticSegment.emptyWritable());
 			}
-			cw.codeOb = ((SolidBlock) tarSeg.get(tarSeg.size() - 1)).getData();
+			cw.codeOb = ((StaticSegment) tarSeg.get(tarSeg.size() - 1)).getData();
 		}
 
 		cw.labels.addAll(unrefLabels);

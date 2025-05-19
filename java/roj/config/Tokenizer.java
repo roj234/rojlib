@@ -8,9 +8,10 @@ import roj.collect.SimpleList;
 import roj.collect.TrieTree;
 import roj.concurrent.OperationDone;
 import roj.config.data.CInt;
+import roj.io.FastFailException;
 import roj.io.IOUtil;
 import roj.text.CharList;
-import roj.text.DateParser;
+import roj.text.DateTime;
 import roj.text.TextReader;
 import roj.text.TextUtil;
 import roj.util.Helpers;
@@ -248,92 +249,111 @@ public class Tokenizer {
 	}
 	// endregion
 	// region 转义
-
-	private static final Int2IntMap ADDSLASHES = new Int2IntMap();
-	private static final Int2IntMap DESLASHES = new Int2IntMap();
-	private static void a(char a, char b) {
-		ADDSLASHES.putInt(a, b);
-		DESLASHES.putInt(b, a);
+	private static final boolean USE_OCTAL_ESCAPE = true;
+	private static final Int2IntMap ESCAPE_MAPPING = new Int2IntMap(), UNESCAPE_MAPPING = new Int2IntMap();
+	private static void escape(char original, char escaped) {
+		ESCAPE_MAPPING.putInt(original, escaped);
+		UNESCAPE_MAPPING.putInt(escaped, original);
 	}
 	static {
 		// 双向
-		a('\\', '\\');
-		a('\n', 'n');
-		a('\r', 'r');
-		a('\t', 't');
-		a('\b', 'b');
-		a('\f', 'f');
-		a('\'', '\'');
-		a('"', '"');
-		DESLASHES.putInt('s', ' ');
+		escape('\\', '\\');
+		escape('\n', 'n');
+		escape('\r', 'r');
+		escape('\t', 't');
+		escape('\b', 'b');
+		escape('\f', 'f');
+		escape('\'', '\'');
+		escape('"', '"');
 
-		// 仅解码
-		DESLASHES.putInt('/', -1);
-		DESLASHES.putInt('U', -2);
-		DESLASHES.putInt('u', -3);
-
-		// \ NEXTLINE
-		DESLASHES.putInt('\r', -4);
-		DESLASHES.putInt('\n', -5);
+		// \s => ' '
+		UNESCAPE_MAPPING.putInt('s', ' ');
+		// \/ => '/'
+		UNESCAPE_MAPPING.putInt('/', '/');
 
 		// \377 (oct)
-		for (int i = 0; i <= 7; i++) DESLASHES.putInt('0'+i, -6);
+		for (int i = 0; i <= 7; i++) UNESCAPE_MAPPING.putInt('0'+i, -1);
+
+		// \\uXXXX
+		UNESCAPE_MAPPING.putInt('U', -2);
+		UNESCAPE_MAPPING.putInt('u', -3);
+
+		// 真正的换行符，未转义的那种
+		UNESCAPE_MAPPING.putInt('\r', -4);
+		UNESCAPE_MAPPING.putInt('\n', -5);
 	}
 
-	public static String addSlashes(CharSequence key) { return addSlashes(new CharList(), key).toStringAndFree(); }
-	public static <T extends Appendable> T addSlashes(T to, CharSequence key) { return addSlashes(key, 0, to, '\0'); }
-	public static <T extends Appendable> T addSlashes(CharSequence key, int since, T to, char ignore) {
+	/**
+	 * 对字符串进行转义处理。
+	 */
+	public static String escape(CharSequence string) { return escape(new CharList(), string).toStringAndFree(); }
+	/**
+	 * 将字符串转义结果追加到输出缓冲区。
+	 * @return 输出缓冲区（链式调用）
+	 */
+	public static <T extends Appendable> T escape(T output, CharSequence string) { return escape(output, string, 0, '\0'); }
+	/**
+	 * 将字符串转义结果追加到输出缓冲区（带自定义排除字符）。
+	 * @param startIndex 起始处理位置, 从 [startIndex, string.length()]
+	 * @param charNoEscape 不转义的特定字符, 例如单双引号
+	 * @return 输出缓冲区（链式调用）
+	 */
+	public static <T extends Appendable> T escape(T output, CharSequence string, int startIndex, char charNoEscape) {
 		try {
-			if (since > 0) to.append(key, 0, since);
-
-			int prevI = since;
-			for (int i = since; i < key.length(); i++) {
-				char c = key.charAt(i);
-				int v = ADDSLASHES.getOrDefaultInt(c, 0);
-				if (v > 0 && c != ignore) {
-					to.append(key, prevI, i).append('\\').append((char) v);
+			int prevI = startIndex;
+			for (int i = startIndex; i < string.length(); i++) {
+				char c = string.charAt(i);
+				int escaped = ESCAPE_MAPPING.getOrDefaultInt(c, 0);
+				if (escaped > 0 && c != charNoEscape) {
+					output.append(string, prevI, i).append('\\').append((char) escaped);
 					prevI = i+1;
-				} else if (c < 32 || (c >= 127 && c <= 159)) { // CharacterData is not open
-					if (i+1 < key.length() && NUMBER.contains(key.charAt(i+1))) {
-						String s = Integer.toHexString(c);
-						to.append(key, prevI, i).append("\\u");
-						int j = s.length();
-						while (j++ < 4) to.append('0');
-						to.append(s);
+				} else if (c < 32 || (c >= 127 && c <= 159)) { // 不能出现在字符串中的控制字符
+					output.append(string, prevI, i);
+					// 为了节约空间，在允许的情况下优先使用八进制转义
+					if (USE_OCTAL_ESCAPE && (i+1 >= string.length() || !NUMBER.contains(string.charAt(i+1)))) {
+						output.append('\\').append(Integer.toOctalString(c));
 					} else {
-						String s = Integer.toOctalString(c);
-						to.append(key, prevI, i).append('\\').append(s);
+						output.append("\\u");
+						String hex = Integer.toHexString(c);
+						int pad = hex.length();
+						while (pad++ < 4) output.append('0');
+						output.append(hex);
 					}
 					prevI = i+1;
 				}
 			}
 
-			to.append(key, prevI, key.length());
+			output.append(string, prevI, string.length());
 		} catch (IOException e) {
 			Helpers.athrow(e);
 		}
-		return to;
+		return output;
 	}
-	public static boolean haveSlashes(CharSequence key, int since) {
-		for (int i = since; i < key.length(); i++) {
-			char c = key.charAt(i);
-			int v = ADDSLASHES.getOrDefaultInt(c, 0);
+	/**
+	 * 检查字符串是否需要转义。
+	 * @param string 输入字符串
+	 * @param startIndex 起始检查位置
+	 * @return 若存在需要转义的字符则返回true
+	 */
+	public static boolean needEscape(CharSequence string, int startIndex) {
+		for (int i = startIndex; i < string.length(); i++) {
+			char c = string.charAt(i);
+			int v = ESCAPE_MAPPING.getOrDefaultInt(c, 0);
 			if (v != 0) return true;
 		}
 		return false;
 	}
 
-	public static String removeSlashes(CharSequence key) throws ParseException {return removeSlashes(key, new CharList()).toStringAndFree();}
-	public static <T extends Appendable> T removeSlashes(CharSequence in, T output) throws ParseException {
+	public static String unescape(CharSequence string) throws ParseException {return unescape(new CharList(), string).toStringAndFree();}
+	public static <T extends Appendable> T unescape(T output, CharSequence string) throws ParseException {
 		int i = 0;
-
 		boolean slash = false;
 
 		try {
-			while (i < in.length()) {
-				char c = in.charAt(i++);
+			while (i < string.length()) {
+				char c = string.charAt(i++);
 				if (slash) {
-					i = _removeSlash(in, c, output, i);
+					i = unescapeChar(string, c, output, i);
 					slash = false;
 				} else {
 					if (c == '\\') {
@@ -347,77 +367,26 @@ public class Tokenizer {
 			Helpers.athrow(e);
 		}
 
-		if (slash) throw new ParseException(in, "未终止的 斜杠 (\\)", i, null);
+		if (slash) throw new ParseException(string, "未终止的 斜杠 (\\)", i, null);
 		return output;
 	}
 
 	@SuppressWarnings("fallthrough")
-	protected final CharList readSlashString(char end, boolean 转义) throws ParseException {
-		CharSequence in = input;
-		int i = index;
-
-		CharList v = found; v.clear();
-
-		boolean slash = false;
-
-		int prevI = i;
-		while (i < in.length()) {
-			char c = in.charAt(i++);
-			if (slash) {
-				if (转义) {
-					v.append(in, prevI, i-2);
-					i = _removeSlash(input, c, v, i);
-					prevI = i;
-				}
-				// 这样就不会处理c==end，相当于保留了\end唯一的转义符
-				slash = false;
-			} else if (c == end) {
-				v.append(in, prevI, i-1);
-				index = i;
-				return v;
-			} else if (c == '\\') {
-				slash = true;
-			}
-		}
-
-		throw err("在 转义字符串 终止前遇到了文件尾", index);
-	}
-
-	@SuppressWarnings("fallthrough")
-	protected static int _removeSlash(CharSequence in, char c, Appendable out, int i) throws ParseException {
+	protected static int unescapeChar(CharSequence in, char c, Appendable out, int i) throws ParseException {
 		try {
-			int v = DESLASHES.getOrDefaultInt(c, 0);
-			if (v == 0) {
-				out.append('\\').append(in.charAt(i-1));
-				return i;//throw new ParseException(in, "无效的转义 \\" + c, i-1, null);
-			}
-			if (v > 0) {
-				out.append((char) v);
-				return i;
-			}
-			switch (v) {
-				case -1: out.append('/'); break;
-				case -2: // UXXXXXXXX
-					try {
-						int UIndex = (int) parseNumber(in, i, i += 8, _NF_HEX);
-						if (Character.charCount(UIndex) > 1) out.append(Character.highSurrogate(UIndex)).append(Character.lowSurrogate(UIndex));
-						else out.append((char) UIndex);
-					} catch (Exception e) {
-						throw new ParseException(in, "无效的\\UXXXXXXXX转义:"+e.getMessage(), i);
-					}
-				break;
-				case -3: // uXXXX
-					try {
-						out.append((char) parseNumber(in, i, i += 4, _NF_HEX));
-					} catch (Exception e) {
-						throw new ParseException(in, "无效的\\uXXXX转义:"+e.getMessage(), i);
-					}
-				break;
-				case -4: out.append("\r"); if (in.charAt(i) == '\n') i++;
-				case -5: out.append("\n");
-					while (WHITESPACE.contains(in.charAt(i))) i++;
-				break;
-				case -6: // oct (000 - 377)
+			int unescaped = UNESCAPE_MAPPING.getOrDefaultInt(c, 0);
+			switch (unescaped) {
+				// >0: 替换为
+				default: {
+					out.append((char) unescaped);
+					return i;
+				}
+				// 0: 不支持
+				case 0: {
+					out.append('\\').append(in.charAt(i-1));
+					return i;//throw new ParseException(in, "无效的转义 \\" + c, i-1, null);
+				}
+				case -1: // oct (000 - 377)
 					char d = i == in.length() ? 0 : in.charAt(i);
 					int xi = c-'0';
 					if (d >= '0' && d <= '7') {
@@ -432,17 +401,39 @@ public class Tokenizer {
 					}
 					out.append((char)xi);
 				break;
+				case -2: // UXXXXXXXX
+					try {
+						int codepoint = (int) parseNumber(in, i, i += 8, _NF_HEX);
+						if (codepoint > Character.MAX_CODE_POINT) throw new FastFailException("codePoint="+codepoint);
 
+						if (Character.isBmpCodePoint(codepoint)) {
+							out.append((char) codepoint);
+						} else {
+							out.append(Character.highSurrogate(codepoint))
+							   .append(Character.lowSurrogate(codepoint));
+						}
+					} catch (Exception e) {
+						throw new ParseException(in, "无效的\\UXXXXXXXX转义:"+e.getMessage(), i);
+					}
+				break;
+				case -3: // uXXXX
+					try {
+						out.append((char) parseNumber(in, i, i += 4, _NF_HEX));
+					} catch (Exception e) {
+						throw new ParseException(in, "无效的\\uXXXX转义:"+e.getMessage(), i);
+					}
+				break;
+				case -4: out.append("\r"); if (in.charAt(i) == '\n') i++;
+				case -5: out.append("\n"); while (WHITESPACE.contains(in.charAt(i))) i++;
 			}
 		} catch (IOException e) {
 			Helpers.athrow(e);
 		}
 		return i;
 	}
-
 	// endregion
 	// region lexer
-	public final boolean hasNext() { return index < input.length(); }
+	@Deprecated public final boolean hasNext() { return index < input.length(); }
 	protected final int lookAhead(int i) { return index+i >= input.length() ? -1 : input.charAt(index+i); }
 
 	@SuppressWarnings("fallthrough")
@@ -480,9 +471,9 @@ public class Tokenizer {
 	}
 
 	// region symbol matcher
-	protected static final Word COMMENT_RETRY_HINT = new Word();
-	private final CInt posHold = new CInt();
-	private final BiFunction<CInt, Word, Boolean> searcher = (kPos, v) -> {
+	@Deprecated protected static final Word COMMENT_RETRY_HINT = new Word();
+	@Deprecated private final CInt posHold = new CInt();
+	@Deprecated private final BiFunction<CInt, Word, Boolean> searcher = (kPos, v) -> {
 		// staticy is not valid
 		// 'static;' , 'static ' or '++;' are valid=
 		if (isValidToken(kPos.value, v)) {
@@ -491,10 +482,10 @@ public class Tokenizer {
 		}
 		return false;
 	};
-	private int _bestLength;
-	private Word _bestMatch;
+	@Deprecated private int _bestLength;
+	@Deprecated private Word _bestMatch;
 
-	protected final Word readSymbol() throws ParseException {
+	@Deprecated protected final Word readSymbol() throws ParseException {
 		if (tokens != null) {
 			Word w = tryMatchToken();
 			if (w != null) return w;
@@ -502,7 +493,7 @@ public class Tokenizer {
 		return readLiteral();
 	}
 
-	protected final Word tryMatchToken() throws ParseException {
+	@Deprecated protected final Word tryMatchToken() throws ParseException {
 		CharSequence in = input;
 		int i = index;
 
@@ -577,8 +568,39 @@ public class Tokenizer {
 		found.clear();
 		return formClip(LITERAL, found.append(in, prevI, i));
 	}
+	@SuppressWarnings("fallthrough")
+	protected final CharList readSlashString(char end, boolean unescape) throws ParseException {
+		CharSequence in = input;
+		int i = index;
 
-	protected Word readStringLegacy(char key) throws ParseException { return formClip(STRING, readSlashString(key, true)); }
+		CharList v = found; v.clear();
+
+		boolean slash = false;
+
+		int prevI = i;
+		while (i < in.length()) {
+			char c = in.charAt(i++);
+			if (slash) {
+				if (unescape) {
+					v.append(in, prevI, i-2);
+					i = unescapeChar(input, c, v, i);
+					prevI = i;
+				}
+				// 这样就不会处理c==end，相当于保留了\end唯一的转义符
+				slash = false;
+			} else if (c == end) {
+				v.append(in, prevI, i-1);
+				index = i;
+				return v;
+			} else if (c == '\\') {
+				slash = true;
+			}
+		}
+
+		throw err("在 转义字符串 终止前遇到了文件尾", index);
+	}
+
+	@Deprecated protected Word readStringLegacy(char key) throws ParseException { return formClip(STRING, readSlashString(key, true)); }
 
 	protected Word newWord() {return new Word();}
 	protected final Word wd = newWord();
@@ -897,7 +919,7 @@ public class Tokenizer {
 
 			int d = dateNum(2,31);
 
-			long ts = DateParser.daySinceUnixZero(y, m, d) * 86400000L;
+			long ts = DateTime.daySinceUnixZero(y, m, d) * 86400000L;
 
 			c = index == in.length() ? 0 : in.charAt(index);
 			if (c != 'T' && c != 't' && c != ' ')

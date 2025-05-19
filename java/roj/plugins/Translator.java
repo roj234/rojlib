@@ -69,7 +69,7 @@ public class Translator extends Plugin {
 					int pos = w.asInt();
 					wr.except(12, "=");
 					w = wr.except(Word.STRING, "翻译字符串");
-					map.putInt(pos, w.val());
+					map.put(pos, w.val());
 
 					w = wr.readWord();
 					if (w.type() != Word.INTEGER) break;
@@ -206,7 +206,7 @@ public class Translator extends Plugin {
 			Constant s = array.get(i);
 			if (s.type() == Constant.STRING) {
 				sb.append('\t').append(data.cp.indexOf(s)).append('=').append('"');
-				Tokenizer.addSlashes(sb, ((CstString) s).name().str()).append('"').append('\n');
+				Tokenizer.escape(sb, ((CstString) s).name().str()).append('"').append('\n');
 
 				any = true;
 			}

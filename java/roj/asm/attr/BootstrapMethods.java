@@ -1,5 +1,6 @@
 package roj.asm.attr;
 
+import roj.asm.AsmCache;
 import roj.asm.Opcodes;
 import roj.asm.cp.*;
 import roj.asm.type.Type;
@@ -146,30 +147,27 @@ public final class BootstrapMethods extends Attribute {
 			return owner.equals("java/lang/invoke/LambdaMetafactory");
 		}
 
-		private void initPar() {
-			if (in == null) {
-				in = Type.methodDesc(desc);
-				out = in.remove(in.size()-1);
-			}
-		}
-
-		public final List<Type> parameters() {initPar();return in;}
-		public final Type returnType() {initPar();return out;}
-
-		public final String rawDesc() {
-			if (in != null) {
-				in.add(out);
-				desc = Type.toMethodDesc(in, desc);
-				in.remove(in.size()-1);
-			}
+		public String rawDesc() {
+			if (in != null) return desc = Type.toMethodDesc(in, out, desc);
 			return desc;
 		}
-		public final void rawDesc(String param) {
-			checkInvariant(param);
-			desc = param;
+		public void rawDesc(String desc) {
+			checkInvariant(desc);
+			this.desc = desc;
 			in = null;
 			out = null;
 		}
+
+		public List<Type> parameters() {
+			if (in == null) {
+				SimpleList<Type> in = AsmCache.getInstance().methodTypeTmp();
+				out = Type.methodDesc(rawDesc(), in);
+				this.in = new SimpleList<>(in);
+			}
+			return in;
+		}
+		public Type returnType() { return out == null ? out = Type.methodDescReturn(rawDesc()) : out; }
+		public void setReturnType(Type ret) { parameters(); out = ret; }
 
 		public void toByteArray(ConstantPool pool, DynByteBuf w) {
 			if (!Kind.verifyType(kind, methodType)) throw new IllegalArgumentException("Method type "+methodType+" doesn't fit with lambda kind " + kind);
@@ -183,13 +181,11 @@ public final class BootstrapMethods extends Attribute {
 		}
 
 		public String toString() {
-			initPar();
-
 			CharList sb = new CharList()
 				.append("类型: ").append(Kind.toString(kind))
 				.append('\n').append(out).append(": ").append(owner).append('.').append(name).append('(');
 
-			if (in.size() > 3) {
+			if (parameters().size() > 3) {
 				int i = 3;
 				while (true) {
 					sb.append(in.get(i));
@@ -228,10 +224,8 @@ public final class BootstrapMethods extends Attribute {
 				args.set(i, args.get(i).clone());
 			}
 			if (in != null) {
-				in.add(out);
-				slf.desc = Type.toMethodDesc(in);
+				slf.desc = Type.toMethodDesc(in, out);
 				slf.in = null;
-				in.remove(in.size() - 1);
 			}
 			return slf;
 		}

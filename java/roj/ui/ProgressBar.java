@@ -27,11 +27,10 @@ public class ProgressBar implements AutoCloseable {
 
 	protected int getPostFixWidth() {return 0;}
 	protected void renderPostFix(CharList sb) {}
-	protected void render(CharList b) {
-		Terminal.renderBottomLine(b);}
+	protected void render(CharList b) {Terminal.renderBottomLine(b);}
 	public void _forceUpdate() {render(batch);}
 
-	public void set(String text) {
+	public void setTitle(String text) {
 		batch.clear();
 		render(batch.append(text));
 	}
@@ -81,8 +80,7 @@ public class ProgressBar implements AutoCloseable {
 		render(b.append("\u001B[0m"));
 	}
 
-	@Override public void close() {
-		Terminal.removeBottomLine(batch);}
+	@Override public void close() {Terminal.removeBottomLine(batch);}
 	public final void end() {close();}
 	public final void end(String message) {end(message, Terminal.GREEN);}
 	public void end(String message, int color) {
@@ -91,7 +89,7 @@ public class ProgressBar implements AutoCloseable {
 		batch.clear();
 		System.out.println(batch
 			.append("\u001b[2K").append(name).append(": ")
-			.append("\u001B[").append(color+ Terminal.HIGHLIGHT).append('m')
+			.append("\u001B[").append(color+Terminal.HIGHLIGHT).append('m')
 			.append(message)
 			.append("\u001B[0m"));
 	}

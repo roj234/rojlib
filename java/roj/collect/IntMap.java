@@ -119,8 +119,8 @@ public class IntMap<V> extends AbstractMap<Integer, V> implements _Generic_Map<I
 
 	@Override
 	@Deprecated
-	public final V put(Integer key, V value) {return putInt(key, value);}
-	public V putInt(int key, V e) {
+	public final V put(Integer key, V value) {return put((int)key, value);}
+	public V put(int key, V e) {
 		Entry<V> entry = getOrCreateEntry(key);
 		V oldV = entry.setValue(e);
 		return oldV == UNDEFINED ? null : oldV;
@@ -188,14 +188,14 @@ public class IntMap<V> extends AbstractMap<Integer, V> implements _Generic_Map<I
 	public V computeIfAbsentInt(int k, @NotNull IntFunction<V> fn) {
 		Entry<V> entry = getEntry(k);
 		V v;
-		if (entry == null) putInt(k, v = fn.apply(k));
+		if (entry == null) put(k, v = fn.apply(k));
 		else v = entry.value;
 		return v;
 	}
 	public V computeIfAbsentIntS(int k, @NotNull Supplier<V> supplier) {
 		Entry<V> entry = getEntry(k);
 		V v;
-		if (entry == null) putInt(k, v = supplier.get());
+		if (entry == null) put(k, v = supplier.get());
 		else v = entry.value;
 		return v;
 	}

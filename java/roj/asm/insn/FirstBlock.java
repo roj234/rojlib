@@ -6,7 +6,7 @@ import roj.util.DynByteBuf;
  * @author Roj234
  * @since 2023/10/5 1:50
  */
-final class FirstBlock extends CodeBlock {
+final class FirstBlock extends Segment {
 	private final DynByteBuf buf;
 	private final int off;
 	private int length;
@@ -22,6 +22,6 @@ final class FirstBlock extends CodeBlock {
 		return oldLen != newLen;
 	}
 	@Override public int length() {return length;}
-	@Override public CodeBlock move(AbstractCodeWriter to, int blockMoved, boolean clone) {throw new UnsupportedOperationException();}
+	@Override public Segment move(AbstractCodeWriter to, int blockMoved, boolean clone) {throw new UnsupportedOperationException();}
 	@Override public String toString() {return "First("+length()+')';}
 }

@@ -2,7 +2,7 @@ package roj.http;
 
 import roj.text.CharList;
 import roj.text.DateFormat;
-import roj.text.Escape;
+import roj.text.URICoder;
 
 /**
  * @author Roj234
@@ -99,16 +99,16 @@ public final class Cookie {
 
 	public void write(CharList sb, boolean atServer) {
 		sb.append(name).append('=');
-		Escape.encodeURIComponent(sb, value);
+		URICoder.encodeURIComponent(sb, value);
 		if (!atServer) return;
 		if (expires != 0) sb.append("; Max-Age=").append(expires < 0 ? "-1" : (expires-System.currentTimeMillis()) / 1000);
 		if (domain != null) sb.append("; Domain=").append(domain);
-		if (path != null) Escape.encodeURI(sb.append("; Path="), path);
+		if (path != null) URICoder.encodeURI(sb.append("; Path="), path);
 		if ((flag&4)!=0) sb.append("; HttpOnly");
 		if ((flag&3)!=0) sb.append("; SameSite=").append(sameSite());
 		if ((flag&10)!=0) sb.append("; Secure");
 	}
 
 	@Override
-	public String toString() { return Escape.encodeURIComponent(name)+"="+ Escape.encodeURIComponent(value); }
+	public String toString() { return URICoder.encodeURIComponent(name)+"="+ URICoder.encodeURIComponent(value); }
 }

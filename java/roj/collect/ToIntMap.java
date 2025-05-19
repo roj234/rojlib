@@ -11,41 +11,41 @@ import static roj.collect.IntMap.UNDEFINED;
 
 public class ToIntMap<K> extends MyHashMap<K, Integer> implements ToIntFunction<K> {
 	public static final class Entry<K> extends AbstractEntry<K, Integer> {
-		public int v;
+		public int value;
 
 		public Entry() {}
-		public Entry(K key, int val) {this.k = key;this.v = val;}
+		public Entry(K key, int val) {this.key = key;this.value = val;}
 
 		@Override
 		@Deprecated
-		public Integer getValue() { return v; }
+		public Integer getValue() { return value; }
 		@Override
 		@Deprecated
 		public Integer setValue(Integer value) {
-			int oldV = v;
-			v = value;
+			int oldV = this.value;
+			this.value = value;
 			return oldV;
 		}
 
 		@Override
-		public String toString() { return String.valueOf(k)+'='+v; }
+		public String toString() { return String.valueOf(key)+'='+value; }
 		@Override
 		public boolean equals(Object o) {
 			if (this == o) return true;
 			if (o == null || getClass() != o.getClass()) return false;
 
 			var entry = (Entry<?>) o;
-			if (!(k != null ? k.equals(entry.k) : entry.k == null)) return false;
-			return v == entry.v;
+			if (!(key != null ? key.equals(entry.key) : entry.key == null)) return false;
+			return value == entry.value;
 		}
 		@Override
 		public int hashCode() {
-			int hash = k != null ? k.hashCode() : 0;
-			return v ^ hash;
+			int hash = key != null ? key.hashCode() : 0;
+			return value ^ hash;
 		}
 
-		public static <T> Comparator<Entry<T>> comparator() {return (o1, o2) -> Integer.compare(o1.v, o2.v);}
-		public static <T> Comparator<Entry<T>> reverseComparator() {return (o1, o2) -> Integer.compare(o2.v, o1.v);}
+		public static <T> Comparator<Entry<T>> comparator() {return (o1, o2) -> Integer.compare(o1.value, o2.value);}
+		public static <T> Comparator<Entry<T>> reverseComparator() {return (o1, o2) -> Integer.compare(o2.value, o1.value);}
 	}
 
 	public static <T> ToIntMap<T> fromArray(T[] arr) {
@@ -65,7 +65,7 @@ public class ToIntMap<K> extends MyHashMap<K, Integer> implements ToIntFunction<
 	public final int getInt(Object key) { return getOrDefault(key, -1); }
 	public final int getOrDefault(Object key, int def) {
 		Entry<K> entry = (Entry<K>) getEntry(key);
-		return entry == null ? def : entry.v;
+		return entry == null ? def : entry.value;
 	}
 
 	/**
@@ -74,33 +74,33 @@ public class ToIntMap<K> extends MyHashMap<K, Integer> implements ToIntFunction<
 	 */
 	public int increment(K key, int i) {
 		Entry<K> entry = (Entry<K>) getOrCreateEntry(key);
-		if (entry.k == UNDEFINED) {
-			entry.k = key;
+		if (entry.key == UNDEFINED) {
+			entry.key = key;
 			size++;
 		}
-		return entry.v += i;
+		return entry.value += i;
 	}
 
 	public Integer putInt(K key, int val) {
 		Entry<K> entry = (Entry<K>) getOrCreateEntry(key);
 		Integer oldV;
-		if (entry.k == UNDEFINED) {
-			entry.k = key;
+		if (entry.key == UNDEFINED) {
+			entry.key = key;
 			size++;
 
 			oldV = null;
 		} else {
-			oldV = entry.v;
+			oldV = entry.value;
 		}
 
-		entry.v = val;
+		entry.value = val;
 		return oldV;
 	}
 	public boolean putIntIfAbsent(K key, int val) {
 		Entry<K> entry = (Entry<K>) getOrCreateEntry(key);
-		if (entry.k == UNDEFINED) {
-			entry.k = key;
-			entry.v = val;
+		if (entry.key == UNDEFINED) {
+			entry.key = key;
+			entry.value = val;
 			size++;
 			return true;
 		}
@@ -109,20 +109,20 @@ public class ToIntMap<K> extends MyHashMap<K, Integer> implements ToIntFunction<
 
 	public int putOrGet(K key, int val, int ifPut) {
 		Entry<K> entry = (Entry<K>) getOrCreateEntry(key);
-		if (entry.k == UNDEFINED) {
-			entry.k = key;
-			entry.v = val;
+		if (entry.key == UNDEFINED) {
+			entry.key = key;
+			entry.value = val;
 			size++;
 			return ifPut;
 		}
-		return entry.v;
+		return entry.value;
 	}
 
 	public final int removeInt(Object k) { return removeInt(k, -1); }
 	public final int removeInt(Object k, int def) {
 		Entry<K> entry = (Entry<K>) remove0(k, UNDEFINED);
 		if (entry == null) return def;
-		return entry.v;
+		return entry.value;
 	}
 
 	@SuppressWarnings("unchecked")
@@ -132,7 +132,7 @@ public class ToIntMap<K> extends MyHashMap<K, Integer> implements ToIntFunction<
 		for (int i = ent.length - 1; i >= 0; i--) {
 			Entry<K> entry = (Entry<K>) ent[i];
 			while (entry != null) {
-				if (entry.v == val) return true;
+				if (entry.value == val) return true;
 				entry = (Entry<K>) entry.next;
 			}
 		}
@@ -141,7 +141,7 @@ public class ToIntMap<K> extends MyHashMap<K, Integer> implements ToIntFunction<
 
 	protected AbstractEntry<K, Integer> useEntry() {
 		AbstractEntry<K, Integer> entry = new Entry<>();
-		entry.k = Helpers.cast(UNDEFINED);
+		entry.key = Helpers.cast(UNDEFINED);
 		return entry;
 	}
 }

@@ -115,9 +115,18 @@ public sealed class Type implements IType permits Type.DirtyHacker {
 	public static Type fieldDesc(String desc) {return parse(desc, 0);}
 	public static List<Type> methodDesc(String desc) {
 		SimpleList<Type> p = AsmCache.getInstance().methodTypeTmp();
-		methodDesc(desc, p); return new SimpleList<>(p);
+		Type returnType = methodDesc(desc, p);
+		p.add(returnType);
+		return new SimpleList<>(p);
 	}
-	public static void methodDesc(String desc, List<Type> params) {
+
+	/**
+	 * 解析方法描述
+	 * @param desc 方法描述
+	 * @param arguments 入参
+	 * @return 返回值
+	 */
+	public static Type methodDesc(String desc, List<Type> arguments) {
 		int array = 0;
 		foundError:
 		if (desc.charAt(0) == '(') for (int i = 1; i < desc.length(); i++) {
@@ -126,19 +135,18 @@ public sealed class Type implements IType permits Type.DirtyHacker {
 				case 'L' -> {
 					int typeEnd = desc.indexOf(';', ++i);
 					if (typeEnd < 0) break foundError;
-					params.add(klass(desc.substring(i, typeEnd), array));
+					arguments.add(klass(desc.substring(i, typeEnd), array));
 					array = 0;
 					i = typeEnd;
 				}
 				default -> {
 					if (!isValid(c)) break foundError;
-					params.add(array == 0 ? primitive(c) : primitive(c, array));
+					arguments.add(array == 0 ? primitive(c) : primitive(c, array));
 					array = 0;
 				}
 				case '[' -> array++;
 				case ')' -> {
-					params.add(parse(desc, i+1));
-					return;
+					return parse(desc, i+1);
 				}
 			}
 		}
@@ -188,16 +196,27 @@ public sealed class Type implements IType permits Type.DirtyHacker {
 	/**
 	 * 转换方法type为字符串
 	 */
-	public static String toMethodDesc(List<? extends IType> list) { return toMethodDesc(list, null); }
-	public static String toMethodDesc(List<? extends IType> list, String prev) {
+	@Deprecated
+	public static String toMethodDesc(List<? extends IType> descList) {
 		CharList sb = IOUtil.getSharedCharBuf().append('(');
 
-		for (int i = 0; i < list.size(); i++) {
+		for (int i = 0; i < descList.size(); i++) {
 			// return value
-			if (i == list.size() - 1) sb.append(')');
+			if (i == descList.size() - 1) sb.append(')');
 
-			list.get(i).rawType().toDesc(sb);
+			descList.get(i).rawType().toDesc(sb);
 		}
+		return sb.toString();
+	}
+	public static String toMethodDesc(List<? extends IType> parameters, IType returnType) { return toMethodDesc(parameters, returnType, null); }
+	public static String toMethodDesc(List<? extends IType> parameters, IType returnType, String prev) {
+		CharList sb = IOUtil.getSharedCharBuf().append('(');
+
+		for (int i = 0; i < parameters.size(); i++) {
+			parameters.get(i).rawType().toDesc(sb);
+		}
+		returnType.rawType().toDesc(sb.append(')'));
+
 		return sb.equals(prev) ? prev : sb.toString();
 	}
 
@@ -237,7 +256,7 @@ public sealed class Type implements IType permits Type.DirtyHacker {
 	/**
 	 * 返回基础操作码code适合当前Type的变种
 	 */
-	public byte shiftedOpcode(int code) {
+	public byte getOpcode(int code) {
 		int shift = (int) MAP[getActualType()-BYTE][3];
 		int data = Opcodes.shift(code);
 		if (data >>> 8 <= shift) throw new IllegalStateException(Opcodes.showOpcode(code)+"不存在适合"+this+"的变种");

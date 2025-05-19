@@ -6,14 +6,14 @@ import roj.util.DynByteBuf;
  * @author Roj234
  * @since 2022/11/17 12:53
  */
-public abstract class CodeBlock {
+public abstract class Segment {
 	protected abstract boolean put(CodeWriter to, int segmentId);
 	public abstract int length();
 
-	SolidBlock setData(DynByteBuf data) { throw new UnsupportedOperationException(getClass().getName()); }
+	StaticSegment setData(DynByteBuf data) { throw new UnsupportedOperationException(getClass().getName()); }
 	DynByteBuf getData() { return null; }
 
-	public CodeBlock move(AbstractCodeWriter to, int blockMoved, boolean clone) { return this; }
+	public Segment move(AbstractCodeWriter to, int blockMoved, boolean clone) { return this; }
 	protected static Label copyLabel(Label label, AbstractCodeWriter to, int blockMoved, boolean clone) {
 		if (label.isUnset() || to.labels.contains(label)) return label;
 

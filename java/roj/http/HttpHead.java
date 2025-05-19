@@ -4,7 +4,7 @@ import org.jetbrains.annotations.Nullable;
 import roj.WillChange;
 import roj.collect.SimpleList;
 import roj.math.Version;
-import roj.text.Escape;
+import roj.text.URICoder;
 import roj.util.DynByteBuf;
 
 import java.net.MalformedURLException;
@@ -124,7 +124,7 @@ public class HttpHead extends Headers {
 
 				try {
 					if (cookie != null) cookie.clearDirty();
-					cookie = new Cookie(Escape.decodeURI(k), Escape.decodeURI(v));
+					cookie = new Cookie(URICoder.decodeURI(k), URICoder.decodeURI(v));
 					cookies.add(cookie);
 				} catch (MalformedURLException e) {
 					cookie = new Cookie("invalid");

@@ -3,7 +3,7 @@ package roj.config.data;
 import org.jetbrains.annotations.NotNull;
 import roj.config.serial.CVisitor;
 import roj.text.DateFormat;
-import roj.text.DateParser;
+import roj.text.DateTime;
 
 /**
  * @author Roj234
@@ -21,5 +21,5 @@ public final class CDate extends CLong {
 	@Override public void accept(CVisitor visitor) { visitor.valueDate(value); }
 
 	@Override
-	public String toString() {return DateParser.GMT().toISOString(value);}
+	public String toString() {return DateTime.GMT().toISOString(value);}
 }

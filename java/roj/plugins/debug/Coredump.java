@@ -1,4 +1,4 @@
-package roj.plugins.coredump;
+package roj.plugins.debug;
 
 import roj.ReferenceByGeneratedClass;
 import roj.asm.ClassNode;
@@ -25,7 +25,7 @@ import static roj.asm.Opcodes.*;
 @Autoload(Autoload.Target.INIT)
 public class Coredump implements ConstantPoolHooks.Hook<MethodNode> {
 	static {
-		DefaultTweaker.CONDITIONAL.annotatedMethod("roj/plugins/coredump/Exceptional", new Coredump());
+		DefaultTweaker.CONDITIONAL.annotatedMethod("roj/plugins/debug/api/Exceptional", new Coredump());
 	}
 
 	@Override
@@ -59,13 +59,13 @@ public class Coredump implements ConstantPoolHooks.Hook<MethodNode> {
 
 		Label start = c.label();
 		c.invoke((node.modifier&ACC_STATIC) == 0 ? INVOKESPECIAL : INVOKESTATIC, node.owner, node.name(), node.rawDesc());
-		c.insn(node.returnType().shiftedOpcode(IRETURN));
+		c.insn(node.returnType().getOpcode(IRETURN));
 		Label end = c.label();
 
 		c.visitExceptions();
 		c.visitException(start, end, end, null);
 
-		c.invokeS("roj/plugins/coredump/Coredump", "__onExceptionCaptured", "(Ljava/lang/Throwable;)Ljava/lang/Throwable;");
+		c.invokeS("roj/plugins/debug/Coredump", "__onExceptionCaptured", "(Ljava/lang/Throwable;)Ljava/lang/Throwable;");
 		c.insn(ATHROW);
 
 		c.finish();

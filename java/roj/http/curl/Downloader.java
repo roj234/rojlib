@@ -192,7 +192,7 @@ abstract class Downloader implements Task, Closeable, ChannelHandler {
 			ch = ctx = MyChannel.openTCP();
 			ctx.addLast("Downloader", this);
 
-			client.connect(ctx, timeout);
+			client.attach(ctx, timeout);
 			ServerLaunch.DEFAULT_LOOPER.register(ctx, null);
 		} catch (Exception e) {
 			e.printStackTrace();

@@ -84,7 +84,7 @@ public final class ExprParser {
 		String s = "VZBCSIJFD";
 		for (int i = 0; i < s.length(); i++) {
 			//noinspection MagicConstant
-			PW.putInt(VOID+i, Type.primitive(s.charAt(i)));
+			PW.put(VOID+i, Type.primitive(s.charAt(i)));
 		}
 
 		SM.putInt(SM_UnaryPre | inc, -1);

@@ -28,12 +28,12 @@ public class InsnList extends AbstractCodeWriter implements Iterable<InsnNode> {
 	public InsnList() { clear(); }
 
 	public void clear() {
-		if (codeBlocks.getClass() != SimpleList.class) codeBlocks = new SimpleList<>();
-		else codeBlocks.clear();
+		if (segments.getClass() != SimpleList.class) segments = new SimpleList<>();
+		else segments.clear();
 		offset = 0;
 
-		SolidBlock b = SolidBlock.emptyWritable();
-		codeBlocks.add(b);
+		StaticSegment b = StaticSegment.emptyWritable();
+		segments.add(b);
 		codeOb = b.getData();
 
 		pc = null;
@@ -50,8 +50,8 @@ public class InsnList extends AbstractCodeWriter implements Iterable<InsnNode> {
 			// only read
 			refPos = dd.xInsn_sharedRefPos;
 			refVal = dd.xInsn_sharedRefVal;
-			codeBlocks = new SimpleList<>();
-			((SimpleList<CodeBlock>) codeBlocks)._setArray(dd.xInsn_sharedSegments);
+			segments = new SimpleList<>();
+			((SimpleList<Segment>) segments)._setArray(dd.xInsn_sharedSegments);
 			myIsReading = dd.xInsn_isReading = true;
 		}
 
@@ -70,9 +70,9 @@ public class InsnList extends AbstractCodeWriter implements Iterable<InsnNode> {
 			refVal = Arrays.copyOf(refVal, refLen);
 		}
 
-		List<CodeBlock> block = codeBlocks;
-		if (block.size() == 1) codeBlocks = Collections.singletonList(block.get(0));
-		else codeBlocks = Helpers.cast(Arrays.asList(block.toArray()));
+		List<Segment> block = segments;
+		if (block.size() == 1) segments = Collections.singletonList(block.get(0));
+		else segments = Helpers.cast(Arrays.asList(block.toArray()));
 		block.clear(); // clear Segment reference
 
 		if (myIsReading) dd.xInsn_isReading = false;
@@ -105,10 +105,10 @@ public class InsnList extends AbstractCodeWriter implements Iterable<InsnNode> {
 		labels.add(lbl);
 
 		if (before) {
-			if (codeBlocks.isEmpty() || pos < codeBlocks.get(0).length()) lbl.setFirst(pos);
+			if (segments.isEmpty() || pos < segments.get(0).length()) lbl.setFirst(pos);
 			else lbl.setRaw(pos);
 		} else { // after
-			bciR2W.putInt(pos, lbl);
+			bciR2W.put(pos, lbl);
 		}
 		return lbl;
 	}
@@ -126,7 +126,7 @@ public class InsnList extends AbstractCodeWriter implements Iterable<InsnNode> {
 			int block = label >>> 16;
 			int offset = label & 0xFFFF;
 
-			DynByteBuf bb = codeBlocks.get(block).getData();
+			DynByteBuf bb = segments.get(block).getData();
 
 			int index;
 			switch (c.getClass().getName()) {
@@ -152,11 +152,11 @@ public class InsnList extends AbstractCodeWriter implements Iterable<InsnNode> {
 
 		cw.labels.addAll(labels);
 
-		int blockFrom = cw.codeBlocks.size();
-		if (cw.codeBlocks.isEmpty())
-			cw.codeBlocks = new SimpleList<>();
-		for (int i = 0; i < codeBlocks.size(); i++) {
-			cw.codeBlocks.add(codeBlocks.get(i).move(cw, blockFrom, true));
+		int blockFrom = cw.segments.size();
+		if (cw.segments.isEmpty())
+			cw.segments = new SimpleList<>();
+		for (int i = 0; i < segments.size(); i++) {
+			cw.segments.add(segments.get(i).move(cw, blockFrom, true));
 		}
 		cw.codeOb = codeOb;
 	}
@@ -189,7 +189,7 @@ public class InsnList extends AbstractCodeWriter implements Iterable<InsnNode> {
 		indexLabel(label);
 
 		InsnNode view = new InsnNode(this, false);
-		view._init(label, codeBlocks.get(label.block));
+		view._init(label, segments.get(label.block));
 		return view;
 	}
 	@NotNull
@@ -213,13 +213,13 @@ public class InsnList extends AbstractCodeWriter implements Iterable<InsnNode> {
 			Label pos = label;
 			int len = view.length();
 
-			CodeBlock s = codeBlocks.get(pos.block);
+			Segment s = segments.get(pos.block);
 			if (pos.offset+len >= s.length()) {
 				if (pos.offset+len != s.length()) throw new ConcurrentModificationException();
 
-				if (pos.block == codeBlocks.size()-1) return false;
+				if (pos.block == segments.size()-1) return false;
 
-				s = codeBlocks.get(++pos.block);
+				s = segments.get(++pos.block);
 				if (s.length() == 0) return false;// empty block
 				pos.offset = 0;
 			} else {
@@ -263,25 +263,25 @@ public class InsnList extends AbstractCodeWriter implements Iterable<InsnNode> {
 		codeOb.put(code).putShort(0);
 	}
 
-	protected final void ldc1(byte code, Constant c) { addSegment(new LdcBlock(code, c)); }
+	protected final void ldc1(byte code, Constant c) { addSegment(new Ldc(code, c)); }
 	protected final void ldc2(Constant c) { addRef(c); codeOb.put(LDC2_W).putShort(0); }
 	// endregion
 
 	public int bci() { return codeOb.wIndex()+offset; }
 
-	public final void addSegment(CodeBlock c) {
+	public final void addSegment(Segment c) {
 		if (c == null) throw new NullPointerException("c");
 
 		endSegment();
 
-		if (codeBlocks.getClass() != SimpleList.class)
-			codeBlocks = new SimpleList<>(codeBlocks);
+		if (segments.getClass() != SimpleList.class)
+			segments = new SimpleList<>(segments);
 
-		codeBlocks.add(c);
+		segments.add(c);
 		offset += c.length();
 
-		SolidBlock b = SolidBlock.emptyWritable();
-		codeBlocks.add(b);
+		StaticSegment b = StaticSegment.emptyWritable();
+		segments.add(b);
 		codeOb = b.getData();
 	}
 
@@ -289,7 +289,7 @@ public class InsnList extends AbstractCodeWriter implements Iterable<InsnNode> {
 	private Object[] refVal = ArrayCache.OBJECTS;
 	private int refLen;
 	final void addRef(Object ref) {
-		int pos = (codeBlocks.isEmpty() ? 0 : (codeBlocks.size()-1) << 16) | codeOb.wIndex();
+		int pos = (segments.isEmpty() ? 0 : (segments.size()-1) << 16) | codeOb.wIndex();
 
 		int i = refLen;
 
@@ -366,11 +366,11 @@ public class InsnList extends AbstractCodeWriter implements Iterable<InsnNode> {
 	}
 
 	private void satisfySegments() {
-		if (codeBlocks.size() > 0) {
-			int segLen = codeBlocks.size()+1;
+		if (segments.size() > 0) {
+			int segLen = segments.size()+1;
 			int[] offSum = AsmCache.getInstance().getIntArray_(segLen);
 			boolean updated = updateOffset(labels, offSum, segLen);
-			offset = offSum[codeBlocks.size()-1]; // last block begin
+			offset = offSum[segments.size()-1]; // last block begin
 		} else {
 			offset = 0;
 		}
@@ -380,21 +380,21 @@ public class InsnList extends AbstractCodeWriter implements Iterable<InsnNode> {
 			pos.value = pos.offset;
 
 			int i = 0;
-			for (int block = 0; block < codeBlocks.size(); block++) {
-				CodeBlock s = codeBlocks.get(block);
+			for (int block = 0; block < segments.size(); block++) {
+				Segment s = segments.get(block);
 				int j = i + s.length();
-				if (j > pos.offset || (j == pos.offset && block == codeBlocks.size() - 1)) {
+				if (j > pos.offset || (j == pos.offset && block == segments.size() - 1)) {
 					pos.block = (short) block;
 					pos.offset -= i;
-					if (pos.offset != 0 && s.getClass() != SolidBlock.class) throw new IllegalArgumentException("标签位于不可分割部分 "+pos);
+					if (pos.offset != 0 && s.getClass() != StaticSegment.class) throw new IllegalArgumentException("标签位于不可分割部分 "+pos);
 					return;
 				}
 				i = j;
 			}
-		} else if (pos.block < codeBlocks.size()) {
+		} else if (pos.block < segments.size()) {
 			int len = 0;
 			for (int block = 0; block < pos.block; block++) {
-				len += codeBlocks.get(block).length();
+				len += segments.get(block).length();
 			}
 			pos.value = (char) (len+pos.offset);
 			return;
@@ -422,14 +422,14 @@ public class InsnList extends AbstractCodeWriter implements Iterable<InsnNode> {
 		dst.indexLabel(dend);
 		dst.pc = null;
 
-		SimpleList<CodeBlock> toInsert = new SimpleList<>();
+		SimpleList<Segment> toInsert = new SimpleList<>();
 
 		src.satisfySegments();
 		int blockFrom = sstart.block, blockTo = send.block;
-		List<CodeBlock> srcCodeBlocks = src.codeBlocks;
+		List<Segment> srcSegments = src.segments;
 
 		// 如果是某个segment的开始，那么移动到上一个的结尾
-		final int offTo = send.offset == 0 && blockTo>0 ? srcCodeBlocks.get(--blockTo).length() : send.offset;
+		final int offTo = send.offset == 0 && blockTo>0 ? srcSegments.get(--blockTo).length() : send.offset;
 
 		//处理src的partial segment
 		OnlyOneStaticSegment: {
@@ -437,9 +437,9 @@ public class InsnList extends AbstractCodeWriter implements Iterable<InsnNode> {
 
 			if (sstart.offset != 0) {
 				// 拆分start
-				var bytecode = AsmCache.getInstance().copy(srcCodeBlocks.get(blockFrom++).getData());
+				var bytecode = AsmCache.getInstance().copy(srcSegments.get(blockFrom++).getData());
 				bytecode.rIndex = sstart.offset;
-				toInsert.add(new SolidBlock().setData(bytecode));
+				toInsert.add(new StaticSegment().setData(bytecode));
 
 				// 如果总共只复制一个StaticSegment
 				if (sstart.block == blockTo) {
@@ -449,15 +449,15 @@ public class InsnList extends AbstractCodeWriter implements Iterable<InsnNode> {
 			}
 
 			for (int i = blockFrom; i < blockTo; i++) {
-				toInsert.add(srcCodeBlocks.get(i).move(dst, dstartMoved - blockFrom, clone));
+				toInsert.add(srcSegments.get(i).move(dst, dstartMoved - blockFrom, clone));
 			}
 
-			var toBlock = srcCodeBlocks.get(blockTo);
+			var toBlock = srcSegments.get(blockTo);
 			if (offTo != toBlock.length()) {
 				//拆分end
 				var bytecode = AsmCache.getInstance().copy(toBlock.getData());
 				bytecode.wIndex(offTo);
-				toInsert.add(new SolidBlock().setData(bytecode));
+				toInsert.add(new StaticSegment().setData(bytecode));
 			} else {
 				toInsert.add(toBlock.move(dst, dstartMoved - blockTo, clone));
 			}
@@ -467,7 +467,7 @@ public class InsnList extends AbstractCodeWriter implements Iterable<InsnNode> {
 
 		//处理dst的partial segment
 		if (dstart.block != dend.block || dstart.offset != dend.offset || dstart.offset != 0) {
-			var tmp = dst.codeBlocks.get(dstart.block);
+			var tmp = dst.segments.get(dstart.block);
 
 			var bytecode = AsmCache.getInstance().copy(tmp.getData());
 
@@ -478,7 +478,7 @@ public class InsnList extends AbstractCodeWriter implements Iterable<InsnNode> {
 				if (dstart.block == dend.block) {
 					bytecode.rIndex = dend.offset;
 					if (bytecode.isReadable()) {
-						toInsert.add(new SolidBlock().setData(bytecode));// right
+						toInsert.add(new StaticSegment().setData(bytecode));// right
 						leftSplit = true;
 						break RightKnown;
 					}
@@ -487,7 +487,7 @@ public class InsnList extends AbstractCodeWriter implements Iterable<InsnNode> {
 					if (dend.offset != 0) {
 						segmentRemoved--;
 
-						tmp = dst.codeBlocks.get(dend.block);
+						tmp = dst.segments.get(dend.block);
 
 						bytecode = AsmCache.getInstance().copy(tmp.getData());
 						bytecode.rIndex = dend.offset;
@@ -530,20 +530,20 @@ public class InsnList extends AbstractCodeWriter implements Iterable<InsnNode> {
 
 		// 按顺序插入所有的segment
 
-		SimpleList<CodeBlock> dstCodeBlocks = dst.codeBlocks instanceof SimpleList<CodeBlock> x ? x : (SimpleList<CodeBlock>) (dst.codeBlocks = new SimpleList<>(dst.codeBlocks));
+		SimpleList<Segment> dstSegments = dst.segments instanceof SimpleList<Segment> x ? x : (SimpleList<Segment>) (dst.segments = new SimpleList<>(dst.segments));
 		int blockDelta = toInsert.size() - segmentRemoved;
 
-		dstCodeBlocks.ensureCapacity(dstCodeBlocks.size()+blockDelta);
-		Object[] array = dstCodeBlocks.getInternalArray();
+		dstSegments.ensureCapacity(dstSegments.size()+blockDelta);
+		Object[] array = dstSegments.getInternalArray();
 
 		// move
-		System.arraycopy(array, dend.block, array, dend.block + blockDelta, dstCodeBlocks.size() - dend.block);
+		System.arraycopy(array, dend.block, array, dend.block + blockDelta, dstSegments.size() - dend.block);
 		// copy
 		System.arraycopy(toInsert.getInternalArray(), 0, array, alignSegment(dstart, 1), toInsert.size());
 		// clear
-		for (int i = dstCodeBlocks.size()+blockDelta; i < dstCodeBlocks.size(); i++) array[i] = null;
+		for (int i = dstSegments.size()+blockDelta; i < dstSegments.size(); i++) array[i] = null;
 
-		dstCodeBlocks._setSize(dstCodeBlocks.size()+blockDelta);
+		dstSegments._setSize(dstSegments.size()+blockDelta);
 
 		int refSrcStart, refSrcEnd;
 		int refDstStart, refDstEnd;
@@ -622,10 +622,10 @@ public class InsnList extends AbstractCodeWriter implements Iterable<InsnNode> {
 		dst.refVal = outRefVal;
 		dst.refLen += refDeltaCount;
 
-		CodeBlock lastBlock = dstCodeBlocks.isEmpty() ? null : dstCodeBlocks.getLast();
-		if (!(lastBlock instanceof SolidBlock) || ((SolidBlock) lastBlock).isReadonly()) {
-			lastBlock = new SolidBlock();
-			dstCodeBlocks.add(lastBlock);
+		Segment lastBlock = dstSegments.isEmpty() ? null : dstSegments.getLast();
+		if (!(lastBlock instanceof StaticSegment) || ((StaticSegment) lastBlock).isReadonly()) {
+			lastBlock = new StaticSegment();
+			dstSegments.add(lastBlock);
 		}
 		dst.codeOb = lastBlock.getData();
 		dst.satisfySegments();

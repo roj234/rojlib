@@ -6,7 +6,6 @@ import roj.config.ConfigMaster;
 import roj.config.ParseException;
 import roj.config.auto.SerializerFactory;
 import roj.io.IOUtil;
-import roj.util.Helpers;
 
 import java.io.File;
 import java.io.IOException;
@@ -84,11 +83,7 @@ class JsonUserManager implements UserManager {
 
 		try {
 			IOUtil.writeFileEvenMoreSafe(json.getParentFile(), json.getName(), file -> {
-				try {
-					ConfigMaster.JSON.writeObject(SERIALIZER.listOf(User.class), copy, file);
-				} catch (Exception e) {
-					Helpers.athrow(e);
-				}
+				ConfigMaster.JSON.writeObject(SERIALIZER.listOf(User.class), copy, file);
 			});
 		} catch (Exception e) {
 			e.printStackTrace();

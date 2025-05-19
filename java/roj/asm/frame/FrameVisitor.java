@@ -5,8 +5,8 @@ import roj.asm.MethodNode;
 import roj.asm.Opcodes;
 import roj.asm.cp.*;
 import roj.asm.insn.AbstractCodeWriter;
-import roj.asm.insn.CodeBlock;
-import roj.asm.insn.JumpBlock;
+import roj.asm.insn.JumpTo;
+import roj.asm.insn.Segment;
 import roj.asm.insn.SwitchBlock;
 import roj.asm.type.Type;
 import roj.collect.IntMap;
@@ -84,12 +84,12 @@ public class FrameVisitor {
 	 * Visit CodeBlock [Jump | Switch]
 	 * CodeWriter在固定偏移量(stage2)之后调用
 	 */
-	public void visitBlocks(MethodNode mn, List<CodeBlock> blocks) {
+	public void visitBlocks(MethodNode mn, List<Segment> blocks) {
 		init(mn);
 
 		for (int i = 0; i < blocks.size(); i++) {
-			CodeBlock block = blocks.get(i);
-			if (block instanceof JumpBlock js) {
+			Segment block = blocks.get(i);
+			if (block instanceof JumpTo js) {
 				List<BasicBlock> list;
 
 				BasicBlock jumpTarget = add(js.target.getValue(), "jump target", true);
@@ -100,7 +100,7 @@ public class FrameVisitor {
 				} else {
 					list = Collections.singletonList(jumpTarget);
 				}
-				jumpTo.putInt(js.fv_bci, list);
+				jumpTo.put(js.fv_bci, list);
 			} else if (block.getClass() == SwitchBlock.class) {
 				SwitchBlock ss = (SwitchBlock) block;
 				List<BasicBlock> list = Arrays.asList(new BasicBlock[ss.targets.size()+1]);
@@ -109,7 +109,7 @@ public class FrameVisitor {
 				for (int j = 0; j < ss.targets.size();j++) {
 					list.set(j+1, add(ss.targets.get(j).bci(), "switch branch", true));
 				}
-				jumpTo.putInt(ss.fv_bci, list);
+				jumpTo.put(ss.fv_bci, list);
 			}
 		}
 	}
@@ -134,7 +134,7 @@ public class FrameVisitor {
 	}
 	private BasicBlock add(int pos, String desc, boolean isFrame) {
 		BasicBlock target = stateIn.get(pos);
-		if (target == null) stateIn.putInt(pos, target = new BasicBlock(pos, desc));
+		if (target == null) stateIn.put(pos, target = new BasicBlock(pos, desc));
 		else target.merge(desc);
 		if (isFrame) target.isFrame = true;
 		return target;
@@ -638,9 +638,7 @@ public class FrameVisitor {
 	private void invoke(byte code, CstRef method) {invoke(code, method, method.nameAndType());}
 	private void invoke(byte code, CstRef method, CstNameAndType desc) {
 		SimpleList<Type> arguments = tmpList; arguments.clear();
-		Type.methodDesc(desc.rawDesc().str(), arguments);
-
-		Type returnType = arguments.remove(arguments.size()-1);
+		Type returnType = Type.methodDesc(desc.rawDesc().str(), arguments);
 		for (int i = arguments.size() - 1; i >= 0; i--) {
 			pop(of(arguments.get(i)));
 		}

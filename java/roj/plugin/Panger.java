@@ -184,7 +184,7 @@ public final class Panger extends PluginManager {
 		if (!motds.isEmpty()) {
 			try{
 				var motd = motds.get((int)(System.currentTimeMillis()/86400000L)%motds.size());
-				motd = Tokenizer.removeSlashes(motd.replace("{user}", System.getProperty("user.name")));
+				motd = Tokenizer.unescape(motd.replace("{user}", System.getProperty("user.name")));
 
 				s.append(" + ").append(motd).append('\n');
 			} catch (Exception ignored) {}

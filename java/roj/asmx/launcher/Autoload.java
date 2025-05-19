@@ -13,6 +13,7 @@ import java.lang.annotation.Target;
 @Target(ElementType.TYPE)
 public @interface Autoload {
 	Target value();
+	String group() default "";
 	int priority() default 0;
 	int intrinsic() default -1;
 

@@ -1,7 +1,7 @@
 package roj.plugins.p2p;
 
 import roj.collect.IntSet;
-import roj.crypt.CRC32s;
+import roj.crypt.CRC32;
 import roj.io.IOUtil;
 import roj.net.*;
 import roj.util.ByteList;
@@ -155,7 +155,7 @@ public final class STUN implements ChannelHandler {
 						}
 					break;
 					case 0x8028: // FINGERPRINT
-						int crc = CRC32s.once(pkt, 0, b.rIndex-4) ^ 0x5354554e;
+						int crc = CRC32.crc32(pkt, 0, b.rIndex-4) ^ 0x5354554e;
 						int reCrc = b.readInt();
 						if (crc != reCrc) {
 							r.errCode = 995;
@@ -348,7 +348,7 @@ public final class STUN implements ChannelHandler {
 
 		b.putShort(2, b.wIndex()-20+8);
 
-		int crc32 = CRC32s.once(b.list, 0, b.wIndex());
+		int crc32 = CRC32.crc32(b.list, 0, b.wIndex());
 		b.putShort(0x8028).putShort(4).putInt(crc32 ^ 0x5354554e);
 
 		return b;

@@ -181,7 +181,7 @@ public class TaskPool implements TaskExecutor {
 	}
 
 	public void setRejectPolicy(RejectPolicy policy) { this.policy = policy; }
-	public static void throwPolicy(TaskPool pool, Task task) {throw new RejectedExecutionException(pool+" is full, rejecting "+task);}
+	public static void throwPolicy(TaskPool pool, Task task) {throw new RejectedExecutionException(pool+" is full ("+pool.tasks.size()+" tasks now), rejecting "+task);}
 	public static void waitPolicy(TaskPool pool, Task task) {
 		while (!pool.fastPath.tryTransfer(task) && !pool.tasks.offerLast(task)) {
 			pool.noFull.awaitUninterruptibly();

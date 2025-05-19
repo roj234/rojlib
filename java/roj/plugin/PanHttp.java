@@ -7,7 +7,7 @@ import roj.http.server.Request;
 import roj.http.server.auto.GET;
 import roj.io.buf.BufferPool;
 import roj.text.CharList;
-import roj.text.DateParser;
+import roj.text.DateTime;
 import roj.util.ArrayCache;
 
 import java.lang.ref.WeakReference;
@@ -37,7 +37,7 @@ public final class PanHttp {
 	public Content status(Request req) {
 		var sb = new CharList();
 		sb.append("<title>服务器统计信息</title><p><h1>服务器统计</h1></p><pre>");
-		sb.append("启动时间:").append(DateParser.toLocalTimeString(startTime)).append('\n');
+		sb.append("启动时间:").append(DateTime.toLocalTimeString(startTime)).append('\n');
 		sb.append("正常运行:").append((System.currentTimeMillis() - startTime) / 1000).append("秒\n");
 		sb.append("反向代理:").append(HSConfig.proxySecret != null).append('\n');
 		sb.append("当前线程:").append(Thread.currentThread().getName()).append('\n');

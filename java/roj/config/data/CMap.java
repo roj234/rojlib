@@ -273,7 +273,7 @@ public class CMap extends CEntry {
 				if (TOMLParser.literalSafe(chain)) {
 					sb.append('[').append(chain).append("]\n");
 				} else {
-					Tokenizer.addSlashes(sb.append('['), chain).append("]\n");
+					Tokenizer.escape(sb.append('['), chain).append("]\n");
 				}
 			}
 			if (depth == 0 && properties.containsKey(CONFIG_TOPLEVEL))
@@ -299,7 +299,7 @@ public class CMap extends CEntry {
 						if (TOMLParser.literalSafe(entry.getKey())) {
 							sb.append(entry.getKey());
 						} else {
-							Tokenizer.addSlashes(sb.append('"'), chain).append('"');
+							Tokenizer.escape(sb.append('"'), chain).append('"');
 						}
 						sb.append(" = ");
 						if (depth == 3) {

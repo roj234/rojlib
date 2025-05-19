@@ -4,8 +4,6 @@
 
 package roj.gui.impl;
 
-import roj.RojLib;
-import roj.archive.qz.QZArchive;
 import roj.archive.qz.xz.LZMA2Options;
 import roj.archive.qz.xz.LZMA2Parallel;
 import roj.collect.SimpleList;
@@ -79,11 +77,15 @@ public class QZArchiverUI extends JFrame {
 			}
 		}
 		arc.input = input;
-		arc.storeFolder = uiStoreFolder.isSelected();
-		arc.storeMT = uiStoreMT.isSelected();
-		arc.storeCT = uiStoreCT.isSelected();
-		arc.storeAT = uiStoreAT.isSelected();
-		arc.storeAttr = uiStoreAttr.isSelected();
+		arc.storeFolder = bStoreFolder.isSelected();
+		arc.storeMT = bStoreMT.isSelected();
+		arc.storeCT = bStoreCT.isSelected();
+		arc.storeAT = bStoreAT.isSelected();
+		arc.storeAttr = bStoreAttr.isSelected();
+		arc.storeSymlink = bCheckSymbolicLink.isSelected();
+		arc.storeHardlink = bCheckHardLink.isSelected();
+		arc.storeArchiveOnly = bCompressArchiveOnly.isSelected();
+		arc.clearArchive = bClearArchive.isSelected();
 		if (!(arc.autoSolidSize = uiAutoSolidSize.isSelected())) {
 			arc.solidSize = (long) TextUtil.unscaledNumber1024(uiSolidSize.getText());
 		}
@@ -186,12 +188,12 @@ public class QZArchiverUI extends JFrame {
 						e.printStackTrace();
 					}
 				}
+				bar.close();
 				uiProgress.setValue(10000);
 				uiBegin.setText("压缩");
 				uiBegin.removeActionListener(stopListener);
 				uiBegin.addActionListener(beginListener);
 			}
-			new QZArchive(out, arc.password).close();
 		});
 	}
 
@@ -356,55 +358,61 @@ public class QZArchiverUI extends JFrame {
 
 		uiLog.setText("""
 				Roj234©可扩展并行7z压缩软件v2.0 帮助指南
-				  · 从绝对的可能性来说，相同的文件压缩出来有可能校验值不同，在有大小核的处理器上可能性会很高
-				  · CPU跑不满：开启【压缩流并行】或者减小【固实大小】
-				  · 压缩任何大小（确切的说，是压缩后大小）超过2GB的文件时，务必打开磁盘缓存，否则会压缩失败
+				  · 相同的文件并行压缩多次校验值可能变化，在大小核处理器上可能性更高
+				  · CPU利用率：点击【压缩流并行】查看详情
+				  · 若有文件压缩后大小超过2GB，必须打开磁盘缓存
 				  · 软件的弹窗都有意义，请仔细阅读""");
 
 		ActionListener[] tip = new ActionListener[3];
 		tip[0] = e -> {
-			JOptionPane.showMessageDialog(this, """
-				当【文件大小】的方差较大时，在压缩的最后阶段，CPU可能跑不满
-				开启该选项来解决此问题，但是会导致：
-				  · 进度条不动弹，在几分钟后瞬间结束
-				  · 压缩率降低千分之0.3-1.5
-				
-				注意事项：
-				  · 开启后，【固实大小】越小，压缩效果越差，CPU占用率也越低
-				    （和不开启时相反）
-				  · 若CPU跑不满
-				    1. 取消勾选【固实大小】的【自动】，并填写【1TB】
-				    2. 开启【混合模式】，CPU必定跑满（会使用更多内存）
-				  · 开启【自动拆分任务】，可以在不降低很多速度的同时，提升压缩效果""", "关于压缩流并行……", JOptionPane.WARNING_MESSAGE);
+			JOptionPane.showMessageDialog(this,
+					"<html><body>"
+							+ "<h3 style='margin-top:0; color:#1F4E79;'>压缩模式对比</h3>"
+
+							+ "<div style='background:#F2F2F2; padding:10px; border-left:4px solid #2E75B6;'>"
+							+ "<b style='color:#2E75B6;'>块级并行（项目默认）</b><br>"
+							+ "&nbsp;&nbsp;• 文件合并为字块（连续二进制流），<b>并行压缩多个字块</b><br>"
+							+ "&nbsp;&nbsp;• 固实大小越小，字块越多，并行度越高<br>"
+							+ "&nbsp;&nbsp;• <font color='green'>优点：</font>压缩率高<br>"
+							+ "&nbsp;&nbsp;• <font color='red'>缺点：</font>文件大小差异大时，末期CPU利用率不高"
+							+ "</div>"
+
+							+ "<div style='background:#F2F2F2; padding:10px; border-left:4px solid #C00000;'>"
+							+ "<b style='color:#C00000;'>LZMA2流并行（7-zip默认）</b><br>"
+							+ "&nbsp;&nbsp;• 文件合并为字块，同时压缩单个字块，使用LZMA2流的并行压缩功能<br>"
+							+ "&nbsp;&nbsp;• 固实大小越大，字块越长，（块边界导致的）压缩率损失越小<br>"
+							+ "&nbsp;&nbsp;• <font color='green'>优点：</font>大文件压缩效率高<br>"
+							+ "&nbsp;&nbsp;• <font color='red'>缺点：</font><br>"
+							+ "&nbsp;&nbsp;&nbsp;&nbsp;- 进度条出现延迟（内部分块缓冲）<br>"
+							+ "&nbsp;&nbsp;&nbsp;&nbsp;- 压缩率降低约0.3‰~1.5‰（块头字典重置开销等）"
+							+ "</div>"
+
+							+ "<div style='padding:10px; border-left:4px solid #000000;'>"
+							+ "<b>高级选项</b><br>"
+							+ "&nbsp;&nbsp;• <b>混合模式：</b>同时使用两种并行策略<br>"
+							+ "&nbsp;&nbsp;&nbsp;&nbsp;<font color='#BF9000'><i>→ 高效（疯狂）的选择，最高可达 CPU核心数 &times; 核心数 线程</i></font><br>"
+							+ "&nbsp;&nbsp;• <b>自动拆分：</b>文件级并行末期自动切换压缩流并行<br>"
+							+ "&nbsp;&nbsp;&nbsp;&nbsp;<font color='#BF9000'><i>→ 均衡的选择，优化末期CPU利用率的同时不损失太多压缩率</i></font><br>"
+							+ "</div>"
+
+							+ "</body></html>",
+					"压缩模式选择指南",
+					JOptionPane.WARNING_MESSAGE
+			);
 			uiSplitTask.removeActionListener(tip[0]);
-		};
-		tip[1] = e -> {
-			JOptionPane.showMessageDialog(this, """
-				1. 在压缩流并行时（或许，看你的设定）提高压缩速度
-				2. 会使用非常多的内存
-				3. 建议同时开启磁盘缓存,不然内存可能不够""", "关于混合模式……", JOptionPane.WARNING_MESSAGE);
-			uiMixedMode.removeActionListener(tip[1]);
 		};
 		tip[2] = e -> updateMemoryUsage();
 
 		uiSplitTask.addActionListener(tip[0]);
-		uiMixedMode.addActionListener(tip[1]);
 		uiSplitTask.addActionListener(tip[2]);
-		uiMixedMode.addActionListener(tip[2]);
 		uiAutoSolidSize.addActionListener(tip[2]);
 		uiAutoSplitTask.addActionListener(tip[2]);
-		uiAutoSplitTask.addActionListener(e -> {
-			boolean b = uiAutoSplitTask.isSelected();
-			uiMixedMode.setEnabled(!b);
-			if (b) uiMixedMode.setSelected(false);
-		});
 		helper.addEventListener(uiSolidSize, e -> updateMemoryUsage());
 		uiSplitTaskType.addActionListener(tip[2]);
 		uiSplitTask.addActionListener(e -> {
 			boolean b = uiSplitTask.isSelected();
 			uiSplitTaskType.setEnabled(b);
 			uiAutoSplitTask.setEnabled(b);
-			uiMixedMode.setEnabled(b);
 		});
 		md = new DefaultComboBoxModel<>();
 		md.addElement("压缩率中低|压缩快|内存低");
@@ -423,17 +431,37 @@ public class QZArchiverUI extends JFrame {
 		});
 		uiHideComplicate.addActionListener(e -> {
 			boolean v = uiHideComplicate.isSelected();
-			Component[] c = {uiPathType,uiKeepArchive,uiStoreAT,uiStoreAttr,uiStoreCT,uiStoreFolder,uiStoreMT,uiCyclePower,uiSaltLength,uiFastLZMA,uiFastCheck,uiCompressHeader,uiBCJ,uiBCJ2,uiMatchFinder,uiLc,uiLp,uiPb,uiDepthLimit,uiReadDirFromLog};
+			Component[] c = {uiPathType,uiKeepArchive,bStoreAT,bStoreAttr,bStoreCT,bStoreFolder,bStoreMT,uiCyclePower,uiSaltLength,uiFastLZMA,uiFastCheck,uiCompressHeader,uiBCJ,uiBCJ2,uiMatchFinder,uiLc,uiLp,uiPb,uiDepthLimit,uiReadDirFromLog,bCheckSymbolicLink,bCheckHardLink,bCompressArchiveOnly,bClearArchive};
 			for (Component cc : c) {
 				cc.setVisible(!v);
 			}
 		});
+		bCheckSymbolicLink.addActionListener(e -> {
+			if (bCheckSymbolicLink.isSelected())JOptionPane.showMessageDialog(
+					this,
+					"<html><body style='width: 400px;'>"
+							+ "<b>软硬链接仅支持配套UnarchiverUI解压：</b><br><br>"
+							+ "• <font color='red'>7-zip格式：</font><br>"
+							+ "&nbsp;&nbsp;- 仅支持Windows系统<br>"
+							+ "&nbsp;&nbsp;- 使用raw reparse point stream<br>"
+							+ "&nbsp;&nbsp;- 体积更大<br><br>"
+							+ "• <font color='green'>本项目自定义格式：</font><br>"
+							+ "&nbsp;&nbsp;1. 符号链接：设置REPARSE_POINT属性<br>"
+							+ "&nbsp;&nbsp;&nbsp;&nbsp;→ 直接存储链接路径<br>"
+							+ "&nbsp;&nbsp;2. 硬链接：额外添加NORMAL属性<br>"
+							+ "&nbsp;&nbsp;&nbsp;&nbsp;→ 指向压缩包内Entry的绝对路径<br>"
+							+ "&nbsp;&nbsp;3. 硬链接必须位于最后一个字块，以保证解压时依赖顺序正确"
+							+ "</body></html>",
+					"你需要知道的",
+					JOptionPane.INFORMATION_MESSAGE
+			);
+		});
 
-		if (!RojLib.hasNative(RojLib.FAST_LZMA))
+		if (!LZMA2Options.isNativeAccelerateAvailable())
 			uiNativeAccel.setEnabled(false);
 		else {
 			uiNativeAccel.addActionListener(e -> {
-				JOptionPane.showConfirmDialog(this, "作者C++技术力不行，压缩后可能没法解压（数据错误）\n请自行决定是否使用");
+				JOptionPane.showMessageDialog(this, "作者C++技术力不行，压缩后可能没法解压（数据错误）\n请自行决定是否使用");
 			});
 		}
 	}
@@ -550,11 +578,11 @@ public class QZArchiverUI extends JFrame {
         uiFastCheck = new JCheckBox();
         uiAppendOptions = new JComboBox<>();
         var label6 = new JLabel();
-        uiStoreMT = new JCheckBox();
-        uiStoreCT = new JCheckBox();
-        uiStoreAT = new JCheckBox();
-        uiStoreAttr = new JCheckBox();
-        uiStoreFolder = new JCheckBox();
+        bStoreMT = new JCheckBox();
+        bStoreCT = new JCheckBox();
+        bStoreAT = new JCheckBox();
+        bStoreAttr = new JCheckBox();
+        bStoreFolder = new JCheckBox();
         var separator6 = new JSeparator();
         uiBCJ = new JCheckBox();
         uiBCJ2 = new JCheckBox();
@@ -565,9 +593,15 @@ public class QZArchiverUI extends JFrame {
         uiMixedMode = new JCheckBox();
         uiReadDirFromLog = new JCheckBox();
         uiSortByFilename = new JCheckBox();
+        bCheckSymbolicLink = new JCheckBox();
+        bCheckHardLink = new JCheckBox();
+        bCompressArchiveOnly = new JCheckBox();
+        bClearArchive = new JCheckBox();
+        bRecoveryRecord = new JCheckBox();
+        iRecoveryRecord = new JSpinner();
 
         //======== this ========
-        setTitle("Roj234 SevenZ Archiver 2.6");
+        setTitle("Roj234 SevenZ Archiver 2.7");
         var contentPane = getContentPane();
         contentPane.setLayout(null);
 
@@ -658,14 +692,14 @@ public class QZArchiverUI extends JFrame {
         uiThreads.setBounds(225, 100, 70, uiThreads.getPreferredSize().height);
 
         //---- label2 ----
-        label2.setText("\u5e76\u884c");
+        label2.setText("\u7ebf\u7a0b");
         contentPane.add(label2);
         label2.setBounds(new Rectangle(new Point(198, 103), label2.getPreferredSize()));
 
         //---- uiSplitTask ----
-        uiSplitTask.setText("\u5355\u538b\u7f29\u6d41\u5e76\u884c");
+        uiSplitTask.setText("\u538b\u7f29\u6d41\u5e76\u884c");
         contentPane.add(uiSplitTask);
-        uiSplitTask.setBounds(new Rectangle(new Point(220, 148), uiSplitTask.getPreferredSize()));
+        uiSplitTask.setBounds(new Rectangle(new Point(232, 148), uiSplitTask.getPreferredSize()));
 
         //---- uiSplitTaskType ----
         uiSplitTaskType.setEnabled(false);
@@ -814,32 +848,32 @@ public class QZArchiverUI extends JFrame {
         contentPane.add(label6);
         label6.setBounds(new Rectangle(new Point(5, 230), label6.getPreferredSize()));
 
-        //---- uiStoreMT ----
-        uiStoreMT.setText("\u4fee\u6539\u65f6\u95f4");
-        uiStoreMT.setSelected(true);
-        contentPane.add(uiStoreMT);
-        uiStoreMT.setBounds(new Rectangle(new Point(5, 245), uiStoreMT.getPreferredSize()));
+        //---- bStoreMT ----
+        bStoreMT.setText("\u4fee\u6539\u65f6\u95f4");
+        bStoreMT.setSelected(true);
+        contentPane.add(bStoreMT);
+        bStoreMT.setBounds(new Rectangle(new Point(5, 245), bStoreMT.getPreferredSize()));
 
-        //---- uiStoreCT ----
-        uiStoreCT.setText("\u521b\u5efa\u65f6\u95f4");
-        contentPane.add(uiStoreCT);
-        uiStoreCT.setBounds(new Rectangle(new Point(5, 265), uiStoreCT.getPreferredSize()));
+        //---- bStoreCT ----
+        bStoreCT.setText("\u521b\u5efa\u65f6\u95f4");
+        contentPane.add(bStoreCT);
+        bStoreCT.setBounds(new Rectangle(new Point(5, 265), bStoreCT.getPreferredSize()));
 
-        //---- uiStoreAT ----
-        uiStoreAT.setText("\u8bbf\u95ee\u65f6\u95f4");
-        contentPane.add(uiStoreAT);
-        uiStoreAT.setBounds(new Rectangle(new Point(5, 285), uiStoreAT.getPreferredSize()));
+        //---- bStoreAT ----
+        bStoreAT.setText("\u8bbf\u95ee\u65f6\u95f4");
+        contentPane.add(bStoreAT);
+        bStoreAT.setBounds(new Rectangle(new Point(5, 285), bStoreAT.getPreferredSize()));
 
-        //---- uiStoreAttr ----
-        uiStoreAttr.setText("\u6587\u4ef6\u6743\u9650 (DOS)");
-        contentPane.add(uiStoreAttr);
-        uiStoreAttr.setBounds(new Rectangle(new Point(5, 305), uiStoreAttr.getPreferredSize()));
+        //---- bStoreAttr ----
+        bStoreAttr.setText("\u6587\u4ef6\u6743\u9650 (DOS)");
+        contentPane.add(bStoreAttr);
+        bStoreAttr.setBounds(new Rectangle(new Point(5, 305), bStoreAttr.getPreferredSize()));
 
-        //---- uiStoreFolder ----
-        uiStoreFolder.setText("\u6587\u4ef6\u5939");
-        uiStoreFolder.setSelected(true);
-        contentPane.add(uiStoreFolder);
-        uiStoreFolder.setBounds(new Rectangle(new Point(5, 325), uiStoreFolder.getPreferredSize()));
+        //---- bStoreFolder ----
+        bStoreFolder.setText("\u6587\u4ef6\u5939");
+        bStoreFolder.setSelected(true);
+        contentPane.add(bStoreFolder);
+        bStoreFolder.setBounds(new Rectangle(new Point(5, 325), bStoreFolder.getPreferredSize()));
         contentPane.add(separator6);
         separator6.setBounds(130, 330, 180, 2);
 
@@ -888,7 +922,40 @@ public class QZArchiverUI extends JFrame {
         contentPane.add(uiSortByFilename);
         uiSortByFilename.setBounds(new Rectangle(new Point(395, 290), uiSortByFilename.getPreferredSize()));
 
-        contentPane.setPreferredSize(new Dimension(510, 495));
+        //---- bCheckSymbolicLink ----
+        bCheckSymbolicLink.setText("\u68c0\u6d4b\u5e76\u5904\u7406\u7b26\u53f7\u94fe\u63a5");
+        contentPane.add(bCheckSymbolicLink);
+        bCheckSymbolicLink.setBounds(new Rectangle(new Point(495, 180), bCheckSymbolicLink.getPreferredSize()));
+
+        //---- bCheckHardLink ----
+        bCheckHardLink.setText("\u68c0\u6d4b\u5e76\u5904\u7406\u786c\u94fe\u63a5");
+        contentPane.add(bCheckHardLink);
+        bCheckHardLink.setBounds(new Rectangle(new Point(495, 200), bCheckHardLink.getPreferredSize()));
+
+        //---- bCompressArchiveOnly ----
+        bCompressArchiveOnly.setText("\u4ec5\u538b\u7f29\u5f52\u6863\u7684\u6587\u4ef6");
+        contentPane.add(bCompressArchiveOnly);
+        bCompressArchiveOnly.setBounds(new Rectangle(new Point(495, 220), bCompressArchiveOnly.getPreferredSize()));
+
+        //---- bClearArchive ----
+        bClearArchive.setText("\u5b8c\u6210\u540e\u53bb\u9664\u5f52\u6863\u5c5e\u6027");
+        bClearArchive.setEnabled(false);
+        contentPane.add(bClearArchive);
+        bClearArchive.setBounds(new Rectangle(new Point(495, 240), bClearArchive.getPreferredSize()));
+
+        //---- bRecoveryRecord ----
+        bRecoveryRecord.setText("\u6dfb\u52a0\u6062\u590d\u8bb0\u5f55");
+        bRecoveryRecord.setEnabled(false);
+        contentPane.add(bRecoveryRecord);
+        bRecoveryRecord.setBounds(new Rectangle(new Point(495, 260), bRecoveryRecord.getPreferredSize()));
+
+        //---- iRecoveryRecord ----
+        iRecoveryRecord.setModel(new SpinnerNumberModel(3, 1, 30, 1));
+        iRecoveryRecord.setEnabled(false);
+        contentPane.add(iRecoveryRecord);
+        iRecoveryRecord.setBounds(530, 280, 75, 20);
+
+        contentPane.setPreferredSize(new Dimension(635, 495));
         pack();
         setLocationRelativeTo(getOwner());
 		// JFormDesigner - End of component initialization  //GEN-END:initComponents  @formatter:on
@@ -930,11 +997,11 @@ public class QZArchiverUI extends JFrame {
     private JCheckBox uiCompressHeader;
     private JCheckBox uiFastCheck;
     private JComboBox<String> uiAppendOptions;
-    private JCheckBox uiStoreMT;
-    private JCheckBox uiStoreCT;
-    private JCheckBox uiStoreAT;
-    private JCheckBox uiStoreAttr;
-    private JCheckBox uiStoreFolder;
+    private JCheckBox bStoreMT;
+    private JCheckBox bStoreCT;
+    private JCheckBox bStoreAT;
+    private JCheckBox bStoreAttr;
+    private JCheckBox bStoreFolder;
     private JCheckBox uiBCJ;
     private JCheckBox uiBCJ2;
     private JTextArea uiLog;
@@ -942,5 +1009,11 @@ public class QZArchiverUI extends JFrame {
     private JCheckBox uiMixedMode;
     private JCheckBox uiReadDirFromLog;
     private JCheckBox uiSortByFilename;
+    private JCheckBox bCheckSymbolicLink;
+    private JCheckBox bCheckHardLink;
+    private JCheckBox bCompressArchiveOnly;
+    private JCheckBox bClearArchive;
+    private JCheckBox bRecoveryRecord;
+    private JSpinner iRecoveryRecord;
 	// JFormDesigner - End of variables declaration  //GEN-END:variables  @formatter:on
 }

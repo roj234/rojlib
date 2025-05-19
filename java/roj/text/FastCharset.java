@@ -103,7 +103,7 @@ public abstract class FastCharset {
 	 * @return off
 	 */
 	public final int encodeLoop(Object s, int off, int end, DynByteBuf out, int outMax, int minSpace) {
-		if (!out.hasBuffer()) {
+		if (!out.isReal()) {
 			ByteList bb = new ByteList();
 			bb.ensureCapacity(1024);
 

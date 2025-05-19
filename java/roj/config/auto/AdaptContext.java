@@ -92,9 +92,9 @@ class AdaptContext implements Serializer<Object> {
 	public final void value(String s) {curr.read(this, s);}
 	public final void valueNull() {curr.read(this, (Object) null);}
 	public final boolean supportArray() {return true;}
-	public final void value(byte[] ba) {curr.read(this,ba);}
-	public final void value(int[] ia) {curr.read(this,ia);}
-	public final void value(long[] la) {curr.read(this,la);}
+	public final void value(byte[] array) {curr.read(this, array);}
+	public final void value(int[] array) {curr.read(this, array);}
+	public final void value(long[] array) {curr.read(this, array);}
 
 	public final void valueMap() {curr.map(this,-1);}
 	public final void valueMap(int size) {curr.map(this,size);}

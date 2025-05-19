@@ -197,10 +197,10 @@ public class ByteList extends DynByteBuf implements Appendable {
 		return this;
 	}
 
-	public final Appendable append(char c) {return put(c);}
-	public final Appendable append(CharSequence s) { return append(s,0, s.length()); }
+	public final ByteList append(char c) {return put(c);}
+	public final ByteList append(CharSequence s) { return append(s,0, s.length()); }
 	@SuppressWarnings("deprecation")
-	public final Appendable append(CharSequence s, int start, int end) {
+	public final ByteList append(CharSequence s, int start, int end) {
 		int wi = end-start;
 		if ((wi|start|(s.length()-end)) < 0) throw new IndexOutOfBoundsException();
 		wi = preWrite(wi);
@@ -438,7 +438,7 @@ public class ByteList extends DynByteBuf implements Appendable {
 		public int wIndex() {flush();return fakeWriteIndex;}
 		public void wIndex(int w) { throw a(); }
 
-		public final boolean hasBuffer() { return false; }
+		public final boolean isReal() { return false; }
 		public final int arrayOffset() { return buf.arrayOffset(); }
 		public final int capacity() { return buf.capacity(); }
 		public final int maxCapacity() { return buf.maxCapacity(); }

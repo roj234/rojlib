@@ -11,11 +11,11 @@ import static roj.asm.Opcodes.LDC_W;
  * @author Roj234
  * @since 2023/10/1 23:07
  */
-final class LdcBlock extends CodeBlock {
+final class Ldc extends Segment {
 	byte code;
 	Constant c;
 
-	LdcBlock(byte code, Constant c) {
+	Ldc(byte code, Constant c) {
 		this.code = code;
 		this.c = c;
 	}
@@ -36,14 +36,14 @@ final class LdcBlock extends CodeBlock {
 	}
 
 	@Override public int length() { return code-0x10; } // LDC=0x12, LDC_W=0x13
-	@Override public CodeBlock move(AbstractCodeWriter to, int blockMoved, boolean clone) { return clone?new LdcBlock(code,c.clone()):this; }
+	@Override public Segment move(AbstractCodeWriter to, int blockMoved, boolean clone) { return clone?new Ldc(code,c.clone()):this; }
 	@Override public String toString() { return Opcodes.showOpcode(code)+"("+c.toString()+")"; }
 
 	@Override public boolean equals(Object o) {
 		if (this == o) return true;
 		if (o == null || getClass() != o.getClass()) return false;
 
-		LdcBlock segment = (LdcBlock) o;
+		Ldc segment = (Ldc) o;
 
 		return c.equals(segment.c);
 	}

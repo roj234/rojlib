@@ -26,8 +26,8 @@ public class Multimap<K, V> extends MyHashMap<K, V> {
 
 		// awa, 省一个类, 我真无聊
 		public final void accept(String k, String v) {
-			if (this.k == null || this.k.equals(k)) {
-				this.k = (K) v;
+			if (this.key == null || this.key.equals(k)) {
+				this.key = (K) v;
 				throw OperationDone.INSTANCE;
 			}
 		}
@@ -36,12 +36,12 @@ public class Multimap<K, V> extends MyHashMap<K, V> {
 	public final V get(K key, int index) {
 		var entry = (Entry) getEntry(key);
 		if (entry == null) return null;
-		return (V) (index == 0 ? entry.v : entry.rest.get(index-1));
+		return (V) (index == 0 ? entry.value : entry.rest.get(index-1));
 	}
 	public V getLast(K key) {
 		var entry = (Entry) getEntry(key);
 		if (entry == null) return null;
-		return (V) (entry.rest.isEmpty() ? entry.v : entry.rest.get(entry.rest.size()-1));
+		return (V) (entry.rest.isEmpty() ? entry.value : entry.rest.get(entry.rest.size()-1));
 	}
 	public final List<V> getRest(K key) {
 		var entry = (Entry) getEntry(key);
@@ -53,7 +53,7 @@ public class Multimap<K, V> extends MyHashMap<K, V> {
 		if (entry == null) return Collections.emptyList();
 
 		SimpleList<V> list = new SimpleList<>(entry.rest.size()+1);
-		list.add((V) entry.v);
+		list.add((V) entry.value);
 		list.addAll(entry.rest);
 		return list;
 	}
@@ -66,23 +66,23 @@ public class Multimap<K, V> extends MyHashMap<K, V> {
 	@Override
 	protected final AbstractEntry<K, V> useEntry() {
 		var entry = new Entry();
-		entry.k = entry.v = Helpers.cast(UNDEFINED);
+		entry.key = entry.value = Helpers.cast(UNDEFINED);
 		return entry;
 	}
 
 	@Override
 	protected final void onDel(AbstractEntry<K, V> entry) {
 		Entry e = (Entry) entry;
-		e.k = null;
+		e.key = null;
 		e.next = null;
 		e.rest = Collections.emptyList();
 	}
 
 	public void add(K key, V value) {
 		Entry entry = (Entry) getOrCreateEntry(key);
-		if (entry.k == UNDEFINED) {
-			entry.k = key;
-			entry.v = value;
+		if (entry.getKey() == UNDEFINED) {
+			entry.key = key;
+			entry.value = value;
 			size++;
 		} else {
 			if (entry.rest.isEmpty()) entry.rest = new LinkedList<>();
@@ -92,18 +92,18 @@ public class Multimap<K, V> extends MyHashMap<K, V> {
 
 	public void set(K key, V value) {
 		Entry entry = (Entry) getOrCreateEntry(key);
-		if (entry.k == UNDEFINED) {
-			entry.k = key;
+		if (entry.getKey() == UNDEFINED) {
+			entry.key = key;
 			size++;
 		}
-		entry.v = value;
+		entry.value = value;
 		entry.rest = Collections.emptyList();
 	}
 
 	public void set(K key, List<V> value) {
 		Entry entry = (Entry) getOrCreateEntry(key);
-		if (entry.k == UNDEFINED) {
-			entry.k = key;
+		if (entry.getKey() == UNDEFINED) {
+			entry.key = key;
 			size++;
 		}
 		if (value.size() == 1) {
@@ -112,6 +112,6 @@ public class Multimap<K, V> extends MyHashMap<K, V> {
 			entry.rest = new SimpleList(value);
 			entry.rest.remove(0);
 		}
-		entry.v = value.get(0);
+		entry.value = value.get(0);
 	}
 }

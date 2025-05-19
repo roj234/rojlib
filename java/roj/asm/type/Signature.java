@@ -450,5 +450,5 @@ public class Signature extends Attribute {
 			if (j >= s.length()) fail("在类名结束之前 (';')",j,s);
 		}
 	}
-	private static void fail(String error, int position, CharSequence signature) {throw new IllegalArgumentException(Tokenizer.addSlashes(signature)+" 在第"+position+"个字符("+(position>=signature.length()?"EOF":signature.charAt(position))+")解析失败: "+error);}
+	private static void fail(String error, int position, CharSequence signature) {throw new IllegalArgumentException(Tokenizer.escape(signature)+" 在第"+position+"个字符("+(position>=signature.length()?"EOF":signature.charAt(position))+")解析失败: "+error);}
 }

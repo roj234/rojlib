@@ -15,7 +15,7 @@ import roj.reflect.ClassDefiner;
 import roj.reflect.ILSecurityManager;
 import roj.reflect.ReflectionUtils;
 import roj.reflect.Unaligned;
-import roj.text.Escape;
+import roj.text.URICoder;
 import roj.text.logging.Logger;
 import roj.util.ArrayCache;
 import roj.util.ByteList;
@@ -343,13 +343,13 @@ public final class PanSecurityManager extends MethodHook {
 	/* -- URL -- */
 	public static InputStream hook_callFrom_openStream(URL url, Class<?> caller) throws IOException {
 		if (url.getProtocol().equals("file")) {
-			if (!checkFileAccess(new File(Escape.decodeURI(url.getFile())), caller)) throw new SecurityException("没有读取权限");
+			if (!checkFileAccess(new File(URICoder.decodeURI(url.getFile())), caller)) throw new SecurityException("没有读取权限");
 		} else if (url.getProtocol().equals("jar")) {
 			String spec = url.getFile();
 			int separator = spec.indexOf("!/");
 			if (separator == -1) throw new MalformedURLException("no !/ found in url spec:" + spec);
 
-			if (!checkFileAccess(new File(Escape.decodeURI(spec.substring(0, separator))), caller))
+			if (!checkFileAccess(new File(URICoder.decodeURI(spec.substring(0, separator))), caller))
 				throw new SecurityException("没有读取权限");
 		}
 		return url.openStream();

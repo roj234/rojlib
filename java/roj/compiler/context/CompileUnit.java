@@ -68,7 +68,7 @@ public abstract class CompileUnit extends ClassNode implements ClassResource {
 	private Object _next;
 
 	// Class level flags
-	protected static final int _ACC_RECORD = 1 << 31, _ACC_STRUCT = 1 << 30, _ACC_INNER_CLASS = 1 << 29;
+	protected static final int _ACC_RECORD = 1 << 31, _ACC_STRUCT = 1 << 30, _ACC_INNER_CLASS = 1 << 29, _ACC_ALGEBRA_DERIVED_TYPE = 1 << 28;
 	// read via _modifier()
 	protected static final int _ACC_DEFAULT = 1 << 16, _ACC_ANNOTATION = 1 << 17, _ACC_SEALED = 1 << 18, _ACC_NON_SEALED = 1 << 19, _ACC_ASYNC = 1 << 21;
 	protected static final int CLASS_ACC = ACC_PUBLIC|ACC_FINAL|ACC_ABSTRACT|ACC_STRICT|_ACC_ANNOTATION|_ACC_SEALED|_ACC_NON_SEALED;
@@ -163,7 +163,22 @@ public abstract class CompileUnit extends ClassNode implements ClassResource {
 		importList = parent.importList;
 	}
 
+	/**
+	 * 创建包含用户代码的匿名类
+	 *
+	 * @param mn 关联的方法节点（可为null）
+	 * @return 生成的类节点
+	 * @throws ParseException 如果解析过程中出现语法错误
+	 */
 	public abstract CompileUnit newAnonymousClass(@Nullable MethodNode mn) throws ParseException;
+
+	/**
+	 * 创建编译器生成的匿名类（如SwitchMap等无方法体的类）
+	 *
+	 * @param mn 关联的方法节点（可为null）
+	 * @param desc 内部类描述信息（可为null时自动生成）
+	 * @return 生成的类节点
+	 */
 	public final ClassNode newAnonymousClass_NoBody(@Nullable MethodNode mn, @Nullable InnerClasses.Item desc) {
 		var c = new ClassNode();
 
@@ -199,6 +214,10 @@ public abstract class CompileUnit extends ClassNode implements ClassResource {
 		return c;
 	}
 
+	/**
+	 * 添加NestMember和NestHost属性（需要Java 11+的类文件版本）
+	 * @param c 要成为嵌套子成员的类节点
+	 */
 	public final void addNestMember(ClassNode c) {
 		assert ctx.classes.getMaximumBinaryCompatibility() >= LavaFeatures.JAVA_11;
 
@@ -213,6 +232,11 @@ public abstract class CompileUnit extends ClassNode implements ClassResource {
 		if (nestMembers == null) top.addAttribute(nestMembers = new ClassListAttribute(Attribute.NestMembers));
 		nestMembers.value.add(c.name());
 	}
+
+	/**
+	 * 获取或创建内部类属性列表
+	 * @return 可修改的内部类条目列表
+	 */
 	public final List<InnerClasses.Item> innerClasses() {
 		InnerClasses c = getAttribute(cp, Attribute.InnerClasses);
 		if (c == null) addAttribute(c = new InnerClasses());
@@ -221,6 +245,12 @@ public abstract class CompileUnit extends ClassNode implements ClassResource {
 	// endregion
 	public abstract boolean S1_Struct() throws ParseException;
 	// region 阶段1 类的结构 辅助方法 resolve MODIFIER TYPE GENERIC ANNOTATION
+	/**
+	 * 读取并验证修饰符序列
+	 *
+	 * @param mask 允许的修饰符掩码（使用ACC_*或_ACC_*常量）
+	 * @return 有效的访问标志组合
+	 */
 	public final int readModifiers(Tokens wr, int mask) throws ParseException {
 		if ((mask & _ACC_ANNOTATION) != 0) ctx.tmpAnnotations.clear();
 
@@ -275,7 +305,18 @@ public abstract class CompileUnit extends ClassNode implements ClassResource {
 	public static final int TYPE_PRIMITIVE = 1, TYPE_GENERIC = 2, TYPE_NO_ARRAY = 4, TYPE_ALLOW_VOID = 8;
 	protected static final int GENERIC_INNER = 8, SKIP_TYPE_PARAM = 16;
 	private static final int GENERIC_TERMINATE = 32;
-	// this function only invoke on Stage 4
+	/**
+	 * 读取类型声明（支持泛型、数组等特性）.<br>
+	 * ⚠ 该函数只有在阶段4时能被外部调用。
+	 *
+	 * @param flags 下列标志的组合：<ul>
+	 *             <li>{@link #TYPE_PRIMITIVE} - 允许基本类型</li>
+	 *             <li>{@link #TYPE_GENERIC} - 允许泛型</li>
+	 *             <li>{@link #TYPE_NO_ARRAY} - 禁止数组</li>
+	 *             <li>{@link #TYPE_ALLOW_VOID} - 允许void类型</li>
+	 * @return 解析后的类型表示
+	 * @throws ParseException 当遇到非法类型声明时
+	 */
 	public final IType readType(@MagicConstant(flags = {TYPE_PRIMITIVE, TYPE_GENERIC, TYPE_NO_ARRAY, TYPE_ALLOW_VOID}) int flags) throws ParseException {
 		IType type = readType(ctx.lexer, flags);
 		if (currentNode != null && type instanceof LPGeneric g)
@@ -345,7 +386,8 @@ public abstract class CompileUnit extends ClassNode implements ClassResource {
 	protected final String readRef() throws ParseException {return readRef(false).toString();}
 	/**
 	 * 解析引用类型 (a.b.c)
-	 * @param allowStar allow * (in import)
+	 * @param allowStar 是否允许导入语句中的星号通配符
+	 * @return 规范化后的引用路径（使用'/'分隔）
 	 */
 	protected final CharList readRef(boolean allowStar) throws ParseException {
 		var wr = ctx.lexer;
@@ -369,6 +411,12 @@ public abstract class CompileUnit extends ClassNode implements ClassResource {
 		return sb;
 	}
 
+	/**
+	 * 解析泛型类型参数部分（从已解析的类型名称"&lt;"开始，不包括"&lt;"）
+	 *
+	 * @param type 基础类型名称
+	 * @return 完整的泛型类型表示
+	 */
 	public final IType readGenericPart(String type) throws ParseException {
 		int prev = ctx.lexer.setState(STATE_TYPE);
 		try {
@@ -377,9 +425,6 @@ public abstract class CompileUnit extends ClassNode implements ClassResource {
 			ctx.lexer.state = prev;
 		}
 	}
-	/**
-	 * 解析泛型部件 (从&lt;开始，不包括&lt;)
-	 */
 	private IType readGeneric(String type, Word w, int flags) throws ParseException {
 		var wr = ctx.lexer;
 
@@ -395,7 +440,7 @@ public abstract class CompileUnit extends ClassNode implements ClassResource {
 				flags |= GENERIC_TERMINATE;
 			} else {
 				do {
-					byte extendType = 0;
+					byte extendType = Generic.EX_NONE;
 					// <? extends|super Type
 					if (wr.nextIf(ask)) {
 						w = wr.next();
@@ -463,7 +508,6 @@ public abstract class CompileUnit extends ClassNode implements ClassResource {
 		}
 
 		wr.retractWord();
-		// TODO 我记得以前写了个方法？不过我现在没有IDE
 		return g.children.isEmpty() && g.sub == null ? Type.klass(g.owner, g.array()) : g;
 	}
 
@@ -514,6 +558,10 @@ public abstract class CompileUnit extends ClassNode implements ClassResource {
 		if (w.type() != gtr) wr.unexpected(w.val(), "type.except.afterLss");
 	}
 
+	/**
+	 * 读取注解列表
+	 * @param list 要填充的注解列表（使用{@link Collections#emptyList()}以跳过）
+	 */
 	public final List<AnnotationPrimer> readAnnotations(List<AnnotationPrimer> list) throws ParseException {
 		Tokens wr = ctx.lexer;
 
@@ -565,9 +613,23 @@ public abstract class CompileUnit extends ClassNode implements ClassResource {
 	// region 阶段2 解析引用
 	// region 2.1 名称引用
 	/**
-	 * Stage 2 (1/3) 并行解析本类的名称引用.
-	 * 该阶段使用Stage 1已知的包名和类名和导入
-	 * 本阶段将类【继承，实现，方法，字段，permits，注解】中的引用类名解析为全限定名称
+	 * Stage 2 (1/3) 解析当前编译单元中的名称引用。
+	 * <p>
+	 * 本阶段将使用Stage 1收集的包名、类名和导入信息，将以下元素的简单名称解析为全限定名称：
+	 * <ul>
+	 *   <li>类继承的父类（extends）</li>
+	 *   <li>实现的接口（implements）</li>
+	 *   <li>字段类型和方法签名（参数类型、返回类型）</li>
+	 *   <li>密封类的permits声明</li>
+	 *   <li>类及成员上的注解</li>
+	 * </ul>
+	 * <p>并进行以下语义检查：
+	 * <ul>
+	 *   <li>父类必须是可继承的非final类型</li>
+	 *   <li>实现的接口必须是接口类型</li>
+	 *   <li>密封类允许的子类必须存在</li>
+	 *   <li>所有名称引用必须有效(能找到一个具体的类)</li>
+	 * </ul>
 	 */
 	public void S2_ResolveName() {
 		var ctx = LocalContext.get();
@@ -654,7 +716,7 @@ public abstract class CompileUnit extends ClassNode implements ClassResource {
 		if ((extraModifier&_ACC_SEALED) != 0) {
 			var ps = (ClassListAttribute) getRawAttribute("PermittedSubclasses");
 
-			List<String> value = ps.value;
+			@SuppressWarnings("DataFlowIssue") List<String> value = ps.value;
 			for (int i = 0; i < value.size(); i++) {
 				String type = value.get(i);
 				var info = importList.resolve(ctx, type);
@@ -673,15 +735,17 @@ public abstract class CompileUnit extends ClassNode implements ClassResource {
 		}
 	}
 	/**
-	 * 解析注解类型引用.
-	 * 也会被{@link BlockParser}调用
+	 * 递归解析注解中的全限定名.<br>
+	 * 此方法也被{@link BlockParser}调用用于处理方法内部注解
+	 *
+	 * @param annotations  待解析的注解列表，列表元素会被原地修改为解析后的状态
 	 */
-	public void resolveAnnotationTypes(LocalContext ctx, List<AnnotationPrimer> list) {
-		for (int i = 0; i < list.size(); i++) {
-			var a = list.get(i);
-			resolveAnnotationType(ctx, a);
+	public final void resolveAnnotationTypes(LocalContext ctx, List<AnnotationPrimer> annotations) {
+		for (AnnotationPrimer annotation : annotations) {
+			resolveAnnotationType(ctx, annotation);
 
-			for (Iterator<?> itr = a.values().iterator(); itr.hasNext(); ) {
+			//noinspection ForLoopReplaceableByForEach
+			for (Iterator<?> itr = annotation.values().iterator(); itr.hasNext(); ) {
 				if (itr.next() instanceof CEntry value) {
 					if (value instanceof AList array) {
 						var list1 = array.raw();
@@ -706,11 +770,40 @@ public abstract class CompileUnit extends ClassNode implements ClassResource {
 	// endregion
 	// region 2.2 类型引用
 	/**
-	 * Stage 2 (2/3) 并行解析本类的类引用.
-	 * 该阶段使用Stage 2.1解析的全限定名称，以获取类的对象
-	 * 本阶段将进行循环继承，泛型异常，密封类完整性等检查
-	 * 本阶段还将生成默认构造器和枚举、记录类的默认方法
-	 * 注：方法的throws也在2.2解析，虽然应当在2.1解析，但是在2.2能同时判断是否instanceof Throwable
+	 * Stage 2 (2/3) 解析当前编译单元中的类型引用，并进行语义验证及代码生成。
+	 * <p>
+	 * 由于进行了名称解析，所以现在可以构建{@link ResolveHelper}了，已有足够的信息生成符号表<br>
+	 * 本阶段执行以下操作：
+	 * <ul>
+	 *   <li>验证类继承关系的正确性：
+	 *     <ul>
+	 *       <li>检测循环继承</li>
+	 *       <li>检查静态继承非静态类</li>
+	 *       <li>验证密封类（sealed class）的permits子类完整性</li>
+	 *     </ul>
+	 *   </li>
+	 *   <li>处理泛型异常的限制：
+	 *     <ul>
+	 *       <li>确保Throwable子类不能具有泛型</li>
+	 *     </ul>
+	 *   </li>
+	 *   <li>生成必要的默认方法：
+	 *     <ul>
+	 *       <li>生成枚举类的values和valueOf方法</li>
+	 *       <li>生成记录类的equals/hashCode/toString方法</li>
+	 *       <li>生成默认构造器（并处理内部类的宿主引用）</li>
+	 *     </ul>
+	 *   </li>
+	 *   <li>进行方法级别的验证：
+	 *     <ul>
+	 *       <li>检查注解方法的返回类型有效性</li>
+	 *       <li>验证throws子句的异常类型合法性</li>
+	 *       <li>检测方法签名冲突</li>
+	 *     </ul>
+	 *   </li>
+	 * </ul>
+	 * <p>
+	 * 注意：本阶段可能修改类的字节码结构并添加合成方法。
 	 */
 	public void S2_ResolveType() {
 		var ctx = LocalContext.get();
@@ -769,7 +862,7 @@ public abstract class CompileUnit extends ClassNode implements ClassResource {
 		if ((extraModifier&_ACC_SEALED) != 0) {
 			var ps = (ClassListAttribute) getRawAttribute("PermittedSubclasses");
 
-			List<String> value = ps.value;
+			@SuppressWarnings("DataFlowIssue") List<String> value = ps.value;
 			for (int i = 0; i < value.size(); i++) {
 				String type = value.get(i);
 				var info = ctx.classes.getClassInfo(type);
@@ -896,7 +989,7 @@ public abstract class CompileUnit extends ClassNode implements ClassResource {
 					w.visitSize(fieldType.length(), 1);
 					w.insn(ALOAD_0);
 					w.field(GETFIELD, this, i);
-					w.insn(fieldType.shiftedOpcode(ARETURN));
+					w.insn(fieldType.getOpcode(ARETURN));
 					w.finish();
 
 					var sign = ((LPSignature) field.getRawAttribute("Signature"));
@@ -1023,6 +1116,22 @@ public abstract class CompileUnit extends ClassNode implements ClassResource {
 		return false;
 	}
 	@Nullable private byte[] invokeDefaultConstructor;
+	/**
+	 * 生成调用父类默认构造器的字节码指令。
+	 * <p>
+	 * 根据当前类类型生成不同的调用逻辑：
+	 * <ul>
+	 *   <li>对于枚举类：生成调用Enum构造器的指令</li>
+	 *   <li>对于普通类：生成调用父类构造器的指令
+	 *     <ul>
+	 *       <li>自动处理内部类的宿主引用参数</li>
+	 *       <li>检查父类构造器的可访问性</li>
+	 *     </ul>
+	 *   </li>
+	 * </ul>
+	 *
+	 * @return 包含字节码指令的字节数组，格式为JVM字节码
+	 */
 	public byte[] invokeDefaultConstructor() {
 		if (invokeDefaultConstructor != null) return invokeDefaultConstructor;
 
@@ -1073,6 +1182,10 @@ public abstract class CompileUnit extends ClassNode implements ClassResource {
 		}
 	}
 	// used to create enum constructor
+	/**
+	 * 和这个方法相同，但是返回{@link MethodWriter}而不是{@link CodeWriter}
+	 * @see #newMethod(int, String, String)
+	 */
 	public final MethodWriter newWritableMethod(int acc, String name, String desc) {
 		var mn = new MethodNode(acc, this.name, name, desc);
 		methods.add(mn);
@@ -1085,9 +1198,67 @@ public abstract class CompileUnit extends ClassNode implements ClassResource {
 	// region 2.3 方法引用
 	private static final char __ACC_UNRELATED = 32768, __ACC_INHERITED = 16384;
 	/**
-	 * Stage 2 (3/3) 并行解析本类的方法
-	 * 该阶段使用Stage 2.2生成的方法（如有）
-	 * 本阶段将构建重载列表，验证方法参数
+	 * Stage 2 (3/3) 方法语义检查。
+	 * <p>本阶段具体流程：
+	 * <ol>
+	 *   <li>遍历继承链，收集所有未实现的抽象方法，以及在"继承"中未实现的"接口"方法（Unrelated defaults） </li>
+	 *   <li>验证方法定义的合法性
+	 *     <ul>
+	 *       <li>检查访问权限是否降级（如父类public方法被子类改为protected）</li>
+	 *       <li>检查是否覆盖覆盖静态方法</li>
+	 *       <li>检查返回类型是否合法，例如协变返回类型（covariant return type）</li>
+	 *       <li>不能声明比覆盖方法更宽泛的检查异常，运行时异常不受限制</li>
+	 *     </ul>
+	 *   </li>
+	 *   <li>处理泛型方法的类型参数
+	 *     <ul>
+	 *       <li>比较泛型参数的实际类型</li>
+	 *       <li>验证类型擦除后的方法签名兼容性</li>
+	 *       <li>处理通配符和边界类型</li>
+	 *     </ul>
+	 *   </li>
+	 *   <li>为协变返回类型和泛型擦除生成桥接方法</li>
+	 * </ol>
+	 *
+	 * <h3>特殊场景：默认方法冲突（Unrelated Defaults）</h3>
+	 *
+	 * <b>问题示例</b>：当实现多个包含相同默认方法的接口时
+	 * <pre>{@code
+	 * interface USB {
+	 *     default void connect() { System.out.println("USB连接"); }
+	 * }
+	 *
+	 * interface Bluetooth {
+	 *     default void connect() { System.out.println("蓝牙连接"); }
+	 * }
+	 *
+	 * class SmartDevice implements USB, Bluetooth {} // 这里会编译报错
+	 * }</pre>
+	 *
+	 * <b>问题根源</b>：编译器无法自动选择使用哪个接口的默认方法，必须人工明确指定。这与接口设计原则相关：
+	 * <ul>
+	 *   <li>接口之间是平行的（无继承关系）</li>
+	 *   <li>不同接口的同名方法可能有完全不同的实现逻辑</li>
+	 * </ul>
+	 *
+	 * <b>解决方案</b>：
+	 * <pre>{@code
+	 * class SmartDevice implements USB, Bluetooth {
+	 *     @Override
+	 *     public void connect() {
+	 *         // 必须显式选择其中一个实现
+	 *         USB.super.connect(); // 选择USB的默认实现
+	 *         // 或 Bluetooth.super.connect();
+	 *         // 或 提供全新实现
+	 *     }
+	 * }}</pre>
+	 *
+	 * <b>为什么需要Interface.super语法？</b>
+	 * <ol>
+	 *   <li>传统的super指代父类，但这里需要指代特定接口</li>
+	 *   <li>USB和Bluetooth是同级接口，没有父子关系</li>
+	 *   <li>这种语法明确告诉编译器："使用USB接口的默认实现"</li>
+	 * </ol>
 	 */
 	public void S2_ResolveMethod() {
 		var ctx = LocalContext.get();
@@ -1111,7 +1282,7 @@ public abstract class CompileUnit extends ClassNode implements ClassResource {
 				skip: {
 					for (int j = 0; j < inherits.size(); j++) {
 						// 如果被父类或其它接口实现了，那么跳过
-						if (ctx.getHierarchyList(inherits.get(j)).containsValue(info.name())) {
+						if (ctx.getHierarchyList(inherits.get(j)).containsKey(info.name())) {
 							break skip;
 						}
 					}
@@ -1121,7 +1292,7 @@ public abstract class CompileUnit extends ClassNode implements ClassResource {
 					// 这个操作与下方的continue可以避免Object的方法被访问多次，不过好像没有意义（
 					for (int j = inherits.size()-1; j > 0; j--) {
 						// 如果又包括了别的接口
-						if (myParent.containsValue(inherits.get(j).name())) inherits.remove(j);
+						if (myParent.containsKey(inherits.get(j).name())) inherits.remove(j);
 					}
 
 					inherits.add(info);
@@ -1202,7 +1373,7 @@ public abstract class CompileUnit extends ClassNode implements ClassResource {
 
 							var prev = overridableMethods.getEntry(m);
 							if (prev != null) {
-								char idx = prev.k.modifier;
+								char idx = prev.getKey().modifier;
 								ctx.errorReportIndex = idx == 0 ? classIdx : methodIdx.get(idx-1);
 								MethodResult value = genericCombine(prev.getValue(), method);
 								prev.setValue(value);
@@ -1282,7 +1453,7 @@ public abstract class CompileUnit extends ClassNode implements ClassResource {
 			// 返回值更精确而需要桥接，或更不精确而无法覆盖
 			var cast = ctx.inferrer.overrideCast(myReturn, overrideReturnType);
 			if (cast.type != 0) {
-				String inline = "cu.override.returnType:\1typeCast.error."+cast.type+':'+myReturn+':'+overrideReturnType+"\0";
+				String inline = "cu.override.returnType:[typeCast.error."+cast.type+",\""+myReturn+"\",\""+overrideReturnType+"\"]";
 				ctx.report(Kind.ERROR, "cu.override.unable", name, inherit.owner, inherit, inline);
 			} else
 
@@ -1328,9 +1499,21 @@ public abstract class CompileUnit extends ClassNode implements ClassResource {
 	}
 	private MethodResult genericCheckInit(MethodNode method) {
 		List<IType> resolvedGeneric = ctx.inferGeneric(Type.klass(name), method.owner);
-		return ctx.inferrer.getGenericParameters(ctx.classes.getClassInfo(method.owner), method, resolvedGeneric == null ? Type.klass(method.owner) : new Generic(method.owner, resolvedGeneric));
+		return ctx.inferrer.getGenericParameters(ctx.classes.getClassInfo(method.owner), method,
+				resolvedGeneric == null ? Type.klass(method.owner) : new Generic(method.owner, resolvedGeneric));
 	}
-	// 判断两个方法的泛型参数是否兼容
+	/**
+	 * 对两个方法的泛型参数兼容性进行检查并报错或合并。
+	 * <ul>
+	 *   <li>比较参数类型是否完全一致</li>
+	 *   <li>寻找返回类型的最近公共父类型</li>
+	 *   <li>当出现类型冲突时生成编译错误</li>
+	 * </ul>
+	 *
+	 * @param prev 已存在的泛型方法元数据
+	 * @param method 新增的方法节点
+	 * @return 合并后的泛型方法元数据
+	 */
 	private MethodResult genericCombine(MethodResult prev, MethodNode method) {
 		var curr = genericCheckInit(method);
 
@@ -1338,7 +1521,7 @@ public abstract class CompileUnit extends ClassNode implements ClassResource {
 		var arg2 = curr.parameters();
 
 		if (!arg1.equals(arg2)) {
-			String inline = "cu.override.rawArgument:\1typeCast.error.-98:"+arg1+':'+arg2+"\0";
+			String inline = "cu.override.rawArgument:[typeCast.error.-98,\""+arg1+"\",\""+arg2+"\"]";
 			ctx.report(Kind.ERROR, "cu.override.unable", prev.method.owner, method.owner, method.name(), inline);
 		}
 
@@ -1351,7 +1534,7 @@ public abstract class CompileUnit extends ClassNode implements ClassResource {
 		} else if (parent.equals(newReturnType)) {
 			// no-op
 		} else {
-			String inline = "cu.override.returnType:\1typeCast.error.-3:"+oldReturnType+':'+newReturnType+"\0";
+			String inline = "cu.override.returnType:[typeCast.error.-3,\""+oldReturnType+"\",\""+newReturnType+"\"]";
 			ctx.report(Kind.ERROR, "cu.override.unable", prev.method.owner, method.owner, method.name(), inline);
 		}
 
@@ -1370,13 +1553,29 @@ public abstract class CompileUnit extends ClassNode implements ClassResource {
 			if (myLevel == ACC_PUBLIC || myLevel == itLevel) break pass;
 			if (itLevel == 0 && myLevel == ACC_PROTECTED) break pass;
 
-			String inline = "cu.override.access:"+
-					(itLevel==0?"\1package-private\0":showModifiers(itLevel, ACC_SHOW_METHOD))+":"+
-					(myLevel==0?"\1package-private\0":showModifiers(myLevel, ACC_SHOW_METHOD));
+			String inline = "cu.override.access:[\""+
+					(itLevel==0?"package-private":showModifiers(itLevel, ACC_SHOW_METHOD))+"\",\""+
+					(myLevel==0?"package-private":showModifiers(myLevel, ACC_SHOW_METHOD))+"\"]";
 			ctx.report(Kind.ERROR, "cu.override.unable", my.owner.replace('/', '.'), it.owner.replace('/', '.'), it, inline);
 		}
 	}
 	// endregion
+	/**
+	 * 创建委托方法（桥接方法）。
+	 * <p>
+	 * 该方法用于生成保持二进制兼容性的桥接方法，并自动处理类型转换，典型场景包括：
+	 * <ul>
+	 *   <li>协变返回类型（Covariant return types）</li>
+	 *   <li>泛型类型擦除后的方法派发</li>
+	 *   <li>接口默认方法的适配器</li>
+	 * </ul>
+	 *
+	 * @param acc 方法访问标志
+	 * @param it 其它类方法定义
+	 * @param my 当前类的方法定义
+	 * @param end 是否生成_RETURN指令
+	 * @param newObject 是否需要创建新对象
+	 */
 	public final MethodWriter createDelegation(int acc, MethodNode it, MethodNode my, boolean end, boolean newObject) {
 		var c = newWritableMethod(acc, my.name(), my.rawDesc());
 		int base = 1;
@@ -1407,7 +1606,7 @@ public abstract class CompileUnit extends ClassNode implements ClassResource {
 
 		ctx.castTo(it.returnType(), my.returnType(), TypeCast.E_DOWNCAST).write(c);
 		if (end) {
-			c.insn(my.returnType().shiftedOpcode(IRETURN));
+			c.insn(my.returnType().getOpcode(IRETURN));
 			c.finish();
 		}
 		return c;
@@ -1420,6 +1619,15 @@ public abstract class CompileUnit extends ClassNode implements ClassResource {
 		currentNode = sign != null ? sign : signature;
 	}
 	// 解析static final字段，不过顺便把非final也解析了
+	/**
+	 * Stage 3 (1/2) 深度优先解析静态常量字段。
+	 * <p>本方法执行以下操作：
+	 * <ul>
+	 *   <li>遍历所有static final字段</li>
+	 *   <li>解析字段的常量表达式</li>
+	 *   <li>初始化编译时常量值</li>
+	 * </ul>
+	 */
 	void S3_DFSField() throws ParseException {
 		var ctx = LocalContext.get();
 		ctx.setClass(this);
@@ -1451,6 +1659,16 @@ public abstract class CompileUnit extends ClassNode implements ClassResource {
 		ctx.enclosing.clear();
 		fieldParseState = 1;
 	}
+	/**
+	 * Stage 3 (2/2) 注解处理及常量解析。
+	 * <p>本方法执行以下操作：
+	 * <ul>
+	 *   <li>解析类及成员上的注解值</li>
+	 *   <li>递归处理注解中引用的其他类静态字段</li>
+	 *   <li>检测循环依赖并报告编译错误</li>
+	 *   <li>验证注解元素的合法性（如注解方法的默认值）</li>
+	 * </ul>
+	 */
 	public void S3_Annotation() throws ParseException {
 		S3_DFSField();
 
@@ -1563,7 +1781,13 @@ public abstract class CompileUnit extends ClassNode implements ClassResource {
 	// endregion
 	// region 阶段4 编译代码块
 	private MethodWriter clinit, glinit;
-	// 静态初始化
+	/**
+	 * 获取静态初始化块（&lt;clinit>）的方法写入器。
+	 * <p>
+	 * 如果静态初始化块不存在则创建新的，确保每个类最多只有一个静态初始化块。
+	 *
+	 * @return 静态初始化块的方法写入器实例
+	 */
 	public MethodWriter getStaticInit() {
 		if (clinit != null) return clinit;
 
@@ -1579,54 +1803,68 @@ public abstract class CompileUnit extends ClassNode implements ClassResource {
 		clinit.computeFrames(AttrCode.COMPUTE_SIZES|AttrCode.COMPUTE_FRAMES);
 		return clinit;
 	}
-	// 公共构造器初始化块
+	/**
+	 * 获取或创建全局初始化块的方法写入器。
+	 * <p>
+	 * 全局初始化块用于收集类中所有静态字段初始化之外的初始化逻辑。
+	 *
+	 * @return 全局初始化块的方法写入器实例
+	 */
 	public MethodWriter getGlobalInit() {
 		// 隐式构造器会主动设置这个，不再需要额外检测
 		if (glinit != null) return glinit;
 
-		SimpleList<ClassNode> _throws = new SimpleList<>();
+		SimpleList<ClassNode> exceptions = new SimpleList<>();
 
-		for (int i = 0, size = methods.size(); i < size; i++) {
+		for (int i = 0; i < methods.size(); i++) {
 			MethodNode method = methods.get(i);
 			if (method.name().equals("<init>")) {
-				var list = method.getAttribute(cp, Attribute.Exceptions);
-				if (list == null) {
-					_throws.clear();
-					break;
-				}
+				var exceptionList = method.getAttribute(cp, Attribute.Exceptions);
+				if (exceptionList == null) { exceptions.clear(); break; }
 
-				if (_throws.isEmpty()) {
-					for (String exc : list.value)
-						_throws.add(ctx.classes.getClassInfo(exc));
+				if (exceptions.isEmpty()) {
+					for (String exc : exceptionList.value)
+						exceptions.add(ctx.classes.getClassInfo(exc));
 				} else {
 					loop:
-					for (int j = _throws.size() - 1; j >= 0; j--) {
-						var exParent = ctx.getHierarchyList(_throws.get(j));
-						for (String s : list.value) {
-							var self = ctx.classes.getClassInfo(s);
+					for (int j = exceptions.size() - 1; j >= 0; j--) {
+						var existing = exceptions.get(j);
+						var existingHierarchies = ctx.getHierarchyList(existing);
 
-							if (ctx.getHierarchyList(self).containsValue(exParent.get(0))) {
-								if (!_throws.contains(self)) _throws.add(self);
-							} else if (exParent.containsValue(s)) continue loop;
+						for (String name : exceptionList.value) {
+							var newException = ctx.classes.getClassInfo(name);
+
+							// 取交集，必须抛出existing及其子类才能保留它
+							// RuntimeException + Exception => keep
+							if (existingHierarchies.containsKey(name)) continue loop;
+
+							// 如果existing是newException的子类
+							// Exception + RuntimeException => replace to latter
+							if (ctx.getHierarchyList(newException).containsKey(existing.name())) {
+								if (!exceptions.contains(newException)) {
+									exceptions.set(j, newException);
+									continue loop;
+								}
+							}
 						}
 
-						_throws.remove(j);
+						exceptions.remove(j);
 					}
 
-					if (_throws.isEmpty()) break;
+					if (exceptions.isEmpty()) break;
 				}
 			}
 		}
 
 		var mn = new MethodNode(ACC_PRIVATE, name, "<glinit>", "()V");
-		if (!_throws.isEmpty()) {
-			String[] strings = new String[_throws.size()];
+		if (!exceptions.isEmpty()) {
+			String[] classes = new String[exceptions.size()];
 			int i = 0;
-			for (ClassNode data : _throws) strings[i++] = data.name();
+			for (ClassNode type : exceptions) classes[i++] = type.name();
 
-			GlobalContext.debugLogger().info("Common parent of all constructor throws: "+Arrays.toString(strings));
-			// common parent of all constructor throws'
-			mn.addAttribute(new ClassListAttribute(Attribute.Exceptions, SimpleList.asModifiableList(strings)));
+			GlobalContext.debugLogger().info("Common parent of all constructor throws: "+Arrays.toString(classes));
+			// 仅用于诊断：所有构造器声明的最具体化异常的交集
+			mn.addAttribute(new ClassListAttribute(Attribute.Exceptions, SimpleList.asModifiableList(classes)));
 		}
 		return glinit = ctx.createMethodWriter(this, mn);
 	}
@@ -1645,6 +1883,14 @@ public abstract class CompileUnit extends ClassNode implements ClassResource {
 	// call from newAnonymousClass
 	public void NAC_SetGlobalInit(MethodWriter constructor) {glinit = constructor;}
 
+	/**
+	 * 将全局初始化块的内容注入目标构造器。
+	 * <p>
+	 * insertBefore非空时用于隐式构造器
+	 * target非空时用于显式构造器
+	 *
+	 * @param lines        目标构造器的行号表
+	 */
 	public void appendGlobalInit(MethodWriter target, DynByteBuf insertBefore, LineNumberTable lines) {
 		if (glinit != null) {
 			serializeGlInit();
@@ -1664,10 +1910,10 @@ public abstract class CompileUnit extends ClassNode implements ClassResource {
 
 			int moveCount;
 			if ((moveCount = target.getPlaceholderId(MethodWriter.GLOBAL_INIT_INSERT)) != 0) {
-				target.replaceSegment(moveCount, new SolidBlock(glInitBytes));
+				target.replaceSegment(moveCount, new StaticSegment(glInitBytes));
 			} else {
 				moveCount = target.nextSegmentId();
-				target.addSegment(new SolidBlock(glInitBytes));
+				target.addSegment(new StaticSegment(glInitBytes));
 			}
 			target.visitSizeMax(glStack, glLocal);
 
@@ -1683,6 +1929,15 @@ public abstract class CompileUnit extends ClassNode implements ClassResource {
 	}
 
 	private int assertionId = -1;
+	/**
+	 * 获取或创建断言启用标志字段。
+	 * <p>生成static final boolean字段用于控制断言状态：
+	 * <pre>
+	 * private static final boolean $assertionEnabled = 本类.class.desiredAssertionStatus();
+	 * </pre>
+	 *
+	 * @return 断言标志字段的索引
+	 */
 	public int getAssertEnabled() {
 		if (assertionId >= 0) return assertionId;
 
@@ -1713,6 +1968,16 @@ public abstract class CompileUnit extends ClassNode implements ClassResource {
 		return i;
 	}
 
+	/**
+	 * Stage 4 代码生成。
+	 * <p>本阶段执行以下操作：
+	 * <ul>
+	 *   <li>处理Stage 1添加的所有延迟解析任务</li>
+	 *   <li>确保final字段被初始化</li>
+	 *   <li>处理隐式构造器生成</li>
+	 * </ul>
+	 * @see ParseTask
+	 */
 	public void S4_Code() throws ParseException {
 		var ctx = LocalContext.get();
 		ctx.setClass(this);
@@ -1764,12 +2029,26 @@ public abstract class CompileUnit extends ClassNode implements ClassResource {
 	// endregion
 	//region 阶段5 序列化
 	private List<Member> noStore = Collections.emptyList();
-	public void markFakeNode(Member fn) {
+	/**
+	 * 标记虚节点以在序列化前移除。
+	 * <p>
+	 * 用于处理编译器生成的临时节点（如getter属性），避免写入最终字节码。
+	 * @param node 需要标记为虚节点的类成员
+	 */
+	public void dontSerialize(Member node) {
 		if (noStore.isEmpty()) noStore = new SimpleList<>();
-		noStore.add(fn);
+		noStore.add(node);
 	}
 
-	public void S5_noStore() {
+	/**
+	 * Stage 5 序列化准备。
+	 * <p>本阶段执行以下操作：
+	 * <ul>
+	 *   <li>移除所有虚节点</li>
+	 *   <li>验证类定义的有效性</li>
+	 * </ul>
+	 */
+	public void S5_preStore() {
 		for (Member node : noStore) {
 			fields.remove(node);
 			methods.remove(node);

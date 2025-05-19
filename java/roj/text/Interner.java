@@ -26,7 +26,7 @@ public final class Interner extends LFUCache<CharSequence,String> {
 
 	private String doIntern(CharSequence input) {
 		var entry = getOrCreateEntry(input);
-		if (entry.k != UNDEFINED) return entry.getValue();
+		if (entry.getKey() != UNDEFINED) return entry.getValue();
 
 		if (treeifyCounter >= 10) {
 			treeifyCounter = 0;
@@ -35,7 +35,7 @@ public final class Interner extends LFUCache<CharSequence,String> {
 		}
 
 		String intern = input.toString().intern();
-		entry.k = intern;
+		entry.key = intern;
 		entry.setValue(intern);
 		size++;
 

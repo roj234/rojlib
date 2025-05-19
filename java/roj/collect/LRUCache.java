@@ -33,8 +33,8 @@ public class LRUCache<K, V> extends LinkedMyHashMap<K, V> implements Cache<K,V> 
 		while (entry != null && amount > 0) {
 			LinkedEntry<K, V> next = entry.n;
 
-			K k = entry.k;
-			V v = entry.v;
+			K k = entry.key;
+			V v = entry.value;
 			remove(k);
 			if (listener != null) listener.accept(k,v);
 			amount--;

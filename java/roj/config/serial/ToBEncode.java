@@ -25,7 +25,7 @@ public final class ToBEncode implements CVisitor {
 	public final void value(String s) {ob.putAscii(Integer.toString(DynByteBuf.byteCountUTF8(s))).put(':').putUTFData(s);}
 	public final void valueNull() {throw new UnsupportedOperationException("BEncode不支持null");}
 	public final boolean supportArray() {return true;}
-	public final void value(byte[] ba) {ob.putAscii(Integer.toString(ba.length)).put(':').put(ba);}
+	public final void value(byte[] array) {ob.putAscii(Integer.toString(array.length)).put(':').put(array);}
 
 	// *no state check*
 	public final void key(String key) {value(key);}

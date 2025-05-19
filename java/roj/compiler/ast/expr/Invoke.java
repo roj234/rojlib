@@ -310,7 +310,7 @@ public final class Invoke extends Expr {
 			if ((flag & ARG0_IS_THIS) == 0) {
 				var icFlags = ctx.classes.getInnerClassInfo(methodOwner).get(methodOwner.name());
 				if (icFlags != null && (icFlags.modifier&ACC_STATIC) == 0) {
-					if (!ctx.getHierarchyList(ctx.file).containsValue(icFlags.parent)) {
+					if (!ctx.getHierarchyList(ctx.file).containsKey(icFlags.parent)) {
 						ctx.report(this, Kind.ERROR, "cu.inheritNonStatic", icFlags.parent);
 						return NaE.RESOLVE_FAILED;
 					} else {

@@ -154,7 +154,7 @@ public class Element extends Node {
 				} else {
 					String key = entry.getKey();
 					if (key.contains(" ") || key.contains("\"") || key.contains("'") || key.contains("<") || key.contains("&")) {
-						Tokenizer.addSlashes(sb.append('"'), key).append('"');
+						Tokenizer.escape(sb.append('"'), key).append('"');
 					} else {
 						sb.append(key);
 					}

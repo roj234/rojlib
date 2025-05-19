@@ -10,17 +10,17 @@ import roj.util.DynByteBuf;
  * @author Roj234
  * @since 2022/11/17 12:53
  */
-public final class SolidBlock extends CodeBlock {
-	public static final SolidBlock EMPTY = new SolidBlock(ArrayCache.BYTES);
+public final class StaticSegment extends Segment {
+	public static final StaticSegment EMPTY = new StaticSegment(ArrayCache.BYTES);
 
 	private Object array;
 	private short off;
 	private char length;
 
-	SolidBlock() { array = new ByteList(); }
-	public SolidBlock(DynByteBuf data) { array = data; }
-	public SolidBlock(byte... data) { array = data; length = (char) data.length; }
-	public static SolidBlock emptyWritable() {return new SolidBlock();}
+	StaticSegment() { array = new ByteList(); }
+	public StaticSegment(DynByteBuf data) { array = data; }
+	public StaticSegment(byte... data) { array = data; length = (char) data.length; }
+	public static StaticSegment emptyWritable() {return new StaticSegment();}
 
 	@Override public boolean put(CodeWriter to, int segmentId) {
 		if (array instanceof DynByteBuf b) to.bw.put(b);
@@ -32,8 +32,8 @@ public final class SolidBlock extends CodeBlock {
 	public boolean isReadonly() { return array.getClass() != ByteList.class; }
 	@Override public DynByteBuf getData() { return array.getClass() == byte[].class ? DynByteBuf.wrap((byte[]) array, off, length) : (DynByteBuf) array; }
 	@Override
-	SolidBlock setData(DynByteBuf b) {
-		SolidBlock that = this;
+	StaticSegment setData(DynByteBuf b) {
+		StaticSegment that = this;
 
 		AsmCache local = AsmCache.getInstance();
 
@@ -66,7 +66,7 @@ public final class SolidBlock extends CodeBlock {
 		return (op >= Opcodes.IRETURN && op <= Opcodes.RETURN) || op == Opcodes.ATHROW;
 	}
 
-	@Override public CodeBlock move(AbstractCodeWriter to, int blockMoved, boolean clone) {
+	@Override public Segment move(AbstractCodeWriter to, int blockMoved, boolean clone) {
 		if (!clone) return this;
 		var b = emptyWritable();
 		if (isReadonly()) {

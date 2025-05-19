@@ -42,7 +42,7 @@ public final class TrieTreeSet extends AbstractSet<CharSequence> {
 			}
 
 			for (TrieEntry entry : node) {
-				TrieEntry sub = getChild(entry.c);
+				TrieEntry sub = getChild(entry.firstChar);
 				if (sub == null) putChild(sub = entry.clone());
 				v += sub.copyFrom(entry);
 			}
@@ -121,7 +121,7 @@ public final class TrieTreeSet extends AbstractSet<CharSequence> {
 					i += lastMatch - 1;
 				} else {
 					if (lastMatch == 1) {
-						prev.putChild(new Entry(entry.c));
+						prev.putChild(new Entry(entry.firstChar));
 					} else {
 						((PEntry) entry).val = text.subSequence(0, lastMatch);
 					}
@@ -136,7 +136,7 @@ public final class TrieTreeSet extends AbstractSet<CharSequence> {
 					entry.isEnd = false;
 					entry.clear();
 
-					(entry = (Entry) prev.getChild(entry.c)).putChild(child);
+					(entry = (Entry) prev.getChild(entry.firstChar)).putChild(child);
 
 					lastMatch += i;
 					if (len == lastMatch + 1) {
@@ -356,7 +356,7 @@ public final class TrieTreeSet extends AbstractSet<CharSequence> {
 				i += text.length() - 1;
 				sb.append(text);
 			} else {
-				sb.append(next.c);
+				sb.append(next.firstChar);
 			}
 			entry = next;
 		}

@@ -34,7 +34,6 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 import java.util.function.BiConsumer;
-import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.regex.Pattern;
 
@@ -352,9 +351,8 @@ final class MinecraftClientInfo {
 	}
 
 	static int RETRY_COUNT = 5;
-	static class DownloadTask implements BiConsumer<File, Promise.PromiseCallback>, Consumer<Promise<?>> {
+	static class DownloadTask implements BiConsumer<File, Promise.Callback>, Function<Throwable, Object> {
 		File savedFile;
-
 
 		String url;
 		long size;
@@ -362,7 +360,7 @@ final class MinecraftClientInfo {
 		int retry;
 
 		@Override
-		public void accept(File file, Promise.PromiseCallback callback) {
+		public void accept(File file, Promise.Callback callback) {
 			if (size != 0 && file.length() != size) throw new IllegalStateException("大小校验失败");
 
 			if (!sha1.isEmpty()) {
@@ -403,20 +401,22 @@ final class MinecraftClientInfo {
 		}
 
 		@Override
-		public void accept(Promise<?> promise) {
+		public Object apply(Throwable throwable) {
 			int p1 = ++retry;
 			LOGGER.warn("依赖{}下载失败, 重试{}/{}", savedFile, p1, RETRY_COUNT);
 			if (p1 > RETRY_COUNT) {
 				LOGGER.warn("任务取消");
 			} else {
-				downloader.apply(url).then(this, this);
+				downloader.apply(url).then(this).rejected(this);
 			}
+
+			return null;
 		}
 
 		Function<String, Promise<File>> downloader;
 		public void run(Function<String, Promise<File>> downloader) {
 			this.downloader = downloader;
-			downloader.apply(url).then(this, this);
+			downloader.apply(url).then(this).rejected(this);
 		}
 	}
 	private void downloadLibrary(CMap libraryInfo, String classifiers, String libFileName) {

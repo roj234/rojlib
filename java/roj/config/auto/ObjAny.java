@@ -27,7 +27,7 @@ final class ObjAny extends Adapter {
 
 	@Override
 	public void key(AdaptContext ctx, String key) {
-		if (!key.equals("==")) throw new IllegalArgumentException("第一个key必须是对象类型('=='):"+key);
+		if (!key.isEmpty()) throw new IllegalArgumentException("第一个key必须是空键:"+key);
 		ctx.setKeyHook(0);
 	}
 
@@ -102,11 +102,12 @@ final class ObjAny extends Adapter {
 
 			if (objectId >= 0) {
 				c.valueMap(1);
-				c.key("==");
+				c.key("");
 				c.value(objectId);
 			} else {
-				c.valueMap(ser.fieldCount()+1);
-				c.key("==");
+				if (ser.isOptional()) c.valueMap();
+				else c.valueMap(ser.fieldCount()+1);
+				c.key("");
 				c.value(o.getClass().getName());
 				if (ser.valueIsMap()) {
 					ser.writeMap(c, o);

@@ -140,7 +140,7 @@ public final class DownloadTask implements ChannelHandler, Task, Future<File> {
 			ch.addLast("Redirect", new AutoRedirect(client, Downloader.timeout, maxRedirect))
 			  .addLast("Checker", this);
 
-			client.connect(ch, Downloader.timeout);
+			client.attach(ch, Downloader.timeout);
 
 			ServerLaunch.DEFAULT_LOOPER.register(ch, null);
 		} catch (Exception e) {

@@ -1,6 +1,6 @@
 package roj.plugins.bkcrack;
 
-import static roj.crypt.CRC32s.crcTab;
+import static roj.crypt.CRC32.crcTab;
 import static roj.plugins.bkcrack.Macros.MASK_10_32;
 
 /**

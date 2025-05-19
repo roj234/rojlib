@@ -5,7 +5,7 @@ import roj.config.data.CMap;
 import roj.http.HttpClient;
 import roj.http.HttpRequest;
 import roj.io.IOUtil;
-import roj.text.Escape;
+import roj.text.URICoder;
 import roj.ui.Terminal;
 import roj.util.ByteList;
 
@@ -20,7 +20,7 @@ final class CTLightCat extends IpGetter {
 	private long refreshTime;
 
 	private boolean refreshAccessToken() throws Exception {
-		ByteList body = IOUtil.getSharedByteBuf().putAscii("username=useradmin&psd=").putAscii(Escape.encodeURIComponent(pass));
+		ByteList body = IOUtil.getSharedByteBuf().putAscii("username=useradmin&psd=").putAscii(URICoder.encodeURIComponent(pass));
 		HttpClient shc = HttpRequest.builder()
 										.url("http://"+catUrl+"/cgi-bin/luci")
 										.header("Content-Type","application/x-www-form-urlencoded")

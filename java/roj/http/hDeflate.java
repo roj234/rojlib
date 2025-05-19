@@ -1,7 +1,7 @@
 package roj.http;
 
 import roj.compiler.plugins.asm.ASM;
-import roj.crypt.CRC32s;
+import roj.crypt.CRC32;
 import roj.io.buf.BufferPool;
 import roj.math.MathUtils;
 import roj.net.ChannelCtx;
@@ -74,7 +74,7 @@ public final class hDeflate extends GDeflate {
 
 	@Override
 	protected void readPacket(ChannelCtx ctx, DynByteBuf out) throws IOException {
-		if ((flag&1) != 0) inCrc = CRC32s.update(inCrc, out);
+		if ((flag&1) != 0) inCrc = CRC32.update(inCrc, out);
 		super.readPacket(ctx, out);
 	}
 
@@ -83,7 +83,7 @@ public final class hDeflate extends GDeflate {
 		if (def == null || def.finished()) {ctx.channelWrite(msg);return;}
 
 		var in = (DynByteBuf) msg;
-		if ((flag&2) != 0) outCrc = CRC32s.update(outCrc, in);
+		if ((flag&2) != 0) outCrc = CRC32.update(outCrc, in);
 		DynByteBuf out = ctx.allocate(ASM.TARGET_JAVA_VERSION >= 11, MathUtils.clamp(in.readableBytes(), 128, buf));
 		try {
 			deflateWrite(ctx, in, out, 0);
@@ -106,15 +106,15 @@ public final class hDeflate extends GDeflate {
 	public Inflater getInf() {return inf;}
 	public void setInCrc(boolean doCrc) {
 		if (doCrc) flag |= 1; else flag &= 2;
-		inCrc = CRC32s.INIT_CRC;
+		inCrc = CRC32.initial;
 	}
-	public int getInCrc() {return CRC32s.retVal(inCrc);}
+	public int getInCrc() {return CRC32.finish(inCrc);}
 
 	public void setDef(Deflater def) {this.def = def;}
 	public Deflater getDef() {return def;}
 	public void setOutCrc(boolean doCrc) {
 		if (doCrc) flag |= 2; else flag &= 1;
-		outCrc = CRC32s.INIT_CRC;
+		outCrc = CRC32.initial;
 	}
-	public int getOutCrc() {return CRC32s.retVal(outCrc);}
+	public int getOutCrc() {return CRC32.finish(outCrc);}
 }

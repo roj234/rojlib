@@ -5,7 +5,7 @@ import roj.collect.RingBuffer;
 import roj.collect.SimpleList;
 import roj.http.Headers;
 import roj.http.HttpUtil;
-import roj.text.DateParser;
+import roj.text.DateTime;
 
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -46,8 +46,8 @@ public final class HSConfig implements BiConsumer<String, String> {
 
 	public SessionStorage getSessionStorage() {return sessionStorage == null ? globalSessionStorage : sessionStorage;}
 
-	private final DateParser dateParser = DateParser.GMT();
-	public String toRFC(long time) {return dateParser.toRFCString(time);}
+	private final DateTime dateTime = DateTime.GMT();
+	public String toRFC(long time) {return dateTime.toRFCString(time);}
 
 	final RingBuffer<HttpServer11> keepalive = RingBuffer.lazy(KEEPALIVE_MAX);
 

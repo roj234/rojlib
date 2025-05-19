@@ -65,7 +65,7 @@ public class HOT_RELOAD implements Processor {
 			}
 		}
 		FMD.LOGGER.info("\"热重载青春版\"启动成功，在任意JVM中加入该参数即可使用");
-		FMD.LOGGER.info("  -javaagent:\""+Tokenizer.addSlashes(agent.getAbsolutePath())+"\"="+config.asInt());
+		FMD.LOGGER.info("  -javaagent:\""+Tokenizer.escape(agent.getAbsolutePath())+"\"="+config.asInt());
 	}
 
 	public void start(int port) throws IOException {

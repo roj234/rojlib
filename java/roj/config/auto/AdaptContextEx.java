@@ -3,6 +3,7 @@ package roj.config.auto;
 import roj.collect.Hasher;
 import roj.collect.SimpleList;
 import roj.collect.ToIntMap;
+import roj.concurrent.LazyThreadLocal;
 import roj.config.serial.CVisitor;
 
 /**
@@ -31,7 +32,7 @@ final class AdaptContextEx extends AdaptContext {
 	}
 	public final Serializer<Object> reset() {objectsR.clear();return super.reset();}
 
-	static final ThreadLocal<ToIntMap<Object>> OBJECT_POOL = new ThreadLocal<>();
+	static final LazyThreadLocal<ToIntMap<Object>> OBJECT_POOL = new LazyThreadLocal<>();
 	public final void write(CVisitor c, Object o) {
 		ToIntMap<Object> prev = OBJECT_POOL.get();
 		OBJECT_POOL.set(objectW);

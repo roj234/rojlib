@@ -151,7 +151,7 @@ public class CList extends CEntry implements Iterable<CEntry> {
 			for (int i = 0; i < elements.size(); i++) {
 				sb.append("[[");
 				if (!TOMLParser.literalSafe(chain)) {
-					Tokenizer.addSlashes(sb, chain);
+					Tokenizer.escape(sb, chain);
 				} else {
 					sb.append(chain);
 				}
@@ -161,7 +161,7 @@ public class CList extends CEntry implements Iterable<CEntry> {
 			return sb;
 		} else {
 			if (!TOMLParser.literalSafe(chain)) {
-				Tokenizer.addSlashes(sb, chain);
+				Tokenizer.escape(sb, chain);
 			} else {
 				sb.append(chain);
 			}
@@ -202,7 +202,7 @@ public class CList extends CEntry implements Iterable<CEntry> {
 
 		public final boolean isCommentSupported() {return true;}
 		public String getComment(int key) {return comments.get(key);}
-		public void setComment(int key, String val) {comments.putInt(key, val);}
+		public void setComment(int key, String val) {comments.put(key, val);}
 		public final CList toCommentable() {return this;}
 		public void clearComments() {comments.clear();}
 	}

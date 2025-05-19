@@ -1,5 +1,6 @@
 package roj.archive.qz.xz;
 
+import roj.RojLib;
 import roj.io.Finishable;
 import roj.io.IOUtil;
 import roj.io.UnsafeOutputStream;
@@ -20,7 +21,20 @@ import static roj.reflect.Unaligned.U;
  * @since 2023/11/17 2:10
  */
 class LZMA2WriterN extends OutputStream {
-	static {initNatives();}
+	static final boolean AVAILABLE;
+	static {
+		RojLib.hasNative(0);
+
+		boolean available;
+		try {
+			available = initNatives();
+		} catch (UnsatisfiedLinkError|NativeException e) {
+			e.printStackTrace();
+			available = false;
+		}
+		AVAILABLE = available;
+	}
+
 	private static long NATIVE_STRUCT_SIZE;
 
 	private OutputStream out;
@@ -183,7 +197,7 @@ class LZMA2WriterN extends OutputStream {
 	private int inOffset, inSize, outSize;
 	private byte isFirstWrite = 1;
 
-	private static native void initNatives();
+	private static native boolean initNatives();
 	private static native long getMemoryUsage(long _nativeOptions);
 	private synchronized native long nInit(long _nativeOptions);
 	private synchronized native long nWrite(int len);

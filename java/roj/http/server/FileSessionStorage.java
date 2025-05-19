@@ -103,7 +103,7 @@ public class FileSessionStorage extends SessionStorage implements BiConsumer<Str
 		try (var in = new MyDataInputStream(new FileInputStream(file))) {
 			Serializer<Map<String, Object>> des = adapter();
 			des.reset();
-			XNBTParser.root(in, des);
+			XNBTParser.parse(in, des);
 			return des.finished() ? des.get() : null;
 		} catch (Exception e) {
 			e.printStackTrace();

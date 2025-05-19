@@ -41,7 +41,7 @@ public final class CString extends CEntry {
 	public void accept(CVisitor visitor) { visitor.value(value); }
 	public Object raw() { return value; }
 
-	protected CharList toJSON(CharList sb, int depth) { return Tokenizer.addSlashes(sb.append('"'), value).append('"'); }
+	protected CharList toJSON(CharList sb, int depth) { return Tokenizer.escape(sb.append('"'), value).append('"'); }
 
 	public int hashCode() {return value.hashCode();}
 	public boolean equals(Object o) {

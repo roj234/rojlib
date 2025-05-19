@@ -10,11 +10,11 @@ import java.io.IOException;
  * @author Roj233
  * @since 2022/5/30 18:00
  */
-public abstract class CodeFile implements Closeable {
+public abstract class NativeExecutable implements Closeable {
 	protected final Source src;
 	protected final ByteList rb;
 
-	public CodeFile(Source src) {
+	public NativeExecutable(Source src) {
 		this.src = src;
 		this.rb = new ByteList(128);
 	}

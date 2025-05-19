@@ -12,7 +12,7 @@ package roj.archive.qz.xz.lz;
 
 import roj.util.NativeMemory;
 
-import static roj.crypt.CRC32s.crcTab;
+import static roj.crypt.CRC32.crcTab;
 import static roj.reflect.Unaligned.U;
 
 final class Hash234 {

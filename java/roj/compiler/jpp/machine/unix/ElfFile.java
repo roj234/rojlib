@@ -1,7 +1,7 @@
 package roj.compiler.jpp.machine.unix;
 
 import roj.collect.SimpleList;
-import roj.compiler.jpp.machine.CodeFile;
+import roj.compiler.jpp.machine.NativeExecutable;
 import roj.io.source.Source;
 
 import java.io.IOException;
@@ -10,7 +10,7 @@ import java.io.IOException;
  * @author Roj233
  * @since 2022/5/30 17:30
  */
-public class ElfFile extends CodeFile {
+public class ElfFile extends NativeExecutable {
 	ElfHeader elfHeader;
 	SimpleList<ElfSectionE> programs = new SimpleList<>();
 	SimpleList<ElfSectionD> datas = new SimpleList<>();

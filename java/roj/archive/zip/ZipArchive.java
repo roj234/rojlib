@@ -4,11 +4,13 @@ import roj.archive.ArchiveUtils;
 import roj.collect.MyHashSet;
 import roj.collect.RSegmentTree;
 import roj.collect.RSegmentTree.Range;
-import roj.crypt.CRC32s;
+import roj.concurrent.ExceptionalSupplier;
+import roj.crypt.CRC32;
 import roj.crypt.CipherOutputStream;
 import roj.io.Finishable;
 import roj.io.IOUtil;
 import roj.io.source.Source;
+import roj.text.logging.Logger;
 import roj.util.ArrayCache;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
@@ -27,7 +29,6 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.function.ObjLongConsumer;
-import java.util.function.Supplier;
 import java.util.zip.Deflater;
 import java.util.zip.ZipException;
 
@@ -76,7 +77,7 @@ public final class ZipArchive extends ZipFile {
 		mod.data = data;
 		return mod;
 	}
-	public EntryMod put(String entry, Supplier<ByteList> getData, boolean compress) {
+	public EntryMod put(String entry, ExceptionalSupplier<ByteList, IOException> getData, boolean compress) {
 		EntryMod mod = createMod(entry);
 		mod.flag = (byte) (compress ? EntryMod.COMPRESS : 0);
 		mod.data = getData;
@@ -88,7 +89,7 @@ public final class ZipArchive extends ZipFile {
 		mod.data = in;
 		return mod;
 	}
-	public EntryMod putStream(String entry, Supplier<InputStream> in, boolean compress) {
+	public EntryMod putStream(String entry, ExceptionalSupplier<InputStream, IOException> in, boolean compress) {
 		EntryMod mod = createMod(entry);
 		mod.flag = (byte) (compress ? EntryMod.COMPRESS : 0);
 		mod.data = in;
@@ -115,6 +116,7 @@ public final class ZipArchive extends ZipFile {
 	}
 
 	public void save() throws IOException { save(Deflater.DEFAULT_COMPRESSION); }
+	@SuppressWarnings("unchecked")
 	public void save(int level) throws IOException {
 		if (modified.isEmpty() || (flags&FLAG_HAS_ERROR) != 0) return;
 		getEntry(null);
@@ -232,15 +234,23 @@ public final class ZipArchive extends ZipFile {
 			boolean sizeIsKnown;
 			InputStream in;
 			Object data = mf.data;
-			if (data instanceof Supplier) data = ((Supplier<?>) data).get();
+			if (data instanceof ExceptionalSupplier) {
+				try {
+					data = ((ExceptionalSupplier<?,IOException>) data).get();
+				} catch (Exception ex) {
+					Logger.FALLBACK.error("无法保存{}的数据", ex, e.name);
+					continue;
+				}
+			}
+
 			if (data instanceof DynByteBuf b) {
 				mf.flag &= ~EntryMod.LARGE;
 				if (b.isDirect()) {
 					in = b.asInputStream();
-					e.crc32 = CRC32s.once(b.address(), b.readableBytes());
+					e.crc32 = CRC32.crc32(b.address(), b.readableBytes());
 				} else {
 					in = null;
-					e.crc32 = CRC32s.once(b.array(), b.relativeArrayOffset(), b.readableBytes());
+					e.crc32 = CRC32.crc32(b.array(), b.relativeArrayOffset(), b.readableBytes());
 				}
 
 				sizeIsKnown = true;
@@ -301,7 +311,7 @@ public final class ZipArchive extends ZipFile {
 					e.cSize = e.uSize;
 				}
 			} else try {
-				int crc = CRC32s.INIT_CRC;
+				int crc = CRC32.initial;
 				if (e.method != 0) {
 					final int d2 = buf.length / 2;
 
@@ -310,7 +320,7 @@ public final class ZipArchive extends ZipFile {
 						r = in.read(buf, 0, d2);
 						if (r < 0) break;
 						def.setInput(buf, 0, r);
-						crc = CRC32s.update(crc, buf, 0, r);
+						crc = CRC32.update(crc, buf, 0, r);
 						while (!def.needsInput()) {
 							int len = def.deflate(buf, d2, buf.length - d2);
 							cout.write(buf, d2, len);
@@ -332,16 +342,16 @@ public final class ZipArchive extends ZipFile {
 					while (true) {
 						r = in.read(buf);
 						if (r < 0) break;
-						crc = CRC32s.update(crc, buf, 0, r);
+						crc = CRC32.update(crc, buf, 0, r);
 						cout.write(buf, 0, r);
 						sum += r;
 					}
 					e.uSize = e.cSize = sum;
 				}
-				e.crc32 = CRC32s.retVal(crc);
+				e.crc32 = CRC32.finish(crc);
 			} catch (Throwable ex) {
 				def.end();
-				throw ex;
+				Logger.FALLBACK.error("无法保存{}的数据", ex, e.name);
 			} finally {
 				in.close();
 			}

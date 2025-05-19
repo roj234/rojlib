@@ -1,7 +1,7 @@
 package roj.text.logging.c;
 
 import roj.text.CharList;
-import roj.text.DateParser;
+import roj.text.DateTime;
 
 import java.util.Map;
 
@@ -16,8 +16,8 @@ public class LCTime implements LogComponent {
 
 	@Override
 	public void accept(Map<String, Object> tmp, CharList sb) {
-		DateParser cal = (DateParser) tmp.get("LCAL");
-		if (cal == null) tmp.put("LCAL", cal = DateParser.local());
+		DateTime cal = (DateTime) tmp.get("LCAL");
+		if (cal == null) tmp.put("LCAL", cal = DateTime.local());
 		cal.format(format, System.currentTimeMillis(), sb);
 	}
 }

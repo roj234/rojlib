@@ -246,7 +246,7 @@ public final class LZMA2Parallel {
 						tasksDone.notifyAll();
 					}
 				} else {
-					tasksDone.putInt(task.id, task);
+					tasksDone.put(task.id, task);
 				}
 			}
 		}

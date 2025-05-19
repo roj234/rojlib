@@ -1,7 +1,7 @@
 package roj.compiler.ast;
 
 import org.jetbrains.annotations.Nullable;
-import roj.asm.insn.JumpBlock;
+import roj.asm.insn.JumpTo;
 import roj.asm.insn.Label;
 import roj.collect.IntList;
 import roj.compiler.asm.MethodWriter;
@@ -31,7 +31,7 @@ public class FlowHook {
 		Arrays.sort(breakHook.getRawArray(), 0, breakHook.size());
 		for (int i = breakHook.size()-1; i >= 0; i--) {
 			var segmentId = breakHook.get(i);
-			Label target = ((JumpBlock) cw.getSegment(segmentId)).target;
+			Label target = ((JumpTo) cw.getSegment(segmentId)).target;
 			//  当它跳转到代码块外部时，才需要执行finally
 			//   外部：Label未定义（后） or 在regionBegin之前
 			//   同时,goto target替换成ldc + switch -> target
@@ -48,7 +48,7 @@ public class FlowHook {
 		if (returnHook.size() > 0) {
 			cw.label(returnTarget);
 			finallyEmitter.accept(cw);
-			if (parent == null) cw.insn(cw.mn.returnType().shiftedOpcode(IRETURN));
+			if (parent == null) cw.insn(cw.mn.returnType().getOpcode(IRETURN));
 			else cw.jump(parent.returnTarget);
 		}
 	}

@@ -59,7 +59,7 @@ public class VFSRouter implements Router, Predicate<String> {
 				int length = TextUtil.split(req.path(), '/').size();
 				env.put("BASE", "../".repeat(length));
 				env.put("PARENT", url.isEmpty() ? "none" : "block");
-				env.put("LOC", Tokenizer.addSlashes(hideAbsolutePath ? url.isEmpty()?"/":url : file.toString()));
+				env.put("LOC", Tokenizer.escape(hideAbsolutePath ? url.isEmpty()?"/":url : file.toString()));
 
 				var tmp = IOUtil.getSharedCharBuf().append('[');
 
@@ -71,7 +71,7 @@ public class VFSRouter implements Router, Predicate<String> {
 						while (true) {
 							file = itr.next();
 
-							Tokenizer.addSlashes(tmp.append('"'), file.getName());
+							Tokenizer.escape(tmp.append('"'), file.getName());
 							if (file.isDirectory()) tmp.append('/');
 							tmp.append("\",").append(file.lastModified() / 1000);
 							if (file.isFile()) TextUtil.scaledNumber1024(tmp.append(',').append(file.length()).append(",\""), file.length()).append('"');

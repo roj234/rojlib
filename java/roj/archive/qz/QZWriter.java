@@ -5,7 +5,7 @@ import roj.archive.ArchiveFile;
 import roj.archive.ArchiveWriter;
 import roj.collect.SimpleList;
 import roj.config.data.CInt;
-import roj.crypt.CRC32s;
+import roj.crypt.CRC32;
 import roj.io.source.Source;
 
 import java.io.IOException;
@@ -45,7 +45,7 @@ public abstract class QZWriter extends OutputStream implements ArchiveWriter {
     private long entryUSize;
     OutputStream out;
 
-    int crc32 = CRC32s.INIT_CRC, blockCrc32 = CRC32s.INIT_CRC;
+    int crc32 = CRC32.initial, blockCrc32 = CRC32.initial;
 
     boolean finished;
 
@@ -229,8 +229,8 @@ public abstract class QZWriter extends OutputStream implements ArchiveWriter {
         if (currentEntry == null) throw new IOException("No active entry");
 
         out().write(b);
-        crc32 = CRC32s.update(crc32, b);
-        blockCrc32 = CRC32s.update(blockCrc32, b);
+        crc32 = CRC32.update(crc32, b);
+        blockCrc32 = CRC32.update(blockCrc32, b);
         entryUSize++;
     }
     public final void write(byte[] b, int off, int len) throws IOException {
@@ -238,8 +238,8 @@ public abstract class QZWriter extends OutputStream implements ArchiveWriter {
 
         if (len <= 0) return;
         out().write(b, off, len);
-        crc32 = CRC32s.update(crc32, b, off, len);
-        blockCrc32 = CRC32s.update(blockCrc32, b, off, len);
+        crc32 = CRC32.update(crc32, b, off, len);
+        blockCrc32 = CRC32.update(blockCrc32, b, off, len);
         entryUSize += len;
     }
     public final void closeEntry() throws IOException {
@@ -266,9 +266,9 @@ public abstract class QZWriter extends OutputStream implements ArchiveWriter {
         files.add(entry);
 
         flagSum[7]++;
-        entry.crc32 = CRC32s.retVal(crc32);
+        entry.crc32 = CRC32.finish(crc32);
         entry.flag |= QZEntry.CRC;
-        crc32 = CRC32s.INIT_CRC;
+        crc32 = CRC32.initial;
 
         if (solidSize != 0 && b.uSize >= solidSize) finishWordBlock();
 
@@ -323,8 +323,8 @@ public abstract class QZWriter extends OutputStream implements ArchiveWriter {
 
         flagSum[8]++;
         b.hasCrc |= 1;
-        b.crc = CRC32s.retVal(blockCrc32);
-        blockCrc32 = CRC32s.INIT_CRC;
+        b.crc = CRC32.finish(blockCrc32);
+        blockCrc32 = CRC32.initial;
 
         out.close();
         out = null;

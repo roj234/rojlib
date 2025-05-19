@@ -3,6 +3,7 @@ package roj.asm;
 import roj.io.IOUtil;
 
 import java.io.File;
+import java.io.InputStream;
 
 /**
  * 字节码解析器
@@ -21,9 +22,9 @@ public final class Javap {
 		if (classOrFile.isFile()) {
 			System.out.println(ClassNode.parseAll(IOUtil.read(classOrFile)));
 		} else {
-			ClassNode node = ClassNode.fromType(Class.forName(args[0]));
-			if (node == null) System.out.println("找不到"+args[0]+"的类文件");
-			else System.out.println(node);
+			InputStream in = Javap.class.getClassLoader().getResourceAsStream(args[0].replace('.', '/') + ".class");
+			if (in == null) System.out.println("找不到"+args[0]+"的类文件");
+			else System.out.println(ClassNode.parseAll(IOUtil.read(in)));
 		}
 	}
 }

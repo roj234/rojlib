@@ -17,7 +17,7 @@ import roj.collect.SimpleList;
 import roj.collect.TrieTreeSet;
 import roj.compiler.plugins.asm.ASM;
 import roj.config.data.CInt;
-import roj.crypt.CRC32s;
+import roj.crypt.CRC32;
 import roj.crypt.jar.JarVerifier;
 import roj.io.FastFailException;
 import roj.io.IOUtil;
@@ -26,7 +26,7 @@ import roj.reflect.Bypass;
 import roj.reflect.Debug;
 import roj.reflect.ReflectionUtils;
 import roj.text.CharList;
-import roj.text.Escape;
+import roj.text.URICoder;
 import roj.text.logging.Level;
 import roj.text.logging.Logger;
 import roj.util.ByteList;
@@ -471,7 +471,7 @@ public class Bootstrap implements Function<String, Class<?>> {
 	public void addTransformerExclusion(String toExclude) {transformExcept.add(toExclude);}
 
 	public void enableFastZip(URL url, boolean skipCodeSource) throws IOException {
-		ZipFile zf = new ZipFile(new File(Escape.decodeURI(url.getPath().substring(1))));
+		ZipFile zf = new ZipFile(new File(URICoder.decodeURI(url.getPath().substring(1))));
 		JarVerifier jv = JarVerifier.create(zf);
 		if (archives.isEmpty()) IOUtil.read(zf.getStream(zf.entries().iterator().next())); // INIT
 		archives.add(zf);
@@ -495,14 +495,14 @@ public class Bootstrap implements Function<String, Class<?>> {
 		for (int i = 0; i < archives.size(); i++) {
 			ZipFile archive = archives.get(i);
 
-			int fastHash = CRC32s.INIT_CRC;
+			int fastHash = CRC32.initial;
 			for (ZEntry entry : archive.entries()) {
 				buf.clear();
 				buf.putUTF(entry.getName()).putLong(entry.getModificationTime()).putInt(entry.getCrc32());
 
-				fastHash = CRC32s.update(fastHash, buf.list, 0, buf.wIndex());
+				fastHash = CRC32.update(fastHash, buf.list, 0, buf.wIndex());
 			}
-			fastHash = CRC32s.retVal(fastHash);
+			fastHash = CRC32.finish(fastHash);
 
 			File out = new File(".cached/"+IOUtil.fileName(((FileSource) archive.source()).getFile().getName())+"-"+Integer.toHexString(fastHash)+".jar");
 			if (out.isFile()) {

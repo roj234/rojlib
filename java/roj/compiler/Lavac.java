@@ -11,7 +11,7 @@ import roj.compiler.diagnostic.TextDiagnosticReporter;
 import roj.compiler.plugin.GlobalContextApi;
 import roj.compiler.plugins.eval.Constexpr;
 import roj.io.IOUtil;
-import roj.text.DateParser;
+import roj.text.DateTime;
 import roj.text.TextReader;
 import roj.text.TextUtil;
 import roj.ui.Terminal;
@@ -28,8 +28,8 @@ import java.util.ArrayList;
  */
 public final class Lavac {
 	@Constexpr
-	public static String getCompileTime() {return DateParser.toLocalTimeString(System.currentTimeMillis());}
-	public static String getCurrentTime() {return DateParser.toLocalTimeString(System.currentTimeMillis());}
+	public static String getCompileTime() {return DateTime.toLocalTimeString(System.currentTimeMillis());}
+	public static String getCurrentTime() {return DateTime.toLocalTimeString(System.currentTimeMillis());}
 
 	public static final String VERSION = "1.0.0-alpha (compiled on "+getCompileTime()+")";
 
@@ -223,7 +223,7 @@ public final class Lavac {
 			try (var zfw = new ZipFileWriter(output)) {
 				for (int i = 0; i < files.size(); i++) {
 					var data = files.get(i);
-					data.S5_noStore();
+					data.S5_preStore();
 					zfw.beginEntry(new ZEntry(data.name().concat(".class")));
 					ByteList x = AsmCache.toByteArrayShared(data);
 					x.writeToStream(zfw);

@@ -32,7 +32,7 @@ public class PermissionSet {
 	public boolean has(String permissionNode) {return get(permissionNode, 0) != 0;}
 	public int get(CharSequence node, int def) {
 		var entry = (ToIntMap.Entry<CharSequence>) map.getEntry(node);
-		if (entry != null) def = entry.v;
+		if (entry != null) def = entry.value;
 		else {
 			var sb = IOUtil.getSharedCharBuf().append(node);
 			boolean deepest = false;
@@ -45,14 +45,14 @@ public class PermissionSet {
 				entry = (ToIntMap.Entry<CharSequence>) map.getEntry(sb);
 				if (entry == null) continue;
 
-				if ((entry.v & IMPORTANT) != 0) {
+				if ((entry.value & IMPORTANT) != 0) {
 					// important
-					def = entry.v;
+					def = entry.value;
 					break;
 				}
 
 				if (!deepest) {
-					def = entry.v;
+					def = entry.value;
 					deepest = true;
 				}
 			}
@@ -63,7 +63,7 @@ public class PermissionSet {
 
 	public int getBits(CharSequence node) {
 		var entry = (ToIntMap.Entry<CharSequence>) map.getEntry(node);
-		var bits = entry != null ? entry.v : 0;
+		var bits = entry != null ? entry.value : 0;
 
 		var sb = IOUtil.getSharedCharBuf().append(node);
 
@@ -75,9 +75,9 @@ public class PermissionSet {
 			entry = (ToIntMap.Entry<CharSequence>) map.getEntry(sb);
 			if (entry == null) continue;
 
-			if ((entry.v & IMPORTANT) != 0) {
+			if ((entry.value & IMPORTANT) != 0) {
 				if ((bits&IMPORTANT) == 0) {
-					bits = entry.v;
+					bits = entry.value;
 					continue;
 				}
 			} else {
@@ -85,7 +85,7 @@ public class PermissionSet {
 					continue;
 			}
 
-			bits |= entry.v;
+			bits |= entry.value;
 		}
 
 		return bits & ~IMPORTANT;

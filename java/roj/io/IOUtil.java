@@ -3,8 +3,10 @@ package roj.io;
 import org.jetbrains.annotations.ApiStatus;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
+import roj.RojLib;
 import roj.collect.SimpleList;
 import roj.compiler.plugins.annotations.Attach;
+import roj.concurrent.ExceptionalConsumer;
 import roj.concurrent.FastThreadLocal;
 import roj.config.data.CInt;
 import roj.config.data.CLong;
@@ -22,10 +24,7 @@ import java.nio.channels.FileChannel;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
 import java.nio.file.attribute.BasicFileAttributes;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import java.util.Locale;
+import java.util.*;
 import java.util.concurrent.LinkedBlockingDeque;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
@@ -208,7 +207,7 @@ public final class IOUtil {
 		int i = loc.lastIndexOf('!');
 		loc = loc.substring(loc.startsWith("/")?1:0, i<0?loc.length():i);
 		try {
-			loc = Escape.decodeURI(loc);
+			loc = URICoder.decodeURI(loc);
 			i = loc.lastIndexOf('#');
 			loc = loc.substring(0, i<0?loc.length():i);
 			return new File(loc).getCanonicalFile();
@@ -351,7 +350,7 @@ public final class IOUtil {
 		}
 	}
 
-	public static boolean writeFileEvenMoreSafe(File baseFolder, String baseName, Consumer<File> consumer) throws IOException {
+	public static boolean writeFileEvenMoreSafe(File baseFolder, String baseName, ExceptionalConsumer<File, IOException> consumer) throws IOException {
 		var realFile = new File(baseFolder, baseName);
 		var tmpFile = new File(baseFolder, baseName+"."+System.nanoTime()+".tmp");
 		var deletePend = new File(baseFolder, baseName+".delete_pend");
@@ -552,6 +551,21 @@ public final class IOUtil {
 			new UnsupportedOperationException(c.getClass()+"在关闭时抛出了异常！", e).printStackTrace();
 		}
 	}
+
+	/**
+	 * 获取硬链接的唯一标识符用于去重
+	 * @param filePath 文件绝对路径
+	 * @return 文件唯一标识符（原始二进制数据，可能包含不可打印字符），若无硬链接或失败返回null
+	 */
+	public static @Nullable String getHardLinkUUID(@NotNull String filePath) {
+		return RojLib.hasNative(RojLib.WIN32) ? getHardLinkUUID0(Objects.requireNonNull(filePath)) : null;
+	}
+	public static boolean makeHardLink(@NotNull String link, @NotNull String existing) {
+		RojLib.fastJni();
+		return makeHardLink0(link, existing);
+	}
+	private static native String getHardLinkUUID0(String filePath);
+	private static native boolean makeHardLink0(String link, String existing);
 
 	public static void ioWait(AutoCloseable closeable, Object waiter) throws IOException {
 		synchronized (waiter) {

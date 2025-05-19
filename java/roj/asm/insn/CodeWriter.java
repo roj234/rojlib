@@ -59,7 +59,7 @@ public class CodeWriter extends AbstractCodeWriter {
 		bciR2W = null;
 
 		offset = 0;
-		codeBlocks.clear();
+		segments.clear();
 		labels.clear();
 
 		bw.putLong(0);
@@ -86,8 +86,8 @@ public class CodeWriter extends AbstractCodeWriter {
 		bw.preInsert(offset, length);
 		bw.put(offset, buf);
 		// update length
-		if (!codeBlocks.isEmpty())
-			codeBlocks.get(0).put(null, 0);
+		if (!segments.isEmpty())
+			segments.get(0).put(null, 0);
 
 		for (Label label : labels) {
 			if (label.block == 0) label.offset += length;
@@ -128,9 +128,9 @@ public class CodeWriter extends AbstractCodeWriter {
 		int len1 = r.readUnsignedShort();
 		while (len1 > 0) {
 			// S/E/H
-			bciR2W.putInt(r.readUnsignedShort(), newLabel());
-			bciR2W.putInt(r.readUnsignedShort(), newLabel());
-			bciR2W.putInt(r.readUnsignedShort(), newLabel());
+			bciR2W.put(r.readUnsignedShort(), newLabel());
+			bciR2W.put(r.readUnsignedShort(), newLabel());
+			bciR2W.put(r.readUnsignedShort(), newLabel());
 			r.rIndex += 2;
 
 			len1--;
@@ -202,7 +202,7 @@ public class CodeWriter extends AbstractCodeWriter {
 
 	protected void ldc1(byte code, Constant c) {
 		// 同时读写，长度可能会变，特别是Transformer#compress...
-		if (bciR2W != null) addSegment(new LdcBlock(code, c));
+		if (bciR2W != null) addSegment(new Ldc(code, c));
 		else {
 			int i = cpw.fit(c);
 			if (i < 256) codeOb.put(LDC).put(i);
@@ -230,7 +230,7 @@ public class CodeWriter extends AbstractCodeWriter {
 
 	public void clear() {
 		if (state != 1) throw new IllegalStateException();
-		codeBlocks.clear();
+		segments.clear();
 		bci = 0;
 		codeOb = bw;
 		bw.wIndex(tmpLenOffset);
@@ -253,14 +253,14 @@ public class CodeWriter extends AbstractCodeWriter {
 		// 如何处理只有隐式跳转(exception handler)的情况？
 		fv = null;
 
-		if (!codeBlocks.isEmpty()) {
+		if (!segments.isEmpty()) {
 			endSegment();
 
 			int begin = tmpLenOffset;
-			List<CodeBlock> codeBlocks = this.codeBlocks;
+			List<Segment> segments = this.segments;
 			int wi = bw.wIndex();
 
-			int len = codeBlocks.size()+1;
+			int len = segments.size()+1;
 			int[] offSum = AsmCache.getInstance().getIntArray_(len);
 			updateOffset(labels, offSum, len);
 
@@ -271,8 +271,8 @@ public class CodeWriter extends AbstractCodeWriter {
 				bw.wIndex(wi);
 
 				changed = false;
-				for (int i = 0; i < codeBlocks.size(); i++) {
-					changed |= codeBlocks.get(i).put(this, i);
+				for (int i = 0; i < segments.size(); i++) {
+					changed |= segments.get(i).put(this, i);
 
 					bci = bw.wIndex() - begin;
 				}
@@ -283,10 +283,10 @@ public class CodeWriter extends AbstractCodeWriter {
 			if (fvFlags != 0) {
 				codeOb = bw.slice(begin, bw.wIndex()-begin);
 				fv = new FrameVisitor();
-				fv.visitBlocks(mn, codeBlocks);
+				fv.visitBlocks(mn, segments);
 			}
 
-			codeBlocks.clear();
+			segments.clear();
 		} else {
 			// used for getBci, and on simple method it fails
 			bci = bw.wIndex() - tmpLenOffset;
@@ -296,14 +296,14 @@ public class CodeWriter extends AbstractCodeWriter {
 				int begin = tmpLenOffset;
 				codeOb = bw.slice(begin, bw.wIndex()-begin);
 				fv = new FrameVisitor();
-				fv.visitBlocks(mn, codeBlocks);
+				fv.visitBlocks(mn, segments);
 			}
 		}
 
 		labels.clear();
 	}
 	public void __updateOffsets() {
-		int len = codeBlocks.size()+1;
+		int len = segments.size()+1;
 		int[] offSum = AsmCache.getInstance().getIntArray_(len);
 		updateOffset(labels, offSum, len);
 	}
@@ -502,13 +502,13 @@ public class CodeWriter extends AbstractCodeWriter {
 		else if (lbl.isValid()) return lbl;
 
 		if (before) {
-			if (codeBlocks.isEmpty() || pos < codeBlocks.get(0).length()) lbl.setFirst(pos);
+			if (segments.isEmpty() || pos < segments.get(0).length()) lbl.setFirst(pos);
 			else {
 				lbl.setRaw(pos);
 				labels.add(lbl); // no further mod
 			}
 		} else { // after
-			bciR2W.putInt(pos, lbl);
+			bciR2W.put(pos, lbl);
 		}
 		return lbl;
 	}
@@ -519,7 +519,7 @@ public class CodeWriter extends AbstractCodeWriter {
 	 * 如果需要精确的位置，请使用{@link #label()}
 	 */
 	public int bci() {
-		if (state < 2) return codeBlocks.isEmpty() ? (bw.wIndex() - tmpLenOffset) : codeOb.wIndex() + offset;
+		if (state < 2) return segments.isEmpty() ? (bw.wIndex() - tmpLenOffset) : codeOb.wIndex() + offset;
 		return bci;
 	}
 
@@ -527,57 +527,57 @@ public class CodeWriter extends AbstractCodeWriter {
 	public FrameVisitor getFv() {return fv;}
 	public int getState() {return state;}
 
-	public final void addSegment(CodeBlock c) {
+	public final void addSegment(Segment c) {
 		if (c == null) throw new NullPointerException("c");
 
-		if (codeBlocks.isEmpty()) _addFirst();
+		if (segments.isEmpty()) _addFirst();
 		else endSegment();
 
-		codeBlocks.add(c);
+		segments.add(c);
 		offset += c.length();
 
-		SolidBlock ss;
-		if (c instanceof SolidBlock x && !x.isReadonly()) ss = x;
+		StaticSegment ss;
+		if (c instanceof StaticSegment x && !x.isReadonly()) ss = x;
 		else {
-			ss = new SolidBlock();
-			codeBlocks.add(ss);
+			ss = new StaticSegment();
+			segments.add(ss);
 		}
 		codeOb = ss.getData();
 	}
 
 	protected final void _addOffset(int c) {offset += c;}
 	protected final void _addFirst() {
-		codeBlocks = new SimpleList<>(3);
+		segments = new SimpleList<>(3);
 		offset = bw.wIndex()-tmpLenOffset;
-		codeBlocks.add(new FirstBlock(bw, tmpLenOffset));
+		segments.add(new FirstBlock(bw, tmpLenOffset));
 	}
 
 	public boolean isContinuousControlFlow() {
-		int block = codeBlocks.size()-1;
-		return block >= 0 ? isContinuousControlFlow(block) : !SolidBlock.isTerminate(bw, tmpLenOffset, bw.wIndex());
+		int block = segments.size()-1;
+		return block >= 0 ? isContinuousControlFlow(block) : !StaticSegment.isTerminate(bw, tmpLenOffset, bw.wIndex());
 	}
 
 	public boolean isContinuousControlFlow(int targetBlock) {
-		CodeBlock seg = codeBlocks.get(targetBlock);
+		Segment seg = segments.get(targetBlock);
 		// targetBlock-1 : 有机会走到这个长度为0的StaticSegment
-		if (seg.length() > 0 ? !seg.isTerminate() : targetBlock == 0 || !codeBlocks.get(targetBlock-1).isTerminate()) return true;
-		for (int i = 1; i < codeBlocks.size(); i++) {
-			if (codeBlocks.get(i).willJumpTo(targetBlock, -1)) return true;
+		if (seg.length() > 0 ? !seg.isTerminate() : targetBlock == 0 || !segments.get(targetBlock-1).isTerminate()) return true;
+		for (int i = 1; i < segments.size(); i++) {
+			if (segments.get(i).willJumpTo(targetBlock, -1)) return true;
 		}
 		return false;
 	}
 
 	@Deprecated
 	public boolean isImmediateBeforeContinuous(int targetBlock) {
-		CodeBlock seg = codeBlocks.get(targetBlock);
+		Segment seg = segments.get(targetBlock);
 		// targetBlock-1 : 有机会走到这个长度为0的StaticSegment
-		return seg.length() > 0 ? !seg.isTerminate() : targetBlock == 0 || !codeBlocks.get(targetBlock - 1).isTerminate();
+		return seg.length() > 0 ? !seg.isTerminate() : targetBlock == 0 || !segments.get(targetBlock - 1).isTerminate();
 	}
 
 	public boolean willJumpTo(Label label) {return willJumpTo(label, 1);}
 	public boolean willJumpTo(Label label, int segmentId) {
-		for (; segmentId < codeBlocks.size(); segmentId++) {
-			if (codeBlocks.get(segmentId).willJumpTo(label.block, label.offset)) return true;
+		for (; segmentId < segments.size(); segmentId++) {
+			if (segments.get(segmentId).willJumpTo(label.block, label.offset)) return true;
 		}
 		return false;
 	}
@@ -585,5 +585,5 @@ public class CodeWriter extends AbstractCodeWriter {
 	public boolean isFinished() {return state == 5;}
 
 	@Override
-	public String toString() {return getClass().getName()+"@"+codeBlocks.toString();}
+	public String toString() {return getClass().getName()+"@"+ segments.toString();}
 }

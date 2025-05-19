@@ -36,9 +36,9 @@ public class ToEntry implements CVisitor {
 	public final void valueDate(long mills) {add(new CDate(mills));}
 	public final void valueTimestamp(long mills) {add(new CTimestamp(mills));}
 	public final boolean supportArray() {return true;}
-	public final void value(byte[] ba) { add(new CByteArray(ba)); }
-	public final void value(int[] ia) { add(new CIntArray(ia)); }
-	public final void value(long[] la) { add(new CLongArray(la)); }
+	public final void value(byte[] array) { add(new CByteArray(array)); }
+	public final void value(int[] array) { add(new CIntArray(array)); }
+	public final void value(long[] array) { add(new CLongArray(array)); }
 
 	private void add(CEntry v) {
 		if (pendingComment != null) {

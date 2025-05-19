@@ -4,6 +4,7 @@ import org.jetbrains.annotations.NotNull;
 import roj.compiler.api.RandomAccessible;
 import roj.reflect.Unaligned;
 import roj.util.ArrayCache;
+import roj.util.TimSortForEveryone;
 
 import java.util.Arrays;
 import java.util.ListIterator;
@@ -162,6 +163,15 @@ public class IntList implements Iterable<Integer> {
 			}
 		}
 		return sb.append(']').toString();
+	}
+
+	public void sort() {
+		Arrays.sort(list, 0, size);
+	}
+	public void sortUnsigned() {
+		TimSortForEveryone.sort(0, size, (refLeft, offLeft, offRight) ->
+				Integer.compareUnsigned(Unaligned.U.getInt(refLeft, offLeft), Unaligned.U.getInt(offRight)),
+		list, Unaligned.ARRAY_INT_BASE_OFFSET, 4);
 	}
 
 	private class Itr implements ListIterator<Integer>, PrimitiveIterator.OfInt {

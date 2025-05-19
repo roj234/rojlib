@@ -33,7 +33,7 @@ public final class ToIni implements CVisitor {
 	public final void value(double i) {sb.append(i).append('\n');}
 	public final void value(String s) {
 		if (IniParser.literalSafe(s)) sb.append(s);
-		else Tokenizer.addSlashes(sb.append('"'), s).append('"');
+		else Tokenizer.escape(sb.append('"'), s).append('"');
 		sb.append('\n');
 	}
 	public final void valueNull() {sb.append("null\n");}
@@ -58,11 +58,11 @@ public final class ToIni implements CVisitor {
 			hasTop = true;
 			sb.append("\n[");
 			if (IniParser.literalSafe(key)) sb.append(key);
-			else Tokenizer.addSlashes(sb, key);
+			else Tokenizer.escape(sb, key);
 			sb.append("]\n");
 		} else if (depth == 2) {
 			if (IniParser.literalSafe(key)) sb.append(key);
-			else Tokenizer.addSlashes(sb, key);
+			else Tokenizer.escape(sb, key);
 			sb.append('=');
 		} else {
 			throw new IllegalArgumentException("INI不支持两级以上的映射");

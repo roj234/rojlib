@@ -53,7 +53,7 @@ public final class Tokens extends Tokenizer {
 		"volatile,transient," +
 		// MethodOnly
 		"strictfp,abstract,native,synchronized," +
-		"_async,const,\1MOD1," +
+		"_async,const,_adt," +
 
 		// 类型
 		"void,boolean,byte,char,short,int,long,float,double," +
@@ -81,7 +81,7 @@ public final class Tokens extends Tokenizer {
 		PUBLIC = 29, PROTECTED = 30, PRIVATE = 31, STATIC = 32, FINAL = 33,
 		VOLATILE = 34, TRANSIENT = 35,
 		STRICTFP = 36, ABSTRACT = 37, NATIVE = 38, SYNCHRONIZED = 39,
-		ASYNC = 40, CONST = 41, _1MOD1 = 42,
+		ASYNC = 40, CONST = 41, ADT = 42,
 
 		VOID = 43, BOOLEAN = 44, BYTE = 45, CHAR = 46, SHORT = 47, INT = 48, LONG = 49, FLOAT = 50, DOUBLE = 51,
 		THIS = 52, TRUE = 53, FALSE = 54, NULL = 55, NEW = 56, INSTANCEOF = 57, _1EXP1 = 58,
@@ -453,7 +453,7 @@ public final class Tokens extends Tokenizer {
 				line._free();
 
 				index = i+j+3;
-				return formClip(Word.STRING, removeSlashes(v));
+				return formClip(Word.STRING, unescape(v));
 			}
 
 			i = lend;

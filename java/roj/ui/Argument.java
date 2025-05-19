@@ -278,7 +278,7 @@ public interface Argument<T> {
 				CharList sb = IOUtil.getSharedCharBuf();
 				while (true) {
 					Word w = ctx.nextWord();
-					if (w.type() == Word.STRING) Tokenizer.addSlashes(sb.append('"'), w.val()).append('"');
+					if (w.type() == Word.STRING) Tokenizer.escape(sb.append('"'), w.val()).append('"');
 					else sb.append(w.val());
 					w = ctx.peekWord();
 					if (w == null) break;

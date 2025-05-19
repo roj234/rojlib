@@ -1,5 +1,6 @@
 package roj.asm;
 
+import org.intellij.lang.annotations.MagicConstant;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import roj.asm.attr.Attribute;
@@ -225,7 +226,7 @@ public class ClassNode implements ClassDefinition {
 	}
 
 	@Override
-	public <T extends Attribute> T getAttribute(ConstantPool cp, TypedKey<T> type) {return Attribute.parseSingle(this,this.cp,type,attributes,Signature.CLASS);}
+	public <T extends Attribute> T getAttribute(ConstantPool cp, @MagicConstant(valuesFromClass = Attribute.class) TypedKey<T> type) {return Attribute.parseSingle(this,this.cp,type,attributes,Signature.CLASS);}
 	public AttributeList attributes() {return attributes == null ? attributes = new AttributeList() : attributes;}
 	public AttributeList attributesNullable() {return attributes;}
 

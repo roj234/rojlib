@@ -8,21 +8,20 @@ import roj.collect.MyHashMap;
 import roj.collect.MyHashSet;
 import roj.collect.SimpleList;
 import roj.concurrent.TaskPool;
-import roj.crypt.CRC32s;
+import roj.crypt.CRC32;
 import roj.io.IOUtil;
 import roj.io.source.CacheSource;
 import roj.io.source.CompositeSource;
 import roj.math.MathUtils;
 import roj.text.TextUtil;
+import roj.text.logging.Logger;
 import roj.ui.EasyProgressBar;
 import roj.util.ArrayCache;
 import roj.util.Helpers;
+import roj.util.OS;
 
 import java.io.*;
-import java.nio.file.FileVisitResult;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.SimpleFileVisitor;
+import java.nio.file.*;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.nio.file.attribute.DosFileAttributes;
 import java.util.Comparator;
@@ -32,16 +31,22 @@ import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 
+import static roj.archive.qz.WinAttributes.*;
+
 /**
  * @author Roj234
  * @since 2023/6/4 3:54
  */
 public class QZArchiver {
+	private static final Logger LOGGER = Logger.getLogger();
+
 	public static final int AOP_REPLACE = 0, AOP_UPDATE = 1, AOP_UPDATE_EXISTING = 2, AOP_SYNC = 3, AOP_IGNORE = 4, AOP_DIFF = 5;
 	public static final int PATH_RELATIVE = 0, PATH_FULL = 1, PATH_ABSOLUTE = 2;
 
 	public List<File> input;
 	public boolean storeFolder, storeMT, storeCT, storeAT, storeAttr;
+	public boolean storeSymlink, storeHardlink;
+	public boolean storeArchiveOnly, clearArchive;
 	public int threads;
 	public boolean autoSolidSize;
 	public long solidSize, splitSize;
@@ -69,6 +74,9 @@ public class QZArchiver {
 	private final Map<WordBlock, List<QZEntry>> keep = new MyHashMap<>();
 	private final List<WordBlockAppend> appends = new SimpleList<>();
 	private final List<QZEntry> empties = new SimpleList<>();
+	private final List<QZEntry> symbolicLinks = new SimpleList<>();
+	private final List<String> symbolicLinkValues = new SimpleList<>();
+	private final Map<String, QZEntry> hardlinkRef = new MyHashMap<>();
 	private boolean firstIsUncompressed;
 
 	private static final MyHashSet<String> UNCOMPRESSED = ArchiveUtils.INCOMPRESSIBLE_FILE_EXT;
@@ -267,8 +275,20 @@ public class QZArchiver {
 		if (twoPass) makeBlock2Pass(compressed, chunkSize, coders, tmpa, tmpb);
 		else makeBlock(compressed, chunkSize, coders, tmpa, tmpb);
 
-		if (useBCJ) coders = getBcjCoder(qzAes, lzma2);
-		makeBlock(executable, chunkSize, coders, tmpa, tmpb);
+		makeBlock(executable, chunkSize, useBCJ ? getBcjCoder(qzAes, lzma2) : coders, tmpa, tmpb);
+
+		hardlinkRef.clear();
+		if (!symbolicLinks.isEmpty()) {
+			WordBlockAppend block = new WordBlockAppend();
+
+			block.coders = coders;
+			block.data = symbolicLinkValues.toArray(new Object[symbolicLinkValues.size()]);
+			block.entries = symbolicLinks.toArray(new QZEntry[symbolicLinks.size()]);
+			block.size = symbolicLinks.size();
+
+			symbolicLinkValues.clear();
+			appends.add(block);
+		}
 
 		return chunkSize;
 	}
@@ -348,13 +368,13 @@ public class QZArchiver {
 	private static boolean checkCrc32(File file, int crc2) {
 		byte[] data = ArrayCache.getByteArray(4096, false);
 		try (FileInputStream in = new FileInputStream(file)) {
-			int crc = CRC32s.INIT_CRC;
+			int crc = CRC32.initial;
 			while (true) {
 				int r = in.read(data);
 				if (r < 0) break;
-				crc = CRC32s.update(crc, data, 0, r);
+				crc = CRC32.update(crc, data, 0, r);
 			}
-			crc = CRC32s.retVal(crc);
+			crc = CRC32.finish(crc);
 			return crc == crc2;
 		} catch (Exception e) {
 			return false;
@@ -400,23 +420,27 @@ public class QZArchiver {
 	private void addBlock(QZCoder[] coders, List<Object> tmpa, List<QZEntry> tmpb, long size) {
 		WordBlockAppend block = new WordBlockAppend();
 		block.coders = coders;
-		block.data = Helpers.cast(tmpa.toArray(new Object[tmpa.size()]));
-		block.file = tmpb.toArray(new QZEntry[tmpb.size()]);
+		block.data = tmpa.toArray(new Object[tmpa.size()]);
+		block.entries = tmpb.toArray(new QZEntry[tmpb.size()]);
 		block.size = size;
 		appends.add(block);
 
 		tmpa.clear();
 		tmpb.clear();
 	}
+
+	private static final LinkOption[] READ_LINK = {LinkOption.NOFOLLOW_LINKS}, FOLLOW_LINK = new LinkOption[0];
+	@SuppressWarnings("unchecked")
 	private QZEntry entryFor(File file) {
 		String name = byPath.getByValue(file);
 		if (null == name) return null;
 
 		BasicFileAttributes attr;
 		try {
-			attr = Files.readAttributes(file.toPath(), BasicFileAttributes.class);
+			attr = Files.readAttributes(file.toPath(), (Class<BasicFileAttributes>) (OS.CURRENT == OS.WINDOWS ? DosFileAttributes.class : BasicFileAttributes.class), storeSymlink ? READ_LINK : FOLLOW_LINK);
 		} catch (IOException e) {
-			throw new RuntimeException("Read BasicAttributes for "+file+" failed");
+			LOGGER.error("ReadAttributes for "+file+" failed", e);
+			return null;
 		}
 
 		QZEntry entry = QZEntry.of(name);
@@ -425,19 +449,51 @@ public class QZArchiver {
 		if (storeMT) entry.setModificationTime(attr.lastModifiedTime().toMillis());
 		if (storeCT) entry.setCreationTime(attr.creationTime().toMillis());
 		if (storeAT) entry.setAccessTime(attr.lastAccessTime().toMillis());
-		if (storeAttr) {
-			try {
-				DosFileAttributes dosAttr = Files.readAttributes(file.toPath(), DosFileAttributes.class);
-				int flag = 0;
-				if (dosAttr.isReadOnly()) flag |= 1;
-				if (dosAttr.isHidden()) flag |= 2;
-				if (dosAttr.isSystem()) flag |= 4;
-				if (dosAttr.isArchive()) flag |= 32;
-				if (dosAttr.isSymbolicLink()) flag |= 1024;
-				entry.setAttributes(flag);
-			} catch (IOException e) {
-				System.err.println("Read DosAttributes for "+file+" failed");
+
+		if (storeSymlink) {
+			if (attr.isSymbolicLink()) {
+				try {
+					String linkTarget = Files.readSymbolicLink(file.toPath()).toString();
+					entry.setAttributes(entry.getWinAttributes() | FILE_ATTRIBUTE_REPARSE_POINT);
+
+					symbolicLinks.add(entry);
+					symbolicLinkValues.add(linkTarget);
+					return null;
+				} catch (IOException e) {
+					LOGGER.error("Read SymbolLink for "+file+" failed", e);
+				}
 			}
+		}
+
+		if (storeHardlink) {
+			String uuid = IOUtil.getHardLinkUUID(file.getAbsolutePath());
+			if (uuid != null) {
+				QZEntry prevEntry = hardlinkRef.putIfAbsent(uuid, entry);
+				if (prevEntry != null) {
+					entry.setAttributes(entry.getWinAttributes() | FILE_ATTRIBUTE_REPARSE_POINT | FILE_ATTRIBUTE_NORMAL);
+
+					symbolicLinks.add(entry);
+					symbolicLinkValues.add(prevEntry.getName());
+					return null;
+				}
+			}
+		}
+
+		if (!(attr instanceof DosFileAttributes dosAttr)) return entry;
+
+		if (storeArchiveOnly) {
+			if (!dosAttr.isArchive()) return null;
+		}
+
+		if (storeAttr) {
+			int flag = 0;
+			if (dosAttr.isDirectory()) flag |= FILE_ATTRIBUTE_DIRECTORY;
+			if (dosAttr.isReadOnly()) flag |= FILE_ATTRIBUTE_READONLY;
+			if (dosAttr.isHidden()) flag |= FILE_ATTRIBUTE_HIDDEN;
+			if (dosAttr.isSystem()) flag |= FILE_ATTRIBUTE_SYSTEM;
+			if (dosAttr.isArchive()) flag |= FILE_ATTRIBUTE_ARCHIVE;
+			if (dosAttr.isSymbolicLink()) flag |= FILE_ATTRIBUTE_REPARSE_POINT;
+			entry.setAttributes(flag);
 		}
 
 		return entry;
@@ -445,7 +501,7 @@ public class QZArchiver {
 
 	static final class WordBlockAppend {
 		QZCoder[] coders;
-		QZEntry[] file;
+		QZEntry[] entries;
 		Object[] data;
 		long size;
 	}
@@ -600,6 +656,10 @@ public class QZArchiver {
 				}
 				if (bar != null) bar.setName("3/4 压缩("+blockCompleted.incrementAndGet()+"/"+appends.size()+")");
 			});
+
+			if (!symbolicLinks.isEmpty() && i == appends.size()-2) {
+				pool.awaitFinish();
+			}
 		}
 
 		pool.awaitFinish();
@@ -632,14 +692,18 @@ public class QZArchiver {
 
 	private void writeBlock(EasyProgressBar bar, WordBlockAppend block, QZWriter writer, TaskPool canSplit) throws IOException {
 		writer.setCodec(block.coders);
-		QZEntry[] file = block.file;
+		QZEntry[] file = block.entries;
 		for (int i = 0; i < file.length; i++) {
 			writer.beginEntry(file[i]);
-			File data = (File) block.data[i];
-			try (FileInputStream in = new FileInputStream(data)) {
-				copyStreamWithProgress(in, writer, bar);
-			} catch (IOException e) {
-				e.printStackTrace();
+			if (block.data[i] instanceof File data) {
+				try (FileInputStream in = new FileInputStream(data)) {
+					copyStreamWithProgress(in, writer, bar);
+				} catch (IOException e) {
+					e.printStackTrace();
+				}
+			} else {
+				IOUtil.getSharedByteBuf().putUTFData(block.data[i].toString()).writeToStream(writer);
+				bar.increment();
 			}
 
 			if (canSplit != null && canSplit.busyCount() <= autoSplitTaskSize) {

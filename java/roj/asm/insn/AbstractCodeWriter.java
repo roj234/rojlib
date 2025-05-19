@@ -24,7 +24,7 @@ import static roj.asm.type.Type.*;
  */
 public abstract class AbstractCodeWriter extends CodeVisitor {
 	protected DynByteBuf codeOb;
-	protected List<CodeBlock> codeBlocks = Collections.emptyList();
+	protected List<Segment> segments = Collections.emptyList();
 
 	protected final MyHashSet<Label> labels = new MyHashSet<>(Hasher.identity());
 
@@ -142,7 +142,7 @@ public abstract class AbstractCodeWriter extends CodeVisitor {
 			IF_acmpeq, IF_acmpne,
 			IFNULL, IFNONNULL,
 			GOTO, GOTO_W
-	}) byte code, Label target) { assertTrait(code, TRAIT_JUMP); addSegment(new JumpBlock(code, target)); }
+	}) byte code, Label target) { assertTrait(code, TRAIT_JUMP); addSegment(new JumpTo(code, target)); }
 	public void vars(@MagicConstant(intValues = {ILOAD,LLOAD,FLOAD,DLOAD,ALOAD,ISTORE,LSTORE,FSTORE,DSTORE,ASTORE}) byte code, int value) {
 		assertCate(code, CATE_LOAD_STORE_LEN);
 		DynByteBuf ob = codeOb;
@@ -248,9 +248,9 @@ public abstract class AbstractCodeWriter extends CodeVisitor {
 		else insn((byte) (DCONST_0 + (int)n));
 	}
 
-	public final void return_(Type type) { insn(type.shiftedOpcode(IRETURN)); }
-	public final void varLoad(Type type, int id) { vars(type.shiftedOpcode(ILOAD), id); }
-	public final void varStore(Type type, int id) { vars(type.shiftedOpcode(ISTORE), id); }
+	public final void return_(Type type) { insn(type.getOpcode(IRETURN)); }
+	public final void varLoad(Type type, int id) { vars(type.getOpcode(ILOAD), id); }
+	public final void varStore(Type type, int id) { vars(type.getOpcode(ISTORE), id); }
 	public final void arrayLoad(Type type) {insn(ArrayLoad(type));}
 	public final void arrayStore(Type type) {insn(ArrayStore(type));}
 	public final void arrayLoadP(int type) {insn((byte) (ArrayLoadP(type)+33));}
@@ -333,11 +333,11 @@ public abstract class AbstractCodeWriter extends CodeVisitor {
 	public final void label(Label x) {
 		if (!x.isUnset()) throw new IllegalStateException("标签的状态不是<unset>: "+x);
 
-		if (codeBlocks.isEmpty()) {
+		if (segments.isEmpty()) {
 			x.setFirst(bci());
 			if (skipFirstSegmentLabels()) return;
 		} else {
-			x.block = (short) (codeBlocks.size()-1);
+			x.block = (short) (segments.size()-1);
 			x.offset = (char) codeOb.wIndex();
 			x.value = (char) (x.offset + offset);
 		}
@@ -348,11 +348,11 @@ public abstract class AbstractCodeWriter extends CodeVisitor {
 	final boolean updateOffset(Collection<Label> labels, int[] offSum, int len) {
 		int i = 0;
 		offSum[0] = 0;
-		if (i != codeBlocks.size()) {
+		if (i != segments.size()) {
 			do {
-				CodeBlock c = codeBlocks.get(i);
+				Segment c = segments.get(i);
 				offSum[++i] = offSum[i-1] + c.length();
-			} while (i != codeBlocks.size());
+			} while (i != segments.size());
 		} else {
 			offSum[1] = bci();
 		}
@@ -367,11 +367,11 @@ public abstract class AbstractCodeWriter extends CodeVisitor {
 	public abstract int bci();
 
 	int offset;
-	public abstract void addSegment(CodeBlock c);
+	public abstract void addSegment(Segment c);
 	final void endSegment() {
-		if (!codeOb.isReadable()) codeBlocks.remove(codeBlocks.size()-1);
+		if (!codeOb.isReadable()) segments.remove(segments.size()-1);
 		else {
-			SolidBlock prev = (SolidBlock) codeBlocks.get(codeBlocks.size()-1);
+			StaticSegment prev = (StaticSegment) segments.get(segments.size()-1);
 			prev.setData(codeOb);
 			offset += prev.length();
 			codeOb = null;

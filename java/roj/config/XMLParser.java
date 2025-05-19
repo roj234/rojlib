@@ -11,7 +11,7 @@ import roj.config.serial.CVisitor;
 import roj.config.serial.ToEntry;
 import roj.config.serial.ToXml;
 import roj.text.CharList;
-import roj.text.Escape;
+import roj.text.HtmlEntities;
 import roj.text.TextUtil;
 import roj.util.Helpers;
 
@@ -126,6 +126,11 @@ public class XMLParser extends Parser {
 		while (true) {
 			w = next();
 			if (w.type() != tag_start) {
+				if (w.type() == COMMENT) {
+					cc.comment(w.val());
+					continue;
+				}
+
 				if ((flag & LENIENT) == 0 || w.type() == EOF)
 					break;
 			}
@@ -362,7 +367,7 @@ public class XMLParser extends Parser {
 		}
 
 		if (hasEntity && (flag&DECODE_ENTITY) != 0) {
-			Escape.deHtmlEntities_Append(v, in.subSequence(prevI, lastNonEmpty));
+			HtmlEntities.unescapeHtml(in.subSequence(prevI, lastNonEmpty), v);
 		} else {
 			v.append(in, prevI, lastNonEmpty);
 		}

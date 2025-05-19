@@ -70,7 +70,7 @@ public class TransformUtil {
 			case DOUBLE: cw.insn(DCONST_0); break;
 			case LONG: cw.insn(LCONST_0); break;
 		}
-		cw.insn(t.shiftedOpcode(IRETURN));
+		cw.insn(t.getOpcode(IRETURN));
 		cw.finish();
 
 		ms.addAttribute(new UnparsedAttribute("Code", cw.bw));

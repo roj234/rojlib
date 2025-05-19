@@ -89,7 +89,7 @@ final class ClassStage implements Processor {
 
 			fn.addAttribute(new FieldBridge(file, readId, writeId));
 			file.fields().add(Helpers.cast(fn));
-			if (file instanceof CompileUnit cu) cu.markFakeNode(fn);
+			if (file instanceof CompileUnit cu) cu.dontSerialize(fn);
 		}
 	}
 

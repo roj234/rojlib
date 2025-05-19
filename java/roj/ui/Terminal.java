@@ -637,7 +637,7 @@ public final class Terminal extends DelegatedPrintStream {
 
 			found: {
 				failed:
-				if (matcher.v == VK_ESCAPE) {
+				if (matcher.value == VK_ESCAPE) {
 					if (i+1 < len && buf[i+1] == '[') {
 						int j = i+1;
 						while (true) {
@@ -652,7 +652,7 @@ public final class Terminal extends DelegatedPrintStream {
 						break found;
 					}
 				}
-				console.keyEnter(matcher.v, true);
+				console.keyEnter(matcher.value, true);
 			}
 
 			i += matchLen;
@@ -669,7 +669,7 @@ public final class Terminal extends DelegatedPrintStream {
 				return;
 			}
 		}
-		printError("未识别的ANSI转义: "+Tokenizer.addSlashes(buf)+" (考虑报告该问题)");
+		printError("未识别的ANSI转义: "+Tokenizer.escape(buf)+" (考虑报告该问题)");
 	}
 	//endregion
 	//region AnsiInput基础
@@ -948,7 +948,7 @@ public final class Terminal extends DelegatedPrintStream {
 			} else if (c == '\033') {
 				//noinspection all
 				if (m.find(i)) i = m.end();
-				else throw new RuntimeException("未识别的转义"+Tokenizer.addSlashes(s)+",请更新ANSI_ESCAPE PATTERN");
+				else throw new RuntimeException("未识别的转义"+Tokenizer.escape(s)+",请更新ANSI_ESCAPE PATTERN");
 			} else {
 				int w = getCharWidth(c);
 				if (tmpWidth+w > width) {
