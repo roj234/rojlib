@@ -3,25 +3,25 @@ package roj.compiler.plugins.moreop;
 import roj.asm.MethodNode;
 import roj.asm.Opcodes;
 import roj.asm.type.Type;
+import roj.compiler.CompileContext;
 import roj.compiler.Tokens;
+import roj.compiler.api.Compiler;
+import roj.compiler.api.CompilerPlugin;
 import roj.compiler.api.Types;
 import roj.compiler.ast.expr.Expr;
 import roj.compiler.ast.expr.Invoke;
-import roj.compiler.context.LocalContext;
-import roj.compiler.plugin.LavaApi;
-import roj.compiler.plugin.LavaPlugin;
 import roj.compiler.resolve.TypeCast;
 
 /**
  * @author Roj234
  * @since 2024/11/11 22:34
  */
-@LavaPlugin(name = "moreop", desc = """
+@CompilerPlugin(name = "moreop", desc = """
 		More OP, More Power!
 		操作符重载测试插件
 
 		为Lava语言提供一些操作符语法糖""")
-public final class MoreOpPlugin implements LavaApi.ExprOp {
+public final class MoreOpPlugin implements Compiler.ExprOp {
 	private static final MethodNode STRING_CHARAT = new MethodNode(Opcodes.ACC_PUBLIC, "java/lang/String", "charAt", "()C");
 
 	/**
@@ -33,7 +33,7 @@ public final class MoreOpPlugin implements LavaApi.ExprOp {
 	private final Type MAP_TYPE = Type.klass("java/util/Map");
 	public MoreOpPlugin() {}
 
-	public void pluginInit(LavaApi api) {
+	public void pluginInit(Compiler api) {
 		api.onBinary(Type.klass("java/util/Collection"), "+=", Types.OBJECT_TYPE, new MethodNode(Opcodes.ACC_PUBLIC | Opcodes.ACC_INTERFACE, "java/util/Collection", "add", "(Ljava/lang/Object;)Z"), false);
 		api.addOpHandler("[", this);
 		api.onBinary(Type.klass("java/lang/String"), "*", Type.primitive(Type.INT), new MethodNode(Opcodes.ACC_PUBLIC, "java/lang/String", "repeat", "(I)Ljava/lang/String;"), false);
@@ -41,7 +41,7 @@ public final class MoreOpPlugin implements LavaApi.ExprOp {
 	}
 
 	@Override
-	public Expr test(LocalContext ctx, LavaApi.OperatorContext opctx, Expr left, Object right) {
+	public Expr test(CompileContext ctx, Compiler.OperatorContext opctx, Expr left, Object right) {
 		var sym = opctx.symbol();
 		if (sym == Tokens.lBracket) {
 			if (ctx.castTo(opctx.leftType(), LIST_TYPE, TypeCast.E_NEVER).type >= 0) {

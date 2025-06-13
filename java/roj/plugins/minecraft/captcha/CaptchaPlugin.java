@@ -1,7 +1,7 @@
 package roj.plugins.minecraft.captcha;
 
 import roj.asmx.event.Subscribe;
-import roj.collect.MyBitSet;
+import roj.collect.BitSet;
 import roj.collect.RingBuffer;
 import roj.config.data.CMap;
 import roj.io.IOUtil;
@@ -69,7 +69,7 @@ public class CaptchaPlugin extends Plugin {
 		String cmd = event.getCommand();
 		if (cmd.startsWith("verify ")) {
 			PlayerConnection player = event.getPlayer();
-			MyBitSet[] choices = captcha.choices();
+			BitSet[] choices = captcha.choices();
 			for (int i = 0; i < choices.length; i++) {
 				if (!choices[i].contains(cmd.charAt(7+i))) {
 					player.playGlobalSound("entity.villager.no", Enums.BLOCKS, 1);

@@ -4,11 +4,11 @@ import org.jetbrains.annotations.NotNull;
 import roj.asm.Opcodes;
 import roj.asm.type.IType;
 import roj.asm.type.Type;
+import roj.compiler.CompileContext;
 import roj.compiler.api.Types;
 import roj.compiler.asm.MethodWriter;
 import roj.compiler.ast.expr.Expr;
 import roj.compiler.ast.expr.LeftValue;
-import roj.compiler.context.LocalContext;
 import roj.compiler.resolve.TypeCast;
 
 /**
@@ -31,7 +31,7 @@ final class ListGet extends LeftValue {
 
 	@NotNull
 	@Override
-	public Expr resolve(LocalContext ctx) {
+	public Expr resolve(CompileContext ctx) {
 		list = list.resolve(ctx);
 		index = index.resolve(ctx);
 

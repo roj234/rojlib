@@ -31,6 +31,7 @@ final class PrimObj extends Adapter {
 		} else {
 			var s = String.valueOf(o);
 			switch (type) {
+				case Type.BOOLEAN -> o = Boolean.parseBoolean(s);
 				case Type.LONG -> o = Long.parseLong(s);
 				case Type.DOUBLE -> o = Double.parseDouble(s);
 				case Type.FLOAT -> o = Float.parseFloat(s);

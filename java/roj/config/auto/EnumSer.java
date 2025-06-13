@@ -19,7 +19,7 @@ final class EnumSer extends Adapter {
 	@Override
 	public void read(AdaptContext ctx, Object o) {
 		if (o != null && o.getClass() != String.class) throw new IllegalStateException();
-		ctx.setRef(o == null ? null : EnumHelper.cDirAcc.enumConstantDirectory(enumc).get(o));
+		ctx.setRef(o == null ? null : EnumHelper.CONSTANTS.enumConstantDirectory(enumc).get(o));
 		ctx.fieldState = 1;
 		ctx.fieldId = -1;
 		ctx.pop();

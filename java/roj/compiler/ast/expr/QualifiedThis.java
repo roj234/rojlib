@@ -3,8 +3,8 @@ package roj.compiler.ast.expr;
 import roj.asm.Opcodes;
 import roj.asm.type.IType;
 import roj.asm.type.Type;
+import roj.compiler.CompileContext;
 import roj.compiler.asm.MethodWriter;
-import roj.compiler.context.LocalContext;
 import roj.compiler.diagnostic.Kind;
 import roj.compiler.resolve.ResolveException;
 import roj.compiler.resolve.TypeCast;
@@ -27,7 +27,7 @@ final class QualifiedThis extends Expr {
 	public String toString() { return type + (nestDepth!=0?".this":".super"); }
 
 	@Override
-	public Expr resolve(LocalContext ctx) throws ResolveException {
+	public Expr resolve(CompileContext ctx) throws ResolveException {
 		if (nestDepth > 0) return this;
 
 		if (ctx.inStatic) ctx.report(this, Kind.ERROR, "this.static");
@@ -59,7 +59,7 @@ final class QualifiedThis extends Expr {
 		return this;
 	}
 
-	private static boolean checkInterfaceInherit(LocalContext ctx, IType type) {
+	private static boolean checkInterfaceInherit(CompileContext ctx, IType type) {
 		String target = type.owner();
 		for (String itf : ctx.file.interfaces()) {
 			if (itf.equals(target)) continue;
@@ -73,7 +73,7 @@ final class QualifiedThis extends Expr {
 
 	@Override
 	public void write(MethodWriter cw, boolean noRet) {
-		var ctx = LocalContext.get();
+		var ctx = CompileContext.get();
 		mustBeStatement(noRet);
 		cw.vars(Opcodes.ALOAD, ctx.thisSlot);
 

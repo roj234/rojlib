@@ -7,7 +7,7 @@ new FormModel {
 			"autoSize": false
 		} ) {
 			name: "this"
-			"title": "映射表Playground"
+			"title": "MappingBuilder"
 			"resizable": false
 			add( new FormContainer( "javax.swing.JScrollPane", new FormLayoutManager( class javax.swing.JScrollPane ) ) {
 				name: "scrollPane1"
@@ -33,16 +33,6 @@ new FormModel {
 				"y": 5
 				"width": 100
 			} )
-			add( new FormComponent( "javax.swing.JComboBox" ) {
-				name: "uiMappingType"
-				auxiliary() {
-					"JavaCodeGenerator.typeParameters": "String"
-				}
-			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
-				"x": 134
-				"y": 5
-				"width": 90
-			} )
 			add( new FormComponent( "javax.swing.JLabel" ) {
 				name: "label1"
 				"text": "名称"
@@ -62,8 +52,8 @@ new FormModel {
 				}
 				addEvent( new FormEvent( "java.awt.event.ActionListener", "actionPerformed", "uiLoad", true ) )
 			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
-				"x": 222
-				"y": 4
+				"x": 135
+				"y": 5
 			} )
 			add( new FormComponent( "javax.swing.JButton" ) {
 				name: "uiDel"
@@ -72,12 +62,12 @@ new FormModel {
 				"enabled": false
 				addEvent( new FormEvent( "java.awt.event.ActionListener", "actionPerformed", "uiDel", true ) )
 			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
-				"x": 15
+				"x": 250
 				"y": 320
 			} )
 			add( new FormComponent( "javax.swing.JButton" ) {
 				name: "uiFlip"
-				"text": "flip"
+				"text": "Flip"
 				"margin": new java.awt.Insets( 2, 4, 2, 4 )
 				"enabled": false
 				addEvent( new FormEvent( "java.awt.event.ActionListener", "actionPerformed", "uiFlip", true ) )
@@ -87,7 +77,7 @@ new FormModel {
 			} )
 			add( new FormComponent( "javax.swing.JButton" ) {
 				name: "uiMerge"
-				"text": "merge"
+				"text": "Merge"
 				"margin": new java.awt.Insets( 2, 4, 2, 4 )
 				"enabled": false
 				addEvent( new FormEvent( "java.awt.event.ActionListener", "actionPerformed", "uiMerge", true ) )
@@ -97,7 +87,7 @@ new FormModel {
 			} )
 			add( new FormComponent( "javax.swing.JButton" ) {
 				name: "uiExtend"
-				"text": "extend"
+				"text": "Extend"
 				"margin": new java.awt.Insets( 2, 4, 2, 4 )
 				"enabled": false
 				addEvent( new FormEvent( "java.awt.event.ActionListener", "actionPerformed", "uiExtend", true ) )
@@ -112,42 +102,32 @@ new FormModel {
 				"enabled": false
 				addEvent( new FormEvent( "java.awt.event.ActionListener", "actionPerformed", "uiSave", true ) )
 			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
-				"x": 210
-				"y": 320
-			} )
-			add( new FormComponent( "javax.swing.JButton" ) {
-				name: "uiCopy"
-				"text": "copy"
-				"margin": new java.awt.Insets( 2, 4, 2, 4 )
-				"enabled": false
-				addEvent( new FormEvent( "java.awt.event.ActionListener", "actionPerformed", "uiCopy", true ) )
-			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
-				"x": 170
+				"x": 285
 				"y": 320
 			} )
 			add( new FormComponent( "javax.swing.JButton" ) {
 				name: "uiDelLeft"
-				"text": "DC←"
+				"text": "Dl"
 				"border": &EmptyBorder0 new javax.swing.border.EmptyBorder( 5, 5, 5, 5 )
 				"toolTipText": "用右侧的名称覆盖整个ClassMap"
 				"enabled": false
 			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
-				"x": 250
+				"x": 175
 				"y": 320
 			} )
 			add( new FormComponent( "javax.swing.JButton" ) {
 				name: "uiDelRight"
-				"text": "DC→"
+				"text": "Dr"
 				"border": #EmptyBorder0
 				"toolTipText": "用左侧的名称覆盖整个ClassMap"
 				"enabled": false
 			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
-				"x": 290
+				"x": 205
 				"y": 320
 			} )
 		}, new FormLayoutConstraints( null ) {
 			"location": new java.awt.Point( 0, 0 )
-			"size": new java.awt.Dimension( 345, 345 )
+			"size": new java.awt.Dimension( 345, 410 )
 		} )
 		add( new FormWindow( "javax.swing.JDialog", new FormLayoutManager( class com.jformdesigner.runtime.NullLayout ) {
 			"autoSize": false
@@ -186,3 +166,4 @@ new FormModel {
 		} )
 	}
 }
+

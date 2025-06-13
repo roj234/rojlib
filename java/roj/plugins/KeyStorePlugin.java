@@ -2,8 +2,8 @@ package roj.plugins;
 
 import roj.archive.zip.ZipArchive;
 import roj.collect.CollectionX;
-import roj.collect.MyHashMap;
-import roj.collect.SimpleList;
+import roj.collect.HashMap;
+import roj.collect.ArrayList;
 import roj.config.auto.Either;
 import roj.config.data.CEntry;
 import roj.config.data.CMap;
@@ -45,8 +45,8 @@ import static roj.ui.CommandNode.literal;
  */
 @SimplePlugin(id = "keyStore", desc = "统一密钥管理器，同时提供jar签名和验证功能")
 public class KeyStorePlugin extends Plugin {
-	private final Map<String, Either<List<Certificate>, PublicKey>> publicKeys = new MyHashMap<>();
-	private final Map<String, PrivateKey> privateKeys = new MyHashMap<>();
+	private final Map<String, Either<List<Certificate>, PublicKey>> publicKeys = new HashMap<>();
+	private final Map<String, PrivateKey> privateKeys = new HashMap<>();
 
 	private MSSKeyPair defaultKeypair;
 
@@ -114,7 +114,7 @@ public class KeyStorePlugin extends Plugin {
 			var hashAlg = ctx.argument("摘要算法", String.class, "SHA-256");
 			var signHashAlg = ctx.argument("签名摘要算法", String.class, "SHA-256");
 
-			var options = new MyHashMap<String, String>();
+			var options = new HashMap<String, String>();
 			options.put("jarSigner:signatureFileName", alias.toUpperCase(Locale.ROOT));
 			options.put("jarSigner:skipPerFileAttributes", "true");
 			options.put("jarSigner:manifestHashAlgorithm", hashAlg);
@@ -128,17 +128,15 @@ public class KeyStorePlugin extends Plugin {
 			}
 		};
 
-		registerCommand(literal("jar").then(argument("jar", Argument.file()).then(literal("verify").executes(ctx -> {
-			JarVerifier.main(new String[]{ctx.argument("jar", File.class).getAbsolutePath()});
-		})).then(literal("sign")
+		registerCommand(literal("jar").then(literal("sign")
 			.then(argument("证书别名", Argument.oneOf(CollectionX.toMap(privateKeys.keySet())))
 					.then(argument("摘要算法", Argument.suggest(CollectionX.toMap(hashAlgs))).executes(sign)
-						.then(argument("签名摘要算法", Argument.suggest(CollectionX.toMap(hashAlgs))).executes(sign)))))));
+						.then(argument("签名摘要算法", Argument.suggest(CollectionX.toMap(hashAlgs))).executes(sign))))));
 	}
 
 	private void loadCertificateAndKeys(File pem, File key, String name) throws CertificateException, IOException {
 		var cf = CertificateFactory.getInstance("X509");
-		var certs = new SimpleList<Certificate>();
+		var certs = new ArrayList<Certificate>();
 		try (var in = new BufferedInputStream(new FileInputStream(pem))) {
 			while (true) {
 				certs.add(cf.generateCertificate(in));

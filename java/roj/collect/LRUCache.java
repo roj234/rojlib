@@ -6,7 +6,7 @@ import java.util.function.BiConsumer;
  * @author Roj233
  * @since 2023/3/3 22:32
  */
-public class LRUCache<K, V> extends LinkedMyHashMap<K, V> implements Cache<K,V> {
+public class LRUCache<K, V> extends LinkedHashMap<K, V> implements Cache<K,V> {
 	private final int maximumCapacity;
 	private BiConsumer<K,V> listener;
 

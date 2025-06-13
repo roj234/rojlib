@@ -1,9 +1,9 @@
 package roj.asm.type;
 
-import roj.collect.SimpleList;
+import roj.collect.ArrayList;
+import roj.concurrent.OperationDone;
 import roj.io.IOUtil;
 import roj.text.CharList;
-import roj.util.Helpers;
 
 import java.util.Collections;
 import java.util.List;
@@ -20,7 +20,7 @@ public abstract class IGeneric implements IType {
 	public IGeneric() {}
 
 	public void addChild(IType child) {
-		if (children.isEmpty()) children = new SimpleList<>(2);
+		if (children.isEmpty()) children = new ArrayList<>(2);
 		children.add(child);
 	}
 
@@ -40,14 +40,13 @@ public abstract class IGeneric implements IType {
 			clone.sub = sub == null ? null : (GenericSub) sub.clone();
 			if (children.isEmpty()) clone.children = Collections.emptyList();
 			else {
-				clone.children = new SimpleList<>(children.size());
+				clone.children = new ArrayList<>(children.size());
 				for (int i = 0; i < children.size(); i++)
 					clone.children.add(children.get(i).clone());
 			}
 			return clone;
 		} catch (CloneNotSupportedException e) {
-			Helpers.athrow(e);
-			return Helpers.nonnull();
+			throw OperationDone.NEVER;
 		}
 	}
 }

@@ -2,10 +2,10 @@ package roj.archive.qpak;
 
 import org.jetbrains.annotations.NotNull;
 import roj.archive.qz.*;
-import roj.archive.qz.xz.LZMA2Options;
+import roj.archive.xz.LZMA2Options;
+import roj.collect.ArrayList;
+import roj.collect.HashMap;
 import roj.collect.IntMap;
-import roj.collect.MyHashMap;
-import roj.collect.SimpleList;
 import roj.http.Headers;
 import roj.http.server.FileInfo;
 import roj.http.server.MimeType;
@@ -31,7 +31,7 @@ import java.util.function.Predicate;
 public final class QPakFileSystem implements WritableFileSystem {
 	private List<QZArchive> archives;
 	private final IntMap<QZFileWriter> metadataOverride = new IntMap<>();
-	private final MyHashMap<String, QFile> files = new MyHashMap<>();
+	private final HashMap<String, QFile> files = new HashMap<>();
 
 	private final File alsoReadFrom;
 	private final QZFileWriter patch;
@@ -197,7 +197,7 @@ public final class QPakFileSystem implements WritableFileSystem {
 		if (!pathname.startsWith("/")) return Collections.emptyList();
 		int len = pathname.length();
 
-		SimpleList<QFile> paths = new SimpleList<>();
+		ArrayList<QFile> paths = new ArrayList<>();
 		// Not implemented yet!!
 		for (Map.Entry<String, QFile> entry : files.entrySet()) {
 			String name = entry.getKey();

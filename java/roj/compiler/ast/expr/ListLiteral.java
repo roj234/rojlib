@@ -2,9 +2,9 @@ package roj.compiler.ast.expr;
 
 import roj.asm.type.Generic;
 import roj.asm.type.IType;
+import roj.compiler.CompileContext;
 import roj.compiler.asm.Asterisk;
 import roj.compiler.asm.MethodWriter;
-import roj.compiler.context.LocalContext;
 import roj.compiler.resolve.ResolveException;
 import roj.compiler.resolve.TypeCast;
 
@@ -23,7 +23,7 @@ final class ListLiteral extends Expr {
 
 	@Override public String toString() {return elements.toString();}
 
-	@Override public Expr resolve(LocalContext ctx) throws ResolveException {
+	@Override public Expr resolve(CompileContext ctx) throws ResolveException {
 		IType vType = null;
 		boolean allIsConstant = true;
 
@@ -56,7 +56,7 @@ final class ListLiteral extends Expr {
 		cw.clazz(ANEWARRAY, type.children.get(0).rawType().owner);
 
 		var vType = type.children.get(0);
-		var lc = LocalContext.get();
+		var lc = CompileContext.get();
 		for (int i = 0; i < elements.size(); i++) {
 			cw.insn(DUP);
 			cw.ldc(i);

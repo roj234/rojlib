@@ -1,10 +1,10 @@
 package roj.compiler.ast;
 
 import org.jetbrains.annotations.Nullable;
+import roj.collect.ArrayList;
 import roj.collect.IntBiMap;
 import roj.collect.IntList;
 import roj.collect.IntMap;
-import roj.collect.SimpleList;
 import roj.compiler.asm.Variable;
 import roj.util.TypedKey;
 
@@ -29,9 +29,9 @@ public final class VisMap {
 
 	private final IntBiMap<Variable> vuid = new IntBiMap<>();
 
-	private final SimpleList<BlockScope> entryHook = new SimpleList<>();
+	private final ArrayList<Scope> entryHook = new ArrayList<>();
 	private final IntList varCounts = new IntList();
-	private final SimpleList<IntMap<Object>> varStates = new SimpleList<>();
+	private final ArrayList<IntMap<Object>> varStates = new ArrayList<>();
 
 	private IntMap<Object> varState = new IntMap<>();
 	private int varCount;
@@ -48,7 +48,7 @@ public final class VisMap {
 	}
 
 	// 进入代码块
-	public void enter(@Nullable BlockScope immediateLabel) {
+	public void enter(@Nullable Scope immediateLabel) {
 		entryHook.add(immediateLabel);
 		varCounts.add(varCount);
 

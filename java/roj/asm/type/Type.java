@@ -4,10 +4,10 @@ import org.intellij.lang.annotations.MagicConstant;
 import org.jetbrains.annotations.Range;
 import roj.asm.AsmCache;
 import roj.asm.Opcodes;
-import roj.collect.SimpleList;
+import roj.collect.ArrayList;
+import roj.concurrent.OperationDone;
 import roj.io.IOUtil;
 import roj.text.CharList;
-import roj.util.Helpers;
 
 import java.util.List;
 import java.util.Objects;
@@ -36,18 +36,7 @@ public sealed class Type implements IType permits Type.DirtyHacker {
 		MAP[LONG-BYTE] = new Object[]{"J", "long", new Type(LONG), 1, "L"};
 	}
 
-	public static String getDesc(int type) {
-		if (type < BYTE || type > ARRAY) return Helpers.nonnull();
-		Object[] arr = MAP[type-BYTE];
-		if (arr == null) return Helpers.nonnull();
-		return arr[0].toString();
-	}
-	public static String getName(int type) {
-		if (type < BYTE || type > ARRAY) return Helpers.nonnull();
-		Object[] arr = MAP[type-BYTE];
-		if (arr == null) return Helpers.nonnull();
-		return arr[1].toString();
-	}
+	public static String getName(int type) {return MAP[type-BYTE][1].toString();}
 
 	public static boolean isValid(int c) {
 		if (c < BYTE || c > ARRAY) return false;
@@ -69,10 +58,11 @@ public sealed class Type implements IType permits Type.DirtyHacker {
 		@Override
 		public void toString(CharList sb) {
 			super.toString(sb);
-			if (type != 'L') sb.append("<alias of ").append(getName(type)).append(">");
+			if (type != CLASS) sb.append("<alias of ").append(getName(type)).append(">");
 		}
 	}
 
+	@MagicConstant(intValues = {VOID,BOOLEAN,BYTE,CHAR,SHORT,INT,FLOAT,DOUBLE,LONG,CLASS})
 	public final byte type;
 	public String owner;
 	private byte array;
@@ -114,10 +104,10 @@ public sealed class Type implements IType permits Type.DirtyHacker {
 	//region from Class descriptor
 	public static Type fieldDesc(String desc) {return parse(desc, 0);}
 	public static List<Type> methodDesc(String desc) {
-		SimpleList<Type> p = AsmCache.getInstance().methodTypeTmp();
+		ArrayList<Type> p = AsmCache.getInstance().methodTypeTmp();
 		Type returnType = methodDesc(desc, p);
 		p.add(returnType);
-		return new SimpleList<>(p);
+		return new ArrayList<>(p);
 	}
 
 	/**
@@ -177,6 +167,11 @@ public sealed class Type implements IType permits Type.DirtyHacker {
 	//endregion
 
 	@Override public byte genericType() {return STANDARD_TYPE;}
+	@Override public String toDesc() {
+		int type = getActualType();
+		if (type != Type.CLASS) return Type.MAP[type - Type.BYTE][0].toString();
+		return IType.super.toDesc();
+	}
 	@Override public final void toDesc(CharList sb) {
 		for (int i = array&0xFF; i > 0; i--) sb.append('[');
 		sb.append((char) type);
@@ -259,11 +254,11 @@ public sealed class Type implements IType permits Type.DirtyHacker {
 	public byte getOpcode(int code) {
 		int shift = (int) MAP[getActualType()-BYTE][3];
 		int data = Opcodes.shift(code);
-		if (data >>> 8 <= shift) throw new IllegalStateException(Opcodes.showOpcode(code)+"不存在适合"+this+"的变种");
+		if (data >>> 8 <= shift) throw new IllegalStateException(Opcodes.toString(code)+"不存在适合"+this+"的变种");
 		return (byte) ((data&0xFF)+shift);
 	}
 
-	public static Type fromJavaType(Class<?> clazz) {
+	public static Type from(Class<?> clazz) {
 		int array = 0;
 		Class<?> tmp;
 		while ((tmp = clazz.getComponentType()) != null) {
@@ -278,7 +273,7 @@ public sealed class Type implements IType permits Type.DirtyHacker {
 
 		return klass(clazz.getName().replace('.', '/'), array);
 	}
-	public Class<?> toJavaType(ClassLoader loader) throws ClassNotFoundException {
+	public Class<?> toClass(ClassLoader loader) throws ClassNotFoundException {
 		return switch (getActualType()) {
 			case VOID -> void.class;
 			case BOOLEAN -> boolean.class;
@@ -316,8 +311,7 @@ public sealed class Type implements IType permits Type.DirtyHacker {
 		try {
 			return (Type) super.clone();
 		} catch (CloneNotSupportedException e) {
-			Helpers.athrow(e);
-			return Helpers.nonnull();
+			throw OperationDone.NEVER;
 		}
 	}
 

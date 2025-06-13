@@ -72,7 +72,7 @@ public class AutoRedirect extends Timeout implements ChannelHandler {
 					event.stopPropagate();
 
 					var ch = ctx.channel();
-					TaskPool.Common().submit(() -> {
+					TaskPool.common().submit(() -> {
 						var lock = ch.lock();
 						try {
 							lock.lock();

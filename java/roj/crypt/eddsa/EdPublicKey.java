@@ -1,5 +1,7 @@
 package roj.crypt.eddsa;
 
+import roj.crypt.asn1.DerValue;
+
 import java.security.PublicKey;
 import java.security.spec.InvalidKeySpecException;
 import java.security.spec.X509EncodedKeySpec;
@@ -8,34 +10,30 @@ import java.util.Arrays;
 import static roj.crypt.eddsa.EdPrivateKey.OID_ED25519;
 import static roj.crypt.eddsa.EdPrivateKey.OID_OLD;
 
-final class EdPublicKey implements EdKey, PublicKey {
+public final class EdPublicKey implements EdKey, PublicKey {
 	private static final int OID_BYTE = 8;
 	private static final int IDLEN_BYTE = 3;
 
-	private final EdPoint Aneg;
-	private final byte[] Abyte;
 	private final EdParameterSpec spec;
+
+	// Point A
+	private final EdPoint negativePublicPoint;
+	private final byte[] publicKey;
 
 	public EdPublicKey(X509EncodedKeySpec spec) throws InvalidKeySpecException {
 		this(EdPublicKey.decode(spec.getEncoded()), EdParameterSpec.ED25519_CURVE_SPEC);
 	}
 
-	public EdPublicKey(EdPrivateKey priKey) {
-		this.Aneg = priKey.getA().negate();
-		this.Abyte = priKey.getAbyte();
-		this.spec = priKey.getParams();
+	public EdPublicKey(EdPrivateKey privateKey) {
+		this.negativePublicPoint = privateKey.getPublicPoint().negate();
+		this.publicKey = privateKey.getPublicKey();
+		this.spec = privateKey.getParams();
 	}
 
-	public EdPublicKey(byte[] pk, EdParameterSpec spec) {
-		if (pk.length != 32) throw new IllegalArgumentException("public-key length is wrong");
-		this.Aneg = new EdPoint(spec.getCurve(), pk).negate();
-		this.Abyte = pk;
-		this.spec = spec;
-	}
-
-	public EdPublicKey(EdPoint A, EdParameterSpec spec) {
-		this.Aneg = A.negate();
-		this.Abyte = A.toByteArray();
+	public EdPublicKey(byte[] publicPoint, EdParameterSpec spec) {
+		if (publicPoint.length != 32) throw new IllegalArgumentException("public point length is wrong");
+		this.negativePublicPoint = new EdPoint(spec.getCurve(), publicPoint).negate();
+		this.publicKey = publicPoint;
 		this.spec = spec;
 	}
 
@@ -77,53 +75,37 @@ final class EdPublicKey implements EdKey, PublicKey {
 		}
 	}
 
-	@Override
-	public String getAlgorithm() {
-		return "EdDSA";
-	}
+	@Override public EdParameterSpec getParams() { return spec; }
 
-	@Override
-	public String getFormat() {
-		return "X.509";
-	}
+	public EdPoint getNegativePublicPoint() { return negativePublicPoint; }
+	public byte[] getPublicKey() {return publicKey;}
 
-	@Override
-	public byte[] getEncoded() {
+	@Override public String getAlgorithm() {return "EdDSA";}
+	@Override public String getFormat() {return "X.509";}
+	@Override public byte[] getEncoded() {
 		if (!spec.equals(EdParameterSpec.ED25519_CURVE_SPEC)) return null;
 
-		int totlen = 12 + Abyte.length;
-		byte[] rv = new byte[totlen];
-		int i = 0;
-		rv[i++] = 48;
-		rv[i++] = (byte) (totlen - 2);
-		rv[i++] = 48;
-		rv[i++] = 5;
-		rv[i++] = 6;
-		rv[i++] = 3;
-		rv[i++] = 43;
-		rv[i++] = 101;
-		rv[i++] = 112;
-		rv[i++] = 3;
-		rv[i++] = (byte) (1 + Abyte.length);
-		rv[i++] = 0;
-		System.arraycopy(Abyte, 0, rv, i, Abyte.length);
+		byte[] rv = new byte[44];
+		rv[0] = DerValue.SEQUENCE;
+		rv[1] = 42;
+		rv[2] = DerValue.SEQUENCE;
+		rv[3] = 5;
+		rv[4] = DerValue.OID;
+		rv[5] = 3;
+		rv[6] = 43;
+		rv[7] = 101;
+		rv[8] = 112;
+		rv[9] = DerValue.BIT_STRING;
+		rv[10] = 33;
+		rv[11] = 0;
+		System.arraycopy(publicKey, 0, rv, 12, publicKey.length);
 		return rv;
 	}
 
-	public EdPoint getNegativeA() { return Aneg; }
-	public byte[] getAbyte() {
-		return Abyte;
-	}
-
-	@Override
-	public EdParameterSpec getParams() { return spec; }
-
-	public int hashCode() { return Arrays.hashCode(Abyte); }
-
+	public int hashCode() { return Arrays.hashCode(publicKey); }
 	public boolean equals(Object o) {
 		if (o == this) return true;
-		if (!(o instanceof EdPublicKey)) return false;
-		EdPublicKey pk = (EdPublicKey) o;
-		return Arrays.equals(Abyte, pk.Abyte) && spec.equals(pk.spec);
+		if (!(o instanceof EdPublicKey pk)) return false;
+		return Arrays.equals(publicKey, pk.publicKey) && spec.equals(pk.spec);
 	}
 }

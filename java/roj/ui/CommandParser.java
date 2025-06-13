@@ -1,9 +1,9 @@
 package roj.ui;
 
+import roj.collect.HashMap;
 import roj.collect.IntList;
 import roj.collect.IntMap;
-import roj.collect.MyHashMap;
-import roj.collect.SimpleList;
+import roj.collect.ArrayList;
 import roj.concurrent.TaskExecutor;
 import roj.config.ParseException;
 import roj.config.Word;
@@ -25,7 +25,7 @@ public class CommandParser {
 	private final IntList stack = new IntList();
 	private List<IntMap.Entry<CommandNode>> dynamicHighlighter, dynamicHighlighterMax;
 
-	private final MyHashMap<String, Object> map = new MyHashMap<>();
+	private final HashMap<String, Object> map = new HashMap<>();
 
 	public CommandParser(TaskExecutor executor) { this.executor = executor; }
 
@@ -97,8 +97,8 @@ public class CommandParser {
 	}
 
 	public void setDynamicHighlighter() {
-		this.dynamicHighlighter = new SimpleList<>();
-		this.dynamicHighlighterMax = new SimpleList<>();
+		this.dynamicHighlighter = new ArrayList<>();
+		this.dynamicHighlighterMax = new ArrayList<>();
 	}
 	public List<IntMap.Entry<CommandNode>> getDynamicHighlighterMax() {return dynamicHighlighterMax;}
 

@@ -4,9 +4,10 @@
 
 package roj.gui.impl;
 
-import roj.archive.qz.xz.LZMA2Options;
-import roj.archive.qz.xz.LZMA2Parallel;
-import roj.collect.SimpleList;
+import roj.archive.qpak.QZArchiver;
+import roj.archive.xz.LZMA2Options;
+import roj.archive.xz.LZMA2ParallelManager;
+import roj.collect.ArrayList;
 import roj.concurrent.TaskPool;
 import roj.gui.CMBoxValue;
 import roj.gui.GuiProgressBar;
@@ -69,23 +70,23 @@ public class QZArchiverUI extends JFrame {
 		}
 
 		QZArchiver arc = new QZArchiver();
-		List<File> input = new SimpleList<>();
+		List<File> input = new ArrayList<>();
 		input.add(new File(uiInput.getText()));
 		if (uiReadDirFromLog.isSelected()) {
 			for (String line : LineReader.create(uiLog.getText())) {
 				if (!line.isEmpty()) input.add(new File(line));
 			}
 		}
-		arc.input = input;
-		arc.storeFolder = bStoreFolder.isSelected();
-		arc.storeMT = bStoreMT.isSelected();
-		arc.storeCT = bStoreCT.isSelected();
-		arc.storeAT = bStoreAT.isSelected();
-		arc.storeAttr = bStoreAttr.isSelected();
-		arc.storeSymlink = bCheckSymbolicLink.isSelected();
-		arc.storeHardlink = bCheckHardLink.isSelected();
-		arc.storeArchiveOnly = bCompressArchiveOnly.isSelected();
-		arc.clearArchive = bClearArchive.isSelected();
+		arc.inputDirectories = input;
+		arc.storeDirectories = bStoreFolder.isSelected();
+		arc.storeModifiedTime = bStoreMT.isSelected();
+		arc.storeCreationTime = bStoreCT.isSelected();
+		arc.storeAccessTime = bStoreAT.isSelected();
+		arc.storeAttributes = bStoreAttr.isSelected();
+		arc.storeSymbolicLinks = bCheckSymbolicLink.isSelected();
+		arc.storeHardLinks = bCheckHardLink.isSelected();
+		arc.filterByArchiveAttribute = bCompressArchiveOnly.isSelected();
+		arc.clearArchiveAttribute = bClearArchive.isSelected();
 		if (!(arc.autoSolidSize = uiAutoSolidSize.isSelected())) {
 			arc.solidSize = (long) TextUtil.unscaledNumber1024(uiSolidSize.getText());
 		}
@@ -98,22 +99,22 @@ public class QZArchiverUI extends JFrame {
 		arc.splitSize = uiSplitSize.getText().isEmpty() ? 0 : (long) TextUtil.unscaledNumber1024(uiSplitSize.getText());
 		arc.compressHeader = uiCompressHeader.isSelected();
 		if (uiCrypt.isSelected()) {
-			arc.password = uiPassword.getText();
-			arc.cryptPower = ((Number) uiCyclePower.getValue()).intValue();
-			arc.cryptSalt = ((Number) uiSaltLength.getValue()).intValue();
+			arc.encryptionPassword = uiPassword.getText();
+			arc.encryptionPower = ((Number) uiCyclePower.getValue()).intValue();
+			arc.encryptionSaltLength = ((Number) uiSaltLength.getValue()).intValue();
 			arc.encryptFileName = uiCryptHeader.isSelected();
 		}
 		arc.useBCJ = uiBCJ.isSelected();
 		arc.useBCJ2 = uiBCJ2.isSelected();
 		arc.options = options;
-		arc.appendOptions = uiAppendOptions.getSelectedIndex();
+		arc.updateMode = uiAppendOptions.getSelectedIndex();
 		arc.fastAppendCheck = uiFastCheck.isSelected();
-		arc.cacheFolder = uiDiskCache.isSelected() ? new File(System.getProperty("roj.archiver.temp", ".")) : null;
-		arc.outputFolder = out.getParentFile();
-		arc.outputName = out.getName();
-		arc.keepArchive = uiKeepArchive.isSelected();
+		arc.cacheDirectory = uiDiskCache.isSelected() ? new File(System.getProperty("roj.archiver.temp", ".")) : null;
+		arc.outputDirectory = out.getParentFile();
+		arc.outputFilename = out.getName();
+		arc.keepOldArchive = uiKeepArchive.isSelected();
 		if (uiSortByFilename.isSelected()) {
-			arc.sorter = (f1, f2) -> f1.getName().compareTo(f2.getName());
+			arc.fileSorter = (f1, f2) -> f1.getName().compareTo(f2.getName());
 		}
 
 		uiLog.setText("正在计数文件\n");
@@ -137,12 +138,12 @@ public class QZArchiverUI extends JFrame {
 			if (!uiAutoSplitTask.isSelected()) {
 				myOpt = options;
 			} else {
-				arc.autoSplitTaskSize = Integer.parseInt(JOptionPane.showInputDialog(this, "在并行小于多少时开始拆分任务？", Math.max(threads/2, 3)));
+				arc.autoSplitTaskThreshold = Integer.parseInt(JOptionPane.showInputDialog(this, "在并行小于多少时开始拆分任务？", Math.max(threads/2, 3)));
 				myOpt = arc.autoSplitTaskOptions = arc.options.clone();
 			}
 			int blockSize = (int) MathUtils.clamp(chunkSize, LZMA2Options.ASYNC_BLOCK_SIZE_MIN, LZMA2Options.ASYNC_BLOCK_SIZE_MAX);
 
-			LZMA2Parallel man = new LZMA2Parallel(myOpt, blockSize, uiSplitTaskType.getSelectedIndex(), threads);
+			LZMA2ParallelManager man = new LZMA2ParallelManager(myOpt, blockSize, uiSplitTaskType.getSelectedIndex(), threads);
 			long mem = (man.getExtraMemoryUsageBytes(uiMixedMode.isSelected()) & ~7) + (16 * threads);// 8-byte alignment
 			long needed = mem - ((long) arr[1]<<10);
 			if (needed > 0) {
@@ -151,7 +152,7 @@ public class QZArchiverUI extends JFrame {
 			}
 			uiLog.append("压缩流并行需要的额外内存:"+TextUtil.scaledNumber1024(mem)+"\n");
 
-			pool2 = TaskPool.MaxThread(threads, "split-worker-");
+			pool2 = TaskPool.newFixed(threads, "split-worker-");
 			buffer = new BufferPool(mem, 0, mem, 0, 0, 0, threads, 0);
 
 			myOpt.setAsyncMode(pool2, buffer, man);
@@ -161,7 +162,7 @@ public class QZArchiverUI extends JFrame {
 			buffer = null;
 		}
 
-		TaskPool pool = TaskPool.MaxThread(threads, "7z-worker-");
+		TaskPool pool = TaskPool.newFixed(threads, "7z-worker-");
 
 		ActionListener stopListener = e -> {
 			arc.interrupt();
@@ -172,7 +173,7 @@ public class QZArchiverUI extends JFrame {
 		uiBegin.removeActionListener(beginListener);
 		uiBegin.addActionListener(stopListener);
 
-		TaskPool.Common().submit(() -> {
+		TaskPool.common().submit(() -> {
 			pool.setRejectPolicy(TaskPool::waitPolicy);
 			EasyProgressBar bar = new GuiProgressBar(uiLog, uiProgress);
 			try {
@@ -296,8 +297,8 @@ public class QZArchiverUI extends JFrame {
 			uiLog.setText("开始测试,时间依据您除了LcLpPb的LZMA设定而变化,请耐心等待\n" +
 				"请不要在测试过程中修改LZMA设定,这会导致结果不准确");
 
-			TaskPool.Common().submit(() -> {
-				TaskPool pool = TaskPool.MaxThread(createTaskPool()[0], "LcLpTest-worker-");
+			TaskPool.common().submit(() -> {
+				TaskPool pool = TaskPool.newFixed(createTaskPool()[0], "LcLpTest-worker-");
 				try {
 					ByteList data = new ByteList();
 					for (File file : files) {
@@ -336,12 +337,12 @@ public class QZArchiverUI extends JFrame {
 		// endregion
 		// region
 		md = new DefaultComboBoxModel<>();
+		md.addElement("完全替换");
 		md.addElement("添加并替换文件");
 		md.addElement("更新并添加文件");
 		md.addElement("只更新已存在的文件");
 		md.addElement("同步压缩包内容");
-		md.addElement("忽略压缩包内容");
-		md.addElement("计算差异的文件");
+		md.addElement("仅保留差异");
 		uiAppendOptions.setModel(Helpers.cast(md));
 		md = new DefaultComboBoxModel<>();
 		md.addElement("相对路径"); // RELATIVE_PATH
@@ -404,15 +405,23 @@ public class QZArchiverUI extends JFrame {
 		tip[2] = e -> updateMemoryUsage();
 
 		uiSplitTask.addActionListener(tip[0]);
+		uiMixedMode.addActionListener(tip[1]);
 		uiSplitTask.addActionListener(tip[2]);
+		uiMixedMode.addActionListener(tip[2]);
 		uiAutoSolidSize.addActionListener(tip[2]);
 		uiAutoSplitTask.addActionListener(tip[2]);
+		uiAutoSplitTask.addActionListener(e -> {
+			boolean b = uiAutoSplitTask.isSelected();
+			uiMixedMode.setEnabled(!b);
+			if (b) uiMixedMode.setSelected(false);
+		});
 		helper.addEventListener(uiSolidSize, e -> updateMemoryUsage());
 		uiSplitTaskType.addActionListener(tip[2]);
 		uiSplitTask.addActionListener(e -> {
 			boolean b = uiSplitTask.isSelected();
 			uiSplitTaskType.setEnabled(b);
 			uiAutoSplitTask.setEnabled(b);
+			uiMixedMode.setEnabled(b);
 		});
 		md = new DefaultComboBoxModel<>();
 		md.addElement("压缩率中低|压缩快|内存低");
@@ -493,7 +502,7 @@ public class QZArchiverUI extends JFrame {
 			}
 
 			int blockSize = MathUtils.clamp((int) TextUtil.unscaledNumber1024(text), LZMA2Options.ASYNC_BLOCK_SIZE_MIN, LZMA2Options.ASYNC_BLOCK_SIZE_MAX);
-			LZMA2Parallel man = new LZMA2Parallel(options, blockSize, uiSplitTaskType.getSelectedIndex(), 1);
+			LZMA2ParallelManager man = new LZMA2ParallelManager(options, blockSize, uiSplitTaskType.getSelectedIndex(), 1);
 			myUsage += man.getExtraMemoryUsageBytes(uiMixedMode.isSelected());
 		}
 		uiMemoryUsage.setText("内存/线程:"+msg+toDigital(myUsage));

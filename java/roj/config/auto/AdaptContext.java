@@ -1,8 +1,8 @@
 package roj.config.auto;
 
+import roj.collect.BitSet;
 import roj.collect.IntBiMap;
-import roj.collect.MyBitSet;
-import roj.collect.SimpleList;
+import roj.collect.ArrayList;
 import roj.config.serial.CVisitor;
 import roj.text.CharList;
 import roj.util.ByteList;
@@ -20,7 +20,7 @@ class AdaptContext implements Serializer<Object> {
 	private State stack, bin;
 
 	static final class State {
-		MyBitSet fieldStateExtra;
+		BitSet fieldStateExtra;
 		int fieldState;
 		int fieldId;
 		Object ref, ref2;
@@ -68,7 +68,7 @@ class AdaptContext implements Serializer<Object> {
 		}
 	}
 
-	public MyBitSet fieldStateEx;
+	public BitSet fieldStateEx;
 	int fieldState;
 
 	int fieldId;
@@ -77,7 +77,7 @@ class AdaptContext implements Serializer<Object> {
 
 	public AdaptContext(Adapter root) {
 		this.curr = this.root = root;
-		if (root.fieldCount() > 32) fieldStateEx = new MyBitSet(root.fieldCount()-32);
+		if (root.fieldCount() > 32) fieldStateEx = new BitSet(root.fieldCount()-32);
 
 		fieldId = -2;
 	}
@@ -194,7 +194,7 @@ class AdaptContext implements Serializer<Object> {
 		s.push(this);
 	}
 	public final void replace(Adapter s) {
-		if (s.fieldCount() > 32) fieldStateEx = new MyBitSet(s.fieldCount()-32);
+		if (s.fieldCount() > 32) fieldStateEx = new BitSet(s.fieldCount()-32);
 		curr = s;
 	}
 
@@ -204,17 +204,17 @@ class AdaptContext implements Serializer<Object> {
 		else buf.clear();
 		return buf;
 	}
-	private SimpleList<SimpleList<Object>> lists;
-	final SimpleList<Object> objBuffer() {
-		if (lists == null) lists = new SimpleList<>();
+	private ArrayList<ArrayList<Object>> lists;
+	final ArrayList<Object> objBuffer() {
+		if (lists == null) lists = new ArrayList<>();
 		else if (!lists.isEmpty()) {
-			SimpleList<Object> b = lists.pop();
+			ArrayList<Object> b = lists.pop();
 			b.clear();
 			return b;
 		}
-		return new SimpleList<>();
+		return new ArrayList<>();
 	}
-	final void releaseBuffer(SimpleList<?> list) {
+	final void releaseBuffer(ArrayList<?> list) {
 		list.clear();
 		lists.add(Helpers.cast(list));
 	}

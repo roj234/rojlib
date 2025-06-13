@@ -1,5 +1,6 @@
 package roj.compiler.plugins.eval;
 
+import roj.ReferenceByGeneratedClass;
 import roj.asm.*;
 import roj.asm.insn.CodeWriter;
 import roj.asm.insn.Label;
@@ -7,19 +8,18 @@ import roj.asm.insn.SwitchBlock;
 import roj.asm.type.Type;
 import roj.asm.type.TypeHelper;
 import roj.asmx.AnnotatedElement;
-import roj.collect.MyHashMap;
-import roj.collect.SimpleList;
+import roj.collect.ArrayList;
+import roj.collect.HashMap;
+import roj.compiler.JavaCompileUnit;
 import roj.compiler.Tokens;
+import roj.compiler.api.Compiler;
+import roj.compiler.api.CompilerPlugin;
 import roj.compiler.ast.ParseTask;
 import roj.compiler.ast.expr.NaE;
-import roj.compiler.context.JavaCompileUnit;
 import roj.compiler.diagnostic.Kind;
-import roj.compiler.plugin.LavaApi;
-import roj.compiler.plugin.LavaPlugin;
 import roj.compiler.resolve.TypeCast;
 import roj.io.IOUtil;
-import roj.reflect.ClassDefiner;
-import roj.reflect.ReflectionUtils;
+import roj.reflect.Reflection;
 import roj.text.CharList;
 import roj.util.DynByteBuf;
 
@@ -33,11 +33,15 @@ import static roj.asm.Opcodes.*;
  * @author Roj234
  * @since 2024/5/30 3:47
  */
-@LavaPlugin(name = "evaluator", desc = "预编译和宏")
+@CompilerPlugin(name = "evaluator", desc = "预编译和宏")
 public interface Evaluator {
-	public static void pluginInit(LavaApi ctx) throws IOException {
-		MyHashMap<String, byte[]> data = new MyHashMap<>();
-		SimpleList<Member> invoker = new SimpleList<>();
+	@ReferenceByGeneratedClass
+	// timeout hook, WIP
+	static boolean forceStop() {return false;}
+
+	public static void pluginInit(Compiler ctx) throws IOException {
+		HashMap<String, byte[]> data = new HashMap<>();
+		ArrayList<Member> invoker = new ArrayList<>();
 
 		for (AnnotatedElement element : ctx.getClasspathAnnotations().annotatedBy("roj/compiler/plugins/eval/Constexpr")) {
 			if (element.isLeaf()) {
@@ -48,14 +52,14 @@ public interface Evaluator {
 				invoker.add(node);
 			}
 
-			var info = ctx.getClassInfo(element.owner());
+			var info = ctx.resolve(element.owner());
 			if (!data.containsKey(element.owner()) && info != null) {
 				DynByteBuf bytes = info.toByteArray(IOUtil.getSharedByteBuf());
 				data.put(element.owner(), bytes.toByteArray());
 			}
 		}
 
-		for (MethodNode method : ctx.getClassInfo("java/lang/String").methods()) {
+		for (MethodNode method : ctx.resolve("java/lang/String").methods()) {
 			if ((method.modifier&(ACC_PUBLIC|ACC_STATIC)) == ACC_PUBLIC && (method.rawDesc().endsWith(")Ljava/lang/String;") || method.rawDesc().endsWith(")C"))) {
 				invoker.add(method);
 			}
@@ -64,9 +68,8 @@ public interface Evaluator {
 		ctx.addSandboxWhitelist("roj.compiler.plugins.eval", true);
 
 		var invokerInst = new ClassNode();
-		invokerInst.name("roj/compiler/plugins/eval/Evaluator$"+ReflectionUtils.uniqueId());
+		invokerInst.name("roj/compiler/plugins/eval/Evaluator$"+Reflection.uniqueId());
 		invokerInst.addInterface("roj/compiler/plugins/eval/Evaluator");
-		ClassDefiner.premake(invokerInst);
 		CodeWriter c = invokerInst.newMethod(ACC_PUBLIC, "eval", "(I[Ljava/lang/Object;)Ljava/lang/Object;");
 		c.visitSize(1, 3);
 		c.insn(ALOAD_2);
@@ -146,41 +149,40 @@ public interface Evaluator {
 
 		for (int j = 0; j < invoker.size(); j++) {
 			Member mof = invoker.get(j);
-			ClassDefinition info = ctx.getClassInfo(mof.owner());
+			ClassDefinition info = ctx.resolve(mof.owner());
 			int i = info.getMethod(mof.name(), mof.rawDesc());
 			info.methods().get(i).addAttribute(new CompiledMethod(evaluator, j, Type.methodDescReturn(mof.rawDesc())));
 		}
 
-		ctx.newExprOp("!!macro ", (ctx1) -> {
+		ctx.newExprOp("@LavaMacro", (ctx1) -> {
 			var lexer = ctx1.lexer;
 
 			var def = new JavaCompileUnit(ctx1.file.getSourceFile() + " <macro#"+lexer.index+">", lexer.getText().toString());
 			def.name("java/lang/Thread"); // just a hack..
 			def.addInterface("roj/compiler/plugins/eval/Macro");
-			ClassDefiner.premake(def);
 
 			var toString = new MethodNode(ACC_PUBLIC, def.name(), "toString", "(Lroj/text/CharList;)V");
 			def.methods.add(toString);
 
-			var lc = ctx1.classes.createLocalContext();
+			var lc = ctx1.compiler.createContext();
 			lc.setClass(def);
 
 			var text = lexer.getText();
-			int before = lexer.index;
+			int before = lexer.prevIndex;
 
-			var sb = new CharList().append(text, 0, before);
+			var sb = new CharList().append(text, 0, before).append(';');
 			try {
 				lc.lexer.index = lexer.index;
 				lc.lexer.LN = lexer.LN;
 				lc.lexer.LNIndex = lexer.LNIndex;
 				lc.lexer.state = Tokens.STATE_EXPR;
-				lc.lexer.next();
+				lc.lexer.except(Tokens.lBrace);
 
 				ParseTask.Method(def, toString, Collections.singletonList("code")).parse(lc);
-				def.name("roj/compiler/plugins/eval/Macro$"+ReflectionUtils.uniqueId());
+				def.name("roj/compiler/plugins/eval/Macro$"+Reflection.uniqueId());
 				int after = lc.lexer.index;
 
-				if (!lc.classes.hasError) {
+				if (!lc.compiler.hasError) {
 					var impl = (Macro) ctx.createSandboxInstance(def);
 					impl.toString(sb);
 				}

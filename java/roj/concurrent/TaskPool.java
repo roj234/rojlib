@@ -1,11 +1,11 @@
 package roj.concurrent;
 
 import org.jetbrains.annotations.Async;
+import roj.collect.HashSet;
 import roj.collect.IntMap;
-import roj.collect.MyHashSet;
 import roj.collect.RingBuffer;
-import roj.collect.SimpleList;
-import roj.reflect.ReflectionUtils;
+import roj.collect.ArrayList;
+import roj.reflect.Unaligned;
 import roj.text.logging.Logger;
 
 import java.util.List;
@@ -31,7 +31,7 @@ public class TaskPool implements TaskExecutor {
 		void onReject(TaskPool pool, Task task);
 	}
 
-	final MyHashSet<ExecutorImpl> threads = new MyHashSet<>();
+	final HashSet<ExecutorImpl> threads = new HashSet<>();
 	private final MyThreadFactory factory;
 	private RejectPolicy policy;
 	private Thread.UncaughtExceptionHandler exceptionHandler;
@@ -40,7 +40,7 @@ public class TaskPool implements TaskExecutor {
 	private volatile int running;
 	private volatile long prevStop;
 
-	private static final long RUNNING_OFFSET = ReflectionUtils.fieldOffset(TaskPool.class, "running");
+	private static final long RUNNING_OFFSET = Unaligned.fieldOffset(TaskPool.class, "running");
 
 	final ReentrantLock lock = new ReentrantLock();
 	final Condition noFull = lock.newCondition();
@@ -73,21 +73,21 @@ public class TaskPool implements TaskExecutor {
 	private static final AtomicInteger poolId = new AtomicInteger();
 
 	public TaskPool(int coreThreads, int maxThreads, int threshold) {
-		this(coreThreads, maxThreads, threshold, 60000, "pool-"+poolId.getAndIncrement()+"-by"+Thread.currentThread().getId() + "-");
+		this(coreThreads, maxThreads, threshold, 60000, "pool-"+poolId.getAndIncrement()+"-by"+Thread.currentThread().getId()+"-");
 	}
 
-	public static TaskPool Common() { return CommonHolder.P; }
-	private static final class CommonHolder {
+	public static TaskPool common() { return Common.P; }
+	private static final class Common {
 		static final TaskPool P = new TaskPool(1, Integer.getInteger("roj.cpuPoolSize", Runtime.getRuntime().availableProcessors()), 0, 60000, "RojLib 线程池 #");
 	}
 
-	public static TaskPool MaxThread(int threadCount, String prefix) { return MaxThread(threadCount, namedPrefixFactory(prefix)); }
-	public static TaskPool MaxThread(int threadCount, MyThreadFactory factory) {
-		TaskPool pool = new TaskPool(0, threadCount, 0, 10, 60000, factory);
+	public static TaskPool newFixed(String prefix) { return newFixed(Runtime.getRuntime().availableProcessors(), prefix); }
+	public static TaskPool newFixed(int threadCount, String prefix) { return newFixed(threadCount, namedPrefixFactory(prefix)); }
+	public static TaskPool newFixed(int threadCount, MyThreadFactory factory) {
+		TaskPool pool = new TaskPool(threadCount, threadCount, 0, Math.min(threadCount*2, 256), 60000, factory);
 		pool.setRejectPolicy(TaskPool::waitPolicy);
 		return pool;
 	}
-	public static TaskPool MaxSize(int rejectThreshold, String prefix) { return new TaskPool(0, Runtime.getRuntime().availableProcessors(), 0, rejectThreshold, 60000, namedPrefixFactory(prefix)); }
 
 	@Override
 	public void submit(@Async.Schedule Task task) {
@@ -201,10 +201,10 @@ public class TaskPool implements TaskExecutor {
 	public List<Task> shutdownNow() {
 		shutdown();
 
-		SimpleList<Task> tasks1;
+		ArrayList<Task> tasks1;
 		lock.lock();
 		try {
-			tasks1 = new SimpleList<>(tasks);
+			tasks1 = new ArrayList<>(tasks);
 			tasks.clear();
 			noFull.signalAll();
 			lock.lock();

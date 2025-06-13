@@ -1,10 +1,10 @@
 package roj.text;
 
 import org.jetbrains.annotations.Range;
+import roj.collect.BitSet;
 import roj.collect.IntList;
 import roj.collect.IntMap;
-import roj.collect.MyBitSet;
-import roj.collect.SimpleList;
+import roj.collect.ArrayList;
 import roj.compiler.plugins.annotations.Attach;
 import roj.config.Tokenizer;
 import roj.io.IOUtil;
@@ -34,7 +34,7 @@ public class TextUtil {
 		DefaultOutputCharset = property == null ? StandardCharsets.UTF_8 : Charset.forName(property);
 	}
 
-	public static final MyBitSet HEX = MyBitSet.from("0123456789ABCDEFabcdef");
+	public static final BitSet HEX = BitSet.from("0123456789ABCDEFabcdef");
 
 	public static String shuffle(String in) {
 		char[] arr = IOUtil.getSharedCharBuf().append(in).list;
@@ -514,11 +514,11 @@ public class TextUtil {
 	 * @implSpec 忽略空字符
 	 */
 	public static String[] split1(CharSequence keys, char c) {
-		List<String> list = new SimpleList<>();
+		List<String> list = new ArrayList<>();
 		return split(list, keys, c).toArray(new String[list.size()]);
 	}
 
-	public static List<String> split(CharSequence keys, char c) { return split(new SimpleList<>(), keys, c); }
+	public static List<String> split(CharSequence keys, char c) { return split(new ArrayList<>(), keys, c); }
 	public static List<String> split(List<String> list, CharSequence str, char splitter) { return split(list, str, splitter, Integer.MAX_VALUE); }
 	/**
 	 * 策略：不保留最后的连续空行
@@ -553,7 +553,7 @@ public class TextUtil {
 		return list;
 	}
 
-	public static List<String> split(CharSequence str, CharSequence splitter) { return split(new SimpleList<>(), str, splitter, Integer.MAX_VALUE); }
+	public static List<String> split(CharSequence str, CharSequence splitter) { return split(new ArrayList<>(), str, splitter, Integer.MAX_VALUE); }
 	public static List<String> split(List<String> list, CharSequence str, CharSequence splitter) { return split(list, str, splitter, Integer.MAX_VALUE); }
 	public static List<String> split(List<String> list, CharSequence str, CharSequence splitter, int max) {
 		switch (splitter.length()) {
@@ -611,12 +611,12 @@ public class TextUtil {
 	}
 
 	public static <T extends Appendable> T prettyTable(T sb, String linePrefix, Object data, String... separators) {
-		List<Object[]> table = new SimpleList<>();
-		List<String> row = new SimpleList<>();
-		List<List<String>> multiLineRef = new SimpleList<>();
+		List<Object[]> table = new ArrayList<>();
+		List<String> row = new ArrayList<>();
+		List<List<String>> multiLineRef = new ArrayList<>();
 		IntList maxLens = new IntList();
 
-		List<Object> myList = data instanceof List ? Helpers.cast(data) : SimpleList.asModifiableList((Object[]) data);
+		List<Object> myList = data instanceof List ? Helpers.cast(data) : ArrayList.asModifiableList((Object[]) data);
 		for (Object o : myList) {
 			if (o == IntMap.UNDEFINED) {
 				table.add(row.toArray());
@@ -636,7 +636,7 @@ public class TextUtil {
 				row.add(s = _sLines.get(0));
 				sLen = getStringWidth(s);
 
-				while (multiLineRef.size() < _sLines.size()-1) multiLineRef.add(new SimpleList<>());
+				while (multiLineRef.size() < _sLines.size()-1) multiLineRef.add(new ArrayList<>());
 				for (int i = 1; i < _sLines.size(); i++) {
 					List<String> line = multiLineRef.get(i-1);
 					while (line.size() < row.size()) line.add("");
@@ -718,8 +718,8 @@ public class TextUtil {
 		long offset = CODER_OFFSET;
 		if (offset < 0) {
 			try {
-				offset = Unaligned.U.objectFieldOffset(String.class.getDeclaredField("coder"));
-			} catch (NoSuchFieldException e) {
+				offset = Unaligned.fieldOffset(String.class, "coder");
+			} catch (Exception e) {
 				offset = 0;
 			}
 			CODER_OFFSET = offset;

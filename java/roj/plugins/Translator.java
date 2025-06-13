@@ -6,9 +6,9 @@ import roj.asm.AsmCache;
 import roj.asm.ClassNode;
 import roj.asm.cp.Constant;
 import roj.asm.cp.CstString;
+import roj.collect.BitSet;
+import roj.collect.HashMap;
 import roj.collect.IntMap;
-import roj.collect.MyBitSet;
-import roj.collect.MyHashMap;
 import roj.config.Tokenizer;
 import roj.config.Word;
 import roj.io.IOUtil;
@@ -51,10 +51,10 @@ public class Translator extends Plugin {
 	@SuppressWarnings("unchecked")
 	protected void onEnable() throws Exception {
 		registerCommand(literal("translate").then(literal("apply").then(argument("dict", Argument.file()).then(argument("jar", Argument.files(0)).executes(ctx -> {
-			value = new MyHashMap<>();
+			value = new HashMap<>();
 			Tokenizer wr = new Tokenizer();
 			wr.tokenIds(Tokenizer.generate(": 11\n= 12"))
-			  .literalEnd(MyBitSet.from(":="))
+			  .literalEnd(BitSet.from(":="))
 			  .init(TextReader.auto(ctx.argument("dict", File.class)));
 
 			Word w = wr.except(Word.LITERAL, "类名");
@@ -93,7 +93,7 @@ public class Translator extends Plugin {
 
 	private static void apply(File f) throws IOException {
 		if (f.isDirectory()) {
-			IOUtil.findAllFiles(f, file -> {
+			IOUtil.listFiles(f, file -> {
 				String name = file.getName().toLowerCase(Locale.ROOT);
 				if (name.endsWith(".zip") || name.endsWith(".jar") || name.endsWith(".class")) {
 					try {
@@ -152,7 +152,7 @@ public class Translator extends Plugin {
 		List<Constant> array = data.cp.data();
 		for (IntMap.Entry<String> entry : map.selfEntrySet()) {
 			CstString ref = (CstString) array.get(entry.getIntKey()-1);
-			if (!ref.name().str().equals(entry.getValue())) {
+			if (!ref.value().str().equals(entry.getValue())) {
 				ref.setValue(data.cp.getUtf(entry.getValue()));
 				any = true;
 			}
@@ -163,7 +163,7 @@ public class Translator extends Plugin {
 
 	private static void read(File f) throws IOException {
 		if (f.isDirectory()) {
-			IOUtil.findAllFiles(f, file -> {
+			IOUtil.listFiles(f, file -> {
 				String name = file.getName().toLowerCase(Locale.ROOT);
 				if (name.endsWith(".zip") || name.endsWith(".jar") || name.endsWith(".class")) {
 					try {
@@ -206,7 +206,7 @@ public class Translator extends Plugin {
 			Constant s = array.get(i);
 			if (s.type() == Constant.STRING) {
 				sb.append('\t').append(data.cp.indexOf(s)).append('=').append('"');
-				Tokenizer.escape(sb, ((CstString) s).name().str()).append('"').append('\n');
+				Tokenizer.escape(sb, ((CstString) s).value().str()).append('"').append('\n');
 
 				any = true;
 			}

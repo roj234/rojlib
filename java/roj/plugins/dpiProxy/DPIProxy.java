@@ -1,8 +1,8 @@
 package roj.plugins.dpiProxy;
 
-import roj.collect.MyBitSet;
-import roj.collect.MyHashMap;
-import roj.collect.SimpleList;
+import roj.collect.ArrayList;
+import roj.collect.BitSet;
+import roj.collect.HashMap;
 import roj.compiler.LambdaLinker;
 import roj.compiler.ast.expr.ExprParser;
 import roj.concurrent.OperationDone;
@@ -32,7 +32,7 @@ public class DPIProxy extends Plugin {
 	private static Logger LOGGER;
 
 	private final Fail2Ban f2b = new Fail2Ban(5, 60000);
-	private final List<ServerLaunch> servers = new SimpleList<>();
+	private final List<ServerLaunch> servers = new ArrayList<>();
 
 	@Override
 	protected void onEnable() throws Exception {
@@ -40,10 +40,10 @@ public class DPIProxy extends Plugin {
 		LOGGER.setLevel(Level.valueOf(getConfig().getString("logLevel", "INFO")));
 
 		var compiler = new LambdaLinker();
-		var matchers = new MyHashMap<String, DpiMatcher>();
+		var matchers = new HashMap<String, DpiMatcher>();
 
 		for (var item : getConfig().getMap("inject").entrySet()) {
-			var ctx = compiler.lctx;
+			var ctx = compiler.ctx;
 
 			ctx.lexer.init(item.getValue().asString()+";");
 			var node = ctx.ep.parse(ExprParser.STOP_SEMICOLON|ExprParser.SKIP_SEMICOLON);
@@ -67,7 +67,7 @@ public class DPIProxy extends Plugin {
 		var proxies = getConfig().getList("proxies").raw();
 		for (int i = 0; i < proxies.size(); i++) {
 			var item = proxies.get(i).asMap();
-			var patterns = new SimpleList<DpiMatcher>();
+			var patterns = new ArrayList<DpiMatcher>();
 			var timeout = item.getInt("timeout", 15000);
 
 			var port = item.getString("port");
@@ -85,7 +85,7 @@ public class DPIProxy extends Plugin {
 			}
 		}
 
-		compiler.api.reset();
+		compiler.compiler.reset();
 		LOGGER.info("插件启用成功：编译了{}个Matcher", matchers.size());
 		for (var server : servers) server.launch();
 	}
@@ -98,12 +98,12 @@ public class DPIProxy extends Plugin {
 	}
 
 	static class Matcher implements ChannelHandler {
-		private final MyBitSet matchers;
+		private final BitSet matchers;
 		private final List<DpiMatcher> patterns;
 
 		public Matcher(List<DpiMatcher> patterns) {
 			this.patterns = patterns;
-			this.matchers = new MyBitSet(patterns.size());
+			this.matchers = new BitSet(patterns.size());
 			this.matchers.fill(patterns.size());
 		}
 

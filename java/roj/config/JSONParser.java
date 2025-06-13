@@ -1,12 +1,11 @@
 package roj.config;
 
-import roj.collect.LinkedMyHashMap;
-import roj.collect.MyBitSet;
-import roj.collect.MyHashMap;
+import roj.collect.BitSet;
+import roj.collect.HashMap;
+import roj.collect.LinkedHashMap;
 import roj.collect.TrieTree;
 import roj.config.data.*;
 import roj.text.Interner;
-import roj.util.Helpers;
 
 import java.util.Map;
 
@@ -26,7 +25,7 @@ public class JSONParser extends Parser {
 	static final short TRUE = 9, FALSE = 10, NULL = 11, lBrace = 12, rBrace = 13, lBracket = 14, rBracket = 15, comma = 16, colon = 17;
 
 	private static final TrieTree<Word> JSON_TOKENS = new TrieTree<>();
-	private static final MyBitSet JSON_LENDS = new MyBitSet();
+	private static final BitSet JSON_LENDS = new BitSet();
 	static {
 		addKeywords(JSON_TOKENS, TRUE, "true", "false", "null");
 		addSymbols(JSON_TOKENS, JSON_LENDS, lBrace, "{", "}", "[", "]", ",", ":");
@@ -85,7 +84,7 @@ public class JSONParser extends Parser {
 	 */
 	@SuppressWarnings("fallthrough")
 	static CMap map(Parser wr, int flag) throws ParseException {
-		Map<String, CEntry> map = (flag & ORDERED_MAP) != 0 ? new LinkedMyHashMap<>() : new MyHashMap<>();
+		Map<String, CEntry> map = (flag & ORDERED_MAP) != 0 ? new LinkedHashMap<>() : new HashMap<>();
 		Map<String, String> comment = null;
 		boolean more = true;
 
@@ -125,16 +124,16 @@ public class JSONParser extends Parser {
 	@SuppressWarnings("fallthrough")
 	private static CEntry element(Word w, Parser wr, int flag) throws ParseException {
 		switch (w.type()) {
-			default: wr.unexpected(w.val()); return Helpers.nonnull();
-			case lBracket: return list(wr, new CList(), flag);
-			case lBrace: return map(wr, flag);
-			case LITERAL, STRING: return CEntry.valueOf(w.val());
+			default: wr.unexpected(w.val()); // Always fail
 			case NULL: return CNull.NULL;
 			case TRUE: return CBoolean.TRUE;
 			case FALSE: return CBoolean.FALSE;
 			case INTEGER: return CEntry.valueOf(w.asInt());
 			case LONG: return CEntry.valueOf(w.asLong());
 			case DOUBLE: return CEntry.valueOf(w.asDouble());
+			case LITERAL, STRING: return CEntry.valueOf(w.val());
+			case lBracket: return list(wr, new CList(), flag);
+			case lBrace: return map(wr, flag);
 		}
 	}
 

@@ -8,9 +8,9 @@ import roj.asm.cp.Constant;
 import roj.asm.cp.ConstantPool;
 import roj.asm.type.TypeHelper;
 import roj.collect.AbstractIterator;
+import roj.collect.ArrayList;
+import roj.collect.BitSet;
 import roj.collect.IntMap;
-import roj.collect.MyBitSet;
-import roj.collect.SimpleList;
 import roj.util.ArrayCache;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
@@ -28,7 +28,7 @@ public class InsnList extends AbstractCodeWriter implements Iterable<InsnNode> {
 	public InsnList() { clear(); }
 
 	public void clear() {
-		if (segments.getClass() != SimpleList.class) segments = new SimpleList<>();
+		if (segments.getClass() != ArrayList.class) segments = new ArrayList<>();
 		else segments.clear();
 		offset = 0;
 
@@ -50,14 +50,14 @@ public class InsnList extends AbstractCodeWriter implements Iterable<InsnNode> {
 			// only read
 			refPos = dd.xInsn_sharedRefPos;
 			refVal = dd.xInsn_sharedRefVal;
-			segments = new SimpleList<>();
-			((SimpleList<Segment>) segments)._setArray(dd.xInsn_sharedSegments);
+			segments = new ArrayList<>();
+			((ArrayList<Segment>) segments)._setArray(dd.xInsn_sharedSegments);
 			myIsReading = dd.xInsn_isReading = true;
 		}
 
 		clear();
 
-		pc = new MyBitSet(len);
+		pc = new BitSet(len);
 		pcLen = len;
 
 		super.visitBytecode(cp, r, len);
@@ -154,19 +154,19 @@ public class InsnList extends AbstractCodeWriter implements Iterable<InsnNode> {
 
 		int blockFrom = cw.segments.size();
 		if (cw.segments.isEmpty())
-			cw.segments = new SimpleList<>();
+			cw.segments = new ArrayList<>();
 		for (int i = 0; i < segments.size(); i++) {
 			cw.segments.add(segments.get(i).move(cw, blockFrom, true));
 		}
 		cw.codeOb = codeOb;
 	}
 
-	private MyBitSet pc;
+	private BitSet pc;
 	private int pcLen;
-	public MyBitSet getPcMap() {
+	public BitSet getPcMap() {
 		NodeIterator itr;
 		if (pc == null) {
-			pc = new MyBitSet(bci());
+			pc = new BitSet(bci());
 			itr = since(0);
 		} else if (pcLen < bci()) { // inserted new nodes
 			itr = since(pcLen);
@@ -274,8 +274,8 @@ public class InsnList extends AbstractCodeWriter implements Iterable<InsnNode> {
 
 		endSegment();
 
-		if (segments.getClass() != SimpleList.class)
-			segments = new SimpleList<>(segments);
+		if (segments.getClass() != ArrayList.class)
+			segments = new ArrayList<>(segments);
 
 		segments.add(c);
 		offset += c.length();
@@ -312,7 +312,7 @@ public class InsnList extends AbstractCodeWriter implements Iterable<InsnNode> {
 		int target = (pos.block << 16) | pos.offset;
 		if (refLen > refPos.length) refLen = refPos.length;
 		int i = Arrays.binarySearch(refPos, 0, refLen, target);
-		if (i < 0) throw new IllegalArgumentException("no data at " + pos);
+		if (i < 0) return new MemberDescriptor("", "", "()V");//throw new IllegalArgumentException("no data at " + pos);
 		return refVal[i];
 	}
 	final void setNodeData(Label pos, Object val) {
@@ -422,7 +422,7 @@ public class InsnList extends AbstractCodeWriter implements Iterable<InsnNode> {
 		dst.indexLabel(dend);
 		dst.pc = null;
 
-		SimpleList<Segment> toInsert = new SimpleList<>();
+		ArrayList<Segment> toInsert = new ArrayList<>();
 
 		src.satisfySegments();
 		int blockFrom = sstart.block, blockTo = send.block;
@@ -469,33 +469,27 @@ public class InsnList extends AbstractCodeWriter implements Iterable<InsnNode> {
 		if (dstart.block != dend.block || dstart.offset != dend.offset || dstart.offset != 0) {
 			var tmp = dst.segments.get(dstart.block);
 
-			var bytecode = AsmCache.getInstance().copy(tmp.getData());
+			DynByteBuf bytecode;
+			if (dstart.offset != 0) {
+				bytecode = AsmCache.getInstance().copy(tmp.getData());
+				tmp.setData(bytecode.slice(dstart.offset)); // left 可能长度为零
+			} else {
+				bytecode = ByteList.EMPTY;
+			}
 
-			tmp.setData(bytecode.slice(dstart.offset)); // left 可能长度为零
-
-			boolean leftSplit;
-			RightKnown: {
-				if (dstart.block == dend.block) {
-					bytecode.rIndex = dend.offset;
-					if (bytecode.isReadable()) {
-						toInsert.add(new StaticSegment().setData(bytecode));// right
-						leftSplit = true;
-						break RightKnown;
-					}
-				} else {
-					segmentRemoved = dend.block - dstart.block;
-					if (dend.offset != 0) {
-						segmentRemoved--;
-
-						tmp = dst.segments.get(dend.block);
-
-						bytecode = AsmCache.getInstance().copy(tmp.getData());
-						bytecode.rIndex = dend.offset;
-						tmp.setData(bytecode); // right
-					}
+			if (dstart.block == dend.block) {
+				bytecode.rIndex = dend.offset;
+				if (bytecode.isReadable()) {
+					toInsert.add(new StaticSegment().setData(bytecode));// right
 				}
-
-				leftSplit = false;
+			} else {
+				segmentRemoved = dend.block - dstart.block;
+				if (dend.offset != 0) {
+					tmp = dst.segments.get(dend.block);
+					bytecode = AsmCache.getInstance().copy(tmp.getData());
+					bytecode.rIndex = dend.offset;
+					tmp.setData(bytecode); // right
+				}
 			}
 
 			// 然后修复label
@@ -530,7 +524,7 @@ public class InsnList extends AbstractCodeWriter implements Iterable<InsnNode> {
 
 		// 按顺序插入所有的segment
 
-		SimpleList<Segment> dstSegments = dst.segments instanceof SimpleList<Segment> x ? x : (SimpleList<Segment>) (dst.segments = new SimpleList<>(dst.segments));
+		ArrayList<Segment> dstSegments = dst.segments instanceof ArrayList<Segment> x ? x : (ArrayList<Segment>) (dst.segments = new ArrayList<>(dst.segments));
 		int blockDelta = toInsert.size() - segmentRemoved;
 
 		dstSegments.ensureCapacity(dstSegments.size()+blockDelta);
@@ -571,12 +565,12 @@ public class InsnList extends AbstractCodeWriter implements Iterable<InsnNode> {
 
 		int refDstDeleteCount = refDstEnd - refDstStart;
 		int refSrcInsertCount = refSrcEnd - refSrcStart;
-		int newRefLen = dst.refLen + refSrcInsertCount - refDstDeleteCount;
 		int refDeltaCount = refSrcInsertCount - refDstDeleteCount;
+		int newRefLen = dst.refLen + refDeltaCount;
 
 		if (dst.refPos.length < newRefLen) {
-			outRefPos = new int[newRefLen];
-			outRefVal = new Object[newRefLen];
+			outRefPos = Arrays.copyOf(dst.refPos, newRefLen);
+			outRefVal = Arrays.copyOf(dst.refVal, newRefLen);
 		} else {
 			outRefPos = dst.refPos;
 			outRefVal = dst.refVal;

@@ -1,8 +1,8 @@
 package roj.http.server;
 
-import roj.collect.MyHashMap;
+import roj.collect.HashMap;
 import roj.collect.RingBuffer;
-import roj.collect.SimpleList;
+import roj.collect.ArrayList;
 import roj.http.Headers;
 import roj.http.HttpUtil;
 import roj.text.DateTime;
@@ -29,7 +29,7 @@ public final class HSConfig implements BiConsumer<String, String> {
 	public static SessionStorage globalSessionStorage;
 	public SessionStorage sessionStorage;
 
-	public final MyHashMap<String, Object> ctx = new MyHashMap<>();
+	public final HashMap<String, Object> ctx = new HashMap<>();
 
 	private static final ThreadLocal<HSConfig> TL = ThreadLocal.withInitial(HSConfig::new);
 	public static HSConfig getInstance() {return TL.get();}
@@ -51,7 +51,7 @@ public final class HSConfig implements BiConsumer<String, String> {
 
 	final RingBuffer<HttpServer11> keepalive = RingBuffer.lazy(KEEPALIVE_MAX);
 
-	private final SimpleList<Request> requests = new SimpleList<>(REQUEST_CACHE);
+	private final ArrayList<Request> requests = new ArrayList<>(REQUEST_CACHE);
 	final Request request() {
 		var req = requests.pop();
 		if (req == null) req = new Request(this);
@@ -79,8 +79,8 @@ public final class HSConfig implements BiConsumer<String, String> {
 		return sha1;
 	}
 
-	final SimpleList<Deflater> gzDef = new SimpleList<>(10);
-	final SimpleList<Deflater> deDef = new SimpleList<>(10);
+	final ArrayList<Deflater> gzDef = new ArrayList<>(10);
+	final ArrayList<Deflater> deDef = new ArrayList<>(10);
 	final Deflater deflater(boolean nowrap) {
 		var def = (nowrap ? gzDef : deDef).pop();
 		if (def == null) def = new Deflater(Deflater.DEFAULT_COMPRESSION, nowrap);

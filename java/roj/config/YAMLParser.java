@@ -1,14 +1,13 @@
 package roj.config;
 
-import roj.collect.LinkedMyHashMap;
-import roj.collect.MyBitSet;
-import roj.collect.MyHashMap;
+import roj.collect.BitSet;
+import roj.collect.HashMap;
+import roj.collect.LinkedHashMap;
 import roj.collect.TrieTree;
 import roj.config.data.*;
 import roj.text.CharList;
 import roj.text.Interner;
 import roj.text.TextUtil;
-import roj.util.Helpers;
 
 import java.util.Map;
 
@@ -33,7 +32,7 @@ public class YAMLParser extends Parser {
 
 	private static final TrieTree<Word> YAML_TOKENS = new TrieTree<>();
 	// - for timestamp
-	private static final MyBitSet YAML_LENDS = new MyBitSet(), TMP1 = MyBitSet.from("\r\n:#"), TMP_JSON = MyBitSet.from(":,{}[]\r\n \t");
+	private static final BitSet YAML_LENDS = new BitSet(), TMP1 = BitSet.from("\r\n:#"), TMP_JSON = BitSet.from(":,{}[]\r\n \t");
 
 	static {
 		put(TRUE, "True", "On", "Yes");
@@ -115,7 +114,7 @@ public class YAMLParser extends Parser {
 	 * c : x
 	 */
 	private CEntry yamlObject(Word w) throws ParseException {
-		Map<String, CEntry> map = (flag & ORDERED_MAP) != 0 ? new LinkedMyHashMap<>() : new MyHashMap<>();
+		Map<String, CEntry> map = (flag & ORDERED_MAP) != 0 ? new LinkedHashMap<>() : new HashMap<>();
 		Map<String, String> comment = null;
 
 		int superIndent = prevIndent;
@@ -264,8 +263,8 @@ public class YAMLParser extends Parser {
 				if (val == null) throw err("不存在的锚点 "+cnt);
 				return val;
 			}
+			default: unexpected(cnt); // Always fail
 			case Word.EOF: return CNull.NULL;
-			default: unexpected(cnt); return Helpers.nonnull();
 		}
 	}
 
@@ -335,7 +334,7 @@ public class YAMLParser extends Parser {
 		return -1;
 	}
 
-	final MyHashMap<String, CEntry> anchors = new MyHashMap<>();
+	final HashMap<String, CEntry> anchors = new HashMap<>();
 	int indent, prevIndent;
 
 	@Override

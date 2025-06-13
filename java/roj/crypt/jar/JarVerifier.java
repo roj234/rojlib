@@ -5,13 +5,15 @@ import org.jetbrains.annotations.Nullable;
 import roj.archive.zip.ZEntry;
 import roj.archive.zip.ZipArchive;
 import roj.archive.zip.ZipFile;
-import roj.collect.MyHashMap;
-import roj.collect.MyHashSet;
+import roj.collect.HashMap;
+import roj.collect.HashSet;
 import roj.crypt.Base64;
 import roj.crypt.CryptoFactory;
 import roj.io.IOUtil;
 import roj.io.source.FileSource;
+import roj.io.source.Source;
 import roj.text.CharList;
+import roj.util.ArrayCache;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
 
@@ -34,7 +36,7 @@ import java.util.jar.Manifest;
  */
 public class JarVerifier {
 	private static final String CREATED_BY = "ImpLib/JarSigner (v1.3)";
-	private static final MyHashSet<String> VALID_CERTIFICATE_EXTENSION = new MyHashSet<>("rsa", "dsa", "ec");
+	private static final HashSet<String> VALID_CERTIFICATE_EXTENSION = new HashSet<>("rsa", "dsa", "ec");
 	private static final List<String> SECURE_HASH_ALGORITHMS = Arrays.asList("SHA-512", "SHA-384", "SHA-256");
 	private static final ThreadLocal<Map<String, MessageDigest>> DIGESTS = new ThreadLocal<>();
 
@@ -61,12 +63,13 @@ public class JarVerifier {
 	public boolean isSignTrusted() {
 		List<X509Certificate> certs = block.getCertificates();
 		try {
-			CryptoFactory.checkCertificateValidity(certs.toArray(new X509Certificate[0]));
+			CryptoFactory.checkCertificateValidity(certs.toArray(new X509Certificate[certs.size()]));
 			return true;
 		} catch (Exception e) {
 			return false;
 		}
 	}
+	public String getAlgorithm() {return block == null ? null : block.getSignatureAlg();}
 
 	public void ensureManifestValid(boolean lenient) throws GeneralSecurityException {
 		if (source != null) return;
@@ -76,7 +79,7 @@ public class JarVerifier {
 		}
 
 		Map<String, MessageDigest> digests = DIGESTS.get();
-		if (digests == null) digests = new MyHashMap<>();
+		if (digests == null) digests = new HashMap<>();
 
 		try {
 			readManifestAndHash(new ManifestBytes(signatureBytes), lenient);
@@ -169,9 +172,9 @@ public class JarVerifier {
 		DIGESTS.set(digests);
 	}
 	private boolean readManifestAndHash(ManifestBytes manifestBytes, boolean lenient) throws IOException {
-		this.hashes = new MyHashMap<>();
+		this.hashes = new HashMap<>();
 
-		MyHashMap<String, String> tmpMap = new MyHashMap<>();
+		HashMap<String, String> tmpMap = new HashMap<>();
 		String prevName = null, algorithm = null;
 		outerLoop:
 		for (ManifestBytes.NamedAttr attribute : manifestBytes.namedAttrMap.values()) {
@@ -248,7 +251,7 @@ public class JarVerifier {
 
 		var digests = DIGESTS.get();
 		if (digests == null) {
-			digests = new MyHashMap<>();
+			digests = new HashMap<>();
 			DIGESTS.set(digests);
 		}
 
@@ -361,7 +364,7 @@ public class JarVerifier {
 		String signAlg = certs.get(0).getPublicKey().getAlgorithm();
 		var signHashAlg = options.getOrDefault("jarSigner:signatureHashAlgorithm", "SHA-256");
 
-		var signer = Signature.getInstance(signHashAlg.replace("-", "")+"with"+(signAlg.equals("EC")?"ECDSA": signAlg));
+		var signer = Signature.getInstance(signHashAlg.replace("-", "")+"with"+(signAlg.equals("EC")?"ECDSA":signAlg));
 
 		var hashAlg = options.getOrDefault("jarSigner:manifestHashAlgorithm", "SHA-256");
 		if (!VALID_CERTIFICATE_EXTENSION.contains(signAlg.toLowerCase(Locale.ROOT))) throw new IllegalArgumentException("不支持的数字签名类型:"+signAlg);
@@ -369,7 +372,6 @@ public class JarVerifier {
 
 		var md = MessageDigest.getInstance(hashAlg);
 
-		byte[] buf = new byte[1024];
 		var mfin = zf.getStream("META-INF/MANIFEST.MF");
 		if (mfin == null) throw new FileNotFoundException("META-INF/MANIFEST.MF");
 		var mf = new Manifest(mfin);
@@ -377,6 +379,7 @@ public class JarVerifier {
 
 		var cacheHash = "true".equals(options.get("jarSigner:cacheHash"));
 
+		byte[] buf = ArrayCache.getByteArray(1024, false);
 		var digestKey = new Attributes.Name(hashAlg+"-Digest");
 		for (ZEntry entry : zf.entries()) {
 			if (entry.getName().startsWith("META-INF/")) {
@@ -437,6 +440,21 @@ public class JarVerifier {
 		append72(ob, "Created-By: "+options.getOrDefault("jarSigner:creator", CREATED_BY));
 		append72(ob, hashAlg+"-Digest-Manifest: "+IOUtil.encodeBase64(md.digest(mfBytes)));
 		append72(ob, hashAlg+"-Digest-Manifest-Main-Attributes: "+IOUtil.encodeBase64(mb.digest(md, null)));
+
+		if (options.getOrDefault("jarSigner:addV2", "false").equals("true")) {
+			Source file = zf.source();
+			file.seek(0);
+			var in = file.asInputStream();
+			while (true) {
+				int r = in.read(buf);
+				if (r < 0) break;
+				md.update(buf, 0, r);
+			}
+			ArrayCache.putArray(buf);
+
+			// raw data without MANIFEST / SIGNFILE / CERTIFICATE
+			append72(ob, hashAlg+"-Digest-Archive: "+IOUtil.encodeBase64(md.digest()));
+		}
 		ob.putAscii("\r\n");
 
 		for (String name : mb.namedAttrMap.keySet()) {
@@ -477,34 +495,5 @@ public class JarVerifier {
 			out.write(lineBytes, pos, length - pos);
 		}
 		out.putAscii("\r\n");
-	}
-
-	public static void main(String[] args) throws Exception {
-		try (var zf = new ZipFile(args[0])) {
-			JarVerifier verifier = create(zf);
-			if (verifier == null) {
-				System.out.println("文件没有清单属性");
-				return;
-			}
-			if (!verifier.isSigned()) {
-				System.out.println("文件没有签名");
-				return;
-			}
-
-			verifier.ensureManifestValid(false);
-			System.out.println("清单和元签名校验通过");
-			System.out.println("是自签证书:"+!verifier.isSignTrusted());
-			System.out.println("签名算法:"+verifier.block.getSignatureAlg());
-
-			for (ZEntry entry : zf.entries()) {
-				try (InputStream in = verifier.wrapInput(entry.getName(), zf.getStream(entry))) {
-					IOUtil.read(in);
-				} catch (Exception e) {
-					System.out.println(e.getMessage());
-				}
-			}
-
-			System.out.println("文件验证完成，有问题的文件已在上方列出");
-		}
 	}
 }

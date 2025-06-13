@@ -1,12 +1,12 @@
 package roj.plugins.ci.plugin;
 
-import roj.archive.zip.ZipArchive;
+import roj.archive.roar.RoWriteArchive;
 import roj.archive.zip.ZipFileWriter;
 import roj.asm.MemberDescriptor;
 import roj.asmx.Context;
 import roj.asmx.event.Subscribe;
 import roj.asmx.mapper.Mapper;
-import roj.collect.SimpleList;
+import roj.collect.ArrayList;
 import roj.config.data.CEntry;
 import roj.crypt.CryptoFactory;
 import roj.io.IOUtil;
@@ -16,7 +16,6 @@ import roj.plugins.ci.Project;
 import roj.plugins.ci.Workspace;
 import roj.plugins.ci.event.LibraryModifiedEvent;
 import roj.text.TextUtil;
-import roj.text.logging.Level;
 import roj.ui.Argument;
 import roj.ui.Terminal;
 import roj.util.ByteList;
@@ -141,12 +140,12 @@ public class MAP implements Processor {
 			}
 		});
 		CommandManager.register(literal("mapname").then(argument("工作空间", Argument.oneOf(workspaces)).then(mapName)).then(mapName));
-		CommandManager.register(literal("mapdebug").then(argument("type", Argument.string()).executes(ctx -> {
+		/*CommandManager.register(literal("mapdebug").then(argument("type", Argument.string()).executes(ctx -> {
             var s = ctx.argument("type", String.class);
 			int i = s.indexOf('#');
 			Mapper.LOGGER.setLevel(Level.ALL);
 			defaultProject.mapper.debugRelative(s.substring(0, i).replace('.', '/'), s.substring(i+1));
-        })));
+        })));*/
 	}
 
 	@Override public String name() {return "映射";}
@@ -155,7 +154,7 @@ public class MAP implements Processor {
 		if (config.asMap().getBool("子类实现")) flag |= MF_FIX_SUBIMPL;
 	}
 
-	@Override public int beforeCompile(Compiler compiler, SimpleList<String> options, List<File> files, ProcessEnvironment ctx) {
+	@Override public int beforeCompile(Compiler compiler, ArrayList<String> options, List<File> files, ProcessEnvironment ctx) {
 		return ctx.project.mapperState == null && ctx.project.workspace.mapping != null ? 1 : 2;
 	}
 
@@ -190,7 +189,7 @@ public class MAP implements Processor {
 		var mapper = p.mapper;
 		if (mapper != null) return mapper;
 
-		var libraries = new SimpleList<File>();
+		var libraries = new ArrayList<File>();
 		var digest = CryptoFactory.SM3();
 		Predicate<File> predicate = file -> {
 			digest.update(IOUtil.getSharedByteBuf().putUTF(file.getName()).putLong(file.length()).putLong(file.lastModified()));
@@ -199,15 +198,15 @@ public class MAP implements Processor {
 			return !name.startsWith(DONT_LOAD_PREFIX) && (name.endsWith(".zip") || name.endsWith(".jar"));
 		};
 		libraries.addAll(p.workspace.mappedDepend);
-		IOUtil.findAllFiles(new File(BASE, "libs"), libraries, predicate);
-		IOUtil.findAllFiles(new File(p.getRoot(), "libs"), libraries, predicate);
+		IOUtil.listFiles(new File(BASE, "libs"), libraries, predicate);
+		IOUtil.listFiles(new File(p.getRoot(), "libs"), libraries, predicate);
 
 		LOGGER.trace("{}: 映射器的库列表：{}", p.getName(), libraries);
 
 		Mapper m;
 		var hash = digest.digest();
 		loaded:
-		try (var mzf = new ZipArchive(new File(DATA_PATH, ".mapCacheAll.zip"))) {
+		try (var mzf = new RoWriteArchive(new File(DATA_PATH, ".mapCacheAll.roar"))) {
 			m = new Mapper(p.workspace.getMapper());
 			m.flag = (byte) flag;
 
@@ -216,7 +215,7 @@ public class MAP implements Processor {
 			if (in != null) {
 				try {
 					m.loadCache(in, true);
-					LOGGER.debug("{}: 从缓存恢复映射器", p.getName());
+					LOGGER.debug("{}: 从缓存恢复映射器 {}", p.getName(), entryId);
 					break loaded;
 				} catch (Exception e) {
 					LOGGER.warn("{}: 从缓存恢复映射器失败", e, p.getName());
@@ -234,12 +233,12 @@ public class MAP implements Processor {
 
 			int cacheWipe = mzf.entries().size()-config.getInt("映射缓存大小");
 			if (cacheWipe > 0) {
-				var entries = new SimpleList<>(mzf.entries());
+				var entries = new ArrayList<>(mzf.entries());
 				entries.sort((o1, o2) -> Long.compare(o1.getModificationTime(), o2.getModificationTime()));
 				for (int i = 0; i < cacheWipe; i++) mzf.put(entries.get(i).getName(), null);
 			}
 
-			mzf.put(entryId, buf).flag = 0;
+			mzf.put(entryId, buf).compress = false;
 			mzf.save();
 			buf._free();
 		} catch (IOException e) {

@@ -11,9 +11,9 @@ import roj.asm.cp.ConstantPool;
 import roj.asm.cp.CstUTF;
 import roj.asmx.AnnotatedElement.Node;
 import roj.asmx.AnnotatedElement.Type;
-import roj.collect.MyHashMap;
-import roj.collect.MyHashSet;
-import roj.collect.SimpleList;
+import roj.collect.ArrayList;
+import roj.collect.HashMap;
+import roj.collect.HashSet;
 import roj.collect.ToIntMap;
 import roj.io.IOUtil;
 import roj.util.ArrayUtil;
@@ -33,7 +33,7 @@ import static roj.text.Interner.intern;
  * @since 2023/12/26 12:47
  */
 public final class AnnotationRepo {
-	private final MyHashMap<String, Set<AnnotatedElement>> annotations = new MyHashMap<>();
+	private final HashMap<String, Set<AnnotatedElement>> annotations = new HashMap<>();
 
 	public AnnotationRepo() {}
 
@@ -52,6 +52,17 @@ public final class AnnotationRepo {
 		}
 	}
 
+	public void addOptionalCache(ZipFile zf) throws IOException {
+		try {
+			ZEntry entry = zf.getEntry("META-INF/annotations.repo");
+			if (entry != null && entry.getSize() <= 1048576) {
+				if (deserialize(IOUtil.getSharedByteBuf().readStreamFully(zf.getStream(entry)))) return;
+			}
+		} catch (Exception ignored) {}
+
+		add(zf);
+	}
+
 	public void add(ClassNode data) {
 		Type klass = new Type(data);
 		add2(data.cp, data, klass);
@@ -66,7 +77,7 @@ public final class AnnotationRepo {
 
 			if (!subNode.annotations.isEmpty()) {
 				if (klass.children.isEmpty())
-					klass.children = new MyHashSet<>();
+					klass.children = new HashSet<>();
 				klass.children.add(subNode);
 			}
 		}
@@ -83,10 +94,10 @@ public final class AnnotationRepo {
 	}
 	private void add3(AnnotatedElement info, Annotation anno) {
 		info.annotations.put(anno.type(), anno);
-		annotations.computeIfAbsent(anno.type(), Helpers.fnMyHashSet()).add(info);
+		annotations.computeIfAbsent(anno.type(), Helpers.fnHashSet()).add(info);
 	}
 
-	private final SimpleList<Object> rawNodes = new SimpleList<>();
+	private final ArrayList<Object> rawNodes = new ArrayList<>();
 	public void addRaw(DynByteBuf r, String fileName) {
 		if (r.readInt() != 0xcafebabe) throw new IllegalArgumentException("Illegal header");
 		r.rIndex += 4;
@@ -130,7 +141,7 @@ public final class AnnotationRepo {
 						if (xnode == null) {
 							xnode = new Node(klass, node);
 							if (klass.children.isEmpty())
-								klass.children = new MyHashSet<>();
+								klass.children = new HashSet<>();
 							klass.children.add(xnode);
 							rawNodes.add(node);
 						}
@@ -162,7 +173,7 @@ public final class AnnotationRepo {
 	}
 
 	public Set<AnnotatedElement> annotatedBy(String type) { return annotations.getOrDefault(type, Collections.emptySet()); }
-	public MyHashMap<String, Set<AnnotatedElement>> getAnnotations() {return annotations;}
+	public HashMap<String, Set<AnnotatedElement>> getAnnotations() {return annotations;}
 
 	public void serialize(DynByteBuf buf) {
 		ToIntMap<Annotation> annotations = new ToIntMap<>();
@@ -230,12 +241,12 @@ public final class AnnotationRepo {
 		if (!buf.readAscii(7).equals("ANNOREP") || buf.readUnsignedByte() != 0)
 			return false;
 
-		var annotations = new Annotation[buf.readShort()];
+		var annotations = new Annotation[buf.readUnsignedShort()];
 		int annotationCount = 0;
-		var elements = new AnnotatedElement[buf.readShort()];
+		var elements = new AnnotatedElement[buf.readUnsignedShort()];
 		int elementCount = 0;
 
-		int repoSize = buf.readShort();
+		int repoSize = buf.readUnsignedShort();
 		this.annotations.ensureCapacity(repoSize);
 
 		var cp = AsmCache.getInstance().constPool();
@@ -261,7 +272,7 @@ public final class AnnotationRepo {
 				}
 
 				ae.annotations.put(annotation.type(), annotation);
-				this.annotations.computeIfAbsent(annotation.type(), Helpers.fnMyHashSet()).add(ae);
+				this.annotations.computeIfAbsent(annotation.type(), Helpers.fnHashSet()).add(ae);
 			}
 		}
 

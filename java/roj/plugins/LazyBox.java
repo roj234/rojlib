@@ -9,8 +9,8 @@ import roj.asmx.Context;
 import roj.asmx.injector.CodeWeaver;
 import roj.asmx.injector.WeaveException;
 import roj.collect.CollectionX;
+import roj.collect.HashMap;
 import roj.collect.IntMap;
-import roj.collect.MyHashMap;
 import roj.concurrent.TaskPool;
 import roj.crypt.CRC32;
 import roj.crypt.ReedSolomonECC;
@@ -79,7 +79,7 @@ import static roj.ui.CommandNode.literal;
 	Nixim注入: nixim <injector> <reference> [output]
 	""")
 public class LazyBox extends Plugin {
-	private static final TaskPool pool = TaskPool.Common();
+	private static final TaskPool pool = TaskPool.common();
 
 	@Override
 	protected void onEnable() throws Exception {
@@ -278,7 +278,7 @@ public class LazyBox extends Plugin {
 			Pattern regex = Pattern.compile(ctx.argument("正则", String.class));
 			String replace = ctx.argument("替换", String.class);
 			File path = ctx.argument("文件夹", File.class);
-			for (File file : IOUtil.findAllFiles(path)) {
+			for (File file : IOUtil.listFiles(path)) {
 				try (TextReader in = TextReader.auto(file)) {
 					AtomicBoolean change = new AtomicBoolean(false);
 					CharList sb = IOUtil.getSharedCharBuf().readFully(in);
@@ -298,7 +298,23 @@ public class LazyBox extends Plugin {
 					}
 				}
 			}
-		})))));
+		})).executes(ctx -> {
+					Pattern regex = Pattern.compile(ctx.argument("正则", String.class));
+					File path = ctx.argument("文件夹", File.class);
+					TaskPool pool = TaskPool.newFixed(16, "Search worker #");
+					for (File file : IOUtil.listFiles(path)) {
+						pool.submit(() -> {
+							try (TextReader in = TextReader.auto(file)) {
+								CharList sb = IOUtil.getSharedCharBuf().readFully(in);
+								sb.preg_match_callback(regex, m -> {
+									System.out.println(file.getName()+":"+m.start()+": "+m.group());
+								});
+							}
+						});
+					}
+					pool.awaitTermination();
+					pool.shutdown();
+		}))));
 		}
 		//endregion
 
@@ -312,7 +328,7 @@ public class LazyBox extends Plugin {
 			var nx = new CodeWeaver();
 			File src = ctx.argument("注入(Nixim)", File.class);
 			if (src.isDirectory()) {
-				IOUtil.findAllFiles(src, file -> {
+				IOUtil.listFiles(src, file -> {
 					if (IOUtil.extensionName(file.getName()).equals("class")) {
 						try {
 							nx.read(ClassNode.parseSkeleton(IOUtil.read(file)));
@@ -457,12 +473,12 @@ public class LazyBox extends Plugin {
 	private void qzDiff(CommandContext ctx) throws IOException {
 		QZArchive in1 = new QZArchive(ctx.argument("file1", File.class));
 		QZArchive in2 = new QZArchive(ctx.argument("file2", File.class));
-		MyHashMap<String, QZEntry> remain = in1.getEntries();
+		HashMap<String, QZEntry> remain = in1.getEntries();
 
 		int add = 0, change = 0, del = 0, move = 0;
 
 		IntMap<QZEntry> in2_by_crc32 = new IntMap<>();
-		MyHashMap<QZEntry, String> in1_should_copy = new MyHashMap<>(), in2_should_copy = new MyHashMap<>();
+		HashMap<QZEntry, String> in1_should_copy = new HashMap<>(), in2_should_copy = new HashMap<>();
 		for (QZEntry entry : in2.getEntriesByPresentOrder()) {
 			if (entry.isDirectory()) continue;
 
@@ -546,7 +562,7 @@ public class LazyBox extends Plugin {
 			Terminal.setConsole(Panger.console());
 		}));
 	}
-	private static AtomicInteger copy(QZArchive arc, MyHashMap<QZEntry, String> should_copy, QZFileWriter out, EasyProgressBar bar) {
+	private static AtomicInteger copy(QZArchive arc, HashMap<QZEntry, String> should_copy, QZFileWriter out, EasyProgressBar bar) {
 		return arc.parallelDecompress(pool, (entry, in) -> {
 			String prefix = should_copy.get(entry);
 			if (prefix == null) return;

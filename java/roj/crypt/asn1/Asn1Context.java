@@ -10,6 +10,7 @@ import roj.text.CharList;
 
 import java.io.IOException;
 import java.math.BigInteger;
+import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.Map;
 
@@ -29,8 +30,8 @@ import static roj.crypt.asn1.Asn1Tokenizer.*;
  * @since 2024/3/22 22:58
  */
 public class Asn1Context {
-	protected final Map<String, Type> map = new MyHashMap<>();
-	private final MyHashSet<CEntry> byVal = new MyHashSet<>();
+	protected final Map<String, Type> map = new HashMap<>();
+	private final HashSet<CEntry> byVal = new HashSet<>();
 
 	@Override
 	public String toString() {return "Asn1Context{" + "map=" + map + ", namedOid=" + byVal + '}';}
@@ -49,20 +50,23 @@ public class Asn1Context {
 	public void write(String struct, CEntry value, DerWriter out) throws IOException {
 		Type type = map.get(struct);
 
-		out.begin(type.derType());
-		type.write(value, out);
-		out.end();
+		CURRENT_PARSING.set(this);
+		try {
+			type.write(value, out);
+		} finally {
+			CURRENT_PARSING.remove();
+		}
 	}
 
-	protected Type unmarshalAny(String struct, String target, CEntry value) {
+	protected Type unmarshalAny(String struct, String target, CEntry context) {
 		if (struct.equals("ContentInfo")) {
-			Object oid = byVal.find1(value);
-			if (oid == IntMap.UNDEFINED) throw new UnsupportedOperationException("未知的OID "+value);
+			Object oid = byVal.find1(context);
+			if (oid == IntMap.UNDEFINED) throw new UnsupportedOperationException("未知的OID "+context);
 			return map.get(((NamedOID)oid).name);
 		}
 
 		if (struct.equals("AlgorithmIdentifier")) {
-			Object oid = byVal.find1(value);
+			Object oid = byVal.find1(context);
 			// "2.16.840.1.101.3.4.2.1" sha256
 			// "1.2.840.113549.1.1.5" sha1WithRSAEncryption
 			// "1.2.840.113549.1.1.1" rsaEncryption
@@ -73,13 +77,23 @@ public class Asn1Context {
 			// "2.5.4.6" countryName
 			// "2.5.4.10" organizationName
 			// "2.5.4.11" organizationalUnitName
-			int[] _oid = ((CIntArray) value).value;
+			int[] _oid = ((CIntArray) context).value;
 			if (_oid[0] == 2 && _oid[1] == 5 && _oid[2] == 4)
 				return Simple.PrintableString;
 		}
 
-		throw new IllegalStateException("无法解析ANY类型\n数据: "+value+"\n结构: "+struct+'.'+target);
+		throw new IllegalStateException("无法解析ANY类型\n上下文: "+context+"\n结构: "+struct+'.'+target);
 	}
+	protected DerValue.Opaque marshalAny(String struct, String target, CEntry context, CEntry value) {
+		if (struct.equals("AttributeTypeAndValue")) {
+			int[] _oid = ((CIntArray) context).value;
+			if (_oid[0] == 2 && _oid[1] == 5 && _oid[2] == 4)
+				return new DerValue.Opaque(Simple.PrintableString.derType, value.asString().getBytes(StandardCharsets.UTF_8));
+		}
+
+		throw new IllegalStateException("无法解析ANY类型\n上下文: "+context+"\n结构: "+struct+'.'+target);
+	}
+
 
 	static final class NamedOID extends CIntArray {
 		final String name;
@@ -165,7 +179,7 @@ public class Asn1Context {
 		private final String[] names;
 		private final CEntry[] values;
 
-		public Enum(Type type, SimpleList<MapStub> stubs) {
+		public Enum(Type type, ArrayList<MapStub> stubs) {
 			original = (byte) ((Simple) type).ordinal();
 			int len = stubs.size();
 			names = new String[len];
@@ -216,7 +230,7 @@ public class Asn1Context {
 		private final byte[] rules;
 		private final CharMap<Type> mappedTarget;
 
-		public Choice(SimpleList<MapStub> stubs) {
+		public Choice(ArrayList<MapStub> stubs) {
 			int len = stubs.size();
 			names = new String[len];
 			choices = new Type[len];
@@ -335,15 +349,17 @@ public class Asn1Context {
 		public CharList append(CharList sb, int prefix) {return type.append(sb.append(set?"SET":"SEQUENCE").append(" OF["), prefix).append(']');}
 		public CEntry parse(int type, DerReader in) throws IOException {
 			int end = in.readLength() + in.position();
-			SimpleList<CEntry> values = new SimpleList<>();
+			ArrayList<CEntry> values = new ArrayList<>();
 			while (in.position() < end) values.add(this.type.parse(in.readType(), in));
 
 			if (in.position() != end) throw new CorruptedInputException("length mismatch");
 			return new CList(values);
 		}
 		public void write(CEntry val, DerWriter out) throws IOException {
+			out.begin(derType());
 			for (CEntry entry : val.asList().raw()) type.write(entry, out);
 			if (set) out.sort();
+			out.end();
 		}
 	}
 	/**
@@ -358,7 +374,7 @@ public class Asn1Context {
 		private final Object[] context;
 		private final boolean set;
 
-		public Struct(boolean set, SimpleList<MapStub> stubs) {
+		public Struct(boolean set, ArrayList<MapStub> stubs) {
 			this.set = set;
 			int len = stubs.size();
 			index = new IntBiMap<>(len);
@@ -412,7 +428,7 @@ public class Asn1Context {
 			if (names.length == 0) return Simple.ANY.parse(type, in);
 
 			int end = in.readLength()+in.position();
-			SimpleList<CEntry> values = new SimpleList<>(names.length);
+			ArrayList<CEntry> values = new ArrayList<>(names.length);
 			int i = 0;
 			if (in.position() < end) {
 				type = in.readType();
@@ -476,6 +492,7 @@ public class Asn1Context {
 			return new DerValue.Sequence(name, index, values);
 		}
 		public void write(CEntry val, DerWriter out) throws IOException {
+			out.begin(derType());
 			Map<String, CEntry> map = val.asMap().raw();
 			for (int i = 0; i < names.length; i++) {
 				String name = names[i];
@@ -484,9 +501,13 @@ public class Asn1Context {
 				Object def = context[i];
 
 				CEntry entry = map.get(name);
-				if (entry != null && entry != def) {
+				if (entry != null && ((flag&OPTIONAL) == 0 || entry != def)) {
+					if (target == Simple.ANY) {
+						entry = CURRENT_PARSING.get().marshalAny(this.name, name, map.get(names[(int)def]), entry);
+					}
+
 					int type;
-					if (flag != 0) {
+					if (flag != UNSPECIFIED) {
 						type = flag&31;
 						if ((flag&EXPLICIT) != 0) {
 							out.begin(type|0xA0);
@@ -498,17 +519,17 @@ public class Asn1Context {
 						type = target.derType();
 					}
 
-					out.begin(type);
+					//out.begin(type);
 
 					target.write(entry, out);
 
 					if ((flag&EXPLICIT) != 0) out.end();
-					out.end();
-
+					//out.end();
 				} else {
 					if ((flag&OPTIONAL) == 0) throw new CorruptedInputException("结构"+this.name+"缺少必选参数["+i+"]"+name);
 				}
 			}
+			out.end();
 		}
 		public void setName(String name) { this.name = name; }
 	}
@@ -533,8 +554,8 @@ public class Asn1Context {
 		wr.init(s);
 
 		IntList oids = new IntList();
-		SimpleList<MapStub> stubs = new SimpleList<>();
-		MyHashMap<String, NamedOID> OidByName = new MyHashMap<>();
+		ArrayList<MapStub> stubs = new ArrayList<>();
+		HashMap<String, NamedOID> OidByName = new HashMap<>();
 
 		while (wr.hasNext()) {
 			String typeName = wr.except(LITERAL, "ObjectName").val();
@@ -585,7 +606,7 @@ public class Asn1Context {
 		return ctx;
 	}
 
-	private static Type readType(Word w, Asn1Tokenizer wr, SimpleList<MapStub> stubs, Asn1Context ctx) throws ParseException {
+	private static Type readType(Word w, Asn1Tokenizer wr, ArrayList<MapStub> stubs, Asn1Context ctx) throws ParseException {
 		var strict = false;
 
 		Type type;
@@ -631,7 +652,7 @@ public class Asn1Context {
 				if (strict && original == null) throw wr.err("找不到该结构: "+w.val());
 				type = new Alias(w.val(), original);
 			}
-			case AsnSetOf, AsnSequenceOf -> type = new List(w.type() == AsnSetOf, readType(wr.next(), wr, new SimpleList<>(), ctx));
+			case AsnSetOf, AsnSequenceOf -> type = new List(w.type() == AsnSetOf, readType(wr.next(), wr, new ArrayList<>(), ctx));
 			case AsnSet, AsnSequence -> {
 				boolean unordered = w.type() == AsnSet;
 
@@ -639,7 +660,7 @@ public class Asn1Context {
 				if (w.type() != lBrace) {
 					if (w.val().equals("SIZE")) {
 						long minMax = readSize(wr);
-						type = new List(unordered, readType(wr.next(), wr, new SimpleList<>(), ctx));
+						type = new List(unordered, readType(wr.next(), wr, new ArrayList<>(), ctx));
 						type = new Range(type, (int) (minMax>>>32), (int) minMax);
 						break;
 					}
@@ -681,7 +702,7 @@ public class Asn1Context {
 		return ((long)min << 32) | max;
 	}
 
-	private static void readStubs(SimpleList<MapStub> stubs, Asn1Tokenizer wr, Asn1Context ctx, boolean struct) throws ParseException {
+	private static void readStubs(ArrayList<MapStub> stubs, Asn1Tokenizer wr, Asn1Context ctx, boolean struct) throws ParseException {
 		while (true) {
 			Word w = wr.next();
 			if (w.type() == rBrace) break;
@@ -719,7 +740,7 @@ public class Asn1Context {
 				flag = UNSPECIFIED;
 			}
 
-			stub.type = readType(w, wr, new SimpleList<>(), ctx);
+			stub.type = readType(w, wr, new ArrayList<>(), ctx);
 
 			// Version DEFAULT v1,
 			// 标有 DEFAULT 的字段与 OPTIONAL 类似。 如果该字段取默认值，在 BER 编码中就可以予以省略， 而在 DER 编码中则必须省略。

@@ -10,14 +10,13 @@ import roj.asm.insn.Label;
 import roj.asm.type.IType;
 import roj.asm.type.Signature;
 import roj.asm.type.TypeHelper;
-import roj.collect.MyHashMap;
+import roj.collect.HashMap;
 import roj.config.ConfigMaster;
 import roj.config.ParseException;
 import roj.config.serial.CVisitor;
 import roj.io.IOUtil;
-import roj.reflect.Bypass;
 import roj.reflect.ClassDefiner;
-import roj.reflect.ReflectionUtils;
+import roj.reflect.Reflection;
 import roj.reflect.VirtualReference;
 import roj.text.CharList;
 import roj.util.ArrayCache;
@@ -45,8 +44,8 @@ public abstract class SerializerFactory {
 	static final Function<ClassLoader, GenSerRepo> Fn = GenSerRepo::new;
 	static final class GenSerRepo {
 		GenSerRepo(ClassLoader loader) {}
-		final MyHashMap<String, IntFunction<?>> dataContainer = new MyHashMap<>();
-		final MyHashMap<String, Adapter> generated = new MyHashMap<>();
+		final HashMap<String, IntFunction<?>> dataContainer = new HashMap<>();
+		final HashMap<String, Adapter> generated = new HashMap<>();
 	}
 
 	static final boolean UNSAFE_ADAPTER;
@@ -54,8 +53,8 @@ public abstract class SerializerFactory {
 		boolean unsafe = false;
 		try {
 			ClassNode c = ClassNode.parseSkeleton(IOUtil.getResourceIL("roj/config/auto/Adapter.class"));
-			c.parent(Bypass.MAGIC_ACCESSOR_CLASS);
-			if (ReflectionUtils.JAVA_VERSION > 21)
+			c.parent(Reflection.MAGIC_ACCESSOR_CLASS);
+			if (Reflection.JAVA_VERSION > 21)
 				c.modifier |= ACC_PUBLIC;
 			ClassDefiner.defineGlobalClass(c);
 			unsafe = true;
@@ -75,7 +74,6 @@ public abstract class SerializerFactory {
 		OBJECT_POOL = 64,
 		CHECK_PUBLIC = 128,
 		SERIALIZE_PARENT = 256,
-		OPTIONAL_BY_DEFAULT = 512,
 		NO_SCHEMA = 1024;
 
 	int flag;
@@ -88,7 +86,7 @@ public abstract class SerializerFactory {
 
 	public static SerializerFactory getInstance() {return getInstance0(GENERATE|CHECK_INTERFACE|CHECK_PARENT);}
 	public static SerializerFactory getInstance(@MagicConstant(flags = {GENERATE, CHECK_INTERFACE, CHECK_PARENT, NO_CONSTRUCTOR, ALLOW_DYNAMIC, PREFER_DYNAMIC, OBJECT_POOL, CHECK_PUBLIC, SERIALIZE_PARENT, NO_SCHEMA }) int flag) {return getInstance0(flag);}
-	private static SerializerFactory getInstance0(int flag) {return new SerializerFactoryImpl(flag, ReflectionUtils.getCallerClass(3).getClassLoader());}
+	private static SerializerFactory getInstance0(int flag) {return new SerializerFactoryImpl(flag, Reflection.getCallerClass(3).getClassLoader());}
 	public static SerializerFactory getInstance0(int flag, ClassLoader classLoader) {return new SerializerFactoryImpl(flag, classLoader);}
 
 	// 默认的flag仅支持在类中实际写出的具体类，不涉及任意对象的反序列化
@@ -236,7 +234,6 @@ public abstract class SerializerFactory {
 			var c = new ClassNode();
 			c.name(type.getName().replace('.', '/')+"$DC");
 			c.addInterface("java/util/function/IntFunction");
-			ClassDefiner.premake(c);
 
 			CodeWriter cw = c.newMethod(ACC_PUBLIC|ACC_FINAL, "apply", "(I)Ljava/lang/Object;");
 
@@ -275,7 +272,7 @@ public abstract class SerializerFactory {
 
 			cw.insn(ARETURN);
 
-			IntFunction<T> fn = Helpers.cast(ClassDefiner.make(c, type.getClassLoader()));
+			IntFunction<T> fn = Helpers.cast(ClassDefiner.newInstance(c, type.getClassLoader()));
 			dc.put(type.getName(), fn);
 			return fn;
 		}

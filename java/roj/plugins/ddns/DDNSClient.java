@@ -1,18 +1,15 @@
 package roj.plugins.ddns;
 
-import roj.collect.MyHashMap;
-import roj.collect.SimpleList;
-import roj.collect.ToIntMap;
+import roj.collect.ArrayList;
 import roj.concurrent.ScheduleTask;
 import roj.config.data.CEntry;
 import roj.config.data.CMap;
+import roj.net.Net;
 import roj.plugin.Plugin;
 
-import java.net.Inet4Address;
 import java.net.InetAddress;
-import java.net.NetworkInterface;
-import java.net.SocketException;
-import java.util.*;
+import java.util.Arrays;
+import java.util.List;
 
 /**
  * @author Roj234
@@ -21,8 +18,7 @@ import java.util.*;
 public class DDNSClient extends Plugin {
 	private boolean hasV6;
 	private IpGetter ip;
-	private DDNSService ddns;
-	private ToIntMap<String> monitorIps;
+	private List<IpMapper> services;
 
 	private ScheduleTask task;
 
@@ -30,34 +26,31 @@ public class DDNSClient extends Plugin {
 	protected void onEnable() throws Exception {
 		CMap cfg = getConfig();
 
+		hasV6 = Net.isIPv6();
 		ip = (IpGetter) Class.forName(cfg.getString("GetIp")).newInstance();
 		ip.loadConfig(cfg);
 
-		ddns = (DDNSService) Class.forName(cfg.getString("DDNS")).newInstance();
-		ddns.loadConfig(cfg);
+		services = new ArrayList<>();
 
-		hasV6 = hasIpV6Adapter();
+		List<CEntry> list = cfg.getList("Services").raw();
 
-		Map<String, List<String>> sites = new MyHashMap<>();
-		monitorIps = new ToIntMap<>();
-		for (Map.Entry<String, CEntry> subSites : cfg.get("Sites").asMap().entrySet()) {
-			CMap map1 = subSites.getValue().asMap();
-			for (Iterator<Map.Entry<String, CEntry>> itr = map1.entrySet().iterator(); itr.hasNext(); ) {
-				Map.Entry<String, CEntry> entry = itr.next();
-				int e = entry.getValue().asInt();
-				if ((e & 3) != 0) monitorIps.putInt(entry.getKey(), e);
-				else itr.remove();
-			}
+		for (int i = 0; i < list.size(); i++) {
+			var service = list.get(i).asMap();
+			if (!service.getBool("Enable", true)) continue;
 
-			sites.put(subSites.getKey(), new SimpleList<>(map1.keySet()));
+			var instance = (IpMapper) Class.forName(service.getString("Type")).newInstance();
+			instance.init(service);
+			services.add(instance);
 		}
 
-		ddns.init(sites.entrySet());
-		task = getScheduler().loop(this::run, 300000);
+		task = getScheduler().loop(this::run, cfg.getInt("Interval", 5) * 60000L);
 	}
 
 	@Override
-	protected void onDisable() { task.cancel(); }
+	protected void onDisable() {
+		if (task != null) task.cancel();
+		for (var service : services) service.close();
+	}
 
 	private InetAddress[] prev = null;
 	public void run() {
@@ -73,39 +66,13 @@ public class DDNSClient extends Plugin {
 		if (!Arrays.equals(prev, address)) {
 			prev = address;
 
-			List<Map.Entry<String, InetAddress[]>> changes = new SimpleList<>(monitorIps.size());
-			for (ToIntMap.Entry<String> entry : monitorIps.selfEntrySet()) {
-				InetAddress[] addr1 = new InetAddress[2];
-				if ((entry.value & 1) != 0) addr1[0] = address[0];
-				if ((entry.value & 2) != 0 && hasV6) addr1[1] = address[1];
-
-				// both null
-				if (addr1[0] == addr1[1]) continue;
-
-				changes.add(new AbstractMap.SimpleImmutableEntry<>(entry.getKey(), addr1));
-			}
-
-			try {
-				ddns.update(changes);
-			} catch (Exception e) {
-				e.printStackTrace();
+			for (IpMapper service : services) {
+				try {
+					service.update(address[0], address[1]);
+				} catch (Exception e) {
+					getLogger().error(e);
+				}
 			}
 		}
-	}
-
-	private static boolean hasIpV6Adapter() throws SocketException {
-		Enumeration<NetworkInterface> itfs = NetworkInterface.getNetworkInterfaces();
-		while (itfs.hasMoreElements()) {
-			NetworkInterface itf = itfs.nextElement();
-			if (!itf.isUp() || itf.isLoopback() || itf.isPointToPoint() || itf.isVirtual()) continue;
-
-			Enumeration<InetAddress> addrs = itf.getInetAddresses();
-			while (addrs.hasMoreElements()) {
-				InetAddress addr = addrs.nextElement();
-				if (!(addr instanceof Inet4Address)) continue; // maybe check IPv6
-				return true;
-			}
-		}
-		return false;
 	}
 }

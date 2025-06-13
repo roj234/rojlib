@@ -1,9 +1,9 @@
 package roj.plugins.minecraft.captcha;
 
 import org.jetbrains.annotations.NotNull;
-import roj.collect.MyBitSet;
-import roj.collect.MyHashMap;
-import roj.collect.SimpleList;
+import roj.collect.BitSet;
+import roj.collect.HashMap;
+import roj.collect.ArrayList;
 import roj.concurrent.ScheduleTask;
 import roj.config.data.CEntry;
 import roj.config.data.CList;
@@ -49,7 +49,7 @@ public final class Captcha implements ChannelHandler {
 		tree.then(literal("verify").then(argument("captcha", Argument.string())).executes(OptionParser.nullImpl()));
 
 		String CMD = "? about bukkit:?||? bukkit:about||about bukkit:help||help bukkit:pl||plugins bukkit:plugins||plugins bukkit:ver||version bukkit:version||version help icanhasbukkit me|action minecraft:help minecraft:me||me minecraft:msg||msg minecraft:teammsg||teammsg minecraft:tell||tell minecraft:tm|tm minecraft:trigger|trigger minecraft:w||w msg|message pl||plugins plugins teammsg|message tell|player|message tm||teammsg trigger|action ver||version version w";
-		for (String str : TextUtil.split(new SimpleList<>(), CMD, ' ')) {
+		for (String str : TextUtil.split(new ArrayList<>(), CMD, ' ')) {
 			int pos = str.indexOf('|');
 			String name = pos >= 0 ? str.substring(0, pos) : str;
 			String alias = str.charAt(pos+1) == '|' ? str.substring(pos+2) : null;
@@ -64,13 +64,13 @@ public final class Captcha implements ChannelHandler {
 	});
 
 	private final String text;
-	private final MyBitSet[] choices;
+	private final BitSet[] choices;
 	private final World world;
 
 	private Vec4d[] matrix;
 	private long haveSeen;
 
-	public Captcha(String text, MyBitSet[] choices, World world) {
+	public Captcha(String text, BitSet[] choices, World world) {
 		this.text = text;
 		this.choices = choices;
 		this.world = world;
@@ -100,7 +100,7 @@ public final class Captcha implements ChannelHandler {
 		int timeout = cfg.getInt("timeout");
 
 		Formatter template = Formatter.simple(cfg.getString("messages.intro"));
-		MyHashMap<String, Object> map = new MyHashMap<>();
+		HashMap<String, Object> map = new HashMap<>();
 		map.put("reset", cfg.getInt("timeout_reset"));
 		map.put("length", choices.length);
 		map.put("user", pc.getName());
@@ -156,7 +156,7 @@ public final class Captcha implements ChannelHandler {
 
 		if (cfg.getBool("debug")) {
 			CharList buf = IOUtil.getSharedCharBuf();
-			for (MyBitSet choice : choices) buf.append((char) choice.first());
+			for (BitSet choice : choices) buf.append((char) choice.first());
 			System.out.println(buf);
 			pc.sendMessage(new Text(buf.toString()), true);
 		}
@@ -242,6 +242,6 @@ public final class Captcha implements ChannelHandler {
 	}
 
 	public String text() {return text;}
-	public MyBitSet[] choices() {return choices;}
+	public BitSet[] choices() {return choices;}
 	public World world() {return world;}
 }

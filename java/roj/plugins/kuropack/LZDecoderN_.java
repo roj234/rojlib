@@ -1,6 +1,6 @@
 package roj.plugins.kuropack;
 
-import roj.archive.qz.xz.lz.LZDecoder;
+import roj.archive.xz.lz.LZDecoder;
 import roj.asmx.injector.Final;
 import roj.asmx.injector.Inject;
 import roj.asmx.injector.Shadow;

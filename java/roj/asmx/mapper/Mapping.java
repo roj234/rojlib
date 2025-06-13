@@ -16,7 +16,10 @@ import roj.util.Helpers;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
-import java.util.*;
+import java.util.Collections;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
 
 /**
  * Class Mapping (format: XSrg)
@@ -25,8 +28,12 @@ import java.util.*;
  * @since 2020/8/28 19:18
  */
 public class Mapping {
+	public static record MethodExtra(List<String> arguments, String javadoc) {}
+
 	public static final Logger LOGGER = Logger.getLogger("Mapper");
 	static { LOGGER.setLevel(Level.ERROR); }
+
+	public String _name;
 
 	protected Flippable<String, String> classMap;
 	protected FindMap<MemberDescriptor, String> fieldMap, methodMap;
@@ -50,9 +57,9 @@ public class Mapping {
 	public Mapping(boolean checkFieldType) {
 		this.checkFieldType = checkFieldType;
 		this.classMap = new HashBiMap<>(1000);
-		this.fieldMap = new MyHashMap<>(1000);
-		this.methodMap = new MyHashMap<>(1000);
-		this.paramMap = new MyHashMap<>();
+		this.fieldMap = new HashMap<>(1000);
+		this.methodMap = new HashMap<>(1000);
+		this.paramMap = new HashMap<>();
 	}
 
 	public Mapping(Mapping o) {
@@ -80,7 +87,7 @@ public class Mapping {
 	}
 	@SuppressWarnings("fallthrough")
 	public final void loadMap(LineReader slr, boolean reverse) {
-		ArrayList<String> q = new ArrayList<>();
+		java.util.ArrayList<String> q = new java.util.ArrayList<>();
 		String last0 = null, last1 = null;
 		MemberDescriptor lastMethod = null;
 
@@ -170,7 +177,7 @@ public class Mapping {
 					else mm.put(lastMethod = new MemberDescriptor(last0, q.get(0), q.get(1)), q.get(2));
 				break;
 				case "A":
-					SimpleList<String> value = new SimpleList<>(q);
+					ArrayList<String> value = new ArrayList<>(q);
 					for (int j = 0; j < value.size(); j++) {
 						String arg = value.get(j);
 						if (arg.equals("null")) value.set(j, null);
@@ -187,7 +194,7 @@ public class Mapping {
 		try (TextWriter ob = TextWriter.to(file)) { saveMap(ob); }
 	}
 	public void saveMap(Appendable ob) throws IOException {
-		MyHashMap<String, CharList> classFos = new MyHashMap<>(classMap.size());
+		HashMap<String, CharList> classFos = new HashMap<>(classMap.size());
 
 		ClassUtil U = ClassUtil.getInstance();
 		for (Map.Entry<MemberDescriptor, String> entry : fieldMap.entrySet()) {
@@ -345,7 +352,7 @@ public class Mapping {
 		if (dst.checkFieldType != checkFieldType) throw new IllegalStateException("checkFieldType are not same");
 		ClassUtil U = ClassUtil.getInstance();
 
-		MyHashMap<MemberDescriptor, String> fieldMap1 = new MyHashMap<>(fieldMap.size());
+		HashMap<MemberDescriptor, String> fieldMap1 = new HashMap<>(fieldMap.size());
 		for (Map.Entry<MemberDescriptor, String> entry : fieldMap.entrySet()) {
 			MemberDescriptor desc = entry.getKey();
 			MemberDescriptor target = new MemberDescriptor(classMap.getOrDefault(desc.owner, desc.owner), entry.getValue(), desc.rawDesc, desc.modifier);
@@ -357,22 +364,16 @@ public class Mapping {
 		}
 		dst.fieldMap = fieldMap1;
 
-		MyHashMap<MemberDescriptor, String> methodMap1 = new MyHashMap<>(methodMap.size());
+		HashMap<MemberDescriptor, String> methodMap1 = new HashMap<>(methodMap.size());
+		HashMap<MemberDescriptor, List<String>> paramMap1 = new HashMap<>(paramMap.size());
 		for (var entry : methodMap.entrySet()) {
-			MemberDescriptor desc = entry.getKey();
-			MemberDescriptor target = new MemberDescriptor(classMap.getOrDefault(desc.owner, desc.owner), entry.getValue(), U.mapMethodParam(classMap, desc.rawDesc), desc.modifier);
+			var desc = entry.getKey();
+			var target = new MemberDescriptor(classMap.getOrDefault(desc.owner, desc.owner), entry.getValue(), U.mapMethodParam(classMap, desc.rawDesc), desc.modifier);
 			methodMap1.put(target, desc.name);
+			var data = paramMap1.get(desc);
+			if (data != null) paramMap1.put(target, data);
 		}
-		var backupMethodMap = methodMap;
 		dst.methodMap = methodMap1;
-
-		MyHashMap<MemberDescriptor, List<String>> paramMap1 = new MyHashMap<>(paramMap.size());
-		for (var entry : paramMap.entrySet()) {
-			MemberDescriptor desc = entry.getKey();
-			MemberDescriptor target = new MemberDescriptor(classMap.getOrDefault(desc.owner, desc.owner), backupMethodMap.getOrDefault(desc, desc.name), U.mapMethodParam(classMap, desc.rawDesc), desc.modifier);
-			paramMap1.put(target, entry.getValue());
-		}
-		dst.paramMap = paramMap1;
 
 		dst.classMap = classMap.flip();
 	}
@@ -416,8 +417,8 @@ public class Mapping {
 				else entry.setValue(v);
 			}
 		}
-		for (Iterator<Map.Entry<MemberDescriptor, String>> itr = methodMap.entrySet().iterator(); itr.hasNext(); ) {
-			Map.Entry<MemberDescriptor, String> entry = itr.next();
+		for (var itr = methodMap.entrySet().iterator(); itr.hasNext(); ) {
+			var entry = itr.next();
 			MemberDescriptor md = entry.getKey();
 			String nn = U.mapClassName(classMap, md.owner);
 			d.owner = nn != null ? nn : md.owner;
@@ -430,28 +431,6 @@ public class Mapping {
 				if (v == null) itr.remove();
 				else entry.setValue(v);
 			}
-		}
-
-		if (!from.paramMap.isEmpty()) {
-			var reversedMethodMap = new MyHashMap<MemberDescriptor, String>();
-			for (var entry : methodMap.entrySet()) {
-				MemberDescriptor desc = entry.getKey();
-				MemberDescriptor target = new MemberDescriptor(classMap.getOrDefault(desc.owner, desc.owner), entry.getValue(), U.mapMethodParam(classMap, desc.rawDesc), desc.modifier);
-				reversedMethodMap.put(target, desc.name);
-			}
-
-			System.out.println(from.paramMap.toString().substring(0, 1000));
-			for (var entry : from.paramMap.entrySet()) {
-				MemberDescriptor md = entry.getKey();
-
-				var changed = reversedMethodMap.get(md);
-				if (changed != null) {
-					paramMap.putIfAbsent(new MemberDescriptor(md.owner, changed, md.rawDesc), entry.getValue());
-				} else if (keepNotfound) {
-					paramMap.putIfAbsent(md, entry.getValue());
-				}
-			}
-			System.out.println(paramMap.toString().substring(0, 1000));
 		}
 
 		for (Iterator<Map.Entry<String, String>> itr = classMap.entrySet().iterator(); itr.hasNext(); ) {
@@ -470,7 +449,7 @@ public class Mapping {
 	public void merge(Mapping other, Boolean priority) { merge(Collections.singletonList(other), priority); }
 
 	public void merge(List<Mapping> others, Boolean priority) {
-		MyHashSet<String> ownerMod = new MyHashSet<>();
+		HashSet<String> ownerMod = new HashSet<>();
 		ToIntMap<String> replaceSubs = new ToIntMap<>();
 
 		for (int i = 0; i < others.size(); i++) {

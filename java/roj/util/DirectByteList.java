@@ -43,7 +43,7 @@ public class DirectByteList extends DynByteBuf {
 
 		address = 0;
 		if (nm != null) {
-			nm.release();
+			nm.free();
 			nm = null;
 		}
 	}
@@ -83,7 +83,7 @@ public class DirectByteList extends DynByteBuf {
 				U.copyMemory(prevAddr, addr, Math.min(newLen, len));
 
 				if (wIndex != 0) {
-					mem.release();
+					mem.free();
 					throw new ConcurrentModificationException();
 				}
 				wIndex = len;
@@ -91,7 +91,7 @@ public class DirectByteList extends DynByteBuf {
 				address = addr;
 				nm = mem;
 
-				prevNM.release();
+				prevNM.free();
 			} else {
 				address = nm.resize(newLen);
 			}

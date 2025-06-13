@@ -3,7 +3,6 @@ package roj.crypt;
 import org.jetbrains.annotations.Nullable;
 import roj.RojLib;
 import roj.concurrent.OperationDone;
-import roj.crypt.eddsa.XDHUnofficial;
 import roj.io.IOUtil;
 import roj.reflect.Unaligned;
 import roj.reflect.litasm.FastJNI;
@@ -90,7 +89,7 @@ public final class CryptoFactory extends Provider {
 	//密钥交换
 	//public static KeyExchange DH() {return new DH();}
 	//public static KeyExchange ECDH() {return new ECDH();}
-	public static KeyExchange X25519DH() {return new XDHUnofficial();}
+	//public static KeyExchange X25519DH() {return new X25519DH();}
 	//end 密钥交换
 
 	//数字签名(复用Java的API)
@@ -159,7 +158,7 @@ public final class CryptoFactory extends Provider {
 	//endregion
 	//region 证书验证
 	private static X509TrustManager defaultTrustStore;
-	private static X509TrustManager getDefaultTrustStore() throws NoSuchAlgorithmException {
+	public static X509TrustManager getDefaultTrustStore() throws NoSuchAlgorithmException {
 		if (defaultTrustStore == null) {
 			TrustManagerFactory tmf = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
 			try {

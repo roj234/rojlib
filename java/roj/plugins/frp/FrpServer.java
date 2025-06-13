@@ -1,7 +1,9 @@
 package roj.plugins.frp;
 
+import roj.collect.CharMap;
+import roj.collect.HashMap;
+import roj.collect.HashSet;
 import roj.collect.Hasher;
-import roj.collect.MyHashSet;
 import roj.crypt.Blake3;
 import roj.io.IOUtil;
 import roj.net.*;
@@ -29,8 +31,11 @@ import java.util.function.Consumer;
 public class FrpServer extends MSSContext implements Consumer<MyChannel> {
 	static final Logger LOGGER = Logger.getLogger("FRP/Server");
 
-	Map<String, FrpRoom> activeRooms = new ConcurrentHashMap<>();
-	Set<byte[]> cfpWhitelist = new MyHashSet<>(Hasher.array(byte[].class));
+	static final Logger LOGGER = Logger.getLogger("FRPServer");
+
+	HashMap<byte[], FrpRoom> activeRooms = new HashMap<>();
+	Set<byte[]> endpointWhitelist = new HashSet<>(Hasher.array(byte[].class));
+	Set<byte[]> hostWhitelist = new HashSet<>(Hasher.array(byte[].class));
 
 	private ServerLaunch launch;
 

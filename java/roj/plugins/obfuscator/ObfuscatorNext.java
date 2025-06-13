@@ -5,7 +5,7 @@ import roj.archive.zip.ZipFileWriter;
 import roj.asm.AsmCache;
 import roj.asm.ClassNode;
 import roj.asmx.Context;
-import roj.collect.SimpleList;
+import roj.collect.ArrayList;
 import roj.concurrent.TaskPool;
 import roj.crypt.CryptoFactory;
 import roj.gui.Profiler;
@@ -17,7 +17,6 @@ import roj.util.PermissionSet;
 
 import java.io.File;
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
 
@@ -28,7 +27,7 @@ import static roj.asmx.Context.runAsync;
  * @since 2025/3/18 1:03
  */
 public class ObfuscatorNext {
-	private List<ObfuscateTask> tasks = new SimpleList<>();
+	private List<ObfuscateTask> tasks = new ArrayList<>();
 	private static final int ASYNC_THRESHOLD = 1000;
 
 	public static void main(String[] args) throws IOException {
@@ -74,7 +73,7 @@ public class ObfuscatorNext {
 		obf.exclusions.add("roj/asmx/launcher", Integer.MAX_VALUE, true, true);
 		obf.exclusions.add("roj/gui/impl", Integer.MAX_VALUE, true, true);
 		obf.exclusions.add("roj/plugin", Integer.MAX_VALUE, true, true);
-		obf.exclusions.add("roj/collect/SimpleList", 99, true, true);
+		obf.exclusions.add("roj/collect/ArrayList", 99, true, true);
 		System.out.println(obf.exclusions);
 
 		//obf.m.loadLibraries(lib);
@@ -101,10 +100,10 @@ public class ObfuscatorNext {
 	}
 
 	public void obfuscate(List<Context> ctxs) {
-		var pool = TaskPool.Common();
+		var pool = TaskPool.common();
 		var rand = CryptoFactory.MT19937Random();
 
-		List<List<Context>> contextTasks = new ArrayList<>((ctxs.size()-1)/ASYNC_THRESHOLD + 1);
+		List<List<Context>> contextTasks = new java.util.ArrayList<>((ctxs.size()-1)/ASYNC_THRESHOLD + 1);
 
 		int i = 0;
 		while (i < ctxs.size()) {

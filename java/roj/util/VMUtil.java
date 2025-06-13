@@ -1,7 +1,6 @@
 package roj.util;
 
 import roj.io.IOUtil;
-import roj.reflect.ReflectionUtils;
 import roj.reflect.Unaligned;
 
 /**
@@ -15,7 +14,7 @@ public class VMUtil {
 		try {
 			// might not applicable for Java8
 			Hooks_Instance = Class.forName("java.lang.ApplicationShutdownHooks");
-			Hooks_Offset = ReflectionUtils.fieldOffset(Hooks_Instance, "hooks");
+			Hooks_Offset = Unaligned.fieldOffset(Hooks_Instance, "hooks");
 		} catch (ClassNotFoundException e) {
 			throw new RuntimeException(e);
 		}

@@ -5,7 +5,7 @@ import roj.asm.Opcodes;
 import roj.asm.type.Type;
 import roj.asm.type.TypeHelper;
 import roj.asmx.ClassResource;
-import roj.collect.SimpleList;
+import roj.collect.ArrayList;
 import roj.reflect.ClassDefiner;
 import roj.reflect.Proxy;
 import roj.text.CharList;
@@ -58,7 +58,7 @@ public final class JCompiler implements Compiler, DiagnosticListener<JavaFileObj
 		showErrorCode = showDiagnosticId;
 		buf = new CharList(1024);
 
-		List<MyJFO> compiled = new SimpleList<>();
+		List<MyJFO> compiled = new ArrayList<>();
 		var jfm = javac.getStandardFileManager(this, Locale.getDefault(), StandardCharsets.UTF_8);
 		jfm = createOrUseDelegation(jfm, compiled, basePath);
 
@@ -112,8 +112,7 @@ public final class JCompiler implements Compiler, DiagnosticListener<JavaFileObj
 			return false;
 		}, listId, nameId);
 
-		ClassDefiner.premake(data);
-		return Helpers.cast(ClassDefiner.make(data));
+		return Helpers.cast(ClassDefiner.newInstance(data));
 	}
 	public static JavaFileObject proxyGetOutput(StandardJavaFileManager delegation,
 												JavaFileManager.Location location, String className,

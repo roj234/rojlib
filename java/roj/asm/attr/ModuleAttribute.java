@@ -5,11 +5,10 @@ import roj.asm.cp.Constant;
 import roj.asm.cp.ConstantPool;
 import roj.asm.cp.CstUTF;
 import roj.asm.type.TypeHelper;
-import roj.collect.SimpleList;
+import roj.collect.ArrayList;
 import roj.text.CharList;
 import roj.util.DynByteBuf;
 
-import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -19,11 +18,11 @@ import java.util.List;
 public final class ModuleAttribute extends Attribute {
 	public ModuleAttribute(String name, int access) {
 		this.self = new Module(name, access);
-		this.requires = new ArrayList<>();
-		this.exports = new ArrayList<>();
-		this.opens = new ArrayList<>();
-		this.uses = new ArrayList<>();
-		this.provides = new ArrayList<>();
+		this.requires = new java.util.ArrayList<>();
+		this.exports = new java.util.ArrayList<>();
+		this.opens = new java.util.ArrayList<>();
+		this.uses = new java.util.ArrayList<>();
+		this.provides = new java.util.ArrayList<>();
 	}
 
 	public ModuleAttribute(DynByteBuf r, ConstantPool pool) {
@@ -34,23 +33,23 @@ public final class ModuleAttribute extends Attribute {
 			if (len != 0) throw new IllegalArgumentException("'"+self.name+"' module should not have 'require' section");
 		}
 
-		List<Module> requires = this.requires = new ArrayList<>(len);
+		List<Module> requires = this.requires = new java.util.ArrayList<>(len);
 		while (len-- > 0) requires.add(new Module(r, pool));
 
 		len = r.readUnsignedShort();
-		List<Export> export = this.exports = new ArrayList<>(len);
+		List<Export> export = this.exports = new java.util.ArrayList<>(len);
 		while (len-- > 0) export.add(new Export(r, pool));
 
 		len = r.readUnsignedShort();
-		List<Export> open = this.opens = new ArrayList<>(len);
+		List<Export> open = this.opens = new java.util.ArrayList<>(len);
 		while (len-- > 0) open.add(new Export(r, pool));
 
 		len = r.readUnsignedShort();
-		List<String> use = this.uses = new ArrayList<>(len);
+		List<String> use = this.uses = new java.util.ArrayList<>(len);
 		while (len-- > 0) use.add(pool.getRefName(r, Constant.CLASS));
 
 		len = r.readUnsignedShort();
-		List<Provide> provide = this.provides = new ArrayList<>(len);
+		List<Provide> provide = this.provides = new java.util.ArrayList<>(len);
 		while (len-- > 0) provide.add(new Provide(r, pool));
 	}
 
@@ -201,12 +200,12 @@ public final class ModuleAttribute extends Attribute {
 			access = r.readUnsignedShort();
 
 			int len = r.readUnsignedShort();
-			to = new SimpleList<>(len);
+			to = new ArrayList<>(len);
 			while (len-- > 0) to.add(pool.getRefName(r, Constant.MODULE));
 		}
 		public Export(String pkg) {
 			this.pkg = pkg;
-			this.to = new SimpleList<>();
+			this.to = new ArrayList<>();
 		}
 
 		public void write(DynByteBuf w, ConstantPool writer) {
@@ -230,12 +229,12 @@ public final class ModuleAttribute extends Attribute {
 			int len = r.readUnsignedShort();
 			if (len == 0) throw new IllegalArgumentException("Provide cannot be empty");
 
-			impl = new SimpleList<>(len);
+			impl = new ArrayList<>(len);
 			while (len-- > 0) impl.add(pool.getRefName(r, Constant.CLASS));
 		}
 		public Provide(String spi) {
 			this.spi = spi;
-			this.impl = new SimpleList<>();
+			this.impl = new ArrayList<>();
 		}
 
 		public void write(DynByteBuf w, ConstantPool writer) {

@@ -1,9 +1,9 @@
 package roj.archive.qz;
 
 import roj.archive.ArchiveEntry;
+import roj.concurrent.OperationDone;
 import roj.text.CharList;
 import roj.text.DateTime;
-import roj.util.Helpers;
 
 import java.nio.file.attribute.FileTime;
 
@@ -142,7 +142,7 @@ public sealed class QZEntry implements ArchiveEntry, Cloneable permits QZEntryA 
             clone.next = null;
             return clone;
         } catch (Exception E) {
-            return Helpers.nonnull();
+            throw OperationDone.NEVER;
         }
     }
 }

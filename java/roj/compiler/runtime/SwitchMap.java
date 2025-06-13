@@ -21,12 +21,12 @@ public final class SwitchMap {
 		}
 
 		private final Entry[] entries;
-		private final int mask, size;
+		private final int mask;
+		private int size;
 		private final boolean useEquals;
 
 		public static Builder builder(int size, boolean useEquals) { return new Builder(size, useEquals); }
 		private Builder(int size, boolean useEquals) {
-			this.size = size;
 			this.useEquals = useEquals;
 			if (size > 4096) throw new IllegalStateException("branch must <= 4096");
 
@@ -34,8 +34,28 @@ public final class SwitchMap {
 			this.mask = entries.length - 1;
 		}
 
-		// 返回值总是null, 不能删除，和代码生成相关
-		public Object add(Object key, int ord) {
+		/**
+		 * 添加键值对到映射表，并检查重复键。
+		 *
+		 * <p><b>返回值特殊处理说明</b>：在生成的调用代码中，此返回值会与异常处理机制配合使用，
+		 * 等效于以下伪代码：
+		 * <pre>{@code
+		 * try {
+		 *     $$on_stack = add(key, ord); // 返回值压入操作数栈
+		 * } catch ({@link roj.asm.insn.TryCatchEntry#ANY} e) {
+		 *     // 异常时将异常压入操作数栈
+		 *     $$on_stack = e;
+		 * } finally {
+		 *     pop(); // 忽略它们的返回值，无论是正常还是异常
+		 * }
+		 * }</pre>
+		 *
+		 * @param key 映射键（不可为 null）
+		 * @param ord 键对应的序号（会转为 char 存储）
+		 * @return 当前构造器实例（当且仅当你手写代码时支持链式调用）
+		 * @throws IncompatibleClassChangeError 检测到重复键时抛出
+		 */
+		public Builder add(Object key, int ord) {
 			int slot = (useEquals ? key.hashCode() : System.identityHashCode(key)) & mask;
 			Entry entry = new Entry(key, ord);
 			entry.next = entries[slot];
@@ -49,7 +69,8 @@ public final class SwitchMap {
 				entry = entry.next;
 			}
 
-			return null;
+			size++;
+			return this;
 		}
 
 		public SwitchMap build() {

@@ -40,7 +40,7 @@ import static roj.reflect.Unaligned.U;
 public class QZArchive extends QZReader implements ArchiveFile {
 	private WordBlock[] blocks;
 	private QZEntry[] entries;
-	private MyHashMap<String, QZEntry> byName;
+	private HashMap<String, QZEntry> byName;
 
 	public static final byte FLAG_RECOVERY = 1, FLAG_SKIP_METADATA = 2, FLAG_DUMP_HIDDEN = 4;
 	private final byte[] password;
@@ -101,7 +101,7 @@ public class QZArchive extends QZReader implements ArchiveFile {
 	}
 
 	public final void reload() throws IOException {
-		if (byName == null) byName = new MyHashMap<>();
+		if (byName == null) byName = new HashMap<>();
 		else byName.clear();
 		entries = null;
 
@@ -134,7 +134,7 @@ public class QZArchive extends QZReader implements ArchiveFile {
 		private long[] streamLen;
 
 		//共享以减少无用对象
-		final MyHashSet<Object[]> coders = new MyHashSet<>(Hasher.array(Object[].class));
+		final HashSet<Object[]> coders = new HashSet<>(Hasher.array(Object[].class));
 		final QZCoder[] temp = new QZCoder[32];
 		final Int2IntBiMap pipe1 = new Int2IntBiMap();
 		final int[] sorted1 = new int[32];
@@ -220,16 +220,16 @@ public class QZArchive extends QZReader implements ArchiveFile {
 		private void findSurprise(long ehOff, long ehLen) throws IOException {
 			if (ecLen != 0 && in.position() != ecLen) System.out.println("EncodedHeader存在剩余信息");
 
-			RSegmentTree<RSegmentTree.Wrap<String>> tree = new RSegmentTree<>();
+			IntervalPartition<IntervalPartition.Wrap<String>> tree = new IntervalPartition<>();
 
-			tree.add(new RSegmentTree.Wrap<>("SignatureHeader", 0, 32));
-			tree.add(new RSegmentTree.Wrap<>("Header", ehOff, ehOff+ehLen));
+			tree.add(new IntervalPartition.Wrap<>("SignatureHeader", 0, 32));
+			tree.add(new IntervalPartition.Wrap<>("Header", ehOff, ehOff+ehLen));
 			if (blocks != null) {
 				WordBlock lastBlock = blocks[blocks.length - 1];
-				tree.add(new RSegmentTree.Wrap<>("PackedStreams", this.offset, lastBlock.offset+lastBlock.size));
+				tree.add(new IntervalPartition.Wrap<>("PackedStreams", this.offset, lastBlock.offset+lastBlock.size));
 			}
 			if (ecOff != 0) {
-				tree.add(new RSegmentTree.Wrap<>("PackedStreamsForHeaders", ecOff, ecOff+ecLen));
+				tree.add(new IntervalPartition.Wrap<>("PackedStreamsForHeaders", ecOff, ecOff+ecLen));
 			}
 
 			long hasInfo = 0;
@@ -239,8 +239,8 @@ public class QZArchive extends QZReader implements ArchiveFile {
 					hasInfo = 0;
 				}
 
-				if (region.value().size() != 1) {
-					if (region.value().size() > 1)
+				if (region.coverage().size() != 1) {
+					if (region.coverage().size() > 1)
 						throw new CorruptedInputException("overlapped region (wb + end header ??)");
 					if (region.pos() != that.r.length())
 						hasInfo = region.pos();
@@ -353,7 +353,7 @@ public class QZArchive extends QZReader implements ArchiveFile {
 
 			id = in.readUnsignedByte();
 			if (id == kCRC) {
-				MyBitSet hasCrc = readBitsOrTrue(count);
+				BitSet hasCrc = readBitsOrTrue(count);
 				// int32(LE)
 				in.skipForce((long) hasCrc.size() << 2);
 
@@ -403,7 +403,7 @@ public class QZArchive extends QZReader implements ArchiveFile {
 
 			id = in.readUnsignedByte();
 			if (id == kCRC) {
-				MyBitSet set = readBitsOrTrue(count);
+				BitSet set = readBitsOrTrue(count);
 				for (IntIterator itr = set.iterator(); itr.hasNext(); ) {
 					WordBlock b = blocks[itr.nextInt()];
 					b.hasCrc |= 1; // uncompressed crc
@@ -495,8 +495,8 @@ public class QZArchive extends QZReader implements ArchiveFile {
 		}
 		private WordBlock readComplexBlock(QZCoder[] coders, WordBlock b, int i, int ioLen, int flag) throws IOException {
 			List<IntMap.Entry<CoderInfo>>
-				inputs = new SimpleList<>(),
-				outputs = new SimpleList<>();
+				inputs = new ArrayList<>(),
+				outputs = new ArrayList<>();
 
 			var ordered = new CoderInfo[ioLen];
 			for (int j = 0; j < i; j++) {
@@ -661,7 +661,7 @@ public class QZArchive extends QZReader implements ArchiveFile {
 					}
 				}
 
-				MyBitSet extraCrcs = readBitsOrTrue(extraCrc);
+				BitSet extraCrcs = readBitsOrTrue(extraCrc);
 
 				fileId = 0;
 				extraCrc = 0;
@@ -724,23 +724,23 @@ public class QZArchive extends QZReader implements ArchiveFile {
 			}
 
 			int id = in.readUnsignedByte();
-			MyBitSet empty = null;
+			BitSet empty = null;
 			if (id == kEmptyStream) {
 				if (fileCount == nonEmptyFileCount) fatalError();
 
 				int length = in.readVUInt();
-				MyBitSet emptyFile = null, anti = null;
-				empty = MyBitSet.readBits(in, fileCount);
+				BitSet emptyFile = null, anti = null;
+				empty = BitSet.readBits(in, fileCount);
 				while (true) {
 					id = in.readUnsignedByte();
 					if (id == kEmptyFile) {
 						if (emptyFile != null) error("kEmptyFile属性重复");
 						length = in.readVUInt();
-						emptyFile = MyBitSet.readBits(in, empty.size());
+						emptyFile = BitSet.readBits(in, empty.size());
 					} else if (id == kAnti) {
 						if (anti != null) error("kAnti属性重复");
 						length = in.readVUInt();
-						anti = MyBitSet.readBits(in, empty.size());
+						anti = BitSet.readBits(in, empty.size());
 					} else {
 						break;
 					}
@@ -803,7 +803,7 @@ public class QZArchive extends QZReader implements ArchiveFile {
 					case kCTime, kATime, kMTime -> {
 						if (skipMetadata) {in.skipForce(len);continue;}
 
-						MyBitSet set = readBitsOrTrue(fileCount);
+						BitSet set = readBitsOrTrue(fileCount);
 						if (in.readByte() != 0) error("i_Time.external");
 
 						long off = QZEntryA.SPARSE_ATTRIBUTE_OFFSET[id-kCTime];
@@ -818,7 +818,7 @@ public class QZArchive extends QZReader implements ArchiveFile {
 					case kWinAttributes -> {
 						if (skipMetadata) {in.skipForce(len);continue;}
 
-						MyBitSet set = readBitsOrTrue(fileCount);
+						BitSet set = readBitsOrTrue(fileCount);
 						if (in.readByte() != 0) error("iAttribute.external");
 
 						long off = QZEntryA.SPARSE_ATTRIBUTE_OFFSET[3];
@@ -837,8 +837,8 @@ public class QZArchive extends QZReader implements ArchiveFile {
 			this.files = files;
 		}
 
-		private void relocation15(MyDataInput in, QZEntry[] files, MyBitSet empty) throws IOException {
-			var emptyFile = MyBitSet.readBits(in, empty.size());
+		private void relocation15(MyDataInput in, QZEntry[] files, BitSet empty) throws IOException {
+			var emptyFile = BitSet.readBits(in, empty.size());
 			int j = 0;
 			for (var itr = empty.iterator(); itr.hasNext(); ) {
 				int i = itr.nextInt();
@@ -847,8 +847,8 @@ public class QZArchive extends QZReader implements ArchiveFile {
 				}
 			}
 		}
-		private void relocation16(MyDataInput in, QZEntry[] files, MyBitSet empty) throws IOException {
-			var anti = MyBitSet.readBits(in, empty.size());
+		private void relocation16(MyDataInput in, QZEntry[] files, BitSet empty) throws IOException {
+			var anti = BitSet.readBits(in, empty.size());
 			int j = 0;
 			for (var itr = empty.iterator(); itr.hasNext(); ) {
 				int i = itr.nextInt();
@@ -860,12 +860,12 @@ public class QZArchive extends QZReader implements ArchiveFile {
 		@SuppressWarnings("fallthrough")
 		private void relocationAll(int id, QZEntry[] files, int nonEmptyFileCount, int fileCount, boolean skipMetadata) throws IOException {
 			byte[][] deferredAttributes = new byte[8][];
-			MyBitSet empty = null;
+			BitSet empty = null;
 			while (id != 0) {
 				int len = in.readVUInt();
 				switch (id) {
 					case kEmptyStream:
-						empty = MyBitSet.readBits(in, fileCount);
+						empty = BitSet.readBits(in, fileCount);
 						int emptyNo = nonEmptyFileCount, fileNo = 0;
 						for (int i = 0; i < fileCount; i++) {
 							if (!empty.contains(i)) {
@@ -922,13 +922,13 @@ public class QZArchive extends QZReader implements ArchiveFile {
 							if (j != fileCount) error("文件名太少");
 						}
 						case kCTime, kATime, kMTime, kWinAttributes -> {
-							MyBitSet set;
+							BitSet set;
 							// all true
 							if (in.readByte() != 0) {
-								set = new MyBitSet();
+								set = new BitSet();
 								set.fill(fileCount);
 							} else {
-								set = MyBitSet.readBits(in, fileCount);
+								set = BitSet.readBits(in, fileCount);
 							}
 
 							if (in.readByte() != 0) error("i_Time.external");
@@ -987,14 +987,14 @@ public class QZArchive extends QZReader implements ArchiveFile {
 			b.wIndex(len);
 			return b;
 		}
-		private MyBitSet readBitsOrTrue(int size) throws IOException {
-			MyBitSet set;
+		private BitSet readBitsOrTrue(int size) throws IOException {
+			BitSet set;
 			// all true
 			if (in.readByte() != 0) {
-				set = new MyBitSet();
+				set = new BitSet();
 				set.fill(size);
 			} else {
-				set = MyBitSet.readBits(in, size);
+				set = BitSet.readBits(in, size);
 			}
 			return set;
 		}
@@ -1028,7 +1028,7 @@ public class QZArchive extends QZReader implements ArchiveFile {
 	@Override
 	public QZEntry getEntry(String name) { return getEntries().get(name); }
 	@Deprecated
-	public MyHashMap<String, QZEntry> getEntries() {
+	public HashMap<String, QZEntry> getEntries() {
 		if (byName.isEmpty()) {
 			byName.ensureCapacity(entries.length);
 			for (QZEntry entry : entries) {
@@ -1176,7 +1176,7 @@ public class QZArchive extends QZReader implements ArchiveFile {
 				off += len;
 			}
 
-			var ins = node.getInputStream(b.outSizes, streams, new MyHashMap<>(), pass, limit);
+			var ins = node.getInputStream(b.outSizes, streams, new HashMap<>(), pass, limit);
 			if (ins.length != 1) throw new CorruptedInputException("root node has many outputs");
 			in = ins[0];
 		}
@@ -1189,7 +1189,7 @@ public class QZArchive extends QZReader implements ArchiveFile {
 	}
 
 	public synchronized QZReader parallel() {
-		if (asyncReaders.isEmpty()) asyncReaders = new SimpleList<>();
+		if (asyncReaders.isEmpty()) asyncReaders = new ArrayList<>();
 		AsyncReader ar = new AsyncReader();
 		ar.r = r;
 		asyncReaders.add(ar);

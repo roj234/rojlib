@@ -9,80 +9,74 @@ import roj.asm.attr.UnparsedAttribute;
 import roj.asm.cp.ConstantPool;
 import roj.asm.cp.CstUTF;
 import roj.asm.type.Type;
-import roj.asm.type.TypeHelper;
-import roj.collect.MyBitSet;
-import roj.collect.SimpleList;
+import roj.collect.ArrayList;
 import roj.io.IOUtil;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
 
 import java.util.List;
+import java.util.function.Predicate;
+import java.util.regex.Pattern;
 
 /**
  * @author Roj234
  * @since 2023/2/22 21:57
  */
 public abstract class ParamNameMapper {
-	public static List<String> getParameterNames(ConstantPool cp, MethodNode m) {
-		int j = (m.modifier() & Opcodes.ACC_STATIC) == 0 ? 1 : 0;
-
-		int len = TypeHelper.paramSize(m.rawDesc())+j;
-		SimpleList<String> names = new SimpleList<>(len);
+	public static List<@Nullable String> getParameterNames(ConstantPool cp, MethodNode m) {
+		int len = m.parameters().size();
+		ArrayList<String> names = new ArrayList<>(len);
 		names._setSize(len);
 
 		ParamNameMapper pmap = new ParamNameMapper() {
 			@Override
-			protected List<String> getParamNames(MethodNode m) {
-				return names;
-			}
+			protected List<String> getParamNames(MethodNode m) {return names;}
 		};
 
-		if (pmap.mapParam(cp, m)) {
-			List<Type> parameters = m.parameters();
-			for (int i = 0; i < parameters.size(); i++) {
-				if (j != i) names.set(i, names.get(j));
-				j += parameters.get(i).length();
-			}
-			names._setSize(parameters.size());
-			return names;
-		}
+		return pmap.mapParam(cp, m) ? names : null;
 
-		return null;
 	}
 
-	public static final MyBitSet HUMAN_READABLE_TOKENS = MyBitSet.from("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz_$");
+	public static final Predicate<String> IS_VALID = Pattern.compile("[a-zA-Z_][a-zA-Z0-9_]+").asMatchPredicate();
+	public Predicate<String> isValid = IS_VALID;
 
-	public MyBitSet validNameChars = HUMAN_READABLE_TOKENS;
+	protected List<String> copyOf(List<String> data) {return new ArrayList<>(data);}
 
 	public boolean mapParam(ConstantPool pool, MethodNode m) {
 		List<String> parNames = getParamNames(m);
 
 		Attribute a;
 		DynByteBuf r;
+		//MethodParameters属性的参数名称与descriptor一一对应，但Signature和ParameterAnnotations并非如此
 		if (!parNames.isEmpty()) {
 			a = m.getRawAttribute("MethodParameters");
 			if (a != null) {
-				int i = 0;
-				int j = (m.modifier() & Opcodes.ACC_STATIC) == 0 ? 1 : 0;
-				List<Type> parameters = m.parameters();
-
 				r = a instanceof UnparsedAttribute ? AsmCache.reader(a) : UnparsedAttribute.serialize(pool, IOUtil.getSharedByteBuf(), a).getRawData();
 				int len = r.readUnsignedByte();
-				while (len-- > 0) {
-					String name = ((CstUTF) pool.get(r)).str();
-					while (parNames.size() < j) parNames.add(null);
-					if (parNames.get(j) == null && validNameChars.contains(name.charAt(0))) parNames.set(j, name);
-
+				for (int i = 0; i < len; i++) {
+					CstUTF namecst = (CstUTF) pool.getNullable(r);
 					r.rIndex += 2;
 
-					j += parameters.get(i++).length();
+					if (namecst != null) {
+						String name = namecst.str();
+						while (i >= parNames.size()) parNames.add(null);
+						if (parNames.get(i) == null && isValid.test(name)) parNames.set(i, name);
+					}
 				}
 			}
 		}
 
-		a =  m.getRawAttribute("Code");
+		// try get from LocalVariableTable
+		a = m.getRawAttribute("Code");
 		if (a != null) {
-			MyBitSet replaced = new MyBitSet(parNames.size());
+			int slotBegin = (m.modifier() & Opcodes.ACC_STATIC) == 0 ? 1 : 0;
+			int slot = slotBegin;
+			List<Type> parameters = m.parameters();
+			byte[] slotToArg = new byte[parameters.size() << 1];
+			for (int i = 0; i < parameters.size(); i++) {
+				slotToArg[slot] = (byte) (i+1);
+				slot += parameters.get(i).length();
+			}
 
 			r = a instanceof UnparsedAttribute ? AsmCache.reader(a) : UnparsedAttribute.serialize(pool, IOUtil.getSharedByteBuf(), a).getRawData();
 			r.rIndex += 4; // stack size
@@ -92,109 +86,69 @@ public abstract class ParamNameMapper {
 			int len = r.readUnsignedShort(); // exception
 			r.rIndex += len << 3;
 
-			int attrLen = r.rIndex;
 			len = r.readUnsignedShort();
 
 			while (len-- > 0) {
 				String aname = ((CstUTF) pool.get(r)).str();
 				int end = r.readInt() + r.rIndex;
 				switch (aname) {
-					case "LocalVariableTable":
-						List<V> list = parseLVT(pool, r);
-						for (int j = 0; j < list.size(); j++) {
-							V entry = list.get(j);
+					case "LocalVariableTable" -> {
+						var variables = parseLVT(pool, r);
+						for (int j = 0; j < variables.size(); j++) {
+							V entry = variables.get(j);
 
 							String ref = mapType(entry.type.str());
 							if (ref != null) r.putShort(entry.typeOff, pool.getUtfId(ref));
 
 							String name = entry.name.str();
-							if (entry.start == 0 && parNames.size() > entry.slot) {
-								replaced.add(entry.slot);
+							if (!parNames.isEmpty() && entry.start == 0 && entry.slot >= slotBegin && entry.slot < slotToArg.length) {
+								int argIndex = (slotToArg[entry.slot] & 0xFF) - 1;
+								if (argIndex >= 0) {
+									slotToArg[entry.slot] = 0;
 
-								String n = parNames.get(entry.slot);
-								if (n != null) {
-									if (!n.equals(name)) {
-										r.putShort(entry.nameOff, pool.getUtfId(n));
-										continue;
+									String newName = argIndex < parNames.size() ? parNames.get(argIndex) : null;
+									if (newName != null) {
+										if (!newName.equals(name)) {
+											r.putShort(entry.nameOff, pool.getUtfId(newName));
+											continue;
+										}
+									} else {
+										if (isValid.test(name)) {
+											while (argIndex >= parNames.size()) parNames.add(null);
+											parNames.set(argIndex, name);
+										}
 									}
-								} else {
-									parNames.set(entry.slot, entry.name.str());
 								}
 							}
 
-							if (name.isEmpty() || !validNameChars.contains(name.charAt(0))) {
-								r.putShort(entry.nameOff, pool.getUtfId("lvt"+entry.start+"_"+entry.slot));
-							}
+							/*if (!isValid.test(name)) {
+								r.putShort(entry.nameOff, pool.getUtfId("lvt"+entry.slot+"_"+entry.start));
+							}*/
 						}
-						break;
-					case "LocalVariableTypeTable":
-						list = parseLVT(pool, r);
-						for (int j = 0; j < list.size(); j++) {
-							V entry = list.get(j);
-
+					}
+					case "LocalVariableTypeTable" -> {
+						var variables = parseLVT(pool, r);
+						for (int j = 0; j < variables.size(); j++) {
+							var entry = variables.get(j);
 							String ref = mapGenericType(entry.type.str());
 							if (ref != null) r.putShort(entry.typeOff, pool.getUtfId(ref));
-
-							String name = entry.name.str();
-							if (entry.start == 0 && parNames.size() > entry.slot) {
-								replaced.add(entry.slot);
-
-								String n = parNames.get(entry.slot);
-								if (n != null) {
-									if (!n.equals(name)) {
-										r.putShort(entry.nameOff, pool.getUtfId(n));
-										continue;
-									}
-								} else {
-									parNames.set(entry.slot, entry.name.str());
-								}
-							}
-
-							if (name.isEmpty() || !validNameChars.contains(name.charAt(0))) {
-								r.putShort(entry.nameOff, pool.getUtfId("lvt"+entry.start+"_"+entry.slot));
-							}
 						}
-						break;
+					}
 				}
 				r.rIndex = end;
 			}
-
-			if (replaced.size() > parNames.size()) {
-				System.out.println("catch " + replaced);
-				System.out.println(parNames);
-				return false;
-			}
 		}
 
-		add:
 		if (!parNames.isEmpty()) {
-			int i = 0;
-			int j = (m.modifier() & Opcodes.ACC_STATIC) == 0 ? 1 : 0;
-
-			List<Type> parameters = m.parameters();
-			ByteList attr = IOUtil.getSharedByteBuf().put(0);
-
-			while (j < parNames.size()) {
-				if (i == parameters.size()) {
-					// Static flag not match or Error happens
-					break add;
-				}
-
-				// including Null check
-				String name = parNames.get(j);
-				if (name == null) {
-					name = getFallbackParamName(m, i, j);
-					parNames.set(j, name);
-				}
-				attr.putShort(pool.getUtfId(name)).putShort(0);
-
-				j += parameters.get(i++).length();
+			ByteList data = IOUtil.getSharedByteBuf().put(parNames.size());
+			for (int i = 0; i < parNames.size(); i++) {
+				String name = parNames.get(i);
+				data.putShort(name == null ? 0 : pool.getUtfId(name)).putShort(0);
 			}
-			attr.put(0, (byte) i);
-
-			m.addAttribute(new UnparsedAttribute("MethodParameters", ByteList.wrap(attr.toByteArray())));
+			m.addAttribute(new UnparsedAttribute("MethodParameters", data.toByteArray()));
 			return true;
 		}
+
 		return false;
 	}
 
@@ -205,26 +159,28 @@ public abstract class ParamNameMapper {
 	}
 	private static List<V> parseLVT(ConstantPool cp, DynByteBuf r) {
 		int len = r.readUnsignedShort();
-		List<V> list = new SimpleList<>(len);
+		List<V> list = new ArrayList<>(len);
 
 		for (int i = 0; i < len; i++) {
 			V v = new V();
 			v.start = r.readUnsignedShort();
 			v.end = r.readUnsignedShort();
 			v.nameOff = r.rIndex;
-			v.name = ((CstUTF) cp.get(r));
+			v.name = cp.get(r);
 			v.typeOff = r.rIndex;
-			v.type = ((CstUTF) cp.get(r));
+			v.type = cp.get(r);
 			v.slot = r.readUnsignedShort();
 			list.add(v);
 		}
 		return list;
 	}
 
-
 	@Nullable protected String mapType(String type) {return null;}
 	@Nullable protected String mapGenericType(String type) {return null;}
 
-	protected String getFallbackParamName(MethodNode m, int index, int stackPos) {return "arg"+index;}
+	/**
+	 * 按顺序排列的参数名称，部分可以为null表示不做改变
+	 * 不需要管理是否静态，或者为long预留，每"个"参数都只占用一位。
+	 */
 	protected abstract List<String> getParamNames(MethodNode m);
 }

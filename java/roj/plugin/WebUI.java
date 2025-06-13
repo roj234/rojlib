@@ -140,7 +140,7 @@ final class WebUI {
 		if (!json.algorithm.equals("r")) req.server().enableCompression();
 
 		var callback = new AsyncContent();
-		TaskPool.Common().submit(() -> {
+		TaskPool.common().submit(() -> {
 			ByteList buf = IOUtil.getSharedByteBuf();
 			try {
 				switch (json.algorithm) {

@@ -1,9 +1,9 @@
 package roj.asmx.mapper;
 
 import org.jetbrains.annotations.NotNull;
-import roj.archive.qz.xz.LZMA2Options;
-import roj.archive.qz.xz.LZMAInputStream;
-import roj.archive.qz.xz.LZMAOutputStream;
+import roj.archive.xz.LZMA2Options;
+import roj.archive.xz.LZMAInputStream;
+import roj.archive.xz.LZMAOutputStream;
 import roj.archive.zip.ZEntry;
 import roj.archive.zip.ZipFile;
 import roj.asm.*;
@@ -14,6 +14,9 @@ import roj.asm.cp.*;
 import roj.asm.type.Signature;
 import roj.asm.type.Type;
 import roj.asmx.Context;
+import roj.collect.ArrayList;
+import roj.collect.HashMap;
+import roj.collect.HashSet;
 import roj.collect.*;
 import roj.concurrent.TaskExecutor;
 import roj.concurrent.TaskPool;
@@ -62,19 +65,17 @@ public class Mapper extends Mapping {
 		/** 修复class改名造成的访问问题 */
 		MF_FIX_ACCESS = 64;
 
-	// 'CMPC': Const Remapper Cache
-	private static final int FILE_HEADER = 0x634d5063;
 	private static final int ASYNC_THRESHOLD = 1000;
 	// 注意事项
 	// 1. 返回值的重载通过bridge method实现，JVM就是傻逼，当然也可以让你实现骚操作
 	// 2. stopAnchor
 	// 3. fixAccess inheritor
 
-	private final UnaryOperator<String> GENERIC_TYPE_MAPPER = (old) -> {
+	private final UnaryOperator<String> signatureMapper = (old) -> {
 		String now = ClassUtil.getInstance().mapClassName(classMap, old);
 		return now == null ? old : now;
 	};
-	private final ParamNameMapper PARAM_TYPE_MAPPER = new ParamNameMapper() {
+	private final ParamNameMapper paramMapper = new ParamNameMapper() {
 		@Override
 		protected List<String> getParamNames(MethodNode m) {
 			if (paramMap != null) {
@@ -89,14 +90,14 @@ public class Mapper extends Mapping {
 				int i = 0;
 				do {
 					List<String> param = paramMap.get(md);
-					if (param != null) return new SimpleList<>(param);
+					if (param != null) return copyOf(param);
 
 					if (i == parents.size()) break;
 					md.owner = parents.get(i++);
 				} while (true);
 			}
 
-			return new SimpleList<>();
+			return Collections.emptyList();
 		}
 
 		@Override
@@ -104,17 +105,17 @@ public class Mapper extends Mapping {
 		@Override
 		protected String mapGenericType(String type) {
 			Signature s = Signature.parse(type);
-			s.rename(GENERIC_TYPE_MAPPER);
+			s.rename(signatureMapper);
 			return s.toDesc();
 		}
 	};
 
-	private final List<State> extraStates = new SimpleList<>();
+	private final List<State> extraStates = new ArrayList<>();
 	/**
 	 * 来自依赖的数据
 	 */
-	public final MyHashSet<MemberDescriptor> libStopAnchor;
-	public final MyHashMap<String, List<String>> libSupers;
+	public final HashSet<MemberDescriptor> libStopAnchor;
+	public final HashMap<String, List<String>> libSupers;
 
 	/**
 	 * 工作中数据
@@ -128,28 +129,26 @@ public class Mapper extends Mapping {
 	public Mapper() { this(false); }
 	public Mapper(boolean checkFieldType) {
 		super(checkFieldType);
-		libSupers = new MyHashMap<>(128);
-		libStopAnchor = new MyHashSet<>();
+		libSupers = new HashMap<>(128);
+		libStopAnchor = new HashSet<>();
 	}
 
 	public Mapper(Mapper o) {
 		super(o);
-		this.libStopAnchor = new MyHashSet<>(o.libStopAnchor);
-		this.libSupers = new MyHashMap<>(o.libSupers);
-		this.PARAM_TYPE_MAPPER.validNameChars = o.PARAM_TYPE_MAPPER.validNameChars;
+		this.libStopAnchor = new HashSet<>(o.libStopAnchor);
+		this.libSupers = new HashMap<>(o.libSupers);
+		this.paramMapper.isValid = o.paramMapper.isValid;
 		this.flag = o.flag;
 	}
 	public Mapper(Mapping o) {
 		super(o);
-		this.libSupers = new MyHashMap<>(128);
-		this.libStopAnchor = new MyHashSet<>();
+		this.libSupers = new HashMap<>(128);
+		this.libStopAnchor = new HashSet<>();
 	}
 
 	// region 缓存
 
-	private static LZMA2Options getLZMAOption() {
-		return new LZMA2Options(6).setDictSize(2097152).setPb(0);
-	}
+	private static LZMA2Options getLZMAOption() {return new LZMA2Options(6).setDictSize(2097152).setPb(0);}
 
 	public void saveCache(OutputStream cache, int saveMode) throws IOException {
 		StringPool pool = new StringPool();
@@ -196,18 +195,17 @@ public class Mapper extends Mapping {
 			w.putShort(0);
 		}
 
-		try (var out = new LZMAOutputStream(cache, getLZMAOption(), -1)) {
+		try (var out = new LZMAOutputStream(cache, getLZMAOption(), false, true, -1)) {
 			try (var header = new ByteList.ToStream(out, false)) {
-				pool.writePool(header.putInt(FILE_HEADER));
+				pool.writePool(header);
 			}
 			w.writeToStream(out);
 		}
 	}
 
 	public Boolean loadCache(InputStream cache, boolean readClassInheritanceMap) throws IOException {
-		var r = MyDataInputStream.wrap(new LZMAInputStream(cache));
-
-		if (r.readInt() != FILE_HEADER) throw new IllegalArgumentException("file header");
+		LZMA2Options lzmaOption = getLZMAOption();
+		var r = MyDataInputStream.wrap(new LZMAInputStream(cache, -1, lzmaOption.getPropByte(), lzmaOption.getDictSize()));
 
 		var pool = new StringPool(r);
 
@@ -254,7 +252,7 @@ public class Mapper extends Mapping {
 	/**
 	 * 全量
 	 */
-	public void map(List<Context> ctxs) {map(ctxs, TaskPool.Common());}
+	public void map(List<Context> ctxs) {map(ctxs, TaskPool.common());}
 	public void map(List<Context> ctxs, TaskExecutor pool) {
 		if ((flag&MF_SINGLE_THREAD)!=0 || ctxs.size() <= ASYNC_THRESHOLD) {
 			_map(ctxs, true);
@@ -266,7 +264,7 @@ public class Mapper extends Mapping {
 		selfSupers = new ConcurrentHashMap<>(ctxs.size());
 		selfInherited = new SynchronizedFindMap<>();
 
-		List<List<Context>> tasks = new ArrayList<>((ctxs.size()-1)/ASYNC_THRESHOLD + 1);
+		List<List<Context>> tasks = new java.util.ArrayList<>((ctxs.size()-1)/ASYNC_THRESHOLD + 1);
 
 		int i = 0;
 		while (i < ctxs.size()) {
@@ -291,6 +289,8 @@ public class Mapper extends Mapping {
 		if ((flag&MF_RENAME_CLASS) != 0) {
 			runAsync(this::S5_mapClassName, tasks, pool);
 			runAsync(this::S5_1_resetDebugInfo, tasks, pool);
+		} else {
+			runAsync(this::S5_alt_mapParamName, tasks, pool);
 		}
 	}
 
@@ -304,7 +304,7 @@ public class Mapper extends Mapping {
 
 		Context ctx = null;
 		try {
-			MyHashSet<String> modified = full?null:new MyHashSet<>();
+			HashSet<String> modified = full?null:new HashSet<>();
 			for (int i = 0; i < ctxs.size(); i++) {
 				S1_parse(ctx = ctxs.get(i));
 				if (!full) modified.add(ctx.getData().name());
@@ -331,6 +331,10 @@ public class Mapper extends Mapping {
 					S5_mapClassName(ctx = ctxs.get(i));
 					S5_1_resetDebugInfo(ctx);
 				}
+			} else if (!paramMap.isEmpty()) {
+				for (int i = 0; i < ctxs.size(); i++) {
+					S5_alt_mapParamName(ctx = ctxs.get(i));
+				}
 			}
 		} catch (Throwable e) {
 			throw new RuntimeException("At parsing " + ctx, e);
@@ -349,7 +353,7 @@ public class Mapper extends Mapping {
 		int size = itfs.size() + ("java/lang/Object".equals(data.parent()) ? 0 : 1);
 		if (size == 0 && (flag&MF_ANNOTATION_INHERIT) == 0) return;
 
-		ArrayList<String> list = new ArrayList<>(size);
+		java.util.ArrayList<String> list = new java.util.ArrayList<>(size);
 		if (!"java/lang/Object".equals(data.parent())) list.add(data.parent());
 		for (int i = 0; i < itfs.size(); i++) list.add(itfs.get(i));
 
@@ -367,16 +371,16 @@ public class Mapper extends Mapping {
 		selfSupers.put(data.name(), list);
 	}
 
-	private MyHashMap<String, ClassDefinition> s2_tmp_byName;
-	private MyHashMap<String, List<MemberDescriptor>> s2_tmp_methods;
+	private HashMap<String, ClassDefinition> s2_tmp_byName;
+	private HashMap<String, List<MemberDescriptor>> s2_tmp_methods;
 	public final void S2_begin(List<Context> ctxs) {
-		MyHashMap<String, ClassDefinition> classInfo = new MyHashMap<>(ctxs.size());
+		HashMap<String, ClassDefinition> classInfo = new HashMap<>(ctxs.size());
 		for (int i = 0; i < ctxs.size(); i++) {
 			ClassNode data = ctxs.get(i).getData();
 			classInfo.put(data.name(), data);
 		}
 		s2_tmp_byName = classInfo;
-		s2_tmp_methods = new MyHashMap<>();
+		s2_tmp_methods = new HashMap<>();
 	}
 
 	/**
@@ -384,8 +388,8 @@ public class Mapper extends Mapping {
 	 * @param downgradeToo downgrade access level also (no supported yet)
 	 */
 	public final void S2_1_FixAccess(List<Context> ctxs, boolean downgradeToo) {
-		MyHashSet<MemberDescriptor> upgraded = new MyHashSet<>();
-		MyHashSet<Object> processed = new MyHashSet<>();
+		HashSet<MemberDescriptor> upgraded = new HashSet<>();
+		HashSet<Object> processed = new HashSet<>();
 
 		for (int i = 0; i < ctxs.size(); i++) {
 			Context ctx = ctxs.get(i);
@@ -395,7 +399,7 @@ public class Mapper extends Mapping {
 
 			List<CstClass> cref = ctx.getClassConstants();
 			for (int j = 0; j < cref.size(); j++) {
-				String name = cref.get(j).name().str();
+				String name = cref.get(j).value().str();
 				if (name.equals(selfName)) continue;
 
 				if (processed.contains(name)) continue;
@@ -419,7 +423,7 @@ public class Mapper extends Mapping {
 			checkAccess(ctx.getFieldConstants(), false, processed, selfName, selfNewName, upgraded);
 
 			ClassNode data = ctx.getData();
-			SimpleList<MethodNode> methods = data.methods;
+			ArrayList<MethodNode> methods = data.methods;
 			for (int j = 0; j < methods.size(); j++) {
 				MethodNode mn = methods.get(j);
 				// inheritable package-private method
@@ -430,7 +434,7 @@ public class Mapper extends Mapping {
 		}
 
 		MemberDescriptor d = ClassUtil.getInstance().sharedDesc;
-		List<String> exist = new SimpleList<>();
+		List<String> exist = new ArrayList<>();
 		for (int i = 0; i < ctxs.size(); i++) {
 			ClassNode data = ctxs.get(i).getData();
 
@@ -444,7 +448,7 @@ public class Mapper extends Mapping {
 			}
 			if (exist.isEmpty()) continue;
 
-			SimpleList<MethodNode> methods = data.methods;
+			ArrayList<MethodNode> methods = data.methods;
 			for (int j = 0; j < methods.size(); j++) {
 				MethodNode mn = methods.get(j);
 
@@ -489,9 +493,9 @@ public class Mapper extends Mapping {
 		}
 	}
 	private void checkAccess(List<CstRef> ref, boolean method,
-							 MyHashSet<Object> processed,
+							 HashSet<Object> processed,
 							 String selfName, String selfNewName,
-							 MyHashSet<MemberDescriptor> upgraded) {
+							 HashSet<MemberDescriptor> upgraded) {
 		MemberDescriptor d = ClassUtil.getInstance().sharedDesc;
 		nextNode:
 		for (int j = 0; j < ref.size(); j++) {
@@ -558,8 +562,8 @@ public class Mapper extends Mapping {
 	 * The mapping must be modifiable
 	 */
 	public final boolean S2_2_FixInheritConflict(List<Context> ctxs) {
-		MyHashMap<NameAndType, Set<NameAndType>> sameNameNodes = new MyHashMap<>();
-		MyHashSet<String> checked = new MyHashSet<>();
+		HashMap<NameAndType, Set<NameAndType>> sameNameNodes = new HashMap<>();
+		HashSet<String> checked = new HashSet<>();
 
 		boolean success = true;
 		for (Context ctx : ctxs) {
@@ -601,7 +605,7 @@ public class Mapper extends Mapping {
 	}
 	private void tryMap(String inheritTo,
 						String owner, List<?> list,
-						MyHashMap<NameAndType, Set<NameAndType>> descs,
+						HashMap<NameAndType, Set<NameAndType>> descs,
 						FindMap<MemberDescriptor, String> map) {
 		List<String> parents = selfSupers.getOrDefault(owner, Collections.emptyList());
 		MemberDescriptor d = ClassUtil.getInstance().sharedDesc;
@@ -647,7 +651,7 @@ public class Mapper extends Mapping {
 			val.name = m.name();
 			val.rawDesc = key.rawDesc;
 			val.modifier = d.modifier;
-			descs.computeIfAbsent(key, Helpers.fnMyHashSet()).add(val);
+			descs.computeIfAbsent(key, Helpers.fnHashSet()).add(val);
 		}
 	}
 
@@ -658,7 +662,7 @@ public class Mapper extends Mapping {
 	 * @return added mapping
 	 */
 	public final List<MemberDescriptor> S2_3_FixSubImpl(List<Context> ctxs, boolean mapIsMutable) {
-		List<MemberDescriptor> added = new SimpleList<>();
+		List<MemberDescriptor> added = new ArrayList<>();
 
 		for (SubImpl method : collectSubImpl(ctxs)) {
 			MemberDescriptor desc = method.type.copy();
@@ -714,13 +718,13 @@ public class Mapper extends Mapping {
 		return added;
 	}
 	private Set<SubImpl> collectSubImpl(List<Context> ctx) {
-		MyHashSet<SubImpl> out = new MyHashSet<>();
+		HashSet<SubImpl> out = new HashSet<>();
 
 		SubImpl sTest = new SubImpl();
 		NameAndType nTest = new NameAndType();
 		MemberDescriptor dTest = ClassUtil.getInstance().sharedDesc;
 
-		SimpleList<NameAndType> interfaceMethods = new SimpleList<>();
+		ArrayList<NameAndType> interfaceMethods = new ArrayList<>();
 
 		for (int i = 0; i < ctx.size(); i++) {
 			ClassNode data = ctx.get(i).getData();
@@ -732,7 +736,7 @@ public class Mapper extends Mapping {
 			interfaceMethods.clear();
 
 			List<String> parents = selfSupers.get(data.parent());
-			if (parents == null) parents = ClassUtil.getInstance().getSuperClassList(data.parent());
+			if (parents == null) parents = ClassUtil.getInstance().getHierarchyList(data.parent());
 
 			for (int j = 0; j < itfs.size(); j++) {
 				String name = itfs.get(j);
@@ -783,12 +787,12 @@ public class Mapper extends Mapping {
 
 						Set<String> set;
 						found: {
-							for (Iterator<Set<String>> itr = s_get.owners.iterator(); itr.hasNext(); ) {
+							for (var itr = s_get.owners.iterator(); itr.hasNext(); ) {
 								set = itr.next();
 								if (set.contains(parent) || set.contains(issuer.owner)) break found;
 							}
 
-							set = new MyHashSet<>(2);
+							set = new HashSet<>(2);
 							s_get.owners.add(set);
 						}
 
@@ -812,7 +816,7 @@ public class Mapper extends Mapping {
 	@NotNull
 	private List<Member> getMethodInfoEx(String name) {
 		ClassDefinition c = s2_tmp_byName.get(name);
-		if (c == null) c = ClassUtil.getInstance().getClassInfo(name);
+		if (c == null) c = ClassUtil.getInstance().resolve(name);
 		if (c != null) return Helpers.cast(c.methods());
 
 		if (s2_tmp_methods.isEmpty()) {
@@ -1186,7 +1190,7 @@ public class Mapper extends Mapping {
 	/** Generic signature type */
 	private void mapSignature(ConstantPool pool, Attributed node) {
 		Signature generic = node.getAttribute(pool, Attribute.SIGNATURE);
-		if (generic != null) generic.rename(GENERIC_TYPE_MAPPER);
+		if (generic != null) generic.rename(signatureMapper);
 	}
 	/** Class name and parent */
 	private void mapClassAndSuper(ClassNode data) {
@@ -1224,7 +1228,7 @@ public class Mapper extends Mapping {
 		}
 
 		for (int i = 0; i < nodes.size(); i++) {
-			PARAM_TYPE_MAPPER.mapParam(data.cp, (MethodNode) nodes.get(i));
+			paramMapper.mapParam(data.cp, (MethodNode) nodes.get(i));
 		}
 	}
 	/** Any other: interface, bootstrap method, class ref... */
@@ -1246,7 +1250,7 @@ public class Mapper extends Mapping {
 				case Constant.CLASS: {
 					CstClass clazz = (CstClass) c;
 
-					oldCls = clazz.name().str();
+					oldCls = clazz.value().str();
 					newCls = U.mapClassName(classMap, oldCls);
 
 					if (newCls != null) clazz.setValue(cp.getUtf(newCls));
@@ -1255,7 +1259,7 @@ public class Mapper extends Mapping {
 				case Constant.METHOD_TYPE: {
 					CstMethodType type = (CstMethodType) c;
 
-					oldCls = type.name().str();
+					oldCls = type.value().str();
 					newCls = U.mapMethodParam(classMap, oldCls);
 
 					if (!oldCls.equals(newCls)) type.setValue(cp.getUtf(newCls));
@@ -1273,10 +1277,18 @@ public class Mapper extends Mapping {
 			sourceFile.value = name.substring(Math.max(name.lastIndexOf('/'), name.lastIndexOf('$'))+1).concat(".java");
 		}
 	}
+
+	public final void S5_alt_mapParamName(Context context) {
+		var data = context.getData();
+		var nodes = data.methods;
+		for (int i = 0; i < nodes.size(); i++) {
+			paramMapper.mapParam(data.cp, nodes.get(i));
+		}
+	}
 	// endregion
 	// region libraries
 	public void loadLibraries(List<?> files) {
-		SimpleList<Context> classes = new SimpleList<>();
+		ArrayList<Context> classes = new ArrayList<>();
 		MemberDescriptor m = ClassUtil.getInstance().sharedDesc;
 
 		var prevSS = selfSupers;
@@ -1355,7 +1367,7 @@ public class Mapper extends Mapping {
 		MemberDescriptor m = ClassUtil.getInstance().sharedDesc;
 
 		// check inherit & overloads
-		for (MemberDescriptor d : new SimpleList<>(methodMap.keySet())) {
+		for (MemberDescriptor d : new ArrayList<>(methodMap.keySet())) {
 			List<String> parents = libSupers.get(d.owner);
 			if (parents == null) continue;
 
@@ -1382,7 +1394,7 @@ public class Mapper extends Mapping {
 			}
 		}
 
-		MyHashSet<MemberDescriptor> unmatched = new MyHashSet<>();
+		HashSet<MemberDescriptor> unmatched = new HashSet<>();
 		for (MemberDescriptor desc : methodMap.keySet())
 			if (desc.modifier == MemberDescriptor.FLAG_UNSET)
 				unmatched.add(desc);
@@ -1415,7 +1427,7 @@ public class Mapper extends Mapping {
 	}
 
 	public final void initSelfSuperMap() {
-		Map<String, List<String>> universe = new MyHashMap<>(libSupers);
+		Map<String, List<String>> universe = new HashMap<>(libSupers);
 		for (int i = 0; i < extraStates.size(); i++) {
 			State state = extraStates.get(i);
 			universe.putAll(state.parents);
@@ -1428,15 +1440,15 @@ public class Mapper extends Mapping {
 	}
 
 	public final void initSelf(int size) {
-		stopAnchor = new MyHashSet<>(libStopAnchor);
-		selfSupers = new MyHashMap<>(size);
-		selfInherited = new MyHashMap<>();
+		stopAnchor = new HashSet<>(libStopAnchor);
+		selfSupers = new HashMap<>(size);
+		selfInherited = new HashMap<>();
 	}
 
 	public Set<MemberDescriptor> getStopAnchor() { return stopAnchor; }
 	public Map<String, List<String>> getSelfSupers() { return selfSupers; }
 	public final List<State> getSeperatedLibraries() { return extraStates; }
-	public ParamNameMapper getParamTypeMapper() { return PARAM_TYPE_MAPPER; }
+	public ParamNameMapper getParamTypeMapper() { return paramMapper; }
 
 	/**
 	 * By slot
@@ -1462,9 +1474,9 @@ public class Mapper extends Mapping {
 	}
 
 	public static final class State {
-		final MyHashMap<String, List<String>> parents = new MyHashMap<>();
-		final MyHashSet<MemberDescriptor> stopAnchor = new MyHashSet<>(Hasher.identity());
-		final MyHashMap<MemberDescriptor, String> inheritor = new MyHashMap<>();
+		final HashMap<String, List<String>> parents = new HashMap<>();
+		final HashSet<MemberDescriptor> stopAnchor = new HashSet<>(Hasher.identity());
+		final HashMap<MemberDescriptor, String> inheritor = new HashMap<>();
 	}
 
 	public void debugRelative(String owner, String name) {

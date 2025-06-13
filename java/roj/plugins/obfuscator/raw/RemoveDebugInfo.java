@@ -8,7 +8,7 @@ import roj.asm.attr.UnparsedAttribute;
 import roj.asm.cp.ConstantPool;
 import roj.asm.cp.CstUTF;
 import roj.asmx.Context;
-import roj.collect.MyHashSet;
+import roj.collect.HashSet;
 import roj.plugins.obfuscator.ObfuscateTask;
 import roj.text.CharList;
 import roj.util.ByteList;
@@ -22,7 +22,7 @@ import java.util.Random;
  * @since 2025/3/18 14:16
  */
 class RemoveDebugInfo implements ObfuscateTask {
-	public MyHashSet<String> removeAttributes = new MyHashSet<>();
+	public HashSet<String> removeAttributes = new HashSet<>();
 	public CharList mangleLine;
 
 	@Override

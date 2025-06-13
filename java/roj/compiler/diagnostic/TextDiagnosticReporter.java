@@ -93,7 +93,7 @@ public class TextDiagnosticReporter implements Function<Diagnostic, Boolean> {
 		StackTraceElement[] trace = new Throwable().getStackTrace();
 		for (int i = 2; i < trace.length; i++) {
 			String name = trace[i].getMethodName();
-			if (!name.equals("report") && !name.equals("fireDiagnostic") && !name.equals("castTo") && !name.equals("writeCast")) {
+			if (!name.equals("report") && !name.equals("fireDiagnostic") && !name.equals("castTo") && !name.equals("writeCast") && !name.equals("endCodeBlock")) {
 				System.err.println("    at "+trace[i]);
 				break;
 			}
@@ -102,7 +102,7 @@ public class TextDiagnosticReporter implements Function<Diagnostic, Boolean> {
 		return diag.getKind().ordinal() >= (((warnOps&2) != 0) ? Kind.WARNING.ordinal() : Kind.ERROR.ordinal());
 	}
 
-	public void printSum() {
+	public void summary() {
 		PrintStream err = System.err;
 		err.println((counter[2]+counter[3]) + " 个 警告");
 		err.println((counter[4]+counter[5]) + " 个 错误");

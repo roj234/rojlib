@@ -1,7 +1,7 @@
 package roj.compiler.ast.expr;
 
+import roj.compiler.CompileContext;
 import roj.compiler.asm.MethodWriter;
-import roj.compiler.context.LocalContext;
 import roj.compiler.diagnostic.Kind;
 
 /**
@@ -13,7 +13,7 @@ public abstract class LeftValue extends Expr {
 	protected LeftValue(int _noUpdate) {super(0);}
 
 	@Override
-	public LeftValue asLeftValue(LocalContext ctx) {
+	public LeftValue asLeftValue(CompileContext ctx) {
 		if (isFinal()) {
 			ctx.report(this, Kind.ERROR, "var.assignFinal", this);
 			return null;

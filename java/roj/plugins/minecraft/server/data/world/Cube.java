@@ -20,8 +20,8 @@ public final class Cube<T> {
 
 	private static final XashMap.Builder<Object, Ref<?>> REF_BUILDER = Helpers.cast(XashMap.builder(Object.class, Ref.class, "block", "next", Hasher.defaul()));
 	private final XashMap<T, Ref<T>> blockRef = Helpers.cast(REF_BUILDER.createSized(1 << bits));
-	private final SimpleList<Ref<T>> byId = new SimpleList<>(1 << bits);
-	private MyBitSet emptySlot;
+	private final ArrayList<Ref<T>> byId = new ArrayList<>(1 << bits);
+	private BitSet emptySlot;
 
 	final Registry<T> registry;
 	short pack;
@@ -141,7 +141,7 @@ public final class Cube<T> {
 				blockRef.removeKey(prevBlock);
 				byId.set(prev, null);
 
-				if (emptySlot == null) emptySlot = new MyBitSet(byId.size());
+				if (emptySlot == null) emptySlot = new BitSet(byId.size());
 				emptySlot.add(prev);
 			}
 

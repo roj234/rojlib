@@ -1,6 +1,6 @@
 package roj.config.auto;
 
-import roj.collect.MyBitSet;
+import roj.collect.BitSet;
 import roj.collect.ToIntMap;
 import roj.config.serial.CVisitor;
 
@@ -47,7 +47,7 @@ final class ObjectPoolWrapper extends Adapter {
 	public void pop(AdaptContext ctx) {ada.pop(ctx);}
 
 	public int fieldCount() {return ada.fieldCount();}
-	public int plusOptional(int fieldState, MyBitSet fieldStateEx) {return ada.plusOptional(fieldState, fieldStateEx);}
+	public int plusOptional(int fieldState, BitSet fieldStateEx) {return ada.plusOptional(fieldState, fieldStateEx);}
 	public boolean valueIsMap() {return ada.valueIsMap();}
 
 	public void write(CVisitor c, Object o) {

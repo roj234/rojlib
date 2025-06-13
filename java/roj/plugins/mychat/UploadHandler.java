@@ -239,7 +239,7 @@ public class UploadHandler extends MultipartParser {
 				// todo stream
 				String v$fmt = fmt;
 				File v$file = files[i];
-				TaskPool.Common().submit(() -> {
+				TaskPool.common().submit(() -> {
 					BufferedImage dst = img.get();
 					if (dst == null || dst.getWidth() < r.getWidth(0) || dst.getHeight() < r.getHeight(0)) {
 						dst = new BufferedImage(r.getWidth(0), r.getHeight(0), BufferedImage.TYPE_3BYTE_BGR);

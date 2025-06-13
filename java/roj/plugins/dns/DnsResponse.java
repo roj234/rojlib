@@ -1,6 +1,6 @@
 package roj.plugins.dns;
 
-import roj.collect.MyHashMap;
+import roj.collect.HashMap;
 
 import java.util.List;
 
@@ -11,7 +11,7 @@ import java.util.List;
 public final class DnsResponse extends DnsQuery {
 	boolean authorizedAnswer, truncated;
 	byte responseCode;
-	MyHashMap<RecordKey, List<DnsServer.Record>> response;
+	HashMap<RecordKey, List<DnsServer.Record>> response;
 
 	@Override
 	public String toString() {

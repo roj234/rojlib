@@ -2,6 +2,7 @@ package roj.plugin;
 
 import org.jetbrains.annotations.Nullable;
 import roj.archive.zip.ZipFile;
+import roj.asmx.Transformer;
 import roj.collect.TrieTreeSet;
 import roj.io.source.Source;
 import roj.math.Version;
@@ -42,7 +43,7 @@ public class PluginDescriptor {
 	List<String> depend = Collections.emptyList(), loadAfter = Collections.emptyList(), loadBefore = Collections.emptyList();
 	List<String> javaModuleDepend = Collections.emptyList();
 	boolean isModulePlugin;
-	transient PluginClassLoader cl;
+	transient PluginClassLoader classLoader;
 
 	// 基于transformer的安全管理
 	TrieTreeSet reflectiveClass, extraPath;
@@ -54,13 +55,20 @@ public class PluginDescriptor {
 
 	private PluginDescriptor _next;
 
+	public PluginClassLoader getClassLoader() {return classLoader;}
+	public void addTransformer(Transformer transformer) {
+		if (transformer.getClass().getClassLoader() != PluginDescriptor.class.getClassLoader())
+			throw new IllegalArgumentException("不允许");
+		classLoader.transformers.add(transformer);
+	}
+
 	public String getId() { return id; }
 	public Version getVersion() { return version; }
 	public Plugin instance() { return instance; }
 	public int getState() { return state; }
 	@Nullable
 	public Source getFile() {return source;}
-	public ZipFile getArchive() {return cl == null ? null : cl.archive;}
+	public ZipFile getArchive() {return classLoader == null ? null : classLoader.archive;}
 
 	@Override
 	public String toString() { return new CharList().append(id).append(" v").append(version).toStringAndFree(); }

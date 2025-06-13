@@ -81,9 +81,9 @@ public class Label implements Comparable<Label> {
 
 	@Override
 	public String toString() {
-		if (isUnset()) return "<uninitialized>";
-		if (block == -1) return "<unresolved "+(int)offset+">";
-		return "<"+(int)value + " in [b"+block+" + "+(int)offset+"]>";
+		if (isUnset()) return "<### uninitialized>";
+		if (block == -1) return "<"+(int)offset+" unresolved>";
+		return "<"+(int)value + "[b"+block+" + "+(int)offset+"]>";
 	}
 
 	@Override

@@ -6,14 +6,14 @@ import roj.asm.MethodNode;
 import roj.asm.Opcodes;
 import roj.asm.type.IType;
 import roj.asm.type.Type;
+import roj.compiler.CompileContext;
+import roj.compiler.api.Compiler;
+import roj.compiler.api.CompilerPlugin;
 import roj.compiler.api.InvokeHook;
 import roj.compiler.asm.MethodWriter;
 import roj.compiler.ast.expr.Expr;
 import roj.compiler.ast.expr.Invoke;
-import roj.compiler.context.Library;
-import roj.compiler.context.LocalContext;
-import roj.compiler.plugin.LavaApi;
-import roj.compiler.plugin.LavaPlugin;
+import roj.compiler.library.Library;
 import roj.compiler.resolve.TypeCast;
 import roj.concurrent.OperationDone;
 
@@ -25,11 +25,11 @@ import static roj.compiler.Tokens.*;
  * @author Roj234
  * @since 2024/12/1 3:33
  */
-@LavaPlugin(name = "uint", desc = """
+@CompilerPlugin(name = "uint", desc = """
 		PseudoType测试插件
 
 		为Lava语言提供两种无符号数据类型: uint32和uint64""")
-public final class UintPlugin extends InvokeHook implements Library, LavaApi.ExprOp {
+public final class UintPlugin extends InvokeHook implements Library, Compiler.ExprOp {
 	private static Expr _u32(Expr node) {return node instanceof uiCast cast ? cast.is64 == 0 ? cast.left : cast : new uiCast(node, 1);}
 	private static Expr _u64(Expr node) {return node instanceof uiCast cast ? cast.is64 == 0 ? cast.left : cast : new uiCast(node, 2);}
 	private static Expr _i32(Expr node) {return node instanceof uiCast cast ? cast.left : new uiCast(node, 0);}
@@ -57,19 +57,19 @@ public final class UintPlugin extends InvokeHook implements Library, LavaApi.Exp
 				default -> throw OperationDone.NEVER;
 			};
 		}
-		@Override public Expr resolve(LocalContext ctx) {left = left.resolve(ctx);return this;}
+		@Override public Expr resolve(CompileContext ctx) {left = left.resolve(ctx);return this;}
 		@Override public boolean isConstant() {return left.isConstant();}
 		@Override public Object constVal() {return left.constVal();}
 		@Override public void write(MethodWriter cw, boolean noRet) {
 			mustBeStatement(noRet);
 			IType type = left.type();
 			if (type.getActualType() != 'L' && !type.isPrimitive()) type = Type.primitive(type.getActualType());
-			left.write(cw, LocalContext.get().castTo(type, Type.primitive(is64 < 2 ? Type.INT : Type.LONG), TypeCast.E_DOWNCAST));
+			left.write(cw, CompileContext.get().castTo(type, Type.primitive(is64 < 2 ? Type.INT : Type.LONG), TypeCast.E_DOWNCAST));
 		}
 		//@Override public void write(MethodWriter cw, TypeCast.Cast returnType) {left.write(cw, returnType);}
 	}
 
-	private static int u32Count(LavaApi.OperatorContext opctx) {return u32Count(opctx.leftType())+u32Count(opctx.rightType());}
+	private static int u32Count(Compiler.OperatorContext opctx) {return u32Count(opctx.leftType())+u32Count(opctx.rightType());}
 	private static int u32Count(IType type) {
 		if (type == null) return -1;
 		if ("uint32".equals(type.owner())) return 1;
@@ -77,7 +77,7 @@ public final class UintPlugin extends InvokeHook implements Library, LavaApi.Exp
 		return cap >= 1 && cap <= 4 ? 0 : -1;
 	}
 
-	private static int u64Count(LavaApi.OperatorContext opctx) {return u64Count(opctx.leftType())+u64Count(opctx.rightType());}
+	private static int u64Count(Compiler.OperatorContext opctx) {return u64Count(opctx.leftType())+u64Count(opctx.rightType());}
 	private static int u64Count(IType type) {
 		if (type == null) return -1;
 		if ("uint64".equals(type.owner())) return 1;
@@ -136,18 +136,18 @@ public final class UintPlugin extends InvokeHook implements Library, LavaApi.Exp
 		return null;
 	}
 	@Override public String toString() {return "Plugin<uint>";}
-	@Override public Expr eval(MethodNode owner, @Nullable Expr self, List<Expr> args, Invoke node) {
-		boolean is32 = owner.owner.equals("uint32");
+	@Override public Expr eval(MethodNode owner, @Nullable Expr that, List<Expr> args, Invoke node) {
+		boolean is32 = owner.owner().equals("uint32");
 		if (owner.name().equals("parse")) {
 			return is32
-				? _u32(Invoke.staticMethod(u32FromString, self))
-				: _u64(Invoke.staticMethod(u64FromString, self));
+				? _u32(Invoke.staticMethod(u32FromString, that))
+				: _u64(Invoke.staticMethod(u64FromString, that));
 		} else {
-			return Invoke.staticMethod(is32?u32ToString:u64ToString, _i32(self));
+			return Invoke.staticMethod(is32?u32ToString:u64ToString, _i32(that));
 		}
 	}
 
-	public void pluginInit(LavaApi api) {
+	public void pluginInit(Compiler api) {
 		api.addLibrary(this);
 
 		api.addOpHandler("(", this); // 窄化转型失败
@@ -175,7 +175,7 @@ public final class UintPlugin extends InvokeHook implements Library, LavaApi.Exp
 	}
 
 	@Override
-	public Expr test(LocalContext ctx, LavaApi.OperatorContext opctx, Expr left, Object right) {
+	public Expr test(CompileContext ctx, Compiler.OperatorContext opctx, Expr left, Object right) {
 		short sym = opctx.symbol();
 		switch (sym) {
 			case inc, dec, add, sub, mul, shl, shr, inv, and, or, xor -> {

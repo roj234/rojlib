@@ -7,20 +7,20 @@ import roj.asm.Opcodes;
 import roj.asm.type.Generic;
 import roj.asm.type.IType;
 import roj.asm.type.Type;
-import roj.collect.MyHashMap;
+import roj.collect.HashMap;
+import roj.compiler.CompileContext;
+import roj.compiler.LavaCompiler;
+import roj.compiler.api.Compiler;
+import roj.compiler.api.CompilerPlugin;
 import roj.compiler.api.InvokeHook;
 import roj.compiler.asm.MethodWriter;
 import roj.compiler.ast.expr.Expr;
 import roj.compiler.ast.expr.Invoke;
 import roj.compiler.ast.expr.Lambda;
-import roj.compiler.context.LocalContext;
 import roj.compiler.diagnostic.Kind;
-import roj.compiler.plugin.GlobalContextApi;
-import roj.compiler.plugin.LavaApi;
-import roj.compiler.plugin.LavaPlugin;
 import roj.compiler.resolve.TypeCast;
 import roj.concurrent.OperationDone;
-import roj.reflect.ReflectionUtils;
+import roj.reflect.Reflection;
 import roj.util.Helpers;
 import roj.util.TypedKey;
 
@@ -31,13 +31,13 @@ import java.util.function.Consumer;
  * @author Roj234
  * @since 2024/6/4 22:15
  */
-@LavaPlugin(name = "asm", desc = "名字起的奇奇怪怪其实大概挺基础的")
+@CompilerPlugin(name = "asm", desc = "名字起的奇奇怪怪其实大概挺基础的")
 public final class AsmPlugin extends InvokeHook {
-	public static final TypedKey<MyHashMap<String, Expr>> INJECT_PROPERTY = new TypedKey<>("asmHook:injected_property");
-	private final MyHashMap<String, Expr> properties = new MyHashMap<>();
+	public static final TypedKey<HashMap<String, Expr>> INJECT_PROPERTY = new TypedKey<>("asmHook:injected_property");
+	private final HashMap<String, Expr> properties = new HashMap<>();
 
-	public void pluginInit(LavaApi api) {
-		var info = api.getClassInfo("roj/compiler/plugins/asm/ASM");
+	public void pluginInit(Compiler api) {
+		var info = api.resolve("roj/compiler/plugins/asm/ASM");
 		List<MethodNode> methods = Helpers.cast(info.methods()); methods.clear();
 
 		MethodNode mn;
@@ -70,8 +70,8 @@ public final class AsmPlugin extends InvokeHook {
 	@Override public String toString() {return "__asm hook";}
 
 	@SuppressWarnings("unchecked")
-	@Override public Expr eval(MethodNode owner, @Nullable Expr self, List<Expr> args, Invoke node) {
-		LocalContext ctx = LocalContext.get();
+	@Override public Expr eval(MethodNode owner, @Nullable Expr that, List<Expr> args, Invoke node) {
+		CompileContext ctx = CompileContext.get();
 		switch (owner.name()) {
 			default: throw OperationDone.NEVER;
 			case "i2z", "z2i": return args.get(0);
@@ -90,7 +90,7 @@ public final class AsmPlugin extends InvokeHook {
 				}
 
 				var newClass = new ClassNode();
-				newClass.name("roj/compiler/plugins/asm/impl$"+ReflectionUtils.uniqueId());
+				newClass.name("roj/compiler/plugins/asm/impl$"+Reflection.uniqueId());
 				newClass.addInterface("roj/compiler/plugins/asm/WriterImpl");
 				newClass.methods.add(impl);
 				impl.name("accept");
@@ -99,7 +99,7 @@ public final class AsmPlugin extends InvokeHook {
 
 				Consumer<MethodWriter> writer;
 				try {
-					GlobalContextApi capi = (GlobalContextApi) ctx.classes;
+					LavaCompiler capi = (LavaCompiler) ctx.compiler;
 					capi.addSandboxWhitelist("roj.compiler.plugins.asm.WriterImpl", false);
 					writer = (Consumer<MethodWriter>) capi.createSandboxInstance(newClass);
 				} catch (Throwable e) {

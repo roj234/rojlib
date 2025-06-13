@@ -1,10 +1,11 @@
 package roj.config.serial;
 
-import roj.collect.LinkedMyHashMap;
-import roj.collect.MyHashMap;
-import roj.collect.SimpleList;
+import roj.collect.ArrayList;
+import roj.collect.HashMap;
+import roj.collect.LinkedHashMap;
 import roj.config.data.*;
 import roj.text.Interner;
+import roj.util.TypedKey;
 
 import java.util.Arrays;
 
@@ -13,7 +14,12 @@ import java.util.Arrays;
  * @since 2022/11/15 2:07
  */
 public class ToEntry implements CVisitor {
-	private final SimpleList<CEntry> stack = new SimpleList<>();
+	/**
+	 * Enable or disable comment
+	 */
+	public static final TypedKey<Boolean> COMMENT = new TypedKey<>("toEntry:comment");
+
+	private final ArrayList<CEntry> stack = new ArrayList<>();
 	private CEntry stackTop, stackBottom;
 
 	private String key;
@@ -80,7 +86,7 @@ public class ToEntry implements CVisitor {
 	public final void valueMap() { push(createMap(8), 2); }
 	public final void valueMap(int size) { push(createMap(size), 2); }
 	private CMap createMap(int size) {
-		MyHashMap<String, CEntry> core = (flag & 1) == 0 ? new MyHashMap<>(size) : new LinkedMyHashMap<>(size);
+		HashMap<String, CEntry> core = (flag & 1) == 0 ? new HashMap<>(size) : new LinkedHashMap<>(size);
 		return new CMap(core);
 	}
 
@@ -128,15 +134,15 @@ public class ToEntry implements CVisitor {
 	}
 
 	@Override
-	public void setProperty(String k, Object v) {
-		switch (k) {
-			case "entry:max_depth" -> maxDepth = (int) v;
-			case "centry:linked_map" -> {
+	public <T> void setProperty(TypedKey<T> k, T v) {
+		switch (k.name) {
+			case "generic:maxDepth" -> maxDepth = (int) v;
+			case "generic:orderedMap" -> {
 				boolean v1 = ((boolean) v);
 				if (v1) flag |= 1;
 				else flag &= ~1;
 			}
-			case "centry:comment" -> {
+			case "generic:comment" -> {
 				boolean v1 = ((boolean) v);
 				if (v1) flag |= 2;
 				else {

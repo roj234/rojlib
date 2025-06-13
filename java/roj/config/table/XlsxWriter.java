@@ -4,7 +4,7 @@ import roj.archive.zip.ZEntry;
 import roj.archive.zip.ZipFile;
 import roj.archive.zip.ZipFileWriter;
 import roj.collect.IntList;
-import roj.collect.SimpleList;
+import roj.collect.ArrayList;
 import roj.collect.ToIntMap;
 import roj.config.Tokenizer;
 import roj.io.IOUtil;
@@ -35,7 +35,7 @@ public class XlsxWriter implements TableWriter {
 	private ByteList sheet;
 	private IntList cw;
 	private List<String> merge;
-	private final List<Object> sheets = new SimpleList<>();
+	private final List<Object> sheets = new ArrayList<>();
 	private static final int SHEET_OBJECT_SIZE = 4;
 
 	public XlsxWriter(ZipFileWriter zfw) throws IOException {
@@ -123,7 +123,7 @@ public class XlsxWriter implements TableWriter {
 	public void setMergedRow(int startCol, int startRow, int endCol, int endRow) {
 		endRow--;
 
-		if (merge == null) merge = new SimpleList<>();
+		if (merge == null) merge = new ArrayList<>();
 		rc(startCol).append(startRow).append(':');
 		merge.add(rc(endCol).append(endRow).toString());
 		tmpC.clear();

@@ -8,7 +8,7 @@ import roj.config.Tokenizer;
 import roj.config.auto.SerializerFactory;
 import roj.gui.GuiUtil;
 import roj.io.IOUtil;
-import roj.reflect.ReflectionUtils;
+import roj.reflect.Reflection;
 import roj.text.CharList;
 import roj.text.TextReader;
 import roj.ui.Terminal;
@@ -41,7 +41,7 @@ public class Unused {
 	}
 
 	public static void runOnce() throws Exception {
-		Class<?> caller = ReflectionUtils.getCallerClass(2);
+		Class<?> caller = Reflection.getCallerClass(2);
 		ZipFile za = new ZipFile(IOUtil.getJar(caller));
 		ZEntry entry = za.getEntry(caller.getName().replace('.', '/') + ".class");
 		int crc32 = entry.getCrc32();

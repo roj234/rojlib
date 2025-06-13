@@ -8,13 +8,13 @@ import roj.asm.attr.Attribute;
 import roj.asm.cp.CstClass;
 import roj.asm.cp.CstInt;
 import roj.asm.cp.CstRef;
-import roj.asm.insn.AttrCode;
+import roj.asm.insn.Code;
 import roj.asm.insn.CodeVisitor;
 import roj.asm.insn.InsnList;
 import roj.asm.insn.InsnNode;
 import roj.asm.type.Type;
 import roj.asm.type.TypeHelper;
-import roj.collect.SimpleList;
+import roj.collect.ArrayList;
 import roj.collect.ToLongMap;
 import roj.concurrent.OperationDone;
 import roj.util.ArrayCache;
@@ -30,19 +30,19 @@ import static roj.asm.Opcodes.*;
  * @since 2023/4/19 2:06
  */
 public final class EnumHelper extends CodeVisitor {
-	public static final CDirAcc cDirAcc;
-	public interface CDirAcc { Map<String, Enum<?>> enumConstantDirectory(Class<? extends Enum<?>> clazz); }
-	static { cDirAcc = Bypass.builder(CDirAcc.class).unchecked().inline().delegate(Class.class, "enumConstantDirectory", "enumConstantDirectory").build(); }
+	public static final Constants CONSTANTS;
+	public interface Constants { Map<String, Enum<?>> enumConstantDirectory(Class<? extends Enum<?>> clazz); }
+	static { CONSTANTS = Bypass.builder(Constants.class).unchecked().inline().delegate(Class.class, "enumConstantDirectory", "enumConstantDirectory").build(); }
 	// 以上都没用
 
 	private final ToLongMap<String> parPos = new ToLongMap<>();
 
 	private final ClassNode ref;
-	private AttrCode staticInit;
+	private Code staticInit;
 
 	private CstInt len;
 	private InsnNode addPos;
-	private InsnList addCode;
+	private InsnList addCode = new InsnList();
 	private int lvid;
 
 	public EnumHelper(ClassNode klass) {
@@ -51,7 +51,7 @@ public final class EnumHelper extends CodeVisitor {
 		ref = klass;
 		klass.unparsed();
 
-		SimpleList<MethodNode> methods = klass.methods;
+		ArrayList<MethodNode> methods = klass.methods;
 		for (int i = 0; i < methods.size(); i++) {
 			MethodNode mn = methods.get(i);
 			if (mn.name().equals("<init>")) {
@@ -63,7 +63,7 @@ public final class EnumHelper extends CodeVisitor {
 					System.out.println(nameId);
 					System.out.println(ordinalId);
 
-					SimpleList<Type> param = new SimpleList<>(mn.parameters());
+					ArrayList<Type> param = new ArrayList<>(mn.parameters());
 					param.remove(Math.max(nameId, ordinalId));
 					param.remove(Math.min(nameId, ordinalId));
 					param.add(Type.primitive(Type.VOID));

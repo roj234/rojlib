@@ -7,7 +7,7 @@ import roj.asm.Attributed;
 import roj.asm.ClassDefinition;
 import roj.asm.MethodNode;
 import roj.asm.type.IType;
-import roj.compiler.context.LocalContext;
+import roj.compiler.CompileContext;
 import roj.compiler.diagnostic.Kind;
 import roj.config.Tokenizer;
 import roj.text.CharList;
@@ -26,9 +26,9 @@ public abstract class ComponentList {
 	public static final ComponentList NOT_FOUND = new EmptyComponentList();
 
 	@Nullable
-	public final MethodResult findMethod(LocalContext ctx, List<IType> params, @MagicConstant(flags = {IN_STATIC, THIS_ONLY, NO_REPORT}) int flags) {return findMethod(ctx, null, params, Collections.emptyMap(), flags);}
+	public final MethodResult findMethod(CompileContext ctx, List<IType> params, @MagicConstant(flags = {IN_STATIC, THIS_ONLY, NO_REPORT}) int flags) {return findMethod(ctx, null, params, Collections.emptyMap(), flags);}
 	@Nullable
-	public final MethodResult findMethod(LocalContext ctx, IType that, List<IType> params, @MagicConstant(flags = {IN_STATIC, THIS_ONLY, NO_REPORT}) int flags) {return findMethod(ctx, that, params, Collections.emptyMap(), flags);}
+	public final MethodResult findMethod(CompileContext ctx, IType that, List<IType> params, @MagicConstant(flags = {IN_STATIC, THIS_ONLY, NO_REPORT}) int flags) {return findMethod(ctx, that, params, Collections.emptyMap(), flags);}
 	/**
 	 * @param that this类型
 	 * @param params 参数数量及类型
@@ -36,14 +36,14 @@ public abstract class ComponentList {
 	 * @param flags
 	 */
 	@Nullable
-	public MethodResult findMethod(LocalContext ctx, IType that, List<IType> params, Map<String, IType> namedType, @MagicConstant(flags = {IN_STATIC, THIS_ONLY, NO_REPORT}) int flags) { throw new UnsupportedOperationException("这不是方法列表"); }
+	public MethodResult findMethod(CompileContext ctx, IType that, List<IType> params, Map<String, IType> namedType, @MagicConstant(flags = {IN_STATIC, THIS_ONLY, NO_REPORT}) int flags) { throw new UnsupportedOperationException("这不是方法列表"); }
 	@NotNull
-	public FieldResult findField(LocalContext ctx, @MagicConstant(flags = {IN_STATIC, THIS_ONLY}) int flags) { throw new UnsupportedOperationException("这不是字段列表"); }
+	public FieldResult findField(CompileContext ctx, @MagicConstant(flags = {IN_STATIC, THIS_ONLY}) int flags) { throw new UnsupportedOperationException("这不是字段列表"); }
 
 	public List<MethodNode> getMethods() {throw new UnsupportedOperationException("这不是方法列表");}
 	public boolean isOverriddenMethod(int id) {return false;}
 
-	static void checkDeprecation(LocalContext ctx, ClassDefinition owner, Attributed methodOrField) {
+	static void checkDeprecation(CompileContext ctx, ClassDefinition owner, Attributed methodOrField) {
 		if (owner.getRawAttribute("Deprecated") != null) {
 			ctx.report(Kind.WARNING, "annotation.deprecated", "symbol.type", owner);
 		}
@@ -59,8 +59,8 @@ public abstract class ComponentList {
 			if (param.length > 0) {
 				sb.append(":[");
 				for (Object o : param)
-					Tokenizer.escape(sb.append('"'), o.toString()).append('"');
-				sb.append(']');
+					Tokenizer.escape(sb.append('"'), o.toString()).append("\",");
+				sb.set(sb.length()-1, ']');
 			}
 		};
 	}

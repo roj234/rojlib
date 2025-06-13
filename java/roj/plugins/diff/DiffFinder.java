@@ -4,9 +4,9 @@
 
 package roj.plugins.diff;
 
+import roj.collect.ArrayList;
+import roj.collect.BitSet;
 import roj.collect.CharMap;
-import roj.collect.MyBitSet;
-import roj.collect.SimpleList;
 import roj.concurrent.*;
 import roj.config.ConfigMaster;
 import roj.config.auto.Serializer;
@@ -192,7 +192,7 @@ public class DiffFinder extends JFrame {
 
 				base = new File(uiInput.getText());
 				int baseLen = base.getAbsolutePath().length() + 1;
-				List<File> files = IOUtil.findAllFiles(base, file -> m.reset(file.getAbsolutePath().substring(baseLen)).find());
+				List<File> files = IOUtil.listFiles(base, file -> m.reset(file.getAbsolutePath().substring(baseLen)).find());
 
 				long bucketSize = (long) TextUtil.unscaledNumber1024(uiBucketSize.getText());
 				metas = new FileMeta[files.size()];
@@ -255,10 +255,10 @@ public class DiffFinder extends JFrame {
 	}
 	private static final Logger LOGGER = Logger.getLogger("Differ");
 	private void runDiffAsync(int completed, File base, FileMeta[] metas, File progress, File result, int preWindow, int slideWindow) {
-		List<List<FileMeta>> layered = new SimpleList<>();
+		List<List<FileMeta>> layered = new ArrayList<>();
 		for (FileMeta meta : metas) {
 			int bucket = meta.bucket;
-			while (layered.size() <= bucket) layered.add(new SimpleList<>());
+			while (layered.size() <= bucket) layered.add(new ArrayList<>());
 			layered.get(bucket).add(meta);
 		}
 
@@ -293,7 +293,7 @@ public class DiffFinder extends JFrame {
 			cleanup.setName("DIFFCleanup");
 			cleanup.start();
 
-			comparator = TaskPool.MaxThread(core, "DIFFCompare-");
+			comparator = TaskPool.newFixed(core, "DIFFCompare-");
 		}
 		private final TaskThread generator, cleanup;
 		private final TaskPool comparator;
@@ -380,7 +380,7 @@ public class DiffFinder extends JFrame {
 		private ScheduleTask updateProgressTask;
 		private RandomAccessFile progressFile;
 		private int progressOffset, progressMax;
-		private MyBitSet progressState;
+		private BitSet progressState;
 		private volatile int lastProgress;
 
 		void updateProgress() throws IOException {
@@ -401,7 +401,7 @@ public class DiffFinder extends JFrame {
 
 		private void taskGenerateThread(List<List<FileMeta>> layered, int slideWindow) {
 			int skip = progressOffset;
-			MyBitSet finishedBlock = new MyBitSet(layered.size());
+			BitSet finishedBlock = new BitSet(layered.size());
 
 			int taskCount = 0;
 
@@ -423,14 +423,14 @@ public class DiffFinder extends JFrame {
 			freeMemory(layered, finishedBlock);
 
 			int taskId = 0;
-			MyBitSet finishedTask = progressState = new MyBitSet(progressMax = taskCount-skip);
+			BitSet finishedTask = progressState = new BitSet(progressMax = taskCount-skip);
 			updateProgressTask = Scheduler.getDefaultScheduler().loop(this::updateProgress, 10000);
 
 			for (; i >= 0; i--) {
 				List<FileMeta> prev = i==0?Collections.emptyList():layered.get(i-1);
 				List<FileMeta> self = layered.get(i);
 
-				List<Promise<?>> tasks = new SimpleList<>();
+				List<Promise<?>> tasks = new ArrayList<>();
 
 				for (int j = 0; j < self.size(); j++) {
 					if (terminateFlag) return;
@@ -451,7 +451,7 @@ public class DiffFinder extends JFrame {
 						BsDiff diff = new BsDiff(); diff.setLeft(left.data);
 						int group = left.group;
 
-						List<DiffInfo> founds = new SimpleList<>();
+						List<DiffInfo> founds = new ArrayList<>();
 
 						for (int k = 0; k < prev.size(); k++) {
 							FileMeta right = prev.get(k);
@@ -528,7 +528,7 @@ public class DiffFinder extends JFrame {
 			DiffFinder.this.uiMemoryState.setText("内存占用: "+TextUtil.scaledNumber(mem));
 		}
 
-		private void freeMemory(List<List<FileMeta>> layered, MyBitSet finishedBlock) {
+		private void freeMemory(List<List<FileMeta>> layered, BitSet finishedBlock) {
 			long mem = 0;
 			for (int j = 0; j < layered.size(); j++) {
 				if (finishedBlock.allTrue(j, j + 2)) {

@@ -3,7 +3,7 @@ package roj.config.auto;
 import org.jetbrains.annotations.Nullable;
 import roj.ReferenceByGeneratedClass;
 import roj.asm.type.IType;
-import roj.collect.MyBitSet;
+import roj.collect.BitSet;
 import roj.config.serial.CVisitor;
 import roj.reflect.Java22Workaround;
 
@@ -54,7 +54,7 @@ abstract class Adapter {
 	public int fieldCount() { return 1; }
 	// TODO 20250531 如果未来哪天决定删除ObjectPool机制，可以把很多方法一起扬了，比如这个
 	public boolean isOptional() { return false; }
-	public int plusOptional(int fieldState, @Nullable MyBitSet fieldStateEx) { return fieldState; }
+	public int plusOptional(int fieldState, @Nullable BitSet fieldStateEx) { return fieldState; }
 	public boolean valueIsMap() { return getClass().getName().contains("GA$"); }
 
 	//WIP

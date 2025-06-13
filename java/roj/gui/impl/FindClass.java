@@ -12,8 +12,8 @@ import roj.asm.attr.Annotations;
 import roj.asm.attr.Attribute;
 import roj.asm.cp.Constant;
 import roj.asm.cp.CstRef;
-import roj.collect.MyHashSet;
-import roj.collect.SimpleList;
+import roj.collect.ArrayList;
+import roj.collect.HashSet;
 import roj.gui.GuiUtil;
 import roj.io.IOUtil;
 import roj.text.CharList;
@@ -51,7 +51,7 @@ public class FindClass extends JFrame {
 		Pattern p = uiSearch.getText().startsWith("!") ? Pattern.compile(uiSearch.getText().substring(1)) : Pattern.compile(uiSearch.getText(), Pattern.LITERAL);
 		Predicate<CharSequence> filter = (id) -> p.matcher(id).find();
 
-		MyHashSet<Object> out = new MyHashSet<>();
+		HashSet<Object> out = new HashSet<>();
 		if (uiSerClass.isSelected()) {
 			for (ClassNode data : ref) {
 				if (filter.test(data.name())) out.add(data.name());
@@ -153,7 +153,7 @@ public class FindClass extends JFrame {
 		for (Object node : out) model.addElement(node);
 	}
 
-	private void checkAnnotation(Predicate<CharSequence> filter, Annotations a, MyHashSet<Object> out, Attributed node, ClassNode data) {
+	private void checkAnnotation(Predicate<CharSequence> filter, Annotations a, HashSet<Object> out, Attributed node, ClassNode data) {
 		if (a == null) return;
 		for (Annotation annotation : a.annotations) {
 			if (filter.test(annotation.type())) {
@@ -171,7 +171,7 @@ public class FindClass extends JFrame {
 	private void open(File file) {
 		ref.clear();
 		if (file.isDirectory()) {
-			for (File aaa : IOUtil.findAllFiles(file, f -> IOUtil.extensionName(f.getName()).equals("jar"))) {
+			for (File aaa : IOUtil.listFiles(file, f -> IOUtil.extensionName(f.getName()).equals("jar"))) {
 				read(aaa);
 			}
 		}
@@ -192,7 +192,7 @@ public class FindClass extends JFrame {
 		}
 	}
 
-	private final SimpleList<ClassNode> ref = new SimpleList<>();
+	private final ArrayList<ClassNode> ref = new ArrayList<>();
 	private final DefaultListModel<Object> model = new DefaultListModel<>();
 	public FindClass() {
 		initComponents();

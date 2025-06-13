@@ -1,7 +1,6 @@
 package roj.reflect.litasm;
 
 import roj.collect.IntMap;
-import roj.reflect.ReflectionUtils;
 import roj.reflect.Unaligned;
 import roj.util.DynByteBuf;
 
@@ -313,7 +312,7 @@ abstract class Assembler {
 		for (Annotation annotation : annotations) {
 			if (annotation instanceof ObjectField field) {
 				if (field.value().isEmpty()) return 0;
-				return (int) ReflectionUtils.fieldOffset(type, field.value());
+				return (int) Unaligned.fieldOffset(type, field.value());
 			}
 		}
 

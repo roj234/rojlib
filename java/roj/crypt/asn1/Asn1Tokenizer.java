@@ -1,7 +1,7 @@
 package roj.crypt.asn1;
 
+import roj.collect.BitSet;
 import roj.collect.Int2IntMap;
-import roj.collect.MyBitSet;
 import roj.collect.TrieTree;
 import roj.config.Tokenizer;
 import roj.config.Word;
@@ -23,7 +23,7 @@ final class Asn1Tokenizer extends Tokenizer {
 		comma = 37, is = 38, dot2 = 39;
 
 	private static final TrieTree<Word> ASN1_TOKEN = new TrieTree<>();
-	private static final MyBitSet ASN1_LEND = new MyBitSet();
+	private static final BitSet ASN1_LEND = new BitSet();
 	private static final Int2IntMap ASN1_C2C = new Int2IntMap();
 
 	static {

@@ -1,7 +1,7 @@
 package roj.http.server;
 
+import roj.collect.HashMap;
 import roj.collect.LRUCache;
-import roj.collect.MyHashMap;
 import roj.concurrent.SegmentReadWriteLock;
 import roj.config.XNBTParser;
 import roj.config.auto.Serializer;
@@ -98,7 +98,7 @@ public class FileSessionStorage extends SessionStorage implements BiConsumer<Str
 		}
 
 		File file = new File(baseDir, id);
-		if (!file.isFile()) return new MyHashMap<>();
+		if (!file.isFile()) return new HashMap<>();
 
 		try (var in = new MyDataInputStream(new FileInputStream(file))) {
 			Serializer<Map<String, Object>> des = adapter();

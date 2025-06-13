@@ -2,10 +2,10 @@ package roj.compiler.asm;
 
 import roj.asm.type.IType;
 import roj.asm.type.Type;
-import roj.collect.SimpleList;
+import roj.collect.ArrayList;
+import roj.concurrent.OperationDone;
 import roj.text.CharList;
 import roj.text.TextUtil;
-import roj.util.Helpers;
 
 import java.util.Collections;
 import java.util.List;
@@ -80,11 +80,10 @@ public final class Asterisk implements IType {
 		try {
 			Asterisk clone = (Asterisk) super.clone();
 			clone.bound = clone.bound.clone();
-			clone.bounds = new SimpleList<>(clone.bounds);
+			clone.bounds = new ArrayList<>(clone.bounds);
 			return clone;
 		} catch (CloneNotSupportedException e) {
-			Helpers.athrow(e);
-			return Helpers.nonnull();
+			throw OperationDone.NEVER;
 		}
 	}
 

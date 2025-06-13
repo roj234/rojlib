@@ -1,12 +1,12 @@
 package roj.config;
 
-import roj.collect.LinkedMyHashMap;
-import roj.collect.MyBitSet;
-import roj.collect.MyHashMap;
+import roj.collect.BitSet;
+import roj.collect.HashMap;
+import roj.collect.LinkedHashMap;
 import roj.collect.TrieTree;
+import roj.concurrent.OperationDone;
 import roj.config.data.*;
 import roj.text.CharList;
-import roj.util.Helpers;
 
 import java.util.List;
 import java.util.Map;
@@ -28,7 +28,7 @@ public final class TOMLParser extends Parser {
 	private static final short eq = 17, dot = 18, dlmb = 19, drmb = 20;
 
 	private static final TrieTree<Word> TOML_TOKENS = new TrieTree<>();
-	private static final MyBitSet TOML_LENDS = new MyBitSet();
+	private static final BitSet TOML_LENDS = new BitSet();
 	static {
 		addKeywords(TOML_TOKENS, TRUE, "true", "false", "null");
 		addSymbols(TOML_TOKENS, TOML_LENDS, lBrace, "{", "}", "[", "]", ",", "=", ".", "[[", "]]");
@@ -138,7 +138,7 @@ public final class TOMLParser extends Parser {
 		return map;
 	}
 
-	private static Map<String, CEntry> createMap(int flag) { return (flag & ORDERED_MAP) != 0 ? new LinkedMyHashMap<>() : new MyHashMap<>(); }
+	private static Map<String, CEntry> createMap(int flag) { return (flag & ORDERED_MAP) != 0 ? new LinkedHashMap<>() : new HashMap<>(); }
 
 	@SuppressWarnings("fallthrough")
 	public static boolean literalSafe(CharSequence text) {
@@ -322,7 +322,7 @@ public final class TOMLParser extends Parser {
 					case NULL -> CNull.NULL;
 					default -> {
 						unexpected(w.val());
-						yield Helpers.nonnull();
+						throw OperationDone.NEVER;
 					}
 				};
 			}

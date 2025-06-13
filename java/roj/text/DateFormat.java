@@ -1,9 +1,9 @@
 package roj.text;
 
+import roj.collect.BitSet;
 import roj.collect.Int2IntMap;
 import roj.collect.IntList;
-import roj.collect.MyBitSet;
-import roj.collect.SimpleList;
+import roj.collect.ArrayList;
 import roj.config.ParseException;
 import roj.config.Tokenizer;
 import roj.config.Word;
@@ -46,9 +46,9 @@ public final class DateFormat {
 
 	public static DateFormat create(String format) throws ParseException {
 		IntList formats = new IntList();
-		SimpleList<String> formatChars = new SimpleList<>();
+		ArrayList<String> formatChars = new ArrayList<>();
 
-		Tokenizer wr = new Tokenizer().literalEnd(MyBitSet.from("'\" ")).init(format);
+		Tokenizer wr = new Tokenizer().literalEnd(BitSet.from("'\" ")).init(format);
 		while (wr.hasNext()) {
 			Word w = wr.next();
 			if (w.type() == Word.LITERAL) {
@@ -142,6 +142,11 @@ public final class DateFormat {
 		};
 		loop:
 		for (int id : formats) {
+			if (cal[0] == sb.length()) {
+				if (optional) break;
+				else throw new IllegalArgumentException("字符串过短");
+			}
+
 			switch (id) {
 				case -1 -> {
 					String s = chars[charI++];
@@ -232,10 +237,6 @@ public final class DateFormat {
 					if (i == prevI) throw new IllegalArgumentException("无效的时区Str");
 					tz = TimeZone.getTimeZone(sb.substring(prevI, i));
 				}
-			}
-			if (cal[0] == sb.length()) {
-				if (optional) break;
-				else throw new IllegalArgumentException("字符串过短");
 			}
 		}
 

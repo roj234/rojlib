@@ -10,7 +10,7 @@ public final class EntryMod {
 	String name;
 	ZEntry entry;
 
-	public static final int KEEP_TIME = 1, UFS = 2, LARGE = 4, COMPRESS = 8;
+	public static final byte KEEP_TIME = 1, UFS = 2, LARGE = 4, COMPRESS = 8;
 	@MagicConstant(flags = {KEEP_TIME, UFS, LARGE, COMPRESS})
 	public byte flag;
 

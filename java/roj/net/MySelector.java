@@ -1,9 +1,9 @@
 package roj.net;
 
-import roj.collect.SimpleList;
+import roj.collect.ArrayList;
 import roj.reflect.Bypass;
 import roj.reflect.Java22Workaround;
-import roj.reflect.ReflectionUtils;
+import roj.reflect.Unaligned;
 
 import java.io.IOException;
 import java.nio.channels.SelectionKey;
@@ -18,7 +18,7 @@ import static roj.reflect.Unaligned.U;
  * @author Roj233
  * @since 2022/1/24 11:32
  */
-final class MySelector extends SimpleList<SelectionKey> implements Set<SelectionKey> {
+final class MySelector extends ArrayList<SelectionKey> implements Set<SelectionKey> {
 	private MySelector() {super(100);}
 
 	public static Set<SelectionKey> getIterable(Selector sel) {
@@ -41,13 +41,9 @@ final class MySelector extends SimpleList<SelectionKey> implements Set<Selection
 				if (getter == null) {
 					getter = Bypass.builder(H.class).unchecked().access(t.getClass(), "keys", "getSet", null)
 								   .access(HashSet.class, "map", "getMap", null).build();
-					try {
-						oSelectedSet = U.objectFieldOffset(ReflectionUtils.getField(t.getClass(), "selectedKeys"));
-						oPublicSelectedSet = U.objectFieldOffset(ReflectionUtils.getField(t.getClass(), "publicSelectedKeys"));
-						oPublicSet = U.objectFieldOffset(ReflectionUtils.getField(t.getClass(), "publicKeys"));
-					} catch (NoSuchFieldException e){
-						e.printStackTrace();
-					}
+					oSelectedSet = Unaligned.fieldOffset(t.getClass(), "selectedKeys");
+					oPublicSelectedSet = Unaligned.fieldOffset(t.getClass(), "publicSelectedKeys");
+					oPublicSet = Unaligned.fieldOffset(t.getClass(), "publicKeys");
 				}
 			}
 		}

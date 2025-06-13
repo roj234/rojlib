@@ -7,8 +7,8 @@ import roj.asm.attr.Attribute;
 import roj.asm.cp.Constant;
 import roj.asm.cp.CstClass;
 import roj.asm.cp.CstRef;
-import roj.collect.MyHashMap;
-import roj.collect.SimpleList;
+import roj.collect.ArrayList;
+import roj.collect.HashMap;
 import roj.util.Helpers;
 import roj.util.TypedKey;
 
@@ -20,8 +20,8 @@ import java.util.Map;
  * @since 2024/1/6 23:03
  */
 public class ConstantPoolHooks implements Transformer {
-	private final MyHashMap<Object, Object> reference = new MyHashMap<>(), declare = new MyHashMap<>(),
-		annotationClass = new MyHashMap<>(), annotationField = new MyHashMap<>(), annotationMethod = new MyHashMap<>();
+	private final HashMap<Object, Object> reference = new HashMap<>(), declare = new HashMap<>(),
+		annotationClass = new HashMap<>(), annotationField = new HashMap<>(), annotationMethod = new HashMap<>();
 
 	public ConstantPoolHooks declaredClass(String owner, Hook<? super ClassNode> cb) { add(declare, owner, cb); return this; }
 	public ConstantPoolHooks declaredMethod(String owner, String name, String desc, Hook<? super MethodNode> cb) { add(declare, new MemberDescriptor(owner, name, desc), cb); return this; }
@@ -42,7 +42,7 @@ public class ConstantPoolHooks implements Transformer {
 		Object prev = reference.putIfAbsent(key, cb);
 		if (prev != null) {
 			if (prev instanceof Hook<?>) {
-				if (cb instanceof Hook) reference.put(key, SimpleList.asModifiableList(prev, cb));
+				if (cb instanceof Hook) reference.put(key, ArrayList.asModifiableList(prev, cb));
 				else {
 					reference.put(key, cb);
 					((List<Object>) cb).add(0, prev);
@@ -67,7 +67,7 @@ public class ConstantPoolHooks implements Transformer {
 			Constant c = cpArr.get(i);
 			switch (c.type()) {
 				case Constant.CLASS:
-					tr = reference.get(((CstClass) c).name().str());
+					tr = reference.get(((CstClass) c).value().str());
 					if (tr != null) mod |= transform(tr, data, c);
 				break;
 				case Constant.FIELD:
@@ -98,7 +98,7 @@ public class ConstantPoolHooks implements Transformer {
 		mod |= invokeDeclare(data, data.fields, d, annotationField);
 		return mod;
 	}
-	private boolean invokeDeclare(ClassNode data, SimpleList<? extends Member> nodes, MemberDescriptor d, MyHashMap<Object, Object> ref) throws TransformException {
+	private boolean invokeDeclare(ClassNode data, ArrayList<? extends Member> nodes, MemberDescriptor d, HashMap<Object, Object> ref) throws TransformException {
 		boolean mod = false;
 		Object tr;
 
@@ -121,7 +121,7 @@ public class ConstantPoolHooks implements Transformer {
 		}
 		return mod;
 	}
-	private boolean checkAnnotation(ClassNode data, Attributed node, TypedKey<Annotations> flag, MyHashMap<Object, Object> ref) throws TransformException {
+	private boolean checkAnnotation(ClassNode data, Attributed node, TypedKey<Annotations> flag, HashMap<Object, Object> ref) throws TransformException {
 		Annotations attr = node.getAttribute(data.cp, flag);
 		boolean mod = false;
 		if (attr != null) {

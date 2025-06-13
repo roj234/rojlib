@@ -1,10 +1,10 @@
 package roj.ui;
 
 import org.jetbrains.annotations.Nullable;
+import roj.collect.HashMap;
+import roj.collect.HashSet;
 import roj.collect.IntMap;
-import roj.collect.MyHashMap;
-import roj.collect.MyHashSet;
-import roj.collect.SimpleList;
+import roj.collect.ArrayList;
 import roj.config.ParseException;
 import roj.config.Tokenizer;
 import roj.config.Word;
@@ -157,7 +157,7 @@ public interface Argument<T> {
 						}
 					}
 				} else {
-					List<File> arr = new SimpleList<>();
+					List<File> arr = new ArrayList<>();
 					do {
 						arr.add(file.parse(ctx, null));
 					} while (!ctx.isRealEOF());
@@ -175,16 +175,16 @@ public interface Argument<T> {
 		@Override public int color() {return 0x1BCC00;}
 	}; }
 	static Argument<String> string(String... selection) {
-		MyHashMap<String, String> map = new MyHashMap<>(selection.length);
+		HashMap<String, String> map = new HashMap<>(selection.length);
 		for (String s : selection) map.put(s,s);
 		return oneOf(map);
 	}
 	static Argument<List<String>> stringFlags(String... flags) {
-		MyHashMap<String, String> map = new MyHashMap<>(flags.length);
+		HashMap<String, String> map = new HashMap<>(flags.length);
 		for (String s : flags) map.put(s,s);
 		return Helpers.cast(anyOf(map));
 	}
-	static <T extends Enum<T>> Argument<T> enumeration(Class<T> type) { return oneOf(Helpers.cast(EnumHelper.cDirAcc.enumConstantDirectory(type))); }
+	static <T extends Enum<T>> Argument<T> enumeration(Class<T> type) { return oneOf(Helpers.cast(EnumHelper.CONSTANTS.enumConstantDirectory(type))); }
 	static <T> Argument<T> oneOf(Map<String, T> map) { return new ArgSetOf<>(0, map); }
 	static Argument<String> suggest(Map<String, String> map) { return new ArgSetOf<>(1, map); }
 	static <T> Argument<List<T>> someOf(Map<String, T> map) { return Helpers.cast(new ArgSetOf<>(2, map)); }
@@ -202,7 +202,7 @@ public interface Argument<T> {
 		public T parse(CommandParser ctx, List<Completion> completions) throws ParseException {
 			updateChoices();
 			if (mode > 1) {
-				List<T> arr = new SimpleList<>();
+				List<T> arr = new ArrayList<>();
 				while (true) {
 					Word w = ctx.peekWord();
 					if (w == null || !choice.containsKey(w.val())) {
@@ -295,7 +295,7 @@ public interface Argument<T> {
 		return new Argument<>() {
 			@Override
 			public String[] parse(CommandParser ctx, @Nullable List<Completion> completions) throws ParseException {
-				List<String> tmp = new SimpleList<>();
+				List<String> tmp = new ArrayList<>();
 				while (true) {
 					var w = ctx.peekWord();
 					if (w == null) break;
@@ -374,7 +374,7 @@ public interface Argument<T> {
 		};
 	}
 	static Argument<Boolean> bool() {
-		final MyHashSet<String> truly = new MyHashSet<>("true", "t", "yes", "y"), falsy = new MyHashSet<>("false", "f", "no", "n");
+		final HashSet<String> truly = new HashSet<>("true", "t", "yes", "y"), falsy = new HashSet<>("false", "f", "no", "n");
 		return new Argument<Boolean>() {
 			@Override
 			public Boolean parse(CommandParser ctx, List<Completion> completions) throws ParseException {

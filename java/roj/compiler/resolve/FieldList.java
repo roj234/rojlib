@@ -4,11 +4,11 @@ import org.jetbrains.annotations.NotNull;
 import roj.asm.ClassDefinition;
 import roj.asm.FieldNode;
 import roj.asm.Opcodes;
-import roj.collect.SimpleList;
-import roj.compiler.LavaFeatures;
+import roj.collect.ArrayList;
+import roj.compiler.CompileContext;
+import roj.compiler.CompileUnit;
+import roj.compiler.api.Compiler;
 import roj.compiler.api.FieldAccessHook;
-import roj.compiler.context.CompileUnit;
-import roj.compiler.context.LocalContext;
 import roj.text.CharList;
 
 /**
@@ -17,8 +17,8 @@ import roj.text.CharList;
  * @since 2024/2/6 2:21
  */
 final class FieldList extends ComponentList {
-	final SimpleList<ClassDefinition> owners = new SimpleList<>();
-	final SimpleList<FieldNode> fields = new SimpleList<>();
+	final ArrayList<ClassDefinition> owners = new ArrayList<>();
+	final ArrayList<FieldNode> fields = new ArrayList<>();
 	private int childId;
 
 	void add(ClassDefinition klass, FieldNode mn) {
@@ -38,8 +38,8 @@ final class FieldList extends ComponentList {
 	}
 
 	@NotNull
-	public FieldResult findField(LocalContext ctx, int flags) {
-		SimpleList<FieldNode> fields = this.fields;
+	public FieldResult findField(CompileContext ctx, int flags) {
+		ArrayList<FieldNode> fields = this.fields;
 		int size = (flags&THIS_ONLY) != 0 ? childId : fields.size();
 
 		for (int j = 0; j < size; j++) {
@@ -76,9 +76,9 @@ final class FieldList extends ComponentList {
 		return new FieldResult(sb.append("]]").replace('/', '.').toStringAndFree());
 	}
 
-	static void checkBridgeMethod(LocalContext ctx, ClassDefinition owner, FieldNode fn) {
+	static void checkBridgeMethod(CompileContext ctx, ClassDefinition owner, FieldNode fn) {
 		if ((fn.modifier&Opcodes.ACC_PRIVATE) == 0 || ctx.file == owner ||
-			ctx.classes.getMaximumBinaryCompatibility() >= LavaFeatures.JAVA_11) return;
+			ctx.compiler.getMaximumBinaryCompatibility() >= Compiler.JAVA_11) return;
 
 		if (fn.getRawAttribute(FieldAccessHook.NAME) != null) return;
 

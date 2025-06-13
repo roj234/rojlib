@@ -80,10 +80,10 @@ public final class CstTop extends Constant {
 	final CstTop set(byte cat, CstClass clazz, CstNameAndType desc) {
 		type = cat;
 
-		strVal = clazz.name().str();
+		strVal = clazz.value().str();
 		strVal2 = desc.name().str();
 		strVal3 = desc.rawDesc().str();
-		hash = 31 * (31 * desc.hashCode() + clazz.name().hashCode()) + cat;
+		hash = 31 * (31 * desc.hashCode() + clazz.value().hashCode()) + cat;
 		return this;
 	}
 	final CstTop set(int kind, CstRef ref) {
@@ -124,7 +124,7 @@ public final class CstTop extends Constant {
 			case PACKAGE:
 			case STRING:
 			case METHOD_TYPE:
-				return strVal.equals(((CstRefUTF) c).name().str());
+				return strVal.equals(((CstRefUTF) c).value().str());
 			case NAME_AND_TYPE: {
 				CstNameAndType r = (CstNameAndType) c;
 				return strVal.equals(r.name().str()) && strVal2.equals(r.rawDesc().str());

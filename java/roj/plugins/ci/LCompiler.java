@@ -1,13 +1,13 @@
 package roj.plugins.ci;
 
 import roj.asmx.ClassResource;
-import roj.collect.SimpleList;
-import roj.compiler.context.CompileUnit;
-import roj.compiler.context.JavaCompileUnit;
-import roj.compiler.context.LocalContext;
+import roj.collect.ArrayList;
+import roj.compiler.CompileContext;
+import roj.compiler.CompileUnit;
+import roj.compiler.JavaCompileUnit;
+import roj.compiler.LavaCompiler;
 import roj.compiler.diagnostic.Kind;
 import roj.compiler.diagnostic.TextDiagnosticReporter;
-import roj.compiler.plugin.GlobalContextApi;
 import roj.config.ParseException;
 import roj.io.IOUtil;
 import roj.text.CharList;
@@ -24,7 +24,7 @@ import java.util.List;
  * @since 2025/4/4 1:01
  */
 public final class LCompiler extends TextDiagnosticReporter implements Compiler {
-	private final GlobalContextApi ctx = new GlobalContextApi();
+	private final LavaCompiler compiler = new LavaCompiler();
 
 	private final String basePath;
 	private final Factory factory;
@@ -46,7 +46,7 @@ public final class LCompiler extends TextDiagnosticReporter implements Compiler 
 		showErrorCode = showDiagnosticId;
 		buf = new CharList(1024);
 
-		List<CompileUnit> files = new SimpleList<>();
+		List<CompileUnit> files = new ArrayList<>();
 		for (File source : sources) {
 			try {
 				files.add(JavaCompileUnit.create(source.getName(), IOUtil.readString(source)));
@@ -55,45 +55,44 @@ public final class LCompiler extends TextDiagnosticReporter implements Compiler 
 			}
 		}
 
-		var lc = ctx.createLocalContext();
-		LocalContext.set(lc);
+		CompileContext.set(compiler.createContext());
 		block:
 		try {
 			for (int i = files.size() - 1; i >= 0; i--) {
 				// 如果解析失败或者不需要解析
-				if (!files.get(i).S1_Struct()) files.remove(i);
+				if (!files.get(i).S1parseStruct()) files.remove(i);
 			}
-			if (ctx.hasError()) break block;
+			if (compiler.hasError()) break block;
 
-			ctx.addGeneratedCompileUnits(files);
+			compiler.getParsableUnits(files);
 			for (int i = 0; i < files.size(); i++) {
-				files.get(i).S2_ResolveName();
+				files.get(i).S2p1resolveName();
 			}
-			if (ctx.hasError()) break block;
+			if (compiler.hasError()) break block;
 			for (int i = 0; i < files.size(); i++) {
-				files.get(i).S2_ResolveType();
+				files.get(i).S2p2resolveType();
 			}
-			if (ctx.hasError()) break block;
+			if (compiler.hasError()) break block;
 			for (int i = 0; i < files.size(); i++) {
-				files.get(i).S2_ResolveMethod();
+				files.get(i).S2p3resolveMethod();
 			}
-			if (ctx.hasError()) break block;
+			if (compiler.hasError()) break block;
 			for (int i = 0; i < files.size(); i++) {
-				files.get(i).S3_Annotation();
+				files.get(i).S3processAnnotation();
 			}
-			if (ctx.hasError()) break block;
+			if (compiler.hasError()) break block;
 			for (int i = 0; i < files.size(); i++) {
-				files.get(i).S4_Code();
+				files.get(i).S4parseCode();
 			}
 		} catch (ParseException e) {
 			e.printStackTrace();
 		} finally {
-			LocalContext.set(null);
+			CompileContext.set(null);
 		}
 
-		boolean isOK = !ctx.hasError();
+		boolean isOK = !compiler.hasError();
 
-		super.printSum();
+		super.summary();
 		System.out.println(new Text(buf).bgColor16(isOK ? Terminal.BLUE : Terminal.RED).color16(Terminal.WHITE + Terminal.HIGHLIGHT).toAnsiString());
 		buf._free();
 		return isOK ? files : null;

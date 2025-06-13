@@ -1,6 +1,6 @@
 package roj.plugins.p2p;
 
-import roj.collect.SimpleList;
+import roj.collect.ArrayList;
 import roj.net.Net;
 
 import java.io.IOException;
@@ -42,7 +42,7 @@ public final class Servers {
 		this.udpKeepaliveServer = new InetSocketAddress[] {Net.parseUnresolvedAddress(udpKeepAliveHost, 53)};
 
 		int udpPos = 0;
-		List<String> list = new SimpleList<>();
+		List<String> list = new ArrayList<>();
 		for (int j = 0; j < objects.length; j++) {
 			String s = objects[j];
 			if (s == null) {

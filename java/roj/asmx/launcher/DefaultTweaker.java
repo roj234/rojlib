@@ -12,9 +12,9 @@ import roj.asmx.AnnotatedElement;
 import roj.asmx.ConstantPoolHooks;
 import roj.asmx.injector.CodeWeaver;
 import roj.asmx.injector.WeaveException;
-import roj.collect.SimpleList;
+import roj.collect.ArrayList;
 import roj.io.IOUtil;
-import roj.reflect.ReflectionUtils;
+import roj.reflect.Reflection;
 import roj.util.Helpers;
 
 import java.io.IOException;
@@ -37,7 +37,7 @@ public class DefaultTweaker implements ITweaker {
 	@Override
 	public void init(List<String> args, Bootstrap loader) {
 		try {
-			List<A> classes = new SimpleList<>(), transformers = new SimpleList<>();
+			List<A> classes = new ArrayList<>(), transformers = new ArrayList<>();
 
 			for (AnnotatedElement element : loader.getAnnotations().annotatedBy("roj/asmx/launcher/Autoload")) {
 				Annotation a = element.annotations().get("roj/asmx/launcher/Autoload");
@@ -95,7 +95,7 @@ public class DefaultTweaker implements ITweaker {
 				w.visitSize(3, 0);
 				for (A d : classes) {
 					w.ldc(new CstClass(d.name));
-					w.invokeS("roj/reflect/ReflectionUtils", "ensureClassInitialized", "(Ljava/lang/Class;)V");
+					w.invokeS("roj/reflect/Reflection", "ensureClassInitialized", "(Ljava/lang/Class;)V");
 				}
 				for (A d : transformers) {
 					w.field(Opcodes.GETSTATIC, "roj/asmx/launcher/Bootstrap", "instance", "Lroj/asmx/launcher/Bootstrap;");
@@ -104,8 +104,8 @@ public class DefaultTweaker implements ITweaker {
 				}
 				w.insn(Opcodes.RETURN);
 
-				Class<?> klass = ReflectionUtils.defineWeakClass(AsmCache.toByteArrayShared(autoloader));
-				ReflectionUtils.ensureClassInitialized(klass);
+				Class<?> klass = Reflection.defineWeakClass(AsmCache.toByteArrayShared(autoloader));
+				Reflection.ensureClassInitialized(klass);
 			}
 
 			loader.registerTransformer(NIXIM);

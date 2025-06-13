@@ -8,7 +8,7 @@ import roj.asm.cp.ConstantPool;
 import roj.asm.cp.CstUTF;
 import roj.asm.type.Type;
 import roj.asm.type.TypeHelper;
-import roj.collect.LinkedMyHashMap;
+import roj.collect.LinkedHashMap;
 import roj.config.data.CEntry;
 import roj.config.data.CMap;
 import roj.config.serial.CVisitor;
@@ -28,7 +28,7 @@ import java.util.Map;
 public class Annotation extends CMap {
 	private String type;
 
-	public Annotation() {super(new LinkedMyHashMap<>());}
+	public Annotation() {super(new LinkedHashMap<>());}
 	public Annotation(String type) {
 		this();
 		this.type = type;
@@ -53,13 +53,13 @@ public class Annotation extends CMap {
 
 	public final Type getClass(String name) {
 		var av = getOr(name);
-		if (av == null || av.dataType() != AnnVal.ANNOTATION_CLASS) return Helpers.nonnull();
+		if (av == null || av.dataType() != AnnVal.ANNOTATION_CLASS) return Helpers.maybeNull();
 		return ((AClass) av).value;
 	}
 
 	public final Annotation getAnnotation(String name) {
 		var av = getOr(name);
-		if (av == null) return Helpers.nonnull();
+		if (av == null) return Helpers.maybeNull();
 		return ((Annotation) av);
 	}
 
@@ -71,7 +71,7 @@ public class Annotation extends CMap {
 
 	@Override
 	protected CEntry put(String k, CEntry v, int flag) {
-		if (properties == Collections.EMPTY_MAP) properties = new LinkedMyHashMap<>();
+		if (properties == Collections.EMPTY_MAP) properties = new LinkedHashMap<>();
 		return super.put(k, v, flag);
 	}
 
@@ -82,7 +82,7 @@ public class Annotation extends CMap {
 
 		Map<String, CEntry> params;
 		if (len > 0) {
-			params = new LinkedMyHashMap<>(len);
+			params = new LinkedHashMap<>(len);
 			while (len-- > 0) {
 				params.put(((CstUTF) pool.get(r)).str(), AnnVal.parse(pool, r));
 			}

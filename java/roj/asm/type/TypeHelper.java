@@ -1,7 +1,7 @@
 package roj.asm.type;
 
 import roj.asm.insn.AbstractCodeWriter;
-import roj.collect.MyHashMap;
+import roj.collect.HashMap;
 import roj.config.Tokenizer;
 import roj.io.IOUtil;
 import roj.text.CharList;
@@ -63,9 +63,9 @@ public final class TypeHelper {
 		return size;
 	}
 
-	static final MyHashMap<String, Object[]> ByName;
+	static final HashMap<String, Object[]> ByName;
 	static {
-		ByName = new MyHashMap<>(MAP.length);
+		ByName = new HashMap<>(MAP.length);
 		for (Object[] o : MAP) {
 			if (o != null && o[1] != null) ByName.put(o[1].toString(), o);
 		}

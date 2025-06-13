@@ -5,14 +5,14 @@ import org.jetbrains.annotations.NotNull;
 import roj.asm.AsmCache;
 import roj.asm.attr.Attribute;
 import roj.asm.cp.ConstantPool;
-import roj.collect.LinkedMyHashMap;
-import roj.collect.SimpleList;
+import roj.collect.ArrayList;
+import roj.collect.LinkedHashMap;
+import roj.concurrent.OperationDone;
 import roj.config.Tokenizer;
 import roj.config.data.CInt;
 import roj.io.IOUtil;
 import roj.text.CharList;
 import roj.util.DynByteBuf;
-import roj.util.Helpers;
 
 import java.util.Collections;
 import java.util.Iterator;
@@ -83,6 +83,18 @@ public class Signature extends Attribute {
 			if (!exceptions.isEmpty()) throw new IllegalStateException("非方法泛型不能定义抛出异常");
 			if (type == FIELD && values.size() != 1) throw new IllegalStateException("字段泛型只能有一项值");
 		}
+	}
+
+	@NotNull
+	public List<IType> getBounds() {
+		List<IType> bounds = new ArrayList<>(typeParams.size());
+		for (List<IType> value : typeParams.values()) {
+			IType type = value.get(0);
+			if (type.genericType() == IType.PLACEHOLDER_TYPE) type = value.get(1);
+
+			bounds.add(type);
+		}
+		return bounds;
 	}
 
 	@Override public String name() {return "Signature";}
@@ -214,14 +226,6 @@ public class Signature extends Attribute {
 		}
 	}
 
-	public static void main(String[] args) {
-		var signature = parse(args[0]);
-		System.out.println("getTypeParam(): "+signature.getTypeParam(IOUtil.getSharedCharBuf()).toString());
-		System.out.println("toString(): "+signature);
-		System.out.println("toDesc(): "+signature.toDesc());
-		signature.validate();
-	}
-
 	public static Signature parse(CharSequence s) {return parse(s, 99);}
 	public static Signature parse(CharSequence s, @MagicConstant(intValues = {CLASS, FIELD, METHOD, 99/*ANY*/}) int expect) {
 		CInt i1 = new CInt();
@@ -233,7 +237,7 @@ public class Signature extends Attribute {
 
 		// type parameter
 		if (s.charAt(0) == '<') {
-			sign.typeParams = new LinkedMyHashMap<>();
+			sign.typeParams = new LinkedHashMap<>();
 			sign.type = CLASS;
 
 			if (expect == FIELD) fail("未预料的<类型参数>(预期类型是<字段>)", 0, s);
@@ -250,7 +254,7 @@ public class Signature extends Attribute {
 
 				// +1: skip ':'
 				i = j + 1;
-				SimpleList<IType> vals = new SimpleList<>(2);
+				ArrayList<IType> vals = new ArrayList<>(2);
 
 				// first parameter: 'extends'
 				// 'nullable': use '::' mark EmptyClass
@@ -294,7 +298,7 @@ public class Signature extends Attribute {
 			// out
 			v.add(parseValue(s, i1, F_PRIMITIVE, tmp));
 
-			sign.values = new SimpleList<>(v);
+			sign.values = new ArrayList<>(v);
 
 			// throws
 			i = i1.value++;
@@ -307,7 +311,7 @@ public class Signature extends Attribute {
 					i1.value++;
 				}
 
-				sign.exceptions = new SimpleList<>(v);
+				sign.exceptions = new ArrayList<>(v);
 			}
 		} else {
 			i1.value = i;
@@ -325,7 +329,7 @@ public class Signature extends Attribute {
 				}
 			}
 
-			sign.values = new SimpleList<>(v);
+			sign.values = new ArrayList<>(v);
 		}
 
 		if (sign.type != expect && expect != 99) {
@@ -369,7 +373,7 @@ public class Signature extends Attribute {
 					return array == 0 ? Type.primitive(c) : Type.primitive(c, array);
 				} catch (Exception e) {
 					fail("无效的类型: "+e.getMessage(),i,s);
-					return Helpers.nonnull();
+					throw OperationDone.NEVER;
 				}
 		}
 	}

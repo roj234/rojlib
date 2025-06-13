@@ -1,7 +1,7 @@
 package roj.ui;
 
 import roj.math.MathUtils;
-import roj.reflect.ReflectionUtils;
+import roj.reflect.Unaligned;
 import roj.text.CharList;
 import roj.text.TextUtil;
 
@@ -17,7 +17,9 @@ public class ProgressBar implements AutoCloseable {
 
 	protected static final int BAR_DELAY = 40;
 	protected volatile long barTime;
-	protected static final long UPDATE_OFFSET = ReflectionUtils.fieldOffset(ProgressBar.class, "barTime");
+	protected static final long UPDATE_OFFSET = Unaligned.fieldOffset(ProgressBar.class, "barTime");
+
+	private boolean closed;
 
 	protected String name, prefix;
 	public ProgressBar(String name) {this.name = name;}
@@ -27,7 +29,7 @@ public class ProgressBar implements AutoCloseable {
 
 	protected int getPostFixWidth() {return 0;}
 	protected void renderPostFix(CharList sb) {}
-	protected void render(CharList b) {Terminal.renderBottomLine(b);}
+	protected void render(CharList b) {if(!closed) Terminal.renderBottomLine(b);}
 	public void _forceUpdate() {render(batch);}
 
 	public void setTitle(String text) {
@@ -80,11 +82,11 @@ public class ProgressBar implements AutoCloseable {
 		render(b.append("\u001B[0m"));
 	}
 
-	@Override public void close() {Terminal.removeBottomLine(batch);}
-	public final void end() {close();}
+	@Override public void close() {end();closed = true;}
+	public void end() {Terminal.removeBottomLine(batch);}
 	public final void end(String message) {end(message, Terminal.GREEN);}
-	public void end(String message, int color) {
-		close();
+	public final void end(String message, int color) {
+		end();
 
 		batch.clear();
 		System.out.println(batch

@@ -2,7 +2,7 @@ package roj.plugins.mychat;
 
 import roj.collect.IntSet;
 import roj.collect.RingBuffer;
-import roj.collect.SimpleList;
+import roj.collect.ArrayList;
 import roj.concurrent.PacketBuffer;
 import roj.http.WebSocket;
 import roj.io.IOUtil;
@@ -122,7 +122,7 @@ class ChatWorker extends WebSocket {
 
 			if (len > 1000) len = 1000;
 
-			SimpleList<Message> msgs = new SimpleList<>(Math.min(his.capacity(), len));
+			ArrayList<Message> msgs = new ArrayList<>(Math.min(his.capacity(), len));
 
 			off = his.size() - len - off;
 			if (off < 0) {

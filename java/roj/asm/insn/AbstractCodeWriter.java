@@ -26,7 +26,7 @@ public abstract class AbstractCodeWriter extends CodeVisitor {
 	protected DynByteBuf codeOb;
 	protected List<Segment> segments = Collections.emptyList();
 
-	protected final MyHashSet<Label> labels = new MyHashSet<>(Hasher.identity());
+	protected final HashSet<Label> labels = new HashSet<>(Hasher.identity());
 
 	IntMap<Label> bciR2W;
 	final void validateBciRef() {
@@ -36,8 +36,8 @@ public abstract class AbstractCodeWriter extends CodeVisitor {
 	}
 
 	// region visitor
-	protected final void multiArray(CstClass clz, int dimension) { multiArray(clz.name().str(), dimension); }
-	protected final void clazz(byte code, CstClass clz) { clazz(code, clz.name().str()); }
+	protected final void multiArray(CstClass clz, int dimension) { multiArray(clz.value().str(), dimension); }
+	protected final void clazz(byte code, CstClass clz) { clazz(code, clz.value().str()); }
 	protected final void ldc(byte code, Constant c) { if (code == LDC2_W) ldc2(c); else ldc1(code, c); }
 	protected final void invokeDyn(CstDynamic dyn, int type) { invokeDyn(dyn.tableIdx, dyn.desc().name().str(), dyn.desc().rawDesc().str(), type); }
 	protected final void invokeItf(CstRef method, short argc) {
@@ -60,7 +60,7 @@ public abstract class AbstractCodeWriter extends CodeVisitor {
 		int hig = r.readInt();
 		int count = hig - low + 1;
 
-		SimpleList<SwitchTarget> map = new SimpleList<>(count);
+		ArrayList<SwitchTarget> map = new ArrayList<>(count);
 
 		if (count > 100000) throw new IllegalArgumentException("length > 100000");
 
@@ -75,7 +75,7 @@ public abstract class AbstractCodeWriter extends CodeVisitor {
 		int def = r.readInt();
 		int count = r.readInt();
 
-		SimpleList<SwitchTarget> map = new SimpleList<>(count);
+		ArrayList<SwitchTarget> map = new ArrayList<>(count);
 
 		if (count > 100000) throw new IllegalArgumentException("length > 100000");
 
@@ -279,7 +279,7 @@ public abstract class AbstractCodeWriter extends CodeVisitor {
 	}
 	public final void unpackArray(int slot, Class<?>... types) {
 		Type[] types1 = new Type[types.length];
-		for (int i = 0; i < types.length; i++) types1[i] = fromJavaType(types[i]);
+		for (int i = 0; i < types.length; i++) types1[i] = from(types[i]);
 		unpackArray(slot, 0, types1);
 	}
 	public final void unpackArray(int slot, int begin, Type... types) { unpackArray(slot, begin, Arrays.asList(types)); }
@@ -344,6 +344,7 @@ public abstract class AbstractCodeWriter extends CodeVisitor {
 
 		labels.add(x);
 	}
+	public final void _addLabel(Label x) {labels.add(x);}
 
 	final boolean updateOffset(Collection<Label> labels, int[] offSum, int len) {
 		int i = 0;

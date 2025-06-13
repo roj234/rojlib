@@ -1,6 +1,6 @@
 package roj.compiler.test;
 
-import roj.collect.MyHashMap;
+import roj.collect.HashMap;
 import roj.compiler.api.Switchable;
 import roj.compiler.plugins.annotations.Operator;
 import roj.compiler.plugins.primgen.PrimitiveGeneric;
@@ -28,7 +28,7 @@ public class Test<T> {
 
 	@Operator("+")
 	public static <K, V> Map<K, V> add(Map<K, V> map1, Map<K, V> map2) {
-		MyHashMap<K, V> out = new MyHashMap<>(map1);
+		HashMap<K, V> out = new HashMap<>(map1);
 		out.putAll(map2);
 		return out;
 	}

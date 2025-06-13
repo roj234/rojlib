@@ -10,9 +10,8 @@ import roj.asm.type.Generic;
 import roj.asm.type.Signature;
 import roj.asm.type.Type;
 import roj.io.IOUtil;
-import roj.reflect.Bypass;
 import roj.reflect.ClassDefiner;
-import roj.reflect.ReflectionUtils;
+import roj.reflect.Reflection;
 import roj.text.CharList;
 
 import java.util.Collections;
@@ -84,9 +83,8 @@ final class EventListenerImpl implements EventListener {
 		ListenerInfo info = this.infos.get(0);
 		ClassNode c = new ClassNode();
 
-		c.parent(Bypass.MAGIC_ACCESSOR_CLASS);
-		c.name("roj/asmx/event/EventListenerImpl$"+ReflectionUtils.uniqueId());
-		ClassDefiner.premake(c);
+		c.parent(Reflection.MAGIC_ACCESSOR_CLASS);
+		c.name("roj/asmx/event/EventListenerImpl$"+Reflection.uniqueId());
 		c.addInterface("roj/asmx/event/EventListenerImpl$ASM");
 
 		CodeWriter cw = c.newMethod(ACC_PUBLIC|ACC_FINAL, "invoke", "(Lroj/asmx/event/Event;)V");
@@ -175,7 +173,7 @@ final class EventListenerImpl implements EventListener {
 		}
 
 		cw.finish();
-		return (ASM) ClassDefiner.make(c);
+		return (ASM) ClassDefiner.newInstance(c);
 	}
 	private static int callEvent(ClassNode out, CodeWriter c, Member listener, int fid) {
 		String clz = listener.owner();

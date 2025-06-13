@@ -1,6 +1,6 @@
 package roj.config;
 
-import roj.collect.MyHashMap;
+import roj.collect.HashMap;
 import roj.config.data.CEntry;
 import roj.config.serial.CVisitor;
 import roj.io.IOUtil;
@@ -88,7 +88,7 @@ public abstract class Parser extends Tokenizer implements BinaryParser {
 
 	final Map<String, String> addComment(Map<String, String> map, String v) {
 		if (comment == null || comment.length() == 0) return map;
-		if (map == null) map = new MyHashMap<>();
+		if (map == null) map = new HashMap<>();
 		map.put(v, comment.toString());
 		comment.clear();
 		return map;

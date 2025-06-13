@@ -1,11 +1,11 @@
 package roj.collect;
 
 import org.intellij.lang.annotations.MagicConstant;
-import roj.reflect.ReflectionUtils;
+import roj.reflect.Unaligned;
 import roj.util.ArrayCache;
 import roj.util.Helpers;
+import roj.util.Multisort;
 import roj.util.NativeArray;
-import roj.util.TimSortForEveryone;
 
 import java.util.*;
 import java.util.function.Function;
@@ -22,7 +22,7 @@ public class MatchMap<K extends Comparable<K>, V> {
 		public V value;
 	}
 
-	private final MyHashMap<K, PosList> map = new MyHashMap<>();
+	private final HashMap<K, PosList> map = new HashMap<>();
 	private int size;
 
 	private static final Function<Object, PosList> CIA_FUNC = (x) -> new PosList();
@@ -59,7 +59,7 @@ public class MatchMap<K extends Comparable<K>, V> {
 			}
 
 			// 同时排序pos和entries两个数组
-			TimSortForEveryone.sort(0, size, (refLeft, offLeft, offRight) -> {
+			Multisort.sort(0, size, (refLeft, offLeft, offRight) -> {
 				int o = U.getInt(refLeft, offLeft+2), o2 = U.getInt(null, offRight+2);
 				int cmp = KEYCMP.compare(entries[o], entries[o2]);
 				if (cmp != 0) return cmp;
@@ -228,10 +228,10 @@ public class MatchMap<K extends Comparable<K>, V> {
 
 	public void clear() { size = 0; map.clear(); }
 
-	private static final long CACHE_OFFSET = ReflectionUtils.fieldOffset(MatchMap.class, "stateCache");
+	private static final long CACHE_OFFSET = Unaligned.fieldOffset(MatchMap.class, "stateCache");
 	private static class State {
 		final PosList a = new PosList(), b = new PosList();
-		final SimpleList<MyBitSet> aflag = new SimpleList<>(), bflag = new SimpleList<>();
+		final ArrayList<BitSet> aflag = new ArrayList<>(), bflag = new ArrayList<>();
 	}
 	private State stateCache;
 	private State getStateCache() {
@@ -251,7 +251,7 @@ public class MatchMap<K extends Comparable<K>, V> {
 	/**
 	 * @see #matchUnordered(List, int, Collection)
 	 */
-	public List<Entry<V>> matchUnordered(List<K> key, int flag) { return matchUnordered(key, flag, new SimpleList<>()); }
+	public List<Entry<V>> matchUnordered(List<K> key, int flag) { return matchUnordered(key, flag, new ArrayList<>()); }
 	/**
 	 * 高性能批量查找无序子序列.
 	 * 如下示例中，haystack均指该集合中的一个字符串，不过方法实际上是对集合的匹配，而且仅需needle长度(而不是集合大小)的对数时间
@@ -306,7 +306,7 @@ public class MatchMap<K extends Comparable<K>, V> {
 
 		var tmp = getStateCache();
 		var prev = tmp.a;
-		SimpleList<MyBitSet> prevBits = tmp.aflag, nextBits = tmp.bflag;
+		ArrayList<BitSet> prevBits = tmp.aflag, nextBits = tmp.bflag;
 
 		if (o instanceof Iterable<?> it) {
 			var itr = it.iterator();
@@ -328,7 +328,7 @@ public class MatchMap<K extends Comparable<K>, V> {
 						var newPos = list.pos[j];
 						prev.add(entry, 1 << newPos);
 						if (newPos >= 16) {
-							var largeBits = new MyBitSet();
+							var largeBits = new BitSet();
 							largeBits.add(newPos);
 
 							prevBits.ensureCapacity(prev.size);
@@ -389,7 +389,7 @@ public class MatchMap<K extends Comparable<K>, V> {
 								}
 							} else {
 								var largeBits = prevBits.get(j);
-								if (largeBits == null) prevBits.set(j, largeBits = new MyBitSet());
+								if (largeBits == null) prevBits.set(j, largeBits = new BitSet());
 								if (largeBits.add(newPos)) break;
 							}
 

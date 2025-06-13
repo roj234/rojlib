@@ -1,8 +1,8 @@
 package roj.archive.qz;
 
 import org.jetbrains.annotations.NotNull;
+import roj.collect.HashMap;
 import roj.collect.IntMap;
-import roj.collect.MyHashMap;
 import roj.io.Finishable;
 import roj.io.IOUtil;
 import roj.util.ArrayUtil;
@@ -131,7 +131,7 @@ final class CoderInfo extends QZCoder {
 			// noinspection all
 			streams[i] = new SizeTracker(block, i);
 
-		return new CompositeOutputStream(createOutputStreams(block, streams, new MyHashMap<>())[0], streams);
+		return new CompositeOutputStream(createOutputStreams(block, streams, new HashMap<>())[0], streams);
 	}
 	private OutputStream[] createOutputStreams(WordBlock block, OutputStream[] fileStreams,
 											   Map<CoderInfo, OutputStream[]> streamCache) throws IOException {

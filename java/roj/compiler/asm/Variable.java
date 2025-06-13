@@ -3,13 +3,13 @@ package roj.compiler.asm;
 import org.jetbrains.annotations.Nullable;
 import roj.asm.attr.LocalVariableTable;
 import roj.asm.type.IType;
-import roj.collect.RSegmentTree;
+import roj.collect.IntervalPartition;
 
 /**
  * @author Roj234
  * @since 2023/9/24 4:27
  */
-public class Variable extends LocalVariableTable.Item implements RSegmentTree.Range {
+public class Variable extends LocalVariableTable.Item implements IntervalPartition.Range {
 	public Variable(String name, IType type) { super(name, type); }
 
 	public boolean isFinal, hasValue;
@@ -36,7 +36,7 @@ public class Variable extends LocalVariableTable.Item implements RSegmentTree.Ra
 	public int pos;
 
 	// (WIP) 基于VisMap分区返回的占用状态：解决生命周期黑洞问题
-	public RSegmentTree<?> complexStartEnd;
+	public IntervalPartition<?> complexStartEnd;
 
 	public long startPos() { return start.getValue(); }
 	public long endPos() { return end.getValue(); }

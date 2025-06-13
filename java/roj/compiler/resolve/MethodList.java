@@ -10,16 +10,16 @@ import roj.asm.type.IType;
 import roj.asm.type.Signature;
 import roj.asm.type.Type;
 import roj.asmx.mapper.ParamNameMapper;
+import roj.collect.ArrayList;
+import roj.collect.BitSet;
+import roj.collect.HashMap;
 import roj.collect.IntMap;
-import roj.collect.MyBitSet;
-import roj.collect.MyHashMap;
-import roj.collect.SimpleList;
-import roj.compiler.LavaFeatures;
+import roj.compiler.CompileContext;
+import roj.compiler.CompileUnit;
+import roj.compiler.LavaCompiler;
+import roj.compiler.api.Compiler;
 import roj.compiler.api.InvokeHook;
 import roj.compiler.ast.expr.Expr;
-import roj.compiler.context.CompileUnit;
-import roj.compiler.context.GlobalContext;
-import roj.compiler.context.LocalContext;
 import roj.compiler.diagnostic.Kind;
 import roj.text.CharList;
 import roj.text.TextUtil;
@@ -35,18 +35,18 @@ import java.util.Map;
  */
 final class MethodList extends ComponentList {
 	ClassDefinition owner;
-	final SimpleList<MethodNode> methods = new SimpleList<>();
+	final ArrayList<MethodNode> methods = new ArrayList<>();
 	private int childId;
-	private MyHashMap<String, List<MethodNode>> ddtmp = new MyHashMap<>();
-	private MyBitSet overrider;
+	private HashMap<String, List<MethodNode>> ddtmp = new HashMap<>();
+	private BitSet overrider;
 
 	void add(ClassDefinition klass, MethodNode mn) {
 		// 忽略改变返回类型的重载的parent (akka如果有对应的桥接方法，就不去父类查询了)
 		var list = ddtmp.computeIfAbsent(Type.toMethodDesc(mn.parameters()), Helpers.fnArrayList());
 		for (int i = 0; i < list.size(); i++) {
 			var prev = list.get(i);
-			if (ClassUtil.isOverridable(klass.name(), mn.modifier, prev.owner)) {
-				if (overrider == null) overrider = new MyBitSet();
+			if (ClassUtil.isOverridable(klass.name(), mn.modifier, prev.owner())) {
+				if (overrider == null) overrider = new BitSet();
 				overrider.add(methods.indexOfAddress(prev));
 				return;
 			}
@@ -71,7 +71,7 @@ final class MethodList extends ComponentList {
 
 		String owner = klass.name();
 		for (int i = 0; i < methods.size(); i++) {
-			if (!owner.equals(methods.get(i).owner)) {
+			if (!owner.equals(methods.get(i).owner())) {
 				childId = i;
 				return false;
 			}
@@ -83,24 +83,24 @@ final class MethodList extends ComponentList {
 	@Override public boolean isOverriddenMethod(int id) {return overrider != null && overrider.contains(id);}
 	@Override public List<MethodNode> getMethods() {return methods;}
 
-	public MethodResult findMethod(LocalContext ctx, IType that, final List<IType> actualArguments,
+	public MethodResult findMethod(CompileContext ctx, IType that, final List<IType> actualArguments,
 								   final Map<String, IType> namedArguments, int flags) {
-		SimpleList<MethodNode> candidates = methods;
+		ArrayList<MethodNode> candidates = methods;
 
 		MethodResult best = null;
-		List<MethodNode> dup = new SimpleList<>();
+		List<MethodNode> dup = new ArrayList<>();
 
 		int size = (flags&THIS_ONLY) != 0 ? childId : candidates.size();
 
 		for (int j = 0; j < size; j++) {
 			MethodNode method = candidates.get(j);
-			var owner = ctx.classes.getClassInfo(method.owner);
+			var owner = ctx.compiler.resolve(method.owner());
 
 			if (!ctx.checkAccessible(owner, method, (flags&IN_STATIC) != 0, false)) continue;
 
 			List<Type> declaredArguments = method.parameters();
 			IntMap<Object> fillArguments = null;
-			SimpleList<IType> myParam = null;
+			ArrayList<IType> myParam = null;
 
 			int missedArguments = declaredArguments.size() - actualArguments.size();
 			dontCheckForNamedArguments: {
@@ -130,10 +130,10 @@ final class MethodList extends ComponentList {
 				}
 
 				fillArguments = new IntMap<>();
-				myParam = new SimpleList<>(actualArguments);
+				myParam = new ArrayList<>(actualArguments);
 
 				// 可能在Annotation Resolve阶段，此时tmpMap1可用，但2不行
-				MyHashMap<String, IType> tmpMap = Helpers.cast(ctx.tmpMap1); tmpMap.clear();
+				HashMap<String, IType> tmpMap = Helpers.cast(ctx.tmpMap1); tmpMap.clear();
 				tmpMap.putAll(namedArguments);
 
 				// 填充缺少的参数
@@ -191,11 +191,11 @@ final class MethodList extends ComponentList {
 
 			appendInput(actualArguments, sb);
 
-			sb.append("\"  \",\"").append(best.method.owner).append("\",invoke.method,\"").append(name).append("(\",");
+			sb.append("\"  \",\"").append(best.method.owner()).append("\",invoke.method,\"").append(name).append("(\",");
 			getArg(best.method, that, sb).append("\")\",");
 
 			for (MethodNode mn : dup) {
-				sb.append("\" \",and,\"\n  \",\"").append(mn.owner).append("\",invoke.method,\"").append(name).append("(\",");
+				sb.append("\" \",and,\"\n  \",\"").append(mn.owner()).append("\",invoke.method,\"").append(name).append("(\",");
 				getArg(mn, that, sb).append("\")\",");
 			}
 
@@ -214,8 +214,8 @@ final class MethodList extends ComponentList {
 
 			for (int i = 0; i < size; i++) {
 				MethodNode mn = methods.get(i);
-				if (isConstructor) sb.append("\"  \",invoke.constructor,\"").append(mn.owner);
-				else sb.append("\"  \",invoke.method,\"").append(mn.owner).append('.').append(mn.name());
+				if (isConstructor) sb.append("\"  \",invoke.constructor,\"").append(mn.owner());
+				else sb.append("\"  \",invoke.method,\"").append(mn.owner()).append('.').append(mn.name());
 				getArg(mn, that, sb.append("\",\"(\",")).append("\")\",invoke.notApplicable,\"\n    \",");
 
 				getErrorMsg(ctx, that, actualArguments, (flags&IN_STATIC) != 0, mn, sb.append("\"(\","), tmp);
@@ -233,13 +233,15 @@ final class MethodList extends ComponentList {
 		return best;
 	}
 
-	private static void getErrorMsg(LocalContext ctx, IType genericHint, List<IType> params, boolean in_static, MethodNode mn, CharList sb, CharList errRpt) {
-		var info = ctx.classes.getClassInfo(mn.owner);
+	private static void getErrorMsg(CompileContext ctx, IType genericHint, List<IType> params, boolean in_static, MethodNode mn, CharList sb, CharList errRpt) {
+		var info = ctx.compiler.resolve(mn.owner());
 		if (ctx.checkAccessible(info, mn, in_static, true)) {
 			appendError(ctx.inferrer.infer(info, mn, genericHint, params), sb);
 		}
-		sb.append(errRpt);
-		errRpt.clear();
+		if (errRpt.length() > 0) {
+			sb.append(errRpt).append(',');
+			errRpt.clear();
+		}
 	}
 
 	static void appendError(MethodResult mr, CharList sb) {
@@ -277,23 +279,23 @@ final class MethodList extends ComponentList {
 		CharList sb = new CharList().append('[');
 
 		for (MethodNode node : methods) {
-			sb.append(node.returnType()).append(' ').append(node.owner).append('.').append(node.name()).append('(').append(TextUtil.join(node.parameters(), ", ")).append("), ");
+			sb.append(node.returnType()).append(' ').append(node.owner()).append('.').append(node.name()).append('(').append(TextUtil.join(node.parameters(), ", ")).append("), ");
 		}
 
 		return sb.append(']').toStringAndFree();
 	}
 
-	static void checkBridgeMethod(LocalContext ctx, MethodResult mr) {
+	static void checkBridgeMethod(CompileContext ctx, MethodResult mr) {
 		var mn = mr.method;
-		if ((mn.modifier&Opcodes.ACC_PRIVATE) == 0 || ctx.file.name().equals(mn.owner) ||
-			ctx.classes.getMaximumBinaryCompatibility() >= LavaFeatures.JAVA_11) return;
+		if ((mn.modifier&Opcodes.ACC_PRIVATE) == 0 || ctx.file.name().equals(mn.owner()) ||
+			ctx.compiler.getMaximumBinaryCompatibility() >= Compiler.JAVA_11) return;
 
 		var prev = (InvokeHook)mn.getRawAttribute(InvokeHook.NAME);
 		if (prev != null) {
-			GlobalContext.debugLogger().warn("Method {} Already have Evaluable!!!", mn);
+			LavaCompiler.debugLogger().warn("Method {} Already have Evaluable!!!", mn);
 		}
 
-		var fwr = new MethodBridge((CompileUnit) ctx.classes.getClassInfo(mn.owner), mn, prev);
+		var fwr = new MethodBridge((CompileUnit) ctx.compiler.resolve(mn.owner()), mn, prev);
 		mn.addAttribute(fwr);
 	}
 }

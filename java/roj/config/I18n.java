@@ -1,6 +1,6 @@
 package roj.config;
 
-import roj.collect.MyHashMap;
+import roj.collect.HashMap;
 import roj.text.CharList;
 import roj.text.LineReader;
 
@@ -16,7 +16,7 @@ public class I18n {
 	public static final I18n NULL = new I18n("");
 
 	public static Map<String, String> parseLang(CharSequence content) {
-		MyHashMap<String, String> map = new MyHashMap<>();
+		HashMap<String, String> map = new HashMap<>();
 		if (content == null) return map;
 		try {
 			for (String line : LineReader.create(content)) {

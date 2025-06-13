@@ -10,7 +10,7 @@ import java.util.Arrays;
 import java.util.Map;
 import java.util.Set;
 
-public class Int2IntBiMap extends AbstractMap<Integer, Integer> implements _Generic_Map<Int2IntMap.Entry> {
+public class Int2IntBiMap extends AbstractMap<Integer, Integer> implements _LibMap<Int2IntMap.Entry> {
 	public void setNullId(int nullId) {
 		this.nullId = nullId;
 	}
@@ -62,11 +62,11 @@ public class Int2IntBiMap extends AbstractMap<Integer, Integer> implements _Gene
 
 	public int size() { return size; }
 
-	public Set<Entry> selfEntrySet() { return _Generic_EntrySet.create(this); }
+	public Set<Entry> selfEntrySet() { return _LibEntrySet.create(this); }
 	public Set<Map.Entry<Integer, Integer>> entrySet() { return Helpers.cast(selfEntrySet()); }
 
 	@Override
-	public _Generic_Entry[] __entries() { return entries; }
+	public _LibEntry[] __entries() { return entries; }
 	@Override
 	public void __remove(Int2IntMap.Entry vEntry) { removeEntry((Entry) vEntry); }
 

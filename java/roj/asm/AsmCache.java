@@ -7,8 +7,8 @@ import roj.asm.cp.CstTop;
 import roj.asm.insn.CodeWriter;
 import roj.asm.insn.Label;
 import roj.asm.type.Type;
+import roj.collect.ArrayList;
 import roj.collect.IntMap;
-import roj.collect.SimpleList;
 import roj.util.ArrayCache;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
@@ -52,13 +52,13 @@ public final class AsmCache {
 		return buf;
 	}
 
-	private final SimpleList<Type> mp = new SimpleList<>();
-	public <T> SimpleList<T> methodTypeTmp() {mp.clear(); return Helpers.cast(mp);}
+	private final ArrayList<Type> mp = new ArrayList<>();
+	public <T> ArrayList<T> methodTypeTmp() {mp.clear(); return Helpers.cast(mp);}
 
 	private final Object[][] cpArr = new Object[10][];
 	private int cpCount;
 
-	public void getCpWriter(SimpleList<Constant> constants) {
+	public void getCpWriter(ArrayList<Constant> constants) {
 		if (cpCount == 10) return;
 		int i = cpCount++;
 		Object[] objects = cpArr[i];
@@ -69,7 +69,7 @@ public final class AsmCache {
 		}
 	}
 
-	public void freeCpWriter(SimpleList<Constant> constants, boolean discard) {
+	public void freeCpWriter(ArrayList<Constant> constants, boolean discard) {
 		if (cpCount == 0) return;
 
 		Object[] cpArray = constants.getInternalArray();

@@ -13,7 +13,7 @@ import roj.asm.type.Type;
 import roj.asmx.AnnotationRepo;
 import roj.asmx.Context;
 import roj.asmx.Transformer;
-import roj.collect.SimpleList;
+import roj.collect.ArrayList;
 import roj.collect.TrieTreeSet;
 import roj.compiler.plugins.asm.ASM;
 import roj.config.data.CInt;
@@ -24,7 +24,7 @@ import roj.io.IOUtil;
 import roj.io.source.FileSource;
 import roj.reflect.Bypass;
 import roj.reflect.Debug;
-import roj.reflect.ReflectionUtils;
+import roj.reflect.Reflection;
 import roj.text.CharList;
 import roj.text.URICoder;
 import roj.text.logging.Level;
@@ -70,11 +70,11 @@ public class Bootstrap implements Function<String, Class<?>> {
 	private static final Logger LOGGER = Logger.getLogger(/*Transforming Class Loader*/"TCL");
 
 	@ReferenceByGeneratedClass
-	static final List<ITweaker> tweakers = new SimpleList<>();
+	static final List<ITweaker> tweakers = new ArrayList<>();
 
 	static String[] initArgs;
 	// 这里和Bootstrap$Loader是同一个包了
-	static SimpleList<String> args;
+	static ArrayList<String> args;
 	static String[] getArg() {
 		var s = args.toArray(new String[args.size()]);
 		args = null;
@@ -133,7 +133,7 @@ public class Bootstrap implements Function<String, Class<?>> {
 		if (tweakerNames.isEmpty()) {
 			tweakerNames.add("roj/asmx/launcher/DefaultTweaker");
 		}
-		Bootstrap.args = new SimpleList<>();
+		Bootstrap.args = new ArrayList<>();
 		Bootstrap.args.addAll(initArgs);
 
 		ClassNode L = new ClassNode();
@@ -143,7 +143,7 @@ public class Bootstrap implements Function<String, Class<?>> {
 
 		CodeWriter c = L.newMethod(ACC_PUBLIC|ACC_STATIC, "<clinit>", "()V");
 		c.visitSize(3, 2);
-		c.field(GETSTATIC, "roj/asmx/launcher/Bootstrap", "args", "Lroj/collect/SimpleList;");
+		c.field(GETSTATIC, "roj/asmx/launcher/Bootstrap", "args", "Lroj/collect/ArrayList;");
 		c.insn(ASTORE_0);
 
 		for (String name : tweakerNames) {
@@ -186,7 +186,7 @@ public class Bootstrap implements Function<String, Class<?>> {
 
 		ByteList list = AsmCache.toByteArrayShared(L);
 		Class<?> loaderClass = entryPoint.defineClassA(L.name().replace('/', '.'), list.list, 0, list.wIndex(), Bootstrap.class.getProtectionDomain().getCodeSource());
-		ReflectionUtils.ensureClassInitialized(loaderClass);
+		Reflection.ensureClassInitialized(loaderClass);
 	}
 
 	private static boolean GetOtherJars() {
@@ -200,7 +200,7 @@ public class Bootstrap implements Function<String, Class<?>> {
 				// 这个异常实际上不可能发生
 				try {
 					fn = builder.access(URLClassLoader.class, "ucp", "getUCP", null)
-							   .delegate_o(ReflectionUtils.getField(URLClassLoader.class, "ucp").getType(), "closeLoaders").build();
+							   .delegate_o(Reflection.getField(URLClassLoader.class, "ucp").getType(), "closeLoaders").build();
 				} catch (NoSuchFieldException ignored) {}
 				ucp = fn.getUCP(loader);
 				urls = ucl.getURLs();
@@ -266,17 +266,17 @@ public class Bootstrap implements Function<String, Class<?>> {
 	}
 	private interface H {
 		Object getUCP(Object o);
-		ArrayList<URL> getPath(Object o);
+		java.util.ArrayList<URL> getPath(Object o);
 		List<IOException> closeLoaders(Object o);
 		HashMap<String, JarFile> getCache();
 	}
 
-	private final List<ZipFile> archives = new ArrayList<>();
-	private final List<CodeSource> locations = new ArrayList<>();
-	private final List<JarVerifier> verifiers = new ArrayList<>();
+	private final List<ZipFile> archives = new java.util.ArrayList<>();
+	private final List<CodeSource> locations = new java.util.ArrayList<>();
+	private final List<JarVerifier> verifiers = new java.util.ArrayList<>();
 
 	private INameTransformer nameTransformer;
-	private final List<Transformer> transformers = new ArrayList<>();
+	private final List<Transformer> transformers = new java.util.ArrayList<>();
 
 	private final TrieTreeSet transformExcept = new TrieTreeSet();
 	private final TrieTreeSet loadExcept = new TrieTreeSet();
@@ -306,35 +306,47 @@ public class Bootstrap implements Function<String, Class<?>> {
 			LOGGER.trace("注册类转换器 '{}'", tr.getClass().getName());
 		}
 	}
-
-	private void addPackage(URL url, String name, JarVerifier jv)  {
+	private void addPackage(URL sealBase, String name, JarVerifier jv) {
 		int dot = name.lastIndexOf('/');
 		if (dot > -1) {
 			Manifest man = jv.getManifest();
-			// TODO specTitle ... 等我理解了manifest中包定义的结构再说 先让它自己来
-			//m.getAttributes();
-			/*String pkgName = name.substring(0, dot).replace('/', '.');
+			String pkgName = name.substring(0, dot).replace('/', '.');
+			Attributes pkgAttrs = man.getAttributes(name.substring(0, dot+1));
 
+			// 优先使用包专属属性，若无则使用主属性
+			Attributes attrs = pkgAttrs != null ? pkgAttrs : man.getMainAttributes();
+
+			// 提取包属性
+			String specTitle = getAttribute(attrs, Attributes.Name.SPECIFICATION_TITLE);
+			String specVersion = getAttribute(attrs, Attributes.Name.SPECIFICATION_VERSION);
+			String specVendor = getAttribute(attrs, Attributes.Name.SPECIFICATION_VENDOR);
+			String implTitle = getAttribute(attrs, Attributes.Name.IMPLEMENTATION_TITLE);
+			String implVersion = getAttribute(attrs, Attributes.Name.IMPLEMENTATION_VERSION);
+			String implVendor = getAttribute(attrs, Attributes.Name.IMPLEMENTATION_VENDOR);
+			String sealed = getAttribute(attrs, Attributes.Name.SEALED);
+
+			// 获取或定义包
 			Package pkg = ENTRY_POINT.getPackage(pkgName);
 			if (pkg == null) {
-				ENTRY_POINT.definePackage(pkgName, null, null, null, null, null, null, isSealed(pkgName, man) ? url : null);
-			} else if (pkg.isSealed() && !pkg.isSealed(url)) {
-				LOGGER.log(Level.WARN,  "{} 加载了其他文件的封闭包 {} 的类 {}", null, url, pkgName, name);
-			}*/
-		}
-	}
-	private static boolean isSealed(String name, Manifest man) {
-		Attributes attr = man.getAttributes(name.replace('.', '/').concat("/"));
-		String sealed = null;
-		if (attr != null) {
-			sealed = attr.getValue(Attributes.Name.SEALED);
-		}
-		if (sealed == null) {
-			if ((attr = man.getMainAttributes()) != null) {
-				sealed = attr.getValue(Attributes.Name.SEALED);
+				// 包未定义，创建新包
+				ENTRY_POINT.definePackage(
+						pkgName,
+						specTitle,
+						specVersion,
+						specVendor,
+						implTitle,
+						implVersion,
+						implVendor,
+						"true".equalsIgnoreCase(sealed) ? sealBase : null
+				);
+			} else if (pkg.isSealed() && !pkg.isSealed(sealBase)) {
+				// 密封性冲突警告
+				LOGGER.log(Level.WARN, "URL {} 加载了其他文件的封闭包 {} 的类 {}", null, sealBase, pkgName, name);
 			}
 		}
-		return "true".equalsIgnoreCase(sealed);
+	}
+	private String getAttribute(Attributes attrs, Attributes.Name name) {
+		return attrs != null ? attrs.getValue(name) : null;
 	}
 
 	@Override
@@ -552,19 +564,8 @@ public class Bootstrap implements Function<String, Class<?>> {
 			if (archives.isEmpty()) LOGGER.warn("无法读取注解：无法列出文件");
 
 			var repo = new AnnotationRepo();
-			var buf = IOUtil.getSharedByteBuf();
 			for (ZipFile archive : archives) {
-				ZEntry entry = archive.getEntry("META-INF/annotations.repo");
-				if (entry != null) {
-					buf.clear();
-					try {
-						if (repo.deserialize(archive.get(entry, buf))) {
-							LOGGER.debug("从缓存读取注解: {}", archive.source());
-							continue;
-						}
-					} catch (Exception ignored) {}
-				}
-				repo.add(archive);
+				repo.addOptionalCache(archive);
 			}
 
 			this.repo = repo;

@@ -1,6 +1,6 @@
 package roj.net;
 
-import roj.collect.SimpleList;
+import roj.collect.ArrayList;
 import roj.io.buf.BufferPool;
 import roj.util.DynByteBuf;
 import roj.util.TypedKey;
@@ -77,7 +77,7 @@ public final class ChannelCtx {
 		else {
 			Throwable ex1 = ex;
 			while (ex != null) {
-				SimpleList<StackTraceElement> list = SimpleList.asModifiableList(ex.getStackTrace());
+				ArrayList<StackTraceElement> list = ArrayList.asModifiableList(ex.getStackTrace());
 				for (int i = 0; i < list.size(); i++) {
 					StackTraceElement el = list.get(i);
 					if (el.getMethodName().startsWith("channel")) {

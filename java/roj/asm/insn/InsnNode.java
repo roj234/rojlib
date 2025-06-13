@@ -1,6 +1,8 @@
 package roj.asm.insn;
 
+import org.intellij.lang.annotations.MagicConstant;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 import roj.asm.MemberDescriptor;
 import roj.asm.Opcodes;
 import roj.asm.cp.*;
@@ -71,7 +73,7 @@ public final class InsnNode {
 			}
 
 			byte data = OPLENGTH[code&0xFF];
-			if (data == 0) throw new IllegalStateException("unknown opcode " + showOpcode(code));
+			if (data == 0) throw new IllegalStateException("unknown opcode " + Opcodes.toString(code));
 
 			len = data>>>4;
 			assert len > 0;
@@ -95,22 +97,25 @@ public final class InsnNode {
 			}
 
 			return;
-		} else if (seg instanceof Ldc) {
+		} else if (seg instanceof Ldc ldc) {
 			code = seg.length() == 3 ? LDC_W : LDC;
+			ref = ldc;
 		} else if (seg instanceof JumpTo) {
 			code = ((JumpTo) seg).code;
+			ref = seg;
 		} else if (seg instanceof SwitchBlock) {
 			code = ((SwitchBlock) seg).code;
+			ref = seg;
 		} else {
 			assert false;
 		}
 
-		ref = seg;
 		id = number = 0;
 		len = seg.length();
 	}
 
-	public final String opName() { return showOpcode(opcode()); }
+	public final String opName() { return Opcodes.toString(opcode()); }
+	@MagicConstant(valuesFromClass = Opcodes.class)
 	public final byte opcode() {
 		if (!pos.isValid()) throw new IllegalStateException("referent Node was removed");
 		return code;
@@ -120,7 +125,7 @@ public final class InsnNode {
 
 		byte oldData = OPLENGTH[code&0xFF];
 		byte data = OPLENGTH[newCode&0xFF];
-		if (data != oldData) throw new IllegalStateException("只能修改类型与长度相同的: "+ showOpcode(code)+" =X> "+ showOpcode(newCode));
+		if (data != oldData) throw new IllegalStateException("只能修改类型与长度相同的: "+ Opcodes.toString(code)+" =X> "+ Opcodes.toString(newCode));
 
 		DynByteBuf data1 = getData();
 		if (data1.get(pos.offset) == WIDE) throw new UnsupportedOperationException("对wide的处理暂未实现");
@@ -224,7 +229,7 @@ public final class InsnNode {
 		byte opcode = opcode();
 		switch (category(opcode)) {
 			case CATE_LOAD_STORE:
-				String name = Opcodes.showOpcode(opcode);
+				String name = Opcodes.toString(opcode);
 				return name.charAt(name.length()-1)-'0';
 			case CATE_LOAD_STORE_LEN: return id();
 		}
@@ -261,12 +266,23 @@ public final class InsnNode {
 		}
 	}
 
+	@Nullable
+	public Integer getAsInteger() {
+		byte code = opcode();
+		if (code>=2&&code<=8) return code-3;
+		return switch (code) {
+			case BIPUSH, SIPUSH -> id;
+			case LDC, LDC_W -> ((Ldc) ref).c instanceof CstInt intval ? intval.value : null;
+			default -> null;
+		};
+	}
+
 	public final int getAsInt() {
 		byte code = opcode();
 		if (code>=2&&code<=8) return code-3;
 		return switch (code) {
 			case BIPUSH, SIPUSH -> id;
-			case LDC, LDC_W -> ((CstInt) ref).value;
+			case LDC, LDC_W -> ((CstInt) ((Ldc) ref).c).value;
 			default -> invalidArg(code);
 		};
 	}
@@ -286,7 +302,7 @@ public final class InsnNode {
 			case FCONST_0 -> 0;
 			case FCONST_1 -> 1;
 			case FCONST_2 -> 2;
-			case LDC, LDC_W -> ((CstFloat) ref).value;
+			case LDC, LDC_W -> ((CstFloat) ((Ldc) ref).c).value;
 			default -> invalidArg(code);
 		};
 	}
@@ -323,8 +339,8 @@ public final class InsnNode {
 	}
 	public Label targetOrNull() {
 		opcode();
-		if (!(ref instanceof JumpTo)) return null;
-		return ((JumpTo) ref).target;
+		if (!(ref instanceof JumpTo t)) return null;
+		return t.target;
 	}
 	public void setTarget(Label label) {
 		byte code = opcode();
@@ -345,11 +361,11 @@ public final class InsnNode {
 
 	public InsnNode prev() {
 		int bci = owner.getPcMap().prevTrue(pos.getValue()-1);
-		return bci < 0 ? Helpers.nonnull() : owner.getNodeAt(bci);
+		return bci < 0 ? Helpers.maybeNull() : owner.getNodeAt(bci);
 	}
 	public InsnNode next() {
 		int bci = pos.getValue() + len;
-		return bci == owner.bci() ? Helpers.nonnull() : owner.getNodeAt(bci);
+		return bci == owner.bci() ? Helpers.maybeNull() : owner.getNodeAt(bci);
 	}
 
 	@Deprecated
@@ -418,8 +434,13 @@ public final class InsnNode {
 		if (pos.isValid()) sb.append("#").append(pos.getValue()).append(' ');
 		else sb.append("#<invalid>: ");
 
-		sb.append(showOpcode(code)).append(' ');
-		return myToString(sb, false).toStringAndFree();
+		sb.append(Opcodes.toString(code)).append(' ');
+		try {
+			return myToString(sb, false).toStringAndFree();
+		} catch (Exception e) {
+			e.printStackTrace();
+			return sb.toStringAndFree();
+		}
 	}
 
 	public CharList myToString(CharList sb, boolean simple) {
@@ -495,5 +516,5 @@ public final class InsnNode {
 		list.codeOb.put(getData(), pos.offset, len);
 	}
 
-	private static <T> T invalidArg(byte code) { throw new UnsupportedOperationException(showOpcode(code)+"不支持该操作"); }
+	private static <T> T invalidArg(byte code) { throw new UnsupportedOperationException(Opcodes.toString(code)+"不支持该操作"); }
 }

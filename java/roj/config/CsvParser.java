@@ -1,8 +1,8 @@
 package roj.config;
 
+import roj.collect.BitSet;
 import roj.collect.Int2IntMap;
-import roj.collect.MyBitSet;
-import roj.collect.SimpleList;
+import roj.collect.ArrayList;
 import roj.config.data.CEntry;
 import roj.config.data.CList;
 import roj.config.data.CNull;
@@ -26,7 +26,7 @@ import java.util.List;
 public final class CsvParser extends Parser implements TableParser {
 	private static final short separator = 9, line = 10;
 
-	private static final MyBitSet CSV_LENDS = MyBitSet.from("\r\n,;");
+	private static final BitSet CSV_LENDS = BitSet.from("\r\n,;");
 	private static final Int2IntMap CSV_C2C = new Int2IntMap(16);
 	static {
 		CSV_C2C.putInt('"', 0);
@@ -55,7 +55,7 @@ public final class CsvParser extends Parser implements TableParser {
 
 	public void forEachLine(CharSequence text, TableReader c) throws ParseException {
 		init(text);
-		tmpList = new SimpleList<>();
+		tmpList = new ArrayList<>();
 
 		int i = 1;
 		while (true) {
@@ -101,13 +101,13 @@ public final class CsvParser extends Parser implements TableParser {
 	public <C extends CVisitor> C parse(CharSequence text, int flags, C cv) throws ParseException {
 		this.flag = flags;
 		init(text);
-		tmpList = new SimpleList<>();
+		tmpList = new ArrayList<>();
 
 		int i = 0;
 
 		cv.valueList();
 
-		var keys = new SimpleList<>(fastLine(next()));
+		var keys = new ArrayList<>(fastLine(next()));
 		List<String> list = Helpers.cast(tmpList);
 
 		while (true) {
@@ -158,7 +158,7 @@ public final class CsvParser extends Parser implements TableParser {
 	public CList parse(CharSequence text, int flags) throws ParseException {
 		this.flag = flags;
 		init(text);
-		tmpList = new SimpleList<>();
+		tmpList = new ArrayList<>();
 
 		int i = 0;
 		var list = new CList();
@@ -207,7 +207,7 @@ public final class CsvParser extends Parser implements TableParser {
 			hasValue = false;
 		}
 
-		return new CList(new SimpleList<>(buf));
+		return new CList(new ArrayList<>(buf));
 	}
 
 	public ConfigMaster format() {return ConfigMaster.CSV;}

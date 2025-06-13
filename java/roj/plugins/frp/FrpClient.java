@@ -2,7 +2,13 @@ package roj.plugins.frp;
 
 import org.jetbrains.annotations.NotNull;
 import roj.collect.IntBiMap;
-import roj.collect.SimpleList;
+import roj.collect.ArrayList;
+import roj.crypt.Blake3;
+import roj.crypt.KeyType;
+import roj.http.Headers;
+import roj.http.h2.H2Connection;
+import roj.http.h2.H2Exception;
+import roj.http.h2.H2Stream;
 import roj.io.IOUtil;
 import roj.io.buf.BufferPool;
 import roj.net.*;
@@ -86,9 +92,10 @@ public class FrpClient extends FrpCommon implements Consumer<MyChannel> {
 		System.exit(0);
 	}
 
-	public String room, nickname;
-	final List<PortMapEntry> portMaps = new SimpleList<>();
-	final List<ServerLaunch> listeners = new SimpleList<>();
+	public byte[] roomHash;
+	public String friendlyRoom, friendlyName;
+	final List<PortMapEntry> portMaps = new ArrayList<>();
+	final List<ServerLaunch> listeners = new ArrayList<>();
 
 	// stale timeout = 1m
 	IntBiMap<InetSocketAddress> udpSenderIds = new IntBiMap<>();

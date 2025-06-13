@@ -1,6 +1,6 @@
 package roj.gui;
 
-import roj.collect.SimpleList;
+import roj.collect.ArrayList;
 import roj.util.Helpers;
 
 import javax.swing.*;
@@ -46,7 +46,7 @@ public class OnChangeHelper extends MouseAdapter implements FocusListener, KeyLi
 
 	private class State extends MouseAdapter implements DocumentListener {
 		final Component self;
-		final SimpleList<Consumer<Component>> change = new SimpleList<>();
+		final ArrayList<Consumer<Component>> change = new ArrayList<>();
 		private boolean changed;
 
 		private State(Component self) {this.self = self;}

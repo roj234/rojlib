@@ -9,9 +9,9 @@ import roj.asm.insn.Label;
 import roj.asm.type.Generic;
 import roj.asm.type.IType;
 import roj.asm.type.Type;
+import roj.compiler.CompileContext;
 import roj.compiler.api.Types;
 import roj.compiler.asm.MethodWriter;
-import roj.compiler.context.LocalContext;
 import roj.compiler.diagnostic.Kind;
 import roj.compiler.resolve.ResolveException;
 import roj.compiler.resolve.TypeCast;
@@ -30,7 +30,7 @@ public abstract class Expr implements RawExpr {
 	public int getWordEnd() {return wordEnd;}
 
 	protected Expr() {
-		var lc = LocalContext.get();
+		var lc = CompileContext.get();
 		if (lc != null) {
 			wordStart = lc.lexer.current().pos();
 			wordEnd = lc.lexer.index;
@@ -60,12 +60,12 @@ public abstract class Expr implements RawExpr {
 	 * 常量允许到达的最小数量级
 	 */
 	public IType minType() {return type();}
-	public Expr resolve(LocalContext ctx) throws ResolveException { return this; }
+	public Expr resolve(CompileContext ctx) throws ResolveException { return this; }
 
 	@Override public boolean isConstant() {return RawExpr.super.isConstant();}
 	@Override public Object constVal() {return RawExpr.super.constVal();}
 
-	public LeftValue asLeftValue(LocalContext ctx) {
+	public LeftValue asLeftValue(CompileContext ctx) {
 		ctx.report(this, Kind.ERROR, "var.notAssignable", this);
 		return null;
 	}
@@ -82,7 +82,7 @@ public abstract class Expr implements RawExpr {
 		cw.jump(ifThen ? Opcodes.IFNE/*true*/ : Opcodes.IFEQ/*false*/, label);
 	}
 
-	protected final void mustBeStatement(boolean noRet) { if (noRet) LocalContext.get().report(this, Kind.ERROR, "expr.skipReturnValue"); }
+	protected final void mustBeStatement(boolean noRet) { if (noRet) CompileContext.get().report(this, Kind.ERROR, "expr.skipReturnValue"); }
 
 
 	public static Expr constant(IType type, Object value) {return new Literal(type, value);}

@@ -1,11 +1,11 @@
 package roj.compiler.ast;
 
+import roj.collect.BitSet;
 import roj.collect.IntMap;
-import roj.collect.MyBitSet;
-import roj.collect.RSegmentTree;
-import roj.collect.RSegmentTree.Point;
-import roj.collect.RSegmentTree.Region;
-import roj.collect.SimpleList;
+import roj.collect.IntervalPartition;
+import roj.collect.IntervalPartition.Endpoint;
+import roj.collect.IntervalPartition.Segment;
+import roj.collect.ArrayList;
 import roj.compiler.asm.Variable;
 
 import java.util.List;
@@ -16,15 +16,17 @@ import java.util.List;
  * @since 2022/2/23 15:27
  */
 final class VarMapper {
-	private final RSegmentTree<Variable> vars = new RSegmentTree<>(10, false, 100);
+	private final IntervalPartition<Variable> vars = new IntervalPartition<>(10, false, 100);
 
-	private final MyBitSet freeId = new MyBitSet();
-	private final List<Variable> tmp2 = new SimpleList<>();
+	private final BitSet freeId = new BitSet();
+	private final List<Variable> tmp2 = new ArrayList<>();
 	private int _id;
 
 	public void add(Variable v) {tmp2.add(v);}
 	public void reserve(int slot) {
+		if (_id >= slot+1) return;
 		if (_id < slot) freeId.addRange(_id, slot);
+		freeId.remove(slot);
 		_id = slot+1;
 	}
 	public int map() {
@@ -40,18 +42,18 @@ final class VarMapper {
 
 		int id = _id, peakId = id;
 
-		Region[] list = union.dataArray();
-		for (int j = 0; j < union.arraySize(); j++) {
-			Point p = list[j].node();
+		Segment[] list = union.getSegments();
+		for (int j = 0; j < union.getSegmentCount(); j++) {
+			Endpoint p = list[j].anchor();
 			while (p != null) {
-				Variable v = p.owner();
-				if (p.end()) {
+				Variable v = p.interval();
+				if (p.isEnd()) {
 					int size = v.type.rawType().length();
 
 					if (v.slot == id+size-1) id -= size;
 					else freeId.addRange(v.slot, v.slot+size);
 				} else {
-					curVars.add(p.owner());
+					curVars.add(p.interval());
 				}
 				p = p.next();
 			}
@@ -62,8 +64,8 @@ final class VarMapper {
 
 				int nextId = freeId.nextTrue(0);
 
-				if (size > 1) while (nextId > 0) {
-					if (!freeId.contains(nextId+1)) {
+				if (size > 1) {
+					while (nextId > 0 && !freeId.contains(nextId+1)) {
 						nextId = freeId.nextTrue(nextId+1);
 					}
 				}

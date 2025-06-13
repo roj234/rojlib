@@ -3,7 +3,7 @@ package roj.asm.attr;
 import roj.asm.MethodNode;
 import roj.asm.annotation.Annotation;
 import roj.asm.cp.ConstantPool;
-import roj.collect.SimpleList;
+import roj.collect.ArrayList;
 import roj.util.DynByteBuf;
 
 import java.util.List;
@@ -22,14 +22,14 @@ public final class ParameterAnnotations extends Attribute {
 
 	public ParameterAnnotations(boolean visibleForRuntime) {
 		vis = visibleForRuntime;
-		annotations = new SimpleList<>();
+		annotations = new ArrayList<>();
 	}
 
 	public ParameterAnnotations(String name, DynByteBuf r, ConstantPool pool) {
 		vis = name.equals(VISIBLE);
 
 		int len = r.readUnsignedByte();
-		List<List<Annotation>> annos = annotations = new SimpleList<>(len);
+		List<List<Annotation>> annos = annotations = new ArrayList<>(len);
 		while (len-- > 0) {
 			annos.add(Annotations.parse(pool, r));
 		}

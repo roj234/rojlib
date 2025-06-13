@@ -86,7 +86,7 @@ public class ParseException extends Exception {
 		while (true) {
 			int j = TextUtil.gNextCRLF(lines, i);
 			if (j > pos || j < 0) {
-				CharList sb = new CharList().append(lines, i, j < 0 ? lines.length() : j).trimLast();
+				CharList sb = new CharList().append(lines, i, j < 0 ? lines.length() : j).rtrim();
 				int myLen = sb.length(), myLen2 = sb.replace("\t", "    ").length();
 				line = ln;
 				column = Math.min(pos-i + myLen2-myLen, sb.length());

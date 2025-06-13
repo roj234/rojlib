@@ -1,7 +1,7 @@
 package roj.plugins.p2p;
 
 import org.jetbrains.annotations.Nullable;
-import roj.collect.SimpleList;
+import roj.collect.ArrayList;
 import roj.crypt.Base64;
 import roj.http.HttpRequest;
 import roj.io.IOUtil;
@@ -26,7 +26,7 @@ import java.util.function.Function;
  */
 public final class NATT implements Closeable, ChannelHandler, Consumer<MyChannel> {
 	public static void main(String[] args) throws Exception {
-		SimpleList<NetworkInterface> interfaces = Net.getNetworkInterfaces();
+		ArrayList<NetworkInterface> interfaces = Net.getNetworkInterfaces();
 		if (interfaces.isEmpty()) {
 			System.out.println("No network interface available, abort");
 			return;
@@ -69,7 +69,7 @@ public final class NATT implements Closeable, ChannelHandler, Consumer<MyChannel
 				@Override
 				public void channelRead(ChannelCtx ctx, Object msg) throws IOException {
 					DatagramPkt pkt = (DatagramPkt) msg;
-					System.out.println("接受: "+pkt.addr+":"+pkt.port+":"+pkt.buf);
+					System.out.println("接受: "+Net.toString(pkt.address)+":"+pkt.data);
 				}
 			});
 		});
@@ -394,7 +394,7 @@ public final class NATT implements Closeable, ChannelHandler, Consumer<MyChannel
 		public void channelRead(ChannelCtx ctx, Object msg) throws IOException {
 			DatagramPkt pkt = (DatagramPkt) msg;
 			// not check port
-			if (pkt.addr.equals(keepaliveAddress.getAddress())) {
+			if (pkt.address.getAddress().equals(keepaliveAddress.getAddress())) {
 				ctx.channelRead(pkt);
 			} else if (target != null) {
 				target.fireChannelRead(pkt);

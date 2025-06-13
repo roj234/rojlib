@@ -3,11 +3,11 @@ package roj.plugins.obfuscator.naming;
 import roj.asm.*;
 import roj.asmx.Context;
 import roj.asmx.mapper.Mapper;
-import roj.collect.MyHashMap;
-import roj.collect.MyHashSet;
-import roj.compiler.context.GlobalContext;
-import roj.compiler.context.LibraryClassLoader;
+import roj.collect.HashMap;
+import roj.collect.HashSet;
+import roj.compiler.library.ClassLoaderLibrary;
 import roj.compiler.resolve.ComponentList;
+import roj.compiler.resolve.Resolver;
 import roj.concurrent.TaskExecutor;
 import roj.crypt.CryptoFactory;
 import roj.gui.Profiler;
@@ -32,7 +32,7 @@ import java.util.Random;
 public class NameObfuscator implements ObfuscateTask {
 	public static final int EX_CLASS = 1, EX_FIELD = 2, EX_METHOD = 4;
 
-	private final MyHashSet<String> tempF = new MyHashSet<>(), tempM = new MyHashSet<>();
+	private final HashSet<String> tempF = new HashSet<>(), tempM = new HashSet<>();
 
 	public Random rand = CryptoFactory.MT19937Random();
 	public NamingPolicy clazz, method, field, param;
@@ -54,7 +54,7 @@ public class NameObfuscator implements ObfuscateTask {
 
 		Mapper.LOGGER.setLevel(Level.ALL);
 
-		if (named == null) named = new MyHashMap<>(arr.size());
+		if (named == null) named = new HashMap<>(arr.size());
 		else named.clear();
 
 		for (int i = 0; i < arr.size(); i++) {
@@ -65,12 +65,12 @@ public class NameObfuscator implements ObfuscateTask {
 		Profiler.startSection("makeMap");
 		Mapper m = this.m; m.clear();
 
-		var gc = new GlobalContext();
-		gc.addLibrary(new LibraryClassLoader(null));
-		gc.addLibrary(new LibraryClassLoader(NameObfuscator.class.getClassLoader()));
-		gc.addLibrary(name -> named.get(name));
+		var resolver = new Resolver();
+		resolver.addLibrary(new ClassLoaderLibrary(null));
+		resolver.addLibrary(new ClassLoaderLibrary(NameObfuscator.class.getClassLoader()));
+		resolver.addLibrary(name -> named.get(name));
 
-		for (int i = 0; i < arr.size(); i++) generateObfuscationMap(gc, arr.get(i));
+		for (int i = 0; i < arr.size(); i++) generateObfuscationMap(resolver, arr.get(i));
 
 		try {
 			m.saveMap(new File("test.map"));
@@ -89,7 +89,7 @@ public class NameObfuscator implements ObfuscateTask {
 		Profiler.endSection();
 	}
 
-	private void generateObfuscationMap(GlobalContext gc, Context c) {
+	private void generateObfuscationMap(Resolver resolver, Context c) {
 		ClassNode data = c.getData();
 
 		String from = data.name();
@@ -119,7 +119,7 @@ public class NameObfuscator implements ObfuscateTask {
 
 			int acc = method.modifier;
 			if (0 == (acc & (Opcodes.ACC_STATIC | Opcodes.ACC_PRIVATE))) {
-				ComponentList ml = gc.getMethodList(c.getData(), method.name());
+				ComponentList ml = resolver.getMethodList(c.getData(), method.name());
 				List<MethodNode> parentMethods = ml.getMethods();
 				for (int j = 0; j < parentMethods.size(); j++) {
 					MethodNode parentMethod = parentMethods.get(j);

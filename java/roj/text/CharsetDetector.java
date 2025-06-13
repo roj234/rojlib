@@ -1,6 +1,6 @@
 package roj.text;
 
-import roj.collect.MyBitSet;
+import roj.collect.BitSet;
 import roj.io.IOUtil;
 import roj.reflect.Unaligned;
 import roj.util.ArrayCache;
@@ -192,16 +192,16 @@ public final class CharsetDetector implements IntConsumer, AutoCloseable {
 	}
 
 	//19968, 40863
-	public static final MyBitSet 常用字 = new MyBitSet(40863);
+	public static final BitSet 常用字 = new BitSet(40863);
 	//19984, 40718
-	public static final MyBitSet 次常用字 = new MyBitSet(40718);
-	public static final MyBitSet 标点 = new MyBitSet(65507);
+	public static final BitSet 次常用字 = new BitSet(40718);
+	public static final BitSet 标点 = new BitSet(65507);
 	public static final String 半角 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789 `~!@#$%^&*()_+-={}|[]:\";'<>?,./";
 	public static final String 全角;
 	static {
 		try (var in = CharsetDetector.class.getClassLoader().getResourceAsStream("roj/text/CharsetDetector.txt")) {
 			byte[] b = ArrayCache.getByteArray(1024, false);
-			var list = new MyBitSet[] {常用字, 次常用字, 标点};
+			var list = new BitSet[] {常用字, 次常用字, 标点};
 			int off = 0;
 			var set = list[off];
 

@@ -1,7 +1,7 @@
 package roj.text;
 
 import org.jetbrains.annotations.Nullable;
-import roj.reflect.ReflectionUtils;
+import roj.reflect.Reflection;
 import roj.util.ArrayCache;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
@@ -37,7 +37,7 @@ public abstract class FastCharset {
 			case "GB2312", "x-mswin-936", "GBK", "GB18030" -> GB18030.INSTANCE;
 			case "UTF-16", "UTF-16LE", "UTF-16BE" -> {
 				var isBE = !charset.name().equals("UTF-16LE");
-				yield !UTF16n.DISABLE_AUTO && ReflectionUtils.BIG_ENDIAN == isBE ? UTF16n.INSTANCE : null;
+				yield !UTF16n.DISABLE_AUTO && Reflection.BIG_ENDIAN == isBE ? UTF16n.INSTANCE : null;
 			}
 			default -> null;
 		};

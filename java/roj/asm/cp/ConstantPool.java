@@ -5,9 +5,9 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import roj.asm.AsmCache;
 import roj.asm.attr.BootstrapMethods;
+import roj.collect.ArrayList;
+import roj.collect.HashSet;
 import roj.collect.IntMap;
-import roj.collect.MyHashSet;
-import roj.collect.SimpleList;
 import roj.text.TextUtil;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
@@ -25,15 +25,15 @@ import static roj.asm.cp.Constant.*;
 public final class ConstantPool {
 	public static final int ONLY_STRING = -1, BYTE_STRING = 0, CHAR_STRING = 1;
 
-	private final SimpleList<Constant> constants;
-	private MyHashSet<Constant> refMap;
+	private final ArrayList<Constant> constants;
+	private HashSet<Constant> refMap;
 	private int length;
 	private boolean isForWrite;
 
-	public ConstantPool(int size) {constants = new SimpleList<>(size);}
+	public ConstantPool(int size) {constants = new ArrayList<>(size);}
 	public ConstantPool() {
-		constants = new SimpleList<>();
-		refMap = new MyHashSet<>();
+		constants = new ArrayList<>();
+		refMap = new HashSet<>();
 	}
 
 	public void read(DynByteBuf r, @MagicConstant(intValues = {ONLY_STRING,BYTE_STRING,CHAR_STRING}) int stringDecodeType) {
@@ -240,12 +240,12 @@ public final class ConstantPool {
 	public final @NotNull <T extends Constant> T get(DynByteBuf r) {return (T) constants.getInternalArray()[r.readUnsignedShort()-1];}
 	public final @Nullable String getRefName(DynByteBuf r) {
 		int id = r.readUnsignedShort()-1;
-		return id < 0 ? null : ((CstClass) constants.getInternalArray()[id]).name().str();
+		return id < 0 ? null : ((CstClass) constants.getInternalArray()[id]).value().str();
 	}
 	public final @NotNull String getRefName(DynByteBuf r, int type) {
 		var c = (CstRefUTF) constants.getInternalArray()[r.readUnsignedShort()-1];
 		if (c.type() != type) throw new IllegalStateException("excepting"+Constant.toString(type)+" but got "+c);
-		return c.name().str();
+		return c.value().str();
 	}
 	public final @NotNull CstRef getRef(DynByteBuf r, boolean isField) {
 		var c = (CstRef) constants.getInternalArray()[r.readUnsignedShort()-1];
@@ -254,7 +254,7 @@ public final class ConstantPool {
 	}
 
 	private void initRefMap() {
-		if (refMap == null) refMap = new MyHashSet<>(constants.size());
+		if (refMap == null) refMap = new HashSet<>(constants.size());
 		else {
 			if (!refMap.isEmpty()) return;
 			refMap.ensureCapacity(constants.size());
@@ -462,7 +462,7 @@ public final class ConstantPool {
 			break;
 			case CLASS, STRING, METHOD_TYPE, MODULE, PACKAGE: {
 				CstRefUTF ref = (CstRefUTF) c;
-				ref.setValue(reset(ref.name()));
+				ref.setValue(reset(ref.value()));
 			}
 			break;
 			case METHOD_HANDLE: {

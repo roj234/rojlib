@@ -1,5 +1,6 @@
 package roj.asm;
 
+import org.jetbrains.annotations.NotNull;
 import roj.RojLib;
 import roj.asm.attr.*;
 import roj.asm.cp.ConstantPool;
@@ -9,15 +10,20 @@ import roj.asm.type.IType;
 import roj.asm.type.Signature;
 import roj.asm.type.Type;
 import roj.asm.type.TypeHelper;
-import roj.collect.SimpleList;
+import roj.collect.ArrayList;
+import roj.concurrent.Flow;
 import roj.text.CharList;
 import roj.text.logging.Logger;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
+import roj.util.Helpers;
 import roj.util.TypedKey;
 
 import java.util.List;
 import java.util.Objects;
+
+import static roj.asm.Opcodes.ACC_ABSTRACT;
+import static roj.asm.Opcodes.ACC_NATIVE;
 
 /**
  * @author Roj234
@@ -53,8 +59,11 @@ public final class MethodNode extends MemberNode {
 		return inst;
 	}
 
-	public String owner;
+	// to [ConstantData | String] later
+	String owner;
 	public String owner() { return owner; }
+	@Deprecated
+	public void __setOwner(String owner) {this.owner = owner;}
 
 	private List<Type> in;
 	private Type out;
@@ -70,7 +79,7 @@ public final class MethodNode extends MemberNode {
 		return this;
 	}
 
-	public boolean visitCode(CodeVisitor cv, ConstantPool cp, ByteList tmp) {
+	public boolean transform(ConstantPool cp, ByteList tmp, CodeVisitor cv) {
 		var code = getRawAttribute("Code");
 		if (code == null) return false;
 
@@ -91,8 +100,29 @@ public final class MethodNode extends MemberNode {
 		return true;
 	}
 
+	public CodeWriter overwrite(ConstantPool cp) {
+		if ((modifier & (ACC_ABSTRACT|ACC_NATIVE)) != 0) throw new IllegalStateException(this+" cannot have Code attribute");
+		var code = new AttrCodeWriter(cp, this);
+		addAttribute(code);
+		return code.cw;
+	}
+
 	@Override
 	public <T extends Attribute> T getAttribute(ConstantPool cp, TypedKey<T> type) { return Attribute.parseSingle(this, cp, type, attributes, Signature.METHOD); }
+
+	@NotNull
+	public final Signature getSignature(ConstantPool cp) {
+		Signature signature = getAttribute(cp, Attribute.SIGNATURE);
+		if (signature == null) {
+			signature = new Signature(Signature.METHOD);
+			ClassListAttribute exceptions = getAttribute(cp, Attribute.Exceptions);
+			if (exceptions != null)
+				signature.exceptions = Helpers.cast(Flow.of(exceptions.value).map(Type::klass).toList());
+			signature.values = Helpers.cast(Type.methodDesc(rawDesc()));
+			addAttribute(signature);
+		}
+		return signature;
+	}
 
 	public String rawDesc() {
 		if (in != null) {
@@ -109,9 +139,9 @@ public final class MethodNode extends MemberNode {
 
 	public List<Type> parameters() {
 		if (in == null) {
-			SimpleList<Type> in = AsmCache.getInstance().methodTypeTmp();
+			ArrayList<Type> in = AsmCache.getInstance().methodTypeTmp();
 			out = Type.methodDesc(rawDesc(), in);
-			this.in = new SimpleList<>(in);
+			this.in = new ArrayList<>(in);
 		}
 		return in;
 	}
@@ -152,9 +182,11 @@ public final class MethodNode extends MemberNode {
 
 			if (!in.isEmpty()) {
 				var modifiers = getAttribute(cp, Attribute.MethodParameters);
+				// 警告: 规范不要求注解必须按descriptor排序，编译器可以让第0个表示用户显式提供的参数，而不是标识符的第0个
+				//https://docs.oracle.com/javase/specs/jvms/se17/html/jvms-4.html#jvms-4.7.18
 				var a1 = getAttribute(cp, Attribute.ClParameterAnnotations);
 				var a2 = getAttribute(cp, Attribute.RtParameterAnnotations);
-				AttrCode code;
+				Code code;
 				try {
 					code = getAttribute(cp, Attribute.Code);
 				} catch (ClassCastException e) {
@@ -223,7 +255,7 @@ public final class MethodNode extends MemberNode {
 			if (getRawAttribute("Code") instanceof AttrCodeWriter cw) {
 				sb.append(" {\n").padEnd(' ', prefix+4).append("<complex ").append(cw.cw).append(">\n").padEnd(' ', prefix).append('}');
 			} else {
-				AttrCode code = getAttribute(cp, Attribute.Code);
+				Code code = getAttribute(cp, Attribute.Code);
 				if (code != null) code.toString(sb.append(" {\n"), prefix+4).padEnd(' ', prefix).append('}');
 				else sb.append(';');
 			}

@@ -37,16 +37,17 @@ LZMA2Input/OutputStream均支持并行压缩和解压
 ```java
 package roj.archive.qz;
 
-import roj.collect.MyHashMap;
+import roj.collect.HashMap;
+import roj.collect.HashMap;
 import roj.concurrent.TaskPool;
 import roj.util.Helpers;
 
 public class QZUtils {
 	public static void readTest() throws Exception {
-		TaskPool pool = TaskPool.Common();
+		TaskPool pool = TaskPool.common();
 		try (QZArchive archive = new QZArchive("D:\\Test.7z")) {
 			// 这是最常用的。通过文件名获取entry
-			MyHashMap<String, QZEntry> byName = archive.getEntries();
+			HashMap<String, QZEntry> byName = archive.getEntries();
 			// 通过这个可以多线程读取同一个压缩包，archive关闭时它也会同时关闭
 			try (QZReader asyncReader = archive.parallel()) {
 				// 读取一个文件

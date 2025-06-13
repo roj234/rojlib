@@ -10,9 +10,9 @@ import roj.asm.type.Generic;
 import roj.asm.type.IType;
 import roj.asm.type.Type;
 import roj.asmx.mapper.ParamNameMapper;
-import roj.collect.MyBitSet;
-import roj.collect.MyHashSet;
-import roj.collect.SimpleList;
+import roj.collect.ArrayList;
+import roj.collect.BitSet;
+import roj.collect.HashSet;
 import roj.collect.ToIntMap;
 import roj.config.auto.SerializerFactory;
 import roj.config.serial.CVisitor;
@@ -35,8 +35,8 @@ import static roj.asm.Opcodes.*;
  * @since 2025/5/8 8:50
  */
 final class DAOMaker {
-	private static final MyHashSet<String> ITERABLE_TYPES = new MyHashSet<>("java/lang/Iterable", "java/util/Collection", "java/util/List", "java/util/Set");
-	private static final MyBitSet VARIABLE_LEND = MyBitSet.from(")`'\" \t\r\n");
+	private static final HashSet<String> ITERABLE_TYPES = new HashSet<>("java/lang/Iterable", "java/util/Collection", "java/util/List", "java/util/Set");
+	private static final BitSet VARIABLE_LEND = BitSet.from(")`'\" \t\r\n");
 
 	static final VirtualReference<Map<Class<?>, Object>> IMPLEMENTATION_CACHE = new VirtualReference<>();
 	static DAO<?> make(Class<?> daoItf) throws ReflectiveOperationException {
@@ -48,14 +48,14 @@ final class DAOMaker {
 		impl.name(ref.name()+"$Impl");
 		impl.addInterface("roj/sql/DAO");
 		impl.addInterface(daoItf.getName().replace('.', '/'));
-		ClassDefiner.premake(impl);
+		impl.npConstructor();
 
 		var init = impl.newMethod(ACC_PUBLIC, "newInstance", "(Ljava/sql/Connection;)Ljava/lang/Object;");
 		init.visitSize(3, 2);
 		init.newObject(impl.name());
 		init.insn(ASTORE_0);
 
-		var variables = new SimpleList<String>();
+		var variables = new ArrayList<String>();
 		var parIds = new ToIntMap<String>();
 
 		for (var method : ref.methods) {
@@ -109,7 +109,7 @@ final class DAOMaker {
 				if (extraType == null) throw new IllegalArgumentException(method+"缺少泛型签名,无法确定List<T>的类型");
 
 				IType itrType = ((Generic) extraType.values.get(0)).children.get(0);
-				Class<?> parTypeInst = itrType.rawType().toJavaType(daoItf.getClassLoader());
+				Class<?> parTypeInst = itrType.rawType().toClass(daoItf.getClassLoader());
 
 				if (parTypes.get(0).owner.equals("java/util/List")) {
 					cw.visitSizeMax(3, 5);
@@ -139,7 +139,7 @@ final class DAOMaker {
 						cw.ldc(j+1);
 						cw.insn(ALOAD_2);
 
-						Type asmType = Type.fromJavaType(parTypeInst.getDeclaredField(name).getType());
+						Type asmType = Type.from(parTypeInst.getDeclaredField(name).getType());
 						cw.field(GETFIELD, itrType.owner(), name, asmType);
 						invokeSet(cw, asmType);
 					}
@@ -176,7 +176,7 @@ final class DAOMaker {
 						cw.ldc(j+1);
 						cw.insn(ALOAD_2);
 
-						Type asmType = Type.fromJavaType(parTypeInst.getDeclaredField(name).getType());
+						Type asmType = Type.from(parTypeInst.getDeclaredField(name).getType());
 						cw.field(GETFIELD, itrType.owner(), name, asmType);
 						invokeSet(cw, asmType);
 					}
@@ -212,8 +212,8 @@ final class DAOMaker {
 					Type parType = parTypes.get(parId&0xFFFF);
 					cw.varLoad(parType, parId>>>16);
 					if (nameLast != null) {
-						Class<?> parTypeInst = parType.toJavaType(daoItf.getClassLoader());
-						Type asmType = Type.fromJavaType(parTypeInst.getDeclaredField(nameLast).getType());
+						Class<?> parTypeInst = parType.toClass(daoItf.getClassLoader());
+						Type asmType = Type.from(parTypeInst.getDeclaredField(nameLast).getType());
 						cw.field(GETFIELD, parType.owner, nameLast, parType = asmType);
 					}
 					invokeSet(cw, parType);
@@ -263,7 +263,7 @@ final class DAOMaker {
 
 		init.insn(ALOAD_0);
 		init.insn(ARETURN);
-		return (DAO) ClassDefiner.make(impl, daoItf.getClassLoader());
+		return (DAO) ClassDefiner.newInstance(impl, daoItf.getClassLoader());
 	}
 
 	private static void doClear(CodeWriter cw, boolean clearBatch) {
@@ -375,11 +375,11 @@ final class DAOMaker {
 
 	private interface A {void adapt(CVisitor visitor, ResultSet set) throws SQLException;}
 	private static List<Object> createAdapter(Class<?> klass, ResultSetMetaData meta) throws Exception {
-		var adapters = new SimpleList<>();
+		var adapters = new ArrayList<>();
 		for (int i = 1; i <= meta.getColumnCount(); i++) {
 			String name = meta.getColumnLabel(i);
 
-			var type = Type.fromJavaType(klass.getDeclaredField(name).getType());
+			var type = Type.from(klass.getDeclaredField(name).getType());
 
 			var adapter = switch (type.getActualType()) {
 				case Type.BOOLEAN -> boolAdapter(i);

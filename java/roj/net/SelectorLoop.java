@@ -1,6 +1,6 @@
 package roj.net;
 
-import roj.collect.SimpleList;
+import roj.collect.ArrayList;
 import roj.concurrent.FastLocalThread;
 import roj.concurrent.Shutdownable;
 import roj.io.IOUtil;
@@ -48,7 +48,7 @@ public class SelectorLoop implements Shutdownable {
 				return;
 			}
 
-			var keys = new SimpleList<>(old.keys());
+			var keys = new ArrayList<>(old.keys());
 			IOUtil.closeSilently(old);
 
 			for (var key : keys) {

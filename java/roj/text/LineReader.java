@@ -3,9 +3,9 @@ package roj.text;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import roj.collect.AbstractIterator;
-import roj.collect.SimpleList;
+import roj.collect.ArrayList;
+import roj.concurrent.OperationDone;
 import roj.io.IOUtil;
-import roj.util.Helpers;
 
 import java.io.IOException;
 import java.util.Iterator;
@@ -26,7 +26,7 @@ public interface LineReader extends Iterable<String> {
 	boolean readLine(CharList buf) throws IOException;
 
 	default List<String> lines() throws IOException {
-		List<String> list = new SimpleList<>();
+		List<String> list = new ArrayList<>();
 		CharList sb = IOUtil.getSharedCharBuf();
 		while (readLine(sb)) {
 			list.add(sb.toString());
@@ -115,7 +115,7 @@ public interface LineReader extends Iterable<String> {
 			try {
 				return LineReader.super.readLine();
 			} catch (IOException e) {
-				return Helpers.nonnull();
+				throw OperationDone.NEVER;
 			}
 		}
 
@@ -124,7 +124,7 @@ public interface LineReader extends Iterable<String> {
 			try {
 				return LineReader.super.lines();
 			} catch (IOException e) {
-				return Helpers.nonnull();
+				throw OperationDone.NEVER;
 			}
 		}
 

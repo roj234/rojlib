@@ -1,17 +1,17 @@
 package roj.plugins;
 
 import org.jetbrains.annotations.Nullable;
-import roj.collect.SimpleList;
+import roj.audio.*;
+import roj.audio.mp3.MP3Decoder;
+import roj.collect.ArrayList;
 import roj.crypt.CryptoFactory;
 import roj.io.IOUtil;
 import roj.io.source.FileSource;
 import roj.io.source.Source;
 import roj.math.Vec2d;
-import roj.media.audio.*;
-import roj.media.audio.mp3.MP3Decoder;
 import roj.plugin.Plugin;
 import roj.plugin.SimplePlugin;
-import roj.reflect.ReflectionUtils;
+import roj.reflect.Unaligned;
 import roj.text.CharList;
 import roj.ui.Argument;
 import roj.ui.Command;
@@ -24,7 +24,7 @@ import java.io.File;
 import java.util.List;
 import java.util.concurrent.locks.LockSupport;
 
-import static roj.media.audio.FFT.displaySpectrum;
+import static roj.audio.FFT.displaySpectrum;
 import static roj.reflect.Unaligned.U;
 import static roj.ui.CommandNode.argument;
 import static roj.ui.CommandNode.literal;
@@ -35,7 +35,7 @@ import static roj.ui.CommandNode.literal;
  */
 @SimplePlugin(id = "musicPlayer", version = "2.1.0", desc = "ImpLib音乐播放测试", inheritConfig = true)
 public class MusicPlayer extends Plugin implements Runnable {
-	private static final long FLAG = ReflectionUtils.fieldOffset(MusicPlayer.class, "flag");
+	private static final long FLAG = Unaligned.fieldOffset(MusicPlayer.class, "flag");
 	private static final int STOP = 1, SKIP_AUTO = 2;
 	private static final int END_STOP = 1, END_NEXT = 2, IS_RANDOM = 4;
 
@@ -60,11 +60,11 @@ public class MusicPlayer extends Plugin implements Runnable {
 	protected void onEnable() throws Exception {
 		progress.setAnimation(false);
 		String path = getConfig().getString("music_path", "D:\\Music");
-		initList = IOUtil.findAllFiles(new File(path), file -> {
+		initList = IOUtil.listFiles(new File(path), file -> {
 			String ext = IOUtil.extensionName(file.getName());
 			return ext.equals("mp3") || ext.equals("wav")/* || ext.equals("ogg") || ext.equals("flac")*/;
 		});
-		playList = new SimpleList<>(initList);
+		playList = new ArrayList<>(initList);
 		flag = STOP;
 		var t = new Thread(this, "音乐播放器");
 		t.setDaemon(true);

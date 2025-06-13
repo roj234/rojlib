@@ -1,7 +1,7 @@
 package roj.net;
 
-import roj.collect.MyHashSet;
-import roj.collect.SimpleList;
+import roj.collect.HashSet;
+import roj.collect.ArrayList;
 import roj.io.buf.BufferPool;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
@@ -29,8 +29,8 @@ public class EmbeddedChannel extends MyChannel {
 	};
 
 	public static class Ticker extends Thread {
-		private final SimpleList<EmbeddedChannel> addPending = new SimpleList<>();
-		private final MyHashSet<EmbeddedChannel> ch = new MyHashSet<>();
+		private final ArrayList<EmbeddedChannel> addPending = new ArrayList<>();
+		private final HashSet<EmbeddedChannel> ch = new HashSet<>();
 		private volatile boolean shutdown, notify;
 
 		@Override

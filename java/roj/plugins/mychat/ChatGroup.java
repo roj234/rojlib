@@ -1,6 +1,6 @@
 package roj.plugins.mychat;
 
-import roj.collect.MyHashSet;
+import roj.collect.HashSet;
 import roj.collect.RingBuffer;
 import roj.util.ByteList;
 
@@ -11,7 +11,7 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
  * @since 2022/2/7 19:56
  */
 final class ChatGroup extends ChatSubject {
-	MyHashSet<ChatUser> users = new MyHashSet<>();
+	HashSet<ChatUser> users = new HashSet<>();
 	final RingBuffer<Message> history = new RingBuffer<>(100);
 	private final ReentrantReadWriteLock lock = new ReentrantReadWriteLock();
 

@@ -2,7 +2,7 @@ package roj.concurrent;
 
 import org.jetbrains.annotations.Nullable;
 import roj.io.buf.BufferPool;
-import roj.reflect.ReflectionUtils;
+import roj.reflect.Unaligned;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
 
@@ -22,7 +22,7 @@ public final class PacketBuffer extends ReuseFIFOQueue<PacketBuffer.Entry> {
 		volatile Thread waiter;
 	}
 
-	private static final long SIZE_OFFSET = ReflectionUtils.fieldOffset(PacketBuffer.class, "recycleSize");
+	private static final long SIZE_OFFSET = Unaligned.fieldOffset(PacketBuffer.class, "recycleSize");
 	private volatile int recycleSize;
 
 	public PacketBuffer() {recycleSize = 4;}

@@ -4,7 +4,7 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.jetbrains.annotations.Range;
 import roj.asm.insn.Label;
-import roj.collect.SimpleList;
+import roj.collect.ArrayList;
 import roj.compiler.asm.MethodWriter;
 import roj.compiler.asm.Variable;
 import roj.compiler.ast.expr.Expr;
@@ -37,14 +37,14 @@ public final class SwitchNode {
 	public final int kind;
 	/** break; 跳到的位置 */
 	public final Label breakTo;
-	public final SimpleList<Branch> branches;
+	public final ArrayList<Branch> branches;
 	/** case null 所属的分支 注意: 它可能也在branches里 */
 	@Nullable
 	public final SwitchNode.Branch nullBranch;
 	/** 是否含有default (对应Case的labels==null) */
 	public final boolean defaultBranch;
 
-	public SwitchNode(Expr sval, int kind, @Nullable Object cst, Label breakTo, SimpleList<Branch> branches, @Nullable SwitchNode.Branch nullBranch, boolean defaultBranch) {
+	public SwitchNode(Expr sval, int kind, @Nullable Object cst, Label breakTo, ArrayList<Branch> branches, @Nullable SwitchNode.Branch nullBranch, boolean defaultBranch) {
 		this.sval = sval;
 		this.kind = kind;
 		this.cst = cst;

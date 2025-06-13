@@ -9,7 +9,7 @@ import java.util.function.ToIntFunction;
 
 import static roj.collect.IntMap.UNDEFINED;
 
-public class ToIntMap<K> extends MyHashMap<K, Integer> implements ToIntFunction<K> {
+public class ToIntMap<K> extends HashMap<K, Integer> implements ToIntFunction<K> {
 	public static final class Entry<K> extends AbstractEntry<K, Integer> {
 		public int value;
 
@@ -56,9 +56,9 @@ public class ToIntMap<K> extends MyHashMap<K, Integer> implements ToIntFunction<
 
 	public ToIntMap() { super(); }
 	public ToIntMap(int size) { super(size); }
-	public ToIntMap(MyHashMap<K, Integer> map) { super(map); }
+	public ToIntMap(HashMap<K, Integer> map) { super(map); }
 
-	public final Set<Entry<K>> selfEntrySet() { return _Generic_EntrySet.create(this); }
+	public final Set<Entry<K>> selfEntrySet() { return _LibEntrySet.create(this); }
 
 	@Override
 	public final int applyAsInt(K value) { return getInt(value); }

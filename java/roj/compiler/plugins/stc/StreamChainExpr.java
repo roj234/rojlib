@@ -2,10 +2,10 @@ package roj.compiler.plugins.stc;
 
 import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.Nullable;
+import roj.compiler.CompileContext;
 import roj.compiler.asm.MethodWriter;
 import roj.compiler.ast.expr.Invoke;
 import roj.compiler.ast.expr.LeftValue;
-import roj.compiler.context.LocalContext;
 
 import java.util.List;
 
@@ -37,7 +37,7 @@ public interface StreamChainExpr {
 	int TERM = 0, TEMP = 1, IGNORE = 2;
 
 	@Contract(pure = true)
-	LocalContext context();
+	CompileContext context();
 	@Contract(pure = true)
 	MethodWriter writer();
 }

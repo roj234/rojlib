@@ -4,7 +4,7 @@ import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import roj.archive.zip.ZipFile;
-import roj.collect.SimpleList;
+import roj.collect.ArrayList;
 import roj.collect.TrieTreeSet;
 import roj.collect.XashMap;
 import roj.config.ConfigMaster;
@@ -15,6 +15,7 @@ import roj.io.FastFailException;
 import roj.io.IOUtil;
 import roj.io.source.FileSource;
 import roj.math.Version;
+import roj.plugin.di.DIContext;
 import roj.text.logging.Logger;
 
 import java.io.File;
@@ -29,11 +30,13 @@ import java.util.regex.Pattern;
  * @since 2023/12/25 16:08
  */
 public class PluginManager {
-	static final String SYSTEM_NAME = "Panger";
-	static final Logger LOGGER = Logger.getLogger(SYSTEM_NAME);
 	private static final XashMap.Builder<String, PluginDescriptor> PM_BUILDER = XashMap.noCreation(PluginDescriptor.class, "id");
+	static final Logger LOGGER = Logger.getLogger();
+
+	final PluginDescriptor systemPlugin = new PluginDescriptor();
 	final XashMap<String, PluginDescriptor> plugins = PM_BUILDER.create();
 	final EnumMap<PluginDescriptor.Role, PluginDescriptor> rolePlugins = new EnumMap<>(PluginDescriptor.Role.class);
+
 	boolean stopping;
 
 	private final ClassLoader env = getClass().getClassLoader();
@@ -44,14 +47,13 @@ public class PluginManager {
 
 	protected boolean isCriticalPlugin(PluginDescriptor pd) {return pd.fileName == null;}
 
-	protected final void readPlugins() {
+	protected final void findPlugins() {
 		File[] plugins = pluginFolder.listFiles();
 		if (plugins == null) return;
 		for (File file : plugins) {
 			String ext = IOUtil.extensionName(file.getName());
-			if (ext.equals("jar") || ext.equals("zip")) preloadPlugin(file);
+			if (ext.equals("jar") || ext.equals("zip")) findPlugin(file);
 		}
-		loadPlugins();
 	}
 	protected final void loadPlugins() {
 		for (var pd : plugins) {
@@ -91,7 +93,7 @@ public class PluginManager {
 	}
 
 	public static final int UNLOAD = 0, LOADING = 1, ERRORED = 2, LOADED = 3, ENABLED = 4, DISABLED = 5;
-	final void loadPlugin(PluginDescriptor pd) {
+	private void loadPlugin(PluginDescriptor pd) {
 		if (stopping) throw new FastFailException("系统正在关闭");
 
 		switch (pd.state) {
@@ -130,8 +132,11 @@ public class PluginManager {
 				for (int i = 0; i < pd.depend.size(); i++) accessible[i] = getPlugin(pd.depend.get(i));
 
 				var pcl = new PluginClassLoader(env, pd, accessible);
+				pd.classLoader = pcl;
 
-				pd.cl = pcl;
+				// 依赖注入
+				DIContext.onPluginLoaded(pd);
+
 				if (pd.mainClass.isEmpty()) {
 					pd.state = ENABLED;
 					return;
@@ -179,8 +184,8 @@ public class PluginManager {
 		}
 	}
 
-	protected final void loadPluginFromFile(File plugin) throws Exception {
-		var pd = preloadPlugin(plugin);
+	protected final void findAndLoadPlugin(File plugin) throws Exception {
+		var pd = findPlugin(plugin);
 		if (pd != null) loadAndEnablePlugin(pd);
 	}
 	protected final void loadAndEnablePlugin(PluginDescriptor pd) throws Exception {
@@ -189,7 +194,7 @@ public class PluginManager {
 		enablePlugin(pd);
 	}
 
-	private PluginDescriptor preloadPlugin(File plugin) {
+	private PluginDescriptor findPlugin(File plugin) {
 		try {
 			var pd = getMetadata(plugin);
 			if (pd == null) {
@@ -240,7 +245,7 @@ public class PluginManager {
 			pd.loadAfter = config.getList("loadAfter").toStringList();
 			pd.javaModuleDepend = config.getList("moduleDepend").toStringList();
 
-			SimpleList<String> path = config.getList("extraPath").toStringList();
+			ArrayList<String> path = config.getList("extraPath").toStringList();
 			pd.extraPath = new TrieTreeSet();
 			pd.extraPath.add("plugins"+File.separatorChar+plugin.getName());
 			pd.extraPath.add("plugins"+File.separatorChar+pd.id+"\\");
@@ -259,7 +264,6 @@ public class PluginManager {
 		}
 	}
 
-	//public PluginDescriptor getPluginOfType(String typeId) { return null; }
 	@Nullable
 	@Contract(pure = true)
 	public PluginDescriptor getPlugin(String id) { return plugins.get(id); }
@@ -280,6 +284,7 @@ public class PluginManager {
 		}
 		throw new IllegalStateException("没有"+role+"类型的实例");
 	}
+
 	public void enablePlugin(PluginDescriptor pd) throws Exception {
 		if (stopping) throw new FastFailException("系统正在关闭");
 
@@ -349,18 +354,21 @@ public class PluginManager {
 
 			disablePlugin(pd);
 			pd.instance = null;
-			if (pd.cl != null) {
+			if (pd.classLoader != null) {
+				// 依赖注入
+				DIContext.onPluginUnload(pd);
+
 				try {
-					pd.cl.close();
+					pd.classLoader.close();
 				}  catch (Throwable e) {
 					LOGGER.error("卸载插件 {} 出错", e, pd);
 				}
-				pd.cl = null;
+				pd.classLoader = null;
 			}
 
 			pd.state = UNLOAD;
 		}
 	}
 
-	public PluginDescriptor getOwner(Class<?> clazz) {return clazz.getClassLoader() instanceof PluginClassLoader pcl ? pcl.desc : getPlugin(SYSTEM_NAME);}
+	public PluginDescriptor getOwner(Class<?> type) {return type.getClassLoader() instanceof PluginClassLoader pcl ? pcl.desc : systemPlugin;}
 }

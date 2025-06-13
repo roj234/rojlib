@@ -8,7 +8,7 @@
  * 本项目实现了比ObjectWeb ASM多快好省的字节码处理，包括但不限于以下独特设计：
  * <ul>
  *   <li><b>按需解析</b> - 完成Class/Method/Field节点的基础解析后，所有{@link roj.asm.attr.Attribute 属性}的复杂结构仅在需要时解析</li>
- *   <li><b>代码访问者</b> - 整体采用Tree模式结构化存储，同时为{@link roj.asm.insn.AttrCode Code}属性提供{@link roj.asm.insn.CodeVisitor 访问者模式接口}</li>
+ *   <li><b>代码访问者</b> - 整体采用Tree模式结构化存储，同时为{@link roj.asm.insn.Code Code}属性提供{@link roj.asm.insn.CodeVisitor 访问者模式接口}</li>
  *   <li><b>指令压缩</b> - {@link roj.asm.insn.InsnList}采用压缩的内存布局，{@link roj.asm.insn.InsnNode}仅为动态视图</li>
  *   <li><b>常量模式</b> - 通过{@link roj.asm.ClassNode#cp}直接操作常量池，使用{@link roj.asmx.TransformUtil#compress(roj.asm.ClassNode)}优化代码大小</li>
  * </ul>
@@ -20,16 +20,13 @@
  *
  * // 混合模式操作
  * clazz.methods.forEach(method -> {
- *     AttrCode code = method.getAttribute(clazz.cp, Attribute.Code);
+ *     Code code = method.getAttribute(clazz.cp, Attribute.Code);
  *     if (code != null) {
- *         code.instructions.insert(...);            // Tree模式
+ *         code.instructions.insert(...);              // Tree模式
  *     }
  *
- *     CodeVisitor visitor = new CodeVisitor() { ... }
- *     UnparsedAttribute attribute = method.getRawAttribute("Code");
- *     if (code != null) {
- *         visitor.visit(clazz.cp, attribute.getRawData());    // Visitor模式
- *     }
+ *     CodeVisitor visitor = new CodeVisitor() { ... } // Visitor模式
+ *     method.visitCode(clazz.cp, new ByteList(), visitor);
  * });
  *
  * // 常量池模式
@@ -37,7 +34,7 @@
  * clazz.cp.setUTFValue(utf, "bbb");
  * }</pre>
  *
- * <h2>性能指标</h2>
+ * <h2>性能指标 (不是AIGC)</h2>
  * <table>
  *   <tr><th>特性</th><th>收益</th></tr>
  *   <tr>
@@ -57,7 +54,7 @@
  * <h2>扩展点</h2>
  * 通过实现以下接口定制行为：
  * <ul>
- *   <li>{@link roj.asm.attr.Attribute#addCustomAttribute(roj.util.TypedKey, java.util.function.BiFunction)} - 添加对新JVM属性的支持</li>
+ *   <li>{@link roj.asm.attr.Attribute#addCustomAttribute(roj.util.TypedKey, java.util.function.BiFunction)} - 添加对自定义属性的解析支持</li>
  * </ul>
  *
  * @author Roj234-N

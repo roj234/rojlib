@@ -8,10 +8,10 @@ import roj.net.ChannelCtx;
 import roj.net.ChannelHandler;
 import roj.net.MyChannel;
 import roj.net.util.SpeedLimiter;
-import roj.reflect.ReflectionUtils;
 import roj.reflect.Unaligned;
 
 import java.io.IOException;
+import java.util.Objects;
 
 /**
  * @author Roj234
@@ -33,7 +33,7 @@ class FlowController extends SpeedLimiter implements ChannelHandler {
 	private final ToLongMap<MyChannel> channel = new ToLongMap<>();
 
 	private volatile int lock;
-	private static final long LOCK_OFFSET = ReflectionUtils.fieldOffset(FlowController.class, "lock");
+	private static final long LOCK_OFFSET = Unaligned.fieldOffset(FlowController.class, "lock");
 
 	public int limit(int pendingBytes) {
 		if (setting.maxTokens == 0) return pendingBytes;
@@ -63,10 +63,10 @@ class FlowController extends SpeedLimiter implements ChannelHandler {
 
 	@Override
 	public void channelOpened(ChannelCtx ctx) throws IOException {
-		var request = ctx.prev(ResponseHeader.class).request();
-
 		// is address limiter
 		if (getLimitGroup().name == null) {
+			ResponseHeader prev = Objects.requireNonNull(ctx.prev(ResponseHeader.class));
+			var request = prev.request();
 			var pipe = owner.loginCheck(this, request);
 			if (pipe == null) ctx.removeSelf();
 			else {

@@ -2,8 +2,8 @@ package roj.plugins.web;
 
 import org.jetbrains.annotations.Nullable;
 import roj.archive.zip.ZipFile;
-import roj.collect.MyHashMap;
-import roj.collect.SimpleList;
+import roj.collect.ArrayList;
+import roj.collect.HashMap;
 import roj.config.ConfigMaster;
 import roj.config.ParseException;
 import roj.config.auto.Optional;
@@ -53,12 +53,12 @@ public class YellowPage extends Plugin implements TableReader {
 		config.put("path", "nav");
 
 		ZipFile archive = getDescription().getArchive();
-		registerRoute(config.getString("path"), new OKRouter().addPrefixDelegation("assets/", new ZipRouter(archive, "assets/")).register(this), "PermissionManager");
+		registerRoute(config.getString("path")+"/", new OKRouter().addPrefixDelegation("assets/", new ZipRouter(archive, "assets/")).register(this), "PermissionManager");
 
 		index = Formatter.simple(IOUtil.readString(archive.getStream("index.html")));
 		site = Formatter.simple(IOUtil.readString(archive.getStream("site.html")));
 
-		db = new SimpleList<>();
+		db = new ArrayList<>();
 		multiplier = ThreadLocalRandom.current().nextInt();
 		File csvFile = new File(getDataFolder(), "motd.csv");
 
@@ -124,7 +124,7 @@ public class YellowPage extends Plugin implements TableReader {
 	@GET("")
 	@Mime("text/html")
 	public CharSequence index(Request req) throws IOException, ParseException {
-		MyHashMap<String, Object> env = new MyHashMap<>();
+		HashMap<String, Object> env = new HashMap<>();
 
 		int i = ((int)(System.currentTimeMillis()/3600000) * multiplier) % db.size();
 		if (i < 0) i = -i % db.size();

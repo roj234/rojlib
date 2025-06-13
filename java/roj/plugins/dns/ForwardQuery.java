@@ -1,6 +1,6 @@
 package roj.plugins.dns;
 
-import roj.collect.MyHashMap;
+import roj.collect.HashMap;
 import roj.util.DynByteBuf;
 
 import java.util.Collections;
@@ -34,7 +34,7 @@ final class ForwardQuery extends DnsQuery {
 		try {
 			DnsResponse resp = DnsServer.readDnsResponse(r, addr);
 			if (resp.truncated) {
-				if (truncated.isEmpty()) truncated = new MyHashMap<>(2);
+				if (truncated.isEmpty()) truncated = new HashMap<>(2);
 				DnsResponse prev = truncated.putIfAbsent(addr.clone(), resp);
 				if (prev != null) prev.response.putAll(resp.response);
 

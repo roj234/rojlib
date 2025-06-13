@@ -254,10 +254,9 @@ public final class STUN implements ChannelHandler {
 	public void channelRead(ChannelCtx ctx, Object msg) throws IOException {
 		DynByteBuf buf;
 		InetSocketAddress address;
-		if (msg instanceof DatagramPkt) {
-			DatagramPkt pkt = (DatagramPkt) msg;
-			buf = pkt.buf;
-			address = new InetSocketAddress(pkt.addr, pkt.port);
+		if (msg instanceof DatagramPkt pkt) {
+			buf = pkt.data;
+			address = pkt.address;
 		} else {
 			buf = (DynByteBuf) msg;
 			address = (InetSocketAddress) ctx.remoteAddress();
@@ -287,7 +286,7 @@ public final class STUN implements ChannelHandler {
 			ctx.channelWrite(reply);
 			ctx.channel().closeGracefully();
 		} else {
-			ctx.channelWrite(new DatagramPkt(address.getAddress(), address.getPort(), reply));
+			ctx.channelWrite(new DatagramPkt(address, reply));
 		}
 	}
 	private void error(ChannelCtx ctx, Object msg) throws IOException {

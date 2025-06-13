@@ -1,9 +1,9 @@
 package roj.config.data;
 
 import org.jetbrains.annotations.NotNull;
+import roj.collect.HashSet;
 import roj.collect.IntMap;
-import roj.collect.MyHashSet;
-import roj.collect.SimpleList;
+import roj.collect.ArrayList;
 import roj.config.TOMLParser;
 import roj.config.Tokenizer;
 import roj.config.serial.CVisitor;
@@ -22,8 +22,8 @@ import java.util.function.Consumer;
 public class CList extends CEntry implements Iterable<CEntry> {
 	protected List<CEntry> elements;
 
-	public CList() { this(SimpleList.hugeCapacity(0)); }
-	public CList(int initialCapacity) { elements = new SimpleList<>(initialCapacity); }
+	public CList() { this(ArrayList.hugeCapacity(0)); }
+	public CList(int initialCapacity) { elements = new ArrayList<>(initialCapacity); }
 	@SuppressWarnings("unchecked")
 	public CList(List<? extends CEntry> elements) { this.elements = (List<CEntry>) elements; }
 
@@ -92,15 +92,15 @@ public class CList extends CEntry implements Iterable<CEntry> {
 	public CList getList(int i) { return elements.get(i).asList(); }
 	public CMap getMap(int i) { return elements.get(i).asMap(); }
 
-	public final MyHashSet<String> toStringSet() {
-		MyHashSet<String> stringSet = new MyHashSet<>(elements.size());
+	public final HashSet<String> toStringSet() {
+		HashSet<String> stringSet = new HashSet<>(elements.size());
 		for (int i = 0; i < elements.size(); i++) {
 			stringSet.add(elements.get(i).asString());
 		}
 		return stringSet;
 	}
-	public final SimpleList<String> toStringList() {
-		SimpleList<String> stringList = new SimpleList<>(elements.size());
+	public final ArrayList<String> toStringList() {
+		ArrayList<String> stringList = new ArrayList<>(elements.size());
 		for (int i = 0; i < elements.size(); i++) {
 			stringList.add(elements.get(i).asString());
 		}

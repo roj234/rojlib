@@ -2,7 +2,7 @@ package roj.net;
 
 import roj.io.buf.BufferPool;
 import roj.reflect.Bypass;
-import roj.reflect.ReflectionUtils;
+import roj.reflect.Reflection;
 import roj.util.DynByteBuf;
 
 import java.io.IOException;
@@ -47,7 +47,7 @@ class TcpChImpl extends MyChannel {
 		if (TcpUtil == null) {
 			synchronized (TcpChImpl.class) {
 				if (TcpUtil == null) {
-					String[] fields = ReflectionUtils.JAVA_VERSION < 11 ? new String[] {"isInputOpen", "isOutputOpen"} : new String[] {"isInputClosed", "isOutputClosed"};
+					String[] fields = Reflection.JAVA_VERSION < 11 ? new String[] {"isInputOpen", "isOutputOpen"} : new String[] {"isInputClosed", "isOutputClosed"};
 					TcpUtil = Bypass.builder(H.class).access(server.getClass(), fields, fields, null).build();
 				}
 			}

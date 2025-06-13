@@ -1,7 +1,7 @@
 package roj.plugins.bkcrack;
 
-import roj.collect.MyBitSet;
-import roj.collect.SimpleList;
+import roj.collect.BitSet;
+import roj.collect.ArrayList;
 import roj.concurrent.Task;
 import roj.concurrent.TaskExecutor;
 import roj.io.FastFailException;
@@ -20,11 +20,11 @@ class PlainPassRecover implements Task {
 	final int[] xlist, ylist, zlist;
 
 	// 256
-	final MyBitSet zm1_24_32;
-	final MyBitSet z0_16_32;
+	final BitSet zm1_24_32;
+	final BitSet z0_16_32;
 	private int x0;
 
-	private final List<Cipher> tmp = new SimpleList<>();
+	private final List<Cipher> tmp = new ArrayList<>();
 	private int cipherId = -1;
 
 	final byte[] charset;
@@ -34,8 +34,8 @@ class PlainPassRecover implements Task {
 		this.charset = charset;
 
 		int[] x = new int[7], y = new int[7], z = new int[7];
-		zm1_24_32 = new MyBitSet(1<<8);
-		z0_16_32 = new MyBitSet(1<<16);
+		zm1_24_32 = new BitSet(1<<8);
+		z0_16_32 = new BitSet(1<<16);
 
 		// initialize target X, Y and Z values
 		x[6] = keys.x;

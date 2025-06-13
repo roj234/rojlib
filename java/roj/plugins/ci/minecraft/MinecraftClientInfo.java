@@ -3,7 +3,7 @@ package roj.plugins.ci.minecraft;
 import roj.archive.zip.ZEntry;
 import roj.archive.zip.ZipArchive;
 import roj.archive.zip.ZipFile;
-import roj.collect.SimpleList;
+import roj.collect.ArrayList;
 import roj.collect.TrieTreeSet;
 import roj.collect.XashMap;
 import roj.concurrent.Promise;
@@ -68,6 +68,7 @@ final class MinecraftClientInfo {
 	File jar;
 	String mainClass;
 	List<String> jvmArguments, gameArguments;
+	CMap gameCoreDownloads;
 
 	public String libraryString() {
 		var libPathString = new CharList();
@@ -78,7 +79,7 @@ final class MinecraftClientInfo {
 		return libPathString.toStringAndFree();
 	}
 
-	public static List<String> listVersions(File file) {return listVersions(file, new SimpleList<>());}
+	public static List<String> listVersions(File file) {return listVersions(file, new ArrayList<>());}
 	private static List<String> listVersions(File file, List<String> jsons) {
 		File[] files = file.listFiles();
 		if (files != null) {
@@ -97,6 +98,8 @@ final class MinecraftClientInfo {
 
 		String inheritVersion = mapping.getString("inheritsFrom");
 		if (inheritVersion.length() > 0) resolve(versionPath, inheritVersion);
+
+		gameCoreDownloads = mapping.getMap("downloads");
 
 		var libraries = mapping.getList("libraries").raw();
 		for (int i = 0; i < libraries.size(); i++) {
@@ -133,7 +136,7 @@ final class MinecraftClientInfo {
 	}
 	@SuppressWarnings("unchecked")
 	private static List<String> makeNewArgs(CList argList) {
-		var args = new SimpleList<String>();
+		var args = new ArrayList<String>();
 
 		for (var entry : argList) {
 			switch (entry.getType()) {
@@ -167,7 +170,7 @@ final class MinecraftClientInfo {
 		String mavenId = libraryInfo.getString("name");
 		int i = mavenId.indexOf(':');
 		CharList sb = new CharList().append(mavenId).replace('.', '/', 0, i);
-		List<String> parts = TextUtil.split(new SimpleList<>(4), sb, ':');
+		List<String> parts = TextUtil.split(new ArrayList<>(4), sb, ':');
 
 		String ext = "jar";
 		final String s = parts.get(parts.size() - 1);
@@ -335,6 +338,7 @@ final class MinecraftClientInfo {
 		if (rule.containsKey("features")) {
 			for (var entry : rule.getMap("features").entrySet()) {
 				String name = entry.getKey();
+				if (name.contains("quick_play")) return false;
 				switch (name) {
 					case "is_demo_user", "has_custom_resolution":
 						return false;
@@ -343,7 +347,7 @@ final class MinecraftClientInfo {
 				CEntry value = entry.getValue();
 				Terminal.warning("FMD发现了一个未知规则: ");
 				Terminal.warning(name + ": " + value);
-				if (!Terminal.readBoolean("请输入T或F并按回车: ")) return false;
+				if (!Terminal.readBoolean("请输入y或n并按回车: ")) return false;
 			}
 		}
 

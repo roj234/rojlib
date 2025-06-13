@@ -2,7 +2,7 @@ package roj.crypt.asn1;
 
 import roj.collect.IntBiMap;
 import roj.collect.ListMap;
-import roj.collect.SimpleList;
+import roj.collect.ArrayList;
 import roj.config.data.*;
 import roj.config.serial.CVisitor;
 import roj.config.serial.ToJson;
@@ -23,7 +23,7 @@ public interface DerValue {
 	static CEntry INTEGER(BigInteger bi) {return new Int(bi);}
 	static CEntry CHOICE(int encType, CEntry ref) { return new Choice(encType, ref); }
 	static CIntArray OID(String s) {
-		List<String> split = TextUtil.split(new SimpleList<>(), s, '.');
+		List<String> split = TextUtil.split(new ArrayList<>(), s, '.');
 		int [] oid = new int[split.size()];
 		for (int i = 0; i < split.size(); i++) {
 			oid[i] = Integer.parseInt(split.get(i));

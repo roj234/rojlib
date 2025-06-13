@@ -1,7 +1,7 @@
 package roj.compiler.asm;
 
 import roj.asm.insn.*;
-import roj.compiler.context.GlobalContext;
+import roj.compiler.LavaCompiler;
 import roj.util.DynByteBuf;
 
 import java.util.List;
@@ -29,7 +29,7 @@ final class OptimizedJumpTo extends JumpTo {
 
 		// 无法访问的代码 (连续goto自动合并会误判)
 		if (!to.isContinuousControlFlow(segmentId-1)) {
-			GlobalContext.debugLogger().warn("无法访问的代码: "+this+" (from b"+segmentId+", bci="+bci+") => "+target.getValue());
+			LavaCompiler.debugLogger().warn("无法访问的代码: "+this+" (from b"+segmentId+", bci="+bci+") => "+target.getValue());
 			doWriteReplace();
 			return true;
 		}
@@ -88,7 +88,7 @@ final class OptimizedJumpTo extends JumpTo {
 		}
 
 		if (target.getValue() == bci + newLen) {
-			GlobalContext.debugLogger().warn("无意义的跳转: "+this+" (from b"+segmentId+", bci="+bci+") => "+target.getValue());
+			LavaCompiler.debugLogger().warn("无意义的跳转: "+this+" (from b"+segmentId+", bci="+bci+") => "+target.getValue());
 			doWriteReplace();
 			return true;
 		}

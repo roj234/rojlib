@@ -7,7 +7,7 @@ import roj.asm.cp.*;
 import roj.asm.insn.*;
 import roj.asm.type.Type;
 import roj.asmx.Context;
-import roj.collect.MyHashMap;
+import roj.collect.HashMap;
 import roj.concurrent.OperationDone;
 import roj.reflect.ClassDefiner;
 import roj.text.logging.Level;
@@ -75,8 +75,7 @@ public class StringDeobfusactor {
 			c.invoke(Opcodes.INVOKESTATIC, method);
 			c.insn(Opcodes.ARETURN);
 
-			ClassDefiner.premake(cls);
-			return impl = (Decoder) ClassDefiner.make(cls);
+			return impl = (Decoder) ClassDefiner.newInstance(cls);
 		}
 	}
 
@@ -84,13 +83,13 @@ public class StringDeobfusactor {
 		boolean user;
 		int ldcPos;
 		MemberDescriptor tmp;
-		MyHashMap<MemberDescriptor, Decoder> decoders;
+		HashMap<MemberDescriptor, Decoder> decoders;
 		CryptFinder() {
-			this.decoders = new MyHashMap<>();
+			this.decoders = new HashMap<>();
 			this.tmp = new MemberDescriptor();
 		}
 
-		public CryptFinder(MyHashMap<MemberDescriptor, DecoderCandidate> candidate) {
+		public CryptFinder(HashMap<MemberDescriptor, DecoderCandidate> candidate) {
 
 		}
 
@@ -147,7 +146,7 @@ public class StringDeobfusactor {
 			protected void invokeDyn(CstDynamic dyn, int type) { throw OperationDone.INSTANCE; }
 		};
 
-		MyHashMap<MemberDescriptor, DecoderCandidate> decoderCandidate = new MyHashMap<>();
+		HashMap<MemberDescriptor, DecoderCandidate> decoderCandidate = new HashMap<>();
 
 		for (int i = 0; i < arr.size(); i++) {
 			ClassNode data = arr.get(i).getData();
@@ -217,7 +216,7 @@ public class StringDeobfusactor {
 				UnparsedAttribute code0 = (UnparsedAttribute) m.getRawAttribute("Code");
 				if (code0 == null) continue;
 
-				AttrCode code = new AttrCode(AsmCache.reader(code0), data.cp, m);
+				Code code = new Code(AsmCache.reader(code0), data.cp, m);
 				try {
 					//if (intr.interpret(code)) {
 					//	code.instructions.removeAll(intr.toDelete);
@@ -238,7 +237,7 @@ public class StringDeobfusactor {
 							MemberDescriptor desc1 = next.descOrNull();
 							if (desc1 != null) {
 								if (next.opcode() == Opcodes.INVOKESTATIC && desc1.rawDesc.equals("(Ljava/lang/String;)Ljava/lang/String;")) {
-									CstUTF utf = ((CstString) cst).name();
+									CstUTF utf = ((CstString) cst).value();
 									//if (!intr.done.contains(utf.getString())) {
 									String value = null;
 									if (value != null) {

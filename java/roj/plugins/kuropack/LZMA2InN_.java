@@ -1,9 +1,9 @@
 package roj.plugins.kuropack;
 
-import roj.archive.qz.xz.LZMA2InputStream;
-import roj.archive.qz.xz.lz.LZDecoder;
-import roj.archive.qz.xz.lzma.LZMADecoder;
-import roj.archive.qz.xz.rangecoder.RangeDecoder;
+import roj.archive.xz.LZMA2InputStream;
+import roj.archive.xz.lz.LZDecoder;
+import roj.archive.xz.lzma.LZMADecoder;
+import roj.archive.xz.rangecoder.RangeDecoder;
 import roj.asmx.injector.Inject;
 import roj.asmx.injector.Shadow;
 import roj.asmx.injector.Weave;

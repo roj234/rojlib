@@ -15,8 +15,8 @@ import roj.asm.cp.CstUTF;
 import roj.asm.frame.Frame;
 import roj.asm.frame.FrameVisitor;
 import roj.asm.type.TypeHelper;
+import roj.collect.ArrayList;
 import roj.collect.IntMap;
-import roj.collect.SimpleList;
 import roj.io.IOUtil;
 import roj.text.logging.Logger;
 import roj.util.DynByteBuf;
@@ -31,13 +31,15 @@ import static roj.reflect.Unaligned.U;
  * @since 2021/8/16 19:07
  */
 public class CodeWriter extends AbstractCodeWriter {
+	public static final int ADD_RETURN = 4;
+
 	public DynByteBuf bw;
 	public ConstantPool cpw;
 
 	public MethodNode mn;
 	private byte fvFlags;
 
-	public SimpleList<Frame> frames;
+	public ArrayList<Frame> frames;
 	private FrameVisitor fv;
 	private boolean hasFrames;
 
@@ -68,7 +70,7 @@ public class CodeWriter extends AbstractCodeWriter {
 		codeOb = bw;
 		state = 1;
 	}
-	public void computeFrames(@MagicConstant(flags = {AttrCode.COMPUTE_SIZES, AttrCode.COMPUTE_FRAMES}) int interpretFlags) {
+	public void computeFrames(@MagicConstant(flags = {Code.COMPUTE_SIZES, Code.COMPUTE_FRAMES, ADD_RETURN}) int interpretFlags) {
 		this.fvFlags = (byte) interpretFlags;
 	}
 
@@ -168,17 +170,16 @@ public class CodeWriter extends AbstractCodeWriter {
 
 	protected void preVisitAttribute(ConstantPool cp, String name, DynByteBuf r, int bci) {
 		switch (name) {
-			case "LineNumberTable":
+			case "LineNumberTable" -> {
 				int len = r.readUnsignedShort();
 				while (len > 0) {
 					_monitor(r.readUnsignedShort());
 					r.rIndex += 2;
 					len--;
 				}
-				break;
-			case "LocalVariableTable":
-			case "LocalVariableTypeTable":
-				len = r.readUnsignedShort();
+			}
+			case "LocalVariableTable", "LocalVariableTypeTable" -> {
+				int len = r.readUnsignedShort();
 				while (len > 0) {
 					int start = r.readUnsignedShort();
 					int end = start + r.readUnsignedShort();
@@ -187,12 +188,12 @@ public class CodeWriter extends AbstractCodeWriter {
 					r.rIndex += 6;
 					len--;
 				}
-				break;
-			case "StackMapTable":
+			}
+			case "StackMapTable" -> {
 				if (fvFlags == 0 && mn != null) {
-					FrameVisitor.readFrames(frames = new SimpleList<>(r.readUnsignedShort(r.rIndex)), r, cp, this, mn.owner(), 0xffff, 0xffff);
+					FrameVisitor.readFrames(frames = new ArrayList<>(r.readUnsignedShort(r.rIndex)), r, cp, this, mn.owner(), getLocalSize(), getStackSize());
 				}
-				break;
+			}
 		}
 	}
 
@@ -212,7 +213,7 @@ public class CodeWriter extends AbstractCodeWriter {
 	protected void ldc2(Constant c) { codeOb.put(LDC2_W).putShort(cpw.fit(c)); }
 
 	public void invokeDyn(int idx, String name, String desc, @Range(from = 0, to = 0) int type) { codeOb.put(INVOKEDYNAMIC).putShort(cpw.getInvokeDynId(idx, name, desc)).putShort(type); }
-	public void invokeItf(String owner, String name, String desc) { codeOb.put(INVOKEINTERFACE).putShort(cpw.getItfRefId(owner, name, desc)).putShortLE(1+ TypeHelper.paramSize(desc)); }
+	public void invokeItf(String owner, String name, String desc) { codeOb.put(INVOKEINTERFACE).putShort(cpw.getItfRefId(owner, name, desc)).putShortLE(1+TypeHelper.paramSize(desc)); }
 	public void invoke(byte code, String owner, String name, String desc, boolean isInterfaceMethod) {
 		// calling by user code
 		if (code == INVOKEINTERFACE) {
@@ -240,6 +241,8 @@ public class CodeWriter extends AbstractCodeWriter {
 		if (state != 1) throw new IllegalStateException();
 		state = 2;
 
+		// make modify <clinit> easier
+		if ((fvFlags&ADD_RETURN) != 0) insn(RETURN);
 		satisfySegments();
 
 		bw.putInt(tmpLenOffset - 4, bw.wIndex() - tmpLenOffset);
@@ -290,7 +293,7 @@ public class CodeWriter extends AbstractCodeWriter {
 		} else {
 			// used for getBci, and on simple method it fails
 			bci = bw.wIndex() - tmpLenOffset;
-			if (!labels.isEmpty()) __updateOffsets();
+			if (!labels.isEmpty()) _updateOffsets();
 
 			if (fvFlags != 0) {
 				int begin = tmpLenOffset;
@@ -302,7 +305,7 @@ public class CodeWriter extends AbstractCodeWriter {
 
 		labels.clear();
 	}
-	public void __updateOffsets() {
+	public void _updateOffsets() {
 		int len = segments.size()+1;
 		int[] offSum = AsmCache.getInstance().getIntArray_(len);
 		updateOffset(labels, offSum, len);
@@ -323,7 +326,7 @@ public class CodeWriter extends AbstractCodeWriter {
 		tmpLen++;
 
 		if (fv != null) {
-			fv.visitException(start, end, handler, type == null ? null : type.name().str());
+			fv.visitException(start, end, handler, type == null ? null : type.value().str());
 		}
 	}
 	public void visitException(Label start, Label end, Label handler, String type) {
@@ -351,8 +354,8 @@ public class CodeWriter extends AbstractCodeWriter {
 
 		hasFrames = false;
 		if (fv != null) {
-			var frames = (SimpleList<Frame>) fv.finish(codeOb, cpw, (fvFlags&AttrCode.COMPUTE_FRAMES) != 0);
-			if ((fvFlags & AttrCode.COMPUTE_SIZES) != 0) {
+			var frames = (ArrayList<Frame>) fv.finish(codeOb, cpw, (fvFlags& Code.COMPUTE_FRAMES) != 0);
+			if ((fvFlags & Code.COMPUTE_SIZES) != 0) {
 				U.put16UB(codeOb.array(), codeOb._unsafeAddr()-8, fv.maxStackSize);
 				U.put16UB(codeOb.array(), codeOb._unsafeAddr()-6, fv.maxLocalSize);
 			}
@@ -406,26 +409,23 @@ public class CodeWriter extends AbstractCodeWriter {
 
 		int pos = b.rIndex;
 		switch (name) {
-			case "LineNumberTable":
+			case "LineNumberTable" -> {
 				int len1 = b.readUnsignedShort();
 				if (len1 == 0) return;
-
 				while (len1-- > 0) {
 					b.putShort(b.rIndex, bciR2W.get(b.readUnsignedShort()).getValue());
 					b.rIndex += 2;
 				}
-				break;
-			case "LocalVariableTable":
-			case "LocalVariableTypeTable":
-				len1 = b.readUnsignedShort();
+			}
+			case "LocalVariableTable", "LocalVariableTypeTable" -> {
+				int len1 = b.readUnsignedShort();
 				if (len1 == 0) return;
-
 				while (len1-- > 0) {
 					int start = b.readUnsignedShort();
-					int end = start+b.readUnsignedShort();
+					int end = start + b.readUnsignedShort();
 					Label oldEnd = bciR2W.get(end);
-					b.putShort(b.rIndex-4, start = bciR2W.get(start).getValue())
-					 .putShort(b.rIndex-2, (oldEnd == null ? bci:oldEnd.getValue()) - start);
+					b.putShort(b.rIndex - 4, start = bciR2W.get(start).getValue())
+							.putShort(b.rIndex - 2, (oldEnd == null ? bci : oldEnd.getValue()) - start);
 					if (cp != cpw) {
 						b.putShort(b.rIndex, cpw.fit(cp.get(b)));
 						b.putShort(b.rIndex, cpw.fit(cp.get(b)));
@@ -434,8 +434,8 @@ public class CodeWriter extends AbstractCodeWriter {
 						b.rIndex += 6;
 					}
 				}
-				break;
-			case "StackMapTable":
+			}
+			case "StackMapTable" -> {
 				if (hasFrames || frames == null) return;
 				hasFrames = true;
 
@@ -445,10 +445,21 @@ public class CodeWriter extends AbstractCodeWriter {
 				FrameVisitor.writeFrames(frames, b, cpw);
 				len = b.readableBytes();
 				frames = null;
-				break;
-			default:
-				Logger.FALLBACK.debug("{}.{} 中发现不支持的属性 {}", mn.owner(), mn.name(), name);
+			}
+			/*case "RuntimeInvisibleTypeAnnotations", "RuntimeVisibleTypeAnnotations" -> {
+				var slice = b.slice();
+				var rita = Attribute.parse(null, cp, name, slice, AttrCode.ATTR_CODE);
+				slice.clear();
+				rita.toByteArrayNoHeader(slice, cpw);
+				if (slice.wIndex() != len) {
+					Logger.FALLBACK.debug("{}.{} 中遇到不支持的属性 {}", mn.owner(), mn.name(), name);
+					return;
+				}
+			}*/
+			default -> {
+				Logger.FALLBACK.debug("{}.{} 中遇到不支持的属性 {}", mn.owner(), mn.name(), name);
 				return;
+			}
 		}
 		b.rIndex = pos;
 
@@ -547,7 +558,7 @@ public class CodeWriter extends AbstractCodeWriter {
 
 	protected final void _addOffset(int c) {offset += c;}
 	protected final void _addFirst() {
-		segments = new SimpleList<>(3);
+		segments = new ArrayList<>(3);
 		offset = bw.wIndex()-tmpLenOffset;
 		segments.add(new FirstBlock(bw, tmpLenOffset));
 	}

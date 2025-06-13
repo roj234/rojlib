@@ -9,9 +9,9 @@ import roj.asm.cp.CstClass;
 import roj.asm.cp.CstRef;
 import roj.asm.insn.CodeVisitor;
 import roj.asmx.Context;
-import roj.collect.MyHashMap;
-import roj.collect.MyHashSet;
-import roj.collect.SimpleList;
+import roj.collect.ArrayList;
+import roj.collect.HashMap;
+import roj.collect.HashSet;
 import roj.io.IOUtil;
 
 import java.io.File;
@@ -27,7 +27,7 @@ import java.util.Map;
 public class StaticAnalyzer {
 	public static void main(String[] args) throws Exception {
 		IOUtil.copyFile(new File(args[0]), new File(args[1]));
-		Map<String, Context> map = new MyHashMap<>();
+		Map<String, Context> map = new HashMap<>();
 
 		ZipArchive zf = new ZipArchive(new File(args[1]));
 		for (ZEntry entry : zf.entries()) {
@@ -37,14 +37,14 @@ public class StaticAnalyzer {
 			}
 		}
 
-		List<String> list = SimpleList.asModifiableList(args);
+		List<String> list = ArrayList.asModifiableList(args);
 		list.remove(0);
 		list.remove(0);
 		for (int i = 0; i < list.size(); i++) {
 			list.set(i, list.get(i).replace('.', '/'));
 		}
 
-		MyHashSet<MemberDescriptor> used = new MyHashSet<>();
+		HashSet<MemberDescriptor> used = new HashSet<>();
 		if (System.getProperty("analyze_method") == null) {
 			analyzeClass(list, map, used);
 		} else {
@@ -52,7 +52,7 @@ public class StaticAnalyzer {
 		}
 		System.out.println(used.size() + " used");
 
-		MyHashSet<String> removed = new MyHashSet<>(map.keySet());
+		HashSet<String> removed = new HashSet<>(map.keySet());
 		for (MemberDescriptor desc : used) removed.remove(desc.owner);
 		System.out.println(removed.size() + " removed");
 
@@ -61,8 +61,8 @@ public class StaticAnalyzer {
 		zf.close();
 	}
 
-	public static void analyzeClass(List<String> entryPoint, Map<String, Context> data, MyHashSet<MemberDescriptor> used) {
-		List<String> pending = new SimpleList<>(entryPoint), next = new SimpleList<>();
+	public static void analyzeClass(List<String> entryPoint, Map<String, Context> data, HashSet<MemberDescriptor> used) {
+		List<String> pending = new ArrayList<>(entryPoint), next = new ArrayList<>();
 		do {
 			for (int i = 0; i < pending.size(); i++) {
 				Context ctx = data.get(pending.get(i));
@@ -80,17 +80,17 @@ public class StaticAnalyzer {
 	private static void analyzeClass0(Context ctx, List<String> next) {
 		List<CstClass> classes = ctx.getClassConstants();
 		for (int i = 0; i < classes.size(); i++) {
-			next.add(classes.get(i).name().str());
+			next.add(classes.get(i).value().str());
 		}
 	}
 
-	public static void analyzeMethod(List<String> entryPoint, Map<String, Context> data, MyHashSet<MemberDescriptor> used) {
-		List<MemberDescriptor> pending = new SimpleList<>();
+	public static void analyzeMethod(List<String> entryPoint, Map<String, Context> data, HashSet<MemberDescriptor> used) {
+		List<MemberDescriptor> pending = new ArrayList<>();
 		for (int i = 0; i < entryPoint.size(); i++) {
 			pending.add(new MemberDescriptor(entryPoint.get(i), null));
 		}
 
-		MyHashSet<MemberDescriptor> next = new MyHashSet<>();
+		HashSet<MemberDescriptor> next = new HashSet<>();
 		do {
 			for (int i = 0; i < pending.size(); i++) {
 				MemberDescriptor desc = pending.get(i);
@@ -106,7 +106,7 @@ public class StaticAnalyzer {
 		} while (!pending.isEmpty());
 	}
 
-	private static void analyzeMethod0(Context ctx, MemberDescriptor desc, MyHashSet<MemberDescriptor> next) {
+	private static void analyzeMethod0(Context ctx, MemberDescriptor desc, HashSet<MemberDescriptor> next) {
 		List<? extends MethodNode> methods = ctx.getData().methods;
 		for (int i = 0; i < methods.size(); i++) {
 			MethodNode mn = methods.get(i);
@@ -127,13 +127,13 @@ public class StaticAnalyzer {
 	}
 
 	static class MyVisitor extends CodeVisitor {
-		MyVisitor(String owner, MyHashSet<MemberDescriptor> next) {
+		MyVisitor(String owner, HashSet<MemberDescriptor> next) {
 			self = owner;
 			user = next;
 		}
 
 		String self;
-		MyHashSet<MemberDescriptor> user;
+		HashSet<MemberDescriptor> user;
 
 		@Override
 		public void invoke(byte code, CstRef method) {

@@ -10,19 +10,19 @@ import roj.asm.annotation.AnnVal;
 import roj.asm.insn.Label;
 import roj.asm.type.IType;
 import roj.asm.type.Type;
-import roj.collect.SimpleList;
-import roj.collect.ToIntMap;
-import roj.compiler.LavaFeatures;
+import roj.collect.ArrayList;
+import roj.compiler.CompileContext;
+import roj.compiler.LavaCompiler;
+import roj.compiler.api.Compiler;
 import roj.compiler.api.FieldAccessHook;
 import roj.compiler.asm.Asterisk;
 import roj.compiler.asm.MethodWriter;
 import roj.compiler.asm.Variable;
-import roj.compiler.context.GlobalContext;
-import roj.compiler.context.LocalContext;
 import roj.compiler.diagnostic.Kind;
 import roj.compiler.resolve.ComponentList;
 import roj.compiler.resolve.FieldResult;
 import roj.compiler.resolve.ResolveException;
+import roj.compiler.runtime.SwitchMap;
 import roj.concurrent.Flow;
 import roj.text.CharList;
 import roj.text.TextUtil;
@@ -41,7 +41,7 @@ import java.util.function.Consumer;
  * }</pre>
  *
  * @author Roj233
- * @see Invoke#resolve(LocalContext) 在方法调用表达式中的使用
+ * @see Invoke#resolve(CompileContext) 在方法调用表达式中的使用
  * @since 2022/2/27 20:27
  */
 final class MemberAccess extends LeftValue {
@@ -55,7 +55,7 @@ final class MemberAccess extends LeftValue {
 		cw.insn(Opcodes.POP);
 		int type1 = targetType.getActualType();
 		if (type1 != Type.VOID) {
-			if (type1 != Type.CLASS) LocalContext.get().report(caller, Kind.ERROR, "symbol.error.derefPrimitive", targetType);
+			if (type1 != Type.CLASS) CompileContext.get().report(caller, Kind.ERROR, "symbol.error.derefPrimitive", targetType);
 			cw.insn(Opcodes.ACONST_NULL);
 		}
 		cw.label(end);
@@ -63,7 +63,7 @@ final class MemberAccess extends LeftValue {
 
 	//package-private: Invoke会修改这些字段
 	Expr parent;
-	SimpleList<String> nameChain;
+	ArrayList<String> nameChain;
 
 	private long nullishBits;
 	private static final byte ARRAY_LENGTH = 1, FINAL_FIELD = 2, SELF_FIELD = 4, RESOLVED = 8;
@@ -74,35 +74,36 @@ final class MemberAccess extends LeftValue {
 	private FieldNode[] chain; // 字段访问链
 	private IType resultType; // 表达式结果类型
 
-	private static final ToIntMap<Class<?>> TypeId = new ToIntMap<>();
-	static {
-		// Notnull
-		TypeId.putInt(This.class, 1);
-		TypeId.putInt(QualifiedThis.class, 1);
-		TypeId.putInt(Literal.class, 1);
-		TypeId.putInt(NewArray.class, 1);
-		TypeId.putInt(NewAnonymousClass.class, 1);
+	private static final SwitchMap TypeId = SwitchMap.Builder
+			.builder(10, true)
 
-		TypeId.putInt(Invoke.class, 2);
-		TypeId.putInt(ArrayAccess.class, 2);
-		TypeId.putInt(BinaryOp.class, 2);
+			// Notnull
+			.add(This.class, 1)
+			.add(QualifiedThis.class, 1)
+			.add(Literal.class, 1)
+			.add(NewArray.class, 1)
+			.add(NewAnonymousClass.class, 1)
 
-		TypeId.putInt(Cast.class, 3);
+			.add(Invoke.class, 2)
+			.add(ArrayAccess.class, 2)
+			.add(BinaryOp.class, 2)
 
-		// only after resolve (via getOperatorOverride)
-		TypeId.putInt(LocalVariable.class, 114);
-	}
+			.add(Cast.class, 3)
+
+			// only after resolve (via getOperatorOverride)
+			.add(LocalVariable.class, 114)
+			.build();
 
 	public MemberAccess(@Nullable Expr parent, String name, int flag) {
 		this.parent = parent;
-		this.nameChain = new SimpleList<>(4);
+		this.nameChain = new ArrayList<>(4);
 		this.nameChain.add(name);
 		// a() ?. expr
 		if (flag != 0) nullishBits = 1;
 
 		if (parent != null) {
-			int type = TypeId.getOrDefault(parent.getClass(), -1);
-			if (type == -1) throw new IllegalArgumentException("未识别的parent:"+parent.getClass().getName());
+			int type = TypeId.get(parent.getClass());
+			if (type == 0) throw new IllegalArgumentException("未识别的parent:"+parent.getClass().getName());
 			this.flags = (byte) type;
 		} else {
 			this.flags = -128;
@@ -112,7 +113,7 @@ final class MemberAccess extends LeftValue {
 
 	public static Expr fieldChain(Expr parent, ClassDefinition begin, IType type, boolean isFinal, FieldNode... chain) {
 		MemberAccess el = new MemberAccess();
-		el.nameChain = (SimpleList<String>) Flow.of(chain).map(FieldNode::name).toList();
+		el.nameChain = (ArrayList<String>) Flow.of(chain).map(FieldNode::name).toList();
 		el.parent = parent;
 		el.owner = begin;
 		el.chain = chain;
@@ -122,7 +123,7 @@ final class MemberAccess extends LeftValue {
 	}
 
 	Type toClassRef() {
-		CharList sb = LocalContext.get().getTmpSb();
+		CharList sb = CompileContext.get().getTmpSb();
 		int i = 0;
 		String part = nameChain.get(0);
 		while (true) {
@@ -143,14 +144,14 @@ final class MemberAccess extends LeftValue {
 
 	@NotNull
 	@Override
-	public Expr resolve(LocalContext ctx) throws ResolveException { return resolveEx(ctx, null, null); }
+	public Expr resolve(CompileContext ctx) throws ResolveException { return resolveEx(ctx, null, null); }
 	/**
 	 * @param classExprTarget 如果这个表达式不能作为字段访问解析，尝试作为类访问解析，并把结果交给它
 	 * @param lastSegment Invoke解析时候拿走的方法名称，用于New省略语法
-	 * @see Invoke#resolve(LocalContext)
+	 * @see Invoke#resolve(CompileContext)
 	 */
 	@Contract("_, null, _ -> !null")
-	final Expr resolveEx(LocalContext ctx, Consumer<Object> classExprTarget, String lastSegment) throws ResolveException {
+	final Expr resolveEx(CompileContext ctx, Consumer<Object> classExprTarget, String lastSegment) throws ResolveException {
 		if ((flags&RESOLVED) != 0) return this;
 
 		// 用于错误提示
@@ -191,7 +192,7 @@ final class MemberAccess extends LeftValue {
 					}
 				}
 
-				LocalContext.Import result;
+				CompileContext.Import result;
 				// 3. 静态字段导入
 				if ((result = ctx.tryImportField(part)) != null) {
 					owner = result.owner;
@@ -213,7 +214,7 @@ final class MemberAccess extends LeftValue {
 			if (++i == nameChain.size()) break;
 			if ((part = nameChain.get(i)).equals(";[")) {
 				ctx.report(this, Kind.ERROR, "symbol.error.arrayBrOutsideClassRef");
-				return NaE.RESOLVE_FAILED;
+				return NaE.resolveFailed(this);
 			}
 			sb.append('/');
 		}
@@ -229,13 +230,13 @@ final class MemberAccess extends LeftValue {
 				fType = (parent = parent.resolve(ctx)).type();
 				if (fType.isPrimitive()) {
 					ctx.report(this, Kind.ERROR, "symbol.error.derefPrimitive", fType);
-					return NaE.RESOLVE_FAILED;
+					return NaE.resolveFailed(this);
 				}
 
 				symbol = ctx.resolve(fType);
 				if (symbol == null) {
 					ctx.report(this, Kind.ERROR, "symbol.error.noSuchClass", fType);
-					return NaE.RESOLVE_FAILED;
+					return NaE.resolveFailed(this);
 				}
 
 				checkNullishDecl(ctx);
@@ -244,7 +245,7 @@ final class MemberAccess extends LeftValue {
 			String error = ctx.resolveField(symbol, fType, sb);
 			if (error != null) {
 				ctx.report(this, Kind.ERROR, error);
-				return NaE.RESOLVE_FAILED;
+				return NaE.resolveFailed(this);
 			}
 
 			part = fType.owner();
@@ -266,7 +267,7 @@ final class MemberAccess extends LeftValue {
 					return null;
 				}
 
-				if (lastSegment != null && ctx.classes.hasFeature(LavaFeatures.OMISSION_NEW)) {
+				if (lastSegment != null && ctx.compiler.hasFeature(Compiler.OMISSION_NEW)) {
 					var checkConstructor = ctx.resolveDotGet(sb.append('/').append(lastSegment), true);
 					if ("".equals(checkConstructor)) {
 						assert classExprTarget != null;
@@ -277,7 +278,7 @@ final class MemberAccess extends LeftValue {
 
 				if (inaccessibleThis != null) error = inaccessibleThis.error;
 				ctx.report(this, Kind.ERROR, error);
-				return NaE.RESOLVE_FAILED;
+				return NaE.resolveFailed(this);
 			}
 
 			part = ctx.get_frChain().get(0).fieldType().owner();
@@ -295,7 +296,7 @@ final class MemberAccess extends LeftValue {
 		FieldNode last = chain[length-1];
 
 		// length不是字段而是opcode
-		if (last == GlobalContext.arrayLength()) {
+		if (last == LavaCompiler.arrayLength()) {
 			flags |= FINAL_FIELD|ARRAY_LENGTH;
 			resultType = Type.primitive(Type.INT);
 			length--;
@@ -336,7 +337,7 @@ final class MemberAccess extends LeftValue {
 		//noinspection all
 		if (part != null && part == ctx.file.name()) {
 			flags |= SELF_FIELD;
-			// redirect check to LocalContext
+			// redirect check to CompileContext
 			if (ctx.inConstructor) flags &= ~FINAL_FIELD;
 		}
 		return this;
@@ -369,13 +370,13 @@ final class MemberAccess extends LeftValue {
 
 	@Override
 	public void preStore(MethodWriter cw) {
-		if ((flags&SELF_FIELD) != 0) LocalContext.get().checkSelfField(chain[chain.length-1], true);
+		if ((flags&SELF_FIELD) != 0) CompileContext.get().checkSelfField(chain[chain.length-1], true);
 		write0(cw, chain.length-1);
 	}
 
 	@Override
 	public void preLoadStore(MethodWriter cw) {
-		if ((flags&SELF_FIELD) != 0) LocalContext.get().checkSelfField(chain[chain.length-1], false);
+		if ((flags&SELF_FIELD) != 0) CompileContext.get().checkSelfField(chain[chain.length-1], false);
 		write0(cw, chain.length-1);
 		if (!isStaticField()) {
 			/*if (parent instanceof LocalVariable) parent.write(cw);
@@ -477,7 +478,7 @@ final class MemberAccess extends LeftValue {
 	 */
 	public MemberAccess add(String name, int flag) {
 		if (flag != 0) {
-			if (nameChain.size() > 64) LocalContext.get().report(this, Kind.ERROR, "dotGet.opChain.tooLong");
+			if (nameChain.size() > 64) CompileContext.get().report(this, Kind.ERROR, "dotGet.opChain.tooLong");
 			nullishBits |= 1L << nameChain.size();
 		}
 		nameChain.add(name);
@@ -498,7 +499,7 @@ final class MemberAccess extends LeftValue {
 		int off = (chain[0].modifier & Opcodes.ACC_STATIC) != 0 ? 1 : 0;
 		return ((1L << nameChain.size() - off) & nullishBits) != 0 ? 2 : nullishBits != 0 ? 1 : 0;
 	}
-	public void checkNullishDecl(LocalContext ctx) {
+	public void checkNullishDecl(CompileContext ctx) {
 		if ((nullishBits&1) != 0 && flags == 1) ctx.report(this, Kind.ERROR, "dotGet.opChain.inClassDecl");
 	}
 

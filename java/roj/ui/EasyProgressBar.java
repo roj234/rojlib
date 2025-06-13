@@ -1,7 +1,7 @@
 package roj.ui;
 
 import roj.io.IOUtil;
-import roj.reflect.ReflectionUtils;
+import roj.reflect.Unaligned;
 import roj.text.CharList;
 import roj.text.TextUtil;
 
@@ -19,9 +19,9 @@ public class EasyProgressBar extends ProgressBar {
 	private volatile long finish, total;
 
 	private static final long
-		DELTA_OFFSET = ReflectionUtils.fieldOffset(EasyProgressBar.class, "delta"),
-		FINISH_OFFSET = ReflectionUtils.fieldOffset(EasyProgressBar.class, "finish"),
-		TOTAL_OFFSET = ReflectionUtils.fieldOffset(EasyProgressBar.class, "total");
+		DELTA_OFFSET = Unaligned.fieldOffset(EasyProgressBar.class, "delta"),
+		FINISH_OFFSET = Unaligned.fieldOffset(EasyProgressBar.class, "finish"),
+		TOTAL_OFFSET = Unaligned.fieldOffset(EasyProgressBar.class, "total");
 
 	public EasyProgressBar(String name) { super(name); this.unit = "it"; }
 	public EasyProgressBar(String name, String unit) { super(name); this.unit = unit; }
@@ -108,15 +108,15 @@ public class EasyProgressBar extends ProgressBar {
 		if (Taskbar.release(this)) {
 			Taskbar.setProgressType(Taskbar.TBPF_OFF);
 		}
-		setTotal(0);
 		super.close();
 	}
 
 	@Override
-	public void end(String message, int color) {
+	public void end() {
 		if (Taskbar.release(this)) {
 			Taskbar.setProgressType(Taskbar.TBPF_OFF);
 		}
-		super.end(message, color);
+		setTotal(0);
+		super.end();
 	}
 }

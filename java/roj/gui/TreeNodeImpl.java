@@ -1,7 +1,7 @@
 package roj.gui;
 
 import roj.asmx.launcher.Conditional;
-import roj.collect.SimpleList;
+import roj.collect.ArrayList;
 import roj.config.auto.Optional;
 
 import javax.swing.tree.MutableTreeNode;
@@ -79,7 +79,7 @@ public abstract class TreeNodeImpl<T extends TreeNodeImpl<T>> implements Mutable
 
 	@SuppressWarnings("unchecked")
 	public final void insert(TreeNodeImpl<T> child, int index) {
-		if (children == null) children = new SimpleList<>();
+		if (children == null) children = new ArrayList<>();
 		T c = (T) child;
 		c.setParent(this);
 		children.add(index, c);

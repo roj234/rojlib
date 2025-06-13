@@ -16,14 +16,14 @@ import java.util.Iterator;
  * @author Roj234
  * @since 2021/5/27 0:8
  */
-public class WeakHashSet<K> extends AbstractSet<K> implements FindSet<K>, _Generic_Map<WeakHashSet.Entry> {
+public class WeakHashSet<K> extends AbstractSet<K> implements FindSet<K>, _LibMap<WeakHashSet.Entry> {
 	public static <T> WeakHashSet<T> newWeakHashSet() {
 		return new WeakHashSet<>();
 	}
 
 	protected final ReferenceQueue<Object> queue = new ReferenceQueue<>();
 
-	public static class Entry extends WeakReference<Object> implements _Generic_Entry {
+	public static class Entry extends WeakReference<Object> implements _LibEntry {
 		public Entry(Object key, ReferenceQueue<Object> queue) {
 			super(key, queue);
 			this.hash = System.identityHashCode(key);
@@ -51,10 +51,10 @@ public class WeakHashSet<K> extends AbstractSet<K> implements FindSet<K>, _Gener
 		if (entries != null) resize();
 	}
 
-	private static final class SetItr<K> extends MapItr<Entry> implements Iterator<K> {
+	private static final class SetItr<K> extends _LitItr<Entry> implements Iterator<K> {
 		K myValue;
 
-		SetItr(WeakHashSet<K> set) { super(set); }
+		SetItr(WeakHashSet<K> set) { super(set.entries, set); }
 
 		@Override
 		@SuppressWarnings("unchecked")
@@ -74,7 +74,7 @@ public class WeakHashSet<K> extends AbstractSet<K> implements FindSet<K>, _Gener
 	@Override
 	public int size() { doEvict(); return size; }
 
-	public final _Generic_Entry[] __entries() { return entries; }
+	public final _LibEntry[] __entries() { return entries; }
 	public final void __remove(Entry entry) { remove(entry.get()); }
 
 	public void resize() {

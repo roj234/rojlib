@@ -2,8 +2,8 @@ package roj.plugins.bkcrack;
 
 import roj.collect.IntList;
 import roj.collect.IntMap;
-import roj.collect.RSegmentTree;
-import roj.collect.SimpleList;
+import roj.collect.IntervalPartition;
+import roj.collect.ArrayList;
 import roj.concurrent.TaskExecutor;
 import roj.io.FastFailException;
 import roj.io.IOUtil;
@@ -22,7 +22,7 @@ final class ZCKiller {
 	static final int ENCRYPTION_HEADER_SIZE = 12;
 
 	ZCKiller(byte[] cipher, IntMap<byte[]> knownPlains) {
-		RSegmentTree<RSegmentTree.Wrap<byte[]>> unioner = new RSegmentTree<>(10, false, 0);
+		IntervalPartition<IntervalPartition.Wrap<byte[]>> unioner = new IntervalPartition<>(10, false, 0);
 
 		int total = 0;
 		for (IntMap.Entry<byte[]> entry : knownPlains.selfEntrySet()) {
@@ -37,7 +37,7 @@ final class ZCKiller {
 
 			total += plain.length;
 
-			unioner.add(new RSegmentTree.Wrap<>(plain, offset, offset+plain.length));
+			unioner.add(new IntervalPartition.Wrap<>(plain, offset, offset+plain.length));
 		}
 
 		if(total < Solver.CIPHER_KEY_SIZE) {
@@ -45,13 +45,13 @@ final class ZCKiller {
 				"there will be " + (1L << ((Solver.CIPHER_KEY_SIZE-total)<<3)) + " results");
 		}
 
-		List<IntMap.Entry<byte[]>> merged = new SimpleList<>();
+		List<IntMap.Entry<byte[]>> merged = new ArrayList<>();
 
 		ByteList tmp = IOUtil.getSharedByteBuf();
 		unioner.mergeConnected((list, length) -> {
 			tmp.clear();
 			for (int j = 0; j < list.size(); j++) {
-				RSegmentTree.Wrap<byte[]> w = Helpers.cast(list.get(j));
+				IntervalPartition.Wrap<byte[]> w = Helpers.cast(list.get(j));
 				tmp.put(w.sth);
 			}
 			merged.add(new IntMap.Entry<>((int) list.get(0).startPos(), tmp.toByteArray()));
@@ -99,7 +99,7 @@ final class ZCKiller {
 	boolean interrupt;
 	EasyProgressBar progress;
 
-	List<Cipher> solutions = new SimpleList<>();
+	List<Cipher> solutions = new ArrayList<>();
 
 	synchronized void solutionFound(Cipher cipher) {
 		solutions.add(cipher.copy(new Cipher()));

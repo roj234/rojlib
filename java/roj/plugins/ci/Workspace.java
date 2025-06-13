@@ -1,5 +1,6 @@
 package roj.plugins.ci;
 
+import org.jetbrains.annotations.Nullable;
 import roj.asmx.mapper.Mapper;
 import roj.config.ParseException;
 import roj.config.XMLParser;
@@ -35,7 +36,7 @@ public class Workspace {
 	public String id;
 	public List<File> depend, mappedDepend, unmappedDepend;
 
-	public File mapping;
+	@Nullable public File mapping;
 	private transient Mapper mapper, invMapper;
 
 	@Optional public Map<String, String> variables = Collections.emptyMap();

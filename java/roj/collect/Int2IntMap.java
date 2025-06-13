@@ -11,8 +11,8 @@ import java.util.Set;
 import static roj.collect.IntMap.NUMKEY_LOADFACTOR;
 import static roj.collect.IntMap.intHash;
 
-public class Int2IntMap extends AbstractMap<Integer, Integer> implements _Generic_Map<Int2IntMap.Entry> {
-	public static class Entry implements _Generic_Entry, Map.Entry<Integer, Integer> {
+public class Int2IntMap extends AbstractMap<Integer, Integer> implements _LibMap<Int2IntMap.Entry> {
+	public static class Entry implements _LibEntry, Map.Entry<Integer, Integer> {
 		public int v;
 		protected int k;
 		protected Entry next;
@@ -66,7 +66,7 @@ public class Int2IntMap extends AbstractMap<Integer, Integer> implements _Generi
 	}
 
 	// GenericMap interface
-	public _Generic_Entry[] __entries() {return entries;}
+	public _LibEntry[] __entries() {return entries;}
 	public void __remove(Entry entry) {remove(entry.k);}
 	// GenericMap interface
 
@@ -187,7 +187,7 @@ public class Int2IntMap extends AbstractMap<Integer, Integer> implements _Generi
 	}
 
 	public Set<Map.Entry<Integer, Integer>> entrySet() {return Helpers.cast(selfEntrySet());}
-	public Set<Entry> selfEntrySet() {return _Generic_EntrySet.create(this);}
+	public Set<Entry> selfEntrySet() {return _LibEntrySet.create(this);}
 
 	@Override
 	@Deprecated

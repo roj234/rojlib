@@ -6,8 +6,8 @@ import roj.asm.Opcodes;
 import roj.asm.insn.Label;
 import roj.asm.type.IType;
 import roj.asm.type.Type;
+import roj.compiler.CompileContext;
 import roj.compiler.asm.MethodWriter;
-import roj.compiler.context.LocalContext;
 import roj.compiler.diagnostic.Kind;
 import roj.compiler.resolve.TypeCast;
 import roj.config.data.CDouble;
@@ -34,7 +34,7 @@ class PrefixOp extends PrefixOperator {
 
 	@Override
 	@SuppressWarnings("fallthrough")
-	public Expr resolve(LocalContext ctx) {
+	public Expr resolve(CompileContext ctx) {
 		if (type != null) return this;
 
 		right = right.resolve(ctx);
@@ -44,13 +44,13 @@ class PrefixOp extends PrefixOperator {
 
 		int iType = type.getActualType();
 		if (iType == Type.CLASS) {
-			Expr override = ctx.getOperatorOverride(right, null, op | LocalContext.UNARY_PRE);
+			Expr override = ctx.getOperatorOverride(right, null, op | CompileContext.UNARY_PRE);
 			if (override != null) return override;
 
 			iType = TypeCast.getWrappedPrimitive(type);
 			if (iType == 0) {
 				ctx.report(this, Kind.ERROR, "op.notApplicable.unary", byId(op), type);
-				return NaE.RESOLVE_FAILED;
+				return NaE.resolveFailed(this);
 			}
 
 			assert !right.isConstant() : "wrapped primitive is constant? weird";
@@ -58,28 +58,28 @@ class PrefixOp extends PrefixOperator {
 		}
 
 		switch (iType) {
-			case Type.VOID: ctx.report(this, Kind.ERROR, "var.voidType", right); return NaE.RESOLVE_FAILED;
+			case Type.VOID: ctx.report(this, Kind.ERROR, "var.voidType", right); return NaE.resolveFailed(this);
 			case Type.BOOLEAN:
 				if (op != logic_not) {
 					ctx.report(this, Kind.ERROR, "op.notApplicable.unary", byId(op), type);
-					return NaE.RESOLVE_FAILED;
+					return NaE.resolveFailed(this);
 				}
 				break;
 			case Type.DOUBLE: case Type.FLOAT:
 				if (op == inv || op == logic_not) {
 					ctx.report(this, Kind.ERROR, "op.notApplicable.unary", byId(op), type);
-					return NaE.RESOLVE_FAILED;
+					return NaE.resolveFailed(this);
 				}
 				break;
 			default: if (type.isPrimitive()) type = Type.primitive(Type.INT);
 			case Type.LONG:
 				if (op == logic_not) {
 					ctx.report(this, Kind.ERROR, "op.notApplicable.unary", "!", type);
-					return NaE.RESOLVE_FAILED;
+					return NaE.resolveFailed(this);
 				}
 		}
 
-		if (incrNode && (right = right.asLeftValue(ctx)) == null) return NaE.RESOLVE_FAILED;
+		if (incrNode && (right = right.asLeftValue(ctx)) == null) return NaE.resolveFailed(this);
 
 		if (!right.isConstant()) return this;
 

@@ -40,8 +40,8 @@ public final class DFA {
 	}
 	// 序列化器使用，它只支持无参构造器，并且能处理final字段
 	private DFA() {
-		this.stateBase = Helpers.nonnull();
-		this.transitions = Helpers.nonnull();
+		this.stateBase = Helpers.maybeNull();
+		this.transitions = Helpers.maybeNull();
 	}
 
 	public int getTerminateState(int state) {
@@ -193,7 +193,7 @@ public final class DFA {
 
 	public static final class Builder {
 		private int nextStateId;
-		private final List<Int2IntMap> transitions = new SimpleList<>();
+		private final List<Int2IntMap> transitions = new ArrayList<>();
 		private final Int2IntMap terminal = new Int2IntMap();
 		private final Int2IntMap terminalStateMap = new Int2IntMap();
 		private IntMap<String> terminalRepr = new IntMap<>();
@@ -216,7 +216,7 @@ public final class DFA {
 			return this;
 		}
 
-		public Builder addSymbol(int startTokenId, MyBitSet lends, String... tokens) {
+		public Builder addSymbol(int startTokenId, BitSet lends, String... tokens) {
 			for (int i = 0; i < tokens.length; i++) {
 				String str = tokens[i];
 				lends.add(str.charAt(0));
@@ -249,7 +249,7 @@ public final class DFA {
 			return this;
 		}
 
-		public Builder addWhitespace(MyBitSet lends) {
+		public Builder addWhitespace(BitSet lends) {
 			String whitespace = "\r\n\t\f ";
 			lends.addAll(whitespace);
 			return addWhitespace(whitespace);
@@ -363,8 +363,8 @@ public final class DFA {
 
 		@SuppressWarnings("unchecked")
 		public <T> Builder addTrieTree(TrieTree<T> tree, ToIntFunction<T> mapToEndState) {
-			SimpleList<TrieTree.Entry<T>> entries = new SimpleList<>();
-			SimpleList<Integer> states = new SimpleList<>();
+			ArrayList<TrieTree.Entry<T>> entries = new ArrayList<>();
+			ArrayList<Integer> states = new ArrayList<>();
 
 			entries.add(tree.getRoot());
 			states.add(0);

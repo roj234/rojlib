@@ -1,6 +1,6 @@
 package roj.ui;
 
-import roj.collect.SimpleList;
+import roj.collect.ArrayList;
 import roj.config.data.CInt;
 import roj.config.serial.CVisitor;
 import roj.config.serial.ToJson;
@@ -24,14 +24,15 @@ public class Text {
 
 	private List<Text> extra = Collections.emptyList();
 
-	public Text(CharSequence value) { this.value = Objects.requireNonNull(value); }
+	public static Text of(CharSequence text) {return new Text(text);}
+	public Text(CharSequence text) { this.value = Objects.requireNonNull(text); }
 	public Text(Text copy) { this(copy, copy.value); }
 	public Text(Text copy, CharSequence altValue) {
 		this.value = Objects.requireNonNull(altValue);
 		this.fgColor = copy.fgColor;
 		this.bgColor = copy.bgColor;
 		this.flag = copy.flag;
-		this.extra = copy.extra.isEmpty() ? Collections.emptyList() : new SimpleList<>(copy.extra);
+		this.extra = copy.extra.isEmpty() ? Collections.emptyList() : new ArrayList<>(copy.extra);
 	}
 
 	public CharList writeAnsi(CharList sb) {return writeAnsi(sb, "\n");}
@@ -111,9 +112,9 @@ public class Text {
 			extra.get(i).flat(str);
 	}
 	public List<Text> lines() {
-		List<Text> flat = new SimpleList<>();
+		List<Text> flat = new ArrayList<>();
 		flat(flat);
-		List<Text> out = new SimpleList<>();
+		List<Text> out = new ArrayList<>();
 
 		Text currentLine = flat.get(0);
 		for (int i = 1; i < flat.size(); i++) {
@@ -200,7 +201,7 @@ public class Text {
 		return s;
 	}
 
-	private List<Text> extra() { return extra.isEmpty() ? extra = new SimpleList<>() : extra; }
+	private List<Text> extra() { return extra.isEmpty() ? extra = new ArrayList<>() : extra; }
 
 	public Text color16(int c) { fgColor = (c&0xFF) | 0x80000000; return this; }
 	public Text bgColor16(int c) { bgColor = (10 + (c&0xFF)) | 0x80000000; return this; }

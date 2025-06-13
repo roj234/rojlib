@@ -2,7 +2,7 @@ package roj.config.auto;
 
 import org.jetbrains.annotations.Nullable;
 import roj.asm.type.IType;
-import roj.collect.MyBitSet;
+import roj.collect.BitSet;
 import roj.config.serial.CVisitor;
 
 import java.util.List;
@@ -91,7 +91,7 @@ final class EitherSer extends Adapter {
 
 	// empty collection
 	@Override
-	public int plusOptional(int fieldState, @Nullable MyBitSet fieldStateEx) { return 1; }
+	public int plusOptional(int fieldState, @Nullable BitSet fieldStateEx) { return 1; }
 
 	@Override
 	public void write(CVisitor c, Object o) {

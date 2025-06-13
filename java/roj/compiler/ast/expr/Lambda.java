@@ -8,14 +8,14 @@ import roj.asm.Opcodes;
 import roj.asm.cp.CstClass;
 import roj.asm.type.IType;
 import roj.asm.type.Type;
-import roj.collect.SimpleList;
-import roj.compiler.LavaFeatures;
+import roj.collect.ArrayList;
+import roj.compiler.CompileContext;
 import roj.compiler.Tokens;
+import roj.compiler.api.Compiler;
 import roj.compiler.asm.Asterisk;
 import roj.compiler.asm.LambdaCall;
 import roj.compiler.asm.MethodWriter;
 import roj.compiler.ast.ParseTask;
-import roj.compiler.context.LocalContext;
 import roj.compiler.diagnostic.Kind;
 import roj.compiler.resolve.NestContext;
 import roj.compiler.resolve.ResolveException;
@@ -80,7 +80,7 @@ public final class Lambda extends Expr {
 				: getLambdaArgcType(args.size());
 	}
 	@Override
-	public Expr resolve(LocalContext ctx) throws ResolveException {
+	public Expr resolve(CompileContext ctx) throws ResolveException {
 		if (methodRef != null) {
 			if (methodRef instanceof MemberAccess d) {
 				methodRef = null;
@@ -116,16 +116,16 @@ public final class Lambda extends Expr {
 	public final void write(MethodWriter cw, boolean noRet) {write(cw, null);}
 	@Override
 	public void write(MethodWriter cw, @Nullable TypeCast.Cast _returnType) {
-		var ctx = LocalContext.get();
+		var ctx = CompileContext.get();
 		if (_returnType == null) {
 			ctx.report(this, Kind.ERROR, "lambda.untyped");
 			return;
 		}
 
 		IType lambda目标类型 = _returnType.getType1();
-		var lambda接口 = ctx.classes.getClassInfo(lambda目标类型.owner());
+		var lambda接口 = ctx.compiler.resolve(lambda目标类型.owner());
 
-		var resolveHelper = ctx.classes.getResolveHelper(lambda接口);
+		var resolveHelper = ctx.compiler.link(lambda接口);
 		int lambda转换方式 = resolveHelper.getLambdaType();
 		var lambda方法 = resolveHelper.getLambdaMethod();
 		LambdaCall generator = LambdaCall.INVOKE_DYNAMIC;
@@ -135,28 +135,28 @@ public final class Lambda extends Expr {
 				return;
 			}
 			case 1 -> {
-				if (ctx.classes.getMaximumBinaryCompatibility() < LavaFeatures.JAVA_8)
+				if (ctx.compiler.getMaximumBinaryCompatibility() < Compiler.JAVA_8)
 					generator = LambdaCall.ANONYMOUS_CLASS;
 				else
-					ctx.file.setMinimumBinaryCompatibility(LavaFeatures.JAVA_8);
+					ctx.file.setMinimumBinaryCompatibility(Compiler.JAVA_8);
 			}
 			case 2 -> generator = LambdaCall.ANONYMOUS_CLASS;
 		}
 
 		var lambda实参 = ctx.inferrer.getGenericParameters(lambda接口, lambda方法, lambda目标类型).rawDesc();
 
-		var lambda入参 = new SimpleList<Type>();
+		var lambda入参 = new ArrayList<Type>();
 		List<Expr> lambda入参的取值表达式;
 
 		ClassNode lambda实现所属的类;
 
 		if (methodRef != null) {
-			lambda实现所属的类 = ctx.classes.getClassInfo(methodRef.type().owner());
+			lambda实现所属的类 = ctx.compiler.resolve(methodRef.type().owner());
 
 			List<Type> args = Type.methodDesc(lambda实参);
 			args.remove(args.size()-1);
 
-			var r = ctx.getMethodListOrReport(lambda实现所属的类, methodName, this).findMethod(ctx, Helpers.cast(args), 0);
+			var r = ctx.getMethodListOrReport(lambda实现所属的类, methodName, methodRef).findMethod(ctx, Helpers.cast(args), 0);
 			if (r == null) return;
 
 			// 方法引用
@@ -177,13 +177,13 @@ public final class Lambda extends Expr {
 			impl.name(ctx.method.name()+"^lambda"+ctx.nameIndex++);
 			impl.rawDesc(lambda实参);
 
-			lambda入参的取值表达式 = new SimpleList<>();
+			lambda入参的取值表达式 = new ArrayList<>();
 			// lambda参数注入 (逆向出来的，我也不知道去哪找文档看):
 			// lambda实现的签名：隐含的this,[注入参数,lambda参数]
 			// invokeDyn的签名: lambda类 lambda方法名 (this, 注入参数)
 			ctx.enclosing.add(NestContext.lambda(ctx, impl.parameters().subList(0, 0), lambda入参, lambda入参的取值表达式));
 
-			var next = LocalContext.next();
+			var next = CompileContext.next();
 			try {
 				next.isArgumentDynamic = true;
 				next.setClass(ctx.file);
@@ -194,7 +194,7 @@ public final class Lambda extends Expr {
 				throw new ResolveException("Lambda表达式解析失败", e);
 			} finally {
 				next.isArgumentDynamic = false;
-				LocalContext.prev();
+				CompileContext.prev();
 				ctx.enclosing.pop();
 			}
 

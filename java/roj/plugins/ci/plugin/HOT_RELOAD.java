@@ -7,7 +7,7 @@ import roj.asm.AsmCache;
 import roj.asm.ClassDefinition;
 import roj.asm.ClassNode;
 import roj.asmx.Context;
-import roj.collect.SimpleList;
+import roj.collect.ArrayList;
 import roj.config.Tokenizer;
 import roj.config.data.CEntry;
 import roj.io.IOUtil;
@@ -34,7 +34,7 @@ import java.util.function.Consumer;
  */
 public class HOT_RELOAD implements Processor {
 	private static final Logger LOGGER = Logger.getLogger("热重载青春版");
-	private final SimpleList<Client> clients = new SimpleList<>();
+	private final ArrayList<Client> clients = new ArrayList<>();
 	private ServerLaunch channel4, channel6;
 
 	@Override public String name() {return "热重载青春版";}
@@ -98,7 +98,7 @@ public class HOT_RELOAD implements Processor {
 
 	@Override public synchronized List<Context> process(List<Context> classes, ProcessEnvironment ctx) {
 		if (ctx.changedClassIndex > 0) {
-			List<ClassNode> classData = new SimpleList<>(ctx.changedClassIndex);
+			List<ClassNode> classData = new ArrayList<>(ctx.changedClassIndex);
 			for (int i = 0; i < ctx.changedClassIndex; i++) {
 				classData.add(classes.get(i).getData());
 			}

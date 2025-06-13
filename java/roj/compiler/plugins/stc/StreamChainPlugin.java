@@ -5,17 +5,18 @@ import roj.asm.ClassNode;
 import roj.asm.MethodNode;
 import roj.asm.type.IType;
 import roj.asm.type.Type;
-import roj.collect.MyHashMap;
-import roj.collect.SimpleList;
+import roj.collect.ArrayList;
+import roj.collect.HashMap;
+import roj.compiler.CompileContext;
+import roj.compiler.api.Compiler;
 import roj.compiler.api.InvokeHook;
 import roj.compiler.asm.MethodWriter;
 import roj.compiler.ast.expr.Expr;
 import roj.compiler.ast.expr.Invoke;
 import roj.compiler.ast.expr.LeftValue;
-import roj.compiler.context.LocalContext;
 import roj.compiler.diagnostic.Kind;
-import roj.compiler.plugin.LavaApi;
 import roj.util.ArrayUtil;
+import roj.util.TypedKey;
 
 import java.util.List;
 import java.util.Map;
@@ -25,8 +26,10 @@ import java.util.function.Consumer;
  * @author Roj234
  * @since 2024/6/15 15:51
  */
-public class StreamChainPlugin implements LavaApi.Resolver {
-	private static class MyExprNode extends Expr implements StreamChainExpr {
+public class StreamChainPlugin implements Compiler.Resolver {
+	public static final TypedKey<StreamChainPlugin> INSTANCE = new TypedKey<>("scp:instance");
+
+	private static class ChainExpr extends Expr implements StreamChainExpr {
 		private List<Invoke> chain;
 		private final LeftValue sourceType;
 		private int targetType;
@@ -35,7 +38,7 @@ public class StreamChainPlugin implements LavaApi.Resolver {
 		private final Consumer<StreamChainExpr> callback;
 		private MethodWriter mw;
 
-		public MyExprNode(Type exactType, List<Invoke> chain, LeftValue sourceType, Consumer<StreamChainExpr> callback, int flag) {
+		public ChainExpr(Type exactType, List<Invoke> chain, LeftValue sourceType, Consumer<StreamChainExpr> callback, int flag) {
 			this.exactType = exactType;
 			this.chain = chain;
 			this.sourceType = sourceType;
@@ -48,7 +51,7 @@ public class StreamChainPlugin implements LavaApi.Resolver {
 		@Override public int targetType() {return targetType;}
 
 		@Override public MethodWriter writer() {return mw;}
-		@Override public LocalContext context() {return LocalContext.get();}
+		@Override public CompileContext context() {return CompileContext.get();}
 
 		@Override public String toString() {return "StreamChainExpr$$";}
 
@@ -61,7 +64,7 @@ public class StreamChainPlugin implements LavaApi.Resolver {
 				mw = cw;
 				callback.accept(this);
 			} catch (Exception e) {
-				LocalContext.get().report(Kind.ERROR, e.getMessage());
+				CompileContext.get().report(Kind.ERROR, e.getMessage());
 				e.printStackTrace();
 			}
 		}
@@ -79,9 +82,9 @@ public class StreamChainPlugin implements LavaApi.Resolver {
 		}
 
 		@Override
-		public @Nullable Expr eval(MethodNode owner, @Nullable Expr _loadObject, List<Expr> args, Invoke _self) {
+		public @Nullable Expr eval(MethodNode owner, @Nullable Expr that, List<Expr> args, Invoke _self) {
 			LeftValue loadFrom = null;
-			List<Invoke> chain = new SimpleList<>();
+			List<Invoke> chain = new ArrayList<>();
 			chain.add(_self);
 			int i = 0;
 
@@ -97,12 +100,12 @@ public class StreamChainPlugin implements LavaApi.Resolver {
 					} else if (x == null) {
 						i++;
 						if (getSTATE(chain.get(chain.size() - 1)) != 0) {
-							LocalContext.get().report(Kind.ERROR, "streamChain IllegalStart");
+							CompileContext.get().report(Kind.ERROR, "streamChain IllegalStart");
 							return null;
 						}
 						break;
 					} else {
-						if (x instanceof MyExprNode altChain) {
+						if (x instanceof ChainExpr altChain) {
 							ArrayUtil.inverse(chain);
 							i = altChain.chain.size();
 							altChain.chain.addAll(chain);
@@ -118,7 +121,7 @@ public class StreamChainPlugin implements LavaApi.Resolver {
 
 			for (; i < chain.size()-1; i++) {
 				if (getSTATE(chain.get(i)) != 1) {
-					LocalContext.get().report(Kind.ERROR, "streamChain IllegalIntermediate "+chain.get(i));
+					CompileContext.get().report(Kind.ERROR, "streamChain IllegalIntermediate "+chain.get(i));
 					//return null;
 				}
 			}
@@ -130,14 +133,14 @@ public class StreamChainPlugin implements LavaApi.Resolver {
 			if (flag == 0) visibleType = owner.returnType();
 			else visibleType = new Type.DirtyHacker(exactType.getActualType(), owner.owner());
 
-			if (_self.getParent() instanceof MyExprNode altChain) {
+			if (_self.getParent() instanceof ChainExpr altChain) {
 				altChain.targetType = flag;
 				altChain.exactType = visibleType;
 				assert altChain.callback == callback;
 				return altChain;
 			}
 
-			return new MyExprNode(visibleType, chain, loadFrom, callback, flag);
+			return new ChainExpr(visibleType, chain, loadFrom, callback, flag);
 		}
 
 		private static int getSTATE(Invoke x) {return ((ChainOp) x.getMethod().getRawAttribute(InvokeHook.NAME)).type;}
@@ -148,9 +151,9 @@ public class StreamChainPlugin implements LavaApi.Resolver {
 		}
 	}
 
-	public void pluginInit(LavaApi api) {api.addResolveListener(0, this);}
+	public void pluginInit(Compiler api) {api.addResolveListener(0, this);}
 
-	private final Map<String, ClassNode> chain = new MyHashMap<>();
+	private final Map<String, ClassNode> chain = new HashMap<>();
 	@Override public ClassNode classResolved(ClassNode info) {return chain.getOrDefault(info.name(), info);}
 
 	public StreamChain newStreamChain(String chainType, boolean allowFallback, Consumer<StreamChainExpr> callback, Type exactType) {

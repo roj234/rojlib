@@ -1,7 +1,7 @@
 package roj.text.logging;
 
+import roj.collect.HashSet;
 import roj.collect.Hasher;
-import roj.collect.MyHashSet;
 import roj.compiler.plugins.asm.ASM;
 import roj.config.serial.ToJson;
 import roj.text.CharList;
@@ -56,7 +56,7 @@ final class LogWriterJson extends LogWriter {
 
 		if (ex != null) {
 			ser.key("exception");
-			writeException(ex, new MyHashSet<>(Hasher.identity()), ser);
+			writeException(ex, new HashSet<>(Hasher.identity()), ser);
 		}
 
 		CharList json = ser.getValue();
@@ -76,7 +76,7 @@ final class LogWriterJson extends LogWriter {
 		}
 	}
 
-	private static void writeException(Throwable ex, MyHashSet<Throwable> dejavu, ToJson ser) {
+	private static void writeException(Throwable ex, HashSet<Throwable> dejavu, ToJson ser) {
 		if (!dejavu.add(ex)) {
 			ser.value("circular reference");
 			return;

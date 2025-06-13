@@ -1,9 +1,9 @@
 package roj.generator;
 
-import roj.archive.qz.xz.LZMA2Options;
-import roj.archive.qz.xz.LZMA2Writer;
+import roj.archive.xz.LZMA2Options;
+import roj.archive.xz.LZMA2Writer;
 import roj.collect.IntList;
-import roj.collect.SimpleList;
+import roj.collect.ArrayList;
 import roj.collect.TrieTree;
 import roj.io.IOUtil;
 import roj.math.MathUtils;
@@ -73,12 +73,12 @@ class UpdatePinyinData {
 					sb.clear();
 					String s = sb.appendCodePoint(cp).toString();
 					String[] myPinyin = pinyinMap.get(s);
-					SimpleList<String> list;
+					ArrayList<String> list;
 					if (myPinyin == null) {
 						myPinyin = new String[]{""};
-						list = new SimpleList<>();
+						list = new ArrayList<>();
 					} else {
-						list = SimpleList.asModifiableList(myPinyin);
+						list = ArrayList.asModifiableList(myPinyin);
 					}
 					if (!myPinyin[0].equals(pinyin.get(i))) {
 						pinyinMap.put(myst, pinyin.toArray(new String[0]));
@@ -93,7 +93,7 @@ class UpdatePinyinData {
 			}
 		}
 		System.out.println("size="+pinyinMap.size());
-		SimpleList<Map.Entry<CharSequence, String[]>> map = new SimpleList<>(pinyinMap.entrySet());
+		ArrayList<Map.Entry<CharSequence, String[]>> map = new ArrayList<>(pinyinMap.entrySet());
 		map.sort((o1, o2) -> Integer.compare(o2.getKey().length(), o1.getKey().length()));
 		xx:
 		for (Map.Entry<CharSequence, String[]> entry : map) {
@@ -140,7 +140,7 @@ class UpdatePinyinData {
 				pinyinMap.remove(entry.getKey());
 			}
 		}
-		map = new SimpleList<>(pinyinMap.entrySet());
+		map = new ArrayList<>(pinyinMap.entrySet());
 		map.sort((o2, o1) -> {
 			int v = Long.compare(o1.getKey().codePoints().count(), o2.getKey().codePoints().count());
 			return v != 0 ? v : o1.getKey().toString().compareTo(o2.getKey().toString());

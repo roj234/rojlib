@@ -4,14 +4,15 @@ import roj.asm.MethodNode;
 import roj.asm.Opcodes;
 import roj.asm.insn.Label;
 import roj.asm.type.Type;
+import roj.compiler.CompileContext;
+import roj.compiler.api.Compiler;
+import roj.compiler.api.CompilerPlugin;
 import roj.compiler.ast.expr.Expr;
 import roj.compiler.ast.expr.Invoke;
-import roj.compiler.context.LocalContext;
 import roj.compiler.diagnostic.Kind;
-import roj.compiler.plugin.LavaApi;
-import roj.compiler.plugin.LavaPlugin;
 import roj.compiler.plugins.stc.StreamChain;
 import roj.compiler.plugins.stc.StreamChainExpr;
+import roj.compiler.plugins.stc.StreamChainPlugin;
 import roj.compiler.resolve.TypeCast;
 
 import java.util.List;
@@ -20,12 +21,12 @@ import java.util.List;
  * @author Roj234
  * @since 2024/12/4 13:26
  */
-@LavaPlugin(name = "comparisonTest", desc = "StreamChain测试插件")
+@CompilerPlugin(name = "comparisonTest", desc = "StreamChain测试插件")
 public class ComparisonChainPlugin {
-	public void pluginInit(LavaApi api) {
+	public void pluginInit(Compiler api) {
 		String name = "roj/compiler/test/ComparisonChain";
 
-		StreamChain chain = api.newStreamChain(name, false, ch -> {
+		StreamChain chain = api.attachment(StreamChainPlugin.INSTANCE).newStreamChain(name, false, ch -> {
 			if (ch.targetType() == StreamChainExpr.IGNORE) {
 				ch.context().report(Kind.ERROR, "结果不能忽略");
 				return;
@@ -55,7 +56,7 @@ public class ComparisonChainPlugin {
 					if (wrapper != null) {
 						for (int i = 0; i < arguments.size(); i++) {
 							Expr argument = arguments.get(i);
-							argument.write(cw, LocalContext.get().castTo(argument.type(), myParamType, 0));
+							argument.write(cw, CompileContext.get().castTo(argument.type(), myParamType, 0));
 						}
 						cw.invokeS(wrapper.owner(), "compare", "("+(char)myParamType.type+(char)myParamType.type+")I");
 						if (mn.name().equals("compareFalseFirst")) cw.insn(Opcodes.INEG);

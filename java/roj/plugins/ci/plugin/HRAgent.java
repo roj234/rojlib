@@ -134,7 +134,7 @@ public class HRAgent extends Thread implements ClassFileTransformer {
 				System.out.println("[热重载青春版] 连接关闭");
 				break;
 			} catch (ConnectException | SocketTimeoutException e) {
-				System.out.println("[热重载青春版] 连接超时");
+				if (time < 10000) System.out.println("[热重载青春版] 连接超时");
 				try {
 					Thread.sleep(time);
 				} catch (InterruptedException ignored) {}

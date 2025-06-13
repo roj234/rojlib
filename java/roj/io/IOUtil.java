@@ -4,14 +4,15 @@ import org.jetbrains.annotations.ApiStatus;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import roj.RojLib;
-import roj.collect.SimpleList;
+import roj.collect.ArrayList;
 import roj.compiler.plugins.annotations.Attach;
 import roj.concurrent.ExceptionalConsumer;
 import roj.concurrent.FastThreadLocal;
 import roj.config.data.CInt;
 import roj.config.data.CLong;
 import roj.crypt.Base64;
-import roj.reflect.ReflectionUtils;
+import roj.reflect.Reflection;
+import roj.reflect.Unaligned;
 import roj.text.*;
 import roj.util.ByteList;
 import roj.util.Helpers;
@@ -24,7 +25,10 @@ import java.nio.channels.FileChannel;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
 import java.nio.file.attribute.BasicFileAttributes;
-import java.util.*;
+import java.util.Collections;
+import java.util.List;
+import java.util.Locale;
+import java.util.Objects;
 import java.util.concurrent.LinkedBlockingDeque;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
@@ -104,14 +108,14 @@ public final class IOUtil {
 
 	//region InputStream/TextReader
 	public static byte[] getResourceIL(String path) throws IOException { return getResource(path, IOUtil.class); }
-	public static byte[] getResource(String path) throws IOException { return getResource(path, ReflectionUtils.getCallerClass(2)); }
+	public static byte[] getResource(String path) throws IOException { return getResource(path, Reflection.getCallerClass(2)); }
 	public static byte[] getResource(String path, Class<?> caller) throws IOException {
 		var in = caller.getClassLoader().getResourceAsStream(path);
 		if (in == null) throw new FileNotFoundException(path+" is not in jar "+caller.getName());
 		return new ByteList(Math.max(in.available(), 4096)).readStreamFully(in).toByteArrayAndFree();
 	}
 	public static String getTextResourceIL(String path) throws IOException { return getTextResource(path, IOUtil.class); }
-	public static String getTextResource(String path) throws IOException { return getTextResource(path, ReflectionUtils.getCallerClass(2)); }
+	public static String getTextResource(String path) throws IOException { return getTextResource(path, Reflection.getCallerClass(2)); }
 	public static String getTextResource(String path, Class<?> caller) throws IOException {
 		var in = caller.getClassLoader().getResourceAsStream(path);
 		if (in == null) throw new FileNotFoundException(path+" is not in jar "+caller.getName());
@@ -220,11 +224,11 @@ public final class IOUtil {
 	public static void copyFile(File source, File target) throws IOException {Files.copy(source.toPath(), target.toPath(), StandardCopyOption.REPLACE_EXISTING);}
 
 	@Attach("listAll")
-	public static List<File> findAllFiles(File file) {return findAllFiles(file, SimpleList.hugeCapacity(0), Helpers.alwaysTrue());}
+	public static List<File> listFiles(File file) {return listFiles(file, ArrayList.hugeCapacity(0), Helpers.alwaysTrue());}
 	@Attach("listAll")
-	public static List<File> findAllFiles(File file, Predicate<File> predicate) {return findAllFiles(file, SimpleList.hugeCapacity(0), predicate);}
+	public static List<File> listFiles(File file, Predicate<File> predicate) {return listFiles(file, ArrayList.hugeCapacity(0), predicate);}
 	@Attach("listAll")
-	public static List<File> findAllFiles(File file, List<File> files, Predicate<File> predicate) {
+	public static List<File> listFiles(File file, List<File> files, Predicate<File> predicate) {
 		try {
 			if (!file.exists()) return Collections.emptyList();
 			Files.walkFileTree(file.toPath(), new SimpleFileVisitor<Path>() {
@@ -375,7 +379,7 @@ public final class IOUtil {
 	public static CharList mavenPath(CharSequence name) {
 		int i = TextUtil.gIndexOf(name, ':');
 		CharList cl = new CharList().append(name).replace('.', '/', 0, i);
-		List<String> parts = TextUtil.split(new ArrayList<>(4), cl, ':');
+		List<String> parts = TextUtil.split(new java.util.ArrayList<>(4), cl, ':');
 
 		String ext = "jar";
 		final String s = parts.get(parts.size() - 1);
@@ -401,8 +405,7 @@ public final class IOUtil {
 	public static File deriveOutput(File src, String postfix) {
 		var path = src.getName();
 		int i = path.lastIndexOf('.');
-		if (i < 0) return new File(src.getAbsolutePath()+postfix);
-		return new File(src.getParentFile(), path.substring(0, i)+postfix+path.substring(i));
+		return new File(src.getParentFile(), i < 0 ? path+postfix : path.substring(0, i)+postfix+path.substring(i));
 	}
 
 	public static String extensionName(String path) {
@@ -600,7 +603,7 @@ public final class IOUtil {
 		try {
 			long off;
 			if ((off=pendingKeys_offset) == 0) {
-				off = pendingKeys_offset = ReflectionUtils.fieldOffset(Class.forName("sun.nio.fs.AbstractWatchService"), "pendingKeys");
+				off = pendingKeys_offset = Unaligned.fieldOffset(Class.forName("sun.nio.fs.AbstractWatchService"), "pendingKeys");
 			}
 			if (off > 0) {
 				U.putObject(watcher, off, new LinkedBlockingDeque<>() {

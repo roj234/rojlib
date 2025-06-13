@@ -7,16 +7,16 @@ import roj.asm.FieldNode;
 import roj.asm.Opcodes;
 import roj.asm.type.IType;
 import roj.asm.type.Type;
-import roj.collect.LinkedMyHashMap;
-import roj.collect.MyHashMap;
-import roj.collect.SimpleList;
+import roj.collect.ArrayList;
+import roj.collect.HashMap;
+import roj.collect.LinkedHashMap;
 import roj.collect.ToIntMap;
+import roj.compiler.CompileContext;
+import roj.compiler.CompileUnit;
 import roj.compiler.asm.MethodWriter;
 import roj.compiler.asm.Variable;
 import roj.compiler.ast.expr.Expr;
 import roj.compiler.ast.expr.LocalVariable;
-import roj.compiler.context.CompileUnit;
-import roj.compiler.context.LocalContext;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -48,12 +48,12 @@ public sealed abstract class NestContext {
 	public String nestHost() {return host;}
 	public @Nullable FieldNode nestHostRef() {return null;}
 
-	public abstract LocalContext.Import resolveField(LocalContext ctx, SimpleList<NestContext> nestHost, int i, String name);
-	public LocalContext.Import resolveMethod(LocalContext ctx, SimpleList<NestContext> nestHost, int i, String name) {return null;}
+	public abstract CompileContext.Import resolveField(CompileContext ctx, ArrayList<NestContext> nestHost, int i, String name);
+	public CompileContext.Import resolveMethod(CompileContext ctx, ArrayList<NestContext> nestHost, int i, String name) {return null;}
 
-	public static NestContext anonymous(LocalContext ctx, CompileUnit nest, MethodWriter nestConstructor, List<Expr> hostArgsLoad) {return new NestContext.InnerClass(ctx.file.name(), hostArgsLoad, ctx.variables, nest, nestConstructor);}
-	public static NestContext innerClass(LocalContext ctx, String host, CompileUnit nest) {return new NestContext.InnerClass(host, nest);}
-	public static NestContext lambda(LocalContext ctx, List<Type> nestArgs, List<Type> hostArgs, List<Expr> hostArgsLoad) {return new NestContext.Lambda(ctx.variables, nestArgs, hostArgs, hostArgsLoad);}
+	public static NestContext anonymous(CompileContext ctx, CompileUnit nest, MethodWriter nestConstructor, List<Expr> hostArgsLoad) {return new NestContext.InnerClass(ctx.file.name(), hostArgsLoad, ctx.variables, nest, nestConstructor);}
+	public static NestContext innerClass(CompileContext ctx, String host, CompileUnit nest) {return new NestContext.InnerClass(host, nest);}
+	public static NestContext lambda(CompileContext ctx, List<Type> nestArgs, List<Type> hostArgs, List<Expr> hostArgsLoad) {return new NestContext.Lambda(ctx.variables, nestArgs, hostArgs, hostArgsLoad);}
 
 	public static final class InnerClass extends NestContext {
 		public static final String FIELD_HOST_REF = "$host";
@@ -96,7 +96,7 @@ public sealed abstract class NestContext {
 					@Override public String toString() {return "this<"+type+">";}
 					@Override public IType type() {return type;}
 					@Override public void write(MethodWriter cw, boolean noRet) {
-						var ctx = LocalContext.get();
+						var ctx = CompileContext.get();
 						ctx.thisUsed = true;
 						cw.vars(Opcodes.ALOAD, ctx.thisSlot);
 					}
@@ -117,7 +117,7 @@ public sealed abstract class NestContext {
 			return fid;
 		}
 		private void copyIn(Expr external, int fid) {
-			var ctx = LocalContext.get();
+			var ctx = CompileContext.get();
 			ctx.thisUsed = true;
 
 			hostArguments.add(external);
@@ -132,12 +132,12 @@ public sealed abstract class NestContext {
 			constructor.visitSizeMax(length+1, localSize += length);
 		}
 
-		public LocalContext.Import resolveField(LocalContext ctx, SimpleList<NestContext> nestHost, int i, String name) {
+		public CompileContext.Import resolveField(CompileContext ctx, ArrayList<NestContext> nestHost, int i, String name) {
 			int fid;
 			var hostVar = hostVariables.get(name);
 			ClassNode owner;
 			if (hostVar == null) {
-				owner = ctx.classes.getClassInfo(host);
+				owner = ctx.compiler.resolve(host);
 				fid = owner.getField(name);
 				if (fid < 0) return null;
 				i--;
@@ -161,8 +161,8 @@ public sealed abstract class NestContext {
 
 			return makeChain(ctx, nestHost, null, null, owner == nest || (fieldNode.modifier&Opcodes.ACC_FINAL) != 0, chain);
 		}
-		public LocalContext.Import resolveMethod(LocalContext ctx, SimpleList<NestContext> nestHost, int i, String name) {
-			var host = ctx.classes.getClassInfo(this.host);
+		public CompileContext.Import resolveMethod(CompileContext ctx, ArrayList<NestContext> nestHost, int i, String name) {
+			var host = ctx.compiler.resolve(this.host);
 			var v = host.getMethod(name);
 			if (v >= 0) {
 				i--;
@@ -181,11 +181,11 @@ public sealed abstract class NestContext {
 		}
 
 		@NotNull
-		private static LocalContext.Import makeChain(LocalContext ctx, SimpleList<NestContext> nestHost, ClassNode owner, String name, boolean isFinal, FieldNode... chain) {
+		private static CompileContext.Import makeChain(CompileContext ctx, ArrayList<NestContext> nestHost, ClassNode owner, String name, boolean isFinal, FieldNode... chain) {
 			for (int i = nestHost.size() - 1; i >= 0; i--) {
 				if (nestHost.get(i) instanceof InnerClass ic) {
 					// must use This(), will reference topmost fieldIds
-					return new LocalContext.Import(owner, name, Expr.fieldChain(ctx.ep.This().resolve(ctx), ic.nest, null, isFinal, chain));
+					return new CompileContext.Import(owner, name, Expr.fieldChain(ctx.ep.This().resolve(ctx), ic.nest, null, isFinal, chain));
 				}
 			}
 			throw new AssertionError();
@@ -199,14 +199,14 @@ public sealed abstract class NestContext {
 		public Lambda(Map<String, Variable> hostVars, List<Type> nestArgs, List<Type> hostArgs, List<Expr> hostArgsLoad) {
 			super("OIIAOIIA", hostArgsLoad, hostVars);
 
-			this.fieldIds = new LinkedMyHashMap<>();
+			this.fieldIds = new LinkedHashMap<>();
 			this.nestArgs = nestArgs; // Must be a SubList
 			this.hostArgs = hostArgs;
 			this.localSize = 0x10000;
 		}
 
 		@Override
-		public LocalContext.Import resolveField(LocalContext ctx, SimpleList<NestContext> nestHost, int i, String name) {
+		public CompileContext.Import resolveField(CompileContext ctx, ArrayList<NestContext> nestHost, int i, String name) {
 			var hostVar = hostVariables.get(name);
 			if (hostVar == null) return null;
 
@@ -228,10 +228,10 @@ public sealed abstract class NestContext {
 
 				return new LocalVariable(nestVariable);
 			});
-			return LocalContext.Import.replace(nestVar);
+			return CompileContext.Import.replace(nestVar);
 		}
 
-		public void processVariableIndex(LocalContext ctx, MyHashMap<String, Variable> variables) {
+		public void processVariableIndex(CompileContext ctx, HashMap<String, Variable> variables) {
 			if (!ctx.thisUsed) {
 				ctx.method.modifier |= ACC_STATIC;
 				for (var value : variables.values()) value.slot--;

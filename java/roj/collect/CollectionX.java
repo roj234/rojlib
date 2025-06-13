@@ -69,7 +69,7 @@ public class CollectionX {
 	public static <T> Map<T, T> toMap(Collection<T> name) {return toMap(name, Function.identity());}
 	public static <From, To> Map<From, To> toMap(Collection<From> from, Function<From, To> mapper) {return new CMap<>(from, mapper);}
 	@SuppressWarnings("unchecked")
-	private static final class CMap<From, To> extends AbstractMap<From, To> implements _Generic_Map<_Generic_Entry> {
+	private static final class CMap<From, To> extends AbstractMap<From, To> implements _LibMap<_LibEntry> {
 		private final Collection<From> from;
 		private final Function<From, To> mapper;
 
@@ -79,15 +79,15 @@ public class CollectionX {
 		}
 
 		@NotNull
-		public Set<Entry<From, To>> entrySet() {return _Generic_EntrySet.create(this);}
+		public Set<Entry<From, To>> entrySet() {return _LibEntrySet.create(this);}
 		public int size() {return from.size();}
 		public To get(Object key) {return containsKey(key)?mapper.apply((From) key):null;}
 		public boolean containsKey(Object key) {return from.contains((From) key);}
 
 		@Override
-		public _Generic_Entry[] __entries() {return null;}
+		public _LibEntry[] __entries() {return null;}
 		@Override
-		public void __remove(_Generic_Entry entry) {}
+		public void __remove(_LibEntry entry) {}
 		@Override
 		public Iterator<?> __iterator() {
 			Iterator<From> itr = from.iterator();
@@ -112,13 +112,13 @@ public class CollectionX {
 	}
 
 	public static <K, V> Map<K, V> toMap(XashMap<K, V> from) {return new XMap<>(from);}
-	private static final class XMap<K, V> extends AbstractMap<K, V> implements _Generic_Map<_Generic_Entry> {
+	private static final class XMap<K, V> extends AbstractMap<K, V> implements _LibMap<_LibEntry> {
 		private final XashMap<K, V> from;
 
 		public XMap(XashMap<K, V> from) {this.from = from;}
 
 		@NotNull
-		public Set<Entry<K, V>> entrySet() {return _Generic_EntrySet.create(this);}
+		public Set<Entry<K, V>> entrySet() {return _LibEntrySet.create(this);}
 		public int size() {return from.size;}
 		public boolean containsKey(Object key) {return from.containsKey(key);}
 		public boolean containsValue(Object value) {return from.contains(value);}
@@ -130,9 +130,9 @@ public class CollectionX {
 		public V putIfAbsent(K key, V value) {return from.putIfAbsent(key, value);}
 
 		@Override
-		public _Generic_Entry[] __entries() {return null;}
+		public _LibEntry[] __entries() {return null;}
 		@Override
-		public void __remove(_Generic_Entry entry) {}
+		public void __remove(_LibEntry entry) {}
 		@Override
 		public Iterator<?> __iterator() {
 			Iterator<V> itr = from.iterator();

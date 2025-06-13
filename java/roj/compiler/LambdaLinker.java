@@ -3,16 +3,14 @@ package roj.compiler;
 import roj.asm.ClassNode;
 import roj.asm.MethodNode;
 import roj.asm.Opcodes;
+import roj.asm.attr.Attribute;
+import roj.asm.attr.StringAttribute;
 import roj.asm.type.TypeHelper;
+import roj.compiler.api.Compiler;
 import roj.compiler.ast.ParseTask;
 import roj.compiler.ast.expr.Expr;
-import roj.compiler.context.CompileUnit;
-import roj.compiler.context.JavaCompileUnit;
-import roj.compiler.context.LibraryZipFile;
-import roj.compiler.context.LocalContext;
-import roj.compiler.diagnostic.Diagnostic;
 import roj.compiler.diagnostic.TextDiagnosticReporter;
-import roj.compiler.plugin.GlobalContextApi;
+import roj.compiler.library.JarLibrary;
 import roj.compiler.plugins.TypeDeclPlugin;
 import roj.compiler.plugins.UintPlugin;
 import roj.compiler.plugins.annotations.AnnotationsPlugin;
@@ -25,7 +23,7 @@ import roj.compiler.test.TestPlugin;
 import roj.compiler.test.TimeUnitPlugin;
 import roj.io.IOUtil;
 import roj.reflect.ClassDefiner;
-import roj.reflect.ReflectionUtils;
+import roj.reflect.Reflection;
 
 import java.io.IOException;
 import java.lang.reflect.Method;
@@ -38,46 +36,40 @@ import java.util.Map;
  * @since 2024/5/20 2:52
  */
 public class LambdaLinker {
-	public final GlobalContextApi api = new GlobalContextApi();
-	public final LocalContext lctx = api.createLocalContext();
+	public final LavaCompiler compiler = new LavaCompiler();
+	public final CompileContext ctx = compiler.createContext();
 	public final ClassLoader maker = new ClassDefiner(LambdaLinker.class.getClassLoader(), "LavaLambdaLinker");
 	public final Map<String, Expr> injector;
 	public String fileName = "<eval>";
 
 	public LambdaLinker() throws IOException {
-		LocalContext.set(lctx);
-		initDefaultPlugins(api);
-		injector = api.attachment(AsmPlugin.INJECT_PROPERTY);
-		LocalContext.set(null);
-		api.reporter = new TextDiagnosticReporter(1,1,1) {
-			@Override
-			public Boolean apply(Diagnostic diag) {
-				if (diag.getCode().equals("lc.unReportedException")) return false;
-				return super.apply(diag);
-			}
-		};
+		CompileContext.set(ctx);
+		initDefaultPlugins(compiler);
+		CompileContext.set(null);
 
-		api.features.add(LavaFeatures.ATTR_SOURCE_FILE);
-		api.features.add(LavaFeatures.ATTR_LINE_NUMBERS);
-		api.features.add(LavaFeatures.ATTR_INNER_CLASS);
-		api.features.add(LavaFeatures.ATTR_STACK_FRAME);
-		api.features.add(LavaFeatures.OPTIONAL_SEMICOLON);
-		api.features.add(LavaFeatures.OMISSION_NEW);
-		api.features.add(LavaFeatures.SHARED_STRING_CONCAT);
-		api.features.add(LavaFeatures.DISABLE_CHECKED_EXCEPTION);
+		injector = compiler.attachment(AsmPlugin.INJECT_PROPERTY);
+		compiler.reporter = new TextDiagnosticReporter(1,1,1);
+		compiler.features.add(Compiler.EMIT_SOURCE_FILE);
+		compiler.features.add(Compiler.EMIT_LINE_NUMBERS);
+		compiler.features.add(Compiler.EMIT_INNER_CLASS);
+		compiler.features.add(Compiler.EMIT_STACK_FRAME);
+		compiler.features.add(Compiler.OPTIONAL_SEMICOLON);
+		compiler.features.add(Compiler.OMISSION_NEW);
+		compiler.features.add(Compiler.SHARED_STRING_CONCAT);
+		compiler.features.add(Compiler.OMIT_CHECKED_EXCEPTION);
 	}
 
-	public static final LibraryZipFile Implib_Archive;
+	public static final JarLibrary LIBRARY_SELF;
 	static {
 		try {
-			Implib_Archive = new LibraryZipFile(IOUtil.getJar(LambdaLinker.class));
+			LIBRARY_SELF = new JarLibrary(IOUtil.getJar(LambdaLinker.class));
 		} catch (IOException e) {
 			throw new RuntimeException(e);
 		}
 	}
 
-	static void initDefaultPlugins(GlobalContextApi api) throws IOException {
-		api.addLibrary(Implib_Archive);
+	static void initDefaultPlugins(LavaCompiler api) throws IOException {
+		api.addLibrary(LIBRARY_SELF);
 
 		Evaluator.pluginInit(api);
 		new AsmPlugin().pluginInit(api);
@@ -92,12 +84,12 @@ public class LambdaLinker {
 		api.attachment(AsmPlugin.INJECT_PROPERTY).put("咕咕咕", Expr.valueOf("咕咕咕咕，我是🕊"));
 	}
 
-	public <T> T linkLambda(Class<T> functionalInterface, String methodStr, String... parName) throws Exception {return linkLambda("roj/lavac/Lambda"+ReflectionUtils.uniqueId(), functionalInterface, methodStr, parName);}
+	public <T> T linkLambda(Class<T> functionalInterface, String methodStr, String... parName) throws Exception {return linkLambda("roj/lavac/Lambda"+Reflection.uniqueId(), functionalInterface, methodStr, parName);}
 	@SuppressWarnings("unchecked")
 	public <T> T linkLambda(String className, Class<T> functionalInterface, String methodStr, String... parName) throws Exception {
-		api.reset();
+		compiler.reset();
 
-		LocalContext.set(lctx);
+		CompileContext.set(ctx);
 
 		Method myMethod = null;
 		for (Method method : functionalInterface.getDeclaredMethods()) {
@@ -113,8 +105,9 @@ public class LambdaLinker {
 		u.name(className);
 		u.addInterface(functionalInterface.getName().replace('.', '/'));
 		u.npConstructor();
+		u.addAttribute(new StringAttribute(Attribute.SourceFile, "<eval>"));
 
-		api.addCompileUnit(u, false);
+		compiler.addCompileUnit(u, false);
 
 		ImportList tr = u.getImportList();
 		tr.setImportAny(true);
@@ -128,19 +121,18 @@ public class LambdaLinker {
 			for (int i = 0; i < refPar.length; i++) parName[i] = refPar[i].getName();
 		}
 
-		lctx.setClass(u);
-		lctx.lexer.index = 0;
-		lctx.lexer.setState(Tokens.STATE_EXPR);
-		ParseTask.Method(u, mn, Arrays.asList(parName)).parse(lctx);
+		ctx.setClass(u);
+		ctx.lexer.index = 0;
+		ctx.lexer.setState(Tokens.STATE_EXPR);
+		ParseTask.Method(u, mn, Arrays.asList(parName)).parse(ctx);
 
-		lctx.clear();
-		LocalContext.set(null);
+		ctx.clear();
+		CompileContext.set(null);
 
-		for (ClassNode data : api.getGeneratedClasses()) {
+		for (ClassNode data : compiler.getGeneratedClasses()) {
 			ClassDefiner.defineClass(maker, data);
 		}
 
-		ClassDefiner.premake(u);
-		return (T) ClassDefiner.make(u, maker);
+		return (T) ClassDefiner.newInstance(u, maker);
 	}
 }

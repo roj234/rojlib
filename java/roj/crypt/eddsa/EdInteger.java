@@ -14,6 +14,12 @@ final class EdInteger {
 		ONE = new EdInteger(b);
 	}
 
+	public static EdInteger of(int i) {
+		int[] t1 = new int[10];
+		t1[0] = i;
+		return new EdInteger(t1);
+	}
+
 	private final int[] t;
 	private transient boolean mutable;
 

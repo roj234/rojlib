@@ -1,6 +1,6 @@
 package roj.ui;
 
-import roj.collect.MyHashMap;
+import roj.collect.HashMap;
 
 import java.util.Map;
 
@@ -10,7 +10,7 @@ import java.util.Map;
  */
 public class CommandContext {
 	public final String context;
-	private final MyHashMap<String, Object> map = new MyHashMap<>();
+	private final HashMap<String, Object> map = new HashMap<>();
 	public CommandContext(String context, Map<String, Object> map) { this.context = context; this.map.putAll(map); }
 
 	public <T> T argument(String name, Class<T> type) { return type.cast(map.get(name)); }

@@ -1,6 +1,6 @@
 package roj.config.auto;
 
-import roj.collect.SimpleList;
+import roj.collect.ArrayList;
 import roj.config.serial.CVisitor;
 
 import java.lang.reflect.Array;
@@ -21,7 +21,7 @@ final class ObjArr extends Adapter {
 	@Override
 	public void pop(AdaptContext ctx) {
 		if (ctx.fieldId == -1) {
-			SimpleList<?> buf = (SimpleList<?>) ctx.ref;
+			ArrayList<?> buf = (ArrayList<?>) ctx.ref;
 			ctx.setRef(buf.toArray((Object[]) Array.newInstance(type,buf.size())));
 			ctx.releaseBuffer(buf);
 		}
@@ -52,7 +52,7 @@ final class ObjArr extends Adapter {
 		}
 
 		if (ctx.fieldId == -1) {
-			((SimpleList<Object>) ctx.ref).add(o);
+			((ArrayList<Object>) ctx.ref).add(o);
 		} else {
 			((Object[]) ctx.ref)[ctx.fieldId++] = o;
 		}

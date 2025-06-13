@@ -46,6 +46,11 @@ public class CRC32 {
 		intrinsic = intr;
 	}
 
+	@Contract(pure = true) public static int crc32(DynByteBuf buf) {
+		return buf.isDirect()
+				? crc32(buf.address() + buf.rIndex, buf.readableBytes())
+				: crc32(buf.array(), buf.arrayOffset() + buf.rIndex, buf.readableBytes());
+	}
 	@Contract(pure = true) public static int crc32(DynByteBuf buf, int off, int len) {
 		ArrayUtil.checkRange(buf.wIndex(), off, len);
 		return buf.isDirect()

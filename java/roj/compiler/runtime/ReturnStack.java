@@ -1,7 +1,7 @@
 package roj.compiler.runtime;
 
 import roj.ReferenceByGeneratedClass;
-import roj.collect.SimpleList;
+import roj.collect.ArrayList;
 import roj.util.NativeMemory;
 
 import static roj.reflect.Unaligned.U;
@@ -52,7 +52,7 @@ public final class ReturnStack<T> {
 	 * Optional: put return crc32 at +0, and throw IncompatibleClassChangeError on demand
 	 */
 	long address;
-	final SimpleList<Object> objects = new SimpleList<>();
+	final ArrayList<Object> objects = new ArrayList<>();
 	int index;
 
 	public ReturnStack<T> put(boolean v) {return put(v ? 1 : 0);}
@@ -110,4 +110,6 @@ public final class ReturnStack<T> {
 	public float getF() {return Float.intBitsToFloat(getI());}
 	public double getD() {return Double.longBitsToDouble(getJ());}
 	public Object getL() {return objects.set(index++, null);}
+	public void skip(int count) {address += count;}
+	public void skipL(int count) {index += count;}
 }

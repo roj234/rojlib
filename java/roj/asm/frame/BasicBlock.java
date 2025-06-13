@@ -1,7 +1,7 @@
 package roj.asm.frame;
 
-import roj.collect.MyBitSet;
-import roj.collect.MyHashSet;
+import roj.collect.BitSet;
+import roj.collect.HashSet;
 import roj.concurrent.Flow;
 import roj.io.FastFailException;
 import roj.util.ArrayUtil;
@@ -15,14 +15,14 @@ import java.util.Arrays;
 public class BasicBlock {
 	public int bci;
 	private String desc;
-	private final MyHashSet<BasicBlock> successor = new MyHashSet<>();
+	private final HashSet<BasicBlock> successor = new HashSet<>();
 
 	public boolean isFrame;
 
 	// 异常处理器使用到的
-	private MyBitSet reassignedLocal;
+	private BitSet reassignedLocal;
 	public void reassignedLocal(int i) {
-		if (reassignedLocal == null) reassignedLocal = new MyBitSet();
+		if (reassignedLocal == null) reassignedLocal = new BitSet();
 		reassignedLocal.add(i);
 	}
 
@@ -33,8 +33,6 @@ public class BasicBlock {
 		usedLocal = new Var2[8],
 		assignedLocal = new Var2[8];
 	int consumedStackSize, outStackSize, usedLocalCount, assignedLocalCount;
-
-	int maxStackSize;
 
 	// frame计算时状态
 	Var2[] startLocal = Frame.NONE, startStack = Frame.NONE;
@@ -59,7 +57,7 @@ public class BasicBlock {
 		combineLocal(initLocal);
 		endStack = Arrays.copyOf(outStack, outStackSize);
 	}
-	public void traverse(MyHashSet<BasicBlock> visited) {
+	public void traverse(HashSet<BasicBlock> visited) {
 		if (!visited.add(this)) return;
 
 		for (BasicBlock block : successor) {
@@ -74,8 +72,11 @@ public class BasicBlock {
 		visited.remove(this);
 	}
 
+	private static final Var2[] NOT_FIRST = new Var2[0];
 	private boolean combineLocal(Var2[] newStartLocal) {
+		boolean isFirst = startLocal == Frame.NONE;
 		if (startLocal.length < newStartLocal.length) startLocal = Arrays.copyOf(startLocal, newStartLocal.length);
+		else if (startLocal == Frame.NONE) startLocal = NOT_FIRST;
 
 		int endLocalCount = Math.max(Math.max(usedLocalCount, assignedLocalCount), startLocal.length);
 		if (endLocal.length < endLocalCount) endLocal = Arrays.copyOf(endLocal, endLocalCount);
@@ -89,7 +90,7 @@ public class BasicBlock {
 			Var2 newType = newStartLocal[i];
 			if (newType != null) {
 				if (existing == null) {
-					startLocal[i] = newType;
+					startLocal[i] = isFirst ? newType : Var2.TOP;
 					changed = true;
 				} else {
 					Var2 change = existing.uncombine(newType);
@@ -121,7 +122,9 @@ public class BasicBlock {
 					//可能是未完成遍历
 					endLocal[i] = except;
 				} else {
-					type.copy().verify(except);
+					type = type.copy();
+					type.verify(except);
+					startLocal[i] = type;
 				}
 			}
 		}
@@ -166,7 +169,11 @@ public class BasicBlock {
 		Var2[] consumed = consumedStack;
 		if (parentEndCount < consumedStackSize) throw new FastFailException("Attempt to pop empty stack.");
 		for (int i = 0; i < consumedStackSize; i++) {
-			parentEndState[--parentEndCount].copy().verify(consumed[i]);
+			Var2 except = parentEndState[--parentEndCount];
+			Var2 current = consumed[i];
+			if (current.bci() != 0) except.bci = current.bci();
+			// todo REVERSE??
+			except.verify(current);
 		}
 
 		// first time

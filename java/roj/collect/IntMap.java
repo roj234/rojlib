@@ -12,7 +12,7 @@ import java.util.function.Supplier;
  * @author Roj234
  * @since 2021/4/21 22:51
  */
-public class IntMap<V> extends AbstractMap<Integer, V> implements _Generic_Map<IntMap.Entry<V>> {
+public class IntMap<V> extends AbstractMap<Integer, V> implements _LibMap<IntMap.Entry<V>> {
 	public static final Object UNDEFINED = new Object() {
 		public String toString() {return "roj.collect.UNDEFINED";}
 	};
@@ -22,7 +22,7 @@ public class IntMap<V> extends AbstractMap<Integer, V> implements _Generic_Map<I
 
 	static final float NUMKEY_LOADFACTOR = 1f;
 
-	public static class Entry<V> implements _Generic_Entry, Map.Entry<Integer, V> {
+	public static class Entry<V> implements _LibEntry, Map.Entry<Integer, V> {
 		int key;
 		public V value;
 
@@ -42,7 +42,7 @@ public class IntMap<V> extends AbstractMap<Integer, V> implements _Generic_Map<I
 
 		Entry<V> next;
 		@Override
-		public _Generic_Entry __next() {return next;}
+		public _LibEntry __next() {return next;}
 
 		@Override
 		public String toString() {return key +"="+ value;}
@@ -74,7 +74,7 @@ public class IntMap<V> extends AbstractMap<Integer, V> implements _Generic_Map<I
 
 	// GenericMap interface
 	@Override
-	public _Generic_Entry[] __entries() {return entries;}
+	public _LibEntry[] __entries() {return entries;}
 	@Override
 	public void __remove(Entry<V> vEntry) {remove(vEntry.key);}
 	// GenericMap interface
@@ -178,7 +178,7 @@ public class IntMap<V> extends AbstractMap<Integer, V> implements _Generic_Map<I
 	}
 
 	public final Set<Map.Entry<Integer, V>> entrySet() {return Helpers.cast(selfEntrySet());}
-	public final Set<Entry<V>> selfEntrySet() {return _Generic_EntrySet.create(this);}
+	public final Set<Entry<V>> selfEntrySet() {return _LibEntrySet.create(this);}
 
 	public V getOrDefault(Object key, V def) {return getOrDefault((int) key, def);}
 	public V getOrDefault(int key, V def) {

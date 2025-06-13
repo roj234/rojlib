@@ -1,7 +1,7 @@
 package roj.concurrent;
 
-import roj.collect.SimpleList;
-import roj.reflect.ReflectionUtils;
+import roj.collect.ArrayList;
+import roj.reflect.Unaligned;
 import roj.text.logging.Logger;
 import roj.util.Helpers;
 
@@ -27,7 +27,7 @@ public class Scheduler implements Runnable {
 			synchronized (Scheduler.class) {
 				if (defaultScheduler != null) return defaultScheduler;
 
-				defaultScheduler = new Scheduler(TaskPool.Common());
+				defaultScheduler = new Scheduler(TaskPool.common());
 				Thread t = new Thread(defaultScheduler, "RojLib 定时任务");
 				t.setDaemon(true);
 				t.start();
@@ -56,8 +56,8 @@ public class Scheduler implements Runnable {
 			return "ScheduleTask{state="+state+",task="+task+",lock="+lock+",timeLeft="+timeLeft+'}';
 		}
 
-		static final long NEXT_OFFSET = ReflectionUtils.fieldOffset(TaskHolder.class, "next");
-		static final long TIME_OFFSET = ReflectionUtils.fieldOffset(TaskHolder.class, "timeLeft");
+		static final long NEXT_OFFSET = Unaligned.fieldOffset(TaskHolder.class, "next");
+		static final long TIME_OFFSET = Unaligned.fieldOffset(TaskHolder.class, "timeLeft");
 
 		Object lock;
 		TaskHolder prev, next;
@@ -336,7 +336,7 @@ public class Scheduler implements Runnable {
 		}
 	}
 
-	private static final long OFF_HEAD = ReflectionUtils.fieldOffset(Scheduler.class, "head");
+	private static final long OFF_HEAD = Unaligned.fieldOffset(Scheduler.class, "head");
 
 	private final TimingWheel wheel = new TimingWheel(null);
 	private volatile boolean stopped;
@@ -380,7 +380,7 @@ public class Scheduler implements Runnable {
 
 	public final void tick() { wheel.tick(executor); }
 	public final void fastForward(int ticks) {
-		SimpleList<TaskHolder> tasks = new SimpleList<>();
+		ArrayList<TaskHolder> tasks = new ArrayList<>();
 		wheel.fastForward(ticks, tasks, executor);
 		for (int i = 0; i < tasks.size(); i++) {
 			TaskHolder task = tasks.get(i);

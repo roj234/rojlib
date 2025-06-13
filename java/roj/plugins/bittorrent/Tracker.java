@@ -23,7 +23,7 @@ import java.util.concurrent.ThreadLocalRandom;
  * @author Roj234
  * @since 2025/05/20 20:00
  */
-abstract class Tracker {
+public abstract class Tracker {
 	abstract Promise<Void> update(Session session);
 	abstract int errorCount();
 
@@ -142,7 +142,7 @@ abstract class Tracker {
 									if (buf.readInt() != transactionId) break;
 
 									state++;
-									interval = buf.readInt();
+									interval = System.currentTimeMillis() / 1000 + buf.readInt();
 									leechers = buf.readInt();
 									seeders = buf.readInt();
 

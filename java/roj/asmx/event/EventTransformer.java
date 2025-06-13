@@ -1,21 +1,14 @@
 package roj.asmx.event;
 
 import roj.asm.ClassNode;
-import roj.asm.MethodNode;
 import roj.asm.Opcodes;
 import roj.asm.attr.Attribute;
 import roj.asm.cp.CstClass;
-import roj.asm.insn.AbstractCodeWriter;
-import roj.asm.insn.AttrCode;
 import roj.asm.insn.CodeWriter;
-import roj.asm.insn.InsnList;
 import roj.asm.type.IType;
 import roj.asm.type.Signature;
-import roj.asmx.ConstantPoolHooks;
-import roj.asmx.Context;
-import roj.asmx.TransformException;
-import roj.asmx.Transformer;
-import roj.collect.MyHashSet;
+import roj.asmx.*;
+import roj.collect.HashSet;
 
 import java.util.List;
 import java.util.Map;
@@ -25,7 +18,7 @@ import java.util.Map;
  * @since 2024/3/21 13:20
  */
 public final class EventTransformer implements Transformer, ConstantPoolHooks.Hook<ClassNode> {
-	private final MyHashSet<String> knownEvents = new MyHashSet<>("roj/asmx/event/Event");
+	private final HashSet<String> knownEvents = new HashSet<>("roj/asmx/event/Event");
 
 	public static EventTransformer register(ConstantPoolHooks fd) {
 		EventTransformer tr = new EventTransformer();
@@ -60,24 +53,10 @@ public final class EventTransformer implements Transformer, ConstantPoolHooks.Ho
 	}
 
 	private static void callRegister(ClassNode data) {
-		MethodNode clinit = data.getMethodObj("<clinit>");
-		AbstractCodeWriter c;
-		if (clinit == null) {
-			CodeWriter c1 = data.newMethod(Opcodes.ACC_PUBLIC | Opcodes.ACC_STATIC, "<clinit>", "()V");
-			c1.visitSize(1, 0);
-			c = c1;
-		} else {
-			c = new InsnList();
-		}
-
-		c.ldc(new CstClass(data.name()));
-		c.invoke(Opcodes.INVOKESTATIC, "roj/asmx/event/EventBus", "registerEvent", "(Ljava/lang/Class;)V");
-
-		if (clinit != null) {
-			AttrCode code = clinit.getAttribute(data.cp, Attribute.Code);
-			if (code.stackSize == 0) code.stackSize = 1;
-			code.instructions.replaceRange(0,0, (InsnList) c, false);
-		}
+		TransformUtil.prependStaticConstructor(data, c -> {
+			c.ldc(new CstClass(data.name()));
+			c.invoke(Opcodes.INVOKESTATIC, "roj/asmx/event/EventBus", "registerEvent", "(Ljava/lang/Class;)V");
+		});
 	}
 
 	@Override

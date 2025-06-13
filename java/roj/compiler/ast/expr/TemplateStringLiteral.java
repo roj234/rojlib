@@ -2,9 +2,9 @@ package roj.compiler.ast.expr;
 
 import roj.asm.type.IType;
 import roj.asm.type.Type;
+import roj.compiler.CompileContext;
 import roj.compiler.api.Types;
 import roj.compiler.asm.MethodWriter;
-import roj.compiler.context.LocalContext;
 import roj.compiler.diagnostic.Kind;
 import roj.compiler.resolve.ResolveException;
 import roj.config.Tokenizer;
@@ -33,7 +33,7 @@ class TemplateStringLiteral extends Expr {
 	public IType type() {return Types.STRING_TYPE;}
 
 	@Override
-	public Expr resolve(LocalContext ctx) throws ResolveException {
+	public Expr resolve(CompileContext ctx) throws ResolveException {
 		// 未来也许会支持基于变量的处理器？
 		String type = ((MemberAccess) processor).nameChain.get(0);
 		switch (type) {

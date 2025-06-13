@@ -385,8 +385,9 @@ public final class HttpServer11 extends PacketMerger implements PostSetting, Res
 		state = PROCESSING;
 		try {
 			if (ph != null) {
-				ph.onSuccess(merged);
-				BufferPool.reserve(merged);
+				DynByteBuf buf = merged;
+				ph.onSuccess(buf == null ? ByteList.EMPTY : buf);
+				if (buf != null) BufferPool.reserve(buf);
 				merged = null;
 			}
 			if ((flag&SEND_BODY) != 0) return;
@@ -615,7 +616,7 @@ public final class HttpServer11 extends PacketMerger implements PostSetting, Res
 			LOGGER.warn("onRequestFinish时发生了异常", e);
 		}
 
-		if ("close".equalsIgnoreCase(req.responseHeader.get("connection"))) {
+		if (req == null || "close".equalsIgnoreCase(req.responseHeader.get("connection"))) {
 			ch.channel().closeGracefully();
 			state = CLOSED;
 		} else {

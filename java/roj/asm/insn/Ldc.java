@@ -37,7 +37,7 @@ final class Ldc extends Segment {
 
 	@Override public int length() { return code-0x10; } // LDC=0x12, LDC_W=0x13
 	@Override public Segment move(AbstractCodeWriter to, int blockMoved, boolean clone) { return clone?new Ldc(code,c.clone()):this; }
-	@Override public String toString() { return Opcodes.showOpcode(code)+"("+c.toString()+")"; }
+	@Override public String toString() { return Opcodes.toString(code)+"("+c.toString()+")"; }
 
 	@Override public boolean equals(Object o) {
 		if (this == o) return true;

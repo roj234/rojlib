@@ -1,7 +1,7 @@
 package roj.plugins.ci.plugin;
 
 import roj.asmx.Context;
-import roj.collect.SimpleList;
+import roj.collect.ArrayList;
 import roj.config.data.CEntry;
 import roj.plugins.ci.Compiler;
 
@@ -15,6 +15,6 @@ import java.util.List;
 public interface Processor {
 	String name();
 	default void init(CEntry config) {}
-	default int beforeCompile(Compiler compiler, SimpleList<String> options, List<File> files, ProcessEnvironment pc) {return 2;}
+	default int beforeCompile(Compiler compiler, ArrayList<String> options, List<File> files, ProcessEnvironment pc) {return 2;}
 	List<Context> process(List<Context> classes, ProcessEnvironment ctx);
 }

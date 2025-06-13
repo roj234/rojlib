@@ -1,6 +1,6 @@
 package roj.concurrent;
 
-import roj.compiler.api.ExceptionalStub;
+import roj.plugins.ci.annotation.AliasOf;
 
 import java.util.function.Supplier;
 
@@ -9,7 +9,7 @@ import java.util.function.Supplier;
  * @since 2025/06/03 9:18
  */
 @FunctionalInterface
-@ExceptionalStub(Supplier.class)
+@AliasOf(Supplier.class)
 public interface ExceptionalSupplier<T, EX extends Throwable> {
 	T get() throws EX;
 }

@@ -5,8 +5,8 @@ import roj.asm.Opcodes;
 import roj.asm.cp.CstClass;
 import roj.asm.type.IType;
 import roj.asm.type.Type;
+import roj.compiler.CompileContext;
 import roj.compiler.asm.MethodWriter;
-import roj.compiler.context.LocalContext;
 import roj.compiler.resolve.ResolveException;
 import roj.compiler.resolve.TypeCast;
 import roj.config.Tokenizer;
@@ -57,7 +57,7 @@ final class Literal extends Expr {
 	@Override public Object constVal() { return c; }
 
 	@Override
-	public Expr resolve(LocalContext ctx) throws ResolveException {
+	public Expr resolve(CompileContext ctx) throws ResolveException {
 		if (c instanceof IType t) c = ctx.resolveType(t);
 		return this;
 	}
@@ -86,7 +86,7 @@ final class Literal extends Expr {
 		} else {
 			switch (returnType.type) {
 				case TypeCast.E_NUMBER_DOWNCAST, TypeCast.NUMBER_UPCAST, TypeCast.BOXING -> {
-					String name = Opcodes.showOpcode(returnType.getOp1());
+					String name = Opcodes.toString(returnType.getOp1());
 					assert name.length() == 3;
 					writePrimitive(cw, switch (name.charAt(2)) {
 						default -> 4;
@@ -98,6 +98,12 @@ final class Literal extends Expr {
 						returnType.writeBox(cw);
 				}
 				default -> {
+					if (returnType.type == TypeCast.E_EXPLICIT_CAST) {
+						int value = ((CEntry) c).asInt();
+						// it is ok to cast
+						if (value >= 0) returnType.type = 0;
+					}
+
 					write(cw, false);
 					returnType.write(cw);
 				}

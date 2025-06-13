@@ -1,6 +1,6 @@
 package roj.plugins.p2p;
 
-import roj.collect.MyHashMap;
+import roj.collect.HashMap;
 import roj.text.logging.Logger;
 
 import java.io.IOException;
@@ -82,7 +82,7 @@ public class UPnPGateway {
 	}
 
 	public static boolean openPort(String desc, int inPort, int outPort, boolean tcp, int durationMs) throws IOException {
-		Map<String, String> p = new MyHashMap<>();
+		Map<String, String> p = new HashMap<>();
 		p.put("NewRemoteHost", "");
 		p.put("NewProtocol", tcp ? "TCP" : "UDP");
 		p.put("NewInternalClient", gateway.getLocalIp());
@@ -96,7 +96,7 @@ public class UPnPGateway {
 	}
 
 	public static boolean closePort(int outPort, boolean tcp) throws IOException {
-		Map<String, String> p = new MyHashMap<>();
+		Map<String, String> p = new HashMap<>();
 		p.put("NewRemoteHost", "");
 		p.put("NewProtocol", tcp ? "TCP" : "UDP");
 		p.put("NewExternalPort", Integer.toString(outPort));
@@ -105,7 +105,7 @@ public class UPnPGateway {
 	}
 
 	public static boolean isMapped(int outPort, boolean tcp) throws IOException {
-		Map<String, String> p = new MyHashMap<>();
+		Map<String, String> p = new HashMap<>();
 		p.put("NewRemoteHost", "");
 		p.put("NewProtocol", tcp ? "TCP" : "UDP");
 		p.put("NewExternalPort", Integer.toString(outPort));

@@ -3,8 +3,8 @@ package roj.http.server;
 import org.jetbrains.annotations.CheckReturnValue;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
-import roj.collect.MyHashMap;
-import roj.collect.SimpleList;
+import roj.collect.HashMap;
+import roj.collect.ArrayList;
 import roj.config.Tokenizer;
 import roj.crypt.Base64;
 import roj.http.*;
@@ -258,7 +258,7 @@ public final class Request extends Headers {
 	public Map<String, String> requestFields() throws IllegalRequestException {
 		var pf = formData();
 		if (pf == null) return queryParam();
-		var gf = new MyHashMap<>(queryParam());
+		var gf = new HashMap<>(queryParam());
 		gf.putAll(pf);
 		return gf;
 	}
@@ -273,7 +273,7 @@ public final class Request extends Headers {
 			Map<String, String> fromClient;
 			try {
 				fromClient = rawCookie();
-				if (fromClient.isEmpty()) return cookie = new MyHashMap<>();
+				if (fromClient.isEmpty()) return cookie = new HashMap<>();
 			} catch (MalformedURLException e) {
 				throw IllegalRequestException.badRequest(e.getMessage());
 			}
@@ -305,7 +305,7 @@ public final class Request extends Headers {
 	}
 	void packToHeader() {
 		if (cookie != null) {
-			List<Cookie> modified = new SimpleList<>();
+			List<Cookie> modified = new ArrayList<>();
 			for (var entry : cookie.entrySet()) {
 				Cookie c = entry.getValue();
 				if (c.isDirty()) modified.add(c);
@@ -333,7 +333,7 @@ public final class Request extends Headers {
 				cookie.put(sessionName, c);
 			}
 			session = storage.get(sessionId);
-			if (session == null && createIfNonExist) session = new MyHashMap<>();
+			if (session == null && createIfNonExist) session = new HashMap<>();
 		}
 		return session;
 	}

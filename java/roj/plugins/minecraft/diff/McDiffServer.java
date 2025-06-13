@@ -1,12 +1,12 @@
 package roj.plugins.minecraft.diff;
 
 import roj.archive.qz.*;
-import roj.archive.qz.xz.LZMA2Options;
-import roj.archive.qz.xz.LZMAOutputStream;
+import roj.archive.xz.LZMA2Options;
+import roj.archive.xz.LZMAOutputStream;
+import roj.collect.ArrayList;
+import roj.collect.HashMap;
+import roj.collect.HashSet;
 import roj.collect.IntMap;
-import roj.collect.MyHashMap;
-import roj.collect.MyHashSet;
-import roj.collect.SimpleList;
 import roj.concurrent.TaskPool;
 import roj.config.NBTParser;
 import roj.config.serial.ToNBT;
@@ -45,12 +45,12 @@ public final class McDiffServer {
 	public void makeDiff(File fullPack, File directory, Predicate<File> filter, File diffFile) throws IOException {
 		QZArchive pack = new QZArchive(fullPack);
 
-		List<String> empty = new SimpleList<>();
-		MyHashSet<String> added = new MyHashSet<>();
-		MyHashMap<String, String> moved = new MyHashMap<>();
-		List<String> deleted = new SimpleList<>();
+		List<String> empty = new ArrayList<>();
+		HashSet<String> added = new HashSet<>();
+		HashMap<String, String> moved = new HashMap<>();
+		List<String> deleted = new ArrayList<>();
 
-		TaskPool pool = TaskPool.Common();
+		TaskPool pool = TaskPool.common();
 		//TaskPool.MaxThread(Runtime.getRuntime().availableProcessors(), "MCDiff-CRC32-Worker");
 
 		computeDiff(directory, filter, pack, empty, added, deleted, moved, pool);
@@ -72,7 +72,7 @@ public final class McDiffServer {
 		long myMem = (1L<<24) * affinity;
 		System.out.println("Allocating "+TextUtil.scaledNumber1024(myMem)+" of memory");
 		LZMA2Options opt = new LZMA2Options();
-		opt.setAsyncMode(1<<24, TaskPool.Common(), affinity, new BufferPool(myMem,0,myMem, 0,0, 0, 10,0), LZMA2Options.ASYNC_DICT_NONE);
+		opt.setAsyncMode(1<<24, TaskPool.common(), affinity, new BufferPool(myMem,0,myMem, 0,0, 0, 10,0), LZMA2Options.ASYNC_DICT_NONE);
 		QZWriter genericParallel = qzfw.newParallelWriter();
 		genericParallel.setCodec(new LZMA2(opt));
 
@@ -326,16 +326,16 @@ public final class McDiffServer {
 	private static void computeDiff(File directory, Predicate<File> filter,
 									QZArchive pack,
 									List<String> empty,
-									MyHashSet<String> added,
+									HashSet<String> added,
 									List<String> deleted,
-									MyHashMap<String, String> moved,
+									HashMap<String, String> moved,
 									TaskPool pool) throws IOException {
-		var oldEntries = new MyHashMap<>(pack.getEntries());
+		var oldEntries = new HashMap<>(pack.getEntries());
 
 		IntMap<String> moveCheck = new IntMap<>();
 
 		int prefix = directory.getAbsolutePath().length()+1;
-		List<File> newEntries = IOUtil.findAllFiles(directory, filter);
+		List<File> newEntries = IOUtil.listFiles(directory, filter);
 		byte[] tmp = new byte[4096];
 
 		System.out.println("正在计算哈希 (1/4)");

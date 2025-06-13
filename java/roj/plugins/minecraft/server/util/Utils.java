@@ -1,6 +1,7 @@
 package roj.plugins.minecraft.server.util;
 
 import roj.collect.BitArray;
+import roj.concurrent.OperationDone;
 import roj.config.JSONParser;
 import roj.config.serial.ToNBT;
 import roj.io.IOUtil;
@@ -23,7 +24,7 @@ public class Utils {
 			return new JSONParser().parse(MinecraftServer.INSTANCE.getResource(path), 0, ser).buffer().toByteArray();
 		} catch (Exception e) {
 			Helpers.athrow(e);
-			return Helpers.nonnull();
+			throw OperationDone.NEVER;
 		}
 	}
 

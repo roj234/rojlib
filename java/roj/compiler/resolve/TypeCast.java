@@ -7,8 +7,8 @@ import roj.asm.Opcodes;
 import roj.asm.insn.CodeWriter;
 import roj.asm.type.*;
 import roj.collect.*;
+import roj.compiler.LavaCompiler;
 import roj.compiler.asm.Asterisk;
-import roj.compiler.context.GlobalContext;
 import roj.concurrent.OperationDone;
 import roj.text.CharList;
 
@@ -148,7 +148,7 @@ public class TypeCast {
 		return cast; }
 	// endregion
 
-	public GlobalContext context;
+	public Resolver context;
 	public Map<String, List<IType>> typeParams = Collections.emptyMap();
 	// only used in resolveType
 	public Map<String, List<IType>> typeParamsForTargetType;
@@ -172,7 +172,7 @@ public class TypeCast {
 				IType bound = ((Asterisk) to).getBound();
 				if (bound == null) {
 					if (from.isPrimitive()) {
-						GlobalContext.debugLogger().debug("E_INT_OBJ, {}, {}", from, to);
+						LavaCompiler.debugLogger().debug("E_INT_OBJ, {}, {}", from, to);
 						//return ERROR(E_INT2OBJ);
 					}
 					return RESULT(UPCAST, 0).setAnyCast(from);
@@ -238,8 +238,8 @@ public class TypeCast {
 		return result;
 	}
 
-	private static final class TPCollector extends MyHashMap<String, IType> {
-		final MyHashSet<Object> batch = new MyHashSet<>(), prevBatch = new MyHashSet<>();
+	private static final class TPCollector extends HashMap<String, IType> {
+		final HashSet<Object> batch = new HashSet<>(), prevBatch = new HashSet<>();
 
 		public TPCollector() {}
 
@@ -296,7 +296,7 @@ public class TypeCast {
 			if (!sub.children.isEmpty()) {
 				if (!copy) {
 					// just a hack to check validity
-					gg1.children = new SimpleList<>(gg1.children);
+					gg1.children = new ArrayList<>(gg1.children);
 					copy = true;
 				}
 				gg1.children.addAll(sub.children);
@@ -359,7 +359,7 @@ public class TypeCast {
 			}
 		} else {
 			if (fc != null && tc != null) throw new AssertionError("primitive not resolved");
-			// 基本类型泛型由LocalContext的resolveType处理，并根据模板生产
+			// 基本类型泛型由CompileContext的resolveType处理，并根据模板生产
 		}
 
 		return r;
@@ -370,8 +370,6 @@ public class TypeCast {
 		if (from.type == VOID || to.type == VOID) return ERROR(E_NEVER);
 
 		if (from.isPrimitive()) {
-			// 泛型
-			if (inheritType >= 0) return ERROR(E_NEVER);
 			// 装箱
 			if (!to.isPrimitive()) {
 				int box = from.type;
@@ -395,6 +393,9 @@ public class TypeCast {
 				cast.box = (byte) box;
 				return cast;
 			}
+
+			// 泛型
+			if (inheritType >= 0) return ERROR(E_NEVER);
 
 			// 皆为基本
 			int fCap = DataCap.getOrDefaultInt(from.type, 0);
@@ -474,7 +475,7 @@ public class TypeCast {
 			x = (String[]) (Object) null;
 			x = (String[]) (Serializable) null;*/
 			if ("java/lang/Object".equals(from.owner) ||
-				GlobalContext.arrayInterfaces().contains(from.owner))
+				LavaCompiler.arrayInterfaces().contains(from.owner))
 				return DOWNCAST(to);
 
 			return ERROR(E_NEVER);
@@ -487,7 +488,7 @@ public class TypeCast {
 				if (owner == null) return ERROR(E_NEVER); // t2是基本类型数组
 
 				if (owner.equals("java/lang/Object")) return RESULT(UPCAST, 2);
-				if (GlobalContext.arrayInterfaces().contains(owner)) return RESULT(UPCAST, 1);
+				if (LavaCompiler.arrayInterfaces().contains(owner)) return RESULT(UPCAST, 1);
 
 				return ERROR(E_NEVER); // int[] 除了转换成数组实现的类不能变成任何其他东西
 			} else {
@@ -507,8 +508,8 @@ public class TypeCast {
 		return checkInheritable(from, to);
 	}
 	public Cast checkInheritable(Type from, Type to) {
-		ClassDefinition fromClass = context.getClassInfo(from.owner);
-		ClassDefinition toClass = context.getClassInfo(to.owner);
+		ClassDefinition fromClass = context.resolve(from.owner);
+		ClassDefinition toClass = context.resolve(to.owner);
 
 		if (fromClass == null) return ERROR(E_NODATA);
 		if (toClass == null) return ERROR(E_NODATA);

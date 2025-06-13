@@ -44,14 +44,16 @@ for (int i=0; i<arr.length; i++) {
 一个方法可以返回多个值。  
 其中基本类型占用的字节数不能超过1KB(256个int/128个long)，对象类型无限制。  
 使用ThreadLocal对象，而非浪费内存的不可变对象，所以
-禁止套娃 (带编译期错误)
+禁止套娃 (带编译期错误)  
+必须使用下面的方法解包，因为编译器会自动插入参数类型哈希用于验证，并在适合的时候抛出IncompatibleClassChangeError  
+不需要的参数可以用_跳过  
+为什么用方括号和花括号，是为了不修改默认行为，例如var[]是合法的， {}又是静态构造器
 ```java
 static [int, long, String] multiReturnTest() {
     return {3, 5, "233"};
 }
 
-var [a, b, c] = multiReturnTest();
-var a = multiReturnTest()[0];
+var {a, _, c} = multiReturnTest();
 ```
 
 ### ⚡ 分支忽略
@@ -96,7 +98,7 @@ AbstractType obj = () -> System.out.println("Magic!");
 
 ### 覆盖隐式方法
 所有隐式生成的方法，例如Enum.valueOf和values都可以由你手动覆盖，覆盖后编译器不再会生成相同的方法  
-访问权限修饰符必须和它应有的相同，否则会编译失败
+访问权限修饰符必须和它应有的相同，否则会编译期错误
 
 ### MapLiteral / ListLiteral
   使用类似PHP的语法来构建Map&lt;?,?&gt;
@@ -110,7 +112,8 @@ var list = [1, 2, 3]; // List<Integer> (不可变)
   * 警告，由于VisMap并没有那么可靠，goto可能会导致编译器在StackMapTable生成阶段崩溃
 
 ### 基本类型附加函数
-  12345 . toHexString() => Integer.toHexString (static)
+  12345 . toHexString() => Integer.toHexString (static)  
+  请注意为了防止被解析为浮点数，你需要在小数点前添加空格或使用括号
 
 ### Switch扩展
 - Lavac生成的switch语句具有更小的文件大小和更优越的性能。
@@ -234,17 +237,17 @@ try (
 * 你也可以使value=false来禁用优化
 
 ### 生成器函数
-* 定义 (_async是一个修饰符，并且是必须的)
+* 定义 (函数名称前带星号)
 ```java
-    _async static Generator<String> generatorTest(String inputArg) {
+    static String *generatorTest(String inputArg) {
         yield inputArg+="a";
         yield inputArg+="b";
         yield inputArg+="c";
     }
 ```
-* 使用方法
+* 使用方法 (注意事实上返回了Generator<String>, 你可以在这里面使用基本类型泛型参数！)
 ```java
-    var itr = generatorTest("喵");
+    Generator<String> itr = generatorTest("喵");
     while(itr.hasNext()) {
         System.out.println(itr.next());
     }
@@ -253,7 +256,7 @@ try (
     // 喵abc
 ```
 * 优先级低于switch中的yield
-* 通过匿名类实现，可参考有栈协程，由于这个东西，它貌似不再那么牛逼了
+* 通过匿名类实现，可参考有栈协程（貌似不再像看起来那么牛逼了）
 
 ### PseudoType (伪类型)
 相关API：
@@ -294,7 +297,8 @@ public class Attacher {
 ```
 
 这么做之后，无论这个类以源代码编译还是在classpath中  
-都可在字符串对象（或它的子类，虽然字符串是final的）上使用 isNotEmpty() 函数
+都可在字符串对象（或它的子类，虽然字符串是final的）上使用 isNotEmpty() 函数  
+与某些编程语言不同，**这是全局的**，而不是只能在一个包内使用，所以可能导致名称冲突
 ### @AutoIncrement
   以指定的start和step为每个字段分配整数常量值
 ```java
@@ -346,10 +350,11 @@ public class Some {
 目前支持int[]和byte[]，你可以这么写：  
 RtUtil.unpackI(RtUtil.pack(new byte[] { ... }));
 ### 宏
-使用“!!macro { ... }”（macro后的空格不能省略）编写一个宏  
-宏类似于一个lambda代码块，其中有且仅有一个参数，CharList sb  
+使用“@LavaMacro { ... }”编写一个宏  
+宏类似于一个lambda代码块，其中有且仅有一个参数，CharList code  
+注意：在目前版本中，这不是一个真实的注解！  
 举例:  
-!!macro { sb.append("1+1"); }  
+@LavaMacro { code.append("1+1"); }  
 将会编译为1+1  
 宏可以使用Lava的所有特性，不过依然只能使用白名单内的少部分类
 ## Uint插件
@@ -389,7 +394,7 @@ RtUtil.unpackI(RtUtil.pack(new byte[] { ... }));
 
 # 不支持的特性
 ### 开发中
-* 非静态类，以及和它相关的泛型调用
+* 非静态类的泛型
 * instanceof cast (VisMap)
 * 方法中的具名类
 
@@ -476,10 +481,10 @@ ast 语法树
    - Javac是形式生命周期，所以在不考虑JVM优化的情况下，会多占用不少槽位
 
 context 上下文
-1. 全局编译上下文 GlobalContext
+1. 全局编译上下文 LavaCompiler
    - 负责生成线程本地的编译上下文，词法分析器，方法分析器，表达式分析器
    - 包含全局符号缓存和解析缓存
-2. 本地编译上下文 LocalContext
+2. 本地编译上下文 CompileContext
    - 包含大部分不支持多线程和递归的对象，例如，方法分析器，供编译器调用
    - 包含文件中只在当前阶段有效的状态，节省CompileUnit的空间。
    - 包含对象缓存，复用一些SetListMap什么的

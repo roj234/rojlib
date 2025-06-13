@@ -261,7 +261,7 @@ public class TrieTree<V> extends AbstractMap<CharSequence, V> {
 	public V remove(CharSequence s, int i, int len, Object except) {
 		if (len - i < 0) throw new IllegalArgumentException("Δlength < 0");
 
-		SimpleList<Entry<V>> list = new SimpleList<>();
+		ArrayList<Entry<V>> list = new ArrayList<>();
 
 		Entry<V> entry = root;
 		while (i < len) {
@@ -315,7 +315,7 @@ public class TrieTree<V> extends AbstractMap<CharSequence, V> {
 
 	public Map.Entry<CInt, V> longestMatches(CharSequence s) { return longestMatches(s, 0, s.length()); }
 	public Map.Entry<CInt, V> longestMatches(CharSequence s, int i, int len) {
-		MyHashMap.Entry<CInt, V> entry = new MyHashMap.Entry<>(new CInt(), null);
+		HashMap.Entry<CInt, V> entry = new HashMap.Entry<>(new CInt(), null);
 		match(s,i,len,entry);
 		return entry.getKey().value < 0 ? null : entry;
 	}
@@ -328,7 +328,7 @@ public class TrieTree<V> extends AbstractMap<CharSequence, V> {
 	 * s="abcdef" 返回 6, feed: 6=B
 	 */
 	@SuppressWarnings("unchecked")
-	public int match(CharSequence s, int i, int len, MyHashMap.Entry<CInt, V> feed) {
+	public int match(CharSequence s, int i, int len, HashMap.Entry<CInt, V> feed) {
 		feed.key.value = -1;
 
 		int d = 0;
@@ -394,7 +394,7 @@ public class TrieTree<V> extends AbstractMap<CharSequence, V> {
 		KeyItr itr = matches(s, i, len);
 		if (itr == null) return Collections.emptyList();
 
-		SimpleList<V> values = new SimpleList<>();
+		ArrayList<V> values = new ArrayList<>();
 		while (itr.hasNext()) {
 			if (values.size() >= limit) break;
 
@@ -410,7 +410,7 @@ public class TrieTree<V> extends AbstractMap<CharSequence, V> {
 		KeyItr itr = matches(s, i, len);
 		if (itr == null) return Collections.emptyList();
 
-		SimpleList<Map.Entry<String, V>> entries = new SimpleList<>();
+		ArrayList<Map.Entry<String, V>> entries = new ArrayList<>();
 		while (itr.hasNext()) {
 			if (entries.size() >= limit) {
 				break;

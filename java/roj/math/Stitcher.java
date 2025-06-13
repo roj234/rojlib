@@ -1,7 +1,7 @@
 package roj.math;
 
 import roj.collect.IterablePriorityQueue;
-import roj.collect.SimpleList;
+import roj.collect.ArrayList;
 
 import java.util.List;
 
@@ -86,7 +86,7 @@ public class Stitcher {
 	public int getHeight() {return height;}
 	public List<Tile> getTiles() {
 		Object[] array = tiles.array();
-		List<Tile> list = new SimpleList<>(tiles.size());
+		List<Tile> list = new ArrayList<>(tiles.size());
 		for (int i = 0; i < tiles.size(); i++) list.add(((Holder)array[i]).getTile());
 		return list;
 	}
@@ -94,7 +94,7 @@ public class Stitcher {
 	private boolean place(Holder tile) {
 		// Slot.next是一个链表, 否则remove浪费
 		Slot prev = null, free = freeHead;
-		var remainSpace = new SimpleList<Slot>();
+		var remainSpace = new ArrayList<Slot>();
 
 		while (free != null) {
 			// place成功则next就被修改了 (side effect)
@@ -161,7 +161,7 @@ public class Stitcher {
 			this.height += tileH;
 		}
 
-		SimpleList<Slot> remain = new SimpleList<>();
+		ArrayList<Slot> remain = new ArrayList<>();
 		if (!slot.place(tile, this, remain)) throw new AssertionError();
 		addFree(remain);
 		return true;

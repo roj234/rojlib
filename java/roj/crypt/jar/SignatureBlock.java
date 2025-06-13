@@ -1,15 +1,17 @@
 package roj.crypt.jar;
 
-import roj.collect.MyHashMap;
+import roj.collect.HashMap;
 import roj.config.ParseException;
 import roj.config.data.CByteArray;
 import roj.config.data.CIntArray;
+import roj.crypt.CryptoFactory;
 import roj.crypt.asn1.Asn1Context;
 import roj.crypt.asn1.DerReader;
 import roj.crypt.asn1.DerValue;
 import roj.crypt.asn1.DerWriter;
 import roj.io.IOUtil;
 import roj.io.MyDataInputStream;
+import roj.text.TextUtil;
 import roj.util.ArrayUtil;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
@@ -19,6 +21,7 @@ import java.io.InputStream;
 import java.math.BigInteger;
 import java.security.cert.*;
 import java.util.*;
+import java.util.stream.Collectors;
 
 /**
  * @author Roj234
@@ -32,10 +35,10 @@ final class SignatureBlock extends CertPath {
 
 	private static final String PKCS7_ENCODING = "PKCS7", PKIPATH_ENCODING = "PkiPath";
 
-	private static final Asn1Context PKCS_7_CTX;
+	private static final Asn1Context PKCS7;
 	static {
 		try {
-			PKCS_7_CTX = Asn1Context.createFromString(IOUtil.getTextResourceIL("roj/crypt/jar/PKCS#7.asn"));
+			PKCS7 = Asn1Context.createFromString(IOUtil.getTextResourceIL("roj/crypt/jar/PKCS#7.asn"));
 		} catch (ParseException | IOException e) {
 			throw new RuntimeException(e);
 		}
@@ -43,7 +46,7 @@ final class SignatureBlock extends CertPath {
 
 	private static final Collection<String> encodingList = List.of(PKIPATH_ENCODING, PKCS7_ENCODING);
 
-	private static final MyHashMap<CIntArray, String> DigestAlg = new MyHashMap<>(), SignAlg = new MyHashMap<>();
+	private static final HashMap<CIntArray, String> DigestAlg = new HashMap<>(), SignAlg = new HashMap<>();
 	static {
 		DigestAlg.put(DerValue.OID("2.16.840.1.101.3.4.2.1"), "SHA256");
 		DigestAlg.put(DerValue.OID("2.16.840.1.101.3.4.2.2"), "SHA384");
@@ -88,28 +91,9 @@ final class SignatureBlock extends CertPath {
 		try {
 			var der = new DerReader(MyDataInputStream.wrap(is));
 
-			var info = PKCS_7_CTX.parse("ContentInfo", der).asMap().getMap("content");
+			var info = PKCS7.parse("ContentInfo", der).asMap().getMap("content");
 
 			var certBytes = info.getList("certificates");
-			var signerInfos = info.getList("signerInfos");
-			if (signerInfos.size() != 1) throw new UnsupportedOperationException("不支持的格式，请发issue！(signerInfos.size() != 1)");
-
-			BigInteger sn = null;
-			String digestOid = null, signOid = null;
-			byte[] sign = null;
-
-			for (int i = 0; i < signerInfos.size(); i++) {
-				var signerInfo = signerInfos.getMap(i);
-
-				sn = ((DerValue.Int)signerInfo.query("sid.serialNumber")).value;
-
-				//noinspection SuspiciousMethodCalls
-				digestOid = DigestAlg.get(signerInfo.query("digestAlgorithm.algorithm"));
-				//noinspection SuspiciousMethodCalls
-				signOid = SignAlg.get(signerInfo.query("signatureAlgorithm.algorithm"));
-				sign = (byte[]) signerInfo.get("signature").unwrap();
-			}
-
 			var factory = CertificateFactory.getInstance("X.509");
 			var cert = new X509Certificate[certBytes.size()];
 
@@ -123,24 +107,65 @@ final class SignatureBlock extends CertPath {
 				cert[i] = (X509Certificate) factory.generateCertificate(buf.asInputStream());
 			}
 
-			// certs are optional in PKCS #7
+			// certs are optional
 			certs = cert.length > 0 ? List.of(cert) : Collections.emptyList();
 
-			X509Certificate cert1;
-			block: {
-				for (int i = 0; i < certs.size(); i++) {
-					cert1 = certs.get(i);
-					if (cert1.getSerialNumber().equals(sn)) break block;
+			var signerInfos = info.getList("signerInfos");
+			if (signerInfos.size() != 1) throw new UnsupportedOperationException("暂不支持多签名！");
+
+			String digestOid = null, signOid = null;
+			byte[] sign = null;
+			X509Certificate cert1 = null;
+
+			for (int i = 0; i < signerInfos.size(); i++) {
+				var signerInfo = signerInfos.getMap(i);
+
+				DerWriter dw = new DerWriter();
+				PKCS7.write("Name", signerInfo.query("sid.issuer"), dw);
+				buf.clear();
+				dw.flush(buf);
+				byte[] issuer = buf.toByteArray();
+
+				BigInteger sn = ((DerValue.Int)signerInfo.query("sid.serialNumber")).value;
+
+				//noinspection SuspiciousMethodCalls
+				digestOid = DigestAlg.get(signerInfo.query("digestAlgorithm.algorithm"));
+				//noinspection SuspiciousMethodCalls
+				signOid = SignAlg.get(signerInfo.query("signatureAlgorithm.algorithm"));
+				sign = (byte[]) signerInfo.get("signature").unwrap();
+
+				block: {
+					for (int j = 0; j < certs.size(); j++) {
+						cert1 = certs.get(j);
+						// 主要是X509证书未来可能增加新的格式，不然我就自己做了……
+						if (Arrays.equals(cert1.getIssuerX500Principal().getEncoded(), issuer) && cert1.getSerialNumber().equals(sn)) break block;
+					}
+					throw new CertificateEncodingException("未在证书链中找到签名者#"+i+"的序列号");
 				}
-				throw new CertificateEncodingException("未在证书链中找到签名者的序列号");
 			}
+
 			signer = cert1;
 			signatureAlg = digestOid+"with"+signOid;
 			signature = sign;
 			var inlinesf = (CByteArray)info.query("contentInfo.content");
 			sfData = inlinesf == null ? null : inlinesf.value;
+		} catch (CertificateException e) {
+			throw e;
 		} catch (Exception e) {
-			throw new CertificateException("IOException parsing PKCS7 data: " + e, e);
+			throw new CertificateException("PKCS7 envelope解析失败: "+e.getMessage());
+		}
+	}
+
+	public void checkTrusted() throws CertPathValidatorException {
+		try {
+			CertPathValidator validator = CertPathValidator.getInstance("PKIX");
+			PKIXParameters params = new PKIXParameters(Arrays.stream(CryptoFactory.getDefaultTrustStore().getAcceptedIssuers()).map(x -> new TrustAnchor(x, null)).collect(Collectors.toSet()));
+			params.setRevocationEnabled(true);
+			validator.validate(this, params);
+		} catch (CertPathValidatorException e) {
+			throw e;
+		} catch (Exception e) {
+			throw new IllegalStateException("意外的验证失败", e);
 		}
 	}
 
@@ -162,25 +187,25 @@ final class SignatureBlock extends CertPath {
 	}
 
 	private byte[] encodePKCS7() throws CertificateEncodingException {
-		String[] withs = signatureAlg.split("with");
+		var withs = TextUtil.split(signatureAlg, "with");
 		int[] digestAlg, signAlg;
 		block: {
 			for (Map.Entry<CIntArray, String> entry : SignAlg.entrySet()) {
-				if (entry.getValue().equals(withs[1])) {
+				if (entry.getValue().equals(withs.get(1))) {
 					signAlg = entry.getKey().value;
 					break block;
 				}
 			}
-			throw new IllegalStateException("Unknown signature algorithm "+withs[1]);
+			throw new IllegalStateException("Unknown signature algorithm "+withs.get(1));
 		}
 		block: {
 			for (Map.Entry<CIntArray, String> entry : DigestAlg.entrySet()) {
-				if (entry.getValue().equals(withs[0])) {
+				if (entry.getValue().equals(withs.get(0))) {
 					digestAlg = entry.getKey().value;
 					break block;
 				}
 			}
-			throw new IllegalStateException("Unknown digest algorithm "+withs[0]);
+			throw new IllegalStateException("Unknown digest algorithm "+withs.get(0));
 		}
 		DynByteBuf issuer = null;
 

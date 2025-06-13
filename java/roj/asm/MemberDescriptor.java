@@ -10,7 +10,7 @@ public class MemberDescriptor implements Member {
 	public static final char FLAG_UNSET = Opcodes.ACC_PUBLIC | Opcodes.ACC_PRIVATE;
 
 	public String owner, name, rawDesc;
-	public char modifier;
+	public transient char modifier;
 
 	public MemberDescriptor() {
 		owner = name = rawDesc = "";

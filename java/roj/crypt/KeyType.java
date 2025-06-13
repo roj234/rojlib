@@ -1,5 +1,6 @@
 package roj.crypt;
 
+import roj.concurrent.OperationDone;
 import roj.io.IOUtil;
 import roj.text.CharList;
 import roj.text.LineReader;
@@ -24,7 +25,8 @@ public class KeyType {
 			CryptoFactory.register();
 			return new KeyType(alg);
 		} catch (NoSuchAlgorithmException e) {
-			return Helpers.maybeNull();
+			Helpers.athrow(e);
+			throw OperationDone.NEVER;
 		}
 	}
 
@@ -64,7 +66,7 @@ public class KeyType {
 			return loadKey(in, pass);
 		} catch (Exception e) {
 			Helpers.athrow(e);
-			return Helpers.maybeNull();
+			throw OperationDone.NEVER;
 		}
 	}
 	public void saveKey(KeyPair kp, byte[] pass, OutputStream cos) throws IOException, GeneralSecurityException {

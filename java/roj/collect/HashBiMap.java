@@ -12,8 +12,8 @@ import static roj.collect.IntMap.NUMKEY_LOADFACTOR;
  * @author Roj234
  * @since 2021/6/18 10:35
  */
-public class HashBiMap<K, V> extends AbstractMap<K, V> implements Flippable<K, V>, _Generic_Map<MyHashMap.AbstractEntry<K, V>>, FindMap<K, V> {
-	public static class Entry<K, V> extends MyHashMap.Entry<K, V> {
+public class HashBiMap<K, V> extends AbstractMap<K, V> implements Flippable<K, V>, _LibMap<HashMap.AbstractEntry<K, V>>, FindMap<K, V> {
+	public static class Entry<K, V> extends HashMap.Entry<K, V> {
 		protected Entry(K k, V v) { super(k, v); }
 		public V setValue(V value) { throw new UnsupportedOperationException(); }
 
@@ -133,7 +133,7 @@ public class HashBiMap<K, V> extends AbstractMap<K, V> implements Flippable<K, V
 	public Flippable<V, K> flip() {return inverse;}
 
 	@NotNull
-	public Set<Map.Entry<K, V>> entrySet() { return _Generic_EntrySet.create(this); }
+	public Set<Map.Entry<K, V>> entrySet() { return _LibEntrySet.create(this); }
 
 	public int size() {return size;}
 
@@ -317,8 +317,8 @@ public class HashBiMap<K, V> extends AbstractMap<K, V> implements Flippable<K, V
 	}
 
 	@Override
-	public _Generic_Entry[] __entries() { return kTab; }
-	public void __remove(MyHashMap.AbstractEntry<K, V> entry) { removeEntry((Entry<K, V>) entry); }
+	public _LibEntry[] __entries() { return kTab; }
+	public void __remove(HashMap.AbstractEntry<K, V> entry) { removeEntry((Entry<K, V>) entry); }
 
 	protected void removeEntry(Entry<K, V> toRemove) {
 		removeKeyEntry(toRemove, toRemove.key);

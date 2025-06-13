@@ -5,7 +5,7 @@ import roj.asm.ClassDefinition;
 import roj.asm.Member;
 import roj.asm.Opcodes;
 import roj.asm.annotation.Annotation;
-import roj.collect.MyHashMap;
+import roj.collect.HashMap;
 import roj.io.IOUtil;
 import roj.text.CharList;
 
@@ -18,7 +18,7 @@ import java.util.Set;
  * @since 2023/12/26 12:47
  */
 public abstract sealed class AnnotatedElement permits AnnotatedElement.Type, AnnotatedElement.Node {
-	final MyHashMap<String, Annotation> annotations = new MyHashMap<>(2);
+	final HashMap<String, Annotation> annotations = new HashMap<>(2);
 
 	public abstract String owner();
 	public String name() { return owner(); }

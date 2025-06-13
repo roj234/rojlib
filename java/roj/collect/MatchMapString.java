@@ -1,10 +1,10 @@
 package roj.collect;
 
 import org.intellij.lang.annotations.MagicConstant;
-import roj.reflect.ReflectionUtils;
+import roj.reflect.Unaligned;
 import roj.util.ArrayCache;
+import roj.util.Multisort;
 import roj.util.NativeArray;
-import roj.util.TimSortForEveryone;
 
 import java.util.Arrays;
 import java.util.Comparator;
@@ -58,7 +58,7 @@ public class MatchMapString<V> {
 			}
 
 			// 同时排序pos和entries两个数组
-			TimSortForEveryone.sort(0, size, (refLeft, offLeft, offRight) -> {
+			Multisort.sort(0, size, (refLeft, offLeft, offRight) -> {
 				int o = U.getInt(refLeft, offLeft+2), o2 = U.getInt(null, offRight+2);
 				int cmp = entries[o].key.compareTo(entries[o2].key);
 				if (cmp != 0) return cmp;
@@ -197,7 +197,7 @@ public class MatchMapString<V> {
 			out[i] = key.charAt(i);
 			size[i] = prev.size;
 		}
-		TimSortForEveryone.sort(0, key.length(), (refLeft, offLeft, offRight) -> Integer.compare(U.getInt(refLeft, offLeft), U.getInt(offRight)),
+		Multisort.sort(0, key.length(), (refLeft, offLeft, offRight) -> Integer.compare(U.getInt(refLeft, offLeft), U.getInt(offRight)),
 			NativeArray.primitiveArray(size), NativeArray.primitiveArray(out));
 
 		String s = new String(out, 0, key.length());
@@ -206,18 +206,18 @@ public class MatchMapString<V> {
 		return s;
 	}
 
-	private static final long VOL_OFFSET = ReflectionUtils.fieldOffset(MatchMapString.class, "vol0");
+	private static final long VOL_OFFSET = Unaligned.fieldOffset(MatchMapString.class, "vol0");
 	private Object[] vol0;
 	private Object[] getVolArray() {
 		Object[] vol0 = (Object[]) U.getAndSetObject(this, VOL_OFFSET, null);
-		if (vol0 == null) vol0 = new Object[] { new PosList(), new PosList(), new SimpleList<>(), new SimpleList<>(), new int[2] };
+		if (vol0 == null) vol0 = new Object[] { new PosList(), new PosList(), new ArrayList<>(), new ArrayList<>(), new int[2] };
 		return vol0;
 	}
 	private void setVolArray(Object[] vol0) {
 		((PosList) vol0[0]).clear();
 		((PosList) vol0[1]).clear();
-		((SimpleList<?>) vol0[2]).clear();
-		((SimpleList<?>) vol0[3]).clear();
+		((ArrayList<?>) vol0[2]).clear();
+		((ArrayList<?>) vol0[3]).clear();
 		U.compareAndSwapObject(this, VOL_OFFSET, null, vol0);
 	}
 
@@ -226,15 +226,15 @@ public class MatchMapString<V> {
 	/**
 	 * @see #matchUnordered(String, int, List)
 	 */
-	public List<Entry<V>> matchUnordered(String key, int flag) { return matchUnordered(key, flag, new SimpleList<>()); }
+	public List<Entry<V>> matchUnordered(String key, int flag) { return matchUnordered(key, flag, new ArrayList<>()); }
 
-	private static MyBitSet myAddBitset(int pos, int[] flag, MyBitSet extraFlag) {
+	private static BitSet myAddBitset(int pos, int[] flag, BitSet extraFlag) {
 		if (pos < 16) {
 			if ((flag[0] & (1 << pos)) != 0) return extraFlag;
 			flag[0] |= 1 << pos;
 			flag[1] = 1;
 		} else {
-			if (extraFlag == null) extraFlag = new MyBitSet();
+			if (extraFlag == null) extraFlag = new BitSet();
 			if (extraFlag.add(pos)) flag[1] = 1;
 		}
 		return extraFlag;
@@ -256,9 +256,9 @@ public class MatchMapString<V> {
 		Object[] vol0 = getVolArray();
 		PosList next = (PosList) vol0[0];
 
-		List<MyBitSet>
-			prevBits = (List<MyBitSet>) vol0[2],
-			nextBits = (List<MyBitSet>) vol0[3];
+		List<BitSet>
+			prevBits = (List<BitSet>) vol0[2],
+			nextBits = (List<BitSet>) vol0[3];
 
 		int[] tmp00 = (int[]) vol0[4];
 
@@ -295,7 +295,7 @@ public class MatchMapString<V> {
 					if (next.indexOf(entry, 0) >= 0) continue;
 
 					tmp00[0] = 0;
-					MyBitSet bitSet = myAddBitset(list.pos[j], tmp00, null);
+					BitSet bitSet = myAddBitset(list.pos[j], tmp00, null);
 					bitSet = myAddBitset(prev.pos[k], tmp00, bitSet);
 
 					prevBits.add(bitSet);
@@ -324,7 +324,7 @@ public class MatchMapString<V> {
 						if (k < 0) break fail;
 						prevK = k;
 
-						MyBitSet bitSet = prevBits.get(j);
+						BitSet bitSet = prevBits.get(j);
 						tmp00[0] = prev.pos[j];
 						tmp00[1] = 0;
 
@@ -358,7 +358,7 @@ public class MatchMapString<V> {
 				next.clear();
 				prev = temp;
 
-				List<MyBitSet> tmp = nextBits;
+				List<BitSet> tmp = nextBits;
 				nextBits = prevBits;
 				nextBits.clear();
 				prevBits = tmp;
@@ -378,7 +378,7 @@ public class MatchMapString<V> {
 			Entry<?> entry = next.entries[i];
 			if ((flag & MATCH_LONGER) == 0) {
 				int bits = Integer.bitCount(next.pos[i]);
-				MyBitSet bitSet = prevBits.get(i);
+				BitSet bitSet = prevBits.get(i);
 				if (bitSet != null) bits += bitSet.size();
 				if (bits < entry.key.length()) continue;
 			}

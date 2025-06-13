@@ -46,13 +46,13 @@ public final class Example {
 		c.register(literal("build").then(
 				argument("flags", Argument.stringFlags("zl", "showErrorCode", "noupdate")).executes(ctx -> {
 					List<String> flags = Helpers.cast(ctx.argument("flags", List.class));
-					Map<String, Object> map = new MyHashMap<>();
+					Map<String, Object> map = new HashMap<>();
 					for (String flag : flags) map.put(flag, "");
 					build(map);
 				})));
 
 		// 甚至是自定义参数
-		Argument.ArgSetOf<File> dynamicProject = new Argument.ArgSetOf<>(1, new MyHashMap<>()) {
+		Argument.ArgSetOf<File> dynamicProject = new Argument.ArgSetOf<>(1, new HashMap<>()) {
 			@Override
 			protected void updateChoices() {
 				choice.clear();

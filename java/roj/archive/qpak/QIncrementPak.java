@@ -1,8 +1,10 @@
 package roj.archive.qpak;
 
+import org.jetbrains.annotations.ApiStatus;
+import org.jetbrains.annotations.NotNull;
 import roj.archive.qz.QZArchive;
 import roj.archive.qz.QZFileWriter;
-import roj.archive.qz.xz.LZMA2Writer;
+import roj.archive.xz.LZMA2Writer;
 import roj.asmx.injector.Copy;
 import roj.asmx.injector.Redirect;
 import roj.asmx.injector.Shadow;
@@ -19,18 +21,48 @@ import roj.util.DynByteBuf;
 import java.io.File;
 import java.io.IOException;
 import java.io.OutputStream;
+import java.util.regex.Matcher;
+
+import static roj.archive.ArchiveUtils.SPLIT_ARCHIVE_PATTERN;
 
 /**
+ * 提供创建支持增量更新的分卷压缩文件的功能，支持双头（DualHeader）和单头（SingleHeader）两种格式。
+ * <p>
+ * 头部和数据分开存放，如果仅仅在压缩文件末尾追加了数据，那么只需要更新头部和新的数据块，而不需要改动其它数据块。
+ * <p>
+ * 双头包含两个头部，分别是.001和最后一个卷<br>
+ * 单头把它们都存在.001中，使用更加方便，但是其他软件的兼容性受限
+ *
  * @author Roj234
  * @since 2024/4/21 1:23
  */
 public class QIncrementPak {
-	// 文件结构
-	// .001 32byte QZHeader
-	// .002 - .xxx Block data
-	// .last QZTailHeader
-	public static QZFileWriter openIncremental(File baseFile) throws IOException {
-		var source = CompositeSource.dynamic(baseFile, true);
+	@NotNull
+	private static CompositeSource getSource(File baseFile) throws IOException {
+		Matcher m = SPLIT_ARCHIVE_PATTERN.matcher(baseFile.getName());
+		if (!m.find()) throw new IllegalArgumentException("文件不指向第一卷");
+
+		String path = baseFile.getAbsolutePath();
+		return CompositeSource.dynamic(new File(path.substring(0, path.length() + m.start() - m.end())), true);
+	}
+
+	/**
+	 * 以写入模式打开支持增量更新的双头分卷压缩文件。
+	 * <p>
+	 * 文件格式：
+	 * <ul>
+	 *   <li>首卷（.001）包含32字节的QZHeader</li>
+	 *   <li>中间卷（.002至.xxx）存储块数据</li>
+	 *   <li>末卷（.xxx + 1）存储QZTailHeader</li>
+	 * </ul>
+	 *
+	 * @param baseFile 基础文件对象，指向分卷序列的首卷（如"archive.001"）
+	 * @return 用于写入的QZFileWriter实例
+	 * @throws IOException 当文件操作失败时抛出
+	 */
+	public static QZFileWriter openDualHeader(File baseFile) throws IOException {
+		var source = getSource(baseFile);
+
 		QZFileWriter out;
 		if (source.length() > 0) {
 			out = new QZArchive(source).append();
@@ -41,29 +73,52 @@ public class QIncrementPak {
 		}
 		return out;
 	}
-
-	// 请在调用之前关闭所有的ParallelWriter
-	public static void closeIncremental(QZFileWriter qfw) throws IOException {
-		qfw.flush();
-		((CompositeSource) qfw.source()).next();
-		qfw.close();
+	/**
+	 * 关闭双头分卷压缩文件的写入器。
+	 * <p>
+	 * <b>重要提示：</b> 调用前必须关闭所有通过{@link QZFileWriter#newParallelWriter()}创建的并行写入器，
+	 * 否则文件结构可能与预期不符（但文件仍可被读取）。
+	 *
+	 * @param qzfw 要关闭的QZFileWriter实例
+	 * @throws IOException 当刷新或关闭操作失败时抛出
+	 */
+	public static void closeDualHeader(QZFileWriter qzfw) throws IOException {
+		qzfw.flush();
+		((CompositeSource) qzfw.source()).next();
+		qzfw.close();
 	}
 
 	/**
-	 * The file format is
+	 * 以写入模式打开支持增量更新的单头分卷压缩文件。
 	 * <p>
-	 * .001 32byte QZHeader + QZTailHeader
-	 * .002 - .xxx Block data
-	 * @apiNote  V2 method was banned by 7-zip v21+, WinRar 7.0+
+	 * 文件格式规范：
+	 * <ul>
+	 *   <li>首卷（.001）包含32字节QZHeader和QZTailHeader</li>
+	 *   <li>后续卷（.002至.xxx）存储块数据</li>
+	 * </ul>
+	 *
+	 * @param baseFile 基础文件对象，指向分卷序列的首卷（如"archive.001"）
+	 * @return 用于写入的QZFileWriter实例
+	 * @throws IOException 当文件操作失败时抛出
+	 * @apiNote 该格式仅兼容本项目QZArchive、7-zip&lt;v22或WinRar&lt;7.0，高版本压缩软件可能将此格式视为安全漏洞
 	 */
-	public static QZFileWriter openIncrementalV2(File baseFile) throws IOException {
-		var source = CompositeSource.dynamic(baseFile, true);
+	public static QZFileWriter openSingleHeader(File baseFile) throws IOException {
+		var source = getSource(baseFile);
 		QZFileWriter out = source.length() > 0 ? new QZArchive(source).append() : new QZFileWriter(source);
 		source.next();
 		return out;
 	}
 
-	public static void closeIncrementalV2(QZFileWriter qzfw) throws IOException {
+	/**
+	 * 关闭单头分卷压缩文件的写入器。
+	 * <p>
+	 * <b>重要提示：</b> 调用前必须关闭所有通过{@link QZFileWriter#newParallelWriter()}创建的并行写入器，
+	 * 否则可能导致文件损坏。
+	 *
+	 * @param qzfw 要关闭的QZFileWriter实例
+	 * @throws IOException 当刷新或关闭操作失败时抛出
+	 */
+	public static void closeSingleHeader(QZFileWriter qzfw) throws IOException {
 		qzfw.flush();
 		qzfw.setCodec(roj.archive.qz.Copy.INSTANCE);
 
@@ -76,8 +131,8 @@ public class QIncrementPak {
 		meta.seek(32);
 
 		qzfw.flag = 0;
-		AOP aop = (AOP) qzfw;
-		aop.aopSetEnabled(true);
+		QZSH sh = (QZSH) qzfw;
+		sh.setUseSingleHeader(true);
 
 		boolean noCompression = false;
 		try {
@@ -86,8 +141,8 @@ public class QIncrementPak {
 			noCompression = true;
 		}
 
-		int hstart = (int) aop.aopGetStartPos();
-		int hend = (int) (aop.aopGetEndPos()-32);
+		int hstart = (int) sh.getHeaderBegin();
+		int hend = (int) (sh.getHeaderEnd()-32);
 
 		meta.seek(hstart);
 		meta.writeInt(Integer.reverseBytes(hend));
@@ -123,13 +178,12 @@ public class QIncrementPak {
 		qzfw.close();
 	}
 
-	public interface AOP {long aopGetStartPos();long aopGetEndPos();void aopSetEnabled(boolean enabled);}
+	@ApiStatus.Internal
+	public interface QZSH {long getHeaderBegin();long getHeaderEnd();void setUseSingleHeader(boolean enabled);}
 
 	@Autoload(Autoload.Target.NIXIM)
 	@Weave(target = QZFileWriter.class)
-	private static final class AOP_Inject implements AOP {
-		@Shadow
-		private ByteList buf;
+	private static final class QZSHImpl implements QZSH {
 		@Shadow(owner = "roj.archive.qz.QZWriter")
 		private OutputStream out;
 		@Shadow(owner = "roj.archive.qz.QZWriter")
@@ -138,51 +192,49 @@ public class QIncrementPak {
 		private int[] flagSum;
 
 		@Copy
-		private long aopStartPos, aopEndPos;
+		private long headerBegin, headerEnd;
 		@Copy
-		private int aopEnabled;
+		private boolean useSingleHeader;
 
 		@Redirect(value = "writeStreamInfo", injectDesc = "(J)V", matcher = "putVULong(J)Lroj/util/DynByteBuf;", occurrences = 0)
-		private static DynByteBuf aopInc_writeOffset(ByteList ob, long offset, AOP_Inject self) throws IOException {
-			if (self.aopEnabled == 0) return ob.putVULong(offset);
+		private static DynByteBuf aopWriteOffset(ByteList ob, long offset, QZSHImpl self) throws IOException {
+			if (!self.useSingleHeader) return ob.putVULong(offset);
 
-			if (self.aopEnabled == 1) {
-				ob.put(0xF0).flush();
+			ob.put(0xF0).flush();
 
-				if (self.out instanceof LZMA2Writer w) {
-					// 强制flush并禁止接下来块的压缩，以便我能确定性的得到一个int的offset
-					w.setCompressionDisabled(true);
-				}
+			if (self.out instanceof LZMA2Writer w) {
+				// 强制flush并禁止接下来块的压缩，以便我能确定性的得到一个int的offset
+				w.setCompressionDisabled(true);
+			}
 
-				self.aopStartPos = self.s.position();
-				ob.putInt(0);
+			self.headerBegin = self.s.position();
+			ob.putInt(0);
 
-				if (self.out instanceof LZMA2Writer w) {
-					ob.flush();
-					w.setCompressionDisabled(false);
-					self.aopStartPos = self.s.position() - 4;
-					self.flagSum[8] = -1; // INDEX_BLOCK_CRC32
-					self.aopEnabled = 0;
-				}
+			if (self.out instanceof LZMA2Writer w) {
+				ob.flush();
+				w.setCompressionDisabled(false);
+				self.headerBegin = self.s.position() - 4;
+				self.flagSum[8] = -1; // INDEX_BLOCK_CRC32
+				self.useSingleHeader = false;
 			}
 			return ob;
 		}
 
 		@Redirect(value = "finish", injectDesc = "()V", matcher = "position()J", occurrences = 2)
-		private static long aopInc_setLength(Source s, AOP_Inject self) throws IOException {
-			long pos = self.aopEndPos = s.position();
-			if (self.aopEnabled == 1) throw OperationDone.INSTANCE;
+		private static long aopGetPosition(Source s, QZSHImpl self) throws IOException {
+			long pos = self.headerEnd = s.position();
+			if (self.useSingleHeader) throw OperationDone.INSTANCE;
 			return pos;
 		}
 
 		@Copy
 		@Override
-		public long aopGetStartPos() {return aopStartPos;}
+		public long getHeaderBegin() {return headerBegin;}
 		@Copy
 		@Override
-		public long aopGetEndPos() {return aopEndPos;}
+		public long getHeaderEnd() {return headerEnd;}
 		@Copy
 		@Override
-		public void aopSetEnabled(boolean enabled) {aopEnabled = 1;}
+		public void setUseSingleHeader(boolean enabled) {useSingleHeader = enabled;}
 	}
 }

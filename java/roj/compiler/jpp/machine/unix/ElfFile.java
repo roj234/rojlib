@@ -1,6 +1,6 @@
 package roj.compiler.jpp.machine.unix;
 
-import roj.collect.SimpleList;
+import roj.collect.ArrayList;
 import roj.compiler.jpp.machine.NativeExecutable;
 import roj.io.source.Source;
 
@@ -12,8 +12,8 @@ import java.io.IOException;
  */
 public class ElfFile extends NativeExecutable {
 	ElfHeader elfHeader;
-	SimpleList<ElfSectionE> programs = new SimpleList<>();
-	SimpleList<ElfSectionD> datas = new SimpleList<>();
+	ArrayList<ElfSectionE> programs = new ArrayList<>();
+	ArrayList<ElfSectionD> datas = new ArrayList<>();
 
 	public ElfFile(Source src) throws IOException {
 		super(src);

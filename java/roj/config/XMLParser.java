@@ -1,7 +1,7 @@
 package roj.config;
 
-import roj.collect.MyBitSet;
-import roj.collect.MyHashSet;
+import roj.collect.BitSet;
+import roj.collect.HashSet;
 import roj.collect.TrieTree;
 import roj.config.data.CBoolean;
 import roj.config.data.CEntry;
@@ -36,7 +36,7 @@ public class XMLParser extends Parser {
 		header_start = 17, header_end = 18, equ = 19;
 
 	private static final TrieTree<Word> XML_TOKENS = new TrieTree<>();
-	private static final MyBitSet XML_LENDS = new MyBitSet();
+	private static final BitSet XML_LENDS = new BitSet();
 	static {
 		addKeywords(XML_TOKENS, TRUE, "true", "false");
 		addSymbols(XML_TOKENS, XML_LENDS, tag_start, "<", "</", ">", "/>", "<?", "?>", "=");
@@ -49,7 +49,8 @@ public class XMLParser extends Parser {
 	{ tokens = XML_TOKENS; literalEnd = XML_LENDS; firstChar = SIGNED_NUMBER_C2C; }
 
 	public static final int HTML = 2, DECODE_ENTITY = 4, PRESERVE_SPACE = 8, NO_MY_SPACE = 16;
-	private static final MyHashSet<String> HTML_SHORT_TAGS = new MyHashSet<>(TextUtil.split("area|base|br|col|embed|hr|img|input|link|meta|param|source|track|wbr", '|'));
+	//https://html.spec.whatwg.org/#void-elements
+	private static final HashSet<String> HTML_VOID_ELEMENTS = new HashSet<>(TextUtil.split("area,base,br,col,embed,hr,img,input,link,meta,source,track,wbr",','));
 
 	public static Document parses(CharSequence string) throws ParseException { return new XMLParser().parseToXml(string, LENIENT); }
 	public static Document parses(CharSequence string, int flag) throws ParseException { return new XMLParser().parseToXml(string, flag); }
@@ -86,7 +87,7 @@ public class XMLParser extends Parser {
 		cc = cv;
 		init(text);
 		try {
-			if ((flag & HTML) != 0) needCLOSE = (s) -> !HTML_SHORT_TAGS.contains(s.toLowerCase());
+			if ((flag & HTML) != 0) needCLOSE = (s) -> !HTML_VOID_ELEMENTS.contains(s.toLowerCase());
 			ccXmlHeader();
 		} catch (ParseException e) {
 			throw e.addPath("$");
@@ -103,7 +104,7 @@ public class XMLParser extends Parser {
 		Word w = next();
 		if (w.type() != header_start) {
 			retractWord();
-			cc.setProperty("xml:headless", true);
+			cc.setProperty(ToXml.HEADLESS, true);
 		} else {
 			if (!readLiteral().val().equalsIgnoreCase("xml")) {
 				throw err("<? 但不是 <?xml");
@@ -164,7 +165,7 @@ public class XMLParser extends Parser {
 		}
 
 		if (w.type() == tag_end_close || name.equals("!DOCTYPE") || !needCLOSE.test(name)) {
-			cc.setProperty("xml:short_tag", true);
+			cc.setProperty(ToXml.SHORT_TAG, true);
 			cc.pop();
 			flag = prevFlag;
 			return;
@@ -190,7 +191,7 @@ public class XMLParser extends Parser {
 						}
 						break;
 					case COMMENT: cc.comment(w.val()); break;
-					case CDATA_STRING: cc.value(w.val()); cc.setProperty("xml:cdata", true); break;
+					case CDATA_STRING: cc.value(w.val()); cc.setProperty(ToXml.CDATA, true); break;
 					case LITERAL: cc.value(w.val()); break;
 					case EOF:
 						if ((flag & LENIENT) != 0) {

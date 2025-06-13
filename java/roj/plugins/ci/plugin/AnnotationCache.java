@@ -2,7 +2,7 @@ package roj.plugins.ci.plugin;
 
 import roj.asmx.AnnotationRepo;
 import roj.asmx.Context;
-import roj.collect.MyHashSet;
+import roj.collect.HashSet;
 import roj.io.IOUtil;
 import roj.plugins.ci.FMD;
 import roj.util.DynByteBuf;
@@ -15,7 +15,7 @@ import java.util.Set;
  * @since 2025/3/18 15:29
  */
 public class AnnotationCache implements Processor {
-	static final Set<String> DEFAULT_BLACKLIST = new MyHashSet<String>("java/lang/Deprecated", "java/lang/annotation/Target", "java/lang/annotation/Retention", "org/jetbrains/annotations/Nullable", "org/jetbrains/annotations/NotNull", "org/jetbrains/annotations/Contract");
+	static final Set<String> DEFAULT_BLACKLIST = new HashSet<>("java/lang/Deprecated", "java/lang/annotation/Target", "java/lang/annotation/Retention", "org/jetbrains/annotations/Nullable", "org/jetbrains/annotations/NotNull", "org/jetbrains/annotations/Contract");
 
 	@Override
 	public String name() {return "注解缓存提供程序";}
@@ -25,7 +25,22 @@ public class AnnotationCache implements Processor {
 		if (ctx.increment == 0 && "true".equals(ctx.project.getVariables().get("fmd:annotation_cache:enable"))) {
 			var ar = new AnnotationRepo();
 			for (Context file : classes) ar.addRaw(file.getClassBytes(), file.getFileName());
-			for (String type : DEFAULT_BLACKLIST) ar.annotatedBy(type).clear();
+
+			List<Context> whitelist = ctx.getAnnotatedClass(classes, "roj/plugins/ci/annotation/InRepo");
+			if (whitelist.isEmpty()) {
+				for (var itr = ar.getAnnotations().entrySet().iterator(); itr.hasNext(); ) {
+					var entry = itr.next();
+					if (DEFAULT_BLACKLIST.contains(entry.getKey())) itr.remove();
+				}
+			} else {
+				Set<String> classNames = new HashSet<>();
+				for (Context ctx1 : whitelist) classNames.add(ctx1.getClassName());
+
+				for (var itr = ar.getAnnotations().entrySet().iterator(); itr.hasNext(); ) {
+					var entry = itr.next();
+					if (!classNames.contains(entry.getKey())) itr.remove();
+				}
+			}
 
 			var buf = IOUtil.getSharedByteBuf();
 			ar.serialize(buf);

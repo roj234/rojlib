@@ -5,9 +5,9 @@ import roj.asm.Opcodes;
 import roj.asm.insn.Label;
 import roj.asm.type.IType;
 import roj.asm.type.Type;
+import roj.compiler.CompileContext;
+import roj.compiler.LavaCompiler;
 import roj.compiler.asm.MethodWriter;
-import roj.compiler.context.GlobalContext;
-import roj.compiler.context.LocalContext;
 import roj.compiler.diagnostic.Kind;
 import roj.compiler.resolve.TypeCast;
 import roj.config.data.CInt;
@@ -34,7 +34,7 @@ final class If extends Expr {
 
 	@NotNull
 	@Override
-	public Expr resolve(LocalContext ctx) {
+	public Expr resolve(CompileContext ctx) {
 		// must before resolve
 		if (condition.hasFeature(Feature.IMMEDIATE_CONSTANT))
 			ctx.report(this, Kind.WARNING, "trinary.constant");
@@ -78,7 +78,7 @@ final class If extends Expr {
 	public void write(MethodWriter cw, boolean noRet) {
 		if (boolHack != 0 && !(condition instanceof BinaryOp)) {
 			mustBeStatement(noRet);
-			GlobalContext.debugLogger().info("trinary.note.boolean_hack {}", this);
+			LavaCompiler.debugLogger().info("trinary.note.boolean_hack {}", this);
 
 			condition.write(cw, cast);
 			int value = ((CInt) trueBranch.constVal()).value;
@@ -95,7 +95,7 @@ final class If extends Expr {
 			return;
 		}
 
-		var vis = LocalContext.get().bp.vis();
+		var vis = CompileContext.get().bp.vis();
 		var end = new Label();
 		var falsy = new Label();
 

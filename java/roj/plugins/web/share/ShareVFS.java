@@ -1,7 +1,7 @@
 package roj.plugins.web.share;
 
 import org.jetbrains.annotations.NotNull;
-import roj.collect.SimpleList;
+import roj.collect.ArrayList;
 import roj.collect.TrieTree;
 import roj.http.server.DiskFileInfo;
 import roj.io.vfs.VirtualFile;
@@ -102,7 +102,7 @@ final class ShareVFS implements VirtualFileSystem {
 		var subPath = path.toString();
 		if (subPath.equals("/")) subPath = "";
 
-		List<ShareFile> list = new SimpleList<>();
+		List<ShareFile> list = new ArrayList<>();
 		files.forEachSince(subPath, (name, file) -> {
 			list.add(file);
 			return FileVisitResult.SKIP_SUBTREE;

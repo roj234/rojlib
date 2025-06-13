@@ -20,5 +20,5 @@ public abstract class InvokeHook extends Attribute {
 	@Override public final boolean writeIgnore() {return true;}
 	@Override public final String name() {return NAME;}
 
-	@Nullable public abstract Expr eval(MethodNode owner, @Nullable Expr self, List<Expr> args, Invoke node);
+	@Nullable public abstract Expr eval(MethodNode owner, @Nullable Expr that, List<Expr> args, Invoke node);
 }

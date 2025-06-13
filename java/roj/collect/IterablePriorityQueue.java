@@ -7,6 +7,7 @@ import roj.util.Helpers;
 import java.util.*;
 
 /**
+ * 基于二分查找的有序优先队列——它的迭代器是有序的
  * @author Roj234
  * @since 2021/2/2 19:59
  */

@@ -7,7 +7,7 @@ package roj.plugins;
 import roj.collect.Int2IntMap;
 import roj.collect.IntSet;
 import roj.collect.RingBuffer;
-import roj.collect.SimpleList;
+import roj.collect.ArrayList;
 import roj.concurrent.TaskPool;
 import roj.concurrent.TaskThread;
 import roj.config.CsvParser;
@@ -382,7 +382,7 @@ public class CardSleep extends JFrame {
 				return;
 			}
 
-			SimpleList<String> args = new SimpleList<>();
+			ArrayList<String> args = new ArrayList<>();
 			args.add("nvidia-smi");
 			args.add("--query-gpu=utilization.gpu,clocks.current.graphics,utilization.memory,clocks.current.memory,temperature.gpu,power.draw.instant");
 			args.add("-i="+myCard.uuid);
@@ -577,13 +577,13 @@ public class CardSleep extends JFrame {
 			e.printStackTrace();
 		}
 		if (isGraphicClock) {
-			TaskPool.Common().submit(() -> {
+			TaskPool.common().submit(() -> {
 				JOptionPane.showMessageDialog(this, "该显卡不支持或没有权限调节核心频率");
 			});
 			uiST_Core.setSelected(false);
 			uiST_Core.setEnabled(false);
 		} else {
-			TaskPool.Common().submit(() -> {
+			TaskPool.common().submit(() -> {
 				JOptionPane.showMessageDialog(this, "该显卡不支持或没有权限调节显存频率");
 			});
 			uiST_Memory.setSelected(false);
@@ -602,7 +602,7 @@ public class CardSleep extends JFrame {
 	private static SpinnerNumberModel createMyModel(int v) { return new SpinnerNumberModel(v, 5, 95, 1); }
 
 	private static boolean query(Consumer<List<String>> csvCallback, String... cmd) {
-		SimpleList<String> args = new SimpleList<>();
+		ArrayList<String> args = new ArrayList<>();
 		args.add("nvidia-smi");
 		args.addAll(cmd);
 		args.add("--format=csv,noheader,nounits");

@@ -1,7 +1,7 @@
 package roj.ui;
 
 import roj.collect.IntSet;
-import roj.collect.SimpleList;
+import roj.collect.ArrayList;
 import roj.io.IOUtil;
 import roj.text.CharList;
 
@@ -82,13 +82,13 @@ public class Box {
 	}
 
 	private void writeBox(String[] box, int i1) {
-		List<List<String>> totalLines = new SimpleList<>();
+		List<List<String>> totalLines = new ArrayList<>();
 		for (int i = i1; i < box.length; i++) {
 			// -1来强制边距..算了,纯英文开比较好
 			List<String> lines = Terminal.splitByWidth(box[i], boxWidth[i-i1]);
 			for (int j = 0; j < lines.size(); j++) {
 				String line = lines.get(j);
-				if (totalLines.size() <= j) totalLines.add(new SimpleList<>());
+				if (totalLines.size() <= j) totalLines.add(new ArrayList<>());
 				List<String> list = totalLines.get(j);
 				while (list.size() < i-i1) list.add("");
 				list.add(line);

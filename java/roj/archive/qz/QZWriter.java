@@ -3,7 +3,7 @@ package roj.archive.qz;
 import roj.archive.ArchiveEntry;
 import roj.archive.ArchiveFile;
 import roj.archive.ArchiveWriter;
-import roj.collect.SimpleList;
+import roj.collect.ArrayList;
 import roj.config.data.CInt;
 import roj.crypt.CRC32;
 import roj.io.source.Source;
@@ -20,7 +20,7 @@ public abstract class QZWriter extends OutputStream implements ArchiveWriter {
     Source source;
     public final Source source() {return source;}
 
-    final SimpleList<WordBlock> blocks = new SimpleList<>();
+    final ArrayList<WordBlock> blocks = new ArrayList<>();
     /**
      * 文件条目标志统计数组，索引对应含义：
      * <ul>
@@ -38,8 +38,8 @@ public abstract class QZWriter extends OutputStream implements ArchiveWriter {
      */
     final int[] flagSum = new int[10];
 
-    final SimpleList<QZEntry> files = new SimpleList<>();
-    final SimpleList<QZEntry> emptyFiles = new SimpleList<>();
+    final ArrayList<QZEntry> files = new ArrayList<>();
+    final ArrayList<QZEntry> emptyFiles = new ArrayList<>();
 
     private QZEntry currentEntry;
     private long entryUSize;
@@ -120,7 +120,7 @@ public abstract class QZWriter extends OutputStream implements ArchiveWriter {
     }
     private void setComplexCodec(QZCoder[] methods) {
         CoderInfo[] nodes = new CoderInfo[methods.length];
-        SimpleList<CoderInfo> nonNull = new SimpleList<>();
+        ArrayList<CoderInfo> nonNull = new ArrayList<>();
 
         int provides = -1;
         for (int i = 0; i < methods.length; i++) {
@@ -175,8 +175,8 @@ public abstract class QZWriter extends OutputStream implements ArchiveWriter {
     public final long getSolidSize() {return solidSize;}
 
     // do not modify those list!
-    public final SimpleList<QZEntry> getFiles() { return files; }
-    public final SimpleList<QZEntry> getEmptyFiles() { return emptyFiles; }
+    public final ArrayList<QZEntry> getFiles() { return files; }
+    public final ArrayList<QZEntry> getEmptyFiles() { return emptyFiles; }
 
     /**
      * 复制已有归档条目到当前写入流

@@ -1,6 +1,6 @@
 package roj.text;
 
-import roj.archive.qz.xz.LZMAInputStream;
+import roj.archive.xz.LZMAInputStream;
 import roj.util.ArrayCache;
 
 import java.io.IOException;

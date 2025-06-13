@@ -1,7 +1,7 @@
 package roj.plugins.obfuscator.naming;
 
-import roj.collect.MyBitSet;
-import roj.collect.SimpleList;
+import roj.collect.BitSet;
+import roj.collect.ArrayList;
 import roj.text.CharList;
 import roj.text.TextReader;
 
@@ -15,7 +15,7 @@ import java.util.Random;
  * @since 2021/7/18 19:29
  */
 public final class StringList extends SimpleNamer {
-	public List<String> names = new SimpleList<>();
+	public List<String> names = new ArrayList<>();
 
 	public StringList() {}
 
@@ -33,7 +33,7 @@ public final class StringList extends SimpleNamer {
 		}
 	}
 
-	private static final MyBitSet INVALID = MyBitSet.from(";[%./");
+	private static final BitSet INVALID = BitSet.from(";[%./");
 	static boolean isValid(String s) {
 		for (int i = 0; i < s.length(); i++)
 			if (INVALID.contains(s.charAt(i)))

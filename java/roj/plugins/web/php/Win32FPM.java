@@ -1,7 +1,7 @@
 package roj.plugins.web.php;
 
 import roj.collect.RingBuffer;
-import roj.collect.SimpleList;
+import roj.collect.ArrayList;
 import roj.concurrent.Scheduler;
 import roj.concurrent.Task;
 import roj.http.server.IllegalRequestException;
@@ -132,7 +132,7 @@ public class Win32FPM extends fcgiManager implements Task {
 				if (tryAttachGuarded(response, param)) break;
 
 				if (processes.size() < maxProcess) {
-					SimpleList<String> myArgs = new SimpleList<>(command.size()+1);
+					ArrayList<String> myArgs = new ArrayList<>(command.size()+1);
 					myArgs.addAll(command);
 
 					int port = portBase + launchedSize++ % 1000;
@@ -141,12 +141,17 @@ public class Win32FPM extends fcgiManager implements Task {
 					var key = new ProcessBuilder(myArgs).directory(new File(myArgs.get(0)).getParentFile()).start();
 					var val = new fcgiConnection(this, port);
 
-					if (val.attach(response, param) > 0) {
-						processes.put(key, val);
-						break;
-					} else {
+					try {
+						if (val.attach(response, param) > 0) {
+							processes.put(key, val);
+							break;
+						}
+					} catch (Exception e) {
 						key.destroy();
+						throw e;
 					}
+
+					key.destroy();
 				}
 
 				lock.lock();

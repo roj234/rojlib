@@ -1,13 +1,11 @@
 package roj.compiler;
 
 import roj.asm.attr.LineNumberTable;
+import roj.collect.BitSet;
 import roj.collect.Int2IntMap;
 import roj.collect.IntBiMap;
-import roj.collect.MyBitSet;
 import roj.collect.TrieTree;
 import roj.compiler.asm.MethodWriter;
-import roj.compiler.context.GlobalContext;
-import roj.compiler.context.LocalContext;
 import roj.compiler.diagnostic.Kind;
 import roj.compiler.doc.Javadoc;
 import roj.compiler.plugins.annotations.AutoIncrement;
@@ -53,18 +51,18 @@ public final class Tokens extends Tokenizer {
 		"volatile,transient," +
 		// MethodOnly
 		"strictfp,abstract,native,synchronized," +
-		"_async,const,_adt," +
+		"\1a,const,_adt," +
 
 		// 类型
 		"void,boolean,byte,char,short,int,long,float,double," +
 		// 表达式
-		"this,true,false,null,new,instanceof,\1EXP1," +
+		"this,true,false,null,new,instanceof,\1b," +
 
 		// 方法内
 		"for,while,do," +
 		"continue,break,goto,return,throw," +
 		"if,switch,try,assert," +
-		"\1STM1,\1STM2,yield,with,_await,\1STM0,"+
+		"\1c,\1d,yield,with,_await,\1e,"+
 		// statement rest
 		"else,case,defer,catch,finally," +
 
@@ -81,15 +79,15 @@ public final class Tokens extends Tokenizer {
 		PUBLIC = 29, PROTECTED = 30, PRIVATE = 31, STATIC = 32, FINAL = 33,
 		VOLATILE = 34, TRANSIENT = 35,
 		STRICTFP = 36, ABSTRACT = 37, NATIVE = 38, SYNCHRONIZED = 39,
-		ASYNC = 40, CONST = 41, ADT = 42,
+		_unused0 = 40, CONST = 41, ADT = 42,
 
 		VOID = 43, BOOLEAN = 44, BYTE = 45, CHAR = 46, SHORT = 47, INT = 48, LONG = 49, FLOAT = 50, DOUBLE = 51,
-		THIS = 52, TRUE = 53, FALSE = 54, NULL = 55, NEW = 56, INSTANCEOF = 57, _1EXP1 = 58,
+		THIS = 52, TRUE = 53, FALSE = 54, NULL = 55, NEW = 56, INSTANCEOF = 57, _unused1 = 58,
 
 		FOR = 59, WHILE = 60, DO = 61,
 		CONTINUE = 62, BREAK = 63, GOTO = 64, RETURN = 65, THROW = 66,
 		IF = 67, SWITCH = 68, TRY = 69, ASSERT = 70,
-		_1STM1 = 71, _1STM2 = 72, YIELD = 73, WITH = 74, AWAIT = 75, _1STM0 = 76,
+		_unused2 = 71, _unused3 = 72, YIELD = 73, WITH = 74, AWAIT = 75, _unused4 = 76,
 		ELSE = 77, CASE = 78, DEFER = 79, CATCH = 80, FINALLY = 81,
 
 		REQUIRES = 82, EXPORTS = 83, OPENS = 84, USES = 85, PROVIDES = 86, TRANSITIVE = 87, TO = 88;
@@ -154,17 +152,17 @@ public final class Tokens extends Tokenizer {
 
 	private static final Int2IntMap C2C = new Int2IntMap();
 	private static final TrieTree<Word> TOKEN_MAP = new TrieTree<>();
-	private static final MyBitSet LITERAL_END = new MyBitSet();
-	private static final MyBitSet[] LITERAL_STATE = new MyBitSet[4];
+	private static final BitSet LITERAL_END = new BitSet();
+	private static final BitSet[] LITERAL_STATE = new BitSet[4];
 
 	public static final int STATE_CLASS = 0, STATE_MODULE = 1, STATE_EXPR = 2, STATE_TYPE = 3;
 	public int state = STATE_CLASS;
-	public MyBitSet[] literalState = LITERAL_STATE;
+	public BitSet[] literalState = LITERAL_STATE;
 
 	public static TrieTree<Word> getTokenMap() {return new TrieTree<>(TOKEN_MAP);}
-	public static MyBitSet getLiteralEnd() {return LITERAL_END.copy();}
-	public static MyBitSet[] getLiteralState() {
-		MyBitSet[] r = LITERAL_STATE.clone();
+	public static BitSet getLiteralEnd() {return LITERAL_END.copy();}
+	public static BitSet[] getLiteralState() {
+		BitSet[] r = LITERAL_STATE.clone();
 		for (int i = 0; i < r.length; i++) {
 			r[i] = r[i].copy();
 		}
@@ -174,8 +172,15 @@ public final class Tokens extends Tokenizer {
 
 	public static I18n i18n;
 	static {
+		String path = System.getProperty("roj.lavac.i18n");
+		try {
+			i18n = new I18n(path == null ? IOUtil.getTextResourceIL("roj/compiler/kscript.lang") : IOUtil.readUTF(new File(path)));
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+
 		for (int state = 0; state < LITERAL_STATE.length; state++) {
-			MyBitSet set = new MyBitSet();
+			BitSet set = new BitSet();
 			for (int id = 0; id < INITIAL_TOKEN_COUNT; id++) {
 				if (id <= CHARACTER || id >= 100 || switch (state) {
 					case STATE_CLASS -> id <= Tokens.DOUBLE;
@@ -186,13 +191,6 @@ public final class Tokens extends Tokenizer {
 				}) set.add(id);
 			}
 			LITERAL_STATE[state] = set;
-		}
-
-		String path = System.getProperty("roj.lavac.i18n");
-		try {
-			i18n = new I18n(path == null ? IOUtil.getTextResourceIL("roj/compiler/kscript.lang") : IOUtil.readUTF(new File(path)));
-		} catch (IOException e) {
-			e.printStackTrace();
 		}
 
 		addKeywords(TOKEN_MAP, 10, keywords);
@@ -241,7 +239,7 @@ public final class Tokens extends Tokenizer {
 		return this;
 	}
 
-	private static void alias(String kw, short begin, MyBitSet noLiterals) {
+	private static void alias(String kw, short begin, BitSet noLiterals) {
 		TOKEN_MAP.put(kw, new Word().init(begin, 0, kw));
 		if (noLiterals != null) noLiterals.add(kw.charAt(0));
 	}
@@ -315,7 +313,6 @@ public final class Tokens extends Tokenizer {
 					index = i+1;
 
 					CharList list = readSlashString('\'', true);
-					if (list.length() != 1) throw err("未结束的字符常量");
 					return formClip(CHARACTER, list);
 				case C_WHITESPACE: i++;
 			}
@@ -328,7 +325,7 @@ public final class Tokens extends Tokenizer {
 	@Override
 	protected Word onNumberFlow(CharList str, short from, short to) {
 		if (str.equals("2147483648")) return formClip(INT_MIN_VALUE, "2147483648");
-		LocalContext.get().report(Kind.ERROR, "lexer.number.overflow");
+		CompileContext.get().report(Kind.ERROR, "lexer.number.overflow");
 		return null;
 	}
 
@@ -400,7 +397,7 @@ public final class Tokens extends Tokenizer {
 		} while (in.charAt(i) != '/');
 
 		doc.visitEnd();
-		if (javadoc != null) GlobalContext.debugLogger().error("冲走"+ javadoc);
+		if (javadoc != null) LavaCompiler.debugLogger().error("冲走"+ javadoc);
 		javadoc = doc;
 		index = i+1;
 	}
@@ -427,7 +424,7 @@ public final class Tokens extends Tokenizer {
 		}
 
 		indent -= i;
-		if (indent == 0) throw err("lexer.stringBlock.noIndent", i);
+		//if (indent == 0) throw err("lexer.stringBlock.noIndent", i);
 
 		CharList line = new CharList();
 		while (true) {
@@ -446,10 +443,10 @@ public final class Tokens extends Tokenizer {
 				throw err("lexer.stringBlock.indentChange", lend);
 			}
 
-			int j = line.trimLast().indexOf("\"\"\"", indent);
+			int j = line.rtrim().indexOf("\"\"\"", indent);
 			if (j >= 0) {
 				line.setLength(j);
-				if (line.trimLast().length() > indent) v.append(line, indent, line.length());
+				if (line.rtrim().length() > indent) v.append(line, indent, line.length());
 				line._free();
 
 				index = i+j+3;

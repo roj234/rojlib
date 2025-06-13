@@ -1,6 +1,6 @@
 package roj.dev;
 
-import roj.reflect.ReflectionUtils;
+import roj.reflect.Reflection;
 
 import java.lang.reflect.Method;
 
@@ -11,7 +11,7 @@ import java.lang.reflect.Method;
 public class ModuleKiller {
 	public static void main(String[] args) throws Exception {
 		Class<?> c = Class.forName(args[0]);
-		ReflectionUtils.killJigsaw(c);
+		Reflection.killJigsaw(c);
 		Method m = c.getMethod("main", String[].class);
 		String[] args2 = new String[args.length-1];
 		System.arraycopy(args, 1, args2, 0, args2.length);

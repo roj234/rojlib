@@ -3,7 +3,7 @@ package roj.plugins.minecraft.diff;
 import roj.archive.qz.QZArchive;
 import roj.archive.qz.QZEntry;
 import roj.archive.qz.WordBlock;
-import roj.collect.MyHashMap;
+import roj.collect.HashMap;
 import roj.concurrent.TaskPool;
 import roj.config.NBTParser;
 import roj.config.serial.ToNBT;
@@ -34,7 +34,7 @@ import java.util.zip.GZIPOutputStream;
  */
 public class McDiffClient {
 	QZArchive archive;
-	MyHashMap<String, String> renames = new MyHashMap<>();
+	HashMap<String, String> renames = new HashMap<>();
 
 	public void apply(File basePath) throws IOException {
 		QZEntry hashes = archive.getEntry(".vcs|hashes");
@@ -51,7 +51,7 @@ public class McDiffClient {
 			ArrayCache.putArray(tmp);
 		}
 
-		var pool = TaskPool.Common();
+		var pool = TaskPool.common();
 		var bar = new EasyProgressBar("应用更新包");
 		bar.addTotal(archive.getEntriesByPresentOrder().length);
 		for (QZEntry entry : archive.getEntriesByPresentOrder()) {

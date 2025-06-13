@@ -8,9 +8,9 @@ import roj.archive.zip.ZipFileWriter;
 import roj.asm.MemberDescriptor;
 import roj.asmx.Context;
 import roj.asmx.mapper.Mapper;
+import roj.collect.ArrayList;
+import roj.collect.HashMap;
 import roj.collect.Int2IntMap;
-import roj.collect.MyHashMap;
-import roj.collect.SimpleList;
 import roj.concurrent.TaskPool;
 import roj.gui.GuiUtil;
 import roj.gui.OnChangeHelper;
@@ -57,7 +57,7 @@ public class MapperUI extends JFrame {
 		if (uiFlag4.isSelected()) flag |= Mapper.FLAG_FIX_INHERIT;
 		MAPPER.flag = (byte) flag;
 
-		List<File> lib = new SimpleList<>();
+		List<File> lib = new ArrayList<>();
 		for (String line : LineReader.create(uiLibraries.getText())) {
 			if (line.startsWith("#")) continue;
 			File f = new File(line);
@@ -67,7 +67,7 @@ public class MapperUI extends JFrame {
 			} else if (f.isFile()) {
 				lib.add(f);
 			} else {
-				lib.addAll(IOUtil.findAllFiles(f, jarFilter()));
+				lib.addAll(IOUtil.listFiles(f, jarFilter()));
 			}
 		}
 
@@ -77,12 +77,12 @@ public class MapperUI extends JFrame {
 		uiMap.setEnabled(true);
 	}
 	private void map() throws Exception {
-		List<File> input = new SimpleList<>();
+		List<File> input = new ArrayList<>();
 
 		for (String path : LineReader.create(uiInputPath.getText())) {
 			File file = new File(path);
 			if (file.isFile()) input.add(file);
-			else if (file.isDirectory()) IOUtil.findAllFiles(file, input, jarFilter());
+			else if (file.isDirectory()) IOUtil.listFiles(file, input, jarFilter());
 			else {
 				input = null;
 				break;
@@ -122,8 +122,8 @@ public class MapperUI extends JFrame {
 
 		m.getSeperatedLibraries().clear();
 
-		List<MapTask> files = new SimpleList<>();
-		List<Context> ctxs = new SimpleList<>();
+		List<MapTask> files = new ArrayList<>();
+		List<Context> ctxs = new ArrayList<>();
 		try {
 			for (File file : input) {
 				File out = input.size() == 1 && !output.isDirectory() ? output : new File(output, file.getName());
@@ -177,7 +177,7 @@ public class MapperUI extends JFrame {
 
 
 	private static final Pattern STACKTRACE = Pattern.compile("at (.+)\\.(.+)\\((?:(.+)\\.java|Unknown Source)(?::(\\d+))?\\)");
-	private static final MyHashMap<MemberDescriptor, Int2IntMap> LINES = new MyHashMap<>();
+	private static final HashMap<MemberDescriptor, Int2IntMap> LINES = new HashMap<>();
 	private void loadLines() {
 		File file = GuiUtil.fileLoadFrom("选择行号表", dlgMapTrace);
 		if (file == null) return;
@@ -220,7 +220,7 @@ public class MapperUI extends JFrame {
 
 		uiInit.addActionListener((e) -> {
 			uiInit.setEnabled(false);
-			TaskPool.Common().submit(() -> {
+			TaskPool.common().submit(() -> {
 				try {
 					File file = GuiUtil.fileLoadFrom("选择映射表(Srg / XSrg)", this);
 					if (file != null) load(file);
@@ -231,7 +231,7 @@ public class MapperUI extends JFrame {
 		});
 		uiMap.addActionListener((e) -> {
 			uiMap.setEnabled(false);
-			TaskPool.Common().submit(() -> {
+			TaskPool.common().submit(() -> {
 				try {
 					map();
 				} finally {
@@ -250,7 +250,7 @@ public class MapperUI extends JFrame {
 		});
 		uiLoadLines.addActionListener((e) -> {
 			uiLoadLines.setEnabled(false);
-			TaskPool.Common().submit(() -> {
+			TaskPool.common().submit(() -> {
 				try {
 					loadLines();
 				} finally {

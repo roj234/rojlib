@@ -1,12 +1,14 @@
 package roj.plugins.frp;
 
 import org.jetbrains.annotations.Nullable;
+import roj.collect.HashSet;
 import roj.collect.Hasher;
-import roj.collect.MyHashSet;
-import roj.collect.XHashSet;
-import roj.net.MyChannel;
-import roj.net.NetUtil;
-import roj.net.http.Headers;
+import roj.collect.XashMap;
+import roj.http.Headers;
+import roj.net.ChannelCtx;
+import roj.net.ChannelHandler;
+import roj.net.Net;
+import roj.net.handler.MSSCrypto;
 
 import java.io.IOException;
 import java.util.Collections;
@@ -24,11 +26,13 @@ public class FrpRoom {
 	public XHashSet<String, PortMapEntry> portMaps = setMaker.create();
 	public String motd = "~o( =∩ω∩= )m 欢迎使用船新通信协议！";
 	@Nullable
-	public final FrpServerConnection host;
-	public Set<FrpServerConnection> connections = Collections.synchronizedSet(new MyHashSet<>());
-	public Set<byte[]> cidWhitelist = new MyHashSet<>(Hasher.array(byte[].class));
-	public boolean whitelistEnabled;
-	public Set<byte[]> cidBlacklist = new MyHashSet<>(Hasher.array(byte[].class));
+	public FrpServerConnection remote;
+	public Set<FrpServerConnection> connections = Collections.synchronizedSet(new HashSet<>());
+
+	public String motd = "~o( =∩ω∩= )m 欢迎使用船新通信协议！";
+	public Set<byte[]> cidWhitelist = new HashSet<>(Hasher.array(byte[].class));
+	public Set<byte[]> cidBlacklist = new HashSet<>(Hasher.array(byte[].class));
+	public boolean ready;
 
 	{
 		portMaps.add(new PortMapEntry((char) 80, "test", false));

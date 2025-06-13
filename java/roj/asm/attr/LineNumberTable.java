@@ -3,8 +3,8 @@ package roj.asm.attr;
 import roj.asm.insn.CodeWriter;
 import roj.asm.insn.InsnList;
 import roj.asm.insn.Label;
+import roj.collect.ArrayList;
 import roj.collect.IntMap;
-import roj.collect.SimpleList;
 import roj.text.TextUtil;
 import roj.util.ArrayUtil;
 import roj.util.DynByteBuf;
@@ -16,13 +16,13 @@ import java.util.List;
  * @since 2021/4/30 19:27
  */
 public final class LineNumberTable extends Attribute implements CodeAttribute {
-	public SimpleList<Item> list;
+	public ArrayList<Item> list;
 
-	public LineNumberTable() { list = new SimpleList<>(); }
+	public LineNumberTable() { list = new ArrayList<>(); }
 
 	public LineNumberTable(InsnList owner, DynByteBuf r) {
 		int len = r.readUnsignedShort();
-		list = new SimpleList<>(len);
+		list = new ArrayList<>(len);
 		while (len-- > 0) {
 			list.add(new Item(owner._monitor(r.readUnsignedShort()), r.readUnsignedShort()));
 		}
@@ -42,7 +42,7 @@ public final class LineNumberTable extends Attribute implements CodeAttribute {
 	public int lastBci() { return list.isEmpty() ? -1 : list.getLast().pos.getValue(); }
 
 	public String toString() {
-		List<Object> a = SimpleList.asModifiableList("BCI","行号",IntMap.UNDEFINED);
+		List<Object> a = ArrayList.asModifiableList("BCI","行号",IntMap.UNDEFINED);
 		StringBuilder sb = new StringBuilder();
 		for (int i = 0; i < list.size(); i++) {
 			Item item = list.get(i);

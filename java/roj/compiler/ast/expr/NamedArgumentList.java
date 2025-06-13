@@ -1,9 +1,9 @@
 package roj.compiler.ast.expr;
 
 import roj.asm.type.IType;
-import roj.collect.MyHashMap;
+import roj.collect.HashMap;
+import roj.compiler.CompileContext;
 import roj.compiler.asm.MethodWriter;
-import roj.compiler.context.LocalContext;
 import roj.compiler.resolve.ResolveException;
 
 import java.util.Map;
@@ -13,7 +13,7 @@ import java.util.Map;
  * @since 2024/1/23 8:31
  */
 final class NamedArgumentList extends Expr {
-	final MyHashMap<String, Expr> map = new MyHashMap<>();
+	final HashMap<String, Expr> map = new HashMap<>();
 
 	public boolean add(String name, Expr val) { return map.putIfAbsent(name, val) == null; }
 
@@ -21,7 +21,7 @@ final class NamedArgumentList extends Expr {
 	public String toString() { return map.toString(); }
 
 	@Override
-	public Expr resolve(LocalContext ctx) throws ResolveException {
+	public Expr resolve(CompileContext ctx) throws ResolveException {
 		for (Map.Entry<String, Expr> entry : map.entrySet()) {
 			entry.setValue(entry.getValue().resolve(ctx));
 		}
@@ -33,7 +33,7 @@ final class NamedArgumentList extends Expr {
 	@Override public void write(MethodWriter cw, boolean noRet) { throw new UnsupportedOperationException(); }
 
 	Map<String, IType> resolve() {
-		MyHashMap<String, IType> params = new MyHashMap<>(map.size());
+		HashMap<String, IType> params = new HashMap<>(map.size());
 		for (Map.Entry<String, Expr> entry : map.entrySet()) {
 			params.put(entry.getKey(), entry.getValue().type());
 		}

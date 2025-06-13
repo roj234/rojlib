@@ -5,9 +5,9 @@ import roj.asm.Opcodes;
 import roj.asm.type.IType;
 import roj.asm.type.Type;
 import roj.asm.type.TypeHelper;
+import roj.compiler.CompileContext;
 import roj.compiler.Tokens;
 import roj.compiler.asm.MethodWriter;
-import roj.compiler.context.LocalContext;
 import roj.compiler.diagnostic.Kind;
 import roj.compiler.resolve.TypeCast;
 import roj.config.data.CEntry;
@@ -33,7 +33,7 @@ final class ArrayAccess extends LeftValue {
 
 	@NotNull
 	@Override
-	public Expr resolve(LocalContext ctx) {
+	public Expr resolve(CompileContext ctx) {
 		array = array.resolve(ctx);
 		index = index.resolve(ctx);
 
@@ -43,10 +43,10 @@ final class ArrayAccess extends LeftValue {
 			if (override != null) return override;
 
 			ctx.report(this, Kind.ERROR, "arrayGet.error.notArray", type);
-			return NaE.RESOLVE_FAILED;
+			return NaE.resolveFailed(this);
 		}
 		cast = ctx.castTo(index.type(), Type.primitive(Type.INT), 0);
-		if (cast.type < 0) return NaE.RESOLVE_FAILED;
+		if (cast.type < 0) return NaE.resolveFailed(this);
 		componentType = TypeHelper.componentType(type);
 
 		if (array.isConstant()) {

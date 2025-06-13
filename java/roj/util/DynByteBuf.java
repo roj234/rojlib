@@ -6,6 +6,8 @@ import roj.ReferenceByGeneratedClass;
 import roj.crypt.Base64;
 import roj.io.IOUtil;
 import roj.io.MyDataInput;
+import roj.math.MathUtils;
+import roj.reflect.Unaligned;
 import roj.text.CharList;
 import roj.text.FastCharset;
 
@@ -28,6 +30,23 @@ public abstract class DynByteBuf extends OutputStream implements CharSequence, M
 	public static ByteList allocate(int capacity, int maxCapacity) {
 		return new ByteList(capacity) {
 			@Override public int maxCapacity() { return maxCapacity; }
+			@Override public void ensureCapacity(int required) {
+				if (required > list.length) {
+					int newLen = Math.max(MathUtils.getMin2PowerOf(required), 1024);
+					if (newLen > 1073741823 || newLen > maxCapacity()) newLen = maxCapacity();
+					if (newLen <= list.length) throw new IndexOutOfBoundsException("cannot hold "+required+" bytes in this buffer("+list.length+"/"+newLen+")");
+
+					byte[] newList = ArrayCache.getByteArray(newLen, false);
+					if (newList.length > maxCapacity) {
+						ArrayCache.putArray(newList);
+						newList = (byte[]) Unaligned.U.allocateUninitializedArray(byte.class, maxCapacity);
+					}
+
+					if (wIndex > 0) System.arraycopy(list, 0, newList, 0, wIndex);
+					ArrayCache.putArray(list);
+					list = newList;
+				}
+			}
 		};
 	}
 	public static ByteList wrap(byte[] b) {return new ByteList(b);}

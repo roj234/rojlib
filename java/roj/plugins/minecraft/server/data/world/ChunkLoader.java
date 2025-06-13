@@ -1,8 +1,8 @@
 package roj.plugins.minecraft.server.data.world;
 
 import org.jetbrains.annotations.NotNull;
+import roj.collect.HashSet;
 import roj.collect.LRUCache;
-import roj.collect.MyHashSet;
 import roj.concurrent.Promise;
 import roj.concurrent.ScheduleTask;
 import roj.concurrent.Scheduler;
@@ -28,7 +28,7 @@ public final class ChunkLoader implements Closeable {
 
 	private CInt _id = new CInt();
 
-	private final MyHashSet<Chunk> dirtyChunks = new MyHashSet<>();
+	private final HashSet<Chunk> dirtyChunks = new HashSet<>();
 	private ScheduleTask asyncSave;
 
 	public ChunkLoader(File folder) {
@@ -71,7 +71,7 @@ public final class ChunkLoader implements Closeable {
 		}
 	}
 	public Promise<Chunk> loadChunkAsync(int x, int z) {
-		return Promise.async(TaskPool.Common(), callback -> {
+		return Promise.async(TaskPool.common(), callback -> {
 			try {
 				Chunk c = loadChunkExceptional(x, z);
 				callback.resolve(c);

@@ -1,7 +1,7 @@
 package roj.net.handler;
 
 import roj.collect.HashBiMap;
-import roj.collect.SimpleList;
+import roj.collect.ArrayList;
 import roj.io.FastFailException;
 import roj.io.IOUtil;
 import roj.io.buf.BufferPool;
@@ -55,13 +55,13 @@ public class uTP implements ChannelHandler {
 
 		Ctx embed = connections.get(pkt);
 		if (embed == null) {
-			pkt.buf = IOUtil.getSharedByteBuf().putShort(0).put(RST);
+			pkt.data = IOUtil.getSharedByteBuf().putShort(0).put(RST);
 			ctx.channelWrite(pkt);
 			return;
 		}
 
 		try {
-			embed.protocolRead(pkt.buf);
+			embed.protocolRead(pkt.data);
 		} catch (RuntimeException e) {
 			throw new IOException("Protocol error: " + e.getMessage());
 		}
@@ -105,12 +105,12 @@ public class uTP implements ChannelHandler {
 		int prot_state, prot_flag;
 		long timeout;
 
-		SimpleList<DynByteBuf> rcv_seqs = new SimpleList<>();
+		ArrayList<DynByteBuf> rcv_seqs = new ArrayList<>();
 		int rcv_seq,rcv_win;
 
 		DynByteBuf outBuf = EMPTY;
 		int outBufMax;
-		SimpleList<DynByteBuf> snd_seqs = new SimpleList<>();
+		ArrayList<DynByteBuf> snd_seqs = new ArrayList<>();
 		int snd_seq,snd_remote_seq,snd_win;
 
 		int mtu, half_acceptable_latency;
@@ -171,7 +171,7 @@ public class uTP implements ChannelHandler {
 			switch (prot_state) {
 				case SEND:
 					prot_state = WAIT;
-					pkt = new DatagramPkt(address.getAddress(), address.getPort(), null);
+					pkt = new DatagramPkt(address, null);
 
 					protocolSend(IOUtil.getSharedByteBuf().put(REQ));
 
@@ -431,11 +431,11 @@ public class uTP implements ChannelHandler {
 					if (pid<0||pid>=snd_seqs.size()) break;
 
 					limit += 3;
-					pkt.buf = snd_seqs.get(pid);
+					pkt.data = snd_seqs.get(pid);
 					try {
 						owner.fireChannelWrite(pkt);
 					} finally {
-						pkt.buf = null;
+						pkt.data = null;
 					}
 					return;
 				case WIN: // window update
@@ -495,11 +495,11 @@ public class uTP implements ChannelHandler {
 								   .put((byte) snd_seq++).put(buf);
 			snd_seqs.add(bb);
 
-			pkt.buf = bb;
+			pkt.data = bb;
 			try {
 				owner.fireChannelWrite(pkt);
 			} finally {
-				pkt.buf = null;
+				pkt.data = null;
 				bb.rIndex = 0;
 			}
 		}
@@ -529,7 +529,7 @@ public class uTP implements ChannelHandler {
 			BufferPool p = alloc();
 			DynByteBuf tmp = p.allocate(true, mtu+5);
 			try {
-				pkt.buf = tmp;
+				pkt.data = tmp;
 
 				do {
 					int cnt = Math.min(outBuf.readableBytes(),mtu);
@@ -557,7 +557,7 @@ public class uTP implements ChannelHandler {
 				} while (outBuf.readableBytes() >= mtu);
 			} finally {
 				BufferPool.reserve(tmp);
-				pkt.buf = null;
+				pkt.data = null;
 			}
 			outBuf.compact();
 		}

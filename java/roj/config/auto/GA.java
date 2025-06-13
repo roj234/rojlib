@@ -1,8 +1,8 @@
 package roj.config.auto;
 
 import roj.ReferenceByGeneratedClass;
+import roj.collect.BitSet;
 import roj.collect.IntBiMap;
-import roj.collect.MyBitSet;
 import roj.reflect.Java22Workaround;
 
 /**
@@ -12,7 +12,7 @@ import roj.reflect.Java22Workaround;
 @Java22Workaround
 interface GA extends Cloneable {
 	@ReferenceByGeneratedClass
-	void init(IntBiMap<String> fieldId, MyBitSet optionalEx);
+	void init(IntBiMap<String> fieldId, BitSet optionalEx);
 	@ReferenceByGeneratedClass
 	default IntBiMap<String> fn() { return null; }
 	@ReferenceByGeneratedClass

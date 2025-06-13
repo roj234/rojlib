@@ -13,6 +13,10 @@ import roj.asm.type.Type;
 import roj.asm.type.TypeHelper;
 import roj.asmx.Context;
 import roj.asmx.Transformer;
+import roj.collect.ArrayList;
+import roj.collect.BitSet;
+import roj.collect.HashMap;
+import roj.collect.HashSet;
 import roj.collect.*;
 import roj.config.data.CInt;
 import roj.io.IOUtil;
@@ -139,14 +143,14 @@ public class CodeWeaver implements Transformer {
 		public List<String> newInterfaces = Collections.emptyList();
 
 		Map<Pcd, IJPoint> inject = Collections.emptyMap();
-		final Map<Pcd, IJPoint> inject() { if (inject.isEmpty()) inject = new MyHashMap<>(); return inject; }
+		final Map<Pcd, IJPoint> inject() { if (inject.isEmpty()) inject = new HashMap<>(); return inject; }
 
 		MethodNode copyClinit;
 		Set<MemberNode> copied = Collections.emptySet();
-		final Set<MemberNode> copied() { if (copied.isEmpty()) copied = new MyHashSet<>(Hasher.identity()); return copied; }
+		final Set<MemberNode> copied() { if (copied.isEmpty()) copied = new HashSet<>(Hasher.identity()); return copied; }
 
 		// Shadow
-		final MyHashSet<Pcd> preconditions = new MyHashSet<>();
+		final HashSet<Pcd> preconditions = new HashSet<>();
 
 		// lambda
 		Map<BootstrapMethods.Item, List<MemberDescriptor>> lambda = Collections.emptyMap();
@@ -210,7 +214,7 @@ public class CodeWeaver implements Transformer {
 							isAbstract = false;
 							break;
 						case "HEAD", "TAIL":
-							nodeList = new ArrayList<>();
+							nodeList = new java.util.ArrayList<>();
 							break;
 						default:
 							break;
@@ -222,13 +226,13 @@ public class CodeWeaver implements Transformer {
 			mapName = map.getString("value", method.name());
 		}
 
-		public MyBitSet getOccurrences() {
+		public BitSet getOccurrences() {
 			int[] a = extra.getIntArray("occurrences");
-			return a == null || a.length == 0 ? null : MyBitSet.from(a);
+			return a == null || a.length == 0 ? null : BitSet.from(a);
 		}
 	}
 
-	protected final Map<String, Patch> registry = new MyHashMap<>();
+	protected final Map<String, Patch> registry = new HashMap<>();
 
 	public final void load(ClassNode data) throws WeaveException {
 		Patch nx = read(data);
@@ -297,8 +301,8 @@ public class CodeWeaver implements Transformer {
 		}
 
 		// 检测特殊方法, 删除桥接方法
-		SimpleList<MethodNode> autoCopy = new SimpleList<>();
-		SimpleList<MethodNode> methods = data.methods;
+		ArrayList<MethodNode> autoCopy = new ArrayList<>();
+		ArrayList<MethodNode> methods = data.methods;
 		for (int i = methods.size() - 1; i >= 0; i--) {
 			MethodNode method = methods.get(i);
 			String name = method.name();
@@ -336,7 +340,7 @@ public class CodeWeaver implements Transformer {
 		mapReference(data.cp, nx, ctx);
 
 		// 查找无法访问的方法
-		MyHashSet<MemberDescriptor> inaccessible = new MyHashSet<>();
+		HashSet<MemberDescriptor> inaccessible = new HashSet<>();
 		boolean isSamePackage = ClassUtil.arePackagesSame(data.name(), nx.target);
 		findInaccessible(data, data.methods, inaccessible, isSamePackage);
 		findInaccessible(data, data.fields, inaccessible, isSamePackage);
@@ -349,7 +353,7 @@ public class CodeWeaver implements Transformer {
 			nx.copyClinit = mn;
 		}
 
-		List<BootstrapMethods.Item> lambdaPending = new SimpleList<>();
+		List<BootstrapMethods.Item> lambdaPending = new ArrayList<>();
 
 		// 检测无法访问的方法(nixim中private等), 循环添加autoCopy中的方法, 并复制用到的lambda
 		Validator cv = new Validator(data, inaccessible, nx, autoCopy);
@@ -358,7 +362,7 @@ public class CodeWeaver implements Transformer {
 				cv.state = state;
 				cv.visit(state.method);
 
-				AttrCode code = (AttrCode) state.method.parsed(data.cp).getRawAttribute("Code");
+				Code code = (Code) state.method.parsed(data.cp).getRawAttribute("Code");
 				if (code != null) copyLambdas(data, code, nx, lambdaPending);
 
 				if (state.initBci == 0 && state.mapName.equals("<init>"))
@@ -430,7 +434,7 @@ public class CodeWeaver implements Transformer {
 				nx.copied().add(node);
 				hasNew = true;
 
-				AttrCode code = (AttrCode) node.parsed(data.cp).getRawAttribute("Code");
+				Code code = (Code) node.parsed(data.cp).getRawAttribute("Code");
 				if (code != null) copyLambdas(data, code, nx, lambdaPending);
 			}
 		} while (hasNew);
@@ -461,7 +465,7 @@ public class CodeWeaver implements Transformer {
 		if (hasNewCopyMethod)
 			copyIndirectUsages(tmpPcd, nx, nx.copied);
 
-		List<MemberNode> list = new SimpleList<>(nx.inject.values().size());
+		List<MemberNode> list = new ArrayList<>(nx.inject.values().size());
 		for (IJPoint t : nx.inject.values()) list.add(t.method);
 		copyIndirectUsages(tmpPcd, nx, list);
 
@@ -478,7 +482,7 @@ public class CodeWeaver implements Transformer {
 	private static Map<String, Annotation> getAnnotations(Attributed node, ClassNode data) {
 		Annotations attr = node.getAttribute(data.cp, Attribute.ClAnnotations);
 		if (attr == null || attr.writeIgnore()) return Collections.emptyMap();
-		MyHashMap<String, Annotation> map = new MyHashMap<>(attr.annotations.size());
+		HashMap<String, Annotation> map = new HashMap<>(attr.annotations.size());
 		List<Annotation> annotations = attr.annotations;
 		for (int i = annotations.size()-1; i >= 0; i--) {
 			Annotation a = annotations.get(i);
@@ -487,7 +491,7 @@ public class CodeWeaver implements Transformer {
 		}
 		return map;
 	}
-	private void readAnnotations(ClassNode data, Patch patch, SimpleList<? extends MemberNode> nodes) throws WeaveException {
+	private void readAnnotations(ClassNode data, Patch patch, ArrayList<? extends MemberNode> nodes) throws WeaveException {
 		Annotation a;
 		Map<String, Annotation> map;
 
@@ -618,9 +622,9 @@ public class CodeWeaver implements Transformer {
 
 	private static class Validator extends CodeVisitor {
 		private final ClassNode data;
-		private final MyHashSet<MemberDescriptor> inaccessible;
+		private final HashSet<MemberDescriptor> inaccessible;
 		private final Patch nx;
-		private final SimpleList<MethodNode> autoCopy;
+		private final ArrayList<MethodNode> autoCopy;
 
 		private final MemberDescriptor tmp = ClassUtil.getInstance().sharedDesc;
 		private final Pcd tmp2 = new Pcd();
@@ -628,11 +632,11 @@ public class CodeWeaver implements Transformer {
 		private boolean isConstructor;
 
 		IJPoint state;
-		MyHashSet<MethodNode> copied = new MyHashSet<>(Hasher.identity());
+		HashSet<MethodNode> copied = new HashSet<>(Hasher.identity());
 
 		private MethodNode mn;
 
-		public Validator(ClassNode data, MyHashSet<MemberDescriptor> inaccessible, Patch nx, SimpleList<MethodNode> autoCopy) {
+		public Validator(ClassNode data, HashSet<MemberDescriptor> inaccessible, Patch nx, ArrayList<MethodNode> autoCopy) {
 			this.data = data;
 			this.inaccessible = inaccessible;
 			this.nx = nx;
@@ -679,7 +683,7 @@ public class CodeWeaver implements Transformer {
 			checkAccess(field);
 
 			if (initFlag != 2) {
-				if (Opcodes.showOpcode(code).startsWith("Get")) return;
+				if (Opcodes.toString(code).startsWith("Get")) return;
 
 				tmp2.name = field.name();
 				tmp2.desc = field.rawDesc();
@@ -714,7 +718,7 @@ public class CodeWeaver implements Transformer {
 		}
 	}
 
-	private static void findInaccessible(ClassNode data, SimpleList<? extends MemberNode> nodes, MyHashSet<MemberDescriptor> inaccessible, boolean isSamePackage) {
+	private static void findInaccessible(ClassNode data, ArrayList<? extends MemberNode> nodes, HashSet<MemberDescriptor> inaccessible, boolean isSamePackage) {
 		for (int i = 0; i < nodes.size(); i++) {
 			MemberNode remain = nodes.get(i);
 			int acc = remain.modifier;
@@ -725,7 +729,7 @@ public class CodeWeaver implements Transformer {
 	}
 	private static void parseInject(IJPoint s, ClassNode data) throws WeaveException {
 		MethodNode method = s.method;
-		AttrCode code = method.getAttribute(data.cp, Attribute.Code);
+		Code code = method.getAttribute(data.cp, Attribute.Code);
 		if (s.initBci > 0) {
 			LineNumberTable ln = (LineNumberTable) code.getRawAttribute("LineNumberTable");
 			if (ln != null) {
@@ -826,7 +830,7 @@ public class CodeWeaver implements Transformer {
 				break;
 		}
 	}
-	private static void copyLambdas(ClassNode data, AttrCode code, Patch nx, List<BootstrapMethods.Item> pending) throws WeaveException {
+	private static void copyLambdas(ClassNode data, Code code, Patch nx, List<BootstrapMethods.Item> pending) throws WeaveException {
 		for (Map.Entry<Label, Object> entry : code.instructions.nodeData()) {
 			Object o = entry.getValue();
 			if (o.getClass() == MemberDescriptor.class) {
@@ -839,7 +843,7 @@ public class CodeWeaver implements Transformer {
 					// NiximClass不应有实例。 (static method也不建议使用)
 					desc.rawDesc = ClassUtil.getInstance().mapMethodParam(Collections.singletonMap(data.name(), nx.target), desc.rawDesc);
 
-					if (nx.lambda.isEmpty()) nx.lambda = new MyHashMap<>();
+					if (nx.lambda.isEmpty()) nx.lambda = new HashMap<>();
 					List<MemberDescriptor> list = nx.lambda.computeIfAbsent(key, Helpers.fnArrayList());
 					if (list.isEmpty()) pending.add(key);
 					list.add(desc);
@@ -849,7 +853,7 @@ public class CodeWeaver implements Transformer {
 	}
 	private static void copyIndirectUsages(Pcd tmp, Patch patch, Collection<MemberNode> nodes) {
 		for (MemberNode node : nodes) {
-			AttrCode code = node.getAttribute(null, Attribute.Code);
+			Code code = node.getAttribute(null, Attribute.Code);
 			if (code == null) continue;
 
 			for (Map.Entry<Label, Object> entry : code.instructions.nodeData()) {
@@ -894,7 +898,7 @@ public class CodeWeaver implements Transformer {
 		}
 	}
 	private static InsnList getPattern(ClassNode data, MethodNode method, IJPoint state) throws WeaveException {
-		AttrCode code = method.getAttribute(data.cp, Attribute.Code);
+		Code code = method.getAttribute(data.cp, Attribute.Code);
 		if (code == null) throw new WeaveException("方法"+method.name()+"不能是抽象的");
 
 		Label start = null, end = null;
@@ -960,7 +964,7 @@ public class CodeWeaver implements Transformer {
 			Constant c = constants.get(i);
 			if (c.type() == Constant.CLASS) {
 				CstClass ref1 = (CstClass) c;
-				String name = ref1.name().str();
+				String name = ref1.value().str();
 				Patch patch = ctx.get(name);
 				if (patch != null && patch.self.equals(name)) {
 					changed = true;
@@ -1009,7 +1013,7 @@ public class CodeWeaver implements Transformer {
 		// region 检查 Shadow 兼容性
 		if (!patch.preconditions.isEmpty()) {
 			Pcd.INVERT_EQUALS.set(true);
-			MyHashSet<Pcd> pcdRev = new MyHashSet<>(patch.preconditions);
+			HashSet<Pcd> pcdRev = new HashSet<>(patch.preconditions);
 
 			tmp.mapOwner = data.name();
 			try {
@@ -1101,9 +1105,9 @@ public class CodeWeaver implements Transformer {
 
 
 		if (patch.copyClinit != null) {
-			AttrCode injectClInit = patch.copyClinit.getAttribute(null, Attribute.Code);
+			Code injectClInit = patch.copyClinit.getAttribute(null, Attribute.Code);
 
-			AttrCode code;
+			Code code;
 			int last;
 			int clinit_id = data.getMethod("<clinit>");
 			if (clinit_id >= 0) {
@@ -1113,7 +1117,7 @@ public class CodeWeaver implements Transformer {
 				insn.replaceRange(last, insn.bci(), injectClInit.instructions, true);
 			} else {
 				MethodNode mn = new MethodNode(ACC_PUBLIC | ACC_STATIC, data.name(), "<clinit>", "()V");
-				mn.addAttribute(code = new AttrCode(mn));
+				mn.addAttribute(code = new Code(mn));
 				methods.add(mn);
 				last = 0;
 
@@ -1125,14 +1129,14 @@ public class CodeWeaver implements Transformer {
 
 
 		for (int i = 0; i < data.methods.size(); i++) {
-			AttrCode m = data.methods.get(i).getAttribute(null, Attribute.Code);
+			Code m = data.methods.get(i).getAttribute(null, Attribute.Code);
 			if (m != null) removeLVT(m);
 		}
 
 		assert data.verify();
 	}
 	//region 应用补丁
-	private static void verifyCopyShadow(String self, MyHashSet<Pcd> pcds, Pcd tmp, List<? extends MemberNode> nodes) throws WeaveException {
+	private static void verifyCopyShadow(String self, HashSet<Pcd> pcds, Pcd tmp, List<? extends MemberNode> nodes) throws WeaveException {
 		int size = nodes.size();
 		for (int i = 0; i < size; i++) {
 			MemberNode node = nodes.get(i);
@@ -1163,8 +1167,8 @@ public class CodeWeaver implements Transformer {
 		}
 	}
 	private static MethodNode doInject(IJPoint s, ClassNode data, MethodNode input) throws WeaveException {
-		AttrCode nxCode = (AttrCode) s.method.getRawAttribute("Code");
-		s.method.owner = data.name();
+		Code nxCode = (Code) s.method.getRawAttribute("Code");
+		s.method.__setOwner(data.name());
 
 		if (s.mapName.equals("<init>") && !s.at.equals("TAIL")) {
 			MemberDescriptor iin = nxCode.instructions.getNodeAt(s.initBci).desc();
@@ -1189,7 +1193,7 @@ public class CodeWeaver implements Transformer {
 			iin.name = "<init>";
 		}
 
-		AttrCode mnCode = input.getAttribute(data.cp, Attribute.Code);
+		Code mnCode = input.getAttribute(data.cp, Attribute.Code);
 		switch (s.at) {
 			case "REMOVE": return null;
 			case "REPLACE": default:
@@ -1233,7 +1237,7 @@ public class CodeWeaver implements Transformer {
 
 				mnCode.instructions.replaceRange(Label.atZero(),endMy,out,false);
 
-				mnCode.computeFrames(AttrCode.COMPUTE_FRAMES);
+				mnCode.computeFrames(Code.COMPUTE_FRAMES);
 				mnCode.stackSize = (char) Math.max(mnCode.stackSize, nxCode.stackSize);
 				mnCode.localSize = (char) Math.max(mnCode.localSize, nxCode.localSize);
 
@@ -1242,10 +1246,10 @@ public class CodeWeaver implements Transformer {
 			return input;
 			case "INVOKE": {
 				MemberDescriptor m = MemberDescriptor.fromJavapLike(s.extra.getString("matcher"));
-				MyBitSet occurrences = s.getOccurrences();
+				BitSet occurrences = s.getOccurrences();
 				int ordinal = 0;
 
-				List<InsnNode.InsnMod> rpls = new SimpleList<>();
+				List<InsnNode.InsnMod> rpls = new ArrayList<>();
 				int isStatic = (s.method.modifier & ACC_STATIC);
 				int used = 0;
 				for (InsnList.NodeIterator itr = mnCode.instructions.iterator(); itr.hasNext(); ) {
@@ -1341,7 +1345,7 @@ public class CodeWeaver implements Transformer {
 					}
 				}
 
-				MyBitSet occurrences = s.getOccurrences();
+				BitSet occurrences = s.getOccurrences();
 				CInt ordinal = new CInt();
 
 				int used = 0;
@@ -1402,7 +1406,7 @@ public class CodeWeaver implements Transformer {
 				int paramSize = TypeHelper.paramSize(input.rawDesc());
 
 				// 寻找空位放返回值和变量
-				MyBitSet usedSlots = null;
+				BitSet usedSlots = null;
 				int retValId = -1;
 
 				InsnList tmpList = new InsnList();
@@ -1517,7 +1521,7 @@ public class CodeWeaver implements Transformer {
 					}
 				}
 
-				mnCode.computeFrames(AttrCode.COMPUTE_FRAMES);
+				mnCode.computeFrames(Code.COMPUTE_FRAMES);
 				mnCode.stackSize = (char) Math.max(mnCode.stackSize, nxCode.stackSize);
 				mnCode.localSize = (char) Math.max(mnCode.localSize, nxCode.localSize);
 				if ((returnHookType & 0x100) != 0) mnCode.stackSize = (char) Math.max(mnCode.stackSize, 1);
@@ -1589,7 +1593,7 @@ public class CodeWeaver implements Transformer {
 
 						toFind.replaceRange(toFind.labelAt(node.pos()), itrA.unsharedPos(), toInj, false);
 
-						mnCode.computeFrames(AttrCode.COMPUTE_FRAMES);
+						mnCode.computeFrames(Code.COMPUTE_FRAMES);
 						mnCode.stackSize = (char) Math.max(mnCode.stackSize, nxCode.stackSize);
 						mnCode.localSize = (char) Math.max(mnCode.localSize, nxCode.localSize);
 
@@ -1600,8 +1604,8 @@ public class CodeWeaver implements Transformer {
 				throw new WeaveException("PATTERN没有匹配成功: 目标方法: "+mnCode+"\n匹配方法: "+matcher);
 		}
 	}
-	private static MyBitSet findUsedVarIds(InsnList insn, int paramSize) {
-		MyBitSet usedSlots = new MyBitSet();
+	private static BitSet findUsedVarIds(InsnList insn, int paramSize) {
+		BitSet usedSlots = new BitSet();
 		usedSlots.fill(paramSize);
 		for (InsnNode node : insn) {
 			String name = node.opName();
@@ -1615,7 +1619,7 @@ public class CodeWeaver implements Transformer {
 		}
 		return usedSlots;
 	}
-	private static int nextAvailableVarId(MyBitSet usedSlots, String name) {
+	private static int nextAvailableVarId(BitSet usedSlots, String name) {
 		int newSlot = 0;
 		int len = name.charAt(0) == 'D' || name.charAt(0) == 'L' ? 2 : 1;
 		while (!usedSlots.allFalse(newSlot, newSlot+len)) {
@@ -1624,12 +1628,12 @@ public class CodeWeaver implements Transformer {
 		usedSlots.addRange(newSlot, newSlot+len);
 		return newSlot;
 	}
-	private static boolean matchLdcByOpcode(InsnNode node, byte base, String find, MyBitSet occurrences, CInt ordinal) {
+	private static boolean matchLdcByOpcode(InsnNode node, byte base, String find, BitSet occurrences, CInt ordinal) {
 		int value = node.opcode() - base;
 		if (!find.equals(String.valueOf(value))) return false;
 		return occurrences == null || occurrences.contains(++ordinal.value);
 	}
-	private static void copyLineNumbers(AttrCode from, AttrCode to, int pcOff) {
+	private static void copyLineNumbers(Code from, Code to, int pcOff) {
 		LineNumberTable lnFr = (LineNumberTable) from.getRawAttribute("LineNumberTable");
 		LineNumberTable lnTo = (LineNumberTable) to.getRawAttribute("LineNumberTable");
 
@@ -1646,7 +1650,7 @@ public class CodeWeaver implements Transformer {
 
 		if (lnFr == null) return;
 
-		MyBitSet pcMap = to.instructions.getPcMap();
+		BitSet pcMap = to.instructions.getPcMap();
 		for (LineNumberTable.Item item : lnFr.list) {
 			int value = item.pos.getValue();
 			if (pcMap.contains(value+pcOff)) {
@@ -1657,7 +1661,7 @@ public class CodeWeaver implements Transformer {
 
 		lnTo.sort();
 	}
-	private static void removeLVT(AttrCode code) {
+	private static void removeLVT(Code code) {
 		AttributeList list = code.attributesNullable();
 		if (list != null) {
 			list.removeByName("LocalVariableTable");

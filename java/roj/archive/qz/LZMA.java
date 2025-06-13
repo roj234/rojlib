@@ -1,8 +1,8 @@
 package roj.archive.qz;
 
-import roj.archive.qz.xz.LZMA2Options;
-import roj.archive.qz.xz.LZMAInputStream;
-import roj.archive.qz.xz.LZMAOutputStream;
+import roj.archive.xz.LZMA2Options;
+import roj.archive.xz.LZMAInputStream;
+import roj.archive.xz.LZMAOutputStream;
 import roj.util.DynByteBuf;
 
 import java.io.IOException;

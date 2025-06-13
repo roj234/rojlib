@@ -1,6 +1,6 @@
 package roj.gui;
 
-import roj.collect.MyHashMap;
+import roj.collect.HashMap;
 
 import java.util.Arrays;
 
@@ -9,7 +9,7 @@ import java.util.Arrays;
  * @since 2024/1/17 18:37
  */
 public class TreeBuilder<V> {
-	MyHashMap<String, V> packages = new MyHashMap<>();
+	HashMap<String, V> packages = new HashMap<>();
 
 	public void add(String path, V value, boolean isDirectory) {
 		int i = path.length();

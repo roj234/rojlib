@@ -93,6 +93,11 @@ final class HttpClient11 extends HttpRequest implements ChannelHandler {
 				state = RECV_BODY;
 				long contentLength = response.getContentLength();
 				if (contentLength > responseBodyLimit) throw new IOException("多余"+(contentLength-responseBodyLimit)+"字节");
+
+				String contentEncoding = response.getContentEncoding();
+				if (!contentEncoding.equals("identity") && !getHeaders().get("accept-encoding", "identity").contains(contentEncoding))
+					throw new IllegalArgumentException("不支持的压缩算法:"+contentEncoding);
+
 				ctx = hCE.apply(ctx, response, (flag&SKIP_CE) != 0, responseBodyLimit);
 				ctx = hTE.apply(ctx, response, -1);
 				ctx.handler().channelRead(ctx, buf);

@@ -10,8 +10,8 @@ import java.util.function.IntFunction;
 import static roj.collect.IntMap.NUMKEY_LOADFACTOR;
 import static roj.collect.IntMap.UNDEFINED;
 
-public final class CharMap<V> extends AbstractMap<Character, V> implements _Generic_Map<CharMap.Entry<V>> {
-	public static final class Entry<V> implements _Generic_Entry, Map.Entry<Character, V> {
+public final class CharMap<V> extends AbstractMap<Character, V> implements _LibMap<CharMap.Entry<V>> {
+	public static final class Entry<V> implements _LibEntry, Map.Entry<Character, V> {
 		final char k;
 		public V v;
 
@@ -30,7 +30,7 @@ public final class CharMap<V> extends AbstractMap<Character, V> implements _Gene
 
 		Entry<V> next;
 		@Override
-		public _Generic_Entry __next() {return next;}
+		public _LibEntry __next() {return next;}
 
 		@Override
 		public String toString() {return k+"="+v;}
@@ -62,7 +62,7 @@ public final class CharMap<V> extends AbstractMap<Character, V> implements _Gene
 
 	// GenericMap interface
 	@Override
-	public final _Generic_Entry[] __entries() {return entries;}
+	public final _LibEntry[] __entries() {return entries;}
 	@Override
 	public final void __remove(Entry<V> vEntry) {remove(vEntry.k);}
 	// GenericMap interface
@@ -170,7 +170,7 @@ public final class CharMap<V> extends AbstractMap<Character, V> implements _Gene
 	@NotNull
 	@Override
 	public final Set<Map.Entry<Character, V>> entrySet() {return Helpers.cast(selfEntrySet());}
-	public final Set<Entry<V>> selfEntrySet() {return _Generic_EntrySet.create(this);}
+	public final Set<Entry<V>> selfEntrySet() {return _LibEntrySet.create(this);}
 
 	@Override
 	@Deprecated

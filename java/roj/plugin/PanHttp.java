@@ -1,6 +1,6 @@
 package roj.plugin;
 
-import roj.collect.SimpleList;
+import roj.collect.ArrayList;
 import roj.http.server.Content;
 import roj.http.server.HSConfig;
 import roj.http.server.Request;
@@ -20,7 +20,7 @@ import java.util.function.BiConsumer;
  */
 public final class PanHttp {
 	static long startTime = System.currentTimeMillis();
-	static List<WeakReference<BiConsumer<CharList, Request>>> statuses = new SimpleList<>();
+	static List<WeakReference<BiConsumer<CharList, Request>>> statuses = new ArrayList<>();
 
 	PanHttp() {}
 

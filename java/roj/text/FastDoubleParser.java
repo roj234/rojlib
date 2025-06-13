@@ -192,25 +192,4 @@ public class FastDoubleParser {
 		return value;
     }
 	//endregion
-
-	public static void main(String[] args) {
-		var a = 1.110223024625155E-16;
-		var b = 1.110223024625156E-16;
-		var c = 1.110223024625157E-16;
-		var d = 1.110223024625158E-16;
-		var e = 1.110223024625159E-16;
-		var f = 1.110223024625150E-16;
-		System.out.println((a));
-		System.out.println(((parseDoubleDec(new CharList("1110223024625155"), 1, -16))));
-		System.out.println((b));
-		System.out.println(((parseDoubleDec(new CharList("1110223024625156"), 1, -16))));
-		System.out.println((c));
-		System.out.println(((parseDoubleDec(new CharList("1110223024625157"), 1, -16))));
-		System.out.println((d));
-		System.out.println(((parseDoubleDec(new CharList("1110223024625158"), 1, -16))));
-		System.out.println((e));
-		System.out.println(((parseDoubleDec(new CharList("1110223024625159"), 1, -16))));
-		System.out.println((f));
-		System.out.println(((parseDoubleDec(new CharList("1110223024625150"), 1, -16))));
-	}
 }

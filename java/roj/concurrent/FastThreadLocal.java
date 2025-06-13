@@ -1,7 +1,7 @@
 package roj.concurrent;
 
+import roj.collect.BitSet;
 import roj.collect.IntMap;
-import roj.collect.MyBitSet;
 import roj.reflect.Unaligned;
 import roj.util.ArrayCache;
 
@@ -13,7 +13,7 @@ import java.util.function.Supplier;
  */
 public class FastThreadLocal<T> {
 	private static int registrations;
-	private static final MyBitSet reusable = new MyBitSet();
+	private static final BitSet reusable = new BitSet();
 	private static final Object NULL = IntMap.UNDEFINED;
 
 	private static Thread[] threads;
@@ -42,8 +42,7 @@ public class FastThreadLocal<T> {
 	public static void clear() {
 		var t = Thread.currentThread();
 		try {
-			var field = Thread.class.getDeclaredField("threadLocals");
-			Unaligned.U.putObject(t, Unaligned.U.objectFieldOffset(field), null);
+			Unaligned.U.putObject(t, Unaligned.fieldOffset(Thread.class, "threadLocals"), null);
 		} catch (Exception e) {
 			e.printStackTrace();
 		}

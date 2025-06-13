@@ -26,7 +26,7 @@ public class TCPasUDP implements ChannelHandler {
 	@Override
 	public void channelWrite(ChannelCtx ctx, Object msg) throws IOException {
 		DatagramPkt pkt = (DatagramPkt) msg;
-		if (!pkt.addr.equals(address.getAddress()) || pkt.port != address.getPort()) throw new ClosedChannelException();
-		ctx.channelWrite(pkt.buf);
+		if (!pkt.address.equals(address)) throw new ClosedChannelException();
+		ctx.channelWrite(pkt.data);
 	}
 }

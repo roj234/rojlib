@@ -11,7 +11,7 @@ import roj.util.DynByteBuf;
  */
 public class UnparsedAttribute extends Attribute {
 	public static Attribute serialize(ConstantPool cw, DynByteBuf r, Attribute attr) {
-		if (attr.getClass() == UnparsedAttribute.class) return attr;
+		if (attr.getClass() == UnparsedAttribute.class || attr.writeIgnore()) return attr;
 
 		r.clear(); attr.toByteArrayNoHeader(r, cw);
 		int length = r.readableBytes();

@@ -3,11 +3,11 @@ package roj.compiler.ast.expr;
 import org.jetbrains.annotations.Nullable;
 import roj.asm.type.Generic;
 import roj.asm.type.IType;
-import roj.collect.MyBitSet;
+import roj.collect.BitSet;
+import roj.compiler.CompileContext;
 import roj.compiler.asm.LPSignature;
 import roj.compiler.asm.MethodWriter;
 import roj.compiler.asm.Variable;
-import roj.compiler.context.LocalContext;
 import roj.compiler.diagnostic.Kind;
 import roj.compiler.resolve.ResolveException;
 import roj.compiler.resolve.TypeCast;
@@ -23,7 +23,7 @@ import static roj.compiler.ast.GeneratorUtil.RETURNSTACK_TYPE;
  */
 final class MultiReturn extends Expr {
 	private final List<Expr> values;
-	private MyBitSet unsafeCall;
+	private BitSet unsafeCall;
 	private Generic exactType;
 
 	public MultiReturn(List<Expr> values) {this.values = values;}
@@ -31,7 +31,7 @@ final class MultiReturn extends Expr {
 	@Override public String toString() {return "{"+TextUtil.join(values, ", ")+"}";}
 
 	@Override
-	public Expr resolve(LocalContext ctx) throws ResolveException {
+	public Expr resolve(CompileContext ctx) throws ResolveException {
 		if (values.size() == 0 || values.size() > 255) ctx.report(this, Kind.ERROR, "泛型过长："+values.size());
 
 		for (int i = 0; i < values.size(); i++) {
@@ -39,7 +39,7 @@ final class MultiReturn extends Expr {
 			values.set(i, node);
 			if (!(node instanceof LocalVariable) && !node.isConstant()) {
 				if (unsafeCall == null)
-					unsafeCall = new MyBitSet(values.size());
+					unsafeCall = new BitSet(values.size());
 				unsafeCall.add(i);
 				ctx.report(this, Kind.WARNING, "multiReturn.sideEffect");
 			}
@@ -59,20 +59,20 @@ final class MultiReturn extends Expr {
 		}
 
 		ctx.report(this, Kind.ERROR, "multiReturn.incompatible");
-		return NaE.RESOLVE_FAILED;
+		return NaE.resolveFailed(this);
 	}
 
 	@Override public IType type() {return exactType;}
 
 	@Override
 	public void write(MethodWriter cw, @Nullable TypeCast.Cast returnType) {
-		var ctx = LocalContext.get();
+		var ctx = CompileContext.get();
 
 		if (unsafeCall != null) for (var itr = unsafeCall.iterator(); itr.hasNext(); ) {
 			int i = itr.nextInt();
 
 			Expr expr = values.get(i);
-			Variable variable = ctx.bp.tempVar(expr.type());
+			Variable variable = ctx.createTempVariable(expr.type());
 			expr.write(cw);
 			cw.store(variable);
 

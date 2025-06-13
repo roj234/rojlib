@@ -2,10 +2,10 @@ package roj.text.logging;
 
 import roj.asm.type.Type;
 import roj.asm.type.TypeHelper;
-import roj.collect.MyHashMap;
+import roj.collect.HashMap;
 import roj.compiler.plugins.asm.ASM;
 import roj.concurrent.ScheduleTask;
-import roj.reflect.ReflectionUtils;
+import roj.reflect.Reflection;
 import roj.text.CharList;
 import roj.text.LineReader;
 import roj.text.logging.d.LogDestination;
@@ -51,7 +51,7 @@ class LogWriter extends PrintWriter {
 		int end = name.lastIndexOf('.', name.indexOf('('));
 		int i = 4;
 
-		if (ReflectionUtils.JAVA_VERSION > 8) {
+		if (Reflection.JAVA_VERSION > 8) {
 			// java.base/
 			int module = name.indexOf('/');
 			if (module >= 0) {
@@ -69,7 +69,7 @@ class LogWriter extends PrintWriter {
 		sb.append(name, i, name.length()).append('\n');
 	}
 
-	static final class MyMap extends MyHashMap<String, Object> {
+	static final class MyMap extends HashMap<String, Object> {
 		List<?> components;
 
 		@Override

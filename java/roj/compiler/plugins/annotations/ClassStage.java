@@ -5,11 +5,11 @@ import roj.asm.annotation.Annotation;
 import roj.asm.attr.Attribute;
 import roj.asm.type.Signature;
 import roj.asm.type.Type;
-import roj.collect.MyHashSet;
-import roj.compiler.context.CompileUnit;
-import roj.compiler.context.LocalContext;
+import roj.collect.HashSet;
+import roj.compiler.CompileContext;
+import roj.compiler.CompileUnit;
+import roj.compiler.api.Processor;
 import roj.compiler.diagnostic.Kind;
-import roj.compiler.plugin.Processor;
 import roj.compiler.resolve.FieldBridge;
 import roj.text.CharList;
 import roj.util.Helpers;
@@ -24,11 +24,11 @@ import java.util.Set;
 final class ClassStage implements Processor {
 	@Override public boolean acceptClasspath() {return true;}
 
-	private static final Set<String> ACCEPTS = new MyHashSet<>("roj/compiler/plugins/annotations/Attach", "roj/compiler/plugins/annotations/Operator", "roj/compiler/plugins/annotations/Property");
+	private static final Set<String> ACCEPTS = new HashSet<>("roj/compiler/plugins/annotations/Attach", "roj/compiler/plugins/annotations/Operator", "roj/compiler/plugins/annotations/Property");
 	@Override public Set<String> acceptedAnnotations() {return ACCEPTS;}
 
 	@Override
-	public void handle(LocalContext ctx, ClassDefinition file, Attributed node, Annotation annotation) {
+	public void handle(CompileContext ctx, ClassDefinition file, Attributed node, Annotation annotation) {
 		String type = annotation.type();
 		if (type.endsWith("Attach")) {
 			if (file == node) {
@@ -100,7 +100,7 @@ final class ClassStage implements Processor {
 		return s.toStringAndFree();
 	}
 
-	private static void attach(Member mn, LocalContext ctx, Annotation annotation) {
+	private static void attach(Member mn, CompileContext ctx, Annotation annotation) {
 		if ((mn.modifier()&Opcodes.ACC_STATIC) == 0) return;
 		String desc = mn.rawDesc();
 
@@ -118,7 +118,7 @@ final class ClassStage implements Processor {
 			if (idx >= 0) info.methods().set(idx, Helpers.cast(replace));
 			else info.methods().add(Helpers.cast(replace));
 
-			ctx.classes.invalidateResolveHelper(info);
+			ctx.compiler.unlink(info);
 		}
 	}
 }

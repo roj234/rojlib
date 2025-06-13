@@ -1,13 +1,12 @@
 package roj.io;
 
 import org.jetbrains.annotations.Nullable;
-import roj.collect.MyBitSet;
+import roj.collect.BitSet;
 import roj.io.buf.BufferPool;
 import roj.io.source.FileSource;
 import roj.io.source.Source;
 import roj.io.source.SourceInputStream;
 import roj.math.MathUtils;
-import roj.reflect.ReflectionUtils;
 import roj.reflect.Unaligned;
 import roj.text.logging.Level;
 import roj.text.logging.Logger;
@@ -38,14 +37,14 @@ public class MyRegionFile implements AutoCloseable {
 
 	int[] offsets;
 	private final int[] timestamps;
-	private final MyBitSet free;
+	private final BitSet free;
 	private int sectorCount;
 
 	protected final int chunkSize;
 	protected byte flag;
 
 	Source fpRead;
-	static final long FPREAD_OFFSET = ReflectionUtils.fieldOffset(MyRegionFile.class, "fpRead");
+	static final long FPREAD_OFFSET = Unaligned.fieldOffset(MyRegionFile.class, "fpRead");
 	protected Lock lock = new ReentrantLock();
 
 	public MyRegionFile(File file) throws IOException {
@@ -64,7 +63,7 @@ public class MyRegionFile implements AutoCloseable {
 		if (chunkSize <= 0 || fileCap <= 1) throw new IllegalStateException("chunkSize="+chunkSize+",fileSize="+fileCap);
 		this.chunkSize = MathUtils.getMin2PowerOf(chunkSize);
 
-		free = new MyBitSet(fileCap);
+		free = new BitSet(fileCap);
 		flag = (byte) flags;
 		raf = file;
 		offsets = new int[fileCap];

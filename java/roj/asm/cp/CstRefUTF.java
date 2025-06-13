@@ -15,7 +15,7 @@ public abstract sealed class CstRefUTF extends Constant permits CstClass, CstMet
 	CstRefUTF(String v) { value = new CstUTF(Objects.requireNonNull(v, "value"));}
 	CstRefUTF() {}
 
-	public CstUTF name() { return value; }
+	public CstUTF value() { return value; }
 
 	public final void setValue(CstUTF value) {this.value = Objects.requireNonNull(value, "value");}
 

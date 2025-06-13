@@ -229,7 +229,7 @@ public final class TrieTreeSet extends AbstractSet<CharSequence> {
 	public boolean remove(CharSequence s, int i, int len) {
 		if (len - i < 0) throw new IllegalArgumentException("Δlength < 0");
 
-		SimpleList<Entry> list = new SimpleList<>();
+		ArrayList<Entry> list = new ArrayList<>();
 
 		Entry entry = root;
 		for (; i < len; i++) {
@@ -361,7 +361,7 @@ public final class TrieTreeSet extends AbstractSet<CharSequence> {
 			entry = next;
 		}
 
-		List<String> values = new ArrayList<>();
+		List<String> values = new java.util.ArrayList<>();
 		KeyItr itr = new KeyItr(entry, sb);
 		while (itr.hasNext()) {
 			if (values.size() >= limit) {

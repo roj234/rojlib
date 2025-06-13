@@ -11,7 +11,6 @@ import roj.asm.insn.CodeWriter;
 import roj.asm.insn.Label;
 import roj.asm.type.Type;
 import roj.io.IOUtil;
-import roj.reflect.ClassDefiner;
 
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -150,7 +149,6 @@ class GenerateReflectionHook {
 		impl.parent("java/lang/Unaligned");
 		impl.addInterface("roj/reflect/Unaligned");
 		impl.npConstructor();
-		ClassDefiner.premake(impl);
 		return impl;
 	}
 
@@ -160,7 +158,6 @@ class GenerateReflectionHook {
 		impl.parent(CLASS_NAME);
 		impl.addInterface("roj/reflect/Unaligned");
 		impl.npConstructor();
-		ClassDefiner.premake(impl);
 
 		System.out.println("Runnable Index: "+ impl.cp.getClassId("java/lang/Runnable"));
 		System.out.println("Unaligned Index: "+ impl.cp.getClassId("roj/reflect/Unaligned"));

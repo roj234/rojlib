@@ -1,7 +1,7 @@
 package roj.asmx.mapper;
 
 import roj.asm.MemberDescriptor;
-import roj.collect.SimpleList;
+import roj.collect.ArrayList;
 
 import java.util.List;
 import java.util.Set;
@@ -11,7 +11,7 @@ import java.util.Set;
  * @since 2021/7/21 2:42
  */
 public class SubImpl {
-	public final List<Set<String>> owners = new SimpleList<>();
+	public final List<Set<String>> owners = new ArrayList<>();
 	public MemberDescriptor type;
 
 	@Override

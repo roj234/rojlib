@@ -1,7 +1,7 @@
 package roj.http.curl;
 
 import org.jetbrains.annotations.NotNull;
-import roj.collect.SimpleList;
+import roj.collect.ArrayList;
 import roj.concurrent.Task;
 import roj.concurrent.TaskExecutor;
 import roj.concurrent.TaskPool;
@@ -204,7 +204,7 @@ public final class DownloadTask implements ChannelHandler, Task, Future<File> {
 			}
 		}
 
-		List<Downloader> tasks = new SimpleList<>();
+		List<Downloader> tasks = new ArrayList<>();
 
 		if (operation == STREAM_DOWNLOAD || len < 0 || (
 			!"bytes".equals(h.header("accept-ranges")) &&

@@ -1,6 +1,6 @@
 package roj.config.table;
 
-import roj.collect.MyBitSet;
+import roj.collect.BitSet;
 import roj.text.CharList;
 import roj.text.TextUtil;
 import roj.text.TextWriter;
@@ -13,7 +13,7 @@ import java.util.List;
  * @since 2023/6/2 14:12
  */
 final class CsvWriter implements TableWriter {
-	private static final MyBitSet CSV_ESCAPE = MyBitSet.from(",;\n\"");
+	private static final BitSet CSV_ESCAPE = BitSet.from(",;\n\"");
 
 	private final TextWriter sw;
 	public CsvWriter(TextWriter sw) {this.sw = sw;}

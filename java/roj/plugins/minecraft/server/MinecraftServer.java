@@ -1,7 +1,7 @@
 package roj.plugins.minecraft.server;
 
 import roj.asmx.event.EventBus;
-import roj.collect.SimpleList;
+import roj.collect.ArrayList;
 import roj.config.JSONParser;
 import roj.config.data.CMap;
 import roj.config.serial.ToJson;
@@ -133,7 +133,7 @@ public class MinecraftServer extends Plugin {
 	public final ConcurrentHashMap<UUID, PlayerConnection> players = new ConcurrentHashMap<>();
 
 	public PlayerConnection getPlayer(UUID uuid) { return players.get(uuid); }
-	public Collection<PlayerConnection> getPlayers() { return new SimpleList<>(players.values()); }
+	public Collection<PlayerConnection> getPlayers() { return new ArrayList<>(players.values()); }
 
 	private final CMap meta = new CMap();
 	private volatile DynByteBuf metaBytes;

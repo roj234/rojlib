@@ -11,30 +11,30 @@ unexpected=此时不应有 '%1'
 unexpected_2=未预料的 '%1', 期待 '%2'
 
 braceMismatch=未关闭的花括号
-not_statement=不是语句
 noExpression=非法的表达式开始
 
 lava.compiler=<编译器>
-lava.sandbox=预编译模式已开启，请注意安全
-lava.sandbox.error=[Sandbox]计算出错: %1
+lava.sandbox=编译器沙盒已激活
 
 # ResolveHelper | ResolveException
 rh.cyclicDepend=包括%1在内的循环继承
 
 # Tokenizer
-lexer.number.floatLarge=[Num]浮点数过大
-lexer.number.floatSmall=[Num]浮点数过小
-lexer.number.overflow=[Num]整数太大
-lexer.number.notNumber=[Num]非法的字符'%1'
-lexer.number.eof=[Num]在解析数字时遇到了文件尾
-lexer.number.exceptBlank=[Num]期待[空白]
-lexer.number.exceptDec=[Num]期待[阿拉伯数字]
-lexer.number.noExponent=[Num]数字在指数后被截断
-lexer.number.formatError=[Num]浮点文字的格式错误
+lexer.number.floatLarge=浮点数过大
+lexer.number.floatSmall=浮点数过小
+lexer.number.overflow=整数太大
+lexer.number.notNumber=非法的字符'%1'
+lexer.number.eof=在解析数字时遇到了文件尾
+lexer.number.exceptBlank=期待[空白]
+lexer.number.exceptDec=期待[阿拉伯数字]
+lexer.number.noExponent=数字在指数后被截断
+lexer.number.formatError=浮点文字的格式错误
 
-lexer.stringBlock.noCRLF=[StringBlock]期待换行
+lexer.stringBlock.noCRLF=期待换行
 lexer.stringBlock.noIndent=文本块必须有缩进
 lexer.stringBlock.indentChange=[Incompatible]文本块的缩进必须在第一行确定
+
+lexer.unterminated.character=未结束的字符常量
 
 pseudoType.cast=伪类型擦除
 pseudoType.pseudo=伪类型不存在
@@ -43,6 +43,9 @@ pseudoType.pseudo=伪类型不存在
 annotation.override=此方法未能覆盖超类的方法
 annotation.functionalInterface=在类%1中找不到lambda方法
 annotation.deprecated=使用弃用的%1%2
+
+# 源发行版 WIP
+lava.version.10.var=警告: 从发行版 10 开始，'var' 是受限类型名称，不能用于类型声明，也不能用作数组的元素类型
 
 # CompileUnit
 
@@ -164,7 +167,10 @@ type.illegalAnyType=非法的类型开始
 type.except.afterAsk=大于号、逗号、extends或super
 type.except.afterLss=大于号或逗号
 
-# LocalContext
+#GeneratorUtil
+generator.voidReturn=生成器函数不能使用'空'返回值
+
+# CompileContext
 lc.unReportedException=可能抛出未声明的异常 %1
 lc.packageRestricted=中间变量或返回值 %1 不在受限import的导入范围中
 lc.illegalModifier=在类%1中遇到非法的修饰符组合: 0x%2
@@ -229,7 +235,7 @@ block.switch.exprMode.uncovered="switch表达式未覆盖所有可能结果\n  1
 
 block.multiReturn.typeError=多返回值自动解包仅适用于ReturnStack<?>类型
 block.multiReturn.countError=多返回值数量错误: 期待%1, 实际%2
-block.except.multiReturn=','或']'
+block.except.multiReturn=','或'}'
 
 block.var.unused=未使用的变量 %1
 block.var.exist=变量%1已存在
@@ -367,18 +373,24 @@ invoke.warn.illegalNameList=[ML]%1.%2的参数属性格式不合法
 invoke.error.paramExtra=[ML]对%1.%2的按名称调用多余参数%3
 invoke.error.varargCount=可变参数数量限制：%1 实际参数数量: %2
 
-# 类型转换 (注意，当修改TypeCast中对应数值需要同步这里)
+# 类型转换 (注意，修改TypeCast中对应数值需要同步这里)
 typeCast.warn.rawTypes=[TypeCast]对原始类型的转换: %1 => %2
 typeCast.error.-1=%1无法隐式转换为%2
 typeCast.error.-2=从%1转换为%2可能会有损失
 typeCast.error.-3=%1无法转换为%2
 typeCast.error.-4=%1无法转换为基本类型%2
 typeCast.error.-5=基本类型%1无法转换为%2
-typeCast.error.-6=实际参数列表和形式参数列表长度不同
-typeCast.error.-7=找不到符号，无法处理%1与%2的转换关系
+typeCast.error.-6=%1和%2的泛型参数数目不同
+typeCast.error.-7=找不到%1或%2的定义
 typeCast.error.-8=%1不可能转换为%2
+
+#自定义错误码，不在TypeCast中出现
+#ref roj.compiler.resolve.Inferrer#cast
 typeCast.error.-99=%2不是具有%1个参数的函数式接口
+#ref roj.compiler.CompileUnit#genericCombine
 typeCast.error.-98=%1与%2的基础类型相同，但是泛型不同
+#ref roj.compiler.resolve.Inferrer#FAIL_ARGCOUNT
+typeCast.error.-97=实际参数列表和形式参数列表长度不同
 
 
 # 插件
@@ -391,3 +403,5 @@ plugins.annotation.argError.setter=属性%1的setter %2 参数验证失败
 plugins.annotation.singleton=Singleton的方法必须是静态，无参数，有返回值
 
 plugins.eval.macro.error=宏生成函数发生了未捕获的异常
+plugins.eval.constexpr.timeout=%1计算超时，正在中止线程
+plugins.eval.constexpr.error=Constexpr计算出错: %1

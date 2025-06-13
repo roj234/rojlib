@@ -195,12 +195,12 @@ public final class Context implements ClassResource, Consumer<Constant>, Supplie
 	public String toString() {return "Ctx " + "'" + name + '\'';}
 
 	public String getFileName() {
-		if (data == null) return name;
-		return name = data.name().concat(".class");
+		if (data != null) name = data.name().concat(".class");
+		return name;
 	}
 	public String getClassName() {
-		if (data == null) return name.substring(0, name.length()-6);
-		return name = data.name();
+		if (data != null) name = data.name().concat(".class");
+		return name.substring(0, name.length()-6);
 	}
 
 	public static List<Context> fromZip(File input, ZipFileWriter rw) throws IOException {

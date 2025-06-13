@@ -1,14 +1,12 @@
 package roj.collect;
 
+import roj.reflect.Unaligned;
 import roj.util.Helpers;
 import roj.util.NativeMemory;
 
 import java.lang.ref.Reference;
 import java.lang.ref.WeakReference;
-import java.lang.reflect.Field;
 import java.util.Objects;
-
-import static roj.reflect.Unaligned.U;
 
 /**
  * @author Roj234
@@ -41,13 +39,9 @@ public class ImmediateWeakReference<K> extends WeakReference<K> implements Runna
 		}
 	}
 
+	private static final long _NEXT = Unaligned.fieldOffset(ImmediateWeakReference.class, "_next");
+	private static final long REFERENT = Unaligned.fieldOffset(Reference.class, "referent");
 	public static <K, V extends ImmediateWeakReference<K>> XashMap.Builder<K, V> shape(Class<V> vType) {
-		try {
-			Field key = Reference.class.getDeclaredField("referent");
-			Field next = ImmediateWeakReference.class.getDeclaredField("_next");
-			return new XashMap.Builder<>(vType, U.objectFieldOffset(next), U.objectFieldOffset(key), Hasher.identity(), null);
-		} catch (NoSuchFieldException e) {
-			throw new IllegalArgumentException("无法找到字段", e);
-		}
+		return new XashMap.Builder<>(vType, _NEXT, REFERENT, Hasher.identity(), null);
 	}
 }

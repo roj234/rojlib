@@ -1,9 +1,9 @@
 package roj.asm.type;
 
 import org.intellij.lang.annotations.MagicConstant;
+import roj.concurrent.OperationDone;
 import roj.io.IOUtil;
 import roj.text.CharList;
-import roj.util.Helpers;
 
 import static roj.asm.type.Generic.*;
 
@@ -80,8 +80,7 @@ public final class TypeParam implements IType {
 		try {
 			return (TypeParam) super.clone();
 		} catch (CloneNotSupportedException e) {
-			Helpers.athrow(e);
-			return Helpers.nonnull();
+			throw OperationDone.NEVER;
 		}
 	}
 }

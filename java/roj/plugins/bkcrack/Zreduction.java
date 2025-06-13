@@ -1,7 +1,7 @@
 package roj.plugins.bkcrack;
 
+import roj.collect.BitSet;
 import roj.collect.IntList;
-import roj.collect.MyBitSet;
 
 /**
  * @author Roj234
@@ -40,7 +40,7 @@ final class Zreduction {
 		int wait = 0;
 
 		IntList zim1_10_32_vector = new IntList(1<<22);
-		MyBitSet zim1_10_32_set = new MyBitSet(1<<22);
+		BitSet zim1_10_32_set = new BitSet(1<<22);
 
 		for(int i = index; i >= Solver.MIN_CONTIGUOUS_PLAIN_LENGTH; i--) {
 			zim1_10_32_vector.clear();

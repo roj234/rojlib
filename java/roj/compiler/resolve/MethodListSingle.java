@@ -6,11 +6,11 @@ import roj.asm.Opcodes;
 import roj.asm.type.IType;
 import roj.asm.type.Type;
 import roj.asmx.mapper.ParamNameMapper;
+import roj.collect.ArrayList;
+import roj.collect.HashMap;
 import roj.collect.IntMap;
-import roj.collect.MyHashMap;
-import roj.collect.SimpleList;
+import roj.compiler.CompileContext;
 import roj.compiler.ast.expr.Expr;
-import roj.compiler.context.LocalContext;
 import roj.compiler.diagnostic.Kind;
 import roj.text.CharList;
 import roj.text.TextUtil;
@@ -32,10 +32,10 @@ final class MethodListSingle extends ComponentList {
 	@Override public boolean isOverriddenMethod(int id) {return isOverriden;}
 	@Override public String toString() {return "["+method.returnType()+' '+method.owner()+'.'+method.name()+"("+TextUtil.join(method.parameters(), ", ")+")]";}
 
-	public MethodResult findMethod(LocalContext ctx, IType that, List<IType> actualArguments,
+	public MethodResult findMethod(CompileContext ctx, IType that, List<IType> actualArguments,
 								   Map<String, IType> namedArguments, int flags) {
 		MethodNode method = this.method;
-		ClassNode owner = ctx.classes.getClassInfo(method.owner);
+		ClassNode owner = ctx.compiler.resolve(method.owner());
 
 		if (!ctx.checkAccessible(owner, method, (flags&IN_STATIC) != 0, true)) return null;
 
@@ -71,10 +71,10 @@ final class MethodListSingle extends ComponentList {
 				}
 
 				fillArguments = new IntMap<>();
-				actualArguments = new SimpleList<>(actualArguments);
+				actualArguments = new ArrayList<>(actualArguments);
 
 				// 可能在Annotation Resolve阶段，此时tmpMap1可用，但2不行
-				MyHashMap<String, IType> tmp = Helpers.cast(ctx.tmpMap1); tmp.clear();
+				HashMap<String, IType> tmp = Helpers.cast(ctx.tmpMap1); tmp.clear();
 				tmp.putAll(namedArguments);
 				namedArguments = tmp;
 
@@ -125,7 +125,7 @@ final class MethodListSingle extends ComponentList {
 		if ((flags & NO_REPORT) == 0) {
 			if (result == null) result = ctx.inferrer.infer(owner, method, that, actualArguments);
 
-			CharList sb = new CharList().append("invoke.incompatible.single:[\"").append(method.owner).append("\",[");
+			CharList sb = new CharList().append("invoke.incompatible.single:[\"").append(method.owner()).append("\",[");
 			if (method.name().equals("<init>")) sb.append("invoke.constructor],[");
 			else sb.append("invoke.method,\" ").append(method.name()).append("\"],[");
 

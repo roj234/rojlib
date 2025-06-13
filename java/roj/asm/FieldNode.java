@@ -1,5 +1,6 @@
 package roj.asm;
 
+import org.jetbrains.annotations.NotNull;
 import roj.asm.attr.Annotations;
 import roj.asm.attr.Attribute;
 import roj.asm.attr.AttributeList;
@@ -12,6 +13,7 @@ import roj.asm.type.TypeHelper;
 import roj.text.CharList;
 import roj.util.TypedKey;
 
+import java.util.Arrays;
 import java.util.Objects;
 
 /**
@@ -51,6 +53,17 @@ public final class FieldNode extends MemberNode {
 	}
 
 	public <T extends Attribute> T getAttribute(ConstantPool cp, TypedKey<T> type) { return Attribute.parseSingle(this,cp,type,attributes,Signature.FIELD); }
+
+	@NotNull
+	public final Signature getSignature(ConstantPool cp) {
+		Signature signature = getAttribute(cp, Attribute.SIGNATURE);
+		if (signature == null) {
+			signature = new Signature(Signature.METHOD);
+			signature.values = Arrays.asList(fieldType()); // allow change value...
+			addAttribute(signature);
+		}
+		return signature;
+	}
 
 	public String rawDesc() { return desc.getClass() == CstUTF.class ? ((CstUTF) desc).str() : desc instanceof Type ? ((Type) desc).toDesc() : desc.toString(); }
 

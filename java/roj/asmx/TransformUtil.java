@@ -9,18 +9,17 @@ import roj.asm.attr.UnparsedAttribute;
 import roj.asm.cp.Constant;
 import roj.asm.cp.CstDynamic;
 import roj.asm.cp.CstNameAndType;
-import roj.asm.insn.AttrCode;
-import roj.asm.insn.CodeVisitor;
-import roj.asm.insn.CodeWriter;
+import roj.asm.insn.*;
 import roj.asm.type.Type;
 import roj.asm.type.TypeHelper;
-import roj.collect.MyHashSet;
-import roj.collect.SimpleList;
+import roj.collect.ArrayList;
+import roj.collect.HashSet;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
 
 import java.util.Collection;
 import java.util.List;
+import java.util.function.Consumer;
 
 import static roj.asm.Opcodes.*;
 import static roj.asm.type.Type.*;
@@ -76,10 +75,10 @@ public class TransformUtil {
 		ms.addAttribute(new UnparsedAttribute("Code", cw.bw));
 	}
 
-	private static final MyHashSet<String>
-		class_allow = new MyHashSet<>("RuntimeVisibleAnnotations", "BootstrapMethods", "NestMembers", "NestHost"),
-		field_allow = new MyHashSet<>("ConstantValue", "RuntimeVisibleAnnotations"),
-		method_allow = new MyHashSet<>("Code", "RuntimeVisibleAnnotations", "AnnotationDefault");
+	private static final HashSet<String>
+		class_allow = new HashSet<>("RuntimeVisibleAnnotations", "BootstrapMethods", "NestMembers", "NestHost"),
+		field_allow = new HashSet<>("ConstantValue", "RuntimeVisibleAnnotations"),
+		method_allow = new HashSet<>("Code", "RuntimeVisibleAnnotations", "AnnotationDefault");
 
 	/**
 	 * 删除多余的属性，目前仅支持Java8
@@ -96,17 +95,17 @@ public class TransformUtil {
 			data.version = minVer;
 		}
 
-		SimpleList<FieldNode> fields = data.fields;
+		ArrayList<FieldNode> fields = data.fields;
 		for (int i = 0; i < fields.size(); i++) {
 			filter(fields.get(i), field_allow);
 		}
 
-		SimpleList<MethodNode> methods = data.methods;
+		ArrayList<MethodNode> methods = data.methods;
 		for (int i = 0; i < methods.size(); i++) {
 			MethodNode mn = methods.get(i);
 			filter(mn, method_allow);
 
-			AttrCode code = mn.getAttribute(data.cp, Attribute.Code);
+			Code code = mn.getAttribute(data.cp, Attribute.Code);
 			if (code == null) continue;
 
 			if (minVer == 6) code.frames = null;
@@ -115,7 +114,7 @@ public class TransformUtil {
 			if (list != null) list.clear();
 		}
 	}
-	private static void filter(Attributed a, MyHashSet<String> permitted) {
+	private static void filter(Attributed a, HashSet<String> permitted) {
 		AttributeList list = a.attributesNullable();
 		if (list == null) return;
 		for (int i = list.size() - 1; i >= 0; i--) {
@@ -177,7 +176,7 @@ public class TransformUtil {
 
 		ByteList tmp = new ByteList();
 		boolean[] frame = {false};
-		List<CstDynamic> dynList = new SimpleList<>();
+		List<CstDynamic> dynList = new ArrayList<>();
 
 		CodeVisitor cv = new CodeVisitor() {
 			protected void invokeDyn(CstDynamic dyn, int type) {dynList.add(dyn);}
@@ -187,7 +186,7 @@ public class TransformUtil {
 		};
 
 		for (MethodNode mn : data.methods)
-			mn.visitCode(cv, data.cp, tmp);
+			mn.transform(data.cp, tmp, cv);
 
 		if (!frame[0]) return null;
 
@@ -247,7 +246,7 @@ public class TransformUtil {
 	}
 
 	public static void compress(ClassNode data) {
-		var lazyLDC = new MyHashSet<Constant>();
+		var lazyLDC = new HashSet<Constant>();
 		var cpw = AsmCache.getInstance().constPool();
 		CodeVisitor smallerLdc = new CodeVisitor() {
 			protected void ldc(byte code, Constant c) {if (code != LDC2_W) lazyLDC.add(c);}
@@ -256,7 +255,7 @@ public class TransformUtil {
 
 		var methods = data.methods;
 		for (int i = 0; i < methods.size(); i++) {
-			methods.get(i).visitCode(smallerLdc, data.cp, bw);
+			methods.get(i).transform(data.cp, bw, smallerLdc);
 		}
 		for (var constant : lazyLDC) cpw.reset(constant);
 
@@ -291,10 +290,30 @@ public class TransformUtil {
 		}
 	}
 
-	@Deprecated
-	public static void transformCode(ClassNode data, MethodNode mn, ByteList tmp, CodeWriter cw) {
-		if (!mn.visitCode(cw, data.cp, tmp)) {
-			throw new NullPointerException("Method "+mn+" not code");
+	public static void prependStaticConstructor(ClassNode data, Consumer<AbstractCodeWriter> writer) {
+		MethodNode clinit = data.getMethodObj("<clinit>");
+		AbstractCodeWriter c;
+		if (clinit == null) {
+			CodeWriter c1 = data.newMethod(Opcodes.ACC_PUBLIC | Opcodes.ACC_STATIC, "<clinit>", "()V");
+			c1.visitSize(1, 0);
+			c1.computeFrames(Code.COMPUTE_FRAMES| Code.COMPUTE_SIZES|CodeWriter.ADD_RETURN);
+			c = c1;
+		} else {
+			if (clinit.getRawAttribute("Code") instanceof AttrCodeWriter cw) {
+				c = cw.cw;
+				clinit = null;
+			} else {
+				c = new InsnList();
+			}
+		}
+
+		writer.accept(c);
+
+		if (clinit != null) {
+			Code code = clinit.getAttribute(data.cp, Attribute.Code);
+			if (code.stackSize == 0) code.stackSize = 1;
+			code.computeFrames(Code.COMPUTE_FRAMES| Code.COMPUTE_SIZES);
+			code.instructions.replaceRange(0,0, (InsnList) c, false);
 		}
 	}
 }

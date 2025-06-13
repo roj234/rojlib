@@ -1,7 +1,7 @@
 package roj.plugins.web.sso;
 
-import roj.collect.MyHashMap;
-import roj.collect.SimpleList;
+import roj.collect.HashMap;
+import roj.collect.ArrayList;
 import roj.config.ConfigMaster;
 import roj.config.ParseException;
 import roj.config.auto.SerializerFactory;
@@ -23,7 +23,7 @@ class JsonUserManager implements UserManager {
 	private final File json;
 
 	private List<User> users;
-	private Map<String, User> userByName = new MyHashMap<>();
+	private Map<String, User> userByName = new HashMap<>();
 	private boolean dirty;
 
 	private static final SerializerFactory SERIALIZER = SerializerFactory.getInstance();
@@ -39,7 +39,7 @@ class JsonUserManager implements UserManager {
 
 	public JsonUserManager(File json) throws IOException, ParseException {
 		this.json = json;
-		this.users = !json.isFile() ? new SimpleList<>() : ConfigMaster.JSON.readObject(SERIALIZER.listOf(User.class), json);
+		this.users = !json.isFile() ? new ArrayList<>() : ConfigMaster.JSON.readObject(SERIALIZER.listOf(User.class), json);
 		for (User user : users) userByName.put(user.name, user);
 	}
 
@@ -74,10 +74,10 @@ class JsonUserManager implements UserManager {
 	public void save() {if (dirty) doSave();}
 
 	private void doSave() {
-		SimpleList<User> copy;
+		ArrayList<User> copy;
 		synchronized (this) {
 			if (!dirty) return;
-			copy = new SimpleList<>(users);
+			copy = new ArrayList<>(users);
 			dirty = false;
 		}
 

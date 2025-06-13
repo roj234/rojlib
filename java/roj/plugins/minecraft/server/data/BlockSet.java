@@ -1,7 +1,7 @@
 package roj.plugins.minecraft.server.data;
 
 import roj.collect.Int2IntMap;
-import roj.collect.SimpleList;
+import roj.collect.ArrayList;
 
 import java.util.List;
 import java.util.Random;
@@ -12,7 +12,7 @@ import java.util.Random;
  */
 public class BlockSet {
 	private final Int2IntMap groupId = new Int2IntMap();
-	private final List<List<Block>> blockList = new SimpleList<>();
+	private final List<List<Block>> blockList = new ArrayList<>();
 
 	public int[] createState(Random rnd) {
 		int[] array = new int[blockList.size()];
@@ -29,7 +29,7 @@ public class BlockSet {
 		Integer i = groupId.get(block.color);
 		if (i == null) {
 			groupId.put(block.color, blockList.size());
-			blockList.add(SimpleList.asModifiableList(block));
+			blockList.add(ArrayList.asModifiableList(block));
 		} else {
 			blockList.get(i).add(block);
 		}

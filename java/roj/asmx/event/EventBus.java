@@ -10,8 +10,8 @@ import roj.asm.type.Type;
 import roj.asm.type.TypeHelper;
 import roj.asmx.AnnotatedElement;
 import roj.asmx.AnnotationRepo;
+import roj.collect.ArrayList;
 import roj.collect.Hasher;
-import roj.collect.SimpleList;
 import roj.collect.XashMap;
 import roj.text.logging.Logger;
 import roj.util.Helpers;
@@ -66,7 +66,7 @@ public class EventBus {
 
 	public EventBus() {}
 	public EventBus(AnnotationRepo repo) {
-		List<ListenerInfo> objectList = new SimpleList<>(), staticList = new SimpleList<>();
+		List<ListenerInfo> objectList = new ArrayList<>(), staticList = new ArrayList<>();
 		for (AnnotatedElement el : repo.annotatedBy(SUBSCRIBE_NAME)) {
 			if (entries.get(el.owner()) != null) continue;
 
@@ -94,7 +94,7 @@ public class EventBus {
 			var data = ClassNode.fromType(type);
 			if (data == null) throw new IllegalArgumentException("无法解析"+type.getName()+"的源文件！");
 
-			List<ListenerInfo> objectList = new SimpleList<>(), staticList = new SimpleList<>();
+			List<ListenerInfo> objectList = new ArrayList<>(), staticList = new ArrayList<>();
 			for (var mn : data.methods) {
 				var annotations = mn.getAttribute(data.cp, Attribute.ClAnnotations);
 				if (annotations == null) continue;

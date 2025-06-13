@@ -2,11 +2,11 @@ package roj.compiler.asm;
 
 import roj.asm.MethodNode;
 import roj.asm.type.*;
-import roj.collect.LinkedMyHashMap;
-import roj.collect.MyHashMap;
-import roj.collect.SimpleList;
+import roj.collect.ArrayList;
+import roj.collect.HashMap;
+import roj.collect.LinkedHashMap;
+import roj.compiler.CompileContext;
 import roj.compiler.api.Types;
-import roj.compiler.context.LocalContext;
 import roj.compiler.diagnostic.Kind;
 
 import java.util.Collections;
@@ -19,7 +19,7 @@ public final class LPSignature extends Signature {
 	public LPSignature parent;
 	public LPSignature(int type) {
 		super(type);
-		typeParams = new LinkedMyHashMap<>() {
+		typeParams = new LinkedHashMap<>() {
 			@Override
 			public List<IType> getOrDefault(Object key, List<IType> def) {
 				var n = LPSignature.this;
@@ -27,19 +27,19 @@ public final class LPSignature extends Signature {
 					n = n.parent;
 					if (n == null) return def;
 				}
-				return ((MyHashMap<String, List<IType>>)n.typeParams).getEntry(key).getValue();
+				return ((HashMap<String, List<IType>>)n.typeParams).getEntry(key).getValue();
 			}
 		};
 	}
 
 	// class decl
 	public void _add(IType parent) {
-		if (values.isEmpty()) values = new SimpleList<>(3);
+		if (values.isEmpty()) values = new ArrayList<>(3);
 		values.add(parent);
 	}
 	public void _impl(IType itf) {
 		if (values.isEmpty()) {
-			values = new SimpleList<>(3);
+			values = new ArrayList<>(3);
 			values.add(Signature.placeholder());
 		}
 		values.add(itf);
@@ -47,7 +47,7 @@ public final class LPSignature extends Signature {
 
 	// method decl
 	public void _add(int size, Generic use) {
-		if (values.isEmpty()) values = new SimpleList<>(size+1);
+		if (values.isEmpty()) values = new ArrayList<>(size+1);
 		while (values.size() < size) values.add(SKIP);
 		values.add(use);
 	}
@@ -71,7 +71,7 @@ public final class LPSignature extends Signature {
 		}
 
 		List<Type> list = mn.parameters();
-		if (values.isEmpty()) values = new SimpleList<>(list.size() + 1);
+		if (values.isEmpty()) values = new ArrayList<>(list.size() + 1);
 		else {
 			for (int i = 0; i < values.size(); i++)
 				if (values.get(i) == SKIP)
@@ -106,7 +106,7 @@ public final class LPSignature extends Signature {
 				// 意外的类型
 				//  需要: 类
 				//  找到: 类型参数T
-				LocalContext.get().report(g.pos, Kind.ERROR, "type.parameterizedParam");
+				CompileContext.get().report(g.pos, Kind.ERROR, "type.parameterizedParam");
 			} else {
 				// 神奇的语法: <T extends Map> => T.Entry
 				if (i >= 0) type.owner(bounds.get(0).owner() + owner.substring(i));
@@ -127,13 +127,13 @@ public final class LPSignature extends Signature {
 		return type;
 	}
 
-	public void resolve(LocalContext ctx) {
+	public void resolve(CompileContext ctx) {
 		for (List<IType> value : typeParams.values()) {
 			if (value != UNBOUNDED_TYPE_PARAM) resolve(value, ctx);
 		}
 		resolve(values, ctx);
 	}
-	private void resolve(List<IType> list, LocalContext ctx) {
+	private void resolve(List<IType> list, CompileContext ctx) {
 		for (int i = 0; i < list.size(); i++) ctx.resolveType(list.get(i));
 	}
 

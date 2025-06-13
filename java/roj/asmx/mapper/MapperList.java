@@ -1,6 +1,6 @@
 package roj.asmx.mapper;
 
-import roj.collect.SimpleList;
+import roj.collect.ArrayList;
 import roj.collect.ToIntMap;
 
 import java.util.List;
@@ -10,7 +10,7 @@ import java.util.Map;
  * @author Roj234
  * @since 2020/8/11 14:59
  */
-final class MapperList extends SimpleList<String> {
+final class MapperList extends ArrayList<String> {
 	private final ToIntMap<String> index;
 	public int selfIdx = -1;
 

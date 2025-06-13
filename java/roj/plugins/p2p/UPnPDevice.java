@@ -1,7 +1,7 @@
 package roj.plugins.p2p;
 
-import roj.collect.MyHashMap;
-import roj.collect.SimpleList;
+import roj.collect.HashMap;
+import roj.collect.ArrayList;
 import roj.concurrent.TaskPool;
 import roj.config.ParseException;
 import roj.config.XMLParser;
@@ -41,7 +41,7 @@ public final class UPnPDevice {
 
 	public List<Service> getServices() { return services; }
 	public List<Service> getServices(Collection<String> typeFilter) {
-		SimpleList<Service> services1 = new SimpleList<>();
+		ArrayList<Service> services1 = new ArrayList<>();
 		for (int i = 0; i < services.size(); i++) {
 			Service service = services.get(i);
 			if (typeFilter.contains(service.serviceType)) {
@@ -67,9 +67,9 @@ public final class UPnPDevice {
 	public static Supplier<List<UPnPDevice>> discover(List<String> deviceTypes) throws IOException {
 		SelectorLoop loop = new SelectorLoop("UPnP discover", 1);
 
-		List<UPnPDevice> devices = new SimpleList<>();
+		List<UPnPDevice> devices = new ArrayList<>();
 
-		List<Discoverer> tasks = new SimpleList<>();
+		List<Discoverer> tasks = new ArrayList<>();
 		Enumeration<NetworkInterface> itfs = NetworkInterface.getNetworkInterfaces();
 		while (itfs.hasMoreElements()) {
 			NetworkInterface itf = itfs.nextElement();
@@ -147,20 +147,21 @@ public final class UPnPDevice {
 		@Override
 		public void channelRead(ChannelCtx ctx, Object msg) throws IOException {
 			DatagramPkt pkt = (DatagramPkt) msg;
-			HttpHead head = HttpHead.parse(pkt.buf);
+			HttpHead head = HttpHead.parse(pkt.data);
 			String loc = head.get("location");
-			UPnPGateway.LOGGER.debug("接收到来自{}的UPnP响应, 数据为{}", pkt.addr, loc);
+			InetAddress addr1 = pkt.address.getAddress();
+			UPnPGateway.LOGGER.debug("接收到来自{}的UPnP响应, 数据为{}", addr1, loc);
 			if (null == loc) return/*"没有 'Location' 头"*/;
 
 			UPnPDevice device;
 			synchronized (devices) {
 				for (UPnPDevice dev : devices) {
-					if (dev.deviceIp.equals(pkt.addr)) {
+					if (dev.deviceIp.equals(addr1)) {
 						UPnPGateway.LOGGER.debug("该数据包已存在,丢弃");
 						return;
 					}
 				}
-				device = new UPnPDevice(addr, pkt.addr);
+				device = new UPnPDevice(addr, addr1);
 				devices.add(device);
 			}
 
@@ -170,7 +171,7 @@ public final class UPnPDevice {
 			if (tmp == null) {
 				device.TTL = -1;
 			} else {
-				List<String> cache = TextUtil.split(new SimpleList<>(), tmp, ',');
+				List<String> cache = TextUtil.split(new ArrayList<>(), tmp, ',');
 				for (int i = 0; i < cache.size(); i++) {
 					String s = cache.get(i).trim().toLowerCase();
 					if (s.equals("no-cache")) {
@@ -182,8 +183,8 @@ public final class UPnPDevice {
 				}
 			}
 
-			List<Service> services = device.services = new SimpleList<>();
-			TaskPool.Common().submit(() -> {
+			List<Service> services = device.services = new ArrayList<>();
+			TaskPool.common().submit(() -> {
 				UPnPGateway.LOGGER.debug("正在请求设备描述: {}", loc);
 				Element xml;
 				try {
@@ -206,7 +207,7 @@ public final class UPnPDevice {
 						services.add(srv);
 					}
 
-					Map<String, String> deviceInfo = new MyHashMap<>(8);
+					Map<String, String> deviceInfo = new HashMap<>(8);
 					List<Element> xDevice = xml.getElementsByTagName("device");
 					for (int i = 0; i < xDevice.size(); i++) {
 						Node xDesc = xDevice.get(i);
@@ -287,7 +288,7 @@ public final class UPnPDevice {
 				if (detail != null) child = detail.child(0).children();
 			}
 
-			Map<String, String> ret = new MyHashMap<>(child.size());
+			Map<String, String> ret = new HashMap<>(child.size());
 			for (int i = 0; i < child.size(); i++) {
 				Element xKey = child.get(i).asElement();
 				ret.put(xKey.tag, xKey.size() == 0 ? "" : xKey.child(0).textContent().trim());

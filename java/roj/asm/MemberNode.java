@@ -1,5 +1,6 @@
 package roj.asm;
 
+import org.intellij.lang.annotations.MagicConstant;
 import roj.asm.attr.AttributeList;
 import roj.asm.attr.UnparsedAttribute;
 import roj.asm.cp.ConstantPool;
@@ -7,11 +8,16 @@ import roj.asm.cp.CstNameAndType;
 import roj.asm.cp.CstUTF;
 import roj.util.DynByteBuf;
 
+import static roj.asm.Opcodes.*;
+
 /**
  * @author Roj234
  * @since 2023/9/24 13:54
  */
 public abstract class MemberNode implements Member {
+	@MagicConstant(flags = ACC_PUBLIC | ACC_PROTECTED | ACC_PRIVATE | ACC_FINAL | ACC_STATIC | ACC_SYNTHETIC |
+			ACC_SYNCHRONIZED | ACC_ABSTRACT | ACC_VARARGS | ACC_STRICT | ACC_NATIVE | ACC_BRIDGE |
+			ACC_TRANSIENT | ACC_VOLATILE)
 	public char modifier;
 	Object name, desc;
 	public AttributeList attributes;

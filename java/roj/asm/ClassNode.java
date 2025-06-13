@@ -16,8 +16,10 @@ import roj.asm.insn.CodeWriter;
 import roj.asm.type.Signature;
 import roj.asm.type.Type;
 import roj.asm.type.TypeHelper;
-import roj.collect.MyHashSet;
-import roj.collect.SimpleList;
+import roj.collect.ArrayList;
+import roj.collect.HashSet;
+import roj.compiler.library.PackedLibrary;
+import roj.concurrent.Flow;
 import roj.io.IOUtil;
 import roj.text.CharList;
 import roj.util.ByteList;
@@ -122,7 +124,7 @@ public class ClassNode implements ClassDefinition {
 	 * @param buf    包含类文件数据的字节缓冲区（从name开始读取）
 	 * @param version 类文件版本号（需与常量池来源版本一致）
 	 * @param pool   预解析的常量池实例（必须与当前类数据匹配）
-	 * @see roj.compiler.context.LibraryCompactedKlass
+	 * @see PackedLibrary
 	 * @return 包含基础结构的ClassNode对象
 	 */
 	@NotNull
@@ -198,13 +200,16 @@ public class ClassNode implements ClassDefinition {
 
 	public int version;
 	public ConstantPool cp;
+	@MagicConstant(flags = ACC_PUBLIC | ACC_FINAL | ACC_SUPER |
+			ACC_ABSTRACT | ACC_INTERFACE | ACC_ANNOTATION | ACC_ENUM |
+			ACC_SYNTHETIC | ACC_MODULE)
 	public char modifier;
 	private CstClass nameCst, parentCst;
 
 	private ItfView itfView;
 	protected List<CstClass> interfaces = Collections.emptyList();
-	public final SimpleList<FieldNode> fields = new SimpleList<>();
-	public final SimpleList<MethodNode> methods = new SimpleList<>();
+	public final ArrayList<FieldNode> fields = new ArrayList<>();
+	public final ArrayList<MethodNode> methods = new ArrayList<>();
 
 	private AttributeList attributes;
 
@@ -234,7 +239,7 @@ public class ClassNode implements ClassDefinition {
 		List<MethodNode> methods = this.methods;
 		ByteList tmp = new ByteList();
 		for (int j = 0; j < methods.size(); j++) {
-			methods.get(j).visitCode(cv, cp, tmp);
+			methods.get(j).transform(cp, tmp, cv);
 		}
 		tmp._free();
 	}
@@ -323,18 +328,18 @@ public class ClassNode implements ClassDefinition {
 		}
 	}
 
-	public final String name() {return nameCst.name().str();}
+	public final String name() {return nameCst.value().str();}
 	@Override public void name(String name) {
 		if (name == null) throw new NullPointerException("name");
 
 		if (nameCst == null) nameCst = cp.getClazz(name);
-		else cp.setUTFValue(nameCst.name(), name);
+		else cp.setUTFValue(nameCst.value(), name);
 
 		for (int i = 0; i < methods.size(); i++) {
 			methods.get(i).owner = name;
 		}
 	}
-	public final String parent() {return parentCst == null ? Helpers.maybeNull() : parentCst.name().str();}
+	public final String parent() {return parentCst == null ? Helpers.maybeNull() : parentCst.value().str();}
 	@Override public final void parent(String name) {parentCst = name == null ? null : cp.getClazz(name);}
 
 	public final void modifier(int flag) { modifier = (char) flag; }
@@ -342,10 +347,10 @@ public class ClassNode implements ClassDefinition {
 
 	public final List<String> interfaces() { return itfView == null ? itfView = new ItfView() : itfView; }
 	private class ItfView extends AbstractList<String> {
-		@Override public String get(int index) { return interfaces.get(index).name().str(); }
-		@Override public String set(int index, String obj) { return interfaces.set(index, cp.getClazz(obj)).name().str(); }
+		@Override public String get(int index) { return interfaces.get(index).value().str(); }
+		@Override public String set(int index, String obj) { return interfaces.set(index, cp.getClazz(obj)).value().str(); }
 		@Override public void add(int index, String element) { itfList().add(index, cp.getClazz(element)); }
-		@Override public String remove(int index) { return interfaces.remove(index).name().str(); }
+		@Override public String remove(int index) { return interfaces.remove(index).value().str(); }
 
 		@Override
 		public boolean remove(Object o) {
@@ -358,7 +363,7 @@ public class ClassNode implements ClassDefinition {
 		@Override public boolean contains(Object o) { return indexOf(o) >= 0; }
 		@Override public int indexOf(Object o) {
 			for (int i = 0; i < interfaces.size(); i++) {
-				if (interfaces.get(i).name().str().equals(o)) {
+				if (interfaces.get(i).value().str().equals(o)) {
 					return i;
 				}
 			}
@@ -370,9 +375,9 @@ public class ClassNode implements ClassDefinition {
 	}
 
 	public final void addInterface(String s) {itfList().add(cp.getClazz(s));}
-	public SimpleList<CstClass> itfList() {
-		if (interfaces instanceof SimpleList<CstClass> c) return c;
-		var list = new SimpleList<CstClass>();
+	public ArrayList<CstClass> itfList() {
+		if (interfaces instanceof ArrayList<CstClass> c) return c;
+		var list = new ArrayList<CstClass>();
 		interfaces = list;
 		return list;
 	}
@@ -421,13 +426,13 @@ public class ClassNode implements ClassDefinition {
 		if (v != 0 && (modifier & (ACC_ABSTRACT|ACC_SUPER|ACC_ENUM)) != ACC_ABSTRACT)
 			throw new IllegalArgumentException("无效的描述符组合(Itf) "+this);
 
-		MyHashSet<String> descs = new MyHashSet<>();
+		HashSet<String> descs = new HashSet<>();
 		fastValidate(Helpers.cast(methods), descs);
 		descs.clear();
 		fastValidate(Helpers.cast(fields), descs);
 		return true;
 	}
-	private void fastValidate(SimpleList<Member> nodes, MyHashSet<String> out) {
+	private void fastValidate(ArrayList<Member> nodes, HashSet<String> out) {
 		for (int i = 0; i < nodes.size(); i++) {
 			Member n = nodes.get(i);
 			if (!out.add(n.name().concat(n.rawDesc())))
@@ -448,23 +453,29 @@ public class ClassNode implements ClassDefinition {
 		return i < 0 ? null : methods.get(i);
 	}
 
-	public final int newField(int acc, String name, Type type) {
+	public final int newField(
+			@MagicConstant(flags = ACC_PUBLIC | ACC_PROTECTED | ACC_PRIVATE | ACC_FINAL | ACC_STATIC | ACC_VOLATILE | ACC_TRANSIENT | ACC_SYNTHETIC) int acc,
+			String name, Type type) {
 		FieldNode f = new FieldNode(acc, name, type);
 		int i = fields.size();
 		fields.add(f);
 		return i;
 	}
-	public final int newField(int acc, String name, String type) {
+	public final int newField(
+			@MagicConstant(flags = ACC_PUBLIC | ACC_PROTECTED | ACC_PRIVATE | ACC_FINAL | ACC_STATIC | ACC_VOLATILE | ACC_TRANSIENT | ACC_SYNTHETIC)
+			int acc, String name, String type) {
 		FieldNode f = new FieldNode(acc, name, type);
 		int i = fields.size();
 		fields.add(f);
 		return i;
 	}
 
-	public final CodeWriter newMethod(int acc, String name, String desc) {
+	public final CodeWriter newMethod(
+			@MagicConstant(flags = ACC_PUBLIC | ACC_PROTECTED | ACC_PRIVATE | ACC_FINAL | ACC_STATIC | ACC_SYNCHRONIZED | ACC_ABSTRACT | ACC_VARARGS | ACC_SYNTHETIC | ACC_NATIVE)
+			int acc, String name, String desc) {
 		MethodNode m = new MethodNode(acc, this.name(), name, desc);
 		methods.add(m);
-		if ((acc & (ACC_ABSTRACT|ACC_NATIVE)) != 0) return Helpers.nonnull();
+		if ((acc & (ACC_ABSTRACT|ACC_NATIVE)) != 0) return Helpers.maybeNull();
 		AttrCodeWriter cw = new AttrCodeWriter(cp, m);
 		m.addAttribute(cw);
 		return cw.cw;
@@ -484,7 +495,7 @@ public class ClassNode implements ClassDefinition {
 	public final void cloneable() {cloneable(false);}
 	public final void cloneable(boolean invokeSuper) {
 		for (int i = 0; i < interfaces.size(); i++) {
-			if (interfaces.get(i).name().str().equals("java/lang/Cloneable")) return;
+			if (interfaces.get(i).value().str().equals("java/lang/Cloneable")) return;
 		}
 		addInterface("java/lang/Cloneable");
 
@@ -496,6 +507,17 @@ public class ClassNode implements ClassDefinition {
 		c.clazz(Opcodes.CHECKCAST, name());
 		c.insn(Opcodes.ARETURN);
 		c.finish();
+	}
+
+	@NotNull
+	public final Signature getSignature() {
+		Signature signature = getAttribute(cp, Attribute.SIGNATURE);
+		if (signature == null) {
+			signature = new Signature(Signature.CLASS);
+			signature.values = Flow.of(parentCst).append(Flow.of(interfaces)).map(type -> type.value().str().equals("java/lang/Object") ? Signature.placeholder() : Type.klass(type.value().str())).toList();
+			addAttribute(signature);
+		}
+		return signature;
 	}
 	//endregion
 
@@ -535,7 +557,7 @@ public class ClassNode implements ClassDefinition {
 			if (!_list.isEmpty()) {
 				sb.append(" implements ");
 				for (int j = 0; j < _list.size();) {
-					String i = _list.get(j).name().str();
+					String i = _list.get(j).value().str();
 					TypeHelper.toStringOptionalPackage(sb, i);
 					if (++j == _list.size()) break;
 					sb.append(", ");

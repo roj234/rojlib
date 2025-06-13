@@ -10,7 +10,7 @@ import java.util.function.ToIntFunction;
 
 import static roj.collect.IntMap.UNDEFINED;
 
-public class IntBiMap<V> extends AbstractMap<Integer, V> implements _Generic_Map<IntMap.Entry<V>>, ToIntFunction<V> {
+public class IntBiMap<V> extends AbstractMap<Integer, V> implements _LibMap<IntMap.Entry<V>>, ToIntFunction<V> {
 	public void setNullId(int nullId) {
 		this.nullId = nullId;
 	}
@@ -72,7 +72,7 @@ public class IntBiMap<V> extends AbstractMap<Integer, V> implements _Generic_Map
 		return entry == null ? def : entry.key;
 	}
 
-	public Set<Entry<V>> selfEntrySet() { return _Generic_EntrySet.create(this); }
+	public Set<Entry<V>> selfEntrySet() { return _LibEntrySet.create(this); }
 	public Set<Map.Entry<Integer, V>> entrySet() { return Helpers.cast(selfEntrySet()); }
 
 	@SuppressWarnings("unchecked")
@@ -98,7 +98,7 @@ public class IntBiMap<V> extends AbstractMap<Integer, V> implements _Generic_Map
 	public int size() { return size; }
 
 	@Override
-	public _Generic_Entry[] __entries() { return entries; }
+	public _LibEntry[] __entries() { return entries; }
 
 	@Override
 	public void __remove(IntMap.Entry<V> vEntry) { removeEntry((Entry<V>) vEntry); }

@@ -1,7 +1,7 @@
 package roj.concurrent;
 
 import org.jetbrains.annotations.NotNull;
-import roj.reflect.ReflectionUtils;
+import roj.reflect.Unaligned;
 import roj.text.logging.Logger;
 import roj.util.Helpers;
 
@@ -22,7 +22,7 @@ final class PromiseImpl<T> implements Promise<T>, Task, Promise.Callback {
 	PromiseImpl() {}
 	PromiseImpl(TaskExecutor executor) {this.executor = executor;}
 
-	private static final long STATE = ReflectionUtils.fieldOffset(PromiseImpl.class, "_state");
+	private static final long STATE = Unaligned.fieldOffset(PromiseImpl.class, "_state");
 	static final int
 		TASK_COMPLETE = 1, TASK_SUCCESS = 2,
 		WAIT = 4, CALLBACK = 8,

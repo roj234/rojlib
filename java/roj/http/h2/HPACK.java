@@ -1,7 +1,7 @@
 package roj.http.h2;
 
 import org.jetbrains.annotations.Nullable;
-import roj.collect.MyHashSet;
+import roj.collect.HashSet;
 import roj.collect.RingBuffer;
 import roj.crypt.Base64;
 import roj.io.IOUtil;
@@ -137,7 +137,7 @@ final class HPACK {
 		F("if-unmodified-since"), F("last-modified"), F("link"), F("location"), F("max-forwards"), F("proxy-authenticate"),
 		F("proxy-authorization"), F("range"), F("referer"), F("refresh"), F("retry-after"), F("server"), F("set-cookie"),
 		F("strict-transport-security"), F("transfer-encoding"), F("user-agent"), F("vary"), F("via"), F("www-authenticate"));
-	private static final MyHashSet<Field> STATIC_MAP = new MyHashSet<>();
+	private static final HashSet<Field> STATIC_MAP = new HashSet<>();
 	static {
 		for (int i = 0; i < STATIC_TABLE.size();) {
 			Field f = STATIC_TABLE.get(i);
@@ -156,7 +156,7 @@ final class HPACK {
 	private boolean encoderSizeChanged, decoderSizeChanged;
 	private final Table encode_tbl, decode_tbl;
 	private final Field checker;
-	private final MyHashSet<Field> encode_fp;
+	private final HashSet<Field> encode_fp;
 
 	public HPACK() {
 		bu = new BitBuffer();
@@ -164,7 +164,7 @@ final class HPACK {
 		encode_tbl = new Table(4096);
 		encode_tbl.owner = this;
 		checker = new Field();
-		encode_fp = new MyHashSet<>();
+		encode_fp = new HashSet<>();
 
 		decode_tbl = new Table(4096);
 	}
@@ -252,7 +252,7 @@ final class HPACK {
 		return f;
 	}
 
-	private int findExistField(MyHashSet<Field> set, CharSequence k, CharSequence v) {
+	private int findExistField(HashSet<Field> set, CharSequence k, CharSequence v) {
 		Field test = checker;
 
 		test.k = k;

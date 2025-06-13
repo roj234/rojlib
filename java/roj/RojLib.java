@@ -1,6 +1,6 @@
 package roj;
 
-import roj.collect.MyHashMap;
+import roj.collect.HashMap;
 import roj.plugins.ci.annotation.ReplaceConstant;
 import roj.reflect.litasm.Intrinsics;
 import roj.reflect.litasm.LibraryLoader;
@@ -18,7 +18,7 @@ import java.util.Map;
  */
 @ReplaceConstant
 public final class RojLib {
-	public static final Map<Object, Object> BLACKBOARD = new MyHashMap<>();
+	public static final Map<Object, Object> BLACKBOARD = new HashMap<>();
 	/**
 	 * 用于某些类加载顺序强相关的依赖注入
 	 * @author Roj234
@@ -26,6 +26,7 @@ public final class RojLib {
 	 */
 	public static Object inject(String s) {return BLACKBOARD.get(s);}
 	public static <T> T inject(TypedKey<T> key) {return Helpers.cast(BLACKBOARD.get(key));}
+	public static <T> T inject(TypedKey<T> key, T def) {return Helpers.cast(BLACKBOARD.getOrDefault(key, def));}
 
 	//region FastJNI
 	public static boolean fastJni() {return Intrinsics.available();}

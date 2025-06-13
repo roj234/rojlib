@@ -21,10 +21,10 @@ final class AttachedMethod extends InvokeHook {
 	public String toString() {return "attached<"+target+">";}
 
 	@Override
-	public Expr eval(MethodNode owner, @Nullable Expr self, List<Expr> args, Invoke node) {
-		if (self != null) {
+	public Expr eval(MethodNode owner, @Nullable Expr that, List<Expr> args, Invoke node) {
+		if (that != null) {
 			var nodes = new Expr[args.size()+1];
-			nodes[0] = self;
+			nodes[0] = that;
 			for (int i = 0; i < args.size(); i++)
 				nodes[i+1] = args.get(i);
 			args = Arrays.asList(nodes);

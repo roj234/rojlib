@@ -2,9 +2,9 @@ package roj.compiler.ast.expr;
 
 import roj.asm.type.IType;
 import roj.asm.type.Type;
+import roj.compiler.CompileContext;
 import roj.compiler.Tokens;
 import roj.compiler.asm.MethodWriter;
-import roj.compiler.context.LocalContext;
 import roj.compiler.diagnostic.Kind;
 import roj.compiler.resolve.ResolveException;
 import roj.compiler.resolve.TypeCast;
@@ -32,21 +32,21 @@ final class PostfixOp extends Expr {
 	public IType type() { return left.type(); }
 
 	@Override
-	public Expr resolve(LocalContext ctx) throws ResolveException {
+	public Expr resolve(CompileContext ctx) throws ResolveException {
 		Expr node = left.resolve(ctx);
 		left = node.asLeftValue(ctx);
-		if (left == null) return NaE.RESOLVE_FAILED;
+		if (left == null) return NaE.resolveFailed(this);
 
 		IType type = node.type();
 		int iType = type.getActualType();
 		if (iType == Type.CLASS) {
-			Expr override = ctx.getOperatorOverride(left, null, op | LocalContext.UNARY_POST);
+			Expr override = ctx.getOperatorOverride(left, null, op | CompileContext.UNARY_POST);
 			if (override != null) return override;
 
 			iType = TypeCast.getWrappedPrimitive(type);
 			if (iType == 0) {
 				ctx.report(this, Kind.ERROR, "op.notApplicable.unary", byId(op), type);
-				return NaE.RESOLVE_FAILED;
+				return NaE.resolveFailed(this);
 			}
 
 			ctx.report(this, Kind.SEVERE_WARNING, "unary.warn.wrapper", type, byId(op));

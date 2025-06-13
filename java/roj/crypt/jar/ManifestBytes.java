@@ -1,7 +1,7 @@
 package roj.crypt.jar;
 
-import roj.collect.MyHashMap;
-import roj.collect.SimpleList;
+import roj.collect.HashMap;
+import roj.collect.ArrayList;
 import roj.io.IOUtil;
 import roj.text.LineReader;
 import roj.util.ByteList;
@@ -19,14 +19,14 @@ import java.util.function.Function;
  */
 final class ManifestBytes {
 	byte[] data;
-	Map<String, NamedAttr> namedAttrMap = new MyHashMap<>();
+	Map<String, NamedAttr> namedAttrMap = new HashMap<>();
 	ByteAttr mainAttr;
 
 	public ManifestBytes(InputStream in) throws IOException {this(IOUtil.read(in));}
 	@SuppressWarnings("fallthrough")
 	public ManifestBytes(byte[] data) {
 		this.data = data;
-		List<ByteAttr> tmp = new SimpleList<>();
+		List<ByteAttr> tmp = new ArrayList<>();
 
 		int i = 0, len = data.length;
 		loop:
@@ -87,7 +87,7 @@ final class ManifestBytes {
 
 	static final class NamedAttr {
 		final String name;
-		final List<ByteAttr> sections = new SimpleList<>();
+		final List<ByteAttr> sections = new ArrayList<>();
 		NamedAttr(String name) { this.name = name; }
 
 		byte[] digest(MessageDigest digest, byte[] data) {

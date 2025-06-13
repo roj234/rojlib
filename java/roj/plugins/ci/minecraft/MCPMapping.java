@@ -3,7 +3,7 @@ package roj.plugins.ci.minecraft;
 import roj.asm.ClassUtil;
 import roj.asm.MemberDescriptor;
 import roj.asmx.mapper.Mapping;
-import roj.collect.MyHashMap;
+import roj.collect.HashMap;
 import roj.io.IOUtil;
 import roj.text.LineReader;
 import roj.text.TextReader;
@@ -39,13 +39,13 @@ final class MCPMapping extends Mapping {
 
 		save.getClassMap().putAll(classMap);
 
-		Map<String, List<MemberDescriptor>> fields = new MyHashMap<>(srg.getFieldMap().size());
+		Map<String, List<MemberDescriptor>> fields = new HashMap<>(srg.getFieldMap().size());
 		for (Map.Entry<MemberDescriptor, String> entry : srg.getFieldMap().entrySet()) {
 			if (entry.getValue().startsWith("field_"))
 				fields.computeIfAbsent(entry.getValue(), Helpers.fnArrayList()).add(entry.getKey());
 		}
 
-		Map<String, List<MemberDescriptor>> methods = new MyHashMap<>(srg.getMethodMap().size());
+		Map<String, List<MemberDescriptor>> methods = new HashMap<>(srg.getMethodMap().size());
 		for (Map.Entry<MemberDescriptor, String> entry : srg.getMethodMap().entrySet()) {
 			if (entry.getValue().startsWith("func_"))
 				methods.computeIfAbsent(entry.getValue(), Helpers.fnArrayList()).add(entry.getKey());
@@ -55,7 +55,7 @@ final class MCPMapping extends Mapping {
 			parseMoF(zf, "fields.csv", tmp, fields, save.getFieldMap());
 			parseMoF(zf, "methods.csv", tmp, methods, save.getMethodMap());
 			if (paramMap != null) {
-				MyHashMap<String, String> tmpParams = new MyHashMap<>();
+				HashMap<String, String> tmpParams = new HashMap<>();
 				parseParam(IOUtil.readUTF(zf.getInputStream(zf.getEntry("params.csv"))), tmp, tmpParams);
 				formatParamMap(tmpParams, paramMap, tmp, methods, save);
 			}
@@ -111,7 +111,7 @@ final class MCPMapping extends Mapping {
 	private void formatParamMap(Map<String, String> mcpParams, Map<MemberDescriptor, List<String>> params, List<String> tmp, Map<String, List<MemberDescriptor>> methods, Mapping srgName) {
 		ClassUtil U = ClassUtil.getInstance();
 
-		Map<String, Set<MemberDescriptor>> methodData = new MyHashMap<>(1000);
+		Map<String, Set<MemberDescriptor>> methodData = new HashMap<>(1000);
 
 		// func_10001_i
 		for (Map.Entry<String, List<MemberDescriptor>> entry : methods.entrySet()) {
@@ -129,7 +129,7 @@ final class MCPMapping extends Mapping {
 				String name = srgName.getMethodMap().get(desc);
 				if (name == null) continue;
 
-				Set<MemberDescriptor> list = methodData.computeIfAbsent(tmp.get(1), Helpers.fnMyHashSet());
+				Set<MemberDescriptor> list = methodData.computeIfAbsent(tmp.get(1), Helpers.fnHashSet());
 
 				String param = U.mapMethodParam(classMap, desc.rawDesc);
 				list.add(new MemberDescriptor(classMap.get(desc.owner), name, param));

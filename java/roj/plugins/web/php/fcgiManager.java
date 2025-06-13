@@ -1,7 +1,7 @@
 package roj.plugins.web.php;
 
 import org.jetbrains.annotations.Nullable;
-import roj.collect.MyHashMap;
+import roj.collect.HashMap;
 import roj.http.HttpUtil;
 import roj.http.server.*;
 import roj.text.logging.Level;
@@ -25,7 +25,7 @@ public abstract class fcgiManager implements Router {
 	public Content response(Request req, ResponseHeader rh) throws Exception {
 		var h = req.connection().attachment(FCGI_Handler,null);
 		if (h == null) {
-			h = fcgi_pass(req, new MyHashMap<>());
+			h = fcgi_pass(req, new HashMap<>());
 			h.onSuccess(null);
 		}
 
@@ -40,7 +40,7 @@ public abstract class fcgiManager implements Router {
 
 		fcgiContent h;
 		if (cfg != null) {
-			h = fcgi_pass(req, new MyHashMap<>());
+			h = fcgi_pass(req, new HashMap<>());
 			cfg.postAccept(Integer.MAX_VALUE, 900000);
 			cfg.postHandler(h);
 		} else {

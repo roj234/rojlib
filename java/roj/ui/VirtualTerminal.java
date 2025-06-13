@@ -1,7 +1,7 @@
 package roj.ui;
 
-import roj.collect.MyBitSet;
-import roj.collect.SimpleList;
+import roj.collect.ArrayList;
+import roj.collect.BitSet;
 import roj.concurrent.ScheduleTask;
 import roj.concurrent.Scheduler;
 import roj.config.data.CInt;
@@ -23,7 +23,8 @@ import static roj.ui.Terminal.*;
  * @since 2023/11/18 16:42
  */
 public class VirtualTerminal implements KeyHandler {
-	private static final int MAX_INPUT = 500;
+	private static final int HISTORY_MAX = 100;
+	private static final int INPUT_MAX = 500;
 
 	protected final CharList prompt = new CharList(100);
 	private String realPrompt;
@@ -35,14 +36,14 @@ public class VirtualTerminal implements KeyHandler {
 
 	private final CharList input = new CharList();
 	private int cursor, scrollLeft;
-	private final MyBitSet invisible = new MyBitSet();
+	private final BitSet invisible = new BitSet();
 	private String lastInput;
 
 	private int historyPos;
-	private final List<String> history = new SimpleList<>();
+	private final List<String> history = new ArrayList<>();
 	private String currentHistory;
 
-	private final List<Completion> tabs = new SimpleList<>();
+	private final List<Completion> tabs = new ArrayList<>();
 	private int tabCursor = -1, tabId;
 
 	private boolean _history = true, _echo = true;
@@ -171,7 +172,7 @@ public class VirtualTerminal implements KeyHandler {
 		if (!isVirtualKey) {
 			endCompletion(false);
 
-			if (input.length() > MAX_INPUT) { beep(); return; }
+			if (input.length() > INPUT_MAX) { beep(); return; }
 
 			input.insert(cursor, (char)keyCode);
 			cursor ++;
@@ -187,7 +188,9 @@ public class VirtualTerminal implements KeyHandler {
 			afterInput();
 		} else {
 			switch (keyCode) {
-				case VK_CTRL|VK_A -> _selectAll = true;
+				case VK_CTRL|VK_A -> {
+					if (input.length() > 0) _selectAll = true;
+				}
 				case VK_CTRL|VK_V -> {
 					try {
 						var text = GuiUtil.getClipboardText();
@@ -233,7 +236,7 @@ public class VirtualTerminal implements KeyHandler {
 					doRender(); // 适配粘贴多行命令的情况
 					if (endCompletion(true)) break;
 
-					String cmd = input.toString();
+					String cmd = input.trim().toString();
 					boolean ok = evaluate(cmd);
 					if (!ok) Terminal.beep();
 
@@ -241,7 +244,7 @@ public class VirtualTerminal implements KeyHandler {
 
 					if (_history && !cmd.isEmpty()) {
 						history.remove(cmd);
-						while (history.size() > 255) history.remove(0);
+						while (history.size() > HISTORY_MAX) history.remove(0);
 						history.add(cmd);
 					}
 
@@ -296,7 +299,7 @@ public class VirtualTerminal implements KeyHandler {
 					else return;
 				}
 				case VK_TAB -> {
-					if (!_echo || input.length() > MAX_INPUT) { beep(); return; }
+					if (!_echo || input.length() > INPUT_MAX) { beep(); return; }
 
 					if (tabs.size() > 0) {
 						endCompletion(true);
@@ -534,9 +537,9 @@ public class VirtualTerminal implements KeyHandler {
 		Ctrl+→: 光标移至结尾""";
 	protected void printHelp() {
 		Box.DEFAULT.render(new String[][]{
-			new String[] { "Roj234的终端模拟器 帮助", "简介", "快捷键" },
+			new String[] { "终端模拟器", "简介", "快捷键" },
 			new String[] {"""
-怎么，其实又是一个JLine不会用的人啊/doge 可惜这里不能放图，哈哈哈
+只是一个不会用JLine的人啊/doge 可惜这里不能放图，哈哈哈
 有兴趣可以看看我是如何计算字符显示长度的
 非常邪门的写法，但是很好用
 https://unix.stackexchange.com/questions/245013/get-the-display-width-of-a-string-of-characters""",
@@ -552,7 +555,7 @@ https://unix.stackexchange.com/questions/245013/get-the-display-width-of-a-strin
 	@Deprecated
 	public void onKeyboardInterrupt(Runnable o) {interruptHandler = o;}
 	public void onVirtualKey(IntFunction<Boolean> h) {
-		if (keyHandler.isEmpty()) keyHandler = new SimpleList<>();
+		if (keyHandler.isEmpty()) keyHandler = new ArrayList<>();
 		keyHandler.add(h);
 	}
 	public void removeKeyHandler(IntFunction<Boolean> h) {keyHandler.remove(h);}

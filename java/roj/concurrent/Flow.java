@@ -1,9 +1,9 @@
 package roj.concurrent;
 
+import roj.collect.ArrayList;
+import roj.collect.HashMap;
+import roj.collect.HashSet;
 import roj.collect.IntMap;
-import roj.collect.MyHashMap;
-import roj.collect.MyHashSet;
-import roj.collect.SimpleList;
 import roj.text.TextReader;
 import roj.util.Helpers;
 
@@ -14,10 +14,7 @@ import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.ForkJoinTask;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.LongAdder;
-import java.util.function.BiFunction;
-import java.util.function.Consumer;
-import java.util.function.Function;
-import java.util.function.Predicate;
+import java.util.function.*;
 
 /**
  * @author Roj234
@@ -37,10 +34,10 @@ public interface Flow<T> {
 		};
 	}
 
-	void consume(Consumer<T> consumer);
-	default void safeConsume(Consumer<T> consumer) {
+	void forEach(Consumer<T> consumer);
+	default void safeForEach(Consumer<T> consumer) {
 		try {
-			consume(consumer);
+			forEach(consumer);
 		} catch (OperationDone ignored) {}
 	}
 
@@ -63,11 +60,24 @@ public interface Flow<T> {
 		};
 	}
 
-	default <R> Flow<R> map(Function<T, R> mapper) {return c -> consume(t -> c.accept(mapper.apply(t)));}
+	default Flow<T> prepend(Flow<T> before) {
+		return c -> {
+			before.forEach(c);
+			this.forEach(c);
+		};
+	}
+	default Flow<T> append(Flow<T> after) {
+		return c -> {
+			this.forEach(c);
+			after.forEach(c);
+		};
+	}
+
+	default <R> Flow<R> map(Function<T, R> mapper) {return c -> forEach(t -> c.accept(mapper.apply(t)));}
 	default <R> Flow<R> map(Function<T, R> mapper1, int count, Function<T, R> mapper2) {
 		return c -> {
 			var counter = new AtomicInteger(count);
-			safeConsume(t -> {
+			safeForEach(t -> {
 				Function<T, R> mapper;
 				if (counter.get() > 0) {
 					counter.decrementAndGet();
@@ -81,9 +91,9 @@ public interface Flow<T> {
 			});
 		};
 	}
-	default <R> Flow<R> flatMap(Function<T, Flow<R>> mapper) {return c -> consume(t -> mapper.apply(t).consume(c));}
+	default <R> Flow<R> flatMap(Function<T, Flow<R>> mapper) {return c -> forEach(t -> mapper.apply(t).forEach(c));}
 	default Flow<T> filter(Predicate<T> filter) {
-		return c -> consume(t -> {
+		return c -> forEach(t -> {
 			if (filter.test(t)) {
 				c.accept(t);
 			}
@@ -92,7 +102,7 @@ public interface Flow<T> {
 	default Flow<T> limit(int max) {
 		return c -> {
 			var counter = new AtomicInteger(max);
-			safeConsume(t -> {
+			safeForEach(t -> {
 				if (counter.getAndDecrement() > 0) {
 					c.accept(t);
 				} else {
@@ -104,7 +114,7 @@ public interface Flow<T> {
 	default Flow<T> skip(int count) {
 		return c -> {
 			var counter = new AtomicInteger(count);
-			consume(t -> {
+			forEach(t -> {
 				if (counter.get() <= 0) {
 					c.accept(t);
 				} else {
@@ -113,11 +123,11 @@ public interface Flow<T> {
 			});
 		};
 	}
-	default Flow<T> andThen(Consumer<T> consumer) {return c -> consume(consumer.andThen(c));}
+	default Flow<T> andThen(Consumer<T> consumer) {return c -> forEach(consumer.andThen(c));}
 	default <U, R> Flow<R> zip(Iterable<U> newParam, BiFunction<T, U, R> combiner) {
 		return c -> {
 			var itr = newParam.iterator();
-			safeConsume(t -> {
+			safeForEach(t -> {
 				if (itr.hasNext()) {
 					c.accept(combiner.apply(t, itr.next()));
 				} else {
@@ -127,19 +137,28 @@ public interface Flow<T> {
 		};
 	}
 
+	default Flow<T> sorted() {return sorted(null);}
+	default Flow<T> sorted(Comparator<T> comparator) {
+		return c -> {
+			List<T> list = toList();
+			list.sort(comparator);
+			for (T t : list) c.accept(t);
+		};
+	}
+
 	default Flow<T> cached() {
 		var arraySeq = new ArrayList<T>();
-		consume(arraySeq::add);
+		forEach(arraySeq::add);
 		return arraySeq::forEach;
 	}
 	default Flow<T> parallel() {
 		var pool = ForkJoinPool.commonPool();
-		return c -> map(t -> pool.submit(() -> c.accept(t))).cached().consume(ForkJoinTask::join);
+		return c -> map(t -> pool.submit(() -> c.accept(t))).cached().forEach(ForkJoinTask::join);
 	}
 
 	default boolean anyMatch(Predicate<T> filter) {
 		try {
-			consume(t -> {
+			forEach(t -> {
 				if (filter.test(t)) throw OperationDone.INSTANCE;
 			});
 			return false;
@@ -150,7 +169,7 @@ public interface Flow<T> {
 	default boolean noneMatch(Predicate<T> filter) {return !anyMatch(filter);}
 	default boolean allMatch(Predicate<T> filter) {
 		try {
-			consume(t -> {
+			forEach(t -> {
 				if (!filter.test(t)) throw OperationDone.INSTANCE;
 			});
 			return true;
@@ -161,26 +180,26 @@ public interface Flow<T> {
 
 	default String join(String sep) {
 		var joiner = new StringJoiner(sep);
-		consume(t -> joiner.add(t.toString()));
+		forEach(t -> joiner.add(t.toString()));
 		return joiner.toString();
 	}
 
 	default List<T> toList() {
-		var list = new SimpleList<T>();
-		consume(list::add);
+		var list = new ArrayList<T>();
+		forEach(list::add);
 		return list;
 	}
 	default Set<T> toSet() {
-		var set = new MyHashSet<T>();
-		consume(set::add);
+		var set = new HashSet<T>();
+		forEach(set::add);
 		return set;
 	}
 
 	default <U> U reduce(U identity, BiFunction<U, T, U> accumulator, BiFunction<U, U, U> combiner) {
 		AtomicInteger v = new AtomicInteger();
 		ThreadLocal<Integer> threadId = ThreadLocal.withInitial(v::getAndIncrement);
-		List<U> tmp = new SimpleList<>();
-		consume(t -> {
+		List<U> tmp = new ArrayList<>();
+		forEach(t -> {
 			var i = threadId.get();
 			U value;
 			if (tmp.size() <= i) {
@@ -203,12 +222,14 @@ public interface Flow<T> {
 
 		return value;
 	}
-	default <K, V> Map<K, V> groupBy(Function<T, K> grouper, V identity, BiFunction<V, T, V> reducer) {
-		var map = new MyHashMap<K, V>();
+	default <K, V> Map<K, V> groupBy(Function<T, K> grouper, Supplier<V> identity, BiFunction<V, T, V> reducer) {
+		var map = new HashMap<K, V>();
 
-		consume(t -> {
+		forEach(t -> {
 			var i = grouper.apply(t);
-			V v1 = map.getOrDefault(i, identity);
+			V v1 = map.get(i);
+			if (v1 == null && !map.containsKey(i))
+				v1 = identity.get();
 			map.put(i, reducer.apply(v1, t));
 		});
 
@@ -217,7 +238,7 @@ public interface Flow<T> {
 
 	default long count() {
 		var adder = new LongAdder();
-		consume(t -> adder.increment());
+		forEach(t -> adder.increment());
 		return adder.sum();
 	}
 }

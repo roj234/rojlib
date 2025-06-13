@@ -11,4 +11,6 @@ import java.lang.annotation.Target;
  */
 @Retention(RetentionPolicy.SOURCE)
 @Target({ElementType.CONSTRUCTOR, ElementType.METHOD, ElementType.FIELD, ElementType.TYPE})
-public @interface ReferenceByGeneratedClass {}
+public @interface ReferenceByGeneratedClass {
+	String by() default "";
+}

@@ -8,8 +8,8 @@ import roj.asm.attr.ClassListAttribute;
 import roj.asm.attr.ModuleAttribute;
 import roj.asm.attr.StringAttribute;
 import roj.asmx.Context;
-import roj.collect.MyHashSet;
-import roj.collect.SimpleList;
+import roj.collect.HashSet;
+import roj.collect.ArrayList;
 import roj.text.TextUtil;
 import roj.util.DynByteBuf;
 
@@ -27,7 +27,7 @@ public class AutoModule implements Processor {
 	public List<Context> process(List<Context> classes, ProcessEnvironment ctx) {
 		if (ctx.increment == 0 && "true".equals(ctx.project.getVariables().get("fmd:auto_module:enable"))) {
 			var moduleName = ctx.project.getVariables().getOrDefault("fmd:auto_module:name", ctx.project.getName());
-			MyHashSet<String> packages = new MyHashSet<>();
+			HashSet<String> packages = new HashSet<>();
 
 			for (Context context : classes) {
 				String className = context.getClassName();
@@ -59,7 +59,7 @@ public class AutoModule implements Processor {
 			var mainClass = ctx.project.getVariables().get("fmd:auto_module:main");
 			if (mainClass != null) moduleInfo.addAttribute(new StringAttribute(Attribute.ModuleMainClass, mainClass.replace('.', '/')));
 
-			moduleInfo.addAttribute(new ClassListAttribute(Attribute.ModulePackages, new SimpleList<>(packages)));
+			moduleInfo.addAttribute(new ClassListAttribute(Attribute.ModulePackages, new ArrayList<>(packages)));
 			moduleInfo.addAttribute(moduleAttr);
 
 			ctx.generatedFiles.put("module-info.class", DynByteBuf.wrap(AsmCache.toByteArray(moduleInfo)));

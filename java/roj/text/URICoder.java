@@ -1,6 +1,6 @@
 package roj.text;
 
-import roj.collect.MyBitSet;
+import roj.collect.BitSet;
 import roj.compiler.plugins.annotations.Attach;
 import roj.concurrent.LazyThreadLocal;
 import roj.config.Tokenizer;
@@ -31,8 +31,8 @@ import java.net.MalformedURLException;
 public class URICoder {
 	public static final LazyThreadLocal<FastCharset> CHARSET = new LazyThreadLocal<>(FastCharset.UTF8());
 
-	public static final MyBitSet URI_SAFE = MyBitSet.from(TextUtil.digits).addAll("~!@$&*()_+-=/.,:;'");
-	public static final MyBitSet URI_COMPONENT_SAFE = MyBitSet.from(TextUtil.digits).addAll("~!*()_-.'");
+	public static final BitSet URI_SAFE = BitSet.from(TextUtil.digits).addAll("~!@$&*()_+-=/.,:;'");
+	public static final BitSet URI_COMPONENT_SAFE = BitSet.from(TextUtil.digits).addAll("~!*()_-.'");
 
 	public static String encodeURI(CharSequence src) { return encodeURI(new CharList(), src).toStringAndFree(); }
 	public static String encodeURIComponent(CharSequence src) { return encodeURIComponent(new CharList(), src).toStringAndFree(); }
@@ -57,12 +57,12 @@ public class URICoder {
 		}
 	}
 
-	private static final MyBitSet FILE_NAME_INVALID = MyBitSet.from("%\\/:*?\"<>|"), FILE_PATH_INVALID = MyBitSet.from("%:*?\"<>|");
+	private static final BitSet FILE_NAME_INVALID = BitSet.from("%\\/:*?\"<>|"), FILE_PATH_INVALID = BitSet.from("%:*?\"<>|");
 
 	public static String escapeFilePath(CharSequence src) { return pEncodeB(src, new CharList(), FILE_PATH_INVALID).toStringAndFree(); }
 	public static String escapeFileName(CharSequence src) { return pEncodeB(src, new CharList(), FILE_NAME_INVALID).toStringAndFree(); }
 
-	public static <T extends Appendable> T pEncodeW(T sb, DynByteBuf src, MyBitSet whitelist) {
+	public static <T extends Appendable> T pEncodeW(T sb, DynByteBuf src, BitSet whitelist) {
 		try {
 			for (int i = 0; i < src.length(); i++) {
 				char c = src.charAt(i);
@@ -74,7 +74,7 @@ public class URICoder {
 		}
 		return sb;
 	}
-	private static CharList pEncodeB(CharSequence src, CharList sb, MyBitSet blacklist) {
+	private static CharList pEncodeB(CharSequence src, CharList sb, BitSet blacklist) {
 		for (int i = 0; i < src.length(); i++) {
 			char c = src.charAt(i);
 			if (!blacklist.contains(c)) sb.append(c);

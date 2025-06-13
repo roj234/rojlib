@@ -1,6 +1,6 @@
 package roj.plugins.pinyin;
 
-import roj.archive.qz.xz.LZMA2InputStream;
+import roj.archive.xz.LZMA2InputStream;
 import roj.collect.*;
 import roj.config.Tokenizer;
 import roj.config.data.CInt;
@@ -10,7 +10,10 @@ import roj.text.FastCharset;
 import roj.util.DynByteBuf;
 
 import java.nio.CharBuffer;
+import java.util.Comparator;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 
 /**
  * @author Roj234
@@ -84,7 +87,7 @@ public class JPinyin {
 
 	public static TrieTree<Integer> getPinyinWords() { return PinyinWords; }
 
-	private final MyHashMap.Entry<CInt, Integer> entry = new MyHashMap.Entry<>(new CInt(), null);
+	private final HashMap.Entry<CInt, Integer> entry = new HashMap.Entry<>(new CInt(), null);
 
 	public JPinyin() {}
 
@@ -133,7 +136,7 @@ public class JPinyin {
 
 			off = j+1;
 			j = findNextNumber(off);
-			if (j+1 >= len) break;
+			if (j+1 > len) break;
 
 			sb.append(splitter);
 		}
@@ -172,5 +175,60 @@ public class JPinyin {
 		assert vowels != null : "invalid StringPool";
 		char vowel = vowels.charAt(StringPool[to]-'0');
 		sb.set(offset+from, vowel);
+	}
+
+	public static Comparator<CharSequence> pinyinSorter() {
+		JPinyin instance = JPinyin.getInstance();
+		return (o1, o2) -> instance.toPinyin(o1).compareTo(instance.toPinyin(o2));
+	}
+
+	public List<String[]> toChoices(CharSequence str) {
+		int i = 0, len = str.length();
+
+		var out = new ArrayList<String[]>();
+		var sb = IOUtil.getSharedCharBuf();
+		var tmp = new LinkedHashSet<String>();
+
+		while (i < len) {
+			PinyinWords.match(str, i, len, entry);
+
+			int matchLen = entry.getKey().value;
+			if (matchLen > 0) {
+				if (sb.length() > 0) {
+					out.add(new String[] {sb.toString()});
+					sb.clear();
+				}
+
+				tmp.add(str.subSequence(i, i+matchLen).toString());
+				if (matchLen == 1) addTone2(tmp, entry.getValue());
+				else {
+					addTone(sb, entry.getValue(), PINYIN_NONE|PINYIN_DUOYINZI, "");
+					tmp.add(sb.toString());
+					sb.clear();
+				}
+				out.add(tmp.toArray(new String[tmp.size()]));
+				tmp.clear();
+
+				i += matchLen;
+			} else {
+				sb.append(str.charAt(i++));
+			}
+		}
+
+		if (sb.length() > 0) {
+			out.add(new String[] {sb.toString()});
+			sb.clear();
+		}
+		return out;
+	}
+	private static void addTone2(Set<String> tmp, int cpState) {
+		int off = cpState >>> CPBits;
+		int len = off + (cpState & CPMask);
+		int j = findNextNumber(off);
+		do {
+			tmp.add(new String(StringPool, off, j - off));
+			off = j+1;
+			j = findNextNumber(off);
+		} while (j+1 <= len);
 	}
 }

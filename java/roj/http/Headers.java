@@ -1,14 +1,13 @@
 package roj.http;
 
 import org.jetbrains.annotations.NotNull;
-import roj.collect.MyHashMap;
-import roj.collect.MyHashSet;
-import roj.collect.SimpleList;
+import roj.collect.HashMap;
+import roj.collect.HashSet;
+import roj.collect.ArrayList;
 import roj.collect.ToIntMap;
 import roj.concurrent.OperationDone;
 import roj.config.Tokenizer;
 import roj.io.IOUtil;
-import roj.reflect.ReflectionUtils;
 import roj.reflect.Unaligned;
 import roj.text.CharList;
 import roj.text.LineReader;
@@ -75,7 +74,7 @@ public class Headers extends Multimap<CharSequence, String> {
 		return null;
 	}
 	private static List<Map.Entry<String, String>> getValues(CharSequence field) {
-		List<Map.Entry<String, String>> kvs = new SimpleList<>();
+		List<Map.Entry<String, String>> kvs = new ArrayList<>();
 		complexValue(field, (k, v) -> kvs.add(new SimpleImmutableEntry<>(k, v)), false);
 		return kvs;
 	}
@@ -312,7 +311,7 @@ public class Headers extends Multimap<CharSequence, String> {
 		if (value.size() == 1) {
 			e.rest = Collections.emptyList();
 		} else {
-			e.rest = new SimpleList(value);
+			e.rest = new ArrayList(value);
 			e.rest.remove(0);
 			for (int i = 0; i < e.rest.size(); i++)
 				e.rest.set(i, checkVal((String) e.rest.get(i)));
@@ -339,7 +338,7 @@ public class Headers extends Multimap<CharSequence, String> {
 		return key;
 	}
 
-	private static final MyHashSet<CharSequence> dedup = new MyHashSet<>();
+	private static final HashSet<CharSequence> dedup = new HashSet<>();
 	static {
 		F("accept-charset");F("accept-encoding");
 		F("accept-language");F("accept-ranges");F("accept");F("access-control-allow-origin");F("age");F("allow");
@@ -416,7 +415,7 @@ public class Headers extends Multimap<CharSequence, String> {
 		encType.putInt(name, enc);
 	}
 
-	private static final long LENGTH_OFFSET = ReflectionUtils.fieldOffset(MyHashMap.class, "length");
+	private static final long LENGTH_OFFSET = Unaligned.fieldOffset(HashMap.class, "length");
 	public void _moveFrom(Headers head) {
 		entries = null;
 		if (head.entries != null) {

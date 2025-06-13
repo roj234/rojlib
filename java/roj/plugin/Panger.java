@@ -4,8 +4,8 @@ import roj.archive.zip.ZEntry;
 import roj.archive.zip.ZipFile;
 import roj.asm.annotation.Annotation;
 import roj.collect.CollectionX;
-import roj.collect.MyHashMap;
-import roj.collect.SimpleList;
+import roj.collect.HashMap;
+import roj.collect.ArrayList;
 import roj.concurrent.TaskPool;
 import roj.config.Tokenizer;
 import roj.config.data.CBoolean;
@@ -17,9 +17,10 @@ import roj.io.IOUtil;
 import roj.math.Version;
 import roj.net.MyChannel;
 import roj.net.ServerLaunch;
+import roj.plugin.di.DIContext;
 import roj.plugins.ci.annotation.ReplaceConstant;
 import roj.reflect.ILSecurityManager;
-import roj.reflect.ReflectionUtils;
+import roj.reflect.Reflection;
 import roj.text.CharList;
 import roj.text.Formatter;
 import roj.text.TextReader;
@@ -58,8 +59,7 @@ public final class Panger extends PluginManager {
 	public static KeyHandler console() {return CMD;}
 
 	static Panger pm;
-	public static PluginManager getInstance() {return pm;}
-	private Panger(File pluginFolder) {super(pluginFolder);}
+	public static PluginManager getPluginManager() {return pm;}
 
 	@SuppressWarnings("unchecked")
 	public static void main(String[] args) throws Exception {
@@ -90,9 +90,12 @@ public final class Panger extends PluginManager {
 
 		File plugins = new File("plugins"); plugins.mkdir();
 		pm = new Panger(plugins);
-		pm.onLoad();
+		pm.registerSystemCommands();
+		DIContext.dependencyLoad(PanTweaker.annotations);
+		pm.loadBuiltinPlugins();
 		ILSecurityManager.setSecurityManager(new PanSecurityManager.ILHook());
-		pm.readPlugins();
+		pm.findPlugins();
+		pm.loadPlugins();
 
 		if (pm.stopping) return;
 
@@ -116,7 +119,6 @@ public final class Panger extends PluginManager {
 			}
 		}
 
-		if (!Terminal.ANSI_INPUT) LOGGER.error("使用支持ANSI转义的终端以获得更好的体验");
 		if (httpServer != null) httpServer.launch();
 		CMD.sortCommands();
 		Terminal.setConsole(CMD);
@@ -125,13 +127,12 @@ public final class Panger extends PluginManager {
 		HighResolutionTimer.runThis();
 	}
 
-	private void onLoad() {
-		String CORE_VERSION = "${panger_version}";
-		splash(CORE_VERSION);
+	private Panger(File pluginFolder) {
+		super(pluginFolder);
 
-		var pd = new PluginDescriptor();
-		pd.id = SYSTEM_NAME;
-		pd.version = new Version(CORE_VERSION);
+		var pd = systemPlugin;
+		pd.id = "panger";
+		pd.version = new Version("${panger_version}");
 		pd.authors = Collections.singletonList("Roj234");
 
 		pd.skipCheck = true;
@@ -139,11 +140,42 @@ public final class Panger extends PluginManager {
 		pd.accessUnsafe = true;
 
 		pd.state = ENABLED;
-		plugins.put(pd.id, pd);
 
+		if (!Terminal.ANSI_INPUT) LOGGER.error("使用支持ANSI转义的终端以获得更好的体验");
+		else {
+			if (CONFIG.getBool("clear_screen")) Terminal.directWrite("\u001b[1;1H\u001b[0J");
+			Terminal.directWrite("\u001b]0;Panger ${panger_version} Terminal\7");
+		}
+
+		System.out.println("""
+			------------------------------------------------------------
+			\u001b[38;2;46;137;255m
+			  █████▌╗   ████▌╗  ██▌╗   █▌╗  █████▌╗  ██████▌╗ █████▌╗\s
+			  █▌╔══█▌╗ █▌╔══█▌╗ ███▌╗  █▌║ █▌╔════╝  █▌╔════╝ █▌╔══█▌╗
+			  █████▌╔╝ ██████▌║ █▌╔█▌╗ █▌║ █▌║  ██▌╗ ████▌╗   █████▌╔╝
+			  █▌╔═══╝  █▌╔══█▌║ █▌║╚█▌╗█▌║ █▌║   █▌║ █▌╔══╝   █▌╔══█▌╗
+			  █▌║      █▌║  █▌║ █▌║ ╚███▌║ ╚█████▌╔╝ ██████▌╗ █▌║  █▌║
+			  ╚═╝      ╚═╝  ╚═╝ ╚═╝  ╚═══╝  ╚═════╝  ╚══════╝ ╚═╝  ╚═╝\s\u001b[38;2;128;255;255mv${panger_version}\u001b[38;2;255;255;255m
+			
+			""");
+
+		readMOTDs();
+		if (!motds.isEmpty()) {
+			try{
+				var motd = motds.get((int)(System.currentTimeMillis()/86400000L)%motds.size());
+				motd = Tokenizer.unescape(motd.replace("{user}", System.getProperty("user.name")));
+
+				System.out.println(" + "+motd);
+			} catch (Exception ignored) {}
+		}
+
+		System.out.println(" + Copyright (c) 2019-2025 Roj234\n\u001b[0m------------------------------------------------------------");
+	}
+
+	private void registerSystemCommands() {
 		CMD.register(literal("load").then(argument("name", Argument.file()).executes(ctx -> {
 			File plugin = ctx.argument("name", File.class);
-			loadPluginFromFile(plugin);
+			findAndLoadPlugin(plugin);
 		})));
 		CMD.register(literal("unload").then(argument("id", Argument.oneOf(CollectionX.toMap(plugins))).executes(ctx -> {
 			unloadPlugin(ctx.argument("id", PluginDescriptor.class));
@@ -164,41 +196,12 @@ public final class Panger extends PluginManager {
 			System.out.println(node.dump(new CharList(), 2).toStringAndFree());
 		})));
 		CMD.register(literal("stop").executes(ctx -> System.exit(0)));
-
-		loadBuiltin();
 	}
-	private void splash(String CORE_VERSION) {
-		CharList s = new CharList("""
-			------------------------------------------------------------
-			\u001b[38;2;46;137;255m
-			  █████▌╗   ████▌╗  ██▌╗   █▌╗  █████▌╗  ██████▌╗ █████▌╗\s
-			  █▌╔══█▌╗ █▌╔══█▌╗ ███▌╗  █▌║ █▌╔════╝  █▌╔════╝ █▌╔══█▌╗
-			  █████▌╔╝ ██████▌║ █▌╔█▌╗ █▌║ █▌║  ██▌╗ ████▌╗   █████▌╔╝
-			  █▌╔═══╝  █▌╔══█▌║ █▌║╚█▌╗█▌║ █▌║   █▌║ █▌╔══╝   █▌╔══█▌╗
-			  █▌║      █▌║  █▌║ █▌║ ╚███▌║ ╚█████▌╔╝ ██████▌╗ █▌║  █▌║
-			  ╚═╝      ╚═╝  ╚═╝ ╚═╝  ╚═══╝  ╚═════╝  ╚══════╝ ╚═╝  ╚═╝\s\u001b[38;2;128;255;255mv{V}
-			\u001b[38;2;255;255;255m
-			""").replace("{V}", CORE_VERSION);
-
-		readMOTD();
-		if (!motds.isEmpty()) {
-			try{
-				var motd = motds.get((int)(System.currentTimeMillis()/86400000L)%motds.size());
-				motd = Tokenizer.unescape(motd.replace("{user}", System.getProperty("user.name")));
-
-				s.append(" + ").append(motd).append('\n');
-			} catch (Exception ignored) {}
-		}
-
-		if (CONFIG.getBool("clear_screen")) System.out.print("\u001b[1;1H\u001b[0J");
-		System.out.print("\u001b]0;Panger VT\7");
-		System.out.println(s.append(" + Copyright (c) 2019-2025 Roj234\n\u001b[0m------------------------------------------------------------").toStringAndFree());
-	}
-	private void loadBuiltin() {
+	private void loadBuiltinPlugins() {
 		PluginDescriptor pd;
 		CEntry entry = CONFIG.getOr("load_builtin", CBoolean.TRUE);
 		if (!entry.mayCastTo(Type.BOOL) || entry.asBool()) {
-			MyHashMap<String, PluginDescriptor> builtin = new MyHashMap<>();
+			HashMap<String, PluginDescriptor> builtin = new HashMap<>();
 			for (var info : PanTweaker.annotations.annotatedBy("roj/plugin/SimplePlugin")) {
 				Annotation pin = info.annotations().get("roj/plugin/SimplePlugin");
 
@@ -231,29 +234,15 @@ public final class Panger extends PluginManager {
 					for (int i = 0; i < lt.size(); i++) {
 						var pd1 = lt.get(i);
 						builtin.remove(pd1.id);
-						plugins.add(pd1);
-					}
-					for (int i = 0; i < lt.size(); i++) {
-						var pd1 = lt.get(i);
-						loadPlugin(pd1);
-						enablePlugin(pd1);
+						loadAndEnablePlugin(pd1);
 					}
 				})));
 			}
 		}
 	}
 
-	private static void shutdown() {
-		Terminal.setConsole(null);
-		LOGGER.info("正在卸载插件");
-		pm.stopping = true;
-		pm.unloadPlugins();
-		IOUtil.closeSilently(httpServer);
-		if (!VMUtil.isShutdownInProgress()) System.exit(0);
-	}
-
 	public static void addChannelInitializator(Consumer<MyChannel> ch) {
-		var caller = ReflectionUtils.getCallerClass(2);
+		var caller = Reflection.getCallerClass(2);
 		if (caller.getClassLoader() instanceof PluginClassLoader) throw new IllegalStateException("not allowed for external plugin");
 		httpServer.initializator(httpServer.initializator().andThen(ch));
 	}
@@ -287,8 +276,8 @@ public final class Panger extends PluginManager {
 		return router;
 	}
 
-	static final SimpleList<String> motds = new SimpleList<>();
-	private void readMOTD() {
+	static final ArrayList<String> motds = new ArrayList<>();
+	private void readMOTDs() {
 		try (var tr = TextReader.from(new File(getPluginFolder(), "Core/splashes.txt"), StandardCharsets.UTF_8)) {
 			for (;;) {
 				var line = tr.readLine();
@@ -299,9 +288,21 @@ public final class Panger extends PluginManager {
 	}
 
 	private static final class Interrupter extends Thread implements IntFunction<Boolean>, KeyHandler {
+		private static void shutdown() {
+			Terminal.setConsole(null);
+			LOGGER.info("正在卸载插件");
+			pm.stopping = true;
+			pm.unloadPlugins();
+			IOUtil.closeSilently(httpServer);
+			if (!VMUtil.isShutdownInProgress()) System.exit(0);
+		}
+
 		public Interrupter() {
-			super(Panger::shutdown, "RojLib Interrupter");
+			super(Interrupter::shutdown, "Panger Shutdown");
 			Runtime.getRuntime().addShutdownHook(this);
+
+			// preload class, only for development purpose
+			VMUtil.isShutdownInProgress();
 		}
 
 		@Override
@@ -310,7 +311,7 @@ public final class Panger extends PluginManager {
 				CMD.removeKeyHandler(this);
 				Runtime.getRuntime().removeShutdownHook(this);
 				LOGGER.warn("正在关闭系统，再次按下Ctrl+C以强制退出");
-				TaskPool.Common().submit(Panger::shutdown);
+				TaskPool.common().submit(Interrupter::shutdown);
 				return false;
 			}
 

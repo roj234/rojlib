@@ -1,6 +1,7 @@
 package roj.io;
 
-import roj.collect.SimpleList;
+import roj.collect.ArrayList;
+import roj.config.auto.Optional;
 import roj.text.DateTime;
 import roj.text.TextUtil;
 
@@ -50,9 +51,12 @@ import static roj.text.DateTime.*;
  * @author Roj234
  * @since 2025/05/25 12:54
  */
+@Optional(write = Optional.WriteMode.ALWAYS)
 public class FlexibleRetiringPolicy {
-	private final File directory;
+	@Optional(read = Optional.ReadMode.REQUIRED)
+	private File directory;
 	/** 目录允许的最大存储空间（字节） */
+	@Optional(read = Optional.ReadMode.REQUIRED)
 	public long maxSize = Long.MAX_VALUE;
 	/** 保留最近N秒内的所有文件 */
 	public int last;
@@ -67,9 +71,11 @@ public class FlexibleRetiringPolicy {
 	/** 保留最近N年内的文件（每年至少保留1个最新文件） */
 	public int year;
 
-	private List<FileInfo> fileList;
-	private long remainSize;
+	private transient List<FileInfo> fileList;
+	private transient long remainSize;
 
+	// for serializer
+	private FlexibleRetiringPolicy() {}
 	public FlexibleRetiringPolicy(File directory) {
 		this.directory = directory;
 	}
@@ -85,7 +91,7 @@ public class FlexibleRetiringPolicy {
 			this.size = file.length();
 		}
 	}
-	private final int[] calendarCache = new int[CORE_FIELD_COUNT], calendarCache2 = new int[CORE_FIELD_COUNT];
+	private transient final int[] calendarCache = new int[CORE_FIELD_COUNT], calendarCache2 = new int[CORE_FIELD_COUNT];
 
 	/**
 	 * 设置目录最大存储空间限制。
@@ -108,7 +114,7 @@ public class FlexibleRetiringPolicy {
 		FileInfo info = new FileInfo(file);
 		this.fileList.add(0, info);
 
-		List<FileInfo> retired = new SimpleList<>();
+		List<FileInfo> retired = new ArrayList<>();
 		int i = retire(fileList, retired);
 
 		long remainSize = this.remainSize - info.size;
@@ -132,10 +138,10 @@ public class FlexibleRetiringPolicy {
 		}
 		Arrays.sort(files, (a, b) -> Long.compare(b.lastModified(), a.lastModified()));
 
-		List<FileInfo> fileList = this.fileList = new SimpleList<>(files.length);
+		List<FileInfo> fileList = this.fileList = new ArrayList<>(files.length);
 		for (File file : files) fileList.add(new FileInfo(file));
 
-		List<FileInfo> retired = new SimpleList<>();
+		List<FileInfo> retired = new ArrayList<>();
 		int i = retire(fileList, retired);
 
 		int j = 0;

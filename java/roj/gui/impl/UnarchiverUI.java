@@ -6,6 +6,7 @@ package roj.gui.impl;
 
 import roj.archive.ArchiveEntry;
 import roj.archive.ArchiveFile;
+import roj.archive.qpak.QZArchiver;
 import roj.archive.qz.QZArchive;
 import roj.archive.qz.QZEntry;
 import roj.archive.zip.ZEntry;
@@ -114,10 +115,10 @@ public class UnarchiverUI extends JFrame {
 
 			uiRead.setEnabled(false);
 			uiExtract.setEnabled(false);
-			TaskPool.Common().submit(() -> {
+			TaskPool.common().submit(() -> {
 				int threads = (int) uiThreads.getValue();
 				if (threads == 0) threads = Runtime.getRuntime().availableProcessors();
-				TaskPool pool = TaskPool.MaxThread(threads, "7z-worker-");
+				TaskPool pool = TaskPool.newFixed(threads, "7z-worker-");
 
 				EasyProgressBar bar = new GuiProgressBar(null, progressBar1);
 				bar.setName("解压");

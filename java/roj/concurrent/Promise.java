@@ -22,7 +22,7 @@ public sealed interface Promise<T> permits PromiseImpl {
 	@SuppressWarnings("unchecked")
 	static <T, X extends Promise<T> & Callback> X sync() { return (X) new PromiseImpl<>(); }
 
-	static <T> Promise<T> async(Consumer<Callback> handler) {return async(TaskPool.Common(), handler);}
+	static <T> Promise<T> async(Consumer<Callback> handler) {return async(TaskPool.common(), handler);}
 	static <T> Promise<T> async(TaskExecutor executor, Consumer<Callback> handler) {
 		PromiseImpl<T> impl = new PromiseImpl<>(executor);
 		executor.submit(() -> {
@@ -35,7 +35,7 @@ public sealed interface Promise<T> permits PromiseImpl {
 		return impl;
 	}
 
-	static <T> Promise<T> callAsync(Callable<T> callable) {return callAsync(TaskPool.Common(), callable);}
+	static <T> Promise<T> callAsync(Callable<T> callable) {return callAsync(TaskPool.common(), callable);}
 	static <T> Promise<T> callAsync(TaskExecutor executor, Callable<T> callable) {
 		PromiseImpl<T> impl = new PromiseImpl<>(executor);
 		executor.submit(() -> {
@@ -47,9 +47,9 @@ public sealed interface Promise<T> permits PromiseImpl {
 		});
 		return impl;
 	}
-	static <T> Promise<T> supplyAsync(Supplier<T> supplier) {return supplyAsync(TaskPool.Common(), supplier);}
+	static <T> Promise<T> supplyAsync(Supplier<T> supplier) {return supplyAsync(TaskPool.common(), supplier);}
 	static <T> Promise<T> supplyAsync(TaskExecutor executor, Supplier<T> supplier) {return callAsync(executor, supplier::get);}
-	static Promise<Void> runAsync(Runnable runnable) {return runAsync(TaskPool.Common(), runnable);}
+	static Promise<Void> runAsync(Runnable runnable) {return runAsync(TaskPool.common(), runnable);}
 	static Promise<Void> runAsync(TaskExecutor executor, Runnable runnable) {
 		return callAsync(executor, () -> {
 			runnable.run();

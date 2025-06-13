@@ -1,9 +1,9 @@
 package roj.plugins.web.share;
 
 import org.jetbrains.annotations.Nullable;
+import roj.collect.BitSet;
 import roj.collect.IntMap;
-import roj.collect.MyBitSet;
-import roj.collect.SimpleList;
+import roj.collect.ArrayList;
 import roj.config.ConfigMaster;
 import roj.crypt.Base64;
 import roj.crypt.CryptoFactory;
@@ -38,9 +38,9 @@ public class ChunkUpload {
 
 		long length;
 		File lock, tmp;
-		transient SimpleList<FileChannel> fds = new SimpleList<>();
+		transient ArrayList<FileChannel> fds = new ArrayList<>();
 
-		MyBitSet bitmap;
+		BitSet bitmap;
 		int fragmentSize, fragmentCount, threads;
 
 		public File getFile() {return tmp;}
@@ -84,7 +84,7 @@ public class ChunkUpload {
 
 	private static final Logger LOGGER = Logger.getLogger("分片上传");
 	private final IntMap<Task> tasks = new IntMap<>();
-	private final MyBitSet taskIds = new MyBitSet();
+	private final BitSet taskIds = new BitSet();
 	private final SecureRandom srnd = new SecureRandom();
 	private int fragmentSize = 4194304, threads = 4;
 
@@ -114,7 +114,7 @@ public class ChunkUpload {
 			task.fragmentSize = fragmentSize;
 			int fragmentCount = (int) ((size+task.fragmentSize-1) / task.fragmentSize);
 			task.fragmentCount = fragmentCount;
-			task.bitmap = new MyBitSet(fragmentCount);
+			task.bitmap = new BitSet(fragmentCount);
 			task.bitmap.fill(fragmentCount);
 			task.lock = lock;
 			task.tmp = tmpFile;
@@ -205,7 +205,7 @@ public class ChunkUpload {
 	}
 
 	public void purge(long expire) {
-		List<Task> purged = new SimpleList<>();
+		List<Task> purged = new ArrayList<>();
 		synchronized (tasks) {
 			for (var itr = tasks.values().iterator(); itr.hasNext(); ) {
 				var task = itr.next();

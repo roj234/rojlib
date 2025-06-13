@@ -11,36 +11,57 @@ import java.lang.annotation.Target;
 @Retention(RetentionPolicy.CLASS)
 @Target({ElementType.FIELD,ElementType.TYPE})
 public @interface Optional {
-    Mode value() default Mode.IF_DEFAULT;
-    enum Mode {
+    /**
+     * 字段序列化模式
+     * 注解默认值：非空时序列化
+     * 无注解的默认值：始终
+     */
+    WriteMode write() default WriteMode.NON_NULL;
+    enum WriteMode {
         /**
-         * 这个字段总会被序列化
+         * 始终跳过该字段（不参与序列化）
          */
-        NEVER,
+        SKIP,
         /**
-         * 这个字段在非默认值(0, false, null)时会被序列化
+         * 始终序列化该字段（无论字段值如何）
          */
-        IF_DEFAULT,
+        ALWAYS,
         /**
-         * 这个字段在非空时会被序列化，仅适用于对象类型.
-         * 在基本类型上使用和IF_DEFAULT效果相同.
-         * 会额外调用一些简单的isEmpty函数判断.
-         * @deprecated 建议使用writeIgnore (WIP)
+         * 仅当字段值非空时序列化（适用规则：<br>
+         * - 原始类型：非默认值（如非0/false）<br>
+         * - 对象类型：非null
+         */
+        NON_NULL,
+        /**
+         * 仅当字段值非空且非空集合/字符串时序列化<br>
+         * (原始类型处理同{@link #NON_NULL})<br>
+         * @deprecated 使用 {@link #CUSTOM} 替代
          */
         @Deprecated
-        IF_EMPTY
+        NON_BLANK,
+        CUSTOM
     }
 
+    String writeOn() default "";
+
     /**
-     * 序列化忽略类型.
-     * 默认/NEVER => 遵从value的设置
-     * ALWAYS => 这个值不会被序列化 (但是能被反序列化)
-     * 其它 => 使用自定义Predicate (未实现)
+     * 字段反序列化模式
+     * 注解默认值：可选
+     * 无注解的默认值：REQUIRED
      */
-    String writeIgnore() default "NEVER";
-    /**
-     * 反序列化忽略.
-     * 为true时，该值不会被反序列化
-     */
-    boolean readIgnore() default false;
+    ReadMode read() default ReadMode.OPTIONAL;
+    enum ReadMode {
+        /**
+         * 必须存在字段值（不存在则抛出异常）
+         */
+        REQUIRED,
+        /**
+         * 字段值可选（不存在时设为默认值）
+         */
+        OPTIONAL,
+        /**
+         * 完全跳过该字段（不参与反序列化）
+         */
+        IGNORED
+    }
 }

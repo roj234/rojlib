@@ -1,8 +1,8 @@
 package roj.plugins.minecraft;
 
-import roj.collect.MyHashMap;
-import roj.collect.MyHashSet;
-import roj.collect.SimpleList;
+import roj.collect.ArrayList;
+import roj.collect.HashMap;
+import roj.collect.HashSet;
 import roj.config.JSONParser;
 import roj.config.ParseException;
 import roj.config.data.CEntry;
@@ -38,7 +38,7 @@ public class MCTrim extends Plugin {
 			c.setPrompt("\u001b[;97m添加MC版本目录,Ctrl+C以结束 > ");
 			c.setInputEcho(true);
 
-			SimpleList<File> versions = new SimpleList<>();
+			ArrayList<File> versions = new ArrayList<>();
 			while (true) {
 				File file = Terminal.readLine(c, Argument.folder());
 				if (file == null) break;
@@ -50,15 +50,15 @@ public class MCTrim extends Plugin {
 		}))));
 	}
 
-	static void operate(File assets, File libraries, SimpleList<File> versionss) throws IOException {
-		MyHashMap<String, File> librariesToRemove = new MyHashMap<>();
+	static void operate(File assets, File libraries, ArrayList<File> versionss) throws IOException {
+		HashMap<String, File> librariesToRemove = new HashMap<>();
 		int pathLen = libraries.getAbsolutePath().length() + 1;
-		IOUtil.findAllFiles(libraries, file -> {
+		IOUtil.listFiles(libraries, file -> {
 			librariesToRemove.put(file.getAbsolutePath().substring(pathLen).replace(File.separatorChar, '/'), file);
 			return false;
 		});
 
-		MyHashSet<String> assetIds = new MyHashSet<>();
+		HashSet<String> assetIds = new HashSet<>();
 		for (int i = 0; i < versionss.size(); i++) {
 			File versions = versionss.get(i);
 			File[] files = versions.listFiles();
@@ -93,8 +93,8 @@ public class MCTrim extends Plugin {
 			}
 		}
 
-		MyHashMap<String, File> assetsToRemove = new MyHashMap<>();
-		IOUtil.findAllFiles(new File(assets, "objects"), file -> {
+		HashMap<String, File> assetsToRemove = new HashMap<>();
+		IOUtil.listFiles(new File(assets, "objects"), file -> {
 			assetsToRemove.put(file.getName(), file);
 			return false;
 		});

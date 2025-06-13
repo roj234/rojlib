@@ -2,6 +2,7 @@ package roj.compiler.asm;
 
 import roj.asm.insn.CodeWriter;
 import roj.asm.insn.Segment;
+import roj.compiler.LavaCompiler;
 import roj.compiler.resolve.TypeCast;
 import roj.util.DynByteBuf;
 
@@ -26,8 +27,20 @@ final class LazyLoadStore extends Segment {
 		int begin = ob.wIndex();
 
 		if (v.slot < 0) {
-			// POP | POP2, this variable not used
-			ob.put(0x56 + v.type.rawType().length());
+			if (store) {
+				// POP | POP2, this variable not used
+				ob.put(0x56 + v.type.rawType().length());
+			} else {
+				byte code = switch (TypeCast.getDataCap(v.type.getActualType())) {
+					default -> ICONST_0;
+					case 5 -> LCONST_0;
+					case 6 -> FCONST_0;
+					case 7 -> DCONST_0;
+					case 8 -> ACONST_NULL;
+				};
+				ob.put(code);
+				LavaCompiler.debugLogger().debug("VariableLoad unused: {}", v);
+			}
 		} else {
 			// Note: 如果以后StreamChain要改的话，这里要和Type.DirtyHacker一起改
 			byte code = switch (TypeCast.getDataCap(v.type.getActualType())) {

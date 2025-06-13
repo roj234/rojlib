@@ -8,8 +8,8 @@ import roj.asm.insn.Label;
 import roj.asm.type.IType;
 import roj.asm.type.Signature;
 import roj.asm.type.Type;
+import roj.collect.ArrayList;
 import roj.collect.IntMap;
-import roj.collect.SimpleList;
 import roj.io.IOUtil;
 import roj.text.CharList;
 import roj.text.TextUtil;
@@ -27,13 +27,13 @@ public final class LocalVariableTable extends Attribute implements CodeAttribute
 
 	public LocalVariableTable(String name) {
 		generic = name.equals("LocalVariableTypeTable");
-		list = new SimpleList<>();
+		list = new ArrayList<>();
 	}
 
 	public LocalVariableTable(String name, InsnList owner, ConstantPool cp, DynByteBuf r, int maxIdx) {
 		generic = name.equals("LocalVariableTypeTable");
 		int len = r.readUnsignedShort();
-		List<Item> list = new SimpleList<>(len);
+		List<Item> list = new ArrayList<>(len);
 
 		while (len-- > 0) {
 			int start = r.readUnsignedShort();
@@ -83,7 +83,7 @@ public final class LocalVariableTable extends Attribute implements CodeAttribute
 	public String toString() { return toString(IOUtil.getSharedCharBuf(), null, 0).toString(); }
 	public CharList toString(CharList sb, LocalVariableTable table, int prefix) {
 		CharList tmp = new CharList();
-		List<Object> a = SimpleList.asModifiableList("名称","类型","槽","从","至",IntMap.UNDEFINED);
+		List<Object> a = ArrayList.asModifiableList("名称","类型","槽","从","至",IntMap.UNDEFINED);
 		for (int i = 0; i < list.size(); i++) {
 			Item v = list.get(i);
 			v = table != null ? table.getSimilar(v) : v;

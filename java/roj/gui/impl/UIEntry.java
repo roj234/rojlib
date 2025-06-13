@@ -7,16 +7,18 @@ package roj.gui.impl;
 import roj.asm.ClassNode;
 import roj.asmx.Context;
 import roj.asmx.launcher.EntryPoint;
+import roj.collect.ArrayList;
 import roj.concurrent.TaskPool;
 import roj.gui.GuiUtil;
 import roj.io.IOUtil;
-import roj.text.CharList;
+import roj.text.TextUtil;
 
 import javax.swing.*;
 import java.awt.*;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
 import java.lang.reflect.Method;
+import java.util.List;
 
 /**
  * @author Roj234
@@ -41,21 +43,22 @@ public class UIEntry extends JFrame {
 		f.setDefaultCloseOperation(WindowConstants.EXIT_ON_CLOSE);
 		f.setVisible(true);
 
-		TaskPool.Common().submit(() -> {
-			CharList sb = new CharList();
+		TaskPool.common().submit(() -> {
+			List<String> sb = new ArrayList<>();
 			try {
 				for (Context ctx : Context.fromZip(IOUtil.getJar(UIEntry.class), null)) {
 					ClassNode data = ctx.getData();
 					int id = data.getMethod("main", "([Ljava/lang/String;)V");
 					String p = data.parent();
 					if (id >= 0 && !p.startsWith("javax/swing/")/* && !p.equals("roj/plugin/Plugin")*/) {
-						sb.append(data.name().replace('/', '.')).append('\n');
+						sb.add(data.name().replace('/', '.'));
 					}
 				}
 			} catch (Exception e) {
 				e.printStackTrace();
 			}
-			f.uiCLITool.setText(sb.toString());
+			sb.sort(null);
+			f.uiCLITool.setText(TextUtil.join(sb, "\n"));
 		});
 	}
 

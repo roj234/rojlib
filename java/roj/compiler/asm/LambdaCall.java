@@ -8,8 +8,8 @@ import roj.asm.cp.CstMethodHandle;
 import roj.asm.cp.CstMethodType;
 import roj.asm.insn.CodeWriter;
 import roj.asm.type.Type;
-import roj.collect.SimpleList;
-import roj.compiler.context.LocalContext;
+import roj.collect.ArrayList;
+import roj.compiler.CompileContext;
 
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
@@ -34,13 +34,13 @@ public enum LambdaCall {
 		 * @see java.lang.invoke.LambdaMetafactory#metafactory(MethodHandles.Lookup, String, MethodType, MethodType, MethodHandle, MethodType)
 		 */
 		@Override
-		public void generate(LocalContext ctx, CodeWriter cw,
+		public void generate(CompileContext ctx, CodeWriter cw,
 							 ClassNode lambdaOwner, MethodNode lambdaMethod, String lambdaActualArguments,
 							 List<Type> capturedTypes,
 							 ClassNode implementationOwner, MethodNode implementation) {
 
 			byte refType = (implementationOwner.modifier& ACC_INTERFACE) != 0 ? Constant.INTERFACE : Constant.METHOD;
-			var lambdaImplRef = cw.cpw.getRefByType(implementation.owner, implementation.name(), implementation.rawDesc(), refType);
+			var lambdaImplRef = cw.cpw.getRefByType(implementation.owner(), implementation.name(), implementation.rawDesc(), refType);
 
 			var item = new BootstrapMethods.Item(
 					"java/lang/invoke/LambdaMetafactory",
@@ -70,7 +70,7 @@ public enum LambdaCall {
 	},
 	ANONYMOUS_CLASS {
 		@Override
-		public void generate(LocalContext ctx, CodeWriter cw,
+		public void generate(CompileContext ctx, CodeWriter cw,
 							 ClassNode lambdaOwner, MethodNode lambdaMethod, String lambdaActualArguments,
 							 List<Type> capturedTypes,
 							 ClassNode implementationOwner, MethodNode implementation) {
@@ -78,7 +78,7 @@ public enum LambdaCall {
 			ClassNode node = ctx.file.newAnonymousClass_NoBody(ctx.method, null);
 			node.addInterface(lambdaOwner.name());
 
-			// 
+			//
 			capturedTypes.set(capturedTypes.size()-1, Type.primitive(Type.VOID));
 
 			// 生成构造器
@@ -119,8 +119,8 @@ public enum LambdaCall {
 			// 加载接口参数
 			int localIndex = 1;
 
-			SimpleList<Type> arguments = new SimpleList<>();
-			SimpleList<Type> argRealType = new SimpleList<>();
+			ArrayList<Type> arguments = new ArrayList<>();
+			ArrayList<Type> argRealType = new ArrayList<>();
 			Type.methodDesc(lambdaMethod.rawDesc(), arguments);
 			Type.methodDesc(lambdaActualArguments, argRealType);
 
@@ -133,7 +133,7 @@ public enum LambdaCall {
 
 			// 调用目标方法
 			byte invokeOpcode = (implementation.modifier & ACC_STATIC) != 0 ? INVOKESTATIC : INVOKEVIRTUAL;
-			String owner = implementation.owner;
+			String owner = implementation.owner();
 
 			implCw.invoke(invokeOpcode,
 					owner,
@@ -145,7 +145,7 @@ public enum LambdaCall {
 			implCw.return_(Type.methodDescReturn(lambdaMethod.rawDesc()));
 
 			// 4. 注册匿名类
-			ctx.classes.addGeneratedClass(node);
+			ctx.compiler.addGeneratedClass(node);
 
 			// 5. 生成调用代码 (NEW + DUP + 加载捕获变量 + INVOKESPECIAL)
 			cw.newObject(node.name());
@@ -174,7 +174,7 @@ public enum LambdaCall {
 	 *                             - 对于方法引用：是被引用的目标方法
 	 *                             - 对于块/表达式Lambda：是编译器生成的包含Lambda体的方法
 	 */
-	public abstract void generate(LocalContext ctx, CodeWriter cw,
+	public abstract void generate(CompileContext ctx, CodeWriter cw,
 								  ClassNode lambdaOwner, MethodNode lambdaMethod,
 								  String lambdaActualArguments, List<Type> capturedTypes,
 								  ClassNode implementationOwner, MethodNode implementation);

@@ -1,7 +1,7 @@
 package roj.compiler.ast.expr;
 
 import roj.asm.type.IType;
-import roj.compiler.context.LocalContext;
+import roj.compiler.CompileContext;
 import roj.compiler.resolve.ResolveException;
 
 /**
@@ -10,7 +10,7 @@ import roj.compiler.resolve.ResolveException;
  */
 public interface RawExpr {
 	IType type();
-	Expr resolve(LocalContext ctx) throws ResolveException;
+	Expr resolve(CompileContext ctx) throws ResolveException;
 
 	default boolean isConstant() { return false; }
 	default Object constVal() { throw new IllegalArgumentException("'"+this+"' ("+getClass().getName()+") is not a constant."); }

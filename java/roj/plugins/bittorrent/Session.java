@@ -1,9 +1,10 @@
 package roj.plugins.bittorrent;
 
 import org.jetbrains.annotations.Nullable;
-import roj.collect.MyHashMap;
-import roj.collect.SimpleList;
+import roj.collect.ArrayList;
+import roj.collect.HashMap;
 import roj.concurrent.Promise;
+import roj.concurrent.ScheduleTask;
 import roj.concurrent.TaskPool;
 import roj.net.*;
 import roj.net.util.SpeedLimiter;
@@ -24,7 +25,7 @@ import java.util.concurrent.ThreadLocalRandom;
  * @author Roj234
  * @since 2024/11/29 3:15
  */
-class Session {
+public class Session {
 	public final Client owner;
 	public final Torrent.Info torrent;
 	public final File[] files;
@@ -34,7 +35,9 @@ class Session {
 	private int newEvent;
 
 	private long uploaded, downloaded, selected;
-	private List<Tracker> trackers = new SimpleList<>();
+	private List<Tracker> trackers = new ArrayList<>();
+
+	private List<ScheduleTask> updateTask = new ArrayList<>();
 
 	public Session(Client owner, Torrent torrent) {
 		this.owner = owner;
@@ -61,20 +64,20 @@ class Session {
 		notifyTrackers();
 	}
 
-	private void notifyTrackers() {
-		List<Promise<?>> result = new SimpleList<>();
+	public void notifyTrackers() {
+		List<Promise<?>> result = new ArrayList<>();
 		for (Tracker tracker : trackers) {
 			result.add(tracker.update(this));
 		}
 
-		Promise.all(TaskPool.Common(), result).thenRun(() -> {
+		Promise.all(TaskPool.common(), result).thenRun(() -> {
 			this.newEvent = 0;
 			System.out.println("all done");
 		});
 	}
 
 	List<Map.Entry<String, String>> getHttpParameter() {
-		List<Map.Entry<String, String>> list = new SimpleList<>();
+		List<Map.Entry<String, String>> list = new ArrayList<>();
 		//event, 可选, 该参数的值可以是 started, completed, stopped, empty 其中的一个, 该参数的值为 empty 与该参数不存在是等价的, 当开始下载时, 该参数的值设置为 started, 当下载完成时, 该参数的值设置为 completed, 当下载停止时, 该参数的值设置为 stopped
 		if (newEvent > 0) list.add(new SimpleEntry<>("event", EventName[newEvent]));
 		//info_hash, 20 字节, 将 .torrent 文件中的 info 键对应的值生成的 SHA1 哈希, 该哈希值可作为所要请求的资源的标识符
@@ -107,18 +110,17 @@ class Session {
 	}
 
 	private static class UDPDispatcher implements ChannelHandler {
-		Map<InetSocketAddress, UDPHandler> addressMap = new MyHashMap<>();
+		Map<InetSocketAddress, UDPHandler> addressMap = new HashMap<>();
 
 		@Override
 		public void channelRead(ChannelCtx ctx, Object msg) throws IOException {
 			DatagramPkt pkt = (DatagramPkt) msg;
-			InetSocketAddress key = new InetSocketAddress(pkt.addr, pkt.port);
-			UDPHandler channelHandler = addressMap.get(key);
+			UDPHandler channelHandler = addressMap.get(pkt.address);
 			if (channelHandler != null) {
-				if (null == (pkt.buf = channelHandler.next(pkt.buf))) {
-					addressMap.remove(key);
+				if (null == (pkt.data = channelHandler.next(pkt.data))) {
+					addressMap.remove(pkt.address);
 				} else {
-					if (pkt.buf.isReadable()) ctx.channelWrite(pkt);
+					if (pkt.data.isReadable()) ctx.channelWrite(pkt);
 				}
 			}
 		}

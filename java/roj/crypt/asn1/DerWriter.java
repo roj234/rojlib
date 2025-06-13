@@ -1,14 +1,15 @@
 package roj.crypt.asn1;
 
 import roj.collect.IntList;
-import roj.collect.SimpleList;
+import roj.collect.ArrayList;
 import roj.io.IOUtil;
-import roj.reflect.Unaligned;
 import roj.util.*;
 
 import java.io.IOException;
 import java.math.BigInteger;
 import java.util.Arrays;
+
+import static roj.reflect.Unaligned.U;
 
 /**
  * 不像java的DerOutputStream把byte[]拷来拷去，这个（大概）高性能的实现选择至多拷贝一次
@@ -18,7 +19,7 @@ import java.util.Arrays;
 public final class DerWriter {
 	private final ByteList T = new ByteList();
 	private final IntList L = new IntList();
-	private final SimpleList<Object> V = new SimpleList<>();
+	private final ArrayList<Object> V = new ArrayList<>();
 	private final IntList stack = new IntList();
 	//private final byte[] TLPool = new byte[512];
 
@@ -33,7 +34,7 @@ public final class DerWriter {
 		int prev = stack.pop();
 		// T.wIndex() - prev 是type的额外长度
 		int total = (T.wIndex() - prev);
-		SimpleList<Object> acc = new SimpleList<>();
+		ArrayList<Object> acc = new ArrayList<>();
 
 		// NEVER copy byte[]
 		for (int i = prev; i < T.wIndex(); i++) {
@@ -47,7 +48,7 @@ public final class DerWriter {
 			acc.add(typeAndLength);
 
 			Object value = V.get(i);
-			if (value instanceof SimpleList<?> list) acc.addAll(list);
+			if (value instanceof ArrayList<?> list) acc.addAll(list);
 			else acc.add(value);
 		}
 
@@ -61,18 +62,19 @@ public final class DerWriter {
 
 	public void sort() {
 		int prev = stack.get(stack.size()-1);
-		TimSortForEveryone.sort(prev, T.wIndex(), (refLeft, offLeft, offRight) -> {
-			int objectIdL = Unaligned.U.getInt(refLeft, offLeft);
-			int objectIdR = Unaligned.U.getInt(offRight);
+		Multisort.sort(prev, T.wIndex(), (refLeft, offLeft, offRight) -> {
+			int objectIdL = U.getInt(refLeft, offLeft);
+			int objectIdR = U.getInt(offRight);
 
-			ByteList dataLeft = combine(L.get(objectIdL));
-			ByteList dataRight = combine(L.get(objectIdR));
+			ByteList dataLeft = combine(V.get(objectIdL));
+			ByteList dataRight = combine(V.get(objectIdR));
 			return Arrays.compare(dataLeft.list, dataLeft.relativeArrayOffset(), dataLeft.readableBytes(), dataRight.list, dataRight.relativeArrayOffset(), dataRight.readableBytes());
 		}, NativeArray.objectArray(V.getInternalArray()), NativeArray.primitiveArray(T.list), NativeArray.primitiveArray(L.getRawArray()));
 	}
 	private static ByteList combine(Object o) {
 		if (o instanceof ByteList bl) return bl;
-		SimpleList<ByteList> o1 = Helpers.cast(o);
+		if (o == null) return ByteList.EMPTY;
+		ArrayList<ByteList> o1 = Helpers.cast(o);
 		ByteList tmp = new ByteList();
 		for (int i = 0; i < o1.size(); i++) tmp.put(o1.get(i));
 		return tmp;
@@ -173,7 +175,7 @@ public final class DerWriter {
 			Object value = V.get(i);
 			if (value instanceof DynByteBuf buf) out.put(buf);
 			else {
-				SimpleList<DynByteBuf> list = Helpers.cast(value);
+				ArrayList<DynByteBuf> list = Helpers.cast(value);
 				for (DynByteBuf buf : list) out.put(buf);
 			}
 		}

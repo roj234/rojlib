@@ -4,7 +4,7 @@ import roj.http.HttpHead;
 import roj.http.HttpUtil;
 import roj.http.server.IllegalRequestException;
 import roj.io.IOUtil;
-import roj.reflect.ReflectionUtils;
+import roj.reflect.Unaligned;
 import roj.util.DynByteBuf;
 
 import java.io.IOException;
@@ -46,10 +46,10 @@ public abstract class H2Stream {
 
 	private static final Set<String> PSEUDO_HEADERS = Set.of(":method", ":path", ":scheme", ":authority", ":status");
 	private static final long
-		RR = ReflectionUtils.fieldOffset(HttpHead.class, "isRequest"),
-		AA = ReflectionUtils.fieldOffset(HttpHead.class, "a"),
-		BB = ReflectionUtils.fieldOffset(HttpHead.class, "b"),
-		CC = ReflectionUtils.fieldOffset(HttpHead.class, "c");
+		RR = Unaligned.fieldOffset(HttpHead.class, "isRequest"),
+		AA = Unaligned.fieldOffset(HttpHead.class, "a"),
+		BB = Unaligned.fieldOffset(HttpHead.class, "b"),
+		CC = Unaligned.fieldOffset(HttpHead.class, "c");
 	protected HttpHead _header = new HttpHead(false,null,null,null);
 
 	final String header(DynByteBuf buf, HPACK coder, boolean first) throws IOException {

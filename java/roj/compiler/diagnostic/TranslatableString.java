@@ -9,8 +9,6 @@ import roj.config.*;
 import roj.text.CharList;
 import roj.util.ArrayCache;
 
-import java.util.Arrays;
-
 /**
  * @author Roj234
  * @since 2025/4/4 3:22
@@ -53,10 +51,8 @@ public class TranslatableString {
 					str = type.toString();
 				}  else if (arg instanceof Expr expr) {
 					str = expr.toString();
-				} else if (arg instanceof String) {
-					str = of(arg.toString()).translate(i18n, new CharList()).toStringAndFree();
 				} else {
-					throw new UnsupportedOperationException("不知道怎么转换" + i18nKey + Arrays.toString(arguments) + "到字符串");
+					str = of(arg.toString()).translate(i18n, new CharList()).toStringAndFree();
 				}
 
 				buf.replace("%"+(i+1), str);

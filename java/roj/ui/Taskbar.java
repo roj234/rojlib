@@ -63,7 +63,7 @@ public class Taskbar {
 	}
 	private static native void initNatives() throws NativeException;
 
-	public static void setWindowHandle(long windowHandle) {
+	public static synchronized void setWindowHandle(long windowHandle) {
 		if (handle == 0 || windowHandle == 0) throw new NativeException("handle == 0");
 		handle = windowHandle;
 	}
@@ -89,7 +89,7 @@ public class Taskbar {
 	 * @apiNote 程序退出前必须调用本方法设置TBPF_OFF，
 	 *          否则可能导致任务栏状态残留
 	 */
-	public static void setProgressType(@MagicConstant(intValues = {TBPF_OFF,TBPF_INDETERMINATE,TBPF_NORMAL,TBPF_ERROR,TBPF_PAUSED}) int type) {
+	public static synchronized void setProgressType(@MagicConstant(intValues = {TBPF_OFF,TBPF_INDETERMINATE,TBPF_NORMAL,TBPF_ERROR,TBPF_PAUSED}) int type) {
 		if (progressType != type) {
 			progressType = type;
 			setProgressType(handle, type == TBPF_OFF ? 0 : 1 << (type-1));
@@ -108,7 +108,7 @@ public class Taskbar {
 	 * @param progress 当前进度值（≥0）
 	 * @param total    总进度值（≥-1，≤0时触发不确定模式）
 	 */
-	public static void setProgressValue(@Range(from = 0, to = Long.MAX_VALUE) long progress, @Range(from = -1, to = Long.MAX_VALUE) long total) {
+	public static synchronized void setProgressValue(@Range(from = 0, to = Long.MAX_VALUE) long progress, @Range(from = -1, to = Long.MAX_VALUE) long total) {
 		if (total <= 0) {
 			setProgressType(TBPF_INDETERMINATE);
 			return;

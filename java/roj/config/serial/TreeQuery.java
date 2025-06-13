@@ -1,10 +1,9 @@
 package roj.config.serial;
 
-import roj.collect.SimpleList;
+import roj.collect.ArrayList;
 import roj.collect.XashMap;
 import roj.config.data.CEntry;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -30,8 +29,8 @@ public class TreeQuery implements CVisitor {
 	}
 
 	private final PathNode root = new PathNode(null);
-	private final SimpleList<PathNode> nodeStack = new SimpleList<>();
-	private final SimpleList<Object> contextStack = new SimpleList<>();
+	private final ArrayList<PathNode> nodeStack = new ArrayList<>();
+	private final ArrayList<Object> contextStack = new ArrayList<>();
 	private PathNode node = root;
 
 	private CVisitor visitor;
@@ -75,7 +74,7 @@ public class TreeQuery implements CVisitor {
 	private static List<Object> splitPathExpr(String pathExpr) {
 		if (!pathExpr.startsWith("$")) throw new IllegalArgumentException("Path must start with $");
 
-		List<Object> segments = new ArrayList<>();
+		List<Object> segments = new java.util.ArrayList<>();
 		Matcher matcher = PATHEXPR.matcher(pathExpr);
 		while (matcher.find()) {
 			if (matcher.group(1) != null) {

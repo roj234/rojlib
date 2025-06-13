@@ -1,7 +1,7 @@
 package roj.plugins.minecraft.diff;
 
+import roj.collect.HashSet;
 import roj.collect.LongMap;
-import roj.collect.MyHashSet;
 import roj.concurrent.TaskExecutor;
 import roj.concurrent.TaskPool;
 import roj.config.ConfigMaster;
@@ -84,8 +84,8 @@ public class GroupBy {
 		bar.end();
 
 		var stitcher = new Stitcher(65536, 65536, 0, 0);
-		var bfs = new MyHashSet<Long>();
-		var bfsNext = new MyHashSet<Long>();
+		var bfs = new HashSet<Long>();
+		var bfsNext = new HashSet<Long>();
 
 		System.out.println("Grouping "+chunks.size()+" chunks");
 		while(!chunks.isEmpty()) {

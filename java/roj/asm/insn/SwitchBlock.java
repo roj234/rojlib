@@ -2,9 +2,9 @@ package roj.asm.insn;
 
 import org.intellij.lang.annotations.MagicConstant;
 import roj.asm.Opcodes;
+import roj.collect.ArrayList;
 import roj.collect.IntMap;
 import roj.collect.IntSet;
-import roj.collect.SimpleList;
 import roj.io.IOUtil;
 import roj.text.CharList;
 import roj.text.TextUtil;
@@ -39,7 +39,7 @@ public final class SwitchBlock extends Segment {
 	SwitchBlock() {this((byte) 0);}
 	SwitchBlock(byte code) {
 		this.code = code;
-		this.targets = new SimpleList<>();
+		this.targets = new ArrayList<>();
 		this.length = 1;
 	}
 	public static SwitchBlock ofAuto() {return new SwitchBlock();}
@@ -159,18 +159,18 @@ public final class SwitchBlock extends Segment {
 	}
 
 	@Override
-	public String toString() { return toString(IOUtil.getSharedCharBuf().append(Opcodes.showOpcode(code)).append(' '), 0).toString(); }
+	public String toString() { return toString(IOUtil.getSharedCharBuf().append(Opcodes.toString(code)).append(' '), 0).toString(); }
 	public CharList toString(CharList sb, int prefix) {
 		sb.append("{");
-		SimpleList<Object> a = new SimpleList<>();
+		ArrayList<Object> a = new ArrayList<>((targets.size()+1)*3);
+		a.add("default");
+		a.add(def);
+		a.add(IntMap.UNDEFINED);
 		for (SwitchTarget target : targets) {
 			a.add(target.value);
-			a.add(target.target.getValue());
+			a.add(target.target);
 			a.add(IntMap.UNDEFINED);
 		}
-		a.add("default");
-		a.add(def.getValue());
-		a.add(IntMap.UNDEFINED);
 
 		TextUtil.prettyTable(sb, new CharList().padEnd(' ', prefix+4).toStringAndFree(), a.toArray(), "  ");
 		return sb.padEnd(' ', prefix).append('}');

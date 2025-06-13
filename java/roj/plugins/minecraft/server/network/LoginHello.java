@@ -140,7 +140,7 @@ public class LoginHello implements ChannelHandler {
 	}
 
 	private Promise<Void> authenticateUser(MinecraftServer server, PlayerConnection player, String hash, InetAddress address) {
-		return Promise.async(TaskPool.Common(), callback -> {
+		return Promise.async(TaskPool.common(), callback -> {
 			try {
 				Thread.sleep(100);
 			} catch (InterruptedException ignored) {}

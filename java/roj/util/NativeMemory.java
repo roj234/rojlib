@@ -2,7 +2,7 @@ package roj.util;
 
 import roj.reflect.Bypass;
 import roj.reflect.Java22Workaround;
-import roj.reflect.ReflectionUtils;
+import roj.reflect.Reflection;
 import roj.text.logging.Logger;
 
 import java.nio.Buffer;
@@ -69,8 +69,8 @@ public class NativeMemory {
 				Logger.getLogger().warn("无法加载模块 {}", e, "BufferCleaner");
 			}
 
-			var j17 = ReflectionUtils.JAVA_VERSION >= 17;
-			var j9 = ReflectionUtils.JAVA_VERSION >= 9;
+			var j17 = Reflection.JAVA_VERSION >= 17;
+			var j9 = Reflection.JAVA_VERSION >= 9;
 			da.construct(dbb, new String[]{j17?"newDirectBuffer2":"newDirectBuffer"}, j17?Collections.emptyList():null)
 			  .construct(Class.forName("java.nio.HeapByteBuffer"), new String[]{j17?"newHeapBuffer2":"newHeapBuffer"}, j17?Collections.emptyList():null)
 			  .delegate(Class.forName(j9?"jdk.internal.misc.VM":"sun.misc.VM"), "isDirectMemoryPageAligned")
@@ -133,10 +133,10 @@ public class NativeMemory {
 			lock.unlock();
 		}
 	}
-	public boolean release() {
+	public boolean free() {
 		lock.lock();
 		try {
-			return unmanaged.release();
+			return unmanaged.free();
 		} finally {
 			lock.unlock();
 		}
@@ -166,7 +166,7 @@ public class NativeMemory {
 			return base;
 		}
 
-		boolean release() {
+		boolean free() {
 			if (base != 0) {
 				U.freeMemory(base);
 				hlp.unreserveMemory(length, except);
@@ -186,7 +186,7 @@ public class NativeMemory {
 
 		long malloc(long cap, boolean resize) {
 			if (cap < 0) throw new IllegalArgumentException("cap="+cap);
-			if (base != 0 && !resize) release();
+			if (base != 0 && !resize) free();
 
 			this.except = (int) Math.min(cap, Integer.MAX_VALUE);
 
@@ -221,6 +221,6 @@ public class NativeMemory {
 		}
 
 		@Override
-		public void run() { release(); }
+		public void run() { free(); }
 	}
 }

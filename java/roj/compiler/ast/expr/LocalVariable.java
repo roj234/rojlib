@@ -2,9 +2,9 @@ package roj.compiler.ast.expr;
 
 import roj.asm.Opcodes;
 import roj.asm.type.IType;
+import roj.compiler.CompileContext;
 import roj.compiler.asm.MethodWriter;
 import roj.compiler.asm.Variable;
-import roj.compiler.context.LocalContext;
 
 /**
  * @author Roj234
@@ -25,8 +25,8 @@ public final class LocalVariable extends LeftValue {
 
 	@Override public boolean isFinal() { return v.isFinal; }
 	@Override public void preStore(MethodWriter cw) {}
-	@Override public void preLoadStore(MethodWriter cw) {cw.load(v); LocalContext.get().loadVar(v);}
-	@Override public void postStore(MethodWriter cw, int state) {cw.store(v); LocalContext.get().storeVar(v);}
+	@Override public void preLoadStore(MethodWriter cw) {cw.load(v); CompileContext.get().loadVar(v);}
+	@Override public void postStore(MethodWriter cw, int state) {cw.store(v); CompileContext.get().storeVar(v);}
 	@Override public int copyValue(MethodWriter cw, boolean twoStack) {cw.insn(twoStack?Opcodes.DUP2:Opcodes.DUP);return 0;}
 	@Override public boolean hasSideEffect() {return false;}
 

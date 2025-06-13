@@ -1,8 +1,8 @@
 package roj.config.data;
 
 import org.jetbrains.annotations.NotNull;
-import roj.collect.MyHashMap;
-import roj.collect.SimpleList;
+import roj.collect.HashMap;
+import roj.collect.ArrayList;
 import roj.config.Tokenizer;
 import roj.config.serial.CVisitor;
 import roj.text.CharList;
@@ -60,8 +60,8 @@ public class Element extends Node {
 
 	@Override
 	public Map<String, CEntry> attributes() {
-		if (!(attributes instanceof MyHashMap))
-			attributes = new MyHashMap<>(attributes);
+		if (!(attributes instanceof HashMap))
+			attributes = new HashMap<>(attributes);
 		return attributes;
 	}
 	@Override
@@ -82,8 +82,8 @@ public class Element extends Node {
 	public Node child(int index) { return children.get(index); }
 	@Override
 	public List<Node> _childNodes() {
-		if (!(children instanceof SimpleList)) {
-			SimpleList<Node> s = SimpleList.hugeCapacity(children.size());
+		if (!(children instanceof ArrayList)) {
+			ArrayList<Node> s = ArrayList.hugeCapacity(children.size());
 			s.addAll(children);
 			children = s;
 		}
@@ -93,7 +93,7 @@ public class Element extends Node {
 	public List<Node> children() { return children; }
 	@Override
 	public void clear() {
-		if (children instanceof SimpleList) children.clear();
+		if (children instanceof ArrayList) children.clear();
 		else children = Collections.emptyList();
 	}
 	// endregion

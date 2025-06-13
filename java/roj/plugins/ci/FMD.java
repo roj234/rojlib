@@ -1,8 +1,12 @@
 package roj.plugins.ci;
 
 import org.jetbrains.annotations.NotNull;
+import roj.archive.qpak.QZArchiver;
+import roj.archive.qz.*;
+import roj.archive.xz.LZMA2Options;
 import roj.archive.zip.ZEntry;
 import roj.archive.zip.ZipArchive;
+import roj.archive.zip.ZipFileWriter;
 import roj.archive.zip.ZipOutput;
 import roj.asm.AsmCache;
 import roj.asm.ClassNode;
@@ -11,14 +15,15 @@ import roj.asm.attr.Attribute;
 import roj.asm.attr.ModuleAttribute;
 import roj.asm.attr.StringAttribute;
 import roj.asmx.Context;
+import roj.asmx.TransformException;
 import roj.asmx.TransformUtil;
 import roj.asmx.event.EventBus;
 import roj.asmx.launcher.Bootstrap;
-import roj.collect.MyHashMap;
-import roj.collect.MyHashSet;
-import roj.collect.SimpleList;
+import roj.collect.ArrayList;
+import roj.collect.HashMap;
+import roj.collect.HashSet;
 import roj.collect.TrieTreeSet;
-import roj.compiler.context.GlobalContext;
+import roj.concurrent.Flow;
 import roj.concurrent.ScheduleTask;
 import roj.concurrent.Scheduler;
 import roj.concurrent.TaskPool;
@@ -33,17 +38,21 @@ import roj.crypt.jar.JarVerifier;
 import roj.gui.Profiler;
 import roj.io.FastFailException;
 import roj.io.IOUtil;
+import roj.io.source.FileSource;
 import roj.math.Version;
 import roj.plugins.ci.annotation.ReplaceConstant;
+import roj.plugins.ci.minecraft.MappingUI;
 import roj.plugins.ci.plugin.MAP;
 import roj.plugins.ci.plugin.ProcessEnvironment;
 import roj.plugins.ci.plugin.Processor;
 import roj.text.CharList;
+import roj.text.DateTime;
 import roj.text.Formatter;
 import roj.text.TextUtil;
 import roj.text.logging.Level;
 import roj.text.logging.Logger;
 import roj.ui.Argument;
+import roj.ui.EasyProgressBar;
 import roj.ui.Shell;
 import roj.ui.Terminal;
 import roj.util.ByteList;
@@ -51,9 +60,8 @@ import roj.util.DynByteBuf;
 import roj.util.Helpers;
 import roj.util.HighResolutionTimer;
 
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.IOException;
+import javax.swing.*;
+import java.io.*;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -66,6 +74,9 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.LockSupport;
 import java.util.function.BiConsumer;
 import java.util.function.Predicate;
+import java.util.zip.Deflater;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipInputStream;
 
 import static roj.ui.CommandNode.argument;
 import static roj.ui.CommandNode.literal;
@@ -88,7 +99,7 @@ public final class FMD {
 
 	private static boolean immediateExit;
 	public static final Scheduler TIMER = Scheduler.getDefaultScheduler();
-	public static final TaskPool EXECUTOR = TaskPool.Common();
+	public static final TaskPool EXECUTOR = TaskPool.common();
 	public static final EventBus EVENT_BUS = new EventBus();
 	private static final AtomicInteger COMPILE_LOCK = new AtomicInteger();
 	static IFileWatcher watcher;
@@ -97,10 +108,10 @@ public final class FMD {
 	public static final Shell CommandManager = new Shell("");
 
 	public static Project defaultProject;
-	public static final MyHashMap<String, Project> projects = new MyHashMap<>();
-	static final MyHashMap<String, Compiler.Factory> compilerTypes = new MyHashMap<>();
-	static final MyHashMap<String, Workspace.Factory> workspaceTypes = new MyHashMap<>();
-	public static final MyHashMap<String, Workspace> workspaces = new MyHashMap<>();
+	public static final HashMap<String, Project> projects = new HashMap<>();
+	static final HashMap<String, Compiler.Factory> compilerTypes = new HashMap<>();
+	static final HashMap<String, Workspace.Factory> workspaceTypes = new HashMap<>();
+	public static final HashMap<String, Workspace> workspaces = new HashMap<>();
 
 	@Deprecated static List<Processor> processors;
 	@Deprecated public static MAP MapPlugin;
@@ -134,7 +145,7 @@ public final class FMD {
 			List<String> flags = Helpers.cast(ctx.argument("选项", List.class));
 			Profiler p = flags.contains("profile") ? new Profiler("build").begin() : null;
 			try {
-				int build = build(new MyHashSet<>(flags), project);
+				int build = build(new HashSet<>(flags), project);
 				if (immediateExit) System.exit(build);
 			} catch (IOException e) {
 				e.printStackTrace();
@@ -163,14 +174,102 @@ public final class FMD {
 				var proj = ctx.argument("项目名称", Project.class);
 				Workspace.addIDEAProject(proj, true);
 				proj.unmappedJar.delete();
+				new File(DATA_PATH, "at-"+proj.name+"-.jar").delete();
+				new File(PROJECT_PATH, proj.name+".iml").delete();
 				projects.remove(proj.name);
 				saveConfig();
-				System.out.println("IDEA项目&FMD配置文件已删除，请手动清理projects目录下的iml&文件夹");
+				System.out.println("已从配置中删除，请手动删除projects目录下文件");
 			})))
 			.then(literal("setdefault").then(argument("项目名称", Argument.oneOf(projects)).executes(ctx -> {
 				defaultProject = ctx.argument("项目名称", Project.class);
 				saveConfig();
 				updatePrompt();
+			})))
+			.then(literal("export").then(argument("项目名称", Argument.oneOf(projects)).executes(ctx -> {
+				Project proj = ctx.argument("项目名称", Project.class);
+				File projectRoot = proj.root;
+
+				QZArchiver arc = new QZArchiver();
+				arc.inputDirectories = Collections.singletonList(projectRoot);
+				//arc.threads = 0;
+				arc.updateMode = QZArchiver.UM_REPLACE;
+				arc.pathFormat = QZArchiver.PF_RELATIVE;
+				arc.storeModifiedTime = true;
+				arc.storeSymbolicLinks = true;
+				arc.storeHardLinks = true;
+				arc.solidSize = Long.MAX_VALUE;
+				arc.options.setPreset(9).setDictSize(4194304);
+				arc.useBCJ = true;
+				arc.cacheDirectory = BASE;
+				arc.outputDirectory = BASE;
+				arc.outputFilename = "mcmake-project-"+proj.name+"-"+DateTime.local().format("Ymd", System.currentTimeMillis())+".7z";
+
+				arc.prepare();
+
+				String ymldata = ConfigMaster.YAML.writeObject(POJO_FACTORY.serializer(EnvPojo.Project.class), proj.serialize(), IOUtil.getSharedCharBuf()).toString();
+				arc.appendBinary(new QZCoder[]{Copy.INSTANCE}, Collections.singletonList(ymldata), Collections.singletonList(QZEntry.of("project.yml")));
+
+				try (var bar = new EasyProgressBar("导出项目")) {
+					arc.compress(TaskPool.common(), bar);
+				}
+			})))
+			.then(literal("import").then(argument("项目归档", Argument.file()).executes(ctx -> {
+				File archiveFile = ctx.argument("项目归档", File.class);
+
+				try (var archive = new QZArchive(archiveFile);
+					var bar = new EasyProgressBar("导入项目", "B")) {
+					InputStream in = archive.getStream("project.yml");
+					if (in == null) {
+						Terminal.error("不是有效的归档文件：找不到project.yml");
+						return;
+					}
+
+					EnvPojo.Project pojo = ConfigMaster.YAML.readObject(POJO_FACTORY.serializer(EnvPojo.Project.class), in);
+					pojo.name = IOUtil.safePath(pojo.name);
+
+					if (projects.containsKey(pojo.name)) {
+						Terminal.warning("同名项目("+pojo.name+")已存在");
+						return;
+					}
+
+					var basePath = new File(PROJECT_PATH, pojo.name);
+					if (basePath.exists()) {
+						Terminal.warning("项目目录'"+basePath+"'非空，是否清空目录\nY: 清空并导入\nN: 不清空并导入\nCtrl+C: 取消操作");
+						char selection = Terminal.readChar("YyNn", "您的选择: ");
+						if (selection == 0) return;
+						if (selection == 'Y' || selection == 'y') IOUtil.deletePath(basePath);
+					}
+
+					bar.setName("导入"+pojo.name);
+					for (QZEntry entry : archive.entries()) {
+						if (entry.getName().equals("project.yml")) continue;
+						bar.addTotal(entry.getSize());
+					}
+
+					AtomicInteger lock = archive.parallelDecompress(TaskPool.common(), (entry, in1) -> {
+						if (entry.isDirectory()) return;
+						var file = new File(basePath, IOUtil.safePath(entry.getName()));
+						file.getParentFile().mkdirs();
+
+						try (var out = new FileOutputStream(file)) {
+							QZArchiver.copyStreamWithProgress(in1, out, bar);
+						} catch (IOException e) {
+							e.printStackTrace();
+						}
+					});
+					QZArchive.awaitParallelComplete(lock);
+
+					if (lock.get() == 0) {
+						Project project = new Project(pojo);
+						project.init();
+						Workspace.addIDEAProject(project, false);
+
+						projects.put(project.name, project);
+						saveConfig();
+
+						bar.end("成功");
+					}
+				}
 			})))
 			.then(literal("auto").then(argument("项目名称", Argument.oneOf(projects)).then(argument("自动编译开关", Argument.bool()).executes(ctx -> {
 				var proj = ctx.argument("项目名称", Project.class);
@@ -195,7 +294,7 @@ public final class FMD {
 			})))
 			.then(literal("delete").then(argument("工作空间名称", Argument.oneOf(workspaces)).executes(ctx -> {
 				Workspace space = ctx.argument("工作空间名称", Workspace.class);
-				char nn = Terminal.readChar("YyNn", "输入Y确定删除'"+space.id+"'");
+				char nn = Terminal.readChar("YyNn", "输入Y确定删除'"+space.id+"'及其所有文件");
 				if (nn != 'Y' && nn != 'y') return;
 				for (File dependency : space.unmappedDepend) {
 					Files.deleteIfExists(dependency.toPath());
@@ -206,11 +305,171 @@ public final class FMD {
 				for (File dependency : space.depend) {
 					Files.deleteIfExists(dependency.toPath());
 				}
-				Files.deleteIfExists(space.mapping.toPath());
+				if (space.mapping != null)
+					Files.deleteIfExists(space.mapping.toPath());
 
 				workspaces.remove(space.id);
 				saveConfig();
 				System.out.println("工作空间'"+space.id+"'已删除");
+			})))
+			.then(literal("export").then(argument("工作空间名称", Argument.oneOf(workspaces)).executes(ctx -> {
+				Workspace space = POJO_FACTORY.serializer(Workspace.class).deepcopy(ctx.argument("工作空间名称", Workspace.class));
+
+				try (var qzfw = new QZFileWriter("workspace-"+space.id+".7z");
+					var bar = new EasyProgressBar("导出"+space.id, "B")) {
+
+					bar.addTotal(Integer.MAX_VALUE);
+
+					var files = new ArrayList<>(space.depend);
+					files.addAll(space.mappedDepend);
+					files.addAll(space.unmappedDepend);
+
+					List<Future<?>> tasks = new ArrayList<>();
+
+					for (File file : files) {
+						tasks.add(TaskPool.common().submit(() -> {
+							try (var in = new ZipInputStream(new FileInputStream(file));
+								var out = qzfw.newParallelWriter()) {
+								out.setCodec(new LZMA2(new LZMA2Options(9).setDictSize(16777216)));
+
+								while (true) {
+									ZipEntry entry = in.getNextEntry();
+									if (entry == null || entry.isDirectory()) break;
+
+									out.beginEntry(QZEntry.of(file.getName()+"/"+entry));
+									QZArchiver.copyStreamWithProgress(in, out, bar);
+								}
+							}
+							return null;
+						}));
+					}
+
+					for (Future<?> task : tasks) task.get();
+
+					qzfw.setCodec(Copy.INSTANCE);
+
+					File mapping = space.mapping;
+					if (mapping != null) {
+						qzfw.beginEntry(QZEntry.of(mapping.getName()));
+						try (var in = new FileInputStream(mapping)) {
+							QZArchiver.copyStreamWithProgress(in, qzfw, bar);
+						}
+					}
+
+					qzfw.setCodec(new LZMA2(new LZMA2Options(9).setDictSize(524288)));
+
+					qzfw.beginEntry(QZEntry.of("workspace.yml"));
+					ConfigMaster.YAML.writeObject(POJO_FACTORY.serializer(Workspace.class), space, IOUtil.getSharedByteBuf()).writeToStream(qzfw);
+
+					bar.end("成功");
+				}
+			})))
+			.then(literal("import").then(argument("工作空间归档", Argument.file()).executes(ctx -> {
+				File archiveFile = ctx.argument("工作空间归档", File.class);
+				try (var archive = new QZArchive(archiveFile);
+					var bar = new EasyProgressBar("导入工作空间", "B")) {
+					archive.setMemoryLimitKb(26214400);
+
+					InputStream in = archive.getStream("workspace.yml");
+					if (in == null) {
+						Terminal.error("不是有效的归档文件：找不到workspace.yml");
+						return;
+					}
+
+					Workspace workspace = ConfigMaster.YAML.readObject(POJO_FACTORY.serializer(Workspace.class), in);
+					workspace.id = IOUtil.safePath(workspace.id);
+
+					if (workspaces.containsKey(workspace.id)) {
+						Terminal.warning("同名工作空间("+workspace.id+")已存在");
+						return;
+					}
+
+					bar.setName("导入"+workspace.id);
+					for (QZEntry entry : archive.entries()) {
+						if (entry.getName().equals("workspace.yml")) continue;
+						bar.addTotal(entry.getSize());
+					}
+
+					Map<String, File> filenameMapping = new HashMap<>();
+					List<File> depend = workspace.depend;
+					for (int i = 0; i < depend.size(); i++) {
+						File file = depend.get(i);
+						File result;
+
+						var path = file.getName();
+						result = new File(DATA_PATH, "ws-"+workspace.id+"-cd"+i+path.substring(path.lastIndexOf('.')));
+
+						filenameMapping.putIfAbsent(file.getName(), result);
+						depend.set(i, result);
+					}
+					List<File> mappedDepend = workspace.mappedDepend;
+					for (int i = 0; i < mappedDepend.size(); i++) {
+						File file = mappedDepend.get(i);
+						File result;
+
+						var path = file.getName();
+						result = new File(DATA_PATH, "ws-"+workspace.id+"-md"+i+path.substring(path.lastIndexOf('.')));
+
+						filenameMapping.putIfAbsent(file.getName(), result);
+						mappedDepend.set(i, result);
+					}
+					List<File> unmappedDepend = workspace.unmappedDepend;
+					for (int i = 0; i < unmappedDepend.size(); i++) {
+						File file = unmappedDepend.get(i);
+						File result;
+
+						var path = file.getName();
+						result = new File(DATA_PATH, "ws-"+workspace.id+"-ud"+i+path.substring(path.lastIndexOf('.')));
+
+						filenameMapping.putIfAbsent(file.getName(), result);
+						unmappedDepend.set(i, result);
+					}
+
+					for (var itr = filenameMapping.entrySet().iterator(); itr.hasNext(); ) {
+						Map.Entry<String, Object> generalizedEntry = Helpers.cast(itr.next());
+						generalizedEntry.setValue(new ZipFileWriter(((File) generalizedEntry.getValue()), Deflater.BEST_COMPRESSION, 0));
+					}
+					Map<String, ZipFileWriter> libraryWriter = Helpers.cast(filenameMapping);
+
+					if (workspace.mapping != null) {
+						workspace.mapping = new File(DATA_PATH, "ws-"+workspace.id+"-mapping.lzma");
+					}
+
+					AtomicInteger lock = archive.parallelDecompress(TaskPool.common(), (entry, in1) -> {
+						if (entry.isDirectory() || entry.getName().equals("workspace.yml")) return;
+
+						String pathname = IOUtil.safePath(entry.getName());
+						int i = pathname.indexOf('/');
+						if (i < 0) {
+							var file = workspace.mapping;
+							if (file != null) try (var out = new FileOutputStream(file)) {
+								QZArchiver.copyStreamWithProgress(in1, out, bar);
+							} catch (IOException e) {
+								e.printStackTrace();
+							}
+						} else {
+							ZipFileWriter zfw = libraryWriter.get(pathname.substring(0, i));
+							pathname = pathname.substring(i+1);
+							synchronized (zfw) {
+								try {
+									zfw.beginEntry(new ZEntry(pathname));
+									QZArchiver.copyStreamWithProgress(in1, zfw, bar);
+								} catch (IOException e) {
+									e.printStackTrace();
+								}
+							}
+						}
+					});
+					QZArchive.awaitParallelComplete(lock);
+					for (ZipFileWriter zfw : libraryWriter.values()) zfw.close();
+
+					if (lock.get() == 0) {
+						workspaces.put(workspace.id, workspace);
+						saveConfig();
+
+						bar.end("成功");
+					}
+				}
 			})))
 			.then(literal("info").then(argument("工作空间名称", Argument.oneOf(workspaces)).executes(ctx -> {
 				Workspace space = ctx.argument("工作空间名称", Workspace.class);
@@ -226,6 +485,22 @@ public final class FMD {
 		c.register(literal("reload").executes(ctx -> loadEnv()));
 		c.register(literal("zip").then(argument("路径", Argument.file()).executes(ctx -> {
 			var file = ctx.argument("路径", File.class);
+			if (file.getName().endsWith(".7z")) {
+				try (var qz = new QZArchive(new FileSource(file))) {
+					QZFileWriter qzfw = qz.append();
+
+					ArrayList<QZEntry> emptyFiles = qzfw.getEmptyFiles();
+					for (int i = emptyFiles.size() - 1; i >= 0; i--) {
+						QZEntry emptyFile = emptyFiles.get(i);
+						if (emptyFile.isDirectory() && emptyFile.getName().contains("/")) {
+							qzfw.removeEmptyFile(i);
+						}
+					}
+
+					qzfw.close();
+				}
+				return;
+			}
 			try (ZipArchive za = new ZipArchive(file)) {
 				for (ZEntry ze : za.entries()) {
 					if (ze.getName().endsWith("/")) {
@@ -245,7 +520,7 @@ public final class FMD {
 			File file = ctx.argument("文件", File.class);
 			var moduleName = ctx.argument("模块名", String.class);
 
-			MyHashSet<String> packages = new MyHashSet<>();
+			HashSet<String> packages = new HashSet<>();
 
 			boolean hasModule = false;
 			for (Context context : Context.fromZip(file, null)) {
@@ -280,7 +555,7 @@ public final class FMD {
 			moduleInfo.modifier = Opcodes.ACC_MODULE;
 			moduleInfo.addAttribute(new StringAttribute(Attribute.SourceFile, "module-info.java"));
 			//moduleInfo.putAttr(new AttrString(Attribute.ModuleTarget, "windows-amd64"));
-			//moduleInfo.putAttr(new AttrClassList(Attribute.ModulePackages, new SimpleList<>(packages)));
+			//moduleInfo.putAttr(new AttrClassList(Attribute.ModulePackages, new ArrayList<>(packages)));
 			moduleInfo.addAttribute(moduleAttr);
 
 			System.out.println(moduleAttr);
@@ -290,6 +565,43 @@ public final class FMD {
 			}
 			System.out.println("IL自动模块，应用成功！");
 		}))));
+
+		c.register(literal("backup").executes(ctx -> {
+			File backups = new File(BASE, "backups");
+
+			QZArchiver arc = new QZArchiver();
+			arc.inputDirectories = Flow.of(PROJECT_PATH.listFiles()).filter(File::isDirectory).toList();
+			//arc.threads = 0;
+			arc.updateMode = QZArchiver.UM_REPLACE;
+			arc.pathFormat = QZArchiver.PF_FULL;
+			arc.storeModifiedTime = true;
+			arc.storeSymbolicLinks = true;
+			arc.storeHardLinks = true;
+			arc.solidSize = Long.MAX_VALUE;
+			arc.options.setPreset(9).setDictSize(4194304);
+			arc.useBCJ = true;
+			arc.cacheDirectory = BASE;
+			arc.outputDirectory = backups;
+
+			arc.outputFilename = "projects-"+DateTime.local().format("Ymd H_i_s", System.currentTimeMillis())+".7z";
+
+			arc.prepare();
+
+			String ymldata = ConfigMaster.YAML.writeObject(POJO_FACTORY.serializer(EnvPojo.class), getEnvPojo(), IOUtil.getSharedCharBuf()).toString();
+			arc.appendBinary(new QZCoder[]{Copy.INSTANCE}, Collections.singletonList(ymldata), Collections.singletonList(QZEntry.of("project.yml")));
+
+			try (var bar = new EasyProgressBar("备份")) {
+				arc.compress(TaskPool.common(), bar);
+			}
+		}));
+
+		c.register(literal("mapping").then(literal("create").executes(ctx -> {
+			JFrame frame = new MappingUI();
+			frame.pack();
+			frame.setResizable(false);
+			frame.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
+			frame.setVisible(true);
+		})));
 
 		c.sortCommands();
 		c.setAutoComplete(config.getBool("自动补全"));
@@ -303,20 +615,11 @@ public final class FMD {
 		if (projects.isEmpty()) {
 			Terminal.warning("""
 							欢迎使用MCMake，您的最后一个模组开发工具！
-							使用前请先阅读维基及readme.txt
-							如果你还没有读过，那么下面是快速使用指南：
-								1. 准备Forge或Fabric的可以运行的客户端（必须）
-								2. 准备相同版本和相同模组加载器的服务端（可选）
-								3. 生成映射表 (/mapping create <映射类型>)
-											* 此步需联网
-								4. 生成工作空间 (/workspace create Minecraft)
-									5. 生成项目 (/project create <项目名称>)
-									6. 编辑项目：使用文本编辑器修改data/env.yml
-									7. 加载项目 (/reload 和 /project setdefault <项目名称>)
-									8. 构建 (/build)
-							希望在接下来的日子里，它能陪伴您，并且为您节约数不胜数的时间
+							使用前请先阅读readme.md
+							把您的时间花在更有意义的事情，而不是等待编译上
 																—— Roj234
 							""");
+			updatePrompt();
 		}
 
 		if (Terminal.ANSI_OUTPUT) {
@@ -372,7 +675,7 @@ public final class FMD {
 		}
 
 		LOGGER.setLevel(Level.valueOf(config.getString("日志级别", "DEBUG")));
-		GlobalContext.cacheFolder = DATA_PATH;
+		System.setProperty("roj.compiler.symbolCache", DATA_PATH.getAbsolutePath()+"/symbolCache.zip");
 
 		IFileWatcher w = null;
 		if (config.getBool("文件修改监控")) {
@@ -407,7 +710,7 @@ public final class FMD {
 			}
 		}
 
-		processors = new SimpleList<>();
+		processors = new ArrayList<>();
 		for (var entry : config.getMap("插件").entrySet()) {
 			try {
 				Processor processor = (Processor) Class.forName(entry.getKey()).newInstance();
@@ -460,16 +763,23 @@ public final class FMD {
 			@Optional boolean compiler_options_overwrite;
 			@Optional boolean no_compile_depend;
 			String workspace;
-			@Optional String name_format = "${name}-${version}.jar";
+			@Optional String name_format = "${project_name}-${project_version}.jar";
 			@Optional List<String> dependency = Collections.emptyList();
 			@Optional List<String> binary_depend = Collections.emptyList();
 			@Optional List<String> source_depend = Collections.emptyList();
-			@Optional Map<String, String> variables = new MyHashMap<>();
+			@Optional Map<String, String> variables = new HashMap<>();
 			@Optional TrieTreeSet variable_replace_in = new TrieTreeSet();
 		}
 	}
 	private static void loadEnv() throws IOException, ParseException {
-		var env = ConfigMaster.YAML.readObject(POJO_FACTORY.serializer(EnvPojo.class), new File(DATA_PATH, "env.yml"));
+		File file = new File(DATA_PATH, "env.yml");
+		if (!file.isFile()) {
+			workspaces.clear();
+			projects.clear();
+			return;
+		}
+
+		var env = ConfigMaster.YAML.readObject(POJO_FACTORY.serializer(EnvPojo.class), file);
 
 		workspaces.clear();
 		projects.clear();
@@ -494,10 +804,18 @@ public final class FMD {
 		updatePrompt();
 	}
 	private static void saveConfig() {
+		var env = getEnvPojo();
+		try {
+			ConfigMaster.YAML.writeObject(POJO_FACTORY.serializer(EnvPojo.class), env, new File(DATA_PATH, "env.yml"));
+		} catch (IOException e) {
+			LOGGER.error("配置保存失败", e);
+		}
+	}
+	private static EnvPojo getEnvPojo() {
 		var env = new EnvPojo();
-		env.auto_compile = new SimpleList<>();
-		env.projects = new SimpleList<>();
-		env.workspaces = new SimpleList<>(workspaces.values());
+		env.auto_compile = new ArrayList<>();
+		env.projects = new ArrayList<>();
+		env.workspaces = new ArrayList<>(workspaces.values());
 		for (Project value : projects.values()) {
 			env.projects.add(value.serialize());
 			if (value.isAutoCompile()) {
@@ -505,11 +823,7 @@ public final class FMD {
 			}
 		}
 		if (defaultProject != null) env.default_project = defaultProject.name;
-		try {
-			ConfigMaster.YAML.writeObject(POJO_FACTORY.serializer(EnvPojo.class), env, new File(DATA_PATH, "env.yml"));
-		} catch (IOException e) {
-			LOGGER.error("配置保存失败", e);
-		}
+		return env;
 	}
 
 	private static class CustomSerializer {
@@ -605,7 +919,7 @@ public final class FMD {
 					int srcPrefixLen = srcPrefix.length()+1;
 
 					synchronized (sourceChanged) {
-						for (String path : new SimpleList<>(sourceChanged)) {
+						for (String path : new ArrayList<>(sourceChanged)) {
 							var className = path.substring(srcPrefixLen, path.length()-5).replace(File.separatorChar, '/'); // get roj/test/Asdf
 
 							LOGGER.trace("Modified: {}", className);
@@ -616,7 +930,7 @@ public final class FMD {
 							}
 						}
 
-						sources = new SimpleList<>(sourceChanged.size());
+						sources = new ArrayList<>(sourceChanged.size());
 
 						for (String path : sourceChanged) {
 							File file = new File(path);
@@ -634,8 +948,8 @@ public final class FMD {
 			}
 
 			Predicate<File> incrFilter = file -> IOUtil.extensionName(file.getName()).equals("java") && file.lastModified() > stamp;
-			sources = IOUtil.findAllFiles(p.srcPath, incrFilter);
-			for (String s : p.conf.source_depend) IOUtil.findAllFiles(projects.get(s).srcPath, sources, incrFilter);
+			sources = IOUtil.listFiles(p.srcPath, incrFilter);
+			for (String s : p.conf.source_depend) IOUtil.listFiles(projects.get(s).srcPath, sources, incrFilter);
 			p.dependencyGraph.clear();
 		}
 
@@ -658,7 +972,7 @@ public final class FMD {
 
 			String classPath = getClassPath(p, increment);
 
-			SimpleList<String> options = p.conf.compiler_options_overwrite ? new SimpleList<>() : p.compiler.factory().getDefaultOptions();
+			ArrayList<String> options = p.conf.compiler_options_overwrite ? new ArrayList<>() : p.compiler.factory().getDefaultOptions();
 			options.addAll(p.conf.compiler_options);
 			options.addAll("-cp", classPath, "-encoding", p.charset.name());
 			if ("true".equals(p.conf.variables.get("javac:use_module")))
@@ -700,7 +1014,7 @@ public final class FMD {
 				if (incrementLevel == 1) {
 					Profiler.startSection("loadMapperState");
 
-					MyHashSet<String> changed = new MyHashSet<>(compilerOutput.size());
+					HashSet<String> changed = new HashSet<>(compilerOutput.size());
 					for (int i = 0; i < compilerOutput.size(); i++) changed.add(compilerOutput.get(i).getFileName());
 
 					// copy all
@@ -727,6 +1041,13 @@ public final class FMD {
 				compilerOutput = processors.get(i).process(compilerOutput, pc);
 			}
 
+			try {
+				pc.runTransformers(compilerOutput);
+			} catch (TransformException e) {
+				Terminal.error("类转换失败", e);
+				return false;
+			}
+
 			Profiler.endStartSection("writeResource");
 			try {
 				updateResource.get();
@@ -746,7 +1067,7 @@ public final class FMD {
 					mappedWriter.set(ctx.getFileName(), ctx::getCompressedShared);
 				}
 			} catch (Throwable e) {
-				Terminal.warning("代码更新失败["+p.getName()+"/"+ctx.getFileName()+"]", e);
+				Terminal.error("代码更新失败["+p.getName()+"/"+ctx.getFileName()+"]", e);
 				return false;
 			}
 
@@ -767,7 +1088,7 @@ public final class FMD {
 		}
 		Profiler.endSection();
 
-		p.compileSuccess();
+		p.compileSuccess(increment);
 		return true;
 	}
 
@@ -789,8 +1110,8 @@ public final class FMD {
 		for (File file : p.workspace.mappedDepend) {
 			classpath.append(file.getAbsolutePath().substring(prefix)).append(File.pathSeparatorChar);
 		}
-		IOUtil.findAllFiles(new File(BASE, "libs"), callback);
-		IOUtil.findAllFiles(new File(p.root, "libs"), callback);
+		IOUtil.listFiles(new File(BASE, "libs"), callback);
+		IOUtil.listFiles(new File(p.root, "libs"), callback);
 
 		var dependencies = p.getAllDependencies();
 		for (int i = 0; i < dependencies.size(); i++) {
@@ -874,7 +1195,7 @@ public final class FMD {
     public static final class SignatureCache {
 		final List<Certificate> certificate_chain;
 		final PrivateKey private_key;
-		Map<String, String> options = new MyHashMap<>();
+		Map<String, String> options = new HashMap<>();
 
 		public SignatureCache(List<Certificate> certificate_chain, PrivateKey private_key) {
             this.certificate_chain = certificate_chain;

@@ -1,6 +1,6 @@
 package roj.plugins.rfs.proto;
 
-import roj.collect.SimpleList;
+import roj.collect.ArrayList;
 import roj.collect.ToIntMap;
 import roj.io.IOUtil;
 import roj.net.ChannelCtx;
@@ -19,7 +19,7 @@ import java.util.function.Function;
  */
 public final class PacketSerializer implements ChannelHandler {
     private final ToIntMap<Class<? extends Packet>> clientEncoder = new ToIntMap<>(), serverEncoder = new ToIntMap<>();
-    private final List<Function<DynByteBuf, Packet>> clientDecoder = new SimpleList<>(), serverDecoder = new SimpleList<>();
+    private final List<Function<DynByteBuf, Packet>> clientDecoder = new ArrayList<>(), serverDecoder = new ArrayList<>();
 
     public <T extends Packet> PacketSerializer register(Class<T> packet, Function<DynByteBuf, T> newPacket) {
         if (ClientPacket.class.isAssignableFrom(packet)) {

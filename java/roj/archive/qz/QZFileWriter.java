@@ -1,8 +1,8 @@
 package roj.archive.qz;
 
 import org.jetbrains.annotations.NotNull;
-import roj.collect.MyBitSet;
-import roj.collect.SimpleList;
+import roj.collect.ArrayList;
+import roj.collect.BitSet;
 import roj.config.data.CInt;
 import roj.crypt.CRC32;
 import roj.io.IOUtil;
@@ -98,7 +98,7 @@ public class QZFileWriter extends QZWriter {
         if (out != null) throw new IllegalStateException("进入多线程模式前需要结束QZFW的WordBlock，否则会导致文件数据损坏");
         if (finished) throw new IOException("Stream closed");
         if (parallelWriter == null)
-            parallelWriter = new SimpleList<>();
+            parallelWriter = new ArrayList<>();
 
         ParallelWriter pw = new ParallelWriter(cache);
         parallelWriter.add(pw);
@@ -448,7 +448,7 @@ public class QZFileWriter extends QZWriter {
                 buf.write(0);
 
                 ByteList w = IOUtil.getSharedByteBuf();
-                MyBitSet set = new MyBitSet();
+                BitSet set = new BitSet();
                 int extraCount = 0;
 
                 for (int i = 0; i < blocks.size(); i++) {
@@ -480,8 +480,8 @@ public class QZFileWriter extends QZWriter {
 
         if (flagSum[0] > 0) {
             CInt count = new CInt();
-            MyBitSet emptyFile = flagSum[1] > 0 ? new MyBitSet() : null;
-            MyBitSet anti = flagSum[2] > 0 ? new MyBitSet() : null;
+            BitSet emptyFile = flagSum[1] > 0 ? new BitSet() : null;
+            BitSet anti = flagSum[2] > 0 ? new BitSet() : null;
 
             ByteList ob = IOUtil.getSharedByteBuf();
             writeBits(j -> {
@@ -520,9 +520,9 @@ public class QZFileWriter extends QZWriter {
         writeFileNames();
 
         int i;
-        if ((i = flagSum[3]) > 0) writeSparseAttribute(kCTime, QZEntry.CT, i);
-        if ((i = flagSum[4]) > 0) writeSparseAttribute(kATime, QZEntry.AT, i);
-        if ((i = flagSum[5]) > 0) writeSparseAttribute(kMTime, QZEntry.MT, i);
+        if ((i = flagSum[3]) > 0) writeSparseTime(kCTime, QZEntry.CT, i);
+        if ((i = flagSum[4]) > 0) writeSparseTime(kATime, QZEntry.AT, i);
+        if ((i = flagSum[5]) > 0) writeSparseTime(kMTime, QZEntry.MT, i);
         if ((i = flagSum[6]) > 0) writeSparseAttribute(i);
 
         buf.write(kEnd);
@@ -552,7 +552,7 @@ public class QZFileWriter extends QZWriter {
                 buf.putIntLE(U.getInt(entry, offset));
         }
     }
-    private void writeSparseAttribute(int id, int flag, int count) {
+    private void writeSparseTime(int id, int flag, int count) {
         DynByteBuf buf = writeSparseHeader(id, flag, count);
 
         long offset = QZEntryA.SPARSE_ATTRIBUTE_OFFSET[id-kCTime];

@@ -1,7 +1,7 @@
 package roj.plugins;
 
-import roj.collect.MyBitSet;
-import roj.collect.MyHashMap;
+import roj.collect.BitSet;
+import roj.collect.HashMap;
 import roj.config.ConfigMaster;
 import roj.config.NBTParser;
 import roj.config.data.CByteArray;
@@ -39,7 +39,7 @@ public class MyPassIs extends Plugin {
 	private byte[] pass;
 
 	private final Shell c = new Shell("");
-	private final MyHashMap<String, String> hints = new MyHashMap<>();
+	private final HashMap<String, String> hints = new HashMap<>();
 
 	@Override
 	protected void onEnable() {
@@ -199,7 +199,7 @@ public class MyPassIs extends Plugin {
 
 		CMap accounts = prev.asMap().getOrCreateMap("account");
 
-		MyHashMap<String, String> hints = new MyHashMap<>();
+		HashMap<String, String> hints = new HashMap<>();
 		for (String s : accounts.keySet()) hints.put(s, s);
 		c.setPrompt("账号 > ");
 		String account = Terminal.readLine(c, Argument.suggest(hints));
@@ -227,7 +227,7 @@ public class MyPassIs extends Plugin {
 				String tip = "您的密码是[(c)opy/Enter] > ";
 				sb.insert(0, tip);
 
-				char ce = Terminal.readChar(MyBitSet.from("c\n"), sb, false);
+				char ce = Terminal.readChar(BitSet.from("c\n"), sb, false);
 				try {
 					if (ce == 'c') {
 						GuiUtil.setClipboardText(sb.substring(tip.length(), sb.length()));
@@ -278,7 +278,7 @@ public class MyPassIs extends Plugin {
 
 	private static char[] buildCharset(String cs) {
 		// 1数字a小写字母A大写字母@特殊符号
-		MyBitSet set = MyBitSet.from(cs);
+		BitSet set = BitSet.from(cs);
 		CharList sb = IOUtil.getSharedCharBuf();
 		if (set.contains('1')) sb.append("0123456789");
 		if (set.contains('a')) sb.append("ABCDEFGHIJKLMNOPQRSTUVWXYZ".toLowerCase(Locale.ROOT));

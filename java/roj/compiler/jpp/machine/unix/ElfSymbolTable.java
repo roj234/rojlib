@@ -1,6 +1,6 @@
 package roj.compiler.jpp.machine.unix;
 
-import roj.collect.SimpleList;
+import roj.collect.ArrayList;
 import roj.util.ByteList;
 
 import java.io.IOException;
@@ -20,11 +20,11 @@ public class ElfSymbolTable implements ElfSegment {
 	public static final byte SY_TYPE_SECTION = 3;
 	public static final byte SY_TYPE_FILE = 4;
 
-	public SimpleList<Symbol> symbols;
+	public ArrayList<Symbol> symbols;
 	public ElfSectionD delegate;
 
 	public ElfSymbolTable() {
-		symbols = new SimpleList<>();
+		symbols = new ArrayList<>();
 	}
 
 	public static final class Symbol implements ElfSegment {

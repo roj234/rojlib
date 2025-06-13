@@ -14,9 +14,12 @@ import roj.net.handler.Timeout;
 import roj.net.mss.MSSContext;
 import roj.plugins.rfs.proto.ClientPacket;
 import roj.plugins.rfs.proto.Packet;
-import roj.reflect.ReflectionUtils;
+import roj.reflect.Unaligned;
 import roj.text.logging.Logger;
-import roj.util.*;
+import roj.util.ArrayUtil;
+import roj.util.ByteList;
+import roj.util.DynByteBuf;
+import roj.util.Helpers;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
@@ -48,10 +51,6 @@ public class RFSSourceClient implements ChannelHandler, Consumer<MyChannel> {
 
 	private String accessToken;
 	public RFSSourceClient(String accessToken) {this.accessToken = accessToken;}
-
-	public static void main(String[] args) throws IOException {
-		HighResolutionTimer.runThis();
-	}
 
 	public Source getRemoteSource(String path, boolean writable) throws IOException {
 		var rpc = new RPCTask();
@@ -101,7 +100,7 @@ public class RFSSourceClient implements ChannelHandler, Consumer<MyChannel> {
 	private RingBuffer<RPCTask> rpcTasks = RingBuffer.unbounded();
 	private RPCTask rpc;
 	private static final int MAX_FILE_DATA = 0x10000;
-	private static final long STATE_OFFSET = ReflectionUtils.fieldOffset(RPCTask.class, "state");
+	private static final long STATE_OFFSET = Unaligned.fieldOffset(RPCTask.class, "state");
 
 	@Override
 	public void channelTick(ChannelCtx ctx) throws Exception {
@@ -136,7 +135,7 @@ public class RFSSourceClient implements ChannelHandler, Consumer<MyChannel> {
 			else if (rpc.type != 2 || rpc.p0.readableBytes() == 0) {
 				if (rpc.type == 5) {
 					if (callback != null) {
-						callback.resolveOn(this, TaskPool.Common());
+						callback.resolveOn(this, TaskPool.common());
 					}
 				}
 				rpc.done(null);

@@ -4,7 +4,6 @@ import roj.RojLib;
 import roj.compiler.plugins.asm.ASM;
 import roj.io.IOUtil;
 import roj.io.buf.BufferPool;
-import roj.reflect.ReflectionUtils;
 import roj.reflect.Unaligned;
 import roj.text.CharList;
 import roj.text.FastCharset;
@@ -47,26 +46,24 @@ public final class NativeVT implements StdIO, Runnable {
 
 	private static final String VTERROR = "RojLib Error: 虚拟终端: ";
 	private static byte cap;
+
 	private static final InputStream sysIn;
 	private static final OutputStream sysOut;
 	static Charset charset;
 	static FastCharset ucs;
-
-	private static final StdIO instance = init();
-	private static Thread reader;
 	static {
 		var out = Objects.requireNonNull(System.out);
 		long offset;
 		Object tmp;
 		checkCharset:
 		try {
-			offset = ReflectionUtils.fieldOffset(PrintStream.class, "charOut");
+			offset = Unaligned.fieldOffset(PrintStream.class, "charOut");
 			tmp = Unaligned.U.getObject(out, offset);
 
-			offset = ReflectionUtils.fieldOffset(tmp.getClass(), "se");
+			offset = Unaligned.fieldOffset(tmp.getClass(), "se");
 			tmp =  Unaligned.U.getObject(tmp, offset);
 
-			offset = ReflectionUtils.fieldOffset(tmp.getClass(), "cs");
+			offset = Unaligned.fieldOffset(tmp.getClass(), "cs");
 			charset = (Charset) Unaligned.U.getObject(tmp, offset);
 		} catch (Exception e) {
 			if (ASM.TARGET_JAVA_VERSION >= 17) {
@@ -85,17 +82,20 @@ public final class NativeVT implements StdIO, Runnable {
 
 		var in = System.in;
 		if (in instanceof FilterInputStream) {
-			offset = ReflectionUtils.fieldOffset(FilterInputStream.class, "in");
+			offset = Unaligned.fieldOffset(FilterInputStream.class, "in");
 			sysIn = (InputStream) Unaligned.U.getObject(in, offset);
 		} else {
 			sysIn = in;
 		}
 
-		offset = ReflectionUtils.fieldOffset(FilterOutputStream.class, "out");
+		offset = Unaligned.fieldOffset(FilterOutputStream.class, "out");
 		tmp = Unaligned.U.getObject(out, offset);
 		if (tmp instanceof FilterOutputStream) tmp = Unaligned.U.getObject(tmp, offset);
 		sysOut = (OutputStream) tmp;
 	}
+
+	private static Thread reader;
+	private static final StdIO instance = init();
 	public static StdIO getInstance(){return instance;}
 
 	public static final class Fallback extends DelegatedPrintStream implements StdIO, Runnable {
@@ -189,6 +189,7 @@ public final class NativeVT implements StdIO, Runnable {
 			System.err.println(VTERROR+"Timeout");
 			return null;
 		}
+		io.tw = new TextWriter(sysOut, charset, BufferPool.UNPOOLED);
 		reader = t;
 		return io;
 	}
@@ -205,8 +206,8 @@ public final class NativeVT implements StdIO, Runnable {
 			read = true;
 			ib.wIndex(r);
 			synchronized (this) {notify();}
-			// block until NativeVT and Terminal initialized
-			tw = new TextWriter(sysOut, Terminal.nativeCharset, BufferPool.UNPOOLED);
+			// 类加载锁, 会卡在这里直到Terminal初始化
+			Terminal.getConsole();
 
 			while (true) {
 				int off = ib.rIndex;

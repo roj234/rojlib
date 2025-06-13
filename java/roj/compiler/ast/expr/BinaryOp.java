@@ -5,11 +5,11 @@ import org.jetbrains.annotations.Nullable;
 import roj.asm.insn.Label;
 import roj.asm.type.IType;
 import roj.asm.type.Type;
-import roj.collect.MyBitSet;
+import roj.collect.BitSet;
+import roj.compiler.CompileContext;
+import roj.compiler.LavaCompiler;
 import roj.compiler.api.Types;
 import roj.compiler.asm.MethodWriter;
-import roj.compiler.context.GlobalContext;
-import roj.compiler.context.LocalContext;
 import roj.compiler.diagnostic.Kind;
 import roj.compiler.resolve.ResolveException;
 import roj.compiler.resolve.TypeCast;
@@ -32,7 +32,7 @@ final class BinaryOp extends Expr {
 	Expr left, right;
 
 	// 对于下列操作，由于范围已知，可以保证它们的类型不会自动提升
-	private static final MyBitSet BIT_OP = MyBitSet.from(and,or,xor,shr,ushr), BITSHIFT = MyBitSet.from(shl,shr,ushr);
+	private static final BitSet BIT_OP = BitSet.from(and,or,xor,shr,ushr), BITSHIFT = BitSet.from(shl,shr,ushr);
 	private static final byte[] BIT_COUNT = new byte[] {-1, 8, 16, 16, 32, 64};
 
 	private IType type;
@@ -67,7 +67,7 @@ final class BinaryOp extends Expr {
 		if (node instanceof LeftValue || node instanceof Invoke) return false;
 		if (!(node instanceof BinaryOp childOp)) return true;
 
-		var ep = LocalContext.get().ep;
+		var ep = CompileContext.get().ep;
 
 		int priority = ep.binaryOperatorPriority(this.operator);
 		int childPriority = ep.binaryOperatorPriority(childOp.operator);
@@ -96,8 +96,8 @@ final class BinaryOp extends Expr {
 	private static final LazyThreadLocal<Boolean> IN_ANY_BINARY = new LazyThreadLocal<>();
 	@NotNull
 	@Override
-	public Expr resolve(LocalContext ctx) throws ResolveException {return resolveEx(ctx, false);}
-	final Expr resolveEx(LocalContext ctx, boolean isAssignEx) {
+	public Expr resolve(CompileContext ctx) throws ResolveException {return resolveEx(ctx, false);}
+	final Expr resolveEx(CompileContext ctx, boolean isAssignEx) {
 		if (type != null) return this;
 
 		IType lType, rType;
@@ -127,7 +127,7 @@ final class BinaryOp extends Expr {
 
 		if (lType.getActualType() == Type.VOID || rType.getActualType() == Type.VOID) {
 			ctx.report(this, Kind.ERROR, "var.voidType", lType.getActualType() == Type.VOID ? left : right);
-			return NaE.RESOLVE_FAILED;
+			return NaE.resolveFailed(this);
 		}
 
 		// 常量优化: (A + 1) - 2 转换为 A + (1 - 2)
@@ -143,7 +143,7 @@ final class BinaryOp extends Expr {
 			// 5. 操作符优先级相同
 			ctx.ep.binaryOperatorPriority(op.operator) == ctx.ep.binaryOperatorPriority(operator)) {
 
-			GlobalContext.debugLogger().info("doing constant optimize for {}", this);
+			LavaCompiler.debugLogger().info("doing constant optimize for {}", this);
 			left = op.right;
 			op.right = this.resolve(ctx);
 			return new BinaryOp(op.operator, op.left, this).resolveEx(ctx, isAssignEx);
@@ -160,7 +160,7 @@ final class BinaryOp extends Expr {
 				if (Math.min(capL, capR) == 0) {
 					if (dataCap != 0 || operator > logic_or || operator < and) {
 						ctx.report(this, Kind.ERROR, "op.notApplicable.binary", lType, rType, byId(operator));
-						return NaE.RESOLVE_FAILED;
+						return NaE.resolveFailed(this);
 					}
 					dataCap = 8; // boolean
 				} else {
@@ -170,7 +170,7 @@ final class BinaryOp extends Expr {
 						// 6 = float, 7 = double
 						if (dataCap > 5) {
 							ctx.report(this, Kind.ERROR, "op.notApplicable.binary", lType, rType, byId(operator));
-							return NaE.RESOLVE_FAILED;
+							return NaE.resolveFailed(this);
 						} else if (dataCap == 5 && BITSHIFT.contains(operator)) {
 							// 5 = long
 							// lsh, rsh, rsh_unsigned => int bits operator
@@ -210,13 +210,13 @@ final class BinaryOp extends Expr {
 					if (override == null) {
 						if (isAssignEx) return null;
 						ctx.report(this, Kind.ERROR, "op.notApplicable.binary", lType, rType, byId(operator));
-						return NaE.RESOLVE_FAILED;
+						return NaE.resolveFailed(this);
 					}
 					return override;
 			}
 
 			if (castLeft != null && (castLeft.type) < 0 ||
-				castRight != null && (castRight.type) < 0) return NaE.RESOLVE_FAILED;
+				castRight != null && (castRight.type) < 0) return NaE.resolveFailed(this);
 		}
 
 		stackType = (byte) (TypeCast.getDataCap(type.getActualType())-4);
@@ -384,7 +384,7 @@ final class BinaryOp extends Expr {
 
 		return this;
 	}
-	private Expr checkRight(LocalContext ctx, int dataCap) {
+	private Expr checkRight(CompileContext ctx, int dataCap) {
 		var c = (CEntry) right.constVal();
 		switch (operator) {
 			case shl, shr, ushr -> {

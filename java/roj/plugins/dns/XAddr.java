@@ -22,9 +22,9 @@ final class XAddr implements Cloneable {
 	}
 
 	XAddr init(DatagramPkt packet) {
-		this.addr = packet.addr;
-		this.port = (char) packet.port;
-		this.id = (char) packet.buf.readUnsignedShort(packet.buf.rIndex);
+		this.addr = packet.address.getAddress();
+		this.port = (char) packet.address.getPort();
+		this.id = (char) packet.data.readUnsignedShort(packet.data.rIndex);
 		return this;
 	}
 

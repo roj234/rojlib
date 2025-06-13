@@ -11,9 +11,10 @@ import java.util.Objects;
  * @since 2021/6/2 23:28
  */
 public final class Var2 {
-	public static final byte T_TOP = 0, T_INT = 1, T_FLOAT = 2, T_DOUBLE = 3, T_LONG = 4, T_NULL = 5, T_UNINITIAL_THIS = 6, T_REFERENCE = 7, T_UNINITIAL = 8, T_ANY = 114, T_ANY2 = 115;
+	public static final byte T_TOP = 0, T_INT = 1, T_FLOAT = 2, T_DOUBLE = 3, T_LONG = 4, T_NULL = 5, T_UNINITIAL_THIS = 6, T_REFERENCE = 7, T_UNINITIAL = 8, T_ANY = 11, T_ANY2 = 12, T_INITIALIZED_THIS = 13;
 
 	public static final String BYTE_ARRAY = "[B";
+	public static final String BOOL_ARRAY = "[Z";
 	public static final String T_ANYARRAY = "[";
 
 	public byte type;
@@ -27,7 +28,8 @@ public final class Var2 {
 		INT = new Var2(T_INT),
 		FLOAT = new Var2(T_FLOAT),
 		DOUBLE = new Var2(T_DOUBLE),
-		LONG = new Var2(T_LONG);
+		LONG = new Var2(T_LONG),
+		SECOND = new Var2(T_TOP);
 
 	public static Var2 of(Type type) {
 		return switch (type.getActualType()) {
@@ -89,34 +91,28 @@ public final class Var2 {
 		}
 
 		// 是 uninitial / uninitial_this 那么初始化自身
-		if (type != T_REFERENCE && o.bci >= 0) {
-			type = T_REFERENCE;
+		if (type != T_REFERENCE && o.type != type && o.bci > 0) {
 			bci = o.bci;
+			//copy(o);
+			//return true;
 		}
 
-		if (o.owner.equals("java/lang/Object")) return false;
-		if (owner.equals(o.owner)) return false;
-		if (owner.equals("java/lang/Object")) {
-			copy(o);
-			return true;
-		}
+		if (owner.equals(o.owner) || o.owner.equals("java/lang/Object")) return false;
+		if (owner.equals("java/lang/Object")) {copy(o);return true;}
 
 		if (owner.startsWith("[") != o.owner.startsWith("[")) {
 			throw new IllegalStateException("无法合并 " + this + " 与 " + o);
 		}
-		if (o.owner.equals("[")) return false;
-		if (owner.equals("[")) {
-			copy(o);
-			return true;
-		}
+
+		if (o.owner.equals(T_ANYARRAY)) return false;
+		if (owner.equals(T_ANYARRAY)) {copy(o);return true;}
+
 		if (owner.equals(BYTE_ARRAY) || o.owner.equals(BYTE_ARRAY)) {
-			if (o.owner.equals("[Z") || owner.equals("[Z")) return false;
+			// BASTORE may available for boolean[]
+			if (owner.equals(BOOL_ARRAY) || o.owner.equals(BOOL_ARRAY)) return false;
 		}
 
-		if (owner.equals("[Ljava/lang/Object;")) {
-			copy(o);
-			return true;
-		}
+		//if (owner.equals("[Ljava/lang/Object;")) {copy(o);return true;}
 
 		// 更具体的
 		String newOwner = FrameVisitor.getConcreteChild(owner, o.owner);
@@ -141,7 +137,20 @@ public final class Var2 {
 		}
 
 		// 感觉不能合并
-		if (type != T_REFERENCE && o.bci >= 0) throw new IllegalStateException("may not able to merge "+this+" and "+o);
+		if (type != T_REFERENCE || o.type != T_REFERENCE) {
+			// REFERENCE, UNINITIALIZED_THIS, UNINITIALIZED
+			bci = Math.max(bci, o.bci);
+
+			if (type == T_UNINITIAL_THIS || o.type == T_UNINITIAL_THIS) {
+				if (type == T_UNINITIAL || o.type == T_UNINITIAL) {
+					throw new IllegalStateException("无法合并 "+this+" and "+o);
+				}
+
+				type = T_UNINITIAL_THIS;
+			} else {
+				type = T_UNINITIAL;
+			}
+		}
 
 		// o更不具体
 		if (o.owner.equals("java/lang/Object")) return o;
@@ -151,12 +160,12 @@ public final class Var2 {
 		if (owner.startsWith("[") != o.owner.startsWith("[")) return TOP;
 
 		// '[' only for ArrayLength, 并且不是合法的类型
-		if (o.owner.equals("[")) return null;
-		if (owner.equals("[")) return o;
+		if (o.owner.equals(T_ANYARRAY)) return null;
+		if (owner.equals(T_ANYARRAY)) return o;
 
 		// byteArray和booleanArray，头大
 		if (owner.equals(BYTE_ARRAY) || o.owner.equals(BYTE_ARRAY)) {
-			if (o.owner.equals("[Z") || owner.equals("[Z")) return null;
+			if (o.owner.equals(BOOL_ARRAY) || owner.equals(BOOL_ARRAY)) return null;
 		}
 
 		// 基本类型数组
@@ -190,12 +199,12 @@ public final class Var2 {
 
 	private static final String[] toString = {"top", "int", "float", "double", "long", "{null}", "uninitial_this", "object", "uninitial"};
 	public String toString() {
-		if (type == T_UNINITIAL) {
-			return "【在 " + bci + " | " + monitor_bci + " 初始化】";
+		if (type == T_UNINITIAL || type == T_UNINITIAL_THIS) {
+			return "【在 #"+(monitor_bci == null ? bci : monitor_bci)+" 初始化的"+owner+"】";
 		} else if (type == T_REFERENCE) {
-			return owner;
+			return owner+(bci == 0 ? "" : " initializes "+bci);
 		} else {
-			return type > 100 ? "Any" : toString[type];
+			return type > 10 ? "Any#"+type : toString[type];
 		}
 	}
 

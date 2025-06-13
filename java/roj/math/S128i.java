@@ -260,7 +260,7 @@ public class S128i implements Comparable<S128i> {
 	public final S128i mod(S128i modulus) {
 		if (modulus.isNegative() || modulus.isZero()) throw new ArithmeticException("Modulus must be positive");
 		S128i r = remainder(modulus);
-		return r.isNegative() ? r.add(modulus) : r;
+		return r.isNegative() ? r.add(modulus, r) : r;
 	}
 
 	// 最大公约数 (GCD)
@@ -367,8 +367,10 @@ public class S128i implements Comparable<S128i> {
 		}
 	}
 
-	private int numberOfLeadingZeros() {return high != 0 ? Long.numberOfLeadingZeros(high) : 64 + Long.numberOfLeadingZeros(low);}
-	private void shiftLeft(int n) {
+	public int numberOfLeadingZeros() {return high != 0 ? Long.numberOfLeadingZeros(high) : 64+Long.numberOfLeadingZeros(low);}
+	public int numberOfTrailingZeros() {return low != 0 ? Long.numberOfTrailingZeros(low) : 64+Long.numberOfTrailingZeros(high);}
+	public void shiftLeft(int n) {
+		if (n == 0) return;
 		if (n >= 128) {
 			high = low = 0;
 		} else if (n >= 64) {
@@ -379,7 +381,8 @@ public class S128i implements Comparable<S128i> {
 			low = low << n;
 		}
 	}
-	private void shiftRight(int n) {
+	public void shiftRight(int n) {
+		if (n == 0) return;
 		if (n >= 128) {
 			low = high = 0;
 		} else if (n >= 64) {

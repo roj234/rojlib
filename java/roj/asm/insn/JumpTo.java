@@ -60,7 +60,7 @@ public class JumpTo extends Segment {
 		return len != newLen;
 	}
 
-	@Override public int length() { return Opcodes.showOpcode(code).endsWith("_W")?5:3; }
+	@Override public int length() { return Opcodes.toString(code).endsWith("_W")?5:3; }
 	@Override public final boolean isTerminate() { return code == GOTO || code == GOTO_W; }
 	@Override public final boolean willJumpTo(int block, int offset) { return (offset == -1 || target.offset == offset) && target.getBlock() == block; }
 
@@ -69,5 +69,5 @@ public class JumpTo extends Segment {
 		return clone?new JumpTo(code,rx):this;
 	}
 
-	@Override public final String toString() { return Opcodes.showOpcode(code)+"("+target+")"; }
+	@Override public final String toString() { return Opcodes.toString(code)+"("+target+")"; }
 }

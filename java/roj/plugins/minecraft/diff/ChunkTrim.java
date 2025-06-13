@@ -28,7 +28,7 @@ import java.util.regex.Pattern;
 public class ChunkTrim {
 	static final Pattern REGION_MATCHER = Pattern.compile("r\\.(-?\\d+)\\.(-?\\d+)\\.mca$");
 	static EasyProgressBar bar = new EasyProgressBar("计算", "区块");
-	static TaskPool pool = TaskPool.Common();
+	static TaskPool pool = TaskPool.common();
 
 	private static MCTWhitelist whitelist;
 
@@ -55,7 +55,7 @@ public class ChunkTrim {
 	}
 
 	private static MyRegionFile[] removeBlockChunk(File[] fileList, MCTWhitelist whitelist, File trimToPath, TaskPool asyncPool) {
-		var toClear = new MyHashMap<String,IntList>();
+		var toClear = new HashMap<String,IntList>();
 
 		MyRegionFile[] definedState = new MyRegionFile[fileList.length];
 		bar.setTotal(fileList.length * 1024L);
@@ -70,7 +70,7 @@ public class ChunkTrim {
 			int fileZ = Integer.parseInt(match.group(2)) * 32;
 			int javac傻逼 = i;
 			asyncPool.submit(() -> {
-				MyHashSet<String> whitelistTest = new MyHashSet<>();
+				HashSet<String> whitelistTest = new HashSet<>();
 				try (var rf = new MyRegionFile(mca)) {
 					definedState[javac傻逼] = rf;
 					for (int j = 0; j < 1024; j++) {
@@ -187,7 +187,7 @@ public class ChunkTrim {
 		c.setPrompt("\u001b[;97m输入需要删除的区块类型,Ctrl+C以结束 > ");
 		c.setInputEcho(true);
 
-		LongMap<MyBitSet> deleteChunk = new LongMap<>();
+		LongMap<BitSet> deleteChunk = new LongMap<>();
 		int max = 0;
 		while (true) {
 			var chunks = Terminal.readLine(c, Argument.oneOf(toClear));
@@ -199,7 +199,7 @@ public class ChunkTrim {
 				int x = chunks.get(i), z = chunks.get(i+1);
 
 				long mcaKey = ((long) (x >> 5) << 32) | ((z >> 5) & 0xFFFFFFFFL);
-				deleteChunk.computeIfAbsent(mcaKey, s -> new MyBitSet()).add((x&31) | ((z&31) << 5));
+				deleteChunk.computeIfAbsent(mcaKey, s -> new BitSet()).add((x&31) | ((z&31) << 5));
 			}
 		}
 
@@ -334,7 +334,7 @@ public class ChunkTrim {
 	}
 
 	private static final class MCTWhitelist {
-		final MyHashSet<String> world = new MyHashSet<>(), nether = new MyHashSet<>(), the_end = new MyHashSet<>();
+		final HashSet<String> world = new HashSet<>(), nether = new HashSet<>(), the_end = new HashSet<>();
 	}
 
 	private static final class NbtChunk {

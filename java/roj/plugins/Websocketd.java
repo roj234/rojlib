@@ -1,8 +1,8 @@
 package roj.plugins;
 
 import org.jetbrains.annotations.Nullable;
-import roj.collect.MyHashMap;
-import roj.collect.SimpleList;
+import roj.collect.HashMap;
+import roj.collect.ArrayList;
 import roj.config.data.Type;
 import roj.http.WebSocket;
 import roj.http.server.*;
@@ -35,9 +35,9 @@ import java.util.function.Function;
  * @since 2022/3/20 22:53
  */
 public class Websocketd extends Plugin implements Router {
-	private static final MyHashMap<String, List<String>> cmdList = new MyHashMap<>();
+	private static final HashMap<String, List<String>> cmdList = new HashMap<>();
 
-	static volatile List<Worker> workers = new SimpleList<>();
+	static volatile List<Worker> workers = new ArrayList<>();
 
 	private static Logger logger;
 	private OKRouter.Dispatcher manager;

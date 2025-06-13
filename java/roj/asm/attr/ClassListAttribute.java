@@ -2,7 +2,7 @@ package roj.asm.attr;
 
 import roj.asm.cp.Constant;
 import roj.asm.cp.ConstantPool;
-import roj.collect.SimpleList;
+import roj.collect.ArrayList;
 import roj.util.DynByteBuf;
 import roj.util.TypedKey;
 
@@ -16,7 +16,7 @@ public final class ClassListAttribute extends Attribute {
 	private static final int MODULE_PACKAGES_ID = NAMED_ID.getInt("ModulePackages");
 	private final byte type;
 
-	public ClassListAttribute(TypedKey<ClassListAttribute> key) {this(key, new SimpleList<>());}
+	public ClassListAttribute(TypedKey<ClassListAttribute> key) {this(key, new ArrayList<>());}
 	public ClassListAttribute(TypedKey<ClassListAttribute> key, List<String> list) {
 		type = (byte) NAMED_ID.getInt(key.name);
 		value = list;
@@ -26,7 +26,7 @@ public final class ClassListAttribute extends Attribute {
 		type = (byte) NAMED_ID.getInt(name);
 
 		int len = r.readUnsignedShort();
-		value = new SimpleList<>(len);
+		value = new ArrayList<>(len);
 		while (len-- > 0) value.add(pool.getRefName(r, type == MODULE_PACKAGES_ID ? Constant.PACKAGE : Constant.CLASS));
 	}
 

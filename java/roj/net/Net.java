@@ -2,8 +2,8 @@ package roj.net;
 
 import org.jetbrains.annotations.Nullable;
 import roj.RojLib;
-import roj.collect.MyHashSet;
-import roj.collect.SimpleList;
+import roj.collect.HashSet;
+import roj.collect.ArrayList;
 import roj.net.handler.Socks5Client;
 import roj.reflect.Bypass;
 import roj.reflect.Java22Workaround;
@@ -30,13 +30,13 @@ import java.util.Enumeration;
 public final class Net {
 	public static final Logger LOGGER = Logger.getLogger("Net");
 
-	private static SimpleList<NetworkInterface> networkInterfaces;
-	private static MyHashSet<InetAddress> endpoints;
+	private static ArrayList<NetworkInterface> networkInterfaces;
+	private static HashSet<InetAddress> endpoints;
 	private static boolean isIPv6;
 
 	public static void refreshEndpoints() {
-		SimpleList<NetworkInterface> interfaces = new SimpleList<>();
-		MyHashSet<InetAddress> addresses = new MyHashSet<>();
+		ArrayList<NetworkInterface> interfaces = new ArrayList<>();
+		HashSet<InetAddress> addresses = new HashSet<>();
 		boolean val = false;
 
 		try {
@@ -63,8 +63,8 @@ public final class Net {
 	}
 
 	public static boolean isIPv6() { if (networkInterfaces == null) refreshEndpoints(); return isIPv6; }
-	public static MyHashSet<InetAddress> getNetworkEndpoints() { if (networkInterfaces == null) refreshEndpoints(); return endpoints; }
-	public static SimpleList<NetworkInterface> getNetworkInterfaces() { if (networkInterfaces == null) refreshEndpoints(); return networkInterfaces; }
+	public static HashSet<InetAddress> getNetworkEndpoints() { if (networkInterfaces == null) refreshEndpoints(); return endpoints; }
+	public static ArrayList<NetworkInterface> getNetworkInterfaces() { if (networkInterfaces == null) refreshEndpoints(); return networkInterfaces; }
 
 	private static InetAddress any;
 	public static InetAddress anyLocalAddress() {

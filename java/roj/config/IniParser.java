@@ -1,8 +1,8 @@
 package roj.config;
 
-import roj.collect.LinkedMyHashMap;
-import roj.collect.MyBitSet;
-import roj.collect.MyHashMap;
+import roj.collect.BitSet;
+import roj.collect.HashMap;
+import roj.collect.LinkedHashMap;
 import roj.collect.TrieTree;
 import roj.config.data.*;
 import roj.text.Interner;
@@ -24,10 +24,10 @@ public final class IniParser extends Parser {
 
 	private static final short eq = rBrace;
 	// readWord() checked WHITESPACE
-	private static final MyBitSet iniSymbol_LN = MyBitSet.from("\r\n");
+	private static final BitSet iniSymbol_LN = BitSet.from("\r\n");
 
 	private static final TrieTree<Word> INI_TOKENS = new TrieTree<>();
-	private static final MyBitSet INI_LENDS = new MyBitSet();
+	private static final BitSet INI_LENDS = new BitSet();
 	static {
 		addKeywords(INI_TOKENS, TRUE, "true", "false", "null");
 		addSymbols(INI_TOKENS, INI_LENDS, rBrace, "=", "[", "]");
@@ -40,7 +40,7 @@ public final class IniParser extends Parser {
 		this.flag = flags;
 		init(text);
 		try {
-			MyHashMap<String, CEntry> map = new LinkedMyHashMap<>();
+			HashMap<String, CEntry> map = new LinkedHashMap<>();
 
 			String name = CMap.CONFIG_TOPLEVEL;
 			while (true) {
@@ -98,7 +98,7 @@ public final class IniParser extends Parser {
 		return list;
 	}
 	private CMap iniMap(int flag) throws ParseException {
-		MyHashMap<String, CEntry> map = (flag&ORDERED_MAP) != 0 ? new LinkedMyHashMap<>() : new MyHashMap<>();
+		HashMap<String, CEntry> map = (flag&ORDERED_MAP) != 0 ? new LinkedHashMap<>() : new HashMap<>();
 
 		while (true) {
 			Word w = next();

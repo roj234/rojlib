@@ -5,9 +5,8 @@ import org.jetbrains.annotations.NotNull;
 import roj.math.MathUtils;
 import roj.reflect.Bypass;
 import roj.reflect.Java22Workaround;
-import roj.reflect.ReflectionUtils;
+import roj.reflect.Unaligned;
 
-import java.lang.reflect.Field;
 import java.util.*;
 
 import static roj.reflect.Unaligned.U;
@@ -25,25 +24,18 @@ public final class XashMap<K, V> extends AbstractSet<V> {
 		} catch (IllegalArgumentException e) {
 			da.construct(vType, "createValueNoarg");
 		}
-		try {
-			ObjectNew creator = da.build();
-			Field key = ReflectionUtils.getField(vType, field_key);
-			Field next = ReflectionUtils.getField(vType, field_next);
-			return new Builder<>(vType, U.objectFieldOffset(next), U.objectFieldOffset(key), hasher, creator);
-		} catch (NoSuchFieldException e) {
-			throw new IllegalArgumentException("无法找到字段", e);
-		}
+
+		ObjectNew creator = da.build();
+		long key = Unaligned.fieldOffset(vType, field_key);
+		long next = Unaligned.fieldOffset(vType, field_next);
+		return new Builder<>(vType, next, key, hasher, creator);
 	}
 	public static <K, V> Builder<K, V> noCreation(Class<V> vType, String field_key) {return noCreation(vType, field_key, "_next");}
 	public static <K, V> Builder<K, V> noCreation(Class<V> vType, String field_key, String field_next) {return noCreation(vType, field_key, field_next, Hasher.defaul());}
 	public static <K, V> Builder<K, V> noCreation(Class<V> vType, String field_key, String field_next, Hasher<K> hasher) {
-		try {
-			Field key = ReflectionUtils.getField(vType, field_key);
-			Field next = ReflectionUtils.getField(vType, field_next);
-			return new Builder<>(vType, U.objectFieldOffset(next), U.objectFieldOffset(key), hasher, null);
-		} catch (NoSuchFieldException e) {
-			throw new IllegalArgumentException("无法找到字段", e);
-		}
+		long key = Unaligned.fieldOffset(vType, field_key);
+		long next = Unaligned.fieldOffset(vType, field_next);
+		return new Builder<>(vType, next, key, hasher, null);
 	}
 
 	@Java22Workaround

@@ -2,9 +2,9 @@ package roj.config.auto;
 
 import org.jetbrains.annotations.Nullable;
 import roj.asm.type.IType;
-import roj.collect.MyBitSet;
-import roj.collect.MyHashSet;
-import roj.collect.SimpleList;
+import roj.collect.BitSet;
+import roj.collect.HashSet;
+import roj.collect.ArrayList;
 import roj.config.serial.CVisitor;
 import roj.util.Helpers;
 
@@ -45,8 +45,8 @@ final class CollectionSer extends Adapter {
 	public void list(AdaptContext ctx, int size) {
 		ctx.fieldId = -1;
 		ctx.setRef(newCollection != null ? newCollection.apply(size) :
-			set ? size < 0 ? new MyHashSet<>() : new MyHashSet<>(size)
-			: size < 0 ? SimpleList.hugeCapacity(0) : new SimpleList<>(size));
+			set ? size < 0 ? new HashSet<>() : new HashSet<>(size)
+			: size < 0 ? ArrayList.hugeCapacity(0) : new ArrayList<>(size));
 		ctx.push(valueType);
 	}
 
@@ -68,7 +68,7 @@ final class CollectionSer extends Adapter {
 
 	// empty collection
 	@Override
-	public int plusOptional(int fieldState, @Nullable MyBitSet fieldStateEx) { return 1; }
+	public int plusOptional(int fieldState, @Nullable BitSet fieldStateEx) { return 1; }
 
 	@Override
 	public void write(CVisitor c, Object o) {

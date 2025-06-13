@@ -1,7 +1,7 @@
 package roj.plugins.rfs;
 
+import roj.collect.BitSet;
 import roj.collect.IntMap;
-import roj.collect.MyBitSet;
 import roj.config.data.CMap;
 import roj.crypt.KeyType;
 import roj.io.FastFailException;
@@ -65,11 +65,9 @@ public class RemoteFileSystem extends Plugin implements Consumer<MyChannel> {
             }
         }
         easySso = getPluginManager().getPluginInstance(PluginDescriptor.Role.PermissionManager);
-        if (easySso != null) {
-            anonymousPermissions = easySso.ipc(new TypedKey<>("getDefaultPermissions"));
-        }
+		anonymousPermissions = easySso.ipc(new TypedKey<>("getDefaultPermissions"));
 
-        if (!config.getString("address").isEmpty()) {
+		if (!config.getString("address").isEmpty()) {
             var bindAddress = Net.parseAddress(config.getString("address"), InetAddress.getLocalHost());
             launch = ServerLaunch.tcp(config.getString("server_name"))
                     .bind(bindAddress)
@@ -101,7 +99,7 @@ public class RemoteFileSystem extends Plugin implements Consumer<MyChannel> {
 
         IntMap<Source> handles = new IntMap<>();
         int nextHandle;
-        MyBitSet closedHandles = new MyBitSet();
+        BitSet closedHandles = new BitSet();
 
         PermissionHolder permissions = anonymousPermissions;
         int pendingHandle;
@@ -115,7 +113,7 @@ public class RemoteFileSystem extends Plugin implements Consumer<MyChannel> {
         public void channelOpened(ChannelCtx ctx) throws IOException {
             LOGGER.info(ctx+" 连接");
             this.ctx = ctx;
-            ctx.channelWrite(new Packet.AccessToken(easySso != null ? "EasySSO" : ""));
+            ctx.channelWrite(new Packet.AccessToken(easySso.getDescription().getId()));
         }
 
         @Override

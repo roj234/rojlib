@@ -6,10 +6,10 @@ import roj.asm.Opcodes;
 import roj.asm.insn.AbstractCodeWriter;
 import roj.asm.type.IType;
 import roj.asm.type.Type;
+import roj.compiler.CompileContext;
 import roj.compiler.asm.Asterisk;
 import roj.compiler.asm.MethodWriter;
 import roj.compiler.ast.GeneratorUtil;
-import roj.compiler.context.LocalContext;
 import roj.compiler.diagnostic.Kind;
 import roj.compiler.resolve.ResolveException;
 import roj.compiler.resolve.TypeCast;
@@ -69,7 +69,7 @@ public final class NewArray extends Expr {
 	private static final char[] UNSIGNED_MAX = {0, 255, 65535, 65535};
 	@NotNull
 	@Override
-	public Expr resolve(LocalContext ctx) throws ResolveException {
+	public Expr resolve(CompileContext ctx) throws ResolveException {
 		if ((flag&4) != 0) return this;
 		flag |= 4;
 
@@ -132,7 +132,7 @@ public final class NewArray extends Expr {
 			casts[i] = cast.intern();
 		}
 
-		if (failed) return NaE.RESOLVE_FAILED;
+		if (failed) return NaE.resolveFailed(this);
 		if (isAllConstant) {
 			flag |= 2;
 
@@ -156,7 +156,7 @@ public final class NewArray extends Expr {
 		}
 		return this;
 	}
-	private void autoType(LocalContext ctx) {
+	private void autoType(CompileContext ctx) {
 		flag |= 8;
 
 		ctx.report(this, Kind.WARNING, "arrayDef.autoTypeTip");
@@ -211,7 +211,7 @@ public final class NewArray extends Expr {
 	@Override
 	public void write(MethodWriter cw, @Nullable TypeCast.Cast returnType) {
 		if ((flag&8) != 0) {
-			var ctx = LocalContext.get();
+			var ctx = CompileContext.get();
 			if (returnType == null) {
 				ctx.report(this, Kind.ERROR, "arrayDef.inferFailed");
 				return;

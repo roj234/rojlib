@@ -3,8 +3,8 @@ package roj.compiler.ast.expr;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import roj.asm.type.IType;
+import roj.compiler.CompileContext;
 import roj.compiler.asm.MethodWriter;
-import roj.compiler.context.LocalContext;
 import roj.compiler.diagnostic.Kind;
 import roj.compiler.resolve.TypeCast;
 import roj.text.TextUtil;
@@ -28,7 +28,7 @@ final class SequenceExpr extends Expr {
 
 	@NotNull
 	@Override
-	public Expr resolve(LocalContext ctx) {
+	public Expr resolve(CompileContext ctx) {
 		int i = 0;
 		while (i < sequence.size()) {
 			Expr node = sequence.get(i).resolve(ctx);

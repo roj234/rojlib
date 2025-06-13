@@ -1,7 +1,7 @@
 package roj.io;
 
 import roj.collect.IntMap;
-import roj.collect.SimpleList;
+import roj.collect.ArrayList;
 import roj.io.source.Source;
 import roj.math.MathUtils;
 import roj.reflect.Unaligned;
@@ -26,7 +26,7 @@ public class RollingHashDedup {
 	}
 
 	private final int base, window, windowPower, blockSize;
-	private List<Source> sources = new SimpleList<>();
+	private List<Source> sources = new ArrayList<>();
 	private IntMap<List<Tab>> hashTab = new IntMap<>();
 
 	static final class Tab {
@@ -68,7 +68,7 @@ public class RollingHashDedup {
 	public List<Match> deduplicate(Source src) throws IOException {
 		int window = this.window;
 		int windowPower = this.windowPower;
-		List<Match> matches = new SimpleList<>();
+		List<Match> matches = new ArrayList<>();
 
 		byte[] buf = ArrayCache.getByteArray(window * 2, true);
 		int hash = 0;
@@ -141,7 +141,7 @@ public class RollingHashDedup {
 	}
 
 	private void addHash(Source source, long offset, int hash) {
-		List<Tab> matches = hashTab.computeIfAbsentInt(hash, x -> new SimpleList<>());
+		List<Tab> matches = hashTab.computeIfAbsentInt(hash, x -> new ArrayList<>());
 		matches.add(new Tab(source, offset));
 	}
 

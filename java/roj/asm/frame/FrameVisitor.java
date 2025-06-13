@@ -9,9 +9,9 @@ import roj.asm.insn.JumpTo;
 import roj.asm.insn.Segment;
 import roj.asm.insn.SwitchBlock;
 import roj.asm.type.Type;
+import roj.collect.ArrayList;
+import roj.collect.HashSet;
 import roj.collect.IntMap;
-import roj.collect.MyHashSet;
-import roj.collect.SimpleList;
 import roj.compiler.resolve.TypeCast;
 import roj.io.FastFailException;
 import roj.text.CharList;
@@ -33,21 +33,22 @@ public class FrameVisitor {
 	private static final boolean DEADCODE_LENIENT = true;
 	private static final String ANY_OBJECT_TYPE = "java/lang/Object";
 
+	private int stackSizeNow;
 	public int maxStackSize, maxLocalSize;
 
 	private MethodNode method;
 	private Var2[] initLocal;
 
 	private final IntMap<BasicBlock> stateIn = new IntMap<>();
-	private final List<BasicBlock> stateOut = new SimpleList<>();
+	private final List<BasicBlock> stateOut = new ArrayList<>();
 	private final IntMap<List<BasicBlock>> jumpTo = new IntMap<>();
-	private final List<BasicBlock> exceptionHandlers = new SimpleList<>();
+	private final List<BasicBlock> exceptionHandlers = new ArrayList<>();
 
 	private int bci;
 	private BasicBlock current;
 	private boolean controlFlowTerminate;
 
-	private final SimpleList<Type> tmpList = new SimpleList<>();
+	private final ArrayList<Type> tmpList = new ArrayList<>();
 	private final CharList sb = new CharList();
 
 	/**
@@ -75,7 +76,7 @@ public class FrameVisitor {
 			Var2 v = of(types.get(i));
 			if (v == null) throw new IllegalArgumentException("参数["+i+"]不允许是Void类型");
 			set(slotBegin++, v);
-			if (v.type == T_DOUBLE || v.type == T_LONG) set(slotBegin++, TOP);
+			if (v.type == T_DOUBLE || v.type == T_LONG) set(slotBegin++, SECOND);
 		}
 
 		initLocal = Arrays.copyOf(current.assignedLocal, current.assignedLocalCount);
@@ -119,10 +120,15 @@ public class FrameVisitor {
 	 */
 	public void visitException(int start, int end, int handler, String type) {
 		var _handler = current = add(handler, "exception #["+start+','+end+"].handler", true);
-		push(type == null ? "java/lang/Throwable" : type);
 
-		_handler.reachable = true;
-		_handler.startStack = new Var2[] {_handler.outStack[0]};
+		if (_handler.reachable) {
+			Var2 uncombine = _handler.startStack[0].uncombine(of(T_REFERENCE, type == null ? "java/lang/Throwable" : type));
+			if (uncombine != null) _handler.startStack[0] = uncombine;
+		} else {
+			push(type == null ? "java/lang/Throwable" : type);
+			_handler.reachable = true;
+			_handler.startStack = new Var2[] {_handler.outStack[0]};
+		}
 
 		// 对于任何一个在异常处理器[start,end]之间的基本块，记录每一个变量slot被assign时的类型，如果与start之前的状态不符，那么在异常处理器中它就是TOP类型
 		var _begin = add(start, "exception #["+start+','+end+"].begin", false);
@@ -160,10 +166,8 @@ public class FrameVisitor {
 
 		if (blocks.size() <= 1 || !generateFrames) return null;
 
-		System.out.println("FV========================================");
-
-		var frames = new SimpleList<Frame>();
-		var tmp = new MyHashSet<BasicBlock>();
+		var frames = new ArrayList<Frame>();
+		var tmp = new HashSet<BasicBlock>();
 
 		var first = blocks.get(0);
 		first.initFirst(initLocal);
@@ -188,8 +192,14 @@ public class FrameVisitor {
 			}
 		}
 
+		List<Var2> out = new ArrayList<>();
 		Var2[] lastLocal = initLocal;
-		for (int i = 1; i < blocks.size(); i++) {
+		for (Var2 item : lastLocal) {
+			if (item != SECOND) out.add(item);
+		}
+		lastLocal = out.toArray(new Var2[out.size()]);
+
+		for (int i = 0; i < blocks.size(); i++) {
 			var block = blocks.get(i);
 			if (!block.reachable) {
 				if (DEADCODE_LENIENT) {
@@ -201,18 +211,34 @@ public class FrameVisitor {
 			if (!block.isFrame) continue;
 
 			Var2[] stack = block.startStack;
-			Var2[] local;
+			Var2[] local = block.startLocal;
 
-			int startLocalSize = -1;
-			for (int j = 0; j < block.startLocal.length;) {
-				Var2 item = block.startLocal[j++];
-				if (item != null && item.type != T_TOP) startLocalSize = j;
+			int startLocalSize = 0;
+			for (int j = 0; j < local.length;) {
+				Var2 item = local[j++];
+				if (item == null || item.type == T_TOP) continue;
+				startLocalSize = j;
+				if ((item.type == T_UNINITIAL || item.type == T_UNINITIAL_THIS) && block.bci > item.bci) {
+					if (item.bci == 0) throw new IllegalStateException("未初始化的"+item);
+					local[j-1] = Var2.of(T_REFERENCE, item.owner);
+				}
 			}
 
-			local = startLocalSize < 0 ? NONE : Arrays.copyOf(block.startLocal, startLocalSize);
-			for (int j = 0; j < local.length; j++) {
+			out.clear();
+			for (int j = 0; j < startLocalSize; j++) {
 				Var2 item = local[j];
-				if (item == null) local[j] = TOP;
+				if (item == null) item = TOP;
+				if (item == SECOND) continue;
+				out.add(item);
+			}
+			local = out.toArray(new Var2[out.size()]);
+
+			for (int j = 0; j < stack.length; j++) {
+				Var2 item = stack[j];
+				if ((item.type == T_UNINITIAL || item.type == T_UNINITIAL_THIS) && block.bci > item.bci) {
+					if (item.bci == 0) throw new IllegalStateException("未初始化的"+item);
+					local[j] = Var2.of(T_REFERENCE, item.owner);
+				}
 			}
 
 			Frame frame = new Frame();
@@ -252,8 +278,7 @@ public class FrameVisitor {
 		}
 		blocks.clear();
 
-		System.out.println(frames);
-		System.out.println("========================================FV");
+		//System.out.println(frames);
 		return frames;
 	}
 
@@ -279,6 +304,7 @@ public class FrameVisitor {
 				// if
 				if (!controlFlowTerminate && current != null) current.to(next);
 				current = next;
+				stackSizeNow = next.outStackSize;
 				stateOut.add(next);
 				controlFlowTerminate = false;
 			}
@@ -286,9 +312,9 @@ public class FrameVisitor {
 				if (DEADCODE_LENIENT) {
 					current = new BasicBlock(bci, "unreachable");
 					controlFlowTerminate = false;
-					new IllegalStateException("无法访问的代码: #"+bci+"("+Opcodes.showOpcode(prev)+") ").printStackTrace();
+					new IllegalStateException("无法访问的代码: #"+bci+"("+Opcodes.toString(prev)+") ").printStackTrace();
 				} else {
-					throw new IllegalStateException("无法访问的代码: #"+bci+"("+Opcodes.showOpcode(prev)+") ");
+					throw new IllegalStateException("无法访问的代码: #"+bci+"("+Opcodes.toString(prev)+") ");
 				}
 			}
 
@@ -416,11 +442,11 @@ public class FrameVisitor {
 					push(new Var2(T_REFERENCE, v));
 				}
 				case AASTORE -> {
-					Var2 value = pop("java/lang/Object");
+					Var2 value = pop(ANY_OBJECT_TYPE);
 					pop(T_INT);
-					Var2 arrayType = pop("[Ljava/lang/Object;");
-					String v = arrayType.owner;
-					value.verify(new Var2(T_REFERENCE, v.substring(2, v.length() - 1)));
+					String v = pop("[Ljava/lang/Object;").owner;
+					v = v.charAt(1) == 'L' ? v.substring(2, v.length() - 1) : v.substring(1);
+					value.verify(new Var2(T_REFERENCE, v));
 				}
 				case PUTFIELD, GETFIELD, PUTSTATIC, GETSTATIC -> field(code, cp.getRef(r, true));
 				case INVOKEVIRTUAL, INVOKESPECIAL, INVOKESTATIC -> invoke(code, cp.getRef(r, false));
@@ -637,16 +663,17 @@ public class FrameVisitor {
 	private void invokeDynamic(CstDynamic dyn, int type/* unused */) {invoke(INVOKESTATIC, null, dyn.desc());}
 	private void invoke(byte code, CstRef method) {invoke(code, method, method.nameAndType());}
 	private void invoke(byte code, CstRef method, CstNameAndType desc) {
-		SimpleList<Type> arguments = tmpList; arguments.clear();
+		ArrayList<Type> arguments = tmpList; arguments.clear();
 		Type returnType = Type.methodDesc(desc.rawDesc().str(), arguments);
 		for (int i = arguments.size() - 1; i >= 0; i--) {
 			pop(of(arguments.get(i)));
 		}
 
 		if (code != INVOKESTATIC) {
-			Var2 instance = new Var2(T_REFERENCE, method.clazz().name().str());
-			instance.bci = bci;
-			pop(instance); // Optionally initialize T_UNINITIALIZED
+			Var2 instance = new Var2(T_REFERENCE, method.clazz().value().str());
+			// initialize T_UNINITIALIZED
+			if (method.name().equals("<init>")) instance.bci = bci;
+			pop(instance);
 		}
 
 		Var2 returnValue = of(returnType);
@@ -658,12 +685,12 @@ public class FrameVisitor {
 			case GETSTATIC -> push(fieldType);
 			case PUTSTATIC -> pop(fieldType);
 			case GETFIELD -> {
-				pop(field.clazz().name().str());
+				pop(field.clazz().value().str());
 				push(fieldType);
 			}
 			case PUTFIELD -> {
 				pop(fieldType);
-				pop(field.clazz().name().str());
+				pop(field.clazz().value().str());
 			}
 		}
 	}
@@ -745,8 +772,8 @@ public class FrameVisitor {
 		}
 
 		block.assignedLocal[i] = type;
-		if (type.type == T_LONG || type.type == T_DOUBLE) set(i+1, TOP);
-		else if (prev == TOP && type != prev && i > 0) {
+		if (type.type == T_LONG || type.type == T_DOUBLE) set(i+1, SECOND);
+		else if (prev == SECOND && type != prev && i > 0) {
 			Var2 prev2 = block.assignedLocal[i-1];
 			if (prev2.type == T_LONG || prev2.type == T_DOUBLE)
 				throw new IllegalStateException("无法修改被"+prev2+"占用的slot "+i+"为"+type);
@@ -775,7 +802,7 @@ public class FrameVisitor {
 				v1.verify(exceptType);
 			}
 
-			block.maxStackSize -= v1.type == T_LONG || v1.type == T_DOUBLE ? 2 : 1;
+			stackSizeNow -= v1.type == T_LONG || v1.type == T_DOUBLE ? 2 : 1;
 			return v1;
 		}
 
@@ -785,11 +812,9 @@ public class FrameVisitor {
 			block.consumedStack = Arrays.copyOf(block.consumedStack, block.consumedStackSize+1);
 		block.consumedStack[block.consumedStackSize++] = exceptType;
 
-		block.maxStackSize += exceptType.type == T_LONG || exceptType.type == T_DOUBLE ? 2 : 1;
-		maxStackSize = Math.max(maxStackSize, block.maxStackSize);
+		pushHook(exceptType, block);
 		return exceptType;
 	}
-
 	private void push(byte type) {push(of(type, null));}
 	private void push(String owner) {push(new Var2(T_REFERENCE, owner));}
 	private void push(Var2 type) {
@@ -798,12 +823,19 @@ public class FrameVisitor {
 			block.outStack = Arrays.copyOf(block.outStack, block.outStackSize+1);
 		block.outStack[block.outStackSize++] = type;
 
-		block.maxStackSize += type.type == T_LONG || type.type == T_DOUBLE ? 2 : 1;
-		maxStackSize = Math.max(maxStackSize, block.maxStackSize);
+		pushHook(type, block);
+	}
+
+	private void pushHook(Var2 type, BasicBlock block) {
+		stackSizeNow += type.type == T_LONG || type.type == T_DOUBLE ? 2 : 1;
+		stackSizeNow = block.outStackSize + block.consumedStackSize;
+		if (stackSizeNow > maxStackSize) {
+			maxStackSize = stackSizeNow;
+		}
 	}
 	// endregion
 	public static String getConcreteChild(String type1, String type2) {return ClassUtil.getInstance().getCommonChild(type1, type2);}
-	public static String getCommonParent(String type1, String type2) {return ClassUtil.getInstance().getCommonParent(type1, type2);}
+	public static String getCommonParent(String type1, String type2) {return ClassUtil.getInstance().getCommonAncestor(type1, type2);}
 	// region Frame writing
 	public static void readFrames(List<Frame> frames, DynByteBuf r, ConstantPool cp, AbstractCodeWriter pc, String owner, int lMax, int sMax) {
 		frames.clear();

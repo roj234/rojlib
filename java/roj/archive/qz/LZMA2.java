@@ -1,8 +1,8 @@
 package roj.archive.qz;
 
-import roj.archive.qz.xz.LZMA2InputStream;
-import roj.archive.qz.xz.LZMA2Options;
-import roj.archive.qz.xz.LZMA2ParallelReader;
+import roj.archive.xz.LZMA2InputStream;
+import roj.archive.xz.LZMA2Options;
+import roj.archive.xz.LZMA2ParallelInputStream;
 import roj.util.DynByteBuf;
 
 import java.io.IOException;
@@ -48,7 +48,7 @@ public final class LZMA2 extends QZCoder {
         }
         useMemory(memoryLimit, LZMA2InputStream.getMemoryUsage(dictSize));
 
-        return experimental_async_decompress ? new LZMA2ParallelReader(in, dictSize) : new LZMA2InputStream(in, dictSize);
+        return experimental_async_decompress ? new LZMA2ParallelInputStream(in, dictSize) : new LZMA2InputStream(in, dictSize);
     }
     private int getDictSize() {return options==null?this.dictSize:options.getDictSize();}
 

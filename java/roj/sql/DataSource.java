@@ -2,7 +2,7 @@ package roj.sql;
 
 import org.jetbrains.annotations.ApiStatus;
 import roj.reflect.Bypass;
-import roj.reflect.ReflectionUtils;
+import roj.reflect.Reflection;
 
 import java.io.File;
 import java.sql.Connection;
@@ -34,7 +34,7 @@ public interface DataSource {
 
 	String DEFAULT_CHARSET = "UTF-16LE";
 	private static DataSource jdbc(String driverClass, String url, String user, String pass) {
-		ClassLoader classLoader = ReflectionUtils.getCallerClass(4).getClassLoader();
+		ClassLoader classLoader = Reflection.getCallerClass(3, DataSource.class).getClassLoader();
 		boolean bypassClassLoaderRestriction = classLoader != DataSource.class.getClassLoader();
 		try {
 			Class.forName(driverClass, true, classLoader);

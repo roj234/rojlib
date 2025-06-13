@@ -1,7 +1,7 @@
 package roj.io.buf;
 
 import roj.collect.IntMap;
-import roj.collect.SimpleList;
+import roj.collect.ArrayList;
 import roj.concurrent.FastThreadLocal;
 import roj.concurrent.Scheduler;
 import roj.concurrent.SegmentReadWriteLock;
@@ -16,8 +16,8 @@ import java.io.Closeable;
 import java.lang.ref.WeakReference;
 import java.nio.ByteBuffer;
 
-import static roj.reflect.ReflectionUtils.fieldOffset;
 import static roj.reflect.Unaligned.U;
+import static roj.reflect.Unaligned.fieldOffset;
 
 /**
  * @author Roj233
@@ -40,9 +40,9 @@ public final class BufferPool {
 		private int refCount;
 		@Override public Object pool(Object p1) { return U.getAndSetObject(this, u_pool, p1); }
 
-		private Page page;
-		@Override public Page page() { return page; }
-		@Override public void page(Page p) { page = p; }
+		private Bitmap bitmap;
+		@Override public Bitmap page() { return bitmap; }
+		@Override public void page(Bitmap p) { bitmap = p; }
 
 		private int meta;
 		@Override public int getKeepBefore() { return meta; }
@@ -59,9 +59,9 @@ public final class BufferPool {
 		@Override
 		public Object pool(Object p1) { return U.getAndSetObject(this, u_pool, p1); }
 
-		private Page page;
-		@Override public Page page() { return page; }
-		@Override public void page(Page p) { page = p; }
+		private Bitmap bitmap;
+		@Override public Bitmap page() { return bitmap; }
+		@Override public void page(Bitmap p) { bitmap = p; }
 
 		private int meta;
 		@Override public int getKeepBefore() { return meta; }
@@ -97,14 +97,14 @@ public final class BufferPool {
 	public int getHeapMax() { return heapMax; }
 
 	private final SegmentReadWriteLock lock = new SegmentReadWriteLock();
-	private Page pDirect, pHeap;
+	private Bitmap pDirect, pHeap;
 	private volatile NativeMemory directRef;
 	private volatile byte[] heap;
 
 	private final PooledBuffer[] directShell, heapShell;
 	private int directShellLen, heapShellLen;
 
-	private final SimpleList<ByteBuffer> directBufferShell = new SimpleList<>();
+	private final ArrayList<ByteBuffer> directBufferShell = new ArrayList<>();
 
 	private boolean hasDelay;
 	private final int maxStall;
@@ -118,10 +118,10 @@ public final class BufferPool {
 		this.directInit = directInit;
 		this.heapInit = heapInit;
 
-		this.pHeap = heapInit <= 0 ? null : Page.create(heapInit);
+		this.pHeap = heapInit <= 0 ? null : Bitmap.create(heapInit);
 		this.heapIncr = heapIncr;
 		this.heapMax = heapMax;
-		this.pDirect = directInit <= 0 ? null : Page.create(directInit);
+		this.pDirect = directInit <= 0 ? null : Bitmap.create(directInit);
 		this.directIncr = directIncr;
 		this.directMax = directMax;
 		this.directShell = directInit <= 0 ? null : new PooledBuffer[shellSize];
@@ -169,11 +169,11 @@ public final class BufferPool {
 		try {
 			if (p.pDirect.usedSpace() == 0) {
 				if (p.directRef != null) {
-					p.directRef.release();
+					p.directRef.free();
 					p.directRef = null;
 				}
 				p.directBufferShell.clear();
-				p.pDirect = Page.create(Math.max(p.directInit, (int) p.pDirect.totalSpace() - p.directIncr));
+				p.pDirect = Bitmap.create(Math.max(p.directInit, (int) p.pDirect.totalSpace() - p.directIncr));
 			}
 		} finally {
 			p.lock.unlock(0);
@@ -184,7 +184,7 @@ public final class BufferPool {
 		try {
 			if (p.pHeap.usedSpace() == 0) {
 				p.heap = null;
-				p.pHeap = Page.create(Math.max(p.heapInit, (int) p.pHeap.totalSpace() - p.heapIncr));
+				p.pHeap = Bitmap.create(Math.max(p.heapInit, (int) p.pHeap.totalSpace() - p.heapIncr));
 			}
 		} finally {
 			p.lock.unlock(1);
@@ -256,11 +256,11 @@ public final class BufferPool {
 	private long allocDirect(long cap, PooledBuffer sh) {
 		long off;
 		if (cap < DIRECT_LARGE) while (true) {
-			Page p = pDirect;
+			Bitmap p = pDirect;
 			if (p == null) return 0;
 			NativeMemory stamp = directRef;
 			if (stamp == null && !U.compareAndSwapObject(this, u_directRef, null, stamp = new NativeMemory(p.totalSpace()))) {
-				stamp.release();
+				stamp.free();
 				continue;
 			}
 
@@ -288,10 +288,10 @@ public final class BufferPool {
 			try {
 				if (pDirect == p) {
 					// otherwise give it to GC
-					if (p.usedSpace() == 0) directRef.release();
+					if (p.usedSpace() == 0) directRef.free();
 
 					long space = Math.min(p.totalSpace() + ((cap+directIncr-1)/directIncr)*directIncr, directMax);
-					p = Page.create(space);
+					p = Bitmap.create(space);
 					directRef = new NativeMemory(p.totalSpace());
 					directBufferShell.clear();
 					pDirect = p;
@@ -306,7 +306,7 @@ public final class BufferPool {
 	private boolean allocHeap(int cap, PooledBuffer sh) {
 		int off;
 		if(cap < HEAP_LARGE) while (true) {
-			Page p = pHeap;
+			Bitmap p = pHeap;
 			if (p == null) return false;
 			byte[] stamp = heap;
 			if (stamp == null && !U.compareAndSwapObject(this, u_heap, null, stamp = new byte[(int) p.totalSpace()]))
@@ -333,7 +333,7 @@ public final class BufferPool {
 			try {
 				if (pHeap == p) {
 					long space = p.totalSpace() + (long) ((cap+heapIncr-1)/heapIncr)*heapIncr;
-					p = Page.create(Math.min(space, heapMax));
+					p = Bitmap.create(Math.min(space, heapMax));
 
 					heap = new byte[(int) p.totalSpace()];
 
@@ -435,13 +435,13 @@ public final class BufferPool {
 		if (buf.isDirect()) {
 			long m = buf.address();
 			NativeMemory nm = ((DirectByteList) buf).memory();
-			Page p = pb.page();
+			Bitmap p = pb.page();
 			int slot = System.identityHashCode(p);
 			lock.lock(slot);
 			try {
 				p.free(m-nm.address()-prefix, buf.capacity()+prefix);
 				if (p.usedSpace() == 0) {
-					if (directRef != nm) nm.release();
+					if (directRef != nm) nm.free();
 					else tryDelayedFree();
 				}
 			} finally {
@@ -452,7 +452,7 @@ public final class BufferPool {
 			addShell(directShell, u_directShellLen, pb);
 		} else {
 			byte[] bb = buf.array();
-			Page p = pb.page();
+			Bitmap p = pb.page();
 			int slot = System.identityHashCode(p);
 			lock.lock(slot);
 			try {
@@ -534,7 +534,7 @@ public final class BufferPool {
 				if (more < 0) {
 					int x = -more & ~7;
 					if (x > 0) {
-						int off = (int) Page.align(offset + b.capacity()) - x;
+						int off = (int) Bitmap.align(offset + b.capacity()) - x;
 						page.free(off, x);
 					} else {
 						LOGGER.debug("FreeTooSmall: "+b.info()+", size="+more+" => 0");

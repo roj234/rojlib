@@ -4,10 +4,10 @@ import org.jetbrains.annotations.Nullable;
 import roj.asm.MethodNode;
 import roj.asm.Opcodes;
 import roj.asm.type.Type;
+import roj.compiler.CompileUnit;
 import roj.compiler.api.InvokeHook;
 import roj.compiler.ast.expr.Expr;
 import roj.compiler.ast.expr.Invoke;
-import roj.compiler.context.CompileUnit;
 
 import java.util.List;
 
@@ -40,14 +40,14 @@ final class MethodBridge extends InvokeHook {
 	public String toString() {return "Evaluable<Generic MethodBridge>";}
 
 	@Override
-	public Expr eval(MethodNode owner, @Nullable Expr self, List<Expr> args, Invoke node) {
+	public Expr eval(MethodNode owner, @Nullable Expr that, List<Expr> args, Invoke node) {
 		if (prev != null) {
-			Expr eval = prev.eval(owner, self, args, node);
+			Expr eval = prev.eval(owner, that, args, node);
 			if (eval != null) return eval;
 		}
 
 		MethodNode mn = this.owner.methods.get(accessor);
 		if ((owner.modifier&Opcodes.ACC_STATIC) != 0) return Invoke.staticMethod(mn, args);
-		else return Invoke.virtualMethod(mn, self, args);
+		else return Invoke.virtualMethod(mn, that, args);
 	}
 }

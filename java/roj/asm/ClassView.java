@@ -5,7 +5,7 @@ import roj.asm.cp.ConstantPool;
 import roj.asm.cp.CstUTF;
 import roj.asm.type.Type;
 import roj.asm.type.TypeHelper;
-import roj.collect.SimpleList;
+import roj.collect.ArrayList;
 import roj.io.IOUtil;
 import roj.text.CharList;
 import roj.util.DynByteBuf;
@@ -34,14 +34,14 @@ public final class ClassView implements ClassDefinition {
 		node.modifier = acc;
 
 		int len = r.readUnsignedShort();
-		SimpleList<String> itf = new SimpleList<>(len);
+		ArrayList<String> itf = new ArrayList<>(len);
 		while (len-- > 0) itf.add(pool.getRefName(r, Constant.CLASS));
 
 		node.interfaces = itf;
 
 		for (int k = 0; k < 2; k++) {
 			len = r.readUnsignedShort();
-			List<MOF> com = new SimpleList<>(len);
+			List<MOF> com = new ArrayList<>(len);
 			while (len-- > 0) {
 				int offset = r.rIndex;
 

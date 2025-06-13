@@ -160,8 +160,7 @@ public class ConnectionPool implements DataSource {
 					return false;
 				}, closeHandler);
 
-				ClassDefiner.premake(data);
-				proxy = Helpers.cast(ClassDefiner.make(data));
+				proxy = Helpers.cast(ClassDefiner.newInstance(data));
 			}
 		}
 

@@ -6,7 +6,6 @@ import roj.concurrent.Task;
 import roj.net.ChannelCtx;
 import roj.net.ChannelHandler;
 import roj.net.Event;
-import roj.reflect.ReflectionUtils;
 import roj.reflect.Unaligned;
 import roj.text.logging.Logger;
 import roj.util.VMUtil;
@@ -28,7 +27,7 @@ public class Fail2Ban implements ChannelHandler, Task {
 	private final ConcurrentHashMap<InetAddress, Attempt> data = new ConcurrentHashMap<>();
 
 	final class Attempt {
-		private static final long COUNT_OFFSET = ReflectionUtils.fieldOffset(Attempt.class, "count");
+		private static final long COUNT_OFFSET = Unaligned.fieldOffset(Attempt.class, "count");
 		private volatile int count;
 		private long forgive;
 		public Attempt(InetAddress address) {}

@@ -3,8 +3,8 @@ package roj.config.table;
 import org.jetbrains.annotations.NotNull;
 import roj.archive.zip.ZEntry;
 import roj.archive.zip.ZipFile;
-import roj.collect.MyHashMap;
-import roj.collect.SimpleList;
+import roj.collect.HashMap;
+import roj.collect.ArrayList;
 import roj.config.ParseException;
 import roj.config.Tokenizer;
 import roj.config.XMLParser;
@@ -37,12 +37,12 @@ final class XlsxParser implements TableParser {
 
 	// 奇技淫巧（狗头
 	private final XMLParser xml = new XMLParser();
-	private final Map<String, Element> replaceNodes = new MyHashMap<>();
+	private final Map<String, Element> replaceNodes = new HashMap<>();
 	private Consumer<Element> consumer;
 
 	// row-col
-	private final SimpleList<String> sharedStrings = SimpleList.hugeCapacity(64);
-	private final SimpleList<String> cells = new SimpleList<>();
+	private final ArrayList<String> sharedStrings = ArrayList.hugeCapacity(64);
+	private final ArrayList<String> cells = new ArrayList<>();
 	private final int[] cellPos = new int[2];
 	private boolean emptyRow;
 
@@ -104,13 +104,13 @@ final class XlsxParser implements TableParser {
 			};
 
 			ze = zf.getEntry("xl/_rels/workbook.xml.rels");
-			var relMap = new MyHashMap<String, String>();
+			var relMap = new HashMap<String, String>();
 			readWith(zf, ze, entry -> {
 				relMap.put(entry.attr("Id").asString(), entry.attr("Target").asString());
 			});
 
 			ze = zf.getEntry("xl/workbook.xml");
-			var sheetList = new SimpleList<>();
+			var sheetList = new ArrayList<>();
 			readWith(zf, ze, entry -> {
 				int id = entry.attr("sheetId").asInt();
 				String name = entry.attr("name").asString();
@@ -197,7 +197,7 @@ final class XlsxParser implements TableParser {
 		consumer = c;
 
 		try (InputStream in = zip.getStream(entry)) {
-			xml.parse(in, 0, new ToXml() {
+			xml.parse(in, XMLParser.DECODE_ENTITY, new ToXml() {
 				@Override
 				protected Element createElement(String str) {
 					Element el = replaceNodes.get(str);

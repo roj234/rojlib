@@ -8,6 +8,8 @@ import roj.asm.attr.ConstantValue;
 import roj.asm.attr.UnparsedAttribute;
 import roj.asm.cp.*;
 import roj.asm.type.IType;
+import roj.compiler.CompileContext;
+import roj.compiler.CompileUnit;
 import roj.compiler.Tokens;
 import roj.compiler.api.MethodDefault;
 import roj.compiler.asm.AnnotationPrimer;
@@ -15,8 +17,6 @@ import roj.compiler.asm.MethodWriter;
 import roj.compiler.ast.expr.Expr;
 import roj.compiler.ast.expr.ExprParser;
 import roj.compiler.ast.expr.RawExpr;
-import roj.compiler.context.CompileUnit;
-import roj.compiler.context.LocalContext;
 import roj.compiler.diagnostic.Kind;
 import roj.config.ParseException;
 import roj.config.data.CEntry;
@@ -30,7 +30,7 @@ import java.util.List;
  * Parser levels: <ol>
  *     <li>{@link CompileUnit Class Parser}</li>
  *     <li><b><i>Segment Parser</i></b></li>
- *     <li>{@link BlockParser Method Parser}</li>
+ *     <li>{@link MethodParser Method Parser}</li>
  *     <li>{@link ExprParser Expression Parser}</li>
  * </ol>
  *
@@ -102,7 +102,7 @@ public interface ParseTask {
 			@Override
 			public int priority() {return 1;}
 			@Override
-			public void parse(LocalContext ctx) throws ParseException {
+			public void parse(CompileContext ctx) throws ParseException {
 				ctx.lexer.init(pos, linePos, lineIdx);
 				ctx.bp.parseBlockMethod(file, file.getGlobalInit());
 			}
@@ -122,7 +122,7 @@ public interface ParseTask {
 			@Override
 			public int priority() {return (f.modifier&Opcodes.ACC_STATIC) != 0 ? 0 : 1;}
 			@Override
-			public void parse(LocalContext ctx) {
+			public void parse(CompileContext ctx) {
 				// 已经解析
 				if (f.getRawAttribute("ConstantValue") != null) return;
 
@@ -130,7 +130,6 @@ public interface ParseTask {
 
 				var file = ctx.file;
 				var node = expr.resolve(ctx);
-				var cast = ctx.castTo(node.type(), f.fieldType(), 0);
 
 				ctx.errorReportIndex = -1;
 
@@ -148,13 +147,11 @@ public interface ParseTask {
 						if (ctx.fieldDFS) return;
 					}
 
-					if (cast.type < 0) return;
-
 					var mp = file.getStaticInit();
 					ctx.setMethod(mp.mn);
 
 					mp.lines().add(mp.label(), line);
-					node.write(mp, cast);
+					ctx.writeCast(mp, node, f.fieldType());
 					mp.field(Opcodes.PUTSTATIC, file.name(), f.name(), f.rawDesc());
 				} else {
 					if ((f.modifier & Opcodes.ACC_FINAL) != 0) {
@@ -163,14 +160,12 @@ public interface ParseTask {
 						}
 					}
 
-					if (cast.type < 0) return;
-
 					var mp = file.getGlobalInit();
 					ctx.setMethod(mp.mn);
 
 					mp.lines().add(mp.label(), line);
 					mp.vars(Opcodes.ALOAD, ctx.thisSlot);
-					node.write(mp, cast);
+					ctx.writeCast(mp, node, f.fieldType());
 					mp.field(Opcodes.PUTFIELD, file.name(), f.name(), f.rawDesc());
 					mp.visitSizeMax(1 + f.fieldType().length(), 1);
 				}
@@ -201,7 +196,7 @@ public interface ParseTask {
 			@Override
 			public int priority() {return 2;}
 			@Override
-			public void parse(LocalContext ctx) throws ParseException {
+			public void parse(CompileContext ctx) throws ParseException {
 				var file = ctx.file;
 				ctx.lexer.init(pos, linePos, lineIdx);
 				MethodWriter cw = ctx.bp.parseMethod(file, mn, argNames);
@@ -224,5 +219,5 @@ public interface ParseTask {
 
 	default boolean isStaticFinalField() {return false;}
 	default int priority() {return 0;}
-	void parse(LocalContext ctx) throws ParseException;
+	void parse(CompileContext ctx) throws ParseException;
 }

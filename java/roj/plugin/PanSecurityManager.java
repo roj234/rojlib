@@ -1,19 +1,16 @@
 package roj.plugin;
 
 import roj.asm.ClassUtil;
-import roj.asm.ClassView;
 import roj.asm.MemberDescriptor;
 import roj.asm.cp.Constant;
 import roj.asm.cp.CstClass;
 import roj.asm.cp.CstUTF;
 import roj.asm.type.TypeHelper;
-import roj.asmx.Context;
-import roj.asmx.MethodHook;
-import roj.asmx.Transformer;
+import roj.asmx.*;
 import roj.collect.*;
 import roj.reflect.ClassDefiner;
 import roj.reflect.ILSecurityManager;
-import roj.reflect.ReflectionUtils;
+import roj.reflect.Reflection;
 import roj.reflect.Unaligned;
 import roj.text.URICoder;
 import roj.text.logging.Logger;
@@ -32,9 +29,6 @@ import java.nio.file.FileSystems;
 import java.nio.file.Path;
 import java.security.ProtectionDomain;
 import java.util.Arrays;
-import java.util.Collections;
-import java.util.Iterator;
-import java.util.List;
 
 /**
  * 这只是一个示例，应该还有不少文件访问函数没有包括在内
@@ -55,48 +49,24 @@ public final class PanSecurityManager extends MethodHook {
 	}
 
 	static final class ILHook extends ILSecurityManager {
-		@Override
-		public ByteList checkDefineClass(String name, ByteList buf) {
-			int i = 3;
-			Class<?> caller;
-			do {
-				caller = ReflectionUtils.getCallerClass(i++);
-			} while (caller == ClassDefiner.class);
-
+		public ByteList preDefineClass(ByteList buf) {
+			Class<?> caller = Reflection.getCallerClass(3, ClassDefiner.class);
 			var pd = Panger.pm.getOwner(caller);
-			return preDefineHook(name, pd, buf);
+			return preDefineHook(null, pd, buf);
 		}
 
-		// 0: TraceUtil
-		// 1: SecureClassDefineIL
-		// 2: roj.reflect.XX
-		// 3: real caller
-		public boolean checkAccess(Field f) { return filterField(f, false, ReflectionUtils.getCallerClass(3)) != null; }
-		public boolean checkInvoke(Method m) { return filterMethod(m, false, ReflectionUtils.getCallerClass(3)) != null; }
-		public boolean checkConstruct(Constructor<?> c) { return filterConstructor(c, false, ReflectionUtils.getCallerClass(3)) != null; }
+		public boolean checkAccess(Field f, Class<?> caller) { return filterField(f, false, caller) != null; }
+		public boolean checkInvoke(Method m, Class<?> caller) { return filterMethod(m, false, caller) != null; }
+		public boolean checkConstruct(Constructor<?> c, Class<?> caller) { return filterConstructor(c, false, caller) != null; }
 
-		public void checkAccess(String owner, String name, String desc) {
+		public void checkAccess(String owner, String name, String desc, Class<?> caller) {
 			MemberDescriptor d = ClassUtil.getInstance().sharedDesc;
 			d.owner = owner;
 			d.name = name;
 			d.rawDesc = desc;
 
-			Class<?> caller = ReflectionUtils.getCallerClass(3);
 			Object v = ban(d, caller);
-			if (v == IntMap.UNDEFINED) throw new SecurityException(d+" is blocked");
-		}
-
-		public void filterMethods(MyHashSet<Method> methods) {
-			Class<?> caller = ReflectionUtils.getCallerClass(3);
-			for (Iterator<Method> itr = methods.iterator(); itr.hasNext(); ) {
-				if (filterMethod(itr.next(), false, caller) == null) itr.remove();
-			}
-		}
-		public void filterFields(SimpleList<Field> fields) {
-			Class<?> caller = ReflectionUtils.getCallerClass(3);
-			for (Iterator<Field> itr = fields.iterator(); itr.hasNext(); ) {
-				if (filterField(itr.next(), false, caller) == null) itr.remove();
-			}
+			if (v == IntMap.UNDEFINED) throw new SecurityException(d+" is not allowed");
 		}
 	}
 
@@ -117,7 +87,7 @@ public final class PanSecurityManager extends MethodHook {
 	private static Method[] filterMethods(Method[] a, Class<?> caller) {
 		if (a.length == 0 || a[0].getDeclaringClass().getClassLoader() == caller.getClassLoader()) return a;
 
-		SimpleList<Method> list = SimpleList.asModifiableList(a);
+		ArrayList<Method> list = ArrayList.asModifiableList(a);
 		for (int i = list.size()-1; i >= 0; i--) {
 			Method f = filterMethod(list.get(i), false, caller);
 			if (f == null) {
@@ -157,13 +127,13 @@ public final class PanSecurityManager extends MethodHook {
 	public static Object hook_callFrom_invoke(Method m, Object inst, Object[] value, Class<?> caller) throws Exception {
 		if (m.getDeclaringClass().getClassLoader() == caller.getClassLoader()) return m.invoke(inst, value);
 
-		MyHashSet<Object[]> arr = null;
+		HashSet<Object[]> arr = null;
 		while (m.equals(INVOKE)) {
 			m = (Method) inst;
 			inst = value[0];
 
 			// 防止可能的DoS漏洞
-			if (arr == null) arr = new MyHashSet<>(Hasher.identity());
+			if (arr == null) arr = new HashSet<>(Hasher.identity());
 			if (!arr.add(value)) throw new StackOverflowError();
 
 			value = (Object[]) value[1];
@@ -181,7 +151,7 @@ public final class PanSecurityManager extends MethodHook {
 	private static Field[] filterFields(Field[] a, Class<?> caller) {
 		if (a.length == 0 || a[0].getDeclaringClass().getClassLoader() == caller.getClassLoader()) return a;
 
-		SimpleList<Field> list = SimpleList.asModifiableList(a);
+		ArrayList<Field> list = ArrayList.asModifiableList(a);
 		for (int i = list.size()-1; i >= 0; i--) {
 			Field f = filterField(list.get(i), false, caller);
 			if (f == null) {
@@ -215,7 +185,7 @@ public final class PanSecurityManager extends MethodHook {
 	private static Constructor<?>[] filterConstructors(Constructor<?>[] a, Class<?> caller) {
 		if (a.length == 0 || a[0].getDeclaringClass().getClassLoader() == caller.getClassLoader()) return a;
 
-		SimpleList<Constructor<?>> list = SimpleList.asModifiableList(a);
+		ArrayList<Constructor<?>> list = ArrayList.asModifiableList(a);
 		for (int i = list.size()-1; i >= 0; i--) {
 			Constructor<?> f = filterConstructor(list.get(i), false, caller);
 			if (f == null) {
@@ -413,33 +383,33 @@ public final class PanSecurityManager extends MethodHook {
 			// 因为final了，所以就不用clone
 			buf = new ByteList(buf.toByteArray());
 
-			name = ClassView.parse(buf, false).name;
-			transform(name, buf);
+			try {
+				//name = ClassView.parse(buf, false).name;
+				Context ctx = new Context(name, buf);
+				if (transformer.transform(name/*目前未使用*/, ctx)) {
+					ByteList b = ctx.getClassBytes();
+					if (b != buf) {
+						buf.clear();
+						buf.put(b);
+					}
+				}
+			} catch (TransformException e) {
+				throw new ClassFormatError(e.toString());
+			}
 		}
 		return buf;
 	}
 	// endregion
+	//region 依赖注入
+	@RealDesc(value = "roj/plugin/di/DIContext.onPluginLoaded(Lroj/plugin/PluginDescriptor;)V")
+	public static void hook_static_onPluginLoaded(PluginDescriptor pd) { throw new NoSuchMethodError(); }
+	@RealDesc(value = "roj/plugin/di/DIContext.onPluginUnloaded(Lroj/plugin/PluginDescriptor;)V")
+	public static void hook_static_onPluginUnloaded(PluginDescriptor pd) { throw new NoSuchMethodError(); }
+	@RealDesc(value = "roj/plugin/di/DIContext.dependencyLoad(Lroj/asmx/AnnotationRepo;)V")
+	public static void hook_static_dependencyLoad(AnnotationRepo repo) { throw new NoSuchMethodError(); }
+	//endregion
 
-	static List<Transformer> transformers = Collections.singletonList(new PanSecurityManager());
-	static void transform(String name, ByteList buf) {
-		var ctx = new Context(name, buf);
-		boolean changed = false;
-		for (int i = 0; i < transformers.size(); i++) {
-			try {
-				changed |= transformers.get(i).transform(name, ctx);
-			} catch (Exception e) {
-				LOGGER.error("无法解析类{}", e, name);
-				throw new ClassFormatError();
-			}
-		}
-		if (changed) {
-			ByteList b = ctx.getClassBytes();
-			if (b != buf) {
-				buf.clear();
-				buf.put(b);
-			}
-		}
-	}
+	static final Transformer transformer = new PanSecurityManager();
 
 	private static Object checkInvoke(Method m, Object inst, Object[] value, Class<?> caller) throws Exception {
 		return m.invoke(inst, value);
@@ -507,7 +477,7 @@ public final class PanSecurityManager extends MethodHook {
 		if (PluginClassLoader.PLUGIN_CONTEXT.get() != null) {
 			for (Constant c : ctx.getData().cp.data()) {
 				if (c instanceof CstClass) {
-					CstUTF ref = ((CstClass) c).name();
+					CstUTF ref = ((CstClass) c).value();
 					if (GlobalClassBlackList.strStartsWithThis(ref.str())) {
 						LOGGER.debug("屏蔽对类 {} 的访问", ref.str());
 						ctx.getData().cp.setUTFValue(ref, "java/lang/Blocked");

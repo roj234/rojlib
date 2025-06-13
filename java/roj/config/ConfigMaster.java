@@ -213,7 +213,7 @@ public enum ConfigMaster {
 			}
 		} else {
 			var tmp = new ToEntry();
-			tmp.setProperty("centry:linked_map", true);
+			tmp.setProperty(ToEntry.ORDERED_MAP, true);
 			ser.write(tmp, o);
 			serialize(out, tmp.get());
 		}

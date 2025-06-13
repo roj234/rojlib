@@ -5,7 +5,7 @@ import org.jetbrains.annotations.Nullable;
 import roj.RojLib;
 import roj.compiler.plugins.annotations.Attach;
 import roj.io.IOUtil;
-import roj.reflect.ReflectionUtils;
+import roj.reflect.Unaligned;
 import roj.reflect.litasm.FastJNI;
 import roj.text.TextReader;
 import roj.text.TextUtil;
@@ -115,9 +115,9 @@ public final class GuiUtil {
 		SetWindowLong(hwnd, -20, flags);
 	}
 
-	public static long getWindowHandle(Window window) throws NoSuchFieldException {
-		Object peer = U.getObject(window, U.objectFieldOffset(Component.class.getDeclaredField("peer")));
-		return U.getLong(peer, U.objectFieldOffset(ReflectionUtils.getField(peer.getClass(), "hwnd")));
+	public static long getWindowHandle(Window window) {
+		Object peer = U.getObject(window, Unaligned.fieldOffset(Component.class, "peer"));
+		return U.getLong(peer, Unaligned.fieldOffset(peer.getClass(), "hwnd"));
 	}
 
 	//static {Intrinsics.linkNative("USER32");}

@@ -9,6 +9,8 @@ import roj.util.ByteList;
 
 import java.io.PrintStream;
 import java.nio.charset.Charset;
+import java.util.Formatter;
+import java.util.Locale;
 import java.util.Objects;
 
 /**
@@ -104,5 +106,13 @@ public abstract class DelegatedPrintStream extends PrintStream {
 	public final synchronized void println(@NotNull char[] v) { append0(new CharList(v), true); }
 	public final synchronized void println(String v) { append0(v == null ? "null" : v, true); }
 	public final synchronized void println(Object v) { append0(v == null ? "null" : v.toString(), true); }
+
+	public final PrintStream format(@NotNull String format, Object... args) {return format(Locale.getDefault(Locale.Category.FORMAT), format, args);}
+	private Formatter formatter;
+	public final synchronized PrintStream format(Locale l, String format, Object ... args) {
+		if (formatter == null || formatter.locale() != l) formatter = new Formatter(this, l);
+		formatter.format(l, format, args);
+		return this;
+	}
 	// endregion
 }

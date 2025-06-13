@@ -1,7 +1,7 @@
 package roj.archive.qz;
 
-import roj.archive.qz.xz.MemoryLimitException;
-import roj.collect.MyHashMap;
+import roj.archive.xz.MemoryLimitException;
+import roj.collect.HashMap;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
 
@@ -16,7 +16,7 @@ import java.util.zip.Deflater;
  * @since 2023/3/14 8:04
  */
 public abstract class QZCoder {
-	private static final MyHashMap<ByteList, QZCoder> coders = new MyHashMap<>();
+	private static final HashMap<ByteList, QZCoder> coders = new HashMap<>();
 	private static void reg(QZCoder c) { coders.put(ByteList.wrap(c.id()), c); }
 
 	QZCoder factory() {return this;}

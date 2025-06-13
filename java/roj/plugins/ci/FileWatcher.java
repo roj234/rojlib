@@ -31,8 +31,8 @@ final class FileWatcher extends IFileWatcher implements Consumer<WatchKey> {
 		WatchKey key;
 		final Project owner;
 		final byte no;
-		final MyHashSet<String> mod = new MyHashSet<>();
-		final MyHashSet<String> del = new MyHashSet<>();
+		final HashSet<String> mod = new HashSet<>();
+		final HashSet<String> del = new HashSet<>();
 
 		X(Project owner, WatchKey key, int tag) {
 			this.owner = owner;
@@ -51,17 +51,18 @@ final class FileWatcher extends IFileWatcher implements Consumer<WatchKey> {
 	private final WatchService watcher;
 	private final String libPath;
 
-	private final MyHashMap<String, X[]> listeners;
+	private final HashMap<String, X[]> listeners;
 
 	public FileWatcher() throws IOException {
 		watcher = IOUtil.syncWatchPoll("文件修改监控", this);
 		XashMap.Builder<WatchKey, X> builder = XashMap.noCreation(X.class, "key", "_next", Hasher.identity());
 		actions = builder.create();
-		listeners = new MyHashMap<>();
+		listeners = new HashMap<>();
 		via = new X();
 		actions.add(via);
 
 		File lib = new File(BASE, "libs");
+		lib.mkdirs();
 		lib.toPath().register(watcher, ENTRY_CREATE, ENTRY_DELETE, ENTRY_MODIFY, OVERFLOW);
 		this.libPath = lib.getAbsolutePath();
 	}
@@ -91,7 +92,7 @@ final class FileWatcher extends IFileWatcher implements Consumer<WatchKey> {
 		loop:
 		for (WatchEvent<?> event : key.pollEvents()) {
 			String name = event.kind().name();
-			MyHashSet<String> s = handler.mod;
+			HashSet<String> s = handler.mod;
 			switch (name) {
 				case "OVERFLOW": {
 					Terminal.error("[PW]更改的文件过多，已暂停自动编译 "+key.watchable());
@@ -141,7 +142,7 @@ final class FileWatcher extends IFileWatcher implements Consumer<WatchKey> {
 	}
 
 	public void removeAll() {
-		for (X listener : new SimpleList<>(actions)) {
+		for (X listener : new ArrayList<>(actions)) {
 			var key1 = listener.key;
 			if (key1 != null) key1.cancel();
 		}

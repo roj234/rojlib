@@ -1,6 +1,6 @@
 package roj.archive;
 
-import roj.collect.MyHashSet;
+import roj.collect.HashSet;
 import roj.io.source.CompositeSource;
 import roj.io.source.FileSource;
 import roj.io.source.Source;
@@ -16,7 +16,7 @@ import java.util.regex.Pattern;
  */
 public class ArchiveUtils {
 	// 有意的不包含zip格式
-	public static final MyHashSet<String> INCOMPRESSIBLE_FILE_EXT = new MyHashSet<>("7z", "rar", "xz", "txz", "lzma", "lzma2", "bz2", "bzip2", "tbz", "tbz2", "gz", "gzip", "esd", "wim");
+	public static final HashSet<String> INCOMPRESSIBLE_FILE_EXT = new HashSet<>("7z", "rar", "xz", "txz", "lzma", "lzma2", "bz2", "bzip2", "tbz", "tbz2", "gz", "gzip", "esd", "wim");
 	public static final Pattern SPLIT_ARCHIVE_PATTERN = Pattern.compile("\\.[0zZ]01$");
 
 	public static Source tryOpenSplitArchive(File file, boolean readonly) throws IOException {

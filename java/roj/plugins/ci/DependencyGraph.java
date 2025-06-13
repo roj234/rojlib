@@ -5,7 +5,7 @@ import roj.asm.attr.Attribute;
 import roj.asm.attr.StringAttribute;
 import roj.asm.cp.Constant;
 import roj.asm.cp.CstClass;
-import roj.collect.MyHashMap;
+import roj.collect.HashMap;
 import roj.util.Helpers;
 
 import java.util.Collections;
@@ -17,7 +17,8 @@ import java.util.Set;
  * @since 2025/5/7 13:11
  */
 final class DependencyGraph {
-	private final Map<String, Set<String>> graph = new MyHashMap<>();
+	private final Map<String, Set<String>> graph = new HashMap<>();
+	//private final ToLongMap<String> memberHash = new ToLongMap<>();
 
 	/**
 	 * 添加一个类
@@ -30,10 +31,10 @@ final class DependencyGraph {
 		for (Constant cp : node.cp().data()) {
 			if (cp instanceof CstClass ref) {
 				// node类引用了ref类，所以在ref修改时需要重新编译node类
-				String str = ref.name().str();
+				String str = ref.value().str();
 				if (str.equals(name)) continue;
 
-				Set<String> set = graph.computeIfAbsent(str, Helpers.fnMyHashSet());
+				Set<String> set = graph.computeIfAbsent(str, Helpers.fnHashSet());
 				set.add(name);
 			}
 		}

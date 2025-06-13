@@ -4,7 +4,7 @@ import org.jetbrains.annotations.NotNull;
 import roj.asm.Attributed;
 import roj.asm.annotation.Annotation;
 import roj.asm.cp.ConstantPool;
-import roj.collect.SimpleList;
+import roj.collect.ArrayList;
 import roj.io.IOUtil;
 import roj.text.CharList;
 import roj.util.DynByteBuf;
@@ -20,7 +20,7 @@ import java.util.List;
 public final class Annotations extends Attribute {
 	public Annotations(boolean visibleForRuntime) {
 		vis = visibleForRuntime;
-		annotations = new SimpleList<>();
+		annotations = new ArrayList<>();
 	}
 	public Annotations(boolean visibleForRuntime, Annotation annotation) {
 		vis = visibleForRuntime;
@@ -61,7 +61,7 @@ public final class Annotations extends Attribute {
 
 	public static List<Annotation> parse(ConstantPool pool, DynByteBuf r) {
 		int len = r.readUnsignedShort();
-		List<Annotation> annos = new SimpleList<>(len);
+		List<Annotation> annos = new ArrayList<>(len);
 		while (len-- > 0) annos.add(Annotation.parse(pool, r));
 		return annos;
 	}

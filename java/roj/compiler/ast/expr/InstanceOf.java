@@ -5,8 +5,8 @@ import roj.asm.type.Generic;
 import roj.asm.type.IType;
 import roj.asm.type.Signature;
 import roj.asm.type.Type;
+import roj.compiler.CompileContext;
 import roj.compiler.asm.MethodWriter;
-import roj.compiler.context.LocalContext;
 import roj.compiler.diagnostic.Kind;
 import roj.compiler.resolve.TypeCast;
 
@@ -38,13 +38,13 @@ public final class InstanceOf extends Expr {
 
 	@Override
 	@SuppressWarnings("fallthrough")
-	public Expr resolve(LocalContext ctx) {
+	public Expr resolve(CompileContext ctx) {
 		left = left.resolve(ctx);
 
 		IType lType = left.type();
 		if (lType.isPrimitive()) {
 			ctx.report(this, Kind.ERROR, "symbol.error.derefPrimitive");
-			return NaE.RESOLVE_FAILED;
+			return NaE.resolveFailed(this);
 		}
 
 		if (ctx.resolveType(type).genericType() != IType.STANDARD_TYPE) {

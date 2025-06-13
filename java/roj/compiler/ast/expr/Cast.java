@@ -3,10 +3,10 @@ package roj.compiler.ast.expr;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import roj.asm.type.IType;
+import roj.compiler.CompileContext;
 import roj.compiler.Tokens;
 import roj.compiler.asm.AnnotationPrimer;
 import roj.compiler.asm.MethodWriter;
-import roj.compiler.context.LocalContext;
 import roj.compiler.diagnostic.Kind;
 import roj.compiler.resolve.TypeCast;
 import roj.config.data.CEntry;
@@ -29,7 +29,7 @@ final class Cast extends PrefixOp {
 
 	@NotNull
 	@Override
-	public Expr resolve(LocalContext ctx) {
+	public Expr resolve(CompileContext ctx) {
 		IType rType = (right = right.resolve(ctx)).type();
 		ctx.resolveType(type);
 		cast = ctx.castTo(rType, type, TypeCast.E_NEVER);
@@ -49,12 +49,12 @@ final class Cast extends PrefixOp {
 			if (override != null) return override;
 
 			ctx.report(this, Kind.ERROR, "typeCast.error."+cast.type, rType, type);
-			return NaE.RESOLVE_FAILED;
+			return NaE.resolveFailed(this);
 		}
 
 		if (type.isPrimitive() && rType.isPrimitive() && right.isConstant()) {
 			if (this.cast.isNoop()) {
-				LocalContext.get().report(this, Kind.WARNING, "cast.warn.redundant", type);
+				CompileContext.get().report(this, Kind.WARNING, "cast.warn.redundant", type);
 			}
 			return constant(type, AnnotationPrimer.castPrimitive((CEntry) right.constVal(), type));
 		}
@@ -70,7 +70,7 @@ final class Cast extends PrefixOp {
 	@Override
 	public void write(MethodWriter cw, @Nullable TypeCast.Cast returnType) {
 		if (returnType != null && this.cast.isNoop()) {
-			LocalContext.get().report(this, Kind.WARNING, "cast.warn.redundant", type);
+			CompileContext.get().report(this, Kind.WARNING, "cast.warn.redundant", type);
 		}
 
 		right.write(cw, this.cast);

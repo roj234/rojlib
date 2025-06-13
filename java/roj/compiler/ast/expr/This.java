@@ -3,8 +3,8 @@ package roj.compiler.ast.expr;
 import roj.asm.Opcodes;
 import roj.asm.type.IType;
 import roj.asm.type.Type;
+import roj.compiler.CompileContext;
 import roj.compiler.asm.MethodWriter;
-import roj.compiler.context.LocalContext;
 import roj.compiler.diagnostic.Kind;
 import roj.compiler.resolve.ResolveException;
 
@@ -22,7 +22,7 @@ final class This extends Expr {
 	public String toString() { return (isThis?"this<":"super<")+type+'>'; }
 
 	@Override
-	public Expr resolve(LocalContext ctx) throws ResolveException {
+	public Expr resolve(CompileContext ctx) throws ResolveException {
 		var file = ctx.file;
 		type.owner = isThis ? file.name() : file.parent();
 		if (type.owner == null) throw ResolveException.ofIllegalInput("this.no_super", file);
@@ -36,7 +36,7 @@ final class This extends Expr {
 	public void write(MethodWriter cw, boolean noRet) {
 		mustBeStatement(noRet);
 
-		var ctx = LocalContext.get();
+		var ctx = CompileContext.get();
 		// 不在上面检查是为了Invoke local static method
 		if (ctx.inStatic) ctx.report(this, Kind.ERROR, "this.static");
 

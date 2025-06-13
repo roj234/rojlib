@@ -7,12 +7,12 @@ import roj.asm.type.Generic;
 import roj.asm.type.IType;
 import roj.asm.type.Signature;
 import roj.asm.type.Type;
-import roj.collect.SimpleList;
+import roj.collect.ArrayList;
+import roj.compiler.CompileContext;
+import roj.compiler.CompileUnit;
 import roj.compiler.asm.Asterisk;
 import roj.compiler.asm.LPSignature;
 import roj.compiler.asm.MethodWriter;
-import roj.compiler.context.CompileUnit;
-import roj.compiler.context.LocalContext;
 import roj.compiler.diagnostic.Kind;
 import roj.compiler.resolve.*;
 import roj.config.ParseException;
@@ -44,11 +44,11 @@ final class NewAnonymousClass extends Expr {
 	@Override public IType type() {return newExpr.type();}
 
 	@Override
-	public Expr resolve(LocalContext ctx) throws ResolveException {
+	public Expr resolve(CompileContext ctx) throws ResolveException {
 		List<Expr> args = newExpr.args;
 		// writable
-		if (!(args instanceof SimpleList<Expr>))
-			newExpr.args = args = new SimpleList<>(args);
+		if (!(args instanceof ArrayList<Expr>))
+			newExpr.args = args = new ArrayList<>(args);
 
 		List<IType> argTypes = Arrays.asList(new IType[args.size()]);
 		for (int i = 0; i < args.size(); i++) {
@@ -63,10 +63,10 @@ final class NewAnonymousClass extends Expr {
 		if (Inferrer.hasUndefined(parentType)) ctx.report(this, Kind.ERROR, "invoke.noExact");
 
 		String parent = parentType.owner();
-		ClassNode info = ctx.classes.getClassInfo(parent);
+		ClassNode info = ctx.compiler.resolve(parent);
 		if (info == null) {
 			ctx.report(this, Kind.ERROR, "symbol.error.noSuchClass", parent);
-			return NaE.RESOLVE_FAILED;
+			return NaE.resolveFailed(this);
 		}
 
 		if (parentType.genericType() != 0) {
@@ -77,8 +77,8 @@ final class NewAnonymousClass extends Expr {
 			klass.addAttribute(sign);
 		}
 
-		ctx.classes.addGeneratedClass(klass);
-		var next = LocalContext.next();
+		ctx.compiler.addGeneratedClass(klass);
+		var next = CompileContext.next();
 		next.setClass(klass);
 
 		MethodWriter constructor;
@@ -90,7 +90,7 @@ final class NewAnonymousClass extends Expr {
 				next.report(this, Kind.ERROR, "invoke.incompatible.single", info, "invoke.constructor",
 						"[\"  \",invoke.except,\" \",invoke.no_param,\"\n"+
 						"  \",invoke.found\" "+TextUtil.join(argTypes, ", ")+"\"]");
-				return NaE.RESOLVE_FAILED;
+				return NaE.resolveFailed(this);
 			}
 
 			constructor = klass.newWritableMethod(ACC_PUBLIC, "<init>", "()V");
@@ -100,19 +100,19 @@ final class NewAnonymousClass extends Expr {
 		} else {
 			klass.parent(parent);
 
-			var r = next.getMethodListOrReport(info, "<init>", this).findMethod(next, argTypes, ComponentList.THIS_ONLY);
-			if (r == null) return NaE.RESOLVE_FAILED;
+			var r = next.getMethodListOrReport(info, "<init>", newExpr).findMethod(next, argTypes, ComponentList.THIS_ONLY);
+			if (r == null) return NaE.resolveFailed(this);
 
 			r.addExceptions(next, false);
 			klass.j11PrivateConstructor(r.method);
 			constructor = klass.createDelegation(Opcodes.ACC_SYNTHETIC, r.method, r.method, false, false);
 		}
 
-		klass.S2_ResolveName();
-		klass.S2_ResolveType();
+		klass.S2p1resolveName();
+		klass.S2p2resolveType();
 		klass.NAC_SetGlobalInit(constructor);
-		klass.S2_ResolveMethod();
-		LocalContext.prev();
+		klass.S2p3resolveMethod();
+		CompileContext.prev();
 
 		newExpr.expr = Type.klass(klass.name());
 		nestContext = NestContext.anonymous(ctx, klass, constructor, args);
@@ -122,13 +122,13 @@ final class NewAnonymousClass extends Expr {
 				: resolveNow(ctx);
 	}
 
-	private Expr resolveNow(LocalContext ctx) {
+	private Expr resolveNow(CompileContext ctx) {
 		ctx.enclosing.add(nestContext);
-		LocalContext.next();
+		CompileContext.next();
 		try {
-			klass.S3_Annotation();
-			klass.S4_Code();
-			klass.S5_preStore();
+			klass.S3processAnnotation();
+			klass.S4parseCode();
+			klass.S5serialize();
 
 			var constructor = nestContext.constructor();
 			constructor.insn(RETURN);
@@ -136,7 +136,7 @@ final class NewAnonymousClass extends Expr {
 		} catch (ParseException e) {
 			throw new ResolveException("匿名类解析失败", e);
 		} finally {
-			LocalContext.prev();
+			CompileContext.prev();
 			ctx.enclosing.pop();
 		}
 
@@ -148,11 +148,11 @@ final class NewAnonymousClass extends Expr {
 	@Override
 	public void write(MethodWriter cw, @Nullable TypeCast.Cast returnType) {
 		if (returnType == null || !(returnType.getType1() instanceof Generic g)) {
-			LocalContext.get().report(this, Kind.ERROR, "anonymousClass.inferFailed");
+			CompileContext.get().report(this, Kind.ERROR, "anonymousClass.inferFailed");
 			return;
 		}
 
 		((Generic) newExpr.expr).children = g.children;
-		resolveNow(LocalContext.get()).write(cw, false);
+		resolveNow(CompileContext.get()).write(cw, false);
 	}
 }

@@ -1,6 +1,6 @@
 package roj.plugin;
 
-import roj.collect.MyHashMap;
+import roj.collect.HashMap;
 import roj.config.Tokenizer;
 import roj.http.HttpUtil;
 import roj.http.server.*;
@@ -54,7 +54,7 @@ public class VFSRouter implements Router, Predicate<String> {
 			var index = fs.getPath(file, "index.html");
 			if (index.isFile()) file = index;
 			else if (url.endsWith("/") || url.isEmpty()) {
-				var env = new MyHashMap<String, Object>();
+				var env = new HashMap<String, Object>();
 
 				int length = TextUtil.split(req.path(), '/').size();
 				env.put("BASE", "../".repeat(length));

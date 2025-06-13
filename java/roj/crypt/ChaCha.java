@@ -10,6 +10,7 @@ import java.security.InvalidKeyException;
 import java.security.SecureRandom;
 import java.security.spec.AlgorithmParameterSpec;
 
+import static java.lang.Integer.reverseBytes;
 import static java.lang.Integer.rotateLeft;
 
 /**
@@ -40,8 +41,8 @@ class ChaCha extends RCipherSpi {
 	public void init(int flags, byte[] key, AlgorithmParameterSpec par, SecureRandom random) throws InvalidAlgorithmParameterException, InvalidKeyException {
 		if (key.length != 32) throw new InvalidKeyException("Key should be 256 bits length");
 
-		for (int i = 4; i < 12; i++) {
-			this.key[i] = Unaligned.U.get32UL(key, Unaligned.ARRAY_BYTE_BASE_OFFSET + ((long) i << 2));
+		for (int i = 0; i < 8; i++) {
+			this.key[i+4] = Unaligned.U.get32UL(key, Unaligned.ARRAY_BYTE_BASE_OFFSET + (i << 2));
 		}
 
 		if (par != null) {
@@ -97,39 +98,40 @@ class ChaCha extends RCipherSpi {
 
 	@Override
 	public final void crypt(DynByteBuf in, DynByteBuf out) throws ShortBufferException {
-		if (out.writableBytes() < in.readableBytes()) throw new ShortBufferException();
+		int readableBytes = in.readableBytes();
+		if (out.writableBytes() < readableBytes) throw new ShortBufferException();
 
-		int[] T = this.tmp;
-		int i = this.pos;
+		int[] T = tmp;
+		int i = pos;
 
 		if ((i & 3) != 0) {
-			int j = Integer.reverseBytes(T[i >> 2]) >>> ((i & 3) << 3);
-			while (in.isReadable() && (i & 3) != 0) {
-				out.put((byte) (in.readByte() ^ j));
+			int j = reverseBytes(T[i >> 2]) >>> ((i & 3) << 3);
+			while (readableBytes > 0 && (i & 3) != 0) {
+				out.put(in.readByte() ^ j);
 				j >>>= 8;
+
 				i++;
+				readableBytes--;
 			}
 		}
 
-		while (in.readableBytes() >= 4) {
-			if (i == 64) {
-				KeyStream();
-				i = 0;
-			}
+		while (readableBytes >= 4) {
+			if (i == 64) { KeyStream(); i = 0; }
+
 			out.putInt(in.readInt() ^ T[i >> 2]);
 			i += 4;
+			readableBytes -= 4;
 		}
 
-		if (in.isReadable()) {
-			if (i == 64) {
-				KeyStream();
-				i = 0;
-			}
-			this.pos = i + in.readableBytes();
-			i = Integer.reverseBytes(T[i >> 2]);
-			while (in.isReadable()) {
-				out.put((byte) (in.readByte() ^ i));
-				i >>>= 8;
+		if (readableBytes > 0) {
+			if (i == 64) { KeyStream(); i = 0; }
+			pos = i + readableBytes;
+
+			int j = T[i >> 2];
+			switch (readableBytes) {
+				/*case 3*/default -> out.putMedium(in.readMedium() ^ (j >>> 8));
+				case 2 -> out.putShort(in.readShort() ^ (j >>> 16));
+				case 1 -> out.put(in.readByte() ^ (j >>> 24));
 			}
 		} else {
 			this.pos = i;
@@ -143,7 +145,7 @@ class ChaCha extends RCipherSpi {
 
 		System.arraycopy(Src, 0, Dst, 0, 16);
 		Round(Dst, round);
-		for (int i = 0; i < 16; i++) Dst[i] = Integer.reverseBytes(Dst[i] + Src[i]);
+		for (int i = 0; i < 16; i++) Dst[i] = reverseBytes(Dst[i] + Src[i]);
 		Src[12]++; // Counter
 	}
 
@@ -163,22 +165,11 @@ class ChaCha extends RCipherSpi {
 	private static void Quarter(int[] T, int x, int y, int z, int w) {
 		int a = T[x], b = T[y], c = T[z], d = T[w];
 
-		a += b;
-		d ^= a;
-		d = rotateLeft(d, 16);
-		c += d;
-		b ^= c;
-		b = rotateLeft(b, 12);
-		a += b;
-		d ^= a;
-		d = rotateLeft(d, 8);
-		c += d;
-		b ^= c;
-		b = rotateLeft(b, 7);
+		a += b; d ^= a; d = rotateLeft(d, 16);
+		c += d; b ^= c; b = rotateLeft(b, 12);
+		a += b; d ^= a; d = rotateLeft(d, 8);
+		c += d; b ^= c; b = rotateLeft(b, 7);
 
-		T[x] = a;
-		T[y] = b;
-		T[z] = c;
-		T[w] = d;
+		T[x] = a; T[y] = b; T[z] = c; T[w] = d;
 	}
 }

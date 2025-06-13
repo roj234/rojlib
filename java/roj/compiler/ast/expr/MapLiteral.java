@@ -2,10 +2,10 @@ package roj.compiler.ast.expr;
 
 import roj.asm.type.Generic;
 import roj.asm.type.IType;
+import roj.compiler.CompileContext;
 import roj.compiler.api.Types;
 import roj.compiler.asm.Asterisk;
 import roj.compiler.asm.MethodWriter;
-import roj.compiler.context.LocalContext;
 import roj.compiler.resolve.ResolveException;
 import roj.compiler.resolve.TypeCast;
 import roj.text.CharList;
@@ -39,7 +39,7 @@ final class MapLiteral extends Expr {
 	}
 
 	@Override
-	public Expr resolve(LocalContext ctx) throws ResolveException {
+	public Expr resolve(CompileContext ctx) throws ResolveException {
 		if (type != null) return this;
 
 		IType key = getCommonType(ctx, keys);
@@ -59,7 +59,7 @@ final class MapLiteral extends Expr {
 		return this;
 	}
 
-	private IType getCommonType(LocalContext ctx, List<Expr> nodes) {
+	private IType getCommonType(CompileContext ctx, List<Expr> nodes) {
 		IType commonType = null;
 		for (int i = 0; i < nodes.size(); i++) {
 			var expr = nodes.get(i).resolve(ctx);

@@ -4,8 +4,13 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import roj.archive.zip.ZEntry;
 import roj.archive.zip.ZipFile;
+import roj.asmx.ConstantPoolHooks;
+import roj.asmx.Context;
+import roj.asmx.Transformer;
+import roj.asmx.injector.CodeWeaver;
 import roj.asmx.launcher.EntryPointM;
-import roj.collect.MyHashSet;
+import roj.collect.HashSet;
+import roj.collect.ArrayList;
 import roj.io.source.FileSource;
 import roj.text.URICoder;
 import roj.util.ByteList;
@@ -21,6 +26,7 @@ import java.security.CodeSource;
 import java.security.ProtectionDomain;
 import java.util.Collections;
 import java.util.Enumeration;
+import java.util.List;
 
 /**
  * @author Roj234
@@ -33,6 +39,10 @@ public class PluginClassLoader extends ClassLoader {
 	final PluginDescriptor[] accessible;
 	final ZipFile archive;
 
+	final List<Transformer> transformers = new ArrayList<>();
+	ConstantPoolHooks hooks;
+	CodeWeaver weaver;
+
 	public PluginClassLoader(ClassLoader parent, PluginDescriptor plugin, PluginDescriptor[] accessible) throws IOException {
 		super(parent);
 		this.desc = plugin;
@@ -41,7 +51,7 @@ public class PluginClassLoader extends ClassLoader {
 		this.archive.reload();
 
 		if (Panger.class.getModule().isNamed() && Panger.useModulePluginIfAvailable) {
-			var packages = new MyHashSet<String>();
+			var packages = new HashSet<String>();
 			for (ZEntry entry : this.archive.entries()) {
 				String name = entry.getName();
 				if (name.startsWith("META-INF/")) continue;
@@ -53,7 +63,7 @@ public class PluginClassLoader extends ClassLoader {
 				//ClassNode moduleInfo = Parser.parse(IOUtil.read(getResourceAsStream("module-info.class")));
 
 				if (plugin.isModulePlugin) {
-					var depend = new MyHashSet<>(plugin.javaModuleDepend);
+					var depend = new HashSet<>(plugin.javaModuleDepend);
 					depend.add("java.base");
 					depend.add("roj.core");
 
@@ -82,14 +92,22 @@ public class PluginClassLoader extends ClassLoader {
 		}
 	}
 
+	public ConstantPoolHooks getHooks() {
+		if (hooks == null) {
+			hooks = new ConstantPoolHooks();
+			transformers.add(hooks);
+		}
+		return hooks;
+	}
+
 	@Override
 	protected Class<?> findClass(String name) throws ClassNotFoundException {
 		String klass = name.replace('.', '/').concat(".class");
 		ZEntry entry = archive.getEntry(klass);
 		if (entry == null) {
 			for (var s : accessible) {
-				if (s.cl != null && s.cl.archive.getEntry(klass) != null) {
-					return s.cl.findClass(name);
+				if (s.classLoader != null && s.classLoader.archive.getEntry(klass) != null) {
+					return s.classLoader.findClass(name);
 				}
 			}
 			throw new ClassNotFoundException(name);
@@ -98,12 +116,18 @@ public class PluginClassLoader extends ClassLoader {
 		PluginClassLoader prev = PLUGIN_CONTEXT.get();
 		PLUGIN_CONTEXT.set(this);
 		try {
-			ByteList buf = new ByteList().readStreamFully(archive.getStream(entry));
+			var ctx = new Context(klass, archive.getStream(entry));
+			name = ctx.getClassName();
+
 			var cs = new CodeSource(getUrl(klass), (CodeSigner[]) null);
-			PanSecurityManager.transform(name, buf);
-			var clazz = defineClass(name, buf.list, 0, buf.wIndex(), new ProtectionDomain(cs, null));
-			buf._free();
-			return clazz;
+
+			for (Transformer transformer : transformers) {
+				transformer.transform(name, ctx);
+			}
+			PanSecurityManager.transformer.transform(name, ctx);
+
+			ByteList buf = ctx.get();
+			return defineClass(name.replace('/', '.'), buf.list, 0, buf.wIndex(), new ProtectionDomain(cs, null));
 		} catch (Exception e) {
 			throw new ClassNotFoundException("failed", e);
 		} finally {

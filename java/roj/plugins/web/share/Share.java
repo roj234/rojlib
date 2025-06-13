@@ -1,11 +1,11 @@
 package roj.plugins.web.share;
 
-import roj.collect.SimpleList;
+import roj.collect.ArrayList;
 import roj.concurrent.OperationDone;
 import roj.config.auto.Optional;
 import roj.io.IOUtil;
 import roj.plugin.VFSRouter;
-import roj.reflect.ReflectionUtils;
+import roj.reflect.Unaligned;
 
 import java.io.File;
 import java.util.List;
@@ -35,12 +35,12 @@ final class Share {
 	public boolean isExpired() {return expireType() == 1 && System.currentTimeMillis() > expire;}
 
 	public void fillFromServerPath(File path) {
-		files = new SimpleList<>();
+		files = new ArrayList<>();
 		size = 0;
 		base = path;
 		int prefixLength = path.getAbsolutePath().length() + 1;
 		try {
-			IOUtil.findAllFiles(path, file -> {
+			IOUtil.listFiles(path, file -> {
 				if (files.size() == FileShare.LOCAL_FILE_MAX) throw OperationDone.INSTANCE;
 				ShareFile file1 = new ShareFile(file, prefixLength);
 				size += file1.size;
@@ -53,7 +53,7 @@ final class Share {
 
 	transient Share _next;
 
-	static final long EXPIRE_OFFSET = ReflectionUtils.fieldOffset(Share.class, "expire");
+	static final long EXPIRE_OFFSET = Unaligned.fieldOffset(Share.class, "expire");
 
 	public void countDown(long timeout) {
 		while (true) {

@@ -4,7 +4,6 @@ import roj.http.Headers;
 import roj.io.IOUtil;
 import roj.net.ChannelCtx;
 import roj.net.ChannelHandler;
-import roj.reflect.ReflectionUtils;
 import roj.reflect.Unaligned;
 import roj.text.URICoder;
 import roj.util.DirectByteList;
@@ -27,7 +26,7 @@ public class DiskFileInfo implements FileInfo, ChannelHandler {
 	private DirectByteList cc;
 	private byte[] uc;
 
-	private static final long STATE_OFFSET = ReflectionUtils.fieldOffset(DiskFileInfo.class, "state");
+	private static final long STATE_OFFSET = Unaligned.fieldOffset(DiskFileInfo.class, "state");
 	private volatile int state;
 
 	public DiskFileInfo(File file) {this(file, false);}

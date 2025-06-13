@@ -5,14 +5,16 @@ import roj.archive.zip.ZEntry;
 import roj.archive.zip.ZipArchive;
 import roj.archive.zip.ZipFile;
 import roj.archive.zip.ZipFileWriter;
+import roj.asm.MemberDescriptor;
 import roj.asmx.Context;
 import roj.asmx.TransformUtil;
 import roj.asmx.mapper.Mapper;
-import roj.collect.MyHashMap;
-import roj.collect.SimpleList;
+import roj.asmx.mapper.Mapping;
+import roj.collect.ArrayList;
+import roj.collect.HashMap;
+import roj.concurrent.ExceptionalSupplier;
 import roj.config.ParseException;
 import roj.config.data.CMap;
-import roj.crypt.CRC32;
 import roj.io.IOUtil;
 import roj.io.source.FileSource;
 import roj.io.source.MemorySource;
@@ -99,13 +101,30 @@ public abstract sealed class MinecraftWorkspace {
 			bar.setName("收集信息");
 			bar.increment();
 
-			File com2int = Terminal.readFile("Srg/XSrg格式的【编译期到运行期】名称映射表（必须）");
+			File com2int = Terminal.readFile("指定映射配置(*.yml)或手动提供【调试名到中间名】映射表(*.srg) （必须）");
 			if (com2int == null) return null;
 			File serverPath = Terminal.readFile("同版本的Forge服务端（可选，用于服务端开发）");
 
 			var tmpSource = new MemorySource();
 			var resources = new ZipFileWriter(tmpSource, 8);
-			var clientData = new SimpleList<Context>();
+			var clientData = new ArrayList<Context>();
+			var context = new HashMap<String, ExceptionalSupplier<File, IOException>>();
+/*			var serverMappingsUrl = clientInfo.gameCoreDownloads.getMap("server_mappings").getString("url");
+			var clientMappingsUrl = clientInfo.gameCoreDownloads.getMap("client_mappings").getString("url");
+			context.put("client.txt", () -> {
+				try {
+					return DownloadTask.download(clientMappingsUrl, new File("fmdTemp.txt")).get();
+				} catch (InterruptedException | ExecutionException e) {
+					throw new RuntimeException(e);
+				}
+			});
+			context.put("server.txt", () -> {
+				try {
+					return DownloadTask.download(serverMappingsUrl, new File("fmdTemp.txt")).get();
+				} catch (InterruptedException | ExecutionException e) {
+					throw new RuntimeException(e);
+				}
+			});*/
 
 			bar.setName("客户端");
 			bar.increment();
@@ -128,7 +147,7 @@ public abstract sealed class MinecraftWorkspace {
 				}
 			}
 
-			File libraries = new File(DATA_PATH, ".MC"+mcVersion+"FG"+forgeVersion+"_lib.jar");
+			File libraries = new File(DATA_PATH, "gen-"+mcVersion+"-Forge"+forgeVersion+"_lib.jar");
 			combineLibrary(clientInfo, libraries);
 
 			bar.setName("服务端");
@@ -146,12 +165,12 @@ public abstract sealed class MinecraftWorkspace {
 				var text = IOUtil.readString(argumentFile);
 				var arguments = MinecraftClientInfo.tokenize(text);
 
-				var serverData = new SimpleList<Context>();
+				var serverData = new ArrayList<Context>();
 				serverSrgCombined = combine(new File(serverPath, "libraries"), arguments, serverData, resources, true);
 				if (serverSrgCombined == null) return null;
 
 				var merger = new ClassMerger();
-				clientData = new SimpleList<>(merger.process(clientData, serverData));
+				clientData = new ArrayList<>(merger.process(clientData, serverData));
 				LOGGER.debug("ClassMerger: {}/{} entries, {} combined", merger.clientOnly, merger.both, merger.mergedField+merger.mergedMethod+merger.replaceMethod);
 			}
 
@@ -160,7 +179,7 @@ public abstract sealed class MinecraftWorkspace {
 				resources.writeNamed(ctx.getFileName(), ctx.getCompressedShared());
 			}
 			resources.close();
-			var combinedCache = new File(DATA_PATH, ".MC"+mcVersion+"FG"+forgeVersion+(serverSrgCombined!=null?"+S":"")+"_srg.jar");
+			var combinedCache = new File(DATA_PATH, "gen-"+mcVersion+"-Forge"+forgeVersion+"_srg.jar");
 			try (var fos = new FileOutputStream(combinedCache)) {
 				tmpSource.buffer().writeToStream(fos);
 			}
@@ -168,14 +187,36 @@ public abstract sealed class MinecraftWorkspace {
 			bar.setName("映射");
 			bar.increment();
 
-			var mapper = new Mapper();
-			mapper.loadMap(com2int, true);
+			Mapper mapper;
+
+			if (IOUtil.extensionName(com2int.getName()).equals("yml")) {
+				Mapping mapping;
+				try {
+					mapping = new MappingBuilder(com2int.getParentFile(), context).build(com2int);
+				} catch (ParseException e) {
+					throw new RuntimeException("MappingBuilder解析失败", e);
+				}
+				mapper = new Mapper(mapping);
+				for (var itr = mapper.getParamMap().values().iterator(); itr.hasNext(); ) {
+					for (String param : itr.next()) {
+						if (param != null && param.startsWith("p_")) {
+							itr.remove();
+							break;
+						}
+					}
+				}
+			} else {
+				mapper = new Mapper();
+				mapper.loadMap(com2int, true);
+			}
+
 			mapper.loadLibraries(Arrays.asList(libraries, combinedCache));
 			mapper.packup();
 			var atList = AT.buildATMapFromATCfg(new ByteArrayInputStream(atBytes), mapper);
 
-			var combinedCacheMcp = new File(DATA_PATH, ".MC"+mcVersion+"FG"+forgeVersion+(serverSrgCombined!=null?"+S":"")+"_mcp.jar");
+			var combinedCacheMcp = new File(DATA_PATH, "gen-"+mcVersion+"-Forge"+forgeVersion+"_mcp.jar");
 			try (var zfw2 = new ZipFileWriter(combinedCacheMcp)) {
+				mapper.flag |= Mapper.MF_SINGLE_THREAD; // 多线程不知道什么时候又出bug了，暂时先禁用
 				mapper.map(clientData);
 
 				for (int i = 0; i < clientData.size(); i++) {
@@ -193,17 +234,18 @@ public abstract sealed class MinecraftWorkspace {
 
 			if (!atList.isEmpty()) LOGGER.error("未成功应用的AT: {}", atList);
 
-			var hash = Integer.toHexString(CRC32.crc32(IOUtil.read(com2int)));
-
-			var mapCache = new File(DATA_PATH, ".MC"+mcVersion+"FG"+forgeVersion+(serverSrgCombined!=null?"+S":"")+"_map"+hash+".lzma");
+			var mapCache = new File(DATA_PATH, "gen-"+mcVersion+"-Forge"+forgeVersion+"_map.lzma");
 			try (var fs = new FileSource(mapCache)) {
+				// forge's patch
+				mapper.getMethodMap().keySet().removeIf(desc -> desc.modifier == MemberDescriptor.FLAG_UNSET);
+				mapper.getFieldMap().keySet().removeIf(desc -> desc.modifier == MemberDescriptor.FLAG_UNSET);
 				mapper.reverseSelf();
 				mapper.saveCache(fs, 1);
 			}
 
 			var workspace = new Workspace();
 			workspace.type = "Minecraft/ForgeV2";
-			workspace.id = "MC"+mcVersion+"Forge"+forgeVersion+(serverSrgCombined != null?"+S":"")+"_Map"+hash;
+			workspace.id = mcVersion+"-Forge"+forgeVersion;
 			workspace.depend = Collections.singletonList(libraries);
 			workspace.mappedDepend = Collections.singletonList(combinedCacheMcp);
 			workspace.unmappedDepend = Collections.singletonList(combinedCache);
@@ -232,7 +274,7 @@ public abstract sealed class MinecraftWorkspace {
 			var ForgeSided = new ZipFile(forgeSided, ZipFile.FLAG_BACKWARD_READ|ZipFile.FLAG_VERIFY);
 			var ForgeUniversal = new ZipFile(forgeUniversal, ZipFile.FLAG_BACKWARD_READ|ZipFile.FLAG_VERIFY);
 
-			var fileList = new MyHashMap<String, ZipFile>();
+			var fileList = new HashMap<String, ZipFile>();
 
 			var bar = new EasyProgressBar("处理游戏代码");
 			bar.addTotal(PatchSrg.entries().size());
@@ -292,7 +334,7 @@ public abstract sealed class MinecraftWorkspace {
 		EasyProgressBar bar = new EasyProgressBar("复制库文件");
 		bar.setTotal(info.libraries.size());
 
-		MyHashMap<String, String> dupChecker = new MyHashMap<>();
+		HashMap<String, String> dupChecker = new HashMap<>();
 		try (var zfw = new ZipFileWriter(libraryFileName)) {
 			for (var itr = info.libraries.iterator(); itr.hasNext(); bar.increment(1)) {
 				String libName = itr.next().path;

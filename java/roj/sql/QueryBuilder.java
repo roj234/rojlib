@@ -3,11 +3,14 @@ package roj.sql;
 import roj.asmx.injector.Inject;
 import roj.asmx.injector.Weave;
 import roj.asmx.launcher.Autoload;
+import roj.collect.ArrayList;
+import roj.collect.HashMap;
 import roj.collect.*;
 import roj.config.Tokenizer;
 import roj.plugins.web.error.GreatErrorPage;
 import roj.text.CharList;
 import roj.text.TextUtil;
+import roj.util.Helpers;
 
 import java.sql.*;
 import java.util.*;
@@ -63,7 +66,7 @@ public final class QueryBuilder implements AutoCloseable {
 				QueryBuilder inst = INSTANCE.get();
 				if (inst == null) return null;
 
-				List<String> values = new SimpleList<>(inst.logs);
+				List<String> values = new ArrayList<>(inst.logs);
 				IntBiMap<String> index = new IntBiMap<>(values.size());
 				for (int i = 0; i < values.size();) index.putInt(i, String.valueOf(++i));
 				return new ListMap<>(index, values);
@@ -132,7 +135,7 @@ public final class QueryBuilder implements AutoCloseable {
 			"fulltext"    ,  "TBD"
 	);
 	private static Map<String, String> myWhere(String ... a) {
-		MyHashMap<String,String> map = new MyHashMap<>(a.length/2);
+		HashMap<String,String> map = new HashMap<>(a.length/2);
 		for (int i = 0; i < a.length;) {
 			map.put(a[i++],a[i++]);
 		}
@@ -333,7 +336,7 @@ public final class QueryBuilder implements AutoCloseable {
 	 */
 	public List<String> next() throws SQLException {
 		if (set == null) throw new SQLException("not in select mode!");
-		List<String> result = new SimpleList<>(set.getMetaData().getColumnCount());
+		List<String> result = new ArrayList<>(set.getMetaData().getColumnCount());
 		return next(result) ? result : null;
 	}
 	/**
@@ -374,7 +377,7 @@ public final class QueryBuilder implements AutoCloseable {
 	/**
 	 * 读取所有结果中的第一个字段
 	 */
-	public List<String> getrows_onefield() throws SQLException { return getrows_onefield(0, new SimpleList<>()); }
+	public List<String> getrows_onefield() throws SQLException { return getrows_onefield(0, new ArrayList<>()); }
 	/**
 	 * 读取所有结果中的第index个字段, 并存入list
 	 */
@@ -393,40 +396,36 @@ public final class QueryBuilder implements AutoCloseable {
 	/**
 	 * 读取所有结果,并存入list
 	 */
-	public List<List<String>> getrows(List<List<String>> list) throws SQLException {
-		try {
-			while (true) {
-				List<String> a = next();
-				if (a == null) break;
-
-				list.add(a);
+	public Iterable<List<String>> getrows() throws SQLException {
+		return () -> new AbstractIterator<>() {
+			@Override
+			protected boolean computeNext() {
+				try {
+					if ((result = QueryBuilder.this.next()) != null) return true;
+					else set.close();
+				} catch (SQLException e) {
+					Helpers.athrow(e);
+				}
+				return false;
 			}
-		} finally {
-			set.close();
-		}
-		return list;
+		};
 	}
 	/**
 	 * 读取所有结果,作为关联数组存入list
 	 */
-	public List<Map<String,String>> getrows_colkey() throws SQLException {
-		return getrows_colkey(new SimpleList<>());
-	}
-	/**
-	 * 读取所有结果,作为关联数组存入list
-	 */
-	public List<Map<String,String>> getrows_colkey(List<Map<String,String>> list) throws SQLException {
-		try {
-			while (true) {
-				Map<String, String> a = nextMap();
-				if (a == null) break;
-
-				list.add(a);
+	public Iterable<Map<String,String>> getrows_colkey() throws SQLException {
+		return () -> new AbstractIterator<>() {
+			@Override
+			protected boolean computeNext() {
+				try {
+					if ((result = nextMap()) != null) return true;
+					else set.close();
+				} catch (SQLException e) {
+					Helpers.athrow(e);
+				}
+				return false;
 			}
-		} finally {
-			set.close();
-		}
-		return list;
+		};
 	}
 	/**
 	 * 读取所有结果,并以第key个值作为主键,value作为子键存入map
@@ -679,7 +678,7 @@ public final class QueryBuilder implements AutoCloseable {
 	/**
 	 * 列出数据库中的表的详细信息
 	 */
-	public List<Map<String, String>> get_tables_info(String database) throws SQLException {
+	public Iterable<Map<String, String>> get_tables_info(String database) throws SQLException {
 		return reset()
 			.table("information_schema","TABLES")
 			.field("`TABLE_NAME` as `name`,`ENGINE` as `engine`,`TABLE_ROWS` as `length`,`DATA_LENGTH` as `data_length`,`INDEX_LENGTH` as `index_length`,`CREATE_TIME` as `time`,`UPDATE_TIME` as `modify_time`")
@@ -712,7 +711,7 @@ public final class QueryBuilder implements AutoCloseable {
 	 *		can_null => 能否为NULL
 	 *		max => 数字型的最大大小
 	 */
-	public List<Map<String, String>> get_fields_info(String database, String table) throws SQLException {
+	public Iterable<Map<String, String>> get_fields_info(String database, String table) throws SQLException {
 		return reset()
 			.table("information_schema","COLUMNS")
 			.field("`COLUMN_NAME` as `name`,`DATA_TYPE` as `dtype`,`COLUMN_COMMENT` as `comment`,`COLUMN_TYPE` as `type`,`COLUMN_DEFAULT` as `default_val`,`IS_NULLABLE` as `can_null`,`CHARACTER_MAXIMUM_LENGTH` as `max`")

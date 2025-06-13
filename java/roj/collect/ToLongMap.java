@@ -11,7 +11,7 @@ import static roj.collect.IntMap.UNDEFINED;
  * @author Roj234
  * @since 2021/6/18 11:6
  */
-public class ToLongMap<K> extends MyHashMap<K, Long> implements ToLongFunction<K> {
+public class ToLongMap<K> extends HashMap<K, Long> implements ToLongFunction<K> {
 	public static final class Entry<K> extends AbstractEntry<K, Long> {
 		public long value;
 
@@ -46,9 +46,9 @@ public class ToLongMap<K> extends MyHashMap<K, Long> implements ToLongFunction<K
 
 	public ToLongMap() { super(); }
 	public ToLongMap(int size) { super(size); }
-	public ToLongMap(MyHashMap<K, Long> map) { super(map); }
+	public ToLongMap(HashMap<K, Long> map) { super(map); }
 
-	public final Set<Entry<K>> selfEntrySet() { return _Generic_EntrySet.create(this); }
+	public final Set<Entry<K>> selfEntrySet() { return _LibEntrySet.create(this); }
 
 	@Override
 	public final long applyAsLong(K key) { return getOrDefault(key, -1); }

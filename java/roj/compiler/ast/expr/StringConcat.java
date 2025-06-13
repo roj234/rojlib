@@ -3,11 +3,11 @@ package roj.compiler.ast.expr;
 import roj.asm.Opcodes;
 import roj.asm.type.IType;
 import roj.asm.type.Type;
-import roj.collect.SimpleList;
-import roj.compiler.LavaFeatures;
+import roj.collect.ArrayList;
+import roj.compiler.CompileContext;
+import roj.compiler.api.Compiler;
 import roj.compiler.api.Types;
 import roj.compiler.asm.MethodWriter;
-import roj.compiler.context.LocalContext;
 import roj.compiler.resolve.ResolveException;
 import roj.compiler.resolve.TypeCast;
 import roj.config.data.CEntry;
@@ -22,7 +22,7 @@ import java.util.Collections;
  * @since 2024/1/27 2:57
  */
 final class StringConcat extends Expr {
-	SimpleList<Expr> nodes = new SimpleList<>();
+	ArrayList<Expr> nodes = new ArrayList<>();
 
 	StringConcat() {}
 	StringConcat(Expr left, Expr right) {
@@ -37,7 +37,7 @@ final class StringConcat extends Expr {
 	public IType type() { return Types.STRING_TYPE; }
 
 	@Override
-	public Expr resolve(LocalContext ctx) throws ResolveException {
+	public Expr resolve(CompileContext ctx) throws ResolveException {
 		for (int i = 0; i < nodes.size();) {
 			Expr node = nodes.get(i).resolve(ctx);
 			if (node instanceof StringConcat sc) {
@@ -91,14 +91,14 @@ final class StringConcat extends Expr {
 			return;
 		}
 
-		var lc = LocalContext.get();
-		if (lc.classes.hasFeature(LavaFeatures.SHARED_STRING_CONCAT)) {
+		var lc = CompileContext.get();
+		if (lc.compiler.hasFeature(Compiler.SHARED_STRING_CONCAT)) {
 			viaCharList(cw, lc);
 		} else {
 			viaStringBuilder(cw, lc);
 		}
 	}
-	private void viaStringBuilder(MethodWriter cw, LocalContext lc) {
+	private void viaStringBuilder(MethodWriter cw, CompileContext lc) {
 		cw.newObject("java/lang/StringBuilder");
 		for (int i = 0; i < nodes.size(); i++) {
 			Expr node = nodes.get(i);
@@ -136,12 +136,12 @@ final class StringConcat extends Expr {
 		cw.invoke(Opcodes.INVOKEVIRTUAL, "java/lang/StringBuilder", "toString", "()Ljava/lang/String;");
 	}
 
-	private static Expr callPseudoToString(LocalContext ctx, Expr node) {
+	private static Expr callPseudoToString(CompileContext ctx, Expr node) {
 		MemberAccess fn = new MemberAccess(node, "toString", 0);
 		return new Invoke(fn, Collections.emptyList()).resolve(ctx);
 	}
 
-	private void viaCharList(MethodWriter cw, LocalContext lc) {
+	private void viaCharList(MethodWriter cw, CompileContext lc) {
 		cw.newObject("roj/text/CharList");
 		for (int i = 0; i < nodes.size(); i++) {
 			Expr node = nodes.get(i);

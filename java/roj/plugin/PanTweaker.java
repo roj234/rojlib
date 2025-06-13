@@ -11,15 +11,11 @@ import roj.asmx.launcher.DefaultTweaker;
 import roj.config.ConfigMaster;
 import roj.config.ParseException;
 import roj.config.data.CMap;
-import roj.io.IOUtil;
 import roj.ui.NativeVT;
 import roj.util.ArrayUtil;
-import roj.util.ByteList;
 import roj.util.Helpers;
 
 import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileOutputStream;
 import java.io.IOException;
 import java.security.SecureRandom;
 import java.util.List;
@@ -41,39 +37,16 @@ public final class PanTweaker extends DefaultTweaker implements Transformer {
 			Helpers.athrow(e);
 		}
 
-		AnnotationRepo repo;
-		loadAnnotations:
-		try {
-			File cache = null;
-			if (CONFIG.getBool("annotation_cache")) {
-				cache = new File("plugins/Core/annotation.bin");
-				long length = cache.length();
-				if (length > 8 && length < 10485760 && cache.lastModified() >= loader.getAnnotationTimestamp()) {
-					try (var in = new FileInputStream(cache)) {
-						repo = new AnnotationRepo();
-						if (repo.deserialize(IOUtil.getSharedByteBuf().readStreamFully(in))) {
-							loader.setAnnotations(repo);
-							break loadAnnotations;
-						}
-					}
-				}
-			}
-			repo = loader.getAnnotations();
-			if (cache != null) {
-				try (var out = new ByteList.ToStream(new FileOutputStream(cache))) {
-					repo.serialize(out);
-				}
-			}
-		} catch (IOException e) {
-			throw new IllegalStateException("无法读取注解数据", e);
-		}
-
 		super.init(args, loader);
 
 		loader.registerTransformer(EventTransformer.register(DefaultTweaker.CONDITIONAL));
 		loader.registerTransformer(this);
 
-		annotations = repo;
+		try {
+			annotations = loader.getAnnotations();
+		} catch (IOException e) {
+			throw new IllegalStateException("无法读取注解数据", e);
+		}
 
 		if (NativeVT.getInstance() == null && !Boolean.getBoolean("roj.noAnsi")) {
 			System.err.println("[警告]NativeVT不可用，请使用Web终端输入内容，否则可能造成不可预知的问题");

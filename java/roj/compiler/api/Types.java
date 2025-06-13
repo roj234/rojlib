@@ -15,6 +15,7 @@ public interface Types {
 	Type ENUM_TYPE = Type.klass("java/lang/Enum");
 	Type CHARSEQUENCE_TYPE = Type.klass("java/lang/CharSequence");
 	Type RUNTIME_EXCEPTION = Type.klass("java/lang/RuntimeException");
+	Type AUTOCLOSEABLE_TYPE = Type.klass("java/lang/AutoCloseable");
 	Type ERROR = Type.klass("java/lang/Error");
 	String LOCK_TYPE = "java/util/concurrent/locks/Lock";
 }

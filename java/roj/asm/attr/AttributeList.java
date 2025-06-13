@@ -2,8 +2,8 @@ package roj.asm.attr;
 
 import org.jetbrains.annotations.ApiStatus;
 import roj.asm.cp.ConstantPool;
-import roj.collect.MyHashMap;
-import roj.collect.SimpleList;
+import roj.collect.ArrayList;
+import roj.collect.HashMap;
 import roj.util.DynByteBuf;
 
 import java.util.Map;
@@ -12,7 +12,7 @@ import java.util.Map;
  * @author Roj234
  * @since 2020/10/25 16:50
  */
-public final class AttributeList extends SimpleList<Attribute> {
+public final class AttributeList extends ArrayList<Attribute> {
 	private static final int THE_SIZE = 4;
 	private Map<String, Attribute> byName;
 
@@ -21,7 +21,7 @@ public final class AttributeList extends SimpleList<Attribute> {
 
 	public AttributeList(AttributeList l) {
 		super(l);
-		if (l.size > 0 && l.byName != null) byName = new MyHashMap<>(l.byName);
+		if (l.size > 0 && l.byName != null) byName = new HashMap<>(l.byName);
 	}
 
 	public Object getByName(String name) {
@@ -30,7 +30,7 @@ public final class AttributeList extends SimpleList<Attribute> {
 				int o = _indexOf(name);
 				return o<0?null:list[o];
 			}
-			byName = new MyHashMap<>(size);
+			byName = new HashMap<>(size);
 			return _find(name);
 		}
 		Object o = byName.get(name);

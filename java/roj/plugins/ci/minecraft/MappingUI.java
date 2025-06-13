@@ -4,15 +4,17 @@
 
 package roj.plugins.ci.minecraft;
 
+import roj.archive.zip.ZipFile;
 import roj.asm.MemberDescriptor;
 import roj.asmx.mapper.Mapper;
 import roj.asmx.mapper.Mapping;
+import roj.collect.ArrayList;
+import roj.collect.HashMap;
 import roj.collect.IntSet;
-import roj.collect.MyHashMap;
-import roj.collect.SimpleList;
 import roj.crypt.CryptoFactory;
 import roj.gui.DoubleClickHelper;
 import roj.gui.GuiUtil;
+import roj.io.IOUtil;
 import roj.text.TextReader;
 import roj.util.Helpers;
 
@@ -50,7 +52,7 @@ public class MappingUI extends JFrame {
 
 
 	private void uiLoad(ActionEvent e) {
-		File input = GuiUtil.fileLoadFrom("注：先选择类型再点击加载！" + uiMappingType.getSelectedItem().toString(), this);
+		File input = GuiUtil.fileLoadFrom("选择文件", this);
 		if (input == null) return;
 
 		try {
@@ -60,54 +62,54 @@ public class MappingUI extends JFrame {
 		}
 	}
 	private void load(File input) throws IOException {
-		Mapping m = null;
-		switch (uiMappingType.getSelectedItem().toString()) {
-			case "srg/xsrg":
-				m = new Mapping();
-				m.loadMap(input, false);
-				break;
-			case "tab srg": {
-				TSrgMapping m1 = new TSrgMapping();
-				m1.readMcpConfig(input, m1.getParamMap(), new SimpleList<>());
-				m = m1;
-			}
-			break;
-			case "mapper cache": {
-				Mapper m1 = new Mapper();
-				try (var src = new FileInputStream(input)) {
-					m1.loadCache(src, true);
+		String name1 = input.getName();
+		String ext = IOUtil.extensionName(name1);
+		Mapping m;
+
+		zip:
+		if (ext.equals("zip")) {
+			try (var zf = new ZipFile(input)) {
+				var tsrg = zf.getEntry("config.json");
+				if (tsrg != null) {
+					TSrgMapping m1 = new TSrgMapping();
+					m1.readMcpConfig(input, m1.getParamMap(), new ArrayList<>());
+					m = m1;
+					break zip;
 				}
-				m = m1;
 			}
-			break;
-			case "intermediary": {
-				YarnMapping m1 = new YarnMapping();
-				m1.readIntermediaryMap(input.getName(), TextReader.auto(input), new SimpleList<>());
-				m = m1;
+
+			YarnMapping m1 = new YarnMapping();
+			m1.readYarnMap(input, new ArrayList<>(), null, m1.getParamMap());
+			m = m1;
+		} else if (ext.equals("tsrg")) {
+			TSrgMapping m1 = new TSrgMapping();
+			m1.readMcpConfig(input, m1.getParamMap(), new ArrayList<>());
+			m = m1;
+		} else if (ext.equals("tiny")) {
+			YarnMapping m1 = new YarnMapping();
+			m1.readIntermediaryMap(input.getName(), TextReader.auto(input), new ArrayList<>());
+			m = m1;
+		} else if (ext.equals("srg")) {
+			m = new Mapping();
+			m.loadMap(input, false);
+		} else if (ext.equals("lzma")) {
+			Mapper m1 = new Mapper();
+			try (var src = new FileInputStream(input)) {
+				m1.loadCache(src, true);
 			}
-			break;
-			case "yarn": {
-				YarnMapping m1 = new YarnMapping();
-				m1.readYarnMap(input, new SimpleList<>(), null, m1.getParamMap());
-				m = m1;
+			m = m1;
+		} else if (name1.equals("client.txt") || name1.equals("server.txt")) {
+			OjngMapping m1 = new OjngMapping();
+			m1.readMojangMap(input.getName(), TextReader.auto(input), new ArrayList<>());
+			m = m1;
+		} else {
+			List<NamedMapping> maps = uiMappingList.getSelectedValuesList();
+			if (maps.size() != 1) {
+				JOptionPane.showMessageDialog(this, "请选择一个映射表作为应用的来源\nMCP csv mapping不能单独使用", "提示", JOptionPane.WARNING_MESSAGE);
+				return;
 			}
-			break;
-			case "mojang": {
-				OjngMapping m1 = new OjngMapping();
-				m1.readMojangMap(input.getName(), TextReader.auto(input), new SimpleList<>());
-				m = m1;
-			}
-			break;
-			case "mcp": {
-				List<NamedMapping> maps = uiMappingList.getSelectedValuesList();
-				if (maps.size() != 1) {
-					JOptionPane.showMessageDialog(this, "请选择一个映射表作为应用的来源\nMCP mapping不能单独使用", "提示", JOptionPane.WARNING_MESSAGE);
-					return;
-				}
-				MCPMapping m1 = new MCPMapping(input, null);
-				m1.apply(new SimpleList<>(), maps.get(0).mapping, m = new Mapping());
-			}
-			break;
+			MCPMapping m1 = new MCPMapping(input, null);
+			m1.apply(new ArrayList<>(), maps.get(0).mapping, m = new Mapping());
 		}
 
 		NamedMapping name = getNamedMapping();
@@ -134,32 +136,24 @@ public class MappingUI extends JFrame {
 		if (alertShown != (alertShown |= 1))
 			JOptionPane.showMessageDialog(this, "从上至下的显示顺序（而不是点击顺序）会决定合并顺序！", "警告", JOptionPane.WARNING_MESSAGE);
 
-		NamedMapping out = getNamedMapping();
+		NamedMapping out = new NamedMapping();
 		out.mapping = new Mapping();
 
 		List<NamedMapping> maps = uiMappingList.getSelectedValuesList();
 
-		System.out.println(maps);
+		out.name = "M"+maps.size();
 		for (NamedMapping m : maps) {
 			out.mapping.merge(m.mapping, true);
+			out.name += "-"+m.name;
 		}
 		mappings.addElement(out);
 	}
 
 	private void uiFlip(ActionEvent e) {
-		NamedMapping m = getNamedMapping();
+		NamedMapping m = new NamedMapping();
 		NamedMapping om = uiMappingList.getSelectedValue();
-		if (m.name == null) m.name = om.name+"-flip";
+		m.name = "F-"+om.name;
 		m.mapping = om.mapping.reverse();
-		mappings.addElement(m);
-	}
-
-	private void uiCopy(ActionEvent e) {
-		NamedMapping m = getNamedMapping();
-		NamedMapping om = uiMappingList.getSelectedValue();
-		if (m.name == null) m.name = om.name+"-copy";
-		m.mapping = new Mapping();
-		m.mapping.merge(om.mapping);
 		mappings.addElement(m);
 	}
 
@@ -171,9 +165,10 @@ public class MappingUI extends JFrame {
 		List<NamedMapping> l = uiMappingList.getSelectedValuesList(); l.remove(child);
 		NamedMapping parent = l.get(0);
 
-		NamedMapping m = getNamedMapping();
+		NamedMapping m = new NamedMapping();
 		m.mapping = new Mapping();
-		m.mapping.merge(child.mapping);
+		m.name = "E-"+child.name+"-"+parent.name;
+		m.mapping.merge(child.mapping, true);
 
 		// Mapper{B->C} .extend ( Mapper{A->B} )   =>>  Mapper{A->C}
 		m.mapping.extend(parent.mapping, true);
@@ -204,16 +199,6 @@ public class MappingUI extends JFrame {
 	public MappingUI() {
 		initComponents();
 
-		DefaultComboBoxModel<String> model = new DefaultComboBoxModel<>();
-		model.addElement("srg/xsrg");
-		model.addElement("tab srg");
-		model.addElement("mapper cache");
-		model.addElement("intermediary");
-		model.addElement("yarn");
-		model.addElement("mojang");
-		model.addElement("mcp");
-		uiMappingType.setModel(model);
-
 		uiMappingList.setModel(mappings);
 		uiMappingList.getSelectionModel().addListSelectionListener(evt -> {
 			int len = uiMappingList.getSelectedIndices().length;
@@ -225,10 +210,15 @@ public class MappingUI extends JFrame {
 			uiFlip.setEnabled(one);
 			uiMerge.setEnabled(many);
 			uiExtend.setEnabled(len == 2);
-			uiCopy.setEnabled(one);
 			uiSave.setEnabled(one);
 			uiDelLeft.setEnabled(one);
 			uiDelRight.setEnabled(one);
+			List<NamedMapping> selectedValuesList = uiMappingList.getSelectedValuesList();
+			if (len == 2 && selectedValuesList.get(0).equals(selectedValuesList.get(1))) {
+				uiSave.setText("equal");
+			} else {
+				uiSave.setText("save");
+			}
 		});
 
 		uiMappingList.addMouseListener(new DoubleClickHelper(uiMappingList, 300, (e) -> {
@@ -239,15 +229,16 @@ public class MappingUI extends JFrame {
 		uiDelLeft.addActionListener(e -> {
 			NamedMapping m = getNamedMapping();
 			NamedMapping om = uiMappingList.getSelectedValue();
-			if (m.name == null) m.name = om.name+"-rl";
+			if (m.name == null) m.name = "Dl-"+om.name;
 			m.mapping = om.mapping.reverse();
 			m.mapping.deleteClassMap();
+			m.mapping.reverseSelf();
 			mappings.addElement(m);
 		});
 		uiDelRight.addActionListener(e -> {
 			NamedMapping m = getNamedMapping();
 			NamedMapping om = uiMappingList.getSelectedValue();
-			if (m.name == null) m.name = om.name+"-rr";
+			if (m.name == null) m.name = "Dr-"+om.name;
 			m.mapping = new Mapping(om.mapping);
 			m.mapping.deleteClassMap();
 			mappings.addElement(m);
@@ -273,7 +264,7 @@ public class MappingUI extends JFrame {
 			while (i-- > 0) while (!id.add(r.nextInt(m.mapping.getClassMap().size())));
 		}
 
-		Map<String, List<String>> tmp = new MyHashMap<>();
+		Map<String, List<String>> tmp = new HashMap<>();
 		i = 0;
 		for (Map.Entry<String, String> entry : m.mapping.getClassMap().entrySet()) {
 			if (id == null || id.remove(i++))
@@ -312,7 +303,6 @@ public class MappingUI extends JFrame {
         var scrollPane1 = new JScrollPane();
         uiMappingList = new JList<>();
         uiName = new JTextField();
-        uiMappingType = new JComboBox<>();
         var label1 = new JLabel();
         var uiLoad = new JButton();
         uiDel = new JButton();
@@ -320,7 +310,6 @@ public class MappingUI extends JFrame {
         uiMerge = new JButton();
         uiExtend = new JButton();
         uiSave = new JButton();
-        uiCopy = new JButton();
         uiDelLeft = new JButton();
         uiDelRight = new JButton();
         dlgPreview = new JDialog();
@@ -329,7 +318,7 @@ public class MappingUI extends JFrame {
         uiDel2 = new JButton();
 
         //======== this ========
-        setTitle("\u6620\u5c04\u8868Playground");
+        setTitle("MappingBuilder");
         setResizable(false);
         var contentPane = getContentPane();
         contentPane.setLayout(null);
@@ -342,8 +331,6 @@ public class MappingUI extends JFrame {
         scrollPane1.setBounds(10, 35, 320, 275);
         contentPane.add(uiName);
         uiName.setBounds(35, 5, 100, uiName.getPreferredSize().height);
-        contentPane.add(uiMappingType);
-        uiMappingType.setBounds(134, 5, 90, uiMappingType.getPreferredSize().height);
 
         //---- label1 ----
         label1.setText("\u540d\u79f0");
@@ -355,7 +342,7 @@ public class MappingUI extends JFrame {
         uiLoad.setMargin(new Insets(2, 4, 2, 4));
         uiLoad.addActionListener(e -> uiLoad(e));
         contentPane.add(uiLoad);
-        uiLoad.setBounds(new Rectangle(new Point(222, 4), uiLoad.getPreferredSize()));
+        uiLoad.setBounds(new Rectangle(new Point(135, 5), uiLoad.getPreferredSize()));
 
         //---- uiDel ----
         uiDel.setText("del");
@@ -363,10 +350,10 @@ public class MappingUI extends JFrame {
         uiDel.setEnabled(false);
         uiDel.addActionListener(e -> uiDel(e));
         contentPane.add(uiDel);
-        uiDel.setBounds(new Rectangle(new Point(15, 320), uiDel.getPreferredSize()));
+        uiDel.setBounds(new Rectangle(new Point(250, 320), uiDel.getPreferredSize()));
 
         //---- uiFlip ----
-        uiFlip.setText("flip");
+        uiFlip.setText("Flip");
         uiFlip.setMargin(new Insets(2, 4, 2, 4));
         uiFlip.setEnabled(false);
         uiFlip.addActionListener(e -> uiFlip(e));
@@ -374,7 +361,7 @@ public class MappingUI extends JFrame {
         uiFlip.setBounds(new Rectangle(new Point(45, 320), uiFlip.getPreferredSize()));
 
         //---- uiMerge ----
-        uiMerge.setText("merge");
+        uiMerge.setText("Merge");
         uiMerge.setMargin(new Insets(2, 4, 2, 4));
         uiMerge.setEnabled(false);
         uiMerge.addActionListener(e -> uiMerge(e));
@@ -382,7 +369,7 @@ public class MappingUI extends JFrame {
         uiMerge.setBounds(new Rectangle(new Point(80, 320), uiMerge.getPreferredSize()));
 
         //---- uiExtend ----
-        uiExtend.setText("extend");
+        uiExtend.setText("Extend");
         uiExtend.setMargin(new Insets(2, 4, 2, 4));
         uiExtend.setEnabled(false);
         uiExtend.addActionListener(e -> uiExtend(e));
@@ -395,33 +382,25 @@ public class MappingUI extends JFrame {
         uiSave.setEnabled(false);
         uiSave.addActionListener(e -> uiSave(e));
         contentPane.add(uiSave);
-        uiSave.setBounds(new Rectangle(new Point(210, 320), uiSave.getPreferredSize()));
-
-        //---- uiCopy ----
-        uiCopy.setText("copy");
-        uiCopy.setMargin(new Insets(2, 4, 2, 4));
-        uiCopy.setEnabled(false);
-        uiCopy.addActionListener(e -> uiCopy(e));
-        contentPane.add(uiCopy);
-        uiCopy.setBounds(new Rectangle(new Point(170, 320), uiCopy.getPreferredSize()));
+        uiSave.setBounds(new Rectangle(new Point(285, 320), uiSave.getPreferredSize()));
 
         //---- uiDelLeft ----
-        uiDelLeft.setText("DC\u2190");
+        uiDelLeft.setText("Dl");
         uiDelLeft.setBorder(new EmptyBorder(5, 5, 5, 5));
         uiDelLeft.setToolTipText("\u7528\u53f3\u4fa7\u7684\u540d\u79f0\u8986\u76d6\u6574\u4e2aClassMap");
         uiDelLeft.setEnabled(false);
         contentPane.add(uiDelLeft);
-        uiDelLeft.setBounds(new Rectangle(new Point(250, 320), uiDelLeft.getPreferredSize()));
+        uiDelLeft.setBounds(new Rectangle(new Point(175, 320), uiDelLeft.getPreferredSize()));
 
         //---- uiDelRight ----
-        uiDelRight.setText("DC\u2192");
+        uiDelRight.setText("Dr");
         uiDelRight.setBorder(new EmptyBorder(5, 5, 5, 5));
         uiDelRight.setToolTipText("\u7528\u5de6\u4fa7\u7684\u540d\u79f0\u8986\u76d6\u6574\u4e2aClassMap");
         uiDelRight.setEnabled(false);
         contentPane.add(uiDelRight);
-        uiDelRight.setBounds(new Rectangle(new Point(290, 320), uiDelRight.getPreferredSize()));
+        uiDelRight.setBounds(new Rectangle(new Point(205, 320), uiDelRight.getPreferredSize()));
 
-        contentPane.setPreferredSize(new Dimension(345, 345));
+        contentPane.setPreferredSize(new Dimension(345, 410));
         pack();
         setLocationRelativeTo(getOwner());
 
@@ -457,13 +436,11 @@ public class MappingUI extends JFrame {
 	// JFormDesigner - Variables declaration - DO NOT MODIFY  //GEN-BEGIN:variables  @formatter:off
     private JList<NamedMapping> uiMappingList;
     private JTextField uiName;
-    private JComboBox<String> uiMappingType;
     private JButton uiDel;
     private JButton uiFlip;
     private JButton uiMerge;
     private JButton uiExtend;
     private JButton uiSave;
-    private JButton uiCopy;
     private JButton uiDelLeft;
     private JButton uiDelRight;
     private JDialog dlgPreview;

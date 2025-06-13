@@ -1,6 +1,6 @@
 package roj.compiler.doc;
 
-import roj.collect.SimpleList;
+import roj.collect.ArrayList;
 import roj.text.TextUtil;
 
 import java.util.List;
@@ -10,7 +10,7 @@ import java.util.List;
  * @since 2024/7/4 3:03
  */
 public class Javadoc {
-	public List<String> texts = new SimpleList<>();
+	public List<String> texts = new ArrayList<>();
 
 	public void visitText(CharSequence text) {texts.add(text.toString());}
 	/**

@@ -1,6 +1,6 @@
 package roj.crypt.eddsa;
 
-import roj.collect.SimpleList;
+import roj.collect.ArrayList;
 
 import java.io.Serializable;
 import java.util.Arrays;
@@ -8,8 +8,8 @@ import java.util.Arrays;
 import static roj.crypt.eddsa.EdInteger.ZERO;
 
 final class EdPoint implements Serializable {
-	public enum Format {
-		P2, P3, P1P1, PRECOMP, CACHED
+	public static class Format {
+		static final byte P2 = 0, P3 = 1, P1P1 = 2, PRECOMP = 3, CACHED = 4;
 	}
 
 	static final ThreadLocal<TmpNum> NUMS = ThreadLocal.withInitial(TmpNum::new);
@@ -19,12 +19,12 @@ final class EdPoint implements Serializable {
 
 		final byte[] ba = new byte[256], bb = new byte[256];
 
-		final SimpleList<EdInteger> tmp1 = new SimpleList<>(10);
+		final ArrayList<EdInteger> tmp1 = new ArrayList<>(10);
 		void reserve(EdInteger t) {if (tmp1.size() < 10) tmp1.add(t);}
 	}
 
 	private EdCurve curve;
-	private Format state;
+	private byte format;
 	private final EdInteger X, Y;
 	private EdInteger Z, T;
 	// P3 state
@@ -37,9 +37,9 @@ final class EdPoint implements Serializable {
 	public static EdPoint precomp(EdCurve curve, EdInteger ypx, EdInteger ymx, EdInteger xy2d) { return new EdPoint(curve, Format.PRECOMP, ypx, ymx, xy2d, null); }
 	public static EdPoint cached(EdCurve curve, EdInteger YpX, EdInteger YmX, EdInteger Z, EdInteger T2d) { return new EdPoint(curve, Format.CACHED, YpX, YmX, Z, T2d); }
 
-	public EdPoint(EdCurve curve, Format state, EdInteger X, EdInteger Y, EdInteger Z, EdInteger T) {
+	public EdPoint(EdCurve curve, byte format, EdInteger X, EdInteger Y, EdInteger Z, EdInteger T) {
 		this.curve = curve;
-		this.state = state;
+		this.format = format;
 		this.X = X.lock();
 		this.Y = Y.lock();
 		this.Z = Z.lock();
@@ -67,7 +67,7 @@ final class EdPoint implements Serializable {
 		if ((x.isNegative() ? 1 : 0) != ((s[31] >> 7) & 1)) x.neg();
 
 		this.curve = curve;
-		this.state = Format.P3;
+		this.format = Format.P3;
 		this.X = x.lock();
 		this.Y = y;
 		this.Z = EdInteger.ONE;
@@ -89,8 +89,8 @@ final class EdPoint implements Serializable {
 
 	public byte[] toByteArray() {
 		TmpNum tt = NUMS.get();
-		switch (state) {
-			case P2: case P3: {
+		switch (format) {
+			case Format.P2: case Format.P3: {
 				EdInteger recip = tt.invert_safe.set(Z).invert();
 				EdInteger x = tt.b.set(X).mul(recip);
 				boolean flagneg = x.isNegative();
@@ -104,26 +104,41 @@ final class EdPoint implements Serializable {
 		return tt.pa.set(this).toP2().toByteArray();
 	}
 
+	public byte[] getU() {
+		TmpNum tt = NUMS.get();
+		switch (format) {
+			case Format.P2: case Format.P3: {
+				// 计算 u = (1 + y) / (1 - y)
+				EdInteger num = EdInteger.ONE.add(Y);
+				EdInteger den = EdInteger.ONE.sub(Y);
+				EdInteger u = num.mul(den.invert());
+				return u.toByteArray();
+			}
+		}
+
+		return tt.pa.set(this).toP2().toByteArray();
+	}
+
 	public EdPoint toP2() { return toRep(Format.P2); }
 	public EdPoint toP3() { return toRep(Format.P3); }
 	public EdPoint toCached() { return toRep(Format.CACHED); }
 
-	private EdPoint toRep(Format toRep) {
-		if (state == toRep) return this;
-		switch (state) {
-			case P3:
+	private EdPoint toRep(byte toRep) {
+		if (format == toRep) return this;
+		switch (format) {
+			case Format.P3:
 				switch (toRep) {
-					case P2:
+					case Format.P2:
 						if (mutable) {
-							state = Format.P2;
+							format = Format.P2;
 							NUMS.get().reserve(T);
 							T = null;
 							return this;
 						}
 						return p2(curve, X, Y, Z);
-					case CACHED:
+					case Format.CACHED:
 						if (mutable) {
-							state = Format.CACHED;
+							format = Format.CACHED;
 							EdInteger x = NUMS.get().a.set(Y).add(X);
 							Y.sub(X);
 							X.set(x);
@@ -133,11 +148,11 @@ final class EdPoint implements Serializable {
 						return cached(curve, Y.add(X), Y.sub(X), Z, T.mul(curve.twoD));
 				}
 				break;
-			case P1P1:
+			case Format.P1P1:
 				switch (toRep) {
-					case P2:
+					case Format.P2:
 						if (mutable) {
-							state = Format.P2;
+							format = Format.P2;
 							X.mul(T);
 							Y.mul(Z);
 							Z.mul(T);
@@ -146,9 +161,9 @@ final class EdPoint implements Serializable {
 							return this;
 						}
 						return p2(curve, X.mul(T), Y.mul(Z), Z.mul(T));
-					case P3:
+					case Format.P3:
 						if (mutable) {
-							state = Format.P3;
+							format = Format.P3;
 							EdInteger t = NUMS.get().a.set(X).mul(Y);
 							X.mul(T);
 							Y.mul(Z);
@@ -164,7 +179,7 @@ final class EdPoint implements Serializable {
 	}
 
 	private EdPoint[] computeSingleTable() {
-		if (state != Format.P3) throw new IllegalArgumentException();
+		if (format != Format.P3) throw new IllegalArgumentException();
 		EdPoint[] preval = new EdPoint[32*8];
 
 		TmpNum tt = NUMS.get();
@@ -198,7 +213,7 @@ final class EdPoint implements Serializable {
 		return preval;
 	}
 	private EdPoint[] computeDoubleTable() {
-		if (state != Format.P3) throw new IllegalArgumentException();
+		if (format != Format.P3) throw new IllegalArgumentException();
 		EdPoint[] preval2 = new EdPoint[8];
 
 		TmpNum tt = NUMS.get();
@@ -224,8 +239,8 @@ final class EdPoint implements Serializable {
 	}
 
 	public EdPoint dbl() {
-		switch (state) {
-			case P2: case P3:
+		switch (format) {
+			case Format.P2: case Format.P3:
 				TmpNum tt = NUMS.get();
 
 				EdInteger XX = tt.a.set(X).square();
@@ -248,7 +263,7 @@ final class EdPoint implements Serializable {
 					X.sub(Y);
 					Z = Zn;
 
-					state = Format.P1P1;
+					format = Format.P1P1;
 					return this;
 				} else {
 					EdInteger YY = Y.mutable().square();
@@ -263,8 +278,8 @@ final class EdPoint implements Serializable {
 	}
 
 	private EdPoint madd(EdPoint q) {
-		if (state != Format.P3) throw new UnsupportedOperationException();
-		if (q.state != Format.PRECOMP) throw new IllegalArgumentException();
+		if (format != Format.P3) throw new UnsupportedOperationException();
+		if (q.format != Format.PRECOMP) throw new IllegalArgumentException();
 		if (!mutable) throw new IllegalStateException();
 
 		TmpNum tt = NUMS.get();
@@ -280,12 +295,12 @@ final class EdPoint implements Serializable {
 		X.set(A).sub(B);
 		Y.set(A).add(B);
 
-		state = Format.P1P1;
+		format = Format.P1P1;
 		return this;
 	}
 	private EdPoint msub(EdPoint q) {
-		if (state != Format.P3) throw new UnsupportedOperationException();
-		if (q.state != Format.PRECOMP) throw new IllegalArgumentException();
+		if (format != Format.P3) throw new UnsupportedOperationException();
+		if (q.format != Format.PRECOMP) throw new IllegalArgumentException();
 		if (!mutable) throw new IllegalStateException();
 
 		TmpNum tt = NUMS.get();
@@ -301,13 +316,13 @@ final class EdPoint implements Serializable {
 		X.set(A).sub(B);
 		Y.set(A).add(B);
 
-		state = Format.P1P1;
+		format = Format.P1P1;
 		return this;
 	}
 
 	public EdPoint add(EdPoint q) {
-		if (state != Format.P3) throw new UnsupportedOperationException();
-		if (q.state != Format.CACHED) throw new IllegalArgumentException();
+		if (format != Format.P3) throw new UnsupportedOperationException();
+		if (q.format != Format.CACHED) throw new IllegalArgumentException();
 
 		TmpNum tt = NUMS.get();
 
@@ -325,7 +340,7 @@ final class EdPoint implements Serializable {
 			T.set(D).sub(C);
 			D.add(C);
 
-			state = Format.P1P1;
+			format = Format.P1P1;
 			return this;
 		}
 
@@ -339,8 +354,8 @@ final class EdPoint implements Serializable {
 		return p1p1(curve, A, B, D.mutable().add(C), D.sub(C));
 	}
 	public EdPoint sub(EdPoint q) {
-		if (state != Format.P3) throw new UnsupportedOperationException();
-		if (q.state != Format.CACHED) throw new IllegalArgumentException();
+		if (format != Format.P3) throw new UnsupportedOperationException();
+		if (q.format != Format.CACHED) throw new IllegalArgumentException();
 
 		TmpNum tt = NUMS.get();
 
@@ -358,7 +373,7 @@ final class EdPoint implements Serializable {
 			T.set(D).add(C);
 			D.sub(C);
 
-			state = Format.P1P1;
+			format = Format.P1P1;
 			return this;
 		}
 
@@ -373,7 +388,7 @@ final class EdPoint implements Serializable {
 	}
 
 	public EdPoint negate() {
-		if (state != Format.P3) throw new UnsupportedOperationException();
+		if (format != Format.P3) throw new UnsupportedOperationException();
 		return curve.P3_ZERO.sub(NUMS.get().pa.set(this).toCached()).toP3().lock();
 	}
 
@@ -406,7 +421,7 @@ final class EdPoint implements Serializable {
 		y.cmov(tt.a, flagneg);
 		z.cmov(tt.b.neg(), flagneg);
 
-		_t.state = Format.PRECOMP;
+		_t.format = Format.PRECOMP;
 		return _t;
 	}
 	private static byte[] toRadix16(byte[] a, byte[] e) {
@@ -528,7 +543,7 @@ final class EdPoint implements Serializable {
 		if (!mutable) throw new IllegalStateException();
 
 		curve = o.curve;
-		state = o.state;
+		format = o.format;
 		X.set(o.X);
 		Y.set(o.Y);
 		Z.set(o.Z);
@@ -555,9 +570,9 @@ final class EdPoint implements Serializable {
 	public boolean isOnCurve(EdCurve curve) {
 		TmpNum tt = NUMS.get();
 
-		switch (state) {
-			case P2:
-			case P3: {
+		switch (format) {
+			case Format.P2:
+			case Format.P3: {
 				EdInteger recip = tt.invert_safe.set(Z).invert();
 				EdInteger xx = tt.b.set(X).mul(recip).square();
 				EdInteger yy = tt.c.set(Y).mul(recip).square();
@@ -571,12 +586,11 @@ final class EdPoint implements Serializable {
 	public int hashCode() { return Arrays.hashCode(toByteArray()); }
 	public boolean equals(Object obj) {
 		if (obj == this) return true;
-		if (!(obj instanceof EdPoint)) return false;
+		if (!(obj instanceof EdPoint other)) return false;
 
-		EdPoint ge = (EdPoint) obj;
-		if (state != ge.state) {
+		if (format != other.format) {
 			try {
-				ge = ge.toRep(state);
+				other = other.toRep(format);
 			} catch (RuntimeException e) {
 				return false;
 			}
@@ -588,31 +602,31 @@ final class EdPoint implements Serializable {
 			return point1.equals(obj);
 		}
 
-		switch (state) {
-			case P2:
-			case P3: {
-				if (Z.equals(ge.Z)) return X.equals(ge.X) && Y.equals(ge.Y);
+		switch (format) {
+			case Format.P2:
+			case Format.P3: {
+				if (Z.equals(other.Z)) return X.equals(other.X) && Y.equals(other.Y);
 
-				EdInteger x1 = X.mul(ge.Z);
-				EdInteger x2 = ge.X.mul(Z);
+				EdInteger x1 = X.mul(other.Z);
+				EdInteger x2 = other.X.mul(Z);
 
-				EdInteger y1 = Y.mul(ge.Z);
-				EdInteger y2 = ge.Y.mul(Z);
+				EdInteger y1 = Y.mul(other.Z);
+				EdInteger y2 = other.Y.mul(Z);
 				return x1.equals(x2) && y1.equals(y2);
 			}
-			case P1P1: return toP2().equals(ge);
-			case PRECOMP: return X.equals(ge.X) && Y.equals(ge.Y) && Z.equals(ge.Z);
-			case CACHED: {
-				if (Z.equals(ge.Z)) return X.equals(ge.X) && Y.equals(ge.Y) && T.equals(ge.T);
+			case Format.P1P1: return toP2().equals(other);
+			case Format.PRECOMP: return X.equals(other.X) && Y.equals(other.Y) && Z.equals(other.Z);
+			case Format.CACHED: {
+				if (Z.equals(other.Z)) return X.equals(other.X) && Y.equals(other.Y) && T.equals(other.T);
 
-				EdInteger x3 = X.mul(ge.Z);
-				EdInteger x4 = ge.X.mul(Z);
+				EdInteger x3 = X.mul(other.Z);
+				EdInteger x4 = other.X.mul(Z);
 
-				EdInteger y3 = Y.mul(ge.Z);
-				EdInteger y4 = ge.Y.mul(Z);
+				EdInteger y3 = Y.mul(other.Z);
+				EdInteger y4 = other.Y.mul(Z);
 
-				EdInteger t3 = T.mul(ge.Z);
-				EdInteger t4 = ge.T.mul(Z);
+				EdInteger t3 = T.mul(other.Z);
+				EdInteger t4 = other.T.mul(Z);
 				return x3.equals(x4) && y3.equals(y4) && t3.equals(t4);
 			}
 		}

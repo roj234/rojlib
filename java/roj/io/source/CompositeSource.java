@@ -1,6 +1,6 @@
 package roj.io.source;
 
-import roj.collect.SimpleList;
+import roj.collect.ArrayList;
 import roj.io.IOUtil;
 import roj.text.CharList;
 import roj.util.DynByteBuf;
@@ -25,7 +25,7 @@ public final class CompositeSource extends Source {
 	private final long fragmentSize;
 	private boolean writable;
 
-	private final SimpleList<Object> ref;
+	private final ArrayList<Object> ref;
 
 	private CompositeSource(Source[] sources) {
 		path = null;
@@ -33,14 +33,14 @@ public final class CompositeSource extends Source {
 
 		fragmentSize = -1;
 
-		ref = SimpleList.asModifiableList((Object[]) sources);
+		ref = ArrayList.asModifiableList((Object[]) sources);
 		s = sources[0];
 	}
 	private CompositeSource(File file, long fragSize, boolean writable) throws IOException {
 		path = file.getAbsoluteFile().getParentFile();
 		name = file.getName();
 
-		ref = new SimpleList<>();
+		ref = new ArrayList<>();
 
 		for (int i = 1; i <= 999; i++) {
 			t.clear();

@@ -1,6 +1,6 @@
 package roj.http.server;
 
-import roj.collect.MyBitSet;
+import roj.collect.BitSet;
 import roj.crypt.Base64;
 import roj.crypt.CryptoFactory;
 import roj.io.IOUtil;
@@ -17,7 +17,7 @@ import java.util.concurrent.locks.ReentrantLock;
 public abstract class SessionStorage {
 	private static final int ID_LENGTH = 32;
 
-	static final MyBitSet VALID_ID = MyBitSet.from(Base64.B64_URL_SAFE);
+	static final BitSet VALID_ID = BitSet.from(Base64.B64_URL_SAFE);
 	static { VALID_ID.remove(0); }
 	public static boolean isValid(String id) {
 		if (id.length() != ID_LENGTH) return false;

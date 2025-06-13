@@ -5,9 +5,9 @@ import roj.asm.FieldNode;
 import roj.asm.Opcodes;
 import roj.asm.insn.CodeWriter;
 import roj.asm.type.Type;
+import roj.compiler.CompileContext;
+import roj.compiler.CompileUnit;
 import roj.compiler.api.FieldAccessHook;
-import roj.compiler.context.CompileUnit;
-import roj.compiler.context.LocalContext;
 import roj.compiler.diagnostic.Kind;
 
 /**
@@ -34,12 +34,12 @@ public final class FieldBridge extends FieldAccessHook {
 
 	@Override
 	public void writeRead(CodeWriter cw, String owner, FieldNode fn) {
-		if (exist && cw.mn.owner.equals(this.owner.name())) {
+		if (exist && cw.mn.owner().equals(this.owner.name())) {
 			super.writeRead(cw, owner, fn);
 		} else {
 			if (readAccessor < 0) {
 				if (readAccessor == -2) {
-					LocalContext.get().report(Kind.ERROR, "symbol.error.field.notReadable", owner, fn.name());
+					CompileContext.get().report(Kind.ERROR, "symbol.error.field.notReadable", owner, fn.name());
 					return;
 				}
 				var _realOwner = (CompileUnit) this.owner;
@@ -67,7 +67,7 @@ public final class FieldBridge extends FieldAccessHook {
 	}
 	@Override
 	public void writeWrite(CodeWriter cw, String owner, FieldNode fn) {
-		if (exist && cw.mn.owner.equals(this.owner.name())) {
+		if (exist && cw.mn.owner().equals(this.owner.name())) {
 			super.writeWrite(cw, owner, fn);
 		} else {
 			if (writeAccessor < 0) {

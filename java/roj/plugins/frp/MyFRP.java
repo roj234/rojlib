@@ -4,7 +4,7 @@
 
 package roj.plugins.frp;
 
-import roj.collect.MyHashMap;
+import roj.collect.HashMap;
 import roj.config.ConfigMaster;
 import roj.config.data.CList;
 import roj.config.data.CMap;
@@ -199,7 +199,7 @@ public class MyFRP implements ChannelHandler {
 
 	private DefaultListModel<PortMapEntry> model = new DefaultListModel<>();
 
-	private static final MyHashMap<String, String> res = new MyHashMap<>();
+	private static final HashMap<String, String> res = new HashMap<>();
 	private static String res(String name) throws IOException {
 		String v = res.get(name);
 		if (v == null) res.put(name, v = IOUtil.getTextResource("META-INF/html/"+name));

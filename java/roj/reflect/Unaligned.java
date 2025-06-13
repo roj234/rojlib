@@ -1,12 +1,14 @@
 package roj.reflect;
 
+import roj.asm.Opcodes;
 import roj.io.IOUtil;
 import roj.text.logging.Logger;
+import roj.util.Helpers;
 import sun.misc.Unsafe;
 
 import java.lang.reflect.Field;
 
-import static roj.reflect.VMInternals.u;
+import static roj.reflect.Reflection.u;
 
 /**
  * 允许运行时不存在sun.misc.Unsafe的情况(WIP)
@@ -82,41 +84,56 @@ public interface Unaligned {
 
 	/** The value of {@code addressSize()} */
 	int ADDRESS_SIZE = Unsafe.ADDRESS_SIZE;
+
+	/**
+	 * Reports the size in bytes of a native memory page (whatever that is).
+	 * This value will always be a power of two.
+	 */
+	int PAGE_SIZE = u.pageSize();
+
+	static long fieldOffset(Class<?> type, String fieldName) {
+		try {
+			var field = Reflection.getField(type, fieldName);
+			return (field.getModifiers() & Opcodes.ACC_STATIC) == 0 ? U.objectFieldOffset(field) : U.staticFieldOffset(field);
+		} catch (Exception e) {
+			Helpers.athrow(e);
+			return 0;
+		}
+	}
 	//endregion
 
 	@interface Name { String value();}
 
 	Unaligned U = init();
+	// should be a simple static{} !
+	// Lava supports.
 	private static Unaligned init() {
-		if (ReflectionUtils.JAVA_VERSION > 8) {
-			try (var in = Unaligned.class.getClassLoader().getResourceAsStream("roj/reflect/Unaligned$.class")) {
-				byte[] ref = new byte[8776];
-				IOUtil.readFully(in, ref);
-				if (in.read() >= 0) throw new AssertionError("data corrupt");
-				if (ReflectionUtils.BIG_ENDIAN) {
+		if (Reflection.JAVA_VERSION > 8) {
+			try {
+				// hard-coded offset & size
+				byte[] ref = Reflection.readExact("roj/reflect/Unaligned$.class", 8776);
+				if (Reflection.BIG_ENDIAN) {
 					for (int i = 3804; i < 3804 + 10 * 12; i += 10) {
 						ref[i] = (byte) (ref[i] == 'B' ? 'L' : 'B');
 					}
 				}
-				if (ReflectionUtils.JAVA_VERSION > 21) {
+				if (Reflection.JAVA_VERSION > 21) {
 					ref[ 115] = 14; // super();
 					ref[4094] = 14; // extends Object
 					ref[4098] = 12; // implements Runnable
 
 					// Not able to use ACCESS_VM_ANNOTATIONS here...
-					VMInternals._ImplLookup.defineClass(ref);
+					Reflection.IMPL_LOOKUP.defineClass(ref);
 					ref = IOUtil.getResource("roj/reflect/Unaligned$2.class", Unaligned.class);
 				}
-				// it actually does, it should have static{} !
-				// lavac does.
-				var type = VMInternals.DefineWeakClass("roj.reflect.Unaligned", ref);
+				var type = Reflection.DefineWeakClass("roj.reflect.Unaligned", ref);
 				return (Unaligned) u.allocateInstance(type);
 			} catch (Throwable e) {
 				e.printStackTrace();
 			}
 		}
 
-		Logger.FALLBACK.fatal("NativeAccess初始化失败！！！");
+		Logger.FALLBACK.fatal("Unaligned初始化失败！！！");
 		return new Unaligned() {};
 	}
 
@@ -135,6 +152,30 @@ public interface Unaligned {
 		throw new AssertionError(componentType+"不是基本类型");
 	}
 
+	/**
+	 * Allocates an instance but does not run any constructor.
+	 * Initializes the class if it has not yet been.
+	 */
+	default Object allocateInstance(Class<?> cls) throws InstantiationException {return u.allocateInstance(cls);}
+
+	/**
+	 * Detects if the given class may need to be initialized. This is often
+	 * needed in conjunction with obtaining the static field base of a
+	 * class.
+	 *
+	 * @return false only if a call to {@code ensureClassInitialized} would have no effect
+	 *
+	 */
+	default boolean shouldBeInitialized(Class<?> c) {return u.shouldBeInitialized(c);}
+
+	/**
+	 * Ensures the given class has been initialized. This is often
+	 * needed in conjunction with obtaining the static field base of a
+	 * class.
+	 */
+	default void ensureClassInitialized(Class<?> c) {u.ensureClassInitialized(c);}
+
+	//region 内存读写
 	default int get16UL(Object o, long offset) {return (u.getByte(o, offset++) & 0xFF) | (u.getByte(o, offset) & 0xFF) << 8;}
 	default int get32UL(Object o, long offset) {return (u.getByte(o, offset++) & 0xFF) | (u.getByte(o, offset++) & 0xFF) << 8 | (u.getByte(o, offset++) & 0xFF) << 16 | (u.getByte(o, offset) & 0xFF) << 24;}
 	default long get64UL(Object o, long offset) {
@@ -256,125 +297,8 @@ public interface Unaligned {
 
 	default long getAddress(long address) {return u.getAddress(address);}
 	default void putAddress(long address, long x) {u.putAddress(address, x);}
-
-	default long allocateMemory(long bytes) {return u.allocateMemory(bytes);}
-	default long reallocateMemory(long address, long bytes) {return u.reallocateMemory(address, bytes);}
-	default void setMemory(Object o, long offset, long bytes, byte value) {u.setMemory(o, offset, bytes, value);}
-	default void setMemory(long address, long bytes, byte value) {u.setMemory(address, bytes, value);}
-	default void copyMemory(Object srcBase, long srcOffset, Object destBase, long destOffset, long bytes) {u.copyMemory(srcBase, srcOffset, destBase, destOffset, bytes);}
-	default void copyMemory(long srcAddress, long destAddress, long bytes) {u.copyMemory(srcAddress, destAddress, bytes);}
-	default void freeMemory(long address) {u.freeMemory(address);}
-
-	/// random queries
-
-	/**
-	 * Reports the location of a given field in the storage allocation of its
-	 * class.  Do not expect to perform any sort of arithmetic on this offset;
-	 * it is just a cookie which is passed to the unsafe heap memory accessors.
-	 *
-	 * <p>Any given field will always have the same offset and base, and no
-	 * two distinct fields of the same class will ever have the same offset
-	 * and base.
-	 *
-	 * <p>As of 1.4.1, offsets for fields are represented as long values,
-	 * although the Sun JVM does not use the most significant 32 bits.
-	 * However, JVM implementations which store static fields at absolute
-	 * addresses can use long offsets and null base pointers to express
-	 * the field locations in a form usable by {@link #getInt(Object,long)}.
-	 * Therefore, code which will be ported to such JVMs on 64-bit platforms
-	 * must preserve all bits of static field offsets.
-	 * @see #getInt(Object, long)
-	 */
-	default long objectFieldOffset(Field f) {return u.objectFieldOffset(f);}
-
-	/**
-	 * Reports the location of a given static field, in conjunction with {@link
-	 * #staticFieldBase}.
-	 * <p>Do not expect to perform any sort of arithmetic on this offset;
-	 * it is just a cookie which is passed to the unsafe heap memory accessors.
-	 *
-	 * <p>Any given field will always have the same offset, and no two distinct
-	 * fields of the same class will ever have the same offset.
-	 *
-	 * <p>As of 1.4.1, offsets for fields are represented as long values,
-	 * although the Sun JVM does not use the most significant 32 bits.
-	 * It is hard to imagine a JVM technology which needs more than
-	 * a few bits to encode an offset within a non-array object,
-	 * However, for consistency with other methods in this class,
-	 * this method reports its result as a long value.
-	 * @see #getInt(Object, long)
-	 */
-	default long staticFieldOffset(Field f) {return u.staticFieldOffset(f);}
-
-	/**
-	 * Reports the location of a given static field, in conjunction with {@link
-	 * #staticFieldOffset}.
-	 * <p>Fetch the base "Object", if any, with which static fields of the
-	 * given class can be accessed via methods like {@link #getInt(Object,
-	 * long)}.  This value may be null.  This value may refer to an object
-	 * which is a "cookie", not guaranteed to be a real Object, and it should
-	 * not be used in any way except as argument to the get and put routines in
-	 * this class.
-	 */
-	default Object staticFieldBase(Field f) {return u.staticFieldBase(f);}
-
-	/**
-	 * Detects if the given class may need to be initialized. This is often
-	 * needed in conjunction with obtaining the static field base of a
-	 * class.
-	 *
-	 * @return false only if a call to {@code ensureClassInitialized} would have no effect
-	 *
-	 */
-	default boolean shouldBeInitialized(Class<?> c) {return u.shouldBeInitialized(c);}
-
-	/**
-	 * Ensures the given class has been initialized. This is often
-	 * needed in conjunction with obtaining the static field base of a
-	 * class.
-	 */
-	default void ensureClassInitialized(Class<?> c) {u.ensureClassInitialized(c);}
-
-	/**
-	 * Reports the offset of the first element in the storage allocation of a
-	 * given array class.  If {@link #arrayIndexScale} returns a non-zero value
-	 * for the same class, you may use that scale factor, together with this
-	 * base offset, to form new offsets to access elements of arrays of the
-	 * given class.
-	 *
-	 * @see #getInt(Object, long)
-	 * @see #putInt(Object, long, int)
-	 */
-	default int arrayBaseOffset(Class<?> arrayClass) {return u.arrayBaseOffset(arrayClass);}
-
-	/**
-	 * Reports the scale factor for addressing elements in the storage
-	 * allocation of a given array class.  However, arrays of "narrow" types
-	 * will generally not work properly with accessors like {@link
-	 * #getByte(Object, long)}, so the scale factor for such classes is reported
-	 * as zero.
-	 *
-	 * @see #arrayBaseOffset
-	 * @see #getInt(Object, long)
-	 * @see #putInt(Object, long, int)
-	 */
-	default int arrayIndexScale(Class<?> arrayClass) {return u.arrayIndexScale(arrayClass);}
-
-	/**
-	 * Reports the size in bytes of a native memory page (whatever that is).
-	 * This value will always be a power of two.
-	 */
-	default int pageSize() {return u.pageSize();}
-
-
-	/// random trusted operations from JNI:
-
-	/**
-	 * Allocates an instance but does not run any constructor.
-	 * Initializes the class if it has not yet been.
-	 */
-	default Object allocateInstance(Class<?> cls) throws InstantiationException {return u.allocateInstance(cls);}
-
+	//endregion
+	//region Atomic & Barrier
 	/**
 	 * Atomically updates Java variable to {@code x} if it is currently
 	 * holding {@code expected}.
@@ -456,22 +380,6 @@ public interface Unaligned {
 	@Name("putLongRelease")
 	default void putOrderedLong(Object o, long offset, long x) {u.putOrderedLong(o, offset, x);}
 
-	/**
-	 * Gets the load average in the system run queue assigned
-	 * to the available processors averaged over various periods of time.
-	 * This method retrieves the given {@code nelem} samples and
-	 * assigns to the elements of the given {@code loadavg} array.
-	 * The system imposes a maximum of 3 samples, representing
-	 * averages over the last 1,  5,  and  15 minutes, respectively.
-	 *
-	 * @param loadavg an array of double of size nelems
-	 * @param nelems the number of samples to be retrieved and
-	 *        must be 1 to 3.
-	 *
-	 * @return the number of samples actually retrieved; or -1
-	 *         if the load average is unobtainable.
-	 */
-	default int getLoadAverage(double[] loadavg, int nelems) {return u.getLoadAverage(loadavg, nelems);}
 	default int getAndAddInt(Object o, long offset, int delta) {return u.getAndAddInt(o, offset, delta);}
 	default long getAndAddLong(Object o, long offset, long delta) {return u.getAndAddLong(o, offset, delta);}
 	default int getAndSetInt(Object o, long offset, int newValue) {return u.getAndSetInt(o, offset, newValue);}
@@ -515,6 +423,81 @@ public interface Unaligned {
 	 * @since 1.8
 	 */
 	default void fullFence() {u.fullFence();}
+	//endregion
+
+	default long allocateMemory(long bytes) {return u.allocateMemory(bytes);}
+	default long reallocateMemory(long address, long bytes) {return u.reallocateMemory(address, bytes);}
+	default void setMemory(Object o, long offset, long bytes, byte value) {u.setMemory(o, offset, bytes, value);}
+	default void setMemory(long address, long bytes, byte value) {u.setMemory(address, bytes, value);}
+	default void copyMemory(Object srcBase, long srcOffset, Object destBase, long destOffset, long bytes) {u.copyMemory(srcBase, srcOffset, destBase, destOffset, bytes);}
+	default void copyMemory(long srcAddress, long destAddress, long bytes) {u.copyMemory(srcAddress, destAddress, bytes);}
+	default void freeMemory(long address) {u.freeMemory(address);}
+
+	/// random queries
+
+	/**
+	 * Use {@link Unaligned#fieldOffset(Class, String)} instead
+	 */
+	default long objectFieldOffset(Field f) {return u.objectFieldOffset(f);}
+	/**
+	 * Use {@link Unaligned#fieldOffset(Class, String)} instead
+	 */
+	default long staticFieldOffset(Field f) {return u.staticFieldOffset(f);}
+
+	/**
+	 * Reports the location of a given static field, in conjunction with {@link
+	 * #staticFieldOffset}.
+	 * <p>Fetch the base "Object", if any, with which static fields of the
+	 * given class can be accessed via methods like {@link #getInt(Object,
+	 * long)}.  This value may be null.  This value may refer to an object
+	 * which is a "cookie", not guaranteed to be a real Object, and it should
+	 * not be used in any way except as argument to the get and put routines in
+	 * this class.
+	 */
+	default Object staticFieldBase(Field f) {return u.staticFieldBase(f);}
+
+	/**
+	 * Reports the offset of the first element in the storage allocation of a
+	 * given array class.  If {@link #arrayIndexScale} returns a non-zero value
+	 * for the same class, you may use that scale factor, together with this
+	 * base offset, to form new offsets to access elements of arrays of the
+	 * given class.
+	 *
+	 * @see #getInt(Object, long)
+	 * @see #putInt(Object, long, int)
+	 */
+	default int arrayBaseOffset(Class<?> arrayClass) {return u.arrayBaseOffset(arrayClass);}
+
+	/**
+	 * Reports the scale factor for addressing elements in the storage
+	 * allocation of a given array class.  However, arrays of "narrow" types
+	 * will generally not work properly with accessors like {@link
+	 * #getByte(Object, long)}, so the scale factor for such classes is reported
+	 * as zero.
+	 *
+	 * @see #arrayBaseOffset
+	 * @see #getInt(Object, long)
+	 * @see #putInt(Object, long, int)
+	 */
+	default int arrayIndexScale(Class<?> arrayClass) {return u.arrayIndexScale(arrayClass);}
+
+	/**
+	 * Gets the load average in the system run queue assigned
+	 * to the available processors averaged over various periods of time.
+	 * This method retrieves the given {@code nelem} samples and
+	 * assigns to the elements of the given {@code loadavg} array.
+	 * The system imposes a maximum of 3 samples, representing
+	 * averages over the last 1,  5,  and  15 minutes, respectively.
+	 *
+	 * @param loadavg an array of double of size nelems
+	 * @param nelems the number of samples to be retrieved and
+	 *        must be 1 to 3.
+	 *
+	 * @return the number of samples actually retrieved; or -1
+	 *         if the load average is unobtainable.
+	 */
+	default int getLoadAverage(double[] loadavg, int nelems) {return u.getLoadAverage(loadavg, nelems);}
+
 
 	default void invokeCleaner(java.nio.ByteBuffer directBuffer) {u.invokeCleaner(directBuffer);}
 }

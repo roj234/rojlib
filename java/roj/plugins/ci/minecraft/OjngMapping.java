@@ -5,7 +5,7 @@ import roj.asm.MemberDescriptor;
 import roj.asm.type.TypeHelper;
 import roj.asmx.mapper.Mapping;
 import roj.collect.FilterList;
-import roj.collect.SimpleList;
+import roj.collect.ArrayList;
 import roj.io.FastFailException;
 import roj.text.LineReader;
 import roj.text.TextReader;
@@ -23,7 +23,7 @@ import java.util.Map;
  */
 final class OjngMapping extends Mapping {
 	public void load(File client, File server) throws IOException {
-		SimpleList<String> tmp = new SimpleList<>(5);
+		ArrayList<String> tmp = new ArrayList<>(5);
 
 		if (client != null) {
 			try (TextReader tr = TextReader.auto(client)) {

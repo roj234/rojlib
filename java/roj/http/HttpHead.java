@@ -2,7 +2,7 @@ package roj.http;
 
 import org.jetbrains.annotations.Nullable;
 import roj.WillChange;
-import roj.collect.SimpleList;
+import roj.collect.ArrayList;
 import roj.math.Version;
 import roj.text.URICoder;
 import roj.util.DynByteBuf;
@@ -114,7 +114,7 @@ public class HttpHead extends Headers {
 		String field = header("set-cookie");
 		if (field.isEmpty()) return Collections.emptyList();
 
-		List<Cookie> cookies = new SimpleList<>();
+		List<Cookie> cookies = new ArrayList<>();
 		complexValue(field, new BiConsumer<>() {
 			Cookie cookie;
 

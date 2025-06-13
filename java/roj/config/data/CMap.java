@@ -3,7 +3,8 @@ package roj.config.data;
 import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
-import roj.collect.MyHashMap;
+import roj.collect.HashMap;
+import roj.collect.LinkedHashMap;
 import roj.config.TOMLParser;
 import roj.config.Tokenizer;
 import roj.config.serial.CVisitor;
@@ -28,8 +29,8 @@ public class CMap extends CEntry {
 	protected Map<String, CEntry> properties;
 	boolean dot;
 
-	public CMap() { properties = new MyHashMap<>(); }
-	public CMap(int initialCapacity) { properties = new MyHashMap<>(initialCapacity); }
+	public CMap() { properties = new HashMap<>(); }
+	public CMap(int initialCapacity) { properties = new HashMap<>(initialCapacity); }
 	public CMap(Map<String, CEntry> properties) { this.properties = properties; }
 
 	public Type getType() { return Type.MAP; }
@@ -61,7 +62,7 @@ public class CMap extends CEntry {
 
 	public final Map<String, CEntry> raw() { return properties; }
 	public final Map<String, Object> unwrap() {
-		MyHashMap<String, Object> rawdata = Helpers.cast(new MyHashMap<>(properties));
+		HashMap<String, Object> rawdata = Helpers.cast(properties instanceof LinkedHashMap ? new LinkedHashMap<>(properties) : new HashMap<>(properties));
 		for (var entry : rawdata.entrySet()) {
 			entry.setValue(((CEntry) entry.getValue()).unwrap());
 		}
@@ -148,7 +149,7 @@ public class CMap extends CEntry {
 	public final boolean getBool(String key) {return getBool(key, false);}
 	public final boolean getBool(String key, boolean def) {
 		CEntry entry = get(key);
-		return entry.mayCastTo(Type.BOOL) && entry.asBool() || def;
+		return entry.mayCastTo(Type.BOOL) ? entry.asBool() : def;
 	}
 	@NotNull
 	public final String getString(String key) {return getString(key, "");}
@@ -353,7 +354,7 @@ public class CMap extends CEntry {
 	}
 
 	public static class Commentable extends CMap {
-		public Map<String, String> comments = new MyHashMap<>();
+		public Map<String, String> comments = new HashMap<>();
 
 		public Commentable() {}
 		public Commentable(Map<String, CEntry> properties) { super(properties); }

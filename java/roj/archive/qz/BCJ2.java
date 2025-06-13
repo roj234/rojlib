@@ -1,8 +1,8 @@
 package roj.archive.qz;
 
 import org.jetbrains.annotations.NotNull;
-import roj.archive.qz.xz.rangecoder.RangeDecoderFromStream;
-import roj.archive.qz.xz.rangecoder.RangeEncoderToStream;
+import roj.archive.xz.rangecoder.RangeDecoderFromStream;
+import roj.archive.xz.rangecoder.RangeEncoderToStream;
 import roj.io.CorruptedInputException;
 import roj.io.Finishable;
 import roj.io.IOUtil;
@@ -14,16 +14,16 @@ import java.io.OutputStream;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static java.lang.Integer.MIN_VALUE;
-import static roj.archive.qz.xz.rangecoder.RangeCoder.initProbs;
+import static roj.archive.xz.rangecoder.RangeCoder.initProbs;
 /**
  * @author Roj234
  * @since 2023/5/29 12:26
  */
 public final class BCJ2 extends QZComplexCoder {
-	private final int segmentSize;
+	private int fileSize;
 
-	public BCJ2() { segmentSize = 64<<20; }
-	public BCJ2(int size) { segmentSize = size; }
+	public BCJ2() {}
+	public BCJ2(int fileSize) { this.fileSize = fileSize; }
 
 	private static final byte[] id = {3,3,1,27};
 	public byte[] id() {return id;}
@@ -31,7 +31,7 @@ public final class BCJ2 extends QZComplexCoder {
 	public int useCount() {return 4;}
 	public int provideCount() {return 1;}
 
-	public OutputStream[] complexEncode(OutputStream[] out) {return new OutputStream[] { new Encoder(out[0], out[1], out[2], out[3]) };}
+	public OutputStream[] complexEncode(OutputStream[] out) {return new OutputStream[] { new Encoder(out[0], out[1], out[2], out[3], fileSize) };}
 
 	public InputStream[] complexDecode(InputStream[] in, long[] uncompressedSize, int sizeBegin, AtomicInteger memoryLimit) throws IOException {
 		useMemory(memoryLimit, 10);
@@ -41,24 +41,18 @@ public final class BCJ2 extends QZComplexCoder {
 	static final class Encoder extends OutputStream implements Finishable {
 		private final OutputStream main, call, jump;
 		private final RangeEncoderToStream rc;
-		Encoder(OutputStream main, OutputStream call, OutputStream jump, OutputStream rc) {
+		Encoder(OutputStream main, OutputStream call, OutputStream jump, OutputStream rc, int fileSize) {
 			this.main = main;
 			this.call = call;
 			this.jump = jump;
 			this.rc = new RangeEncoderToStream(rc);
+			this.fileSize = fileSize;
 
 			initProbs(probs);
 		}
 
-		private static final int
-			BCJ2_RELAT_LIMIT_NUM_BITS = 26,
-			BCJ2_RELAT_LIMIT = 1 << BCJ2_RELAT_LIMIT_NUM_BITS;
-
-		private int fileSize; /* (fileSize <= ((UInt32)1 << 31)), 0 means no_limit */
-		private int relatLimit = BCJ2_RELAT_LIMIT; /* (relatLimit <= ((UInt32)1 << 31)), 0 means desable_conversion */
-
-		public void setFileSize(int fileSize) { this.fileSize = fileSize; }
-		public void setRelatLimit(int relatLimit) { this.relatLimit = relatLimit; }
+		private int fileSize; /* 跳转目标必须在文件范围内，避免无效转换。设置为0时忽略 */
+		private int relativeLimit = 67108864; /* 相对跳转偏移量限制, 默认不转换超过64MB, 设置为0时禁用跳转转换, 这么做没有意义 */
 
 		private final ByteList ob = new ByteList();
 		private int offset = 0, b = -1;
@@ -132,7 +126,7 @@ public final class BCJ2 extends QZComplexCoder {
 
 				// 多线程实现方式不同，似乎没有v23.01提到的corner case
 				if ((fileSize == 0 || (offset+4+v)+MIN_VALUE < fileSize+MIN_VALUE)
-					&& ((v+relatLimit) >>> 1)+MIN_VALUE < relatLimit+MIN_VALUE) {
+					&& ((v+relativeLimit) >>> 1)+MIN_VALUE < relativeLimit+MIN_VALUE) {
 					rc.encodeBit(probs, idx, 1);
 
 					// 吐槽同上
@@ -169,7 +163,7 @@ public final class BCJ2 extends QZComplexCoder {
 				ob.writeToStream(main);
 				ob._free();
 				rc.finish();
-				rc.release();
+				rc.free();
 				if (main instanceof Finishable f) f.finish();
 				if (call instanceof Finishable f) f.finish();
 				if (jump instanceof Finishable f) f.finish();

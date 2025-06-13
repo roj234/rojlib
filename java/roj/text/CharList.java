@@ -1,9 +1,9 @@
 package roj.text;
 
 import org.jetbrains.annotations.NotNull;
+import roj.collect.BitSet;
 import roj.collect.CharMap;
-import roj.collect.MyBitSet;
-import roj.collect.MyHashMap;
+import roj.collect.HashMap;
 import roj.collect.TrieTree;
 import roj.config.data.CInt;
 import roj.io.IOUtil;
@@ -173,14 +173,14 @@ public class CharList implements CharSequence, Appendable {
 	// region search
 	public final boolean contains(CharSequence s) {return indexOf(s, 0) >= 0;}
 	public final boolean containsAny(TrieTree<?> map) {return indexOf(map, 0) >= 0;}
-	public final boolean containsAny(MyBitSet map) {return indexOf(map, 0) >= 0;}
+	public final boolean containsAny(BitSet map) {return indexOf(map, 0) >= 0;}
 	public final int indexOf(CharSequence s) { return indexOf(s, 0); }
 	public final int indexOf(CharSequence s, int from) { return doMatch(s, from, len-s.length()+1); }
 	public final boolean startsWith(CharSequence s) { return s.length() == 0 || doMatch(s, 0, 1) >= 0; }
 	public final boolean endsWith(CharSequence s) { return s.length() == 0 || (len >= s.length() && doMatch(s, len-s.length(), len-s.length()+1) >= 0); }
 
 	public final int indexOf(TrieTree<?> map, int pos) {
-		var entry = new MyHashMap.Entry<>(new CInt(), null);
+		var entry = new HashMap.Entry<>(new CInt(), null);
 		while (pos < len) {
 			map.match(this, pos, len, Helpers.cast(entry));
 			int len = entry.getKey().value;
@@ -194,7 +194,7 @@ public class CharList implements CharSequence, Appendable {
 
 		return -1;
 	}
-	public final int indexOf(MyBitSet map, int pos) {
+	public final int indexOf(BitSet map, int pos) {
 		while (pos < len) {
 			if (map.contains(list[pos])) return pos;
 			pos++;
@@ -493,7 +493,7 @@ public class CharList implements CharSequence, Appendable {
 		return this;
 	}
 
-	public final CharList trimLast() {
+	public final CharList rtrim() {
 		int len = this.len;
 		char[] val = list;    /* avoid getfield opcode */
 
@@ -591,7 +591,7 @@ public class CharList implements CharSequence, Appendable {
 
 		int pos = 0;
 
-		MyHashMap.Entry<CInt, String> entry = new MyHashMap.Entry<>(new CInt(), null);
+		HashMap.Entry<CInt, String> entry = new HashMap.Entry<>(new CInt(), null);
 		while (pos < len) {
 			map.match(this, pos, len, entry);
 			int len = entry.getKey().value;

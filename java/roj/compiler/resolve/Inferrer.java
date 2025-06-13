@@ -6,12 +6,12 @@ import roj.asm.MethodNode;
 import roj.asm.Opcodes;
 import roj.asm.attr.Attribute;
 import roj.asm.type.*;
-import roj.collect.MyHashMap;
+import roj.collect.HashMap;
+import roj.compiler.CompileContext;
+import roj.compiler.LavaCompiler;
 import roj.compiler.api.Types;
 import roj.compiler.asm.Asterisk;
 import roj.compiler.ast.expr.Lambda;
-import roj.compiler.context.GlobalContext;
-import roj.compiler.context.LocalContext;
 import roj.util.ArrayCache;
 
 import java.util.Collections;
@@ -25,27 +25,27 @@ import java.util.Map;
  */
 public final class Inferrer {
 	public static final MethodResult
-		FAIL_ARGCOUNT = new MethodResult(TypeCast.E_GEN_PARAM_COUNT, ArrayCache.OBJECTS),
+		FAIL_ARGCOUNT = new MethodResult(-97, ArrayCache.OBJECTS),
 		FAIL_GENERIC = new MethodResult(TypeCast.E_GEN_PARAM_COUNT, ArrayCache.OBJECTS);
 
 	private static final int LEVEL_DEPTH = 5120;
 
-	private final LocalContext ctx;
+	private final CompileContext ctx;
 	private final TypeCast castChecker = new TypeCast();
 
 	// 类型参数的当前类型
-	private final Map<String, IType> typeParams = new MyHashMap<>();
+	private final Map<String, IType> typeParams = new HashMap<>();
 	// 类型参数的上界
-	private final Map<String, List<IType>> typeParamBounds = new MyHashMap<>();
+	private final Map<String, List<IType>> typeParamBounds = new HashMap<>();
 
 	@Nullable
 	private Signature sign;
 	private IType[] bounds;
 
-	public Inferrer(LocalContext ctx) {
+	public Inferrer(CompileContext ctx) {
 		this.ctx = ctx;
 		this.castChecker.typeParams = typeParamBounds;
-		this.castChecker.context = ctx.classes;
+		this.castChecker.context = ctx.compiler;
 	}
 
 	public MethodResult getGenericParameters(ClassNode info, MethodNode method, @Nullable IType instanceType) {
@@ -69,7 +69,7 @@ public final class Inferrer {
 	 */
 	@SuppressWarnings("fallthrough")
 	public MethodResult infer(ClassNode owner, MethodNode mn, IType instanceType, List<IType> input) {
-		this.castChecker.context = ctx.classes;
+		this.castChecker.context = ctx.compiler;
 
 		List<? extends IType> mpar;
 		int mnSize;
@@ -156,7 +156,7 @@ public final class Inferrer {
 			distance += LEVEL_DEPTH*2;
 
 			IType type = mpar.get(vararg);
-			if (type.array() == 0) throw ResolveException.ofIllegalInput("inferrer.illegalVararg", mn.owner, mn.name());
+			if (type.array() == 0) throw ResolveException.ofIllegalInput("inferrer.illegalVararg", mn.owner(), mn.name());
 			IType componentType = TypeHelper.componentType(type);
 
 			if (inSize == vararg) {
@@ -233,7 +233,7 @@ public final class Inferrer {
 	/**
 	 * 警告: override mode现在不检查参数数量
 	 */
-	public MethodResult inferOverride(LocalContext ctx, MethodNode overriden, Type type, List<IType> argument) {
+	public MethodResult inferOverride(CompileContext ctx, MethodNode overriden, Type type, List<IType> argument) {
 		overrideMode = true;
 		var mr = new MethodListSingle(overriden, false).findMethod(ctx, type, argument, 0);
 		overrideMode = false;
@@ -259,7 +259,7 @@ public final class Inferrer {
 				}
 			}
 		} else {
-			GlobalContext.debugLogger().warn("Unknown from type: "+from);
+			LavaCompiler.debugLogger().warn("Unknown from type: "+from);
 		}
 
 		return TypeCast.ERROR(TypeCast.E_NEVER);
@@ -271,7 +271,7 @@ public final class Inferrer {
 				return TypeCast.RESULT(TypeCast.UPCAST, 0);
 
 			if (!to.isPrimitive()) {
-				var mn = ctx.classes.getResolveHelper(ctx.resolve(to)).getLambdaMethod();
+				var mn = ctx.compiler.link(ctx.resolve(to)).getLambdaMethod();
 				if (mn != null) {
 					if (mn.parameters().size() == lambdaArgCount)
 						return TypeCast.RESULT(TypeCast.UPCAST, 0);
@@ -376,14 +376,15 @@ public final class Inferrer {
 				if (exact.genericType() == IType.ASTERISK_TYPE) return exact;
 				if (exact.genericType() == IType.ANY_TYPE) return Types.OBJECT_TYPE;//Asterisk.anyType;
 
+				// FIXME 250605 is correct ?
 				if (tt.array() > 0) {
 					exact = exact.clone();
-					exact.setArrayDim(exact.array()+tt.array());
+					exact.setArrayDim(tt.array());
 				}
 
 				var bound = bounds.get(tt.name);
 				if (tt.extendType == Generic.EX_SUPER) {
-					GlobalContext.debugLogger().warn("EX_SUPER how to deal? typeParam={}, realType={}", tt, exact);
+					LavaCompiler.debugLogger().warn("EX_SUPER how to deal? typeParam={}, realType={}", tt, exact);
 					return exact;
 				}
 

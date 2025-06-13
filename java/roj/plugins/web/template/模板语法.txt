@@ -1,0 +1,98 @@
+#c 快速模式，如果你的代码很快，那么可以在HTTP服务线程上处理降低延迟
+#fast
+#c 调试模式，也可以在配置中开启或关闭，开启后模板修改后会实时更新
+#debug
+#c 导入包，只能导入配置文件规定的白名单内的包
+#import java.util.*
+#c 别名
+#import java.util.List as Vector
+#c 导入白名单中不冲突的所有类
+#import *
+#c 取消导入某个类
+#import -java.awt.List
+#c 静态导入，这些语法基本和java相同
+#import static java.util.Collections.emptyList
+
+#c 注意，一旦出现注释和command之外的行，例如上面是一个空行，那么元数据到此为止，后续只能使用directive
+##这是转义，只会显示一个#，出现在输出里
+
+#c 表达式
+<p>你好，来自${request.remoteAddress()}的人！</p>
+
+#c 条件
+#if DateTime.local().parse(System.currentTimeMillis())[DateTime.HOUR] < 5
+<p>现在很晚了，要早点睡觉哦</p>
+#elif false
+喵喵喵
+#else
+<p>时间还早，起来嗨</p>
+#/if
+
+#c 循环
+#for var i = 0; i < 10; i++
+<p>${i}. Lorem ipsum</p>
+#/for
+
+#for var item : db.query("xxx")
+<p>另外一种循环方式</p>
+#/for
+
+#c 参数传递
+#c 最好使用一个实体类(Pojo)
+#c Map也是支持的，但是实体类支持自动注入变量
+#c 例如这样的定义 class TestPojo { String title; } 那么就可以使用下面的代码
+#c <p>title=${title}</p>
+#c 而使用Map时必须手动使用param.get
+
+#c 需要注意的是，如果创建了同名变量，那么会优先使用这个变量，而不是模板参数
+#c 不过，无论何时都可以使用param访问这个实体类，例如param.title
+#c 保留的变量名称共有三个：Request request、ResponseWriter response、? param
+
+
+#c 模板导入
+#c 导入不需要考虑参数的传递，它相当于把被导入的模板按字符串拷贝到当前模板中
+#include common_body.tpl
+
+
+#c 模板调用
+#c 调用时需要注意参数的传递，相当于调用模板的渲染函数
+#c 参数类型会在编译期检查，如果上下文中没有它要求的参数类型，可以使用代码块准备
+#call fabulously_title_animation.tpl param.title
+
+#c 模板块（可复用部分）
+#c 不过更推荐使用call，因为call可以被其它模板复用，而block只能在当前模板使用
+#block myTitle(String title)
+<title>${title}</title>
+#/block
+
+#c 可以这样调用
+#call @myTitle "标题"
+
+#c 代码块和作用域
+
+#code
+var ua = request.header("User-Agent");
+#/code
+
+#{
+#code
+// 上一个code定义的变量可以被后续代码使用
+String myText = "<font color='red'>"+ua+"不是红色的</font>";
+
+// 另外，可以在代码块里使用模板块，例如
+myTitle(request,response,param,"代码块");
+
+// 也可以直接写，但是不推荐
+response.write("我来自代码！<br>\n");
+#/code
+
+
+#c 转义
+#c 这个不是红色的，所有String类型都会自动转义
+<p>${myText}</p>
+#c 除非使用不转义输出
+<p>${rawText(myText)}除非在这里</p>
+
+#}
+#c 通过第二个code块前的#{和#}，我们创建了一个作用域，这个位置无法再使用myText
+#c 但是变量ua未被包括，依然可用

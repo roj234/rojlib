@@ -1,13 +1,13 @@
 package roj.archive.zip;
 
 import roj.archive.ArchiveEntry;
-import roj.collect.RSegmentTree;
+import roj.collect.IntervalPartition;
+import roj.concurrent.OperationDone;
 import roj.crypt.CRC32;
 import roj.text.DateTime;
 import roj.text.TextUtil;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
-import roj.util.Helpers;
 
 import java.nio.file.attribute.FileTime;
 import java.util.TimeZone;
@@ -20,7 +20,7 @@ import static roj.archive.zip.ZipFile.*;
  * @author Roj234
  * @since 2023/3/14 0:43
  */
-public class ZEntry implements RSegmentTree.Range, ArchiveEntry, Cloneable {
+public class ZEntry implements IntervalPartition.Range, ArchiveEntry, Cloneable {
 	//00: no compression
 	//08: deflated
 	//14: LZMA
@@ -440,7 +440,7 @@ public class ZEntry implements RSegmentTree.Range, ArchiveEntry, Cloneable {
 		try {
 			return (ZEntry) super.clone();
 		} catch (CloneNotSupportedException e) {
-			return Helpers.nonnull();
+			throw OperationDone.NEVER;
 		}
 	}
 

@@ -3,14 +3,14 @@ package roj.asm;
 import org.jetbrains.annotations.Nullable;
 import roj.asm.type.IType;
 import roj.asm.type.Type;
+import roj.collect.ArrayList;
 import roj.collect.CollectionX;
-import roj.collect.MyHashMap;
-import roj.collect.SimpleList;
+import roj.collect.HashMap;
 import roj.collect.ToIntMap;
-import roj.compiler.context.GlobalContext;
-import roj.compiler.context.LibraryClassLoader;
-import roj.compiler.context.LocalContext;
+import roj.compiler.CompileContext;
+import roj.compiler.library.ClassLoaderLibrary;
 import roj.compiler.resolve.ComponentList;
+import roj.compiler.resolve.Resolver;
 import roj.compiler.resolve.TypeCast;
 import roj.text.CharList;
 import roj.text.TextUtil;
@@ -136,46 +136,46 @@ public final class ClassUtil {
 		return arePackagesSame(owner, referent);
 	}
 
-	private static volatile GlobalContext defaultCtx;
-	private GlobalContext getGlobalContext() {
-		var lc = LocalContext.get();
-		if (lc != null) return lc.classes;
+	private static volatile Resolver global;
+	private Resolver resolver() {
+		var lc = CompileContext.get();
+		if (lc != null) return lc.compiler;
 
-		if (gc == null) {
-			if (defaultCtx == null) {
+		if (local == null) {
+			if (global == null) {
 				synchronized (ClassUtil.class) {
-					if (defaultCtx == null) {
-						defaultCtx = new GlobalContext(false);
-						defaultCtx.addLibrary(new LibraryClassLoader(ClassUtil.class.getClassLoader()));
+					if (global == null) {
+						global = new Resolver(false);
+						global.addLibrary(new ClassLoaderLibrary(ClassUtil.class.getClassLoader()));
 					}
 				}
 			}
-			gc = defaultCtx;
+			local = global;
 		}
-		return gc;
+		return local;
 	}
 
-	private GlobalContext gc;
+	private Resolver local;
 
 	public ClassUtil() {}
 	public ClassUtil(ClassLoader... classLoaders) {
-		gc = new GlobalContext(false);
+		local = new Resolver(false);
 		for (ClassLoader loader : classLoaders) {
-			gc.addLibrary(new LibraryClassLoader(loader));
+			local.addLibrary(new ClassLoaderLibrary(loader));
 		}
 	}
 
-	public ClassDefinition getClassInfo(CharSequence name) {return getGlobalContext().getClassInfo(name);}
+	public ClassDefinition resolve(CharSequence name) {return resolver().resolve(name);}
 
 	private final Function<ClassNode, List<String>> getSuperClassListCached = CollectionX.lazyLru(info -> {
-		ToIntMap<String> classList = getGlobalContext().getHierarchyList(info);
+		ToIntMap<String> classList = resolver().getHierarchyList(info);
 
-		List<String> parents = new SimpleList<>(classList.keySet());
+		List<String> parents = new ArrayList<>(classList.keySet());
 		parents.sort((o1, o2) -> Integer.compare(classList.getInt(o1) >>> 16, classList.getInt(o2) >>> 16));
 		return parents;
 	}, 1000);
-	public List<String> getSuperClassList(String type) {
-		ClassNode info = getGlobalContext().getClassInfo(type);
+	public List<String> getHierarchyList(String type) {
+		ClassNode info = resolver().resolve(type);
 		if (info == null) return Collections.emptyList();
 		return getSuperClassListCached.apply(info);
 	}
@@ -184,9 +184,9 @@ public final class ClassUtil {
 	 * method所表示的方法是否从parents(若非空)或method.owner的父类继承/实现
 	 */
 	public Boolean isInherited(MemberDescriptor method, @Nullable List<String> parents, Boolean defVal) {
-		ClassNode info = getGlobalContext().getClassInfo(method.owner);
+		ClassNode info = resolver().resolve(method.owner);
 		if (info == null) return defVal;
-		ComponentList ml = gc.getMethodList(info, method.name);
+		ComponentList ml = local.getMethodList(info, method.name);
 		if (ml == ComponentList.NOT_FOUND) return defVal;
 
 		for (MethodNode mn : ml.getMethods()) {
@@ -199,13 +199,13 @@ public final class ClassUtil {
 	}
 
 	private final TypeCast caster = new TypeCast();
-	private final Map<Object, Object> temp1 = new MyHashMap<>();
+	private final Map<Object, Object> temp1 = new HashMap<>();
 
-	public boolean instanceOf(String testClass, String instClass) {return getGlobalContext().instanceOf(testClass, instClass);}
-	public List<IType> inferGeneric(IType typeInst, String targetType) {return getGlobalContext().inferGeneric(typeInst, targetType, temp1);}
-	public String getCommonParent(String type1, String type2) {return getGlobalContext().getCommonParent(Type.klass(type1), Type.klass(type2)).owner();}
+	public boolean instanceOf(String testClass, String instClass) {return resolver().instanceOf(testClass, instClass);}
+	public List<IType> inferGeneric(IType typeInst, String targetType) {return resolver().inferGeneric(typeInst, targetType, temp1);}
+	public String getCommonAncestor(String type1, String type2) {return resolver().getCommonAncestor(Type.klass(type1), Type.klass(type2)).owner();}
 	public String getCommonChild(String type1, String type2) {
-		caster.context = getGlobalContext();
+		caster.context = resolver();
 
 		var left = type1.startsWith("[") ? Type.fieldDesc(type1) : Type.klass(type1);
 		var right = type2.startsWith("[") ? Type.fieldDesc(type2) : Type.klass(type2);

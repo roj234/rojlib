@@ -1,6 +1,6 @@
 package roj.text;
 
-import roj.reflect.ReflectionUtils;
+import roj.reflect.Reflection;
 import roj.reflect.Unaligned;
 
 import java.util.function.IntConsumer;
@@ -17,7 +17,7 @@ final class UTF16n extends FastCharset {
 	static final FastCharset INSTANCE = new UTF16n();
 	private UTF16n() {}
 
-	@Override public String name() {return ReflectionUtils.BIG_ENDIAN ? "UTF-16BE" : "UTF-16LE";}
+	@Override public String name() {return Reflection.BIG_ENDIAN ? "UTF-16BE" : "UTF-16LE";}
 	@Override public long fastEncode(char[] s, int i, int end, Object ref, long addr, int max_len) {
 		int copyChars = Math.min(max_len/2, end-i);
 		U.copyMemory(s, Unaligned.ARRAY_CHAR_BASE_OFFSET + (i * 2L), ref, addr, copyChars * 2L);

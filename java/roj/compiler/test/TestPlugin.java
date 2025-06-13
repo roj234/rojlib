@@ -4,13 +4,13 @@ import roj.asm.MethodNode;
 import roj.asm.Opcodes;
 import roj.asm.type.IType;
 import roj.asm.type.Type;
+import roj.compiler.CompileContext;
 import roj.compiler.Tokens;
+import roj.compiler.api.Compiler;
 import roj.compiler.asm.MethodWriter;
 import roj.compiler.ast.expr.Expr;
 import roj.compiler.ast.expr.Invoke;
 import roj.compiler.ast.expr.PrefixOperator;
-import roj.compiler.context.LocalContext;
-import roj.compiler.plugin.LavaApi;
 import roj.config.Word;
 import roj.io.FastFailException;
 import roj.util.Helpers;
@@ -20,7 +20,7 @@ import roj.util.Helpers;
  * @since 2024/2/20 1:28
  */
 public class TestPlugin {
-	public void pluginInit(LavaApi api) {
+	public void pluginInit(Compiler api) {
 		// <minecraft:stone>
 		api.newStartOp("<", (ctx) -> {
 			var wr = ctx.lexer;
@@ -48,7 +48,7 @@ public class TestPlugin {
 			@Override public String toString() {return null;}
 			@Override public IType type() {return null;}
 			@Override public void write(MethodWriter cw, boolean noRet) {
-				throw new FastFailException("[\n  表达式="+node+"\n  解析="+(node = node.resolve(LocalContext.get()))+"\n  返回类型="+node.type()+"\n]");
+				throw new FastFailException("[\n  表达式="+node+"\n  解析="+(node = node.resolve(CompileContext.get()))+"\n  返回类型="+node.type()+"\n]");
 			}
 		});
 	}

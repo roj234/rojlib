@@ -7,7 +7,7 @@ import roj.asm.Opcodes;
 import roj.asm.cp.ConstantPool;
 import roj.asm.cp.CstClass;
 import roj.asm.cp.CstUTF;
-import roj.collect.SimpleList;
+import roj.collect.ArrayList;
 import roj.util.DynByteBuf;
 
 import java.util.List;
@@ -20,19 +20,19 @@ import java.util.Objects;
 public final class InnerClasses extends Attribute {
 	public static final String NAME = "InnerClasses";
 
-	public InnerClasses() { classes = new SimpleList<>(); }
+	public InnerClasses() { classes = new ArrayList<>(); }
 
 	public InnerClasses(DynByteBuf r, ConstantPool pool) {
 		//** If a class file has a version number that is 51.0 or above, outer_class_info_index must be 0 if inner_name_index is 0.
 		int count = r.readUnsignedShort();
 
-		List<Item> classes = this.classes = new SimpleList<>(count);
+		List<Item> classes = this.classes = new ArrayList<>(count);
 
 		while (count-- > 0) {
-			String selfName = ((CstClass) pool.get(r)).name().str();
+			String selfName = ((CstClass) pool.get(r)).value().str();
 			CstClass outer = (CstClass) pool.getNullable(r);
 			// If C is not a member of a class or an interface (that is, if C is a top-level class or interface (JLS §7.6) or a local class (JLS §14.3) or an anonymous class (JLS §15.9.5)), the value of the outer_class_info_index item must be 0.
-			String outerName = outer == null ? null : outer.name().str();
+			String outerName = outer == null ? null : outer.value().str();
 
 			CstUTF nameS = (CstUTF) pool.getNullable(r);
 			// If C is anonymous (JLS §15.9.5), the item must be null

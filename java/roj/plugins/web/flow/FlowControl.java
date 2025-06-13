@@ -1,8 +1,8 @@
 package roj.plugins.web.flow;
 
+import roj.collect.HashMap;
 import roj.collect.Hasher;
 import roj.collect.LFUCache;
-import roj.collect.MyHashMap;
 import roj.config.auto.SerializerFactory;
 import roj.http.server.Request;
 import roj.net.util.SpeedLimiter;
@@ -29,7 +29,7 @@ public class FlowControl extends Plugin {
 	}
 
 	LimitGroup guestGroup;
-	Map<String, LimitGroup> limitGroup = new MyHashMap<>();
+	Map<String, LimitGroup> limitGroup = new HashMap<>();
 	static final class LimitGroup extends SpeedLimiter.Setting {
 		int maxConnections, maxConcurrentConnections;
 		transient String name;

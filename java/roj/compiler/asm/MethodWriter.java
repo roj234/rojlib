@@ -6,11 +6,11 @@ import roj.asm.attr.LineNumberTable;
 import roj.asm.attr.LocalVariableTable;
 import roj.asm.insn.*;
 import roj.asm.type.IType;
+import roj.collect.ArrayList;
+import roj.collect.HashSet;
 import roj.collect.Hasher;
-import roj.collect.MyHashSet;
-import roj.collect.SimpleList;
-import roj.compiler.context.GlobalContext;
-import roj.compiler.context.LocalContext;
+import roj.compiler.CompileContext;
+import roj.compiler.LavaCompiler;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
 
@@ -27,9 +27,9 @@ import static roj.asm.Opcodes.assertTrait;
 public class MethodWriter extends CodeWriter {
 	public static final int GLOBAL_INIT_INSERT = 0;
 
-	public final LocalContext ctx;
+	public final CompileContext ctx;
 
-	private final SimpleList<TryCatchEntry> trys = new SimpleList<>();
+	private final ArrayList<TryCatchEntry> trys = new ArrayList<>();
 
 	public LineNumberTable lines;
 	public LineNumberTable lines() {
@@ -39,7 +39,7 @@ public class MethodWriter extends CodeWriter {
 
 	private LocalVariableTable lvt1, lvt2;
 
-	private final MyHashSet<Label> unrefLabels = new MyHashSet<>(Hasher.identity());
+	private final HashSet<Label> unrefLabels = new HashSet<>(Hasher.identity());
 
 	public void addLVTEntry(LocalVariableTable.Item v) {
 		if (lvt1 == null) return;
@@ -49,7 +49,6 @@ public class MethodWriter extends CodeWriter {
 		}
 	}
 
-	public void __addLabel(Label l) {labels.add(l);}
 	public Label __attrLabel() {
 		Label label = label();
 		unrefLabels.add(label);
@@ -66,7 +65,7 @@ public class MethodWriter extends CodeWriter {
 		label(v.end);
 	}
 
-	public MethodWriter(ClassNode unit, MethodNode mn, boolean generateLVT, LocalContext ctx) {
+	public MethodWriter(ClassNode unit, MethodNode mn, boolean generateLVT, CompileContext ctx) {
 		this.ctx = ctx;
 		this.init(new ByteList(),unit.cp,mn);
 		if (generateLVT) {
@@ -89,7 +88,7 @@ public class MethodWriter extends CodeWriter {
 		if (!str.equals(end)) {
 			trys.add(entry);
 		} else {
-			GlobalContext.debugLogger().debug("无意义的异常处理器: "+entry);
+			LavaCompiler.debugLogger().debug("无意义的异常处理器: "+entry);
 		}
 		return entry;
 	}

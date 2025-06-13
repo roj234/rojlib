@@ -1,7 +1,7 @@
 package roj.ui;
 
 import roj.collect.IntMap;
-import roj.collect.SimpleList;
+import roj.collect.ArrayList;
 import roj.concurrent.TaskExecutor;
 import roj.concurrent.TaskThread;
 import roj.config.ParseException;
@@ -33,7 +33,7 @@ import java.util.Objects;
 public class Shell extends VirtualTerminal {
 	public Shell(String prompt) { super(prompt); }
 
-	protected final List<CommandNode> commands = new SimpleList<>();
+	protected final List<CommandNode> commands = new ArrayList<>();
 	public Shell register(CommandNode node) { commands.add(node); return this; }
 	public boolean unregister(CommandNode node) { return commands.remove(node); }
 	public boolean unregister(String name) {
@@ -63,7 +63,7 @@ public class Shell extends VirtualTerminal {
 	@Override
 	protected void printHelp() {
 		Box.DEFAULT.render(new String[][]{
-			new String[] { "Roj234的指令终端 帮助", "注册的指令", "快捷键" },
+			new String[] { "指令帮助", "指令", "快捷键" },
 			new String[] { dumpNodes(new CharList(), 0).toStringAndFree(), KEY_SHORTCUT }
 		});
 	}
@@ -83,7 +83,7 @@ public class Shell extends VirtualTerminal {
 		protected Word onInvalidNumber(int flag, int i, String reason) throws ParseException { return readLiteral(); }
 	};
 	private List<Word> parse(String cmd, boolean highlighting) {
-		List<Word> words = new SimpleList<>();
+		List<Word> words = new ArrayList<>();
 
 		wr.init(cmd);
 		while (wr.hasNext()) {

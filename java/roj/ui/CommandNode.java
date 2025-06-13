@@ -1,7 +1,7 @@
 package roj.ui;
 
 import org.jetbrains.annotations.Nullable;
-import roj.collect.SimpleList;
+import roj.collect.ArrayList;
 import roj.config.ParseException;
 import roj.text.CharList;
 
@@ -14,26 +14,38 @@ import java.util.Objects;
  * @since 2023/11/20 15:03
  */
 public abstract class CommandNode {
-	private final List<CommandNode> children = new SimpleList<>();
+	private final List<CommandNode> children = new ArrayList<>();
 	private Command impl;
+	private Text comment;
 
 	@Nullable
 	public String getName() { return null; }
 
-	//public static CommandNode root(List<CommandNode> name) { return new Literal(name); }
 	public static CommandNode literal(String name) { return new Literal(name); }
 	public static CommandNode argument(String name, Argument<?> argument) { return new ArgumentNode(name, argument); }
 	public static CommandNode redirect(CommandNode node) { return new Redirect(node); }
 
 	public CharList dump(CharList sb, int depth) {
 		if (impl == null) {
-			if (children.size() == 1) return children.get(0).dump(sb.append(' '), depth);
+			if (children.size() == 1) {
+				children.get(0).dump(sb.append(' '), depth);
+				if (comment != null) {
+					sb.set(sb.length()-1, ' ');
+					comment.writeAnsi(sb).append('\n');
+				}
+				return sb;
+			}
 			else if (children.size() == 0) return sb.append("[**错误:不可执行**]\n");
-		} else if (children.isEmpty()) return sb.append('\n');
+		} else if (children.isEmpty()) {
+			if (comment != null) comment.writeAnsi(sb.append(' '));
+			return sb.append('\n');
+		}
 
 		depth += 2;
 
-		sb.append(":\n");
+		sb.append(':');
+		if (comment != null) comment.writeAnsi(sb.append(' '));
+		sb.append('\n');
 		if (impl != null) sb.padEnd(' ', depth).append("[无参数]\n");
 		for (CommandNode child : children) {
 			child.dump(sb.padEnd(' ', depth), depth);
@@ -41,9 +53,9 @@ public abstract class CommandNode {
 		return sb;
 	}
 
-	public CommandNode executes(Command e) {
-		if (impl != null) throw new IllegalStateException("Already have executor");
-		impl = e;
+	public CommandNode executes(Command command) {
+		if (impl != null) throw new IllegalStateException("Already have command");
+		impl = command;
 		return this;
 	}
 
@@ -97,10 +109,9 @@ public abstract class CommandNode {
 		return this;
 	}
 
-	public CommandNode then(CommandNode node) {
-		children.add(node);
-		return this;
-	}
+	public CommandNode then(CommandNode node) {children.add(node);return this;}
+	public CommandNode comment(String comment) {this.comment = Text.of(comment+"\033[0m").color16(Terminal.BLACK+Terminal.HIGHLIGHT);return this;}
+	public CommandNode comment(Text comment) {this.comment = comment;return this;}
 
 	boolean breakOn;
 	public CommandNode breakOn() { breakOn = true; return this; }

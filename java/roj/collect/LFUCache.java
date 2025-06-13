@@ -13,8 +13,8 @@ import static roj.collect.IntMap.UNDEFINED;
  * @author Roj233
  * @since 2021/9/9 23:17
  */
-public class LFUCache<K, V> extends MyHashMap<K, V> implements Cache<K, V> {
-	public static final class Entry<K, V> extends MyHashMap.Entry<K, V> {
+public class LFUCache<K, V> extends HashMap<K, V> implements Cache<K, V> {
+	public static final class Entry<K, V> extends HashMap.Entry<K, V> {
 		Bucket owner;
 		Entry<K, V> lfuPrev, lfuNext;
 

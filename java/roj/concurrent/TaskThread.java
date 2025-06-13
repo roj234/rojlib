@@ -1,6 +1,6 @@
 package roj.concurrent;
 
-import roj.reflect.ReflectionUtils;
+import roj.reflect.Unaligned;
 import roj.util.ArrayUtil;
 
 import java.util.List;
@@ -13,7 +13,7 @@ import static roj.reflect.Unaligned.U;
 public class TaskThread extends FastLocalThread implements TaskExecutor {
 	ConcurrentLinkedQueue<Task> tasks = new ConcurrentLinkedQueue<>();
 
-	static final long STATE_OFFSET = ReflectionUtils.fieldOffset(TaskThread.class, "state");
+	static final long STATE_OFFSET = Unaligned.fieldOffset(TaskThread.class, "state");
 	//0 => running, 1 => terminating, 2 => stopped
 	volatile int state = 0;
 

@@ -1,6 +1,6 @@
 package roj.concurrent;
 
-import roj.reflect.ReflectionUtils;
+import roj.reflect.Unaligned;
 
 import static roj.reflect.Unaligned.U;
 
@@ -12,9 +12,9 @@ public abstract class ReuseFIFOQueue<T extends ReuseFIFOQueue.Node> {
 	public static class Node {volatile Node next;}
 
 	protected static final long
-			HEAD_OFFSET = ReflectionUtils.fieldOffset(ReuseFIFOQueue.class, "head"),
-			TAIL_OFFSET = ReflectionUtils.fieldOffset(ReuseFIFOQueue.class, "tail"),
-			RECYCLE_OFFSET = ReflectionUtils.fieldOffset(ReuseFIFOQueue.class, "recycle");
+			HEAD_OFFSET = Unaligned.fieldOffset(ReuseFIFOQueue.class, "head"),
+			TAIL_OFFSET = Unaligned.fieldOffset(ReuseFIFOQueue.class, "tail"),
+			RECYCLE_OFFSET = Unaligned.fieldOffset(ReuseFIFOQueue.class, "recycle");
 
 	protected volatile Node head, tail, recycle;
 

@@ -57,9 +57,9 @@ public class VirtualReference<V> {
 	private final ReadWriteLock lock = new ReentrantReadWriteLock();
 
 	private static final long
-		NEXT_OFF = ReflectionUtils.fieldOffset(Entry.class, "next"),
-		VALUE_OFF = ReflectionUtils.fieldOffset(Entry.class, "v"),
-		SIZE_OFF = ReflectionUtils.fieldOffset(VirtualReference.class, "size");
+		NEXT_OFF = Unaligned.fieldOffset(Entry.class, "next"),
+		VALUE_OFF = Unaligned.fieldOffset(Entry.class, "v"),
+		SIZE_OFF = Unaligned.fieldOffset(VirtualReference.class, "size");
 	private static final Entry<?> SENTIAL = new Entry<>(null, null);
 
 	public static final class Entry<V> extends WeakReference<ClassLoader> {
@@ -94,13 +94,13 @@ public class VirtualReference<V> {
 
 			var xref = new ClassNode();
 			xref.modifier = 0;
-			xref.name(loader.getClass().getName().replace('.', '/')+"$OwnedRef$"+ReflectionUtils.uniqueId());
+			xref.name(loader.getClass().getName().replace('.', '/')+"$OwnedRef$"+Reflection.uniqueId());
 			xref.newField(Opcodes.ACC_STATIC, "r", "Ljava/lang/Object;");
 
 			Class<?> klass = ClassDefiner.defineClass(loader, xref);
 
 			this.v = new WeakReference<>(klass);
-			offset = ReflectionUtils.fieldOffset(klass, "r");
+			offset = Unaligned.fieldOffset(klass, "r");
 			U.putObject(klass, offset, v);
 		}
 	}

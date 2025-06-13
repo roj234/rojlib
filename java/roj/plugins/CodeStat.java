@@ -1,7 +1,7 @@
 package roj.plugins;
 
-import roj.collect.MyHashMap;
-import roj.collect.SimpleList;
+import roj.collect.HashMap;
+import roj.collect.ArrayList;
 import roj.collect.ToIntMap;
 import roj.concurrent.Flow;
 import roj.gui.GuiUtil;
@@ -38,7 +38,7 @@ import java.util.function.Function;
 @SimplePlugin(id = "codeStat", desc = "让你可以直观的看到自己写了多少代码\n指令: codestat [文件夹]", version = "2.1")
 public class CodeStat extends Plugin {
 	private static final Function<String, ToIntMap<String>> compute = (x) -> new ToIntMap<>();
-	private final MyHashMap<String, ToIntMap<String>> lines = new MyHashMap<>(), chars = new MyHashMap<>();
+	private final HashMap<String, ToIntMap<String>> lines = new HashMap<>(), chars = new HashMap<>();
 	private final ToIntMap<String> totalLines = new ToIntMap<>(), totalChars = new ToIntMap<>();
 	private static boolean hasUI;
 
@@ -146,17 +146,17 @@ public class CodeStat extends Plugin {
 
 		System.out.println("你已经写了 "+totalLinesX+" 行 (合 " +totalCharsX+" 字符, "+fileCount+" 文件) 的代码呢~");
 		if (inst.totalLines.size() > 1) {
-			printStatistic(inst, "语言按行数", new SimpleList<>(inst.totalLines.selfEntrySet()), 99);
-			printStatistic(inst, "语言按字符数", new SimpleList<>(inst.totalChars.selfEntrySet()), 99);
+			printStatistic(inst, "语言按行数", new ArrayList<>(inst.totalLines.selfEntrySet()), 99);
+			printStatistic(inst, "语言按字符数", new ArrayList<>(inst.totalChars.selfEntrySet()), 99);
 			printStatistic(inst, "语言按文件数", Flow.of(inst.lines.entrySet()).map(entry -> new ToIntMap.Entry<>(entry.getKey(), entry.getValue().size())).toList(), 99);
 			for (Map.Entry<String, ToIntMap<String>> entry : inst.lines.entrySet()) {
-				printStatistic(inst, "行数Top"+TOP+" - "+entry.getKey(), new SimpleList<>(entry.getValue().selfEntrySet()), TOP);
+				printStatistic(inst, "行数Top"+TOP+" - "+entry.getKey(), new ArrayList<>(entry.getValue().selfEntrySet()), TOP);
 			}
 			for (Map.Entry<String, ToIntMap<String>> entry : inst.chars.entrySet()) {
-				printStatistic(inst, "字符Top"+TOP+" - "+entry.getKey(), new SimpleList<>(entry.getValue().selfEntrySet()), TOP);
+				printStatistic(inst, "字符Top"+TOP+" - "+entry.getKey(), new ArrayList<>(entry.getValue().selfEntrySet()), TOP);
 			}
 		}
-		SimpleList<ToIntMap.Entry<String>> all = new SimpleList<>();
+		ArrayList<ToIntMap.Entry<String>> all = new ArrayList<>();
 		for (Map.Entry<String, ToIntMap<String>> entry : inst.lines.entrySet())
 			all.addAll(entry.getValue().selfEntrySet());
 		printStatistic(inst, "行数Top"+TOP, all, TOP);

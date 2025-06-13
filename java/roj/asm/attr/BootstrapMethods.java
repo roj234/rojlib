@@ -4,12 +4,11 @@ import roj.asm.AsmCache;
 import roj.asm.Opcodes;
 import roj.asm.cp.*;
 import roj.asm.type.Type;
-import roj.collect.SimpleList;
+import roj.collect.ArrayList;
+import roj.concurrent.OperationDone;
 import roj.text.CharList;
 import roj.util.DynByteBuf;
-import roj.util.Helpers;
 
-import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -17,10 +16,10 @@ import java.util.List;
  * @since 2021/6/18 9:51
  */
 public final class BootstrapMethods extends Attribute {
-	public BootstrapMethods() { methods = new ArrayList<>(); }
+	public BootstrapMethods() { methods = new java.util.ArrayList<>(); }
 	public BootstrapMethods(DynByteBuf r, ConstantPool pool) {
 		int len = r.readUnsignedShort();
-		List<Item> methods = this.methods = new SimpleList<>(len);
+		List<Item> methods = this.methods = new ArrayList<>(len);
 		while (len-- > 0) {
 			CstMethodHandle handle = (CstMethodHandle) pool.get(r);
 			if (handle.kind != Kind.INVOKESTATIC && handle.kind != Kind.NEW_INVOKESPECIAL)
@@ -28,7 +27,7 @@ public final class BootstrapMethods extends Attribute {
 
 			// parsing method
 			int argc = r.readUnsignedShort();
-			List<Constant> list = new ArrayList<>(argc);
+			List<Constant> list = new java.util.ArrayList<>(argc);
 			for (int j = 0; j < argc; j++) {
 				Constant c = pool.get(r);
 				switch (c.type()) {
@@ -62,7 +61,7 @@ public final class BootstrapMethods extends Attribute {
 
 		static final byte[] toString = {Opcodes.GETFIELD, Opcodes.GETSTATIC, Opcodes.PUTFIELD, Opcodes.PUTSTATIC, Opcodes.INVOKEVIRTUAL, Opcodes.INVOKESTATIC, Opcodes.INVOKESPECIAL, Opcodes.INVOKESPECIAL, Opcodes.INVOKEINTERFACE};
 
-		public static String toString(byte kind) { return Opcodes.showOpcode(toString[kind]); }
+		public static String toString(byte kind) { return Opcodes.toString(toString[kind]); }
 
 		public static byte validate(int kind) {
 			if (kind < 1 || kind > 9) throw new IllegalArgumentException("Illegal kind "+kind+ ", Must in [1,9]");
@@ -140,7 +139,7 @@ public final class BootstrapMethods extends Attribute {
 
 		public String interfaceDesc() {
 			CstMethodType mType = (CstMethodType) arguments.get(0);
-			return mType.name().str();
+			return mType.value().str();
 		}
 
 		public boolean isInvokeMethod() {
@@ -160,9 +159,9 @@ public final class BootstrapMethods extends Attribute {
 
 		public List<Type> parameters() {
 			if (in == null) {
-				SimpleList<Type> in = AsmCache.getInstance().methodTypeTmp();
+				ArrayList<Type> in = AsmCache.getInstance().methodTypeTmp();
 				out = Type.methodDesc(rawDesc(), in);
-				this.in = new SimpleList<>(in);
+				this.in = new ArrayList<>(in);
 			}
 			return in;
 		}
@@ -197,12 +196,12 @@ public final class BootstrapMethods extends Attribute {
 
 			if (isInvokeMethod()) {
 				sb.append("(LambdaMetafactory)")
-				  .append("\n  形参: ").append(((CstMethodType) arguments.get(0)).name().str())
-				  .append("\n  实参: ").append(((CstMethodType) arguments.get(2)).name().str())
+				  .append("\n  形参: ").append(((CstMethodType) arguments.get(0)).value().str())
+				  .append("\n  实参: ").append(((CstMethodType) arguments.get(2)).value().str())
 				  .append("\n  类型: ").append(((CstMethodHandle) arguments.get(1)).kind)
 				  .append("\n  目标: ").append(((CstMethodHandle) arguments.get(1)).getRef());
 			} else {
-				List<String> list = new SimpleList<>(arguments.size());
+				List<String> list = new ArrayList<>(arguments.size());
 				for (int i = 0; i < arguments.size(); i++) {
 					list.add(arguments.get(i).getClass().getSimpleName().substring(3));
 				}
@@ -217,9 +216,9 @@ public final class BootstrapMethods extends Attribute {
 			try {
 				slf = (Item) super.clone();
 			} catch (CloneNotSupportedException e) {
-				return Helpers.nonnull();
+				throw OperationDone.NEVER;
 			}
-			List<Constant> args = slf.arguments = new ArrayList<>(slf.arguments);
+			List<Constant> args = slf.arguments = new java.util.ArrayList<>(slf.arguments);
 			for (int i = 0; i < args.size(); i++) {
 				args.set(i, args.get(i).clone());
 			}

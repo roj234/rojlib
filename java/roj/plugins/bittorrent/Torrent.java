@@ -29,7 +29,7 @@ public class Torrent {
 	@Name("announce-list")
 	public List<String[]> announce_list;
 
-	@Optional(Optional.Mode.NEVER)
+	@Optional(read = Optional.ReadMode.REQUIRED)
 	public Info info;
 
 	@Name("creation date")
@@ -79,13 +79,13 @@ public class Torrent {
 		@Deprecated String md5sum;
 
 		@Name("piece length")
-		@Optional(Optional.Mode.NEVER)
+		@Optional(read = Optional.ReadMode.REQUIRED)
 		public long piece_length;
-		@Optional(Optional.Mode.NEVER)
+		@Optional(read = Optional.ReadMode.REQUIRED)
 		public byte[] pieces;
 
 		@Name("private")
-		@Optional(Optional.Mode.IF_EMPTY)
+		@Optional(write = Optional.WriteMode.NON_BLANK)
 		public Byte isPrivate;
 
 		public String publisher;

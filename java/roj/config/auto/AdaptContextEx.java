@@ -1,7 +1,7 @@
 package roj.config.auto;
 
 import roj.collect.Hasher;
-import roj.collect.SimpleList;
+import roj.collect.ArrayList;
 import roj.collect.ToIntMap;
 import roj.concurrent.LazyThreadLocal;
 import roj.config.serial.CVisitor;
@@ -11,7 +11,7 @@ import roj.config.serial.CVisitor;
  * @since 2023/3/19 19:16
  */
 final class AdaptContextEx extends AdaptContext {
-	SimpleList<Object> objectsR = new SimpleList<>();
+	ArrayList<Object> objectsR = new ArrayList<>();
 	ToIntMap<Object> objectW = new ToIntMap<>();
 
 	public AdaptContextEx(Adapter root) { super(root); objectW.setHasher(Hasher.identity()); }

@@ -5,7 +5,7 @@ import roj.asm.cp.ConstantPool;
 import roj.asm.cp.CstClass;
 import roj.asm.cp.CstNameAndType;
 import roj.asm.type.Type;
-import roj.collect.SimpleList;
+import roj.collect.ArrayList;
 import roj.util.DynByteBuf;
 
 import java.util.List;
@@ -20,14 +20,14 @@ public final class EnclosingMethod extends Attribute {
 	public EnclosingMethod(CstClass clazz, CstNameAndType method) {
 		super();
 		// 当并非被代码文本意义上的'函数'创建时(etc {}, static{}, x = ?), 需为Null
-		owner = clazz.name().str();
+		owner = clazz.value().str();
 		if (method == null) {
 			name = PREDEFINED;
 		} else {
 			name = method.name().str();
-			SimpleList<Type> in = AsmCache.getInstance().methodTypeTmp();
+			ArrayList<Type> in = AsmCache.getInstance().methodTypeTmp();
 			returnType = Type.methodDesc(method.rawDesc().str(), in);
-			parameters = new SimpleList<>(in);
+			parameters = new ArrayList<>(in);
 		}
 	}
 

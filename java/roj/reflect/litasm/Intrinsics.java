@@ -5,9 +5,8 @@ import roj.RojLib;
 import roj.asm.ClassNode;
 import roj.asm.Opcodes;
 import roj.io.IOUtil;
-import roj.reflect.Bypass;
 import roj.reflect.ClassDefiner;
-import roj.reflect.ReflectionUtils;
+import roj.reflect.Reflection;
 import roj.reflect.litasm.internal.JVMCI;
 import roj.text.TextUtil;
 import roj.text.logging.Logger;
@@ -27,7 +26,7 @@ public class Intrinsics {
 		CodeInjector tmp;
 		try {
 			var c = ClassNode.parseSkeleton(IOUtil.getResourceIL("roj/reflect/litasm/internal/JVMCI.class"));
-			c.parent(Bypass.MAGIC_ACCESSOR_CLASS);
+			c.parent(Reflection.MAGIC_ACCESSOR_CLASS);
 			ClassDefiner.defineGlobalClass(c);
 			tmp = new JVMCI();
 		} catch (Throwable e) {
@@ -54,7 +53,7 @@ public class Intrinsics {
 		}
 	}
 	public static boolean available() {return linker != null;}
-	public static boolean linkNative(@Nullable String library) {return linkNative(library, ReflectionUtils.getCallerClass(2));}
+	public static boolean linkNative(@Nullable String library) {return linkNative(library, Reflection.getCallerClass(2));}
 	public static boolean linkNative(@Nullable Object library, Class<?> caller) {
 		if (linker == null || LibraryLoader.INSTANCE == null) return false;
 

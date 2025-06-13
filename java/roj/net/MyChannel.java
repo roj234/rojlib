@@ -1,8 +1,8 @@
 package roj.net;
 
-import roj.collect.MyHashMap;
+import roj.collect.HashMap;
 import roj.collect.RingBuffer;
-import roj.collect.SimpleList;
+import roj.collect.ArrayList;
 import roj.io.buf.BufferPool;
 import roj.util.DynByteBuf;
 import roj.util.Helpers;
@@ -217,7 +217,7 @@ public abstract class MyChannel implements Selectable, Closeable {
 		return list;
 	}
 	public final List<ChannelCtx> handlers() {
-		List<ChannelCtx> list = new SimpleList<>();
+		List<ChannelCtx> list = new ArrayList<>();
 		ChannelCtx pipe = pipelineHead;
 		while (pipe != null) {
 			list.add(pipe);
@@ -271,7 +271,7 @@ public abstract class MyChannel implements Selectable, Closeable {
 	}
 	@SuppressWarnings("unchecked")
 	public synchronized final <T> T attachment(TypedKey<T> key, T val) {
-		if (attachments.isEmpty()) attachments = new MyHashMap<>(4);
+		if (attachments.isEmpty()) attachments = new HashMap<>(4);
 		return (T) (val == null ? attachments.remove(key) : attachments.put(key, val));
 	}
 

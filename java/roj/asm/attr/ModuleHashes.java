@@ -3,7 +3,7 @@ package roj.asm.attr;
 import roj.asm.cp.Constant;
 import roj.asm.cp.ConstantPool;
 import roj.asm.cp.CstUTF;
-import roj.collect.MyHashMap;
+import roj.collect.HashMap;
 import roj.util.DynByteBuf;
 
 import java.util.Map;
@@ -13,12 +13,12 @@ import java.util.Map;
  * @since 2025/5/4 9:06
  */
 public class ModuleHashes extends Attribute {
-	public ModuleHashes(){map = new MyHashMap<>();}
+	public ModuleHashes(){map = new HashMap<>();}
 	public ModuleHashes(DynByteBuf r, ConstantPool cp) {
 		algorithm = ((CstUTF) cp.get(r)).str();
 
 		int len = r.readUnsignedShort();
-		map = new MyHashMap<>(len);
+		map = new HashMap<>(len);
 		for (int i = 0; i < len; i++) {
 			String moduleName = cp.getRefName(r, Constant.MODULE);
 

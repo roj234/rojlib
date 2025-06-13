@@ -1,6 +1,6 @@
 package roj.plugins.kuropack.loader;
 
-import roj.archive.qz.xz.LZMA2InputStream;
+import roj.archive.xz.LZMA2InputStream;
 
 import java.io.*;
 import java.net.URL;

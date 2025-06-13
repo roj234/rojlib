@@ -26,10 +26,10 @@ public abstract sealed class CstRef extends Constant permits CstRef.Field, CstRe
 	public final String toString() {
 		CharList sb = new CharList().append(super.toString())
 			.append(" 引用[").append((int) clazz.index).append(",").append((int) desc.index).append("] ");
-		return CstNameAndType.parseNodeDesc(sb, clazz.name().str(), desc.name().str(), desc.rawDesc().str());
+		return CstNameAndType.parseNodeDesc(sb, clazz.value().str(), desc.name().str(), desc.rawDesc().str());
 	}
 
-	public final String owner() { return clazz.name().str(); }
+	public final String owner() { return clazz.value().str(); }
 	public final String name() { return desc.name().str(); }
 	public final String rawDesc() { return desc.rawDesc().str(); }
 
@@ -43,9 +43,9 @@ public abstract sealed class CstRef extends Constant permits CstRef.Field, CstRe
 		if (o == this) return true;
 		if (o == null || o.getClass() != getClass()) return false;
 		CstRef x = (CstRef) o;
-		return x.clazz.name().equals(clazz.name()) && x.desc.equals0(desc);
+		return x.clazz.value().equals(clazz.value()) && x.desc.equals0(desc);
 	}
-	public final int hashCode() {return 31 * (31 * desc.hashCode() + clazz.name().hashCode()) + type();}
+	public final int hashCode() {return 31 * (31 * desc.hashCode() + clazz.value().hashCode()) + type();}
 
 	@Override
 	public final CstRef clone() {

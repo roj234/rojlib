@@ -1,7 +1,7 @@
 package roj.plugins;
 
 import org.jetbrains.annotations.Nullable;
-import roj.collect.SimpleList;
+import roj.collect.ArrayList;
 import roj.concurrent.PacketBuffer;
 import roj.config.ConfigMaster;
 import roj.config.ParseException;
@@ -44,10 +44,10 @@ public class SimpleMQ extends Plugin {
 
 	@Override
 	protected void onDisable() {
-		SimpleList<Worker> copy;
+		ArrayList<Worker> copy;
 		synchronized (workers) {
 			disabled = true;
-			copy = new SimpleList<>(workers);
+			copy = new ArrayList<>(workers);
 			workers.clear();
 		}
 
@@ -67,7 +67,7 @@ public class SimpleMQ extends Plugin {
 	}
 
 	boolean disabled;
-	final SimpleList<Worker> workers = new SimpleList<>();
+	final ArrayList<Worker> workers = new ArrayList<>();
 	final ConcurrentHashMap<String, List<Worker>> subscribers = new ConcurrentHashMap<>();
 	final ConcurrentHashMap<String, DynByteBuf> dataCache = new ConcurrentHashMap<>();
 

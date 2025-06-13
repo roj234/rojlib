@@ -1,6 +1,6 @@
 package roj.plugins.minecraft.server.data;
 
-import roj.collect.SimpleList;
+import roj.collect.ArrayList;
 import roj.collect.ToIntMap;
 
 /**
@@ -9,7 +9,7 @@ import roj.collect.ToIntMap;
  */
 public class Registry<T> {
 	public ToIntMap<T> REGISTRY = new ToIntMap<>();
-	public SimpleList<T> VALUES = new SimpleList<>();
+	public ArrayList<T> VALUES = new ArrayList<>();
 	private int nextId;
 
 	final String name;

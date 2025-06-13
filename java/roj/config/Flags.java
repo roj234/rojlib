@@ -1,5 +1,7 @@
 package roj.config;
 
+import roj.collect.LinkedHashMap;
+
 /**
  * @author Roj234
  * @since 2024/11/8 20:09
@@ -22,7 +24,7 @@ public interface Flags {
 	 */
 	int NO_DUPLICATE_KEY = 2;
 	/**
-	 * 使用{@link roj.collect.LinkedMyHashMap}充当CMap中的map来保留配置文件key的顺序 <br>
+	 * 使用{@link LinkedHashMap}充当CMap中的map来保留配置文件key的顺序 <br>
 	 * 适用于: JSON YAML TOML INI
 	 */
 	int ORDERED_MAP = 4;

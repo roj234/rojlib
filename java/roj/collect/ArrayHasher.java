@@ -18,7 +18,7 @@ final class ArrayHasher {
 	static <T> Hasher<T> array(Class<T> type) {
 		if (!type.getComponentType().isPrimitive()) type = (Class<T>) Object[].class;
 
-		Type clz = Type.fromJavaType(type);
+		Type clz = Type.from(type);
 
 		int OFFSET = clz.type - Type.BYTE;
 		Hasher<?> h = INSTANCES[OFFSET];
@@ -48,8 +48,7 @@ final class ArrayHasher {
 			cw.invokeS("java/util/Arrays", "equals", "("+clz.toDesc()+clz.toDesc()+")Z");
 			cw.insn(IRETURN);
 
-			ClassDefiner.premake(hasher);
-			h = (Hasher<?>) ClassDefiner.make(hasher);
+			h = (Hasher<?>) ClassDefiner.newInstance(hasher);
 			Unaligned.U.putObjectVolatile(INSTANCES, Unaligned.ARRAY_OBJECT_BASE_OFFSET + (long) OFFSET * Unaligned.ARRAY_OBJECT_INDEX_SCALE, h);
 		}
 		return (Hasher<T>) h;

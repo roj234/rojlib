@@ -1,8 +1,10 @@
 package roj.http;
 
 import org.jetbrains.annotations.ApiStatus;
+import org.jetbrains.annotations.Nullable;
 import roj.collect.RingBuffer;
-import roj.collect.SimpleList;
+import roj.collect.ArrayList;
+import roj.concurrent.OperationDone;
 import roj.http.server.HSConfig;
 import roj.io.FastFailException;
 import roj.io.IOUtil;
@@ -53,7 +55,7 @@ public abstract class HttpRequest {
 	protected Object _body;
 
 	private Headers headers;
-	private final SimpleList<Map.Entry<String, String>> autoHeaders = new SimpleList<>(4);
+	private final ArrayList<Map.Entry<String, String>> autoHeaders = new ArrayList<>(4);
 
 	private URI proxy;
 	InetSocketAddress _address;
@@ -78,7 +80,7 @@ public abstract class HttpRequest {
 	}
 	public final String method() { return action; }
 
-	public final HttpRequest withProxy(URI uri) { proxy = uri; return this; }
+	public final HttpRequest withProxy(@Nullable URI uri) { proxy = uri; return this; }
 
 	public final HttpRequest header(CharSequence k, String v) { headers.put(k, v); return this; }
 	public final HttpRequest headers(Map<? extends CharSequence, String> map) { headers.putAll(map); return this; }
@@ -130,7 +132,7 @@ public abstract class HttpRequest {
 			return new URI(protocol, null, site, port, encodeQuery(IOUtil.getSharedByteBuf()).toString(), null, null);
 		} catch (URISyntaxException e) {
 			Helpers.athrow(e);
-			return Helpers.nonnull();
+			throw OperationDone.NEVER;
 		}
 	}
 
@@ -173,8 +175,8 @@ public abstract class HttpRequest {
 		responseBodyLimit = bodyLimit;
 		return this;
 	}
-	public final HttpRequest decompressBody(boolean decompress) {
-		if (decompress) flag &= ~SKIP_CE;
+	public final HttpRequest unzip(boolean unzip) {
+		if (unzip) flag &= ~SKIP_CE;
 		else flag |= SKIP_CE;
 		return this;
 	}

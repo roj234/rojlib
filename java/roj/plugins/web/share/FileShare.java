@@ -53,7 +53,7 @@ public class FileShare extends Plugin {
 
         public Serialized() {}
         public Serialized(FileShare share) {
-            shares = new SimpleList<>(share.shares);
+            shares = new ArrayList<>(share.shares);
             shareFileIndex = share.shareFileIdx.get();
         }
     }
@@ -367,7 +367,7 @@ public class FileShare extends Plugin {
         simpleSer.key("data");
         simpleSer.valueList();
         if (user != null) {
-            List<Share> myShares = new SimpleList<>();
+            List<Share> myShares = new ArrayList<>();
             synchronized (lock) {
                 for (var info : shares) {
                     if (info.owner == user.getId()) myShares.add(info);
@@ -557,8 +557,8 @@ public class FileShare extends Plugin {
             }
         } else {
             if (!user.hasPermission("share/file")) return error("您没有创建文件分享的权限");
-            info.files = new SimpleList<>();
-            info.uploading = new MyHashSet<>(Hasher.identity());
+            info.files = new ArrayList<>();
+            info.uploading = new HashSet<>(Hasher.identity());
             synchronized (incompleteShares) {
                 if (!incompleteShares.add(info)) return error("自定义链接已存在");
             }

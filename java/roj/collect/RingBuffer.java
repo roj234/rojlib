@@ -373,7 +373,7 @@ public class RingBuffer<E> extends AbstractCollection<E> implements Deque<E> {
 	public String toString() {
 		StringBuilder sb = new StringBuilder().append("RingBuffer{\n  size=").append(size).append(",length=").append(array.length);
 
-		SimpleList<Object> data = new SimpleList<>();
+		ArrayList<Object> data = new ArrayList<>();
 
 		for (int i = 0; i < array.length; i++) data.add(i);
 		data.add(IntMap.UNDEFINED);

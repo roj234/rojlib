@@ -65,7 +65,7 @@ public class VoidCrypt {
 			hash1.update(nonce);
 			sbox[i] = hash1.digest();
 		}
-		var rnd = CryptoFactory.MT19937Random();
+		var rnd = CryptoFactory.WyRandom();
 
 		maxLen /= 2;
 		outer:

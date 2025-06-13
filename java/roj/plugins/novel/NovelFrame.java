@@ -4,7 +4,6 @@
 
 package roj.plugins.novel;
 
-import roj.archive.zip.ZipFileWriter;
 import roj.collect.*;
 import roj.concurrent.OperationDone;
 import roj.concurrent.ScheduleTask;
@@ -12,6 +11,8 @@ import roj.concurrent.Scheduler;
 import roj.concurrent.TaskPool;
 import roj.config.Tokenizer;
 import roj.config.data.CInt;
+import roj.ebook.Chapter;
+import roj.ebook.EbookWriter;
 import roj.gui.DragReorderHelper;
 import roj.gui.GuiUtil;
 import roj.gui.OnChangeHelper;
@@ -32,6 +33,7 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.charset.Charset;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.atomic.LongAdder;
 import java.util.function.Function;
@@ -77,7 +79,7 @@ public class NovelFrame extends JFrame {
 				length.getEntryOrCreate(line.length()).v++;
 				linenum++;
 			}
-			SimpleList<Int2IntMap.Entry> entries = new SimpleList<>(length.selfEntrySet());
+			ArrayList<Int2IntMap.Entry> entries = new ArrayList<>(length.selfEntrySet());
 			entries.sort((o1, o2) -> Integer.compare(o1.v, o2.v));
 			System.out.println(linenum);
 			Int2IntMap.Entry pop = entries.pop();
@@ -177,7 +179,7 @@ public class NovelFrame extends JFrame {
 			errout.setText(tmp.toString());
 		});
 
-		chapters = new SimpleList<>();
+		chapters = new ArrayList<>();
 		chaptersTree = (DefaultTreeModel) uiChapters.getModel();
 
 		ChapterDblClickHelper uxChapterClick = new ChapterDblClickHelper();
@@ -241,7 +243,7 @@ public class NovelFrame extends JFrame {
 				if (chapter.type != matcher && pi >= 0) {
 					// range [pi+1 ... i)
 					List<Chapter> toAdd = _ch.subList(pi + 1, i);
-					_ch.get(pi).children = new SimpleList<>(toAdd);
+					_ch.get(pi).children = new ArrayList<>(toAdd);
 					toAdd.clear();
 					i = pi+1;
 
@@ -254,7 +256,7 @@ public class NovelFrame extends JFrame {
 
 			if (pi >= 0) {
 				List<Chapter> toAdd = _ch.subList(pi + 1, i);
-				_ch.get(pi).children = new SimpleList<>(toAdd);
+				_ch.get(pi).children = new ArrayList<>(toAdd);
 				toAdd.clear();
 			}
 
@@ -286,8 +288,8 @@ public class NovelFrame extends JFrame {
 					cpwOutName.setEnabled(true);
 
 					cpwOrigName.setText("在下方修改【"+c.matches +"】");
-					cpwOutName.setText(c.displayName);
-					cpwChapNo.setValue((int) c.no);
+					cpwOutName.setText(c.customName);
+					cpwChapNo.setValue((int) c.index);
 					cpwChapName.setText(c.name);
 					return;
 				}
@@ -307,9 +309,9 @@ public class NovelFrame extends JFrame {
 
 			if (c != null) {
 				if (cpwOutName.isEnabled()) {
-					if (!cpwOutName.getText().equals(c.displayName)) {
-						c.displayName = cpwOutName.getText();
-						c.applyOverride = true;
+					if (!cpwOutName.getText().equals(c.customName)) {
+						c.customName = cpwOutName.getText();
+						c.hasCustomName = true;
 						cpwOrigName.setText("数据已保存");
 						chaptersTree.nodeChanged(c);
 					}
@@ -336,7 +338,7 @@ public class NovelFrame extends JFrame {
 	CharList novel_in = new CharList(), novel_out = new CharList();
 
 
-	static final MyBitSet myWhiteSpace = MyBitSet.from("\r\n\t 　 \uE4C6\uE5E5\uFEFF\u200B");
+	static final BitSet myWhiteSpace = BitSet.from("\r\n\t 　 \uE4C6\uE5E5\uFEFF\u200B");
 
 	// region 功能区-文件读取
 	private void select_novel(ActionEvent e) {
@@ -456,7 +458,7 @@ public class NovelFrame extends JFrame {
 
 	private void test_chapter(ActionEvent e) {
 		Chapter root = new Chapter();
-		List<Chapter> chapters = root.children = new SimpleList<>();
+		List<Chapter> chapters = root.children = new ArrayList<>();
 
 		Chapter c = root;
 		c.name = DateTime.toLocalTimeString(System.currentTimeMillis());
@@ -471,7 +473,7 @@ public class NovelFrame extends JFrame {
 			c.start = m.end();
 
 			try {
-				c.no = Chapter.parseChapterNo(novel_in.list, m.start(chapterId_group), m.end(chapterId_group));
+				c.index = Chapter.parseChapterNo(novel_in.list, m.start(chapterId_group), m.end(chapterId_group));
 			} catch (NumberFormatException ignored) {}
 
 			for (int j = 1; j <= m.groupCount(); j++)
@@ -485,7 +487,7 @@ public class NovelFrame extends JFrame {
 				tmp.replace("$" + j, j == chapterName_group ? c.name : m.group(j));
 			}
 			c.matches = m.group();
-			c.displayName = tmp.toStringAndFree();
+			c.customName = tmp.toStringAndFree();
 
 			chapters.add(c);
 
@@ -557,7 +559,7 @@ public class NovelFrame extends JFrame {
 			Chapter prev = chapters.get(i-1);
 			Chapter curr = chapters.get(i);
 
-			int delta = (int) (curr.no - prev.no);
+			int delta = (int) (curr.index - prev.index);
 			if (delta != 1) {
 				if (curr.getParent() == prev) continue;
 				if (curr.type != prev.type) {
@@ -612,7 +614,7 @@ public class NovelFrame extends JFrame {
 			CharList str = data(prev);
 
 			if (c.getChildCount() > 0) {
-				List<Chapter> flat = new SimpleList<>();
+				List<Chapter> flat = new ArrayList<>();
 				c.flat(flat);
 				for (Chapter c1 : flat)
 					str.append(c1.matches).append(data(c1));
@@ -635,10 +637,10 @@ public class NovelFrame extends JFrame {
 
 			long total = (chapters.size() - 1) * chapters.size() / 2;
 
-			TaskPool pool = TaskPool.MaxThread(20, "ND-Worker");
+			TaskPool pool = TaskPool.newFixed(20, "ND-Worker");
 			pool.setRejectPolicy(TaskPool::waitPolicy);
 
-			SimpleList<IntMap.Entry<String>> list = new SimpleList<>();
+			ArrayList<IntMap.Entry<String>> list = new ArrayList<>();
 
 			AtomicReference<ScheduleTask> task = new AtomicReference<>();
 			task.set(Scheduler.getDefaultScheduler().loop(() -> {
@@ -734,7 +736,7 @@ public class NovelFrame extends JFrame {
 		novel_out.clear();
 		for (int i = 0; i < chapters.size(); i++) {
 			Chapter c = chapters.get(i);
-			if (i > 0) novel_out.append("\n\n").append(regen ? c.displayName : c.matches).append('\n');
+			if (i > 0) novel_out.append("\n\n").append(regen ? c.customName : c.matches).append('\n');
 			writeChapter(c, novel_out, true);
 		}
 		errout.setText("");
@@ -785,13 +787,18 @@ public class NovelFrame extends JFrame {
 			return tmp;
 		};
 
-		try (EpubWriter epw = new EpubWriter(new ZipFileWriter(path), title, author, cover)) {
-			Chapter root = (Chapter) chaptersTree.getRoot();
-			epw.addChapter0(root, encoder);
+		Map<EbookWriter.Metadata<?>, Object> metadata = new HashMap<>();
+		metadata.put(EbookWriter.TITLE, title);
+		metadata.put(EbookWriter.AUTHOR, author);
+		if (cover != null) metadata.put(EbookWriter.COVER, cover);
 
-			List<Chapter> children = root.children;
-			for (int i = 0; i < children.size(); i++)
-				epw.addChapter(children.get(i), encoder);
+		try (var epw = EbookWriter.epub(metadata, path)) {
+			Chapter root = (Chapter) chaptersTree.getRoot();
+			epw.addChapter(root, encoder);
+
+			//List<Chapter> children = root.children;
+			//for (int i = 0; i < children.size(); i++)
+			//	epw.addChapter(children.get(i), encoder);
 
 			errout.setText("写入成功！保存为同名epub文件");
 		} catch (Exception ex) {
@@ -851,7 +858,7 @@ public class NovelFrame extends JFrame {
 
 		for (int i = 1; i < chapters.size(); i++) {
 			Chapter c = chapters.get(i);
-			if (c.applyOverride) continue;
+			if (c.hasCustomName) continue;
 
 			Matcher m = novel_regexp.matcher(c.matches);
 			boolean ok = m.matches();
@@ -890,7 +897,7 @@ public class NovelFrame extends JFrame {
 				tmp.replace("$"+j, str);
 			}
 
-			c.displayName = tmp.toString();
+			c.customName = tmp.toString();
 		}
 	}
 
@@ -1331,7 +1338,7 @@ public class NovelFrame extends JFrame {
             {
 
                 //---- presetRegexpInp ----
-                presetRegexpInp.setText("\u5e38\u7528|1|3\n\u6b63\u6587?\\s*\u7b2c\\s*([\u2015\uff0d\\-\u2500\u2014\u58f9\u8d30\u53c1\u8086\u4f0d\u9646\u67d2\u634c\u7396\u4e00\u4e8c\u4e24\u4e09\u56db\u4e94\u516d\u4e03\u516b\u4e5d\u5341\u25cb\u3007\u96f6\u767e\u5343O0-9\uff10-\uff19]{1,12})\\s*([\u7ae0\u5377])\\s*(.*)$\n\u7b2c$1$2 $3\n\u7eaf\u4e2d\u6587|1|1\n(?<=[ \u3000\ue4c6\ue4c6\\t\\n])([0-9 \\x4e00-\\x9fa5\uff08\uff09\\(\\)\\[\\]]{1,15})[ \u3000\\t]*$\n$1\n\u786c\u56de\u8f66\u7b80\u6613\u4fee\u590d|0|0\n^([ \u3000\ue4c6\ue4c6\\t]+.+)\\r?\\n([^ \u3000\\t\\r\\n].+)$\n$1$2\n\u664b\u6c5f\u5e38\u7528|1|2\n\u7b2c$1\u7ae0 $2\n^[ \u3000\ue4c6\ue4c6\\t]*([0-9\u4e00\u4e8c\u4e09\u56db\u4e94\u516d\u4e03\u516b\u4e5d\u96f6]{1,5})[\uff0e.\u3001\u203b](.+)");
+                presetRegexpInp.setText("\u5e38\u7528|1|3\n^(?:\u6b63\u6587)?[\\t \u3000\u00a0\\uE4C6\\uE5E5\\uFEFF\\u200B]*\u7b2c[\\t \u3000\u00a0\\uE4C6\\uE5E5\\uFEFF\\u200B]*([\u2015\uff0d\\\\-\u2500\u2014\u58f9\u8d30\u53c1\u8086\u4f0d\u9646\u67d2\u634c\u7396\u4e00\u4e8c\u4e24\u4e09\u56db\u4e94\u516d\u4e03\u516b\u4e5d\u5341\u25cb\u3007\u96f6\u767e\u5343O0-9\uff10-\uff19]{1,12})[\\t \u3000\u00a0\\uE4C6\\uE5E5\\uFEFF\\u200B]*([\u7ae0\u5377])[\\t \u3000\u00a0\\uE4C6\\uE5E5\\uFEFF\\u200B]*(.*)$\n\u7b2c$1$2 $3\n\u7eaf\u4e2d\u6587|1|1\n(?<=[ \u3000\ue4c6\ue4c6\\t\\n])([0-9 \\x4e00-\\x9fa5\uff08\uff09\\(\\)\\[\\]]{1,15})[ \u3000\\t]*$\n$1\n\u786c\u56de\u8f66\u7b80\u6613\u4fee\u590d|0|0\n^([ \u3000\ue4c6\ue4c6\\t]+.+)\\r?\\n([^ \u3000\\t\\r\\n].+)$\n$1$2\n\u664b\u6c5f\u5e38\u7528|1|2\n\u7b2c$1\u7ae0 $2\n^[ \u3000\ue4c6\ue4c6\\t]*([0-9\u4e00\u4e8c\u4e09\u56db\u4e94\u516d\u4e03\u516b\u4e5d\u96f6]{1,5})[\uff0e.\u3001\u203b](.+)");
                 scrollPane3.setViewportView(presetRegexpInp);
             }
             advancedMenuContentPane.add(scrollPane3);

@@ -2,8 +2,8 @@ package roj.config.auto;
 
 import org.jetbrains.annotations.Nullable;
 import roj.asm.type.IType;
-import roj.collect.MyBitSet;
-import roj.collect.MyHashMap;
+import roj.collect.BitSet;
+import roj.collect.HashMap;
 import roj.config.serial.CVisitor;
 
 import java.util.List;
@@ -45,7 +45,7 @@ final class MapSer extends Adapter {
 	@Override
 	public void map(AdaptContext ctx, int size) {
 		ctx.fieldId = -1;
-		ctx.setRef(newMap != null ? newMap.apply(size) : size < 0 ? new MyHashMap<>() : new MyHashMap<>(size));
+		ctx.setRef(newMap != null ? newMap.apply(size) : size < 0 ? new HashMap<>() : new HashMap<>(size));
 	}
 
 	@Override
@@ -88,7 +88,7 @@ final class MapSer extends Adapter {
 
 	// empty map
 	@Override
-	public int plusOptional(int fieldState, @Nullable MyBitSet fieldStateEx) { return 1; }
+	public int plusOptional(int fieldState, @Nullable BitSet fieldStateEx) { return 1; }
 
 	@Override
 	public void write(CVisitor c, Object o) {

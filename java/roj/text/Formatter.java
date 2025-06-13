@@ -1,6 +1,6 @@
 package roj.text;
 
-import roj.collect.SimpleList;
+import roj.collect.ArrayList;
 import roj.io.IOUtil;
 
 import java.util.Map;
@@ -36,7 +36,7 @@ public interface Formatter {
 		Simple(String template) {
 			var tmp = IOUtil.getSharedCharBuf();
 			var pos = new CharList();
-			var names = new SimpleList<String>();
+			var names = new ArrayList<String>();
 
 			int prevI = 0;
 			while (true) {

@@ -12,37 +12,12 @@ public final class EdSignature extends Signature implements Cloneable {
 	private MessageDigest digest;
 	private EdKey key;
 	private DynByteBuf data = new ByteList();
-	private boolean externalBuffer, prehash;
+	private boolean prehash;
 
 	public EdSignature() { super("EdDSA"); }
 
-	@Override
-	public Object clone() throws CloneNotSupportedException {
-		EdSignature sig = (EdSignature) super.clone();
-		sig.data = new ByteList();
-		return sig;
-	}
-
-	@Override
-	protected void engineInitVerify(PublicKey publicKey) throws InvalidKeyException {
-		if (!(publicKey instanceof EdPublicKey))
-			throw new InvalidKeyException("cannot identify EdDSA public key: " + publicKey.getClass());
-
-		key = (EdPublicKey) publicKey;
-		reset();
-	}
-
-	@Override
-	protected void engineInitSign(PrivateKey privateKey) throws InvalidKeyException {
-		if (!(privateKey instanceof EdPrivateKey)) {
-			throw new InvalidKeyException("cannot identify EdDSA private key: " + privateKey.getClass());
-		}
-
-		key = (EdPrivateKey) privateKey;
-		reset();
-	}
-
-	private void reset() {
+	// 三个核心函数
+	private void init() {
 		prehash = key.getParams().isPrehash();
 		if (digest == null) {
 			try {
@@ -53,44 +28,31 @@ public final class EdSignature extends Signature implements Cloneable {
 		} else if (!key.getParams().getHashAlgorithm().equals(digest.getAlgorithm())) {
 			Helpers.athrow(new InvalidKeyException("Key hash algorithm does not match chosen digest"));
 		}
-		digest.reset();
-		if (!externalBuffer) data.clear();
+		data.clear();
 	}
 
-	protected final void engineUpdate(byte b) { if (prehash) digest.update(b); else data.put(b); }
-	protected final void engineUpdate(byte[] b, int off, int len) { if (prehash) digest.update(b, off, len); else data.put(b, off, len); }
-	protected final void engineUpdate(ByteBuffer input) { if (prehash) digest.update(input); else data.put(input); }
-
-	@Override
-	protected byte[] engineSign() {
-		try {
-			return x_engineSign();
-		} finally {
-			reset();
-		}
-	}
-
-	private byte[] x_engineSign() {
+	private byte[] doSign() {
 		ByteBuffer buf = prehash ? ByteBuffer.wrap(digest.digest()) : data.nioBuffer();
-		EdPrivateKey edk = (EdPrivateKey) key;
+		EdPrivateKey key = (EdPrivateKey) this.key;
 
-		edk.getParams().addCtx(digest);
-		digest.update(edk.getH(), 32, 32);
+		key.getParams().addCtx(digest);
+		digest.update(key.getPrivateKey(), 32, 32);
 		buf.mark();
 		digest.update(buf);
 
 		byte[] r = EdInteger.scalar_mod_inline(digest.digest());
-		EdPoint R = key.getParams().getB().scalarMultiplyShared(r);
+		EdPoint R = key.getParams().getBasePoint().scalarMultiplyShared(r);
 		byte[] Rbyte = R.toByteArray();
 
-		edk.getParams().addCtx(digest);
+		key.getParams().addCtx(digest);
 		digest.update(Rbyte);
-		digest.update(edk.getAbyte());
+		digest.update(key.getPublicKey());
 		buf.reset();
 		digest.update(buf);
 
 		byte[] h = EdInteger.scalar_mod_inline(digest.digest());
-		byte[] a = edk.getH();
+		new Throwable().printStackTrace();
+		byte[] a = key.getPrivateKey();
 		// h,a,r均只使用了低32字节
 		byte[] S = EdInteger.scalar_mul_add_mod_inline(h, a, r);
 
@@ -100,64 +62,98 @@ public final class EdSignature extends Signature implements Cloneable {
 		return out;
 	}
 
-	@Override
-	protected boolean engineVerify(byte[] sigBytes) throws SignatureException {
-		try {
-			return x_engineVerify(sigBytes);
-		} finally {
-			reset();
-		}
-	}
+	private boolean doVerify(byte[] signature) throws SignatureException {
+		if (signature.length != 64) throw new SignatureException("signature length is wrong");
 
-	private boolean x_engineVerify(byte[] sigBytes) throws SignatureException {
-		if (sigBytes.length != 64) throw new SignatureException("signature length is wrong");
+		EdPublicKey key = (EdPublicKey) this.key;
 
-		EdPublicKey edk = (EdPublicKey) key;
-
-		edk.getParams().addCtx(digest);
-		digest.update(sigBytes, 0, 32);
-		digest.update(edk.getAbyte());
+		key.getParams().addCtx(digest);
+		digest.update(signature, 0, 32);
+		digest.update(key.getPublicKey());
 		ByteBuffer buf = prehash ? ByteBuffer.wrap(digest.digest()) : data.nioBuffer();
 		digest.update(buf);
 
 		byte[] h = EdInteger.scalar_mod_inline(digest.digest());
-		byte[] S = Arrays.copyOfRange(sigBytes, 32, 64);
-		EdPoint R = key.getParams().getB().doubleScalarMultiplyShared(edk.getNegativeA(), h, S);
+		byte[] S = Arrays.copyOfRange(signature, 32, 64);
+		EdPoint R = key.getParams().getBasePoint().doubleScalarMultiplyShared(key.getNegativePublicPoint(), h, S);
 		byte[] Rbyte = R.toByteArray();
 		for (int i = 0; i < Rbyte.length; ++i) {
-			if (Rbyte[i] != sigBytes[i]) return false;
+			if (Rbyte[i] != signature[i]) return false;
 		}
 		return true;
 	}
-
-	@Override
-	protected void engineSetParameter(String param, Object value) { throw new InvalidParameterException("no impl"); }
-	@Override
-	protected Object engineGetParameter(String param) { throw new InvalidParameterException("no impl"); }
-
-	public byte[] signOneShot(DynByteBuf buf) throws SignatureException {
-		DynByteBuf prev = data;
-		data = buf;
-		externalBuffer = true;
-		try{
-			if (prehash) update(buf.nioBuffer());
-			return sign();
-		} finally {
-			data = prev;
-			externalBuffer = false;
-		}
-	}
+	// 三个核心函数
 
 	public boolean verifyOneShot(DynByteBuf buf, byte[] sign) throws SignatureException {
 		DynByteBuf prev = data;
 		data = buf;
-		externalBuffer = true;
 		try{
-			if (prehash) update(buf.nioBuffer());
-			return verify(sign);
+			if (prehash) digest.update(buf.nioBuffer());
+			return doVerify(sign);
 		} finally {
 			data = prev;
-			externalBuffer = false;
 		}
 	}
+
+	public byte[] signOneShot(DynByteBuf buf) {
+		DynByteBuf prev = data;
+		data = buf;
+		try{
+			if (prehash) digest.update(buf.nioBuffer());
+			return doSign();
+		} finally {
+			data = prev;
+		}
+	}
+
+	@Override
+	protected void engineInitVerify(PublicKey publicKey) throws InvalidKeyException {
+		if (!(publicKey instanceof EdPublicKey))
+			throw new InvalidKeyException("cannot identify EdDSA public key: " + publicKey.getClass());
+
+		key = (EdPublicKey) publicKey;
+		init();
+	}
+
+	@Override
+	protected void engineInitSign(PrivateKey privateKey) throws InvalidKeyException {
+		if (!(privateKey instanceof EdPrivateKey)) {
+			throw new InvalidKeyException("cannot identify EdDSA private key: " + privateKey.getClass());
+		}
+
+		key = (EdPrivateKey) privateKey;
+		init();
+	}
+
+	protected final void engineUpdate(byte b) { if (prehash) digest.update(b); else data.put(b); }
+	protected final void engineUpdate(byte[] b, int off, int len) { if (prehash) digest.update(b, off, len); else data.put(b, off, len); }
+	protected final void engineUpdate(ByteBuffer input) { if (prehash) digest.update(input); else data.put(input); }
+
+	@Override
+	protected boolean engineVerify(byte[] sigBytes) throws SignatureException {
+		try {
+			return doVerify(sigBytes);
+		} finally {
+			data.clear();
+		}
+	}
+
+	@Override
+	protected byte[] engineSign() {
+		try {
+			return doSign();
+		} finally {
+			data.clear();
+		}
+	}
+
+	@Override
+	public Object clone() throws CloneNotSupportedException {
+		EdSignature sig = (EdSignature) super.clone();
+		sig.data = new ByteList();
+		return sig;
+	}
+
+	@Override protected void engineSetParameter(String param, Object value) { throw new InvalidParameterException("no impl"); }
+	@Override protected Object engineGetParameter(String param) { throw new InvalidParameterException("no impl"); }
 }

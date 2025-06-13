@@ -10,19 +10,19 @@ import roj.asm.insn.Label;
 import roj.asm.type.Generic;
 import roj.asm.type.IType;
 import roj.asm.type.Type;
+import roj.collect.ArrayList;
 import roj.collect.IntMap;
-import roj.collect.SimpleList;
-import roj.collect.ToIntMap;
-import roj.compiler.LavaFeatures;
+import roj.compiler.CompileContext;
+import roj.compiler.LavaCompiler;
+import roj.compiler.api.Compiler;
 import roj.compiler.api.InvokeHook;
 import roj.compiler.api.Types;
 import roj.compiler.asm.Asterisk;
 import roj.compiler.asm.MethodWriter;
 import roj.compiler.ast.EnumUtil;
-import roj.compiler.context.GlobalContext;
-import roj.compiler.context.LocalContext;
 import roj.compiler.diagnostic.Kind;
 import roj.compiler.resolve.*;
+import roj.compiler.runtime.SwitchMap;
 import roj.text.CharList;
 import roj.text.TextUtil;
 import roj.util.Helpers;
@@ -41,7 +41,7 @@ import static roj.asm.Opcodes.*;
  *   <li>接口方法调用：{@code interface.defaultMethod(args)}
  * </ul>
  *
- * <p>{@link #resolve(LocalContext)}处理以下语义：
+ * <p>{@link #resolve(CompileContext)}处理以下语义：
  * <ul>
  *   <li>方法重载解析
  *   <li>可变参数处理
@@ -95,7 +95,7 @@ public final class Invoke extends Expr {
 
 	static Invoke resolved(MethodNode method, Expr expr, List<Expr> args, int flag) {
 		var node = new Invoke();
-		node.expr = method.name().equals("<init>") ? Type.klass(method.owner) : expr;
+		node.expr = method.name().equals("<init>") ? Type.klass(method.owner()) : expr;
 		node.method = method;
 		node.argTypes = Helpers.cast(Type.methodDesc(method.rawDesc()));
 		// 不可能在生成的代码中出现，仅供插件使用（akka不需要owner信息判断也能知道这是一个接口里的类）
@@ -113,16 +113,17 @@ public final class Invoke extends Expr {
 		this.args = args;
 	}
 
-	private static final ToIntMap<Class<?>> TypeId = new ToIntMap<>();
-	static {
-		TypeId.putInt(This.class, 0);
-		TypeId.putInt(MemberAccess.class, 1);
-		TypeId.putInt(Literal.class, 2);
-		TypeId.putInt(LocalVariable.class, 3);
-	}
+	private static final SwitchMap TypeId = SwitchMap.Builder
+			.builder(4, true)
+			.add(This.class, 1)
+			.add(MemberAccess.class, 2)
+			.add(Literal.class, 3)
+			.add(LocalVariable.class, 4)
+			.build();
+
 	public Invoke(Expr expr, List<Expr> args) {
-		int type = TypeId.getOrDefault(expr.getClass(), -1);
-		if (type < 0) throw new IllegalArgumentException("不支持的表达式类型 "+expr);
+		int type = TypeId.get(expr.getClass());
+		if (type == 0) throw new IllegalArgumentException("不支持的表达式类型 "+expr);
 		this.expr = expr;
 		this.args = args;
 	}
@@ -131,14 +132,14 @@ public final class Invoke extends Expr {
 	public String toString() {
 		CharList sb = new CharList();
 		if (!(expr instanceof IType)) {
-			if (expr != null) sb.append(expr); else if (method != null) sb.append(method.owner);
+			if (expr != null) sb.append(expr); else if (method != null) sb.append(method.owner());
 			if (method != null) sb.replace('/', '.').append('.').append(method.name());
 		} else sb.append("new ").append(expr);
 		return TextUtil.join(args, ", ", sb.append('(')).append(')').toStringAndFree();
 	}
 
 	@Override
-	public Expr resolve(LocalContext ctx) throws ResolveException {
+	public Expr resolve(CompileContext ctx) throws ResolveException {
 		if ((flag&RESOLVED) != 0) return this;
 		flag |= RESOLVED;
 
@@ -173,7 +174,7 @@ public final class Invoke extends Expr {
 						void a() {}
 					*/
 					for (MethodNode method : ctx.getMethodList(ctx.file, methodName).getMethods()) {
-						if (ctx.checkAccessible(ctx.classes.getClassInfo(method.owner), method, false, false)) {
+						if (ctx.checkAccessible(ctx.compiler.resolve(method.owner()), method, false, false)) {
 							break check;
 						}
 					}
@@ -187,7 +188,7 @@ public final class Invoke extends Expr {
 						break block;
 					}
 
-					if(ctx.classes.hasFeature(LavaFeatures.OMISSION_NEW)) {
+					if(ctx.compiler.hasFeature(Compiler.OMISSION_NEW)) {
 						methodOwner = ctx.resolve(methodName);
 						if (methodOwner != null) {
 							// 构造器
@@ -230,7 +231,7 @@ public final class Invoke extends Expr {
 			// 如果是this，因为This表达式返回值是rawtypes，所以泛型参数会被擦到上界
 			instanceType = realExpr.type();
 			// Notfound
-			if (instanceType == Asterisk.anyType) return NaE.RESOLVE_FAILED;
+			if (instanceType == Asterisk.anyType) return NaE.resolveFailed(this);
 
 			if (instanceType.isPrimitive()) {
 				// 支持 4.5 .toFixed(5) 这种自定义函数
@@ -238,10 +239,10 @@ public final class Invoke extends Expr {
 				methodOwner = ctx.getPrimitiveMethod(instanceType);
 				if (methodOwner == null) {
 					ctx.report(this, Kind.ERROR, "symbol.error.derefPrimitive", instanceType);
-					return NaE.RESOLVE_FAILED;
+					return NaE.resolveFailed(this);
 				} else {
 					// 转换为静态方法调用，基本类型变成第一个参数
-					SimpleList<Expr> tmp = Helpers.cast(ctx.tmpList); tmp.clear();
+					ArrayList<Expr> tmp = Helpers.cast(ctx.tmpList); tmp.clear();
 					tmp.add(realExpr); tmp.addAll(args);
 					args = ctx.ep.copyOf(tmp);
 					expr = null;
@@ -251,18 +252,18 @@ public final class Invoke extends Expr {
 				methodOwner = ctx.resolve(instanceType);
 				if (methodOwner == null) {
 					ctx.report(this, Kind.ERROR, "symbol.error.noSuchClass", instanceType);
-					return NaE.RESOLVE_FAILED;
+					return NaE.resolveFailed(this);
 				}
 			}
 		} else if (expr.getClass() == This.class) {// this / super
 			if (ctx.inConstructor && ctx.thisUsed) {
 				ctx.report(this, Kind.ERROR, "invoke.error.constructor", expr);
-				return NaE.RESOLVE_FAILED;
+				return NaE.resolveFailed(this);
 			}
 
 			flag |= INVOKE_SPECIAL;
 			instanceType = ((This) expr).resolve(ctx).type();
-			methodOwner = ctx.classes.getClassInfo(instanceType.owner());
+			methodOwner = ctx.compiler.resolve(instanceType.owner());
 			methodName = "<init>";
 
 			if ((ctx.file.modifier()&Opcodes.ACC_ENUM) != 0) {
@@ -280,12 +281,12 @@ public final class Invoke extends Expr {
 				// that.new enclosing() 转换为全限定名称
 				var myType = (IType) expr;
 
-				var encloseInfo = ctx.classes.getClassInfo(that.type().owner());
+				var encloseInfo = ctx.compiler.resolve(that.type().owner());
 				// !开头表示是短名称而非全限定名称
-				var innerClassInfo = ctx.classes.getInnerClassInfo(encloseInfo).get("!"+myType.owner());
-				if (innerClassInfo == null || (innerClassInfo.modifier&ACC_STATIC) != 0 || !ctx.classes.getHierarchyList(encloseInfo).containsKey(innerClassInfo.parent)) {
+				var innerClassInfo = ctx.compiler.getInnerClassInfo(encloseInfo).get("!"+myType.owner());
+				if (innerClassInfo == null || (innerClassInfo.modifier&ACC_STATIC) != 0 || !ctx.compiler.getHierarchyList(encloseInfo).containsKey(innerClassInfo.parent)) {
 					ctx.report(this, Kind.ERROR, "invoke.wrongInstantiationEnclosing", expr, that.type());
-					return NaE.RESOLVE_FAILED;
+					return NaE.resolveFailed(this);
 				}
 				myType.owner(innerClassInfo.self);
 			}
@@ -294,25 +295,25 @@ public final class Invoke extends Expr {
 			methodOwnerName = instanceType.owner();
 			methodName = "<init>";
 
-			methodOwner = ctx.classes.getClassInfo(methodOwnerName);
+			methodOwner = ctx.compiler.resolve(methodOwnerName);
 			if (methodOwner == null) {
 				ctx.report(this, Kind.ERROR, "symbol.error.noSuchClass", methodOwnerName);
-				return NaE.RESOLVE_FAILED;
+				return NaE.resolveFailed(this);
 			}
 
 			int check_flag = ctx.enumConstructor ? ACC_ABSTRACT|ACC_INTERFACE : ACC_ABSTRACT|ACC_INTERFACE|ACC_ENUM;
 			if ((methodOwner.modifier()&check_flag) != 0) {
 				ctx.report(this, Kind.ERROR, (methodOwner.modifier()&ACC_ENUM) != 0 ? "invoke.error.instantiationEnum" : "invoke.error.instantiationAbstract", methodOwnerName);
-				return NaE.RESOLVE_FAILED;
+				return NaE.resolveFailed(this);
 			}
 
 			// newEnclosingClass检查
 			if ((flag & ARG0_IS_THIS) == 0) {
-				var icFlags = ctx.classes.getInnerClassInfo(methodOwner).get(methodOwner.name());
+				var icFlags = ctx.compiler.getInnerClassInfo(methodOwner).get(methodOwner.name());
 				if (icFlags != null && (icFlags.modifier&ACC_STATIC) == 0) {
 					if (!ctx.getHierarchyList(ctx.file).containsKey(icFlags.parent)) {
 						ctx.report(this, Kind.ERROR, "cu.inheritNonStatic", icFlags.parent);
-						return NaE.RESOLVE_FAILED;
+						return NaE.resolveFailed(this);
 					} else {
 						args = EnumUtil.prepend(args, ctx.ep.This());
 					}
@@ -320,7 +321,7 @@ public final class Invoke extends Expr {
 			}
 		}
 
-		SimpleList<IType> argumentType = Helpers.cast(ctx.tmpList);
+		ArrayList<IType> argumentType = Helpers.cast(ctx.tmpList);
 		Map<String, IType> namedArgumentType = Collections.emptyMap();
 		int size = args.size()-1;
 		if (size >= 0) {
@@ -335,7 +336,8 @@ public final class Invoke extends Expr {
 			else namedArgumentType = ((NamedArgumentList) last).resolve();
 		} else argumentType.clear();
 
-		block: {
+		block:
+		try {
 			ctx.assertAccessible(methodOwner);
 
 			int flags = expr == null ? ComponentList.IN_STATIC : 0;
@@ -349,10 +351,10 @@ public final class Invoke extends Expr {
 			}
 			MethodResult r = ctx.getMethodListOrReport(methodOwner, methodName, this).findMethod(ctx, instanceType, argumentType, namedArgumentType, flags);
 			ctx.inferrer.manualTPBounds = null;
-			if (r == null) return NaE.RESOLVE_FAILED;
+			if (r == null) return NaE.resolveFailed(this);
 
 			// 后面需要读取注解，所以改成方法真正属于的类
-			methodOwner = ctx.classes.getClassInfo(r.method.owner);
+			methodOwner = ctx.compiler.resolve(r.method.owner());
 			// 注意这里也应该优化(未实现)
 			// 如果取值表达式的实际类型T是methodOwner的子类，并且T不是接口，应该直接调用T.<invokevirtual>method
 			// 这同时能减少常量池中的名称数量
@@ -369,7 +371,7 @@ public final class Invoke extends Expr {
 				Generic type1 = Objects.requireNonNull(instanceType) instanceof Generic ? (Generic) instanceType.clone() : new Generic(instanceType.owner(), instanceType.array(), Generic.EX_EXTENDS);
 				type1.extendType = Generic.EX_EXTENDS;
 				argTypes = Collections.singletonList(new Generic("java/lang/Class", Collections.singletonList(type1)));
-			} else if (method == GlobalContext.arrayClone()) {
+			} else if (method == LavaCompiler.arrayClone()) {
 				// 数组clone的特殊处理，实际返回Object，在使用处转型为instanceType
 				argTypes = Collections.singletonList(Asterisk.genericReturn(instanceType, Types.OBJECT_TYPE));
 			} else {
@@ -379,7 +381,7 @@ public final class Invoke extends Expr {
 			if ((method.modifier&Opcodes.ACC_STATIC) != 0) {
 				if (expr != null) {
 					// 如果静态函数调用的取值表达式有副作用，那么警告"不应当由表达式限定"
-					if (hasSideEffect) ctx.report(this, Kind.SEVERE_WARNING, "symbol.warn.static_on_half", method.owner, method.name(), "invoke.method");
+					if (hasSideEffect) ctx.report(this, Kind.SEVERE_WARNING, "symbol.warn.static_on_half", method.owner(), method.name(), "invoke.method");
 					else expr = null;
 				}
 			} else if ((method.modifier&Opcodes.ACC_PRIVATE) != 0) {
@@ -392,7 +394,7 @@ public final class Invoke extends Expr {
 			IntMap<Object> filledArguments = r.filledArguments;
 			if (filledArguments != null) {
 				NamedArgumentList namedArgumentList = namedArgumentType == Collections.EMPTY_MAP ? null : (NamedArgumentList) args.remove(args.size() - 1);
-				if (args == Collections.EMPTY_LIST) args = new SimpleList<>();
+				if (args == Collections.EMPTY_LIST) args = new ArrayList<>();
 				for (var entry : filledArguments.selfEntrySet()) {
 					// map的遍历不是顺序的workaround，实际args一定不能有null值！
 					while (args.size() <= entry.getIntKey()) args.add(null);
@@ -408,7 +410,7 @@ public final class Invoke extends Expr {
 				var polySign = ctx.getAnnotation(methodOwner, method, "java/lang/invoke/MethodHandle$PolymorphicSignature", true);
 				if (polySign != null) {
 					// 可变签名函数, 动态生成一个MethodNode
-					this.method = new MethodNode(method.modifier, method.owner, method.name(), "()Ljava/lang/Object;");
+					this.method = new MethodNode(method.modifier, method.owner(), method.name(), "()Ljava/lang/Object;");
 					List<Type> parameters = this.method.parameters();
 					for (int i = 0; i < argumentType.size(); i++)
 						parameters.add(argumentType.get(i).rawType());
@@ -423,16 +425,20 @@ public final class Invoke extends Expr {
 
 					var sizeContract = ctx.getAnnotation(methodOwner, method, "roj/compiler/api/VarargCount", false);
 					if (sizeContract != null) {
-						if (elements.size() < sizeContract.getInt("min", 0) || elements.size() > sizeContract.getInt("max", Integer.MAX_VALUE)) {
+						int multiplyOf = sizeContract.getInt("multiplyOf", 1);
+						if (
+								elements.size() < sizeContract.getInt("min", 0)
+							||  elements.size() > sizeContract.getInt("max", Integer.MAX_VALUE)
+							||  elements.size() / multiplyOf * multiplyOf != elements.size()) {
 							ctx.report(Kind.ERROR, "invoke.error.varargCount", sizeContract, argc);
 						}
 					}
 
-					Type arrayType = method.parameters().get(argc);
-					NewArray newArray = new NewArray(arrayType, new SimpleList<>(elements), false);
-					elements.clear();
+					IType arrayType = r.parameters().get(argc);
+					NewArray newArray = new NewArray(arrayType, new ArrayList<>(elements), false);
+					elements.clear(); // removeRange
 
-					if (args == Collections.EMPTY_LIST) args = new SimpleList<>();
+					if (args == Collections.EMPTY_LIST) args = new ArrayList<>();
 					args.add(newArray.resolve(ctx));
 				}
 			}
@@ -445,23 +451,24 @@ public final class Invoke extends Expr {
 
 			// add throws
 			r.addExceptions(ctx, false);
+		} finally {
+			// clear ThreadLocal cache
+			argumentType.clear();
 		}
 
-		// clear ThreadLocal cache
-		argumentType.clear();
 		return this;
 	}
 
 	@Override
 	public boolean hasFeature(Feature feature) {
 		if (feature == Feature.INVOKE_CONSTRUCTOR) return expr instanceof This;
-		if (feature == Feature.TAILREC) return method == LocalContext.get().method;
+		if (feature == Feature.TAILREC) return method == CompileContext.get().method;
 		return false;
 	}
 	@Override
 	public IType type() { return expr instanceof IType ? ((IType) expr) : argTypes != null ? argTypes.get(argTypes.size()-1) : Asterisk.anyType; }
 
-	private boolean checkTailrec(LocalContext ctx, MethodWriter cw) {
+	private boolean checkTailrec(CompileContext ctx, MethodWriter cw) {
 		var mn = method;
 		if (mn != ctx.method) return false;
 
@@ -495,7 +502,7 @@ public final class Invoke extends Expr {
 	public void write(MethodWriter cw, boolean noRet) { write(cw, noRet ? null : TypeCast.Cast.IDENTITY); }
 	@Override
 	public void write(MethodWriter cw, @Nullable TypeCast.Cast _returnType) {
-		var ctx = LocalContext.get();
+		var ctx = CompileContext.get();
 		if (ctx.inReturn && checkTailrec(ctx, cw)) return;
 
 		var isNullishOwner = false;
@@ -527,7 +534,7 @@ public final class Invoke extends Expr {
 					}
 				}
 
-				var cast = instanceType == null || instanceType.genericType() >= IType.ASTERISK_TYPE ? null : ctx.castTo(instanceType, Type.klass(method.owner), 0);
+				var cast = instanceType == null || instanceType.genericType() >= IType.ASTERISK_TYPE ? null : ctx.castTo(instanceType, Type.klass(method.owner()), 0);
 				expr.write(cw, cast);
 
 				// DotGet最后的调用（当前表达式）是nullish的
@@ -545,8 +552,7 @@ public final class Invoke extends Expr {
 			//noinspection ThreadLocalSetWithNull
 			MemberAccess.NULLISH_TARGET.set(null);
 		for (int i = 0; i < args.size(); i++) {
-			Expr expr = args.get(i);
-			expr.write(cw, ctx.castTo(/*对常量进行范围内的自动窄化转换*/expr.minType(), argTypes.get(i), 0));
+			ctx.writeCast(cw, args.get(i), argTypes.get(i));
 		}
 		if (nullishTarget != null) MemberAccess.NULLISH_TARGET.set(nullishTarget);
 
@@ -558,9 +564,9 @@ public final class Invoke extends Expr {
 
 		if ((flag&INTERFACE_CLASS) != 0) {
 			if (opcode == Opcodes.INVOKESTATIC) {
-				ctx.file.setMinimumBinaryCompatibility(LavaFeatures.JAVA_8);
+				ctx.file.setMinimumBinaryCompatibility(Compiler.JAVA_8);
 			}
-			cw.invoke(opcode == Opcodes.INVOKEVIRTUAL ? Opcodes.INVOKEINTERFACE : opcode, method.owner, method.name(), method.rawDesc(), true);
+			cw.invoke(opcode == Opcodes.INVOKEVIRTUAL ? Opcodes.INVOKEINTERFACE : opcode, method.owner(), method.name(), method.rawDesc(), true);
 		} else {
 			cw.invoke(opcode, method);
 			if (ctx.inConstructor && expr instanceof This) {
@@ -603,6 +609,7 @@ public final class Invoke extends Expr {
 	public boolean isNew() {return expr instanceof IType;}
 	public Expr getParent() {return expr instanceof Expr expr ? expr : null;}
 	public MethodNode getMethod() {return method;}
+	public void setMethod(MethodNode mn) {method = mn;}
 	public List<Expr> getArguments() {return args;}
 	/**
 	 * 仅给静态工厂准备，指定该表达式的泛型返回值
@@ -612,4 +619,9 @@ public final class Invoke extends Expr {
 	 * var.new XXX()语法, 指定第一个参数为This
 	 */
 	public Invoke setThisArg() {flag |= ARG0_IS_THIS;return this;}
+
+	public int getArgumentCount() {
+		if (args.size() == 0) return 0;
+		return args.get(args.size() - 1) instanceof NamedArgumentList argumentList ? argumentList.map.size() + args.size() - 1 : args.size();
+	}
 }

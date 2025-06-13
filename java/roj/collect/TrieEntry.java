@@ -11,7 +11,7 @@ import java.util.Iterator;
  * @author Roj234
  * @since 2020/11/9 23:10
  */
-public abstract class TrieEntry implements Iterable<TrieEntry>, Cloneable, _Generic_Entry {
+public abstract class TrieEntry implements Iterable<TrieEntry>, Cloneable, _LibEntry {
 	public final char firstChar;
 	TrieEntry(char ch) { this.firstChar = ch; }
 
@@ -93,7 +93,7 @@ public abstract class TrieEntry implements Iterable<TrieEntry>, Cloneable, _Gene
 
 	@NotNull
 	@Override
-	public final Iterator<TrieEntry> iterator() { return new _Generic_EntryItr<>(entries); }
+	public final Iterator<TrieEntry> iterator() { return new _LibEntryItr<>(entries, null); }
 
 	public void faster() {
 		if (size > 1) {
@@ -158,8 +158,8 @@ public abstract class TrieEntry implements Iterable<TrieEntry>, Cloneable, _Gene
 	}
 
 	public static abstract class Itr<NEXT, ENTRY extends TrieEntry> extends AbstractIterator<NEXT> {
-		SimpleList<ENTRY> a = new SimpleList<>();
-		SimpleList<Object> b = new SimpleList<>();
+		ArrayList<ENTRY> a = new ArrayList<>();
+		ArrayList<Object> b = new ArrayList<>();
 		ENTRY ent;
 		int i;
 		protected CharList seq;
@@ -184,8 +184,8 @@ public abstract class TrieEntry implements Iterable<TrieEntry>, Cloneable, _Gene
 		// 深度优先
 		@SuppressWarnings("unchecked")
 		public final boolean _computeNextDepthFirst() {
-			SimpleList<ENTRY> a = this.a;
-			SimpleList<Iterator<ENTRY>> b = Helpers.cast(this.b);
+			ArrayList<ENTRY> a = this.a;
+			ArrayList<Iterator<ENTRY>> b = Helpers.cast(this.b);
 
 			int i = a.size - 1;
 			while (true) {
@@ -215,7 +215,7 @@ public abstract class TrieEntry implements Iterable<TrieEntry>, Cloneable, _Gene
 		// 广度优先
 		@SuppressWarnings("unchecked")
 		public final boolean _computeNextWidthFirst() {
-			SimpleList<ENTRY> a = this.a;
+			ArrayList<ENTRY> a = this.a;
 			while (true) {
 				if (a.size == 0) return false;
 
@@ -224,7 +224,7 @@ public abstract class TrieEntry implements Iterable<TrieEntry>, Cloneable, _Gene
 				}
 				i = 0;
 
-				SimpleList<ENTRY> b = Helpers.cast(this.b);
+				ArrayList<ENTRY> b = Helpers.cast(this.b);
 				for (ENTRY entry : a) {
 					if (entry.size > 0) {
 						b.ensureCapacity(b.size + entry.size);

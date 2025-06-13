@@ -64,7 +64,7 @@ public interface DAO<T> {
 	@SuppressWarnings("unchecked")
 	@NotNull
 	static <T> DAO<T> forType(Class<T> dao) {
-		var map = DAOMaker.IMPLEMENTATION_CACHE.computeIfAbsent(dao.getClassLoader(), Helpers.fnMyHashMap());
+		var map = DAOMaker.IMPLEMENTATION_CACHE.computeIfAbsent(dao.getClassLoader(), Helpers.fnHashMap());
 
 		var impl = map.get(dao);
 		if (impl == null) {

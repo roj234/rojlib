@@ -279,6 +279,6 @@ public class Rect3d {
 
 	@Override
 	public String toString() {
-		return this.getClass() + " {" + minX + ", " + minY + ", " + minZ + ", " + maxX + ", " + maxY + ", " + minZ + "}";
+		return this.getClass().getSimpleName() + " {" + minX + ", " + minY + ", " + minZ + ", " + maxX + ", " + maxY + ", " + minZ + "}";
 	}
 }

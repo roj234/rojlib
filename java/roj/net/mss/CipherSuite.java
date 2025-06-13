@@ -5,7 +5,6 @@ import roj.crypt.CryptoFactory;
 import roj.crypt.DHGroup;
 import roj.crypt.ECGroup;
 import roj.crypt.KeyExchange;
-import roj.crypt.eddsa.XDHUnofficial;
 import roj.util.Helpers;
 
 import java.security.MessageDigest;
@@ -83,7 +82,7 @@ public final class CipherSuite {
 
 			register(KEX_DHE_ffdhe2048, "DH-ffdhe2048", DHGroup.ffdhe2048);
 			register(KEX_ECDHE_secp384r1, "ECDH-secp384r1", ECGroup.secp384r1);
-			register(KEX_XDHE_x25519, "XDH-x25519", XDHUnofficial::new);
+			//register(KEX_XDHE_x25519, "XDH-x25519", X25519DH::new);
 		} catch (Exception e) {
 			Helpers.athrow(e);
 		}

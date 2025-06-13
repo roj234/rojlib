@@ -2,9 +2,9 @@ package roj.config;
 
 import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.Range;
+import roj.collect.BitSet;
 import roj.collect.Int2IntMap;
-import roj.collect.MyBitSet;
-import roj.collect.SimpleList;
+import roj.collect.ArrayList;
 import roj.collect.TrieTree;
 import roj.concurrent.OperationDone;
 import roj.config.data.CInt;
@@ -17,7 +17,6 @@ import roj.text.TextUtil;
 import roj.util.Helpers;
 
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.function.BiFunction;
 
@@ -28,14 +27,14 @@ import static roj.config.Word.*;
  * @since 2020/10/31 14:22
  */
 public class Tokenizer {
-	public static final MyBitSet
-		NUMBER = MyBitSet.from("0123456789"),
-		WHITESPACE = MyBitSet.from(" \r\n\t\f"); // #12288 Chinese space '　'
+	public static final BitSet
+		NUMBER = BitSet.from("0123456789"),
+		WHITESPACE = BitSet.from(" \r\n\t\f"); // #12288 Chinese space '　'
 
 	private static final int _AF_ROD = 1;
 
 	protected final CharList found = new CharList(32);
-	protected MyBitSet literalEnd = WHITESPACE;
+	protected BitSet literalEnd = WHITESPACE;
 
 	public int index, prevIndex;
 
@@ -69,7 +68,7 @@ public class Tokenizer {
 	}
 	public final List<Word> split(String seq) throws ParseException {
 		init(seq);
-		List<Word> list = new ArrayList<>();
+		List<Word> list = new java.util.ArrayList<>();
 		while (true) {
 			Word w = next();
 			if (w.type() == Word.EOF) break;
@@ -79,7 +78,7 @@ public class Tokenizer {
 	}
 	public final List<String> splitToString(String seq) throws ParseException {
 		init(seq);
-		List<String> list = new ArrayList<>();
+		List<String> list = new java.util.ArrayList<>();
 		while (true) {
 			Word w = next();
 			if (w.type() == Word.EOF) break;
@@ -94,7 +93,7 @@ public class Tokenizer {
 
 	// region 构造
 	public Tokenizer tokenIds(TrieTree<Word> i) { tokens = i; return this; }
-	public Tokenizer literalEnd(MyBitSet i) { literalEnd = i; return this; }
+	public Tokenizer literalEnd(BitSet i) { literalEnd = i; return this; }
 
 	@Deprecated
 	public static TrieTree<Word> generate(CharSequence text) {
@@ -129,7 +128,7 @@ public class Tokenizer {
 			indexes.put(kw, new Word().init(begin++, 0, kw));
 		}
 	}
-	public static void addSymbols(TrieTree<Word> indexes, MyBitSet noLiterals, int begin, String... symbols) {
+	public static void addSymbols(TrieTree<Word> indexes, BitSet noLiterals, int begin, String... symbols) {
 		for (String kw : symbols) {
 			indexes.put(kw, new Word().init(begin++, 0, kw));
 			if (noLiterals != null) noLiterals.add(kw.charAt(0));
@@ -140,7 +139,7 @@ public class Tokenizer {
 			indexes.get(kw).pos = -1;
 		}
 	}
-	public static void addWhitespace(MyBitSet special) { special.addAll(" \t\r\n\f"); }
+	public static void addWhitespace(BitSet special) { special.addAll(" \t\r\n\f"); }
 	// endregion
 
 	public Tokenizer init(CharSequence seq) {
@@ -164,7 +163,7 @@ public class Tokenizer {
 
 	private byte seek;
 	private short prevSeekPos, seekPos;
-	private final SimpleList<Word> prevWords = new SimpleList<>();
+	private final ArrayList<Word> prevWords = new ArrayList<>();
 	public final void mark() throws ParseException {
 		if ((seek&1) != 0) throw new UnsupportedOperationException("嵌套的seek");
 
@@ -552,7 +551,7 @@ public class Tokenizer {
 		int i = index;
 		int prevI = i;
 
-		MyBitSet ex = literalEnd;
+		BitSet ex = literalEnd;
 		while (i < in.length()) {
 			int c = in.charAt(i);
 			if (ex.contains(c)) break;
@@ -616,14 +615,14 @@ public class Tokenizer {
 	}
 	protected Word onNumberFlow(CharList str, short from, short to) throws ParseException {return null;}
 
-	private static final MyBitSet
-		BIN_NUMBERS = MyBitSet.from("01Ll"),
-		OCT_NUMBERS = MyBitSet.from("01234567Ll"),
-		HEX_NUMBERS = MyBitSet.from("0123456789ABCDEFabcdefLl.Pp"),
-		DEC_NUMBERS = MyBitSet.from("0123456789DEFdefLl."),
-		REAL_NUMBERS = MyBitSet.from("0123456789DdEeFf"),
-		REAL_NUMBERS_HEX = MyBitSet.from("0123456789ABCDEFabcdefPp"),
-		REAL_NUMBERS_AFTER_EXP = MyBitSet.from("0123456789DdFf+-");
+	private static final BitSet
+		BIN_NUMBERS = BitSet.from("01Ll"),
+		OCT_NUMBERS = BitSet.from("01234567Ll"),
+		HEX_NUMBERS = BitSet.from("0123456789ABCDEFabcdefLl.Pp"),
+		DEC_NUMBERS = BitSet.from("0123456789DEFdefLl."),
+		REAL_NUMBERS = BitSet.from("0123456789DdEeFf"),
+		REAL_NUMBERS_HEX = BitSet.from("0123456789ABCDEFabcdefPp"),
+		REAL_NUMBERS_AFTER_EXP = BitSet.from("0123456789DdFf+-");
 	private static final int _NF_HEX = 1, _NF_BIN = 2, _NF_OCT = 3, _NF_END = 4, _NF_UNDERSCORE = 8;
 
 	/**
@@ -650,7 +649,7 @@ public class Tokenizer {
 		 * bit 3: Has any underscore(_)
 		 */
 		int flag = 0;
-		MyBitSet set = DEC_NUMBERS;
+		BitSet set = DEC_NUMBERS;
 		char c = in.charAt(i);
 		check1:
 		if (c == '0' && i+1 < in.length() && (oFlag & DIGIT_HBO) != 0) {
@@ -1019,7 +1018,7 @@ public class Tokenizer {
 		int i;
 		if (row != null) {
 			i = TextUtil.gAppendToNextCRLF(in, index, row);
-			row.trimLast().append('\n');
+			row.rtrim().append('\n');
 		} else {
 			i = TextUtil.gNextCRLF(in, index);
 			if (i < 0) i = in.length();

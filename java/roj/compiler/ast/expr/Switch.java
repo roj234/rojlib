@@ -6,15 +6,14 @@ import roj.asm.FieldNode;
 import roj.asm.Opcodes;
 import roj.asm.attr.Attribute;
 import roj.asm.type.IType;
-import roj.collect.MyHashSet;
+import roj.collect.HashSet;
+import roj.compiler.CompileContext;
+import roj.compiler.LavaCompiler;
 import roj.compiler.asm.MethodWriter;
 import roj.compiler.ast.SwitchNode;
-import roj.compiler.context.GlobalContext;
-import roj.compiler.context.LocalContext;
 import roj.compiler.diagnostic.Kind;
 import roj.compiler.resolve.ResolveException;
 import roj.compiler.resolve.TypeCast;
-import roj.util.Helpers;
 
 import java.util.List;
 
@@ -31,12 +30,12 @@ final class Switch extends Expr {
 	public String toString() {return "<SwitchExpr> "+node;}
 
 	@Override
-	public Expr resolve(LocalContext ctx) throws ResolveException {
+	public Expr resolve(CompileContext ctx) throws ResolveException {
 		if (type != null) return this;
 
 		int coveredAll = 0;
 
-		IType type = Helpers.maybeNull();
+		IType type = null;
 		for (var branch : node.branches) {
 			Expr expr = branch.value;
 			if (expr != null) {
@@ -58,11 +57,11 @@ final class Switch extends Expr {
 			if (node.kind < 0) {
 				// abstract sealed
 				if ((info.modifier&Opcodes.ACC_ABSTRACT) != 0 && info.getRawAttribute("PermittedSubclasses") != null) {
-					MyHashSet<String> patternType = new MyHashSet<>();
+					HashSet<String> patternType = new HashSet<>();
 					for (var branch : node.branches) {
 						patternType.add(branch.variable.type.owner());
 					}
-					coveredAll = iterSealed(ctx.classes, info, patternType) ? -1 : 0;
+					coveredAll = iterSealed(ctx.compiler, info, patternType) ? -1 : 0;
 				}
 			} else {
 				if ((info.modifier&Opcodes.ACC_ENUM) != 0) {
@@ -74,7 +73,7 @@ final class Switch extends Expr {
 					}
 					if (count >= coveredAll) {
 						if (count > coveredAll) {
-							GlobalContext.debugLogger().warn("[WTF]switch的label引用的枚举字段超过了枚举自身的字段数量");
+							LavaCompiler.debugLogger().warn("[WTF]switch的label引用的枚举字段超过了枚举自身的字段数量");
 						} else {
 							coveredAll = -1;
 						}
@@ -88,14 +87,14 @@ final class Switch extends Expr {
 		return this;
 	}
 
-	private boolean iterSealed(GlobalContext ctx, ClassNode info, MyHashSet<String> patterns) {
+	private boolean iterSealed(LavaCompiler ctx, ClassNode info, HashSet<String> patterns) {
 		var s = info.getAttribute(info.cp, Attribute.PermittedSubclasses);
 		if (s != null) {
 			List<String> value = s.value;
 			for (int i = 0; i < value.size(); i++) {
 				String type = value.get(i);
 				if (!patterns.remove(type)) return false;
-				info = ctx.getClassInfo(type);
+				info = ctx.resolve(type);
 				if (info == null || !iterSealed(ctx, info, patterns)) return false;
 			}
 		}
@@ -113,7 +112,7 @@ final class Switch extends Expr {
 
 	@Override
 	public void write(MethodWriter cw, @Nullable TypeCast.Cast returnType) {
-		var ctx = LocalContext.get();
+		var ctx = CompileContext.get();
 
 		var type = this.type;
 		if (returnType != null && returnType.getType1() != null) type = returnType.getType1();

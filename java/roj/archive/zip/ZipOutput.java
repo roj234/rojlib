@@ -1,6 +1,5 @@
 package roj.archive.zip;
 
-import roj.concurrent.ExceptionalConsumer;
 import roj.concurrent.ExceptionalSupplier;
 import roj.io.IOUtil;
 import roj.util.ByteList;
@@ -9,8 +8,6 @@ import roj.util.Helpers;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
-import java.util.concurrent.Callable;
-import java.util.function.Supplier;
 import java.util.zip.ZipEntry;
 
 /**
@@ -33,11 +30,11 @@ public final class ZipOutput implements AutoCloseable {
 	public boolean isUseZFW() {return useZFW;}
 	public ZipFileWriter getZFW() {return all;}
 
-	public void begin(boolean increment) throws IOException {
+	public void begin(boolean incremental) throws IOException {
 		if (work) end();
 
-		useZFW = !increment;
-		if (increment) {
+		useZFW = !incremental;
+		if (incremental) {
 			if (some == null) {
 				some = new ZipArchive(file);
 			} else {
@@ -107,7 +104,7 @@ public final class ZipOutput implements AutoCloseable {
 		try {
 			if (useZFW) {
 				if (all != null) {
-					all.finish();
+					all.close();
 					all = null;
 				}
 			} else if (some != null) {
@@ -116,10 +113,8 @@ public final class ZipOutput implements AutoCloseable {
 			}
 		} catch (Exception e) {
 			e3 = e;
-			try {
-				if (some != null) some.close();
-				if (all != null) all.close();
-			} catch (Exception ignored) {}
+			IOUtil.closeSilently(some);
+			IOUtil.closeSilently(all);
 		}
 		work = false;
 		if (e3 != null) Helpers.athrow(e3);

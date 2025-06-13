@@ -1,9 +1,9 @@
 package roj.config.data;
 
 import org.jetbrains.annotations.NotNull;
-import roj.collect.MyBitSet;
-import roj.collect.MyHashSet;
-import roj.collect.SimpleList;
+import roj.collect.BitSet;
+import roj.collect.HashSet;
+import roj.collect.ArrayList;
 import roj.collect.TrieTree;
 import roj.config.ParseException;
 import roj.config.Tokenizer;
@@ -15,7 +15,6 @@ import roj.text.CharList;
 import roj.text.TextUtil;
 import roj.util.Helpers;
 
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -30,7 +29,7 @@ import java.util.function.Consumer;
 public abstract class Node {
 	// region simple xpath-like selector language
 	private static final short lsb = 10, rsb = 11, child = 12, any_child = 13, lmb = 14, rmb = 15, any = 16, equ = 17, neq = 18, or = 19, comma = 20, range = 21, attr = 22, xstartwith = 23;
-	private static final MyBitSet XPATH_TOKEN_CHAR = new MyBitSet();
+	private static final BitSet XPATH_TOKEN_CHAR = new BitSet();
 	private static final TrieTree<Word> XPATH_TOKEN_ID = new TrieTree<>();
 	static { Tokenizer.addSymbols(XPATH_TOKEN_ID, XPATH_TOKEN_CHAR, 10, TextUtil.split1("( ) / // [ ] * = != | , ... @ ^=", ' ')); Tokenizer.addWhitespace(XPATH_TOKEN_CHAR); }
 
@@ -41,7 +40,7 @@ public abstract class Node {
 	public List<Node> querySelectorAll(String key) {
 		Tokenizer x = new Tokenizer().tokenIds(XPATH_TOKEN_ID).literalEnd(XPATH_TOKEN_CHAR).init(key);
 		try {
-			return _query(x, SimpleList.asModifiableList(this));
+			return _query(x, ArrayList.asModifiableList(this));
 		} catch (ParseException e) {
 			throw new IllegalArgumentException(key, e);
 		}
@@ -52,7 +51,7 @@ public abstract class Node {
 	}
 
 	private static List<Node> _query(Tokenizer wr, List<Node> in) throws ParseException {
-		List<Node> out = new SimpleList<>();
+		List<Node> out = new ArrayList<>();
 		Word w = wr.next();
 		while (true) {
 			switch (w.type()) {
@@ -88,7 +87,7 @@ public abstract class Node {
 					}
 				break;
 				case lmb:
-					MyHashSet<Node> _out = new MyHashSet<>();
+					HashSet<Node> _out = new HashSet<>();
 
 					while (true) {
 						String key = wr.next().val();
@@ -214,7 +213,7 @@ public abstract class Node {
 		return null;
 	}
 	public final List<Element> getElementsByTagName(String tag) {
-		List<Element> result = new ArrayList<>();
+		List<Element> result = new java.util.ArrayList<>();
 		getElementsByTagName(tag, result);
 		return result;
 	}

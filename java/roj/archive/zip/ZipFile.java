@@ -4,15 +4,15 @@ import roj.archive.ArchiveEntry;
 import roj.archive.ArchiveFile;
 import roj.archive.ArchiveUtils;
 import roj.archive.CRC32InputStream;
+import roj.collect.ArrayList;
 import roj.collect.ImmediateWeakReference;
-import roj.collect.SimpleList;
 import roj.collect.XashMap;
 import roj.crypt.CipherInputStream;
 import roj.io.IOUtil;
 import roj.io.source.BufferedSource;
 import roj.io.source.Source;
 import roj.io.source.SourceInputStream;
-import roj.reflect.ReflectionUtils;
+import roj.reflect.Unaligned;
 import roj.util.ArrayCache;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
@@ -40,24 +40,24 @@ import static roj.reflect.Unaligned.U;
 public class ZipFile implements ArchiveFile {
 	Source r;
 	Source fpRead;
-	private static final long FPREAD_OFFSET = ReflectionUtils.fieldOffset(ZipFile.class, "fpRead");
+	private static final long FPREAD_OFFSET = Unaligned.fieldOffset(ZipFile.class, "fpRead");
 
-	private static final XashMap.Builder<String, ZEntry> ENTRY_BUILDER = XashMap.noCreation(ZEntry.class, "name", "next");
+	static final XashMap.Builder<String, ZEntry> ENTRY_BUILDER = XashMap.noCreation(ZEntry.class, "name", "next");
 
-	private static final XashMap<Source, CacheNode> OpenedCache = ImmediateWeakReference.shape(CacheNode.class).create();
+	static final XashMap<Source, CacheNode> OpenedCache = ImmediateWeakReference.shape(CacheNode.class).create();
 	static final class CacheNode extends ImmediateWeakReference<Source> {
 		public CacheNode(Source key, XashMap<Source, CacheNode> owner) {super(key, owner);}
-		SimpleList<ZEntry> entries;
+		ArrayList<ZEntry> entries;
 		XashMap<String, ZEntry> namedEntries;
 	}
 
 	XashMap<String, ZEntry> namedEntries;
-	SimpleList<ZEntry> entries = new SimpleList<>();
+	ArrayList<ZEntry> entries = new ArrayList<>();
 
 	private ByteList buf;
 	final Charset cs;
 
-	static final ThreadLocal<List<InflateIn>> INFS = ThreadLocal.withInitial(SimpleList::new);
+	static final ThreadLocal<List<InflateIn>> INFS = ThreadLocal.withInitial(ArrayList::new);
 	static final int MAX_INFS = 10;
 
 	byte flags;
@@ -111,7 +111,7 @@ public class ZipFile implements ArchiveFile {
 
 		r = ArchiveUtils.tryOpenSplitArchive(file, true);
 		r.seek(offset);
-		if (r.length() > 0) reload();
+		reload();
 	}
 
 	public ZipFile(Source source, int flag, Charset cs) {
@@ -140,7 +140,7 @@ public class ZipFile implements ArchiveFile {
 		var node = OpenedCache.get(r);
 		if (node == null) {
 			buf = new ByteList(256);
-			entries = new SimpleList<>();
+			entries = new ArrayList<>();
 			namedEntries = null;
 			try {
 				if ((flags & FLAG_BACKWARD_READ) == 0 || r.length() < 1024 || !readBackward())
@@ -190,7 +190,7 @@ public class ZipFile implements ArchiveFile {
 		Source r1 = r;
 		if (!r.isBuffered()) r = BufferedSource.wrap(r);
 
-		SimpleList<ZEntry> locEntries = new SimpleList<>();
+		ArrayList<ZEntry> locEntries = new ArrayList<>();
 
 		// found_cen = 1
 		// found_end = 2
@@ -327,7 +327,7 @@ public class ZipFile implements ArchiveFile {
 		b.wIndex(len);
 		return b;
 	}
-	private void readLOC(SimpleList<ZEntry> locEntries) throws IOException {
+	private void readLOC(ArrayList<ZEntry> locEntries) throws IOException {
 		ByteList buf = read(26);
 		ZEntry entry = new ZEntry();
 
@@ -409,7 +409,7 @@ public class ZipFile implements ArchiveFile {
 			entry.name = new String(entry.nameBytes, 0, nameLen, cs);
 		}
 	}
-	private void readCEN(SimpleList<ZEntry> entryForward) throws IOException {
+	private void readCEN(ArrayList<ZEntry> entryForward) throws IOException {
 		ByteList buf = read(42);
 		ZEntry entry = new ZEntry();
 

@@ -1,9 +1,9 @@
 package roj.archive.zip;
 
 import roj.archive.ArchiveUtils;
-import roj.collect.MyHashSet;
-import roj.collect.RSegmentTree;
-import roj.collect.RSegmentTree.Range;
+import roj.collect.HashSet;
+import roj.collect.IntervalPartition;
+import roj.collect.IntervalPartition.Range;
 import roj.concurrent.ExceptionalSupplier;
 import roj.crypt.CRC32;
 import roj.crypt.CipherOutputStream;
@@ -40,7 +40,7 @@ import static roj.archive.zip.ZEntry.MZ_NoCrc;
  * 支持任意编码，支持InfoZip的UTF文件名
  * 支持ZIP64
  * <p>
- * 注意事项：ZipArchive禁止使用FLAG_BACKWARD_READ标记，查看{@link ZEntry#setEndPos(long)}和{@link ZipFile#initDataOffset(Source, ZEntry)}以获取详细信息
+ * 注意事项：ZipArchive禁止使用FLAG_BACKWARD_READ标记，查看{@link ZEntry#setEndPos(long)}和{@link ZipFile#validateEntry(Source, ZEntry)}以获取详细信息
  *
  * @author Roj233
  * @since 2021/7/10 17:09
@@ -48,7 +48,7 @@ import static roj.archive.zip.ZEntry.MZ_NoCrc;
 public final class ZipArchive extends ZipFile {
 	private static final Comparator<ZEntry> CEN_SORTER = (o1, o2) -> Long.compare(o1.offset, o2.offset);
 
-	private final MyHashSet<EntryMod> modified = new MyHashSet<>();
+	private final HashSet<EntryMod> modified = new HashSet<>();
 
 	public ZipArchive(String name) throws IOException { this(new File(name)); }
 	public ZipArchive(File file) throws IOException { this(file, FLAG_KILL_EXT|FLAG_VERIFY); }
@@ -56,6 +56,7 @@ public final class ZipArchive extends ZipFile {
 	public ZipArchive(File file, int flag, Charset charset) throws IOException {
 		super(ArchiveUtils.tryOpenSplitArchive(file, false), flag & ~FLAG_BACKWARD_READ, charset);
 		if (r.length() > 0) reload();
+		else namedEntries = ENTRY_BUILDER.create();
 		this.file = file;
 	}
 	public ZipArchive(Source source, int flag, Charset cs) { super(source, flag & ~FLAG_BACKWARD_READ, cs); }
@@ -83,12 +84,6 @@ public final class ZipArchive extends ZipFile {
 		mod.data = getData;
 		return mod;
 	}
-	public EntryMod putStream(String entry, InputStream in, boolean compress) {
-		EntryMod mod = createMod(entry);
-		mod.flag = (byte) (compress ? EntryMod.COMPRESS : 0);
-		mod.data = in;
-		return mod;
-	}
 	public EntryMod putStream(String entry, ExceptionalSupplier<InputStream, IOException> in, boolean compress) {
 		EntryMod mod = createMod(entry);
 		mod.flag = (byte) (compress ? EntryMod.COMPRESS : 0);
@@ -107,7 +102,7 @@ public final class ZipArchive extends ZipFile {
 		return file;
 	}
 
-	public MyHashSet<EntryMod> getModified() { return modified; }
+	public HashSet<EntryMod> getModified() { return modified; }
 
 	@Override
 	public void close() throws IOException {
@@ -123,9 +118,9 @@ public final class ZipArchive extends ZipFile {
 
 		Deflater def = new Deflater(level, true);
 
-		ZEntry minFile = null;
+		ZEntry beginEntry = null;
 
-		RSegmentTree<ZEntry> uFile = new RSegmentTree<>((int) Math.log(namedEntries.size()), false, modified.size());
+		IntervalPartition<ZEntry> keepingEntries = new IntervalPartition<>((int) Math.log(namedEntries.size()), false, modified.size());
 
 		for (Iterator<EntryMod> itr = modified.iterator(); itr.hasNext(); ) {
 			EntryMod file = itr.next();
@@ -133,15 +128,15 @@ public final class ZipArchive extends ZipFile {
 
 			ZEntry o = namedEntries.get(file.name);
 			if (o != null) {
-				if (minFile == null || minFile.offset > o.offset) {
-					minFile = o;
+				if (beginEntry == null || beginEntry.offset > o.offset) {
+					beginEntry = o;
 				}
 
 				if (file.data == null) {
 					namedEntries.removeKey(file.name);
 					// 删除【删除】类型的EntryMod
 					itr.remove();
-				} else uFile.add(o);
+				} else keepingEntries.add(o);
 			} else if (file.data == null) {
 				// not found, 多半是entries被外部修改了
 				itr.remove();
@@ -151,17 +146,17 @@ public final class ZipArchive extends ZipFile {
 		}
 
 		// write linear EFile header
-		if (minFile != null) {
-			for (ZEntry file : namedEntries) {
-				if (file.offset >= minFile.offset && !uFile.add(file)) { // ^=
-					uFile.remove(file);
+		if (beginEntry != null) {
+			for (ZEntry entry : namedEntries) {
+				if (entry.offset >= beginEntry.offset && !keepingEntries.add(entry)) { // ^=
+					keepingEntries.remove(entry);
 				}
 			}
 
-			r.seek(minFile.startPos());
+			r.seek(beginEntry.startPos());
 
-			ZEntry finalMinFile = minFile;
-			uFile.mergeConnected(new ObjLongConsumer<>() {
+			ZEntry finalMinFile = beginEntry;
+			keepingEntries.mergeConnected(new ObjLongConsumer<>() {
 				long delta, prevEnd = finalMinFile.startPos();
 
 				@Override
@@ -419,6 +414,12 @@ public final class ZipArchive extends ZipFile {
 		bw._free();
 
 		r.setLength(r.position());
+
+		CacheNode node = OpenedCache.get(r);
+		if (node != null) {
+			node.entries = entries;
+			node.namedEntries = namedEntries;
+		}
 	}
 
 	private File file;

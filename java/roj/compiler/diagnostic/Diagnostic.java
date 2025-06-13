@@ -2,8 +2,8 @@ package roj.compiler.diagnostic;
 
 import org.jetbrains.annotations.Nls;
 import roj.asm.ClassDefinition;
+import roj.compiler.CompileUnit;
 import roj.compiler.Tokens;
-import roj.compiler.context.CompileUnit;
 import roj.math.MathUtils;
 import roj.text.CharList;
 import roj.text.TextUtil;
@@ -73,7 +73,7 @@ public class Diagnostic {
 		while (true) {
 			int j = TextUtil.gNextCRLF(lines, i);
 			if (j > pos || j < 0) {
-				CharList sb = new CharList().append(lines, i, j < 0 ? lines.length() : j).trimLast();
+				CharList sb = new CharList().append(lines, i, j < 0 ? lines.length() : j).rtrim();
 				lineNumber = ln;
 				columnNumber = MathUtils.clamp(pos-i, 0, sb.length());
 				line = sb.toStringAndFree();

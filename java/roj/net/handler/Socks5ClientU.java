@@ -31,11 +31,10 @@ public final class Socks5ClientU extends Socks5Client {
 	public void channelRead(ChannelCtx ctx, Object msg) throws IOException {
 		var pkt = (DatagramPkt) msg;
 		if (state == 3) {
-			pkt.addr = remote.getAddress();
-			pkt.port = remote.getPort();
+			pkt.address = remote;
 			ctx.channelRead(msg);
 		} else {
-			super.channelRead(ctx, pkt.buf);
+			super.channelRead(ctx, pkt.data);
 		}
 	}
 

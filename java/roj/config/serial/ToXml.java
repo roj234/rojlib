@@ -1,7 +1,8 @@
 package roj.config.serial;
 
-import roj.collect.SimpleList;
+import roj.collect.ArrayList;
 import roj.config.data.*;
+import roj.util.TypedKey;
 
 import java.util.List;
 
@@ -10,6 +11,10 @@ import java.util.List;
  * @since 2022/11/15 2:07
  */
 public class ToXml implements CVisitor {
+	public static final TypedKey<Boolean> HEADLESS = new TypedKey<>("xml:headless");
+	public static final TypedKey<Boolean> SHORT_TAG = new TypedKey<>("xml:shortTag");
+	public static final TypedKey<Boolean> CDATA = new TypedKey<>("xml:CData");
+
 	public static final byte
 		XML_BEGIN    = 0,
 		XML_NAME     = 1,
@@ -19,7 +24,7 @@ public class ToXml implements CVisitor {
 		XML_ATTR_KEY = 5,
 		XML_ATTR_VAL = 6;
 
-	private final List<Element> stack = new SimpleList<>();
+	private final List<Element> stack = new ArrayList<>();
 	private Element stackBottom = new Document();
 
 	private String key;
@@ -109,12 +114,12 @@ public class ToXml implements CVisitor {
 	}
 
 	@Override
-	public void setProperty(String k, Object v) {
-		switch (k) {
-			case "entry:max_depth": maxDepth = (int) v; break;
+	public <T> void setProperty(TypedKey<T> k, T v) {
+		switch (k.name) {
+			case "generic:maxDepth": maxDepth = (int) v; break;
 			case "xml:headless": ((Document)stackBottom).headless(); break;
-			case "xml:short_tag": stackBottom.shortTag = (boolean) v; break;
-			case "xml:cdata":
+			case "xml:shortTag": stackBottom.shortTag = (boolean) v; break;
+			case "xml:CData":
 				List<Node> children = stackBottom.children();
 				((Text)children.get(children.size()-1)).nodeType = (boolean) v ? Node.CDATA : Node.TEXT;
 			break;

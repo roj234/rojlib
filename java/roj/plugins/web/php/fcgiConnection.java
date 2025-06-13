@@ -5,7 +5,7 @@ import roj.net.ChannelCtx;
 import roj.net.ChannelHandler;
 import roj.net.ClientLaunch;
 import roj.net.MyChannel;
-import roj.reflect.ReflectionUtils;
+import roj.reflect.Unaligned;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
 import roj.util.Helpers;
@@ -51,7 +51,7 @@ public final class fcgiConnection implements ChannelHandler, Consumer<MyChannel>
 
 	private final Object lock = new Object();
 	private volatile fcgiContent activeResponse;
-	private static final long OFF = ReflectionUtils.fieldOffset(fcgiConnection.class, "activeResponse");
+	private static final long OFF = Unaligned.fieldOffset(fcgiConnection.class, "activeResponse");
 
 	fcgiConnection(fcgiManager manager, int port) throws IOException {
 		this.manager = manager;

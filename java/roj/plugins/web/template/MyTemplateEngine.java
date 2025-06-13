@@ -1,16 +1,13 @@
 package roj.plugins.web.template;
 
 import roj.collect.XashMap;
+import roj.compiler.CompileContext;
+import roj.compiler.JavaCompileUnit;
 import roj.compiler.LambdaLinker;
-import roj.compiler.context.GlobalContext;
-import roj.compiler.context.JavaCompileUnit;
-import roj.compiler.context.LocalContext;
-import roj.compiler.plugins.annotations.Getter;
-import roj.compiler.plugins.annotations.Setter;
+import roj.compiler.LavaCompiler;
 import roj.concurrent.TaskPool;
-import roj.config.ConfigMaster;
 import roj.config.ParseException;
-import roj.config.auto.Optional;
+import roj.config.Tokenizer;
 import roj.http.server.Content;
 import roj.http.server.Request;
 import roj.http.server.ResponseHeader;
@@ -18,11 +15,9 @@ import roj.io.IOUtil;
 import roj.plugins.web.error.GreatErrorPage;
 import roj.reflect.ClassDefiner;
 import roj.text.CharList;
-import roj.text.TextUtil;
+import roj.text.LineReader;
 
 import java.io.File;
-import java.util.List;
-import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -30,13 +25,10 @@ import java.util.concurrent.atomic.AtomicInteger;
  * @since 2024/3/3 3:27
  */
 public class MyTemplateEngine {
-	private final GlobalContext compiler = new GlobalContext();
-	private final ThreadLocal<LocalContext> myContext = new ThreadLocal<>();
+	private final LavaCompiler compiler = new LavaCompiler();
+	private final ThreadLocal<CompileContext> myContext = new ThreadLocal<>();
 	private final ClassLoader loader = new ClassDefiner(MyTemplateEngine.class.getClassLoader(), "MyTemplateEngine");
 	private final AtomicInteger classId = new AtomicInteger();
-	@Getter
-	@Setter
-	private TemplateConfig defaultConfig = new TemplateConfig();
 
 	private static final XashMap.Builder<File, Cache> BUILDER = XashMap.builder(File.class, Cache.class, "file", "_next");
 	private final XashMap<File, Cache> cache = BUILDER.create();
@@ -46,11 +38,16 @@ public class MyTemplateEngine {
 		File file;
 		long lastUpdate;
 		Template template;
-		String nothingSpecial;
+		String textContent;
 	}
 
 	public MyTemplateEngine() {
-		compiler.addLibrary(LambdaLinker.Implib_Archive);
+		compiler.addLibrary(LambdaLinker.LIBRARY_SELF);
+	}
+
+
+	public Cache findTemplate(String substring) {
+		return null;
 	}
 
 	public Content render(File file, Request req, ResponseHeader rh) {
@@ -65,8 +62,8 @@ public class MyTemplateEngine {
 				synchronized (fc) {
 					if (modified > fc.lastUpdate) {
 						String str = IOUtil.readString(file);
-						if (!str.equals(fc.nothingSpecial)) {
-							fc.template = parse(file.getName(), fc.nothingSpecial = str, new CharList());
+						if (!str.equals(fc.textContent)) {
+							fc.template = parse(file.getName(), fc.textContent = str, new CharList());
 						}
 						fc.lastUpdate = modified;
 					}
@@ -78,145 +75,199 @@ public class MyTemplateEngine {
 		}
 
 		var tpl = fc.template;
-		if (tpl == null) return Content.html(fc.nothingSpecial);
-		if (tpl.isFast(req, rh.enableCompression())) {
+		if (tpl == null) return Content.html(fc.textContent);
+
+		rh.enableCompression();
+		if (tpl.isFast()) {
 			CharList tmp = new CharList();
 			tpl.render(req, tmp, null);
 			return Content.html(tmp);
 		} else {
-			var resp = new TemplateRenderer();
-			TaskPool.Common().submit(() -> {
+			var renderer = new TemplateRenderer();
+			TaskPool.common().submit(() -> {
 				try {
 					CharList tmp = new CharList();
-					tpl.render(req, tmp, resp);
+					tpl.render(req, tmp, renderer);
 					if (tmp.length() > 0) {
-						resp.offer(IOUtil.getSharedByteBuf().putUTFData(tmp));
+						renderer.offer(IOUtil.getSharedByteBuf().putUTFData(tmp));
 					}
 				} finally {
-					resp.setEof();
+					renderer.setEof();
 				}
 			});
-			return resp;
+			return renderer;
 		}
 	}
 
-	@Optional
-	public static final class TemplateConfig {
-		public boolean restricted = true, fast, debug;
-		public List<String> imports;
-		public Map<String, String> headers;
-		public String prepend;
-	}
+	public Template parse(String sourceFile, String template, CharList code) throws ParseException {
+		code.append("package roj.plugins.web.template.servlet;" +
+				   "package-restricted;" +
+				   "import roj.http.server.Request;" +
+				   "import roj.http.server.ResponseHeader;" +
+				   "import roj.text.CharList;" +
+				   "import roj.plugins.web.template.*;");
 
-	public Template parse(String source, CharSequence in, CharList out) throws ParseException {
-		int prev = 0, i = 0;
+		var itr = LineReader.create(template);
+		String line;
 
-		var cfg = defaultConfig;
-		if (in.charAt(0) == '{' && in.charAt(1) == '{' && in.charAt(2) == '{') {
-			int j = TextUtil.gIndexOf(in, "}}}", i, in.length());
-			if (j < 0) throw new IllegalArgumentException("未终止的{{{");
-			cfg = ConfigMaster.YAML.readObject(TemplateConfig.class, in.subSequence(3, j));
-			prev = i = j+3;
-		}
+		var fast = false;
+		var debug = false;
+		var lines = 0;
 
-		out.append("package roj.plugins.http.template.servlet;\n");
-		if (cfg.restricted) out.append("package-restricted;\n");
-		if (cfg.imports != null) {
-			List<String> imports = cfg.imports;
-			for (int j = 0; j < imports.size(); j++) {
-				out.append("import ").append(imports.get(j)).append(";\n");
-			}
-		}
-		out.append("""
-			import roj.net.http.server.Request;
-			import roj.net.http.server.ResponseHeader;
-			import roj.text.CharList;
-			import roj.plugins.http.template.*;
-			public class MyJspServlet""")
-		   .append(classId.incrementAndGet())
-		   .append(" implements Template {\n");
-		if (cfg.prepend != null) out.append(cfg.prepend).append('\n');
-		if (cfg.headers != null || cfg.fast) {
-			out.append("""
-			@Override
-			public boolean isFast(Request req, ResponseHeader rh) {
-			""");
-
-			if (cfg.headers != null) {
-				out.append("rh");
-				for (var entry : cfg.headers.entrySet()) {
-					out.append(".header(\"").append(entry.getKey().replace("\"", "\\\"")).append("\",\"").append(entry.getValue().replace("\"", "\\\"")).append("\")");
-				}
-				out.append(';');
-			}
-
-			out.append("return ").append(cfg.fast).append(";}\n");
-		}
-		out.append("""
-			@Override
-			public void render(Request request, CharList out, TemplateRenderer\s""")
-		   .append(cfg.fast ? "_" : "renderer").append("){\n");
-
-		var escape = new CharList();
+		loop:
 		while (true) {
-			i = TextUtil.gIndexOf(in, "{{", i, in.length());
-			if (i < 0) {
-				i = in.length();
-				// 没有模板标记，这是纯静态的
-				if (prev == 0) return null;
-			} else if (i+2 >= in.length()) throw new ParseException(in, "未终止的{{", i);
+			line = itr.next();
 
-			if (prev < i) {
-				out.append("out.append(\"");
-				escape.clear();
-				out.append(escape.append(in, prev, i).replace("\"", "\\\""));
-				out.append("\");\n");
+			if (line.length() > 2 && line.charAt(0) == '#') {
+				int i = line.indexOf(' ');
+
+				switch (line.substring(1, i < 0 ? line.length() : i)) {
+					case "c" -> {}
+					case "fast" -> fast = true;
+					case "debug" -> debug = true;
+					case "import" -> code.append(line, 1, line.length()).append(';');
+					default -> {break loop;}
+				}
+
+				lines++;
+				if (!itr.hasNext()) return null;
+				continue;
 			}
-
-			if ((i+=2) >= in.length()) break;
-
-			if (in.charAt(i) == '{') {
-				int j = TextUtil.gIndexOf(in, "}}}", ++i, in.length());
-				if (j < 0) throw new ParseException(in, "未终止的{{{", i);
-
-				out.append(in, i, j);
-				i = j + 3;
-			} else {
-				int j = TextUtil.gIndexOf(in, "}}", i, in.length());
-				if (j < 0) throw new ParseException(in, "未终止的{{", i);
-
-				out.append("out.append(").append(in, i, j).append(");");
-				i = j + 2;
-			}
-
-			prev = i;
-		}
-		escape._free();
-
-		if (cfg.debug) {
-			System.out.println("准备编译的代码:");
-			System.out.println(out);
+			break;
 		}
 
-		var cu = new JavaCompileUnit(source, out.append("\n}}").toStringAndFree());
+		var paramType = "Object";
+
+		code.append("public class ExpressoServlet$").append(classId.incrementAndGet()).append(" implements Template {");
+		if (fast) code.append("public boolean isFast() {return true;}");
+		code.append("public void render(Request request, CharList response, TemplateRenderer renderer){")
+		   .append("const param = (").append(paramType).append(") renderer.param;")
+		   .padEnd('\n', lines+1); // 对齐行号;
+
+		var blockMethod = new CharList();
+
+		templateBody(code, line, itr, paramType, blockMethod);
+
+		code.append('}').append(blockMethod).append('}');
+
+		if (debug) {
+			System.out.println("准备编译:");
+			System.out.println(code);
+		}
+
+		var unit = new JavaCompileUnit(sourceFile, code.toStringAndFree());
 
 		var ctx = myContext.get();
-		if (ctx == null) myContext.set(ctx = compiler.createLocalContext());
+		if (ctx == null) myContext.set(ctx = compiler.createContext());
 
-		LocalContext.set(ctx);
+		CompileContext.set(ctx);
 		try {
-			cu.S1_Struct();
-			cu.S2_ResolveName();
-			cu.S2_ResolveType();
-			cu.S2_ResolveMethod();
-			cu.S3_Annotation();
-			cu.S4_Code();
-			cu.S5_preStore();
+			unit.S1parseStruct();
+			unit.S2p1resolveName();
+			unit.S2p2resolveType();
+			unit.S2p3resolveMethod();
+			unit.S3processAnnotation();
+			unit.S4parseCode();
+			unit.S5serialize();
 		} finally {
-			LocalContext.set(null);
+			CompileContext.set(null);
 		}
 
-		ClassDefiner.premake(cu);
-		return (Template) ClassDefiner.make(cu, loader);
+		return (Template) ClassDefiner.newInstance(unit, loader);
+	}
+
+	private void templateBody(CharList code, String line, LineReader.Impl itr, String paramType, CharList miscMethod) {
+		boolean isWriting = false;
+
+		while (true) {
+			isDirective: {
+				if (line.length() > 1 && line.charAt(0) == '#') {
+					if (line.startsWith("#c ")) line = "";
+					else if (!line.startsWith("##")) {
+						if (isWriting) {
+							code.setLength(code.length()-1);
+							code.append("\");\n");
+							isWriting = false;
+						}
+
+						int i = line.indexOf(' ');
+
+						if (i > 0) {
+							switch (line.substring(1, i)) {
+								default -> throw new IllegalArgumentException("unknown directive "+line);
+								case "if" -> code.append("if(").append(line.substring(i + 1)).append("){");
+								case "elif" -> code.append("} else if(").append(line.substring(i + 1)).append("){");
+								case "for" -> code.append("for(").append(line.substring(i + 1)).append("){");
+								case "call" -> {
+									int second = line.indexOf(' ', i+1);
+									String templateName = line.substring(i+1, second < 0 ? line.length() : second);
+									String argument = second < 0 ? null : line.substring(second+1);
+
+									if (templateName.startsWith("@")) {
+										code.append("this.").append(templateName, 1, templateName.length()).append("(request,response,param,");
+										if (argument != null) code.append(argument);
+										code.append(");");
+									} else {
+										code.append("renderer.findTemplate(\"");
+										Tokenizer.escape(code, templateName).append("\").render(request,response,").append(argument).append(");");
+									}
+								}
+								case "include" -> {
+									String tplName = line.substring(i + 1);
+									var template = findTemplate(tplName);
+									//if (template == null) throw new IllegalStateException("找不到导入的模板"+tplName);
+
+									//templateBody(code, "", LineReader.create(template.textContent), paramType);
+								}
+								case "block" -> {
+									String nameAndArg = line.substring(i+1);
+									int pos = nameAndArg.indexOf('(');
+									String name = pos < 0 ? nameAndArg : nameAndArg.substring(0, pos);
+									String arg = pos < 0 ? "" : ","+nameAndArg.substring(pos+1, nameAndArg.length()-1);
+
+									miscMethod.append("private void ").append(name).append("(Request request, CharList response, ").append(paramType).append(" param").append(arg).append("){");
+									CharList nextLevel = new CharList();
+									templateBody(miscMethod, "", itr, paramType, nextLevel);
+									miscMethod.append("}");
+									nextLevel.appendToAndFree(miscMethod);
+								}
+							}
+						} else if (line.equals("#else")) {
+							code.append("} else {");
+						} else if (line.equals("#{")) {
+							code.append('{');
+						} else if (line.startsWith("#/") || line.equals("#}")) {
+							if (line.equals("#/block")) return;
+							code.append('}');
+						} else if (line.equals("#code")) {
+							while (itr.hasNext()) {
+								line = itr.next();
+								if (line.startsWith("#/")) break;
+								code.append(line).append('\n');
+							}
+						} else {
+							throw new IllegalArgumentException("unknown directive "+line);
+						}
+
+						break isDirective;
+					} else {
+						line = line.substring(1);
+					}
+				}
+
+				if (!isWriting) {
+					code.append("response.append(\"");
+					isWriting = true;
+				}
+				Tokenizer.escape(code, line);
+			}
+
+			if (!itr.hasNext()) break;
+			line = itr.next();
+
+			code.append('\n');
+		}
+
+		if (isWriting) code.append("\");");
 	}
 }

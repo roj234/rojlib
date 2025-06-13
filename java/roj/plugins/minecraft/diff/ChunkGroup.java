@@ -1,6 +1,6 @@
 package roj.plugins.minecraft.diff;
 
-import roj.collect.MyHashSet;
+import roj.collect.HashSet;
 import roj.math.Tile;
 
 /**
@@ -9,7 +9,7 @@ import roj.math.Tile;
  */
 public class ChunkGroup implements Tile {
 	private int minX = Integer.MAX_VALUE, minZ = Integer.MAX_VALUE, maxX = Integer.MIN_VALUE, maxZ = Integer.MIN_VALUE;
-	MyHashSet<Long> chunks = new MyHashSet<>();
+	HashSet<Long> chunks = new HashSet<>();
 	int offsetX, offsetZ;
 	private int id = xx++;
 	private static int xx;
@@ -27,7 +27,7 @@ public class ChunkGroup implements Tile {
 		assert !rotated;
 	}
 
-	public void addAll(MyHashSet<Long> bfs) {
+	public void addAll(HashSet<Long> bfs) {
 		chunks.addAll(bfs);
 		for (long pos : bfs) {
 			int x = (int) (pos >>> 32);

@@ -12,8 +12,8 @@ interface PooledBuffer {
 
 	Object pool(Object newPool);
 
-	Page page();
-	void page(Page p);
+	Bitmap page();
+	void page(Bitmap p);
 
 	int getKeepBefore();
 	void setKeepBefore(int keepBefore);

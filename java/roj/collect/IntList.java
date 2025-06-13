@@ -4,7 +4,7 @@ import org.jetbrains.annotations.NotNull;
 import roj.compiler.api.RandomAccessible;
 import roj.reflect.Unaligned;
 import roj.util.ArrayCache;
-import roj.util.TimSortForEveryone;
+import roj.util.Multisort;
 
 import java.util.Arrays;
 import java.util.ListIterator;
@@ -169,7 +169,7 @@ public class IntList implements Iterable<Integer> {
 		Arrays.sort(list, 0, size);
 	}
 	public void sortUnsigned() {
-		TimSortForEveryone.sort(0, size, (refLeft, offLeft, offRight) ->
+		Multisort.sort(0, size, (refLeft, offLeft, offRight) ->
 				Integer.compareUnsigned(Unaligned.U.getInt(refLeft, offLeft), Unaligned.U.getInt(offRight)),
 		list, Unaligned.ARRAY_INT_BASE_OFFSET, 4);
 	}

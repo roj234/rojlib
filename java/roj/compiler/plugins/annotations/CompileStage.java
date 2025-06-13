@@ -8,12 +8,12 @@ import roj.asm.cp.Constant;
 import roj.asm.cp.CstInt;
 import roj.asm.insn.CodeWriter;
 import roj.asm.type.Type;
-import roj.collect.MyHashSet;
-import roj.compiler.LavaFeatures;
-import roj.compiler.context.CompileUnit;
-import roj.compiler.context.LocalContext;
+import roj.collect.HashSet;
+import roj.compiler.CompileContext;
+import roj.compiler.CompileUnit;
+import roj.compiler.api.Compiler;
+import roj.compiler.api.Processor;
 import roj.compiler.diagnostic.Kind;
-import roj.compiler.plugin.Processor;
 import roj.config.data.CInt;
 
 import java.util.Collections;
@@ -25,7 +25,7 @@ import java.util.WeakHashMap;
  * @since 2024/6/10 4:27
  */
 final class CompileStage implements Processor {
-	private static final Set<String> ACCEPTS = new MyHashSet<>(
+	private static final Set<String> ACCEPTS = new HashSet<>(
 		"roj/compiler/plugins/annotations/AutoIncrement",
 		"roj/compiler/plugins/annotations/Getter",
 		"roj/compiler/plugins/annotations/Setter",
@@ -36,7 +36,7 @@ final class CompileStage implements Processor {
 	private final WeakHashMap<Annotation, CInt> increment_count = new WeakHashMap<>();
 
 	@Override
-	public void handle(LocalContext ctx, ClassDefinition file, Attributed node, Annotation annotation) {
+	public void handle(CompileContext ctx, ClassDefinition file, Attributed node, Annotation annotation) {
 		String type = annotation.type();
 		type = type.substring(type.lastIndexOf('/')+1);
 		CompileUnit cu = (CompileUnit) file;
@@ -95,7 +95,7 @@ final class CompileStage implements Processor {
 					return;
 				}
 
-				cu.setMinimumBinaryCompatibility(LavaFeatures.JAVA_11);
+				cu.setMinimumBinaryCompatibility(Compiler.JAVA_11);
 
 				var getter = annotation.getString("value");
 				int mid = cu.getMethod(getter, gi.rawDesc());
@@ -109,7 +109,7 @@ final class CompileStage implements Processor {
 					cu.methods.remove(mid);
 				}
 
-				var realGetInstance = cu.cp.getMethodHandle(gi.owner, gi.name(), gi.rawDesc(), BootstrapMethods.Kind.INVOKESTATIC, Constant.METHOD);
+				var realGetInstance = cu.cp.getMethodHandle(gi.owner(), gi.name(), gi.rawDesc(), BootstrapMethods.Kind.INVOKESTATIC, Constant.METHOD);
 				var idx = cu.addLambdaRef(new BootstrapMethods.Item("java/lang/invoke/ConstantBootstraps", "invoke",
 					"(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/Class;Ljava/lang/invoke/MethodHandle;[Ljava/lang/Object;)Ljava/lang/Object;",
 					BootstrapMethods.Kind.INVOKESTATIC, Constant.METHOD, Collections.singletonList(realGetInstance)));

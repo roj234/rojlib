@@ -1,5 +1,6 @@
 package roj.asm.attr;
 
+import org.intellij.lang.annotations.MagicConstant;
 import roj.asm.AsmCache;
 import roj.asm.Attributed;
 import roj.asm.MethodNode;
@@ -7,10 +8,10 @@ import roj.asm.cp.Constant;
 import roj.asm.cp.ConstantPool;
 import roj.asm.cp.CstNameAndType;
 import roj.asm.cp.CstUTF;
-import roj.asm.insn.AttrCode;
+import roj.asm.insn.Code;
 import roj.asm.type.Signature;
+import roj.collect.HashMap;
 import roj.collect.IntBiMap;
-import roj.collect.MyHashMap;
 import roj.util.DynByteBuf;
 import roj.util.Helpers;
 import roj.util.TypedKey;
@@ -55,14 +56,14 @@ public abstract class Attribute {
 	// u16 flags
 	// public static final TypedKey<StringAttribute> ModuleResolution = register("ModuleResolution");
 	// method
-	public static final TypedKey<AttrCode> Code = register("Code");
+	public static final TypedKey<Code> Code = register("Code");
 	public static final TypedKey<MethodParameters> MethodParameters = register("MethodParameters");
 	public static final TypedKey<ClassListAttribute> Exceptions = register("Exceptions");
 	public static final TypedKey<AnnotationDefault> AnnotationDefault = register("AnnotationDefault");
 	// field
 	public static final TypedKey<ConstantValue> ConstantValue = register("ConstantValue");
 
-	private static final MyHashMap<String, BiFunction<ConstantPool, DynByteBuf, Attribute>> CUSTOM_ATTRIBUTE = new MyHashMap<>();
+	private static final HashMap<String, BiFunction<ConstantPool, DynByteBuf, Attribute>> CUSTOM_ATTRIBUTE = new HashMap<>();
 	public static <T extends Attribute> void addCustomAttribute(TypedKey<T> id, BiFunction<ConstantPool, DynByteBuf, T> deserializer) {
 		CUSTOM_ATTRIBUTE.put(id.name, Helpers.cast(deserializer));
 	}
@@ -93,7 +94,10 @@ public abstract class Attribute {
 	}
 
 	private static boolean hasError;
-	public static Attribute parse(Attributed node, ConstantPool cp, String name, DynByteBuf data, int origin) {
+	public static Attribute parse(Attributed node, ConstantPool cp, String name, DynByteBuf data,
+								  @MagicConstant(intValues = {
+										  Signature.CLASS,Signature.FIELD,Signature.METHOD,roj.asm.insn.Code.ATTR_CODE,RecordAttribute.ATTR_RECORD
+								  }) int origin) {
 		if (hasError) return null;
 
 		int len = data.rIndex;
@@ -115,7 +119,7 @@ public abstract class Attribute {
 				case "MethodParameters": limit(origin,Signature.METHOD); return new MethodParameters(data, cp);
 				case "Exceptions": limit(origin,Signature.METHOD); return new ClassListAttribute(name, data, cp);
 				case "AnnotationDefault": limit(origin,Signature.METHOD); return new AnnotationDefault(data, cp);
-				case "Code": limit(origin,Signature.METHOD); return new AttrCode(data, cp, (MethodNode)node);
+				case "Code": limit(origin,Signature.METHOD); return new Code(data, cp, (MethodNode)node);
 				// field only
 				case "ConstantValue": limit(origin,Signature.FIELD); return new ConstantValue(cp.get(data));
 				// class only

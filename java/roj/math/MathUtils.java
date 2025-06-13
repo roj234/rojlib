@@ -226,41 +226,25 @@ public abstract class MathUtils {
 		return error0 < error1 ? new int[]{p0, q0} : new int[]{p1, q1};
 	}
 
-	public static void main(String[] args) {
-		// 示例数据
-		double[] x = {8, 16, 24, 32};
-		double[] y = {103, 130, 158, 191};
-		int n = 1; // 多项式的次数
-
-		// 拟合多项式
-		double[] coefficients = fitPolynomial(x, y, n);
-
-		// 输出多项式系数
-		System.out.println("拟合的 " + n + " 次多项式系数: " + Arrays.toString(coefficients));
-		System.out.println("R^2="+ polyR2(x, y, coefficients));
-		for (int i = 0; i < x.length; i++) {
-			System.out.println("f("+x[i]+") = "+ polyEval(x[i], coefficients));
-		}
-
-		System.out.println();
-		// 定义一个具体的非线性方程组
-		Polynomial equation1 = new Polynomial();
-		equation1.varName = new String[] {"x"};
-		equation1.coeffMatrix = new double[][] {
-				{20,19,18,17,16,15,14,13,12,11,10,9,8,7,6,5,4,3,2,1},
-		};
-		equation1.zeroVal = -5;
-		System.out.println(equation1+" = 0");
-
-		double[] initialGuess = {0.5};
-		double tolerance = 1e-6;
-		int maxIterations = 100;
-		double[] solution = newtonSolve(new Equation[] {equation1}, initialGuess, tolerance, maxIterations);
-		System.out.println("解: f1("+Arrays.toString(solution)+") = "+equation1.evaluate(solution));
-	}
-
 	/**
-	 * 牛顿迭代法求解非线性方程组
+	 * 牛顿迭代法求解非线性方程组<p>
+	 * Example: <pre>{@code
+	 * // 定义一个非线性方程组
+	 * Polynomial equation1 = new Polynomial();
+	 * equation1.varName = new String[] {"x"};
+	 * equation1.coeffMatrix = new double[][] {
+	 *       {20,19,18,17,16,15,14,13,12,11,10,9,8,7,6,5,4,3,2,1},
+	 * };
+	 * equation1.zeroVal = -5;
+	 *
+	 * System.out.println(equation1+" = 0");
+	 *
+	 * double[] initialGuess = {0.5};
+	 * double tolerance = 1e-6;
+	 * int maxIterations = 100;
+	 * double[] solution = newtonSolve(new Equation[] {equation1}, initialGuess, tolerance, maxIterations);
+	 * System.out.println("解: f1("+Arrays.toString(solution)+") = "+equation1.evaluate(solution));
+	 * }</pre>
 	 */
 	public static double[] newtonSolve(Equation[] equations, @WillChange double[] guess, double tolerance, int maxIterations) {
 		double[] fx = new double[equations.length];
@@ -292,7 +276,23 @@ public abstract class MathUtils {
 	}
 
 	/**
-	 * 最小二乘法拟合n次多项式
+	 * 最小二乘法拟合n次多项式<p>
+	 * <pre>{@code
+	 * // 示例数据
+	 * double[] x = {8, 16, 24, 32};
+	 * double[] y = {103, 130, 158, 191};
+	 * int n = 1; // 多项式的次数
+	 *
+	 * // 拟合多项式
+	 * double[] coefficients = fitPolynomial(x, y, n);
+	 *
+	 * // 输出多项式系数
+	 * System.out.println("拟合的"+ n +"次多项式系数: "+Arrays.toString(coefficients));
+	 * System.out.println("R^2=" + polyR2(x, y, coefficients));
+	 * for (int i = 0; i < x.length; i++) {
+	 * 		System.out.println("f("+x[i]+") = "+ polyEval(x[i], coefficients));
+	 * }
+	 * }</pre>
 	 * @param variable 变量x的值
 	 * @param result 预期的结果y
 	 * @param coeffCount 多项式的次数n

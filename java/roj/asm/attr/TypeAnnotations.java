@@ -5,12 +5,10 @@ import roj.asm.FieldNode;
 import roj.asm.MethodNode;
 import roj.asm.annotation.Annotation;
 import roj.asm.cp.ConstantPool;
-import roj.asm.insn.AttrCode;
+import roj.collect.ArrayList;
 import roj.collect.CharMap;
-import roj.collect.SimpleList;
 import roj.util.DynByteBuf;
 
-import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -23,7 +21,7 @@ public final class TypeAnnotations extends Attribute {
 
 	public TypeAnnotations(boolean visibleForRuntime) {
 		vis = visibleForRuntime;
-		annotations = new SimpleList<>();
+		annotations = new ArrayList<>();
 	}
 
 	public TypeAnnotations(String name, DynByteBuf r, ConstantPool pool) {
@@ -47,7 +45,7 @@ public final class TypeAnnotations extends Attribute {
 
 	public static List<TypeAnno> parse(ConstantPool pool, DynByteBuf r) {
 		int len = r.readUnsignedShort();
-		List<TypeAnno> annos = new SimpleList<>(len);
+		List<TypeAnno> annos = new ArrayList<>(len);
 		while (len-- > 0) {
 			byte type = r.readByte();
 			TypeAnno anno = switch (type) {
@@ -57,7 +55,7 @@ public final class TypeAnnotations extends Attribute {
 				case TypeAnno.EMPTY_FIELD, TypeAnno.EMPTY_RETURN, TypeAnno.EMPTY_RECEIVER -> new Empty(type);
 				case TypeAnno.LOCAL_VAR, TypeAnno.RESOURCE_VAR -> {
 					int len2 = r.readUnsignedShort();
-					List<int[]> table = new ArrayList<>(len2);
+					List<int[]> table = new java.util.ArrayList<>(len2);
 					for (int j = 0; j < len2; j++) {
 						table.add(new int[] {r.readUnsignedShort(), r.readUnsignedShort(), r.readUnsignedShort()});
 					}
@@ -219,7 +217,7 @@ public final class TypeAnnotations extends Attribute {
 				case 0x00, 0x10, 0x11 -> type == ClassNode.class;
 				case 0x13 -> type == FieldNode.class;
 				case 0x01, 0x12, 0x14, 0x15, 0x16, 0x17 -> type == MethodNode.class;
-				case 0x40, 0x41, 0x42, 0x43, 0x44, 0x45, 0x46, 0x47, 0x48 -> type == AttrCode.class;
+				case 0x40, 0x41, 0x42, 0x43, 0x44, 0x45, 0x46, 0x47, 0x48 -> type == roj.asm.insn.Code.class;
 				default -> false;
 			};
 		}

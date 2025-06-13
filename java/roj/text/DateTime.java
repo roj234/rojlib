@@ -261,8 +261,10 @@ public final class DateTime {
 
 		fields[YEAR] += advance;
 
-		fields[DAY_OF_WEEK] = -1;
-		fields[DAY_OF_YEAR] = -1;
+		if (fields.length > CORE_FIELD_COUNT) {
+			fields[DAY_OF_WEEK] = -1;
+			fields[DAY_OF_YEAR] = -1;
+		}
 		fields[LEAP_YEAR] = isLeapYear(fields[YEAR]) ? 1 : 0;
 
 		return fields;

@@ -11,8 +11,8 @@ import roj.asmx.Context;
 import roj.asmx.TransformUtil;
 import roj.asmx.event.Subscribe;
 import roj.asmx.mapper.Mapper;
-import roj.collect.MyHashMap;
-import roj.collect.SimpleList;
+import roj.collect.ArrayList;
+import roj.collect.HashMap;
 import roj.concurrent.OperationDone;
 import roj.config.data.CEntry;
 import roj.io.IOUtil;
@@ -57,7 +57,7 @@ public class AT implements Processor {
 	@Override public void init(CEntry config) {archives.clear();}
 
 	@Override
-	public int beforeCompile(Compiler compiler, SimpleList<String> options, List<File> files, ProcessEnvironment pc) {
+	public int beforeCompile(Compiler compiler, ArrayList<String> options, List<File> files, ProcessEnvironment pc) {
 		Project p = pc.project;
 		var atFile = new File(p.getResPath(), p.variables.getOrDefault("fmd:at:path", "META-INF/accesstransformer.cfg"));
 		if (atFile.isFile() && "true".equals(p.variables.get("fmd:at"))) {
@@ -74,7 +74,7 @@ public class AT implements Processor {
 
 	@NotNull
 	static Map<String, List<String>> buildATMapFromATCfg(Object atFile, Mapper map) {
-		Map<String, List<String>> atList = new MyHashMap<>();
+		Map<String, List<String>> atList = new HashMap<>();
 		try (var tr = makeTextReader(atFile)) {
 			while (true) {
 				String line = tr.readLine();
@@ -120,7 +120,7 @@ public class AT implements Processor {
 		return file instanceof File f ? TextReader.auto(f) : new TextReader((Closeable) file, null);
 	}
 
-	private void makeAT(SimpleList<String> options, Map<String, List<String>> atList, String name1, Project p) {
+	private void makeAT(ArrayList<String> options, Map<String, List<String>> atList, String name1, Project p) {
 		ok:
 		if (!atList.isEmpty()) {
 			var atJar = new File(FMD.BASE, "data/at-"+name1+".jar");
@@ -156,8 +156,8 @@ public class AT implements Processor {
 				for (var file : p.workspace.mappedDepend) {
 					tryAt(file, atList, zfw);
 				}
-				IOUtil.findAllFiles(new File(BASE, "libs"), predicate);
-				IOUtil.findAllFiles(new File(p.getRoot(), "libs"), predicate);
+				IOUtil.listFiles(new File(BASE, "libs"), predicate);
+				IOUtil.listFiles(new File(p.getRoot(), "libs"), predicate);
 			} catch (OperationDone ignored) {
 
 			} catch (IOException e) {
@@ -169,7 +169,7 @@ public class AT implements Processor {
 		}
 	}
 
-	private Map<File, Arch> archives = new MyHashMap<>();
+	private Map<File, Arch> archives = new HashMap<>();
 	private void tryAt(File file, Map<String, List<String>> list, ZipFileWriter zfw) {
 		Arch helper = archives.computeIfAbsent(file, Arch::new);
 		try {

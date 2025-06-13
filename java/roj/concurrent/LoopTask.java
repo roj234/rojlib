@@ -1,6 +1,6 @@
 package roj.concurrent;
 
-import roj.reflect.ReflectionUtils;
+import roj.reflect.Unaligned;
 
 import static roj.reflect.Unaligned.U;
 
@@ -15,7 +15,7 @@ public class LoopTask implements Task {
 	protected final long interval;
 	protected int repeat;
 
-	private static final long STATE_OFFSET = ReflectionUtils.fieldOffset(LoopTask.class, "state");
+	private static final long STATE_OFFSET = Unaligned.fieldOffset(LoopTask.class, "state");
 	/**
 	 * -1: 任务取消
 	 *  0: '确切时间'模式

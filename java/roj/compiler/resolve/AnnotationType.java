@@ -9,7 +9,7 @@ import roj.asm.attr.AnnotationDefault;
 import roj.asm.attr.Annotations;
 import roj.asm.attr.Attribute;
 import roj.asm.type.Type;
-import roj.collect.MyHashMap;
+import roj.collect.HashMap;
 import roj.config.data.CEntry;
 import roj.config.serial.CVisitor;
 
@@ -17,7 +17,7 @@ import java.util.List;
 
 /**
  * 一个{@link java.lang.annotation.Annotation 注解}类的ASM元数据
- * @see roj.compiler.resolve.ResolveHelper
+ * @see LinkedClass
  */
 public class AnnotationType {
 	/**
@@ -53,8 +53,8 @@ public class AnnotationType {
 	@MagicConstant(intValues = {SOURCE, CLASS, RUNTIME})
 	public int retention() { return applicableTo & 3; }
 
-	public MyHashMap<String, CEntry> elementDefault = new MyHashMap<>();
-	public MyHashMap<String, Type> elementType = new MyHashMap<>();
+	public HashMap<String, CEntry> elementDefault = new HashMap<>();
+	public HashMap<String, Type> elementType = new HashMap<>();
 
 	public AnnotationType(ClassDefinition node) {
 		if ((node.modifier()&Opcodes.ACC_ANNOTATION) == 0) throw new IllegalArgumentException(node.name()+"不是注解");

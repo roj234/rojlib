@@ -1,6 +1,7 @@
 package roj.crypt.eddsa;
 
 import roj.crypt.DerivablePrivateKey;
+import roj.crypt.asn1.DerValue;
 
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -13,14 +14,18 @@ final class EdPrivateKey implements EdKey, DerivablePrivateKey {
 	static final int OID_OLD = 100, OID_ED25519 = 112;
 	private static final int OID_BYTE = 11, IDLEN_BYTE = 6;
 
-	private final byte[] seed, h;
-	private final EdPoint A;
-	private final byte[] Abyte;
-
 	private final EdParameterSpec spec;
+
+	private final byte[] seed, privateKey;
+	private final EdPoint publicPoint;
+	// compacted form of Public Point
+	private final byte[] publicKey;
 
 	public EdPrivateKey(PKCS8EncodedKeySpec spec) throws InvalidKeySpecException {
 		this(EdPrivateKey.decode(spec.getEncoded()), EdParameterSpec.ED25519_CURVE_SPEC);
+	}
+	public EdPrivateKey(PKCS8EncodedKeySpec spec, EdParameterSpec spec2) throws InvalidKeySpecException {
+		this(EdPrivateKey.decode(spec.getEncoded()), spec2);
 	}
 
 	public EdPrivateKey(byte[] seed, EdParameterSpec spec) {
@@ -29,52 +34,43 @@ final class EdPrivateKey implements EdKey, DerivablePrivateKey {
 		this.spec = spec;
 		this.seed = seed;
 
-		MessageDigest hash;
-		try {
-			hash = MessageDigest.getInstance(spec.getHashAlgorithm());
-		} catch (NoSuchAlgorithmException e) {
-			throw new IllegalArgumentException("Unsupported hash algorithm");
+		if (spec.getHashAlgorithm() != null) {
+			MessageDigest hash;
+			try {
+				hash = MessageDigest.getInstance(spec.getHashAlgorithm());
+			} catch (NoSuchAlgorithmException e) {
+				throw new IllegalArgumentException("Unsupported hash algorithm");
+			}
+
+			privateKey = hash.digest(seed);
+		} else {
+			privateKey = seed.clone();
 		}
 
-		h = hash.digest(seed);
-		// is
-		// h[0] &= 0xF8;
-		// h[31] &= 0x3F;
-		// h[31] |= 0x40;
-		// for LC=2 and bits=255 and Type=EdDSA
-		prune(h, spec.getBits(), spec.getLogCofactor(), spec.getType());
-		A = spec.getB().scalarMultiply(h);
-		Abyte = A.toByteArray();
-	}
-
-	public EdPrivateKey(EdParameterSpec spec, byte[] h) {
-		if (h.length != 64) throw new IllegalArgumentException("hash length is wrong");
-
-		this.spec = spec;
-		this.seed = null;
-
-		this.h = h;
-		prune(h, spec.getBits(), spec.getLogCofactor(), spec.getType());
-		A = spec.getB().scalarMultiply(h);
-		Abyte = A.toByteArray();
+		prune(privateKey, spec.getBits(), spec.getLogCofactor(), spec.getType());
+		publicPoint = spec.getBasePoint().scalarMultiply(privateKey);
+		publicKey = publicPoint.toByteArray();
 	}
 
 	private static void prune(byte[] k, int bits, int logCofactor, EdParameterSpec.Type type) {
 		int lastByteIndex = k.length/2 - 1;
 
-		boolean flag;
 		int highBits;
 		if (type == EdParameterSpec.Type.XDH) {
 			highBits = bits & 7;
 			if (highBits == 0) highBits = 8;
-
-			k[lastByteIndex] &= (1 << highBits) - 1;
+			lastByteIndex = k.length - 1;
 		} else {
+			// h[0] &= 0xF8;
+			// h[31] &= 0x3F;
+			// h[31] |= 0x40;
+			// for LC=2 and bits=255 and Type=EdDSA
+
 			int bitsDiff = k.length * 4 - bits;
 			highBits = 8 - bitsDiff;
 
-			k[lastByteIndex] &= (1 << highBits) - 1;
 		}
+		k[lastByteIndex] &= (1 << highBits) - 1;
 
 		if (highBits == 0) k[lastByteIndex-1] |= 0x80;
 		else k[lastByteIndex] |= 1 << (highBits-1);
@@ -129,58 +125,45 @@ final class EdPrivateKey implements EdKey, DerivablePrivateKey {
 		}
 	}
 
-	@Override
-	public String getAlgorithm() { return spec.getType().name(); }
-
-	@Override
-	public String getFormat() { return seed == null ? null : "PKCS#8"; }
-
-	@Override
-	public byte[] getEncoded() {
-		if (!spec.equals(EdParameterSpec.ED25519_CURVE_SPEC)) return null;
-
-		if (seed == null) return null;
-
-		int totlen = 16 + seed.length;
-		byte[] rv = new byte[totlen];
-		int i = 0;
-		rv[i++] = 48;
-		rv[i++] = (byte) (totlen - 2);
-		rv[i++] = 2;
-		rv[i++] = 1;
-		rv[i++] = 0;
-		rv[i++] = 48;
-		rv[i++] = 5;
-		rv[i++] = 6;
-		rv[i++] = 3;
-		rv[i++] = 43;
-		rv[i++] = 101;
-		rv[i++] = 112;
-		rv[i++] = 4;
-		rv[i++] = (byte) (2 + seed.length);
-		rv[i++] = 4;
-		rv[i++] = (byte) seed.length;
-		System.arraycopy(seed, 0, rv, i, seed.length);
-		return rv;
-	}
+	@Override public EdParameterSpec getParams() { return spec; }
 
 	public byte[] getSeed() { return seed; }
+	public byte[] getPrivateKey() { return privateKey; }
 
-	public byte[] getH() { return h; }
+	public EdPoint getPublicPoint() { return publicPoint; }
+	public byte[] getPublicKey() { return publicKey; }
 
-	public EdPoint getA() { return A; }
-	public byte[] getAbyte() { return Abyte; }
+	@Override public PublicKey generatePublic() {return new EdPublicKey(this);}
 
-	@Override
-	public EdParameterSpec getParams() { return spec; }
+	@Override public String getAlgorithm() { return spec.getType().name(); }
+	@Override public String getFormat() { return "PKCS#8"; }
+	@Override public byte[] getEncoded() {
+		if (!spec.equals(EdParameterSpec.ED25519_CURVE_SPEC)) return null;
+		byte[] der = new byte[48];
+		der[0] = DerValue.SEQUENCE;
+		der[1] = 46;
+		der[2] = DerValue.INTEGER;
+		der[3] = 1;
+		der[4] = 0;
+		der[5] = DerValue.SEQUENCE;
+		der[6] = 5;
+		der[7] = DerValue.OID;
+		der[8] = 3;
+		der[9] = 43;
+		der[10] = 101;
+		der[11] = 112;
+		der[12] = DerValue.OCTET_STRING;
+		der[13] = 34;
+		der[14] = DerValue.OCTET_STRING;
+		der[15] = 32;
+		System.arraycopy(seed, 0, der, 16, seed.length);
+		return der;
+	}
 
-	public int hashCode() { return Arrays.hashCode(h); }
-
+	public int hashCode() { return Arrays.hashCode(privateKey); }
 	public boolean equals(Object o) {
 		if (o == this) return true;
 		if (!(o instanceof EdPrivateKey pk)) return false;
-		return Arrays.equals(h, pk.h) && spec.equals(pk.spec);
+		return Arrays.equals(privateKey, pk.privateKey) && spec.equals(pk.spec);
 	}
-
-	@Override public PublicKey generatePublic() {return new EdPublicKey(this);}
 }

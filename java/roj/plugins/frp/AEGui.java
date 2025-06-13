@@ -4,8 +4,8 @@
 
 package roj.plugins.frp;
 
+import roj.collect.HashMap;
 import roj.collect.Hasher;
-import roj.collect.MyHashMap;
 import roj.config.ConfigMaster;
 import roj.config.data.CEntry;
 import roj.config.data.CList;
@@ -48,7 +48,7 @@ public class AEGui extends JFrame implements ChannelHandler {
 	static KeyType keyType = KeyType.getInstance("EdDSA");
 	static KeyPair userCert;
 	static byte[] userId;
-	static MyHashMap<byte[], String> userWhiteList;
+	static HashMap<byte[], String> userWhiteList;
 	static boolean exitOnClose;
 
 	@Override
@@ -140,7 +140,7 @@ public class AEGui extends JFrame implements ChannelHandler {
 
 			CMap whitelist = yml.getMap("whitelist");
 			if (whitelist.size() > 0) {
-				userWhiteList = new MyHashMap<>(whitelist.size());
+				userWhiteList = new HashMap<>(whitelist.size());
 				userWhiteList.setHasher(Hasher.array(byte[].class));
 				for (Map.Entry<String, CEntry> entry : whitelist.raw().entrySet()) {
 					String string = entry.getValue().asString();

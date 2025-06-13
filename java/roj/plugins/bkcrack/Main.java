@@ -116,7 +116,7 @@ public class Main extends Plugin {
 		mzf.close();
 		ctx.stopOnFirstKey = stopOnFirstKey;
 
-		TaskPool pool = TaskPool.MaxThread(Runtime.getRuntime().availableProcessors(), "BKCrack-Worker-");
+		TaskPool pool = TaskPool.newFixed(Runtime.getRuntime().availableProcessors(), "BKCrack-Worker-");
 
 		List<Cipher> keys = ctx.find(pool);
 

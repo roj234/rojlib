@@ -1,6 +1,6 @@
 package roj.plugins.dns;
 
-import roj.collect.MyHashMap;
+import roj.collect.HashMap;
 import roj.config.data.CList;
 import roj.config.data.CMap;
 import roj.io.IOUtil;
@@ -394,7 +394,7 @@ public class DnsServer implements ChannelHandler {
 	public void channelRead(ChannelCtx ctx, Object msg) throws IOException {
 		DatagramPkt p = ((DatagramPkt) msg);
 
-		DynByteBuf r = p.buf;
+		DynByteBuf r = p.data;
 		if (r.readableBytes() < 12) return;
 
 		DnsQuery query = new DnsQuery();
@@ -426,8 +426,8 @@ public class DnsServer implements ChannelHandler {
         int CD = r.readBit1();
         int rcode = r.readBit(4);*/
 
-		query.senderIp = p.addr;
-		query.senderPort = (char) p.port;
+		query.senderIp = p.address.getAddress();
+		query.senderPort = (char) p.address.getPort();
 
 		int numQst = r.readUnsignedShort();
 		r.rIndex += 6;
@@ -452,7 +452,7 @@ public class DnsServer implements ChannelHandler {
 
 			DynByteBuf w = IOUtil.getSharedByteBuf().put(r);
 			if (processQuery(w, query, false)) {
-				p.buf = w;
+				p.data = w;
 				local.fireChannelWrite(p);
 			}
 		} catch (Exception e) {
@@ -572,15 +572,14 @@ public class DnsServer implements ChannelHandler {
 		List<InetSocketAddress> target = forwardDns;
 
 		DatagramPkt pkt = new DatagramPkt();
-		pkt.buf = r;
+		pkt.data = r;
 
 		if (target == null) {
 			System.out.println("[Warn]没有前向DNS");
 			setRCode(query, r, RCODE_SERVER_ERROR);
 			r.put(OFF_FLAGS, (byte) (r.getU(OFF_FLAGS) | 128));
 
-			pkt.addr = query.senderIp;
-			pkt.port = query.senderPort;
+			pkt.setAddress(query.senderIp, query.senderPort);
 			try {
 				local.fireChannelWrite(pkt);
 			} catch (IOException e) {
@@ -611,8 +610,7 @@ public class DnsServer implements ChannelHandler {
 						r.putShort(0, myId);
 					} while (null != waiting.putIfAbsent(addr, request));
 				}
-				pkt.addr = addr.addr;
-				pkt.port = addr.port;
+				pkt.setAddress(addr.addr, addr.port);
 
 				int pos = r.rIndex;
 				remote.fireChannelWrite(pkt);
@@ -676,7 +674,7 @@ public class DnsServer implements ChannelHandler {
 			q.qClass = r1.readShort();
 		}
 
-		MyHashMap<RecordKey, List<Record>> map = resp.response = new MyHashMap<>(numRes + numARes + numExRes);
+		HashMap<RecordKey, List<Record>> map = resp.response = new HashMap<>(numRes + numARes + numExRes);
 		gather(r1, numRes, sb, map, FLAG_NORM);
 		gather(r1, numARes, sb, map, FLAG_A);
 		gather(r1, numExRes, sb, map, FLAG_EX);
@@ -684,7 +682,7 @@ public class DnsServer implements ChannelHandler {
 		return resp;
 	}
 
-	private static void gather(DynByteBuf r, int num, CharList sb, MyHashMap<RecordKey, List<Record>> map, byte flag) {
+	private static void gather(DynByteBuf r, int num, CharList sb, HashMap<RecordKey, List<Record>> map, byte flag) {
 		for (int i = 0; i < num; i++) {
 			readDomainEx(r, r, sb);
 
@@ -726,9 +724,8 @@ public class DnsServer implements ChannelHandler {
 		processQuery(w, fq, true);
 
 		DatagramPkt pkt = new DatagramPkt();
-		pkt.addr = fq.senderIp;
-		pkt.port = fq.senderPort;
-		pkt.buf = w;
+		pkt.setAddress(fq.senderIp, fq.senderPort);
+		pkt.data = w;
 
 		try {
 			local.fireChannelWrite(pkt);

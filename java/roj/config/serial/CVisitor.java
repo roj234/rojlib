@@ -1,5 +1,7 @@
 package roj.config.serial;
 
+import roj.util.TypedKey;
+
 import java.io.Closeable;
 import java.io.IOException;
 
@@ -53,7 +55,16 @@ public interface CVisitor extends Closeable {
 
 	default void comment(String comment) {}
 
-	default void setProperty(String k, Object v) {}
+	/**
+	 * Use ordered (Linked) map
+	 */
+	TypedKey<Boolean> ORDERED_MAP = new TypedKey<>("generic:orderedMap");
+	/**
+	 * Max depth (list / map)
+	 */
+	TypedKey<Integer> MAX_DEPTH = new TypedKey<>("generic:maxDepth");
+	default <T> void setProperty(TypedKey<T> k, T v) {}
+
 	CVisitor reset();
 	default void close() throws IOException {}
 }

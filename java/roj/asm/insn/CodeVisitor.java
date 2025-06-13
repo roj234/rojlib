@@ -19,7 +19,7 @@ public class CodeVisitor {
 	static void checkWide(byte code) {
 		switch (code) {
 			case RET, IINC, ISTORE, LSTORE, FSTORE, DSTORE, ASTORE, ILOAD, LLOAD, FLOAD, DLOAD, ALOAD -> {}
-			default -> throw new IllegalStateException(showOpcode(code)+"不支持WIDE指令");
+			default -> throw new IllegalStateException(Opcodes.toString(code)+"不支持WIDE指令");
 		}
 	}
 
@@ -114,7 +114,7 @@ public class CodeVisitor {
 	protected void visitSize(int stackSize, int localSize) {}
 
 	protected final boolean decompressVar(byte code) {
-		String name = Opcodes.showOpcode(code);
+		String name = Opcodes.toString(code);
 		// xLOAD_y
 		if (name.length() == 7 && name.startsWith("Load_", 1)) {
 			vars((byte) Opcodes.opcodeByName().getInt(name.substring(0,5)), name.charAt(6)-'0');

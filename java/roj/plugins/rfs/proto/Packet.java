@@ -1,6 +1,6 @@
 package roj.plugins.rfs.proto;
 
-import roj.collect.SimpleList;
+import roj.collect.ArrayList;
 import roj.io.MyDataInput;
 import roj.plugins.rfs.RFSSourceClient;
 import roj.plugins.rfs.RemoteFileSystem;
@@ -80,7 +80,7 @@ public interface Packet {
 
         public DirectoryMeta(Path path) throws IOException {
             super(path);
-            files = new SimpleList<>();
+            files = new ArrayList<>();
             try (DirectoryStream<Path> ds = Files.newDirectoryStream(path)) {
                 for (Path path2 : ds) {
                     files.add(new FileMetadata(path2));

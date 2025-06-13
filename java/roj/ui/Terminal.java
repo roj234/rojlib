@@ -1,5 +1,6 @@
 package roj.ui;
 
+import org.intellij.lang.annotations.MagicConstant;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.jetbrains.annotations.Range;
@@ -24,6 +25,7 @@ import roj.util.Helpers;
 import java.io.*;
 import java.nio.charset.Charset;
 import java.util.List;
+import java.util.function.IntConsumer;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -221,7 +223,8 @@ public final class Terminal extends DelegatedPrintStream {
 	private Terminal() {}
 
 	//region AnsiOutput基础
-	public static void reset() {if (ANSI_OUTPUT) System.out.print("\033[0m");}
+	public static final String reset = "\033[0m";
+	public static void reset() {if (ANSI_OUTPUT) directWrite(reset);}
 	public static void info(String s) {color(s, WHITE+HIGHLIGHT, true);}
 	public static void success(String s) {color(s, GREEN+HIGHLIGHT, true);}
 	public static void warning(String s) {color(s, YELLOW+HIGHLIGHT, true);}
@@ -338,7 +341,7 @@ public final class Terminal extends DelegatedPrintStream {
 	private static final CharList OSEQ = new CharList(256);
 	private static void writeSeq(CharList b) {write(b);b.clear();}
 
-	private static final SimpleList<CharList> LINES = new SimpleList<>();
+	private static final ArrayList<CharList> LINES = new ArrayList<>();
 	private static final IntList CURSORS = new IntList();
 	private static int PrevWidth;
 
@@ -438,10 +441,11 @@ public final class Terminal extends DelegatedPrintStream {
 		else {
 			int advance = LINES.size() + (PrevWidth > 0 ? 1 : 0);
 			if (advance > 0 && !started) {
-				seq.append("\033[?25l");
+				seq.append(Cursor.hide);
+
 				if (advance > 1) seq.append("\033[").append(advance-1).append('F');
 				else seq.append("\033[1G");
-				writeSeq(seq.append("\033[2K"));
+				writeSeq(seq.append(Screen.clearLine));
 				started = true;
 			}
 		}
@@ -465,7 +469,7 @@ public final class Terminal extends DelegatedPrintStream {
 					seq.append("\r\n");
 				}
 			}
-			writeSeq(seq.append("\033[?25h"));
+			writeSeq(seq.append(Cursor.show));
 			started = false;
 		}
 		_flush();
@@ -621,7 +625,7 @@ public final class Terminal extends DelegatedPrintStream {
 		console.render();
 	}
 
-	private final MyHashMap.Entry<CInt, Integer> matcher = new MyHashMap.Entry<>(new CInt(), null);
+	private final HashMap.Entry<CInt, Integer> matcher = new HashMap.Entry<>(new CInt(), null);
 	private void processInput(CharList inBuf) {
 		var buf = inBuf.list;
 		int i = 0;
@@ -659,8 +663,7 @@ public final class Terminal extends DelegatedPrintStream {
 		}
 	}
 	private void escEnter(CharList buf, int start, int end) {
-		int type = buf.charAt(end);
-		if (type == 'R') {
+		if (buf.charAt(end) == 'R') {
 			int i = TextUtil.gIndexOf(buf, ";", start, end);
 			if (i >= 0) {
 				int height = TextUtil.parseInt(buf, start, i);
@@ -668,8 +671,103 @@ public final class Terminal extends DelegatedPrintStream {
 				cursorPos = (height << 16) | width;
 				return;
 			}
+		} else if (buf.charAt(start) == '<') {
+			int i1 = buf.indexOf(";", start+1);
+			int i2 = buf.indexOf(";", i1+1);
+			int i3 = i2+1;
+			while (buf.charAt(i3) >= '0' && buf.charAt(i3) <= '9') i3++;
+
+			if ((i1|i2|i3) > 0) {
+				int button = TextUtil.parseInt(buf, start+1, i1);
+				int x = TextUtil.parseInt(buf, i1+1, i2)-1;
+				int y = TextUtil.parseInt(buf, i2+1, i3)-1;
+				boolean press = buf.charAt(i3) == 'M';
+
+				int event;
+				if ((button & 64) != 0) {
+					event = MOUSE_SCROLL | (button & 1) * MOUSE_SCROLL_DOWN;
+				} else if ((button & 32) != 0) {
+					event = MOUSE_MOVE;
+				} else {
+					if (press) {
+						event = MOUSE_PRESSED;
+						mouseButton |= 1<<button;
+					} else {
+						event = MOUSE_RELEASED;
+						mouseButton &= ~(1<<button);
+					}
+					event |= 4 + (button << 2); // [0,2]
+				}
+				event |= mouseButton << 4;
+				event |= (x & 0xfff) << 7;
+				event |= (y & 0xfff) << 20;
+
+				mouseX = x;
+				mouseY = y;
+
+				postMouseEvent(event);
+				return;
+			}
 		}
 		printError("未识别的ANSI转义: "+Tokenizer.escape(buf)+" (考虑报告该问题)");
+	}
+	//endregion
+	//region 鼠标
+	private static int mouseX, mouseY;
+	private static byte mouseButton;
+
+	/** @return 最后记录的鼠标X坐标（0起） */
+	@Range(from = 0, to = Long.MAX_VALUE)
+	public static int getMouseX() { return mouseX; }
+	/** @return 最后记录的鼠标Y坐标（0起） */
+	@Range(from = 0, to = Long.MAX_VALUE)
+	public static int getMouseY() { return mouseY; }
+	public static final int MOUSE_BUTTON_LEFT_PRESSED = 1, MOUSE_BUTTON_MIDDLE_PRESSED = 2, MOUSE_BUTTON_RIGHT_PRESSED = 4;
+	/**
+	 * @return 当前按下按钮的状态掩码
+	 * @see #MOUSE_BUTTON_LEFT_PRESSED
+	 */
+	@MagicConstant(flags = {
+			MOUSE_BUTTON_LEFT_PRESSED,
+			MOUSE_BUTTON_MIDDLE_PRESSED,
+			MOUSE_BUTTON_RIGHT_PRESSED
+	})
+	public static byte getMouseButton() { return mouseButton; }
+
+	// event
+	public static final int MOUSE_PRESSED = 0, MOUSE_RELEASED = 1, MOUSE_MOVE = 2, MOUSE_SCROLL = 3;
+	public static final int MOUSE_BUTTON_LEFT = 4, MOUSE_BUTTON_MIDDLE = 8, MOUSE_BUTTON_RIGHT = 12;
+	public static final int MOUSE_SCROLL_DOWN = 4, MOUSE_SCROLL_UP = 0;
+
+	private static IntConsumer mouseEventListener;
+	/**
+	 * 设置鼠标事件监听器
+	 * @param listener 接收32位编码鼠标事件的回调接口
+	 *
+	 * <p>回调事件示例解析：
+	 * <pre>{@code
+	 * void handleMouseEvent(int event) {
+	 *     int type = event & 0x03;  // 事件类型
+	 *     int data = event & 0x0C; // 按钮ID
+	 *     int buttons = (event >>> 4) & 7; // 已按下的按钮
+	 *     int x = (event >>> 7) & 0xFFF; // X坐标
+	 *     int y = (event >>> 20) & 0xFFF; // Y坐标
+	 * }
+	 * }</pre>
+	 */
+	public static void setMouseEventListener(IntConsumer listener) {mouseEventListener = listener;}
+	private static void postMouseEvent(int event) {
+		if (mouseEventListener != null) mouseEventListener.accept(event);
+	}
+
+	public static final int MOUSE_EVENT_OFF = 0, MOUSE_EVENT_CLICK = 1, MOUSE_EVENT_MOVE = 3;
+	public static void setMouseMode(@MagicConstant(intValues = {MOUSE_EVENT_OFF, MOUSE_EVENT_CLICK, MOUSE_EVENT_MOVE}) int mouseMode) {
+		if (mouseMode == MOUSE_EVENT_OFF) {
+			directWrite("\u001b[?1006l\u001b[?1003l");
+		} else {
+			if ((mouseMode & 1) != 0) directWrite("\u001b[?1006h");
+			if ((mouseMode & 2) != 0) directWrite("\u001b[?1003h");
+		}
 	}
 	//endregion
 	//region AnsiInput基础
@@ -758,10 +856,10 @@ public final class Terminal extends DelegatedPrintStream {
 	}
 
 	/**
-	 * @see #readChar(MyBitSet, CharList, boolean)
+	 * @see #readChar(BitSet, CharList, boolean)
 	 */
 	public static char readChar(String chars) {return readChar(chars, "");}
-	public static char readChar(String chars, String prefix) {return readChar(MyBitSet.from(chars), new CharList(prefix), false);}
+	public static char readChar(String chars, String prefix) {return readChar(BitSet.from(chars), new CharList(prefix), false);}
 	/**
 	 * 从标准输入中读取一个被chars允许的字符.
 	 * 如果输入的字符不允许，发出哔哔声
@@ -769,7 +867,7 @@ public final class Terminal extends DelegatedPrintStream {
 	 * @param prefix 提示用户的前缀
 	 * @param exitIfCancel 在等待输入时被中断，如果为真那么退出程序，否则返回\0. 在非ANSI_INPUT下该项可能无效
 	 */
-	public static char readChar(MyBitSet chars, CharList prefix, boolean exitIfCancel) {
+	public static char readChar(BitSet chars, CharList prefix, boolean exitIfCancel) {
 		if (!ANSI_INPUT) {
 			System.out.print(prefix == null ? "请输入一个字符并回车" : prefix);
 			try {
@@ -937,7 +1035,7 @@ public final class Terminal extends DelegatedPrintStream {
 	public static List<String> splitByWidth(String s, int width) {
 		var m = s.indexOf('\033') >= 0 ? ANSI_ESCAPE.matcher(s) : null;
 
-		List<String> out = new SimpleList<>();
+		List<String> out = new ArrayList<>();
 		int prevI = 0, tmpWidth = 0;
 		for (int i = 0; i < s.length(); ) {
 			char c = s.charAt(i);
@@ -975,7 +1073,7 @@ public final class Terminal extends DelegatedPrintStream {
 	 */
 	public static void printError(String text) {serr.println(text);}
 
-	private static final SimpleList<StdIO> terminals = new SimpleList<>();
+	private static final ArrayList<StdIO> terminals = new ArrayList<>();
 	public static void addListener(StdIO t) {
 		int i = terminals.indexOfAddress(t);
 		if (i < 0) terminals.add(t);
@@ -1026,22 +1124,28 @@ public final class Terminal extends DelegatedPrintStream {
 				windowWidth = winSize&0xFFFF;
 				windowHeight = winSize >>> 16;
 				terminalResponse = true;
+				Runtime.getRuntime().addShutdownHook(new Thread(() -> directWrite(reset+"\u001b[?1006l\u001b[?1003l"+Cursor.show), "Terminal Cleanup"));
 			}
 
 			in = null;
 		} else {
 			ANSI_INPUT = false;
 			ANSI_OUTPUT = false;
-			ALT = new AnsiIn();
+			if (Boolean.getBoolean("roj.disableNativeVT")) {
+				ALT = null;
+				in = null;
+			} else {
+				ALT = new AnsiIn();
 
-			var fallback = new NativeVT.Fallback();
-			addListener(fallback);
-			fallback.start();
+				var fallback = new NativeVT.Fallback();
+				addListener(fallback);
+				fallback.start();
 
-			in = new BufferedReader(new InputStreamReader(System.in), 1024);
+				in = new BufferedReader(new InputStreamReader(System.in), 1024);
 
-			System.setOut(fallback);
-			System.setErr(fallback);
+				System.setOut(fallback);
+				System.setErr(fallback);
+			}
 		}
 	}
 }

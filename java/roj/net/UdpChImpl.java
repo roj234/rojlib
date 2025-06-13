@@ -1,15 +1,10 @@
 package roj.net;
 
-import roj.asm.type.Type;
 import roj.io.buf.BufferPool;
 import roj.reflect.Bypass;
-import roj.reflect.ReflectionUtils;
-import roj.text.logging.Logger;
 import roj.util.DynByteBuf;
 
 import java.io.IOException;
-import java.lang.reflect.Field;
-import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
 import java.nio.channels.DatagramChannel;
@@ -22,38 +17,13 @@ import java.nio.channels.spi.AbstractSelectableChannel;
  * @since 2022/5/18 0:00
  */
 class UdpChImpl extends MyChannel {
-	private static final H UdpUtil;
 	private interface H {
-		Object getHolder(Object o);
-		void setAddress(Object holder, Object address);
-		void setPort(Object holder, int port);
 		void removeKey(AbstractSelectableChannel ch, SelectionKey key);
 	}
-	static {
-		H inst;
-		try {
-			Class<?> type = InetSocketAddress.class.getDeclaredField("holder").getType();
-			Bypass<H> b = Bypass.builder(H.class).i_access("java/net/InetSocketAddress", "holder", Type.fromJavaType(type), "getHolder", null, false);
-			Field field = ReflectionUtils.checkFieldName(type, "address", "addr");
-			inst = b.access(type, new String[]{field.getName(),"port"}, null, new String[]{"setAddress","setPort"}).delegate(AbstractSelectableChannel.class, "removeKey").build();
-		} catch (Exception e) {
-			Logger.getLogger().error("UdpChImpl.SocketAddressHelper初始化错误", e);
-			inst = null;
-		}
-		UdpUtil = inst;
-	}
-	private static InetSocketAddress setAddress(InetSocketAddress addr, InetAddress a, int b) {
-		if (UdpUtil == null) return new InetSocketAddress(a, b);
-
-		Object c = UdpUtil.getHolder(addr);
-		UdpUtil.setAddress(c, a);
-		UdpUtil.setPort(c, b);
-		return addr;
-	}
+	private static final H UdpUtil = Bypass.builder(H.class).delegate(AbstractSelectableChannel.class, "removeKey").build();
 
 	static final int UDP_MAX_SIZE = 65507;
 
-	private final InetSocketAddress nioAddr = new InetSocketAddress(0);
 	private final DatagramPkt first = new DatagramPkt();
 
 	private final DatagramChannel dc;
@@ -108,12 +78,12 @@ class UdpChImpl extends MyChannel {
 				DatagramPkt p = (DatagramPkt) pending.peekFirst();
 				if (p == null) break;
 
-				write1(p, p.buf);
+				write1(p, p.data);
 
-				if (p.buf.isReadable()) break;
+				if (p.data.isReadable()) break;
 
 				pending.pollFirst();
-				BufferPool.reserve(p.buf);
+				BufferPool.reserve(p.data);
 			} while (true);
 
 			if (pending.isEmpty()) {
@@ -129,9 +99,8 @@ class UdpChImpl extends MyChannel {
 
 	private void write1(DatagramPkt p, DynByteBuf buf) throws IOException {
 		var nioBuffer = syncNioWrite(buf);
-		var address = setAddress(nioAddr, p.addr, p.port);
-		// buf.readableBytes() or 0
-		dc.send(nioBuffer, address);
+		// either buf.readableBytes() or 0
+		dc.send(nioBuffer, p.address);
 		buf.rIndex = nioBuffer.position();
 	}
 
@@ -146,9 +115,8 @@ class UdpChImpl extends MyChannel {
 				buf.wIndex(nioBuffer.position());
 				alloc().expand(buf, buf.wIndex()-buf.capacity());
 
-				first.buf = buf;
-				first.addr = addr.getAddress();
-				first.port = addr.getPort();
+				first.data = buf;
+				first.address = addr;
 				fireChannelRead(first);
 			} finally {
 				BufferPool.reserve(buf);
@@ -162,7 +130,7 @@ class UdpChImpl extends MyChannel {
 		var bp = alloc();
 
 		var p = (DatagramPkt) o;
-		var buf = p.buf;
+		var buf = p.data;
 		if (buf.readableBytes() > UDP_MAX_SIZE) throw new IOException("packet too large");
 
 		try {
@@ -181,15 +149,15 @@ class UdpChImpl extends MyChannel {
 
 				var put = bp.allocate(true, buf.readableBytes(), 0).put(buf);
 				if (pending.ringAddLast(new DatagramPkt(p, put)) instanceof DatagramPkt prev) {
-					BufferPool.reserve(prev.buf);
+					BufferPool.reserve(prev.data);
 				}
 			} else {
 				fireFlushed();
 			}
 		} finally {
-			if (p.buf != buf) BufferPool.reserve(buf);
+			if (p.data != buf) BufferPool.reserve(buf);
 
-			buf = p.buf;
+			buf = p.data;
 			buf.rIndex = buf.wIndex();
 		}
 	}

@@ -6,9 +6,9 @@ import roj.archive.zip.ZipFile;
 import roj.archive.zip.ZipFileWriter;
 import roj.archive.zip.ZipOutput;
 import roj.asmx.mapper.Mapper;
-import roj.collect.LinkedMyHashMap;
-import roj.collect.MyHashMap;
-import roj.collect.SimpleList;
+import roj.collect.ArrayList;
+import roj.collect.HashMap;
+import roj.collect.LinkedHashMap;
 import roj.concurrent.ScheduleTask;
 import roj.io.FastFailException;
 import roj.io.IOUtil;
@@ -21,7 +21,10 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.nio.charset.Charset;
-import java.util.*;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.Callable;
 
 /**
@@ -74,7 +77,7 @@ public final class Project {
 		if (obj2 == null) throw new NullPointerException("找不到工作空间"+config.workspace);
 		this.workspace = obj2;
 
-		this.variables = new MyHashMap<>(obj2.variables);
+		this.variables = new HashMap<>(obj2.variables);
 		this.variables.put("project_name", name);
 		this.variables.put("project_version", version);
 		this.variables.putAll(config.variables);
@@ -82,7 +85,7 @@ public final class Project {
 			if (itr.next().startsWith("fmd:")) itr.remove();
 		}*/
 
-		this.binaryDepend = new SimpleList<>();
+		this.binaryDepend = new ArrayList<>();
 		for (String depend : conf.binary_depend) {
 			binaryDepend.add(IOUtil.relativePath(depend.startsWith("/") ? FMD.BASE : libPath, depend));
 		}
@@ -100,12 +103,12 @@ public final class Project {
 		resPrefix = resPath.getAbsolutePath();
 	}
 	public void init() {
-		LinkedMyHashMap<Project, Void> projects = new LinkedMyHashMap<>();
+		LinkedHashMap<Project, Void> projects = new LinkedHashMap<>();
 
-		List<Project> dest = new ArrayList<>();
+		List<Project> dest = new java.util.ArrayList<>();
 		for (String name : conf.dependency) dest.add(FMD.projects.get(name));
 
-		List<Project> dest2 = new ArrayList<>();
+		List<Project> dest2 = new java.util.ArrayList<>();
 		while (!dest.isEmpty()) {
 			for (int i = 0; i < dest.size(); i++) {
 				Project key = dest.get(i);
@@ -119,7 +122,7 @@ public final class Project {
 			dest2.clear();
 		}
 
-		this.dependencies = new SimpleList<>(projects.keySet());
+		this.dependencies = new ArrayList<>(projects.keySet());
 		ArrayUtil.inverse(dependencies);
 	}
 
@@ -136,7 +139,12 @@ public final class Project {
 					Set<String> set = FMD.watcher.getModified(Project.this, FileWatcher.ID_RES);
 					if (!set.contains(null)) {
 						synchronized (set) {
-							for (String fileName : set) writeRes(fileName, useCompileTimestamp != 0 ? useCompileTimestamp : new File(fileName).lastModified());
+							for (String fileName : set) {
+								long lastModified = new File(fileName).lastModified();
+								if (lastModified != 0)
+									writeRes(fileName, useCompileTimestamp != 0 ? useCompileTimestamp : lastModified);
+								else FMD.LOGGER.warn("文件{}不存在", fileName);
+							}
 							set.clear();
 						}
 						break block;
@@ -144,7 +152,7 @@ public final class Project {
 				}
 
 				// update all resource ??
-				IOUtil.findAllFiles(resPath, file -> {
+				IOUtil.listFiles(resPath, file -> {
 					long lastModified = file.lastModified();
 					if (lastModified >= stamp) writeRes(file.getAbsolutePath(), useCompileTimestamp != 0 ? useCompileTimestamp : lastModified);
 					return false;
@@ -191,9 +199,7 @@ public final class Project {
 				return;
 			}
 
-			mappedWriter.setStream(relPath, () -> {
-				return new FileInputStream(absolutePath);
-			}, time);
+			mappedWriter.setStream(relPath, () -> new FileInputStream(absolutePath), time);
 		} catch (IOException e) {
 			FMD.LOGGER.warn("资源文件{}复制失败", e, relPath);
 		}
@@ -201,12 +207,23 @@ public final class Project {
 
 	private ScheduleTask delayedCompile;
 	private boolean autoCompile;
-	public void compileSuccess() {
+	public void compileSuccess(boolean increment) {
 		if (delayedCompile != null) delayedCompile.cancel();
 		try {
 			FMD.watcher.add(this);
 		} catch (IOException e) {
 			Terminal.warning("无法启动文件监控", e);
+		}
+		if (!increment) {
+			var copyTo = variables.get("fmd_x:copy_to");
+			if (copyTo != null) {
+				try {
+					IOUtil.copyFile(mappedWriter.file, new File(copyTo));
+					Terminal.success("已将编译产物["+name+"]复制到目标文件夹");
+				} catch (IOException e) {
+					Terminal.warning("无法复制文件", e);
+				}
+			}
 		}
 	}
 	public void setAutoCompile(boolean b) {autoCompile = b;}

@@ -2,8 +2,8 @@ package roj.plugin;
 
 import org.jetbrains.annotations.ApiStatus;
 import org.jetbrains.annotations.Nullable;
+import roj.collect.HashSet;
 import roj.collect.Hasher;
-import roj.collect.MyHashSet;
 import roj.concurrent.*;
 import roj.config.Flags;
 import roj.config.ParseException;
@@ -110,7 +110,7 @@ public abstract class Plugin {
 	}
 	public final InputStream getResource(String path) {
 		if (path == null) throw new IllegalArgumentException("Filename cannot be null");
-		return desc.cl == null ? null : desc.cl.getResourceAsStream(path);
+		return desc.classLoader == null ? null : desc.classLoader.getResourceAsStream(path);
 	}
 
 	private Set<String> pPaths = Collections.emptySet();
@@ -118,7 +118,7 @@ public abstract class Plugin {
 	protected final void registerRoute(String path, Router router, String... interceptors) {router(path).addPrefixDelegation(path, router, interceptors);}
 	private OKRouter router(String path) {
 		synchronized (desc.stateLock) {
-			if (pPaths.isEmpty()) pPaths = new MyHashSet<>(4);
+			if (pPaths.isEmpty()) pPaths = new HashSet<>(4);
 			if (pPaths.add(path)) return Panger.initHttp();
 		}
 		throw new IllegalStateException("路径"+path+"已注册");
@@ -131,7 +131,7 @@ public abstract class Plugin {
 	private Set<String> pIntecs = Collections.emptySet();
 	protected final void registerInterceptor(String name, OKRouter.Dispatcher interceptor) {
 		synchronized (desc.stateLock) {
-			if (pIntecs.isEmpty()) pIntecs = new MyHashSet<>(4);
+			if (pIntecs.isEmpty()) pIntecs = new HashSet<>(4);
 			if (pIntecs.add(name)) Panger.initHttp().setInterceptor(name, interceptor);
 		}
 	}
@@ -146,7 +146,7 @@ public abstract class Plugin {
 	private Set<CommandNode> pCmds = Collections.emptySet();
 	protected final void registerCommand(CommandNode node) {
 		synchronized (desc.stateLock) {
-			if (pCmds.isEmpty()) pCmds = new MyHashSet<>(4, Hasher.identity());
+			if (pCmds.isEmpty()) pCmds = new HashSet<>(4, Hasher.identity());
 			if (pCmds.add(node)) Panger.CMD.register(node);
 		}
 	}
@@ -184,7 +184,7 @@ public abstract class Plugin {
 
 	private static final class PSched extends Scheduler {
 		final Plugin plugin;
-		final MyHashSet<ScheduleTask> userTasks = new MyHashSet<>(Hasher.identity());
+		final HashSet<ScheduleTask> userTasks = new HashSet<>(Hasher.identity());
 
 		private final Scheduler sched;
 		public PSched(Plugin plugin, Scheduler sched) {
@@ -204,7 +204,7 @@ public abstract class Plugin {
 		public ScheduleTask runAsync(Task task) {
 			PLongTask wrapper = new PLongTask(task);
 			synchronized (userTasks) { userTasks.add(wrapper); }
-			TaskPool.Common().submit(wrapper);
+			TaskPool.common().submit(wrapper);
 			return wrapper;
 		}
 		public ScheduleTask loop(Task task, long intervalMs) { return delay(new PLoopTask(sched, task, intervalMs, -1), 0); }

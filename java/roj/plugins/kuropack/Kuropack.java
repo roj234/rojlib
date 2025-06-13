@@ -1,7 +1,7 @@
 package roj.plugins.kuropack;
 
 import roj.archive.ArchiveUtils;
-import roj.archive.qz.xz.LZMA2Options;
+import roj.archive.xz.LZMA2Options;
 import roj.archive.zip.ZEntry;
 import roj.archive.zip.ZipFile;
 import roj.archive.zip.ZipFileWriter;
@@ -14,7 +14,7 @@ import roj.asmx.injector.CodeWeaver;
 import roj.asmx.injector.WeaveException;
 import roj.asmx.mapper.Mapper;
 import roj.collect.Flippable;
-import roj.collect.SimpleList;
+import roj.collect.ArrayList;
 import roj.concurrent.TaskPool;
 import roj.io.DummyOutputStream;
 import roj.io.IOUtil;
@@ -89,7 +89,7 @@ public final class Kuropack {
 	}
 
 	public static void pack(File input, File output, int chunkSize) {
-		List<ClassNode> loadable = new SimpleList<>();
+		List<ClassNode> loadable = new ArrayList<>();
 		try (ZipFileWriter zo = new ZipFileWriter(output, Deflater.BEST_COMPRESSION, 0)) {
 			zo.beginEntry(new ZEntry("META-INF/MANIFEST.MF"));
 			zo.write("Manifest-Version: 1.0\nMain-Class: cpk.Main\n".getBytes(StandardCharsets.UTF_8));
@@ -99,7 +99,7 @@ public final class Kuropack {
 
 			Flippable<String, String> cMap = mapper.getClassMap();
 
-			List<Context> ctxs = new SimpleList<>();
+			List<Context> ctxs = new ArrayList<>();
 			int classId = 0;
 			ClassNode cpkLoader;
 			try (ZipFile self = new ZipFile(IOUtil.getJar(Kuropack.class))) {
@@ -129,7 +129,7 @@ public final class Kuropack {
 					byte[] patchBytes = self.get("roj/plugins/kuropack/LZDecoderN_.class");
 					CodeWeaver.Patch patch = nx.read(ClassNode.parseSkeleton(patchBytes));
 
-					bytes = self.get("roj/archive/qz/xz/lz/LZDecoder.class");
+					bytes = self.get("roj/archive/xz/lz/LZDecoder.class");
 					cd = ClassNode.parseSkeleton(bytes);
 					CodeWeaver.patch(cd, patch);
 					ctxs.add(new Context(cd));
@@ -137,7 +137,7 @@ public final class Kuropack {
 					patchBytes = self.get("roj/plugins/kuropack/LZMA2InN_.class");
 					patch = nx.read(ClassNode.parseSkeleton(patchBytes));
 
-					bytes = self.get("roj/archive/qz/xz/LZMA2InputStream.class");
+					bytes = self.get("roj/archive/xz/LZMA2InputStream.class");
 					cd = ClassNode.parseSkeleton(bytes);
 					CodeWeaver.patch(cd, patch);
 					ctxs.add(new Context(cd));
@@ -165,7 +165,7 @@ public final class Kuropack {
 
 				ClassNode data = ctx.getData();
 
-				SimpleList<FieldNode> fields = data.fields;
+				ArrayList<FieldNode> fields = data.fields;
 				for (int j = fields.size()-1; j >= 0; j--) {
 					if (fields.get(j).getRawAttribute("ConstantValue") != null)
 						fields.remove(j);
@@ -193,7 +193,7 @@ public final class Kuropack {
 			String mainClass = null;
 
 			try (ZipFile za = new ZipFile(input)) {
-				SimpleList<ZEntry> entries = new SimpleList<>(za.entries());
+				ArrayList<ZEntry> entries = new ArrayList<>(za.entries());
 				entries.sort((o1, o2) -> o1.getName().compareTo(o2.getName()));
 
 				for (ZEntry entry : entries) {
@@ -254,7 +254,7 @@ public final class Kuropack {
 	}
 
 	private int filePos;
-	private final List<OffA> files = new SimpleList<>();
+	private final List<OffA> files = new ArrayList<>();
 
 	private static final class OffA {
 		private final String name;
@@ -323,7 +323,7 @@ public final class Kuropack {
 		int uLen = dict.length;
 
 		LZMA2Options opt = new LZMA2Options(9).setDictSize(Math.max(Math.min(1048576, uLen),4096)).setPb(0).setDepthLimit(999);
-		int bestSize = findBestProps(opt, dict, TaskPool.Common());
+		int bestSize = findBestProps(opt, dict, TaskPool.common());
 		System.out.println("Block: #"+ cpSize++ +" ("+opt+") "+uLen+" => "+bestSize+" ("+TextUtil.toFixed(100d * bestSize / uLen, 2)+"%)");
 
 		int cLen = out.wIndex();

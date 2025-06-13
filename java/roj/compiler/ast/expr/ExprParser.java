@@ -7,21 +7,20 @@ import roj.asm.Opcodes;
 import roj.asm.attr.UnparsedAttribute;
 import roj.asm.type.IType;
 import roj.asm.type.Type;
+import roj.collect.ArrayList;
 import roj.collect.Int2IntMap;
 import roj.collect.IntList;
 import roj.collect.IntMap;
-import roj.collect.SimpleList;
-import roj.compiler.LavaFeatures;
+import roj.compiler.CompileContext;
+import roj.compiler.CompileUnit;
 import roj.compiler.Tokens;
+import roj.compiler.api.Compiler;
 import roj.compiler.asm.Asterisk;
 import roj.compiler.asm.LPGeneric;
-import roj.compiler.ast.BlockParser;
+import roj.compiler.ast.MethodParser;
 import roj.compiler.ast.ParseTask;
 import roj.compiler.ast.VariableDeclare;
-import roj.compiler.context.CompileUnit;
-import roj.compiler.context.LocalContext;
 import roj.compiler.diagnostic.Kind;
-import roj.compiler.plugin.LavaApi;
 import roj.config.ConfigMaster;
 import roj.config.ParseException;
 import roj.config.Word;
@@ -32,8 +31,8 @@ import roj.config.serial.CVisitor;
 import roj.io.IOUtil;
 import roj.text.CharList;
 import roj.util.Helpers;
+import roj.util.Multisort;
 import roj.util.NativeArray;
-import roj.util.TimSortForEveryone;
 
 import java.util.Collections;
 import java.util.List;
@@ -47,7 +46,7 @@ import static roj.reflect.Unaligned.U;
  * Parser levels: <ol>
  *     <li>{@link CompileUnit Class Parser}</li>
  *     <li>{@link ParseTask Segment Parser}</li>
- *     <li>{@link BlockParser Method Parser}</li>
+ *     <li>{@link MethodParser Method Parser}</li>
  *     <li><b><i>Expression Parser</i></b></li>
  * </ol>
  * @version 2.6 (Nested new)
@@ -186,22 +185,22 @@ public final class ExprParser {
 		for (short token : tokens) SM.putInt(token|mask, val);
 	}
 
-	private final LocalContext ctx;
+	private final CompileContext ctx;
 
-	private final SimpleList<?> tmp0 = new SimpleList<>();
+	private final ArrayList<?> tmp0 = new ArrayList<>();
 	private <T> List<T> tmp() {
-		if (depth > 0) return new SimpleList<>();
+		if (depth > 0) return new ArrayList<>();
 		var t = tmp0; t.clear(); return Helpers.cast(t);
 	}
 
-	private final SimpleList<Expr> nodes = new SimpleList<>();
+	private final ArrayList<Expr> nodes = new ArrayList<>();
 	/**
 	 * 低10位放优先级
 	 * 高21位放节点索引
 	 * 最高位放右结合标记
 	 */
 	private final IntList binaryOps = new IntList();
-	private static final TimSortForEveryone.MyComparator BOP_SORTER = (refLeft, offLeft, offRight) -> {
+	private static final Multisort.MyComparator BOP_SORTER = (refLeft, offLeft, offRight) -> {
 		int l = U.getInt(refLeft, offLeft);
 		int r = U.getInt(offRight);
 		int priority = Integer.compare(r & 1023, l & 1023);
@@ -214,7 +213,7 @@ public final class ExprParser {
 	public Int2IntMap stateMap = SM;
 	public List<Object> callbacks;
 
-	public ExprParser(LocalContext ctx) {this.ctx = ctx;}
+	public ExprParser(CompileContext ctx) {this.ctx = ctx;}
 
 	public RawExpr parse(int flag) throws ParseException {
 		hasNullExpr = false;
@@ -230,7 +229,7 @@ public final class ExprParser {
 			//throw e;
 			ctx.report(Kind.ERROR, e.getMessage());
 			// IDEA一边说不该滥用Nullable一边在这里疯狂infer
-			return (flag & NAE) != 0 ? NaE.RESOLVE_FAILED : Helpers.maybeNull();
+			return (flag & NAE) != 0 ? NaE.resolveFailed() : Helpers.maybeNull();
 		}
 		return node;
 	}
@@ -319,11 +318,11 @@ public final class ExprParser {
 					default: // 自定义前缀 | 自定义完整表达式
 						int alt_sid = _sid & ~CU_TerminateFlag;
 						if (_sid != alt_sid) {
-							cur = ((LavaApi.StartOp) callbacks.get(alt_sid)).parse(ctx);
+							cur = ((Compiler.StartOp) callbacks.get(alt_sid)).parse(ctx);
 							break endValueConv;
 						}
 
-						pf = ((LavaApi.ContinueOp<PrefixOperator>) callbacks.get(alt_sid)).parse(ctx, up);
+						pf = ((Compiler.ContinueOp<PrefixOperator>) callbacks.get(alt_sid)).parse(ctx, up);
 				}
 				w = wr.next();
 
@@ -338,7 +337,7 @@ public final class ExprParser {
 			// *AI命名建议：后缀表达式（Postfix Expression） | 如方法调用`foo()`、成员访问`obj.field`等需在前缀基础上处理的语法结构。
 			// region 一次性"值生成"(自造词)操作 (加载常量 new this 花括号(direct)数组内容 int[].class String.class)
 			switch (_sid = stateMap.getOrDefaultInt(w.type()|SM_ExprStart, 0)) {
-				case -1://NEW
+				case -1 -> {//NEW
 					// double[]的部分不受支持
 					// new <double[]>test<int[]>(new int[0], (Object) assign2op((short) 2));
 					// test.<int[]>b();
@@ -411,24 +410,29 @@ public final class ExprParser {
 					}
 					cur.wordStart = start;
 				break endValueGen;
+				}
 				// constant
-				case -2: cur = Expr.constant(Type.primitive(Type.CHAR), CEntry.valueOf(w.val().charAt(0))); break;
-				case -3: cur = Expr.valueOf(w.val()); break;
-				case -4: cur = Expr.valueOf(w.asInt()); break;
-				case -5: cur = Expr.constant(Type.primitive(Type.LONG), CEntry.valueOf(w.asLong())); break;
-				case -6: cur = Expr.constant(Type.primitive(Type.FLOAT), CEntry.valueOf(w.asFloat())); break;
-				case -7: cur = Expr.constant(Type.primitive(Type.DOUBLE), CEntry.valueOf(w.asDouble())); break;
-				case -8: cur = Expr.valueOf(true); break;
-				case -9: cur = Expr.valueOf(false); break;
-				case -10: cur = Expr.constant(Asterisk.anyType, null); break;
+				case -2 -> {
+					var ch = w.val();
+					if (ch.length() != 1) ctx.report(Kind.ERROR, "lexer.unterminated.character", w.pos());
+					cur = Expr.constant(Type.primitive(Type.CHAR), CEntry.valueOf(ch.charAt(0)));
+				}
+
+				case -3 -> cur = Expr.valueOf(w.val());
+				case -4 -> cur = Expr.valueOf(w.asInt());
+				case -5 -> cur = Expr.constant(Type.primitive(Type.LONG), CEntry.valueOf(w.asLong()));
+				case -6 -> cur = Expr.constant(Type.primitive(Type.FLOAT), CEntry.valueOf(w.asFloat()));
+				case -7 -> cur = Expr.constant(Type.primitive(Type.DOUBLE), CEntry.valueOf(w.asDouble()));
+				case -8 -> cur = Expr.valueOf(true);
+				case -9 -> cur = Expr.valueOf(false);
+				case -10-> cur = Expr.constant(Asterisk.anyType, null);
 				// MIN_VALUE_NUMBER_LITERAL
-				case -17: LocalContext.get().report(Kind.ERROR, "lexer.number.overflow"); break;
+				case -17 -> CompileContext.get().report(Kind.ERROR, "lexer.number.overflow");
 				// this
-				case -11: cur = Super(); break;
-				case -12: cur = This(); break;
+				case -11 -> cur = Super();
+				case -12 -> cur = This();
 				// lBrace (define unknown array)
-				case -13:
-					//noinspection TextLabelInSwitchStatement
+				case -13 -> {
 					check_param_map:
 					if ((flag & _ENV_INVOKE) != 0) {
 						// invoke_env:
@@ -469,14 +473,14 @@ public final class ExprParser {
 
 					cur = newArray(null);
 					break endValueConv;
-				case -14://lBracket
+				}
+				case -14 -> {//lBracket
 					//if ((flag & _ENV_FIELD) == 0) wr.unexpected(w.val());
 
 					List<Expr> keys = tmp();
 
-					//noinspection TextLabelInSwitchStatement
 					checkMapLiteral: {
-						List<Expr> values = new SimpleList<>();
+						List<Expr> values = new ArrayList<>();
 						// 形如 [ exprkey -> exprval, ... ] 的直接Map<K, V>构建
 						do {
 							var key = parse1(STOP_LAMBDA|STOP_COMMA|SKIP_COMMA|NAE);
@@ -503,16 +507,16 @@ public final class ExprParser {
 
 					wr.except(rBracket, "]");
 					cur = new ListLiteral(copyOf(keys));
-				break;
-				case -15:{//primitive type ref
+				}
+				case -15 -> {//primitive type ref
 					Type typeRef = PW.get(w.type());
 					assert typeRef != null;
 
 					cur = _typeRef(wr.next(), typeRef, flag);
 					if (cur == null) ctx.report(Kind.ERROR, "expr.typeRef.illegal");
 					else if (cur.getClass() == VariableDeclare.class) return cur;
-				break;}
-				case -16://type ref
+				}
+				case -16 -> {//type ref
 					while (true) {
 						cur = chain(cur, w.val(), 0);
 
@@ -545,7 +549,7 @@ public final class ExprParser {
 										IType type = ctx.file.readGenericPart(((MemberAccess) cur).toClassRef().owner);
 
 										w = wr.next();
-										if (w.type() != LITERAL) throw wr.err("未预料的[类型]");
+										if (w.type() != LITERAL) throw wr.err("unexpected_2:[\""+w.val()+"\",type.literal]");
 										return new VariableDeclare(type, w.val());
 									}
 								}
@@ -567,11 +571,9 @@ public final class ExprParser {
 							break endValueGen;
 						}
 					}
-				break;
-				case 0: break endValueGen;
-				default:
-					cur = ((LavaApi.StartOp) callbacks.get(_sid)).parse(ctx);
-				break;
+				}
+				case 0 -> {break endValueGen;}
+				default -> cur = ((Compiler.StartOp) callbacks.get(_sid)).parse(ctx);
 			}
 			w = wr.next();
 			// endregion
@@ -633,7 +635,7 @@ public final class ExprParser {
 							break;
 						}
 
-						if (ctx.classes.hasFeature(LavaFeatures.OPTIONAL_SEMICOLON) && cur != null) {
+						if (ctx.compiler.hasFeature(Compiler.OPTIONAL_SEMICOLON) && cur != null) {
 							wr.retractWord();
 							break endValueConv;
 						}
@@ -705,7 +707,7 @@ public final class ExprParser {
 					default: // 自定义继续 | 自定义终止
 						int alt_sid = _sid & ~CU_TerminateFlag;
 
-						cur = ((LavaApi.ContinueOp<Expr>) callbacks.get(alt_sid)).parse(ctx, cur);
+						cur = ((Compiler.ContinueOp<Expr>) callbacks.get(alt_sid)).parse(ctx, cur);
 
 						if (_sid == alt_sid) break;
 						else break endValueConv;
@@ -745,7 +747,7 @@ public final class ExprParser {
 			// 二元运算符 | 三元运算符 | 终结符
 			_sid = stateMap.getOrDefaultInt(SM_ExprTerm | w.type(), 0);
 			if (_sid == 0) {
-				if (ctx.classes.hasFeature(LavaFeatures.OPTIONAL_SEMICOLON) && depth == 0 && cur != null) {
+				if (ctx.compiler.hasFeature(Compiler.OPTIONAL_SEMICOLON) && depth == 0 && cur != null) {
 					wr.retractWord();
 					break;
 				}
@@ -763,12 +765,13 @@ public final class ExprParser {
 				// 0x020 = FLAG_NEVER_SKIP
 				int shl = _sid & 31;
 				if ((flag & (1 << shl)) == 0) {
-					if (ctx.classes.hasFeature(LavaFeatures.OPTIONAL_SEMICOLON) && depth == 0 && cur != null) {
+					if (ctx.compiler.hasFeature(Compiler.OPTIONAL_SEMICOLON) && depth == 0 && cur != null) {
 						wr.retractWord();
 						break;
 					}
 
 					exceptingStopWord(w.val(), flag);
+					break;
 				}
 				if ((_sid & 0x20) != 0 || (flag & (1 << (shl+1))) == 0) wr.retractWord();
 
@@ -796,6 +799,7 @@ public final class ExprParser {
 
 				do {
 					args.add(parse1(flag|STOP_COMMA|SKIP_COMMA|NAE));
+					w = wr.current();
 				} while (w.type() == comma);
 				if (w.type() != semicolon) ue(wr, w.val(), ";");
 
@@ -836,11 +840,11 @@ public final class ExprParser {
 	 * 根据优先级构建二元表达式树.
 	 * 20250330: 现已支持右结合！
 	 */
-	private Expr buildBinaryTree(SimpleList<Expr> nodes, int nodeCount, int bopCount) {
+	private Expr buildBinaryTree(ArrayList<Expr> nodes, int nodeCount, int bopCount) {
 		Expr cur;
 		var ops = binaryOps;
 		if (ops.size() > bopCount) {
-			TimSortForEveryone.sort(bopCount, ops.size(), BOP_SORTER, NativeArray.primitiveArray(ops.getRawArray()));
+			Multisort.sort(bopCount, ops.size(), BOP_SORTER, NativeArray.primitiveArray(ops.getRawArray()));
 
 			int i = bopCount;
 			do {
@@ -853,7 +857,7 @@ public final class ExprParser {
 				checkNullExpr(op.right);
 
 				int sid = stateMap.getOrDefaultInt(op.operator, 0);
-				if ((sid& CU_Binary) != 0) cur = ((LavaApi.BinaryOp) callbacks.get(sid >>> 12)).parse(ctx, op.left, op.right);
+				if ((sid& CU_Binary) != 0) cur = ((Compiler.BinaryOp) callbacks.get(sid >>> 12)).parse(ctx, op.left, op.right);
 				else cur = op;
 			} while (++i != ops.size());
 
@@ -981,7 +985,7 @@ public final class ExprParser {
 
 		String first = w.val();
 
-		var sb = LocalContext.get().getTmpSb();
+		var sb = CompileContext.get().getTmpSb();
 		sb.append(first);
 
 		wr.state = STATE_TYPE;
@@ -1102,7 +1106,7 @@ public final class ExprParser {
 			Expr node = parse1(stopWord&(STOP_RSB|STOP_COMMA|STOP_SEMICOLON));
 			if (node == null) {
 				ctx.report(Kind.ERROR, "lambda解析失败");
-				return NaE.RESOLVE_FAILED;
+				return NaE.resolveFailed();
 			}
 
 			int end = wr.prevIndex;
@@ -1149,8 +1153,8 @@ public final class ExprParser {
 	public boolean isCommutative(short op) {return op == add || op == mul;}
 
 	public <T> List<T> copyOf(List<T> args) {
-		if (!(args instanceof SimpleList<T>)) return args;
-		SimpleList<T> copy = new SimpleList<>(args);
+		if (!(args instanceof ArrayList<T>)) return args;
+		ArrayList<T> copy = new ArrayList<>(args);
 		args.clear();
 		return copy;
 	}

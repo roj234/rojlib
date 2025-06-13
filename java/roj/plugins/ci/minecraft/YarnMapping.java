@@ -2,8 +2,8 @@ package roj.plugins.ci.minecraft;
 
 import roj.asm.MemberDescriptor;
 import roj.asmx.mapper.Mapping;
+import roj.collect.ArrayList;
 import roj.collect.IntList;
-import roj.collect.SimpleList;
 import roj.text.CharList;
 import roj.text.LineReader;
 import roj.text.TextReader;
@@ -26,7 +26,7 @@ import java.util.zip.ZipFile;
  */
 final class YarnMapping extends Mapping {
 	public Mapping load(File intermediary, File mapping, String version) throws IOException {
-		SimpleList<String> tmp = new SimpleList<>();
+		ArrayList<String> tmp = new ArrayList<>();
 		readIntermediaryMap(intermediary.getName(), TextReader.auto(intermediary), tmp);
 
 		YarnMapping map1 = new YarnMapping();
@@ -113,9 +113,11 @@ final class YarnMapping extends Mapping {
 					if (paramMap != null) {
 						List<String> list = paramMap.computeIfAbsent(method, Helpers.fnArrayList());
 
-						int argNo = Integer.parseInt(tmp.get(1));
+						// simply ignore index to support new ParamNameMapper
+						list.add(tmp.get(2));
+						/*int argNo = Integer.parseInt(tmp.get(1));
 						while (list.size() <= argNo) list.add(null);
-						list.set(argNo, tmp.get(2));
+						list.set(argNo, tmp.get(2));*/
 					}
 				}
 				case "FIELD" -> {

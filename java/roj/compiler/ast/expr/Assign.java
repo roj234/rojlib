@@ -3,9 +3,9 @@ package roj.compiler.ast.expr;
 import roj.asm.Opcodes;
 import roj.asm.type.IType;
 import roj.asm.type.Type;
+import roj.compiler.CompileContext;
 import roj.compiler.Tokens;
 import roj.compiler.asm.MethodWriter;
-import roj.compiler.context.LocalContext;
 import roj.compiler.diagnostic.Kind;
 import roj.compiler.resolve.TypeCast;
 import roj.config.data.CInt;
@@ -17,7 +17,7 @@ import static roj.compiler.Tokens.byId;
  * @author Roj234
  * @since 2023/9/18 9:07
  */
-class Assign extends Expr {
+final class Assign extends Expr {
 	LeftValue left;
 	Expr right;
 	TypeCast.Cast cast;
@@ -30,11 +30,14 @@ class Assign extends Expr {
 	@Override public String toString() { return left+" = "+right; }
 	@Override public IType type() { return left.type(); }
 
+	public LeftValue getLeft() {return left;}
+	public Expr getRight() {return right;}
+
 	@Override
-	public Expr resolve(LocalContext ctx) {
+	public Expr resolve(CompileContext ctx) {
 		Expr node = left.resolve(ctx);
 		left = node.asLeftValue(ctx);
-		if (left == null) return NaE.RESOLVE_FAILED;
+		if (left == null) return NaE.resolveFailed(this);
 
 		Expr prev = right;
 		if (prev instanceof Cast c) {
@@ -45,7 +48,7 @@ class Assign extends Expr {
 
 		if (prev instanceof BinaryOp op) {
 			right = op.resolveEx(ctx, true);
-			if (right == NaE.RESOLVE_FAILED) return right;
+			if (right == NaE.resolveFailed(this)) return right;
 
 			if (node.equals(op.left)) {
 				// a = a + b
@@ -56,7 +59,7 @@ class Assign extends Expr {
 
 			if (right == null) {
 				ctx.report(this, Kind.ERROR, "op.notApplicable.binary", op.left.type(), op.right.type(), byId(op.operator));
-				return NaE.RESOLVE_FAILED;
+				return NaE.resolveFailed(this);
 			}
 		} else {
 			right = prev.resolve(ctx);
@@ -79,11 +82,11 @@ class Assign extends Expr {
 		}
 		//if (!isCastNeeded()) cast = null;
 
-		return cast.type >= 0 ? this : NaE.RESOLVE_FAILED;
+		return cast.type >= 0 ? this : NaE.resolveFailed(this);
 	}
 
 	static void incOrDec(LeftValue expr, MethodWriter cw, boolean noRet, boolean returnBefore, int amount) {
-		var ctx = LocalContext.get();
+		var ctx = CompileContext.get();
 		boolean isVariable = false;
 
 		IType type = expr.type();
@@ -176,7 +179,7 @@ class Assign extends Expr {
 			}
 			if ((short)value != value) break block;
 
-			var ctx = LocalContext.get();
+			var ctx = CompileContext.get();
 
 			ctx.loadVar(lv.v);
 			cw.iinc(lv.v, value);

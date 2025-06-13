@@ -1,7 +1,7 @@
 package roj.concurrent;
 
 import org.jetbrains.annotations.NotNull;
-import roj.reflect.ReflectionUtils;
+import roj.reflect.Unaligned;
 import roj.util.Helpers;
 
 import java.util.concurrent.*;
@@ -14,7 +14,7 @@ import static roj.reflect.Unaligned.U;
  */
 public class AsyncTask<T> implements Future<T>, Task {
 	private static final int INITIAL = 0, RUNNING = 1, COMPLETED = 2, FAILED = 3, CANCELLED = 4;
-	private static final long u_stateOffset = ReflectionUtils.fieldOffset(AsyncTask.class, "state");
+	private static final long u_stateOffset = Unaligned.fieldOffset(AsyncTask.class, "state");
 	private volatile int state;
 
 	private volatile T out;

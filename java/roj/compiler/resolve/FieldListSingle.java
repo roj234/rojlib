@@ -3,7 +3,7 @@ package roj.compiler.resolve;
 import org.jetbrains.annotations.NotNull;
 import roj.asm.ClassDefinition;
 import roj.asm.FieldNode;
-import roj.compiler.context.LocalContext;
+import roj.compiler.CompileContext;
 import roj.text.CharList;
 
 /**
@@ -20,7 +20,7 @@ final class FieldListSingle extends ComponentList {
 	final FieldNode node;
 
 	@NotNull
-	public FieldResult findField(LocalContext ctx, int flag) {
+	public FieldResult findField(CompileContext ctx, int flag) {
 		var tmp = new CharList();
 		ctx.errorCapture = makeErrorCapture(tmp);
 

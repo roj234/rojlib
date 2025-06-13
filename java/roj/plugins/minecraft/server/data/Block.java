@@ -1,8 +1,8 @@
 package roj.plugins.minecraft.server.data;
 
+import roj.collect.HashMap;
+import roj.collect.HashSet;
 import roj.collect.Hasher;
-import roj.collect.MyHashMap;
-import roj.collect.MyHashSet;
 import roj.compiler.plugins.asm.ASM;
 import roj.config.NBTParser;
 import roj.config.auto.Optional;
@@ -22,18 +22,18 @@ import java.util.Map;
  * @since 2024/3/19 17:00
  */
 public final class Block {
-	public static final MyHashMap<String, Block> byName = new MyHashMap<>();
+	public static final HashMap<String, Block> byName = new HashMap<>();
 	public static final Registry<Block> REGISTRY = new Registry<>("block", 1024);
 	public static final Registry<Block> STATE_ID = new Registry<>("block_state_id", 16384);
-	private static MyHashSet<Object> _tmp;
+	private static HashSet<Object> _tmp;
 	static {
 		try (var in = MinecraftServer.INSTANCE.getResource("assets/Blocks_1.19.2.nbt")) {
 			var conv = SerializerFactory.SAFE.serializer(BlockInfo.class);
 			var nbt = new NBTParser();
 
 			Comparator<PropertyInfo> propertyCmp = (o1, o2) -> o1.name.compareTo(o2.name);
-			var intern = new MyHashSet<>(Hasher.array(Object[].class));
-			_tmp = new MyHashSet<>();
+			var intern = new HashSet<>(Hasher.array(Object[].class));
+			_tmp = new HashSet<>();
 
 			var mdi = new MyDataInputStream(in);
 			int i = 0;
@@ -59,7 +59,7 @@ public final class Block {
 
 				int allDefault = STATE_ID.nextId();
 				if (prop != null) {
-					iterateStates(block, new MyHashMap<>(), prop, 0);
+					iterateStates(block, new HashMap<>(), prop, 0);
 					STATE_ID.remove(allDefault);
 
 					Block prev = block;
@@ -89,7 +89,7 @@ public final class Block {
 				Map<String, String> exist = (Map<String, String>) _tmp.find(map);
 				if (map == exist) {
 					if (map.size() == 1) exist = Collections.singletonMap(prop.name, choice);
-					else exist = ASM.TARGET_JAVA_VERSION >= 10 ? Map.copyOf(exist) : new MyHashMap<>(exist);
+					else exist = ASM.TARGET_JAVA_VERSION >= 10 ? Map.copyOf(exist) : new HashMap<>(exist);
 					_tmp.add(exist);
 				}
 				STATE_ID.register(new Block(base, exist), STATE_ID.nextId());
@@ -166,7 +166,7 @@ public final class Block {
 			return Collections.singletonMap(prop.name, prop.choices[0]);
 		}
 
-		MyHashMap<String, String> map = new MyHashMap<>(props.length);
+		HashMap<String, String> map = new HashMap<>(props.length);
 		for (PropertyInfo p : props) map.put(p.name, p.choices[0]);
 
 		return ASM.TARGET_JAVA_VERSION >= 10 ? Map.copyOf(map) : map;

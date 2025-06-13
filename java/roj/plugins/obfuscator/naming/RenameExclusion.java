@@ -8,7 +8,7 @@ import roj.asm.cp.CstClass;
 import roj.asm.cp.CstRef;
 import roj.asm.cp.CstString;
 import roj.asm.insn.CodeVisitor;
-import roj.collect.SimpleList;
+import roj.collect.ArrayList;
 import roj.config.auto.Optional;
 import roj.text.CharList;
 import roj.util.ByteList;
@@ -24,9 +24,9 @@ import java.util.List;
  * @since 2022/2/20 22:18
  */
 public class RenameExclusion extends CodeVisitor {
-	public List<ExclusionEntry> exclusionEntries = new SimpleList<>();
+	public List<ExclusionEntry> exclusionEntries = new ArrayList<>();
 
-	private final List<String> ldc = new SimpleList<>();
+	private final List<String> ldc = new ArrayList<>();
 	private int ldcPos;
 
 	public static final class ExclusionEntry {
@@ -85,7 +85,7 @@ public class RenameExclusion extends CodeVisitor {
 				addExclusion(data.name() +"//"+mn.name(), 4);
 			}
 
-			mn.visitCode(this, data.cp, tmp);
+			mn.transform(data.cp, tmp, this);
 		}
 		tmp._free();
 	}
@@ -104,11 +104,11 @@ public class RenameExclusion extends CodeVisitor {
 	public void ldc(byte code, Constant c) {
 		switch (c.type()) {
 			case Constant.STRING:
-				ldc.add(((CstString) c).name().str());
+				ldc.add(((CstString) c).value().str());
 				ldcPos = bci;
 			break;
 			case Constant.CLASS:
-				ldc.add(((CstClass) c).name().str());
+				ldc.add(((CstClass) c).value().str());
 				ldcPos = bci;
 			break;
 		}
@@ -130,13 +130,13 @@ public class RenameExclusion extends CodeVisitor {
 					addExclusion(ldc.get(ldc.size()-1).replace('.', '/'), NameObfuscator.EX_CLASS);
 				} else if (owner.equals("roj/reflect/Bypass") && (name.equals("builder") || name.equals("custom"))) {
 					addExclusion(ldc.get(ldc.size()-1), NameObfuscator.EX_METHOD);
-				} else if (owner.equals("roj/reflect/ReflectionUtils")) {
-					if ((name.equals("fieldOffset") || name.equals("getField")) && ldc.size() >= 2) {
-						addExclusion(ldc.get(0)+"//"+ldc.get(1), NameObfuscator.EX_FIELD);
-					}
+				} else if (owner.equals("roj/reflect/Reflection") && name.equals("getField") && ldc.size() >= 2) {
+					addExclusion(ldc.get(0)+"//"+ldc.get(1), NameObfuscator.EX_FIELD);
+				} else if (owner.equals("roj/reflect/Unaligned") && name.equals("fieldOffset") && ldc.size() >= 2) {
+					addExclusion(ldc.get(0)+"//"+ldc.get(1), NameObfuscator.EX_FIELD);
 				}
 				block:
-				if (owner.equals("roj/collect/XHashSet")) {
+				if (owner.equals("roj/collect/XashMap")) {
 					int i = 0;
 					if (name.equals("shape")) {
 						i = 1;

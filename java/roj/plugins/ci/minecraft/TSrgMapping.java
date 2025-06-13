@@ -38,7 +38,7 @@ final class TSrgMapping extends Mapping {
 			try (var tr = TextReader.from(in, StandardCharsets.UTF_8)) {
 				switch (cfg.version()) {
 					case 1: tsrgV1(tr, tmp); break;
-					case 2: case 3: tSrgV2(tr, tmp, paramMap); break;
+					case 2, 3, 4: tSrgV2(tr, tmp, paramMap); break;
 					default: Terminal.warning("不支持的版本 " + cfg.version());
 				}
 			}
@@ -126,7 +126,7 @@ final class TSrgMapping extends Mapping {
 					return false;
 				}
 
-				if (tmp.size() == 2) {
+				if (tmp.get(1).indexOf('(') < 0) {
 					if (!tmp.get(0).equals(tmp.get(1)))
 						fieldMap.put(new MemberDescriptor(prevF, tmp.get(0)), tmp.get(1));
 				} else {
@@ -140,10 +140,7 @@ final class TSrgMapping extends Mapping {
 					Terminal.error("#!config/joined.tsrg:"+ln+": 无效的元素开始.");
 					return false;
 				}
-				if (tmp.get(0).equals("static")) {
-					Terminal.warning("TSrgMapping:141: "+tmp);
-					continue;
-				}
+				if (tmp.get(0).equals("static")) continue;
 
 				if (paramMap != null) {
 					List<String> list = paramMap.computeIfAbsent(method, Helpers.fnArrayList());

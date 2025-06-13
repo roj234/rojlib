@@ -4,7 +4,7 @@ import roj.ReferenceByGeneratedClass;
 import roj.asmx.injector.Inject;
 import roj.asmx.injector.Weave;
 import roj.asmx.launcher.Autoload;
-import roj.collect.MyHashMap;
+import roj.collect.HashMap;
 import roj.http.server.Content;
 import roj.http.server.HttpServer11;
 import roj.http.server.Request;
@@ -25,7 +25,7 @@ import java.util.function.Function;
  */
 public class GreatErrorPage {
 	private static final String CODEBASE = "../projects/rojlib/java";
-	private static final Map<String,Function<Request,Map<String, ?>>> customTag = new MyHashMap<>();
+	private static final Map<String,Function<Request,Map<String, ?>>> customTag = new HashMap<>();
 	private static Formatter template;
 	static {
 		try {
@@ -51,10 +51,10 @@ public class GreatErrorPage {
 		StackTraceElement[] els = e.getStackTrace();
 		CharList sb = IOUtil.getSharedCharBuf();
 
-		MyHashMap<String, String> data = new MyHashMap<>();
+		HashMap<String, String> data = new HashMap<>();
 
 		data.put("site", req.host());
-		data.put("desc", String.valueOf(e.getMessage()).replace("\n", "<br />"));
+		data.put("desc", HtmlEntities.escapeHtml(String.valueOf(e.getMessage())).toString().replace("\n", "<br />"));
 
 		sb.clear();
 		parse_class(sb.append("["), e.getClass().getName()).append("] at ");
@@ -132,7 +132,7 @@ public class GreatErrorPage {
 		return lineNum >= el.getLineNumber();
 	}
 
-	private static void relation_data(Request req, CharList sb, MyHashMap<String, String> data) {
+	private static void relation_data(Request req, CharList sb, HashMap<String, String> data) {
 		Map<String, ?> map;
 		try {
 			map = req.queryParam();

@@ -1,8 +1,9 @@
 package roj.plugins.ddns;
 
-import roj.collect.MyBitSet;
-import roj.collect.MyHashMap;
-import roj.collect.SimpleList;
+import org.jetbrains.annotations.Nullable;
+import roj.collect.BitSet;
+import roj.collect.HashMap;
+import roj.collect.ArrayList;
 import roj.concurrent.Task;
 import roj.concurrent.TaskThread;
 import roj.config.JSONParser;
@@ -22,7 +23,6 @@ import java.net.InetAddress;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.SecureRandom;
-import java.util.List;
 import java.util.Map;
 import java.util.Random;
 
@@ -32,7 +32,7 @@ import static roj.plugins.ddns.IpGetter.pooledRequest;
  * @author Roj234
  * @since 2023/1/27 19:03
  */
-final class Aliyun implements DDNSService {
+final class Aliyun implements IpMapper {
 	private static final String API_URL = "https://alidns.aliyuncs.com";
 	private static final String DEFAULT_API_VERSION = "2015-01-09";
 	private static final String DEFAULT_SIGNATURE_METHOD = "HMAC-SHA1";
@@ -42,7 +42,7 @@ final class Aliyun implements DDNSService {
 	private final Random rnd = new SecureRandom();
 
 	private String makeUrl(Map<String, String> param) {
-		Map<String, String> queries = new MyHashMap<>(param);
+		Map<String, String> queries = new HashMap<>(param);
 		queries.put("Format", "JSON");
 		queries.put("Version", DEFAULT_API_VERSION);
 		queries.put("SignatureMethod", DEFAULT_SIGNATURE_METHOD);
@@ -69,7 +69,7 @@ final class Aliyun implements DDNSService {
 		return sb.substring(1);
 	}
 	private static String makeSign(Map<String, String> queries, String accessSecret) {
-		SimpleList<Map.Entry<String, String>> sorted = new SimpleList<>(queries.entrySet());
+		ArrayList<Map.Entry<String, String>> sorted = new ArrayList<>(queries.entrySet());
 		sorted.sort((o1, o2) -> o1.getKey().compareTo(o2.getKey()));
 
 		ByteList sb = new ByteList();
@@ -93,11 +93,11 @@ final class Aliyun implements DDNSService {
 		}
 	}
 
-	private static final MyBitSet aliyun_pass = MyBitSet.from("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_.~");
+	private static final BitSet aliyun_pass = BitSet.from("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_.~");
 	private static CharList encodeSignature(CharSequence src) {return URICoder.pEncodeW(IOUtil.getSharedCharBuf(), src instanceof ByteList b ? b : IOUtil.getSharedByteBuf().putUTFData(src), aliyun_pass);}
 
-	private Map<String, DDnsRecord> domain2Id = new MyHashMap<>();
-	static final class DDnsRecord {
+	private final Map<String, DomainRecord> domainRecords = new HashMap<>();
+	static final class DomainRecord {
 		String domain, RR;
 		InetAddress v4Addr, v6Addr;
 		Object v4Id, v6Id;
@@ -106,17 +106,14 @@ final class Aliyun implements DDNSService {
 	private final TaskThread th = new TaskThread();
 
 	@Override
-	public void loadConfig(CMap config) {
+	public void init(CMap config) {
 		AccessKeyId = config.getString("AccessKey");
 		AccessKeySecret = config.getString("AccessSecret");
-	}
 
-	@Override
-	public void init(Iterable<Map.Entry<String, List<String>>> managed) throws Exception {
 		th.start();
 
-		Map<String, String> par = new MyHashMap<>();
-		par.put("Action", "DescribeDomainRecords");
+		Map<String, String> params = new HashMap<>();
+		params.put("Action", "DescribeDomainRecords");
 		// *域名名称
 		// string DomainName
 		// 当前页数，起始值为1，默认为1
@@ -130,62 +127,67 @@ final class Aliyun implements DDNSService {
 		// 记录值的关键字，按照”%ValueKeyWord%”模式搜索，不区分大小写
 		// string ValueKeyWord
 
-		for (Map.Entry<String, List<String>> entry : managed) {
-			par.put("DomainName", entry.getKey());
-			par.put("TypeKeyWord", "A");
-			par.put("PageSize", "100");
+		for (var entry : config.getMap("Domains").entrySet()) {
+			String zone = entry.getKey();
 
-			List<String> subDomains = entry.getValue();
+			params.put("DomainName", zone);
+			params.put("PageSize", "100");
+
+			var subDomains = entry.getValue().asList().raw();
+			String subDomain = null;
 			for (int i = 0; i < subDomains.size(); i++) {
-				String s = subDomains.get(0);
-				int pos = s.lastIndexOf(entry.getKey())-1;
-				if (pos < 0) System.out.println("Invalid sub domain " + s);
+				subDomain = subDomains.get(i).asString();
+
+				int pos = subDomain.lastIndexOf(zone)-1;
+				if (pos < 0) System.err.println("Invalid sub domain "+subDomain);
 				else {
-					DDnsRecord record = new DDnsRecord();
-					record.domain = entry.getKey();
-					record.RR = s.substring(0, pos);
-					domain2Id.put(subDomains.get(i), record);
+					DomainRecord record = new DomainRecord();
+					record.domain = zone;
+					record.RR = subDomain.substring(0, pos);
+					domainRecords.put(subDomain, record);
 				}
 			}
 
 			if (subDomains.size() == 1) {
-				String s = subDomains.get(0);
-				int pos = s.lastIndexOf(entry.getKey())-1;
-				if (pos > 0) par.put("RRKeyWord", s.substring(0, pos));
+				params.put("RRKeyWord", domainRecords.get(subDomain).RR);
+			} else {
+				params.remove("RRKeyWord");
 			}
 
-			th.submit(_init(par));
+			params.put("TypeKeyWord", "A");
+			th.submit(_init(params));
 
-			par.put("TypeKeyWord", "AAAA");
-			th.submit(_init(par));
+			params.put("TypeKeyWord", "AAAA");
+			th.submit(_init(params));
 		}
 
 		th.shutdown();
-		th.awaitTermination();
+		try {
+			th.awaitTermination();
+		} catch (InterruptedException e) {
+			e.printStackTrace();
+		}
 	}
 
-	@Override
-	public void update(Iterable<Map.Entry<String, InetAddress[]>> changed) {
-		for (Map.Entry<String, InetAddress[]> entry : changed) {
-			DDnsRecord record = domain2Id.get(entry.getKey());
-			if (record == null) domain2Id.put(entry.getKey(), record = new DDnsRecord());
 
-			InetAddress[] addr = entry.getValue();
-			if (addr[0] != null && !addr[0].equals(record.v4Addr)) {
-				record.v4Addr = addr[0];
+	@Override
+	public void update(@Nullable InetAddress addr4, @Nullable InetAddress addr6) {
+		for (var record : domainRecords.values()) {
+			if (addr4 != null && !addr4.equals(record.v4Addr)) {
+				record.v4Addr = addr4;
 				if (record.v4Id == null) {
-					_add(record.domain, record.RR, addr[0].getHostAddress(), "A");
+					_add(record.domain, record.RR, addr4.getHostAddress(), "A");
 				} else {
-					_update(record.v4Id, record.RR, addr[0].getHostAddress(), "A");
+					_update(record.v4Id, record.RR, addr4.getHostAddress(), "A");
 				}
 			}
 
-			if (addr[1] != null && !addr[1].equals(record.v6Addr)) {
-				record.v6Addr = addr[1];
+			if (addr6 != null && !addr6.equals(record.v6Addr)) {
+				record.v6Addr = addr6;
 				if (record.v6Id == null) {
-					_add(record.domain, record.RR, addr[1].getHostAddress(), "AAAA");
+					_add(record.domain, record.RR, addr6.getHostAddress(), "AAAA");
 				} else {
-					_update(record.v6Id, record.RR, addr[1].getHostAddress(), "AAAA");
+					_update(record.v6Id, record.RR, addr6.getHostAddress(), "AAAA");
 				}
 			}
 		}
@@ -199,36 +201,19 @@ final class Aliyun implements DDNSService {
 		// string RecordId
 		// 是否启用, Enable: 启用解析 Disable: 暂停解析
 		// string Enable
-
-		// ==UpdateDomainRecord==
-		// 解析记录的ID，此参数在添加解析时会返回，在获取域名解析列表时会返回
-		// string RecordId
-		// 主机记录，如果要解析@.exmaple.com，主机记录要填写"@”，而不是空
-		// string RR
-		// 解析记录类型，参见解析记录类型格式(https://help.aliyun.com/document_detail/29805.html)
-		// string Type = "A";
-		// 记录值
-		// string Value { get; set; }
-		// 生存时间，默认为600秒（10分钟），参见TTL定义说明(https://help.aliyun.com/document_detail/29806.html)
-		// int TTL { get; set; } = 600;
-		// MX记录的优先级，取值范围[1,10]，记录类型为MX记录时，此参数必须
-		// int Priority { get; set; }
-		// 解析线路，默认为default。参见解析线路枚举(https://help.aliyun.com/document_detail/29807.html)
-		// string Line
-
-		// ==AddDomainRecord==
-		// 解析记录的ID，此参数在添加解析时会返回，在获取域名解析列表时会返回
-		// string DomainName
-		// 其余参数同上
 	}
 
 	@Override
-	public void cleanup() {
+	public void close() {
 		th.shutdown();
 	}
 
+	// ==AddDomainRecord==
+	// 解析记录的ID，此参数在添加解析时会返回，在获取域名解析列表时会返回
+	// string DomainName
+	// 其余参数同上
 	private void _add(String domain, String RR, String addr, String type) {
-		Map<String, String> par = new MyHashMap<>();
+		Map<String, String> par = new HashMap<>();
 		par.put("Action", "AddDomainRecord");
 		par.put("DomainName", domain);
 		par.put("RR", RR);
@@ -243,8 +228,23 @@ final class Aliyun implements DDNSService {
 		}
 	}
 
+	// ==UpdateDomainRecord==
+	// 解析记录的ID，此参数在添加解析时会返回，在获取域名解析列表时会返回
+	// string RecordId
+	// 主机记录，如果要解析@.exmaple.com，主机记录要填写"@”，而不是空
+	// string RR
+	// 解析记录类型，参见解析记录类型格式(https://help.aliyun.com/document_detail/29805.html)
+	// string Type = "A";
+	// 记录值
+	// string Value { get; set; }
+	// 生存时间，默认为600秒（10分钟），参见TTL定义说明(https://help.aliyun.com/document_detail/29806.html)
+	// int TTL { get; set; } = 600;
+	// MX记录的优先级，取值范围[1,10]，记录类型为MX记录时，此参数必须
+	// int Priority { get; set; }
+	// 解析线路，默认为default。参见解析线路枚举(https://help.aliyun.com/document_detail/29807.html)
+	// string Line
 	private void _update(Object id, String RR, String addr, String type) {
-		Map<String, String> par = new MyHashMap<>();
+		Map<String, String> par = new HashMap<>();
 		par.put("Action", "UpdateDomainRecord");
 		par.put("RecordId", id.toString());
 		par.put("RR", RR);
@@ -274,7 +274,7 @@ final class Aliyun implements DDNSService {
 				CMap data = list.get(i).asMap();
 				String name = data.getString("RR")+"."+data.getString("DomainName");
 
-				DDnsRecord record = domain2Id.get(name);
+				DomainRecord record = domainRecords.get(name);
 				if (record != null) {
 					switch (data.getString("Type")) {
 						case "A":

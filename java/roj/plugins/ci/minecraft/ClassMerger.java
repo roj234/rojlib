@@ -5,7 +5,7 @@ import roj.asm.MethodNode;
 import roj.asm.attr.Attribute;
 import roj.asm.attr.InnerClasses;
 import roj.asmx.Context;
-import roj.collect.MyHashMap;
+import roj.collect.HashMap;
 
 import java.util.Collection;
 import java.util.List;
@@ -21,7 +21,7 @@ final class ClassMerger {
 	public int mergedField, mergedMethod, replaceMethod;
 
 	public Collection<Context> process(List<Context> main, List<Context> sub) {
-		MyHashMap<String, Context> byName = new MyHashMap<>();
+		HashMap<String, Context> byName = new HashMap<>();
 		for (int i = 0; i < main.size(); i++) {
 			Context ctx = main.get(i);
 			byName.put(ctx.getFileName(), ctx);

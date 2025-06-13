@@ -6,7 +6,7 @@ import roj.asm.Member;
 import roj.asm.Opcodes;
 import roj.asm.cp.ConstantPool;
 import roj.asm.cp.CstUTF;
-import roj.collect.SimpleList;
+import roj.collect.ArrayList;
 import roj.util.DynByteBuf;
 import roj.util.TypedKey;
 
@@ -17,12 +17,12 @@ import java.util.List;
  * @since 2021/1/1 23:12
  */
 public final class RecordAttribute extends Attribute {
-	public static final int RECORD_ATTR = 8;
+	public static final int ATTR_RECORD = 3;
 
-	public RecordAttribute() { fields = new SimpleList<>(); }
+	public RecordAttribute() { fields = new ArrayList<>(); }
 	public RecordAttribute(DynByteBuf r, ConstantPool cp) {
 		int len = r.readUnsignedShort();
-		fields = new SimpleList<>(len);
+		fields = new ArrayList<>(len);
 		while (len-- > 0) {
 			Field rd = new Field();
 			fields.add(rd);
@@ -34,7 +34,7 @@ public final class RecordAttribute extends Attribute {
 				rd.attributes = new AttributeList(len1);
 				while (len1-- > 0) {
 					String name0 = ((CstUTF) cp.get(r)).str();
-					rd.attributes._add(Attribute.parse(rd, cp, name0, r.slice(r.readInt()), RECORD_ATTR));
+					rd.attributes._add(Attribute.parse(rd, cp, name0, r.slice(r.readInt()), ATTR_RECORD));
 				}
 			}
 		}
@@ -85,7 +85,7 @@ public final class RecordAttribute extends Attribute {
 		@Override public AttributeList attributes() { return attributes == null ? attributes = new AttributeList() : attributes; }
 		@Nullable
 		@Override public AttributeList attributesNullable() { return attributes; }
-		@Override public <T extends Attribute> T getAttribute(ConstantPool cp, TypedKey<T> type) { return Attribute.parseSingle(this,cp,type,attributes, RECORD_ATTR); }
+		@Override public <T extends Attribute> T getAttribute(ConstantPool cp, TypedKey<T> type) { return Attribute.parseSingle(this,cp,type,attributes, ATTR_RECORD); }
 		@Override public char modifier() {return Opcodes.ACC_PUBLIC|Opcodes.ACC_FINAL;}
 		@Override public String name() { return name; }
 		@Override public void name(String name) {this.name = name;}

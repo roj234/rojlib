@@ -12,7 +12,7 @@ import roj.asm.cp.CstClass;
 import roj.asm.cp.CstUTF;
 import roj.asm.insn.CodeWriter;
 import roj.asm.type.Type;
-import roj.collect.SimpleList;
+import roj.collect.ArrayList;
 import roj.io.IOUtil;
 import roj.text.CharList;
 import roj.util.ByteList;
@@ -36,7 +36,7 @@ public class GenericTemplate extends CodeWriter {
 		int flag = flag(code);
 		if ((flag&TRAIT_ILFDA) == 0) return (byte) code;
 
-		String name = showOpcode(code);
+		String name = Opcodes.toString(code);
 		if ((flag&0xF) == CATE_ARRAY_SL)
 			return (byte) ((name.endsWith("Store") ? 33 : 0)+ArrayLoad(to));
 
@@ -67,7 +67,7 @@ public class GenericTemplate extends CodeWriter {
 		for (int i = 0; i < list.size(); i++) {
 			Constant c = list.get(i);
 			if (c.type() == Constant.CLASS) {
-				CstUTF ref = ((CstClass) c).name();
+				CstUTF ref = ((CstClass) c).value();
 				d.cp.setUTFValue(ref, replaceArrayClass(ref.str()));
 			}/* else if (c.type() == Constant.NAME_AND_TYPE) {
 				CstUTF ref = ((CstNameAndType) c).getType();
@@ -77,7 +77,7 @@ public class GenericTemplate extends CodeWriter {
 
 		ByteList tmp = IOUtil.getSharedByteBuf();
 
-		SimpleList<MethodNode> methods = d.methods;
+		ArrayList<MethodNode> methods = d.methods;
 		for (int i = 0; i < methods.size(); i++) {
 			MethodNode mn = methods.get(i);
 			mn.rawDesc(replaceDesc(mn.rawDesc(), methodType));
@@ -91,7 +91,7 @@ public class GenericTemplate extends CodeWriter {
 			}
 		}
 
-		SimpleList<FieldNode> fields = d.fields;
+		ArrayList<FieldNode> fields = d.fields;
 		for (int i = 0; i < fields.size(); i++) {
 			FieldNode fn = fields.get(i);
 			fn.rawDesc(replaceDesc(fn.rawDesc(), internalType));

@@ -10,8 +10,8 @@ import java.util.function.LongFunction;
 import static roj.collect.IntMap.NUMKEY_LOADFACTOR;
 import static roj.collect.IntMap.UNDEFINED;
 
-public class LongMap<V> extends AbstractMap<Long, V> implements _Generic_Map<LongMap.Entry<V>> {
-	public static final class Entry<V> implements _Generic_Entry, Map.Entry<Long, V> {
+public class LongMap<V> extends AbstractMap<Long, V> implements _LibMap<LongMap.Entry<V>> {
+	public static final class Entry<V> implements _LibEntry, Map.Entry<Long, V> {
 		final long k;
 		public V v;
 
@@ -30,7 +30,7 @@ public class LongMap<V> extends AbstractMap<Long, V> implements _Generic_Map<Lon
 
 		Entry<V> next;
 		@Override
-		public _Generic_Entry __next() {return next;}
+		public _LibEntry __next() {return next;}
 	}
 
 	Entry<?>[] entries;
@@ -58,7 +58,7 @@ public class LongMap<V> extends AbstractMap<Long, V> implements _Generic_Map<Lon
 	private static int longHash(long c) {return (int) (c ^ (c >>> 32));}
 
 	// GenericMap interface
-	public _Generic_Entry[] __entries() {return entries;}
+	public _LibEntry[] __entries() {return entries;}
 	public void __remove(Entry<V> vEntry) {remove(vEntry.k);}
 	// GenericMap interface
 
@@ -166,7 +166,7 @@ public class LongMap<V> extends AbstractMap<Long, V> implements _Generic_Map<Lon
 	@NotNull
 	@Override
 	public final Set<Map.Entry<Long, V>> entrySet() {return Helpers.cast(selfEntrySet());}
-	public final Set<Entry<V>> selfEntrySet() {return _Generic_EntrySet.create(this);}
+	public final Set<Entry<V>> selfEntrySet() {return _LibEntrySet.create(this);}
 
 	@Override
 	@Deprecated

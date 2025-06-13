@@ -1,7 +1,7 @@
 package roj.http;
 
-import roj.collect.MyHashMap;
-import roj.collect.SimpleList;
+import roj.collect.HashMap;
+import roj.collect.ArrayList;
 import roj.concurrent.OperationDone;
 import roj.util.Helpers;
 
@@ -17,11 +17,11 @@ import static roj.collect.IntMap.UNDEFINED;
  * @since 2021/10/23 21:20
  */
 @SuppressWarnings({"rawtypes","unchecked"})
-public class Multimap<K, V> extends MyHashMap<K, V> {
+public class Multimap<K, V> extends HashMap<K, V> {
 	public Multimap() {super();}
 	public Multimap(int size) {super(size);}
 
-	static final class Entry<K, V> extends MyHashMap.Entry<K, V> implements BiConsumer<String, String> {
+	static final class Entry<K, V> extends HashMap.Entry<K, V> implements BiConsumer<String, String> {
 		List<V> rest = Collections.emptyList();
 
 		// awa, 省一个类, 我真无聊
@@ -52,7 +52,7 @@ public class Multimap<K, V> extends MyHashMap<K, V> {
 		var entry = (Entry) getEntry(key);
 		if (entry == null) return Collections.emptyList();
 
-		SimpleList<V> list = new SimpleList<>(entry.rest.size()+1);
+		ArrayList<V> list = new ArrayList<>(entry.rest.size()+1);
 		list.add((V) entry.value);
 		list.addAll(entry.rest);
 		return list;
@@ -109,7 +109,7 @@ public class Multimap<K, V> extends MyHashMap<K, V> {
 		if (value.size() == 1) {
 			entry.rest = Collections.emptyList();
 		} else {
-			entry.rest = new SimpleList(value);
+			entry.rest = new ArrayList(value);
 			entry.rest.remove(0);
 		}
 		entry.value = value.get(0);

@@ -14,6 +14,11 @@ import java.lang.annotation.Target;
 @Retention(RetentionPolicy.CLASS)
 @Target({ElementType.METHOD, ElementType.CONSTRUCTOR})
 public @interface VarargCount {
-	int min();
-	int max();
+	int min() default 0;
+	int max() default 65535;
+	/**
+	 * 必须是整数倍
+	 * 例如2，那么数量必须是0，2，4等等
+	 */
+	int multiplyOf() default 1;
 }

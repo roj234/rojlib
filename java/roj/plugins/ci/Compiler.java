@@ -1,7 +1,7 @@
 package roj.plugins.ci;
 
 import roj.asmx.ClassResource;
-import roj.collect.SimpleList;
+import roj.collect.ArrayList;
 import roj.config.data.CMap;
 import roj.reflect.Bypass;
 
@@ -34,7 +34,7 @@ public interface Compiler {
 			supplier = Bypass.builder(BiFunction.class).constructFuzzy(Class.forName(config.getString("type")), "apply").build();
 		}
 
-		public SimpleList<String> getDefaultOptions() {return new SimpleList<>(options);}
+		public ArrayList<String> getDefaultOptions() {return new ArrayList<>(options);}
 		public Compiler getInstance(String basePath) {return supplier.apply(this, basePath);}
 	}
 }

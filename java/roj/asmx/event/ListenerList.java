@@ -1,7 +1,6 @@
 package roj.asmx.event;
 
-import roj.collect.SimpleList;
-import roj.reflect.ReflectionUtils;
+import roj.collect.ArrayList;
 import roj.reflect.Unaligned;
 import roj.util.Helpers;
 
@@ -20,7 +19,7 @@ public final class ListenerList {
 	final ListenerList parent;
 
 	private volatile int modCount;
-	private static final long MODCOUNT_OFFSET = ReflectionUtils.fieldOffset(ListenerList.class, "modCount");
+	private static final long MODCOUNT_OFFSET = Unaligned.fieldOffset(ListenerList.class, "modCount");
 
 	ListenerList mapNext;
 
@@ -50,7 +49,7 @@ public final class ListenerList {
 			for (int k = 0; k < instances.length; k++) {
 				var instance = instances[k];
 				if (instance.isEmpty()) continue;
-				var myi = (SimpleList<EventListener>) instance;
+				var myi = (ArrayList<EventListener>) instance;
 
 				var array = myi.getInternalArray();
 				int size = myi.size();
@@ -80,7 +79,7 @@ public final class ListenerList {
 		if (instance == Collections.EMPTY_LIST) {
 			int offset = Unaligned.ARRAY_OBJECT_BASE_OFFSET + priority * Unaligned.ARRAY_OBJECT_INDEX_SCALE;
 			while (true) {
-				if (U.compareAndSwapObject(instances, offset, Collections.EMPTY_LIST, instance = new SimpleList<>())) break;
+				if (U.compareAndSwapObject(instances, offset, Collections.EMPTY_LIST, instance = new ArrayList<>())) break;
 				if ((instance = (List<EventListener>) U.getObjectVolatile(instances, offset)) != Collections.EMPTY_LIST) break;
 			}
 		}

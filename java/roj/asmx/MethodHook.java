@@ -6,8 +6,8 @@ import roj.asm.cp.CstClass;
 import roj.asm.insn.CodeWriter;
 import roj.asm.type.Type;
 import roj.asm.type.TypeHelper;
-import roj.collect.MyHashMap;
-import roj.collect.SimpleList;
+import roj.collect.ArrayList;
+import roj.collect.HashMap;
 import roj.text.CharList;
 
 import java.lang.annotation.ElementType;
@@ -27,7 +27,7 @@ public abstract class MethodHook implements Transformer {
 	@Target(ElementType.METHOD)
 	protected @interface RealDesc { String[] value(); boolean callFrom() default false; }
 
-	protected final MyHashMap<MemberDescriptor, MemberDescriptor> hooks = new MyHashMap<>();
+	protected final HashMap<MemberDescriptor, MemberDescriptor> hooks = new HashMap<>();
 
 	public MethodHook() { addDefaultHook(); }
 	protected void addDefaultHook() {
@@ -51,7 +51,7 @@ public abstract class MethodHook implements Transformer {
 				toDesc.modifier = (char) (i1>=0&&i1<=i ? 1 : 0);
 
 				Function<MemberDescriptor, List<Object>> fn = (x) -> {
-					List<Object> list = new SimpleList<>();
+					List<Object> list = new ArrayList<>();
 					list.add(toDesc);
 					return list;
 				};

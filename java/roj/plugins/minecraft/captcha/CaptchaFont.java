@@ -1,8 +1,8 @@
 package roj.plugins.minecraft.captcha;
 
 import roj.collect.BitArray;
+import roj.collect.BitSet;
 import roj.collect.Int2IntMap;
-import roj.collect.MyBitSet;
 import roj.config.data.CEntry;
 import roj.config.data.CMap;
 import roj.math.Vec3d;
@@ -30,7 +30,7 @@ public final class CaptchaFont {
 	}
 
 	public Captcha generate(Random rnd, BlockSet blockset, int length) {
-		MyBitSet[] choices = new MyBitSet[length];
+		BitSet[] choices = new BitSet[length];
 		World world = new World();
 
 		world.createPhysicalBorder(8, 0, 127, Block.getBlock("minecraft:barrier"));
@@ -79,7 +79,7 @@ public final class CaptchaFont {
 	}
 
 	static final class Char {
-		MyBitSet choice;
+		BitSet choice;
 		BitArray data;
 		int typeCount;
 		int width, height;
@@ -95,7 +95,7 @@ public final class CaptchaFont {
 			for (int j = 0; j < cfgChars.size(); j++) {
 				CMap cfgXCaptcha = cfgChars.get(j).asMap();
 				Char c = font.chars[j] = new Char();
-				c.choice = MyBitSet.from(cfgXCaptcha.asMap().getString("choice"));
+				c.choice = BitSet.from(cfgXCaptcha.asMap().getString("choice"));
 
 				String text = cfgXCaptcha.asMap().getString("text");
 				Int2IntMap types = new Int2IntMap();

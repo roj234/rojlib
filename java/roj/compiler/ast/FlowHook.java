@@ -9,14 +9,12 @@ import roj.compiler.asm.MethodWriter;
 import java.util.Arrays;
 import java.util.function.Consumer;
 
-import static roj.asm.Opcodes.IRETURN;
-
 /**
  * 控制流劫持
  * @author Roj234
  * @since 2025/4/9 12:29
  */
-public class FlowHook {
+class FlowHook {
 	//所有return语句会带着栈上的返回值跳转到该位置
 	public Label returnTarget = new Label();
 	//如果你想节省代码，可以在这里修改每一个return处的JumpBlock
@@ -48,7 +46,7 @@ public class FlowHook {
 		if (returnHook.size() > 0) {
 			cw.label(returnTarget);
 			finallyEmitter.accept(cw);
-			if (parent == null) cw.insn(cw.mn.returnType().getOpcode(IRETURN));
+			if (parent == null) cw.return_(cw.mn.returnType());
 			else cw.jump(parent.returnTarget);
 		}
 	}

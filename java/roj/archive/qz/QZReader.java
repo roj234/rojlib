@@ -4,7 +4,7 @@ import roj.archive.CRC32InputStream;
 import roj.io.LimitInputStream;
 import roj.io.source.Source;
 import roj.io.source.SourceInputStream;
-import roj.reflect.ReflectionUtils;
+import roj.reflect.Unaligned;
 
 import java.io.Closeable;
 import java.io.EOFException;
@@ -22,7 +22,7 @@ public abstract class QZReader implements Closeable {
 	byte flag;
 
 	Source fpRead;
-	static final long FPREAD_OFFSET = ReflectionUtils.fieldOffset(QZReader.class, "fpRead");
+	static final long FPREAD_OFFSET = Unaligned.fieldOffset(QZReader.class, "fpRead");
 
 	private QZEntry activeEntry;
 	private InputStream blockInput;

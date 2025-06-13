@@ -1,5 +1,7 @@
 package roj.compiler.plugins.eval;
 
+import roj.plugins.ci.annotation.InRepo;
+
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
@@ -12,6 +14,7 @@ import java.lang.annotation.Target;
  * @author Roj233
  * @since 2021/9/2 21:52
  */
+@InRepo
 @Retention(RetentionPolicy.CLASS)
 @Target({ElementType.METHOD})
 public @interface Constexpr {}

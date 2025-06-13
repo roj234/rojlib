@@ -1,6 +1,6 @@
 package roj.asmx.mapper;
 
-import roj.collect.MyHashMap;
+import roj.collect.HashMap;
 
 import java.util.concurrent.locks.ReentrantLock;
 
@@ -9,7 +9,7 @@ import java.util.concurrent.locks.ReentrantLock;
  * @author Roj234
  * @since 2020/8/20 14:03
  */
-final class SynchronizedFindMap<K, V> extends MyHashMap<K, V> {
+final class SynchronizedFindMap<K, V> extends HashMap<K, V> {
 	private final ReentrantLock lock = new ReentrantLock();
 
 	public SynchronizedFindMap() {}

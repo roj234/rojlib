@@ -21,9 +21,6 @@ public interface IType extends java.lang.reflect.Type, Cloneable {
 	 * @return 该类型的Java内部表示形式
 	 */
 	@Contract(pure = true) default String toDesc() {
-		int type = getActualType();
-		if (type != Type.CLASS) return Type.getDesc(type);
-
 		var sb = IOUtil.getSharedCharBuf();
 		toDesc(sb);
 		return sb.toString();

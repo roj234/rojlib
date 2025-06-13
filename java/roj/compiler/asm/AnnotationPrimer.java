@@ -7,14 +7,14 @@ import roj.asm.annotation.AnnVal;
 import roj.asm.annotation.Annotation;
 import roj.asm.type.IType;
 import roj.asm.type.TypeHelper;
-import roj.collect.MyHashMap;
-import roj.collect.SimpleList;
+import roj.collect.ArrayList;
+import roj.collect.HashMap;
+import roj.compiler.CompileContext;
+import roj.compiler.CompileUnit;
 import roj.compiler.Tokens;
 import roj.compiler.ast.expr.Expr;
 import roj.compiler.ast.expr.ExprParser;
 import roj.compiler.ast.expr.NewArray;
-import roj.compiler.context.CompileUnit;
-import roj.compiler.context.LocalContext;
 import roj.compiler.diagnostic.Kind;
 import roj.compiler.resolve.TypeCast;
 import roj.config.ParseException;
@@ -49,7 +49,7 @@ public final class AnnotationPrimer extends Annotation {
 			if (wr.next().type() == Tokens.at) {
 				wr.skip();
 
-				var list = new SimpleList<AnnotationPrimer>();
+				var list = new ArrayList<AnnotationPrimer>();
 				while (true) {
 					file.readAnnotations(list);
 					if (!wr.nextIf(Tokens.comma)) break;
@@ -81,13 +81,13 @@ public final class AnnotationPrimer extends Annotation {
 		}
 		}
 
-		((MyHashMap<String,?>) properties).put(key, Helpers.cast(expr));
+		((HashMap<String,?>) properties).put(key, Helpers.cast(expr));
 	}
 
 	public void setValues(Map<String, CEntry> values) {this.properties = values;}
 
 	@Nullable
-	public static CEntry toAnnVal(LocalContext ctx, Expr node, IType type) {
+	public static CEntry toAnnVal(CompileContext ctx, Expr node, IType type) {
 		if (node instanceof NewArray def) def.setType(type);
 
 		// begin 20250120 可以用 @ABC (DEF)这种方式直接引用枚举常量DEF
