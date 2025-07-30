@@ -264,4 +264,17 @@ public final class MethodNode extends MemberNode {
 		}
 		return sb;
 	}
+
+	public Code getCode(ConstantPool cp) {
+		AttributeList list = attributes;
+		if (list == null) return null;
+		Object code = list.getByName("Code");
+		if (code instanceof AttrCodeWriter acw) {
+			var attr = UnparsedAttribute.serialize(cp, AsmCache.buf(), acw);
+			list.add(attr);
+			code = attr;
+		}
+		if (code instanceof Code code1) return code1;
+		return getAttribute(cp, Attribute.Code);
+	}
 }

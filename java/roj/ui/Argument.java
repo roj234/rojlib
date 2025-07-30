@@ -1,10 +1,10 @@
 package roj.ui;
 
 import org.jetbrains.annotations.Nullable;
+import roj.collect.ArrayList;
 import roj.collect.HashMap;
 import roj.collect.HashSet;
 import roj.collect.IntMap;
-import roj.collect.ArrayList;
 import roj.config.ParseException;
 import roj.config.Tokenizer;
 import roj.config.Word;
@@ -62,7 +62,7 @@ public interface Argument<T> {
 						if (!path.exists()) throw ctx.error("路径不存在");
 					}
 					case 1 -> {
-						if (!path.isDirectory() && !path.mkdirs()) throw ctx.error("文件夹不存在且无法创建");
+						if (!path.isDirectory()) throw ctx.error("文件夹不存在");
 					}
 					case 2 -> {
 						if (!path.isFile()) throw ctx.error("文件不存在");
