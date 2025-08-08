@@ -258,6 +258,70 @@ try (
 * 优先级低于switch中的yield
 * 通过匿名类实现，可参考有栈协程（貌似不再像看起来那么牛逼了）
 
+### 编译期联合类型
+
+#### 功能概述
+`roj.compiler.api.Union` 是编译器支持的**联合类型**特性，允许方法声明返回多个可能的类型（如 `String | Integer | Map<String, Integer>`）。在编译期进行类型约束检查，运行时通过模式匹配安全处理具体类型。
+
+#### 核心代码示例
+```java
+// 声明返回 String/Integer/Map<String, Integer> 其中一种类型
+static Union<String, Integer, Map<String, Integer>> manyTypes() {
+    return "asdf"; // 实际返回 String 类型
+}
+
+public static void main(String[] args) {
+    // 接收联合类型返回值 (当然，也支持不使用var的声明，但这没有必要)
+    var x = manyTypes();
+    
+    // 类型安全的模式匹配
+    String n = switch (x) {
+        case String s -> s;         // 处理 String 类型
+        case Integer l -> l.toString(); // 处理 Integer 类型
+        case Map<String, ?> m -> m.toString();   // 处理 Map 类型 (我在这里故意使用了更不具体的类型，表示Union非精确匹配)
+    };
+    System.out.println(n); // 输出: "asdf"
+}
+```
+
+#### ✨ 关键特性
+1. **编译期类型约束**
+   - 方法返回值明确声明为 `Union<Type1, Type2, ...>`
+   - **禁止返回 `null`**，否则触发编译错误：
+     ```
+     错误: <AnyType>不可能转换为* extends String&Integer&Map<String, Integer>
+     ```
+   - 禁止返回类型擦除后相同的泛型类型，因为无法在运行时通过checkcast验证
+
+2. **运行时类型安全**
+   - 必须用 `switch` 覆盖所有声明类型
+   - 未处理 `null` 时抛出 `IncompatibleClassChangeError`
+   - 缺少分支会导致编译错误（如删除 `case Map<String, Integer>`）
+
+3. **模式匹配优化**
+   - 用起来和record类型是差不多的，支持自动类型转换等
+
+#### ⚠️ 重要注意事项
+| 场景 | 后果 | 解决方案 |
+|------|------|----------|
+| 返回 `null` | 编译失败 + 类型转换错误 | 确保返回值非空 |
+| 缺失分支 | 编译错误 | `switch` 覆盖所有 `Union` 声明类型 |
+| 运行时值为 `null` | `IncompatibleClassChangeError` | 添加 `case null` 分支处理 |
+
+#### 最佳实践
+```java
+// 建议：显式处理 null 值
+String result = switch (x) {
+    case String s -> s;
+    case Integer i -> i.toString();
+    case Map<?,?> m -> m.toString();
+    case null -> "[null]"; // 安全处理 null
+};
+```
+
+> **设计意图**：在静态类型语言中模拟联合类型，通过编译期检查消除运行时可能产生的 `ClassCastException`，提升类型安全性。  
+> 顺便提一嘴：你可以在pattern switch中使用不冲突的具化泛型类型，例如Map&lt;String, Integer>，而不是Map&lt;?,?>
+
 ### PseudoType (伪类型)
 相关API：
   * Type#DirtyHacker

@@ -1,0 +1,4 @@
+Manifest-Version: 1.0
+Main-Class: roj.asmx.launcher.Main
+Ignis-Main: roj.plugin.Jocker
+Ignis-Tweaker: roj.plugin.PanTweaker

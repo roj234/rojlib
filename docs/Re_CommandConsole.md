@@ -13,7 +13,7 @@
 ## 代码
 
 ```java
-import roj.ui.Terminal;
+import roj.ui.Tty;
 import roj.ui.Shell;
 import roj.ui.Argument;
 import roj.ui.Command;

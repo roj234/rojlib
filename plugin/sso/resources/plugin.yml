@@ -1,0 +1,6 @@
+id: EasySSO
+desc: 支持TOTP、扫码登录，账号冻结等功能的单点登录系统
+version: ${project_version}
+authors: ["Roj234"]
+mainClass: roj.plugins.web.sso.SSOPlugin
+role: PermissionManager

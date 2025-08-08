@@ -1,0 +1,4 @@
+id: roj.pinyin
+version: ${project_version}
+depend:
+  - roj.core@${library_version}

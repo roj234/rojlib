@@ -1,5 +1,0 @@
-Manifest-Version: 1.0
-Main-Class: roj.gui.impl.UIEntry
-Premain-Class: roj.plugins.ci.plugin.HRAgent
-Agent-Class: roj.plugins.ci.plugin.HRAgent
-Can-Redefine-Classes: true

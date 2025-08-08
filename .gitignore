@@ -1,5 +1,4 @@
+.mcmake
+/private
+/.idea
 *.iml
-*.psd
-*.lava
-resources/libcpp.dll
-libs/pregenerated.jar
