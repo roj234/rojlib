@@ -1,6 +1,6 @@
 package roj.ci;
 
-import roj.config.data.CMap;
+import roj.config.node.MapValue;
 
 import java.util.Collections;
 
@@ -9,7 +9,7 @@ import java.util.Collections;
  * @since 2025/2/12 3:47
  */
 public final class EmptyWorkspace {
-	public static Workspace build(CMap config) {
+	public static Workspace build(MapValue config) {
 		var workspace = new Workspace();
 		workspace.type = "Empty";
 		workspace.id = "Empty";

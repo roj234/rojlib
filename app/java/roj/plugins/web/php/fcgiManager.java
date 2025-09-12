@@ -50,7 +50,7 @@ public abstract class fcgiManager implements Router {
 	}
 
 	protected fcgiContent fcgi_pass(Request req, Map<String, String> param) throws IllegalRequestException {
-		param.putIfAbsent("SERVER_SOFTWARE", HttpServer11.SERVER_NAME+"(like apache)");
+		param.putIfAbsent("SERVER_SOFTWARE", HttpServer.SERVER_NAME+"(like apache)");
 		param.putIfAbsent("GATEWAY_INTERFACE", "CGI/1.1");
 		param.putIfAbsent("SERVER_NAME", "localhost");
 		param.putIfAbsent("SERVER_PROTOCOL", "HTTP/1.1");

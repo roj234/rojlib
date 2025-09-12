@@ -2,8 +2,8 @@ package roj.text.pinyin;
 
 import roj.archive.xz.LZMA2InputStream;
 import roj.collect.*;
-import roj.config.Tokenizer;
-import roj.config.data.CInt;
+import roj.text.Tokenizer;
+import roj.config.node.IntValue;
 import roj.io.IOUtil;
 import roj.text.CharList;
 import roj.text.FastCharset;
@@ -87,7 +87,7 @@ public class JPinyin {
 
 	public static TrieTree<Integer> getPinyinWords() { return PinyinWords; }
 
-	private final HashMap.Entry<CInt, Integer> entry = new HashMap.Entry<>(new CInt(), null);
+	private final HashMap.Entry<IntValue, Integer> entry = new HashMap.Entry<>(new IntValue(), null);
 
 	public JPinyin() {}
 

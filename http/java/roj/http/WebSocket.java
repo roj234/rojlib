@@ -2,12 +2,11 @@ package roj.http;
 
 import org.intellij.lang.annotations.MagicConstant;
 import org.jetbrains.annotations.Nullable;
-import roj.io.IOUtil;
 import roj.io.BufferPool;
+import roj.io.IOUtil;
 import roj.net.ChannelCtx;
 import roj.net.ChannelHandler;
 import roj.reflect.Unaligned;
-import roj.text.CharList;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
 import roj.util.Helpers;
@@ -137,8 +136,6 @@ public abstract class WebSocket implements ChannelHandler {
 
 	public void setMaxData(int maxData) {this.maxData = maxData;}
 	public void setMaxDataOnce(int maxDataOnce) {this.maxDataOnce = maxDataOnce;}
-
-	public static CharList decodeToUTF(DynByteBuf in) { return in.readUTF(in.readableBytes(), IOUtil.getSharedCharBuf()); }
 
 	@Override
 	public void channelTick(ChannelCtx ctx) throws IOException {

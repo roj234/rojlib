@@ -10,19 +10,19 @@ import roj.asm.MemberDescriptor;
 import roj.asmx.TransformUtil;
 import roj.asmx.event.Subscribe;
 import roj.asmx.mapper.Mapper;
-import roj.collect.ArrayList;
-import roj.collect.HashMap;
-import roj.util.OperationDone;
-import roj.config.data.CEntry;
-import roj.io.IOUtil;
 import roj.ci.Project;
 import roj.ci.event.ProjectUpdateEvent;
-import roj.ci.plugin.ProcessEnvironment;
+import roj.ci.plugin.BuildContext;
 import roj.ci.plugin.Processor;
+import roj.collect.ArrayList;
+import roj.collect.HashMap;
+import roj.config.node.ConfigValue;
+import roj.io.IOUtil;
 import roj.text.TextReader;
 import roj.text.TextUtil;
 import roj.util.ByteList;
 import roj.util.Helpers;
+import roj.util.OperationDone;
 
 import java.io.Closeable;
 import java.io.File;
@@ -34,7 +34,7 @@ import java.util.Map;
 import java.util.function.Predicate;
 
 import static roj.asmx.mapper.Mapper.DONT_LOAD_PREFIX;
-import static roj.ci.FMD.*;
+import static roj.ci.MCMake.*;
 
 /**
  * Text AT Processor
@@ -52,10 +52,10 @@ public class AT implements Processor {
 	}
 
 	@Override public String name() {return "AccessTransformer";}
-	@Override public void init(CEntry config) {archives.clear();}
+	@Override public void init(ConfigValue config) {archives.clear();}
 
 	@Override
-	public int beforeCompile(ArrayList<String> options, List<File> sources, ProcessEnvironment ctx) {
+	public int beforeCompile(ArrayList<String> options, List<File> sources, BuildContext ctx) {
 		Project p = ctx.project;
 		var atFile = new File(p.resPath, p.variables.getOrDefault("fmd:at", "META-INF/accesstransformer.cfg"));
 		if (atFile.isFile()) {

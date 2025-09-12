@@ -2,7 +2,7 @@ package roj.plugins.llm;
 
 import roj.collect.ArrayList;
 import roj.config.ConfigMaster;
-import roj.config.ParseException;
+import roj.text.ParseException;
 import roj.http.HttpClient;
 import roj.http.HttpRequest;
 import roj.text.CharList;

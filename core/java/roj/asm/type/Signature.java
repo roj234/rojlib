@@ -8,8 +8,8 @@ import roj.asm.cp.ConstantPool;
 import roj.collect.ArrayList;
 import roj.collect.LinkedHashMap;
 import roj.util.OperationDone;
-import roj.config.Tokenizer;
-import roj.config.data.CInt;
+import roj.text.Tokenizer;
+import roj.config.node.IntValue;
 import roj.io.IOUtil;
 import roj.text.CharList;
 import roj.util.DynByteBuf;
@@ -228,7 +228,7 @@ public class Signature extends Attribute {
 
 	public static Signature parse(CharSequence s) {return parse(s, 99);}
 	public static Signature parse(CharSequence s, @MagicConstant(intValues = {CLASS, FIELD, METHOD, 99/*ANY*/}) int expect) {
-		CInt i1 = new CInt();
+		IntValue i1 = new IntValue();
 		CharList tmp = IOUtil.getSharedCharBuf();
 
 		int i = 0;
@@ -340,10 +340,10 @@ public class Signature extends Attribute {
 		return sign;
 	}
 
-	public static IType parseGeneric(CharSequence s) {return parseValue(s, new CInt(), 0, IOUtil.getSharedCharBuf());}
+	public static IType parseGeneric(CharSequence s) {return parseValue(s, new IntValue(), 0, IOUtil.getSharedCharBuf());}
 
 	private static final int F_PLACEHOLDER = 0x1000, F_PRIMITIVE = 0x2000, F_SUBCLASS = 0x4000;
-	private static IType parseValue(CharSequence s, CInt mi, int flag, CharList tmp) {
+	private static IType parseValue(CharSequence s, IntValue mi, int flag, CharList tmp) {
 		tmp.clear();
 		int i = mi.value;
 
@@ -377,7 +377,7 @@ public class Signature extends Attribute {
 				}
 		}
 	}
-	private static IType parseType(CharSequence s, CInt mi, CharList tmp, int flag) {
+	private static IType parseType(CharSequence s, IntValue mi, CharList tmp, int flag) {
 		char c = parseTypeParam(s, mi, tmp);
 		int pos = mi.value;
 
@@ -436,7 +436,7 @@ public class Signature extends Attribute {
 		if (g != null) return g;
 		return Type.klass(tmp.toString(), flag & 0xFF);
 	}
-	private static char parseTypeParam(CharSequence s, CInt mi, CharList tmp) {
+	private static char parseTypeParam(CharSequence s, IntValue mi, CharList tmp) {
 		int j = mi.value;
 		while (true) {
 			switch (s.charAt(j)) {

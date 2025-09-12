@@ -5,7 +5,7 @@ import roj.collect.BitSet;
 import roj.collect.CharMap;
 import roj.collect.HashMap;
 import roj.collect.TrieTree;
-import roj.config.data.CInt;
+import roj.config.node.IntValue;
 import roj.io.IOUtil;
 import roj.math.MathUtils;
 import roj.util.ArrayCache;
@@ -128,7 +128,7 @@ public class CharList implements CharSequence, Appendable {
 
 	public void ensureCapacity(int required) {
 		if (required > list.length) {
-			char[] newList = ArrayCache.getCharArray(Math.max(MathUtils.getMin2PowerOf(required), 256), false);
+			char[] newList = ArrayCache.getCharArray(Math.max(MathUtils.nextPowerOfTwo(required), 256), false);
 			if (len > 0) System.arraycopy(list, 0, newList, 0, Math.min(len, list.length));
 			ArrayCache.putArray(list);
 			list = newList;
@@ -180,7 +180,7 @@ public class CharList implements CharSequence, Appendable {
 	public final boolean endsWith(CharSequence s) { return s.length() == 0 || (len >= s.length() && doMatch(s, len-s.length(), len-s.length()+1) >= 0); }
 
 	public final int indexOf(TrieTree<?> map, int pos) {
-		var entry = new HashMap.Entry<>(new CInt(), null);
+		var entry = new HashMap.Entry<>(new IntValue(), null);
 		while (pos < len) {
 			map.match(this, pos, len, Helpers.cast(entry));
 			int len = entry.getKey().value;
@@ -567,7 +567,7 @@ public class CharList implements CharSequence, Appendable {
 		return this;
 	}
 
-	private CharList createReplaceOutputList() { return new CharList(Math.max(MathUtils.getMin2PowerOf(len) >> 1, 256)); }
+	private CharList createReplaceOutputList() { return new CharList(Math.max(MathUtils.nextPowerOfTwo(len) >> 1, 256)); }
 
 	/**
 	 * 在替换结果中搜索
@@ -591,7 +591,7 @@ public class CharList implements CharSequence, Appendable {
 
 		int pos = 0;
 
-		HashMap.Entry<CInt, String> entry = new HashMap.Entry<>(new CInt(), null);
+		HashMap.Entry<IntValue, String> entry = new HashMap.Entry<>(new IntValue(), null);
 		while (pos < len) {
 			map.match(this, pos, len, entry);
 			int len = entry.getKey().value;

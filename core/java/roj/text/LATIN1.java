@@ -35,8 +35,8 @@ final class LATIN1 extends FastCharset {
 
 		return ((i-base) << 32) | off;
 	}
-	@Override public void fastValidate(Object ref, long i, long max, IntConsumer cs) {
-		while (i < max) cs.accept(U.getByte(ref,i++));
+	@Override public void fastValidate(Object ref, long i, long max, IntConsumer verifier) {
+		while (i < max) verifier.accept(U.getByte(ref,i++));
 	}
 	@Override public int byteCount(CharSequence s, int i, int len) {return len;}
 	@Override public int encodeSize(int codepoint) {return 1;}

@@ -3,18 +3,18 @@ package roj.config.table;
 import org.jetbrains.annotations.NotNull;
 import roj.archive.zip.ZEntry;
 import roj.archive.zip.ZipFile;
-import roj.collect.HashMap;
 import roj.collect.ArrayList;
-import roj.config.ParseException;
-import roj.config.Tokenizer;
-import roj.config.XMLParser;
-import roj.config.data.CEntry;
-import roj.config.data.Element;
-import roj.config.data.Node;
-import roj.config.serial.ToXml;
-import roj.util.FastFailException;
+import roj.collect.HashMap;
+import roj.config.XmlEmitter;
+import roj.config.XmlParser;
+import roj.config.node.ConfigValue;
+import roj.config.node.xml.Element;
+import roj.config.node.xml.Node;
 import roj.io.source.Source;
+import roj.text.ParseException;
 import roj.text.TextUtil;
+import roj.text.Tokenizer;
+import roj.util.FastFailException;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -30,13 +30,13 @@ import java.util.function.Consumer;
 final class XlsxParser implements TableParser {
 	private static final class Dummy extends Element {
 		public Dummy() { super(""); }
-		public void attr(String k, CEntry v) {}
+		public void attr(String k, ConfigValue v) {}
 		public void add(@NotNull Node node) {}
 	}
 	private static final Element FAKE = new Dummy();
 
 	// 奇技淫巧（狗头
-	private final XMLParser xml = new XMLParser();
+	private final XmlParser xml = new XmlParser();
 	private final Map<String, Element> replaceNodes = new HashMap<>();
 	private Consumer<Element> consumer;
 
@@ -197,7 +197,7 @@ final class XlsxParser implements TableParser {
 		consumer = c;
 
 		try (InputStream in = zip.getStream(entry)) {
-			xml.parse(in, XMLParser.DECODE_ENTITY, new ToXml() {
+			xml.parse(in, XmlParser.DECODE_ENTITY, new XmlEmitter() {
 				@Override
 				protected Element createElement(String str) {
 					Element el = replaceNodes.get(str);

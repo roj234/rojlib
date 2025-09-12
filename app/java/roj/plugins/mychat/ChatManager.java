@@ -3,9 +3,8 @@ package roj.plugins.mychat;
 import org.jetbrains.annotations.Nullable;
 import roj.collect.IntMap;
 import roj.config.ConfigMaster;
-import roj.config.Tokenizer;
-import roj.config.data.CMap;
-import roj.config.serial.ToJson;
+import roj.config.JsonSerializer;
+import roj.config.node.MapValue;
 import roj.http.server.*;
 import roj.http.server.auto.*;
 import roj.io.IOUtil;
@@ -15,6 +14,7 @@ import roj.plugin.PluginDescriptor;
 import roj.plugin.SimplePlugin;
 import roj.text.CharList;
 import roj.text.TextUtil;
+import roj.text.Tokenizer;
 import roj.util.DynByteBuf;
 import roj.util.Helpers;
 import roj.util.TypedKey;
@@ -152,23 +152,23 @@ public class ChatManager extends Plugin {
 	public String postFile(Request req) {
 		UploadHandler ph = (UploadHandler) req.postHandler();
 
-		ToJson ser = new ToJson();
-		ser.valueList();
+		JsonSerializer ser = new JsonSerializer();
+		ser.emitList();
 
 		File[] files = ph.files;
 		String[] errors = ph.errors;
 		for (int i = 0; i < files.length; i++) {
-			ser.valueMap();
+			ser.emitMap();
 
 			File f = files[i];
 			boolean ok = errors == null || errors[i] == null;
 			if (ok) files[i] = null;
 
 			ser.key("ok");
-			ser.value(ok);
+			ser.emit(ok);
 
 			ser.key("v");
-			ser.value(ok ? f.getName() : errors[i]);
+			ser.emit(ok ? f.getName() : errors[i]);
 
 			ser.pop();
 		}
@@ -189,7 +189,7 @@ public class ChatManager extends Plugin {
 		}
 
 		synchronized (u) {
-			var m = new CMap();
+			var m = new MapValue();
 			m.put("ok", true);
 			m.put("user", u.put());
 			m.put("address", new File("C:\\Server").isDirectory() ? "wss://popupcandy.dynv6.net:25565/chat/user/info" : "ws://127.0.0.1:8080/chat/user/info");

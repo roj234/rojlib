@@ -6,19 +6,21 @@ import org.jetbrains.annotations.Range;
 import roj.RojLib;
 import roj.collect.*;
 import roj.compiler.plugins.eval.Constexpr;
-import roj.config.Tokenizer;
-import roj.config.data.CInt;
-import roj.config.data.CList;
-import roj.config.data.CMap;
+import roj.config.node.IntValue;
+import roj.config.node.ListValue;
+import roj.config.node.MapValue;
 import roj.io.IOUtil;
 import roj.text.CharList;
 import roj.text.FastCharset;
 import roj.text.TextUtil;
+import roj.text.Tokenizer;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
 import roj.util.FastFailException;
 
-import java.io.*;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.PrintStream;
 import java.util.List;
 import java.util.Random;
 import java.util.function.IntConsumer;
@@ -83,7 +85,7 @@ public final class Tty extends DelegatedPrintStream {
 		}
 
 		public static String getByConsoleCode(int color) { return MC_COLOR_JSON.get(color); }
-		public static Text minecraftJsonStyleToString(CMap map) {
+		public static Text minecraftJsonStyleToString(MapValue map) {
 			Text sts = minecraftRawStyleToString(map.getString("text"));
 
 			int colorCode = MC_COLOR_JSON.getByValue(map.getString("color").toLowerCase());
@@ -94,7 +96,7 @@ public final class Tty extends DelegatedPrintStream {
 			if (map.containsKey("strikethrough")) sts.deleteLine(map.getBool("strikethrough"));
 			if (map.containsKey("obfuscated")) sts.reverseColor(map.getBool("obfuscated"));
 			if (map.containsKey("extra")) {
-				CList list = map.get("extra").asList();
+				ListValue list = map.get("extra").asList();
 				for (int i = 0; i < list.size(); i++) {
 					sts.append(minecraftJsonStyleToString(list.get(i).asMap()));
 				}
@@ -572,7 +574,7 @@ public final class Tty extends DelegatedPrintStream {
 	}
 	private static void key(int vk, String seq) {KeyMap.putIfAbsent(new ByteList().putAscii(seq), vk);}
 
-	private final HashMap.Entry<CInt, Integer> matcher = new HashMap.Entry<>(new CInt(), null);
+	private final HashMap.Entry<IntValue, Integer> matcher = new HashMap.Entry<>(new IntValue(), null);
 	private void processInput(CharList inBuf) {
 		var buf = inBuf.list;
 		int i = 0;
@@ -916,7 +918,7 @@ public final class Tty extends DelegatedPrintStream {
 	private static final Tty instance = new Tty();
 	static {
 		String state = System.getProperty("roj.tty", "enable");
-		var tty = state.equals("enable") ? NativeVT.initialize() : null;
+		var tty = !state.equals("disable") ? NativeVT.initialize(state.equals("force")) : null;
 		if (tty == null) tty = (ITty) RojLib.getObj("roj.ui.Terminal.fallback");
 		if (tty != null) {
 			instance.addListener(tty);

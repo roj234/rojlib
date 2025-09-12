@@ -11,7 +11,7 @@ import roj.compiler.CompileContext;
 import roj.compiler.JavaTokenizer;
 import roj.compiler.diagnostic.Kind;
 import roj.compiler.diagnostic.TranslatableString;
-import roj.config.Tokenizer;
+import roj.text.Tokenizer;
 import roj.io.IOUtil;
 import roj.text.CharList;
 

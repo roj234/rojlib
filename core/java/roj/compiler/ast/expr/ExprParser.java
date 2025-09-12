@@ -22,14 +22,14 @@ import roj.compiler.ast.ParseTask;
 import roj.compiler.ast.VariableDeclare;
 import roj.compiler.diagnostic.Kind;
 import roj.config.ConfigMaster;
-import roj.config.ParseException;
-import roj.config.Token;
-import roj.config.auto.Serializer;
-import roj.config.auto.SerializerFactory;
-import roj.config.data.CEntry;
-import roj.config.serial.CVisitor;
+import roj.config.ValueEmitter;
+import roj.config.node.ConfigValue;
+import roj.config.mapper.ObjectMapper;
+import roj.config.mapper.ObjectMapperFactory;
 import roj.io.IOUtil;
 import roj.text.CharList;
+import roj.text.ParseException;
+import roj.text.Token;
 import roj.util.Helpers;
 import roj.util.Multisort;
 import roj.util.NativeArray;
@@ -39,8 +39,8 @@ import java.util.Collections;
 import java.util.List;
 
 import static roj.compiler.JavaTokenizer.*;
-import static roj.config.Token.LITERAL;
 import static roj.reflect.Unaligned.U;
+import static roj.text.Token.LITERAL;
 
 /**
  * Lava Compiler - 表达式<p>
@@ -266,11 +266,11 @@ public final class ExprParser {
 						w = wr.next();
 						if (w.type() == INT_MIN_VALUE) {
 							w = wr.next();
-							cur = Expr.valueOf(CEntry.valueOf(Integer.MIN_VALUE));
+							cur = Expr.valueOf(ConfigValue.valueOf(Integer.MIN_VALUE));
 							break endValueGen;
 						} else if (w.type() == LONG_MIN_VALUE) {
 							w = wr.next();
-							cur = Expr.valueOf(CEntry.valueOf(Long.MIN_VALUE));
+							cur = Expr.valueOf(ConfigValue.valueOf(Long.MIN_VALUE));
 							break endValueGen;
 						} else {
 							wr.retractWord();
@@ -417,14 +417,14 @@ public final class ExprParser {
 				case -2 -> {
 					var ch = w.text();
 					if (ch.length() != 1) ctx.report(Kind.ERROR, "lexer.unterminated.character", w.pos());
-					cur = Expr.constant(Type.primitive(Type.CHAR), CEntry.valueOf(ch.charAt(0)));
+					cur = Expr.constant(Type.primitive(Type.CHAR), ConfigValue.valueOf(ch.charAt(0)));
 				}
 
 				case -3 -> cur = Expr.valueOf(w.text());
 				case -4 -> cur = Expr.valueOf(w.asInt());
-				case -5 -> cur = Expr.constant(Type.primitive(Type.LONG), CEntry.valueOf(w.asLong()));
-				case -6 -> cur = Expr.constant(Type.primitive(Type.FLOAT), CEntry.valueOf(w.asFloat()));
-				case -7 -> cur = Expr.constant(Type.primitive(Type.DOUBLE), CEntry.valueOf(w.asDouble()));
+				case -5 -> cur = Expr.constant(Type.primitive(Type.LONG), ConfigValue.valueOf(w.asLong()));
+				case -6 -> cur = Expr.constant(Type.primitive(Type.FLOAT), ConfigValue.valueOf(w.asFloat()));
+				case -7 -> cur = Expr.constant(Type.primitive(Type.DOUBLE), ConfigValue.valueOf(w.asDouble()));
 				case -8 -> cur = Expr.valueOf(true);
 				case -9 -> cur = Expr.valueOf(false);
 				case -10-> cur = Expr.constant(Asterisk.anyType, null);
@@ -1241,11 +1241,11 @@ public final class ExprParser {
 	public Invoke newInstance(IType type, List<Expr> pars) {return new Invoke(type, pars);}
 	public Expr newAnonymousClass(Invoke expr, CompileUnit type) {return new NewAnonymousClass(expr, type);}
 
-	private static final Serializer<Expr> serializer = SerializerFactory.pooled().serializer(Expr.class);
+	private static final ObjectMapper<Expr> serializer = ObjectMapperFactory.pooled().serializer(Expr.class);
 	public static String serialize(Expr node) { return ConfigMaster.JSON.writeObject(serializer(), node, new CharList()).toStringAndFree(); }
-	public static void serialize(Expr node, CVisitor visitor) { serializer().write(visitor, node); }
-	public static Serializer<Expr> serializer() { return serializer; }
+	public static void serialize(Expr node, ValueEmitter visitor) { serializer().write(visitor, node); }
+	public static ObjectMapper<Expr> serializer() { return serializer; }
 
-	private final Serializer<Expr> deserializer = SerializerFactory.pooled().serializer(Expr.class);
+	private final ObjectMapper<Expr> deserializer = ObjectMapperFactory.pooled().serializer(Expr.class);
 	public RawExpr deserialize(String string) throws ParseException {return ConfigMaster.JSON.readObject(deserializer, string);}
 }

@@ -23,8 +23,8 @@ import roj.compiler.diagnostic.Kind;
 import roj.compiler.library.Library;
 import roj.compiler.resolve.ComponentList;
 import roj.compiler.resolve.LinkedClass;
-import roj.config.ParseException;
-import roj.config.Token;
+import roj.text.ParseException;
+import roj.text.Token;
 import roj.text.CharList;
 import roj.util.TypedKey;
 

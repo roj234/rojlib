@@ -3,10 +3,10 @@ package roj.plugins;
 import roj.collect.BitSet;
 import roj.collect.HashMap;
 import roj.config.ConfigMaster;
-import roj.config.NBTParser;
-import roj.config.data.CByteArray;
-import roj.config.data.CEntry;
-import roj.config.data.CMap;
+import roj.config.NbtParser;
+import roj.config.node.ByteArrayValue;
+import roj.config.node.ConfigValue;
+import roj.config.node.MapValue;
 import roj.crypt.*;
 import roj.io.IOUtil;
 import roj.plugin.Plugin;
@@ -32,7 +32,7 @@ public class MyPassIs extends Plugin {
 	private File keyFile;
 	private HMAC mac;
 	private RCipher cipher;
-	private CMap data;
+	private MapValue data;
 	private byte[] pass;
 
 	private final Shell c = new Shell("");
@@ -118,20 +118,20 @@ public class MyPassIs extends Plugin {
 		this.cipher = new FeedbackCipher(CryptoFactory.AES(), FeedbackCipher.MODE_CTR);
 
 		File plaintextKey = new File(getDataFolder(), "key.yml");
-		CMap data;
+		MapValue data;
 		if (plaintextKey.isFile()) {
 			if (keyFile.isFile()) throw new IllegalStateException("明文和加密的数据同时存在");
 			data = ConfigMaster.fromExtension(plaintextKey).parse(plaintextKey).asMap();
-			data.put("key", new CByteArray(data.get("key").asList().toByteArray()));
+			data.put("key", new ByteArrayValue(data.get("key").asList().toByteArray()));
 			Tty.warning("数据已导入");
 		} else if (keyFile.length() == 0) {
-			data = new CMap();
+			data = new MapValue();
 
 			byte[] master_key = new byte[MASTER_KEY_LEN];
 			new SecureRandom().nextBytes(master_key);
 
-			data.put("key", new CByteArray(master_key));
-			data.put("record", new CMap());
+			data.put("key", new ByteArrayValue(master_key));
+			data.put("record", new MapValue());
 
 			Tty.warning("新的密钥已生成，创建任意账号来保存");
 		} else {
@@ -140,7 +140,7 @@ public class MyPassIs extends Plugin {
 				IOUtil.readFully(in, iv);
 				cipher.init(RCipher.DECRYPT_MODE, pass, new IvParameterSpecNC(iv), null);
 
-				data = new NBTParser().parse(new CipherInputStream(in, cipher)).asMap();
+				data = new NbtParser().parse(new CipherInputStream(in, cipher)).asMap();
 			} catch (Exception e) {
 				Tty.error("密码错误:"+e.getMessage());
 				return;
@@ -157,13 +157,13 @@ public class MyPassIs extends Plugin {
 	}
 
 	private void site(String site) {
-		CEntry prev = data.query("record."+site);
+		ConfigValue prev = data.query("record."+site);
 
 		char[] charset;
 		int length;
 
 		if (prev == null) {
-			CMap m = new CMap();
+			MapValue m = new MapValue();
 			while (true) {
 				try {
 					c.setPrompt("字符集[1数字a小写字母A大写字母@特殊符号] > ");
@@ -189,12 +189,12 @@ public class MyPassIs extends Plugin {
 			System.out.println("Mpi Generator V2!");
 			prev = m;
 		} else {
-			CMap m = prev.asMap();
+			MapValue m = prev.asMap();
 			charset = buildCharset(m.getString("c"));
 			length = m.getInt("l");
 		}
 
-		CMap accounts = prev.asMap().getOrCreateMap("account");
+		MapValue accounts = prev.asMap().getOrCreateMap("account");
 
 		HashMap<String, String> hints = new HashMap<>();
 		for (String s : accounts.keySet()) hints.put(s, s);

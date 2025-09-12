@@ -1,7 +1,7 @@
 package roj.plugins.minecraft;
 
-import roj.config.JSONParser;
-import roj.config.data.CMap;
+import roj.config.JsonParser;
+import roj.config.node.MapValue;
 import roj.io.IOUtil;
 import roj.net.*;
 import roj.net.handler.Timeout;
@@ -121,9 +121,9 @@ public class MCPinger extends Plugin {
 
 			checkMinecraftMotd:
 			if (buf.isReadable() && buf.readByte() == 0) {
-				CMap json;
+				MapValue json;
 				try {
-					json = new JSONParser().parse(buf.readVarIntUTF(32767)).asMap();
+					json = new JsonParser().parse(buf.readVarIntUTF(32767)).asMap();
 				} catch (Exception e) {
 					break checkMinecraftMotd;
 				}

@@ -3,8 +3,8 @@ package roj.plugins.ddns;
 import org.jetbrains.annotations.Nullable;
 import roj.concurrent.TimerTask;
 import roj.concurrent.Timer;
-import roj.config.ParseException;
-import roj.config.data.CMap;
+import roj.text.ParseException;
+import roj.config.node.MapValue;
 import roj.plugins.bittorrent.Client;
 import roj.plugins.bittorrent.Session;
 import roj.plugins.bittorrent.Torrent;
@@ -27,7 +27,7 @@ class BT extends Client implements IpMapper {
 	private TimerTask task;
 
 	@Override
-	public void init(CMap config) {
+	public void init(MapValue config) {
 		Torrent torrent;
 		try {
 			torrent = Torrent.read(new File(config.getString("torrent")));

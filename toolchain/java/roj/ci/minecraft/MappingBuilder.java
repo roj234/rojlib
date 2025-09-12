@@ -4,14 +4,14 @@ import roj.asmx.mapper.Mapper;
 import roj.asmx.mapper.Mapping;
 import roj.collect.ArrayList;
 import roj.collect.HashMap;
-import roj.util.function.ExceptionalSupplier;
 import roj.config.ConfigMaster;
-import roj.config.Flags;
-import roj.config.ParseException;
-import roj.config.data.CInt;
+import roj.config.Parser;
+import roj.config.node.IntValue;
 import roj.io.IOUtil;
+import roj.text.ParseException;
 import roj.text.TextReader;
 import roj.text.TextUtil;
+import roj.util.function.ExceptionalSupplier;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -36,7 +36,7 @@ public class MappingBuilder {
 	}
 
 	public Mapping build(File conf) throws IOException, ParseException {
-		var config = ConfigMaster.fromExtension(conf).parser(false).parse(conf, Flags.ORDERED_MAP).asMap();
+		var config = ConfigMaster.fromExtension(conf).parser().parse(conf, Parser.ORDERED_MAP).asMap();
 		for (var entry : config.entrySet()) {
 			recursiveBuildMappingEntry(entry.getKey(), TextUtil.split(entry.getValue().asString(), '-'));
 		}
@@ -92,12 +92,12 @@ public class MappingBuilder {
 			}
 			m._name = name;
 		}else {
-			m = recursiveBuildMapping(instructions, new CInt(0), mappings);
+			m = recursiveBuildMapping(instructions, new IntValue(0), mappings);
 		}
 		mappings.put(name, m);
 	}
 
-	private Mapping recursiveBuildMapping(List<String> instructions, CInt index, Map<String, Mapping> mappings) {
+	private Mapping recursiveBuildMapping(List<String> instructions, IntValue index, Map<String, Mapping> mappings) {
 		String s = instructions.get(index.value++);
 		return switch (s.charAt(0)) {
 				case 'E' -> {

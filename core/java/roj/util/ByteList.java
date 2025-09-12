@@ -62,7 +62,7 @@ public class ByteList extends DynByteBuf implements Appendable {
 
 	public void ensureCapacity(int required) {
 		if (required > list.length) {
-			int newLen = Math.max(MathUtils.getMin2PowerOf(required), 1024);
+			int newLen = Math.max(MathUtils.nextPowerOfTwo(required), 1024);
 			if (newLen > 1073741823 || newLen > maxCapacity()) newLen = maxCapacity();
 			if (newLen <= list.length) throw new IndexOutOfBoundsException("cannot hold "+required+" bytes in this buffer("+list.length+"/"+newLen+")");
 

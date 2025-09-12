@@ -1,12 +1,11 @@
 package roj.text.diff;
 
-import roj.config.auto.Optional;
+import roj.config.mapper.Optional;
 import roj.io.IOUtil;
 import roj.reflect.Unaligned;
 import roj.text.CharList;
 import roj.text.TextReader;
 import roj.ui.EasyProgressBar;
-import roj.util.BsDiff;
 
 import java.io.File;
 import java.io.IOException;

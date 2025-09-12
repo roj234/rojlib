@@ -10,7 +10,7 @@ import roj.compiler.JavaTokenizer;
 import roj.compiler.asm.MethodWriter;
 import roj.compiler.diagnostic.Kind;
 import roj.compiler.resolve.TypeCast;
-import roj.config.data.CEntry;
+import roj.config.node.ConfigValue;
 
 /**
  * AST - 获取数组某项
@@ -52,7 +52,7 @@ final class ArrayAccess extends LeftValue {
 		if (array.isConstant()) {
 			if (index.isConstant()) {
 				ctx.report(this, Kind.WARNING, "arrayGet.constant");
-				return constant(type(), ((Object[])array.constVal())[((CEntry) index.constVal()).asInt()]);
+				return constant(type(), ((Object[])array.constVal())[((ConfigValue) index.constVal()).asInt()]);
 			}
 
 			if (!ctx.inStatic) ctx.report(this, Kind.NOTE, "arrayGet.maybeStatic");

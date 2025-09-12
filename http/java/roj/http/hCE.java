@@ -93,7 +93,7 @@ public final class hCE implements ChannelHandler {
 			}
 		} else if (event.id.equals(hTE.IN_END) || event.id.equals(MyChannel.IN_EOF)) {
 			if (state == END) return;
-			if (exactLimit && 0 != readLimit) throw new EOFException("预期额外"+readLimit+"字节");
+			if (exactLimit && 0 != readLimit) throw new EOFException("流过早终止, 预期额外"+readLimit+"字节");
 			if (state != IDENTITY) throw new EOFException(event.id);
 			end(ctx);
 		}

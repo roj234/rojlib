@@ -8,7 +8,8 @@ import java.util.Arrays;
 import java.util.Map;
 import java.util.Set;
 
-import static roj.collect.IntMap.*;
+import static roj.collect.IntMap.PRIMITIVE_CHAIN_THRESHOLD;
+import static roj.collect.IntMap.PRIMITIVE_LOAD_FACTOR;
 
 public final class Int2IntMap extends AbstractMap<Integer, Integer> implements _LibMap<Int2IntMap.Entry> {
 	public static sealed class Entry implements _LibEntry, Map.Entry<Integer, Integer> permits Int2IntBiMap.Entry {
@@ -45,7 +46,7 @@ public final class Int2IntMap extends AbstractMap<Integer, Integer> implements _
 	public Int2IntMap(Int2IntMap other) {putAll(other);}
 	public void ensureCapacity(int size) {
 		if (size <= mask) return;
-		int length = MathUtils.getMin2PowerOf(size);
+		int length = MathUtils.nextPowerOfTwo(size);
 		mask = length-1;
 
 		if (entries != null) resize();
@@ -206,7 +207,7 @@ public final class Int2IntMap extends AbstractMap<Integer, Integer> implements _
 	}
 
 	private void resize() {
-		int length = MathUtils.getMin2PowerOf(this.nextResize) << 1;
+		int length = MathUtils.nextPowerOfTwo(this.nextResize) << 1;
 		if (length <= 0) return;
 
 		Entry[] newEntries = new Entry[length];

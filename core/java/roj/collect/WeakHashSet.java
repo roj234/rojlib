@@ -46,7 +46,7 @@ public class WeakHashSet<K> extends AbstractSet<K> implements FindSet<K>, _LibMa
 	public final void ensureCapacity(int size) {
 		if (size < 0) throw new NegativeArraySizeException(String.valueOf(size));
 		if (size <= mask) return;
-		mask = MathUtils.getMin2PowerOf(size)-1;
+		mask = MathUtils.nextPowerOfTwo(size)-1;
 
 		if (entries != null) resize();
 	}

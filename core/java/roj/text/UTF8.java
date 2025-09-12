@@ -147,37 +147,37 @@ final class UTF8 extends FastCharset {
 		out[off++] = REPLACEMENT;
 		return ((1+previ-base) << 32) | off;
 	}
-	@Override public void fastValidate(Object ref, long i, long max, IntConsumer cs) {
+	@Override public void fastValidate(Object ref, long i, long max, IntConsumer verifier) {
 		int c, c2, c3, c4;
 		while (i < max) {
 			c = U.getByte(ref, i++) & 0xFF;
 			switch (c >> 4) {
-				case 0, 1, 2, 3, 4, 5, 6, 7 -> cs.accept(c);
+				case 0, 1, 2, 3, 4, 5, 6, 7 -> verifier.accept(c);
 				case 12, 13 -> {
-					if (i >= max) { cs.accept(TRUNCATED); return; }
+					if (i >= max) { verifier.accept(TRUNCATED); return; }
 					c2 = U.getByte(ref, i++);
-					if ((c2 & 0xC0) != 0x80) { i -= 1; cs.accept(MALFORMED - 2); continue; }
+					if ((c2 & 0xC0) != 0x80) { i -= 1; verifier.accept(MALFORMED - 2); continue; }
 
-					cs.accept((char) (c << 6 ^ c2 ^ 0b1110011110000000));
+					verifier.accept((char) (c << 6 ^ c2 ^ 0b1110011110000000));
 				}
 				case 14 -> {
-					if (i + 1 >= max) { cs.accept(TRUNCATED); return; }
+					if (i + 1 >= max) { verifier.accept(TRUNCATED); return; }
 					c2 = U.getByte(ref, i++);
 					c3 = U.getByte(ref, i++);
-					if ((c2 & 0xC0) != 0x80 || (c3 & 0xC0) != 0x80) { i -= 2; cs.accept(MALFORMED - 3); continue; }
+					if ((c2 & 0xC0) != 0x80 || (c3 & 0xC0) != 0x80) { i -= 2; verifier.accept(MALFORMED - 3); continue; }
 
-					cs.accept((char) (c << 12 ^ c2 << 6 ^ c3 ^ 0b0001111110000000));
+					verifier.accept((char) (c << 12 ^ c2 << 6 ^ c3 ^ 0b0001111110000000));
 				}
-				default -> cs.accept(MALFORMED - 1);
+				default -> verifier.accept(MALFORMED - 1);
 				case 15 -> {
-					if (i + 2 >= max) { cs.accept(TRUNCATED); return; }
+					if (i + 2 >= max) { verifier.accept(TRUNCATED); return; }
 					c2 = U.getByte(ref, i++);
 					c3 = U.getByte(ref, i++);
 					c4 = U.getByte(ref, i++);
 					if ((c2 & 0xC0) != 0x80 || (c3 & 0xC0) != 0x80 || (c4 & 0xC0) != 0x80
-						|| (c4=((c << 18 ^ c2 << 12 ^ c3 << 6 ^ c4 ^ 0b1110000001111110000000) & 2097151)) > Character.MAX_CODE_POINT) { i -= 3; cs.accept(MALFORMED - 4); continue; }
+						|| (c4=((c << 18 ^ c2 << 12 ^ c3 << 6 ^ c4 ^ 0b1110000001111110000000) & 2097151)) > Character.MAX_CODE_POINT) { i -= 3; verifier.accept(MALFORMED - 4); continue; }
 
-					cs.accept(c4);
+					verifier.accept(c4);
 				}
 			}
 		}

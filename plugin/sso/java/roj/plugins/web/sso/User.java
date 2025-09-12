@@ -1,9 +1,9 @@
 package roj.plugins.web.sso;
 
 import roj.collect.IntSet;
-import roj.config.auto.As;
-import roj.config.auto.Name;
-import roj.config.auto.Optional;
+import roj.config.mapper.As;
+import roj.config.mapper.Name;
+import roj.config.mapper.Optional;
 import roj.plugin.PermissionHolder;
 
 import java.net.InetSocketAddress;

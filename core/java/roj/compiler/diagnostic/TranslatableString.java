@@ -7,7 +7,7 @@ import roj.asm.type.IType;
 import roj.compiler.ast.expr.Expr;
 import roj.config.*;
 import roj.io.IOUtil;
-import roj.text.CharList;
+import roj.text.*;
 import roj.util.ArrayCache;
 
 /**
@@ -32,7 +32,7 @@ public class TranslatableString {
 	public CharList translate(I18n i18n, CharList buf) {
 		String translate = i18n.translate(i18nKey);
 		if (arguments.length == 0 && translate.equals(i18nKey) && (translate.endsWith("]") || translate.endsWith("\""))) {
-			var wr = new JSONParser().init(translate);
+			var wr = new JsonParser().init(translate);
 			try {
 				translateList(wr, i18n, buf);
 			} catch (ParseException e) {

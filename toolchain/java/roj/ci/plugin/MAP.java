@@ -6,15 +6,15 @@ import roj.asm.MemberDescriptor;
 import roj.asmx.Context;
 import roj.asmx.event.Subscribe;
 import roj.asmx.mapper.Mapper;
-import roj.ci.minecraft.MappingUI;
-import roj.collect.ArrayList;
-import roj.config.data.CEntry;
-import roj.crypt.CryptoFactory;
-import roj.io.IOUtil;
-import roj.ci.FMD;
+import roj.ci.MCMake;
 import roj.ci.Project;
 import roj.ci.Workspace;
 import roj.ci.event.LibraryModifiedEvent;
+import roj.ci.minecraft.MappingUI;
+import roj.collect.ArrayList;
+import roj.config.node.ConfigValue;
+import roj.crypt.CryptoFactory;
+import roj.io.IOUtil;
 import roj.text.TextUtil;
 import roj.text.logging.Level;
 import roj.ui.Argument;
@@ -33,7 +33,7 @@ import java.util.regex.Pattern;
 
 import static roj.asmx.mapper.Mapper.DONT_LOAD_PREFIX;
 import static roj.asmx.mapper.Mapper.MF_FIX_SUBIMPL;
-import static roj.ci.FMD.*;
+import static roj.ci.MCMake.*;
 import static roj.ui.CommandNode.argument;
 import static roj.ui.CommandNode.literal;
 
@@ -46,16 +46,16 @@ public class MAP implements Processor {
 
 	@Subscribe
 	public void onLibraryChange(LibraryModifiedEvent event) {
-		FMD._lock();
+		MCMake._lock();
 		var owner = event.getOwner();
 		if (owner == null) {
-			for (var project : FMD.projects.values()) {
+			for (var project : MCMake.projects.values()) {
 				project.mapper = null;
 				project.mapperState = null;
 				LOGGER.debug("库缓存失效 {}", project.getName());
 			}
 		} else {
-			for (var project : FMD.projects.values()) {
+			for (var project : MCMake.projects.values()) {
 				if (project == owner || project.getProjectDependencies().contains(owner)) {
 					project.mapper = null;
 					project.mapperState = null;
@@ -63,7 +63,7 @@ public class MAP implements Processor {
 				}
 			}
 		}
-		FMD._unlock();
+		MCMake._unlock();
 	}
 
 	public MAP() {
@@ -163,15 +163,15 @@ public class MAP implements Processor {
 
 	@Override public String name() {return "映射";}
 
-	@Override public void init(CEntry config) {
+	@Override public void init(ConfigValue config) {
 		if (config.asMap().getBool("子类实现")) flag |= MF_FIX_SUBIMPL;
 	}
 
-	@Override public int beforeCompile(ArrayList<String> options, List<File> sources, ProcessEnvironment ctx) {
+	@Override public int beforeCompile(ArrayList<String> options, List<File> sources, BuildContext ctx) {
 		return ctx.project.mapperState == null && ctx.project.workspace.mapping != null ? 1 : 2;
 	}
 
-	@Override public synchronized void afterCompile(ProcessEnvironment ctx) {
+	@Override public synchronized void afterCompile(BuildContext ctx) {
 		var project = ctx.project;
 		if (project.workspace.mapping != null) {
 			var mapper = getProjectMapper(project);

@@ -9,9 +9,9 @@ import roj.asm.attr.ClassListAttribute;
 import roj.asm.attr.ModuleAttribute;
 import roj.asm.attr.StringAttribute;
 import roj.asmx.Context;
-import roj.ci.FMD;
-import roj.collect.HashSet;
+import roj.ci.MCMake;
 import roj.collect.ArrayList;
+import roj.collect.HashSet;
 import roj.text.TextUtil;
 import roj.ui.Argument;
 import roj.ui.TUI;
@@ -28,7 +28,7 @@ import static roj.ui.CommandNode.literal;
  */
 public class AutoModule implements Processor {
 	static {
-		FMD.COMMANDS.register(literal("automodule").then(argument("文件", Argument.file()).then(argument("模块名", Argument.string()).executes(ctx -> {
+		MCMake.COMMANDS.register(literal("automodule").then(argument("文件", Argument.file()).then(argument("模块名", Argument.string()).executes(ctx -> {
 			File file = ctx.argument("文件", File.class);
 			var moduleName = ctx.argument("模块名", String.class);
 
@@ -83,8 +83,8 @@ public class AutoModule implements Processor {
 	public String name() {return "自动模块化";}
 
 	@Override
-	public void afterCompile(ProcessEnvironment ctx) {
-		if (ctx.increment > ProcessEnvironment.INC_REBUILD) return;
+	public void afterCompile(BuildContext ctx) {
+		if (ctx.increment > BuildContext.INC_REBUILD) return;
 
 		var moduleName = ctx.project.getVariables().getOrDefault("fmd:auto_module:name", ctx.project.getName());
 		if (!moduleName.isEmpty()) {

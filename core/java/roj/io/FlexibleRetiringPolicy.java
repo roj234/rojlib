@@ -1,16 +1,14 @@
 package roj.io;
 
 import roj.collect.ArrayList;
-import roj.config.auto.Optional;
-import roj.text.DateTime;
+import roj.config.mapper.Optional;
+import roj.text.DateFormat;
 import roj.text.TextUtil;
 
 import java.io.File;
 import java.util.Arrays;
 import java.util.List;
 import java.util.TimeZone;
-
-import static roj.text.DateTime.*;
 
 /**
  * 实现基于时间和存储空间的文件自动清理策略。
@@ -91,7 +89,7 @@ public class FlexibleRetiringPolicy {
 			this.size = file.length();
 		}
 	}
-	private transient final int[] calendarCache = new int[CORE_FIELD_COUNT], calendarCache2 = new int[CORE_FIELD_COUNT];
+	private transient final int[] calendarCache = new int[DateFormat.CORE_FIELD_COUNT], calendarCache2 = new int[DateFormat.CORE_FIELD_COUNT];
 
 	/**
 	 * 设置目录最大存储空间限制。
@@ -165,34 +163,34 @@ public class FlexibleRetiringPolicy {
 	}
 
 	private int[] copyCalendar() {
-		System.arraycopy(calendarCache, 0, calendarCache2, 0, CORE_FIELD_COUNT);
+		System.arraycopy(calendarCache, 0, calendarCache2, 0, DateFormat.CORE_FIELD_COUNT);
 		return calendarCache2;
 	}
 	private int retire(List<FileInfo> files, List<FileInfo> retired) {
 		int i = 0;
-		int[] calendar = DateTime.of(System.currentTimeMillis(), calendarCache);
+		int[] calendar = DateFormat.getCalendar(System.currentTimeMillis(), calendarCache);
 
-		calendar[MILLISECOND] = 0;
-		i = filter(i, files, copyCalendar(), SECOND, 1, last, retired);
-		calendar[SECOND] = 0;
-		calendar[MINUTE] = 0;
-		i = filter(i, files, copyCalendar(), HOUR, 1, hour, retired);
-		calendar[MILLISECOND] = -TimeZone.getDefault().getOffset(System.currentTimeMillis());
-		calendar[HOUR] = 0;
-		i = filter(i, files, copyCalendar(), DAY, 1, day, retired);
-		i = filter(i, files, copyCalendar(), DAY, 7, week, retired);
-		calendar[DAY] = 1;
-		i = filter(i, files, copyCalendar(), MONTH, 1, month, retired);
-		calendar[MONTH] = 1;
-		i = filter(i, files, calendar, YEAR, 1, year, retired);
+		calendar[DateFormat.MILLISECOND] = 0;
+		i = filter(i, files, copyCalendar(), DateFormat.SECOND, 1, last, retired);
+		calendar[DateFormat.SECOND] = 0;
+		calendar[DateFormat.MINUTE] = 0;
+		i = filter(i, files, copyCalendar(), DateFormat.HOUR, 1, hour, retired);
+		calendar[DateFormat.MILLISECOND] = -TimeZone.getDefault().getOffset(System.currentTimeMillis());
+		calendar[DateFormat.HOUR] = 0;
+		i = filter(i, files, copyCalendar(), DateFormat.DAY, 1, day, retired);
+		i = filter(i, files, copyCalendar(), DateFormat.DAY, 7, week, retired);
+		calendar[DateFormat.DAY] = 1;
+		i = filter(i, files, copyCalendar(), DateFormat.MONTH, 1, month, retired);
+		calendar[DateFormat.MONTH] = 1;
+		i = filter(i, files, calendar, DateFormat.YEAR, 1, year, retired);
 		return i;
 	}
 
 	private static int filter(int i, List<FileInfo> files, int[] time, int unit, int increment, int limit, List<FileInfo> retired) {
-		long periodStart = DateTime.toTimeStamp(DateTime.normalize(time));
+		long periodStart = DateFormat.toMillis(DateFormat.normalize(time));
 		for (int j = 0; j < limit; j++) {
 			time[unit] -= increment;
-			long periodEnd = DateTime.toTimeStamp(DateTime.normalize(time));
+			long periodEnd = DateFormat.toMillis(DateFormat.normalize(time));
 
 			FileInfo latestFile = null;
 			while (i < files.size()) {

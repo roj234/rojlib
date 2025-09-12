@@ -56,7 +56,7 @@ public class MakeReflectionProxy {
 		ILCD.npConstructor();
 
 		CodeWriter w = ILCD.newMethod(ACC_PUBLIC | ACC_STATIC, "<clinit>", "()V");
-		w.visitSize(2, 0);
+		w.visitSize(4, 0);
 		w.invokeS("jdk/internal/misc/Unsafe", "getUnsafe", "()Ljdk/internal/misc/Unsafe;");
 		w.field(PUTSTATIC, ILCD, 0);
 		w.invokeS("java/lang/System", "getProperties", "()Ljava/util/Properties;");

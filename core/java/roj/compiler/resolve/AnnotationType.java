@@ -10,8 +10,8 @@ import roj.asm.attr.Annotations;
 import roj.asm.attr.Attribute;
 import roj.asm.type.Type;
 import roj.collect.HashMap;
-import roj.config.data.CEntry;
-import roj.config.serial.CVisitor;
+import roj.config.ValueEmitter;
+import roj.config.node.ConfigValue;
 
 import java.util.List;
 
@@ -53,7 +53,7 @@ public class AnnotationType {
 	@MagicConstant(intValues = {SOURCE, CLASS, RUNTIME})
 	public int retention() { return applicableTo & 3; }
 
-	public HashMap<String, CEntry> elementDefault = new HashMap<>();
+	public HashMap<String, ConfigValue> elementDefault = new HashMap<>();
 	public HashMap<String, Type> elementType = new HashMap<>();
 
 	public AnnotationType(ClassDefinition node) {
@@ -122,14 +122,14 @@ public class AnnotationType {
 	/**
 	 * @since 2024/6/21 17:39
 	 */
-	static final class LazyValue extends CEntry {
+	static final class LazyValue extends ConfigValue {
 		public final AnnotationDefault ref;
 
 		public LazyValue(AnnotationDefault ref) {this.ref = ref;}
 
-		@Override public roj.config.data.Type getType() {return ref.val.getType();}
+		@Override public roj.config.node.Type getType() {return ref.val.getType();}
 		@Override public char dataType() {return ref.val.dataType();}
-		@Override public void accept(CVisitor visitor) {ref.val.accept(visitor);}
+		@Override public void accept(ValueEmitter visitor) {ref.val.accept(visitor);}
 		@Override public Object raw() {return ref.val.raw();}
 		@Override public String toString() {return ref.val.toString();}
 	}

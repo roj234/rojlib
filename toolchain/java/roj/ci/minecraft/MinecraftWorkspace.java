@@ -13,11 +13,12 @@ import roj.asmx.mapper.Mapping;
 import roj.ci.Workspace;
 import roj.collect.ArrayList;
 import roj.collect.HashMap;
-import roj.config.ParseException;
-import roj.config.data.CMap;
+import roj.collect.LinkedHashMap;
+import roj.config.node.MapValue;
 import roj.io.IOUtil;
 import roj.io.source.ByteSource;
 import roj.io.source.FileSource;
+import roj.text.ParseException;
 import roj.ui.*;
 import roj.util.function.ExceptionalSupplier;
 
@@ -29,8 +30,8 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
-import static roj.ci.FMD.CACHE_PATH;
-import static roj.ci.FMD.LOGGER;
+import static roj.ci.MCMake.CACHE_PATH;
+import static roj.ci.MCMake.LOGGER;
 import static roj.ui.TUI.*;
 
 /**
@@ -39,7 +40,7 @@ import static roj.ui.TUI.*;
  */
 public abstract sealed class MinecraftWorkspace {
 	@Nullable
-	public static Workspace build(CMap config) {
+	public static Workspace build(MapValue config) {
 		start(text("构建Minecraft工作空间"));
 
 		File mcRoot = new File(config.getString("MC路径"));
@@ -260,7 +261,7 @@ public abstract sealed class MinecraftWorkspace {
 			workspace.processors.add("roj.ci.plugin.MAP");
 			workspace.processors.add("roj.ci.plugin.AT");
 			workspace.processors.add("roj.ci.plugin.MIXIN");
-			workspace.variables = new HashMap<>();
+			workspace.variables = new LinkedHashMap<>();
 			workspace.variables.put("mc_version", mcVersion);
 			workspace.variables.put("forge_version", forgeVersion);
 			return workspace;

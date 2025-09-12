@@ -1,12 +1,11 @@
 package roj.http;
 
 import roj.concurrent.TaskPool;
-import roj.util.FastFailException;
 import roj.net.ChannelCtx;
-import roj.net.ChannelHandler;
 import roj.net.Event;
 import roj.net.handler.Timeout;
 import roj.util.DynByteBuf;
+import roj.util.FastFailException;
 import roj.util.Helpers;
 
 import java.io.IOException;
@@ -16,7 +15,7 @@ import java.net.URI;
  * @author Roj234
  * @since 2023/5/11 14:29
  */
-public class AutoRedirect extends Timeout implements ChannelHandler {
+public class AutoRedirect extends Timeout {
 	private final HttpRequest req;
 	private int maxRedirect, maxRetry;
 	private URI redirectPending;

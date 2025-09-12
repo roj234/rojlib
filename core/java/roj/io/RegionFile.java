@@ -60,7 +60,7 @@ public class RegionFile implements AutoCloseable {
 	public RegionFile(Source file, int chunkSize, int fileCap, int flags) throws IOException {
 		this.file = file.toString();
 		if (chunkSize <= 0 || fileCap <= 1) throw new IllegalStateException("chunkSize="+chunkSize+",fileSize="+fileCap);
-		this.chunkSize = MathUtils.getMin2PowerOf(chunkSize);
+		this.chunkSize = MathUtils.nextPowerOfTwo(chunkSize);
 
 		free = new BitSet(fileCap);
 		flag = (byte) flags;
@@ -449,7 +449,7 @@ public class RegionFile implements AutoCloseable {
 		}
 
 		private synchronized void expand(int more) {
-			buf = BufferPool.localPool().expand(buf, MathUtils.getMin2PowerOf(more));
+			buf = BufferPool.localPool().expand(buf, MathUtils.nextPowerOfTwo(more));
 		}
 
 		public synchronized void close() throws IOException {

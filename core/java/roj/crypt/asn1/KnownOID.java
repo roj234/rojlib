@@ -2,8 +2,8 @@ package roj.crypt.asn1;
 
 import org.jetbrains.annotations.NotNull;
 import roj.collect.HashMap;
-import roj.config.data.CEntry;
-import roj.config.data.CIntArray;
+import roj.config.node.ConfigValue;
+import roj.config.node.IntArrayValue;
 import roj.reflect.EnumHelper;
 
 import java.util.Map;
@@ -141,7 +141,7 @@ public enum KnownOID {
 
 	;
 
-	public final CIntArray oid;
+	public final IntArrayValue oid;
 	public final String type;
 
 	KnownOID(String oid, String type) {
@@ -167,7 +167,7 @@ public enum KnownOID {
 	}
 
 	private static final class Indices {
-		static final Map<CEntry, KnownOID> byOid = new HashMap<>();
+		static final Map<ConfigValue, KnownOID> byOid = new HashMap<>();
 		static final Map<String, KnownOID> byName = EnumHelper.CONSTANTS.enumConstantDirectory(KnownOID.class);
 		static {
 			for (KnownOID value : values()) {
@@ -177,7 +177,7 @@ public enum KnownOID {
 	}
 
 	@NotNull
-	public static KnownOID valueOf(CEntry query) {
+	public static KnownOID valueOf(ConfigValue query) {
 		KnownOID oid = Indices.byOid.get(query);
 		if (oid == null) throw new IllegalArgumentException("找不到已知名称"+query);
 		return oid;

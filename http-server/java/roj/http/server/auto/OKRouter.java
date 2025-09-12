@@ -1,7 +1,6 @@
 package roj.http.server.auto;
 
 import org.jetbrains.annotations.Nullable;
-import roj.ci.annotation.ReferenceByGeneratedClass;
 import roj.asm.ClassNode;
 import roj.asm.MethodNode;
 import roj.asm.annotation.AList;
@@ -15,31 +14,33 @@ import roj.asm.cp.CstString;
 import roj.asm.insn.CodeWriter;
 import roj.asm.insn.Label;
 import roj.asm.insn.SwitchBlock;
-import roj.asm.insn.TryCatchEntry;
+import roj.asm.insn.TryCatchBlock;
 import roj.asm.type.IType;
 import roj.asm.type.Signature;
 import roj.asm.type.Type;
 import roj.asm.type.TypeHelper;
 import roj.asmx.mapper.ParamNameMapper;
+import roj.ci.annotation.ReferenceByGeneratedClass;
 import roj.collect.ArrayList;
 import roj.collect.HashMap;
 import roj.collect.IntMap;
 import roj.collect.ToIntMap;
 import roj.concurrent.Task;
 import roj.config.BinaryParser;
-import roj.config.ConfigMaster;
-import roj.config.auto.SerializerFactory;
-import roj.config.data.CEntry;
+import roj.config.JsonParser;
+import roj.config.MsgPackParser;
+import roj.config.mapper.ObjectMapperFactory;
+import roj.config.node.ConfigValue;
 import roj.http.Headers;
 import roj.http.HttpUtil;
 import roj.http.server.*;
-import roj.util.FastFailException;
 import roj.io.IOUtil;
 import roj.reflect.ClassDefiner;
 import roj.reflect.Reflection;
 import roj.reflect.VirtualReference;
 import roj.text.HtmlEntities;
 import roj.util.ByteList;
+import roj.util.FastFailException;
 import roj.util.Helpers;
 import roj.util.TypedKey;
 
@@ -100,7 +101,7 @@ public final class OKRouter implements Router {
 		private final boolean debug;
 
 		private CodeWriter cw;
-		private final List<TryCatchEntry> exceptionHandlers = new ArrayList<>();
+		private final List<TryCatchBlock> exceptionHandlers = new ArrayList<>();
 		private final Annotation defaultSource = new Annotation();
 		// slot0 this, slot1 request, slot2 handler
 		private int slot, nextSlot = 3;
@@ -201,7 +202,7 @@ public final class OKRouter implements Router {
 				}
 
 				Label self = cw.label();
-				seg.branch(seg.targets.size(), self);
+				seg.branch(seg.cases.size(), self);
 				seg.def = self;
 				List<Type> par = mn.parameters();
 
@@ -251,7 +252,7 @@ public final class OKRouter implements Router {
 
 				if (seg2 != null) {
 					Label label = cw2.label();
-					seg2.branch(seg2.targets.size(), label);
+					seg2.branch(seg2.cases.size(), label);
 					seg2.def = label;
 					cw2.ldc(mn.owner()+"."+mn.name()+mn.rawDesc());
 					cw2.insn(ARETURN);
@@ -259,7 +260,7 @@ public final class OKRouter implements Router {
 			}
 			if (seg.def == null) throw new IllegalArgumentException(userRoute.name()+"没有任何处理函数");
 
-			List<TryCatchEntry> exceptionHandlers = this.exceptionHandlers;
+			List<TryCatchBlock> exceptionHandlers = this.exceptionHandlers;
 			if (debug) {
 				var map = new HashMap<String, Label>();
 				for (var tce : exceptionHandlers) {
@@ -393,7 +394,7 @@ public final class OKRouter implements Router {
 						if (rawType.getActualType() != Type.CLASS)
 							throw new IllegalArgumentException("基本类型无法使用JSON解析");
 
-						var tce = new TryCatchEntry();
+						var tce = new TryCatchBlock();
 						tce.start = cw.label();
 						tce.handler = new Label();
 						tce.type = type+" "+name;
@@ -413,7 +414,7 @@ public final class OKRouter implements Router {
 			}
 			if ((bodyUsed & 6) == 6) throw new IllegalArgumentException("不能同时使用POST和BODY类型");
 
-			var tce = new TryCatchEntry();
+			var tce = new TryCatchBlock();
 			tce.start = cw.label();
 			tce.handler = new Label();
 			tce.type = type+" "+name;
@@ -484,12 +485,12 @@ public final class OKRouter implements Router {
 		}
 
 		@Nullable
-		private static List<CEntry> getPrependInterceptors(ClassNode data) {
+		private static List<ConfigValue> getPrependInterceptors(ClassNode data) {
 			var preDef = Annotation.findInvisible(data.cp, data, "roj/http/server/auto/Interceptor");
 			return preDef != null ? preDef.getList("value").raw() : null;
 		}
 		private static Annotation parseAnnotations(List<Annotation> list) {
-			CEntry accepts = null, mime = null;
+			ConfigValue accepts = null, mime = null;
 			Annotation interceptor = null, route = null, easyMapping = null;
 
 			for (int j = 0; j < list.size(); j++) {
@@ -586,24 +587,24 @@ public final class OKRouter implements Router {
 		ByteList body = req.body();
 		if (body == null) throw new FastFailException("没有请求体");
 
-		var serializer = SerializerFactory.SAFE.serializer(type); serializer.reset();
+		var serializer = ObjectMapperFactory.SAFE.serializer(type); serializer.reset();
 		BinaryParser parser;
 
 		switch (req.getFirstHeaderValue("content-type")) {
 			default -> {
 				parser = (BinaryParser) req.threadLocal().get("or:parser:json");
-				if (parser == null) req.threadLocal().put("or:parser:json", parser = ConfigMaster.JSON.parser(true));
+				if (parser == null) req.threadLocal().put("or:parser:json", parser = new JsonParser());
 			}
 			case "application/x-msgpack"/* Unofficial */, "application/vnd.msgpack" -> {
 				parser = (BinaryParser) req.threadLocal().get("or:parser:msgpack");
-				if (parser == null) req.threadLocal().put("or:parser:msgpack", parser = ConfigMaster.MSGPACK.parser(true));
+				if (parser == null) req.threadLocal().put("or:parser:msgpack", parser = new MsgPackParser());
 			}
 			case "application/x-www-form-urlencoded", "multipart/form-data" -> {
 				var data = req.formData();
-				serializer.valueMap(data.size());
+				serializer.emitMap(data.size());
 				for (Map.Entry<String, String> entry : data.entrySet()) {
 					serializer.key(entry.getKey());
-					serializer.value(entry.getValue());
+					serializer.emit(entry.getValue());
 				}
 				serializer.pop();
 				return serializer.get();

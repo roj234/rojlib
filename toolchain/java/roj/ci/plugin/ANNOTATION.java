@@ -9,9 +9,9 @@ import roj.asm.cp.ConstantPool;
 import roj.asm.cp.CstRefUTF;
 import roj.asm.type.Type;
 import roj.asmx.Context;
+import roj.ci.MCMake;
 import roj.collect.BiMap;
 import roj.io.IOUtil;
-import roj.ci.FMD;
 import roj.text.Formatter;
 
 import java.util.List;
@@ -25,7 +25,7 @@ public class ANNOTATION implements Processor {
 	@Override public boolean defaultEnabled() {return true;}
 
 	@Override
-	public void afterCompile(ProcessEnvironment ctx) {
+	public void afterCompile(BuildContext ctx) {
 		var annotatedClass = ctx.getAnnotatedClass("roj/ci/annotation/ReplaceConstant");
 		for (int i = 0; i < annotatedClass.size(); i++) {
 			ClassNode data = annotatedClass.get(i).getData();
@@ -49,7 +49,7 @@ public class ANNOTATION implements Processor {
 						String string = Formatter.simple(template).format(ctx.getVariables(annotatedClass.get(i)), IOUtil.getSharedCharBuf()).toString();
 						str.setValue(cp.getUtf(string));
 						if (string.contains("${"))
-							FMD.LOGGER.warn(string+" (在文件"+annotatedClass.get(i).getFileName()+"中)");
+							MCMake.LOGGER.warn(string+" (在文件"+annotatedClass.get(i).getFileName()+"中)");
 					}
 				}
 			}
@@ -65,7 +65,7 @@ public class ANNOTATION implements Processor {
 			annotatedClass.get(i).getData().modifier |= Opcodes.ACC_PUBLIC;
 		}
 
-		BiMap<String, String> classMap = ctx.getDynamicMapper().getClassMap();
+		BiMap<String, String> classMap = ctx.getMapper().getClassMap();
 
 		annotatedClass = ctx.getAnnotatedClass("roj/ci/annotation/AliasOf");
 		for (int i = 0; i < annotatedClass.size(); i++) {

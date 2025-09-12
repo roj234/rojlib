@@ -12,6 +12,8 @@ import java.lang.ref.WeakReference;
 import static roj.reflect.Unaligned.U;
 
 public class ArrayCache {
+	public static final int MAX_ARRAY_SIZE = Integer.MAX_VALUE - 8;
+
 	public static final byte[] BYTES = new byte[0];
 	public static final char[] CHARS = new char[0];
 	public static final int[] INTS = new int[0];

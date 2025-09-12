@@ -4,15 +4,15 @@ import org.jetbrains.annotations.ApiStatus;
 import org.jetbrains.annotations.Nullable;
 import roj.collect.HashSet;
 import roj.collect.Hasher;
-import roj.concurrent.*;
-import roj.config.Flags;
-import roj.config.ParseException;
-import roj.config.YAMLParser;
-import roj.config.data.CMap;
-import roj.config.serial.ToYaml;
+import roj.concurrent.Timer;
+import roj.config.Parser;
+import roj.config.YamlParser;
+import roj.config.YamlSerializer;
+import roj.config.node.MapValue;
 import roj.http.server.Router;
 import roj.http.server.auto.OKRouter;
 import roj.io.IOUtil;
+import roj.text.ParseException;
 import roj.text.TextWriter;
 import roj.text.logging.Logger;
 import roj.ui.CommandNode;
@@ -33,7 +33,7 @@ public abstract class Plugin {
 	private PluginManager pluginManager;
 	private PluginDescriptor desc;
 
-	protected CMap config;
+	protected MapValue config;
 	private File dataFolder, configFile;
 
 	final void init(PluginManager pm, File dataFolder, PluginDescriptor pd) {
@@ -52,25 +52,25 @@ public abstract class Plugin {
 	@ApiStatus.OverrideOnly public <T> T ipc(TypedKey<T> key) {return ipc(key, null);}
 	@ApiStatus.OverrideOnly public <T> T ipc(TypedKey<T> key, Object parameter) {throw new UnsupportedOperationException("unknown ipc id "+key.name);}
 
-	protected final CMap getConfig() {
+	protected final MapValue getConfig() {
 		if (config == null) reloadConfig();
 		return config;
 	}
 	protected void reloadConfig() {
 		try {
-			var parser = new YAMLParser();
+			var parser = new YamlParser();
 			saveDefaultConfig();
-			config = parser.parse(configFile, Flags.LENIENT).asMap();
+			config = parser.parse(configFile, Parser.LENIENT).asMap();
 
 			var defaults = getResource("config.yml");
-			if (defaults != null) config.merge(parser.parse(defaults, Flags.LENIENT).asMap(), true, true);
+			if (defaults != null) config.merge(parser.parse(defaults, Parser.LENIENT).asMap(), true, true);
 		} catch (ParseException|IOException e) {
 			throw new IllegalArgumentException("无法读取配置文件"+configFile.getName(),e);
 		}
 	}
 	protected final void saveConfig() {
 		try (var tw = TextWriter.to(configFile)) {
-			var sb = new ToYaml("    ").sb(tw);
+			var sb = new YamlSerializer("    ").to(tw);
 			config.accept(sb);
 		} catch (IOException e) {
 			logger.error("无法保存配置文件{}",e,configFile);

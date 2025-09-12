@@ -5,7 +5,7 @@ import roj.collect.ArrayList;
 import roj.collect.HashMap;
 import roj.collect.HashSet;
 import roj.collect.*;
-import roj.config.Tokenizer;
+import roj.text.Tokenizer;
 import roj.io.IOUtil;
 import roj.reflect.Unaligned;
 import roj.text.CharList;

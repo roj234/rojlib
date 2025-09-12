@@ -5,9 +5,9 @@ import roj.collect.BitSet;
 import roj.collect.HashMap;
 import roj.collect.ArrayList;
 import roj.concurrent.TimerTask;
-import roj.config.data.CEntry;
-import roj.config.data.CList;
-import roj.config.data.CMap;
+import roj.config.node.ConfigValue;
+import roj.config.node.ListValue;
+import roj.config.node.MapValue;
 import roj.io.IOUtil;
 import roj.math.Vec4d;
 import roj.net.ChannelCtx;
@@ -96,7 +96,7 @@ public final class Captcha implements ChannelHandler {
 
 		CaptchaPlugin pl = CaptchaPlugin.INSTANCE;
 
-		CMap cfg = pl.getCfg();
+		MapValue cfg = pl.getCfg();
 		int timeout = cfg.getInt("timeout");
 
 		Formatter template = Formatter.simple(cfg.getString("messages.intro"));
@@ -173,14 +173,14 @@ public final class Captcha implements ChannelHandler {
 	@NotNull
 	private static ItemStack getMyPickaxe(String id, Text name) {
 		ItemStack _pickaxe = new ItemStack(Item.getItem(id), 1);
-		CMap tag = _pickaxe.tag();
+		MapValue tag = _pickaxe.tag();
 		tag.put("Unbreakable", true);
 		tag.put("Damage", 1560);
 		tag.getOrCreateMap("display").put("Name", name.toMinecraftJson());
-		CList enchantment = tag.getOrCreateList("Enchantments");
-		CMap eff = new CMap();
+		ListValue enchantment = tag.getOrCreateList("Enchantments");
+		MapValue eff = new MapValue();
 		eff.put("id", "minecraft:efficiency");
-		eff.put("lvl", CEntry.valueOf((short) 5));
+		eff.put("lvl", ConfigValue.valueOf((short) 5));
 		enchantment.add(eff);
 		return _pickaxe;
 	}

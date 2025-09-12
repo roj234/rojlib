@@ -18,7 +18,7 @@ import roj.collect.BitSet;
 import roj.collect.HashMap;
 import roj.collect.HashSet;
 import roj.collect.*;
-import roj.config.data.CInt;
+import roj.config.node.IntValue;
 import roj.io.IOUtil;
 import roj.text.CharList;
 import roj.text.TextUtil;
@@ -874,7 +874,7 @@ public class CodeWeaver implements Transformer {
 			List<Frame> frames = code.frames;
 			if (frames != null) {
 				for (Frame frame : frames) {
-					for (Var2 v : frame.stacks)
+					for (Var2 v : frame.stack)
 						if (patch.self.equals(v.owner))
 							v.owner = patch.target;
 					for (Var2 v : frame.locals)
@@ -1346,7 +1346,7 @@ public class CodeWeaver implements Transformer {
 				}
 
 				BitSet occurrences = s.getOccurrences();
-				CInt ordinal = new CInt();
+				IntValue ordinal = new IntValue();
 
 				int used = 0;
 
@@ -1628,7 +1628,7 @@ public class CodeWeaver implements Transformer {
 		usedSlots.addRange(newSlot, newSlot+len);
 		return newSlot;
 	}
-	private static boolean matchLdcByOpcode(InsnNode node, byte base, String find, BitSet occurrences, CInt ordinal) {
+	private static boolean matchLdcByOpcode(InsnNode node, byte base, String find, BitSet occurrences, IntValue ordinal) {
 		int value = node.opcode() - base;
 		if (!find.equals(String.valueOf(value))) return false;
 		return occurrences == null || occurrences.contains(++ordinal.value);

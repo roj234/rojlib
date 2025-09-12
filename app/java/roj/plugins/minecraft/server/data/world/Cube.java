@@ -42,7 +42,7 @@ public final class Cube<T> {
 		BitArray newPalette;
 		if (bits > THR()) {
 			Int2IntMap idMap = countBlockTypes();
-			nBits = MathUtils.getMin2PowerOf(idMap.size());
+			nBits = MathUtils.nextPowerOfTwo(idMap.size());
 			if (nBits >= 1 << THR()) return;
 
 			assert emptySlot == null && byId.isEmpty() && blockRef.isEmpty();
@@ -62,7 +62,7 @@ public final class Cube<T> {
 				newPalette.set(i, blockRef.get(registry.getById(id)).id);
 			}
 		} else if (blockRef.size() < (1 << (bits-1))) {
-			nBits = MathUtils.getMin2PowerOf(blockRef.size());
+			nBits = MathUtils.nextPowerOfTwo(blockRef.size());
 			if (nBits < 4) {
 				if (bits == 4) return;
 				nBits = 4;
@@ -174,7 +174,7 @@ public final class Cube<T> {
 		if (nBits < 4 && nBits != 0) nBits = 4;
 
 		if (nBits > THR()) {
-			nBits = Integer.numberOfTrailingZeros(MathUtils.getMin2PowerOf(registry.nextId()));
+			nBits = Integer.numberOfTrailingZeros(MathUtils.nextPowerOfTwo(registry.nextId()));
 			BitArray nPalette = new BitArray(nBits, LEN());
 			for (int i = LEN()-1; i >= 0; i--) {
 				nPalette.set(i, registry.getId(byId.get(palette.get(i)).block));

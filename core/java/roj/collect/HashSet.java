@@ -51,7 +51,7 @@ public final class HashSet<E> extends AbstractSet<E> implements FindSet<E> {
 
 	public void ensureCapacity(int size) {
 		if (size < mask+1) return;
-		mask = MathUtils.getMin2PowerOf(size)-1;
+		mask = MathUtils.nextPowerOfTwo(size)-1;
 		if (entries != null) resize(mask+1);
 	}
 

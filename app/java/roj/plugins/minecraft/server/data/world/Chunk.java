@@ -2,8 +2,8 @@ package roj.plugins.minecraft.server.data.world;
 
 import roj.collect.BitArray;
 import roj.collect.IntMap;
-import roj.config.NBTParser;
-import roj.config.serial.ToNBT;
+import roj.config.NbtEncoder;
+import roj.config.NbtParser;
 import roj.plugins.minecraft.server.data.Block;
 import roj.plugins.minecraft.server.util.Utils;
 import roj.util.ByteList;
@@ -84,12 +84,12 @@ public final class Chunk {
 
 		// ChunkData
 		//HeightMap
-		ToNBT ser = new ToNBT(buf);
-		ser.valueMap();
+		NbtEncoder ser = new NbtEncoder(buf);
+		ser.emitMap();
 		for (int i = 0; i < Heightmap.SEND_TO_CLIENT_ID; i++) {
 			ser.key(Heightmap.VALUES[i].name());
 
-			ser.onValue(NBTParser.LONG_ARRAY);
+			ser.onValue(NbtParser.LONG_ARRAY);
 			int[] data = heightmap.getInternal();
 			buf.putInt((data.length+1) / 2);
 			Utils.writeFakeLongArray2(buf, data);

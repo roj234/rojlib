@@ -3,7 +3,6 @@ package roj.text;
 import roj.collect.BitSet;
 import roj.compiler.plugins.annotations.Attach;
 import roj.concurrent.LazyThreadLocal;
-import roj.config.Tokenizer;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
 import roj.util.Helpers;

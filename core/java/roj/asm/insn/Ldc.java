@@ -12,8 +12,8 @@ import static roj.asm.Opcodes.LDC_W;
  * @since 2023/10/1 23:07
  */
 final class Ldc extends Segment {
-	byte code;
-	Constant c;
+	private byte code;
+	final Constant c;
 
 	Ldc(byte code, Constant c) {
 		this.code = code;

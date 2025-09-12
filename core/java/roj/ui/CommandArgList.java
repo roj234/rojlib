@@ -4,8 +4,8 @@ import roj.collect.HashMap;
 import roj.collect.IntList;
 import roj.collect.IntMap;
 import roj.collect.ArrayList;
-import roj.config.ParseException;
-import roj.config.Token;
+import roj.text.ParseException;
+import roj.text.Token;
 
 import java.util.List;
 

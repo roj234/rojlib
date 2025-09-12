@@ -1,6 +1,7 @@
 package roj.compiler.runtime;
 
 import org.jetbrains.annotations.Contract;
+import org.jetbrains.annotations.Range;
 import roj.ci.annotation.ReferenceByGeneratedClass;
 import roj.compiler.plugins.eval.Constexpr;
 
@@ -65,6 +66,22 @@ public class RtUtil {
 			exponent >>= 1;
 		}
 		return result;
+	}
+
+	@Constexpr
+	@Contract(pure = true)
+	public static int positiveMod(int dividend, @Range(from = 1, to = Integer.MAX_VALUE) int divisor) {
+		if (divisor <= 0) throw new IllegalArgumentException("divisor must be positive");
+		var remainder = dividend % divisor;
+		return remainder >= 0 ? remainder : (remainder + divisor) % divisor;
+	}
+
+	@Constexpr
+	@Contract(pure = true)
+	public static long positiveMod(long dividend, @Range(from = 1, to = Integer.MAX_VALUE) long divisor) {
+		if (divisor <= 0) throw new IllegalArgumentException("divisor must be positive");
+		var remainder = dividend % divisor;
+		return remainder >= 0 ? remainder : (remainder + divisor) % divisor;
 	}
 
 	@Constexpr

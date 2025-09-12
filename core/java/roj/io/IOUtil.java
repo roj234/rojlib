@@ -6,17 +6,18 @@ import org.jetbrains.annotations.Nullable;
 import roj.RojLib;
 import roj.collect.ArrayList;
 import roj.compiler.plugins.annotations.Attach;
-import roj.util.function.ExceptionalConsumer;
 import roj.concurrent.FastThreadLocal;
-import roj.config.data.CInt;
-import roj.config.data.CLong;
+import roj.config.node.IntValue;
+import roj.config.node.LongValue;
 import roj.crypt.Base64;
 import roj.reflect.Reflection;
 import roj.reflect.Unaligned;
 import roj.text.*;
+import roj.util.ArrayCache;
 import roj.util.ByteList;
 import roj.util.Helpers;
 import roj.util.NativeMemory;
+import roj.util.function.ExceptionalConsumer;
 
 import java.io.*;
 import java.net.URL;
@@ -25,6 +26,7 @@ import java.nio.channels.FileChannel;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
 import java.nio.file.attribute.BasicFileAttributes;
+import java.security.MessageDigest;
 import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
@@ -270,7 +272,7 @@ public final class IOUtil {
 
 	@Attach
 	public static int removeEmptyPaths(File file) {
-		CInt tmp = new CInt();
+		IntValue tmp = new IntValue();
 		try {
 			Files.walkFileTree(file.toPath(), new SimpleFileVisitor<Path>() {
 				int size;
@@ -371,6 +373,22 @@ public final class IOUtil {
 
 		deletePend.delete();
 		return realFile.renameTo(deletePend) && tmpFile.renameTo(realFile) && deletePend.delete();
+	}
+
+	public static void digestFile(File file, long length, MessageDigest digest) throws IOException {
+		byte[] tmp = ArrayCache.getByteArray(4096, false);
+		try (var in = new FileInputStream(file)) {
+			while (length > 0) {
+				int r = in.read(tmp);
+				if (r < 0) break;
+
+				r = (int) Math.min(length, r);
+				length -= r;
+
+				digest.update(tmp, 0, r);
+			}
+		}
+		ArrayCache.putArray(tmp);
 	}
 
 	/**
@@ -501,7 +519,7 @@ public final class IOUtil {
 		}
 		if (from.equals(to)) return 1;
 
-		CLong state = new CLong();
+		LongValue state = new LongValue();
 		int len = from.getAbsolutePath().length()+1;
 		to.mkdirs();
 		Files.walkFileTree(from.toPath(), new SimpleFileVisitor<Path>() {

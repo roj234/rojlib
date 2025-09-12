@@ -14,8 +14,8 @@ import roj.collect.ArrayList;
 import roj.collect.BitSet;
 import roj.collect.HashSet;
 import roj.collect.ToIntMap;
-import roj.config.auto.SerializerFactory;
-import roj.config.serial.CVisitor;
+import roj.config.ValueEmitter;
+import roj.config.mapper.ObjectMapperFactory;
 import roj.reflect.ClassDefiner;
 import roj.reflect.VirtualReference;
 import roj.text.CharList;
@@ -320,10 +320,10 @@ final class DAOMaker {
 		ResultSet set = stm.executeQuery();
 
 		var ser = getSerializerFactory(type).listOf(type);
-		ser.valueList();
+		ser.emitList();
 
 		while (set.next()) {
-			ser.valueMap();
+			ser.emitMap();
 			for (int i = 0; i < adapters.size(); ) {
 				ser.key(adapters.get(i++).toString());
 				((A)adapters.get(i++)).adapt(ser, set);
@@ -345,7 +345,7 @@ final class DAOMaker {
 		var set = stm.executeQuery();
 		if (set.next()) {
 			var ser = getSerializerFactory(type).serializer(type);
-			ser.valueMap();
+			ser.emitMap();
 			for (int i = 0; i < adapters.size(); ) {
 				ser.key(adapters.get(i++).toString());
 				((A)adapters.get(i++)).adapt(ser, set);
@@ -356,8 +356,8 @@ final class DAOMaker {
 
 		return null;
 	}
-	private static SerializerFactory getSerializerFactory(Class<?> type) {
-		if (type.getClassLoader() == null || type.getClassLoader() == DAOMaker.class.getClassLoader()) return SerializerFactory.SAFE;
+	private static ObjectMapperFactory getSerializerFactory(Class<?> type) {
+		if (type.getClassLoader() == null || type.getClassLoader() == DAOMaker.class.getClassLoader()) return ObjectMapperFactory.SAFE;
 
 		var map = IMPLEMENTATION_CACHE.getEntry(type.getClassLoader()).getValue();
 		assert map != null;
@@ -365,15 +365,15 @@ final class DAOMaker {
 		Object v = map.get(null);
 		if (v == null) {
 			synchronized (map) {
-				v = SerializerFactory.getInstance0(SerializerFactory.GENERATE | SerializerFactory.CHECK_INTERFACE | SerializerFactory.CHECK_PARENT, type.getClassLoader());
+				v = ObjectMapperFactory.getInstance(ObjectMapperFactory.GENERATE | ObjectMapperFactory.CHECK_INTERFACE | ObjectMapperFactory.CHECK_PARENT, type.getClassLoader());
 				var tmp = map.putIfAbsent(null, v);
 				if (tmp != null) v = tmp;
 			}
 		}
-		return (SerializerFactory) v;
+		return (ObjectMapperFactory) v;
 	}
 
-	private interface A {void adapt(CVisitor visitor, ResultSet set) throws SQLException;}
+	private interface A {void adapt(ValueEmitter visitor, ResultSet set) throws SQLException;}
 	private static List<Object> createAdapter(Class<?> klass, ResultSetMetaData meta) throws Exception {
 		var adapters = new ArrayList<>();
 		for (int i = 1; i <= meta.getColumnCount(); i++) {
@@ -410,17 +410,17 @@ final class DAOMaker {
 		}
 		return adapters;
 	}
-	private static A boolAdapter(int column) {return (visitor, set) -> visitor.value(set.getBoolean(column));}
-	private static A byteAdapter(int column) {return (visitor, set) -> visitor.value(set.getByte(column));}
-	private static A shortAdapter(int column) {return (visitor, set) -> visitor.value(set.getShort(column));}
-	private static A intAdapter(int column) {return (visitor, set) -> visitor.value(set.getInt(column));}
-	private static A longAdapter(int column) {return (visitor, set) -> visitor.value(set.getLong(column));}
-	private static A floatAdapter(int column) {return (visitor, set) -> visitor.value(set.getFloat(column));}
-	private static A doubleAdapter(int column) {return (visitor, set) -> visitor.value(set.getDouble(column));}
-	private static A stringAdapter(int column) {return (visitor, set) -> visitor.value(set.getString(column));}
-	private static A byteArrayAdapter(int column) {return (visitor, set) -> visitor.value(set.getBytes(column));}
-	private static A dateAdapter(int column) {return (visitor, set) -> visitor.valueDate(set.getDate(column).getTime());}
-	private static A timeAdapter(int column) {return (visitor, set) -> visitor.valueTimestamp(set.getTime(column).getTime());}
-	private static A timestampAdapter(int column) {return (visitor, set) -> visitor.valueTimestamp(set.getTimestamp(column).getTime());}
-	private static A bigDecimalAdapter(int column) {return (visitor, set) -> visitor.value(set.getBigDecimal(column).toString());}
+	private static A boolAdapter(int column) {return (visitor, set) -> visitor.emit(set.getBoolean(column));}
+	private static A byteAdapter(int column) {return (visitor, set) -> visitor.emit(set.getByte(column));}
+	private static A shortAdapter(int column) {return (visitor, set) -> visitor.emit(set.getShort(column));}
+	private static A intAdapter(int column) {return (visitor, set) -> visitor.emit(set.getInt(column));}
+	private static A longAdapter(int column) {return (visitor, set) -> visitor.emit(set.getLong(column));}
+	private static A floatAdapter(int column) {return (visitor, set) -> visitor.emit(set.getFloat(column));}
+	private static A doubleAdapter(int column) {return (visitor, set) -> visitor.emit(set.getDouble(column));}
+	private static A stringAdapter(int column) {return (visitor, set) -> visitor.emit(set.getString(column));}
+	private static A byteArrayAdapter(int column) {return (visitor, set) -> visitor.emit(set.getBytes(column));}
+	private static A dateAdapter(int column) {return (visitor, set) -> visitor.emitDate(set.getDate(column).getTime());}
+	private static A timeAdapter(int column) {return (visitor, set) -> visitor.emitTimestamp(set.getTime(column).getTime());}
+	private static A timestampAdapter(int column) {return (visitor, set) -> visitor.emitTimestamp(set.getTimestamp(column).getTime());}
+	private static A bigDecimalAdapter(int column) {return (visitor, set) -> visitor.emit(set.getBigDecimal(column).toString());}
 }

@@ -4,25 +4,24 @@ import org.jetbrains.annotations.Nullable;
 import roj.asmx.mapper.Mapper;
 import roj.ci.event.ProjectUpdateEvent;
 import roj.ci.plugin.Processor;
+import roj.collect.ArrayList;
+import roj.collect.LinkedHashMap;
 import roj.collect.TrieTreeSet;
-import roj.config.ParseException;
-import roj.config.Tokenizer;
-import roj.config.XMLParser;
-import roj.config.auto.Optional;
-import roj.config.data.CMap;
-import roj.config.data.Document;
-import roj.config.data.Node;
+import roj.config.XmlParser;
+import roj.config.mapper.Optional;
+import roj.config.node.MapValue;
+import roj.config.node.xml.Document;
+import roj.config.node.xml.Node;
 import roj.io.IOUtil;
 import roj.reflect.Bypass;
-import roj.text.CharList;
-import roj.text.TextWriter;
-import roj.text.URICoder;
+import roj.text.*;
 import roj.util.function.Flow;
 
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -32,7 +31,7 @@ import java.util.Map;
  * @since 2025/2/12 7:02
  */
 public class Workspace {
-	public interface Factory { Workspace build(CMap config); }
+	public interface Factory { Workspace build(MapValue config); }
 	public static Factory factory(Class<?> type) {return Bypass.builder(Factory.class).delegate(type, "build").build();}
 
 	public String type;
@@ -44,8 +43,8 @@ public class Workspace {
 	@Nullable public File mapping;
 	private transient Mapper mapper, invMapper;
 
-	@Optional public Map<String, String> variables = Collections.emptyMap();
-	@Optional public TrieTreeSet variable_replace_in = new TrieTreeSet();
+	@Optional public LinkedHashMap<String, String> variables = Env.EMPTY_MAP;
+	@Optional public TrieTreeSet variable_replace_in = Env.EMPTY_SET;
 
 	private transient Workspace _next;
 
@@ -53,7 +52,7 @@ public class Workspace {
 
 	public List<Processor> getProcessors() {
 		if (processorsImp == null) {
-			processorsImp = Flow.of(FMD.processors).filter(processor -> processors.contains(processor.getClass().getName())).toList();
+			processorsImp = Flow.of(MCMake.processors).filter(processor -> processors.contains(processor.getClass().getName())).toList();
 		}
 		return processorsImp;
 	}
@@ -61,7 +60,7 @@ public class Workspace {
 	private transient File projectPath;
 	File getProjectPath() {
 		if (projectPath == null) {
-			projectPath = new File(FMD.BASE, path == null ? id : path);
+			projectPath = new File(MCMake.BASE, path == null ? id : path);
 			projectPath.mkdir();
 		}
 		return projectPath;
@@ -94,7 +93,9 @@ public class Workspace {
 	}
 
 	public void registerLibrary() {
-		for (Processor processor : FMD.processors) {
+		if (processors == Collections.EMPTY_LIST)
+			processors = new ArrayList<>();
+		for (Processor processor : MCMake.processors) {
 			if (processor.defaultEnabled()) {
 				String name = processor.getClass().getName();
 				if (!processors.contains(name)) {
@@ -130,7 +131,7 @@ public class Workspace {
 		try (var sout = TextWriter.to(file, StandardCharsets.UTF_8)) {
 			component.toCompatXML(sout);
 		} catch (IOException e) {
-			FMD.LOGGER.error("registerLibrary", e);
+			MCMake.LOGGER.error("registerLibrary", e);
 		}
 	}
 	public void unregisterLibrary() {
@@ -141,7 +142,12 @@ public class Workspace {
 		return "MCMake工作空间-"+id;
 	}
 
-	public static void registerModule(Project p, boolean delete) throws IOException {
+	/**
+	 * mode = 0 add
+	 * mode = 1 del
+	 * mode = 2 regenerate
+	 */
+	public static void registerModule(Project p, int mode) throws IOException {
 		if (!p.conf.type.hasFile()) return;
 		File ipr = new File(p.workspace.getProjectPath(), ".idea/modules.xml");
 
@@ -149,12 +155,12 @@ public class Workspace {
 
 		Document document;
 		try {
-			document = XMLParser.parses(IOUtil.readString(ipr));
+			document = XmlParser.parses(IOUtil.readString(ipr));
 		} catch (ParseException e) {
 			throw new RuntimeException("XML格式错误", e);
 		}
 		var modules = document.querySelector("/project/component[name=ProjectModuleManager]/modules").asElement();
-		boolean exist = false;
+		boolean existInProject = false;
 		needSave: {
 			List<Node> children = modules.children();
 			for (int i = 0; i < children.size(); i++) {
@@ -162,43 +168,43 @@ public class Workspace {
 				if (child.nodeType() == Node.ELEMENT) {
 					var filepath = child.asElement().attr("filepath").asString();
 					if (filepath.equals("$PROJECT_DIR$/"+p.getName()+"/"+p.getShortName()+".iml")) {
-						if (delete) children.remove(i);
-						exist = true;
+						if (mode == 1) children.remove(i);
+						existInProject = true;
 						break needSave;
 					}
 				}
 			}
-			if (delete) return;
+			if (mode != 0) return;
 		}
 
 		var iml = new File(p.root, name+".iml");
-		if (iml.isFile() && !delete) return;
+		if (iml.isFile() && mode == 0) return;
 
-		if (!delete) {
+		if (mode == 1) {
+			Files.delete(iml.toPath());
+		} else {
+			CharList sb = generateIMLForProject(p);
+			try (var tw = TextWriter.to(iml, StandardCharsets.UTF_8)) {
+				tw.append(sb);
+			}
+
+			if (existInProject) return;
+
 			var module = document.createElement("module");
 			module.isVoid = true;
 			module.attr("fileurl", "file://$PROJECT_DIR$/"+p.getName()+"/"+p.getShortName()+".iml");
 			module.attr("filepath", "$PROJECT_DIR$/"+p.getName()+"/"+p.getShortName()+".iml");
 			modules.add(module);
-
-			CharList sb = generateIMLFromProject(p);
-			try (var tw = TextWriter.to(iml, StandardCharsets.UTF_8)) {
-				tw.append(sb);
-			}
-
-			if (exist) return;
-		}/* else {
-			Files.delete(iml.toPath());
-		}*/
+		}
 
 		IOUtil.writeFileEvenMoreSafe(ipr.getParentFile(), ipr.getName(), file -> {
 			try (var tw = TextWriter.to(file, StandardCharsets.UTF_8)) {
-				document.toXML(tw, 0);
+				document.toXML(tw);
 			}
 		});
 	}
 
-	public static CharList generateIMLFromProject(Project p) {
+	public static CharList generateIMLForProject(Project p) {
 		var sb = new CharList("""
 				<?xml version="1.0" encoding="UTF-8"?><!--MCMake-->
 				<module type="JAVA_MODULE" version="4">
@@ -214,7 +220,7 @@ public class Workspace {
 		sb.append("</content>\n<orderEntry type=\"inheritedJdk\" />");
 
 		CharList dynlib = new CharList();
-		FMD.EVENT_BUS.post(new ProjectUpdateEvent(p, dynlib));
+		MCMake.EVENT_BUS.post(new ProjectUpdateEvent(p, dynlib));
 
 		if (dynlib.length() > 0) {
 			sb.append("<orderEntry type=\"module-library\"><library><CLASSES>").append(dynlib).append(
@@ -253,8 +259,13 @@ public class Workspace {
 				""");
 
 		for (Map.Entry<String, Dependency.Scope> entry : p.conf.dependency.entrySet()) {
-			var dependency = FMD.projects.get(entry.getKey());
-			sb.append("<orderEntry type=\"module\" module-name=\"").append(dependency.getShortName());
+			var dependency = MCMake.projects.get(entry.getKey());
+			if (dependency != null) {
+				sb.append("<orderEntry type=\"module\" module-name=\"").append(dependency.getShortName());
+			} else {
+				// FIXME other libraries
+				continue;
+			}
 
 			switch (entry.getValue()) {
 				case COMPILE -> sb.append("\" />\n");

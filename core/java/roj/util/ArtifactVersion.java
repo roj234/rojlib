@@ -3,7 +3,7 @@ package roj.util;
 import org.jetbrains.annotations.NotNull;
 import roj.collect.ArrayList;
 import roj.collect.IntList;
-import roj.config.data.CEntry;
+import roj.config.node.ConfigValue;
 import roj.text.CharList;
 import roj.text.TextUtil;
 
@@ -77,12 +77,12 @@ public final class ArtifactVersion {
 			for (String t : splittedTag) {
 				if (TextUtil.isNumber(t) == 0) {
 					if (TextUtil.isNumber(t, TextUtil.INT_MAXS) == 0) {
-						tags.add((Comparable<?>) CEntry.valueOf(Integer.parseInt(t)));
+						tags.add((Comparable<?>) ConfigValue.valueOf(Integer.parseInt(t)));
 					} else {
-						tags.add((Comparable<?>) CEntry.valueOf(Long.parseLong(t)));
+						tags.add((Comparable<?>) ConfigValue.valueOf(Long.parseLong(t)));
 					}
 				} else {
-					tags.add((Comparable<?>) CEntry.valueOf(t));
+					tags.add((Comparable<?>) ConfigValue.valueOf(t));
 				}
 			}
 

@@ -10,7 +10,7 @@ import roj.compiler.LavaCompiler;
 import roj.compiler.asm.MethodWriter;
 import roj.compiler.diagnostic.Kind;
 import roj.compiler.resolve.TypeCast;
-import roj.config.data.CInt;
+import roj.config.node.IntValue;
 
 /**
  * AST - 三元(条件)运算符和if表达式
@@ -54,7 +54,7 @@ final class If extends Expr {
 		}
 
 		if (trueBranch.isConstant()& falseBranch.isConstant()) {
-			if (trueBranch.constVal() instanceof CInt tv && falseBranch.constVal() instanceof CInt fv) {
+			if (trueBranch.constVal() instanceof IntValue tv && falseBranch.constVal() instanceof IntValue fv) {
 				if (fv.value == 0) {
 					// if not 1 => IMUL
 					// else => NOP
@@ -81,7 +81,7 @@ final class If extends Expr {
 			LavaCompiler.debugLogger().info("trinary.note.boolean_hack {}", this);
 
 			condition.write(cw, this.cast);
-			int value = ((CInt) trueBranch.constVal()).value;
+			int value = ((IntValue) trueBranch.constVal()).value;
 
 			if (boolHack != 1) {
 				cw.ldc(1);

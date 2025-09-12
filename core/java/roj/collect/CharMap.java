@@ -47,7 +47,7 @@ public final class CharMap<V> extends AbstractMap<Character, V> implements _LibM
 	public final void ensureCapacity(int size) {
 		if (size <= mask) return;
 		if (size > 16384) size = 16384;
-		int length = MathUtils.getMin2PowerOf(size);
+		int length = MathUtils.nextPowerOfTwo(size);
 
 		if (entries != null) {
 			mask = (length>>1) - 1;

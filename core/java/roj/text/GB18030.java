@@ -1,6 +1,6 @@
 package roj.text;
 
-import roj.archive.xz.LZMAInputStream;
+import roj.archive.xz.LZMA2InputStream;
 import roj.util.ArrayCache;
 
 import java.io.IOException;
@@ -20,12 +20,12 @@ final class GB18030 extends FastCharset {
 	@Override public FastCharset throwException(boolean doThrow) {return doThrow ? EXCEPTIONAL : INSTANCE;}
 
 	private static final int TAB2 = 24066;
-	private static final char[] TABLE, REVERSE_TABLE;
+	private static final char[] DECODER, ENCODER;
 
 	static {
-		TABLE = (char[]) U.allocateUninitializedArray(char.class, 63486);
-		REVERSE_TABLE = (char[]) U.allocateUninitializedArray(char.class, 65408);
-		try (var in = new LZMAInputStream(GB18030.class.getClassLoader().getResourceAsStream("roj/text/GB18030.lzma"))) {
+		DECODER = (char[]) U.allocateUninitializedArray(char.class, 63486);
+		ENCODER = (char[]) U.allocateUninitializedArray(char.class, 65408);
+		try (var in = new LZMA2InputStream(GB18030.class.getClassLoader().getResourceAsStream("roj/text/GB18030.lzma"), 6144)) {
 			byte[] b = ArrayCache.getByteArray(4096, false);
 			int off = 0;
 			while (true) {
@@ -34,11 +34,12 @@ final class GB18030 extends FastCharset {
 
 				for (int i = 0; i < r; i+=2) {
 					// UTF-16BE
-					char c = (char) (((b[i] & 0xFF) << 8) | (b[i+1] & 0xFF));
-					int id = (off + i) >> 1;
-					TABLE[id] = c;
-					if (c != 0) {
-						REVERSE_TABLE[c-128] = (char) (id+1);
+					char idx = (char) (((b[i] & 0xFF) << 8) | (b[i+1] & 0xFF));
+					int chr = (off + i) >> 1;
+					ENCODER[chr] = idx;
+					// is zero if and only if Character#isSurrogate returns true
+					if (idx != 0) {
+						DECODER[idx-1] = (char) (chr + 128);
 					}
 				}
 				off += r;
@@ -75,7 +76,7 @@ final class GB18030 extends FastCharset {
 						break surrogateCheck;
 					}
 				}
-				cp = REVERSE_TABLE[c-128] - 1;
+				cp = ENCODER[c-128] - 1;
 				assert cp >= 0;
 			}
 
@@ -144,7 +145,7 @@ final class GB18030 extends FastCharset {
 				int cp = (((c-129) * 10 + (c2-48)) * 126 + c3 - 129) * 10 + c4 - 48;
 
 				if (cp <= 39419) {
-					out[off++] = TABLE[TAB2+cp];
+					out[off++] = DECODER[TAB2+cp];
 				} else {
 					cp -= 123464;
 					if (cp < 0 || cp > Character.MAX_CODE_POINT) break malformed;
@@ -164,7 +165,7 @@ final class GB18030 extends FastCharset {
 				if (c2 == 127 || c2 == 255 || c2 < 64) break malformed;
 
 				int cp = (c-129) * (255-64) + (c2-64);
-				out[off++] = TABLE[cp];
+				out[off++] = DECODER[cp];
 			}
 		}
 
@@ -176,14 +177,14 @@ final class GB18030 extends FastCharset {
 	}
 
 	@Override
-	public void fastValidate(Object ref, long i, long max, IntConsumer cs) {
+	public void fastValidate(Object ref, long i, long max, IntConsumer verifier) {
 		int c;
 
 		while (i < max) {
 			c = U.getByte(ref,i++);
 			// US_ASCII
 			if (c >= 0) {
-				cs.accept(c);
+				verifier.accept(c);
 				continue;
 			}
 
@@ -191,37 +192,37 @@ final class GB18030 extends FastCharset {
 			if (c == 128 || c == 255) {
 				if (c == 128) c = '€';
 				else c = MALFORMED;
-				cs.accept(c);
+				verifier.accept(c);
 				continue;
 			}
 			if (i == max) {
-				cs.accept(TRUNCATED);
+				verifier.accept(TRUNCATED);
 				break;
 			}
 
 			int c2 = U.getByte(ref,i++) & 255;
 			if (c2 < 48) {
-				cs.accept(MALFORMED - 2);
+				verifier.accept(MALFORMED - 2);
 				i -= 1;
 				continue;
 			}
 
 			if (c2 <= 57) {
 				if (max-i < 2) {
-					cs.accept(TRUNCATED);
+					verifier.accept(TRUNCATED);
 					break;
 				}
 
 				int c3 = U.getByte(ref,i++) & 255;
 				if (c3 == 128 || c3 == 255) {
-					cs.accept(MALFORMED - 4);
+					verifier.accept(MALFORMED - 4);
 					i -= 2;
 					continue;
 				}
 
 				int c4 = U.getByte(ref,i++) & 255;
 				if (c4 < 48 || c4 > 57) {
-					cs.accept(MALFORMED - 4);
+					verifier.accept(MALFORMED - 4);
 					i -= 3;
 					continue;
 				}
@@ -229,19 +230,19 @@ final class GB18030 extends FastCharset {
 				int cp = (((c-129) * 10 + (c2-48)) * 126 + c3 - 129) * 10 + c4 - 48;
 
 				if (cp <= 39419) {
-					cs.accept(TABLE[TAB2+cp]);
+					verifier.accept(DECODER[TAB2+cp]);
 				} else {
 					cp -= 123464;
-					if (cp < 0 || cp > Character.MAX_CODE_POINT) { i -= 3; cs.accept(MALFORMED - 4); continue; }
+					if (cp < 0 || cp > Character.MAX_CODE_POINT) { i -= 3; verifier.accept(MALFORMED - 4); continue; }
 
-					cs.accept(cp);
+					verifier.accept(cp);
 				}
 			} else {
 				// double
-				if (c2 == 127 || c2 == 255 || c2 < 64) { i -= 1; cs.accept(MALFORMED - 2); continue; }
+				if (c2 == 127 || c2 == 255 || c2 < 64) { i -= 1; verifier.accept(MALFORMED - 2); continue; }
 
 				int cp = (c-128) * (255-64) + (c2-64);
-				cs.accept(TABLE[cp]);
+				verifier.accept(DECODER[cp]);
 			}
 		}
 	}
@@ -265,7 +266,7 @@ final class GB18030 extends FastCharset {
 						break check;
 					}
 				}
-				cp = REVERSE_TABLE[c-128];
+				cp = ENCODER[c-128];
 			}
 
 			if (cp <= TAB2) len++;
@@ -281,7 +282,7 @@ final class GB18030 extends FastCharset {
 	@Override
 	public int encodeSize(int codepoint) {
 		if (codepoint <= 0x80) return 1;
-		var cp = REVERSE_TABLE[codepoint-0x80];
+		var cp = ENCODER[codepoint-0x80];
 		if (cp == 0) return -1;
 		return cp <= TAB2 ? 2 : 4;
 	}

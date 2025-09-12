@@ -1,6 +1,6 @@
 package roj.ui;
 
-import roj.config.ParseException;
+import roj.text.ParseException;
 import roj.reflect.Reflection;
 import roj.text.CharList;
 import roj.text.TextUtil;

@@ -1,6 +1,6 @@
 package roj.compiler.jpp.machine.windows;
 
-import roj.text.DateTime;
+import roj.text.DateFormat;
 import roj.util.ByteList;
 
 /**
@@ -173,7 +173,7 @@ public class PEHeader implements PESegment {
 		  .append("\n  区段:        ")
 		  .append((int) sectionCount)
 		  .append("\n  时间戳:      ")
-		  .append(DateTime.toLocalTimeString(getTimestamp()))
+		  .append(DateFormat.toLocalDateTime(getTimestamp()))
 		  .append("\n  符号表:      0x")
 		  .append(Integer.toHexString(symbolTableOffset))
 		  .append(" @ Size=")

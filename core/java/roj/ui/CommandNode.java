@@ -1,10 +1,8 @@
 package roj.ui;
 
-import org.jetbrains.annotations.Nls;
-import org.jetbrains.annotations.NonNls;
 import org.jetbrains.annotations.Nullable;
 import roj.collect.ArrayList;
-import roj.config.ParseException;
+import roj.text.ParseException;
 import roj.text.CharList;
 
 import java.util.Comparator;

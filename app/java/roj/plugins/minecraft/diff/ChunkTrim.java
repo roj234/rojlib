@@ -4,11 +4,14 @@ import roj.collect.*;
 import roj.concurrent.TaskGroup;
 import roj.concurrent.TaskPool;
 import roj.config.ConfigMaster;
-import roj.config.ParseException;
-import roj.config.auto.Optional;
+import roj.config.mapper.Optional;
 import roj.io.IOUtil;
 import roj.io.RegionFile;
-import roj.ui.*;
+import roj.text.ParseException;
+import roj.ui.Argument;
+import roj.ui.EasyProgressBar;
+import roj.ui.Shell;
+import roj.ui.TUI;
 import roj.util.ArrayCache;
 
 import java.io.File;

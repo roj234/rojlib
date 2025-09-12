@@ -3,8 +3,8 @@ package roj.crypt.asn1;
 import roj.collect.BitSet;
 import roj.collect.Int2IntMap;
 import roj.collect.TrieTree;
-import roj.config.Tokenizer;
-import roj.config.Token;
+import roj.text.Tokenizer;
+import roj.text.Token;
 
 /**
  * @author Roj234

@@ -79,7 +79,11 @@ public class FastDoubleParser {
 				fractionalIndex = i;
 			} else if (digits.list[i] == 'e') {
 				try {
-					exp = TextUtil.parseInt(digits, i+1, digits.len);
+					int n = i+1;
+					char next = digits.list[n];
+					if (next == '-' || next == '+') n++;
+
+					exp = (int) Tokenizer.parseNumber(digits, n, digits.len, 0, next == '-');
 				} catch (NumberFormatException e) {
 					boolean zero = i == 1 && digits.list[0] == '0';
 					return zero ? 0.0 : Double.POSITIVE_INFINITY;

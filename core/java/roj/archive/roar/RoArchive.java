@@ -7,13 +7,13 @@ import roj.archive.zip.ZipFile;
 import roj.collect.ArrayList;
 import roj.collect.WeakCache;
 import roj.collect.XashMap;
-import roj.util.FastFailException;
 import roj.io.IOUtil;
 import roj.io.source.Source;
 import roj.io.source.SourceInputStream;
 import roj.math.MathUtils;
 import roj.reflect.Unaligned;
 import roj.util.ByteList;
+import roj.util.FastFailException;
 import roj.util.Helpers;
 
 import java.io.File;
@@ -101,7 +101,7 @@ public class RoArchive implements ArchiveFile {
 			headerOffset = off;
 			dataLength = data_len;
 
-			int mask = MathUtils.getMin2PowerOf(entry_count / 2);
+			int mask = MathUtils.nextPowerOfTwo(entry_count / 2);
 			map = new RoarEntry[mask];
 			entries = new ArrayList<>(entry_count);
 			mask--;

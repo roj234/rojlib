@@ -2,10 +2,10 @@ package roj.collect;
 
 import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.NotNull;
-import roj.util.FastFailException;
 import roj.math.MathUtils;
 import roj.text.logging.Logger;
 import roj.util.ArrayUtil;
+import roj.util.FastFailException;
 import roj.util.Helpers;
 
 import java.util.*;
@@ -184,7 +184,7 @@ public class HashMap<K, V> extends AbstractMap<K, V> implements FindMap<K, V>, _
 
 	public void ensureCapacity(int size) {
 		if (size <= mask) return;
-		int length = MathUtils.getMin2PowerOf(size);
+		int length = MathUtils.nextPowerOfTwo(size);
 
 		if (entries != null) {
 			mask = (length>>1) - 1;
@@ -319,11 +319,17 @@ public class HashMap<K, V> extends AbstractMap<K, V> implements FindMap<K, V>, _
 	public final V computeIfAbsent(K key, @NotNull Function<? super K, ? extends V> mapper) {
 		AbstractEntry<K, V> entry = getOrCreateEntry(key);
 		if (entry.key != UNDEFINED) return entry.getValue();
-
 		entry.key = key;
-		size++;
 
-		V v = mapper.apply(key);
+		V v;
+		try {
+			v = mapper.apply(key);
+		} catch (Exception e) {
+			remove(key);
+			throw e;
+		}
+
+		size++;
 		onPut(entry, v);
 		entry.setValue(v);
 		return v;
@@ -494,7 +500,7 @@ public class HashMap<K, V> extends AbstractMap<K, V> implements FindMap<K, V>, _
 		if (hasher != Hasher.defaul()) Logger.FALLBACK.warn("Custom hasher "+hasher+"(A "+hasher.getClass().getName()+") generate many("+loop+") hash collisions for "+ key.getClass().getName(), new Throwable());
 		if (!acceptTreeNode()) return false;
 
-		AbstractEntry<K, V>[] arr = Helpers.cast(new AbstractEntry<?,?>[MathUtils.getMin2PowerOf(loop +1)]);
+		AbstractEntry<K, V>[] arr = Helpers.cast(new AbstractEntry<?,?>[MathUtils.nextPowerOfTwo(loop +1)]);
 		int i = 0;
 
 		int slot = hasher.hashCode(key)&mask;

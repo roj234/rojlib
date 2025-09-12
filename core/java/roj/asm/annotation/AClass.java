@@ -1,7 +1,7 @@
 package roj.asm.annotation;
 
 import roj.asm.type.Type;
-import roj.config.serial.CVisitor;
+import roj.config.ValueEmitter;
 
 /**
  * @author Roj234
@@ -14,7 +14,7 @@ final class AClass extends AnnVal {
 
 	public char dataType() {return ANNOTATION_CLASS;}
 
-	@Override public void accept(CVisitor visitor) {((ToJVMAnnotation) visitor).valueClass(value.toDesc());}
+	@Override public void accept(ValueEmitter visitor) {((AnnotationEncoder) visitor).valueClass(value.toDesc());}
 	@Override public Object raw() {return value;}
 
 	public String toString() {return value.toString().concat(".class");}

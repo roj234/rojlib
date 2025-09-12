@@ -9,7 +9,7 @@ import roj.compiler.LavaCompiler;
 import roj.compiler.diagnostic.Kind;
 import roj.compiler.diagnostic.TextDiagnosticReporter;
 import roj.compiler.library.JarLibrary;
-import roj.config.ParseException;
+import roj.text.ParseException;
 import roj.io.IOUtil;
 import roj.text.CharList;
 import roj.text.TextUtil;

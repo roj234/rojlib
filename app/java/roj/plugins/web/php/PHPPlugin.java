@@ -2,9 +2,9 @@ package roj.plugins.web.php;
 
 import org.jetbrains.annotations.Nullable;
 import roj.concurrent.TaskThread;
-import roj.config.data.CEntry;
-import roj.config.data.CMap;
-import roj.config.data.Type;
+import roj.config.node.ConfigValue;
+import roj.config.node.MapValue;
+import roj.config.node.Type;
 import roj.http.server.*;
 import roj.io.IOUtil;
 import roj.plugin.PanHttp;
@@ -26,10 +26,10 @@ public class PHPPlugin extends Plugin implements Router, Predicate<String> {
 
 	@Override
 	protected void onEnable() throws Exception {
-		CMap config = getConfig();
+		MapValue config = getConfig();
 
 		List<String> args;
-		CEntry entry = config.get("fcgi_executable");
+		ConfigValue entry = config.get("fcgi_executable");
 		args = entry.getType() == Type.LIST ? entry.asList().toStringList() : Collections.singletonList(entry.asString());
 
 		Path cgi_exe = getDataFolder().toPath().resolve(Path.of(args.get(0)));

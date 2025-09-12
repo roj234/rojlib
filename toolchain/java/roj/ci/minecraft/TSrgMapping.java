@@ -2,9 +2,9 @@ package roj.ci.minecraft;
 
 import roj.asm.MemberDescriptor;
 import roj.asmx.mapper.Mapping;
-import roj.config.JSONParser;
-import roj.config.ParseException;
-import roj.config.data.CMap;
+import roj.config.JsonParser;
+import roj.text.ParseException;
+import roj.config.node.MapValue;
 import roj.io.IOUtil;
 import roj.text.LineReader;
 import roj.text.TextReader;
@@ -155,11 +155,11 @@ final class TSrgMapping extends Mapping {
 
 	public static final class MCPConfig implements Closeable {
 		private ZipFile zf;
-		private CMap manifest;
+		private MapValue manifest;
 		public MCPConfig(File file) throws IOException {
 			zf = new ZipFile(file);
 			try {
-				manifest = JSONParser.parses(IOUtil.readUTF(zf.getInputStream(zf.getEntry("config.json")))).asMap();
+				manifest = JsonParser.parses(IOUtil.readUTF(zf.getInputStream(zf.getEntry("config.json")))).asMap();
 			} catch (ParseException e) {
 				throw new IOException("reading manifest", e);
 			}

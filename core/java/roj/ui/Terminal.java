@@ -4,7 +4,7 @@ import roj.collect.ArrayList;
 import roj.collect.BitSet;
 import roj.concurrent.TimerTask;
 import roj.concurrent.Timer;
-import roj.config.data.CInt;
+import roj.config.node.IntValue;
 import roj.io.IOUtil;
 import roj.text.CharList;
 import roj.text.LineReader;
@@ -90,7 +90,7 @@ public class Terminal implements KeyHandler {
 
 		Completion c = tabs.get(id);
 		if (c.description != null) {
-			c.description.writeLimited(tooltip(), new CInt(Tty.getColumns()), true);
+			c.description.writeLimited(tooltip(), new IntValue(Tty.getColumns()), true);
 			displayTooltip(5000);
 		} else {
 			displayTooltip(-1);

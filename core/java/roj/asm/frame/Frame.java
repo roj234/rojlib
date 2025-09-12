@@ -18,9 +18,9 @@ public final class Frame {
 	public static final Var2[] NONE = new Var2[0];
 
 	byte type;
-	public int bci;
-	@Nullable public Label monitoredBci;
-	@NotNull public Var2[] locals = NONE, stacks = NONE;
+	public int pc;
+	@Nullable public Label pcLabel;
+	@NotNull public Var2[] locals = NONE, stack = NONE;
 
 	public static Frame fromByte(int type) {
 		if ((type & 128) == 0) {
@@ -39,7 +39,7 @@ public final class Frame {
 	public Frame(int type) {this.type = (byte) type;}
 
 	public byte type() {return type;}
-	public int bci() {return monitoredBci == null ? bci : monitoredBci.getValue();}
+	public int bci() {return pcLabel == null ? pc : pcLabel.getValue();}
 
 	public String toString() {return toString(IOUtil.getSharedCharBuf(), 0).toString();}
 	public CharList toString(CharList sb, int prefix) {
@@ -58,15 +58,15 @@ public final class Frame {
 		}
 		sb.padEnd(' ', prefix).append(typeStr).append('@').append(bci());
 		if (typeStr.equals("append")) display(sb.append(": "), locals);
-		else if (typeStr.equals("same_local_1_stack")) sb.append(": ").append(stacks[0]);
+		else if (typeStr.equals("same_local_1_stack")) sb.append(": ").append(stack[0]);
 		else if (typeStr.equals("full")) {
 			if (locals.length > 0) {
 				sb.append('\n').padEnd(' ', prefix+4).append("Local: ");
 				display(sb, locals);
 			}
-			if (stacks.length > 0) {
+			if (stack.length > 0) {
 				sb.append('\n').padEnd(' ', prefix+4).append("Stack: ");
-				display(sb, stacks);
+				display(sb, stack);
 			}
 		}
 		return sb;
@@ -91,6 +91,6 @@ public final class Frame {
 		if (type != full && (type != same_local_1_stack && type != same_local_1_stack_ex) || arr.length != 1) {
 			throw new IllegalStateException(this+" cannot set "+arr.length+" stacks");
 		}
-		stacks = arr;
+		stack = arr;
 	}
 }

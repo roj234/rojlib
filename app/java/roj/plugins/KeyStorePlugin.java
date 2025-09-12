@@ -1,12 +1,12 @@
 package roj.plugins;
 
 import roj.archive.zip.ZipArchive;
+import roj.collect.ArrayList;
 import roj.collect.CollectionX;
 import roj.collect.HashMap;
-import roj.collect.ArrayList;
-import roj.config.auto.Either;
-import roj.config.data.CEntry;
-import roj.config.data.CMap;
+import roj.config.node.ConfigValue;
+import roj.config.node.MapValue;
+import roj.config.mapper.Either;
 import roj.crypt.KeyType;
 import roj.crypt.jar.JarVerifier;
 import roj.io.IOUtil;
@@ -61,8 +61,8 @@ public class KeyStorePlugin extends Plugin {
 	@Override
 	protected void onEnable() throws Exception {
 		var config = getConfig();
-		for (CEntry entry : config.getList("keypair")) {
-			CMap map = entry.asMap();
+		for (ConfigValue entry : config.getList("keypair")) {
+			MapValue map = entry.asMap();
 			var alias = map.getString("alias");
 			var type = map.getString("type");
 

@@ -1,9 +1,9 @@
 package roj.plugins.minecraft.server.data;
 
-import roj.config.NBTParser;
-import roj.config.ParseException;
-import roj.config.data.CMap;
-import roj.config.serial.ToNBT;
+import roj.config.NbtEncoder;
+import roj.config.NbtParser;
+import roj.config.node.MapValue;
+import roj.text.ParseException;
 import roj.util.DynByteBuf;
 
 import java.io.IOException;
@@ -17,7 +17,7 @@ public class ItemStack {
 
 	public Item item;
 	public byte count;
-	public CMap nbt;
+	public MapValue nbt;
 
 	public ItemStack(Item item) {
 		this.item = item;
@@ -33,7 +33,7 @@ public class ItemStack {
 			this.count = net.readByte();
 			if (net.get(net.rIndex) != 0) {
 				try {
-					this.nbt = new NBTParser().parse(net).asMap();
+					this.nbt = new NbtParser().parse(net).asMap();
 				} catch (ParseException e) {
 					throw new IOException("NBT解析失败", e);
 				}
@@ -46,12 +46,12 @@ public class ItemStack {
 		}
 	}
 
-	public CMap tag() {
-		if (nbt == null) nbt = new CMap();
+	public MapValue tag() {
+		if (nbt == null) nbt = new MapValue();
 		return nbt;
 	}
-	public CMap getSubTag(String name) {
-		if (nbt == null) nbt = new CMap();
+	public MapValue getSubTag(String name) {
+		if (nbt == null) nbt = new MapValue();
 		return nbt.getOrCreateMap(name);
 	}
 
@@ -64,7 +64,7 @@ public class ItemStack {
 
 		buf.putBool(true).putVarInt(item.id).put(count);
 		if (nbt != null) {
-			ToNBT ser = new ToNBT(buf);
+			NbtEncoder ser = new NbtEncoder(buf);
 			nbt.accept(ser);
 		} else {
 			buf.put(0);

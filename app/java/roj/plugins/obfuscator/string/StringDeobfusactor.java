@@ -1,6 +1,9 @@
 package roj.plugins.obfuscator.string;
 
-import roj.asm.*;
+import roj.asm.ClassNode;
+import roj.asm.MemberDescriptor;
+import roj.asm.MethodNode;
+import roj.asm.Opcodes;
 import roj.asm.attr.Attribute;
 import roj.asm.attr.UnparsedAttribute;
 import roj.asm.cp.*;
@@ -8,11 +11,11 @@ import roj.asm.insn.*;
 import roj.asm.type.Type;
 import roj.asmx.Context;
 import roj.collect.HashMap;
-import roj.util.OperationDone;
 import roj.reflect.ClassDefiner;
 import roj.text.logging.Level;
 import roj.text.logging.Logger;
 import roj.util.DynByteBuf;
+import roj.util.OperationDone;
 
 import java.util.List;
 
@@ -143,7 +146,7 @@ public class StringDeobfusactor {
 				if (!cn.startsWith("java/")) throw OperationDone.INSTANCE;
 			}
 			protected void invokeItf(CstRef method, short argc) { invoke((byte) 0, method); }
-			protected void invokeDyn(CstDynamic dyn, int type) { throw OperationDone.INSTANCE; }
+			protected void invokeDyn(CstDynamic dyn, int reserved) { throw OperationDone.INSTANCE; }
 		};
 
 		HashMap<MemberDescriptor, DecoderCandidate> decoderCandidate = new HashMap<>();

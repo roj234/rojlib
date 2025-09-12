@@ -64,7 +64,7 @@ public class DirectByteList extends DynByteBuf {
 
 	public final void ensureCapacity(int required) {
 		if (length < required) {
-			int newLen = Math.max(MathUtils.getMin2PowerOf(required), 1024);
+			int newLen = Math.max(MathUtils.nextPowerOfTwo(required), 1024);
 			if (newLen > 1073741823 || newLen > maxCapacity()) newLen = maxCapacity();
 			if (nm == null || newLen <= length) throw new IndexOutOfBoundsException("长度为("+(nm==null&&length==0?"NaN":length)+" => "+newLen+")的缓冲区无法放下"+required+"字节");
 

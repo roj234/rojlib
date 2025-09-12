@@ -4,7 +4,7 @@ import org.jetbrains.annotations.Range;
 import roj.asmx.event.EventBus;
 import roj.concurrent.TimerTask;
 import roj.concurrent.Timer;
-import roj.config.Tokenizer;
+import roj.text.Tokenizer;
 import roj.io.IOUtil;
 import roj.math.MathUtils;
 import roj.math.Vec3d;

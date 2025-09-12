@@ -8,20 +8,20 @@ import roj.http.h2.H2Connection;
 import roj.http.h2.H2Exception;
 import roj.http.h2.H2Stream;
 import roj.http.hDeflate;
-import roj.util.FastFailException;
-import roj.io.IOUtil;
 import roj.io.BufferPool;
+import roj.io.IOUtil;
 import roj.net.*;
 import roj.net.util.SpeedLimiter;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
+import roj.util.FastFailException;
 
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.zip.Deflater;
 
-import static roj.http.server.HSConfig.*;
+import static roj.http.server.HttpServer.*;
 import static roj.http.server.HttpServer11.*;
 
 /**
@@ -52,7 +52,7 @@ final class HttpServer20 extends H2Stream implements PostSetting, ResponseHeader
 			query = path.substring(i+1);
 			path = path.substring(0, i);
 		}
-		var req = HSConfig.getInstance().request().init(HttpUtil.getMethodId(head.getMethod()), path, query, head.versionStr());
+		var req = HttpServer.getInstance().request().init(HttpUtil.getMethodId(head.getMethod()), path, query, head.versionStr());
 		req._moveFrom(head);
 
 		req.server = this;
@@ -158,7 +158,7 @@ final class HttpServer20 extends H2Stream implements PostSetting, ResponseHeader
 	private void sendHead(H2Connection man) throws IOException {
 		var h = req.responseHeader;
 		h.putIfAbsent(":status", "200");
-		h.put("server", HttpServer11.SERVER_NAME);
+		h.put("server", SERVER_NAME);
 
 		int enc = ENC_PLAIN;
 		boolean noBody = false;
@@ -169,7 +169,7 @@ final class HttpServer20 extends H2Stream implements PostSetting, ResponseHeader
 				h.remove("content-length");
 				body.release(man.channel());
 			} else if ((flag & FLAG_COMPRESS) != 0 && req.containsKey("accept-encoding") && !h.containsKey("content-encoding")) {
-				enc = HSConfig.getInstance().parseAcceptEncoding(req.get("accept-encoding"));
+				enc = HttpServer.getInstance().parseAcceptEncoding(req.get("accept-encoding"));
 				setCompr(enc);
 				h.remove("content-length");
 			}
@@ -223,7 +223,7 @@ final class HttpServer20 extends H2Stream implements PostSetting, ResponseHeader
 				body = ire.createResponse();
 			} else {
 				code(500);
-				body = HttpServer11.onUncaughtError(req, e);
+				body = onUncaughtError(req, e);
 				H2Connection.LOGGER.error("路由发生了异常", e);
 			}
 			return;
@@ -237,7 +237,7 @@ final class HttpServer20 extends H2Stream implements PostSetting, ResponseHeader
 
 	@Override
 	protected void onFinish(H2Connection man) {
-		var t = HSConfig.getInstance();
+		var t = HttpServer.getInstance();
 
 		onFinish(false);
 
@@ -321,13 +321,13 @@ final class HttpServer20 extends H2Stream implements PostSetting, ResponseHeader
 		switch (enc) {
 			default -> {return;}
 			case ENC_GZIP -> {
-				def = HSConfig.getInstance().deflater(true);
+				def = HttpServer.getInstance().deflater(true);
 				flag |= FLAG_GZIP;
 				crc = CRC32.initial;
 				header("content-encoding", "gzip");
 			}
 			case ENC_DEFLATE -> {
-				def = HSConfig.getInstance().deflater(false);
+				def = HttpServer.getInstance().deflater(false);
 				flag &= ~FLAG_GZIP;
 				header("content-encoding", "gzip");
 			}

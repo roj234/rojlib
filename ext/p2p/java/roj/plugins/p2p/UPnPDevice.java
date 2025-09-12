@@ -1,17 +1,17 @@
 package roj.plugins.p2p;
 
-import roj.collect.HashMap;
 import roj.collect.ArrayList;
+import roj.collect.HashMap;
 import roj.concurrent.TaskPool;
-import roj.config.ParseException;
-import roj.config.XMLParser;
-import roj.config.data.Element;
-import roj.config.data.Node;
+import roj.config.XmlParser;
+import roj.config.node.xml.Element;
+import roj.config.node.xml.Node;
 import roj.http.HttpHead;
 import roj.http.HttpRequest;
 import roj.io.CorruptedInputException;
 import roj.net.*;
 import roj.net.handler.Timeout;
+import roj.text.ParseException;
 import roj.text.TextUtil;
 import roj.util.ByteList;
 
@@ -188,7 +188,7 @@ public final class UPnPDevice {
 				UPnPGateway.LOGGER.debug("正在请求设备描述: {}", loc);
 				Element xml;
 				try {
-					xml = XMLParser.parses(HttpRequest.builder().url(loc).header("connection", "close").execute(500).str());
+					xml = XmlParser.parses(HttpRequest.builder().url(loc).header("connection", "close").execute(500).str());
 
 					Node node = xml.querySelector("/root/URLBase");
 					String loc1 = node == null ? loc.substring(0, loc.indexOf('/')) : node.textContent();
@@ -267,7 +267,7 @@ public final class UPnPDevice {
 
 			Element header;
 			try {
-				header = XMLParser.parses(query.execute().str());
+				header = XmlParser.parses(query.execute().str());
 			} catch (ParseException e) {
 				throw new CorruptedInputException("invalid SOAP response", e);
 			}

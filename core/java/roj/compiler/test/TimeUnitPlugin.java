@@ -11,7 +11,7 @@ import roj.compiler.asm.MethodWriter;
 import roj.compiler.ast.expr.Expr;
 import roj.compiler.resolve.ResolveException;
 import roj.compiler.resolve.TypeCast;
-import roj.config.data.CEntry;
+import roj.config.node.ConfigValue;
 
 import java.util.concurrent.TimeUnit;
 
@@ -43,7 +43,7 @@ public class TimeUnitPlugin extends Expr {
 	public Expr resolve(CompileContext ctx) throws ResolveException {
 		node = node.resolve(ctx);
 		cast = ctx.castTo(node.type(), type(), 0);
-		if (node.isConstant()) return Expr.valueOf(CEntry.valueOf(unit.toMillis(((CEntry) node.constVal()).asLong())));
+		if (node.isConstant()) return Expr.valueOf(ConfigValue.valueOf(unit.toMillis(((ConfigValue) node.constVal()).asLong())));
 		return this;
 	}
 

@@ -8,7 +8,7 @@ import roj.compiler.asm.AnnotationPrimer;
 import roj.compiler.asm.MethodWriter;
 import roj.compiler.diagnostic.Kind;
 import roj.compiler.resolve.TypeCast;
-import roj.config.data.CEntry;
+import roj.config.node.ConfigValue;
 
 /**
  * AST - 强制类型转换
@@ -55,7 +55,7 @@ final class Cast extends PrefixOp {
 			if (this.cast.isIdentity()) {
 				CompileContext.get().report(this, Kind.WARNING, "cast.redundant", type);
 			}
-			return constant(type, AnnotationPrimer.castPrimitive((CEntry) right.constVal(), type));
+			return constant(type, AnnotationPrimer.castPrimitive((ConfigValue) right.constVal(), type));
 		}
 		return this;
 	}

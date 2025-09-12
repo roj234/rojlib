@@ -2,6 +2,7 @@ package roj.concurrent;
 
 import org.jetbrains.annotations.Async;
 import roj.compiler.api.Synchronizable;
+import roj.reflect.Reflection;
 import roj.reflect.Unaligned;
 import roj.util.ArrayUtil;
 
@@ -21,8 +22,9 @@ public class TaskThread extends FastLocalThread implements ExecutorService {
 	//0 => running, 1 => terminating, 2 => stopped
 	volatile int state = 0;
 
-	public TaskThread() {
-		setName("RojLib - 未命名任务线程#"+hashCode());
+	public TaskThread() {this("RojLib - 未命名任务线程#"+Reflection.uniqueId());}
+	public TaskThread(String name) {
+		setName(name);
 		setDaemon(true);
 	}
 

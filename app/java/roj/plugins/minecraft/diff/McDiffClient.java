@@ -5,8 +5,8 @@ import roj.archive.qz.QZEntry;
 import roj.archive.qz.WordBlock;
 import roj.collect.HashMap;
 import roj.concurrent.TaskPool;
-import roj.config.NBTParser;
-import roj.config.serial.ToNBT;
+import roj.config.NbtEncoder;
+import roj.config.NbtParser;
 import roj.crypt.CryptoFactory;
 import roj.crypt.KeyType;
 import roj.io.CorruptedInputException;
@@ -16,9 +16,9 @@ import roj.io.RegionFile;
 import roj.io.source.ByteSource;
 import roj.text.TextReader;
 import roj.text.TextUtil;
+import roj.text.diff.BsDiff;
 import roj.ui.EasyProgressBar;
 import roj.util.ArrayCache;
-import roj.util.BsDiff;
 import roj.util.ByteList;
 
 import java.io.*;
@@ -111,7 +111,7 @@ public class McDiffClient {
 								try (var dos = rf.getDataOutput(pos)) {
 									if (patch == 0) {
 										try (var buf = new ByteList.ToStream(dos)) {
-											new NBTParser().parse(mdi, 0, new ToNBT(buf));
+											new NbtParser().parse(mdi, 0, new NbtEncoder(buf));
 										}
 									} else {
 										if (!rf.hasData(pos)) throw new CorruptedInputException("diff source missing");

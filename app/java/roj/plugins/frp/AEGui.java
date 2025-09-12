@@ -7,11 +7,10 @@ package roj.plugins.frp;
 import roj.collect.HashMap;
 import roj.collect.Hasher;
 import roj.config.ConfigMaster;
-import roj.config.data.CEntry;
-import roj.config.data.CList;
-import roj.config.data.CMap;
-import roj.config.serial.ToSomeString;
-import roj.config.serial.ToYaml;
+import roj.config.YamlSerializer;
+import roj.config.node.ConfigValue;
+import roj.config.node.ListValue;
+import roj.config.node.MapValue;
 import roj.crypt.Blake3;
 import roj.crypt.KeyType;
 import roj.gui.GuiUtil;
@@ -118,17 +117,17 @@ public class AEGui extends JFrame implements ChannelHandler {
 	}
 
 	private boolean loadFromFile(File file) throws Exception {
-		CMap yml = ConfigMaster.fromExtension(file).parse(file).asMap();
+		MapValue yml = ConfigMaster.fromExtension(file).parse(file).asMap();
 		uiServer.setText(yml.getString("server"));
 		uiRoom.setText(yml.getString("room"));
 		uiUser.setText(yml.getString("nickname"));
 		var model = (DefaultListModel<Obsoleted>) uiPortList.getModel();
-		CList list = yml.getList("ports");
+		ListValue list = yml.getList("ports");
 		if (yml.getBool("room_owner")) {
 			uiCreateRoom.doClick();
 			uiCustomMotd.setText(yml.getString("room_desc"));
 			for (int i = 0; i < list.size(); i++) {
-				CMap map = list.getMap(i);
+				MapValue map = list.getMap(i);
 				Obsoleted c = new Obsoleted((char) map.getInt("port"), map.getString("hint", null));
 				c.udp = map.getBool("udp");
 				model.addElement(c);
@@ -136,11 +135,11 @@ public class AEGui extends JFrame implements ChannelHandler {
 
 			if (yml.getBool("local_server")) uiDirectServer.setSelected(true);
 
-			CMap whitelist = yml.getMap("whitelist");
+			MapValue whitelist = yml.getMap("whitelist");
 			if (whitelist.size() > 0) {
 				userWhiteList = new HashMap<>(whitelist.size());
 				userWhiteList.setHasher(Hasher.array(byte[].class));
-				for (Map.Entry<String, CEntry> entry : whitelist.raw().entrySet()) {
+				for (Map.Entry<String, ConfigValue> entry : whitelist.raw().entrySet()) {
 					String string = entry.getValue().asString();
 					if (string.length() != 64) System.err.println(string+"不是有效的Blake3-32指纹");
 					userWhiteList.put(TextUtil.hex2bytes(string), entry.getKey());
@@ -148,7 +147,7 @@ public class AEGui extends JFrame implements ChannelHandler {
 			}
 		} else {
 			for (int i = 0; i < list.size(); i++) {
-				CMap map = list.getMap(i);
+				MapValue map = list.getMap(i);
 				Obsoleted c = new Obsoleted((char) map.getInt("port"), map.getString("hint", null));
 				if (map.containsKey("local_port")) c.to = map.getInt("local_port");
 				model.addElement(c);
@@ -286,77 +285,77 @@ public class AEGui extends JFrame implements ChannelHandler {
 				}
 			} else {
 				File file = GuiUtil.fileSaveTo("保存配置文件", "AE_config.yml", uiConnect);
-				try (TextWriter out = TextWriter.to(file)) {
-					ToSomeString v = new ToYaml().multiline(true).sb(out);
-					v.valueMap();
+				try (var out = TextWriter.to(file)) {
+					var v = new YamlSerializer().multiline(true).to(out);
+					v.emitMap();
 					v.key("server");
-					v.value(uiServer.getText());
+					v.emit(uiServer.getText());
 					v.key("room");
-					v.value(uiRoom.getText());
+					v.emit(uiRoom.getText());
 					if (uiCreateRoom.isSelected()) {
 						v.key("room_owner");
-						v.value(true);
+						v.emit(true);
 						v.key("room_desc");
-						v.value(uiCustomMotd.getText());
+						v.emit(uiCustomMotd.getText());
 						v.key("ports");
-						v.valueList();
+						v.emitList();
 						for (int i = 0; i < model.size(); i++) {
 							var c = model.get(i);
-							v.valueMap();
+							v.emitMap();
 							if (c.name != null) {
 								v.key("hint");
-								v.value(c.name);
+								v.emit(c.name);
 							}
 							v.key("port");
-							v.value(c.from);
+							v.emit(c.from);
 							if (c.udp) {
 								v.key("udp");
-								v.value(true);
+								v.emit(true);
 							}
 							v.pop();
 						}
 						v.pop();
 						if (uiDirectServer.isSelected()) {
 							v.key("local_server");
-							v.value(true);
+							v.emit(true);
 						}
 						if (!userWhiteList.isEmpty()) {
 							v.key("whitelist");
-							v.valueMap(userWhiteList.size());
+							v.emitMap(userWhiteList.size());
 							for (Map.Entry<byte[], String> entry : userWhiteList.entrySet()) {
 								v.key(entry.getValue());
-								v.value(IOUtil.encodeHex(entry.getKey()));
+								v.emit(IOUtil.encodeHex(entry.getKey()));
 							}
 							v.pop();
 						}
 					} else if (model.size() > 0) {
 						v.key("ports");
-						v.valueMap();
+						v.emitMap();
 						for (int i = 0; i < model.size(); i++) {
 							Obsoleted c = model.get(i);
 							if (c.name != null) {
 								v.key("hint");
-								v.value(c.name);
+								v.emit(c.name);
 							}
 							v.key("port");
-							v.value(c.from);
+							v.emit(c.from);
 							if (c.to != c.from) {
 								v.key("local_port");
-								v.value(c.to);
+								v.emit(c.to);
 							}
 							if (c.udp) {
 								v.key("udp");
-								v.value(true);
+								v.emit(true);
 							}
 						}
 						v.pop();
 					}
 					v.key("nickname");
-					v.value(uiUser.getText());
+					v.emit(uiUser.getText());
 					v.key("public_key");
-					v.value(keyType.toPEM(userCert.getPublic()));
+					v.emit(keyType.toPEM(userCert.getPublic()));
 					v.key("private_key");
-					v.value(keyType.toPEM(userCert.getPrivate()));
+					v.emit(keyType.toPEM(userCert.getPrivate()));
 					v.getValue();
 
 					uiKeySL.setEnabled(false);

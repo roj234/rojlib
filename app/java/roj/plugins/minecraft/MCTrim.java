@@ -3,11 +3,11 @@ package roj.plugins.minecraft;
 import roj.collect.ArrayList;
 import roj.collect.HashMap;
 import roj.collect.HashSet;
-import roj.config.JSONParser;
-import roj.config.ParseException;
-import roj.config.data.CEntry;
-import roj.config.data.CList;
-import roj.config.data.CMap;
+import roj.config.JsonParser;
+import roj.text.ParseException;
+import roj.config.node.ConfigValue;
+import roj.config.node.ListValue;
+import roj.config.node.MapValue;
 import roj.io.IOUtil;
 import roj.plugin.Plugin;
 import roj.plugin.SimplePlugin;
@@ -74,9 +74,9 @@ public class MCTrim extends Plugin {
 					continue;
 				}
 
-				CMap json;
+				MapValue json;
 				try {
-					json = new JSONParser().charset(StandardCharsets.UTF_8).parse(versionJson).asMap();
+					json = new JsonParser().charset(StandardCharsets.UTF_8).parse(versionJson).asMap();
 				} catch (ParseException e) {
 					Tty.warning(versionJson+" 不是有效的版本JSON");
 					continue;
@@ -85,7 +85,7 @@ public class MCTrim extends Plugin {
 				String id = json.getString("assetIndex.id");
 				// inheritFrom
 				if (!id.isEmpty()) assetIds.add(id);
-				CList libraries1 = json.getOrCreateList("libraries");
+				ListValue libraries1 = json.getOrCreateList("libraries");
 				for (int j = 0; j < libraries1.size(); j++) {
 					String name = libraries1.get(j).asMap().getString("name");
 					CharList maven = IOUtil.mavenIdToPath(name);
@@ -107,14 +107,14 @@ public class MCTrim extends Plugin {
 				continue;
 			}
 
-			CMap json;
+			MapValue json;
 			try {
-				json = new JSONParser().parse(file).asMap().getMap("objects");
+				json = new JsonParser().parse(file).asMap().getMap("objects");
 			} catch (ParseException e) {
 				Tty.warning(file+" 不是有效的资源索引");
 				continue;
 			}
-			for (CEntry value : json.values()) {
+			for (ConfigValue value : json.values()) {
 				assetsToRemove.remove(value.asMap().getString("hash"));
 			}
 		}

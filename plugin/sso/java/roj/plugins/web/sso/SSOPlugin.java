@@ -2,9 +2,8 @@ package roj.plugins.web.sso;
 
 import roj.collect.CollectionX;
 import roj.collect.XashMap;
-import roj.config.Tokenizer;
-import roj.config.data.CEntry;
-import roj.config.serial.ToJson;
+import roj.config.JsonSerializer;
+import roj.config.node.ConfigValue;
 import roj.crypt.Base64;
 import roj.crypt.MySaltedHash;
 import roj.http.Cookie;
@@ -12,10 +11,7 @@ import roj.http.server.*;
 import roj.http.server.auto.*;
 import roj.io.IOUtil;
 import roj.plugin.Plugin;
-import roj.text.CharList;
-import roj.text.DateTime;
-import roj.text.TextUtil;
-import roj.text.URICoder;
+import roj.text.*;
 import roj.ui.Argument;
 import roj.ui.TUI;
 import roj.ui.Tty;
@@ -54,7 +50,7 @@ public class SSOPlugin extends Plugin {
 		for (var entry : getConfig().getMap("groups").entrySet()) {
 			var group = new Group(entry.getKey());
 			Matcher m = PERMISSION_NODE_PATTERN.matcher("");
-			for (CEntry item : entry.getValue().asList()) {
+			for (ConfigValue item : entry.getValue().asList()) {
 				if (!m.reset(item.asString()).matches()) {
 					getLogger().warn("权限定义 {} 不符合规则 {}", item, PERMISSION_NODE_PATTERN);
 				} else {
@@ -182,9 +178,9 @@ public class SSOPlugin extends Plugin {
 			 System.out.println("已绑定OTP: "+(u.totpKey != null));
 			 System.out.println("用户组: "+u.groupName);
 			 System.out.println("密码错误次数: "+u.loginAttempt);
-			 System.out.println("上次登录: "+ DateTime.toLocalTimeString(u.loginTime));
+			 System.out.println("上次登录: "+ DateFormat.toLocalDateTime(u.loginTime));
 			 System.out.println("登录IP: "+u.loginAddr);
-			 System.out.println("注册时间: "+ DateTime.toLocalTimeString(u.registerTime));
+			 System.out.println("注册时间: "+ DateFormat.toLocalDateTime(u.registerTime));
 			 System.out.println("注册IP: "+u.registerAddr);
 		 })))
 		 .then(literal("suspend").then(argument("用户名", userNameList).then(argument("timeout", Argument.number(30, Integer.MAX_VALUE)).executes(ctx -> {
@@ -195,7 +191,7 @@ public class SSOPlugin extends Plugin {
 			 u.suspendTimer = System.currentTimeMillis() + ctx.argument("timeout", Integer.class)*1000L;
 			 u.loginAttempt = 99;
 			 u.tokenSeq++;
-			 System.out.println("账户已锁定至"+ DateTime.toLocalTimeString(u.suspendTimer));
+			 System.out.println("账户已锁定至"+ DateFormat.toLocalDateTime(u.suspendTimer));
 		 }))))
 		 .then(literal("unsuspend").then(argument("用户名", userNameList).executes(ctx -> {
 			 User u = users.getUserByName(ctx.argument("用户名", String.class));
@@ -588,14 +584,14 @@ public class SSOPlugin extends Plugin {
 		o.hmac.init(openIdKey);
 		o.hmac.update(IOUtil.getSharedByteBuf().putInt(u.id));
 
-		var ser = new ToJson();
-		ser.valueMap();
+		var ser = new JsonSerializer();
+		ser.emitMap();
 		ser.key("ok");
-		ser.value(true);
+		ser.emit(true);
 		ser.key("openid");
-		ser.value(IOUtil.encodeHex(o.hmac.digestShared()));
+		ser.emit(IOUtil.encodeHex(o.hmac.digestShared()));
 		ser.key("name");
-		ser.value(u.name);
+		ser.emit(u.name);
 		return Content.json(ser.getValue());
 	}
 

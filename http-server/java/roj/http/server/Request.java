@@ -3,13 +3,14 @@ package roj.http.server;
 import org.jetbrains.annotations.CheckReturnValue;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
-import roj.collect.HashMap;
 import roj.collect.ArrayList;
+import roj.collect.HashMap;
 import roj.collect.Multimap;
-import roj.config.Tokenizer;
 import roj.crypt.Base64;
-import roj.http.*;
-import roj.util.FastFailException;
+import roj.http.Cookie;
+import roj.http.Headers;
+import roj.http.HttpUtil;
+import roj.http.hCE;
 import roj.io.IOUtil;
 import roj.net.ChannelCtx;
 import roj.net.EmbeddedChannel;
@@ -18,9 +19,11 @@ import roj.net.MyChannel;
 import roj.net.handler.PacketMerger;
 import roj.text.CharList;
 import roj.text.FastCharset;
+import roj.text.Tokenizer;
 import roj.text.URICoder;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
+import roj.util.FastFailException;
 import roj.util.Helpers;
 
 import java.io.IOException;
@@ -43,8 +46,8 @@ public final class Request extends Headers {
 	ResponseHeader server;
 	byte externalRef;
 
-	final HSConfig ctx;
-	Request(HSConfig ctx) {this.ctx = ctx;}
+	final HttpServer ctx;
+	Request(HttpServer ctx) {this.ctx = ctx;}
 
 	public Map<String, Object> threadLocal() {return ctx.ctx;}
 
@@ -395,8 +398,8 @@ public final class Request extends Headers {
 
 	private boolean checkProxyToken() {
 		String proxySec = get("x-proxy-sec");
-		if (proxySec == null || HSConfig.proxySecret == null) return false;
-		if (proxySec.equals(HSConfig.proxySecret)) return true;
+		if (proxySec == null || HttpServer.proxySecret == null) return false;
+		if (proxySec.equals(HttpServer.proxySecret)) return true;
 		Helpers.athrow(new IllegalRequestException(400, "Bad proxy-sec"));
 		return false;
 	}

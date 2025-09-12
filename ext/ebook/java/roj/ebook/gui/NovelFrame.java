@@ -8,8 +8,7 @@ import roj.collect.*;
 import roj.concurrent.TaskPool;
 import roj.concurrent.Timer;
 import roj.concurrent.TimerTask;
-import roj.config.Tokenizer;
-import roj.config.data.CInt;
+import roj.config.node.IntValue;
 import roj.ebook.Chapter;
 import roj.ebook.EbookWriter;
 import roj.gui.DragReorderHelper;
@@ -18,7 +17,7 @@ import roj.gui.OnChangeHelper;
 import roj.gui.TextAreaPrintStream;
 import roj.io.IOUtil;
 import roj.text.*;
-import roj.util.BsDiff;
+import roj.text.diff.BsDiff;
 import roj.util.OperationDone;
 
 import javax.swing.*;
@@ -158,7 +157,7 @@ public class NovelFrame extends JFrame {
 		btnRegexRpl.addActionListener(e -> {
 			int prevHash = novel_in.hashCode();
 			int count = 0;
-			CInt rpl = new CInt(0);
+			IntValue rpl = new IntValue(0);
 			do {
 				novel_in.preg_replace_callback(novel_regexp, m -> {
 					tmp.clear();
@@ -461,7 +460,7 @@ public class NovelFrame extends JFrame {
 		List<Chapter> chapters = root.children = new ArrayList<>();
 
 		Chapter c = root;
-		c.name = DateTime.toLocalTimeString(System.currentTimeMillis());
+		c.name = DateFormat.toLocalDateTime(System.currentTimeMillis());
 		CharList tmp = this.tmp;
 
 		Matcher m = novel_regexp.matcher(novel_in);

@@ -2,8 +2,8 @@ package roj.plugins.dns;
 
 import roj.Unused;
 import roj.collect.TrieTreeSet;
-import roj.config.data.CList;
-import roj.config.data.CMap;
+import roj.config.node.ListValue;
+import roj.config.node.MapValue;
 import roj.http.server.Content;
 import roj.http.server.Request;
 import roj.http.server.ResponseHeader;
@@ -41,14 +41,14 @@ public class ADnsGuard extends Plugin {
 
 	@Override
 	protected void onEnable() throws Exception {
-		CMap cfg = getConfig();
+		MapValue cfg = getConfig();
 
 		var local = new InetSocketAddress(InetAddress.getLoopbackAddress(), 53);
 		System.out.println("Dns listening on "+local);
 
 		var dns = new DnsServer(cfg, local);
 
-		CList list = cfg.getOrCreateList("hosts");
+		ListValue list = cfg.getOrCreateList("hosts");
 		for (int i = 0; i < list.size(); i++) {
 			dns.loadHosts(new File(list.get(i).asString()));
 		}
@@ -56,7 +56,7 @@ public class ADnsGuard extends Plugin {
 		TrieTreeSet tree = new TrieTreeSet();
 		list = cfg.getOrCreateList("adblock");
 		for (int i = 0; i < list.size(); i++) {
-			CMap map = list.get(i).asMap();
+			MapValue map = list.get(i).asMap();
 			File file = new File(map.getString("file"));
 			if (System.currentTimeMillis() - file.lastModified() > map.getLong("update")) {
 				String url = map.getString("url");

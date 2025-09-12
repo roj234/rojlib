@@ -1,6 +1,6 @@
 package roj.asm.cp;
 
-import roj.config.Tokenizer;
+import roj.text.Tokenizer;
 
 /**
  * @author Roj234

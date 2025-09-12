@@ -47,7 +47,7 @@ public abstract class AbstractCodeWriter extends CodeVisitor {
 	protected final void multiArray(CstClass clz, int dimension) { multiArray(clz.value().str(), dimension); }
 	protected final void clazz(byte code, CstClass clz) { clazz(code, clz.value().str()); }
 	protected final void ldc(byte code, Constant c) { if (code == LDC2_W) ldc2(c); else ldc1(code, c); }
-	protected final void invokeDyn(CstDynamic dyn, int type) { invokeDyn(dyn.tableIdx, dyn.desc().name().str(), dyn.desc().rawDesc().str(), type); }
+	protected final void invokeDyn(CstDynamic dyn, int reserved) { invokeDyn(dyn.tableIdx, dyn.desc().name().str(), dyn.desc().rawDesc().str(), reserved); }
 	protected final void invokeItf(CstRef method, short argc) {
 		CstNameAndType desc = method.nameAndType();
 		invokeItf(method.owner(), desc.name().str(), desc.rawDesc().str());
@@ -68,13 +68,13 @@ public abstract class AbstractCodeWriter extends CodeVisitor {
 		int hig = r.readInt();
 		int count = hig - low + 1;
 
-		ArrayList<SwitchTarget> map = new ArrayList<>(count);
+		ArrayList<SwitchCase> map = new ArrayList<>(count);
 
 		if (count > 100000) throw new IllegalArgumentException("length > 100000");
 
 		int i = 0;
 		while (count > i) {
-			map.add(new SwitchTarget(i++ + low, _rel(r.readInt())));
+			map.add(new SwitchCase(i++ + low, _rel(r.readInt())));
 		}
 
 		addSegment(new SwitchBlock(TABLESWITCH, _rel(def), map, bci));
@@ -83,12 +83,12 @@ public abstract class AbstractCodeWriter extends CodeVisitor {
 		int def = r.readInt();
 		int count = r.readInt();
 
-		ArrayList<SwitchTarget> map = new ArrayList<>(count);
+		ArrayList<SwitchCase> map = new ArrayList<>(count);
 
 		if (count > 100000) throw new IllegalArgumentException("length > 100000");
 
 		while (count-- > 0) {
-			map.add(new SwitchTarget(r.readInt(), _rel(r.readInt())));
+			map.add(new SwitchCase(r.readInt(), _rel(r.readInt())));
 		}
 
 		addSegment(new SwitchBlock(LOOKUPSWITCH, _rel(def), map, bci));

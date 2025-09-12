@@ -5,7 +5,7 @@ import org.jetbrains.annotations.Nullable;
 import roj.collect.TrieEntry.Itr;
 import roj.collect.TrieEntry.KeyItr;
 import roj.util.OperationDone;
-import roj.config.data.CInt;
+import roj.config.node.IntValue;
 import roj.io.IOUtil;
 import roj.text.CharList;
 import roj.text.TextUtil;
@@ -313,9 +313,9 @@ public class TrieTree<V> extends AbstractMap<CharSequence, V> {
 	}
 	public boolean containsKey(CharSequence s, int off, int len) { return getEntry(s, off, len) != null; }
 
-	public Map.Entry<CInt, V> longestMatches(CharSequence s) { return longestMatches(s, 0, s.length()); }
-	public Map.Entry<CInt, V> longestMatches(CharSequence s, int i, int len) {
-		HashMap.Entry<CInt, V> entry = new HashMap.Entry<>(new CInt(), null);
+	public Map.Entry<IntValue, V> longestMatches(CharSequence s) { return longestMatches(s, 0, s.length()); }
+	public Map.Entry<IntValue, V> longestMatches(CharSequence s, int i, int len) {
+		HashMap.Entry<IntValue, V> entry = new HashMap.Entry<>(new IntValue(), null);
 		match(s,i,len,entry);
 		return entry.getKey().value < 0 ? null : entry;
 	}
@@ -328,7 +328,7 @@ public class TrieTree<V> extends AbstractMap<CharSequence, V> {
 	 * s="abcdef" 返回 6, feed: 6=B
 	 */
 	@SuppressWarnings("unchecked")
-	public int match(CharSequence s, int i, int len, HashMap.Entry<CInt, V> feed) {
+	public int match(CharSequence s, int i, int len, HashMap.Entry<IntValue, V> feed) {
 		feed.key.value = -1;
 
 		int d = 0;
@@ -360,7 +360,7 @@ public class TrieTree<V> extends AbstractMap<CharSequence, V> {
 	}
 
 	@SuppressWarnings("unchecked")
-	public int longestWithCallback(CharSequence s, int i, int len, CInt cont, BiFunction<CInt, V, Boolean> callback) {
+	public int longestWithCallback(CharSequence s, int i, int len, IntValue cont, BiFunction<IntValue, V, Boolean> callback) {
 		int d = 0;
 
 		Entry<V> entry = root;

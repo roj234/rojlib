@@ -2,8 +2,8 @@ package roj.plugins.ddns;
 
 import roj.collect.ArrayList;
 import roj.concurrent.TimerTask;
-import roj.config.data.CEntry;
-import roj.config.data.CMap;
+import roj.config.node.ConfigValue;
+import roj.config.node.MapValue;
 import roj.net.Net;
 import roj.plugin.Plugin;
 
@@ -24,7 +24,7 @@ public class DDNSClient extends Plugin {
 
 	@Override
 	protected void onEnable() throws Exception {
-		CMap cfg = getConfig();
+		MapValue cfg = getConfig();
 
 		hasV6 = Net.isIPv6();
 		ip = (IpGetter) Class.forName(cfg.getString("GetIp")).newInstance();
@@ -32,7 +32,7 @@ public class DDNSClient extends Plugin {
 
 		services = new ArrayList<>();
 
-		List<CEntry> list = cfg.getList("Services").raw();
+		List<ConfigValue> list = cfg.getList("Services").raw();
 
 		for (int i = 0; i < list.size(); i++) {
 			var service = list.get(i).asMap();

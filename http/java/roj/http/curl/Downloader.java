@@ -2,70 +2,57 @@ package roj.http.curl;
 
 import roj.http.HttpHead;
 import roj.http.HttpRequest;
+import roj.io.IOUtil;
 import roj.io.source.Source;
 import roj.net.*;
 import roj.util.DynByteBuf;
 
-import java.io.Closeable;
-import java.io.FileNotFoundException;
-import java.io.IOException;
+import java.io.*;
 
 /**
  * @author Roj233
  * @since 2022/2/28 21:49
  */
-public abstract class Downloader implements Runnable, Closeable, ChannelHandler {
-	// todo 支持HTTP2.0后移走
-	public static int timeout = 10000;
-
+public abstract sealed class Downloader implements Runnable, Closeable, ChannelHandler {
 	Downloader(Source file) { this.file = file; }
 
 	final Source file;
 	HttpRequest client;
 	MyChannel ch;
 	DownloadTask owner;
-	DownloadListener progress;
+	DownloadListener listener;
 
 	volatile byte state;
 	static final byte DISCONNECTED = 0, CONNECTING = 1, DOWNLOADING = 2, SUCCESS = 3, FAILED = 4;
 
-	long begin = System.currentTimeMillis();
-
 	abstract long getDownloaded();
-	abstract long getRemain();
 	abstract long getTotal();
-	abstract long getAverageSpeed();
-	abstract int getDelta();
 
 	@Override
 	public final void channelOpened(ChannelCtx ctx) throws IOException {
-		HttpHead header = client.response();
-		int code = header.getCode();
-		if (code < 200 || code > 299) {
-			throw new FileNotFoundException("远程返回: " + header);
-		}
+		state = DOWNLOADING;
+
+		HttpHead head = client.response();
+		int code = head.getCode();
+		if (code < 200 || code > 299) throw new FileNotFoundException("远程返回: "+head);
+
+		DownloadTask.LOGGER.trace("子任务{}: 已连接服务器 {}", this, head);
 	}
 
 	@Override
 	public final void channelTick(ChannelCtx ctx) throws IOException {
-		if (progress != null && progress.isClosed()) close();
-		if (++idle > timeout) retry();
+		if (listener != null && listener.isCancelled()) close();
+		if (++idleTime > DownloadTask.timeout) retry();
 	}
 
 	@Override
 	public final void channelRead(ChannelCtx ctx, Object msg) throws IOException {
-		DynByteBuf buf = (DynByteBuf) msg;
-
-		idle = 0;
-
+		var buf = (DynByteBuf) msg;
 		int len = buf.readableBytes();
-		try {
-			file.write(buf);
-		} finally {
-			if (progress != null) progress.onChange(this);
-
-			onUpdate(len);
-		}
+		file.write(buf);
+		idleTime = Math.max(idleTime - len, 0);
+		if (listener != null) listener.onProgress(this, len);
+		onProgress(len);
 	}
 
 	@Override
@@ -76,11 +63,8 @@ public abstract class Downloader implements Runnable, Closeable, ChannelHandler 
 
 	@Override
 	public final void exceptionCaught(ChannelCtx ctx, Throwable ex) throws Exception {
-		if (retry == 0) {
-			if (owner.ex == null)
-				owner.ex = ex;
-			ex.printStackTrace();
-		}
+		DownloadTask.LOGGER.trace("子任务{}: 发生异常, 当前重试次数: {}", ex, this, retry);
+		if (retry == 0) owner.exceptionCaught(ctx, ex);
 		ctx.close();
 	}
 
@@ -89,52 +73,45 @@ public abstract class Downloader implements Runnable, Closeable, ChannelHandler 
 		String id = event.id;
 		if (id.equals(HttpRequest.DOWNLOAD_EOF)) {
 			if (event.getData() == Boolean.TRUE)
-				done();
+				success();
 		}
 	}
 
 	abstract void onBeforeSend(HttpRequest client) throws Exception;
-	abstract void onUpdate(int r) throws IOException;
-	abstract void onDone() throws IOException;
+	abstract void onProgress(int count) throws IOException;
+	abstract void onSuccess() throws IOException;
 
 	void onClose() {}
 
-	final void done() throws IOException {
+	final void success() throws IOException {
 		synchronized (client) {
 			if (state >= SUCCESS) return;
 			state = SUCCESS;
 		}
-		onDone();
-		if (progress != null) progress.onFinish(this);
-		owner.onSubDone();
+		DownloadTask.LOGGER.trace("子任务{}: 成功", this);
+		onSuccess();
+		if (listener != null) listener.onSuccess(this);
+		owner.onChunkSuccess();
 		close();
 	}
 
-	int idle, retry;
+	int idleTime, retry;
 
 	private void retry() throws IOException {
-		idle = 0;
+		if ((listener == null || !listener.isCancelled()) && retry-- > 0) {
+			DownloadTask.LOGGER.trace("子任务{}: 正在重试, 还有{}次尝试", this, retry);
+			idleTime = 0;
 
-		if ((progress == null || !progress.isClosed()) && retry-- > 0) {
 			synchronized (client) {
-				if (state >= SUCCESS) {
-					close();
-					return;
-				}
+				if (state >= SUCCESS) { close(); return; }
 				state = DISCONNECTED;
 			}
 
 			ch.close();
-			DownloadTask.QUERY.execute(this);
+			DownloadTask.POOL.execute(this);
 		} else {
-			if (progress != null) progress.close();
+			DownloadTask.LOGGER.trace("子任务{}: 无法重试, 失败", this);
 			close();
-		}
-	}
-
-	public final void waitFor() throws InterruptedException {
-		synchronized (client) {
-			while (state < SUCCESS) client.wait();
 		}
 	}
 
@@ -147,52 +124,41 @@ public abstract class Downloader implements Runnable, Closeable, ChannelHandler 
 				fail = true;
 			}
 		}
-		if (fail) owner.cancel();
-
-		if (ch != null) {
-			try {
-				ch.close();
-			} catch (IOException ignored) {}
+		if (fail) {
+			DownloadTask.LOGGER.trace("子任务{}: 失败", this);
+			owner.cancel();
 		}
 
-		try {
-			file.close();
-		} catch (IOException ignored) {}
+		IOUtil.closeSilently(ch);
+		IOUtil.closeSilently(file);
 
 		onClose();
 
-		synchronized (client) {
-			client.notifyAll();
-		}
+		synchronized (client) { client.notifyAll(); }
 	}
 
 	public final boolean isDone() { return state >= SUCCESS; }
 
 	@Override
 	public final void run() {
-		if (progress != null && progress.isClosed()) {
-			close();
-			return;
-		}
+		if (listener != null && listener.isCancelled()) { close(); return; }
 
 		try {
 			onBeforeSend(client);
+			DownloadTask.LOGGER.trace("子任务{}: 开始运行", this);
 			synchronized (client) {
-				if (state >= SUCCESS) {
-					close();
-					return;
-				}
+				if (state >= SUCCESS) { close(); return; }
 				state = CONNECTING;
 			}
 
-			MyChannel ctx = ch;
-			if (ctx != null) ctx.close();
+			MyChannel channel = ch;
+			if (channel != null) channel.close();
 
-			ch = ctx = MyChannel.openTCP();
-			ctx.addLast("Downloader", this);
+			ch = channel = MyChannel.openTCP();
+			channel.addLast("Downloader", this);
 
-			client.attach(ctx, timeout);
-			ServerLaunch.DEFAULT_LOOPER.register(ctx, null);
+			client.attach(channel, DownloadTask.timeout);
+			ServerLaunch.DEFAULT_LOOPER.register(channel, null);
 		} catch (Exception e) {
 			e.printStackTrace();
 			close();
@@ -200,7 +166,106 @@ public abstract class Downloader implements Runnable, Closeable, ChannelHandler 
 	}
 
 	@Override
-	public String toString() {
-		return "D{Ste="+state+"/Fin="+getDownloaded()+"/Rem="+getRemain()+"/Tot="+getTotal()+"}";
+	public String toString() {return "Downloader{State="+state+"/Progress="+getDownloaded()+"/"+getTotal()+"}";}
+
+	static final class Chunked extends Downloader {
+		private final RandomAccessFile progressFile;
+		private long lastProgressWriteTime;
+
+		private final long length;
+		private long offset;
+		long remaining;
+
+		public Chunked(Source file, long offset, long length, int chunkId, File progress) throws IOException {
+			super(file);
+			this.length = length;
+
+			if (progress != null) {
+				progressFile = new RandomAccessFile(progress, "rw");
+				progressFile.seek((long) chunkId << 3);
+
+				long downloadedBytes = progressFile.readLong();
+				offset += downloadedBytes;
+				length -= downloadedBytes;
+
+				DownloadTask.LOGGER.debug("子任务{}: 共{}/{}字节", chunkId, offset, length);
+				if (length <= 0 || downloadedBytes < 0) {
+					if (downloadedBytes > 0) writeProgress(-1);
+					state = SUCCESS;
+					progressFile.close();
+					file.close();
+					return;
+				}
+			} else {
+				progressFile = null;
+			}
+
+			this.offset = offset;
+			this.remaining = length;
+		}
+
+		long getDownloaded() {return length - remaining;}
+		long getTotal() {return length;}
+
+		@Override
+		protected void onBeforeSend(HttpRequest q) throws IOException {
+			file.seek(offset);
+			q.header("range", "bytes="+offset+'-'+(offset + remaining - 1));
+		}
+
+		@Override
+		void onProgress(int count) throws IOException {
+			offset += count;
+			remaining -= count;
+
+			if (remaining <= 0) success();
+			else writeProgress(length - remaining);
+		}
+
+		@Override
+		void onSuccess() throws IOException {
+			lastProgressWriteTime = 0;
+			writeProgress(-1);
+		}
+
+		@Override
+		void onClose() {
+			if (progressFile != null) {
+				try {
+					if (state == FAILED) {
+						lastProgressWriteTime = 0;
+						writeProgress(length - remaining);
+					}
+				} catch (IOException ignored) {}
+				IOUtil.closeSilently(progressFile);
+			}
+		}
+
+		private void writeProgress(long progress) throws IOException {
+			if (progressFile != null) {
+				long t = System.currentTimeMillis();
+				if (t - lastProgressWriteTime > 1000) {
+					progressFile.seek(progressFile.getFilePointer() - 8);
+					progressFile.writeLong(progress);
+					lastProgressWriteTime = t;
+				}
+			}
+		}
+	}
+
+	static final class Streaming extends Downloader {
+		private long downloaded;
+
+		Streaming(Source file) { super(file); }
+
+		long getDownloaded() {return downloaded;}
+		long getTotal() {return -1;}
+
+		@Override void onBeforeSend(HttpRequest q) throws IOException {
+			downloaded = 0;
+			file.seek(0);
+		}
+		@Override void onProgress(int count) {downloaded += count;}
+		@Override void onSuccess() throws IOException {file.setLength(file.position());}
 	}
 }

@@ -86,7 +86,7 @@ public final class Cookie {
 	public boolean read(String k, String v) {
 		switch (k.toLowerCase()) {
 			case "max-age": expires = System.currentTimeMillis()+Long.parseLong(v); break;
-			case "expires": expires = DateFormat.parseRFCDate(v); break;
+			case "expires": expires = DateFormat.parseRFC5322Datetime(v); break;
 			case "domain": domain = v; break;
 			case "path": path = v; break;
 			case "httponly": flag |= 4; break;

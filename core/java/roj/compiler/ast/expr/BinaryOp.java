@@ -14,7 +14,7 @@ import roj.compiler.resolve.ResolveException;
 import roj.compiler.resolve.TypeCast;
 import roj.compiler.runtime.RtUtil;
 import roj.concurrent.LazyThreadLocal;
-import roj.config.data.CEntry;
+import roj.config.node.ConfigValue;
 import roj.text.CharList;
 import roj.util.OperationDone;
 
@@ -227,12 +227,12 @@ final class BinaryOp extends Expr {
 				switch (operator) {
 					case add, sub, or, xor -> {
 						// 可交换位置的二元表达式无需当且仅当…… 是确定运算：int/long，没有类型提升
-						if (dataCap <= 4 && castLeft == null && ((CEntry) right.constVal()).asInt() == 0)
+						if (dataCap <= 4 && castLeft == null && ((ConfigValue) right.constVal()).asInt() == 0)
 							return left;
 					}
 					// equ 和 neq 应该可以直接删除跳转？反正boolean也就是0和非0 （AND 1就行）
 					case equ, neq, lss, geq, gtr, leq -> {
-						if (dataCap <= 4 && ((CEntry) right.constVal()).asInt() == 0) {
+						if (dataCap <= 4 && ((ConfigValue) right.constVal()).asInt() == 0) {
 							flag = 1;
 						}
 					}
@@ -267,11 +267,11 @@ final class BinaryOp extends Expr {
 		if (!right.isConstant()) {
 			switch (operator) {
 				case add, sub, or, xor -> {
-					if (dataCap <= 4 && castLeft == null && ((CEntry) left.constVal()).asInt() == 0)
+					if (dataCap <= 4 && castLeft == null && ((ConfigValue) left.constVal()).asInt() == 0)
 						return right;
 				}
 				case equ, neq, lss, geq, gtr, leq -> {
-					if (dataCap <= 4 && ((CEntry) left.constVal()).asInt() == 0) {
+					if (dataCap <= 4 && ((ConfigValue) left.constVal()).asInt() == 0) {
 						flag = 2;
 					}
 				}
@@ -285,7 +285,7 @@ final class BinaryOp extends Expr {
 		// 现在左右都是常量
 		switch (operator) {
 			case lss, gtr, geq, leq:
-				double l = ((CEntry) left.constVal()).asDouble(), r = ((CEntry) right.constVal()).asDouble();
+				double l = ((ConfigValue) left.constVal()).asDouble(), r = ((ConfigValue) right.constVal()).asDouble();
 				return valueOf(switch (operator) {
 					case lss -> l < r;
 					case gtr -> l > r;
@@ -297,12 +297,12 @@ final class BinaryOp extends Expr {
 			case equ, neq:
 				return valueOf((operator == equ) == (dataCap == 9 ?
 					left.constVal().equals(right.constVal()) :
-					((CEntry)left.constVal()).asDouble() == ((CEntry)right.constVal()).asDouble()));
+					((ConfigValue)left.constVal()).asDouble() == ((ConfigValue)right.constVal()).asDouble()));
 		}
 
 		switch (dataCap) {
 			case 1, 2, 3, 4: {
-				int l = ((CEntry) left.constVal()).asInt(), r = ((CEntry) right.constVal()).asInt();
+				int l = ((ConfigValue) left.constVal()).asInt(), r = ((ConfigValue) right.constVal()).asInt();
 				int o = switch (operator) {
 					case add -> l+r;
 					case sub -> l-r;
@@ -319,11 +319,11 @@ final class BinaryOp extends Expr {
 					case xor -> l^r;
 					default -> throw OperationDone.NEVER;
 				};
-				return constant(BIT_OP.contains(operator) ? type : Type.primitive(Type.INT), CEntry.valueOf(o));
+				return constant(BIT_OP.contains(operator) ? type : Type.primitive(Type.INT), ConfigValue.valueOf(o));
 			}
 			case 5: {
-				long l = ((CEntry) left.constVal()).asLong(), r = ((CEntry) right.constVal()).asLong();
-				return valueOf(CEntry.valueOf(switch (operator) {
+				long l = ((ConfigValue) left.constVal()).asLong(), r = ((ConfigValue) right.constVal()).asLong();
+				return valueOf(ConfigValue.valueOf(switch (operator) {
 					case add -> l+r;
 					case sub -> l-r;
 					case mul -> l*r;
@@ -341,8 +341,8 @@ final class BinaryOp extends Expr {
 				}));
 			}
 			case 6: {
-				float l = ((CEntry) left.constVal()).asFloat(), r = ((CEntry) right.constVal()).asFloat();
-				return valueOf(CEntry.valueOf(switch (operator) {
+				float l = ((ConfigValue) left.constVal()).asFloat(), r = ((ConfigValue) right.constVal()).asFloat();
+				return valueOf(ConfigValue.valueOf(switch (operator) {
 					case add -> l+r;
 					case sub -> l-r;
 					case mul -> l*r;
@@ -353,8 +353,8 @@ final class BinaryOp extends Expr {
 				}));
 			}
 			case 7: {
-				double l = ((CEntry) left.constVal()).asDouble(), r = ((CEntry) right.constVal()).asDouble();
-				return valueOf(CEntry.valueOf(switch (operator) {
+				double l = ((ConfigValue) left.constVal()).asDouble(), r = ((ConfigValue) right.constVal()).asDouble();
+				return valueOf(ConfigValue.valueOf(switch (operator) {
 					case add -> l+r;
 					case sub -> l-r;
 					case mul -> l*r;
@@ -388,7 +388,7 @@ final class BinaryOp extends Expr {
 	}
 
 	private Expr checkRight(CompileContext ctx, int dataCap) {
-		var c = (CEntry) right.constVal();
+		var c = (ConfigValue) right.constVal();
 		switch (operator) {
 			case shl, shr, ushr -> {
 				int value = c.asInt();

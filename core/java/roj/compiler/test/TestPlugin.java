@@ -13,7 +13,7 @@ import roj.compiler.ast.expr.Expr;
 import roj.compiler.ast.expr.Invoke;
 import roj.compiler.ast.expr.PrefixOperator;
 import roj.compiler.resolve.TypeCast;
-import roj.config.Token;
+import roj.text.Token;
 import roj.util.FastFailException;
 import roj.util.Helpers;
 

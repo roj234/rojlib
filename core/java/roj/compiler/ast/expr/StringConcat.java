@@ -13,7 +13,7 @@ import roj.compiler.api.Types;
 import roj.compiler.asm.MethodWriter;
 import roj.compiler.resolve.ResolveException;
 import roj.compiler.resolve.TypeCast;
-import roj.config.data.CEntry;
+import roj.config.node.ConfigValue;
 import roj.io.IOUtil;
 import roj.text.CharList;
 import roj.text.TextUtil;
@@ -75,7 +75,7 @@ final class StringConcat extends Expr {
 		}
 		return nodes.size() == 1 ? nodes.get(0) : this;
 	}
-	private static String safeToString(Object o) {return o instanceof CEntry entry ? entry.asString() : String.valueOf(o);}
+	private static String safeToString(Object o) {return o instanceof ConfigValue entry ? entry.asString() : String.valueOf(o);}
 
 	public Expr prepend(Expr left) {nodes.add(0, left);return this;}
 	public Expr append(Expr right) {nodes.add(right);return this;}
@@ -126,7 +126,7 @@ final class StringConcat extends Expr {
 			for (int i = 0; i < nodes.size(); i++) {
 				Expr node = nodes.get(i);
 				if (node.isConstant()) {
-					recipe.append(((CEntry) node.constVal()).asString());
+					recipe.append(((ConfigValue) node.constVal()).asString());
 				} else {
 					recipe.append('\u0001');
 				}

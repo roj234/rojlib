@@ -3,6 +3,7 @@ package roj.http.server;
 import roj.http.Headers;
 import roj.net.MyChannel;
 import roj.net.util.SpeedLimiter;
+import roj.text.DateFormat;
 
 import java.io.IOException;
 
@@ -37,7 +38,7 @@ public interface ResponseHeader {
 	 */
 	ResponseHeader disableCompression();
 
-	default ResponseHeader date() {return header("date", HSConfig.getInstance().toRFC(System.currentTimeMillis()));}
+	default ResponseHeader date() {return header("date", DateFormat.toRFC5322Datetime(System.currentTimeMillis()));}
 	default ResponseHeader header(String k, String v) {headers().put(k, v);return this;}
 	default ResponseHeader header(String h) {headers().putAllS(h);return this;}
 	Headers headers();

@@ -1,7 +1,7 @@
 package roj.plugins.ddns;
 
-import roj.config.JSONParser;
-import roj.config.data.CMap;
+import roj.config.JsonParser;
+import roj.config.node.MapValue;
 
 import java.net.InetAddress;
 
@@ -10,11 +10,11 @@ import java.net.InetAddress;
  * @since 2023/1/28 1:23
  */
 final class ZxInc extends IpGetter {
-	JSONParser parser = new JSONParser();
+	JsonParser parser = new JsonParser();
 
 	@Override
 	public InetAddress[] getAddress(boolean checkV6) throws Exception {
-		CMap url = parser.parse(pooledRequest("https://v4.ip.zxinc.org/info.php?type=json").stream()).asMap();
+		MapValue url = parser.parse(pooledRequest("https://v4.ip.zxinc.org/info.php?type=json").stream()).asMap();
 		InetAddress ipv4 = InetAddress.getByName(url.query("data.myip").asString());
 
 		InetAddress ipv6;

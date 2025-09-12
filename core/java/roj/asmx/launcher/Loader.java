@@ -1,7 +1,6 @@
 package roj.asmx.launcher;
 
 import org.jetbrains.annotations.Nullable;
-import roj.ci.annotation.ReferenceByGeneratedClass;
 import roj.archive.zip.ZEntry;
 import roj.archive.zip.ZipFile;
 import roj.archive.zip.ZipFileWriter;
@@ -13,13 +12,13 @@ import roj.asm.type.Type;
 import roj.asmx.AnnotationRepo;
 import roj.asmx.Context;
 import roj.asmx.Transformer;
+import roj.ci.annotation.ReferenceByGeneratedClass;
 import roj.collect.ArrayList;
 import roj.collect.TrieTreeSet;
 import roj.compiler.plugins.asm.ASM;
-import roj.config.data.CInt;
+import roj.config.node.IntValue;
 import roj.crypt.CRC32;
 import roj.crypt.jar.JarVerifier;
-import roj.util.FastFailException;
 import roj.io.IOUtil;
 import roj.io.source.FileSource;
 import roj.reflect.Bypass;
@@ -28,9 +27,10 @@ import roj.reflect.Reflection;
 import roj.text.CharList;
 import roj.text.URICoder;
 import roj.text.logging.Level;
+import roj.text.logging.LogDestination;
 import roj.text.logging.Logger;
-import roj.text.logging.d.LogDestination;
 import roj.util.ByteList;
+import roj.util.FastFailException;
 import roj.util.Helpers;
 
 import java.io.File;
@@ -42,7 +42,9 @@ import java.net.URLClassLoader;
 import java.security.CodeSigner;
 import java.security.CodeSource;
 import java.security.GeneralSecurityException;
-import java.util.*;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.List;
 import java.util.function.Function;
 import java.util.jar.Attributes;
 import java.util.jar.JarFile;
@@ -55,7 +57,7 @@ import static roj.asm.Opcodes.*;
  * @since 2020/11/9 23:10
  */
 public class Loader implements Function<String, Class<?>> {
-	private static final ThreadLocal<CInt> IS_TRANSFORMING = ThreadLocal.withInitial(() -> new CInt(-1));
+	private static final ThreadLocal<IntValue> IS_TRANSFORMING = ThreadLocal.withInitial(() -> new IntValue(-1));
 	private static final Main MAIN;
 	static {
 		try {

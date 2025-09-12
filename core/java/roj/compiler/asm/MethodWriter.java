@@ -46,10 +46,10 @@ public class MethodWriter extends CodeWriter {
 	public MethodWriter fork() {return new MethodWriter(this);}
 
 	//region lazy exception handler
-	private final ArrayList<TryCatchEntry> trys = new ArrayList<>();
+	private final ArrayList<TryCatchBlock> trys = new ArrayList<>();
 
-	public TryCatchEntry addException(Label start, Label end, Label handler, String type) {
-		var item = new TryCatchEntry(Objects.requireNonNull(start, "start"), Objects.requireNonNull(end, "end"), Objects.requireNonNull(handler, "handler"), type);
+	public TryCatchBlock addException(Label start, Label end, Label handler, String type) {
+		var item = new TryCatchBlock(Objects.requireNonNull(start, "start"), Objects.requireNonNull(end, "end"), Objects.requireNonNull(handler, "handler"), type);
 		if (start.equals(end)) {
 			LavaCompiler.debugLogger().debug("无意义的异常处理器: "+item);
 		} else {
@@ -61,7 +61,7 @@ public class MethodWriter extends CodeWriter {
 	@Override
 	public void visitExceptions() {
 		super.visitExceptions();
-		for (TryCatchEntry entry : trys) {
+		for (TryCatchBlock entry : trys) {
 			visitException(entry.start,entry.end,entry.handler,entry.type);
 		}
 		trys.clear();

@@ -2,10 +2,10 @@ package roj.plugins.minecraft.server;
 
 import roj.asmx.event.EventBus;
 import roj.collect.ArrayList;
-import roj.config.JSONParser;
-import roj.config.data.CMap;
-import roj.config.serial.ToJson;
-import roj.config.serial.ToSomeString;
+import roj.config.JsonParser;
+import roj.config.JsonSerializer;
+import roj.config.TextEmitter;
+import roj.config.node.MapValue;
 import roj.io.IOUtil;
 import roj.net.ChannelCtx;
 import roj.net.MyChannel;
@@ -64,7 +64,7 @@ public class MinecraftServer extends Plugin {
 		LOGGER = getLogger();
 		INSTANCE = this;
 
-		setMeta(JSONParser.parses("""
+		setMeta(JsonParser.parses("""
 				{
 					"version": {
 						"protocol": 760,
@@ -135,9 +135,9 @@ public class MinecraftServer extends Plugin {
 	public PlayerConnection getPlayer(UUID uuid) { return players.get(uuid); }
 	public Collection<PlayerConnection> getPlayers() { return new ArrayList<>(players.values()); }
 
-	private final CMap meta = new CMap();
+	private final MapValue meta = new MapValue();
 	private volatile DynByteBuf metaBytes;
-	public void setMeta(CMap meta) {
+	public void setMeta(MapValue meta) {
 		metaBytes = null;
 		this.meta.merge(meta, false, true);
 	}
@@ -151,7 +151,7 @@ public class MinecraftServer extends Plugin {
 				ByteList buf = IOUtil.getSharedByteBuf();
 
 				try (TextWriter tw = new TextWriter(buf, StandardCharsets.UTF_8)) {
-					ToSomeString ser = new ToJson().sb(tw);
+					TextEmitter ser = new JsonSerializer().to(tw);
 					meta.accept(ser);
 					ser.close();
 				} catch (Exception e) {

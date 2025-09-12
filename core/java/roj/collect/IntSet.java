@@ -37,7 +37,7 @@ public class IntSet extends AbstractSet<Integer> {
 
 	public void ensureCapacity(int size) {
 		if (size <= mask + 1) return;
-		mask = MathUtils.getMin2PowerOf(size) - 1;
+		mask = MathUtils.nextPowerOfTwo(size) - 1;
 		resize();
 	}
 

@@ -1,7 +1,6 @@
 package roj.text;
 
 import org.jetbrains.annotations.NotNull;
-import org.jetbrains.annotations.Nullable;
 import org.jetbrains.annotations.Range;
 import org.jetbrains.annotations.Unmodifiable;
 import roj.RojLib;
@@ -10,7 +9,6 @@ import roj.collect.BitSet;
 import roj.collect.IntList;
 import roj.collect.IntMap;
 import roj.compiler.plugins.annotations.Attach;
-import roj.config.Tokenizer;
 import roj.io.IOUtil;
 import roj.reflect.Unaligned;
 import roj.util.DynByteBuf;

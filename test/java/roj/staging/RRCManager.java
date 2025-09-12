@@ -1,15 +1,15 @@
 package roj.staging;
 
+import roj.collect.ArrayList;
 import roj.collect.Hasher;
 import roj.collect.IntMap;
-import roj.collect.ArrayList;
 import roj.collect.ToIntMap;
 import roj.crypt.CRC32;
 import roj.crypt.ReedSolomonECC;
-import roj.io.LimitInputStream;
 import roj.io.BufferPool;
-import roj.io.source.FileSource;
+import roj.io.LimitInputStream;
 import roj.io.source.ByteSource;
+import roj.io.source.FileSource;
 import roj.io.source.Source;
 import roj.math.MathUtils;
 import roj.ui.EasyProgressBar;

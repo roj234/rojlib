@@ -9,8 +9,8 @@ import roj.compiler.CompileContext;
 import roj.compiler.asm.MethodWriter;
 import roj.compiler.resolve.ResolveException;
 import roj.compiler.resolve.TypeCast;
-import roj.config.Tokenizer;
-import roj.config.data.CEntry;
+import roj.text.Tokenizer;
+import roj.config.node.ConfigValue;
 import roj.util.OperationDone;
 
 import java.util.Objects;
@@ -37,17 +37,17 @@ final class Literal extends Expr {
 	@Override public boolean hasFeature(Feature feature) {return feature == Feature.IMMEDIATE_CONSTANT || (feature == Feature.LDC_CLASS && isClassRef());}
 	@Override
 	public IType minType() {
-		if (c instanceof CEntry x && TypeCast.getDataCap(type.getActualType()) <= 4) {
-			if (x.mayCastTo(roj.config.data.Type.Int1)) {
+		if (c instanceof ConfigValue x && TypeCast.getDataCap(type.getActualType()) <= 4) {
+			if (x.mayCastTo(roj.config.node.Type.Int1)) {
 				return Type.primitive(Type.BYTE);
 			}
-			if (x.mayCastTo(roj.config.data.Type.Int2)) {
+			if (x.mayCastTo(roj.config.node.Type.Int2)) {
 				return Type.primitive(Type.SHORT);
 			}
-			if (x.mayCastTo(roj.config.data.Type.CHAR)) {
+			if (x.mayCastTo(roj.config.node.Type.CHAR)) {
 				return Type.primitive(Type.CHAR);
 			}
-			if (x.mayCastTo(roj.config.data.Type.INTEGER)) {
+			if (x.mayCastTo(roj.config.node.Type.INTEGER)) {
 				return Type.primitive(Type.INT);
 			}
 		}
@@ -84,7 +84,7 @@ final class Literal extends Expr {
 			}
 		}
 		if (cast.type == TypeCast.IMPLICIT) {
-			int value = ((CEntry) c).asInt();
+			int value = ((ConfigValue) c).asInt();
 			// it is ok to cast
 			if (value >= 0) cast.type = 0;
 		}
@@ -108,10 +108,10 @@ final class Literal extends Expr {
 
 	private void writePrimitive(MethodWriter cw, int cap) {
 		if ((cap & 7) != 0) switch (cap) {
-			case 5: cw.ldc(((CEntry) c).asLong()); break;
-			case 6: cw.ldc(((CEntry) c).asFloat()); break;
-			case 7: cw.ldc(((CEntry) c).asDouble()); break;
-			default: cw.ldc(((CEntry) c).asInt()); break;
+			case 5: cw.ldc(((ConfigValue) c).asLong()); break;
+			case 6: cw.ldc(((ConfigValue) c).asFloat()); break;
+			case 7: cw.ldc(((ConfigValue) c).asDouble()); break;
+			default: cw.ldc(((ConfigValue) c).asInt()); break;
 		}
 		else cw.ldc(c == Boolean.TRUE ? 1 : 0);
 	}

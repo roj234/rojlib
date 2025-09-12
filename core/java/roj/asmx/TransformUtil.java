@@ -179,7 +179,7 @@ public class TransformUtil {
 		List<CstDynamic> dynList = new ArrayList<>();
 
 		CodeVisitor cv = new CodeVisitor() {
-			protected void invokeDyn(CstDynamic dyn, int type) {dynList.add(dyn);}
+			protected void invokeDyn(CstDynamic dyn, int reserved) {dynList.add(dyn);}
 			protected void jump(byte code, int offset) {frame[0] = true;}
 			protected void lookupSwitch(DynByteBuf r) {frame[0] = true;}
 			protected void tableSwitch(DynByteBuf r) {frame[0] = true;}

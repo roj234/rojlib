@@ -18,8 +18,8 @@ import roj.compiler.ast.expr.Expr;
 import roj.compiler.ast.expr.ExprParser;
 import roj.compiler.ast.expr.RawExpr;
 import roj.compiler.diagnostic.Kind;
-import roj.config.ParseException;
-import roj.config.data.CEntry;
+import roj.text.ParseException;
+import roj.config.node.ConfigValue;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
 
@@ -170,7 +170,7 @@ public interface ParseTask {
 		};
 	}
 	private static roj.asm.cp.Constant toConstant(Object o) {
-		if (o instanceof CEntry entry) {
+		if (o instanceof ConfigValue entry) {
 			switch (entry.dataType()) {
 				case 'F': return new CstFloat(entry.asFloat());
 				case 'D': return new CstDouble(entry.asDouble());

@@ -1,6 +1,5 @@
 package roj.config;
 
-import roj.config.serial.CVisitor;
 import roj.io.CorruptedInputException;
 import roj.io.MyDataInput;
 import roj.io.MyDataInputStream;
@@ -20,8 +19,8 @@ public class MsgPackParser implements BinaryParser {
 	public static final int EXT_STREAM_DATA = 0x00;
 
 	@Override
-	public final <T extends CVisitor> T parse(InputStream in, int flag, T out) throws IOException { parse(MyDataInputStream.wrap(in), out); return out; }
-	public final <T extends CVisitor> T parse(DynByteBuf buf, int flag, T out) throws IOException { parse(buf, out); return out; }
+	public final <T extends ValueEmitter> T parse(InputStream in, int flag, T emitter) throws IOException { parse(MyDataInputStream.wrap(in), emitter); return emitter; }
+	public final <T extends ValueEmitter> T parse(DynByteBuf buf, int flag, T emitter) throws IOException { parse(buf, emitter); return emitter; }
 
 	private static final byte[] LOOKUP = new byte[256];
 	private static final int FAKE_FIXMAP = 0xBD, FAKE_FIXARR = 0xBE, FAKE_FIXSTR = 0xBF;
@@ -66,19 +65,19 @@ public class MsgPackParser implements BinaryParser {
 		for (int i = 0xC0; i <= 0xFF; i++) LOOKUP[i] = (byte) i;
 	}
 
-	public final void parse(MyDataInput in, CVisitor out) throws IOException {parse(in, out, in.readUnsignedByte());}
-	private void parse(MyDataInput in, CVisitor out, int tagByte) throws IOException {
+	public final void parse(MyDataInput in, ValueEmitter out) throws IOException {parse(in, out, in.readUnsignedByte());}
+	private void parse(MyDataInput in, ValueEmitter out, int tagByte) throws IOException {
 		switch (LOOKUP[tagByte]&0xFF) {
 			// [\x80 - \xBF}范围是安全的
-			default      -> out.value((byte) tagByte);					// fixInt [\x00 - \x7F] | [\xE0 - \xFF]
-			case NULL    -> out.valueNull();
+			default      -> out.emit((byte) tagByte);					// fixInt [\x00 - \x7F] | [\xE0 - \xFF]
+			case NULL    -> out.emitNull();
 			case STREAM  -> throw new CorruptedInputException("意外的流终止记号");
-			case FALSE   -> out.value(false);
-			case TRUE    -> out.value(true);
+			case FALSE   -> out.emit(false);
+			case TRUE    -> out.emit(true);
 
-			case BIN8    -> out.value(in.readBytes(in.readUnsignedByte()));
-			case BIN16   -> out.value(in.readBytes(in.readUnsignedShort()));
-			case BIN32   -> out.value(readBytes(in, readInt(in)));
+			case BIN8    -> out.emit(in.readBytes(in.readUnsignedByte()));
+			case BIN16   -> out.emit(in.readBytes(in.readUnsignedShort()));
+			case BIN32   -> out.emit(readBytes(in, readInt(in)));
 
 			case FIXEXT_PREFIX, 0xD5, 0xD6, 0xD7, 0xD8 ->				// fixExt 1 - 16
 					ext(in, out, 1 << (tagByte - FIXEXT_PREFIX));
@@ -86,21 +85,21 @@ public class MsgPackParser implements BinaryParser {
 			case EXT16   -> ext(in, out, in.readUnsignedShort());
 			case EXT32   -> ext(in, out, readInt(in));
 
-			case FLOAT32 -> out.value(in.readFloat());
-			case FLOAT64 -> out.value(in.readDouble());
-			case UINT8   -> out.value(in.readUnsignedByte());
-			case UINT16  -> out.value(in.readChar());
-			case UINT32  -> out.value(in.readUInt());
-			case UINT64  -> out.value(readLong(in));
-			case INT8    -> out.value(in.readByte());
-			case INT16   -> out.value(in.readShort());
-			case INT32   -> out.value(in.readInt());
-			case INT64   -> out.value(in.readLong());
+			case FLOAT32 -> out.emit(in.readFloat());
+			case FLOAT64 -> out.emit(in.readDouble());
+			case UINT8   -> out.emit(in.readUnsignedByte());
+			case UINT16  -> out.emit(in.readChar());
+			case UINT32  -> out.emit(in.readUInt());
+			case UINT64  -> out.emit(readLong(in));
+			case INT8    -> out.emit(in.readByte());
+			case INT16   -> out.emit(in.readShort());
+			case INT32   -> out.emit(in.readInt());
+			case INT64   -> out.emit(in.readLong());
 
-			case FAKE_FIXSTR -> out.value(in.readUTF(tagByte & 0x1F));
-			case STR8    -> out.value(in.readUTF(in.readUnsignedByte()));
-			case STR16   -> out.value(in.readUTF(in.readUnsignedShort()));
-			case STR32   -> out.value(readUTF(in, readInt(in)));
+			case FAKE_FIXSTR -> out.emit(in.readUTF(tagByte & 0x1F));
+			case STR8    -> out.emit(in.readUTF(in.readUnsignedByte()));
+			case STR16   -> out.emit(in.readUTF(in.readUnsignedShort()));
+			case STR32   -> out.emit(readUTF(in, readInt(in)));
 
 			case FAKE_FIXARR -> list(in, out, tagByte&0x0F);
 			case ARRAY16 -> list(in, out, in.readUnsignedShort());
@@ -143,21 +142,21 @@ public class MsgPackParser implements BinaryParser {
 		return v;
 	}
 
-	private void list(MyDataInput in, CVisitor out, int size) throws IOException {
-		out.valueList(size);
+	private void list(MyDataInput in, ValueEmitter out, int size) throws IOException {
+		out.emitList(size);
 		for (int i = 0; i < size; i++) parse(in, out);
 		out.pop();
 	}
-	private void map(MyDataInput in, CVisitor out, int size) throws IOException {
-		out.valueMap(size);
+	private void map(MyDataInput in, ValueEmitter out, int size) throws IOException {
+		out.emitMap(size);
 		for (int i = 0; i < size; i++) {
 			mapKey(in, out);
 			parse(in, out);
 		}
 		out.pop();
 	}
-	private static void mapKey(MyDataInput in, CVisitor out) throws IOException {mapKey(in, out, in.readUnsignedByte());}
-	private static void mapKey(MyDataInput in, CVisitor out, int tagByte) throws IOException {
+	private static void mapKey(MyDataInput in, ValueEmitter out) throws IOException {mapKey(in, out, in.readUnsignedByte());}
+	private static void mapKey(MyDataInput in, ValueEmitter out, int tagByte) throws IOException {
 		switch (LOOKUP[tagByte]&0xFF) {
 			case UINT8   -> out.intKey(in.readUnsignedByte());
 			case UINT16  -> out.intKey(in.readChar());
@@ -177,7 +176,7 @@ public class MsgPackParser implements BinaryParser {
 		}
 	}
 
-	protected void ext(MyDataInput in, CVisitor visitor, int dataLen) throws IOException {
+	protected void ext(MyDataInput in, ValueEmitter visitor, int dataLen) throws IOException {
 		int extType = in.readByte();
 		switch (extType) {
 			case -1  -> timestamp(in, visitor, dataLen);  // 0b111 (reserved for array type)
@@ -195,28 +194,28 @@ public class MsgPackParser implements BinaryParser {
 		}
 	}
 
-	private void timestamp(MyDataInput in, CVisitor out, int dataLen) throws IOException {
+	private void timestamp(MyDataInput in, ValueEmitter out, int dataLen) throws IOException {
 		switch (dataLen) {
-			case 4 -> out.valueTimestamp(in.readUInt() * 1000L); // unix second timestamp
+			case 4 -> out.emitTimestamp(in.readUInt() * 1000L); // unix second timestamp
 			case 8 -> {
 				long data = in.readLong();
 				int nanos = (int) (data >>> 34);
 				long seconds = data & 0x3ffffffffL;
-				out.valueTimestamp(seconds, nanos);
+				out.emitTimestamp(seconds, nanos);
 			}
 			case 12 -> {
 				int nanos = in.readInt();
 				long seconds = in.readLong();
-				out.valueTimestamp(seconds, nanos);
+				out.emitTimestamp(seconds, nanos);
 			}
 			default -> throw new CorruptedInputException("时间戳长度错误: "+dataLen);
 		}
 	}
 	//Proposal: support dynamic length arrays and maps for data streaming
 	//https://github.com/msgpack/msgpack/issues/270
-	private void stream(MyDataInput in, CVisitor out, int dataLen) throws IOException {
+	private void stream(MyDataInput in, ValueEmitter out, int dataLen) throws IOException {
 		if (dataLen == 1) { // 流式映射 (使用场景较多)
-			out.valueMap();
+			out.emitMap();
 			while (true) {
 				int tagByte = in.readUnsignedByte();
 				if (tagByte == STREAM) break;
@@ -225,7 +224,7 @@ public class MsgPackParser implements BinaryParser {
 			}
 			out.pop();
 		} else if (dataLen == 2) { // 流式数组 (使用场景狭窄)
-			out.valueList();
+			out.emitList();
 			while (true) {
 				int tagByte = in.readUnsignedByte();
 				if (tagByte == STREAM) break;
@@ -236,55 +235,55 @@ public class MsgPackParser implements BinaryParser {
 			throw new CorruptedInputException("数据错误："+dataLen);
 		}
 	}
-	private void intArray(MyDataInput in, CVisitor visitor, int dataLen) throws IOException {
+	private void intArray(MyDataInput in, ValueEmitter visitor, int dataLen) throws IOException {
 		int[] array = (int[]) Unaligned.U.allocateUninitializedArray(int.class, dataLen);
 		for (int i = 0; i < array.length; i++) array[i] = in.readInt();
-		visitor.value(array);
+		visitor.emit(array);
 	}
-	private void uintArray(MyDataInput in, CVisitor visitor, int dataLen) throws IOException {
+	private void uintArray(MyDataInput in, ValueEmitter visitor, int dataLen) throws IOException {
 		int[] array = (int[]) Unaligned.U.allocateUninitializedArray(int.class, dataLen);
 		for (int i = 0; i < array.length; i++) array[i] = in.readVUInt();
-		visitor.value(array);
+		visitor.emit(array);
 	}
-	private void vintArray(MyDataInput in, CVisitor visitor, int dataLen) throws IOException {
+	private void vintArray(MyDataInput in, ValueEmitter visitor, int dataLen) throws IOException {
 		int[] array = (int[]) Unaligned.U.allocateUninitializedArray(int.class, dataLen);
 		for (int i = 0; i < array.length; i++) array[i] = MyDataInput.zag(in.readVUInt());
-		visitor.value(array);
+		visitor.emit(array);
 	}
-	private void longArray(MyDataInput in, CVisitor visitor, int dataLen) throws IOException {
+	private void longArray(MyDataInput in, ValueEmitter visitor, int dataLen) throws IOException {
 		long[] array = (long[]) Unaligned.U.allocateUninitializedArray(long.class, dataLen);
 		for (int i = 0; i < array.length; i++) array[i] = in.readLong();
-		visitor.value(array);
+		visitor.emit(array);
 	}
-	private void ulongArray(MyDataInput in, CVisitor visitor, int dataLen) throws IOException {
+	private void ulongArray(MyDataInput in, ValueEmitter visitor, int dataLen) throws IOException {
 		long[] array = (long[]) Unaligned.U.allocateUninitializedArray(long.class, dataLen);
 		for (int i = 0; i < array.length; i++) array[i] = in.readVULong();
-		visitor.value(array);
+		visitor.emit(array);
 	}
-	private void vlongArray(MyDataInput in, CVisitor visitor, int dataLen) throws IOException {
+	private void vlongArray(MyDataInput in, ValueEmitter visitor, int dataLen) throws IOException {
 		long[] array = (long[]) Unaligned.U.allocateUninitializedArray(long.class, dataLen);
 		for (int i = 0; i < array.length; i++) array[i] = MyDataInput.zag(in.readVULong());
-		visitor.value(array);
+		visitor.emit(array);
 	}
 
 	private byte[][] objectPool;
 	// Proposal: Addition of 4 Predefined Extension Types to MessagePack to improve on-demand forward reading and storage efficiency
 	//https://github.com/msgpack/msgpack/issues/330
-	private void dedupData(MyDataInput in, CVisitor out, int dataLen) throws IOException {
+	private void dedupData(MyDataInput in, ValueEmitter out, int dataLen) throws IOException {
 		// Deduplication Array Container
 		objectPool = new byte[dataLen][];
 		for (int i = 0; i < dataLen; i++) {
 			objectPool[i] = readBytes(in, readArrayIndex(in));
 		}
 	}
-	private void dedupRef(MyDataInput in, CVisitor out, int index) throws IOException {
+	private void dedupRef(MyDataInput in, ValueEmitter out, int index) throws IOException {
 		// Deduplication Reference
 		parse(DynByteBuf.wrap(objectPool[index]), out);
 	}
-	private void predefinedMap(MyDataInput in, CVisitor out, int index) throws IOException {
+	private void predefinedMap(MyDataInput in, ValueEmitter out, int index) throws IOException {
 		// Predefined Map
 		var keys = DynByteBuf.wrap(objectPool[index]);
-		out.valueMap(keys.readUnsignedByte());
+		out.emitMap(keys.readUnsignedByte());
 		// 按顺序填充数据
 		while (keys.isReadable()) {
 			int tagByte = in.readUnsignedByte();
@@ -295,7 +294,7 @@ public class MsgPackParser implements BinaryParser {
 		// 缺失的值填充为null
 		while (keys.isReadable()) {
 			parse(keys, out);
-			out.valueNull();
+			out.emitNull();
 		}
 		out.pop();
 	}

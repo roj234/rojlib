@@ -154,7 +154,7 @@ ME: 我的异常需要index作为参数，无论来自*readToken*中见到的字
 </pre>
 ### JSON Parser
 这回我直接上代码了
-![roj.config.JSONParser#element](element.png)
+![roj.config.JsonParser#element](element.png)
 ```java
 public CEntry element(int flag) throws ParseException { return element(token(), this, flag); }
 ```

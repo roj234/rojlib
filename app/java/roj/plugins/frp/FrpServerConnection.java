@@ -3,7 +3,7 @@ package roj.plugins.frp;
 import org.jetbrains.annotations.NotNull;
 import roj.collect.IntBiMap;
 import roj.util.function.ExceptionalRunnable;
-import roj.config.Tokenizer;
+import roj.text.Tokenizer;
 import roj.http.Headers;
 import roj.http.HttpHead;
 import roj.http.h2.H2Connection;

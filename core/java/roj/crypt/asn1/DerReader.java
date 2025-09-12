@@ -1,10 +1,10 @@
 package roj.crypt.asn1;
 
 import roj.collect.IntList;
-import roj.config.data.CBoolean;
-import roj.config.data.CByteArray;
-import roj.config.data.CEntry;
-import roj.config.data.CIntArray;
+import roj.config.node.BoolValue;
+import roj.config.node.ByteArrayValue;
+import roj.config.node.ConfigValue;
+import roj.config.node.IntArrayValue;
 import roj.io.CorruptedInputException;
 import roj.io.MyDataInput;
 import roj.io.MyDataInputStream;
@@ -28,14 +28,14 @@ public class DerReader {
 
 	public int readType() throws IOException { return in.readUnsignedByte(); }
 
-	public CEntry readBool(int length) throws IOException {
+	public ConfigValue readBool(int length) throws IOException {
 		assert length == 1;
 		int i = in.readUnsignedByte();
-		if (i == 0xFF) return CBoolean.TRUE;
-		if (i == 0) return CBoolean.FALSE;
+		if (i == 0xFF) return BoolValue.TRUE;
+		if (i == 0) return BoolValue.FALSE;
 		throw new CorruptedInputException("未预料的布尔值: "+i);
 	}
-	public CEntry readInt(int length) throws IOException {
+	public ConfigValue readInt(int length) throws IOException {
 		byte[] data;
 		if (length > 65536) {
 			data = safeRead(length);
@@ -49,14 +49,14 @@ public class DerReader {
 		return /*length <= 4 && bi.bitLength() <= 31 ? CEntry.valueOf(bi.intValue()) : */DerValue.INTEGER(bi);
 	}
 
-	public CEntry readBits(int length) throws IOException {
+	public ConfigValue readBits(int length) throws IOException {
 		int trash = in.readUnsignedByte();
 		if (trash >= 8) throw new CorruptedInputException("bit string "+trash);
 		return new DerValue.Bits(trash, readDirectBytes(length-1));
 	}
 
-	public CEntry readBytes(int length) throws IOException {return new CByteArray(readDirectBytes(length));}
-	public CEntry readOid(int length) throws IOException {
+	public ConfigValue readBytes(int length) throws IOException {return new ByteArrayValue(readDirectBytes(length));}
+	public ConfigValue readOid(int length) throws IOException {
 		long end = in.position()+ length;
 		IntList oids = new IntList();
 		int oid = in.readVarInt();
@@ -82,12 +82,12 @@ public class DerReader {
 		}
 
 		if (in.position() != end) throw new CorruptedInputException("length mismatch");
-		return new CIntArray(oids.toArray());
+		return new IntArrayValue(oids.toArray());
 	}
 
-	public CEntry readIso(int len) throws IOException {return CEntry.valueOf(len > 65536 ? new String(safeRead(len), StandardCharsets.ISO_8859_1) : in.readAscii(len));}
-	public CEntry readUTF(int len) throws IOException {return CEntry.valueOf(len > 65536 ? new String(safeRead(len), StandardCharsets.UTF_8) : in.readUTF(len));}
-	public CEntry readOpaque(int type, int length) throws IOException {return new DerValue.Opaque(type, readDirectBytes(length));}
+	public ConfigValue readIso(int len) throws IOException {return ConfigValue.valueOf(len > 65536 ? new String(safeRead(len), StandardCharsets.ISO_8859_1) : in.readAscii(len));}
+	public ConfigValue readUTF(int len) throws IOException {return ConfigValue.valueOf(len > 65536 ? new String(safeRead(len), StandardCharsets.UTF_8) : in.readUTF(len));}
+	public ConfigValue readOpaque(int type, int length) throws IOException {return new DerValue.Opaque(type, readDirectBytes(length));}
 	private byte[] readDirectBytes(int length) throws IOException {
 		byte[] data;
 		if (length > 65536) {

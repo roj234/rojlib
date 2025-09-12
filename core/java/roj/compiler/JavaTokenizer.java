@@ -10,10 +10,10 @@ import roj.compiler.diagnostic.Kind;
 import roj.compiler.diagnostic.TranslatableString;
 import roj.compiler.doc.Javadoc;
 import roj.compiler.plugins.annotations.AutoIncrement;
-import roj.config.I18n;
-import roj.config.ParseException;
-import roj.config.Token;
-import roj.config.Tokenizer;
+import roj.text.I18n;
+import roj.text.ParseException;
+import roj.text.Token;
+import roj.text.Tokenizer;
 import roj.io.IOUtil;
 import roj.text.CharList;
 import roj.text.TextUtil;
@@ -22,8 +22,8 @@ import roj.util.OperationDone;
 import java.io.File;
 import java.io.IOException;
 
-import static roj.config.Token.EOF;
-import static roj.config.Token.LITERAL;
+import static roj.text.Token.EOF;
+import static roj.text.Token.LITERAL;
 
 /**
  * Java词法分析器

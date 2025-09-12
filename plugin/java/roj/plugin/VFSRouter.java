@@ -1,7 +1,7 @@
 package roj.plugin;
 
 import roj.collect.HashMap;
-import roj.config.Tokenizer;
+import roj.text.Tokenizer;
 import roj.http.HttpUtil;
 import roj.http.server.*;
 import roj.io.IOUtil;

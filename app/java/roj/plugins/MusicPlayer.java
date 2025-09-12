@@ -10,7 +10,7 @@ import roj.io.source.FileSource;
 import roj.io.source.Source;
 import roj.plugin.Plugin;
 import roj.plugin.SimplePlugin;
-import roj.reflect.Unaligned;
+import roj.reflect.Handles;
 import roj.text.CharList;
 import roj.ui.Argument;
 import roj.ui.Command;
@@ -20,10 +20,10 @@ import roj.util.ArrayUtil;
 import roj.util.Helpers;
 
 import java.io.File;
+import java.lang.invoke.VarHandle;
 import java.util.List;
 import java.util.concurrent.locks.LockSupport;
 
-import static roj.reflect.Unaligned.U;
 import static roj.ui.CommandNode.argument;
 import static roj.ui.CommandNode.literal;
 
@@ -33,7 +33,7 @@ import static roj.ui.CommandNode.literal;
  */
 @SimplePlugin(id = "musicPlayer", version = "2.1.1", desc = "音乐播放测试", inheritConfig = true)
 public class MusicPlayer extends Plugin implements Runnable {
-	private static final long FLAG = Unaligned.fieldOffset(MusicPlayer.class, "flag");
+	private static final VarHandle FLAG = Handles.getInstance().findVarHandle(MusicPlayer.class, "flag", int.class);
 	private static final int STOP = 1, SKIP_AUTO = 2;
 	private static final int END_STOP = 1, END_NEXT = 2, IS_RANDOM = 4;
 
@@ -55,7 +55,6 @@ public class MusicPlayer extends Plugin implements Runnable {
 
 	@Override
 	protected void onEnable() throws Exception {
-		progress.setAnimation(false);
 		String path = getConfig().getString("music_path", "D:\\Music");
 		initList = IOUtil.listFiles(new File(path), file -> {
 			String ext = IOUtil.extensionName(file.getName());
@@ -155,7 +154,7 @@ public class MusicPlayer extends Plugin implements Runnable {
 		 .then(literal("next").executes(prevNext));
 		c.then(literal("play").executes(ctx -> {
 				if (audio.paused()) audio.pause();
-				else if ((U.getAndSetInt(this, FLAG, 0) & STOP) != 0) LockSupport.unpark(player);
+				else if (((int)FLAG.getAndSet(this, 0) & STOP) != 0) LockSupport.unpark(player);
 				else System.out.println("已经在播放");
 			 }).then(argument("歌曲序号", Argument.number(1, playList.size()))
 			.executes(ctx -> play(ctx.argument("歌曲序号", Integer.class)-1))));
@@ -164,7 +163,7 @@ public class MusicPlayer extends Plugin implements Runnable {
 		}));
 		c.then(literal("stop").executes(ctx -> {
 			unpause();
-			if (U.compareAndSwapInt(this, FLAG, 0, SKIP_AUTO|STOP)) decoder.disconnect();
+			if (FLAG.compareAndSet(this, 0, SKIP_AUTO|STOP)) decoder.disconnect();
 		}));
 
 		c.then(literal("seek").then(argument("时间", Argument.real(0,86400)).executes(ctx -> {
@@ -214,7 +213,7 @@ public class MusicPlayer extends Plugin implements Runnable {
 	public void play(int song) {
 		unpause();
 		playIndex = song;
-		int f = U.getAndSetInt(this, FLAG, SKIP_AUTO);
+		int f = (int)FLAG.getAndSet(this, SKIP_AUTO);
 		if ((f&STOP) != 0) {
 			flag = 0;
 			LockSupport.unpark(player);

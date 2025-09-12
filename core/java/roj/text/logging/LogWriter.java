@@ -8,7 +8,6 @@ import roj.concurrent.TimerTask;
 import roj.reflect.Reflection;
 import roj.text.CharList;
 import roj.text.LineReader;
-import roj.text.logging.d.LogDestination;
 import roj.util.DynByteBuf;
 import roj.util.Helpers;
 
@@ -23,7 +22,7 @@ import java.util.Objects;
  * @author Roj233
  * @since 2022/6/1 5:09
  */
-class LogWriter extends PrintWriter {
+sealed class LogWriter extends PrintWriter permits LogWriterJson {
 	static final ThreadLocal<LogWriter> LOCAL = ThreadLocal.withInitial(LogWriter::new);
 
 	public void println(Object x) {
@@ -46,6 +45,7 @@ class LogWriter extends PrintWriter {
 		e.printStackTrace(this);
 	}
 
+	private static final int PACKAGE_NAME_LENGTH = 2;
 	private static void simplifyPackage(String name, CharList sb) {
 		sb.append("\tat ");
 		int end = name.lastIndexOf('.', name.indexOf('('));
@@ -63,7 +63,7 @@ class LogWriter extends PrintWriter {
 		while (true) {
 			int j = name.indexOf('.', i);
 			if (j < 0 || j >= end) break;
-			sb.append(name.charAt(i)).append('.');
+			sb.append(name, i, i+PACKAGE_NAME_LENGTH).append('.');
 			i = j+1;
 		}
 		sb.append(name, i, name.length()).append('\n');
@@ -241,8 +241,8 @@ class LogWriter extends PrintWriter {
 			}
 		}
 
-		if (arg instanceof DynByteBuf) {
-			sb.append(((DynByteBuf) arg).dump());
+		if (arg instanceof DynByteBuf buf) {
+			sb.append(buf.dump());
 			return;
 		}
 

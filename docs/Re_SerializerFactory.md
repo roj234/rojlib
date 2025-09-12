@@ -49,7 +49,7 @@ Either<Left, Right>
 ```java
 
 import roj.config.ConfigMaster;
-import roj.config.auto.*;
+import roj.config.mapper.*;
 import roj.config.serial.ToJson;
 import roj.text.CharList;
 
@@ -58,72 +58,77 @@ import java.nio.charset.Charset;
 import java.util.Map;
 
 public class Test {
-  public static void main(String[] args) throws Exception {
-    SerializerFactory man = SerializerFactory.getInstance(
-            SerializerFactory.GENERATE | SerializerFactory.CHECK_INTERFACE | SerializerFactory.CHECK_PARENT | SerializerFactory.ALLOW_DYNAMIC);
-    // 自定义序列化方式(使用@As调用)
-    man.asRGB();
-    // 自定义序列化器(不一定要匿名类)
-    // 方法名称也不重要 参数和返回值才重要
-    man.add(Charset.class, new Object() {
-      public String serializeMyObject(Charset cs) {return cs.name();}
+	public static void main(String[] args) throws Exception {
+		SerializerFactory man = SerializerFactory.getInstance(
+				SerializerFactory.GENERATE | SerializerFactory.CHECK_INTERFACE | SerializerFactory.CHECK_PARENT | SerializerFactory.ALLOW_DYNAMIC);
+		// 自定义序列化方式(使用@As调用)
+		man.asRGB();
+		// 自定义序列化器(不一定要匿名类)
+		// 方法名称也不重要 参数和返回值才重要
+		man.add(Charset.class, new Object() {
+			public String serializeMyObject(Charset cs) {
+				return cs.name();
+			}
 
-      public Charset deserMyObj(String s) {return Charset.forName(s);}
-    });
+			public Charset deserMyObj(String s) {
+				return Charset.forName(s);
+			}
+		});
 
-    // 生成一个序列化器
-    Serializer<Pojo> adapter = man.serializer(Pojo.class);
+		// 生成一个序列化器
+		Serializer<Pojo> adapter = man.serializer(Pojo.class);
 
-    Pojo p = new Pojo();
-    p.color = 0xAABBCC;
-    p.charset = StandardCharsets.UTF_8;
-    p.map = Map.of("114514", Map.of("1919810", 23333L));
+		Pojo p = new Pojo();
+		p.color = 0xAABBCC;
+		p.charset = StandardCharsets.UTF_8;
+		p.map = Map.of("114514", Map.of("1919810", 23333L));
 
-    // simple
-    ConfigMaster.YAML.writeObject(adapter, p, new File("C:\\test.yml"));
-    p = ConfigMaster.YAML.readObject(adapter, new File("C:\\test.yml"));
+		// simple
+		ConfigMaster.YAML.writeObject(adapter, p, new File("C:\\test.yml"));
+		p = ConfigMaster.YAML.readObject(adapter, new File("C:\\test.yml"));
 
-    // or CVisitor
-    ToJson ser = new ToJson();
-    adapter.write(ser, p);
-    CharList json = ser.getValue();
-    System.out.println(json);
+		// or CVisitor
+		ToJson ser = new ToJson();
+		adapter.write(ser, p);
+		CharList json = ser.getValue();
+		System.out.println(json);
 
-    System.out.println(adapter.read(new CCJson(), json, 0));
-  }
+		System.out.println(adapter.read(new CCJson(), json, 0));
+	}
 
-  public static class Pojo {
-    // 自定义序列化方式
-    @As("rgb")
-    // 自定义序列化名称
-    @Name("myColor")
-    private int color;
-    // 通过getter或setter来访问字段
-    @Via(get = "getCharset", set = "setCharset")
-    public Charset charset;
-    // 支持任意对象和多层泛型
-    // 字段类型为接口和抽象类时，会用ObjAny序列化对象，会使用==表示对象的class
-    // 如果要保留这个Map的类型，那就（1）字段改成HashMap(具体)或者（2）开启DYNAMIC
-    public Map<String, Map<String, Object>> map;
+	public static class Pojo {
+		// 自定义序列化方式
+		@As("rgb")
+		// 自定义序列化名称
+		@Name("myColor")
+		private int color;
+		// 通过getter或setter来访问字段
+		@Via(get = "getCharset", set = "setCharset")
+		public Charset charset;
+		// 支持任意对象和多层泛型
+		// 字段类型为接口和抽象类时，会用ObjAny序列化对象，会使用==表示对象的class
+		// 如果要保留这个Map的类型，那就（1）字段改成HashMap(具体)或者（2）开启DYNAMIC
+		public Map<String, Map<String, Object>> map;
 
-    //使用transient避免被序列化
-    private transient Object doNotSerializeMe;
+		//使用transient避免被序列化
+		private transient Object doNotSerializeMe;
 
-    // 若有无参构造器则调用之，否则allocateInstance
-    public Pojo() {}
+		// 若有无参构造器则调用之，否则allocateInstance
+		public Pojo() {
+		}
 
-    public Charset getCharset() {
-      return charset;
-    }
+		public Charset getCharset() {
+			return charset;
+		}
 
-    public void setCharset(Charset charset) {
-      this.charset = charset;
-    }
+		public void setCharset(Charset charset) {
+			this.charset = charset;
+		}
 
-    @Override
-    public String toString() {
-      return "Pojo{" + "color=" + color + '}';
-    }
-  }
+		@Override
+		public String toString() {
+			return "Pojo{" + "color=" + color + '}';
+		}
+	}
 }
 ```

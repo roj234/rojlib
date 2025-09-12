@@ -2,7 +2,6 @@ package roj.plugins.bittorrent;
 
 import roj.collect.Int2IntMap;
 import roj.crypt.CryptoFactory;
-import roj.crypt.HMAC;
 import roj.util.OperationDone;
 import roj.io.IOUtil;
 import roj.io.source.FileSource;
@@ -15,9 +14,8 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 
-import static roj.config.JSONParser.parseNumber;
+import static roj.config.JsonParser.parseNumber;
 
 /**
  * InfoHash

@@ -36,7 +36,7 @@ public interface Content {
 	 * 显示一个用户友好的错误界面
 	 */
 	static Content internalError(String message, Throwable exception) {return TextContent.errorPage(message, exception);}
-	static Content httpError(int code) {return HSConfig.getInstance().createHttpError(code);}
+	static Content httpError(int code) {return HttpServer.getInstance().createHttpError(code);}
 	static Content websocket(Request req, Function<Request, WebSocket> newHandler) {return websocket(req, newHandler, WebSocketResponse.EMPTY_PROTOCOL);}
 	static Content websocket(Request req, Function<Request, WebSocket> newHandler, Set<String> protocols) {return WebSocketResponse.websocket(req, newHandler, protocols);}
 	static Content redirect(Request req, String url) {return req.server().code(HttpUtil.FOUND).header("location", url).noContent();}

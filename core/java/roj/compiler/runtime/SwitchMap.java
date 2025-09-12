@@ -30,7 +30,7 @@ public final class SwitchMap {
 			this.useEquals = useEquals;
 			if (size > 4096) throw new IllegalStateException("branch must <= 4096");
 
-			this.entries = new Entry[MathUtils.getMin2PowerOf(size)];
+			this.entries = new Entry[MathUtils.nextPowerOfTwo(size)];
 			this.mask = entries.length - 1;
 		}
 
@@ -42,7 +42,7 @@ public final class SwitchMap {
 		 * <pre>{@code
 		 * try {
 		 *     $$on_stack = add(key, ord); // 返回值压入操作数栈
-		 * } catch ({@link roj.asm.insn.TryCatchEntry#ANY} e) {
+		 * } catch ({@link roj.asm.insn.TryCatchBlock#ANY} e) {
 		 *     // 异常时将异常压入操作数栈
 		 *     $$on_stack = e;
 		 * } finally {

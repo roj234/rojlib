@@ -1,8 +1,8 @@
 package roj.http.server;
 
 import roj.http.Headers;
-import roj.io.IOUtil;
 import roj.io.BufferPool;
+import roj.io.IOUtil;
 import roj.math.MathUtils;
 import roj.net.ChannelCtx;
 import roj.net.SendfilePkt;
@@ -69,7 +69,7 @@ final class FileContent implements Content {
 			if ((v = req.get("If-Modified-Since")) != null) {
 				long time;
 				try {
-					time = DateFormat.parseRFCDate(v) / 1000;
+					time = DateFormat.parseRFC5322Datetime(v) / 1000;
 				} catch (Exception e) {
 					rh.code(400);
 					return Content.httpError(400);
@@ -79,7 +79,7 @@ final class FileContent implements Content {
 			} else if ((v = req.get("If-Unmodified-Since")) != null) {
 				long time;
 				try {
-					time = DateFormat.parseRFCDate(v) / 1000;
+					time = DateFormat.parseRFC5322Datetime(v) / 1000;
 				} catch (Exception e) {
 					rh.code(400);
 					return Content.httpError(400);
@@ -124,7 +124,7 @@ final class FileContent implements Content {
 			} else {
 				long time;
 				try {
-					time = DateFormat.parseRFCDate(v) / 1000;
+					time = DateFormat.parseRFC5322Datetime(v) / 1000;
 				} catch (Exception e) {
 					rh.code(400);
 					return Content.httpError(400);
@@ -225,7 +225,7 @@ final class FileContent implements Content {
 		var h = req.server;
 		h.code(r).date();
 		if (r != 304) {
-			h.header("last-modified", HSConfig.getInstance().toRFC(file.lastModified()));
+			h.header("last-modified", DateFormat.toRFC5322Datetime(file.lastModified()));
 			if (r == 206) return this;
 
 			// 需要注意的是，服务器端在生成状态码为 304 的响应的时候，必须同时生成以下会存在于对应的 200 响应中的首部：Cache-Control、Content-Location、Date、ETag、Expires 和 Vary。

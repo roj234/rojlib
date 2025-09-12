@@ -8,20 +8,20 @@ import roj.collect.TrieTreeSet;
 import roj.collect.XashMap;
 import roj.concurrent.Promise;
 import roj.config.ConfigMaster;
-import roj.config.ParseException;
-import roj.config.Tokenizer;
-import roj.config.data.CEntry;
-import roj.config.data.CList;
-import roj.config.data.CMap;
-import roj.config.data.Type;
+import roj.config.node.ConfigValue;
+import roj.config.node.ListValue;
+import roj.config.node.MapValue;
+import roj.config.node.Type;
 import roj.crypt.CryptoFactory;
 import roj.io.IOUtil;
+import roj.text.CharList;
+import roj.text.ParseException;
+import roj.text.TextUtil;
+import roj.text.Tokenizer;
 import roj.ui.TUI;
 import roj.ui.Tty;
-import roj.util.ArtifactVersion;
-import roj.text.CharList;
-import roj.text.TextUtil;
 import roj.util.ArrayCache;
+import roj.util.ArtifactVersion;
 import roj.util.Helpers;
 import roj.util.OS;
 
@@ -38,7 +38,7 @@ import java.util.function.BiConsumer;
 import java.util.function.Function;
 import java.util.regex.Pattern;
 
-import static roj.ci.FMD.LOGGER;
+import static roj.ci.MCMake.LOGGER;
 
 /**
  * @author Roj234
@@ -69,7 +69,7 @@ final class MinecraftClientInfo {
 	File jar;
 	String mainClass;
 	List<String> jvmArguments, gameArguments;
-	CMap gameCoreDownloads;
+	MapValue gameCoreDownloads;
 
 	public String libraryString() {
 		var libPathString = new CharList();
@@ -95,7 +95,7 @@ final class MinecraftClientInfo {
 	}
 
 	MinecraftClientInfo resolve(File versionPath, String version) throws IOException, ParseException {
-		CMap mapping = ConfigMaster.JSON.parse(new File(versionPath, version+'/'+version+".json")).asMap();
+		MapValue mapping = ConfigMaster.JSON.parse(new File(versionPath, version+'/'+version+".json")).asMap();
 
 		String inheritVersion = mapping.getString("inheritsFrom");
 		if (inheritVersion.length() > 0) resolve(versionPath, inheritVersion);
@@ -136,7 +136,7 @@ final class MinecraftClientInfo {
 		return this;
 	}
 	@SuppressWarnings("unchecked")
-	private static List<String> makeNewArgs(CList argList) {
+	private static List<String> makeNewArgs(ListValue argList) {
 		var args = new ArrayList<String>();
 
 		for (var entry : argList) {
@@ -144,7 +144,7 @@ final class MinecraftClientInfo {
 				case STRING -> args.add(entry.asString());
 				case MAP -> {
 					if (fitRules(entry.asMap().getList("rules"))) {
-						CEntry argument = entry.asMap().get("value");
+						ConfigValue argument = entry.asMap().get("value");
 						if (argument.getType() == Type.LIST) {
 							args.addAll((List<String>) argument.asList().unwrap());
 						} else {
@@ -167,7 +167,7 @@ final class MinecraftClientInfo {
 	}
 
 	private static final int NOT = -1, MAYBE = 0, DEFINITELY = 1;
-	private void mergeLibrary(CMap libraryInfo) {
+	private void mergeLibrary(MapValue libraryInfo) {
 		String mavenId = libraryInfo.getString("name");
 		int i = mavenId.indexOf(':');
 		CharList sb = new CharList().append(mavenId).replace('.', '/', 0, i);
@@ -213,7 +213,7 @@ final class MinecraftClientInfo {
 		String classifier = null;
 		int isNative = NOT;
 		if (libraryInfo.containsKey("natives")) {
-			CMap natives = libraryInfo.getMap("natives");
+			MapValue natives = libraryInfo.getMap("natives");
 			sb.append('-').append(natives.getString(OS.CURRENT.name().toLowerCase(Locale.ROOT)).replace("${arch}", OS.archName()));
 			isNative = DEFINITELY;
 		} else if (parts.size() > 3) {
@@ -266,11 +266,11 @@ final class MinecraftClientInfo {
 		} catch (IOException ignored) {}
 		return false;
 	}
-	private void extractNatives(CMap libraryInfo, File libFile) {
+	private void extractNatives(MapValue libraryInfo, File libFile) {
 		nativePath.mkdirs();
 
 		var trieTree = new TrieTreeSet();
-		for (CEntry entry : libraryInfo.getMap("extract").getList("exclude")) trieTree.add(entry.asString());
+		for (ConfigValue entry : libraryInfo.getMap("extract").getList("exclude")) trieTree.add(entry.asString());
 		trieTree.add("META-INF");
 
 		LOGGER.debug("提取本地库{}", libFile);
@@ -300,20 +300,20 @@ final class MinecraftClientInfo {
 		}
 	}
 
-	private static boolean fitRules(CList rules) {
+	private static boolean fitRules(ListValue rules) {
 		boolean fit = rules.size() == 0;
 		for (int i = 0; i < rules.size(); i++) {
-			CMap rule = rules.getMap(i);
+			MapValue rule = rules.getMap(i);
 			if (fitRule(rule)) {
 				fit = rule.getString("action").equals("allow");
 			}
 		}
 		return fit;
 	}
-	private static boolean fitRule(CMap rule) {
+	private static boolean fitRule(MapValue rule) {
 		if (rule.size() == 1) return true;
 		if (rule.containsKey("os")) {
-			CMap os = rule.getMap("os");
+			MapValue os = rule.getMap("os");
 
 			String name = os.getString("name");
 			if (!name.isEmpty() && !switch (name) {
@@ -345,7 +345,7 @@ final class MinecraftClientInfo {
 						return false;
 				}
 
-				CEntry value = entry.getValue();
+				ConfigValue value = entry.getValue();
 				Tty.warning("FMD发现了一个未知规则: ");
 				Tty.warning(name + ": " + value);
 				if (TUI.key("yn", "请手动指定它的值") == 'n') return false;
@@ -424,17 +424,17 @@ final class MinecraftClientInfo {
 			downloader.apply(url).then(this).rejected(this);
 		}
 	}
-	private void downloadLibrary(CMap libraryInfo, String classifiers, String libFileName) {
+	private void downloadLibrary(MapValue libraryInfo, String classifiers, String libFileName) {
 		File libParent = new File(libraryPath, libFileName).getParentFile();
 		if (!libParent.isDirectory() && !libParent.mkdirs()) throw new IllegalStateException("无法创建保存文件夹 "+libParent.getAbsolutePath());
 
-		CMap artifact = null;
+		MapValue artifact = null;
 		if (classifiers != null) {
 			artifact = libraryInfo.getMap("classifiers").getMap(classifiers);
 		}
 		if (artifact == null || artifact.size() == 0) {
 			if (!libraryInfo.containsKey("artifact")) { // mc
-				artifact = new CMap();
+				artifact = new MapValue();
 				if (!libraryInfo.containsKey("url")) {
 					//artifact.put("url", MAIN_CONFIG.get("通用").asMap().getString("协议") + "libraries.minecraft.net/" + libFileName);
 				} else {

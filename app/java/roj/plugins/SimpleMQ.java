@@ -4,8 +4,8 @@ import org.jetbrains.annotations.Nullable;
 import roj.collect.ArrayList;
 import roj.concurrent.PacketBuffer;
 import roj.config.ConfigMaster;
-import roj.config.ParseException;
-import roj.config.data.CMap;
+import roj.text.ParseException;
+import roj.config.node.MapValue;
 import roj.http.WebSocket;
 import roj.http.server.Content;
 import roj.http.server.Request;
@@ -110,7 +110,7 @@ public class SimpleMQ extends Plugin {
 
 		@Override
 		protected void onData(int frameType, DynByteBuf in) throws IOException {
-			CMap map;
+			MapValue map;
 			try {
 				map = (frameType == FRAME_TEXT ? ConfigMaster.JSON : ConfigMaster.MSGPACK).parse(in).asMap();
 			} catch (IOException|ParseException e) {

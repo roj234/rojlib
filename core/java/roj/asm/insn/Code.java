@@ -39,7 +39,7 @@ public class Code extends Attribute implements Attributed {
 
 	public List<Frame> frames;
 
-	public ArrayList<TryCatchEntry> tryCatch;
+	public ArrayList<TryCatchBlock> tryCatch;
 
 	private AttributeList attributes;
 
@@ -60,13 +60,13 @@ public class Code extends Attribute implements Attributed {
 
 		int len = r.readUnsignedShort();
 		if (len > 0) {
-			ArrayList<TryCatchEntry> ex = tryCatch = new ArrayList<>(len);
+			ArrayList<TryCatchBlock> ex = tryCatch = new ArrayList<>(len);
 			for (int i = 0; i < len; i++) {
 				Label start = instructions._monitor(r.readUnsignedShort());
 				int bci = r.readUnsignedShort();
 				Label end = bci == codeLength ? null : instructions._monitor(bci);
 				Label handler = instructions._monitor(r.readUnsignedShort());
-				ex.add(new TryCatchEntry(start, end, handler, cp.getRefName(r)));
+				ex.add(new TryCatchBlock(start, end, handler, cp.getRefName(r)));
 			}
 		}
 
@@ -125,10 +125,10 @@ public class Code extends Attribute implements Attributed {
 		instructions.write(c);
 
 		c.visitExceptions();
-		ArrayList<TryCatchEntry> exs = tryCatch;
+		ArrayList<TryCatchBlock> exs = tryCatch;
 		if (exs != null) {
 			for (int i = 0; i < exs.size(); i++) {
-				TryCatchEntry ex = exs.get(i);
+				TryCatchBlock ex = exs.get(i);
 				c.visitException(ex.start, ex.end, ex.handler, ex.type);
 			}
 		}
@@ -219,7 +219,7 @@ public class Code extends Attribute implements Attributed {
 			sb.append('\n').padEnd(' ', prefix).append("异常处理程序");
 
 			a.clear(); a.addAll("从","至","处理程序","异常类型",IntMap.UNDEFINED);
-			for (TryCatchEntry ex : tryCatch) {
+			for (TryCatchBlock ex : tryCatch) {
 				a.add(ex.start.getValue());
 				a.add(ex.end.getValue());
 				a.add(ex.handler.getValue());
@@ -249,7 +249,7 @@ public class Code extends Attribute implements Attributed {
 		IntMap<String> labels = new IntMap<>();
 		if (tryCatch != null) {
 			for (int i = 0; i < tryCatch.size(); i++) {
-				TryCatchEntry ex = tryCatch.get(i);
+				TryCatchBlock ex = tryCatch.get(i);
 				labels.putIfAbsent(ex.start.getValue(), "exc_"+i+"_start");
 				labels.putIfAbsent(ex.end.getValue(), "exc_"+i+"_end");
 				labels.putIfAbsent(ex.handler.getValue(), "exc_"+i+"_handler");
@@ -260,9 +260,9 @@ public class Code extends Attribute implements Attributed {
 			if (Opcodes.toString(node.opcode()).endsWith("Switch")) {
 				SwitchBlock block = node.switchTargets();
 				labels.putIfAbsent(block.def.getValue(), "switch_"+node.bci()+"_def");
-				List<SwitchTarget> targets = block.targets;
+				List<SwitchCase> targets = block.cases;
 				for (int i = 0; i < targets.size(); i++) {
-					SwitchTarget target = targets.get(i);
+					SwitchCase target = targets.get(i);
 					labels.putIfAbsent(target.target.getValue(), "switch_"+node.bci()+"_target_"+target.value);
 				}
 			} else {
@@ -294,7 +294,7 @@ public class Code extends Attribute implements Attributed {
 			sb.append('\n').padEnd(' ', prefix).append(".exception\n");
 
 			for (int i = 0; i < tryCatch.size(); i++) {
-				TryCatchEntry ex = tryCatch.get(i);
+				TryCatchBlock ex = tryCatch.get(i);
 				sb.padEnd(' ', prefix+4).append("exc_").append(i).append("_start exc_").append(i).append("_end => exc_").append(i).append("_handler").append('\n')
 				  .padEnd(' ', prefix+4).append(ex.type == null ? "*" : ex.type).append('\n');
 			}

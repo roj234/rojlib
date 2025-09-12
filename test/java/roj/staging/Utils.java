@@ -3,11 +3,11 @@ package roj.staging;
 import roj.archive.zip.ZEntry;
 import roj.archive.zip.ZipFile;
 import roj.compiler.runtime.RtUtil;
-import roj.config.Tokenizer;
 import roj.io.IOUtil;
 import roj.reflect.Reflection;
 import roj.text.CharList;
 import roj.text.TextReader;
+import roj.text.Tokenizer;
 import roj.ui.ClipboardUtil;
 import roj.ui.TUI;
 

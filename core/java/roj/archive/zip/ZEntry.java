@@ -1,21 +1,21 @@
 package roj.archive.zip;
 
 import roj.archive.ArchiveEntry;
-import roj.archive.ArchiveUtils;
 import roj.collect.IntervalPartition;
-import roj.util.OperationDone;
 import roj.crypt.CRC32;
-import roj.text.DateTime;
+import roj.text.DateFormat;
 import roj.text.TextUtil;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
+import roj.util.OperationDone;
 
 import java.nio.file.attribute.FileTime;
 import java.util.TimeZone;
 import java.util.concurrent.TimeUnit;
 import java.util.zip.ZipEntry;
 
-import static roj.archive.ArchiveUtils.*;
+import static roj.archive.ArchiveUtils.java2WinTime;
+import static roj.archive.ArchiveUtils.readWinTime;
 import static roj.archive.zip.ZipFile.*;
 
 /**
@@ -428,15 +428,15 @@ public class ZEntry implements IntervalPartition.Range, ArchiveEntry, Cloneable 
 	private static final int INVALID_DATE = (1 << 21) | (1 << 16);
 
 	public static long dos2JavaTime(int dtime) {
-		long day = DateTime.daySinceUnixZero(((dtime >> 25) & 0x7f) + 1980, ((dtime >> 21) & 0x0f), (dtime >> 16) & 0x1f);
+		long day = DateFormat.daySinceUnixZero(((dtime >> 25) & 0x7f) + 1980, ((dtime >> 21) & 0x0f), (dtime >> 16) & 0x1f);
 		long localTime = 86400000L * day + 3600_000L * ((dtime >> 11) & 0x1f) + 60_000L * ((dtime >> 5) & 0x3f) + 1000L * ((dtime << 1) & 0x3e);
 		return localTime - TimeZone.getDefault().getOffset(localTime);
 	}
 	public static int java2DosTime(long time) {
-		int[] arr = DateTime.of(time + TimeZone.getDefault().getOffset(time));
-		int year = arr[DateTime.YEAR] - 1980;
+		int[] arr = DateFormat.getCalendar(time + DateFormat.getLocalTimeZone().getOffset(time));
+		int year = arr[DateFormat.YEAR] - 1980;
 		if (year < 0 || year > 127) return INVALID_DATE;
-		return (year << 25) | (arr[DateTime.MONTH] << 21) | (arr[DateTime.DAY] << 16) | (arr[DateTime.HOUR] << 11) | (arr[DateTime.MINUTE] << 5) | (arr[DateTime.SECOND] >> 1);
+		return (year << 25) | (arr[DateFormat.MONTH] << 21) | (arr[DateFormat.DAY] << 16) | (arr[DateFormat.HOUR] << 11) | (arr[DateFormat.MINUTE] << 5) | (arr[DateFormat.SECOND] >> 1);
 	}
 
 	@Override

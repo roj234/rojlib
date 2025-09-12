@@ -6,7 +6,7 @@ import roj.collect.LRUCache;
 import roj.concurrent.Promise;
 import roj.concurrent.TimerTask;
 import roj.concurrent.Timer;
-import roj.config.data.CInt;
+import roj.config.node.IntValue;
 import roj.io.RegionFile;
 import roj.io.source.FileSource;
 import roj.text.logging.Logger;
@@ -23,9 +23,9 @@ public final class ChunkLoader implements Closeable {
 	private static final Logger LOGGER = Logger.getLogger();
 
 	private final File chunkFolder;
-	private final LRUCache<CInt, RegionFile> chunks = new LRUCache<>(50);
+	private final LRUCache<IntValue, RegionFile> chunks = new LRUCache<>(50);
 
-	private CInt _id = new CInt();
+	private IntValue _id = new IntValue();
 
 	private final HashSet<Chunk> dirtyChunks = new HashSet<>();
 	private TimerTask asyncSave;
@@ -43,8 +43,8 @@ public final class ChunkLoader implements Closeable {
 
 	@NotNull
 	private synchronized RegionFile getRegion(int x, int z) throws IOException {
-		CInt _id = this._id;
-		if (_id == null) _id = new CInt();
+		IntValue _id = this._id;
+		if (_id == null) _id = new IntValue();
 		else this._id = null;
 
 		int x1 = x /32, z1 = z /32;
@@ -54,7 +54,7 @@ public final class ChunkLoader implements Closeable {
 		RegionFile region = chunks.get(_id);
 		if (region == null) {
 			region = new RegionFile(new FileSource(new File(chunkFolder, "r"+x1+"."+z1+".mcx")), 1024, 1024, RegionFile.F_USE_NEW_RULE);
-			chunks.put(new CInt(id), region);
+			chunks.put(new IntValue(id), region);
 		}
 
 		this._id = _id;

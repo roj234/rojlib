@@ -3,8 +3,8 @@ package roj.plugins.minecraft.captcha;
 import roj.collect.BitArray;
 import roj.collect.BitSet;
 import roj.collect.Int2IntMap;
-import roj.config.data.CEntry;
-import roj.config.data.CMap;
+import roj.config.node.ConfigValue;
+import roj.config.node.MapValue;
 import roj.math.Vec3d;
 import roj.math.Vec4d;
 import roj.plugins.minecraft.server.data.Block;
@@ -85,15 +85,15 @@ public final class CaptchaFont {
 		int width, height;
 	}
 
-	public static CaptchaFont[] load(CMap data) {
-		List<CEntry> cfgFonts = data.getList("fonts").raw();
+	public static CaptchaFont[] load(MapValue data) {
+		List<ConfigValue> cfgFonts = data.getList("fonts").raw();
 		CaptchaFont[] fonts = new CaptchaFont[cfgFonts.size()];
 		for (int i = 0; i < cfgFonts.size(); i++) {
-			CMap cfgFont = cfgFonts.get(i).asMap();
-			List<CEntry> cfgChars = cfgFont.getList("chars").raw();
+			MapValue cfgFont = cfgFonts.get(i).asMap();
+			List<ConfigValue> cfgChars = cfgFont.getList("chars").raw();
 			CaptchaFont font = fonts[i] = new CaptchaFont(cfgFont.getString("id"), cfgChars.size());
 			for (int j = 0; j < cfgChars.size(); j++) {
-				CMap cfgXCaptcha = cfgChars.get(j).asMap();
+				MapValue cfgXCaptcha = cfgChars.get(j).asMap();
 				Char c = font.chars[j] = new Char();
 				c.choice = BitSet.from(cfgXCaptcha.asMap().getString("choice"));
 

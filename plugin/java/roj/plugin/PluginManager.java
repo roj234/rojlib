@@ -8,15 +8,15 @@ import roj.collect.ArrayList;
 import roj.collect.TrieTreeSet;
 import roj.collect.XashMap;
 import roj.config.ConfigMaster;
-import roj.config.auto.SerializerFactory;
-import roj.config.data.CMap;
+import roj.config.mapper.ObjectMapperFactory;
+import roj.config.node.MapValue;
 import roj.io.CorruptedInputException;
-import roj.util.FastFailException;
 import roj.io.IOUtil;
 import roj.io.source.FileSource;
-import roj.util.ArtifactVersion;
 import roj.plugin.di.DIContext;
 import roj.text.logging.Logger;
+import roj.util.ArtifactVersion;
+import roj.util.FastFailException;
 
 import java.io.File;
 import java.io.IOException;
@@ -155,7 +155,7 @@ public class PluginManager {
 			throw new FastFailException("无法初始化插件主类"+pd.mainClass, e);
 		}
 
-		var fn = SerializerFactory.dataContainer(klass);
+		var fn = ObjectMapperFactory.containerFactory(klass);
 		try {
 			if (fn == null) {
 				throw new FastFailException("在插件主类"+pd.mainClass+"中找不到无参构造器");
@@ -225,7 +225,7 @@ public class PluginManager {
 			InputStream in = za.getStream("plugin.yml");
 			if (in == null) return null;
 
-			CMap config = ConfigMaster.YAML.parse(in).asMap();
+			MapValue config = ConfigMaster.YAML.parse(in).asMap();
 
 			var pd = new PluginDescriptor();
 			pd.fileName = plugin.getName();

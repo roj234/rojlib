@@ -241,37 +241,25 @@ public class MyDataInputStream extends MBInputStream implements MyDataInput, Fin
 
 	@Override @NotNull public final String readUTF() throws IOException { return readUTF(readUnsignedShort()); }
 	@Override public final String readVUIUTF() throws IOException { return readVUIUTF(DEFAULT_MAX_STRING_LEN); }
-	@Override
-	public final String readVUIUTF(int max) throws IOException {
-		int len = readVUInt();
-		if (len > max) throw new IllegalArgumentException("字符串长度不正确: "+len+" > "+max);
-		return readUTF(len);
-	}
-	@Override public final String readUTF(int len) throws IOException { return readUTF(len, IOUtil.getSharedCharBuf()).toString(); }
-	@Override
-	public final <T extends Appendable> T readUTF(int len, T target) throws IOException {
-		if (len < 0) throw new IllegalArgumentException("length="+len);
-		if (len > 0) {
-			int i = doRead(len);
-			FastCharset.UTF8().decodeFixedIn(DynByteBuf.wrap(buf, i, len),len,target);
-		}
-		return target;
-	}
+	@Override public final String readVUIUTF(int max) throws IOException { return readVUIStr(max, FastCharset.UTF8()); }
+	@Override public final String readUTF(int len) throws IOException { return readStr(len, IOUtil.getSharedCharBuf(), FastCharset.UTF8()).toString(); }
 
 	@Override public final String readVUIGB() throws IOException { return readVUIGB(DEFAULT_MAX_STRING_LEN); }
-	@Override
-	public final String readVUIGB(int max) throws IOException {
+	@Override public final String readVUIGB(int max) throws IOException { return readVUIStr(max, FastCharset.GB18030()); }
+	@Override public final String readGB(int len) throws IOException { return readStr(len, IOUtil.getSharedCharBuf(), FastCharset.GB18030()).toString(); }
+
+	@Override public final String readVUIStr(FastCharset charset) throws IOException { return readVUIStr(DEFAULT_MAX_STRING_LEN, charset); }
+	@Override public final String readVUIStr(int max, FastCharset charset) throws IOException {
 		int len = readVUInt();
 		if (len > max) throw new IllegalArgumentException("字符串长度不正确: "+len+" > "+max);
-		return readGB(len);
+		return readStr(len, charset);
 	}
-	@Override public final String readGB(int len) throws IOException { return readGB(len, IOUtil.getSharedCharBuf()).toString(); }
-	@Override
-	public final <T extends Appendable> T readGB(int len, T target) throws IOException {
+	@Override public final String readStr(int len, FastCharset charset) throws IOException { return readStr(len, IOUtil.getSharedCharBuf(), charset).toString(); }
+	@Override public final <T extends Appendable> T readStr(int len, T target, FastCharset charset) throws IOException {
 		if (len < 0) throw new IllegalArgumentException("length="+len);
 		if (len > 0) {
 			int i = doRead(len);
-			FastCharset.GB18030().decodeFixedIn(DynByteBuf.wrap(buf, i, len),len,target);
+			charset.decodeFixedIn(DynByteBuf.wrap(buf, i, len),len,target);
 		}
 		return target;
 	}

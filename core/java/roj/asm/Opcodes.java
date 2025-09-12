@@ -301,6 +301,8 @@ public final class Opcodes {
 		fset(172, 177, CATE_RETURN);
 		fset(178, 181, CATE_FIELD);
 		fset(182, 185, CATE_METHOD);
+		_Flags[JSR&0xFF] |= CATE_GOTO|TRAIT_JUMP;
+		_Flags[JSR_W&0xFF] |= CATE_GOTO|TRAIT_JUMP;
 		_Flags[GOTO&0xFF] |= CATE_GOTO|TRAIT_JUMP;
 		_Flags[GOTO_W&0xFF] |= CATE_GOTO|TRAIT_JUMP;
 		_Flags[NEW&0xFF] |= CATE_CLASS;

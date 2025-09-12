@@ -6,7 +6,7 @@ import roj.asm.type.Type;
 import roj.asm.type.TypeHelper;
 import roj.compiler.CompileContext;
 import roj.compiler.CompileUnit;
-import roj.config.ParseException;
+import roj.text.ParseException;
 
 import java.util.List;
 

@@ -23,36 +23,38 @@ public final class SwitchBlock extends Segment {
 	private char length;
 
 	public Label def;
-	public List<SwitchTarget> targets;
+	public List<SwitchCase> cases;
 
-	public int fv_bci;
+	private int bci;
+	// 仅供FrameVisitor使用
+	public int bci() {return bci;}
 
-	SwitchBlock(int code, Label def, List<SwitchTarget> targets, int origPos) {
+	SwitchBlock(int code, Label def, List<SwitchCase> cases, int origPos) {
 		this.code = (byte) code;
 		this.def = def;
-		this.targets = targets;
+		this.cases = cases;
 
 		int pad = (4 - ((origPos + 1) & 3)) & 3;
-		this.length = (char) (code == TABLESWITCH ? 1 + pad + 4 + 8 + (targets.size() << 2) : 1 + pad + 8 + (targets.size() << 3));
+		this.length = (char) (code == TABLESWITCH ? 1 + pad + 4 + 8 + (cases.size() << 2) : 1 + pad + 8 + (cases.size() << 3));
 	}
 
 	SwitchBlock() {this((byte) 0);}
 	SwitchBlock(byte code) {
 		this.code = code;
-		this.targets = new ArrayList<>();
+		this.cases = new ArrayList<>();
 		this.length = 1;
 	}
 	public static SwitchBlock ofAuto() {return new SwitchBlock();}
 	public static SwitchBlock ofSwitch(@MagicConstant(intValues = {TABLESWITCH, LOOKUPSWITCH, 0}) byte code) {return new SwitchBlock(code);}
 
-	public void branch(int number, Label label) { targets.add(new SwitchTarget(number, label)); }
+	public void branch(int number, Label label) { cases.add(new SwitchCase(number, label)); }
 
 	@Override
 	public boolean write(CodeWriter to, int segmentId) {
-		targets.sort(null);
+		cases.sort(null);
 
 		if (code == 0) {
-			if (targets.isEmpty()) {
+			if (cases.isEmpty()) {
 				to.bw.put(Opcodes.POP);
 				int len = length;
 				if (def == null) {
@@ -70,13 +72,13 @@ public final class SwitchBlock extends Segment {
 		DynByteBuf o = to.bw;
 		int begin = o.wIndex();
 
-		int self = fv_bci = to.bci;
+		int self = bci = to.bci;
 		o.put(code);
 
 		int pad = (4 - ((self+1) & 3)) & 3;
 		while (pad-- > 0) o.put(0);
 
-		List<SwitchTarget> m = targets;
+		List<SwitchCase> m = cases;
 		if (def == null) throw new NullPointerException("default分支");
 		if (code == TABLESWITCH) {
 			if (m.isEmpty()) throw new NullPointerException("switch没有分支");
@@ -88,7 +90,7 @@ public final class SwitchBlock extends Segment {
 		} else {
 			o.putInt(def.getValue() - self).putInt(m.size());
 			for (int i = 0; i < m.size(); i++) {
-				SwitchTarget se = m.get(i);
+				SwitchCase se = m.get(i);
 				o.putInt(se.value).putInt(se.bci() - self);
 			}
 		}
@@ -103,7 +105,7 @@ public final class SwitchBlock extends Segment {
 	@Override public int length() { return length; }
 
 	public byte findBestCode() {
-		List<SwitchTarget> m = targets;
+		List<SwitchCase> m = cases;
 		if (m.isEmpty()) {
 			return code = LOOKUPSWITCH;
 		}
@@ -118,7 +120,7 @@ public final class SwitchBlock extends Segment {
 				IntSet set = new IntSet();
 				for (int i = 0; i < m.size(); i++) set.add(m.get(i).value);
 				for (int i = lo; i <= hi; i++) {
-					if (!set.contains(i)) m.add(new SwitchTarget(i, def));
+					if (!set.contains(i)) m.add(new SwitchCase(i, def));
 				}
 				m.sort(null);
 			}
@@ -131,8 +133,8 @@ public final class SwitchBlock extends Segment {
 	@Override public boolean isTerminate() {return true;}
 	@Override public boolean willJumpTo(int block, int offset) {
 		if (def.offset == offset && def.block == block) return true;
-		for (int i = 0; i < targets.size(); i++) {
-			SwitchTarget target = targets.get(i);
+		for (int i = 0; i < cases.size(); i++) {
+			SwitchCase target = cases.get(i);
 			if ((offset == -1 || target.target.offset == offset) && target.target.block == block) return true;
 		}
 		return false;
@@ -142,16 +144,16 @@ public final class SwitchBlock extends Segment {
 	public Segment move(AbstractCodeWriter to, int blockMoved, boolean clone) {
 		if (clone) {
 			var copy = ofSwitch(code);
-			for (int i = 0; i < targets.size(); i++) {
-				SwitchTarget entry = targets.get(i);
-				copy.targets.add(new SwitchTarget(entry.value, copyLabel(entry.target, to, blockMoved, true)));
+			for (int i = 0; i < cases.size(); i++) {
+				SwitchCase entry = cases.get(i);
+				copy.cases.add(new SwitchCase(entry.value, copyLabel(entry.target, to, blockMoved, true)));
 			}
 			copy.def = copyLabel(def, to, blockMoved, true);
 			return copy;
 		}
 
-		for (int i = 0; i < targets.size(); i++) {
-			copyLabel(targets.get(i).target, to, blockMoved, false);
+		for (int i = 0; i < cases.size(); i++) {
+			copyLabel(cases.get(i).target, to, blockMoved, false);
 		}
 		copyLabel(def, to, blockMoved, false);
 
@@ -162,11 +164,11 @@ public final class SwitchBlock extends Segment {
 	public String toString() { return toString(IOUtil.getSharedCharBuf().append(Opcodes.toString(code)).append(' '), 0).toString(); }
 	public CharList toString(CharList sb, int prefix) {
 		sb.append("{");
-		ArrayList<Object> a = new ArrayList<>((targets.size()+1)*3);
+		ArrayList<Object> a = new ArrayList<>((cases.size()+1)*3);
 		a.add("default");
 		a.add(def);
 		a.add(IntMap.UNDEFINED);
-		for (SwitchTarget target : targets) {
+		for (SwitchCase target : cases) {
 			a.add(target.value);
 			a.add(target.target);
 			a.add(IntMap.UNDEFINED);

@@ -2,7 +2,7 @@ package roj.ci;
 
 import roj.asmx.ClassResource;
 import roj.collect.ArrayList;
-import roj.config.data.CMap;
+import roj.config.node.MapValue;
 import roj.reflect.Bypass;
 
 import java.io.File;
@@ -29,7 +29,7 @@ public interface Compiler {
 		final BiFunction<Factory, String, ? extends Compiler> supplier;
 
 		@SuppressWarnings("unchecked")
-		public Factory(CMap config) throws ClassNotFoundException {
+		public Factory(MapValue config) throws ClassNotFoundException {
 			ignoredDiagnostics = config.getList("ignoredDiagnostics").toStringSet();
 			options = config.getList("options").toStringList();
 			supplier = Bypass.builder(BiFunction.class).constructFuzzy(Class.forName(config.getString("type")), "apply").build();

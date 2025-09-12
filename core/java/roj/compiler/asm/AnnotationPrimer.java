@@ -17,9 +17,9 @@ import roj.compiler.ast.expr.ExprParser;
 import roj.compiler.ast.expr.NewArray;
 import roj.compiler.diagnostic.Kind;
 import roj.compiler.resolve.TypeCast;
-import roj.config.ParseException;
-import roj.config.Token;
-import roj.config.data.CEntry;
+import roj.text.ParseException;
+import roj.text.Token;
+import roj.config.node.ConfigValue;
 import roj.util.Helpers;
 
 import java.util.Arrays;
@@ -84,10 +84,10 @@ public final class AnnotationPrimer extends Annotation {
 		((HashMap<String,?>) properties).put(key, Helpers.cast(expr));
 	}
 
-	public void setValues(Map<String, CEntry> values) {this.properties = values;}
+	public void setValues(Map<String, ConfigValue> values) {this.properties = values;}
 
 	@Nullable
-	public static CEntry toAnnVal(CompileContext ctx, Expr node, IType type) {
+	public static ConfigValue toAnnVal(CompileContext ctx, Expr node, IType type) {
 		if (node instanceof NewArray def) def.setType(type);
 
 		// begin 20250120 可以用 @ABC (DEF)这种方式直接引用枚举常量DEF
@@ -115,7 +115,7 @@ public final class AnnotationPrimer extends Annotation {
 		var val = toAnnVal(node.constVal(), type);
 		return tryAutoArray ? new AList(Collections.singletonList(val)) : val;
 	}
-	private static CEntry toAnnVal(Object o, IType type) {
+	private static ConfigValue toAnnVal(Object o, IType type) {
 		if (o instanceof Object[] arr) {
 			type = type.clone();
 			type.setArrayDim(type.array()-1);
@@ -125,26 +125,26 @@ public final class AnnotationPrimer extends Annotation {
 			return new AList(Helpers.cast(Arrays.asList(arr)));
 		}
 		if (o instanceof AnnVal x) return x; // AnnValEnum | AnnValClass
-		if (o instanceof CEntry a) return castPrimitive(a, type);
-		if (o instanceof String) return CEntry.valueOf(o.toString());
+		if (o instanceof ConfigValue a) return castPrimitive(a, type);
+		if (o instanceof String) return ConfigValue.valueOf(o.toString());
 		if (o instanceof IType type1) return AnnVal.valueOf(type1.rawType());
-		if (o instanceof Boolean b) return CEntry.valueOf(b);
+		if (o instanceof Boolean b) return ConfigValue.valueOf(b);
 		throw new UnsupportedOperationException("未预料的常量类型:"+o);
 	}
 
-	public static CEntry castPrimitive(CEntry entry, IType type) {
+	public static ConfigValue castPrimitive(ConfigValue entry, IType type) {
 		int sourceType = TypeCast.getDataCap(entry.dataType());
 		int targetType = TypeCast.getDataCap(type.getActualType());
 		if (sourceType == targetType) return entry;
 		return switch (targetType) {
 			default -> entry;
-			case 1 -> CEntry.valueOf((byte) entry.asInt());
-			case 2 -> CEntry.valueOf((char) entry.asInt());
-			case 3 -> CEntry.valueOf((short) entry.asInt());
-			case 4 -> CEntry.valueOf(entry.asInt());
-			case 5 -> CEntry.valueOf(entry.asLong());
-			case 6 -> CEntry.valueOf(entry.asFloat());
-			case 7 -> CEntry.valueOf(entry.asDouble());
+			case 1 -> ConfigValue.valueOf((byte) entry.asInt());
+			case 2 -> ConfigValue.valueOf((char) entry.asInt());
+			case 3 -> ConfigValue.valueOf((short) entry.asInt());
+			case 4 -> ConfigValue.valueOf(entry.asInt());
+			case 5 -> ConfigValue.valueOf(entry.asLong());
+			case 6 -> ConfigValue.valueOf(entry.asFloat());
+			case 7 -> ConfigValue.valueOf(entry.asDouble());
 		};
 	}
 }

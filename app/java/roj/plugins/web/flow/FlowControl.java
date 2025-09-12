@@ -3,7 +3,7 @@ package roj.plugins.web.flow;
 import roj.collect.HashMap;
 import roj.collect.Hasher;
 import roj.collect.LFUCache;
-import roj.config.auto.SerializerFactory;
+import roj.config.mapper.ObjectMapperFactory;
 import roj.http.server.Request;
 import roj.net.util.SpeedLimiter;
 import roj.plugin.*;
@@ -46,7 +46,7 @@ public class FlowControl extends Plugin {
 		var desc = getPluginManager().getPlugin("EasySSO");
 		hasEasySSO = desc != null && desc.getState() == PluginManager.ENABLED;
 
-		var ser = SerializerFactory.getInstance(SerializerFactory.GENERATE|SerializerFactory.CHECK_INTERFACE|SerializerFactory.SERIALIZE_PARENT).mapOf(LimitGroup.class);
+		var ser = ObjectMapperFactory.getInstance(ObjectMapperFactory.GENERATE| ObjectMapperFactory.CHECK_INTERFACE| ObjectMapperFactory.SERIALIZE_PARENT).mapOf(LimitGroup.class);
 		getConfig().accept(ser);
 		limitGroup = ser.get();
 		for (Map.Entry<String, LimitGroup> entry : limitGroup.entrySet()) {

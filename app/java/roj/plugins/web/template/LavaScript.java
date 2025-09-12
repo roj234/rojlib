@@ -1,6 +1,6 @@
 package roj.plugins.web.template;
 
-import roj.config.data.CEntry;
+import roj.config.node.ConfigValue;
 import roj.http.HttpUtil;
 import roj.http.server.Content;
 import roj.http.server.DiskFileInfo;
@@ -18,7 +18,7 @@ public class LavaScript extends Plugin {
 
 	@Override
 	protected void onEnable() throws Exception {
-		for (Map.Entry<String, CEntry> entry : getConfig().getMap("paths").entrySet()) {
+		for (Map.Entry<String, ConfigValue> entry : getConfig().getMap("paths").entrySet()) {
 			var basePath = new File(getDataFolder(), entry.getValue().asString());
 
 			registerRoute(entry.getKey()+"/", (req, rh) -> {

@@ -2,22 +2,17 @@ package roj.http;
 
 import org.jetbrains.annotations.ApiStatus;
 import org.jetbrains.annotations.Nullable;
-import roj.collect.RingBuffer;
 import roj.collect.ArrayList;
-import roj.util.OperationDone;
+import roj.collect.RingBuffer;
 import roj.crypt.CryptoFactory;
-import roj.util.FastFailException;
-import roj.io.IOUtil;
 import roj.io.BufferPool;
+import roj.io.IOUtil;
 import roj.net.*;
-import roj.net.handler.JSslClient;
+import roj.net.handler.TLSClient;
 import roj.net.handler.Timeout;
 import roj.text.CharList;
 import roj.text.URICoder;
-import roj.util.ByteList;
-import roj.util.DynByteBuf;
-import roj.util.Helpers;
-import roj.util.TypedKey;
+import roj.util.*;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -36,9 +31,11 @@ public abstract class HttpRequest {
 	public static int DEFAULT_TIMEOUT = 10000;
 	public static final Headers DEFAULT_HEADERS = new Headers();
 	static {
+		String version = System.getProperty("java.version");
+		String agent = System.getProperty("http.agent");
 		DEFAULT_HEADERS.put("accept", "*/*");
 		//DEFAULT_HEADERS.put("connection", "keep-alive");
-		DEFAULT_HEADERS.put("user-agent", "Java/1.8.0_201");
+		DEFAULT_HEADERS.put("user-agent", agent == null ? "Java/"+version : agent+" Java/"+version);
 		DEFAULT_HEADERS.put("accept-encoding", "gzip, deflate");
 	}
 
@@ -286,13 +283,17 @@ public abstract class HttpRequest {
 	}
 	//endregion
 	public boolean attach(MyChannel ch, int timeout) throws IOException {
+		var address = getAddress();
+
 		ch.addFirst("h11@client", (ChannelHandler) this);
 		if ("https".equals(protocol)) {
-			// todo now we supported HTTP/2, but still not TLS1.3(with my own implementation)
-			ch.addFirst("h11@tls", /*RojLib.EXTRA_BUG_CHECK ? new MSSCipher().sslMode() : */new JSslClient());
+			TLSClient client = new TLSClient(address.getHostName(), address.getPort());
+			//not implemented yet
+			//client.setALPN("h2", "http/1.1");
+			ch.addFirst("h11@tls", client);
 		}
 
-		var addr = Net.applyProxy(proxy, getAddress(), ch);
+		var addr = Net.applyProxy(proxy, address, ch);
 		return ch.connect(addr, timeout);
 	}
 	// region 一次连接
@@ -315,6 +316,16 @@ public abstract class HttpRequest {
 	public final HttpClient executePooled() throws IOException { return executePooled(DEFAULT_TIMEOUT); }
 	public final HttpClient executePooled(int timeout) throws IOException { return executePooled(timeout, action.equals("GET") || action.equals("HEAD") || action.equals("OPTIONS") ? 1 : -1); }
 	public final HttpClient executePooled(int timeout, int maxRedirect) throws IOException { return executePooled(timeout, maxRedirect, 0); }
+
+	/**
+	 * 使用连接池执行HTTP请求，支持重定向和重试机制
+	 *
+	 * @param timeout 连接和读取超时时间（毫秒）
+	 * @param maxRedirect 最大重定向次数，负数表示无限重定向
+	 * @param maxRetry 最大重试次数，负数等同于0
+	 * @return HttpClient实例用于处理响应
+	 * @throws IOException 如果连接失败或发生I/O错误
+	 */
 	public final HttpClient executePooled(int timeout, int maxRedirect, int maxRetry) throws IOException {
 		headers.putIfAbsent("connection", "keep-alive");
 
@@ -376,10 +387,10 @@ public abstract class HttpRequest {
 		}
 
 		final void _add(ChannelCtx ctx, Event event) {
-			if (size < maxCap) {
+			if (size < maxCapacity) {
 				lock.lock();
 				try {
-					if (size < maxCap) {
+					if (size < maxCapacity) {
 						ctx.channel().remove("async_handler");
 						if (event != null) event.setResult(Event.RESULT_DENY);
 						ctx.attachment(SLEEP, new AtomicLong(System.currentTimeMillis()));

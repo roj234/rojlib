@@ -3,9 +3,9 @@ package roj.text.logging;
 import roj.collect.HashSet;
 import roj.collect.Hasher;
 import roj.compiler.plugins.asm.ASM;
-import roj.config.serial.ToJson;
+import roj.config.JsonSerializer;
 import roj.text.CharList;
-import roj.text.logging.c.LogComponent;
+import roj.text.Formatter;
 
 import java.io.PrintStream;
 import java.util.List;
@@ -18,30 +18,29 @@ final class LogWriterJson extends LogWriter {
 	static final ThreadLocal<LogWriterJson> LOCAL = ThreadLocal.withInitial(LogWriterJson::new);
 
 	final void log(LogContext ctx, Level level, CharSequence msg, Throwable ex, Object[] args, int argc) {
-		ToJson ser = new ToJson();
-		ser.valueMap();
+		JsonSerializer ser = new JsonSerializer();
+		ser.emitMap();
 
 		ser.key("context");
-		ser.valueMap();
+		ser.emitMap();
 
 		ser.key("thread");
-		ser.value(tmpCtx.get("THREAD").toString());
+		ser.emit(tmpCtx.get("THREAD").toString());
 		ser.key("level");
-		ser.value(level.name());
+		ser.emit(level.name());
 		ser.key("logger");
-		ser.value(ctx.name());
+		ser.emit(ctx.name());
 
 		CharList sb = this.sb;
 		MyMap m = tmpCtx;
 		m.components = ctx.getComponents();
 
-		List<LogComponent> components = ctx.getComponents();
+		List<Formatter> components = ctx.getComponents();
 		for (int i = 0; i < components.size(); i++) {
 			ser.key(Integer.toString(i));
 
 			sb.clear();
-			components.get(i).accept(m, sb);
-			ser.valString(sb);
+			ser.valString(components.get(i).format(m, sb));
 		}
 
 		ser.pop();
@@ -76,45 +75,45 @@ final class LogWriterJson extends LogWriter {
 		}
 	}
 
-	private static void writeException(Throwable ex, HashSet<Throwable> dejavu, ToJson ser) {
+	private static void writeException(Throwable ex, HashSet<Throwable> dejavu, JsonSerializer ser) {
 		if (!dejavu.add(ex)) {
-			ser.value("circular reference");
+			ser.emit("circular reference");
 			return;
 		}
 
-		ser.valueMap();
+		ser.emitMap();
 
 		ser.key("type");
-		ser.value(ex.getClass().getSimpleName());
+		ser.emit(ex.getClass().getSimpleName());
 
 		if (ex.getMessage() != null) {
 			ser.key("message");
-			ser.value(ex.getMessage());
+			ser.emit(ex.getMessage());
 		}
 
 		var trace = LogHelper.INSTANCE.getStackTrace(ex);
 		if (trace.length > 0) {
 			ser.key("trace");
-			ser.valueList();
+			ser.emitList();
 
 			for (var el : trace) {
-				ser.valueMap();
+				ser.emitMap();
 				ser.key("class");
-				ser.value(el.getClassName());
+				ser.emit(el.getClassName());
 				ser.key("method");
-				ser.value(el.getMethodName());
+				ser.emit(el.getMethodName());
 				if (el.getLineNumber() != -1) {
 					ser.key("line");
-					ser.value(el.getLineNumber());
+					ser.emit(el.getLineNumber());
 				}
 				if (el.getFileName() != null) {
 					ser.key("file");
-					ser.value(el.getFileName());
+					ser.emit(el.getFileName());
 				}
 				if (ASM.TARGET_JAVA_VERSION > 8) {
 					if (el.getModuleName() != null) {
 						ser.key("module");
-						ser.value(el.getMethodName());
+						ser.emit(el.getMethodName());
 					}
 				}
 				ser.pop();
@@ -124,7 +123,7 @@ final class LogWriterJson extends LogWriter {
 		List<Throwable> suppressed = LogHelper.INSTANCE.getSuppressed(ex);
 		if (suppressed != null) {
 			ser.key("suppressed");
-			ser.valueList();
+			ser.emitList();
 			for (Throwable th : suppressed) {
 				writeException(th, dejavu, ser);
 			}

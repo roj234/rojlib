@@ -28,9 +28,9 @@ import roj.compiler.ast.expr.*;
 import roj.compiler.diagnostic.Kind;
 import roj.compiler.resolve.*;
 import roj.compiler.runtime.RtUtil;
-import roj.config.ParseException;
-import roj.config.Token;
-import roj.config.data.CEntry;
+import roj.text.ParseException;
+import roj.text.Token;
+import roj.config.node.ConfigValue;
 import roj.reflect.Reflection;
 import roj.util.ArrayUtil;
 import roj.util.Helpers;
@@ -635,8 +635,8 @@ public final class MethodParser {
 	//  1. 非静态类的泛型语法
 	//  2. while不再使用那个弃用的方法
 	//  新增Feature
-	//  5. 基于模板的无包装泛型
-	//  7. 自动Constexpr
+	//  3. 基于模板的无包装泛型
+	//  4. 自动Constexpr
 	private FlowHook flowHook;
 
 	// 也是回调 抓住能被try捕获的异常
@@ -2381,7 +2381,7 @@ public final class MethodParser {
 					for (Expr label : branch.labels) {
 						var tmp1 = label.constVal();
 						int key;
-						if (tmp1 instanceof CEntry x && x.mayCastTo(roj.config.data.Type.INTEGER)) {
+						if (tmp1 instanceof ConfigValue x && x.mayCastTo(roj.config.node.Type.INTEGER)) {
 							key = x.asInt();
 						} else {
 							continue;
@@ -2413,7 +2413,7 @@ public final class MethodParser {
 				for (Expr label : branch.labels) {
 					var tmp1 = label.constVal();
 					int key;
-					if (tmp1 instanceof CEntry x && x.mayCastTo(roj.config.data.Type.INTEGER)) {
+					if (tmp1 instanceof ConfigValue x && x.mayCastTo(roj.config.node.Type.INTEGER)) {
 						key = x.asInt();
 					} else {
 						// 报告错误，xxx无法转换为常量整数
@@ -2461,7 +2461,7 @@ public final class MethodParser {
 					if (tmp1 instanceof String) {
 						key = (String) tmp1;
 					} else if (label.type().equals(Type.primitive(Type.CHAR))) {
-						key = String.valueOf(((CEntry) tmp1).asChar());
+						key = String.valueOf(((ConfigValue) tmp1).asChar());
 					} else {
 						// 报告错误：xxx无法转换为常量字符串
 						int type = ctx.castTo(label.type(), Types.STRING_TYPE, 0).type;
@@ -2652,7 +2652,11 @@ public final class MethodParser {
 						if (wr.next().type() != rBrace) ctx.report(Kind.WARNING, "block.switch.fallthrough");
 						wr.retractWord();
 					}
-				assert cw.isJumpingTo(endPoint) == cw.isContinuousControlFlow();
+
+					System.out.println("Cw is JumpingTo "+endPoint);
+					System.out.println(cw.isContinuousControlFlow());
+					System.out.println(cw);
+					if (cw.isJumpingTo(endPoint) != cw.isContinuousControlFlow()) throw new AssertionError();
 				return cw.isContinuousControlFlow();
 			}
 

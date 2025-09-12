@@ -21,7 +21,7 @@ import roj.compiler.diagnostic.Kind;
 import roj.compiler.resolve.NestContext;
 import roj.compiler.resolve.ResolveException;
 import roj.compiler.resolve.TypeCast;
-import roj.config.ParseException;
+import roj.text.ParseException;
 import roj.text.TextUtil;
 import roj.util.Helpers;
 import roj.util.function.Flow;

@@ -1,20 +1,20 @@
 package roj.plugins.ddns;
 
 import org.jetbrains.annotations.Nullable;
+import roj.collect.ArrayList;
 import roj.collect.BitSet;
 import roj.collect.HashMap;
-import roj.collect.ArrayList;
 import roj.concurrent.Task;
 import roj.concurrent.TaskThread;
-import roj.config.JSONParser;
-import roj.config.data.CList;
-import roj.config.data.CMap;
+import roj.config.JsonParser;
+import roj.config.node.ListValue;
+import roj.config.node.MapValue;
 import roj.crypt.HMAC;
 import roj.http.HttpClient;
 import roj.http.HttpRequest;
 import roj.io.IOUtil;
 import roj.text.CharList;
-import roj.text.DateTime;
+import roj.text.DateFormat;
 import roj.text.URICoder;
 import roj.ui.Tty;
 import roj.util.ByteList;
@@ -52,7 +52,7 @@ final class Aliyun implements IpMapper {
 		byte[] nonce = new byte[16];
 		rnd.nextBytes(nonce);
 		queries.put("SignatureNonce", IOUtil.encodeHex(nonce));
-		queries.put("Timestamp", DateTime.GMT().format("Y-m-dTH:i:sP", System.currentTimeMillis()).toString());
+		queries.put("Timestamp", DateFormat.format(DateFormat.ISO8601_Seconds, System.currentTimeMillis()).toString());
 
 		//计算签名
 		String signature = makeSign(queries, AccessKeySecret);
@@ -106,7 +106,7 @@ final class Aliyun implements IpMapper {
 	private final TaskThread th = new TaskThread();
 
 	@Override
-	public void init(CMap config) {
+	public void init(MapValue config) {
 		AccessKeyId = config.getString("AccessKey");
 		AccessKeySecret = config.getString("AccessSecret");
 
@@ -218,7 +218,7 @@ final class Aliyun implements IpMapper {
 
 		try {
 			HttpClient shc = HttpRequest.builder().url(makeUrl(par)).executePooled();
-			CMap cfg = _parse(shc);
+			MapValue cfg = _parse(shc);
 		} catch (Exception e) {
 			Tty.error("请求参数: " + par, e);
 		}
@@ -248,14 +248,14 @@ final class Aliyun implements IpMapper {
 		par.put("Type", type);
 
 		try {
-			CMap cfg = _parse(pooledRequest(makeUrl(par)));
+			MapValue cfg = _parse(pooledRequest(makeUrl(par)));
 		} catch (Exception e) {
 			Tty.error("请求参数: " + par, e);
 		}
 	}
 
-	private CMap _parse(HttpClient shc) throws Exception {
-		CMap map = new JSONParser().parse(shc.stream()).asMap();
+	private MapValue _parse(HttpClient shc) throws Exception {
+		MapValue map = new JsonParser().parse(shc.stream()).asMap();
 		if (map.containsKey("Message"))
 			throw new IllegalArgumentException("API错误: " + map.getString("Message"));
 		return map;
@@ -264,10 +264,10 @@ final class Aliyun implements IpMapper {
 	private Task _init(Map<String, String> param) {
 		var url = makeUrl(param);
 		return () -> {
-			CMap cfg = _parse(pooledRequest(url));
-			CList list = cfg.query("DomainRecords.Record").asList();
+			MapValue cfg = _parse(pooledRequest(url));
+			ListValue list = cfg.query("DomainRecords.Record").asList();
 			for (int i = 0; i < list.size(); i++) {
-				CMap data = list.get(i).asMap();
+				MapValue data = list.get(i).asMap();
 				String name = data.getString("RR")+"."+data.getString("DomainName");
 
 				DomainRecord record = domainRecords.get(name);

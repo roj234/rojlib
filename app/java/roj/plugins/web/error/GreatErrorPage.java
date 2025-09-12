@@ -1,12 +1,12 @@
 package roj.plugins.web.error;
 
-import roj.ci.annotation.ReferenceByGeneratedClass;
 import roj.asmx.injector.Inject;
 import roj.asmx.injector.Weave;
 import roj.asmx.launcher.Autoload;
+import roj.ci.annotation.ReferenceByGeneratedClass;
 import roj.collect.HashMap;
 import roj.http.server.Content;
-import roj.http.server.HttpServer11;
+import roj.http.server.HttpServer;
 import roj.http.server.Request;
 import roj.io.IOUtil;
 import roj.text.CharList;
@@ -37,7 +37,7 @@ public class GreatErrorPage {
 	}
 
 	@Autoload(Autoload.Target.NIXIM)
-	@Weave(target = HttpServer11.class)
+	@Weave(target = HttpServer.class)
 	private static final class Injector {
 		@Inject
 		static Content onUncaughtError(Request req, Throwable e) {return GreatErrorPage.display(req, e);}

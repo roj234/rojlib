@@ -9,8 +9,8 @@ import roj.asmx.event.EventTransformer;
 import roj.asmx.launcher.Loader;
 import roj.asmx.launcher.Tweaker;
 import roj.config.ConfigMaster;
-import roj.config.ParseException;
-import roj.config.data.CMap;
+import roj.text.ParseException;
+import roj.config.node.MapValue;
 import roj.text.TextUtil;
 import roj.ui.Tty;
 import roj.util.ArrayUtil;
@@ -26,14 +26,14 @@ import java.util.List;
  * @since 2023/12/31 1:20
  */
 public final class PanTweaker extends Tweaker implements Transformer {
-	static CMap CONFIG;
+	static MapValue CONFIG;
 	static AnnotationRepo annotations;
 
 	@Override
 	public void init(List<String> args, Loader loader) {
 		File file = new File("plugins/Core/config.yml");
 		try {
-			CONFIG = file.isFile() ? ConfigMaster.YAML.parse(file).asMap() : new CMap();
+			CONFIG = file.isFile() ? ConfigMaster.YAML.parse(file).asMap() : new MapValue();
 		} catch (IOException | ParseException e) {
 			Helpers.athrow(e);
 		}

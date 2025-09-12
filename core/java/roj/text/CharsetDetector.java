@@ -1,7 +1,7 @@
 package roj.text;
 
+import roj.collect.ArrayList;
 import roj.collect.BitSet;
-import roj.io.IOUtil;
 import roj.reflect.Unaligned;
 import roj.util.ArrayCache;
 import roj.util.DynByteBuf;
@@ -11,13 +11,37 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.ByteBuffer;
 import java.nio.channels.ReadableByteChannel;
+import java.util.Arrays;
+import java.util.List;
 import java.util.function.IntConsumer;
 
 /**
  * @author Roj234
  * @since 2023/5/14 23:31
  */
-public final class CharsetDetector implements IntConsumer, AutoCloseable {
+public final class CharsetDetector implements AutoCloseable {
+	private static final List<String> charsetNames = new ArrayList<>();
+	private static final List<Scorer> scorers = new ArrayList<>();
+
+	@FunctionalInterface
+	public interface Scorer {
+		int score(byte[] b, int off, int end);
+	}
+
+	public static synchronized void register(String charset, Scorer scorer) {
+		charsetNames.add(charset);
+		scorers.add(scorer);
+	}
+
+	static {
+		register("UTF-8", CharsetDetector::scoreUTF8);
+		register("UTF-16LE", CharsetDetector::scoreUTF16LE);
+		register("UTF-16BE", CharsetDetector::scoreUTF16BE);
+		register("GB18030", CharsetDetector::scoreGB18030);
+		register("BIG5", CharsetDetector::scoreBIG5);
+		register("Shift-JIS", CharsetDetector::scoreShiftJIS);
+	}
+
 	private byte[] b;
 	private int skip, bLen;
 
@@ -50,44 +74,51 @@ public final class CharsetDetector implements IntConsumer, AutoCloseable {
 		int len = readUpto(4);
 		if (len < 2) return "US-ASCII";
 
-		// avoid UTF-32 issue
+		// 填充至4字节以便BOM检测
 		int a = len;
 		while (a < 4) b[a++] = 1;
 
 		String bomCharset = detectBOM(b);
 		if (bomCharset != null) {
-			System.arraycopy(b, skip, b, 0, bLen = len-skip);
+			System.arraycopy(b, skip, b, 0, bLen = len - skip);
 			return bomCharset;
 		}
 		bLen = len;
 
-		int utf8_score = 0, utf8_negate = 0;
-		int gb18030_score = 0, gb18030_negate = 0;
+		var scores = new int[charsetNames.size()];
+		int minScore = 0;
+		int maxScore = 0;
+		int maxScoreIndex = 0;
 
 		len = 0;
 		while (true) {
 			bLen += readUpto(b.length - bLen);
 
-			ps = ns = 0;
-			FastCharset.UTF8().fastValidate(b, Unaligned.ARRAY_BYTE_BASE_OFFSET + len, Unaligned.ARRAY_BYTE_BASE_OFFSET + bLen, this);
-			utf8_score += ps - 5*ns;
-			utf8_negate += ns;
-
-			ps = ns = 0;
-			FastCharset.GB18030().fastValidate(b, Unaligned.ARRAY_BYTE_BASE_OFFSET + len, Unaligned.ARRAY_BYTE_BASE_OFFSET + bLen, this);
-			gb18030_score += ps - 5*ns;
-			gb18030_negate += ns;
-
-			if (Math.abs(utf8_score - gb18030_score) > 100) {
-				// ASCII时相同
-				if (utf8_score >= gb18030_score || utf8_negate * 3 < gb18030_negate * 2) return "UTF8";
-				else if (gb18030_score > 0 && gb18030_negate * 3 < utf8_negate * 2) return "GB18030";
+			for (int i = 0; i < scores.length; i++) {
+				Scorer scorer = scorers.get(i);
+				if (scores[i] > -128)
+					scores[i] += scorer.score(b, len, bLen);
 			}
 
+			for (int i = 0; i < scores.length; i++) {
+				int score = scores[i];
+				if (score > maxScore) {
+					maxScore = score;
+					maxScoreIndex = i;
+				}
+				minScore = Math.min(minScore, score);
+			}
+
+			// 如果差异很大，可以中止
+			if (maxScore - minScore > 100)
+				return charsetNames.get(maxScoreIndex);
+
+			// EOF
 			if (len == bLen) break;
 			len = bLen;
 
 			if (bLen == b.length) {
+				// 读取太多字节了，最多读取这么多够了
 				if (bLen > 32767) break;
 
 				byte[] b1 = ArrayCache.getByteArray(b.length << 1, false);
@@ -97,14 +128,14 @@ public final class CharsetDetector implements IntConsumer, AutoCloseable {
 			}
 		}
 
-		// nearly impossible hit here when file is large
-		if (utf8_score >= gb18030_score || utf8_negate * 3 < gb18030_negate * 2) return "UTF8";
-		else if (gb18030_score > 0 && gb18030_negate * 3 < utf8_negate * 2) return "GB18030";
+		if (maxScore - minScore > bLen/10)
+			return charsetNames.get(maxScoreIndex);
 
-		if (utf8_negate == gb18030_negate) return "UTF8";
-
-		throw new IOException("无法确定编码,utf8_score="+utf8_score+",gbk_score="+gb18030_score);
+		throw new IOException("无法确定编码,"+charsetNames+","+Arrays.toString(scores));
+		// fallback
+		//return "ISO-8859-1";
 	}
+
 	private String detectBOM(byte[] b) {
 		switch (b[0] & 0xFF) {
 			case 0x00:
@@ -145,6 +176,7 @@ public final class CharsetDetector implements IntConsumer, AutoCloseable {
 		}
 		return null;
 	}
+
 	private int readUpto(int max) throws IOException {
 		switch (type & 3) {
 			default:
@@ -152,7 +184,7 @@ public final class CharsetDetector implements IntConsumer, AutoCloseable {
 				InputStream in = (InputStream) this.in;
 				int len = 0;
 				while (len < max) {
-					int r = in.read(b, bLen+len, max-len);
+					int r = in.read(b, bLen + len, max - len);
 					if (r < 0) break;
 					len += r;
 				}
@@ -165,13 +197,12 @@ public final class CharsetDetector implements IntConsumer, AutoCloseable {
 					int r = in.read(bb);
 					if (r < 0 || !bb.hasRemaining()) break;
 				}
-				return bb.position()-bLen;
+				return bb.position() - bLen;
 			}
 			case 2: {
 				DynByteBuf in = (DynByteBuf) this.in;
-				max = Math.min(in.readableBytes()-bLen, max);
-
-				in.readFully(in.rIndex+bLen, b, bLen, max);
+				max = Math.min(in.readableBytes() - bLen, max);
+				in.readFully(in.rIndex + bLen, b, bLen, max);
 				return max;
 			}
 		}
@@ -191,74 +222,125 @@ public final class CharsetDetector implements IntConsumer, AutoCloseable {
 		}
 	}
 
-	//19968, 40863
-	public static final BitSet 常用字 = new BitSet(40863);
-	//19984, 40718
-	public static final BitSet 次常用字 = new BitSet(40718);
-	public static final BitSet 标点 = new BitSet(65507);
-	public static final String 半角 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789 `~!@#$%^&*()_+-={}|[]:\";'<>?,./";
-	public static final String 全角;
-	static {
-		try (var in = CharsetDetector.class.getClassLoader().getResourceAsStream("roj/text/CharsetDetector.txt")) {
-			byte[] b = ArrayCache.getByteArray(1024, false);
-			var list = new BitSet[] {常用字, 次常用字, 标点};
-			int off = 0;
-			var set = list[off];
+	public static final int ASCII_SUCCESS = 1, DECODE_SUCCESS = 2, FREQUENCY_SUCCESS = 3, CONTROL_BYTE = -1, DECODE_FAILURE = 5;
 
-			while (true) {
-				int r = in.read(b);
-				if (r < 0) break;
+	// 评分函数 for each encoding
+	private static int scoreUTF8(byte[] data, int off, int end) {
+		var verifier = new GreatScorer();
+		FastCharset.UTF8().fastValidate(data, Unaligned.ARRAY_BYTE_BASE_OFFSET + off, Unaligned.ARRAY_BYTE_BASE_OFFSET + end, verifier);
+		return verifier.score;
+	}
 
-				for (int i = 0; i < r; i+=2) {
-					// UTF-16LE
-					char c = (char) ((b[i] & 0xFF) | ((b[i+1] & 0xFF) << 8));
-					if (c == '\n') set = list[++off];
-					else set.add(c);
+	private static int scoreUTF16LE(byte[] data, int off, int end) {
+		var verifier = new GreatScorer();
+		FastCharset.UTF16LE().fastValidate(data, Unaligned.ARRAY_BYTE_BASE_OFFSET + off, Unaligned.ARRAY_BYTE_BASE_OFFSET + end, verifier);
+		return verifier.score;
+	}
+
+	private static int scoreUTF16BE(byte[] data, int off, int end) {
+		var verifier = new GreatScorer();
+		FastCharset.UTF16BE().fastValidate(data, Unaligned.ARRAY_BYTE_BASE_OFFSET + off, Unaligned.ARRAY_BYTE_BASE_OFFSET + end, verifier);
+		return verifier.score;
+	}
+
+	private static int scoreGB18030(byte[] data, int off, int end) {
+		var verifier = new GreatScorer();
+		FastCharset.GB18030().fastValidate(data, Unaligned.ARRAY_BYTE_BASE_OFFSET + off, Unaligned.ARRAY_BYTE_BASE_OFFSET + end, verifier);
+		return verifier.score;
+	}
+
+	private static int scoreBIG5(byte[] data, int off, int end) {
+		int score = 0;
+		while (off < end) {
+			int byte1 = data[off++] & 0xFF;
+			if (byte1 <= 0x7F) {
+				score += GreatScorer.isControl(byte1) ? CONTROL_BYTE : ASCII_SUCCESS;
+				continue;
+			} else if (byte1 >= 0xA1 && byte1 <= 0xFE) {
+				if (off < end) {
+					int byte2 = data[off] & 0xFF;
+					if (byte2 >= 0x40 && byte2 <= 0x7E || byte2 >= 0xA1 && byte2 <= 0xFE) {
+						score += DECODE_SUCCESS;
+						off ++;
+						continue;
+					}
+				} else {
+					break;
 				}
 			}
-			ArrayCache.putArray(b);
-		} catch (IOException e) {
-			e.printStackTrace();
+			score -= DECODE_FAILURE;
+		}
+		return score;
+	}
+
+	private static int scoreShiftJIS(byte[] data, int off, int end) {
+		int score = 0;
+		while (off < end) {
+			int byte1 = data[off++] & 0xFF;
+			if (byte1 <= 0x7F) {
+				score += GreatScorer.isControl(byte1) ? CONTROL_BYTE : ASCII_SUCCESS;
+				continue;
+			} else if (byte1 >= 0x81 && byte1 <= 0x9F || byte1 >= 0xE0 && byte1 <= 0xFC) {
+				if (off < end) {
+					int byte2 = data[off] & 0xFF;
+					if (byte2 >= 0x40 && byte2 <= 0x7E || byte2 >= 0x80 && byte2 <= 0xFC) {
+						score += DECODE_SUCCESS;
+						off ++;
+						continue;
+					}
+				} else {
+					break;
+				}
+			}
+			score -= DECODE_FAILURE;
+		}
+		return score;
+	}
+
+	static final class GreatScorer implements IntConsumer {
+		private static final BitSet VERY_COMMON = new BitSet(40863);
+		private static final BitSet COMMON = new BitSet(40718);
+
+		static {
+			try (var in = CharsetDetector.class.getClassLoader().getResourceAsStream("roj/text/CharsetDetector.txt")) {
+				byte[] b = ArrayCache.getByteArray(1024, false);
+				var list = new BitSet[] {VERY_COMMON, COMMON};
+				int off = 0;
+				var set = list[off];
+
+				while (true) {
+					int r = in.read(b);
+					if (r < 0) break;
+
+					for (int i = 0; i < r; i+=2) {
+						// UTF-16LE
+						char c = (char) ((b[i] & 0xFF) | ((b[i+1] & 0xFF) << 8));
+						if (c == '\n') set = list[++off];
+						else set.add(c);
+					}
+				}
+				ArrayCache.putArray(b);
+			} catch (IOException e) {
+				e.printStackTrace();
+			}
 		}
 
-		char[] arr = 半角.toCharArray();
-		for (int i = 0; i < arr.length; i++) arr[i] += 65248;
-		全角 = new String(arr);
-	}
+		static boolean isControl(int c) {return c < 32 && c != '\r' && c != '\n' && c != '\t';}
 
-	// regexp: ([a-z])\1
-	// 就这样
+		public int score;
 
-	public static CharSequence naturalize(CharSequence seq) {
-		CharList tmp = IOUtil.getSharedCharBuf().append(seq);
-		for (int i = 0; i < tmp.length(); i++) {
-			tmp.set(i, naturalize(tmp.charAt(i)));
-		}
-		return tmp.toString();
-	}
-	public static char naturalize(char c) {
-		if (c == '。') return '.';
-		if (标点.contains(c)) return '!';
-
-		int i = 全角.indexOf(c);
-		if (i >= 0) c = 半角.charAt(i);
-		return Character.toLowerCase(c);
-	}
-
-	private int ps, ns;
-	@Override
-	public void accept(int c) {
-		if (c < 0) {
-			if (c != FastCharset.TRUNCATED)
-				ns += 10;
-		} else if (c < 32 && c != '\r' && c != '\n' && c != '\t') { // control
-			ns++;
-		} else if (常用字.contains(c) || c >= Character.MIN_SUPPLEMENTARY_CODE_POINT) { // 表情: 至少验证更严格
-			ps += 3;
-		} else if (次常用字.contains(c)) {
-			ps += 2;
-		} else {
-			ps++;
+		@Override public void accept(int c) {
+			if (c < 0) {
+				if (c != FastCharset.TRUNCATED) score -= DECODE_FAILURE;
+			} else if (isControl(c)) { // 控制字符
+				score += CONTROL_BYTE;
+			} else if (VERY_COMMON.contains(c) || c >= Character.MIN_SUPPLEMENTARY_CODE_POINT) { // 常用字或（正确解码的）表情符号
+				score += FREQUENCY_SUCCESS;
+			} else if (COMMON.contains(c)) {
+				score += DECODE_SUCCESS;
+			} else {
+				score += ASCII_SUCCESS;
+			}
 		}
 	}
 }

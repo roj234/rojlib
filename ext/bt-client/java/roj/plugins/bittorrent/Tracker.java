@@ -3,9 +3,9 @@ package roj.plugins.bittorrent;
 import roj.util.OperationDone;
 import roj.concurrent.Promise;
 import roj.config.ConfigMaster;
-import roj.config.ParseException;
-import roj.config.data.CEntry;
-import roj.config.data.CMap;
+import roj.text.ParseException;
+import roj.config.node.ConfigValue;
+import roj.config.node.MapValue;
 import roj.http.HttpHead;
 import roj.http.HttpRequest;
 import roj.util.FastFailException;
@@ -46,7 +46,7 @@ public abstract class Tracker {
 
 			if (time < notifyAfter) return errorCount > 0 ? Promise.reject(OperationDone.INSTANCE) : Promise.resolve(null);
 
-			return Promise.<CMap>async(callback -> {
+			return Promise.<MapValue>async(callback -> {
 				try {
 					HttpRequest.builder().url(url).query(session.getHttpParameter()).bodyLimit(1048576).execute(120000).await(httpClient -> {
 						if (!httpClient.isDone()) return;
@@ -74,8 +74,8 @@ public abstract class Tracker {
 				interval = System.currentTimeMillis() / 1000 + data.getInt("interval");
 				leechers = data.getInt("incomplete");
 				seeders = data.getInt("complete");
-				for (CEntry item : data.getList("peers").raw()) {
-					CMap map = item.asMap();
+				for (ConfigValue item : data.getList("peers").raw()) {
+					MapValue map = item.asMap();
 					session.addPeer(map.getString("peer id"), new InetSocketAddress(map.getString("IP"), map.getInt("Port")));
 				}
 			}).rejected(exc -> {

@@ -30,7 +30,7 @@ public sealed class Bitmap {
 		if (capacity < 1 << (UNIT+LONG_SHIFT))
 			throw new IllegalArgumentException("Capacity("+capacity+") too small");
 
-		int targetDepth = Long.numberOfTrailingZeros(MathUtils.getMin2PowerOf(capacity)) - LONG_SHIFT;
+		int targetDepth = Long.numberOfTrailingZeros(MathUtils.nextPowerOfTwo(capacity)) - LONG_SHIFT;
 		int i = UNIT;
 		while (i < targetDepth) i += LONG_SHIFT;
 

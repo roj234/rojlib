@@ -3,7 +3,7 @@ package roj.sql;
 import roj.collect.ArrayList;
 import roj.collect.HashMap;
 import roj.collect.*;
-import roj.config.Tokenizer;
+import roj.text.Tokenizer;
 import roj.text.CharList;
 import roj.text.TextUtil;
 import roj.util.Helpers;

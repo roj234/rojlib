@@ -9,19 +9,17 @@ import roj.collect.HashSet;
 import roj.collect.IntMap;
 import roj.concurrent.TaskGroup;
 import roj.concurrent.TaskPool;
-import roj.config.NBTParser;
-import roj.config.serial.ToNBT;
+import roj.config.NbtEncoder;
+import roj.config.NbtParser;
 import roj.crypt.CRC32;
 import roj.crypt.CryptoFactory;
 import roj.crypt.KeyType;
 import roj.io.*;
-import roj.io.BufferPool;
 import roj.text.TextUtil;
+import roj.text.diff.BsDiff;
 import roj.ui.EasyProgressBar;
 import roj.util.ArrayCache;
-import roj.util.BsDiff;
 import roj.util.ByteList;
-import roj.io.RegionFile;
 
 import java.io.*;
 import java.nio.charset.StandardCharsets;
@@ -137,7 +135,7 @@ public final class McDiffServer {
 								}
 
 								var buf = IOUtil.getSharedByteBuf();
-								new NBTParser().parse(in1, 0, new ToNBT(buf));
+								new NbtParser().parse(in1, 0, new NbtEncoder(buf));
 								prevRin.write(block, buf);
 								prevRin.setTimestamp(block, timestamp);
 							}

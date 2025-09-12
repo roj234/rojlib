@@ -28,8 +28,8 @@ import roj.compiler.doc.Javadoc;
 import roj.compiler.doc.JavadocProcessor;
 import roj.compiler.jpp.NativeStruct;
 import roj.compiler.resolve.NestContext;
-import roj.config.ParseException;
-import roj.config.Token;
+import roj.text.ParseException;
+import roj.text.Token;
 import roj.io.IOUtil;
 import roj.util.ArrayUtil;
 
@@ -38,7 +38,7 @@ import java.util.List;
 
 import static roj.asm.Opcodes.*;
 import static roj.compiler.JavaTokenizer.*;
-import static roj.config.Token.*;
+import static roj.text.Token.*;
 
 /**
  * Lava Compiler - 类结构Parser (Stage1 for JavaLike)<p>

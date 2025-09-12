@@ -1,23 +1,23 @@
 package roj.asm;
 
 import org.jetbrains.annotations.Nullable;
+import roj.annotation.MayMutate;
 import roj.asm.type.IType;
 import roj.asm.type.Type;
 import roj.collect.ArrayList;
-import roj.collect.CollectionX;
 import roj.collect.HashMap;
-import roj.collect.ToIntMap;
+import roj.collect.HashSet;
+import roj.collect.*;
 import roj.compiler.CompileContext;
 import roj.compiler.library.ClassLoaderLibrary;
 import roj.compiler.resolve.ComponentList;
 import roj.compiler.resolve.Resolver;
-import roj.compiler.resolve.TypeCast;
 import roj.text.CharList;
 import roj.text.TextUtil;
+import roj.util.Helpers;
+import roj.util.Pair;
 
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.function.Function;
 
 /**
@@ -27,8 +27,9 @@ import java.util.function.Function;
  * @since 2020/8/19 21:32
  */
 public final class ClassUtil {
-	private static final ThreadLocal<ClassUtil> ThreadBasedCache = ThreadLocal.withInitial(ClassUtil::new);
-	public static ClassUtil getInstance() {return ThreadBasedCache.get();}
+	private static final ThreadLocal<ClassUtil> STORAGE = ThreadLocal.withInitial(ClassUtil::new);
+	public static ClassUtil getInstance() {return STORAGE.get();}
+	public static void setInstance(ClassUtil instance) {STORAGE.set(instance);}
 
 	public final MemberDescriptor sharedDesc = new MemberDescriptor();
 	private final CharList sharedCL = new CharList(128), sharedCL2 = new CharList(12);
@@ -165,6 +166,8 @@ public final class ClassUtil {
 		}
 	}
 
+	public Resolver getResolver() {return resolver();}
+
 	public ClassDefinition resolve(CharSequence name) {return resolver().resolve(name);}
 
 	private final Function<ClassNode, List<String>> getSuperClassListCached = CollectionX.lazyLru(info -> {
@@ -198,24 +201,119 @@ public final class ClassUtil {
 		return false;
 	}
 
-	private final TypeCast caster = new TypeCast();
 	private final Map<Object, Object> temp1 = new HashMap<>();
 
 	public boolean instanceOf(String testClass, String instClass) {return resolver().instanceOf(testClass, instClass);}
-	public List<IType> inferGeneric(IType typeInst, String targetType) {return resolver().inferGeneric(typeInst, targetType, temp1);}
-	public String getCommonAncestor(String type1, String type2) {return resolver().getCommonAncestor(Type.klass(type1), Type.klass(type2)).owner();}
-	public String getCommonChild(String type1, String type2) {
-		caster.context = resolver();
+	@Nullable public List<IType> inferGeneric(IType typeInst, String targetType) {return resolver().inferGeneric(typeInst, targetType, temp1);}
 
-		var left = type1.startsWith("[") ? Type.fieldDesc(type1) : Type.klass(type1);
-		var right = type2.startsWith("[") ? Type.fieldDesc(type2) : Type.klass(type2);
-		// copied from Inferrer
-		var result = caster.checkCast(left, right);
-		if (result.type >= 0) return type1; // a更不具体
-		result = caster.checkCast(right, left);
-		if (result.type >= 0) return type2; // b更不具体
-
-		//throw new UnableCastException(a, b, result);
-		throw new UnsupportedOperationException("这两个类型在继承链上没有交集:"+type1+","+type2);
+	private final HashSet<?> sharedSet = new HashSet<>();
+	public <T> Set<T> getSharedSet() {
+		sharedSet.clear();
+		return Helpers.cast(sharedSet);
 	}
+
+	private final LRUCache<Object, List<String>> cache = new LRUCache<>(1000);
+	private final Function<Pair<Collection<String>, Collection<String>>, List<String>> ancestorMapper = pair -> {
+		Resolver resolver = resolver();
+
+		Collection<String> a = pair.getKey();
+		Collection<String> b = pair.getValue();
+
+		Set<String> commonAncestors1 = findCommonAncestors(a, resolver);
+		Set<String> commonAncestors2 = findCommonAncestors(b, resolver);
+
+		if (commonAncestors1.size() == 0) throw new IllegalStateException("找不到"+a+"的类");
+		if (commonAncestors2.size() == 0) throw new IllegalStateException("找不到"+b+"的类");
+
+		Set<String> finalCommonAncestors = new HashSet<>(commonAncestors1);
+		finalCommonAncestors.retainAll(commonAncestors2);
+
+		return getCommonChild(finalCommonAncestors);
+	};
+	private final Function<Set<String>, List<String>> childMapper = classes -> {
+		Resolver resolver = resolver();
+
+		// 1. 初始化结果集，它是输入集合的一个可变拷贝
+		List<String> result = new ArrayList<>(classes);
+
+		for (String klass : classes) {
+			for (String type : getHierarchyFor(klass, resolver)) {
+				if (type.equals(klass)) continue;
+				result.remove(type);
+			}
+		}
+
+		return result;
+	};
+
+	/**
+	 * 计算两个类型集合的最具体共同祖先。
+	 *
+	 * @param a 第一个类型集合。
+	 * @param b 第二个类型集合。
+	 * @return 包含最具体共同祖先的列表。
+	 */
+	public List<String> getCommonAncestors(Collection<String> a, Collection<String> b) {return cache.computeIfAbsent(new Pair<>(a, b), Helpers.cast(ancestorMapper));}
+
+
+	public List<String> getCommonChild(@MayMutate Set<String> types) {return cache.computeIfAbsent(types, Helpers.cast(childMapper));}
+
+	/**
+	 * 辅助方法：为一个类型集合找到它们共同的所有祖先。
+	 *
+	 * @param types 要分析的类型集合。
+	 * @return 一个包含所有共同祖先的集合（包括接口和父类）。
+	 */
+	private Set<String> findCommonAncestors(Collection<String> types, Resolver resolver) {
+		Set<String> commonAncestors = new HashSet<>();
+
+		for (String type : types) {
+			Set<String> hierarchy = getHierarchyFor(type, resolver);
+			commonAncestors.addAll(hierarchy);
+		}
+		return commonAncestors;
+	}
+
+	/**
+	 * 辅助方法，用于获取指定类的完整继承链（包括自身）。
+	 * 这段逻辑是从原方法中提取出来的，用于处理普通类和数组类型。
+	 * @param klass    类名 (e.g., "java/lang/String" or "[Ljava/lang/Object;")
+	 * @param resolver 解析器实例
+	 * @return 包含所有父类型和接口的集合，如果无法解析则可能为空集
+	 */
+	private Set<String> getHierarchyFor(String klass, Resolver resolver) {
+		if (klass.startsWith("[")) {
+			Set<String> hierarchy = new HashSet<>();
+			hierarchy.add(klass);
+			hierarchy.add("java/lang/Cloneable");
+			hierarchy.add("java/lang/Serializable");
+			hierarchy.add("java/lang/Object"); // 数组的父类是 Object
+
+			Type type = typeOf(klass);
+			if (type.owner != null) {
+				ClassNode ownerNode = resolver.resolve(type.owner);
+				if (ownerNode != null) {
+					// 如果 String 继承自 CharSequence，那么 String[] 也“继承”自 CharSequence[]
+					ToIntMap<String> ownerHierarchy = resolver.getHierarchyList(ownerNode);
+					String arrayPrefix = "[".repeat(type.array());
+					for (String parent : ownerHierarchy.keySet()) {
+						hierarchy.add(arrayPrefix+"L"+parent+";");
+					}
+				}
+			}
+			for (int i = 1; i < type.array(); i++) {
+				hierarchy.add("[".repeat(i)+"Ljava/lang/Object;");
+			}
+			return hierarchy;
+		} else {
+			ClassNode classNode = resolver.resolve(klass);
+			if (classNode != null) {
+				// getHierarchyList 返回包含自身在内的所有父类和接口
+				return resolver.getHierarchyList(classNode).keySet();
+			}
+		}
+		return Collections.emptySet();
+	}
+
+	private static Type typeOf(String type1) {return type1.startsWith("[") ? Type.fieldDesc(type1) : Type.klass(type1);}
 }

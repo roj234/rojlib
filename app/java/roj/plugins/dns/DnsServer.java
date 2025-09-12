@@ -1,8 +1,8 @@
 package roj.plugins.dns;
 
 import roj.collect.HashMap;
-import roj.config.data.CList;
-import roj.config.data.CMap;
+import roj.config.node.ListValue;
+import roj.config.node.MapValue;
 import roj.io.IOUtil;
 import roj.net.*;
 import roj.text.CharList;
@@ -44,7 +44,7 @@ public class DnsServer implements ChannelHandler {
 	public List<InetSocketAddress> forwardDns;
 	public InetSocketAddress fakeDns;
 
-	public DnsServer(CMap cfg, InetSocketAddress address) throws IOException {
+	public DnsServer(MapValue cfg, InetSocketAddress address) throws IOException {
 		ServerLaunch.udp().bind(new InetSocketAddress(cfg.getInt("forwarderReceive")))
 					.initializator(new ForwardQueryHandler(this))
 					.option(ServerLaunch.TCP_RECEIVE_BUFFER, 10000)
@@ -57,7 +57,7 @@ public class DnsServer implements ChannelHandler {
 		waiting = new ConcurrentHashMap<>();
 		requestTimeout = cfg.getInt("requestTimeout");
 		forwardDns = new ArrayList<>();
-		CList list = cfg.getOrCreateList("trustedDnsServers");
+		ListValue list = cfg.getOrCreateList("trustedDnsServers");
 		for (int i = 0; i < list.size(); i++) {
 			String id = list.get(i).asString();
 			int j = id.lastIndexOf(':');

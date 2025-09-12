@@ -1,11 +1,11 @@
 package roj.crypt.asn1;
 
+import roj.collect.ArrayList;
 import roj.collect.IntBiMap;
 import roj.collect.ListMap;
-import roj.collect.ArrayList;
-import roj.config.data.*;
-import roj.config.serial.CVisitor;
-import roj.config.serial.ToJson;
+import roj.config.JsonSerializer;
+import roj.config.ValueEmitter;
+import roj.config.node.*;
 import roj.text.CharList;
 import roj.text.TextUtil;
 
@@ -20,18 +20,18 @@ public interface DerValue {
 	int COMPOSITE = 32;
 	int BOOLEAN = 1, INTEGER = 2, BIT_STRING = 3, OCTET_STRING = 4, NULL = 5, OID = 6, UTF8_STRING = 12, SEQUENCE = 16|COMPOSITE, SET = 17|COMPOSITE, PrintableString = 19, IA5String = 22, UTCTime = 23, GeneralizedTime = 24;
 
-	static CEntry INTEGER(BigInteger bi) {return new Int(bi);}
-	static CEntry CHOICE(int encType, CEntry ref) { return new Choice(encType, ref); }
-	static CIntArray OID(String s) {
+	static ConfigValue INTEGER(BigInteger bi) {return new Int(bi);}
+	static ConfigValue CHOICE(int encType, ConfigValue ref) { return new Choice(encType, ref); }
+	static IntArrayValue OID(String s) {
 		List<String> split = TextUtil.split(new ArrayList<>(), s, '.');
 		int [] oid = new int[split.size()];
 		for (int i = 0; i < split.size(); i++) {
 			oid[i] = Integer.parseInt(split.get(i));
 		}
-		return new CIntArray(oid);
+		return new IntArrayValue(oid);
 	}
 
-	final class Int extends CEntry {
+	final class Int extends ConfigValue {
 		public BigInteger value;
 
 		public Int(BigInteger data) {value = data;}
@@ -40,12 +40,12 @@ public interface DerValue {
 		public Type getType() {return Type.INTEGER;}
 
 		@Override
-		public void accept(CVisitor visitor) {visitor.value("bigInt:"+value);}
+		public void accept(ValueEmitter visitor) {visitor.emit("bigInt:"+value);}
 
 		@Override
 		public Object raw() {return value;}
 		@Override
-		protected CharList toJSON(CharList sb, int depth) {return sb.append(value);}
+		public CharList toJSON(CharList sb, int depth) {return sb.append(value);}
 
 		@Override
 		public boolean equals(Object o) {
@@ -57,7 +57,7 @@ public interface DerValue {
 		public int hashCode() {return value.hashCode();}
 	}
 
-	final class Bits extends CByteArray {
+	final class Bits extends ByteArrayValue {
 		public int bits;
 		public Bits(int trashBits, byte[] data) {
 			super(data);
@@ -65,7 +65,7 @@ public interface DerValue {
 		}
 	}
 
-	final class Opaque extends CByteArray {
+	final class Opaque extends ByteArrayValue {
 		public int type;
 
 		public Opaque(int type, byte[] bytes) {
@@ -74,29 +74,29 @@ public interface DerValue {
 		}
 
 		@Override
-		public void accept(CVisitor visitor) {visitor.value("unknown("+type+"):"+TextUtil.bytes2hex(value));}
+		public void accept(ValueEmitter visitor) {visitor.emit("unknown("+type+"):"+TextUtil.bytes2hex(value));}
 	}
 
-	final class Sequence extends CMap {
+	final class Sequence extends MapValue {
 		public final String type;
 
-		public Sequence(String type, IntBiMap<String> index, List<CEntry> values) {
+		public Sequence(String type, IntBiMap<String> index, List<ConfigValue> values) {
 			super(new ListMap<>(index, values));
 			this.type = type;
 		}
 	}
 
-	final class Choice extends CEntry {
-		public CEntry ref;
+	final class Choice extends ConfigValue {
+		public ConfigValue ref;
 		public byte encType;
 
-		public Choice(int encType, CEntry ref) {
+		public Choice(int encType, ConfigValue ref) {
 			this.ref = ref;
 			this.encType = (byte) encType;
 		}
 
 		public Type getType() {return ref.getType();}
-		public boolean contentEquals(CEntry o) {return this == o || ref.contentEquals(o);}
+		public boolean contentEquals(ConfigValue o) {return this == o || ref.contentEquals(o);}
 		public boolean mayCastTo(Type o) { return ref.mayCastTo(o); }
 
 		public boolean asBool() {return ref.asBool();}
@@ -105,17 +105,18 @@ public interface DerValue {
 		public float asFloat() {return ref.asFloat();}
 		public double asDouble() {return ref.asDouble();}
 		public String asString() {return ref.asString();}
-		public CMap asMap() {return ref.asMap();}
-		public CList asList() {return ref.asList();}
+		public MapValue asMap() {return ref.asMap();}
+		public ListValue asList() {return ref.asList();}
 
 		@Override
-		public void accept(CVisitor visitor) {ref.accept(visitor);}
+		public void accept(ValueEmitter visitor) {ref.accept(visitor);}
 		@Override
 		public Object raw() {return ref.raw();}
 		@Override
 		public Object unwrap() {return ref.unwrap();}
 		@Override
-		protected CharList toJSON(CharList sb, int depth) {ToJson ser = new ToJson();accept(ser);return ser.getValue();}
+		public CharList toJSON(CharList sb, int depth) {
+			JsonSerializer ser = new JsonSerializer();accept(ser);return ser.getValue();}
 
 		@Override
 		public int hashCode() {return ref.hashCode();}

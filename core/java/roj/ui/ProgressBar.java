@@ -131,7 +131,7 @@ public class ProgressBar implements AutoCloseable {
 					b.append('[');
 					if (!isProgressUnknown || !Tty.IS_RICH) b.padEnd('=', fill);
 					else Tty.TextEffect.rainbow("=".repeat(fill), b);
-					b.padEnd(' ', barWidth - fill).append(']');
+					b.padEnd(' ', barWidth - fill).append(Tty.reset).append(']');
 				}
 			}
 		}

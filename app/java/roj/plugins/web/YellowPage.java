@@ -5,9 +5,8 @@ import roj.archive.zip.ZipFile;
 import roj.collect.ArrayList;
 import roj.collect.HashMap;
 import roj.config.ConfigMaster;
-import roj.config.ParseException;
-import roj.config.auto.Optional;
-import roj.config.data.CMap;
+import roj.config.node.MapValue;
+import roj.config.mapper.Optional;
 import roj.config.table.TableParser;
 import roj.config.table.TableReader;
 import roj.config.table.TableWriter;
@@ -23,6 +22,7 @@ import roj.plugin.Plugin;
 import roj.plugin.PluginDescriptor;
 import roj.text.CharList;
 import roj.text.Formatter;
+import roj.text.ParseException;
 import roj.text.TextUtil;
 import roj.util.ByteList;
 import roj.util.TypedKey;
@@ -49,7 +49,7 @@ public class YellowPage extends Plugin implements TableReader {
 	protected void onEnable() throws Exception {
 		easySso = getPluginManager().getPluginInstance(PluginDescriptor.Role.PermissionManager);
 
-		CMap config = new CMap();//getConfig();
+		MapValue config = new MapValue();//getConfig();
 		config.put("path", "nav");
 
 		ZipFile archive = getDescription().getArchive();

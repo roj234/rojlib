@@ -276,32 +276,55 @@ public class Resolver {
 			var g = typeInst.getAttribute(typeInst.cp, Attribute.SIGNATURE);
 
 			int i = 0;
+			final List<IType> values = g.values;
+			Map<String, List<IType>> typeParams = g.typeParams;
+
 			visType.clear();
-			for (String s : g.typeParams.keySet())
-				visType.put(s, params.get(i++));
+			for (String name : typeParams.keySet())
+				visType.put(name, params.get(i++));
+
+			// 250915 第一个和non static generic兼容有关的更新
+			var nonStaticGenericParent = typeInst;
+			while (true) {
+				var item = link(nonStaticGenericParent).getInnerClasses(this).get(nonStaticGenericParent.name());
+				if (item == null || (item.modifier & Opcodes.ACC_STATIC) != 0) break;
+				nonStaticGenericParent = resolve(item.parent);
+				if (nonStaticGenericParent == null) break;
+
+				if (typeParams == g.typeParams) typeParams = new HashMap<>(typeParams);
+
+				g = nonStaticGenericParent.getAttribute(typeInst.cp, Attribute.SIGNATURE);
+				for (var entry : g.typeParams.entrySet()) {
+					String name = entry.getKey();
+
+					typeParams.putIfAbsent(name, entry.getValue());
+					visType.putIfAbsent(name, params.get(i++));
+				}
+
+			}
 
 			// < 0 => flag[0x80000000] => 从接口的接口继承，而不是父类的接口
 			i = depthInfo < 0 ? 1 : 0;
 			for(;;) {
-				IType type = g.values.get(i);
+				IType type = values.get(i);
 				if (target.equals(type.owner())) {
 					// rawtypes
 					if (type.genericType() == IType.STANDARD_TYPE) return Collections.emptyList();
 
-					var rubber = (Generic) Inferrer.clearTypeParam(type, visType, g.typeParams);
+					var rubber = (Generic) Inferrer.clearTypeParam(type, visType, typeParams);
 					return rubber.children;
 				}
 
 				typeInst = resolve(type.owner());
 				depthInfo = getHierarchyList(typeInst).getOrDefault(target, -1);
 				if (depthInfo != -1) {
-					var rubber = (Generic) Inferrer.clearTypeParam(type, visType, g.typeParams);
+					var rubber = (Generic) Inferrer.clearTypeParam(type, visType, typeParams);
 					params = rubber.children;
 					continue loop;
 				}
 
 				i++;
-				assert i < g.values.size();
+				assert i < values.size();
 			}
 		}
 	}
@@ -404,7 +427,7 @@ public class Resolver {
 		List<IType> bGeneric = inferGeneric(b, commonParent);
 
 		// 如果不是泛型类，那么直接返回
-		if (extendType == Generic.EX_NONE && aGeneric == null && bGeneric == null) {
+		if (extendType == Generic.EX_NONE && (aGeneric == null || bGeneric == null)) {
 			// 少创建对象
 			if (info == infoA) return a;
 			if (info == infoB) return b;

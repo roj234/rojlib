@@ -4,7 +4,7 @@ import roj.archive.ArchiveEntry;
 import roj.archive.ArchiveFile;
 import roj.archive.ArchiveWriter;
 import roj.collect.ArrayList;
-import roj.config.data.CInt;
+import roj.config.node.IntValue;
 import roj.crypt.CRC32;
 import roj.io.source.Source;
 
@@ -136,7 +136,7 @@ public abstract class QZWriter extends OutputStream implements ArchiveWriter {
         CoderInfo root = nodes[0];
         if (root.provides > 1) throw new IllegalArgumentException("根编码器只能有一个输入!");
 
-        CInt blockId = new CInt();
+        IntValue blockId = new IntValue();
         inflateTree(root, nodes, blockId, 1);
 
         coders = nonNull.toArray(new CoderInfo[nonNull.size()]);
@@ -144,7 +144,7 @@ public abstract class QZWriter extends OutputStream implements ArchiveWriter {
 		cOffsets = blockId.value-1;
         cOutSizes = provides;
     }
-    private int inflateTree(CoderInfo node, CoderInfo[] nodes, CInt blockId, int i) {
+    private int inflateTree(CoderInfo node, CoderInfo[] nodes, IntValue blockId, int i) {
         for (int j = 0; j < node.uses.length; j++) {
             CoderInfo next = nodes[i++];
             if (next != null) {

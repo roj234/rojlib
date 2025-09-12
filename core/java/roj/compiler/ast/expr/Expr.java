@@ -14,7 +14,7 @@ import roj.compiler.asm.MethodWriter;
 import roj.compiler.diagnostic.Kind;
 import roj.compiler.resolve.ResolveException;
 import roj.compiler.resolve.TypeCast;
-import roj.config.data.CEntry;
+import roj.config.node.ConfigValue;
 import roj.util.DynByteBuf;
 
 import java.util.Collections;
@@ -88,8 +88,8 @@ public abstract class Expr implements RawExpr {
 	public static Expr classRef(Type type) {return new Literal(new Generic("java/lang/Class", Collections.singletonList(type)), type);}
 	public static Expr valueOf(String v) {return new Literal(Types.STRING_TYPE, v);}
 	public static Expr valueOf(boolean v) {return new Literal(Type.primitive(Type.BOOLEAN), v);}
-	public static Expr valueOf(int v) {return new Literal(Type.primitive(Type.INT), CEntry.valueOf(v));}
-	public static Expr valueOf(CEntry v) {
+	public static Expr valueOf(int v) {return new Literal(Type.primitive(Type.INT), ConfigValue.valueOf(v));}
+	public static Expr valueOf(ConfigValue v) {
 		return switch (v.dataType()) {
 			case 's' -> valueOf(v.asString());
 			case 'I', 'B', 'C', 'S', 'J', 'F', 'D' -> new Literal(Type.primitive(v.dataType()), v);

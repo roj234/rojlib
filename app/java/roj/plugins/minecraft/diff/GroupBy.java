@@ -4,13 +4,13 @@ import roj.collect.HashSet;
 import roj.collect.LongMap;
 import roj.concurrent.TaskGroup;
 import roj.config.ConfigMaster;
-import roj.config.data.CEntry;
-import roj.config.data.CList;
-import roj.config.data.Type;
+import roj.config.node.ConfigValue;
+import roj.config.node.ListValue;
+import roj.config.node.Type;
 import roj.io.IOUtil;
 import roj.io.RegionFile;
-import roj.util.Stitcher;
-import roj.util.Tile;
+import roj.renderer.util.Stitcher;
+import roj.renderer.util.Tile;
 import roj.util.ByteList;
 import roj.util.Helpers;
 
@@ -175,7 +175,7 @@ public class GroupBy {
 							if (data.containsKey("xPos")) {
 								chunkPos = chunkPos(data.getInt("xPos"), data.getInt("zPos"));
 							} else if (data.containsKey("Position", Type.LIST)) {
-								CList list = data.getList("Position");
+								ListValue list = data.getList("Position");
 								chunkPos = chunkPos(list.getInteger(0), list.getInteger(1));
 							} else {
 								System.out.println(data);
@@ -194,9 +194,9 @@ public class GroupBy {
 									data.put("zPos", remapPos.intValue());
 									changed = true;
 								} else if (data.containsKey("Position", Type.LIST)) {
-									CList list = data.getList("Position");
-									list.set(0, CEntry.valueOf((int) (remapPos >>> 32)));
-									list.set(1, CEntry.valueOf(remapPos.intValue()));
+									ListValue list = data.getList("Position");
+									list.set(0, ConfigValue.valueOf((int) (remapPos >>> 32)));
+									list.set(1, ConfigValue.valueOf(remapPos.intValue()));
 									changed = true;
 								}
 							}

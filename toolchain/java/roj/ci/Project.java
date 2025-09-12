@@ -3,7 +3,7 @@ package roj.ci;
 import roj.archive.ArchiveUtils;
 import roj.archive.zip.ZipOutput;
 import roj.asmx.mapper.Mapper;
-import roj.ci.plugin.ProcessEnvironment;
+import roj.ci.plugin.BuildContext;
 import roj.collect.ArrayList;
 import roj.collect.HashMap;
 import roj.collect.HashSet;
@@ -14,12 +14,15 @@ import roj.text.Formatter;
 import roj.ui.Tty;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
-import roj.util.FastFailException;
 import roj.util.Helpers;
+import roj.util.function.ExceptionalSupplier;
 
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
+import java.io.InputStream;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.nio.charset.Charset;
 import java.util.*;
 import java.util.concurrent.Callable;
@@ -39,7 +42,7 @@ public final class Project {
 	public final File root, srcPath, resPath, libPath, cachePath;
 
 	private List<Project> initialDep, buildOrderDep;
-	private EnumMap<Dependency.Scope, List<Dependency>> dependencies;
+	private final EnumMap<Dependency.Scope, List<Dependency>> dependencies;
 	private List<Dependency> compileDependencies;
 
 	final Compiler compiler;
@@ -52,9 +55,9 @@ public final class Project {
 	ZipOutput mappedWriter, unmappedWriter;
 	final DependencyGraph dependencyGraph = new DependencyGraph();
 
-	FMD.SignatureCache signatureCache;
+	MCMake.SignatureCache signatureCache;
 
-	public ProcessEnvironment.CacheState cacheState;
+	public BuildContext.State state;
 
 	@Deprecated public Mapper mapper;
 	@Deprecated public Mapper.State mapperState;
@@ -70,7 +73,7 @@ public final class Project {
 		this.version = config.version.toString();
 		this.charset = config.charset;
 
-		var ws = FMD.workspaces.get(config.workspace);
+		var ws = MCMake.workspaces.get(config.workspace);
 		if (ws == null) throw new NullPointerException("找不到工作空间"+config.workspace);
 		this.workspace = ws;
 
@@ -78,7 +81,7 @@ public final class Project {
 		this.srcPath = new File(root, "java");
 		this.resPath = new File(root, "resources");
 		this.libPath = new File(root, "lib");
-		this.cachePath = new File(FMD.CACHE_PATH, config.name.equals(name) ? name : name+"@"+Integer.toHexString(config.name.hashCode()));
+		this.cachePath = new File(MCMake.CACHE_PATH, ".pr/"+(config.name.equals(name) ? name : name+"@"+Integer.toHexString(config.name.hashCode())));
 		this.unmappedJar = new File(cachePath, "classes.jar");
 
 		this.variables = new HashMap<>(ws.variables);
@@ -104,7 +107,7 @@ public final class Project {
 		}
 
 		String compilerType = config.variables.getOrDefault("fmd:compiler", "Javac");
-		var obj = FMD.compilerTypes.get(compilerType);
+		var obj = MCMake.compilerTypes.get(compilerType);
 		if (obj == null) throw new NullPointerException("找不到编译器"+compilerType);
 
 		compiler = obj.getInstance(srcPath.getAbsolutePath().replace(File.separatorChar, '/'));
@@ -114,11 +117,14 @@ public final class Project {
 			resPath.mkdir();
 			libPath.mkdir();
 		}
-		cachePath.mkdir();
-		unmappedJar.createNewFile();
+		cachePath.mkdirs();
 
 		unmappedWriter = new ZipOutput(unmappedJar);
 		unmappedWriter.setCompress(true);
+		if (unmappedJar.length() == 0) {
+			unmappedWriter.begin(false);
+			unmappedWriter.end();
+		}
 
 		resPrefix = resPath.getAbsolutePath().length()+1;
 	}
@@ -130,24 +136,61 @@ public final class Project {
 		for (var entry : conf.dependency.entrySet()) {
 			var id = entry.getKey();
 			Dependency dep;
-			if (id.startsWith("FILE:")) {
-				File file = IOUtil.relativePath(root, id.substring(5));
-				if (!file.isFile()) {
-					FMD.LOGGER.warn("找不到依赖项目{}", id);
+			if (id.contains("://")) {
+				URI uri;
+				try {
+					uri = new URI(id);
+				} catch (URISyntaxException e) {
+					MCMake.LOGGER.warn("不支持的依赖类型{}", e, id);
 					continue;
 				}
-				dep = new Dependency.FileDep(file);
-			} else if (id.startsWith("DIR:")) {
-				File dir = IOUtil.relativePath(root, id.substring(4));
-				if (!dir.isDirectory()) {
-					FMD.LOGGER.warn("找不到依赖项目{}", id);
-					continue;
+
+				// 解析校验信息
+				String checksumAlgorithm = null;
+				byte[] expectedChecksum = null;
+				String userInfo = uri.getUserInfo();
+				if (userInfo != null) {
+					checksumAlgorithm = userInfo;
+					expectedChecksum = IOUtil.decodeHex(uri.getHost());
 				}
-				dep = new Dependency.DirDep(dir);
+
+				switch (uri.getScheme()) {
+					case "file" -> {
+						String path = uri.getPath();
+						File file = IOUtil.relativePath(root, path);
+						if (!file.exists()) {
+							MCMake.LOGGER.warn("找不到依赖项目{}", file);
+							continue;
+						}
+
+						if (checksumAlgorithm != null && !Dependency.verifyFile(checksumAlgorithm, file, expectedChecksum, id))
+							continue;
+
+						dep = file.isDirectory() ? new Dependency.DirDep(file) : new Dependency.FileDep(file);
+					}
+					case "maven" -> {
+						String path = uri.getPath();
+						if (path.startsWith("/")) path = path.substring(1);
+						dep = new Dependency.MavenDep(this, id, path, checksumAlgorithm, expectedChecksum);
+					}
+					case "project" -> {
+						Project project = MCMake.projects.get(uri.getPath());
+						if (project == null) {
+							MCMake.LOGGER.warn("找不到依赖项目{}", uri.getPath());
+							continue;
+						}
+						dep = new Dependency.ProjectDep(project);
+						initialDep.add(project);
+					}
+					default -> {
+						MCMake.LOGGER.warn("不支持的依赖类型{}", id);
+						continue;
+					}
+				}
 			} else {
-				Project project = FMD.projects.get(id);
+				Project project = MCMake.projects.get(id);
 				if (project == null) {
-					FMD.LOGGER.warn("找不到依赖项目{}", id);
+					MCMake.LOGGER.warn("找不到依赖项目{}", id);
 					continue;
 				}
 				dep = new Dependency.ProjectDep(project);
@@ -192,26 +235,26 @@ public final class Project {
 	public List<Project> getProjectDependencies() {return buildOrderDep;}
 	public List<Dependency> getCompileDependencies() {return compileDependencies;}
 
-	public void getDependencyClasses(ProcessEnvironment context, long stamp) throws IOException {
+	public void getDependencyClasses(BuildContext context, long stamp) throws IOException {
 		for (Dependency dependency : dependencies.getOrDefault(Dependency.Scope.BUNDLED, Collections.emptyList())) {
 			dependency.getClasses(context, stamp);
 		}
 	}
 
 	private int resCount;
-	public Callable<Integer> getResourceTask(long stamp) {
+	public Callable<Integer> getResourceTask(long stamp, BuildContext ctx) {
 		return () -> {
 			resCount = 0;
 			long useCompileTimestamp = "true".equals(variables.get("fmd:resource:use_compile_timestamp")) ? System.currentTimeMillis() : 0;
 			boolean prevCompress = mappedWriter.isCompress();
 			block: {
 				if (stamp > 0) {
-					Set<String> set = FMD.watcher.getModified(Project.this, FileWatcher.ID_RES);
+					Set<String> set = MCMake.watcher.getModified(Project.this, FileWatcher.ID_RES);
 					if (!set.contains(null)) {
 						synchronized (set) {
 							for (String fileName : set) {
 								File file = new File(fileName);
-								if (file.isFile()) writeRes(file, useCompileTimestamp != 0 ? useCompileTimestamp : file.lastModified(), Collections.emptyMap());
+								if (file.isFile()) writeRes(file, useCompileTimestamp != 0 ? useCompileTimestamp : file.lastModified(), Collections.emptyMap(), ctx);
 								else mappedWriter.set(fileName.substring(resPrefix).replace(File.separatorChar, '/'), (ByteList) null);
 							}
 							set.clear();
@@ -223,47 +266,49 @@ public final class Project {
 				// update all resource ??
 				IOUtil.listFiles(resPath, file -> {
 					long lastModified = file.lastModified();
-					if (lastModified >= stamp) writeRes(file, useCompileTimestamp != 0 ? useCompileTimestamp : lastModified, Collections.emptyMap());
+					if (lastModified >= stamp) writeRes(file, useCompileTimestamp != 0 ? useCompileTimestamp : lastModified, Collections.emptyMap(), ctx);
 					return false;
 				});
 			}
 
 			List<Dependency> bundles = dependencies.getOrDefault(Dependency.Scope.BUNDLED, Collections.emptyList());
 			for (Dependency bundle : bundles) {
-				resCount += bundle.getResources(this, mappedWriter, stamp);
+				resCount += bundle.getResources(this, mappedWriter, stamp, ctx);
 			}
 
 			mappedWriter.setCompress(prevCompress);
 			return resCount;
 		};
 	}
-	void writeRes(File file, long time, Map<String, String> altVariables) {
+	void writeRes(File file, long time, Map<String, String> altVariables, BuildContext ctx) {
 		resCount++;
 		String relPath = file.getAbsolutePath().substring(resPrefix).replace(File.separatorChar, '/');
 		mappedWriter.setCompress(!ArchiveUtils.INCOMPRESSIBLE_FILE_EXT.contains(IOUtil.extensionName(relPath)));
+		ExceptionalSupplier<InputStream, IOException> writer;
 		try {
 			if (varReplacePathPrefix.strStartsWithThis(relPath)) {
 				String string;
 				try {
 					string = IOUtil.readString(file);
 				} catch (Exception e) {
-					FMD.LOGGER.warn("变量替换规则可能命中了二进制文件{}", e, relPath);
+					MCMake.LOGGER.warn("变量替换规则可能命中了二进制文件{}", e, relPath);
 					return;
 				}
 
 				var template = Formatter.simple(string);
-				if (template.isDynamic()) {
+				if (!template.isConstant()) {
 					string = template.format(new TwoMap(altVariables), IOUtil.getSharedCharBuf()).toString();
 				}
 
 				String fuckJavac = string;
-				mappedWriter.set(relPath, () -> DynByteBuf.wrap(fuckJavac.getBytes(charset)), time);
-				return;
+				writer = () -> ctx.wrapResource(relPath, DynByteBuf.wrap(fuckJavac.getBytes(charset)).asInputStream());
+			} else {
+				writer = () -> ctx.wrapResource(relPath, new FileInputStream(file));
 			}
 
-			mappedWriter.setStream(relPath, () -> new FileInputStream(file), time);
+			mappedWriter.setStream(relPath, writer, time);
 		} catch (IOException e) {
-			FMD.LOGGER.warn("资源文件{}复制失败", e, relPath);
+			MCMake.LOGGER.warn("资源文件{}复制失败", e, relPath);
 		}
 	}
 
@@ -272,7 +317,7 @@ public final class Project {
 	public void compileSuccess(boolean increment) {
 		if (delayedCompile != null) delayedCompile.cancel();
 		try {
-			FMD.watcher.add(this);
+			MCMake.watcher.add(this);
 		} catch (IOException e) {
 			Tty.warning("无法启动文件监控", e);
 		}
@@ -293,7 +338,7 @@ public final class Project {
 	public void fileChanged() {
 		if (delayedCompile != null) delayedCompile.cancel();
 		if (autoCompile) {
-			delayedCompile = FMD.TIMER.delay(() -> {
+			delayedCompile = MCMake.TIMER.delay(() -> {
 				try {
 					block:
 					if (!isDirty(this)) {
@@ -303,20 +348,18 @@ public final class Project {
 						return;
 					}
 
-					FMD.build(new HashSet<>("auto"), this);
-				} catch (FastFailException ignored) {
-					fileChanged();
+					MCMake.build(new HashSet<>("auto"), this);
 				} catch (Throwable e) {
 					Tty.error("自动编译出错", e);
-					FMD.watcher.removeAll();
+					MCMake.watcher.removeAll();
 				}
-			}, FMD.config.getInt("自动编译防抖"));
+			}, MCMake.config.getInt("自动编译防抖"));
 		}
 	}
 	private static boolean isDirty(Project p) {
-		var modified = FMD.watcher.getModified(p, IFileWatcher.ID_SRC);
+		var modified = MCMake.watcher.getModified(p, IFileWatcher.ID_SRC);
 		if (modified.contains(null) || modified.isEmpty()) {
-			if (modified.contains(null)) FMD.LOGGER.debug("{}未注册监听器", p.getName());
+			if (modified.contains(null)) MCMake.LOGGER.debug("{}未注册监听器", p.getName());
 			return false;
 		}
 		return true;

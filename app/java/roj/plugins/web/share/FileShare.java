@@ -5,10 +5,9 @@ import roj.asm.Opcodes;
 import roj.collect.*;
 import roj.concurrent.TimerTask;
 import roj.config.ConfigMaster;
-import roj.config.ParseException;
-import roj.config.auto.SerializerFactory;
-import roj.config.data.CMap;
-import roj.config.serial.ToJson;
+import roj.config.JsonSerializer;
+import roj.config.mapper.ObjectMapperFactory;
+import roj.config.node.MapValue;
 import roj.crypt.Base64;
 import roj.crypt.CryptoFactory;
 import roj.http.Cookie;
@@ -22,6 +21,7 @@ import roj.plugin.PluginDescriptor;
 import roj.plugin.VFSRouter;
 import roj.text.CharList;
 import roj.text.HtmlEntities;
+import roj.text.ParseException;
 import roj.text.TextUtil;
 import roj.ui.Argument;
 import roj.util.TypedKey;
@@ -72,13 +72,13 @@ public class FileShare extends Plugin {
     private final AtomicInteger shareFileIdx = new AtomicInteger(1);
     private final ChunkUpload uploadManager = new ChunkUpload();
 
-    private final SerializerFactory ownerSerializer;
+    private final ObjectMapperFactory ownerSerializer;
     private boolean dirty;
 
     private Plugin easySso;
 
     public FileShare() {
-        SerializerFactory.SerializeSetting transientRemover = (owner, field, annotations) -> {
+        ObjectMapperFactory.SerializeSetting transientRemover = (owner, field, annotations) -> {
             if (field != null) {
                 String name = field.name();
                 if (name.equals("_next") || name.equals("file") || name.equals("uploading") || name.equals("vfs")) return annotations;
@@ -86,7 +86,7 @@ public class FileShare extends Plugin {
             }
             return annotations;
         };
-        ownerSerializer = SerializerFactory.getInstance().serializeFileToString().add(ShareFile.class, transientRemover).add(Share.class, transientRemover);
+        ownerSerializer = ObjectMapperFactory.getInstance().serializeFileToString().registerType(ShareFile.class, transientRemover).registerType(Share.class, transientRemover);
     }
 
     @Override
@@ -96,7 +96,7 @@ public class FileShare extends Plugin {
         uploadPath = new File(getDataFolder(), "files");
         uploadPath.mkdir();
 
-        CMap config = getConfig();
+        MapValue config = getConfig();
         uploadManager.setFragmentSize(config.getInt("fragmentSize", 4194304));
 
         reloadDB();
@@ -360,12 +360,12 @@ public class FileShare extends Plugin {
     @GET("list")
     public CharSequence shareList(Request req) {
         var user = getUser(req);
-        var simpleSer = new ToJson();
-        simpleSer.valueMap();
+        var simpleSer = new JsonSerializer();
+        simpleSer.emitMap();
         simpleSer.key("ok");
-        simpleSer.value(true);
+        simpleSer.emit(true);
         simpleSer.key("data");
-        simpleSer.valueList();
+        simpleSer.emitList();
         if (user != null) {
             List<Share> myShares = new ArrayList<>();
             synchronized (lock) {
@@ -384,37 +384,37 @@ public class FileShare extends Plugin {
     }
 
     private static CharList writeInfoHistory(Share share, boolean addThreads) {
-        var simpleSer = new ToJson();
-        simpleSer.valueMap();
+        var simpleSer = new JsonSerializer();
+        simpleSer.emitMap();
         simpleSer.key("ok");
-        simpleSer.value(true);
+        simpleSer.emit(true);
         simpleSer.key("data");
         writeInfoHistory(share, simpleSer);
         if (addThreads) {
             simpleSer.key("threads");
-            simpleSer.value(FILE_UPLOAD_TASKS);
+            simpleSer.emit(FILE_UPLOAD_TASKS);
             simpleSer.key("maxFiles");
-            simpleSer.value(REMOTE_FILE_MAX);
+            simpleSer.emit(REMOTE_FILE_MAX);
         }
         simpleSer.pop();
         return simpleSer.getValue();
     }
-    private static void writeInfoHistory(Share info, ToJson ser) {
-        ser.valueMap();
+    private static void writeInfoHistory(Share info, JsonSerializer ser) {
+        ser.emitMap();
         ser.key("id");
-        ser.value(info.id);
+        ser.emit(info.id);
         ser.key("name");
-        ser.value(info.name);
+        ser.emit(info.name);
         if (info.code != null) {
             ser.key("code");
-            ser.value(info.code);
+            ser.emit(info.code);
         }
         ser.key("time");
-        ser.value(info.time);
+        ser.emit(info.time);
         ser.key("view");
-        ser.value(info.view);
+        ser.emit(info.view);
         ser.key("download");
-        ser.value(info.download);
+        ser.emit(info.download);
 
         String name, type;
         var file = info.files;
@@ -437,16 +437,16 @@ public class FileShare extends Plugin {
         }
 
         ser.key("size");
-        ser.value(info.size);
+        ser.emit(info.size);
         ser.key("expire");
-        ser.value(info.expire);
+        ser.emit(info.expire);
 
         ser.key("file");
-        ser.valueMap();
+        ser.emitMap();
         ser.key("name");
-        ser.value(name);
+        ser.emit(name);
         ser.key("type");
-        ser.value(type);
+        ser.emit(type);
         ser.pop();
     }
 

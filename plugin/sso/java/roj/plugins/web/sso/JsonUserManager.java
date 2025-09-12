@@ -1,11 +1,11 @@
 package roj.plugins.web.sso;
 
-import roj.collect.HashMap;
 import roj.collect.ArrayList;
+import roj.collect.HashMap;
 import roj.config.ConfigMaster;
-import roj.config.ParseException;
-import roj.config.auto.SerializerFactory;
+import roj.config.mapper.ObjectMapperFactory;
 import roj.io.IOUtil;
+import roj.text.ParseException;
 
 import java.io.File;
 import java.io.IOException;
@@ -26,15 +26,15 @@ class JsonUserManager implements UserManager {
 	private Map<String, User> userByName = new HashMap<>();
 	private boolean dirty;
 
-	private static final SerializerFactory SERIALIZER = SerializerFactory.getInstance();
+	private static final ObjectMapperFactory SERIALIZER = ObjectMapperFactory.getInstance();
 	static {
-		SERIALIZER.add(InetSocketAddress.class, new Object() {
+		SERIALIZER.registerAdapter(InetSocketAddress.class, new Object() {
 			public InetSocketAddress readCallback(String addr) throws UnknownHostException {
 				int i = addr.indexOf(':');
 				return new InetSocketAddress(InetAddress.getByName(addr.substring(0, i)), Integer.parseInt(addr.substring(i+1)));
 			}
 			public String writeCallback(InetSocketAddress addr) {return addr.getAddress().getHostAddress()+":"+addr.getPort();}
-		}).asBase64();
+		}).enableAsBase64();
 	}
 
 	public JsonUserManager(File json) throws IOException, ParseException {

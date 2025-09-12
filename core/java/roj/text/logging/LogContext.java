@@ -1,9 +1,6 @@
 package roj.text.logging;
 
 import roj.text.Formatter;
-import roj.text.logging.c.LCTime;
-import roj.text.logging.c.LogComponent;
-import roj.text.logging.d.LogDestination;
 
 import java.util.Collections;
 import java.util.List;
@@ -13,14 +10,14 @@ import java.util.Objects;
  * @author Roj233
  * @since 2022/6/1 5:09
  */
-public class LogContext {
+public final class LogContext {
 	LogContext parent;
 
 	private String name;
 	private Level level;
 
 	private Formatter prefix;
-	private List<LogComponent> components;
+	private List<Formatter> components;
 
 	private LogDestination destination;
 
@@ -33,14 +30,14 @@ public class LogContext {
 
 	LogContext() {
 		name = "root";
-		level = Level.DEBUG;
+		level = Level.INFO;
 		prefix = Formatter.simple("[${0}][${THREAD}/${LEVEL}]: ");
-		components = Collections.singletonList(LCTime.of("H:i:s"));
-		destination = () -> System.out;
+		components = Collections.singletonList(Formatter.time("H:i:s"));
+		destination = LogDestination.stdout();
 	}
 
-	public List<LogComponent> getComponents() { return components != null ? components : parent.getComponents(); }
-	public void setComponents(List<LogComponent> components) {this.components = components;}
+	public List<Formatter> getComponents() { return components != null ? components : parent.getComponents(); }
+	public void setComponents(List<Formatter> components) {this.components = components;}
 	public Formatter getPrefix() { return prefix != null ? prefix : parent.getPrefix(); }
 	public void setPrefix(Formatter t) { prefix = t; }
 

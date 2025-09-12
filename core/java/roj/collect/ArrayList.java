@@ -30,7 +30,7 @@ public class ArrayList<E> extends AbstractCollection<E> implements List<E>, Rand
 		if (list.length < cap) {
 			int newCap;
 			if (list.length == 0) newCap = cap;
-			else if (cap > 1000) newCap = MathUtils.getMin2PowerOf(cap);
+			else if (cap > 1000) newCap = MathUtils.nextPowerOfTwo(cap);
 			else if (cap > 100) newCap = cap + (cap >> 1);
 			else newCap = cap + 11;
 
@@ -52,7 +52,7 @@ public class ArrayList<E> extends AbstractCollection<E> implements List<E>, Rand
 		return new ArrayList<>(initialCapacity) {
 			public void ensureCapacity(int cap) {
 				if (list.length < cap) {
-					int newCap = list.length == 0 ? cap : MathUtils.getMin2PowerOf(cap);
+					int newCap = list.length == 0 ? cap : MathUtils.nextPowerOfTwo(cap);
 					Object[] newList = new Object[newCap];
 					if (size > 0) System.arraycopy(list, 0, newList, 0, size);
 					list = newList;
@@ -220,6 +220,7 @@ public class ArrayList<E> extends AbstractCollection<E> implements List<E>, Rand
 	@SuppressWarnings("unchecked")
 	public void sort(Comparator<? super E> c) { Arrays.sort(list, 0, size, (Comparator<? super Object>) c); }
 	@SuppressWarnings("unchecked")
+	@Contract(mutates = "this")
 	public void sort(int from, int to, Comparator<? super E> c) { Arrays.sort(list, from, to, (Comparator<? super Object>) c); }
 
 	@Override
@@ -388,31 +389,31 @@ public class ArrayList<E> extends AbstractCollection<E> implements List<E>, Rand
 	public String toString() { return ArrayUtil.toString(list,0,size); }
 
 	private class Itr implements ListIterator<E> {
-		int i, mark = -1;
+		int cursor, mark = -1;
 
-		Itr(int pos) { this.i = pos; }
+		Itr(int pos) { this.cursor = pos; }
 
-		public boolean hasNext() { return i < size; }
+		public boolean hasNext() { return cursor < size; }
 		@SuppressWarnings("unchecked")
-		public E next() { return (E) list[mark = i++]; }
-		public int nextIndex() { return i; }
+		public E next() { return (E) list[mark = cursor++]; }
+		public int nextIndex() { return cursor; }
 
-		public boolean hasPrevious() { return i > 0; }
+		public boolean hasPrevious() { return cursor > 0; }
 		@SuppressWarnings("unchecked")
-		public E previous() { return (E) list[mark = --i]; }
-		public int previousIndex() { return i-1; }
+		public E previous() { return (E) list[mark = --cursor]; }
+		public int previousIndex() { return cursor-1; }
 
 		public void remove() {
 			if (mark == -1) throw new IllegalStateException();
 			ArrayList.this.remove(mark);
-			if (mark < i) i--;
+			if (mark < cursor) cursor--;
 			mark = -1;
 		}
 		public void set(E v) { list[mark] = v; }
 		public void add(E v) {
 			if (mark == -1) throw new IllegalStateException();
 
-			ArrayList.this.add(i++, v);
+			ArrayList.this.add(cursor++, v);
 			mark = -1;
 		}
 	}

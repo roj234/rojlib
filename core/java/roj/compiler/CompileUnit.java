@@ -28,9 +28,9 @@ import roj.compiler.ast.expr.ExprParser;
 import roj.compiler.diagnostic.Kind;
 import roj.compiler.doc.Javadoc;
 import roj.compiler.resolve.*;
-import roj.config.ParseException;
-import roj.config.Token;
-import roj.config.data.CEntry;
+import roj.text.ParseException;
+import roj.text.Token;
+import roj.config.node.ConfigValue;
 import roj.io.IOUtil;
 import roj.text.CharList;
 import roj.util.ArrayCache;
@@ -43,7 +43,7 @@ import java.util.*;
 
 import static roj.asm.Opcodes.*;
 import static roj.compiler.JavaTokenizer.*;
-import static roj.config.Token.LITERAL;
+import static roj.text.Token.LITERAL;
 
 /**
  * Lava Compiler - 类Resolver<p>
@@ -747,7 +747,7 @@ public abstract class CompileUnit extends ClassNode implements ClassResource {
 
 			//noinspection ForLoopReplaceableByForEach
 			for (Iterator<?> itr = annotation.values().iterator(); itr.hasNext(); ) {
-				if (itr.next() instanceof CEntry value) {
+				if (itr.next() instanceof ConfigValue value) {
 					if (value instanceof AList array) {
 						var list1 = array.raw();
 						for (int j = 0; j < list1.size(); j++) {
@@ -1701,7 +1701,7 @@ public abstract class CompileUnit extends ClassNode implements ClassResource {
 				if (!desc.stackable && (prev = dup.putIfAbsent(type, i)) != null) {
 					if (desc.repeatOn == null) ctx.report(Kind.ERROR, "cu.annotation.noRepeat", type);
 					else {
-						List<CEntry> values;
+						List<ConfigValue> values;
 						if (prev instanceof Integer p) {
 							var removable = list.get(p);
 

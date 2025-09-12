@@ -68,7 +68,7 @@ class ChatWorker extends WebSocket {
 				if (u == null) {
 					sendClose(ERR_INVALID_DATA, "无效的数据包[UserId]");
 				} else {
-					u.sendMessage(server, new Message(user.id, decodeToUTF(in).toString()), false);
+					u.sendMessage(server, new Message(user.id, in.readUTF(in.readableBytes())), false);
 				}
 			}
 			case P_REMOVE_HISTORY -> deleteHistory(in.readInt(), in.readInt());
@@ -76,7 +76,7 @@ class ChatWorker extends WebSocket {
 				int id = in.readInt();
 				int off = in.readInt();
 				int len = in.readInt();
-				getHistory(id, decodeToUTF(in), off, len);
+				getHistory(id, in.readUTF(in.readableBytes()), off, len);
 			}
 			case P_COLD_HISTORY -> unloadHistory(in.readInt());
 			default -> sendClose(ERR_INVALID_DATA, "未实现的函数 "+in.get(0));
@@ -122,14 +122,14 @@ class ChatWorker extends WebSocket {
 
 			if (len > 1000) len = 1000;
 
-			ArrayList<Message> msgs = new ArrayList<>(Math.min(his.capacity(), len));
+			ArrayList<Message> msgs = new ArrayList<>(Math.min(his.maxCapacity(), len));
 
 			off = his.size() - len - off;
 			if (off < 0) {
 				len += off;
 				off = 0;
 			}
-			his.getSome(1, his.head(), his.tail(), msgs, off, len);
+			his.forEach(msgs::add, false, off, len);
 
 			filter = filter.toString();
 			if (filter.length() > 0) {

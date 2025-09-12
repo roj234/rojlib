@@ -1,14 +1,14 @@
 package roj.plugins.web;
 
-import roj.config.serial.ToJson;
+import roj.config.JsonSerializer;
 import roj.http.server.*;
 import roj.http.server.auto.GET;
 import roj.http.server.auto.Interceptor;
 import roj.http.server.auto.OKRouter;
 import roj.http.server.auto.POST;
 import roj.plugin.Plugin;
-import roj.text.URICoder;
 import roj.text.TextWriter;
+import roj.text.URICoder;
 
 import java.io.File;
 import java.io.FileOutputStream;
@@ -46,8 +46,8 @@ public class EasyMusicPlayer extends Plugin {
 			return null;
 		} else {
 			req.argument("user");
-			try (var tw = new ToJson().sb(new TextWriter(new GZIPOutputStream(new FileOutputStream(file)), StandardCharsets.UTF_8))) {
-				tw.valueMap();
+			try (var tw = new JsonSerializer().to(new TextWriter(new GZIPOutputStream(new FileOutputStream(file)), StandardCharsets.UTF_8))) {
+				tw.emitMap();
 				for (var entry : handler.fields.entrySet()) {
 					tw.key(entry.getKey());
 					tw.mapValue().append(entry.getValue().toString());

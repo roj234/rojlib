@@ -87,7 +87,7 @@ public class InsnList extends AbstractCodeWriter implements Iterable<InsnNode> {
 	}
 
 	@Override
-	void _visitNodePre() {
+	protected void visitPreInsn() {
 		pc.add(bci);
 		var label = bciR2W.get(bci);
 		if (label != null) label(label);

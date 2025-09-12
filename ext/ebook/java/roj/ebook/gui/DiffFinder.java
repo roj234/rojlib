@@ -10,10 +10,10 @@ import roj.collect.CharMap;
 import roj.concurrent.Timer;
 import roj.concurrent.*;
 import roj.config.ConfigMaster;
-import roj.config.auto.Serializer;
-import roj.config.auto.SerializerFactory;
-import roj.config.serial.CVisitor;
-import roj.config.serial.ToYaml;
+import roj.config.ValueEmitter;
+import roj.config.YamlSerializer;
+import roj.config.mapper.ObjectMapper;
+import roj.config.mapper.ObjectMapperFactory;
 import roj.gui.GuiUtil;
 import roj.gui.OnChangeHelper;
 import roj.io.IOUtil;
@@ -22,10 +22,11 @@ import roj.text.CharList;
 import roj.text.TextReader;
 import roj.text.TextUtil;
 import roj.text.TextWriter;
+import roj.text.diff.BsDiff;
 import roj.text.diff.DiffInfo;
+import roj.text.logging.LogDestination;
 import roj.text.logging.Logger;
 import roj.util.ArrayCache;
-import roj.util.BsDiff;
 import roj.util.FastFailException;
 
 import javax.swing.*;
@@ -249,7 +250,7 @@ public class DiffFinder extends JFrame {
 		textRpl.put('\t', "");
 		textRpl.put(' ', "");
 		textRpl.put('　', "");
-		Logger.getRootContext().destination(() -> System.out);
+		Logger.getRootContext().destination(LogDestination.stdout());
 	}
 	private static final Logger LOGGER = Logger.getLogger("Differ");
 	private void runDiffAsync(int completed, File base, FileMeta[] metas, File progress, File result, int preWindow, int slideWindow) {
@@ -298,8 +299,8 @@ public class DiffFinder extends JFrame {
 
 		private volatile boolean terminateFlag;
 
-		private final Serializer<DiffInfo> writer = SerializerFactory.SAFE.serializer(DiffInfo.class);
-		private CVisitor result;
+		private final ObjectMapper<DiffInfo> writer = ObjectMapperFactory.SAFE.serializer(DiffInfo.class);
+		private ValueEmitter result;
 
 		final void initComparator(File base, FileMeta[] metas, int preWindow, TaskPool POOL) {
 			bar.addTotal(metas.length);
@@ -365,8 +366,8 @@ public class DiffFinder extends JFrame {
 			generator.executeUnsafe(() -> {
 				try {
 					progressFile = new RandomAccessFile(progress_, "rwd");
-					result = new ToYaml().sb(TextWriter.append(output));
-					result.valueList();
+					result = new YamlSerializer().to(TextWriter.append(output));
+					result.emitList();
 					taskGenerateThread(layered, window);
 				} catch (Exception e) {
 					LOGGER.error("发生了异常", e);

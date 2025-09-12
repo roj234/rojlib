@@ -3,32 +3,31 @@ package roj.plugin;
 import roj.archive.zip.ZEntry;
 import roj.archive.zip.ZipFile;
 import roj.asm.annotation.Annotation;
+import roj.ci.annotation.ReplaceConstant;
 import roj.collect.CollectionX;
 import roj.collect.HashMap;
 import roj.concurrent.TaskPool;
-import roj.config.Tokenizer;
-import roj.config.data.CBoolean;
-import roj.config.data.CEntry;
-import roj.config.data.Type;
-import roj.http.server.HSConfig;
-import roj.http.server.HttpServer11;
+import roj.config.node.BoolValue;
+import roj.config.node.ConfigValue;
+import roj.config.node.Type;
+import roj.http.server.HttpServer;
 import roj.http.server.PathRouter;
 import roj.http.server.ZipRouter;
 import roj.http.server.auto.OKRouter;
 import roj.io.IOUtil;
-import roj.util.ArtifactVersion;
 import roj.net.MyChannel;
 import roj.net.ServerLaunch;
 import roj.plugin.di.DIContext;
-import roj.ci.annotation.ReplaceConstant;
 import roj.reflect.ILSecurityManager;
 import roj.reflect.Reflection;
 import roj.text.CharList;
 import roj.text.Formatter;
 import roj.text.TextReader;
+import roj.text.Tokenizer;
 import roj.text.logging.Level;
 import roj.text.logging.Logger;
 import roj.ui.*;
+import roj.util.ArtifactVersion;
 import roj.util.Helpers;
 import roj.util.HighResolutionTimer;
 import roj.util.VMUtil;
@@ -198,7 +197,7 @@ public final class Jocker extends PluginManager {
 	}
 	private void loadBuiltinPlugins() {
 		PluginDescriptor pd;
-		CEntry entry = CONFIG.get("load_builtin", CBoolean.TRUE);
+		ConfigValue entry = CONFIG.get("load_builtin", BoolValue.TRUE);
 		if (!entry.mayCastTo(Type.BOOL) || entry.asBool()) {
 			HashMap<String, PluginDescriptor> builtin = new HashMap<>();
 			for (var info : PanTweaker.annotations.annotatedBy("roj/plugin/SimplePlugin")) {
@@ -252,18 +251,19 @@ public final class Jocker extends PluginManager {
 	static OKRouter initHttp() {
 		if (router == null) {
 			var level = Level.valueOf(CONFIG.getString("http_log", "INFO"));
-			HttpServer11.LOGGER.setLevel(level);
+			HttpServer.setLevel(level);
 			router = new OKRouter(level.canLog(Level.DEBUG));
 			try {
-				httpServer = HttpServer11.simple("PangerHTTP", new InetSocketAddress(CONFIG.getInt("http_port", 8080)), 512, router);
+				httpServer = HttpServer.simple(new InetSocketAddress(CONFIG.getInt("http_port", 8080)), 512, router, "PangerHTTP");
 				router.setInterceptor("PermissionManager", null);
-				var resources = new ZipRouter(new File(pm.getPluginFolder(), "Core/ui.zip"));
+				var resources = new ZipRouter(IOUtil.getJar(Jocker.class));
+				resources.setPrefix("w/");
 				router.addPrefixDelegation("", resources);
 				Jocker.resources = resources.zip;
 
 				var http = new PanHttp();
 				var proxyToken = CONFIG.getString("http_reverse_proxy");
-				if (!proxyToken.isEmpty()) HSConfig.proxySecret = proxyToken;
+				if (!proxyToken.isEmpty()) HttpServer.proxySecret = proxyToken;
 				if (CONFIG.getBool("http_status")) router.register(http);
 			} catch (IOException e) {
 				LOGGER.error("HTTP服务启动失败", e);

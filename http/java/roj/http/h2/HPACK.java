@@ -64,7 +64,7 @@ final class HPACK {
 			if (--id < STATIC_TABLE.size()) return STATIC_TABLE.get(id);
 			id -= STATIC_TABLE.size();
 			if (id >= super.size) throw new H2Exception(ERROR_COMPRESS, "HPACK.Table.IndexError");
-			return (Field) array[(id+head) % array.length];
+			return (Field) elements[(id+head) % elements.length];
 		}
 
 		public void _add(Field f) {
@@ -110,7 +110,7 @@ final class HPACK {
 		}
 
 		@Override
-		public void setCapacity(int capacity) {
+		public void setMaxCapacity(int capacity) {
 			if (cap == capacity) return;
 
 			cap = capacity;
@@ -123,7 +123,7 @@ final class HPACK {
 			int max = capacity / 32;
 			if ((capacity & 31) != 0) max++;
 
-			super.setCapacity(max);
+			super.setMaxCapacity(max);
 		}
 	}
 
@@ -177,13 +177,13 @@ final class HPACK {
 
 	public void setEncoderTableSize(int encodeMax/*REMOTE*/) {
 		if (encodeMax != encode_tbl.cap) {
-			encode_tbl.setCapacity(encodeMax);
+			encode_tbl.setMaxCapacity(encodeMax);
 			encoderSizeChanged = true;
 		}
 	}
 	public void setDecoderTableSize(int decodeMax/*LOCAL*/) {
 		if (decodeMax != decode_tbl.cap) {
-			decode_tbl.setCapacity(decodeMax);
+			decode_tbl.setMaxCapacity(decodeMax);
 			decoderSizeChanged = true;
 		}
 	}
@@ -237,7 +237,7 @@ final class HPACK {
 			case 2, 3 -> {
 				if ((k &= 31) == 31) k = readInt(in, 31);
 				if (k < 0 || k > decode_tbl.cap) throw new H2Exception(ERROR_COMPRESS, "HPACK.Table.SizeError");
-				decode_tbl.setCapacity(k);
+				decode_tbl.setMaxCapacity(k);
 				decoderSizeChanged = false;
 			}
 			// 0001 xxxx    Literal Header Field Never Indexed

@@ -1,6 +1,6 @@
 package roj.net.util;
 
-import roj.config.auto.Optional;
+import roj.config.mapper.Optional;
 
 /**
  * @author Roj234

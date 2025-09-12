@@ -51,7 +51,7 @@ public class LZMAOutputStream extends OutputStream implements Finishable {
 
 		int dictSize = options.getDictSize();
 		if (expectedUncompressedSize >= 0 && dictSize > expectedUncompressedSize) {
-			dictSize = MathUtils.getMin2PowerOf((int) expectedUncompressedSize);
+			dictSize = MathUtils.nextPowerOfTwo((int) expectedUncompressedSize);
 		}
 
 		lzma = LZMAEncoder.getInstance(rc, options, 0);

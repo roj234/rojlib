@@ -1,6 +1,6 @@
 package roj.plugins.minecraft.server.util;
 
-import roj.config.serial.CVisitor;
+import roj.config.ValueEmitter;
 import roj.ui.Text;
 
 /**
@@ -18,12 +18,12 @@ public class TranslatedString extends Text {
 	@Override
 	protected String getMinecraftType() { return "translate"; }
 	@Override
-	public void writeJson(CVisitor ser) {
+	public void writeJson(ValueEmitter ser) {
 		super.writeJson(ser);
 
 		if (with.length > 0) {
 			ser.key("with");
-			ser.valueList(with.length);
+			ser.emitList(with.length);
 			for (Text string : with) {
 				string.writeJson(ser);
 			}

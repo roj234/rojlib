@@ -2,7 +2,7 @@ package roj.util;
 
 import roj.asmx.launcher.Conditional;
 import roj.collect.ArrayList;
-import roj.config.auto.Optional;
+import roj.config.mapper.Optional;
 
 import javax.swing.tree.MutableTreeNode;
 import javax.swing.tree.TreeNode;

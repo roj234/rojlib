@@ -1,7 +1,7 @@
 package roj.plugins.web.share;
 
-import roj.config.auto.Name;
-import roj.config.auto.Optional;
+import roj.config.mapper.Name;
+import roj.config.mapper.Optional;
 import roj.http.server.MimeType;
 import roj.io.IOUtil;
 import roj.io.vfs.VirtualFile;

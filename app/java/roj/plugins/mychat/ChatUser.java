@@ -2,10 +2,10 @@ package roj.plugins.mychat;
 
 import roj.collect.Int2IntMap;
 import roj.collect.RingBuffer;
-import roj.config.serial.CRawString;
-import roj.config.serial.ToJson;
+import roj.config.node.RawValue;
+import roj.config.JsonSerializer;
 import roj.http.server.Request;
-import roj.text.DateTime;
+import roj.text.DateFormat;
 import roj.util.ByteList;
 
 import java.util.concurrent.atomic.AtomicInteger;
@@ -33,7 +33,7 @@ final class ChatUser extends ChatSubject {
 				worker.sendExternalLogout("您已在他处登录<br />" +
 						"IP: " + req.connection().remoteAddress() + "<br />" +
 						"UA: " + req.header("User-Agent") + "<br />" +
-						"时间: " + DateTime.toLocalTimeString(System.currentTimeMillis()));
+						"时间: " + DateFormat.toLocalDateTime(System.currentTimeMillis()));
 			}
 			worker = w;
 		}
@@ -106,29 +106,29 @@ final class ChatUser extends ChatSubject {
 		b.putInt(id).putUTF(name).putUTF("").putUTF(face).putUTF(desc);
 	}
 
-	public final CRawString put() {
-		ToJson ser = new ToJson();
-		ser.valueMap();
+	public final RawValue put() {
+		JsonSerializer ser = new JsonSerializer();
+		ser.emitMap();
 
 		ser.key("id");
-		ser.value(id);
+		ser.emit(id);
 
 		ser.key("name");
-		ser.value(name);
+		ser.emit(name);
 
 		ser.key("username");
-		ser.value("");
+		ser.emit("");
 
 		ser.key("face");
-		ser.value(face);
+		ser.emit(face);
 
 		ser.key("desc");
-		ser.value(desc);
+		ser.emit(desc);
 
 		ser.key("online");
-		ser.value(flag);
+		ser.emit(flag);
 
 		ser.pop();
-		return new CRawString(ser.getValue());
+		return new RawValue(ser.getValue());
 	}
 }

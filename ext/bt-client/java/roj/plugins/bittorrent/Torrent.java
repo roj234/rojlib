@@ -1,15 +1,15 @@
 package roj.plugins.bittorrent;
 
-import roj.util.function.Flow;
 import roj.config.ConfigMaster;
-import roj.config.ParseException;
-import roj.config.auto.Name;
-import roj.config.auto.Optional;
+import roj.config.mapper.Name;
+import roj.config.mapper.Optional;
 import roj.io.IOUtil;
 import roj.text.CharList;
-import roj.text.DateTime;
+import roj.text.DateFormat;
+import roj.text.ParseException;
 import roj.text.TextUtil;
 import roj.util.ByteList;
+import roj.util.function.Flow;
 
 import java.io.File;
 import java.io.IOException;
@@ -55,7 +55,7 @@ public class Torrent {
 		else sb.append(Flow.of(announce_list).map(t -> t[0]).join(", "));
 		sb.append(']');
 		if (creation_date != 0) {
-			sb.append(", 发布于: ").append(DateTime.toLocalTimeString(creation_date*1000));
+			sb.append(", 发布于: ").append(DateFormat.toLocalDateTime(creation_date*1000));
 		}
 		if (comment != null) sb.append(", 发布者: ").append(comment);
 		if (created_by != null) sb.append(", 制作软件: ").append(created_by);

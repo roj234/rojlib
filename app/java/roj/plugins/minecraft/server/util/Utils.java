@@ -1,9 +1,8 @@
 package roj.plugins.minecraft.server.util;
 
 import roj.collect.BitArray;
-import roj.util.OperationDone;
-import roj.config.JSONParser;
-import roj.config.serial.ToNBT;
+import roj.config.JsonParser;
+import roj.config.NbtEncoder;
 import roj.io.IOUtil;
 import roj.math.Vec3i;
 import roj.plugins.minecraft.server.MinecraftServer;
@@ -20,8 +19,8 @@ import java.util.function.IntConsumer;
 public class Utils {
 	public static byte[] constantize(String path) {
 		try {
-			ToNBT ser = new ToNBT(IOUtil.getSharedByteBuf());
-			return new JSONParser().parse(MinecraftServer.INSTANCE.getResource(path), 0, ser).buffer().toByteArray();
+			NbtEncoder ser = new NbtEncoder(IOUtil.getSharedByteBuf());
+			return new JsonParser().parse(MinecraftServer.INSTANCE.getResource(path), 0, ser).buffer().toByteArray();
 		} catch (Exception e) {
 			return Helpers.athrow2(e);
 		}

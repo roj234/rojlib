@@ -6,8 +6,8 @@ package roj.plugins.frp;
 
 import roj.collect.HashMap;
 import roj.config.ConfigMaster;
-import roj.config.data.CList;
-import roj.config.data.CMap;
+import roj.config.node.ListValue;
+import roj.config.node.MapValue;
 import roj.crypt.Blake3;
 import roj.crypt.KeyType;
 import roj.io.IOUtil;
@@ -107,7 +107,7 @@ public class MyFRP implements ChannelHandler {
 	}
 
 	private void start(File file) throws Exception {
-		CMap yml = ConfigMaster.fromExtension(file).parse(file).asMap();
+		MapValue yml = ConfigMaster.fromExtension(file).parse(file).asMap();
 
 		var userCert = new KeyPair((PublicKey) keyType.fromPEM(yml.getString("public_key")), (PrivateKey) keyType.fromPEM(yml.getString("private_key")));
 		String digest = TextUtil.bytes2hex(userId = new Blake3(32).digest(userCert.getPublic().getEncoded()));
@@ -123,7 +123,7 @@ public class MyFRP implements ChannelHandler {
 		System.out.println("正在连接"+address.getAddress()+", 端口"+address.getPort());
 		launch.loop(loop).connect(address);
 
-		CList list = yml.getList("ports");
+		ListValue list = yml.getList("ports");
 		/*if (yml.getBool("room_owner")) {
 			var h = new AEHost(loop);
 			client = h;

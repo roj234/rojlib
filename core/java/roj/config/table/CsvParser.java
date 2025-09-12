@@ -3,16 +3,16 @@ package roj.config.table;
 import roj.collect.ArrayList;
 import roj.collect.BitSet;
 import roj.collect.Int2IntMap;
-import roj.config.ParseException;
 import roj.config.Parser;
-import roj.config.Token;
-import roj.config.data.CEntry;
-import roj.config.data.CList;
-import roj.config.data.CNull;
-import roj.config.serial.CVisitor;
+import roj.config.ValueEmitter;
+import roj.config.node.ConfigValue;
+import roj.config.node.ListValue;
+import roj.config.node.NullValue;
 import roj.io.source.Source;
 import roj.text.CharList;
+import roj.text.ParseException;
 import roj.text.TextReader;
+import roj.text.Token;
 import roj.util.Helpers;
 
 import java.io.File;
@@ -39,7 +39,7 @@ public final class CsvParser extends Parser implements TableParser {
 	}
 	{ literalEnd = CSV_LENDS; }
 
-	private List<CEntry> tmpList;
+	private List<ConfigValue> tmpList;
 
 	@Override public void table(File file, Charset charset, TableReader listener) throws IOException, ParseException {
 		try (var tw = TextReader.from(file, charset)) {
@@ -99,14 +99,14 @@ public final class CsvParser extends Parser implements TableParser {
 
 	public CsvParser() {}
 
-	public <C extends CVisitor> C parse(CharSequence text, int flags, C cv) throws ParseException {
+	public <E extends ValueEmitter> E parse(CharSequence text, int flags, E emitter) throws ParseException {
 		this.flag = flags;
 		init(text);
 		tmpList = new ArrayList<>();
 
 		int i = 0;
 
-		cv.valueList();
+		emitter.emitList();
 
 		var keys = new ArrayList<>(fastLine(next()));
 		List<String> list = Helpers.cast(tmpList);
@@ -122,19 +122,19 @@ public final class CsvParser extends Parser implements TableParser {
 				int j = 0;
 				boolean hasValue = false;
 
-				cv.valueMap();
+				emitter.emitMap();
 				for(;; w = next(), j++) {
 					type = w.type();
 					if (type >= 0 && type < 8) {
 						if (hasValue) unexpected(w.toString(), "分隔符");
 						hasValue = true;
 
-						cv.key(keys.get(j));
+						emitter.key(keys.get(j));
 						switch (w.type()) {
-							case Token.LITERAL -> cv.value(w.text());
-							case Token.INTEGER -> cv.value(w.asInt());
-							case Token.DOUBLE -> cv.value(w.asDouble());
-							case Token.LONG -> cv.value(w.asLong());
+							case Token.LITERAL -> emitter.emit(w.text());
+							case Token.INTEGER -> emitter.emit(w.asInt());
+							case Token.DOUBLE -> emitter.emit(w.asDouble());
+							case Token.LONG -> emitter.emit(w.asLong());
 						}
 					} else {
 						if (!hasValue) list.add(null);
@@ -142,27 +142,27 @@ public final class CsvParser extends Parser implements TableParser {
 						hasValue = false;
 					}
 				}
-				cv.pop();
+				emitter.pop();
 			} catch (ParseException e) {
 				throw e.addPath("$["+i+"]");
 			}
 			i++;
 		}
 
-		cv.pop();
+		emitter.pop();
 		init(null);
-		return cv;
+		return emitter;
 	}
 
 	@Override
 	@Deprecated
-	public CList parse(CharSequence text, int flags) throws ParseException {
+	public ListValue parse(CharSequence text, int flags) throws ParseException {
 		this.flag = flags;
 		init(text);
 		tmpList = new ArrayList<>();
 
 		int i = 0;
-		var list = new CList();
+		var list = new ListValue();
 		while (true) {
 			Token w = next();
 			short type = w.type();
@@ -181,20 +181,20 @@ public final class CsvParser extends Parser implements TableParser {
 		init(null);
 		return list;
 	}
-	private CList csvLine(Token w) throws ParseException {
+	private ListValue csvLine(Token w) throws ParseException {
 		var buf = tmpList; buf.clear();
 
 		var hasValue = false;
 		for(;; w = next()) {
 			var type = w.type();
 			mySegmentBlock: {
-				CEntry entry;
+				ConfigValue entry;
 				switch (type) {
 					default: break mySegmentBlock;
-					case Token.LITERAL: entry = CEntry.valueOf(w.text());break;
-					case Token.INTEGER: entry = CEntry.valueOf(w.asInt());break;
-					case Token.DOUBLE:  entry = CEntry.valueOf(w.asDouble());break;
-					case Token.LONG:    entry = CEntry.valueOf(w.asLong());break;
+					case Token.LITERAL: entry = ConfigValue.valueOf(w.text());break;
+					case Token.INTEGER: entry = ConfigValue.valueOf(w.asInt());break;
+					case Token.DOUBLE:  entry = ConfigValue.valueOf(w.asDouble());break;
+					case Token.LONG:    entry = ConfigValue.valueOf(w.asLong());break;
 				}
 				buf.add(entry);
 
@@ -203,12 +203,12 @@ public final class CsvParser extends Parser implements TableParser {
 				continue;
 			}
 
-			if (!hasValue) buf.add(CNull.NULL);
+			if (!hasValue) buf.add(NullValue.NULL);
 			if (type != separator) break;
 			hasValue = false;
 		}
 
-		return new CList(new ArrayList<>(buf));
+		return new ListValue(new ArrayList<>(buf));
 	}
 
 	@Override

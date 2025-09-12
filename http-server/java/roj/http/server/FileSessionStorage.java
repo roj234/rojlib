@@ -3,10 +3,10 @@ package roj.http.server;
 import roj.collect.HashMap;
 import roj.collect.LRUCache;
 import roj.concurrent.SegmentReadWriteLock;
-import roj.config.XNBTParser;
-import roj.config.auto.Serializer;
-import roj.config.auto.SerializerFactory;
-import roj.config.serial.ToNBT;
+import roj.config.NbtEncoder;
+import roj.config.NbtParserEx;
+import roj.config.mapper.ObjectMapper;
+import roj.config.mapper.ObjectMapperFactory;
 import roj.io.MyDataInputStream;
 import roj.math.MathUtils;
 import roj.util.ByteList;
@@ -29,7 +29,7 @@ import java.util.function.BiConsumer;
  * @since 2023/5/15 14:13
  */
 public class FileSessionStorage extends SessionStorage implements BiConsumer<String,Map<String,Object>> {
-	private static final ThreadLocal<Serializer<?>> local = new ThreadLocal<>();
+	private static final ThreadLocal<ObjectMapper<?>> local = new ThreadLocal<>();
 	private static volatile StandardCopyOption[] moveAction = {StandardCopyOption.ATOMIC_MOVE};
 
 	private final File baseDir;
@@ -47,7 +47,7 @@ public class FileSessionStorage extends SessionStorage implements BiConsumer<Str
 			return;
 		}
 
-		int tc = MathUtils.getMin2PowerOf(concurrency);
+		int tc = MathUtils.nextPowerOfTwo(concurrency);
 		if (tc > 32) throw new IllegalArgumentException("concurrency too large:"+concurrency);
 
 		this.concurrency = tc-1;
@@ -101,9 +101,9 @@ public class FileSessionStorage extends SessionStorage implements BiConsumer<Str
 		if (!file.isFile()) return new HashMap<>();
 
 		try (var in = new MyDataInputStream(new FileInputStream(file))) {
-			Serializer<Map<String, Object>> des = adapter();
+			ObjectMapper<Map<String, Object>> des = adapter();
 			des.reset();
-			XNBTParser.parse(in, des);
+			NbtParserEx.parse(in, des);
 			return des.finished() ? des.get() : null;
 		} catch (Exception e) {
 			e.printStackTrace();
@@ -136,7 +136,7 @@ public class FileSessionStorage extends SessionStorage implements BiConsumer<Str
 		try {
 			try (FileChannel fc = FileChannel.open(tmpFile.toPath(), StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE)) {
 				try (var buf = new ByteList.ToStream(Channels.newOutputStream(fc), false)) {
-					adapter().write(new ToNBT(buf).setXNbt(true), value);
+					adapter().write(new NbtEncoder(buf).setXNbt(true), value);
 				}
 			}
 
@@ -175,10 +175,10 @@ public class FileSessionStorage extends SessionStorage implements BiConsumer<Str
 		new File(baseDir, id+".tmp").delete();
 	}
 
-	private static Serializer<Map<String, Object>> adapter() {
-		Serializer<?> c = local.get();
+	private static ObjectMapper<Map<String, Object>> adapter() {
+		ObjectMapper<?> c = local.get();
 		if (c == null) {
-			c = SerializerFactory.pooled().mapOf(Object.class);
+			c = ObjectMapperFactory.pooled().mapOf(Object.class);
 			local.set(c);
 		}
 		return Helpers.cast(c);

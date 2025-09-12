@@ -444,34 +444,35 @@ public final class InsnNode {
 	}
 
 	public CharList myToString(CharList sb, boolean simple) {
-		switch (OPLENGTH[code&0xFF]&0xF) {
-			case 1:
-				MemberDescriptor d = desc();
+		switch (OPLENGTH[code & 0xFF] & 0xF) {
+			case 1 -> {
+				var d = desc();
 				sb.append(parseOwner(d.owner, simple)).append('.').append(d.name).append(" // ");
 				Type.fieldDesc(d.rawDesc).toString(sb);
-			break;
-			case 2:
-				d = desc();
+			}
+			case 2 -> {
+				var d = desc();
 				TypeHelper.humanize(Type.methodDesc(d.rawDesc), parseOwner(d.owner, simple)+'.'+d.name, simple, sb);
-			break;
-			case 3:
-				d = desc();
-				TypeHelper.humanize(Type.methodDesc(d.rawDesc), "*."+d.name, simple, sb).append(" // [#").append((int)d.modifier).append(']');
-			break;
-			case 6:
-				//noinspection MagicConstant
-				sb.append(Type.primitive(AbstractCodeWriter.FromPrimitiveArrayId(id))); break;
-			case 5: case 8: case 9: sb.append(id); break;
-			case 7: sb.append('#').append(id).append(number >= 0 ? " += " : " -= ").append(Math.abs(number)); break;
-			case 10: Type.fieldDesc(ref.toString()).toString(sb); sb.append(" // [维度=").append(id).append(']'); break;
-			default:
+			}
+			case 3 -> {
+				var d = desc();
+				TypeHelper.humanize(Type.methodDesc(d.rawDesc), "[#"+d.modifier+"]."+d.name, simple, sb);
+			}
+			case 6 -> //noinspection MagicConstant
+					sb.append(Type.primitive(AbstractCodeWriter.FromPrimitiveArrayId(id)));
+			case 5, 8, 9 -> sb.append(id);
+			case 7 -> sb.append('#').append(id).append(number >= 0 ? " += " : " -= ").append(Math.abs(number));
+			case 10 -> {
+				Type.fieldDesc(ref.toString()).toString(sb);
+				sb.append(" // [维度=").append(id).append(']');
+			}
+			default -> {
 				if (ref instanceof Ldc) sb.append(((Ldc) ref).c.toString());
 				else if (ref instanceof JumpTo) sb.append(((JumpTo) ref).target);
 				else if (ref instanceof SwitchBlock) sb.append(ref);
-				else if (ref instanceof Constant) {
-					sb.append(((Constant) ref).toString());
-				} else if (ref != null) sb.append(parseOwner((String) ref, simple));
-			break;
+				else if (ref instanceof Constant) sb.append(ref.toString());
+				else if (ref != null) sb.append(parseOwner((String) ref, simple));
+			}
 		}
 		return sb;
 	}

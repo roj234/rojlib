@@ -2,7 +2,7 @@ package roj.io.remote;
 
 import roj.collect.BitSet;
 import roj.collect.IntMap;
-import roj.config.data.CMap;
+import roj.config.node.MapValue;
 import roj.crypt.KeyType;
 import roj.util.FastFailException;
 import roj.io.IOUtil;
@@ -51,7 +51,7 @@ public class RemoteFileSystem extends Plugin implements Consumer<MyChannel> {
     @Override
     protected void onEnable() throws Exception {
         PluginManager pm = getPluginManager();
-        CMap config = getConfig();
+        MapValue config = getConfig();
         keypairGot: {
             var keyStore = pm.getPluginInstance("keyStore");
             if (keyStore != null) {

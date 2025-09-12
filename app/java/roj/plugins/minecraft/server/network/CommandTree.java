@@ -1,7 +1,7 @@
 package roj.plugins.minecraft.server.network;
 
 import roj.collect.ToIntMap;
-import roj.config.ParseException;
+import roj.text.ParseException;
 import roj.ui.Argument;
 import roj.ui.CommandNode;
 import roj.ui.CommandArgList;

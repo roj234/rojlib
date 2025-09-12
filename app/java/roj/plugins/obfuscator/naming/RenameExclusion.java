@@ -9,10 +9,10 @@ import roj.asm.cp.CstRef;
 import roj.asm.cp.CstString;
 import roj.asm.insn.CodeVisitor;
 import roj.collect.ArrayList;
-import roj.config.auto.Optional;
+import roj.collect.FlagSet;
+import roj.config.mapper.Optional;
 import roj.text.CharList;
 import roj.util.ByteList;
-import roj.collect.FlagSet;
 
 import java.util.List;
 

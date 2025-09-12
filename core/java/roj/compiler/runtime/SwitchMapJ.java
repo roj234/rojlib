@@ -17,7 +17,7 @@ public final class SwitchMapJ {
 		public static Builder builder(int size) {return new Builder(size);}
 		private Builder(int size) {
 			keys = new long[size];
-			mask = MathUtils.getMin2PowerOf((int)(size * 1.5f)); // 负载因子≈66%
+			mask = MathUtils.nextPowerOfTwo((int)(size * 1.5f)); // 负载因子≈66%
 			tab = new int[mask+1];
 		}
 

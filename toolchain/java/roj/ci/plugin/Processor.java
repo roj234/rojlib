@@ -1,9 +1,10 @@
 package roj.ci.plugin;
 
 import roj.collect.ArrayList;
-import roj.config.data.CEntry;
+import roj.config.node.ConfigValue;
 
 import java.io.File;
+import java.io.InputStream;
 import java.util.List;
 
 /**
@@ -12,9 +13,10 @@ import java.util.List;
  */
 public interface Processor {
 	String name();
-	default void init(CEntry config) {}
-	default int beforeCompile(ArrayList<String> options, List<File> sources, ProcessEnvironment ctx) {return 2;}
-	default void afterCompile(ProcessEnvironment ctx) {}
+	default void init(ConfigValue config) {}
+	default InputStream wrapResource(String path, InputStream in) {return in;}
+	default int beforeCompile(ArrayList<String> options, List<File> sources, BuildContext ctx) {return 2;}
+	default void afterCompile(BuildContext ctx) {}
 
 	default boolean defaultEnabled() {return false;}
 }

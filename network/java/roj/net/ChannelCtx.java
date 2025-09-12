@@ -62,7 +62,7 @@ public final class ChannelCtx {
 
 	public void channelRead(Object data) throws IOException {
 		if (next != null) next.handler.channelRead(next, data);
-		else throw new IllegalStateException("No next handler");
+		else throw new IllegalStateException("No next for "+this);
 	}
 
 	public Event postEvent(String id) throws IOException {
@@ -146,7 +146,6 @@ public final class ChannelCtx {
 		}
 	}
 
-
 	@Override
-	public String toString() { return name + "=" + handler; }
+	public String toString() { return name+"="+handler; }
 }

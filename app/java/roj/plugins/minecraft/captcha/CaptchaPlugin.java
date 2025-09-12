@@ -3,7 +3,7 @@ package roj.plugins.minecraft.captcha;
 import roj.asmx.event.Subscribe;
 import roj.collect.BitSet;
 import roj.collect.RingBuffer;
-import roj.config.data.CMap;
+import roj.config.node.MapValue;
 import roj.io.IOUtil;
 import roj.net.ChannelCtx;
 import roj.plugin.Plugin;
@@ -32,13 +32,13 @@ public class CaptchaPlugin extends Plugin {
 	private Random random;
 
 	public static CaptchaPlugin INSTANCE;
-	public CMap getCfg() { return getConfig(); }
+	public MapValue getCfg() { return getConfig(); }
 
 	@Override
 	protected void onEnable() {
 		INSTANCE = this;
 
-		CMap config = getConfig();
+		MapValue config = getConfig();
 		config.dot(true);
 		captchaFonts = CaptchaFont.load(config);
 

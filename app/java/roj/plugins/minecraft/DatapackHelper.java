@@ -10,17 +10,17 @@ import roj.collect.HashMap;
 import roj.collect.LinkedHashMap;
 import roj.concurrent.TaskPool;
 import roj.config.ConfigMaster;
-import roj.config.Flags;
-import roj.config.ParseException;
-import roj.config.data.CEntry;
-import roj.config.data.CInt;
-import roj.config.data.CList;
-import roj.config.data.CMap;
-import roj.config.serial.ToJson;
-import roj.config.serial.ToSomeString;
+import roj.config.JsonSerializer;
+import roj.config.Parser;
+import roj.config.TextEmitter;
+import roj.config.node.ConfigValue;
+import roj.config.node.IntValue;
+import roj.config.node.ListValue;
+import roj.config.node.MapValue;
 import roj.io.IOUtil;
 import roj.math.Rect3d;
 import roj.text.CharList;
+import roj.text.ParseException;
 import roj.text.TextReader;
 import roj.text.TextWriter;
 import roj.ui.Argument;
@@ -161,7 +161,7 @@ public class DatapackHelper {
 			var pool = TaskPool.common().newGroup();
 			for (var zf : datapackList) {
 				pool.executeUnsafe(() -> {
-					CInt flag = new CInt();
+					IntValue flag = new IntValue();
 					for (ZEntry ze : zf.entries()) {
 						if (ze.getName().endsWith(".json")) {
 							try (TextReader in = new TextReader(zf.getStream(ze), StandardCharsets.UTF_8)) {
@@ -212,8 +212,8 @@ public class DatapackHelper {
 
 		var dump_missing_translation = literal("chinese").comment("导出缺失的中文翻译").then(argument("to", Argument.fileOptional(true)).executes(ctx -> {
 			try (var out = TextWriter.to(ctx.argument("to", File.class))) {
-				var json = new ToJson("\t").sb(out);
-				json.valueMap();
+				var json = new JsonSerializer("\t").to(out);
+				json.emitMap();
 				for (ZipArchive in : datapackList) {
 					dumpZhcn(in, json);
 				}
@@ -235,7 +235,7 @@ public class DatapackHelper {
 	private static final Pattern TRANSLATION_PATTERN = Pattern.compile("^assets/([a-z_\\-]+)/lang/(.._..)\\.json");
 	record LangState(LinkedHashMap<String, String> translation, ZEntry hash) {}
 	@SuppressWarnings("unchecked")
-	private static void dumpZhcn(ZipArchive za, ToSomeString json) {
+	private static void dumpZhcn(ZipArchive za, TextEmitter json) {
 		HashMap<String, Map<String, LangState>> states = new HashMap<>();
 
 		for (ZEntry ze : za.entries()) {
@@ -247,7 +247,7 @@ public class DatapackHelper {
 				Map<String, LangState> langState = states.computeIfAbsent(modid, Helpers.fnHashMap());
 
 				try {
-					var translation = (LinkedHashMap<String, String>) ConfigMaster.JSON.parser(false).parse(za.getStream(ze), Flags.ORDERED_MAP).unwrap();
+					var translation = (LinkedHashMap<String, String>) ConfigMaster.JSON.parser().parse(za.getStream(ze), Parser.ORDERED_MAP).unwrap();
 
 					LangState state = new LangState(translation, ze);
 					if (langid.equals("en_us")) {
@@ -304,10 +304,10 @@ public class DatapackHelper {
 			if (copyOf.size() > 0) {
 				System.out.println("正在创建"+modid+"的翻译");
 				json.key("_");
-				json.value("模组ID="+modid+", 条目="+copyOf.size());
+				json.emit("模组ID="+modid+", 条目="+copyOf.size());
 				for (Map.Entry<String, String> entry1 : copyOf.entrySet()) {
 					json.key(entry1.getKey());
-					json.value(entry1.getValue());
+					json.emit(entry1.getValue());
 				}
 			}
 		}
@@ -324,18 +324,18 @@ public class DatapackHelper {
 
 		for (ZEntry ze : za.entries()) {
 			if (BLOCK_MODEL_PATTERN.matcher(ze.getName()).matches()) {
-				CMap map = null;
+				MapValue map = null;
 				try {
 					map = ConfigMaster.JSON.parse(za.getStream(ze)).asMap();
 
-					for (CEntry entry : map.getList("elements")) {
-						CMap map1 = entry.asMap();
+					for (ConfigValue entry : map.getList("elements")) {
+						MapValue map1 = entry.asMap();
 						if (map1.containsKey("rotation")) continue;
-						CList from = map1.getList("from");
-						CList to = map1.getList("to");
+						ListValue from = map1.getList("from");
+						ListValue to = map1.getList("to");
 
 						var rect = new Rect3d(from.getDouble(0), from.getDouble(1), from.getDouble(2), to.getDouble(0), to.getDouble(1), to.getDouble(2));
-						for (Map.Entry<String, CEntry> faces : map1.getMap("faces").entrySet()) {
+						for (Map.Entry<String, ConfigValue> faces : map1.getMap("faces").entrySet()) {
 							String faceKey = faces.getKey();
 							boolean isCoincident = switch (faceKey) {
 								case "up" -> rect.maxY >= up_plane.minY && rect.maxY <= up_plane.maxY;

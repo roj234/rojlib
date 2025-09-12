@@ -1,10 +1,10 @@
 package roj.plugins.unpacker;
 
 import roj.collect.TrieTree;
-import roj.config.JSONParser;
-import roj.config.ParseException;
-import roj.config.data.CEntry;
-import roj.config.data.CMap;
+import roj.config.JsonParser;
+import roj.text.ParseException;
+import roj.config.node.ConfigValue;
+import roj.config.node.MapValue;
 import roj.io.CorruptedInputException;
 import roj.io.IOUtil;
 import roj.io.MyDataInputStream;
@@ -37,9 +37,9 @@ class Asar extends Scene {
 
 			baseOffset = headerSize + 8;
 
-			CMap root;
+			MapValue root;
 			try {
-				root = new JSONParser().charset(StandardCharsets.UTF_8).parse(f).asMap();
+				root = new JsonParser().charset(StandardCharsets.UTF_8).parse(f).asMap();
 			} catch (ParseException e) {
 				throw new CorruptedInputException("无法解析文件", e);
 			}
@@ -56,13 +56,13 @@ class Asar extends Scene {
 		return tree;
 	}
 
-	private void recursionTree(CharList parents, CMap directory, TrieTree<PosInfo> tree) {
+	private void recursionTree(CharList parents, MapValue directory, TrieTree<PosInfo> tree) {
 		int len = parents.length();
-		for (Map.Entry<String, CEntry> entry : directory.get("files").asMap().entrySet()) {
+		for (Map.Entry<String, ConfigValue> entry : directory.get("files").asMap().entrySet()) {
 			parents.setLength(len);
 			parents.append(entry.getKey());
 
-			CMap val = entry.getValue().asMap();
+			MapValue val = entry.getValue().asMap();
 			if (val.containsKey("unpacked")) {
 				unpackCount++;
 				System.out.println("跳过解包的 "+parents);

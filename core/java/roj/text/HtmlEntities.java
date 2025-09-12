@@ -3,7 +3,7 @@ package roj.text;
 import roj.collect.HashMap;
 import roj.collect.TrieTree;
 import roj.compiler.plugins.annotations.Attach;
-import roj.config.data.CInt;
+import roj.config.node.IntValue;
 import roj.io.IOUtil;
 import roj.util.ArrayCache;
 import roj.util.Helpers;
@@ -62,7 +62,7 @@ public class HtmlEntities {
 		CharList out = null;
 		int prevI = 0, i = 0;
 
-		HashMap.Entry<CInt, String> entry = new HashMap.Entry<>(new CInt(), null);
+		HashMap.Entry<IntValue, String> entry = new HashMap.Entry<>(new IntValue(), null);
 		while (i < len) {
 			tree.match(in, i, len, entry);
 			int matchLen = entry.getKey().value;

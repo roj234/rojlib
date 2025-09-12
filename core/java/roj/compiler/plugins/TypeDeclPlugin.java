@@ -10,7 +10,7 @@ import roj.compiler.api.Compiler;
 import roj.compiler.api.CompilerPlugin;
 import roj.compiler.ast.expr.Expr;
 import roj.compiler.ast.expr.Invoke;
-import roj.config.ParseException;
+import roj.text.ParseException;
 
 import java.util.Collections;
 

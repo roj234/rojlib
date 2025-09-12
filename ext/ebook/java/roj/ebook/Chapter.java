@@ -1,10 +1,10 @@
 package roj.ebook;
 
 import roj.collect.Int2IntMap;
-import roj.config.auto.Optional;
-import roj.util.TreeNodeImpl;
+import roj.config.mapper.Optional;
 import roj.text.CharList;
 import roj.text.ChinaNumeric;
+import roj.util.TreeNodeImpl;
 
 /**
  * @author Roj234

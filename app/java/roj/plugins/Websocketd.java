@@ -3,7 +3,7 @@ package roj.plugins;
 import org.jetbrains.annotations.Nullable;
 import roj.collect.HashMap;
 import roj.collect.ArrayList;
-import roj.config.data.Type;
+import roj.config.node.Type;
 import roj.http.WebSocket;
 import roj.http.server.*;
 import roj.http.server.auto.OKRouter;

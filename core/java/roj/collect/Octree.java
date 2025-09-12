@@ -73,10 +73,10 @@ public class Octree<V extends OctreeEntry> implements Iterable<Node> {
 			size = 0;
 		}
 		if (unit <= 1) throw new IllegalArgumentException();
-		this.unit = MathUtils.getMin2PowerOf(unit);
+		this.unit = MathUtils.nextPowerOfTwo(unit);
 		if (maxDepth <= 1 || maxDepth > 10) throw new IllegalArgumentException();
 		this.maxDepth = maxDepth;
-		int mask1 = MathUtils.getMin2PowerOf(capacity) - 1;
+		int mask1 = MathUtils.nextPowerOfTwo(capacity) - 1;
 		if (nodes != null) {
 			if (mask < mask1) {
 				nodes = null;

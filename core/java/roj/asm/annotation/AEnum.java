@@ -2,7 +2,7 @@ package roj.asm.annotation;
 
 import roj.asm.MemberDescriptor;
 import roj.asm.type.TypeHelper;
-import roj.config.serial.CVisitor;
+import roj.config.ValueEmitter;
 import roj.text.CharList;
 
 /**
@@ -11,7 +11,7 @@ import roj.text.CharList;
  */
 final class AEnum extends AnnVal {
 	public AEnum(String type, String field) {
-		this.owner = type;
+		setOwner(type);
 		this.field = field;
 	}
 
@@ -21,13 +21,13 @@ final class AEnum extends AnnVal {
 	public char dataType() {return ENUM;}
 
 	public String owner() {
-		if (owner.endsWith(";")) owner = owner.substring(1, owner.length() - 1);
+		if (owner.endsWith(";")) return owner.substring(1, owner.length() - 1);
 		return owner;
 	}
 
-	public void setOwner(String owner) {this.owner = owner;}
+	public void setOwner(String owner) {this.owner = owner.endsWith(";") ? owner : 'L'+owner+';';}
 
-	@Override public void accept(CVisitor visitor) {((ToJVMAnnotation) visitor).valueEnum(owner, field);}
+	@Override public void accept(ValueEmitter visitor) {((AnnotationEncoder) visitor).valueEnum(owner, field);}
 
 	@Override public Object raw() {return new MemberDescriptor(owner(), field, owner);}
 

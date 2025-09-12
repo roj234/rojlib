@@ -1,5 +1,6 @@
 package roj.http.server;
 
+import org.intellij.lang.annotations.MagicConstant;
 import roj.http.Headers;
 import roj.net.ChannelCtx;
 
@@ -15,7 +16,7 @@ import java.nio.channels.FileChannel;
 public interface FileInfo {
 	// FileResponse#def referred this
 	int FILE_RA = 1, FILE_DEFLATED = 2, FILE_CAN_COMPRESS = 4, FILE_HAS_CRC32 = 8;
-	int stats();
+	@MagicConstant(flags = {FILE_RA, FILE_DEFLATED, FILE_CAN_COMPRESS, FILE_HAS_CRC32}) int stats();
 
 	long length(boolean deflated);
 	default FileChannel getSendFile(boolean deflated) throws IOException {return null;}

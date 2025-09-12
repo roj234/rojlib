@@ -29,16 +29,17 @@ public abstract class FastCharset {
 	/**
 	 * UTF_16本地字符集，基于处理器的Endian
 	 */
-	public static FastCharset UTF16n() {return UTF16n.INSTANCE;}
+	public static FastCharset UTF16() {return UTF16n.INSTANCE;}
+	public static FastCharset UTF16LE() {return Reflection.BIG_ENDIAN ? UTF16i.INSTANCE : UTF16n.INSTANCE;}
+	public static FastCharset UTF16BE() {return Reflection.BIG_ENDIAN ? UTF16n.INSTANCE : UTF16i.INSTANCE;}
 	@Nullable public static FastCharset getInstance(Charset charset) {
 		return switch (charset.name()) {
 			case "UTF-8" -> UTF8.INSTANCE;
 			case "ISO-8859-1" -> LATIN1.INSTANCE;
 			case "GB2312", "x-mswin-936", "GBK", "GB18030" -> GB18030.INSTANCE;
-			case "UTF-16", "UTF-16LE", "UTF-16BE" -> {
-				var isBE = !charset.name().equals("UTF-16LE");
-				yield !UTF16n.DISABLE_AUTO && Reflection.BIG_ENDIAN == isBE ? UTF16n.INSTANCE : null;
-			}
+			case "UTF-16" -> UTF16n.INSTANCE;
+			case "UTF-16LE", "UTF-16BE" ->
+					Reflection.BIG_ENDIAN == charset.name().equals("UTF-16BE") ? UTF16n.INSTANCE : null;
 			default -> null;
 		};
 	}
@@ -322,7 +323,7 @@ public abstract class FastCharset {
 		fastValidate(in.array(),in._unsafeAddr()+in.rIndex,in._unsafeAddr()+in.wIndex(),codepointAcceptor);
 		in.rIndex = in.wIndex();
 	}
-	public abstract void fastValidate(Object ref, long base, long end, IntConsumer cs);
+	public abstract void fastValidate(Object ref, long base, long end, IntConsumer verifier);
 
 	public final int byteCount(CharSequence s) { return byteCount(s, 0, s.length()); }
 	public abstract int byteCount(CharSequence s, int off, int len);

@@ -44,7 +44,7 @@ import java.sql.Connection;
  *
  * @param <T> DAO接口的具体类型（需包含 {@link Query} 注解的方法）
  * @see Query
- * @see roj.config.auto.Name 列名映射
+ * @see roj.config.mapper.Name 列名映射
  * @author Roj234-N
  * @since 2024/9/2 3:03
  */

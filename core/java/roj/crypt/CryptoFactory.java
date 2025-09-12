@@ -5,13 +5,13 @@ import org.jetbrains.annotations.Nullable;
 import roj.RojLib;
 import roj.collect.HashMap;
 import roj.compiler.runtime.SwitchMap;
-import roj.util.OperationDone;
 import roj.io.IOUtil;
 import roj.reflect.Unaligned;
 import roj.reflect.litasm.FastJNI;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
 import roj.util.Helpers;
+import roj.util.OperationDone;
 
 import javax.crypto.AEADBadTagException;
 import javax.net.ssl.TrustManager;

@@ -1,6 +1,5 @@
 package roj.compiler.plugins.eval;
 
-import roj.ci.annotation.ReferenceByGeneratedClass;
 import roj.asm.*;
 import roj.asm.insn.CodeWriter;
 import roj.asm.insn.Label;
@@ -8,6 +7,7 @@ import roj.asm.insn.SwitchBlock;
 import roj.asm.type.Type;
 import roj.asm.type.TypeHelper;
 import roj.asmx.AnnotatedElement;
+import roj.ci.annotation.ReferenceByGeneratedClass;
 import roj.collect.ArrayList;
 import roj.collect.HashMap;
 import roj.compiler.JavaCompileUnit;
@@ -103,7 +103,7 @@ public interface Evaluator {
 
 				Type klass = types.get(j);
 				if (klass.isPrimitive()) {
-					c.clazz(CHECKCAST, "roj/config/data/CEntry");
+					c.clazz(CHECKCAST, "roj/config/node/ConfigValue");
 					String converter;
 					char type = (char) klass.type;
 					switch (klass.type) {
@@ -115,7 +115,7 @@ public interface Evaluator {
 							type = 'I';
 						}
 					}
-					c.invoke(INVOKEVIRTUAL, "roj/config/data/CEntry", converter, "()"+type);
+					c.invoke(INVOKEVIRTUAL, "roj/config/node/ConfigValue", converter, "()"+type);
 				} else {
 					c.clazz(CHECKCAST, klass.getActualClass());
 				}
@@ -135,7 +135,7 @@ public interface Evaluator {
 					case Type.LONG, Type.FLOAT, Type.DOUBLE -> {}
 					default -> type = 'I';
 				}
-				c.invoke(INVOKESTATIC, "roj/config/data/CEntry", "valueOf", "("+type+")Lroj/config/data/CEntry;");
+				c.invoke(INVOKESTATIC, "roj/config/node/ConfigValue", "valueOf", "("+type+")L/CEntry;");
 			} else if (retVal.owner.equals("java/lang/Class")) {
 				c.clazz(NEW, "roj/asm/cp/CstClass");
 				c.insn(DUP);

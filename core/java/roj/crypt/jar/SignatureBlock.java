@@ -1,11 +1,10 @@
 package roj.crypt.jar;
 
-import roj.config.ParseException;
+import roj.text.ParseException;
 import roj.crypt.CryptoFactory;
 import roj.crypt.asn1.*;
 import roj.io.IOUtil;
 import roj.io.MyDataInputStream;
-import roj.text.TextUtil;
 import roj.util.ArrayUtil;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;

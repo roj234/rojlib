@@ -1,7 +1,7 @@
 package roj.plugins.minecraft.diff;
 
 import roj.collect.HashSet;
-import roj.util.Tile;
+import roj.renderer.util.Tile;
 
 /**
  * @author Roj234

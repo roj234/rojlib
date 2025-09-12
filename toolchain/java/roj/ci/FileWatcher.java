@@ -1,9 +1,9 @@
 package roj.ci;
 
 import com.sun.nio.file.ExtendedWatchEventModifier;
+import roj.ci.event.LibraryModifiedEvent;
 import roj.collect.*;
 import roj.io.IOUtil;
-import roj.ci.event.LibraryModifiedEvent;
 import roj.ui.Tty;
 
 import java.io.File;
@@ -17,7 +17,7 @@ import java.util.function.Consumer;
 
 import static java.nio.file.StandardWatchEventKinds.*;
 import static roj.asmx.mapper.Mapper.DONT_LOAD_PREFIX;
-import static roj.ci.FMD.BASE;
+import static roj.ci.MCMake.BASE;
 
 /**
  * Project file change watcher
@@ -77,7 +77,7 @@ final class FileWatcher extends IFileWatcher implements Consumer<WatchKey> {
 					String name = event.context().toString().toLowerCase();
 					if (path.startsWith(libPath)) {
 						if (!name.startsWith(DONT_LOAD_PREFIX) && (name.endsWith(".zip") || name.endsWith(".jar"))) {
-							FMD.EVENT_BUS.post(new LibraryModifiedEvent(null));
+							MCMake.EVENT_BUS.post(new LibraryModifiedEvent(null));
 							break;
 						}
 					}
@@ -103,7 +103,7 @@ final class FileWatcher extends IFileWatcher implements Consumer<WatchKey> {
 					String id = key.watchable().toString()+File.separatorChar+event.context();
 					if (new File(id).isDirectory()) break;
 					if (handler.no == ID_LIB) {
-						FMD.EVENT_BUS.post(new LibraryModifiedEvent(handler.owner));
+						MCMake.EVENT_BUS.post(new LibraryModifiedEvent(handler.owner));
 						break loop;
 					} else {
 						if (handler.no == ID_SRC && !id.endsWith(".java")) continue;
@@ -125,7 +125,7 @@ final class FileWatcher extends IFileWatcher implements Consumer<WatchKey> {
 					if (set == null) continue;
 
 					actions.remove(set);
-					FMD.EXECUTOR.executeUnsafe(set.key::cancel);
+					MCMake.EXECUTOR.executeUnsafe(set.key::cancel);
 					synchronized (set.mod) {
 						set.mod.clear();
 						set.mod.add(null);

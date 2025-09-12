@@ -4,9 +4,9 @@ import org.jetbrains.annotations.Nullable;
 import roj.asm.ClassUtil;
 import roj.asm.MemberDescriptor;
 import roj.collect.*;
-import roj.config.ParseException;
-import roj.config.Tokenizer;
-import roj.config.data.CInt;
+import roj.text.ParseException;
+import roj.text.Tokenizer;
+import roj.config.node.IntValue;
 import roj.io.IOUtil;
 import roj.text.*;
 import roj.text.logging.Level;
@@ -312,7 +312,7 @@ public class Mapping {
 
 		for (Iterator<Map.Entry<String, String>> itr = new ArrayList<>(classMap.entrySet()).iterator(); itr.hasNext(); ) {
 			Map.Entry<String, String> entry = itr.next();
-			Map.Entry<CInt, String> found = packageMap.longestMatches(entry.getValue());
+			Map.Entry<IntValue, String> found = packageMap.longestMatches(entry.getValue());
 			if (found != null) {
 				String k = entry.getKey();
 				String v = found.getValue().concat(entry.getValue().substring(found.getKey().value));

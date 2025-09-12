@@ -1,6 +1,6 @@
 package roj.config.table;
 
-import roj.config.ParseException;
+import roj.text.ParseException;
 import roj.io.source.FileSource;
 import roj.io.source.Source;
 

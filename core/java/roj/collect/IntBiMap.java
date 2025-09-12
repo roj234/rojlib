@@ -28,7 +28,7 @@ public final class IntBiMap<V> extends AbstractMap<Integer, V> implements _LibMa
 
 	public void ensureCapacity(int size) {
 		if (size <= mask) return;
-		int length = MathUtils.getMin2PowerOf(size);
+		int length = MathUtils.nextPowerOfTwo(size);
 
 		if (keyTab != null) {
 			mask = (length>>1) - 1;

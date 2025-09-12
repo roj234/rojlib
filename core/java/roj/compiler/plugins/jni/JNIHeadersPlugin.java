@@ -14,7 +14,7 @@ import roj.compiler.api.Types;
 import roj.compiler.resolve.TypeCast;
 import roj.io.IOUtil;
 import roj.text.CharList;
-import roj.text.DateTime;
+import roj.text.DateFormat;
 import roj.util.Helpers;
 import roj.util.TypedKey;
 
@@ -65,7 +65,7 @@ public class JNIHeadersPlugin implements Processor {
 				((Compiler) ctx).attachment(sbType, h);
 
 				h.append("/* THIS FILE IS MACHINE GENERATED, DO NOT EDIT IT MANUALLY!!!\n");
-				h.append(" * Update on: ").append(DateTime.toLocalTimeString(System.currentTimeMillis())).append(" */\n");
+				h.append(" * Update on: ").append(DateFormat.toLocalDateTime(System.currentTimeMillis())).append(" */\n");
 				h.append("""
 				#include <jni.h>
 

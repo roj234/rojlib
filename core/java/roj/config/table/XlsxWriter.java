@@ -6,7 +6,7 @@ import roj.archive.zip.ZipFileWriter;
 import roj.collect.IntList;
 import roj.collect.ArrayList;
 import roj.collect.ToIntMap;
-import roj.config.Tokenizer;
+import roj.text.Tokenizer;
 import roj.io.IOUtil;
 import roj.io.source.ByteSource;
 import roj.text.CharList;

@@ -1,10 +1,10 @@
 package roj.ui;
 
 import roj.collect.ArrayList;
-import roj.config.data.CInt;
-import roj.config.serial.CVisitor;
-import roj.config.serial.ToJson;
-import roj.config.serial.ToSomeString;
+import roj.config.JsonSerializer;
+import roj.config.TextEmitter;
+import roj.config.ValueEmitter;
+import roj.config.node.IntValue;
 import roj.io.IOUtil;
 import roj.text.CharList;
 import roj.text.TextUtil;
@@ -61,15 +61,15 @@ public class Text {
 		return sb;
 	}
 	protected String getMinecraftType() { return "text"; }
-	public void writeJson(CVisitor ser) {
-		ser.valueMap();
+	public void writeJson(ValueEmitter ser) {
+		ser.emitMap();
 		ser.key(getMinecraftType());
-		ser.value(value.toString());
+		ser.emit(value.toString());
 
 		if (flag != 0) {
 			if (isClear()) {
 				ser.key("reset");
-				ser.value(true);
+				ser.emit(true);
 			}
 			addFlag(ser, 1, "bold");
 			addFlag(ser, 4, "italic");
@@ -81,15 +81,15 @@ public class Text {
 		if (fgColor != 0) {
 			ser.key("color");
 			if (isColorRGB()) {
-				ser.value("#"+Integer.toHexString(fgColor));
+				ser.emit("#"+Integer.toHexString(fgColor));
 			} else {
-				ser.value(Tty.TextEffect.getByConsoleCode(fgColor&0xFF));
+				ser.emit(Tty.TextEffect.getByConsoleCode(fgColor&0xFF));
 			}
 		}
 
 		if (extra.size() > 0) {
 			ser.key("extra");
-			ser.valueList(extra.size());
+			ser.emitList(extra.size());
 			for (int i = 0; i < extra.size(); i++) {
 				extra.get(i).writeJson(ser);
 			}
@@ -100,7 +100,7 @@ public class Text {
 	public String toString() { return extra == null ? value.toString() : writeRaw(IOUtil.getSharedCharBuf()).toString(); }
 	public String toAnsiString() { return isSimple() ? value.toString() : writeAnsi(IOUtil.getSharedCharBuf()).toString(); }
 	public String toMinecraftJson() {
-		ToSomeString ser = new ToJson().sb(IOUtil.getSharedCharBuf());
+		TextEmitter ser = new JsonSerializer().to(IOUtil.getSharedCharBuf());
 		writeJson(ser);
 		return ser.getValue().toString();
 	}
@@ -138,7 +138,7 @@ public class Text {
 		out.add(currentLine);
 		return out;
 	}
-	public Text writeLimited(CharList sb, CInt maxWidth, boolean ansi) {
+	public Text writeLimited(CharList sb, IntValue maxWidth, boolean ansi) {
 		int width = Tty.getStringWidth(value);
 		if (width > maxWidth.value) {
 			int i = 0;
@@ -251,10 +251,10 @@ public class Text {
 			sb.append('2').append(yes).append(';');
 		}
 	}
-	private void addFlag(CVisitor sb, int bit, String yes) {
+	private void addFlag(ValueEmitter sb, int bit, String yes) {
 		if ((flag&(bit<<1)) == 0) return;
 		sb.key(yes);
-		sb.value((flag & bit) != 0);
+		sb.emit((flag & bit) != 0);
 	}
 
 	private static void addColor(CharList sb, int rgb, int type) {

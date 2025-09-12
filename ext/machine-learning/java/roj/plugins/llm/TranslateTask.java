@@ -1,9 +1,9 @@
 package roj.plugins.llm;
 
 import roj.config.ConfigMaster;
-import roj.config.auto.SerializerFactory;
+import roj.config.mapper.ObjectMapperFactory;
 import roj.config.table.TableWriter;
-import roj.text.DateTime;
+import roj.text.DateFormat;
 import roj.text.TextUtil;
 import roj.ui.EasyProgressBar;
 
@@ -19,7 +19,7 @@ import java.util.Map;
 public class TranslateTask {
 	public static void main(String[] args) throws Exception {
 		var task = ChatTask.fromFile(new File("plugins/AIApi/templates/translate_en.json"));
-		var ser = SerializerFactory.SAFE.mapOf(String.class);
+		var ser = ObjectMapperFactory.SAFE.mapOf(String.class);
 
 		var recovery = new RandomAccessFile("progress.dat", "rw");
 		recovery.setLength(4);
@@ -27,7 +27,7 @@ public class TranslateTask {
 		Map<String, String> map = ConfigMaster.JSON.readObject(ser, new File("input.json"));
 
 		var out = TableWriter.csvWriterAppend("output.csv");
-		out.writeRow(Arrays.asList("text","translated","success", DateTime.toLocalTimeString(System.currentTimeMillis())));
+		out.writeRow(Arrays.asList("text","translated","success", DateFormat.toLocalDateTime(System.currentTimeMillis())));
 
 		int finishedCount = recovery.readInt();
 		int i = finishedCount;

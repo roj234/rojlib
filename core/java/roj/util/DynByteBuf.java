@@ -32,7 +32,7 @@ public abstract class DynByteBuf extends OutputStream implements CharSequence, M
 			@Override public int maxCapacity() { return maxCapacity; }
 			@Override public void ensureCapacity(int required) {
 				if (required > list.length) {
-					int newLen = Math.max(MathUtils.getMin2PowerOf(required), 1024);
+					int newLen = Math.max(MathUtils.nextPowerOfTwo(required), 1024);
 					if (newLen > 1073741823 || newLen > maxCapacity()) newLen = maxCapacity();
 					if (newLen <= list.length) throw new IndexOutOfBoundsException("cannot hold "+required+" bytes in this buffer("+list.length+"/"+newLen+")");
 
@@ -430,13 +430,15 @@ public abstract class DynByteBuf extends OutputStream implements CharSequence, M
 	}
 	public final DynByteBuf putVarIntUTF(CharSequence s) { int len = byteCountUTF8(s); return putVarInt(len).putUTFData0(s, len); }
 	public final DynByteBuf putVUIUTF(CharSequence s) { int len = byteCountUTF8(s); return putVUInt(len).putUTFData0(s, len); }
-	public DynByteBuf putUTFData(CharSequence s) { FastCharset.UTF8().encodeFixedIn(s, this); return this; }
-	public final DynByteBuf putUTFData0(CharSequence s, int len) { ensureWritable(len); FastCharset.UTF8().encodePreAlloc(s, this, len); return this; }
+	public DynByteBuf putUTFData(CharSequence s) { return putStrData(s, FastCharset.UTF8()); }
+	public final DynByteBuf putUTFData0(CharSequence s, int len) { return putStrData(s, len, FastCharset.UTF8()); }
 
-	public static int byteCountGB(CharSequence s) { return FastCharset.GB18030().byteCount(s); }
-	public final DynByteBuf putVUIGB(CharSequence s) { int len = byteCountGB(s); return putVUInt(len).putGBData0(s, len); }
-	public final DynByteBuf putGBData(CharSequence s) { FastCharset.GB18030().encodeFixedIn(s, this); return this; }
-	public final DynByteBuf putGBData0(CharSequence s, int len) { ensureWritable(len); FastCharset.GB18030().encodePreAlloc(s, this, len); return this; }
+	public final DynByteBuf putVUIGB(CharSequence s) { return putVUIStr(s, FastCharset.GB18030()); }
+	public final DynByteBuf putGBData(CharSequence s) { return putStrData(s, FastCharset.GB18030()); }
+
+	public final DynByteBuf putVUIStr(CharSequence str, FastCharset charset) { int len = charset.byteCount(str); return putVUInt(len).putStrData(str, len, charset); }
+	public final DynByteBuf putStrData(CharSequence str, FastCharset charset) { charset.encodeFixedIn(str, this); return this; }
+	public final DynByteBuf putStrData(CharSequence str, int len, FastCharset charset) { ensureWritable(len); charset.encodePreAlloc(str, this, len); return this; }
 
 	public abstract DynByteBuf put(ByteBuffer buf);
 
@@ -603,35 +605,28 @@ public abstract class DynByteBuf extends OutputStream implements CharSequence, M
 	@NotNull
 	public final String readUTF() { return readUTF(readUnsignedShort()); }
 	public final String readVUIUTF() { return readVUIUTF(DEFAULT_MAX_STRING_LEN); }
-	public final String readVUIUTF(int max) {
+	public final String readVUIUTF(int max) {return readVUIStr(max, FastCharset.UTF8());}
+	public final String readUTF(int len) {return readStr(len, IOUtil.getSharedCharBuf(), FastCharset.UTF8()).toString();}
+
+	public final String readVUIGB() {return readVUIGB(DEFAULT_MAX_STRING_LEN);}
+	public final String readVUIGB(int max) {return readVUIStr(max, FastCharset.GB18030());}
+	public final String readGB(int len) {return readStr(len, IOUtil.getSharedCharBuf(), FastCharset.GB18030()).toString();}
+
+	public final String readVUIStr(FastCharset charset) { return readVUIStr(DEFAULT_MAX_STRING_LEN, charset); }
+	public final String readVUIStr(int max, FastCharset charset) {
 		int len = readVUInt();
 		if (len > max) throw new IllegalArgumentException("字符串长度不正确: "+len+" > "+max);
-		return readUTF(len);
+		return readStr(len, charset);
 	}
-	public final String readUTF(int len) { return readUTF(len, IOUtil.getSharedCharBuf()).toString(); }
-	public final <T extends Appendable> T readUTF(int len, T target) {
-		if (len < 0) throw new IllegalArgumentException("length < 0: "+len);
+	public final String readStr(int len, FastCharset charset) { return readStr(len, IOUtil.getSharedCharBuf(), charset).toString(); }
+	public final <T extends Appendable> T readStr(int len, T target, FastCharset charset) {
 		if (len > 0) {
-			testWI(rIndex,len);
-			FastCharset.UTF8().decodeFixedIn(this,len,target);
+			testWI(rIndex, len);
+			charset.decodeFixedIn(this,len,target);
 		}
 		return target;
 	}
 
-	public final String readVUIGB() { return readVUIGB(DEFAULT_MAX_STRING_LEN); }
-	public final String readVUIGB(int max) {
-		int len = readVUInt();
-		if (len > max) throw new IllegalArgumentException("字符串长度不正确: "+len+" > "+max);
-		return readGB(len);
-	}
-	public final String readGB(int len) { return readGB(len, IOUtil.getSharedCharBuf()).toString(); }
-	public final <T extends Appendable> T readGB(int len, T target) {
-		if (len > 0) {
-			testWI(rIndex,len);
-			FastCharset.GB18030().decodeFixedIn(this,len,target);
-		}
-		return target;
-	}
 
 	public abstract String readLine();
 

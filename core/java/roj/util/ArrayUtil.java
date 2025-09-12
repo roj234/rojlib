@@ -29,6 +29,8 @@ public final class ArrayUtil {
 							   int log2ArrayIndexScale);
 	}
 
+	public static boolean equals(Collection<String> a, Collection<String> b) {return a.size() == b.size() && a.containsAll(b);}
+
 	@Attach
 	public static <T> List<T> inverse(List<T> list) { return inverse(list, 0, list.size()); }
 	@Attach

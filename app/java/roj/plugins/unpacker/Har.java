@@ -2,10 +2,10 @@ package roj.plugins.unpacker;
 
 import roj.collect.TrieTree;
 import roj.config.ConfigMaster;
-import roj.config.ParseException;
-import roj.config.auto.Optional;
+import roj.config.mapper.Optional;
 import roj.crypt.Base64;
 import roj.io.IOUtil;
+import roj.text.ParseException;
 import roj.util.ByteList;
 import roj.util.Helpers;
 

@@ -2,7 +2,7 @@ package roj.plugins.web.sso;
 
 import roj.collect.HashMap;
 import roj.collect.IntMap;
-import roj.config.data.CMap;
+import roj.config.node.MapValue;
 import roj.sql.QueryBuilder;
 import roj.text.TextUtil;
 import roj.util.Helpers;
@@ -19,7 +19,7 @@ class DbUserManager implements UserManager {
 	private IntMap<User> users = new IntMap<>();
 	private Map<String, User> userByName = new HashMap<>();
 
-	public DbUserManager(CMap table) {userTable = table.getString("table");}
+	public DbUserManager(MapValue table) {userTable = table.getString("table");}
 
 	@Override
 	public User getUserById(int uid) {

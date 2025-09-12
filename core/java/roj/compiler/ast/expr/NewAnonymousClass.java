@@ -16,7 +16,7 @@ import roj.compiler.asm.MethodWriter;
 import roj.compiler.diagnostic.Kind;
 import roj.compiler.resolve.*;
 import roj.util.OperationDone;
-import roj.config.ParseException;
+import roj.text.ParseException;
 import roj.text.TextUtil;
 
 import java.util.Arrays;

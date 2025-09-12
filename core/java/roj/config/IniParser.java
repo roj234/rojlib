@@ -5,13 +5,14 @@ import roj.collect.BitSet;
 import roj.collect.HashMap;
 import roj.collect.LinkedHashMap;
 import roj.collect.TrieTree;
-import roj.config.data.*;
+import roj.config.node.*;
+import roj.text.ParseException;
 import roj.text.TextUtil;
+import roj.text.Token;
 
-import static roj.config.Flags.NO_DUPLICATE_KEY;
-import static roj.config.Flags.ORDERED_MAP;
-import static roj.config.JSONParser.*;
-import static roj.config.Token.*;
+import static roj.config.JsonParser.*;
+import static roj.config.node.ConfigValue.valueOf;
+import static roj.text.Token.*;
 
 /**
  * @author Roj233
@@ -34,13 +35,13 @@ public final class IniParser extends Parser {
 	{ tokens = INI_TOKENS; literalEnd = INI_LENDS; }
 
 	@Override
-	public CMap parse(CharSequence text, @MagicConstant(flags = {NO_DUPLICATE_KEY, UNESCAPE, ORDERED_MAP}) int flags) throws ParseException {
+	public MapValue parse(CharSequence text, @MagicConstant(flags = {NO_DUPLICATE_KEY, UNESCAPE, ORDERED_MAP}) int flags) throws ParseException {
 		this.flag = flags;
 		init(text);
 		try {
-			HashMap<String, CEntry> map = new LinkedHashMap<>();
+			HashMap<String, ConfigValue> map = new LinkedHashMap<>();
 
-			String name = CMap.CONFIG_TOPLEVEL;
+			String name = MapValue.CONFIG_TOPLEVEL;
 			while (true) {
 				try {
 					map.put(name, iniValue(flags));
@@ -59,7 +60,7 @@ public final class IniParser extends Parser {
 
 				if ((flags & NO_DUPLICATE_KEY) != 0 && map.containsKey(name)) throw err("重复的key: "+name);
 			}
-			return new CMap(map);
+			return new MapValue(map);
 		} catch (ParseException e) {
 			throw e.addPath("$");
 		} finally {
@@ -68,7 +69,7 @@ public final class IniParser extends Parser {
 	}
 
 	@SuppressWarnings("fallthrough")
-	CEntry element(@MagicConstant(flags = {NO_DUPLICATE_KEY, UNESCAPE, ORDERED_MAP}) int flag) throws ParseException {
+	protected ConfigValue element(@MagicConstant(flags = {NO_DUPLICATE_KEY, UNESCAPE, ORDERED_MAP}) int flag) throws ParseException {
 		literalEnd = iniSymbol_LN;
 		Token w = next();
 
@@ -76,34 +77,32 @@ public final class IniParser extends Parser {
 		switch (w.type()) {
 			case LITERAL:
 				if ((flag & UNESCAPE) != 0 && val.startsWith("\"") && val.endsWith("\"")) {
-					return CEntry.valueOf(val.substring(1, val.length()-1));
+					return valueOf(val.substring(1, val.length()-1));
 				}
-			case STRING: return CEntry.valueOf(val);
-			case DOUBLE:
-			case FLOAT: return CEntry.valueOf(w.asDouble());
-			case INTEGER: return CEntry.valueOf(w.asInt());
-			case LONG: return CEntry.valueOf(w.asLong());
-			case TRUE:
-			case FALSE: return CEntry.valueOf(w.type() == TRUE);
-			case NULL: return CNull.NULL;
+			case STRING: return valueOf(val);
+			case DOUBLE, FLOAT: return valueOf(w.asDouble());
+			case INTEGER: return valueOf(w.asInt());
+			case LONG: return valueOf(w.asLong());
+			case TRUE, FALSE: return valueOf(w.type() == TRUE);
+			case NULL: return NullValue.NULL;
 			default: unexpected(val); return null;
 		}
 	}
 
-	private CEntry iniValue(int flag) throws ParseException {
+	private ConfigValue iniValue(int flag) throws ParseException {
 		Token w = next();
 		// EOF or not 'primitive'
 		if (w.type() < 0 || w.type() > 12) {
 			retractWord();
-			return new CMap();
+			return new MapValue();
 		}
 
 		boolean eq1 = readWord().type() == eq;
 		retractWord();
 		return eq1 ? iniMap(flag) : iniList(flag);
 	}
-	private CList iniList(int flag) throws ParseException {
-		CList list = new CList();
+	private ListValue iniList(int flag) throws ParseException {
+		ListValue list = new ListValue();
 		while (true) {
 			list.add(element(flag));
 
@@ -115,8 +114,8 @@ public final class IniParser extends Parser {
 		}
 		return list;
 	}
-	private CMap iniMap(int flag) throws ParseException {
-		HashMap<String, CEntry> map = (flag&ORDERED_MAP) != 0 ? new LinkedHashMap<>() : new HashMap<>();
+	private MapValue iniMap(int flag) throws ParseException {
+		HashMap<String, ConfigValue> map = (flag&ORDERED_MAP) != 0 ? new LinkedHashMap<>() : new HashMap<>();
 
 		while (true) {
 			Token w = next();
@@ -130,13 +129,13 @@ public final class IniParser extends Parser {
 			if ((flag & NO_DUPLICATE_KEY) != 0 && map.containsKey(name)) throw err("重复的key: "+name);
 			except(eq, "=");
 			try {
-				CEntry prev = map.get(name);
-				CEntry val = element(flag);
+				ConfigValue prev = map.get(name);
+				ConfigValue val = element(flag);
 				if (prev == null) {
 					map.put(name, val);
 				} else {
 					if (prev.getType() != Type.LIST) {
-						map.put(name, prev = new CList().add(map.get(name)));
+						map.put(name, prev = new ListValue().add(map.get(name)));
 					}
 					prev.asList().add(val);
 				}
@@ -144,7 +143,7 @@ public final class IniParser extends Parser {
 				throw e.addPath('.' + name);
 			}
 		}
-		return new CMap(map);
+		return new MapValue(map);
 	}
 
 	@Override

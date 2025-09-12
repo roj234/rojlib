@@ -161,7 +161,7 @@ public class CodeWriter extends AbstractCodeWriter {
 		validateBciRef();
 	}
 	@Override
-	protected void _visitNodePre() {
+	protected void visitPreInsn() {
 		var label = bciR2W.get(bci);
 		if (label != null) label(label);
 	}
@@ -286,7 +286,7 @@ public class CodeWriter extends AbstractCodeWriter {
 			if (fvFlags != 0) {
 				codeOb = bw.slice(begin, bw.wIndex()-begin);
 				fv = new FrameVisitor();
-				fv.visitBlocks(mn, segments);
+				fv.init(mn, segments);
 			}
 
 			segments.clear();
@@ -299,7 +299,7 @@ public class CodeWriter extends AbstractCodeWriter {
 				int begin = tmpLenOffset;
 				codeOb = bw.slice(begin, bw.wIndex()-begin);
 				fv = new FrameVisitor();
-				fv.visitBlocks(mn, segments);
+				fv.init(mn, segments);
 			}
 		}
 
@@ -362,7 +362,14 @@ public class CodeWriter extends AbstractCodeWriter {
 				Object debugInfo;
 				try {
 					codeOb.rIndex = rIndex;
-					debugInfo = new Code(new ByteList().putInt(0).putInt(codeOb.readableBytes()).put(codeOb).putInt(0), cpw, mn);
+					var code = new Code(new ByteList().putInt(0).putInt(codeOb.readableBytes()).put(codeOb).putInt(0), cpw, mn);
+					var code1 = mn.getAttribute(null, Attribute.Code);
+					if (code1 != null) {
+						debugInfo = "";
+						code1.instructions = code.instructions;
+					} else {
+						debugInfo = code;
+					}
 				} catch (Exception e1) {
 					debugInfo = "(Illegal instruction "+e1+"): "+codeOb.dump();
 				}
@@ -388,7 +395,7 @@ public class CodeWriter extends AbstractCodeWriter {
 		int pos = bw.wIndex();
 		new CodeVisitor() {
 			@Override
-			void _visitNodePre() {
+			protected void visitPreInsn() {
 				CodeWriter.this.bw.putShort(bci).putShort(bci);
 			}
 		}.visitCopied(cpw, bw);

@@ -7,7 +7,7 @@ import roj.asm.type.IType;
 import roj.asm.type.Type;
 import roj.compiler.asm.MethodWriter;
 import roj.compiler.resolve.TypeCast;
-import roj.config.data.CEntry;
+import roj.config.node.ConfigValue;
 import roj.text.CharList;
 import roj.util.DynByteBuf;
 
@@ -66,13 +66,13 @@ final class NewPackedArray extends Expr {
 		while (arr.isReadable()) {
 			array[i++] = switch (cap) {
 				// 0 or 1
-				default -> CEntry.valueOf(arr.readByte());
-				case 2 -> CEntry.valueOf(arr.readShort());
-				case 3 -> CEntry.valueOf(arr.readChar());
-				case 4 -> CEntry.valueOf(arr.readInt());
-				case 5 -> CEntry.valueOf(arr.readLong());
-				case 6 -> CEntry.valueOf(arr.readFloat());
-				case 7 -> CEntry.valueOf(arr.readDouble());
+				default -> ConfigValue.valueOf(arr.readByte());
+				case 2 -> ConfigValue.valueOf(arr.readShort());
+				case 3 -> ConfigValue.valueOf(arr.readChar());
+				case 4 -> ConfigValue.valueOf(arr.readInt());
+				case 5 -> ConfigValue.valueOf(arr.readLong());
+				case 6 -> ConfigValue.valueOf(arr.readFloat());
+				case 7 -> ConfigValue.valueOf(arr.readDouble());
 			};
 		}
 		return array;

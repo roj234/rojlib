@@ -1,6 +1,7 @@
 package roj.io;
 
 import org.jetbrains.annotations.NotNull;
+import roj.text.FastCharset;
 
 import java.io.Closeable;
 import java.io.DataInput;
@@ -65,7 +66,6 @@ public interface MyDataInput extends DataInput, Closeable {
 	double readDouble() throws IOException;
 
 	int readVarInt() throws IOException;
-
 	long readVarLong() throws IOException;
 
 	int readVUInt() throws IOException;
@@ -78,12 +78,15 @@ public interface MyDataInput extends DataInput, Closeable {
 	String readVUIUTF() throws IOException;
 	String readVUIUTF(int max) throws IOException;
 	String readUTF(int len) throws IOException;
-	<T extends Appendable> T readUTF(int len, T target) throws IOException;
 
 	String readVUIGB() throws IOException;
 	String readVUIGB(int max) throws IOException;
 	String readGB(int len) throws IOException;
-	<T extends Appendable> T readGB(int len, T target) throws IOException;
+
+	String readVUIStr(FastCharset charset) throws IOException;
+	String readVUIStr(int max, FastCharset charset) throws IOException;
+	String readStr(int len, FastCharset charset) throws IOException;
+	<T extends Appendable> T readStr(int len, T target, FastCharset charset) throws IOException;
 
 	String readLine() throws IOException;
 

@@ -1,13 +1,13 @@
 package roj.net.handler;
 
-import roj.collect.HashBiMap;
 import roj.collect.ArrayList;
-import roj.util.FastFailException;
-import roj.io.IOUtil;
+import roj.collect.HashBiMap;
 import roj.io.BufferPool;
+import roj.io.IOUtil;
 import roj.math.MathUtils;
 import roj.net.*;
 import roj.util.DynByteBuf;
+import roj.util.FastFailException;
 import roj.util.Helpers;
 
 import java.io.IOException;
@@ -509,7 +509,7 @@ public class uTP implements ChannelHandler {
 			if (outBuf.writableBytes() < buf.readableBytes() && outBuf.capacity() < outBufMax) {
 				BufferPool p = alloc();
 
-				DynByteBuf newBuf = p.allocate(true, Math.min(MathUtils.getMin2PowerOf(outBuf.capacity()+buf.readableBytes()), outBufMax));
+				DynByteBuf newBuf = p.allocate(true, Math.min(MathUtils.nextPowerOfTwo(outBuf.capacity()+buf.readableBytes()), outBufMax));
 				newBuf.put(outBuf);
 				BufferPool.reserve(outBuf);
 				outBuf = newBuf;

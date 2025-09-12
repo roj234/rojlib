@@ -13,7 +13,9 @@ public class JumpTo extends Segment {
 	public byte code;
 	public Label target;
 
-	public int fv_bci;
+	protected int bci;
+	// 仅供FrameVisitor使用
+	public int bci() {return bci;}
 
 	public JumpTo(byte code, Label target) {
 		this.code = code;
@@ -24,44 +26,44 @@ public class JumpTo extends Segment {
 	@Override
 	@SuppressWarnings("fallthrough")
 	public boolean write(CodeWriter to, int segmentId) {
-		if (!target.isValid()) throw new IllegalStateException("target label is not valid: "+target);
+		if (!target.isValid()) throw new IllegalStateException("target is not valid: "+target);
 
 		DynByteBuf o = to.bw;
-		int off = target.getValue() - to.bci;
 
-		fv_bci = to.bci;
+		bci = to.bci;
+		int off = target.getValue() - bci;
 
 		int len = 3;
 		int newLen = length();
 
 		switch (code) {
-			case JSR: case JSR_W:
+			case JSR, JSR_W -> {
 				if (((short) off) != off) {
 					o.put(code = JSR_W).putInt(off);
 					len = 5;
 				} else {
 					o.put(code = JSR).putShort(off);
 				}
-			break;
-			case GOTO: case GOTO_W:
+			}
+			case GOTO, GOTO_W -> {
 				if (((short) off) != off) {
 					o.put(code = GOTO_W).putInt(off);
 					len = 5;
 				} else {
 					o.put(code = GOTO).putShort(off);
 				}
-			break;
-			default:
+			}
+			default -> {
 				if (((short) off) != off) throw new IllegalStateException("offset too large");
 				o.put(code).putShort(off);
-			break;
+			}
 		}
 
 		return len != newLen;
 	}
 
-	@Override public int length() { return Opcodes.toString(code).endsWith("_W")?5:3; }
-	@Override public final boolean isTerminate() { return code == GOTO || code == GOTO_W; }
+	@Override public int length() { return code>=GOTO_W?5:3; }
+	@Override public final boolean isTerminate() { return code >= GOTO; } // GOTO, GOTO_W, JSR, JSR_W
 	@Override public final boolean willJumpTo(int block, int offset) { return (offset == -1 || target.offset == offset) && target.getBlock() == block; }
 
 	@Override public Segment move(AbstractCodeWriter to, int blockMoved, boolean clone) {

@@ -9,7 +9,7 @@ import roj.compiler.JavaTokenizer;
 import roj.compiler.asm.MethodWriter;
 import roj.compiler.diagnostic.Kind;
 import roj.compiler.resolve.TypeCast;
-import roj.config.data.CInt;
+import roj.config.node.IntValue;
 
 import static roj.compiler.JavaTokenizer.byId;
 
@@ -165,7 +165,7 @@ final class Assign extends Expr {
 		// to IINC if applicable
 		block:
 		if (left instanceof LocalVariable lv && TypeCast.getDataCap(br.left.type().getActualType()) == 4 && operand.isConstant()) {
-			int value = ((CInt) operand.constVal()).value;
+			int value = ((IntValue) operand.constVal()).value;
 
 			switch (br.operator) {
 				default: break block;

@@ -144,7 +144,7 @@ public class VirtualReference<V> {
 	public VirtualReference() { this(4); }
 	public VirtualReference(int size) {
 		if (size < length) return;
-		length = MathUtils.getMin2PowerOf(size);
+		length = MathUtils.nextPowerOfTwo(size);
 	}
 
 	@SuppressWarnings("unchecked")

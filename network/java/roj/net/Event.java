@@ -1,7 +1,9 @@
 package roj.net;
 
+import org.jetbrains.annotations.NotNull;
+
 public class Event {
-	public final String id;
+	@NotNull public final String id;
 
 	public static final int RESULT_DEFAULT = 0, RESULT_ACCEPT = 1, RESULT_DENY = 2;
 	private byte state;

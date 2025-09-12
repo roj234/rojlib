@@ -6,7 +6,7 @@ import roj.concurrent.TaskPool;
 import roj.crypt.BufferedDigest;
 import roj.crypt.CryptoFactory;
 import roj.http.Headers;
-import roj.http.server.HSConfig;
+import roj.http.server.HttpServer;
 import roj.http.server.MultipartParser;
 import roj.http.server.Request;
 import roj.io.IOUtil;
@@ -53,7 +53,7 @@ public class UploadHandler extends MultipartParser {
 	public void init(String req) {
 		super.init(req);
 
-		Map<String, Object> ctx = HSConfig.getInstance().ctx;
+		Map<String, Object> ctx = HttpServer.getInstance().ctx;
 		if (!ctx.containsKey("SM3U")) {
 			ctx.put("SM3U", sm3 = CryptoFactory.SM3());
 		} else {

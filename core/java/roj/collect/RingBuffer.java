@@ -1,187 +1,230 @@
 package roj.collect;
 
+import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.NotNull;
 import roj.math.MathUtils;
 import roj.text.TextUtil;
 import roj.util.ArrayCache;
 
 import java.util.*;
+import java.util.function.Consumer;
 
 /**
- * 简单的环形缓冲区实现
- * 除此之外，还可以作为一个有界的ArrayDeque使用
+ * 简单的环形缓冲区实现.
+ * 还可以作为一个有界的{@link ArrayDeque}使用.
+ * This class allow {@code null} elements, but not encouraged to use.
+ * This class is likely to be faster than Stack when used as a stack, and faster than LinkedList when used as a queue.
  *
  * @author Roj234
  * @since 2021/4/13 23:25
  */
 public class RingBuffer<E> extends AbstractCollection<E> implements Deque<E> {
-	protected int maxCap;
-	protected Object[] array;
+	protected int maxCapacity;
+	protected Object[] elements;
 
 	protected int head, tail, size;
 
 	public static <T> RingBuffer<T> bounded(int capacity) {return new RingBuffer<>(capacity);}
-	public static <T> RingBuffer<T> unbounded() {return new RingBuffer<>(0, Integer.MAX_VALUE);}
+	public static <T> RingBuffer<T> unbounded() {return new RingBuffer<>(0, ArrayCache.MAX_ARRAY_SIZE);}
+	public static <T> RingBuffer<T> unbounded(int initialCapacity) {return new RingBuffer<>(initialCapacity, ArrayCache.MAX_ARRAY_SIZE);}
 	public static <T> RingBuffer<T> lazy(int maxCapacity) {return new RingBuffer<>(0, maxCapacity);}
 
 	public RingBuffer(int capacity) {
-		// not check == 0, for SerializerFactory
 		if (capacity < 0) throw new IllegalArgumentException("Capacity must >= 0");
-		maxCap = capacity == 0 ? Integer.MAX_VALUE : capacity;
-		array = capacity == 0 ? ArrayCache.OBJECTS : new Object[capacity];
+		if (capacity == 0) {
+			/**
+			 * Why can be zero
+			 * @see roj.config.mapper.ObjectMapperFactory#containerFactory(Class)
+			 */
+			maxCapacity = ArrayCache.MAX_ARRAY_SIZE;
+			elements = ArrayCache.OBJECTS;
+		} else {
+			maxCapacity = capacity;
+			elements = new Object[capacity];
+		}
 	}
 	public RingBuffer(int capacity, int maxCapacity) {
 		if (maxCapacity <= 0) throw new IllegalArgumentException("MaxCapacity must > 0");
-		maxCap = maxCapacity;
-		array = capacity == 0 ? ArrayCache.OBJECTS : new Object[capacity];
+		this.maxCapacity = maxCapacity;
+		elements = capacity == 0 ? ArrayCache.OBJECTS : new Object[capacity];
 	}
 
-	public int capacity() {return maxCap;}
-	public void setCapacity(int capacity) {
-		maxCap = capacity;
-		if (array.length > capacity && capacity > 0) {
-			if (size > 0) refit(capacity);
-			else array = new Object[capacity];
+	public int maxCapacity() {return maxCapacity;}
+	public void setMaxCapacity(int capacity) {
+		if (capacity < 0) throw new IllegalArgumentException("Capacity must >= 0");
+		if (capacity == 0) capacity = ArrayCache.MAX_ARRAY_SIZE;
+		maxCapacity = capacity;
+		if (elements.length > capacity) {
+			if (size > 0) setCapacity(capacity);
+			else elements = new Object[capacity];
 		}
 	}
 
-	private void ensureCapacity() {
-		int capacity = array.length;
-		if (capacity > 64) capacity = MathUtils.getMin2PowerOf(capacity+1);
-		else capacity += 10;
-
-		if (capacity > maxCap) capacity = maxCap;
-
-		if (size > 0) refit(capacity);
-		else array = new Object[capacity];
-	}
-
-	private void refit(int capacity) {
+	public int capacity() {return elements.length;}
+	private void setCapacity(int capacity) {
 		Object[] newArray = new Object[capacity];
-		int j = 0;
+		int oldLen = elements.length;
+		int toCopy = Math.min(size, capacity);
+		int frontLen = Math.min(toCopy, oldLen - head);
+		System.arraycopy(elements, head, newArray, 0, frontLen);
+		int backLen = toCopy - frontLen;
+		System.arraycopy(elements, 0, newArray, frontLen, backLen);
 
-		int i = head;
-		int fence = tail;
-		Object[] arr = array;
-		do {
-			if (j == newArray.length) break;
-			newArray[j++] = arr[i++];
-
-			if (i == arr.length) i = 0;
-		} while (i != fence);
-
-		array = newArray;
+		elements = newArray;
 		head = 0;
-		tail = j;
-		size = Math.min(j, size);
+		tail = toCopy;
+		size = Math.min(toCopy, size);
 	}
 
-	@NotNull
-	@Override
-	public Iterator<E> iterator() {return size == 0 ? Collections.emptyIterator() : new Itr(false);}
-	@NotNull
-	@Override
-	public Iterator<E> descendingIterator() {return size == 0 ? Collections.emptyIterator() : new Itr(true);}
-	private final class Itr extends AbstractIterator<E> {
-		int i, dir, fence;
+	private void grow() {
+		int capacity = elements.length;
+		if (capacity > 64) capacity += MathUtils.nextPowerOfTwo(capacity) >> 1;
+		else capacity += capacity + 2;
 
-		@SuppressWarnings("unchecked")
-		public Itr(boolean rev) {
-			if (size == 0) {
-				stage = ENDED;
-				return;
-			}
-
-			if (rev) {
-				i = (tail == 0 ? array.length : tail) - 1;
-				dir = -1;
-				fence = (head == 0 ? array.length : head) - 1;
-			} else {
-				i = head;
-				dir = 1;
-				fence = tail;
-			}
-
-			stage = CHECKED;
-			result = (E) array[i];
-			i += dir;
-		}
-
-		@Override
-		@SuppressWarnings("unchecked")
-		public boolean computeNext() {
-			if (i == -1) {
-				if (size < array.length) return false;
-				i = array.length - 1;
-			} else if (i == array.length) {
-				i = 0;
-			}
-
-			if (i == fence) return false;
-			result = (E) array[i];
-			i += dir;
-			return true;
-		}
+		if (capacity < 0 || capacity > maxCapacity) capacity = maxCapacity;
+		setCapacity(capacity);
 	}
 
 	@Override
 	public int size() {return size;}
 	public int head() {return head;}
 	public int tail() {return tail;}
-	public int remaining() {return maxCap - size;}
+	public int remaining() {return maxCapacity - size;}
 
-	// region *** Collection ***
-	@Override
-	public final boolean contains(Object o) {return indexOf(o) != -1;}
-	@Deprecated
-	public final boolean add(E e) {addLast(e);return true;}
-	@Override
-	public final boolean remove(Object o) {return removeFirstOccurrence(o);}
-	@Override
-	public boolean retainAll(@NotNull Collection<?> c) {throw new UnsupportedOperationException();}
+	@SuppressWarnings("unchecked")
+	@Contract(mutates = "this")
+	public E ringAddFirst(E element) {
+		int sz = size;
+		if (sz < maxCapacity) {
+			if (sz == elements.length) grow();
+			size = ++sz;
+		}
 
-	@Override
-	public void clear() {
-		head = tail = size = 0;
-		Arrays.fill(array, null);
+		int h = head;
+		int nextH = h == 0 ? elements.length-1 : h-1;
+		if (tail == h && sz == maxCapacity) tail = nextH;
+
+		E prev = (E) elements[nextH];
+		elements[nextH] = element;
+
+		head = nextH;
+		return prev;
 	}
-	// endregion
+
+	@SuppressWarnings("unchecked")
+	@Contract(mutates = "this")
+	public E ringAddLast(E element) {
+		int sz = size;
+		if (sz < maxCapacity) {
+			if (sz == elements.length) grow();
+			size = sz+1;
+		}
+
+		int t = tail;
+		int nextT = t == elements.length-1 ? 0 : t+1;
+		if (head == t && size == maxCapacity) head = nextT;
+
+		E prev = (E) elements[t];
+		elements[t] = element;
+
+		tail = nextT;
+		return prev;
+	}
+
 	public final int indexOf(Object o) {
-		Object[] arr = array;
-		int i = head;
-		while (i != tail) {
-			if (o == null ? arr[i] == null : o.equals(arr[i])) return i;
-			if (--i < 0) i = arr.length - 1;
+		if (size > 0) {
+			Object[] arr = elements;
+			int i = head;
+			do {
+				if (o == null ? arr[i] == null : o.equals(arr[i])) return i;
+				if (++i == arr.length) i = 0;
+			} while (i != tail);
 		}
 		return -1;
 	}
 	public final int lastIndexOf(Object o) {
-		Object[] arr = array;
-		int i = tail;
-		while (i != head) {
-			if (o == null ? arr[i] == null : o.equals(arr[i])) return i;
-			if (++i == arr.length) i = 0;
+		if (size > 0) {
+			Object[] arr = elements;
+			int i = tail;
+			do {
+				if (o == null ? arr[i] == null : o.equals(arr[i])) return i;
+				if (--i < 0) i = arr.length - 1;
+			} while (i != head);
 		}
 		return -1;
 	}
+
+	/**
+	 * 删除下标为{@code index}的元素，并返回移动的是否为tail指针.
+	 * @see Itr#remove()
+	 * @param index 要删除的元素的下标
+	 * @return 移动的是否为tail指针
+	 */
+	@Contract(mutates = "this")
+	protected boolean delete(int index) {
+		Object[] elements = this.elements;
+		int h = head, t = tail;
+
+		deleteFromEnd: {
+			if (h < t) {
+				// [head, tail)
+				if (index < h || index >= t) throw new ArrayIndexOutOfBoundsException(index);
+				// 如果从后删除更经济
+				if (index - h >= t - index) break deleteFromEnd;
+			} else {
+				// [head, elements.length) ∪ [0, tail)
+				if (index < h && index >= t) throw new ArrayIndexOutOfBoundsException(index);
+				if (index < t) break deleteFromEnd;
+			}
+
+			size--;
+			if (h < elements.length - 1) {
+				System.arraycopy(elements, h, elements, h + 1, index - h);
+				head = h + 1;
+			} else {
+				head = 0;
+			}
+			elements[h] = null;
+			return false;
+		}
+
+		size--;
+		t--;
+		System.arraycopy(elements, index + 1, elements, index, t - index);
+		tail = t;
+		elements[t] = null;
+		return true;
+	}
+
+	// region *** Collection ***
+	@Override public final boolean contains(Object o) {return indexOf(o) != -1;}
+	@Override public final boolean add(E e) {if (size >= maxCapacity) return false;addLast(e);return true;}
+	@Override public final boolean remove(Object o) {return removeFirstOccurrence(o);}
+
+	@Override
+	public void clear() {
+		head = tail = size = 0;
+		Arrays.fill(elements, null);
+	}
+	// endregion
 	// region *** Deque ***
 	public final void addFirst(E e) {
-		if (size >= maxCap) throw new IllegalStateException("RingBuffer is full");
+		if (size >= maxCapacity) throw new IllegalStateException("RingBuffer is full");
 		ringAddFirst(e);
 	}
 	public final void addLast(E e) {
-		if (size >= maxCap) throw new IllegalStateException("RingBuffer is full");
+		if (size >= maxCapacity) throw new IllegalStateException("RingBuffer is full");
 		ringAddLast(e);
 	}
 	public final boolean offerFirst(E e) {
-		if (size < maxCap) {
+		if (size < maxCapacity) {
 			ringAddFirst(e);
 			return true;
 		}
 		return false;
 	}
 	public final boolean offerLast(E e) {
-		if (size < maxCap) {
+		if (size < maxCapacity) {
 			ringAddLast(e);
 			return true;
 		}
@@ -195,11 +238,11 @@ public class RingBuffer<E> extends AbstractCollection<E> implements Deque<E> {
 
 		int h = head;
 
-		E val = (E) array[h];
-		array[h] = null;
+		E val = (E) elements[h];
+		elements[h] = null;
 
 		if (--size == 0) head = tail = 0;
-		else head = ++h == array.length ? 0 : h;
+		else head = ++h == elements.length ? 0 : h;
 
 		return val;
 	}
@@ -208,11 +251,11 @@ public class RingBuffer<E> extends AbstractCollection<E> implements Deque<E> {
 		if (size == 0) throw new NoSuchElementException();
 
 		int t = tail;
-		if (t == 0) t = array.length-1;
+		if (t == 0) t = elements.length-1;
 		else t--;
 
-		E val = (E) array[t];
-		array[t] = null;
+		E val = (E) elements[t];
+		elements[t] = null;
 
 		if (--size == 0) head = tail = 0;
 		else tail = t;
@@ -229,68 +272,37 @@ public class RingBuffer<E> extends AbstractCollection<E> implements Deque<E> {
 	@SuppressWarnings("unchecked")
 	public final E getFirst() {
 		if (size == 0) throw new NoSuchElementException();
-		return (E) array[head];
+		return (E) elements[head];
 	}
 	@Override
 	@SuppressWarnings("unchecked")
 	public final E getLast() {
 		if (size == 0) throw new NoSuchElementException();
-		return (E) array[tail];
+		return (E) elements[tail];
 	}
 
 	@Override
 	@SuppressWarnings("unchecked")
-	public final E peekFirst() {return size == 0 ? null : (E) array[head];}
+	public final E peekFirst() {return size == 0 ? null : (E) elements[head];}
 	@Override
 	@SuppressWarnings("unchecked")
-	public final E peekLast() {return size == 0 ? null : (E) array[tail];}
+	public final E peekLast() {return size == 0 ? null : (E) elements[tail];}
 
 	@Override
 	public final boolean removeFirstOccurrence(Object o) {
 		int i = indexOf(o);
 		if (i < 0) return false;
-		remove(i);
+		delete(i);
 		return true;
 	}
 	@Override
 	public final boolean removeLastOccurrence(Object o) {
 		int i = lastIndexOf(o);
 		if (i < 0) return false;
-		remove(i);
+		delete(i);
 		return true;
 	}
 	// endregion
-	/**
-	 * 删除数组下标i的元素，并保证缓冲区依然可用
-	 */
-	@SuppressWarnings("unchecked")
-	public E remove(int i) {
-		checkArrayBound(i);
-		Object[] array = this.array;
-		E e = (E) array[i];
-		int t = tail;
-
-		if (i >= t) {
-			// [head, array.length]
-			if (head < array.length - 1) System.arraycopy(array, head, array, head + 1, i - head);
-			array[head] = null;
-			head = head == array.length - 1 ? 0 : head + 1;
-		} else {
-			// [0, tail)
-			if (i > 0 && t - i - 1 > 0) System.arraycopy(array, i + 1, array, i, t - i - 1);
-			array[tail = t - 1] = null;
-		}
-
-		size--;
-		return e;
-	}
-
-	private void checkArrayBound(int i) {
-		if (size == array.length) return;
-		if (head > tail) {
-			if (i >= tail && i < head) throw new ArrayIndexOutOfBoundsException(i);
-		} else if (i < head || (i >= tail)) throw new ArrayIndexOutOfBoundsException(i);
-	}
 	// region *** Queue ***
 	public final boolean offer(E e) {return offerLast(e);}
 	public final E remove() {return removeFirst();}
@@ -299,95 +311,121 @@ public class RingBuffer<E> extends AbstractCollection<E> implements Deque<E> {
 	public final E peek() {return peekFirst();}
 	// endregion
 	// region *** Stack ***
-	@Deprecated
 	public void push(E e) {addLast(e);}
-	@Deprecated
 	public E pop() {return removeLast();}
 	// endregion
-	@SuppressWarnings("unchecked")
-	public E ringAddFirst(E e) {
-		int s = size;
-		if (s < maxCap) {
-			if (s == array.length) ensureCapacity();
-			size = s+1;
+
+	@NotNull
+	@Override
+	public Iterator<E> iterator() {return size == 0 ? Collections.emptyIterator() : new Itr(false);}
+	@NotNull
+	@Override
+	public Iterator<E> descendingIterator() {return size == 0 ? Collections.emptyIterator() : new Itr(true);}
+	private final class Itr implements Iterator<E> {
+		byte direction;
+		int cursor, remaining;
+		int lastRet; // 尽管可以用cursor-direction来得到这个值，但是我同时使用它以避免多次remove
+
+		public Itr(boolean descending) {
+			remaining = size;
+			if (descending) {
+				cursor = head == tail ? tail : tail-1;
+				direction = -1;
+			} else {
+				cursor = head;
+				direction = 1;
+			}
 		}
 
-		int h = head;
-		int nextH = h == 0 ? array.length-1 : h-1;
-		if (tail == h && size == maxCap) tail = nextH;
+		@Override public boolean hasNext() {return remaining > 0;}
 
-		E v = (E) array[nextH];
-		array[nextH] = e;
+		@Override
+		@SuppressWarnings("unchecked")
+		public E next() {
+			if (remaining <= 0) throw new NoSuchElementException();
+			remaining--;
 
-		head = nextH;
-		return v;
-	}
+			int cur = cursor;
+			lastRet = cur; // 记录当前光标位置，用于remove
+			E element = (E) elements[cur];
 
-	@SuppressWarnings("unchecked")
-	public E ringAddLast(E e) {
-		int s = size;
-		if (s < maxCap) {
-			if (s == array.length) ensureCapacity();
-			size = s+1;
+			advance(direction);
+			return element;
 		}
 
-		int t = tail;
-		int nextT = t == array.length-1 ? 0 : t+1;
-		if (head == t && size == maxCap) head = nextT;
+		@Override
+		public void remove() {
+			if (lastRet < 0) throw new IllegalStateException();
 
-		E v = (E) array[t];
-		array[t] = e;
+			boolean tailMoved = RingBuffer.this.delete(lastRet);
+			if (tailMoved) {
+				if (direction > 0 && lastRet != head) advance(-1);
+			} else {
+				if (direction < 0 && lastRet != tail) advance(1);
+			}
 
-		tail = nextT;
-		return v;
+			lastRet = -1;
+		}
+
+		private void advance(int direction) {
+			int cur = cursor + direction;
+			if (cur < 0) cur = elements.length - 1;
+			else if (cur == elements.length) cur = 0;
+			cursor = cur;
+		}
 	}
 
+	@Override
+	public final void forEach(Consumer<? super E> action) {forEach(action, false, 0, size);}
 	@SuppressWarnings("unchecked")
-	public void getSome(int dir, int i, int fence, List<E> dst) {
-		if (size == 0) return;
-		Object[] arr = array;
-		do {
-			dst.add((E) arr[i]);
-			i += dir;
+	public void forEach(Consumer<? super E> action, boolean descending, int skip, int remaining) {
+		byte direction;
+		int cursor;
 
-			if (i == arr.length) i = 0;
-			else if (i < 0) i = arr.length - 1;
-		} while (i != fence);
-	}
+		if (descending) {
+			cursor = tail;
+			direction = -1;
+		} else {
+			cursor = head;
+			direction = 1;
+		}
 
-	@SuppressWarnings("unchecked")
-	public void getSome(int dir, int i, int fence, List<E> dst, int off, int len) {
-		if (size == 0) return;
-		Object[] arr = array;
-		do {
-			if (off != 0) off--;
-			else if (len-- > 0) dst.add((E) arr[i]);
-			i += dir;
+		if (skip > 0) {
+			cursor = MathUtils.positiveMod(cursor + direction * skip, elements.length);
+		}
 
-			if (i == arr.length) i = 0;
-			else if (i < 0) i = arr.length - 1;
-		} while (i != fence);
+		while (remaining-- > 0) {
+			E element = (E) elements[cursor];
+
+			cursor += direction;
+			if (cursor < 0) cursor = elements.length - 1;
+			else if (cursor == elements.length) cursor = 0;
+
+			action.accept(element);
+		}
 	}
 
 	@Override
 	public String toString() {
-		StringBuilder sb = new StringBuilder().append("RingBuffer{\n  size=").append(size).append(",length=").append(array.length);
+		var sb = new StringBuilder().append("RingBuffer{\n  size=").append(size).append('/').append(elements.length).append('/').append(maxCapacity);
 
 		ArrayList<Object> data = new ArrayList<>();
-
-		for (int i = 0; i < array.length; i++) data.add(i);
+		data.add("#");
+		data.add("P");
+		data.add("Element");
 		data.add(IntMap.UNDEFINED);
 
-		for (int i = 0; i < head; i++) data.add(" ");
-		data.add("H");
-		data.add(IntMap.UNDEFINED);
+		for (int i = 0; i < elements.length; i++) {
+			data.add(i);
+			if (i == head) {
+				data.add(i == tail ? "*" : "H");
+			} else if (i == tail) data.add("T");
+			else data.add("");
+			data.add(elements[i]);
+			data.add(IntMap.UNDEFINED);
+		}
 
-		for (int i = 0; i < tail; i++) data.add(" ");
-		data.add("T");
-		data.add(IntMap.UNDEFINED);
-
-		data.addAll(array);
-		TextUtil.prettyTable(sb, "  ", data.toArray(), " ", " ");
-		return sb.append("\n}").toString();
+		TextUtil.prettyTable(sb, "  ", data.toArray());
+		return sb.append('}').toString();
 	}
 }

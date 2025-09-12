@@ -186,8 +186,8 @@ public class MakePinyinData {
 		}
 		bar.end();
 		bar.reset();
-		int ybits = Integer.numberOfTrailingZeros(MathUtils.getMin2PowerOf(yinLen));
-		int nbits = Integer.numberOfTrailingZeros(MathUtils.getMin2PowerOf(nameLen));
+		int ybits = Integer.numberOfTrailingZeros(MathUtils.nextPowerOfTwo(yinLen));
+		int nbits = Integer.numberOfTrailingZeros(MathUtils.nextPowerOfTwo(nameLen));
 		System.out.println("cpSize="+ziPool.length()+",shortZi="+mys+",shortYin="+mys2);
 		System.out.println(yinLen+"=>"+ybits);
 		System.out.println(nameLen+"=>"+nbits);

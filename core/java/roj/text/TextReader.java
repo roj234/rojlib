@@ -1,8 +1,8 @@
 package roj.text;
 
 import org.jetbrains.annotations.NotNull;
-import roj.io.Finishable;
 import roj.io.BufferPool;
+import roj.io.Finishable;
 import roj.math.MathUtils;
 import roj.util.ArrayCache;
 import roj.util.DynByteBuf;
@@ -167,7 +167,7 @@ public class TextReader extends Reader implements CharSequence, Closeable, Finis
 		}
 	}
 	private void grow(int toRead) {
-		char[] newBuf = ArrayCache.getCharArray(MathUtils.getMin2PowerOf(len+toRead), false);
+		char[] newBuf = ArrayCache.getCharArray(MathUtils.nextPowerOfTwo(len+toRead), false);
 		System.arraycopy(buf, 0, newBuf, 0, len);
 		ArrayCache.putArray(buf);
 		buf = newBuf;

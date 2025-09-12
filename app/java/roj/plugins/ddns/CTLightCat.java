@@ -1,7 +1,7 @@
 package roj.plugins.ddns;
 
-import roj.config.JSONParser;
-import roj.config.data.CMap;
+import roj.config.JsonParser;
+import roj.config.node.MapValue;
 import roj.http.HttpClient;
 import roj.http.HttpRequest;
 import roj.io.IOUtil;
@@ -40,7 +40,7 @@ final class CTLightCat extends IpGetter {
 	private String pass, catUrl;
 
 	@Override
-	public void loadConfig(CMap config) {
+	public void loadConfig(MapValue config) {
 		pass = config.getString("CatPassword");
 		catUrl = config.getString("CatUrl");
 	}
@@ -54,7 +54,7 @@ final class CTLightCat extends IpGetter {
 			.header("Cookie", "sysauth="+accessToken)
 			.executePooled();
 
-		CMap url = new JSONParser().parse(shc.stream()).asMap();
+		MapValue url = new JsonParser().parse(shc.stream()).asMap();
 
 		InetAddress WANIP = InetAddress.getByName(url.getString("WANIP")),
 			WANIPv6 = InetAddress.getByName(url.getString("WANIPv6"));

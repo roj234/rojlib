@@ -12,7 +12,7 @@ import roj.compiler.ast.GeneratorUtil;
 import roj.compiler.diagnostic.Kind;
 import roj.compiler.resolve.ResolveException;
 import roj.compiler.resolve.TypeCast;
-import roj.config.data.CEntry;
+import roj.config.node.ConfigValue;
 import roj.text.CharList;
 
 import java.util.List;
@@ -118,7 +118,7 @@ public final class NewArray extends Expr {
 			var cast = ctx.castTo(sourceType, exprType, castType);
 
 			if (castType != 0 && cast.type == TypeCast.IMPLICIT) {
-				var value = ((CEntry)node.constVal()).asInt();
+				var value = ((ConfigValue)node.constVal()).asInt();
 				if (value >= 0 && value <= UNSIGNED_MAX[dataCap]) {
 					if (exprType.getActualType() != Type.CHAR)
 						ctx.report(this, Kind.INCOMPATIBLE, "arrayDef.autoCastNumber", node, exprType);

@@ -46,7 +46,7 @@ public final class LongMap<V> extends AbstractMap<Long, V> implements _LibMap<Lo
 
 	public final void ensureCapacity(int size) {
 		if (size <= mask) return;
-		int length = MathUtils.getMin2PowerOf(size);
+		int length = MathUtils.nextPowerOfTwo(size);
 
 		if (entries != null) {
 			mask = (length>>1) - 1;

@@ -61,7 +61,7 @@ public final class IntMap<V> extends AbstractMap<Integer, V> implements _LibMap<
 
 	public void ensureCapacity(int size) {
 		if (size <= mask) return;
-		int length = MathUtils.getMin2PowerOf(size);
+		int length = MathUtils.nextPowerOfTwo(size);
 
 		if (entries != null) {
 			mask = (length>>1) - 1;

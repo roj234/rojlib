@@ -14,7 +14,7 @@ import roj.compiler.CompileUnit;
 import roj.compiler.api.Compiler;
 import roj.compiler.api.Processor;
 import roj.compiler.diagnostic.Kind;
-import roj.config.data.CInt;
+import roj.config.node.IntValue;
 
 import java.util.Set;
 import java.util.WeakHashMap;
@@ -33,7 +33,7 @@ final class CompileStage implements Processor {
 	);
 	@Override public Set<String> acceptedAnnotations() {return ACCEPTS;}
 
-	private final WeakHashMap<Annotation, CInt> increment_count = new WeakHashMap<>();
+	private final WeakHashMap<Annotation, IntValue> increment_count = new WeakHashMap<>();
 
 	@Override
 	public void handle(CompileContext ctx, ClassDefinition file, Attributed node, Annotation annotation) {
@@ -42,7 +42,7 @@ final class CompileStage implements Processor {
 		CompileUnit cu = (CompileUnit) file;
 		switch (type) {
 			case "AutoIncrement" -> {
-				CInt start = increment_count.computeIfAbsent(annotation, x -> new CInt(annotation.getInt("start")));
+				IntValue start = increment_count.computeIfAbsent(annotation, x -> new IntValue(annotation.getInt("start")));
 
 				if (node.getAttribute("ConstantValue") != null) {
 					throw new IllegalStateException("字段"+node+"已经有值");

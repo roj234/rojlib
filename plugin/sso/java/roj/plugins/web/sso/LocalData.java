@@ -4,7 +4,6 @@ import org.jetbrains.annotations.NotNull;
 import roj.crypt.CryptoFactory;
 import roj.crypt.HMAC;
 import roj.crypt.MySaltedHash;
-import roj.http.server.HSConfig;
 import roj.http.server.Request;
 
 import java.security.SecureRandom;

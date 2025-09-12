@@ -73,15 +73,19 @@ final class NativeVT implements ITty, Runnable {
 		}
 	}
 
-	static ITty initialize() {
-		if (TextUtil.consoleAbsent) return null;
+	static ITty initialize(boolean forceEnable) {
+		if (!forceEnable && TextUtil.consoleAbsent) return null;
 
 		Tty instance = Tty.getInstance();
-		int flag = 0;
+		int flag = forceEnable ? ANSI : 0;
 
+		checkAnsi:
 		if (RojLib.hasNative(RojLib.ANSI_READBACK)) {
 			int wh = GetConsoleSize();
-			if (wh == 0) RojLib.debug("NativeVT", "GetConsoleSize() = 0");
+			if (wh == 0) {
+				RojLib.debug("NativeVT", "GetConsoleSize() = 0");
+				break checkAnsi;
+			}
 
 			instance.columns = wh >>> 16;
 			instance.rows = wh & 0xFFFF;

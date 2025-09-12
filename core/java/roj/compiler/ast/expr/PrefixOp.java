@@ -9,10 +9,10 @@ import roj.compiler.CompileContext;
 import roj.compiler.asm.MethodWriter;
 import roj.compiler.diagnostic.Kind;
 import roj.compiler.resolve.TypeCast;
-import roj.config.data.CDouble;
-import roj.config.data.CFloat;
-import roj.config.data.CInt;
-import roj.config.data.CLong;
+import roj.config.node.DoubleValue;
+import roj.config.node.FloatValue;
+import roj.config.node.IntValue;
+import roj.config.node.LongValue;
 
 import static roj.asm.Opcodes.*;
 import static roj.compiler.JavaTokenizer.*;
@@ -71,7 +71,7 @@ class PrefixOp extends PrefixOperator {
 			default -> this;
 			case 0 -> constant(type, !(boolean) right.constVal());
 			case 1, 2, 3, 4 -> {
-				var x = (CInt) right.constVal();
+				var x = (IntValue) right.constVal();
 				switch (op) {
 					case sub -> x.value = -x.value;
 					case inv -> x.value ^= -1;
@@ -79,7 +79,7 @@ class PrefixOp extends PrefixOperator {
 				yield right;
 			}
 			case 5 -> {
-				var x = (CLong) right.constVal();
+				var x = (LongValue) right.constVal();
 				switch (op) {
 					case sub -> x.value = -x.value;
 					case inv -> x.value ^= -1L;
@@ -88,14 +88,14 @@ class PrefixOp extends PrefixOperator {
 			}
 			case 6 -> {
 				if (op == sub) {
-					var val = (CFloat) right.constVal();
+					var val = (FloatValue) right.constVal();
 					val.value = -val.value;
 				}
 				yield right;
 			}
 			case 7 -> {
 				if (op == sub) {
-					var val = (CDouble) right.constVal();
+					var val = (DoubleValue) right.constVal();
 					val.value = -val.value;
 				}
 				yield right;

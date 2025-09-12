@@ -25,7 +25,7 @@ public class NIXIM implements Processor {
 	public String name() {return "Nixim注解上下文处理程序";}
 
 	@Override
-	public void afterCompile(ProcessEnvironment pc) {
+	public void afterCompile(BuildContext pc) {
 		var mapper = Objects.requireNonNull(pc.getProcessor(MAP.class), "Missing dep MAP for NIXIM").getProjectMapper(pc.project);
 		var ctx = pc.getAnnotatedClass(CodeWeaver.A_INJECTION);
 

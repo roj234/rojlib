@@ -69,7 +69,7 @@ public class CodeVisitor {
 
 				boolean widen = prev == Opcodes.WIDE;
 				if (widen) checkWide(code);
-				else _visitNodePre();
+				else visitPreInsn();
 
 				switch (code) {
 					case PUTFIELD, GETFIELD, PUTSTATIC, GETSTATIC -> field(code, cp.getRef(r, true));
@@ -108,7 +108,7 @@ public class CodeVisitor {
 		}
 	}
 
-	void _visitNodePre() {}
+	protected void visitPreInsn() {}
 
 	protected void visitSize(int stackSize, int localSize) {}
 
@@ -131,7 +131,7 @@ public class CodeVisitor {
 	protected void clazz(byte code, CstClass clz) {}
 	protected void iinc(int id, int count) {}
 	protected void ldc(byte code, Constant c) {}
-	protected void invokeDyn(CstDynamic dyn, int type) {}
+	protected void invokeDyn(CstDynamic dyn, int reserved) {}
 	protected void invokeItf(CstRef method, short argc) {}
 	protected void invoke(byte code, CstRef method) {}
 	protected void field(byte code, CstRef field) {}

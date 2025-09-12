@@ -2,7 +2,7 @@ package roj.plugins.ddns;
 
 import org.jetbrains.annotations.Nullable;
 import roj.collect.HashMap;
-import roj.config.data.CMap;
+import roj.config.node.MapValue;
 import roj.io.IOUtil;
 import roj.text.CharList;
 import roj.text.URICoder;
@@ -23,7 +23,7 @@ final class Dynv6 implements IpMapper {
 	private static final class State { InetAddress v4Addr, v6Addr;}
 
 	@Override
-	public void init(CMap config) {
+	public void init(MapValue config) {
 		token = config.getString("HttpToken");
 		for (var entry : config.getList("Hosts")) {
 			domain2Id.put(entry.asString(), new State());

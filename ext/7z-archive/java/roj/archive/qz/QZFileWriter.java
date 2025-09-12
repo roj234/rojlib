@@ -3,7 +3,7 @@ package roj.archive.qz;
 import org.jetbrains.annotations.NotNull;
 import roj.collect.ArrayList;
 import roj.collect.BitSet;
-import roj.config.data.CInt;
+import roj.config.node.IntValue;
 import roj.crypt.CRC32;
 import roj.io.IOUtil;
 import roj.io.source.FileSource;
@@ -479,7 +479,7 @@ public class QZFileWriter extends QZWriter {
         buf.put(kFilesInfo).putVUInt(files.size());
 
         if (flagSum[0] > 0) {
-            CInt count = new CInt();
+            IntValue count = new IntValue();
             BitSet emptyFile = flagSum[1] > 0 ? new BitSet() : null;
             BitSet anti = flagSum[2] > 0 ? new BitSet() : null;
 

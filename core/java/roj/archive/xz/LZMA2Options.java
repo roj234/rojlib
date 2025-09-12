@@ -6,8 +6,8 @@ import roj.archive.xz.lzma.LZMAEncoder;
 import roj.concurrent.Executor;
 import roj.concurrent.TaskGroup;
 import roj.concurrent.TaskPool;
-import roj.io.DummyOutputStream;
 import roj.io.BufferPool;
+import roj.io.DummyOutputStream;
 import roj.math.MathUtils;
 import roj.text.CharList;
 import roj.text.TextUtil;
@@ -508,7 +508,7 @@ public class LZMA2Options implements Cloneable {
 	public String toString() {
 		CharList sb = new CharList();
 
-		if (MathUtils.getMin2PowerOf(dictSize) == dictSize) sb.append(31-Integer.numberOfLeadingZeros(dictSize));
+		if (MathUtils.nextPowerOfTwo(dictSize) == dictSize) sb.append(31-Integer.numberOfLeadingZeros(dictSize));
 		else sb.append(TextUtil.scaledNumber(dictSize));
 
 		if (lc != LC_DEFAULT) sb.append(":lc").append(lc);

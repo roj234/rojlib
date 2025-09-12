@@ -30,8 +30,8 @@ import roj.compiler.ast.expr.*;
 import roj.compiler.diagnostic.Diagnostic;
 import roj.compiler.diagnostic.Kind;
 import roj.compiler.resolve.*;
-import roj.config.ParseException;
-import roj.config.data.CEntry;
+import roj.text.ParseException;
+import roj.config.node.ConfigValue;
 import roj.text.CharList;
 import roj.text.TextUtil;
 import roj.util.ArrayCache;
@@ -1019,7 +1019,7 @@ public class CompileContext {
 		}
 
 		if (allow && cast.type == TypeCast.IMPLICIT) {
-			var number = ((roj.config.data.CEntry)expr.constVal()).asInt();
+			var number = ((ConfigValue)expr.constVal()).asInt();
 			if (number < 0 || number > 65535)
 				report(Kind.ERROR, "typeCast.error.-2", rType, toType);
 		}
@@ -1203,10 +1203,10 @@ public class CompileContext {
 		if (cv == null) return null;
 
 		var c = switch (cv.c.type()) {
-			case Constant.INT -> CEntry.valueOf(((CstInt) cv.c).value);
-			case Constant.FLOAT -> CEntry.valueOf(((CstFloat) cv.c).value);
-			case Constant.LONG -> CEntry.valueOf(((CstLong) cv.c).value);
-			case Constant.DOUBLE -> CEntry.valueOf(((CstDouble) cv.c).value);
+			case Constant.INT -> ConfigValue.valueOf(((CstInt) cv.c).value);
+			case Constant.FLOAT -> ConfigValue.valueOf(((CstFloat) cv.c).value);
+			case Constant.LONG -> ConfigValue.valueOf(((CstLong) cv.c).value);
+			case Constant.DOUBLE -> ConfigValue.valueOf(((CstDouble) cv.c).value);
 			case Constant.CLASS -> cv.c;
 			case Constant.STRING -> cv.c.getEasyCompareValue();
 			default -> throw new IllegalArgumentException("Illegal ConstantValue "+cv.c);

@@ -12,7 +12,7 @@ import roj.compiler.diagnostic.TextDiagnosticReporter;
 import roj.compiler.library.JarLibrary;
 import roj.compiler.plugins.eval.Constexpr;
 import roj.io.IOUtil;
-import roj.text.DateTime;
+import roj.text.DateFormat;
 import roj.text.TextReader;
 import roj.text.TextUtil;
 import roj.util.ByteList;
@@ -31,8 +31,8 @@ import java.util.ArrayList;
  */
 public final class Lavac extends LavaCompiler {
 	@Constexpr
-	public static String getCompileTime() {return DateTime.toLocalTimeString(System.currentTimeMillis());}
-	public static String getCurrentTime() {return DateTime.toLocalTimeString(System.currentTimeMillis());}
+	public static String getCompileTime() {return DateFormat.toLocalDateTime(System.currentTimeMillis());}
+	public static String getCurrentTime() {return DateFormat.toLocalDateTime(System.currentTimeMillis());}
 
 	public static final String VERSION = "1.1.0-alpha (compiled on "+getCompileTime()+")";
 

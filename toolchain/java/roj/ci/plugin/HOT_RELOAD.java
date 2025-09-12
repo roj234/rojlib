@@ -7,15 +7,15 @@ import roj.asm.AsmCache;
 import roj.asm.ClassDefinition;
 import roj.asm.ClassNode;
 import roj.asmx.Context;
+import roj.ci.MCMake;
 import roj.collect.ArrayList;
-import roj.config.Tokenizer;
-import roj.config.data.CEntry;
+import roj.config.node.ConfigValue;
 import roj.io.IOUtil;
 import roj.net.ChannelCtx;
 import roj.net.ChannelHandler;
 import roj.net.MyChannel;
 import roj.net.ServerLaunch;
-import roj.ci.FMD;
+import roj.text.Tokenizer;
 import roj.text.logging.Logger;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
@@ -40,7 +40,7 @@ public class HOT_RELOAD implements Processor {
 	@Override public String name() {return "热重载青春版";}
 	@Override public boolean defaultEnabled() {return true;}
 
-	@Override public void init(CEntry config) {
+	@Override public void init(ConfigValue config) {
 		try {
 			stop();
 			start(config.asInt());
@@ -48,7 +48,7 @@ public class HOT_RELOAD implements Processor {
 			throw new RuntimeException(e);
 		}
 
-		File agent = new File(FMD.BIN_PATH, "agent.jar");
+		File agent = new File(MCMake.BIN_PATH, "agent.jar");
 		if (!agent.isFile()) {
 			try (var zfw = new ZipFileWriter(agent)) {
 				zfw.beginEntry(new ZEntry("META-INF/MANIFEST.MF"));
@@ -65,8 +65,8 @@ public class HOT_RELOAD implements Processor {
 				e.printStackTrace();
 			}
 		}
-		FMD.LOGGER.info("\"热重载青春版\"启动成功，在任意JVM中加入该参数即可使用");
-		FMD.LOGGER.info("  -javaagent:\""+Tokenizer.escape(agent.getAbsolutePath())+"\"="+config.asInt());
+		MCMake.LOGGER.info("\"热重载青春版\"启动成功，在任意JVM中加入该参数即可使用");
+		MCMake.LOGGER.info("  -javaagent:\""+Tokenizer.escape(agent.getAbsolutePath())+"\"="+config.asInt());
 	}
 
 	public void start(int port) throws IOException {
@@ -97,7 +97,7 @@ public class HOT_RELOAD implements Processor {
 		IOUtil.closeSilently(channel6);
 	}
 
-	@Override public synchronized void afterCompile(ProcessEnvironment ctx) {
+	@Override public synchronized void afterCompile(BuildContext ctx) {
 		if (ctx.compiledClassIndex > 0) {
 			List<ClassNode> classData = new ArrayList<>(ctx.compiledClassIndex);
 			List<Context> classes = ctx.getClasses();

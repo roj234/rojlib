@@ -3,76 +3,102 @@ package roj.text;
 import roj.collect.ArrayList;
 import roj.io.IOUtil;
 
+import java.util.List;
 import java.util.Map;
-import java.util.function.BiConsumer;
+import java.util.TimeZone;
 
 /**
+ * A functional interface for formatting templates with variable substitution.
+ * @see roj.text.logging.LogContext#setComponents(List)
  * @author Roj234
  * @since 2022/11/29 21:34
  */
+@FunctionalInterface
 public interface Formatter {
 	/**
-	 * 创建一个简单变量模板，在它的模板字符串中，可以用${变量名}引用变量
-	 * @param template 模板字符串
-	 * @return 简单变量模板实例
-	 */
-	static Formatter simple(String template) {return new Simple(template);}
-
-	/**
-	 * 这是否是动态模板，也就是说，将会使用env中的任何变量.
-	 */
-	default boolean isDynamic() {return true;}
-	/**
-	 * 用env中的变量填充模板，并将结果写入sb.
-	 * @param env Map&lt;String, {@link CharList Consumer&lt;CharList&gt;}|{@link CharSequence}&gt;
-	 * @return 填充后的模板
+	 * Formats the template using variables from the environment and writes the result to the provided CharList.
+	 *
+	 * @param env a map containing variable names as keys and their corresponding values.
+	 *            Values can be {@link CharSequence} instances or {@link Formatter}
+	 * @param sb  the CharList to which the formatted result will be appended
+	 * @return the CharList containing the formatted result
+	 * @throws IllegalArgumentException if the environment contains invalid values or variables
 	 */
 	CharList format(Map<String, ?> env, CharList sb) throws IllegalArgumentException;
 
-	final class Simple implements Formatter {
-		private final String[] names;
-		private final char[] data, pos;
+	/**
+	 * 是否是常量模板。
+	 * @see #constant(String)
+	 */
+	default boolean isConstant() {return false;}
 
-		Simple(String template) {
-			var tmp = IOUtil.getSharedCharBuf();
-			var pos = new CharList();
-			var names = new ArrayList<String>();
+	/**
+	 * Creates a constant formatter that always outputs the specified value.
+	 *
+	 * @param value the constant string value to output
+	 * @return a Formatter instance that always returns the specified value
+	 */
+	static Formatter constant(String value) {
+		return new Formatter() {
+			@Override public boolean isConstant() {return true;}
+			@Override public CharList format(Map<String, ?> env, CharList sb) {return sb.append(value);}
+		};
+	}
 
-			int prevI = 0;
-			while (true) {
-				int i = template.indexOf("${", prevI);
-				if (i < 0) break;
+	/**
+	 * Creates a simple variable template formatter that supports variable references using {@code ${variableName}} syntax.
+	 *
+	 * @param template the template string containing variable placeholders in the format {@code ${variableName}}
+	 * @return a Formatter instance capable of substituting variables in the template
+	 * @throws IllegalArgumentException if the template contains unclosed variable brackets
+	 */
+	static Formatter simple(String template) {
+		var tmp = IOUtil.getSharedCharBuf();
+		var pos = new CharList();
+		var names = new ArrayList<String>();
 
-				int end = template.indexOf('}', i);
-				if (end < 0) throw new IllegalStateException("未闭合的括号");
+		int prevI = 0;
+		while (true) {
+			int i = template.indexOf("${", prevI);
+			if (i < 0) break;
 
-				names.add(template.substring(i+2, end));
-				tmp.append(template, prevI, i);
-				pos.append((char)(i - prevI));
+			int end = template.indexOf('}', i);
+			if (end < 0) throw new IllegalArgumentException("未闭合的花括号("+i+"): "+template);
 
-				prevI = end+1;
-			}
+			names.add(template.substring(i+2, end));
+			tmp.append(template, prevI, i);
+			pos.append((char)(i - prevI));
 
-			data = tmp.append(template, prevI, template.length()).toCharArray();
-			this.pos = pos.toCharArray();
-			this.names = names.toArray(new String[names.size()]);
+			prevI = end+1;
 		}
 
-		public boolean isDynamic() {return names.length > 0;}
+		if (names.isEmpty()) return constant(template);
 
-		@SuppressWarnings("unchecked")
-		public CharList format(Map<String, ?> env, CharList sb) {
+		String[] names1 = names.toArray(new String[names.size()]);
+		char[] data1 = tmp.append(template, prevI, template.length()).toCharArray();
+		char[] pos1 = pos.toCharArray();
+
+		return (env, sb) -> {
 			int i = 0;
-			for (int j = 0; j < pos.length; j++) {
-				Object val = env.get(names[j]);
+			for (int j = 0; j < pos1.length; j++) {
+				Object val = env.get(names1[j]);
 
-				sb.append(data, i, i += pos[j]);
+				sb.append(data1, i, i += pos1[j]);
 
-				if (val == null) sb.append("${").append(names[j]).append("}");
-				else if (val instanceof BiConsumer) ((BiConsumer<Object, CharList>) val).accept(env, sb);
+				if (val == null) sb.append("${").append(names1[j]).append('}');
+				else if (val instanceof Formatter f) f.format(env, sb);
 				else sb.append(val);
 			}
-			return sb.append(data, i, data.length);
-		}
+			return sb.append(data1, i, data1.length);
+		};
 	}
+
+	/**
+	 * Creates a formatter that always returns the current time formatted according to the specified pattern.
+	 *
+	 * @param format the date/time format pattern to use
+	 * @see DateFormat#format(String, long, TimeZone, CharList)
+	 * @return a Formatter instance that outputs the current time in the specified format
+	 */
+	static Formatter time(String format) { return (env, sb) -> DateFormat.format(format, System.currentTimeMillis(), DateFormat.getLocalTimeZone(), sb); }
 }

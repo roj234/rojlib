@@ -9,9 +9,9 @@ import roj.asm.cp.CstUTF;
 import roj.asm.type.Type;
 import roj.asm.type.TypeHelper;
 import roj.collect.LinkedHashMap;
-import roj.config.data.CEntry;
-import roj.config.data.CMap;
-import roj.config.serial.CVisitor;
+import roj.config.ValueEmitter;
+import roj.config.node.ConfigValue;
+import roj.config.node.MapValue;
 import roj.text.CharList;
 import roj.util.DynByteBuf;
 import roj.util.Helpers;
@@ -25,7 +25,7 @@ import java.util.Map;
  * @author Roj234
  * @since 2021/6/18 9:51
  */
-public class Annotation extends CMap {
+public class Annotation extends MapValue {
 	private String type;
 
 	public Annotation() {super(new LinkedHashMap<>());}
@@ -33,7 +33,7 @@ public class Annotation extends CMap {
 		this();
 		this.type = type;
 	}
-	public Annotation(String type, Map<String, CEntry> values) {
+	public Annotation(String type, Map<String, ConfigValue> values) {
 		super(values);
 		this.type = type;
 	}
@@ -70,7 +70,7 @@ public class Annotation extends CMap {
 	@Deprecated public String[] getStringArray(String name) {return getList(name).toStringArray();}
 
 	@Override
-	protected CEntry put(String k, CEntry v, int flag) {
+	protected ConfigValue put(String k, ConfigValue v, int flag) {
 		if (properties == Collections.EMPTY_MAP) properties = new LinkedHashMap<>();
 		return super.put(k, v, flag);
 	}
@@ -80,7 +80,7 @@ public class Annotation extends CMap {
 		if (!type.endsWith(";")) throw new IllegalArgumentException("无效的注解类型:"+type);
 		int len = r.readUnsignedShort();
 
-		Map<String, CEntry> params;
+		Map<String, ConfigValue> params;
 		if (len > 0) {
 			params = new LinkedHashMap<>(len);
 			while (len-- > 0) {
@@ -95,15 +95,15 @@ public class Annotation extends CMap {
 
 	public char dataType() { return AnnVal.ANNOTATION; }
 	public void toByteArray(DynByteBuf w, ConstantPool pool) {
-		var serializer = new ToJVMAnnotation();
+		var serializer = new AnnotationEncoder();
 		serializer.init(pool, w);
 		w.putShort(serializer.getTypeId(type));
 		super.accept(serializer);
 	}
 
 	@Override
-	public void accept(CVisitor visitor) {
-		((ToJVMAnnotation) visitor).valueAnnotation(type);
+	public void accept(ValueEmitter visitor) {
+		((AnnotationEncoder) visitor).valueAnnotation(type);
 		super.accept(visitor);
 	}
 

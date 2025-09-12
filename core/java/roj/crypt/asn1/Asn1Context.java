@@ -1,9 +1,9 @@
 package roj.crypt.asn1;
 
 import roj.collect.*;
-import roj.config.ParseException;
-import roj.config.Token;
-import roj.config.data.*;
+import roj.text.ParseException;
+import roj.text.Token;
+import roj.config.node.*;
 import roj.io.CorruptedInputException;
 import roj.io.IOUtil;
 import roj.text.CharList;
@@ -14,8 +14,8 @@ import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.Map;
 
-import static roj.config.Token.INTEGER;
-import static roj.config.Token.LITERAL;
+import static roj.text.Token.INTEGER;
+import static roj.text.Token.LITERAL;
 import static roj.crypt.asn1.Asn1Tokenizer.*;
 
 /**
@@ -31,13 +31,13 @@ import static roj.crypt.asn1.Asn1Tokenizer.*;
  */
 public class Asn1Context {
 	protected final Map<String, Type> map = new HashMap<>();
-	private final HashSet<CEntry> byVal = new HashSet<>();
+	private final HashSet<ConfigValue> byVal = new HashSet<>();
 
 	@Override
 	public String toString() {return "Asn1Context{" + "map=" + map + ", namedOid=" + byVal + '}';}
 
 	static final ThreadLocal<Asn1Context> CURRENT_PARSING = new ThreadLocal<>();
-	public CEntry parse(String struct, DerReader in) throws IOException {
+	public ConfigValue parse(String struct, DerReader in) throws IOException {
 		Type type = map.get(struct);
 
 		CURRENT_PARSING.set(this);
@@ -47,7 +47,7 @@ public class Asn1Context {
 			CURRENT_PARSING.remove();
 		}
 	}
-	public void write(String struct, CEntry value, DerWriter out) throws IOException {
+	public void write(String struct, ConfigValue value, DerWriter out) throws IOException {
 		Type type = map.get(struct);
 
 		CURRENT_PARSING.set(this);
@@ -58,7 +58,7 @@ public class Asn1Context {
 		}
 	}
 
-	protected Type unmarshalAny(String struct, String target, CEntry context) {
+	protected Type unmarshalAny(String struct, String target, ConfigValue context) {
 		if (struct.equals("ContentInfo")) {
 			Object oid = byVal.find1(context);
 			if (oid == IntMap.UNDEFINED) throw new UnsupportedOperationException("未知的OID "+context);
@@ -77,16 +77,16 @@ public class Asn1Context {
 			// "2.5.4.6" countryName
 			// "2.5.4.10" organizationName
 			// "2.5.4.11" organizationalUnitName
-			int[] _oid = ((CIntArray) context).value;
+			int[] _oid = ((IntArrayValue) context).value;
 			if (_oid[0] == 2 && _oid[1] == 5 && _oid[2] == 4)
 				return Simple.PrintableString;
 		}
 
 		throw new IllegalStateException("无法解析ANY类型\n上下文: "+context+"\n结构: "+struct+'.'+target);
 	}
-	protected DerValue.Opaque marshalAny(String struct, String target, CEntry context, CEntry value) {
+	protected DerValue.Opaque marshalAny(String struct, String target, ConfigValue context, ConfigValue value) {
 		if (struct.equals("AttributeTypeAndValue")) {
-			int[] _oid = ((CIntArray) context).value;
+			int[] _oid = ((IntArrayValue) context).value;
 			if (_oid[0] == 2 && _oid[1] == 5 && _oid[2] == 4)
 				return new DerValue.Opaque(Simple.PrintableString.derType, value.asString().getBytes(StandardCharsets.UTF_8));
 		}
@@ -95,7 +95,7 @@ public class Asn1Context {
 	}
 
 
-	static final class NamedOID extends CIntArray {
+	static final class NamedOID extends IntArrayValue {
 		final String name;
 		NamedOID(String name, int... oid) {
 			super(oid);
@@ -110,10 +110,10 @@ public class Asn1Context {
 	public sealed interface Type permits Simple, BaseType {
 		int derType();
 		CharList append(CharList sb, int prefix);
-		CEntry parse(int type, DerReader in) throws IOException;
-		void write(CEntry val, DerWriter out) throws IOException;
+		ConfigValue parse(int type, DerReader in) throws IOException;
+		void write(ConfigValue val, DerWriter out) throws IOException;
 		default void setName(String name) {}
-		default CEntry translate(String name) { throw new UnsupportedOperationException(getClass().getName()+"无法解析"+name); }
+		default ConfigValue translate(String name) { throw new UnsupportedOperationException(getClass().getName()+"无法解析"+name); }
 	}
 	private sealed abstract static class BaseType implements Type permits Alias, Choice, Enum, List, Range, Struct {
 		@Override
@@ -132,13 +132,13 @@ public class Asn1Context {
 
 		public int derType() { return derType; }
 		public CharList append(CharList sb, int prefix) { return sb.append(name()); }
-		public CEntry parse(int type, DerReader in) throws IOException {
+		public ConfigValue parse(int type, DerReader in) throws IOException {
 			int len = in.readLength();
 			return switch (this) {
 				case INTEGER -> in.readInt(len);
 				case BIT_STRING -> in.readBits(len);
 				case OCTET_STRING -> in.readBytes(len);
-				case NULL -> CNull.NULL;
+				case NULL -> NullValue.NULL;
 				case UTF8_STRING -> in.readUTF(len);
 				case PrintableString, IA5_STRING, UTCTime, GeneralizedTime -> in.readIso(len);
 				case OID -> in.readOid(len);
@@ -146,17 +146,17 @@ public class Asn1Context {
 				case BOOLEAN -> in.readBool(len); // should be 1
 			};
 		}
-		public void write(CEntry val, DerWriter out) throws IOException {
+		public void write(ConfigValue val, DerWriter out) throws IOException {
 			switch (this) {
 				case INTEGER -> out.writeInt(((DerValue.Int)val).value);
 				case BIT_STRING -> {
 					var bits = (DerValue.Bits) val;
 					out.writeBits(bits.value, bits.bits);
 				}
-				case OCTET_STRING -> out.writeBytes(((CByteArray)val).value);
+				case OCTET_STRING -> out.writeBytes(((ByteArrayValue)val).value);
 				case UTF8_STRING -> out.writeUTF(val.asString());
 				case PrintableString, IA5_STRING, UTCTime, GeneralizedTime -> out.writeText(derType, val.asString());
-				case OID -> out.writeOid(((CIntArray) val).value);
+				case OID -> out.writeOid(((IntArrayValue) val).value);
 				case ANY -> {
 					var opq = (DerValue.Opaque) val;
 					out.write(opq.type, opq.value);
@@ -164,7 +164,7 @@ public class Asn1Context {
 				case BOOLEAN -> out.writeBool(val.asBool());
 			};
 		}
-		public CEntry translate(String name) {
+		public ConfigValue translate(String name) {
 			return switch (this) {
 				case INTEGER -> DerValue.INTEGER(new BigInteger(name));
 				default -> Type.super.translate(name);
@@ -177,13 +177,13 @@ public class Asn1Context {
 	private static final class Enum extends BaseType {
 		private final byte original;
 		private final String[] names;
-		private final CEntry[] values;
+		private final ConfigValue[] values;
 
 		public Enum(Type type, ArrayList<MapStub> stubs) {
 			original = (byte) ((Simple) type).ordinal();
 			int len = stubs.size();
 			names = new String[len];
-			values = new CEntry[len];
+			values = new ConfigValue[len];
 			for (int i = 0; i < len; i++) {
 				MapStub stub = stubs.get(i);
 				names[i] = stub.name;
@@ -202,18 +202,18 @@ public class Asn1Context {
 			}
 		}
 		@Override
-		public CEntry parse(int type, DerReader in) throws IOException {
-			CEntry value = Simple.VALUES[original].parse(type, in);
-			for (CEntry v1 : values) {
+		public ConfigValue parse(int type, DerReader in) throws IOException {
+			ConfigValue value = Simple.VALUES[original].parse(type, in);
+			for (ConfigValue v1 : values) {
 				if (value.equals(v1)) return value;
 			}
 			throw new CorruptedInputException("value("+value+") not in enum "+this);
 		}
 		@Override
-		public void write(CEntry val, DerWriter out) throws IOException {Simple.VALUES[original].write(val, out);}
+		public void write(ConfigValue val, DerWriter out) throws IOException {Simple.VALUES[original].write(val, out);}
 
 		@Override
-		public CEntry translate(String name) {
+		public ConfigValue translate(String name) {
 			for (int i = 0; i < values.length; i++) {
 				if (names[i].equals(name))
 					return values[i];
@@ -279,7 +279,7 @@ public class Asn1Context {
 				sb.append(", \n");
 			}
 		}
-		public CEntry parse(int type, DerReader in) throws IOException {
+		public ConfigValue parse(int type, DerReader in) throws IOException {
 			int typeRef = type;
 
 			Type type1 = mappedTarget.get((char)type);
@@ -289,10 +289,10 @@ public class Asn1Context {
 				type = in.readType();
 			}
 
-			CEntry ref = type1.parse(type, in);
+			ConfigValue ref = type1.parse(type, in);
 			return DerValue.CHOICE(typeRef, ref);
 		}
-		public void write(CEntry val, DerWriter out) throws IOException {
+		public void write(ConfigValue val, DerWriter out) throws IOException {
 			byte type = ((DerValue.Choice) val).encType;
 			Type type1 = mappedTarget.get((char) type);
 			if (type1 == null) throw new CorruptedInputException("选项("+type+")不在范围中:"+this);
@@ -308,9 +308,9 @@ public class Asn1Context {
 		Alias(String alias, Type original) { this.alias = alias; this.original = original; }
 		public int derType() { return original.derType(); }
 		public CharList append(CharList sb, int prefix) {return sb.append(alias).append(" (ref ").append(original.getClass().getSimpleName()).append(")");}
-		public CEntry parse(int type, DerReader in) throws IOException {return original.parse(type, in);}
-		public void write(CEntry val, DerWriter out) throws IOException {original.write(val, out);}
-		public CEntry translate(String name) { return original.translate(name); }
+		public ConfigValue parse(int type, DerReader in) throws IOException {return original.parse(type, in);}
+		public void write(ConfigValue val, DerWriter out) throws IOException {original.write(val, out);}
+		public ConfigValue translate(String name) { return original.translate(name); }
 	}
 	/**
 	 * SIZE (1..MAX)
@@ -321,17 +321,17 @@ public class Asn1Context {
 		Range(Type original, int min, int max) { this.original = original; this.min = min; this.max = max; }
 		public int derType() { return original.derType(); }
 		public CharList append(CharList sb, int prefix) {return original.append(sb.append("SIZE (").append(min).append("...").append(max).append(") "), prefix);}
-		public CEntry parse(int type, DerReader in) throws IOException {
-			CEntry value = original.parse(type, in);
+		public ConfigValue parse(int type, DerReader in) throws IOException {
+			ConfigValue value = original.parse(type, in);
 			checkRange(value);
 			return value;
 		}
-		public void write(CEntry val, DerWriter out) throws IOException {checkRange(val);original.write(val, out);}
-		private void checkRange(CEntry value) throws CorruptedInputException {
-			if (value instanceof CList c) {
-				java.util.List<CEntry> raw = c.raw();
+		public void write(ConfigValue val, DerWriter out) throws IOException {checkRange(val);original.write(val, out);}
+		private void checkRange(ConfigValue value) throws CorruptedInputException {
+			if (value instanceof ListValue c) {
+				java.util.List<ConfigValue> raw = c.raw();
 				if (raw.size() < min || raw.size() > max) throw new CorruptedInputException("值("+value+") 超出范围: "+this);
-			} else if (value instanceof CString s) {
+			} else if (value instanceof StringValue s) {
 				if (s.value.length() < min || s.value.length() > max) throw new CorruptedInputException("值("+value+") 超出范围: "+this);
 			} else {
 				throw new CorruptedInputException("值("+value+") 无法定义范围: "+this);
@@ -347,17 +347,17 @@ public class Asn1Context {
 		List(boolean set, Type type) { this.set = set; this.type = type; }
 		public int derType() { return set?DerValue.SET:DerValue.SEQUENCE; }
 		public CharList append(CharList sb, int prefix) {return type.append(sb.append(set?"SET":"SEQUENCE").append(" OF["), prefix).append(']');}
-		public CEntry parse(int type, DerReader in) throws IOException {
+		public ConfigValue parse(int type, DerReader in) throws IOException {
 			int end = in.readLength() + in.position();
-			ArrayList<CEntry> values = new ArrayList<>();
+			ArrayList<ConfigValue> values = new ArrayList<>();
 			while (in.position() < end) values.add(this.type.parse(in.readType(), in));
 
 			if (in.position() != end) throw new CorruptedInputException("length mismatch");
-			return new CList(values);
+			return new ListValue(values);
 		}
-		public void write(CEntry val, DerWriter out) throws IOException {
+		public void write(ConfigValue val, DerWriter out) throws IOException {
 			out.begin(derType());
-			for (CEntry entry : val.asList().raw()) type.write(entry, out);
+			for (ConfigValue entry : val.asList().raw()) type.write(entry, out);
 			if (set) out.sort();
 			out.end();
 		}
@@ -424,11 +424,11 @@ public class Asn1Context {
 				sb.append(", \n");
 			}
 		}
-		public CEntry parse(int type, DerReader in) throws IOException {
+		public ConfigValue parse(int type, DerReader in) throws IOException {
 			if (names.length == 0) return Simple.ANY.parse(type, in);
 
 			int end = in.readLength()+in.position();
-			ArrayList<CEntry> values = new ArrayList<>(names.length);
+			ArrayList<ConfigValue> values = new ArrayList<>(names.length);
 			int i = 0;
 			if (in.position() < end) {
 				type = in.readType();
@@ -477,8 +477,8 @@ public class Asn1Context {
 						values.add(target.parse(type, in));
 					} else {
 						values.add(ctx == null ? null :
-									ctx instanceof CEntry d ? d :
-									(CEntry) (context[i-1] = target.translate(ctx.toString())));
+									ctx instanceof ConfigValue d ? d :
+									(ConfigValue) (context[i-1] = target.translate(ctx.toString())));
 						continue;
 					}
 
@@ -491,16 +491,16 @@ public class Asn1Context {
 			if (in.position() != end) throw new CorruptedInputException("length mismatch, pos="+in.position()+", except="+end);
 			return new DerValue.Sequence(name, index, values);
 		}
-		public void write(CEntry val, DerWriter out) throws IOException {
+		public void write(ConfigValue val, DerWriter out) throws IOException {
 			out.begin(derType());
-			Map<String, CEntry> map = val.asMap().raw();
+			Map<String, ConfigValue> map = val.asMap().raw();
 			for (int i = 0; i < names.length; i++) {
 				String name = names[i];
 				Type target = types[i];
 				int flag = flags[i];
 				Object def = context[i];
 
-				CEntry entry = map.get(name);
+				ConfigValue entry = map.get(name);
 				if (entry != null && ((flag&OPTIONAL) == 0 || entry != def)) {
 					if (target == Simple.ANY) {
 						entry = CURRENT_PARSING.get().marshalAny(this.name, name, map.get(names[(int)def]), entry);

@@ -12,11 +12,11 @@ import roj.asm.type.Generic;
 import roj.asm.type.Signature;
 import roj.asm.type.Type;
 import roj.asmx.mapper.Mapper;
-import roj.collect.ArrayList;
-import roj.ci.FMD;
+import roj.ci.MCMake;
+import roj.ci.plugin.BuildContext;
 import roj.ci.plugin.MAP;
-import roj.ci.plugin.ProcessEnvironment;
 import roj.ci.plugin.Processor;
+import roj.collect.ArrayList;
 
 import java.util.Collections;
 import java.util.List;
@@ -32,7 +32,7 @@ public class MIXIN implements Processor {
 	public String name() {return "Mixin注解上下文处理程序";}
 
 	@Override
-	public void afterCompile(ProcessEnvironment ctx) {
+	public void afterCompile(BuildContext ctx) {
 		var m = Objects.requireNonNull(ctx.getProcessor(MAP.class), "Missing dep MAP for MIXIN").getProjectMapper(ctx.project);
 
 		var annotatedClass = ctx.getAnnotatedClass("org/spongepowered/asm/mixin/Mixin");
@@ -69,7 +69,7 @@ public class MIXIN implements Processor {
 
 						member.name(mappedName);
 					} else {
-						FMD.LOGGER.warn("无法为对象{}.{}找到映射", mixinClass.name(), member.name());
+						MCMake.LOGGER.warn("无法为对象{}.{}找到映射", mixinClass.name(), member.name());
 					}
 					break;
 				}
@@ -88,7 +88,7 @@ public class MIXIN implements Processor {
 					if (mappedTarget != null) {
 						at.put("target", AnnVal.valueOf("L"+target.owner+";"+mappedTarget+target.rawDesc));
 					} else {
-						FMD.LOGGER.warn("无法为对象{}.{}找到映射", target);
+						MCMake.LOGGER.warn("无法为对象{}.{}找到映射", target);
 					}
 				}
 				if (anno.type().equals("org/spongepowered/asm/mixin/injection/Inject") || anno.type().equals("org/spongepowered/asm/mixin/injection/Redirect")
@@ -101,7 +101,7 @@ public class MIXIN implements Processor {
 						if (mappedName != null) {
 							anno.put("method", new AList(Collections.singletonList(AnnVal.valueOf(mappedName))));
 						} else {
-							FMD.LOGGER.warn("无法为对象{}.{}找到映射", mixinClass.name(), member.name());
+							MCMake.LOGGER.warn("无法为对象{}.{}找到映射", mixinClass.name(), member.name());
 						}
 					}
 					break;
@@ -125,7 +125,7 @@ public class MIXIN implements Processor {
 						Type returnType = ((Generic) signature.values.get(signature.values.size() - 2)).children.get(0).rawType();
 						parameters.set(parameters.size() - 1, returnType);
 					} catch (Exception e) {
-						FMD.LOGGER.warn("failed to obtain generic CallbackInfoReturnable {}", signature);
+						MCMake.LOGGER.warn("failed to obtain generic CallbackInfoReturnable {}", signature);
 					}
 				}
 				memberDesc = Type.toMethodDesc(parameters);
@@ -157,7 +157,7 @@ public class MIXIN implements Processor {
 		while (true) {
 			String mappedName = mapping.get(desc);
 			if (mappedName != null) return hasEmbeddedDesc ? mappedName + desc.rawDesc() : mappedName;
-			FMD.LOGGER.debug("NotFoundInCurrent: {}", desc);
+			MCMake.LOGGER.debug("NotFoundInCurrent: {}", desc);
 
 			if (mapper.getStopAnchor().contains(desc)) break;
 

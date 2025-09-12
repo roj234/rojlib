@@ -1,13 +1,13 @@
 package roj.plugin;
 
-import roj.config.serial.ToJson;
+import roj.config.JsonSerializer;
 import roj.http.server.Content;
 import roj.http.server.Request;
 import roj.http.server.ResponseHeader;
 import roj.http.server.auto.GET;
 import roj.http.server.auto.Interceptor;
 import roj.net.ChannelCtx;
-import roj.text.DateTime;
+import roj.text.DateFormat;
 import roj.ui.Tty;
 import roj.util.DynByteBuf;
 
@@ -28,12 +28,12 @@ final class WebUI {
 
 	@GET
 	public Content list(Request req) {
-		var ser = new ToJson();
-		ser.valueMap();
+		var ser = new JsonSerializer();
+		ser.emitMap();
 		ser.key("ok");
-		ser.value(true);
+		ser.emit(true);
 		ser.key("data");
-		ser.value(Jocker.motds.get(((int)System.nanoTime()&Integer.MAX_VALUE)% Jocker.motds.size()));
+		ser.emit(Jocker.motds.get(((int)System.nanoTime()&Integer.MAX_VALUE)% Jocker.motds.size()));
 		ser.key("menus");
 		CONFIG.getList("webui").accept(ser);
 		return Content.json(ser.getValue());
@@ -66,7 +66,7 @@ final class WebUI {
 			Jocker.CMD.onVirtualKey(key -> {
 				if (key == (Tty.VK_CTRL| KeyEvent.VK_Q)) {
 					timeout = System.currentTimeMillis() + 300000;
-					Tty.error("Web终端功能关闭至"+ DateTime.toLocalTimeString(timeout));
+					Tty.error("Web终端功能关闭至"+ DateFormat.toLocalDateTime(timeout));
 					return false;
 				}
 				if (key == (Tty.VK_CTRL|KeyEvent.VK_C)) {

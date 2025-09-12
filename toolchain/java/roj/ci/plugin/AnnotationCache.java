@@ -2,9 +2,9 @@ package roj.ci.plugin;
 
 import roj.asmx.AnnotationRepo;
 import roj.asmx.Context;
+import roj.ci.MCMake;
 import roj.collect.HashSet;
 import roj.io.IOUtil;
-import roj.ci.FMD;
 import roj.util.DynByteBuf;
 
 import java.util.List;
@@ -21,8 +21,8 @@ public class AnnotationCache implements Processor {
 	public String name() {return "注解缓存提供程序";}
 
 	@Override
-	public void afterCompile(ProcessEnvironment ctx) {
-		if (ctx.increment <= ProcessEnvironment.INC_REBUILD && "true".equals(ctx.project.getVariables().getOrDefault("fmd:annotation_cache", "true"))) {
+	public void afterCompile(BuildContext ctx) {
+		if (ctx.increment <= BuildContext.INC_REBUILD && "true".equals(ctx.project.getVariables().getOrDefault("fmd:annotation_cache", "true"))) {
 			var repo = new AnnotationRepo();
 			for (Context file : ctx.getClasses()) repo.add(file);
 
@@ -47,7 +47,7 @@ public class AnnotationCache implements Processor {
 				var buf = IOUtil.getSharedByteBuf();
 				repo.serialize(buf);
 				ctx.addFile(AnnotationRepo.CACHE_NAME, DynByteBuf.wrap(buf.toByteArray()));
-				FMD.LOGGER.debug("AnnotationCache created, size={}.", buf.wIndex());
+				MCMake.LOGGER.debug("AnnotationCache created, size={}.", buf.wIndex());
 			}
 		}
 	}

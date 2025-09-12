@@ -77,7 +77,7 @@ final class OptimizedJumpTo extends JumpTo {
 		DynByteBuf o = to.bw;
 		int off = target.getValue() - bci;
 
-		fv_bci = bci;
+		this.bci = bci;
 
 		int len = 3;
 		int newLen = length();
