@@ -305,11 +305,20 @@ public class Resolver {
 			}
 		}
 	}
-
 	/**
-	 * 判断{@code instClass}是否属于{@code testClass}的子类（或自身）
+	 * 判断指定类型是否可宽化转换或等同于目标类型。
+	 * <p>
+	 * 此方法检查 {@code testClass} 类型是否可以通过宽化转换（widening conversion）
+	 * 或类型等同性（type identity）转换为 {@code instClass} 类型。
+	 * a.k.a {@code return thisClass instanceof instClass}
+	 * <p>
+	 * <b>参数必须使用JVM的全限定名称（使用 '/' 分隔），不支持该标准下的数组类型</b>
 	 *
-	 * <p>该方法能处理接口和数组等，传入的参数为内部(/)全限定名称
+	 * @param testClass 要检查的源类型全限定名
+	 * @param instClass 目标类型全限定名
+	 * @return 如果 {@code testClass} 可以宽化转换为 {@code instClass} 或两者类型相同，返回 {@code true}；
+	 *         如果类型不存在或无法转换，返回 {@code false}
+	 * @see Class#isInstance(Object)
 	 */
 	public final boolean instanceOf(String testClass, String instClass) {
 		ClassDefinition info = resolve(testClass);
@@ -470,6 +479,16 @@ public class Resolver {
 	public void report(ClassDefinition source, Kind kind, int pos, String code) { report(source, kind, pos, code, (Object[]) null);}
 	public void report(ClassDefinition source, Kind kind, int pos, String code, Object... args) {report(new Diagnostic(source, kind, pos, pos, code, args));}
 	//endregion
+
+	public List<CompileUnit> getDirectInheritorFor(String name) {
+		var inheritors = new ArrayList<CompileUnit>();
+		for (CompileUnit file : compileUnits) {
+			if (file.parent().equals(name) || file.interfaces().contains(name)) {
+				inheritors.add(file);
+			}
+		}
+		return inheritors;
+	}
 
 	protected static final ClassNode AnyArray;
 	static {

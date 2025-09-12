@@ -2,9 +2,12 @@ package roj.compiler.asm;
 
 import roj.asm.insn.CodeWriter;
 import roj.asm.insn.Segment;
+import roj.asm.insn.StaticSegment;
 import roj.compiler.LavaCompiler;
 import roj.compiler.resolve.TypeCast;
 import roj.util.DynByteBuf;
+
+import java.util.List;
 
 import static roj.asm.Opcodes.*;
 
@@ -22,7 +25,7 @@ final class LazyLoadStore extends Segment {
 	}
 
 	@Override
-	protected boolean put(CodeWriter to, int segmentId) {
+	public boolean write(CodeWriter to, int segmentId) {
 		DynByteBuf ob = to.bw;
 		int begin = ob.wIndex();
 
@@ -31,14 +34,15 @@ final class LazyLoadStore extends Segment {
 				// POP | POP2, this variable not used
 				ob.put(0x56 + v.type.rawType().length());
 			} else {
-				byte code = switch (TypeCast.getDataCap(v.type.getActualType())) {
-					default -> ICONST_0;
-					case 5 -> LCONST_0;
-					case 6 -> FCONST_0;
-					case 7 -> DCONST_0;
-					case 8 -> ACONST_NULL;
-				};
-				ob.put(code);
+				// Store n, Load n 消除
+				List<Segment> segments = ((MethodWriter) to).getSegments();
+				if (segments.get(segmentId-1) instanceof LazyLoadStore prev && prev.store && prev.v == v) {
+					segments.set(segmentId-1, StaticSegment.EMPTY);
+					segments.set(segmentId, StaticSegment.EMPTY);
+					return true;
+				}
+
+				ob.put(NOP);
 				LavaCompiler.debugLogger().error("标记为未使用的变量进行了Load操作，内部错误: {}", v);
 			}
 		} else {
@@ -50,10 +54,21 @@ final class LazyLoadStore extends Segment {
 				case 7 -> DLOAD;
 				case 8 -> ALOAD;
 			};
-			if (store) code += 33;
+
+			if (store) {
+				// Load n, Store n 消除
+				List<Segment> segments = ((MethodWriter) to).getSegments();
+				if (segments.get(segmentId-1) instanceof LazyLoadStore prev && !prev.store && prev.v.slot == v.slot) {
+					segments.set(segmentId-1, StaticSegment.EMPTY);
+					segments.set(segmentId, StaticSegment.EMPTY);
+					return true;
+				}
+
+				code += 33;
+			}
+
 			to.vars(code, v.slot);
 		}
-
 
 		begin = ob.wIndex() - begin;
 		assert length() == begin;

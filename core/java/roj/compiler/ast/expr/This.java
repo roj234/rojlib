@@ -27,7 +27,7 @@ final class This extends Expr {
 	public Expr resolve(CompileContext ctx) throws ResolveException {
 		var file = ctx.file;
 		type.owner = isThis ? file.name() : file.parent();
-		if (type.owner == null) throw ResolveException.ofIllegalInput("this.no_super", file);
+		if (type.owner == null) throw ResolveException.ofIllegalInput("this.noSuper", file);
 		return this;
 	}
 

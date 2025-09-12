@@ -7,7 +7,7 @@ import roj.util.DynByteBuf;
  * @since 2022/11/17 12:53
  */
 public abstract class Segment {
-	protected abstract boolean put(CodeWriter to, int segmentId);
+	public abstract boolean write(CodeWriter to, int segmentId);
 	public abstract int length();
 
 	StaticSegment setData(DynByteBuf data) { throw new UnsupportedOperationException(getClass().getName()); }

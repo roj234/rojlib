@@ -1197,15 +1197,15 @@ final class SerializerFactoryImpl extends SerializerFactory {
 									cw.vars(ALOAD, 4);
 									cw.invokeV("java/lang/String", "isEmpty", "()Z");
 									cw.jump(IFNE, skip);
-								} else if (inferrer.instanceOf("java/lang/CharSequence", actualTypeName)) {
+								} else if (inferrer.instanceOf(actualTypeName, "java/lang/CharSequence")) {
 									cw.vars(ALOAD, 4);
 									cw.invokeItf("java/lang/CharSequence", "length", "()I");
 									cw.jump(IFEQ, skip);
-								} else if (inferrer.instanceOf("java/util/Map", actualTypeName)) {
+								} else if (inferrer.instanceOf(actualTypeName, "java/util/Map")) {
 									cw.vars(ALOAD, 4);
 									cw.invokeItf("java/util/Map", "isEmpty", "()Z");
 									cw.jump(IFNE, skip);
-								} else if (inferrer.instanceOf("java/util/Collection", actualTypeName)) {
+								} else if (inferrer.instanceOf(actualTypeName, "java/util/Collection")) {
 									cw.vars(ALOAD, 4);
 									cw.invokeItf("java/util/Collection", "isEmpty", "()Z");
 									cw.jump(IFNE, skip);

@@ -31,9 +31,9 @@ final class Cast extends PrefixOp {
 	public Expr resolve(CompileContext ctx) {
 		IType rType = (right = right.resolve(ctx)).type();
 		type = ctx.resolveType(type);
-		cast = ctx.castTo(rType, type, TypeCast.E_NEVER);
+		cast = ctx.castTo(rType, type, TypeCast.IMPOSSIBLE);
 		castable:
-		if (cast.type < TypeCast.E_DOWNCAST) {
+		if (cast.type < TypeCast.DOWNCAST) {
 			if (rType.isPrimitive()) {
 				int wrapper = TypeCast.getWrappedPrimitive(type);
 				if (wrapper != 0) {
@@ -53,7 +53,7 @@ final class Cast extends PrefixOp {
 
 		if (type.isPrimitive() && rType.isPrimitive() && right.isConstant()) {
 			if (this.cast.isIdentity()) {
-				CompileContext.get().report(this, Kind.WARNING, "cast.warn.redundant", type);
+				CompileContext.get().report(this, Kind.WARNING, "cast.redundant", type);
 			}
 			return constant(type, AnnotationPrimer.castPrimitive((CEntry) right.constVal(), type));
 		}
@@ -63,7 +63,7 @@ final class Cast extends PrefixOp {
 	@Override
 	protected void write1(MethodWriter cw, @NotNull TypeCast.Cast cast) {
 		if (cast.isIdentity() && this.cast.isIdentity()) {
-			CompileContext.get().report(this, Kind.WARNING, "cast.warn.redundant", type);
+			CompileContext.get().report(this, Kind.WARNING, "cast.redundant", type);
 		}
 
 		right.write(cw, this.cast);

@@ -101,7 +101,7 @@ public final class AnnotationPrimer extends Annotation {
 		ctx.dynamicFieldImport = prevDfi;
 
 		if (!node.isConstant() && !node.hasFeature(Expr.Feature.ENUM_REFERENCE)) {
-			ctx.report(Kind.ERROR, "ap.annotation.noConstant");
+			ctx.report(Kind.ERROR, "cu.annotation.noConstant");
 			return null;
 		}
 

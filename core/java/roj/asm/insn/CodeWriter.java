@@ -89,7 +89,7 @@ public class CodeWriter extends AbstractCodeWriter {
 		bw.put(offset, buf);
 		// update length
 		if (!segments.isEmpty())
-			segments.get(0).put(null, 0);
+			segments.get(0).write(null, 0);
 
 		for (Label label : labels) {
 			if (label.block == 0) label.offset += length;
@@ -275,7 +275,7 @@ public class CodeWriter extends AbstractCodeWriter {
 
 				changed = false;
 				for (int i = 0; i < segments.size(); i++) {
-					changed |= segments.get(i).put(this, i);
+					changed |= segments.get(i).write(this, i);
 
 					bci = bw.wIndex() - begin;
 				}
@@ -584,8 +584,11 @@ public class CodeWriter extends AbstractCodeWriter {
 
 	public boolean isContinuousControlFlow(int targetBlock) {
 		Segment seg = segments.get(targetBlock);
-		// targetBlock-1 : 有机会走到这个长度为0的StaticSegment
-		if (seg.length() > 0 ? !seg.isTerminate() : targetBlock == 0 || !segments.get(targetBlock-1).isTerminate()) return true;
+		if (seg.length() > 0) {
+			if (!seg.isTerminate()) return true;
+		} else if (targetBlock == 0 || !segments.get(targetBlock - 1).isTerminate() && isContinuousControlFlow(targetBlock - 1)) {
+			return true;
+		}
 		for (int i = 1; i < segments.size(); i++) {
 			if (segments.get(i).willJumpTo(targetBlock, -1)) return true;
 		}

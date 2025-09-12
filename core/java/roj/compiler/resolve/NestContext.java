@@ -164,7 +164,7 @@ public sealed abstract class NestContext {
 				return new Import(owner, fieldNode.name(), true);
 
 			if (noInstanceMember) {
-				ctx.setImportError("symbol.error.nonStatic.symbol", host, name, "symbol.field");
+				ctx.setImportError("symbol.nonStatic.symbol", host, name, "symbol.field");
 				return null;
 			}
 
@@ -183,7 +183,7 @@ public sealed abstract class NestContext {
 				return new Import(owner, name, true);
 
 			if (noInstanceMember) {
-				ctx.setImportError("symbol.error.nonStatic.symbol", host, name, "invoke.method");
+				ctx.setImportError("symbol.nonStatic.symbol", host, name, "invoke.method");
 				return null;
 			}
 

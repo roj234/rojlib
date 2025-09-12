@@ -65,7 +65,7 @@ public final class UintPlugin extends InvokeHook implements Library, Compiler.Ex
 			mustBeStatement(cast);
 			IType type = left.type();
 			if (type.getActualType() != 'L' && !type.isPrimitive()) type = Type.primitive(type.getActualType());
-			left.write(cw, CompileContext.get().castTo(type, Type.primitive(is64 < 2 ? Type.INT : Type.LONG), TypeCast.E_DOWNCAST));
+			left.write(cw, CompileContext.get().castTo(type, Type.primitive(is64 < 2 ? Type.INT : Type.LONG), TypeCast.DOWNCAST));
 		}
 	}
 

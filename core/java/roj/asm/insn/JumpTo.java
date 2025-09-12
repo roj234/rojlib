@@ -23,7 +23,7 @@ public class JumpTo extends Segment {
 
 	@Override
 	@SuppressWarnings("fallthrough")
-	public boolean put(CodeWriter to, int segmentId) {
+	public boolean write(CodeWriter to, int segmentId) {
 		if (!target.isValid()) throw new IllegalStateException("target label is not valid: "+target);
 
 		DynByteBuf o = to.bw;

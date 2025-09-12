@@ -9,9 +9,9 @@ import roj.compiler.CompileContext;
 import roj.compiler.asm.MethodWriter;
 import roj.compiler.resolve.ResolveException;
 import roj.compiler.resolve.TypeCast;
-import roj.util.OperationDone;
 import roj.config.Tokenizer;
 import roj.config.data.CEntry;
+import roj.util.OperationDone;
 
 import java.util.Objects;
 
@@ -68,7 +68,7 @@ final class Literal extends Expr {
 	@Override
 	public void write(MethodWriter cw, @NotNull TypeCast.Cast cast) {
 		switch (cast.type) {
-			case TypeCast.E_NUMBER_DOWNCAST, TypeCast.NUMBER_UPCAST, TypeCast.BOXING -> {
+			case TypeCast.LOSSY, TypeCast.NUMBER_UPCAST, TypeCast.BOXING -> {
 				String name = Opcodes.toString(cast.getOp1());
 				assert name.length() == 3;
 				writePrimitive(cw, switch (name.charAt(2)) {
@@ -83,7 +83,7 @@ final class Literal extends Expr {
 				return;
 			}
 		}
-		if (cast.type == TypeCast.E_EXPLICIT_CAST) {
+		if (cast.type == TypeCast.IMPLICIT) {
 			int value = ((CEntry) c).asInt();
 			// it is ok to cast
 			if (value >= 0) cast.type = 0;

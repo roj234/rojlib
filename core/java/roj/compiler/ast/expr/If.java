@@ -37,7 +37,7 @@ final class If extends Expr {
 	public Expr resolve(CompileContext ctx) {
 		// must before resolve
 		if (condition.hasFeature(Feature.IMMEDIATE_CONSTANT))
-			ctx.report(this, Kind.WARNING, "trinary.constant");
+			ctx.report(this, Kind.WARNING, "if.constant");
 
 		condition = condition.resolve(ctx);
 		cast = ctx.castTo(condition.type(), Type.primitive(Type.BOOLEAN), 0);
@@ -50,7 +50,7 @@ final class If extends Expr {
 			return (boolean) condition.constVal() ? trueBranch : falseBranch;
 
 		if (trueBranch.equals(falseBranch)) {
-			ctx.report(this, Kind.WARNING, "trinary.constant");
+			ctx.report(this, Kind.WARNING, "if.constant");
 		}
 
 		if (trueBranch.isConstant()& falseBranch.isConstant()) {

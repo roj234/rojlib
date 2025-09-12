@@ -45,7 +45,7 @@ class PrefixOp extends PrefixOperator {
 		if (actualType == Type.CLASS) {
 			actualType = TypeCast.getWrappedPrimitive(type);
 			if (actualType == 0) return notApplicable(ctx);
-			if (mutate) ctx.report(this, Kind.SEVERE_WARNING, "unary.warn.wrapper", type, byId(op));
+			if (mutate) ctx.report(this, Kind.SEVERE_WARNING, "op.wrapper", type, byId(op));
 		}
 
 		switch (actualType) {
@@ -171,7 +171,7 @@ class PrefixOp extends PrefixOperator {
 	}
 
 	public String setRight(Expr right) {
-		if (right == null) return "noExpression";
+		if (right == null) return "expr.illegalStart";
 		this.right = right;
 		return null;
 	}

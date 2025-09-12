@@ -105,7 +105,7 @@ public final class NewArray extends Expr {
 				if (node.isConstant()) {
 					if (dataCap >= 1 && dataCap <= 3) {
 						sourceType = node.minType();
-						castType = TypeCast.E_EXPLICIT_CAST;
+						castType = TypeCast.IMPLICIT;
 						break ok;
 					}
 
@@ -117,7 +117,7 @@ public final class NewArray extends Expr {
 
 			var cast = ctx.castTo(sourceType, exprType, castType);
 
-			if (castType != 0 && cast.type == TypeCast.E_EXPLICIT_CAST) {
+			if (castType != 0 && cast.type == TypeCast.IMPLICIT) {
 				var value = ((CEntry)node.constVal()).asInt();
 				if (value >= 0 && value <= UNSIGNED_MAX[dataCap]) {
 					if (exprType.getActualType() != Type.CHAR)

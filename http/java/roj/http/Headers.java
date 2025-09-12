@@ -1,11 +1,10 @@
 package roj.http;
 
 import org.jetbrains.annotations.NotNull;
-import roj.collect.*;
 import roj.collect.ArrayList;
 import roj.collect.HashMap;
 import roj.collect.HashSet;
-import roj.util.OperationDone;
+import roj.collect.*;
 import roj.config.Tokenizer;
 import roj.io.IOUtil;
 import roj.reflect.Unaligned;
@@ -13,10 +12,7 @@ import roj.text.CharList;
 import roj.text.LineReader;
 import roj.text.TextUtil;
 import roj.text.URICoder;
-import roj.util.ArrayCache;
-import roj.util.ByteList;
-import roj.util.DynByteBuf;
-import roj.util.Helpers;
+import roj.util.*;
 
 import java.io.IOException;
 import java.net.MalformedURLException;
@@ -415,11 +411,11 @@ public class Headers extends Multimap<CharSequence, String> {
 		encType.putInt(name, enc);
 	}
 
-	private static final long LENGTH_OFFSET = Unaligned.fieldOffset(HashMap.class, "length");
+	private static final long MASK = Unaligned.fieldOffset(HashMap.class, "mask");
 	public void _moveFrom(Headers head) {
 		entries = null;
 		if (head.entries != null) {
-			Unaligned.U.putInt(this, LENGTH_OFFSET, 0);
+			Unaligned.U.putInt(this, MASK, 1);
 			ensureCapacity(head.entries.length);
 			entries = head.entries;
 		}

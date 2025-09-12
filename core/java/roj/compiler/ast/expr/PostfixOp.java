@@ -50,7 +50,7 @@ final class PostfixOp extends Expr {
 				return NaE.resolveFailed(this);
 			}
 
-			ctx.report(this, Kind.SEVERE_WARNING, "unary.warn.wrapper", type, byId(op));
+			ctx.report(this, Kind.SEVERE_WARNING, "op.wrapper", type, byId(op));
 		}
 		return this;
 	}

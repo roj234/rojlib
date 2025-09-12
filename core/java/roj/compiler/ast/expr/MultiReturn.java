@@ -45,7 +45,7 @@ final class MultiReturn extends Expr {
 			}
 
 			if (RETURNSTACK_TYPE.equals(node.type().owner())) {
-				ctx.report(this, Kind.ERROR, "multiReturn.russianToy");
+				ctx.report(this, Kind.ERROR, "multiReturn.recursion");
 			}
 		}
 

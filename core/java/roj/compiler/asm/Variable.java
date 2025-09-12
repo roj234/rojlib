@@ -10,7 +10,7 @@ import roj.collect.IntervalPartition;
  * @since 2023/9/24 4:27
  */
 public class Variable extends LocalVariableTable.Item implements IntervalPartition.Range {
-	public Variable(String name, IType type) { super(name, type); }
+	public Variable(String name, IType type) { super(name, type); slot = -1; }
 
 	public boolean isFinal, hasValue;
 	/**

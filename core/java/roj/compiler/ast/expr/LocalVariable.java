@@ -27,7 +27,7 @@ public final class LocalVariable extends LeftValue {
 
 	@Override public boolean isFinal() { return v.isFinal; }
 	@Override public void preStore(MethodWriter cw) {}
-	@Override public void preLoadStore(MethodWriter cw) {cw.load(v); CompileContext.get().loadVar(v);}
+	@Override public void preLoadStore(MethodWriter cw) {CompileContext.get().loadVar(v); cw.load(v);}
 	@Override public void postStore(MethodWriter cw, int state) {cw.store(v); CompileContext.get().storeVar(v);}
 	@Override public int copyValue(MethodWriter cw, boolean twoStack) {cw.insn(twoStack?Opcodes.DUP2:Opcodes.DUP);return 0;}
 	@Override public boolean hasSideEffect() {return false;}

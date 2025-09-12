@@ -87,7 +87,7 @@ public final class LinkedClass {
 	public synchronized ToIntMap<String> getHierarchyList(Resolver ctx) {
 		if (hierarchyList != null) return hierarchyList;
 
-		if (query) throw ResolveException.ofIllegalInput("rh.cyclicDepend", owner.name());
+		if (query) throw ResolveException.ofIllegalInput("semantic.resolution.cyclicDepend", owner.name());
 		query = true;
 
 		ToIntMap<String> list = new ToIntMap<>();
@@ -99,14 +99,14 @@ public final class LinkedClass {
 				int i = list.size();
 				list.putInt(owner, (i << 16) | i);
 			} catch (IllegalArgumentException e) {
-				throw ResolveException.ofIllegalInput("rh.cyclicDepend", owner);
+				throw ResolveException.ofIllegalInput("semantic.resolution.cyclicDepend", owner);
 			}
 
 			owner = info.parent();
 			if (owner == null) break;
 			info = ctx.resolve(owner);
 			if (info == null) {
-				ctx.report(this.owner, Kind.SEVERE_WARNING, -1, "symbol.error.noSuchClass", owner);
+				ctx.report(this.owner, Kind.SEVERE_WARNING, -1, "symbol.noSuchClass", owner);
 				break;
 			}
 		}
@@ -121,7 +121,7 @@ public final class LinkedClass {
 
 				ClassDefinition itfInfo = ctx.resolve(name);
 				if (itfInfo == null) {
-					ctx.report(this.owner, Kind.SEVERE_WARNING, -1, "symbol.error.noSuchClass", name);
+					ctx.report(this.owner, Kind.SEVERE_WARNING, -1, "symbol.noSuchClass", name);
 					break;
 				}
 
@@ -230,7 +230,7 @@ public final class LinkedClass {
 					while (true) {
 						ClassDefinition info = ctx.resolve(className);
 						if (info == null) {
-							ctx.report(type, Kind.SEVERE_WARNING, -1, "symbol.error.noSuchClass", className);
+							ctx.report(type, Kind.SEVERE_WARNING, -1, "symbol.noSuchClass", className);
 						} else for (Map.Entry<String, ComponentList> entry : ctx.link(info).getMethods(ctx).entrySet()) {
 							String key = entry.getKey();
 							if (key.startsWith("<")) continue;
@@ -298,7 +298,7 @@ public final class LinkedClass {
 					while (true) {
 						ClassDefinition info = ctx.resolve(className);
 						if (info == null) {
-							ctx.report(type, Kind.SEVERE_WARNING, -1, "symbol.error.noSuchClass", className);
+							ctx.report(type, Kind.SEVERE_WARNING, -1, "symbol.noSuchClass", className);
 						} else {
 
 						for (var entry : ctx.link(info).getFields(ctx).entrySet()) {
@@ -358,7 +358,7 @@ public final class LinkedClass {
 
 					ClassDefinition ref = ctx.resolve(value.owner());
 					if (ref == null) {
-						ctx.report(this.owner, Kind.SEVERE_WARNING, -1, "symbol.error.noSuchClass", owner);
+						ctx.report(this.owner, Kind.SEVERE_WARNING, -1, "symbol.noSuchClass", owner);
 						continue;
 					}
 

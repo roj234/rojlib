@@ -34,7 +34,7 @@ public final class Lavac extends LavaCompiler {
 	public static String getCompileTime() {return DateTime.toLocalTimeString(System.currentTimeMillis());}
 	public static String getCurrentTime() {return DateTime.toLocalTimeString(System.currentTimeMillis());}
 
-	public static final String VERSION = "1.0.5-alpha (compiled on "+getCompileTime()+")";
+	public static final String VERSION = "1.1.0-alpha (compiled on "+getCompileTime()+")";
 
 	private Charset charset;
 	private final ArrayList<CompileUnit> CompileUnits = new ArrayList<>();

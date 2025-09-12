@@ -23,8 +23,9 @@ public class I18n {
 				line = line.trim();
 				if (line.startsWith("#") || line.isEmpty()) continue;
 
-				int i = line.indexOf('=');
+				int i = line.indexOf(": ");
 				String k = line.substring(0, i++);
+				i++;
 				map.put(k, line.charAt(i) == '"' ? Tokenizer.unescape(line.substring(i+1, line.length()-1)) : line.substring(i));
 			}
 		} catch (Exception e) {
@@ -35,6 +36,7 @@ public class I18n {
 
 	public I18n(CharSequence data) {langMap = parseLang(data);}
 	public void add(CharSequence data) {langMap.putAll(parseLang(data));}
+	public I18n(Map<String, String> langMap) {this.langMap = langMap;}
 
 	final Map<String, String> langMap;
 

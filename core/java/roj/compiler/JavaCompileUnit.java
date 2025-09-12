@@ -528,10 +528,8 @@ public final class JavaCompileUnit extends CompileUnit {
 		// 密封
 		sealedCheck:
 		if ((acc & _ACC_SEALED) != 0) {
-			if (w.type() != PERMITS) {
-				ctx.report(Kind.ERROR, "cu.sealed.noPermits");
-				break sealedCheck;
-			}
+			setMinimumBinaryCompatibility(Compiler.JAVA_17);
+			if (w.type() != PERMITS) break sealedCheck;
 
 			var subclasses = new ClassListAttribute(Attribute.PermittedSubclasses);
 			addAttribute(subclasses);
@@ -591,14 +589,9 @@ public final class JavaCompileUnit extends CompileUnit {
 			// ## 3.1 访问级别和注解
 			acc = ACC_PUBLIC|ACC_STATIC|ACC_STRICT|ACC_FINAL|ACC_ABSTRACT|_ACC_ANNOTATION|_ACC_SEALED|_ACC_NON_SEALED;
 			switch (modifier & (ACC_INTERFACE|ACC_ANNOTATION)) {
-				case ACC_INTERFACE:
-					acc |= _ACC_DEFAULT|ACC_PRIVATE;
-					break;
-				case ACC_INTERFACE|ACC_ANNOTATION:
-					break;
-				case 0:
-					acc |= ACC_NATIVE|ACC_PRIVATE|ACC_PROTECTED|ACC_TRANSIENT|ACC_VOLATILE|ACC_SYNCHRONIZED;
-					break;
+				case ACC_INTERFACE -> acc |= _ACC_DEFAULT|ACC_PRIVATE;
+				case ACC_INTERFACE|ACC_ANNOTATION -> {}
+				case 0 -> acc |= ACC_NATIVE|ACC_PRIVATE|ACC_PROTECTED|ACC_TRANSIENT|ACC_VOLATILE|ACC_SYNCHRONIZED;
 			}
 			acc = readModifiers(wr, acc);
 
@@ -645,6 +638,7 @@ public final class JavaCompileUnit extends CompileUnit {
 				continue;
 				default:
 					if ((acc & (_ACC_SEALED|_ACC_NON_SEALED)) != 0) ctx.report(Kind.ERROR, "modifier.conflict", "sealed/non-sealed", "method/field");
+					if ((acc & (ACC_STATIC|ACC_ABSTRACT)) == (ACC_STATIC|ACC_ABSTRACT)) ctx.report(Kind.ERROR, "modifier.conflict", "static", "abstract");
 			}
 
 			String name;
@@ -698,7 +692,7 @@ public final class JavaCompileUnit extends CompileUnit {
 				if (wr.nextIf(mul)) {
 					// *fn 生成器函数
 					acc |= _ACC_GENERATOR;
-					if (type1.getActualType() == Type.VOID) ctx.report(Kind.ERROR, "generator.voidReturn");
+					if (type1.getActualType() == Type.VOID) ctx.report(Kind.ERROR, "cu.generator.void");
 					type1 = Generic.generic(GeneratorUtil.GENERATOR_TYPE, type1);
 				}
 

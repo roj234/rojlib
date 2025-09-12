@@ -46,7 +46,7 @@ public final class LineNumberTable extends Attribute implements CodeAttribute {
 		StringBuilder sb = new StringBuilder();
 		for (int i = 0; i < list.size(); i++) {
 			Item item = list.get(i);
-			a.add(item.pos.getValue());
+			a.add(item.pos);
 			a.add((int)item.line);
 			a.add(IntMap.UNDEFINED);
 		}

@@ -3,10 +3,12 @@ package roj.asm.insn;
 import org.intellij.lang.annotations.MagicConstant;
 import org.jetbrains.annotations.ApiStatus;
 import org.jetbrains.annotations.Range;
+import roj.RojLib;
 import roj.asm.*;
 import roj.asm.cp.*;
 import roj.asm.type.Type;
 import roj.collect.*;
+import roj.text.logging.Logger;
 import roj.util.DynByteBuf;
 
 import java.util.Arrays;
@@ -31,7 +33,13 @@ public abstract class AbstractCodeWriter extends CodeVisitor {
 	IntMap<Label> bciR2W;
 	final void validateBciRef() {
 		for (IntMap.Entry<Label> entry : bciR2W.selfEntrySet()) {
-			if (!entry.getValue().isValid()) throw new IllegalArgumentException("BCI #"+entry.getIntKey()+" 不存在");
+			if (!entry.getValue().isValid()) {
+				if (RojLib.isDev("asm")) {
+					Logger.FALLBACK.error("找不到标签引用的BCI @"+entry.getIntKey());
+				} else {
+					throw new IllegalArgumentException("BCI @"+entry.getIntKey()+" 不存在");
+				}
+			}
 		}
 	}
 

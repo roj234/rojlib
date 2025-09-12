@@ -9,7 +9,6 @@ import roj.compiler.CompileContext;
 import roj.compiler.LavaCompiler;
 import roj.compiler.api.Types;
 import roj.compiler.asm.MethodWriter;
-import roj.compiler.ast.VisMap;
 import roj.compiler.diagnostic.Kind;
 import roj.compiler.resolve.ResolveException;
 import roj.compiler.resolve.TypeCast;
@@ -173,15 +172,15 @@ final class BinaryOp extends Expr {
 						} else if (dataCap == 5 && BITSHIFT.contains(operator)) {
 							// 5 = long
 							// lsh, rsh, rsh_unsigned => int bits operator
-							castRight = ctx.castTo(rType, Type.primitive(Type.INT), TypeCast.E_NUMBER_DOWNCAST);
+							castRight = ctx.castTo(rType, Type.primitive(Type.INT), TypeCast.LOSSY);
 							break primitive;
 						}
 					}
 
 					//noinspection MagicConstant
 					type = Type.primitive(TypeCast.getDataCapRev(dataCap));
-					castLeft = ctx.castTo(lType, type, TypeCast.E_NUMBER_DOWNCAST);
-					castRight = ctx.castTo(rType, type, TypeCast.E_NUMBER_DOWNCAST);
+					castLeft = ctx.castTo(lType, type, TypeCast.LOSSY);
+					castRight = ctx.castTo(rType, type, TypeCast.LOSSY);
 				}
 
 				break primitive;
@@ -189,13 +188,13 @@ final class BinaryOp extends Expr {
 
 			switch (operator) {
 				case equ, neq:// 无法比较的类型
-					if (rType.isPrimitive()) castLeft = ctx.castTo(lType, type = rType, TypeCast.E_DOWNCAST);
-					else if (lType.isPrimitive()) castRight = ctx.castTo(rType, type = lType, TypeCast.E_DOWNCAST);
+					if (rType.isPrimitive()) castLeft = ctx.castTo(lType, type = rType, TypeCast.DOWNCAST);
+					else if (lType.isPrimitive()) castRight = ctx.castTo(rType, type = lType, TypeCast.DOWNCAST);
 					dataCap = 9;
 				break;
 				case logic_and, logic_or, nullish_coalescing:
 					if (operator == nullish_coalescing) {
-						if (lType.isPrimitive()) ctx.report(this, Kind.ERROR, "symbol.error.derefPrimitive", lType);
+						if (lType.isPrimitive()) ctx.report(this, Kind.ERROR, "symbol.derefPrimitive", lType);
 						type = ctx.getCommonParent(lType, rType);
 					} else {
 						type = Type.primitive(Type.BOOLEAN);

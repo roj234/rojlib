@@ -6,8 +6,8 @@ import roj.compiler.CompileContext;
 import roj.compiler.asm.MethodWriter;
 import roj.compiler.diagnostic.Kind;
 import roj.compiler.resolve.TypeCast;
-import roj.util.OperationDone;
 import roj.text.TextUtil;
+import roj.util.OperationDone;
 
 import java.util.List;
 
@@ -33,7 +33,7 @@ final class SequenceExpr extends Expr {
 		while (i < sequence.size()) {
 			Expr node = sequence.get(i).resolve(ctx);
 			if (node.isConstant() && i != sequence.size()-1) {
-				ctx.report(this, Kind.SEVERE_WARNING, "chained.warn.constant_expr");
+				ctx.report(this, Kind.SEVERE_WARNING, "sequence.constexpr");
 				sequence.remove(i);
 			} else {
 				sequence.set(i++, node);

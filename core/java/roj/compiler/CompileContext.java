@@ -41,8 +41,8 @@ import java.util.*;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
 
-import static roj.compiler.LavaCompiler.*;
 import static roj.compiler.JavaTokenizer.assign;
+import static roj.compiler.LavaCompiler.*;
 
 /**
  * CompileContext 解析(Parse/Resolve)环境 线程本地+递归
@@ -89,7 +89,7 @@ public class CompileContext {
 	public final int thisSlot = 0;
 	/**
 	 * expressionBeforeThisOrSuper()检查
-	 * 只有在未使用this类型前才能调用this或super
+	 * 只有在未使用this类型前才能调用this()或super()
 	 * 不要求必须是构造器的第一个语句
 	 * 同时用于lambda的自动静态化
 	 * * 具有传递性
@@ -100,6 +100,10 @@ public class CompileContext {
 	 * @see Invoke#resolve(CompileContext) int check_flag
 	 */
 	public boolean enumConstructor;
+	/**
+	 * 全局构造器插入点的segmentId
+	 */
+	public int globalInitInsertTo;
 
 	// lambda方法的序号
 	protected int syntheticMethodId;
@@ -183,6 +187,7 @@ public class CompileContext {
 		thisUsed = false;
 
 		syntheticMethodId = 0;
+		globalInitInsertTo = 0;
 
 		thisConstructor = false;
 
@@ -204,7 +209,8 @@ public class CompileContext {
 
 	public final void report(Kind kind, String message) {report(kind, message, ArrayCache.OBJECTS);}
 	public final void report(Kind kind, String message, Object... args) {
-		report(errorReportIndex >= 0 ? errorReportIndex : lexer.index, kind, message, args);
+		if (errorReportIndex >= 0) report(errorReportIndex, kind, message, args);
+		else report(lexer.current().pos(), lexer.index, kind, message, args);
 	}
 
 	public final void report(Expr pos, Kind kind, String message) {report(pos, kind, message, ArrayCache.OBJECTS);}
@@ -213,6 +219,9 @@ public class CompileContext {
 		int start = pos.getWordStart();
 		int end = pos.getWordEnd();
 		if (end == 0) start = end = lexer.index;
+		hasError |= compiler.report(new Diagnostic(file, kind, start, end, message, args));
+	}
+	public void report(int start, int end, Kind kind, String message, Object... args) {
 		hasError |= compiler.report(new Diagnostic(file, kind, start, end, message, args));
 	}
 
@@ -235,10 +244,10 @@ public class CompileContext {
 
 	public final void reportNoSuchType(Kind kind, Object owner) {
 		if (reportedType.add(owner))
-			report(kind, "symbol.error.noSuchSymbol", "symbol.type", owner, currentCodeBlockForReport());}
+			report(kind, "symbol.noSuchSymbol", "symbol.type", owner, currentCodeBlockForReport());}
 	public final void reportNoSuchType(Expr node, Kind kind, Object owner) {
 		if (reportedType.add(owner))
-			report(node, kind, "symbol.error.noSuchSymbol", "symbol.type", owner, currentCodeBlockForReport());
+			report(node, kind, "symbol.noSuchSymbol", "symbol.type", owner, currentCodeBlockForReport());
 	}
 	//endregion
 	// region 访问权限和final字段赋值检查
@@ -250,29 +259,29 @@ public class CompileContext {
 		InnerClasses.Item item = compiler.getInnerClassInfo(type).get(type.name());
 		if (item != null) {
 			modifier = item.modifier;
-			checkAccessModifier(modifier, type, null, "symbol.error.accessDenied.type", true);
+			checkAccessModifier(modifier, type, null, "symbol.accessDenied.type", true);
 		} else {
 			switch ((modifier&(Opcodes.ACC_PUBLIC|Opcodes.ACC_PROTECTED|Opcodes.ACC_PRIVATE))) {
-				default: report(Kind.ERROR, "lc.illegalModifier", Integer.toHexString(modifier));
+				default: report(Kind.ERROR, "semantic.resolution.illegalModifier", Integer.toHexString(modifier));
 				case Opcodes.ACC_PUBLIC: return;
 				case 0: if (!ClassUtil.arePackagesSame(type.name(), file.name()))
-					report(Kind.ERROR, "symbol.error.accessDenied.type", type.name(), "package-private", file.name());
+					report(Kind.ERROR, "symbol.accessDenied.type", type.name(), "package-private", file.name());
 			}
 		}
 	}
 	// 这里不会检测某些东西 (override, static has been written等)
 	public boolean checkAccessible(ClassDefinition type, Member node, boolean staticEnv, boolean report) {
 		if (staticEnv && (node.modifier()&Opcodes.ACC_STATIC) == 0) {
-			if (report) report(Kind.ERROR, "symbol.error.nonStatic.symbol", type.name(), node.name(), node instanceof FieldNode ? "symbol.field" : "invoke.method");
+			if (report) report(Kind.ERROR, "symbol.nonStatic.symbol", type.name(), node.name(), node instanceof FieldNode ? "symbol.field" : "invoke.method");
 			return false;
 		}
 
-		return type == file || checkAccessModifier(node.modifier(), type, node.name(), "symbol.error.accessDenied.symbol", report);
+		return type == file || checkAccessModifier(node.modifier(), type, node.name(), "symbol.accessDenied.symbol", report);
 	}
 	private boolean checkAccessModifier(int flag, ClassDefinition type, String node, String message, boolean report) {
 		String modifier;
 		switch ((flag & (Opcodes.ACC_PUBLIC|Opcodes.ACC_PROTECTED|Opcodes.ACC_PRIVATE))) {
-			default: throw ResolveException.ofIllegalInput("lc.illegalModifier", Integer.toHexString(flag));
+			default: throw ResolveException.ofIllegalInput("semantic.resolution.illegalModifier", Integer.toHexString(flag));
 			case Opcodes.ACC_PUBLIC: return true;
 			case Opcodes.ACC_PROTECTED:
 				if (ClassUtil.arePackagesSame(type.name(), file.name()) || instanceOf(file.name(), type.name())) return true;
@@ -299,7 +308,7 @@ public class CompileContext {
 		boolean constructor = inConstructor;
 		if (inStatic) {
 			if ((node.modifier()&Opcodes.ACC_STATIC) == 0)
-				report(Kind.ERROR, "symbol.error.nonStatic.symbol", file.name(), node.name(), "symbol.field");
+				report(Kind.ERROR, "symbol.nonStatic.symbol", file.name(), node.name(), "symbol.field");
 		} else if ((node.modifier()&Opcodes.ACC_STATIC) != 0) {
 			constructor = false;
 		}
@@ -308,15 +317,15 @@ public class CompileContext {
 			if (write) {
 				if (constructor) {
 					if (!constructorFields.remove(node)) {
-						report(Kind.ERROR, "symbol.error.field.writeAfterWrite", file.name(), node.name());
+						report(Kind.ERROR, "symbol.field.writeAfterWrite", file.name(), node.name());
 					}
 				} else {
-					report(Kind.ERROR, "symbol.error.field.writeFinal", file.name(), node.name());
+					report(Kind.ERROR, "symbol.field.writeFinal", file.name(), node.name());
 				}
 			} else {
 				if (constructor) {
 					if (constructorFields.contains(node)) {
-						report(Kind.ERROR, "symbol.error.field.readBeforeWrite", file.name(), node.name());
+						report(Kind.ERROR, "symbol.field.readBeforeWrite", file.name(), node.name());
 					}
 				}
 			}
@@ -348,7 +357,7 @@ public class CompileContext {
 		var list = compiler.getMethodList(type, name);
 		if (list == ComponentList.NOT_FOUND) {
 			int argc = callerForDebug instanceof Invoke a ? a.getArgumentCount() : Integer.MAX_VALUE;
-			report(callerForDebug, Kind.ERROR, "symbol.error.noSuchSymbol", name.equals("<init>") ? "invoke.constructor" : "invoke.method", name, "[symbol.type,\" \","+type.name()+"]", reportSimilarMethod(type, name, argc));
+			report(callerForDebug, Kind.ERROR, "symbol.noSuchSymbol", name.equals("<init>") ? "invoke.constructor" : "invoke.method", name, "[symbol.type,\" \","+type.name()+"]", reportSimilarMethod(type, name, argc));
 		}
 		return list;
 	}
@@ -416,7 +425,7 @@ public class CompileContext {
 		// 检查type是否已导入
 		if (type != null && importList.isRestricted() && importList.checkRestriction(compiler.resolve(type)) == null) {
 			// FIXME 这个检查和别名导入有冲突
-			report(Kind.ERROR, "lc.packageRestricted", type);
+			report(Kind.ERROR, "semantic.feature.import.restricted", type);
 		}
 	}
 
@@ -466,9 +475,9 @@ public class CompileContext {
 			List<IType> params = type1.children;
 
 			if (params.size() != count && (typeFlag & TF_ANYARGC) == 0) {
-				if (count == 0) report(Kind.ERROR, "symbol.error.generic.paramCount.0", type.rawType());
+				if (count == 0) report(Kind.ERROR, "symbol.generic.paramCount.0", type.rawType());
 				else if (params.size() != 1 || params.get(0) != Asterisk.anyGeneric) {
-					report(Kind.ERROR, "symbol.error.generic.paramCount", type.rawType(), params.size(), count);
+					report(Kind.ERROR, "symbol.generic.paramCount", type.rawType(), params.size(), count);
 					return type;
 				}
 			}
@@ -532,7 +541,7 @@ public class CompileContext {
 			while (x != null) {
 				var ic = compiler.getInnerClassInfo(info).get(x.owner);
 				if (ic == null || (info = compiler.resolve(ic.self)) == null) {
-					report(Kind.ERROR, "symbol.error.noSuchSymbol", "symbol.type", x.owner, "[symbol.type,\""+type1+"\"]");
+					report(Kind.ERROR, "symbol.noSuchSymbol", "symbol.type", x.owner, "[symbol.type,\""+type1+"\"]");
 					break;
 				}
 
@@ -544,8 +553,8 @@ public class CompileContext {
 				count = sign == null ? 0 : sign.typeParams.size();
 
 				if (x.children.size() != count) {
-					if (count == 0) report(Kind.ERROR, "symbol.error.generic.paramCount.0", ic.self);
-					else report(Kind.ERROR, "symbol.error.generic.paramCount", ic.self, x.children.size(), count);
+					if (count == 0) report(Kind.ERROR, "symbol.generic.paramCount.0", ic.self);
+					else report(Kind.ERROR, "symbol.generic.paramCount", ic.self, x.children.size(), count);
 				}
 
 				x = x.sub;
@@ -567,7 +576,7 @@ public class CompileContext {
 				return Asterisk.oneOf(type1.children);
 			}
 		} else if (count > 0) {
-			report((typeFlag & TF_NORAW) != 0 ? Kind.ERROR : Kind.WARNING, "symbol.warn.generic.rawTypes", type);
+			report((typeFlag & TF_NORAW) != 0 ? Kind.ERROR : Kind.WARNING, "symbol.generic.rawTypes", type);
 		}
 		return type;
 	}
@@ -635,9 +644,9 @@ public class CompileContext {
 					return "";
 				}
 
-				return "symbol.error.expression:[\""+desc+"\"]";
+				return "symbol.expression:[\""+desc+"\"]";
 			}
-			return "symbol.error.noSuchSymbol:[symbol.field,\""+desc+"\","+currentCodeBlockForReport()+"]";
+			return "symbol.noSuchSymbol:[symbol.field,\""+desc+"\","+currentCodeBlockForReport()+"]";
 		}
 		return anySuccess;
 	}
@@ -667,7 +676,7 @@ public class CompileContext {
 					field = fr.field;
 					break block;
 				}
-				return "symbol.error.noSuchSymbol:[symbol.field,"+name+",[symbol.type,\" \","+clz.name()+"],"+reportSimilarField(clz, name)+"]";
+				return "symbol.noSuchSymbol:[symbol.field,"+name+",[symbol.type,\" \","+clz.name()+"],"+reportSimilarField(clz, name)+"]";
 			}
 
 			Signature cSign = clz.getAttribute(clz.cp(), Attribute.SIGNATURE);
@@ -708,11 +717,11 @@ public class CompileContext {
 					return null;
 				}
 				// 不能解引用基本类型
-				return "symbol.error.derefPrimitive:"+type;
+				return "symbol.derefPrimitive:"+type;
 			}
 
 			clz = resolve(type);
-			if (clz == null) return "symbol.error.noSuchClass:".concat(type.toString());
+			if (clz == null) return "symbol.noSuchClass:".concat(type.toString());
 		}
 	}
 
@@ -917,11 +926,11 @@ public class CompileContext {
 	 * <tr><td>{@link TypeCast#UNBOXING}</td>      <td>2</td> <td>拆箱操作（如 Integer → int）</td></tr>
 	 * <tr><td>{@link TypeCast#BOXING}</td>        <td>3</td> <td>装箱操作（如 int → Integer）</td></tr>
 	 * <tr><td rowspan="3">可恢复错误</td>
-	 *     <td>{@link TypeCast#E_EXPLICIT_CAST}</td> <td>-1</td> <td>数值窄化（但是在JVM里都是int的情况）（如 int → char）</td></tr>
-	 * <tr><td>{@link TypeCast#E_NUMBER_DOWNCAST}</td><td>-2</td><td>数值窄化（如 double → float）</td></tr>
-	 * <tr><td>{@link TypeCast#E_DOWNCAST}</td>     <td>-3</td> <td>向下转型（如 Collection → ArrayList）</td></tr>
+	 *     <td>{@link TypeCast#IMPLICIT}</td> <td>-1</td> <td>数值窄化（但是在JVM里都是int的情况）（如 int → char）</td></tr>
+	 * <tr><td>{@link TypeCast#LOSSY}</td><td>-2</td><td>数值窄化（如 double → float）</td></tr>
+	 * <tr><td>{@link TypeCast#DOWNCAST}</td>     <td>-3</td> <td>向下转型（如 Collection → ArrayList）</td></tr>
 	 * <tr><td>致命错误</td>
-	 *     <td>{@link TypeCast#E_OBJ2INT}等</td>    <td>≤-4</td><td>不可恢复的类型错误（如 String → int）</td></tr>
+	 *     <td>{@link TypeCast#TO_PRIMITIVE}等</td>    <td>≤-4</td><td>不可恢复的类型错误（如 String → int）</td></tr>
 	 * </table>
 	 *
 	 * <p><b>转换代价（distance）规则 *主要用于{@link Inferrer}的方法重载优先级计算</b>：
@@ -953,8 +962,8 @@ public class CompileContext {
 	 *
 	 * @param lowest_limit 允许的最低转换等级
 	 *                    <ul>
-	 *                      <li>{@link TypeCast#E_NEVER}：允许任何转换，即便不合法</li>
-	 *                      <li>{@link TypeCast#E_DOWNCAST}：允许生成可行的转换</li>
+	 *                      <li>{@link TypeCast#IMPOSSIBLE}：允许任何转换，即便不合法</li>
+	 *                      <li>{@link TypeCast#DOWNCAST}：允许生成可行的转换</li>
 	 *                      <li>{@link TypeCast#UPCAST}：仅允许向上转换</li>
 	 *                    </ul>
 	 * @return 转换描述对象，包含：
@@ -1000,7 +1009,7 @@ public class CompileContext {
 		var cast = castTo(rType, toType, -8);
 		if (cast.type < 0) {
 			if (!rType.equals(rType = expr.minType())) {
-				cast = castTo(rType, toType, allow ? TypeCast.E_EXPLICIT_CAST : 0);
+				cast = castTo(rType, toType, allow ? TypeCast.IMPLICIT : 0);
 			} else {
 				var override = getOperatorOverride(expr, toType, assign);
 				if (override != null) return override;
@@ -1009,7 +1018,7 @@ public class CompileContext {
 			}
 		}
 
-		if (allow && cast.type == TypeCast.E_EXPLICIT_CAST) {
+		if (allow && cast.type == TypeCast.IMPLICIT) {
 			var number = ((roj.config.data.CEntry)expr.constVal()).asInt();
 			if (number < 0 || number > 65535)
 				report(Kind.ERROR, "typeCast.error.-2", rType, toType);
@@ -1031,7 +1040,7 @@ public class CompileContext {
 		}
 
 		var cast = (TypeCast.Cast) result;
-		if (cast.type >= TypeCast.E_EXPLICIT_CAST) {
+		if (cast.type >= TypeCast.IMPLICIT) {
 			expr.write(cw, cast);
 		}
 

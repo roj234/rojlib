@@ -15,7 +15,8 @@ final class FirstBlock extends Segment {
 		this.length = buf.wIndex() - off;
 	}
 
-	@Override protected boolean put(CodeWriter to, int segmentId) {
+	@Override
+	public boolean write(CodeWriter to, int segmentId) {
 		int newLen = buf.wIndex() - off;
 		int oldLen = length;
 		length = newLen;

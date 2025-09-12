@@ -10,14 +10,14 @@ import roj.compiler.diagnostic.Kind;
 import roj.compiler.diagnostic.TranslatableString;
 import roj.compiler.doc.Javadoc;
 import roj.compiler.plugins.annotations.AutoIncrement;
-import roj.config.Token;
-import roj.util.OperationDone;
 import roj.config.I18n;
 import roj.config.ParseException;
+import roj.config.Token;
 import roj.config.Tokenizer;
 import roj.io.IOUtil;
 import roj.text.CharList;
 import roj.text.TextUtil;
+import roj.util.OperationDone;
 
 import java.io.File;
 import java.io.IOException;
@@ -173,9 +173,9 @@ public final class JavaTokenizer extends Tokenizer {
 
 	public static I18n i18n;
 	static {
-		String path = System.getProperty("roj.lavac.i18n");
+		String path = System.getProperty("roj.compiler.i18n");
 		try {
-			i18n = new I18n(path == null ? IOUtil.getTextResourceIL("roj/compiler/kscript.lang") : IOUtil.readUTF(new File(path)));
+			i18n = new I18n(path == null ? IOUtil.getTextResourceIL("roj/compiler/zh-cn.yml") : IOUtil.readUTF(new File(path)));
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
@@ -277,7 +277,7 @@ public final class JavaTokenizer extends Tokenizer {
 			switch (w.type()) {
 				case lBrace: L++; break;
 				case rBrace: if (--L == 0) return pos; break;
-				case EOF: throw err("braceMismatch");
+				case EOF: throw err("lexer.brace.mismatch");
 			}
 		}
 	}
@@ -469,8 +469,8 @@ public final class JavaTokenizer extends Tokenizer {
 
 	public void setCw(MethodWriter cw) {
 		if (!stack.containsValue(cw)) {
-			stack.putByValue(cw, stack.size());
-			if (lines != null) lines.add(cw.__attrLabel(), LN);
+			stack.put(stack.size(), cw);
+			if (lines != null) lines.add(cw.createExternalLabel(), LN);
 		} else {
 			int id = stack.getByValue(cw);
 			while (++id < stack.size()) stack.remove(id);
@@ -479,17 +479,7 @@ public final class JavaTokenizer extends Tokenizer {
 	}
 
 	public void setLines(LineNumberTable _new) {
-		if (lines != null) throw new IllegalStateException("excepting a proper reset after a failed parsing");
 		lines = _new;
-		stack.clear();
-	}
-	public void getLines(MethodWriter cw) {
-		assert labelGen == cw;
-
-		if (labelGen.bci() == lines.lastBci()) lines.list.pop();
-		if (!lines.writeIgnore()) cw.lines = lines;
-
-		lines = null;
 		labelGen = null;
 		stack.clear();
 	}
@@ -499,8 +489,12 @@ public final class JavaTokenizer extends Tokenizer {
 		int line = LN;
 		super.afterWord();
 		if (line != LN) {
-			if (lines != null && (labelGen.bci() != lines.lastBci())) {
-				lines.add(labelGen.__attrLabel(), LN);
+			if (lines != null) {
+				if (labelGen.bci() == lines.lastBci()) {
+					lines.list.getLast().setLine(LN);
+				} else {
+					lines.add(labelGen.createExternalLabel(), LN);
+				}
 			}
 		}
 	}
@@ -511,7 +505,7 @@ public final class JavaTokenizer extends Tokenizer {
 	public final Token except(short type) throws ParseException {
 		Token w = next();
 		if (w.type() == type) return w;
-		String s = type == LITERAL ? "type.literal" : byId(type);
+		String s = type == LITERAL ? "lexer.identifier" : byId(type);
 		throw err("unexpected_2:[\""+w.text()+"\",\""+s+"\"]");
 	}
 

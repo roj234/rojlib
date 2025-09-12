@@ -90,7 +90,7 @@ final class MethodListSingle extends ComponentList {
 							if (isVarargs && i == declaredArguments.size() - 1) break;
 
 							//弃用，按"参数数量不同"错误走error分支
-							//ctx.report(Kind.ERROR, "invoke.error.paramMissing", owner, method.name(), paramName);
+							//ctx.report(Kind.ERROR, "invoke.paramMissing", owner, method.name(), paramName);
 							break error;
 						}
 
@@ -106,7 +106,7 @@ final class MethodListSingle extends ComponentList {
 
 			// 如果参数调用有剩的
 			if (!namedArguments.isEmpty()) {
-				ctx.report(Kind.ERROR, "invoke.error.paramExtra", owner, method.name(), namedArguments);
+				ctx.report(Kind.ERROR, "invoke.paramExtra", owner, method.name(), namedArguments);
 				ctx.tmpMap1.clear(); // GC
 				return null;
 			}

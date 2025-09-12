@@ -42,7 +42,7 @@ final class ArrayAccess extends LeftValue {
 			Expr override = ctx.getOperatorOverride(array, index, JavaTokenizer.lBracket);
 			if (override != null) return override;
 
-			ctx.report(this, Kind.ERROR, "arrayGet.error.notArray", type);
+			ctx.report(this, Kind.ERROR, "arrayGet.notArray", type);
 			return NaE.resolveFailed(this);
 		}
 		cast = ctx.castTo(index.type(), Type.primitive(Type.INT), 0);
@@ -51,11 +51,11 @@ final class ArrayAccess extends LeftValue {
 
 		if (array.isConstant()) {
 			if (index.isConstant()) {
-				ctx.report(this, Kind.WARNING, "arrayGet.warn.constant");
+				ctx.report(this, Kind.WARNING, "arrayGet.constant");
 				return constant(type(), ((Object[])array.constVal())[((CEntry) index.constVal()).asInt()]);
 			}
 
-			if (!ctx.inStatic) ctx.report(this, Kind.NOTE, "arrayGet.note.uselessCreation");
+			if (!ctx.inStatic) ctx.report(this, Kind.NOTE, "arrayGet.maybeStatic");
 		}
 		return this;
 	}

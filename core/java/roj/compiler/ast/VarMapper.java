@@ -46,15 +46,19 @@ final class VarMapper {
 			Endpoint p = list[j].anchor();
 			while (p != null) {
 				Variable v = p.interval();
-				if (p.isEnd()) {
+				boolean end = p.isEnd();
+				p = p.next();
+
+				if (end) {
+					if (curVars.remove(v)) continue;
+
 					int size = v.type.rawType().length();
 
 					if (v.slot == id+size-1) id -= size;
 					else freeId.addRange(v.slot, v.slot+size);
 				} else {
-					curVars.add(p.interval());
+					curVars.add(v);
 				}
-				p = p.next();
 			}
 
 			for (int i = 0; i < curVars.size(); i++) {
@@ -73,10 +77,11 @@ final class VarMapper {
 					v.slot = id;
 					id += size;
 				} else {
+					v.slot = nextId;
 					freeId.removeRange(nextId, nextId+size);
+
 					var prev = known.get(nextId);
 					if (prev != null) prev.end = v.start;
-					v.slot = nextId;
 				}
 				known.put(v.slot, v);
 

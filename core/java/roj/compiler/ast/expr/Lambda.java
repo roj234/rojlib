@@ -21,10 +21,10 @@ import roj.compiler.diagnostic.Kind;
 import roj.compiler.resolve.NestContext;
 import roj.compiler.resolve.ResolveException;
 import roj.compiler.resolve.TypeCast;
-import roj.util.function.Flow;
 import roj.config.ParseException;
 import roj.text.TextUtil;
 import roj.util.Helpers;
+import roj.util.function.Flow;
 
 import java.util.Collections;
 import java.util.List;
@@ -55,8 +55,8 @@ public final class Lambda extends Expr {
 	 * lambda类型不是给TypeCast用的！
 	 * @see roj.compiler.resolve.Inferrer#cast(IType, IType)
 	 */
-	public static Asterisk typedLambda(List<IType> arguments) {return new Asterisk("lambdaArg:["+arguments.size()+"]", arguments);}
-	public static Asterisk untypedLambda(int argc) {return new Asterisk("lambdaArg:["+argc+"]", null);}
+	public static Asterisk typedLambda(List<IType> arguments) {return new Asterisk("lambda.arg:["+arguments.size()+"]", arguments);}
+	public static Asterisk untypedLambda(int argc) {return new Asterisk("lambda.arg:["+argc+"]", null);}
 	public static IType typeOf(List<VariableDeclare> args) {
 		var argc = args.size();
 		if (argc == 0) return untypedLambda[0];
@@ -190,7 +190,7 @@ public final class Lambda extends Expr {
 				methodRef.write(cw);
 				lambda入参.add(0, methodRef.type().rawType());
 			} else if (!(methodRef instanceof Literal)) {
-				ctx.report(this, Kind.WARNING, "symbol.warn.static_on_half", lambda实现所属的类, methodName, this);
+				ctx.report(this, Kind.WARNING, "symbol.isStatic", lambda实现所属的类, methodName, this);
 			}
 		} else {
 			ctx.file.methods.add(impl);

@@ -460,7 +460,7 @@ public final class ExprParser {
 							firstName = w.text();
 							wr.except(colon);
 						}
-						if (w.type() != rBrace) ue(wr, w.text(), "type.literal");
+						if (w.type() != rBrace) ue(wr, w.text(), "lexer.identifier");
 						cur = npl;
 						break endValueConv;
 					}
@@ -551,7 +551,7 @@ public final class ExprParser {
 										IType type = ctx.file.readGenericPart(w, ((MemberAccess) cur).toClassRef().owner);
 
 										w = wr.next();
-										if (w.type() != LITERAL) throw wr.err("unexpected_2:[\""+w.text()+"\",type.literal]");
+										if (w.type() != LITERAL) throw wr.err("unexpected_2:[\""+w.text()+"\",lexer.identifier]");
 										return new VariableDeclare(type, w.text());
 									}
 								}
@@ -589,7 +589,7 @@ public final class ExprParser {
 						// '小于'操作符
 						if (waitDot) break endValueConvNrt;
 
-						if (cur == null) ctx.report(Kind.ERROR, "noExpression");
+						if (cur == null) ctx.report(Kind.ERROR, "expr.illegalStart");
 
 						// 方法的泛型边界
 						// 不能是<>
@@ -617,16 +617,16 @@ public final class ExprParser {
 						waitDot = true;
 					break;}
 					case -2://lBracket a[b]
-						if (!waitDot) ue(wr, w.text(), "type.literal");
+						if (!waitDot) ue(wr, w.text(), "lexer.identifier");
 						var index = parse1(STOP_RMB|SKIP_RMB);
-						if (index == null) chain(cur, ";[", 0); // 无意义，完全可以在这里报错
+						if (index == null) chain(cur, MemberAccess.EMPTY_BRACKET_MAGIC, 0);
 						else cur = accessArray(cur, index);
 					break;
 					case -3://optional_chaining
 						opFlag |= OP_OPTIONAL;
 					//fallthrough
 					case -4://dot
-						if (!waitDot) ue(wr, w.text(), "type.literal");
+						if (!waitDot) ue(wr, w.text(), "lexer.identifier");
 						waitDot = false;
 					break;
 					case -5://LITERAL => a.b
@@ -645,7 +645,7 @@ public final class ExprParser {
 						ue(wr, w.text(), ".");
 					break;
 					case -6:{//lParen a(b...)
-						if (!waitDot) ue(wr, w.text(), "type.literal");
+						if (!waitDot) ue(wr, w.text(), "lexer.identifier");
 
 						int wordStart = ctx.lexer.prevIndex;
 						List<Expr> args = tmp();
@@ -680,7 +680,7 @@ public final class ExprParser {
 							break endValueConv;
 						}
 					case 0://其他token
-						if (cur != null && !waitDot) ue(wr, w.text(), "type.literal");
+						if (cur != null && !waitDot) ue(wr, w.text(), "lexer.identifier");
 					break endValueConvNrt;
 
 					case -7: {//assign及其变种
@@ -700,7 +700,7 @@ public final class ExprParser {
 						else cur = postfixOp(w.type(), vn);
 					break endValueConv;
 					case -9://method_referent this::stop
-						if (!waitDot) ue(wr, w.text(), "type.literal");
+						if (!waitDot) ue(wr, w.text(), "lexer.identifier");
 						cur = new Lambda(cur, wr.except(LITERAL).text());
 					break endValueConv;
 
@@ -826,7 +826,7 @@ public final class ExprParser {
 		if (hasNullExpr) cur = null;
 
 		if (cur == null && (flag&NAE) != 0) {
-			if (!hasNullExpr) ctx.report(Kind.ERROR, "noExpression");
+			if (!hasNullExpr) ctx.report(Kind.ERROR, "expr.illegalStart");
 			cur = NaE.NOEXPR;
 		}
 
@@ -876,7 +876,7 @@ public final class ExprParser {
 	private boolean hasNullExpr;
 	private void checkNullExpr(Expr cur) {
 		if (cur == null && !hasNullExpr) {
-			ctx.report(Kind.ERROR, "noExpression");
+			ctx.report(Kind.ERROR, "expr.illegalStart");
 			hasNullExpr = true;
 		}
 	}

@@ -47,6 +47,8 @@ public final class VisMap {
 		entryHook.clear();
 	}
 
+	public boolean isTopScope() {return entryHook.isEmpty();}
+
 	// 进入代码块
 	public void enter(@Nullable Scope immediateLabel) {
 		entryHook.add(immediateLabel);

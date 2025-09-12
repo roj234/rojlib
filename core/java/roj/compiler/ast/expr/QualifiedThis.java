@@ -49,15 +49,15 @@ final class QualifiedThis extends Expr {
 
 			nestDepth = 0;
 			if (!type.owner().equals(ctx.file.name())) {
-				ctx.report(this, Kind.ERROR, "encloseRef.noRef", type);
+				ctx.report(this, Kind.ERROR, "qualifiedThis.noNested", type);
 			}
 		} else {
 			var thisType = ctx.ep.This().resolve(ctx).type();
 			var cast = ctx.caster.checkCast(thisType, type);
 			if (cast.type < 0) {
-				ctx.report(this, Kind.ERROR, "encloseRef.nds", thisType, type);
+				ctx.report(this, Kind.ERROR, "qualifiedThis.inaccessible", thisType, type);
 			} else if (cast.distance > 1 || checkInterfaceInherit(ctx, type)) {
-				ctx.report(this, Kind.INCOMPATIBLE, "encloseRef.tooFar", thisType, type);
+				ctx.report(this, Kind.INCOMPATIBLE, "qualifiedThis.indirect", thisType, type);
 			}
 		}
 		return this;

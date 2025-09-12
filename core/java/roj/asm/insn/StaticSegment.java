@@ -23,8 +23,9 @@ public final class StaticSegment extends Segment {
 	public StaticSegment(DynByteBuf data) { array = data; }
 	public StaticSegment(byte... data) { array = data; length = (char) data.length; }
 	public static StaticSegment emptyWritable() {return new StaticSegment();}
+	public static StaticSegment emptyPlaceholder() {return new StaticSegment(ArrayCache.BYTES);}
 
-	@Override public boolean put(CodeWriter to, int segmentId) {
+	@Override public boolean write(CodeWriter to, int segmentId) {
 		if (array instanceof DynByteBuf b) to.bw.put(b);
 		else to.bw.put((byte[]) array,off,length);
 		return false;

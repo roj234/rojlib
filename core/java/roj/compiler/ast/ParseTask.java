@@ -144,7 +144,7 @@ public interface ParseTask {
 					if (ctx.fieldDFS) return;
 
 					if (!file.finalFields.remove(f)) {
-						ctx.report(Kind.ERROR, "symbol.error.field.writeAfterWrite", file.name(), f.name());
+						ctx.report(Kind.ERROR, "symbol.field.writeAfterWrite", file.name(), f.name());
 						return;
 					}
 				}

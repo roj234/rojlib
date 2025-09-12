@@ -14,7 +14,6 @@ import roj.util.Helpers;
 
 import java.io.IOException;
 import java.util.List;
-import java.util.Locale;
 
 /**
  * @author Roj234
@@ -304,7 +303,7 @@ public final class ImportList {
 		if (entry != null) {
 			Object[] arr = entry.getValue();
 			if (arr == null) {
-				ctx.report(Kind.ERROR, "dotGet.incompatible.plural", name, importStaticClass);
+				ctx.report(Kind.ERROR, "memberAccess.incompatible.plural", name, importStaticClass);
 				return null;
 			}
 

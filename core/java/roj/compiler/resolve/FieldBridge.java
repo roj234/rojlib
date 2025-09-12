@@ -39,7 +39,7 @@ public final class FieldBridge extends FieldAccessHook {
 		} else {
 			if (readAccessor < 0) {
 				if (readAccessor == -2) {
-					CompileContext.get().report(Kind.ERROR, "symbol.error.field.notReadable", owner, fn.name());
+					CompileContext.get().report(Kind.ERROR, "symbol.field.notReadable", owner, fn.name());
 					return;
 				}
 				var _realOwner = (CompileUnit) this.owner;

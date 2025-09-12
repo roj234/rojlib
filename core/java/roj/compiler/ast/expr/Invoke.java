@@ -98,7 +98,7 @@ public final class Invoke extends Expr {
 		node.expr = method.name().equals("<init>") ? Type.klass(method.owner()) : expr;
 		node.method = method;
 		node.argTypes = Helpers.cast(Type.methodDesc(method.rawDesc()));
-		// 不可能在生成的代码中出现，仅供插件使用（akka不需要owner信息判断也能知道这是一个接口里的类）
+		// 不可能在生成的代码中出现，仅供插件使用（a.k.a 不需要owner信息判断也能知道这是一个接口里的类）
 		if ((method.modifier&ACC_INTERFACE) != 0) flag |= INTERFACE_CLASS;
 		if (((method.modifier&Opcodes.ACC_STATIC) == 0) == (expr == null)) throw new IllegalArgumentException("静态参数错误:"+node);
 		if (args.size() != node.argTypes.size()-1) throw new IllegalArgumentException("参数数量错误:"+node);
@@ -195,6 +195,7 @@ public final class Invoke extends Expr {
 							// 构造器
 							methodName = "<init>";
 							expr = Type.klass(methodOwner.name());
+							hasSideEffect = true;
 							break block;
 						}
 					}
@@ -239,7 +240,7 @@ public final class Invoke extends Expr {
 				// 注意因为lexer会把数字后面的.当成小数所以要括号或加空格
 				methodOwner = ctx.getPrimitiveMethod(instanceType);
 				if (methodOwner == null) {
-					ctx.report(this, Kind.ERROR, "symbol.error.derefPrimitive", instanceType);
+					ctx.report(this, Kind.ERROR, "symbol.derefPrimitive", instanceType);
 					return NaE.resolveFailed(this);
 				} else {
 					// 转换为静态方法调用，基本类型变成第一个参数
@@ -258,7 +259,7 @@ public final class Invoke extends Expr {
 			}
 		} else if (expr.getClass() == This.class) {// this / super
 			if (ctx.inConstructor && ctx.thisUsed) {
-				ctx.report(this, Kind.ERROR, "invoke.error.constructor", expr);
+				ctx.report(this, Kind.ERROR, "invoke.constructor.thisUsed", expr);
 				return NaE.resolveFailed(this);
 			}
 
@@ -304,7 +305,7 @@ public final class Invoke extends Expr {
 
 			int check_flag = ctx.enumConstructor ? ACC_ABSTRACT|ACC_INTERFACE : ACC_ABSTRACT|ACC_INTERFACE|ACC_ENUM;
 			if ((methodOwner.modifier()&check_flag) != 0) {
-				ctx.report(this, Kind.ERROR, (methodOwner.modifier()&ACC_ENUM) != 0 ? "invoke.error.instantiationEnum" : "invoke.error.instantiationAbstract", methodOwnerName);
+				ctx.report(this, Kind.ERROR, (methodOwner.modifier()&ACC_ENUM) != 0 ? "invoke.instantiationEnum" : "invoke.instantiationAbstract", methodOwnerName);
 				return NaE.resolveFailed(this);
 			}
 
@@ -382,7 +383,7 @@ public final class Invoke extends Expr {
 			if ((method.modifier&Opcodes.ACC_STATIC) != 0) {
 				if (expr != null) {
 					// 如果静态函数调用的取值表达式有副作用，那么警告"不应当由表达式限定"
-					if (hasSideEffect) ctx.report(this, Kind.SEVERE_WARNING, "symbol.warn.static_on_half", method.owner(), method.name(), "invoke.method");
+					if (hasSideEffect) ctx.report(this, Kind.SEVERE_WARNING, "symbol.isStatic", method.owner(), method.name(), "invoke.method");
 					else expr = null;
 				}
 			} else if ((method.modifier&Opcodes.ACC_PRIVATE) != 0) {
@@ -431,7 +432,7 @@ public final class Invoke extends Expr {
 								elements.size() < sizeContract.getInt("min", 0)
 							||  elements.size() > sizeContract.getInt("max", Integer.MAX_VALUE)
 							||  elements.size() / multiplyOf * multiplyOf != elements.size()) {
-							ctx.report(Kind.ERROR, "invoke.error.varargCount", sizeContract, argc);
+							ctx.report(Kind.ERROR, "invoke.varargCount", sizeContract, argc);
 						}
 					}
 
@@ -569,8 +570,10 @@ public final class Invoke extends Expr {
 		} else {
 			cw.invoke(opcode, method);
 			if (ctx.inConstructor && expr instanceof This) {
+				if (!ctx.bp.vis().isTopScope())
+					ctx.report(Kind.ERROR, "invoke.constructor.childScope", expr);
 				ctx.onCallConstructor(method);
-				cw.addPlaceholder(MethodWriter.GLOBAL_INIT_INSERT);
+				cw.insertGlobalInit(ctx);
 			}
 		}
 

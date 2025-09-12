@@ -37,6 +37,7 @@ import roj.util.ArrayCache;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
 import roj.util.Helpers;
+import roj.util.function.Flow;
 
 import java.util.*;
 
@@ -250,6 +251,7 @@ public abstract class CompileUnit extends ClassNode implements ClassResource {
 	// region 阶段1 类的结构 辅助方法 resolve MODIFIER TYPE GENERIC ANNOTATION
 	/**
 	 * 读取并验证修饰符序列
+	 * 250913: 现在static和abstract不冲突了，因为class，你需要手动处理它
 	 *
 	 * @param mask 允许的修饰符掩码（使用ACC_*或_ACC_*常量）
 	 * @return 有效的访问标志组合
@@ -279,7 +281,7 @@ public abstract class CompileUnit extends ClassNode implements ClassResource {
 				case STATIC -> 		f = ( 0b100000 << 25) | ACC_STATIC;
 				case CONST -> 		f = ( 0b110001 << 25) | ACC_PUBLIC | ACC_STATIC | ACC_FINAL;
 				case DEFAULT -> 	f = ( 0b110110 << 25) | _ACC_DEFAULT;
-				case ABSTRACT -> 	f = ( 0b111110 << 25) | ACC_ABSTRACT;
+				case ABSTRACT -> 	f = ( 0b011110 << 25) | ACC_ABSTRACT;
 				case SEALED ->      f = (0b1000000 << 25) | _ACC_SEALED;
 				case NON_SEALED ->  f = (0b1000000 << 25) | _ACC_NON_SEALED;
 				case STRICTFP -> 	f = ACC_STRICT; // on method, cannot be used with abstract
@@ -333,7 +335,7 @@ public abstract class CompileUnit extends ClassNode implements ClassResource {
 		IType type = FastPrimitive.get(w.type());
 
 		if (type == null) {
-			if (w.type() != LITERAL) throw wr.err("type.illegalType:[\""+w.text()+"\"]");
+			if (w.type() != LITERAL) throw wr.err("type.illegalStart:[\""+w.text()+"\"]");
 			wr.retractWord();
 
 			String klass = readRef();
@@ -364,7 +366,7 @@ public abstract class CompileUnit extends ClassNode implements ClassResource {
 			}
 
 			if (arrLen > 0) {
-				if (arrLen > 255) throw wr.err("type.arrayDepth");
+				if (arrLen > 255) throw wr.err("type.arrayDepthExceeded");
 				if (type.isPrimitive()) {
 					if (type.rawType().type == Type.VOID && (flags&TYPE_ALLOW_VOID) == 0)
 						ctx.report(Kind.ERROR, "type.voidNotAllowed");
@@ -378,7 +380,7 @@ public abstract class CompileUnit extends ClassNode implements ClassResource {
 		if (type.isPrimitive()) {
 			if ((flags & TYPE_PRIMITIVE) == 0)
 				ctx.report(Kind.ERROR, "type.primitiveNotAllowed");
-			if (type.rawType().type == Type.VOID && (flags&TYPE_ALLOW_VOID) == 0)
+			if (type.getActualType() == Type.VOID && (flags&TYPE_ALLOW_VOID) == 0)
 				ctx.report(Kind.ERROR, "type.voidNotAllowed");
 		}
 		return type;
@@ -681,7 +683,7 @@ public abstract class CompileUnit extends ClassNode implements ClassResource {
 		// extends
 		var pInfo = importList.resolve(ctx, parent());
         if (pInfo == null) {
-			ctx.report(Kind.ERROR, "symbol.error.noSuchSymbol", "symbol.type", parent(), "[symbol.type,\" \","+name+", \" \", cu.unknown.super]");
+			ctx.report(Kind.ERROR, "symbol.noSuchSymbol", "symbol.type", parent(), "[symbol.type,\" \","+name+", \" \", cu.unknown.super]");
 		} else {
             int acc = pInfo.modifier;
 			if (0 != (acc & ACC_FINAL)) {
@@ -699,7 +701,7 @@ public abstract class CompileUnit extends ClassNode implements ClassResource {
 			String iname = itfs.get(i).value().str();
 			var info = importList.resolve(ctx, iname);
             if (info == null) {
-				ctx.report(Kind.ERROR, "symbol.error.noSuchSymbol", "symbol.type", iname, "[symbol.type,\" \","+name+", \" \", [cu.unknown.interface, "+i+"]]");
+				ctx.report(Kind.ERROR, "symbol.noSuchSymbol", "symbol.type", iname, "[symbol.type,\" \","+name+", \" \", [cu.unknown.interface, "+i+"]]");
 			} else {
                 int acc = info.modifier;
                 if (0 == (acc & ACC_INTERFACE)) {
@@ -712,17 +714,18 @@ public abstract class CompileUnit extends ClassNode implements ClassResource {
 
 		// permits
 		if ((extraModifier&_ACC_SEALED) != 0) {
-			var ps = (ClassListAttribute) getAttribute("PermittedSubclasses");
+			var subclasses = (ClassListAttribute) getAttribute("PermittedSubclasses");
+			if (subclasses != null) {
+				List<String> value = subclasses.value;
+				for (int i = 0; i < value.size(); i++) {
+					String type = value.get(i);
+					var info = importList.resolve(ctx, type);
 
-			@SuppressWarnings("DataFlowIssue") List<String> value = ps.value;
-			for (int i = 0; i < value.size(); i++) {
-				String type = value.get(i);
-				var info = importList.resolve(ctx, type);
-
-				if (info == null) {
-					ctx.report(Kind.ERROR, "symbol.error.noSuchSymbol", "symbol.type", type, "[symbol.type,\" \","+name+", \" \", [cu.unknown.permits, "+i+"]]");
-				} else {
-					value.set(i, info.name());
+					if (info == null) {
+						ctx.report(Kind.ERROR, "symbol.noSuchSymbol", "symbol.type", type, "[symbol.type,\" \","+name+", \" \", [cu.unknown.permits, "+i+"]]");
+					} else {
+						value.set(i, info.name());
+					}
 				}
 			}
 		}
@@ -760,7 +763,7 @@ public abstract class CompileUnit extends ClassNode implements ClassResource {
 	private void resolveAnnotationType(CompileContext ctx, AnnotationPrimer a) {
 		var type = importList.resolve(ctx, a.type());
 		if (type == null) {
-			ctx.report(a.pos, Kind.ERROR, "symbol.error.noSuchSymbol", "symbol.type", a.type(), ctx.currentCodeBlockForReport());
+			ctx.report(a.pos, Kind.ERROR, "symbol.noSuchSymbol", "symbol.type", a.type(), ctx.currentCodeBlockForReport());
 		} else {
 			a.setType(type.name());
 		}
@@ -858,9 +861,19 @@ public abstract class CompileUnit extends ClassNode implements ClassResource {
 
 		// 检查permits的子类是否真的继承了我
 		if ((extraModifier&_ACC_SEALED) != 0) {
-			var ps = (ClassListAttribute) getAttribute("PermittedSubclasses");
+			var subclasses = (ClassListAttribute) getAttribute("PermittedSubclasses");
 
-			@SuppressWarnings("DataFlowIssue") List<String> value = ps.value;
+			if (subclasses == null) {
+				subclasses = new ClassListAttribute(Attribute.PermittedSubclasses);
+				addAttribute(subclasses);
+
+				Flow.of(ctx.compiler.getDirectInheritorFor(name())).map(ClassNode::name).forEach(subclasses.value::add);
+				if (subclasses.value.isEmpty()) {
+					ctx.report(Kind.ERROR, "cu.sealed.noPermits");
+				}
+			}
+
+			List<String> value = subclasses.value;
 			for (int i = 0; i < value.size(); i++) {
 				String type = value.get(i);
 				var info = ctx.compiler.resolve(type);
@@ -1471,10 +1484,10 @@ public abstract class CompileUnit extends ClassNode implements ClassResource {
 					List<IType> itThrows = overrideGenericInfo.getExceptions(ctx);
 					outer:
 					for (IType f : myThrows) {
-						if (ctx.castTo(f, Types.RUNTIME_EXCEPTION, TypeCast.E_NEVER).type == 0) continue;
+						if (ctx.castTo(f, Types.RUNTIME_EXCEPTION, TypeCast.IMPOSSIBLE).type == 0) continue;
 
 						for (IType type : itThrows) {
-							TypeCast.Cast c = ctx.castTo(f, type, TypeCast.E_NEVER);
+							TypeCast.Cast c = ctx.castTo(f, type, TypeCast.IMPOSSIBLE);
 							if (c.type == 0) continue outer;
 						}
 
@@ -1596,13 +1609,13 @@ public abstract class CompileUnit extends ClassNode implements ClassResource {
 		for (int i = 0; i < myPar.size(); i++) {
 			Type from = myPar.get(i);
 			c.varLoad(from, base);
-			ctx.castTo(from, itPar.get(i), TypeCast.E_DOWNCAST).write(c);
+			ctx.castTo(from, itPar.get(i), TypeCast.DOWNCAST).write(c);
 			base += from.length();
 		}
 
 		c.invoke(it.name().equals("<init>") ? INVOKESPECIAL : (it.modifier&ACC_STATIC) == 0 ? INVOKEVIRTUAL : INVOKESTATIC, it);
 
-		ctx.castTo(it.returnType(), my.returnType(), TypeCast.E_DOWNCAST).write(c);
+		ctx.castTo(it.returnType(), my.returnType(), TypeCast.DOWNCAST).write(c);
 		if (end) {
 			c.insn(my.returnType().getOpcode(IRETURN));
 			c.finish();
@@ -1803,11 +1816,11 @@ public abstract class CompileUnit extends ClassNode implements ClassResource {
 		return clinit;
 	}
 	/**
-	 * 获取或创建全局初始化块的方法写入器。
+	 * 获取或创建实例共有初始化块的方法写入器。
 	 * <p>
-	 * 全局初始化块用于收集类中所有静态字段初始化之外的初始化逻辑。
+	 * 实例共有初始化块用于收集类中所有{ ... }块的初始化逻辑。
 	 *
-	 * @return 全局初始化块的方法写入器实例
+	 * @return 实例共有初始化块的方法写入器实例
 	 */
 	public MethodWriter getGlobalInit() {
 		// 隐式构造器会主动设置这个，不再需要额外检测
@@ -1873,7 +1886,7 @@ public abstract class CompileUnit extends ClassNode implements ClassResource {
 	private void serializeGlInit() {
 		if (glInitBytes == null) {
 			glinit.computeFrames(Code.COMPUTE_SIZES);
-			glInitBytes = glinit.writeTo();
+			glInitBytes = glinit.serialize();
 			glStack = glInitBytes.readChar();
 			glLocal = glInitBytes.readChar();
 			glInitBytes.rIndex += 4;
@@ -1907,11 +1920,11 @@ public abstract class CompileUnit extends ClassNode implements ClassResource {
 				return;
 			}
 
-			int moveCount;
-			if ((moveCount = target.getPlaceholderId(MethodWriter.GLOBAL_INIT_INSERT)) != 0) {
-				target.replaceSegment(moveCount, new StaticSegment(glInitBytes));
+			int insertAt = target.ctx.globalInitInsertTo;
+			if (insertAt != 0) {
+				target.replaceSegment(insertAt, new StaticSegment(glInitBytes));
 			} else {
-				moveCount = target.nextSegmentId();
+				insertAt = target.nextSegmentId();
 				target.addSegment(new StaticSegment(glInitBytes));
 			}
 			target.visitSizeMax(glStack, glLocal);
@@ -1919,7 +1932,7 @@ public abstract class CompileUnit extends ClassNode implements ClassResource {
 			if (glinit.lines != null) {
 				for (var item : glinit.lines.list) {
 					Label pos = new Label(item.pos);
-					pos.__move(moveCount);
+					pos.__move(insertAt);
 					target._addLabel(pos);
 					lines.add(pos, item.getLine());
 				}
@@ -1951,7 +1964,7 @@ public abstract class CompileUnit extends ClassNode implements ClassResource {
 		initAssert.field(PUTSTATIC, this, fid);
 
 		if (clinit != initAssert) {
-			clinit.insertBefore(initAssert.writeTo());
+			clinit.insertBefore(initAssert.serialize());
 		}
 		return fid;
 	}

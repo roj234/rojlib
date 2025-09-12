@@ -11,7 +11,7 @@
   * extraPath 允许访问的路径前缀
 
 上述功能不依赖SecurityManager  
-虽然并没有办法保证真正的安全(akka 随便造)  
+虽然并没有办法保证真正的安全(a.k.a 随便造)  
  * method hook可能没写全
  * JVM本来也不以安全著称，绝对安全连docker也不够，群友觉得VM都不够要搞物理隔离了  
 

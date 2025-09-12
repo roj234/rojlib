@@ -26,7 +26,7 @@ import java.util.Map;
 public final class Inferrer {
 	public static final MethodResult
 		FAIL_ARGCOUNT = new MethodResult(-97, ArrayCache.OBJECTS),
-		FAIL_GENERIC = new MethodResult(TypeCast.E_GEN_PARAM_COUNT, ArrayCache.OBJECTS);
+		FAIL_GENERIC = new MethodResult(TypeCast.GENERIC_PARAM_COUNT, ArrayCache.OBJECTS);
 
 	private static final int LEVEL_DEPTH = 5120;
 
@@ -156,7 +156,7 @@ public final class Inferrer {
 			distance += LEVEL_DEPTH*2;
 
 			IType type = mpar.get(vararg);
-			if (type.array() == 0) throw ResolveException.ofIllegalInput("inferrer.illegalVararg", mn.owner(), mn.name());
+			if (type.array() == 0) throw ResolveException.ofIllegalInput("semantic.resolution.illegalVararg", mn.owner(), mn.name());
 			IType componentType = TypeHelper.componentType(type);
 
 			if (inSize == vararg) {
@@ -213,8 +213,8 @@ public final class Inferrer {
 
 			var cast = overrideMode ? overrideCast(from, to) : cast(from, to);
 			switch (cast.type) {
-				case TypeCast.E_NUMBER_DOWNCAST: distance += LEVEL_DEPTH; break;
-				case TypeCast.E_EXPLICIT_CAST: if (_minCastAllow < 0) {distance += cast.distance; break;}
+				case TypeCast.LOSSY: distance += LEVEL_DEPTH; break;
+				case TypeCast.IMPLICIT: if (_minCastAllow < 0) {distance += cast.distance; break;}
 				default: return FAIL(i, from, to, cast);
 
 				// 装箱/拆箱 第二步
@@ -262,7 +262,7 @@ public final class Inferrer {
 			LavaCompiler.debugLogger().warn("Unknown from type: "+from);
 		}
 
-		return TypeCast.ERROR(TypeCast.E_NEVER);
+		return TypeCast.ERROR(TypeCast.IMPOSSIBLE);
 	}
 	private TypeCast.Cast cast(IType from, IType to) {
 		int lambdaArgCount = Lambda.getLambdaArgc(from);

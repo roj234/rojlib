@@ -28,7 +28,7 @@ final class Switch extends Expr {
 	public Switch(SwitchNode node) {this.node = node;}
 
 	@Override
-	public String toString() {return "<SwitchExpr> "+node;}
+	public String toString() {return "switch "+node;}
 
 	@Override
 	public Expr resolve(CompileContext ctx) throws ResolveException {
@@ -51,7 +51,7 @@ final class Switch extends Expr {
 		type = node.sval.type();
 		if (coveredAll >= 0 && !type.isPrimitive()) {
 			var info = ctx.resolve(type);
-			if (info == null) throw new IllegalStateException("parent node "+node.sval+" did not return NaE.RESOLVE_FAILED for null type");
+			if (info == null) throw new AssertionError("parent node "+node.sval+" must return NaE.RESOLVE_FAILED if resolution failed");
 
 			if (node.kind < 0) {
 				// abstract sealed
@@ -61,7 +61,7 @@ final class Switch extends Expr {
 						patternType.add(branch.variable.type.owner());
 					}
 
-					if (iterSealed(ctx.compiler, info, patternType)) {
+					if (isFullySealed(ctx.compiler, info, patternType)) {
 						coveredAll = -1;
 						node.shouldNotReachDefault(ctx);
 					}
@@ -69,6 +69,8 @@ final class Switch extends Expr {
 					HashSet<IType> patternType = new HashSet<>();
 					patternType.addAll(((Asterisk) type).getTraits());
 					for (var branch : node.branches) {
+						if (patternType.isEmpty()) LavaCompiler.debugLogger().warn("ExprSwitch FailFast");
+
 						for (var itr = patternType.iterator(); itr.hasNext(); ) {
 							var cast = ctx.castTo(itr.next(), branch.variable.type, -8);
 							if (cast.type >= 0) itr.remove();
@@ -90,7 +92,7 @@ final class Switch extends Expr {
 					}
 					if (count >= coveredAll) {
 						if (count > coveredAll) {
-							LavaCompiler.debugLogger().warn("[WTF]switch的label引用的枚举字段超过了枚举自身的字段数量");
+							LavaCompiler.debugLogger().warn("ExprSwitch label引用的枚举字段超过了枚举自身的字段数量");
 						} else {
 							coveredAll = -1;
 						}
@@ -104,18 +106,24 @@ final class Switch extends Expr {
 		return this;
 	}
 
-	private boolean iterSealed(LavaCompiler ctx, ClassNode info, HashSet<String> patterns) {
-		var s = info.getAttribute(info.cp, Attribute.PermittedSubclasses);
-		if (s != null) {
-			List<String> value = s.value;
+	private boolean isFullySealed(LavaCompiler ctx, ClassNode info, HashSet<String> patterns) {
+		// 如果当前类是目标，那么不再需要检测子类
+		if (patterns.remove(info.name())) return true;
+
+		var subclasses = info.getAttribute(info.cp, Attribute.PermittedSubclasses);
+		if ((info.modifier&Opcodes.ACC_ABSTRACT) != 0 && subclasses != null) {
+			List<String> value = subclasses.value;
 			for (int i = 0; i < value.size(); i++) {
-				String type = value.get(i);
-				if (!patterns.remove(type)) return false;
-				info = ctx.resolve(type);
-				if (info == null || !iterSealed(ctx, info, patterns)) return false;
+				var child = ctx.resolve(value.get(i));
+				if (child == null || !isFullySealed(ctx, child, patterns)) return false;
 			}
+
+			// 所有子类都覆盖了，那么是允许的
+			return true;
 		}
-		return true;
+
+		// non-sealed或final
+		return false;
 	}
 
 	@Override

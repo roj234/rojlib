@@ -2,8 +2,8 @@ package roj.compiler.diagnostic;
 
 import roj.compiler.DebugSetting;
 import roj.text.CharList;
-import roj.ui.Tty;
 import roj.ui.Text;
+import roj.ui.Tty;
 
 import java.io.PrintStream;
 import java.util.Locale;
@@ -19,6 +19,8 @@ public class TextDiagnosticReporter implements Function<Diagnostic, Boolean> {
 	final int[] counter = new int[6];
 
 	public TextDiagnosticReporter(int maxError, int maxWarn, int warnOps) {
+		// ensure proper color rendering if supported
+		Tty.getInstance();
 		this.err = maxError;
 		this.warn = maxWarn;
 		this.warnOps = warnOps;

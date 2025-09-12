@@ -48,7 +48,7 @@ public final class SwitchBlock extends Segment {
 	public void branch(int number, Label label) { targets.add(new SwitchTarget(number, label)); }
 
 	@Override
-	public boolean put(CodeWriter to, int segmentId) {
+	public boolean write(CodeWriter to, int segmentId) {
 		targets.sort(null);
 
 		if (code == 0) {
@@ -59,7 +59,7 @@ public final class SwitchBlock extends Segment {
 					length = 0;
 				} else {
 					JumpTo seg = new JumpTo(GOTO, def);
-					seg.put(to, segmentId);
+					seg.write(to, segmentId);
 					length = (char) seg.length();
 				}
 				return len != length;

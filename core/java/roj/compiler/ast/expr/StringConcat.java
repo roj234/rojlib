@@ -193,7 +193,7 @@ final class StringConcat extends Expr {
 			} else if (type.equals(Types.STRING_TYPE)) {
 				cw.invoke(Opcodes.INVOKEVIRTUAL, "java/lang/StringBuilder", "append", "(Ljava/lang/String;)Ljava/lang/StringBuilder;");
 			} else {
-				TypeCast.Cast cast = lc.castTo(type, Types.CHARSEQUENCE_TYPE, TypeCast.E_NEVER);
+				TypeCast.Cast cast = lc.castTo(type, Types.CHARSEQUENCE_TYPE, TypeCast.IMPOSSIBLE);
 				if (cast.type >= 0) {
 					cast.write(cw);
 					cw.invoke(Opcodes.INVOKEVIRTUAL, "java/lang/StringBuilder", "append", "(Ljava/lang/CharSequence;)Ljava/lang/StringBuilder;");
@@ -230,7 +230,7 @@ final class StringConcat extends Expr {
 			} else if (type.equals(Types.STRING_TYPE)) {
 				cw.invoke(Opcodes.INVOKEVIRTUAL, "roj/text/CharList", "append", "(Ljava/lang/String;)Lroj/text/CharList;");
 			} else {
-				TypeCast.Cast cast = lc.castTo(type, Types.CHARSEQUENCE_TYPE, TypeCast.E_NEVER);
+				TypeCast.Cast cast = lc.castTo(type, Types.CHARSEQUENCE_TYPE, TypeCast.IMPOSSIBLE);
 				if (cast.type >= 0) {
 					cast.write(cw);
 					cw.invoke(Opcodes.INVOKEVIRTUAL, "roj/text/CharList", "append", "(Ljava/lang/CharSequence;)Lroj/text/CharList;");

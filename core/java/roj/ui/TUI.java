@@ -94,7 +94,7 @@ public abstract class TUI implements KeyHandler {
 	}
 	public static <T> T password(Text message, Argument<T> argument) {
 		var callback = new Input<>(message, "", argument);
-		callback.placeholder = text("密码不会显示").bgColor16(Tty.BLACK+Tty.HIGHLIGHT);
+		callback.placeholder = text("密码不会显示"+Tty.reset).bgColor16(Tty.BLACK+Tty.HIGHLIGHT);
 		callback.setInputEcho(false);
 		Tty.pushHandler(callback);
 		return callback.getValue();

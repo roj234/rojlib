@@ -24,9 +24,9 @@ import roj.compiler.resolve.FieldResult;
 import roj.compiler.resolve.ResolveException;
 import roj.compiler.resolve.TypeCast;
 import roj.compiler.runtime.SwitchMap;
-import roj.util.function.Flow;
 import roj.text.CharList;
 import roj.text.TextUtil;
+import roj.util.function.Flow;
 
 import java.util.function.Consumer;
 
@@ -46,6 +46,8 @@ import java.util.function.Consumer;
  * @since 2022/2/27 20:27
  */
 final class MemberAccess extends LeftValue {
+	public static final String EMPTY_BRACKET_MAGIC = ";[";
+
 	static final ThreadLocal<Label> NULLISH_TARGET = new ThreadLocal<>();
 	static void writeNullishExpr(MethodWriter cw, Label ifNull, IType targetType, Expr caller) {
 		NULLISH_TARGET.remove();
@@ -56,7 +58,7 @@ final class MemberAccess extends LeftValue {
 		cw.insn(Opcodes.POP);
 		int type1 = targetType.getActualType();
 		if (type1 != Type.VOID) {
-			if (type1 != Type.CLASS) CompileContext.get().report(caller, Kind.ERROR, "symbol.error.derefPrimitive", targetType);
+			if (type1 != Type.CLASS) cw.ctx.report(caller, Kind.ERROR, "symbol.derefPrimitive", targetType);
 			cw.insn(Opcodes.ACONST_NULL);
 		}
 		cw.label(end);
@@ -129,7 +131,7 @@ final class MemberAccess extends LeftValue {
 		String part = nameChain.get(0);
 		while (true) {
 			sb.append(part);
-			if (++i == nameChain.size() || (part = nameChain.get(i)).equals(";[")) break;
+			if (++i == nameChain.size() || (part = nameChain.get(i)).equals(EMPTY_BRACKET_MAGIC)) break;
 			sb.append('/');
 		}
 
@@ -213,8 +215,8 @@ final class MemberAccess extends LeftValue {
 		while (true) {
 			sb.append(part);
 			if (++i == nameChain.size()) break;
-			if ((part = nameChain.get(i)).equals(";[")) {
-				ctx.report(this, Kind.ERROR, "symbol.error.arrayBrOutsideClassRef");
+			if ((part = nameChain.get(i)).equals(EMPTY_BRACKET_MAGIC)) {
+				ctx.report(this, Kind.ERROR, "memberAccess.emptyArrayIndex");
 				return NaE.resolveFailed(this);
 			}
 			sb.append('/');
@@ -230,7 +232,7 @@ final class MemberAccess extends LeftValue {
 			} else {
 				fType = (parent = parent.resolve(ctx)).type();
 				if (fType.isPrimitive()) {
-					ctx.report(this, Kind.ERROR, "symbol.error.derefPrimitive", fType);
+					ctx.report(this, Kind.ERROR, "symbol.derefPrimitive", fType);
 					return NaE.resolveFailed(this);
 				}
 
@@ -257,7 +259,7 @@ final class MemberAccess extends LeftValue {
 
 			if (nullishBits != 0) {
 				int offset = ctx.get_frOffset()+1;
-				if (Long.numberOfTrailingZeros(nullishBits) <= offset) ctx.report(this, Kind.ERROR, "dotGet.opChain.inClassDecl");
+				if (Long.numberOfTrailingZeros(nullishBits) <= offset) ctx.report(this, Kind.ERROR, "memberAccess.opChain.inClassDecl");
 				nullishBits >>>= offset;
 			}
 
@@ -312,7 +314,7 @@ final class MemberAccess extends LeftValue {
 		if (i1 < length) for (;;) {
 			fn = chain[i1];
 			if ((fn.modifier & Opcodes.ACC_STATIC) != 0) {
-				ctx.report(this, Kind.SEVERE_WARNING, "symbol.warn.static_on_half", part, fn.name(), "symbol.field");
+				ctx.report(this, Kind.SEVERE_WARNING, "symbol.isStatic", part, fn.name(), "symbol.field");
 			}
 
 			if (++i1 == length) break;
@@ -332,7 +334,7 @@ final class MemberAccess extends LeftValue {
 		if (isStaticField()) nullishBits &= ~1;
 		if (nullishBits != 0) {
 			flags |= FINAL_FIELD;
-			if ((flags&ARRAY_LENGTH) != 0) ctx.report(this, Kind.ERROR, "dotGet.opChain.arrayLen");
+			if ((flags&ARRAY_LENGTH) != 0) ctx.report(this, Kind.ERROR, "memberAccess.opChain.arrayLen");
 		} else if ((fn.modifier&Opcodes.ACC_FINAL) != 0) flags |= FINAL_FIELD;
 
 		// == is better
@@ -480,7 +482,7 @@ final class MemberAccess extends LeftValue {
 	 */
 	public MemberAccess add(String name, int flag) {
 		if (flag != 0) {
-			if (nameChain.size() > 64) CompileContext.get().report(this, Kind.ERROR, "dotGet.opChain.tooLong");
+			if (nameChain.size() > 64) CompileContext.get().report(this, Kind.ERROR, "memberAccess.opChain.tooLong");
 			nullishBits |= 1L << nameChain.size();
 		}
 		nameChain.add(name);
@@ -502,7 +504,7 @@ final class MemberAccess extends LeftValue {
 		return ((1L << nameChain.size() - off) & nullishBits) != 0 ? 2 : nullishBits != 0 ? 1 : 0;
 	}
 	public void checkNullishDecl(CompileContext ctx) {
-		if ((nullishBits&1) != 0 && flags == 1) ctx.report(this, Kind.ERROR, "dotGet.opChain.inClassDecl");
+		if ((nullishBits&1) != 0 && flags == 1) ctx.report(this, Kind.ERROR, "memberAccess.opChain.inClassDecl");
 	}
 
 	@Override

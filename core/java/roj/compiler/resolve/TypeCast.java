@@ -9,8 +9,8 @@ import roj.asm.type.*;
 import roj.collect.*;
 import roj.compiler.LavaCompiler;
 import roj.compiler.asm.Asterisk;
-import roj.util.OperationDone;
 import roj.text.CharList;
+import roj.util.OperationDone;
 
 import java.util.Collections;
 import java.util.List;
@@ -39,9 +39,10 @@ public class TypeCast {
 	// 成功
 	public static final int UPCAST = 0, NUMBER_UPCAST = 1, UNBOXING = 2, BOXING = 3;
 	// 失败
-	public static final int E_EXPLICIT_CAST = -1, E_NUMBER_DOWNCAST = -2, E_DOWNCAST = -3;
+	public static final int IMPLICIT = -1, LOSSY = -2, DOWNCAST = -3;
 	// 致命错误
-	public static final int E_OBJ2INT = -4, E_INT2OBJ = -5, E_GEN_PARAM_COUNT = -6, E_NODATA = -7, E_NEVER = -8;
+	public static final int TO_PRIMITIVE = -4, FROM_PRIMITIVE = -5, GENERIC_PARAM_COUNT = -6, UNDEFINED = -7, IMPOSSIBLE = -8;
+
 	private static final int DISTANCE_BOXING = 1;
 
 	public static final class Cast {
@@ -60,8 +61,8 @@ public class TypeCast {
 		public Cast intern() {return isNoop() ? IDENTITY : this;}
 
 		// identity
-		public boolean isIdentity() { return (type == UPCAST || type == E_DOWNCAST) && op1 == op2; }
-		public boolean isNoop() { return (type == UPCAST || type == E_DOWNCAST) && (type1 == null ? op1 == op2 : op1 != 0); }
+		public boolean isIdentity() { return (type == UPCAST || type == DOWNCAST) && op1 == op2; }
+		public boolean isNoop() { return (type == UPCAST || type == DOWNCAST) && (type1 == null ? op1 == op2 : op1 != 0); }
 
 		public IType getType1() { return type1; }
 		public byte getOp1() { return op1; }
@@ -73,12 +74,12 @@ public class TypeCast {
 				case NUMBER_UPCAST -> "向上转型到";
 				case BOXING -> "装箱到";
 				case UNBOXING -> "拆箱到";
-				case E_EXPLICIT_CAST, E_NUMBER_DOWNCAST, E_DOWNCAST -> "强转到";
+				case IMPLICIT, LOSSY, DOWNCAST -> "强转到";
 				default -> "无法转换到";
-				case E_OBJ2INT -> "无法转换为基本类型";
-				case E_INT2OBJ -> "无法转换自基本类型";
-				case E_NODATA -> "数据不足";
-				case E_GEN_PARAM_COUNT -> "泛型参数不同";
+				case TO_PRIMITIVE -> "无法转换为基本类型";
+				case FROM_PRIMITIVE -> "无法转换自基本类型";
+				case UNDEFINED -> "数据不足";
+				case GENERIC_PARAM_COUNT -> "泛型参数不同";
 			};
 		}
 
@@ -86,7 +87,7 @@ public class TypeCast {
 		public void write(CodeWriter cw) {
 			switch (type) {
 				default: throw new UnsupportedOperationException("'"+getCastDesc()+"'无法生成字节码");
-				case NUMBER_UPCAST, E_EXPLICIT_CAST, E_NUMBER_DOWNCAST: break;
+				case NUMBER_UPCAST, IMPLICIT, LOSSY: break;
 				case BOXING:
 					writeOp(cw);
 					writeBox(cw);
@@ -95,7 +96,7 @@ public class TypeCast {
 					cast(cw);
 					cw.invoke(Opcodes.INVOKEVIRTUAL, WRAPPER.get(box).owner, Type.primitive(box).toString().concat("Value"), "()"+(char)box);
 				break;
-				case UPCAST, E_DOWNCAST:
+				case UPCAST, DOWNCAST:
 					if (isNoop()) return;
 					cast(cw);
 				break;
@@ -118,7 +119,7 @@ public class TypeCast {
 			if (type1 != null && op1 == 0) cw.clazz(Opcodes.CHECKCAST, type1.rawType().getActualClass());
 		}
 
-		public boolean canCast() {return type > E_OBJ2INT;}
+		public boolean canCast() {return type > TO_PRIMITIVE;}
 
 		Cast setAnyCast(IType to) {
 			op1 = 42;
@@ -132,13 +133,13 @@ public class TypeCast {
 	public static Cast ANYCAST(int type, IType to) { return new Cast(type, 0).setAnyCast(to); }
 	private static final Cast[] SOLID = new Cast[6];
 	static {
-		for (int i = E_NEVER; i <= E_DOWNCAST; i++) {
-			SOLID[i-E_NEVER] = new Cast(i, -1); // -1 : not applicable
+		for (int i = IMPOSSIBLE; i <= DOWNCAST; i++) {
+			SOLID[i- IMPOSSIBLE] = new Cast(i, -1); // -1 : not applicable
 		}
 	}
-	public static Cast ERROR(@Range(from = E_NEVER, to = E_DOWNCAST) int type) { return SOLID[type-E_NEVER]; }
+	public static Cast ERROR(@Range(from = IMPOSSIBLE, to = DOWNCAST) int type) { return SOLID[type- IMPOSSIBLE]; }
 	private static Cast DOWNCAST(IType type) {
-		Cast cast = new Cast(E_DOWNCAST, -1);
+		Cast cast = new Cast(DOWNCAST, -1);
 		cast.type1 = type;
 		return cast; }
 	private static Cast NUMBER(int type, int distance, int op1) {
@@ -146,7 +147,7 @@ public class TypeCast {
 		cast.op1 = (byte) op1;
 		return cast; }
 	private static Cast NUMBER_DOWNCAST(int distance, int op1, int op2) {
-		Cast cast = new Cast(E_NUMBER_DOWNCAST, distance);
+		Cast cast = new Cast(LOSSY, distance);
 		cast.op1 = (byte) op1;
 		cast.op2 = (byte) op2;
 		return cast; }
@@ -189,7 +190,7 @@ public class TypeCast {
 					Cast cast = checkCast(from, bound);
 					if (cast.type >= 0) return cast;
 				}
-				return ERROR(E_NEVER);
+				return ERROR(IMPOSSIBLE);
 			}
 		}
 
@@ -206,7 +207,7 @@ public class TypeCast {
 			case ASTERISK_TYPE -> {
 				asterisk = (Asterisk) from;
 				if (asterisk.getBound() == null) {
-					if (to.isPrimitive()) return ERROR(E_OBJ2INT);
+					if (to.isPrimitive()) return ERROR(TO_PRIMITIVE);
 					return RESULT(UPCAST, 0).setAnyCast(to);
 				}
 				from = to;
@@ -222,7 +223,7 @@ public class TypeCast {
 					Cast cast = checkCast(bound, to);
 					if (cast.type >= 0) return cast;
 				}
-				return ERROR(E_NEVER);
+				return ERROR(IMPOSSIBLE);
 			}
 		}
 
@@ -353,7 +354,7 @@ public class TypeCast {
 			fc = null;
 		}
 
-		if (r.type != UPCAST && r.type != E_DOWNCAST) return r;
+		if (r.type != UPCAST && r.type != DOWNCAST) return r;
 
 		// 计算泛型继承并擦除类型
 		genericCastCheck:
@@ -368,11 +369,11 @@ public class TypeCast {
 				if (fc == null) break genericCastCheck;
 			}
 
-			if (fc.size() != tc.size()) return ERROR(E_GEN_PARAM_COUNT);
+			if (fc.size() != tc.size()) return ERROR(GENERIC_PARAM_COUNT);
 
 			for (int i = 0; i < fc.size(); i++) {
 				Cast v = checkCast(fc.get(i), tc.get(i), EX_EXTENDS);
-				if (v.type != UPCAST) return ERROR(E_NEVER);
+				if (v.type != UPCAST) return ERROR(IMPOSSIBLE);
 			}
 		} else {
 			if (fc != null && tc != null) throw new AssertionError("primitive not resolved");
@@ -384,7 +385,7 @@ public class TypeCast {
 
 	public Cast checkCast(Type from, Type to, int inheritType) {
 		if (from.equals(to)) return RESULT(UPCAST, 0);
-		if (from.type == VOID || to.type == VOID) return ERROR(E_NEVER);
+		if (from.type == VOID || to.type == VOID) return ERROR(IMPOSSIBLE);
 
 		if (from.isPrimitive()) {
 			// 装箱
@@ -395,11 +396,11 @@ public class TypeCast {
 				// 让byte可以转换到Integer
 				if (cast.type < UPCAST) {
 					box = getWrappedPrimitive(to);
-					if (box == 0) return ERROR(E_INT2OBJ);
+					if (box == 0) return ERROR(FROM_PRIMITIVE);
 
 					//noinspection MagicConstant
 					cast = checkCast(from, Type.primitive(box), inheritType);
-					if (cast.type < UPCAST) return ERROR(E_INT2OBJ);
+					if (cast.type < UPCAST) return ERROR(FROM_PRIMITIVE);
 				}
 
 				assert cast.type <= NUMBER_UPCAST;
@@ -412,7 +413,7 @@ public class TypeCast {
 			}
 
 			// 泛型
-			if (inheritType >= 0) return ERROR(E_NEVER);
+			if (inheritType >= 0) return ERROR(IMPOSSIBLE);
 
 			// 皆为基本
 			int fCap = DataCap.getOrDefaultInt(from.type, 0);
@@ -420,7 +421,7 @@ public class TypeCast {
 			// downcast
 			if (fCap > tCap) {
 				// 0是boolean
-				if (fCap == 0) return ERROR(E_NEVER);
+				if (fCap == 0) return ERROR(IMPOSSIBLE);
 
 				int distance = fCap - tCap;
 				//	L2I = (byte) 0X88,
@@ -428,13 +429,13 @@ public class TypeCast {
 				//	D2I = (byte) 0X8E, D2L = (byte) 0X8F, D2F = (byte) 0X90,
 				if (fCap > 4) {
 					int caster1 = (Opcodes.L2I-19) + (Math.max(tCap, 4) + fCap*3);
-					if (tCap >= 4) return NUMBER(E_NUMBER_DOWNCAST, distance, caster1);
+					if (tCap >= 4) return NUMBER(LOSSY, distance, caster1);
 
 					//	I2B = (byte) 0X91, I2C = (byte) 0X92, I2S = (byte) 0X93,
 					return NUMBER_DOWNCAST(distance, caster1, (Opcodes.I2B-1) + tCap);
 				}
 
-				return NUMBER(E_EXPLICIT_CAST, distance, (Opcodes.I2B-1) + tCap);
+				return NUMBER(IMPLICIT, distance, (Opcodes.I2B-1) + tCap);
 			}
 
 			int distance = tCap - fCap;
@@ -443,19 +444,19 @@ public class TypeCast {
 			if (tCap <= 4) return RESULT(
 					(fCap == 2 && tCap != 4)  // Char to Byte/Short
 					|| tCap == 2              // Byte/Short/Int to Char
-					? E_EXPLICIT_CAST : UPCAST, distance);
+					? IMPLICIT : UPCAST, distance);
 
 			//	I2L = 0x85, I2F = 0x86, I2D = 0x87,
 			//	            L2F = 0x89, L2D = 0x8A,
 			//	                        F2D = 0x8D,
 			// Char to Long/Float/Double is OK (but might a warning ??)
-			return NUMBER(fCap == 2 ? E_NUMBER_DOWNCAST : NUMBER_UPCAST, distance, (Opcodes.I2L-17) + (tCap + Math.max(fCap, 4)*3));
+			return NUMBER(fCap == 2 ? LOSSY : NUMBER_UPCAST, distance, (Opcodes.I2L-17) + (tCap + Math.max(fCap, 4)*3));
 		} else if (to.isPrimitive()) {
 			// 泛型
-			if (inheritType >= 0) return ERROR(E_NEVER);
+			if (inheritType >= 0) return ERROR(IMPOSSIBLE);
 			// 拆箱
 			int primitive = getWrappedPrimitive(from);
-			if (primitive == 0) return ERROR(E_OBJ2INT);
+			if (primitive == 0) return ERROR(TO_PRIMITIVE);
 
 			Cast cast;
 			if (primitive == to.type) {
@@ -463,7 +464,7 @@ public class TypeCast {
 			} else {
 				//noinspection MagicConstant
 				cast = checkCast(Type.primitive(primitive), to, inheritType);
-				if (cast.type < E_NUMBER_DOWNCAST) return cast;
+				if (cast.type < LOSSY) return cast;
 				assert cast.type <= NUMBER_UPCAST;
 
 				cast.type = UNBOXING;
@@ -485,7 +486,7 @@ public class TypeCast {
 		// 数组继承
 		int arrayDelta = from.array() - to.array();
 		if (arrayDelta < 0) { // 转成更高维度 (包括从Object到)
-			if (from.type != CLASS) return ERROR(E_NEVER); // 基本类型不可能
+			if (from.type != CLASS) return ERROR(IMPOSSIBLE); // 基本类型不可能
 
 			/*String[] x;
 			x = (String[]) (String) null;
@@ -495,21 +496,21 @@ public class TypeCast {
 				LavaCompiler.arrayInterfaces().contains(from.owner))
 				return DOWNCAST(to);
 
-			return ERROR(E_NEVER);
+			return ERROR(IMPOSSIBLE);
 		}
 		if (from.array() != 0) {
 			if (arrayDelta > 0) {
 				//int[]      [] t1 = null;
 				//Object     [] t2 = t1;
 				String owner = inheritType == EX_SUPER ? from.owner : to.owner;
-				if (owner == null) return ERROR(E_NEVER); // t2是基本类型数组
+				if (owner == null) return ERROR(IMPOSSIBLE); // t2是基本类型数组
 
 				if (owner.equals("java/lang/Object")) return RESULT(UPCAST, 2);
 				if (LavaCompiler.arrayInterfaces().contains(owner)) return RESULT(UPCAST, 1);
 
-				return ERROR(E_NEVER); // int[] 除了转换成数组实现的类不能变成任何其他东西
+				return ERROR(IMPOSSIBLE); // int[] 除了转换成数组实现的类不能变成任何其他东西
 			} else {
-				if (from.type != to.type) return ERROR(E_NEVER);
+				if (from.type != to.type) return ERROR(IMPOSSIBLE);
 
 				// 维度相同的基本类型数组 （然而，若是这种情况，前面equals就会直接返回真）
 				// if (from.type != CLASS) return RESULT(UPCAST, 0);
@@ -528,8 +529,8 @@ public class TypeCast {
 		ClassDefinition fromClass = context.resolve(from.owner);
 		ClassDefinition toClass = context.resolve(to.owner);
 
-		if (fromClass == null) return ERROR(E_NODATA);
-		if (toClass == null) return ERROR(E_NODATA);
+		if (fromClass == null) return ERROR(UNDEFINED);
+		if (toClass == null) return ERROR(UNDEFINED);
 
 		// 本来是不该发生的（前面检测了），但是说不定未来会支持class aliasing呢/doge
 		if (fromClass == toClass) return RESULT(UPCAST, 0);
@@ -538,7 +539,7 @@ public class TypeCast {
 		if (distance != 0xFFFF) return RESULT(UPCAST, distance);
 
 		// to.parent == null => !Object (alias object or ??)
-		return (fromClass.modifier() & Opcodes.ACC_FINAL) == 0 && toClass.parent() != null && (fromClass.parent() != null || fromClass.name().equals("java/lang/Object")) ? DOWNCAST(to) : ERROR(E_NEVER);
+		return (fromClass.modifier() & Opcodes.ACC_FINAL) == 0 && toClass.parent() != null && (fromClass.parent() != null || fromClass.name().equals("java/lang/Object")) ? DOWNCAST(to) : ERROR(IMPOSSIBLE);
 	}
 
 	private static final Int2IntMap DataCap = new Int2IntMap(8);

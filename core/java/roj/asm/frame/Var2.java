@@ -120,7 +120,7 @@ public final class Var2 {
 		owner = newOwner;
 		return changed;
 	}
-	Var2 uncombine(Var2 o) {
+	Var2 generalize(Var2 o) {
 		if (o == this) return null;
 		if (o.type >= T_ANY) return null;
 		if (type >= T_ANY) return o;
@@ -171,11 +171,11 @@ public final class Var2 {
 		// 基本类型数组
 		if (owner.startsWith("[") && owner.charAt(1) != 'L') return TOP;
 
-		String commonSuperClass = FrameVisitor.getCommonParent(owner, o.owner);
-		if (commonSuperClass.equals(owner)) return null;
+		String commonAncestor = FrameVisitor.getCommonAncestor(owner, o.owner);
+		if (commonAncestor.equals(owner)) return null;
 
 		var copy = copy();
-		copy.owner = commonSuperClass;
+		copy.owner = commonAncestor;
 		return copy;
 	}
 
@@ -200,9 +200,9 @@ public final class Var2 {
 	private static final String[] toString = {"top", "int", "float", "double", "long", "{null}", "uninitial_this", "object", "uninitial"};
 	public String toString() {
 		if (type == T_UNINITIAL || type == T_UNINITIAL_THIS) {
-			return "【在 #"+(monitor_bci == null ? bci : monitor_bci)+" 初始化的"+owner+"】";
+			return owner+" 未初始化 @"+(monitor_bci == null ? bci : monitor_bci);
 		} else if (type == T_REFERENCE) {
-			return owner+(bci == 0 ? "" : " initializes "+bci);
+			return owner+(bci == 0 ? "" : " initialized @"+bci);
 		} else {
 			return type > 10 ? "Any#"+type : toString[type];
 		}

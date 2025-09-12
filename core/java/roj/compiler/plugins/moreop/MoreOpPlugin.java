@@ -44,13 +44,13 @@ public final class MoreOpPlugin implements Compiler.ExprOp {
 	public Expr test(CompileContext ctx, Compiler.OperatorContext opctx, Expr left, Object right) {
 		var sym = opctx.symbol();
 		if (sym == JavaTokenizer.lBracket) {
-			if (ctx.castTo(opctx.leftType(), LIST_TYPE, TypeCast.E_NEVER).type >= 0) {
+			if (ctx.castTo(opctx.leftType(), LIST_TYPE, TypeCast.IMPOSSIBLE).type >= 0) {
 				return new ListGet(left, (Expr) right);
 			}
-			if (ctx.castTo(opctx.leftType(), MAP_TYPE, TypeCast.E_NEVER).type >= 0) {
+			if (ctx.castTo(opctx.leftType(), MAP_TYPE, TypeCast.IMPOSSIBLE).type >= 0) {
 				return new MapGet(left, (Expr) right);
 			}
-			if (ctx.castTo(opctx.leftType(), Types.STRING_TYPE, TypeCast.E_NEVER).type >= 0) {
+			if (ctx.castTo(opctx.leftType(), Types.STRING_TYPE, TypeCast.IMPOSSIBLE).type >= 0) {
 				return Invoke.virtualMethod(STRING_CHARAT, left, (Expr) right);
 			}
 		}

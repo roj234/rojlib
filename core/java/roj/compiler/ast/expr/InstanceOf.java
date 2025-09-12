@@ -45,7 +45,7 @@ public final class InstanceOf extends Expr {
 
 		IType lType = left.type();
 		if (lType.isPrimitive()) {
-			ctx.report(this, Kind.ERROR, "symbol.error.derefPrimitive");
+			ctx.report(this, Kind.ERROR, "symbol.derefPrimitive");
 			return NaE.resolveFailed(this);
 		}
 
@@ -54,23 +54,23 @@ public final class InstanceOf extends Expr {
 				List<IType> children = ((Generic) type).children;
 				for (int i = 0; i < children.size(); i++) {
 					if (children.get(i) != Signature.any()) {
-						ctx.report(this, Kind.ERROR, "instanceOf.error.unsafeCast", lType, type);
+						ctx.report(this, Kind.ERROR, "instanceOf.genericCast", lType, type);
 						break;
 					}
 				}
 			} else {
 				// typeParam
-				ctx.report(this, Kind.ERROR, "instanceOf.error.unsafeCast", lType, type);
+				ctx.report(this, Kind.ERROR, "instanceOf.genericCast", lType, type);
 			}
 		}
 
-		var cast = ctx.castTo(lType, type, TypeCast.E_NEVER);
+		var cast = ctx.castTo(lType, type, TypeCast.IMPOSSIBLE);
 		boolean result;
 		switch (cast.type) {
 			default: ctx.report(this, Kind.ERROR, "typeCast.error."+cast.type, lType, type);
-			case TypeCast.E_DOWNCAST: return this;
+			case TypeCast.DOWNCAST: return this;
 			case TypeCast.UPCAST: result = true; break;
-			case TypeCast.E_NEVER: result = false; break;
+			case TypeCast.IMPOSSIBLE: result = false; break;
 		}
 
 		ctx.report(this, Kind.SEVERE_WARNING, "instanceOf.constant", type);

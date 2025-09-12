@@ -6,7 +6,7 @@ import roj.util.Helpers;
 import java.util.function.Function;
 
 /**
- * 这是给序列化用的，Left和Right必须是可区分类型(akka. 映射，列表，其它(基本类型和字符串)不放回的三选二)
+ * 这是给序列化用的，Left和Right必须是可区分类型(a.k.a. 映射，列表，其它(基本类型和字符串)不放回的三选二)
  * 类型为Either的字段不建议为null
  * 不带泛型参数的Either在序列化时会报错
  * @author Roj234

@@ -9,11 +9,11 @@ import roj.compiler.asm.MethodWriter;
 import roj.compiler.diagnostic.Kind;
 import roj.compiler.resolve.ResolveException;
 import roj.compiler.resolve.TypeCast;
-import roj.util.OperationDone;
-import roj.config.Tokenizer;
 import roj.config.Token;
+import roj.config.Tokenizer;
 import roj.text.TextUtil;
 import roj.util.DynByteBuf;
+import roj.util.OperationDone;
 
 /**
  * AST - 字符串模板处理器.
@@ -58,7 +58,7 @@ class TemplateStringLiteral extends Expr {
 
 					int end = tag.indexOf('}', i);
 					if (end < 0) {
-						ctx.report(this, Kind.ERROR, "stringFormat.f.unclosed");
+						ctx.report(this, Kind.ERROR, "stringTemplate.f.unclosed");
 						break;
 					}
 
@@ -89,7 +89,7 @@ class TemplateStringLiteral extends Expr {
 			}
 		}
 
-		ctx.report(this, Kind.ERROR, "stringFormat.unknown", type);
+		ctx.report(this, Kind.ERROR, "stringTemplate.unknown", type);
 		return this;
 	}
 

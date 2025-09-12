@@ -164,7 +164,7 @@ public class IntervalPartition<T extends IntervalPartition.Range> implements Ite
 
 	public boolean add(T range) {
 		long sp = range.startPos();
-		if (sp >= range.endPos()) throw new IndexOutOfBoundsException("start >= end: " + range);
+		if (sp > range.endPos()) throw new IndexOutOfBoundsException("start > end: "+range);
 		if (range.startPos() < 0) throw new IndexOutOfBoundsException("start < 0");
 
 		int begin = binarySearch(sp);
@@ -187,13 +187,13 @@ public class IntervalPartition<T extends IntervalPartition.Range> implements Ite
 	}
 	public boolean remove(T range) {
 		long startPos = range.startPos();
-		if (startPos >= range.endPos()) throw new IndexOutOfBoundsException("start >= end");
+		if (startPos > range.endPos()) throw new IndexOutOfBoundsException("start > end");
 
 		int begin = binarySearch(startPos);
-		if (begin < 0 || !removePoint(begin, range)) return false;
+		if (begin < 0 || !removePoint(begin, range, false)) return false;
 
 		int endPos = binarySearch(range.endPos());
-		if (endPos < 0 || !removePoint(endPos, range)) throw new AssertionError("数据结构损坏！(也许是错误的equals方法) "+range.startPos()+","+range.endPos()+": "+range);
+		if (endPos < 0 || !removePoint(endPos, range, true)) throw new AssertionError("数据结构损坏！(也许是错误的equals方法) "+range.startPos()+","+range.endPos()+": "+range);
 
 		if (segments[endPos] == null) endPos--;
 
@@ -285,13 +285,12 @@ public class IntervalPartition<T extends IntervalPartition.Range> implements Ite
 	}
 
 	private int addPoint(int pos, T val, boolean end) {
-		Endpoint point = retain(val, end);
 		if (pos >= 0) {
 			Endpoint anchor = segments[pos].anchor;
 			while (true) {
-				if (val.equals(anchor.interval)) return -1;
+				if (val.equals(anchor.interval) && end == anchor.end) return -1;
 				if (anchor.next == null) {
-					anchor.next = point;
+					anchor.next = retain(val, end);
 					break;
 				}
 				anchor = anchor.next;
@@ -301,7 +300,7 @@ public class IntervalPartition<T extends IntervalPartition.Range> implements Ite
 			Segment segment = segmentCount == segments.length ? null : segments[segmentCount];
 			if (segment == null) segment = new Segment(trackCoverage);
 			else segment.init(trackCoverage);
-			segment.anchor = point;
+			segment.anchor = retain(val, end);
 
 			pos = -pos - 1;
 			if (trackCoverage && pos > 0) {
@@ -311,11 +310,11 @@ public class IntervalPartition<T extends IntervalPartition.Range> implements Ite
 		}
 		return pos;
 	}
-	private boolean removePoint(int pos, T val) {
+	private boolean removePoint(int pos, T val, boolean end) {
 		Endpoint prev = null;
 		Endpoint endpoint = segments[pos].anchor;
 		while (endpoint != null) {
-			if (val.equals(endpoint.interval)) {
+			if (val.equals(endpoint.interval) && end == endpoint.end) {
 				if (prev == null) {
 					if (endpoint.next == null) removeSegment(pos);
 					else segments[pos].anchor = endpoint.next;

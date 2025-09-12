@@ -53,7 +53,7 @@ final class FieldList extends ComponentList {
 			}
 		}
 
-		CharList sb = new CharList().append("dotGet.incompatible.plural:[");
+		CharList sb = new CharList().append("memberAccess.incompatible.plural:[");
 
 		sb.append(fields.get(0).name()).append(",[");
 

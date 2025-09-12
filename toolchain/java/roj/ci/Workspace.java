@@ -200,7 +200,7 @@ public class Workspace {
 
 	public static CharList generateIMLFromProject(Project p) {
 		var sb = new CharList("""
-				<?xml version="1.0" encoding="UTF-8"?>
+				<?xml version="1.0" encoding="UTF-8"?><!--MCMake-->
 				<module type="JAVA_MODULE" version="4">
 				  <component name="NewModuleRootManager" inherit-compiler-output="true">
 				    <exclude-output />

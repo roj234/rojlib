@@ -21,7 +21,7 @@ final class Ldc extends Segment {
 	}
 
 	@Override
-	public boolean put(CodeWriter to, int segmentId) {
+	public boolean write(CodeWriter to, int segmentId) {
 		int prevCode = code;
 
 		DynByteBuf o = to.bw;

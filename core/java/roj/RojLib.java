@@ -57,6 +57,10 @@ public final class RojLib {
 		bits = t & mask;
 	}
 
+	public static boolean isDev(String type) {
+		return IS_DEV;
+	}
+
 	public static void debug(String group, String message) {
 		System.err.println("RojLib/"+group+" Warning: "+message);
 	}
