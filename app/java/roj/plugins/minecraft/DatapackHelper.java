@@ -303,10 +303,10 @@ public class DatapackHelper {
 
 			if (copyOf.size() > 0) {
 				System.out.println("正在创建"+modid+"的翻译");
-				json.key("_");
+				json.emitKey("_");
 				json.emit("模组ID="+modid+", 条目="+copyOf.size());
 				for (Map.Entry<String, String> entry1 : copyOf.entrySet()) {
-					json.key(entry1.getKey());
+					json.emitKey(entry1.getKey());
 					json.emit(entry1.getValue());
 				}
 			}

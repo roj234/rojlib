@@ -1,7 +1,7 @@
 package roj.plugins.minecraft.server.network;
 
-import roj.io.CorruptedInputException;
 import roj.io.BufferPool;
+import roj.io.CorruptedInputException;
 import roj.net.ChannelCtx;
 import roj.net.handler.GDeflate;
 import roj.util.ByteList;
@@ -58,7 +58,7 @@ public class Compress extends GDeflate {
 			else {
 				DynByteBuf out = ctx.alloc().expandBefore(buf, 1);
 				try {
-					out.put(0, 0);
+					out.set(0, 0);
 					ctx.channelWrite(out);
 				} finally {
 					if (out != buf) BufferPool.reserve(out);

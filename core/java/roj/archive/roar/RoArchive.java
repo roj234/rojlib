@@ -11,7 +11,7 @@ import roj.io.IOUtil;
 import roj.io.source.Source;
 import roj.io.source.SourceInputStream;
 import roj.math.MathUtils;
-import roj.reflect.Unaligned;
+import roj.reflect.Unsafe;
 import roj.util.ByteList;
 import roj.util.FastFailException;
 import roj.util.Helpers;
@@ -25,7 +25,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.zip.ZipEntry;
 
-import static roj.reflect.Unaligned.U;
+import static roj.reflect.Unsafe.U;
 
 /**
  * 鸣谢： <a href="https://phoboslab.org/log/2024/09/qop">A Simple Archive Format for Self-Contained Executables</a><br>
@@ -35,7 +35,7 @@ import static roj.reflect.Unaligned.U;
  */
 public class RoArchive implements ArchiveFile {
 	Source r, cache;
-	private static final long CACHE = Unaligned.fieldOffset(RoArchive.class, "cache");
+	private static final long CACHE = Unsafe.fieldOffset(RoArchive.class, "cache");
 
 	static final XashMap<Source, CacheNode> OPENED = WeakCache.shape(CacheNode.class).create();
 	static final class CacheNode extends WeakCache<Source> {
@@ -91,11 +91,11 @@ public class RoArchive implements ArchiveFile {
 			r.readFully(buf.list, 0, 12);
 			buf.wIndex(12);
 
-			int magic = buf.readInt(8);
+			int magic = buf.getInt(8);
 			if (magic != HEADER_END) throw new IllegalStateException("Invalid magic");
 
-			int entry_count = buf.readInt(0);
-			int data_len = buf.readInt(4);
+			int entry_count = buf.getInt(0);
+			int data_len = buf.getInt(4);
 
 			off = r.length() - 12 - (long) ENTRY_SIZE * entry_count;
 			headerOffset = off;

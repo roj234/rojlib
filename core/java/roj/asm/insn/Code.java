@@ -23,19 +23,20 @@ import roj.util.DynByteBuf;
 
 import java.util.List;
 
+import static roj.asm.frame.FrameVisitor.*;
+
 /**
  * @author Roj234
  * @since 2023/10/1 00:21
  */
 public class Code extends Attribute implements Attributed {
 	public static final int ATTR_CODE = 2;
-	public static final byte COMPUTE_FRAMES = 1, COMPUTE_SIZES = 2;
 
 	public InsnList instructions = new InsnList();
 	public char stackSize, localSize;
 
 	private final MethodNode method;
-	private byte fvFlags;
+	private byte computes;
 
 	public List<Frame> frames;
 
@@ -113,16 +114,16 @@ public class Code extends Attribute implements Attributed {
 	@Override
 	public String name() { return "Code"; }
 
-	public void computeFrames(@MagicConstant(flags = {COMPUTE_SIZES, COMPUTE_FRAMES}) int flag) {this.fvFlags = (byte) flag;}
+	public void computeFrames(@MagicConstant(flags = {COMPUTE_SIZES, COMPUTE_FRAMES, VALIDATE}) int flag) {this.computes = (byte) flag;}
 
 	@Override
 	public void toByteArrayNoHeader(DynByteBuf w, ConstantPool cp) {
 		var c = AsmCache.getInstance().cw();
 		c.init(w, cp, method);
-		c.computeFrames(fvFlags);
+		c.computeFrames(computes);
 
 		c.visitSize(stackSize, localSize);
-		instructions.write(c);
+		instructions.writeTo(c);
 
 		c.visitExceptions();
 		ArrayList<TryCatchBlock> exs = tryCatch;
@@ -135,15 +136,15 @@ public class Code extends Attribute implements Attributed {
 
 		c.visitAttributes();
 
-		if (fvFlags != 0) {
-			FrameVisitor fv = c.getFv();
+		if (computes != 0) {
+			FrameVisitor fv = c.frameVisitor;
 
-			if ((fvFlags & COMPUTE_SIZES) != 0) {
+			if ((computes & COMPUTE_SIZES) != 0) {
 				stackSize = (char) fv.maxStackSize;
 				localSize = (char) fv.maxLocalSize;
 			}
 
-			if ((fvFlags & COMPUTE_FRAMES) != 0) {
+			if ((computes & COMPUTE_FRAMES) != 0) {
 				frames = c.frames;
 			}
 		} else {
@@ -238,68 +239,6 @@ public class Code extends Attribute implements Attributed {
 			for (int i = 0; i < frames.size(); i++)
 				frames.get(i).toString(sb, prefix).append('\n');
 		}
-		return sb;
-	}
-
-	//WIP
-	public CharList simpleDecompiler(CharList sb, int prefix) {
-		sb.padEnd(' ', prefix).append(".stack ").append((int)stackSize).append('\n')
-		  .padEnd(' ', prefix).append(".local ").append((int)localSize).append('\n');
-
-		IntMap<String> labels = new IntMap<>();
-		if (tryCatch != null) {
-			for (int i = 0; i < tryCatch.size(); i++) {
-				TryCatchBlock ex = tryCatch.get(i);
-				labels.putIfAbsent(ex.start.getValue(), "exc_"+i+"_start");
-				labels.putIfAbsent(ex.end.getValue(), "exc_"+i+"_end");
-				labels.putIfAbsent(ex.handler.getValue(), "exc_"+i+"_handler");
-			}
-		}
-
-		for (InsnNode node : instructions) {
-			if (Opcodes.toString(node.opcode()).endsWith("Switch")) {
-				SwitchBlock block = node.switchTargets();
-				labels.putIfAbsent(block.def.getValue(), "switch_"+node.bci()+"_def");
-				List<SwitchCase> targets = block.cases;
-				for (int i = 0; i < targets.size(); i++) {
-					SwitchCase target = targets.get(i);
-					labels.putIfAbsent(target.target.getValue(), "switch_"+node.bci()+"_target_"+target.value);
-				}
-			} else {
-				Label target = node.targetOrNull();
-				if (target != null) labels.putIfAbsent(target.getValue(), "label"+target.getValue());
-			}
-		}
-
-		LineNumberTable lines = getLines();
-
-		for (var node : instructions) {
-			if (lines != null) {
-				int line = lines.searchLine(node.bci());
-				if (line > 0) sb.padEnd(' ', prefix).append(".line ").append(line).append('\n');
-			}
-
-			String lbl = labels.get(node.bci());
-			if (lbl != null) sb.padEnd(' ', prefix).append(lbl).append(':').append('\n');
-
-			sb.padEnd(' ', prefix).append(Opcodes.toString(node.opcode()));
-			if ((Opcodes.flag(node.opcode())&16) == 0) {
-				sb.append(' ');
-				node.myToString(sb, false);
-			}
-			sb.append('\n');
-		}
-
-		if (tryCatch != null) {
-			sb.append('\n').padEnd(' ', prefix).append(".exception\n");
-
-			for (int i = 0; i < tryCatch.size(); i++) {
-				TryCatchBlock ex = tryCatch.get(i);
-				sb.padEnd(' ', prefix+4).append("exc_").append(i).append("_start exc_").append(i).append("_end => exc_").append(i).append("_handler").append('\n')
-				  .padEnd(' ', prefix+4).append(ex.type == null ? "*" : ex.type).append('\n');
-			}
-		}
-
 		return sb;
 	}
 

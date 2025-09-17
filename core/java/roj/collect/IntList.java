@@ -2,13 +2,15 @@ package roj.collect;
 
 import org.jetbrains.annotations.NotNull;
 import roj.compiler.api.RandomAccessible;
-import roj.reflect.Unaligned;
+import roj.reflect.Unsafe;
 import roj.util.ArrayCache;
 import roj.util.Multisort;
 
 import java.util.Arrays;
 import java.util.ListIterator;
 import java.util.PrimitiveIterator;
+
+import static roj.reflect.Unsafe.U;
 
 /**
  * @author Roj234
@@ -20,12 +22,13 @@ public class IntList implements Iterable<Integer> {
 	protected int size;
 
 	public IntList() {list = ArrayCache.INTS;}
-	public IntList(int size) {list = (int[]) Unaligned.U.allocateUninitializedArray(int.class, size);}
+	public IntList(int size) {
+		list = (int[]) U.allocateUninitializedArray(int.class, size);}
 
 	public void ensureCapacity(int cap) {
 		if (list.length < cap) {
 			int length = ((cap * 3) >> 1) + 1;
-			int[] newList = (int[]) Unaligned.U.allocateUninitializedArray(int.class, length);
+			int[] newList = (int[]) U.allocateUninitializedArray(int.class, length);
 			if (size > 0) System.arraycopy(list, 0, newList, 0, size);
 			list = newList;
 		}
@@ -170,8 +173,8 @@ public class IntList implements Iterable<Integer> {
 	}
 	public void sortUnsigned() {
 		Multisort.sort(0, size, (refLeft, offLeft, offRight) ->
-				Integer.compareUnsigned(Unaligned.U.getInt(refLeft, offLeft), Unaligned.U.getInt(offRight)),
-		list, Unaligned.ARRAY_INT_BASE_OFFSET, 4);
+				Integer.compareUnsigned(Unsafe.U.getInt(refLeft, offLeft), Unsafe.U.getInt(offRight)),
+		list, Unsafe.ARRAY_INT_BASE_OFFSET, 4);
 	}
 
 	public int peek() {return list[size-1];}

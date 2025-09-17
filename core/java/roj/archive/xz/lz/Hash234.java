@@ -13,7 +13,7 @@ package roj.archive.xz.lz;
 import roj.util.NativeMemory;
 
 import static roj.crypt.CRC32.crcTab;
-import static roj.reflect.Unaligned.U;
+import static roj.reflect.Unsafe.U;
 
 final class Hash234 {
 	private static final int HASH_2_SIZE = 1 << 10;

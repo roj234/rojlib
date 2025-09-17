@@ -134,7 +134,7 @@ public final class Context implements ClassResource, Consumer<Constant>, Supplie
 		if (cstCache[0].isEmpty()) {
 			var cp = getConstantPool();
 			cp.setAddListener(this);
-			List<Constant> csts = cp.data();
+			List<Constant> csts = cp.constants();
 			for (int i = 0; i < csts.size(); i++) accept(csts.get(i));
 		}
 	}

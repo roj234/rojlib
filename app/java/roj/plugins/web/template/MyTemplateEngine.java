@@ -6,16 +6,17 @@ import roj.compiler.JavaCompileUnit;
 import roj.compiler.LambdaLinker;
 import roj.compiler.LavaCompiler;
 import roj.concurrent.TaskPool;
-import roj.text.ParseException;
-import roj.text.Tokenizer;
 import roj.http.server.Content;
 import roj.http.server.Request;
 import roj.http.server.ResponseHeader;
 import roj.io.IOUtil;
 import roj.plugins.web.error.GreatErrorPage;
-import roj.reflect.ClassDefiner;
+import roj.reflect.Reflection;
+import roj.reflect.Sandbox;
 import roj.text.CharList;
 import roj.text.LineReader;
+import roj.text.ParseException;
+import roj.text.Tokenizer;
 
 import java.io.File;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -27,7 +28,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 public class MyTemplateEngine {
 	private final LavaCompiler compiler = new LavaCompiler();
 	private final ThreadLocal<CompileContext> myContext = new ThreadLocal<>();
-	private final ClassLoader loader = new ClassDefiner(MyTemplateEngine.class.getClassLoader(), "MyTemplateEngine");
+	private final ClassLoader loader = new Sandbox("MyTemplateEngine", MyTemplateEngine.class.getClassLoader());
+
 	private final AtomicInteger classId = new AtomicInteger();
 
 	private static final XashMap.Builder<File, Cache> BUILDER = XashMap.builder(File.class, Cache.class, "file", "_next");
@@ -173,7 +175,7 @@ public class MyTemplateEngine {
 			CompileContext.set(null);
 		}
 
-		return (Template) ClassDefiner.newInstance(unit, loader);
+		return (Template) Reflection.createInstance(loader, unit);
 	}
 
 	private void templateBody(CharList code, String line, LineReader.Impl itr, String paramType, CharList miscMethod) {

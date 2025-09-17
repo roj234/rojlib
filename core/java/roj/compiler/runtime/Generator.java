@@ -5,7 +5,7 @@ import roj.util.Helpers;
 import java.util.Iterator;
 import java.util.NoSuchElementException;
 
-import static roj.reflect.Unaligned.U;
+import static roj.reflect.Unsafe.U;
 
 /**
  * @author Roj234

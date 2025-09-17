@@ -3,16 +3,16 @@ package roj.archive.zip;
 import roj.archive.ArchiveEntry;
 import roj.archive.ArchiveFile;
 import roj.archive.ArchiveUtils;
-import roj.io.CRC32InputStream;
 import roj.collect.ArrayList;
 import roj.collect.WeakCache;
 import roj.collect.XashMap;
 import roj.crypt.CipherInputStream;
+import roj.io.CRC32InputStream;
 import roj.io.IOUtil;
 import roj.io.source.BufferedSource;
 import roj.io.source.Source;
 import roj.io.source.SourceInputStream;
-import roj.reflect.Unaligned;
+import roj.reflect.Unsafe;
 import roj.util.ArrayCache;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
@@ -31,7 +31,7 @@ import java.util.zip.Inflater;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipException;
 
-import static roj.reflect.Unaligned.U;
+import static roj.reflect.Unsafe.U;
 
 /**
  * @author Roj234
@@ -39,7 +39,7 @@ import static roj.reflect.Unaligned.U;
  */
 public class ZipFile implements ArchiveFile {
 	Source r, cache;
-	static final long CACHE = Unaligned.fieldOffset(ZipFile.class, "cache");
+	static final long CACHE = Unsafe.fieldOffset(ZipFile.class, "cache");
 
 	static final XashMap.Builder<String, ZEntry> ENTRY_BUILDER = XashMap.noCreation(ZEntry.class, "name", "next");
 
@@ -269,9 +269,9 @@ public class ZipFile implements ArchiveFile {
 		boolean hasEnd = false;
 		int pos = 1020;
 		while (pos > 0) {
-			if (tmp.getU(--pos) != 'P') continue;
+			if (tmp.getUnsignedByte(--pos) != 'P') continue;
 
-			int field = tmp.readInt(pos);
+			int field = tmp.getInt(pos);
 			if (field == HEADER_END) {
 				r.seek(off+pos+4);
 
@@ -338,17 +338,17 @@ public class ZipFile implements ArchiveFile {
 		ZEntry entry = new ZEntry();
 
 		//entry.minExtractVer = buffer.readUShortLE(0);
-		int flags = buf.readUShortLE(2);
+		int flags = buf.getUnsignedShortLE(2);
 		entry.flags = (char) flags;
-		entry.method = (char) buf.readUShortLE(4);
-		entry.modTime = buf.readIntLE(6);
-		entry.crc32 = buf.readIntLE(10);
-		long cSize = buf.readUIntLE(14);
+		entry.method = (char) buf.getUnsignedShortLE(4);
+		entry.modTime = buf.getIntLE(6);
+		entry.crc32 = buf.getIntLE(10);
+		long cSize = buf.getUnsignedIntLE(14);
 		entry.cSize = cSize;
-		entry.uSize = buf.readUIntLE(18);
+		entry.uSize = buf.getUnsignedIntLE(18);
 
-		readName(entry, flags, buf.readUShortLE(22));
-		int extraLen = buf.readUShortLE(24);
+		readName(entry, flags, buf.getUnsignedShortLE(22));
+		int extraLen = buf.getUnsignedShortLE(24);
 
 		if (extraLen > 0) {
 			buf = read(extraLen);
@@ -421,27 +421,27 @@ public class ZipFile implements ArchiveFile {
 
 		//entry.ver = buf[0] | buf[1] << 8;
 		//entry.minExtractVer = buf[2] | buf[3] << 8;
-		entry.flags = (char) buf.readUShortLE(4);
-		entry.method = (char) buf.readUShortLE(6);
-		entry.modTime = buf.readIntLE(8);
-		entry.crc32 = buf.readIntLE(12);
-		entry.cSize = buf.readUIntLE(16);
-		entry.uSize = buf.readUIntLE(20);
+		entry.flags = (char) buf.getUnsignedShortLE(4);
+		entry.method = (char) buf.getUnsignedShortLE(6);
+		entry.modTime = buf.getIntLE(8);
+		entry.crc32 = buf.getIntLE(12);
+		entry.cSize = buf.getUnsignedIntLE(16);
+		entry.uSize = buf.getUnsignedIntLE(20);
 
 		//entry.disk = (char) buf.readUShortLE(30);
-		entry.internalAttr = (char) buf.readUShortLE(32);
-		entry.externalAttr = buf.readIntLE(34);
-		long fileHeader = buf.readUIntLE(38);
+		entry.internalAttr = (char) buf.getUnsignedShortLE(32);
+		entry.externalAttr = buf.getIntLE(34);
+		long fileHeader = buf.getUnsignedIntLE(38);
 
-		int nameLen = buf.readUShortLE(24);
+		int nameLen = buf.getUnsignedShortLE(24);
 
 		readName(entry, entry.flags, nameLen);
 
 		// ignore per-file comment
-		int commentLen = buf.readUShortLE(28);
+		int commentLen = buf.getUnsignedShortLE(28);
 		r.skip(commentLen);
 
-		int extraLen = buf.readUShortLE(26);
+		int extraLen = buf.getUnsignedShortLE(26);
 		if (extraLen > 0) {
 			buf = read(extraLen);
 			fileHeader = entry.readCENExtra(this, buf, fileHeader);
@@ -480,14 +480,14 @@ public class ZipFile implements ArchiveFile {
 		if (!zip64) {
 			//diskId = buf.readUShortLE(0);
 			//cDirBegin = buf.readUShortLE(2);
-			cDirOnDisk = buf.readUShortLE(4);
-			cDirTotal = buf.readUShortLE(6);
+			cDirOnDisk = buf.getUnsignedShortLE(4);
+			cDirTotal = buf.getUnsignedShortLE(6);
 
-			cDirLen = buf.readUIntLE(8);
-			cDirOffset = buf.readUIntLE(12);
+			cDirLen = buf.getUnsignedIntLE(8);
+			cDirOffset = buf.getUnsignedIntLE(12);
 		}
 
-		int commentLen = buf.readUShortLE(16);
+		int commentLen = buf.getUnsignedShortLE(16);
 		if (commentLen > 0) {
 			buf = read(commentLen);
 			comment = buf.toByteArray();
@@ -507,11 +507,11 @@ public class ZipFile implements ArchiveFile {
 		// 20 u8 totalEntryCount
 		// 28 u8 cDirLen
 		// 36 u8 cDirBegin
-		cDirOnDisk = (int) buf.readLongLE(12);
-		cDirTotal = (int) buf.readLongLE(20);
+		cDirOnDisk = (int) buf.getLongLE(12);
+		cDirTotal = (int) buf.getLongLE(20);
 
-		cDirLen = buf.readLongLE(28);
-		cDirOffset = buf.readLongLE(36);
+		cDirLen = buf.getLongLE(28);
+		cDirOffset = buf.getLongLE(36);
 	}
 
 	public void validateEntry(ZEntry entry) throws IOException {validateEntry(r, entry);}
@@ -535,16 +535,16 @@ public class ZipFile implements ArchiveFile {
 			verifySuccess_:{
 			verifyFailed:{
 
-			var cSize = buf.readUIntLE(14);
+			var cSize = buf.getUnsignedIntLE(14);
 			if (cSize != 0 && entry.cSize != cSize) break verifyFailed;
 
-			var uSize = buf.readUIntLE(18);
+			var uSize = buf.getUnsignedIntLE(18);
 			if (uSize != 0 && entry.uSize != uSize) break verifyFailed;
 
-			extraLen = buf.readUShortLE(24);
+			extraLen = buf.getUnsignedShortLE(24);
 
 			var prevNameBytes = entry.nameBytes;
-			var nameLen = buf.readUShortLE(22);
+			var nameLen = buf.getUnsignedShortLE(22);
 			if (nameLen != prevNameBytes.length) break verifyFailed;
 
 			if (nameLen > tmp.length) tmp = new byte[nameLen];

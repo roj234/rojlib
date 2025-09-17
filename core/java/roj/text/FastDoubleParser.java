@@ -127,7 +127,7 @@ public class FastDoubleParser {
 	static {
 		try {
 			var target = Class.forName("jdk.internal.math.FloatingDecimal$ASCIIToBinaryBuffer");
-			INSTANCE = Bypass.builder(H.class).inline().unchecked()
+			INSTANCE = Bypass.builder(H.class).unchecked()
 					.construct(target, "newParser")
 					.delegate(target, new String[]{"floatValue","doubleValue"})
 					.access(target, new String[]{"isNegative","decExponent","digits","nDigits"}, null, new String[]{"isNegative","decExponent","digits","nDigits"})

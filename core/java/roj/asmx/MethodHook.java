@@ -68,7 +68,7 @@ public abstract class MethodHook implements Transformer {
 					}
 				} else {
 					if (toDesc.modifier == 0) {
-						List<Type> param = Type.methodDesc(toDesc.rawDesc);
+						List<Type> param = Type.getMethodTypes(toDesc.rawDesc);
 						String owner = param.remove(0).owner();
 
 						i1 = sb.indexOf("callFrom_");
@@ -80,7 +80,7 @@ public abstract class MethodHook implements Transformer {
 						MemberDescriptor key = toDesc.copy();
 						key.owner = owner;
 						key.name = sb.substring(i, sb.length());
-						key.rawDesc = Type.toMethodDesc(param);
+						key.rawDesc = Type.getMethodDescriptor(param);
 
 						hooks.put(key, toDesc);
 					} else {

@@ -31,7 +31,7 @@ public class ItemStack {
 		if (net.readBoolean()) {
 			this.item = Item.getItem(net.readVarInt());
 			this.count = net.readByte();
-			if (net.get(net.rIndex) != 0) {
+			if (net.getByte(net.rIndex) != 0) {
 				try {
 					this.nbt = new NbtParser().parse(net).asMap();
 				} catch (ParseException e) {

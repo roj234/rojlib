@@ -65,7 +65,7 @@ public final class NewArray extends Expr {
 
 	public void setType(IType type) {this.type = type;}
 
-	private static final char[] UNSIGNED_MAX = {0, 255, 65535, 65535};
+	private static final char[] UNSIGNED_MAX = {0, 0, 255, 65535, 65535};
 	@NotNull
 	@Override
 	public Expr resolve(CompileContext ctx) throws ResolveException {
@@ -86,8 +86,8 @@ public final class NewArray extends Expr {
 		boolean failed = false;
 		// useless if sized creation
 		boolean isAllConstant = (flag&1) == 0;
-		IType exprType = isAllConstant ? componentType(type) : Type.primitive(Type.INT);
-		int dataCap = TypeCast.getDataCap(exprType.getActualType());
+		IType exprType = isAllConstant ? componentType(type) : Type.INT_TYPE;
+		int sort = Type.getSort(exprType.getActualType());
 		casts = new TypeCast.Cast[expr.size()];
 		for (int i = 0; i < expr.size(); i++) {
 			var node = expr.get(i);
@@ -103,7 +103,7 @@ public final class NewArray extends Expr {
 			IType sourceType;
 			ok: {
 				if (node.isConstant()) {
-					if (dataCap >= 1 && dataCap <= 3) {
+					if (sort >= Type.SORT_BYTE && sort <= Type.SORT_SHORT) {
 						sourceType = node.minType();
 						castType = TypeCast.IMPLICIT;
 						break ok;
@@ -119,7 +119,7 @@ public final class NewArray extends Expr {
 
 			if (castType != 0 && cast.type == TypeCast.IMPLICIT) {
 				var value = ((ConfigValue)node.constVal()).asInt();
-				if (value >= 0 && value <= UNSIGNED_MAX[dataCap]) {
+				if (value >= 0 && value <= UNSIGNED_MAX[sort]) {
 					if (exprType.getActualType() != Type.CHAR)
 						ctx.report(this, Kind.INCOMPATIBLE, "arrayDef.autoCastNumber", node, exprType);
 				} else {

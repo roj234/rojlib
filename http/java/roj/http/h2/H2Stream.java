@@ -3,7 +3,7 @@ package roj.http.h2;
 import roj.http.HttpHead;
 import roj.http.HttpUtil;
 import roj.io.IOUtil;
-import roj.reflect.Unaligned;
+import roj.reflect.Unsafe;
 import roj.util.DynByteBuf;
 
 import java.io.IOException;
@@ -13,7 +13,7 @@ import java.util.Locale;
 import java.util.Set;
 
 import static roj.http.h2.H2Connection.LOGGER;
-import static roj.reflect.Unaligned.U;
+import static roj.reflect.Unsafe.U;
 
 /**
  * @author Roj234
@@ -45,10 +45,10 @@ public abstract class H2Stream {
 
 	private static final Set<String> PSEUDO_HEADERS = Set.of(":method", ":path", ":scheme", ":authority", ":status");
 	private static final long
-		RR = Unaligned.fieldOffset(HttpHead.class, "isRequest"),
-		AA = Unaligned.fieldOffset(HttpHead.class, "a"),
-		BB = Unaligned.fieldOffset(HttpHead.class, "b"),
-		CC = Unaligned.fieldOffset(HttpHead.class, "c");
+		RR = Unsafe.fieldOffset(HttpHead.class, "isRequest"),
+		AA = Unsafe.fieldOffset(HttpHead.class, "a"),
+		BB = Unsafe.fieldOffset(HttpHead.class, "b"),
+		CC = Unsafe.fieldOffset(HttpHead.class, "c");
 	protected HttpHead _header = new HttpHead(false,null,null,null);
 
 	final String header(DynByteBuf buf, HPACK coder, boolean first) throws IOException {

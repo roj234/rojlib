@@ -127,7 +127,7 @@ public final class EdSignature extends Signature implements Cloneable {
 
 	protected final void engineUpdate(byte b) { if (prehash) digest.update(b); else data.put(b); }
 	protected final void engineUpdate(byte[] b, int off, int len) { if (prehash) digest.update(b, off, len); else data.put(b, off, len); }
-	protected final void engineUpdate(ByteBuffer input) { if (prehash) digest.update(input); else data.put(input); }
+	protected final void engineUpdate(ByteBuffer input) { if (prehash) digest.update(input); else data.put(DynByteBuf.nioRead(input)); }
 
 	@Override
 	protected boolean engineVerify(byte[] sigBytes) throws SignatureException {

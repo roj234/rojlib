@@ -21,13 +21,13 @@ import roj.collect.*;
 import roj.concurrent.Executor;
 import roj.concurrent.TaskPool;
 import roj.io.IOUtil;
-import roj.io.MyDataInputStream;
+import roj.io.ByteInputStream;
 import roj.text.CharList;
-import roj.util.StringPool;
 import roj.text.logging.Level;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
 import roj.util.Helpers;
+import roj.util.StringPool;
 
 import java.io.File;
 import java.io.IOException;
@@ -205,7 +205,7 @@ public class Mapper extends Mapping {
 
 	public Boolean loadCache(InputStream cache, boolean readClassInheritanceMap) throws IOException {
 		LZMA2Options lzmaOption = getLZMAOption();
-		var r = MyDataInputStream.wrap(new LZMAInputStream(cache, -1, lzmaOption.getPropByte(), lzmaOption.getDictSize()));
+		var r = ByteInputStream.wrap(new LZMAInputStream(cache, -1, lzmaOption.getPropByte(), lzmaOption.getDictSize()));
 
 		var pool = new StringPool(r);
 
@@ -975,7 +975,7 @@ public class Mapper extends Mapping {
 
 		BootstrapMethods bs = null;
 
-		List<Constant> list = data.cp.data();
+		List<Constant> list = data.cp.constants();
 		for (int j = 0; j < list.size(); j++) {
 			Constant c = list.get(j);
 			switch (c.type()) {
@@ -1011,7 +1011,7 @@ public class Mapper extends Mapping {
 		if (!allDesc.endsWith(";")) return;
 
 		d.rawDesc = ibm.lambdaInterfaceDesc();
-		d.owner = Type.methodDescReturn(allDesc).owner;
+		d.owner = Type.getReturnType(allDesc).owner;
 
 		List<String> parents = selfSupers.getOrDefault(d.owner, Collections.emptyList());
 		int i = 0;
@@ -1132,7 +1132,7 @@ public class Mapper extends Mapping {
 	private void mapAnnotation(ClassUtil U, ConstantPool cp, DynByteBuf r) {
 		CstUTF owner = cp.get(r);
 		String newOwner = U.mapFieldType(classMap, owner.str());
-		if (newOwner != null) r.putShort(r.rIndex-2, cp.getUtfId(newOwner));
+		if (newOwner != null) r.setShort(r.rIndex-2, cp.getUtfId(newOwner));
 
 		String owner_name = owner.str().substring(1, owner.str().length()-1);
 		int len = r.readUnsignedShort();
@@ -1142,7 +1142,7 @@ public class Mapper extends Mapping {
 			// assert is annotation class...
 			for (Map.Entry<MemberDescriptor, String> entry : methodMap.entrySet()) {
 				if (entry.getKey().name.equals(name) && entry.getKey().owner.equals(owner_name)) {
-					r.putShort(r.rIndex-2, cp.getUtfId(entry.getValue()));
+					r.setShort(r.rIndex-2, cp.getUtfId(entry.getValue()));
 					break;
 				}
 			}
@@ -1157,14 +1157,14 @@ public class Mapper extends Mapping {
 				CstUTF owner = cp.get(r);
 				String newOwner = U.mapFieldType(classMap, owner.str());
 				if (newOwner != null) {
-					r.putShort(r.rIndex-2, cp.getUtfId(newOwner));
+					r.setShort(r.rIndex-2, cp.getUtfId(newOwner));
 				}
 			}
 			break;
 			case AnnVal.ENUM: {
 				CstUTF owner = cp.get(r);
 				String newOwner = U.mapFieldType(classMap, owner.str());
-				if (newOwner != null) r.putShort(r.rIndex-2, cp.getUtfId(newOwner));
+				if (newOwner != null) r.setShort(r.rIndex-2, cp.getUtfId(newOwner));
 
 				CstUTF enum_name = cp.get(r);
 
@@ -1176,7 +1176,7 @@ public class Mapper extends Mapping {
 
 				String newFieldName = fieldMap.get(fd);
 				if (newFieldName != null) {
-					r.putShort(r.rIndex-2, cp.getUtfId(newFieldName));
+					r.setShort(r.rIndex-2, cp.getUtfId(newFieldName));
 				}
 			}
 			break;
@@ -1234,7 +1234,7 @@ public class Mapper extends Mapping {
 	/** Any other: interface, bootstrap method, class ref... */
 	private void mapConstant(ClassUtil U, ConstantPool cp) {
 		String oldCls, newCls;
-		List<Constant> arr = cp.data();
+		List<Constant> arr = cp.constants();
 		for (int i = 0; i < arr.size(); i++) {
 			Constant c = arr.get(i);
 			switch (c.type()) {

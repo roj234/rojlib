@@ -92,7 +92,7 @@ public final class BCJ2 extends QZComplexCoder {
 
 					while (srcPos < srcLim) {
 						prev = b;
-						b = ob.getU(srcPos++);
+						b = ob.getUnsignedByte(srcPos++);
 
 						if ((b & 0xFE) == 0xE8 ||
 							prev == 0x0F && (b & 0xF0) == 0x80) {
@@ -122,7 +122,7 @@ public final class BCJ2 extends QZComplexCoder {
 				int idx = (b == 0xE8 ? 2 + prev : (b == 0xE9 ? 1 : 0));
 
 				// Relative offset (relat)
-				int v = ob.readIntLE(ob.rIndex);
+				int v = ob.getIntLE(ob.rIndex);
 
 				// 多线程实现方式不同，似乎没有v23.01提到的corner case
 				if ((fileSize == 0 || (offset+4+v)+MIN_VALUE < fileSize+MIN_VALUE)
@@ -248,11 +248,11 @@ public final class BCJ2 extends QZComplexCoder {
 					InputStream in = (b == 0xE8) ? call : jump;
 					int i = ob.readStream(in, 4);
 					if (i < 4) throw new CorruptedInputException("地址流结束过早");
-					int val = ob.readInt(ob.wIndex()-4);
+					int val = ob.getInt(ob.wIndex()-4);
 
 					offset += 4;
 					val -= offset;
-					ob.putIntLE(ob.wIndex()-4, val);
+					ob.setIntLE(ob.wIndex()-4, val);
 					b = val >>> 24;
 				}
 			}

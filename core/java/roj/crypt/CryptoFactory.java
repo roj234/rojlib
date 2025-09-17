@@ -6,12 +6,12 @@ import roj.RojLib;
 import roj.collect.HashMap;
 import roj.compiler.runtime.SwitchMap;
 import roj.io.IOUtil;
-import roj.reflect.Unaligned;
-import roj.reflect.litasm.FastJNI;
+import roj.reflect.Unsafe;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
 import roj.util.Helpers;
 import roj.util.OperationDone;
+import roj.util.optimizer.IntrinsicCandidate;
 
 import javax.crypto.AEADBadTagException;
 import javax.net.ssl.TrustManager;
@@ -25,7 +25,7 @@ import java.util.Random;
 import java.util.function.Function;
 
 import static java.lang.Integer.rotateLeft;
-import static roj.reflect.Unaligned.U;
+import static roj.reflect.Unsafe.U;
 
 /**
  * @author Roj234
@@ -237,7 +237,7 @@ public final class CryptoFactory extends Provider {
 		int off = 0;
 		int blockCounter = 1;
 		while (off < derivedKeyLength) {
-			Unaligned.U.put32UB(io, Unaligned.ARRAY_BYTE_BASE_OFFSET + io.length-4, blockCounter++);
+			Unsafe.U.put32UB(io, Unsafe.ARRAY_BYTE_BASE_OFFSET + io.length-4, blockCounter++);
 			hashAlgorithm.update(io);
 			salt = hashAlgorithm.digestShared();
 			System.arraycopy(salt, 0, tmp, 0, salt.length);
@@ -292,7 +292,7 @@ public final class CryptoFactory extends Provider {
 	 */
 	public static byte[] HKDF_expand(MessageAuthenticCode hmac, byte[] pseudoRandomKey, DynByteBuf additionalInfo, int outputSize) {
 		byte[] out = new byte[outputSize];
-		HKDF_expand(hmac, pseudoRandomKey, additionalInfo, outputSize, out, Unaligned.ARRAY_BYTE_BASE_OFFSET);
+		HKDF_expand(hmac, pseudoRandomKey, additionalInfo, outputSize, out, Unsafe.ARRAY_BYTE_BASE_OFFSET);
 		return out;
 	}
 
@@ -310,7 +310,7 @@ public final class CryptoFactory extends Provider {
 			if (additionalInfo != null) hmac.update(additionalInfo);
 			hmac.update((byte) counter++);
 
-			Unaligned.U.copyMemory(hmac.digestShared(), Unaligned.ARRAY_BYTE_BASE_OFFSET, outputRef, outputAddress+off, Math.min(io.length, outputSize-off));
+			Unsafe.U.copyMemory(hmac.digestShared(), Unsafe.ARRAY_BYTE_BASE_OFFSET, outputRef, outputAddress+off, Math.min(io.length, outputSize-off));
 
 			off += io.length;
 		}
@@ -339,7 +339,7 @@ public final class CryptoFactory extends Provider {
 		int i = 0, j;
 		int crc = 0;
 		while (i < length) {
-			crc ^= in.get(in.rIndex + i++);
+			crc ^= in.getByte(in.rIndex + i++);
 
 			j = 7;
 			do {
@@ -355,9 +355,9 @@ public final class CryptoFactory extends Provider {
 
 	static {RojLib.linkLibrary(CryptoFactory.class, RojLib.GENERIC);}
 
-	@FastJNI("IL_xxHash32")
+	@IntrinsicCandidate("IL_xxHash32")
 	public static int xxHash32(int seed, byte[] buf, int off, int len) {
-		return xxHash32(seed, (Object) buf, Unaligned.ARRAY_BYTE_BASE_OFFSET+off, len);
+		return xxHash32(seed, (Object) buf, Unsafe.ARRAY_BYTE_BASE_OFFSET+off, len);
 	}
 	public static int xxHash32(int seed, Object buf, long off, int len) {
 		int a,b,c,d;
@@ -405,7 +405,7 @@ public final class CryptoFactory extends Provider {
 	}
 
 	public static long wyhash(long seed, byte[] data) {
-		return wyhash(data, Unaligned.ARRAY_BYTE_BASE_OFFSET, data.length, seed, WYHASH_SECRET);
+		return wyhash(data, Unsafe.ARRAY_BYTE_BASE_OFFSET, data.length, seed, WYHASH_SECRET);
 	}
 	/**
 	 * translated by Roj234-N

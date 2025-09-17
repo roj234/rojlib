@@ -1,14 +1,12 @@
 package roj.io;
 
-import roj.collect.IntMap;
-import roj.collect.ArrayList;
-import roj.concurrent.FastThreadLocal;
-import roj.concurrent.Timer;
-import roj.concurrent.SegmentReadWriteLock;
-import roj.util.Bitmap;
-import roj.util.LeakDetector;
 import roj.annotation.Status;
-import roj.reflect.Unaligned;
+import roj.collect.ArrayList;
+import roj.collect.IntMap;
+import roj.concurrent.FastThreadLocal;
+import roj.concurrent.SegmentReadWriteLock;
+import roj.concurrent.Timer;
+import roj.reflect.Unsafe;
 import roj.text.CharList;
 import roj.text.logging.Logger;
 import roj.util.*;
@@ -16,8 +14,8 @@ import roj.util.*;
 import java.lang.ref.WeakReference;
 import java.nio.ByteBuffer;
 
-import static roj.reflect.Unaligned.U;
-import static roj.reflect.Unaligned.fieldOffset;
+import static roj.reflect.Unsafe.U;
+import static roj.reflect.Unsafe.fieldOffset;
 
 /**
  * @author Roj233
@@ -196,7 +194,7 @@ public final class BufferPool {
 		if (len == 0) return null;
 
 		for (int i = array.length-1; i >= 0; i--) {
-			long o = Unaligned.ARRAY_OBJECT_BASE_OFFSET + (long) i * Unaligned.ARRAY_OBJECT_INDEX_SCALE;
+			long o = Unsafe.ARRAY_OBJECT_BASE_OFFSET + (long) i * Unsafe.ARRAY_OBJECT_INDEX_SCALE;
 
 			Object b = U.getReferenceVolatile(array, o);
 			if (b == null) continue;
@@ -343,7 +341,7 @@ public final class BufferPool {
 				if (pool.directRef == nm) {
 					var shell = pool.directBufferShell.pop();
 					if (shell != null) {
-						NativeMemory.setBufferCapacityAndAddress(shell, pb.address(), pb.capacity());
+						NativeMemory.setAddress(shell, pb.address(), pb.capacity());
 						return shell.limit(pb.wIndex()).position(pb.rIndex);
 					}
 				}
@@ -363,7 +361,7 @@ public final class BufferPool {
 		pool.lock.lock(0);
 		try {
 			if (pool.directRef == nm) {
-				NativeMemory.setBufferCapacityAndAddress(shell, 0, 0);
+				NativeMemory.setAddress(shell, 0, 0);
 				pool.directBufferShell.add(shell);
 			}
 		} finally {
@@ -434,7 +432,7 @@ public final class BufferPool {
 		if (len >= array.length) return;
 
 		for (int i = 0; i < array.length; i++) {
-			long o = Unaligned.ARRAY_OBJECT_BASE_OFFSET + (long) i * Unaligned.ARRAY_OBJECT_INDEX_SCALE;
+			long o = Unsafe.ARRAY_OBJECT_BASE_OFFSET + (long) i * Unsafe.ARRAY_OBJECT_INDEX_SCALE;
 
 			Object b = U.getReferenceVolatile(array, o);
 			if (b != null) continue;

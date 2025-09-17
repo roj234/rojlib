@@ -6,7 +6,7 @@ import roj.util.ArrayCache;
 import java.io.IOException;
 import java.util.function.IntConsumer;
 
-import static roj.reflect.Unaligned.U;
+import static roj.reflect.Unsafe.U;
 
 /**
  * @author Roj234

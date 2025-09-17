@@ -35,7 +35,7 @@ public final class InstanceOf extends Expr {
 	public String toString() { return left+" instanceof "+type+(variable!=null?" "+variable:""); }
 
 	@Override
-	public IType type() { return Type.primitive(Type.BOOLEAN); }
+	public IType type() { return Type.BOOLEAN_TYPE; }
 
 	@Override
 	@SuppressWarnings("fallthrough")

@@ -4,7 +4,7 @@ import roj.net.ChannelCtx;
 import roj.net.Event;
 import roj.net.MyChannel;
 import roj.net.handler.PacketMerger;
-import roj.reflect.Unaligned;
+import roj.reflect.Unsafe;
 import roj.text.TextUtil;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
@@ -114,10 +114,10 @@ public final class hTE extends PacketMerger {
 		int i = buf.rIndex;
 		int prevI = i;
 		while (i < buf.wIndex()) {
-			if (buf.getU(i) != 0x0D) {
+			if (buf.getUnsignedByte(i) != 0x0D) {
 				i+=1;
 				continue;
-			} else if (buf.getU(i+1) != 0x0A) {
+			} else if (buf.getUnsignedByte(i+1) != 0x0A) {
 				i+=2;
 				continue;
 			}
@@ -174,10 +174,10 @@ public final class hTE extends PacketMerger {
 		long pos = 7;
 
 		while (i > 15) {
-			Unaligned.U.putByte(addr + pos--, DIGITS[i&0xF]);
+			Unsafe.U.putByte(addr + pos--, DIGITS[i&0xF]);
 			i >>>= 4;
 		}
-		Unaligned.U.putByte(addr + pos, DIGITS[i&0xF]);
+		Unsafe.U.putByte(addr + pos, DIGITS[i&0xF]);
 
 		return (int) pos;
 	}

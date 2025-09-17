@@ -83,20 +83,20 @@ final class Assign extends Expr {
 		boolean isVariable = false;
 
 		IType type = expr.type();
-		int dataCap, primType = 0;
+		int sort, primType = 0;
 		if (type.isPrimitive()) {
-			dataCap = TypeCast.getDataCap(type.getActualType());
+			sort = Type.getSort(type.getActualType());
 		} else {
 			primType = TypeCast.getWrappedPrimitive(type);
 			if (primType == 0) throw new UnsupportedOperationException("incOrDec(expr = " + expr + ", cw = " + cw + ", noRet = " + noRet + ", returnBefore = " + returnBefore + ", amount = " + amount+") fail");
-			dataCap = TypeCast.getDataCap(primType);
+			sort = Type.getSort(primType);
 		}
 
 		// == 4 (int) 防止byte自增导致溢出什么的...
 		if (expr instanceof LocalVariable lv) {
 			isVariable = true;
 
-			if (dataCap == 4 && (short)amount == amount) {
+			if (sort == Type.SORT_INT && (short)amount == amount) {
 				ctx.loadVar(lv.v);
 				if (!noRet & returnBefore) cw.load(lv.v);
 				cw.iinc(lv.v, amount);
@@ -115,21 +115,22 @@ final class Assign extends Expr {
 		int op;
 		if (amount < 0 && amount != Integer.MIN_VALUE) {
 			amount = -amount;
-			op = Opcodes.ISUB-4;
+			op = Opcodes.ISUB;
 		} else {
-			op = Opcodes.IADD-4;
+			op = Opcodes.IADD;
 		}
 
-		int type2 = Math.max(4, dataCap);
-		switch (type2) {
-			case 4: cw.ldc(amount); break;
-			case 5: cw.ldc((long)amount); break;
-			case 6: cw.ldc((float)amount); break;
-			case 7: cw.ldc((double)amount); break;
+		int unifiedSort = Math.max(Type.SORT_INT, sort);
+		switch (unifiedSort) {
+			case Type.SORT_INT: cw.ldc(amount); break;
+			case Type.SORT_LONG: cw.ldc((long)amount); break;
+			case Type.SORT_FLOAT: cw.ldc((float)amount); break;
+			case Type.SORT_DOUBLE: cw.ldc((double)amount); break;
 		}
-		cw.insn((byte) (op + type2));
+		cw.insn((byte) (op - Type.SORT_INT + unifiedSort));
 
-		if (dataCap < 4 && primType == 0 && isVariable) cw.insn((byte) (Opcodes.I2B-1 + dataCap));
+		// sort => [2, 3, 4]
+		if (sort < Type.SORT_INT && primType == 0 && isVariable) cw.insn((byte) (Opcodes.I2B - Type.SORT_BYTE + sort));
 		else if (primType != 0) ctx.castTo(Type.primitive(primType), type, 0).write(cw);
 
 		if (!noRet & !returnBefore) state = expr.copyValue(cw, type.rawType().length() - 1 != 0);
@@ -159,12 +160,12 @@ final class Assign extends Expr {
 		left.postStore(cw, state);
 	}
 
-	private boolean isCastNeeded() { return (cast.type != -1 && cast.type != -2) || left.getClass() == LocalVariable.class; }
+	private boolean isCastNeeded() { return (cast.type != TypeCast.IMPLICIT && cast.type != TypeCast.LOSSY)/* || left.getClass() == LocalVariable.class*/; }
 
 	private boolean sameVarShrink(MethodWriter cw, BinaryOp br, boolean noRet, Expr operand) {
 		// to IINC if applicable
 		block:
-		if (left instanceof LocalVariable lv && TypeCast.getDataCap(br.left.type().getActualType()) == 4 && operand.isConstant()) {
+		if (left instanceof LocalVariable lv && Type.getSort(br.left.type().getActualType()) == Type.SORT_INT && operand.isConstant()) {
 			int value = ((IntValue) operand.constVal()).value;
 
 			switch (br.operator) {
@@ -194,7 +195,7 @@ final class Assign extends Expr {
 	@Override
 	public final boolean equals(Object o) {
 		if (this == o) return true;
-		if (!(o instanceof Assign assign) || o.getClass() != getClass()) return false;
+		if (!(o instanceof Assign assign)) return false;
 		return assign.left.equals(left) && assign.right.equals(right);
 	}
 

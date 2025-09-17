@@ -42,7 +42,7 @@ public class TestPlugin {
 
 		// <minecraft:stone> * 5
 		MethodNode mn = new MethodNode(Opcodes.ACC_STATIC, "roj/compiler/test/CandyTestPlugin$Item", "stack", "(Lroj/compiler/test/CandyTestPlugin$Item;I)Lroj/compiler/test/CandyTestPlugin$ItemStack;");
-		api.onBinary(Type.klass("roj/compiler/test/CandyTestPlugin$Item"), "*", Type.primitive(Type.INT), mn, true);
+		api.onBinary(Type.klass("roj/compiler/test/CandyTestPlugin$Item"), "*", Type.INT_TYPE, mn, true);
 
 		api.newUnaryOp("__TypeOf", (ctx, node) -> new PrefixOperator() {
 			Expr node;

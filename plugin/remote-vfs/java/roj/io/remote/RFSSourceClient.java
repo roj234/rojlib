@@ -4,17 +4,18 @@ import roj.collect.RingBuffer;
 import roj.concurrent.Promise;
 import roj.concurrent.TaskPool;
 import roj.io.IOUtil;
+import roj.io.remote.proto.ClientPacket;
+import roj.io.remote.proto.Packet;
 import roj.io.source.Source;
 import roj.net.ChannelCtx;
 import roj.net.ChannelHandler;
 import roj.net.ClientLaunch;
 import roj.net.MyChannel;
-import roj.net.mss.MSSHandler;
 import roj.net.handler.Timeout;
 import roj.net.mss.MSSContext;
-import roj.io.remote.proto.ClientPacket;
-import roj.io.remote.proto.Packet;
-import roj.reflect.Unaligned;
+import roj.net.mss.MSSHandler;
+import roj.optimizer.FastVarHandle;
+import roj.reflect.Handles;
 import roj.text.logging.Logger;
 import roj.util.ArrayUtil;
 import roj.util.ByteList;
@@ -22,13 +23,12 @@ import roj.util.DynByteBuf;
 import roj.util.Helpers;
 
 import java.io.IOException;
+import java.lang.invoke.VarHandle;
 import java.net.InetSocketAddress;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Consumer;
-
-import static roj.reflect.Unaligned.U;
 
 /**
  * 远程文件系统，Source包装客户端
@@ -44,6 +44,7 @@ import static roj.reflect.Unaligned.U;
  * @author Roj234
  * @since 2024/10/27 0:34
  */
+@FastVarHandle
 public class RFSSourceClient implements ChannelHandler, Consumer<MyChannel> {
 	private static final Logger LOGGER = Logger.getLogger();
 	private static final MSSContext context = new MSSContext().setALPN("RFS");
@@ -100,7 +101,7 @@ public class RFSSourceClient implements ChannelHandler, Consumer<MyChannel> {
 	private RingBuffer<RPCTask> rpcTasks = RingBuffer.unbounded();
 	private RPCTask rpc;
 	private static final int MAX_FILE_DATA = 0x10000;
-	private static final long STATE_OFFSET = Unaligned.fieldOffset(RPCTask.class, "state");
+	private static final VarHandle STATE = Handles.lookup().findVarHandle(RPCTask.class, "state", long.class);
 
 	@Override
 	public void channelTick(ChannelCtx ctx) throws Exception {
@@ -113,7 +114,7 @@ public class RFSSourceClient implements ChannelHandler, Consumer<MyChannel> {
 				}
 			}
 			if (rpc != null) {
-				if (!U.compareAndSetInt(rpc, STATE_OFFSET, 0, 1)) {
+				if (!STATE.compareAndSet(rpc, 0, 1)) {
 					rpc = null;
 					return;
 				}
@@ -207,6 +208,7 @@ public class RFSSourceClient implements ChannelHandler, Consumer<MyChannel> {
 		rpc.failCallback = e -> IOUtil.closeSilently(ctx.channel());
 	}
 
+	@FastVarHandle
 	static class RPCTask {
 		String path;
 		int handle;
@@ -227,7 +229,7 @@ public class RFSSourceClient implements ChannelHandler, Consumer<MyChannel> {
 				var st = state;
 				if (st == 2) return true;
 				if (st != 1) return false;
-				if (U.compareAndSetInt(this, STATE_OFFSET, 1, 2)) return true;
+				if (STATE.compareAndSet(this, 1, 2)) return true;
 			}
 		}
 		void done(String message) {
@@ -242,7 +244,7 @@ public class RFSSourceClient implements ChannelHandler, Consumer<MyChannel> {
 		}
 
 		public void cancel() {
-			if (U.getAndSetInt(this, STATE_OFFSET, 3) != 3) {
+			if ((int) STATE.getAndSet(this, 3) != 3) {
 				done("cancelled");
 			}
 		}

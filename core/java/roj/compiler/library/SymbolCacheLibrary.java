@@ -8,20 +8,20 @@ import roj.asm.ClassView;
 import roj.asm.Opcodes;
 import roj.asm.attr.Attribute;
 import roj.asm.attr.ModuleAttribute;
+import roj.ci.annotation.Public;
 import roj.collect.ArrayList;
 import roj.collect.HashMap;
 import roj.collect.HashSet;
 import roj.compiler.LavaCompiler;
 import roj.compiler.resolve.Resolver;
-import roj.util.OperationDone;
 import roj.io.IOUtil;
-import roj.io.MyDataInput;
-import roj.io.MyDataInputStream;
+import roj.io.ByteInput;
+import roj.io.ByteInputStream;
 import roj.reflect.Bypass;
-import roj.ci.annotation.Public;
-import roj.reflect.Reflection;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
+import roj.util.JVM;
+import roj.util.OperationDone;
 
 import java.io.File;
 import java.io.IOException;
@@ -62,7 +62,7 @@ public final class SymbolCacheLibrary extends ClassLoaderLibrary {
 		}
 
 		try {
-			if (Reflection.JAVA_VERSION <= 8) {
+			if (JVM.VERSION <= 8) {
 				File file = IOUtil.getJar(Object.class);
 				return Collections.singletonList(new JarLibrary(file));
 			}
@@ -70,7 +70,7 @@ public final class SymbolCacheLibrary extends ClassLoaderLibrary {
 			LavaCompiler.debugLogger().debug("正在初始化LibraryRuntimeJ9Plus...");
 
 			Class<?> _jir = Class.forName("jdk.internal.jimage.ImageReader");
-			J9 j9 = Bypass.builder(J9.class).weak().inline()
+			J9 j9 = Bypass.builder(J9.class)
 						  .access(Class.forName("jdk.internal.jrtfs.SystemImage"), new String[] {"modulesImageExists", "moduleImageFile"}, new String[] {"modulesImageExists", "moduleImageFile"}, null)
 						  .delegate_o(_jir, new String[] {"open"})
 						  .delegate(_jir, new String[] {"getEntryNames", "getResource"})
@@ -152,7 +152,7 @@ public final class SymbolCacheLibrary extends ClassLoaderLibrary {
 			}
 
 			for (ZEntry entry : zf.entries()) {
-				try (var in = MyDataInputStream.wrap(zf.getStream(entry))) {
+				try (var in = ByteInputStream.wrap(zf.getStream(entry))) {
 					modules.add(new SymbolCacheLibrary(entry.getName(), in));
 				} catch (Exception e) {
 					IOUtil.closeSilently(zf);
@@ -168,7 +168,7 @@ public final class SymbolCacheLibrary extends ClassLoaderLibrary {
 	private final HashSet<String> classNamesAll = new HashSet<>(), classNamesPublic = new HashSet<>();
 
 	public SymbolCacheLibrary(String module) {super(null);this.module = module;}
-	public SymbolCacheLibrary(String module, MyDataInput buf) throws IOException {
+	public SymbolCacheLibrary(String module, ByteInput buf) throws IOException {
 		super(null);
 		this.module = module;
 

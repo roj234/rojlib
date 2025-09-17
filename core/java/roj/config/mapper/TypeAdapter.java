@@ -2,8 +2,8 @@ package roj.config.mapper;
 
 import org.jetbrains.annotations.Nullable;
 import roj.asm.type.IType;
+import roj.ci.annotation.IndirectReference;
 import roj.ci.annotation.Public;
-import roj.ci.annotation.ReferenceByGeneratedClass;
 import roj.collect.BitSet;
 import roj.config.ValueEmitter;
 
@@ -17,8 +17,8 @@ import java.util.List;
 /*abstract */class TypeAdapter {
 	static final TypeAdapter NO_DESERIALIZE = new TypeAdapter();
 
-	@ReferenceByGeneratedClass
-	static void value(ValueEmitter v, String s) {if(s == null) v.emitNull(); else v.emit(s);}
+	@IndirectReference
+	static void emit(ValueEmitter v, String s) {if(s == null) v.emitNull(); else v.emit(s);}
 
 	public TypeAdapter transform(Factory man, Class<?> subclass, @Nullable List<IType> generic) { return this; }
 
@@ -58,11 +58,6 @@ import java.util.List;
 	public boolean isOptional() { return false; }
 	public int plusOptional(int fieldState, @Nullable BitSet fieldStateEx) { return fieldState; }
 	public boolean valueIsMap() { return getClass().getName().contains("GA$"); }
-
-	//WIP
-	@ReferenceByGeneratedClass
-	public boolean isEmpty(Object o) {return o != null;}
-	//end WIP
 
 	public void write(ValueEmitter c, Object o) {
 		if (o == null) c.emitNull();

@@ -315,5 +315,5 @@ public final class ClassUtil {
 		return Collections.emptySet();
 	}
 
-	private static Type typeOf(String type1) {return type1.startsWith("[") ? Type.fieldDesc(type1) : Type.klass(type1);}
+	private static Type typeOf(String type1) {return type1.startsWith("[") ? Type.getType(type1) : Type.klass(type1);}
 }

@@ -20,6 +20,7 @@ import roj.text.diff.BsDiff;
 import roj.ui.EasyProgressBar;
 import roj.util.ArrayCache;
 import roj.util.ByteList;
+import roj.util.DynByteBuf;
 
 import java.io.*;
 import java.nio.charset.StandardCharsets;
@@ -124,7 +125,7 @@ public final class McDiffServer {
 					if (in != null) {
 						// 加载会失败的，如果对于diff
 						prevRin = new RegionFile(tempFile = File.createTempFile("mcDiffChunkTemp", ".tmp"));
-						try (var in1 = new MyDataInputStream(in)) {
+						try (var in1 = new ByteInputStream(in)) {
 							while (in1.isReadable()) {
 								int block = in1.readShort();
 								int timestamp = in1.readInt();
@@ -150,7 +151,7 @@ public final class McDiffServer {
 				w.beginEntry(entry);
 
 				pool.executeUnsafe(() -> {
-					try (ByteList.ToStream out = new ByteList.ToStream(w)) {
+					try (var out = DynByteBuf.toStream(w)) {
 						for (int i = 0; i < 1024; i++) {
 							if (!rin.hasData(i)) continue;
 
@@ -215,7 +216,7 @@ public final class McDiffServer {
 		genericParallel.close();
 
 		qzfw.beginEntry(QZEntry.ofNoAttribute(".vcs|hashes"));
-		try (ByteList.ToStream out = new ByteList.ToStream(qzfw, false)) {
+		try (var out = DynByteBuf.toStream(qzfw, false)) {
 			for (QZEntry file : qzfw.getFiles()) {
 				// or other kind that need original file
 				if (file.getModificationTime() == REGION) {

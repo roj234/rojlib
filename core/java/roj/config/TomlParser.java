@@ -58,10 +58,10 @@ public final class TomlParser extends Parser {
 	public TomlParser(int flag) { super(flag); }
 
 	@Override
-	protected ConfigValue element(@MagicConstant(flags = {LENIENT, ORDERED_MAP}) int flag) throws ParseException {
+	protected ConfigValue element(@MagicConstant(flags = {LENIENT, ORDERED_MAP}) int flags) throws ParseException {
 		MapValue map = comment == null ? new MapValue() : new MapValue.Commentable();
 
-		MapValue root = tomlObject(flag);
+		MapValue root = tomlObject(flags);
 		if (root.size() > 0) map.put(MapValue.CONFIG_TOPLEVEL, root);
 
 		o:
@@ -72,7 +72,7 @@ public final class TomlParser extends Parser {
 					w = next();
 					if (w.type() != LITERAL && w.type() != STRING) unexpected(w.text(), "键");
 					try {
-						dotName(w.text(), map, flag | INLINE, "]");
+						dotName(w.text(), map, flags | INLINE, "]");
 					} catch (ParseException e) {
 						throw e.addPath('.' + k);
 					}
@@ -81,7 +81,7 @@ public final class TomlParser extends Parser {
 					w = next();
 					if (w.type() != LITERAL && w.type() != STRING) unexpected(w.text(), "键");
 					try {
-						dotName(w.text(), map, flag, "]]");
+						dotName(w.text(), map, flags, "]]");
 					} catch (ParseException e) {
 						throw e.addPath('.' + k);
 					}

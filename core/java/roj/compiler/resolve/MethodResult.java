@@ -11,8 +11,8 @@ import roj.collect.IntMap;
 import roj.compiler.CompileContext;
 import roj.compiler.asm.MethodWriter;
 import roj.compiler.diagnostic.Kind;
-import roj.util.function.Flow;
 import roj.util.Helpers;
+import roj.util.function.Flow;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -46,8 +46,8 @@ public final class MethodResult {
 		this.error = error;
 	}
 
-	public @NotNull String rawDesc() {return desc != null ? Type.toMethodDesc(Arrays.asList(desc)) : method.rawDesc();}
-	public @NotNull List<IType> desc() {return desc != null ? Arrays.asList(desc) : Helpers.cast(Type.methodDesc(method.rawDesc()));}
+	public @NotNull String rawDesc() {return desc != null ? Type.getMethodDescriptor(Arrays.asList(desc)) : method.rawDesc();}
+	public @NotNull List<IType> desc() {return desc != null ? Arrays.asList(desc) : Helpers.cast(Type.getMethodTypes(method.rawDesc()));}
 	public @NotNull List<IType> parameters() {
 		if (desc == null) return Helpers.cast(method.parameters());
 		// 不复制数组

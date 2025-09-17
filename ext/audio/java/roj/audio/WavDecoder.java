@@ -4,7 +4,7 @@ import org.jetbrains.annotations.Nullable;
 import roj.audio.tag.APETag;
 import roj.collect.HashMap;
 import roj.io.Finishable;
-import roj.io.MyDataInputStream;
+import roj.io.ByteInputStream;
 import roj.io.source.Source;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
@@ -48,17 +48,17 @@ public class WavDecoder implements AudioDecoder {
 		buf.clear();
 		in.readFully(buf, fmtLen);
 
-		int format = buf.readUShortLE();
+		int format = buf.readUnsignedShortLE();
 		if (format != 1) throw new IOException("compressed WAVE file (0x"+Integer.toHexString(format)+")");
 
 		this.in = in;
 
-		int channels = buf.readUShortLE();
+		int channels = buf.readUnsignedShortLE();
 		int sampleRate = buf.readIntLE();
 		//每秒的数据量，波形音频数据传送速率，其值为通道数×每秒样本数×每样本的数据位数／8。播放软件利用此值可以估计缓冲区的大小。
 		int frameSize = buf.readIntLE();
-		int align = buf.readUShortLE();
-		int sampleSize = buf.readUShortLE();
+		int align = buf.readUnsignedShortLE();
+		int sampleSize = buf.readUnsignedShortLE();
 
 		assert align == ((sampleSize + 7) / 8) * channels;
 
@@ -68,14 +68,14 @@ public class WavDecoder implements AudioDecoder {
 		while (true) {
 			buf.clear();
 			in.readFully(buf, 8);
-			int type = buf.readInt(0);
+			int type = buf.getInt(0);
 			if (type == DATA) break;
 			if (type == FACT) {
 				buf.clear();
 				in.readFully(buf, 4);
 				sampleCount = buf.readIntLE();
 			} else {
-				in.skip(buf.readIntLE(4));
+				in.skip(buf.getIntLE(4));
 				//System.out.println("unknown wave block:"+buf.dump());
 			}
 		}
@@ -83,7 +83,7 @@ public class WavDecoder implements AudioDecoder {
 		this.af = af;
 		bytePerSecond = frameSize;
 		dataBegin = (int) in.position();
-		dataEnd = dataBegin+buf.readIntLE(4);
+		dataEnd = dataBegin+buf.getIntLE(4);
 
 		if (parseMetadata && dataLen+8 != dataEnd) {
 			in.seek(dataEnd);
@@ -93,8 +93,8 @@ public class WavDecoder implements AudioDecoder {
 					buf.clear();
 					in.readFully(buf, 8);
 
-					int type = buf.readInt(0);
-					int len = buf.readIntLE(4);
+					int type = buf.getInt(0);
+					int len = buf.getIntLE(4);
 
 					if (type == LIST) {
 						buf.clear();
@@ -107,7 +107,7 @@ public class WavDecoder implements AudioDecoder {
 						APETag tag = new APETag();
 
 						in.seek(in.length() - 8);
-						var mdi = MyDataInputStream.wrap(in.asInputStream());
+						var mdi = ByteInputStream.wrap(in.asInputStream());
 						try {
 							tag.parseTag(mdi, false);
 							return tag;

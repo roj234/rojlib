@@ -42,7 +42,7 @@ public final class LocalVariableTable extends Attribute implements CodeAttribute
 			name = ((CstUTF) cp.get(r)).str();
 			String desc = ((CstUTF) cp.get(r)).str();
 
-			Item item = new Item(name, generic ? Signature.parseGeneric(desc) : Type.fieldDesc(desc));
+			Item item = new Item(name, generic ? Signature.parseGeneric(desc) : Type.getType(desc));
 			list.add(item);
 
 			item.slot = r.readUnsignedShort();

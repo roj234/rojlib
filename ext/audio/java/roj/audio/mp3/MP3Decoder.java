@@ -9,26 +9,27 @@ import roj.audio.tag.ID3Tag;
 import roj.concurrent.Executor;
 import roj.concurrent.TaskPool;
 import roj.io.Finishable;
-import roj.io.MyDataInputStream;
+import roj.io.ByteInputStream;
 import roj.io.source.Source;
-import roj.reflect.Unaligned;
+import roj.optimizer.FastVarHandle;
+import roj.reflect.Handles;
 import roj.text.logging.Logger;
 import roj.util.ArrayCache;
 import roj.util.DynByteBuf;
 
 import java.io.IOException;
-
-import static roj.reflect.Unaligned.U;
+import java.lang.invoke.VarHandle;
 
 /**
  * MP3解码器
  * @author Roj234
  * @since 2024/2/18 23:37
  */
+@FastVarHandle
 public final class MP3Decoder implements AudioDecoder {
 	private static final Logger LOGGER = Logger.getLogger("MP3");
 	private static final int BUFFER_LEN = 16384;
-	private static final long STATE_OFFSET = Unaligned.fieldOffset(MP3Decoder.class, "state");
+	private static final VarHandle STATE = Handles.lookup().findVarHandle(MP3Decoder.class, "state", int.class);
 
 	private Source in;
 	private AudioSink out;
@@ -83,7 +84,7 @@ public final class MP3Decoder implements AudioDecoder {
 		int tagSize = id3.checkID3V2(_buf);
 		if (tagSize > len) {
 			in.seek(0);
-			var st = MyDataInputStream.wrap(in.asInputStream());
+			var st = ByteInputStream.wrap(in.asInputStream());
 			try {
 				id3.parseID3V2(st);
 			} finally {
@@ -120,7 +121,7 @@ public final class MP3Decoder implements AudioDecoder {
 				if (tagSize != 0) {
 					in.seek(length - 32 - Math.abs(tagSize));
 
-					var st = MyDataInputStream.wrap(in.asInputStream());
+					var st = ByteInputStream.wrap(in.asInputStream());
 					try {
 						ape.parseTag(st, tagSize < 0);
 					} finally {
@@ -157,7 +158,7 @@ public final class MP3Decoder implements AudioDecoder {
 
 	@Override
 	public void connect(AudioSink sink) throws IOException {
-		if (!U.compareAndSetInt(this, STATE_OFFSET, 0, 1))
+		if (!STATE.compareAndSet(this, 0, 1))
 			throw new IllegalStateException("wrong state "+state);
 
 		header.reset((int)in.position()-off, (int)in.length());
@@ -244,7 +245,7 @@ public final class MP3Decoder implements AudioDecoder {
 	@Override
 	public void disconnect() {
 		synchronized (this) {
-			if (U.compareAndSetInt(this, STATE_OFFSET, 1, 2)) {
+			if (STATE.compareAndSet(this, 1, 2)) {
 				try {
 					wait();
 				} catch (InterruptedException ignored) {}

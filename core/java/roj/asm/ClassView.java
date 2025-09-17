@@ -120,7 +120,7 @@ public final class ClassView implements ClassDefinition {
 		@Override public String toString() {return toString(IOUtil.getSharedCharBuf()).toString();}
 		public CharList toString(CharList sb) {
 			Opcodes.showModifiers(modifier, Opcodes.ACC_SHOW_METHOD, sb).append(' ');
-			TypeHelper.humanize(Type.methodDesc(desc), name, false, sb);
+			TypeHelper.humanize(Type.getMethodTypes(desc), name, false, sb);
 			return sb;
 		}
 	}

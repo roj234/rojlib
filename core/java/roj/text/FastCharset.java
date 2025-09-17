@@ -1,11 +1,7 @@
 package roj.text;
 
 import org.jetbrains.annotations.Nullable;
-import roj.reflect.Reflection;
-import roj.util.ArrayCache;
-import roj.util.ByteList;
-import roj.util.DynByteBuf;
-import roj.util.Helpers;
+import roj.util.*;
 
 import java.io.IOException;
 import java.nio.CharBuffer;
@@ -30,8 +26,8 @@ public abstract class FastCharset {
 	 * UTF_16本地字符集，基于处理器的Endian
 	 */
 	public static FastCharset UTF16() {return UTF16n.INSTANCE;}
-	public static FastCharset UTF16LE() {return Reflection.BIG_ENDIAN ? UTF16i.INSTANCE : UTF16n.INSTANCE;}
-	public static FastCharset UTF16BE() {return Reflection.BIG_ENDIAN ? UTF16n.INSTANCE : UTF16i.INSTANCE;}
+	public static FastCharset UTF16LE() {return JVM.BIG_ENDIAN ? UTF16i.INSTANCE : UTF16n.INSTANCE;}
+	public static FastCharset UTF16BE() {return JVM.BIG_ENDIAN ? UTF16n.INSTANCE : UTF16i.INSTANCE;}
 	@Nullable public static FastCharset getInstance(Charset charset) {
 		return switch (charset.name()) {
 			case "UTF-8" -> UTF8.INSTANCE;
@@ -39,7 +35,7 @@ public abstract class FastCharset {
 			case "GB2312", "x-mswin-936", "GBK", "GB18030" -> GB18030.INSTANCE;
 			case "UTF-16" -> UTF16n.INSTANCE;
 			case "UTF-16LE", "UTF-16BE" ->
-					Reflection.BIG_ENDIAN == charset.name().equals("UTF-16BE") ? UTF16n.INSTANCE : null;
+					JVM.BIG_ENDIAN == charset.name().equals("UTF-16BE") ? UTF16n.INSTANCE : null;
 			default -> null;
 		};
 	}

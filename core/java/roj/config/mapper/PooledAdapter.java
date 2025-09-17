@@ -58,7 +58,7 @@ final class PooledAdapter extends TypeAdapter {
 			int objectId = pool.putOrGet(o, pool.size(), -1);
 			if (objectId >= 0) {
 				c.emitMap(1);
-				c.key("");
+				c.emitKey("");
 				c.emit(objectId);
 				c.pop();
 				return;

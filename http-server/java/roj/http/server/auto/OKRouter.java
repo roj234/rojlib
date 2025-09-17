@@ -20,7 +20,7 @@ import roj.asm.type.Signature;
 import roj.asm.type.Type;
 import roj.asm.type.TypeHelper;
 import roj.asmx.mapper.ParamNameMapper;
-import roj.ci.annotation.ReferenceByGeneratedClass;
+import roj.ci.annotation.IndirectReference;
 import roj.collect.ArrayList;
 import roj.collect.HashMap;
 import roj.collect.IntMap;
@@ -35,7 +35,6 @@ import roj.http.Headers;
 import roj.http.HttpUtil;
 import roj.http.server.*;
 import roj.io.IOUtil;
-import roj.reflect.ClassDefiner;
 import roj.reflect.Reflection;
 import roj.reflect.VirtualReference;
 import roj.text.HtmlEntities;
@@ -119,7 +118,7 @@ public final class OKRouter implements Router {
 			//caller.parent(Bypass.MAGIC_ACCESSOR_CLASS);
 			//not needed, only invoke type.xxx
 			//caller.putAttr(new AttrString("SourceFile", type.getName()));
-			caller.npConstructor();
+			caller.defaultConstructor();
 
 			caller.newField(ACC_PRIVATE, "$m", "I");
 			caller.newField(ACC_PRIVATE, "$i", TypeHelper.class2asm(type));
@@ -291,7 +290,7 @@ public final class OKRouter implements Router {
 				clinit.finish();
 			}
 
-			var inst = (Dispatcher) ClassDefiner.newInstance(caller, type.getClassLoader());
+			var inst = (Dispatcher) Reflection.createInstance(type.getClassLoader(), caller);
 			var defaultMime = Annotation.findInvisible(userRoute.cp, userRoute, "roj/http/server/auto/Mime");
 			return new RouterInfo(handlers, interceptors, inst, defaultMime != null ? defaultMime.getString("value") : null);
 		}
@@ -475,7 +474,7 @@ public final class OKRouter implements Router {
 					cw.insn(ATHROW);
 					cw.label(label);
 				} else {
-					name = Reflection.upper(Type.getName(type1));
+					name = rawType.capitalized();
 					cw.clazz(CHECKCAST, "java/lang/String");
 					cw.invoke(INVOKESTATIC, "java/lang/"+(name.equals("Int")?"Integer":name), "parse"+name, "(Ljava/lang/String;)"+(char)rawType.type);
 				}
@@ -576,13 +575,13 @@ public final class OKRouter implements Router {
 		}
 	}
 	// 生成请求调试信息
-	@ReferenceByGeneratedClass
+	@IndirectReference
 	public static IllegalRequestException requestDebug(Throwable exc, Request req, String msg) {
 		var isBrowserRequest = Headers.getOneValue(req.get("accept"), "text/html") != null;
 		return new IllegalRequestException(400, /*isBrowserRequest ? */Content.internalError("参数'"+HtmlEntities.escapeHtml(msg)+"'解析失败", exc));
 	}
 	// 解析JSON请求体
-	@ReferenceByGeneratedClass
+	@IndirectReference
 	public static Object parse(Request req, IType type) throws Exception {
 		ByteList body = req.body();
 		if (body == null) throw new FastFailException("没有请求体");
@@ -603,7 +602,7 @@ public final class OKRouter implements Router {
 				var data = req.formData();
 				serializer.emitMap(data.size());
 				for (Map.Entry<String, String> entry : data.entrySet()) {
-					serializer.key(entry.getKey());
+					serializer.emitKey(entry.getKey());
 					serializer.emit(entry.getValue());
 				}
 				serializer.pop();

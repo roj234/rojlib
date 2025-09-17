@@ -362,9 +362,9 @@ public class FileShare extends Plugin {
         var user = getUser(req);
         var simpleSer = new JsonSerializer();
         simpleSer.emitMap();
-        simpleSer.key("ok");
+        simpleSer.emitKey("ok");
         simpleSer.emit(true);
-        simpleSer.key("data");
+        simpleSer.emitKey("data");
         simpleSer.emitList();
         if (user != null) {
             List<Share> myShares = new ArrayList<>();
@@ -386,14 +386,14 @@ public class FileShare extends Plugin {
     private static CharList writeInfoHistory(Share share, boolean addThreads) {
         var simpleSer = new JsonSerializer();
         simpleSer.emitMap();
-        simpleSer.key("ok");
+        simpleSer.emitKey("ok");
         simpleSer.emit(true);
-        simpleSer.key("data");
+        simpleSer.emitKey("data");
         writeInfoHistory(share, simpleSer);
         if (addThreads) {
-            simpleSer.key("threads");
+            simpleSer.emitKey("threads");
             simpleSer.emit(FILE_UPLOAD_TASKS);
-            simpleSer.key("maxFiles");
+            simpleSer.emitKey("maxFiles");
             simpleSer.emit(REMOTE_FILE_MAX);
         }
         simpleSer.pop();
@@ -401,19 +401,19 @@ public class FileShare extends Plugin {
     }
     private static void writeInfoHistory(Share info, JsonSerializer ser) {
         ser.emitMap();
-        ser.key("id");
+        ser.emitKey("id");
         ser.emit(info.id);
-        ser.key("name");
+        ser.emitKey("name");
         ser.emit(info.name);
         if (info.code != null) {
-            ser.key("code");
+            ser.emitKey("code");
             ser.emit(info.code);
         }
-        ser.key("time");
+        ser.emitKey("time");
         ser.emit(info.time);
-        ser.key("view");
+        ser.emitKey("view");
         ser.emit(info.view);
-        ser.key("download");
+        ser.emitKey("download");
         ser.emit(info.download);
 
         String name, type;
@@ -436,16 +436,16 @@ public class FileShare extends Plugin {
             }
         }
 
-        ser.key("size");
+        ser.emitKey("size");
         ser.emit(info.size);
-        ser.key("expire");
+        ser.emitKey("expire");
         ser.emit(info.expire);
 
-        ser.key("file");
+        ser.emitKey("file");
         ser.emitMap();
-        ser.key("name");
+        ser.emitKey("name");
         ser.emit(name);
-        ser.key("type");
+        ser.emitKey("type");
         ser.emit(type);
         ser.pop();
     }

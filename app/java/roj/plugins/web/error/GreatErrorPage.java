@@ -3,7 +3,7 @@ package roj.plugins.web.error;
 import roj.asmx.injector.Inject;
 import roj.asmx.injector.Weave;
 import roj.asmx.launcher.Autoload;
-import roj.ci.annotation.ReferenceByGeneratedClass;
+import roj.ci.annotation.IndirectReference;
 import roj.collect.HashMap;
 import roj.http.server.Content;
 import roj.http.server.HttpServer;
@@ -43,7 +43,7 @@ public class GreatErrorPage {
 		static Content onUncaughtError(Request req, Throwable e) {return GreatErrorPage.display(req, e);}
 	}
 
-	@ReferenceByGeneratedClass
+	@IndirectReference
 	public static void registerCustomTag() {}
 	public static void addCustomTag(String tag, Function<Request,Map<String, ?>> fn) {customTag.put(tag, fn);}
 

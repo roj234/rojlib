@@ -3,7 +3,7 @@ package roj.crypt;
 import org.jetbrains.annotations.Nullable;
 import roj.util.FastFailException;
 import roj.io.source.Source;
-import roj.reflect.Unaligned;
+import roj.reflect.Unsafe;
 import roj.text.logging.Logger;
 import roj.ui.EasyProgressBar;
 import roj.util.ArrayCache;
@@ -18,7 +18,7 @@ import java.security.InvalidKeyException;
 import java.security.SecureRandom;
 import java.security.spec.AlgorithmParameterSpec;
 
-import static roj.reflect.Unaligned.U;
+import static roj.reflect.Unsafe.U;
 
 /**
  * <We should never use C language>
@@ -93,10 +93,10 @@ public final class ReedSolomonECC extends RCipher {
 	 * @return 发现并修复了n个错误
 	 */
 	public int errorCorrection(DynByteBuf data) {
-		U.copyMemory(data.array(), data._unsafeAddr(), buf, Unaligned.ARRAY_BYTE_BASE_OFFSET, buf.length);
+		U.copyMemory(data.array(), data._unsafeAddr(), buf, Unsafe.ARRAY_BYTE_BASE_OFFSET, buf.length);
 		var errorCount = errorCorrection(buf);
 		if (errorCount == 0) return 0;
-		U.copyMemory(buf, Unaligned.ARRAY_BYTE_BASE_OFFSET, data.array(), data._unsafeAddr(), buf.length);
+		U.copyMemory(buf, Unsafe.ARRAY_BYTE_BASE_OFFSET, data.array(), data._unsafeAddr(), buf.length);
 		return errorCount;
 	}
 	public int errorCorrection(byte[] buf) {return errorCorrection(buf, null);}

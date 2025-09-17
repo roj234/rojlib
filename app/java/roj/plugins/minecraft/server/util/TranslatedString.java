@@ -22,7 +22,7 @@ public class TranslatedString extends Text {
 		super.writeJson(ser);
 
 		if (with.length > 0) {
-			ser.key("with");
+			ser.emitKey("with");
 			ser.emitList(with.length);
 			for (Text string : with) {
 				string.writeJson(ser);

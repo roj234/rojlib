@@ -5,9 +5,10 @@ import roj.collect.ArrayList;
 import roj.collect.BitSet;
 import roj.config.node.IntValue;
 import roj.crypt.CRC32;
+import roj.io.ByteOutput;
 import roj.io.IOUtil;
-import roj.io.source.FileSource;
 import roj.io.source.ByteSource;
+import roj.io.source.FileSource;
 import roj.io.source.Source;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
@@ -22,7 +23,7 @@ import java.util.Arrays;
 import java.util.List;
 
 import static roj.archive.qz.BlockId.*;
-import static roj.reflect.Unaligned.U;
+import static roj.reflect.Unsafe.U;
 
 /**
  * @author Roj234
@@ -225,7 +226,6 @@ public class QZFileWriter extends QZWriter {
         countFlagEmpty(entry.flag, -1);
     }
 
-    private ByteList buf;
     /**
      * 结束压缩包的写入操作
      *
@@ -255,7 +255,7 @@ public class QZFileWriter extends QZWriter {
             }
             public void close() throws IOException {if (out != null) out.close();}
         };
-        var out = buf = new ByteList.ToStream(crcOut);
+        var out = DynByteBuf.toStream(crcOut);
 
         long hstart = source.position();
         try {
@@ -265,25 +265,25 @@ public class QZFileWriter extends QZWriter {
 
                 crcOut.out = source;
                 if ((files.size()|emptyFiles.size()) != 0)
-                    writeHeader();
+                    writeHeader(out);
             } else {
                 crcOut.out = out();
                 WordBlock metadata = blocks.pop();
 
-                writeHeader();
+                writeHeader(out);
 
                 out.flush();
                 blocks.add(metadata);
                 finishWordBlock();
-                metadata.uSize = out.wIndex();
+                metadata.uSize = out.totalWritten();
 
                 long pos1 = source.position();
                 blockCrc32 = CRC32.initial;
                 crcOut.out = source;
 
                 out.write(kEncodedHeader);
-                writeStreamInfo(hstart-32);
-                writeWordBlocks();
+                writeStreamInfo(out, hstart-32);
+                writeWordBlocks(out);
                 out.write(kEnd);
 
                 hstart = pos1;
@@ -308,12 +308,12 @@ public class QZFileWriter extends QZWriter {
            .putLongLE(hstart-32)
            .putLongLE(hend-hstart)
            .putIntLE(CRC32.finish(blockCrc32))
-           .putIntLE(8, CRC32.crc32(buf.list, 12, 20));
+           .setIntLE(8, CRC32.crc32(buf.list, 12, 20));
 
         source.write(buf);
     }
-
-    private void writeHeader() {
+    //region 实现细节
+    private void writeHeader(ByteOutput buf) throws IOException {
         try {
             buf.write(kHeader);
 
@@ -321,14 +321,14 @@ public class QZFileWriter extends QZWriter {
                 assert !blocks.isEmpty();
 
                 buf.write(kMainStreamsInfo);
-                writeStreamInfo(0);
-                writeWordBlocks();
-                writeBlockFileMap();
+                writeStreamInfo(buf, 0);
+                writeWordBlocks(buf);
+                writeBlockFileMap(buf);
                 buf.write(kEnd);
             }
 
             files.addAll(emptyFiles);
-            writeFilesInfo();
+            writeFilesInfo(buf);
 
             buf.write(kEnd);
         } finally {
@@ -338,8 +338,7 @@ public class QZFileWriter extends QZWriter {
             flagSum[8] = flagSum[9] = 0;
         }
     }
-
-    private void writeStreamInfo(long offset) {
+    private void writeStreamInfo(ByteOutput buf, long offset) throws IOException {
         buf.put(kPackInfo)
          .putVULong(offset)
          .putVUInt(blocks.size()+flagSum[9])
@@ -353,9 +352,8 @@ public class QZFileWriter extends QZWriter {
 
         buf.write(kEnd);
     }
-    private void writeWordBlocks() {
+    private void writeWordBlocks(ByteOutput buf) throws IOException {
         buf.put(kUnPackInfo)
-
          .put(kFolder)
          .putVUInt(blocks.size())
          .put(0);
@@ -412,7 +410,7 @@ public class QZFileWriter extends QZWriter {
 
         buf.write(kEnd);
     }
-    private void writeBlockFileMap() {
+    private void writeBlockFileMap(ByteOutput buf) throws IOException {
         buf.write(kSubStreamsInfo);
 
         block:
@@ -475,13 +473,13 @@ public class QZFileWriter extends QZWriter {
         buf.write(kEnd);
     }
 
-    private void writeFilesInfo() {
+    private void writeFilesInfo(ByteOutput buf) throws IOException {
         buf.put(kFilesInfo).putVUInt(files.size());
 
         if (flagSum[0] > 0) {
             IntValue count = new IntValue();
-            BitSet emptyFile = flagSum[1] > 0 ? new BitSet() : null;
-            BitSet anti = flagSum[2] > 0 ? new BitSet() : null;
+            BitSet emptyFile = flagSum[1] > 0 ? new BitSet() : Helpers.maybeNull();
+            BitSet anti = flagSum[2] > 0 ? new BitSet() : Helpers.maybeNull();
 
             ByteList ob = IOUtil.getSharedByteBuf();
             writeBits(j -> {
@@ -517,23 +515,23 @@ public class QZFileWriter extends QZWriter {
             }
         }
 
-        writeFileNames();
+        writeFileNames(buf);
 
         int i;
-        if ((i = flagSum[3]) > 0) writeSparseTime(kCTime, QZEntry.CT, i);
-        if ((i = flagSum[4]) > 0) writeSparseTime(kATime, QZEntry.AT, i);
-        if ((i = flagSum[5]) > 0) writeSparseTime(kMTime, QZEntry.MT, i);
-        if ((i = flagSum[6]) > 0) writeSparseAttribute(i);
+        if ((i = flagSum[3]) > 0) writeTime(buf, kCTime, QZEntry.CT, i);
+        if ((i = flagSum[4]) > 0) writeTime(buf, kATime, QZEntry.AT, i);
+        if ((i = flagSum[5]) > 0) writeTime(buf, kMTime, QZEntry.MT, i);
+        if ((i = flagSum[6]) > 0) writeWinAttributes(buf, i);
 
         buf.write(kEnd);
     }
 
-    private void writeFileNames() {
+    private void writeFileNames(ByteOutput buf) throws IOException {
         int len = 1 + (files.size()<<1); // external=0 + terminators
         for (int j = 0; j < files.size(); j++)
             len += files.get(j).getName().length() << 1;
 
-        DynByteBuf buf = this.buf.put(kName).putVUInt(len).put(0);
+        buf.put(kName).putVUInt(len).put(0);
 
         for (int j = 0; j < files.size(); j++) {
             String s = files.get(j).getName();
@@ -542,8 +540,8 @@ public class QZFileWriter extends QZWriter {
             buf.putShortLE(0);
         }
     }
-    private void writeSparseAttribute(int count) {
-        DynByteBuf buf = writeSparseHeader(kWinAttributes, QZEntry.ATTR, count);
+    private void writeWinAttributes(ByteOutput buf, int count) throws IOException {
+        writeSparseHeader(buf, kWinAttributes, QZEntry.ATTR, count);
 
         long offset = QZEntryA.SPARSE_ATTRIBUTE_OFFSET[3];
         for (int i = 0; i < files.size(); i++) {
@@ -552,8 +550,8 @@ public class QZFileWriter extends QZWriter {
                 buf.putIntLE(U.getInt(entry, offset));
         }
     }
-    private void writeSparseTime(int id, int flag, int count) {
-        DynByteBuf buf = writeSparseHeader(id, flag, count);
+    private void writeTime(ByteOutput buf, int id, int flag, int count) throws IOException {
+        writeSparseHeader(buf, id, flag, count);
 
         long offset = QZEntryA.SPARSE_ATTRIBUTE_OFFSET[id-kCTime];
         for (int i = 0; i < files.size(); i++) {
@@ -562,13 +560,13 @@ public class QZFileWriter extends QZWriter {
                 buf.putLongLE(U.getLong(entry, offset));
         }
     }
-    private DynByteBuf writeSparseHeader(int id, int flag, int count) {
+    private void writeSparseHeader(ByteOutput buf, int id, int flag, int count) throws IOException {
         int len = 2;
         // bitset size
         if (count < files.size()) len += (files.size()+7) >> 3;
         len += count << (id == kWinAttributes ? 2 : 3);
 
-        DynByteBuf buf = this.buf.put(id).putVUInt(len);
+        buf.put(id).putVUInt(len);
 
         if (count < files.size()) {
             buf.write(0);
@@ -576,10 +574,10 @@ public class QZFileWriter extends QZWriter {
         } else {
             buf.write(1);
         }
-        return buf.put(0);
+        buf.put(0);
     }
 
-    private static void writeBits(Int2IntFunction fn, int len, DynByteBuf buf) {
+    private static void writeBits(Int2IntFunction fn, int len, ByteOutput buf) throws IOException {
         int v = 0;
         int shl = 7;
         for (int i = 0; i < len; i++) {
@@ -592,4 +590,5 @@ public class QZFileWriter extends QZWriter {
         }
         if (shl != 7) buf.write(v);
     }
+    //endregion
 }

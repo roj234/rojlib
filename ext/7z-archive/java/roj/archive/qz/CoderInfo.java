@@ -3,6 +3,7 @@ package roj.archive.qz;
 import org.jetbrains.annotations.NotNull;
 import roj.collect.HashMap;
 import roj.collect.IntMap;
+import roj.io.ByteOutput;
 import roj.io.Finishable;
 import roj.io.IOUtil;
 import roj.util.ArrayUtil;
@@ -291,7 +292,7 @@ final class CoderInfo extends QZCoder {
 	 * @param block The word block being processed
 	 * @param buffer The output buffer
 	 */
-	void writeCoders(WordBlock block, ByteList buffer) {
+	void writeCoders(WordBlock block, ByteOutput buffer) throws IOException {
 		ByteList options = IOUtil.getSharedByteBuf();
 
 		var sortedCoders = (CoderInfo[]) block.coder;

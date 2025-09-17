@@ -51,7 +51,7 @@ public final class CstUTF extends Constant {
 	int _length() {
 		if (data.getClass() == byte[].class) return ((byte[]) data).length;
 		if (data instanceof DynByteBuf) return ((DynByteBuf) data).readableBytes();
-		return DynByteBuf.byteCountDioUTF(data.toString());
+		return DynByteBuf.countJavaUTF(data.toString());
 	}
 
 	public String toString() { return super.toString() + ' ' + str(); }

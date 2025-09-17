@@ -45,7 +45,7 @@ public class EmitterAdapter {
 			while (!parser.nextIsMapEnd()) {
 				String key = parser.getString();
 				parser.nextMapKey();
-				emitter.key(key);
+				emitter.emitKey(key);
 				try {
 					parseValue();
 				} catch (ParseException e) {

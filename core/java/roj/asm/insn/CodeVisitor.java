@@ -82,7 +82,7 @@ public class CodeVisitor {
 					case RET -> ret(widen ? r.readShort() : r.readByte());
 					case BIPUSH -> smallNum(code, r.readByte());
 					case NEWARRAY -> newArray(r.readByte());
-					case LDC -> ldc(LDC, cp.data().get(r.readUnsignedByte()-1));
+					case LDC -> ldc(LDC, cp.constants().get(r.readUnsignedByte()-1));
 					case LDC_W, LDC2_W -> ldc(code, cp.get(r));
 					case IINC -> iinc(widen ? r.readUnsignedShort() : r.readUnsignedByte(), widen ? r.readShort() : r.readByte());
 					case WIDE -> {}

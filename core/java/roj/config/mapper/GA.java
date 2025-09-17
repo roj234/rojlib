@@ -1,7 +1,7 @@
 package roj.config.mapper;
 
+import roj.ci.annotation.IndirectReference;
 import roj.ci.annotation.Public;
-import roj.ci.annotation.ReferenceByGeneratedClass;
 import roj.collect.BitSet;
 import roj.collect.IntBiMap;
 
@@ -11,11 +11,11 @@ import roj.collect.IntBiMap;
  */
 @Public
 interface GA extends Cloneable {
-	@ReferenceByGeneratedClass
+	@IndirectReference
 	void init(IntBiMap<String> fieldId, BitSet optionalEx);
-	@ReferenceByGeneratedClass
+	@IndirectReference
 	default IntBiMap<String> fn() { return null; }
-	@ReferenceByGeneratedClass
+	@IndirectReference
 	default void init2(Factory man, Object par) {}
 	Object clone();
 }

@@ -10,13 +10,13 @@ import roj.asmx.injector.Redirect;
 import roj.asmx.injector.Shadow;
 import roj.asmx.injector.Weave;
 import roj.asmx.launcher.Autoload;
-import roj.util.OperationDone;
 import roj.crypt.CRC32;
+import roj.io.ByteOutput;
 import roj.io.IOUtil;
 import roj.io.source.CompositeSource;
 import roj.io.source.Source;
 import roj.util.ByteList;
-import roj.util.DynByteBuf;
+import roj.util.OperationDone;
 
 import java.io.File;
 import java.io.IOException;
@@ -170,7 +170,7 @@ public class QIncrementPak {
 			   .putLongLE(hend)
 			   .putIntLE(CRC32.finish(myCrc));
 
-			buf.putIntLE(8, CRC32.crc32(buf.list, 12, 20));
+			buf.setIntLE(8, CRC32.crc32(buf.list, 12, 20));
 
 			s.write(buf);
 		}
@@ -196,8 +196,8 @@ public class QIncrementPak {
 		@Copy
 		private boolean useSingleHeader;
 
-		@Redirect(value = "writeStreamInfo", injectDesc = "(J)V", matcher = "putVULong(J)Lroj/util/DynByteBuf;", occurrences = 0)
-		private static DynByteBuf aopWriteOffset(ByteList ob, long offset, QZSHImpl self) throws IOException {
+		@Redirect(value = "writeStreamInfo", injectDesc = "(Lroj/io/ByteOutput;J)V", matcher = "putVULong(J)Lroj/io/ByteOutput;", occurrences = 0)
+		private static ByteOutput writeOffset(ByteOutput ob, long offset, QZSHImpl self) throws IOException {
 			if (!self.useSingleHeader) return ob.putVULong(offset);
 
 			ob.put(0xF0).flush();

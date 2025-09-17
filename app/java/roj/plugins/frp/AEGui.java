@@ -20,7 +20,7 @@ import roj.net.*;
 import roj.net.mss.MSSKeyPair;
 import roj.text.TextUtil;
 import roj.text.TextWriter;
-import roj.util.HighResolutionTimer;
+import roj.util.JVM;
 
 import javax.swing.*;
 import java.awt.*;
@@ -104,7 +104,7 @@ public class AEGui extends JFrame implements ChannelHandler {
 				//noinspection AssignmentUsedAsCondition
 				if (exitOnClose = f.loadFromFile(new File(args[0]))) {
 					System.out.println("运行在无GUI模式");
-					HighResolutionTimer.activate();
+					JVM.useAccurateTiming();
 				}
 			} catch (Throwable e) {
 				e.printStackTrace();
@@ -288,73 +288,73 @@ public class AEGui extends JFrame implements ChannelHandler {
 				try (var out = TextWriter.to(file)) {
 					var v = new YamlSerializer().multiline(true).to(out);
 					v.emitMap();
-					v.key("server");
+					v.emitKey("server");
 					v.emit(uiServer.getText());
-					v.key("room");
+					v.emitKey("room");
 					v.emit(uiRoom.getText());
 					if (uiCreateRoom.isSelected()) {
-						v.key("room_owner");
+						v.emitKey("room_owner");
 						v.emit(true);
-						v.key("room_desc");
+						v.emitKey("room_desc");
 						v.emit(uiCustomMotd.getText());
-						v.key("ports");
+						v.emitKey("ports");
 						v.emitList();
 						for (int i = 0; i < model.size(); i++) {
 							var c = model.get(i);
 							v.emitMap();
 							if (c.name != null) {
-								v.key("hint");
+								v.emitKey("hint");
 								v.emit(c.name);
 							}
-							v.key("port");
+							v.emitKey("port");
 							v.emit(c.from);
 							if (c.udp) {
-								v.key("udp");
+								v.emitKey("udp");
 								v.emit(true);
 							}
 							v.pop();
 						}
 						v.pop();
 						if (uiDirectServer.isSelected()) {
-							v.key("local_server");
+							v.emitKey("local_server");
 							v.emit(true);
 						}
 						if (!userWhiteList.isEmpty()) {
-							v.key("whitelist");
+							v.emitKey("whitelist");
 							v.emitMap(userWhiteList.size());
 							for (Map.Entry<byte[], String> entry : userWhiteList.entrySet()) {
-								v.key(entry.getValue());
+								v.emitKey(entry.getValue());
 								v.emit(IOUtil.encodeHex(entry.getKey()));
 							}
 							v.pop();
 						}
 					} else if (model.size() > 0) {
-						v.key("ports");
+						v.emitKey("ports");
 						v.emitMap();
 						for (int i = 0; i < model.size(); i++) {
 							Obsoleted c = model.get(i);
 							if (c.name != null) {
-								v.key("hint");
+								v.emitKey("hint");
 								v.emit(c.name);
 							}
-							v.key("port");
+							v.emitKey("port");
 							v.emit(c.from);
 							if (c.to != c.from) {
-								v.key("local_port");
+								v.emitKey("local_port");
 								v.emit(c.to);
 							}
 							if (c.udp) {
-								v.key("udp");
+								v.emitKey("udp");
 								v.emit(true);
 							}
 						}
 						v.pop();
 					}
-					v.key("nickname");
+					v.emitKey("nickname");
 					v.emit(uiUser.getText());
-					v.key("public_key");
+					v.emitKey("public_key");
 					v.emit(keyType.toPEM(userCert.getPublic()));
-					v.key("private_key");
+					v.emitKey("private_key");
 					v.emit(keyType.toPEM(userCert.getPrivate()));
 					v.getValue();
 

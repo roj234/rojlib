@@ -2,13 +2,13 @@ package roj.util;
 
 import roj.collect.IntList;
 import roj.math.MathUtils;
-import roj.reflect.Unaligned;
+import roj.reflect.Unsafe;
 import roj.text.CharList;
 import roj.text.TextUtil;
 
 import java.util.Arrays;
 
-import static roj.reflect.Unaligned.U;
+import static roj.reflect.Unsafe.U;
 import static roj.text.TextUtil.scaledNumber1024;
 
 /**
@@ -185,10 +185,10 @@ public sealed class Bitmap {
 	static void addLong(IntList l, long v) {
 		int size = l.size();
 		l.ensureCapacity(2+size*2);
-		U.putLong(l.getRawArray(), Unaligned.ARRAY_INT_BASE_OFFSET + 4L * size, v);
+		U.putLong(l.getRawArray(), Unsafe.ARRAY_INT_BASE_OFFSET + 4L * size, v);
 		l.setSize(size+2);
 	}
-	static long getLong(IntList l, int i) { return U.getLong(l.getRawArray(), Unaligned.ARRAY_INT_BASE_OFFSET + 4L * i); }
+	static long getLong(IntList l, int i) { return U.getLong(l.getRawArray(), Unsafe.ARRAY_INT_BASE_OFFSET + 4L * i); }
 
 	// 60bytes
 	private static sealed class Ext extends Bitmap {
@@ -526,7 +526,7 @@ public sealed class Bitmap {
 				long a = U.getLong(refA, posA); // [offset, length]
 				long b = U.getLong(posB);
 				return Long.compare(a, b);
-			}, data.getRawArray(), Unaligned.ARRAY_INT_BASE_OFFSET, 16);
+			}, data.getRawArray(), Unsafe.ARRAY_INT_BASE_OFFSET, 16);
 
 			long off = 0;
 			for (int i = 0; i < data.size();) {

@@ -10,6 +10,7 @@ import roj.asm.annotation.Annotation;
 import roj.asm.attr.*;
 import roj.asm.cp.Constant;
 import roj.asm.cp.CstClass;
+import roj.asm.frame.FrameVisitor;
 import roj.asm.insn.*;
 import roj.asm.type.*;
 import roj.collect.ArrayList;
@@ -28,10 +29,9 @@ import roj.compiler.ast.expr.*;
 import roj.compiler.diagnostic.Kind;
 import roj.compiler.resolve.*;
 import roj.compiler.runtime.RtUtil;
+import roj.config.node.ConfigValue;
 import roj.text.ParseException;
 import roj.text.Token;
-import roj.config.node.ConfigValue;
-import roj.reflect.Reflection;
 import roj.util.ArrayUtil;
 import roj.util.Helpers;
 import roj.util.OperationDone;
@@ -112,11 +112,11 @@ public final class MethodParser {
 	public void parseBlockMethod(CompileUnit file, MethodWriter cw) throws ParseException {
 		blockMethod = true;
 		this.file = file;
-		ctx.setMethod(cw.mn);
+		ctx.setMethod(cw.method);
 		reset();
 
 		paramSize = 0;
-		returnTypeG = returnType = Type.primitive(Type.VOID);
+		returnTypeG = returnType = Type.VOID_TYPE;
 
 		wr.next(); wr.retractWord();
 		wr.setLines(cw.lines());
@@ -132,24 +132,24 @@ public final class MethodParser {
 		ctx.setMethod(mn);
 		reset();
 
-		returnType = mn.returnType();
-		Signature signature = (Signature) mn.getAttribute("Signature");
-		returnTypeG = signature == null ? returnType : signature.values.get(signature.values.size()-1);
-
 		wr.next(); wr.retractWord();
 		var cw = ctx.createMethodWriter(file, mn);
 		wr.setLines(cw.lines());
 		setCw(cw);
 
+		var flags = mn.getAttribute(null, Attribute.MethodParameters);
+		var signature = mn.getAttribute(null, Attribute.SIGNATURE);
+
+		returnType = mn.returnType();
+		returnTypeG = signature == null ? returnType : signature.values.get(signature.values.size()-1);
+
 		paramSize = (mn.modifier() & ACC_STATIC) == 0 ? 1 : 0;
 
-		var flags = mn.getAttribute(null, Attribute.MethodParameters);
-		var sign = mn.getAttribute(null, Attribute.SIGNATURE);
 		var parameters = mn.parameters();
 		for (int i = 0; i < parameters.size(); i++) {
 			IType type = parameters.get(i);
 			if (i < names.size()) {
-				Variable var = newVar(names.get(i), sign != null ? sign.values.get(i) : type);
+				Variable var = newVar(names.get(i), signature != null ? signature.values.get(i) : type);
 				if (flags != null && (flags.getFlag(i, 0)&ACC_FINAL) != 0) var.isFinal = true;
 				if (ctx.isArgumentDynamic) var.pos = 0; // keep dynamic
 			} else {
@@ -281,8 +281,8 @@ public final class MethodParser {
 
 		if (!DebugSetting.DisableFrameVisitor)
 		cw.computeFrames(file.version > ClassNode.JavaVersion(6)
-				? Code.COMPUTE_FRAMES|Code.COMPUTE_SIZES
-				: Code.COMPUTE_SIZES);
+				? FrameVisitor.COMPUTE_FRAMES| FrameVisitor.COMPUTE_SIZES
+				: FrameVisitor.COMPUTE_SIZES);
 		else cw.visitSizeMax(10,10);
 	}
 	//endregion
@@ -763,7 +763,7 @@ public final class MethodParser {
 
 			if ((flag&1) != 0) ctx.report(Kind.ERROR, "block.try.duplicateCatch");
 
-			TryCatchEntry entry = cw.addException(tryBegin,tryEnd,cw.label(),null);
+			TryCatchBlock entry = cw.addException(tryBegin,tryEnd,cw.label(),null);
 			visMap.orElse();
 			beginCodeBlock();
 
@@ -858,7 +858,7 @@ public final class MethodParser {
 			Label finallyHandler = new Label();
 			Variable exc = newVar("@异常", Types.OBJECT_TYPE);
 
-			cw.addException(tryBegin, cw.label(), finallyHandler, TryCatchEntry.ANY);
+			cw.addException(tryBegin, cw.label(), finallyHandler, TryCatchBlock.ANY);
 
 			//region 标准版finally
 			if (disableOptimization) {
@@ -911,7 +911,7 @@ public final class MethodParser {
 			//endregion
 			//region 优化版finally
 			else {
-				Variable procedureIdVar = newVar("@跳转自", Type.primitive(Type.INT));
+				Variable procedureIdVar = newVar("@跳转自", Type.INT_TYPE);
 				Variable returnValue = returnType.type == Type.VOID ? null : newVar("@返回值", Types.OBJECT_TYPE);
 				Label optimizedFinallyHandler = new Label();
 				int procedureId = 0;
@@ -1120,7 +1120,7 @@ public final class MethodParser {
 		if (anyNormal) moreSituations++;
 		if (flowHook.returnHook.size() > 0) moreSituations++;
 
-		var sri = moreSituations < 2 ? null : newVar("@跳转自", Type.primitive(Type.INT));
+		var sri = moreSituations < 2 ? null : newVar("@跳转自", Type.INT_TYPE);
 		var exc = newVar("@异常", Types.OBJECT_TYPE);
 
 		if (sri != null) {
@@ -1192,7 +1192,7 @@ public final class MethodParser {
 			if (pos.get(j) == null) pos.set(j, pos.get(j-1));
 		}
 
-		cw.addException(pos.get(i), tryEnd, cw.label(), TryCatchEntry.ANY);
+		cw.addException(pos.get(i), tryEnd, cw.label(), TryCatchBlock.ANY);
 
 		boolean smallTwr = i > 2;
 		while (true) {
@@ -1247,11 +1247,11 @@ public final class MethodParser {
 
 			if (normalHandlers == null) {
 				if (!pos.get(i).equals(pos.get(i+1)))
-					cw.addException(pos.get(i), pos.get(i+1), cw.label(), TryCatchEntry.ANY);
+					cw.addException(pos.get(i), pos.get(i+1), cw.label(), TryCatchBlock.ANY);
 			} else {
 				Label ph_start = normalHandlers[i*2], ph_handler = normalHandlers[i*2 + 1];
 				cw.label(ph_handler);
-				cw.addException(pos.get(i), ph_start, ph_handler, TryCatchEntry.ANY);
+				cw.addException(pos.get(i), ph_start, ph_handler, TryCatchBlock.ANY);
 			}
 		}
 	}
@@ -1445,7 +1445,7 @@ public final class MethodParser {
 			if (checkLSB) ctx.report(Kind.ERROR, "expr.illegalStart");
 		} else {
 			Expr node = expr.resolve(ctx);
-			if (node.isConstant() && node.type() == Type.primitive(Type.BOOLEAN)) {
+			if (node.isConstant() && node.type() == Type.BOOLEAN_TYPE) {
 				boolean flag = (boolean) node.constVal();
 				constantHint = flag ? 1 : -1;
 
@@ -1454,7 +1454,7 @@ public final class MethodParser {
 					node.writeStmt(cw);
 				}
 			} else {
-				var r = ctx.castTo(node.type(), Type.primitive(Type.BOOLEAN), 0);
+				var r = ctx.castTo(node.type(), Type.BOOLEAN_TYPE, 0);
 				if (r.type >= 0) node.writeShortCircuit(cw, r, mode == 2/*WHILE*/, target);
 			}
 		}
@@ -1550,7 +1550,7 @@ public final class MethodParser {
 
 					int iterableMode = ctx.compiler.link(owner).getIterableMode(ctx.compiler);
 					if (iterableMode == 2) { // 2=LavaRandomAccessible
-						var result = ctx.getMethodList(owner, "get").findMethod(ctx, type, Collections.singletonList(Type.primitive(Type.INT)), 0);
+						var result = ctx.getMethodList(owner, "get").findMethod(ctx, type, Collections.singletonList(Type.INT_TYPE), 0);
 						if (result == null) {
 							ctx.report(Kind.INTERNAL_ERROR, "ListIterable.get resolve failed");
 							skipBlockOrStatement();
@@ -1608,7 +1608,7 @@ public final class MethodParser {
 							cw.clazz(CHECKCAST, elementType);
 						} else {
 							// 20250708 nextLong etc, 这样和PrimitiveIterator兼容
-							cw.invoke(isInterface ? INVOKEINTERFACE : INVOKEVIRTUAL, owner.name(), "next"+Reflection.capitalizedType(elementType), "()"+(char)elementType.type, false);
+							cw.invoke(isInterface ? INVOKEINTERFACE : INVOKEVIRTUAL, owner.name(), "next"+elementType.capitalized(), "()"+(char)elementType.type, false);
 						}
 						cw.store(lastVar);
 
@@ -1629,8 +1629,8 @@ public final class MethodParser {
 					iter.write(cw);
 					cw.store(_arr);
 				}
-				Variable _i = newVar("@索引", Type.primitive(Type.INT));
-				Variable _len = newVar("@数组长度", Type.primitive(Type.INT));
+				Variable _i = newVar("@索引", Type.INT_TYPE);
+				Variable _len = newVar("@数组长度", Type.INT_TYPE);
 
 				// type[] __var = expr;
 				// int __i = 0;
@@ -1658,7 +1658,7 @@ public final class MethodParser {
 				cw.load(_i);
 				if (owner != null) {
 					// 检查可能存在的override
-					var result = ctx.getMethodList(owner, "get").findMethod(ctx, type, Collections.singletonList(Type.primitive(Type.INT)), 0);
+					var result = ctx.getMethodList(owner, "get").findMethod(ctx, type, Collections.singletonList(Type.INT_TYPE), 0);
 					if (result != null) {
 						MethodResult.writeInvoke(result.method, ctx, cw);
 						ctx.castTo(result.method.returnType(), lastVar.type, TypeCast.DOWNCAST).write(cw);
@@ -2260,7 +2260,7 @@ public final class MethodParser {
 
 		switch (node.kind) {
 			case 0 -> {// int or Integer
-				ctx.writeCast(cw, sval, Type.primitive(Type.INT));
+				ctx.writeCast(cw, sval, Type.INT_TYPE);
 				switchInt(breakTo, branches, null);
 			}
 			case 1 -> {// legacy String
@@ -2302,19 +2302,19 @@ public final class MethodParser {
 			case 5 -> {// SwitchMapI
 				if (switchInt(breakTo, branches, sval)) break;
 
-				ClassNode switchMap = switchMap(branches, (byte) 0, "roj/compiler/runtime/SwitchMapI", Type.primitive(Type.INT));
+				ClassNode switchMap = switchMap(branches, (byte) 0, "roj/compiler/runtime/SwitchMapI", Type.INT_TYPE);
 
 				cw.field(GETSTATIC, switchMap, 0);
-				ctx.writeCast(cw, sval, Type.primitive(Type.INT));
+				ctx.writeCast(cw, sval, Type.INT_TYPE);
 				cw.invoke(INVOKEVIRTUAL, "roj/compiler/runtime/SwitchMapI", "get", "(I)I");
 
 				linearMapping(breakTo, branches);
 			}
 			case 6 -> {// SwitchMapJ
-				ClassNode switchMap = switchMap(branches, (byte) 0, "roj/compiler/runtime/SwitchMapJ", Type.primitive(Type.LONG));
+				ClassNode switchMap = switchMap(branches, (byte) 0, "roj/compiler/runtime/SwitchMapJ", Type.LONG_TYPE);
 
 				cw.field(GETSTATIC, switchMap, 0);
-				ctx.writeCast(cw, sval, Type.primitive(Type.LONG));
+				ctx.writeCast(cw, sval, Type.LONG_TYPE);
 				cw.invoke(INVOKEVIRTUAL, "roj/compiler/runtime/SwitchMapJ", "get", "(J)I");
 
 				linearMapping(breakTo, branches);
@@ -2393,7 +2393,7 @@ public final class MethodParser {
 			}
 
 			if (sw.findBestCode() == LOOKUPSWITCH && branches.size() > 2) return false;
-			ctx.writeCast(cw, lookupTesting, Type.primitive(Type.INT));
+			ctx.writeCast(cw, lookupTesting, Type.INT_TYPE);
 		}
 
 		var sw = SwitchBlock.ofAuto();
@@ -2417,7 +2417,7 @@ public final class MethodParser {
 						key = x.asInt();
 					} else {
 						// 报告错误，xxx无法转换为常量整数
-						int type = ctx.castTo(label.type(), Type.primitive(Type.INT), 0).type;
+						int type = ctx.castTo(label.type(), Type.INT_TYPE, 0).type;
 						assert type < 0;
 						continue;
 					}
@@ -2460,7 +2460,7 @@ public final class MethodParser {
 					String key;
 					if (tmp1 instanceof String) {
 						key = (String) tmp1;
-					} else if (label.type().equals(Type.primitive(Type.CHAR))) {
+					} else if (label.type().equals(Type.CHAR_TYPE)) {
 						key = String.valueOf(((ConfigValue) tmp1).asChar());
 					} else {
 						// 报告错误：xxx无法转换为常量字符串
@@ -2557,7 +2557,7 @@ public final class MethodParser {
 
 		c.insn(Opcodes.RETURN);
 		c.finish();
-		c.mn.addAttribute(new UnparsedAttribute("Code", c.bw.toByteArray()));
+		c.method.addAttribute(new UnparsedAttribute("Code", c.bw.toByteArray()));
 		return sm;
 	}
 	@NotNull
@@ -2621,14 +2621,14 @@ public final class MethodParser {
 		c.field(PUTSTATIC, sm, 0);
 
 		c.insn(Opcodes.RETURN);
-		c.computeFrames(Code.COMPUTE_FRAMES|Code.COMPUTE_SIZES);
+		c.computeFrames(FrameVisitor.COMPUTE_FRAMES| FrameVisitor.COMPUTE_SIZES);
 		if (ctx.compiler.hasFeature(Compiler.EMIT_LINE_NUMBERS)) {
 			c.visitExceptions();
 			c.visitAttributes();
 			c.visitAttribute(lines);
 		}
 		c.finish();
-		c.mn.addAttribute(new UnparsedAttribute("Code", c.bw.toByteArray()));
+		c.method.addAttribute(new UnparsedAttribute("Code", c.bw.toByteArray()));
 		return sm;
 	}
 
@@ -2715,7 +2715,7 @@ public final class MethodParser {
 
 		if (generatorEntry == null) {ctx.report(Kind.ERROR, "block.switch.yield");return;}
 
-		int point = generatorEntry.targets.size();
+		int point = generatorEntry.cases.size();
 
 		cw.insn(ALOAD_1);
 		cw.invokeV(RETURNSTACK_TYPE, "forWrite", "()L"+RETURNSTACK_TYPE+";");
@@ -2822,7 +2822,7 @@ public final class MethodParser {
 		};
 		hook.finallyExecute(cw, start, unlocker);
 
-		cw.addException(start,end,cw.label(),TryCatchEntry.ANY);
+		cw.addException(start,end,cw.label(), TryCatchBlock.ANY);
 		unlocker.accept(cw);
 		cw.insn(ATHROW);
 
@@ -2903,7 +2903,7 @@ public final class MethodParser {
 					break alwaysThrow;
 				}
 			}
-			ctx.writeCast(cw, condition, Type.primitive(Type.BOOLEAN));
+			ctx.writeCast(cw, condition, Type.BOOLEAN_TYPE);
 			cw.jump(IFNE, assertDone);
 		}
 

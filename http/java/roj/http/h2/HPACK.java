@@ -463,7 +463,7 @@ final class HPACK {
 		in.retractBits(-in.readableBits());
 
 		int mask = (1 << in.bitPos) - 1;
-		if (in.bitPos >0 && (in.byteBuffer.get(in.byteBuffer.rIndex) & mask) != mask) {
+		if (in.bitPos >0 && (in.byteBuffer.getByte(in.byteBuffer.rIndex) & mask) != mask) {
 			throw new H2Exception(ERROR_COMPRESS, "HPACK.Huffman.InvalidPadding");
 		}
 		in.endBitRead();

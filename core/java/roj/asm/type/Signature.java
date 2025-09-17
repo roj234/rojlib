@@ -7,12 +7,12 @@ import roj.asm.attr.Attribute;
 import roj.asm.cp.ConstantPool;
 import roj.collect.ArrayList;
 import roj.collect.LinkedHashMap;
-import roj.util.OperationDone;
-import roj.text.Tokenizer;
 import roj.config.node.IntValue;
 import roj.io.IOUtil;
 import roj.text.CharList;
+import roj.text.Tokenizer;
 import roj.util.DynByteBuf;
+import roj.util.OperationDone;
 
 import java.util.Collections;
 import java.util.Iterator;
@@ -48,8 +48,8 @@ public class Signature extends Attribute {
 	@NotNull public Map<String, List<IType>> typeParams;
 	@NotNull public List<IType> values, exceptions;
 
-	public static IType any() { return Any.I; }
-	public static IType placeholder() { return Placeholder.I; }
+	public static IType any() { return Any.any; }
+	public static IType placeholder() { return Itf.itf; }
 
 	public Signature(@MagicConstant(intValues = {METHOD, FIELD, CLASS}) int type) {
 		this.type = (byte) type;
@@ -271,7 +271,7 @@ public class Signature extends Attribute {
 					i = i1.value;
 				}
 
-				if (vals.size() == 1 && vals.get(0) == Placeholder.I) fail("此处不允许占位符类型",i,s);
+				if (vals.size() == 1 && vals.get(0) == Itf.itf) fail("此处不允许占位符类型",i,s);
 
 				sign.typeParams.put(name, vals);
 
@@ -357,7 +357,7 @@ public class Signature extends Attribute {
 			case ':':
 				if ((flag & F_PLACEHOLDER) == 0) fail("此处不允许占位符类型("+flag+")",i,s);
 				mi.value--;
-				return Placeholder.I;
+				return Itf.itf;
 
 			case 'L':
 				return parseType(s,mi,tmp,array|(flag&0xF00));
@@ -400,7 +400,7 @@ public class Signature extends Attribute {
 						break childrenLoop;
 					case '*':
 						pos++;
-						g.addChild(Any.I);
+						g.addChild(Any.any);
 						break;
 					default:
 						int ex;
@@ -455,4 +455,37 @@ public class Signature extends Attribute {
 		}
 	}
 	private static void fail(String error, int position, CharSequence signature) {throw new IllegalArgumentException(Tokenizer.escape(signature)+" 在第"+position+"个字符("+(position>=signature.length()?"EOF":signature.charAt(position))+")解析失败: "+error);}
+
+	private static final class Itf implements IType {
+		static final Itf itf = new Itf();
+
+		private Itf() {}
+
+		@Override public byte genericType() {return PLACEHOLDER_TYPE;}
+		@Override public void toDesc(CharList sb) {}
+		@Override public void toString(CharList sb) {}
+		@Override public String owner() { return "java/lang/Object"; }
+		@Override
+		public void validate(int position, int index) {
+			if (position != TYPE_PARAMETER_ENV || index != 0) throw new IllegalStateException(this+"类型只能位于类型参数的第一项");
+		}
+		@Override public IType clone() { return itf; }
+		@Override public String toString() {return "<接口占位符>";}
+	}
+
+	private static final class Any implements IType {
+		static final Any any = new Any();
+
+		private Any() {}
+
+		@Override public byte genericType() {return ANY_TYPE;}
+		@Override public void toDesc(CharList sb) {sb.append('*');}
+		@Override public void toString(CharList sb) {sb.append('?');}
+		@Override
+		public void validate(int position, int index) {
+			if (position != GENERIC_ENV) throw new IllegalStateException("<任意>只能在泛型中使用");
+		}
+		@Override public IType clone() {return any;}
+		@Override public String toString() { return "?"; }
+	}
 }

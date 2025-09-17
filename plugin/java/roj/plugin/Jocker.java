@@ -29,8 +29,7 @@ import roj.text.logging.Logger;
 import roj.ui.*;
 import roj.util.ArtifactVersion;
 import roj.util.Helpers;
-import roj.util.HighResolutionTimer;
-import roj.util.VMUtil;
+import roj.util.JVM;
 
 import java.awt.event.KeyEvent;
 import java.io.File;
@@ -124,7 +123,7 @@ public final class Jocker extends PluginManager {
 		Tty.setHandler(CMD);
 
 		LOGGER.info("启动耗时: {}ms", System.currentTimeMillis()-time);
-		HighResolutionTimer.runThis();
+		JVM.AccurateTimer.parkForMe();
 	}
 
 	private Jocker(File pluginFolder) {
@@ -287,7 +286,7 @@ public final class Jocker extends PluginManager {
 			pm.stopping = true;
 			pm.unloadPlugins();
 			IOUtil.closeSilently(httpServer);
-			if (!VMUtil.isShutdownInProgress()) System.exit(0);
+			if (!JVM.isShutdownInProgress()) System.exit(0);
 		}
 
 		public Interrupter() {
@@ -295,7 +294,7 @@ public final class Jocker extends PluginManager {
 			Runtime.getRuntime().addShutdownHook(this);
 
 			// preload class, only for development purpose
-			VMUtil.isShutdownInProgress();
+			JVM.isShutdownInProgress();
 		}
 
 		@Override

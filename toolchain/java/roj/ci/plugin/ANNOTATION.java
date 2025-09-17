@@ -40,7 +40,7 @@ public class ANNOTATION implements Processor {
 				}
 			}
 
-			List<Constant> array = cp.data();
+			List<Constant> array = cp.constants();
 			for (Constant constant : array) {
 				if (constant.type() == Constant.STRING) {
 					CstRefUTF str = (CstRefUTF) constant;

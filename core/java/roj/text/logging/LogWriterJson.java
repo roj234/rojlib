@@ -21,14 +21,14 @@ final class LogWriterJson extends LogWriter {
 		JsonSerializer ser = new JsonSerializer();
 		ser.emitMap();
 
-		ser.key("context");
+		ser.emitKey("context");
 		ser.emitMap();
 
-		ser.key("thread");
+		ser.emitKey("thread");
 		ser.emit(tmpCtx.get("THREAD").toString());
-		ser.key("level");
+		ser.emitKey("level");
 		ser.emit(level.name());
-		ser.key("logger");
+		ser.emitKey("logger");
 		ser.emit(ctx.name());
 
 		CharList sb = this.sb;
@@ -37,7 +37,7 @@ final class LogWriterJson extends LogWriter {
 
 		List<Formatter> components = ctx.getComponents();
 		for (int i = 0; i < components.size(); i++) {
-			ser.key(Integer.toString(i));
+			ser.emitKey(Integer.toString(i));
 
 			sb.clear();
 			ser.valString(components.get(i).format(m, sb));
@@ -45,7 +45,7 @@ final class LogWriterJson extends LogWriter {
 
 		ser.pop();
 
-		ser.key("message");
+		ser.emitKey("message");
 		if (argc > 0) {
 			sb.clear();
 			replaceArg(sb, msg.toString(), args, argc);
@@ -54,7 +54,7 @@ final class LogWriterJson extends LogWriter {
 		else ser.valString(msg);
 
 		if (ex != null) {
-			ser.key("exception");
+			ser.emitKey("exception");
 			writeException(ex, new HashSet<>(Hasher.identity()), ser);
 		}
 
@@ -83,36 +83,36 @@ final class LogWriterJson extends LogWriter {
 
 		ser.emitMap();
 
-		ser.key("type");
+		ser.emitKey("type");
 		ser.emit(ex.getClass().getSimpleName());
 
 		if (ex.getMessage() != null) {
-			ser.key("message");
+			ser.emitKey("message");
 			ser.emit(ex.getMessage());
 		}
 
 		var trace = LogHelper.INSTANCE.getStackTrace(ex);
 		if (trace.length > 0) {
-			ser.key("trace");
+			ser.emitKey("trace");
 			ser.emitList();
 
 			for (var el : trace) {
 				ser.emitMap();
-				ser.key("class");
+				ser.emitKey("class");
 				ser.emit(el.getClassName());
-				ser.key("method");
+				ser.emitKey("method");
 				ser.emit(el.getMethodName());
 				if (el.getLineNumber() != -1) {
-					ser.key("line");
+					ser.emitKey("line");
 					ser.emit(el.getLineNumber());
 				}
 				if (el.getFileName() != null) {
-					ser.key("file");
+					ser.emitKey("file");
 					ser.emit(el.getFileName());
 				}
 				if (ASM.TARGET_JAVA_VERSION > 8) {
 					if (el.getModuleName() != null) {
-						ser.key("module");
+						ser.emitKey("module");
 						ser.emit(el.getMethodName());
 					}
 				}
@@ -122,7 +122,7 @@ final class LogWriterJson extends LogWriter {
 
 		List<Throwable> suppressed = LogHelper.INSTANCE.getSuppressed(ex);
 		if (suppressed != null) {
-			ser.key("suppressed");
+			ser.emitKey("suppressed");
 			ser.emitList();
 			for (Throwable th : suppressed) {
 				writeException(th, dejavu, ser);
@@ -132,7 +132,7 @@ final class LogWriterJson extends LogWriter {
 
 		Throwable cause = ex.getCause();
 		if (cause != null) {
-			ser.key("cause");
+			ser.emitKey("cause");
 			writeException(cause, dejavu, ser);
 		}
 

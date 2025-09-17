@@ -48,7 +48,7 @@ public final class AnnotationEncoder implements ValueEmitter {
 	}
 	public final void emitNull() {throw new UnsupportedOperationException();}
 
-	public final void key(String key) {out.putShort(cp.getUtfId(key));}
+	public final void emitKey(String key) {out.putShort(cp.getUtfId(key));}
 
 	public final void emitList() {emitList(-1);}
 	public final void emitList(int size) {

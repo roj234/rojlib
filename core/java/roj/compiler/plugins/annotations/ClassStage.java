@@ -104,12 +104,12 @@ final class ClassStage implements Processor {
 		if ((mn.modifier()&Opcodes.ACC_STATIC) == 0) return;
 		String desc = mn.rawDesc();
 
-		var params = Type.methodDesc(desc);
+		var params = Type.getMethodTypes(desc);
 		ClassDefinition info = ctx.resolve(params.get(0));
 		if (info != null) {
 			params.remove(0);
 
-			desc = Type.toMethodDesc(params);
+			desc = Type.getMethodDescriptor(params);
 			int idx = info.getMethod(mn.name(), desc);
 			if (idx >= 0 && !annotation.getBool("override")) return;
 

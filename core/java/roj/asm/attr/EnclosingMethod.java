@@ -26,7 +26,7 @@ public final class EnclosingMethod extends Attribute {
 		} else {
 			name = method.name().str();
 			ArrayList<Type> in = AsmCache.getInstance().methodTypeTmp();
-			returnType = Type.methodDesc(method.rawDesc().str(), in);
+			returnType = Type.getArgumentTypes(method.rawDesc().str(), in);
 			parameters = new ArrayList<>(in);
 		}
 	}
@@ -44,7 +44,7 @@ public final class EnclosingMethod extends Attribute {
 		if (PREDEFINED == name) {
 			w.putShort(0);
 		} else {
-			w.putShort(pool.getDescId(name, Type.toMethodDesc(parameters, returnType)));
+			w.putShort(pool.getDescId(name, Type.getMethodDescriptor(parameters, returnType)));
 		}
 	}
 

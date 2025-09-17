@@ -7,7 +7,7 @@ import roj.config.node.ConfigValue;
 import roj.config.node.MapValue;
 import roj.io.CorruptedInputException;
 import roj.io.IOUtil;
-import roj.io.MyDataInputStream;
+import roj.io.ByteInputStream;
 import roj.text.CharList;
 import roj.text.TextUtil;
 
@@ -28,7 +28,7 @@ class Asar extends Scene {
 	@Override
 	public TrieTree<?> load(File file) throws IOException {
 		this.file = file;
-		try (MyDataInputStream f = new MyDataInputStream(new FileInputStream(file))) {
+		try (ByteInputStream f = new ByteInputStream(new FileInputStream(file))) {
 			if (0x04000000 != f.readInt()) throw new IOException("Not ASAR header (04000000)");
 
 			int headerSize = f.readIntLE();

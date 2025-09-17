@@ -1,7 +1,7 @@
 package roj.crypt;
 
 import roj.compiler.runtime.RtUtil;
-import roj.reflect.Unaligned;
+import roj.reflect.Unsafe;
 import roj.util.DynByteBuf;
 
 import javax.crypto.ShortBufferException;
@@ -42,7 +42,7 @@ final class SM4 extends RCipher {
 
 		int i;
 		for (i = 0; i < 4; i++) {
-			temp[i] = FK[i] ^ Unaligned.U.get32UB(key, Unaligned.ARRAY_BYTE_BASE_OFFSET + ((long) i << 2));
+			temp[i] = FK[i] ^ Unsafe.U.get32UB(key, Unsafe.ARRAY_BYTE_BASE_OFFSET + ((long) i << 2));
 		}
 
 		var sKey = this.sKey = new int[32];

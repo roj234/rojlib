@@ -45,7 +45,7 @@ final class ArrayAccess extends LeftValue {
 			ctx.report(this, Kind.ERROR, "arrayGet.notArray", type);
 			return NaE.resolveFailed(this);
 		}
-		cast = ctx.castTo(index.type(), Type.primitive(Type.INT), 0);
+		cast = ctx.castTo(index.type(), Type.INT_TYPE, 0);
 		if (cast.type < 0) return NaE.resolveFailed(this);
 		componentType = TypeHelper.componentType(type);
 

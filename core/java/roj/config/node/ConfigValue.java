@@ -35,7 +35,7 @@ public abstract class ConfigValue {
 	public abstract Type getType();
 	public char dataType() {return getType().symbol();}
 	public boolean contentEquals(ConfigValue o) {
-		return this == o || (o.getType().ordinal() > Type.INTEGER.ordinal()
+		return this == o || (o.getType().ordinal() > Type.INTEGER.ordinal() && getType().ordinal() <= Type.INTEGER.ordinal()
 		? o.contentEquals(this)
 		: o.mayCastTo(getType()) && eqVal(o));
 	}

@@ -9,8 +9,8 @@ import roj.compiler.CompileContext;
 import roj.compiler.asm.MethodWriter;
 import roj.compiler.resolve.ResolveException;
 import roj.compiler.resolve.TypeCast;
-import roj.text.Tokenizer;
 import roj.config.node.ConfigValue;
+import roj.text.Tokenizer;
 import roj.util.OperationDone;
 
 import java.util.Objects;
@@ -37,19 +37,11 @@ final class Literal extends Expr {
 	@Override public boolean hasFeature(Feature feature) {return feature == Feature.IMMEDIATE_CONSTANT || (feature == Feature.LDC_CLASS && isClassRef());}
 	@Override
 	public IType minType() {
-		if (c instanceof ConfigValue x && TypeCast.getDataCap(type.getActualType()) <= 4) {
-			if (x.mayCastTo(roj.config.node.Type.Int1)) {
-				return Type.primitive(Type.BYTE);
-			}
-			if (x.mayCastTo(roj.config.node.Type.Int2)) {
-				return Type.primitive(Type.SHORT);
-			}
-			if (x.mayCastTo(roj.config.node.Type.CHAR)) {
-				return Type.primitive(Type.CHAR);
-			}
-			if (x.mayCastTo(roj.config.node.Type.INTEGER)) {
-				return Type.primitive(Type.INT);
-			}
+		if (c instanceof ConfigValue x && Type.getSort(type.getActualType()) <= Type.SORT_INT) {
+			if (x.mayCastTo(roj.config.node.Type.Int1)) return Type.BYTE_TYPE;
+			if (x.mayCastTo(roj.config.node.Type.Int2)) return Type.SHORT_TYPE;
+			if (x.mayCastTo(roj.config.node.Type.CHAR)) return Type.CHAR_TYPE;
+			if (x.mayCastTo(roj.config.node.Type.INTEGER)) return Type.INT_TYPE;
 		}
 		return type;
 	}
@@ -69,14 +61,9 @@ final class Literal extends Expr {
 	public void write(MethodWriter cw, @NotNull TypeCast.Cast cast) {
 		switch (cast.type) {
 			case TypeCast.LOSSY, TypeCast.NUMBER_UPCAST, TypeCast.BOXING -> {
-				String name = Opcodes.toString(cast.getOp1());
+				String name = cast.getOp1() == 0 ? "III" : Opcodes.toString(cast.getOp1());
 				assert name.length() == 3;
-				writePrimitive(cw, switch (name.charAt(2)) {
-					default -> 4;
-					case 'L' -> 5;
-					case 'F' -> 6;
-					case 'D' -> 7;
-				});
+				writePrimitive(cw, Math.max(Type.SORT_INT, Type.getSort(name.charAt(2))));
 				if (cast.type == TypeCast.BOXING)
 					cast.writeBox(cw);
 
@@ -100,20 +87,20 @@ final class Literal extends Expr {
 		else if ("java/lang/String".equals(type.owner())) cw.ldc(c.toString());
 		else {
 			assert type.isPrimitive();
-			writePrimitive(cw, TypeCast.getDataCap(type.rawType().type));
+			writePrimitive(cw, Type.getSort(type.getActualType()));
 		}
 
 		cast.write(cw);
 	}
 
 	private void writePrimitive(MethodWriter cw, int cap) {
-		if ((cap & 7) != 0) switch (cap) {
-			case 5: cw.ldc(((ConfigValue) c).asLong()); break;
-			case 6: cw.ldc(((ConfigValue) c).asFloat()); break;
-			case 7: cw.ldc(((ConfigValue) c).asDouble()); break;
-			default: cw.ldc(((ConfigValue) c).asInt()); break;
+		switch (cap) {
+			case Type.SORT_BOOLEAN -> cw.ldc(c == Boolean.TRUE ? 1 : 0);
+			default -> cw.ldc(((ConfigValue) c).asInt());
+			case Type.SORT_LONG -> cw.ldc(((ConfigValue) c).asLong());
+			case Type.SORT_FLOAT -> cw.ldc(((ConfigValue) c).asFloat());
+			case Type.SORT_DOUBLE -> cw.ldc(((ConfigValue) c).asDouble());
 		}
-		else cw.ldc(c == Boolean.TRUE ? 1 : 0);
 	}
 
 	@Override

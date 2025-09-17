@@ -2,12 +2,13 @@ package roj.config.v2;
 
 import roj.collect.*;
 import roj.io.IOUtil;
-import roj.reflect.Unaligned;
 import roj.text.CharList;
 
 import java.util.Arrays;
 import java.util.List;
 import java.util.function.ToIntFunction;
+
+import static roj.reflect.Unsafe.U;
 
 /**
  * 有限自动机
@@ -319,7 +320,7 @@ public final class DFA {
 
 			IntList entries = new IntList();
 
-			int[] stateBase = (int[]) Unaligned.U.allocateUninitializedArray(int.class, numStates+1);
+			int[] stateBase = (int[]) U.allocateUninitializedArray(int.class, numStates + 1);
 			IntList stateMap = new IntList();
 
 			int state = 0;

@@ -138,7 +138,7 @@ public sealed abstract class NestContext {
 			hostArguments.add(external);
 
 			var type = external.type().rawType();
-			constructor.mn.parameters().add(type);
+			constructor.method.parameters().add(type);
 
 			constructor.insn(Opcodes.ALOAD_0);
 			constructor.varLoad(type, localSize);

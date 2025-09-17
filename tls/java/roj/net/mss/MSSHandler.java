@@ -87,9 +87,9 @@ public class MSSHandler extends PacketMerger {
 		int lim = in.wIndex();
 		while (in.readableBytes() > 2) {
 			int pos = in.rIndex;
-			if (in.getU(pos) != P_DATA) {
+			if (in.getUnsignedByte(pos) != P_DATA) {
 				if (engine.isClosed()) return;
-				throw new MSSException(MSSEngine.ILLEGAL_PACKET, "ILLEGAL_PACKET "+in.getU(pos), null);
+				throw new MSSException(MSSEngine.ILLEGAL_PACKET, "ILLEGAL_PACKET "+in.getUnsignedByte(pos), null);
 			}
 
 			in.rIndex = pos+1;

@@ -1,6 +1,6 @@
 package roj.archive.qz;
 
-import roj.reflect.Unaligned;
+import roj.reflect.Unsafe;
 
 import java.nio.file.attribute.FileTime;
 
@@ -12,10 +12,10 @@ import static roj.archive.ArchiveUtils.*;
  */
 final class QZEntryA extends QZEntry {
     static final long[] SPARSE_ATTRIBUTE_OFFSET = new long[] {
-        Unaligned.fieldOffset(QZEntryA.class, "createTime"),
-        Unaligned.fieldOffset(QZEntryA.class, "accessTime"),
-        Unaligned.fieldOffset(QZEntryA.class, "modifyTime"),
-        Unaligned.fieldOffset(QZEntryA.class, "attributes")
+        Unsafe.fieldOffset(QZEntryA.class, "createTime"),
+        Unsafe.fieldOffset(QZEntryA.class, "accessTime"),
+        Unsafe.fieldOffset(QZEntryA.class, "modifyTime"),
+        Unsafe.fieldOffset(QZEntryA.class, "attributes")
     };
 
     long accessTime, createTime, modifyTime;

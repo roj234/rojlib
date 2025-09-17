@@ -40,7 +40,7 @@ public class BufferedSource extends Source {
 		sl();
 
 		sync |= 1;
-		return pos >= len ? -1 : buffer(pos).getU(((int)pos++&(PAGE-1)));
+		return pos >= len ? -1 : buffer(pos).getUnsignedByte(((int)pos++&(PAGE-1)));
 	}
 
 	@Override

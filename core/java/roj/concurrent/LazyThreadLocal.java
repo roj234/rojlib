@@ -1,7 +1,7 @@
 package roj.concurrent;
 
-import roj.reflect.Bypass;
 import roj.ci.annotation.Public;
+import roj.reflect.Bypass;
 
 /**
  * @author Roj233
@@ -23,7 +23,7 @@ public class LazyThreadLocal<T> extends ThreadLocal<T> {
 	static final H ACCESS;
 	static {
 		try {
-			ACCESS = Bypass.builder(H.class).inline().delegate_o(ThreadLocal.class, "getMap").delegate_o(Class.forName("java.lang.ThreadLocal$ThreadLocalMap"), new String[]{"remove", "getEntry"}).access(Class.forName("java.lang.ThreadLocal$ThreadLocalMap$Entry"), "value", "getValue", null).build();
+			ACCESS = Bypass.builder(H.class).delegate_o(ThreadLocal.class, "getMap").delegate_o(Class.forName("java.lang.ThreadLocal$ThreadLocalMap"), new String[]{"remove", "getEntry"}).access(Class.forName("java.lang.ThreadLocal$ThreadLocalMap$Entry"), "value", "getValue", null).build();
 		} catch (ClassNotFoundException e) {
 			throw new RuntimeException(e);
 		}

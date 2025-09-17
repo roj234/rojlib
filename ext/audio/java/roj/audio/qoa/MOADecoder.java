@@ -7,12 +7,12 @@ import roj.crypt.CryptoFactory;
 import roj.io.CorruptedInputException;
 import roj.io.source.Source;
 import roj.math.MathUtils;
-import roj.reflect.Reflection;
+import roj.util.JVM;
 
 import javax.sound.sampled.AudioFormat;
 import java.io.IOException;
 
-import static roj.reflect.Unaligned.U;
+import static roj.reflect.Unsafe.U;
 
 /**
  * @author Roj234-N
@@ -65,7 +65,7 @@ public class MOADecoder extends MOA implements AudioDecoder {
 	public void connect(AudioSink sink) throws IOException {
 		if (getState() != OPENED) throw new IllegalStateException("Not opened");
 
-		AudioFormat audioFormat = new AudioFormat(samplerate, 16, channels, true, Reflection.BIG_ENDIAN);
+		AudioFormat audioFormat = new AudioFormat(samplerate, 16, channels, true, JVM.BIG_ENDIAN);
 		sink.open(audioFormat);
 
 		int qoaMaxFrameSize = MaxFrameSize(channels);

@@ -318,7 +318,7 @@ public class uTP implements ChannelHandler {
 
 		void protocolRead(DynByteBuf buf) throws IOException {
 			int seq = buf.readUnsignedShort();
-			if (seq == rcv_seq || buf.getU(buf.rIndex) == RST) {
+			if (seq == rcv_seq || buf.getUnsignedByte(buf.rIndex) == RST) {
 				flag |= SEND_ACK;
 
 				int i = 0;

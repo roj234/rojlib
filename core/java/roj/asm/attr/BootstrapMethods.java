@@ -127,7 +127,7 @@ public final class BootstrapMethods extends Attribute {
 
 		public String toString() {
 			ArrayList<Type> in = AsmCache.getInstance().methodTypeTmp();
-			var out = Type.methodDesc(linker.rawDesc(), in);
+			var out = Type.getArgumentTypes(linker.rawDesc(), in);
 
 			CharList sb = new CharList()
 					.append("类型: ").append(Kind.toString(kind))

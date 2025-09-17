@@ -135,7 +135,7 @@ public class HOT_RELOAD implements Processor {
 		@Override
 		public void channelRead(ChannelCtx ctx, Object msg) {
 			DynByteBuf buf = (DynByteBuf) msg;
-			if (buf.readableBytes() >= 2 && buf.readableBytes() >= buf.readShort(buf.rIndex)+2) {
+			if (buf.readableBytes() >= 2 && buf.readableBytes() >= buf.getShort(buf.rIndex)+2) {
 				System.out.println(ctx.remoteAddress()+": "+buf.readUTF());
 			}
 		}

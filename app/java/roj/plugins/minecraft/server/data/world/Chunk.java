@@ -87,7 +87,7 @@ public final class Chunk {
 		NbtEncoder ser = new NbtEncoder(buf);
 		ser.emitMap();
 		for (int i = 0; i < Heightmap.SEND_TO_CLIENT_ID; i++) {
-			ser.key(Heightmap.VALUES[i].name());
+			ser.emitKey(Heightmap.VALUES[i].name());
 
 			ser.onValue(NbtParser.LONG_ARRAY);
 			int[] data = heightmap.getInternal();

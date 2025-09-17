@@ -50,7 +50,7 @@ final class MSSEngineServer extends MSSEngine {
 		// fast-fail preventing meaningless waiting
 		validated:
 		if (rx.isReadable()) {
-			var type = rx.get(rx.rIndex);
+			var type = rx.getByte(rx.rIndex);
 			switch (stage) {
 				case CLIENT_HELLO, RETRY_KEY_EXCHANGE:
 					if (type == H_CLIENT_PACKET) break validated;

@@ -4,13 +4,13 @@ import roj.archive.xz.lz.LZDecoder;
 import roj.archive.xz.lzma.LZMADecoder;
 import roj.archive.xz.rangecoder.RangeDecoder;
 import roj.collect.ArrayList;
-import roj.concurrent.Task;
 import roj.concurrent.Executor;
+import roj.concurrent.Task;
 import roj.concurrent.TaskPool;
 import roj.io.CorruptedInputException;
 import roj.io.IOUtil;
 import roj.io.MBInputStream;
-import roj.reflect.Unaligned;
+import roj.reflect.Handles;
 import roj.util.ArrayUtil;
 import roj.util.ByteList;
 
@@ -236,7 +236,7 @@ public class LZMA2ParallelInputStream extends MBInputStream {
 		this.presetDict = presetDict;
 		this.taskExecutor = taskExecutor;
 		this.taskFree = affinity;
-		Unaligned.U.storeFence();
+		Handles.storeFence();
 		taskExecutor.executeUnsafe(() -> { while (!noMoreInput) nextChunk(); });
 	}
 
@@ -289,7 +289,7 @@ public class LZMA2ParallelInputStream extends MBInputStream {
 					ByteList decBuf = getDecoder();
 					synchronized (decBuf) {
 						decBuf.put(control).readStream(in, 2);
-						int cSize = decBuf.readUnsignedShort(decBuf.wIndex()-2)+1;
+						int cSize = decBuf.getUnsignedShort(decBuf.wIndex()-2)+1;
 						decBuf.readStream(in, cSize);
 						decBuf.notify();
 					}
@@ -303,7 +303,7 @@ public class LZMA2ParallelInputStream extends MBInputStream {
 		ByteList decBuf = getDecoder();
 		synchronized (decBuf) {
 			decBuf.put(control).readStream(in, 4+myDelta);
-			int cSize = decBuf.readUnsignedShort(decBuf.wIndex()-2-myDelta)+1;
+			int cSize = decBuf.getUnsignedShort(decBuf.wIndex()-2-myDelta)+1;
 			decBuf.readStream(in, cSize);
 			decBuf.notify();
 		}

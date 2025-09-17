@@ -1,7 +1,7 @@
 package roj.http.server;
 
-import roj.http.Headers;
 import roj.collect.Multimap;
+import roj.http.Headers;
 import roj.io.IOUtil;
 import roj.net.ChannelCtx;
 import roj.text.FastMatcher;
@@ -70,7 +70,7 @@ public class MultipartParser implements BodyParser {
 						while (keep > 0) {
 							findPartialMatch: {
 								for (int j = 0; j < keep; j++) {
-									if (buf.get(i+j) != boundary.charAt(j))
+									if (buf.getByte(i+j) != boundary.charAt(j))
 										break findPartialMatch;
 								}
 								break;
@@ -115,7 +115,7 @@ public class MultipartParser implements BodyParser {
 					}
 
 					// 如果下一个 part 没有头部信息，边界之后就应该跟两个 CRLF
-					if (buf.readChar(buf.rIndex) == 0x0D0A) {
+					if (buf.getChar(buf.rIndex) == 0x0D0A) {
 						buf.rIndex += 2;
 						value = beginPlain(ctx);
 						state = 0;

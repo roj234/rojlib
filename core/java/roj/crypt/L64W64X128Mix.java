@@ -1,6 +1,6 @@
 package roj.crypt;
 
-import static roj.reflect.Unaligned.U;
+import static roj.reflect.Unsafe.U;
 
 /**
  * LCG64 + WyHash64 + XorShift128

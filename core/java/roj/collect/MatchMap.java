@@ -1,7 +1,7 @@
 package roj.collect;
 
 import org.intellij.lang.annotations.MagicConstant;
-import roj.reflect.Unaligned;
+import roj.reflect.Unsafe;
 import roj.util.ArrayCache;
 import roj.util.Helpers;
 import roj.util.Multisort;
@@ -10,7 +10,7 @@ import roj.util.NativeArray;
 import java.util.*;
 import java.util.function.Function;
 
-import static roj.reflect.Unaligned.U;
+import static roj.reflect.Unsafe.U;
 
 /**
  * 比删除的UnsortedMultiKeyMap更快、更好、更方便
@@ -228,7 +228,7 @@ public class MatchMap<K extends Comparable<K>, V> {
 
 	public void clear() { size = 0; map.clear(); }
 
-	private static final long CACHE_OFFSET = Unaligned.fieldOffset(MatchMap.class, "stateCache");
+	private static final long CACHE_OFFSET = Unsafe.fieldOffset(MatchMap.class, "stateCache");
 	private static class State {
 		final PosList a = new PosList(), b = new PosList();
 		final ArrayList<BitSet> aflag = new ArrayList<>(), bflag = new ArrayList<>();

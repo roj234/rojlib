@@ -2,21 +2,22 @@ package roj.concurrent;
 
 import org.jetbrains.annotations.NotNull;
 import roj.compiler.api.Synchronizable;
-import roj.reflect.Unaligned;
+import roj.optimizer.FastVarHandle;
+import roj.reflect.Handles;
 import roj.util.Helpers;
 
+import java.lang.invoke.VarHandle;
 import java.util.concurrent.*;
-
-import static roj.reflect.Unaligned.U;
 
 /**
  * @author Roj234
  * @since 2020/8/19 1:01
  */
 @Synchronizable
+@FastVarHandle
 public class FutureTask<T> implements RunnableFuture<T>, Cancellable {
 	private static final int INITIAL = 0, RUNNING = 1, CANCELLING = 2, CANCELLED = 3, COMPLETED = 4, FAILED = 5;
-	private static final long STATE = Unaligned.fieldOffset(FutureTask.class, "state");
+	private static final VarHandle STATE = Handles.lookup().findVarHandle(FutureTask.class, "state", int.class);
 	private volatile int state;
 
 	private Thread executor;
@@ -27,12 +28,12 @@ public class FutureTask<T> implements RunnableFuture<T>, Cancellable {
 
 	@Override
 	public boolean cancel(boolean mayInterruptIfRunning) {
-		if (U.compareAndSetInt(this, STATE, INITIAL, CANCELLED)) {
+		if (STATE.compareAndSet(this, INITIAL, CANCELLED)) {
 			synchronized (this) { notifyAll(); }
 			return true;
 		}
 
-		if (mayInterruptIfRunning && U.compareAndSetInt(this, STATE, RUNNING, CANCELLING)) {
+		if (mayInterruptIfRunning && STATE.compareAndSet(this, RUNNING, CANCELLING)) {
 			var thread = executor;
 			if (thread != null) thread.interrupt();
 		}
@@ -44,7 +45,7 @@ public class FutureTask<T> implements RunnableFuture<T>, Cancellable {
 
 	@Override
 	public final void run() {
-		if (!U.compareAndSetInt(this, STATE, INITIAL, RUNNING)) return;
+		if (!STATE.compareAndSet(this, INITIAL, RUNNING)) return;
 
 		try {
 			executor = Thread.currentThread();

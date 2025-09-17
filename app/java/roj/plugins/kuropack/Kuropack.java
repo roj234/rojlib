@@ -13,8 +13,8 @@ import roj.asmx.TransformUtil;
 import roj.asmx.injector.CodeWeaver;
 import roj.asmx.injector.WeaveException;
 import roj.asmx.mapper.Mapper;
-import roj.collect.BiMap;
 import roj.collect.ArrayList;
+import roj.collect.BiMap;
 import roj.concurrent.Executor;
 import roj.concurrent.TaskGroup;
 import roj.concurrent.TaskPool;
@@ -368,8 +368,8 @@ public final class Kuropack {
 		}
 
 		long mask = System.currentTimeMillis();
-		ob.putLong(4, mask);
-		ob.putLong(12, metaPos);
-		ob.putLong(20, metaPos ^ mask); // simple verify
+		ob.setLong(4, mask);
+		ob.setLong(12, metaPos);
+		ob.setLong(20, metaPos ^ mask); // simple verify
 	}
 }

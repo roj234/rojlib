@@ -24,7 +24,7 @@ public class ElfStringTable implements ElfSegment {
 		String name = cache.get(idx);
 		if (name == null) {
 			data.rIndex = idx;
-			int len = data.readZeroTerminate(0);
+			int len = data.readCString(0);
 			name = data.readAscii(len);
 			cache.put(idx, name);
 		}
@@ -42,7 +42,7 @@ public class ElfStringTable implements ElfSegment {
 
 	@Override
 	public void fromByteArray(ElfFile owner, ByteList r) throws IOException {
-		if (r.readInt(4) != ElfSectionD.DT_STRING_TABLE) throw new IllegalArgumentException();
+		if (r.getInt(4) != ElfSectionD.DT_STRING_TABLE) throw new IllegalArgumentException();
 		if (delegate == null) delegate = new ElfSectionD();
 		delegate.fromByteArray(owner, r);
 		owner.read(delegate.offset, delegate.length);

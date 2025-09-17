@@ -1,6 +1,5 @@
 package roj.plugin.di;
 
-import roj.ci.annotation.ReferenceByGeneratedClass;
 import roj.archive.zip.ZipFile;
 import roj.asm.ClassNode;
 import roj.asm.Member;
@@ -11,16 +10,17 @@ import roj.asmx.AnnotatedElement;
 import roj.asmx.AnnotationRepo;
 import roj.asmx.ConstantPoolHooks;
 import roj.asmx.TransformUtil;
+import roj.ci.annotation.IndirectReference;
 import roj.collect.ArrayList;
 import roj.collect.HashMap;
-import roj.util.function.Flow;
-import roj.util.FastFailException;
 import roj.plugin.Jocker;
 import roj.plugin.PluginClassLoader;
 import roj.plugin.PluginDescriptor;
 import roj.reflect.Reflection;
 import roj.reflect.VirtualReference;
+import roj.util.FastFailException;
 import roj.util.Helpers;
+import roj.util.function.Flow;
 
 import java.io.IOException;
 import java.util.List;
@@ -47,13 +47,13 @@ public record DIContext(
 	private static final VirtualReference<Map<Class<?>, Object[]>> dependencyProviders = new VirtualReference<>();
 	private static final Map<PluginDescriptor, List<Object>> resources = new HashMap<>();
 
-	@ReferenceByGeneratedClass
+	@IndirectReference
 	public static DIContext _CTX(Class<?> caller, String fieldName) {
 		PluginDescriptor plugin = Objects.requireNonNull(Jocker.getPluginManager().getOwner(caller));
 		return new DIContext(plugin, caller, fieldName);
 	}
 
-	@ReferenceByGeneratedClass
+	@IndirectReference
 	public static void _UCB(Object instance, DIContext ctx, Class<?> formalType) {
 		List<Object> objects = resources.computeIfAbsent(ctx.plugin, Helpers.fnArrayList());
 		objects.add(formalType);
@@ -116,7 +116,7 @@ public record DIContext(
 		for (AnnotatedElement element : dependency) {
 			try {
 				Class<?> injectOwner = Class.forName(element.owner().replace('/', '.'), false, classLoader);
-				List<Type> types = Type.methodDesc(((Member) element.node()).rawDesc());
+				List<Type> types = Type.getMethodTypes(((Member) element.node()).rawDesc());
 				Class<?> injectType = Class.forName(types.get(types.size() - 1).owner.replace('/', '.'), false, classLoader);
 
 				Object[] objects = dependencyProviders.computeIfAbsent(injectType.getClassLoader(), Helpers.fnHashMap()).putIfAbsent(injectType, new Object[]{element, null});
@@ -146,7 +146,7 @@ public record DIContext(
 					cw.invokeS("roj/plugin/di/DIContext", "_CTX", "(Ljava/lang/Class;Ljava/lang/String;)Lroj/plugin/di/DIContext;");
 					cw.insn(Opcodes.ASTORE_0);
 
-					String typeName = Type.fieldDesc(element.desc()).owner;
+					String typeName = Type.getType(element.desc()).owner;
 					AnnotatedElement method;
 					boolean hasCleanup;
 					try {

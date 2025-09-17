@@ -5,14 +5,15 @@ import roj.asm.Opcodes;
 import roj.asm.type.Type;
 import roj.asm.type.TypeHelper;
 import roj.asmx.ClassResource;
+import roj.asmx.TransformUtil;
+import roj.ci.annotation.IndirectReference;
 import roj.collect.ArrayList;
-import roj.reflect.ClassDefiner;
-import roj.reflect.Proxy;
+import roj.reflect.Reflection;
 import roj.text.CharList;
 import roj.text.TextReader;
 import roj.text.URICoder;
-import roj.ui.Tty;
 import roj.ui.Text;
+import roj.ui.Tty;
 import roj.util.ByteList;
 import roj.util.Helpers;
 
@@ -108,9 +109,9 @@ public final class JCompiler implements Compiler, DiagnosticListener<JavaFileObj
 		int listId = data.newField(0, "bo", Type.klass("java/util/List"));
 		int nameId = data.newField(0, "aa", Type.klass("java/lang/String"));
 
-		Proxy.proxyClass(data, new Class<?>[] {StandardJavaFileManager.class}, (m, cw) -> {
+		TransformUtil.proxyClass(data, new Class<?>[] {StandardJavaFileManager.class}, (m, cw) -> {
 			if (m.equals(proxyGetOutput)) {
-				int s = TypeHelper.paramSize(cw.mn.rawDesc())+1;
+				int s = TypeHelper.paramSize(cw.method.rawDesc())+1;
 				cw.visitSize(s+2,s);
 				cw.insn(Opcodes.ALOAD_0);
 				cw.field(Opcodes.GETFIELD, data, listId);
@@ -122,8 +123,9 @@ public final class JCompiler implements Compiler, DiagnosticListener<JavaFileObj
 			return false;
 		}, listId, nameId);
 
-		return Helpers.cast(ClassDefiner.newInstance(data));
+		return Helpers.cast(Reflection.createInstance(JCompiler.class.getClassLoader(), data));
 	}
+	@IndirectReference
 	public static JavaFileObject proxyGetOutput(StandardJavaFileManager delegation,
 												JavaFileManager.Location location, String className,
 												JavaFileObject.Kind kind, FileObject sibling,

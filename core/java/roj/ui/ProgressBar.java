@@ -4,23 +4,25 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Range;
 import roj.io.IOUtil;
 import roj.math.MathUtils;
-import roj.reflect.Unaligned;
+import roj.optimizer.FastVarHandle;
+import roj.reflect.Handles;
 import roj.text.CharList;
 import roj.text.TextUtil;
 
-import static roj.reflect.Unaligned.U;
+import java.lang.invoke.VarHandle;
 
 /**
  * @author Roj234
  * @since 2022/11/19 3:33
  */
+@FastVarHandle
 public class ProgressBar implements AutoCloseable {
 	protected final CharList line = new CharList();
 	protected boolean isProgressUnknown, showCenterString;
 
 	protected static final int BAR_DELAY = 40;
 	protected volatile long barTime;
-	protected static final long UPDATE_OFFSET = Unaligned.fieldOffset(ProgressBar.class, "barTime");
+	protected static final VarHandle BAR_TIME = Handles.lookup().findVarHandle(ProgressBar.class, "barTime", long.class);
 
 	private boolean closed;
 
@@ -43,7 +45,7 @@ public class ProgressBar implements AutoCloseable {
 	public boolean setProgressWithUpdateLimit(double progress) {
 		long time = System.currentTimeMillis();
 		long t = barTime;
-		if (time - t < BAR_DELAY || !U.compareAndSetLong(this, UPDATE_OFFSET, t, time)) return false;
+		if (time - t < BAR_DELAY || !BAR_TIME.compareAndSet(this, t, time)) return false;
 		setProgress(progress);
 		return true;
 	}

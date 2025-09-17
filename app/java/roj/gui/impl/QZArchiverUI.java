@@ -14,15 +14,15 @@ import roj.gui.CMBoxValue;
 import roj.gui.GuiProgressBar;
 import roj.gui.GuiUtil;
 import roj.gui.OnChangeHelper;
-import roj.util.FastFailException;
 import roj.io.BufferPool;
 import roj.math.MathUtils;
 import roj.text.LineReader;
 import roj.text.TextUtil;
 import roj.ui.EasyProgressBar;
 import roj.util.ByteList;
+import roj.util.FastFailException;
 import roj.util.Helpers;
-import roj.util.VMUtil;
+import roj.util.JVM;
 
 import javax.swing.*;
 import javax.swing.event.ChangeListener;
@@ -357,7 +357,7 @@ public class QZArchiverUI extends JFrame {
 		// endregion
 		// region
 		uiThreads.setModel(new SpinnerNumberModel(Runtime.getRuntime().availableProcessors(), 1,256,1));
-		uiMemoryLimit.setText(toDigital(VMUtil.usableMemory()));
+		uiMemoryLimit.setText(toDigital(JVM.usableMemory()));
 
 		uiAutoSolidSize.addActionListener(e -> uiSolidSize.setEnabled(!uiAutoSolidSize.isSelected()));
 		uiBCJ.addActionListener(e -> uiBCJ2.setEnabled(uiBCJ.isSelected()));
@@ -517,7 +517,7 @@ public class QZArchiverUI extends JFrame {
 
 		String text = uiMemoryLimit.getText();
 		double memoryLimit;
-		if (text.isEmpty()) memoryLimit = (VMUtil.usableMemory() >>> 10);
+		if (text.isEmpty()) memoryLimit = (JVM.usableMemory() >>> 10);
 		else memoryLimit = TextUtil.unscaledNumber1024(text) / 1024;
 
 		double perThreadUsageKb = options.getEncoderMemoryUsage() + 256;

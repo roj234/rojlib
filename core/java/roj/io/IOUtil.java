@@ -11,7 +11,7 @@ import roj.config.node.IntValue;
 import roj.config.node.LongValue;
 import roj.crypt.Base64;
 import roj.reflect.Reflection;
-import roj.reflect.Unaligned;
+import roj.reflect.Unsafe;
 import roj.text.*;
 import roj.util.ArrayCache;
 import roj.util.ByteList;
@@ -35,7 +35,7 @@ import java.util.concurrent.LinkedBlockingDeque;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
 
-import static roj.reflect.Unaligned.U;
+import static roj.reflect.Unsafe.U;
 
 /**
  * @author Roj234
@@ -622,7 +622,7 @@ public final class IOUtil {
 		try {
 			long off;
 			if ((off=pendingKeys_offset) == 0) {
-				off = pendingKeys_offset = Unaligned.fieldOffset(Class.forName("sun.nio.fs.AbstractWatchService"), "pendingKeys");
+				off = pendingKeys_offset = Unsafe.fieldOffset(Class.forName("sun.nio.fs.AbstractWatchService"), "pendingKeys");
 			}
 			if (off > 0) {
 				U.putReference(watcher, off, new LinkedBlockingDeque<>() {

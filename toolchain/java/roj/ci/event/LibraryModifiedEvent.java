@@ -1,8 +1,8 @@
 package roj.ci.event;
 
 import org.jetbrains.annotations.Nullable;
-import roj.asmx.event.Event;
 import roj.ci.Project;
+import roj.event.Event;
 
 /**
  * @author Roj234

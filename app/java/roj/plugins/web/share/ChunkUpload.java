@@ -1,20 +1,20 @@
 package roj.plugins.web.share;
 
 import org.jetbrains.annotations.Nullable;
+import roj.collect.ArrayList;
 import roj.collect.BitSet;
 import roj.collect.IntMap;
-import roj.collect.ArrayList;
 import roj.config.ConfigMaster;
 import roj.crypt.Base64;
 import roj.crypt.CryptoFactory;
 import roj.http.server.*;
-import roj.util.FastFailException;
 import roj.io.IOUtil;
 import roj.net.ChannelCtx;
 import roj.text.CharList;
 import roj.text.logging.Logger;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
+import roj.util.FastFailException;
 
 import java.io.File;
 import java.io.IOException;
@@ -229,7 +229,7 @@ public class ChunkUpload {
 		Base64.decode(taskId, buf, Base64.B64_URL_SAFE_REV);
 		if (buf.readableBytes() == 12) try {
 			int taskIdNum = buf.readInt();
-			int hash = buf.readInt(8);
+			int hash = buf.getInt(8);
 
 			var task = tasks.get(taskIdNum);
 			if (task != null && CryptoFactory.xxHash32(taskIdNum ^ task.sk, buf.list, 4, 4) == hash) {

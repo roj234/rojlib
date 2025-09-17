@@ -29,7 +29,8 @@ import roj.compiler.library.JarLibrary;
 import roj.compiler.library.Library;
 import roj.compiler.resolve.Resolver;
 import roj.io.IOUtil;
-import roj.reflect.ClassDefiner;
+import roj.reflect.Reflection;
+import roj.reflect.Sandbox;
 import roj.text.Token;
 import roj.util.ByteList;
 import roj.util.Helpers;
@@ -350,20 +351,14 @@ public class LavaCompiler extends Resolver implements Compiler {
 	private synchronized Sandbox getSandbox() {
 		if (sandbox == null) {
 			report(null, Kind.SEVERE_WARNING, -1, "lava.sandbox");
-			sandbox = new Sandbox(LavaCompiler.class.getClassLoader());
-			for (var packages : new String[] {"java.lang", "java.util", "java.util.regex", "java.util.function", "java.text", "roj.compiler", "roj.text", "roj.config.data"}) {
-				addSandboxWhitelist(packages, false);
-			}
-			for (var classes : new String[] {"java.lang.Process", "java.lang.ProcessBuilder", "java.lang.Thread", "java.lang.ClassLoader"}) {
-				addSandboxWhitelist(classes, false);
-			}
+			sandbox = new Sandbox("Lava", LavaCompiler.class.getClassLoader(), true);
 		}
 		return sandbox;
 	}
 
-	public void addSandboxWhitelist(String packageOrTypename, boolean childInheritance) {getSandbox().permits.add(packageOrTypename, 1, false, childInheritance);}
-	public void addSandboxBlacklist(String packageOrTypename, boolean childInheritance) {getSandbox().permits.add(packageOrTypename, 0, false, childInheritance);}
-	public Object createSandboxInstance(ClassNode data) {return ClassDefiner.newInstance(data, getSandbox());}
+	public void addSandboxWhitelist(String packageOrTypename, boolean childInheritance) {getSandbox().restriction.add(packageOrTypename, 1, false, childInheritance);}
+	public void addSandboxBlacklist(String packageOrTypename, boolean childInheritance) {getSandbox().restriction.add(packageOrTypename, 0, false, childInheritance);}
+	public Object createSandboxInstance(ClassNode data) {return Reflection.createInstance(getSandbox(), data);}
 	public void addSandboxClass(String className, byte[] data) {getSandbox().classBytes.put(className, data);}
 	public Class<?> loadSandboxClass(String className, boolean resolve) {
 		try {

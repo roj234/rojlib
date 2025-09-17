@@ -1,22 +1,24 @@
 package roj.plugins.web.share;
 
+import roj.ci.annotation.IndirectReference;
 import roj.collect.ArrayList;
 import roj.config.mapper.Optional;
 import roj.io.IOUtil;
+import roj.optimizer.FastVarHandle;
 import roj.plugin.VFSRouter;
-import roj.reflect.Unaligned;
+import roj.reflect.Handles;
 import roj.util.OperationDone;
 
 import java.io.File;
+import java.lang.invoke.VarHandle;
 import java.util.List;
 import java.util.Set;
-
-import static roj.reflect.Unaligned.U;
 
 /**
  * @author Roj234
  * @since 2025/4/4 21:27
  */
+@FastVarHandle
 final class Share {
 	String id, name;
 	long time;
@@ -51,15 +53,16 @@ final class Share {
 		}
 	}
 
+	@IndirectReference
 	transient Share _next;
 
-	static final long EXPIRE = Unaligned.fieldOffset(Share.class, "expire");
+	private static final VarHandle EXPIRE = Handles.lookup().findVarHandle(Share.class, "expire", long.class);
 
 	public void countDown(long timeout) {
 		while (true) {
 			long oldVal = this.expire;
 			long newVal = oldVal == 1 ? timeout : oldVal - 1;
-			if (U.compareAndSetLong(this, EXPIRE, oldVal, newVal)) {
+			if (EXPIRE.compareAndSet(this, oldVal, newVal)) {
 				if (oldVal == 1) code = ""; // no new entry
 				break;
 			}

@@ -4,7 +4,7 @@ import org.jetbrains.annotations.NotNull;
 import roj.collect.HashMap;
 import roj.config.node.ConfigValue;
 import roj.config.node.IntArrayValue;
-import roj.reflect.EnumHelper;
+import roj.reflect.Reflection;
 
 import java.util.Map;
 
@@ -168,7 +168,7 @@ public enum KnownOID {
 
 	private static final class Indices {
 		static final Map<ConfigValue, KnownOID> byOid = new HashMap<>();
-		static final Map<String, KnownOID> byName = EnumHelper.CONSTANTS.enumConstantDirectory(KnownOID.class);
+		static final Map<String, KnownOID> byName = Reflection.enumConstantDirectory(KnownOID.class);
 		static {
 			for (KnownOID value : values()) {
 				byOid.put(value.oid, value);

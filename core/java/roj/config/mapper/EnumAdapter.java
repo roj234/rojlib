@@ -1,7 +1,7 @@
 package roj.config.mapper;
 
 import roj.config.ValueEmitter;
-import roj.reflect.EnumHelper;
+import roj.reflect.Reflection;
 import roj.util.Helpers;
 
 /**
@@ -20,7 +20,7 @@ final class EnumAdapter extends TypeAdapter {
 	@Override
 	public void read(MappingContext ctx, Object o) {
 		if (o != null && o.getClass() != String.class) throw new IllegalStateException();
-		ctx.setRef(o == null ? null : EnumHelper.CONSTANTS.enumConstantDirectory(Helpers.cast(enumType)).get(o));
+		ctx.setRef(o == null ? null : Reflection.enumConstantDirectory(Helpers.cast(enumType)).get(o));
 		ctx.fieldState = 1;
 		ctx.fieldId = -1;
 		ctx.pop();

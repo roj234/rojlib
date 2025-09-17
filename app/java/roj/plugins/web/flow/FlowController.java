@@ -8,9 +8,10 @@ import roj.net.ChannelCtx;
 import roj.net.ChannelHandler;
 import roj.net.MyChannel;
 import roj.net.util.SpeedLimiter;
-import roj.reflect.Unaligned;
+import roj.reflect.Handles;
 
 import java.io.IOException;
+import java.lang.invoke.VarHandle;
 import java.util.Objects;
 
 /**
@@ -33,12 +34,12 @@ class FlowController extends SpeedLimiter implements ChannelHandler {
 	private final ToLongMap<MyChannel> channel = new ToLongMap<>();
 
 	private volatile int lock;
-	private static final long LOCK_OFFSET = Unaligned.fieldOffset(FlowController.class, "lock");
+	private static final VarHandle LOCK = Handles.lookup().findVarHandle(FlowController.class, "lock", int.class);
 
 	public int limit(int pendingBytes) {
 		if (setting.maxTokens == 0) return pendingBytes;
 
-		if (!Unaligned.U.compareAndSetInt(this, LOCK_OFFSET, 0, 1)) return 0;
+		if (!LOCK.compareAndSet(this, 0, 1)) return 0;
 		try {
 			return super.limit(pendingBytes);
 		} finally {

@@ -1,9 +1,9 @@
 package roj.plugins.minecraft.captcha;
 
-import roj.asmx.event.Subscribe;
 import roj.collect.BitSet;
 import roj.collect.RingBuffer;
 import roj.config.node.MapValue;
+import roj.event.Subscribe;
 import roj.io.IOUtil;
 import roj.net.ChannelCtx;
 import roj.plugin.Plugin;

@@ -16,6 +16,7 @@ import roj.collect.ToIntMap;
 import roj.compiler.resolve.TypeCast;
 import roj.text.CharList;
 import roj.util.ArrayCache;
+import roj.util.JVM;
 
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
@@ -25,7 +26,7 @@ import java.util.Collections;
 import java.util.List;
 
 import static roj.asm.Opcodes.*;
-import static roj.reflect.Unaligned.U;
+import static roj.reflect.Unsafe.U;
 
 /**
  * 用接口替代反射，虽然看起来和{@link java.lang.invoke.MethodHandle}很相似，其实却是同一个原理 <br>
@@ -43,7 +44,7 @@ public final class Bypass<T> {
 	private ClassNode impl;
 
 	private byte flags;
-	private static final byte UNCHECKED_CAST = 1, WEAK_REF = 2, INLINE = 4;
+	private static final byte UNCHECKED_CAST = 1;
 
 	private Bypass(Class<T> itf, boolean checkDuplicate) {
 		if (!itf.isInterface()) throw new IllegalArgumentException(itf.getName()+" must be a interface");
@@ -68,27 +69,23 @@ public final class Bypass<T> {
 		this.caller = caller;
 	}
 
-	public final T build() { return build(ClassDefiner.APP_LOADER); }
 	@SuppressWarnings("unchecked")
-	public T build(ClassLoader def) {
-		if (impl == null) throw new IllegalStateException("Already built");
+	public final T build() {
+		var node = impl;
+		if (node == null) throw new IllegalStateException("Already built");
+		impl = null;
+
 		DMHBuild();
 		methodByName.clear();
 
-		if ((flags&INLINE) != 0) {
-			// jdk.internal.vm.annotation.ForceInline
-			Annotation annotation = new Annotation("Ljdk/internal/vm/annotation/ForceInline;", Collections.emptyMap());
-			for (MethodNode mn : impl.methods) {
-				if (mn.name().startsWith("<")) continue;
-				mn.addAttribute(new Annotations(true, annotation));
-			}
+		var forceInline = new Annotations(true, new Annotation("Ljdk/internal/vm/annotation/ForceInline;", Collections.emptyMap()));
+		for (MethodNode mn : node.methods) {
+			if (mn.name().startsWith("<")) continue;
+			mn.addAttribute(forceInline);
 		}
 
-		if ((flags&(INLINE|WEAK_REF)) != 0) def = null;
-
-		var node = impl;
-		impl = null;
-		return (T) ClassDefiner.newInstance(node, def);
+		ClassLoader def = itf.getClassLoader();
+		return (T) Reflection.createInstance(def == null ? Bypass.class.getClassLoader() : def, node);
 	}
 
 	private Method checkExistence(String name) {
@@ -102,7 +99,7 @@ public final class Bypass<T> {
 	private ToIntMap<String> dmh_desc;
 
 	private boolean DMHInit() {
-		if (Reflection.JAVA_VERSION < 22) return false;
+		if (JVM.VERSION < 22) return false;
 
 		if (dmh_si == null) {
 			dmh_si = impl.newMethod(ACC_PUBLIC|ACC_STATIC, "<clinit>", "()V");
@@ -124,7 +121,7 @@ public final class Bypass<T> {
 
 		dmh_si.field(GETSTATIC, "roj/reflect/Reflection", "IMPL_LOOKUP", "Ljava/lang/invoke/MethodHandles$Lookup;");
 		ldcClass(className);
-		var args = Type.methodDesc(methodDesc);
+		var args = Type.getMethodTypes(methodDesc);
 		ldcType(args.remove(args.size()-1));
 		dmh_si.newArraySized(Type.klass("java/lang/Class"), args.size());
 		for (int i = 0; i < args.size(); i++) {
@@ -151,7 +148,7 @@ public final class Bypass<T> {
 		dmh_si.field(GETSTATIC, "roj/reflect/Reflection", "IMPL_LOOKUP", "Ljava/lang/invoke/MethodHandles$Lookup;");
 		ldcClass(className);
 		dmh_si.ldc(methodName);
-		var args = Type.methodDesc(methodDesc);
+		var args = Type.getMethodTypes(methodDesc);
 		ldcType(args.remove(args.size()-1));
 		dmh_si.newArraySized(Type.klass("java/lang/Class"), args.size());
 		for (int i = 0; i < args.size(); i++) {
@@ -325,7 +322,7 @@ public final class Bypass<T> {
 			int varId = 1;
 			for (int j = 0; j < constructorArguments.length; j++) {
 				Class<?> param = constructorArguments[j];
-				Type type = Type.from(param);
+				Type type = Type.getType(param);
 				cw.varLoad(type, varId);
 				if ((flags&UNCHECKED_CAST) == 0 && !param.isAssignableFrom(types[j]))
 					cw.clazz(CHECKCAST, type.getActualClass());
@@ -502,7 +499,7 @@ public final class Bypass<T> {
 
 			int j = varId-1;
 			for (Class<?> param : params) {
-				Type type = Type.from(param);
+				Type type = Type.getType(param);
 				cw.varLoad(type, varId);
 				if ((this.flags&UNCHECKED_CAST) == 0 && !param.isAssignableFrom(types[j++])) // 强制转换再做检查...
 					cw.clazz(CHECKCAST, type.getActualClass());
@@ -525,7 +522,7 @@ public final class Bypass<T> {
 				}
 			}
 
-			cw.return_(Type.from(targetMethod.getReturnType()));
+			cw.return_(Type.getType(targetMethod.getReturnType()));
 			cw.finish();
 		}
 		return this;
@@ -584,7 +581,7 @@ public final class Bypass<T> {
 
 		for (int i = 0; i < targetFieldNames.length; i++) {
 			Field field = targetFields[i];
-			Type fieldType = Type.from(field.getType());
+			Type fieldType = Type.getType(field.getType());
 
 			String name;
 			int off = (field.getModifiers() & ACC_STATIC) != 0 ? 0 : 1;
@@ -607,7 +604,7 @@ public final class Bypass<T> {
 				if (DMHInit()) {
 					int DMH_ID = DMHNewVarHandle(targetName, field.getName(), fieldType, isStatic ? "findStaticVarHandle" : "findVarHandle");
 					var targetName1 = fuzzyIfNotAccessible(target).getName().replace('.', '/');
-					fieldType = Type.from(fuzzyIfNotAccessible(field.getType()));
+					fieldType = Type.getType(fuzzyIfNotAccessible(field.getType()));
 					cw.field(GETSTATIC, impl, DMH_ID);
 					if (isStatic) {
 						cw.invokeV("java/lang/invoke/VarHandle", "get", "()"+fieldType.toDesc());
@@ -681,7 +678,7 @@ public final class Bypass<T> {
 						cw.varLoad(fieldType, isStatic ? 1 : 2);
 						if ((flags&UNCHECKED_CAST) == 0 && !fieldType.isPrimitive() && !field.getType().isAssignableFrom(params2[off]))
 							cw.clazz(CHECKCAST, fieldType.getActualClass());
-						cw.invoke(INVOKESPECIAL, "roj/reflect/Unaligned", "put"+Reflection.capitalizedType(fieldType), "(Ljava/lang/Object;J"+(fieldType.isPrimitive()?fieldType.toDesc():"Ljava/lang/Object;")+")V");
+						cw.invoke(INVOKESPECIAL, "roj/reflect/Unaligned", "put"+fieldType.capitalized(), "(Ljava/lang/Object;J"+(fieldType.isPrimitive()?fieldType.toDesc():"Ljava/lang/Object;")+")V");
 					} else {
 						int localSize, stackSize = fieldType.length()+1;
 
@@ -742,7 +739,7 @@ public final class Bypass<T> {
 		cw.clazz(NEW, target);
 		cw.insn(DUP);
 
-		List<Type> argTypes = Type.methodDesc(desc);
+		List<Type> argTypes = Type.getMethodTypes(desc);
 		argTypes.remove(argTypes.size()-1);
 
 		int varId = 1;
@@ -773,7 +770,7 @@ public final class Bypass<T> {
 
 		CodeWriter cw = impl.newMethod(ACC_PUBLIC, self.getName(), sDesc);
 
-		List<Type> argTypes = Type.methodDesc(desc);
+		List<Type> argTypes = Type.getMethodTypes(desc);
 		Type retype = argTypes.remove(argTypes.size()-1);
 
 		boolean isStatic = (flags&INVOKE_STATIC) != 0;
@@ -864,16 +861,6 @@ public final class Bypass<T> {
 	 * @return this
 	 */
 	public final Bypass<T> unchecked() { if (!DMHInit()) flags |= UNCHECKED_CAST; return this; }
-	/**
-	 * 启用弱类加载器引用模式（允许生成的类被单独卸载）
-	 * @return this
-	 */
-	public final Bypass<T> weak() { flags |= WEAK_REF; return this; }
-	/**
-	 * 强制JVM内联代理函数（提升调用性能）
-	 * @return this
-	 */
-	public final Bypass<T> inline() { flags |= INLINE; return this; }
 
 	/**
 	 * 首字母大写: xx,set => setXxx

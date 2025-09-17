@@ -1,13 +1,13 @@
 package roj.config.mapper;
 
-import roj.ci.annotation.ReferenceByGeneratedClass;
+import roj.ci.annotation.IndirectReference;
 
 /**
  * @author Roj234
  * @since 2023/3/25 12:59
  */
 final class Skip extends TypeAdapter {
-	@ReferenceByGeneratedClass
+	@IndirectReference
 	static final TypeAdapter INST = new Skip();
 
 	public void read(MappingContext ctx, boolean l) { popIfNoContainer(ctx); }

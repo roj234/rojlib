@@ -42,7 +42,7 @@ final class MethodList extends ComponentList {
 
 	void add(ClassDefinition klass, MethodNode mn) {
 		// 忽略改变返回类型的重载的parent (a.k.a 如果有对应的桥接方法，就不去父类查询了)
-		var list = ddtmp.computeIfAbsent(Type.toMethodDesc(mn.parameters()), Helpers.fnArrayList());
+		var list = ddtmp.computeIfAbsent(Type.getMethodDescriptor(mn.parameters()), Helpers.fnArrayList());
 		for (int i = 0; i < list.size(); i++) {
 			var prev = list.get(i);
 			if (ClassUtil.isOverridable(klass.name(), mn.modifier, prev.owner())) {

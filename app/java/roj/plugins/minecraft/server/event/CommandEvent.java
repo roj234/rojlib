@@ -1,6 +1,6 @@
 package roj.plugins.minecraft.server.event;
 
-import roj.asmx.event.Event;
+import roj.event.Event;
 import roj.plugins.minecraft.server.network.PlayerConnection;
 
 /**

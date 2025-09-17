@@ -17,20 +17,20 @@ import roj.asm.type.IType;
 import roj.asm.type.Signature;
 import roj.asm.type.Type;
 import roj.asmx.GenericTemplate;
+import roj.ci.annotation.IndirectReference;
 import roj.ci.annotation.Public;
-import roj.ci.annotation.ReferenceByGeneratedClass;
 import roj.collect.ArrayList;
 import roj.collect.BitSet;
 import roj.collect.HashMap;
 import roj.collect.*;
 import roj.compiler.resolve.Inferrer;
 import roj.io.IOUtil;
-import roj.reflect.ClassDefiner;
 import roj.reflect.Reflection;
-import roj.reflect.Unaligned;
+import roj.reflect.Unsafe;
 import roj.text.CharList;
 import roj.util.ByteList;
 import roj.util.Helpers;
+import roj.util.JVM;
 
 import java.io.IOException;
 import java.lang.reflect.Method;
@@ -79,7 +79,8 @@ final class Factory extends ObjectMapperFactory {
 		DEFAULT.put("java.util.Set", new CollectionAdapter(null, true, null));
 		DEFAULT.put("java.util.Optional", new OptionalAdapter());
 
-		DEFAULT.put("roj.config.auto.Either", new EitherAdapter());
+		DEFAULT.put("roj.util.function.Either", new EitherAdapter());
+		DEFAULT.put("roj.config.node.ConfigValue", TreeAdapter.INSTANCE);
 	}
 
 	private final ClassLoader classLoader;
@@ -163,7 +164,7 @@ final class Factory extends ObjectMapperFactory {
 		String name = "U|"+wid+"|"+rid+"|"+type.getName()+"|"+adapterType.getName();
 		TypeAdapter ser = GENERATED.get(name);
 		if (ser == null) {
-			Type clsType = Type.from(type);
+			Type clsType = Type.getType(type);
 			for (MethodNode mn : data.methods) {
 				List<Type> par = mn.parameters();
 				if (par.size() != 1) continue;
@@ -249,7 +250,7 @@ final class Factory extends ObjectMapperFactory {
 			List<Type> wp = w.parameters(), rp = r.parameters();
 			if (((r.modifier ^ w.modifier)&ACC_STATIC) != 0) throw new IllegalArgumentException("R/W方法静态不同");
 			if ((r.modifier&ACC_STATIC) == 0 == (adapterType == adapter)) throw new IllegalArgumentException("R/W方法与参数的静态不同");
-			if (wp.get(0).equals(Type.from(type))) {
+			if (wp.get(0).equals(Type.getType(type))) {
 				actualTypeMode = rp.size() == 2 && "java/lang/String".equals(rp.get(1).getActualClass());
 
 				if (rp.get(0).equals(w.returnType())) break sp;
@@ -287,7 +288,7 @@ final class Factory extends ObjectMapperFactory {
 		ClassNode data = ClassNode.fromType(adapter);
 		if (data == null) throw new IllegalArgumentException("无法获取"+adapter.getName()+"的类文件");
 
-		Type clsType = Type.from(type);
+		Type clsType = Type.getType(type);
 		MethodNode writer = null, reader = null;
 		for (MethodNode mn : data.methods) {
 			List<Type> par = mn.parameters();
@@ -489,20 +490,20 @@ final class Factory extends ObjectMapperFactory {
 	}
 
 	// region ASM-回调
-	@ReferenceByGeneratedClass
+	@IndirectReference
 	@Public
 	final Object gas(String as) {
 		AsType a = asTypes.get(as);
 		if (a == null) throw new IllegalStateException("缺少@As("+as+")的适配器");
 		return a.ref;
 	}
-	@ReferenceByGeneratedClass
+	@IndirectReference
 	@Public
 	final TypeAdapter get(Class<?> type) {
 		TypeAdapter make = make(null, type, null, false);
 		if ((this.flag&OBJECT_POOL) != 0 && make != dynamicRoot) make = new PooledAdapter(make);
 		return make; }
-	@ReferenceByGeneratedClass
+	@IndirectReference
 	@Public
 	final TypeAdapter gsa(Class<?> type, String generic) {
 		Generic genericType = null;
@@ -518,7 +519,7 @@ final class Factory extends ObjectMapperFactory {
 		return make;
 	}
 	// Get parent adapter
-	@ReferenceByGeneratedClass
+	@IndirectReference
 	@Public
 	final TypeAdapter gpa(Class<?> type) {
 		TypeAdapter ser = make(type, type.getName().replace('.', '/'), SERIALIZE_PARENT | SERIALIZE_ONLY);
@@ -546,8 +547,8 @@ final class Factory extends ObjectMapperFactory {
 		}
 		byte[] b = primitiveArrayTemplate.clone();
 
-		Type asmType = Type.from(type);
-		Type methodType = asmType.opcodePrefix().equals("I") ? Type.primitive(Type.INT) : asmType;
+		Type asmType = Type.getType(type);
+		Type methodType = asmType.opcodePrefix().equals("I") ? Type.INT_TYPE : asmType;
 		ClassNode c = new GenericTemplate(Type.LONG,asmType,methodType,asmType,true).generate(ByteList.wrap(b));
 
 		switch (asmType.type) {
@@ -558,7 +559,7 @@ final class Factory extends ObjectMapperFactory {
 		}
 
 		c.name("roj/config/mapper/PAS$"+asmType);
-		return (TypeAdapter) ClassDefiner.newInstance(c);
+		return (TypeAdapter) Reflection.createInstance(LOADER_CHAIN.get(0), c);
 	}
 	private static void copyArrayRef(ClassNode c, char type) {
 		CodeWriter cw = c.newMethod(ACC_PUBLIC|ACC_FINAL, "read", "(Lroj/config/mapper/MappingContext;["+type+")V");
@@ -671,7 +672,7 @@ final class Factory extends ObjectMapperFactory {
 		} else {
 			cw.insn(ALOAD_1);
 			cw.varLoad(type, 2);
-			cw.invokeItf("roj/config/ValueEmitter", "value", "("+type.toDesc()+")V");
+			cw.invokeItf("roj/config/ValueEmitter", "emit", "("+type.toDesc()+")V");
 		}
 
 		cw.insn(RETURN);
@@ -690,7 +691,7 @@ final class Factory extends ObjectMapperFactory {
 	}
 
 	// region 对象序列化器
-	private static final byte DIRECT_IF_OVERRIDE = MAGIC_ADAPTER && Reflection.JAVA_VERSION < 22 ? INVOKESPECIAL : INVOKEVIRTUAL;
+	private static final byte DIRECT_IF_OVERRIDE = MAGIC_ADAPTER && JVM.VERSION < 22 ? INVOKESPECIAL : INVOKEVIRTUAL;
 	/**
 	 * 对象序列化器
 	 */
@@ -698,7 +699,7 @@ final class Factory extends ObjectMapperFactory {
 		int t = CHECK_PARENT| SERIALIZE_PARENT;
 		if ((flag&t) == t) throw new IllegalArgumentException("CHECK_PARENT SERIALIZE_PARENT 不能同时为真");
 
-		if ((o.getModifiers()&ACC_PUBLIC) == 0 && (flag& SERIALIZE_PUBLIC_ONLY) != 0) throw new IllegalArgumentException("类"+o.getName()+"不是公共的");
+		if ((o.getModifiers()&ACC_PUBLIC) == 0 && (flag&SERIALIZE_PUBLIC_ONLY) != 0) throw new IllegalArgumentException("类"+o.getName()+"不是公共的");
 		ClassNode data = ClassNode.fromType(o);
 		if (data == null) throw new IllegalArgumentException("无法获取"+o.getName()+"的类文件");
 
@@ -707,7 +708,7 @@ final class Factory extends ObjectMapperFactory {
 			if ((flag & SERIALIZE_ONLY) == 0) throw new IllegalArgumentException("找不到无参构造器"+o.getName());
 		} else if ((data.methods.get(_init).modifier() & ACC_PUBLIC) == 0) {
 			if (!MAGIC_ADAPTER) throw new IllegalArgumentException("MagicAdapter没有激活,不能跳过无参构造器生成对象"+o.getName());
-			if ((flag & SERIALIZE_PUBLIC_ONLY) != 0) throw new IllegalArgumentException("UNSAFE: "+o.getName()+".<init>");
+			if ((flag&SERIALIZE_PUBLIC_ONLY) != 0) throw new IllegalArgumentException("UNSAFE: "+o.getName()+".<init>");
 		}
 
 		fieldIds.clear();
@@ -741,7 +742,7 @@ final class Factory extends ObjectMapperFactory {
 
 			for (Method mn : parentSerInst.getClass().getDeclaredMethods()) {
 				if (mn.getName().equals("read")) {
-					int type = Type.from(mn.getParameterTypes()[1]).getActualType();
+					int type = Type.getType(mn.getParameterTypes()[1]).getActualType();
 					parentExist.add(type);
 				}
 			}
@@ -1015,7 +1016,7 @@ final class Factory extends ObjectMapperFactory {
 		cw.field(GETFIELD, c, parentSer);
 		cw.insn(ALOAD_1);
 		cw.vars(opcode, 2);
-		cw.invoke(INVOKEVIRTUAL, "roj/config/mapper/TypeAdapter", cw.mn.name(), cw.mn.rawDesc());
+		cw.invoke(INVOKEVIRTUAL, "roj/config/mapper/TypeAdapter", cw.method.name(), cw.method.rawDesc());
 	}
 
 	private void asmStruct(final int fieldId, final ClassNode data, final FieldNode fn,
@@ -1119,9 +1120,9 @@ final class Factory extends ObjectMapperFactory {
 				cw.varStore(fType, 2);
 				cw.field(GETSTATIC, "roj/reflect/Unaligned", "U", "Lroj/reflect/Unaligned;");
 				cw.insn(ALOAD_3);
-				cw.ldc(Unaligned.fieldOffset(unsafePut, fn.name()));
+				cw.ldc(Unsafe.fieldOffset(unsafePut, fn.name()));
 				cw.varLoad(fType, 2);
-				cw.invokeItf("roj/reflect/Unaligned", "put"+Reflection.capitalizedType(fType), "(Ljava/lang/Object;J"+(fType.isPrimitive() ? fType.toDesc() : "Ljava/lang/Object;")+")V");
+				cw.invokeItf("roj/reflect/Unaligned", "put"+fType.capitalized(), "(Ljava/lang/Object;J"+(fType.isPrimitive() ? fType.toDesc() : "Ljava/lang/Object;")+")V");
 				cw.visitSizeMax(5+fType.length(), 0);
 			} else {
 				cw.field(PUTFIELD, data.name(), fn.name(), fn.rawDesc());
@@ -1228,10 +1229,10 @@ final class Factory extends ObjectMapperFactory {
 			cw.insn(ALOAD_1);
 			if (actualName == null) {
 				cw.ldc(fieldId);
-				cw.invokeItf("roj/config/ValueEmitter", "intKey", "(I)V");
+				cw.invokeItf("roj/config/ValueEmitter", "emitKey", "(I)V");
 			} else {
 				cw.ldc(new CstString(actualName));
-				cw.invokeItf("roj/config/ValueEmitter", "key", "(Ljava/lang/String;)V");
+				cw.invokeItf("roj/config/ValueEmitter", "emitKey", "(Ljava/lang/String;)V");
 			}
 		}
 
@@ -1312,9 +1313,9 @@ final class Factory extends ObjectMapperFactory {
 			}
 
 			if ("java/lang/String".equals(type.getActualClass())) {
-				cw.invokeS("roj/config/mapper/TypeAdapter", "value", "(Lroj/config/ValueEmitter;Ljava/lang/String;)V");
+				cw.invokeS("roj/config/mapper/TypeAdapter", "emit", "(Lroj/config/ValueEmitter;Ljava/lang/String;)V");
 			} else {
-				cw.invokeItf("roj/config/ValueEmitter", "value", "("+(char)actualType+")V");
+				cw.invokeItf("roj/config/ValueEmitter", "emit", "("+(char)actualType+")V");
 			}
 		}
 
@@ -1365,7 +1366,7 @@ final class Factory extends ObjectMapperFactory {
 
 		cw.label(t.seg.def);
 		if (parentExist.remove(methodType)) {
-			invokeParent(cw, Type.methodDesc(desc).get(1).getOpcode(ILOAD));
+			invokeParent(cw, Type.getMethodTypes(desc).get(1).getOpcode(ILOAD));
 			cw.insn(RETURN);
 		} else {
 			cw.insn(ALOAD_1);
@@ -1446,9 +1447,9 @@ final class Factory extends ObjectMapperFactory {
 		copy.visitSize(4, 3);
 	}
 	private TypeAdapter build(ClassLoader cl) {
-		if (LOADER_CHAIN.contains(cl)) cl = ClassDefiner.APP_LOADER;
+		if (LOADER_CHAIN.contains(cl) || cl == null) cl = LOADER_CHAIN.get(0);
 
- 		ClassNode c1 = c;
+		ClassNode c1 = c;
 		c = null;
 		// 2024/7/23 让ConstantPool可以释放
 		keyCw = null;
@@ -1466,7 +1467,7 @@ final class Factory extends ObjectMapperFactory {
 		readMethods.clear();
 		serializerId.clear();
 
-		return (TypeAdapter) ClassDefiner.newInstance(c1, cl);
+		return (TypeAdapter) Reflection.createInstance(cl, c1, "Serializer@"+currentObject);
 	}
 	// endregion
 }

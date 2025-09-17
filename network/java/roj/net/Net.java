@@ -2,11 +2,11 @@ package roj.net;
 
 import org.jetbrains.annotations.Nullable;
 import roj.RojLib;
-import roj.collect.HashSet;
+import roj.ci.annotation.Public;
 import roj.collect.ArrayList;
+import roj.collect.HashSet;
 import roj.net.handler.Socks5Client;
 import roj.reflect.Bypass;
-import roj.ci.annotation.Public;
 import roj.text.CharList;
 import roj.text.TextUtil;
 import roj.text.URICoder;
@@ -19,8 +19,10 @@ import java.io.FileDescriptor;
 import java.io.IOException;
 import java.net.*;
 import java.nio.channels.DatagramChannel;
+import java.nio.channels.SelectionKey;
 import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
+import java.nio.channels.spi.AbstractSelectableChannel;
 import java.util.Enumeration;
 
 /**
@@ -213,7 +215,7 @@ public final class Net {
 
 	@Nullable
 	public static String getOriginalHostName(InetAddress address) {
-		return Util.getOriginalHostName(Util.getHolder(address));
+		return H.impl.getOriginalHostName(H.impl.getHolder(address));
 	}
 
 	public static String toString(SocketAddress address) {
@@ -224,18 +226,66 @@ public final class Net {
 	public static void setHostCachePolicy(boolean negative, int seconds) {
 		if (seconds < 0) seconds = -1;
 		if (negative) {
-			Util.setNegCachePolicy(seconds);
-			Util.setNegCacheSet(true);
+			H.impl.setNegCachePolicy(seconds);
+			H.impl.setNegCacheSet(true);
 		} else {
-			Util.setPosCachePolicy(seconds);
-			Util.setPosCacheSet(true);
+			H.impl.setPosCachePolicy(seconds);
+			H.impl.setPosCacheSet(true);
 		}
 	}
 
-	private static final H Util;
-
 	@Public
-	private interface H {
+	interface H {
+		H impl = getInstance();
+		private static H getInstance() {
+			Bypass<H> b = Bypass.builder(H.class).unchecked();
+
+			try {
+				b.access(FileDescriptor.class, "fd", "fdVal", "fdFd")
+						.delegate(FileDescriptor.class, "closeAll", "fdClose");
+			} catch (Throwable e) {
+				LOGGER.error("无法加载模块 {}", e, "GetIntFD");
+			}
+
+			try {
+				b.access(Class.forName("sun.nio.ch.SocketChannelImpl"), "fd", "tcpFD", null)
+						.access(Class.forName("sun.nio.ch.ServerSocketChannelImpl"), "fd", "tcpsFD", null)
+						.access(Class.forName("sun.nio.ch.DatagramChannelImpl"), "fd", "udpFD", null);
+			} catch (Throwable e) {
+				LOGGER.error("无法加载模块 {}", e, "GetChannelFD");
+			}
+
+			try {
+				Class<?> policy = Class.forName("sun.net.InetAddressCachePolicy");
+				String[] fieldName = new String[] {"cachePolicy", "negativeCachePolicy", "propertySet", "propertyNegativeSet"};
+				try {
+					policy.getDeclaredField("propertySet");
+				} catch (NoSuchFieldException e) {
+					fieldName[2] = "set";
+					fieldName[3] = "negativeSet";
+				}
+				b.access(policy, fieldName, null, new String[] {"setPosCachePolicy", "setNegCachePolicy", "setPosCacheSet", "setNegCacheSet"});
+			} catch (Throwable e) {
+				LOGGER.error("无法加载模块 {}", e, "AddressCache");
+			}
+
+			try {
+				Class<?> pl = Class.forName("java.net.InetAddress$InetAddressHolder");
+				b.access(pl, "originalHostName", "getOriginalHostName", null);
+				b.access(InetAddress.class, "holder", "getHolder", null);
+			} catch (Throwable e) {
+				LOGGER.error("无法加载模块 {}", e, "getOriginalHostName");
+			}
+
+			try {
+				b.delegate(AbstractSelectableChannel.class, "removeKey");
+			} catch (Throwable e) {
+				LOGGER.error("无法加载模块 {}", e, "UDP Util");
+			}
+
+			return b.build();
+		}
+
 		//region FileDescriptor
 		void fdFd(FileDescriptor fd, int fdVal);
 		int fdVal(FileDescriptor fd);
@@ -258,68 +308,27 @@ public final class Net {
 		void setPosCacheSet(boolean set);
 		void setNegCacheSet(boolean set);
 		//endregion
-	}
 
-	static {
-		Bypass<H> b = Bypass.builder(H.class).inline().unchecked();
-
-		try {
-			b.access(FileDescriptor.class, "fd", "fdVal", "fdFd")
-			 .delegate(FileDescriptor.class, "closeAll", "fdClose");
-		} catch (Throwable e) {
-			LOGGER.error("无法加载模块 {}", e, "GetIntFD");
-		}
-
-		try {
-			b.access(Class.forName("sun.nio.ch.SocketChannelImpl"), "fd", "tcpFD", null)
-			 .access(Class.forName("sun.nio.ch.ServerSocketChannelImpl"), "fd", "tcpsFD", null)
-			 .access(Class.forName("sun.nio.ch.DatagramChannelImpl"), "fd", "udpFD", null);
-		} catch (Throwable e) {
-			LOGGER.error("无法加载模块 {}", e, "GetChannelFD");
-		}
-
-		try {
-			Class<?> policy = Class.forName("sun.net.InetAddressCachePolicy");
-			String[] fieldName = new String[] {"cachePolicy", "negativeCachePolicy", "propertySet", "propertyNegativeSet"};
-			try {
-				policy.getDeclaredField("propertySet");
-			} catch (NoSuchFieldException e) {
-				fieldName[2] = "set";
-				fieldName[3] = "negativeSet";
-			}
-			b.access(policy, fieldName, null, new String[] {"setPosCachePolicy", "setNegCachePolicy", "setPosCacheSet", "setNegCacheSet"});
-		} catch (Throwable e) {
-			LOGGER.error("无法加载模块 {}", e, "AddressCache");
-		}
-
-		try {
-			Class<?> pl = Class.forName("java.net.InetAddress$InetAddressHolder");
-			b.access(pl, "originalHostName", "getOriginalHostName", null);
-			b.access(InetAddress.class, "holder", "getHolder", null);
-		} catch (Throwable e) {
-			LOGGER.error("无法加载模块 {}", e, "getOriginalHostName");
-		}
-
-		Util = b.build();
+		void removeKey(AbstractSelectableChannel ch, SelectionKey key);
 	}
 
 	// java为了所谓的安全性禁止在windows上重用端口，这是解决它的办法
 	public static void setReusePort(DatagramChannel so, boolean on) throws IOException {
 		if (OS.CURRENT != OS.WINDOWS) so.setOption(StandardSocketOptions.SO_REUSEPORT, on);
-		else SetSocketOpt(Util.udpFD(so), on);
+		else SetSocketOpt(H.impl.udpFD(so), on);
 	}
 	public static void setReusePort(SocketChannel so, boolean on) throws IOException {
 		if (OS.CURRENT != OS.WINDOWS) so.setOption(StandardSocketOptions.SO_REUSEPORT, on);
-		else SetSocketOpt(Util.tcpFD(so), on);
+		else SetSocketOpt(H.impl.tcpFD(so), on);
 	}
 	public static void setReusePort(ServerSocketChannel so, boolean on) throws IOException {
 		if (OS.CURRENT != OS.WINDOWS) so.setOption(StandardSocketOptions.SO_REUSEPORT, on);
-		else SetSocketOpt(Util.tcpsFD(so), on);
+		else SetSocketOpt(H.impl.tcpsFD(so), on);
 	}
 
 	private static void SetSocketOpt(FileDescriptor fd, boolean enabled) throws IOException {
 		if (!RojLib.hasNative(RojLib.WIN32)) throw new NativeException("not available");
-		int error = SetSocketOpt(Util.fdVal(fd), enabled);
+		int error = SetSocketOpt(H.impl.fdVal(fd), enabled);
 		if (error != 0) {
 			switch (error) {
 				case 10036: throw new IOException("WSAEINPROGRESS");

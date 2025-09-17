@@ -19,8 +19,6 @@ public class TextDiagnosticReporter implements Function<Diagnostic, Boolean> {
 	final int[] counter = new int[6];
 
 	public TextDiagnosticReporter(int maxError, int maxWarn, int warnOps) {
-		// ensure proper color rendering if supported
-		Tty.getInstance();
 		this.err = maxError;
 		this.warn = maxWarn;
 		this.warnOps = warnOps;
@@ -49,6 +47,8 @@ public class TextDiagnosticReporter implements Function<Diagnostic, Boolean> {
 	 */
 	@Override
 	public Boolean apply(Diagnostic diag) {
+		// ensure proper color rendering if supported
+		Tty.getInstance();
 		total++;
 
 		if (diag.getKind().ordinal() < Kind.ERROR.ordinal() && (warnOps&1) != 0) return false;

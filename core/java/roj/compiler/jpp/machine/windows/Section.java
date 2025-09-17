@@ -78,8 +78,8 @@ public class Section implements PESegment {
 		rawDataOffset = r.readIntLE();
 		relocationOffset = r.readIntLE();
 		lineNumberOffset = r.readIntLE();
-		relocationCount = (char) r.readUShortLE();
-		lineNumberCount = (char) r.readUShortLE();
+		relocationCount = (char) r.readUnsignedShortLE();
+		lineNumberCount = (char) r.readUnsignedShortLE();
 		characteristics = r.readIntLE();
 	}
 }

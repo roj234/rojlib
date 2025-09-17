@@ -3,6 +3,7 @@ package roj.plugins.obfuscator.naming;
 import roj.asm.*;
 import roj.asmx.Context;
 import roj.asmx.mapper.Mapper;
+import roj.collect.FlagSet;
 import roj.collect.HashMap;
 import roj.collect.HashSet;
 import roj.compiler.library.ClassLoaderLibrary;
@@ -16,7 +17,6 @@ import roj.plugins.obfuscator.ObfuscateTask;
 import roj.text.CharList;
 import roj.text.logging.Level;
 import roj.util.ArrayUtil;
-import roj.collect.FlagSet;
 
 import java.util.Collections;
 import java.util.List;
@@ -37,7 +37,7 @@ public class NameObfuscator implements ObfuscateTask {
 	public FlagSet exclusions = new FlagSet("/");
 
 	public boolean hasMap;
-	public final Mapper m = new Mapper(true);;
+	public final Mapper m = new Mapper(true);
 	private Map<String, ClassNode> named;
 
 	public NameObfuscator() {

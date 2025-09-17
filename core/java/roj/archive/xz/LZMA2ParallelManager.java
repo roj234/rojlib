@@ -9,7 +9,7 @@ import roj.concurrent.Task;
 import roj.io.Finishable;
 import roj.io.IOUtil;
 import roj.io.BufferPool;
-import roj.reflect.Unaligned;
+import roj.reflect.Unsafe;
 import roj.util.ArrayUtil;
 import roj.util.DynByteBuf;
 import roj.util.Helpers;
@@ -18,7 +18,7 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.channels.AsynchronousCloseException;
 
-import static roj.reflect.Unaligned.U;
+import static roj.reflect.Unsafe.U;
 
 /**
  * @author Roj234
@@ -190,7 +190,7 @@ public final class LZMA2ParallelManager {
 				if (closed != 0) throw new AsynchronousCloseException();
 
 				int copyLen = Math.min(man.bufLen - bufPos, len);
-				U.copyMemory(buf, Unaligned.ARRAY_BYTE_BASE_OFFSET+off, null, this.buf+bufPos, copyLen);
+				U.copyMemory(buf, Unsafe.ARRAY_BYTE_BASE_OFFSET+off, null, this.buf+bufPos, copyLen);
 
 				bufPos += copyLen;
 				off += copyLen;

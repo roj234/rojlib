@@ -6,7 +6,7 @@ import roj.io.BufferPool;
 import roj.io.IOUtil;
 import roj.net.ChannelCtx;
 import roj.net.ChannelHandler;
-import roj.reflect.Unaligned;
+import roj.reflect.Unsafe;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
 import roj.util.Helpers;
@@ -16,7 +16,7 @@ import java.util.concurrent.ThreadLocalRandom;
 import java.util.zip.Deflater;
 import java.util.zip.Inflater;
 
-import static roj.reflect.Unaligned.U;
+import static roj.reflect.Unsafe.U;
 
 /**
  * <a href="https://datatracker.ietf.org/doc/html/rfc6455">RFC6455 - Websocket</a>
@@ -351,7 +351,7 @@ public abstract class WebSocket implements ChannelHandler {
 
 	private void mask(DynByteBuf b) {
 		byte[] mask = this.mask;
-		int maskI = U.getInt(mask, (long) Unaligned.ARRAY_BYTE_BASE_OFFSET);
+		int maskI = U.getInt(mask, (long) Unsafe.ARRAY_BYTE_BASE_OFFSET);
 
 		byte[] ref = b.array();
 		long addr = b._unsafeAddr()+b.rIndex;
@@ -559,7 +559,7 @@ public abstract class WebSocket implements ChannelHandler {
 		}
 
 		if ((flag & REMOTE_MASK) == 0) {
-			out.put(1, (byte) (out.get(1) | REMOTE_MASK));
+			out.set(1, (byte) (out.getByte(1) | REMOTE_MASK));
 			if ((flag & LOCAL_SIMPLE_MASK) != 0) out.putInt(0);
 			else {
 				int mask = generateMask();

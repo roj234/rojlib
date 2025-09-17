@@ -88,7 +88,7 @@ public final class Blake3 extends BufferedDigest implements MessageAuthenticCode
             while (i < 64) in.list[i++] = 0;
             in.wIndex(64);
 
-            for (i = 0; i < 16; ++i) Msg[i] = in.readIntLE(i<<2);
+            for (i = 0; i < 16; ++i) Msg[i] = in.getIntLE(i<<2);
             in.clear();
 
             compress();
@@ -146,8 +146,8 @@ public final class Blake3 extends BufferedDigest implements MessageAuthenticCode
 
         buf.rIndex = 0; buf.wIndex(64);
         for (int i = 0; i < 8; i++) {
-            buf.putIntLE(i*4, v[i]^v[i+8])
-               .putIntLE(i*4+32, v[i+8]^stack[i]);
+            buf.setIntLE(i*4, v[i]^v[i+8])
+               .setIntLE(i*4+32, v[i+8]^stack[i]);
         }
     }
 

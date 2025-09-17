@@ -87,14 +87,11 @@ public abstract class Expr implements RawExpr {
 	public static Expr constant(IType type, Object value) {return new Literal(type, value);}
 	public static Expr classRef(Type type) {return new Literal(new Generic("java/lang/Class", Collections.singletonList(type)), type);}
 	public static Expr valueOf(String v) {return new Literal(Types.STRING_TYPE, v);}
-	public static Expr valueOf(boolean v) {return new Literal(Type.primitive(Type.BOOLEAN), v);}
-	public static Expr valueOf(int v) {return new Literal(Type.primitive(Type.INT), ConfigValue.valueOf(v));}
+	public static Expr valueOf(boolean v) {return new Literal(Type.BOOLEAN_TYPE, v);}
+	public static Expr valueOf(int v) {return new Literal(Type.INT_TYPE, ConfigValue.valueOf(v));}
 	public static Expr valueOf(ConfigValue v) {
-		return switch (v.dataType()) {
-			case 's' -> valueOf(v.asString());
-			case 'I', 'B', 'C', 'S', 'J', 'F', 'D' -> new Literal(Type.primitive(v.dataType()), v);
-			default -> throw new IllegalArgumentException("暂时不支持这些类型："+v);
-		};
+		if (v.dataType() == 's') return valueOf(v.asString());
+		return new Literal(Type.primitive(v.dataType()), v);
 	}
 
 	public static Expr fieldChain(Expr parent, ClassDefinition begin, IType type, boolean isFinal, FieldNode... chain) {return MemberAccess.fieldChain(parent, begin, type, isFinal, chain);}

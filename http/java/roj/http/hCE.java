@@ -113,7 +113,7 @@ public final class hCE implements ChannelHandler {
 			case DEFLATE_INIT -> {
 				if (buf.readableBytes() < 2) return;
 				count(ctx, buf);
-				ctx = hDeflate.inflate(ctx, checkWrap(buf.readUnsignedShort(buf.rIndex)), false);
+				ctx = hDeflate.inflate(ctx, checkWrap(buf.getUnsignedShort(buf.rIndex)), false);
 				state = DEFLATE;
 				ctx.handler().channelRead(ctx, buf);
 			}
@@ -183,7 +183,7 @@ public final class hCE implements ChannelHandler {
 		int rPos = buf.rIndex;
 
 		// Check header magic
-		if (buf.readUShortLE() != GZIP_MAGIC) {
+		if (buf.readUnsignedShortLE() != GZIP_MAGIC) {
 			throw new ZipException("Not in GZIP format");
 		}
 		// Check compression method
@@ -199,7 +199,7 @@ public final class hCE implements ChannelHandler {
 
 		// extra
 		if ((flg & FEXTRA) != 0) {
-			int m = buf.readUShortLE();
+			int m = buf.readUnsignedShortLE();
 			buf.rIndex += m;
 			n += m + 2;
 		}
@@ -221,7 +221,7 @@ public final class hCE implements ChannelHandler {
 		// header CRC
 		if ((flg & FHCRC) != 0) {
 			int v = CRC32.crc32(buf, rPos, buf.rIndex - rPos)&0xFFFF;
-			if (buf.readUShortLE() != v) throw new ZipException("Corrupt GZIP header");
+			if (buf.readUnsignedShortLE() != v) throw new ZipException("Corrupt GZIP header");
 			n += 2;
 		}
 

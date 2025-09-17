@@ -9,18 +9,20 @@ import roj.asm.insn.Label;
 import roj.asm.type.IType;
 import roj.asm.type.Signature;
 import roj.asm.type.TypeHelper;
-import roj.ci.annotation.ReferenceByGeneratedClass;
+import roj.ci.annotation.IndirectReference;
 import roj.collect.HashMap;
-import roj.config.ConfigMaster;
+import roj.config.JsonParser;
+import roj.config.JsonSerializer;
 import roj.config.ValueEmitter;
+import roj.config.node.ConfigValue;
 import roj.io.IOUtil;
-import roj.reflect.ClassDefiner;
 import roj.reflect.Reflection;
 import roj.reflect.VirtualReference;
 import roj.text.CharList;
 import roj.text.ParseException;
 import roj.util.ArrayCache;
 import roj.util.Helpers;
+import roj.util.JVM;
 
 import java.io.File;
 import java.nio.charset.Charset;
@@ -31,6 +33,7 @@ import java.util.Set;
 import java.util.function.Function;
 import java.util.function.IntFunction;
 import java.util.function.ToIntFunction;
+import java.util.regex.Pattern;
 
 import static roj.asm.Opcodes.*;
 
@@ -57,9 +60,9 @@ public abstract class ObjectMapperFactory {
 		try {
 			ClassNode c = ClassNode.parseSkeleton(IOUtil.getResourceIL("roj/config/mapper/TypeAdapter.class"));
 			c.parent(Reflection.MAGIC_ACCESSOR_CLASS);
-			if (Reflection.JAVA_VERSION > 21)
+			if (JVM.VERSION > 21)
 				c.modifier |= ACC_PUBLIC;
-			ClassDefiner.defineGlobalClass(c);
+			Reflection.defineClass(ObjectMapperFactory.class.getClassLoader(), c);
 			ok = true;
 		} catch (Throwable ignored) {}
 
@@ -186,6 +189,9 @@ public abstract class ObjectMapperFactory {
 	public final ObjectMapperFactory serializeCharsetToString() {return registerAdapter(Charset.class, ObjectMapperFactory.class,"FromCharset","ToCharset");}
 	public static String FromCharset(Charset t) {return t == null ? null : t.name();}
 	public static Charset ToCharset(String t) {return t == null ? null : Charset.forName(t);}
+	public final ObjectMapperFactory serializePatternToString() {return registerAdapter(Pattern.class, ObjectMapperFactory.class,"FromPattern","ToPattern");}
+	public static String FromPattern(Pattern t) {return t == null ? null : t.pattern();}
+	public static Pattern ToPattern(String t) {return t == null ? null : Pattern.compile(t);}
 	//endregion
 
 	/**
@@ -208,13 +214,17 @@ public abstract class ObjectMapperFactory {
 	public abstract ObjectMapperFactory registerAdapter(String name, Class<?> type, Object adapter);
 
 	//region 一些常用的As及其实现
-	public ObjectMapperFactory enableAsJson() {return registerAdapter("json",String.class, ObjectMapperFactory.class,"ToJson","FromJson");}
-	public static String ToJson(Object obj) {return ConfigMaster.JSON.writeObject(obj, new CharList()).toStringAndFree();}
-	public static Object FromJson(String str, String type) {
+	public ObjectMapperFactory enableAsJson() {return registerAdapter("json", String.class, ObjectMapperFactory.class,"ToJson","FromJson");}
+	public static String ToJson(ConfigValue obj) {
+		var textEmitter = new JsonSerializer().to(new CharList());
+		obj.accept(textEmitter);
+		return textEmitter.getValue().toStringAndFree();
+	}
+	public static ConfigValue FromJson(String str, String actualType) {
 		try {
-			return ConfigMaster.JSON.readObject(SAFE.serializer(Signature.parseGeneric(type)), str);
+			return new JsonParser().parse(str);
 		} catch (ParseException e) {
-			throw new IllegalArgumentException("类型"+type+"解析失败", e);
+			throw new IllegalArgumentException("类型"+actualType+"解析失败", e);
 		}
 	}
 
@@ -316,12 +326,12 @@ public abstract class ObjectMapperFactory {
 
 			cw.insn(ARETURN);
 
-			IntFunction<T> fn = Helpers.cast(ClassDefiner.newInstance(c, type.getClassLoader()));
+			IntFunction<T> fn = Helpers.cast(Reflection.createInstance(type.getClassLoader(), c));
 			dc.put(type.getName(), fn);
 			return fn;
 		}
 	}
 
-	@ReferenceByGeneratedClass
+	@IndirectReference
 	public static String valueOf(Object o) {return o == null ? null : o.toString();}
 }

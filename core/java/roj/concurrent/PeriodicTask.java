@@ -1,13 +1,15 @@
 package roj.concurrent;
 
-import roj.reflect.Unaligned;
+import roj.optimizer.FastVarHandle;
+import roj.reflect.Handles;
 
-import static roj.reflect.Unaligned.U;
+import java.lang.invoke.VarHandle;
 
 /**
  * @author Roj234
  * @since 2024/3/6 2:07
  */
+@FastVarHandle
 public class PeriodicTask implements Runnable, Cancellable {
 	protected TimerTask handle;
 	protected final Runnable task;
@@ -15,7 +17,7 @@ public class PeriodicTask implements Runnable, Cancellable {
 	protected final long period;
 	protected int repeat;
 
-	private static final long STATE = Unaligned.fieldOffset(PeriodicTask.class, "state");
+	private static final VarHandle STATE = Handles.lookup().findVarHandle(PeriodicTask.class, "state", int.class);
 	/**
 	 * -1: 任务取消
 	 *  0: '固定频率'模式
@@ -41,13 +43,13 @@ public class PeriodicTask implements Runnable, Cancellable {
 		if (state == 0) {
 			task.run();
 		} else if ((state&1) == 0) {
-			U.compareAndSetInt(this, STATE, 2, 3);
+			STATE.compareAndSet(this, 2, 3);
 			try {
 				task.run();
 			} finally {
 				while (true) {
 					state = this.state;
-					if (state < 0 || U.compareAndSetInt(this, STATE, state, 1)) {
+					if (state < 0 || STATE.compareAndSet(this, state, 1)) {
 						// 任务执行时间超过一个周期，在完成之后重新添加
 						if (state == 4) handle.reschedule(period);
 						break;
@@ -66,9 +68,9 @@ public class PeriodicTask implements Runnable, Cancellable {
 		loop: for(;;) {
 			var state = this.state;
 			switch (state) {
-				case 2, 3: if (!U.compareAndSetInt(this, STATE, state, 4)) break;
+				case 2, 3: if (!STATE.compareAndSet(this, state, 4)) break;
 				case 4: default: return -1;
-				case 1: if (!U.compareAndSetInt(this, STATE, 1, 2)) break;
+				case 1: if (!STATE.compareAndSet(this, 1, 2)) break;
 				case 0: break loop;
 			}
 		}
@@ -77,7 +79,7 @@ public class PeriodicTask implements Runnable, Cancellable {
 	}
 
 	@Override public boolean cancel(boolean mayInterruptIfRunning) {
-		int state = U.getAndSetInt(this, STATE, -1);
+		int state = (int) STATE.getAndSet(this, -1);
 		return state >= 0 || task instanceof Cancellable cancellable && cancellable.cancel(mayInterruptIfRunning);
 	}
 	@Override public boolean isCancelled() {return (state & 1) != 0;}

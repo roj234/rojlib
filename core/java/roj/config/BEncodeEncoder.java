@@ -28,8 +28,7 @@ public final class BEncodeEncoder implements ValueEmitter {
 	public final void emit(byte[] array) {out.putAscii(Integer.toString(array.length)).put(':').put(array);}
 
 	// *no state check*
-	public final void key(String key) {
-		emit(key);}
+	public final void emitKey(String key) {emit(key);}
 
 	public final void emitList() {out.write('l');depth++;}
 	public final void emitMap() {out.write('d');depth++;}

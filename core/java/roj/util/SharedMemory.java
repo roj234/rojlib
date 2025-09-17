@@ -9,7 +9,7 @@ import java.io.Closeable;
  * @author Roj234
  * @since 2024/4/24 2:42
  */
-public class SharedMemory implements Closeable {
+public final class SharedMemory implements Closeable {
 	private static native long nCreate(String name, long size) throws NativeException;
 	private static native long nAttach(String name, boolean writable) throws NativeException;
 	private static native long nGetAddress(long ptr);

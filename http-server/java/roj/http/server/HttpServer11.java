@@ -1,6 +1,6 @@
 package roj.http.server;
 
-import roj.ci.annotation.ReferenceByGeneratedClass;
+import roj.ci.annotation.IndirectReference;
 import roj.http.*;
 import roj.io.BufferPool;
 import roj.io.IOUtil;
@@ -30,7 +30,7 @@ final class HttpServer11 extends PacketMerger implements PostSetting, ResponseHe
 	public static final Logger LOGGER = Logger.getLogger("IIS");
 
 	//region 使用Nixim注入的函数
-	@ReferenceByGeneratedClass
+	@IndirectReference
 	private void accessLog() {
 		var sb = IOUtil.getSharedCharBuf();
 		req.firstLine(sb.append(((InetSocketAddress) ch.remoteAddress()).getHostString()).append(" \""))

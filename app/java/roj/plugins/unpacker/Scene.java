@@ -3,7 +3,7 @@ package roj.plugins.unpacker;
 import roj.collect.TrieTree;
 import roj.io.CorruptedInputException;
 import roj.io.IOUtil;
-import roj.io.MyDataInputStream;
+import roj.io.ByteInputStream;
 import roj.io.source.FileSource;
 import roj.io.source.SourceInputStream;
 import roj.text.TextUtil;
@@ -25,7 +25,7 @@ class Scene implements Unpacker {
 	@Override
 	public TrieTree<?> load(File file) throws IOException {
 		this.file = file;
-		try (var b = new MyDataInputStream(new FileInputStream(file))) {
+		try (var b = new ByteInputStream(new FileInputStream(file))) {
 			int len = b.readIntLE();
 			String ver = b.readUTF(len);
 			int verInt = Integer.parseInt(ver.substring(4));

@@ -33,7 +33,7 @@ public class UrlEncodedParser implements BodyParser {
 		// a=b&c=d
 		char c = key != null ? '&' : '=';
 		while (i < len) {
-			if (buf.get(i) != c) {i++;continue;}
+			if (buf.getByte(i) != c) {i++;continue;}
 
 			buf.wIndex(i);
 			try {

@@ -44,7 +44,7 @@ final class H2Upgrade implements ChannelHandler {
 
 		int i = pos;
 		for (; i < Math.min(len, MAGIC.length()); i++) {
-			if (in.get(in.rIndex + i) != MAGIC.charAt(i)) {
+			if (in.getByte(in.rIndex + i) != MAGIC.charAt(i)) {
 				ctx.replaceSelf(HttpServer.http(router));
 				ctx.handler().channelOpened(ctx);
 				ctx.handler().channelRead(ctx, in);

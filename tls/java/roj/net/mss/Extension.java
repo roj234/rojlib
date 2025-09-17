@@ -65,6 +65,6 @@ public class Extension {
 				buf.putShort(b.readableBytes()).put(b);
 			}
 		}
-		buf.putShort(pos-2, buf.wIndex()-pos);
+		buf.setShort(pos-2, buf.wIndex()-pos);
 	}
 }

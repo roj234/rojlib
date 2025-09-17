@@ -2,13 +2,12 @@ package roj.gui;
 
 import roj.asmx.launcher.Conditional;
 import roj.text.TextUtil;
-import roj.util.HighResolutionTimer;
+import roj.util.JVM;
 import roj.util.TreeNodeImpl;
 
 import javax.swing.*;
 import javax.swing.tree.DefaultTreeCellRenderer;
 import javax.swing.tree.DefaultTreeModel;
-import javax.swing.tree.MutableTreeNode;
 import java.awt.*;
 import java.util.Comparator;
 
@@ -64,7 +63,7 @@ public final class Profiler {
 		p.current = p.current.parent;
 	}
 
-	public Profiler begin() { LOCAL.set(this); HighResolutionTimer.activate(); return this; }
+	public Profiler begin() { LOCAL.set(this); JVM.useAccurateTiming(); return this; }
 	public Profiler end() {
 		LOCAL.remove();
 		Node r = root;

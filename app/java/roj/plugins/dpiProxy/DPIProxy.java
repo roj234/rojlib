@@ -1,11 +1,11 @@
 package roj.plugins.dpiProxy;
 
+import roj.asm.type.Type;
 import roj.collect.ArrayList;
 import roj.collect.BitSet;
 import roj.collect.HashMap;
 import roj.compiler.LambdaLinker;
 import roj.compiler.ast.expr.ExprParser;
-import roj.util.OperationDone;
 import roj.io.IOUtil;
 import roj.net.*;
 import roj.net.handler.Fail2Ban;
@@ -16,6 +16,7 @@ import roj.text.logging.Level;
 import roj.text.logging.Logger;
 import roj.util.DynByteBuf;
 import roj.util.Helpers;
+import roj.util.OperationDone;
 
 import java.io.File;
 import java.io.IOException;
@@ -47,7 +48,7 @@ public class DPIProxy extends Plugin {
 
 			ctx.lexer.init(item.getValue().asString()+";");
 			var node = ctx.ep.parse(ExprParser.STOP_SEMICOLON|ExprParser.SKIP_SEMICOLON);
-			compiler.injector.put(item.getKey(), node.resolve(ctx));
+			compiler.injectedExpressions.put(item.getKey(), node.resolve(ctx));
 		}
 
 		Function<String, DpiMatcher> _createMatcher = file -> {
@@ -56,7 +57,7 @@ public class DPIProxy extends Plugin {
 				try {
 					String text = IOUtil.readString(realFile);
 					compiler.fileName = realFile.getName();
-					return compiler.linkLambda("roj/plugins/dpiProxy/impl/"+file, DpiMatcher.class, text, "data");
+					return compiler.linkLambda("roj/plugins/dpiProxy/impl/"+file, Type.klass("roj/plugins/dpiProxy/DpiMatcher"), text, "data");
 				} catch (Exception e) {
 					Helpers.athrow2(e);
 				}

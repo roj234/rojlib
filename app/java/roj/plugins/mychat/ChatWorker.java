@@ -79,7 +79,7 @@ class ChatWorker extends WebSocket {
 				getHistory(id, in.readUTF(in.readableBytes()), off, len);
 			}
 			case P_COLD_HISTORY -> unloadHistory(in.readInt());
-			default -> sendClose(ERR_INVALID_DATA, "未实现的函数 "+in.get(0));
+			default -> sendClose(ERR_INVALID_DATA, "未实现的函数 "+in.getByte(0));
 		}
 	}
 

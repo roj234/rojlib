@@ -1,9 +1,9 @@
 package roj;
 
 import roj.ci.annotation.ReplaceConstant;
-import roj.reflect.litasm.Intrinsics;
-import roj.reflect.litasm.LibraryLoader;
 import roj.util.OS;
+import roj.util.optimizer.Intrinsics;
+import roj.util.optimizer.LibraryLoader;
 
 import java.io.File;
 import java.io.FileOutputStream;

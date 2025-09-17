@@ -110,22 +110,22 @@ final class ChatUser extends ChatSubject {
 		JsonSerializer ser = new JsonSerializer();
 		ser.emitMap();
 
-		ser.key("id");
+		ser.emitKey("id");
 		ser.emit(id);
 
-		ser.key("name");
+		ser.emitKey("name");
 		ser.emit(name);
 
-		ser.key("username");
+		ser.emitKey("username");
 		ser.emit("");
 
-		ser.key("face");
+		ser.emitKey("face");
 		ser.emit(face);
 
-		ser.key("desc");
+		ser.emitKey("desc");
 		ser.emit(desc);
 
-		ser.key("online");
+		ser.emitKey("online");
 		ser.emit(flag);
 
 		ser.pop();

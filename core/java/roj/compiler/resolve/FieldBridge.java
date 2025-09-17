@@ -34,7 +34,7 @@ public final class FieldBridge extends FieldAccessHook {
 
 	@Override
 	public void writeRead(CodeWriter cw, String owner, FieldNode fn) {
-		if (exist && cw.mn.owner().equals(this.owner.name())) {
+		if (exist && cw.method.owner().equals(this.owner.name())) {
 			super.writeRead(cw, owner, fn);
 		} else {
 			if (readAccessor < 0) {
@@ -67,7 +67,7 @@ public final class FieldBridge extends FieldAccessHook {
 	}
 	@Override
 	public void writeWrite(CodeWriter cw, String owner, FieldNode fn) {
-		if (exist && cw.mn.owner().equals(this.owner.name())) {
+		if (exist && cw.method.owner().equals(this.owner.name())) {
 			super.writeWrite(cw, owner, fn);
 		} else {
 			if (writeAccessor < 0) {

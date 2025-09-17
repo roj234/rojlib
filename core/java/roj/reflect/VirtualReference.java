@@ -4,8 +4,11 @@ import org.jetbrains.annotations.NotNull;
 import roj.asm.ClassNode;
 import roj.asm.Opcodes;
 import roj.math.MathUtils;
+import roj.optimizer.FastVarHandle;
 import roj.util.Helpers;
 
+import java.lang.invoke.MethodHandles;
+import java.lang.invoke.VarHandle;
 import java.lang.ref.ReferenceQueue;
 import java.lang.ref.WeakReference;
 import java.util.Arrays;
@@ -14,7 +17,7 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
-import static roj.reflect.Unaligned.U;
+import static roj.reflect.Unsafe.U;
 
 /**
  * 让ClassLoader能正确的被卸载，防止内存泄露 <pre>
@@ -28,6 +31,7 @@ import static roj.reflect.Unaligned.U;
  * @author Roj234
  * @since 2024/6/4 3:31
  */
+@FastVarHandle
 public class VirtualReference<V> {
 	/*
 	 * Java里面的一个类加载器要被卸载，需要同时满足两个条件
@@ -56,10 +60,12 @@ public class VirtualReference<V> {
 	private final ReferenceQueue<Object> queue = new ReferenceQueue<>();
 	private final ReadWriteLock lock = new ReentrantReadWriteLock();
 
-	private static final long
-		NEXT_OFF = Unaligned.fieldOffset(Entry.class, "next"),
-		VALUE_OFF = Unaligned.fieldOffset(Entry.class, "v"),
-		SIZE_OFF = Unaligned.fieldOffset(VirtualReference.class, "size");
+	private static final VarHandle
+		ENTRIES = MethodHandles.arrayElementVarHandle(Entry[].class),
+		NEXT = Handles.lookup().findVarHandle(Entry.class, "next", Entry.class),
+		VALUE = Handles.lookup().findVarHandle(Entry.class, "v", WeakReference.class),
+		SIZE = Handles.lookup().findVarHandle(VirtualReference.class, "size", int.class);
+
 	private static final Entry<?> SENTIAL = new Entry<>(null, null);
 
 	public static final class Entry<V> extends WeakReference<ClassLoader> {
@@ -92,15 +98,15 @@ public class VirtualReference<V> {
 			ClassLoader loader = get();
 			if (loader == null) throw new IllegalStateException("key was freed???");
 
-			var xref = new ClassNode();
-			xref.modifier = 0;
-			xref.name(loader.getClass().getName().replace('.', '/')+"$OwnedRef$"+Reflection.uniqueId());
-			xref.newField(Opcodes.ACC_STATIC, "r", "Ljava/lang/Object;");
+			var ref = new ClassNode();
+			ref.modifier = Opcodes.ACC_PUBLIC|Opcodes.ACC_FINAL;
+			ref.name(loader.getClass().getName().replace('.', '/')+"$OwnedRef$"+Reflection.uniqueId());
+			ref.newField(Opcodes.ACC_PUBLIC|Opcodes.ACC_STATIC, "v", "Ljava/lang/Object;");
 
-			Class<?> klass = ClassDefiner.defineClass(loader, xref);
+			Class<?> klass = Reflection.defineClass(loader, ref);
 
 			this.v = new WeakReference<>(klass);
-			offset = Unaligned.fieldOffset(klass, "r");
+			offset = Unsafe.fieldOffset(klass, "v");
 			U.putReference(klass, offset, v);
 		}
 	}
@@ -119,12 +125,12 @@ public class VirtualReference<V> {
 				Entry<?> prev = null;
 				for (;;) {
 					if (entry == remove) {
-						Object next = U.getAndSetReference(entry, NEXT_OFF, SENTIAL);
+						Object next = NEXT.getAndSet(entry, SENTIAL);
 						if (next != SENTIAL) {
 							if (prev == null) array[i] = (Entry<?>) next;
 							else prev.next = Helpers.cast(next);
 
-							U.getAndAddInt(this, SIZE_OFF, -1);
+							SIZE.getAndAdd(this, -1);
 						}
 
 						break loop;
@@ -234,8 +240,8 @@ public class VirtualReference<V> {
 			V value = entry.getValue();
 			if (value != null) return value;
 
-			if (U.compareAndSetReference(entry, VALUE_OFF, SENTIAL, null)) {
-				U.getAndAddInt(this, SIZE_OFF, 1);
+			if (VALUE.compareAndSet(entry, SENTIAL, null)) {
+				SIZE.getAndAdd(this, 1);
 
 				entry.setValue(value = mapper.apply(key));
 				return value;
@@ -272,15 +278,14 @@ public class VirtualReference<V> {
 
 		int i = System.identityHashCode(key)&(array.length-1);
 		Entry<V> entry;
-		long offset = Unaligned.ARRAY_OBJECT_BASE_OFFSET + ((long) i * Unaligned.ARRAY_OBJECT_INDEX_SCALE);
 		// CAS first
 		for (;;) {
 			for (;;) {
-				entry = (Entry<V>) U.getReferenceVolatile(array, offset);
+				entry = (Entry<V>) ENTRIES.getVolatile(array, i);
 				if (entry != null) break;
 
-				if (U.compareAndSetReference(array, offset, null, SENTIAL)) {
-					U.putReferenceVolatile(array, offset, entry = new Entry<>(queue, key));
+				if (ENTRIES.compareAndSet(array, i, null, SENTIAL)) {
+					ENTRIES.setVolatile(array, i, entry = new Entry<>(queue, key));
 					return entry;
 				}
 			}
@@ -289,7 +294,7 @@ public class VirtualReference<V> {
 				if (key == entry.get()) return entry;
 
 				if (entry.next == null) {
-					if (U.compareAndSetReference(entry, NEXT_OFF, null, SENTIAL)) {
+					if (NEXT.compareAndSet(entry, null, SENTIAL)) {
 						Entry<V> next = new Entry<>(queue, key);
 						entry.next = next;
 						return next;

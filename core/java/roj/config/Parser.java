@@ -49,63 +49,64 @@ public abstract class Parser extends Tokenizer implements BinaryParser {
 	protected Parser(int _flag) {if ((_flag & COMMENT) != 0) comment = new CharList();}
 
 	public final ConfigValue parse(CharSequence text) throws ParseException { return parse(text, 0); }
-	public ConfigValue parse(CharSequence text, int flag) throws ParseException {
-		this.flag = flag;
+	public ConfigValue parse(CharSequence text, int flags) throws ParseException {
+		this.flag = flags;
 		init(text);
 		try {
-			return element(flag);
+			return element(flags);
 		} catch (ParseException e) {
 			throw e.addPath("$");
 		} finally {
 			init(null);
 		}
 	}
-	protected ConfigValue element(int flag) throws ParseException { throw new UnsupportedOperationException(); }
-
-	public <E extends ValueEmitter> E parse(CharSequence text, int flag, E emitter) throws ParseException {
-		parse(text,flag).accept(emitter);
-		return emitter;
+	public void parse(CharSequence text, int flags, ValueEmitter emitter) throws ParseException {
+		parse(text, flags).accept(emitter);
 	}
+
+	protected ConfigValue element(int flags) throws ParseException { throw new UnsupportedOperationException(); }
 
 	// auto detect
 	public Charset charset = null;
 	public final Parser charset(Charset cs) { charset = cs; return this; }
 
-	public final ConfigValue parse(File file, int flag) throws IOException, ParseException {
+	public final ConfigValue parse(File file, int flags) throws IOException, ParseException {
 		try (TextReader in = new TextReader(file, charset)) {
-			return parse(in, flag);
+			return parse(in, flags);
 		} catch (ParseException e) {
-			if (file.length() > 1048576) throw e;
+			throw wrapWithFullText(file, e);
+		}
+	}
+	public final void parse(File file, int flags, ValueEmitter emitter) throws IOException, ParseException {
+		try (var text = new TextReader(file, charset)) {
+			parse(text, flags, emitter);
+		} catch (ParseException e) {
+			throw wrapWithFullText(file, e);
+		}
+	}
+	public final ConfigValue parse(DynByteBuf buf, int flags) throws IOException, ParseException {
+		try (var text = new TextReader(buf, charset)) {
+			return parse(text, flags);
+		}
+	}
+	public final ConfigValue parse(InputStream in, int flags) throws IOException, ParseException {
+		try (var text = new TextReader(in, charset)) {
+			return parse(text, flags);
+		}
+	}
+	public final void parse(InputStream in, int flag, ValueEmitter emitter) throws IOException, ParseException {
+		try (var text = new TextReader(in, charset)) {
+			parse(text, flag, emitter);
+		}
+	}
 
-			ParseException ex = new ParseException(IOUtil.readString(file), e.getMessage(), e.getIndex(), e.getCause());
-			ex.addPath(e.getPath());
-			ex.setStackTrace(e.getStackTrace());
-			throw ex;
-		}
-	}
-	public final <E extends ValueEmitter> E parse(File file, int flag, E emitter) throws IOException, ParseException {
-		try (TextReader text = new TextReader(file, charset)) {
-			return parse(text, flag, emitter);
-		} catch (ParseException e) {
-			ParseException exc = new ParseException(IOUtil.readString(file), e.getMessage(), e.getIndex(), e.getCause());
-			exc.setStackTrace(e.getStackTrace());
-			throw exc;
-		}
-	}
-	public final ConfigValue parse(DynByteBuf buf, int flag) throws IOException, ParseException {
-		try (TextReader text = new TextReader(buf, charset)) {
-			return parse(text, flag);
-		}
-	}
-	public final ConfigValue parse(InputStream in, int flag) throws IOException, ParseException {
-		try (TextReader text = new TextReader(in, charset)) {
-			return parse(text, flag);
-		}
-	}
-	public final <E extends ValueEmitter> E parse(InputStream in, int flag, E emitter) throws IOException, ParseException {
-		try (TextReader text = new TextReader(in, charset)) {
-			return parse(text, flag, emitter);
-		}
+	private static ParseException wrapWithFullText(File file, ParseException e) throws ParseException, IOException {
+		if (file.length() > 1048576) throw e;
+
+		var ex = new ParseException(IOUtil.readString(file), e.getMessage(), e.getIndex(), e.getCause());
+		ex.addPath(e.getPath());
+		ex.setStackTrace(e.getStackTrace());
+		return ex;
 	}
 
 	protected int flag;

@@ -11,7 +11,7 @@ import roj.asm.insn.*;
 import roj.asm.type.Type;
 import roj.asmx.Context;
 import roj.collect.HashMap;
-import roj.reflect.ClassDefiner;
+import roj.reflect.Reflection;
 import roj.text.logging.Level;
 import roj.text.logging.Logger;
 import roj.util.DynByteBuf;
@@ -78,7 +78,7 @@ public class StringDeobfusactor {
 			c.invoke(Opcodes.INVOKESTATIC, method);
 			c.insn(Opcodes.ARETURN);
 
-			return impl = (Decoder) ClassDefiner.newInstance(cls);
+			return impl = (Decoder) Reflection.createInstance(StringDeobfusactor.class.getClassLoader(), cls);
 		}
 	}
 

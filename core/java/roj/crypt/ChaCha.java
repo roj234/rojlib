@@ -1,6 +1,6 @@
 package roj.crypt;
 
-import roj.reflect.Unaligned;
+import roj.reflect.Unsafe;
 import roj.util.DynByteBuf;
 
 import javax.crypto.ShortBufferException;
@@ -12,7 +12,7 @@ import java.security.spec.AlgorithmParameterSpec;
 
 import static java.lang.Integer.reverseBytes;
 import static java.lang.Integer.rotateLeft;
-import static roj.reflect.Unaligned.U;
+import static roj.reflect.Unsafe.U;
 
 /**
  * @author solo6975
@@ -41,7 +41,7 @@ sealed class ChaCha extends RCipher permits XChaCha {
 		if (key.length != 32) throw new InvalidKeyException("Key should be 256 bits length");
 
 		for (int i = 0; i < 8; i++) {
-			this.key[i+4] = U.get32UL(key, Unaligned.ARRAY_BYTE_BASE_OFFSET + (i << 2));
+			this.key[i+4] = U.get32UL(key, Unsafe.ARRAY_BYTE_BASE_OFFSET + (i << 2));
 		}
 
 		if (par != null) {
@@ -90,9 +90,9 @@ sealed class ChaCha extends RCipher permits XChaCha {
 	}
 	void setIv(byte[] iv) throws InvalidAlgorithmParameterException {
 		if (iv.length != 12) throw new InvalidAlgorithmParameterException("iv.length("+iv.length+") != 12");
-		key[13] = U.get32UL(iv, Unaligned.ARRAY_BYTE_BASE_OFFSET);
-		key[14] = U.get32UL(iv, Unaligned.ARRAY_BYTE_BASE_OFFSET + 4);
-		key[15] = U.get32UL(iv, Unaligned.ARRAY_BYTE_BASE_OFFSET + 8);
+		key[13] = U.get32UL(iv, Unsafe.ARRAY_BYTE_BASE_OFFSET);
+		key[14] = U.get32UL(iv, Unsafe.ARRAY_BYTE_BASE_OFFSET + 4);
+		key[15] = U.get32UL(iv, Unsafe.ARRAY_BYTE_BASE_OFFSET + 8);
 	}
 
 	@Override

@@ -59,15 +59,15 @@ public final class StaticSegment extends Segment {
 		return isTerminate(buf, buf.rIndex, buf.wIndex());
 	}
 	static boolean isTerminate(DynByteBuf buf, int start, int end) {
-		int op = buf.get(end-1);
+		int op = buf.getByte(end-1);
 		if ((op < Opcodes.IRETURN || op > Opcodes.RETURN) && op != Opcodes.ATHROW) return false;
 
 		// 常量池ID可能正好落在这个范围中, 所以再做一次终止检查
 		do {
-			op = buf.get(start);
+			op = buf.getByte(start);
 			boolean wide = op == WIDE;
 			if (wide) {
-				op = buf.get(++start);
+				op = buf.getByte(++start);
 				CodeVisitor.checkWide((byte) op);
 			}
 

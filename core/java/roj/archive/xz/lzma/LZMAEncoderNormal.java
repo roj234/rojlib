@@ -13,10 +13,10 @@ package roj.archive.xz.lzma;
 import roj.archive.xz.LZMA2Options;
 import roj.archive.xz.lz.LZEncoder;
 import roj.archive.xz.rangecoder.RangeEncoder;
-import roj.reflect.Unaligned;
+import roj.reflect.Unsafe;
 import roj.util.NativeMemory;
 
-import static roj.reflect.Unaligned.U;
+import static roj.reflect.Unsafe.U;
 
 final class LZMAEncoderNormal extends LZMAEncoder {
 	private static final int OPTS = 4096;
@@ -263,7 +263,7 @@ final class LZMAEncoderNormal extends LZMAEncoder {
 		// state and reps for the next byte.
 		oSetState(0, state);
 		U.copyMemory(
-			reps, Unaligned.ARRAY_INT_BASE_OFFSET,
+			reps, Unsafe.ARRAY_INT_BASE_OFFSET,
 			null, opts+REPS_OFF,
 			REPS << 2);
 

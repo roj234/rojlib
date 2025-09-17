@@ -1,8 +1,8 @@
 package roj.net;
 
+import roj.collect.ArrayList;
 import roj.collect.HashMap;
 import roj.collect.RingBuffer;
-import roj.collect.ArrayList;
 import roj.io.BufferPool;
 import roj.util.DynByteBuf;
 import roj.util.Helpers;
@@ -676,14 +676,14 @@ public abstract class MyChannel implements Selectable, Closeable {
 	final ByteBuffer syncNioWrite(DynByteBuf buf) {
 		if (nioBuf == null) return nioBuf = buf.nioBuffer();
 		else {
-			NativeMemory.setBufferCapacityAndAddress(nioBuf, buf.address(), buf.capacity());
+			NativeMemory.setAddress(nioBuf, buf.address(), buf.capacity());
 			nioBuf.limit(buf.wIndex()).position(buf.rIndex);
 		}
 		return nioBuf;
 	}
 	final ByteBuffer syncNioRead(DynByteBuf buf) {
 		if (nioBuf == null) nioBuf = buf.nioBuffer();
-		else NativeMemory.setBufferCapacityAndAddress(nioBuf, buf.address(), buf.capacity());
+		else NativeMemory.setAddress(nioBuf, buf.address(), buf.capacity());
 		nioBuf.limit(buf.capacity()).position(buf.wIndex());
 		return nioBuf;
 	}

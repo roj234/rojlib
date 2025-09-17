@@ -586,11 +586,11 @@ public class SSOPlugin extends Plugin {
 
 		var ser = new JsonSerializer();
 		ser.emitMap();
-		ser.key("ok");
+		ser.emitKey("ok");
 		ser.emit(true);
-		ser.key("openid");
+		ser.emitKey("openid");
 		ser.emit(IOUtil.encodeHex(o.hmac.digestShared()));
-		ser.key("name");
+		ser.emitKey("name");
 		ser.emit(u.name);
 		return Content.json(ser.getValue());
 	}

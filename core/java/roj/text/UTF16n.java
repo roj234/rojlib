@@ -1,12 +1,12 @@
 package roj.text;
 
-import roj.reflect.Reflection;
-import roj.reflect.Unaligned;
+import roj.reflect.Unsafe;
+import roj.util.JVM;
 
 import java.util.function.IntConsumer;
 
 import static java.lang.Character.*;
-import static roj.reflect.Unaligned.U;
+import static roj.reflect.Unsafe.U;
 
 /**
  * 不验证并且仅内存拷贝的UTF16
@@ -16,16 +16,16 @@ final class UTF16n extends FastCharset {
 	static final FastCharset INSTANCE = new UTF16n();
 	private UTF16n() {}
 
-	@Override public String name() {return Reflection.BIG_ENDIAN ? "UTF-16BE" : "UTF-16LE";}
+	@Override public String name() {return JVM.BIG_ENDIAN ? "UTF-16BE" : "UTF-16LE";}
 	@Override public long fastEncode(char[] s, int i, int end, Object ref, long addr, int max_len) {
 		int copyChars = Math.min(max_len>>>1, end-i);
-		U.copyMemory(s, Unaligned.ARRAY_CHAR_BASE_OFFSET + (i * 2L), ref, addr, copyChars * 2L);
+		U.copyMemory(s, Unsafe.ARRAY_CHAR_BASE_OFFSET + (i * 2L), ref, addr, copyChars * 2L);
 		i += copyChars;
 		return ((long) i << 32) | (max_len - copyChars * 2L);
 	}
 	@Override public long fastDecode(Object ref, long base, int pos, int end, char[] out, int off, int outMax) {
 		int copyChars = Math.min((end-pos)>>>1, outMax);
-		U.copyMemory(ref, base+pos, out, Unaligned.ARRAY_CHAR_BASE_OFFSET + (off * 2L), copyChars * 2L);
+		U.copyMemory(ref, base+pos, out, Unsafe.ARRAY_CHAR_BASE_OFFSET + (off * 2L), copyChars * 2L);
 		return ((pos+copyChars*2L)<<32) | (off+copyChars);
 	}
 	@Override public void fastValidate(Object ref, long i, long max, IntConsumer verifier) {
@@ -38,7 +38,7 @@ final class UTF16n extends FastCharset {
 
 				int ls = U.getChar(ref, i); i += 2;
 				if (ls < MIN_LOW_SURROGATE || ls >= MAX_LOW_SURROGATE) verifier.accept(MALFORMED - 2);
-				c = codepoint(c, ls);
+				c = codepointNoExc(c, ls);
 			}
 			verifier.accept(c);
 		}

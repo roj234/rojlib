@@ -4,7 +4,7 @@ import roj.text.ParseException;
 import roj.crypt.CryptoFactory;
 import roj.crypt.asn1.*;
 import roj.io.IOUtil;
-import roj.io.MyDataInputStream;
+import roj.io.ByteInputStream;
 import roj.util.ArrayUtil;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
@@ -63,7 +63,7 @@ final class SignatureBlock extends CertPath {
 		if (is == null) throw new CertificateException("input stream is null");
 
 		try {
-			var der = new DerReader(MyDataInputStream.wrap(is));
+			var der = new DerReader(ByteInputStream.wrap(is));
 
 			var info = PKCS7.parse("ContentInfo", der).asMap().getMap("content");
 

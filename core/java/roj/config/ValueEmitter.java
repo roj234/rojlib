@@ -45,8 +45,8 @@ public interface ValueEmitter extends Closeable {
 	void emitMap();
 	default void emitMap(int size) { emitMap(); }
 
-	void key(String key);
-	default void intKey(int key) {key(Integer.toString(key));}
+	void emitKey(String key);
+	default void emitKey(int key) {emitKey(Integer.toString(key));}
 
 	void emitList();
 	default void emitList(int size) { emitList(); }

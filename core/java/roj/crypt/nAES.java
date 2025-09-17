@@ -6,9 +6,9 @@ import roj.asmx.injector.Inject;
 import roj.asmx.injector.Shadow;
 import roj.asmx.injector.Weave;
 import roj.asmx.launcher.Autoload;
-import roj.reflect.litasm.FastJNI;
-import roj.reflect.litasm.ObjectField;
 import roj.util.DynByteBuf;
+import roj.util.optimizer.IntrinsicCandidate;
+import roj.util.optimizer.ObjectField;
 
 import javax.crypto.ShortBufferException;
 import java.security.InvalidAlgorithmParameterException;
@@ -87,21 +87,21 @@ final class nAES {
 	@Inject("<clinit>") static void __clinit() {RojLib.linkLibrary(AES.class);}
 
 	@Copy
-	@FastJNI
+	@IntrinsicCandidate
 	private static native void IL_aes_init(byte[] k, int rounds, int[] Ke);
 	@Copy
-	@FastJNI
+	@IntrinsicCandidate
 	private static native void IL_aes_encrypt(int[] K, int rounds, @ObjectField("") byte[] in, long in_off, @ObjectField("") byte[] out, long out_off, int blocks);
 	@Copy
-	@FastJNI
+	@IntrinsicCandidate
 	private static native void IL_aes_decrypt(int[] K, int rounds, @ObjectField("") byte[] in, long in_off, @ObjectField("") byte[] out, long out_off, int blocks);
 	@Copy
-	@FastJNI
+	@IntrinsicCandidate
 	private static native void IL_aes_CBC_encrypt(int[] K, int rounds, byte[] iv16, @ObjectField("") byte[] in, long in_off, @ObjectField("") byte[] out, long out_off, int blocks);
 	@Copy
-	@FastJNI
+	@IntrinsicCandidate
 	private static native void IL_aes_CBC_decrypt(int[] K, int rounds, byte[] iv16, @ObjectField("") byte[] in, long in_off, @ObjectField("") byte[] out, long out_off, int blocks);
 	@Copy
-	@FastJNI
+	@IntrinsicCandidate
 	private static native void IL_aes_CTR(int[] K, int rounds, byte[] iv16, byte[] nonce4, @ObjectField("") byte[] in, long in_off, @ObjectField("") byte[] out, long out_off, int blocks);
 }

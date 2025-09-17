@@ -1,7 +1,7 @@
 package roj.io.remote.proto;
 
 import roj.collect.ArrayList;
-import roj.io.MyDataInput;
+import roj.io.ByteInput;
 import roj.io.remote.RFSSourceClient;
 import roj.io.remote.RemoteFileSystem;
 import roj.util.DynByteBuf;
@@ -138,7 +138,7 @@ public interface Packet {
         }
 
         public FileHandle(int handle, long length) {this.handle = handle;this.length = length;}
-        public FileHandle(DynByteBuf buf) {handle = MyDataInput.zag(buf.readVUInt());length = buf.readVULong();}
+        public FileHandle(DynByteBuf buf) {handle = ByteInput.zag(buf.readVUInt());length = buf.readVULong();}
         public void encode(DynByteBuf buf) {buf.putVUInt(DynByteBuf.zig(handle)).putVULong(length);}
 
         public void handle(RFSSourceClient client) {client.onOpenHandle(this);}

@@ -15,7 +15,7 @@ import roj.net.*;
 import roj.net.mss.MSSKeyPair;
 import roj.text.TextUtil;
 import roj.text.logging.LoggingStream;
-import roj.util.HighResolutionTimer;
+import roj.util.JVM;
 
 import javax.swing.*;
 import java.io.File;
@@ -103,7 +103,7 @@ public class MyFRP implements ChannelHandler {
 
 		new MyFRP().start(new File(args[0]));
 		Constants.registerShutdownHook(loop);
-		HighResolutionTimer.runThis();
+		JVM.AccurateTimer.parkForMe();
 	}
 
 	private void start(File file) throws Exception {

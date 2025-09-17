@@ -28,9 +28,9 @@ import roj.compiler.doc.Javadoc;
 import roj.compiler.doc.JavadocProcessor;
 import roj.compiler.jpp.NativeStruct;
 import roj.compiler.resolve.NestContext;
+import roj.io.IOUtil;
 import roj.text.ParseException;
 import roj.text.Token;
-import roj.io.IOUtil;
 import roj.util.ArrayUtil;
 
 import java.util.Collections;
@@ -616,10 +616,10 @@ public final class JavaCompileUnit extends CompileUnit {
 					if ((acc& ~(ACC_STATIC|_ACC_ANNOTATION|_ACC_SEALED|_ACC_NON_SEALED)) != 0) ctx.report(Kind.ERROR, "modifier.conflict", showModifiers(acc & ~ACC_STATIC, ACC_SHOW_METHOD), "cu.except.initBlock");
 					if ((acc & ACC_STATIC) == 0) {
 						if ((acc & ACC_INTERFACE) != 0) ctx.report(Kind.ERROR, "cu.interfaceInit");
-						addParseTask(ParseTask.InstanceInitBlock(this));
+						addParseTask(ParseTask.instanceInit(this));
 					} else {
 						// no interface checks 😄
-						addParseTask(ParseTask.StaticInitBlock(this));
+						addParseTask(ParseTask.staticInit(this));
 					}
 					if (currentNode != null) {
 						ctx.report(Kind.ERROR, "type.illegalGenericDecl");
@@ -656,7 +656,7 @@ public final class JavaCompileUnit extends CompileUnit {
 					wr.skip();
 
 					name = "<init>";
-					type = Type.primitive(Type.VOID);
+					type = Type.VOID_TYPE;
 
 					// 接口不能有构造器
 					if ((modifier & ACC_INTERFACE) != 0)
@@ -728,7 +728,7 @@ public final class JavaCompileUnit extends CompileUnit {
 						paramNames.add("@ordinal");
 						var par = method.parameters();
 						par.add(Types.STRING_TYPE);
-						par.add(Type.primitive(Type.INT));
+						par.add(Type.INT_TYPE);
 					}
 					else if (_parent != this && (extraModifier & ACC_STATIC) == 0) {
 						paramNames.add(NestContext.InnerClass.FIELD_HOST_REF);
@@ -797,7 +797,7 @@ public final class JavaCompileUnit extends CompileUnit {
 						if (w.type() == assign) {
 							if (isVarargs) ctx.report(Kind.ERROR, "cu.method.varargDefault");
 
-							ParseTask.MethodDefault(this, method, paramNames.size());
+							ParseTask.defaultParameter(this, method, paramNames.size());
 							w = wr.next();
 						}
 					} while (w.type() == comma);
@@ -841,7 +841,7 @@ public final class JavaCompileUnit extends CompileUnit {
 					if ((modifier & ACC_ANNOTATION) != 0) {
 						// 注解的default
 						if (w.type() == DEFAULT) {
-							addParseTask(ParseTask.AnnotationDefault(this, method));
+							addParseTask(ParseTask.annotationDefault(this, method));
 							continue;
 						}
 
@@ -869,7 +869,7 @@ public final class JavaCompileUnit extends CompileUnit {
 
 					addParseTask((acc & _ACC_GENERATOR) != 0
 						? GeneratorUtil.Generator(this, method, ArrayUtil.immutableCopyOf(paramNames))
-						: ParseTask.Method(this, method, ArrayUtil.immutableCopyOf(paramNames)));
+						: ParseTask.method(this, method, ArrayUtil.immutableCopyOf(paramNames)));
 					continue;
 				}
 
@@ -918,7 +918,7 @@ public final class JavaCompileUnit extends CompileUnit {
 					fieldIdx.add(w.pos());
 
 					w = wr.next();
-					if (w.type() == assign) addParseTask(ParseTask.Field(this, field));
+					if (w.type() == assign) addParseTask(ParseTask.field(this, field));
 
 					w = wr.next();
 					if (w.type() != comma) {
@@ -1007,7 +1007,7 @@ public final class JavaCompileUnit extends CompileUnit {
 		if (!enumInit.isEmpty()) {
 			addParseTask((lc) -> {
 				var cw = getStaticInit();
-				lc.setMethod(cw.mn);
+				lc.setMethod(cw.method);
 				lc.enumConstructor = true;
 
 				for (int i = 0; i < enumInit.size(); i++) {
@@ -1083,7 +1083,7 @@ public final class JavaCompileUnit extends CompileUnit {
 			w = wr.next();
 			if (w.type() == lParen && !wr.nextIf(rParen)) {
 				var m = newMethod(ACC_PUBLIC|ACC_STATIC|ACC_ENUM, name, "()V");
-				MethodNode method = m.mn;
+				MethodNode method = m.method;
 
 				do {
 					readModifiers(wr, _ACC_ANNOTATION);
@@ -1104,7 +1104,7 @@ public final class JavaCompileUnit extends CompileUnit {
 				CodeWriter init = container.newMethod(ACC_PUBLIC | ACC_FINAL, "<init>", method.rawDesc());
 
 			} else {
-				container.npConstructor();
+				container.defaultConstructor();
 
 				// 生成单例
 				FieldNode field = new FieldNode(ACC_PUBLIC|ACC_STATIC|ACC_FINAL|ACC_ENUM, name, selfType);
@@ -1124,7 +1124,7 @@ public final class JavaCompileUnit extends CompileUnit {
 		if (!enumInit.isEmpty()) {
 			addParseTask((lc) -> {
 				var cw = getStaticInit();
-				lc.setMethod(cw.mn);
+				lc.setMethod(cw.method);
 				lc.enumConstructor = true;
 
 				for (int i = 0; i < enumInit.size(); i++) {

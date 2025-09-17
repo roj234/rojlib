@@ -6,8 +6,8 @@ import roj.config.node.ByteArrayValue;
 import roj.config.node.ConfigValue;
 import roj.config.node.IntArrayValue;
 import roj.io.CorruptedInputException;
-import roj.io.MyDataInput;
-import roj.io.MyDataInputStream;
+import roj.io.ByteInput;
+import roj.io.ByteInputStream;
 import roj.util.ArrayCache;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
@@ -22,9 +22,9 @@ import java.nio.charset.StandardCharsets;
  * @since 2023/11/4 19:03
  */
 public class DerReader {
-	private final MyDataInput in;
+	private final ByteInput in;
 
-	public DerReader(MyDataInput din) {this.in = din;}
+	public DerReader(ByteInput din) {this.in = din;}
 
 	public int readType() throws IOException { return in.readUnsignedByte(); }
 
@@ -103,7 +103,7 @@ public class DerReader {
 		if (in instanceof DynByteBuf b) return b.readBytes(len);
 
 		ByteList buf = new ByteList();
-		int r = buf.readStream((MyDataInputStream) in, len);
+		int r = buf.readStream((ByteInputStream) in, len);
 		if (r < len) throw new EOFException("没有 "+len+" 字节可用");
 		byte[] v = buf.toByteArray();
 		buf.release();
@@ -111,7 +111,7 @@ public class DerReader {
 	}
 
 	public final int readLength() throws IOException {return readLength1(in);}
-	public static int readLength1(MyDataInput in) throws IOException {
+	public static int readLength1(ByteInput in) throws IOException {
 		int len = in.readUnsignedByte();
 		if ((len&0x80) == 0) return len;
 		len &= 0x7F;

@@ -1,12 +1,12 @@
 package roj.plugins.bkcrack;
 
-import roj.collect.BitSet;
 import roj.collect.ArrayList;
+import roj.collect.BitSet;
 import roj.concurrent.Cancellable;
 import roj.concurrent.Executor;
-import roj.util.FastFailException;
 import roj.ui.EasyProgressBar;
 import roj.util.ByteList;
+import roj.util.FastFailException;
 
 import java.util.List;
 
@@ -126,7 +126,7 @@ class PlainPassRecover implements Runnable, Cancellable {
 
 					if(recover6(tmp)) {
 						pass.preInsert(0, 1);
-						pass.put(0, pi);
+						pass.set(0, pi);
 						return true;
 					}
 				}
@@ -136,7 +136,7 @@ class PlainPassRecover implements Runnable, Cancellable {
 
 					if(tryLonger(tmp, length-1)) {
 						pass.preInsert(0, 1);
-						pass.put(0, pi);
+						pass.set(0, pi);
 						return true;
 					}
 				}

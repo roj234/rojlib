@@ -15,10 +15,10 @@ import java.lang.annotation.Target;
 @Retention(RetentionPolicy.CLASS)
 @Target(ElementType.TYPE)
 public @interface Autoload {
-	Target value();
+	Target value() default Target.INIT;
 	String group() default "";
 	int priority() default 0;
 	int intrinsic() default -1;
 
-	enum Target {NIXIM, TRANSFORMER, INIT}
+	enum Target {NIXIM, INIT}
 }

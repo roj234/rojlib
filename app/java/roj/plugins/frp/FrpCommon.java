@@ -42,7 +42,7 @@ public abstract class FrpCommon extends H2Connection {
 			}
 			while (true) {
 				int rb = buf.readableBytes() - 2;
-				if (rb < 0 || rb < buf.readUnsignedShort(buf.rIndex)) {
+				if (rb < 0 || rb < buf.getUnsignedShort(buf.rIndex)) {
 					if (buf != buffer) buffer.put(buf);
 					break;
 				} else {

@@ -178,14 +178,14 @@ final class StringConcat extends Expr {
 			}
 			node.write(cw);
 
-			int cap = TypeCast.getDataCap(type.getActualType());
-			if (cap != 8) {
+			int cap = Type.getSort(type.getActualType());
+			if (cap != Type.SORT_OBJECT) {
 				String desc = switch (cap) {
-					case 0 -> "(Z)Ljava/lang/StringBuilder;";
-					case 2 -> "(C)Ljava/lang/StringBuilder;";
-					case 5 -> "(J)Ljava/lang/StringBuilder;";
-					case 6 -> "(F)Ljava/lang/StringBuilder;";
-					case 7 -> "(D)Ljava/lang/StringBuilder;";
+					case Type.SORT_BOOLEAN -> "(Z)Ljava/lang/StringBuilder;";
+					case Type.SORT_CHAR -> "(C)Ljava/lang/StringBuilder;";
+					case Type.SORT_LONG -> "(J)Ljava/lang/StringBuilder;";
+					case Type.SORT_FLOAT -> "(F)Ljava/lang/StringBuilder;";
+					case Type.SORT_DOUBLE -> "(D)Ljava/lang/StringBuilder;";
 					default -> "(I)Ljava/lang/StringBuilder;";
 				};
 
@@ -215,14 +215,14 @@ final class StringConcat extends Expr {
 			}
 			node.write(cw);
 
-			int cap = TypeCast.getDataCap(type.getActualType());
-			if (cap != 8) {
+			int cap = Type.getSort(type.getActualType());
+			if (cap != Type.SORT_OBJECT) {
 				String desc = switch (cap) {
-					case 0 -> "(Z)Lroj/text/CharList;";
-					case 2 -> "(C)Lroj/text/CharList;";
-					case 5 -> "(J)Lroj/text/CharList;";
-					case 6 -> "(F)Lroj/text/CharList;";
-					case 7 -> "(D)Lroj/text/CharList;";
+					case Type.SORT_BOOLEAN -> "(Z)Lroj/text/CharList;";
+					case Type.SORT_CHAR -> "(C)Lroj/text/CharList;";
+					case Type.SORT_LONG -> "(J)Lroj/text/CharList;";
+					case Type.SORT_FLOAT -> "(F)Lroj/text/CharList;";
+					case Type.SORT_DOUBLE -> "(D)Lroj/text/CharList;";
 					default -> "(I)Lroj/text/CharList;";
 				};
 

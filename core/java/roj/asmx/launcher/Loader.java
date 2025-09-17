@@ -12,7 +12,7 @@ import roj.asm.type.Type;
 import roj.asmx.AnnotationRepo;
 import roj.asmx.Context;
 import roj.asmx.Transformer;
-import roj.ci.annotation.ReferenceByGeneratedClass;
+import roj.ci.annotation.IndirectReference;
 import roj.collect.ArrayList;
 import roj.collect.TrieTreeSet;
 import roj.compiler.plugins.asm.ASM;
@@ -22,7 +22,7 @@ import roj.crypt.jar.JarVerifier;
 import roj.io.IOUtil;
 import roj.io.source.FileSource;
 import roj.reflect.Bypass;
-import roj.reflect.Debug;
+import roj.reflect.ClassDump;
 import roj.reflect.Reflection;
 import roj.text.CharList;
 import roj.text.URICoder;
@@ -74,7 +74,7 @@ public class Loader implements Function<String, Class<?>> {
 
 	// 这里和Loader$Init是相同类加载器的相同包了
 	static ArrayList<String> args;
-	@ReferenceByGeneratedClass
+	@IndirectReference
 	static String[] args() {
 		var s = args.toArray(new String[args.size()]);
 		args = null;
@@ -145,7 +145,7 @@ public class Loader implements Function<String, Class<?>> {
 		ClassNode init = new ClassNode();
 		init.name("roj/asmx/launcher/Loader$Init");
 		init.interfaces().add("java/lang/Runnable");
-		init.npConstructor();
+		init.defaultConstructor();
 
 		CodeWriter c = init.newMethod(ACC_PUBLIC|ACC_STATIC, "<clinit>", "()V");
 		c.visitSize(3, 0);
@@ -175,7 +175,7 @@ public class Loader implements Function<String, Class<?>> {
 
 	private static boolean GetOtherJars() {
 		H fn = null;
-		var builder = Bypass.builder(H.class).weak().i_access("sun.net.www.protocol.jar.JarFileFactory", "fileCache", Type.klass("java/util/HashMap"), "getCache", null, true);
+		var builder = Bypass.builder(H.class).i_access("sun.net.www.protocol.jar.JarFileFactory", "fileCache", Type.klass("java/util/HashMap"), "getCache", null, true);
 		Object ucp;
 		URL[] urls;
 		var loader = Main.class.getClassLoader();
@@ -266,7 +266,7 @@ public class Loader implements Function<String, Class<?>> {
 	private final TrieTreeSet transformExcept = new TrieTreeSet();
 	private final TrieTreeSet loadExcept = new TrieTreeSet();
 	public Loader() {
-		transformExcept.addAll(Arrays.asList("roj.asm.", "roj.asmx.", "roj.reflect."));
+		transformExcept.addAll(Arrays.asList("roj.asm.", "roj.asmx.launcher.", "roj.reflect."));
 		loadExcept.addAll(Arrays.asList("java.", "javax."));
 
 		try {
@@ -426,7 +426,7 @@ public class Loader implements Function<String, Class<?>> {
 
 				LOGGER.fatal("转换类'{}'时发生异常({}/{})", e, name, i);
 				try {
-					Debug.dump("transform_failed", ctx.getClassBytes());
+					ClassDump.dump("transform_failed", ctx.getClassBytes());
 				} catch (Throwable e1) {
 					LOGGER.fatal("保存'{}'的内容用于调试时发生异常", e1, name);
 				}

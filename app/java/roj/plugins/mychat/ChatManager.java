@@ -164,10 +164,10 @@ public class ChatManager extends Plugin {
 			boolean ok = errors == null || errors[i] == null;
 			if (ok) files[i] = null;
 
-			ser.key("ok");
+			ser.emitKey("ok");
 			ser.emit(ok);
 
-			ser.key("v");
+			ser.emitKey("v");
 			ser.emit(ok ? f.getName() : errors[i]);
 
 			ser.pop();

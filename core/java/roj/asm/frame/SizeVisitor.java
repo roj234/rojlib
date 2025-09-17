@@ -174,17 +174,17 @@ public class SizeVisitor {
 	 * 计算方法的最大局部变量大小和最大操作数栈深度。
 	 * 此方法是整个大小计算流程的入口。
 	 *
-	 * @param code           方法字节码
-	 * @param cp             方法的常量池
-	 * @param generateFrames 指示是否需要生成StackMapTable帧。如果为 {@code false}，则不生成帧，该方法返回 {@code null}。
+	 * @param code  方法字节码
+	 * @param cp    方法的常量池
+	 * @param flags 指示是否需要生成StackMapTable帧。如果为 {@code false}，则不生成帧，该方法返回 {@code null}。
 	 * @return 如果 {@code generateFrames} 为 {@code true}，则返回生成的 {@link Frame} 列表；否则返回 {@code null}。
-	 * @throws FastFailException 如果字节码解析或数据流分析过程中发生严重错误。
+	 * @throws FastFailException             如果字节码解析或数据流分析过程中发生严重错误。
 	 * @throws UnsupportedOperationException 如果 {@code generateFrames} 为 {@code true}，因为此方法仅用于计算大小，不生成帧。
 	 */
 	@Nullable
 	@Contract("_, _, false -> null")
-	public List<Frame> finish(DynByteBuf code, ConstantPool cp, boolean generateFrames) {
-		if (generateFrames) throw new UnsupportedOperationException();
+	public List<Frame> finish(DynByteBuf code, ConstantPool cp, int flags) {
+		if ((flags & ~FrameVisitor.COMPUTE_SIZES) != 0) throw new UnsupportedOperationException();
 
 		maxLocalSize = TypeHelper.paramSize(method.rawDesc())+((method.modifier&ACC_STATIC) == 0 ? 1 : 0);
 
@@ -229,6 +229,8 @@ public class SizeVisitor {
 			for (var successor : currentBlock.successors) {
 				int oldSuccEntryHeight = maxEntryHeights.getOrDefault(successor, -1); // 用-1表示从未见过
 
+				if (exitHeight > 0xFFFF) throw new FastFailException("堆栈不对齐 "+currentBlock);
+
 				if (exitHeight > oldSuccEntryHeight) {
 					maxEntryHeights.put(successor, exitHeight);
 
@@ -265,7 +267,6 @@ public class SizeVisitor {
 
 			visitCode(code, cp, begin);
 
-			assert block.poppedStackSpace == 0;
 			maxStackSize = Math.max(maxStackSize, block.pushedStackSpaceMax);
 		}
 
@@ -409,7 +410,7 @@ public class SizeVisitor {
 	private void invoke(byte code, CstRef method) {invoke1(code, method.nameAndType());}
 	private void invoke1(byte code, CstNameAndType desc) {
 		ArrayList<Type> arguments = tmpList; arguments.clear();
-		Type returnType = Type.methodDesc(desc.rawDesc().str(), arguments);
+		Type returnType = Type.getArgumentTypes(desc.rawDesc().str(), arguments);
 
 		for (int i = arguments.size() - 1; i >= 0; i--) {
 			stack(-arguments.get(i).length());

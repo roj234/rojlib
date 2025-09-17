@@ -1,0 +1,16 @@
+package roj.ci.annotation;
+
+import java.lang.annotation.ElementType;
+import java.lang.annotation.Retention;
+import java.lang.annotation.RetentionPolicy;
+import java.lang.annotation.Target;
+
+/**
+ * @author Roj234
+ * @since 2024/1/6 2:19
+ */
+@Retention(RetentionPolicy.SOURCE)
+@Target({ElementType.CONSTRUCTOR, ElementType.METHOD, ElementType.FIELD, ElementType.TYPE})
+public @interface IndirectReference {
+	String by() default "";
+}

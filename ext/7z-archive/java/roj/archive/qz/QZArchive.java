@@ -4,12 +4,10 @@ import org.jetbrains.annotations.NotNull;
 import roj.archive.ArchiveEntry;
 import roj.archive.ArchiveFile;
 import roj.archive.ArchiveUtils;
-import roj.concurrent.TaskGroup;
-import roj.io.CRC32InputStream;
 import roj.collect.*;
+import roj.concurrent.TaskGroup;
 import roj.crypt.CRC32;
 import roj.io.*;
-import roj.io.BufferPool;
 import roj.io.source.Source;
 import roj.io.source.SourceInputStream;
 import roj.text.CharList;
@@ -30,7 +28,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiConsumer;
 
 import static roj.archive.qz.BlockId.*;
-import static roj.reflect.Unaligned.U;
+import static roj.reflect.Unsafe.U;
 
 /**
  * 我去除了大部分C++的味道，但是保留了一部分，这样你才知道自己用的是Java
@@ -144,7 +142,7 @@ public class QZArchive extends QZReader implements ArchiveFile {
 		// -- INTERNAL --
 		private ByteList buf;
 		private InputStream rawIn;
-		private MyDataInputStream in;
+		private ByteInputStream in;
 
 		final void load() throws IOException {
 			streamLen = null;
@@ -158,7 +156,7 @@ public class QZArchive extends QZReader implements ArchiveFile {
 				ByteList buf = read(32);
 
 				if ((buf.readLong() >>> 16) != (QZ_HEADER >>> 16))
-					throw new CorruptedInputException("文件头错误"+Long.toHexString(buf.readLong(0)>>>16));
+					throw new CorruptedInputException("文件头错误"+Long.toHexString(buf.getLong(0)>>>16));
 				buf.rIndex = 6;
 
 				int major = buf.readUnsignedByte();
@@ -174,7 +172,7 @@ public class QZArchive extends QZReader implements ArchiveFile {
 				}
 
 				int crc = CRC32.crc32(buf.list, buf.arrayOffset()+12, 20);
-				int myCrc = buf.readIntLE(8);
+				int myCrc = buf.getIntLE(8);
 				if (crc != myCrc) {
 					// https://www.7-zip.org/recover.html : if crc, offset and length are zero
 					if (that.isRecovering()) {
@@ -206,7 +204,7 @@ public class QZArchive extends QZReader implements ArchiveFile {
 					in = new LimitInputStream(in, length);
 				}
 
-				this.in = new MyDataInputStream(rawIn = that.isRecovering() ? in : new CRC32InputStream(in, myCrc));
+				this.in = new ByteInputStream(rawIn = that.isRecovering() ? in : new CRC32InputStream(in, myCrc));
 				readHeader();
 				if ((that.flag & FLAG_DUMP_HIDDEN) != 0) findSurprise(32+offset, length);
 			} finally {
@@ -262,7 +260,7 @@ public class QZArchive extends QZReader implements ArchiveFile {
 				int id = r.read();
 				if (id == kEncodedHeader || id == kHeader) {
 					r.seek(pos);
-					try (var in = new MyDataInputStream(rawIn)) {
+					try (var in = new ByteInputStream(rawIn)) {
 						this.in = in;
 						readHeader();
 					} catch (Exception ignored) {}
@@ -323,7 +321,7 @@ public class QZArchive extends QZReader implements ArchiveFile {
 			in.close();
 
 			try {
-				in = new MyDataInputStream(that.getSolidStream(b, null, false));
+				in = new ByteInputStream(that.getSolidStream(b, null, false));
 			} catch (Exception e) {
 				if (b.hasProcessor(QzAES.class) && that.password != null)
 					throw new CorruptedInputException("压缩包打开失败，可能是密码错误", e);
@@ -460,7 +458,7 @@ public class QZArchive extends QZReader implements ArchiveFile {
 				// 2024/7/24 注释 这里可以检测部分管道错误：Int2IntMap的KV都不能重复，所以不能添加任意一侧在map中的管道
 				for (int i = pipeCount; i > 0; i--) {
 					sortedIds[i] = -1;
-					pipe.put(readVarInt(pipeCount), readVarInt(pipeCount));
+					pipe.putInt(readVarInt(pipeCount), readVarInt(pipeCount));
 				}
 			}
 
@@ -788,7 +786,7 @@ public class QZArchive extends QZReader implements ArchiveFile {
 						CharList sb = IOUtil.getSharedCharBuf();
 						// UTF-16 LE
 						for (int i = 0; i < len; i++) {
-							int c = in.readUShortLE();
+							int c = in.readUnsignedShortLE();
 							if (c == 0) {
 								files[j++].name = sb.toString();
 								sb.clear();
@@ -836,7 +834,7 @@ public class QZArchive extends QZReader implements ArchiveFile {
 			this.files = files;
 		}
 
-		private void relocation15(MyDataInput in, QZEntry[] files, BitSet empty) throws IOException {
+		private void relocation15(ByteInput in, QZEntry[] files, BitSet empty) throws IOException {
 			var emptyFile = BitSet.readBits(in, empty.size());
 			int j = 0;
 			for (var itr = empty.iterator(); itr.hasNext(); ) {
@@ -846,7 +844,7 @@ public class QZArchive extends QZReader implements ArchiveFile {
 				}
 			}
 		}
-		private void relocation16(MyDataInput in, QZEntry[] files, BitSet empty) throws IOException {
+		private void relocation16(ByteInput in, QZEntry[] files, BitSet empty) throws IOException {
 			var anti = BitSet.readBits(in, empty.size());
 			int j = 0;
 			for (var itr = empty.iterator(); itr.hasNext(); ) {
@@ -909,7 +907,7 @@ public class QZArchive extends QZReader implements ArchiveFile {
 							CharList sb = IOUtil.getSharedCharBuf();
 							// UTF-16 LE
 							for (int i = 0; i < len; i++) {
-								int c = in.readUShortLE();
+								int c = in.readUnsignedShortLE();
 								if (c == 0) {
 									files[j++].name = sb.toString();
 									sb.clear();

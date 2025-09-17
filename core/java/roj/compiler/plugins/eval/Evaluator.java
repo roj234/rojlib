@@ -7,7 +7,7 @@ import roj.asm.insn.SwitchBlock;
 import roj.asm.type.Type;
 import roj.asm.type.TypeHelper;
 import roj.asmx.AnnotatedElement;
-import roj.ci.annotation.ReferenceByGeneratedClass;
+import roj.ci.annotation.IndirectReference;
 import roj.collect.ArrayList;
 import roj.collect.HashMap;
 import roj.compiler.JavaCompileUnit;
@@ -23,7 +23,6 @@ import roj.reflect.Reflection;
 import roj.text.CharList;
 import roj.util.DynByteBuf;
 
-import java.io.IOException;
 import java.util.Collections;
 import java.util.List;
 
@@ -35,11 +34,11 @@ import static roj.asm.Opcodes.*;
  */
 @CompilerPlugin(name = "evaluator", desc = "预编译和宏")
 public interface Evaluator {
-	@ReferenceByGeneratedClass
+	@IndirectReference
 	// timeout hook, WIP
 	static boolean forceStop() {return false;}
 
-	public static void pluginInit(Compiler ctx) throws IOException {
+	public static void pluginInit(Compiler ctx) {
 		HashMap<String, byte[]> data = new HashMap<>();
 		ArrayList<Member> invoker = new ArrayList<>();
 
@@ -88,7 +87,7 @@ public interface Evaluator {
 
 			c.visitSizeMax(TypeHelper.paramSize(desc) + 2, 0);
 
-			List<Type> types = Type.methodDesc(desc);
+			List<Type> types = Type.getMethodTypes(desc);
 			Type retVal = types.remove(types.size() - 1);
 
 			boolean itf = (mof.modifier() & ACC_INTERFACE) != 0;
@@ -135,7 +134,7 @@ public interface Evaluator {
 					case Type.LONG, Type.FLOAT, Type.DOUBLE -> {}
 					default -> type = 'I';
 				}
-				c.invoke(INVOKESTATIC, "roj/config/node/ConfigValue", "valueOf", "("+type+")L/CEntry;");
+				c.invoke(INVOKESTATIC, "roj/config/node/ConfigValue", "valueOf", "("+type+")Lroj/config/node/ConfigValue;");
 			} else if (retVal.owner.equals("java/lang/Class")) {
 				c.clazz(NEW, "roj/asm/cp/CstClass");
 				c.insn(DUP);
@@ -151,7 +150,7 @@ public interface Evaluator {
 			Member mof = invoker.get(j);
 			ClassDefinition info = ctx.resolve(mof.owner());
 			int i = info.getMethod(mof.name(), mof.rawDesc());
-			info.methods().get(i).addAttribute(new CompiledMethod(evaluator, j, Type.methodDescReturn(mof.rawDesc())));
+			info.methods().get(i).addAttribute(new CompiledMethod(evaluator, j, Type.getReturnType(mof.rawDesc())));
 		}
 
 		ctx.newExprOp("@LavaMacro", (ctx1) -> {
@@ -178,7 +177,7 @@ public interface Evaluator {
 				lc.lexer.state = JavaTokenizer.STATE_EXPR;
 				lc.lexer.except(JavaTokenizer.lBrace);
 
-				ParseTask.Method(def, toString, Collections.singletonList("code")).parse(lc);
+				ParseTask.method(def, toString, Collections.singletonList("code")).parse(lc);
 				def.name("roj/compiler/plugins/eval/Macro$"+Reflection.uniqueId());
 				int after = lc.lexer.index;
 

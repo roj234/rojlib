@@ -1,7 +1,7 @@
 package roj.crypt;
 
 import roj.compiler.runtime.RtUtil;
-import roj.reflect.Unaligned;
+import roj.reflect.Unsafe;
 import roj.util.DynByteBuf;
 
 import javax.crypto.BadPaddingException;
@@ -61,7 +61,7 @@ class AES extends RCipher {
 		int i, j;
 
 		for (i = 0; i < KC; i++) {
-			tk[i] = Unaligned.U.get32UB(key, Unaligned.ARRAY_BYTE_BASE_OFFSET + ((long) i << 2));
+			tk[i] = Unsafe.U.get32UB(key, Unsafe.ARRAY_BYTE_BASE_OFFSET + ((long) i << 2));
 		}
 
 		int k = 0;

@@ -115,7 +115,7 @@ public class H2Connection implements ChannelHandler {
 
 		int wIdx = buf.wIndex();
 		while (buf.readableBytes() > 3) {
-			int len = buf.readMedium(buf.rIndex);
+			int len = buf.getMedium(buf.rIndex);
 			if (len > localSetting.max_frame_size) {sizeError();return;}
 			len += 6;
 			if (buf.readableBytes() < len+3) return;
@@ -469,7 +469,7 @@ public class H2Connection implements ChannelHandler {
 	}
 	//endregion
 	//region 数据包发送
-	private static DynByteBuf withLength(DynByteBuf buf) {return buf.putMedium(0, buf.wIndex()-9);}
+	private static DynByteBuf withLength(DynByteBuf buf) {return buf.setMedium(0, buf.wIndex()-9);}
 	public void syncSettings() throws IOException {
 		var ob = IOUtil.getSharedByteBuf();
 		localSetting.write(ob.putMedium(0).put(FRAME_SETTINGS).put(0).putInt(0), isServer());
@@ -575,7 +575,7 @@ public class H2Connection implements ChannelHandler {
 		} else {
 			ob.putMedium(0).put(FRAME_HEADER).put(0).putInt(stream.id);
 			if (weight != 0) {
-				ob.put(4, FLAG_PRIORITY);
+				ob.set(4, FLAG_PRIORITY);
 				if (!streams.containsKey(depend) || weight < 0 || weight > 256) throw new IllegalArgumentException("weight error");
 				ob.putInt(depend).put(weight -1);
 			}
@@ -585,7 +585,7 @@ public class H2Connection implements ChannelHandler {
 		noBody = encodeLoop(header, noBody, ob, true);
 		noBody = encodeLoop(header, noBody, ob, false);
 
-		ob.put(4, ob.get(4) | FLAG_HEADER_END | (noBody ? FLAG_END : 0));
+		ob.set(4, ob.getByte(4) | FLAG_HEADER_END | (noBody ? FLAG_END : 0));
 		ctx.channelWrite(withLength(ob));
 		stream.outState = noBody ? H2Stream.CLOSED : H2Stream.DATA;
 	}
@@ -607,7 +607,7 @@ public class H2Connection implements ChannelHandler {
 
 				ob.rIndex = 0;
 				ob.wIndex(9 + (newSize -= oldSize));
-				ob.putShortLE(3, FRAME_CONTINUATION);
+				ob.setShortLE(3, FRAME_CONTINUATION);
 				System.arraycopy(ob.list, oldSize, ob.list, 9, newSize - oldSize);
 
 				noBody = false;
@@ -668,7 +668,7 @@ public class H2Connection implements ChannelHandler {
 			}
 		}
 
-		if (isLastBlock) ob.put(4, FLAG_END);
+		if (isLastBlock) ob.set(4, FLAG_END);
 		ob.put(wt);
 		wt.rIndex = wt.wIndex();
 		ctx.channelWrite(withLength(ob));

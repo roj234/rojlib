@@ -4,8 +4,8 @@ import org.jetbrains.annotations.Nullable;
 import roj.audio.AudioMetadata;
 import roj.collect.HashMap;
 import roj.io.IOUtil;
-import roj.io.MyDataInput;
-import roj.reflect.Unaligned;
+import roj.io.ByteInput;
+import roj.reflect.Unsafe;
 import roj.util.TypedKey;
 
 import java.io.IOException;
@@ -28,18 +28,18 @@ public class APETag implements AudioMetadata {
 		if (b.length - off < 32) return 0;
 
 		// APETAGEX
-		if (Unaligned.U.get64UB(b, Unaligned.ARRAY_BYTE_BASE_OFFSET + off) == SIGNATURE) {
-			itemCount = Unaligned.U.get32UL(b, Unaligned.ARRAY_BYTE_BASE_OFFSET + off + 16);
-			int flags = Unaligned.U.get32UL(b, Unaligned.ARRAY_BYTE_BASE_OFFSET + off + 20);
+		if (Unsafe.U.get64UB(b, Unsafe.ARRAY_BYTE_BASE_OFFSET + off) == SIGNATURE) {
+			itemCount = Unsafe.U.get32UL(b, Unsafe.ARRAY_BYTE_BASE_OFFSET + off + 16);
+			int flags = Unsafe.U.get32UL(b, Unsafe.ARRAY_BYTE_BASE_OFFSET + off + 20);
 			// Illegal flag
 			if ((flags&0x60) != 0) return 0;
-			int len = Unaligned.U.get32UL(b, Unaligned.ARRAY_BYTE_BASE_OFFSET + off + 12);
+			int len = Unsafe.U.get32UL(b, Unsafe.ARRAY_BYTE_BASE_OFFSET + off + 12);
 			return (flags&0x80) != 0 ? len+32 : len;
 		}
 		return 0;
 	}
 
-	public void parseTag(MyDataInput st, boolean noHeader) throws IOException {
+	public void parseTag(ByteInput st, boolean noHeader) throws IOException {
 		if (!noHeader) {
 			if (st.readLong() != SIGNATURE) return;
 			int apeVer = st.readIntLE();
@@ -53,7 +53,7 @@ public class APETag implements AudioMetadata {
 		for (int i = 0; i < itemCount; i++) readItem(st);
 	}
 
-	private void readItem(MyDataInput st) throws IOException {
+	private void readItem(ByteInput st) throws IOException {
 		int valueSize = st.readIntLE();
 		int flags = st.readInt()&7;
 

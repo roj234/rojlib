@@ -11,7 +11,6 @@ import roj.archive.zip.ZipOutput;
 import roj.asm.ClassNode;
 import roj.asmx.ClassResource;
 import roj.asmx.Context;
-import roj.asmx.event.EventBus;
 import roj.ci.annotation.ReplaceConstant;
 import roj.ci.plugin.BuildContext;
 import roj.ci.plugin.Processor;
@@ -30,10 +29,11 @@ import roj.config.YamlParser;
 import roj.config.mapper.ObjectMapperFactory;
 import roj.config.node.MapValue;
 import roj.crypt.jar.JarVerifier;
+import roj.event.EventBus;
 import roj.gui.Profiler;
 import roj.io.IOUtil;
 import roj.io.source.FileSource;
-import roj.reflect.Reflection;
+import roj.reflect.Sandbox;
 import roj.text.Formatter;
 import roj.text.*;
 import roj.text.logging.Level;
@@ -42,7 +42,7 @@ import roj.ui.*;
 import roj.util.ArtifactVersion;
 import roj.util.DynByteBuf;
 import roj.util.Helpers;
-import roj.util.HighResolutionTimer;
+import roj.util.JVM;
 import roj.util.function.Flow;
 
 import java.io.*;
@@ -183,7 +183,7 @@ public final class MCMake {
 			Tty.pushHandler(COMMANDS);
 		}
 
-		HighResolutionTimer.runThis();
+		JVM.AccurateTimer.parkForMe();
 	}
 
 	private static void registerCommands() {
@@ -244,14 +244,7 @@ public final class MCMake {
 				var proj = ctx.argument("项目名称", Project.class);
 				proj.setAutoCompile(ctx.argument("自动编译开关", Boolean.class));
 				saveEnv();
-			}))))
-			.then(literal("config").executes(ctx -> {
-				System.out.println("配置模板: ");
-				ClassNode project = ClassNode.fromType(Env.Project.class);
-				project.methods.clear();
-				System.out.println(project);
-				System.out.println("MCMake命令已经很多了，你可以考虑通过脚本注册更多指令");
-			}));
+			}))));
 		importExportProject(pr);
 		c.register(pr);
 
@@ -399,10 +392,13 @@ public final class MCMake {
 				}
 				if (compiler.hasError()) break block;
 
-				var cd = Reflection.newClassDefiner("fmdScript", MCMake.class.getClassLoader());
-				for (CompileUnit file : files) Reflection.defineClass(cd, file);
+				var sandbox = new Sandbox("fmdScript", MCMake.class.getClassLoader());
+				sandbox.restriction = null;
 
-				MethodHandle handle = MethodHandles.lookup().findStatic(cd.loadClass(files.get(0).name().replace('/', '.')), "main", MethodType.methodType(void.class, String[].class));
+				for (var node : compiler.getGeneratedClasses()) sandbox.add(node);
+				for (var node : files) sandbox.add(node);
+
+				MethodHandle handle = MethodHandles.lookup().findStatic(sandbox.loadClass(files.get(0).name().replace('/', '.')), "main", MethodType.methodType(void.class, String[].class));
 				handle.invoke(new String[0]);
 			} catch (Throwable e) {
 				e.printStackTrace();

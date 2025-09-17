@@ -23,8 +23,8 @@ public class GifImage {
 		if (!cl.equals("GIF87a") && !cl.equals("GIF89a")) throw new IOException("Illegal header " + cl);
 
 		// Block LSD
-		width = r.readUShortLE();
-		height = r.readUShortLE();
+		width = r.readUnsignedShortLE();
+		height = r.readUnsignedShortLE();
 		wh = width * height;
 
 		byte flag = r.readByte();
@@ -72,10 +72,10 @@ public class GifImage {
 	private void readDescriptor(DynByteBuf r) {
 		Frame f = new Frame();
 
-		f.offsetX = r.readUShortLE();
-		f.offsetY = r.readUShortLE();
-		f.width = r.readUShortLE();
-		f.height = r.readUShortLE();
+		f.offsetX = r.readUnsignedShortLE();
+		f.offsetY = r.readUnsignedShortLE();
+		f.width = r.readUnsignedShortLE();
+		f.height = r.readUnsignedShortLE();
 
 		byte flag = r.readByte();
 		f.sorted = isBitTrue(flag, 5);
@@ -144,7 +144,7 @@ public class GifImage {
 		byte flag = r.readByte();
 		f.disposalMethod = (flag & 0x1C) >>> 2;
 		f.transparent = isBitTrue(flag, 0);
-		f.delay = r.readUShortLE();
+		f.delay = r.readUnsignedShortLE();
 		f.transparentColor = r.readByte();
 		r.rIndex++;
 	}

@@ -1,11 +1,11 @@
 package roj.plugins.minecraft.server;
 
-import roj.asmx.event.EventBus;
 import roj.collect.ArrayList;
 import roj.config.JsonParser;
 import roj.config.JsonSerializer;
 import roj.config.TextEmitter;
 import roj.config.node.MapValue;
+import roj.event.EventBus;
 import roj.io.IOUtil;
 import roj.net.ChannelCtx;
 import roj.net.MyChannel;
@@ -26,7 +26,7 @@ import roj.text.logging.Logger;
 import roj.ui.Text;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
-import roj.util.HighResolutionTimer;
+import roj.util.JVM;
 import roj.util.TypedKey;
 
 import java.io.IOException;
@@ -60,7 +60,7 @@ public class MinecraftServer extends Plugin {
 
 	@Override
 	protected void onEnable() throws Exception {
-		HighResolutionTimer.activate();
+		JVM.useAccurateTiming();
 		LOGGER = getLogger();
 		INSTANCE = this;
 

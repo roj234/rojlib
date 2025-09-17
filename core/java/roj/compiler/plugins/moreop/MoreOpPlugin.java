@@ -36,7 +36,7 @@ public final class MoreOpPlugin implements Compiler.ExprOp {
 	public void pluginInit(Compiler api) {
 		api.onBinary(Type.klass("java/util/Collection"), "+=", Types.OBJECT_TYPE, new MethodNode(Opcodes.ACC_PUBLIC | Opcodes.ACC_INTERFACE, "java/util/Collection", "add", "(Ljava/lang/Object;)Z"), false);
 		api.addOpHandler("[", this);
-		api.onBinary(Type.klass("java/lang/String"), "*", Type.primitive(Type.INT), new MethodNode(Opcodes.ACC_PUBLIC, "java/lang/String", "repeat", "(I)Ljava/lang/String;"), false);
+		api.onBinary(Type.klass("java/lang/String"), "*", Type.INT_TYPE, new MethodNode(Opcodes.ACC_PUBLIC, "java/lang/String", "repeat", "(I)Ljava/lang/String;"), false);
 		api.onUnary("!", Type.klass("java/lang/String"), new MethodNode(Opcodes.ACC_PUBLIC, "java/lang/String", "isEmpty", "()Z"), 1);
 	}
 

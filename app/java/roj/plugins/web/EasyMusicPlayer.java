@@ -49,7 +49,7 @@ public class EasyMusicPlayer extends Plugin {
 			try (var tw = new JsonSerializer().to(new TextWriter(new GZIPOutputStream(new FileOutputStream(file)), StandardCharsets.UTF_8))) {
 				tw.emitMap();
 				for (var entry : handler.fields.entrySet()) {
-					tw.key(entry.getKey());
+					tw.emitKey(entry.getKey());
 					tw.mapValue().append(entry.getValue().toString());
 				}
 				tw.pop();

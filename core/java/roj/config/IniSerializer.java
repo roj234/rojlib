@@ -45,7 +45,7 @@ public final class IniSerializer implements ValueEmitter {
 	}
 
 	// *no state check*
-	public final void key(String key) {
+	public final void emitKey(String key) {
 		if (depth == 1) {
 			if (key.equals(CONFIG_TOPLEVEL)) {
 				if (hasTop) throw new IllegalArgumentException("TopLevel必须是第一个:"+key);

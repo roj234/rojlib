@@ -1,6 +1,6 @@
 package roj.filesystem;
 
-import roj.reflect.Unaligned;
+import roj.reflect.Unsafe;
 import roj.util.DynByteBuf;
 import roj.util.NativeMemory;
 
@@ -38,7 +38,7 @@ final class FileDevice implements BlockDevice {
 	@Override
 	public void erase(long position, long count) throws IOException {
 		MappedByteBuffer map = channel.map(FileChannel.MapMode.READ_WRITE, position, count);
-		Unaligned.U.setMemory(NativeMemory.getAddress(map), map.capacity(), (byte) 0);
+		Unsafe.U.setMemory(NativeMemory.getAddress(map), map.capacity(), (byte) 0);
 		NativeMemory.freeDirectBuffer(map);
 	}
 

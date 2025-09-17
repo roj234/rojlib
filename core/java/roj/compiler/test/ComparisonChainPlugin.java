@@ -89,7 +89,7 @@ public class ComparisonChainPlugin {
 			}
 
 			assert false;
-		}, Type.primitive(Type.INT));
+		}, Type.INT_TYPE);
 
 		for(var c : "IJFDZ".toCharArray()) {
 			chain.intermediateOp(new MethodNode(Opcodes.ACC_PUBLIC, name, "compare", "("+c+c+")L"+name+";"));

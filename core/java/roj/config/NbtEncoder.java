@@ -137,7 +137,7 @@ public final class NbtEncoder implements ValueEmitter {
 		}
 	}
 
-	public final void key(String key) {
+	public final void emitKey(String key) {
 		if (state != 1) throw new IllegalStateException("状态不是COMPOUND "+state);
 		if (this.key != null) throw new IllegalStateException("期待"+this.key+"的值|"+key);
 		this.key = key;
@@ -183,7 +183,7 @@ public final class NbtEncoder implements ValueEmitter {
 			case 1 -> out.write(END);
 			case 2 -> {
 				if (sizeOffset > 0) {
-					out.putInt(sizeOffset, size);
+					out.setInt(sizeOffset, size);
 				} else {
 					if (size != 0) throw new IllegalStateException("距离预定的LIST大小还有"+ -size +"个项目");
 					// 空列表

@@ -15,7 +15,7 @@ import roj.archive.xz.lzma.LZMADecoder;
 import roj.archive.xz.rangecoder.RangeDecoder;
 import roj.io.CorruptedInputException;
 import roj.io.MBInputStream;
-import roj.reflect.Unaligned;
+import roj.reflect.Unsafe;
 import roj.util.ArrayUtil;
 
 import java.io.DataInput;
@@ -146,7 +146,7 @@ public final class LZMA2InputStream extends MBInputStream {
 
 	public int read(byte[] buf, int off, int len) throws IOException {
 		ArrayUtil.checkRange(buf, off, len);
-		return read0(buf, (long) Unaligned.ARRAY_BYTE_BASE_OFFSET+off, len);
+		return read0(buf, (long) Unsafe.ARRAY_BYTE_BASE_OFFSET+off, len);
 	}
 	public int read(long addr, int len) throws IOException { return read0(null, addr, len); }
 	public int read0(Object buf, long addr, int len) throws IOException {

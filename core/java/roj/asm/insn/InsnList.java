@@ -8,6 +8,7 @@ import roj.asm.cp.Constant;
 import roj.asm.cp.ConstantPool;
 import roj.asm.type.TypeHelper;
 import roj.collect.AbstractIterator;
+import roj.collect.ArrayIterator;
 import roj.collect.ArrayList;
 import roj.collect.BitSet;
 import roj.util.ArrayCache;
@@ -23,7 +24,7 @@ import static roj.asm.Opcodes.*;
  * @author Roj233
  * @since 2021/8/16 19:07
  */
-public class InsnList extends AbstractCodeWriter implements Iterable<InsnNode> {
+public final class InsnList extends AbstractCodeWriter implements Iterable<InsnNode> {
 	public InsnList() { clear(); }
 
 	public void clear() {
@@ -61,12 +62,12 @@ public class InsnList extends AbstractCodeWriter implements Iterable<InsnNode> {
 
 		super.visitBytecode(cp, r, len);
 
-		if (refLen == 0) {
+		if (refCount == 0) {
 			refPos = ArrayCache.INTS;
 			refVal = ArrayCache.OBJECTS;
 		} else {
-			refPos = Arrays.copyOf(refPos, refLen);
-			refVal = Arrays.copyOf(refVal, refLen);
+			refPos = Arrays.copyOf(refPos, refCount);
+			refVal = Arrays.copyOf(refVal, refCount);
 		}
 
 		List<Segment> block = segments;
@@ -114,10 +115,9 @@ public class InsnList extends AbstractCodeWriter implements Iterable<InsnNode> {
 
 	// endregion
 
-	@SuppressWarnings("fallthrough")
-	public void write(CodeWriter cw) {
+	public void writeTo(CodeWriter cw) {
 		ConstantPool cp = cw.cpw;
-		for (int i = 0; i < refLen; i++) {
+		for (int i = 0; i < refCount; i++) {
 			Object c = refVal[i];
 			if (c == null) continue;
 
@@ -129,24 +129,27 @@ public class InsnList extends AbstractCodeWriter implements Iterable<InsnNode> {
 
 			int index;
 			switch (c.getClass().getName()) {
-				case "roj.asm.MemberDescriptor":
+				case "roj.asm.MemberDescriptor" -> {
 					MemberDescriptor d = (MemberDescriptor) c;
 					if (d.owner == null) index = cp.getInvokeDynId(d.modifier, d.name, d.rawDesc);
 					else {
 						switch (d.modifier >>> 14) {
-							default: throw new IllegalStateException("unknown flag "+d.modifier);
-							case 0: index = cp.getMethodRefId(d.owner, d.name, d.rawDesc); break;
-							case 1: index = cp.getFieldRefId(d.owner, d.name, d.rawDesc); break;
-							case 2: bb.put(offset+3, 1+ TypeHelper.paramSize(d.rawDesc));
-							case 3: index = cp.getItfRefId(d.owner, d.name, d.rawDesc); break;
+							case 0 -> index = cp.getMethodRefId(d.owner, d.name, d.rawDesc);
+							case 1 -> index = cp.getFieldRefId(d.owner, d.name, d.rawDesc);
+							case 2 -> {
+								bb.set(offset + 3, TypeHelper.paramSize(d.rawDesc) + 1);
+								index = cp.getItfRefId(d.owner, d.name, d.rawDesc);
+							}
+							case 3 -> index = cp.getItfRefId(d.owner, d.name, d.rawDesc);
+							default -> throw new IllegalStateException("unknown flag " + d.modifier);
 						}
 					}
-				break;
-				case "java.lang.String": index = cp.getClassId(c.toString()); break;
-				default: index = cp.fit((Constant) c); break;
+				}
+				case "java.lang.String" -> index = cp.getClassId(c.toString());
+				default -> index = cp.fit((Constant) c);
 			}
 
-			bb.putShort(offset+1, index);
+			bb.setShort(offset+1, index);
 		}
 
 		cw.labels.addAll(labels);
@@ -165,9 +168,9 @@ public class InsnList extends AbstractCodeWriter implements Iterable<InsnNode> {
 	public BitSet getPcMap() {
 		NodeIterator itr;
 		if (pc == null) {
-			pc = new BitSet(bci());
+			pc = new BitSet(length());
 			itr = since(0);
-		} else if (pcLen < bci()) { // inserted new nodes
+		} else if (pcLen < length()) { // inserted new nodes
 			itr = since(pcLen);
 		} else {
 			return pc;
@@ -177,18 +180,19 @@ public class InsnList extends AbstractCodeWriter implements Iterable<InsnNode> {
 			InsnNode node = itr.next();
 			pc.add(node.bci());
 		}
-		pcLen = bci();
+		pcLen = length();
 
 		return pc;
 	}
 
+	public final InsnNode first() {return getNodeAt(0);}
 	public final InsnNode getNodeAt(int bci) {
 		if (!getPcMap().contains(bci)) throw new IllegalArgumentException("bci "+bci+" is not valid");
 		Label label = new Label(bci);
 		indexLabel(label);
 
 		InsnNode view = new InsnNode(this, false);
-		view._init(label, segments.get(label.block));
+		view.setPos(label, segments.get(label.block));
 		return view;
 	}
 	@NotNull
@@ -200,7 +204,7 @@ public class InsnList extends AbstractCodeWriter implements Iterable<InsnNode> {
 		final InsnNode view = new InsnNode(InsnList.this, true);
 
 		public NodeIterator(int bci) {
-			if (bci >= bci()) stage = ENDED;
+			if (bci >= length()) stage = ENDED;
 			label.setRaw(bci);
 			indexLabel(label);
 		}
@@ -227,7 +231,7 @@ public class InsnList extends AbstractCodeWriter implements Iterable<InsnNode> {
 			pos.value += len;
 
 			result = view;
-			view._init(pos, s);
+			view.setPos(pos, s);
 			return true;
 		}
 	}
@@ -266,7 +270,9 @@ public class InsnList extends AbstractCodeWriter implements Iterable<InsnNode> {
 	protected final void ldc2(Constant c) { addRef(c); codeOb.put(LDC2_W).putShort(0); }
 	// endregion
 
-	public int bci() { return codeOb.wIndex()+offset; }
+	@Deprecated
+	public int bci() { return length(); }
+	public int length() {return codeOb.wIndex()+offset;}
 
 	public final void addSegment(Segment c) {
 		if (c == null) throw new NullPointerException("c");
@@ -284,13 +290,13 @@ public class InsnList extends AbstractCodeWriter implements Iterable<InsnNode> {
 		codeOb = b.getData();
 	}
 
-	private int[] refPos = ArrayCache.INTS;
-	private Object[] refVal = ArrayCache.OBJECTS;
-	private int refLen;
+	int[] refPos = ArrayCache.INTS;
+	Object[] refVal = ArrayCache.OBJECTS;
+	int refCount;
 	final void addRef(Object ref) {
 		int pos = (segments.isEmpty() ? 0 : (segments.size()-1) << 16) | codeOb.wIndex();
 
-		int i = refLen;
+		int i = refCount;
 
 		if (i == refPos.length) {
 			int[] pp = refPos;
@@ -304,25 +310,17 @@ public class InsnList extends AbstractCodeWriter implements Iterable<InsnNode> {
 
 		refPos[i] = pos;
 		refVal[i] = ref;
-		refLen = i+1;
+		refCount = i+1;
 	}
-	// OPTIONAL: override field, invoke, invokeItf and use Shared Desc
-	final Object getNodeData(Label pos) {
+	final int refIndex(Label pos) {
 		int target = (pos.block << 16) | pos.offset;
-		if (refLen > refPos.length) refLen = refPos.length;
-		int i = Arrays.binarySearch(refPos, 0, refLen, target);
-		if (i < 0) return new MemberDescriptor("", "", "()V");//throw new IllegalArgumentException("no data at " + pos);
-		return refVal[i];
-	}
-	final void setNodeData(Label pos, Object val) {
-		if (val == null) throw new IllegalArgumentException("data cannot be null");
-		int target = (pos.block << 16) | pos.offset;
-		int i = Arrays.binarySearch(refPos, 0, refLen, target);
-		if (i < 0) throw new IllegalArgumentException("no data at " + pos);
-		refVal[i] = val;
+		if (refCount > refPos.length) refCount = refPos.length;
+		return Arrays.binarySearch(refPos, 0, refCount, target);
 	}
 
+	public final Iterable<Object> nodeDataList() {return () -> new ArrayIterator<>(refVal, 0, refCount);}
 	public final Iterable<Map.Entry<Label, Object>> nodeData() { return new NodeDataIterator(); }
+
 	private final class NodeDataIterator extends AbstractIterator<Map.Entry<Label, Object>> implements Map.Entry<Label, Object>, Iterable<Map.Entry<Label, Object>> {
 		private int i, realI;
 		private final Label label = newLabel();
@@ -331,7 +329,7 @@ public class InsnList extends AbstractCodeWriter implements Iterable<InsnNode> {
 
 		@Override
 		protected boolean computeNext() {
-			if (i == refLen) return false;
+			if (i == refCount) return false;
 			realI = i++;
 			return true;
 		}
@@ -355,7 +353,7 @@ public class InsnList extends AbstractCodeWriter implements Iterable<InsnNode> {
 		}
 	}
 
-	public final InsnList copy() { return copySlice(0, bci()); }
+	public final InsnList copy() { return copySlice(0, length()); }
 	public final InsnList copySlice(int from, int to) { return copySlice(new Label(from), new Label(to)); }
 	public final InsnList copySlice(Label from, Label to) {
 		InsnList target = new InsnList();
@@ -541,19 +539,19 @@ public class InsnList extends AbstractCodeWriter implements Iterable<InsnNode> {
 		int refSrcStart, refSrcEnd;
 		int refDstStart, refDstEnd;
 
-		if (src.refLen > 0) {
-			refSrcStart = Arrays.binarySearch(src.refPos, 0, src.refLen, sstart.block << 16 | sstart.offset);
+		if (src.refCount > 0) {
+			refSrcStart = Arrays.binarySearch(src.refPos, 0, src.refCount, sstart.block << 16 | sstart.offset);
 			if (refSrcStart < 0) refSrcStart = -refSrcStart -1;
-			refSrcEnd = Arrays.binarySearch(src.refPos, refSrcStart, src.refLen, send.block << 16 | send.offset);
+			refSrcEnd = Arrays.binarySearch(src.refPos, refSrcStart, src.refCount, send.block << 16 | send.offset);
 			if (refSrcEnd < 0) refSrcEnd = -refSrcEnd -1;
 		} else {
 			refSrcStart = refSrcEnd = 0;
 		}
 
-		if (dst.refLen > 0) {
-			refDstStart = Arrays.binarySearch(dst.refPos, 0, dst.refLen, dstart.block << 16 | dstart.offset);
+		if (dst.refCount > 0) {
+			refDstStart = Arrays.binarySearch(dst.refPos, 0, dst.refCount, dstart.block << 16 | dstart.offset);
 			if (refDstStart < 0) refDstStart = -refDstStart -1;
-			refDstEnd = Arrays.binarySearch(dst.refPos, refSrcStart, dst.refLen, dend.block << 16 | dend.offset);
+			refDstEnd = Arrays.binarySearch(dst.refPos, refSrcStart, dst.refCount, dend.block << 16 | dend.offset);
 			if (refDstEnd < 0) refDstEnd = -refDstEnd -1;
 		} else {
 			refDstStart = refDstEnd = 0;
@@ -565,7 +563,7 @@ public class InsnList extends AbstractCodeWriter implements Iterable<InsnNode> {
 		int refDstDeleteCount = refDstEnd - refDstStart;
 		int refSrcInsertCount = refSrcEnd - refSrcStart;
 		int refDeltaCount = refSrcInsertCount - refDstDeleteCount;
-		int newRefLen = dst.refLen + refDeltaCount;
+		int newRefLen = dst.refCount + refDeltaCount;
 
 		if (dst.refPos.length < newRefLen) {
 			outRefPos = Arrays.copyOf(dst.refPos, newRefLen);
@@ -576,7 +574,7 @@ public class InsnList extends AbstractCodeWriter implements Iterable<InsnNode> {
 		}
 
 		// refPos update part1
-		for (int srcPos = refDstEnd; srcPos < dst.refLen; srcPos++) {
+		for (int srcPos = refDstEnd; srcPos < dst.refCount; srcPos++) {
 			int label = dst.refPos[srcPos];
 
 			if (dend.offset != 0 && (label >>> 16) == dend.block) {
@@ -599,7 +597,7 @@ public class InsnList extends AbstractCodeWriter implements Iterable<InsnNode> {
 		}
 
 		// move
-		System.arraycopy(dst.refVal, refDstEnd, outRefVal, refDstEnd + refDeltaCount, dst.refLen - refDstEnd);
+		System.arraycopy(dst.refVal, refDstEnd, outRefVal, refDstEnd + refDeltaCount, dst.refCount - refDstEnd);
 		// copy
 		if (clone) {
 			for (int srcPos = refSrcStart, dstPos = refDstStart; srcPos < refSrcEnd; srcPos++, dstPos++) {
@@ -609,11 +607,11 @@ public class InsnList extends AbstractCodeWriter implements Iterable<InsnNode> {
 			System.arraycopy(src.refVal, refSrcStart, outRefVal, refDstStart, refSrcInsertCount);
 		}
 		// clear
-		for (int i = dst.refLen + refDeltaCount; i < dst.refLen; i++) outRefVal[i] = null;
+		for (int i = dst.refCount + refDeltaCount; i < dst.refCount; i++) outRefVal[i] = null;
 
 		dst.refPos = outRefPos;
 		dst.refVal = outRefVal;
-		dst.refLen += refDeltaCount;
+		dst.refCount += refDeltaCount;
 
 		Segment lastBlock = dstSegments.isEmpty() ? null : dstSegments.getLast();
 		if (!(lastBlock instanceof StaticSegment) || ((StaticSegment) lastBlock).isReadonly()) {
@@ -626,7 +624,7 @@ public class InsnList extends AbstractCodeWriter implements Iterable<InsnNode> {
 	private static int alignSegment(Label label, int dir) {return label.block + (label.offset == 0 ? 0 : dir);}
 
 	public final void replaceRange(int from, int to, InsnList list1, boolean clone) { replaceRange(new Label(from), new Label(to), list1, clone); }
-	public final void replaceRange(Label from, Label to, InsnList list1, boolean clone) {insnCopy(list1, this, new Label(0), new Label(list1.bci()), from, to, clone);}
+	public final void replaceRange(Label from, Label to, InsnList list1, boolean clone) {insnCopy(list1, this, new Label(0), new Label(list1.length()), from, to, clone);}
 
 	private static Object copyData(Object o) {
 		if (o instanceof Constant) return ((Constant) o).clone();

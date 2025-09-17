@@ -1,6 +1,5 @@
 package roj.net.mss;
 
-import org.jetbrains.annotations.Nullable;
 import roj.collect.CharMap;
 import roj.crypt.HMAC;
 import roj.crypt.KeyExchange;
@@ -50,7 +49,7 @@ final class MSSEngineClient extends MSSEngine {
 			case INITIAL:
 				return writeClientHello(tx);
 			case SERVER_HELLO:
-				if (rx.isReadable() && (rx.get(rx.rIndex) != H_SERVER_PACKET && rx.get(rx.rIndex) != P_ALERT))
+				if (rx.isReadable() && (rx.getByte(rx.rIndex) != H_SERVER_PACKET && rx.getByte(rx.rIndex) != P_ALERT))
 					return error(ILLEGAL_PACKET, null);
 
 				int lim = rx.wIndex();

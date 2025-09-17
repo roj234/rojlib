@@ -6,8 +6,8 @@ import roj.asmx.injector.Inject;
 import roj.asmx.injector.Shadow;
 import roj.asmx.injector.Weave;
 import roj.asmx.launcher.Autoload;
-import roj.reflect.litasm.FastJNI;
 import roj.util.DynByteBuf;
+import roj.util.optimizer.IntrinsicCandidate;
 
 /**
  * @author Roj234
@@ -22,7 +22,7 @@ final class nBsDiff {
 	@Shadow private int[] sfx;
 
 	@Inject(at = Inject.At.REPLACE)
-	@FastJNI("IL_bsdiff_init")
+	@IntrinsicCandidate("IL_bsdiff_init")
 	private static native void initializeSuffixArray(final byte[] baseData, final int[] suffixArray, int size);
 	@Inject(at = Inject.At.REMOVE)
 	private static native void sortSuffixGroup(int[] suffixArray, int[] positionArray, int start, int length, int stepSize);
@@ -50,15 +50,15 @@ final class nBsDiff {
 	public int calculateDiffLength(byte[] right, int off, int end, int stopOn) {return getDiffLength(sfx, left, right, off, end, stopOn);}
 
 	@Copy
-	@FastJNI("IL_bsdiff_newCtx")
+	@IntrinsicCandidate("IL_bsdiff_newCtx")
 	private static native long newCtx();
 	@Copy
-	@FastJNI("IL_bsdiff_freeCtx")
+	@IntrinsicCandidate("IL_bsdiff_freeCtx")
 	private static native void freeCtx(long ctx);
 	@Copy
-	@FastJNI("IL_bsdiff_makePatch")
+	@IntrinsicCandidate("IL_bsdiff_makePatch")
 	private static native int makePatch(int[] sfx, byte[] left, long nativeContext, byte[] right, byte[] ip0, long ip1, int length);
 	@Copy
-	@FastJNI("IL_bsdiff_getDiffLength")
+	@IntrinsicCandidate("IL_bsdiff_getDiffLength")
 	private static native int getDiffLength(int[] sfx, byte[] left, byte[] right, int off, int end, int stopOn);
 }

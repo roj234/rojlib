@@ -30,18 +30,18 @@ final class NewPackedArray extends Expr {
 		CharList sb = new CharList().append("new <compiledArray>");
 		sb.append(dataType).append(" {");
 		var arr = elements.slice();
-		int cap = TypeCast.getDataCap(dataType.type);
+		int sort = Type.getSort(dataType.type);
 		if (arr.isReadable()) {
 			while (true) {
-				sb.append( switch (cap) {
-					// 0 or 1
-					default -> arr.readByte();
-					case 2 -> arr.readShort();
-					case 3 -> arr.readChar();
-					case 4 -> arr.readInt();
-					case 5 -> arr.readLong();
-					case 6 -> arr.readFloat();
-					case 7 -> arr.readDouble();
+				sb.append(switch (sort) {
+					default -> arr.readBoolean();
+					case Type.SORT_BYTE -> arr.readByte();
+					case Type.SORT_SHORT -> arr.readShort();
+					case Type.SORT_CHAR -> arr.readChar();
+					case Type.SORT_INT -> arr.readInt();
+					case Type.SORT_LONG -> arr.readLong();
+					case Type.SORT_FLOAT -> arr.readFloat();
+					case Type.SORT_DOUBLE -> arr.readDouble();
 				});
 				if (!arr.isReadable()) break;
 				sb.append(',');
@@ -54,31 +54,25 @@ final class NewPackedArray extends Expr {
 	@Override public boolean isConstant() {return true;}
 	@Override public Object constVal() {
 		var arr = elements.slice();
-		int cap = TypeCast.getDataCap(dataType.type);
-		Object[] array = new Object[arr.readableBytes() / switch (cap) {
-			// 0 or 1
-			default   -> 1;
-			case 2, 3 -> 2;
-			case 4, 6 -> 4;
-			case 5, 7 -> 8;
-		}];
+		int sort = Type.getSort(dataType.type);
+		Object[] array = new Object[arr.readableBytes() / COMPONENT_SIZE[sort]];
 		int i = 0;
 		while (arr.isReadable()) {
-			array[i++] = switch (cap) {
-				// 0 or 1
-				default -> ConfigValue.valueOf(arr.readByte());
-				case 2 -> ConfigValue.valueOf(arr.readShort());
-				case 3 -> ConfigValue.valueOf(arr.readChar());
-				case 4 -> ConfigValue.valueOf(arr.readInt());
-				case 5 -> ConfigValue.valueOf(arr.readLong());
-				case 6 -> ConfigValue.valueOf(arr.readFloat());
-				case 7 -> ConfigValue.valueOf(arr.readDouble());
+			array[i++] = switch (sort) {
+				default -> ConfigValue.valueOf(arr.readBoolean());
+				case Type.SORT_BYTE -> ConfigValue.valueOf(arr.readByte());
+				case Type.SORT_SHORT -> ConfigValue.valueOf(arr.readShort());
+				case Type.SORT_CHAR -> ConfigValue.valueOf(arr.readChar());
+				case Type.SORT_INT -> ConfigValue.valueOf(arr.readInt());
+				case Type.SORT_LONG -> ConfigValue.valueOf(arr.readLong());
+				case Type.SORT_FLOAT -> ConfigValue.valueOf(arr.readFloat());
+				case Type.SORT_DOUBLE -> ConfigValue.valueOf(arr.readDouble());
 			};
 		}
 		return array;
 	}
 
-	private static final byte[] COMPONENT_SIZE = {1,1,2,2,4,8,4,8,0};
+	private static final byte[] COMPONENT_SIZE = {0,1,1,2,2,4,8,4,8,0};
 	@Override
 	protected void write1(MethodWriter cw, @NotNull TypeCast.Cast cast) {
 		mustBeStatement(cast);
@@ -86,7 +80,7 @@ final class NewPackedArray extends Expr {
 		var arr = elements.slice();
 
 		// 这里没用getActualType
-		int cap = TypeCast.getDataCap(dataType.type);
+		int cap = Type.getSort(dataType.type);
 		cw.ldc(arr.readableBytes() / COMPONENT_SIZE[cap]);
 		cw.newArray(AbstractCodeWriter.ToPrimitiveArrayId(dataType.type));
 
@@ -96,13 +90,13 @@ final class NewPackedArray extends Expr {
 			cw.insn(Opcodes.DUP);
 			cw.ldc(i++);
 			switch (cap) {
-				case 0, 1 -> cw.ldc(arr.readByte());
-				case 2 -> cw.ldc(arr.readShort());
-				case 3 -> cw.ldc(arr.readChar());
-				case 4 -> cw.ldc(arr.readInt());
-				case 5 -> cw.ldc(arr.readLong());
-				case 6 -> cw.ldc(arr.readFloat());
-				case 7 -> cw.ldc(arr.readDouble());
+				default -> cw.ldc(arr.readByte());
+				case Type.SORT_SHORT -> cw.ldc(arr.readShort());
+				case Type.SORT_CHAR -> cw.ldc(arr.readChar());
+				case Type.SORT_INT -> cw.ldc(arr.readInt());
+				case Type.SORT_LONG -> cw.ldc(arr.readLong());
+				case Type.SORT_FLOAT -> cw.ldc(arr.readFloat());
+				case Type.SORT_DOUBLE -> cw.ldc(arr.readDouble());
 			}
 			cw.insn(storeType);
 		}

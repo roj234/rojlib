@@ -9,14 +9,10 @@ import roj.asm.cp.CstString;
 import roj.collect.BitSet;
 import roj.collect.HashMap;
 import roj.collect.IntMap;
-import roj.text.Token;
-import roj.text.Tokenizer;
 import roj.io.IOUtil;
 import roj.plugin.Plugin;
 import roj.plugin.SimplePlugin;
-import roj.text.CharList;
-import roj.text.TextReader;
-import roj.text.TextWriter;
+import roj.text.*;
 import roj.ui.Argument;
 import roj.util.ByteList;
 
@@ -149,7 +145,7 @@ public class Translator extends Plugin {
 
 		boolean any = false;
 
-		List<Constant> array = data.cp.data();
+		List<Constant> array = data.cp.constants();
 		for (IntMap.Entry<String> entry : map.selfEntrySet()) {
 			CstString ref = (CstString) array.get(entry.getIntKey()-1);
 			if (!ref.value().str().equals(entry.getValue())) {
@@ -201,7 +197,7 @@ public class Translator extends Plugin {
 		sb.append(path).append(data.name()).append(':').append('\n');
 		boolean any = false;
 
-		List<Constant> array = data.cp.data();
+		List<Constant> array = data.cp.constants();
 		for (int i = 0; i < array.size(); i++) {
 			Constant s = array.get(i);
 			if (s.type() == Constant.STRING) {

@@ -62,7 +62,7 @@ public class ConstantPoolHooks implements Transformer {
 		Object tr;
 		boolean mod = false;
 
-		var cpArr = data.cp.data();
+		var cpArr = data.cp.constants();
 		for (int i = 0; i < cpArr.size(); i++) {
 			Constant c = cpArr.get(i);
 			switch (c.type()) {

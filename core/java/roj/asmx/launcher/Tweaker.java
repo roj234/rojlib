@@ -2,13 +2,9 @@ package roj.asmx.launcher;
 
 import org.jetbrains.annotations.NotNull;
 import roj.RojLib;
-import roj.asm.AsmCache;
 import roj.asm.ClassNode;
-import roj.asm.Opcodes;
 import roj.asm.annotation.AList;
 import roj.asm.annotation.Annotation;
-import roj.asm.cp.CstClass;
-import roj.asm.insn.CodeWriter;
 import roj.asmx.AnnotatedElement;
 import roj.asmx.ConstantPoolHooks;
 import roj.asmx.TransformUtil;
@@ -16,11 +12,9 @@ import roj.asmx.injector.CodeWeaver;
 import roj.asmx.injector.WeaveException;
 import roj.collect.ArrayList;
 import roj.io.IOUtil;
-import roj.reflect.Reflection;
 import roj.util.Helpers;
 
 import java.io.IOException;
-import java.util.Comparator;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
@@ -39,7 +33,7 @@ public class Tweaker {
 	// for override
 	protected void init(List<String> args, Loader loader) {
 		try {
-			List<A> classes = new ArrayList<>(), transformers = new ArrayList<>();
+			List<A> classes = new ArrayList<>();
 
 			for (AnnotatedElement element : loader.getAnnotations().annotatedBy("roj/asmx/launcher/Autoload")) {
 				Annotation a = element.annotations().get("roj/asmx/launcher/Autoload");
@@ -49,9 +43,8 @@ public class Tweaker {
 				var intrinsic = a.getInt("intrinsic", -1);
 				if (intrinsic >= 0 && (!RojLib.fastJni() || !RojLib.hasNative(intrinsic))) continue;
 
-				switch (a.getEnumValue("value", null)) {
+				switch (a.getEnumValue("value", "INIT")) {
 					case "INIT" -> classes.add(new A(owner, priority));
-					case "TRANSFORMER" -> transformers.add(new A(owner, priority));
 					case "NIXIM" -> {
 						try {
 							NIXIM.load(ClassNode.parseSkeleton(IOUtil.read(loader.getResource(owner.concat(".class")))));
@@ -94,34 +87,16 @@ public class Tweaker {
 				return false;
 			});
 
-			if ((classes.size()|transformers.size()) != 0) {
-				Comparator<A> cmp = (l, r) -> Integer.compare(r.priority, l.priority);
-				classes.sort(cmp);
-				transformers.sort(cmp);
-
-				ClassNode autoloader = new ClassNode();
-				autoloader.name("roj/asmx/autoload/Autoloader");
-
-				CodeWriter w = autoloader.newMethod(Opcodes.ACC_PUBLIC | Opcodes.ACC_STATIC, "<clinit>", "()V");
-				w.visitSize(3, 0);
-				for (A d : classes) {
-					w.ldc(new CstClass(d.name));
-					w.invokeS("roj/reflect/Reflection", "ensureClassInitialized", "(Ljava/lang/Class;)V");
+			if (classes.size() != 0) {
+				classes.sort((l, r) -> Integer.compare(r.priority, l.priority));
+				for (A a : classes) {
+					Class.forName(a.name.replace('/', '.'), true, Tweaker.class.getClassLoader());
 				}
-				for (A d : transformers) {
-					w.field(Opcodes.GETSTATIC, "roj/asmx/launcher/Bootstrap", "instance", "Lroj/asmx/launcher/Bootstrap;");
-					w.newObject(d.name);
-					w.invokeV("roj/asmx/launcher/Bootstrap", "registerTransformer", "(Lroj/asmx/ITransformer;)V");
-				}
-				w.insn(Opcodes.RETURN);
-
-				Class<?> klass = Reflection.defineWeakClass(AsmCache.toByteArrayShared(autoloader));
-				Reflection.ensureClassInitialized(klass);
 			}
 
 			loader.registerTransformer(NIXIM);
 			loader.registerTransformer(CONDITIONAL);
-		} catch (IOException e) {
+		} catch (IOException | ClassNotFoundException e) {
 			throw new RuntimeException(e);
 		}
 	}

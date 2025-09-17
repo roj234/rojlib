@@ -11,14 +11,14 @@
 package roj.archive.xz.lz;
 
 import roj.archive.xz.LZMA2Options;
-import roj.reflect.Unaligned;
+import roj.reflect.Unsafe;
 import roj.util.ArrayCache;
 import roj.util.NativeMemory;
 
 import java.io.IOException;
 import java.io.OutputStream;
 
-import static roj.reflect.Unaligned.U;
+import static roj.reflect.Unsafe.U;
 
 public abstract class LZEncoder {
 	public static final int MF_HC4 = 0, MF_BT4 = 1;
@@ -278,7 +278,7 @@ public abstract class LZEncoder {
 
 	public final void copyUncompressed(OutputStream out, int backward, int len) throws IOException {
 		byte[] arr = ArrayCache.getByteArray(len, false);
-		U.copyMemory(null, buf+readPos+1-backward, arr, Unaligned.ARRAY_BYTE_BASE_OFFSET, len);
+		U.copyMemory(null, buf+readPos+1-backward, arr, Unsafe.ARRAY_BYTE_BASE_OFFSET, len);
 		out.write(arr,0,len);
 		ArrayCache.putArray(arr);
 	}

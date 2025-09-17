@@ -117,14 +117,14 @@ public class PEHeader implements PESegment {
 
 	@Override
 	public void fromByteArray(PEFile owner, ByteList r) {
-		cpuType = (char) r.readUShortLE();
-		sectionCount = (char) r.readUShortLE();
+		cpuType = (char) r.readUnsignedShortLE();
+		sectionCount = (char) r.readUnsignedShortLE();
 		timestamp = r.readIntLE();
 		symbolTableOffset = r.readIntLE();
 		symbolCount = r.readIntLE();
-		optHeaderSize = (char) r.readUShortLE();
-		characteristics = (char) r.readUShortLE();
-		format = (char) r.readUShortLE();
+		optHeaderSize = (char) r.readUnsignedShortLE();
+		characteristics = (char) r.readUnsignedShortLE();
+		format = (char) r.readUnsignedShortLE();
 		linkerVersion = r.readChar();
 		codeSize = r.readIntLE();
 		initializedDataSize = r.readIntLE();
@@ -133,26 +133,26 @@ public class PEHeader implements PESegment {
 		codeBase = r.readIntLE();
 		if (format == FORMAT_PE32) {
 			dataBase = r.readIntLE();
-			imageBase = r.readUIntLE();
+			imageBase = r.readUnsignedIntLE();
 		} else {
 			imageBase = r.readLongLE();
 		}
 		sectionAlign = r.readIntLE();
 		fileAlign = r.readIntLE();
-		OSVersion = (r.readUShortLE() << 16) | r.readUShortLE();
-		imageVersion = (r.readUShortLE() << 16) | r.readUShortLE();
-		subsystemVersion = (r.readUShortLE() << 16) | r.readUShortLE();
+		OSVersion = (r.readUnsignedShortLE() << 16) | r.readUnsignedShortLE();
+		imageVersion = (r.readUnsignedShortLE() << 16) | r.readUnsignedShortLE();
+		subsystemVersion = (r.readUnsignedShortLE() << 16) | r.readUnsignedShortLE();
 		win32Version = r.readIntLE();
 		imageSize = r.readIntLE();
 		headerSize = r.readIntLE();
 		checksum = r.readIntLE();
-		subsystem = (char) r.readUShortLE();
-		DLLCharacteristic = (char) r.readUShortLE();
+		subsystem = (char) r.readUnsignedShortLE();
+		DLLCharacteristic = (char) r.readUnsignedShortLE();
 		if (format == FORMAT_PE32) {
-			stackReservedSize = r.readUIntLE();
-			stackCommitSize = r.readUIntLE();
-			heapReservedSize = r.readUIntLE();
-			heapCommitSize = r.readUIntLE();
+			stackReservedSize = r.readUnsignedIntLE();
+			stackCommitSize = r.readUnsignedIntLE();
+			heapReservedSize = r.readUnsignedIntLE();
+			heapCommitSize = r.readUnsignedIntLE();
 		} else {
 			stackReservedSize = r.readLongLE();
 			stackCommitSize = r.readLongLE();

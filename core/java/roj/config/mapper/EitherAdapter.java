@@ -4,6 +4,7 @@ import org.jetbrains.annotations.Nullable;
 import roj.asm.type.IType;
 import roj.collect.BitSet;
 import roj.config.ValueEmitter;
+import roj.util.function.Either;
 
 import java.util.List;
 

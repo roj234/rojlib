@@ -58,7 +58,7 @@ public class ElfSymbolTable implements ElfSegment {
 
 	@Override
 	public void fromByteArray(ElfFile owner, ByteList r) throws IOException {
-		if (r.readInt(4) != ElfSectionD.DT_DYNAMIC_SYMBOL) throw new IllegalArgumentException();
+		if (r.getInt(4) != ElfSectionD.DT_DYNAMIC_SYMBOL) throw new IllegalArgumentException();
 		if (delegate == null) delegate = new ElfSectionD();
 		delegate.fromByteArray(owner, r);
 		owner.read(delegate.offset, delegate.length);

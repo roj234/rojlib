@@ -45,7 +45,7 @@ public class JsonParser extends Parser implements StreamParser {
 	public JsonParser(@MagicConstant(flags = COMMENT) int commentFlag) { super(commentFlag); }
 
 	@Override
-	public ConfigValue element(@MagicConstant(flags = {NO_DUPLICATE_KEY, ORDERED_MAP, LENIENT}) int flag) throws ParseException {return element(next(), this, flag);}
+	public ConfigValue element(@MagicConstant(flags = {NO_DUPLICATE_KEY, ORDERED_MAP, LENIENT}) int flags) throws ParseException {return element(next(), this, flags);}
 	@SuppressWarnings("fallthrough")
 	private static ConfigValue element(Token w, Parser wr, int flag) throws ParseException {
 		switch (w.type()) {
@@ -63,7 +63,7 @@ public class JsonParser extends Parser implements StreamParser {
 	}
 
 	@Override
-	public <E extends ValueEmitter> E parse(CharSequence text, @MagicConstant(flags = {LENIENT}) int flag, E emitter) throws ParseException {
+	public void parse(CharSequence text, @MagicConstant(flags = {LENIENT}) int flag, ValueEmitter emitter) throws ParseException {
 		init(text);
 		try {
 			streamElement(flag, emitter);
@@ -72,16 +72,15 @@ public class JsonParser extends Parser implements StreamParser {
 		} finally {
 			input = null;
 		}
-		return emitter;
 	}
 	@SuppressWarnings("fallthrough")
-	public void streamElement(@MagicConstant(flags = {LENIENT}) int flag, ValueEmitter emitter) throws ParseException {
+	public void streamElement(@MagicConstant(flags = {LENIENT}) int flags, ValueEmitter emitter) throws ParseException {
 		Token w = next();
 		try {
 			switch (w.type()) {
 				default -> unexpected(w.text());
-				case lBracket -> list(this, emitter, flag);
-				case lBrace -> map(this, emitter, flag);
+				case lBracket -> list(this, emitter, flags);
+				case lBrace -> map(this, emitter, flags);
 				case LITERAL, STRING -> emitter.emit(w.text());
 				case NULL -> emitter.emitNull();
 				case TRUE -> emitter.emit(true);
@@ -258,7 +257,7 @@ public class JsonParser extends Parser implements StreamParser {
 				}
 			}
 
-			emitter.key(k);
+			emitter.emitKey(k);
 			try {
 				p.streamElement(flag, emitter);
 			} catch (ParseException e) {

@@ -3,8 +3,8 @@ package roj.http;
 import org.jetbrains.annotations.Nullable;
 import roj.annotation.MayMutate;
 import roj.collect.ArrayList;
-import roj.util.ArtifactVersion;
 import roj.text.URICoder;
+import roj.util.ArtifactVersion;
 import roj.util.DynByteBuf;
 
 import java.net.MalformedURLException;
@@ -99,12 +99,12 @@ public class HttpHead extends Headers {
 		int i = buf.rIndex;
 		int beginI = i;
 		while (i < len) {
-			if (buf.get(i) == '\r') {
+			if (buf.getByte(i) == '\r') {
 				if (i+1 == len) return null;
 
-				if (buf.get(i+1) == '\n') {
+				if (buf.getByte(i+1) == '\n') {
 					buf.rIndex = i+2;
-					return buf.readAscii(beginI, i-beginI);
+					return buf.getAscii(beginI, i-beginI);
 				}
 			}
 			i++;

@@ -2,12 +2,12 @@ package roj.crypt;
 
 import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.NotNull;
-import roj.reflect.Bypass;
 import roj.ci.annotation.Public;
+import roj.reflect.Bypass;
 import roj.util.ArrayUtil;
 import roj.util.DynByteBuf;
 
-import static roj.reflect.Unaligned.U;
+import static roj.reflect.Unsafe.U;
 
 /**
  * s is either software or stream
@@ -38,7 +38,7 @@ public class CRC32 {
 	static {
 		hw intr;
 		try {
-			intr = Bypass.builder(hw.class).inline().delegate(java.util.zip.CRC32.class, "update", "updateBytes", "updateByteBuffer").build();
+			intr = Bypass.builder(hw.class).delegate(java.util.zip.CRC32.class, "update", "updateBytes", "updateByteBuffer").build();
 		} catch (Exception e) {
 			e.printStackTrace();
 			intr = null;

@@ -128,8 +128,7 @@ public final class MutableBigInteger implements Comparable<MutableBigInteger> {
 			throw new Error();
 		}
 
-		Bypass<Opr> dab = Bypass
-			.custom(Opr.class).inline().unchecked()
+		Bypass<Opr> dab = Bypass.custom(Opr.class).unchecked()
 			.construct(mb, "_n1", "_n2", "_n3", "_n4")
 			.construct(mb, "_n5", mb)
 			.access(mb, new String[] {"value", "intLen"}, new String[] {"_nArrG", "_nArrLen"}, new String[] {"_nArrS", null});

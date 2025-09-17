@@ -1,6 +1,6 @@
 package roj.http.server;
 
-import roj.ci.annotation.ReferenceByGeneratedClass;
+import roj.ci.annotation.IndirectReference;
 import roj.collect.ArrayList;
 import roj.collect.HashMap;
 import roj.collect.RingBuffer;
@@ -86,7 +86,7 @@ public final class HttpServer implements BiConsumer<String, String> {
 	/**
 	 * 这个函数可能会在运行时被CodeWeaver注入，从而生成更好看的错误页面
 	 */
-	@ReferenceByGeneratedClass
+	@IndirectReference
 	static Content onUncaughtError(Request req, Throwable e) {return Content.httpError(500);}
 
 	/** 代理密钥，用于验证来源请求的字段是否可信 */

@@ -4,10 +4,10 @@
 
 package roj.plugins;
 
+import roj.collect.ArrayList;
 import roj.collect.Int2IntMap;
 import roj.collect.IntSet;
 import roj.collect.RingBuffer;
-import roj.collect.ArrayList;
 import roj.concurrent.TaskThread;
 import roj.config.table.CsvParser;
 import roj.gui.CMBoxValue;
@@ -20,7 +20,7 @@ import roj.plugin.SimplePlugin;
 import roj.text.TextReader;
 import roj.text.TextUtil;
 import roj.util.ByteList;
-import roj.util.VMUtil;
+import roj.util.JVM;
 
 import javax.swing.*;
 import java.awt.*;
@@ -55,7 +55,7 @@ public class CardSleep extends JFrame {
 
 		@Override
 		protected void onLoad() {
-			if (!VMUtil.isRoot()) System.err.println("本程序需要管理员权限才能完美工作");
+			if (!JVM.isRoot()) System.err.println("本程序需要管理员权限才能完美工作");
 			GuiUtil.systemLaf();
 		}
 
@@ -81,7 +81,7 @@ public class CardSleep extends JFrame {
 			monitorRead.shutdown();
 			monitorRead = null;
 
-			if (VMUtil.isShutdownInProgress()) return;
+			if (JVM.isShutdownInProgress()) return;
 			instance.dispose();
 			instance = null;
 		}
@@ -550,7 +550,7 @@ public class CardSleep extends JFrame {
 			});
 		});
 
-		if (!VMUtil.isRoot()) {
+		if (!JVM.isRoot()) {
 			GuiUtil.removeComponent(uiPanelControl);
 			uiST_Memory.setSelected(false);
 			uiST_Core.setSelected(false);

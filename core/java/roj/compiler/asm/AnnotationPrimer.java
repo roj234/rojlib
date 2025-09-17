@@ -6,6 +6,7 @@ import roj.asm.annotation.AList;
 import roj.asm.annotation.AnnVal;
 import roj.asm.annotation.Annotation;
 import roj.asm.type.IType;
+import roj.asm.type.Type;
 import roj.asm.type.TypeHelper;
 import roj.collect.ArrayList;
 import roj.collect.HashMap;
@@ -16,10 +17,9 @@ import roj.compiler.ast.expr.Expr;
 import roj.compiler.ast.expr.ExprParser;
 import roj.compiler.ast.expr.NewArray;
 import roj.compiler.diagnostic.Kind;
-import roj.compiler.resolve.TypeCast;
+import roj.config.node.ConfigValue;
 import roj.text.ParseException;
 import roj.text.Token;
-import roj.config.node.ConfigValue;
 import roj.util.Helpers;
 
 import java.util.Arrays;
@@ -133,18 +133,18 @@ public final class AnnotationPrimer extends Annotation {
 	}
 
 	public static ConfigValue castPrimitive(ConfigValue entry, IType type) {
-		int sourceType = TypeCast.getDataCap(entry.dataType());
-		int targetType = TypeCast.getDataCap(type.getActualType());
+		int sourceType = Type.getSort(entry.dataType());
+		int targetType = Type.getSort(type.getActualType());
 		if (sourceType == targetType) return entry;
 		return switch (targetType) {
 			default -> entry;
-			case 1 -> ConfigValue.valueOf((byte) entry.asInt());
-			case 2 -> ConfigValue.valueOf((char) entry.asInt());
-			case 3 -> ConfigValue.valueOf((short) entry.asInt());
-			case 4 -> ConfigValue.valueOf(entry.asInt());
-			case 5 -> ConfigValue.valueOf(entry.asLong());
-			case 6 -> ConfigValue.valueOf(entry.asFloat());
-			case 7 -> ConfigValue.valueOf(entry.asDouble());
+			case Type.SORT_BYTE -> ConfigValue.valueOf((byte) entry.asInt());
+			case Type.SORT_CHAR -> ConfigValue.valueOf((char) entry.asInt());
+			case Type.SORT_SHORT -> ConfigValue.valueOf((short) entry.asInt());
+			case Type.SORT_INT -> ConfigValue.valueOf(entry.asInt());
+			case Type.SORT_LONG -> ConfigValue.valueOf(entry.asLong());
+			case Type.SORT_FLOAT -> ConfigValue.valueOf(entry.asFloat());
+			case Type.SORT_DOUBLE -> ConfigValue.valueOf(entry.asDouble());
 		};
 	}
 }

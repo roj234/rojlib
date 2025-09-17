@@ -1,10 +1,10 @@
 package roj.ui;
 
-import roj.text.ParseException;
 import roj.reflect.Reflection;
 import roj.text.CharList;
+import roj.text.ParseException;
 import roj.text.TextUtil;
-import roj.util.HighResolutionTimer;
+import roj.util.JVM;
 
 import java.util.Arrays;
 
@@ -46,7 +46,7 @@ public class OptionParser {
 					System.out.println("Goodbye!");
 					System.exit(0);
 				})));
-				HighResolutionTimer.runThis();
+				JVM.AccurateTimer.parkForMe();
 			}
 		}
 		return executed;

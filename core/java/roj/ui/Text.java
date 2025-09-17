@@ -63,12 +63,12 @@ public class Text {
 	protected String getMinecraftType() { return "text"; }
 	public void writeJson(ValueEmitter ser) {
 		ser.emitMap();
-		ser.key(getMinecraftType());
+		ser.emitKey(getMinecraftType());
 		ser.emit(value.toString());
 
 		if (flag != 0) {
 			if (isClear()) {
-				ser.key("reset");
+				ser.emitKey("reset");
 				ser.emit(true);
 			}
 			addFlag(ser, 1, "bold");
@@ -79,7 +79,7 @@ public class Text {
 		}
 
 		if (fgColor != 0) {
-			ser.key("color");
+			ser.emitKey("color");
 			if (isColorRGB()) {
 				ser.emit("#"+Integer.toHexString(fgColor));
 			} else {
@@ -88,7 +88,7 @@ public class Text {
 		}
 
 		if (extra.size() > 0) {
-			ser.key("extra");
+			ser.emitKey("extra");
 			ser.emitList(extra.size());
 			for (int i = 0; i < extra.size(); i++) {
 				extra.get(i).writeJson(ser);
@@ -253,7 +253,7 @@ public class Text {
 	}
 	private void addFlag(ValueEmitter sb, int bit, String yes) {
 		if ((flag&(bit<<1)) == 0) return;
-		sb.key(yes);
+		sb.emitKey(yes);
 		sb.emit((flag & bit) != 0);
 	}
 

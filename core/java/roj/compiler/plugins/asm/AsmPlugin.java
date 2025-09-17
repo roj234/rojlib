@@ -20,9 +20,9 @@ import roj.compiler.ast.expr.Invoke;
 import roj.compiler.ast.expr.Lambda;
 import roj.compiler.diagnostic.Kind;
 import roj.compiler.resolve.TypeCast;
-import roj.util.OperationDone;
 import roj.reflect.Reflection;
 import roj.util.Helpers;
+import roj.util.OperationDone;
 import roj.util.TypedKey;
 
 import java.util.List;
@@ -111,7 +111,7 @@ public final class AsmPlugin extends InvokeHook {
 				return new Expr() {
 					@Override public String toString() {return "asmWriter("+writer+")";}
 
-					@Override public IType type() {return Type.primitive(Type.BOOLEAN);}
+					@Override public IType type() {return Type.BOOLEAN_TYPE;}
 					@Override public boolean isConstant() {return true;}
 					@Override public Object constVal() {return false;}
 

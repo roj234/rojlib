@@ -84,7 +84,7 @@ public class JNIHeadersPlugin implements Processor {
 				for (MethodNode method : list) {
 					h.append("/*")
 							.append(" * Class:     ").append(klass.name()).append("\n")
-							.append(" * Method: ").append(TypeHelper.humanize(Type.methodDesc(method.rawDesc()), method.name(), true)).append("\n")
+							.append(" * Method: ").append(TypeHelper.humanize(Type.getMethodTypes(method.rawDesc()), method.name(), true)).append("\n")
 							.append(" */");
 					h.append("JNIEXPORT ").append(jniType(cast, method.returnType())).append(" JNICALL ").append(encodeMethod(method, list.size() > 1));
 					h.append("  (JNIEnv *, ");

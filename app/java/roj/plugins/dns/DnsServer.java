@@ -201,15 +201,15 @@ public class DnsServer implements ChannelHandler {
 						readDomain(r, sb);
 						readDomain(r, sb.append(", Owner: "));
 						sb.append(", ZoneId(SERIAL): ")
-						  .append(Long.toString(r.readUInt()))
+						  .append(Long.toString(r.readUnsignedInt()))
 						  .append(", ZoneTtl(REFRESH): ")
-						  .append(Long.toString(r.readUInt()))
+						  .append(Long.toString(r.readUnsignedInt()))
 						  .append(", Retry: ")
-						  .append(Long.toString(r.readUInt()))
+						  .append(Long.toString(r.readUnsignedInt()))
 						  .append(", Expire: ")
-						  .append(Long.toString(r.readUInt()))
+						  .append(Long.toString(r.readUnsignedInt()))
 						  .append(", MinTtlInServer: ")
-						  .append(Long.toString(r.readUInt()));
+						  .append(Long.toString(r.readUnsignedInt()));
 					} catch (Throwable e) {
 						e.printStackTrace();
 						break;
@@ -528,15 +528,15 @@ public class DnsServer implements ChannelHandler {
 			}
 		}
 
-		w.put(OFF_FLAGS, (byte) (w.getU(OFF_FLAGS) | 128 | 1))
+		w.set(OFF_FLAGS, (byte) (w.getUnsignedByte(OFF_FLAGS) | 128 | 1))
 		 //if(query.iterate)
 		 //    bl.set(OFF_FLAGS + 1, (byte) (bl.getU(OFF_FLAGS + 1) | 128));
-		 .put(OFF_RES, (byte) (sum >> 8))
-		 .put(OFF_RES + 1, (byte) sum)
-		 .put(OFF_ARES, (byte) (sumA >> 8))
-		 .put(OFF_ARES + 1, (byte) sumA)
-		 .put(OFF_EXRES, (byte) (sumEx >> 8))
-		 .put(OFF_EXRES + 1, (byte) sumEx);
+		 .set(OFF_RES, (byte) (sum >> 8))
+		 .set(OFF_RES + 1, (byte) sum)
+		 .set(OFF_ARES, (byte) (sumA >> 8))
+		 .set(OFF_ARES + 1, (byte) sumA)
+		 .set(OFF_EXRES, (byte) (sumEx >> 8))
+		 .set(OFF_EXRES + 1, (byte) sumEx);
 
 		//if (!isResolved) {
 		//    System.out.println("[Dbg]缓存中中找到了全部, " + query);
@@ -562,8 +562,8 @@ public class DnsServer implements ChannelHandler {
 	static final byte RCODE_NOT_IMPLEMENTED = 4;
 	static final byte RCODE_REFUSED = 5;
 	private static void setRCode(DnsQuery query, DynByteBuf clientRequest, int reason) {
-		int type = clientRequest.get(3) & 0xF0;
-		clientRequest.put(3, (byte) (type | (reason & 0x0F)));
+		int type = clientRequest.getByte(3) & 0xF0;
+		clientRequest.set(3, (byte) (type | (reason & 0x0F)));
 	}
 
 	public void forwardDnsRequest(DnsQuery query, DynByteBuf r) {
@@ -577,7 +577,7 @@ public class DnsServer implements ChannelHandler {
 		if (target == null) {
 			System.out.println("[Warn]没有前向DNS");
 			setRCode(query, r, RCODE_SERVER_ERROR);
-			r.put(OFF_FLAGS, (byte) (r.getU(OFF_FLAGS) | 128));
+			r.set(OFF_FLAGS, (byte) (r.getUnsignedByte(OFF_FLAGS) | 128));
 
 			pkt.setAddress(query.senderIp, query.senderPort);
 			try {
@@ -607,7 +607,7 @@ public class DnsServer implements ChannelHandler {
 					do {
 						int myId = (int) System.nanoTime() & 65535;
 						addr.id = (char) myId;
-						r.putShort(0, myId);
+						r.setShort(0, myId);
 					} while (null != waiting.putIfAbsent(addr, request));
 				}
 				pkt.setAddress(addr.addr, addr.port);

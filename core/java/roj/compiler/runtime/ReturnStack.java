@@ -1,10 +1,10 @@
 package roj.compiler.runtime;
 
-import roj.ci.annotation.ReferenceByGeneratedClass;
+import roj.ci.annotation.IndirectReference;
 import roj.collect.ArrayList;
 import roj.util.NativeMemory;
 
-import static roj.reflect.Unaligned.U;
+import static roj.reflect.Unsafe.U;
 
 /**
  * @author Roj234
@@ -23,7 +23,7 @@ public final class ReturnStack<T> {
 		memory.allocate(cap);
 	}
 
-	@ReferenceByGeneratedClass
+	@IndirectReference
 	public ReturnStack<T> toImmutable() {
 		int memoryCap = (int) (address - memory.address());
 		System.out.println("CopyImmutable size="+memoryCap);

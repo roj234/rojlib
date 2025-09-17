@@ -2,7 +2,7 @@ package roj.concurrent;
 
 import org.jetbrains.annotations.NotNull;
 import roj.compiler.api.Synchronizable;
-import roj.reflect.Unaligned;
+import roj.reflect.Unsafe;
 import roj.text.logging.Logger;
 import roj.util.Helpers;
 
@@ -13,7 +13,7 @@ import java.util.concurrent.TimeoutException;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
 
-import static roj.reflect.Unaligned.U;
+import static roj.reflect.Unsafe.U;
 
 /**
  * @author Roj234
@@ -24,7 +24,7 @@ final class PromiseImpl<T> implements Promise<T>, Runnable, Cancellable, Promise
 	PromiseImpl() {}
 	PromiseImpl(Executor executor) {this.executor = executor;}
 
-	private static final long STATE = Unaligned.fieldOffset(PromiseImpl.class, "_state");
+	private static final long STATE = Unsafe.fieldOffset(PromiseImpl.class, "_state");
 	static final int
 		TASK_COMPLETE = 1, TASK_SUCCESS = 2,
 		WAIT = 4, CALLBACK = 8,

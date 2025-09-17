@@ -2,7 +2,7 @@ package roj.text;
 
 import roj.collect.ArrayList;
 import roj.collect.BitSet;
-import roj.reflect.Unaligned;
+import roj.reflect.Unsafe;
 import roj.util.ArrayCache;
 import roj.util.DynByteBuf;
 
@@ -227,25 +227,25 @@ public final class CharsetDetector implements AutoCloseable {
 	// 评分函数 for each encoding
 	private static int scoreUTF8(byte[] data, int off, int end) {
 		var verifier = new GreatScorer();
-		FastCharset.UTF8().fastValidate(data, Unaligned.ARRAY_BYTE_BASE_OFFSET + off, Unaligned.ARRAY_BYTE_BASE_OFFSET + end, verifier);
+		FastCharset.UTF8().fastValidate(data, Unsafe.ARRAY_BYTE_BASE_OFFSET + off, Unsafe.ARRAY_BYTE_BASE_OFFSET + end, verifier);
 		return verifier.score;
 	}
 
 	private static int scoreUTF16LE(byte[] data, int off, int end) {
 		var verifier = new GreatScorer();
-		FastCharset.UTF16LE().fastValidate(data, Unaligned.ARRAY_BYTE_BASE_OFFSET + off, Unaligned.ARRAY_BYTE_BASE_OFFSET + end, verifier);
+		FastCharset.UTF16LE().fastValidate(data, Unsafe.ARRAY_BYTE_BASE_OFFSET + off, Unsafe.ARRAY_BYTE_BASE_OFFSET + end, verifier);
 		return verifier.score;
 	}
 
 	private static int scoreUTF16BE(byte[] data, int off, int end) {
 		var verifier = new GreatScorer();
-		FastCharset.UTF16BE().fastValidate(data, Unaligned.ARRAY_BYTE_BASE_OFFSET + off, Unaligned.ARRAY_BYTE_BASE_OFFSET + end, verifier);
+		FastCharset.UTF16BE().fastValidate(data, Unsafe.ARRAY_BYTE_BASE_OFFSET + off, Unsafe.ARRAY_BYTE_BASE_OFFSET + end, verifier);
 		return verifier.score;
 	}
 
 	private static int scoreGB18030(byte[] data, int off, int end) {
 		var verifier = new GreatScorer();
-		FastCharset.GB18030().fastValidate(data, Unaligned.ARRAY_BYTE_BASE_OFFSET + off, Unaligned.ARRAY_BYTE_BASE_OFFSET + end, verifier);
+		FastCharset.GB18030().fastValidate(data, Unsafe.ARRAY_BYTE_BASE_OFFSET + off, Unsafe.ARRAY_BYTE_BASE_OFFSET + end, verifier);
 		return verifier.score;
 	}
 

@@ -17,7 +17,7 @@ import roj.config.mapper.ObjectMapperFactory;
 import roj.gui.GuiUtil;
 import roj.gui.OnChangeHelper;
 import roj.io.IOUtil;
-import roj.reflect.Unaligned;
+import roj.reflect.Unsafe;
 import roj.text.CharList;
 import roj.text.TextReader;
 import roj.text.TextUtil;
@@ -42,7 +42,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import static roj.reflect.Unaligned.U;
+import static roj.reflect.Unsafe.U;
 import static roj.text.diff.DiffInfo.bar;
 
 /**
@@ -337,7 +337,7 @@ public class DiffFinder extends JFrame {
 								sb.replaceBatch(textRpl);
 
 								int canCopy = Math.min(sb.length(), preWindow-i);
-								U.copyMemory(sb.list, Unaligned.ARRAY_CHAR_BASE_OFFSET, out, Unaligned.ARRAY_BYTE_BASE_OFFSET + i * 2L, canCopy * 2L);
+								U.copyMemory(sb.list, Unsafe.ARRAY_CHAR_BASE_OFFSET, out, Unsafe.ARRAY_BYTE_BASE_OFFSET + i * 2L, canCopy * 2L);
 								if ((i += canCopy) == preWindow) break;
 
 								sb.clear();

@@ -6,11 +6,11 @@ import roj.asm.ClassNode;
 import roj.asm.Opcodes;
 import roj.asm.insn.Label;
 import roj.asm.type.TypeHelper;
+import roj.asmx.TransformUtil;
 import roj.concurrent.SegmentReadWriteLock;
-import roj.util.LeakDetector;
-import roj.reflect.ClassDefiner;
-import roj.reflect.Proxy;
+import roj.reflect.Reflection;
 import roj.util.Helpers;
+import roj.util.LeakDetector;
 
 import java.nio.channels.ClosedByInterruptException;
 import java.sql.Connection;
@@ -132,7 +132,7 @@ public class ConnectionPool implements DataSource {
 
 				int closeHandler = data.newField(0, "$closeHandler", TypeHelper.class2asm(ConnectionPool.class));
 
-				Proxy.proxyClass(data, new Class<?>[]{Connection.class}, (m, c) -> {
+				TransformUtil.proxyClass(data, new Class<?>[]{Connection.class}, (m, c) -> {
 					if (m.getName().equals("close")) {
 						c.visitSize(2, 1);
 						c.clear();
@@ -144,7 +144,7 @@ public class ConnectionPool implements DataSource {
 					} else if (m.getName().equals("isClosed")) {
 						c.visitSizeMax(2, 0);
 
-						c.invokeItf("java/sql/Connection", c.mn.name(), c.mn.rawDesc());
+						c.invokeItf("java/sql/Connection", c.method.name(), c.method.rawDesc());
 
 						Label label = new Label();
 						c.jump(Opcodes.IFEQ, label);
@@ -160,7 +160,7 @@ public class ConnectionPool implements DataSource {
 					return false;
 				}, closeHandler);
 
-				proxy = Helpers.cast(ClassDefiner.newInstance(data));
+				proxy = Helpers.cast(Reflection.createInstance(ConnectionPool.class.getClassLoader(), data));
 			}
 		}
 

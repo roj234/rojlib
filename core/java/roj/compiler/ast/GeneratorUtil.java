@@ -76,9 +76,9 @@ public class GeneratorUtil {
 				implInit.finish();
 
 				var c = mn.overwrite(file.cp);
-				c.clazz(NEW, implInit.mn.owner());
+				c.clazz(NEW, implInit.method.owner());
 				c.insn(DUP);
-				c.visitSize(TypeHelper.paramSize(implInit.mn.rawDesc())+2, TypeHelper.paramSize(mn.rawDesc()));
+				c.visitSize(TypeHelper.paramSize(implInit.method.rawDesc())+2, TypeHelper.paramSize(mn.rawDesc()));
 
 				List<Type> myPar = mn.parameters();
 				slot = 0;
@@ -88,7 +88,7 @@ public class GeneratorUtil {
 					slot += from.length();
 				}
 
-				c.invoke(INVOKESPECIAL, implInit.mn);
+				c.invoke(INVOKESPECIAL, implInit.method);
 				c.insn(ARETURN);
 				c.finish();
 

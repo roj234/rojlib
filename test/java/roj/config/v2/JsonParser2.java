@@ -43,7 +43,7 @@ public class JsonParser2 extends Parser implements StreamParser2 {
 	public JsonParser2(@MagicConstant(flags = COMMENT) int commentFlag) { super(commentFlag); }
 
 	@Override
-	public ConfigValue element(@MagicConstant(flags = {NO_DUPLICATE_KEY, ORDERED_MAP, LENIENT}) int flag) throws ParseException {return element(next(), this, flag);}
+	public ConfigValue element(@MagicConstant(flags = {NO_DUPLICATE_KEY, ORDERED_MAP, LENIENT}) int flags) throws ParseException {return element(next(), this, flags);}
 	@SuppressWarnings("fallthrough")
 	private static ConfigValue element(Token w, Parser wr, int flag) throws ParseException {
 		switch (w.type()) {

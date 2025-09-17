@@ -1,7 +1,7 @@
 package roj.ci.event;
 
-import roj.asmx.event.Event;
 import roj.ci.Project;
+import roj.event.Event;
 import roj.text.CharList;
 
 /**

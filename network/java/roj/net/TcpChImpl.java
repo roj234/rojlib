@@ -1,9 +1,10 @@
 package roj.net;
 
+import roj.ci.annotation.Public;
 import roj.io.BufferPool;
 import roj.reflect.Bypass;
-import roj.reflect.Reflection;
 import roj.util.DynByteBuf;
+import roj.util.JVM;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
@@ -22,6 +23,7 @@ import static roj.util.ByteList.EMPTY;
  */
 class TcpChImpl extends MyChannel {
 	private static volatile H TcpUtil;
+	@Public
 	private interface H {
 		default boolean isInputOpen(SocketChannel sc) { return !isInputClosed(sc); }
 		boolean isInputClosed(SocketChannel sc);
@@ -47,7 +49,7 @@ class TcpChImpl extends MyChannel {
 		if (TcpUtil == null) {
 			synchronized (TcpChImpl.class) {
 				if (TcpUtil == null) {
-					String[] fields = Reflection.JAVA_VERSION < 11 ? new String[] {"isInputOpen", "isOutputOpen"} : new String[] {"isInputClosed", "isOutputClosed"};
+					String[] fields = JVM.VERSION < 11 ? new String[] {"isInputOpen", "isOutputOpen"} : new String[] {"isInputClosed", "isOutputClosed"};
 					TcpUtil = Bypass.builder(H.class).access(server.getClass(), fields, fields, null).build();
 				}
 			}

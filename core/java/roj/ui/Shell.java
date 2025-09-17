@@ -1,14 +1,14 @@
 package roj.ui;
 
 import org.jetbrains.annotations.Nullable;
-import roj.collect.IntMap;
 import roj.collect.ArrayList;
+import roj.collect.IntMap;
 import roj.concurrent.Executor;
 import roj.concurrent.TaskPool;
+import roj.text.CharList;
 import roj.text.ParseException;
 import roj.text.Token;
 import roj.text.Tokenizer;
-import roj.text.CharList;
 import roj.text.logging.Logger;
 import roj.util.Helpers;
 
@@ -60,6 +60,26 @@ public class Shell extends Terminal {
 		for (CommandNode node : commands)
 			node.dump(sb.padEnd(' ', depth), depth);
 		return sb;
+	}
+
+	public CommandNode findNode(String... name) {
+		int i = 0;
+		List<CommandNode> nodes = commands;
+
+		loop:
+		while (true) {
+			for (CommandNode node : nodes) {
+				if (name[i].equals(node.getName())) {
+					if (++i == name.length)
+						return node;
+
+					nodes = node.getChildren();
+					i++;
+					continue loop;
+				}
+			}
+			return null;
+		}
 	}
 
 	@Override

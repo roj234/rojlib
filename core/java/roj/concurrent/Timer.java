@@ -1,14 +1,14 @@
 package roj.concurrent;
 
 import roj.collect.ArrayList;
-import roj.reflect.Unaligned;
+import roj.optimizer.FastVarHandle;
+import roj.reflect.Handles;
 import roj.text.CharList;
 import roj.text.logging.Logger;
 
+import java.lang.invoke.VarHandle;
 import java.util.Collection;
 import java.util.concurrent.locks.LockSupport;
-
-import static roj.reflect.Unaligned.U;
 
 /**
  * 处理定时任务
@@ -16,6 +16,7 @@ import static roj.reflect.Unaligned.U;
  * @version 2.4
  * @since 2024/3/6 0:38
  */
+@FastVarHandle
 public class Timer implements Runnable {
 	private static final Logger LOGGER = Logger.getLogger("定时器");
 
@@ -34,6 +35,7 @@ public class Timer implements Runnable {
 		return defaultTimer;
 	}
 
+	@FastVarHandle
 	private static final class TaskHolder implements TimerTask {
 		// root
 		TaskHolder(TimingWheel wheel) {
@@ -53,9 +55,9 @@ public class Timer implements Runnable {
 			return sb.append("queued,timeLeft=").append(timeLeft).append(",owner=").append(wheel()).append(",task=").append(task).append('}').toStringAndFree();
 		}
 
-		static final long
-				NEXT = Unaligned.fieldOffset(TaskHolder.class, "next"),
-				TIME = Unaligned.fieldOffset(TaskHolder.class, "timeLeft");
+		static final VarHandle
+				NEXT = Handles.lookup().findVarHandle(TaskHolder.class, "next", TaskHolder.class),
+				TIME = Handles.lookup().findVarHandle(TaskHolder.class, "timeLeft", long.class);
 
 		// TimingWheel | TimerTask
 		private Object owner;
@@ -76,15 +78,15 @@ public class Timer implements Runnable {
 			for(;;) {
 				long t = timeLeft;
 				if (t < 0) break;
-				if (U.compareAndSetLong(this, TIME, t, -1)) { removeFromTimer(); break; }
+				if (TIME.weakCompareAndSet(this, t, -1L)) { removeFromTimer(); break; }
 				Thread.yield();
 			}
 
 			timeLeft = System.currentTimeMillis()+delay;
 
 			// 追加到单向链表
-			TaskHolder head = (TaskHolder) U.getAndSetReference(timer(), HEAD, this);
-			U.putReferenceVolatile(this, NEXT, head);
+			TaskHolder head = (TaskHolder) HEAD.getAndSet(timer(), this);
+			NEXT.setVolatile(this, head);
 		}
 		@Override public boolean isExpired() { return timeLeft == 0 || timeLeft == -2; }
 		@Override public boolean isCancelled() { return timeLeft < 0; }
@@ -95,7 +97,7 @@ public class Timer implements Runnable {
 				long t = timeLeft;
 				if (t < 0) return true;
 
-				if (U.compareAndSetLong(this, TIME, t, t == 0/*isExpired*/ ? -2 : -1)) {
+				if (TIME.compareAndSet(this, t, t == 0/*isExpired*/ ? -2 : -1)) {
 					taskCancelled = t == 0 && task instanceof Cancellable cancellable && cancellable.cancel(mayInterruptIfRunning);
 					break;
 				}
@@ -111,7 +113,7 @@ public class Timer implements Runnable {
 			boolean removed = false;
 
 			// 尝试上锁，如果失败，意味着这个链表正在被遍历，那么由于 timeLeft<0 它马上就会被删除
-			while (!U.compareAndSetLong(root, TIME, 0, READ_LOCK)) {
+			while (!TIME.compareAndSet(root, 0, READ_LOCK)) {
 				Thread.yield();
 			}
 
@@ -126,7 +128,7 @@ public class Timer implements Runnable {
 
 			for (;;) {
 				long t = root.timeLeft;
-				if (U.compareAndSetLong(root, TIME, t, t & WRITE_LOCK)) break;
+				if (TIME.compareAndSet(root, t, t & WRITE_LOCK)) break;
 				Thread.yield();
 			}
 
@@ -175,13 +177,14 @@ public class Timer implements Runnable {
 			for (;;) {
 				var t = timeLeft;
 				if (t == WRITE_LOCK) break;
-				if (U.compareAndSetLong(this, TIME, t, t|WRITE_LOCK) && t == 0) break;
+				if (TIME.compareAndSet(this, t, t|WRITE_LOCK) && t == 0) break;
 				Thread.yield();
 			}
 		}
 	}
 
 	private static final int DEPTH_SHL = 4, DEPTH_MASK = (1 << DEPTH_SHL) - 1;
+	@FastVarHandle
 	private final class TimingWheel {
 		TimingWheel(TimingWheel prev) {
 			this.prev = prev;
@@ -201,11 +204,11 @@ public class Timer implements Runnable {
 		private final TimingWheel prev;
 		// @Stable
 		private volatile TimingWheel next;
-		private static final long NEXT = Unaligned.fieldOffset(TimingWheel.class, "next");
+		private static final VarHandle NEXT = Handles.lookup().findVarHandle(TimingWheel.class, "next", TimingWheel.class);
 		private TimingWheel next() {
 			while (next == null) {
 				TimingWheel next = new TimingWheel(this);
-				if (U.compareAndSetReference(this, NEXT, null, next)) {
+				if (NEXT.compareAndSet(this, null, next)) {
 					return next;
 				}
 			}
@@ -248,12 +251,12 @@ public class Timer implements Runnable {
 					task.removed();
 
 					TaskWasCancelled:
-					if (time > 0 && U.compareAndSetLong(task, TaskHolder.TIME, time, time = Math.max(0, time-ticks))) {
+					if (time > 0 && TaskHolder.TIME.compareAndSet(task, time, time = Math.max(0, time-ticks))) {
 						if (time == 0) {
 							time = safeExec(pool, task);
 							if (time <= 0) break TaskWasCancelled;
 
-							if (U.compareAndSetLong(task, TaskHolder.TIME, 0, time)) reschedule.add(task);
+							if (TaskHolder.TIME.compareAndSet(task, 0, time)) reschedule.add(task);
 						} else {
 							add(prev, task);
 						}
@@ -290,14 +293,14 @@ public class Timer implements Runnable {
 				task.removed();
 
 				TaskWasCancelled:
-				if (time > 0 && U.compareAndSetLong(task, TaskHolder.TIME, time, time &= mask)) {
+				if (time > 0 && TaskHolder.TIME.compareAndSet(task, time, time &= mask)) {
 					if (time == 0) {
 						time = safeExec(pool, task);
 						if (time <= 0) break TaskWasCancelled;
 
 						TimingWheel wheel = this;
 						while (wheel.prev != null) wheel = wheel.prev;
-						if (U.compareAndSetLong(task, TaskHolder.TIME, 0, tweakTime(wheel, time))) {
+						if (TaskHolder.TIME.compareAndSet(task, 0L, tweakTime(wheel, time))) {
 							add(this, task);
 						}
 					} else {
@@ -378,7 +381,7 @@ public class Timer implements Runnable {
 		}
 	}
 
-	private static final long HEAD = Unaligned.fieldOffset(Timer.class, "head");
+	private static final VarHandle HEAD = Handles.lookup().findVarHandle(Timer.class, "head", TaskHolder.class);
 
 	private final TimingWheel wheel = new TimingWheel(null);
 	private volatile boolean stopped;
@@ -422,18 +425,18 @@ public class Timer implements Runnable {
 		for (int i = 0; i < tasks.size(); i++) {
 			TaskHolder task = tasks.get(i);
 			long timeLeft = task.timeLeft;
-			if (timeLeft > 0 && U.compareAndSetLong(task, TaskHolder.TIME, timeLeft, TimingWheel.tweakTime(wheel, timeLeft)))
+			if (timeLeft > 0 && TaskHolder.TIME.compareAndSet(task, timeLeft, TimingWheel.tweakTime(wheel, timeLeft)))
 				TimingWheel.add(wheel, task);
 		}
 	}
 	private void pollNewTasks(long time) {
-		TaskHolder h = (TaskHolder) U.getAndSetReference(this, HEAD, SENTIAL_HEAD_END);
+		TaskHolder h = (TaskHolder) HEAD.getAndSet(this, SENTIAL_HEAD_END);
 
 		while (h != SENTIAL_HEAD_END) {
 			TaskHolder next;
 			do {
-				next = (TaskHolder) U.getReference(h, TaskHolder.NEXT);
-			} while (next == null || !U.compareAndSetReference(h, TaskHolder.NEXT, next, null));
+				next = (TaskHolder) TaskHolder.NEXT.getVolatile(h);
+			} while (next == null || !TaskHolder.NEXT.compareAndSet(h, next, null));
 
 			block: {
 				long timeLeft = h.timeLeft;
@@ -449,7 +452,7 @@ public class Timer implements Runnable {
 					}
 				}
 
-				if (!U.compareAndSetLong(h, TaskHolder.TIME, timeLeft, TimingWheel.tweakTime(wheel, addTime)))
+				if (!TaskHolder.TIME.compareAndSet(h, timeLeft, TimingWheel.tweakTime(wheel, addTime)))
 					break block;
 
 				TimingWheel.add(wheel, h);
@@ -464,8 +467,8 @@ public class Timer implements Runnable {
 		if (delay < 0) throw new IllegalArgumentException("Negative delay.");
 		var wrapper = new TaskHolder(wheel, task, System.currentTimeMillis()+delay);
 
-		TaskHolder head = (TaskHolder) U.getAndSetReference(this, HEAD, wrapper);
-		U.putReferenceVolatile(wrapper, TaskHolder.NEXT, head);
+		TaskHolder head = (TaskHolder) HEAD.getAndSet(this, wrapper);
+		TaskHolder.NEXT.setVolatile(wrapper, head);
 
 		return wrapper;
 	}

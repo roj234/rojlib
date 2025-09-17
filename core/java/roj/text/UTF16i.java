@@ -1,11 +1,11 @@
 package roj.text;
 
-import roj.reflect.Reflection;
+import roj.util.JVM;
 
 import java.util.function.IntConsumer;
 
 import static java.lang.Character.*;
-import static roj.reflect.Unaligned.U;
+import static roj.reflect.Unsafe.U;
 
 /**
  * Inversed UTF16n
@@ -16,7 +16,7 @@ final class UTF16i extends FastCharset {
 	static final FastCharset INSTANCE = new UTF16i();
 	private UTF16i() {}
 
-	@Override public String name() {return !Reflection.BIG_ENDIAN ? "UTF-16BE" : "UTF-16LE";}
+	@Override public String name() {return !JVM.BIG_ENDIAN ? "UTF-16BE" : "UTF-16LE";}
 	@Override public long fastEncode(char[] s, int i, int end, Object ref, long addr, int outMax) {
 		while (i < end && outMax > 1) {
 			char c = s[i++];
@@ -52,7 +52,7 @@ final class UTF16i extends FastCharset {
 
 				int ls = Character.reverseBytes(U.getChar(ref, i)); i += 2;
 				if (ls < MIN_LOW_SURROGATE || ls >= MAX_LOW_SURROGATE) verifier.accept(MALFORMED - 2);
-				c = codepoint(c, ls);
+				c = codepointNoExc(c, ls);
 			}
 			verifier.accept(c);
 		}

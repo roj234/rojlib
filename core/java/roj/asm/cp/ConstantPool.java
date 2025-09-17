@@ -106,7 +106,7 @@ public final class ConstantPool {
 	private static void readName(DynByteBuf r, Object[] csts, int len, Consumer<Constant> listener) {
 		int i = 0;
 		while (i < len) {
-			switch (r.get(r.rIndex)) {
+			switch (r.getByte(r.rIndex)) {
 				case UTF, CLASS -> {
 					var c = readConstant(r, csts, i, false);
 					if (c == null) c = (Constant) csts[i];
@@ -216,7 +216,7 @@ public final class ConstantPool {
 				};
 			}
 			case DYNAMIC, INVOKE_DYNAMIC: {
-				int id = r.readUnsignedShort(r.rIndex + 2)-1;
+				int id = r.getUnsignedShort(r.rIndex + 2)-1;
 				CstNameAndType desc;
 				if (arr[id] == null) arr[id] = desc = new CstNameAndType();
 				else desc = (CstNameAndType) arr[id];
@@ -230,7 +230,7 @@ public final class ConstantPool {
 		}
 	}
 
-	public final List<Constant> data() {return constants;}
+	public final List<Constant> constants() {return constants;}
 	public final @Nullable Constant getNullable(DynByteBuf r) {
 		int i = r.readUnsignedShort()-1;
 		return i < 0 ? null : constants.get(i);
@@ -281,7 +281,7 @@ public final class ConstantPool {
 		if (size >= 0xFFFF) throw new IllegalStateException("常量池满!");
 
 		switch (c.type()) {
-			case UTF -> length += 3 + DynByteBuf.byteCountDioUTF(((CstUTF) c).str());
+			case UTF -> length += 3 + DynByteBuf.countJavaUTF(((CstUTF) c).str());
 			case INT, FLOAT, NAME_AND_TYPE, INVOKE_DYNAMIC, DYNAMIC, METHOD, FIELD, INTERFACE -> length += 5;
 			case LONG, DOUBLE -> {
 				length += 9;
@@ -312,7 +312,7 @@ public final class ConstantPool {
 		}
 
 		int prev = utf._length();
-		int curr = ByteList.byteCountDioUTF(str);
+		int curr = ByteList.countJavaUTF(str);
 
 		length += curr - prev;
 
@@ -495,7 +495,7 @@ public final class ConstantPool {
 	}
 	static void verifyUtf(String str) {
 		if (str.length() >= 0x10000/3) {
-			if (str.length() >= 0x10000 || ByteList.byteCountDioUTF(str) >= 0x10000) throw new IllegalArgumentException("UTF8字符串太长，限制是65535字节，"+str.length()+"！");
+			if (str.length() >= 0x10000 || ByteList.countJavaUTF(str) >= 0x10000) throw new IllegalArgumentException("UTF8字符串太长，限制是65535字节，"+str.length()+"！");
 		}
 	}
 

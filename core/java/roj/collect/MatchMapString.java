@@ -1,7 +1,7 @@
 package roj.collect;
 
 import org.intellij.lang.annotations.MagicConstant;
-import roj.reflect.Unaligned;
+import roj.reflect.Unsafe;
 import roj.util.ArrayCache;
 import roj.util.Multisort;
 import roj.util.NativeArray;
@@ -11,7 +11,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.function.IntFunction;
 
-import static roj.reflect.Unaligned.U;
+import static roj.reflect.Unsafe.U;
 
 /**
  * 比删除的UnsortedMultiKeyMap更快、更好、更方便 (除了现在key只有string外...)
@@ -206,7 +206,7 @@ public class MatchMapString<V> {
 		return s;
 	}
 
-	private static final long VOL_OFFSET = Unaligned.fieldOffset(MatchMapString.class, "vol0");
+	private static final long VOL_OFFSET = Unsafe.fieldOffset(MatchMapString.class, "vol0");
 	private Object[] vol0;
 	private Object[] getVolArray() {
 		Object[] vol0 = (Object[]) U.getAndSetReference(this, VOL_OFFSET, null);

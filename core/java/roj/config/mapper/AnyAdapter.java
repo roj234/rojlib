@@ -102,17 +102,17 @@ final class AnyAdapter extends TypeAdapter {
 
 			if (objectId >= 0) {
 				c.emitMap(1);
-				c.key("");
+				c.emitKey("");
 				c.emit(objectId);
 			} else {
 				if (ser.isOptional()) c.emitMap();
 				else c.emitMap(ser.fieldCount()+1);
-				c.key("");
+				c.emitKey("");
 				c.emit(o.getClass().getName());
 				if (ser.valueIsMap()) {
 					ser.writeMap(c, o);
 				} else {
-					c.key("v");
+					c.emitKey("v");
 					ser.write(c, o);
 				}
 			}

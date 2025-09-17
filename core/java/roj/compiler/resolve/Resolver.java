@@ -382,11 +382,11 @@ public class Resolver {
 			if (b == null) return a.isPrimitive() ? TypeCast.getWrapper(a) : a;
 		}
 
-		int capa = TypeCast.getDataCap(a.getActualType());
-		int capb = TypeCast.getDataCap(b.getActualType());
+		int capa = Type.getSort(a.getActualType())-1;
+		int capb = Type.getSort(b.getActualType())-1;
 		// 双方都是数字
 		if ((capa&7) != 0 && (capb&7) != 0) return Type.klass("java/lang/Number");
-		// 没有任何一方是对象 (boolean | void)
+		// 没有任何一方是对象 (boolean=0 | void=-1)
 		if ((capa|capb) < 8) return Types.OBJECT_TYPE;
 
 		if (a.isPrimitive()) a = TypeCast.getWrapper(a);

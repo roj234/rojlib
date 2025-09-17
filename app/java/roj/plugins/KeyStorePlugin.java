@@ -6,7 +6,6 @@ import roj.collect.CollectionX;
 import roj.collect.HashMap;
 import roj.config.node.ConfigValue;
 import roj.config.node.MapValue;
-import roj.config.mapper.Either;
 import roj.crypt.KeyType;
 import roj.crypt.jar.JarVerifier;
 import roj.io.IOUtil;
@@ -17,6 +16,7 @@ import roj.ui.Argument;
 import roj.ui.Command;
 import roj.ui.Tty;
 import roj.util.TypedKey;
+import roj.util.function.Either;
 
 import java.io.BufferedInputStream;
 import java.io.File;
@@ -72,7 +72,7 @@ public class KeyStorePlugin extends Plugin {
 				var password = map.getString("pass");
 				KeyPair keyPair = KeyType.getInstance(type.substring(7)).loadKey(password.getBytes(StandardCharsets.UTF_8), IOUtil.relativePath(getDataFolder(), map.getString("file")));
 
-				publicKeys.put(alias, Either.ofRight(keyPair.getPublic()));
+				publicKeys.put(alias, Either.right(keyPair.getPublic()));
 				privateKeys.put(alias, keyPair.getPrivate());
 			}
 		}
@@ -148,7 +148,7 @@ public class KeyStorePlugin extends Plugin {
 		}
 
 		var prk = (PrivateKey) KeyType.getInstance(certs.get(0).getPublicKey().getAlgorithm()).fromPEM(IOUtil.readString(key));
-		publicKeys.put(name, Either.ofLeft(certs));
+		publicKeys.put(name, Either.left(certs));
 		privateKeys.put(name, prk);
 	}
 }

@@ -13,7 +13,7 @@ package roj.archive.xz.lzma;
 import roj.archive.xz.LZMA2Options;
 import roj.archive.xz.lz.LZEncoder;
 import roj.archive.xz.rangecoder.RangeEncoder;
-import roj.reflect.Unaligned;
+import roj.reflect.Unsafe;
 import roj.util.ArrayUtil;
 
 import java.io.IOException;
@@ -620,11 +620,11 @@ public abstract class LZMAEncoder extends LZMACoder {
 	}
 	public final void lzPresetDict(int dictSize, byte[] dict, int off, int len) {
 		ArrayUtil.checkRange(dict, off, len);
-		lzPresetDict0(dictSize, dict, (long) Unaligned.ARRAY_BYTE_BASE_OFFSET +off, len);
+		lzPresetDict0(dictSize, dict, (long) Unsafe.ARRAY_BYTE_BASE_OFFSET +off, len);
 	}
 	public final void lzPresetDict0(int dictSize, Object ref, long off, int len) { lz.setPresetDict(dictSize, ref, off, len); }
 
-	public final int lzFill(byte[] in, int off, int len) { return lzFill0(in, (long) Unaligned.ARRAY_BYTE_BASE_OFFSET +off, len); }
+	public final int lzFill(byte[] in, int off, int len) { return lzFill0(in, (long) Unsafe.ARRAY_BYTE_BASE_OFFSET +off, len); }
 	public final int lzFill(long addr, int len) { return lzFill0(null, addr, len); }
 	public final int lzFill0(Object in, long off, int len) {return lz.fillWindow(in, off, len);}
 

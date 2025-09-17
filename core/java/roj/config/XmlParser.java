@@ -47,16 +47,16 @@ public class XmlParser extends Parser {
 	public static Document parses(CharSequence string) throws ParseException { return new XmlParser().parse(string, LENIENT); }
 
 	@Override
-	public Document parse(CharSequence text, int flag) throws ParseException {
+	public Document parse(CharSequence text, int flags) throws ParseException {
 		XmlEmitter entry = new XmlEmitter();
-		parse(text, flag, entry);
+		parse(text, flags, entry);
 		return (Document) entry.get();
 	}
 
 	private ValueEmitter emitter;
 
 	@Override
-	public <E extends ValueEmitter> E parse(CharSequence text, @MagicConstant(flags = {LENIENT, HTML, DECODE_ENTITY, PRESERVE_SPACE, NO_MY_SPACE}) int flag, E emitter) throws ParseException {
+	public void parse(CharSequence text, @MagicConstant(flags = {LENIENT, HTML, DECODE_ENTITY, PRESERVE_SPACE, NO_MY_SPACE}) int flag, ValueEmitter emitter) throws ParseException {
 		this.flag = flag;
 		this.emitter = emitter;
 		init(text);
@@ -69,7 +69,6 @@ public class XmlParser extends Parser {
 			this.emitter = null;
 			input = null;
 		}
-		return emitter;
 	}
 
 	private void parseDocument() throws ParseException {
@@ -197,7 +196,7 @@ public class XmlParser extends Parser {
 
 	private Token parseAttribute(Token w) throws ParseException {
 		var key = w.text();
-		emitter.key(key);
+		emitter.emitKey(key);
 		w = next();
 
 		if (w.type() == equ) {
@@ -233,17 +232,17 @@ public class XmlParser extends Parser {
 	}
 
 	public static ConfigValue attrVal(Token w) {
-		switch (w.type()) {
-			case TRUE: return BoolValue.TRUE;
-			case FALSE: return BoolValue.FALSE;
-			case NULL: return NullValue.NULL;
-			case FLOAT: return ConfigValue.valueOf(w.asFloat());
-			case DOUBLE: return ConfigValue.valueOf(w.asDouble());
-			case INTEGER: return ConfigValue.valueOf(w.asInt());
-			case LONG: return ConfigValue.valueOf(w.asLong());
-			case STRING, LITERAL: return ConfigValue.valueOf(w.text());
-		}
-		throw new IllegalArgumentException("不是简单类型:"+w);
+		return switch (w.type()) {
+			case TRUE -> BoolValue.TRUE;
+			case FALSE -> BoolValue.FALSE;
+			case NULL -> NullValue.NULL;
+			case FLOAT -> ConfigValue.valueOf(w.asFloat());
+			case DOUBLE -> ConfigValue.valueOf(w.asDouble());
+			case INTEGER -> ConfigValue.valueOf(w.asInt());
+			case LONG -> ConfigValue.valueOf(w.asLong());
+			case STRING, LITERAL -> ConfigValue.valueOf(w.text());
+			default -> throw new IllegalArgumentException("不是简单类型:"+w);
+		};
 	}
 
 	public Predicate<String> needCLOSE = Helpers.alwaysTrue();

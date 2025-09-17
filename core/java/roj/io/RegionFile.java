@@ -6,13 +6,16 @@ import roj.io.source.FileSource;
 import roj.io.source.Source;
 import roj.io.source.SourceInputStream;
 import roj.math.MathUtils;
-import roj.reflect.Unaligned;
+import roj.optimizer.FastVarHandle;
+import roj.reflect.Unsafe;
 import roj.text.logging.Level;
 import roj.text.logging.Logger;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
 
 import java.io.*;
+import java.lang.invoke.MethodHandles;
+import java.lang.invoke.VarHandle;
 import java.util.Arrays;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
@@ -21,12 +24,13 @@ import java.util.zip.GZIPInputStream;
 import java.util.zip.GZIPOutputStream;
 import java.util.zip.InflaterInputStream;
 
-import static roj.reflect.Unaligned.U;
+import static roj.reflect.Unsafe.U;
 
 /**
  * @author Roj233
  * @since 2022/5/8 1:36
  */
+@FastVarHandle
 public class RegionFile implements AutoCloseable {
 	public static final int GZIP=1,DEFLATE=2,PLAIN=3;
 	public static final int F_KEEP_TIME_IN_MEMORY = 1, F_DONT_STORE_TIME = 2, F_USE_NEW_RULE = 4, F_DONT_UPDATE_TIME = 8;
@@ -34,6 +38,7 @@ public class RegionFile implements AutoCloseable {
 	public final String file;
 	protected volatile Source raf;
 
+	private static final VarHandle OFFSETS = MethodHandles.arrayElementVarHandle(int[].class);
 	int[] offsets;
 	private final int[] timestamps;
 	private final BitSet free;
@@ -42,8 +47,8 @@ public class RegionFile implements AutoCloseable {
 	protected final int chunkSize;
 	protected byte flag;
 
-	Source fpRead;
-	static final long FPREAD_OFFSET = Unaligned.fieldOffset(RegionFile.class, "fpRead");
+	Source cache;
+	static final long CACHE = Unsafe.fieldOffset(RegionFile.class, "cache");
 	protected Lock lock = new ReentrantLock();
 
 	public RegionFile(File file) throws IOException {
@@ -96,9 +101,9 @@ public class RegionFile implements AutoCloseable {
 	}
 	public void close() throws IOException {
 		IOUtil.closeSilently(raf);
-		IOUtil.closeSilently(fpRead);
+		IOUtil.closeSilently(cache);
 		raf = null;
-		fpRead = null;
+		cache = null;
 	}
 
 	public void load() throws IOException {
@@ -143,9 +148,9 @@ public class RegionFile implements AutoCloseable {
 		}
 	}
 
-	public MyDataInputStream getBufferedInputStream(int id) throws IOException {
+	public ByteInputStream getBufferedInputStream(int id) throws IOException {
 		var in = getInputStream(id, null);
-		return in == null ? null : new MyDataInputStream(in);
+		return in == null ? null : new ByteInputStream(in);
 	}
 	// holder[0]是(磁盘上的)数据长度 [1]是Unix时间戳/1000
 	public InputStream getInputStream(int id) throws IOException {return _in(id, null);}
@@ -185,16 +190,16 @@ public class RegionFile implements AutoCloseable {
 			metadata[0] = byteLength;
 			if (timestamps != null) metadata[1] = timestamps[id];
 		}
-		return new SourceInputStream.Shared(src, byteLength, this, FPREAD_OFFSET);
+		return new SourceInputStream.Shared(src, byteLength, this, CACHE);
 	}
 
 	private Source getUnsharedSource() throws IOException {
-		Source src = (Source) U.getAndSetReference(this, FPREAD_OFFSET, null);
+		Source src = (Source) U.getAndSetReference(this, CACHE, null);
 		if (src == null) src = raf.copy();
 		return src;
 	}
 	private void putUnsharedSource(Source raf) throws IOException {
-		if (!U.compareAndSetReference(this, FPREAD_OFFSET, null, raf))
+		if (!U.compareAndSetReference(this, CACHE, null, raf))
 			raf.close();
 	}
 
@@ -283,7 +288,7 @@ public class RegionFile implements AutoCloseable {
 
 	public void delete(int id) throws IOException {
 		if (outOfBounds(id)) return;
-		int i = U.getAndSetInt(offsets, Unaligned.ARRAY_INT_BASE_OFFSET + id, 0);
+		int i = (int) OFFSETS.getAndSet(offsets, id, 0);
 		if (i == 0) return;
 
 		int off = i >>> 8;
@@ -455,14 +460,14 @@ public class RegionFile implements AutoCloseable {
 		public synchronized void close() throws IOException {
 			if (buf != null) {
 				RegionFile.this.write(id, buf);
-				BufferPool.reserve(buf);
+				buf.release();
 				buf = null;
 			}
 		}
 
 		public synchronized final void cancel() throws IOException {
 			if (buf != null) {
-				BufferPool.reserve(buf);
+				buf.release();
 				buf = null;
 				close();
 			}

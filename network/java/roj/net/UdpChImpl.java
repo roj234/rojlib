@@ -1,7 +1,6 @@
 package roj.net;
 
 import roj.io.BufferPool;
-import roj.reflect.Bypass;
 import roj.util.DynByteBuf;
 
 import java.io.IOException;
@@ -10,18 +9,12 @@ import java.net.SocketAddress;
 import java.nio.channels.DatagramChannel;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
-import java.nio.channels.spi.AbstractSelectableChannel;
 
 /**
  * @author Roj233
  * @since 2022/5/18 0:00
  */
 class UdpChImpl extends MyChannel {
-	private interface H {
-		void removeKey(AbstractSelectableChannel ch, SelectionKey key);
-	}
-	private static final H UdpUtil = Bypass.builder(H.class).delegate(AbstractSelectableChannel.class, "removeKey").build();
-
 	static final int UDP_MAX_SIZE = 65507;
 
 	private final DatagramPkt first = new DatagramPkt();
@@ -55,7 +48,7 @@ class UdpChImpl extends MyChannel {
 	@Override
 	protected void disconnect0() throws IOException {
 		dc.disconnect();
-		UdpUtil.removeKey(dc, key);
+		Net.H.impl.removeKey(dc, key);
 	}
 
 	@Override

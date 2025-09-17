@@ -4,8 +4,6 @@ import roj.asm.ClassNode;
 import roj.asm.FieldNode;
 import roj.asm.MethodNode;
 import roj.asm.Opcodes;
-import roj.asm.attr.Attribute;
-import roj.asm.attr.UnparsedAttribute;
 import roj.asm.cp.Constant;
 import roj.asm.cp.ConstantPool;
 import roj.asm.cp.CstClass;
@@ -63,7 +61,7 @@ public class GenericTemplate extends CodeWriter {
 		ClassNode d = curr = ClassNode.parseSkeleton(data);
 		d.version = 49;
 
-		List<Constant> list = d.cp.data();
+		List<Constant> list = d.cp.constants();
 		for (int i = 0; i < list.size(); i++) {
 			Constant c = list.get(i);
 			if (c.type() == Constant.CLASS) {
@@ -142,7 +140,7 @@ public class GenericTemplate extends CodeWriter {
 
 	private String replaceArrayClass(String clz) {
 		if (clz.startsWith("[")) {
-			Type type1 = Type.fieldDesc(clz);
+			Type type1 = Type.getType(clz);
 			if (type1.type == templateType) {
 				type1 = replaceType(type1, internalType);
 				clz = type1.getActualClass();
@@ -153,7 +151,7 @@ public class GenericTemplate extends CodeWriter {
 	private String replaceDesc(String desc, Type target) {
 		boolean dirty = false;
 		if (desc.startsWith("(")) {
-			List<Type> types = Type.methodDesc(desc);
+			List<Type> types = Type.getMethodTypes(desc);
 			for (int i = 0; i < types.size(); i++) {
 				Type t = types.get(i);
 				if (t.type == templateType) {
@@ -161,9 +159,9 @@ public class GenericTemplate extends CodeWriter {
 					types.set(i, replaceType(t, target));
 				}
 			}
-			if (dirty) desc = Type.toMethodDesc(types);
+			if (dirty) desc = Type.getMethodDescriptor(types);
 		} else {
-			Type t = Type.fieldDesc(desc);
+			Type t = Type.getType(desc);
 			if (t.type == templateType) {
                 desc = replaceType(t, target).toDesc();
 			}

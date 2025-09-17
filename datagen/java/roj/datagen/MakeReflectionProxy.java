@@ -9,13 +9,12 @@ import roj.asm.cp.CstString;
 import roj.asm.insn.CodeWriter;
 import roj.asm.insn.Label;
 import roj.asm.type.Type;
-import roj.ci.annotation.ReferenceByGeneratedClass;
+import roj.ci.annotation.IndirectReference;
 import roj.io.IOUtil;
 
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
-import java.io.InputStream;
 import java.security.ProtectionDomain;
 import java.util.Collections;
 
@@ -26,23 +25,18 @@ import static roj.asm.Opcodes.*;
  * @since 2024/5/23 0:29
  */
 public class MakeReflectionProxy {
-	@ReferenceByGeneratedClass
+	@IndirectReference
 	private static final String PROP_NAME = "_ILJ9DC_", CLASS_NAME = "java/lang/🔓_IL🐟"; // "海阔凭鱼跃，天高任鸟飞"
 
 	public void run(File input, File output) throws Exception {
 		try (var fos = new FileOutputStream(new File(output, "roj/reflect/Reflection$.class"))) {
 			AsmCache.toByteArrayShared(generateClassDefiner()).writeToStream(fos);
 		}
-		try (var fos = new FileOutputStream(new File(output, "roj/reflect/Unaligned$.class"))) {
-			AsmCache.toByteArrayShared(makeImpl(false)).writeToStream(fos);
+		try (var fos = new FileOutputStream(new File(output, "roj/reflect/Unsafe$.class"))) {
+			fos.write(makeImpl(false));
 		}
-		try (var fos = new FileOutputStream(new File(output, "roj/reflect/Unaligned$2.class"))) {
+		try (var fos = new FileOutputStream(new File(output, "roj/reflect/Unsafe$2.class"))) {
 			AsmCache.toByteArrayShared(makeAdapter()).writeToStream(fos);
-		}
-		try (var fos = new FileOutputStream(new File(output, "roj/reflect/litasm/internal/JVMCI.class"))) {
-			InputStream in = MakeReflectionProxy.class.getClassLoader().getResourceAsStream("roj/reflect/litasm/internal/JVMCI.class");
-			IOUtil.copyStream(in, fos);
-			in.close();
 		}
 	}
 
@@ -53,7 +47,7 @@ public class MakeReflectionProxy {
 		ILCD.interfaces().add("java/util/function/BiConsumer");
 		ILCD.parent("jdk/internal/reflect/MagicAccessorImpl");
 		ILCD.newField(ACC_PUBLIC | ACC_STATIC | ACC_FINAL, "theInternalUnsafe", Type.klass("jdk/internal/misc/Unsafe"));
-		ILCD.npConstructor();
+		ILCD.defaultConstructor();
 
 		CodeWriter w = ILCD.newMethod(ACC_PUBLIC | ACC_STATIC, "<clinit>", "()V");
 		w.visitSize(4, 0);
@@ -153,23 +147,27 @@ public class MakeReflectionProxy {
 
 	private static ClassNode makeAdapter() {
 		var impl = new ClassNode();
-		impl.name("roj/reflect/Unaligned$");
-		impl.parent("java/lang/Unaligned");
-		impl.addInterface("roj/reflect/Unaligned");
-		impl.npConstructor();
+		impl.name("roj/reflect/Unsafe$");
+		impl.parent("java/lang/ILUnsafe");
+		impl.addInterface("roj/reflect/Unsafe");
+		impl.defaultConstructor();
 		return impl;
 	}
 
-	private static ClassNode makeImpl(boolean nativeBE) throws IOException {
+	private static byte[] makeImpl(boolean nativeBE) throws IOException {
 		var impl = new ClassNode();
-		impl.name("java/lang/Unaligned");
+		impl.name("java/lang/ILUnsafe");
 		impl.parent(CLASS_NAME);
-		impl.addInterface("roj/reflect/Unaligned");
-		impl.npConstructor();
+		impl.addInterface("roj/reflect/Unsafe");
+		impl.defaultConstructor();
 
-		System.out.println("Runnable Index: "+ impl.cp.getClassId("java/lang/Runnable"));
-		System.out.println("Unaligned Index: "+ impl.cp.getClassId("roj/reflect/Unaligned"));
-		System.out.println("Object Index: "+ impl.cp.getClassId("java/lang/Object"));
+		System.out.println("Constructor offset: "+Integer.toHexString(10+impl.cp.byteLength()-4+1));
+
+		System.out.println("Runnable Index: "+impl.cp.getClassId("java/lang/Runnable"));
+		System.out.println("Unsafe Index: "+impl.cp.getClassId("roj/reflect/Unsafe"));
+		System.out.println("Object Index: "+impl.cp.getClassId("java/lang/Object"));
+
+		System.out.println("BE/LE offset: "+Integer.toHexString(10+impl.cp.byteLength()+"get16U".length()));
 
 		impl.cp.getUtfId("get16UL");
 		impl.cp.getUtfId("get32UB");
@@ -251,20 +249,17 @@ public class MakeReflectionProxy {
 			i++;
 		}
 
-		ClassNode parentNode = ClassNode.parseSkeleton(IOUtil.getResourceIL("roj/reflect/Unaligned.class"));
+		ClassNode parentNode = ClassNode.parseSkeleton(IOUtil.getResource("roj/datagen/UnsafeTemplate.class"));
 		for (MethodNode method : parentNode.methods) {
 			if ((method.modifier&ACC_STATIC) != 0) continue;
 			// no putmedium available
 			if (method.name().contains("24")) continue;
 			int impled = impl.getMethod(method.name(), method.rawDesc());
 			if (impled < 0) {
-				Annotation invisible = Annotation.findInvisible(parentNode.cp, method, "roj/reflect/Name");
-
 				String methodName = method.name();
-				if (invisible != null) methodName = invisible.getString("value");
 				if (methodName.isEmpty()) continue;
 
-				w = impl.newMethod(method.modifier, method.name(), method.rawDesc());
+				w = impl.newMethod(method.modifier&~ACC_ABSTRACT, method.name(), method.rawDesc());
 				w.field(GETSTATIC, CLASS_NAME, "theInternalUnsafe", unsafeType);
 				int slot = 1;
 				for (Type parameter : method.parameters()) {
@@ -287,6 +282,12 @@ public class MakeReflectionProxy {
 		for (var mn : impl.fields) {
 			mn.addAttribute(new Annotations(true, annotation));
 		}
-		return impl;
+
+
+		byte[] ref = AsmCache.toByteArray(impl);
+		System.out.println("ThisClass offset: "+Integer.toHexString(10+impl.cp.byteLength()+1));
+
+		System.out.println("Exact size: "+ref.length);
+		return ref;
 	}
 }

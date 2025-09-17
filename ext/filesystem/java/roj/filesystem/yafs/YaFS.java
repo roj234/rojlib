@@ -4,9 +4,9 @@ import roj.collect.IntList;
 import roj.collect.IntMap;
 import roj.collect.LFUCache;
 import roj.crypt.CRC32;
-import roj.util.Bitmap;
-import roj.math.MathUtils;
 import roj.filesystem.BlockDevice;
+import roj.math.MathUtils;
+import roj.util.Bitmap;
 import roj.util.DynByteBuf;
 
 import java.io.IOException;
@@ -98,10 +98,10 @@ public class YaFS {
 		int i = DynByteBuf.byteCountUTF8(volumeLabel);
 		buf.putUTFData(volumeLabel).putZero(256 - i);
 
-		buf.putInt(0, CRC32.crc32(buf, 4, buf.readableBytes()-4));
+		buf.setInt(0, CRC32.crc32(buf, 4, buf.readableBytes()-4));
 		device.write(0, clusterSize, buf);
 
-		buf.putInt(20, 0).putInt(0, CRC32.crc32(buf, 4, buf.readableBytes()-4));
+		buf.setInt(20, 0).setInt(0, CRC32.crc32(buf, 4, buf.readableBytes()-4));
 		device.write(deviceSize - clusterSize, clusterSize, buf);
 
 		initPT(buf, 1, 1, clusterSize, "SECU");

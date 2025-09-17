@@ -68,7 +68,7 @@ public final class FieldNode extends MemberNode {
 	public String rawDesc() { return desc.getClass() == CstUTF.class ? ((CstUTF) desc).str() : desc instanceof Type ? ((Type) desc).toDesc() : desc.toString(); }
 
 	public Type fieldType() {
-		if (!(desc instanceof Type)) desc = Type.fieldDesc(rawDesc());
+		if (!(desc instanceof Type)) desc = Type.getType(rawDesc());
 		return (Type) desc;
 	}
 	public void fieldType(Type type) { this.desc = Objects.requireNonNull(type); }

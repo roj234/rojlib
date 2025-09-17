@@ -17,7 +17,7 @@ import roj.io.CorruptedInputException;
 import roj.io.Finishable;
 import roj.io.IOUtil;
 import roj.io.MBInputStream;
-import roj.reflect.Unaligned;
+import roj.reflect.Unsafe;
 import roj.util.ArrayUtil;
 
 import java.io.IOException;
@@ -125,13 +125,13 @@ public class LZMAInputStream extends MBInputStream implements Finishable {
 		byte propsByte = h[0];
 
 		// Dictionary size is an unsigned 32-bit little endian integer.
-		int dictSize = Unaligned.U.get32UL(h, Unaligned.ARRAY_BYTE_BASE_OFFSET+1);
+		int dictSize = Unsafe.U.get32UL(h, Unsafe.ARRAY_BYTE_BASE_OFFSET+1);
 
 		// Uncompressed size is an unsigned 64-bit little endian integer.
 		// The maximum 64-bit value is a special case (becomes -1 here)
 		// which indicates that the end marker is used instead of knowing
 		// the uncompressed size beforehand.
-		long uncompSize = Unaligned.U.get64UL(h, Unaligned.ARRAY_BYTE_BASE_OFFSET+5);
+		long uncompSize = Unsafe.U.get64UL(h, Unsafe.ARRAY_BYTE_BASE_OFFSET+5);
 
 		// Check the memory usage limit.
 		int memoryNeeded = getMemoryUsage(dictSize, propsByte);
@@ -288,7 +288,7 @@ public class LZMAInputStream extends MBInputStream implements Finishable {
 
 	public int read(byte[] buf, int off, int len) throws IOException {
 		ArrayUtil.checkRange(buf, off, len);
-		return read0(buf, (long) Unaligned.ARRAY_BYTE_BASE_OFFSET +off, len);
+		return read0(buf, (long) Unsafe.ARRAY_BYTE_BASE_OFFSET +off, len);
 	}
 	public int read(long addr, int len) throws IOException { return read0(null, addr, len); }
 	public int read0(Object buf, long addr, int len) throws IOException {

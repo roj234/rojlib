@@ -109,9 +109,9 @@ final class MapAdapter extends TypeAdapter {
 		for (Map.Entry<?,?> entry : ref.entrySet()) {
 			// 能不能反序列化回来，就不是我考虑的事情了
 			if (keyType == null || !(entry.getKey() instanceof Integer idx)) {
-				c.key(String.valueOf(entry.getKey()));
+				c.emitKey(String.valueOf(entry.getKey()));
 			} else {
-				c.intKey(idx);
+				c.emitKey(idx);
 			}
 			valueType.write(c, entry.getValue());
 		}

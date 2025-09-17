@@ -23,9 +23,9 @@ import roj.compiler.ast.VariableDeclare;
 import roj.compiler.diagnostic.Kind;
 import roj.config.ConfigMaster;
 import roj.config.ValueEmitter;
-import roj.config.node.ConfigValue;
 import roj.config.mapper.ObjectMapper;
 import roj.config.mapper.ObjectMapperFactory;
+import roj.config.node.ConfigValue;
 import roj.io.IOUtil;
 import roj.text.CharList;
 import roj.text.ParseException;
@@ -39,7 +39,7 @@ import java.util.Collections;
 import java.util.List;
 
 import static roj.compiler.JavaTokenizer.*;
-import static roj.reflect.Unaligned.U;
+import static roj.reflect.Unsafe.U;
 import static roj.text.Token.LITERAL;
 
 /**
@@ -417,14 +417,14 @@ public final class ExprParser {
 				case -2 -> {
 					var ch = w.text();
 					if (ch.length() != 1) ctx.report(Kind.ERROR, "lexer.unterminated.character", w.pos());
-					cur = Expr.constant(Type.primitive(Type.CHAR), ConfigValue.valueOf(ch.charAt(0)));
+					cur = Expr.constant(Type.CHAR_TYPE, ConfigValue.valueOf(ch.charAt(0)));
 				}
 
 				case -3 -> cur = Expr.valueOf(w.text());
 				case -4 -> cur = Expr.valueOf(w.asInt());
-				case -5 -> cur = Expr.constant(Type.primitive(Type.LONG), ConfigValue.valueOf(w.asLong()));
-				case -6 -> cur = Expr.constant(Type.primitive(Type.FLOAT), ConfigValue.valueOf(w.asFloat()));
-				case -7 -> cur = Expr.constant(Type.primitive(Type.DOUBLE), ConfigValue.valueOf(w.asDouble()));
+				case -5 -> cur = Expr.constant(Type.LONG_TYPE, ConfigValue.valueOf(w.asLong()));
+				case -6 -> cur = Expr.constant(Type.FLOAT_TYPE, ConfigValue.valueOf(w.asFloat()));
+				case -7 -> cur = Expr.constant(Type.DOUBLE_TYPE, ConfigValue.valueOf(w.asDouble()));
 				case -8 -> cur = Expr.valueOf(true);
 				case -9 -> cur = Expr.valueOf(false);
 				case -10-> cur = Expr.constant(Asterisk.anyType, null);
@@ -1161,7 +1161,7 @@ public final class ExprParser {
 		ParseTask task;
 
 		if (wr.nextIf(lBrace)) {
-			task = ParseTask.Method(file, method, argNames);
+			task = ParseTask.method(file, method, argNames);
 		} else {
 			int start = wr.prevIndex;
 			int linePos = wr.LN;

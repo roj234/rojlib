@@ -32,7 +32,7 @@ final class BinaryOp extends Expr {
 
 	// 对于下列操作，由于范围已知，可以保证它们的类型不会自动提升
 	private static final BitSet BIT_OP = BitSet.from(and,or,xor,shr,ushr), BITSHIFT = BitSet.from(shl,shr,ushr);
-	private static final byte[] BIT_COUNT = new byte[] {-1, 8, 16, 16, 32, 64};
+	private static final byte[] BIT_COUNT = new byte[] {-1, -1, 8, 16, 16, 32, 64};
 
 	private IType type;
 	private TypeCast.Cast castLeft, castRight;
@@ -83,15 +83,17 @@ final class BinaryOp extends Expr {
 		return true;
 	}
 
-	private static int getPrimitiveOrWrapperTypeCapacity(IType type) {
+	private static int getPrimitiveOrWrapperSort(IType type) {
 		int i = type.getActualType();
 		if (i == Type.CLASS) {
-			if (type.genericType() != 0) return 8;
+			if (type.genericType() != 0) return Type.SORT_OBJECT;
 			i = TypeCast.getWrappedPrimitive(type);
+			if (i == 0) return Type.SORT_OBJECT;
 		}
-		return TypeCast.getDataCap(i);
+		return Type.getSort(i);
 	}
 
+	private static final int SORT_BOOLEAN_MY = 9, SORT_EQU = 10;
 	private static final LazyThreadLocal<Boolean> IN_ANY_BINARY = new LazyThreadLocal<>();
 	@NotNull
 	@Override
@@ -136,8 +138,8 @@ final class BinaryOp extends Expr {
 			// 2. 不是浮点 (NaN / 精度问题)
 			// 3. 无副作用 (是常量)
 			// 4. 未发生类型提升 (op.type()获取表达式值类型)
-			op.right.isConstant() && TypeCast.getDataCap(op.type().getActualType()) <= 4 &&
-			this.right.isConstant() && TypeCast.getDataCap(this.right.type().getActualType()) <= 4 &&
+			op.right.isConstant() && Type.getSort(op.type().getActualType()) <= Type.SORT_INT &&
+			this.right.isConstant() && Type.getSort(this.right.type().getActualType()) <= Type.SORT_INT &&
 			// 5. 操作符优先级相同
 			ctx.ep.binaryOperatorPriority(op.operator) == ctx.ep.binaryOperatorPriority(operator)) {
 
@@ -151,34 +153,33 @@ final class BinaryOp extends Expr {
 		castLeft = TypeCast.Cast.IDENTITY;
 		castRight = TypeCast.Cast.IDENTITY;
 		// TODO 第一次赋值可以就是它吗？
-		int capL = getPrimitiveOrWrapperTypeCapacity(left.minType());
-		int capR = getPrimitiveOrWrapperTypeCapacity(right.minType());
-		int dataCap = Math.max(capL, capR);
+		int capL = getPrimitiveOrWrapperSort(left.minType());
+		int capR = getPrimitiveOrWrapperSort(right.minType());
+		int sort = Math.max(capL, capR);
 
 		primitive: {
-			if (dataCap < 8 && (operator < logic_and || operator > nullish_coalescing)) {
+			if (sort < Type.SORT_OBJECT && (operator < logic_and || operator > nullish_coalescing)) {
 				if (Math.min(capL, capR) == 0) {
-					if (dataCap != 0 || operator > logic_or || operator < and) {
+					if (sort != 0 || operator > logic_or || operator < and) {
 						return notApplicable(ctx);
 					}
-					dataCap = 8; // boolean
+					sort = SORT_BOOLEAN_MY;
 				} else {
-					if (dataCap < 4 && !BIT_OP.contains(operator)) dataCap = 4;
+					if (sort < Type.SORT_INT && !BIT_OP.contains(operator)) sort = Type.SORT_INT;
 
 					if (operator >= shl) {
-						// 6 = float, 7 = double
-						if (dataCap > 5) {
+						// float, double
+						if (sort > Type.SORT_LONG) {
 							return notApplicable(ctx);
-						} else if (dataCap == 5 && BITSHIFT.contains(operator)) {
-							// 5 = long
+						} else if (sort == Type.SORT_LONG && BITSHIFT.contains(operator)) {
 							// lsh, rsh, rsh_unsigned => int bits operator
-							castRight = ctx.castTo(rType, Type.primitive(Type.INT), TypeCast.LOSSY);
+							castRight = ctx.castTo(rType, Type.INT_TYPE, TypeCast.LOSSY);
 							break primitive;
 						}
 					}
 
 					//noinspection MagicConstant
-					type = Type.primitive(TypeCast.getDataCapRev(dataCap));
+					type = Type.primitive(Type.getBySort(sort));
 					castLeft = ctx.castTo(lType, type, TypeCast.LOSSY);
 					castRight = ctx.castTo(rType, type, TypeCast.LOSSY);
 				}
@@ -190,14 +191,14 @@ final class BinaryOp extends Expr {
 				case equ, neq:// 无法比较的类型
 					if (rType.isPrimitive()) castLeft = ctx.castTo(lType, type = rType, TypeCast.DOWNCAST);
 					else if (lType.isPrimitive()) castRight = ctx.castTo(rType, type = lType, TypeCast.DOWNCAST);
-					dataCap = 9;
+					sort = SORT_EQU;
 				break;
 				case logic_and, logic_or, nullish_coalescing:
 					if (operator == nullish_coalescing) {
 						if (lType.isPrimitive()) ctx.report(this, Kind.ERROR, "symbol.derefPrimitive", lType);
 						type = ctx.getCommonParent(lType, rType);
 					} else {
-						type = Type.primitive(Type.BOOLEAN);
+						type = Type.BOOLEAN_TYPE;
 					}
 
 					castLeft = ctx.castTo(lType, type, 0);
@@ -212,14 +213,14 @@ final class BinaryOp extends Expr {
 				castRight != null && (castRight.type) < 0) return NaE.resolveFailed(this);
 		}
 
-		stackType = (byte) (TypeCast.getDataCap(type.getActualType())-4);
-		if (operator >= equ) type = Type.primitive(Type.BOOLEAN);
-		if (operator == pow && dataCap == 6) {
+		stackType = (byte) (Type.getSort(type.getActualType())-Type.SORT_INT);
+		if (operator >= equ) type = Type.BOOLEAN_TYPE;
+		if (operator == pow && sort == Type.SORT_INT) {
 			// 将pow float提升到double
-			type = Type.primitive(Type.DOUBLE);
+			type = Type.DOUBLE_TYPE;
 			stackType = 3;
 			//但是编译期常量就算了
-			//dataCap = 7;
+			//sort = Type.SORT_DOUBLE;
 		}
 
 		if (!left.isConstant()) {
@@ -227,12 +228,12 @@ final class BinaryOp extends Expr {
 				switch (operator) {
 					case add, sub, or, xor -> {
 						// 可交换位置的二元表达式无需当且仅当…… 是确定运算：int/long，没有类型提升
-						if (dataCap <= 4 && castLeft == null && ((ConfigValue) right.constVal()).asInt() == 0)
+						if (sort <= Type.SORT_INT && castLeft == null && ((ConfigValue) right.constVal()).asInt() == 0)
 							return left;
 					}
 					// equ 和 neq 应该可以直接删除跳转？反正boolean也就是0和非0 （AND 1就行）
 					case equ, neq, lss, geq, gtr, leq -> {
-						if (dataCap <= 4 && ((ConfigValue) right.constVal()).asInt() == 0) {
+						if (sort <= Type.SORT_INT && ((ConfigValue) right.constVal()).asInt() == 0) {
 							flag = 1;
 						}
 					}
@@ -244,7 +245,7 @@ final class BinaryOp extends Expr {
 						}
 					}
 					default -> {
-						var expr = checkRight(ctx, dataCap);
+						var expr = checkRight(ctx, sort);
 						if(expr != null) return expr;
 					}
 				}
@@ -267,18 +268,18 @@ final class BinaryOp extends Expr {
 		if (!right.isConstant()) {
 			switch (operator) {
 				case add, sub, or, xor -> {
-					if (dataCap <= 4 && castLeft == null && ((ConfigValue) left.constVal()).asInt() == 0)
+					if (sort <= Type.SORT_INT && castLeft == null && ((ConfigValue) left.constVal()).asInt() == 0)
 						return right;
 				}
 				case equ, neq, lss, geq, gtr, leq -> {
-					if (dataCap <= 4 && ((ConfigValue) left.constVal()).asInt() == 0) {
+					if (sort <= Type.SORT_INT && ((ConfigValue) left.constVal()).asInt() == 0) {
 						flag = 2;
 					}
 				}
 			}
 			return this;
 		} else {
-			var expr = checkRight(ctx, dataCap);
+			var expr = checkRight(ctx, sort);
 			if(expr != null) return expr;
 		}
 
@@ -295,13 +296,13 @@ final class BinaryOp extends Expr {
 				});
 
 			case equ, neq:
-				return valueOf((operator == equ) == (dataCap == 9 ?
+				return valueOf((operator == equ) == (sort == SORT_EQU ?
 					left.constVal().equals(right.constVal()) :
 					((ConfigValue)left.constVal()).asDouble() == ((ConfigValue)right.constVal()).asDouble()));
 		}
 
-		switch (dataCap) {
-			case 1, 2, 3, 4: {
+		switch (sort) {
+			case Type.SORT_BYTE, Type.SORT_CHAR, Type.SORT_SHORT, Type.SORT_INT: {
 				int l = ((ConfigValue) left.constVal()).asInt(), r = ((ConfigValue) right.constVal()).asInt();
 				int o = switch (operator) {
 					case add -> l+r;
@@ -319,9 +320,9 @@ final class BinaryOp extends Expr {
 					case xor -> l^r;
 					default -> throw OperationDone.NEVER;
 				};
-				return constant(BIT_OP.contains(operator) ? type : Type.primitive(Type.INT), ConfigValue.valueOf(o));
+				return constant(BIT_OP.contains(operator) ? type : Type.INT_TYPE, ConfigValue.valueOf(o));
 			}
-			case 5: {
+			case Type.SORT_LONG: {
 				long l = ((ConfigValue) left.constVal()).asLong(), r = ((ConfigValue) right.constVal()).asLong();
 				return valueOf(ConfigValue.valueOf(switch (operator) {
 					case add -> l+r;
@@ -340,7 +341,7 @@ final class BinaryOp extends Expr {
 					default -> throw OperationDone.NEVER;
 				}));
 			}
-			case 6: {
+			case Type.SORT_FLOAT: {
 				float l = ((ConfigValue) left.constVal()).asFloat(), r = ((ConfigValue) right.constVal()).asFloat();
 				return valueOf(ConfigValue.valueOf(switch (operator) {
 					case add -> l+r;
@@ -352,7 +353,7 @@ final class BinaryOp extends Expr {
 					default -> throw OperationDone.NEVER;
 				}));
 			}
-			case 7: {
+			case Type.SORT_DOUBLE: {
 				double l = ((ConfigValue) left.constVal()).asDouble(), r = ((ConfigValue) right.constVal()).asDouble();
 				return valueOf(ConfigValue.valueOf(switch (operator) {
 					case add -> l+r;
@@ -364,7 +365,7 @@ final class BinaryOp extends Expr {
 					default -> throw OperationDone.NEVER;
 				}));
 			}
-			case 8: {
+			case SORT_BOOLEAN_MY: {
 				boolean l = (boolean) left.constVal(), r = (boolean) right.constVal();
 				return valueOf(switch (operator) {
 					case and -> l&r;
@@ -383,7 +384,7 @@ final class BinaryOp extends Expr {
 		Expr override = ctx.getOperatorOverride(left, right, operator);
 		if (override != null) return override;
 
-		ctx.report(this, Kind.ERROR, "op.notApplicable.binary", left.type(), right.type(), byId(operator));
+		ctx.report(this, Kind.ERROR, "op.notApplicable.binary", byId(operator), left.type(), right.type());
 		return NaE.resolveFailed(this);
 	}
 

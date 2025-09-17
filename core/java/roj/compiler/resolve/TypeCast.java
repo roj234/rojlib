@@ -6,7 +6,10 @@ import roj.asm.ClassDefinition;
 import roj.asm.Opcodes;
 import roj.asm.insn.CodeWriter;
 import roj.asm.type.*;
-import roj.collect.*;
+import roj.collect.ArrayList;
+import roj.collect.HashMap;
+import roj.collect.HashSet;
+import roj.collect.IntBiMap;
 import roj.compiler.LavaCompiler;
 import roj.compiler.asm.Asterisk;
 import roj.text.CharList;
@@ -62,7 +65,7 @@ public class TypeCast {
 
 		// identity
 		public boolean isIdentity() { return (type == UPCAST || type == DOWNCAST) && op1 == op2; }
-		public boolean isNoop() { return (type == UPCAST || type == DOWNCAST) && (type1 == null ? op1 == op2 : op1 != 0); }
+		public boolean isNoop() { return (type == UPCAST || type == DOWNCAST) && type1 == null && op1 == op2; }
 
 		public IType getType1() { return type1; }
 		public byte getOp1() { return op1; }
@@ -122,7 +125,6 @@ public class TypeCast {
 		public boolean canCast() {return type > TO_PRIMITIVE;}
 
 		Cast setAnyCast(IType to) {
-			op1 = 42;
 			type1 = to;
 			return this;
 		}
@@ -416,8 +418,8 @@ public class TypeCast {
 			if (inheritType >= 0) return ERROR(IMPOSSIBLE);
 
 			// 皆为基本
-			int fCap = DataCap.getOrDefaultInt(from.type, 0);
-			int tCap = DataCap.getOrDefaultInt(to.type, 0);
+			int fCap = Type.getSort(from.type)-1;
+			int tCap = Type.getSort(to.type)-1;
 			// downcast
 			if (fCap > tCap) {
 				// 0是boolean
@@ -541,22 +543,6 @@ public class TypeCast {
 		// to.parent == null => !Object (alias object or ??)
 		return (fromClass.modifier() & Opcodes.ACC_FINAL) == 0 && toClass.parent() != null && (fromClass.parent() != null || fromClass.name().equals("java/lang/Object")) ? DOWNCAST(to) : ERROR(IMPOSSIBLE);
 	}
-
-	private static final Int2IntMap DataCap = new Int2IntMap(8);
-	private static final byte[] DataCapRev = {BOOLEAN,BYTE,CHAR,SHORT,INT,LONG,FLOAT,DOUBLE};
-	static {
-		DataCap.putInt(BOOLEAN, 0);
-		DataCap.putInt(BYTE, 1);
-		DataCap.putInt(CHAR, 2);
-		DataCap.putInt(SHORT, 3);
-		DataCap.putInt(INT, 4);
-		DataCap.putInt(LONG, 5);
-		DataCap.putInt(FLOAT, 6);
-		DataCap.putInt(DOUBLE, 7);
-	}
-	@Range(from = 0, to = 8)
-	public static int getDataCap(int type) { return DataCap.getOrDefaultInt(type, 8); }
-	public static int getDataCapRev(int type) { return DataCapRev[type]; }
 
 	private static final IntBiMap<Type> WRAPPER = new IntBiMap<>(9);
 	static {

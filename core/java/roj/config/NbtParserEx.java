@@ -1,14 +1,14 @@
 package roj.config;
 
-import roj.io.MyDataInput;
-import roj.io.MyDataInputStream;
-import roj.reflect.Unaligned;
+import roj.io.ByteInput;
+import roj.io.ByteInputStream;
 import roj.util.DynByteBuf;
 
 import java.io.IOException;
 import java.io.InputStream;
 
 import static roj.config.NbtParser.*;
+import static roj.reflect.Unsafe.U;
 
 /**
  * Extended NBT
@@ -21,10 +21,10 @@ public final class NbtParserEx implements BinaryParser {
 	public static final byte X_GB18030_STRING = 13, X_LATIN1_STRING = 14, X_NULL = 15, X_DEDUP_LIST = 16;
 
 	@Override
-	public <T extends ValueEmitter> T parse(InputStream in, int flag, T emitter) throws IOException { parse(MyDataInputStream.wrap(in), emitter); return emitter; }
-	public <T extends ValueEmitter> T parse(DynByteBuf buf, int flag, T emitter) throws IOException { parse(buf, emitter); return emitter; }
+	public void parse(InputStream in, int flags, ValueEmitter emitter) throws IOException {parse(ByteInputStream.wrap(in), emitter);}
+	public void parse(DynByteBuf buf, int flags, ValueEmitter emitter) throws IOException {parse(buf, emitter);}
 
-	public static void parse(MyDataInput in, ValueEmitter cc) throws IOException {
+	public static void parse(ByteInput in, ValueEmitter cc) throws IOException {
 		byte type = in.readByte();
 		if (type == 0) return;
 
@@ -33,7 +33,7 @@ public final class NbtParserEx implements BinaryParser {
 		parse(in, type, cc);
 	}
 
-	private static void parse(MyDataInput in, byte type, ValueEmitter cc) throws IOException {
+	private static void parse(ByteInput in, byte type, ValueEmitter cc) throws IOException {
 		switch (type) {
 			default -> throw new IOException("Corrupted NBT(invalid id "+type+")");
 			case X_NULL -> cc.emitNull();
@@ -44,7 +44,8 @@ public final class NbtParserEx implements BinaryParser {
 			case FLOAT -> cc.emit(in.readFloat());
 			case DOUBLE -> cc.emit(in.readDouble());
 			case BYTE_ARRAY -> {
-				var arr = (byte[]) Unaligned.U.allocateUninitializedArray(byte.class, in.readInt());
+				int length = in.readInt();
+				var arr = (byte[]) U.allocateUninitializedArray(byte.class, length);
 				in.readFully(arr);
 				cc.emit(arr);
 			}
@@ -72,28 +73,30 @@ public final class NbtParserEx implements BinaryParser {
 				while (true) {
 					type = in.readByte();
 					if (type == 0) break;
-					cc.key(in.readUTF());
+					cc.emitKey(in.readUTF());
 					parse(in, type, cc);
 				}
 				cc.pop();
 			}
 			case INT_ARRAY -> {
-				var arr = (int[]) Unaligned.U.allocateUninitializedArray(int.class, in.readInt());
+				int length = in.readInt();
+				var arr = (int[]) U.allocateUninitializedArray(int.class, length);
 				for (int i = 0; i < arr.length; i++) arr[i] = in.readInt();
 				cc.emit(arr);
 			}
 			case LONG_ARRAY -> {
-				var arr = (long[]) Unaligned.U.allocateUninitializedArray(long.class, in.readInt());
+				int length = in.readInt();
+				var arr = (long[]) U.allocateUninitializedArray(long.class, length);
 				for (int i = 0; i < arr.length; i++) arr[i] = in.readLong();
 				cc.emit(arr);
 			}
 		}
 	}
 
-	private static void useKey(MyDataInput in, ValueEmitter cc, String[] mapKey) throws IOException {
+	private static void useKey(ByteInput in, ValueEmitter cc, String[] mapKey) throws IOException {
 		cc.emitMap(mapKey.length);
 		for (String key : mapKey) {
-			cc.key(key);
+			cc.emitKey(key);
 
 			byte type = in.readByte();
 			parse(in, type, cc);

@@ -10,7 +10,7 @@ import roj.util.DynByteBuf;
 import javax.sound.sampled.AudioFormat;
 import java.io.IOException;
 
-import static roj.reflect.Unaligned.U;
+import static roj.reflect.Unsafe.U;
 
 /**
  * @author Roj234-N

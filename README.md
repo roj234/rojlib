@@ -19,7 +19,7 @@
 [新建ZIP](core/java/roj/archive/zip/ZipFileWriter.java)
 * 任意编码 AES加密/ZipCrypto加密 分卷 增量修改 可开关仅读取CEN(更快) 复制数据
 * 复制数据的意思是，可以从别人压缩好的文件中直接复制数据，不需要解压并重新压缩，这可以大大提升性能
-* Info-ZIP UnicodePath和NTFS高精度时间戳(现已加入可写入豪华午餐)  
+* Info-ZIP UnicodePath和NTFS高精度时间戳(现已加入可写入豪华午餐)
 
 [多线程高性能7z压缩和解压(文档)](docs/Re_QZArchiver.md)  
 [读取/追加 7z](ext/7z-archive/java/roj/archive/qz/QZArchive.java)&nbsp;
@@ -39,7 +39,7 @@
 主要特点为按需解析，所以速度快，内存用的少，我用了都说好  
 [按需解析的字节码处理框架，100%原创](core/java/roj/asm/package-info.java)
 * [基于它的高性能事件系统](core/java/roj/asmx/event/EventBus.java) 设计模式抄的Forge 支持取消、继承、泛型
-* [伪LaunchWrapper](core/java/roj/asmx/launcher/Bootstrap.java) 对字节码进行转换
+* [伪LaunchWrapper](core/java/roj/asmx/launcher/Loader.java) 对字节码进行转换
 * [类映射器](core/java/roj/asmx/mapper/Mapper.java) 编译模组必须的
 * * by using this framework, 它的速度是SpecialSource的十倍 _(2023/2/11更新:更快了)_
 * [公共注解缓存](core/java/roj/asmx/AnnotationRepo.java) 还能保存到文件(二进制)，灵感来自forge1.12.2的时候那个半吊子注解缓存
@@ -47,50 +47,50 @@
 * * 比起遍历转换器列表，它可以单点注册转换器需要转换的类、甚至引用某个类，或具有注解
 
 #### 图片展示
-![roj.asmx.mapper.MapperUI](docs/images/mapper v3.png)  
+![roj.asmx.mapper.MapperUI](docs/images/mapper v3.png)
 
 #### nixim
- * 使用注解注入一个class，修改其中一些方法，或者让它实现接口  
- * 在头部、尾部、或中间插入你的代码
- * 删除或替换方法
- * 通过模糊匹配替换一个连续（不包含if、switch、循环）的代码段
- * 替换常量的值，或将其的求值语句替换成一个函数
- * 替换方法的调用
- * 灵感来自spongepowered:mixin  
- * 现已增加Javadoc, 你可以在roj.asmx.injector包中查看各个注解的使用说明
+* 使用注解注入一个class，修改其中一些方法，或者让它实现接口
+* 在头部、尾部、或中间插入你的代码
+* 删除或替换方法
+* 通过模糊匹配替换一个连续（不包含if、switch、循环）的代码段
+* 替换常量的值，或将其的求值语句替换成一个函数
+* 替换方法的调用
+* 灵感来自spongepowered:mixin
+* 现已增加Javadoc, 你可以在roj.asmx.injector包中查看各个注解的使用说明
 
 
 ### roj.collect  集合
- * [一种全文搜索算法](core/java/roj/collect/MatchMap.java) &nbsp;
-   [以及它的文档](docs/Re_MatchMap.md)
- * [带压缩的字典树](core/java/roj/collect/TrieTree.java)
- * [计算区间的交集](core/java/roj/collect/IntervalPartition.java)  
-   可以用来计算变量的作用域  或者合并相邻数据的IO操作  
-   ZipArchive有用到
- * [环形缓冲区](core/java/roj/collect/RingBuffer.java)
- * [砷铋的闭合寻址哈希表：无额外开销版](core/java/roj/collect/XashMap.java)
- * [基于上面这个搞的怪东西](core/java/roj/collect/WeakCache.java)
- * [get，put，remove开销均为常数的LFU缓存](core/java/roj/collect/LFUCache.java)
+* [一种全文搜索算法](core/java/roj/collect/MatchMap.java) &nbsp;
+  [以及它的文档](docs/Re_MatchMap.md)
+* [带压缩的字典树](core/java/roj/collect/TrieTree.java)
+* [计算区间的交集](core/java/roj/collect/IntervalPartition.java)  
+  可以用来计算变量的作用域  或者合并相邻数据的IO操作  
+  ZipArchive有用到
+* [环形缓冲区](core/java/roj/collect/RingBuffer.java)
+* [砷铋的闭合寻址哈希表：无额外开销版](core/java/roj/collect/XashMap.java)
+* [基于上面这个搞的怪东西](core/java/roj/collect/WeakCache.java)
+* [get，put，remove开销均为常数的LFU缓存](core/java/roj/collect/LFUCache.java)
 
 ### roj.concurrent  并行
 * [Promise都写好了才发现Java居然有](core/java/roj/concurrent/Promise.java)
-* [基于时间轮的，所有操作耗时均为O(1)的定时任务系统](core/java/roj/concurrent/Scheduler.java)
+* [基于时间轮的，所有操作耗时均为O(1)的定时任务系统](core/java/roj/concurrent/Timer.java)
 * * 有锁，如果不要求删除为O(1)可以做到定义上无锁
-* [Stream青春版](core/java/roj/concurrent/Flow.java) 参考自腾讯云的一篇文章
+* [Stream青春版](core/java/roj/util/function/Flow.java) 参考自腾讯云的一篇文章
 
 ### roj.config  配置
-  JSON YAML TOML INI XML NBT MSGPACK Torrent(Bencode) CSV Xlsx 解析器  
+JSON YAML TOML INI XML NBT MSGPACK Torrent(Bencode) CSV Xlsx 解析器
 * [入口](core/java/roj/config/ConfigMaster.java)
 * 自动识别编码（仅支持中英，默认开启可关闭）
-* 所有配置类型（除xml）使用[统一结构](core/java/roj/config/data/CEntry.java)
+* 所有配置类型（除xml）使用[统一结构](core/java/roj/config/node/ConfigValue.java)
 * 访问者模式(流式)的读取和写入（仅支持JSON YAML NBT MSGPACK）
-* 支持dot-get: 形如`a.b[2].c` [CEntry](core/java/roj/config/data/CEntry.java)#query
-* XML支持XPath-like查询语法 [Node](core/java/roj/config/data/Node.java)#querySelector
+* 支持dot-get: 形如`a.b[2].c` [CEntry](core/java/roj/config/node/ConfigValue.java)#query
+* XML支持XPath-like查询语法 [Node](core/java/roj/config/node/xml/Node.java)#querySelector
 * 支持Xlsx和Csv的流式读写，它们在[这里](core/java/roj/config/table)
 * 人性化的错误提示
 * [(几乎)任意对象和配置文件的自动序列化](docs/Re_SerializerFactory.md)
 
-#### 人性化的错误(仅适用于等宽字体)  
+#### 人性化的错误(仅适用于等宽字体)
 ```  
 解析错误:  
   Line 39: "最大线程数": 96, , ,  
@@ -120,20 +120,20 @@ at roj.config.Tokenizer.err(Tokenizer.java:967)
 ### roj.http 客户端和服务器
 * 支持[HTTP2](http/java/roj/http/h2) 长连接 压缩缓存 错误友好 Websocket
 * TLS1.3由于我想自己写所以还没做好
-* [服务器](http-server/java/roj/http/server/HttpServer11.java)  
+* [服务器](http-server/java/roj/http/server/HttpServer11.java)
 * [注解定义的路由(文档)](docs/Re_OKRouter.md)&nbsp;&nbsp;
-[OKRouter(代码)](http-server/java/roj/http/server/auto/OKRouter.java)
+  [OKRouter(代码)](http-server/java/roj/http/server/auto/OKRouter.java)
 
-### roj.io  
+### roj.io
 * [内存分配器](core/java/roj/util/Bitmap.java)
 * [灵活备份删除策略](core/java/roj/io/FlexibleRetiringPolicy.java)
 * [Minecraft的Region格式](core/java/roj/io/RegionFile.java)
 
-### roj.math  
+### roj.math
 * [可变大整数(exposed)](core/java/roj/math/MutableBigInteger.java)
 * [定点小数](core/java/roj/math/FixedDecimal.java)
 * [128位整数](core/java/roj/math/S128i.java)
-* [更好的Stitcher](core/java/roj/util/Stitcher.java)
+* [更好的Stitcher](ext/renderer/java/roj/renderer/util/Stitcher.java)
 * [解方程](core/java/roj/math/MathUtils.java)
 
 ### roj.net 网络请求管线
@@ -145,15 +145,16 @@ jvav的SSL不好用，自用的话还不如自己写一个协议
 
 ### roj.plugin 插件管理系统
 * 特点： 交互式终端 命令补全 HTTP服务器 热重载 依赖注入 声明式权限管理 依赖管理 生命周期管理  
-[(并不)安全的插件系统](docs/Re_PluginSystem.md)
+  [(并不)安全的插件系统](docs/Re_PluginSystem.md)
 * [插件列表](app/java/roj/plugins)
 
-### roj.plugins.ci 持续集成？ MCMake
+### roj.ci 持续集成？ MCMake
 * 模组、插件和普通Java项目开发工具
-* 2019年，有着Minecraft开发的需求, 和ForgeGradle那惊人的缓慢，还有编译要联网什么的，我决定制作它  
+* 2019年，有着Minecraft开发的需求, 和ForgeGradle那惊人的缓慢，还有编译要联网什么的，我决定制作它
 * 不联网 体积小 速度快
 * 增量编译 自动编译 热重载 屏蔽警告 （java8的时候那种使用Unsafe的警告，能按错误码屏蔽）
 * 多版本 多项目 支持MIXIN 支持AT 支持NIXIM（上面提过我的项目）
+* 支持项目依赖 自定义构建 变量替换 Maven 等等等等
 * 大量自定义注解
 * 不在用户文件夹拉屎
 * 支持没有任何开发工具支持的子类实现重映射，这个bug直到2025年还在1.19.2最后一个版本的灾变模组里出现！
@@ -176,12 +177,12 @@ jvav的SSL不好用，自用的话还不如自己写一个协议
 * * 中转服务器模式下支持多个房间(主机)并行
 * * ![内网穿透工具(旧版GUI)](docs/images/port transfer.png)
 * [小说校对工具](ext/ebook/java/roj/ebook/gui/NovelFrame.java)
-![小说校对工具(旧版)](docs/images/novel manager.png)
+  ![小说校对工具(旧版)](docs/images/novel manager.png)
 * [NAT打洞(文档)](docs/Re_NAT.md) &nbsp; [代码](ext/p2p/java/roj/plugins/p2p/UPnPGateway.java)
 * [基于DP的中音英混合搜索](ext/pinyin/java/roj/text/pinyin/TextSearchEngine.java) 参考text-search-engine (JavaScript)
 
 ### roj.reflect 反射
-* [Java8-21通杀的高性能反射解决方案](docs/Re_Bypass.md) *现已兼容Java22  
+* [Java8-21通杀的高性能反射解决方案](docs/Re_Bypass.md) *现已兼容Java22
 * [获取调用者的实例，是对象！](core/java/roj/reflect/GetCallerInstance.java)
 * [把jdk.internal.misc.Unsafe的好方法(不对齐访问)暴露出来](core/java/roj/reflect/Unaligned.java)
 * [动态生成的类和插件系统类卸载建通所需的‘虚引用’](core/java/roj/reflect/VirtualReference.java)
@@ -208,68 +209,72 @@ jvav的SSL不好用，自用的话还不如自己写一个协议
 
 ### roj.util 实用
 * [对结构体进行排序](core/java/roj/util/Multisort.java)
-* [BsDiff](core/java/roj/util/BsDiff.java)
+* [BsDiff](ext/ebook/java/roj/text/diff/BsDiff.java)
 * [本机内存](core/java/roj/util/NativeMemory.java)
 * [共享内存](core/java/roj/util/SharedMemory.java)
-* [更好的ByteBuffer](core/java/roj/util/DynByteBuf.java) 能扩展，也许Streamed，可作为Input/OutputStream, DataInput/Output  
+* [更好的ByteBuffer](core/java/roj/util/DynByteBuf.java) 能扩展，也许Streamed，可作为Input/OutputStream, DataInput/Output
 
-# Properties （不全）
+# Properties
 int roj.nativeDisableBit [禁用native优化] (RojLib)
 int roj.cpuPoolSize [CPU Count]  (TaskPool)  
 String roj.text.outputCharset [UTF-8]  (TextWriter)  
 Path roj.archiver.temp [.]  (ArchiverUI)  
 File roj.lavac.i18n [null]  (Lava Compiler)  
 boolean roj.debug.dumpClass  (ClassDefiner)
-  
+Path roj.compiler.symbolCache [.lavaCache]
+Enum<enable, disable, legacy> roj.tty [enable]
+boolean roj.config.noRawCheck
+
 
 # Libcpp.dll
 Windows：
-  * 共享内存 重用端口 ANSI终端转义
-  * [Fast LZMA2](https://github.com/conor42/fast-lzma2) (WIP)
+* 共享内存 重用端口 ANSI终端转义
+* [Fast LZMA2](https://github.com/conor42/fast-lzma2) (WIP)
 
 公共：
-  * AES-NI BsDiff XXHash
+* AES-NI BsDiff XXHash
 
 如果有人问，你为什么不给Linux做优化？  
-因为没有人问 ×  
+因为没有人问 ×
 
 # 特别鸣谢
 DeepSeek
-  * S128i的基础结构
-  * RS纠错码的部分重构
-  * 名称标准化的大部分建议
-  * 大量Javadoc
-  * 部分前端页面
+* S128i的基础结构
+* RS纠错码的部分重构
+* 名称标准化的大部分建议
+* 大量Javadoc
+* 部分前端页面
+* 从9月开始的一些commit message
 
-JFormDesigner  
-  * 让我不用碰恶心的AWT界面  
+JFormDesigner
+* 让我不用碰恶心的AWT界面
 
 STM32F10X
-  * 让我意识到C语言多么简单
+* 让我意识到C语言多么简单
 
 @huige233
-  * 提供了很多梗图
-  * 提供了子模块的命名建议
-  * 提供了一些乱七八糟还被我真的实现了的需求
-  * 在我学会用IDA之前提供了一些Assembler中的opcode
+* 提供了很多梗图
+* 提供了子模块的命名建议
+* 提供了一些乱七八糟还被我真的实现了的需求
+* 在我学会用IDA之前提供了一些Assembler中的opcode
 
 黄豆
-  * 为7z压缩GUI提供了设计建议
-  * 找到了一些bug
-  * 给我的硬盘增加了许多写入量
-  * 为Lava语言提供了有关【无符号数据类型】的建议
+* 为7z压缩GUI提供了设计建议
+* 找到了一些bug
+* 给我的硬盘增加了许多写入量
+* 为Lava语言提供了有关【无符号数据类型】的建议
 
 ETC
-  * 提供EpubWriter的新模板
-  * 汇报EpubWriter的bug
+* 提供EpubWriter的新模板
+* 汇报EpubWriter的bug
 
 CraftKuro
-  * 帮助安装和配置OpenWRT
-  * 提供情绪价值（吉祥物 ×）
-  * 提供Kuropack的命名（其实是我硬要贴上去的）
-  * 提供部分文本
-  * 试玩游戏
+* 帮助安装和配置OpenWRT
+* 提供情绪价值（吉祥物 ×）
+* 提供Kuropack的命名（其实是我硬要贴上去的）
+* 提供部分文本
+* 试玩游戏
 
 咖喱人
-  * 提供很多很多支持 (真的)
-  * 提供编程天赋 (雾, 但大概也是真的)
+* 提供很多很多支持 (真的)
+* 提供编程天赋 (雾, 但大概也是真的)

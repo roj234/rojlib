@@ -128,6 +128,6 @@ public final class AttributeList extends ArrayList<Attribute> {
 			else attr.toByteArray(w, cw);
 		}
 
-		w.putShort(pos, size);
+		w.setShort(pos, size);
 	}
 }

@@ -5,13 +5,9 @@ import roj.collect.ArrayList;
 import roj.collect.HashMap;
 import roj.collect.HashSet;
 import roj.collect.*;
-import roj.text.Tokenizer;
 import roj.io.IOUtil;
-import roj.reflect.Unaligned;
-import roj.text.CharList;
-import roj.text.LineReader;
-import roj.text.TextUtil;
-import roj.text.URICoder;
+import roj.reflect.Unsafe;
+import roj.text.*;
 import roj.util.*;
 
 import java.io.IOException;
@@ -175,7 +171,7 @@ public class Headers extends Multimap<CharSequence, String> {
 		while (true) {
 			tmp.clear();
 			while (true) {
-				int c = buf.get(i);
+				int c = buf.getByte(i);
 				if (c == ':') break;
 				if (c >= 'A' && c <= 'Z') c += 32;
 				tmp.append((char) c);
@@ -187,23 +183,23 @@ public class Headers extends Multimap<CharSequence, String> {
 			String key = dedup.find(tmp).toString();
 
 			// a:b也可行
-			if (buf.get(++i) == ' ') ++i;
+			if (buf.getByte(++i) == ' ') ++i;
 
 			tmp.clear();
 			int prevI = i;
 			while (true) {
-				int c = buf.get(i);
+				int c = buf.getByte(i);
 				if (c == '\r') {
 					if (i+2 >= len) return false;
 
-					if (buf.get(i+1) != '\n') continue;
+					if (buf.getByte(i+1) != '\n') continue;
 
 					tmp.put(buf, prevI, i-prevI);
 
 					i += 2;
 					prevI = i;
 
-					c = buf.get(i);
+					c = buf.getByte(i);
 					// mht
 					if (c == ' ' || c == '\t') {
 						tmp.put((byte) c);
@@ -218,7 +214,7 @@ public class Headers extends Multimap<CharSequence, String> {
 					if (c == '\r') {
 						if (i+1 >= len) return false;
 
-						if (buf.get(i+1) != '\n')
+						if (buf.getByte(i+1) != '\n')
 							throw new IllegalArgumentException("header+"+(i+1)+": 应当以'\\r\\n\\r\\n'结束");
 
 						buf.rIndex = i+2;
@@ -411,11 +407,11 @@ public class Headers extends Multimap<CharSequence, String> {
 		encType.putInt(name, enc);
 	}
 
-	private static final long MASK = Unaligned.fieldOffset(HashMap.class, "mask");
+	private static final long MASK = Unsafe.fieldOffset(HashMap.class, "mask");
 	public void _moveFrom(Headers head) {
 		entries = null;
 		if (head.entries != null) {
-			Unaligned.U.putInt(this, MASK, 1);
+			Unsafe.U.putInt(this, MASK, 1);
 			ensureCapacity(head.entries.length);
 			entries = head.entries;
 		}

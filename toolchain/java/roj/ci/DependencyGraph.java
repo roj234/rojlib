@@ -28,7 +28,7 @@ final class DependencyGraph {
 		StringAttribute nestHost = node.getAttribute(node.cp, Attribute.NestHost);
 		if (nestHost != null) name = nestHost.value;
 
-		for (Constant cp : node.cp().data()) {
+		for (Constant cp : node.cp().constants()) {
 			if (cp instanceof CstClass ref) {
 				// node类引用了ref类，所以在ref修改时需要重新编译node类
 				String str = ref.value().str();

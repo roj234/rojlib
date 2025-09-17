@@ -5,9 +5,9 @@ import org.jetbrains.annotations.Range;
 import roj.asm.AsmCache;
 import roj.asm.Opcodes;
 import roj.collect.ArrayList;
-import roj.util.OperationDone;
 import roj.io.IOUtil;
 import roj.text.CharList;
+import roj.util.OperationDone;
 
 import java.util.List;
 import java.util.Objects;
@@ -20,27 +20,68 @@ import java.util.function.UnaryOperator;
  * @since 2021/6/18 9:51
  */
 public sealed class Type implements IType permits Type.ADT {
-	public static final char ARRAY = '[', CLASS = 'L', VOID = 'V', BOOLEAN = 'Z', BYTE = 'B', CHAR = 'C', SHORT = 'S', INT = 'I', FLOAT = 'F', DOUBLE = 'D', LONG = 'J';
+	public static final char ARRAY = '[', CLASS = 'L', VOID = 'V', BOOLEAN = 'Z', BYTE = 'B', CHAR = 'C', SHORT = 'S', INT = 'I', LONG = 'J', FLOAT = 'F', DOUBLE = 'D';
 
-	static final Object[][] MAP = new Object[26][];
-	static {
-		MAP[CLASS-BYTE] = new Object[]{"L", "object", new Type(CLASS), 4, "A"};
-		MAP[VOID-BYTE] = new Object[]{"V", "void", new Type(VOID), 5, null};
-		MAP[BOOLEAN-BYTE] = new Object[]{"Z", "boolean", new Type(BOOLEAN), 0, "I"};
-		MAP[BYTE-BYTE] = new Object[]{"B", "byte", new Type(BYTE), 0, "I"};
-		MAP[CHAR-BYTE] = new Object[]{"C", "char", new Type(CHAR), 0, "I"};
-		MAP[SHORT-BYTE] = new Object[]{"S", "short", new Type(SHORT), 0, "I"};
-		MAP[INT-BYTE] = new Object[]{"I", "int", new Type(INT), 0, "I"};
-		MAP[FLOAT-BYTE] = new Object[]{"F", "float", new Type(FLOAT), 2, "F"};
-		MAP[DOUBLE-BYTE] = new Object[]{"D", "double", new Type(DOUBLE), 3, "D"};
-		MAP[LONG-BYTE] = new Object[]{"J", "long", new Type(LONG), 1, "L"};
-	}
+	/** The {@code void} type. */
+	public static final Type VOID_TYPE = primitive(VOID);
+	/** The {@code boolean} type. */
+	public static final Type BOOLEAN_TYPE = primitive(BOOLEAN);
+	/** The {@code byte} type. */
+	public static final Type BYTE_TYPE = primitive(BYTE);
+	/** The {@code char} type. */
+	public static final Type CHAR_TYPE = primitive(CHAR);
+	/** The {@code short} type. */
+	public static final Type SHORT_TYPE = primitive(SHORT);
+	/** The {@code int} type. */
+	public static final Type INT_TYPE = primitive(INT);
+	/** The {@code float} type. */
+	public static final Type FLOAT_TYPE = primitive(FLOAT);
+	/** The {@code double} type. */
+	public static final Type DOUBLE_TYPE = primitive(DOUBLE);
+	/** The {@code long} type. */
+	public static final Type LONG_TYPE = primitive(LONG);
 
-	public static String getName(int type) {return MAP[type-BYTE][1].toString();}
+	public static String getName(int type) {return R.byId[type-BYTE].name;}
+	public String capitalized() {return R.byId[getActualType()-BYTE].capitalizedName;}
 
-	public static boolean isValid(int c) {
+	public static final int SORT_VOID = 0, SORT_BOOLEAN = 1, SORT_BYTE = 2, SORT_CHAR = 3, SORT_SHORT = 4, SORT_INT = 5, SORT_LONG = 6, SORT_FLOAT = 7, SORT_DOUBLE = 8, SORT_OBJECT = 9;
+	/**
+	 * 获取类型的’类型‘。
+	 * 原文这个sort真是一语双关.
+	 * 可以用来方便的switch
+	 * <pre>
+	 * | Type    | Sort |
+	 * |---------|------|
+	 * | VOID    | 0    |
+	 * | BOOLEAN | 1    |
+	 * | BYTE    | 2    |
+	 * | CHAR    | 3    |
+	 * | SHORT   | 4    |
+	 * | INT     | 5    |
+	 * | LONG    | 6    |
+	 * | FLOAT   | 7    |
+	 * | DOUBLE  | 8    |
+	 * | OBJECT  | 9    |
+	 *
+	 * @param type 类型常量 (e.g., {@link #INT})
+	 * @throws IllegalArgumentException 如果 type 无效
+	 */
+	@Range(from = SORT_VOID, to = SORT_OBJECT)
+	public static int getSort(int type) { return R.byId[type-BYTE].sort; }
+	/**
+	 * 根据排序值获取基本类型常量。
+	 * -1 返回 VOID。
+	 * 映射见 getSort 的表格（反向）。
+	 *
+	 * @param sort 排序值 (-1 到 7)
+	 * @return 类型常量，无效抛异常
+	 * @throws IllegalArgumentException 如果 sort 无效
+	 */
+	public static int getBySort(@Range(from = 0, to = 9) int sort) { return R.bySort[sort]; }
+
+	static boolean isValid(int c) {
 		if (c < BYTE || c > ARRAY) return false;
-		return MAP[c-BYTE] != null;
+		return R.byId[c-BYTE] != null;
 	}
 
 	// for Lava Compiler only
@@ -48,7 +89,7 @@ public sealed class Type implements IType permits Type.ADT {
 	@Deprecated
 	public static final class ADT extends Type {
 		public ADT(int type, String owner) {
-			super((byte) type, true);
+			super((char) type);
 			this.owner = owner;
 		}
 
@@ -68,8 +109,7 @@ public sealed class Type implements IType permits Type.ADT {
 	public String owner;
 	private byte array;
 
-	private Type(byte c, boolean _unused) {type = c;}
-	@Deprecated public Type(char type) {this.type = (byte) type;}
+	Type(char type) {this.type = (byte) type;}
 
 	/**
 	 * TYPE_OTHER
@@ -93,8 +133,8 @@ public sealed class Type implements IType permits Type.ADT {
 
 	public static Type primitive(@MagicConstant(intValues = {VOID,BOOLEAN,BYTE,CHAR,SHORT,INT,FLOAT,DOUBLE,LONG}) int primitive) {
 		if (primitive >= BYTE && primitive <= ARRAY) {
-			Object[] arr = MAP[primitive-BYTE];
-			if (arr != null) return (Type) arr[2];
+			var arr = R.byId[primitive-BYTE];
+			if (arr != null) return arr.singleton;
 		}
 		throw new IllegalArgumentException("Illegal type desc '"+(char)primitive+"'("+primitive+")");
 	}
@@ -102,22 +142,21 @@ public sealed class Type implements IType permits Type.ADT {
 	public static Type klass(String type, @Range(from = 0, to = 255) int array) {return new Type(type, array);}
 	public static Type klass(String type) {return new Type(type, 0);}
 	public static Type custom(int type) {return new Type((char)type);}
-	//region from Class descriptor
-	public static Type fieldDesc(String desc) {return parse(desc, 0);}
-	public static List<Type> methodDesc(String desc) {
-		ArrayList<Type> p = AsmCache.getInstance().methodTypeTmp();
-		Type returnType = methodDesc(desc, p);
-		p.add(returnType);
-		return new ArrayList<>(p);
+	//region from 解析标识符
+	public static Type getType(String desc) {return parse(desc, 0);}
+	public static List<Type> getMethodTypes(String desc) {
+		ArrayList<Type> tmp = AsmCache.getInstance().methodTypeTmp();
+		Type returnType = getArgumentTypes(desc, tmp);
+		tmp.add(returnType);
+		return new ArrayList<>(tmp);
 	}
-
 	/**
 	 * 解析方法描述
 	 * @param desc 方法描述
-	 * @param arguments 入参
+	 * @param argumentTypes 入参
 	 * @return 返回值
 	 */
-	public static Type methodDesc(String desc, List<Type> arguments) {
+	public static Type getArgumentTypes(String desc, List<Type> argumentTypes) {
 		int array = 0;
 		foundError:
 		if (desc.charAt(0) == '(') for (int i = 1; i < desc.length(); i++) {
@@ -126,13 +165,13 @@ public sealed class Type implements IType permits Type.ADT {
 				case 'L' -> {
 					int typeEnd = desc.indexOf(';', ++i);
 					if (typeEnd < 0) break foundError;
-					arguments.add(klass(desc.substring(i, typeEnd), array));
+					argumentTypes.add(klass(desc.substring(i, typeEnd), array));
 					array = 0;
 					i = typeEnd;
 				}
 				default -> {
 					if (!isValid(c)) break foundError;
-					arguments.add(array == 0 ? primitive(c) : primitive(c, array));
+					argumentTypes.add(array == 0 ? primitive(c) : primitive(c, array));
 					array = 0;
 				}
 				case '[' -> array++;
@@ -144,7 +183,7 @@ public sealed class Type implements IType permits Type.ADT {
 
 		throw new IllegalArgumentException("方法描述无效:"+desc);
 	}
-	public static Type methodDescReturn(String desc) {
+	public static Type getReturnType(String desc) {
 		int index = desc.indexOf(')');
 		if (index < 0) throw new IllegalArgumentException("方法描述无效:"+desc);
 		return parse(desc, index+1);
@@ -170,7 +209,7 @@ public sealed class Type implements IType permits Type.ADT {
 	@Override public byte genericType() {return STANDARD_TYPE;}
 	@Override public String toDesc() {
 		int type = getActualType();
-		if (type != Type.CLASS) return Type.MAP[type - Type.BYTE][0].toString();
+		if (type != Type.CLASS) return R.byId[type - Type.BYTE].desc;
 		return IType.super.toDesc();
 	}
 	@Override public final void toDesc(CharList sb) {
@@ -192,23 +231,23 @@ public sealed class Type implements IType permits Type.ADT {
 	/**
 	 * 转换方法type为字符串
 	 */
-	public static String toMethodDesc(List<? extends IType> descList) {
+	public static String getMethodDescriptor(List<? extends IType> methodTypes) {
 		CharList sb = IOUtil.getSharedCharBuf().append('(');
 
-		for (int i = 0; i < descList.size(); i++) {
+		for (int i = 0; i < methodTypes.size(); i++) {
 			// return value
-			if (i == descList.size() - 1) sb.append(')');
+			if (i == methodTypes.size() - 1) sb.append(')');
 
-			descList.get(i).rawType().toDesc(sb);
+			methodTypes.get(i).rawType().toDesc(sb);
 		}
 		return sb.toString();
 	}
-	public static String toMethodDesc(List<? extends IType> parameters, IType returnType) { return toMethodDesc(parameters, returnType, null); }
-	public static String toMethodDesc(List<? extends IType> parameters, IType returnType, String prev) {
+	public static String getMethodDescriptor(List<? extends IType> argumentTypes, IType returnType) { return getMethodDescriptor(argumentTypes, returnType, null); }
+	public static String getMethodDescriptor(List<? extends IType> argumentTypes, IType returnType, String prev) {
 		CharList sb = IOUtil.getSharedCharBuf().append('(');
 
-		for (int i = 0; i < parameters.size(); i++) {
-			parameters.get(i).rawType().toDesc(sb);
+		for (int i = 0; i < argumentTypes.size(); i++) {
+			argumentTypes.get(i).rawType().toDesc(sb);
 		}
 		returnType.rawType().toDesc(sb.append(')'));
 
@@ -247,18 +286,18 @@ public sealed class Type implements IType permits Type.ADT {
 	 * 操作码前缀
 	 * @return ILFDA
 	 */
-	public String opcodePrefix() {return MAP[getActualType()-BYTE][4].toString();}
+	public String opcodePrefix() {return R.byId[getActualType()-BYTE].opPrefix;}
 	/**
 	 * 返回基础操作码code适合当前Type的变种
 	 */
 	public byte getOpcode(int code) {
-		int shift = (int) MAP[getActualType()-BYTE][3];
+		int shift = R.byId[getActualType()-BYTE].opShift;
 		int data = Opcodes.shift(code);
 		if (data >>> 8 <= shift) throw new IllegalStateException(Opcodes.toString(code)+"不存在适合"+this+"的变种");
 		return (byte) ((data&0xFF)+shift);
 	}
 
-	public static Type from(Class<?> clazz) {
+	public static Type getType(Class<?> clazz) {
 		int array = 0;
 		Class<?> tmp;
 		while ((tmp = clazz.getComponentType()) != null) {
@@ -267,7 +306,7 @@ public sealed class Type implements IType permits Type.ADT {
 		}
 
 		if (clazz.isPrimitive()) {
-			Type type = (Type) TypeHelper.ByName.get(clazz.getName())[2];
+			Type type = R.byName.get(clazz.getName()).singleton;
 			return array == 0 ? type : primitive(type.type, array);
 		}
 

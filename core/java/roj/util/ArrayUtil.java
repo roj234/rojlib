@@ -7,7 +7,7 @@ import roj.reflect.Bypass;
 import java.util.*;
 import java.util.function.ToIntFunction;
 
-import static roj.reflect.Unaligned.U;
+import static roj.reflect.Unsafe.U;
 
 /**
  * @author Roj234
@@ -18,7 +18,7 @@ public final class ArrayUtil {
 		H SCOPED_MEMORY_ACCESS = init();
 		private static H init() {
 			try {
-				return Bypass.builder(H.class).inline().delegate(Class.forName("jdk.internal.util.ArraysSupport"), "vectorizedMismatch").build();
+				return Bypass.builder(H.class).delegate(Class.forName("jdk.internal.util.ArraysSupport"), "vectorizedMismatch").build();
 			} catch (Throwable ignored) {}
 			return null;
 		}

@@ -1,7 +1,7 @@
 package roj.util;
 
 import roj.annotation.Status;
-import roj.reflect.Unaligned;
+import roj.reflect.Unsafe;
 import roj.text.CharList;
 import roj.text.TextUtil;
 
@@ -9,7 +9,7 @@ import java.lang.ref.Reference;
 import java.lang.ref.SoftReference;
 import java.lang.ref.WeakReference;
 
-import static roj.reflect.Unaligned.U;
+import static roj.reflect.Unsafe.U;
 
 public class ArrayCache {
 	public static final int MAX_ARRAY_SIZE = Integer.MAX_VALUE - 8;
@@ -112,9 +112,9 @@ public class ArrayCache {
 			if (Integer.lowestOneBit(size) != size) return null;
 		}
 
-		long offCache = Unaligned.ARRAY_OBJECT_BASE_OFFSET + Unaligned.ARRAY_OBJECT_INDEX_SCALE * CACHE_COUNT * (long) idx;
-		long offUsing = Unaligned.ARRAY_INT_BASE_OFFSET + ((long) idx << 2);
-		for (int i = 0; i < CACHE_COUNT; i++, offCache += Unaligned.ARRAY_OBJECT_INDEX_SCALE) {
+		long offCache = Unsafe.ARRAY_OBJECT_BASE_OFFSET + Unsafe.ARRAY_OBJECT_INDEX_SCALE * CACHE_COUNT * (long) idx;
+		long offUsing = Unsafe.ARRAY_INT_BASE_OFFSET + ((long) idx << 2);
+		for (int i = 0; i < CACHE_COUNT; i++, offCache += Unsafe.ARRAY_OBJECT_INDEX_SCALE) {
 			var r = (Reference<?>) U.getReferenceVolatile(G_Cache, offCache);
 			Object t;
 			if (r != null && (t = r.get()) != null) {
@@ -133,9 +133,9 @@ public class ArrayCache {
 	private static void putGlobalArray(int idx, Object array, int size) {
 		idx = idx * 256 + Math.min(size / LARGE_ARRAY_SIZE - 1, 255);
 
-		long offCache = Unaligned.ARRAY_OBJECT_BASE_OFFSET + Unaligned.ARRAY_OBJECT_INDEX_SCALE * CACHE_COUNT * (long) idx;
-		long offUsing = Unaligned.ARRAY_INT_BASE_OFFSET + ((long) idx << 2);
-		for (int i = 0; i < CACHE_COUNT; i++, offCache += Unaligned.ARRAY_OBJECT_INDEX_SCALE) {
+		long offCache = Unsafe.ARRAY_OBJECT_BASE_OFFSET + Unsafe.ARRAY_OBJECT_INDEX_SCALE * CACHE_COUNT * (long) idx;
+		long offUsing = Unsafe.ARRAY_INT_BASE_OFFSET + ((long) idx << 2);
+		for (int i = 0; i < CACHE_COUNT; i++, offCache += Unsafe.ARRAY_OBJECT_INDEX_SCALE) {
 			var r = (Reference<?>) U.getReferenceVolatile(G_Cache, offCache);
 			if (r != null && r.get() == array) {
 				int mask = 1 << i;
@@ -148,8 +148,8 @@ public class ArrayCache {
 			}
 		}
 
-		offCache = Unaligned.ARRAY_OBJECT_BASE_OFFSET + Unaligned.ARRAY_OBJECT_INDEX_SCALE * CACHE_COUNT * (long) idx;
-		for (int i = 0; i < CACHE_COUNT; i++, offCache += Unaligned.ARRAY_OBJECT_INDEX_SCALE) {
+		offCache = Unsafe.ARRAY_OBJECT_BASE_OFFSET + Unsafe.ARRAY_OBJECT_INDEX_SCALE * CACHE_COUNT * (long) idx;
+		for (int i = 0; i < CACHE_COUNT; i++, offCache += Unsafe.ARRAY_OBJECT_INDEX_SCALE) {
 			var r = (Reference<?>) U.getReferenceVolatile(G_Cache, offCache);
 			if (r == null || r.get() == null) {
 				if (U.compareAndSetReference(G_Cache, offCache, r, G_Sential)) {
@@ -218,7 +218,7 @@ public class ArrayCache {
 
 		byte[] array = size1 > LARGE_ARRAY_SIZE ? getGlobalArray(0, size1) : small().getArray(0, size1);
 
-		if (array == null) array = fillWithZeros ? new byte[size1] : (byte[]) Unaligned.U.allocateUninitializedArray(byte.class, size1);
+		if (array == null) array = fillWithZeros ? new byte[size1] : (byte[]) U.allocateUninitializedArray(byte.class, size1);
 		else if (fillWithZeros) {
 			for (int i = 0; i < size; i++)
 				array[i] = 0;
@@ -236,7 +236,7 @@ public class ArrayCache {
 
 		int[] array = size1 > LARGE_ARRAY_SIZE ? getGlobalArray(1, size1) : small().getArray(1, size1);
 
-		if (array == null) array = fillWithZeros != 0 ? new int[size1] : (int[]) Unaligned.U.allocateUninitializedArray(int.class, size1);
+		if (array == null) array = fillWithZeros != 0 ? new int[size1] : (int[]) U.allocateUninitializedArray(int.class, size1);
 		else {
 			for (int i = 0; i < fillWithZeros; i++)
 				array[i] = 0;
@@ -256,7 +256,7 @@ public class ArrayCache {
 
 		char[] array = size1 > LARGE_ARRAY_SIZE ? getGlobalArray(2, size1) : small().getArray(2, size1);
 
-		if (array == null) array = fillWithZeros ? new char[size1] : (char[]) Unaligned.U.allocateUninitializedArray(char.class, size1);
+		if (array == null) array = fillWithZeros ? new char[size1] : (char[]) U.allocateUninitializedArray(char.class, size1);
 		else if (fillWithZeros) {
 			for (int i = 0; i < size; i++)
 				array[i] = 0;

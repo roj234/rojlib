@@ -1,7 +1,7 @@
 package roj.io.source;
 
-import roj.io.MyDataInput;
-import roj.reflect.Unaligned;
+import roj.io.ByteInput;
+import roj.reflect.Unsafe;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
 
@@ -58,7 +58,7 @@ public class ByteSource extends Source {
 
 	public void reopen() {}
 
-	public MyDataInput asDataInput() { return list; }
+	public ByteInput asDataInput() { return list; }
 	public InputStream asInputStream() { return list.asInputStream(); }
 
 	public Source copy() { return new ByteSource(buffer()); }
@@ -66,7 +66,7 @@ public class ByteSource extends Source {
 	@Override
 	public void moveSelf(long from, long to, long length) {
 		if ((from | to | length) < 0) throw new IllegalArgumentException();
-		Unaligned.U.copyMemory(list.array(), list._unsafeAddr()+from, list.array(), list._unsafeAddr()+to, length);
+		Unsafe.U.copyMemory(list.array(), list._unsafeAddr()+from, list.array(), list._unsafeAddr()+to, length);
 	}
 
 	@Override

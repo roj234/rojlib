@@ -66,7 +66,7 @@ public enum LambdaCall {
 			);
 
 			int tableIdx = ctx.file.addLambdaRef(item);
-			cw.invokeDyn(tableIdx, lambdaMethod.name(), Type.toMethodDesc(capturedTypes), 0);
+			cw.invokeDyn(tableIdx, lambdaMethod.name(), Type.getMethodDescriptor(capturedTypes), 0);
 		}
 	},
 	ANONYMOUS_CLASS {
@@ -80,10 +80,10 @@ public enum LambdaCall {
 			node.addInterface(lambdaOwner.name());
 
 			//
-			capturedTypes.set(capturedTypes.size()-1, Type.primitive(Type.VOID));
+			capturedTypes.set(capturedTypes.size() - 1, Type.VOID_TYPE);
 
 			// 生成构造器
-			CodeWriter ctorCw = node.newMethod(ACC_PUBLIC, "<init>", Type.toMethodDesc(capturedTypes));
+			CodeWriter ctorCw = node.newMethod(ACC_PUBLIC, "<init>", Type.getMethodDescriptor(capturedTypes));
 			ctorCw.vars(ALOAD, 0);
 			ctorCw.invoke(INVOKESPECIAL, "java/lang/Object", "<init>", "()V", false);
 
@@ -122,8 +122,8 @@ public enum LambdaCall {
 
 			var arguments = new ArrayList<Type>();
 			var argRealType1 = new ArrayList<Type>();
-			Type.methodDesc(lambdaMethod.rawDesc(), arguments);
-			Type.methodDesc(lambdaActualArguments, argRealType1);
+			Type.getArgumentTypes(lambdaMethod.rawDesc(), arguments);
+			Type.getArgumentTypes(lambdaActualArguments, argRealType1);
 			var argRealType2 = implementation.parameters().subList(capturedTypes.size()-1, implementation.parameters().size());
 
 			for (int i = 0; i < arguments.size(); i++) {
@@ -151,7 +151,7 @@ public enum LambdaCall {
 			implCw.visitSizeMax(Math.max(stackSize, lambdaMethod.returnType().length()), localSize + (((lambdaMethod.modifier&ACC_STATIC) != 0) ? 0 : 1));
 			//implCw.computeFrames(Code.COMPUTE_SIZES);
 
-			Type returnMethodType = Type.methodDescReturn(lambdaMethod.rawDesc());
+			Type returnMethodType = Type.getReturnType(lambdaMethod.rawDesc());
 			// 返回结果
 			ctx.castTo(implementation.returnType(), argRealType1.getLast(), 0).write(implCw);
 			ctx.castTo(argRealType1.getLast(), returnMethodType, -3).write(implCw);
@@ -164,7 +164,7 @@ public enum LambdaCall {
 			// 加载所有捕获变量
 			for (var node1 : capturedTypesExpr) node1.write(cw);
 
-			cw.invokeD(node.name(), "<init>", Type.toMethodDesc(capturedTypes));
+			cw.invokeD(node.name(), "<init>", Type.getMethodDescriptor(capturedTypes));
 		}
 	}
 	;

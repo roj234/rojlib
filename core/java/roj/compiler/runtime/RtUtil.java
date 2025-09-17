@@ -2,7 +2,7 @@ package roj.compiler.runtime;
 
 import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.Range;
-import roj.ci.annotation.ReferenceByGeneratedClass;
+import roj.ci.annotation.IndirectReference;
 import roj.compiler.plugins.eval.Constexpr;
 
 import java.nio.charset.StandardCharsets;
@@ -26,7 +26,7 @@ public class RtUtil {
 		return sb.toString();
 	}
 
-	@ReferenceByGeneratedClass
+	@IndirectReference
 	public static Throwable twr(Throwable local, AutoCloseable closeable) {
 		if (closeable != null) {
 			try {

@@ -1,8 +1,7 @@
 package roj.util;
 
-import roj.reflect.Bypass;
 import roj.ci.annotation.Public;
-import roj.reflect.Reflection;
+import roj.reflect.Bypass;
 import roj.text.logging.Logger;
 
 import java.nio.Buffer;
@@ -11,7 +10,7 @@ import java.util.Collections;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
-import static roj.reflect.Unaligned.U;
+import static roj.reflect.Unsafe.U;
 
 /**
  * @author Roj233
@@ -54,10 +53,10 @@ public class NativeMemory {
 		Object cleaner(Object buf);
 	}
 
-	static final H hlp;
+	static final H h;
 	static {
 		try {
-			Bypass<H> da = Bypass.builder(H.class).inline();
+			Bypass<H> da = Bypass.builder(H.class);
 			da.access(ByteBuffer.class, new String[]{"hb","offset"});
 
 			var dbb = Class.forName("java.nio.DirectByteBuffer");
@@ -68,8 +67,8 @@ public class NativeMemory {
 				Logger.getLogger().warn("无法加载模块 {}", e, "BufferCleaner");
 			}
 
-			var j17 = Reflection.JAVA_VERSION >= 17;
-			var j9 = Reflection.JAVA_VERSION >= 9;
+			var j17 = JVM.VERSION >= 17;
+			var j9 = JVM.VERSION >= 9;
 			da.construct(dbb, new String[]{j17?"newDirectBuffer2":"newDirectBuffer"}, j17?Collections.emptyList():null)
 			  .construct(Class.forName("java.nio.HeapByteBuffer"), new String[]{j17?"newHeapBuffer2":"newHeapBuffer"}, j17?Collections.emptyList():null)
 			  .delegate(Class.forName(j9?"jdk.internal.misc.VM":"sun.misc.VM"), "isDirectMemoryPageAligned")
@@ -78,56 +77,72 @@ public class NativeMemory {
 			da.delegate(cleaner, new String[] {"create", "clean"}, new String[] {"newCleaner", "invokeClean"});
 
 			String[] names = {"pageSize", "reserveMemory", "unreserveMemory"};
-			hlp = da.delegate(Class.forName("java.nio.Bits"), names, j17 ? new String[] {"pageSize", "reserveMemory2", "unreserveMemory2"} : names).build();
+			h = da.delegate(Class.forName("java.nio.Bits"), names, j17 ? new String[] {"pageSize", "reserveMemory2", "unreserveMemory2"} : names).build();
 		} catch (ClassNotFoundException e) {
 			Helpers.athrow(e);
 			throw null;
 		}
 	}
 
-	public static ByteBuffer newDirectBuffer(long addr, int cap, Object att) { return hlp.newDirectBuffer(addr, cap, att); }
-	public static long getAddress(ByteBuffer buf) { return hlp.getAddress(buf); }
-	public static void setBufferCapacityAndAddress(ByteBuffer buf, long addr, int cap) { assert buf.isDirect() : "buffer is not direct"; hlp.setCapacity(buf, cap); hlp.setAddress(buf, addr); }
+	public static long getAddress(ByteBuffer buf) { return h.getAddress(buf); }
+	public static void setAddress(ByteBuffer buf, long address, int capacity) {
+		if (!buf.isDirect()) throw new IllegalArgumentException("Buffer is not direct");
+		h.setCapacity(buf, capacity);
+		h.setAddress(buf, address);
+	}
+
+	public static DynByteBuf fromBuffer(ByteBuffer buf, int capacity) {
+		byte[] array = h.getHb(buf);
+		DynByteBuf b;
+		if (array != null) {
+			b = new ByteList.Slice(array, h.getOffset(buf), capacity);
+		} else if (buf.isDirect()) {
+			b = new DirectByteList.Slice(null, getAddress(buf), capacity);
+		} else {
+			return null;
+		}
+		return b;
+	}
+	public static ByteBuffer toBuffer(DynByteBuf buf) {
+		if (!buf.isReal()) throw new IllegalArgumentException("Buffer is not real");
+		if (buf.hasArray()) {
+			return h.newHeapBuffer(buf.array(), -1, buf.rIndex, buf.wIndex, buf.capacity(), buf.arrayOffset());
+		}
+		return h.newDirectBuffer(buf.address(), buf.capacity(), null/*java sb*/).limit(buf.wIndex).position(buf.rIndex);
+	}
 
 	public static void freeDirectBuffer(Buffer buffer) {
 		if (!buffer.isDirect()) return;
 
 		// Java做了多次运行的处理，无须担心
 		Object o = buffer;
-		while (hlp.attachment(o) != null) o = hlp.attachment(o);
+		while (h.attachment(o) != null) o = h.attachment(o);
 
-		Object cleaner = hlp.cleaner(o);
+		Object cleaner = h.cleaner(o);
 		if (cleaner != null) invokeClean(cleaner);
 	}
 
-	public static Object createCleaner(Object referent, Runnable fastCallable) { return hlp.newCleaner(referent, fastCallable); }
-	public static void invokeClean(Object cleaner) { hlp.invokeClean(cleaner); }
-
-	public static ByteBuffer newHeapBuffer(byte[] buf, int mark, int pos, int lim, int cap, int off) { return hlp.newHeapBuffer(buf, mark, pos, lim, cap, off); }
-	public static byte[] getArray(ByteBuffer buf) { return hlp.getHb(buf); }
-	public static int getOffset(ByteBuffer buf) { return hlp.getOffset(buf); }
-
-	public static void reserveMemory(int length) throws OutOfMemoryError { hlp.reserveMemory(length, length); }
-	public static void unreserveMemory(int length) { hlp.unreserveMemory(length, length); }
+	public static Object createCleaner(Object referent, Runnable fastCallable) { return h.newCleaner(referent, fastCallable); }
+	public static void invokeClean(Object cleaner) { h.invokeClean(cleaner); }
 
 	public NativeMemory() { this(false); }
 	public NativeMemory(long size) { this(false); allocate(size); }
 	public NativeMemory(boolean zeroFilled) {
-		unmanaged = new Unmanaged(zeroFilled);
-		hlp.newCleaner(this, unmanaged);
+		cleaner = new Cleaner(zeroFilled);
+		h.newCleaner(this, cleaner);
 	}
 
-	private final Unmanaged unmanaged;
+	private final Cleaner cleaner;
 	private final ReentrantLock lock = new ReentrantLock();
 
-	public long address() { return unmanaged.address(); }
-	public long length() { return unmanaged.length; }
+	public long address() { return cleaner.address(); }
+	public long length() { return cleaner.length; }
 	public Lock lock() { return lock; }
 
 	public long allocate(long cap) {
 		lock.lock();
 		try {
-			return unmanaged.malloc(cap, false);
+			return cleaner.malloc(cap, false);
 		} finally {
 			lock.unlock();
 		}
@@ -135,7 +150,7 @@ public class NativeMemory {
 	public boolean free() {
 		lock.lock();
 		try {
-			return unmanaged.free();
+			return cleaner.free();
 		} finally {
 			lock.unlock();
 		}
@@ -143,23 +158,23 @@ public class NativeMemory {
 	public long resize(long cap) {
 		lock.lock();
 		try {
-			return unmanaged.resize(cap);
+			return cleaner.resize(cap);
 		} finally {
 			lock.unlock();
 		}
 	}
 
-	static final class Unmanaged implements Runnable {
+	static final class Cleaner implements Runnable {
 		private final boolean clear;
 		private long base, length;
 		private int except;
 
-		Unmanaged(boolean b) {clear = b;}
+		Cleaner(boolean b) {clear = b;}
 
 		long address() {
 			long base = this.base;
-			if (hlp.isDirectMemoryPageAligned()) {
-				int ps = hlp.pageSize();
+			if (h.isDirectMemoryPageAligned()) {
+				int ps = h.pageSize();
 				if (base % ps != 0) return base + ps - (base & (ps - 1));
 			}
 			return base;
@@ -168,7 +183,7 @@ public class NativeMemory {
 		boolean free() {
 			if (base != 0) {
 				U.freeMemory(base);
-				hlp.unreserveMemory(length, except);
+				h.unreserveMemory(length, except);
 				base = 0;
 				return true;
 			}
@@ -179,7 +194,7 @@ public class NativeMemory {
 			long s0 = length;
 			int s1 = except;
 			long addr = malloc(cap, true);
-			hlp.unreserveMemory(s0, s1);
+			h.unreserveMemory(s0, s1);
 			return addr;
 		}
 
@@ -189,16 +204,16 @@ public class NativeMemory {
 
 			this.except = (int) Math.min(cap, Integer.MAX_VALUE);
 
-			boolean pa = hlp.isDirectMemoryPageAligned();
-			int ps = hlp.pageSize();
+			boolean pa = h.isDirectMemoryPageAligned();
+			int ps = h.pageSize();
 			long size = Math.max(1L, cap + (pa ? ps : 0));
-			hlp.reserveMemory(size, except);
+			h.reserveMemory(size, except);
 
 			long base;
 			try {
 				base = this.base == 0 ? U.allocateMemory(size) : U.reallocateMemory(this.base, size);
 			} catch (OutOfMemoryError x) {
-				hlp.unreserveMemory(size, except);
+				h.unreserveMemory(size, except);
 				throw x;
 			}
 

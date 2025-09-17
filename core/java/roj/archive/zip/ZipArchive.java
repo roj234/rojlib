@@ -4,18 +4,18 @@ import roj.archive.ArchiveUtils;
 import roj.collect.HashSet;
 import roj.collect.IntervalPartition;
 import roj.collect.IntervalPartition.Range;
-import roj.reflect.Unaligned;
-import roj.util.function.ExceptionalSupplier;
 import roj.crypt.CRC32;
 import roj.crypt.CipherOutputStream;
 import roj.io.Finishable;
 import roj.io.IOUtil;
 import roj.io.source.Source;
+import roj.reflect.Unsafe;
 import roj.text.logging.Logger;
 import roj.util.ArrayCache;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
 import roj.util.Helpers;
+import roj.util.function.ExceptionalSupplier;
 
 import java.io.File;
 import java.io.IOException;
@@ -431,7 +431,7 @@ public final class ZipArchive extends ZipFile {
 		if (file == null) throw new IOException("不是从文件打开");
 		if (r == null) {
 			r = ArchiveUtils.tryOpenSplitArchive(file, false);
-			var cache = (Source) Unaligned.U.getAndSetReference(this, CACHE, r);
+			var cache = (Source) Unsafe.U.getAndSetReference(this, CACHE, r);
 			if (cache != r) IOUtil.closeSilently(cache);
 		}
 	}
@@ -492,7 +492,7 @@ public final class ZipArchive extends ZipFile {
 		   .put(file.nameBytes);
 		int extOff = buf.wIndex();
 		file.writeCENExtra(buf, extLenOff);
-		buf.putShortLE(extLenOff, buf.wIndex()-extOff);
+		buf.setShortLE(extLenOff, buf.wIndex()-extOff);
 	}
 	static void writeEND(ByteList util, long cDirOffset, long cDirLen, int cDirTotal, byte[] comment, long position) {
 		boolean zip64 = false;

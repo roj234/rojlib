@@ -6,13 +6,9 @@ import roj.collect.ArrayList;
 import roj.collect.HashMap;
 import roj.collect.HashSet;
 import roj.collect.IntMap;
-import roj.text.ParseException;
-import roj.text.Tokenizer;
-import roj.text.Token;
 import roj.io.IOUtil;
-import roj.reflect.EnumHelper;
-import roj.text.CharList;
-import roj.text.TextUtil;
+import roj.reflect.Reflection;
+import roj.text.*;
 import roj.util.Helpers;
 
 import java.io.File;
@@ -101,7 +97,7 @@ public interface Argument<T> {
 		for (String s : flags) map.put(s,s);
 		return Helpers.cast(anyOf(map));
 	}
-	static <T extends Enum<T>> Argument<T> enumeration(Class<T> type) { return oneOf(Helpers.cast(EnumHelper.CONSTANTS.enumConstantDirectory(type))); }
+	static <T extends Enum<T>> Argument<T> enumeration(Class<T> type) { return oneOf(Helpers.cast(Reflection.enumConstantDirectory(type))); }
 	static <T> Argument<T> oneOf(Map<String, T> map) { return new ArgSetOf<>(0, map); }
 	static Argument<String> suggest(Map<String, String> map) { return new ArgSetOf<>(1, map); }
 	static <T> Argument<List<T>> someOf(Map<String, T> map) { return Helpers.cast(new ArgSetOf<>(2, map)); }

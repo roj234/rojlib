@@ -120,6 +120,7 @@ public abstract class Node extends ConfigValue {
 	@Override public final Type getType() {return Type.OTHER;}
 	@Override public final char dataType() {return (char) nodeType();}
 	@Override public Object raw() {return this;}
+	@Override public boolean mayCastTo(Type o) {return o == Type.STRING || o == Type.MAP || o == Type.LIST;}
 
 	@Override public final String asString() {return textContent();}
 	@Override public final MapValue asMap() {return new MapValue(attributesWritable());}

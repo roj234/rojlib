@@ -1,6 +1,6 @@
 package roj.crypt;
 
-import roj.reflect.Unaligned;
+import roj.reflect.Unsafe;
 
 import java.util.Random;
 
@@ -10,8 +10,8 @@ import java.util.Random;
  */
 class WyRand extends Random {
 	static final long
-			SEED = Unaligned.fieldOffset(Random.class, "seed"),
-			HAVE_NEXT_NEXT_GAUSSIAN = Unaligned.fieldOffset(Random.class, "haveNextNextGaussian");
+			SEED = Unsafe.fieldOffset(Random.class, "seed"),
+			HAVE_NEXT_NEXT_GAUSSIAN = Unsafe.fieldOffset(Random.class, "haveNextNextGaussian");
 
 	static final long WY_INCREMENT = 0x2d358dccaa6c78a5L, WY_XOR = 0x8bb84b93962eacc9L;
 
@@ -23,7 +23,7 @@ class WyRand extends Random {
 	@Override
 	public void setSeed(long seed) {
 		w = seed;
-		Unaligned.U.putReference(this, SEED, null);
+		Unsafe.U.putReference(this, SEED, null);
 	}
 
 	@Override

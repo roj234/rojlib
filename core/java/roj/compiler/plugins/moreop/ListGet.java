@@ -35,7 +35,7 @@ final class ListGet extends LeftValue {
 		list = list.resolve(ctx);
 		index = index.resolve(ctx);
 
-		cast = ctx.castTo(index.type(), Type.primitive(Type.INT), 0);
+		cast = ctx.castTo(index.type(), Type.INT_TYPE, 0);
 
 		IType type = list.type();
 		var types = ctx.inferGeneric(type, "java/util/List");

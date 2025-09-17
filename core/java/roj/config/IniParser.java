@@ -69,14 +69,14 @@ public final class IniParser extends Parser {
 	}
 
 	@SuppressWarnings("fallthrough")
-	protected ConfigValue element(@MagicConstant(flags = {NO_DUPLICATE_KEY, UNESCAPE, ORDERED_MAP}) int flag) throws ParseException {
+	protected ConfigValue element(@MagicConstant(flags = {NO_DUPLICATE_KEY, UNESCAPE, ORDERED_MAP}) int flags) throws ParseException {
 		literalEnd = iniSymbol_LN;
 		Token w = next();
 
 		String val = w.text();
 		switch (w.type()) {
 			case LITERAL:
-				if ((flag & UNESCAPE) != 0 && val.startsWith("\"") && val.endsWith("\"")) {
+				if ((flags & UNESCAPE) != 0 && val.startsWith("\"") && val.endsWith("\"")) {
 					return valueOf(val.substring(1, val.length()-1));
 				}
 			case STRING: return valueOf(val);

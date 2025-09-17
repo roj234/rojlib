@@ -2,13 +2,12 @@ package roj.concurrent;
 
 import org.jetbrains.annotations.Nullable;
 import roj.io.BufferPool;
-import roj.reflect.Unaligned;
+import roj.reflect.Handles;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
 
+import java.lang.invoke.VarHandle;
 import java.util.concurrent.locks.LockSupport;
-
-import static roj.reflect.Unaligned.U;
 
 /**
  * 一个适合【多线程写入，单线程读取】的无界FIFO队列
@@ -22,8 +21,11 @@ public final class PacketBuffer extends ReuseFIFOQueue<PacketBuffer.Entry> {
 		volatile Thread waiter;
 	}
 
-	private static final long SIZE_OFFSET = Unaligned.fieldOffset(PacketBuffer.class, "recycleSize");
+	private static final VarHandle SIZE = Handles.lookup().findVarHandle(PacketBuffer.class, "size", int.class);
+	private static final VarHandle RECYCLE = Handles.lookup().findVarHandle(PacketBuffer.class, "recycle", Node.class);
+
 	private volatile int recycleSize;
+	private volatile Node recycle;
 
 	public PacketBuffer() {recycleSize = 4;}
 	public PacketBuffer(int maxUnused) {this.recycleSize = maxUnused;}
@@ -31,16 +33,16 @@ public final class PacketBuffer extends ReuseFIFOQueue<PacketBuffer.Entry> {
 	@Override
 	protected void recycle(Node node) {
 		if (node instanceof Entry && recycleSize > 0) {
-			U.getAndAddInt(this, SIZE_OFFSET, -1);
-			node.next = (Node)U.getAndSetReference(this, RECYCLE_OFFSET, node);
+			SIZE.getAndAdd(this, -1);
+			node.next = (Node)RECYCLE.getAndSet(this, node);
 		}
 	}
 	private Entry retain() {
 		while (true) {
 			var bin = recycle;
 			if (bin != null) {
-				if (U.compareAndSetReference(this, RECYCLE_OFFSET, bin, bin.next)) {
-					U.getAndAddInt(this, SIZE_OFFSET, 1);
+				if (RECYCLE.compareAndSet(this, bin, bin.next)) {
+					SIZE.getAndAdd(this, 1);
 					return (Entry) bin;
 				}
 			} else {
@@ -59,7 +61,7 @@ public final class PacketBuffer extends ReuseFIFOQueue<PacketBuffer.Entry> {
 		Thread waiter = wait ? Thread.currentThread() : null;
 		entry.waiter = waiter;
 
-		U.storeFence();
+		Handles.storeFence();
 
 		addLast(entry);
 
@@ -96,14 +98,14 @@ public final class PacketBuffer extends ReuseFIFOQueue<PacketBuffer.Entry> {
 				buf.put(data);
 			}
 		} finally {
-			BufferPool.reserve(data);
+			data.release();
 		}
 
 		var thread = entry.waiter;
 		entry.waiter = null;
 		LockSupport.unpark(thread);
 
-		U.storeFence();
+		Handles.storeFence();
 
 		return buf;
 	}
@@ -118,7 +120,7 @@ public final class PacketBuffer extends ReuseFIFOQueue<PacketBuffer.Entry> {
 			var data = entry.buffer;
 			entry.buffer = null;
 			assert data != null;
-			BufferPool.reserve(data);
+			data.release();
 
 			var thread = entry.waiter;
 			entry.waiter = null;

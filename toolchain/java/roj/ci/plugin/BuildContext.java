@@ -205,7 +205,7 @@ public class BuildContext {
 
 	public void mixin(ClassNode mixin) throws WeaveException {project.state.weaver.load(mixin);}
 	public ConstantPoolHooks getCPHooks() {project.state.needTransform = true;return project.state.hooks;}
-	public Mapper getDynamicMapper() {return project.state.mapper;}
+	public Mapper getMapper() {return project.state.mapper;}
 
 	public void removeClasses(Context context) {
 		int i = classes.indexOf(context);

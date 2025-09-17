@@ -1,14 +1,14 @@
 package roj.text.diff;
 
 import roj.io.CorruptedInputException;
-import roj.io.MyDataInput;
+import roj.io.ByteInput;
 import roj.io.source.Source;
-import roj.reflect.Unaligned;
-import roj.reflect.litasm.FastJNI;
+import roj.reflect.Unsafe;
 import roj.util.ArrayCache;
 import roj.util.ArrayUtil;
 import roj.util.DynByteBuf;
 import roj.util.NativeArray;
+import roj.util.optimizer.IntrinsicCandidate;
 
 import java.io.IOException;
 import java.io.OutputStream;
@@ -47,7 +47,7 @@ public final class BsDiff {
 		initializeSuffixArray(baseData, suffixArray, length);
 	}
 
-	@FastJNI("IL_bsdiff_init")
+	@IntrinsicCandidate("IL_bsdiff_init")
 	private static void initializeSuffixArray(final byte[] baseData, final int[] suffixArray, int size) {
 		int[] frequencyBucket = ArrayCache.getIntArray(256, 256);
 		// Count character frequencies
@@ -396,8 +396,8 @@ public final class BsDiff {
 			int i = suffixArray[mid];
 			int len = Math.min(left.length-i, right.length-rightOff);
 			int ret = ArrayUtil.compare(
-					left, Unaligned.ARRAY_BYTE_BASE_OFFSET + i,
-					right, Unaligned.ARRAY_BYTE_BASE_OFFSET + rightOff,
+					left, Unsafe.ARRAY_BYTE_BASE_OFFSET + i,
+					right, Unsafe.ARRAY_BYTE_BASE_OFFSET + rightOff,
 					len, ArrayUtil.LOG2_ARRAY_BYTE_INDEX_SCALE);
 
 			if (ret >= 0 && left[i+ret] < right[rightOff+ret]) {
@@ -418,7 +418,7 @@ public final class BsDiff {
 		return i - lStart;
 	}
 
-	public static long patch(Source in, MyDataInput patch, OutputStream out) throws IOException {
+	public static long patch(Source in, ByteInput patch, OutputStream out) throws IOException {
 		int wrote = 0;
 		int outputSize = patch.readIntLE();
 		byte[] tmp = ArrayCache.getByteArray(1024 * 3, false);

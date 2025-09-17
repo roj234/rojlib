@@ -10,7 +10,11 @@ import roj.asm.attr.*;
 import roj.asm.cp.Constant;
 import roj.asm.cp.CstClass;
 import roj.asm.cp.CstString;
-import roj.asm.insn.*;
+import roj.asm.frame.FrameVisitor;
+import roj.asm.insn.AttrCodeWriter;
+import roj.asm.insn.CodeWriter;
+import roj.asm.insn.Label;
+import roj.asm.insn.StaticSegment;
 import roj.asm.type.*;
 import roj.asmx.ClassResource;
 import roj.collect.ArrayList;
@@ -28,11 +32,11 @@ import roj.compiler.ast.expr.ExprParser;
 import roj.compiler.diagnostic.Kind;
 import roj.compiler.doc.Javadoc;
 import roj.compiler.resolve.*;
-import roj.text.ParseException;
-import roj.text.Token;
 import roj.config.node.ConfigValue;
 import roj.io.IOUtil;
 import roj.text.CharList;
+import roj.text.ParseException;
+import roj.text.Token;
 import roj.util.ArrayCache;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
@@ -898,7 +902,7 @@ public abstract class CompileUnit extends ClassNode implements ClassResource {
 			String par = method.rawDesc();
 			// 方法定义冲突在该阶段检查，因为更早的阶段拿不到完整的全限定参数类型
 			if (!names.add(method.name()+par.substring(0, par.lastIndexOf(')')+1)))
-				ctx.report(Kind.ERROR, "cu.nameConflict", this.name, "invoke.method", TypeHelper.humanize(Type.methodDesc(par), method.name(), false));
+				ctx.report(Kind.ERROR, "cu.nameConflict", this.name, "invoke.method", TypeHelper.humanize(Type.getMethodTypes(par), method.name(), false));
 
 			if ((modifier&ACC_INTERFACE) != 0 && (method.modifier&ACC_ABSTRACT) == 0 && ctx.compiler.resolve("java/lang/Object").getMethodObj(method.name(), method.rawDesc()) != null) {
 				ctx.report(Kind.ERROR, "cu.override.interfaceObject", method.owner(), method.name());
@@ -1007,7 +1011,7 @@ public abstract class CompileUnit extends ClassNode implements ClassResource {
 					if (sign != null) {
 						Signature attr = new Signature(Signature.METHOD);
 						attr.values = sign.values;
-						w.mn.addAttribute(attr);
+						w.method.addAttribute(attr);
 					}
 				} else if (methods.get(mid).modifier != (ACC_PUBLIC)) {
 					ctx.report(methodIdx.get(mid), Kind.ERROR, "cu.enumMethod");
@@ -1107,7 +1111,7 @@ public abstract class CompileUnit extends ClassNode implements ClassResource {
 		if (generateConstructor) {
 			var cw = glinit = newWritableMethod(ACC_PUBLIC, "<init>", isNonStaticInnerClass() ? "(L"+_parent.name()+";)V" : "()V");
 			cw.visitSize(1,1);
-			cw.computeFrames(Code.COMPUTE_SIZES);
+			cw.computeFrames(FrameVisitor.COMPUTE_SIZES);
 			cw.insertBefore(DynByteBuf.wrap(invokeDefaultConstructor()));
 		}
 
@@ -1812,7 +1816,7 @@ public abstract class CompileUnit extends ClassNode implements ClassResource {
 		MethodNode node = methods.get(v);
 		clinit = ctx.createMethodWriter(this, node);
 		node.addAttribute(new AttrCodeWriter(cp, node, clinit));
-		clinit.computeFrames(Code.COMPUTE_SIZES|Code.COMPUTE_FRAMES);
+		clinit.computeFrames(FrameVisitor.COMPUTE_SIZES| FrameVisitor.COMPUTE_FRAMES);
 		return clinit;
 	}
 	/**
@@ -1885,7 +1889,7 @@ public abstract class CompileUnit extends ClassNode implements ClassResource {
 	private char glStack, glLocal;
 	private void serializeGlInit() {
 		if (glInitBytes == null) {
-			glinit.computeFrames(Code.COMPUTE_SIZES);
+			glinit.computeFrames(FrameVisitor.COMPUTE_SIZES);
 			glInitBytes = glinit.serialize();
 			glStack = glInitBytes.readChar();
 			glLocal = glInitBytes.readChar();
@@ -2020,7 +2024,7 @@ public abstract class CompileUnit extends ClassNode implements ClassResource {
 
 		// 隐式构造器
 		if (glinit != null && glInitBytes == null && extraModifier != (ACC_FINAL|ACC_INTERFACE)) {
-			glinit.computeFrames(Code.COMPUTE_SIZES|Code.COMPUTE_FRAMES);
+			glinit.computeFrames(FrameVisitor.COMPUTE_SIZES| FrameVisitor.COMPUTE_FRAMES);
 			glinit.insn(Opcodes.RETURN);
 			glinit.finish();
 		}

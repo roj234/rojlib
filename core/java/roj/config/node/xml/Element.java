@@ -182,7 +182,7 @@ public class Element extends Node {
 		if (!attributes.isEmpty()) {
 			cc.emitMap(attributes.size());
 			for (Map.Entry<String, ConfigValue> entry : attributes.entrySet()) {
-				cc.key(entry.getKey());
+				cc.emitKey(entry.getKey());
 				entry.getValue().accept(cc);
 			}
 			cc.pop();

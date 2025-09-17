@@ -11,7 +11,7 @@ import roj.crypt.CryptoFactory;
 import roj.crypt.KeyType;
 import roj.io.CorruptedInputException;
 import roj.io.IOUtil;
-import roj.io.MyDataInputStream;
+import roj.io.ByteInputStream;
 import roj.io.RegionFile;
 import roj.io.source.ByteSource;
 import roj.text.TextReader;
@@ -39,7 +39,7 @@ public class McDiffClient {
 	public void apply(File basePath) throws IOException {
 		QZEntry hashes = archive.getEntry(".vcs|hashes");
 		System.out.println("正在验证哈希");
-		if (hashes != null) try (MyDataInputStream in = new MyDataInputStream(archive.getStream(hashes))) {
+		if (hashes != null) try (ByteInputStream in = new ByteInputStream(archive.getStream(hashes))) {
 			byte[] tmp = ArrayCache.getByteArray(4096, false);
 			while (in.isReadable()) {
 				String name = in.readVUIGB();
@@ -101,7 +101,7 @@ public class McDiffClient {
 							return;
 						}
 
-						try (var mdi = new MyDataInputStream(in)) {
+						try (var mdi = new ByteInputStream(in)) {
 							// short pos int timestamp int patchLength
 							while (mdi.isReadable()) {
 								int pos = mdi.readShort();

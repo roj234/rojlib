@@ -5,9 +5,11 @@ import roj.collect.ArrayList;
 import roj.collect.HashSet;
 import roj.collect.IntMap;
 import roj.collect.RingBuffer;
-import roj.reflect.Unaligned;
+import roj.optimizer.FastVarHandle;
+import roj.reflect.Handles;
 import roj.text.logging.Logger;
 
+import java.lang.invoke.VarHandle;
 import java.util.List;
 import java.util.concurrent.LinkedTransferQueue;
 import java.util.concurrent.RejectedExecutionException;
@@ -17,8 +19,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
 
-import static roj.reflect.Unaligned.U;
-
+@FastVarHandle
 public class TaskPool implements ExecutorService {
 	@FunctionalInterface
 	public interface MyThreadFactory {
@@ -40,7 +41,7 @@ public class TaskPool implements ExecutorService {
 	private volatile int running;
 	private volatile long prevStop;
 
-	private static final long RUNNING = Unaligned.fieldOffset(TaskPool.class, "running");
+	private static final VarHandle RUNNING = Handles.lookup().findVarHandle(TaskPool.class, "running", int.class);
 
 	final ReentrantLock queueLock = new ReentrantLock();
 	final Condition noFull = queueLock.newCondition();
@@ -149,12 +150,12 @@ public class TaskPool implements ExecutorService {
 			if (task == null) {
 				int r = running;
 				if (r < 0) {// shutdown
-					if (U.getAndAddInt(this, RUNNING, 1) == -2) {
+					if ((int)RUNNING.getAndAdd(this, 1) == -2) {
 						synchronized (threadLock) {threadLock.notifyAll();}
 					}
 					return null;
 				} else if (r > core && timeout && System.currentTimeMillis() - prevStop >= idleTime) {// idle timeout
-					if (U.compareAndSetInt(this, RUNNING, r, r-1)) {
+					if (RUNNING.compareAndSet(this, r, r-1)) {
 						prevStop = System.currentTimeMillis();
 						return null;
 					}
@@ -177,7 +178,7 @@ public class TaskPool implements ExecutorService {
 	private void newWorker() {
 		int r = running;
 		if (r < 0) throw new RejectedExecutionException(this+" was shutdown.");
-		if (U.compareAndSetInt(this, RUNNING, r, r+1)) {
+		if (RUNNING.compareAndSet(this, r, r+1)) {
 			prevStop = System.currentTimeMillis();
 
 			var t = factory.get(this);
@@ -200,7 +201,7 @@ public class TaskPool implements ExecutorService {
 		do {
 			r = running;
 			if (r < 0) return;
-		} while (!U.compareAndSetInt(this, RUNNING, r, -r-1));
+		} while (!RUNNING.compareAndSet(this, r, -r-1));
 		if (running < -1) synchronized (threadLock) {threadLock.notifyAll();}
 	}
 	public List<Runnable> shutdownNow() {

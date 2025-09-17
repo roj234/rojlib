@@ -66,7 +66,7 @@ public class XmlEmitter implements ValueEmitter {
 		key = null;
 	}
 
-	public final void key(String k) { _state(XML_ATTR_KEY, XML_ATTR_VAL); key = k; }
+	public final void emitKey(String k) { _state(XML_ATTR_KEY, XML_ATTR_VAL); key = k; }
 	@SuppressWarnings("fallthrough")
 	public final void emitList() {
 		switch (state) {

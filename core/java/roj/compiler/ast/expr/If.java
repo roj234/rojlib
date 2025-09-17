@@ -40,7 +40,7 @@ final class If extends Expr {
 			ctx.report(this, Kind.WARNING, "if.constant");
 
 		condition = condition.resolve(ctx);
-		cast = ctx.castTo(condition.type(), Type.primitive(Type.BOOLEAN), 0);
+		cast = ctx.castTo(condition.type(), Type.BOOLEAN_TYPE, 0);
 
 		trueBranch = trueBranch.resolve(ctx);
 		falseBranch = falseBranch.resolve(ctx);

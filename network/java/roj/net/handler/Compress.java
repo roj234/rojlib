@@ -1,7 +1,7 @@
 package roj.net.handler;
 
-import roj.io.CorruptedInputException;
 import roj.io.BufferPool;
+import roj.io.CorruptedInputException;
 import roj.net.ChannelCtx;
 import roj.util.DynByteBuf;
 
@@ -86,7 +86,7 @@ public class Compress extends GDeflate {
 		if (in.readableBytes() <= thr) {
 			out = ctx.alloc().expand(in, 1, false, false);
 			try {
-				ctx.channelWrite(out.put(0, /*UNCOMPRESSED*/0));
+				ctx.channelWrite(out.set(0, /*UNCOMPRESSED*/0));
 			} finally {
 				if (out != in) BufferPool.reserve(out);
 			}
@@ -103,7 +103,7 @@ public class Compress extends GDeflate {
 	}
 	@Override
 	protected int writePacket(ChannelCtx ctx, DynByteBuf out, boolean isFull) throws IOException {
-		out.put(0, isFull ? /*CONTINUOUS*/2 : /*TERMINATE*/1);
+		out.set(0, isFull ? /*CONTINUOUS*/2 : /*TERMINATE*/1);
 		ctx.channelWrite(out);
 		return 1;
 	}

@@ -302,7 +302,7 @@ final class MemberAccess extends LeftValue {
 		// length不是字段而是opcode
 		if (last == LavaCompiler.arrayLength()) {
 			flags |= FINAL_FIELD|ARRAY_LENGTH;
-			resultType = Type.primitive(Type.INT);
+			resultType = Type.INT_TYPE;
 			length--;
 		} else if (resultType == null) {
 			// get_frType只处理泛型

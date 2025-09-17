@@ -10,7 +10,7 @@
 
 package roj.archive.xz.lz;
 
-import static roj.reflect.Unaligned.U;
+import static roj.reflect.Unsafe.U;
 
 final class HC4 extends LZEncoder {
 	HC4(int dictSize, int beforeSizeMin, int readAheadMax, int niceLen, int matchLenMax, int depthLimit) {

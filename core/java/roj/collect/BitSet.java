@@ -1,8 +1,8 @@
 package roj.collect;
 
 import org.jetbrains.annotations.NotNull;
-import roj.io.MyDataInput;
-import roj.util.DynByteBuf;
+import roj.io.ByteInput;
+import roj.io.ByteOutput;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -459,7 +459,7 @@ public class BitSet implements Iterable<Integer> {
 		return new String(str);
 	}
 
-	public static BitSet readBits(MyDataInput buf, int byteLength) throws IOException {
+	public static BitSet readBits(ByteInput buf, int byteLength) throws IOException {
 		if (byteLength == 0) return new BitSet();
 
 		long[] set = new long[(byteLength+63)/64];
@@ -488,7 +488,7 @@ public class BitSet implements Iterable<Integer> {
 
 		return new BitSet(set, count);
 	}
-	public void writeBits(DynByteBuf buf) {
+	public void writeBits(ByteOutput buf) throws IOException {
 		int size = max+1;
 
 		int i = 0;

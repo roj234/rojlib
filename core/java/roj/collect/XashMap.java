@@ -5,11 +5,11 @@ import org.jetbrains.annotations.NotNull;
 import roj.ci.annotation.Public;
 import roj.math.MathUtils;
 import roj.reflect.Bypass;
-import roj.reflect.Unaligned;
+import roj.reflect.Unsafe;
 
 import java.util.*;
 
-import static roj.reflect.Unaligned.U;
+import static roj.reflect.Unsafe.U;
 
 /**
  * @author Roj234
@@ -18,7 +18,7 @@ import static roj.reflect.Unaligned.U;
 public final class XashMap<K, V> extends AbstractSet<V> {
 	public static <K, V> Builder<K, V> builder(Class<K> kType, Class<V> vType, String field_key, String field_next) { return builder(kType, vType, field_key, field_next, Hasher.defaul()); }
 	public static <K, V> Builder<K, V> builder(Class<K> kType, Class<V> vType, String field_key, String field_next, Hasher<K> hasher) {
-		Bypass<ObjectNew> da = Bypass.builder(ObjectNew.class).weak().unchecked();
+		Bypass<ObjectNew> da = Bypass.builder(ObjectNew.class).unchecked();
 		try {
 			da.construct(vType, "createValue", kType);
 		} catch (IllegalArgumentException e) {
@@ -26,15 +26,15 @@ public final class XashMap<K, V> extends AbstractSet<V> {
 		}
 
 		ObjectNew creator = da.build();
-		long key = Unaligned.fieldOffset(vType, field_key);
-		long next = Unaligned.fieldOffset(vType, field_next);
+		long key = Unsafe.fieldOffset(vType, field_key);
+		long next = Unsafe.fieldOffset(vType, field_next);
 		return new Builder<>(vType, next, key, hasher, creator);
 	}
 	public static <K, V> Builder<K, V> noCreation(Class<V> vType, String field_key) {return noCreation(vType, field_key, "_next");}
 	public static <K, V> Builder<K, V> noCreation(Class<V> vType, String field_key, String field_next) {return noCreation(vType, field_key, field_next, Hasher.defaul());}
 	public static <K, V> Builder<K, V> noCreation(Class<V> vType, String field_key, String field_next, Hasher<K> hasher) {
-		long key = Unaligned.fieldOffset(vType, field_key);
-		long next = Unaligned.fieldOffset(vType, field_next);
+		long key = Unsafe.fieldOffset(vType, field_key);
+		long next = Unsafe.fieldOffset(vType, field_next);
 		return new Builder<>(vType, next, key, hasher, null);
 	}
 

@@ -7,6 +7,7 @@ import roj.asm.annotation.Annotation;
 import roj.asm.attr.*;
 import roj.asm.cp.*;
 import roj.asm.frame.Frame;
+import roj.asm.frame.FrameVisitor;
 import roj.asm.frame.Var2;
 import roj.asm.insn.*;
 import roj.asm.type.Type;
@@ -28,8 +29,8 @@ import roj.util.Helpers;
 import java.util.*;
 
 import static roj.asm.Opcodes.*;
-import static roj.reflect.Debug.CLASS_DUMP;
-import static roj.reflect.Debug.dump;
+import static roj.reflect.ClassDump.CLASS_DUMP;
+import static roj.reflect.ClassDump.dump;
 
 /**
  * @author Roj234
@@ -766,7 +767,7 @@ public class CodeWeaver implements Transformer {
 					} else if (node.opName().endsWith("Return")) {
 						InsnNode node1 = node.prev();
 						if (node1.opcode() == INVOKESTATIC && node1.desc().name.startsWith(MARKER_Continue)) {
-							if (!Type.methodDescReturn(node1.desc().rawDesc).equals(method.returnType()))
+							if (!Type.getReturnType(node1.desc().rawDesc).equals(method.returnType()))
 								throw new WeaveException("返回值指代#"+s.retVal().size()+"(bci: "+node1.bci()+")的返回值不适用于目的方法的"+method.returnType());
 
 							usedContinue.add(code.instructions.labelAt(node1.pos()));
@@ -801,7 +802,7 @@ public class CodeWeaver implements Transformer {
 						} else if (bci > 0) {
 							node = node.prev();
 							if (node.opcode() == INVOKESTATIC && node.desc().name.startsWith(MARKER_ReturnValue)) {
-								if (!Type.methodDescReturn(node.desc().rawDesc).equals(method.returnType()))
+								if (!Type.getReturnType(node.desc().rawDesc).equals(method.returnType()))
 									throw new WeaveException("返回值指代#"+s.retVal().size()+"(bci: "+node.bci()+")的返回值不适用于目的方法的"+method.returnType());
 								s.retVal().add(node.unshared());
 							}
@@ -831,23 +832,19 @@ public class CodeWeaver implements Transformer {
 		}
 	}
 	private static void copyLambdas(ClassNode data, Code code, Patch nx, List<BootstrapMethods.Item> pending) throws WeaveException {
-		for (Map.Entry<Label, Object> entry : code.instructions.nodeData()) {
-			Object o = entry.getValue();
-			if (o.getClass() == MemberDescriptor.class) {
-				MemberDescriptor desc = (MemberDescriptor) o;
-				if (desc.owner == null) {
-					BootstrapMethods bsm = data.getAttribute(data.cp, Attribute.BootstrapMethods);
-					if (bsm == null) throw new WeaveException(data.name()+"存在错误,BootstrapMethods不存在");
+		for (Object o : code.instructions.nodeDataList()) {
+			if (o instanceof MemberDescriptor desc && desc.owner == null) {
+				BootstrapMethods bsm = data.getAttribute(data.cp, Attribute.BootstrapMethods);
+				if (bsm == null) throw new WeaveException(data.name()+"存在错误,BootstrapMethods不存在");
 
-					BootstrapMethods.Item key = bsm.methods.get(desc.modifier);
-					// NiximClass不应有实例。 (static method也不建议使用)
-					desc.rawDesc = ClassUtil.getInstance().mapMethodParam(Collections.singletonMap(data.name(), nx.target), desc.rawDesc);
+				BootstrapMethods.Item key = bsm.methods.get(desc.modifier);
+				// NiximClass不应有实例。 (static method也不建议使用)
+				desc.rawDesc = ClassUtil.getInstance().mapMethodParam(Collections.singletonMap(data.name(), nx.target), desc.rawDesc);
 
-					if (nx.lambda.isEmpty()) nx.lambda = new HashMap<>();
-					List<MemberDescriptor> list = nx.lambda.computeIfAbsent(key, Helpers.fnArrayList());
-					if (list.isEmpty()) pending.add(key);
-					list.add(desc);
-				}
+				if (nx.lambda.isEmpty()) nx.lambda = new HashMap<>();
+				List<MemberDescriptor> list = nx.lambda.computeIfAbsent(key, Helpers.fnArrayList());
+				if (list.isEmpty()) pending.add(key);
+				list.add(desc);
 			}
 		}
 	}
@@ -856,17 +853,14 @@ public class CodeWeaver implements Transformer {
 			Code code = node.getAttribute(null, Attribute.Code);
 			if (code == null) continue;
 
-			for (Map.Entry<Label, Object> entry : code.instructions.nodeData()) {
-				if (entry.getValue().getClass() == MemberDescriptor.class) {
-					MemberDescriptor desc = (MemberDescriptor) entry.getValue();
-					if (desc.name.equals(patch.self)) {
-						tmp.name = desc.name;
-						tmp.desc = desc.rawDesc;
-						Pcd pcd = patch.preconditions.find(tmp);
-						if (pcd != tmp && pcd.mapName != null) {
-							desc.owner = pcd.mapOwner;
-							desc.name = pcd.mapName;
-						}
+			for (Object o : code.instructions.nodeDataList()) {
+				if (o instanceof MemberDescriptor desc && desc.name.equals(patch.self)) {
+					tmp.name = desc.name;
+					tmp.desc = desc.rawDesc;
+					Pcd pcd = patch.preconditions.find(tmp);
+					if (pcd != tmp && pcd.mapName != null) {
+						desc.owner = pcd.mapOwner;
+						desc.name = pcd.mapName;
 					}
 				}
 			}
@@ -892,7 +886,7 @@ public class CodeWeaver implements Transformer {
 			case Constant.LONG: Long.parseLong(data1); break;
 			case Constant.DOUBLE: Double.parseDouble(data1); break;
 			case Constant.FLOAT: Float.parseFloat(data1); break;
-			case Constant.CLASS: Type.fieldDesc(data1); break;
+			case Constant.CLASS: Type.getType(data1); break;
 			case Constant.STRING: break;
 			default: throw new WeaveException("OverwriteConstant的matchType必须是Constant中的有效类别ID");
 		}
@@ -934,7 +928,7 @@ public class CodeWeaver implements Transformer {
 		AbstractMap<String, String> fakeMap = getFakeMap(nx, ctx);
 
 		Pcd tmpPCD = new Pcd();
-		List<Constant> constants = cp.data();
+		List<Constant> constants = cp.constants();
 		for (int i = 0; i < constants.size(); i++) {
 			Constant c = constants.get(i);
 			switch (c.type()) {
@@ -1114,7 +1108,7 @@ public class CodeWeaver implements Transformer {
 				code = data.methods.get(clinit_id).getAttribute(data.cp, Attribute.Code);
 				InsnList insn = code.instructions;
 				last = insn.getPcMap().last();
-				insn.replaceRange(last, insn.bci(), injectClInit.instructions, true);
+				insn.replaceRange(last, insn.length(), injectClInit.instructions, true);
 			} else {
 				MethodNode mn = new MethodNode(ACC_PUBLIC | ACC_STATIC, data.name(), "<clinit>", "()V");
 				mn.addAttribute(code = new Code(mn));
@@ -1237,7 +1231,7 @@ public class CodeWeaver implements Transformer {
 
 				mnCode.instructions.replaceRange(Label.atZero(),endMy,out,false);
 
-				mnCode.computeFrames(Code.COMPUTE_FRAMES);
+				mnCode.computeFrames(FrameVisitor.COMPUTE_FRAMES);
 				mnCode.stackSize = (char) Math.max(mnCode.stackSize, nxCode.stackSize);
 				mnCode.localSize = (char) Math.max(mnCode.localSize, nxCode.localSize);
 
@@ -1280,7 +1274,7 @@ public class CodeWeaver implements Transformer {
 							block:
 							if (!s.method.rawDesc().equals(desc)) {
 								List<Type> par1 = s.method.parameters();
-								List<Type> par2 = Type.methodDesc(desc);
+								List<Type> par2 = Type.getMethodTypes(desc);
 								par2.remove(par2.size()-1);
 								if (par1.size()-1 == par2.size() && data.name().equals(par1.get(par1.size()-1).owner)) {
 									if ((input.modifier&ACC_STATIC) != 0) throw new WeaveException("@Redirect.ContextInject 期待非静态方法: "+input.name()+"."+input.rawDesc());
@@ -1521,7 +1515,7 @@ public class CodeWeaver implements Transformer {
 					}
 				}
 
-				mnCode.computeFrames(Code.COMPUTE_FRAMES);
+				mnCode.computeFrames(FrameVisitor.COMPUTE_FRAMES);
 				mnCode.stackSize = (char) Math.max(mnCode.stackSize, nxCode.stackSize);
 				mnCode.localSize = (char) Math.max(mnCode.localSize, nxCode.localSize);
 				if ((returnHookType & 0x100) != 0) mnCode.stackSize = (char) Math.max(mnCode.stackSize, 1);
@@ -1534,9 +1528,8 @@ public class CodeWeaver implements Transformer {
 				data.methods.add(s.method);
 				String mapName = "nx^SIJ@@"+randomId((System.nanoTime() << 32) | s.mapName.hashCode());
 				input.name(mapName);
-				for (Map.Entry<Label, Object> entry : nxCode.instructions.nodeData()) {
-					if (entry.getValue().getClass() == MemberDescriptor.class) {
-						MemberDescriptor d = (MemberDescriptor) entry.getValue();
+				for (Object o : nxCode.instructions.nodeDataList()) {
+					if (o instanceof MemberDescriptor d) {
 						if ((data.name().equals(d.owner) || d.owner.contains("SIJ")) && s.mapName.equals(d.name) && s.method.rawDesc().equals(d.rawDesc)) {
 							d.owner = data.name();
 							d.name = mapName;
@@ -1569,7 +1562,7 @@ public class CodeWeaver implements Transformer {
 					}
 				};
 
-				InsnNode matchFirst = matcher.getNodeAt(0);
+				InsnNode matchFirst = matcher.first();
 				for (InsnNode node : toFind) {
 					ctx.reset();
 
@@ -1593,7 +1586,7 @@ public class CodeWeaver implements Transformer {
 
 						toFind.replaceRange(toFind.labelAt(node.pos()), itrA.unsharedPos(), toInj, false);
 
-						mnCode.computeFrames(Code.COMPUTE_FRAMES);
+						mnCode.computeFrames(FrameVisitor.COMPUTE_FRAMES);
 						mnCode.stackSize = (char) Math.max(mnCode.stackSize, nxCode.stackSize);
 						mnCode.localSize = (char) Math.max(mnCode.localSize, nxCode.localSize);
 

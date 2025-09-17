@@ -35,22 +35,21 @@ public final class BEncodeParser implements BinaryParser {
 	}
 
 	@Override
-	public <T extends ValueEmitter> T parse(InputStream in, @MagicConstant(intValues = SKIP_UTF_DECODE) int flag, T emitter) throws IOException, ParseException {
+	public void parse(InputStream in, @MagicConstant(intValues = SKIP_UTF_DECODE) int flags, ValueEmitter emitter) throws IOException, ParseException {
 		this.in = in;
-		this.cc = emitter;
+		this.emitter = emitter;
 		try {
-			element(flag);
+			element(flags);
 		} catch (ParseException e) {
 			throw e.addPath("$");
 		} finally {
 			this.in = null;
-			this.cc = null;
+			this.emitter = null;
 		}
-		return emitter;
 	}
 
 	private InputStream in;
-	private ValueEmitter cc;
+	private ValueEmitter emitter;
 	private final ByteList buf = new ByteList(64);
 
 	boolean element(int flag) throws IOException, ParseException {
@@ -64,9 +63,9 @@ public final class BEncodeParser implements BinaryParser {
 			case 3: // INT i
 				long v = readInt(-1);
 				if (v < Integer.MIN_VALUE || v > Integer.MAX_VALUE) {
-					cc.emit(v);
+					emitter.emit(v);
 				} else {
-					cc.emit((int) v);
+					emitter.emit((int) v);
 				}
 				break;
 			case 4: // STRING <number>
@@ -74,19 +73,19 @@ public final class BEncodeParser implements BinaryParser {
 				int r = b.rIndex;
 				if ((flag & SKIP_UTF_DECODE) == 0) {
 					try {
-						cc.emit(b.readUTF(b.readableBytes()));
+						emitter.emit(b.readUTF(b.readableBytes()));
 						break;
 					} catch (IllegalArgumentException e) {
 						b.rIndex = r;
 					}
 				}
-				cc.emit(b.toByteArray());
+				emitter.emit(b.toByteArray());
 				break;
 		}
 		return true;
 	}
 	private void list(int flag) throws IOException, ParseException {
-		cc.emitList();
+		emitter.emitList();
 		int size = 0;
 
 		while (true) {
@@ -97,10 +96,10 @@ public final class BEncodeParser implements BinaryParser {
 			}
 			size++;
 		}
-		cc.pop();
+		emitter.pop();
 	}
 	private void map(int flag) throws IOException, ParseException {
-		cc.emitMap();
+		emitter.emitMap();
 
 		while (true) {
 			int c = in.read();
@@ -111,7 +110,7 @@ public final class BEncodeParser implements BinaryParser {
 			ByteList b = readString(c);
 			String k = b.readUTF(b.readableBytes());
 
-			cc.key(k);
+			emitter.emitKey(k);
 			try {
 				if (!element(flag)) throw err("未预料的END");
 			} catch (ParseException e) {
@@ -119,7 +118,7 @@ public final class BEncodeParser implements BinaryParser {
 			}
 		}
 
-		cc.pop();
+		emitter.pop();
 	}
 
 	private ByteList readString(int c) throws IOException, ParseException {

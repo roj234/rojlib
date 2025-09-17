@@ -11,13 +11,13 @@ import roj.asm.type.Signature;
 import roj.asm.type.Type;
 import roj.asm.type.TypeHelper;
 import roj.collect.ArrayList;
-import roj.util.function.Flow;
 import roj.text.CharList;
 import roj.text.logging.Logger;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
 import roj.util.Helpers;
 import roj.util.TypedKey;
+import roj.util.function.Flow;
 
 import java.util.List;
 import java.util.Objects;
@@ -113,7 +113,7 @@ public final class MethodNode extends MemberNode {
 			ClassListAttribute exceptions = getAttribute(cp, Attribute.Exceptions);
 			if (exceptions != null)
 				signature.exceptions = Helpers.cast(Flow.of(exceptions.value).map(Type::klass).toList());
-			signature.values = Helpers.cast(Type.methodDesc(rawDesc()));
+			signature.values = Helpers.cast(Type.getMethodTypes(rawDesc()));
 			addAttribute(signature);
 		}
 		return signature;
@@ -121,7 +121,7 @@ public final class MethodNode extends MemberNode {
 
 	public String rawDesc() {
 		if (in != null) {
-			desc = Type.toMethodDesc(in, out, desc.getClass() == String.class ? desc.toString() : null);
+			desc = Type.getMethodDescriptor(in, out, desc.getClass() == String.class ? desc.toString() : null);
 			return desc.toString();
 		}
 		return desc.getClass() == CstUTF.class ? ((CstUTF) desc).str() : desc.toString();
@@ -135,12 +135,12 @@ public final class MethodNode extends MemberNode {
 	public List<Type> parameters() {
 		if (in == null) {
 			ArrayList<Type> in = AsmCache.getInstance().methodTypeTmp();
-			out = Type.methodDesc(rawDesc(), in);
+			out = Type.getArgumentTypes(rawDesc(), in);
 			this.in = new ArrayList<>(in);
 		}
 		return in;
 	}
-	public Type returnType() { return out == null ? out = Type.methodDescReturn(rawDesc()) : out; }
+	public Type returnType() { return out == null ? out = Type.getReturnType(rawDesc()) : out; }
 	public void setReturnType(Type ret) { parameters(); out = ret; }
 
 	public String toString() { return toString(new CharList(), null, 0).toStringAndFree(); }

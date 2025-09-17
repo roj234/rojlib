@@ -3,10 +3,10 @@ package roj.audio.tag;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import roj.audio.AudioMetadata;
-import roj.crypt.CRC32;
 import roj.collect.Multimap;
+import roj.crypt.CRC32;
 import roj.io.IOUtil;
-import roj.io.MyDataInput;
+import roj.io.ByteInput;
 import roj.io.source.Source;
 import roj.text.CharList;
 import roj.text.FastCharset;
@@ -143,23 +143,23 @@ public class ID3Tag implements AudioMetadata {
 
 		var buf = DynByteBuf.wrap(b, 3 + off, 125);
 
-		int i = buf.readZeroTerminate(30);
+		int i = buf.readCString(30);
 		if (title == null && i != 0) title = readAsciiOrGBK(buf, i);
 
 		buf.rIndex = 30;
-		i = buf.readZeroTerminate(30);
+		i = buf.readCString(30);
 		if (artist == null && i != 0) artist = readAsciiOrGBK(buf, i);
 
 		buf.rIndex = 60;
-		i = buf.readZeroTerminate(30);
+		i = buf.readCString(30);
 		if (album == null && i != 0) album = readAsciiOrGBK(buf, i);
 
 		buf.rIndex = 90;
-		i = buf.readZeroTerminate(4);
+		i = buf.readCString(4);
 		if (year == null && i != 0) year = buf.readAscii(i);
 
 		buf.rIndex = 94;
-		i = buf.readZeroTerminate(28);
+		i = buf.readCString(28);
 		if (i != 0) attributes.put("COMM", readAsciiOrGBK(buf, i));
 
 		buf.rIndex = 122;
@@ -176,7 +176,7 @@ public class ID3Tag implements AudioMetadata {
 		if (i <= 3) return buf.readAscii(i);
 		int cn = 0;
 		for (int j = buf.rIndex; j < buf.rIndex+i; j++) {
-			int u = buf.getU(j);
+			int u = buf.getUnsignedByte(j);
 			if (u > 0x7F) cn++;
 		}
 		if (cn * 3 > i) {
@@ -214,7 +214,7 @@ public class ID3Tag implements AudioMetadata {
 	 * 解析ID3 v2标签信息。
 	 * <a href="https://mutagen-specs.readthedocs.io/en/latest/id3/id3v2.4.0-structure.html#id3v2-header">ID3 tag version 2.4.0 - Main Structure — Mutagen Specs 1.0 documentation</a>
 	 */
-	public void parseID3V2(MyDataInput in) throws IOException {
+	public void parseID3V2(ByteInput in) throws IOException {
 		in.skipForce(3);
 
 		int id3_ver  = in.readUnsignedByte(); // ID3V2.[ver]
@@ -248,7 +248,7 @@ public class ID3Tag implements AudioMetadata {
 		while (in.position() < end && readFrame(in));
 	}
 
-	private static int synchSafeInt(MyDataInput in) throws IOException {
+	private static int synchSafeInt(ByteInput in) throws IOException {
 		int i = in.readUnsignedByte() << 21;
 		i |= in.readUnsignedByte() << 14;
 		i |= in.readUnsignedByte() << 7;
@@ -256,12 +256,12 @@ public class ID3Tag implements AudioMetadata {
 		return i;
 	}
 
-	private static String readString(MyDataInput in, int len) throws IOException {return readString(in, in.readUnsignedByte(), len-1);}
-	private static String readString(MyDataInput in, int encoding, int len) throws IOException {
+	private static String readString(ByteInput in, int len) throws IOException {return readString(in, in.readUnsignedByte(), len-1);}
+	private static String readString(ByteInput in, int encoding, int len) throws IOException {
 		return new String(in.readBytes(len), encoding == 1 ? StandardCharsets.UTF_16 : StandardCharsets.ISO_8859_1);
 	}
 
-	private boolean readFrame(MyDataInput in) throws IOException {
+	private boolean readFrame(ByteInput in) throws IOException {
 		String tag = in.readAscii(4);
 		// padding
 		if (tag.charAt(0) == 0) return false;
@@ -403,7 +403,7 @@ public class ID3Tag implements AudioMetadata {
 		}*/
 		if (crc) {
 			var crc32 = CRC32.crc32(tmp.list, 24, tmp.wIndex()-24);
-			tmp.putInt(20, crc32);
+			tmp.setInt(20, crc32);
 		}
 
 		int len = tmp.wIndex() - 10;
@@ -476,5 +476,5 @@ public class ID3Tag implements AudioMetadata {
 		writeSynchSafeInt(tmp, pos, length);
 	}
 
-	private static void writeSynchSafeInt(ByteList b, int off, int len) {b.put(off++, (len >>> 21) & 0x7F).put(off++, (len >>> 14) & 0x7F).put(off++, (len >>> 7) & 0x7F).put(off, (len) & 0x7F);}
+	private static void writeSynchSafeInt(ByteList b, int off, int len) {b.set(off++, (len >>> 21) & 0x7F).set(off++, (len >>> 14) & 0x7F).set(off++, (len >>> 7) & 0x7F).set(off, (len) & 0x7F);}
 }

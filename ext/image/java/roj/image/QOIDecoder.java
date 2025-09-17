@@ -1,7 +1,7 @@
 package roj.image;
 
 import roj.io.CorruptedInputException;
-import roj.io.MyDataInput;
+import roj.io.ByteInput;
 
 import java.awt.color.ColorSpace;
 import java.awt.image.*;
@@ -19,7 +19,7 @@ public class QOIDecoder implements ImageDecoder {
 	private boolean alpha, sRGB;
 
 	@Override
-	public boolean init(MyDataInput in) throws IOException {
+	public boolean init(ByteInput in) throws IOException {
 		if (!in.readAscii(4).equals("qoif")) return false;
 		width = in.readInt();
 		height = in.readInt();
@@ -52,7 +52,7 @@ public class QOIDecoder implements ImageDecoder {
 	public ColorModel getColorModel() {return new DirectColorModel(getColorSpace(), alpha ? 32 : 24, 0xff0000, 0xff00, 0xff, alpha ? 0xff000000 : 0, false, 3);}
 
 	@Override
-	public BufferedImage decodeImage(MyDataInput in) throws IOException {
+	public BufferedImage decodeImage(ByteInput in) throws IOException {
 		ColorModel cm = getColorModel();
 		WritableRaster raster = cm.createCompatibleWritableRaster(width, height);
 
@@ -66,7 +66,7 @@ public class QOIDecoder implements ImageDecoder {
 	}
 
 	@Override
-	public void decodeImage(MyDataInput in, IntConsumer argb) throws IOException {
+	public void decodeImage(ByteInput in, IntConsumer argb) throws IOException {
 		int i = 0;
 		int pixels = width * height;
 		//if (argb.length < pixels) throw new CorruptedInputException("Pixel Array Too Small");

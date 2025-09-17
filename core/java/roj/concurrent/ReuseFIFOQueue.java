@@ -1,27 +1,28 @@
 package roj.concurrent;
 
-import roj.reflect.Unaligned;
+import roj.optimizer.FastVarHandle;
+import roj.reflect.Handles;
 
-import static roj.reflect.Unaligned.U;
+import java.lang.invoke.VarHandle;
 
 /**
  * @author Roj234
  * @since 2025/3/13 8:23
  */
+@FastVarHandle
 public abstract class ReuseFIFOQueue<T extends ReuseFIFOQueue.Node> {
 	public static class Node {volatile Node next;}
 
-	protected static final long
-			HEAD_OFFSET = Unaligned.fieldOffset(ReuseFIFOQueue.class, "head"),
-			TAIL_OFFSET = Unaligned.fieldOffset(ReuseFIFOQueue.class, "tail"),
-			RECYCLE_OFFSET = Unaligned.fieldOffset(ReuseFIFOQueue.class, "recycle");
+	private static final VarHandle
+			HEAD = Handles.lookup().findVarHandle(ReuseFIFOQueue.class, "head", Node.class),
+			TAIL = Handles.lookup().findVarHandle(ReuseFIFOQueue.class, "tail", Node.class);
 
-	protected volatile Node head, tail, recycle;
+	protected volatile Node head, tail;
 
 	public ReuseFIFOQueue() {head = tail = new Node();}
 
 	protected final void addLast(T node) {
-		var tail = (Node)U.getAndSetReference(this, TAIL_OFFSET, node);
+		var tail = (Node)TAIL.getAndSet(this, node);
 		tail.next = node;
 	}
 
@@ -37,7 +38,7 @@ public abstract class ReuseFIFOQueue<T extends ReuseFIFOQueue.Node> {
 			var oldHeadNext = oldHead.next;
 			if (oldHeadNext == null || (ifEqual != null && ifEqual != oldHeadNext)) return null;
 
-			if (U.compareAndSetReference(this, HEAD_OFFSET, oldHead, oldHeadNext)) {
+			if (HEAD.compareAndSet(this, oldHead, oldHeadNext)) {
 				oldHead.next = null;
 				recycle(oldHead);
 				return (T) oldHeadNext;

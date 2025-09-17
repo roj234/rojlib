@@ -1,7 +1,7 @@
 package roj.util;
 
 import org.intellij.lang.annotations.MagicConstant;
-import roj.reflect.Unaligned;
+import roj.reflect.Unsafe;
 
 import java.util.Locale;
 
@@ -14,7 +14,7 @@ public enum OS {
 
 	public static final OS CURRENT = getOS();
 	@MagicConstant(intValues = {32, 64})
-	public static final int ARCH = Unaligned.ADDRESS_SIZE << 3;
+	public static final int ARCH = Unsafe.ADDRESS_SIZE << 3;
 	public static String archName() {
 		return switch (ARCH) {
 			case 32 -> "x86";

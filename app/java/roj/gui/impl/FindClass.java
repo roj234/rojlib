@@ -57,7 +57,7 @@ public class FindClass extends JFrame {
 				if (filter.test(data.name())) out.add(data.name());
 
 				if (!uiDeclOnly.isSelected()) {
-					for (Constant c : data.cp.data()) {
+					for (Constant c : data.cp.constants()) {
 						if (c.type() == Constant.CLASS) {
 							if (filter.test(c.getEasyCompareValue())) {
 								out.add("REF: "+ data.name());
@@ -89,7 +89,7 @@ public class FindClass extends JFrame {
 				}
 				if (uiDeclOnly.isSelected()) continue;
 
-				for (Constant c : data.cp.data()) {
+				for (Constant c : data.cp.constants()) {
 					if (c instanceof CstRef) {
 						CstRef ref = (CstRef) c;
 						String s = ref.rawDesc();
@@ -107,7 +107,7 @@ public class FindClass extends JFrame {
 		}
 		if (uiSerString.isSelected()) {
 			for (ClassNode data : ref) {
-				for (Constant c : data.cp.data()) {
+				for (Constant c : data.cp.constants()) {
 					if (c.type() == Constant.STRING) {
 						if (filter.test(c.getEasyCompareValue())) {
 							out.add(data.name());
@@ -119,7 +119,7 @@ public class FindClass extends JFrame {
 		}
 		if (uiSerConstant.isSelected()) {
 			for (ClassNode data : ref) {
-				for (Constant c : data.cp.data()) {
+				for (Constant c : data.cp.constants()) {
 					if (c.type() >= 3 && c.type() <= 6) {
 						if (filter.test(c.getEasyCompareValue())) {
 							out.add(data.name());

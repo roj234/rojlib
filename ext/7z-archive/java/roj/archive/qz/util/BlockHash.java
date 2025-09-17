@@ -5,7 +5,7 @@ import roj.collect.ArrayList;
 import roj.collect.LRUCache;
 import roj.io.source.Source;
 import roj.math.MathUtils;
-import roj.reflect.Unaligned;
+import roj.reflect.Unsafe;
 import roj.util.ArrayCache;
 import roj.util.ArrayUtil;
 
@@ -155,7 +155,7 @@ public final class BlockHash {
 		byte[] bufb = cache.computeIfAbsent(new Value(bb, offsetb), loadCache);
 
 		int readable = Math.min(bufa.length, bufb.length);
-		int firstDiff = ArrayUtil.compare(bufa, Unaligned.ARRAY_BYTE_BASE_OFFSET, bufb, Unaligned.ARRAY_BYTE_BASE_OFFSET, readable, ArrayUtil.LOG2_ARRAY_BYTE_INDEX_SCALE);
+		int firstDiff = ArrayUtil.compare(bufa, Unsafe.ARRAY_BYTE_BASE_OFFSET, bufb, Unsafe.ARRAY_BYTE_BASE_OFFSET, readable, ArrayUtil.LOG2_ARRAY_BYTE_INDEX_SCALE);
 		return firstDiff >= 0 ? firstDiff : readable;
 	}
 

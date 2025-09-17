@@ -51,10 +51,10 @@ public final class UintPlugin extends InvokeHook implements Library, Compiler.Ex
 		}
 		@Override public IType type() {
 			return switch (is64) {
-				case 0 -> Type.primitive(Type.INT);
+				case 0 -> Type.INT_TYPE;
 				case 1 -> new Type.ADT('I', "uint32");
 				case 2 -> new Type.ADT('J', "uint64");
-				case 3 -> Type.primitive(Type.LONG);
+				case 3 -> Type.LONG_TYPE;
 				default -> throw OperationDone.NEVER;
 			};
 		}
@@ -73,16 +73,16 @@ public final class UintPlugin extends InvokeHook implements Library, Compiler.Ex
 	private static int u32Count(IType type) {
 		if (type == null) return -1;
 		if ("uint32".equals(type.owner())) return 1;
-		int cap = TypeCast.getDataCap(type.getActualType());
-		return cap >= 1 && cap <= 4 ? 0 : -1;
+		int cap = Type.getSort(type.getActualType());
+		return cap >= Type.SORT_BYTE && cap <= Type.SORT_INT ? 0 : -1;
 	}
 
 	private static int u64Count(Compiler.OperatorContext opctx) {return u64Count(opctx.leftType())+u64Count(opctx.rightType());}
 	private static int u64Count(IType type) {
 		if (type == null) return -1;
 		if ("uint64".equals(type.owner())) return 1;
-		int cap = TypeCast.getDataCap(type.getActualType());
-		return cap >= 1 && cap <= 5 ? 0 : -1;
+		int cap = Type.getSort(type.getActualType());
+		return cap >= Type.SORT_BYTE && cap <= Type.SORT_LONG ? 0 : -1;
 	}
 
 	private final MethodNode[] exprRef = new MethodNode[6];

@@ -4,7 +4,7 @@ import roj.collect.ArrayList;
 import roj.concurrent.FastLocalThread;
 import roj.io.IOUtil;
 import roj.util.Helpers;
-import roj.util.HighResolutionTimer;
+import roj.util.JVM;
 
 import java.io.Closeable;
 import java.io.IOException;
@@ -31,7 +31,7 @@ public final class SelectorLoop implements Closeable {
 
 		volatile boolean idle, wakeupLock;
 
-		static { HighResolutionTimer.activate(); }
+		static { JVM.useAccurateTiming(); }
 		Poller() throws IOException {
 			this.selector = MySelector.open();
 			setName(prefix+" #"+index++);

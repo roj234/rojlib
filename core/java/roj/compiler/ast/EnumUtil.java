@@ -21,7 +21,7 @@ public class EnumUtil {
 		v1.slot = 1;
 		v1.hasValue = true;
 
-		var v2 = new Variable("@ordinal", Type.primitive(Type.INT));
+		var v2 = new Variable("@ordinal", Type.INT_TYPE);
 		v2.slot = 2;
 		v2.hasValue = true;
 

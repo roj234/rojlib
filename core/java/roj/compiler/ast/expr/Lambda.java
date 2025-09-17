@@ -44,8 +44,8 @@ public final class Lambda extends Expr {
 	}
 	public static int getLambdaArgc(IType lambdaType) {
 		String name;
-		if (lambdaType.genericType() != IType.ASTERISK_TYPE || !(name = lambdaType.toString()).startsWith("lambdaArg:[")) return -1;
-		return name.length() == 13 ? name.charAt(11) - '0' : Integer.parseInt(name.substring(11, name.length()-1));
+		if (lambdaType.genericType() != IType.ASTERISK_TYPE || !(name = lambdaType.toString()).startsWith("lambda.arg:[")) return -1;
+		return name.length() == 14 ? name.charAt(12) - '0' : Integer.parseInt(name.substring(12, name.length()-1));
 	}
 	public static List<IType> getLambdaArgs(IType lambdaType) {
 		return ((Asterisk) lambdaType).getTraits();
@@ -174,7 +174,7 @@ public final class Lambda extends Expr {
 		if (methodRef != null) {
 			lambda实现所属的类 = ctx.compiler.resolve(methodRef.type().owner());
 
-			List<Type> args = Type.methodDesc(lambda实参);
+			List<Type> args = Type.getMethodTypes(lambda实参);
 			args.remove(args.size()-1);
 
 			var r = ctx.getMethodListOrReport(lambda实现所属的类, methodName, methodRef).findMethod(ctx, Helpers.cast(args), 0);

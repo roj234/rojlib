@@ -2,7 +2,7 @@ package roj.plugins.web.sso;
 
 import roj.crypt.HMAC;
 import roj.io.IOUtil;
-import roj.reflect.Unaligned;
+import roj.reflect.Unsafe;
 import roj.text.CharList;
 import roj.text.TextUtil;
 import roj.text.URICoder;
@@ -28,7 +28,7 @@ public final class TOTP {
 		byte[] digest = hmac_sha1.digestShared();
 
 		int offset = digest[digest.length-1]&0xf;
-		int i = Unaligned.U.get32UB(digest, Unaligned.ARRAY_BYTE_BASE_OFFSET+offset)&Integer.MAX_VALUE;
+		int i = Unsafe.U.get32UB(digest, Unsafe.ARRAY_BYTE_BASE_OFFSET+offset)&Integer.MAX_VALUE;
 
 		int otp = i % 1000000;
 

@@ -5,7 +5,7 @@ import roj.util.DynByteBuf;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 
-import static roj.reflect.Unaligned.U;
+import static roj.reflect.Unsafe.U;
 
 /**
  * 这是全新的BM字符串匹配实现

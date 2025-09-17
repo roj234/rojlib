@@ -113,13 +113,13 @@ public abstract sealed class MSSEngine permits MSSEngineClient, MSSEngineServer 
 		if (siz < 0) return siz;
 
 		int pos = rx.rIndex;
-		int len = rx.readShort(pos+1);
+		int len = rx.getShort(pos+1);
 		if (siz < len) return siz-len;
 
 		rx.rIndex = pos+3;
 		rx.wIndex(rx.rIndex+len);
 
-		int type = rx.getU(pos);
+		int type = rx.getUnsignedByte(pos);
 		if (type == P_ALERT) handleError(rx);
 		return type;
 	}

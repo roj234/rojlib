@@ -37,7 +37,7 @@ public class TimeUnitPlugin extends Expr {
 	}
 
 	@Override public String toString() { return node+" "+unit; }
-	@Override public IType type() { return Type.primitive(Type.LONG); }
+	@Override public IType type() { return Type.LONG_TYPE; }
 
 	@Override
 	public Expr resolve(CompileContext ctx) throws ResolveException {

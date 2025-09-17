@@ -699,7 +699,7 @@ public final class Tty extends DelegatedPrintStream {
 		onInput(iseq);
 		buf.compact();
 	}
-	public void onInput(CharList buf) {
+	public synchronized void onInput(CharList buf) {
 		processInput(buf);
 		handler.render();
 	}
@@ -933,7 +933,10 @@ public final class Tty extends DelegatedPrintStream {
 		if (IS_RICH) {
 			System.setOut(instance);
 			System.setErr(instance);
-			Runtime.getRuntime().addShutdownHook(new Thread(() -> write(reset+"\u001b[?1006l\u001b[?1003l"+Cursor.show), "Tty Reset"));
+			Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+				instance.writeAll(reset+"\u001b[?1006l\u001b[?1003l"+Cursor.show);
+				instance.flushAll();
+			}, "Tty Reset"));
 
 			if (IS_INTERACTIVE) {
 				System.setIn(new InputStream() {

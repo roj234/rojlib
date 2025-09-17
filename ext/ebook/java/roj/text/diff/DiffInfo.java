@@ -2,7 +2,7 @@ package roj.text.diff;
 
 import roj.config.mapper.Optional;
 import roj.io.IOUtil;
-import roj.reflect.Unaligned;
+import roj.reflect.Unsafe;
 import roj.text.CharList;
 import roj.text.TextReader;
 import roj.ui.EasyProgressBar;
@@ -10,7 +10,7 @@ import roj.ui.EasyProgressBar;
 import java.io.File;
 import java.io.IOException;
 
-import static roj.reflect.Unaligned.U;
+import static roj.reflect.Unsafe.U;
 
 /**
  * @author Roj234
@@ -47,7 +47,7 @@ public final class DiffInfo {
 			try (TextReader in = TextReader.auto(file)) {
 				sb.readFully(in, true);
 				byte[] out = new byte[sb.length()*2];
-				U.copyMemory(sb.list, Unaligned.ARRAY_CHAR_BASE_OFFSET, out, Unaligned.ARRAY_BYTE_BASE_OFFSET, out.length);
+				U.copyMemory(sb.list, Unsafe.ARRAY_CHAR_BASE_OFFSET, out, Unsafe.ARRAY_BYTE_BASE_OFFSET, out.length);
 				return out;
 			}
 		} else {

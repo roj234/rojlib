@@ -1,7 +1,7 @@
 package roj.crypt;
 
 import org.intellij.lang.annotations.MagicConstant;
-import roj.reflect.Unaligned;
+import roj.reflect.Unsafe;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
 
@@ -206,7 +206,7 @@ public class FeedbackCipher extends RCipher {
 
 				for (int i = 0; i < blockSize; i++) {
 					int b = vArr[i]^tArr[i];
-					vArr[i] = in.get(i+j);
+					vArr[i] = in.getByte(i+j);
 					out.put(b);
 				}
 			}
@@ -245,19 +245,19 @@ public class FeedbackCipher extends RCipher {
 				for (int i = 0; i < blockSize; i++) {
 					int b = tArr[i] ^ vArr[i];
 					out.put((byte) b);
-					vArr[i] = (byte) (b ^ in.get(inPos++));
+					vArr[i] = (byte) (b ^ in.getByte(inPos++));
 				}
 			}
 		} else {
 			while (cyl-- > 0) {
-				for (int i = 0; i < blockSize; i++) vArr[i] ^= in.get(inPos++);
+				for (int i = 0; i < blockSize; i++) vArr[i] ^= in.getByte(inPos++);
 
 				V.rIndex = 0; T.clear();
 				cip.cryptOneBlock(V, T);
 
 				in.readFully(vArr);
 
-				for (int i = 0; i < blockSize; i++) vArr[i] ^= T.get(i);
+				for (int i = 0; i < blockSize; i++) vArr[i] ^= T.getByte(i);
 
 				out.put(T);
 			}
@@ -324,7 +324,7 @@ public class FeedbackCipher extends RCipher {
 			// block N first (E^P)
 			int off = pos+blockSize;
 			for (int i = 0; i < ext; i++)
-				out.put(off++, (in.get(in.rIndex+i) ^ tArr[i]));
+				out.set(off++, (in.getByte(in.rIndex+i) ^ tArr[i]));
 
 			// replace X
 			T.clear(); T.put(in, ext); T.wIndex(blockSize);
@@ -333,7 +333,7 @@ public class FeedbackCipher extends RCipher {
 			out.wIndex(pos);
 			cip.cryptOneBlock(T, out);
 			for (int i=0; i<blockSize; i++)
-				out.put(pos+i, (out.get(pos+i) ^ vArr[i]));
+				out.set(pos+i, (out.getByte(pos+i) ^ vArr[i]));
 
 			out.wIndex(pos+blockSize+ext);
 		}
@@ -441,7 +441,7 @@ public class FeedbackCipher extends RCipher {
 		} else {
 			Object ref = buf.array();
 			long addr = buf._unsafeAddr() + buf.wIndex();
-			while (padLen-- > 0) Unaligned.U.putByte(ref, addr++, num);
+			while (padLen-- > 0) Unsafe.U.putByte(ref, addr++, num);
 
 			buf.wIndex(buf.wIndex() + (num&0xFF));
 		}
@@ -449,7 +449,7 @@ public class FeedbackCipher extends RCipher {
 
 	public static void FC_Unpad(int block, DynByteBuf buf, boolean iso) throws BadPaddingException {
 		int srcLen = buf.readableBytes();
-		int padLen = buf.getU(buf.wIndex()-1);
+		int padLen = buf.getUnsignedByte(buf.wIndex()-1);
 
 		if (padLen <= 0 || padLen > block || buf.readableBytes() < padLen) throw new BadPaddingException();
 
@@ -459,7 +459,7 @@ public class FeedbackCipher extends RCipher {
 			Object ref = buf.array();
 			long addr = buf._unsafeAddr() + buf.wIndex() - 2;
 			while (num-- > 0) {
-				if ((Unaligned.U.getByte(ref, addr--)&0xFF) != padLen) {
+				if ((Unsafe.U.getByte(ref, addr--)&0xFF) != padLen) {
 					throw new BadPaddingException();
 				}
 			}

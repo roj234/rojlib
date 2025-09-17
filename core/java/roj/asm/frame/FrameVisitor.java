@@ -1,6 +1,5 @@
 package roj.asm.frame;
 
-import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import roj.asm.MethodNode;
@@ -32,6 +31,9 @@ import static roj.asm.frame.Var2.*;
  */
 public class FrameVisitor extends SizeVisitor {
 	public static final Var2 UNRESOLVED_REFERENCE = new Var2(T_NULL, "UNRESOLVED NULL REFERENCE");
+	public static final byte COMPUTE_FRAMES = 1;
+	public static final byte COMPUTE_SIZES = 2;
+	public static final byte VALIDATE = 4;
 
 	private Var2[] currentLocals;
 	private Var2[] currentStack;
@@ -79,19 +81,19 @@ public class FrameVisitor extends SizeVisitor {
 	 * 这个方法执行工作列表算法，模拟指令执行，计算每个基本块的出口状态，
 	 * 并最终将这些状态转换为StackMapTable格式的 {@link Frame} 列表。
 	 *
-	 * @param code           方法字节码
-	 * @param cp             方法的常量池
-	 * @param generateFrames 指示是否要生成帧。如果为 {@code false}，则返回 {@code null}。
+	 * @param code  方法字节码
+	 * @param cp    方法的常量池
+	 * @param flags 指示是否要生成帧。如果为 {@code false}，则返回 {@code null}。
 	 * @return 生成的StackMapTable帧列表，如果 {@code generateFrames} 为 {@code false}，则返回 {@code null}。
 	 */
 	@Nullable
-	@Contract("_, _, false -> null")
-	public List<Frame> finish(DynByteBuf code, ConstantPool cp, boolean generateFrames) {
+	public List<Frame> finish(DynByteBuf code, ConstantPool cp, int flags) {
 		int begin = code.rIndex;
-		super.finish(code, cp, false);
+		super.finish(code, cp, COMPUTE_SIZES);
 		List<BasicBlock> blocks = processed;
 
-		if (blocks.size() == 1 && !blocks.get(0).isFrame) return null;
+		if ((flags&~COMPUTE_SIZES) == 0) return null;
+		if (blocks.size() == 1 && !blocks.get(0).isFrame && (flags&VALIDATE) == 0) return null;
 
 		// 1. 初始化 Worklist，这是一个存放待处理块的队列。
 		Deque<BasicBlock> changeset = new ArrayDeque<>();
@@ -130,7 +132,7 @@ public class FrameVisitor extends SizeVisitor {
 			try {
 				interpret(code, cp, begin);
 			} catch (Exception e) {
-				throw new FastFailException("Exception processing block \n"+block, e);
+				throw new FastFailException("Exception processing block (at #"+pc+") \n"+block, e);
 			}
 			saveState(block);
 
@@ -166,6 +168,8 @@ public class FrameVisitor extends SizeVisitor {
 		if (debug) for (BasicBlock block : blocks) {
 			System.out.println(block);
 		}
+
+		if (blocks.size() == 1 && !blocks.get(0).isFrame) return null;
 
 		var frames = new ArrayList<Frame>();
 		toFrames(blocks, frames);
@@ -306,7 +310,7 @@ public class FrameVisitor extends SizeVisitor {
 				case LADD, LSUB, LMUL, LDIV, LREM, LAND, LOR, LXOR -> math(T_LONG);
 				case LSHL, LSHR, LUSHR -> pop(T_INT);
 				case DADD, DSUB, DMUL, DDIV, DREM -> math(T_DOUBLE);
-				case LDC -> ldc(cp.data().get(r.readUnsignedByte()-1));
+				case LDC -> ldc(cp.constants().get(r.readUnsignedByte()-1));
 				case LDC_W, LDC2_W -> ldc(cp.get(r));
 				case BIPUSH -> {
 					push(T_INT);
@@ -606,7 +610,7 @@ public class FrameVisitor extends SizeVisitor {
 
 	private void ldc(Constant c) {
 		switch (c.type()) {
-			case Constant.DYNAMIC -> push(of(Type.fieldDesc(((CstDynamic) c).desc().rawDesc().str())));
+			case Constant.DYNAMIC -> push(of(Type.getType(((CstDynamic) c).desc().rawDesc().str())));
 			case Constant.INT -> push(T_INT);
 			case Constant.LONG -> push(T_LONG);
 			case Constant.FLOAT -> push(T_FLOAT);
@@ -623,7 +627,7 @@ public class FrameVisitor extends SizeVisitor {
 	private void invoke(byte code, CstRef method) {invoke(code, method, method.nameAndType());}
 	private void invoke(byte code, CstRef method, CstNameAndType desc) {
 		ArrayList<Type> arguments = tmpList; arguments.clear();
-		Type returnType = Type.methodDesc(desc.rawDesc().str(), arguments);
+		Type returnType = Type.getArgumentTypes(desc.rawDesc().str(), arguments);
 		for (int i = arguments.size() - 1; i >= 0; i--) {
 			pop(of(arguments.get(i)));
 		}
@@ -650,7 +654,7 @@ public class FrameVisitor extends SizeVisitor {
 		if (returnValue != null) push(returnValue);
 	}
 	private void field(byte code, CstRef field) {
-		Var2 fieldType = of(Type.fieldDesc(field.nameAndType().rawDesc().str()));
+		Var2 fieldType = of(Type.getType(field.nameAndType().rawDesc().str()));
 		switch (code) {
 			case GETSTATIC -> push(fieldType);
 			case PUTSTATIC -> pop(fieldType);

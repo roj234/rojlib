@@ -1,7 +1,6 @@
 package roj.asm.insn;
 
 import org.intellij.lang.annotations.MagicConstant;
-import org.jetbrains.annotations.ApiStatus;
 import org.jetbrains.annotations.Range;
 import roj.asm.AsmCache;
 import roj.asm.MethodNode;
@@ -22,25 +21,27 @@ import roj.util.ByteList;
 import roj.util.DynByteBuf;
 
 import java.util.List;
+import java.util.Objects;
 
 import static roj.asm.Opcodes.*;
-import static roj.reflect.Unaligned.U;
+import static roj.asm.frame.FrameVisitor.*;
+import static roj.reflect.Unsafe.U;
 
 /**
  * @author Roj233
  * @since 2021/8/16 19:07
  */
 public class CodeWriter extends AbstractCodeWriter {
-	public static final int ADD_RETURN = 4;
+	public static final int ADD_RETURN = 8;
 
 	public DynByteBuf bw;
 	public ConstantPool cpw;
 
-	public MethodNode mn;
-	private byte fvFlags;
+	public MethodNode method;
+	private byte computes;
 
 	public ArrayList<Frame> frames;
-	private FrameVisitor fv;
+	FrameVisitor frameVisitor;
 	private boolean hasFrames;
 
 	private int state;
@@ -54,9 +55,9 @@ public class CodeWriter extends AbstractCodeWriter {
 		this.bw = bw;
 		this.cpw = cpw;
 
-		this.mn = method;
-		this.fv = null;
-		this.fvFlags = 0;
+		this.method = method;
+		this.frameVisitor = null;
+		this.computes = 0;
 
 		bciR2W = null;
 
@@ -70,13 +71,12 @@ public class CodeWriter extends AbstractCodeWriter {
 		codeOb = bw;
 		state = 1;
 	}
-	public void computeFrames(@MagicConstant(flags = {Code.COMPUTE_SIZES, Code.COMPUTE_FRAMES, ADD_RETURN}) int interpretFlags) {
-		this.fvFlags = (byte) interpretFlags;
+	public void computeFrames(@MagicConstant(flags = {COMPUTE_SIZES, COMPUTE_FRAMES, VALIDATE, ADD_RETURN}) int computes) {
+		this.computes = (byte) computes;
 	}
 
 	/**
 	 * 将buf插入代码开始之前
-	 * 可能需要处理位于index0的label（见重载）
 	 */
 	public void insertBefore(DynByteBuf buf) {
 		if (state != 1) throw new IllegalStateException();
@@ -86,7 +86,7 @@ public class CodeWriter extends AbstractCodeWriter {
 		int length = buf.readableBytes();
 
 		bw.preInsert(offset, length);
-		bw.put(offset, buf);
+		bw.set(offset, buf);
 		// update length
 		if (!segments.isEmpty())
 			segments.get(0).write(null, 0);
@@ -99,26 +99,26 @@ public class CodeWriter extends AbstractCodeWriter {
 
 	public void visitSize(int stackSize, int localSize) {
 		if (state != 1) throw new IllegalStateException();
-		bw.putShort(tmpLenOffset-8, stackSize).putShort(tmpLenOffset-6, localSize);
+		bw.setShort(tmpLenOffset-8, stackSize).setShort(tmpLenOffset-6, localSize);
 	}
 	public void visitSizeMax(int stackSize, int localSize) {
 		if (state != 1) throw new IllegalStateException();
-		int s = bw.readShort(tmpLenOffset-8);
+		int s = bw.getShort(tmpLenOffset-8);
 		if (stackSize > s) {
-			bw.putShort(tmpLenOffset-8, stackSize);
+			bw.setShort(tmpLenOffset-8, stackSize);
 		}
-		s = bw.readShort(tmpLenOffset-6);
+		s = bw.getShort(tmpLenOffset-6);
 		if (localSize > s) {
-			bw.putShort(tmpLenOffset-6, localSize);
+			bw.setShort(tmpLenOffset-6, localSize);
 		}
 	}
 	public int getStackSize() {
 		if (state != 1) throw new IllegalStateException();
-		return bw.readShort(tmpLenOffset-8);
+		return bw.getShort(tmpLenOffset-8);
 	}
 	public int getLocalSize() {
 		if (state != 1) throw new IllegalStateException();
-		return bw.readShort(tmpLenOffset-6);
+		return bw.getShort(tmpLenOffset-6);
 	}
 
 	protected void visitBytecode(ConstantPool cp, DynByteBuf r, int len) {
@@ -190,8 +190,8 @@ public class CodeWriter extends AbstractCodeWriter {
 				}
 			}
 			case "StackMapTable" -> {
-				if (fvFlags == 0 && mn != null) {
-					FrameVisitor.readFrames(frames = new ArrayList<>(r.readUnsignedShort(r.rIndex)), r, cp, this, mn.owner(), getLocalSize(), getStackSize());
+				if (computes == 0 && method != null) {
+					FrameVisitor.readFrames(frames = new ArrayList<>(r.getUnsignedShort(r.rIndex)), r, cp, this, method.owner(), getLocalSize(), getStackSize());
 				}
 			}
 		}
@@ -242,10 +242,10 @@ public class CodeWriter extends AbstractCodeWriter {
 		state = 2;
 
 		// make modify <clinit> easier
-		if ((fvFlags&ADD_RETURN) != 0) insn(RETURN);
+		if ((computes &ADD_RETURN) != 0) insn(RETURN);
 		satisfySegments();
 
-		bw.putInt(tmpLenOffset - 4, bw.wIndex() - tmpLenOffset);
+		bw.setInt(tmpLenOffset - 4, bw.wIndex() - tmpLenOffset);
 
 		tmpLenOffset = bw.wIndex();
 		tmpLen = 0;
@@ -253,20 +253,18 @@ public class CodeWriter extends AbstractCodeWriter {
 	}
 
 	private void satisfySegments() {
-		// 如何处理只有隐式跳转(exception handler)的情况？
-		fv = null;
+		frameVisitor = null;
 
+		int begin = tmpLenOffset;
+		List<Segment> segments = this.segments;
 		if (!segments.isEmpty()) {
 			endSegment();
-
-			int begin = tmpLenOffset;
-			List<Segment> segments = this.segments;
-			int wi = bw.wIndex();
 
 			int len = segments.size()+1;
 			int[] offSum = AsmCache.getInstance().getIntArray_(len);
 			updateOffset(labels, offSum, len);
 
+			int wi = bw.wIndex();
 			codeOb = bw;
 			boolean changed;
 			do {
@@ -282,30 +280,22 @@ public class CodeWriter extends AbstractCodeWriter {
 
 				changed |= updateOffset(labels, offSum, len);
 			} while (changed);
-
-			if (fvFlags != 0) {
-				codeOb = bw.slice(begin, bw.wIndex()-begin);
-				fv = new FrameVisitor();
-				fv.init(mn, segments);
-			}
-
-			segments.clear();
 		} else {
 			// used for getBci, and on simple method it fails
-			bci = bw.wIndex() - tmpLenOffset;
+			bci = bw.wIndex() - begin;
 			if (!labels.isEmpty()) _updateOffsets();
-
-			if (fvFlags != 0) {
-				int begin = tmpLenOffset;
-				codeOb = bw.slice(begin, bw.wIndex()-begin);
-				fv = new FrameVisitor();
-				fv.init(mn, segments);
-			}
 		}
 
+		if (computes != 0) {
+			codeOb = bw.slice(begin, bw.wIndex()-begin);
+			frameVisitor = new FrameVisitor();
+			frameVisitor.init(method, segments);
+		}
+
+		segments.clear();
 		labels.clear();
 	}
-	public void _updateOffsets() {
+	protected void _updateOffsets() {
 		int len = segments.size()+1;
 		int[] offSum = AsmCache.getInstance().getIntArray_(len);
 		updateOffset(labels, offSum, len);
@@ -314,56 +304,54 @@ public class CodeWriter extends AbstractCodeWriter {
 	protected void visitException(int start, int end, int handler, CstClass type) {
 		if (state != 2) throw new IllegalStateException();
 
-		try {
-			start = bciR2W.get(start).getValue();
-			end = bciR2W.get(end).getValue();
-			handler = bciR2W.get(handler).getValue();
-		} catch (NullPointerException e) {
-			throw new IllegalStateException("异常处理器的一部分无法找到", e);
-		}
+		start = Objects.requireNonNull(bciR2W.get(start), "异常处理器的一部分无法找到").getValue();
+		end = Objects.requireNonNull(bciR2W.get(end), "异常处理器的一部分无法找到").getValue();
+		handler = Objects.requireNonNull(bciR2W.get(handler), "异常处理器的一部分无法找到").getValue();
+
 		bw.putShort(start).putShort(end).putShort(handler).putShort(type == null ? 0 : cpw.fit(type));
 		// 在这里是exception的数量
 		tmpLen++;
 
-		if (fv != null) {
-			fv.visitException(start, end, handler, type == null ? null : type.value().str());
+		if (frameVisitor != null) {
+			frameVisitor.visitException(start, end, handler, type == null ? null : type.value().str());
 		}
 	}
 	public void visitException(Label start, Label end, Label handler, String type) {
 		if (state != 2) throw new IllegalStateException();
 
 		int endId = end == null ? bci : end.getValue();
-		if (fv != null) {
-			fv.visitException(start.getValue(), endId, handler.getValue(), type);
-		}
-
 		bw.putShort(start.getValue()).putShort(endId).putShort(handler.getValue())
 		  .putShort(type == null ? 0 : cpw.getClassId(type));
 		tmpLen++;
+
+		if (frameVisitor != null) {
+			frameVisitor.visitException(start.getValue(), endId, handler.getValue(), type);
+		}
 	}
 
 	public void visitAttributes() {
 		if (state != 2) throw new IllegalStateException();
 		state = 3;
 
-		bw.putShort(tmpLenOffset, tmpLen);
+		bw.setShort(tmpLenOffset, tmpLen);
 
 		tmpLenOffset = bw.wIndex();
 		tmpLen = 0;
 		bw.putShort(0);
 
 		hasFrames = false;
-		if (fv != null) {
+		if (frameVisitor != null) {
 			int rIndex = codeOb.rIndex;
 			ArrayList<Frame> frames;
 			try {
-				frames = (ArrayList<Frame>) fv.finish(codeOb, cpw, (fvFlags&Code.COMPUTE_FRAMES) != 0);
+				frames = (ArrayList<Frame>) frameVisitor.finish(codeOb, cpw, computes);
 			} catch (Throwable e) {
 				Object debugInfo;
 				try {
 					codeOb.rIndex = rIndex;
-					var code = new Code(new ByteList().putInt(0).putInt(codeOb.readableBytes()).put(codeOb).putInt(0), cpw, mn);
-					var code1 = mn.getAttribute(null, Attribute.Code);
+					codeOb.wIndex(codeOb.capacity());
+					var code = new Code(new ByteList().putInt(0).putInt(codeOb.readableBytes()).put(codeOb).putInt(0), cpw, method);
+					var code1 = method.getAttribute(null, Attribute.Code);
 					if (code1 != null) {
 						debugInfo = "";
 						code1.instructions = code.instructions;
@@ -373,12 +361,12 @@ public class CodeWriter extends AbstractCodeWriter {
 				} catch (Exception e1) {
 					debugInfo = "(Illegal instruction "+e1+"): "+codeOb.dump();
 				}
-				throw new IllegalStateException("无法为代码生成StackMapTable:\n BCI #"+fv.bci()+"\n method "+mn+"\n "+debugInfo, e);
+				throw new IllegalStateException("无法为代码生成StackMapTable:\n BCI #"+ frameVisitor.bci()+"\n method "+ method +"\n "+debugInfo, e);
 			}
 
-			if ((fvFlags & Code.COMPUTE_SIZES) != 0) {
-				U.put16UB(codeOb.array(), codeOb._unsafeAddr()-8, fv.maxStackSize);
-				U.put16UB(codeOb.array(), codeOb._unsafeAddr()-6, fv.maxLocalSize);
+			if ((computes & COMPUTE_SIZES) != 0) {
+				U.put16UB(codeOb.array(), codeOb._unsafeAddr()-8, frameVisitor.maxStackSize);
+				U.put16UB(codeOb.array(), codeOb._unsafeAddr()-6, frameVisitor.maxLocalSize);
 			}
 
 			if (frames != null) {
@@ -399,7 +387,7 @@ public class CodeWriter extends AbstractCodeWriter {
 				CodeWriter.this.bw.putShort(bci).putShort(bci);
 			}
 		}.visitCopied(cpw, bw);
-		bw.putShort(pos-2,(bw.wIndex()-pos)/4);
+		bw.setShort(pos-2,(bw.wIndex()-pos)/4);
 		visitAttributeIEnd(stack);
 	}
 
@@ -421,7 +409,7 @@ public class CodeWriter extends AbstractCodeWriter {
 		state = 3;
 
 		tmpLen++;
-		bw.putInt(tmpLenOffset-4, bw.wIndex()-tmpLenOffset);
+		bw.setInt(tmpLenOffset-4, bw.wIndex()-tmpLenOffset);
 		tmpLenOffset = stack;
 	}
 
@@ -434,7 +422,7 @@ public class CodeWriter extends AbstractCodeWriter {
 				int len1 = b.readUnsignedShort();
 				if (len1 == 0) return;
 				while (len1-- > 0) {
-					b.putShort(b.rIndex, bciR2W.get(b.readUnsignedShort()).getValue());
+					b.setShort(b.rIndex, bciR2W.get(b.readUnsignedShort()).getValue());
 					b.rIndex += 2;
 				}
 			}
@@ -445,11 +433,11 @@ public class CodeWriter extends AbstractCodeWriter {
 					int start = b.readUnsignedShort();
 					int end = start + b.readUnsignedShort();
 					Label oldEnd = bciR2W.get(end);
-					b.putShort(b.rIndex - 4, start = bciR2W.get(start).getValue())
-							.putShort(b.rIndex - 2, (oldEnd == null ? bci : oldEnd.getValue()) - start);
+					b.setShort(b.rIndex - 4, start = bciR2W.get(start).getValue())
+							.setShort(b.rIndex - 2, (oldEnd == null ? bci : oldEnd.getValue()) - start);
 					if (cp != cpw) {
-						b.putShort(b.rIndex, cpw.fit(cp.get(b)));
-						b.putShort(b.rIndex, cpw.fit(cp.get(b)));
+						b.setShort(b.rIndex, cpw.fit(cp.get(b)));
+						b.setShort(b.rIndex, cpw.fit(cp.get(b)));
 						b.rIndex += 2;
 					} else {
 						b.rIndex += 6;
@@ -478,7 +466,7 @@ public class CodeWriter extends AbstractCodeWriter {
 				}
 			}*/
 			default -> {
-				Logger.FALLBACK.debug("{}.{} 中遇到不支持的属性 {}", mn.owner(), mn.name(), name);
+				Logger.FALLBACK.debug("{}.{} 中遇到不支持的属性 {}", method.owner(), method.name(), name);
 				return;
 			}
 		}
@@ -510,7 +498,7 @@ public class CodeWriter extends AbstractCodeWriter {
 		frames = null;
 		if (bciR2W != null) bciR2W.clear();
 
-		bw.putShort(tmpLenOffset, tmpLen);
+		bw.setShort(tmpLenOffset, tmpLen);
 	}
 
 	@SuppressWarnings("fallthrough")
@@ -554,10 +542,6 @@ public class CodeWriter extends AbstractCodeWriter {
 		if (state < 2) return segments.isEmpty() ? (bw.wIndex() - tmpLenOffset) : codeOb.wIndex() + offset;
 		return bci;
 	}
-
-	@ApiStatus.Experimental
-	public FrameVisitor getFv() {return fv;}
-	public int getState() {return state;}
 
 	public final void addSegment(Segment c) {
 		if (c == null) throw new NullPointerException("c");
@@ -617,8 +601,6 @@ public class CodeWriter extends AbstractCodeWriter {
 		return false;
 	}
 
-	public boolean isFinished() {return state == 5;}
-
 	@Override
-	public String toString() {return getClass().getName()+"@"+ segments.toString();}
+	public String toString() {return getClass().getName()+"@"+segments.toString();}
 }

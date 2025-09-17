@@ -33,11 +33,11 @@ public class SoundUtil {
 				short value;
 				int offset = (index * chs + ch) << 1;
 				if (inputPCM.readableBytes() - offset > 2) {
-					value = (short) (inputPCM.readShort(offset) * (1 - frac) + inputPCM.readShort(offset+2) * frac);
+					value = (short) (inputPCM.getShort(offset) * (1 - frac) + inputPCM.getShort(offset+2) * frac);
 				} else {
-					value = inputPCM.readShort(offset);
+					value = inputPCM.getShort(offset);
 				}
-				compressedPCM2.putShort((i * chs + ch) << 1, value);
+				compressedPCM2.setShort((i * chs + ch) << 1, value);
 
 			}
 		}

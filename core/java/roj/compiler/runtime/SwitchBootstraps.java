@@ -1,6 +1,6 @@
 package roj.compiler.runtime;
 
-import roj.ci.annotation.ReferenceByGeneratedClass;
+import roj.ci.annotation.IndirectReference;
 
 import java.lang.invoke.*;
 
@@ -22,7 +22,7 @@ public class SwitchBootstraps {
 		return map.get(o);
 	}
 
-	@ReferenceByGeneratedClass
+	@IndirectReference
 	public static CallSite typeSwitch(MethodHandles.Lookup lookup,
 									  String invocationName,
 									  MethodType invocationType,

@@ -1,32 +1,30 @@
 package roj.concurrent;
 
 import org.jetbrains.annotations.Nullable;
-import roj.reflect.Unaligned;
+import roj.optimizer.FastVarHandle;
+import roj.reflect.Handles;
 import roj.util.Helpers;
 import roj.util.function.Flow;
 
+import java.lang.invoke.VarHandle;
 import java.util.Collections;
 import java.util.Set;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.ConcurrentHashMap;
 
-import static roj.reflect.Unaligned.U;
-
 /**
  * @author Roj234
  * @since 2025/09/02 23:03
  */
+@FastVarHandle
 public class TaskGroup implements Executor, Cancellable {
-	static final long FINISHED = Unaligned.fieldOffset(TaskGroup.class, "finishedCount");
-	static final long TOTAL = Unaligned.fieldOffset(TaskGroup.class, "totalCount");
-	static final long FAILED = Unaligned.fieldOffset(TaskGroup.class, "failedTasks");
-
+	@FastVarHandle
 	private class MTask implements Runnable, Cancellable {
 		volatile MTask next;
 		Throwable throwable;
 
 		private static final int INITIAL = 0, RUNNING = 1, CANCELLING = 2, CANCELLED = 3;
-		private static final long STATE = Unaligned.fieldOffset(MTask.class, "state");
+		private static final VarHandle STATE = Handles.lookup().findVarHandle(MTask.class, "state", int.class);
 		private volatile int state;
 
 		private Thread executor;
@@ -36,12 +34,12 @@ public class TaskGroup implements Executor, Cancellable {
 
 		@Override
 		public boolean cancel(boolean mayInterruptIfRunning) {
-			if (U.compareAndSetInt(this, STATE, INITIAL, CANCELLED)) {
+			if (STATE.compareAndSet(this, INITIAL, CANCELLED)) {
 				taskCompleted();
 				return true;
 			}
 
-			if (mayInterruptIfRunning && U.compareAndSetInt(this, STATE, RUNNING, CANCELLING)) {
+			if (mayInterruptIfRunning && STATE.compareAndSet(this, RUNNING, CANCELLING)) {
 				var thread = executor;
 				if (thread != null) thread.interrupt();
 			}
@@ -54,14 +52,14 @@ public class TaskGroup implements Executor, Cancellable {
 
 		@Override
 		public final void run() {
-			if (!U.compareAndSetInt(this, STATE, INITIAL, RUNNING)) return;
+			if (!STATE.compareAndSet(this, INITIAL, RUNNING)) return;
 
 			try {
 				executor = Thread.currentThread();
 				callable.run();
 			} catch (Throwable e) {
 				throwable = e;
-				next = (MTask) U.getAndSetReference(TaskGroup.this, FAILED, this);
+				next = (MTask) FAILED.getAndSet(TaskGroup.this, this);
 				if (failFast) TaskGroup.this.cancel();
 			} finally {
 				executor = null;
@@ -70,8 +68,8 @@ public class TaskGroup implements Executor, Cancellable {
 		}
 
 		private void taskCompleted() {
-			int val = U.getAndAddInt(TaskGroup.this, FINISHED, 1);
-			if (val+1 >= getTotalCount()) {
+			int val = (int) FINISHED.getAndAdd(TaskGroup.this, 1);
+			if (val+1 >= getTotalTasks()) {
 				synchronized (lock) {
 					lock.notifyAll();
 				}
@@ -83,9 +81,13 @@ public class TaskGroup implements Executor, Cancellable {
 	private final Object lock = new Object();
 	private final Set<MTask> helpRunner;
 
+	static final VarHandle FAILED = Handles.lookup().findVarHandle(TaskGroup.class, "failedTasks", MTask.class);
+	static final VarHandle FINISHED = Handles.lookup().findVarHandle(TaskGroup.class, "finishedTasks", int.class);
+	static final VarHandle TOTAL = Handles.lookup().findVarHandle(TaskGroup.class, "totalTasks", int.class);
+
 	private boolean failFast = true;
 	private volatile MTask failedTasks;
-	private volatile int finishedCount, totalCount;
+	private volatile int finishedTasks, totalTasks;
 	private CancellationException cancellationException;
 
 	/**
@@ -111,9 +113,9 @@ public class TaskGroup implements Executor, Cancellable {
 	 */
 	public void execute(Runnable task) {
 		while (true) {
-			int total = totalCount;
+			int total = totalTasks;
 			if (total < 0) return;
-			if (U.compareAndSetInt(this, TOTAL, total, total+1)) break;
+			if (TOTAL.compareAndSet(this, total, total+1)) break;
 		}
 
 		MTask task1 = new MTask(task);
@@ -161,7 +163,7 @@ public class TaskGroup implements Executor, Cancellable {
 
 	private void await(long timeoutMs, boolean interrupt) {
 		long deadline = timeoutMs == 0 ? 0 : System.currentTimeMillis() + timeoutMs;
-		while (finishedCount < totalCount) {
+		while (finishedTasks < totalTasks) {
 			long remain = deadline == 0 ? 0 : deadline - System.currentTimeMillis();
 			if (remain < 0) break;
 
@@ -170,7 +172,7 @@ public class TaskGroup implements Executor, Cancellable {
 
 			try {
 				synchronized (lock) {
-					if (finishedCount < totalCount)
+					if (finishedTasks < totalTasks)
 						lock.wait(remain);
 				}
 			} catch (InterruptedException e) {
@@ -200,7 +202,7 @@ public class TaskGroup implements Executor, Cancellable {
 	 */
 	@Nullable
 	public Throwable clearExceptions() {
-		var exceptionList = (MTask) U.getAndSetReference(this, FAILED, null);
+		var exceptionList = (MTask) FAILED.getAndSet(this, null);
 		if (exceptionList == null) return null;
 
 		Throwable ex = exceptionList.throwable;
@@ -226,7 +228,7 @@ public class TaskGroup implements Executor, Cancellable {
 	 *
 	 * @return the total number of tasks submitted
 	 */
-	public int getTotalCount() {return totalCount&Integer.MAX_VALUE;}
+	public int getTotalTasks() {return totalTasks &Integer.MAX_VALUE;}
 
 	/**
 	 * Attempts to cancel all tasks managed by this monitor.
@@ -243,9 +245,9 @@ public class TaskGroup implements Executor, Cancellable {
 	 */
 	@Override public boolean cancel(boolean mayInterruptIfRunning) {
 		while (true) {
-			int total = totalCount;
+			int total = totalTasks;
 			if (total < 0) return true;
-			if (U.compareAndSetInt(this, TOTAL, total, total|Integer.MIN_VALUE)) {
+			if (TOTAL.compareAndSet(this, total, total|Integer.MIN_VALUE)) {
 				cancellationException = new CancellationException("(Async)");
 				synchronized (lock) {lock.notifyAll();}
 				return true;
@@ -261,5 +263,5 @@ public class TaskGroup implements Executor, Cancellable {
 	 *
 	 * @return {@code true} if the monitor has been cancelled
 	 */
-	@Override public boolean isCancelled() {return totalCount < 0;}
+	@Override public boolean isCancelled() {return totalTasks < 0;}
 }

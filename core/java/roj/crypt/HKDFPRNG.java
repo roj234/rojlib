@@ -1,6 +1,6 @@
 package roj.crypt;
 
-import roj.reflect.Unaligned;
+import roj.reflect.Unsafe;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
 
@@ -25,7 +25,7 @@ public class HKDFPRNG extends SecureRandom {
 
 	@Override
 	public void nextBytes(byte[] b) {
-		CryptoFactory.HKDF_expand(kd, null, info, b.length, b, Unaligned.ARRAY_BYTE_BASE_OFFSET);
+		CryptoFactory.HKDF_expand(kd, null, info, b.length, b, Unsafe.ARRAY_BYTE_BASE_OFFSET);
 		incr();
 	}
 
@@ -36,5 +36,5 @@ public class HKDFPRNG extends SecureRandom {
 		return b;
 	}
 
-	private void incr() { info.putLong(0, info.readLong(0)+1); }
+	private void incr() { info.setLong(0, info.getLong(0)+1); }
 }

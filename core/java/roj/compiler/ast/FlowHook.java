@@ -72,7 +72,7 @@ class FlowHook {
 		}
 
 		if (returnHook.size() > 0) {
-			Type type = cw.mn.returnType();
+			Type type = cw.method.returnType();
 			var temp = keepReturnValueOnStack || type.type == Type.VOID ? null : cw.ctx.bp.tempVar(type);
 
 			cw.label(returnTarget);

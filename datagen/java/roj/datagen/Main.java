@@ -15,7 +15,7 @@ public class Main {
 		var output = new File("../RojLib/core/resources");
 		new MakeReflectionProxy().run(input, output);
 
-		String path = "roj/reflect/litasm/internal/JVMCI.class";
+		String path = "roj/util/optimizer/JVMCI.class";
 		var data = IOUtil.getResource(path);
 		try (var fos = new FileOutputStream(new File(output, path))) {
 			fos.write(data);

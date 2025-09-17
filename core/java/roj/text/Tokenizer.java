@@ -665,6 +665,7 @@ public class Tokenizer {
 		}
 
 		int prevI = i;
+		var firstCharIsZero = c == '0';
 		while (true) {
 			c = in.charAt(i);
 
@@ -677,7 +678,7 @@ public class Tokenizer {
 				return onInvalidNumber(oFlag, i, set.contains(c)?"lexer.number.exceptBlank":"lexer.number.notNumber:");
 			}
 
-			if (c == '0' && prevI == i-1) prevI++;
+			if (firstCharIsZero && c == '0' && prevI == i-1) prevI++;
 
 			switch (c) {
 				case 'P', 'p' -> {

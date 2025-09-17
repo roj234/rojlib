@@ -65,12 +65,12 @@ public class YamlParser extends Parser implements StreamParser {
 	public YamlParser(int flag) {super(flag);}
 
 	@Override
-	public ConfigValue parse(CharSequence text, @MagicConstant(flags = {ORDERED_MAP, LENIENT, NO_DUPLICATE_KEY}) int flag) throws ParseException {
-		this.flag = flag;
+	public ConfigValue parse(CharSequence text, @MagicConstant(flags = {ORDERED_MAP, LENIENT, NO_DUPLICATE_KEY}) int flags) throws ParseException {
+		this.flag = flags;
 		init(text);
 		if (!next().text().equals("---")) retractWord();
 		try {
-			return element(flag);
+			return element(flags);
 		} catch (ParseException e) {
 			throw e.addPath("$");
 		} finally {
@@ -79,12 +79,12 @@ public class YamlParser extends Parser implements StreamParser {
 	}
 	@SuppressWarnings("fallthrough")
 	@Override
-	protected final ConfigValue element(int flag) throws ParseException {
+	protected final ConfigValue element(int flags) throws ParseException {
 		Token w = next();
 		String cnt = w.text();
 		switch (w.type()) {
 			case force_cast: {
-				ConfigValue val = element(flag);
+				ConfigValue val = element(flags);
 				switch (cnt) {
 					case "str": return ConfigValue.valueOf(val.asString());
 					case "float": return ConfigValue.valueOf(val.asDouble());
@@ -103,12 +103,12 @@ public class YamlParser extends Parser implements StreamParser {
 			}
 			case lBracket:
 				this.flag |= JSON_MODE;
-				ListValue v = list(this, new ListValue(), flag);
+				ListValue v = list(this, new ListValue(), flags);
 				this.flag ^= JSON_MODE;
 				return v;
 			case lBrace:
 				this.flag |= JSON_MODE;
-				MapValue v2 = JsonParser.map(this, flag);
+				MapValue v2 = JsonParser.map(this, flags);
 				this.flag ^= JSON_MODE;
 				return v2;
 			case multiline: case multiline_clump: return ConfigValue.valueOf(cnt);
@@ -145,12 +145,12 @@ public class YamlParser extends Parser implements StreamParser {
 			}
 			case delim:
 				if (prevLN == LN && LN != 1) {
-					if ((flag&LENIENT) == 0) throw err("一行内不允许放置多级列表 (你看的不累吗) (通过LENIENT参数关闭该限制)");
+					if ((flags &LENIENT) == 0) throw err("一行内不允许放置多级列表 (你看的不累吗) (通过LENIENT参数关闭该限制)");
 					prevIndent = -2;
 				}
 				return blockSeq();
 			case anchor: {
-				ConfigValue val = element(flag);
+				ConfigValue val = element(flags);
 				anchors.put(cnt, val);
 				return val;
 			}
@@ -165,7 +165,7 @@ public class YamlParser extends Parser implements StreamParser {
 	}
 
 	@Override
-	public <E extends ValueEmitter> E parse(CharSequence text, @MagicConstant(flags = LENIENT) int flag, E emitter) throws ParseException {
+	public void parse(CharSequence text, @MagicConstant(flags = LENIENT) int flag, ValueEmitter emitter) throws ParseException {
 		this.flag = flag;
 		init(text);
 		if (!next().text().equals("---")) retractWord();
@@ -176,23 +176,22 @@ public class YamlParser extends Parser implements StreamParser {
 		} finally {
 			input = null;
 		}
-		return emitter;
 	}
 
 	@Override
-	public void streamElement(@MagicConstant(flags = LENIENT) int flag, ValueEmitter emitter) throws ParseException {
+	public void streamElement(@MagicConstant(flags = LENIENT) int flags, ValueEmitter emitter) throws ParseException {
 		Token w = next();
 		try {
 			switch (w.type()) {
 				case join, force_cast, ref, anchor -> throw err("访问者模式不支持seek-past");
 				case lBracket -> {
 					this.flag |= JSON_MODE;
-					JsonParser.list(this, emitter, flag);
+					JsonParser.list(this, emitter, flags);
 					this.flag ^= JSON_MODE;
 				}
 				case lBrace -> {
 					this.flag |= JSON_MODE;
-					JsonParser.map(this, emitter, flag);
+					JsonParser.map(this, emitter, flags);
 					this.flag ^= JSON_MODE;
 				}
 				case multiline, multiline_clump -> emitter.emit(w.text());
@@ -220,7 +219,7 @@ public class YamlParser extends Parser implements StreamParser {
 				}
 				case delim -> {
 					if (prevLN == LN && LN != 1) {
-						if ((flag & LENIENT) == 0) throw err("一行内不允许放置多级列表 (你看的不累吗) (通过LENIENT参数关闭该限制)");
+						if ((flags & LENIENT) == 0) throw err("一行内不允许放置多级列表 (你看的不累吗) (通过LENIENT参数关闭该限制)");
 						prevIndent = -1;
 					}
 					blockSeq(emitter);
@@ -393,7 +392,7 @@ public class YamlParser extends Parser implements StreamParser {
 				case NULL:
 					except(colon, ":");
 
-					emitter.key(name);
+					emitter.emitKey(name);
 					//addComment();
 					try {
 						prevIndent = firstIndent;

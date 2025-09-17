@@ -19,13 +19,13 @@ import roj.asm.type.TypeHelper;
 import roj.asmx.Context;
 import roj.collect.ArrayList;
 import roj.collect.HashSet;
-import roj.util.function.Flow;
 import roj.io.IOUtil;
 import roj.text.CharList;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
 import roj.util.Helpers;
 import roj.util.TypedKey;
+import roj.util.function.Flow;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -482,7 +482,7 @@ public class ClassNode implements ClassDefinition {
 		return cw.cw;
 	}
 
-	public void npConstructor() {
+	public void defaultConstructor() {
 		if (getMethod("<init>", "()V") >= 0) return;
 
 		var c = newMethod(ACC_PUBLIC, "<init>", "()V");

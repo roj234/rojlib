@@ -34,10 +34,10 @@ public final class Lavac extends LavaCompiler {
 	public static String getCompileTime() {return DateFormat.toLocalDateTime(System.currentTimeMillis());}
 	public static String getCurrentTime() {return DateFormat.toLocalDateTime(System.currentTimeMillis());}
 
-	public static final String VERSION = "1.1.0-alpha (compiled on "+getCompileTime()+")";
+	public static final String VERSION = "1.1.4-alpha (compiled on "+getCompileTime()+")";
 
 	private Charset charset;
-	private final ArrayList<CompileUnit> CompileUnits = new ArrayList<>();
+	private final ArrayList<CompileUnit> allFiles = new ArrayList<>();
 
 	public static void main(String[] args) throws IOException, ReflectiveOperationException {
 		if (args.length < 1) {
@@ -186,7 +186,7 @@ public final class Lavac extends LavaCompiler {
 		CompileContext.set(null);
 
 		while (i < args.length) compiler.addSource(new File(args[i++]));
-		if (compiler.CompileUnits.isEmpty()) {
+		if (compiler.allFiles.isEmpty()) {
 			System.err.println("错误：没有源文件");
 			return;
 		}
@@ -233,7 +233,7 @@ public final class Lavac extends LavaCompiler {
 							return clazz;
 						}
 					};
-					Class<?> test = Class.forName(compiler.CompileUnits.get(0).name().replace('/', '.'), true, scl);
+					Class<?> test = Class.forName("Test", true, scl);
 					lookup.findStatic(test, "main", MethodType.methodType(void.class, String[].class)).invoke((Object) new String[0]);
 					System.out.println("执行成功");
 				} catch (Throwable e) {
@@ -246,7 +246,7 @@ public final class Lavac extends LavaCompiler {
 	}
 
 	private boolean compile(File output) {
-		var files = CompileUnits;
+		var files = allFiles;
 		boolean done = false;
 		try {
 			for (int i = files.size() - 1; i >= 0; i--) {
@@ -320,7 +320,7 @@ public final class Lavac extends LavaCompiler {
 					e.printStackTrace();
 					return;
 				}
-				CompileUnits.add(new JavaCompileUnit(file.getName(), code));
+				allFiles.add(new JavaCompileUnit(file.getName(), code));
 			}
 		}
 	}

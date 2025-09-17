@@ -56,7 +56,7 @@ class PrefixOp extends PrefixOperator {
 				if (op == inv || op == logic_not) return notApplicable(ctx);
 			break;
 
-			default: type = Type.primitive(Type.INT);
+			default: type = Type.INT_TYPE;
 			case Type.CLASS, Type.LONG:
 				if (op != logic_not) break;
 			// fallthrough
@@ -67,10 +67,10 @@ class PrefixOp extends PrefixOperator {
 
 		if (!right.isConstant()) return this;
 
-		return switch (TypeCast.getDataCap(actualType)) {
+		return switch (Type.getSort(actualType)) {
 			default -> this;
-			case 0 -> constant(type, !(boolean) right.constVal());
-			case 1, 2, 3, 4 -> {
+			case Type.SORT_BOOLEAN -> constant(type, !(boolean) right.constVal());
+			case Type.SORT_BYTE, Type.SORT_CHAR, Type.SORT_SHORT, Type.SORT_INT -> {
 				var x = (IntValue) right.constVal();
 				switch (op) {
 					case sub -> x.value = -x.value;
@@ -78,7 +78,7 @@ class PrefixOp extends PrefixOperator {
 				}
 				yield right;
 			}
-			case 5 -> {
+			case Type.SORT_LONG -> {
 				var x = (LongValue) right.constVal();
 				switch (op) {
 					case sub -> x.value = -x.value;
@@ -86,14 +86,14 @@ class PrefixOp extends PrefixOperator {
 				}
 				yield right;
 			}
-			case 6 -> {
+			case Type.SORT_FLOAT -> {
 				if (op == sub) {
 					var val = (FloatValue) right.constVal();
 					val.value = -val.value;
 				}
 				yield right;
 			}
-			case 7 -> {
+			case Type.SORT_DOUBLE -> {
 				if (op == sub) {
 					var val = (DoubleValue) right.constVal();
 					val.value = -val.value;
@@ -153,7 +153,7 @@ class PrefixOp extends PrefixOperator {
 				cw.insn(ICONST_1);
 				cw.insn(IXOR);
 			}
-			case sub -> cw.insn((byte) (INEG - 4 + Math.max(4, TypeCast.getDataCap(actualType))));
+			case sub -> cw.insn((byte) (INEG - Type.SORT_INT + Math.max(Type.SORT_INT, Type.getSort(actualType))));
 		}
 	}
 

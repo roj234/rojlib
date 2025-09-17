@@ -7,5 +7,5 @@ import roj.text.ParseException;
  * @since 2023/3/19 11:01
  */
 public interface StreamParser {
-	void streamElement(int flag, ValueEmitter out) throws ParseException;
+	void streamElement(int flags, ValueEmitter out) throws ParseException;
 }

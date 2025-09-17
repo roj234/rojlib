@@ -103,8 +103,8 @@ sealed class MappingContext implements ObjectMapper<Object> permits MappingConte
 	public final void emitList() {curr.list(this,-1);}
 	public final void emitList(int size) {curr.list(this,size);}
 
-	public final void intKey(int key) {curr.key(this,key);}
-	public final void key(String key) {curr.key(this,key);}
+	public final void emitKey(int key) {curr.key(this,key);}
+	public final void emitKey(String key) {curr.key(this,key);}
 	public final void pop() {
 		while (fieldId == -2)
 			popd(false);
@@ -152,7 +152,7 @@ sealed class MappingContext implements ObjectMapper<Object> permits MappingConte
 
 	@Override
 	public String toString() {
-		return "AdaptContext{" + "Stack=" + stack + ", State=" + fieldState + ", Id=" + fieldId + ", Ref=" + ref + '}';
+		return "MappingContext{" + "Stack=" + stack + ", State=" + fieldState + ", Id=" + fieldId + ", Ref=" + ref + '}';
 	}
 
 	public final void setFieldHook() {

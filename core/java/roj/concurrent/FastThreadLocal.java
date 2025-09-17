@@ -2,7 +2,7 @@ package roj.concurrent;
 
 import roj.collect.BitSet;
 import roj.collect.IntMap;
-import roj.reflect.Unaligned;
+import roj.reflect.Unsafe;
 import roj.util.ArrayCache;
 
 import java.util.function.Supplier;
@@ -43,7 +43,7 @@ public class FastThreadLocal<T> {
 	public static void clear() {
 		var t = Thread.currentThread();
 		try {
-			Unaligned.U.putReference(t, Unaligned.fieldOffset(Thread.class, "threadLocals"), null);
+			Unsafe.U.putReference(t, Unsafe.fieldOffset(Thread.class, "threadLocals"), null);
 		} catch (Exception e) {
 			e.printStackTrace();
 		}

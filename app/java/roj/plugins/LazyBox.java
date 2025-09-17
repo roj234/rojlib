@@ -168,7 +168,7 @@ public class LazyBox extends Plugin {
 				in.readFully(metadata, dataLength);
 
 				var crc = CRC32.crc32(metadata.array(), 0, dataLength - 4);
-				if (crc != metadata.readInt(dataLength - 4)) throw new FastFailException("文件尾校验失败");
+				if (crc != metadata.getInt(dataLength - 4)) throw new FastFailException("文件尾校验失败");
 
 				int eccType = metadata.readUnsignedByte();
 				if (eccType != 0) throw new FastFailException("不是RS纠错码："+eccType);
@@ -203,7 +203,7 @@ public class LazyBox extends Plugin {
 				in.readFully(metadata, dataLength);
 
 				var crc = CRC32.crc32(metadata.array(), 0, dataLength - 4);
-				if (crc != metadata.readInt(dataLength - 4)) throw new FastFailException("文件尾校验失败");
+				if (crc != metadata.getInt(dataLength - 4)) throw new FastFailException("文件尾校验失败");
 
 				int eccType = metadata.readUnsignedByte();
 				if (eccType != 0) throw new FastFailException("不是RS纠错码："+eccType);

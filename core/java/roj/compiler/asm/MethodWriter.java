@@ -38,7 +38,7 @@ public class MethodWriter extends CodeWriter {
 	}
 	protected MethodWriter(MethodWriter parent) {
 		this.ctx = parent.ctx;
-		this.init(new ByteList(),parent.cpw,parent.mn);
+		this.init(new ByteList(),parent.cpw,parent.method);
 		//lines由JavaTokenizer管理
 		locals = parent.locals;
 	}

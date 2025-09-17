@@ -1,7 +1,6 @@
 package roj.asm.attr;
 
 import org.intellij.lang.annotations.MagicConstant;
-import roj.asm.AsmCache;
 import roj.asm.Attributed;
 import roj.asm.MethodNode;
 import roj.asm.cp.Constant;
@@ -163,7 +162,7 @@ public abstract class Attribute {
 		w.putShort(pool.getUtfId(name())).putInt(0);
 		int i = w.wIndex();
 		toByteArrayNoHeader(w, pool);
-		w.putInt(i-4, w.wIndex()-i);
+		w.setInt(i-4, w.wIndex()-i);
 	}
 	public void toByteArrayNoHeader(DynByteBuf w, ConstantPool cp) { w.put(getRawData()); }
 

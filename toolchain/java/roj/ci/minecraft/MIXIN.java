@@ -128,7 +128,7 @@ public class MIXIN implements Processor {
 						MCMake.LOGGER.warn("failed to obtain generic CallbackInfoReturnable {}", signature);
 					}
 				}
-				memberDesc = Type.toMethodDesc(parameters);
+				memberDesc = Type.getMethodDescriptor(parameters);
 			}
 		}
 

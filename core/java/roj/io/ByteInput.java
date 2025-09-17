@@ -1,0 +1,95 @@
+package roj.io;
+
+import org.jetbrains.annotations.NotNull;
+import roj.text.FastCharset;
+
+import java.io.Closeable;
+import java.io.DataInput;
+import java.io.EOFException;
+import java.io.IOException;
+
+/**
+ * @author Roj234
+ * @since 2024/3/10 3:53
+ */
+public interface ByteInput extends DataInput, Closeable {
+	long position() throws IOException;
+	boolean isReadable();
+
+	int DEFAULT_MAX_STRING_LEN = 65536;
+
+	static int zag(int i) {return (i >>> 1) ^ -(i & 1);}
+	static long zag(long i) {return (i >>> 1) ^ -(i & 1);}
+
+	default byte[] readBytes(int len) throws IOException {
+		byte[] result = new byte[len];
+		this.readFully(result, 0, len);
+		return result;
+	}
+	void readFully(byte[] b) throws IOException;
+	void readFully(byte[] b, int off, int len) throws IOException;
+
+	int skipBytes(int n) throws IOException;
+	default void skipForce(long n) throws IOException {
+		err: {
+			while (n > Integer.MAX_VALUE) {
+				if (skipBytes(Integer.MAX_VALUE) != Integer.MAX_VALUE) break err;
+				n -= Integer.MAX_VALUE;
+			}
+			if (skipBytes((int) n) == n) return;
+		}
+
+		throw new EOFException("Failed to skip "+n+" bytes");
+	}
+
+	boolean readBoolean() throws IOException;
+
+	byte readByte() throws IOException;
+	int readUnsignedByte() throws IOException;
+
+	short readShort() throws IOException;
+	char readChar() throws IOException;
+
+	int readUnsignedShort() throws IOException;
+	int readUnsignedShortLE() throws IOException;
+
+	int readMedium() throws IOException;
+	int readMediumLE() throws IOException;
+
+	int readInt() throws IOException;
+	int readIntLE() throws IOException;
+
+	long readUnsignedInt() throws IOException;
+	long readUnsignedIntLE() throws IOException;
+
+	long readLong() throws IOException;
+	long readLongLE() throws IOException;
+
+	float readFloat() throws IOException;
+	double readDouble() throws IOException;
+
+	int readVarInt() throws IOException;
+	long readVarLong() throws IOException;
+
+	int readVUInt() throws IOException;
+	long readVULong() throws IOException;
+
+	String readAscii(int len) throws IOException;
+
+	@NotNull String readUTF() throws IOException;
+
+	String readVUIUTF() throws IOException;
+	String readVUIUTF(int max) throws IOException;
+	String readUTF(int len) throws IOException;
+
+	String readVUIGB() throws IOException;
+	String readVUIGB(int max) throws IOException;
+	String readGB(int len) throws IOException;
+
+	String readVUIStr(FastCharset charset) throws IOException;
+	String readVUIStr(int max, FastCharset charset) throws IOException;
+	String readStr(int len, FastCharset charset) throws IOException;
+	<T extends Appendable> T readStr(int len, T target, FastCharset charset) throws IOException;
+
+	String readLine() throws IOException;
+}

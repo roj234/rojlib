@@ -288,7 +288,7 @@ public abstract class AbstractCodeWriter extends CodeVisitor {
 	}
 	public final void unpackArray(int slot, Class<?>... types) {
 		Type[] types1 = new Type[types.length];
-		for (int i = 0; i < types.length; i++) types1[i] = from(types[i]);
+		for (int i = 0; i < types.length; i++) types1[i] = getType(types[i]);
 		unpackArray(slot, 0, types1);
 	}
 	public final void unpackArray(int slot, int begin, Type... types) { unpackArray(slot, begin, Arrays.asList(types)); }
@@ -311,7 +311,7 @@ public abstract class AbstractCodeWriter extends CodeVisitor {
 						break;
 					default:
 						clazz(CHECKCAST, "java/lang/Number");
-						invoke(INVOKEVIRTUAL, "java/lang/Number", Type.getName(klass.type)+"Value", "()"+(char)klass.type);
+						invoke(INVOKEVIRTUAL, "java/lang/Number", klass+"Value", "()"+(char)klass.type);
 						break;
 				}
 			} else {

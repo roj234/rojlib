@@ -10,7 +10,7 @@ import roj.collect.IntList;
 import roj.collect.IntMap;
 import roj.compiler.plugins.annotations.Attach;
 import roj.io.IOUtil;
-import roj.reflect.Unaligned;
+import roj.reflect.Unsafe;
 import roj.util.DynByteBuf;
 import roj.util.Helpers;
 
@@ -758,13 +758,13 @@ public class TextUtil {
 		long offset = CODER_OFFSET;
 		if (offset < 0) {
 			try {
-				offset = Unaligned.fieldOffset(String.class, "coder");
+				offset = Unsafe.fieldOffset(String.class, "coder");
 			} catch (Exception e) {
 				offset = 0;
 			}
 			CODER_OFFSET = offset;
 		}
-		return offset != 0 ? Unaligned.U.getByte(Objects.requireNonNull(s), offset) == 0 : legacyIsLatin1(s);
+		return offset != 0 ? Unsafe.U.getByte(Objects.requireNonNull(s), offset) == 0 : legacyIsLatin1(s);
 	}
 	private static boolean legacyIsLatin1(String s) {
 		for (int i = 0; i < s.length(); i++) {

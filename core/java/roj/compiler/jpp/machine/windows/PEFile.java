@@ -41,7 +41,7 @@ public class PEFile extends NativeExecutable {
 			throw new IOException("MZ header not found");
 		}
 		read(60, 4);
-		read(headerOff = rb.readUIntLE(), 4);
+		read(headerOff = rb.readUnsignedIntLE(), 4);
 		if (rb.readInt() != 0x50450000) {
 			throw new IOException("PE signature not found at 0x" + Long.toHexString(headerOff));
 		}
@@ -51,7 +51,7 @@ public class PEFile extends NativeExecutable {
 		readPlus(-1, size << 3);
 		for (int i = 0; i < size; i++) {
 			//                  virtual address    |    length
-			dataIndexes[i] = rb.readUIntLE() << 32 | rb.readUIntLE();
+			dataIndexes[i] = rb.readUnsignedIntLE() << 32 | rb.readUnsignedIntLE();
 		}
 		while (size < dataIndexes.length) {
 			dataIndexes[size++] = 0;

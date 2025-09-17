@@ -2,7 +2,7 @@ package roj.ui;
 
 import roj.RojLib;
 import roj.io.BufferPool;
-import roj.reflect.Unaligned;
+import roj.reflect.Unsafe;
 import roj.text.CharList;
 import roj.text.FastCharset;
 import roj.text.TextUtil;
@@ -149,14 +149,14 @@ final class NativeVT implements ITty, Runnable {
 	private int flag;
 
 	private NativeVT() {
-		long offset = Unaligned.fieldOffset(FilterInputStream.class, "in");
+		long offset = Unsafe.fieldOffset(FilterInputStream.class, "in");
 		Object in = System.in;
-		while (in instanceof FilterInputStream) in = Unaligned.U.getReference(in, offset);
+		while (in instanceof FilterInputStream) in = Unsafe.U.getReference(in, offset);
 		this.in = (InputStream) in;
 
-		offset = Unaligned.fieldOffset(FilterOutputStream.class, "out");
+		offset = Unsafe.fieldOffset(FilterOutputStream.class, "out");
 		Object out = System.out;
-		while (out instanceof FilterOutputStream) out = Unaligned.U.getReference(out, offset);
+		while (out instanceof FilterOutputStream) out = Unsafe.U.getReference(out, offset);
 
 		this.out = new TextWriter((OutputStream) out, charset, BufferPool.UNPOOLED);
 	}

@@ -98,11 +98,11 @@ public class JsonPathQuery implements ValueEmitter {
 	}
 
 	@Override
-	public void key(String key) {
+	public void emitKey(String key) {
 		this.key = key;
 		if (visitor != null) {
 			if (depth == 0) nextVisitor();
-			if (visitor != null) visitor.key(key);
+			if (visitor != null) visitor.emitKey(key);
 		}
 	}
 

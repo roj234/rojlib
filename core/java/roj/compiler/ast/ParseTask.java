@@ -18,8 +18,8 @@ import roj.compiler.ast.expr.Expr;
 import roj.compiler.ast.expr.ExprParser;
 import roj.compiler.ast.expr.RawExpr;
 import roj.compiler.diagnostic.Kind;
-import roj.text.ParseException;
 import roj.config.node.ConfigValue;
+import roj.text.ParseException;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
 
@@ -44,7 +44,7 @@ import java.util.List;
  * @author Roj234
  */
 public interface ParseTask {
-	static void MethodDefault(CompileUnit file, MethodNode mn, int id) throws ParseException {
+	static void defaultParameter(CompileUnit file, MethodNode mn, int id) throws ParseException {
 		var lc = file.lc();
 		var wr = lc.lexer;
 		int state = wr.setState(JavaTokenizer.STATE_EXPR);
@@ -61,7 +61,7 @@ public interface ParseTask {
 		attr.defaultValue.put(id-1, jsonString);
 	}
 
-	static ParseTask AnnotationDefault(CompileUnit file, MethodNode mn) throws ParseException {
+	static ParseTask annotationDefault(CompileUnit file, MethodNode mn) throws ParseException {
 		var wr = file.lc().lexer;
 		int index = wr.index;
 		int state = wr.setState(JavaTokenizer.STATE_EXPR);
@@ -73,14 +73,14 @@ public interface ParseTask {
 
 		return (ctx) -> {
 			ctx.errorReportIndex = index;
-			ctx.setMethod(file.getStaticInit().mn);
+			ctx.setMethod(file.getStaticInit().method);
 			attr.val = AnnotationPrimer.toAnnVal(ctx, (Expr) expr, mn.returnType());
 			ctx.errorReportIndex = -1;
 		};
 	}
 
 
-	static ParseTask StaticInitBlock(CompileUnit file) throws ParseException {
+	static ParseTask staticInit(CompileUnit file) throws ParseException {
 		var wr = file.lc().lexer;
 		int linePos = wr.LN;
 		int lineIdx = wr.LNIndex;
@@ -92,7 +92,7 @@ public interface ParseTask {
 		};
 	}
 
-	static ParseTask InstanceInitBlock(CompileUnit file) throws ParseException {
+	static ParseTask instanceInit(CompileUnit file) throws ParseException {
 		var wr = file.lc().lexer;
 		int linePos = wr.LN;
 		int lineIdx = wr.LNIndex;
@@ -108,7 +108,7 @@ public interface ParseTask {
 			}
 		};
 	}
-	static ParseTask Field(CompileUnit file, FieldNode f) throws ParseException {
+	static ParseTask field(CompileUnit file, FieldNode f) throws ParseException {
 		var wr = file.lc().lexer;
 		int index = wr.index;
 		int line = wr.LN;
@@ -151,14 +151,14 @@ public interface ParseTask {
 
 				if (isStatic) {
 					var mp = file.getStaticInit();
-					ctx.setMethod(mp.mn);
+					ctx.setMethod(mp.method);
 
 					mp.lines().add(mp.label(), line);
 					ctx.writeCast(mp, node, f.fieldType());
 					mp.field(Opcodes.PUTSTATIC, file.name(), f.name(), f.rawDesc());
 				} else {
 					var mp = file.getGlobalInit();
-					ctx.setMethod(mp.mn);
+					ctx.setMethod(mp.method);
 
 					mp.lines().add(mp.label(), line);
 					mp.vars(Opcodes.ALOAD, ctx.thisSlot);
@@ -183,7 +183,7 @@ public interface ParseTask {
 		throw new UnsupportedOperationException("未预料的常量类型:"+o);
 	}
 
-	static ParseTask Method(CompileUnit file, MethodNode mn, List<String> argNames) throws ParseException {
+	static ParseTask method(CompileUnit file, MethodNode mn, List<String> argNames) throws ParseException {
 		var wr = file.lc().lexer;
 		int linePos = wr.LN;
 		int lineIdx = wr.LNIndex;

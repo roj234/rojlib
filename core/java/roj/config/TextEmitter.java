@@ -105,7 +105,7 @@ public abstract class TextEmitter implements ValueEmitter {
 	}
 
 	@Override
-	public final void key(String key) {
+	public final void emitKey(String key) {
 		if ((flag & 12) != MAP) throw new IllegalStateException("不是MAP");
 
 		if ((flag & VALUE) != 0) throw new IllegalStateException("缺少值");

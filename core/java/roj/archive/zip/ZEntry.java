@@ -158,8 +158,8 @@ public class ZEntry implements IntervalPartition.Range, ArchiveEntry, Cloneable 
 
 	final void readLOCExtra(ZipFile o, ByteList buf) {
 		while (buf.readableBytes() > 4) {
-			int id = buf.readUShortLE();
-			int len = buf.readUShortLE();
+			int id = buf.readUnsignedShortLE();
+			int len = buf.readUnsignedShortLE();
 			int end = buf.rIndex + len;
 			switch (id) {
 				case 0x5455: // high precision timestamp
@@ -189,28 +189,28 @@ public class ZEntry implements IntervalPartition.Range, ArchiveEntry, Cloneable 
 	}
 	final void writeLOCExtra(ByteList buf, int extOff, int extLenOff) {
 		if (cSize >= U32_MAX || uSize >= U32_MAX) {
-			if (uSize > U32_MAX) buf.putIntLE(extLenOff-6, (int) U32_MAX);
-			if (cSize > U32_MAX) buf.putIntLE(extLenOff-10, (int) U32_MAX);
+			if (uSize > U32_MAX) buf.setIntLE(extLenOff-6, (int) U32_MAX);
+			if (cSize > U32_MAX) buf.setIntLE(extLenOff-10, (int) U32_MAX);
 
 			buf.putShortLE(0x0001).putShortLE(16).putLongLE(uSize).putLongLE(cSize);
 		}
 
 		if ((mzFlag & MZ_AES) != 0) {
 			writeAES(buf);
-			if ((mzFlag & MZ_NoCrc) != 0) buf.putIntLE(extLenOff-14, 0);
+			if ((mzFlag & MZ_NoCrc) != 0) buf.setIntLE(extLenOff-14, 0);
 		}
 
 		if ((flags & GP_UTF) == 0 && (mzFlag & MZ_UniPath) != 0) {
 			writeUnicodePath(buf);
 		}
 
-		buf.putShortLE(extLenOff, extraLenOfLOC = (char) (buf.wIndex() - extOff));
+		buf.setShortLE(extLenOff, extraLenOfLOC = (char) (buf.wIndex() - extOff));
 	}
 
 	final long readCENExtra(ZipFile o, ByteList buf, long header) {
 		while (buf.readableBytes() > 4) {
-			int id = buf.readUShortLE();
-			int len = buf.readUShortLE();
+			int id = buf.readUnsignedShortLE();
+			int len = buf.readUnsignedShortLE();
 			int end = buf.rIndex + len;
 			switch (id) {
 				case 0x5455: // Extended timestamp
@@ -218,8 +218,8 @@ public class ZEntry implements IntervalPartition.Range, ArchiveEntry, Cloneable 
 					break;
 				case 0x000A: // NTFS timestamp
 					while (buf.rIndex < end) {
-						int k = buf.readUShortLE();
-						DynByteBuf v = buf.slice(buf.readUShortLE());
+						int k = buf.readUnsignedShortLE();
+						DynByteBuf v = buf.slice(buf.readUnsignedShortLE());
 						if (k == 1) {
 							if (v.readableBytes() >= 8) pModTime = readWinTime(v.readLongLE());
 							if (v.readableBytes() >= 8) pAccTime = readWinTime(v.readLongLE());
@@ -260,23 +260,23 @@ public class ZEntry implements IntervalPartition.Range, ArchiveEntry, Cloneable 
 
 		int z64 = 0;
 		if (uSize >= U32_MAX) {
-			buf.putIntLE(extLenOff-6, (int) U32_MAX)
+			buf.setIntLE(extLenOff-6, (int) U32_MAX)
 			   .putLongLE(uSize);
 			z64++;
 		}
 		if (cSize >= U32_MAX) {
-			buf.putIntLE(extLenOff-10, (int) U32_MAX)
+			buf.setIntLE(extLenOff-10, (int) U32_MAX)
 			   .putLongLE(cSize);
 			z64++;
 		}
 		if (startPos() >= U32_MAX) {
-			buf.putIntLE(extLenOff+14, (int) U32_MAX)
+			buf.setIntLE(extLenOff+14, (int) U32_MAX)
 			   .putLongLE(startPos());
 			z64++;
 		}
 
 		if (z64 > 0) {
-			buf.putShortLE(pos-2, z64<<3);
+			buf.setShortLE(pos-2, z64<<3);
 		} else {
 			buf.wIndex(buf.wIndex()-4);
 		}
@@ -302,7 +302,7 @@ public class ZEntry implements IntervalPartition.Range, ArchiveEntry, Cloneable 
 
 		if ((mzFlag & MZ_AES) != 0) {
 			writeAES(buf);
-			if ((mzFlag & MZ_NoCrc) != 0) buf.putIntLE(extLenOff-14, 0);
+			if ((mzFlag & MZ_NoCrc) != 0) buf.setIntLE(extLenOff-14, 0);
 		}
 	}
 
@@ -336,17 +336,17 @@ public class ZEntry implements IntervalPartition.Range, ArchiveEntry, Cloneable 
 		buf.put(0)
 		   .putIntLE(crc)
 		   .putUTFData(name)
-		   .putShortLE(pos, buf.wIndex()-pos-2);
+		   .setShortLE(pos, buf.wIndex()-pos-2);
 	}
 
 	private void readAES(ByteList buf, int len) {
 		if(len >= 7) {
 			// 1 => AE-1, CRC presented, 2 => CRC set to 0
-			int type = buf.readUShortLE();
+			int type = buf.readUnsignedShortLE();
 			if (type == 2) mzFlag |= MZ_NoCrc;
 			else if (type != 1) mzFlag |= MZ_ERROR;
 
-			int vendor = buf.readUShortLE();
+			int vendor = buf.readUnsignedShortLE();
 			if (vendor != 0x4541) mzFlag |= MZ_ERROR;
 
 			int algorithm = buf.readUnsignedByte();
@@ -369,15 +369,15 @@ public class ZEntry implements IntervalPartition.Range, ArchiveEntry, Cloneable 
 		if (flag != 0) mzFlag |= MZ_PrTime;
 
 		if (len >= 4 && (flag&1) != 0) {
-			pModTime = buf.readUIntLE()*1000;
+			pModTime = buf.readUnsignedIntLE()*1000;
 			len -= 4;
 		}
 		if (len >= 4 && (flag&2) != 0) {
-			pAccTime = buf.readUIntLE()*1000;
+			pAccTime = buf.readUnsignedIntLE()*1000;
 			len -= 4;
 		}
 		if (len >= 4 && (flag&4) != 0) {
-			pCreTime = buf.readUIntLE()*1000;
+			pCreTime = buf.readUnsignedIntLE()*1000;
 		}
 	}
 

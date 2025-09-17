@@ -3,16 +3,18 @@ package roj.ui;
 import org.jetbrains.annotations.NotNull;
 import roj.concurrent.Timer;
 import roj.concurrent.TimerTask;
-import roj.reflect.Unaligned;
+import roj.optimizer.FastVarHandle;
+import roj.reflect.Handles;
 import roj.text.CharList;
 import roj.text.TextUtil;
 
-import static roj.reflect.Unaligned.U;
+import java.lang.invoke.VarHandle;
 
 /**
  * @author Roj234
  * @since 2023/10/28 1:55
  */
+@FastVarHandle
 public class EasyProgressBar extends ProgressBar {
 	private String unit;
 	private volatile long completed, total;
@@ -27,10 +29,10 @@ public class EasyProgressBar extends ProgressBar {
 	private static final int INITIAL_THRESHOLD = 5;
 	private static final double STALE_DECAY_FACTOR = 15000; // ms for exponential decay (e.g., halves roughly every ~10s)
 
-	private static final long
-			DELTA = Unaligned.fieldOffset(EasyProgressBar.class, "delta"),
-			COMPLETED = Unaligned.fieldOffset(EasyProgressBar.class, "completed"),
-			TOTAL = Unaligned.fieldOffset(EasyProgressBar.class, "total");
+	private static final VarHandle
+			DELTA = Handles.lookup().findVarHandle(EasyProgressBar.class, "delta", long.class),
+			COMPLETED = Handles.lookup().findVarHandle(EasyProgressBar.class, "completed", long.class),
+			TOTAL = Handles.lookup().findVarHandle(EasyProgressBar.class, "total", long.class);
 
 	public EasyProgressBar() { this(""); }
 	public EasyProgressBar(String name) { super(name); this.unit = "it"; }
@@ -64,20 +66,20 @@ public class EasyProgressBar extends ProgressBar {
 			showCenterString = true;
 		}
 	}
-	public void addTotal(long total) {U.getAndAddLong(this, TOTAL, total);}
+	public void addTotal(long total) {TOTAL.getAndAdd(this, total);}
 
 	public long getFinished() {return completed;}
 	public long getTotal() {return total;}
 
 	public void increment() {increment(1);}
 	public void increment(long count) {
-		long prevFin = U.getAndAddLong(this, COMPLETED, count);
+		long prevFin = (long) COMPLETED.getAndAdd(this, count);
 		long fin = prevFin + count;
 		long tot = total;
 
 		long now = System.currentTimeMillis();
 		if (count > 0) {
-			U.getAndAddLong(this, DELTA, count);
+			DELTA.getAndAdd(this, count);
 
 			// Initialize startTime on first real increment
 			if (startTime == 0) {
@@ -86,7 +88,7 @@ public class EasyProgressBar extends ProgressBar {
 
 			// Update speed only on real progress (count > 0) and if window elapsed
 			if (now - lastUpdateTime > AVG_SPEED_WINDOW) {
-				long deltaVal = U.getAndSetLong(this, DELTA, 0L);
+				long deltaVal = (long) DELTA.getAndSet(this, 0L);
 				double timeDiffSec = (now - lastUpdateTime) / 1000.0;
 				double instSpeed = (timeDiffSec > 0) ? deltaVal / timeDiffSec : 0.0;
 
@@ -101,12 +103,10 @@ public class EasyProgressBar extends ProgressBar {
 		}
 
 		long t = barTime;
-		if (((tot >= 0 && fin < tot || prevFin >= tot) && now - t < BAR_DELAY) || !U.compareAndSetLong(this, UPDATE_OFFSET, t, now)) return;
+		if (((tot >= 0 && fin < tot || prevFin >= tot) && now - t < BAR_DELAY) || !BAR_TIME.compareAndSet(this, t, now)) return;
 
 		if (updateTask == null || updateTask.isCancelled())
 			updateTask = Timer.getDefault().loop(this::scheduledUpdate, 1000);
-
-		//prefix = "";
 
 		setProgress(tot < 0 ? 1 : (double) fin / tot);
 	}

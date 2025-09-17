@@ -1,7 +1,6 @@
 package roj.asmx.mapper;
 
 import org.jetbrains.annotations.Nullable;
-import roj.asm.AsmCache;
 import roj.asm.MethodNode;
 import roj.asm.Opcodes;
 import roj.asm.attr.Attribute;
@@ -98,7 +97,7 @@ public abstract class ParamNameMapper {
 							V entry = variables.get(j);
 
 							String ref = mapType(entry.type.str());
-							if (ref != null) r.putShort(entry.typeOff, pool.getUtfId(ref));
+							if (ref != null) r.setShort(entry.typeOff, pool.getUtfId(ref));
 
 							String name = entry.name.str();
 							if (!parNames.isEmpty() && entry.start == 0 && entry.slot >= slotBegin && entry.slot < slotToArg.length) {
@@ -109,7 +108,7 @@ public abstract class ParamNameMapper {
 									String newName = argIndex < parNames.size() ? parNames.get(argIndex) : null;
 									if (newName != null) {
 										if (!newName.equals(name)) {
-											r.putShort(entry.nameOff, pool.getUtfId(newName));
+											r.setShort(entry.nameOff, pool.getUtfId(newName));
 											continue;
 										}
 									} else {
@@ -131,7 +130,7 @@ public abstract class ParamNameMapper {
 						for (int j = 0; j < variables.size(); j++) {
 							var entry = variables.get(j);
 							String ref = mapGenericType(entry.type.str());
-							if (ref != null) r.putShort(entry.typeOff, pool.getUtfId(ref));
+							if (ref != null) r.setShort(entry.typeOff, pool.getUtfId(ref));
 						}
 					}
 				}

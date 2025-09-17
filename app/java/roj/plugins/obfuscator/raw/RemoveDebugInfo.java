@@ -1,11 +1,8 @@
 package roj.plugins.obfuscator.raw;
 
-import roj.asm.AsmCache;
 import roj.asm.FieldNode;
 import roj.asm.MethodNode;
-import roj.asm.attr.Attribute;
 import roj.asm.attr.AttributeList;
-import roj.asm.attr.UnparsedAttribute;
 import roj.asm.cp.ConstantPool;
 import roj.asm.cp.CstUTF;
 import roj.asmx.Context;
@@ -111,7 +108,7 @@ class RemoveDebugInfo implements ObfuscateTask {
 				}
 				r.rIndex = end;
 			}
-			w.putShort(countIdx, count);
+			w.setShort(countIdx, count);
 
 			au.setRawData(w);
 		}

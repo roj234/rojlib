@@ -42,7 +42,7 @@ public class MapValue extends ConfigValue {
 		visitor.emitMap(properties.size());
 		if (!properties.isEmpty()) {
 			for (var entry : properties.entrySet()) {
-				visitor.key(entry.getKey());
+				visitor.emitKey(entry.getKey());
 				entry.getValue().accept(visitor);
 			}
 		}
@@ -53,7 +53,7 @@ public class MapValue extends ConfigValue {
 		for (String name : elementOrder) {
 			ConfigValue value = properties.get(name);
 			if (value != null) {
-				visitor.key(name);
+				visitor.emitKey(name);
 				value.accept(visitor);
 			}
 		}
@@ -201,47 +201,19 @@ public class MapValue extends ConfigValue {
 	public void clearComments() {}
 
 	/**
-	 * 使自身符合rule中定义的规则（字段名称，类型，数量）
-	 * 多出的将被删除（可选）
+	 * @param prioritySelf 优先从自身合并
 	 */
-	public final void format(MapValue rule, boolean deep, boolean remove) {
-		Map<String, ConfigValue> map = this.properties;
-		for (var entry : rule.properties.entrySet()) {
-			String k = entry.getKey();
-
-			ConfigValue myEnt = map.putIfAbsent(entry.getKey(), entry.getValue());
-			if (myEnt == null) continue;
-			ConfigValue oEnt = entry.getValue();
-
-			if (!myEnt.mayCastTo(oEnt.getType())) {
-				map.put(k, oEnt);
-			} else if (myEnt.getType() == Type.MAP && deep) {
-				myEnt.asMap().format(oEnt.asMap(), true, remove);
-			}
-		}
-		if (remove) {
-			for (var itr = map.entrySet().iterator(); itr.hasNext(); ) {
-				if (!rule.properties.containsKey(itr.next().getKey())) {
-					itr.remove();
-				}
-			}
-		}
-	}
-
-	/**
-	 * @param self 优先从自身合并
-	 */
-	public void merge(MapValue o, boolean self, boolean deep) {
+	public void merge(MapValue o, boolean prioritySelf, boolean deep) {
 		if (!deep) {
-			if (!self) {
-				properties.putAll(o.properties);
-			} else {
+			if (prioritySelf) {
 				for (var entry : o.properties.entrySet()) {
 					properties.putIfAbsent(entry.getKey(), entry.getValue());
 				}
+			} else {
+				properties.putAll(o.properties);
 			}
 		} else {
-			if (self) {
+			if (prioritySelf) {
 				for (var entry : o.properties.entrySet()) {
 					ConfigValue oEnt = entry.getValue();
 					ConfigValue myEnt = properties.putIfAbsent(entry.getKey(), oEnt);
@@ -370,7 +342,7 @@ public class MapValue extends ConfigValue {
 					String comment = comments.get(entry.getKey());
 					if (comment != null) visitor.comment(comment);
 
-					visitor.key(entry.getKey());
+					visitor.emitKey(entry.getKey());
 					entry.getValue().accept(visitor);
 				}
 			}
@@ -384,7 +356,7 @@ public class MapValue extends ConfigValue {
 				if (value != null) {
 					String comment = comments.get(key);
 					if (comment != null) visitor.comment(comment);
-					visitor.key(key);
+					visitor.emitKey(key);
 					value.accept(visitor);
 				}
 			}

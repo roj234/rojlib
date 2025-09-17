@@ -266,7 +266,7 @@ public final class STUN implements ChannelHandler {
 			error(ctx, msg);
 			return;
 		}
-		int length = buf.readUnsignedShort(buf.rIndex+2);
+		int length = buf.getUnsignedShort(buf.rIndex+2);
 		if (buf.readableBytes() < length+20) {
 			error(ctx, msg);
 			return;
@@ -345,7 +345,7 @@ public final class STUN implements ChannelHandler {
 			for (Integer i : unknown) b.putInt(i);
 		}
 
-		b.putShort(2, b.wIndex()-20+8);
+		b.setShort(2, b.wIndex()-20+8);
 
 		int crc32 = CRC32.crc32(b.list, 0, b.wIndex());
 		b.putShort(0x8028).putShort(4).putInt(crc32 ^ 0x5354554e);

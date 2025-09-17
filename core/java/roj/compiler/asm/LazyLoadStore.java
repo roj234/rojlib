@@ -4,12 +4,12 @@ import roj.asm.insn.CodeWriter;
 import roj.asm.insn.Segment;
 import roj.asm.insn.StaticSegment;
 import roj.compiler.LavaCompiler;
-import roj.compiler.resolve.TypeCast;
 import roj.util.DynByteBuf;
 
 import java.util.List;
 
-import static roj.asm.Opcodes.*;
+import static roj.asm.Opcodes.ILOAD;
+import static roj.asm.Opcodes.NOP;
 
 /**
  * @author Roj234
@@ -47,13 +47,7 @@ final class LazyLoadStore extends Segment {
 			}
 		} else {
 			// Note: 如果以后StreamChain要改的话，这里要和Type.DirtyHacker一起改
-			byte code = switch (TypeCast.getDataCap(v.type.getActualType())) {
-				default -> ILOAD;
-				case 5 -> LLOAD;
-				case 6 -> FLOAD;
-				case 7 -> DLOAD;
-				case 8 -> ALOAD;
-			};
+			byte code = v.type.rawType().getOpcode(ILOAD);
 
 			if (store) {
 				// Load n, Store n 消除

@@ -30,11 +30,11 @@ final class WebUI {
 	public Content list(Request req) {
 		var ser = new JsonSerializer();
 		ser.emitMap();
-		ser.key("ok");
+		ser.emitKey("ok");
 		ser.emit(true);
-		ser.key("data");
+		ser.emitKey("data");
 		ser.emit(Jocker.motds.get(((int)System.nanoTime()&Integer.MAX_VALUE)% Jocker.motds.size()));
-		ser.key("menus");
+		ser.emitKey("menus");
 		CONFIG.getList("webui").accept(ser);
 		return Content.json(ser.getValue());
 	}

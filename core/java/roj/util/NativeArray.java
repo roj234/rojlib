@@ -2,7 +2,7 @@ package roj.util;
 
 import java.lang.reflect.Array;
 
-import static roj.reflect.Unaligned.U;
+import static roj.reflect.Unsafe.U;
 
 /**
  * @author Roj234

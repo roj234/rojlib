@@ -4,14 +4,14 @@ import roj.io.CRC32InputStream;
 import roj.io.LimitInputStream;
 import roj.io.source.Source;
 import roj.io.source.SourceInputStream;
-import roj.reflect.Unaligned;
+import roj.reflect.Unsafe;
 
 import java.io.Closeable;
 import java.io.EOFException;
 import java.io.IOException;
 import java.io.InputStream;
 
-import static roj.reflect.Unaligned.U;
+import static roj.reflect.Unsafe.U;
 
 /**
  * @author Roj233
@@ -22,7 +22,7 @@ public abstract class QZReader implements Closeable {
 	byte flag;
 
 	Source cache;
-	static final long CACHE = Unaligned.fieldOffset(QZReader.class, "cache");
+	static final long CACHE = Unsafe.fieldOffset(QZReader.class, "cache");
 
 	private QZEntry activeEntry;
 	private InputStream blockInput;

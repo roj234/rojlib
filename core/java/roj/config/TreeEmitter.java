@@ -73,7 +73,7 @@ public class TreeEmitter implements ValueEmitter {
 		}
 	}
 
-	public final void key(String key) {
+	public final void emitKey(String key) {
 		if (state != 2) throw new IllegalStateException("栈顶不是映射: "+stackBottom.getType());
 		if (this.key != null) throw new IllegalStateException("映射缺少值: 在键 "+this.key+" 后立即输入了键 "+key);
 		this.key = key.intern();

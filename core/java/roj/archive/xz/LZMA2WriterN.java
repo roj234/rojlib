@@ -5,7 +5,7 @@ import roj.io.Finishable;
 import roj.io.IOUtil;
 import roj.io.UnsafeOutputStream;
 import roj.io.BufferPool;
-import roj.reflect.Unaligned;
+import roj.reflect.Unsafe;
 import roj.util.ArrayCache;
 import roj.util.ArrayUtil;
 import roj.util.DynByteBuf;
@@ -14,7 +14,7 @@ import roj.util.NativeException;
 import java.io.IOException;
 import java.io.OutputStream;
 
-import static roj.reflect.Unaligned.U;
+import static roj.reflect.Unsafe.U;
 
 /**
  * @author Roj234
@@ -75,11 +75,11 @@ class LZMA2WriterN extends OutputStream {
 
 		if (dict != null) {
 			U.putAddress(addr, nStruct.address()+128); // *presetDict
-			addr += Unaligned.ADDRESS_SIZE;
+			addr += Unsafe.ADDRESS_SIZE;
 			U.putInt(addr, dict.length); // presetDictLength
 		} else {
 			U.putAddress(addr, 0); // *presetDict
-			addr += Unaligned.ADDRESS_SIZE;
+			addr += Unsafe.ADDRESS_SIZE;
 			U.putInt(addr, 0); // presetDictLength
 		}
 		addr += 4;
@@ -111,7 +111,7 @@ class LZMA2WriterN extends OutputStream {
 	public final void write(int b) throws IOException {write(new byte[]{(byte) b}, 0, 1);}
 	public final void write(byte[] buf, int off, int len) throws IOException {
 		ArrayUtil.checkRange(buf, off, len);
-		write0(buf, (long) Unaligned.ARRAY_BYTE_BASE_OFFSET+off, len);
+		write0(buf, (long) Unsafe.ARRAY_BYTE_BASE_OFFSET+off, len);
 	}
 	public final void write(long off, int len) throws IOException { write0(null, off, len); }
 	public final void write0(Object buf, long off, int len) throws IOException {
@@ -218,7 +218,7 @@ class LZMA2WriterN extends OutputStream {
 			byte[] arr = ArrayCache.getByteArray(Math.min(4096, len), false);
 			while (len > 0) {
 				int copyLen = Math.min(4096, len);
-				U.copyMemory(null, off, arr, Unaligned.ARRAY_BYTE_BASE_OFFSET, copyLen);
+				U.copyMemory(null, off, arr, Unsafe.ARRAY_BYTE_BASE_OFFSET, copyLen);
 				out.write(arr, 0, copyLen);
 
 				len -= copyLen;

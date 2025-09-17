@@ -8,10 +8,9 @@ import roj.asm.cp.CstUTF;
 import roj.asm.type.TypeHelper;
 import roj.asmx.*;
 import roj.collect.*;
-import roj.reflect.ClassDefiner;
 import roj.reflect.ILSecurityManager;
 import roj.reflect.Reflection;
-import roj.reflect.Unaligned;
+import roj.reflect.Unsafe;
 import roj.text.URICoder;
 import roj.text.logging.Logger;
 import roj.util.ArrayCache;
@@ -44,17 +43,11 @@ public final class PanSecurityManager extends MethodHook {
 	static final Logger LOGGER = Logger.getLogger(Jocker.LOGGER.context().child("Security"));
 
 	PanSecurityManager() {
-		hooks.put(new MemberDescriptor("roj/reflect/Unaligned", "U", "Lroj/reflect/Unaligned;"),
-			new MemberDescriptor("roj/plugin/PanSecurityManager", "Unaligned_getUnsafe", "(Ljava/lang/Class;)Lroj/reflect/Unaligned;", 2));
+		hooks.put(new MemberDescriptor("roj/reflect/Unsafe", "U", "Lroj/reflect/Unsafe;"),
+			new MemberDescriptor("roj/plugin/PanSecurityManager", "Unsafe_getUnsafe", "(Ljava/lang/Class;)Lroj/reflect/Unsafe;", 2));
 	}
 
 	static final class ILHook extends ILSecurityManager {
-		public ByteList preDefineClass(ByteList buf) {
-			Class<?> caller = Reflection.getCallerClass(3, ClassDefiner.class);
-			var pd = Jocker.pm.getOwner(caller);
-			return preDefineHook(null, pd, buf);
-		}
-
 		public boolean checkAccess(Field f, Class<?> caller) { return filterField(f, false, caller) != null; }
 		public boolean checkInvoke(Method m, Class<?> caller) { return filterMethod(m, false, caller) != null; }
 		public boolean checkConstruct(Constructor<?> c, Class<?> caller) { return filterConstructor(c, false, caller) != null; }
@@ -235,7 +228,7 @@ public final class PanSecurityManager extends MethodHook {
 
 	public static Class<?> hook_defineClass(ClassLoader cl, byte[] b, int off, int len) { return hook_defineClass(cl, null, b, off, len, null); }
 	public static Class<?> hook_defineClass(ClassLoader cl, String name, byte[] b, int off, int len) { return hook_defineClass(cl, name, b, off, len, null); }
-	public static Class<?> hook_defineClass(ClassLoader cl, String name, byte[] b, int off, int len, ProtectionDomain pd) { return hook_defineClass(cl, name, b, off, len, pd, cl.getClass()); }
+	public static Class<?> hook_defineClass(ClassLoader cl, String name, byte[] b, int off, int len, ProtectionDomain pd) { return hook_defineClass(cl, name, b, off, len, pd, 0, cl.getClass()); }
 
 	private static String argumentTypesToString(Class<?>[] types) {
 		StringBuilder buf = new StringBuilder().append('(');
@@ -360,20 +353,20 @@ public final class PanSecurityManager extends MethodHook {
 	}
 	// endregion
 	// region Unsafe
-	public static Unaligned Unaligned_getUnsafe(Class<?> caller) {
+	public static Unsafe Unsafe_getUnsafe(Class<?> caller) {
 		var pd = Jocker.pm.getOwner(caller);
 		if (!pd.accessUnsafe) throw new SecurityException("accessUnsafe权限未为"+pd+"开启");
-		return Unaligned.U;
+		return Unsafe.U;
 	}
 	// endregion
 	// region 类定义
-	@RealDesc(value = "roj/reflect/ClassDefiner.defineClass(Ljava/lang/ClassLoader;Ljava/lang/String;[BIILjava/security/ProtectDomain;)Ljava/lang/Class;", callFrom = true)
-	public static Class<?> hook_defineClass(ClassLoader cl, String name, byte[] b, int off, int len, ProtectionDomain pd, Class<?> caller) {
+	@RealDesc(value = "roj/reflect/Reflection.defineClass(Ljava/lang/ClassLoader;Ljava/lang/String;[BIILjava/security/ProtectDomain;I)Ljava/lang/Class;", callFrom = true)
+	public static Class<?> hook_defineClass(ClassLoader cl, String name, byte[] b, int off, int len, ProtectionDomain pd, int flag, Class<?> caller) {
 		ByteList buf = new ByteList(Arrays.copyOfRange(b, off, off+len));
 
 		var pd1 = Jocker.pm.getOwner(caller);
 		buf = preDefineHook(name, pd1, buf);
-		return ClassDefiner.defineClass(cl, name, buf.list, 0, buf.wIndex(), pd);
+		return Reflection.defineClass(cl, name, buf.list, 0, buf.wIndex(), pd, flag);
 	}
 
 	static ByteList preDefineHook(String name, PluginDescriptor pd1, ByteList buf) {
@@ -475,7 +468,7 @@ public final class PanSecurityManager extends MethodHook {
 	public boolean transform(String name, Context ctx) {
 		boolean changed = false;
 		if (PluginClassLoader.PLUGIN_CONTEXT.get() != null) {
-			for (Constant c : ctx.getData().cp.data()) {
+			for (Constant c : ctx.getData().cp.constants()) {
 				if (c instanceof CstClass) {
 					CstUTF ref = ((CstClass) c).value();
 					if (GlobalClassBlackList.strStartsWithThis(ref.str())) {

@@ -8,8 +8,8 @@ import roj.asm.cp.ConstantPool;
 import roj.collect.ArrayList;
 import roj.collect.ToIntMap;
 import roj.io.IOUtil;
-import roj.io.MyDataInput;
-import roj.io.MyDataInputStream;
+import roj.io.ByteInput;
+import roj.io.ByteInputStream;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
 
@@ -29,7 +29,7 @@ public final class PackedLibrary implements Library {
 
 		for (ZEntry entry : zf.entries()) {
 			if (!entry.getName().endsWith("/v")) {
-				try (var in = MyDataInputStream.wrap(zf.getStream(entry))) {
+				try (var in = ByteInputStream.wrap(zf.getStream(entry))) {
 					output.add(new PackedLibrary(in, zf, entry.getName()));
 				} catch (Exception e) {
 					IOUtil.closeSilently(zf);
@@ -70,7 +70,7 @@ public final class PackedLibrary implements Library {
 	public void add(ClassNode data) {
 		//Library.removeUnrelatedAttribute(data);
 
-		if (pool.getLast().data().size() + data.cp.data().size() >= 0xFFFF) {
+		if (pool.getLast().constants().size() + data.cp.constants().size() >= 0xFFFF) {
 			pool.add(new ConstantPool());
 		}
 		table.putInt(data.name(), this.data.wIndex() | (pool.size()-1) << 24);
@@ -94,7 +94,7 @@ public final class PackedLibrary implements Library {
 		buf.put(data);
 	}
 
-	public PackedLibrary(MyDataInput buf, ZipFile zf, String module) throws IOException {
+	public PackedLibrary(ByteInput buf, ZipFile zf, String module) throws IOException {
 		if (!buf.readAscii(8).equals("LAVASYM4")) throw new IllegalStateException("Magic number error");
 		this.module = module;
 

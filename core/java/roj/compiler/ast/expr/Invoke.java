@@ -97,7 +97,7 @@ public final class Invoke extends Expr {
 		var node = new Invoke();
 		node.expr = method.name().equals("<init>") ? Type.klass(method.owner()) : expr;
 		node.method = method;
-		node.argTypes = Helpers.cast(Type.methodDesc(method.rawDesc()));
+		node.argTypes = Helpers.cast(Type.getMethodTypes(method.rawDesc()));
 		// 不可能在生成的代码中出现，仅供插件使用（a.k.a 不需要owner信息判断也能知道这是一个接口里的类）
 		if ((method.modifier&ACC_INTERFACE) != 0) flag |= INTERFACE_CLASS;
 		if (((method.modifier&Opcodes.ACC_STATIC) == 0) == (expr == null)) throw new IllegalArgumentException("静态参数错误:"+node);
@@ -558,8 +558,8 @@ public final class Invoke extends Expr {
 
 		if ((flag&POLYSIGN) != 0) {
 			method.setReturnType(_returnType == NORET
-				? Type.primitive(Type.VOID)
-				: _returnType.getType1().rawType());
+					? Type.VOID_TYPE
+					: _returnType.getType1().rawType());
 		}
 
 		if ((flag&INTERFACE_CLASS) != 0) {
@@ -580,7 +580,7 @@ public final class Invoke extends Expr {
 		// pop or pop2
 		if (!method.rawDesc().endsWith(")V") && _returnType == NORET) cw.insn((byte) (0x56 + method.returnType().length()));
 
-		if (isNullishOwner) MemberAccess.writeNullishExpr(cw, nullishTarget, _returnType == NORET ? Type.primitive(Type.VOID) : method.returnType(), this);
+		if (isNullishOwner) MemberAccess.writeNullishExpr(cw, nullishTarget, _returnType == NORET ? Type.VOID_TYPE : method.returnType(), this);
 	}
 
 	@Override

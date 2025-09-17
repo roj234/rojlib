@@ -2,21 +2,21 @@ package roj.plugins.frp;
 
 import org.jetbrains.annotations.NotNull;
 import roj.collect.IntBiMap;
-import roj.util.function.ExceptionalRunnable;
-import roj.text.Tokenizer;
 import roj.http.Headers;
 import roj.http.HttpHead;
 import roj.http.h2.H2Connection;
 import roj.http.h2.H2Exception;
 import roj.http.h2.H2Stream;
-import roj.io.IOUtil;
 import roj.io.BufferPool;
+import roj.io.IOUtil;
 import roj.net.*;
 import roj.text.CharList;
 import roj.text.TextUtil;
+import roj.text.Tokenizer;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
 import roj.util.Helpers;
+import roj.util.function.ExceptionalRunnable;
 
 import java.io.IOException;
 import java.util.ArrayDeque;
@@ -101,7 +101,7 @@ class FrpServerConnection extends FrpCommon {
 
 			String motd = room.motd;
 			DynByteBuf data = IOUtil.getSharedByteBuf().putShort(0).put(8).putAscii("frp:motd").putUTFData(motd);
-			man.sendData(this, data.putShort(0, data.readableBytes()-2), false);
+			man.sendData(this, data.setShort(0, data.readableBytes()-2), false);
 
 			if (room.remote != FrpServerConnection.this) {
 				data.clear();
@@ -109,7 +109,7 @@ class FrpServerConnection extends FrpCommon {
 				for (var entry : room.portMaps) {
 					data.putShort(entry.port).putVUIUTF(entry.name).putBool(entry.udp);
 				}
-				man.sendData(this, data.putShort(0, data.readableBytes()-2), false);
+				man.sendData(this, data.setShort(0, data.readableBytes()-2), false);
 				System.out.println("Send PortMap");
 			} else {
 				room.ready = true;
@@ -197,7 +197,7 @@ class FrpServerConnection extends FrpCommon {
 			var key = udp.address;
 
 			var buf = ctx.alloc().expandBefore(udp.data, 3);
-			buf.putShort(0, buf.wIndex() - 2);
+			buf.setShort(0, buf.wIndex() - 2);
 			buf.putVUInt(senderId);
 
 			Lock lock = channel().channel().lock();

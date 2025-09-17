@@ -4,7 +4,7 @@ import roj.http.Headers;
 import roj.io.IOUtil;
 import roj.net.ChannelCtx;
 import roj.net.ChannelHandler;
-import roj.reflect.Unaligned;
+import roj.reflect.Unsafe;
 import roj.text.URICoder;
 import roj.util.DynByteBuf;
 
@@ -25,7 +25,7 @@ public class DiskFileInfo implements FileInfo, ChannelHandler {
 	private DynByteBuf cc;
 	private byte[] uc;
 
-	private static final long STATE_OFFSET = Unaligned.fieldOffset(DiskFileInfo.class, "state");
+	private static final long STATE_OFFSET = Unsafe.fieldOffset(DiskFileInfo.class, "state");
 	private volatile int state;
 
 	public DiskFileInfo(File file) {this(file, false);}
@@ -85,7 +85,7 @@ public class DiskFileInfo implements FileInfo, ChannelHandler {
 
 	@Override
 	public void prepare(ResponseHeader rh, Headers h) {
-		if (Unaligned.U.compareAndSetInt(this, STATE_OFFSET, 2, 3)) {
+		if (Unsafe.U.compareAndSetInt(this, STATE_OFFSET, 2, 3)) {
 			cc = DynByteBuf.allocateDirect();
 			rh.connection().addBefore("h11@compr", "compress-capture", this);
 		}

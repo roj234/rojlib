@@ -2,7 +2,7 @@ package roj.text;
 
 import java.util.function.IntConsumer;
 
-import static roj.reflect.Unaligned.U;
+import static roj.reflect.Unsafe.U;
 
 /**
  * @author Roj234

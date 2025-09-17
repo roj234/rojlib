@@ -5,13 +5,13 @@ import org.jetbrains.annotations.Nullable;
 import roj.RojLib;
 import roj.compiler.plugins.annotations.Attach;
 import roj.io.IOUtil;
-import roj.reflect.Unaligned;
-import roj.reflect.litasm.FastJNI;
+import roj.reflect.Unsafe;
 import roj.text.TextReader;
 import roj.text.TextUtil;
 import roj.util.Helpers;
 import roj.util.NativeException;
 import roj.util.OS;
+import roj.util.optimizer.IntrinsicCandidate;
 
 import javax.imageio.ImageIO;
 import javax.swing.*;
@@ -31,7 +31,7 @@ import java.io.InputStream;
 import java.util.List;
 import java.util.function.Consumer;
 
-import static roj.reflect.Unaligned.U;
+import static roj.reflect.Unsafe.U;
 
 /**
  * @author Roj234
@@ -87,14 +87,14 @@ public final class GuiUtil {
 	}
 
 	public static long getWindowHandle(Window window) {
-		Object peer = U.getReference(window, Unaligned.fieldOffset(Component.class, "peer"));
-		return U.getLong(peer, Unaligned.fieldOffset(peer.getClass(), "hwnd"));
+		Object peer = U.getReference(window, Unsafe.fieldOffset(Component.class, "peer"));
+		return U.getLong(peer, Unsafe.fieldOffset(peer.getClass(), "hwnd"));
 	}
 
 	//static {Intrinsics.linkNative("USER32");}
-	@FastJNI
+	@IntrinsicCandidate
 	private static native long GetWindowLong(long hwnd, int dwType);
-	@FastJNI
+	@IntrinsicCandidate
 	private static native void SetWindowLong(long hwnd, int dwType, long flags);
 
 	@NotNull

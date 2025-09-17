@@ -2,6 +2,8 @@ package roj.asmx.launcher;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.lang.invoke.MethodHandles;
+import java.lang.invoke.MethodType;
 import java.net.URL;
 import java.security.CodeSource;
 import java.security.SecureClassLoader;
@@ -57,10 +59,8 @@ public class Main extends SecureClassLoader {
 	public static Runnable main;
 
 	public static void main(String[] args) throws Throwable {
-		Class.forName("roj.asmx.launcher.Loader", true, new Main())
-			 .getMethod("init", String[].class)
-			 .invoke(null, (Object) args);
-
+		Class<?> loader = Class.forName("roj.asmx.launcher.Loader", true, new Main());
+		MethodHandles.lookup().findStatic(loader, "init", MethodType.methodType(void.class, String[].class)).invokeExact(args);
 		main.run();
 	}
 }

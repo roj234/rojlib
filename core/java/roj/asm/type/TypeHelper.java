@@ -1,16 +1,13 @@
 package roj.asm.type;
 
 import roj.asm.insn.AbstractCodeWriter;
-import roj.collect.HashMap;
-import roj.text.Tokenizer;
 import roj.io.IOUtil;
 import roj.text.CharList;
 import roj.text.TextUtil;
+import roj.text.Tokenizer;
 
 import java.util.ArrayList;
 import java.util.List;
-
-import static roj.asm.type.Type.MAP;
 
 /**
  * @author Roj234
@@ -63,14 +60,6 @@ public final class TypeHelper {
 		return size;
 	}
 
-	static final HashMap<String, Object[]> ByName;
-	static {
-		ByName = new HashMap<>(MAP.length);
-		for (Object[] o : MAP) {
-			if (o != null && o[1] != null) ByName.put(o[1].toString(), o);
-		}
-	}
-
 	/**
 	 * 转换class为字段的asm type
 	 */
@@ -82,7 +71,7 @@ public final class TypeHelper {
 			sb.append('[');
 		}
 
-		if (clazz.isPrimitive()) return sb.append(ByName.get(clazz.getName())[0].toString());
+		if (clazz.isPrimitive()) return sb.append(R.byName.get(clazz.getName()).desc);
 		return sb.append('L').append(clazz.getName().replace('.', '/')).append(';');
 	}
 
@@ -172,8 +161,8 @@ public final class TypeHelper {
 			sb.append('[');
 		}
 
-		Object[] arr = ByName.get(sb1);
-		if (arr != null) return sb.append(arr[0]);
+		var arr = R.byName.get(sb1);
+		if (arr != null) return sb.append(arr.desc);
 
 		return sb.append('L').append(sb1.replace('.', '/')).append(';');
 	}

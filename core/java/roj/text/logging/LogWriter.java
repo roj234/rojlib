@@ -5,11 +5,11 @@ import roj.asm.type.TypeHelper;
 import roj.collect.HashMap;
 import roj.compiler.plugins.asm.ASM;
 import roj.concurrent.TimerTask;
-import roj.reflect.Reflection;
 import roj.text.CharList;
 import roj.text.LineReader;
 import roj.util.DynByteBuf;
 import roj.util.Helpers;
+import roj.util.JVM;
 
 import java.io.PrintStream;
 import java.io.PrintWriter;
@@ -51,7 +51,7 @@ sealed class LogWriter extends PrintWriter permits LogWriterJson {
 		int end = name.lastIndexOf('.', name.indexOf('('));
 		int i = 4;
 
-		if (Reflection.JAVA_VERSION > 8) {
+		if (JVM.VERSION > 8) {
 			// java.base/
 			int module = name.indexOf('/');
 			if (module >= 0) {
@@ -228,7 +228,7 @@ sealed class LogWriter extends PrintWriter permits LogWriterJson {
 		}
 
 		if (arg.getClass().getComponentType() != null) {
-			switch (Type.fieldDesc(TypeHelper.class2asm(arg.getClass())).getActualClass()) {
+			switch (Type.getType(TypeHelper.class2asm(arg.getClass())).getActualClass()) {
 				case "[I": sb.append(Arrays.toString((int[]) arg)); return;
 				case "[J": sb.append(Arrays.toString((long[]) arg)); return;
 				case "[F": sb.append(Arrays.toString((float[]) arg)); return;

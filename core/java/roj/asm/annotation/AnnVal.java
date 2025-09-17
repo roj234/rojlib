@@ -42,7 +42,7 @@ public abstract class AnnVal extends ConfigValue {
 					case FLOAT -> valueOf(((CstFloat) c).value);
 					case DOUBLE -> valueOf(((CstDouble) c).value);
 					case STRING -> valueOf(((CstUTF) c).str());
-					case ANNOTATION_CLASS -> valueOf(fieldDesc(((CstUTF) c).str()));
+					case ANNOTATION_CLASS -> valueOf(Type.getType(((CstUTF) c).str()));
 					default -> throw new IllegalStateException("Unexpected value: " + type);
 				};
 			case ENUM: return new AEnum(checkSemicolon(((CstUTF) pool.get(r)).str()), ((CstUTF) pool.get(r)).str());

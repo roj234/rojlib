@@ -1,6 +1,6 @@
 package roj.collect;
 
-import roj.reflect.Unaligned;
+import roj.reflect.Unsafe;
 import roj.util.Helpers;
 import roj.util.NativeMemory;
 
@@ -41,8 +41,8 @@ public class WeakCache<K> extends WeakReference<K> implements Runnable {
 		}
 	}
 
-	private static final long _NEXT = Unaligned.fieldOffset(WeakCache.class, "_next");
-	private static final long REFERENT = Unaligned.fieldOffset(Reference.class, "referent");
+	private static final long _NEXT = Unsafe.fieldOffset(WeakCache.class, "_next");
+	private static final long REFERENT = Unsafe.fieldOffset(Reference.class, "referent");
 	public static <K, V extends WeakCache<K>> XashMap.Builder<K, V> shape(Class<V> vType) {
 		return new XashMap.Builder<>(vType, _NEXT, REFERENT, Hasher.identity(), null);
 	}

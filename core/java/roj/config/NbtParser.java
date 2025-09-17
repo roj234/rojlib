@@ -1,12 +1,13 @@
 package roj.config;
 
-import roj.reflect.Unaligned;
 import roj.util.DynByteBuf;
 
 import java.io.DataInput;
 import java.io.DataInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+
+import static roj.reflect.Unsafe.U;
 
 /**
  * NBT IO class
@@ -17,8 +18,8 @@ public final class NbtParser implements BinaryParser {
 	public static final byte END = 0, BYTE = 1, SHORT = 2, INT = 3, LONG = 4, FLOAT = 5, DOUBLE = 6, BYTE_ARRAY = 7, STRING = 8, LIST = 9, COMPOUND = 10, INT_ARRAY = 11, LONG_ARRAY = 12;
 
 	@Override
-	public <T extends ValueEmitter> T parse(InputStream in, int flag, T emitter) throws IOException { parse((DataInput) (in instanceof DataInput ? in : new DataInputStream(in)), emitter); return emitter; }
-	public <T extends ValueEmitter> T parse(DynByteBuf buf, int flag, T emitter) throws IOException { parse(buf, emitter); return emitter; }
+	public void parse(InputStream in, int flag, ValueEmitter emitter) throws IOException {parse((DataInput) (in instanceof DataInput ? in : new DataInputStream(in)), emitter);}
+	public void parse(DynByteBuf buf, int flag, ValueEmitter emitter) throws IOException {parse(buf, emitter);}
 
 	public static void parse(DataInput in, ValueEmitter cc) throws IOException {
 		byte type = in.readByte();
@@ -59,7 +60,7 @@ public final class NbtParser implements BinaryParser {
 				while (true) {
 					type = in.readByte();
 					if (type == 0) break;
-					cc.key(in.readUTF());
+					cc.emitKey(in.readUTF());
 					parse(in, type, cc);
 				}
 				cc.pop();
@@ -87,7 +88,8 @@ public final class NbtParser implements BinaryParser {
 			case FLOAT -> cc.emit(in.readFloat());
 			case DOUBLE -> cc.emit(in.readDouble());
 			case BYTE_ARRAY -> {
-				var arr = (byte[]) Unaligned.U.allocateUninitializedArray(byte.class, in.readInt());
+				int length = in.readInt();
+				var arr = (byte[]) U.allocateUninitializedArray(byte.class, length);
 				in.readFully(arr);
 				cc.emit(arr);
 			}
@@ -104,18 +106,20 @@ public final class NbtParser implements BinaryParser {
 				while (true) {
 					type = in.readByte();
 					if (type == 0) break;
-					cc.key(in.readUTF());
+					cc.emitKey(in.readUTF());
 					parseSA(in, type, cc);
 				}
 				cc.pop();
 			}
 			case INT_ARRAY -> {
-				var arr = (int[]) Unaligned.U.allocateUninitializedArray(int.class, in.readInt());
+				int length = in.readInt();
+				var arr = (int[]) U.allocateUninitializedArray(int.class, length);
 				for (int i = 0; i < arr.length; i++) arr[i] = in.readInt();
 				cc.emit(arr);
 			}
 			case LONG_ARRAY -> {
-				var arr = (long[]) Unaligned.U.allocateUninitializedArray(long.class, in.readInt());
+				int length = in.readInt();
+				var arr = (long[]) U.allocateUninitializedArray(long.class, length);
 				for (int i = 0; i < arr.length; i++) arr[i] = in.readLong();
 				cc.emit(arr);
 			}

@@ -126,7 +126,7 @@ public final class VarintSplitter implements ChannelHandler {
 			if (3 > maxBytes) throw new IllegalArgumentException("数据包过大");
 			if (data.readableBytes() < 2) return -1;
 
-			return ((b&0x1F)<<16) | data.readUShortLE();
+			return ((b&0x1F)<<16) | data.readUnsignedShortLE();
 		}
 		if ((b&0x10) == 0) {
 			if (4 > maxBytes) throw new IllegalArgumentException("数据包过大");

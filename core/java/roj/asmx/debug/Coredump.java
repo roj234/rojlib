@@ -1,9 +1,8 @@
 package roj.asmx.debug;
 
-import roj.ci.annotation.ReferenceByGeneratedClass;
 import roj.asm.ClassNode;
 import roj.asm.MethodNode;
-import roj.asm.insn.Code;
+import roj.asm.frame.FrameVisitor;
 import roj.asm.insn.Label;
 import roj.asm.type.Type;
 import roj.asm.type.TypeHelper;
@@ -11,6 +10,7 @@ import roj.asmx.ConstantPoolHooks;
 import roj.asmx.TransformException;
 import roj.asmx.launcher.Autoload;
 import roj.asmx.launcher.Tweaker;
+import roj.ci.annotation.IndirectReference;
 
 import javax.management.MBeanServer;
 import javax.management.ObjectName;
@@ -22,7 +22,7 @@ import static roj.asm.Opcodes.*;
  * @author Roj234
  * @since 2024/6/30 19:15
  */
-@Autoload(Autoload.Target.INIT)
+@Autoload
 public class Coredump implements ConstantPoolHooks.Hook<MethodNode> {
 	static {
 		Tweaker.CONDITIONAL.annotatedMethod("roj/asmx/debug/api/Exceptional", new Coredump());
@@ -45,7 +45,7 @@ public class Coredump implements ConstantPoolHooks.Hook<MethodNode> {
 			size = 1;
 		}
 		c.visitSize(size, size);
-		c.computeFrames(Code.COMPUTE_FRAMES);
+		c.computeFrames(FrameVisitor.COMPUTE_FRAMES);
 
 		var pars = node.parameters();
 		for (int i = 0; i < pars.size(); i++) {
@@ -72,7 +72,7 @@ public class Coredump implements ConstantPoolHooks.Hook<MethodNode> {
 		return true;
 	}
 
-	@ReferenceByGeneratedClass
+	@IndirectReference
 	public static Throwable __onExceptionCaptured(Throwable ex) {
 		System.out.println("异常已捕获");
 		Coredump.heapdump();

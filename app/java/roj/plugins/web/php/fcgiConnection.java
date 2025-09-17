@@ -5,17 +5,17 @@ import roj.net.ChannelCtx;
 import roj.net.ChannelHandler;
 import roj.net.ClientLaunch;
 import roj.net.MyChannel;
-import roj.reflect.Unaligned;
+import roj.optimizer.FastVarHandle;
+import roj.reflect.Handles;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
 import roj.util.Helpers;
 
 import java.io.IOException;
+import java.lang.invoke.VarHandle;
 import java.net.InetAddress;
 import java.util.Map;
 import java.util.function.Consumer;
-
-import static roj.reflect.Unaligned.U;
 
 /**
  * 来源：nginx抓包分析
@@ -23,6 +23,7 @@ import static roj.reflect.Unaligned.U;
  * @author Roj234
  * @since 2024/7/1 20:12
  */
+@FastVarHandle
 public final class fcgiConnection implements ChannelHandler, Consumer<MyChannel> {
 	private static final int
 		FCGI_BEGIN_REQUEST = 1, FCGI_ABORT_REQUEST = 2, FCGI_END_REQUEST/*RECV*/ = 3,
@@ -51,7 +52,7 @@ public final class fcgiConnection implements ChannelHandler, Consumer<MyChannel>
 
 	private final Object lock = new Object();
 	private volatile fcgiContent activeResponse;
-	private static final long OFF = Unaligned.fieldOffset(fcgiConnection.class, "activeResponse");
+	private static final VarHandle RESPONSE = Handles.lookup().findVarHandle(fcgiConnection.class, "activeResponse", fcgiContent.class);
 
 	fcgiConnection(fcgiManager manager, int port) throws IOException {
 		this.manager = manager;
@@ -68,7 +69,7 @@ public final class fcgiConnection implements ChannelHandler, Consumer<MyChannel>
 			if (!(opened & ctx.isOpen())) return -1;
 		}
 
-		if (!U.compareAndSetReference(this, OFF, null, resp)) return 0;
+		if (!RESPONSE.compareAndSet(this, null, resp)) return 0;
 		abort = -1;
 		abortEx = null;
 
@@ -113,7 +114,7 @@ public final class fcgiConnection implements ChannelHandler, Consumer<MyChannel>
 		b.release();
 
 		int len = buf.wIndex() - offset;
-		buf.putShort(offset-4, len);
+		buf.setShort(offset-4, len);
 
 		// end of params
 		buf.putLong(/*FCGI_PARAMS*/0x01_04_0001_0000_0000L);
@@ -147,7 +148,7 @@ public final class fcgiConnection implements ChannelHandler, Consumer<MyChannel>
 
 		var ib = (DynByteBuf) msg;
 		while (true) {
-			if (ib.readableBytes() < 8 || ib.readableBytes() < ib.readUnsignedShort(ib.rIndex+4)+8) return;
+			if (ib.readableBytes() < 8 || ib.readableBytes() < ib.getUnsignedShort(ib.rIndex+4)+8) return;
 
 			int start = ib.rIndex;
 			int type = ib.readUnsignedShort();
@@ -243,7 +244,7 @@ public final class fcgiConnection implements ChannelHandler, Consumer<MyChannel>
 
 	void requestFinished(fcgiContent response) {
 		//potential release before setEof()
-		if (U.compareAndSetReference(this, OFF, response, null)) {
+		if (RESPONSE.compareAndSet(this, response, null)) {
 			abort = 0;
 		}
 	}

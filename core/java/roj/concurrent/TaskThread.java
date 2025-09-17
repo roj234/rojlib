@@ -3,7 +3,7 @@ package roj.concurrent;
 import org.jetbrains.annotations.Async;
 import roj.compiler.api.Synchronizable;
 import roj.reflect.Reflection;
-import roj.reflect.Unaligned;
+import roj.reflect.Unsafe;
 import roj.util.ArrayUtil;
 
 import java.util.List;
@@ -11,14 +11,14 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.locks.LockSupport;
 
-import static roj.reflect.Unaligned.U;
+import static roj.reflect.Unsafe.U;
 
 @Synchronizable
 public class TaskThread extends FastLocalThread implements ExecutorService {
 	private ConcurrentLinkedQueue<Runnable> tasks = new ConcurrentLinkedQueue<>();
 	private UncaughtExceptionHandler exceptionHandler = LOG_HANDLER;
 
-	static final long STATE = Unaligned.fieldOffset(TaskThread.class, "state");
+	static final long STATE = Unsafe.fieldOffset(TaskThread.class, "state");
 	//0 => running, 1 => terminating, 2 => stopped
 	volatile int state = 0;
 

@@ -93,11 +93,11 @@ final class ClassMerger {
 		var mainRealCode = mainMethod.getAttribute(main.cp, Attribute.Code);
 		var subRealCode = mainMethod.getAttribute(sub.cp, Attribute.Code);
 
-		if (mainRealCode.instructions.bci() != subRealCode.instructions.bci()) {
+		if (mainRealCode.instructions.length() != subRealCode.instructions.length()) {
 			replaceMethod++;
 		}
 
-		return mainRealCode.instructions.bci() >= subRealCode.instructions.bci() ? mainMethod : subMethod;
+		return mainRealCode.instructions.length() >= subRealCode.instructions.length() ? mainMethod : subMethod;
 	}
 
 	private void processInnerClasses(ClassNode main, ClassNode sub) {

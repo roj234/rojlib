@@ -99,7 +99,7 @@ public final class CsvParser extends Parser implements TableParser {
 
 	public CsvParser() {}
 
-	public <E extends ValueEmitter> E parse(CharSequence text, int flags, E emitter) throws ParseException {
+	public void parse(CharSequence text, int flags, ValueEmitter emitter) throws ParseException {
 		this.flag = flags;
 		init(text);
 		tmpList = new ArrayList<>();
@@ -129,7 +129,7 @@ public final class CsvParser extends Parser implements TableParser {
 						if (hasValue) unexpected(w.toString(), "分隔符");
 						hasValue = true;
 
-						emitter.key(keys.get(j));
+						emitter.emitKey(keys.get(j));
 						switch (w.type()) {
 							case Token.LITERAL -> emitter.emit(w.text());
 							case Token.INTEGER -> emitter.emit(w.asInt());
@@ -151,7 +151,6 @@ public final class CsvParser extends Parser implements TableParser {
 
 		emitter.pop();
 		init(null);
-		return emitter;
 	}
 
 	@Override

@@ -1,27 +1,23 @@
 package roj.plugins.frp;
 
 import org.jetbrains.annotations.NotNull;
+import roj.collect.ArrayList;
 import roj.collect.CharMap;
 import roj.collect.IntBiMap;
-import roj.collect.ArrayList;
 import roj.crypt.Blake3;
 import roj.crypt.KeyType;
 import roj.http.Headers;
 import roj.http.h2.H2Connection;
 import roj.http.h2.H2Exception;
 import roj.http.h2.H2Stream;
-import roj.io.IOUtil;
 import roj.io.BufferPool;
+import roj.io.IOUtil;
 import roj.net.*;
-import roj.net.mss.MSSHandler;
 import roj.net.handler.Timeout;
-import roj.net.mss.MSSContext;
-import roj.net.mss.MSSException;
-import roj.net.mss.MSSKeyPair;
-import roj.net.mss.MSSPublicKey;
+import roj.net.mss.*;
 import roj.text.CharList;
-import roj.text.URICoder;
 import roj.text.Formatter;
+import roj.text.URICoder;
 import roj.text.logging.Level;
 import roj.text.logging.Logger;
 import roj.ui.TUI;
@@ -308,7 +304,7 @@ public class FrpClient extends FrpCommon implements Consumer<MyChannel> {
 			if (senderId < 0) udpSenderIds.putByValue(key, udpSenderIds.size());
 
 			var buf = ctx.alloc().expandBefore(udp.data, 3);
-			buf.putShort(0, buf.wIndex() - 2);
+			buf.setShort(0, buf.wIndex() - 2);
 
 			Lock lock = man.channel().channel().lock();
 			lock.lock();
@@ -333,7 +329,7 @@ public class FrpClient extends FrpCommon implements Consumer<MyChannel> {
 
 			while (buf.isReadable()) {
 				int rb = buf.readableBytes() - 2;
-				if (rb < 0 || rb < buf.readUnsignedShort(buf.rIndex)) {
+				if (rb < 0 || rb < buf.getUnsignedShort(buf.rIndex)) {
 					if (buf != buffer) buffer.put(buf);
 				} else {
 					int count = buf.readUnsignedShort();

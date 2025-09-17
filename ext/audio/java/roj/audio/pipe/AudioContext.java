@@ -104,7 +104,7 @@ public class AudioContext implements AudioSink {
 	private int readSample(DynByteBuf buffer) {
 		return switch (sampleBytes) {
 			case 1 -> buffer.readByte();
-			case 2 -> bigEndian ? buffer.readShort() : buffer.readUShortLE();
+			case 2 -> bigEndian ? buffer.readShort() : buffer.readUnsignedShortLE();
 			case 3 -> bigEndian ? buffer.readMedium() : buffer.readMediumLE();
 			case 4 -> bigEndian ? buffer.readInt() : buffer.readIntLE();
 			default -> throw new IllegalArgumentException("Unsupported sample size: " + sampleBytes * 8);

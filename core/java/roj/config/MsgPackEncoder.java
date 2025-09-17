@@ -144,11 +144,11 @@ public class MsgPackEncoder implements ValueEmitter {
 		}
 		push((byte) 1, size);
 	}
-	public final void key(String key) {
+	public final void emitKey(String key) {
 		onKey();
 		writeUTF(key);
 	}
-	public final void intKey(int key) {
+	public final void emitKey(int key) {
 		onKey();
 
 		if ((byte)key == key) {
@@ -205,7 +205,7 @@ public class MsgPackEncoder implements ValueEmitter {
 		int prevState = states[--stateLen];
 
 		if ((prevState & 4) != 0) {
-			if (out.isReal()) out.putShort(prevData, size);
+			if (out.isReal()) out.setShort(prevData, size);
 			else out.put(STREAM);
 		} else {
 			if (size != prevData) throw new IllegalStateException("预期大小("+prevData+"),实际大小("+size+")");

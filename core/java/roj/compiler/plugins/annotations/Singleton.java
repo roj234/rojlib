@@ -28,7 +28,7 @@ import java.lang.invoke.MethodHandles;
 @Target(ElementType.METHOD)
 public @interface Singleton {
 	/**
-	 * Getter的名称，必须，但是同一类中相同名称和参数的方法可以不存在，不存在会自动生成
+	 * Getter的名称，这么设计是为了drop-in replace，也就是说，你可以在Getter内实现正常的DCL，因为Singleton会替换这个函数
 	 */
 	String value();
 }

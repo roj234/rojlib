@@ -1,8 +1,8 @@
 package roj.crypt.asn1;
 
 import org.intellij.lang.annotations.MagicConstant;
-import roj.collect.IntList;
 import roj.collect.ArrayList;
+import roj.collect.IntList;
 import roj.io.IOUtil;
 import roj.util.*;
 
@@ -10,7 +10,7 @@ import java.io.IOException;
 import java.math.BigInteger;
 import java.util.Arrays;
 
-import static roj.reflect.Unaligned.U;
+import static roj.reflect.Unsafe.U;
 
 /**
  * 不像java的DerOutputStream把byte[]拷来拷去，这个（大概）高性能的实现选择至多拷贝一次
@@ -44,7 +44,7 @@ public final class DerWriter {
 
 			total += length + metalen;
 
-			ByteList typeAndLength = new ByteList(metalen+1).put(T.get(i));
+			ByteList typeAndLength = new ByteList(metalen+1).put(T.getByte(i));
 			writeLength(metalen, typeAndLength, length);
 			acc.add(typeAndLength);
 
@@ -172,7 +172,7 @@ public final class DerWriter {
 	public void flush(DynByteBuf out) {
 		if (stack.size() != 0) throw new IllegalStateException("stack depth != 0");
 		for (int i = 0; i < T.wIndex(); i++) {
-			out.put(T.get(i));
+			out.put(T.getByte(i));
 
 			int len = L.get(i);
 			writeLength(getLength(len), out, len);

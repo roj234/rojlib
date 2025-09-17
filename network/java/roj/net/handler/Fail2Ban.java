@@ -1,15 +1,17 @@
 package roj.net.handler;
 
-import roj.concurrent.TimerTask;
 import roj.concurrent.Timer;
+import roj.concurrent.TimerTask;
 import roj.net.ChannelCtx;
 import roj.net.ChannelHandler;
 import roj.net.Event;
-import roj.reflect.Unaligned;
+import roj.optimizer.FastVarHandle;
+import roj.reflect.Handles;
 import roj.text.logging.Logger;
-import roj.util.VMUtil;
+import roj.util.JVM;
 
 import java.io.IOException;
+import java.lang.invoke.VarHandle;
 import java.net.Inet6Address;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
@@ -25,14 +27,15 @@ public class Fail2Ban implements ChannelHandler, Runnable {
 	private static final Logger LOGGER = Logger.getLogger();
 	private final ConcurrentHashMap<InetAddress, Attempt> data = new ConcurrentHashMap<>();
 
+	@FastVarHandle
 	final class Attempt {
-		private static final long COUNT_OFFSET = Unaligned.fieldOffset(Attempt.class, "count");
+		private static final VarHandle COUNT = Handles.lookup().findVarHandle(Attempt.class, "count", int.class);
 		private volatile int count;
 		private long forgive;
 		public Attempt(InetAddress address) {}
 
 		public boolean login() {
-			boolean ok = Unaligned.U.getAndAddInt(this, COUNT_OFFSET, 1) < maxFail;
+			boolean ok = (int) COUNT.getAndAdd(this, 1) < maxFail;
 			if (!ok) forgive = System.currentTimeMillis();
 			return ok;
 		}
@@ -73,7 +76,7 @@ public class Fail2Ban implements ChannelHandler, Runnable {
 			LOGGER.info("{} 被阻止", ip);
 
 			ctx.close();
-			if (VMUtil.isRoot()) {
+			if (JVM.isRoot()) {
 				// TODO netsh timed block
 				//Scheduler.getDefaultScheduler().delay(ctx::close, purgeInterval);
 			}

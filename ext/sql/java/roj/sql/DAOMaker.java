@@ -16,7 +16,7 @@ import roj.collect.HashSet;
 import roj.collect.ToIntMap;
 import roj.config.ValueEmitter;
 import roj.config.mapper.ObjectMapperFactory;
-import roj.reflect.ClassDefiner;
+import roj.reflect.Reflection;
 import roj.reflect.VirtualReference;
 import roj.text.CharList;
 
@@ -48,7 +48,7 @@ final class DAOMaker {
 		impl.name(ref.name()+"$Impl");
 		impl.addInterface("roj/sql/DAO");
 		impl.addInterface(daoItf.getName().replace('.', '/'));
-		impl.npConstructor();
+		impl.defaultConstructor();
 
 		var init = impl.newMethod(ACC_PUBLIC, "newInstance", "(Ljava/sql/Connection;)Ljava/lang/Object;");
 		init.visitSize(3, 2);
@@ -139,7 +139,7 @@ final class DAOMaker {
 						cw.ldc(j+1);
 						cw.insn(ALOAD_2);
 
-						Type asmType = Type.from(parTypeInst.getDeclaredField(name).getType());
+						Type asmType = Type.getType(parTypeInst.getDeclaredField(name).getType());
 						cw.field(GETFIELD, itrType.owner(), name, asmType);
 						invokeSet(cw, asmType);
 					}
@@ -176,7 +176,7 @@ final class DAOMaker {
 						cw.ldc(j+1);
 						cw.insn(ALOAD_2);
 
-						Type asmType = Type.from(parTypeInst.getDeclaredField(name).getType());
+						Type asmType = Type.getType(parTypeInst.getDeclaredField(name).getType());
 						cw.field(GETFIELD, itrType.owner(), name, asmType);
 						invokeSet(cw, asmType);
 					}
@@ -213,7 +213,7 @@ final class DAOMaker {
 					cw.varLoad(parType, parId>>>16);
 					if (nameLast != null) {
 						Class<?> parTypeInst = parType.toClass(daoItf.getClassLoader());
-						Type asmType = Type.from(parTypeInst.getDeclaredField(nameLast).getType());
+						Type asmType = Type.getType(parTypeInst.getDeclaredField(nameLast).getType());
 						cw.field(GETFIELD, parType.owner, nameLast, parType = asmType);
 					}
 					invokeSet(cw, parType);
@@ -263,7 +263,7 @@ final class DAOMaker {
 
 		init.insn(ALOAD_0);
 		init.insn(ARETURN);
-		return (DAO) ClassDefiner.newInstance(impl, daoItf.getClassLoader());
+		return (DAO) Reflection.createInstance(daoItf.getClassLoader(), impl);
 	}
 
 	private static void doClear(CodeWriter cw, boolean clearBatch) {
@@ -325,7 +325,7 @@ final class DAOMaker {
 		while (set.next()) {
 			ser.emitMap();
 			for (int i = 0; i < adapters.size(); ) {
-				ser.key(adapters.get(i++).toString());
+				ser.emitKey(adapters.get(i++).toString());
 				((A)adapters.get(i++)).adapt(ser, set);
 			}
 			ser.pop();
@@ -347,7 +347,7 @@ final class DAOMaker {
 			var ser = getSerializerFactory(type).serializer(type);
 			ser.emitMap();
 			for (int i = 0; i < adapters.size(); ) {
-				ser.key(adapters.get(i++).toString());
+				ser.emitKey(adapters.get(i++).toString());
 				((A)adapters.get(i++)).adapt(ser, set);
 			}
 			ser.pop();
@@ -379,7 +379,7 @@ final class DAOMaker {
 		for (int i = 1; i <= meta.getColumnCount(); i++) {
 			String name = meta.getColumnLabel(i);
 
-			var type = Type.from(klass.getDeclaredField(name).getType());
+			var type = Type.getType(klass.getDeclaredField(name).getType());
 
 			var adapter = switch (type.getActualType()) {
 				case Type.BOOLEAN -> boolAdapter(i);

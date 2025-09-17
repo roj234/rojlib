@@ -43,11 +43,11 @@ public final class CstNameAndType extends Constant {
 
 		if (type.startsWith("(")) {
 			try {
-				return sb.append(TypeHelper.humanize(Type.methodDesc(type), name, true)).toString();
+				return sb.append(TypeHelper.humanize(Type.getMethodTypes(type), name, true)).toString();
 			} catch (Exception ignored) {}
 		} else {
 			try {
-				Type.fieldDesc(type).toString(sb);
+				Type.getType(type).toString(sb);
 				return sb.append(' ').append(name).toString();
 			} catch (Exception ignored) {}
 		}
