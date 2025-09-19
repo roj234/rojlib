@@ -2,18 +2,18 @@ package roj.ci.minecraft;
 
 import org.jetbrains.annotations.Nullable;
 import roj.asm.*;
-import roj.asm.annotation.AList;
 import roj.asm.annotation.AnnVal;
 import roj.asm.annotation.Annotation;
+import roj.asm.annotation.ArrayVal;
 import roj.asm.attr.Annotations;
 import roj.asm.cp.ConstantPool;
 import roj.asm.cp.CstNameAndType;
-import roj.asm.type.Generic;
+import roj.asm.type.ParameterizedType;
 import roj.asm.type.Signature;
 import roj.asm.type.Type;
 import roj.asmx.mapper.Mapper;
+import roj.ci.BuildContext;
 import roj.ci.MCMake;
-import roj.ci.plugin.BuildContext;
 import roj.ci.plugin.MAP;
 import roj.ci.plugin.Processor;
 import roj.collect.ArrayList;
@@ -35,7 +35,7 @@ public class MIXIN implements Processor {
 	public void afterCompile(BuildContext ctx) {
 		var m = Objects.requireNonNull(ctx.getProcessor(MAP.class), "Missing dep MAP for MIXIN").getProjectMapper(ctx.project);
 
-		var annotatedClass = ctx.getAnnotatedClass("org/spongepowered/asm/mixin/Mixin");
+		var annotatedClass = ctx.getSourceAnnotations("org/spongepowered/asm/mixin/Mixin");
 		for (int i = 0; i < annotatedClass.size(); i++) {
 			ClassNode data = annotatedClass.get(i).getData();
 			Annotation mixin = Annotation.findInvisible(data.cp, data, "org/spongepowered/asm/mixin/Mixin");
@@ -99,7 +99,7 @@ public class MIXIN implements Processor {
 					if (methods.size() <= 1) {
 						String mappedName = mapMemberName(mapper, mixinClass.cp, targetClass, member, methods.isEmpty() ? null : methods.getString(0));
 						if (mappedName != null) {
-							anno.put("method", new AList(Collections.singletonList(AnnVal.valueOf(mappedName))));
+							anno.put("method", new ArrayVal(Collections.singletonList(AnnVal.valueOf(mappedName))));
 						} else {
 							MCMake.LOGGER.warn("无法为对象{}.{}找到映射", mixinClass.name(), member.name());
 						}
@@ -122,7 +122,7 @@ public class MIXIN implements Processor {
 				if (lastArg.owner().endsWith("CallbackInfoReturnable")) {
 					Signature signature = mn.getSignature(cp);
 					try {
-						Type returnType = ((Generic) signature.values.get(signature.values.size() - 2)).children.get(0).rawType();
+						Type returnType = ((ParameterizedType) signature.values.get(signature.values.size() - 2)).typeParameters.get(0).rawType();
 						parameters.set(parameters.size() - 1, returnType);
 					} catch (Exception e) {
 						MCMake.LOGGER.warn("failed to obtain generic CallbackInfoReturnable {}", signature);

@@ -1,9 +1,9 @@
 package roj.asm.type;
 
 import roj.collect.ArrayList;
-import roj.util.OperationDone;
 import roj.io.IOUtil;
 import roj.text.CharList;
+import roj.util.OperationDone;
 
 import java.util.Collections;
 import java.util.List;
@@ -15,16 +15,16 @@ import java.util.List;
 public abstract class IGeneric implements IType {
 	public String owner;
 	public GenericSub sub;
-	public List<IType> children = Collections.emptyList();
+	public List<IType> typeParameters = Collections.emptyList();
 
 	public IGeneric() {}
 
 	public void addChild(IType child) {
-		if (children.isEmpty()) children = new ArrayList<>(2);
-		children.add(child);
+		if (typeParameters.isEmpty()) typeParameters = new ArrayList<>(2);
+		typeParameters.add(child);
 	}
 
-	public List<IType> childrenRaw() { return children; }
+	public List<IType> childrenRaw() { return typeParameters; }
 
 	@Override
 	public String toString() {
@@ -38,11 +38,11 @@ public abstract class IGeneric implements IType {
 		try {
 			IGeneric clone = (IGeneric) super.clone();
 			clone.sub = sub == null ? null : (GenericSub) sub.clone();
-			if (children.isEmpty()) clone.children = Collections.emptyList();
+			if (typeParameters.isEmpty()) clone.typeParameters = Collections.emptyList();
 			else {
-				clone.children = new ArrayList<>(children.size());
-				for (int i = 0; i < children.size(); i++)
-					clone.children.add(children.get(i).clone());
+				clone.typeParameters = new ArrayList<>(typeParameters.size());
+				for (int i = 0; i < typeParameters.size(); i++)
+					clone.typeParameters.add(typeParameters.get(i).clone());
 			}
 			return clone;
 		} catch (CloneNotSupportedException e) {

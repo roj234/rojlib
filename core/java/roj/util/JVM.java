@@ -26,8 +26,8 @@ public final class JVM {
 
 	@FastVarHandle
 	private static final class SIP {
-		private static final VarHandle HOOKS = Handles.lookup().findStaticVarHandle(Handles.findClass("java.lang.ApplicationShutdownHooks"), "hooks", IdentityHashMap.class);
-		private static boolean isShutdownInProgress() {return HOOKS.get() != null;}
+		private static final VarHandle HOOKS$STATIC = Handles.lookup().findStaticVarHandle(Handles.findClass("java.lang.ApplicationShutdownHooks"), "hooks", IdentityHashMap.class);
+		private static boolean isShutdownInProgress() {return HOOKS$STATIC.get() == null;}
 	}
 	public static boolean isShutdownInProgress() {return SIP.isShutdownInProgress();}
 

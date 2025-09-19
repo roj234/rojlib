@@ -2,23 +2,24 @@ package roj.concurrent;
 
 import org.jetbrains.annotations.Async;
 import roj.compiler.api.Synchronizable;
+import roj.optimizer.FastVarHandle;
+import roj.reflect.Handles;
 import roj.reflect.Reflection;
-import roj.reflect.Unsafe;
 import roj.util.ArrayUtil;
 
+import java.lang.invoke.VarHandle;
 import java.util.List;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.locks.LockSupport;
 
-import static roj.reflect.Unsafe.U;
-
 @Synchronizable
+@FastVarHandle
 public class TaskThread extends FastLocalThread implements ExecutorService {
 	private ConcurrentLinkedQueue<Runnable> tasks = new ConcurrentLinkedQueue<>();
 	private UncaughtExceptionHandler exceptionHandler = LOG_HANDLER;
 
-	static final long STATE = Unsafe.fieldOffset(TaskThread.class, "state");
+	static final VarHandle STATE = Handles.lookup().findVarHandle(TaskThread.class, "state", int.class);
 	//0 => running, 1 => terminating, 2 => stopped
 	volatile int state = 0;
 
@@ -63,7 +64,7 @@ public class TaskThread extends FastLocalThread implements ExecutorService {
 	}
 	@Override
 	public void shutdown() {
-		if (U.compareAndSetInt(this, STATE, 0, 1))
+		if (STATE.compareAndSet(this, 0, 1))
 			LockSupport.unpark(this);
 	}
 	@Override

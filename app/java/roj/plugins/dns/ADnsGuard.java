@@ -1,9 +1,9 @@
 package roj.plugins.dns;
 
-import roj.Unused;
 import roj.collect.TrieTreeSet;
 import roj.config.node.ListValue;
 import roj.config.node.MapValue;
+import roj.debug.DebugTool;
 import roj.http.server.Content;
 import roj.http.server.Request;
 import roj.http.server.ResponseHeader;
@@ -136,7 +136,7 @@ public class ADnsGuard extends Plugin {
 	}
 
 	@GET
-	public String stat() {return Unused.deepToString(resolved.entrySet());}
+	public String stat() {return DebugTool.inspect(resolved.entrySet());}
 
 	@POST
 	public void set(Request req, ResponseHeader rh, String url, String type, String cnt) {

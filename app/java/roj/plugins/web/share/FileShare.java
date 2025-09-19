@@ -6,7 +6,7 @@ import roj.collect.*;
 import roj.concurrent.TimerTask;
 import roj.config.ConfigMaster;
 import roj.config.JsonSerializer;
-import roj.config.mapper.ObjectMapperFactory;
+import roj.config.mapper.ObjectMapper;
 import roj.config.node.MapValue;
 import roj.crypt.Base64;
 import roj.crypt.CryptoFactory;
@@ -72,13 +72,13 @@ public class FileShare extends Plugin {
     private final AtomicInteger shareFileIdx = new AtomicInteger(1);
     private final ChunkUpload uploadManager = new ChunkUpload();
 
-    private final ObjectMapperFactory ownerSerializer;
+    private final ObjectMapper ownerSerializer;
     private boolean dirty;
 
     private Plugin easySso;
 
     public FileShare() {
-        ObjectMapperFactory.SerializeSetting transientRemover = (owner, field, annotations) -> {
+        ObjectMapper.SerializeSetting transientRemover = (owner, field, annotations) -> {
             if (field != null) {
                 String name = field.name();
                 if (name.equals("_next") || name.equals("file") || name.equals("uploading") || name.equals("vfs")) return annotations;
@@ -86,7 +86,7 @@ public class FileShare extends Plugin {
             }
             return annotations;
         };
-        ownerSerializer = ObjectMapperFactory.getInstance().serializeFileToString().registerType(ShareFile.class, transientRemover).registerType(Share.class, transientRemover);
+        ownerSerializer = ObjectMapper.getInstance().serializeFileToString().registerType(ShareFile.class, transientRemover).registerType(Share.class, transientRemover);
     }
 
     @Override
@@ -160,7 +160,7 @@ public class FileShare extends Plugin {
     private void reloadDB() throws IOException, ParseException {
         var persist = new File(getDataFolder(), "db.yml");
         if (persist.isFile()) {
-            var db = ConfigMaster.YAML.readObject(ownerSerializer.serializer(Serialized.class), persist);
+            var db = ConfigMaster.YAML.readObject(ownerSerializer.reader(Serialized.class), persist);
             shares = SHARE_INFO_BUILDER.createValued(db.shares);
             shareFileIdx.set(db.shareFileIndex);
         } else {
@@ -199,7 +199,7 @@ public class FileShare extends Plugin {
 
         try {
             IOUtil.writeFileEvenMoreSafe(getDataFolder(), "db.yml", file -> {
-                ConfigMaster.YAML.writeObject(ownerSerializer.serializer(Serialized.class), snapshot, file);
+                ConfigMaster.YAML.writeObject(ownerSerializer.writer(Serialized.class), snapshot, file);
                 getLogger().debug("配置已保存");
             });
         } catch (IOException e) {
@@ -507,7 +507,7 @@ public class FileShare extends Plugin {
         info.owner = user.getId();
         String name = map.getOrDefault("name", "").trim();
         if (name.length() > MAX_NAME_LENGTH) name = name.substring(0, MAX_NAME_LENGTH);
-        info.name = name.isEmpty() ? null : HtmlEntities.escapeHtml(name).toString();
+        info.name = name.isEmpty() ? null : HtmlEntities.encode(name).toString();
         info.code = code;
         info.time = System.currentTimeMillis();
 

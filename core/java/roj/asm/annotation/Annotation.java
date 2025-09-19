@@ -48,13 +48,13 @@ public class Annotation extends MapValue {
 	public final String getEnumValue(String name, String def) {
 		var av = getNullable(name);
 		if (av == null || av.dataType() != AnnVal.ENUM) return def;
-		return ((AEnum) av).field;
+		return ((EnumVal) av).field;
 	}
 
 	public final Type getClass(String name) {
 		var av = getNullable(name);
 		if (av == null || av.dataType() != AnnVal.ANNOTATION_CLASS) return Helpers.maybeNull();
-		return ((AClass) av).value;
+		return ((TypeVal) av).value;
 	}
 
 	public final Annotation getAnnotation(String name) {
@@ -64,10 +64,10 @@ public class Annotation extends MapValue {
 	}
 
 	@NotNull
-	public final AList getList(String name) {return (AList) properties.getOrDefault(name, AList.EMPTY);}
+	public final ArrayVal getList(String name) {return (ArrayVal) properties.getOrDefault(name, ArrayVal.EMPTY);}
 
-	@Deprecated public int[] getIntArray(String name) {return getList(name).toIntArray();}
-	@Deprecated public String[] getStringArray(String name) {return getList(name).toStringArray();}
+	public int[] getIntArray(String name) {return getList(name).toIntArray();}
+	public String[] getStringArray(String name) {return getList(name).toStringArray();}
 
 	@Override
 	protected ConfigValue put(String k, ConfigValue v, int flag) {
@@ -103,7 +103,7 @@ public class Annotation extends MapValue {
 
 	@Override
 	public void accept(ValueEmitter visitor) {
-		((AnnotationEncoder) visitor).valueAnnotation(type);
+		((AnnotationEncoder) visitor).emitAnnotation(type);
 		super.accept(visitor);
 	}
 

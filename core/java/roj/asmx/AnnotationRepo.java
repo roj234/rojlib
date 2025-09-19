@@ -1,6 +1,6 @@
 package roj.asmx;
 
-import roj.archive.zip.ZEntry;
+import roj.archive.ArchiveFile;
 import roj.archive.zip.ZipFile;
 import roj.asm.*;
 import roj.asm.annotation.Annotation;
@@ -25,6 +25,7 @@ import java.io.IOException;
 import java.util.Collections;
 import java.util.List;
 import java.util.Set;
+import java.util.function.Predicate;
 
 /**
  * @author Roj234
@@ -45,23 +46,27 @@ public final class AnnotationRepo {
 			e.printStackTrace();
 		}
 	}
-	public void add(ZipFile za) throws IOException {
-		for (ZEntry ze : za.entries()) {
-			if (IOUtil.extensionName(ze.getName()).equals("class")) {
-				addRaw(IOUtil.getSharedByteBuf().readStreamFully(za.getStream(ze)), ze.getName());
+	public void add(ArchiveFile archive) throws IOException {
+		for (var entry : archive.entries()) {
+			if (IOUtil.extensionName(entry.getName()).equals("class")) {
+				addRaw(IOUtil.getSharedByteBuf().readStreamFully(archive.getInputStream(entry)), entry.getName());
 			}
 		}
 	}
 
-	public void loadCacheOrAdd(ZipFile zf) throws IOException {
+	public void loadCacheOrAdd(ArchiveFile archive) throws IOException {
+		if (loadFromCache(archive)) return;
+		add(archive);
+	}
+
+	private boolean loadFromCache(ArchiveFile archive) {
 		try {
-			ZEntry entry = zf.getEntry(CACHE_NAME);
+			var entry = archive.getEntry(CACHE_NAME);
 			if (entry != null && entry.getSize() <= MAX_CACHE_SIZE) {
-				if (deserialize(IOUtil.getSharedByteBuf().readStreamFully(zf.getStream(entry)))) return;
+				if (deserialize(IOUtil.getSharedByteBuf().readStreamFully(archive.getInputStream(entry)))) return true;
 			}
 		} catch (Exception ignored) {}
-
-		add(zf);
+		return false;
 	}
 
 	public void add(Context context) {
@@ -313,5 +318,17 @@ public final class AnnotationRepo {
 		}
 
 		return elementCount;
+	}
+
+	/**
+	 * 增量更新用，
+	 * @param changedClasses [java/lang/Object]
+	 */
+	public void remove(Set<String> changedClasses) {
+		for (String type : changedClasses) annotations.remove(type);
+		Predicate<AnnotatedElement> remover = annotatedElement -> changedClasses.contains(annotatedElement.owner());
+		for (Set<AnnotatedElement> value : annotations.values()) {
+			value.removeIf(remover);
+		}
 	}
 }

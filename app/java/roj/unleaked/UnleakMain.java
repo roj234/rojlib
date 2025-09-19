@@ -43,7 +43,7 @@ public class UnleakMain extends MethodHook {
 
 	public static void run(File thePlugin) {
 		try(var zipArchive = new ZipArchive(thePlugin)) {
-			String main = ConfigMaster.YAML.parse(zipArchive.getStream("plugin.yml")).asMap().getString("main").replace('.', '/') + ".class";
+			String main = ConfigMaster.YAML.parse(zipArchive.getInputStream("plugin.yml")).asMap().getString("main").replace('.', '/') + ".class";
 			byte[] bytes = zipArchive.get(main);
 			ClassNode mainClass = ClassNode.parseAll(bytes);
 

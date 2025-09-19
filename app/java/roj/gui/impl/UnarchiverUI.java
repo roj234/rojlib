@@ -6,9 +6,9 @@ package roj.gui.impl;
 
 import roj.archive.ArchiveEntry;
 import roj.archive.ArchiveFile;
-import roj.archive.qz.util.QZArchiver;
 import roj.archive.qz.QZArchive;
 import roj.archive.qz.QZEntry;
+import roj.archive.qz.util.QZArchiver;
 import roj.archive.zip.ZEntry;
 import roj.archive.zip.ZipFile;
 import roj.collect.TrieTreeSet;
@@ -18,13 +18,13 @@ import roj.gui.GuiProgressBar;
 import roj.gui.GuiUtil;
 import roj.gui.TreeBuilder;
 import roj.io.CorruptedInputException;
-import roj.util.FastFailException;
 import roj.io.IOUtil;
 import roj.io.source.FileSource;
 import roj.text.TextUtil;
 import roj.text.URICoder;
 import roj.text.logging.Logger;
 import roj.ui.EasyProgressBar;
+import roj.util.FastFailException;
 import roj.util.Helpers;
 
 import javax.swing.*;
@@ -310,7 +310,7 @@ public class UnarchiverUI extends JFrame {
 			for (ZEntry entry : zipFile.entries()) {
 				if (set == null || set.strStartsWithThis(entry.getName())) {
 					pool.executeUnsafe(() -> {
-						try (InputStream in = zipFile.getStream(entry, javacSbAgain)) {
+						try (InputStream in = zipFile.getInputStream(entry, javacSbAgain)) {
 							cb.accept(entry, in);
 						}
 					});
@@ -365,7 +365,7 @@ public class UnarchiverUI extends JFrame {
 
 	private byte[] checkPassword(ArchiveEntry entry, String pass, String charset) {
 		byte[] password;
-		try (InputStream in = archiveFile.getStream(entry, password = pass.getBytes(Charset.forName(charset)))) {
+		try (InputStream in = archiveFile.getInputStream(entry, password = pass.getBytes(Charset.forName(charset)))) {
 			in.skip(1048576);
 			return password;
 		} catch (Exception ex) {

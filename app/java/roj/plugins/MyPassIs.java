@@ -140,7 +140,7 @@ public class MyPassIs extends Plugin {
 				IOUtil.readFully(in, iv);
 				cipher.init(RCipher.DECRYPT_MODE, pass, new IvParameterSpecNC(iv), null);
 
-				data = new NbtParser().parse(new CipherInputStream(in, cipher)).asMap();
+				data = NbtParser.INSTANCE.parse(new CipherInputStream(in, cipher)).asMap();
 			} catch (Exception e) {
 				Tty.error("密码错误:"+e.getMessage());
 				return;

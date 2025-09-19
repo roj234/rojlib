@@ -1,7 +1,6 @@
 package roj.http.server;
 
 import roj.http.Headers;
-import roj.io.BufferPool;
 import roj.net.ChannelCtx;
 import roj.text.CharList;
 import roj.text.FastCharset;
@@ -61,7 +60,7 @@ public class TextContent implements Content {
 	@Override
 	public void release(ChannelCtx ctx) throws IOException {
 		if (buf != null) {
-			BufferPool.reserve(buf);
+			buf.release();
 			buf = null;
 		}
 		if (text instanceof CharList cl) cl._free();

@@ -1,13 +1,14 @@
 package roj.ci.plugin;
 
 import roj.asmx.AnnotationRepo;
-import roj.asmx.Context;
+import roj.ci.BuildContext;
 import roj.ci.MCMake;
 import roj.collect.HashSet;
 import roj.io.IOUtil;
+import roj.text.TextUtil;
 import roj.util.DynByteBuf;
+import roj.util.Helpers;
 
-import java.util.List;
 import java.util.Set;
 
 /**
@@ -15,39 +16,29 @@ import java.util.Set;
  * @since 2025/3/18 15:29
  */
 public class AnnotationCache implements Processor {
-	static final Set<String> DEFAULT_BLACKLIST = new HashSet<>("java/lang/Deprecated", "java/lang/annotation/Target", "java/lang/annotation/Retention", "org/jetbrains/annotations/Nullable", "org/jetbrains/annotations/NotNull", "org/jetbrains/annotations/Contract");
-
 	@Override
 	public String name() {return "注解缓存提供程序";}
 
 	@Override
 	public void afterCompile(BuildContext ctx) {
-		if (ctx.increment <= BuildContext.INC_REBUILD && "true".equals(ctx.project.getVariables().getOrDefault("fmd:annotation_cache", "true"))) {
+		if (ctx.updateCount > 0 && "true".equals(ctx.project.getVariables().getOrDefault("fmd:annotation_cache", "true"))) {
 			var repo = new AnnotationRepo();
-			for (Context file : ctx.getClasses()) repo.add(file);
 
-			//ctx.getLibraryClass()
-			List<Context> whitelist = ctx.getAnnotatedClass("roj/ci/annotation/InRepo");
-			if (whitelist.isEmpty()) {
-				for (var itr = repo.getAnnotations().entrySet().iterator(); itr.hasNext(); ) {
-					var entry = itr.next();
-					if (DEFAULT_BLACKLIST.contains(entry.getKey())) itr.remove();
-				}
-			} else {
-				Set<String> classNames = new HashSet<>();
-				for (Context ctx1 : whitelist) classNames.add(ctx1.getClassName());
+			Set<String> whitelist = new HashSet<>(TextUtil.split(ctx.project.getVariables().getOrDefault("fmd:annotation_inrepo", ""), ';'));
+			ctx.getDepAnnotations("roj/ci/annotation/InRepo", el -> whitelist.add(el.owner()));
+			MCMake.LOGGER.debug("AnnotationCache whitelist={}", whitelist);
 
-				for (var itr = repo.getAnnotations().entrySet().iterator(); itr.hasNext(); ) {
-					var entry = itr.next();
-					if (!classNames.contains(entry.getKey())) itr.remove();
-				}
+			for (String type : whitelist) {
+				ctx.getBundledAnnotations(type, el -> {
+					repo.getAnnotations().computeIfAbsent(type, Helpers.fnHashSet()).add(el);
+				});
 			}
 
 			if (!repo.getAnnotations().isEmpty()) {
 				var buf = IOUtil.getSharedByteBuf();
 				repo.serialize(buf);
 				ctx.addFile(AnnotationRepo.CACHE_NAME, DynByteBuf.wrap(buf.toByteArray()));
-				MCMake.LOGGER.debug("AnnotationCache created, size={}.", buf.wIndex());
+				MCMake.LOGGER.debug("AnnotationCache size={}.", buf.wIndex());
 			}
 		}
 	}

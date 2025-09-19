@@ -2,8 +2,8 @@ package roj.asmx.injector;
 
 import org.jetbrains.annotations.NotNull;
 import roj.asm.*;
-import roj.asm.annotation.AList;
 import roj.asm.annotation.Annotation;
+import roj.asm.annotation.ArrayVal;
 import roj.asm.attr.*;
 import roj.asm.cp.*;
 import roj.asm.frame.Frame;
@@ -19,7 +19,6 @@ import roj.collect.BitSet;
 import roj.collect.HashMap;
 import roj.collect.HashSet;
 import roj.collect.*;
-import roj.config.node.IntValue;
 import roj.io.IOUtil;
 import roj.text.CharList;
 import roj.text.TextUtil;
@@ -29,8 +28,6 @@ import roj.util.Helpers;
 import java.util.*;
 
 import static roj.asm.Opcodes.*;
-import static roj.reflect.ClassDump.CLASS_DUMP;
-import static roj.reflect.ClassDump.dump;
 
 /**
  * @author Roj234
@@ -50,11 +47,11 @@ public class CodeWeaver implements Transformer {
 	public static final String A_PATTERN_MATCH = PACKAGE+"PatternMatch";
 
 	// region 特殊方法
-	private static final String
 	/**
 	 * 在{@link PatternMatch}中指代任意【方法返回类型】的变量
 	 * 当变量定义位置过早时，用于通用类型占位
 	 */
+	private static final String
 	MARKER_AnyVariable = "$$$VALUE",
 	/**
 	 * 在TAIL注入模式中访问方法返回值
@@ -278,7 +275,7 @@ public class CodeWeaver implements Transformer {
 	}
 
 	public Patch read(ClassNode data) throws WeaveException {
-		if (CLASS_DUMP) dump("patch", data);
+		//DebugTool.dump("patch", data);
 
 		Patch nx = new Patch(data.name());
 
@@ -405,7 +402,7 @@ public class CodeWeaver implements Transformer {
 							pcd.name = mn.name();
 							pcd.desc = mn.rawDesc();
 							pcd.mapOwner = nx.target;
-							pcd.mapName = "nx^lambda@"+randomId((System.nanoTime() << 32) | mn.name().hashCode());
+							pcd.mapName = nx.self.substring(nx.self.lastIndexOf('/')+1)+":"+mn.name()+"@"+randomId(System.nanoTime() % 14776336);
 							nx.preconditions.add(pcd);
 
 							ref.clazz().setValue(data.cp.getUtf(nx.target));
@@ -456,7 +453,7 @@ public class CodeWeaver implements Transformer {
 			if (pcd == tmpPcd) {
 				// manual rename
 				pcd.mapOwner = nx.target;
-				pcd.mapName = "nx^copyRef@@"+randomId((System.nanoTime() << 32) | node.name().hashCode());
+				pcd.mapName = nx.self.substring(nx.self.lastIndexOf('/')+1)+":"+node.name()+"@"+randomId(System.nanoTime() % 14776336);
 				tmpPcd = new Pcd();
 				hasNewCopyMethod = true;
 			}
@@ -770,8 +767,8 @@ public class CodeWeaver implements Transformer {
 							if (!Type.getReturnType(node1.desc().rawDesc).equals(method.returnType()))
 								throw new WeaveException("返回值指代#"+s.retVal().size()+"(bci: "+node1.bci()+")的返回值不适用于目的方法的"+method.returnType());
 
-							usedContinue.add(code.instructions.labelAt(node1.pos()));
-							usedContinue.add(code.instructions.labelAt(node.end()));
+							usedContinue.add(code.instructions.monitor(node1.pos()));
+							usedContinue.add(code.instructions.monitor(node.end()));
 						}
 					}
 				}
@@ -798,13 +795,13 @@ public class CodeWeaver implements Transformer {
 						if (node.opName().startsWith("Load", 1)) {
 							if (id >= paramLength) continue;
 
-							usedVar.putInt(node.unshared(), id);
+							usedVar.putInt(node.detach(), id);
 						} else if (bci > 0) {
 							node = node.prev();
 							if (node.opcode() == INVOKESTATIC && node.desc().name.startsWith(MARKER_ReturnValue)) {
 								if (!Type.getReturnType(node.desc().rawDesc).equals(method.returnType()))
 									throw new WeaveException("返回值指代#"+s.retVal().size()+"(bci: "+node.bci()+")的返回值不适用于目的方法的"+method.returnType());
-								s.retVal().add(node.unshared());
+								s.retVal().add(node.detach());
 							}
 						}
 					}
@@ -865,6 +862,7 @@ public class CodeWeaver implements Transformer {
 				}
 			}
 
+			// 需要重新计算Frames吗？
 			List<Frame> frames = code.frames;
 			if (frames != null) {
 				for (Frame frame : frames) {
@@ -876,7 +874,6 @@ public class CodeWeaver implements Transformer {
 							v.owner = patch.target;
 				}
 			}
-			// TODO set fv flag?
 		}
 	}
 	@SuppressWarnings("ResultOfMethodCallIgnored")
@@ -903,14 +900,14 @@ public class CodeWeaver implements Transformer {
 				switch (desc.name) {
 					case "$$$MATCH_BEGIN":
 						if (start != null) throw new WeaveException("重复的MATCH_BEGIN");
-						start = code.instructions.labelAt(node.end());
+						start = code.instructions.monitor(node.end());
 					break;
 					case "$$$MATCH_END":
-						end = code.instructions.labelAt(node.pos());
+						end = code.instructions.monitor(node.pos());
 					break label;
 					case MARKER_Continue:
 						if (state == null) throw new WeaveException("Continue不能在这里使用");
-						Label pos = code.instructions.labelAt(node.pos());
+						Label pos = code.instructions.monitor(node.pos());
 						state.headJump().add(pos);
 						state.headJump().add(pos);
 					break;
@@ -987,14 +984,14 @@ public class CodeWeaver implements Transformer {
 	public static void patch(ClassNode data, Patch patches) throws WeaveException {
 		if (!data.name().equals(patches.target)) throw new WeaveException("期待目标为"+patches.target+"而不是"+data.name());
 
-		if (CLASS_DUMP) dump("patch_in", data);
+		//DebugTool.dump("patch_in", data);
 		while (patches != null) {
 			data.unparsed();
 			weave(data, patches);
 			patches = patches.next;
 		}
 		data.unparsed();
-		if (CLASS_DUMP) dump("patch_out", data);
+		//DebugTool.dump("patch_out", data);
 	}
 	private static void weave(ClassNode data, Patch patch) throws WeaveException {
 		// 添加接口
@@ -1108,7 +1105,7 @@ public class CodeWeaver implements Transformer {
 				code = data.methods.get(clinit_id).getAttribute(data.cp, Attribute.Code);
 				InsnList insn = code.instructions;
 				last = insn.getPcMap().last();
-				insn.replaceRange(last, insn.length(), injectClInit.instructions, true);
+				insn.replace(last, insn.length(), injectClInit.instructions, true);
 			} else {
 				MethodNode mn = new MethodNode(ACC_PUBLIC | ACC_STATIC, data.name(), "<clinit>", "()V");
 				mn.addAttribute(code = new Code(mn));
@@ -1160,8 +1157,9 @@ public class CodeWeaver implements Transformer {
 			}
 		}
 	}
+	@SuppressWarnings("MagicConstant")
 	private static MethodNode doInject(IJPoint s, ClassNode data, MethodNode input) throws WeaveException {
-		Code nxCode = (Code) s.method.getAttribute("Code");
+		Code nxCode = (Code) Objects.requireNonNull(s.method.getAttribute("Code"));
 		s.method.__setOwner(data.name());
 
 		if (s.mapName.equals("<init>") && !s.at.equals("TAIL")) {
@@ -1218,18 +1216,18 @@ public class CodeWeaver implements Transformer {
 				List<Label> jumps = s.headJump();
 				// noinspection all
 				if (endMy.getValue() == 0 && jumps.size() == 2 && jumps.get(1).getValue() == out.bci()) {
-					out.replaceRange(jumps.get(0), jumps.get(1), replace, false);
+					out.replace(jumps.get(0), jumps.get(1), replace, false);
 				} else {
-					replace.jump(mnCode.instructions.labelAt(endMy));
+					replace.jump(mnCode.instructions.monitor(endMy));
 
 					for (int i = jumps.size()-1; i >= 0; i--) {
 						Label end = jumps.get(i--);
 						Label start = jumps.get(i--);
-						out.replaceRange(start, end, replace, false);
+						out.replace(start, end, replace, false);
 					}
 				}
 
-				mnCode.instructions.replaceRange(Label.atZero(),endMy,out,false);
+				mnCode.instructions.replace(Label.atZero(),endMy,out,false);
 
 				mnCode.computeFrames(FrameVisitor.COMPUTE_FRAMES);
 				mnCode.stackSize = (char) Math.max(mnCode.stackSize, nxCode.stackSize);
@@ -1243,15 +1241,13 @@ public class CodeWeaver implements Transformer {
 				BitSet occurrences = s.getOccurrences();
 				int ordinal = 0;
 
-				List<InsnNode.InsnMod> rpls = new ArrayList<>();
 				int isStatic = (s.method.modifier & ACC_STATIC);
 				int used = 0;
-				for (InsnList.NodeIterator itr = mnCode.instructions.iterator(); itr.hasNext(); ) {
-					InsnNode node = itr.next();
+				for (InsnNode node : mnCode.instructions) {
 					MemberDescriptor d = node.descOrNull();
 					if (d != null && d.owner != null) {
 						if ((m.owner.isEmpty() || m.owner.equals(d.owner)) &&
-							d.name.equals(m.name) && d.rawDesc.equals(m.rawDesc)) {
+								d.name.equals(m.name) && d.rawDesc.equals(m.rawDesc)) {
 
 							if (occurrences != null && !occurrences.contains(ordinal++)) continue;
 
@@ -1274,18 +1270,17 @@ public class CodeWeaver implements Transformer {
 							block:
 							if (!s.method.rawDesc().equals(desc)) {
 								List<Type> par1 = s.method.parameters();
-								List<Type> par2 = Type.getMethodTypes(desc);
-								par2.remove(par2.size()-1);
-								if (par1.size()-1 == par2.size() && data.name().equals(par1.get(par1.size()-1).owner)) {
-									if ((input.modifier&ACC_STATIC) != 0) throw new WeaveException("@Redirect.ContextInject 期待非静态方法: "+input.name()+"."+input.rawDesc());
-									// context_inject
+								List<Type> par2 = new ArrayList<>();
+								Type.getArgumentTypes(desc, par2);
 
-									itr = mnCode.instructions.since(node.bci());
+								// context_inject
+								if (par1.size() - 1 == par2.size() && data.name().equals(par1.get(par1.size() - 1).owner)) {
+									if ((input.modifier & ACC_STATIC) != 0)
+										throw new WeaveException("@Redirect.ContextInject 期待非静态方法: "+input.name()+"."+input.rawDesc());
 
-									InsnList list = new InsnList();
-									list.insn(ALOAD_0);
-									node.insertBefore(list, false);
-
+									InsnList replaceTo = new InsnList();
+									replaceTo.insn(ALOAD_0);
+									node.insertBefore(replaceTo, false);
 									break block;
 								}
 
@@ -1296,11 +1291,10 @@ public class CodeWeaver implements Transformer {
 							d.name = s.method.name();
 							d.rawDesc = s.method.rawDesc();
 
-							// TODO 可能无法和aload_0一起使用
 							if (node.opcode() == INVOKEINTERFACE) {
-								InsnNode.InsnMod rpl = node.replace();
-								rpl.list.invoke(isStatic > 0 ? INVOKESTATIC : INVOKEVIRTUAL, d.owner, d.name, d.rawDesc);
-								rpls.add(rpl);
+								InsnList replaceTo = new InsnList();
+								replaceTo.invoke(isStatic > 0 ? INVOKESTATIC : INVOKEVIRTUAL, d.owner, d.name, d.rawDesc);
+								node.replace(replaceTo, false);
 							}
 
 							used++;
@@ -1310,8 +1304,6 @@ public class CodeWeaver implements Transformer {
 
 				if (used < (occurrences == null ? 1 : occurrences.size()) && (s.flags & Inject.OPTIONAL) == 0)
 					throw new WeaveException("@Redirect "+m+" 没有全部匹配("+used+")");
-
-				for (int i = rpls.size() - 1; i >= 0; i--) rpls.get(i).commit();
 			}
 			return input;
 			case "LDC": {
@@ -1322,13 +1314,13 @@ public class CodeWeaver implements Transformer {
 				InsnList replaceTo = new InsnList();
 				if (!replace.isEmpty()) {
 					switch (type) {
-						case Constant.INT: replaceTo.ldc(Integer.parseInt(replace)); break;
-						case Constant.LONG: replaceTo.ldc(Long.parseLong(replace)); break;
-						case Constant.DOUBLE: replaceTo.ldc(Double.parseDouble(replace)); break;
-						case Constant.FLOAT: replaceTo.ldc(Float.parseFloat(replace)); break;
-						case Constant.CLASS: replaceTo.ldc(new CstClass(replace)); break;
-						case Constant.STRING: replaceTo.ldc(replace); break;
-						default: throw new WeaveException("OverwriteConstant的matchType必须是Constant中的有效类别ID");
+						case Constant.INT -> replaceTo.ldc(Integer.parseInt(replace));
+						case Constant.LONG -> replaceTo.ldc(Long.parseLong(replace));
+						case Constant.DOUBLE -> replaceTo.ldc(Double.parseDouble(replace));
+						case Constant.FLOAT -> replaceTo.ldc(Float.parseFloat(replace));
+						case Constant.CLASS -> replaceTo.ldc(new CstClass(replace));
+						case Constant.STRING -> replaceTo.ldc(replace);
+						default -> throw new WeaveException("OverwriteConstant的matchType必须是Constant中的有效类别ID");
 					}
 				} else {
 					if ((s.method.modifier & ACC_STATIC) == 0) {
@@ -1340,51 +1332,14 @@ public class CodeWeaver implements Transformer {
 				}
 
 				BitSet occurrences = s.getOccurrences();
-				IntValue ordinal = new IntValue();
+				int ordinal = 0;
 
 				int used = 0;
-
 				for (InsnNode node : mnCode.instructions) {
-					switch (node.opcode()) {
-						case ICONST_M1, ICONST_0:
-						case ICONST_1, ICONST_2, ICONST_3, ICONST_4, ICONST_5:
-							if (type == Constant.INT && matchLdcByOpcode(node, ICONST_0, find, occurrences, ordinal)) {
-								node.replace(replaceTo, false);
-								used++;
-							}
-						break;
-						case LCONST_0, LCONST_1:
-							if (type == Constant.LONG && matchLdcByOpcode(node, LCONST_0, find, occurrences, ordinal)) {
-								node.replace(replaceTo, false);
-								used++;
-							}
-						break;
-						case FCONST_0, FCONST_1, FCONST_2:
-							if (type == Constant.FLOAT && matchLdcByOpcode(node, FCONST_0, find, occurrences, ordinal)) {
-								node.replace(replaceTo, false);
-								used++;
-							}
-						break;
-						case DCONST_0, DCONST_1:
-							if (type == Constant.DOUBLE && matchLdcByOpcode(node, DCONST_0, find, occurrences, ordinal)) {
-								node.replace(replaceTo, false);
-								used++;
-							}
-						break;
-						case BIPUSH, SIPUSH:
-							if (type == Constant.INT && find.equals(String.valueOf(node.getNumberExact())) &&
-								(occurrences == null || occurrences.contains(++ordinal.value))) {
-								node.replace(replaceTo, false);
-								used++;
-							}
-						break;
-						case LDC, LDC_W, LDC2_W:
-							if (type == node.constant().type() && find.equals(node.constant().getEasyCompareValue()) &&
-								(occurrences == null || occurrences.contains(++ordinal.value))) {
-								node.replace(replaceTo, false);
-								used++;
-							}
-						break;
+					if (node.constantEquals(type, find) &&
+							(occurrences == null || occurrences.contains(++ordinal))) {
+						node.replace(replaceTo, false);
+						used++;
 					}
 				}
 
@@ -1465,10 +1420,10 @@ public class CodeWeaver implements Transformer {
 						}
 					}
 
-					begin = tmpList.bci();
+					begin = tmpList.length();
 					if (begin == 0) break parBR;
 
-					insn.replaceRange(0,0,tmpList,false);
+					insn.replace(0,0,tmpList,false);
 
 					tmpList.clear();
 					for (Int2IntMap.Entry entry : overwriteCheck.selfEntrySet()) {
@@ -1483,14 +1438,14 @@ public class CodeWeaver implements Transformer {
 						}
 					}
 
-					hookInsn.replaceRange(0, 0, tmpList, false);
+					hookInsn.replace(0, 0, tmpList, false);
 				} else {
 					begin = 0;
 				}
 
 				Label hookBegin = hookInsn.labelAt(0);
-				int end = insn.bci();
-				insn.replaceRange(end, end, hookInsn, false);
+				int end = insn.length();
+				insn.replace(end, end, hookInsn, false);
 
 				for (InsnList.NodeIterator it = insn.since(begin); it.hasNext(); ) {
 					InsnNode node = it.next();
@@ -1507,7 +1462,7 @@ public class CodeWeaver implements Transformer {
 
 						if (node.bci()+node.length() < end) {
 							tmpList.jump(hookBegin);
-							end += tmpList.bci() - node.length();
+							end += tmpList.length() - node.length();
 						}
 
 						node.replace(tmpList, false);
@@ -1526,10 +1481,11 @@ public class CodeWeaver implements Transformer {
 			return input;
 			case "SUPER": {
 				data.methods.add(s.method);
-				String mapName = "nx^SIJ@@"+randomId((System.nanoTime() << 32) | s.mapName.hashCode());
+				String mapName = "nx^replace@"+randomId((System.nanoTime() << 32) | s.mapName.hashCode());
 				input.name(mapName);
 				for (Object o : nxCode.instructions.nodeDataList()) {
 					if (o instanceof MemberDescriptor d) {
+						//TODO 解析这个magic constant的用途
 						if ((data.name().equals(d.owner) || d.owner.contains("SIJ")) && s.mapName.equals(d.name) && s.method.rawDesc().equals(d.rawDesc)) {
 							d.owner = data.name();
 							d.name = mapName;
@@ -1584,7 +1540,7 @@ public class CodeWeaver implements Transformer {
 						InsnList toInj = nxCode.instructions.copy();
 						ctx.mapVarId(toInj);
 
-						toFind.replaceRange(toFind.labelAt(node.pos()), itrA.unsharedPos(), toInj, false);
+						toFind.replace(toFind.monitor(node.pos()), itrA.unsharedPos(), toInj, false);
 
 						mnCode.computeFrames(FrameVisitor.COMPUTE_FRAMES);
 						mnCode.stackSize = (char) Math.max(mnCode.stackSize, nxCode.stackSize);
@@ -1621,11 +1577,6 @@ public class CodeWeaver implements Transformer {
 		usedSlots.addRange(newSlot, newSlot+len);
 		return newSlot;
 	}
-	private static boolean matchLdcByOpcode(InsnNode node, byte base, String find, BitSet occurrences, IntValue ordinal) {
-		int value = node.opcode() - base;
-		if (!find.equals(String.valueOf(value))) return false;
-		return occurrences == null || occurrences.contains(++ordinal.value);
-	}
 	private static void copyLineNumbers(Code from, Code to, int pcOff) {
 		LineNumberTable lnFr = (LineNumberTable) from.getAttribute("LineNumberTable");
 		LineNumberTable lnTo = (LineNumberTable) to.getAttribute("LineNumberTable");
@@ -1633,6 +1584,7 @@ public class CodeWeaver implements Transformer {
 		if (lnTo == null) {
 			if (lnFr == null) return;
 			lnTo = new LineNumberTable();
+			lnTo.list.addAll(lnFr.list);
 		}
 
 		List<LineNumberTable.Item> list = lnTo.list;
@@ -1641,16 +1593,7 @@ public class CodeWeaver implements Transformer {
 			if (!item.pos.isValid()) list.remove(i);
 		}
 
-		if (lnFr == null) return;
-
-		BitSet pcMap = to.instructions.getPcMap();
-		for (LineNumberTable.Item item : lnFr.list) {
-			int value = item.pos.getValue();
-			if (pcMap.contains(value+pcOff)) {
-				// TODO copy lines better (consider hole)
-				list.add(new LineNumberTable.Item(to.instructions.labelAt(value+pcOff), item.getLine()));
-			}
-		}
+		System.out.println(lnTo);
 
 		lnTo.sort();
 	}
@@ -1674,7 +1617,7 @@ public class CodeWeaver implements Transformer {
 
 	//region override
 	public Map<String, Patch> registry() { return registry; }
-	protected boolean shouldApply(String annotation, Attributed node, AList args) { throw new UnsupportedOperationException(); }
+	protected boolean shouldApply(String annotation, Attributed node, ArrayVal args) { throw new UnsupportedOperationException(); }
 	protected String mapName(String owner, String newOwner, String name, MemberNode node) { return name; }
 	//endregion
 }

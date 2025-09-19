@@ -33,7 +33,7 @@ public class ItemStack {
 			this.count = net.readByte();
 			if (net.getByte(net.rIndex) != 0) {
 				try {
-					this.nbt = new NbtParser().parse(net).asMap();
+					this.nbt = NbtParser.INSTANCE.parse(net).asMap();
 				} catch (ParseException e) {
 					throw new IOException("NBT解析失败", e);
 				}

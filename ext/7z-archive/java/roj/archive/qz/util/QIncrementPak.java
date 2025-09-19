@@ -40,7 +40,7 @@ public class QIncrementPak {
 	@NotNull
 	private static CompositeSource getSource(File baseFile) throws IOException {
 		Matcher m = SPLIT_ARCHIVE_PATTERN.matcher(baseFile.getName());
-		if (!m.find()) throw new IllegalArgumentException("文件不指向第一卷");
+		if (!m.find()) throw new IllegalArgumentException("文件不指向第一卷(扩展名需要为.001/.z01)");
 
 		String path = baseFile.getAbsolutePath();
 		return CompositeSource.dynamic(new File(path.substring(0, path.length() + m.start() - m.end())), true);
@@ -115,28 +115,26 @@ public class QIncrementPak {
 	 * <b>重要提示：</b> 调用前必须关闭所有通过{@link QZFileWriter#newParallelWriter()}创建的并行写入器，
 	 * 否则可能导致文件损坏。
 	 *
-	 * @param qzfw 要关闭的QZFileWriter实例
+	 * @param writer 要关闭的QZFileWriter实例
 	 * @throws IOException 当刷新或关闭操作失败时抛出
 	 */
-	public static void closeSingleHeader(QZFileWriter qzfw) throws IOException {
-		qzfw.flush();
-		qzfw.setCodec(roj.archive.qz.Copy.INSTANCE);
+	public static void closeSingleHeader(QZFileWriter writer) throws IOException {
+		writer.flush();
 
-		CompositeSource s = (CompositeSource) qzfw.source();
+		CompositeSource s = (CompositeSource) writer.source();
 
 		s.setSourceId(0);
 		Source meta = s.getSource();
 
-		meta.setLength(32);
 		meta.seek(32);
 
-		qzfw.flag = 0;
-		QZSH sh = (QZSH) qzfw;
-		sh.setUseSingleHeader(true);
+		writer.flag = QZFileWriter.NO_TRIM_FILE;
+		QZSH sh = (QZSH) writer;
+		sh.setUseSingleHeader();
 
 		boolean noCompression = false;
 		try {
-			qzfw.finish();
+			writer.finish();
 		} catch (OperationDone e) {
 			noCompression = true;
 		}
@@ -175,11 +173,11 @@ public class QIncrementPak {
 			s.write(buf);
 		}
 
-		qzfw.close();
+		writer.close();
 	}
 
 	@ApiStatus.Internal
-	public interface QZSH {long getHeaderBegin();long getHeaderEnd();void setUseSingleHeader(boolean enabled);}
+	public interface QZSH {long getHeaderBegin();long getHeaderEnd();void setUseSingleHeader();}
 
 	@Autoload(Autoload.Target.NIXIM)
 	@Weave(target = QZFileWriter.class)
@@ -187,7 +185,7 @@ public class QIncrementPak {
 		@Shadow(owner = "roj.archive.qz.QZWriter")
 		private OutputStream out;
 		@Shadow(owner = "roj.archive.qz.QZWriter")
-		private Source s;
+		private Source source;
 		@Shadow(owner = "roj.archive.qz.QZWriter")
 		private int[] flagSum;
 
@@ -207,13 +205,13 @@ public class QIncrementPak {
 				w.setCompressionDisabled(true);
 			}
 
-			self.headerBegin = self.s.position();
+			self.headerBegin = self.source.position();
 			ob.putInt(0);
 
 			if (self.out instanceof LZMA2Writer w) {
 				ob.flush();
 				w.setCompressionDisabled(false);
-				self.headerBegin = self.s.position() - 4;
+				self.headerBegin = self.source.position() - 4;
 				self.flagSum[8] = -1; // INDEX_BLOCK_CRC32
 				self.useSingleHeader = false;
 			}
@@ -221,7 +219,7 @@ public class QIncrementPak {
 		}
 
 		@Redirect(value = "finish", injectDesc = "()V", matcher = "position()J", occurrences = 2)
-		private static long aopGetPosition(Source s, QZSHImpl self) throws IOException {
+		private static long getHeaderEnd(Source s, QZSHImpl self) throws IOException {
 			long pos = self.headerEnd = s.position();
 			if (self.useSingleHeader) throw OperationDone.INSTANCE;
 			return pos;
@@ -235,6 +233,6 @@ public class QIncrementPak {
 		public long getHeaderEnd() {return headerEnd;}
 		@Copy
 		@Override
-		public void setUseSingleHeader(boolean enabled) {useSingleHeader = enabled;}
+		public void setUseSingleHeader() {useSingleHeader = true;}
 	}
 }

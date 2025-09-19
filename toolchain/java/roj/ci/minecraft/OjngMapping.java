@@ -4,12 +4,12 @@ import roj.asm.ClassUtil;
 import roj.asm.MemberDescriptor;
 import roj.asm.type.TypeHelper;
 import roj.asmx.mapper.Mapping;
-import roj.collect.Top1;
 import roj.collect.ArrayList;
-import roj.util.FastFailException;
+import roj.collect.Top1;
 import roj.text.LineReader;
 import roj.text.TextReader;
 import roj.text.TextUtil;
+import roj.util.FastFailException;
 
 import java.io.File;
 import java.io.IOException;

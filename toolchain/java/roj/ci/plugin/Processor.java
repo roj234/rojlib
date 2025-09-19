@@ -1,5 +1,6 @@
 package roj.ci.plugin;
 
+import roj.ci.BuildContext;
 import roj.collect.ArrayList;
 import roj.config.node.ConfigValue;
 

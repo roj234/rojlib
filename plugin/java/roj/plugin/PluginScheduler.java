@@ -24,7 +24,7 @@ public final class PluginScheduler extends Timer implements Executor {
 	public void execute(Runnable task) {
 		PAsyncTask wrapper = new PAsyncTask(task);
 		synchronized (userTasks) { userTasks.add(wrapper); }
-		TaskPool.common().execute(wrapper);
+		TaskPool.cpu().execute(wrapper);
 	}
 
 	@Override

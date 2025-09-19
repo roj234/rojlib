@@ -1,26 +1,31 @@
 package roj.io;
 
-import roj.annotation.Status;
+import roj.annotation.ForDebug;
 import roj.collect.ArrayList;
 import roj.collect.IntMap;
 import roj.concurrent.FastThreadLocal;
 import roj.concurrent.SegmentReadWriteLock;
 import roj.concurrent.Timer;
-import roj.reflect.Unsafe;
+import roj.optimizer.FastVarHandle;
+import roj.reflect.Handles;
 import roj.text.CharList;
 import roj.text.logging.Logger;
 import roj.util.*;
 
+import java.lang.invoke.MethodHandles;
+import java.lang.invoke.VarHandle;
 import java.lang.ref.WeakReference;
 import java.nio.ByteBuffer;
 
 import static roj.reflect.Unsafe.U;
 import static roj.reflect.Unsafe.fieldOffset;
+import static roj.text.TextUtil.scaledNumber1024;
 
 /**
  * @author Roj233
  * @since 2022/6/1 7:06
  */
+@FastVarHandle
 public final class BufferPool {
 	// 超过128KB的从ArrayCache拿，本地缓存不大于4MB
 	private static final int HEAP_INIT = 32768, HEAP_INCR = 32768, HEAP_FLEX_MAX = 4194304, HEAP_LARGE = 131072;
@@ -32,11 +37,12 @@ public final class BufferPool {
 	public static BufferPool localPool() { return DEFAULT.get(); }
 	public static final BufferPool UNPOOLED = new BufferPool(0,0,0,0,0,0,0,0);
 
-	private static final long
-		DIRECT_SHELL_LEN = fieldOffset(BufferPool.class, "directShellLen"),
-		HEAP_SHELL_LEN = fieldOffset(BufferPool.class, "heapShellLen"),
-		HEAP = fieldOffset(BufferPool.class, "heap"),
-		DIRECT_REF = fieldOffset(BufferPool.class, "directRef");
+	private static final VarHandle
+		DIRECT_SHELL_LEN = Handles.lookup().findVarHandle(BufferPool.class, "directShellLen", int.class),
+		HEAP_SHELL_LEN = Handles.lookup().findVarHandle(BufferPool.class, "heapShellLen", int.class),
+		HEAP = Handles.lookup().findVarHandle(BufferPool.class, "heap", byte[].class),
+		DIRECT_REF = Handles.lookup().findVarHandle(BufferPool.class, "directRef", NativeMemory.class),
+		SHELL$ARRAY = MethodHandles.arrayElementVarHandle(Pooled[].class);
 
 	private static final Logger LOGGER = Logger.getLogger();
 	private static final Object _UNPOOLED = IntMap.UNDEFINED;
@@ -60,7 +66,7 @@ public final class BufferPool {
 	private final Pooled[] directShell, heapShell;
 	private int directShellLen, heapShellLen;
 
-	private final ArrayList<ByteBuffer> directBufferShell = new ArrayList<>();
+	private final ArrayList<ByteBuffer> nioBuffers = new ArrayList<>();
 
 	private boolean hasDelay;
 	private final int maxStall;
@@ -128,7 +134,7 @@ public final class BufferPool {
 					p.directRef.free();
 					p.directRef = null;
 				}
-				p.directBufferShell.clear();
+				p.nioBuffers.clear();
 				p.pDirect = Bitmap.create(Math.max(p.directInit, (int) p.pDirect.totalSpace() - p.directIncr));
 			}
 		} finally {
@@ -157,21 +163,23 @@ public final class BufferPool {
 
 		Pooled buf;
 		if (direct) {
-			buf = getShell(directShell, DIRECT_SHELL_LEN);
+			buf = getShell(directShell, DIRECT_SHELL_LEN, 0);
 			if (buf == null) buf = new PooledDirectBuf();
 			buf.setKeepBefore(keepBefore);
 
 			if (allocDirect(cap, buf) != 0) {
+				directAlloc += cap;
 				buf.pool(this);
 				if (ldt != null) ldt.track(buf);
 				return (DynByteBuf) buf;
 			}
 		} else {
-			buf = getShell(heapShell, HEAP_SHELL_LEN);
+			buf = getShell(heapShell, HEAP_SHELL_LEN, 0);
 			if (buf == null) buf = new PooledHeapBuf();
 			buf.setKeepBefore(keepBefore);
 
 			if (allocHeap(cap, buf)) {
+				heapAlloc += cap;
 				buf.pool(this);
 				if (ldt != null) ldt.track(buf);
 				return (DynByteBuf) buf;
@@ -179,9 +187,12 @@ public final class BufferPool {
 		}
 
 		if (direct) {
-			var mem = new NativeMemory(cap);
-			buf.set(mem, mem.address()+keepBefore, cap-keepBefore);
+			directAllocFail += cap;
+			var mem = new NativeMemory();
+			long address = mem.allocate(cap);
+			buf.set(mem, address+keepBefore, cap-keepBefore);
 		} else {
+			heapAllocFail += cap;
 			byte[] b = ArrayCache.getByteArray(cap, false);
 			buf.set(b, keepBefore, b.length-keepBefore);
 		}
@@ -189,22 +200,17 @@ public final class BufferPool {
 
 		return (DynByteBuf) buf;
 	}
-	private Pooled getShell(Pooled[] array, long offset) {
-		int len = U.getIntVolatile(this, offset);
+	private Pooled getShell(Pooled[] array, VarHandle count, int padding) {
+		int len = (int) count.get(this);
 		if (len == 0) return null;
 
 		for (int i = array.length-1; i >= 0; i--) {
-			long o = Unsafe.ARRAY_OBJECT_BASE_OFFSET + (long) i * Unsafe.ARRAY_OBJECT_INDEX_SCALE;
-
-			Object b = U.getReferenceVolatile(array, o);
+			Object b = SHELL$ARRAY.getVolatile(array, i);
 			if (b == null) continue;
 
-			if (U.compareAndSetReference(array, o, b, null)) {
-				while (true) {
-					len = U.getIntVolatile(this, offset);
-					if (U.compareAndSetInt(this, offset, len, len-1))
-						return (Pooled) b;
-				}
+			if (SHELL$ARRAY.compareAndSet(array, i, b, null)) {
+				count.getAndAdd(this, -1);
+				return (Pooled) b;
 			}
 		}
 		return null;
@@ -215,7 +221,7 @@ public final class BufferPool {
 			Bitmap p = pDirect;
 			if (p == null) return 0;
 			NativeMemory stamp = directRef;
-			if (stamp == null && !U.compareAndSetReference(this, DIRECT_REF, null, stamp = new NativeMemory(p.totalSpace()))) {
+			if (stamp == null && !DIRECT_REF.compareAndSet(this, null, stamp = new NativeMemory(p.totalSpace()))) {
 				stamp.free();
 				continue;
 			}
@@ -249,7 +255,7 @@ public final class BufferPool {
 					long space = Math.min(p.totalSpace() + ((cap+directIncr-1)/directIncr)*directIncr, directMax);
 					p = Bitmap.create(space);
 					directRef = new NativeMemory(p.totalSpace());
-					directBufferShell.clear();
+					nioBuffers.clear();
 					pDirect = p;
 				}
 			} finally {
@@ -265,7 +271,7 @@ public final class BufferPool {
 			Bitmap p = pHeap;
 			if (p == null) return false;
 			byte[] stamp = heap;
-			if (stamp == null && !U.compareAndSetReference(this, HEAP, null, stamp = new byte[(int) p.totalSpace()]))
+			if (stamp == null && !HEAP.compareAndSet(this, null, stamp = new byte[(int) p.totalSpace()]))
 				continue;
 
 			int slot = System.identityHashCode(p);
@@ -303,43 +309,14 @@ public final class BufferPool {
 		return false;
 	}
 
-	public long malloc(long size) {
-		if (pDirect.totalSpace() < directMax) throw new UnsupportedOperationException("only non-extensible pool can direct allocate");
-		if (size < 0) throw new IllegalArgumentException("size < 0");
-		if (size == 0) return 0;
-
-		size += 16;
-		long addr = allocDirect(size, null);
-		if (addr == 0) return 0;
-
-		U.putLong(addr, size);
-		U.putLong(addr+8, ~size);
-
-		return addr+16;
-	}
-	public void free(long address) {
-		if (address == 0) return;
-		long cap1 = ~U.getLong(address -= 8);
-		long cap2 = U.getLong(address -= 8);
-		if (cap1 != cap2 || cap1 == 0) throw new UnsupportedOperationException("memory segment mangled");
-
-		int slot = System.identityHashCode(pDirect);
-		lock.lock(slot);
-		try {
-			pDirect.free(address-directRef.address(), cap1);
-		} finally {
-			lock.unlock(slot);
-		}
-	}
-
-	public static ByteBuffer mallocShell(DynByteBuf buf) {
+	public static ByteBuffer retainWrapper(DynByteBuf buf) {
 		if (buf instanceof PooledDirectBuf pb) {
 			var nm = pb.memory();
 			var pool = (BufferPool) pb.pool;
 			pool.lock.lock(0);
 			try {
 				if (pool.directRef == nm) {
-					var shell = pool.directBufferShell.pop();
+					var shell = pool.nioBuffers.pop();
 					if (shell != null) {
 						NativeMemory.setAddress(shell, pb.address(), pb.capacity());
 						return shell.limit(pb.wIndex()).position(pb.rIndex);
@@ -352,7 +329,7 @@ public final class BufferPool {
 
 		return buf.nioBuffer();
 	}
-	public static void mfreeShell(DynByteBuf buf, ByteBuffer shell) {
+	public static void releaseWrapper(DynByteBuf buf, ByteBuffer shell) {
 		if (!(buf instanceof PooledDirectBuf pb)) return;
 		var nm = pb.memory();
 		var pool = (BufferPool) pb.pool;
@@ -362,7 +339,7 @@ public final class BufferPool {
 		try {
 			if (pool.directRef == nm) {
 				NativeMemory.setAddress(shell, 0, 0);
-				pool.directBufferShell.add(shell);
+				pool.nioBuffers.add(shell);
 			}
 		} finally {
 			pool.lock.unlock(0);
@@ -407,7 +384,7 @@ public final class BufferPool {
 			}
 
 			pb._clear();
-			addShell(directShell, DIRECT_SHELL_LEN, pb);
+			addShell(directShell, pb, DIRECT_SHELL_LEN, 0);
 		} else {
 			byte[] bb = buf.array();
 			Bitmap p = pb.page();
@@ -424,24 +401,24 @@ public final class BufferPool {
 			}
 
 			pb._clear();
-			addShell(heapShell, HEAP_SHELL_LEN, pb);
+			addShell(heapShell, pb, HEAP_SHELL_LEN, 0);
 		}
 	}
-	private void addShell(Pooled[] array, long offset, Pooled b1) {
-		int len = U.getIntVolatile(this, offset);
+	private void addShell(Pooled[] array, Pooled b1, VarHandle count, int padding) {
+		int len = (int) count.get(this);
 		if (len >= array.length) return;
 
 		for (int i = 0; i < array.length; i++) {
-			long o = Unsafe.ARRAY_OBJECT_BASE_OFFSET + (long) i * Unsafe.ARRAY_OBJECT_INDEX_SCALE;
-
-			Object b = U.getReferenceVolatile(array, o);
+			Object b = SHELL$ARRAY.getVolatile(array, i);
+			if (b == b1) throw new AssertionError(((DynByteBuf) b1).info()+"@"+System.identityHashCode(b1));
+		}
+		for (int i = 0; i < array.length; i++) {
+			Object b = SHELL$ARRAY.getVolatile(array, i);
 			if (b != null) continue;
 
-			if (U.compareAndSetReference(array, o, null, b1)) {
-				while (true) {
-					len = U.getIntVolatile(this, offset);
-					if (U.compareAndSetInt(this, offset, len, len+1)) return;
-				}
+			if (SHELL$ARRAY.compareAndSet(array, i, null, b1)) {
+				count.getAndAdd(this, 1);
+				break;
 			}
 		}
 	}
@@ -450,6 +427,8 @@ public final class BufferPool {
 	public DynByteBuf expand(DynByteBuf buf, int more) { return expand(buf, more, true, true); }
 	public DynByteBuf expandBefore(DynByteBuf buf, int more) { return expand(buf, more, false, false); }
 	public DynByteBuf expand(DynByteBuf buf, int more, boolean addAtEnd, boolean reserveOld) {
+		totalExpands++;
+
 		Object pool;
 		if (!(buf instanceof Pooled)) {
 			if (reserveOld) throwUnpooled(buf);
@@ -464,7 +443,7 @@ public final class BufferPool {
 					? tryZeroCopyExt(more, addAtEnd, (Pooled) buf)
 					: tryZeroCopy(more, addAtEnd, (BufferPool) pool, (Pooled) buf)) {
 				((Pooled) buf).pool(pool);
-				__expand_1++;
+				zeroCopyExpands++;
 				return buf;
 			}
 		}
@@ -472,7 +451,7 @@ public final class BufferPool {
 		if (pool != null) ((Pooled) buf).pool(pool);
 		if (more < 0) return buf;
 
-		__expand_2++;
+		reallocateExpands++;
 		DynByteBuf newBuf = allocate(buf.isDirect(), buf.capacity()+more);
 		if (!addAtEnd) newBuf.wIndex(more);
 		newBuf.put(buf);
@@ -525,13 +504,24 @@ public final class BufferPool {
 		return true;
 	}
 
-	private int __expand_1, __expand_2;
-	@Status
+	private static volatile long
+			heapAlloc, directAlloc, heapAllocFail, directAllocFail,
+			zeroCopyExpands, reallocateExpands, totalExpands;
+
+	@ForDebug
 	public CharList status(CharList sb) {
 		sb.append("本机缓冲池:");
 		(directRef == null ? sb.append("未初始化") : pDirect.toString(sb, 0)).append("\n堆缓冲池:");
-		(heap==null?sb.append("未初始化"):pHeap.toString(sb, 0)).append("\n缓冲区扩展:");
-		return sb.append("预留空间:").append(DEFAULT_KEEP_BEFORE).append(", 零拷贝成功:").append(__expand_1).append(", 调用:").append(__expand_2);
+		(heap==null?sb.append("未初始化"):pHeap.toString(sb, 0)).append("");
+		return globalStatus(sb);
+	}
+
+	@ForDebug
+	public static CharList globalStatus(CharList sb) {
+		sb.append("\n缓冲区统计数据(大约):");
+		return sb.append("\n 本机分配:").append(scaledNumber1024(directAlloc)).append('/').append(scaledNumber1024(directAlloc+directAllocFail))
+				.append("\n 堆分配:").append(scaledNumber1024(heapAlloc)).append('/').append(scaledNumber1024(heapAlloc+heapAllocFail))
+				.append("\n 扩展:").append(zeroCopyExpands).append('/').append(reallocateExpands).append('/').append(totalExpands);
 	}
 
 	private sealed interface Pooled {

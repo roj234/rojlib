@@ -2,7 +2,7 @@ package roj.reflect;
 
 import org.intellij.lang.annotations.MagicConstant;
 import org.jetbrains.annotations.ApiStatus;
-import org.jetbrains.annotations.Nullable;
+import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Unmodifiable;
 import roj.asm.AsmCache;
 import roj.asm.ClassDefinition;
@@ -11,7 +11,6 @@ import roj.ci.annotation.Public;
 import roj.compiler.plugins.annotations.Attach;
 import roj.compiler.plugins.eval.Constexpr;
 import roj.util.ByteList;
-import roj.util.DynByteBuf;
 import roj.util.Helpers;
 import roj.util.JVM;
 
@@ -69,7 +68,7 @@ public final class Reflection {
 
 			if (JVM.VERSION > 21) {
 				killJigsaw(Reflection.class);
-				System.err.println("[RojLib Warning] Java22+兼容模式：模块系统已为RojLib模块禁用，这会造成严重的安全问题，请确保为RojLib使用了独立的模块！");
+				System.err.println("WARNING: RojLib Java22+兼容模式：Jigsaw已为"+Reflection.class.getModule()+"禁用，请确保不会出现安全性问题！");
 			}
 		} catch (Exception e) {
 			String msg = JVM.VERSION < 8 || JVM.VERSION > 21 ? "您使用的JVM版本"+ JVM.VERSION +"不受支持!" : "未预料的内部错误";
@@ -124,14 +123,13 @@ public final class Reflection {
 			ACCESS_VM_ANNOTATIONS     = 0x00000008;
 	// also a 'Trusted' lookup for defineClass redirect
 	@IndirectReference
-	public static Class<?> defineClass(ClassLoader loader, String name, byte[] b, int off, int len, ProtectionDomain pd, @MagicConstant(flags = {NESTMATE_CLASS, HIDDEN_CLASS, STRONG_LOADER_LINK, ACCESS_VM_ANNOTATIONS}) int flags) {
+	public static Class<?> defineClass(ClassLoader loader, Class<?> nestHost, String name, byte[] b, int off, int len, ProtectionDomain pd, @MagicConstant(flags = {NESTMATE_CLASS, HIDDEN_CLASS, STRONG_LOADER_LINK, ACCESS_VM_ANNOTATIONS}) int flags) {
 		if (loader == null) throw new NullPointerException("classLoader cannot be null");
-		if (ClassDump.CLASS_DUMP) ClassDump.dump("define", DynByteBuf.wrap(b, off, len));
 
 		if (pd == null) pd = loader.getClass().getProtectionDomain();
-		if (flags != 0 || TypeInternals.IMPL == null) {
+		if (flags != 0 || TypeInternals.IMPL == null || nestHost != null) {
 			if (flags == 0) flags = STRONG_LOADER_LINK;
-			return defineClass.apply(new Object[]{loader, /* NestHost */Reflection.class, name, b, off, len, pd, false, flags, null});
+			return defineClass.apply(new Object[]{loader, nestHost, name, b, off, len, pd, false, flags, null});
 		} else {
 			return TypeInternals.IMPL.defineClass(loader, name, b, off, len, pd);
 		}
@@ -147,26 +145,40 @@ public final class Reflection {
 	}
 
 	/**
-	 * 以{@code loader}创建一个匿名隐藏类实例
+	 * 以{@code loader}创建一个类实例，不提供nestHost，它无法弱引用，同时JIT可能无法对其执行更佳的优化
 	 */
-	public static Object createInstance(ClassLoader loader, ClassDefinition node) {return createInstance(loader, node, null);}
-	/**
-	 * 以{@code loader}创建一个名称为{@code name}的隐藏类实例
-	 */
-	public static Object createInstance(ClassLoader loader, ClassDefinition node, @Nullable String name) {
-		var buf = AsmCache.toByteArray(node);
-		Class<?> klass = defineClass(loader, name, buf, 0, buf.length, null, HIDDEN_CLASS|ACCESS_VM_ANNOTATIONS);
+	public static Object createInstance(ClassLoader loader, ClassDefinition node) {
+		Class<?> klass = defineClass(loader, node);
 		try {
 			return U.allocateInstance(klass);
 		} catch (Throwable e) {
 			throw new IllegalStateException("类构造失败", e);
 		}
 	}
-
-	@Attach
 	public static Class<?> defineClass(ClassLoader loader, ClassDefinition node) {
 		ByteList buf = AsmCache.toByteArrayShared(node);
-		return defineClass(loader, null, buf.list, 0, buf.wIndex(), null, 0);
+		return TypeInternals.IMPL.defineClass(loader, null, buf.list, 0, buf.wIndex(), loader.getClass().getProtectionDomain());
+	}
+
+	public static Object createInstance(@NotNull Class<?> nestHost, ClassDefinition node) {return createInstance(nestHost, node, true);}
+	/**
+	 * 以{@code loader}创建一个名称为{@code name}的隐藏类实例
+	 * @param privateAccess 允许定义的类访问{@code nestHost}中的所有private成员
+	 */
+	public static Object createInstance(@NotNull Class<?> nestHost, ClassDefinition node, boolean privateAccess) {
+		var buf = AsmCache.toByteArrayShared(node);
+
+		int flags = HIDDEN_CLASS | ACCESS_VM_ANNOTATIONS;
+		if (privateAccess) flags |= NESTMATE_CLASS;
+
+		ClassLoader classLoader = nestHost.getClassLoader();
+		//if (classLoader == null) classLoader = ClassLoader.getSystemClassLoader();
+		Class<?> klass = defineClass(classLoader, nestHost, nestHost.getName()+"$R", buf.list, 0, buf.wIndex(), nestHost.getProtectionDomain(), flags);
+		try {
+			return U.allocateInstance(klass);
+		} catch (Throwable e) {
+			throw new IllegalStateException("类构造失败", e);
+		}
 	}
 
 	@Attach
@@ -183,10 +195,14 @@ public final class Reflection {
 
 	@Public
 	private interface TypeInternals {
-		TypeInternals IMPL = Bypass.builder(TypeInternals.class)
-				.delegate(ClassLoader.class, "defineClass")
-				.delegate(Class.class, "enumConstantDirectory")
-				.build();
+		TypeInternals IMPL = getInstance();
+		private static TypeInternals getInstance() {
+			AsmCache.clear();
+			return Bypass.builder(TypeInternals.class)
+					.delegate(ClassLoader.class, "defineClass")
+					.delegate(Class.class, "enumConstantDirectory")
+					.build();
+		}
 
 		Class<?> defineClass(ClassLoader loader, String name, byte[] b, int off, int len, ProtectionDomain pd);
 		<T extends Enum<T>> Map<String, T> enumConstantDirectory(Class<T> clazz);
@@ -241,22 +257,15 @@ public final class Reflection {
 		});
 	}
 	private static final class CalleeInternals {
+		static final long LOCALS = Unsafe.fieldOffset(Handles.findClass("java.lang.LiveStackFrameInfo"), "locals");
 		static final StackWalker LIVE;
-		static final long LOCALS;
 
 		static {
-			try {
-				LOCALS = Unsafe.fieldOffset(Class.forName("java.lang.LiveStackFrameInfo"), "locals");
-
-				// simple java.lang.LiveStackFrame.getStackWalker() without SM checks
-				var optionType = Class.forName("java.lang.StackWalker$ExtendedOption");
-				var localsAndOperands = U.getReference(optionType, Unsafe.fieldOffset(optionType, "LOCALS_AND_OPERANDS"));
-				Bypass<BiFunction> biFunctionBypass = Bypass.builder(BiFunction.class);
-				BiFunction<Object, Object, StackWalker> fn = Helpers.cast(biFunctionBypass.delegate_o(StackWalker.class, "newInstance", "apply").build());
-				LIVE = fn.apply(Collections.emptySet(), localsAndOperands);
-			} catch (Exception e) {
-				throw new IllegalStateException("非常抱歉，由于使用了大量内部API，这个类无法兼容你的JVM", e);
-			}
+			// simple java.lang.LiveStackFrame.getStackWalker() without SM checks
+			var optionType = Handles.findClass("java.lang.StackWalker$ExtendedOption");
+			var localsAndOperands = U.getReference(optionType, Unsafe.fieldOffset(optionType, "LOCALS_AND_OPERANDS"));
+			BiFunction<Object, Object, StackWalker> fn = Helpers.cast(Bypass.builder(BiFunction.class).delegate_o(StackWalker.class, "newInstance", "apply").build());
+			LIVE = fn.apply(Collections.emptySet(), localsAndOperands);
 		}
 	}
 	//endregion

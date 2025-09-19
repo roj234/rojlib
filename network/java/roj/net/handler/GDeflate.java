@@ -1,10 +1,10 @@
 package roj.net.handler;
 
-import roj.compiler.plugins.asm.ASM;
 import roj.io.BufferPool;
 import roj.net.ChannelCtx;
 import roj.net.ChannelHandler;
 import roj.util.DynByteBuf;
+import roj.util.JVM;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -30,7 +30,7 @@ public abstract class GDeflate implements ChannelHandler {
 			inf.setInput(in.array(), in.arrayOffset()+in.rIndex, v);
 			in.rIndex = in.wIndex();
 		} else {
-			if (ASM.TARGET_JAVA_VERSION >= 11) {
+			if (JVM.VERSION >= 11) {
 				inf.setInput(in.nioBuffer());
 				in.rIndex = in.wIndex();
 			} else {
@@ -44,7 +44,7 @@ public abstract class GDeflate implements ChannelHandler {
 				while (!inf.needsInput()) {
 					int i;
 					try {
-						if (ASM.TARGET_JAVA_VERSION >= 11 && out.isDirect()) {
+						if (JVM.VERSION >= 11 && out.isDirect()) {
 							i = inf.inflate(out.nioBuffer().limit(out.capacity()).position(v));
 						} else {
 							i = inf.inflate(out.array(), out.arrayOffset()+v, out.capacity()-v);
@@ -85,8 +85,8 @@ public abstract class GDeflate implements ChannelHandler {
 			def.setInput(in.array(), in.arrayOffset()+in.rIndex, in.readableBytes());
 			in.rIndex = in.wIndex();
 		} else {
-			if (ASM.TARGET_JAVA_VERSION >= 11) {
-				def.setInput(__j11_ib = BufferPool.mallocShell(in));
+			if (JVM.VERSION >= 11) {
+				def.setInput(__j11_ib = BufferPool.retainWrapper(in));
 				in.rIndex = in.wIndex();
 			} else {
 				tmp1 = ctx.allocate(false, Math.min(buf, in.readableBytes()));
@@ -94,8 +94,8 @@ public abstract class GDeflate implements ChannelHandler {
 		}
 
 		try {
-			if (ASM.TARGET_JAVA_VERSION >= 11 && out.isDirect()) {
-				__j11_ob = BufferPool.mallocShell(out);
+			if (JVM.VERSION >= 11 && out.isDirect()) {
+				__j11_ob = BufferPool.retainWrapper(out);
 			}
 
 			int v = out.wIndex();
@@ -103,7 +103,7 @@ public abstract class GDeflate implements ChannelHandler {
 				int flush = doFlush == 1 && !in.isReadable() ? Deflater.SYNC_FLUSH : Deflater.NO_FLUSH;
 				while (true) {
 					int i;
-					if (ASM.TARGET_JAVA_VERSION >= 11 && out.isDirect()) {
+					if (JVM.VERSION >= 11 && out.isDirect()) {
 						i = def.deflate(__j11_ob.limit(out.capacity()).position(v), flush);
 					} else {
 						i = def.deflate(out.array(), out.arrayOffset() + v, out.capacity() - v, flush);
@@ -137,8 +137,8 @@ public abstract class GDeflate implements ChannelHandler {
 			}
 		} finally {
 			if (tmp1 != null) BufferPool.reserve(tmp1);
-			if (__j11_ib != null) BufferPool.mfreeShell(in, __j11_ib);
-			if (__j11_ob != null) BufferPool.mfreeShell(out, __j11_ob);
+			if (__j11_ib != null) BufferPool.releaseWrapper(in, __j11_ib);
+			if (__j11_ob != null) BufferPool.releaseWrapper(out, __j11_ob);
 		}
 	}
 	protected int writePacket(ChannelCtx ctx, DynByteBuf out, boolean isFull) throws IOException {ctx.channelWrite(out);return 0;}

@@ -36,7 +36,7 @@ public class VFSRouter implements Router, Predicate<String> {
 			var zf = Jocker.resources;
 			js = new ZipRouter.ZipFileInfo(zf, zf.getEntry("assets/pi.js"));
 			css = new ZipRouter.ZipFileInfo(zf, zf.getEntry("assets/pi.css"));
-			html = Formatter.simple(IOUtil.readString(zf.getStream("assets/pi.html")));
+			html = Formatter.simple(IOUtil.readString(zf.getInputStream("assets/pi.html")));
 		} catch (IOException e) {
 			throw new RuntimeException(e);
 		}

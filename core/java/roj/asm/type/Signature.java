@@ -25,17 +25,17 @@ import java.util.function.UnaryOperator;
  * 各个字段的状态：
  * 类型为Class时:
  *  type = -1
- *  typeParams = 该类定义的类型参数
+ *  typeVariables = 该类定义的类型参数
  * 	values 第0项为extends的泛型类型，后续项为implements
  * 	exceptions 空
  * 类型为Field时
  *  type = 0
- *  typeParams = 空
+ *  typeVariables = 空
  *  values 长度固定为1 为该字段的泛型类型
  *  exceptions 空
  * 类型为Method时：
  *  type = 1
- *  typeParams = 该方法定义的类型参数
+ *  typeVariables = 该方法定义的类型参数
  *  values 最后一项为返回值类型 前面各项为参数类型
  *  exceptions 抛出的泛型异常
  *
@@ -45,52 +45,56 @@ import java.util.function.UnaryOperator;
 public class Signature extends Attribute {
 	public static final int METHOD = 1, FIELD = 0, CLASS = -1;
 	@MagicConstant(intValues = {METHOD, FIELD, CLASS}) public byte type;
-	@NotNull public Map<String, List<IType>> typeParams;
+	@NotNull public Map<String, List<IType>> typeVariables;
 	@NotNull public List<IType> values, exceptions;
 
-	public static IType any() { return Any.any; }
-	public static IType placeholder() { return Itf.itf; }
+	public static IType unboundedWildcard() { return Any.any; }
+	public static IType objectBound() { return Itf.itf; }
 
 	public Signature(@MagicConstant(intValues = {METHOD, FIELD, CLASS}) int type) {
 		this.type = (byte) type;
-		this.typeParams = Collections.emptyMap();
+		this.typeVariables = Collections.emptyMap();
 		this.values = Collections.emptyList();
 		this.exceptions = Collections.emptyList();
 	}
 
 	public void validate() {
-		for (Map.Entry<String, List<IType>> entry : typeParams.entrySet()) {
+		for (Map.Entry<String, List<IType>> entry : typeVariables.entrySet()) {
 			List<IType> list = entry.getValue();
 
 			for (int i = 0; i < list.size(); i++) {
-				list.get(i).validate(IType.TYPE_PARAMETER_ENV, i);
+				list.get(i).validate(IType.E_TYPE_VARIABLE, i);
 			}
 		}
 
 		if (type == METHOD) {
 			for (int i = 0; i < values.size() - 1; i++) {
-				values.get(i).validate(IType.INPUT_ENV, i);
+				values.get(i).validate(IType.E_ARGUMENT, i);
 			}
-			values.get(values.size() - 1).validate(IType.OUTPUT_ENV, 0);
+			values.get(values.size() - 1).validate(IType.E_RETURN, 0);
 
 			for (int i = 0; i < exceptions.size(); i++) {
-				exceptions.get(i).validate(IType.THROW_ENV, i);
+				exceptions.get(i).validate(IType.E_THROW, i);
 			}
 		} else {
 			for (int i = 0; i < values.size(); i++) {
-				values.get(i).validate(IType.INPUT_ENV, i);
+				values.get(i).validate(IType.E_ARGUMENT, i);
 			}
 			if (!exceptions.isEmpty()) throw new IllegalStateException("非方法泛型不能定义抛出异常");
 			if (type == FIELD && values.size() != 1) throw new IllegalStateException("字段泛型只能有一项值");
 		}
 	}
 
+	/**
+	 * 返回若当前typeVariables的上界(擦除后的类型)格式为typeParameter
+	 * @return
+	 */
 	@NotNull
 	public List<IType> getBounds() {
-		List<IType> bounds = new ArrayList<>(typeParams.size());
-		for (List<IType> value : typeParams.values()) {
+		List<IType> bounds = new ArrayList<>(typeVariables.size());
+		for (List<IType> value : typeVariables.values()) {
 			IType type = value.get(0);
-			if (type.genericType() == IType.PLACEHOLDER_TYPE) type = value.get(1);
+			if (type.kind() == IType.OBJECT_BOUND) type = value.get(1);
 
 			bounds.add(type);
 		}
@@ -104,9 +108,9 @@ public class Signature extends Attribute {
 	public String toDesc() {
 		CharList sb = IOUtil.getSharedCharBuf();
 
-		if (!typeParams.isEmpty()) {
+		if (!typeVariables.isEmpty()) {
 			sb.append('<');
-			for (Map.Entry<String, List<IType>> entry : typeParams.entrySet()) {
+			for (Map.Entry<String, List<IType>> entry : typeVariables.entrySet()) {
 				sb.append(entry.getKey());
 				List<IType> list = entry.getValue();
 
@@ -144,7 +148,7 @@ public class Signature extends Attribute {
 			if (type == METHOD) {
 				toMethodString(sb, "<some method>");
 			} else {
-				getTypeParam(sb);
+				getTypeVariables(sb);
 				if (!"java/lang/Object".equals(values.get(0).owner())) values.get(0).toString(sb.append(" extends "));
 				if (values.size() > 1) {
 					sb.append(" implements ");
@@ -183,14 +187,14 @@ public class Signature extends Attribute {
 			}
 		}
 	}
-	public CharList getTypeParam(CharList sb) {
-		if (typeParams.isEmpty()) return sb;
+	public CharList getTypeVariables(CharList sb) {
+		if (typeVariables.isEmpty()) return sb;
 
 		sb.append('<');
-		Iterator<Map.Entry<String, List<IType>>> itr = typeParams.entrySet().iterator();
+		Iterator<Map.Entry<String, List<IType>>> itr = typeVariables.entrySet().iterator();
 		while (true) {
 			Map.Entry<String, List<IType>> entry = itr.next();
-			appendTypeParameter(sb, entry.getKey(), entry.getValue());
+			appendTypeVariable(sb, entry.getKey(), entry.getValue());
 
 			if (!itr.hasNext()) break;
 			sb.append(", ");
@@ -198,9 +202,9 @@ public class Signature extends Attribute {
 
 		return sb.append('>');
 	}
-	private void appendTypeParameter(CharList sb, String name, List<IType> list) {
+	private void appendTypeVariable(CharList sb, String name, List<IType> list) {
 		sb.append(name);
-		if (list == null) list = typeParams.getOrDefault(name, Collections.emptyList());
+		if (list == null) list = typeVariables.getOrDefault(name, Collections.emptyList());
 		if (list.isEmpty()) return;
 		if (list.size() > 1 || !"java/lang/Object".equals(list.get(0).owner())) {
 			sb.append(" extends ");
@@ -215,7 +219,7 @@ public class Signature extends Attribute {
 	}
 
 	public void rename(UnaryOperator<String> fn) {
-		for (List<IType> values : typeParams.values()) {
+		for (List<IType> values : typeVariables.values()) {
 			for (int i = values.size() - 1; i >= 0; i--) {
 				values.get(i).rename(fn);
 			}
@@ -237,7 +241,7 @@ public class Signature extends Attribute {
 
 		// type parameter
 		if (s.charAt(0) == '<') {
-			sign.typeParams = new LinkedHashMap<>();
+			sign.typeVariables = new LinkedHashMap<>();
 			sign.type = CLASS;
 
 			if (expect == FIELD) fail("未预料的<类型参数>(预期类型是<字段>)", 0, s);
@@ -273,7 +277,7 @@ public class Signature extends Attribute {
 
 				if (vals.size() == 1 && vals.get(0) == Itf.itf) fail("此处不允许占位符类型",i,s);
 
-				sign.typeParams.put(name, vals);
+				sign.typeVariables.put(name, vals);
 
 				if (s.charAt(i) == '>') {
 					i++;
@@ -343,6 +347,7 @@ public class Signature extends Attribute {
 	public static IType parseGeneric(CharSequence s) {return parseValue(s, new IntValue(), 0, IOUtil.getSharedCharBuf());}
 
 	private static final int F_PLACEHOLDER = 0x1000, F_PRIMITIVE = 0x2000, F_SUBCLASS = 0x4000;
+	@SuppressWarnings("MagicConstant")
 	private static IType parseValue(CharSequence s, IntValue mi, int flag, CharList tmp) {
 		tmp.clear();
 		int i = mi.value;
@@ -365,7 +370,7 @@ public class Signature extends Attribute {
 			case 'T':
 				c = parseTypeParam(s,mi,tmp);
 				if (c != ';') fail("未结束的类型"+c, mi.value-1,s);
-				return new TypeParam(tmp.toString(), array, (flag >>> 8) & 0xF);
+				return new TypeVariable(tmp.toString(), array, (flag >>> 8) & 0xF);
 
 			default:
 				if ((flag & F_PRIMITIVE) == 0) fail("此处不允许基本类型("+flag+")",i,s);
@@ -377,6 +382,7 @@ public class Signature extends Attribute {
 				}
 		}
 	}
+	@SuppressWarnings("MagicConstant")
 	private static IType parseType(CharSequence s, IntValue mi, CharList tmp, int flag) {
 		char c = parseTypeParam(s, mi, tmp);
 		int pos = mi.value;
@@ -385,7 +391,7 @@ public class Signature extends Attribute {
 		if ((flag & F_SUBCLASS) != 0) {
 			g = new GenericSub(tmp.toString());
 		} else if ((flag & 0xF00) != 0 || c == '<') {
-			g = new Generic(tmp.toString(), flag&0xFF, (byte) ((flag >>> 8)&0xF));
+			g = new ParameterizedType(tmp.toString(), flag&0xFF, (byte) ((flag >>> 8)&0xF));
 		} else g = null;
 
 		if (c == '<') {
@@ -395,7 +401,7 @@ public class Signature extends Attribute {
 				c = s.charAt(pos);
 				switch (c) {
 					case '>':
-						if (g.children.isEmpty()) fail("空类型列表", pos, s);
+						if (g.typeParameters.isEmpty()) fail("空类型列表", pos, s);
 						pos++;
 						break childrenLoop;
 					case '*':
@@ -405,17 +411,15 @@ public class Signature extends Attribute {
 					default:
 						int ex;
 						switch (c) {
-							case '+':
+							case '+' -> {
 								pos++;
-								ex = Generic.EX_EXTENDS << 8;
-								break;
-							case '-':
+								ex = ParameterizedType.EXTENDS_WILDCARD << 8;
+							}
+							case '-' -> {
 								pos++;
-								ex = Generic.EX_SUPER << 8;
-								break;
-							default:
-								ex = 0;
-								break;
+								ex = ParameterizedType.SUPER_WILDCARD << 8;
+							}
+							default -> ex = 0;
 						}
 						mi.value = pos;
 						g.addChild(parseValue(s, mi, F_PRIMITIVE | ex, tmp));
@@ -428,7 +432,7 @@ public class Signature extends Attribute {
 		}
 
 		if (c == '.') {
-			if (g == null) g = new Generic(tmp.toString(), flag&0xFF, (byte) ((flag >>> 8)&0xF));
+			if (g == null) g = new ParameterizedType(tmp.toString(), flag&0xFF, (byte) ((flag >>> 8)&0xF));
 
 			g.sub = (GenericSub) parseType(s, mi, tmp, F_SUBCLASS);
 		} else if (c != ';') fail("未预料的 '"+c+"' 期待';'或'.'",pos,s);
@@ -461,13 +465,13 @@ public class Signature extends Attribute {
 
 		private Itf() {}
 
-		@Override public byte genericType() {return PLACEHOLDER_TYPE;}
+		@Override public byte kind() {return OBJECT_BOUND;}
 		@Override public void toDesc(CharList sb) {}
 		@Override public void toString(CharList sb) {}
 		@Override public String owner() { return "java/lang/Object"; }
 		@Override
-		public void validate(int position, int index) {
-			if (position != TYPE_PARAMETER_ENV || index != 0) throw new IllegalStateException(this+"类型只能位于类型参数的第一项");
+		public void validate(int positionType, int index) {
+			if (positionType != E_TYPE_VARIABLE || index != 0) throw new IllegalStateException(this+"类型只能位于类型参数的第一项");
 		}
 		@Override public IType clone() { return itf; }
 		@Override public String toString() {return "<接口占位符>";}
@@ -478,12 +482,12 @@ public class Signature extends Attribute {
 
 		private Any() {}
 
-		@Override public byte genericType() {return ANY_TYPE;}
+		@Override public byte kind() {return UNBOUNDED_WILDCARD;}
 		@Override public void toDesc(CharList sb) {sb.append('*');}
 		@Override public void toString(CharList sb) {sb.append('?');}
 		@Override
-		public void validate(int position, int index) {
-			if (position != GENERIC_ENV) throw new IllegalStateException("<任意>只能在泛型中使用");
+		public void validate(int positionType, int index) {
+			if (positionType != E_PARAMETERIZED) throw new IllegalStateException("<任意>只能在泛型中使用");
 		}
 		@Override public IType clone() {return any;}
 		@Override public String toString() { return "?"; }

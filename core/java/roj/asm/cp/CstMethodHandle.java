@@ -29,10 +29,15 @@ public final class CstMethodHandle extends Constant {
 	@Override
 	public final void write(DynByteBuf w) {w.put(Constant.METHOD_HANDLE).put(kind).putShort(getRefIndex());}
 
-	public final String toString() { return super.toString() + " Type: " + kind + ", Method: " + target; }
+	public final String toString() {
+		var s = target.toString();
+		int i = s.indexOf(' ');
+		i = s.indexOf(' ', i+1);
+		return super.toString()+" "+BootstrapMethods.Kind.toString(kind)+" "+s.substring(i+1); }
 
 	public final int hashCode() { return (target.hashCode() << 3) | kind; }
 	public final boolean equals(Object o) {
+
 		if (o == this) return true;
 		if (!(o instanceof CstMethodHandle handle)) return false;
 		return handle.kind == this.kind && handle.getRefIndex() == this.getRefIndex();

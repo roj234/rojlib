@@ -9,6 +9,7 @@ import roj.asm.annotation.Annotation;
 import roj.asm.attr.Annotations;
 import roj.asmx.injector.CodeWeaver;
 import roj.asmx.mapper.Mapper;
+import roj.ci.BuildContext;
 import roj.ui.Tty;
 
 import java.util.Collections;
@@ -27,7 +28,7 @@ public class NIXIM implements Processor {
 	@Override
 	public void afterCompile(BuildContext pc) {
 		var mapper = Objects.requireNonNull(pc.getProcessor(MAP.class), "Missing dep MAP for NIXIM").getProjectMapper(pc.project);
-		var ctx = pc.getAnnotatedClass(CodeWeaver.A_INJECTION);
+		var ctx = pc.getSourceAnnotations(CodeWeaver.A_INJECTION);
 
 		for (int i = 0; i < ctx.size(); i++) {
 			ClassNode data = ctx.get(i).getData();

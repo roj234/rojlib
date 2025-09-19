@@ -1,7 +1,6 @@
 package roj.util;
 
 import roj.compiler.plugins.annotations.Attach;
-import roj.compiler.plugins.asm.ASM;
 import roj.reflect.Bypass;
 
 import java.util.*;
@@ -161,7 +160,7 @@ public final class ArrayUtil {
 	public static <T> List<T> immutableCopyOf(Collection<T> list) {
 		if (list.isEmpty()) return Collections.emptyList();
 		if (list.getClass() == IMMUTABLE_ARRAY_TYPE) return (List<T>) list;
-		if (ASM.TARGET_JAVA_VERSION > 9) {
+		if (JVM.VERSION > 9) {
 			return List.copyOf(list);
 		} else {
 			return (List<T>) Arrays.asList(list.toArray());

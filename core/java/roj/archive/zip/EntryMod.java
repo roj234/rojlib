@@ -14,6 +14,8 @@ public final class EntryMod {
 	@MagicConstant(flags = {KEEP_TIME, UFS, LARGE, COMPRESS})
 	public byte flag;
 
+	public long modificationTime;
+
 	public Object data;
 
 	public byte[] pass;

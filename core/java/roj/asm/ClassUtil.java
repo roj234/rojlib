@@ -2,16 +2,12 @@ package roj.asm;
 
 import org.jetbrains.annotations.Nullable;
 import roj.annotation.MayMutate;
-import roj.asm.type.IType;
 import roj.asm.type.Type;
 import roj.collect.ArrayList;
-import roj.collect.HashMap;
 import roj.collect.HashSet;
 import roj.collect.*;
-import roj.compiler.CompileContext;
-import roj.compiler.library.ClassLoaderLibrary;
-import roj.compiler.resolve.ComponentList;
-import roj.compiler.resolve.Resolver;
+import roj.reflect.resolver.IResolver;
+import roj.reflect.resolver.SimpleResolver;
 import roj.text.CharList;
 import roj.text.TextUtil;
 import roj.util.Helpers;
@@ -19,6 +15,7 @@ import roj.util.Pair;
 
 import java.util.*;
 import java.util.function.Function;
+import java.util.function.Supplier;
 
 /**
  * Mapper Util
@@ -137,38 +134,33 @@ public final class ClassUtil {
 		return arePackagesSame(owner, referent);
 	}
 
-	private static volatile Resolver global;
-	private Resolver resolver() {
-		var lc = CompileContext.get();
-		if (lc != null) return lc.compiler;
+	public static Supplier<IResolver> currentResolver;
+	private static volatile IResolver global;
+	private IResolver resolver() {
+		if (currentResolver != null) {
+			IResolver impl = currentResolver.get();
+			if (impl != null) return impl;
+		}
 
-		if (local == null) {
+		if (resolver == null) {
 			if (global == null) {
 				synchronized (ClassUtil.class) {
 					if (global == null) {
-						global = new Resolver(false);
-						global.addLibrary(new ClassLoaderLibrary(ClassUtil.class.getClassLoader()));
+						global = new SimpleResolver(ClassNode.class.getClassLoader());
 					}
 				}
 			}
-			local = global;
+			resolver = global;
 		}
-		return local;
+		return resolver;
 	}
 
-	private Resolver local;
+	private IResolver resolver;
 
 	public ClassUtil() {}
-	public ClassUtil(ClassLoader... classLoaders) {
-		local = new Resolver(false);
-		for (ClassLoader loader : classLoaders) {
-			local.addLibrary(new ClassLoaderLibrary(loader));
-		}
-	}
+	public ClassUtil(IResolver impl) {resolver = impl;}
 
-	public Resolver getResolver() {return resolver();}
-
-	public ClassDefinition resolve(CharSequence name) {return resolver().resolve(name);}
+	public ClassNode resolve(CharSequence name) {return resolver().resolve(name);}
 
 	private final Function<ClassNode, List<String>> getSuperClassListCached = CollectionX.lazyLru(info -> {
 		ToIntMap<String> classList = resolver().getHierarchyList(info);
@@ -178,43 +170,17 @@ public final class ClassUtil {
 		return parents;
 	}, 1000);
 	public List<String> getHierarchyList(String type) {
-		ClassNode info = resolver().resolve(type);
+		ClassNode info = resolve(type);
 		if (info == null) return Collections.emptyList();
 		return getSuperClassListCached.apply(info);
 	}
 
-	/**
-	 * method所表示的方法是否从parents(若非空)或method.owner的父类继承/实现
-	 */
-	public Boolean isInherited(MemberDescriptor method, @Nullable List<String> parents, Boolean defVal) {
-		ClassNode info = resolver().resolve(method.owner);
-		if (info == null) return defVal;
-		ComponentList ml = local.getMethodList(info, method.name);
-		if (ml == ComponentList.NOT_FOUND) return defVal;
-
-		for (MethodNode mn : ml.getMethods()) {
-			if (mn.rawDesc().equals(method.rawDesc())) {
-				return parents == null || parents.contains(mn.owner());
-			}
-		}
-
-		return false;
-	}
-
-	private final Map<Object, Object> temp1 = new HashMap<>();
-
-	public boolean instanceOf(String testClass, String instClass) {return resolver().instanceOf(testClass, instClass);}
-	@Nullable public List<IType> inferGeneric(IType typeInst, String targetType) {return resolver().inferGeneric(typeInst, targetType, temp1);}
-
 	private final HashSet<?> sharedSet = new HashSet<>();
-	public <T> Set<T> getSharedSet() {
-		sharedSet.clear();
-		return Helpers.cast(sharedSet);
-	}
+	public <T> Set<T> getSharedSet() { sharedSet.clear(); return Helpers.cast(sharedSet); }
 
 	private final LRUCache<Object, List<String>> cache = new LRUCache<>(1000);
 	private final Function<Pair<Collection<String>, Collection<String>>, List<String>> ancestorMapper = pair -> {
-		Resolver resolver = resolver();
+		var resolver = resolver();
 
 		Collection<String> a = pair.getKey();
 		Collection<String> b = pair.getValue();
@@ -231,7 +197,7 @@ public final class ClassUtil {
 		return getCommonChild(finalCommonAncestors);
 	};
 	private final Function<Set<String>, List<String>> childMapper = classes -> {
-		Resolver resolver = resolver();
+		var resolver = resolver();
 
 		// 1. 初始化结果集，它是输入集合的一个可变拷贝
 		List<String> result = new ArrayList<>(classes);
@@ -264,7 +230,7 @@ public final class ClassUtil {
 	 * @param types 要分析的类型集合。
 	 * @return 一个包含所有共同祖先的集合（包括接口和父类）。
 	 */
-	private Set<String> findCommonAncestors(Collection<String> types, Resolver resolver) {
+	private Set<String> findCommonAncestors(Collection<String> types, IResolver resolver) {
 		Set<String> commonAncestors = new HashSet<>();
 
 		for (String type : types) {
@@ -281,7 +247,7 @@ public final class ClassUtil {
 	 * @param resolver 解析器实例
 	 * @return 包含所有父类型和接口的集合，如果无法解析则可能为空集
 	 */
-	private Set<String> getHierarchyFor(String klass, Resolver resolver) {
+	private Set<String> getHierarchyFor(String klass, IResolver resolver) {
 		if (klass.startsWith("[")) {
 			Set<String> hierarchy = new HashSet<>();
 			hierarchy.add(klass);

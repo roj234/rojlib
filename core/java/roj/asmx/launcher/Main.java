@@ -15,10 +15,9 @@ import java.util.function.Function;
  * @since 2023/8/4 15:41
  */
 public class Main extends SecureClassLoader {
-	public final ClassLoader PARENT = Main.class.getClassLoader();
+	public static final ClassLoader PARENT = Main.class.getClassLoader();
 
 	Main() {super(null);}
-	static {ClassLoader.registerAsParallelCapable();}
 
 	public final Class<?> defineClassA(String name, byte[] b, int off, int len, CodeSource cs) throws ClassFormatError {return defineClass(name, b, off, len, cs);}
 
@@ -27,6 +26,9 @@ public class Main extends SecureClassLoader {
 		return super.definePackage(name, specTitle, specVersion, specVendor, implTitle, implVersion, implVendor, sealBase); }
 	@Override public Package getPackage(String name) {return super.getPackage(name);}
 	final public Class<?> findLoadedClass1(String name) {return super.findLoadedClass(name);}
+
+	@Override
+	protected Object getClassLoadingLock(String className) {return className;}
 
 	protected Class<?> findClass(String name) throws ClassNotFoundException {
 		if (classFinder == null) {

@@ -39,7 +39,8 @@ public final class Base64 {
 
 	public static <T extends Appendable> T encode(DynByteBuf in, T out) { return encode(in, out, B64_CHAR); }
 	public static <T extends Appendable> T encode(DynByteBuf in, T out, byte[] tab) {
-		var ob = ArrayCache.getCharArray(512, false);
+		var ob = ArrayCache.getIOCharBuffer();
+		int tmpCap = ob.length - 5;
 		int i = 0;
 		try {
 			int c = in.readableBytes() / 3;
@@ -51,7 +52,7 @@ public final class Base64 {
 				ob[i++] = (char) tab[bits >>  6 & 0x3f];
 				ob[i++] = (char) tab[bits       & 0x3f];
 
-				if (i == (512-4)) {
+				if (i >= tmpCap) {
 					out.append(new CharList.Slice(ob, 0, i));
 					i = 0;
 				}

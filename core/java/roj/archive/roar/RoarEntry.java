@@ -4,7 +4,6 @@ import roj.archive.ArchiveEntry;
 import roj.collect.IntervalPartition;
 
 import java.nio.charset.StandardCharsets;
-import java.nio.file.attribute.FileTime;
 import java.util.Arrays;
 
 /**
@@ -42,21 +41,6 @@ public final class RoarEntry implements IntervalPartition.Range, ArchiveEntry, C
 	public long getOffset() { return offset; }
 	public final long getSize() { return size & 0xFFFFFFFFL; }
 	public final long getCompressedSize() { return compressedSize & 0xFFFFFFFFL; }
-
-	public final long getAccessTime() { return 0; }
-	public final long getCreationTime() { return 0; }
-	public final long getModificationTime() { return 0; }
-
-	public final FileTime getPrecisionAccessTime() { return null; }
-	public final FileTime getPrecisionCreationTime() { return null; }
-	public final FileTime getPrecisionModificationTime() { return null; }
-
-	public final boolean hasAccessTime() { return false; }
-	public final boolean hasCreationTime() { return false; }
-	public final boolean hasModificationTime() { return false; }
-
-	public int getWinAttributes() {return 0;}
-	public final boolean isEncrypted() { return false; }
 
 	@Override
 	public String toString() {

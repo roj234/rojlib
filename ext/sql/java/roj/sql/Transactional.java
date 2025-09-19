@@ -3,8 +3,8 @@ package roj.sql;
 import roj.asm.ClassNode;
 import roj.asm.MethodNode;
 import roj.asm.Opcodes;
-import roj.asm.annotation.AList;
 import roj.asm.annotation.Annotation;
+import roj.asm.annotation.ArrayVal;
 import roj.asm.frame.FrameVisitor;
 import roj.asm.insn.CodeWriter;
 import roj.asm.insn.Label;
@@ -72,7 +72,7 @@ public @interface Transactional {
 
 			Label tryEnd = cw.label();
 
-			AList commitFor = transactional.getList("commitFor");
+			ArrayVal commitFor = transactional.getList("commitFor");
 			Label commit = tryEnd;
 			if (commitFor.size() > 0) {
 				cw.invokeS("roj/sql/QueryBuilder", "getInstance", "()Lroj/sql/QueryBuilder;");
@@ -87,7 +87,7 @@ public @interface Transactional {
 			cw.invokeV("roj/sql/QueryBuilder", "transEnd", "(Z)Lroj/sql/QueryBuilder;");
 			cw.insn(Opcodes.ATHROW);
 
-			cw.computeFrames(FrameVisitor.COMPUTE_FRAMES);
+			cw.computeFrames(FrameVisitor.COMPUTE_SIZES | FrameVisitor.COMPUTE_FRAMES);
 			cw.visitExceptions();
 			for (int i = 0; i < commitFor.size(); i++) {
 				cw.visitException(tryStart, tryEnd, commit, commitFor.getType(i).owner);

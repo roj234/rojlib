@@ -22,7 +22,7 @@ import java.util.Arrays;
 
 import static roj.archive.xz.rangecoder.RangeEncoder.*;
 
-public abstract class LZMAEncoder extends LZMACoder {
+public abstract sealed class LZMAEncoder extends LZMACoder permits LZMAEncoderFast, LZMAEncoderNormal {
 	public static final int MODE_FAST = 1, MODE_NORMAL = 2;
 
 	/**

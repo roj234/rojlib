@@ -39,15 +39,12 @@ public class MakePinyinData {
 			CharList sb = IOUtil.getSharedCharBuf();
 			Pattern p = Pattern.compile("^U\\+([0-9A-F]+): (.+)  #");
 			while (in.readLine(sb)) {
-				if (sb.startsWith("#")) {
-					sb.clear(); continue;
-				}
+				if (sb.startsWith("#")) continue;
 
 				Matcher matcher = p.matcher(sb);
 				boolean matches = matcher.find();
 				if (!matches) {
 					System.out.println("no match "+sb);
-					sb.clear();
 					continue;
 				}
 				int cp = Integer.parseInt(matcher.group(1), 16);
@@ -55,7 +52,6 @@ public class MakePinyinData {
 
 				sb.clear();
 				pinyinMap.put(sb.appendCodePoint(cp).toString(), avlPinyin.toArray(new String[0]));
-				sb.clear();
 			}
 		}
 		try (TextReader in = TextReader.auto(phrasePinyinData)) {

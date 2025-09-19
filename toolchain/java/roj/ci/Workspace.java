@@ -19,6 +19,7 @@ import roj.util.function.Flow;
 
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -150,12 +151,24 @@ public class Workspace {
 	public static void registerModule(Project p, int mode) throws IOException {
 		if (!p.conf.type.hasFile()) return;
 		File ipr = new File(p.workspace.getProjectPath(), ".idea/modules.xml");
+		if (!ipr.isFile()) {
+			ipr.getParentFile().mkdirs();
+			try (var fos = new FileOutputStream(ipr)) {
+				fos.write(("""
+						<?xml version="1.0" encoding="UTF-8"?>
+						<project version="4">
+						    <component name="ProjectModuleManager">
+						        <modules></modules>
+						    </component>
+						</project>""").getBytes(StandardCharsets.UTF_8));
+			}
+		}
 
 		var name = p.getShortName();
 
 		Document document;
 		try {
-			document = XmlParser.parses(IOUtil.readString(ipr));
+			document = (Document) new XmlParser().parse(ipr);
 		} catch (ParseException e) {
 			throw new RuntimeException("XML格式错误", e);
 		}
@@ -238,6 +251,7 @@ public class Workspace {
 			Tokenizer.escape(sb.append("<orderEntry type=\"library\" name=\""), p.workspace.getLibraryId()).append("\" level=\"project\" />\n");
 		}
 
+		// TODO remove this
 		if (p.libPath.isDirectory()) {
 			sb.append("""
 					<orderEntry type="module-library">

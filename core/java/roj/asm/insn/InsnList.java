@@ -1,5 +1,6 @@
 package roj.asm.insn;
 
+import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.NotNull;
 import roj.asm.AsmCache;
 import roj.asm.MemberDescriptor;
@@ -21,26 +22,51 @@ import java.util.*;
 import static roj.asm.Opcodes.*;
 
 /**
- * @author Roj233
- * @since 2021/8/16 19:07
+ * 指令列表，用于存储和管理JVM字节码指令序列。
+ *
+ * <p>{@code InsnList}是本库节点操作的核心类，负责指令的存储、解析、修改和迭代。
+ * 它不仅和{@code CodeWriter}一样支持追加，还支持迭代和<b>低效</b><u>(我也不清楚)</u>的插入、删除和替换操作。
+ * 同时存储非常量池引用以实现{@code ConstantPool}无关。</p>
+ *
+ * <p>主要特性：</p>
+ * <ul>
+ *   <li>和{@code CodeWriter}一样基于{@code Segment}存储，内存占用较低</li>
+ *   <li>{@code InsnNode}仅为视图，但是也提供了对它的前插、后插、替换和删除操作</li>
+ *   <li>提供字节码位置映射和指令迭代功能</li>
+ *   <li>支持常量池引用的延迟解析和优化</li>
+ *   <li>完整的指令序列操作API（添加、替换、复制等）</li>
+ * </ul>
+ *
+ * <p>使用示例：
+ * <pre>{@code
+ * InsnList list = new InsnList();
+ * list.ldc(1);
+ * list.vars(ILOAD, 0);
+ * list.insn(IADD);
+ * list._return(Type.INT_TYPE);
+ *
+ * // 迭代指令
+ * for (InsnNode node : list) {
+ *     System.out.println(node.opcode() + ": " + node.toString());
+ * }
+ *
+ * // 替换指令段
+ * InsnList replacement = new InsnList();
+ * // ... 构建替换内容 ...
+ * list.replace(5, 10, replacement, true);
+ * }</pre></p>
+ *
+ * @author Roj234
+ * @see AbstractCodeWriter
+ * @see InsnNode
+ * @see Label
  */
 public final class InsnList extends AbstractCodeWriter implements Iterable<InsnNode> {
-	public InsnList() { clear(); }
+	static final InsnList EMPTY = new InsnList();
 
-	public void clear() {
-		if (segments.getClass() != ArrayList.class) segments = new ArrayList<>();
-		else segments.clear();
-		offset = 0;
+	public InsnList() {clear();}
 
-		StaticSegment b = StaticSegment.emptyWritable();
-		segments.add(b);
-		codeOb = b.getData();
-
-		pc = null;
-		pcLen = 0;
-	}
-
-	// region pre-parse
+	// region readFrom
 	@Override
 	public void visitBytecode(ConstantPool cp, DynByteBuf r, int len) {
 		AsmCache dd = AsmCache.getInstance();
@@ -112,9 +138,8 @@ public final class InsnList extends AbstractCodeWriter implements Iterable<InsnN
 		}
 		return lbl;
 	}
-
 	// endregion
-
+	//region writeTo
 	public void writeTo(CodeWriter cw) {
 		ConstantPool cp = cw.cpw;
 		for (int i = 0; i < refCount; i++) {
@@ -162,6 +187,133 @@ public final class InsnList extends AbstractCodeWriter implements Iterable<InsnN
 		}
 		cw.codeOb = codeOb;
 	}
+	//endregion
+	//region 标签位置处理
+	final void indexLabel(Label pos) {
+		if (pos.block < 0) {
+			pos.value = pos.offset;
+
+			int i = 0;
+			for (int block = 0; block < segments.size(); block++) {
+				Segment s = segments.get(block);
+				int j = i + s.length();
+				if (j > pos.offset || (j == pos.offset && block == segments.size() - 1)) {
+					pos.block = (short) block;
+					pos.offset -= i;
+					if (pos.offset != 0 && s.getClass() != StaticSegment.class) throw new IllegalArgumentException("标签位于不可分割部分 "+pos);
+					return;
+				}
+				i = j;
+			}
+		} else if (pos.block < segments.size()) {
+			int len = 0;
+			for (int block = 0; block < pos.block; block++) {
+				len += segments.get(block).length();
+			}
+			pos.value = (char) (len+pos.offset);
+			return;
+		}
+		throw new IllegalArgumentException("找不到 "+pos);
+	}
+	/**
+	 * 将字节码位置转换为标准化标签。
+	 */
+	@Contract(value = "_ -> new", pure = true)
+	public final Label labelAt(int pos) {
+		Label label = new Label(pos);
+		indexLabel(label);
+		return monitor(label);
+	}
+	/**
+	 * 开始跟踪该标签位置。
+	 *
+	 * <p>如果标签已经存在于列表中，直接返回；否则创建新标签并添加到列表。</p>
+	 *
+	 * @param pos 原始标签位置
+	 * @return 被跟踪(其value会随InsnList的操作更新)的标签对象
+	 */
+	public final Label monitor(Label pos) {
+		if (labels.contains(pos)) return pos;
+
+		indexLabel(pos);
+		var copy = new Label(pos);
+		labels.add(copy);
+		return copy;
+	}
+	//endregion
+	//region 常量值容器实现
+	int[] refPos = ArrayCache.INTS;
+	Object[] refVal = ArrayCache.OBJECTS;
+	int refCount;
+	final void addRef(Object ref) {
+		int pos = (segments.isEmpty() ? 0 : (segments.size()-1) << 16) | codeOb.wIndex();
+
+		int i = refCount;
+
+		if (i == refPos.length) {
+			int[] pp = refPos;
+			Object[] pp2 = refVal;
+			int nextSize = i<100 ? i+10 : i+100;
+			refPos = new int[nextSize];
+			refVal = new Object[nextSize];
+			System.arraycopy(pp, 0, refPos, 0, i);
+			System.arraycopy(pp2, 0, refVal, 0, i);
+		}
+
+		refPos[i] = pos;
+		refVal[i] = ref;
+		refCount = i+1;
+	}
+	final int findRef(Label pos) {
+		int target = (pos.block << 16) | pos.offset;
+		if (refCount > refPos.length) refCount = refPos.length;
+		return Arrays.binarySearch(refPos, 0, refCount, target);
+	}
+	//endregion
+	//region iterate / getter
+	@Deprecated
+	public int bci() { return length(); }
+	public int length() {return codeOb.wIndex()+offset;}
+
+	/**
+	 * 获取第一个指令节点。
+	 *
+	 * @return 列表中的第一个指令节点
+	 * @throws IllegalStateException 如果列表为空
+	 */
+	public final InsnNode first() {return getNodeAt(0);}
+	/**
+	 * 获取指定字节码索引位置的指令节点。
+	 *
+	 * <p>创建一个新的<code>InsnNode</code>视图，指向指定位置的指令。
+	 * 如果指定位置不是有效的指令开始位置，会抛出异常。</p>
+	 *
+	 * @param bci 字节码索引位置
+	 * @return 指定位置的指令节点
+	 * @throws IllegalArgumentException 如果指定位置不是有效的指令开始位置
+	 */
+	public final InsnNode getNodeAt(int bci) {
+		if (!getPcMap().contains(bci)) throw new IllegalArgumentException("bci "+bci+" is not valid");
+
+		Label label = new Label(bci);
+		indexLabel(label);
+
+		InsnNode view = new InsnNode(this, null);
+		view.setPos(label, segments.get(label.block));
+		return view;
+	}
+	@NotNull
+	public final Iterator<InsnNode> iterator() { return since(0); }
+	/**
+	 * 返回从指定字节码位置开始的节点迭代器。
+	 *
+	 * <p>返回一个迭代器，从指定的字节码索引位置开始遍历后续的所有指令节点。</p>
+	 * 注意：为了性能和内存占用(PCMap)，<b>它不检查起始位置的合法性！</b>
+	 *
+	 * @param bci 开始的字节码索引位置
+	 * @return 从指定位置开始的节点迭代器
+	 */
+	public final NodeIterator since(int bci) { return new NodeIterator(bci); }
 
 	private BitSet pc;
 	private int pcLen;
@@ -185,23 +337,18 @@ public final class InsnList extends AbstractCodeWriter implements Iterable<InsnN
 		return pc;
 	}
 
-	public final InsnNode first() {return getNodeAt(0);}
-	public final InsnNode getNodeAt(int bci) {
-		if (!getPcMap().contains(bci)) throw new IllegalArgumentException("bci "+bci+" is not valid");
-		Label label = new Label(bci);
-		indexLabel(label);
-
-		InsnNode view = new InsnNode(this, false);
-		view.setPos(label, segments.get(label.block));
-		return view;
-	}
-	@NotNull
-	public final NodeIterator iterator() { return since(0); }
-	public final NodeIterator since(int bci) { return new NodeIterator(bci); }
+	/**
+	 * 迭代只读的节点数据。
+	 */
+	public final Iterable<Object> nodeDataList() {return () -> new ArrayIterator<>(refVal, 0, refCount);}
+	/**
+	 * 迭代可写并有位置信息的节点数据。
+	 */
+	public final Iterable<Map.Entry<Label, Object>> nodeData() { return new DataItr(); }
 
 	public final class NodeIterator extends AbstractIterator<InsnNode> {
 		final Label label = newLabel();
-		final InsnNode view = new InsnNode(InsnList.this, true);
+		final InsnNode view = new InsnNode(InsnList.this, this);
 
 		public NodeIterator(int bci) {
 			if (bci >= length()) stage = ENDED;
@@ -209,6 +356,14 @@ public final class InsnList extends AbstractCodeWriter implements Iterable<InsnN
 			indexLabel(label);
 		}
 
+		/**
+		 * 获取不共享的当前位置标签副本。
+		 *
+		 * <p>返回当前迭代位置的标签副本，避免外部修改影响迭代状态。</p>
+		 *
+		 * @return 当前位置的标签副本
+		 */
+		@Deprecated
 		public Label unsharedPos() {return new Label(label);}
 
 		@Override
@@ -235,10 +390,39 @@ public final class InsnList extends AbstractCodeWriter implements Iterable<InsnN
 			return true;
 		}
 	}
+	private final class DataItr extends AbstractIterator<Map.Entry<Label, Object>> implements Map.Entry<Label, Object>, Iterable<Map.Entry<Label, Object>> {
+		private int i;
+		private final Label label = newLabel();
 
-	public final void add(InsnNode node) { node.appendTo(this); }
+		DataItr() { result = this; }
 
-	// region instructions
+		@NotNull
+		@Override
+		public Iterator<Map.Entry<Label, Object>> iterator() { i = 0; stage = refCount == 0 ? ENDED : GOTTEN; return this; }
+
+		@Override
+		protected boolean computeNext() {
+			if (i+1 == refCount) return false;
+			i++;
+			return true;
+		}
+
+		public Label getKey() {
+			label.block = (short) (refPos[i] >>> 16);
+			label.offset = (char) refPos[i];
+			indexLabel(label);
+			return label;
+		}
+		public Object getValue() { return refVal[i]; }
+		public Object setValue(Object value) {
+			Object prev = refVal[i];
+			if (prev.getClass() != value.getClass()) throw new IllegalArgumentException();
+			refVal[i] = value;
+			return prev;
+		}
+	}
+	//endregion
+	// region 追加
 	public final void multiArray(String clz, int dimension) { addRef(clz); codeOb.put(MULTIANEWARRAY).putShort(0).put(dimension); }
 	public final void clazz(byte code, String clz) { assertCate(code, Opcodes.CATE_CLASS); addRef(clz); codeOb.put(code).putShort(0); }
 	public final void invokeDyn(int idx, String name, String desc, int reserved) {
@@ -266,14 +450,14 @@ public final class InsnList extends AbstractCodeWriter implements Iterable<InsnN
 		codeOb.put(code).putShort(0);
 	}
 
-	protected final void ldc1(byte code, Constant c) { addSegment(new Ldc(code, c)); }
-	protected final void ldc2(Constant c) { addRef(c); codeOb.put(LDC2_W).putShort(0); }
-	// endregion
+	protected final void ldc1(byte code, Constant c) { addSegment(new Ldc(code, c.clone())); }
+	protected final void ldc2(Constant c) { addRef(c.clone()); codeOb.put(LDC2_W).putShort(0); }
 
-	@Deprecated
-	public int bci() { return length(); }
-	public int length() {return codeOb.wIndex()+offset;}
-
+	/**
+	 * 添加新的代码段到指令列表。
+	 * 几乎只用于SwitchBlock，除非你还有自定义的Segment
+	 * @see SwitchBlock
+	 */
 	public final void addSegment(Segment c) {
 		if (c == null) throw new NullPointerException("c");
 
@@ -290,129 +474,70 @@ public final class InsnList extends AbstractCodeWriter implements Iterable<InsnN
 		codeOb = b.getData();
 	}
 
-	int[] refPos = ArrayCache.INTS;
-	Object[] refVal = ArrayCache.OBJECTS;
-	int refCount;
-	final void addRef(Object ref) {
-		int pos = (segments.isEmpty() ? 0 : (segments.size()-1) << 16) | codeOb.wIndex();
-
-		int i = refCount;
-
-		if (i == refPos.length) {
-			int[] pp = refPos;
-			Object[] pp2 = refVal;
-			int nextSize = i<100 ? i+10 : i+512;
-			refPos = new int[nextSize];
-			refVal = new Object[nextSize];
-			System.arraycopy(pp, 0, refPos, 0, i);
-			System.arraycopy(pp2, 0, refVal, 0, i);
-		}
-
-		refPos[i] = pos;
-		refVal[i] = ref;
-		refCount = i+1;
-	}
-	final int refIndex(Label pos) {
-		int target = (pos.block << 16) | pos.offset;
-		if (refCount > refPos.length) refCount = refPos.length;
-		return Arrays.binarySearch(refPos, 0, refCount, target);
-	}
-
-	public final Iterable<Object> nodeDataList() {return () -> new ArrayIterator<>(refVal, 0, refCount);}
-	public final Iterable<Map.Entry<Label, Object>> nodeData() { return new NodeDataIterator(); }
-
-	private final class NodeDataIterator extends AbstractIterator<Map.Entry<Label, Object>> implements Map.Entry<Label, Object>, Iterable<Map.Entry<Label, Object>> {
-		private int i, realI;
-		private final Label label = newLabel();
-
-		NodeDataIterator() { result = this; }
-
-		@Override
-		protected boolean computeNext() {
-			if (i == refCount) return false;
-			realI = i++;
-			return true;
-		}
-
-		@NotNull
-		@Override
-		public Iterator<Map.Entry<Label, Object>> iterator() { i = 0; stage = INITIAL; return this; }
-
-		public Label getKey() {
-			label.block = (short) (refPos[realI] >>> 16);
-			label.offset = (char) refPos[realI];
-			indexLabel(label);
-			return label;
-		}
-		public Object getValue() { return refVal[realI]; }
-		public Object setValue(Object value) {
-			Object prev = refVal[realI];
-			if (prev.getClass() != value.getClass()) throw new IllegalArgumentException();
-			refVal[realI] = value;
-			return prev;
-		}
-	}
-
+	/**
+	 * 添加指令节点到当前指令列表的末尾。
+	 * @param node 要添加的指令节点
+	 * @throws NullPointerException 如果节点为null
+	 */
+	public final void add(InsnNode node) { node.appendTo(this); }
+	// endregion
+	//region 插入、替换和删除
 	public final InsnList copy() { return copySlice(0, length()); }
 	public final InsnList copySlice(int from, int to) { return copySlice(new Label(from), new Label(to)); }
 	public final InsnList copySlice(Label from, Label to) {
 		InsnList target = new InsnList();
-		var zero = Label.atZero();
-		insnCopy(this, target, from, to, zero, zero, true);
+		insncopy(this, target, from, to, Label.ZERO, Label.ZERO, true);
 		return target;
 	}
 
-	private void satisfySegments() {
-		if (segments.size() > 0) {
-			int segLen = segments.size()+1;
-			int[] offSum = AsmCache.getInstance().getIntArray_(segLen);
-			boolean updated = updateOffset(labels, offSum, segLen);
-			offset = offSum[segments.size()-1]; // last block begin
-		} else {
-			offset = 0;
-		}
-	}
-	private void indexLabel(Label pos) {
-		if (pos.block < 0) {
-			pos.value = pos.offset;
+	public final void replace(int from, int to, InsnList value) {replace(from, to, value, true);}
+	public final void replace(int from, int to, InsnList value, boolean clone) {replace(new Label(from), new Label(to), value, clone);}
+	public final void replace(Label from, Label to, InsnList value) {replace(from, to, value, true);}
+	public final void replace(Label from, Label to, InsnList value, boolean clone) {insncopy(value, this, new Label(0), new Label(value.length()), from, to, clone);}
 
-			int i = 0;
-			for (int block = 0; block < segments.size(); block++) {
-				Segment s = segments.get(block);
-				int j = i + s.length();
-				if (j > pos.offset || (j == pos.offset && block == segments.size() - 1)) {
-					pos.block = (short) block;
-					pos.offset -= i;
-					if (pos.offset != 0 && s.getClass() != StaticSegment.class) throw new IllegalArgumentException("标签位于不可分割部分 "+pos);
-					return;
-				}
-				i = j;
-			}
-		} else if (pos.block < segments.size()) {
-			int len = 0;
-			for (int block = 0; block < pos.block; block++) {
-				len += segments.get(block).length();
-			}
-			pos.value = (char) (len+pos.offset);
-			return;
-		}
-		throw new IllegalArgumentException("找不到 " + pos);
-	}
-	public final Label labelAt(Label pos) {
-		if (labels.contains(pos)) return pos;
+	public void clear() {
+		if (segments.getClass() != ArrayList.class) segments = new ArrayList<>();
+		else segments.clear();
+		offset = 0;
 
-		indexLabel(pos);
-		var copy = new Label(pos);
-		labels.add(copy);
-		return copy;
-	}
-	public final Label labelAt(int pos) {
-		Label label = new Label(pos);
-		indexLabel(label);
-		return labelAt(label);
+		StaticSegment b = StaticSegment.emptyWritable();
+		segments.add(b);
+		codeOb = b.getData();
+
+		pc = null;
+		pcLen = 0;
+
+		for (int i = 0; i < refCount; i++)
+			refVal[i] = 0;
+		refCount = 0;
 	}
 
-	public static void insnCopy(InsnList src, InsnList dst, Label sstart, Label send, Label dstart, Label dend, boolean clone) {
+	/**
+	 * 指令插入、替换和删除的底层实现。
+	 * <p>
+	 * 将{@code dst}指令列表中{@code dstart}-{@code dend}范围的内容,
+	 * 替换为{@code src}指令列表中{@code sstart}-{@code send}范围的内容.
+	 * <p>
+	 * 通过修改这些参数，即可在同一个函数中实现插入、替换与删除操作.
+	 * 因为{@code InsnList}使用了复杂的压缩内部表示，所以合并到同一个函数以降低维护复杂度
+	 *
+	 * <p>此方法处理：</p>
+	 * <ul>
+	 *   <li>部分段的拆分和合并</li>
+	 *   <li>标签位置的重新计算和更新</li>
+	 *   <li>常量池引用的重新定位</li>
+	 *   <li>字节码位置映射的重置</li>
+	 * </ul>
+	 *
+	 * @param src 源指令列表
+	 * @param dst 目标指令列表
+	 * @param sstart 源开始位置
+	 * @param send 源结束位置
+	 * @param dstart 目标开始位置
+	 * @param dend 目标结束位置
+	 * @param clone 是否克隆源数据（true）或移动（false）
+	 */
+	public static void insncopy(InsnList src, InsnList dst, Label sstart, Label send, Label dstart, Label dend, boolean clone) {
 		src.indexLabel(sstart);
 		src.indexLabel(send);
 		dst.indexLabel(dstart);
@@ -455,7 +580,7 @@ public final class InsnList extends AbstractCodeWriter implements Iterable<InsnN
 				var bytecode = toBlock.getDataSlice();
 				bytecode.wIndex(offTo);
 				toInsert.add(new StaticSegment().setData(bytecode));
-			} else {
+			} else if (toBlock.length() > 0) {
 				toInsert.add(toBlock.move(dst, dstartMoved - blockTo, clone));
 			}
 		}
@@ -475,6 +600,10 @@ public final class InsnList extends AbstractCodeWriter implements Iterable<InsnN
 			}
 
 			if (dstart.block == dend.block) {
+				if (bytecode == ByteList.EMPTY) {
+					bytecode = tmp.getDataSlice();
+					segmentRemoved++;
+				}
 				bytecode.rIndex = dend.offset;
 				if (bytecode.isReadable()) {
 					toInsert.add(new StaticSegment().setData(bytecode));// right
@@ -620,18 +749,31 @@ public final class InsnList extends AbstractCodeWriter implements Iterable<InsnN
 		}
 		dst.codeOb = lastBlock.getData();
 		dst.satisfySegments();
+
+		// 尽管可能只移动了src中的部分内容，但是partial更加危险
+		if (!clone) {
+			// TODO 目前有些地方故意在重用时选择不clone
+			if (!src.segments.isEmpty())
+				src.clear();
+		}
+	}
+	private void satisfySegments() {
+		if (segments.size() > 0) {
+			int segLen = segments.size()+1;
+			int[] offSum = AsmCache.getInstance().getIntArray_(segLen);
+			boolean updated = updateOffset(labels, offSum, segLen);
+			offset = offSum[segments.size()-1]; // last block begin
+		} else {
+			offset = 0;
+		}
 	}
 	private static int alignSegment(Label label, int dir) {return label.block + (label.offset == 0 ? 0 : dir);}
-
-	public final void replaceRange(int from, int to, InsnList list1, boolean clone) { replaceRange(new Label(from), new Label(to), list1, clone); }
-	public final void replaceRange(Label from, Label to, InsnList list1, boolean clone) {insnCopy(list1, this, new Label(0), new Label(list1.length()), from, to, clone);}
-
 	private static Object copyData(Object o) {
 		if (o instanceof Constant) return ((Constant) o).clone();
 		if (o instanceof MemberDescriptor) return ((MemberDescriptor) o).copy();
 		return o;
 	}
-
+	//endregion
 	public String toString() {
 		StringBuilder sb = new StringBuilder().append("[\n");
 		for (InsnNode node : this) {

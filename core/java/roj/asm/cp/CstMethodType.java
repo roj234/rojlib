@@ -11,4 +11,7 @@ public final class CstMethodType extends CstRefUTF {
 	public CstMethodType(String v) {super(new CstUTF(Objects.requireNonNull(v)));}
 	@Override
 	public byte type() {return Constant.METHOD_TYPE;}
+
+	@Override public String toString() { return getEasyCompareValue(); }
+	@Override public String getEasyCompareValue() { return value().str(); }
 }

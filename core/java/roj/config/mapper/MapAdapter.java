@@ -27,7 +27,7 @@ final class MapAdapter extends TypeAdapter {
 	private static TypeAdapter getAdapter(TypeAdapter kType) {return kType == PrimitiveAdapter.STR ? null : kType;}
 
 	@Override
-	public TypeAdapter transform(Factory man, Class<?> subclass, List<IType> generic) {
+	public TypeAdapter transform(ObjectMapperImpl man, Class<?> subclass, List<IType> generic) {
 		var kType = keyType;
 		var vType = valueType;
 		if (generic != null) {
@@ -36,7 +36,7 @@ final class MapAdapter extends TypeAdapter {
 			vType = man.get(generic.get(1));
 		}
 
-		IntFunction<Map<String, ?>> constructor = ObjectMapperFactory.containerFactory(subclass);
+		IntFunction<Map<String, ?>> constructor = ObjectMapper.containerFactory(subclass);
 		if (constructor == null) constructor = newMap;
 
 		return getAdapter(kType) == getAdapter(keyType) && vType == valueType && constructor == newMap ? this : new MapAdapter(kType, vType, constructor);

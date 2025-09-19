@@ -11,6 +11,8 @@ import java.util.Set;
  * @since 2025/4/28 6:09
  */
 public class CrossOriginPolicy {
+	public static final CrossOriginPolicy NO_LIMIT = new CrossOriginPolicy();
+
 	// 大写的方法
 	public Set<String> allowMethods;
 	// 小写的请求头
@@ -51,9 +53,9 @@ public class CrossOriginPolicy {
 		if (allowMethods != null && !allowMethods.contains(method)) return false;
 
 		String headers = req.get("access-control-request-headers");
-		if (headers != null) {
+		if (allowHeaders != null && headers != null) {
 			for (String header : TextUtil.split(headers, ',')) {
-				if (allowHeaders == null || !allowHeaders.contains(header.trim().toLowerCase(Locale.ROOT)))
+				if (!allowHeaders.contains(header.trim().toLowerCase(Locale.ROOT)))
 					return false;
 			}
 		}

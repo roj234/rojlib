@@ -414,7 +414,8 @@ public class FrameVisitor extends SizeVisitor {
 				case NEWARRAY -> {
 					pop(T_INT);
 					sb.clear();
-					push(sb.append('[').append(AbstractCodeWriter.FromPrimitiveArrayId(r.readByte())).toString());
+					int opType = r.readByte();
+					push(sb.append('[').append(Type.getByArrayType(opType)).toString());
 				}
 				case INSTANCEOF -> {
 					r.rIndex += 2;

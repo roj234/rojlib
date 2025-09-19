@@ -33,7 +33,7 @@ public final class Javap {
 		}));
 		var dumpSignature = literal("dump-type").comment("使用RojASM解析类型签名").then(argument("签名", Argument.string()).executes(ctx -> {
 			var signature = Signature.parse(ctx.argument("签名", String.class));
-			System.out.println("getTypeParam(): "+signature.getTypeParam(IOUtil.getSharedCharBuf()).toString());
+			System.out.println("getTypeParam(): "+signature.getTypeVariables(IOUtil.getSharedCharBuf()).toString());
 			System.out.println("toString(): "+signature);
 			System.out.println("toDesc(): "+signature.toDesc());
 			signature.validate();
@@ -41,7 +41,7 @@ public final class Javap {
 		var verify = literal("verify").comment("验证Jar签名").then(argument("文件", Argument.file()).executes(ctx -> {
 			try (var zf = new ZipFile(ctx.argument("文件", File.class))) {
 				System.out.println("正在验证"+zf.toString());
-				JarVerifier verifier = JarVerifier.create(zf);
+				JarVerifier verifier = JarVerifier.create(zf, null);
 				if (verifier == null) {
 					System.out.println("文件没有清单属性");
 					return;
@@ -57,7 +57,7 @@ public final class Javap {
 				System.out.println("签名算法:"+verifier.getAlgorithm());
 
 				for (ZEntry entry : zf.entries()) {
-					try (InputStream in = verifier.wrapInput(entry.getName(), zf.getStream(entry))) {
+					try (InputStream in = verifier.wrapInput(entry.getName(), zf.getInputStream(entry))) {
 						IOUtil.read(in);
 					} catch (Exception e) {
 						System.out.println(e.getMessage());

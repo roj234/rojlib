@@ -32,7 +32,8 @@ public interface Compiler {
 		public Factory(MapValue config) throws ClassNotFoundException {
 			ignoredDiagnostics = config.getList("ignoredDiagnostics").toStringSet();
 			options = config.getList("options").toStringList();
-			supplier = Bypass.builder(BiFunction.class).constructFuzzy(Class.forName(config.getString("type")), "apply").build();
+			Class<?> type = Class.forName(config.getString("type"));
+			supplier = Bypass.builder(BiFunction.class).defineOn(type).constructFuzzy(type, "apply").build();
 		}
 
 		public ArrayList<String> getDefaultOptions() {return new ArrayList<>(options);}

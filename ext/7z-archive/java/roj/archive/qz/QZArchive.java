@@ -10,6 +10,7 @@ import roj.crypt.CRC32;
 import roj.io.*;
 import roj.io.source.Source;
 import roj.io.source.SourceInputStream;
+import roj.optimizer.FastVarHandle;
 import roj.text.CharList;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
@@ -31,12 +32,20 @@ import static roj.archive.qz.BlockId.*;
 import static roj.reflect.Unsafe.U;
 
 /**
- * 我去除了大部分C++的味道，但是保留了一部分，这样你才知道自己用的是Java
- * 已支持多线程解压
+ * A reader for 7z archives, 我有意保留了一部分C++的味道，这样你才知道自己用的是Java (玩梗而已).
+ * <p>
+ * Supports loading entries, sequential/concurrent decompression, appending files, and resource management
+ * with optional password protection and recovery mode. Memory usage is controlled via {@link #setMemoryLimitKb(int)}.
+ * Use {@link #forkReader()} for creating shared readers suitable for concurrent access to different blocks.
+ * For parallel decompression across multiple threads, use {@link #parallelDecompress(TaskGroup, BiConsumer)}.
+ *
  * @author Roj233
  * @since 2022/3/14 7:09
+ * @see QZReader
+ * @see ArchiveFile
  */
-public class QZArchive extends QZReader implements ArchiveFile {
+@FastVarHandle
+public final class QZArchive extends QZReader implements ArchiveFile {
 	private WordBlock[] blocks;
 	private QZEntry[] entries;
 	private HashMap<String, QZEntry> byName;
@@ -47,33 +56,56 @@ public class QZArchive extends QZReader implements ArchiveFile {
 
 	public QZArchive(String path) throws IOException { this(new File(path), null); }
 	public QZArchive(File file) throws IOException { this(file, null); }
-	public QZArchive(File file, String pass) throws IOException {
+	public QZArchive(File file, String password) throws IOException {
 		r = ArchiveUtils.tryOpenSplitArchive(file, true);
-		password = pass == null ? null : pass.getBytes(StandardCharsets.UTF_16LE);
+		this.password = password == null ? null : password.getBytes(StandardCharsets.UTF_16LE);
 		reload();
 	}
 
-	public QZArchive(Source s) throws IOException { this(s, null); }
-	public QZArchive(Source s, String pass) throws IOException {
-		r = s;
+	public QZArchive(Source src) throws IOException { this(src, null); }
+	public QZArchive(Source src, String password) throws IOException {
+		r = src;
 		r.seek(0);
-		password = pass == null ? null : pass.getBytes(StandardCharsets.UTF_16LE);
+		this.password = password == null ? null : password.getBytes(StandardCharsets.UTF_16LE);
 		reload();
 	}
-	public QZArchive(Source s, int recovery, int maxFileCount, byte[] pass) {
-		r = s;
+	/**
+	 * Creates an uninitialized 7z archive for advanced use (e.g., error recovery).
+	 *
+	 * @param src the source stream
+	 * @param recovery recovery flags (bitwise OR of FLAG_* constants)
+	 * @param maxFileCount maximum number of files to load
+	 * @param pass the password bytes (null if unencrypted)
+	 * @see #reload()
+	 */
+	public QZArchive(Source src, int recovery, int maxFileCount, byte[] pass) {
+		r = src;
 		this.flag = (byte) recovery;
 		this.password = pass;
 		this.maxFileCount = maxFileCount;
-		this.entries = new QZEntry[0];
+		this.entries = Loader.NO_FILES;
 	}
 
+	/**
+	 * Sets the memory limit in KB for decompression operations. Exceeding this may throw an exception.
+	 *
+	 * @param v the new memory limit in KB
+	 */
 	public void setMemoryLimitKb(int v) { memoryLimitKb = v; }
 
-	public Source getFile() { return r; }
+	public Source getSource() { return r; }
 	public final boolean isEmpty() { return entries.length == 0; }
 	public WordBlock[] getWordBlocks() { return blocks; }
 
+	/**
+	 * Prepares a writer for appending new files to this archive.
+	 * The archive must be writable and not skipping metadata. Positions the writer after existing content.
+	 * Entries are copied to the writer for continuation.
+	 *
+	 * @return a writer for appending files
+	 * @throws IOException if the source is not writable or metadata is skipped
+	 * @throws IllegalStateException if prerequisites not met
+	 */
 	public QZFileWriter append() throws IOException {
 		if (!r.isWritable()) throw new IllegalStateException("Source ["+r+"] not writable");
 		if ((flag&FLAG_SKIP_METADATA) != 0) throw new IllegalStateException("Metadata skip");
@@ -99,12 +131,13 @@ public class QZArchive extends QZReader implements ArchiveFile {
 		return fw;
 	}
 
+	@Override
 	public final void reload() throws IOException {
 		if (byName == null) byName = new HashMap<>();
 		else byName.clear();
 		entries = null;
 
-		var cache = (Source) U.getAndSetReference(this, CACHE, r);
+		var cache = (Source) CACHE.getAndSet(this, r);
 		if (cache != r) IOUtil.closeSilently(cache);
 
 		try {
@@ -120,9 +153,11 @@ public class QZArchive extends QZReader implements ArchiveFile {
 
 	public static final long QZ_HEADER = 0x377abcaf271c_00_02L;
 	private static final class Loader {
+		public static final QZEntry[] NO_FILES = new QZEntry[0];
+
 		// -- IN --
-		final QZArchive that;
-		private boolean strictMode;
+		private final QZArchive that;
+		private final boolean strictMode;
 
 		Loader(QZArchive archive) { this.that = archive; strictMode = !archive.isRecovering(); }
 
@@ -131,10 +166,10 @@ public class QZArchive extends QZReader implements ArchiveFile {
 		private long[] streamLen;
 
 		//共享以减少无用对象
-		final HashSet<Object[]> coders = new HashSet<>(Hasher.array(Object[].class));
-		final QZCoder[] temp = new QZCoder[32];
-		final Int2IntBiMap pipe1 = new Int2IntBiMap();
-		final int[] sorted1 = new int[32];
+		private final HashSet<Object[]> coders = new HashSet<>(Hasher.array(Object[].class));
+		private final QZCoder[] temp = new QZCoder[32];
+		private final Int2IntBiMap pipe1 = new Int2IntBiMap();
+		private final int[] sorted1 = new int[32];
 
 		WordBlock[] blocks;
 		QZEntry[] files;
@@ -187,7 +222,7 @@ public class QZArchive extends QZReader implements ArchiveFile {
 
 				if (length > that.maxFileCount) throw new IOException("文件表过大"+length);
 				if (length == 0) {
-					files = new QZEntry[0];
+					files = NO_FILES;
 					return;
 				}
 
@@ -209,7 +244,7 @@ public class QZArchive extends QZReader implements ArchiveFile {
 				if ((that.flag & FLAG_DUMP_HIDDEN) != 0) findSurprise(32+offset, length);
 			} finally {
 				IOUtil.closeSilently(buf);
-				IOUtil.closeSilently(in);
+				in.finish();
 			}
 		}
 
@@ -321,7 +356,7 @@ public class QZArchive extends QZReader implements ArchiveFile {
 			in.close();
 
 			try {
-				in = new ByteInputStream(that.getSolidStream(b, null, false));
+				in = new ByteInputStream(that.getBlockInputStream(b, null, that.r, that, (that.flag&FLAG_RECOVERY) == 0));
 			} catch (Exception e) {
 				if (b.hasProcessor(QzAES.class) && that.password != null)
 					throw new CorruptedInputException("压缩包打开失败，可能是密码错误", e);
@@ -630,7 +665,7 @@ public class QZArchive extends QZReader implements ArchiveFile {
 					if (prev != null) prev.next = f;
 					else b.firstEntry = f;
 
-					if (f.uSize <= 0) error("block["+j+"]没有足够的数据:最后的解压大小为" + f.uSize);
+					if (f.uSize <= 0) error("block["+j+"]没有足够的数据:最后的解压大小为"+f.uSize);
 				}
 
 				nid = in.readUnsignedByte();
@@ -1024,7 +1059,7 @@ public class QZArchive extends QZReader implements ArchiveFile {
 
 	@Override
 	public QZEntry getEntry(String name) { return getEntries().get(name); }
-	@Deprecated
+
 	public HashMap<String, QZEntry> getEntries() {
 		if (byName.isEmpty()) {
 			byName.ensureCapacity(entries.length);
@@ -1041,32 +1076,43 @@ public class QZArchive extends QZReader implements ArchiveFile {
 	public List<QZEntry> entries() { return Arrays.asList(entries); }
 	public QZEntry[] getEntriesByPresentOrder() { return entries; }
 
-	public void parallelDecompress(TaskGroup th, BiConsumer<QZEntry, InputStream> callback) {parallelDecompress(th, callback, password);}
-	public void parallelDecompress(TaskGroup th, BiConsumer<QZEntry, InputStream> callback, byte[] pass) {
+	public void parallelDecompress(TaskGroup taskGroup, BiConsumer<QZEntry, InputStream> callback) {parallelDecompress(taskGroup, callback, password);}
+	/**
+	 * Decompresses all entries in parallel using the provided task group, with optional custom password.
+	 * Each block is processed in a separate task, invoking the callback for each entry's input stream.
+	 * Supports cancellation via {@link TaskGroup#isCancelled()} and shared source access.
+	 *
+	 * @param taskGroup the task group for parallel execution
+	 * @param callback the consumer to process each entry and its stream (stream is auto-closed after callback)
+	 * @param password the password for decryption (falls back to archive password if null)
+	 * @throws IOException (in TaskGroup) if decompression fails or stream ends prematurely
+	 * @throws FastFailException if the archive is closed by another thread
+	 */
+	public void parallelDecompress(TaskGroup taskGroup, BiConsumer<QZEntry, InputStream> callback, byte[] password) {
 		if (blocks == null) return;
 
 		Objects.requireNonNull(r, "Stream Closed");
-		for (WordBlock b : blocks) {
-			th.executeUnsafe(() -> {
+		for (WordBlock block : blocks) {
+			taskGroup.executeUnsafe(() -> {
 				if (r == null) throw new FastFailException("其他线程关闭了压缩包");
 
-				try (var in = getSolidStream(b, pass, false)) {
-					// noinspection all
-					LimitInputStream lin = new LimitInputStream(in, 0, false);
-					QZEntry entry = b.firstEntry;
+				QZEntry entry = block.firstEntry;
+				try (var blockIn = getBlockInputStream(entry, password)) {
+					//noinspection IOResourceOpenedButNotSafelyClosed
+					LimitInputStream in = new LimitInputStream(blockIn, 0);
 					long toSkip = 0;
 					do {
-						if (th.isCancelled()) return;
+						if (taskGroup.isCancelled()) return;
 
-						lin.remain = entry.uSize;
+						in.remain = entry.uSize;
 
-						InputStream fin = lin;
+						InputStream fin = in;
 						if ((entry.flag&QZEntry.CRC) != 0) fin = new CRC32InputStream(fin, entry.crc32);
-						if (toSkip > 0) fin = new SkipInputStream(fin, in, toSkip);
+						if (toSkip > 0) fin = new DelayedSkipInputStream(fin, blockIn, toSkip);
 
 						callback.accept(entry, fin);
-						if (fin instanceof SkipInputStream x) toSkip = x.toSkip;
-						toSkip += lin.remain;
+						if (fin instanceof DelayedSkipInputStream x) toSkip = x.toSkip;
+						toSkip += in.remain;
 
 						entry = entry.next;
 					} while (entry != null);
@@ -1075,11 +1121,11 @@ public class QZArchive extends QZReader implements ArchiveFile {
 		}
 	}
 
-	private static final class SkipInputStream extends InputStream {
+	private static final class DelayedSkipInputStream extends InputStream {
 		private final InputStream in, rin;
 		long toSkip;
 
-		private SkipInputStream(InputStream in, InputStream rin, long skip) {
+		private DelayedSkipInputStream(InputStream in, InputStream rin, long skip) {
 			this.in = in;
 			this.rin = rin;
 			toSkip = skip;
@@ -1103,42 +1149,36 @@ public class QZArchive extends QZReader implements ArchiveFile {
 		}
 	}
 
-
-	public final InputStream getStream(String entry) throws IOException {
-		QZEntry file = getEntries().get(entry);
-		if (file == null) return null;
-		return getInput(file, null);
-	}
 	@Override
-	public final InputStream getStream(ArchiveEntry entry, byte[] pw) throws IOException { return getInput((QZEntry) entry, pw); }
+	public final InputStream getInputStream(ArchiveEntry entry, byte[] password) throws IOException { return getInputStream((QZEntry) entry, password); }
 
-	final InputStream getSolidStream1(WordBlock b, byte[] pass, Source src, QZReader that, boolean verify) throws IOException {
-		if (pass == null) pass = password;
-		assert blocks == null || Arrays.asList(blocks).contains(b) : "foreign word block "+b;
+	final InputStream getBlockInputStream(WordBlock block, byte[] password, Source src, QZReader self, boolean verify) throws IOException {
+		if (password == null) password = this.password;
+		assert blocks == null || Arrays.asList(blocks).contains(block) : "foreign word block "+block;
 
-		src.seek(b.offset);
+		src.seek(block.offset);
 
 		var limit = new AtomicInteger(memoryLimitKb);
 		InputStream in;
-		var node = b.complexCoder();
+		var node = block.complexCoder();
 		if (node == null) {
-			in = new SourceInputStream.Shared(src, b.size, that, CACHE);
+			in = new SourceInputStream.Shared(src, block.size, self, CACHE);
 
-			var coders = b.coder;
+			var coders = block.coder;
 			QZCoder.useMemory(limit, coders.length);
 			for (int i = 0; i < coders.length; i++) {
-				in = coders[i].decode(in, pass, i==coders.length-1?b.uSize:b.outSizes[i], limit);
+				in = coders[i].decode(in, password, i==coders.length-1 ? block.uSize : block.outSizes[i], limit);
 			}
 		} else {
-			long[] sizes = b.extraSizes;
+			long[] sizes = block.extraSizes;
 			var streams = new InputStream[sizes.length+1];
 			QZCoder.useMemory(limit, streams.length);
 
-			long off = b.offset;
+			long off = block.offset;
 			src.seek(off);
-			// noinspection all
-			streams[0] = new SourceInputStream.Shared(src, b.size, that, CACHE);
-			off += b.size;
+			//noinspection IOResourceOpenedButNotSafelyClosed
+			streams[0] = new SourceInputStream.Shared(src, block.size, self, CACHE);
+			off += block.size;
 
 			for (int i = 0; i < sizes.length;) {
 				src = src.copy();
@@ -1150,57 +1190,66 @@ public class QZArchive extends QZReader implements ArchiveFile {
 				off += len;
 			}
 
-			var ins = node.getInputStream(b.outSizes, streams, new HashMap<>(), pass, limit);
+			var ins = node.getInputStream(block.outSizes, streams, new HashMap<>(), password, limit);
 			if (ins.length != 1) throw new CorruptedInputException("root node has many outputs");
 			in = ins[0];
 		}
 
-		// 这个可以清理掉，因为QZEntry自身有CRC32了
+		// 通常false，因为QZEntry自身有CRC32了
 		// 不过我喜欢搞骚操作，也许直接读WordBlock了
-		if (verify && !isRecovering() && (b.hasCrc&1) != 0) in = new CRC32InputStream(in, b.crc);
+		if (verify && (block.hasCrc&1) != 0) in = new CRC32InputStream(in, block.crc);
 
 		return in;
 	}
 
-	public synchronized QZReader parallel() {
-		if (asyncReaders.isEmpty()) asyncReaders = new ArrayList<>();
-		AsyncReader ar = new AsyncReader();
-		ar.r = r;
-		asyncReaders.add(ar);
-		return ar;
+	private List<ForkedReader> readers = Collections.emptyList();
+	/**
+	 * Creates a forked reader sharing the same data as this archive, suitable for concurrent access
+	 * (e.g., multiple threads reading different blocks without resource duplication).
+	 * The forked reader delegates block reading to this instance but manages its own active stream
+	 * and file handle. May be used for high concurrency.
+	 * Forks are tracked and closed with the parent archive.
+	 *
+	 * @return a new forked reader instance
+	 */
+	public synchronized QZReader forkReader() {
+		if (readers.isEmpty()) readers = new ArrayList<>();
+		ForkedReader copy = new ForkedReader();
+		copy.r = r;
+		readers.add(copy);
+		return copy;
 	}
-	private final class AsyncReader extends QZReader {
+	final class ForkedReader extends QZReader {
 		@Override
-		InputStream getSolidStream1(WordBlock b, byte[] pass, Source src, QZReader that, boolean verify) throws IOException {
-			return QZArchive.this.getSolidStream1(b, pass, src, that, verify);
+		InputStream getBlockInputStream(WordBlock block, byte[] password, Source src, QZReader self, boolean verify) throws IOException {
+			return QZArchive.this.getBlockInputStream(block, password, src, self, verify);
 		}
 
 		@Override
-		public void close() throws IOException {
-			synchronized (QZArchive.this) { asyncReaders.remove(this); }
-			closeSolidStream();
+		public void close() {
+			synchronized (QZArchive.this) { readers.remove(this); }
+			closeActiveStream();
 		}
 	}
-	private List<AsyncReader> asyncReaders = Collections.emptyList();
 
 	@Override
 	public synchronized void close() throws IOException {
-		closeSolidStream();
+		closeActiveStream();
 
-		for (AsyncReader reader : asyncReaders) {
-			var cache = (Source) U.getAndSetReference(reader, CACHE, null);
+		for (var reader : readers) {
+			reader.closeActiveStream();
+
+			var cache = (Source) CACHE.getAndSet(reader, r);
 			IOUtil.closeSilently(cache);
-
-			reader.closeSolidStream();
 		}
-		asyncReaders.clear();
+		readers.clear();
 
 		if (r != null) {
 			Source r1 = r;
 			r1.close();
 			r = null;
 
-			Source cache = (Source) U.getAndSetReference(this, CACHE, null);
+			Source cache = (Source) CACHE.getAndSet(this, r1);
 			IOUtil.closeSilently(cache);
 
 			if (password != null) Arrays.fill(password, (byte) 0);

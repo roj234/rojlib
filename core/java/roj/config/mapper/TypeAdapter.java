@@ -14,13 +14,11 @@ import java.util.List;
  * @since 2023/3/18 12:55
  */
 @Public
-/*abstract */class TypeAdapter {
-	static final TypeAdapter NO_DESERIALIZE = new TypeAdapter();
-
+abstract class TypeAdapter implements ObjectWriter<Object> {
 	@IndirectReference
 	static void emit(ValueEmitter v, String s) {if(s == null) v.emitNull(); else v.emit(s);}
 
-	public TypeAdapter transform(Factory man, Class<?> subclass, @Nullable List<IType> generic) { return this; }
+	public TypeAdapter transform(ObjectMapperImpl man, Class<?> subclass, @Nullable List<IType> generic) { return this; }
 
 	public void read(MappingContext ctx, boolean l) {read(ctx, (Object)l);}
 	public void read(MappingContext ctx, int l) {read(ctx, (Object)l);}

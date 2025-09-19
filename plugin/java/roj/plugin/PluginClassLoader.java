@@ -9,8 +9,8 @@ import roj.asmx.Context;
 import roj.asmx.Transformer;
 import roj.asmx.injector.CodeWeaver;
 import roj.asmx.launcher.MainM;
-import roj.collect.HashSet;
 import roj.collect.ArrayList;
+import roj.collect.HashSet;
 import roj.io.source.FileSource;
 import roj.text.URICoder;
 import roj.util.ByteList;
@@ -116,7 +116,7 @@ public class PluginClassLoader extends ClassLoader {
 		PluginClassLoader prev = PLUGIN_CONTEXT.get();
 		PLUGIN_CONTEXT.set(this);
 		try {
-			var ctx = new Context(klass, archive.getStream(entry));
+			var ctx = new Context(klass, archive.getInputStream(entry));
 			name = ctx.getClassName();
 
 			var cs = new CodeSource(getUrl(klass), (CodeSigner[]) null);
@@ -160,7 +160,7 @@ public class PluginClassLoader extends ClassLoader {
 		ZEntry entry = archive.getEntry(name);
 		if (entry == null) return getParent().getResourceAsStream(name);
 		try {
-			return archive.getStream(entry);
+			return archive.getInputStream(entry);
 		} catch (Exception e) {
 			return null;
 		}

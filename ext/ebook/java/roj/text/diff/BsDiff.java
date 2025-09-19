@@ -1,7 +1,7 @@
 package roj.text.diff;
 
-import roj.io.CorruptedInputException;
 import roj.io.ByteInput;
+import roj.io.CorruptedInputException;
 import roj.io.source.Source;
 import roj.reflect.Unsafe;
 import roj.util.ArrayCache;
@@ -49,7 +49,7 @@ public final class BsDiff {
 
 	@IntrinsicCandidate("IL_bsdiff_init")
 	private static void initializeSuffixArray(final byte[] baseData, final int[] suffixArray, int size) {
-		int[] frequencyBucket = ArrayCache.getIntArray(256, 256);
+		int[] frequencyBucket = ArrayCache.getIntArray(256, true);
 		// Count character frequencies
 		for (int i = 0; i < baseData.length; i++) frequencyBucket[toUnsignedByte(baseData[i])]++;
 		// Calculate cumulative sums
@@ -71,7 +71,7 @@ public final class BsDiff {
 
 		if (frequencyBucket[0] == 1) suffixArray[0] = -1;
 
-		int[] positionArray = ArrayCache.getIntArray(size, 0);
+		int[] positionArray = ArrayCache.getIntArray(size, false);
 		for (int i = 0; i < size; ++i) positionArray[i] = frequencyBucket[toUnsignedByte(baseData[i])] - 1;
 
 		ArrayCache.putArray(frequencyBucket);

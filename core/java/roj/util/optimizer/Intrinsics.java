@@ -23,9 +23,9 @@ public class Intrinsics {
 		try {
 			var c = ClassNode.parseSkeleton(IOUtil.getResourceIL("roj/util/optimizer/JVMCI.class"));
 			c.parent(Reflection.MAGIC_ACCESSOR_CLASS);
-			tmp = (CodeInjector) Reflection.createInstance(Intrinsics.class.getClassLoader(), c);
+			tmp = (CodeInjector) Reflection.createInstance(CodeInjector.class, c, false);
 		} catch (Throwable e) {
-			if (e instanceof NoClassDefFoundError) {
+			if (e.getCause() instanceof NoClassDefFoundError) {
 				LOGGER.error("添加 -XX:+UnlockExperimentalVMOptions -XX:+EnableJVMCI 虚拟机参数以启用LiteralASM");
 			} else {
 				LOGGER.error("Intrinsics初始化失败", e);

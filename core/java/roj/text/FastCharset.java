@@ -144,7 +144,7 @@ public abstract class FastCharset {
 			}
 
 			if (s.getClass() == String.class) {
-				arr = ArrayCache.getCharArray(Math.min(end-off, 4096), false);
+				arr = ArrayCache.getIOCharBuffer();
 				String ss = s.toString();
 				try {
 					while (true) {
@@ -169,7 +169,7 @@ public abstract class FastCharset {
 				new Throwable("It is recommended to pre-copy your " + s.getClass().getName() + " to a CharBuffer or CharList").printStackTrace();
 			}
 
-			arr = ArrayCache.getCharArray(Math.min(end-off, 4096), false);
+			arr = ArrayCache.getIOCharBuffer();
 			CharSequence cs = (CharSequence) s;
 			try {
 				while (true) {
@@ -251,7 +251,7 @@ public abstract class FastCharset {
 				}
 			}
 
-			arr = ArrayCache.getCharArray(Math.min(outMax, 4096), false);
+			arr = ArrayCache.getIOCharBuffer();
 			off = 0;
 			unsafeWritable = arr.length;
 			kind = 2;

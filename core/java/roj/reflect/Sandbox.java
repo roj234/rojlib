@@ -15,7 +15,7 @@ public class Sandbox extends ClassLoader {
 
 	private static final FlagSet DefaultPermits = new FlagSet(".");
 	static {
-		for (var packages : new String[] {"java.lang", "java.util", "java.util.regex", "java.util.function", "java.text", "roj.compiler", "roj.text", "roj.config.node"}) {
+		for (var packages : new String[] {"java.lang", "java.util", "java.util.regex", "java.util.function", "java.text"}) {
 			DefaultPermits.add(packages, 1, false, false);
 		}
 		for (var classes : new String[] {"java.lang.Process", "java.lang.ProcessBuilder", "java.lang.Thread", "java.lang.ClassLoader"}) {

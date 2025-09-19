@@ -3,7 +3,7 @@ package roj.plugins.web.sso;
 import roj.collect.ArrayList;
 import roj.collect.HashMap;
 import roj.config.ConfigMaster;
-import roj.config.mapper.ObjectMapperFactory;
+import roj.config.mapper.ObjectMapper;
 import roj.io.IOUtil;
 import roj.text.ParseException;
 
@@ -26,7 +26,7 @@ class JsonUserManager implements UserManager {
 	private Map<String, User> userByName = new HashMap<>();
 	private boolean dirty;
 
-	private static final ObjectMapperFactory SERIALIZER = ObjectMapperFactory.getInstance();
+	private static final ObjectMapper SERIALIZER = ObjectMapper.getInstance();
 	static {
 		SERIALIZER.registerAdapter(InetSocketAddress.class, new Object() {
 			public InetSocketAddress readCallback(String addr) throws UnknownHostException {
@@ -83,7 +83,7 @@ class JsonUserManager implements UserManager {
 
 		try {
 			IOUtil.writeFileEvenMoreSafe(json.getParentFile(), json.getName(), file -> {
-				ConfigMaster.JSON.writeObject(SERIALIZER.listOf(User.class), copy, file);
+				ConfigMaster.JSON.writeObject(SERIALIZER.listWriter(User.class), copy, file);
 			});
 		} catch (Exception e) {
 			e.printStackTrace();

@@ -2,10 +2,10 @@ package roj.plugins.llm;
 
 import roj.collect.ArrayList;
 import roj.config.ConfigMaster;
-import roj.text.ParseException;
 import roj.http.HttpClient;
 import roj.http.HttpRequest;
 import roj.text.CharList;
+import roj.text.ParseException;
 import roj.util.DynByteBuf;
 
 import java.io.File;
@@ -29,7 +29,7 @@ public class ChatTask {
 	public transient int totalInputTokens, totalOutputTokens;
 	private transient int initInputTokens;
 
-	public static ChatTask fromFile(File file) throws IOException, ParseException {return ConfigMaster.fromExtension(file).readObject(ChatTask.class, file).resolve();}
+	public static ChatTask fromFile(File file) throws IOException, ParseException {return ConfigMaster.fromExtension(file).readObject(file, ChatTask.class).resolve();}
 	public ChatTask() {}
 
 	private transient OAIChatCompletionRequest request;
@@ -43,7 +43,7 @@ public class ChatTask {
 
 	@SuppressWarnings("unchecked")
 	static <T> DynByteBuf encode(T o) throws IOException {return ConfigMaster.JSON.writeObject(/*(Serializer<T>) SerializerFactory.POOLED.serializer(o.getClass()), */o, DynByteBuf.allocate());}
-	static <T> T decode(HttpClient client, Class<T> response) throws IOException, ParseException {return ConfigMaster.JSON.readObject(response, client.stream());}
+	static <T> T decode(HttpClient client, Class<T> response) throws IOException, ParseException {return ConfigMaster.JSON.readObject(client.stream(), response);}
 
 	public String eval(String input) throws IOException {
 		List<OAIChatCompletionRequest.Message> messages = request.messages;

@@ -1,7 +1,5 @@
 package roj.crypt;
 
-import static roj.reflect.Unsafe.U;
-
 /**
  * LCG64 + WyHash64 + XorShift128
  * @author Roj234-N
@@ -19,12 +17,9 @@ final class L64W64X128Mix extends WyRand {
 	@Override
 	public void setSeed(long seed) {
 		l = seed;
-		w = seed += MIX_MULTIPLIER;
+		super.setSeed(seed += MIX_MULTIPLIER);
 		x0 = mixStafford13(seed += MIX_MULTIPLIER);
 		x1 = mixStafford13(seed += MIX_MULTIPLIER);
-
-		U.putReference(this, SEED, null);
-		U.putBoolean(this, HAVE_NEXT_NEXT_GAUSSIAN, false);
 	}
 
 	static long mixStafford13(long z) {

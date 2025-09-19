@@ -8,26 +8,28 @@ import roj.archive.zip.ZEntry;
 import roj.archive.zip.ZipArchive;
 import roj.archive.zip.ZipFileWriter;
 import roj.archive.zip.ZipOutput;
-import roj.asm.ClassNode;
 import roj.asmx.ClassResource;
 import roj.asmx.Context;
 import roj.ci.annotation.ReplaceConstant;
-import roj.ci.plugin.BuildContext;
 import roj.ci.plugin.Processor;
 import roj.collect.ArrayList;
 import roj.collect.HashMap;
 import roj.collect.HashSet;
-import roj.compiler.*;
+import roj.compiler.CompileContext;
+import roj.compiler.LavaCompileUnit;
+import roj.compiler.LavaCompiler;
+import roj.compiler.resolve.Resolver;
 import roj.compiler.test.TestPlugin;
-import roj.concurrent.TaskGroup;
-import roj.concurrent.TaskPool;
 import roj.concurrent.Timer;
 import roj.concurrent.TimerTask;
+import roj.concurrent.*;
 import roj.config.ConfigMaster;
-import roj.config.Parser;
+import roj.config.TextParser;
 import roj.config.YamlParser;
-import roj.config.mapper.ObjectMapperFactory;
+import roj.config.mapper.ObjectMapper;
+import roj.config.node.ConfigValue;
 import roj.config.node.MapValue;
+import roj.config.schema.Schema;
 import roj.crypt.jar.JarVerifier;
 import roj.event.EventBus;
 import roj.gui.Profiler;
@@ -62,7 +64,7 @@ import java.util.zip.Deflater;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
-import static roj.ci.plugin.BuildContext.*;
+import static roj.ci.BuildContext.*;
 import static roj.ui.CommandNode.argument;
 import static roj.ui.CommandNode.literal;
 
@@ -84,14 +86,14 @@ public final class MCMake {
 			OUTPUT_PATH = new File(BASE, "build");
 
 	public static final Timer TIMER = Timer.getDefault();
-	public static final TaskPool EXECUTOR = TaskPool.common();
 	public static final EventBus EVENT_BUS = new EventBus();
 
 	public static final Shell COMMANDS = new Shell("");
-	static final ObjectMapperFactory CONFIG = ObjectMapperFactory.getInstance()
+	static final ObjectMapper CONFIG = ObjectMapper.getInstance()
 			.serializeCharsetToString()
 			.registerAdapter(ArtifactVersion.class, MySerializer.class)
 			.registerAdapter(File.class, MySerializer.class);
+	private static Schema configSchema, envSchema;
 
 	public static MapValue config;
 	static IFileWatcher watcher;
@@ -113,14 +115,28 @@ public final class MCMake {
 	};
 
 	private static final ReentrantLock COMPILE_LOCK = new ReentrantLock();
-	public static void _lock() {if (!COMPILE_LOCK.tryLock()) {
-		Tty.warning("其他项目正在编译，您的操作已排队");
+	public static void _lock(boolean notifyWaiting) {if (!COMPILE_LOCK.tryLock()) {
+		if (notifyWaiting) Tty.warning("其他项目正在编译，您的操作已排队");
 		COMPILE_LOCK.lock();
 	}}
-	public static void _unlock() {COMPILE_LOCK.unlock();}
+	public static void _unlock() {
+		if (COMPILE_LOCK.getHoldCount() == 1) {
+			for (Project project : projects.values()) {
+				project.compiling = null;
+			}
+			MCMake.LOGGER.debug("Unlock cleanup");
+		}
+		COMPILE_LOCK.unlock();
+	}
 
 	@SuppressWarnings({"fallthrough"})
-	public static void main(String[] args) throws IOException, InterruptedException {
+	public static void main(String[] args) throws Exception {
+		var parser = new YamlParser();
+		var value = parser.parse(IOUtil.getTextResourceIL("config.schema.yml"));
+		configSchema = CONFIG.read(value, Schema.class);
+		value = parser.parse(IOUtil.getTextResourceIL("env.schema.yml"));
+		envSchema = CONFIG.read(value, Schema.class);
+
 		if (Tty.IS_RICH) {
 			Tty.write(Tty.Screen.clearScreen);
 			Tty.write("\u001b]0;MCMake v"+VERSION+" [Roj234]\7");
@@ -137,7 +153,7 @@ public final class MCMake {
 					Tty.write(sb1.append("\u001b[?25h\u001b8"));
 					sb1._free();
 				}
-				if (rainbowTask.isExpired()) {
+				if (((PeriodicTask) rainbowTask.task()).isExpired()) {
 					cancelRainbowTask.keyEnter('\b', true);
 				}
 			}, 1000/30, 30 * 10);
@@ -287,10 +303,7 @@ public final class MCMake {
 		importExportWorkspace(ws);
 		c.register(ws);
 
-		c.register(literal("reload").executes(ctx -> loadEnv())
-			.then(literal("all").executes(ctx -> {
-				if (loadConfig()) loadEnv();
-			})));
+		c.register(literal("reload").executes(ctx -> loadEnv()));
 
 		c.register(literal("zip").then(argument("路径", Argument.file()).executes(ctx -> {
 			var file = ctx.argument("路径", File.class);
@@ -325,10 +338,42 @@ public final class MCMake {
 			}
 		})));
 
+		c.register(literal("statistic").executes(ctx -> {
+			Statistic instance = Statistic.instance;
+			long buildCountManual = 0, buildCountTotal = 0, buildCountFail = 0, buildTimes = 0;
+			for (var entry : instance.buildTimes.selfEntrySet()) {
+				buildTimes += entry.value;
+			}
+			for (var entry : instance.buildCounts.selfEntrySet()) {
+				buildCountTotal += entry.value;
+				if (entry.key.endsWith(":manual")) buildCountManual += entry.value;
+			}
+			for (var entry : instance.buildFailures.selfEntrySet()) {
+				buildCountFail += entry.value;
+			}
+			System.out.println("自 "+DateFormat.toLocalDateTime(instance.since)+" 起,");
+			System.out.println("你已使用MCMake进行了 "+buildCountTotal+" 次构建，其中 "+buildCountManual+" 次("+TextUtil.toFixed(100d*buildCountManual/buildCountTotal, 2)+"%) 为手动构建");
+			System.out.println("这些构建共花费了 "+myTime(buildTimes)+", 成功率为 "+TextUtil.toFixed(100d*(buildCountTotal-buildCountFail)/buildCountTotal, 2)+"%");
+			long timeWasted = 30000 * buildCountTotal;
+			System.out.println("按ForgeGradle每次构建至少需要30秒计算, MCMake至少为你节约了 "+myTime(timeWasted-buildTimes));
+		}));
+
 		runScript();
 
 		c.sortCommands();
 		c.setAutoComplete(config.getBool("自动补全"));
+	}
+
+	private static String myTime(long time) {
+		long sec = time / 1000;
+		long ms = time - sec * 1000;
+		long min = sec / 60;
+		sec = sec - min * 60;
+		long hour = min / 60;
+		min = min - hour * 60;
+		long day = hour / 24;
+		hour = hour - day * 24;
+		return IOUtil.getSharedCharBuf().append(day).append("d ").padNumber(hour, 2).append(':').padNumber(min, 2).append(':').padNumber(sec, 2).append('.').padNumber(ms, 3).toString();
 	}
 
 	private static void updatePrompt() {COMMANDS.setPrompt("\u001b[33mMCMake"+(defaultProject == null ? "" : "\u001b[97m[\u001b[96m"+defaultProject.getName()+"\u001b[97m]")+"\u001b[33m > ");}
@@ -351,8 +396,7 @@ public final class MCMake {
 		COMMANDS.register(literal("runscript").comment("执行脚本").then(argument("脚本名称", Argument.fileIn(new File(CONF_PATH, "scripts"))).executes(ctx -> {
 			File scriptFile = ctx.argument("脚本名称", File.class);
 
-			List<CompileUnit> files = new ArrayList<>();
-			files.add(JavaCompileUnit.create(scriptFile.getName(), IOUtil.readString(scriptFile)));
+			var files = Collections.singletonList(LavaCompileUnit.create(scriptFile.getName(), IOUtil.readString(scriptFile)));
 
 			var compiler = new LavaCompiler();
 			new TestPlugin().pluginInit(compiler);
@@ -363,43 +407,20 @@ public final class MCMake {
 			compiler.features.add(roj.compiler.api.Compiler.OMISSION_NEW);
 			compiler.features.add(roj.compiler.api.Compiler.SHARED_STRING_CONCAT);
 			compiler.features.add(roj.compiler.api.Compiler.OMIT_CHECKED_EXCEPTION);
-			compiler.addLibrary(LambdaLinker.LIBRARY_SELF);
+			compiler.addLibrary(Resolver.Libs.SELF);
 
 			CompileContext.set(compiler.createContext());
-			block:
 			try {
-				files.get(0).S1parseStruct();
-				if (compiler.hasError()) break block;
-				compiler.getParsableUnits(files);
-				for (int i = 0; i < files.size(); i++) {
-					files.get(i).S2p1resolveName();
-				}
-				if (compiler.hasError()) break block;
-				for (int i = 0; i < files.size(); i++) {
-					files.get(i).S2p2resolveType();
-				}
-				if (compiler.hasError()) break block;
-				for (int i = 0; i < files.size(); i++) {
-					files.get(i).S2p3resolveMethod();
-				}
-				if (compiler.hasError()) break block;
-				for (int i = 0; i < files.size(); i++) {
-					files.get(i).S3processAnnotation();
-				}
-				if (compiler.hasError()) break block;
-				for (int i = 0; i < files.size(); i++) {
-					files.get(i).S4parseCode();
-				}
-				if (compiler.hasError()) break block;
+				var result = compiler.compile(files);
 
-				var sandbox = new Sandbox("fmdScript", MCMake.class.getClassLoader());
-				sandbox.restriction = null;
+				if (result != null) {
+					var sandbox = new Sandbox("fmdScript", MCMake.class.getClassLoader());
+					sandbox.restriction = null;
+					for (var node : result) sandbox.add(node);
 
-				for (var node : compiler.getGeneratedClasses()) sandbox.add(node);
-				for (var node : files) sandbox.add(node);
-
-				MethodHandle handle = MethodHandles.lookup().findStatic(sandbox.loadClass(files.get(0).name().replace('/', '.')), "main", MethodType.methodType(void.class, String[].class));
-				handle.invoke(new String[0]);
+					MethodHandle handle = MethodHandles.lookup().findStatic(sandbox.loadClass(files.get(0).name().replace('/', '.')), "main", MethodType.methodType(void.class, String[].class));
+					handle.invoke(new String[0]);
+				}
 			} catch (Throwable e) {
 				e.printStackTrace();
 			} finally {
@@ -414,13 +435,13 @@ public final class MCMake {
 				 var bar = new EasyProgressBar("导入工作空间", "B")) {
 				archive.setMemoryLimitKb(26214400);
 
-				InputStream in = archive.getStream("workspace.yml");
+				InputStream in = archive.getInputStream("workspace.yml");
 				if (in == null) {
 					Tty.error("不是有效的归档文件：找不到workspace.yml");
 					return;
 				}
 
-				Workspace workspace = ConfigMaster.YAML.readObject(MCMake.CONFIG.serializer(Workspace.class), in);
+				Workspace workspace = CONFIG.read(in, Workspace.class, new YamlParser());
 				workspace.id = IOUtil.safePath(workspace.id);
 
 				if (MCMake.workspaces.containsKey(workspace.id)) {
@@ -479,7 +500,7 @@ public final class MCMake {
 					workspace.mapping = new File(CACHE_PATH, "ws-"+workspace.id+"-mapping.lzma");
 				}
 
-				TaskGroup monitor = TaskPool.common().newGroup();
+				TaskGroup monitor = TaskPool.cpu().newGroup();
 				archive.parallelDecompress(monitor, (entry, in1) -> {
 					if (entry.isDirectory() || entry.getName().equals("workspace.yml")) return;
 
@@ -516,7 +537,7 @@ public final class MCMake {
 				}
 			}
 		}))).then(literal("export").then(argument("工作空间名称", Argument.oneOf(MCMake.workspaces)).executes(ctx -> {
-			Workspace space = MCMake.CONFIG.serializer(Workspace.class).deepcopy(ctx.argument("工作空间名称", Workspace.class));
+			Workspace space = MCMake.CONFIG.reader(Workspace.class).copyOf(ctx.argument("工作空间名称", Workspace.class));
 
 			try (var qzfw = new QZFileWriter("workspace-"+space.id+".7z");
 				 var bar = new EasyProgressBar("导出"+space.id, "B")) {
@@ -527,7 +548,7 @@ public final class MCMake {
 				files.addAll(space.mappedDepend);
 				files.addAll(space.unmappedDepend);
 
-				TaskGroup monitor = TaskPool.common().newGroup();
+				TaskGroup monitor = TaskPool.cpu().newGroup();
 
 				for (File file : files) {
 					monitor.executeUnsafe(() -> {
@@ -561,7 +582,7 @@ public final class MCMake {
 				qzfw.setCodec(new LZMA2(new LZMA2Options(9).setDictSize(524288)));
 
 				qzfw.beginEntry(QZEntry.of("workspace.yml"));
-				ConfigMaster.YAML.writeObject(MCMake.CONFIG.serializer(Workspace.class), space, IOUtil.getSharedByteBuf()).writeToStream(qzfw);
+				ConfigMaster.YAML.writeObject(MCMake.CONFIG.writer(Workspace.class), space, IOUtil.getSharedByteBuf()).writeToStream(qzfw);
 
 				bar.end("成功");
 			}
@@ -590,11 +611,11 @@ public final class MCMake {
 
 			arc.prepare();
 
-			String ymldata = ConfigMaster.YAML.writeObject(CONFIG.serializer(Env.Project.class), proj.serialize(), IOUtil.getSharedCharBuf()).toString();
+			String ymldata = ConfigMaster.YAML.writeObject(CONFIG.writer(Env.Project.class), proj.serialize(), IOUtil.getSharedCharBuf()).toString();
 			arc.appendBinary(new QZCoder[]{Copy.INSTANCE}, Collections.singletonList(ymldata), Collections.singletonList(QZEntry.of("project.yml")));
 
 			try (var bar = new EasyProgressBar("导出项目")) {
-				arc.compress(TaskPool.common(), bar);
+				arc.compress(TaskPool.cpu(), bar);
 			}
 		})))
 		.then(literal("import").then(argument("项目归档", Argument.file()).executes(ctx -> {
@@ -602,13 +623,13 @@ public final class MCMake {
 
 			try (var archive = new QZArchive(archiveFile);
 				 var bar = new EasyProgressBar("导入项目", "B")) {
-				InputStream in = archive.getStream("project.yml");
+				InputStream in = archive.getInputStream("project.yml");
 				if (in == null) {
 					Tty.error("不是有效的归档文件：找不到project.yml");
 					return;
 				}
 
-				Env.Project pojo = ConfigMaster.YAML.readObject(CONFIG.serializer(Env.Project.class), in);
+				Env.Project pojo = CONFIG.read(in, Env.Project.class, new YamlParser());
 				pojo.name = IOUtil.safePath(pojo.name);
 
 				if (projects.containsKey(pojo.name)) {
@@ -636,7 +657,7 @@ public final class MCMake {
 					bar.addTotal(entry.getSize());
 				}
 
-				TaskGroup monitor = TaskPool.common().newGroup();
+				TaskGroup monitor = TaskPool.cpu().newGroup();
 				archive.parallelDecompress(monitor, (entry, in1) -> {
 					if (entry.isDirectory() || entry.getName().equals("project.yml")) return;
 					var file = new File(basePath, IOUtil.safePath(entry.getName()));
@@ -665,7 +686,8 @@ public final class MCMake {
 	//region 配置文件
 	private static boolean loadConfig() {
 		try {
-			config = new YamlParser().parse(new File(CONF_PATH, "config.yml"), Parser.NO_DUPLICATE_KEY| Parser.ORDERED_MAP).asMap();
+			config = new YamlParser(TextParser.NO_DUPLICATE_KEY|TextParser.ORDERED_MAP).parse(new File(CONF_PATH, "config.yml")).asMap();
+			configSchema.validate(config);
 		} catch (Exception e) {
 			LOGGER.fatal("系统配置config.yml解析失败!", e);
 			return false;
@@ -733,8 +755,10 @@ public final class MCMake {
 			return;
 		}
 
-		var env = ConfigMaster.YAML.readObject(CONFIG.serializer(Env.class), file);
+		ConfigValue envData = new YamlParser().parse(file);
+		envSchema.validate(envData);
 
+		var env = CONFIG.reader(Env.class).read(envData);
 		var deleteIml = !projects.isEmpty();
 
 		workspaces.clear();
@@ -769,7 +793,7 @@ public final class MCMake {
 	private static void saveEnv() {
 		var env = getEnvPojo();
 		try {
-			ConfigMaster.YAML.writeObject(CONFIG.serializer(Env.class), env, new File(CONF_PATH, "env.yml"));
+			ConfigMaster.YAML.writeObject(CONFIG.writer(Env.class), env, new File(CONF_PATH, "env.yml"));
 		} catch (IOException e) {
 			LOGGER.error("配置保存失败", e);
 		}
@@ -807,17 +831,18 @@ public final class MCMake {
 	//endregion
 
 	public static int build(Set<String> args, Project project) throws Exception {
-		if (!project.conf.type.canBuild()) {
+		/*if (!project.conf.type.canBuild()) {
 			Tty.error("项目["+project.getName()+"]是"+project.conf.type+"，只能作为其它项目的依赖，而不能单独构建");
 			return 1;
-		}
+		}*/
 
-		_lock();
+		_lock(!args.contains("auto"));
 
 		long startTime = System.currentTimeMillis();
 		boolean success;
 		block:
 		try {
+			long depMod = 0;
 			if (!project.getProjectDependencies().isEmpty()) {
 				Profiler.startSection("depend");
 				try (var bar = new ProgressBar()) {
@@ -830,20 +855,24 @@ public final class MCMake {
 					for (int i = 0; i < allDependencies.size(); i++) {
 						Project depend = allDependencies.get(i);
 
-						depend.compiling = true;
 						Profiler.startSection(depend.getName());
 
 						bar.setName("构建依赖["+depend.getName()+"]");
 						bar.setProgress((double)i / allDependencies.size());
 
+						File artifact = new File(OUTPUT_PATH, depend.getOutputFormat());
+
+						depMod = Math.max(depMod, (depend.conf.type.hasFile() ? depend.unmappedJar : artifact).lastModified());
+
+						MCMake.LOGGER.debug("Build [{}]: config={}", depend.getName(), copyArgs);
 						try {
-							success = depend.conf.type.canBuild() ? build(copyArgs, depend, new File(OUTPUT_PATH, depend.getOutputFormat())) : compile(copyArgs, depend);
+							success = depend.conf.type.canBuild() ? build(copyArgs, depend, artifact) : compile(copyArgs, depend);
 							if (!success) {
+								Statistic.afterProjectBuild(depend.getName(), System.currentTimeMillis() - depend.compiling.buildStartTime, args, false);
 								bar.end("构建失败");
 								break block;
 							}
 						} finally {
-							depend.compiling = false;
 							if (depend.mappedWriter != null) depend.mappedWriter.end();
 						}
 						Profiler.endSection();
@@ -854,17 +883,24 @@ public final class MCMake {
 
 			if (args.contains("full/inherit")) args.add("full");
 
-			File jarFile = new File(OUTPUT_PATH, project.getOutputFormat());
-			success = build(args, project, jarFile);
-			Statistic.afterProjectBuild(project.getName(), System.currentTimeMillis() - startTime, args, success);
-			if (!success && args.contains("full")) watcher.remove(project);
+			File artifact = new File(OUTPUT_PATH, project.getOutputFormat());
+			if (!args.contains("full") && !project.conf.type.hasFile() && artifact.lastModified() > depMod) {
+				if (!args.contains("silent")) Tty.success("无变更"+"["+project.getName()+"]! "+(System.currentTimeMillis()-startTime)+"ms");
+				return 0;
+			}
+
+			MCMake.LOGGER.debug("Build [{}]: config={}", project.getName(), args);
+			success = build(args, project, artifact);
+			if (!success) {
+				Statistic.afterProjectBuild(project.getName(), System.currentTimeMillis() - project.compiling.buildStartTime, args, false);
+				if (args.contains("full")) watcher.remove(project);
+			}
 		} finally {
 			if (project.mappedWriter != null) try {
 				project.mappedWriter.end();
 			} catch (Throwable e) {
 				LOGGER.warn("mapperWriter", e);
 			}
-
 			_unlock();
 		}
 
@@ -876,49 +912,42 @@ public final class MCMake {
 
 		Profiler.startSection("environment");
 
-		long listSourceTime = System.currentTimeMillis();
-		long lastModified = p.unmappedJar.lastModified();
-		var context = new BuildContext(p);
-		context.increment = increment;
+		var context = new BuildContext(p, increment);
 
 		Profiler.endStartSection("compile");
-		if (!compile(args, p, increment > 0 ? lastModified : -1, context)) {
+		if (!compile(args, p, context)) {
 			Profiler.endSection();
 			return false;
 		}
 
-		boolean wasUpdated = context.getClasses().size() != 0;
+		boolean wasUpdated = context.updateCount != 0;
 
 		Profiler.endStartSection("script");
-		if (!p.unmappedJar.setLastModified(listSourceTime)) Tty.warning("设置时间戳失败!");
-		if (!args.contains("silent") || wasUpdated) Tty.success("构建成功["+p.getName()+"]! "+(System.currentTimeMillis()-listSourceTime)+"ms");
+		if (wasUpdated) Statistic.afterProjectBuild(p.getName(), System.currentTimeMillis() - context.buildStartTime, args, true);
+		if (wasUpdated && !p.unmappedJar.setLastModified(context.buildStartTime)) Tty.warning("设置时间戳失败!");
+		if (wasUpdated || !args.contains("silent")) Tty.success("构建成功["+p.getName()+"]! "+(System.currentTimeMillis()-context.buildStartTime)+"ms");
 		p.compileSuccess(increment > 0);
 
 		Profiler.endSection();
 		return true;
 	}
-	private static boolean build(Set<String> args, Project p, File jarFile) throws IOException {
-		int increment = p.unmappedJar.length() != 0 && !args.contains("full") ? jarFile.isFile() ? INC_UPDATE : INC_REBUILD : INC_FULL;
+	private static boolean build(Set<String> args, Project p, File artifact) throws IOException {
+		int increment = p.unmappedJar.length() != 0 && !args.contains("full") ? artifact.isFile() ? INC_UPDATE : INC_REBUILD : INC_FULL;
 
 		Profiler.startSection("lockOutput");
 
-		ZipOutput mappedWriter = lockOutput(p, jarFile);
+		ZipOutput mappedWriter = lockOutput(p, artifact);
 		mappedWriter.begin(increment == INC_UPDATE);
 		mappedWriter.setComment("MCMake "+VERSION+" by Roj234\r\n" +
 				"https://www.github.com/roj234/rojlib");
 
 		Profiler.endStartSection("environment");
 
-		long listSourceTime = System.currentTimeMillis();
-		long prevCompile = p.unmappedJar.lastModified();
-		var context = new BuildContext(p);
-		context.increment = increment;
-
-		Future<Integer> resources = EXECUTOR.submit(p.getResourceTask(increment == INC_UPDATE ? prevCompile : -1, context));
-		context.initCache();
+		var context = new BuildContext(p, increment);
+		Future<Integer> resources = TaskPool.cpu().submit(p.getAsyncResourceWriter(context));
 
 		Profiler.endStartSection("compile");
-		if (!compile(args, p, increment == INC_FULL ? -1 : prevCompile, context)) {
+		if (!compile(args, p, context)) {
 			Profiler.endStartSection("writeResource [FAILURE]");
 			resources.cancel(false);
 			try {
@@ -933,7 +962,8 @@ public final class MCMake {
 		var classes = context.getClasses();
 
 		Profiler.endStartSection("getDependencyClasses");
-		p.getDependencyClasses(context, prevCompile);
+		for (var dependency : p.getBundledDependencies())
+			dependency.getClasses(context);
 
 		Profiler.endStartSection("afterCompile");
 		int oldSize = classes.size();
@@ -943,14 +973,15 @@ public final class MCMake {
 			Profiler.endSection();
 			return false;
 		}
-		LOGGER.debug("GetDependencyClasses {}, {} => {}", increment, oldSize, classes.size());
+		LOGGER.debug("afterCompile post: increment={}, classes: {} => {}", increment, oldSize, classes.size());
 
 		int resourceUpdated = 0;
 		Profiler.endStartSection("writeResource");
 		try {
 			resourceUpdated = resources.get();
 		} catch (Exception e) {
-			Tty.warning("资源更新失败["+p.getName()+"]", e);
+			LOGGER.error("资源更新失败["+p.getName()+"]", e);
+			return false;
 		}
 
 		int extraWritten = context.writeExtra(mappedWriter);
@@ -960,10 +991,10 @@ public final class MCMake {
 		try {
 			for (int i = 0; i < context.updateCount; i++) {
 				ctx = classes.get(i);
-				mappedWriter.set(ctx.getFileName(), ctx::getCompressedShared);
+				mappedWriter.set(ctx.getFileName(), ctx::getCompressedShared, context.buildStartTime);
 			}
 		} catch (Throwable e) {
-			Tty.error("代码更新失败["+p.getName()+"/"+ctx.getFileName()+"]", e);
+			LOGGER.error("代码更新失败["+p.getName()+":"+ctx.getFileName()+"]", e);
 			return false;
 		}
 
@@ -981,8 +1012,9 @@ public final class MCMake {
 		}
 
 		Profiler.endStartSection("script");
-		if (p.conf.type.hasFile() && !p.unmappedJar.setLastModified(listSourceTime)) Tty.warning("设置时间戳失败!");
-		if (!args.contains("silent") || wasUpdated) Tty.success((wasUpdated?"构建成功":"无变更")+"["+p.getName()+"]! "+(System.currentTimeMillis()-listSourceTime)+"ms");
+		if (wasUpdated) Statistic.afterProjectBuild(p.getName(), System.currentTimeMillis() - context.buildStartTime, args, true);
+		if (wasUpdated && !(p.conf.type.hasFile() ? p.unmappedJar : artifact).setLastModified(context.buildStartTime)) Tty.warning("设置时间戳失败!");
+		if (wasUpdated || !args.contains("silent")) Tty.success((wasUpdated?"构建成功":"无变更")+"["+p.getName()+"]! "+(System.currentTimeMillis()-context.buildStartTime)+"ms");
 		p.compileSuccess(increment > 0);
 
 		Profiler.endSection();
@@ -1001,62 +1033,8 @@ public final class MCMake {
 			IOUtil.closeSilently(zo);
 
 			p.mappedWriter = zo = new ZipOutput(jarFile);
-			zo.setCompress(true);
 		}
 		return zo;
-	}
-	private static List<File> listSourceFile(Project p, Set<String> classWasDeleted, long modifyAfter) throws IOException {
-		List<File> sources;
-		Set<String> sourceChanged;
-		if (modifyAfter >= 0 && !(sourceChanged = watcher.getModified(p, FileWatcher.ID_SRC)).contains(null)) {
-			// 初始化依赖图
-			if (p.dependencyGraph.isEmpty()) {
-				Profiler.startSection("dependencyGraph");
-				ZipArchive za = p.unmappedWriter.getArchive();
-				for (ZEntry ze : za.entries()) {
-					p.dependencyGraph.add(ClassNode.parseSkeleton(za.get(ze)));
-				}
-				p.unmappedWriter.close();
-				Profiler.endSection();
-			}
-
-			String srcPrefix = p.srcPath.getAbsolutePath();
-			int srcPrefixLen = srcPrefix.length()+1;
-
-			synchronized (sourceChanged) {
-				for (String path : new ArrayList<>(sourceChanged)) {
-					File file = new File(path);
-					var className = path.substring(srcPrefixLen, path.length()-5).replace(File.separatorChar, '/'); // get roj/test/Asdf
-					if (file.isFile()) {
-						LOGGER.trace("Modified: {}", className);
-						for (String referent : p.dependencyGraph.get(className)) {
-							LOGGER.trace("Referenced by: {}", referent);
-							referent = srcPrefix+File.separatorChar+referent+".java";
-							sourceChanged.add(referent);
-						}
-					} else {
-						LOGGER.trace("Deleted: {}", className);
-						classWasDeleted.add(className);
-					}
-				}
-
-				sources = new ArrayList<>(sourceChanged.size());
-
-				for (String path : sourceChanged) {
-					File file = new File(path);
-					if (file.isFile())
-						sources.add(file);
-				}
-
-				p.dependencyGraph.remove(sourceChanged);
-				p.dependencyGraph.remove(classWasDeleted);
-			}
-			return sources;
-		}
-
-		p.dependencyGraph.clear();
-		Predicate<File> incrFilter = file -> IOUtil.extensionName(file.getName()).equals("java") && file.lastModified() > modifyAfter;
-		return IOUtil.listFiles(p.srcPath, incrFilter);
 	}
 	private static String getClassPath(Project p, boolean increment) {
 		var classpath = new CharList(200);
@@ -1083,20 +1061,24 @@ public final class MCMake {
 
 		return classpath.toStringAndFree();
 	}
-	private static boolean compile(Set<String> args, Project p, long modifyAfter, BuildContext context) throws IOException {
+	private static boolean compile(Set<String> args, Project p, BuildContext context) throws IOException {
 		int increment = context.increment;
 
-		Set<String> removedSources = new HashSet<>();
 		Profiler.startSection("listSources");
-		List<File> sources = listSourceFile(p, removedSources, modifyAfter);
-		if (sources.isEmpty() && removedSources.isEmpty() && increment != INC_LOAD && increment != INC_REBUILD) {
+
+		List<File> changedSources = context.sources.getChanged();
+		Set<String> removedSources = context.sources.getDeleted();
+
+		LOGGER.debug("Source {} changed {} delete ", changedSources.size(), removedSources.size());
+
+		if (changedSources.isEmpty() && removedSources.isEmpty() && increment != INC_LOAD && increment != INC_REBUILD) {
 			context.setClasses(new ArrayList<>());
 			Profiler.endSection();
 			return true;
 		}
 
 		List<? extends ClassResource> outputs;
-		if (sources.isEmpty()) {
+		if (changedSources.isEmpty()) {
 			outputs = new ArrayList<>();
 		} else {
 			Profiler.endStartSection("parameters");
@@ -1108,13 +1090,13 @@ public final class MCMake {
 			options.addAll("-cp", classPath, "-encoding", p.charset.name());
 			p.compiler.modifyOptions(options, p);
 
-			LOGGER.debug("Compile {}, argBefore={}", increment, options);
+			LOGGER.debug("ModifyArg pre: increment={}, argument={}", increment, options);
 			Profiler.endStartSection("beforeCompile");
-			increment = context.beforeCompile(options, sources, increment);
-			LOGGER.debug("Compile {}, argAfter={}", increment, options);
+			increment = context.beforeCompile(options, changedSources, increment);
+			LOGGER.debug("ModifyArg post: increment={}, argument={}", increment, options);
 
 			Profiler.endStartSection("compile");
-			outputs = p.compiler.compile(options, sources, args.contains("diagnostic"));
+			outputs = p.compiler.compile(options, changedSources, args.contains("diagnostic"));
 
 			// 编译失败
 			if (outputs == null) {
@@ -1123,6 +1105,7 @@ public final class MCMake {
 			}
 		}
 
+		LOGGER.debug("Compile successful with {} outputs", outputs.size());
 		Profiler.endStartSection("outputJar");
 
 		List<Context> compilerOutput = Helpers.cast(outputs);
@@ -1141,6 +1124,7 @@ public final class MCMake {
 				compilerOutput.set(i, ctx);
 
 				p.dependencyGraph.add(ctx.getData());
+				p.annotationRepo.add(ctx.getData());
 			}
 
 			// 删除
@@ -1176,7 +1160,7 @@ public final class MCMake {
 					}
 				}
 
-				LOGGER.debug("Load {} contexts", za.entries().size() - changed.size());
+				LOGGER.debug("Load {} contexts from cache", za.entries().size() - changed.size());
 				Profiler.endSection();
 			}
 		} catch (Throwable e) {

@@ -13,12 +13,17 @@ package roj.archive.xz.lz;
 import roj.io.CorruptedInputException;
 import roj.reflect.Unsafe;
 import roj.util.ArrayCache;
+import roj.util.NativeMemory;
 
 import java.io.DataInput;
 import java.io.IOException;
 
+import static roj.reflect.Unsafe.U;
+
 public final class LZDecoder {
-	private final byte[] buf;
+	private final NativeMemory bufHandle;
+	private final long buf;
+	//private final byte[] buf;
 	private final int bufSize; // To avoid buf.length with an array-cached buf.
 	private int pos, limit; // they were initialized to 0
 	private int start, full;
@@ -26,25 +31,28 @@ public final class LZDecoder {
 
 	public LZDecoder(int dictSize, byte[] presetDict) {
 		bufSize = dictSize;
-		buf = ArrayCache.getByteArray(dictSize, false);
-		buf[dictSize-1] = 0x00;
+		bufHandle = new NativeMemory();
+		buf = bufHandle.allocate(bufSize);
+		U.putByte(buf + dictSize - 1, (byte) 0);
 
 		if (presetDict != null) {
 			pos = Math.min(presetDict.length, dictSize);
 			full = pos;
 			start = pos;
-			System.arraycopy(presetDict, presetDict.length - pos, buf, 0, pos);
+			U.copyMemory(presetDict, Unsafe.ARRAY_BYTE_BASE_OFFSET + presetDict.length - pos, null, buf, pos);
+			//System.arraycopy(presetDict, presetDict.length - pos, buf, 0, pos);
 		}
 	}
 
-	public void putArraysToCache() { ArrayCache.putArray(buf); }
+	public void putArraysToCache() { bufHandle.free(); }
 
 	public void reset() {
 		start = 0;
 		pos = 0;
 		full = 0;
 		limit = 0;
-		buf[bufSize - 1] = 0x00;
+		U.putByte(buf + bufSize - 1, (byte) 0);
+		//buf[bufSize - 1] = 0x00;
 	}
 
 	public void setLimit(int outMax) {
@@ -59,13 +67,14 @@ public final class LZDecoder {
 
 	public int getByte(int dist) {
 		int offset = pos - dist - 1;
-		if (dist >= pos) offset += bufSize;
+		if (/*pos <= dist*/offset < 0) offset += bufSize;
 
-		return buf[offset] & 0xFF;
+		return U.getByte(buf + offset) & 0xFF;//buf[offset] & 0xFF;
 	}
 
 	public void putByte(int b) {
-		buf[pos++] = (byte) b;
+		U.putByte(buf + pos++, (byte) b);
+		//buf[pos++] = (byte) b;
 
 		if (full < pos) full = pos;
 	}
@@ -90,7 +99,8 @@ public final class LZDecoder {
 			int copySize = Math.min(bufSize - back, left);
 			assert copySize <= dist + 1;
 
-			System.arraycopy(buf, back, buf, pos, copySize);
+			U.copyMemory(null, buf+back, null, buf+pos, copySize);
+			//System.arraycopy(buf, back, buf, pos, copySize);
 			pos += copySize;
 			back = 0;
 			left -= copySize;
@@ -110,7 +120,8 @@ public final class LZDecoder {
 			// allows the next iteration of this loop to copy (up to)
 			// twice the number of bytes.
 			int copySize = Math.min(left, pos - back);
-			System.arraycopy(buf, back, buf, pos, copySize);
+			U.copyMemory(null, buf+back, null, buf+pos, copySize);
+			//System.arraycopy(buf, back, buf, pos, copySize);
 			pos += copySize;
 			left -= copySize;
 		} while (left > 0);
@@ -124,8 +135,15 @@ public final class LZDecoder {
 
 	public void copyUncompressed(DataInput inData, int len) throws IOException {
 		int copySize = Math.min(bufSize - pos, len);
-		inData.readFully(buf, pos, copySize);
-		pos += copySize;
+		var ioBuf = ArrayCache.getIOBuffer();
+		while (copySize > 0) {
+			int copied = Math.min(copySize, bufSize);
+			inData.readFully(ioBuf, 0, copied);
+			U.copyMemory(ioBuf, Unsafe.ARRAY_BYTE_BASE_OFFSET, null, buf + pos, copied);
+			pos += copied;
+			copySize -= copied;
+		}
+		ArrayCache.putArray(ioBuf);
 
 		if (full < pos) full = pos;
 	}
@@ -135,8 +153,7 @@ public final class LZDecoder {
 		int copySize = pos - start;
 		if (pos == bufSize) pos = 0;
 
-		if (outOff != 0) // object header size > 0
-			Unsafe.U.copyMemory(buf, (long) Unsafe.ARRAY_BYTE_BASE_OFFSET+start, out, outOff, copySize);
+		U.copyMemory(null, buf+start, out, outOff, copySize);
 		//System.arraycopy(buf, start, out, outOff, copySize);
 		start = pos;
 

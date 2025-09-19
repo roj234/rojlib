@@ -2,6 +2,7 @@ package roj.asm.cp;
 
 import roj.text.CharList;
 import roj.text.FastCharset;
+import roj.text.Tokenizer;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
 
@@ -54,7 +55,7 @@ public final class CstUTF extends Constant {
 		return DynByteBuf.countJavaUTF(data.toString());
 	}
 
-	public String toString() { return super.toString() + ' ' + str(); }
+	public String toString() { return super.toString() + ' ' + Tokenizer.escape(str()); }
 
 	@Override
 	public byte type() { return Constant.UTF; }

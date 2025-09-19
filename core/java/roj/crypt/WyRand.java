@@ -1,17 +1,21 @@
 package roj.crypt;
 
-import roj.reflect.Unsafe;
+import roj.optimizer.FastVarHandle;
+import roj.reflect.Handles;
 
+import java.lang.invoke.VarHandle;
 import java.util.Random;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * @author Roj234-N
  * @since 2025/5/10 5:54
  */
+@FastVarHandle
 class WyRand extends Random {
-	static final long
-			SEED = Unsafe.fieldOffset(Random.class, "seed"),
-			HAVE_NEXT_NEXT_GAUSSIAN = Unsafe.fieldOffset(Random.class, "haveNextNextGaussian");
+	private static final VarHandle
+			SEED = Handles.lookup().findVarHandle(Random.class, "seed", AtomicLong.class),
+			HAVE_NEXT_NEXT_GAUSSIAN = Handles.lookup().findVarHandle(Random.class, "haveNextNextGaussian", boolean.class);
 
 	static final long WY_INCREMENT = 0x2d358dccaa6c78a5L, WY_XOR = 0x8bb84b93962eacc9L;
 
@@ -23,14 +27,15 @@ class WyRand extends Random {
 	@Override
 	public void setSeed(long seed) {
 		w = seed;
-		Unsafe.U.putReference(this, SEED, null);
+		SEED.set(this, seed);
+		HAVE_NEXT_NEXT_GAUSSIAN.set(this, false);
 	}
 
-	@Override
+	/*@Override
 	public double nextGaussian() {
 		long r = nextLong();
 		return ((r&0x1fffff) + ((r>>>21)&0x1fffff) + ((r>>>42)&0x1fffff)) * 0x1.0p-20 - 3.0;
-	}
+	}*/
 
 	@Override
 	public double nextDouble() {return (nextLong() >>> 11) * 0x1.0p-53;}

@@ -12,7 +12,7 @@ package roj.archive.xz.lzma;
 
 import roj.archive.xz.rangecoder.RangeCoder;
 
-abstract class LZMACoder {
+abstract sealed class LZMACoder permits LZMADecoder, LZMAEncoder {
 	static final int LOW_SYMBOLS = 1 << 3, MID_SYMBOLS = 1 << 3, HIGH_SYMBOLS = 1 << 8;
 
 	static final int POS_STATES_MAX = 1 << 4;

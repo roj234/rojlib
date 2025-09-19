@@ -14,15 +14,15 @@ import static roj.asm.type.Type.*;
  * @author Roj234
  * @since 2021/5/29 17:16
  */
-public abstract class AnnVal extends ConfigValue {
+public abstract sealed class AnnVal extends ConfigValue permits TypeVal, EnumVal {
 	public static void serialize(ConfigValue entry, DynByteBuf w, ConstantPool pool) {
 		var serializer = new AnnotationEncoder();
 		serializer.init(pool, w);
 		entry.accept(serializer);
 	}
 
-	public static ConfigValue valueOf(Type type) {return new AClass(type);}
-	public static ConfigValue ofEnum(String name, String name1) {return new AEnum(name, name1);}
+	public static ConfigValue valueOf(Type type) {return new TypeVal(type);}
+	public static ConfigValue ofEnum(String name, String name1) {return new EnumVal(name, name1);}
 
 	public static final char STRING = 's', ENUM = 'e', ANNOTATION_CLASS = 'c', ANNOTATION = '@';
 
@@ -45,19 +45,19 @@ public abstract class AnnVal extends ConfigValue {
 					case ANNOTATION_CLASS -> valueOf(Type.getType(((CstUTF) c).str()));
 					default -> throw new IllegalStateException("Unexpected value: " + type);
 				};
-			case ENUM: return new AEnum(checkSemicolon(((CstUTF) pool.get(r)).str()), ((CstUTF) pool.get(r)).str());
+			case ENUM: return new EnumVal(checkSemicolon(((CstUTF) pool.get(r)).str()), ((CstUTF) pool.get(r)).str());
 			case ANNOTATION: return Annotation.parse(pool, r);
 			case ARRAY:
 				int len = r.readUnsignedShort();
 				List<ConfigValue> annos = new ArrayList<>(len);
 				while (len-- > 0) annos.add(parse(pool, r));
-				return new AList(annos);
+				return new ArrayVal(annos);
 		}
 		throw new IllegalArgumentException("Unknown annotation value type '"+(char) type+"'");
 	}
 
 	static String checkSemicolon(String str) {
-		if (!str.endsWith(";")) throw new IllegalArgumentException("无效的枚举类型:"+str);
+		if (!str.endsWith(";")) throw new IllegalArgumentException("无效的类型(要求描述符而不是类名):"+str);
 		return str;
 	}
 

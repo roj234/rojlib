@@ -93,10 +93,10 @@ public class GenericTemplate extends CodeWriter {
 
 	@Override
 	public void newArray(byte arrayType) {
-		var b = FromPrimitiveArrayId(arrayType);
+		var b = Type.getByArrayType(arrayType);
 		if (b == templateType) {
 			if (internalType.isPrimitive()) {
-				arrayType = ToPrimitiveArrayId(internalType.type);
+				arrayType = Type.getArrayType(internalType.type);
 			} else {
 				super.clazz(Opcodes.ANEWARRAY, internalType.getActualClass());
 				return;

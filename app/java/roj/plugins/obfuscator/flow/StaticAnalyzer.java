@@ -5,8 +5,6 @@ import roj.archive.zip.ZipArchive;
 import roj.asm.ClassNode;
 import roj.asm.MemberDescriptor;
 import roj.asm.MethodNode;
-import roj.asm.attr.Attribute;
-import roj.asm.attr.UnparsedAttribute;
 import roj.asm.cp.CstClass;
 import roj.asm.cp.CstRef;
 import roj.asm.insn.CodeVisitor;

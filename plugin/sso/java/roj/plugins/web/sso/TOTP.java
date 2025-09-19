@@ -32,7 +32,7 @@ public final class TOTP {
 
 		int otp = i % 1000000;
 
-		char[] data = ArrayCache.getCharArray(6, false);
+		char[] data = ArrayCache.getIOCharBuffer();
 		int len = TextUtil.digitCount(otp);
 		for (int j = 0; j < 6-len; j++) data[j] = '0';
 		CharList.getChars(otp, 6, data);

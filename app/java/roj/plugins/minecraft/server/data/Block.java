@@ -3,13 +3,13 @@ package roj.plugins.minecraft.server.data;
 import roj.collect.HashMap;
 import roj.collect.HashSet;
 import roj.collect.Hasher;
-import roj.compiler.plugins.asm.ASM;
 import roj.config.NbtParser;
-import roj.config.mapper.ObjectMapperFactory;
+import roj.config.mapper.ObjectMapper;
 import roj.config.mapper.Optional;
 import roj.io.ByteInputStream;
 import roj.plugins.minecraft.server.MinecraftServer;
 import roj.util.Helpers;
+import roj.util.JVM;
 
 import java.io.IOException;
 import java.util.Arrays;
@@ -28,8 +28,7 @@ public final class Block {
 	private static HashSet<Object> _tmp;
 	static {
 		try (var in = MinecraftServer.INSTANCE.getResource("assets/Blocks_1.19.2.nbt")) {
-			var conv = ObjectMapperFactory.SAFE.serializer(BlockInfo.class);
-			var nbt = new NbtParser();
+			var conv = ObjectMapper.SAFE.reader(BlockInfo.class);
 
 			Comparator<PropertyInfo> propertyCmp = (o1, o2) -> o1.name.compareTo(o2.name);
 			var intern = new HashSet<>(Hasher.array(Object[].class));
@@ -39,7 +38,7 @@ public final class Block {
 			int i = 0;
 			while (true) {
 				conv.reset();
-				nbt.parse(mdi, 1, conv);
+				NbtParser.Parse(mdi, conv);
 				if (!conv.finished()) break;
 
 				BlockInfo info = conv.get();
@@ -89,7 +88,7 @@ public final class Block {
 				Map<String, String> exist = (Map<String, String>) _tmp.find(map);
 				if (map == exist) {
 					if (map.size() == 1) exist = Collections.singletonMap(prop.name, choice);
-					else exist = ASM.TARGET_JAVA_VERSION >= 10 ? Map.copyOf(exist) : new HashMap<>(exist);
+					else exist = JVM.VERSION >= 10 ? Map.copyOf(exist) : new HashMap<>(exist);
 					_tmp.add(exist);
 				}
 				STATE_ID.register(new Block(base, exist), STATE_ID.nextId());
@@ -169,7 +168,7 @@ public final class Block {
 		HashMap<String, String> map = new HashMap<>(props.length);
 		for (PropertyInfo p : props) map.put(p.name, p.choices[0]);
 
-		return ASM.TARGET_JAVA_VERSION >= 10 ? Map.copyOf(map) : map;
+		return JVM.VERSION >= 10 ? Map.copyOf(map) : map;
 	}
 
 	public String getKey() { return identifier; }

@@ -6,7 +6,7 @@ import roj.collect.BitSet;
 import roj.collect.HashMap;
 import roj.collect.LinkedHashMap;
 import roj.collect.TrieTree;
-import roj.config.Parser;
+import roj.config.TextParser;
 import roj.config.node.*;
 import roj.text.ParseException;
 import roj.text.Token;
@@ -20,7 +20,7 @@ import static roj.text.Token.*;
  * @author Roj234
  * @since 2025/09/17 11:56
  */
-public class JsonParser2 extends Parser implements StreamParser2 {
+public class JsonParser2 extends TextParser implements StreamParser2 {
 	static final short TRUE = 9, FALSE = 10, NULL = 11, lBrace = 12, rBrace = 13, lBracket = 14, rBracket = 15, comma = 16, colon = 17;
 
 	private static final TrieTree<Token> JSON_TOKENS = new TrieTree<>();
@@ -37,15 +37,15 @@ public class JsonParser2 extends Parser implements StreamParser2 {
 	}
 	{ tokens = JSON_TOKENS; literalEnd = JSON_LENDS; }
 
-	public static ConfigValue parses(CharSequence text) throws ParseException { return new roj.config.JsonParser().parse(text, 0); }
+	public static ConfigValue parses(CharSequence text) throws ParseException { return new JsonParser2().parse(text); }
 
-	public JsonParser2() {}
+	public JsonParser2() {this(0);}
 	public JsonParser2(@MagicConstant(flags = COMMENT) int commentFlag) { super(commentFlag); }
 
 	@Override
-	public ConfigValue element(@MagicConstant(flags = {NO_DUPLICATE_KEY, ORDERED_MAP, LENIENT}) int flags) throws ParseException {return element(next(), this, flags);}
+	public ConfigValue element() throws ParseException {return element(next(), this, flags);}
 	@SuppressWarnings("fallthrough")
-	private static ConfigValue element(Token w, Parser wr, int flag) throws ParseException {
+	private static ConfigValue element(Token w, TextParser wr, int flag) throws ParseException {
 		switch (w.type()) {
 			default: wr.unexpected(w.text()); // Always fail
 			case NULL: return NullValue.NULL;
@@ -60,7 +60,7 @@ public class JsonParser2 extends Parser implements StreamParser2 {
 		}
 	}
 
-	static ListValue list(Parser p, ListValue value, int flag) throws ParseException {
+	static ListValue list(TextParser p, ListValue value, int flag) throws ParseException {
 		boolean hasComma = true;
 
 		o:
@@ -93,7 +93,7 @@ public class JsonParser2 extends Parser implements StreamParser2 {
 	}
 
 	@SuppressWarnings("fallthrough")
-	static MapValue map(Parser p, int flag) throws ParseException {
+	static MapValue map(TextParser p, int flag) throws ParseException {
 		Map<String, ConfigValue> map = (flag & ORDERED_MAP) != 0 ? new LinkedHashMap<>() : new HashMap<>();
 		Map<String, String> comment = null;
 		boolean hasComma = true;
@@ -143,7 +143,7 @@ public class JsonParser2 extends Parser implements StreamParser2 {
 		return comment == null ? new MapValue(map) : new MapValue.Commentable(map, comment);
 	}
 
-	private static boolean onNextLine(Parser parser, int index) {
+	private static boolean onNextLine(TextParser parser, int index) {
 		for (int i = parser.prevIndex - 1; i >= index; i--) {
 			if (parser.getText().charAt(i) == '\n') return true;
 		}

@@ -6,7 +6,7 @@ import roj.asm.attr.Attribute;
 import roj.asm.insn.AbstractCodeWriter;
 import roj.asm.insn.CodeWriter;
 import roj.asm.insn.Label;
-import roj.asm.type.Generic;
+import roj.asm.type.ParameterizedType;
 import roj.asm.type.Signature;
 import roj.asm.type.Type;
 import roj.ci.annotation.Public;
@@ -97,11 +97,11 @@ final class HandlerInvoker implements EventListener {
 		}
 
 		Signature sign = info.method.getAttribute(null, Attribute.SIGNATURE);
-		if (sign != null && sign.values.get(0) instanceof Generic g) {
+		if (sign != null && sign.values.get(0) instanceof ParameterizedType g) {
 			cw.visitSizeMax(2, 0);
 
 			CharList buf = IOUtil.getSharedCharBuf();
-			for (int i = 0; i < g.children.size(); i++) g.children.get(i).toDesc(buf);
+			for (int i = 0; i < g.typeParameters.size(); i++) g.typeParameters.get(i).toDesc(buf);
 			cw.ldc(buf.toString());
 			cw.insn(ALOAD_1);
 			cw.invokeV("roj/event/Event", "getGenericType", "()Ljava/lang/String;");
@@ -171,8 +171,8 @@ final class HandlerInvoker implements EventListener {
 		}
 
 		cw.finish();
-		var loader = handler instanceof Class<?> t ? t.getClassLoader() : handler.getClass().getClassLoader();
-		return (Impl) Reflection.createInstance(loader, c, "ASMEventInvoker");
+		var type = handler instanceof Class<?> t ? t : handler.getClass();
+		return (Impl) Reflection.createInstance(type, c);
 	}
 	private static int callEvent(ClassNode out, CodeWriter c, Member listener, String eventType, int fid) {
 		String clz = listener.owner();

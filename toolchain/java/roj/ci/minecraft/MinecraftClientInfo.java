@@ -20,13 +20,11 @@ import roj.text.TextUtil;
 import roj.text.Tokenizer;
 import roj.ui.TUI;
 import roj.ui.Tty;
-import roj.util.ArrayCache;
 import roj.util.ArtifactVersion;
 import roj.util.Helpers;
 import roj.util.OS;
 
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -279,7 +277,7 @@ final class MinecraftClientInfo {
 				final String name = entry.getName();
 				if (!entry.isDirectory() && !trieTree.strStartsWithThis(name) && (name.endsWith(".dll") || name.endsWith(".so"))) {
 					try (var fos = new FileOutputStream(new File(nativePath, name))) {
-						IOUtil.copyStream(zf.getStream(entry), fos);
+						IOUtil.copyStream(zf.getInputStream(entry), fos);
 					}
 				} else {
 					LOGGER.debug("排除文件{}#!{}", libFile, entry);
@@ -370,19 +368,10 @@ final class MinecraftClientInfo {
 
 			if (!sha1.isEmpty()) {
 				var digest = CryptoFactory.getSharedDigest("SHA-1");
-
-				var buf = ArrayCache.getByteArray(4096, false);
-				try (var in = new FileInputStream(file)) {
-					int r;
-					while (true) {
-						r = in.read(buf);
-						if (r < 0) break;
-						digest.update(buf, 0, r);
-					}
+				try {
+					IOUtil.digestFile(file, file.length(), digest);
 				} catch (Exception e) {
 					throw new IllegalStateException("摘要校验失败", e);
-				} finally {
-					ArrayCache.putArray(buf);
 				}
 
 				if (!TextUtil.bytes2hex(digest.digest()).equalsIgnoreCase(sha1)) {

@@ -228,7 +228,7 @@ public final class PanSecurityManager extends MethodHook {
 
 	public static Class<?> hook_defineClass(ClassLoader cl, byte[] b, int off, int len) { return hook_defineClass(cl, null, b, off, len, null); }
 	public static Class<?> hook_defineClass(ClassLoader cl, String name, byte[] b, int off, int len) { return hook_defineClass(cl, name, b, off, len, null); }
-	public static Class<?> hook_defineClass(ClassLoader cl, String name, byte[] b, int off, int len, ProtectionDomain pd) { return hook_defineClass(cl, name, b, off, len, pd, 0, cl.getClass()); }
+	public static Class<?> hook_defineClass(ClassLoader cl, String name, byte[] b, int off, int len, ProtectionDomain pd) { return hook_defineClass(cl, null, name, b, off, len, pd, 0, cl.getClass()); }
 
 	private static String argumentTypesToString(Class<?>[] types) {
 		StringBuilder buf = new StringBuilder().append('(');
@@ -360,13 +360,13 @@ public final class PanSecurityManager extends MethodHook {
 	}
 	// endregion
 	// region 类定义
-	@RealDesc(value = "roj/reflect/Reflection.defineClass(Ljava/lang/ClassLoader;Ljava/lang/String;[BIILjava/security/ProtectDomain;I)Ljava/lang/Class;", callFrom = true)
-	public static Class<?> hook_defineClass(ClassLoader cl, String name, byte[] b, int off, int len, ProtectionDomain pd, int flag, Class<?> caller) {
+	@RealDesc(value = "roj/reflect/Reflection.defineClass(Ljava/lang/ClassLoader;Ljava/lang/Class;Ljava/lang/String;[BIILjava/security/ProtectDomain;I)Ljava/lang/Class;", callFrom = true)
+	public static Class<?> hook_defineClass(ClassLoader cl, Class<?> nestHost, String name, byte[] b, int off, int len, ProtectionDomain pd, int flag, Class<?> caller) {
 		ByteList buf = new ByteList(Arrays.copyOfRange(b, off, off+len));
 
 		var pd1 = Jocker.pm.getOwner(caller);
 		buf = preDefineHook(name, pd1, buf);
-		return Reflection.defineClass(cl, name, buf.list, 0, buf.wIndex(), pd, flag);
+		return Reflection.defineClass(cl, nestHost, name, buf.list, 0, buf.wIndex(), pd, flag);
 	}
 
 	static ByteList preDefineHook(String name, PluginDescriptor pd1, ByteList buf) {

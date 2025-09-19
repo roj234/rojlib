@@ -59,10 +59,9 @@ public final class MethodNode extends MemberNode {
 		return inst;
 	}
 
-	// to [ConstantData | String] later
+	// ASM自身只有FrameVisitor用到了这个字段
 	String owner;
 	public String owner() { return owner; }
-	@Deprecated
 	public void __setOwner(String owner) {this.owner = owner;}
 
 	private List<Type> in;
@@ -223,7 +222,7 @@ public final class MethodNode extends MemberNode {
 					if (name != null) sb.append(' ').append(name);
 					if (++j == in.size()) break;
 					sb.append(", ");
-					slot += type.genericType() == IType.TYPE_PARAMETER_TYPE ? 1 : type.rawType().length();
+					slot += type.kind() == IType.TYPE_VARIABLE ? 1 : type.rawType().length();
 				}
 			}
 			sb.append(')');

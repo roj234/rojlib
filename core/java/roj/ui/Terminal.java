@@ -2,12 +2,13 @@ package roj.ui;
 
 import roj.collect.ArrayList;
 import roj.collect.BitSet;
-import roj.concurrent.TimerTask;
 import roj.concurrent.Timer;
+import roj.concurrent.TimerTask;
 import roj.config.node.IntValue;
 import roj.io.IOUtil;
 import roj.text.CharList;
 import roj.text.LineReader;
+import roj.util.OperationDone;
 
 import java.util.Collections;
 import java.util.List;
@@ -382,7 +383,7 @@ public class Terminal implements KeyHandler {
 					var r = interruptHandler;
 					if (r != null) r.run();
 					else if (!runKeyHandlers(keyCode)) {
-						System.exit(0);
+						throw OperationDone.INSTANCE;
 					}
 				}
 				default -> {

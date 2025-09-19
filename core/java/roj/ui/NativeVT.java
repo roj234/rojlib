@@ -10,6 +10,7 @@ import roj.text.TextWriter;
 import roj.util.ByteList;
 import roj.util.NativeException;
 import roj.util.OS;
+import roj.util.OperationDone;
 
 import java.io.*;
 import java.nio.CharBuffer;
@@ -178,6 +179,8 @@ final class NativeVT implements ITty, Runnable {
 			Tty.isFullUnicode();
 
 			while (true) read();
+		} catch (OperationDone interruption) {
+			System.exit(0);
 		} catch (Throwable e) {
 			e.printStackTrace();
 		}

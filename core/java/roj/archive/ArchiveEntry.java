@@ -15,21 +15,21 @@ public interface ArchiveEntry {
 	long getSize();
 	long getCompressedSize();
 
-	boolean isEncrypted();
+	default boolean isEncrypted() { return false; }
 
 	// in milliseconds
-	long getAccessTime();
-	long getCreationTime();
-	long getModificationTime();
+	default long getAccessTime() { return 0; }
+	default long getCreationTime() { return 0; }
+	default long getModificationTime() { return 0; }
 	@MagicConstant(flagsFromClass = WinAttributes.class)
-	int getWinAttributes();
+	default int getWinAttributes() { return 0; }
 
 	// (maybe) in nanoseconds
-	FileTime getPrecisionAccessTime();
-	FileTime getPrecisionCreationTime();
-	FileTime getPrecisionModificationTime();
+	default FileTime getPrecisionAccessTime() { return null; }
+	default FileTime getPrecisionCreationTime() { return null; }
+	default FileTime getPrecisionModificationTime() { return null; }
 
-	boolean hasAccessTime();
-	boolean hasCreationTime();
-	boolean hasModificationTime();
+	default boolean hasAccessTime() {return false;}
+	default boolean hasCreationTime() {return false;}
+	default boolean hasModificationTime() {return false;}
 }

@@ -67,6 +67,13 @@ public class FlagSet {
 			var sb = IOUtil.getSharedCharBuf().append(node);
 			boolean deepest = false;
 
+			int i1 = sb.lastIndexOf(delimiter, sb.length());
+			sb.setLength(i1+1);
+			sb.append('/');
+			entry = (ToIntMap.Entry<CharSequence>) map.getEntry(sb);
+			if (entry != null) def = entry.value;
+
+
 			while (true) {
 				int i = sb.lastIndexOf(delimiter, sb.length()-2);
 				if (i < 0) break;

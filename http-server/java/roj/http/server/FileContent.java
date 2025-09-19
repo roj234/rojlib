@@ -88,7 +88,7 @@ final class FileContent implements Content {
 				// 除以 1000 是RFC时间戳精度问题
 				if (file.lastModified() / 1000 > time) {
 					rh.code(412);
-					return null;
+					return Content.EMPTY;
 				}
 			}
 		}
@@ -235,7 +235,7 @@ final class FileContent implements Content {
 			var def = flag&3;
 			if (def != 2 && (file.stats() & (1<<def)) != 0) h.header("accept-ranges", "bytes");
 		}
-		return null;
+		return Content.EMPTY;
 	}
 
 	@Override

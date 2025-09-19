@@ -6,8 +6,8 @@ import roj.asm.attr.Attribute;
 import roj.asm.cp.CstClass;
 import roj.asm.insn.CodeWriter;
 import roj.asm.insn.Label;
-import roj.asm.type.Generic;
 import roj.asm.type.IType;
+import roj.asm.type.ParameterizedType;
 import roj.asm.type.Type;
 import roj.asmx.mapper.ParamNameMapper;
 import roj.collect.ArrayList;
@@ -15,7 +15,7 @@ import roj.collect.BitSet;
 import roj.collect.HashSet;
 import roj.collect.ToIntMap;
 import roj.config.ValueEmitter;
-import roj.config.mapper.ObjectMapperFactory;
+import roj.config.mapper.ObjectMapper;
 import roj.reflect.Reflection;
 import roj.reflect.VirtualReference;
 import roj.text.CharList;
@@ -108,7 +108,7 @@ final class DAOMaker {
 				if (isSelectStatement) throw new IllegalArgumentException(method+"的参数不能使用select语句");
 				if (extraType == null) throw new IllegalArgumentException(method+"缺少泛型签名,无法确定List<T>的类型");
 
-				IType itrType = ((Generic) extraType.values.get(0)).children.get(0);
+				IType itrType = ((ParameterizedType) extraType.values.get(0)).typeParameters.get(0);
 				Class<?> parTypeInst = itrType.rawType().toClass(daoItf.getClassLoader());
 
 				if (parTypes.get(0).owner.equals("java/util/List")) {
@@ -228,7 +228,7 @@ final class DAOMaker {
 				if (returnType.owner.equals("java/util/List") || returnType.owner.equals("java/util/Collection")) {
 					if (extraType == null) throw new IllegalArgumentException(method+"缺少泛型签名,无法确定List<T>的类型");
 
-					IType itrType = ((Generic) extraType.values.get(extraType.values.size()-1)).children.get(0);
+					IType itrType = ((ParameterizedType) extraType.values.get(extraType.values.size()-1)).typeParameters.get(0);
 					cw.ldc(new CstClass(itrType.owner()));
 					cw.invokeS("roj/sql/DAOMaker", "_doSelectMany", "(Ljava/sql/PreparedStatement;Ljava/lang/Class;)Ljava/util/List;");
 				} else {
@@ -263,7 +263,7 @@ final class DAOMaker {
 
 		init.insn(ALOAD_0);
 		init.insn(ARETURN);
-		return (DAO) Reflection.createInstance(daoItf.getClassLoader(), impl);
+		return (DAO) Reflection.createInstance(daoItf, impl);
 	}
 
 	private static void doClear(CodeWriter cw, boolean clearBatch) {
@@ -344,7 +344,7 @@ final class DAOMaker {
 
 		var set = stm.executeQuery();
 		if (set.next()) {
-			var ser = getSerializerFactory(type).serializer(type);
+			var ser = getSerializerFactory(type).reader(type);
 			ser.emitMap();
 			for (int i = 0; i < adapters.size(); ) {
 				ser.emitKey(adapters.get(i++).toString());
@@ -356,8 +356,8 @@ final class DAOMaker {
 
 		return null;
 	}
-	private static ObjectMapperFactory getSerializerFactory(Class<?> type) {
-		if (type.getClassLoader() == null || type.getClassLoader() == DAOMaker.class.getClassLoader()) return ObjectMapperFactory.SAFE;
+	private static ObjectMapper getSerializerFactory(Class<?> type) {
+		if (type.getClassLoader() == null || type.getClassLoader() == DAOMaker.class.getClassLoader()) return ObjectMapper.SAFE;
 
 		var map = IMPLEMENTATION_CACHE.getEntry(type.getClassLoader()).getValue();
 		assert map != null;
@@ -365,12 +365,12 @@ final class DAOMaker {
 		Object v = map.get(null);
 		if (v == null) {
 			synchronized (map) {
-				v = ObjectMapperFactory.getInstance(ObjectMapperFactory.GENERATE | ObjectMapperFactory.CHECK_INTERFACE | ObjectMapperFactory.CHECK_PARENT, type.getClassLoader());
+				v = ObjectMapper.getInstance(ObjectMapper.GENERATE | ObjectMapper.CHECK_INTERFACE | ObjectMapper.CHECK_PARENT, type.getClassLoader());
 				var tmp = map.putIfAbsent(null, v);
 				if (tmp != null) v = tmp;
 			}
 		}
-		return (ObjectMapperFactory) v;
+		return (ObjectMapper) v;
 	}
 
 	private interface A {void adapt(ValueEmitter visitor, ResultSet set) throws SQLException;}

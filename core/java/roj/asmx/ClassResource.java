@@ -1,5 +1,7 @@
 package roj.asmx;
 
+import roj.asm.AsmCache;
+import roj.asm.ClassDefinition;
 import roj.util.ByteList;
 
 /**
@@ -9,4 +11,11 @@ import roj.util.ByteList;
 public interface ClassResource {
 	String getFileName();
 	ByteList getClassBytes();
+
+	static ClassResource fromDefinition(ClassDefinition definition) {
+		return new ClassResource() {
+			@Override public String getFileName() {return definition.name()+".class";}
+			@Override public ByteList getClassBytes() {return AsmCache.toByteArrayShared(definition);}
+		};
+	}
 }

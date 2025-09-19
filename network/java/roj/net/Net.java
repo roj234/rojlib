@@ -68,12 +68,6 @@ public final class Net {
 	public static HashSet<InetAddress> getNetworkEndpoints() { if (networkInterfaces == null) refreshEndpoints(); return endpoints; }
 	public static ArrayList<NetworkInterface> getNetworkInterfaces() { if (networkInterfaces == null) refreshEndpoints(); return networkInterfaces; }
 
-	private static InetAddress any;
-	public static InetAddress anyLocalAddress() {
-		if (any != null) return any;
-		return any = new InetSocketAddress(0).getAddress();
-	}
-
 	// region IP String-Bytes convert
 	public static byte[] ip2bytes(CharSequence ip) { return TextUtil.lastIndexOf(ip, '.') != -1 ? v4ipBytes(ip) : v6ipBytes(ip); }
 	public static byte[] v4ipBytes(CharSequence ip) {
@@ -189,7 +183,7 @@ public final class Net {
 	// endregion
 
 	public static URI socks5(InetSocketAddress server) {return URI.create("socks5://"+server);}
-	public static URI socks5(InetSocketAddress server, String username, String password) {return URI.create("socks5://"+ URICoder.encodeURIComponent(username)+":"+ URICoder.encodeURIComponent(password)+"@"+server);}
+	public static URI socks5(InetSocketAddress server, String username, String password) {return URI.create("socks5://"+URICoder.encodeURIComponent(username)+":"+URICoder.encodeURIComponent(password)+"@"+server);}
 
 	public static InetSocketAddress applyProxy(@Nullable URI proxy, InetSocketAddress originalAddr, MyChannel ch) throws IOException {
 		if (proxy == null) return originalAddr;

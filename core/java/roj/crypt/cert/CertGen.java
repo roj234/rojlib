@@ -27,7 +27,7 @@ public final class CertGen {
 	public CertGen(SecureRandom srnd) {this.srnd = srnd;}
 
 	private final SecureRandom srnd;
-	private static final DateFormat dateFormat = DateFormat.create("YYYY MM DD HH ii ss 'Z'");
+	private static final DateFormat dateFormat = DateFormat.create("YYYY MM DD HH ii ss \"Z\"");
 
 	public DerWriter generate(CertInfo subject, @NotNull CertInfo issuer) {return generate(subject, issuer, new DerWriter());}
 	public DerWriter generate(CertInfo subject, @NotNull CertInfo issuer, DerWriter dw) {

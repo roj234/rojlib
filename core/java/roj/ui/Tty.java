@@ -17,6 +17,7 @@ import roj.text.Tokenizer;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
 import roj.util.FastFailException;
+import roj.util.OperationDone;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -663,7 +664,7 @@ public final class Tty extends DelegatedPrintStream {
 	//endregion
 	//region 交互式终端 (KeyHandler)
 	private static final KeyHandler DUMMY = (keyCode, isVirtualKey) -> {
-		if (keyCode == (VK_CTRL|VK_C)) System.exit(0);
+		if (keyCode == (VK_CTRL|VK_C)) throw OperationDone.INSTANCE;
 	};
 
 	@NotNull
@@ -977,6 +978,8 @@ public final class Tty extends DelegatedPrintStream {
 					tmp.wIndex(i);
 					NativeVT.decode(tmp, ib);
 					instance.onInput(ib);
+				} catch (OperationDone interruption) {
+					System.exit(0);
 				} catch (Throwable e) {
 					RojLib.debug("NativeVT", "Fatal");
 					e.printStackTrace();

@@ -3,6 +3,7 @@ package roj.ci.plugin;
 import roj.asm.FieldNode;
 import roj.asm.Opcodes;
 import roj.asmx.Context;
+import roj.ci.BuildContext;
 
 import java.util.List;
 

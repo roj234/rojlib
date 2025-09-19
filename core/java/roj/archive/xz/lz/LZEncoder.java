@@ -20,7 +20,7 @@ import java.io.OutputStream;
 
 import static roj.reflect.Unsafe.U;
 
-public abstract class LZEncoder {
+public abstract sealed class LZEncoder permits BT4, HC4 {
 	public static final int MF_HC4 = 0, MF_BT4 = 1;
 
 	/**
@@ -120,8 +120,8 @@ public abstract class LZEncoder {
 		// Subtracting 1 because the shortest match that this match
 		// finder can find is 2 bytes, so there's no need to reserve
 		// space for one-byte matches.
-		mdist = ArrayCache.getIntArray(niceLen-1, 0);
-		mlen = ArrayCache.getIntArray(niceLen-1, 0);
+		mdist = ArrayCache.getIntArray(niceLen-1, false);
+		mlen = ArrayCache.getIntArray(niceLen-1, false);
 
 		keepSizeBefore = extraSizeBefore + dictSize;
 		keepSizeAfter = extraSizeAfter + matchLenMax;

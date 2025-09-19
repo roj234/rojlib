@@ -32,7 +32,7 @@ final class DependencyGraph {
 			if (cp instanceof CstClass ref) {
 				// node类引用了ref类，所以在ref修改时需要重新编译node类
 				String str = ref.value().str();
-				if (str.equals(name)) continue;
+				if (str.equals(name) || str.startsWith("java/")) continue;
 
 				Set<String> set = graph.computeIfAbsent(str, Helpers.fnHashSet());
 				set.add(name);

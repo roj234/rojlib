@@ -1,9 +1,8 @@
 package roj.ci;
 
-import roj.archive.ArchiveUtils;
 import roj.archive.zip.ZipOutput;
+import roj.asmx.AnnotationRepo;
 import roj.asmx.mapper.Mapper;
-import roj.ci.plugin.BuildContext;
 import roj.collect.ArrayList;
 import roj.collect.HashMap;
 import roj.collect.HashSet;
@@ -32,8 +31,6 @@ import java.util.concurrent.Callable;
  * @since 2021/7/11 13:59
  */
 public final class Project {
-	public boolean compiling;
-
 	Env.Project conf;
 
 	private final String name;
@@ -53,11 +50,13 @@ public final class Project {
 	final File unmappedJar;
 	private final int resPrefix;
 	ZipOutput mappedWriter, unmappedWriter;
-	final DependencyGraph dependencyGraph = new DependencyGraph();
+
+	public BuildContext compiling;
+	public BuildContext.PersistentState persistentState;
 
 	MCMake.SignatureCache signatureCache;
-
-	public BuildContext.State state;
+	final DependencyGraph dependencyGraph = new DependencyGraph();
+	final AnnotationRepo annotationRepo = new AnnotationRepo();
 
 	@Deprecated public Mapper mapper;
 	@Deprecated public Mapper.State mapperState;
@@ -65,7 +64,8 @@ public final class Project {
 	public String getName() {return conf.name;}
 	public String getSafeName() {return cachePath.getName();}
 	public String getShortName() {return name;}
-	public int getResPrefix() {return resPrefix;}
+	int getResPrefix() {return resPrefix;}
+	public AnnotationRepo getAnnotationRepo() {return annotationRepo;}
 
 	public Project(Env.Project config, boolean mkdirs) throws IOException {
 		this.conf = config;
@@ -106,7 +106,7 @@ public final class Project {
 			return;
 		}
 
-		String compilerType = config.variables.getOrDefault("fmd:compiler", "Javac");
+		String compilerType = variables.getOrDefault("fmd:compiler", "Javac");
 		var obj = MCMake.compilerTypes.get(compilerType);
 		if (obj == null) throw new NullPointerException("找不到编译器"+compilerType);
 
@@ -120,7 +120,6 @@ public final class Project {
 		cachePath.mkdirs();
 
 		unmappedWriter = new ZipOutput(unmappedJar);
-		unmappedWriter.setCompress(true);
 		if (unmappedJar.length() == 0) {
 			unmappedWriter.begin(false);
 			unmappedWriter.end();
@@ -234,56 +233,39 @@ public final class Project {
 
 	public List<Project> getProjectDependencies() {return buildOrderDep;}
 	public List<Dependency> getCompileDependencies() {return compileDependencies;}
-
-	public void getDependencyClasses(BuildContext context, long stamp) throws IOException {
-		for (Dependency dependency : dependencies.getOrDefault(Dependency.Scope.BUNDLED, Collections.emptyList())) {
-			dependency.getClasses(context, stamp);
-		}
-	}
+	public List<Dependency> getBundledDependencies() {return dependencies.getOrDefault(Dependency.Scope.BUNDLED, Collections.emptyList());}
 
 	private int resCount;
-	public Callable<Integer> getResourceTask(long stamp, BuildContext ctx) {
+	public Callable<Integer> getAsyncResourceWriter(BuildContext ctx) {
 		return () -> {
 			resCount = 0;
-			long useCompileTimestamp = "true".equals(variables.get("fmd:resource:use_compile_timestamp")) ? System.currentTimeMillis() : 0;
-			boolean prevCompress = mappedWriter.isCompress();
-			block: {
-				if (stamp > 0) {
-					Set<String> set = MCMake.watcher.getModified(Project.this, FileWatcher.ID_RES);
-					if (!set.contains(null)) {
-						synchronized (set) {
-							for (String fileName : set) {
-								File file = new File(fileName);
-								if (file.isFile()) writeRes(file, useCompileTimestamp != 0 ? useCompileTimestamp : file.lastModified(), Collections.emptyMap(), ctx);
-								else mappedWriter.set(fileName.substring(resPrefix).replace(File.separatorChar, '/'), (ByteList) null);
-							}
-							set.clear();
-						}
-						break block;
-					}
-				}
+			long useCompileTimestamp = shouldUseCompileTimestamp() ? ctx.buildStartTime : 0;
 
-				// update all resource ??
-				IOUtil.listFiles(resPath, file -> {
-					long lastModified = file.lastModified();
-					if (lastModified >= stamp) writeRes(file, useCompileTimestamp != 0 ? useCompileTimestamp : lastModified, Collections.emptyMap(), ctx);
-					return false;
-				});
+			List<File> changed = ctx.resources.getChanged();
+			for (File file : changed) {
+				writeRes(file, useCompileTimestamp != 0 ? useCompileTimestamp : file.lastModified(), Collections.emptyMap(), ctx);
 			}
 
-			List<Dependency> bundles = dependencies.getOrDefault(Dependency.Scope.BUNDLED, Collections.emptyList());
-			for (Dependency bundle : bundles) {
-				resCount += bundle.getResources(this, mappedWriter, stamp, ctx);
+			Set<String> deleted = ctx.sources.getDeleted();
+			for (String relPath : deleted) {
+				mappedWriter.set(relPath, (ByteList) null);
 			}
 
-			mappedWriter.setCompress(prevCompress);
+			MCMake.LOGGER.debug("Resource {} changed {} deleted", changed.size(), deleted.size());
+
+			for (Dependency bundle : getBundledDependencies()) {
+				resCount += bundle.getResources(this, mappedWriter, ctx);
+			}
+
 			return resCount;
 		};
 	}
+
+	public boolean shouldUseCompileTimestamp() {return "true".equals(variables.get("fmd:resource:use_compile_timestamp"));}
+
 	void writeRes(File file, long time, Map<String, String> altVariables, BuildContext ctx) {
 		resCount++;
 		String relPath = file.getAbsolutePath().substring(resPrefix).replace(File.separatorChar, '/');
-		mappedWriter.setCompress(!ArchiveUtils.INCOMPRESSIBLE_FILE_EXT.contains(IOUtil.extensionName(relPath)));
 		ExceptionalSupplier<InputStream, IOException> writer;
 		try {
 			if (varReplacePathPrefix.strStartsWithThis(relPath)) {
@@ -312,17 +294,19 @@ public final class Project {
 		}
 	}
 
-	private TimerTask delayedCompile;
 	private boolean autoCompile;
+	public void setAutoCompile(boolean b) {autoCompile = b;}
+	public boolean isAutoCompile() {return autoCompile;}
+
 	public void compileSuccess(boolean increment) {
-		if (delayedCompile != null) delayedCompile.cancel();
+		if (autoCompileTask != null) autoCompileTask.cancel();
 		try {
 			MCMake.watcher.add(this);
 		} catch (IOException e) {
 			Tty.warning("无法启动文件监控", e);
 		}
 		if (!increment) {
-			var copyTo = variables.get("fmd_x:copy_to");
+			var copyTo = variables.get("fmd:copy_to");
 			if (copyTo != null) {
 				try {
 					IOUtil.copyFile(mappedWriter.file, new File(copyTo));
@@ -333,36 +317,63 @@ public final class Project {
 			}
 		}
 	}
-	public void setAutoCompile(boolean b) {autoCompile = b;}
-	public boolean isAutoCompile() {return autoCompile;}
-	public void fileChanged() {
-		if (delayedCompile != null) delayedCompile.cancel();
-		if (autoCompile) {
-			delayedCompile = MCMake.TIMER.delay(() -> {
-				try {
-					block:
-					if (!isDirty(this)) {
-						for (Project p : buildOrderDep) {
-							if (isDirty(p)) break block;
-						}
-						return;
-					}
 
-					MCMake.build(new HashSet<>("auto"), this);
+	private static TimerTask autoCompileTask;
+	private static final Set<Project> fileChanged = new HashSet<>();
+	private static void commitFiles() {
+		HashSet<Project> roots;
+		synchronized (fileChanged) {
+			roots = new HashSet<>(fileChanged);
+			for (Project project : fileChanged) {
+				roots.removeAll(project.buildOrderDep);
+			}
+			fileChanged.clear();
+		}
+
+		MCMake._lock(false);
+		MCMake.LOGGER.debug("Auto compile start {}", roots);
+		try {
+			for (Project project : roots) {
+				try {
+					int code = MCMake.build(new HashSet<>("auto", "silent"), project);
+					if (code != 0) break;
 				} catch (Throwable e) {
 					Tty.error("自动编译出错", e);
 					MCMake.watcher.removeAll();
+					return;
 				}
-			}, MCMake.config.getInt("自动编译防抖"));
+			}
+		} finally {
+			MCMake.LOGGER.debug("Auto compile end.");
+			MCMake._unlock();
 		}
+		schedule();
 	}
-	private static boolean isDirty(Project p) {
-		var modified = MCMake.watcher.getModified(p, IFileWatcher.ID_SRC);
-		if (modified.contains(null) || modified.isEmpty()) {
-			if (modified.contains(null)) MCMake.LOGGER.debug("{}未注册监听器", p.getName());
-			return false;
+	public static void fileChanged(Project p) {
+		if (autoCompileTask != null) autoCompileTask.cancel();
+
+		var isRoot = true;
+		for (Project q : MCMake.projects.values()) {
+			if (q.autoCompile && q.buildOrderDep.contains(p)) {
+				synchronized (fileChanged) {
+					isRoot = false;
+					fileChanged.add(q);
+				}
+			}
 		}
-		return true;
+		if (!isRoot) {
+			synchronized (fileChanged) {
+				fileChanged.add(p);
+			}
+		}
+
+		schedule();
+	}
+
+	private static void schedule() {
+		if (!fileChanged.isEmpty()) {
+			autoCompileTask = MCMake.TIMER.delay(Project::commitFiles, MCMake.config.getInt("自动编译防抖"));
+		}
 	}
 
 	public Env.Project serialize() {return conf;}

@@ -225,7 +225,7 @@ public class LZMA2ParallelInputStream extends MBInputStream {
 	private DataInputStream in;
 	private final ByteList out = new ByteList();
 
-	public LZMA2ParallelInputStream(InputStream in, int dictSize) { this(in, dictSize, null, TaskPool.common(), 10); }
+	public LZMA2ParallelInputStream(InputStream in, int dictSize) { this(in, dictSize, null, TaskPool.cpu(), 10); }
 	public LZMA2ParallelInputStream(InputStream in, int dictSize, byte[] presetDict, TaskPool taskExecutor, int affinity) {
 		// Check for null because otherwise null isn't detect
 		// in this constructor.

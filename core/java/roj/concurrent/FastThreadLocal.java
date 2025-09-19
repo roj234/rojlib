@@ -83,8 +83,8 @@ public class FastThreadLocal<T> {
 						}
 					}
 				} else {
-					Object map = LazyThreadLocal.ACCESS.getMap(fallback, t[c]);
-					if (map != null) LazyThreadLocal.ACCESS.remove(map, fallback);
+					Object map = ThreadLocalAccess.INSTANCE.getMap(fallback, t[c]);
+					if (map != null) ThreadLocalAccess.INSTANCE.remove(map, fallback);
 				}
 			}
 		}

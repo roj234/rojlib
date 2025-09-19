@@ -10,9 +10,9 @@ import java.util.List;
  * @since 2022/1/11 17:45
  */
 final class AnyAdapter extends TypeAdapter {
-	final Factory gen;
+	final ObjectMapperImpl gen;
 
-	AnyAdapter(Factory type) { this.gen = type; }
+	AnyAdapter(ObjectMapperImpl type) { this.gen = type; }
 
 	@Override
 	public void map(MappingContext ctx, int size) { ctx.fieldId = -1; /* not primitive (-2) */ }
@@ -54,7 +54,7 @@ final class AnyAdapter extends TypeAdapter {
 			throw new IllegalStateException("无法找到类 "+o, e);
 		}
 
-		if (ctx instanceof MappingContextEx ex) ex.captureRef();
+		if (ctx instanceof ReentrantObjectReader ex) ex.captureRef();
 
 		ctx.fieldId = -2;
 		if (ser.valueIsMap()) {
@@ -86,7 +86,7 @@ final class AnyAdapter extends TypeAdapter {
 				throw new IllegalArgumentException();
 			}
 
-			ToIntMap<Object> pool = MappingContextEx.OBJECT_POOL.get();
+			ToIntMap<Object> pool = ReentrantObjectWriter.OBJECT_POOL.get();
 
 			int objectId;
 			if (pool != null) {

@@ -77,9 +77,11 @@ public class TaskPool implements ExecutorService {
 		this(coreThreads, maxThreads, threshold, 60000, "pool-"+poolId.getAndIncrement()+"-by"+Thread.currentThread().getId()+"-");
 	}
 
-	public static TaskPool common() { return Common.P; }
+	public static TaskPool common() { return Common.TASK; }
+	public static TaskPool cpu() { return Common.CPU; }
 	private static final class Common {
-		static final TaskPool P = new TaskPool(1, Integer.getInteger("roj.cpuPoolSize", Runtime.getRuntime().availableProcessors()), 0, 60000, "RojLib 线程池 #");
+		static final TaskPool TASK = new TaskPool(1, 4, 0, 10000, "RojLib 任务 #");
+		static final TaskPool CPU = new TaskPool(0, Integer.getInteger("roj.cpuPoolSize", Runtime.getRuntime().availableProcessors()), 0, 10000, "RojLib 计算 #");
 	}
 
 	public static TaskPool newFixed(String prefix) { return newFixed(Runtime.getRuntime().availableProcessors(), prefix); }
@@ -101,14 +103,10 @@ public class TaskPool implements ExecutorService {
 	public void execute(@Async.Schedule Runnable task) {
 		if (isCancelled(task)) return;
 
-		int len = running;
-		// move throw into newWorker()
-		if (len <= 0) newWorker();
-
 		// 等待立即结束的短任务
 		if (fastPath.tryTransfer(task)) return;
 
-		len = running;
+		int len = running;
 		if (len < core ||
 			len < max &&
 				(newThr == 0 ||
@@ -178,6 +176,7 @@ public class TaskPool implements ExecutorService {
 	private void newWorker() {
 		int r = running;
 		if (r < 0) throw new RejectedExecutionException(this+" was shutdown.");
+		if (r >= max) return;
 		if (RUNNING.compareAndSet(this, r, r+1)) {
 			prevStop = System.currentTimeMillis();
 

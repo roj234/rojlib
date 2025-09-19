@@ -11,8 +11,8 @@ import roj.collect.LinkedHashMap;
 import roj.concurrent.TaskPool;
 import roj.config.ConfigMaster;
 import roj.config.JsonSerializer;
-import roj.config.Parser;
 import roj.config.TextEmitter;
+import roj.config.TextParser;
 import roj.config.node.ConfigValue;
 import roj.config.node.IntValue;
 import roj.config.node.ListValue;
@@ -105,7 +105,7 @@ public class DatapackHelper {
 					String name = entry.getName();
 					if (name.equals("pack.png") || name.equals("icon.png")) {
 						try {
-							var image = ImageIO.read(zipArchive.getStream(entry));
+							var image = ImageIO.read(zipArchive.getInputStream(entry));
 							if (image.getWidth() > 256 || image.getHeight() > 256) {
 								BufferedImage small = new BufferedImage(256, 256, BufferedImage.TYPE_USHORT_565_RGB);
 								small.createGraphics().drawImage(image, 0, 0, 256, 256, 0, 0, image.getWidth(), image.getHeight(), null);
@@ -137,12 +137,12 @@ public class DatapackHelper {
 
 		Command searcher = ctx -> {
 			Pattern regex = Pattern.compile(ctx.argument("查找", String.class), ctx.context.startsWith("find") ? Pattern.LITERAL : 0);
-			var pool = TaskPool.common().newGroup();
+			var pool = TaskPool.cpu().newGroup();
 			for (var zf : datapackList) {
 				pool.executeUnsafe(() -> {
 					for (ZEntry ze : zf.entries()) {
 						if (ze.getName().endsWith(".json")) {
-							try (TextReader in = new TextReader(zf.getStream(ze), StandardCharsets.UTF_8)) {
+							try (TextReader in = new TextReader(zf.getInputStream(ze), StandardCharsets.UTF_8)) {
 								CharList sb = IOUtil.getSharedCharBuf().readFully(in);
 								sb.preg_match_callback(regex, m -> {
 									System.out.println(zf.source().toString()+"!"+ze.getName()+"@"+m.start()+": "+m.group());
@@ -158,13 +158,13 @@ public class DatapackHelper {
 		Command replacer = ctx -> {
 			Pattern regex = Pattern.compile(ctx.argument("查找", String.class), ctx.context.startsWith("replace") ? Pattern.LITERAL : 0);
 			String replace = ctx.argument("替换", String.class);
-			var pool = TaskPool.common().newGroup();
+			var pool = TaskPool.cpu().newGroup();
 			for (var zf : datapackList) {
 				pool.executeUnsafe(() -> {
 					IntValue flag = new IntValue();
 					for (ZEntry ze : zf.entries()) {
 						if (ze.getName().endsWith(".json")) {
-							try (TextReader in = new TextReader(zf.getStream(ze), StandardCharsets.UTF_8)) {
+							try (TextReader in = new TextReader(zf.getInputStream(ze), StandardCharsets.UTF_8)) {
 								flag.value = 0;
 								CharList sb = IOUtil.getSharedCharBuf().readFully(in);
 								sb.preg_replace_callback(regex, m -> {
@@ -247,7 +247,7 @@ public class DatapackHelper {
 				Map<String, LangState> langState = states.computeIfAbsent(modid, Helpers.fnHashMap());
 
 				try {
-					var translation = (LinkedHashMap<String, String>) ConfigMaster.JSON.parser().parse(za.getStream(ze), Parser.ORDERED_MAP).unwrap();
+					var translation = (LinkedHashMap<String, String>) ConfigMaster.JSON.parser(TextParser.ORDERED_MAP).parse(za.getInputStream(ze)).unwrap();
 
 					LangState state = new LangState(translation, ze);
 					if (langid.equals("en_us")) {
@@ -326,7 +326,7 @@ public class DatapackHelper {
 			if (BLOCK_MODEL_PATTERN.matcher(ze.getName()).matches()) {
 				MapValue map = null;
 				try {
-					map = ConfigMaster.JSON.parse(za.getStream(ze)).asMap();
+					map = ConfigMaster.JSON.parse(za.getInputStream(ze)).asMap();
 
 					for (ConfigValue entry : map.getList("elements")) {
 						MapValue map1 = entry.asMap();

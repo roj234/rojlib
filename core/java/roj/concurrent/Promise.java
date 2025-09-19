@@ -56,14 +56,14 @@ public sealed interface Promise<T> extends Future<T> permits PromiseImpl {
 
 	static <T> Promise<T> resolve(T value) {
 		PromiseImpl<T> p = new PromiseImpl<>();
-		p._state = FULFILLED;
-		p._val = value;
+		p.state = FULFILLED;
+		p.result = value;
 		return p;
 	}
 	static <T> Promise<T> reject(Throwable exception) {
 		PromiseImpl<T> p = new PromiseImpl<>();
-		p._state = REJECTED;
-		p._val = exception;
+		p.state = REJECTED;
+		p.result = exception;
 		return p;
 	}
 

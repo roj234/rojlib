@@ -303,7 +303,7 @@ public final class CharsetDetector implements AutoCloseable {
 
 		static {
 			try (var in = CharsetDetector.class.getClassLoader().getResourceAsStream("roj/text/CharsetDetector.txt")) {
-				byte[] b = ArrayCache.getByteArray(1024, false);
+				byte[] b = ArrayCache.getIOBuffer();
 				var list = new BitSet[] {VERY_COMMON, COMMON};
 				int off = 0;
 				var set = list[off];

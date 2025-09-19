@@ -12,7 +12,8 @@ import roj.io.IOUtil;
 import roj.io.source.BufferedSource;
 import roj.io.source.Source;
 import roj.io.source.SourceInputStream;
-import roj.reflect.Unsafe;
+import roj.optimizer.FastVarHandle;
+import roj.reflect.Handles;
 import roj.util.ArrayCache;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
@@ -22,28 +23,27 @@ import java.io.EOFException;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
+import java.lang.invoke.VarHandle;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.List;
 import java.util.zip.Inflater;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipException;
-
-import static roj.reflect.Unsafe.U;
 
 /**
  * @author Roj234
  * @since 2024/3/18 10:01
  */
-public class ZipFile implements ArchiveFile {
+@FastVarHandle
+public sealed class ZipFile implements ArchiveFile permits ZipArchive {
 	Source r, cache;
-	static final long CACHE = Unsafe.fieldOffset(ZipFile.class, "cache");
+	static final VarHandle CACHE = Handles.lookup().findVarHandle(ZipFile.class, "cache", Source.class);
 
 	static final XashMap.Builder<String, ZEntry> ENTRY_BUILDER = XashMap.noCreation(ZEntry.class, "name", "next");
 
-	static final XashMap<Source, CacheNode> OPENED = WeakCache.shape(CacheNode.class).create();
+	static final XashMap<Source, CacheNode> ARCHIVES = WeakCache.shape(CacheNode.class).create();
 	static final class CacheNode extends WeakCache<Source> {
 		public CacheNode(Source key, XashMap<Source, CacheNode> owner) {super(key, owner);}
 		ArrayList<ZEntry> entries;
@@ -55,9 +55,6 @@ public class ZipFile implements ArchiveFile {
 
 	private ByteList buf;
 	final Charset cs;
-
-	static final ThreadLocal<List<InflateIn>> INFS = ThreadLocal.withInitial(ArrayList::new);
-	static final int MAX_INFS = 10;
 
 	byte flags;
 
@@ -111,7 +108,7 @@ public class ZipFile implements ArchiveFile {
 		r = ArchiveUtils.tryOpenSplitArchive(file, true);
 		r.seek(offset);
 
-		var node = OPENED.get(r);
+		var node = ARCHIVES.get(r);
 		if (node == null) {
 			reload();
 		} else {
@@ -139,8 +136,8 @@ public class ZipFile implements ArchiveFile {
 		r1.close();
 		r = null;
 
-		Source s = (Source) U.getAndSetReference(this, CACHE, null);
-		IOUtil.closeSilently(s);
+		Source cache = (Source) CACHE.getAndSet(this, r1);
+		IOUtil.closeSilently(cache);
 	}
 
 	public final void reload() throws IOException {
@@ -162,7 +159,7 @@ public class ZipFile implements ArchiveFile {
 
 		var namedEntries = ENTRY_BUILDER.createSized(entries.size());
 
-		var node = new CacheNode(r, OPENED);
+		var node = new CacheNode(r, ARCHIVES);
 		node.namedEntries = namedEntries;
 
 		for (int i = 0; i < entries.size(); i++) {
@@ -172,8 +169,8 @@ public class ZipFile implements ArchiveFile {
 			}
 		}
 
-		synchronized (OPENED) {
-			OPENED.put(r, node);
+		synchronized (ARCHIVES) {
+			ARCHIVES.put(r, node);
 		}
 
 		this.entries = node.entries;
@@ -365,11 +362,11 @@ public class ZipFile implements ArchiveFile {
 		// 8; HAS EXT
 		if ((flags & 8) != 0 && cSize == 0) {
 			// skip method
-			InflateIn in1 = (InflateIn) getCachedInflater(new SourceInputStream(r, Long.MAX_VALUE, false));
+			var in1 = (InflateInputStream) InflateInputStream.getInstance(new SourceInputStream(r, Long.MAX_VALUE, false));
 			byte[] tmp = buf.list;
 			while (in1.read(tmp) >= 0);
 
-			Inflater inf = in1.getInf();
+			Inflater inf = in1.getInflater();
 
 			// 不删除EXT标记，只是保存大小，这样不需要【移动文件】这么大的IO
 			if ((this.flags & FLAG_KILL_EXT) != 0) {
@@ -591,7 +588,7 @@ public class ZipFile implements ArchiveFile {
 	public final InputStream getRawStream(ZEntry entry) throws IOException {
 		if (entry.nameBytes == null) throw new ZipException("ZEntry不是从文件读取的");
 
-		Source src = (Source) U.getAndSetReference(this, CACHE, null);
+		Source src = (Source) CACHE.getAndSet(this, null);
 		if (src == null) src = r.copy();
 
 		validateEntry(src, entry);
@@ -610,17 +607,12 @@ public class ZipFile implements ArchiveFile {
 	}
 	public ByteList get(ZEntry file, ByteList buf) throws IOException {
 		buf.ensureCapacity((int) (buf.wIndex() + file.uSize));
-		return buf.readStreamFully(getStream(file, null));
+		return buf.readStreamFully(getInputStream(file, null));
 	}
 
-	public final InputStream getStream(String name) throws IOException {
-		ZEntry entry = getEntry(name);
-		if (entry == null) return null;
-		return getStream(entry, null);
-	}
-	public final InputStream getStream(ZEntry entry) throws IOException { return getStream(entry, null); }
-	public final InputStream getStream(ArchiveEntry entry, byte[] pw) throws IOException { return getStream((ZEntry) entry, pw); }
-	public InputStream getStream(ZEntry entry, byte[] pw) throws IOException {
+	public final InputStream getInputStream(ZEntry entry) throws IOException { return getInputStream(entry, null); }
+	public final InputStream getInputStream(ArchiveEntry entry, byte[] password) throws IOException { return getInputStream((ZEntry) entry, password); }
+	public InputStream getInputStream(ZEntry entry, byte[] pw) throws IOException {
 		InputStream in = getRawStream(entry);
 
 		if (entry.isEncrypted()) {
@@ -653,7 +645,8 @@ public class ZipFile implements ArchiveFile {
 			}
 		}
 
-		if (entry.method == ZipEntry.DEFLATED) in = getCachedInflater(in);
+		if (entry.method == ZipEntry.DEFLATED)
+			in = InflateInputStream.getInstance(in);
 
 		if ((entry.mzFlag & ZEntry.MZ_NoCrc) == 0 && (flags & FLAG_VERIFY) != 0)
 			in = new CRC32InputStream(in, entry.crc32);
@@ -661,11 +654,4 @@ public class ZipFile implements ArchiveFile {
 		return in;
 	}
 	// endregion
-
-	public static InputStream getCachedInflater(InputStream in) {
-		List<InflateIn> infs = INFS.get();
-		if (infs.isEmpty()) in = new InflateIn(in);
-		else in = infs.remove(infs.size() - 1).reset(in);
-		return in;
-	}
 }

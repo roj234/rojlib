@@ -30,7 +30,7 @@ class UdpChImpl extends MyChannel {
 	public void register(Selector sel, int ops, Object att) throws IOException {
 		lock.lock();
 		try {
-			if ((flag & READ_INACTIVE) != 0) ops &= ~SelectionKey.OP_READ;
+			if ((flags & READ_INACTIVE) != 0) ops &= ~SelectionKey.OP_READ;
 		} finally {
 			lock.unlock();
 		}
@@ -43,8 +43,6 @@ class UdpChImpl extends MyChannel {
 	protected boolean connect0(InetSocketAddress na) throws IOException {dc.connect(na);return true;}
 	@Override
 	protected SocketAddress finishConnect0() throws IOException { return dc.getRemoteAddress(); }
-	@Override
-	protected void closeGracefully0() throws IOException { close(); }
 	@Override
 	protected void disconnect0() throws IOException {
 		dc.disconnect();
@@ -80,7 +78,7 @@ class UdpChImpl extends MyChannel {
 			} while (true);
 
 			if (pending.isEmpty()) {
-				flag &= ~(PAUSE_FOR_FLUSH|TIMED_FLUSH);
+				flags &= ~(PAUSE_FOR_FLUSH|TIMED_FLUSH);
 				key.interestOps(SelectionKey.OP_READ);
 
 				fireFlushed();
@@ -115,7 +113,7 @@ class UdpChImpl extends MyChannel {
 				BufferPool.reserve(buf);
 			}
 
-			if ((flag&READ_INACTIVE) != 0) break;
+			if ((flags &READ_INACTIVE) != 0) break;
 		}
 	}
 

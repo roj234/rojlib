@@ -5,6 +5,7 @@
 package roj.ebook.gui;
 
 import roj.collect.*;
+import roj.concurrent.Promise;
 import roj.concurrent.TaskPool;
 import roj.concurrent.Timer;
 import roj.concurrent.TimerTask;
@@ -18,6 +19,7 @@ import roj.gui.TextAreaPrintStream;
 import roj.io.IOUtil;
 import roj.text.*;
 import roj.text.diff.BsDiff;
+import roj.util.FastFailException;
 import roj.util.OperationDone;
 
 import javax.swing.*;
@@ -269,6 +271,31 @@ public class NovelFrame extends JFrame {
 	}
 
 	public Chapter getRootChapter() {return (Chapter) chaptersTree.getRoot();}
+
+	public <T> Promise<T> loadBook(File file, Function<Chapter, T> callback) {
+		return Promise.async(TaskPool.common(), promise -> {
+			setDefaultCloseOperation(WindowConstants.DISPOSE_ON_CLOSE);
+			show();
+			addWindowListener(new WindowAdapter() {
+				@Override
+				public void windowClosing(WindowEvent e) {
+					promise.reject(new FastFailException("Window Closed"));
+				}
+			});
+			load(file);
+			GuiUtil.removeComponent(btnLoad);
+			GuiUtil.removeComponent(uiNovelPath);
+			GuiUtil.removeComponent(btnFindNovel);
+			for (ActionListener actionListener : btnWrite.getActionListeners()) {
+				btnWrite.removeActionListener(actionListener);
+			}
+			btnWrite.addActionListener(e -> {
+				T result = callback.apply(getRootChapter());
+				promise.resolve(result);
+				dispose();
+			});
+		});
+	}
 
 	private class ChapterDblClickHelper extends MouseAdapter {
 		long prevClick;
@@ -986,7 +1013,6 @@ public class NovelFrame extends JFrame {
         var scrollPane1 = new JScrollPane();
         errout = new JEditorPane();
         btnGroup = new JButton();
-        btnExport = new JButton();
         advancedMenu = new JDialog();
         scrollPane3 = new JScrollPane();
         presetRegexpInp = new JTextArea();
@@ -1311,12 +1337,6 @@ public class NovelFrame extends JFrame {
         contentPane.add(btnGroup);
         btnGroup.setBounds(new Rectangle(new Point(180, 485), btnGroup.getPreferredSize()));
 
-        //---- btnExport ----
-        btnExport.setText("\u5bfc\u51fa");
-        btnExport.setEnabled(false);
-        contentPane.add(btnExport);
-        btnExport.setBounds(new Rectangle(new Point(10, 667), btnExport.getPreferredSize()));
-
         contentPane.setPreferredSize(new Dimension(945, 700));
         pack();
         setLocationRelativeTo(getOwner());
@@ -1337,7 +1357,7 @@ public class NovelFrame extends JFrame {
             {
 
                 //---- presetRegexpInp ----
-                presetRegexpInp.setText("\u5e38\u7528|1|3\n^(?:\u6b63\u6587)?[\\t \u3000\u00a0\\uE4C6\\uE5E5\\uFEFF\\u200B]*\u7b2c[\\t \u3000\u00a0\\uE4C6\\uE5E5\\uFEFF\\u200B]*([\u2015\uff0d\\\\-\u2500\u2014\u58f9\u8d30\u53c1\u8086\u4f0d\u9646\u67d2\u634c\u7396\u4e00\u4e8c\u4e24\u4e09\u56db\u4e94\u516d\u4e03\u516b\u4e5d\u5341\u25cb\u3007\u96f6\u767e\u5343O0-9\uff10-\uff19]{1,12})[\\t \u3000\u00a0\\uE4C6\\uE5E5\\uFEFF\\u200B]*([\u7ae0\u5377])[\\t \u3000\u00a0\\uE4C6\\uE5E5\\uFEFF\\u200B]*(.*)$\n\u7b2c$1$2 $3\n\u7eaf\u4e2d\u6587|1|1\n(?<=[ \u3000\ue4c6\ue4c6\\t\\n])([0-9 \\x4e00-\\x9fa5\uff08\uff09\\(\\)\\[\\]]{1,15})[ \u3000\\t]*$\n$1\n\u786c\u56de\u8f66\u7b80\u6613\u4fee\u590d|0|0\n^([ \u3000\ue4c6\ue4c6\\t]+.+)\\r?\\n([^ \u3000\\t\\r\\n].+)$\n$1$2\n\u664b\u6c5f\u5e38\u7528|1|2\n\u7b2c$1\u7ae0 $2\n^[ \u3000\ue4c6\ue4c6\\t]*([0-9\u4e00\u4e8c\u4e09\u56db\u4e94\u516d\u4e03\u516b\u4e5d\u96f6]{1,5})[\uff0e.\u3001\u203b](.+)");
+                presetRegexpInp.setText("\u5e38\u7528|1|3\n^(?:\u6b63\u6587)?[\\t \u3000\u00a0\\uE4C6\\uE5E5\\uFEFF\\u200B]*\u7b2c[\\t \u3000\u00a0\\uE4C6\\uE5E5\\uFEFF\\u200B]*([\u2015\uff0d\\\\-\u2500\u2014\u58f9\u8d30\u53c1\u8086\u4f0d\u9646\u67d2\u634c\u7396\u4e00\u4e8c\u4e24\u4e09\u56db\u4e94\u516d\u4e03\u516b\u4e5d\u5341\u25cb\u3007\u96f6\u767e\u5343O0-9\uff10-\uff19]{1,12})[\\t \u3000\u00a0\\uE4C6\\uE5E5\\uFEFF\\u200B]*([\u7ae0\u5377])[\\t \u3000\u00a0\\uE4C6\\uE5E5\\uFEFF\\u200B]*(.*)$\n\u7b2c$1$2 $3\n\u7eaf\u4e2d\u6587|1|1\n(?<=[ \u3000\ue4c6\ue4c6\\t\\n])([0-9 \\x4e00-\\x9fa5\uff08\uff09\\(\\)\\[\\]]{1,15})[ \u3000\\t]*$\n$1\n\u786c\u56de\u8f66\u7b80\u6613\u4fee\u590d|0|0\n^([ \u3000\ue4c6\ue4c6\\t]+.+)\\r?\\n([^ \u3000\\t\\r\\n].+)$\n$1$2\n\u664b\u6c5f\u5e38\u7528|1|2\n^[ \u3000\ue4c6\ue4c6\\t]*([0-9\u4e00\u4e8c\u4e09\u56db\u4e94\u516d\u4e03\u516b\u4e5d\u96f6]{1,5})[\uff0e.\u3001\u203b](.+)\n\u7b2c$1\u7ae0 $2");
                 scrollPane3.setViewportView(presetRegexpInp);
             }
             advancedMenuContentPane.add(scrollPane3);
@@ -1406,7 +1426,6 @@ public class NovelFrame extends JFrame {
     private JCheckBox uiRegenId;
     private JEditorPane errout;
     private JButton btnGroup;
-    public JButton btnExport;
     private JDialog advancedMenu;
     private JScrollPane scrollPane3;
     private JTextArea presetRegexpInp;

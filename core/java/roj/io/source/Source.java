@@ -83,7 +83,7 @@ public abstract class Source extends DataOutputStream {
 			var pos = src.position();
 			src.seek(offset);
 
-			byte[] bb = ArrayCache.getByteArray(4096, false);
+			byte[] bb = ArrayCache.getIOBuffer();
 			try {
 				while (len > 0) {
 					int l = (int) Math.min(bb.length, len);

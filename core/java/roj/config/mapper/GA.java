@@ -16,6 +16,6 @@ interface GA extends Cloneable {
 	@IndirectReference
 	default IntBiMap<String> fn() { return null; }
 	@IndirectReference
-	default void init2(Factory man, Object par) {}
+	default void init2(ObjectMapperImpl man, Object par) {}
 	Object clone();
 }

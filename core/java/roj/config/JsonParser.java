@@ -22,7 +22,7 @@ import static roj.text.Token.*;
  *
  * @author Roj234
  */
-public class JsonParser extends Parser implements StreamParser {
+public class JsonParser extends TextParser implements StreamParser {
 	static final short TRUE = 9, FALSE = 10, NULL = 11, lBrace = 12, rBrace = 13, lBracket = 14, rBracket = 15, comma = 16, colon = 17;
 
 	private static final TrieTree<Token> JSON_TOKENS = new TrieTree<>();
@@ -37,17 +37,20 @@ public class JsonParser extends Parser implements StreamParser {
 		JSON_TOKENS.put("/*", new Token().init(0, ST_MULTI_LINE_COMMENT, "*/"));
 		JSON_TOKENS.put("'", new Token().init(0, ST_LITERAL_STRING, "'"));
 	}
-	{ tokens = JSON_TOKENS; literalEnd = JSON_LENDS; }
 
-	public static ConfigValue parses(CharSequence text) throws ParseException { return new JsonParser().parse(text, 0); }
+	public static ConfigValue parses(CharSequence text) throws ParseException { return new JsonParser().parse(text); }
 
-	public JsonParser() {}
-	public JsonParser(@MagicConstant(flags = COMMENT) int commentFlag) { super(commentFlag); }
+	public JsonParser() {this(0);}
+	public JsonParser(@MagicConstant(flags = {COMMENT, LENIENT, NO_DUPLICATE_KEY, ORDERED_MAP}) int flags) {
+		super(flags);
+		tokens = JSON_TOKENS;
+		literalEnd = JSON_LENDS;
+	}
 
 	@Override
-	public ConfigValue element(@MagicConstant(flags = {NO_DUPLICATE_KEY, ORDERED_MAP, LENIENT}) int flags) throws ParseException {return element(next(), this, flags);}
+	public ConfigValue element() throws ParseException {return element(next(), this, flags);}
 	@SuppressWarnings("fallthrough")
-	private static ConfigValue element(Token w, Parser wr, int flag) throws ParseException {
+	private static ConfigValue element(Token w, TextParser wr, int flag) throws ParseException {
 		switch (w.type()) {
 			default: wr.unexpected(w.text()); // Always fail
 			case NULL: return NullValue.NULL;
@@ -63,10 +66,10 @@ public class JsonParser extends Parser implements StreamParser {
 	}
 
 	@Override
-	public void parse(CharSequence text, @MagicConstant(flags = {LENIENT}) int flag, ValueEmitter emitter) throws ParseException {
+	public void parse(CharSequence text, ValueEmitter emitter) throws ParseException {
 		init(text);
 		try {
-			streamElement(flag, emitter);
+			element(next(), flags, emitter);
 		} catch (ParseException e) {
 			throw e.addPath("$");
 		} finally {
@@ -74,8 +77,7 @@ public class JsonParser extends Parser implements StreamParser {
 		}
 	}
 	@SuppressWarnings("fallthrough")
-	public void streamElement(@MagicConstant(flags = {LENIENT}) int flags, ValueEmitter emitter) throws ParseException {
-		Token w = next();
+	public void element(Token w, int flags, ValueEmitter emitter) throws ParseException {
 		try {
 			switch (w.type()) {
 				default -> unexpected(w.text());
@@ -95,7 +97,7 @@ public class JsonParser extends Parser implements StreamParser {
 		}
 	}
 
-	static ListValue list(Parser p, ListValue value, int flag) throws ParseException {
+	static ListValue list(TextParser p, ListValue value, int flags) throws ParseException {
 		boolean hasComma = true;
 
 		o:
@@ -111,13 +113,13 @@ public class JsonParser extends Parser implements StreamParser {
 			}
 
 			if (!hasComma) {
-				if ((flag & LENIENT) == 0 || !onNextLine(p, prevIndex))
+				if ((flags & LENIENT) == 0 || !onNextLine(p, prevIndex))
 					p.unexpected(w.text(), "逗号");
 			}
 			hasComma = false;
 
 			try {
-				value.add(element(w, p, flag));
+				value.add(element(w, p, flags));
 			} catch (ParseException e) {
 				throw e.addPath("["+value.size()+"]");
 			}
@@ -126,7 +128,7 @@ public class JsonParser extends Parser implements StreamParser {
 		p.clearComment();
 		return value;
 	}
-	static <P extends Parser&StreamParser> void list(P p, ValueEmitter emitter, int flag) throws ParseException {
+	static <P extends TextParser&StreamParser> void list(P p, ValueEmitter emitter, int flags) throws ParseException {
 		boolean hasComma = true;
 		int index = 0;
 
@@ -144,7 +146,7 @@ public class JsonParser extends Parser implements StreamParser {
 			}
 
 			if (!hasComma) {
-				if ((flag & LENIENT) == 0 || !onNextLine(p, prevIndex))
+				if ((flags & LENIENT) == 0 || !onNextLine(p, prevIndex))
 					p.unexpected(w.text(), "逗号");
 			}
 			hasComma = false;
@@ -155,7 +157,7 @@ public class JsonParser extends Parser implements StreamParser {
 			}
 
 			try {
-				p.streamElement(flag, emitter);
+				p.element(w, flags, emitter);
 			} catch (ParseException e) {
 				throw e.addPath("["+index+"]");
 			}
@@ -165,10 +167,9 @@ public class JsonParser extends Parser implements StreamParser {
 		p.clearComment();
 		emitter.pop();
 	}
-
 	@SuppressWarnings("fallthrough")
-	static MapValue map(Parser p, int flag) throws ParseException {
-		Map<String, ConfigValue> map = (flag & ORDERED_MAP) != 0 ? new LinkedHashMap<>() : new HashMap<>();
+	static MapValue map(TextParser p, int flags) throws ParseException {
+		Map<String, ConfigValue> map = (flags & ORDERED_MAP) != 0 ? new LinkedHashMap<>() : new HashMap<>();
 		Map<String, String> comment = null;
 		boolean hasComma = true;
 
@@ -187,19 +188,19 @@ public class JsonParser extends Parser implements StreamParser {
 			}
 
 			if (!hasComma) {
-				if ((flag & LENIENT) == 0 || !onNextLine(p, prevIndex))
+				if ((flags & LENIENT) == 0 || !onNextLine(p, prevIndex))
 					p.unexpected(name.text(), "逗号");
 			}
 			hasComma = false;
 
 			String k = name.text().intern();
-			if ((flag & NO_DUPLICATE_KEY) != 0 && map.containsKey(k)) throw p.err("重复的key: "+k);
+			if ((flags & NO_DUPLICATE_KEY) != 0 && map.containsKey(k)) throw p.err("重复的key: "+k);
 
 			comment = p.getComment(comment, k);
 
 			Token w = p.next();
 			if (w.type() != colon) {
-				if ((flag & LENIENT) == 0) {
+				if ((flags & LENIENT) == 0) {
 					p.unexpected(w.text(), ":");
 				} else {
 					p.retractWord();
@@ -207,7 +208,7 @@ public class JsonParser extends Parser implements StreamParser {
 			}
 
 			try {
-				map.put(k, element(p.next(), p, flag));
+				map.put(k, element(p.next(), p, flags));
 			} catch (ParseException e) {
 				throw e.addPath('.'+k);
 			}
@@ -217,7 +218,7 @@ public class JsonParser extends Parser implements StreamParser {
 		return comment == null ? new MapValue(map) : new MapValue.Commentable(map, comment);
 	}
 	@SuppressWarnings("fallthrough")
-	static <T extends Parser&StreamParser> void map(T p, ValueEmitter emitter, int flag) throws ParseException {
+	static <T extends TextParser&StreamParser> void map(T p, ValueEmitter emitter, int flags) throws ParseException {
 		boolean hasComma = true;
 
 		emitter.emitMap();
@@ -236,7 +237,7 @@ public class JsonParser extends Parser implements StreamParser {
 			}
 
 			if (!hasComma) {
-				if ((flag & LENIENT) == 0 || !onNextLine(p, prevIndex))
+				if ((flags & LENIENT) == 0 || !onNextLine(p, prevIndex))
 					p.unexpected(name.text(), "逗号");
 			}
 			hasComma = false;
@@ -250,7 +251,7 @@ public class JsonParser extends Parser implements StreamParser {
 
 			Token w = p.next();
 			if (w.type() != colon) {
-				if ((flag & LENIENT) == 0) {
+				if ((flags & LENIENT) == 0) {
 					p.unexpected(w.text(), ":");
 				} else {
 					p.retractWord();
@@ -259,7 +260,7 @@ public class JsonParser extends Parser implements StreamParser {
 
 			emitter.emitKey(k);
 			try {
-				p.streamElement(flag, emitter);
+				p.element(p.next(), flags, emitter);
 			} catch (ParseException e) {
 				throw e.addPath('.'+k);
 			}
@@ -269,14 +270,14 @@ public class JsonParser extends Parser implements StreamParser {
 		emitter.pop();
 	}
 
-	private static boolean onNextLine(Parser parser, int index) {
+	private static boolean onNextLine(TextParser parser, int index) {
 		for (int i = parser.prevIndex - 1; i >= index; i--) {
 			if (parser.getText().charAt(i) == '\n') return true;
 		}
 		return false;
 	}
 
-	static ParseException adaptError(Parser wr, Exception e) {
+	static ParseException adaptError(TextParser wr, Exception e) {
 		ParseException err = wr.err(e.getClass().getName()+": "+e.getMessage());
 		err.setStackTrace(e.getStackTrace());
 		return err;

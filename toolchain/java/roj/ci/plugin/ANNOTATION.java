@@ -1,6 +1,8 @@
 package roj.ci.plugin;
 
 import roj.asm.ClassNode;
+import roj.asm.FieldNode;
+import roj.asm.MethodNode;
 import roj.asm.Opcodes;
 import roj.asm.annotation.Annotation;
 import roj.asm.attr.Annotations;
@@ -9,6 +11,7 @@ import roj.asm.cp.ConstantPool;
 import roj.asm.cp.CstRefUTF;
 import roj.asm.type.Type;
 import roj.asmx.Context;
+import roj.ci.BuildContext;
 import roj.ci.MCMake;
 import roj.collect.BiMap;
 import roj.io.IOUtil;
@@ -26,7 +29,7 @@ public class ANNOTATION implements Processor {
 
 	@Override
 	public void afterCompile(BuildContext ctx) {
-		var annotatedClass = ctx.getAnnotatedClass("roj/ci/annotation/ReplaceConstant");
+		var annotatedClass = ctx.getSourceAnnotations("roj/ci/annotation/ReplaceConstant");
 		for (int i = 0; i < annotatedClass.size(); i++) {
 			ClassNode data = annotatedClass.get(i).getData();
 			ConstantPool cp = data.cp();
@@ -49,43 +52,48 @@ public class ANNOTATION implements Processor {
 						String string = Formatter.simple(template).format(ctx.getVariables(annotatedClass.get(i)), IOUtil.getSharedCharBuf()).toString();
 						str.setValue(cp.getUtf(string));
 						if (string.contains("${"))
-							MCMake.LOGGER.warn(string+" (在文件"+annotatedClass.get(i).getFileName()+"中)");
+							MCMake.LOGGER.warn("未完全匹配的格式字符串 '"+string+"' ("+annotatedClass.get(i).getFileName()+")");
 					}
 				}
 			}
 		}
 
-		annotatedClass = ctx.getAnnotatedClass("roj/ci/annotation/ExcludeFromArtifact");
+		annotatedClass = ctx.getSourceAnnotations("roj/ci/annotation/ExcludeFromArtifact");
 		for (int i = 0; i < annotatedClass.size(); i++) {
 			ctx.removeClasses(annotatedClass.get(i));
 		}
 
-		annotatedClass = ctx.getAnnotatedClass("roj/ci/annotation/Public");
+		annotatedClass = ctx.getSourceAnnotations("roj/ci/annotation/Public");
 		for (int i = 0; i < annotatedClass.size(); i++) {
-			annotatedClass.get(i).getData().modifier |= Opcodes.ACC_PUBLIC;
+			ClassNode data = annotatedClass.get(i).getData();
+			data.modifier |= Opcodes.ACC_PUBLIC;
+			for (MethodNode method : data.methods) {
+				Annotation annotation = Annotation.findInvisible(data.cp, method, "roj/ci/annotation/Public");
+				if (annotation != null) {
+					method.modifier |= Opcodes.ACC_PUBLIC;
+				}
+			}
+			for (FieldNode field : data.fields) {
+				Annotation annotation = Annotation.findInvisible(data.cp, field, "roj/ci/annotation/Public");
+				if (annotation != null) {
+					field.modifier |= Opcodes.ACC_PUBLIC;
+				}
+			}
 		}
 
 		BiMap<String, String> classMap = ctx.getMapper().getClassMap();
 
-		annotatedClass = ctx.getAnnotatedClass("roj/ci/annotation/AliasOf");
+		annotatedClass = ctx.getSourceAnnotations("roj/ci/annotation/AliasOf");
 		for (int i = 0; i < annotatedClass.size(); i++) {
 			Context context = annotatedClass.get(i);
 			ctx.removeClasses(context);
-
-			ClassNode data = context.getData();
-
-			List<Annotation> annotations = Annotations.getAnnotations(data.cp(), data, false);
-			Annotation aliasOf = null;
-			for (int j = 0; j < annotations.size(); j++) {
-				aliasOf = annotations.get(j);
-				if (aliasOf.type().equals("roj/ci/annotation/AliasOf")) {
-					annotations.remove(j);
-					break;
-				}
-			}
-
-			Type aliasTarget = aliasOf.getClass("value");
-			classMap.put(data.name(), aliasTarget.owner());
 		}
+
+		ctx.getDepAnnotations("roj/ci/annotation/AliasOf", annotatedElement -> {
+			Annotation aliasOf = annotatedElement.annotations().get("roj/ci/annotation/AliasOf");
+			Type aliasTarget = aliasOf.getClass("value");
+			classMap.put(annotatedElement.owner(), aliasTarget.owner());
+			MCMake.LOGGER.trace("Load {} from depCache: {}", aliasOf, annotatedElement.name());
+		});
 	}
 }

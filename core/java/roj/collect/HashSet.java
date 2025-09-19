@@ -257,6 +257,16 @@ public final class HashSet<E> extends AbstractSet<E> implements FindSet<E> {
 		return UNDEFINED;
 	}
 
+	@Override
+	public boolean removeAll(@NotNull Collection<?> c) {
+		if (c instanceof Set) return super.removeAll(c);
+
+		var modified = false;
+		for (Object e : c)
+			modified |= remove(e);
+		return modified;
+	}
+
 	public void clear() {
 		if (size == 0) return;
 		hasNull = false;

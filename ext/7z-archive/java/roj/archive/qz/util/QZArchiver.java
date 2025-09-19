@@ -12,7 +12,6 @@ import roj.collect.HashSet;
 import roj.concurrent.Executor;
 import roj.concurrent.TaskGroup;
 import roj.concurrent.TaskPool;
-import roj.crypt.CRC32;
 import roj.io.IOUtil;
 import roj.io.source.CacheSource;
 import roj.io.source.CompositeSource;
@@ -461,10 +460,14 @@ public class QZArchiver {
 	}
 
 	private boolean isSame(File file, QZEntry entry) {
-		return file.length() == entry.getSize() &&
-			(!fastAppendCheck ? contentSame(entry, file) :
-				(entry.hasModificationTime() && file.lastModified() <= entry.getModificationTime()) ||
-					(entry.hasCrc32() && checkCrc32(file, entry.getCrc32())));
+		try {
+			return file.length() == entry.getSize() &&
+				(!fastAppendCheck ? contentSame(entry, file) :
+					(entry.hasModificationTime() && file.lastModified() <= entry.getModificationTime()) ||
+						(entry.hasCrc32() && IOUtil.crc32File(file) == entry.getCrc32()));
+		} catch (IOException e) {
+			return false;
+		}
 	}
 
 	/**
@@ -511,10 +514,10 @@ public class QZArchiver {
 	}
 
 	private boolean contentSame(QZEntry entry, File file) {
-		byte[] data = ArrayCache.getByteArray(4096, false);
-		byte[] data2 = ArrayCache.getByteArray(4096, false);
+		byte[] data = ArrayCache.getIOBuffer();
+		byte[] data2 = ArrayCache.getIOBuffer();
 		try (FileInputStream in = new FileInputStream(file)) {
-			try (InputStream in2 = oldArchive.getInput(entry)) {
+			try (InputStream in2 = oldArchive.getInputStream(entry)) {
 				while (true) {
 					int r = in.read(data);
 					if (r < 0) break;
@@ -530,23 +533,6 @@ public class QZArchiver {
 		} finally {
 			ArrayCache.putArray(data);
 			ArrayCache.putArray(data2);
-		}
-	}
-	private static boolean checkCrc32(File file, int crc2) {
-		byte[] data = ArrayCache.getByteArray(4096, false);
-		try (FileInputStream in = new FileInputStream(file)) {
-			int crc = CRC32.initial;
-			while (true) {
-				int r = in.read(data);
-				if (r < 0) break;
-				crc = CRC32.update(crc, data, 0, r);
-			}
-			crc = CRC32.finish(crc);
-			return crc == crc2;
-		} catch (Exception e) {
-			return false;
-		} finally {
-			ArrayCache.putArray(data);
 		}
 	}
 
@@ -773,7 +759,7 @@ public class QZArchiver {
 			}
 
 			group.executeUnsafe(() -> {
-				try (QZReader _in = oldArchive.parallel()) {
+				try (QZReader _in = oldArchive.forkReader()) {
 					try (QZWriter _out = parallel(writer)) {
 						_out.setCodec(coders);
 
@@ -782,7 +768,7 @@ public class QZArchiver {
 							QZEntry _file = value.get(i);
 
 							_out.beginEntry(_file.clone());
-							try (InputStream in = _in.getInput(_file)) {
+							try (InputStream in = _in.getInputStream(_file)) {
 								copyStreamWithProgress(in, _out, bar);
 							}
 						}
@@ -903,7 +889,7 @@ public class QZArchiver {
 	}
 
 	public static void copyStreamWithProgress(InputStream in, OutputStream out, EasyProgressBar bar) throws IOException {
-		byte[] tmp = ArrayCache.getByteArray(65536, false);
+		byte[] tmp = ArrayCache.getIOBuffer();
 		try {
 			while (true) {
 				if (Thread.interrupted()) throw new InterruptedIOException();

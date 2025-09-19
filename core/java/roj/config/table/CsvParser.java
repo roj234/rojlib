@@ -3,7 +3,7 @@ package roj.config.table;
 import roj.collect.ArrayList;
 import roj.collect.BitSet;
 import roj.collect.Int2IntMap;
-import roj.config.Parser;
+import roj.config.TextParser;
 import roj.config.ValueEmitter;
 import roj.config.node.ConfigValue;
 import roj.config.node.ListValue;
@@ -24,7 +24,7 @@ import java.util.List;
  * @author Roj233
  * @since 2022/1/6 13:46
  */
-public final class CsvParser extends Parser implements TableParser {
+public final class CsvParser extends TextParser implements TableParser {
 	private static final short separator = 9, line = 10;
 
 	private static final BitSet CSV_LENDS = BitSet.from("\r\n,;");
@@ -97,10 +97,9 @@ public final class CsvParser extends Parser implements TableParser {
 		return list;
 	}
 
-	public CsvParser() {}
+	public CsvParser() {super(0);}
 
-	public void parse(CharSequence text, int flags, ValueEmitter emitter) throws ParseException {
-		this.flag = flags;
+	public void parse(CharSequence text, ValueEmitter emitter) throws ParseException {
 		init(text);
 		tmpList = new ArrayList<>();
 
@@ -155,8 +154,7 @@ public final class CsvParser extends Parser implements TableParser {
 
 	@Override
 	@Deprecated
-	public ListValue parse(CharSequence text, int flags) throws ParseException {
-		this.flag = flags;
+	public ListValue parse(CharSequence text) throws ParseException {
 		init(text);
 		tmpList = new ArrayList<>();
 

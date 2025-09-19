@@ -40,9 +40,9 @@ public final class AnnotationEncoder implements ValueEmitter {
 	public final void emit(float i) {out.put(Type.FLOAT).putShort(cp.getFloatId(i));}
 	public final void emit(double i) {out.put(Type.DOUBLE).putShort(cp.getDoubleId(i));}
 	public final void emit(String s) {out.put(AnnVal.STRING).putShort(cp.getUtfId(s));}
-	public final void valueClass(String klass) {out.put(AnnVal.ANNOTATION_CLASS).putShort(cp.getUtfId(klass));}
-	public final void valueEnum(String klass, String field) {out.put(AnnVal.ENUM).putShort(cp.getUtfId(AnnVal.checkSemicolon(klass))).putShort(cp.getUtfId(field));}
-	public final void valueAnnotation(String klass) {
+	public final void emitType(String klass) {out.put(AnnVal.ANNOTATION_CLASS).putShort(cp.getUtfId(klass));}
+	public final void emitEnum(String klass, String field) {out.put(AnnVal.ENUM).putShort(getTypeId(klass)).putShort(cp.getUtfId(field));}
+	public final void emitAnnotation(String klass) {
 		int id = getTypeId(klass);
 		out.put(AnnVal.ANNOTATION).putShort(id);
 	}

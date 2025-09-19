@@ -9,7 +9,7 @@ import roj.crypt.CipherOutputStream;
 import roj.io.Finishable;
 import roj.io.IOUtil;
 import roj.io.source.Source;
-import roj.reflect.Unsafe;
+import roj.optimizer.FastVarHandle;
 import roj.text.logging.Logger;
 import roj.util.ArrayCache;
 import roj.util.ByteList;
@@ -46,6 +46,7 @@ import static roj.archive.zip.ZEntry.MZ_NoCrc;
  * @author Roj233
  * @since 2021/7/10 17:09
  */
+@FastVarHandle
 public final class ZipArchive extends ZipFile {
 	private static final Comparator<ZEntry> CEN_SORTER = (o1, o2) -> Long.compare(o1.offset, o2.offset);
 
@@ -73,31 +74,31 @@ public final class ZipArchive extends ZipFile {
 	public void setComment(byte[] str) { comment = str == null ? ArrayCache.BYTES : str; }
 
 	/** 如果 data 为 null 那么删除 */
-	public EntryMod put(String entry, ByteList data) {
-		EntryMod mod = createMod(entry);
+	public EntryMod put(String name, ByteList data) {
+		EntryMod mod = createMod(name);
 		mod.flag = data != null && data.readableBytes() > 100 ? EntryMod.COMPRESS : 0;
 		mod.data = data;
 		return mod;
 	}
-	public EntryMod put(String entry, ExceptionalSupplier<ByteList, IOException> getData, boolean compress) {
-		EntryMod mod = createMod(entry);
+	public EntryMod put(String name, ExceptionalSupplier<ByteList, IOException> getData, boolean compress) {
+		EntryMod mod = createMod(name);
 		mod.flag = compress ? EntryMod.COMPRESS : 0;
 		mod.data = getData;
 		return mod;
 	}
-	public EntryMod putStream(String entry, ExceptionalSupplier<InputStream, IOException> in, boolean compress) {
-		EntryMod mod = createMod(entry);
+	public EntryMod putStream(String name, ExceptionalSupplier<InputStream, IOException> in, boolean compress) {
+		EntryMod mod = createMod(name);
 		mod.flag = compress ? EntryMod.COMPRESS : 0;
 		mod.data = in;
 		return mod;
 	}
-	public EntryMod createMod(String entry) {
+	public EntryMod createMod(String name) {
 		EntryMod file = new EntryMod();
-		file.name = entry;
+		file.name = name;
 		if (file == (file = modified.find(file))) {
 			if ((flags & FLAG_HAS_ERROR) != 0) throw new IllegalStateException("该压缩文件不符合规范，因此无法写入");
 
-			file.entry = getEntry(entry);
+			file.entry = getEntry(name);
 			modified.add(file);
 		}
 		return file;
@@ -200,30 +201,36 @@ public final class ZipArchive extends ZipFile {
 				continue;
 			}
 
-			ZEntry e = mf.entry;
-			if (e == null) {
-				e = mf.entry = new ZEntry();
-				namedEntries.put(e.name = mf.name, e);
+			ZEntry entry = mf.entry;
+			if (entry == null) {
+				entry = mf.entry = new ZEntry();
+				namedEntries.put(entry.name = mf.name, entry);
 				if ((flags & FLAG_FORCE_UTF) != 0 || (mf.flag & EntryMod.UFS) != 0) {
-					e.flags = GP_UTF;
-					e.nameBytes = IOUtil.encodeUTF8(mf.name);
+					entry.flags = GP_UTF;
+					entry.nameBytes = IOUtil.encodeUTF8(mf.name);
 				} else {
-					e.flags = 0;
-					e.nameBytes = mf.name.getBytes(cs);
+					entry.flags = 0;
+					entry.nameBytes = mf.name.getBytes(cs);
 				}
-			} else if ((mf.flag & EntryMod.UFS) != 0 && (e.flags & GP_UTF) == 0) {
-				e.flags = GP_UTF;
-				e.nameBytes = IOUtil.encodeUTF8(e.name);
+			} else if ((mf.flag & EntryMod.UFS) != 0 && (entry.flags & GP_UTF) == 0) {
+				entry.flags = GP_UTF;
+				entry.nameBytes = IOUtil.encodeUTF8(entry.name);
 			} else {
-				e.flags = 0; // clear
+				entry.flags = 0; // clear
 			}
 
-			e.prepareWrite(mf.cryptType);
-			e.offset = r.position() + 30 + e.nameBytes.length;
-			e.method = (char) (mf.flag & EntryMod.COMPRESS);
+			entry.prepareWrite(mf.cryptType);
+			entry.offset = r.position() + 30 + entry.nameBytes.length;
+			entry.method = (char) (mf.flag & EntryMod.COMPRESS);
 			if ((mf.flag & EntryMod.KEEP_TIME) == 0) {
-				e.pModTime = precisionModTime;
-				e.modTime = modTime;
+				long overrideTime = mf.modificationTime;
+				if (overrideTime == 0) {
+					entry.pModTime = precisionModTime;
+					entry.modTime = modTime;
+				} else {
+					entry.pModTime = overrideTime;
+					entry.modTime = ZEntry.java2DosTime(overrideTime);
+				}
 			}
 
 			// prepare
@@ -234,7 +241,7 @@ public final class ZipArchive extends ZipFile {
 				try {
 					data = ((ExceptionalSupplier<?,IOException>) data).get();
 				} catch (Exception ex) {
-					Logger.FALLBACK.error("无法保存{}的数据", ex, e.name);
+					Logger.FALLBACK.error("无法保存{}的数据", ex, entry.name);
 					continue;
 				}
 			}
@@ -243,26 +250,26 @@ public final class ZipArchive extends ZipFile {
 				mf.flag &= ~EntryMod.LARGE;
 				if (b.isDirect()) {
 					in = b.asInputStream();
-					e.crc32 = CRC32.crc32(b.address(), b.readableBytes());
+					entry.crc32 = CRC32.crc32(b.address(), b.readableBytes());
 				} else {
 					in = null;
-					e.crc32 = CRC32.crc32(b.array(), b.relativeArrayOffset(), b.readableBytes());
+					entry.crc32 = CRC32.crc32(b.array(), b.relativeArrayOffset(), b.readableBytes());
 				}
 
 				sizeIsKnown = true;
-				e.cSize = 0;
-				e.uSize = b.readableBytes();
+				entry.cSize = 0;
+				entry.uSize = b.readableBytes();
 			} else {
 				in = (InputStream) data;
-				if (mf.cryptType == CRYPT_ZIP2) e.flags |= GP_HAS_EXT;
+				if (mf.cryptType == CRYPT_ZIP2) entry.flags |= GP_HAS_EXT;
 				if (in.available() == Integer.MAX_VALUE) mf.flag |= EntryMod.LARGE;
-				e.cSize = e.uSize = mf.large() ? U32_MAX : 0;
-				e.crc32 = 0;
+				entry.cSize = entry.uSize = mf.large() ? U32_MAX : 0;
+				entry.crc32 = 0;
 				sizeIsKnown = false;
 			}
 
 			long offset = r.position() + 14;
-			writeLOC(out, bw, e);
+			writeLOC(out, bw, entry);
 
 			ZipAES za = null;
 			OutputStream cout = out;
@@ -275,7 +282,7 @@ public final class ZipArchive extends ZipFile {
 					byte[] rnd = new byte[12];
 					ThreadLocalRandom.current().nextBytes(rnd);
 					// check byte
-					rnd[11] = (byte) (sizeIsKnown ? e.crc32 >>> 24 : e.modTime >>> 8);
+					rnd[11] = (byte) (sizeIsKnown ? entry.crc32 >>> 24 : entry.modTime >>> 8);
 					cout.write(rnd);
 				} else {
 					za = new ZipAES();
@@ -291,7 +298,7 @@ public final class ZipArchive extends ZipFile {
 			byte[] buf = bw.list;
 			if (in == null) {
 				ByteList buf1 = (ByteList) data;
-				if (e.method != 0) {
+				if (entry.method != 0) {
 					def.setInput(buf1.array(), buf1.relativeArrayOffset(), buf1.readableBytes());
 					def.finish();
 					int w = 0;
@@ -301,14 +308,14 @@ public final class ZipArchive extends ZipFile {
 						cout.write(buf, 0, len);
 					}
 					def.reset();
-					e.cSize = w;
+					entry.cSize = w;
 				} else {
 					cout.write(buf1.array(), buf1.relativeArrayOffset(), buf1.readableBytes());
-					e.cSize = e.uSize;
+					entry.cSize = entry.uSize;
 				}
 			} else try {
 				int crc = CRC32.initial;
-				if (e.method != 0) {
+				if (entry.method != 0) {
 					final int d2 = buf.length / 2;
 
 					int r;
@@ -329,8 +336,8 @@ public final class ZipArchive extends ZipFile {
 						cout.write(buf, 0, len);
 					}
 
-					e.uSize = def.getBytesRead();
-					e.cSize = def.getBytesWritten();
+					entry.uSize = def.getBytesRead();
+					entry.cSize = def.getBytesWritten();
 					def.reset();
 				} else {
 					long sum = 0;
@@ -342,30 +349,30 @@ public final class ZipArchive extends ZipFile {
 						cout.write(buf, 0, r);
 						sum += r;
 					}
-					e.uSize = e.cSize = sum;
+					entry.uSize = entry.cSize = sum;
 				}
-				e.crc32 = CRC32.finish(crc);
+				entry.crc32 = CRC32.finish(crc);
 			} catch (Throwable ex) {
 				def.end();
-				Logger.FALLBACK.error("无法保存{}的数据", ex, e.name);
+				Logger.FALLBACK.error("无法保存{}的数据", ex, entry.name);
 			} finally {
 				in.close();
 			}
 			if (cout instanceof Finishable f) f.finish();
 
-			switch (e.getEncryptType()) {
+			switch (entry.getEncryptType()) {
 				case CRYPT_AES, CRYPT_AES2:
 					// 16 + 2 + 10
-					e.cSize += 28;
+					entry.cSize += 28;
 					za.sendTrailers(out);
 				break;
 				case CRYPT_ZIP2:
-					e.cSize += 12;
-					if (!sizeIsKnown) writeEXT(out, bw, e);
+					entry.cSize += 12;
+					if (!sizeIsKnown) writeEXT(out, bw, entry);
 				break;
 			}
 
-			if ((Math.max(e.cSize, e.uSize) >= U32_MAX) && !mf.large())
+			if ((Math.max(entry.cSize, entry.uSize) >= U32_MAX) && !mf.large())
 				throw new ZipException("Zip64预测失败，对于'可能'超过4GB大小的文件,请设置它的large标志位或令in.available返回Integer.MAX_VALUE");
 
 			long pos = r.position();
@@ -373,17 +380,17 @@ public final class ZipArchive extends ZipFile {
 			// 不想再搞什么提前算然后写的差分了
 			r.seek(offset);
 
-			e.offset += e.extraLenOfLOC;
-			r.writeInt(Integer.reverseBytes(e.getCRC32FW()));
+			entry.offset += entry.extraLenOfLOC;
+			r.writeInt(Integer.reverseBytes(entry.getCRC32FW()));
 
 			if (!mf.large()) {
-				r.writeInt(Integer.reverseBytes((int) e.cSize));
-				r.writeInt(Integer.reverseBytes((int) e.uSize));
+				r.writeInt(Integer.reverseBytes((int) entry.cSize));
+				r.writeInt(Integer.reverseBytes((int) entry.uSize));
 			} else {
 				// update ZIP64 (in extra region)
-				r.seek(offset+20+e.nameBytes.length);
-				r.writeLong(Long.reverseBytes(e.uSize));
-				r.writeLong(Long.reverseBytes(e.cSize));
+				r.seek(offset+20+entry.nameBytes.length);
+				r.writeLong(Long.reverseBytes(entry.uSize));
+				r.writeLong(Long.reverseBytes(entry.cSize));
 			}
 
 			r.seek(pos);
@@ -416,7 +423,7 @@ public final class ZipArchive extends ZipFile {
 
 		r.setLength(r.position());
 
-		CacheNode node = OPENED.get(r);
+		CacheNode node = ARCHIVES.get(r);
 		if (node != null) {
 			node.entries = entries;
 			node.namedEntries = namedEntries;
@@ -431,7 +438,7 @@ public final class ZipArchive extends ZipFile {
 		if (file == null) throw new IOException("不是从文件打开");
 		if (r == null) {
 			r = ArchiveUtils.tryOpenSplitArchive(file, false);
-			var cache = (Source) Unsafe.U.getAndSetReference(this, CACHE, r);
+			var cache = (Source) CACHE.getAndSet(this, r);
 			if (cache != r) IOUtil.closeSilently(cache);
 		}
 	}

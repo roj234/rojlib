@@ -515,7 +515,7 @@ public class ClassNode implements ClassDefinition {
 		Signature signature = getAttribute(cp, Attribute.SIGNATURE);
 		if (signature == null) {
 			signature = new Signature(Signature.CLASS);
-			signature.values = Flow.of(parentCst).append(Flow.of(interfaces)).map(type -> type.value().str().equals("java/lang/Object") ? Signature.placeholder() : Type.klass(type.value().str())).toList();
+			signature.values = Flow.of(parentCst).append(Flow.of(interfaces)).map(type -> type.value().str().equals("java/lang/Object") ? Signature.objectBound() : Type.klass(type.value().str())).toList();
 			addAttribute(signature);
 		}
 		return signature;

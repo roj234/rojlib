@@ -1,8 +1,8 @@
 package roj.plugins;
 
 import org.jetbrains.annotations.Nullable;
-import roj.collect.HashMap;
 import roj.collect.ArrayList;
+import roj.collect.HashMap;
 import roj.config.node.Type;
 import roj.http.WebSocket;
 import roj.http.server.*;
@@ -217,7 +217,7 @@ public class Websocketd extends Plugin implements Router {
 				in.rIndex = in.wIndex();
 			} else if (sysDec == null) {
 				// UTF-8 Direct Memory
-				byte[] array = ArrayCache.getByteArray(1024, false);
+				byte[] array = ArrayCache.getIOBuffer();
 				try {
 					while (in.isReadable()) {
 						int len = Math.min(in.readableBytes(), array.length);

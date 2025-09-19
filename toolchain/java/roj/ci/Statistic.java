@@ -3,6 +3,7 @@ package roj.ci;
 import roj.collect.ToIntMap;
 import roj.collect.ToLongMap;
 import roj.config.ConfigMaster;
+import roj.config.JsonParser;
 import roj.config.mapper.Optional;
 import roj.io.IOUtil;
 import roj.text.ParseException;
@@ -22,7 +23,7 @@ public class Statistic {
 	public ToIntMap<String> buildFailures = new ToIntMap<>();
 	public ToLongMap<String> buildTimes = new ToLongMap<>();
 
-	private static Statistic instance = new Statistic();
+	public static Statistic instance = new Statistic();
 	private static boolean isDirty;
 
 	public static void afterProjectBuild(String projectName, long timeConsumed, Set<String> args, boolean success) {
@@ -42,7 +43,7 @@ public class Statistic {
 		var file = new File(MCMake.CONF_PATH, "statistics.json");
 		if (file.isFile()) {
 			try {
-				instance = ConfigMaster.JSON.readObject(MCMake.CONFIG.serializer(Statistic.class), file);
+				instance = MCMake.CONFIG.read(file, Statistic.class, new JsonParser());
 			} catch (IOException | ParseException e) {
 				MCMake.LOGGER.error("Exception while reading statistics.json", e);
 				return;
@@ -57,7 +58,7 @@ public class Statistic {
 		if (isDirty) {
 			try {
 				IOUtil.writeFileEvenMoreSafe(MCMake.CONF_PATH, "statistics.json",
-						value -> ConfigMaster.JSON.writeObject(MCMake.CONFIG.serializer(Statistic.class), instance, value));
+						value -> ConfigMaster.JSON.writeObject(MCMake.CONFIG.writer(Statistic.class), instance, value));
 				isDirty = false;
 			} catch (IOException e) {
 				MCMake.LOGGER.warn("Exception saving statistics.json", e);

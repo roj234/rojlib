@@ -10,6 +10,7 @@ import roj.concurrent.FastThreadLocal;
 import roj.config.node.IntValue;
 import roj.config.node.LongValue;
 import roj.crypt.Base64;
+import roj.crypt.CRC32;
 import roj.reflect.Reflection;
 import roj.reflect.Unsafe;
 import roj.text.*;
@@ -32,6 +33,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.concurrent.LinkedBlockingDeque;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
 
@@ -279,8 +281,11 @@ public final class IOUtil {
 				@Override
 				public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) {size++;return FileVisitResult.CONTINUE;}
 				@Override
-				public FileVisitResult postVisitDirectory(Path dir, IOException exc) {
-					if (--size > 0 && dir.toFile().delete()) tmp.value++;
+				public FileVisitResult postVisitDirectory(Path dir, IOException exc) throws IOException {
+					if (--size > 0) {
+						Files.delete(dir);
+						tmp.value++;
+					}
 					return FileVisitResult.CONTINUE;
 				}
 			});
@@ -315,48 +320,48 @@ public final class IOUtil {
 		return true;
 	}
 
-	public static long transferFileSelf(FileChannel cf, long from, long to, long len) throws IOException {
+	/**
+	 * 文件内部复制, 返回时fc的位置不确定
+	 */
+	public static long transferFileSelf(FileChannel fc, long from, long to, long len) throws IOException {
 		if (from == to || len == 0) return len;
 
-		long pos = cf.position();
-		try {
-			if (from > to ? to + len <= from : from + len <= to) { // 区间不交叉
-				return cf.transferTo(from, len, cf.position(to));
+		if (from > to ? to + len <= from : from + len <= to) { // 区间不交叉
+			return fc.transferTo(from, len, fc.position(to));
+		}
+
+		if (len <= 1048576) {
+			ByteBuffer direct = ByteBuffer.allocateDirect((int) len);
+			try {
+				direct.position(0).limit((int) len);
+				fc.read(direct, from);
+				direct.position(0);
+				return fc.position(to).write(direct);
+			} finally {
+				NativeMemory.freeDirectBuffer(direct);
 			}
+		} else {
+			File tmpPath = new File(System.getProperty("java.io.tmpdir"));
+			File tmpFile;
+			do {
+				tmpFile = new File(tmpPath, "FUT~"+randomFileName()+".tmp");
+			} while (tmpFile.exists());
 
-			if (len <= 1048576) {
-				ByteBuffer direct = ByteBuffer.allocateDirect((int) len);
-				try {
-					direct.position(0).limit((int) len);
-					cf.read(direct, from);
-					direct.position(0);
-					return cf.position(to).write(direct);
-				} finally {
-					NativeMemory.freeDirectBuffer(direct);
-				}
-			} else {
-				File tmpPath = new File(System.getProperty("java.io.tmpdir"));
-				File tmpFile;
-				do {
-					tmpFile = new File(tmpPath, "FUT~"+(float)Math.random()+".tmp");
-				} while (tmpFile.exists());
-
-				try (FileChannel ct = FileChannel.open(tmpFile.toPath(),
+			try (FileChannel ct = FileChannel.open(tmpFile.toPath(),
 					StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE, StandardOpenOption.READ, StandardOpenOption.DELETE_ON_CLOSE)) {
-					cf.transferTo(from, len, ct.position(0));
-					return ct.transferTo(0, len, cf.position(to));
-				}
+				fc.transferTo(from, len, ct.position(0));
+				return ct.transferTo(0, len, fc.position(to));
 			}
-		} finally {
-			// 还原位置
-			cf.position(pos+len);
 		}
 	}
 
+	public static String randomFileName() {return Long.toString(ThreadLocalRandom.current().nextLong(), 36);}
+
+	// 非线程安全，主要目的是写入文件时抛出异常，不会造成文件内容丢失
 	public static boolean writeFileEvenMoreSafe(File baseFolder, String baseName, ExceptionalConsumer<File, IOException> consumer) throws IOException {
 		var realFile = new File(baseFolder, baseName);
-		var tmpFile = new File(baseFolder, baseName+"."+System.nanoTime()+".tmp");
-		var deletePend = new File(baseFolder, baseName+".delete_pend");
+		var tmpFile = new File(baseFolder, baseName+"."+randomFileName()+".new");
+		var deletePend = new File(baseFolder, baseName+"."+randomFileName()+".old");
 
 		if (!realFile.isFile()) tmpFile = realFile;
 
@@ -376,7 +381,7 @@ public final class IOUtil {
 	}
 
 	public static void digestFile(File file, long length, MessageDigest digest) throws IOException {
-		byte[] tmp = ArrayCache.getByteArray(4096, false);
+		byte[] tmp = ArrayCache.getIOBuffer();
 		try (var in = new FileInputStream(file)) {
 			while (length > 0) {
 				int r = in.read(tmp);
@@ -389,6 +394,21 @@ public final class IOUtil {
 			}
 		}
 		ArrayCache.putArray(tmp);
+	}
+
+	public static int crc32File(File file) throws IOException {
+		byte[] data = ArrayCache.getIOBuffer();
+		try (var in = new FileInputStream(file)) {
+			int crc = CRC32.initial;
+			while (true) {
+				int r = in.read(data);
+				if (r < 0) break;
+				crc = CRC32.update(crc, data, 0, r);
+			}
+			return CRC32.finish(crc);
+		} finally {
+			ArrayCache.putArray(data);
+		}
 	}
 
 	/**
@@ -557,8 +577,8 @@ public final class IOUtil {
 			}
 
 			@Override
-			public FileVisitResult postVisitDirectory(Path dir, IOException exc) {
-				if (move) dir.toFile().delete();
+			public FileVisitResult postVisitDirectory(Path dir, IOException exc) throws IOException {
+				if (move) Files.delete(dir);
 				return FileVisitResult.CONTINUE;
 			}
 		});
@@ -584,7 +604,7 @@ public final class IOUtil {
 	}
 	public static boolean makeHardLink(@NotNull String link, @NotNull String existing) {
 		RojLib.fastJni();
-		return makeHardLink0(link, existing);
+		return makeHardLink0(Objects.requireNonNull(link), Objects.requireNonNull(existing));
 	}
 	private static native String getHardLinkUUID0(String filePath);
 	private static native boolean makeHardLink0(String link, String existing);

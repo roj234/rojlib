@@ -1,6 +1,6 @@
 package roj.util;
 
-import roj.annotation.Status;
+import roj.annotation.ForDebug;
 import roj.reflect.Unsafe;
 import roj.text.CharList;
 import roj.text.TextUtil;
@@ -43,7 +43,7 @@ public class ArrayCache {
 	private final Object[] cache = new Object[ID_COUNT * 13 * CACHE_COUNT];
 	private final int[] using = new int[ID_COUNT * 13];
 
-	@Status
+	@ForDebug
 	public static CharList status(CharList sb) {
 		sb.append("小数组缓存(Reserved/Total):\n");
 		var ac = CACHE.get();
@@ -103,6 +103,7 @@ public class ArrayCache {
 
 	@SuppressWarnings("unchecked")
 	private static <T> T getGlobalArray(int idx, int size) {
+		new Throwable("Allocating huge array type="+typeOf(idx)+", size="+size).printStackTrace();
 		idx <<= 8;
 		int i1 = size / LARGE_ARRAY_SIZE - 1;
 		if (i1 >= 255) {
@@ -213,6 +214,7 @@ public class ArrayCache {
 		using[idx] &= ~(1<<free);
 	}
 
+	public static byte[] getIOBuffer() {return getByteArray(8192, false);}
 	public static byte[] getByteArray(int size, boolean fillWithZeros) {
 		int size1 = (size+MIN_ARRAY_SIZE-1)& -MIN_ARRAY_SIZE;
 
@@ -231,14 +233,12 @@ public class ArrayCache {
 		else small().putArray(0, array, array.length);
 	}
 
-	public static int[] getIntArray(int size, int fillWithZeros) {
-		int size1 = (size+MIN_ARRAY_SIZE-1)& -MIN_ARRAY_SIZE;
-
+	public static int[] getIntArray(int size, boolean fillWithZeros) {
+		int size1 = (size+MIN_ARRAY_SIZE-1) & -MIN_ARRAY_SIZE;
 		int[] array = size1 > LARGE_ARRAY_SIZE ? getGlobalArray(1, size1) : small().getArray(1, size1);
-
-		if (array == null) array = fillWithZeros != 0 ? new int[size1] : (int[]) U.allocateUninitializedArray(int.class, size1);
-		else {
-			for (int i = 0; i < fillWithZeros; i++)
+		if (array == null) array = fillWithZeros ? new int[size1] : (int[]) U.allocateUninitializedArray(int.class, size1);
+		else if (fillWithZeros) {
+			for (int i = 0; i < size; i++)
 				array[i] = 0;
 		}
 
@@ -249,19 +249,14 @@ public class ArrayCache {
 		else small().putArray(1, array, array.length);
 	}
 
-	public static char[] getCharArray(int size, boolean fillWithZeros) {
+	// such buffer should not smaller < 256
+	public static char[] getIOCharBuffer() {return getCharArray(4096);}
+	public static char[] getCharArray(int size) {
 		// round up to CHIP_SIZE
 		// 分块... 反正get实际意义是... 长度至少为N的数组
-		int size1 = (size+ MIN_ARRAY_SIZE -1)& -MIN_ARRAY_SIZE;
-
+		int size1 = (size+MIN_ARRAY_SIZE-1) & -MIN_ARRAY_SIZE;
 		char[] array = size1 > LARGE_ARRAY_SIZE ? getGlobalArray(2, size1) : small().getArray(2, size1);
-
-		if (array == null) array = fillWithZeros ? new char[size1] : (char[]) U.allocateUninitializedArray(char.class, size1);
-		else if (fillWithZeros) {
-			for (int i = 0; i < size; i++)
-				array[i] = 0;
-		}
-
+		if (array == null) array = (char[]) U.allocateUninitializedArray(char.class, size1);
 		return array;
 	}
 	public static void putArray(char[] array) {

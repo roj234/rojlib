@@ -9,9 +9,8 @@ import roj.text.CharList;
 public class SchemaViolationException extends RuntimeException {
 	private final CharList paths = new CharList();
 
-	public SchemaViolationException(String message) {
-		super(message);
-	}
+	public SchemaViolationException(String message) {super(message);}
+	public SchemaViolationException(String message, Exception cause) {super(message, cause);}
 
 	public SchemaViolationException addPath(String path) {
 		this.paths.insert(0, path);

@@ -87,7 +87,7 @@ public class RRCManager {
 
 		input.seek(dataOffset);
 
-		try (var in = new LimitInputStream(input.asInputStream(), dataLength, false);
+		try (var in = new LimitInputStream(input.asInputStream(), dataLength);
 			 var bar = new EasyProgressBar("生成纠错码")) {
 
 			bar.setTotal(dataLength);
@@ -99,7 +99,7 @@ public class RRCManager {
 			long dataLengthWithECC = output.position() - dataOffset;
 
 			output.seek(dataOffset);
-			var lin = new LimitInputStream(output.asInputStream(), dataLengthWithECC, false);
+			var lin = new LimitInputStream(output.asInputStream(), dataLengthWithECC);
 
 			byte[] block = new byte[blockSize * recc.dataSize()];
 			bar.setTitle("生成定位码");
@@ -165,7 +165,7 @@ public class RRCManager {
 		byte[] data = new byte[dataLength + 5]; // 4字节CRC + 1字节长度
 		output.readFully(data, 0, dataLength);
 		int crc = CRC32.crc32(data, 0, dataLength);
-		DynByteBuf.wrap(data).putInt(dataLength, crc).put(dataLength+4, dataLength);
+		DynByteBuf.wrap(data).setInt(dataLength, crc).set(dataLength+4, dataLength);
 
 		// 随后重复repetitions-1次
 		output.write(data, dataLength, 5);
@@ -203,7 +203,7 @@ public class RRCManager {
 
 	private boolean decodeLayer(DynByteBuf metadata, Source output, long previousPosition) throws IOException {
 		// 解码元数据
-		int metadataStart = metadata.wIndex() - metadata.getU(metadata.wIndex() - 1) - 1;
+		int metadataStart = metadata.wIndex() - metadata.getUnsignedByte(metadata.wIndex() - 1) - 1;
 		metadata.rIndex = metadataStart;
 
 		int dataSize = metadata.readUnsignedByte();
@@ -316,9 +316,9 @@ public class RRCManager {
 		buf.wIndex(len);
 
 		for (int i = len - 1; i >= 6; i--) {
-			int dataLength = buf.getU(i);
+			int dataLength = buf.getUnsignedByte(i);
 			if (dataLength+4 > i) continue;
-			int crc = buf.readInt(i - 4);
+			int crc = buf.getInt(i - 4);
 			buf.readFully(i - 4 - dataLength, tmp, 0, dataLength);
 
 			if (CRC32.crc32(tmp, 0, dataLength) == crc) {

@@ -1,9 +1,9 @@
 package roj.config.mapper;
 
+import roj.ci.annotation.Public;
 import roj.collect.ArrayList;
 import roj.collect.BitSet;
 import roj.collect.IntBiMap;
-import roj.config.ValueEmitter;
 import roj.text.CharList;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
@@ -13,8 +13,9 @@ import roj.util.Helpers;
  * @author Roj234
  * @since 2023/3/19 19:16
  */
-sealed class MappingContext implements ObjectMapper<Object> permits MappingContextEx {
-	private final TypeAdapter root;
+@Public
+sealed class MappingContext implements ObjectReader<Object> permits ReentrantObjectReader {
+	final TypeAdapter root;
 	TypeAdapter curr;
 
 	private Frame stack, bin;
@@ -69,22 +70,21 @@ sealed class MappingContext implements ObjectMapper<Object> permits MappingConte
 	}
 
 	public BitSet fieldStateEx;
-	int fieldState;
+	public int fieldState;
 
-	int fieldId;
+	public int fieldId;
 
-	Object ref, ref2;
+	public Object ref, ref2;
 
-	public MappingContext(TypeAdapter root, boolean allowDeser) {
+	public MappingContext(TypeAdapter root) {
 		this.root = root;
-		if (!allowDeser) root = TypeAdapter.NO_DESERIALIZE;
 		this.curr = root;
 		if (root.fieldCount() > 32) fieldStateEx = new BitSet(root.fieldCount()-32);
 
 		fieldId = -2;
 	}
 
-	void setRef(Object o) {ref = o;}
+	public void setRef(Object o) {ref = o;}
 
 	public final void emit(boolean b) {curr.read(this, b);}
 	public final void emit(int i) {curr.read(this, i);}
@@ -133,7 +133,7 @@ sealed class MappingContext implements ObjectMapper<Object> permits MappingConte
 		popd(true);
 	}
 	// pop direct (not checking field count)
-	final void popd(boolean sendVal) {
+	public final void popd(boolean sendVal) {
 		if (stack == null) {
 			finished = true;
 			return;
@@ -227,7 +227,7 @@ sealed class MappingContext implements ObjectMapper<Object> permits MappingConte
 		return ref;
 	}
 	public final boolean finished() { return finished; }
-	public ObjectMapper<Object> reset() {
+	public ObjectReader<Object> reset() {
 		fieldId = -2;
 		fieldState = 0;
 		if (fieldStateEx != null) fieldStateEx.clear();
@@ -238,9 +238,10 @@ sealed class MappingContext implements ObjectMapper<Object> permits MappingConte
 		stack = null;
 
 		finished = false;
-		if (curr != TypeAdapter.NO_DESERIALIZE) curr = root;
+		curr = root;
 		return this;
 	}
 
-	public void write(ValueEmitter emitter, Object value) { root.write(emitter, value); }
+	@Override
+	public ObjectWriter<Object> getWriter() {return root;}
 }

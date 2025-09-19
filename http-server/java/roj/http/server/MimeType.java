@@ -13,15 +13,15 @@ import java.util.Objects;
  * @since 2024/7/10 3:01
  */
 public final class MimeType {
-	private static MimeType fallback;
+	private static MimeType fallback = new MimeType("*", "application/octet-stream");
+	public static final XashMap<String, MimeType> REPOSITORY = Helpers.cast(XashMap.noCreation(MimeType.class, "ext").createSized(128));
 	static {
 		try {
-			loadMimeMap(IOUtil.getTextResourceIL("roj/http/server/mine.cfg"));
+			loadMimeMap(IOUtil.getTextResourceIL("roj/http/server/mime.cfg"));
 		} catch (Exception e) {
 			e.printStackTrace();
 		}
 	}
-	public static final XashMap<String, MimeType> REPOSITORY = Helpers.cast(XashMap.noCreation(MimeType.class, "ext").createSized(128));
 
 	public final String ext;
 	public String mime;

@@ -12,7 +12,7 @@ final class PooledAdapter extends TypeAdapter {
 	static final TypeAdapter PrevObjectId = new TypeAdapter() {
 		@Override
 		public void read(MappingContext ctx, int no) {
-			if (!(ctx instanceof MappingContextEx x) || no < 0 || no > x.objectsR.size()) {
+			if (!(ctx instanceof ReentrantObjectReader x) || no < 0 || no > x.objectsR.size()) {
 				throw new IllegalArgumentException("PrevObjectId("+no+")");
 			}
 			ctx.ref = x.objectsR.get(no);
@@ -33,11 +33,11 @@ final class PooledAdapter extends TypeAdapter {
 	public void read(MappingContext ctx, int[] o) {adapter.read(ctx, o);}
 	public void read(MappingContext ctx, long[] o) {adapter.read(ctx, o);}
 
-	public void map(MappingContext ctx, int size) {((MappingContextEx) ctx).captureRef();adapter.map(ctx,size);}
+	public void map(MappingContext ctx, int size) {((ReentrantObjectReader) ctx).captureRef();adapter.map(ctx,size);}
 	public void list(MappingContext ctx, int size) {adapter.list(ctx,size);}
 	public void key(MappingContext ctx, String key) {
 		if (key.isEmpty()) {
-			((MappingContextEx) ctx).objectsR.pop();
+			((ReentrantObjectReader) ctx).objectsR.pop();
 			ctx.replace(PrevObjectId);
 		} else {
 			adapter.key(ctx,key);
@@ -52,7 +52,7 @@ final class PooledAdapter extends TypeAdapter {
 
 	public void write(ValueEmitter c, Object o) {
 		if (valueIsMap() && o != null) {
-			ToIntMap<Object> pool = MappingContextEx.OBJECT_POOL.get();
+			ToIntMap<Object> pool = ReentrantObjectWriter.OBJECT_POOL.get();
 			assert pool != null;
 
 			int objectId = pool.putOrGet(o, pool.size(), -1);

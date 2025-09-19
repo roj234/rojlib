@@ -1,19 +1,13 @@
 package roj.asmx;
 
-import org.jetbrains.annotations.Nullable;
 import roj.asm.*;
 import roj.asm.attr.Attribute;
-import roj.asm.attr.AttributeList;
-import roj.asm.attr.BootstrapMethods;
 import roj.asm.attr.UnparsedAttribute;
 import roj.asm.cp.Constant;
-import roj.asm.cp.CstDynamic;
-import roj.asm.cp.CstNameAndType;
 import roj.asm.frame.FrameVisitor;
 import roj.asm.insn.*;
 import roj.asm.type.Type;
 import roj.asm.type.TypeHelper;
-import roj.collect.ArrayList;
 import roj.collect.HashSet;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
@@ -32,7 +26,7 @@ import static roj.asm.type.Type.*;
  * @since 2024/1/6 21:40
  */
 public class TransformUtil {
-	// region apiOnly | runOnly
+	// region apiOnly
 	/**
 	 * 删除方法的代码，可用于生成api-only package
 	 */
@@ -49,80 +43,33 @@ public class TransformUtil {
 		}
 		return flag;
 	}
-	public static void apiOnly(ClassNode data, MethodNode ms) {
+	public static void apiOnly(ClassNode data, MethodNode mn) {
 		CodeWriter cw = new CodeWriter();
-		cw.init(new ByteList(16), data.cp, ms);
+		cw.init(new ByteList(16), data.cp, mn);
 
-		Type t = ms.returnType();
+		Type t = mn.returnType();
 
-		cw.visitSize(t.length(), TypeHelper.paramSize(ms.rawDesc()) + ((ACC_STATIC & ms.modifier()) == 0 ? 1 : 0));
+		cw.visitSize(t.length(), TypeHelper.paramSize(mn.rawDesc()) + ((ACC_STATIC & mn.modifier()) == 0 ? 1 : 0));
 
-		if (ms.name().equals("<init>")) {
+		if (mn.name().equals("<init>")) {
 			cw.visitSizeMax(1, 0);
 			cw.insn(ALOAD_0);
 			cw.invokeD(data.parent(), "<init>", "()V");
 		}
 
-		switch (t.type) {
-			case CLASS: cw.insn(ACONST_NULL); break;
-			case VOID: break;
-			case BOOLEAN: case BYTE: case CHAR: case SHORT:
-			case INT: cw.insn(ICONST_0); break;
-			case FLOAT: cw.insn(FCONST_0); break;
-			case DOUBLE: cw.insn(DCONST_0); break;
-			case LONG: cw.insn(LCONST_0); break;
+		switch (t.getActualType()) {
+			//case VOID -> {}
+			case CLASS -> cw.insn(ACONST_NULL);
+			case BOOLEAN, BYTE, CHAR, SHORT, INT -> cw.insn(ICONST_0);
+			case FLOAT -> cw.insn(FCONST_0);
+			case DOUBLE -> cw.insn(DCONST_0);
+			case LONG -> cw.insn(LCONST_0);
 		}
+		//noinspection MagicConstant
 		cw.insn(t.getOpcode(IRETURN));
 		cw.finish();
 
-		ms.addAttribute(new UnparsedAttribute("Code", cw.bw));
-	}
-
-	private static final HashSet<String>
-		class_allow = new HashSet<>("RuntimeVisibleAnnotations", "BootstrapMethods", "NestMembers", "NestHost"),
-		field_allow = new HashSet<>("ConstantValue", "RuntimeVisibleAnnotations"),
-		method_allow = new HashSet<>("Code", "RuntimeVisibleAnnotations", "AnnotationDefault");
-
-	/**
-	 * 删除多余的属性，目前仅支持Java8
-	 */
-	public static void runOnly(ClassNode data) {
-		filter(data, class_allow);
-
-		int minVersion = 6;
-		if (data.getAttribute("BootstrapMethods") != null) minVersion = 8;
-		if (data.getAttribute("NestMembers") != null || data.getAttribute("NestHost") != null) minVersion = 11;
-
-		int minVer = ClassNode.JavaVersion(minVersion);
-		if (data.version > minVer) {
-			data.version = minVer;
-		}
-
-		ArrayList<FieldNode> fields = data.fields;
-		for (int i = 0; i < fields.size(); i++) {
-			filter(fields.get(i), field_allow);
-		}
-
-		ArrayList<MethodNode> methods = data.methods;
-		for (int i = 0; i < methods.size(); i++) {
-			MethodNode mn = methods.get(i);
-			filter(mn, method_allow);
-
-			Code code = mn.getAttribute(data.cp, Attribute.Code);
-			if (code == null) continue;
-
-			if (minVer == 6) code.frames = null;
-
-			AttributeList list = code.attributesNullable();
-			if (list != null) list.clear();
-		}
-	}
-	private static void filter(Attributed a, HashSet<String> permitted) {
-		AttributeList list = a.attributesNullable();
-		if (list == null) return;
-		for (int i = list.size() - 1; i >= 0; i--) {
-			if (!permitted.contains(list.get(i).name())) list.remove(i);
-		}
+		mn.addAttribute(new UnparsedAttribute("Code", cw.bw));
 	}
 	// endregion
 	// region Access Transformer
@@ -171,81 +118,17 @@ public class TransformUtil {
 		return flag;
 	}
 	// endregion
-	@Nullable
-	@Deprecated(forRemoval = true)
-	public static ClassNode noStackFrameTableEver(ClassNode data, @Nullable String lambdaClassName) {
-		BootstrapMethods lambda = data.getAttribute(data.cp, Attribute.BootstrapMethods);
-		if (lambda == null) return null;
-
-		ByteList tmp = new ByteList();
-		boolean[] frame = {false};
-		List<CstDynamic> dynList = new ArrayList<>();
-
-		CodeVisitor cv = new CodeVisitor() {
-			protected void invokeDyn(CstDynamic dyn, int reserved) {dynList.add(dyn);}
-			protected void jump(byte code, int offset) {frame[0] = true;}
-			protected void lookupSwitch(DynByteBuf r) {frame[0] = true;}
-			protected void tableSwitch(DynByteBuf r) {frame[0] = true;}
-		};
-
-		for (MethodNode mn : data.methods)
-			mn.transform(data.cp, tmp, cv);
-
-		if (!frame[0]) return null;
-
-		ClassNode newClass = new ClassNode();
-		newClass.name(lambdaClassName != null ? lambdaClassName : data.name() +"$Lambda");
-		newClass.addAttribute(lambda);
-		data.attributes().removeByName(Attribute.BootstrapMethods.name);
-
-		data.version = 49;
-		newClass.version = 52;
-
-		List<BootstrapMethods.Item> methods = lambda.methods;
-		for (int i = 0; i < methods.size(); i++) {
-			CstNameAndType nat = null;
-			for (int j = 0; j < dynList.size(); j++) {
-				if (dynList.get(j).tableIdx == i) {
-					nat = dynList.get(i).desc();
-					break;
-				}
-			}
-			assert nat != null;
-
-			String desc = nat.rawDesc().str();
-			int size = 0;
-			List<Type> types = getMethodTypes(desc);
-			Type ret = types.remove(types.size() - 1);
-
-			CodeWriter mycw = newClass.newMethod(ACC_STATIC | ACC_FINAL | ACC_SYNTHETIC, "lambdaBridge"+i, desc);
-
-			for (int j = 0; j < types.size(); j++) {
-				Type type = types.get(j);
-				mycw.varLoad(type, size);
-				size += type.length();
-			}
-			mycw.visitSize(Math.max(1,size), size);
-			mycw.invokeDyn(i, nat.name().str(), desc, 0);
-			mycw.return_(ret);
-		}
-
-		CodeWriter cw = new CodeWriter() {
-			public void invokeDyn(int idx, String name, String desc, int reserved) { super.invoke(INVOKESTATIC, newClass, idx); }
-			public void visitExceptions() { super.visitExceptions(); frames = null; }
-		};
-
-		for (MethodNode mn : data.methods) {
-			mn.transform(data.cp, tmp, cw);
-		}
-
-		return newClass;
-	}
-
 	public static void compress(ClassNode data) {
 		var lazyLDC = new HashSet<Constant>();
 		var cpw = AsmCache.getInstance().constPool();
 		CodeVisitor smallerLdc = new CodeVisitor() {
-			protected void ldc(byte code, Constant c) {if (code != LDC2_W) lazyLDC.add(c);}
+			protected void ldc(byte code, Constant c) {
+				if (code != LDC2_W) {
+					if (lazyLDC.add(c)) {
+						cpw.add(c);
+					}
+				}
+			}
 		};
 		ByteList bw = new ByteList();
 
@@ -253,7 +136,6 @@ public class TransformUtil {
 		for (int i = 0; i < methods.size(); i++) {
 			methods.get(i).transform(data.cp, bw, smallerLdc);
 		}
-		for (var constant : lazyLDC) cpw.add(constant);
 		for (var constant : lazyLDC) cpw.reset(constant);
 
 		CodeWriter cw = new CodeWriter();
@@ -267,7 +149,7 @@ public class TransformUtil {
 				cw.finish();
 
 				byte[] array = bw.toByteArray();
-				// will not parse this
+				// dont parse my 'Code'
 				mn.addAttribute(new Attribute() {
 					@Override public String name() {return "Code";}
 					@Override public DynByteBuf getRawData() {return ByteList.wrap(array);}
@@ -275,14 +157,17 @@ public class TransformUtil {
 				});
 			}
 		}
+		bw.release();
 
 		data.parsed();
+		// free shared constant pool
 		AsmCache.getInstance().constPool(data.cp);
 		data.cp = cpw;
 
 		for (int i = 0; i < methods.size(); i++) {
 			MethodNode mn = methods.get(i);
 			Attribute code = mn.getAttribute("Code");
+			// convert to default impl
 			if (code != null) mn.addAttribute(new UnparsedAttribute("Code", code.getRawData()));
 		}
 	}
@@ -310,7 +195,7 @@ public class TransformUtil {
 			Code code = clinit.getAttribute(data.cp, Attribute.Code);
 			if (code.stackSize == 0) code.stackSize = 1;
 			code.computeFrames(FrameVisitor.COMPUTE_FRAMES| FrameVisitor.COMPUTE_SIZES);
-			code.instructions.replaceRange(0,0, (InsnList) c, false);
+			code.instructions.replace(0,0, (InsnList) c, false);
 		}
 	}
 

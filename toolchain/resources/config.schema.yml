@@ -1,0 +1,51 @@
+type: MAP
+properties:
+  version:
+    type: STRING
+    pattern: MCMake \d+\.\d+\.\d+
+  日志级别:
+    type: STRING
+    default: INFO
+    pattern: ALL|TRACE|DEBUG|INFO|WARN|ERROR|OFF
+  文件修改监控:
+    type: BOOL
+    default: false
+  自动编译防抖:
+    type: INTEGER
+    default: 250
+    min: 50
+    max: 5000
+    constraints: |-
+      return value.asInt() % 10 != 0;
+  启用依赖图:
+    type: BOOL
+    default: true
+  映射缓存大小:
+    type: INTEGER
+    default: 15
+    min: 0
+    max: 100
+  工作区:
+    default: {}
+    type: MAP
+    children:
+      type: MAP
+      properties:
+        type:
+          type: STRING
+  编译器:
+    type: MAP
+    default: {}
+    children:
+      type: MAP
+      properties:
+        type:
+          type: STRING
+        options:
+          type: LIST
+          required: false
+          children:
+            type: STRING
+  插件:
+    type: MAP
+    default: {}

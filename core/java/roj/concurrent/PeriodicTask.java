@@ -78,6 +78,7 @@ public class PeriodicTask implements Runnable, Cancellable {
 		return repeat > 0 && --repeat == 0 ? 0 : period;
 	}
 
+	public boolean isExpired() {return state < 0 || repeat == 0;}
 	@Override public boolean cancel(boolean mayInterruptIfRunning) {
 		int state = (int) STATE.getAndSet(this, -1);
 		return state >= 0 || task instanceof Cancellable cancellable && cancellable.cancel(mayInterruptIfRunning);

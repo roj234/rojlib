@@ -1,0 +1,346 @@
+/* ---------------------------------------
+   Modern Error Page Styles with Dark Mode
+   --------------------------------------- */
+
+/* CSS Variables */
+:root {
+    color-scheme: light dark;
+
+    /* layout */
+    --max-w: 980px;
+    --gap: 16px;
+    --shadow: 0 12px 28px rgba(15, 23, 42, 0.08);
+    --code: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", "Source Code Pro", monospace;
+
+    /* colors - light */
+    --bg: #f7f8fb;
+    --surface: #ffffff;
+    --text: #1f2937;
+    --muted: #6b7280;
+    --border: #e5e7eb;
+    --primary: #0ea5e9;
+    --accent: #6366f1;
+
+    /* code */
+    --code-bg: #f5f7fa;
+    --code-text: #1f2937;
+    --error-bg: #fee2e2;
+    --error-fg: #b91c1c;
+
+    /* links */
+    --link: #2563eb;
+    --link-muted: #64748b;
+
+    /* syntax */
+    --syn-pln: #334155;
+    --syn-str: #16a34a;
+    --syn-kwd: #2563eb;
+    --syn-com: #6b7280;
+    --syn-typ: #06b6d4;
+    --syn-lit: #ef4444;
+    --syn-pun: #db2777;
+    --syn-tag: #0b67ad;
+    --syn-atn: #7c3aed;
+    --syn-atv: #15803d;
+    --syn-dec: #7c3aed;
+    --syn-fun: #ef4444;
+}
+
+@media (prefers-color-scheme: dark) {
+    :root,
+    :root[data-theme="dark"] {
+        color-scheme: dark;
+
+        --bg: #0b1220;
+        --surface: #121a2a;
+        --text: #e5e7eb;
+        --muted: #a6adc8;
+        --border: #1f2937;
+        --primary: #38bdf8;
+        --accent: #8b5cf6;
+
+        --code-bg: #0f172a;
+        --code-text: #e5e7eb;
+        --error-bg: #2d0f14;
+        --error-fg: #fca5a5;
+
+        --link: #93c5fd;
+        --link-muted: #9da3af;
+
+        --syn-pln: #e5e7eb;
+        --syn-str: #4ade80;
+        --syn-kwd: #93c5fd;
+        --syn-com: #94a3b8;
+        --syn-typ: #22d3ee;
+        --syn-lit: #f87171;
+        --syn-pun: #f472b6;
+        --syn-tag: #60a5fa;
+        --syn-atn: #c084fc;
+        --syn-atv: #34d399;
+        --syn-dec: #c084fc;
+        --syn-fun: #f87171;
+    }
+}
+
+/* Basic Reset + Typography */
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 16px/1.65 system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue",
+    Arial, "Microsoft YaHei", "Noto Sans SC", "PingFang SC", sans-serif;
+    padding: 24px;
+}
+
+/* Page structure */
+.exception {
+    margin: 0 auto;
+    max-width: var(--max-w);
+    border: 1px solid var(--border);
+    background: var(--surface);
+    box-shadow: var(--shadow);
+    overflow: hidden;
+}
+
+.message {
+    padding: 16px 18px;
+    background: linear-gradient(180deg, rgba(99,102,241,0.08), rgba(14,165,233,0.08)) no-repeat;
+    border-bottom: 1px solid var(--border);
+}
+
+.message .info h2 {
+    margin: 0;
+    font-weight: 600;
+    font-size: clamp(16px, 1.6vw, 18px);
+    color: var(--primary);
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+}
+
+.message .info h1 {
+    margin: 8px 0 0;
+    color: var(--text);
+    white-space: pre-wrap;
+}
+
+/* Interactive text */
+abbr {
+    cursor: help;
+    text-decoration: underline dotted;
+    text-underline-offset: 3px;
+}
+abbr.active {
+    cursor: default;
+    text-decoration: none;
+}
+a {
+    color: var(--link);
+    cursor: pointer;
+    text-decoration: none;
+}
+a:hover { text-decoration: underline; }
+
+/* Code viewer */
+.code {
+    padding-right: 0 !important;
+    border-top: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+    background: var(--code-bg);
+    position: relative;
+    overflow-x: auto;
+    overflow-y: hidden;
+}
+
+.code > span {
+    position: absolute;
+    top: 0;
+    right: 0;
+    background:
+            color-mix(in srgb, var(--surface) 70%, transparent);
+    color: var(--muted);
+    border-left: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+    font-size: 12px;
+    font-family: var(--code);
+    padding: 2px 8px;
+}
+
+.code > pre {
+    min-width: 100%;
+    color: var(--code-text);
+}
+
+/* Line numbers are in <ol> already; improve readability */
+.code > pre > ol {
+    margin: 0;
+    padding-left: 4em;
+    font-size: 14px;
+    font-family: var(--code);
+    color: var(--link-muted);
+}
+
+.code > pre > ol > li {
+    border-left: 1px solid var(--border);
+    padding: 0 8px 0 12px;
+    line-height: 1.7;
+    color: var(--code-text);
+    white-space: pre;
+}
+
+/* Highlight error line */
+.line-error {
+    background: var(--error-bg);
+    color: var(--error-fg) !important;
+    border-left: 3px solid var(--error-fg);
+}
+
+.trace h2, .other h2 {
+    color: var(--primary);
+    font-weight: 600;
+    padding: 10px 16px 8px;
+    margin: 0;
+    font-size: 18px;
+    border-bottom: 1px solid var(--border);
+}
+
+/* Trace section */
+.trace > ol {
+    line-height: 1.5;
+    font-size: 14px;
+    font-family: var(--code);
+}
+
+.trace > ol > li {
+    padding: 6px 10px;
+    transition: background-color .15s ease, color .15s ease;
+    cursor: pointer;
+}
+.trace > ol > li:hover {
+    background: color-mix(in srgb, var(--primary) 10%, transparent);
+}
+.trace > ol > li.active {
+    background: color-mix(in srgb, var(--primary) 18%, transparent);
+    color: var(--text);
+    border-left: 3px solid var(--primary);
+}
+
+/* Related info tables */
+.other {
+    border-top: 1px solid var(--border);
+    background: var(--surface);
+}
+
+.other > table {
+    width: 100%;
+    margin: 12px 0;
+    padding: 0 12px;
+    table-layout: fixed;
+    word-wrap: break-word;
+    background: var(--surface);
+}
+.other > table > caption {
+    text-align: left;
+    font-weight: 700;
+    padding: 8px 12px;
+    color: var(--text);
+}
+.other > table > caption > small {
+    font-weight: 400;
+    margin-left: 10px;
+    color: var(--muted);
+}
+.other > table > tbody {
+    font-size: 13px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+}
+.other > table td {
+    padding: 6px;
+    border-top: 1px solid var(--border);
+    word-break: break-all;
+}
+.other > table td:first-child {
+    font-weight: 600;
+    white-space: nowrap;
+    color: var(--muted);
+}
+.other > table td > pre {
+    margin: 0;
+}
+
+/* Footer */
+.copy {
+    margin: 24px auto 0;
+    padding: 16px 0;
+    max-width: var(--max-w);
+    color: var(--muted);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    border-top: 1px dashed var(--border);
+}
+.copy a {
+    margin-left: auto;
+    color: var(--muted);
+}
+
+/* Theme toggle button */
+#theme-toggle {
+    appearance: none;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text);
+    padding: 6px 10px;
+    border-radius: 999px;
+    font-size: 13px;
+    cursor: pointer;
+    transition: background-color .15s ease, border-color .15s ease, color .15s ease;
+}
+#theme-toggle:hover {
+    border-color: var(--primary);
+    color: var(--primary);
+}
+
+/* Custom scrollbar for code */
+.code::-webkit-scrollbar { height: 10px; }
+.code::-webkit-scrollbar-track { background: transparent; }
+.code::-webkit-scrollbar-thumb {
+    background: color-mix(in srgb, var(--muted) 25%, transparent);
+    border-radius: 999px;
+}
+.code::-webkit-scrollbar-thumb:hover {
+    background: color-mix(in srgb, var(--muted) 45%, transparent);
+}
+
+/* Prettyprint syntax colors (use variables for dark mode compatibility) */
+.prettyprint .pln { color: var(--syn-pln); }
+.prettyprint .str { color: var(--syn-str); }
+.prettyprint .kwd { color: var(--syn-kwd); }
+.prettyprint .com { color: var(--syn-com); }
+.prettyprint .typ { color: var(--syn-typ); }
+.prettyprint .lit { color: var(--syn-lit); }
+.prettyprint .pun, pre.prettyprint .opn, pre.prettyprint .clo { color: var(--syn-pun); }
+.prettyprint .tag { color: var(--syn-tag); }
+.prettyprint .atn { color: var(--syn-atn); }
+.prettyprint .atv { color: var(--syn-atv); }
+.prettyprint .dec, pre.prettyprint .var { color: var(--syn-dec); }
+.prettyprint .fun { color: var(--syn-fun); }
+
+/* Headings (generic) */
+h1 { margin: 10px 0 0; font-size: 28px; font-weight: 700; line-height: 1.25; }
+h2 { font-weight: 600; font-size: 18px; }
+h3 { margin: 12px; font-size: 16px; font-weight: 700; }
+
+/* Responsive adjustments */
+@media (max-width: 640px) {
+    body { padding: 16px; }
+
+    .exception > div { padding: 12px; }
+
+    .message { padding: 14px; }
+    .message .info h1 { font-size: clamp(20px, 6vw, 26px); }
+    .message .info h2 { font-size: clamp(15px, 4.2vw, 18px); }
+
+    .other > table td:first-child { width: 36%; }
+}

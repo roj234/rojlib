@@ -132,10 +132,6 @@ public class uTP implements ChannelHandler {
 			return state < CLOSED && prot_state < CLOSE;
 		}
 		@Override
-		public boolean isInputOpen() {
-			return state < CLOSED && prot_state < LOCAL_CLOSE;
-		}
-		@Override
 		public boolean isOutputOpen() {
 			return state < CLOSED && prot_state < CLOSE;
 		}
@@ -266,7 +262,7 @@ public class uTP implements ChannelHandler {
 				} while (true);
 
 				if (pending.isEmpty()) {
-					flag &= ~(PAUSE_FOR_FLUSH|TIMED_FLUSH);
+					flags &= ~(PAUSE_FOR_FLUSH|TIMED_FLUSH);
 					fireFlushed();
 				}
 			} finally {
@@ -278,7 +274,7 @@ public class uTP implements ChannelHandler {
 		protected void read() throws IOException {}
 
 		@Override
-		protected void closeHandler() throws IOException {
+		protected void fireClosed() throws IOException {
 			if (prot_state == OPEN) {
 				protocolSend(IOUtil.getSharedByteBuf().put(RST));
 				state = CLOSED;
@@ -301,7 +297,7 @@ public class uTP implements ChannelHandler {
 			}
 			snd_seqs.clear();
 
-			super.closeHandler();
+			super.fireClosed();
 		}
 		@Override
 		public void closeGracefully0() throws IOException {
@@ -319,7 +315,7 @@ public class uTP implements ChannelHandler {
 		void protocolRead(DynByteBuf buf) throws IOException {
 			int seq = buf.readUnsignedShort();
 			if (seq == rcv_seq || buf.getUnsignedByte(buf.rIndex) == RST) {
-				flag |= SEND_ACK;
+				flags |= SEND_ACK;
 
 				int i = 0;
 				if (!rcv_seqs.isEmpty()) {
@@ -349,15 +345,15 @@ public class uTP implements ChannelHandler {
 				}
 
 				// send ack
-				if ((flag & SEND_ACK) != 0) {
+				if ((flags & SEND_ACK) != 0) {
 					protocolSend(IOUtil.getSharedByteBuf().put((ACK|(OPEN<<4))).putShort(rcv_seq));
-					flag &= ~SEND_ACK;
+					flags &= ~SEND_ACK;
 				}
 
 				// next
 				rcv_seq++;
 			} else {
-				flag |= SEND_RET;
+				flags |= SEND_RET;
 				timer = System.currentTimeMillis();
 
 				seq -= rcv_seq;
@@ -538,8 +534,8 @@ public class uTP implements ChannelHandler {
 
 					tmp.clear();
 					tmp.putShort(snd_seq++);
-					if ((flag & SEND_ACK) != 0) {
-						flag ^= SEND_ACK;
+					if ((flags & SEND_ACK) != 0) {
+						flags ^= SEND_ACK;
 						tmp.put((DTA|(RET<<4))).putShort(rcv_seq);
 					} else {
 						tmp.put(DTA);

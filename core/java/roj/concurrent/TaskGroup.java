@@ -4,6 +4,7 @@ import org.jetbrains.annotations.Nullable;
 import roj.optimizer.FastVarHandle;
 import roj.reflect.Handles;
 import roj.util.Helpers;
+import roj.util.OperationDone;
 import roj.util.function.Flow;
 
 import java.lang.invoke.VarHandle;
@@ -167,8 +168,17 @@ public class TaskGroup implements Executor, Cancellable {
 			long remain = deadline == 0 ? 0 : deadline - System.currentTimeMillis();
 			if (remain < 0) break;
 
-			if ((remain == 0 || remain > 100) && !helpRunner.isEmpty())
-				Flow.of(helpRunner).filter(x -> x.state == MTask.INITIAL).findFirst().ifPresent(MTask::run);
+			if ((remain == 0 || remain > 100) && !helpRunner.isEmpty()) {
+				Flow.of(helpRunner).filter(x -> x.state == MTask.INITIAL).safeForEach(task -> {
+					long startTime = System.currentTimeMillis();
+					task.run();
+					long cost = System.currentTimeMillis() - startTime;
+
+					long remain1 = deadline == 0 ? 0 : deadline - System.currentTimeMillis();
+
+					if (remain1 != 0 && remain1 < cost) throw OperationDone.INSTANCE;
+				});
+			}
 
 			try {
 				synchronized (lock) {

@@ -85,7 +85,7 @@ public class ZipRouter implements Router, Predicate<String> {
 				assert ze.getMethod() == ZipEntry.DEFLATED;
 				in = zf.getRawStream(ze);
 			} else {
-				in = zf.getStream(ze);
+				in = zf.getInputStream(ze);
 			}
 			IOUtil.skipFully(in, offset);
 			return in;

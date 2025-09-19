@@ -24,14 +24,18 @@ final class QZEntryA extends QZEntry {
     QZEntryA() {}
     QZEntryA(String name) {super(name);}
 
+    public final boolean hasAccessTime() {return (flag&AT) != 0;}
+    public final boolean hasCreationTime() {return (flag&CT) != 0;}
+    public final boolean hasModificationTime() {return (flag&MT) != 0;}
+
     public final long getAccessTime() {return winTime2JavaTime(accessTime);}
     public final long getCreationTime() {return winTime2JavaTime(createTime);}
     public final long getModificationTime() {return winTime2JavaTime(modifyTime);}
     public final int getWinAttributes() {return attributes;}
 
-    public FileTime getPrecisionAccessTime() {return !hasAccessTime() ? null : winTime2FileTime(accessTime);}
-    public FileTime getPrecisionCreationTime() {return !hasCreationTime() ? null : winTime2FileTime(createTime);}
-    public FileTime getPrecisionModificationTime() {return !hasModificationTime() ? null : winTime2FileTime(modifyTime);}
+    public FileTime getPrecisionAccessTime() {return hasAccessTime() ? winTime2FileTime(accessTime) : null;}
+    public FileTime getPrecisionCreationTime() {return hasCreationTime() ? winTime2FileTime(createTime) : null;}
+    public FileTime getPrecisionModificationTime() {return hasModificationTime() ? winTime2FileTime(modifyTime) : null;}
 
     public final void setAccessTime(long t) {
         if (t == 0) flag &= ~AT;

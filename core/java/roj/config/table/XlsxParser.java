@@ -196,8 +196,8 @@ final class XlsxParser implements TableParser {
 	private void readWith(ZipFile zip, ZEntry entry, Consumer<Element> c) throws IOException,ParseException {
 		consumer = c;
 
-		try (InputStream in = zip.getStream(entry)) {
-			xml.parse(in, XmlParser.DECODE_ENTITY, new XmlEmitter() {
+		try (InputStream in = zip.getInputStream(entry)) {
+			xml.parse(in, new XmlEmitter() {
 				@Override
 				protected Element createElement(String str) {
 					Element el = replaceNodes.get(str);

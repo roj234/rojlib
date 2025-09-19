@@ -65,6 +65,7 @@ public interface ValueEmitter extends Closeable {
 	TypedKey<Integer> MAX_DEPTH = new TypedKey<>("generic:maxDepth");
 	default <T> void setProperty(TypedKey<T> k, T v) {}
 
+	@Deprecated
 	ValueEmitter reset();
 	default void close() throws IOException {}
 }

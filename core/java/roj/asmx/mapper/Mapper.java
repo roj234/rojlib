@@ -20,8 +20,8 @@ import roj.collect.HashSet;
 import roj.collect.*;
 import roj.concurrent.Executor;
 import roj.concurrent.TaskPool;
-import roj.io.IOUtil;
 import roj.io.ByteInputStream;
+import roj.io.IOUtil;
 import roj.text.CharList;
 import roj.text.logging.Level;
 import roj.util.ByteList;
@@ -252,7 +252,7 @@ public class Mapper extends Mapping {
 	/**
 	 * 全量
 	 */
-	public void map(List<Context> ctxs) {map(ctxs, TaskPool.common());}
+	public void map(List<Context> ctxs) {map(ctxs, TaskPool.cpu());}
 	public void map(List<Context> ctxs, Executor pool) {
 		if ((flag&MF_SINGLE_THREAD)!=0 || ctxs.size() <= ASYNC_THRESHOLD) {
 			_map(ctxs, true);
@@ -1306,7 +1306,7 @@ public class Mapper extends Mapping {
 					try (ZipFile archive = new ZipFile(fi)) {
 						for (ZEntry entry : archive.entries()) {
 							if (entry.getName().endsWith(".class")) {
-								try (InputStream in = archive.getStream(entry)) {
+								try (InputStream in = archive.getInputStream(entry)) {
 									readLibFile(new Context(entry.getName(), in), classes, m);
 								} catch (Throwable e) {
 									LOGGER.warn(f+"#!"+entry.getName()+" 无法读取", e);

@@ -39,7 +39,6 @@ import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
-import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.IntFunction;
 
@@ -66,7 +65,7 @@ public final class Jocker extends PluginManager {
 		Formatter f;
 		if (Tty.IS_RICH) {
 			f = (env, sb) -> {
-				((BiConsumer<Object, CharList>) env.get("0")).accept(env, sb.append('['));
+				((Formatter) env.get("0")).format(env, sb.append('['));
 
 				Level level = (Level) env.get("LEVEL");
 				sb.append("]\u001b[").append(level.color).append("m[").append(env.get("NAME"));

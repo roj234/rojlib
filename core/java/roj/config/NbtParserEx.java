@@ -2,7 +2,6 @@ package roj.config;
 
 import roj.io.ByteInput;
 import roj.io.ByteInputStream;
-import roj.util.DynByteBuf;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -17,14 +16,16 @@ import static roj.reflect.Unsafe.U;
  * @author Roj234
  * @since 2024/4/30 20:17
  */
-public final class NbtParserEx implements BinaryParser {
+public final class NbtParserEx implements Parser {
 	public static final byte X_GB18030_STRING = 13, X_LATIN1_STRING = 14, X_NULL = 15, X_DEDUP_LIST = 16;
 
-	@Override
-	public void parse(InputStream in, int flags, ValueEmitter emitter) throws IOException {parse(ByteInputStream.wrap(in), emitter);}
-	public void parse(DynByteBuf buf, int flags, ValueEmitter emitter) throws IOException {parse(buf, emitter);}
+	public static final NbtParserEx INSTANCE = new NbtParserEx();
+	private NbtParserEx() {}
 
-	public static void parse(ByteInput in, ValueEmitter cc) throws IOException {
+	@Override
+	public void parse(InputStream in, ValueEmitter emitter) throws IOException {Parse(ByteInputStream.wrap(in), emitter);}
+
+	public static void Parse(ByteInput in, ValueEmitter cc) throws IOException {
 		byte type = in.readByte();
 		if (type == 0) return;
 

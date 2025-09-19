@@ -172,7 +172,7 @@ public final class QPakFileSystem implements WritableFileSystem {
 		if (path.ref == null || !path.isFile()) throw new FileNotFoundException();
 		if (path.ref.getClass() == File.class) return new FileInputStream((File) path.ref);
 
-		return archives.get(path.archiveIndex).getInputUncached((QZEntry) path.ref);
+		return archives.get(path.archiveIndex).getConcurrentInputStream((QZEntry) path.ref);
 	}
 
 	public OutputStream getOutputStream(VirtualFile path, boolean append) throws IOException {return getOutputStream(((QFile) path), append);}

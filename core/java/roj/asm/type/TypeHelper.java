@@ -71,7 +71,7 @@ public final class TypeHelper {
 			sb.append('[');
 		}
 
-		if (clazz.isPrimitive()) return sb.append(R.byName.get(clazz.getName()).desc);
+		if (clazz.isPrimitive()) return sb.append(TypeInfo.byName.get(clazz.getName()).desc);
 		return sb.append('L').append(clazz.getName().replace('.', '/')).append(';');
 	}
 
@@ -161,7 +161,7 @@ public final class TypeHelper {
 			sb.append('[');
 		}
 
-		var arr = R.byName.get(sb1);
+		var arr = TypeInfo.byName.get(sb1);
 		if (arr != null) return sb.append(arr.desc);
 
 		return sb.append('L').append(sb1.replace('.', '/')).append(';');

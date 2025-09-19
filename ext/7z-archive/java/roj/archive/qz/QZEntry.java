@@ -50,18 +50,6 @@ public sealed class QZEntry implements ArchiveEntry, Cloneable permits QZEntryA 
     public final long offset() {return offset;}
     public final boolean isEncrypted() {return block != null && block.hasProcessor(QzAES.class);}
 
-    public long getAccessTime() {return 0;}
-    public long getCreationTime() {return 0;}
-    public long getModificationTime() {return 0;}
-    public int getWinAttributes() {return 0;}
-
-    public FileTime getPrecisionAccessTime() {return null;}
-    public FileTime getPrecisionCreationTime() {return null;}
-    public FileTime getPrecisionModificationTime() {return null;}
-
-    public final boolean hasAccessTime() {return (flag&AT) != 0;}
-    public final boolean hasCreationTime() {return (flag&CT) != 0;}
-    public final boolean hasModificationTime() {return (flag&MT) != 0;}
     public final boolean hasAttributes() {return (flag&ATTR) != 0;}
     public final boolean isDirectory() {return (flag&DIRECTORY) != 0;}
     public final boolean isAntiItem() {return (flag&ANTI) != 0;}

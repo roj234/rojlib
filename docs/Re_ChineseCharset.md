@@ -5,7 +5,7 @@
 ## 注意：对于既不是中文也不是英文的文件，比如俄文和日文，可能会报错
 
 ## used in: 
- * roj.config.Parser#parseRaw
+ * roj.config.TextParser#parseRaw
  * roj.text.TextReader#auto
  * roj.io.ChineseInputStream
 

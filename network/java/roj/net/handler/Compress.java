@@ -1,6 +1,5 @@
 package roj.net.handler;
 
-import roj.io.BufferPool;
 import roj.io.CorruptedInputException;
 import roj.net.ChannelCtx;
 import roj.util.DynByteBuf;
@@ -65,7 +64,7 @@ public class Compress extends GDeflate {
 		} finally {
 			if (merged == null) {
 				if ((flag & F_PER_INPUT_RESET) != 0) inf.reset();
-				BufferPool.reserve(out);
+				out.release();
 			}
 		}
 	}
@@ -88,9 +87,8 @@ public class Compress extends GDeflate {
 			try {
 				ctx.channelWrite(out.set(0, /*UNCOMPRESSED*/0));
 			} finally {
-				if (out != in) BufferPool.reserve(out);
+				if (out != in) out.release();
 			}
-			return;
 		}
 
 		out = ctx.allocate(false, Math.min(buf, in.readableBytes()+5)).put(/*TERMINATE*/1).putVUInt(in.readableBytes() - thr);
@@ -98,7 +96,7 @@ public class Compress extends GDeflate {
 			deflateWrite(ctx, in, out, 1);
 		} finally {
 			if ((flag & F_PER_INPUT_RESET) != 0) def.reset();
-			BufferPool.reserve(out);
+			out.release();
 		}
 	}
 	@Override
@@ -112,7 +110,7 @@ public class Compress extends GDeflate {
 	public void handlerRemoved(ChannelCtx ctx) {
 		super.handlerRemoved(ctx);
 		if (merged != null) {
-			BufferPool.reserve(merged);
+			merged.release();
 			merged = null;
 		}
 	}

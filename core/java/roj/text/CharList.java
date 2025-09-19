@@ -85,14 +85,14 @@ public class CharList implements CharSequence, Appendable {
 	protected int len;
 
 	public CharList() { list = ArrayCache.CHARS; }
-	public CharList(int len) { list = ArrayCache.getCharArray(len, false); }
+	public CharList(int len) { list = ArrayCache.getCharArray(len); }
 	public CharList(char[] array) {
 		list = array;
 		len = array.length;
 	}
 
 	public CharList(CharSequence s) {
-		this.list = ArrayCache.getCharArray(s.length(), false);
+		this.list = ArrayCache.getCharArray(s.length());
 		append(s);
 	}
 
@@ -128,7 +128,7 @@ public class CharList implements CharSequence, Appendable {
 
 	public void ensureCapacity(int required) {
 		if (required > list.length) {
-			char[] newList = ArrayCache.getCharArray(Math.max(MathUtils.nextPowerOfTwo(required), 256), false);
+			char[] newList = ArrayCache.getCharArray(Math.max(MathUtils.nextPowerOfTwo(required), 256));
 			if (len > 0) System.arraycopy(list, 0, newList, 0, Math.min(len, list.length));
 			ArrayCache.putArray(list);
 			list = newList;
@@ -842,7 +842,7 @@ public class CharList implements CharSequence, Appendable {
 			}
 		} else {
 			String s = o.toString();
-			v2 = ArrayCache.getCharArray(512, false);
+			v2 = ArrayCache.getCharArray(512);
 			int off = 0;
 			while (off < lim) {
 				int end = Math.min(off+2, lim);

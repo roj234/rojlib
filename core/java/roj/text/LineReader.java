@@ -4,8 +4,8 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import roj.collect.AbstractIterator;
 import roj.collect.ArrayList;
-import roj.util.OperationDone;
 import roj.io.IOUtil;
+import roj.util.OperationDone;
 
 import java.io.IOException;
 import java.util.Iterator;
@@ -24,19 +24,12 @@ public interface LineReader extends Iterable<String> {
 		return read ? sb.toString() : null;
 	}
 	boolean readLine(CharList buf) throws IOException;
-	default boolean readALine(CharList buf) throws IOException {
-		buf.clear();
-		return readLine(buf);
-	}
 
 	default List<String> lines() throws IOException {
-		List<String> list = new ArrayList<>();
-		CharList sb = IOUtil.getSharedCharBuf();
-		while (readLine(sb)) {
-			list.add(sb.toString());
-			sb.clear();
-		}
-		return list;
+		List<String> lines = new ArrayList<>();
+		var sb = IOUtil.getSharedCharBuf();
+		while (readLine(sb)) lines.add(sb.toString());
+		return lines;
 	}
 
 	@NotNull
@@ -58,8 +51,6 @@ public interface LineReader extends Iterable<String> {
 		var sb = IOUtil.getSharedCharBuf();
 		while (lines > 0) {
 			if (!readLine(sb)) break;
-			sb.clear();
-
 			lines--;
 		}
 		return lines - lines1;

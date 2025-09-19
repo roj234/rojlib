@@ -166,7 +166,7 @@ public class HashMap<K, V> extends AbstractMap<K, V> implements FindMap<K, V>, _
 
 	protected AbstractEntry<?, ?>[] entries;
 	protected int size;
-	private int nextResize, mask;
+	protected int nextResize, mask;
 
 	private Hasher<K> hasher = Hasher.defaul();
 	public void setHasher(Hasher<K> hasher) {
@@ -320,6 +320,7 @@ public class HashMap<K, V> extends AbstractMap<K, V> implements FindMap<K, V>, _
 		AbstractEntry<K, V> entry = getOrCreateEntry(key);
 		if (entry.key != UNDEFINED) return entry.getValue();
 		entry.key = key;
+		size++;
 
 		V v;
 		try {
@@ -329,7 +330,6 @@ public class HashMap<K, V> extends AbstractMap<K, V> implements FindMap<K, V>, _
 			throw e;
 		}
 
-		size++;
 		onPut(entry, v);
 		entry.setValue(v);
 		return v;

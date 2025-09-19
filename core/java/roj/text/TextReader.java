@@ -53,7 +53,7 @@ public class TextReader extends Reader implements CharSequence, Closeable, Finis
 	public TextReader(Closeable in, Charset charset, int buffer, BufferPool pool) throws IOException {
 		this.in = in;
 
-		buf = ArrayCache.getCharArray(128, false);
+		buf = ArrayCache.getCharArray(128);
 
 		if (in instanceof DynByteBuf.BufferInputStream) {
 			in = ((DynByteBuf.BufferInputStream) in).buffer();
@@ -167,7 +167,7 @@ public class TextReader extends Reader implements CharSequence, Closeable, Finis
 		}
 	}
 	private void grow(int toRead) {
-		char[] newBuf = ArrayCache.getCharArray(MathUtils.nextPowerOfTwo(len+toRead), false);
+		char[] newBuf = ArrayCache.getCharArray(MathUtils.nextPowerOfTwo(len+toRead));
 		System.arraycopy(buf, 0, newBuf, 0, len);
 		ArrayCache.putArray(buf);
 		buf = newBuf;
@@ -342,6 +342,8 @@ public class TextReader extends Reader implements CharSequence, Closeable, Finis
 	}
 
 	public boolean readLine(CharList ob) throws IOException {
+		ob.clear();
+
 		boolean append = false;
 		while (true) {
 			for (int i = off; i < len;) {

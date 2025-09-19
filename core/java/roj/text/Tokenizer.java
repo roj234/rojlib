@@ -69,7 +69,7 @@ public class Tokenizer {
 		while (true) {
 			Token w = next();
 			if (w.type() == Token.EOF) break;
-			list.add(w.copy());
+			list.add(w.immutable());
 		}
 		return list;
 	}
@@ -165,7 +165,7 @@ public class Tokenizer {
 	public final void mark() throws ParseException {
 		if ((seek&1) != 0) throw new UnsupportedOperationException("嵌套的seek");
 
-		if (seek == 2) prevTokens.add(seekPos, lastToken.copy());
+		if (seek == 2) prevTokens.add(seekPos, lastToken.immutable());
 		seek = 1;
 		prevSeekPos = seekPos;
 	}
@@ -191,6 +191,12 @@ public class Tokenizer {
 		}
 	}
 
+	protected void pushTokens(List<Token> tokens) {prevTokens.addAll(tokens);}
+
+	private int prevPrevIndex;
+	public int __getlwBegin() {return seek == 2 ? prevPrevIndex : wd.pos;}
+	public int __getlwEnd() {return seek == 2 ? prevPrevIndex : index;}
+
 	public final Token next() throws ParseException {
 		if (seek == 2) {
 			seek = 0;
@@ -204,11 +210,12 @@ public class Tokenizer {
 
 		prevLN = LN;
 		prevIndex = index;
+		prevPrevIndex = prevIndex;
 
 		Token w = readWord();
 
 		if (seek == 1) {
-			prevTokens.add(w.copy());
+			prevTokens.add(w.immutable());
 			seekPos++;
 		} else {
 			seekPos = 0;
@@ -509,7 +516,7 @@ public class Tokenizer {
 
 			else w = formClip(w.type(), w.text());
 		} else {
-			w = w.copy();
+			w = w.immutable();
 			w.pos = index;
 		}
 

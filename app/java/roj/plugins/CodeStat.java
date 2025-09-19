@@ -1,9 +1,8 @@
 package roj.plugins;
 
-import roj.collect.HashMap;
 import roj.collect.ArrayList;
+import roj.collect.HashMap;
 import roj.collect.ToIntMap;
-import roj.util.function.Flow;
 import roj.gui.GuiUtil;
 import roj.gui.TextAreaPrintStream;
 import roj.io.IOUtil;
@@ -15,6 +14,7 @@ import roj.text.TextUtil;
 import roj.ui.Argument;
 import roj.ui.CommandNode;
 import roj.ui.Tty;
+import roj.util.function.Flow;
 
 import javax.swing.*;
 import java.awt.*;
@@ -187,7 +187,6 @@ public class CodeStat extends Plugin {
 					lines++;
 					chars += sb.length();
 				}
-				sb.clear();
 			}
 		} catch (IOException e) {
 			System.out.println(file);

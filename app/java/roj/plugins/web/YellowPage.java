@@ -55,8 +55,8 @@ public class YellowPage extends Plugin implements TableReader {
 		ZipFile archive = getDescription().getArchive();
 		registerRoute(config.getString("path")+"/", new OKRouter().addPrefixDelegation("assets/", new ZipRouter(archive, "assets/")).register(this), "PermissionManager");
 
-		index = Formatter.simple(IOUtil.readString(archive.getStream("index.html")));
-		site = Formatter.simple(IOUtil.readString(archive.getStream("site.html")));
+		index = Formatter.simple(IOUtil.readString(archive.getInputStream("index.html")));
+		site = Formatter.simple(IOUtil.readString(archive.getInputStream("site.html")));
 
 		db = new ArrayList<>();
 		multiplier = ThreadLocalRandom.current().nextInt();

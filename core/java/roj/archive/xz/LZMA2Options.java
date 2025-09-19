@@ -433,7 +433,7 @@ public class LZMA2Options implements Cloneable {
 		}
 	}
 
-	public int findBestProps(byte[] data) { return findBestProps(data, TaskPool.common()); }
+	public int findBestProps(byte[] data) { return findBestProps(data, TaskPool.cpu()); }
 	public int findBestProps(byte[] data, Executor th) {
 		TaskGroup monitor = th.newGroup();
 		AtomicReference<Object[]> ref = new AtomicReference<>();

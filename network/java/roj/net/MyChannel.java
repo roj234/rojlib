@@ -4,6 +4,8 @@ import roj.collect.ArrayList;
 import roj.collect.HashMap;
 import roj.collect.RingBuffer;
 import roj.io.BufferPool;
+import roj.optimizer.FastVarHandle;
+import roj.reflect.Handles;
 import roj.util.DynByteBuf;
 import roj.util.Helpers;
 import roj.util.NativeMemory;
@@ -11,6 +13,7 @@ import roj.util.TypedKey;
 
 import java.io.Closeable;
 import java.io.IOException;
+import java.lang.invoke.VarHandle;
 import java.net.ConnectException;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
@@ -28,6 +31,7 @@ import java.util.concurrent.locks.ReentrantLock;
  * @author Roj233
  * @since 2022/5/17 12:47
  */
+@FastVarHandle
 public abstract class MyChannel implements Selectable, Closeable {
 	public static final String IN_EOF = "channel:inEnd";
 
@@ -46,10 +50,11 @@ public abstract class MyChannel implements Selectable, Closeable {
 	public static final int INITIAL = 0, CONNECTED = 1, CONNECT_PENDING = 2, OPENED = 3, CLOSE_PENDING = 4, CLOSED = 5;
 	protected volatile byte state;
 
-	protected final RingBuffer<Object> pending = new RingBuffer<>(0, 30);
+	protected final RingBuffer<Object> pending = RingBuffer.lazy(30);
 
-	protected static final int PAUSE_FOR_FLUSH = 1, REINVOKE_READ = 2, READ_INACTIVE = 4, TIMED_FLUSH = 8;
-	protected byte flag;
+	private static final VarHandle FLAG = Handles.lookup().findVarHandle(MyChannel.class, "flags", byte.class);
+	protected static final int PAUSE_FOR_FLUSH = 1, REINVOKE_READ = 2, READ_INACTIVE = 4, TIMED_FLUSH = 8, INPUT_CLOSED = 16, CLOSE_AFTER_FLUSH = 32;
+	protected byte flags;
 
 	protected final ReentrantLock lock = new ReentrantLock();
 
@@ -244,8 +249,8 @@ public abstract class MyChannel implements Selectable, Closeable {
 	// endregion
 
 	public final int getState() {return state;}
-	public boolean isOpen() {return state < CLOSED && ch.isOpen();}
-	public boolean isInputOpen() { return isOpen(); }
+	public boolean isOpen() {return state < CLOSED;}
+	public boolean isInputOpen() { return (flags&INPUT_CLOSED) == 0; }
 	public boolean isOutputOpen() { return isOpen(); }
 
 	public abstract SocketAddress remoteAddress();
@@ -279,50 +284,43 @@ public abstract class MyChannel implements Selectable, Closeable {
 
 	public void readActive() {
 		int ops = key.interestOps();
-		lock.lock();
-		flag &= ~READ_INACTIVE;
-		lock.unlock();
+		removeFlag(READ_INACTIVE);
 		if ((ops & SelectionKey.OP_READ) == 0) key.interestOps(ops | SelectionKey.OP_READ);
 		var rb = this.rb;
 		if (rb != null && rb.isReadable()) invokeReadLater();
 	}
 	public void readInactive() {
 		int ops = key.interestOps();
-		lock.lock();
-		flag |= READ_INACTIVE;
-		lock.unlock();
-		if ((ops & SelectionKey.OP_READ) != 0) {
-			key.interestOps(ops & ~SelectionKey.OP_READ);
-		}
+		addFlag(READ_INACTIVE);
+		if ((ops & SelectionKey.OP_READ) != 0) key.interestOps(ops & ~SelectionKey.OP_READ);
 	}
-	public boolean readDisabled() { return (flag & READ_INACTIVE) != 0; }
+	public boolean readDisabled() { return (flags & READ_INACTIVE) != 0; }
+
+	protected final void addFlag(int flag) {FLAG.getAndBitwiseOr(this, (byte) flag);}
+	protected final void removeFlag(int flag) {FLAG.getAndBitwiseAnd(this, (byte) ~flag);}
 
 	public void pauseAndFlush() {
 		if (!pending.isEmpty()) {
-			lock.lock();
-			flag |= PAUSE_FOR_FLUSH;
-			lock.unlock();
+			addFlag(PAUSE_FOR_FLUSH);
 			key.interestOps(SelectionKey.OP_WRITE);
 		}
 	}
 	public final boolean isFlushing() {return !pending.isEmpty();}
 	// endregion
 
-	private static ChannelHandler flushedHandler_;
+	/**
+	 * 关闭输出，half_close，如果支持
+	 * fallback到 close
+	 * 不管如何，总是会等待当前数据flush完毕
+	 */
 	public final void closeGracefully() throws IOException {
 		flush();
 		if (!pending.isEmpty()) {
 			pauseAndFlush();
-			if (handler("channel:flushed") == null) {
-				if (flushedHandler_ == null) {
-					flushedHandler_ = new ChannelHandler() {
-						@Override public void channelFlushed(ChannelCtx ctx) throws IOException {ctx.channel().closeGracefully();}
-					};
-				}
-				addLast("channel:flushed", flushedHandler_);
-			}
+			addFlag(CLOSE_AFTER_FLUSH);
+		} else {
+			closeGracefully0();
 		}
-		else closeGracefully0();
 	}
 
 	public BufferPool alloc() {
@@ -362,11 +360,7 @@ public abstract class MyChannel implements Selectable, Closeable {
 		}
 	}
 
-	public void invokeReadLater() {
-		lock.lock();
-		flag |= REINVOKE_READ;
-		lock.unlock();
-	}
+	public void invokeReadLater() {addFlag(REINVOKE_READ);}
 
 	private ChannelCtx head() {
 		if (pipelineHead == null) throw new IllegalStateException("pipeline is empty");
@@ -493,14 +487,14 @@ public abstract class MyChannel implements Selectable, Closeable {
 			throw new ConnectException("Connect timeout");
 		}
 
-		if ((flag&TIMED_FLUSH) != 0 && (System.currentTimeMillis()&15) == (hashCode()&15)) {
+		if ((flags &TIMED_FLUSH) != 0 && (System.currentTimeMillis()&15) == (hashCode()&15)) {
 			flush();
 		}
 
 		lock.lock();
 		try {
-			if ((flag & REINVOKE_READ) != 0) {
-				flag ^= REINVOKE_READ;
+			if ((flags & REINVOKE_READ) != 0) {
+				flags ^= REINVOKE_READ;
 				fireChannelRead(rb);
 			}
 
@@ -530,15 +524,15 @@ public abstract class MyChannel implements Selectable, Closeable {
 			state = CLOSE_PENDING;
 
 			try {
-				closeHandler();
+				fireClosed();
 			} finally {
 				state = CLOSED;
 
 				key.cancel();
 				if (ch != null) ch.close();
 
-				if (rb != null && rb.capacity() > 0) {
-					BufferPool.reserve(rb);
+				if (rb != null) {
+					rb.release();
 					rb = null;
 				}
 			}
@@ -566,7 +560,7 @@ public abstract class MyChannel implements Selectable, Closeable {
 				key.interestOps(0);
 
 				lock.lock();
-				flag |= TIMED_FLUSH;
+				flags |= TIMED_FLUSH;
 				lock.unlock();
 			}
 			return;
@@ -587,7 +581,7 @@ public abstract class MyChannel implements Selectable, Closeable {
 		try {
 			if (state == INITIAL) throw new IllegalStateException("Should call connect() before register");
 			else if (state == CONNECT_PENDING) ops |= SelectionKey.OP_CONNECT;
-			if ((flag & READ_INACTIVE) != 0) ops &= ~SelectionKey.OP_READ;
+			if ((flags & READ_INACTIVE) != 0) ops &= ~SelectionKey.OP_READ;
 
 			if (ch.keyFor(sel) != key) key.cancel();
 			key = ch.register(sel, ops, att);
@@ -623,7 +617,7 @@ public abstract class MyChannel implements Selectable, Closeable {
 	protected abstract void bind0(InetSocketAddress na) throws IOException;
 	protected abstract boolean connect0(InetSocketAddress na) throws IOException;
 	protected abstract SocketAddress finishConnect0() throws IOException;
-	protected abstract void closeGracefully0() throws IOException;
+	protected void closeGracefully0() throws IOException {close();}
 	protected abstract void disconnect0() throws IOException;
 
 	public abstract void flush() throws IOException;
@@ -633,14 +627,15 @@ public abstract class MyChannel implements Selectable, Closeable {
 	// callback
 
 	final void onInputClosed(Object data) throws IOException {
-		var inputEndEvent = new Event(IN_EOF, data);
-		postEvent(inputEndEvent);
-		if (inputEndEvent.getResult() == Event.RESULT_DEFAULT) {
+		var event = new Event(IN_EOF, data);
+		addFlag(INPUT_CLOSED);
+		postEvent(event);
+		if (event.getResult() == Event.RESULT_DEFAULT) {
 			close();
 		}
 	}
 
-	protected void closeHandler() throws IOException {
+	protected void fireClosed() throws IOException {
 		Throwable ee = null;
 		var pipe = pipelineTail;
 		while (pipe != null) {
@@ -670,6 +665,9 @@ public abstract class MyChannel implements Selectable, Closeable {
 			pipe.handler.channelFlushed(pipe);
 			pipe = pipe.next;
 		}
+
+		if ((flags&CLOSE_AFTER_FLUSH) != 0)
+			closeGracefully0();
 	}
 
 	private ByteBuffer nioBuf;
@@ -686,22 +684,6 @@ public abstract class MyChannel implements Selectable, Closeable {
 		else NativeMemory.setAddress(nioBuf, buf.address(), buf.capacity());
 		nioBuf.limit(buf.capacity()).position(buf.wIndex());
 		return nioBuf;
-	}
-
-	public final DynByteBuf i_getBuffer() { return rb; }
-	/**
-	 * 获取Channel用于其它用途
-	 */
-	public AbstractSelectableChannel i_outOfControl() throws IOException {
-		lock.lock();
-		try {
-			AbstractSelectableChannel c = ch;
-			ch = null;
-			close();
-			return c;
-		} finally {
-			lock.unlock();
-		}
 	}
 
 	public boolean isTCP() {return true;}

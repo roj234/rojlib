@@ -52,7 +52,7 @@ public class Token {
 	@Contract(pure = true)
 	public double asDouble() { throw new UnsupportedOperationException(this+"不是数字"); }
 
-	public Token copy() { return new Token().init(type, pos, text.toString()); }
+	public Token immutable() { return new Token().init(type, pos, text.toString()); }
 
 	public static Token timeWord(int type, int pos, long value, CharSequence represent) { return new L(type, pos, value, represent); }
 	public static Token numberWord(int pos, int value, CharSequence represent) { return new I(pos, value, represent); }
@@ -61,7 +61,7 @@ public class Token {
 	public static Token numberWord(int pos, double value, CharSequence represent) { return new D(pos, value, represent); }
 	private static sealed class Num extends Token {
 		public final Token init(int type, int index, CharSequence text) { throw new UnsupportedOperationException("数字token不可变"); }
-		public final Token copy() { return this; }
+		public final Token immutable() { return this; }
 	}
 	private static final class I extends Num {
 		private final int i;

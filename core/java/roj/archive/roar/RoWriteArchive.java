@@ -5,7 +5,6 @@ import roj.collect.ArrayList;
 import roj.collect.HashSet;
 import roj.collect.IntervalPartition;
 import roj.collect.IntervalPartition.Range;
-import roj.util.function.ExceptionalSupplier;
 import roj.io.Finishable;
 import roj.io.IOUtil;
 import roj.io.source.Source;
@@ -13,6 +12,7 @@ import roj.text.logging.Logger;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
 import roj.util.Helpers;
+import roj.util.function.ExceptionalSupplier;
 
 import java.io.File;
 import java.io.IOException;
@@ -273,7 +273,7 @@ public final class RoWriteArchive extends RoArchive {
 
 		r.setLength(r.position());
 
-		CacheNode node = OPENED.get(r);
+		CacheNode node = ARCHIVES.get(r);
 		if (node != null) {
 			node.map = map;
 			node.entries = entries;

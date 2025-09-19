@@ -1,12 +1,12 @@
 package roj.io.source;
 
 import org.jetbrains.annotations.NotNull;
+import roj.optimizer.FastVarHandle;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.lang.invoke.VarHandle;
 import java.util.zip.ZipException;
-
-import static roj.reflect.Unsafe.U;
 
 /**
  * @author Roj234
@@ -76,11 +76,12 @@ public sealed class SourceInputStream extends InputStream {
 	 * @author Roj234
 	 * @since 2023/9/14 14:01
 	 */
+	@FastVarHandle
 	public static final class Shared extends SourceInputStream {
 		private Object ref;
-		private final long off;
+		private final VarHandle off;
 
-		public Shared(Source in, long len, Object ref, long off) {
+		public Shared(Source in, long len, Object ref, VarHandle off) {
 			super(in, len);
 			this.ref = ref;
 			this.off = off;
@@ -88,7 +89,7 @@ public sealed class SourceInputStream extends InputStream {
 
 		@Override
 		public synchronized void close() throws IOException {
-			if (ref != null && !U.compareAndSetReference(ref, off, null, src)) {
+			if (ref != null && !off.compareAndSet(ref, null, src)) {
 				super.close();
 			}
 

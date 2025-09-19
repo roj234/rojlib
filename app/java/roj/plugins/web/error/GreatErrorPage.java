@@ -24,7 +24,7 @@ import java.util.function.Function;
  * @since 2023/2/11 1:14
  */
 public class GreatErrorPage {
-	private static final String CODEBASE = "../projects/rojlib/java";
+	private static final String CODEBASE = "../RojLib/plugin/java";
 	private static final Map<String,Function<Request,Map<String, ?>>> customTag = new HashMap<>();
 	private static Formatter template;
 	static {
@@ -54,7 +54,7 @@ public class GreatErrorPage {
 		HashMap<String, String> data = new HashMap<>();
 
 		data.put("site", req.host());
-		data.put("desc", HtmlEntities.escapeHtml(String.valueOf(e.getMessage())).toString().replace("\n", "<br />"));
+		data.put("desc", HtmlEntities.encode(String.valueOf(e.getMessage())).toString().replace("\n", "<br />"));
 
 		sb.clear();
 		parse_class(sb.append("["), e.getClass().getName()).append("] at ");
@@ -64,7 +64,7 @@ public class GreatErrorPage {
 		sb.clear();
 		for (StackTraceElement el : els) {
 			parse_class(sb.append("<li>"), el.getClassName()).append('.');
-			HtmlEntities.escapeHtml(sb, el.getMethodName()).append("() at ");
+			HtmlEntities.encode(sb, el.getMethodName()).append("() at ");
 			parse_file(sb, el.getFileName(), el.getLineNumber()).append("</li>");
 		}
 		data.put("trace", sb.toString());
@@ -78,7 +78,7 @@ public class GreatErrorPage {
 				}
 			} catch (IOException ignored) {}
 			sb.setLength(pos);
-			sb.append("<pre><ol start=0><li class=\"line-error\" style=\"text-align:center;color:black\">没有源码</li></ol></pre>");
+			sb.append("<pre><ol start=0><li class=\"line-error\" style=\"text-align:center\">没有源码</li></ol></pre>");
 		}
 		data.put("code", sb.toString());
 
@@ -111,10 +111,7 @@ public class GreatErrorPage {
 		CharList sb2 = new CharList();
 		int lineNum = 0;
 		try {
-			while (true) {
-				sb2.clear();
-				if (!s.readLine(sb2)) break;
-
+			while (s.readLine(sb2)) {
 				lineNum++;
 				if (lineNum < begin) continue;
 				if (lineNum > el.getLineNumber()+LINES) break;
@@ -122,7 +119,7 @@ public class GreatErrorPage {
 				if (lineNum == el.getLineNumber()) sb.append("<li class=\"line-error\">");
 				else sb.append("<li>");
 
-				sb.append(HtmlEntities.escapeHtmlInline(sb2)).append("</li>");
+				sb.append(HtmlEntities.encodeInline(sb2)).append("</li>");
 			}
 		} finally {
 			s.close();
@@ -199,7 +196,7 @@ public class GreatErrorPage {
 		if (map == null || map.isEmpty()) return sb.append("<small>").append(map == null ? "&lt;failed&gt;" : "empty").append("</small></caption>");
 		sb.append("</caption><tbody>");
 		for (Map.Entry<String, ?> entry : map.entrySet()) {
-			HtmlEntities.escapeHtml(sb.append("<tr><td>"), entry.getKey()).append("</td><td>");
+			HtmlEntities.encode(sb.append("<tr><td>"), entry.getKey()).append("</td><td>");
 			parse_args(sb, entry.getValue());
 			sb.append("</td></tr>");
 		}
@@ -213,7 +210,7 @@ public class GreatErrorPage {
 		}
 
 		try {
-			HtmlEntities.escapeHtml(sb, String.valueOf(value));
+			HtmlEntities.encode(sb, String.valueOf(value));
 		} catch (Exception e) {
 			sb.append("<b style=\"color:red\">").append(value.getClass().getName()).append(".toString()失败: ");
 			parse_args(sb, e);

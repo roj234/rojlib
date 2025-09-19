@@ -2,7 +2,6 @@ package roj.reflect;
 
 import org.jetbrains.annotations.ApiStatus;
 import roj.asm.Opcodes;
-import roj.io.IOUtil;
 import roj.util.Helpers;
 import roj.util.JVM;
 
@@ -22,23 +21,18 @@ public interface Unsafe {
 	private static Unsafe init() {
 		try {
 			// hard-coded offset & size
-			byte[] ref = Reflection.readExact("roj/reflect/Unsafe$.class", 6298);
+			byte[] ref = Reflection.readExact("roj/reflect/Unsafe$.class",  6274);
 			if (JVM.BIG_ENDIAN) {
-				for (int i = 0xA6; i < 0xAD + 10 * 12; i += 10) {
+				for (int i = 0x8E; i < 0x8E + 10 * 12; i += 10) {
 					ref[i] = (byte) (ref[i] == 'B' ? 'L' : 'B');
 				}
 			}
 			if (JVM.VERSION > 21) {
-				ref[0x6f] = 14; // super();
-				ref[0xbb8] = 14; // extends Object
-				ref[0xbb8+4] = 12; // implements Runnable
-
-				// Not able to use ACCESS_VM_ANNOTATIONS here...
-				Reflection.IMPL_LOOKUP.defineClass(ref);
-				ref = IOUtil.getResourceIL("roj/reflect/Unsafe$2.class");
+				ref[0x6f] = 12; // super();
+				ref[0xba4] = 12; // extends Object
 			}
 
-			var type = Reflection.defineClass(Unsafe.class.getClassLoader(), null, ref, 0, ref.length, Unsafe.class.getProtectionDomain(), Reflection.HIDDEN_CLASS|Reflection.ACCESS_VM_ANNOTATIONS);
+			var type = Reflection.defineClass(Unsafe.class.getClassLoader(), Unsafe.class, null, ref, 0, ref.length, Unsafe.class.getProtectionDomain(), Reflection.HIDDEN_CLASS|Reflection.ACCESS_VM_ANNOTATIONS);
 			return (Unsafe) u.allocateInstance(type);
 		} catch (Throwable e) {
 			e.printStackTrace();

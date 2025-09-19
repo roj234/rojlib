@@ -6,7 +6,7 @@ import roj.concurrent.SegmentReadWriteLock;
 import roj.config.NbtEncoder;
 import roj.config.NbtParserEx;
 import roj.config.mapper.ObjectMapper;
-import roj.config.mapper.ObjectMapperFactory;
+import roj.config.mapper.ObjectReader;
 import roj.io.ByteInputStream;
 import roj.math.MathUtils;
 import roj.util.ByteList;
@@ -29,7 +29,7 @@ import java.util.function.BiConsumer;
  * @since 2023/5/15 14:13
  */
 public class FileSessionStorage extends SessionStorage implements BiConsumer<String,Map<String,Object>> {
-	private static final ThreadLocal<ObjectMapper<?>> local = new ThreadLocal<>();
+	private static final ThreadLocal<ObjectReader<?>> local = new ThreadLocal<>();
 	private static volatile StandardCopyOption[] moveAction = {StandardCopyOption.ATOMIC_MOVE};
 
 	private final File baseDir;
@@ -101,9 +101,9 @@ public class FileSessionStorage extends SessionStorage implements BiConsumer<Str
 		if (!file.isFile()) return new HashMap<>();
 
 		try (var in = new ByteInputStream(new FileInputStream(file))) {
-			ObjectMapper<Map<String, Object>> des = adapter();
+			ObjectReader<Map<String, Object>> des = adapter();
 			des.reset();
-			NbtParserEx.parse(in, des);
+			NbtParserEx.Parse(in, des);
 			return des.finished() ? des.get() : null;
 		} catch (Exception e) {
 			e.printStackTrace();
@@ -136,7 +136,7 @@ public class FileSessionStorage extends SessionStorage implements BiConsumer<Str
 		try {
 			try (FileChannel fc = FileChannel.open(tmpFile.toPath(), StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE)) {
 				try (var buf = new ByteList.ToStream(Channels.newOutputStream(fc), false)) {
-					adapter().write(new NbtEncoder(buf).setXNbt(true), value);
+					adapter().getWriter().write(new NbtEncoder(buf).setXNbt(true), value);
 				}
 			}
 
@@ -175,10 +175,10 @@ public class FileSessionStorage extends SessionStorage implements BiConsumer<Str
 		new File(baseDir, id+".tmp").delete();
 	}
 
-	private static ObjectMapper<Map<String, Object>> adapter() {
-		ObjectMapper<?> c = local.get();
+	private static ObjectReader<Map<String, Object>> adapter() {
+		ObjectReader<?> c = local.get();
 		if (c == null) {
-			c = ObjectMapperFactory.pooled().mapOf(Object.class);
+			c = ObjectMapper.pooled().mapOf(Object.class);
 			local.set(c);
 		}
 		return Helpers.cast(c);

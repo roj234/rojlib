@@ -61,7 +61,6 @@ public class TxtWriter extends EbookWriter {
 		while (lr.readLine(sb)) {
 			if (sb.rtrim().length() > 0) writer.append("\t").append(sb);
 			writer.append("\n");
-			sb.clear();
 		}
 
 	}

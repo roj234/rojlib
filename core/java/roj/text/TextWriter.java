@@ -1,7 +1,7 @@
 package roj.text;
 
-import roj.io.Finishable;
 import roj.io.BufferPool;
+import roj.io.Finishable;
 import roj.util.ArrayCache;
 import roj.util.DynByteBuf;
 import roj.util.Helpers;
@@ -56,7 +56,7 @@ public class TextWriter extends CharList implements Closeable, Finishable {
 
 		if (charset == null) charset = TextUtil.outputCharset;
 
-		this.list = ArrayCache.getCharArray(512, false);
+		this.list = ArrayCache.getCharArray(512);
 		this.out = out;
 
 		var _ucs = FastCharset.getInstance(charset);
@@ -92,7 +92,7 @@ public class TextWriter extends CharList implements Closeable, Finishable {
 			}
 
 			if (cap > list.length) {
-				char[] newArray = ArrayCache.getCharArray(cap, false);
+				char[] newArray = ArrayCache.getCharArray(cap);
 				System.arraycopy(list, 0, newArray, 0, len);
 				ArrayCache.putArray(list);
 				list = newArray;

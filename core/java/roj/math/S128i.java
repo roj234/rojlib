@@ -421,7 +421,7 @@ public class S128i implements Comparable<S128i> {
 	public String toString(@Range(from = 2, to = 36) int radix) {
 		if (isZero()) return "0";
 
-		var sb = ArrayCache.getCharArray(256, false);
+		var sb = ArrayCache.getIOCharBuffer();
 		var absNum = new S128i(this);
 		var negative = absNum.isNegative();
 		if (negative) absNum.negate(absNum);
@@ -429,7 +429,7 @@ public class S128i implements Comparable<S128i> {
 		var pos = fillChars(radix, absNum, sb);
 		if (negative) sb[--pos] = '-';
 
-		String str = new String(sb, pos, 256 - pos);
+		String str = new String(sb, pos, sb.length - pos);
 		ArrayCache.putArray(sb);
 		return str;
 	}
@@ -437,25 +437,25 @@ public class S128i implements Comparable<S128i> {
 	public String toUnsignedString(@Range(from = 2, to = 36) int radix) {
 		if (isZero()) return "0";
 
-		var sb = ArrayCache.getCharArray(256, false);
+		var sb = ArrayCache.getIOCharBuffer();
 		var num = new S128i(this);
 		var pos = fillChars(radix, num, sb);
 
-		String str = new String(sb, pos, 256 - pos);
+		String str = new String(sb, pos, sb.length - pos);
 		ArrayCache.putArray(sb);
 		return str;
 	}
 	private static int fillChars(int radix, S128i num, char[] sb) {
-		var base = digitBase[radix -2];
+		var base = digitBase[radix-2];
 		var remainder = new S128i();
 
-		int pos = 255;
+		int pos = sb.length-1;
 		while (true) {
 			divideAndRemainderUnsigned(num, base, remainder);
 			int newPos = CharList.getChars(remainder.low, radix, pos, sb);
 			if (num.isZero()) {pos = newPos;break;}
 
-			pos -= digitSize[radix -2];
+			pos -= digitSize[radix-2];
 			for (int i = pos; i < newPos; i++) sb[i] = '0';
 		}
 		return pos;

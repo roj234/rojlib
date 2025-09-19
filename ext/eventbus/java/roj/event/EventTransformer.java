@@ -40,7 +40,7 @@ public final class EventTransformer implements Transformer, ConstantPoolHooks.Ho
 
 		Signature signature = data.getAttribute(data.cp, Attribute.SIGNATURE);
 		if (signature != null) {
-			Map<String, List<IType>> typeParams = signature.typeParams;
+			Map<String, List<IType>> typeParams = signature.typeVariables;
 			//if (typeParams.size() > 1) throw new TransformException("事件类"+data.name+"不能有超过一个泛型参数！");
 			if (typeParams.size() > 0 &&
 				null == data.getMethodObj("getGenericType", "()Ljava/lang/String;") &&

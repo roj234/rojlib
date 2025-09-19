@@ -6,8 +6,8 @@ import roj.asm.FieldNode;
 import roj.asm.MethodNode;
 import roj.asm.Opcodes;
 import roj.asm.cp.*;
-import roj.asm.insn.AbstractCodeWriter;
 import roj.asm.insn.CodeVisitor;
+import roj.asm.type.Type;
 import roj.collect.ArrayList;
 import roj.collect.IntMap;
 import roj.text.CharList;
@@ -110,7 +110,7 @@ public class ASMifier {
 		}
 
 		protected void visitSize(int stackSize, int localSize) {line.append("cw.visitSize(").append(stackSize).append(", ").append(localSize).append(");\n");}
-		protected void newArray(byte type) {line.append("cw.newArray(ToPrimitiveArrayId('").append(AbstractCodeWriter.FromPrimitiveArrayId(type)).append("'));\n");}
+		protected void newArray(byte type) {line.append("cw.newArray(Type.getByArrayType('").append(Type.getByArrayType(type)).append("'));\n");}
 		protected void multiArray(CstClass clz, int dimension) {line.append("cw.multiArray(").append(utfRef(clz)).append(", ").append(dimension).append(");\n");}
 
 		protected void clazz(byte code, CstClass clz) {line.append("cw.clazz(").append(op(code)).append(", ").append(utfRef(clz)).append(");\n");}

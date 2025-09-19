@@ -1,12 +1,7 @@
 package roj.asmx.launcher;
 
 import org.jetbrains.annotations.Nullable;
-import roj.archive.zip.ZEntry;
-import roj.archive.zip.ZipFile;
-import roj.archive.zip.ZipFileWriter;
-import roj.asm.AsmCache;
 import roj.asm.ClassNode;
-import roj.asm.ClassView;
 import roj.asm.insn.CodeWriter;
 import roj.asm.type.Type;
 import roj.asmx.AnnotationRepo;
@@ -15,34 +10,27 @@ import roj.asmx.Transformer;
 import roj.ci.annotation.IndirectReference;
 import roj.collect.ArrayList;
 import roj.collect.TrieTreeSet;
-import roj.compiler.plugins.asm.ASM;
-import roj.config.node.IntValue;
-import roj.crypt.CRC32;
 import roj.crypt.jar.JarVerifier;
 import roj.io.IOUtil;
-import roj.io.source.FileSource;
 import roj.reflect.Bypass;
-import roj.reflect.ClassDump;
 import roj.reflect.Reflection;
-import roj.text.CharList;
 import roj.text.URICoder;
 import roj.text.logging.Level;
-import roj.text.logging.LogDestination;
 import roj.text.logging.Logger;
 import roj.util.ByteList;
 import roj.util.FastFailException;
 import roj.util.Helpers;
 
 import java.io.File;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.lang.reflect.Field;
 import java.net.URL;
-import java.net.URLClassLoader;
 import java.security.CodeSigner;
 import java.security.CodeSource;
 import java.security.GeneralSecurityException;
 import java.util.Arrays;
+import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.List;
 import java.util.function.Function;
@@ -57,7 +45,7 @@ import static roj.asm.Opcodes.*;
  * @since 2020/11/9 23:10
  */
 public class Loader implements Function<String, Class<?>> {
-	private static final ThreadLocal<IntValue> IS_TRANSFORMING = ThreadLocal.withInitial(() -> new IntValue(-1));
+	private static final ThreadLocal<int[]> IS_TRANSFORMING = ThreadLocal.withInitial(() -> new int[1]);
 	private static final Main MAIN;
 	static {
 		try {
@@ -67,10 +55,10 @@ public class Loader implements Function<String, Class<?>> {
 		}
 	}
 
-	public static final Loader instance = new Loader();
-	static {Main.classFinder = instance;Main.resourceFinder = instance::getResource;}
-
 	private static final Logger LOGGER = Logger.getLogger("Ignis");
+	public static final Loader instance = new Loader();
+
+	static {Main.classFinder = instance;Main.resourceFinder = instance::getResource;}
 
 	// 这里和Loader$Init是相同类加载器的相同包了
 	static ArrayList<String> args;
@@ -82,30 +70,18 @@ public class Loader implements Function<String, Class<?>> {
 	}
 
 	public static void init(String[] args) {
-		// 甚至都不用传参
-		// 需要注意的是，必须是这个类，别的类会崩，因为加载顺序问题，我也不清楚怎么回事，哈哈哈
-		var entryPoint = (Main) CharList.Slice.class.getClassLoader();
+		if (addClasspaths()) {
+			LOGGER.warn("classpath复制失败，可能会出现奇怪问题");
 
-		boolean isSecureJar = Main.class.getProtectionDomain().getCodeSource().getCertificates() != null;
-		if (ASM.TARGET_JAVA_VERSION >= 17 || GetOtherJars() && !isSecureJar) {
 			URL myJar = Main.class.getProtectionDomain().getCodeSource().getLocation();
 			if (myJar != null && myJar.getProtocol().equals("file") && myJar.getPath().indexOf('!') < 0) {
 				try {
-					instance.enableFastZip(myJar, false);
+					instance.addClasspath(myJar);
 				} catch (Exception e) {
 					e.printStackTrace();
 				}
-			} else {
-				LOGGER.warn("未能开启高性能ZIP，如果你是Java17或更高版本，那就无所谓了");
 			}
 		}
-
-		// 初始化Logger
-		LOGGER.setLevel(Level.INFO);
-		LogDestination destination = Logger.getRootContext().destination();
-		Logger.getRootContext().destination(IOUtil::getSharedCharBuf);
-		LOGGER.info("");
-		Logger.getRootContext().destination(destination);
 
 		String tweakerName = "roj/asmx/launcher/Tweaker";
 		String mainClass = null;
@@ -144,7 +120,7 @@ public class Loader implements Function<String, Class<?>> {
 
 		ClassNode init = new ClassNode();
 		init.name("roj/asmx/launcher/Loader$Init");
-		init.interfaces().add("java/lang/Runnable");
+		init.addInterface("java/lang/Runnable");
 		init.defaultConstructor();
 
 		CodeWriter c = init.newMethod(ACC_PUBLIC|ACC_STATIC, "<clinit>", "()V");
@@ -155,9 +131,6 @@ public class Loader implements Function<String, Class<?>> {
 		c.field(GETSTATIC, "roj/asmx/launcher/Loader", "args", "Lroj/collect/ArrayList;");
 		c.field(GETSTATIC, "roj/asmx/launcher/Loader", "instance", "Lroj/asmx/launcher/Loader;");
 		c.invokeV("roj/asmx/launcher/Tweaker", "init", "(Ljava/util/List;Lroj/asmx/launcher/Loader;)V");
-
-		c.newObject(init.name());
-		c.field(PUTSTATIC, "roj/asmx/launcher/Main", "main", "Ljava/lang/Runnable;");
 		c.insn(RETURN);
 		c.finish();
 
@@ -168,71 +141,35 @@ public class Loader implements Function<String, Class<?>> {
 		c.insn(RETURN);
 		c.finish();
 
-		ByteList buf = AsmCache.toByteArrayShared(init);
-		Class<?> loaderClass = entryPoint.defineClassA(init.name().replace('/', '.'), buf.list, 0, buf.wIndex(), Loader.class.getProtectionDomain().getCodeSource());
-		Reflection.ensureClassInitialized(loaderClass);
+		Main.main = (Runnable) Reflection.createInstance(Loader.class, init);
 	}
-
-	private static boolean GetOtherJars() {
-		H fn = null;
-		var builder = Bypass.builder(H.class).i_access("sun.net.www.protocol.jar.JarFileFactory", "fileCache", Type.klass("java/util/HashMap"), "getCache", null, true);
-		Object ucp;
-		URL[] urls;
+	private static boolean addClasspaths() {
+		H fn;
+		var builder = Bypass.builder(H.class).i_access("sun.net.www.protocol.jar.JarFileFactory", "fileCache", Type.klass("java/util/HashMap"), "fileCache", null, true);
 		var loader = Main.class.getClassLoader();
-		findURL: {
-			if (loader instanceof URLClassLoader ucl) {
-				// 这个异常实际上不可能发生
-				try {
-					fn = builder.access(URLClassLoader.class, "ucp", "getUCP", null)
-							   .delegate_o(Reflection.getField(URLClassLoader.class, "ucp").getType(), "closeLoaders").build();
-				} catch (NoSuchFieldException ignored) {}
-				ucp = fn.getUCP(loader);
-				urls = ucl.getURLs();
-				break findURL;
-			} else {
-				if (loader.getClass().getName().endsWith("AppClassLoader")) {
-					Field _ucp = null;
-					Class<?> type = loader.getClass();
-					loop:
-					while (type != Object.class) {
-						for (Field field : type.getDeclaredFields()) {
-							if (field.getType().getName().endsWith("URLClassPath")) {
-								_ucp = field;
-								break loop;
-							}
-						}
-						type = type.getSuperclass();
-					}
-					if (_ucp != null) {
-						for (var _path : _ucp.getType().getDeclaredFields()) {
-							if (_path.getName().equals("path")) {
-								fn = builder.access(loader.getClass(), _ucp.getName(), "getUCP", null)
-									.access(_ucp.getType(), _path.getName(), "getPath", null)
-									.delegate_o(_ucp.getType(), "closeLoaders").build();
-
-								ucp = fn.getUCP(loader);
-								var path = fn.getPath(ucp);
-								urls = path.toArray(new URL[path.size()]);
-								break findURL;
-							}
-						}
-					}
-				}
-			}
-
-			LOGGER.warn("并非直接从从文件加载: {}", loader.getClass().getName());
+		if (!loader.getClass().getName().endsWith("AppClassLoader")) {
+			LOGGER.warn("不支持的类加载器: {}", loader.getClass().getName());
 			return true;
+		} else {
+			fn = builder.i_access("jdk/internal/loader/BuiltinClassLoader", "ucp", Type.klass("jdk/internal/loader/URLClassPath"), "ucp", null, false)
+					.i_access("jdk/internal/loader/URLClassPath", "path", Type.klass("java/util/ArrayList"), "path", null, false)
+					.i_delegate("jdk/internal/loader/URLClassPath", "closeLoaders", "()Ljava/util/List;", "closeLoaders", (byte) 0)
+					.build();
+
 		}
-		if (urls.length == 0) return true;
+
+		var ucp = fn.ucp(loader);
+		var path = fn.path(ucp);
+		if (path.isEmpty()) return true;
 
 		boolean hasError = false;
-		for (URL url : urls) {
+		for (URL url : path) {
 			if (!url.getProtocol().equals("file")) {
 				LOGGER.warn("非文件的classpath {}", url);
 				hasError = true;
 			} else {
 				try {
-					instance.enableFastZip(url, true);
+					instance.addClasspath(url);
 				} catch (Exception e) {
 					hasError = true;
 					e.printStackTrace();
@@ -242,39 +179,33 @@ public class Loader implements Function<String, Class<?>> {
 
 		if (!hasError) {
 			fn.closeLoaders(ucp);
-			try {
-				fn.getCache().clear();
-			} catch (Throwable ignored) {}
+			for (var jar : new ArrayList<>(fn.fileCache().values())) {
+				IOUtil.closeSilently(jar);
+			}
 		}
 		return false;
 	}
 
 	private interface H {
-		Object getUCP(Object o);
-		java.util.ArrayList<URL> getPath(Object o);
+		Object ucp(Object o);
+		java.util.ArrayList<URL> path(Object o);
 		List<IOException> closeLoaders(Object o);
-		HashMap<String, JarFile> getCache();
+		HashMap<String, JarFile> fileCache();
 	}
 
-	private final List<ZipFile> archives = new java.util.ArrayList<>();
-	private final List<CodeSource> locations = new java.util.ArrayList<>();
-	private final List<JarVerifier> verifiers = new java.util.ArrayList<>();
+	private final List<TinyArchive> archives = new ArrayList<>();
+	private final List<CodeSource> locations = new ArrayList<>();
+	private final List<JarVerifier> verifiers = new ArrayList<>();
 
 	private INameTransformer nameTransformer;
-	private final List<Transformer> transformers = new java.util.ArrayList<>();
+	private final List<Transformer> transformers = new ArrayList<>();
 
 	private final TrieTreeSet transformExcept = new TrieTreeSet();
 	private final TrieTreeSet loadExcept = new TrieTreeSet();
 	public Loader() {
 		transformExcept.addAll(Arrays.asList("roj.asm.", "roj.asmx.launcher.", "roj.reflect."));
 		loadExcept.addAll(Arrays.asList("java.", "javax."));
-
-		try {
-			// preload asm classes
-			new Context("_classwrapper_", IOUtil.getResourceIL("roj/asmx/launcher/Loader.class")).getData().parsed();
-		} catch (Exception e) {
-			throw new IllegalStateException("预加载转换器相关类时出现异常", e);
-		}
+		new Context(null);
 	}
 
 	public void registerTransformer(Transformer tr) {
@@ -355,29 +286,27 @@ public class Loader implements Function<String, Class<?>> {
 		try {
 			name/*File Name*/ = newName.replace('.', '/').concat(".class");
 
-			block:
+			found:
 			try {
 				for (int i = 0; i < archives.size(); i++) {
 					var za = archives.get(i);
-					var in = za.getStream(name);
-					if (in != null) {
+					if (za.get(name, buf)) {
 						var jv = verifiers.get(i);
 						if (jv != null) {
-							in = jv.wrapInput(name, in);
+							//jv.check(name, buf);
 							addPackage(locations.get(i).getLocation(), name, jv);
 						}
-						buf.readStreamFully(in);
 						cs = locations.get(i);
-						break block;
+						break found;
 					}
 				}
 
-				var in = MAIN.PARENT.getResourceAsStream(name);
-				if (in == null || loadExcept.strStartsWithThis(newName)) return MAIN.PARENT.loadClass(newName);
+				var in = MAIN.getParentResource(name);
+				if (in == null || loadExcept.strStartsWithThis(newName)) return Main.PARENT.loadClass(newName);
 
 				buf.readStreamFully(in);
 
-				URL url = MAIN.PARENT.getResource(name);
+				URL url = Main.PARENT.getResource(name);
 				if (url != null) {
 					//格式 file:/PATH/...!xxx
 					String path = "file:".concat(url.getPath().substring(6));
@@ -392,7 +321,7 @@ public class Loader implements Function<String, Class<?>> {
 				throw e;
 			}
 
-			if (!cs.getLocation().getHost().equals("cached") && !transformExcept.strStartsWithThis(newName))
+			if (!transformExcept.strStartsWithThis(newName))
 				transform(name, newName.replace('.', '/'), buf);
 			return MAIN.defineClassA(newName, buf.list, 0, buf.wIndex(), cs);
 		} catch (ClassNotFoundException e) {
@@ -412,28 +341,27 @@ public class Loader implements Function<String, Class<?>> {
 
 		List<Transformer> ts = transformers;
 		var reentrant = IS_TRANSFORMING.get();
-		if (reentrant.value >= 1) {
-			LOGGER.warn("类转换器'{}'正在引用'{}'", ts.get(reentrant.value).getClass().getName(), transformedName);
+		if (reentrant[0]++ > 1) {
+			LOGGER.warn("可能正在循环依赖{}", transformedName);
 			return;
 		}
 
 		for (int i = 0; i < ts.size(); i++) {
-			reentrant.value = i;
 			try {
 				changed |= ts.get(i).transform(transformedName, ctx);
 			} catch (Throwable e) {
-				reentrant.value = -1;
+				reentrant[0] = -1;
 
-				LOGGER.fatal("转换类'{}'时发生异常({}/{})", e, name, i);
-				try {
-					ClassDump.dump("transform_failed", ctx.getClassBytes());
+				LOGGER.fatal("{} 转换 {} 时发生异常", e, ts.get(i).getClass().getName(), name);
+				try (var fos = new FileOutputStream("transform_failed.class")) {
+					ctx.getClassBytes().writeToStream(fos);
 				} catch (Throwable e1) {
-					LOGGER.fatal("保存'{}'的内容用于调试时发生异常", e1, name);
+					LOGGER.fatal("保存其内容用于调试时发生异常", e1, name);
 				}
 				Helpers.athrow(e);
 			}
 		}
-		reentrant.value = -1;
+		reentrant[0]--;
 		if (changed) {
 			// See ConstantPool#checkCollision
 			ByteList b = ctx.getClassBytes();
@@ -446,16 +374,18 @@ public class Loader implements Function<String, Class<?>> {
 
 	public Manifest getManifest() {
 		for (int i = 0; i < archives.size(); i++) {
+			var jv = verifiers.get(i);
+			if (jv != null) return jv.getManifest();
+
 			var zf = archives.get(i);
-			var ze = zf.getEntry("META-INF/MANIFEST.MF");
-			if (ze != null) {
-				var jv = verifiers.get(i);
-				if (jv != null) return jv.getManifest();
-				try {
-					return new Manifest(zf.getStream(ze));
-				} catch (IOException ignored) {}
-			}
+			try (var in = zf.get("META-INF/MANIFEST.MF")) {
+				if (in != null) return new Manifest(in);
+			} catch (IOException ignored) {}
 		}
+
+		try(var in = MAIN.getResourceAsStream("META-INF/MANIFEST.MF")) {
+			if (in != null) return new Manifest(in);
+		} catch (IOException ignored) {}
 
 		return null;
 	}
@@ -463,7 +393,9 @@ public class Loader implements Function<String, Class<?>> {
 	public boolean hasResource(String name) {
 		for (int i = 0; i < archives.size(); i++) {
 			var zf = archives.get(i);
-			if (zf.getEntry(name) != null) return true;
+			try {
+				if (zf.get(name, null)) return true;
+			} catch (IOException ignored) {}
 		}
 
 		var in = MAIN.getResource(name);
@@ -477,7 +409,7 @@ public class Loader implements Function<String, Class<?>> {
 			var zf = archives.get(i);
 			InputStream in = null;
 			try {
-				in = zf.getStream(name);
+				in = zf.get(name);
 			} catch (IOException ignored) {}
 			if (in != null) {
 				var jv = verifiers.get(i);
@@ -494,110 +426,54 @@ public class Loader implements Function<String, Class<?>> {
 	public List<Transformer> getTransformers() {return transformers;}
 	public void addTransformerExclusion(String toExclude) {transformExcept.add(toExclude);}
 
-	public void enableFastZip(URL url, boolean skipCodeSource) throws IOException {
-		ZipFile zf = new ZipFile(new File(URICoder.decodeURI(url.getPath().substring(1))));
-		JarVerifier jv = JarVerifier.create(zf);
-		if (archives.isEmpty()) IOUtil.read(zf.getStream(zf.entries().iterator().next())); // INIT
+	public void addClasspath(URL url) throws IOException {
+		File file = new File(URICoder.decodeURI(url.getPath().substring(1)));
+		var zf = new TinyArchive(file);
+		if (file.getName().endsWith(".roar")) {
+			zf.readRoar();
+		} else {
+			zf.readZip();
+		}
+
+		JarVerifier jv = JarVerifier.create(zf, file);
 		archives.add(zf);
 		int slot = verifiers.size();
 		verifiers.add(null);
-		locations.add(new CodeSource(url, (CodeSigner[]) null));
+		locations.add(null);
 		if (jv != null) {
-			if (skipCodeSource) locations.set(slot, jv.getCodeSource());
 			try {
 				jv.ensureManifestValid(false);
 			} catch (GeneralSecurityException e) {
 				Helpers.athrow(e);
 			}
+			locations.set(slot, jv.getCodeSource());
 			verifiers.set(slot, jv);
-		}
-	}
-	public void enableTransformerCache() throws IOException {
-		ByteList buf = new ByteList();
-		buf.ensureCapacity(4096);
-
-		for (int i = 0; i < archives.size(); i++) {
-			ZipFile archive = archives.get(i);
-
-			int fastHash = CRC32.initial;
-			for (ZEntry entry : archive.entries()) {
-				buf.clear();
-				buf.putUTF(entry.getName()).putLong(entry.getModificationTime()).putInt(entry.getCrc32());
-
-				fastHash = CRC32.update(fastHash, buf.list, 0, buf.wIndex());
-			}
-			fastHash = CRC32.finish(fastHash);
-
-			File out = new File(".cached/"+IOUtil.fileName(((FileSource) archive.source()).getFile().getName())+"-"+Integer.toHexString(fastHash)+".jar");
-			if (out.isFile()) {
-				verifiers.set(i, null);
-				archives.set(i, new ZipFile(out)).close();
-				locations.set(i, new CodeSource(new URL("file://cached/"+out.getName()), (CodeSigner[]) null));
-			} else {
-				JarVerifier jv = verifiers.get(i);
-
-				try (ZipFileWriter zfw = new ZipFileWriter(out, 9, 0)) {
-					for (ZEntry entry : archive.entries()) {
-						if (entry.getName().endsWith(".class")) {
-							InputStream in = null;
-							try {
-								in = archive.getStream(entry);
-								if (jv != null && jv.isSigned()) in = jv.wrapInput(entry.getName(), in);
-
-								buf.clear();
-								buf.readStreamFully(in);
-								String name = ClassView.parse(buf, false).name;
-
-								buf.rIndex = 0;
-								if (name.concat(".class").equals(entry.getName())) {
-									String newName = nameTransformer == null ? name : nameTransformer.mapName(name);
-									transform(name, newName, buf);
-
-									zfw.beginEntry(new ZEntry(entry.getName()));
-									buf.rIndex = 0;
-									buf.writeToStream(zfw);
-									zfw.closeEntry();
-								}
-							} catch (Exception e) {
-								e.printStackTrace();
-							} finally {
-								IOUtil.closeSilently(in);
-							}
-						}
-					}
-				}
-			}
 		}
 	}
 
 	private AnnotationRepo repo;
 	public AnnotationRepo getAnnotations() throws IOException {
-		if (this.repo == null) {
-			if (archives.isEmpty()) LOGGER.warn("无法读取注解：无法列出文件");
-
-			var repo = new AnnotationRepo();
-			for (ZipFile archive : archives) {
-				repo.loadCacheOrAdd(archive);
+		if (repo == null) {
+			repo = new AnnotationRepo();
+			if (archives.isEmpty()) {
+				try {
+					Enumeration<URL> resources = MAIN.getResources("META-INF/annotations.repo");
+					while (resources.hasMoreElements()) {
+						URL resource = resources.nextElement();
+						try (var in = resource.openStream()) {
+							repo.deserialize(IOUtil.getSharedByteBuf().readStreamFully(in));
+						}
+					}
+				} catch (Exception e) {
+					Helpers.athrow(e);
+				}
+			} else {
+				repo = new AnnotationRepo();
+				for (var archive : archives) {
+					repo.loadCacheOrAdd(archive);
+				}
 			}
-
-			this.repo = repo;
 		}
 		return repo;
-	}
-	public void setAnnotations(AnnotationRepo repo) {
-		if (this.repo != null) throw new IllegalStateException("Annotation already set");
-		this.repo = repo;
-	}
-	public long getAnnotationTimestamp() {
-		long time = 0;
-		for (ZipFile archive : archives) {
-			if (archive.source() instanceof FileSource fs) {
-				long mod = fs.getFile().lastModified();
-				if (time < mod) time = mod;
-			} else {
-				LOGGER.warn("有些源来自内存: {}, 注解时间戳可能无效.", archive.source());
-			}
-		}
-		return time;
 	}
 }

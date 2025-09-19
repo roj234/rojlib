@@ -29,7 +29,7 @@ import java.util.TimeZone;
  * </ol>
  *
  * <p>典型工作流程：
- * <pre>
+ * <pre>{@code
  * // 初始化策略
  * FlexibleRetiringPolicy policy = new FlexibleRetiringPolicy();
  * policy.directory = new File("/var/log");
@@ -42,7 +42,7 @@ import java.util.TimeZone;
  *
  * // 动态添加文件时清理
  * policy.addLatestFile(newFile);
- * </pre>
+ * }</pre>
  *
  * @see #reload()
  * @see #addLatestFile(File)

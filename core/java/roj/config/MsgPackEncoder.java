@@ -118,10 +118,12 @@ public class MsgPackEncoder implements ValueEmitter {
 		out.put(array);
 	}
 	public final void emit(int[] array) {
+		onValue();
 		onExt(-8, array.length);
 		for (int i : array) out.putInt(i);
 	}
 	public final void emit(long[] array) {
+		onValue();
 		onExt(-4, array.length);
 		for (long i : array) out.putLong(i);
 	}
@@ -132,8 +134,7 @@ public class MsgPackEncoder implements ValueEmitter {
 		push((byte) 1, -1);
 	}
 	public final void emitMap(int size) {
-		if (ignoreContainerSize) {
-			emitMap();return;}
+		if (ignoreContainerSize) {emitMap();return;}
 
 		if (size <= 0xF) {
 			out.put(FIXMAP_PREFIX | size);
@@ -164,8 +165,7 @@ public class MsgPackEncoder implements ValueEmitter {
 		push((byte) 2, -1);
 	}
 	public final void emitList(int size) {
-		if (ignoreContainerSize) {
-			emitList();return;}
+		if (ignoreContainerSize) {emitList();return;}
 
 		if (size <= 0xF) {
 			out.put(FIXARRAY_PREFIX | size);

@@ -1,11 +1,11 @@
 package roj.crypt;
 
-import roj.util.OperationDone;
 import roj.io.IOUtil;
 import roj.text.CharList;
 import roj.text.LineReader;
 import roj.util.ByteList;
 import roj.util.Helpers;
+import roj.util.OperationDone;
 
 import java.io.*;
 import java.security.*;
@@ -171,7 +171,6 @@ public class KeyType {
 			if (!lr.readLine(sb)) return null;
 			if (sb.startsWith("-----")) break;
 			Base64.decode(sb, out);
-			sb.clear();
 		}
 
 		try {

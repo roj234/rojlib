@@ -37,7 +37,7 @@ public class QOI5551Encoder implements ImageEncoder {
 			case BufferedImage.TYPE_4BYTE_ABGR -> ;*/
 			default -> {
 				stored = true;
-				argb = image.getRGB(0, 0, image.getWidth(), image.getHeight(), ArrayCache.getIntArray(image.getWidth()*image.getHeight(), 0), 0, image.getWidth());
+				argb = image.getRGB(0, 0, image.getWidth(), image.getHeight(), ArrayCache.getIntArray(image.getWidth()*image.getHeight(), false), 0, image.getWidth());
 			}
 		}
 

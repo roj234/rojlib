@@ -36,13 +36,13 @@ public class Timer implements Runnable {
 	}
 
 	@FastVarHandle
-	private static final class TaskHolder implements TimerTask {
+	private static final class TaskHandle implements TimerTask {
 		// root
-		TaskHolder(TimingWheel wheel) {
+		TaskHandle(TimingWheel wheel) {
 			owner = wheel;
 			prev = next = this;
 		}
-		TaskHolder(TimingWheel wheel, Runnable task, long delay) {
+		TaskHandle(TimingWheel wheel, Runnable task, long delay) {
 			owner = wheel;
 			this.task = task;
 			timeLeft = delay;
@@ -56,17 +56,17 @@ public class Timer implements Runnable {
 		}
 
 		static final VarHandle
-				NEXT = Handles.lookup().findVarHandle(TaskHolder.class, "next", TaskHolder.class),
-				TIME = Handles.lookup().findVarHandle(TaskHolder.class, "timeLeft", long.class);
+				NEXT = Handles.lookup().findVarHandle(TaskHandle.class, "next", TaskHandle.class),
+				TIME = Handles.lookup().findVarHandle(TaskHandle.class, "timeLeft", long.class);
 
 		// TimingWheel | TimerTask
 		private Object owner;
 		private TimingWheel wheel() {
 			Object x = owner;
-			return (TimingWheel) (x instanceof TaskHolder h ? h.owner : x);
+			return (TimingWheel) (x instanceof TaskHandle h ? h.owner : x);
 		}
 
-		TaskHolder prev, next;
+		TaskHandle prev, next;
 
 		Runnable task;
 		volatile long timeLeft;
@@ -85,7 +85,7 @@ public class Timer implements Runnable {
 			timeLeft = System.currentTimeMillis()+delay;
 
 			// 追加到单向链表
-			TaskHolder head = (TaskHolder) HEAD.getAndSet(timer(), this);
+			TaskHandle head = (TaskHandle) HEAD.getAndSet(timer(), this);
 			NEXT.setVolatile(this, head);
 		}
 		@Override public boolean isExpired() { return timeLeft == 0 || timeLeft == -2; }
@@ -97,7 +97,7 @@ public class Timer implements Runnable {
 				long t = timeLeft;
 				if (t < 0) return true;
 
-				if (TIME.compareAndSet(this, t, t == 0/*isExpired*/ ? -2 : -1)) {
+				if (TIME.compareAndSet(this, t, t == 0/*isExpired*/ ? -2L : -1L)) {
 					taskCancelled = t == 0 && task instanceof Cancellable cancellable && cancellable.cancel(mayInterruptIfRunning);
 					break;
 				}
@@ -108,12 +108,12 @@ public class Timer implements Runnable {
 			return taskCancelled;
 		}
 		private boolean removeFromTimer() {
-			if (!(owner instanceof TaskHolder root)) return false;
+			if (!(owner instanceof TaskHandle root)) return false;
 
 			boolean removed = false;
 
 			// 尝试上锁，如果失败，意味着这个链表正在被遍历，那么由于 timeLeft<0 它马上就会被删除
-			while (!TIME.compareAndSet(root, 0, READ_LOCK)) {
+			while (!TIME.compareAndSet(root, 0L, READ_LOCK)) {
 				Thread.yield();
 			}
 
@@ -141,7 +141,7 @@ public class Timer implements Runnable {
 		}
 
 		// 这个方法只会在任务计划线程调用
-		boolean add(TaskHolder root) {
+		boolean add(TaskHandle root) {
 			if (isCancelled()) return false;
 
 			// 如果是写锁，那么一定是当前线程
@@ -167,7 +167,7 @@ public class Timer implements Runnable {
 			return shouldAdd;
 		}
 
-		TaskHolder iter() {
+		TaskHandle iter() {
 			lock();
 			var task = next;
 			prev = next = this;
@@ -190,14 +190,14 @@ public class Timer implements Runnable {
 			this.prev = prev;
 			this.slot = prev==null ? 0 : prev.slot+1;
 
-			tasks = new TaskHolder[1 << DEPTH_SHL];
+			tasks = new TaskHandle[1 << DEPTH_SHL];
 			for (int i = 0; i < tasks.length; i++)
-				tasks[i] = new TaskHolder(this);
+				tasks[i] = new TaskHandle(this);
 		}
 
 		Timer owner() {return Timer.this;}
 
-		private final TaskHolder[] tasks;
+		private final TaskHandle[] tasks;
 		private final int slot;
 		private int tick;
 
@@ -236,7 +236,7 @@ public class Timer implements Runnable {
 			return sb.toStringAndFree();
 		}
 
-		final void fastForward(int ticks, Collection<TaskHolder> reschedule, Executor pool) {
+		final void fastForward(int ticks, Collection<TaskHandle> reschedule, Executor pool) {
 			int ff = ticks >>> (slot*DEPTH_SHL);
 			int t = tick;
 			tick = (t+ff) & DEPTH_MASK;
@@ -251,12 +251,12 @@ public class Timer implements Runnable {
 					task.removed();
 
 					TaskWasCancelled:
-					if (time > 0 && TaskHolder.TIME.compareAndSet(task, time, time = Math.max(0, time-ticks))) {
+					if (time > 0 && TaskHandle.TIME.compareAndSet(task, time, time = Math.max(0, time-ticks))) {
 						if (time == 0) {
 							time = safeExec(pool, task);
 							if (time <= 0) break TaskWasCancelled;
 
-							if (TaskHolder.TIME.compareAndSet(task, 0, time)) reschedule.add(task);
+							if (TaskHandle.TIME.compareAndSet(task, 0L, time)) reschedule.add(task);
 						} else {
 							add(prev, task);
 						}
@@ -293,14 +293,14 @@ public class Timer implements Runnable {
 				task.removed();
 
 				TaskWasCancelled:
-				if (time > 0 && TaskHolder.TIME.compareAndSet(task, time, time &= mask)) {
+				if (time > 0 && TaskHandle.TIME.compareAndSet(task, time, time &= mask)) {
 					if (time == 0) {
 						time = safeExec(pool, task);
 						if (time <= 0) break TaskWasCancelled;
 
 						TimingWheel wheel = this;
 						while (wheel.prev != null) wheel = wheel.prev;
-						if (TaskHolder.TIME.compareAndSet(task, 0L, tweakTime(wheel, time))) {
+						if (TaskHandle.TIME.compareAndSet(task, 0L, tweakTime(wheel, time))) {
 							add(this, task);
 						}
 					} else {
@@ -315,7 +315,7 @@ public class Timer implements Runnable {
 			root.timeLeft = 0;
 		}
 
-		static long safeExec(Executor exec, TaskHolder task) {
+		static long safeExec(Executor exec, TaskHandle task) {
 			try {
 				var _task = task.task;
 				long nextRun = _task instanceof PeriodicTask loop ? loop.getNextRun() : 0;
@@ -343,7 +343,7 @@ public class Timer implements Runnable {
 
 			return time;
 		}
-		static void add(TimingWheel wheel, TaskHolder task) {
+		static void add(TimingWheel wheel, TaskHandle task) {
 			long time = task.timeLeft;
 			if (time <= 0) return;
 
@@ -363,8 +363,8 @@ public class Timer implements Runnable {
 			task.add(root);
 		}
 
-		final void collect(Collection<TaskHolder> collector) {
-			for (TaskHolder root : tasks) {
+		final void collect(Collection<TaskHandle> collector) {
+			for (TaskHandle root : tasks) {
 				var task = root.iter();
 				while (task != root) {
 					if (task.timeLeft > 0) collector.add(task);
@@ -381,14 +381,14 @@ public class Timer implements Runnable {
 		}
 	}
 
-	private static final VarHandle HEAD = Handles.lookup().findVarHandle(Timer.class, "head", TaskHolder.class);
+	private static final VarHandle HEAD = Handles.lookup().findVarHandle(Timer.class, "head", TaskHandle.class);
 
 	private final TimingWheel wheel = new TimingWheel(null);
 	private volatile boolean stopped;
 	private final Executor executor;
 
-	private static final TaskHolder SENTIAL_HEAD_END = new TaskHolder(null);
-	private volatile TaskHolder head = SENTIAL_HEAD_END;
+	private static final TaskHandle SENTIAL_HEAD_END = new TaskHandle(null);
+	private volatile TaskHandle head = SENTIAL_HEAD_END;
 
 	public Timer(Executor th) {executor = th;}
 
@@ -420,23 +420,23 @@ public class Timer implements Runnable {
 	}
 
 	private void fastForward(int ticks) {
-		ArrayList<TaskHolder> tasks = new ArrayList<>();
+		ArrayList<TaskHandle> tasks = new ArrayList<>();
 		wheel.fastForward(ticks, tasks, executor);
 		for (int i = 0; i < tasks.size(); i++) {
-			TaskHolder task = tasks.get(i);
+			TaskHandle task = tasks.get(i);
 			long timeLeft = task.timeLeft;
-			if (timeLeft > 0 && TaskHolder.TIME.compareAndSet(task, timeLeft, TimingWheel.tweakTime(wheel, timeLeft)))
+			if (timeLeft > 0 && TaskHandle.TIME.compareAndSet(task, timeLeft, TimingWheel.tweakTime(wheel, timeLeft)))
 				TimingWheel.add(wheel, task);
 		}
 	}
 	private void pollNewTasks(long time) {
-		TaskHolder h = (TaskHolder) HEAD.getAndSet(this, SENTIAL_HEAD_END);
+		TaskHandle h = (TaskHandle) HEAD.getAndSet(this, SENTIAL_HEAD_END);
 
 		while (h != SENTIAL_HEAD_END) {
-			TaskHolder next;
+			TaskHandle next;
 			do {
-				next = (TaskHolder) TaskHolder.NEXT.getVolatile(h);
-			} while (next == null || !TaskHolder.NEXT.compareAndSet(h, next, null));
+				next = (TaskHandle) TaskHandle.NEXT.getVolatile(h);
+			} while (next == null || !TaskHandle.NEXT.compareAndSet(h, next, null));
 
 			block: {
 				long timeLeft = h.timeLeft;
@@ -452,7 +452,7 @@ public class Timer implements Runnable {
 					}
 				}
 
-				if (!TaskHolder.TIME.compareAndSet(h, timeLeft, TimingWheel.tweakTime(wheel, addTime)))
+				if (!TaskHandle.TIME.compareAndSet(h, timeLeft, TimingWheel.tweakTime(wheel, addTime)))
 					break block;
 
 				TimingWheel.add(wheel, h);
@@ -465,22 +465,20 @@ public class Timer implements Runnable {
 	public TimerTask delay(Runnable task, long delay) {
 		if (stopped) throw new IllegalStateException("Timer already cancelled.");
 		if (delay < 0) throw new IllegalArgumentException("Negative delay.");
-		var wrapper = new TaskHolder(wheel, task, System.currentTimeMillis()+delay);
+		var handle = new TaskHandle(wheel, task, System.currentTimeMillis()+delay);
+		if (task instanceof PeriodicTask periodicTaskWrapper) {
+			periodicTaskWrapper.setHandle(handle);
+		}
 
-		TaskHolder head = (TaskHolder) HEAD.getAndSet(this, wrapper);
-		TaskHolder.NEXT.setVolatile(wrapper, head);
+		TaskHandle head = (TaskHandle) HEAD.getAndSet(this, handle);
+		TaskHandle.NEXT.setVolatile(handle, head);
 
-		return wrapper;
+		return handle;
 	}
 	// 周期任务是通过包装器实现的
 	public final TimerTask loop(Runnable task, long period) { return loop(task, period, -1, 0); }
 	public final TimerTask loop(Runnable task, long period, int repeat) { return loop(task, period, repeat, 0); }
-	public TimerTask loop(Runnable task, long period, int repeat, long delay) {
-		PeriodicTask wrapper = new PeriodicTask(task, period, repeat, true);
-		TimerTask handle = delay(wrapper, delay);
-		wrapper.setHandle(handle);
-		return handle;
-	}
+	public TimerTask loop(Runnable task, long period, int repeat, long delay) {return delay(new PeriodicTask(task, period, repeat, true), delay);}
 
 	/**
 	 * Terminates this timer, discarding any currently scheduled tasks.

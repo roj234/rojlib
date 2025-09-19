@@ -3,8 +3,8 @@ package roj.asmx.launcher;
 import org.jetbrains.annotations.NotNull;
 import roj.RojLib;
 import roj.asm.ClassNode;
-import roj.asm.annotation.AList;
 import roj.asm.annotation.Annotation;
+import roj.asm.annotation.ArrayVal;
 import roj.asmx.AnnotatedElement;
 import roj.asmx.ConstantPoolHooks;
 import roj.asmx.TransformUtil;
@@ -56,7 +56,7 @@ public class Tweaker {
 			}
 
 			ConcurrentHashMap<String, Boolean> existence = new ConcurrentHashMap<>();
-			Function<String, Boolean> existenceChecker = resource -> Loader.instance.getResource(resource) != null;
+			Function<String, Boolean> existenceChecker = Loader.instance::hasResource;
 
 			CONDITIONAL.annotatedMethod("roj/asmx/launcher/Conditional", (context, node) -> {
 				var annotation = Annotation.findInvisible(context.cp, node, "roj/asmx/launcher/Conditional");
@@ -73,7 +73,7 @@ public class Tweaker {
 			CONDITIONAL.annotatedClass("roj/asmx/launcher/Conditional", (context, node) -> {
 				var annotation = Annotation.findInvisible(context.cp, node, "roj/asmx/launcher/Conditional");
 				if (!existence.computeIfAbsent(getConditionalTarget(annotation), existenceChecker)) {
-					AList itf = annotation.getList("itf");
+					ArrayVal itf = annotation.getList("itf");
 					for (int i = 0; i < itf.size(); i++) {
 						context.interfaces().remove(itf.getType(i).owner());
 					}

@@ -1,6 +1,7 @@
 package roj.asm.type;
 
 import org.intellij.lang.annotations.MagicConstant;
+import org.jetbrains.annotations.Nullable;
 import org.jetbrains.annotations.Range;
 import roj.asm.AsmCache;
 import roj.asm.Opcodes;
@@ -41,8 +42,12 @@ public sealed class Type implements IType permits Type.ADT {
 	/** The {@code long} type. */
 	public static final Type LONG_TYPE = primitive(LONG);
 
-	public static String getName(int type) {return R.byId[type-BYTE].name;}
-	public String capitalized() {return R.byId[getActualType()-BYTE].capitalizedName;}
+	public static String getName(int type) {return TypeInfo.byId[type-BYTE].name;}
+
+	@Nullable
+	public static Type getWrapper(IType self) { return getWrapper(self.getActualType()); }
+
+	public String capitalized() {return TypeInfo.byId[getActualType()-BYTE].capitalizedName;}
 
 	public static final int SORT_VOID = 0, SORT_BOOLEAN = 1, SORT_BYTE = 2, SORT_CHAR = 3, SORT_SHORT = 4, SORT_INT = 5, SORT_LONG = 6, SORT_FLOAT = 7, SORT_DOUBLE = 8, SORT_OBJECT = 9;
 	/**
@@ -64,10 +69,10 @@ public sealed class Type implements IType permits Type.ADT {
 	 * | OBJECT  | 9    |
 	 *
 	 * @param type 类型常量 (e.g., {@link #INT})
-	 * @throws IllegalArgumentException 如果 type 无效
+	 * @throws NullPointerException 如果 type 无效
 	 */
 	@Range(from = SORT_VOID, to = SORT_OBJECT)
-	public static int getSort(int type) { return R.byId[type-BYTE].sort; }
+	public static int getSort(int type) { return TypeInfo.byId[type-BYTE].sort; }
 	/**
 	 * 根据排序值获取基本类型常量。
 	 * -1 返回 VOID。
@@ -77,11 +82,29 @@ public sealed class Type implements IType permits Type.ADT {
 	 * @return 类型常量，无效抛异常
 	 * @throws IllegalArgumentException 如果 sort 无效
 	 */
-	public static int getBySort(@Range(from = 0, to = 9) int sort) { return R.bySort[sort]; }
+	public static int getBySort(@Range(from = SORT_VOID, to = SORT_OBJECT) int sort) {
+		if (sort < SORT_VOID || sort > SORT_OBJECT) throw new IllegalArgumentException();
+		return TypeInfo.bySort[sort];
+	}
+
+	/**
+	 * 获取基本类型的包装类型
+	 */
+	public static @Nullable Type getWrapper(int type) {return TypeInfo.byId[type-BYTE].wrapper;}
+
+	@Range(from = 4, to = 11)
+	public static byte getArrayType(int type) {
+		byte arrayType = TypeInfo.byId[type - BYTE].arrayType;
+		if (arrayType < 0) throw new IllegalArgumentException("Type "+(char)type+" is not primitive");
+		return arrayType;
+	}
+	@SuppressWarnings("MagicConstant")
+	@MagicConstant(intValues = {BOOLEAN,BYTE,CHAR,SHORT,INT,FLOAT,DOUBLE,LONG})
+	public static char getByArrayType(int arrayType) {return "ZCFDBSIJ".charAt(arrayType-4);}
 
 	static boolean isValid(int c) {
 		if (c < BYTE || c > ARRAY) return false;
-		return R.byId[c-BYTE] != null;
+		return TypeInfo.byId[c-BYTE] != null;
 	}
 
 	// for Lava Compiler only
@@ -120,7 +143,7 @@ public sealed class Type implements IType permits Type.ADT {
 		if (type == CLASS) throw new IllegalArgumentException("不能使用此方法创建CLASS类型的实例");
 
 		this.type = (byte) type;
-		setArrayDim(array);
+		setArray(array);
 	}
 	/**
 	 * TYPE_CLASS
@@ -128,12 +151,12 @@ public sealed class Type implements IType permits Type.ADT {
 	private Type(String owner, int array) {
 		this.type = CLASS;
 		this.owner = Objects.requireNonNull(owner);
-		setArrayDim(array);
+		setArray(array);
 	}
 
 	public static Type primitive(@MagicConstant(intValues = {VOID,BOOLEAN,BYTE,CHAR,SHORT,INT,FLOAT,DOUBLE,LONG}) int primitive) {
 		if (primitive >= BYTE && primitive <= ARRAY) {
-			var arr = R.byId[primitive-BYTE];
+			var arr = TypeInfo.byId[primitive-BYTE];
 			if (arr != null) return arr.singleton;
 		}
 		throw new IllegalArgumentException("Illegal type desc '"+(char)primitive+"'("+primitive+")");
@@ -156,6 +179,7 @@ public sealed class Type implements IType permits Type.ADT {
 	 * @param argumentTypes 入参
 	 * @return 返回值
 	 */
+	@SuppressWarnings("MagicConstant")
 	public static Type getArgumentTypes(String desc, List<Type> argumentTypes) {
 		int array = 0;
 		foundError:
@@ -189,6 +213,7 @@ public sealed class Type implements IType permits Type.ADT {
 		return parse(desc, index+1);
 	}
 
+	@SuppressWarnings("MagicConstant")
 	private static Type parse(String desc, int off) {
 		char c0 = desc.charAt(off);
 		switch (c0) {
@@ -196,7 +221,7 @@ public sealed class Type implements IType permits Type.ADT {
 				int pos = desc.lastIndexOf('[')+1;
 				Type t = parse(desc, pos);
 				if (t.owner == null) t = Type.primitive(t.type, pos - off);
-				else t.setArrayDim(pos - off);
+				else t.setArray(pos - off);
 				return t;
 			case CLASS:
 				if (!desc.endsWith(";")) throw new IllegalArgumentException("类型 '" + desc + "' 未以;结束");
@@ -206,10 +231,10 @@ public sealed class Type implements IType permits Type.ADT {
 	}
 	//endregion
 
-	@Override public byte genericType() {return STANDARD_TYPE;}
+	@Override public byte kind() {return SIMPLE_TYPE;}
 	@Override public String toDesc() {
 		int type = getActualType();
-		if (type != Type.CLASS) return R.byId[type - Type.BYTE].desc;
+		if (type != Type.CLASS) return TypeInfo.byId[type - Type.BYTE].desc;
 		return IType.super.toDesc();
 	}
 	@Override public final void toDesc(CharList sb) {
@@ -254,12 +279,12 @@ public sealed class Type implements IType permits Type.ADT {
 		return sb.equals(prev) ? prev : sb.toString();
 	}
 
-	@Override public void validate(int position, int index) {
-		switch (position) {
-			case INPUT_ENV -> {
+	@Override public void validate(int positionType, int index) {
+		switch (positionType) {
+			case E_ARGUMENT -> {
 				if (type == VOID) throw new IllegalStateException("输入参数不能是void类型");
 			}
-			case THROW_ENV -> {
+			case E_THROW -> {
 				if (type != CLASS || array != 0) throw new IllegalStateException(this+"不是异常类型");
 			}
 		}
@@ -284,14 +309,14 @@ public sealed class Type implements IType permits Type.ADT {
 
 	/**
 	 * 操作码前缀
-	 * @return ILFDA
 	 */
-	public String opcodePrefix() {return R.byId[getActualType()-BYTE].opPrefix;}
+	@MagicConstant(stringValues = {"I","L","F","D","A"})
+	public String opcodePrefix() {return TypeInfo.byId[getActualType()-BYTE].opPrefix;}
 	/**
 	 * 返回基础操作码code适合当前Type的变种
 	 */
 	public byte getOpcode(int code) {
-		int shift = R.byId[getActualType()-BYTE].opShift;
+		int shift = TypeInfo.byId[getActualType()-BYTE].opShift;
 		int data = Opcodes.shift(code);
 		if (data >>> 8 <= shift) throw new IllegalStateException(Opcodes.toString(code)+"不存在适合"+this+"的变种");
 		return (byte) ((data&0xFF)+shift);
@@ -306,7 +331,7 @@ public sealed class Type implements IType permits Type.ADT {
 		}
 
 		if (clazz.isPrimitive()) {
-			Type type = R.byName.get(clazz.getName()).singleton;
+			Type type = TypeInfo.byName.get(clazz.getName()).singleton;
 			return array == 0 ? type : primitive(type.type, array);
 		}
 
@@ -330,8 +355,13 @@ public sealed class Type implements IType permits Type.ADT {
 	@Override public Type rawType() {return this;}
 	@Override public int array() {return array&0xFF;}
 	@Override public void setArrayDim(int array) {
-		if (array > 255 || array < 0) throw new ArrayIndexOutOfBoundsException(array);
-		if (type == VOID && array != 0) throw new IllegalStateException("创建VOID数组");
+		if (type != CLASS && array != 0) {
+			if (this.array == 0) throw new IllegalStateException("修改基本类型常量 "+this);
+		}
+		setArray(array);
+	}
+	private void setArray(int array) {
+		if ((array &0xFF) != array) throw new ArrayIndexOutOfBoundsException(array);
 		this.array = (byte) array;
 	}
 

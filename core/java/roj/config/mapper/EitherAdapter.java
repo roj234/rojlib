@@ -32,7 +32,7 @@ final class EitherAdapter extends TypeAdapter {
 	}
 
 	@Override
-	public TypeAdapter transform(Factory man, Class<?> subclass, @Nullable List<IType> generic) {
+	public TypeAdapter transform(ObjectMapperImpl man, Class<?> subclass, @Nullable List<IType> generic) {
 		if (generic == null || generic.size() != 2) throw new IllegalArgumentException("Either的泛型定义无效:"+generic);
 		return new EitherAdapter(man.get(generic.get(0)), man.get(generic.get(1)));
 	}

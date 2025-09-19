@@ -2,9 +2,9 @@ package roj.plugins.web.template;
 
 import roj.collect.XashMap;
 import roj.compiler.CompileContext;
-import roj.compiler.JavaCompileUnit;
-import roj.compiler.LambdaLinker;
+import roj.compiler.LavaCompileUnit;
 import roj.compiler.LavaCompiler;
+import roj.compiler.resolve.Resolver;
 import roj.concurrent.TaskPool;
 import roj.http.server.Content;
 import roj.http.server.Request;
@@ -44,7 +44,7 @@ public class MyTemplateEngine {
 	}
 
 	public MyTemplateEngine() {
-		compiler.addLibrary(LambdaLinker.LIBRARY_SELF);
+		compiler.addLibrary(Resolver.Libs.SELF);
 	}
 
 
@@ -157,7 +157,7 @@ public class MyTemplateEngine {
 			System.out.println(code);
 		}
 
-		var unit = new JavaCompileUnit(sourceFile, code.toStringAndFree());
+		var unit = new LavaCompileUnit(sourceFile, code.toStringAndFree());
 
 		var ctx = myContext.get();
 		if (ctx == null) myContext.set(ctx = compiler.createContext());

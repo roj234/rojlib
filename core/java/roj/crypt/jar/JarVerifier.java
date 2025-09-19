@@ -2,23 +2,25 @@ package roj.crypt.jar;
 
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
+import roj.archive.ArchiveFile;
 import roj.archive.zip.ZEntry;
 import roj.archive.zip.ZipArchive;
-import roj.archive.zip.ZipFile;
 import roj.collect.HashMap;
 import roj.collect.HashSet;
 import roj.crypt.Base64;
 import roj.crypt.CryptoFactory;
 import roj.crypt.asn1.KnownOID;
 import roj.io.IOUtil;
-import roj.io.source.FileSource;
 import roj.io.source.Source;
 import roj.text.CharList;
 import roj.util.ArrayCache;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
 
-import java.io.*;
+import java.io.ByteArrayInputStream;
+import java.io.File;
+import java.io.IOException;
+import java.io.InputStream;
 import java.net.URL;
 import java.security.*;
 import java.security.cert.Certificate;
@@ -75,6 +77,8 @@ public class JarVerifier {
 	public void ensureManifestValid(boolean lenient) throws GeneralSecurityException {
 		if (source != null) return;
 		if (block == null) {
+			algorithm = "SHA-256";
+			prevName = "SHA-256-Digest";
 			source = new CodeSource(base, (CodeSigner[]) null);
 			return;
 		}
@@ -318,8 +322,8 @@ public class JarVerifier {
 	// classloading hook
 	static {DigestInputStream.init();}
 	@Nullable
-	public static JarVerifier create(ZipFile zf) throws IOException {
-		InputStream in = zf.getStream("META-INF/MANIFEST.MF");
+	public static JarVerifier create(ArchiveFile zf, File source) throws IOException {
+		InputStream in = zf.getInputStream("META-INF/MANIFEST.MF");
 		if (in == null) return null;
 
 		Manifest manifest = null;
@@ -327,17 +331,17 @@ public class JarVerifier {
 		byte[] sb = null;
 		SignatureBlock signatureBlock = null;
 
-		for (ZEntry entry : zf.entries()) {
+		for (var entry : zf.entries()) {
 			String name = entry.getName();
 			String extName = IOUtil.extensionName(name);
 			if (name.startsWith("META-INF/") && VALID_CERTIFICATE_EXTENSION.contains(extName)) {
 				try {
-					signatureBlock = new SignatureBlock(zf.getStream(entry));
+					signatureBlock = new SignatureBlock(zf.getInputStream(entry));
 				} catch (CertificateException e) {
 					throw new IOException(e);
 				}
 
-				var in1 = zf.getStream(name.substring(0, name.length() - extName.length())+"SF");
+				var in1 = zf.getInputStream(name.substring(0, name.length() - extName.length())+"SF");
 				if (in1 == null) signatureBlock = null;
 				else {
 					sb = IOUtil.read(in1);
@@ -350,7 +354,7 @@ public class JarVerifier {
 		if (mb == null) manifest = new Manifest(in);
 
 		IOUtil.closeSilently(in);
-		URL url = zf.source() instanceof FileSource file ? new URL("file", "", file.getFile().getAbsolutePath().replace(File.separatorChar, '/')) : null;
+		URL url = source != null ? new URL("file", "", source.getAbsolutePath().replace(File.separatorChar, '/')) : null;
 		return new JarVerifier(url, manifest, mb, sb, signatureBlock);
 	}
 
@@ -375,7 +379,7 @@ public class JarVerifier {
 		var md = MessageDigest.getInstance(hashAlg);
 
 		Manifest mf;
-		var mfin = zf.getStream("META-INF/MANIFEST.MF");
+		var mfin = zf.getInputStream("META-INF/MANIFEST.MF");
 		if (mfin != null) {
 			mf = new Manifest(mfin);
 			IOUtil.closeSilently(mfin);
@@ -386,7 +390,7 @@ public class JarVerifier {
 
 		var cacheHash = "true".equals(options.get("jarSigner:cacheHash"));
 
-		byte[] buf = ArrayCache.getByteArray(1024, false);
+		byte[] buf = ArrayCache.getIOBuffer();
 		var digestKey = new Attributes.Name(hashAlg+"-Digest");
 		for (ZEntry entry : zf.entries()) {
 			if (entry.getName().startsWith("META-INF/")) {
@@ -420,7 +424,7 @@ public class JarVerifier {
 				}
 			}
 
-			try (var in = zf.getStream(entry)) {
+			try (var in = zf.getInputStream(entry)) {
 				while (true) {
 					int r = in.read(buf);
 					if (r < 0) break;
@@ -457,11 +461,11 @@ public class JarVerifier {
 				if (r < 0) break;
 				md.update(buf, 0, r);
 			}
-			ArrayCache.putArray(buf);
 
 			// raw data without MANIFEST / SIGNFILE / CERTIFICATE
 			append72(ob, hashAlg+"-Digest-Archive: "+IOUtil.encodeBase64(md.digest()));
 		}
+		ArrayCache.putArray(buf);
 		ob.putAscii("\r\n");
 
 		for (String name : mb.namedAttrMap.keySet()) {

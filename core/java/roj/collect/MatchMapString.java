@@ -189,8 +189,8 @@ public class MatchMapString<V> {
 	}
 
 	public String prepareUnorderedQuery(String key) {
-		char[] out = ArrayCache.getCharArray(key.length(), false);
-		int[] size = ArrayCache.getIntArray(key.length(), 0);
+		char[] out = ArrayCache.getCharArray(key.length());
+		int[] size = ArrayCache.getIntArray(key.length(), false);
 		for (int i = 0; i < key.length(); i++) {
 			PosList prev = map.get(key.charAt(i));
 			if (prev == null) return null;

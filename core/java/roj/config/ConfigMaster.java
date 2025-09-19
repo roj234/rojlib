@@ -3,7 +3,8 @@ package roj.config;
 import org.intellij.lang.annotations.MagicConstant;
 import org.jetbrains.annotations.NotNull;
 import roj.config.mapper.ObjectMapper;
-import roj.config.mapper.ObjectMapperFactory;
+import roj.config.mapper.ObjectReader;
+import roj.config.mapper.ObjectWriter;
 import roj.config.node.ConfigValue;
 import roj.config.node.xml.Element;
 import roj.config.node.xml.Node;
@@ -45,12 +46,12 @@ public enum ConfigMaster {
 	/**
 	 * @see #parser(int)
 	 */
-	public BinaryParser parser() {return parser(0);}
+	public Parser parser() {return parser(0);}
 	/**
 	 * 返回的实例并非线程安全
-	 * @param initFlag 初始化标记，无法在解析时动态修改，目前仅有{@link Parser#COMMENT}以支持注释
+	 * @param initFlag 初始化标记，无法在解析时动态修改，目前仅有{@link TextParser#COMMENT}以支持注释
 	 */
-	private BinaryParser parser(@MagicConstant(flags = Parser.COMMENT) int initFlag) {
+	public Parser parser(@MagicConstant(flags = TextParser.COMMENT) int initFlag) {
 		return switch (this) {
 			case JSON -> new JsonParser(initFlag);
 			case YAML -> new YamlParser(initFlag);
@@ -58,8 +59,8 @@ public enum ConfigMaster {
 			case TOML -> new TomlParser(initFlag);
 			case INI -> new IniParser();
 			case CSV -> new CsvParser();
-			case NBT -> new NbtParser();
-			case XNBT -> new NbtParserEx();
+			case NBT -> NbtParser.INSTANCE;
+			case XNBT -> NbtParserEx.INSTANCE;
 			case MSGPACK -> new MsgPackParser();
 			case BENCODE -> new BEncodeParser();
 		};
@@ -168,50 +169,56 @@ public enum ConfigMaster {
 	public ConfigValue parse(InputStream key) throws IOException, ParseException { return parser().parse(key); }
 	public ConfigValue parse(DynByteBuf key) throws IOException, ParseException { return parser().parse(key); }
 	public ConfigValue parse(CharSequence text) throws ParseException {
-		BinaryParser p = parser();
-		if (!(p instanceof Parser tp)) throw new UnsupportedOperationException(this+"不是文本配置格式");
+		Parser p = parser();
+		if (!(p instanceof TextParser tp)) throw new UnsupportedOperationException(this+"不是文本配置格式");
 		return tp.parse(text);
 	}
 
-	public <T> T readObject(Class<T> type, File file) throws IOException, ParseException { return readObject(ObjectMapperFactory.SAFE.serializer(type), file); }
+	@Deprecated
+	public <T> T readObject(File file, Class<T> type) throws IOException, ParseException { return ObjectMapper.SAFE.read(file, type, parser()); }
 	/**
 	 * @implNote 由于部分二进制格式可能存在数据分界，所以不会关闭in
 	 */
-	public <T> T readObject(Class<T> type, InputStream in) throws IOException, ParseException { return readObject(ObjectMapperFactory.SAFE.serializer(type), in); }
-	public <T> T readObject(Class<T> type, DynByteBuf buf) throws IOException, ParseException { return readObject(ObjectMapperFactory.SAFE.serializer(type), buf); }
-	public <T> T readObject(Class<T> type, CharSequence sb) throws ParseException { return readObject(ObjectMapperFactory.SAFE.serializer(type), sb); }
+	@Deprecated
+	public <T> T readObject(InputStream in, Class<T> type) throws IOException, ParseException {return ObjectMapper.SAFE.read(in, type, parser());}
+	@Deprecated
+	public <T> T readObject(DynByteBuf buf, Class<T> type) throws IOException, ParseException {return ObjectMapper.SAFE.read(buf, type, parser());}
+	@Deprecated
+	public <T> T readObject(CharSequence sb, Class<T> type) throws ParseException { return readObject(ObjectMapper.SAFE.reader(type), sb); }
 
-	public <T> T readObject(ObjectMapper<T> ser, File file) throws IOException, ParseException {parser().parse(file, 0, ser.reset());return ser.get();}
-	public <T> T readObject(ObjectMapper<T> ser, InputStream in) throws IOException, ParseException {parser().parse(in, 0, ser.reset());return ser.get();}
-	public <T> T readObject(ObjectMapper<T> ser, DynByteBuf buf) throws IOException, ParseException {parser().parse(buf, 0, ser.reset());return ser.get();}
-	public <T> T readObject(ObjectMapper<T> ser, CharSequence sb) throws ParseException {
+	@Deprecated
+	public <T> T readObject(ObjectReader<T> ser, File file) throws IOException, ParseException {parser().parse(file, ser.reset());return ser.get();}
+	@Deprecated
+	public <T> T readObject(ObjectReader<T> ser, InputStream in) throws IOException, ParseException {parser().parse(in, ser.reset());return ser.get();}
+	@Deprecated
+	public <T> T readObject(ObjectReader<T> ser, CharSequence sb) throws ParseException {
 		var p = parser();
-		if (!(p instanceof Parser tp)) throw new UnsupportedOperationException(this+"不是文本配置格式");
-		tp.parse(sb, 0, ser.reset());
+		if (!(p instanceof TextParser tp)) throw new UnsupportedOperationException(this+"不是文本配置格式");
+		tp.parse(sb, ser.reset());
 		return ser.get();
 	}
 
 	@SuppressWarnings("unchecked")
-	public void writeObject(Object o, File file) throws IOException { writeObject((ObjectMapper<Object>) ObjectMapperFactory.SAFE_SERIALIZE_ONLY.serializer(o.getClass()), o, file); }
+	public void writeObject(Object o, File file) throws IOException { writeObject((ObjectWriter<Object>) ObjectMapper.SAFE.writer(o.getClass()), o, file); }
 	@SuppressWarnings("unchecked")
-	public void writeObject(Object o, File file, String indent) throws IOException {writeObject((ObjectMapper<Object>) ObjectMapperFactory.SAFE_SERIALIZE_ONLY.serializer(o.getClass()), o, file, indent); }
+	public void writeObject(Object o, File file, String indent) throws IOException {writeObject((ObjectWriter<Object>) ObjectMapper.SAFE.writer(o.getClass()), o, file, indent); }
 	@SuppressWarnings("unchecked")
-	public void writeObject(Object o, OutputStream out) throws IOException { writeObject((ObjectMapper<Object>) ObjectMapperFactory.SAFE_SERIALIZE_ONLY.serializer(o.getClass()), o, out); }
+	public void writeObject(Object o, OutputStream out) throws IOException {
+		ObjectWriter<Object> ser = (ObjectWriter<Object>) ObjectMapper.SAFE.writer(o.getClass());
+		writeAndClose(ser, o, out, "");
+	}
 	@SuppressWarnings("unchecked")
-	public DynByteBuf writeObject(Object o, DynByteBuf buf) throws IOException { return writeObject((ObjectMapper<Object>) ObjectMapperFactory.SAFE_SERIALIZE_ONLY.serializer(o.getClass()), o, buf); }
+	public DynByteBuf writeObject(Object o, DynByteBuf buf) throws IOException { return writeObject((ObjectWriter<Object>) ObjectMapper.SAFE.writer(o.getClass()), o, buf); }
 	@SuppressWarnings("unchecked")
-	public CharList writeObject(Object o, CharList sb) { return writeObject((ObjectMapper<Object>) ObjectMapperFactory.SAFE_SERIALIZE_ONLY.serializer(o.getClass()), o, sb); }
+	public CharList writeObject(Object o, CharList sb) { return writeObject((ObjectWriter<Object>) ObjectMapper.SAFE.writer(o.getClass()), o, sb); }
 
-	public <T> void writeObject(ObjectMapper<T> ser, T o, File file) throws IOException { writeAndClose(ser, o, file, ""); }
-	public <T> void writeObject(ObjectMapper<T> ser, T o, File file, String indent) throws IOException { writeAndClose(ser, o, file, indent); }
-	public <T> void writeObject(ObjectMapper<T> ser, T o, OutputStream out) throws IOException { writeAndClose(ser, o, out, ""); }
-	public <T> void writeObject(ObjectMapper<T> ser, T o, OutputStream out, String indent) throws IOException { writeAndClose(ser, o, out, indent); }
-	public <T> DynByteBuf writeObject(ObjectMapper<T> ser, T o, DynByteBuf buf) throws IOException { writeAndClose(ser, o, buf, ""); return buf; }
-	public <T> DynByteBuf writeObject(ObjectMapper<T> ser, T o, DynByteBuf buf, String indent) throws IOException { writeAndClose(ser, o, buf, indent); return buf; }
-	public <T> CharList writeObject(ObjectMapper<T> ser, T o, CharList sb) { ser.write(serializer(sb, ""), o); return sb; }
-	public <T> CharList writeObject(ObjectMapper<T> ser, T o, CharList sb, String indent) { ser.write(serializer(sb, indent), o); return sb; }
+	public <T> void writeObject(ObjectWriter<T> ser, T o, File file) throws IOException { writeAndClose(ser, o, file, ""); }
+	public <T> void writeObject(ObjectWriter<T> ser, T o, File file, String indent) throws IOException { writeAndClose(ser, o, file, indent); }
+	public <T> DynByteBuf writeObject(ObjectWriter<T> ser, T o, DynByteBuf buf) throws IOException { writeAndClose(ser, o, buf, ""); return buf; }
+	public <T> CharList writeObject(ObjectWriter<T> ser, T o, CharList sb) { ser.write(serializer(sb, ""), o); return sb; }
+	public <T> CharList writeObject(ObjectWriter<T> ser, T o, CharList sb, String indent) { ser.write(serializer(sb, indent), o); return sb; }
 
-	private <T> void writeAndClose(ObjectMapper<T> ser, T o, Object out, String indent) throws IOException {
+	private <T> void writeAndClose(ObjectWriter<T> ser, T o, Object out, String indent) throws IOException {
 		if (hasSerializer()) {
 			try (ValueEmitter v = serializer(out, indent)) {
 				ser.write(v, o);

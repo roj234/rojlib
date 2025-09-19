@@ -61,7 +61,7 @@ final class Sandbox extends ClassLoader {
 	public InputStream getResourceAsStream(String name) {
 		try {
 			za.put(name, null);
-			return za.getStream(name);
+			return za.getInputStream(name);
 		} catch (IOException e) {
 			throw new RuntimeException(e);
 		}

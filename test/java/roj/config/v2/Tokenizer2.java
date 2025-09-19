@@ -201,7 +201,7 @@ public class Tokenizer2 {
 	public final void mark() throws ParseException {
 		if ((seek&1) != 0) throw new UnsupportedOperationException("嵌套的seek");
 
-		if (seek == 2) prevTokens.add(seekPos, lastToken.copy());
+		if (seek == 2) prevTokens.add(seekPos, lastToken.immutable());
 		seek = 1;
 		prevSeekPos = seekPos;
 	}
@@ -244,7 +244,7 @@ public class Tokenizer2 {
 		Token w = readWord();
 
 		if (seek == 1) {
-			prevTokens.add(w.copy());
+			prevTokens.add(w.immutable());
 			seekPos++;
 		} else {
 			seekPos = 0;

@@ -17,7 +17,7 @@ import static roj.config.JsonParser.parseNumber;
  * bittorrent解析器
  * @author Roj234
  */
-public final class BEncodeParser implements BinaryParser {
+public final class BEncodeParser implements Parser {
 	public static final int SKIP_UTF_DECODE = 1;
 
 	private static final Int2IntMap BEN_C2C = new Int2IntMap();
@@ -34,12 +34,20 @@ public final class BEncodeParser implements BinaryParser {
 		}
 	}
 
+	private final byte flags;
+	public BEncodeParser() {this(0);}
+	public BEncodeParser(@MagicConstant(flags = SKIP_UTF_DECODE) int flags) {
+		this.flags = (byte) flags;
+	}
 	@Override
-	public void parse(InputStream in, @MagicConstant(intValues = SKIP_UTF_DECODE) int flags, ValueEmitter emitter) throws IOException, ParseException {
+	public int flags() {return flags;}
+
+	@Override
+	public void parse(InputStream in, ValueEmitter emitter) throws IOException, ParseException {
 		this.in = in;
 		this.emitter = emitter;
 		try {
-			element(flags);
+			element();
 		} catch (ParseException e) {
 			throw e.addPath("$");
 		} finally {
@@ -52,14 +60,14 @@ public final class BEncodeParser implements BinaryParser {
 	private ValueEmitter emitter;
 	private final ByteList buf = new ByteList(64);
 
-	boolean element(int flag) throws IOException, ParseException {
+	private boolean element() throws IOException, ParseException {
 		int c = in.read();
 		switch (BEN_C2C.getOrDefaultInt(c, -2)) {
 			default: throw err("无效的字符 " + c);
 			case -1: throw err("未预料的EOF ");
 			case 0: return false; // END e
-			case 1: list(flag); break; // LIST l
-			case 2: map(flag); break; // DICT d
+			case 1: list(); break; // LIST l
+			case 2: map(); break; // DICT d
 			case 3: // INT i
 				long v = readInt(-1);
 				if (v < Integer.MIN_VALUE || v > Integer.MAX_VALUE) {
@@ -71,7 +79,7 @@ public final class BEncodeParser implements BinaryParser {
 			case 4: // STRING <number>
 				ByteList b = readString(c);
 				int r = b.rIndex;
-				if ((flag & SKIP_UTF_DECODE) == 0) {
+				if ((flags & SKIP_UTF_DECODE) == 0) {
 					try {
 						emitter.emit(b.readUTF(b.readableBytes()));
 						break;
@@ -84,13 +92,13 @@ public final class BEncodeParser implements BinaryParser {
 		}
 		return true;
 	}
-	private void list(int flag) throws IOException, ParseException {
+	private void list() throws IOException, ParseException {
 		emitter.emitList();
 		int size = 0;
 
 		while (true) {
 			try {
-				if (!element(flag)) break;
+				if (!element()) break;
 			} catch (ParseException e) {
 				throw e.addPath("["+size+"]");
 			}
@@ -98,7 +106,7 @@ public final class BEncodeParser implements BinaryParser {
 		}
 		emitter.pop();
 	}
-	private void map(int flag) throws IOException, ParseException {
+	private void map() throws IOException, ParseException {
 		emitter.emitMap();
 
 		while (true) {
@@ -112,7 +120,7 @@ public final class BEncodeParser implements BinaryParser {
 
 			emitter.emitKey(k);
 			try {
-				if (!element(flag)) throw err("未预料的END");
+				if (!element()) throw err("未预料的END");
 			} catch (ParseException e) {
 				throw e.addPath('.'+k);
 			}

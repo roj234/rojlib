@@ -3,7 +3,6 @@ package roj.text.logging;
 import roj.asm.type.Type;
 import roj.asm.type.TypeHelper;
 import roj.collect.HashMap;
-import roj.compiler.plugins.asm.ASM;
 import roj.concurrent.TimerTask;
 import roj.text.CharList;
 import roj.text.LineReader;
@@ -90,7 +89,7 @@ sealed class LogWriter extends PrintWriter permits LogWriterJson {
 	final CharList sb = new CharList(256);
 
 	public LogWriter() {
-		super(ASM.TARGET_JAVA_VERSION >= 11 ? nullWriter() : new Writer() {
+		super(JVM.VERSION >= 11 ? nullWriter() : new Writer() {
 			public void write(char[] cbuf, int off, int len){}
 			public void flush(){}
 			public void close(){}

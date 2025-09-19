@@ -13,7 +13,6 @@ import roj.collect.ArrayList;
 import roj.collect.HashMap;
 import roj.collect.HashSet;
 import roj.collect.ToIntMap;
-import roj.compiler.resolve.TypeCast;
 import roj.text.CharList;
 import roj.util.ArrayCache;
 import roj.util.JVM;
@@ -40,6 +39,7 @@ public final class Bypass<T> {
 	private final Class<?> caller;
 
 	private final Class<T> itf;
+	private Class<?> context;
 	private final HashMap<String, Method> methodByName;
 	private ClassNode impl;
 
@@ -49,6 +49,7 @@ public final class Bypass<T> {
 	private Bypass(Class<T> itf, boolean checkDuplicate) {
 		if (!itf.isInterface()) throw new IllegalArgumentException(itf.getName()+" must be a interface");
 		this.itf = itf;
+		this.context = itf;
 		Method[] methods = itf.getMethods();
 		this.methodByName = new HashMap<>(methods.length);
 		for (Method method : methods) {
@@ -69,6 +70,17 @@ public final class Bypass<T> {
 		this.caller = caller;
 	}
 
+	/**
+	 * 在{@code context}上定义Bypass生成的类.
+	 * 默认情况下，Bypass生成的类将会定义在与接口相同的类加载器和包中。
+	 * 当你通过这个函数指定了一个类，那么上述接口必须能从这个类的加载器访问，并且接口必须是公开的。
+	 * 使用场景：接口定义于类加载器A，而代理的成员位于A的子加载器B时，你需要指定子加载器B加载的任何一个类
+	 */
+	public Bypass<T> defineOn(Class<?> context) {
+		this.context = context;
+		return this;
+	}
+
 	@SuppressWarnings("unchecked")
 	public final T build() {
 		var node = impl;
@@ -84,8 +96,7 @@ public final class Bypass<T> {
 			mn.addAttribute(forceInline);
 		}
 
-		ClassLoader def = itf.getClassLoader();
-		return (T) Reflection.createInstance(def == null ? Bypass.class.getClassLoader() : def, node);
+		return (T) Reflection.createInstance(context, node, context == itf);
 	}
 
 	private Method checkExistence(String name) {
@@ -185,10 +196,10 @@ public final class Bypass<T> {
 		return fid;
 	}
 	private void ldcType(Type fieldType) {
-		if (fieldType.getActualType() == Type.CLASS) ldcClass(fieldType.getActualClass());
+		Type wrapper = Type.getWrapper(fieldType.getActualType());
+		if (wrapper == null) ldcClass(fieldType.getActualClass());
 		else {
-			String wrapperType = TypeCast.getWrapper(fieldType).owner;
-			dmh_si.field(GETSTATIC, wrapperType, "TYPE", "Ljava/lang/Class;");
+			dmh_si.field(GETSTATIC, wrapper.owner, "TYPE", "Ljava/lang/Class;");
 		}
 	}
 	private void ldcClass(String className) {

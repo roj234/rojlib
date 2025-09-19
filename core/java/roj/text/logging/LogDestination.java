@@ -16,34 +16,51 @@ public interface LogDestination {
 	Appendable getAndLock();
 	default void unlockAndFlush() throws IOException {}
 
-	static LogDestination stdout() {return appendTo(System.out);}
-	static LogDestination appendTo(Appendable out) {return () -> out;}
-	static LogDestination stream(OutputStream out) { return new Stream(out, null); }
-	static LogDestination stream(OutputStream out, Charset charset) { return new Stream(out, charset); }
+	// allow System.setOut() to work properly
+	static LogDestination stdout() {return new Synchronized(() -> System.out);}
+	static LogDestination appendTo(Appendable out) {return new Synchronized(() -> out);}
+	static LogDestination to(OutputStream out) { return new Stream(out, null); }
+	static LogDestination to(OutputStream out, Charset charset) { return new Stream(out, charset); }
 
-	final class Stream implements LogDestination {
+	class Synchronized implements LogDestination {
 		private final ReentrantLock lock;
-		private final Appendable out;
+		private final LogDestination destination;
 
-		public Stream(OutputStream os, Charset charset) {
+		public Synchronized(LogDestination destination) {
 			lock = new ReentrantLock();
-			out = os instanceof Appendable p ? p : new TextWriter(os, charset);
+			this.destination = destination;
 		}
 
 		@Override
 		public Appendable getAndLock() {
 			lock.lock();
-			return out;
+			return destination.getAndLock();
 		}
 
 		@Override
 		public void unlockAndFlush() throws IOException {
 			try {
-				if (out instanceof TextWriter tw)
-					tw.flush();
+				destination.unlockAndFlush();
 			} finally {
 				lock.unlock();
 			}
+		}
+	}
+
+	final class Stream implements LogDestination {
+		private final Appendable out;
+
+		public Stream(OutputStream os, Charset charset) {
+			out = os instanceof Appendable p ? p : new TextWriter(os, charset);
+		}
+
+		@Override
+		public Appendable getAndLock() {return out;}
+
+		@Override
+		public void unlockAndFlush() throws IOException {
+			if (out instanceof TextWriter tw)
+				tw.flush();
 		}
 	}
 }

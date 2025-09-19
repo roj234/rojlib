@@ -13,7 +13,7 @@ import roj.config.ConfigMaster;
 import roj.config.ValueEmitter;
 import roj.config.YamlSerializer;
 import roj.config.mapper.ObjectMapper;
-import roj.config.mapper.ObjectMapperFactory;
+import roj.config.mapper.ObjectWriter;
 import roj.gui.GuiUtil;
 import roj.gui.OnChangeHelper;
 import roj.io.IOUtil;
@@ -171,7 +171,7 @@ public class DiffFinder extends JFrame {
 						preWindow = in.readInt();
 						slideWindow = in.readInt();
 						base = new File(in.readUTF());
-						metas = ConfigMaster.NBT.readObject(FileMeta[].class, in);
+						metas = ConfigMaster.NBT.readObject(in, FileMeta[].class);
 					} catch (Exception ex) {
 						JOptionPane.showMessageDialog(this, "检查点加载失败！\n" + ex.getMessage());
 						return;
@@ -299,7 +299,7 @@ public class DiffFinder extends JFrame {
 
 		private volatile boolean terminateFlag;
 
-		private final ObjectMapper<DiffInfo> writer = ObjectMapperFactory.SAFE.serializer(DiffInfo.class);
+		private final ObjectWriter<DiffInfo> writer = ObjectMapper.SAFE.writer(DiffInfo.class);
 		private ValueEmitter result;
 
 		final void initComparator(File base, FileMeta[] metas, int preWindow, TaskPool POOL) {
@@ -339,8 +339,6 @@ public class DiffFinder extends JFrame {
 								int canCopy = Math.min(sb.length(), preWindow-i);
 								U.copyMemory(sb.list, Unsafe.ARRAY_CHAR_BASE_OFFSET, out, Unsafe.ARRAY_BYTE_BASE_OFFSET + i * 2L, canCopy * 2L);
 								if ((i += canCopy) == preWindow) break;
-
-								sb.clear();
 							}
 
 							meta.data = Arrays.copyOf(out, i);

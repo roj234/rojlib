@@ -9,9 +9,9 @@ import roj.config.NbtEncoder;
 import roj.config.NbtParser;
 import roj.crypt.CryptoFactory;
 import roj.crypt.KeyType;
+import roj.io.ByteInputStream;
 import roj.io.CorruptedInputException;
 import roj.io.IOUtil;
-import roj.io.ByteInputStream;
 import roj.io.RegionFile;
 import roj.io.source.ByteSource;
 import roj.text.TextReader;
@@ -39,8 +39,8 @@ public class McDiffClient {
 	public void apply(File basePath) throws IOException {
 		QZEntry hashes = archive.getEntry(".vcs|hashes");
 		System.out.println("正在验证哈希");
-		if (hashes != null) try (ByteInputStream in = new ByteInputStream(archive.getStream(hashes))) {
-			byte[] tmp = ArrayCache.getByteArray(4096, false);
+		if (hashes != null) try (ByteInputStream in = new ByteInputStream(archive.getInputStream(hashes))) {
+			byte[] tmp = ArrayCache.getIOBuffer();
 			while (in.isReadable()) {
 				String name = in.readVUIGB();
 				File file = new File(basePath, name);
@@ -51,7 +51,7 @@ public class McDiffClient {
 			ArrayCache.putArray(tmp);
 		}
 
-		var pool = TaskPool.common().newGroup();
+		var pool = TaskPool.cpu().newGroup();
 		var bar = new EasyProgressBar("应用更新包");
 		bar.addTotal(archive.getEntriesByPresentOrder().length);
 		for (QZEntry entry : archive.getEntriesByPresentOrder()) {
@@ -111,7 +111,7 @@ public class McDiffClient {
 								try (var dos = rf.getDataOutput(pos)) {
 									if (patch == 0) {
 										try (var buf = new ByteList.ToStream(dos)) {
-											new NbtParser().parse(mdi, 0, new NbtEncoder(buf));
+											NbtParser.INSTANCE.parse(mdi, new NbtEncoder(buf));
 										}
 									} else {
 										if (!rf.hasData(pos)) throw new CorruptedInputException("diff source missing");
@@ -163,7 +163,7 @@ public class McDiffClient {
 				if (!name.startsWith(".vcs/")) continue;
 
 				if (entry.getSize() != 0) {
-					InputStream in = archive.getStream(entry);
+					InputStream in = archive.getInputStream(entry);
 					String rename = new String(IOUtil.read(in), StandardCharsets.UTF_16LE);
 					if (rename.indexOf('\\') >= 0 || rename.contains("../")) throw new CorruptedInputException("文件不安全");
 
@@ -176,7 +176,7 @@ public class McDiffClient {
 	private void verifySign(File file, QZEntry entry, WordBlock[] blocks) throws IOException, GeneralSecurityException {
 		byte[] sign;
 		Signature dsa;
-		try (TextReader in = new TextReader(archive.getStream(entry), StandardCharsets.US_ASCII)) {
+		try (TextReader in = new TextReader(archive.getInputStream(entry), StandardCharsets.US_ASCII)) {
 			var algorithm = in.readLine();
 			dsa = Signature.getInstance(algorithm);
 			sign = TextUtil.hex2bytes(in.readLine());
@@ -192,7 +192,7 @@ public class McDiffClient {
 		var hash1 = CryptoFactory.Blake3(32);
 		var hash2 = CryptoFactory.SM3();
 
-		byte[] tmp = ArrayCache.getByteArray(4096, false);
+		byte[] tmp = ArrayCache.getIOBuffer();
 		try (InputStream in = new FileInputStream(file)) {
 			IOUtil.readFully(in, tmp, 0, 32); // 跳过文件头
 			while (count > 0) {

@@ -1,10 +1,10 @@
 package roj.archive.xz;
 
 import roj.RojLib;
+import roj.io.BufferPool;
 import roj.io.Finishable;
 import roj.io.IOUtil;
 import roj.io.UnsafeOutputStream;
-import roj.io.BufferPool;
 import roj.reflect.Unsafe;
 import roj.util.ArrayCache;
 import roj.util.ArrayUtil;
@@ -215,9 +215,9 @@ class LZMA2WriterN extends OutputStream {
 	private static void writeMemory(OutputStream out, long off, int len) throws IOException {
 		if (out instanceof UnsafeOutputStream u) u.write0(null, off, len);
 		else {
-			byte[] arr = ArrayCache.getByteArray(Math.min(4096, len), false);
+			byte[] arr = ArrayCache.getIOBuffer();
 			while (len > 0) {
-				int copyLen = Math.min(4096, len);
+				int copyLen = Math.min(arr.length, len);
 				U.copyMemory(null, off, arr, Unsafe.ARRAY_BYTE_BASE_OFFSET, copyLen);
 				out.write(arr, 0, copyLen);
 

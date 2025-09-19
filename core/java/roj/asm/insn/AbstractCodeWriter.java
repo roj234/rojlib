@@ -7,7 +7,10 @@ import roj.RojLib;
 import roj.asm.*;
 import roj.asm.cp.*;
 import roj.asm.type.Type;
-import roj.collect.*;
+import roj.collect.ArrayList;
+import roj.collect.HashSet;
+import roj.collect.Hasher;
+import roj.collect.IntMap;
 import roj.text.logging.Logger;
 import roj.util.DynByteBuf;
 
@@ -34,7 +37,7 @@ public abstract class AbstractCodeWriter extends CodeVisitor {
 	final void validateBciRef() {
 		for (IntMap.Entry<Label> entry : bciR2W.selfEntrySet()) {
 			if (!entry.getValue().isValid()) {
-				if (RojLib.isDev("asm")) {
+				if (RojLib.ASM_DEBUG) {
 					Logger.FALLBACK.error("找不到标签引用的BCI @"+entry.getIntKey());
 				} else {
 					throw new IllegalArgumentException("BCI @"+entry.getIntKey()+" 不存在");
@@ -67,10 +70,9 @@ public abstract class AbstractCodeWriter extends CodeVisitor {
 		int low = r.readInt();
 		int hig = r.readInt();
 		int count = hig - low + 1;
+		if (count > 100000) throw new IllegalArgumentException("length > 100000");
 
 		ArrayList<SwitchCase> map = new ArrayList<>(count);
-
-		if (count > 100000) throw new IllegalArgumentException("length > 100000");
 
 		int i = 0;
 		while (count > i) {
@@ -82,10 +84,9 @@ public abstract class AbstractCodeWriter extends CodeVisitor {
 	protected final void lookupSwitch(DynByteBuf r) {
 		int def = r.readInt();
 		int count = r.readInt();
+		if (count > 100000) throw new IllegalArgumentException("length > 100000");
 
 		ArrayList<SwitchCase> map = new ArrayList<>(count);
-
-		if (count > 100000) throw new IllegalArgumentException("length > 100000");
 
 		while (count-- > 0) {
 			map.add(new SwitchCase(r.readInt(), _rel(r.readInt())));
@@ -117,25 +118,21 @@ public abstract class AbstractCodeWriter extends CodeVisitor {
 
 	public final void ldc(Constant c) {
 		switch (c.type()) {
-			case Constant.DYNAMIC:
+			default -> throw new IllegalStateException("Constant "+c+" is not loadable");
+			case Constant.DYNAMIC -> {
 				String dyn = ((CstDynamic) c).desc().rawDesc().str();
 				if (dyn.charAt(0) == DOUBLE || dyn.charAt(0) == LONG) {
 					ldc2(c);
 					return;
 				}
-				break;
-			case Constant.STRING:
-			case Constant.FLOAT:
-			case Constant.INT:
-			case Constant.CLASS:
-			case Constant.METHOD_HANDLE:
-			case Constant.METHOD_TYPE:
-				break;
-			case Constant.DOUBLE:
-			case Constant.LONG:
+			}
+			case Constant.DOUBLE, Constant.LONG -> {
 				ldc2(c);
 				return;
-			default: throw new IllegalStateException("Constant "+c+" is not loadable");
+			}
+			case Constant.INT, Constant.FLOAT,
+				 Constant.STRING, Constant.CLASS,
+				 Constant.METHOD_HANDLE, Constant.METHOD_TYPE -> {}
 		}
 		ldc1(LDC, c);
 	}
@@ -174,34 +171,19 @@ public abstract class AbstractCodeWriter extends CodeVisitor {
 
 	// endregion
 	// region complex
-	public final void newArray(Type type) {ToPrimitiveArrayId(type.getActualType());}
-	public final void newArrayP(int type) {newArray(ToPrimitiveArrayId(type));}
+	public final void newArrayP(int type) {newArray(Type.getArrayType(type));}
 
 	public final void newArraySized(Type t, int size) {
 		ldc(size);
 		int type = t.getActualType();
 		if (type == CLASS) clazz(ANEWARRAY, t.getActualClass());
-		else newArray(ToPrimitiveArrayId(type));
+		else newArray(Type.getArrayType(type));
 	}
 	public final void newArraySized(Type t, int... size) {
 		if (t.array()+1 < size.length) throw new IllegalArgumentException("t.array()+1 < size.length");
 		for (int i = 0; i < size.length; i++) ldc(size[i]);
 		multiArray(t.getActualClass(), size.length);
 	}
-
-	private static final String PRIMITIVE_TYPE_TABLE = "ZCFDBSIJ";
-	private static final Int2IntMap PRIMITIVE_ARRAY_TABLE = new Int2IntMap(8);
-	static {
-		for (int i = 0; i < PRIMITIVE_TYPE_TABLE.length(); i++) {
-			PRIMITIVE_ARRAY_TABLE.putInt(PRIMITIVE_TYPE_TABLE.charAt(i), i+4);
-		}
-	}
-	public static byte ToPrimitiveArrayId(int descType) {
-		int id = PRIMITIVE_ARRAY_TABLE.getOrDefaultInt(descType, 0);
-		if (id == 0) throw new IllegalArgumentException(String.valueOf((char) descType));
-		return (byte) id;
-	}
-	public static char FromPrimitiveArrayId(int opType) {return PRIMITIVE_TYPE_TABLE.charAt(opType-4);}
 
 	public final void clazz(@MagicConstant(intValues = {NEWARRAY, INSTANCEOF, CHECKCAST}) byte code, Type clz) {
 		if (clz.isPrimitive()) throw new IllegalArgumentException(clz.toString());

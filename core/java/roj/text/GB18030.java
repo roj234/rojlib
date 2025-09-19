@@ -26,7 +26,7 @@ final class GB18030 extends FastCharset {
 		DECODER = (char[]) U.allocateUninitializedArray(char.class, 63486);
 		ENCODER = (char[]) U.allocateUninitializedArray(char.class, 65408);
 		try (var in = new LZMA2InputStream(GB18030.class.getClassLoader().getResourceAsStream("roj/text/GB18030.lzma"), 6144)) {
-			byte[] b = ArrayCache.getByteArray(4096, false);
+			byte[] b = ArrayCache.getIOBuffer();
 			int off = 0;
 			while (true) {
 				int r = in.read(b);

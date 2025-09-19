@@ -103,7 +103,7 @@ public class Shell extends Terminal {
 		tk.init(cmd);
 		while (tk.hasNext()) {
 			try {
-				tokens.add(tk.next().copy());
+				tokens.add(tk.next().immutable());
 			} catch (ParseException e) {
 				if (highlighting) return tokens;
 

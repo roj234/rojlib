@@ -1,12 +1,14 @@
 package roj.asm;
 
 import org.intellij.lang.annotations.MagicConstant;
+import roj.asm.attr.Attribute;
 import roj.asm.attr.AttributeList;
 import roj.asm.attr.UnparsedAttribute;
 import roj.asm.cp.ConstantPool;
 import roj.asm.cp.CstNameAndType;
 import roj.asm.cp.CstUTF;
 import roj.util.DynByteBuf;
+import roj.util.FastFailException;
 
 import static roj.asm.Opcodes.*;
 
@@ -31,7 +33,12 @@ public abstract class MemberNode implements Member {
 
 		var buf = AsmCache.buf();
 		for (int i = 0; i < attributes.size(); i++) {
-			attributes.set(i, UnparsedAttribute.serialize(cp, buf, attributes.get(i)));
+			Attribute attr = attributes.get(i);
+			try {
+				attributes.set(i, UnparsedAttribute.serialize(cp, buf, attr));
+			} catch (Throwable e) {
+				throw new FastFailException("Failed to serialize attribute "+attr.name()+ " for "+this, e);
+			}
 		}
 		AsmCache.buf(buf);
 	}

@@ -18,8 +18,8 @@ import static roj.text.Token.*;
  * @author Roj233
  * @since 2022/1/6 13:46
  */
-public final class IniParser extends Parser {
-	public static final int UNESCAPE = 8;
+public final class IniParser extends TextParser {
+	public static final int UNESCAPE = 2;
 
 	private static final short eq = rBrace;
 	// readWord() checked WHITESPACE
@@ -32,11 +32,16 @@ public final class IniParser extends Parser {
 		addSymbols(INI_TOKENS, INI_LENDS, rBrace, "=", "[", "]");
 		addWhitespace(INI_LENDS);
 	}
-	{ tokens = INI_TOKENS; literalEnd = INI_LENDS; }
+
+	public IniParser() {this(0);}
+	public IniParser(@MagicConstant(flags = {NO_DUPLICATE_KEY, UNESCAPE, ORDERED_MAP}) int flags) {
+		super(flags);
+		tokens = INI_TOKENS;
+		literalEnd = INI_LENDS;
+	}
 
 	@Override
-	public MapValue parse(CharSequence text, @MagicConstant(flags = {NO_DUPLICATE_KEY, UNESCAPE, ORDERED_MAP}) int flags) throws ParseException {
-		this.flag = flags;
+	public MapValue parse(CharSequence text) throws ParseException {
 		init(text);
 		try {
 			HashMap<String, ConfigValue> map = new LinkedHashMap<>();
@@ -69,7 +74,7 @@ public final class IniParser extends Parser {
 	}
 
 	@SuppressWarnings("fallthrough")
-	protected ConfigValue element(@MagicConstant(flags = {NO_DUPLICATE_KEY, UNESCAPE, ORDERED_MAP}) int flags) throws ParseException {
+	protected ConfigValue element() throws ParseException {
 		literalEnd = iniSymbol_LN;
 		Token w = next();
 
@@ -104,7 +109,7 @@ public final class IniParser extends Parser {
 	private ListValue iniList(int flag) throws ParseException {
 		ListValue list = new ListValue();
 		while (true) {
-			list.add(element(flag));
+			list.add(element());
 
 			Token w = next();
 			retractWord();
@@ -130,7 +135,7 @@ public final class IniParser extends Parser {
 			except(eq, "=");
 			try {
 				ConfigValue prev = map.get(name);
-				ConfigValue val = element(flag);
+				ConfigValue val = element();
 				if (prev == null) {
 					map.put(name, val);
 				} else {

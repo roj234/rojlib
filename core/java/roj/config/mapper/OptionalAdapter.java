@@ -19,7 +19,7 @@ final class OptionalAdapter extends TypeAdapter {
 	public OptionalAdapter(TypeAdapter left) {contentType = left;}
 
 	@Override
-	public TypeAdapter transform(Factory man, Class<?> subclass, @Nullable List<IType> generic) {
+	public TypeAdapter transform(ObjectMapperImpl man, Class<?> subclass, @Nullable List<IType> generic) {
 		if (generic == null || generic.size() != 1) throw new IllegalArgumentException("Optional的泛型定义无效:"+generic);
 		return new OptionalAdapter(man.get(generic.get(0)));
 	}

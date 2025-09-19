@@ -4,11 +4,13 @@ import roj.http.Headers;
 import roj.io.IOUtil;
 import roj.net.ChannelCtx;
 import roj.net.ChannelHandler;
-import roj.reflect.Unsafe;
+import roj.optimizer.FastVarHandle;
+import roj.reflect.Handles;
 import roj.text.URICoder;
 import roj.util.DynByteBuf;
 
 import java.io.*;
+import java.lang.invoke.VarHandle;
 import java.nio.channels.FileChannel;
 import java.nio.file.OpenOption;
 import java.nio.file.StandardOpenOption;
@@ -17,6 +19,7 @@ import java.nio.file.StandardOpenOption;
  * @author solo6975
  * @since 2022/3/8 0:21
  */
+@FastVarHandle
 public class DiskFileInfo implements FileInfo, ChannelHandler {
 	protected final File file;
 	protected long lastModified;
@@ -25,7 +28,7 @@ public class DiskFileInfo implements FileInfo, ChannelHandler {
 	private DynByteBuf cc;
 	private byte[] uc;
 
-	private static final long STATE_OFFSET = Unsafe.fieldOffset(DiskFileInfo.class, "state");
+	private static final VarHandle STATE = Handles.lookup().findVarHandle(DiskFileInfo.class, "state", int.class);
 	private volatile int state;
 
 	public DiskFileInfo(File file) {this(file, false);}
@@ -85,7 +88,7 @@ public class DiskFileInfo implements FileInfo, ChannelHandler {
 
 	@Override
 	public void prepare(ResponseHeader rh, Headers h) {
-		if (Unsafe.U.compareAndSetInt(this, STATE_OFFSET, 2, 3)) {
+		if (STATE.compareAndSet(this, 2, 3)) {
 			cc = DynByteBuf.allocateDirect();
 			rh.connection().addBefore("h11@compr", "compress-capture", this);
 		}

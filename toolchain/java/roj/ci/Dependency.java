@@ -5,8 +5,9 @@ import roj.archive.zip.ZEntry;
 import roj.archive.zip.ZipFile;
 import roj.archive.zip.ZipOutput;
 import roj.asm.ClassView;
+import roj.asmx.AnnotationRepo;
 import roj.asmx.Context;
-import roj.ci.plugin.BuildContext;
+import roj.ci.event.LibraryModifiedEvent;
 import roj.collect.HashSet;
 import roj.collect.TrieTreeSet;
 import roj.collect.XashMap;
@@ -15,6 +16,7 @@ import roj.http.curl.DownloadTask;
 import roj.io.IOUtil;
 import roj.text.CharList;
 import roj.text.TextUtil;
+import roj.util.ByteList;
 import roj.util.DynByteBuf;
 import roj.util.Helpers;
 
@@ -27,11 +29,9 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Predicate;
 
-import static roj.ci.plugin.BuildContext.INC_LOAD;
-import static roj.ci.plugin.BuildContext.INC_UPDATE;
+import static roj.ci.BuildContext.*;
 
 /**
  * @author Roj234
@@ -39,8 +39,9 @@ import static roj.ci.plugin.BuildContext.INC_UPDATE;
  */
 public sealed interface Dependency {
 	default @Nullable Project project() {return null;}
-	int getResources(Project project, ZipOutput zipOutput, long stamp, BuildContext ctx) throws IOException;
-	void getClasses(BuildContext context, long stamp) throws IOException;
+	int getResources(Project project, ZipOutput zipOutput, BuildContext ctx) throws IOException;
+	void getClasses(BuildContext context) throws IOException;
+	AnnotationRepo getAnnotations(BuildContext context) throws IOException;
 
 	void getClassPath(CharList classpath, int prefix);
 
@@ -70,45 +71,62 @@ public sealed interface Dependency {
 		public @Nullable Project project() {return project;}
 
 		@Override
-		public int getResources(Project building, ZipOutput zipOutput, long stamp, BuildContext ctx) {
-			var cnt = new AtomicInteger();
+		public int getResources(Project building, ZipOutput writer, BuildContext ctx) {
+			int cnt = 0;
 			var prev = project.mappedWriter;
-			project.mappedWriter = zipOutput;
+			project.mappedWriter = writer;
 			try {
-				IOUtil.listFiles(project.resPath, file -> {
-					long lastModified = file.lastModified();
-					if (lastModified >= stamp) {
-						String relPath = file.getAbsolutePath().substring(project.getResPrefix()).replace(File.separatorChar, '/');
-						TrieTreeSet bundleIgnore = building.conf.bundle_ignore;
+				BuildContext.Changeset changeset = ctx.increment <= INC_REBUILD ? project.compiling.getFullResources() : project.compiling.resources;
 
-						boolean blocked;
-						if (bundleIgnore.isEmpty()) blocked = relPath.startsWith("META-INF/");
-						else {
-							blocked = bundleIgnore.strStartsWithThis(relPath);
-							if (blocked) {
-								String str = relPath + ":" + project.getName();
-								int i = bundleIgnore.longestMatches(str);
-								if (i > relPath.length()) {
-									blocked = i == str.length();
-								}
-							}
-						}
+				List<File> changed = changeset.getChanged();
+				Set<String> deleted = changeset.getDeleted();
 
-						if (!blocked) {
-							project.writeRes(file, lastModified, building.variables, ctx);
-							cnt.getAndIncrement();
-						}
+				MCMake.LOGGER.debug("Dependency mode={} change {} delete {}", ctx.increment, changed.size(), deleted.size());
+
+				long useCompileTimestamp = project.shouldUseCompileTimestamp() ? ctx.buildStartTime : 0;
+				TrieTreeSet bundleIgnore = building.conf.bundle_ignore;
+
+				for (File file : changed) {
+					String relPath = file.getAbsolutePath().substring(project.getResPrefix()).replace(File.separatorChar, '/');
+					if (!isIgnored(bundleIgnore, relPath)) {
+						project.writeRes(file, useCompileTimestamp != 0 ? useCompileTimestamp : file.lastModified(), building.variables, ctx);
+						cnt++;
 					}
-					return false;
-				});
+				}
+
+				for (String relPath : deleted) {
+					if (!isIgnored(bundleIgnore, relPath)) {
+						writer.set(relPath, (ByteList) null);
+						cnt++;
+					}
+				}
+			} catch (IOException e) {
+				MCMake.LOGGER.warn("Exception writing resources for ProjectDep {}", e, project);
 			} finally {
 				project.mappedWriter = prev;
 			}
-			return cnt.get();
+			return cnt;
+		}
+
+		private boolean isIgnored(TrieTreeSet bundleIgnore, String relPath) {
+			boolean ignored;
+			if (bundleIgnore.isEmpty()) ignored = relPath.startsWith("META-INF/");
+			else {
+				ignored = bundleIgnore.strStartsWithThis(relPath);
+				if (ignored) {
+					String str = relPath + ":" + project.getName();
+					int i = bundleIgnore.longestMatches(str);
+					if (i > relPath.length()) {
+						ignored = i == str.length();
+					}
+				}
+			}
+			return ignored;
 		}
 
 		@Override
-		public void getClasses(BuildContext context, long stamp) throws IOException {
+		public void getClasses(BuildContext context) throws IOException {
+			long stamp = context.buildStartTime;
 			long fileTime = project.unmappedJar.lastModified();
 			int increment = context.increment;
 
@@ -124,6 +142,9 @@ public sealed interface Dependency {
 				}
 			}
 		}
+
+		@Override
+		public AnnotationRepo getAnnotations(BuildContext context) {return project.annotationRepo;}
 
 		@Override
 		public void getClassPath(CharList classpath, int prefix) {
@@ -149,6 +170,7 @@ public sealed interface Dependency {
 		long lastModified;
 		ZipFile archive;
 		Set<ZEntry> classes;
+		AnnotationRepo repo;
 
 		private FileDep _next;
 
@@ -156,33 +178,13 @@ public sealed interface Dependency {
 			this.file = file;
 		}
 
-		@Override
-		public int getResources(Project project, ZipOutput zipOutput, long stamp, BuildContext ctx) throws IOException {
-			init();
-
-			int cnt = 0;
-			archive.source().reopen();
-			for (ZEntry entry : archive.entries()) {
-				String name = entry.getName();
-				if (name.endsWith("/") || name.startsWith("META-INF/") || classes.contains(entry)) continue;
-
-				if (entry.getModificationTime() >= stamp) {
-					if (zipOutput.getWriter() != null) {
-						zipOutput.getWriter().copy(archive, entry);
-					} else {
-						zipOutput.set(entry.getName(), () -> DynByteBuf.wrap(archive.get(entry)), entry.getModificationTime());
-					}
-					cnt++;
-				}
-			}
-			archive.source().close();
-			return cnt;
-		}
-
-		private void init() throws IOException {
+		private void init(BuildContext ctx) throws IOException {
 			if (archive == null) archive = new ZipFile(file);
-			else if (file.lastModified() != lastModified) archive.reload();
-			else return;
+			else if (file.lastModified() != lastModified) {
+				archive.reload();
+				MCMake.EVENT_BUS.post(new LibraryModifiedEvent(ctx.project));
+				repo = null;
+			} else return;
 
 			lastModified = file.lastModified();
 			classes = new HashSet<>();
@@ -198,18 +200,57 @@ public sealed interface Dependency {
 		}
 
 		@Override
-		public void getClasses(BuildContext context, long stamp) throws IOException {
-			init();
+		public int getResources(Project project, ZipOutput zipOutput, BuildContext ctx) throws IOException {
+			init(ctx);
+
+			int updated = 0;
+			long lastBuildTime = ctx.increment <= INC_REBUILD ? 0 : ctx.lastBuildTime;
+			archive.source().reopen();
+			for (ZEntry entry : archive.entries()) {
+				String name = entry.getName();
+				if (name.endsWith("/") || name.startsWith("META-INF/") || classes.contains(entry)) continue;
+
+				if (entry.getModificationTime() >= lastBuildTime) {
+					if (zipOutput.getWriter() != null) {
+						zipOutput.getWriter().copy(archive, entry);
+					} else {
+						zipOutput.set(entry.getName(), () -> DynByteBuf.wrap(archive.get(entry)), entry.getModificationTime());
+					}
+				}
+				updated++;
+			}
+			archive.source().close();
+			return updated;
+		}
+
+		@Override
+		public void getClasses(BuildContext ctx) throws IOException {
+			init(ctx);
 
 			archive.source().reopen();
-			int increment = context.increment;
-			for (ZEntry entry : this.classes) {
-				if (increment != INC_UPDATE || entry.getModificationTime() >= stamp) {
-					context.addClass(new Context(entry.getName(), archive.get(entry)), null,
-							increment != INC_LOAD || entry.getModificationTime() >= stamp);
+			int increment = ctx.increment;
+			long lastBuildTime = ctx.lastBuildTime;
+
+			for (ZEntry entry : classes) {
+				if (increment != INC_UPDATE || entry.getModificationTime() >= lastBuildTime) {
+					ctx.addClass(new Context(entry.getName(), archive.get(entry)), null,
+							increment != INC_LOAD || entry.getModificationTime() >= lastBuildTime);
 				}
 			}
 			archive.source().close();
+		}
+
+		@Override
+		public AnnotationRepo getAnnotations(BuildContext context) throws IOException {
+			init(context);
+
+			if (repo == null) {
+				archive.source().reopen();
+				repo = new AnnotationRepo();
+				repo.loadCacheOrAdd(archive);
+				archive.source().close();
+			}
+			return repo;
 		}
 
 		@Override
@@ -235,17 +276,18 @@ public sealed interface Dependency {
 		final File dir;
 		static final XashMap.Builder<File, FileDep> BUILDER = XashMap.builder(File.class, FileDep.class, "file", "_next");
 		XashMap<File, FileDep> fileDeps = BUILDER.create();
+		AnnotationRepo repo;
 
 		public DirDep(File dir) {
 			this.dir = dir;
 		}
 
 		@Override
-		public int getResources(Project project, ZipOutput zipOutput, long stamp, BuildContext ctx) throws IOException {
+		public int getResources(Project project, ZipOutput zipOutput, BuildContext ctx) throws IOException {
 			init();
 			int cnt = 0;
 			for (FileDep dep : fileDeps) {
-				cnt += dep.getResources(project, zipOutput, stamp, ctx);
+				cnt += dep.getResources(project, zipOutput, ctx);
 			}
 			return cnt;
 		}
@@ -267,9 +309,9 @@ public sealed interface Dependency {
 		}
 
 		@Override
-		public void getClasses(BuildContext context, long stamp) throws IOException {
+		public void getClasses(BuildContext context) throws IOException {
 			for (FileDep dep : fileDeps) {
-				dep.getClasses(context, stamp);
+				dep.getClasses(context);
 			}
 		}
 
@@ -277,6 +319,21 @@ public sealed interface Dependency {
 		public void getClassPath(CharList classpath, int prefix) {
 			Predicate<File> callback = jarFilter(classpath, prefix);
 			IOUtil.listFiles(dir, callback);
+		}
+
+		@Override
+		public AnnotationRepo getAnnotations(BuildContext context) throws IOException {
+			if (repo == null) {
+				init();
+
+				repo = new AnnotationRepo();
+				for (FileDep dep : fileDeps) {
+					dep.archive.source().reopen();
+					repo.loadCacheOrAdd(dep.archive);
+					dep.archive.source().close();
+				}
+			}
+			return repo;
 		}
 
 		public static Predicate<File> jarFilter(CharList classpath, int prefix) {
@@ -386,15 +443,21 @@ public sealed interface Dependency {
 		}
 
 		@Override
-		public int getResources(Project project, ZipOutput zipOutput, long stamp, BuildContext ctx) throws IOException {
+		public int getResources(Project project, ZipOutput zipOutput, BuildContext ctx) throws IOException {
 			downloadFile();
-			return cache.getResources(project, zipOutput, stamp, ctx);
+			return cache.getResources(project, zipOutput, ctx);
 		}
 
 		@Override
-		public void getClasses(BuildContext context, long stamp) throws IOException {
+		public void getClasses(BuildContext context) throws IOException {
 			downloadFile();
-			cache.getClasses(context, stamp);
+			cache.getClasses(context);
+		}
+
+		@Override
+		public AnnotationRepo getAnnotations(BuildContext context) throws IOException {
+			downloadFile();
+			return cache.getAnnotations(context);
 		}
 
 		@Override

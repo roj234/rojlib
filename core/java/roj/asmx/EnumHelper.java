@@ -75,7 +75,7 @@ public final class EnumHelper extends CodeVisitor {
 				for (InsnNode node : list) {
 					lvid = Math.max(node.getVarId(), lvid);
 					if (node.opcode() == ANEWARRAY && node.type().equals(klass.name())) {
-						addPos = node.unshared();
+						addPos = node.detach();
 
 						InsnNode prev = node.prev();
 						switch (prev.opcode()) {

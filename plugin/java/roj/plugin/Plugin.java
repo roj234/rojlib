@@ -5,7 +5,7 @@ import org.jetbrains.annotations.Nullable;
 import roj.collect.HashSet;
 import roj.collect.Hasher;
 import roj.concurrent.Timer;
-import roj.config.Parser;
+import roj.config.TextParser;
 import roj.config.YamlParser;
 import roj.config.YamlSerializer;
 import roj.config.node.MapValue;
@@ -58,12 +58,12 @@ public abstract class Plugin {
 	}
 	protected void reloadConfig() {
 		try {
-			var parser = new YamlParser();
+			var parser = new YamlParser(TextParser.LENIENT);
 			saveDefaultConfig();
-			config = parser.parse(configFile, Parser.LENIENT).asMap();
+			config = parser.parse(configFile).asMap();
 
 			var defaults = getResource("config.yml");
-			if (defaults != null) config.merge(parser.parse(defaults, Parser.LENIENT).asMap(), true, true);
+			if (defaults != null) config.merge(parser.parse(defaults).asMap(), true, true);
 		} catch (ParseException|IOException e) {
 			throw new IllegalArgumentException("无法读取配置文件"+configFile.getName(),e);
 		}

@@ -21,7 +21,7 @@ import static roj.text.Token.*;
  *
  * @author Roj234
  */
-public class XmlParser extends Parser {
+public class XmlParser extends TextParser {
 	private static final short
 		COMMENT = 11, CDATA_STRING = 12,
 		tag_start = 13, tag_start_close = 14, tag_end = 15, tag_end_close = 16,
@@ -38,30 +38,34 @@ public class XmlParser extends Parser {
 		XML_TOKENS.put("<![CDATA[", new Token().init(CDATA_STRING, -98,"]]>"));
 	}
 
-	{ tokens = XML_TOKENS; literalEnd = XML_LENDS; firstChar = SIGNED_NUMBER_C2C; }
-
-	public static final int HTML = 2, DECODE_ENTITY = 4, PRESERVE_SPACE = 8, NO_MY_SPACE = 16;
+	public static final int HTML = 4, SKIP_DECODE_ENTITY = 8, PRESERVE_SPACE = 16, NO_MY_SPACE = 32;
 	//https://html.spec.whatwg.org/#void-elements
 	private static final HashSet<String> HTML_VOID_ELEMENTS = new HashSet<>(TextUtil.split("area,base,br,col,embed,hr,img,input,link,meta,source,track,wbr",','));
 
-	public static Document parses(CharSequence string) throws ParseException { return new XmlParser().parse(string, LENIENT); }
+	public XmlParser() {this(0);}
+	public XmlParser(@MagicConstant(flags = {LENIENT, HTML, SKIP_DECODE_ENTITY, PRESERVE_SPACE, NO_MY_SPACE}) int flags) {
+		super(flags);
+		tokens = XML_TOKENS;
+		literalEnd = XML_LENDS;
+		firstChar = SIGNED_NUMBER_C2C;
+	}
 
 	@Override
-	public Document parse(CharSequence text, int flags) throws ParseException {
+	public Document parse(CharSequence text) throws ParseException {
 		XmlEmitter entry = new XmlEmitter();
-		parse(text, flags, entry);
+		parse(text, entry);
 		return (Document) entry.get();
 	}
 
 	private ValueEmitter emitter;
 
 	@Override
-	public void parse(CharSequence text, @MagicConstant(flags = {LENIENT, HTML, DECODE_ENTITY, PRESERVE_SPACE, NO_MY_SPACE}) int flag, ValueEmitter emitter) throws ParseException {
-		this.flag = flag;
+	public void parse(CharSequence text, ValueEmitter emitter) throws ParseException {
+		flags &= ~PRESERVE_SPACE;
 		this.emitter = emitter;
 		init(text);
 		try {
-			if ((flag & HTML) != 0) needCLOSE = (s) -> !HTML_VOID_ELEMENTS.contains(s.toLowerCase());
+			if ((flags & HTML) != 0) needCLOSE = (s) -> !HTML_VOID_ELEMENTS.contains(s.toLowerCase());
 			parseDocument();
 		} catch (ParseException e) {
 			throw e.addPath("$");
@@ -88,7 +92,7 @@ public class XmlParser extends Parser {
 				emitter.emitMap();
 				do {
 					if (w.type() != LITERAL) {
-						if (w.type() != STRING || (flag & LENIENT) == 0)
+						if (w.type() != STRING || (flags & LENIENT) == 0)
 							throw err("期待属性名称");
 					}
 					w = parseAttribute(w);
@@ -105,7 +109,7 @@ public class XmlParser extends Parser {
 					continue;
 				}
 
-				if ((flag & LENIENT) == 0 || w.type() == EOF)
+				if ((flags & LENIENT) == 0 || w.type() == EOF)
 					break;
 			}
 			parseElement();
@@ -124,12 +128,12 @@ public class XmlParser extends Parser {
 
 		Token w = next();
 
-		var prevFlag = flag;
+		var prevFlag = flags;
 		if (w.type() != tag_end_close && w.type() != tag_end) {
 			emitter.emitMap();
 			do {
 				if (w.type() != LITERAL) {
-					if (w.type() != STRING || (flag & LENIENT) == 0)
+					if (w.type() != STRING || (flags & LENIENT) == 0)
 						throw err("期待属性名称");
 				}
 				w = parseAttribute(w);
@@ -140,7 +144,7 @@ public class XmlParser extends Parser {
 		if (w.type() == tag_end_close || name.equals("!DOCTYPE") || !needCLOSE.test(name)) {
 			emitter.setProperty(XmlEmitter.SHORT_TAG, true);
 			emitter.pop();
-			flag = prevFlag;
+			flags = prevFlag;
 			return;
 		}
 
@@ -167,7 +171,7 @@ public class XmlParser extends Parser {
 					case CDATA_STRING: emitter.emit(w.text()); emitter.setProperty(XmlEmitter.CDATA, true); break;
 					case LITERAL: emitter.emit(w.text()); break;
 					case EOF:
-						if ((flag & LENIENT) != 0) {
+						if ((flags & LENIENT) != 0) {
 							emitter.pop();
 							emitter.pop();
 							return;
@@ -185,13 +189,13 @@ public class XmlParser extends Parser {
 		}
 
 		if (!name.equals(except(LITERAL, "元素名称").text())) {
-			if ((flag & LENIENT) == 0) throw err("结束标签不匹配! 需要 "+name+" 找到 "+w.text());
+			if ((flags & LENIENT) == 0) throw err("结束标签不匹配! 需要 "+name+" 找到 "+w.text());
 			errorTag = w.text();
 		}
 		except(tag_end, ">");
 
 		emitter.pop();
-		flag = prevFlag;
+		flags = prevFlag;
 	}
 
 	private Token parseAttribute(Token w) throws ParseException {
@@ -212,9 +216,9 @@ public class XmlParser extends Parser {
 	private void handleSystemAttribute(String key, ConfigValue val) {
 		if (key.equals("xml:space")) {
 			if (val.asString().equalsIgnoreCase("preserve")) {
-				flag |= PRESERVE_SPACE;
+				flags |= PRESERVE_SPACE;
 			} else {
-				flag &= ~PRESERVE_SPACE;
+				flags &= ~PRESERVE_SPACE;
 			}
 		}
 	}
@@ -296,7 +300,7 @@ public class XmlParser extends Parser {
 
 		// skip and collect whitespace
 		int c;
-		if ((flag&PRESERVE_SPACE) == 0) while (true) {
+		if ((flags&PRESERVE_SPACE) == 0) while (true) {
 			c = in.charAt(i);
 			if (!WHITESPACE.contains(c)) break;
 
@@ -321,7 +325,7 @@ public class XmlParser extends Parser {
 		CharList v = found; v.clear();
 
 		// restore whitespace
-		if (i != prevI && (flag&NO_MY_SPACE) == 0) v.append(' ');
+		if (i != prevI && (flags&NO_MY_SPACE) == 0) v.append(' ');
 		int lastNonEmpty = prevI = i;
 
 		boolean hasEntity = false;
@@ -336,16 +340,16 @@ public class XmlParser extends Parser {
 
 			i++;
 
-			if ((flag&PRESERVE_SPACE) != 0 || !WHITESPACE.contains(c)) lastNonEmpty = i;
+			if ((flags&PRESERVE_SPACE) != 0 || !WHITESPACE.contains(c)) lastNonEmpty = i;
 		}
 
-		if (hasEntity && (flag&DECODE_ENTITY) != 0) {
-			HtmlEntities.unescapeHtml(in.subSequence(prevI, lastNonEmpty), v);
+		if (hasEntity && (flags&SKIP_DECODE_ENTITY) == 0) {
+			HtmlEntities.decode(in.subSequence(prevI, lastNonEmpty), v);
 		} else {
 			v.append(in, prevI, lastNonEmpty);
 		}
 
-		if (lastNonEmpty != i && (flag&NO_MY_SPACE) == 0) v.append(' ');
+		if (lastNonEmpty != i && (flags&NO_MY_SPACE) == 0) v.append(' ');
 
 		index = i;
 		return formClip(LITERAL, v);

@@ -68,7 +68,7 @@ public class GroupBy {
 
 						_ChunkPos chunk;
 						try (var nbt = rf.getBufferedInputStream(j)) {
-							chunk = ConfigMaster.NBT.readObject(_ChunkPos.class, nbt);
+							chunk = ConfigMaster.NBT.readObject(nbt, _ChunkPos.class);
 							chunks.add(chunkPos(chunk.xPos, chunk.zPos));
 						} catch (Exception e) {
 						}

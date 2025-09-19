@@ -1,7 +1,7 @@
 package roj.net;
 
-import roj.collect.HashSet;
 import roj.collect.ArrayList;
+import roj.collect.HashSet;
 import roj.io.BufferPool;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
@@ -126,8 +126,6 @@ public class EmbeddedChannel extends MyChannel {
 	@Override
 	public boolean isOpen() { return state < CLOSED && ((closeFlag & 1) == 0); }
 	@Override
-	public boolean isInputOpen() { return state < CLOSED && ((closeFlag & 2) == 0); }
-	@Override
 	public boolean isOutputOpen() { return state < CLOSED && ((closeFlag & 4) == 0); }
 
 	private SocketAddress remote = address, local = address;
@@ -163,8 +161,8 @@ public class EmbeddedChannel extends MyChannel {
 
 	public void readActive() {
 		lock.lock();
-		byte f = flag;
-		flag = (byte) (f & ~READ_INACTIVE);
+		byte f = flags;
+		flags = (byte) (f & ~READ_INACTIVE);
 		lock.unlock();
 		if ((f & READ_INACTIVE) != 0) {
 			if (pair != null) {
@@ -178,7 +176,7 @@ public class EmbeddedChannel extends MyChannel {
 	}
 	public void readInactive() {
 		lock.lock();
-		flag |= READ_INACTIVE;
+		flags |= READ_INACTIVE;
 		lock.unlock();
 	}
 
@@ -195,15 +193,15 @@ public class EmbeddedChannel extends MyChannel {
 
 	@Override
 	protected void closeGracefully0() throws IOException {
-		flag |= 4;
+		flags |= 4;
 		if (pair != null) {
-			pair.flag |= 2;
+			pair.flags |= 2;
 			pair.onInputClosed(null);
 
-			if (pair.flag == 6) close();
+			if (pair.flags == 6) close();
 		}
 
-		if (flag == 6) close();
+		if (flags == 6) close();
 	}
 
 	public void flush() throws IOException {
@@ -222,7 +220,7 @@ public class EmbeddedChannel extends MyChannel {
 			pending.clear();
 			BufferPool.reserve(buf);
 
-			flag &= ~(PAUSE_FOR_FLUSH|TIMED_FLUSH);
+			flags &= ~(PAUSE_FOR_FLUSH|TIMED_FLUSH);
 			fireFlushed();
 		} finally {
 			lock.unlock();
@@ -274,8 +272,8 @@ public class EmbeddedChannel extends MyChannel {
 	}
 
 	@Override
-	protected void closeHandler() throws IOException {
-		super.closeHandler();
+	protected void fireClosed() throws IOException {
+		super.fireClosed();
 
 		closeFlag = 7;
 		if (pair != null) pair.close();

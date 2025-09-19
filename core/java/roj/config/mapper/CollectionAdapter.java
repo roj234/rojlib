@@ -28,14 +28,14 @@ final class CollectionAdapter extends TypeAdapter {
 	}
 
 	@Override
-	public TypeAdapter transform(Factory man, Class<?> subclass, List<IType> generic) {
+	public TypeAdapter transform(ObjectMapperImpl man, Class<?> subclass, List<IType> generic) {
 		var vType = valueType;
 		if (generic != null) {
 			if (generic.size() != 1) throw new IllegalArgumentException(generic.toString());
 			vType = man.get(generic.get(0));
 		}
 
-		IntFunction<Collection<?>> constructor = ObjectMapperFactory.containerFactory(subclass);
+		IntFunction<Collection<?>> constructor = ObjectMapper.containerFactory(subclass);
 		if (constructor == null) constructor = newCollection;
 
 		return vType == valueType && constructor == newCollection ? this : new CollectionAdapter(vType, set, constructor);

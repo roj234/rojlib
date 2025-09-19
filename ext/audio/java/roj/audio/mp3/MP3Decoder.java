@@ -8,8 +8,8 @@ import roj.audio.tag.APETag;
 import roj.audio.tag.ID3Tag;
 import roj.concurrent.Executor;
 import roj.concurrent.TaskPool;
-import roj.io.Finishable;
 import roj.io.ByteInputStream;
+import roj.io.Finishable;
 import roj.io.source.Source;
 import roj.optimizer.FastVarHandle;
 import roj.reflect.Handles;
@@ -172,7 +172,7 @@ public final class MP3Decoder implements AudioDecoder {
 		Layer layer = switch (header.getLayer()) {
 			case 1 -> new Layer1(header, this);
 			case 2 -> new Layer2(header, this);
-			case 3 -> new Layer3(header, this, asyncPool == null ? TaskPool.common() : asyncPool);
+			case 3 -> new Layer3(header, this, asyncPool == null ? TaskPool.cpu() : asyncPool);
 			default -> throw new IOException("未预料的错误");
 		};
 

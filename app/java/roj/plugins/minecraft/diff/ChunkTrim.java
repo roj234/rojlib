@@ -29,12 +29,12 @@ import java.util.regex.Pattern;
 public class ChunkTrim {
 	static final Pattern REGION_MATCHER = Pattern.compile("r\\.(-?\\d+)\\.(-?\\d+)\\.mca$");
 	static EasyProgressBar bar = new EasyProgressBar("计算", "区块");
-	static TaskPool pool = TaskPool.common();
+	static TaskPool pool = TaskPool.cpu();
 
 	private static MCTWhitelist whitelist;
 
 	public static void init(File file1) throws IOException, ParseException {
-		whitelist = ConfigMaster.JSON.readObject(MCTWhitelist.class, file1);
+		whitelist = ConfigMaster.JSON.readObject(file1, MCTWhitelist.class);
 	}
 
 	public static void createBackup(File worldDir, File backup) {
@@ -90,7 +90,7 @@ public class ChunkTrim {
 
 							NbtChunk chunk;
 							try (var nbt = rf.getBufferedInputStream(j)) {
-								chunk = ConfigMaster.NBT.readObject(NbtChunk.class, nbt);
+								chunk = ConfigMaster.NBT.readObject(nbt, NbtChunk.class);
 							} catch (Exception e) {
 								e.printStackTrace();
 								delete = "数据错误(Data Error)";

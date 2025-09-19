@@ -6,6 +6,7 @@ import org.jetbrains.annotations.Nullable;
 import roj.asm.Opcodes;
 import roj.asm.type.TypeHelper;
 import roj.reflect.Bypass;
+import roj.reflect.Handles;
 
 import java.lang.reflect.Method;
 import java.math.BigDecimal;
@@ -121,13 +122,7 @@ public final class MutableBigInteger implements Comparable<MutableBigInteger> {
 	private static final Opr o;
 
 	static {
-		Class<?> mb;
-		try {
-			mb = Class.forName("java.math.MutableBigInteger");
-		} catch (ClassNotFoundException e) {
-			throw new Error();
-		}
-
+		Class<?> mb = Handles.findClass("java.math.MutableBigInteger");
 		Bypass<Opr> dab = Bypass.custom(Opr.class).unchecked()
 			.construct(mb, "_n1", "_n2", "_n3", "_n4")
 			.construct(mb, "_n5", mb)

@@ -25,8 +25,8 @@ public abstract sealed class CstRef extends Constant permits CstRef.Field, CstRe
 
 	public final String toString() {
 		CharList sb = new CharList().append(super.toString())
-			.append(" 引用[").append((int) clazz.index).append(",").append((int) desc.index).append("] ");
-		return CstNameAndType.parseNodeDesc(sb, clazz.value().str(), desc.name().str(), desc.rawDesc().str());
+			.append(" 引用[#").append((int) clazz.index).append(".#").append((int) desc.index).append("] ");
+		return CstNameAndType.parseNodeDesc(sb, clazz.value().str(), desc.name().str(), desc.rawDesc().str()).toStringAndFree();
 	}
 
 	public final String owner() { return clazz.value().str(); }

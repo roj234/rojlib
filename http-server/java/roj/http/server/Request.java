@@ -113,27 +113,14 @@ public final class Request extends Headers {
 	@CheckReturnValue
 	public Content checkOrigin(@Nullable CrossOriginPolicy policy) {
 		if (get("origin") == null) return null;
-
+		if (policy == null) policy = CrossOriginPolicy.NO_LIMIT;
+		
 		// 预检请求
 		if (action() == HttpUtil.OPTIONS && (containsKey("access-control-request-method") || containsKey("access-control-request-headers"))) {
-			if (policy == null) {
-				//"access-control-max-age: 2592000\r\n"
-				server().code(204).header(
-						"access-control-allow-headers: "+get("access-control-request-headers")+"\r\n" +
-							"access-control-allow-origin: "+get("origin")+"\r\n" +
-							"access-control-allow-methods: *");
-			} else if (!policy.preflightRequest(this)) {
-				server.code(403);
-			}
+			server.code(policy.preflightRequest(this) ? 204 : 403);
 			return Content.EMPTY;
 		} else {
-			if (policy == null) {
-				responseHeader.put("access-control-allow-origin", "*");
-				//responseHeader.put("access-control-allow-credentials", "true");
-			} else {
-				return policy.simpleRequest(this);
-			}
-			return null;
+			return policy.simpleRequest(this);
 		}
 	}
 

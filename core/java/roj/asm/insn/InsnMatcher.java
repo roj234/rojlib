@@ -10,11 +10,11 @@ import static roj.asm.Opcodes.*;
  * @since 2021/5/29 17:16
  */
 public class InsnMatcher {
-	Int2IntMap varIdReplace = new Int2IntMap();
+	Int2IntMap variableRemap = new Int2IntMap();
 	protected boolean failed;
 
 	public void reset() {
-		varIdReplace.clear();
+		variableRemap.clear();
 		failed = false;
 	}
 
@@ -23,11 +23,7 @@ public class InsnMatcher {
 	}
 
 	public boolean checkId(int frm, int to) {
-		if (!varIdReplace.containsKey(frm)) {
-			varIdReplace.putInt(frm, to);
-			return true;
-		}
-		if (varIdReplace.getOrDefaultInt(frm, -1) != to) {
+		if (variableRemap.putIntIfAbsent(frm, to) != to) {
 			failed = true;
 			return false;
 		}
@@ -38,7 +34,7 @@ public class InsnMatcher {
 
 	@SuppressWarnings("fallthrough")
 	public void mapVarId(InsnList from) {
-		Int2IntMap map = varIdReplace;
+		Int2IntMap map = variableRemap;
 		for (InsnNode node : from) {
 			switch (Opcodes.category(node.opcode())) {
 				default: if (node.opcode() != IINC) break;

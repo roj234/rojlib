@@ -158,8 +158,6 @@ public class EpubWriter extends EbookWriter {
 		while (lr.readLine(sb)) {
 			if (sb.length() == 0) tw.append("\n<p><br /></p>");
 			else tw.append("\n<p>").append(sb).append("</p>");
-
-			sb.clear();
 		}
 	}
 
@@ -243,7 +241,7 @@ public class EpubWriter extends EbookWriter {
 				}
 
 				x.append("<navPoint id=\"n").append(i).append("\">\n  <navLabel><text>");
-				HtmlEntities.escapeHtml(x, name)
+				HtmlEntities.encode(x, name)
 				.append("</text></navLabel>\n  <content src=\"Text/").append(link).append(".html\"/>\n");
 			}
 

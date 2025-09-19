@@ -3,6 +3,7 @@ package roj.ci;
 import com.sun.nio.file.ExtendedWatchEventModifier;
 import roj.ci.event.LibraryModifiedEvent;
 import roj.collect.*;
+import roj.concurrent.TaskPool;
 import roj.io.IOUtil;
 import roj.ui.Tty;
 
@@ -125,7 +126,7 @@ final class FileWatcher extends IFileWatcher implements Consumer<WatchKey> {
 					if (set == null) continue;
 
 					actions.remove(set);
-					MCMake.EXECUTOR.executeUnsafe(set.key::cancel);
+					TaskPool.common().executeUnsafe(set.key::cancel);
 					synchronized (set.mod) {
 						set.mod.clear();
 						set.mod.add(null);
@@ -133,7 +134,7 @@ final class FileWatcher extends IFileWatcher implements Consumer<WatchKey> {
 				}
 			}
 		} else {
-			handler.owner.fileChanged();
+			Project.fileChanged(handler.owner);
 		}
 	}
 

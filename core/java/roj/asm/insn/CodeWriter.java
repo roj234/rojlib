@@ -295,7 +295,7 @@ public class CodeWriter extends AbstractCodeWriter {
 		segments.clear();
 		labels.clear();
 	}
-	protected void _updateOffsets() {
+	public void _updateOffsets() {
 		int len = segments.size()+1;
 		int[] offSum = AsmCache.getInstance().getIntArray_(len);
 		updateOffset(labels, offSum, len);
@@ -356,12 +356,12 @@ public class CodeWriter extends AbstractCodeWriter {
 						debugInfo = "";
 						code1.instructions = code.instructions;
 					} else {
-						debugInfo = code;
+						debugInfo = code.toString();
 					}
-				} catch (Exception e1) {
+				} catch (Throwable e1) {
 					debugInfo = "(Illegal instruction "+e1+"): "+codeOb.dump();
 				}
-				throw new IllegalStateException("无法为代码生成StackMapTable:\n BCI #"+ frameVisitor.bci()+"\n method "+ method +"\n "+debugInfo, e);
+				throw new IllegalStateException("无法为代码生成StackMapTable:\n BCI #"+frameVisitor.bci()+"\n method "+method+"\n "+debugInfo, e);
 			}
 
 			if ((computes & COMPUTE_SIZES) != 0) {
@@ -575,13 +575,14 @@ public class CodeWriter extends AbstractCodeWriter {
 
 	public boolean isContinuousControlFlow(int targetBlock) {
 		Segment seg = segments.get(targetBlock);
+		var isTerm = seg.isTerminate();
 		if (seg.length() > 0) {
-			if (!seg.isTerminate()) return true;
+			if (!isTerm) return true;
 		} else if (targetBlock == 0 || !segments.get(targetBlock - 1).isTerminate() && isContinuousControlFlow(targetBlock - 1)) {
 			return true;
 		}
 		for (int i = 1; i < segments.size(); i++) {
-			if (segments.get(i).willJumpTo(targetBlock, -1)) return true;
+			if (segments.get(i).willJumpTo(targetBlock, isTerm ? seg.length() : -1)) return true;
 		}
 		return false;
 	}

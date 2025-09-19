@@ -74,8 +74,6 @@ import static roj.ui.CommandNode.literal;
 	Nixim注入: nixim <injector> <reference> [output]
 	""")
 public class LazyBox extends Plugin {
-	private static final TaskPool pool = TaskPool.common();
-
 	@Override
 	protected void onEnable() throws Exception {
 		registerCommand(literal("7zverify").then(argument("path", Argument.file()).executes(this::qzVerify)));
@@ -296,7 +294,7 @@ public class LazyBox extends Plugin {
 		})).executes(ctx -> {
 					Pattern regex = Pattern.compile(ctx.argument("正则", String.class));
 					File path = ctx.argument("文件夹", File.class);
-					var pool = TaskPool.common().newGroup();
+					var pool = TaskPool.cpu().newGroup();
 					for (File file : IOUtil.listFiles(path)) {
 						pool.executeUnsafe(() -> {
 							try (TextReader in = TextReader.auto(file)) {
@@ -354,7 +352,7 @@ public class LazyBox extends Plugin {
 			try (var archive = new ZipArchive(dst)) {
 				for (var entry : nx.registry().entrySet()) {
 					String file = entry.getKey().replace('.', '/')+".class";
-					InputStream in = archive.getStream(file);
+					InputStream in = archive.getInputStream(file);
 					if (in == null) {
 						System.err.println("nixim target "+file+" not found");
 						continue;
@@ -429,9 +427,9 @@ public class LazyBox extends Plugin {
 				bar.addTotal(entry.getSize());
 			}
 
-			TaskGroup monitor = pool.newGroup();
+			TaskGroup monitor = TaskPool.cpu().newGroup();
 			archive.parallelDecompress(monitor, (entry, in) -> {
-				byte[] arr = ArrayCache.getByteArray(40960, false);
+				byte[] arr = ArrayCache.getIOBuffer();
 				try {
 					while (true) {
 						int r = in.read(arr);
@@ -536,7 +534,7 @@ public class LazyBox extends Plugin {
 			EasyProgressBar bar = new EasyProgressBar("复制块", "块");
 			bar.addTotal(in1_should_copy.size()+in2_should_copy.size());
 
-			var monitor = pool.newGroup();
+			var monitor = TaskPool.cpu().newGroup();
 
 			copy(monitor, in1, in1_should_copy, out, bar);
 			copy(monitor, in2, in2_should_copy, out, bar);

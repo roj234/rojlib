@@ -7,7 +7,7 @@ import roj.io.source.Source;
 import roj.io.source.SourceInputStream;
 import roj.math.MathUtils;
 import roj.optimizer.FastVarHandle;
-import roj.reflect.Unsafe;
+import roj.reflect.Handles;
 import roj.text.logging.Level;
 import roj.text.logging.Logger;
 import roj.util.ByteList;
@@ -23,8 +23,6 @@ import java.util.zip.DeflaterOutputStream;
 import java.util.zip.GZIPInputStream;
 import java.util.zip.GZIPOutputStream;
 import java.util.zip.InflaterInputStream;
-
-import static roj.reflect.Unsafe.U;
 
 /**
  * @author Roj233
@@ -48,7 +46,7 @@ public class RegionFile implements AutoCloseable {
 	protected byte flag;
 
 	Source cache;
-	static final long CACHE = Unsafe.fieldOffset(RegionFile.class, "cache");
+	static final VarHandle CACHE = Handles.lookup().findVarHandle(RegionFile.class, "cache", Source.class);
 	protected Lock lock = new ReentrantLock();
 
 	public RegionFile(File file) throws IOException {
@@ -101,9 +99,9 @@ public class RegionFile implements AutoCloseable {
 	}
 	public void close() throws IOException {
 		IOUtil.closeSilently(raf);
+		var cache = (Source) CACHE.getAndSet(this, raf);
 		IOUtil.closeSilently(cache);
 		raf = null;
-		cache = null;
 	}
 
 	public void load() throws IOException {
@@ -169,7 +167,7 @@ public class RegionFile implements AutoCloseable {
 
 		//assert off + len < sectorCount;
 
-		Source src = getUnsharedSource();
+		Source src = getSource();
 
 		src.seek((long) off * chunkSize);
 		int byteLength = src.asDataInput().readInt();
@@ -193,13 +191,13 @@ public class RegionFile implements AutoCloseable {
 		return new SourceInputStream.Shared(src, byteLength, this, CACHE);
 	}
 
-	private Source getUnsharedSource() throws IOException {
-		Source src = (Source) U.getAndSetReference(this, CACHE, null);
+	private Source getSource() throws IOException {
+		Source src = (Source) CACHE.getAndSet(this, null);
 		if (src == null) src = raf.copy();
 		return src;
 	}
-	private void putUnsharedSource(Source raf) throws IOException {
-		if (!U.compareAndSetReference(this, CACHE, null, raf))
+	private void closeSource(Source raf) throws IOException {
+		if (!CACHE.compareAndSet(this, null, raf))
 			raf.close();
 	}
 
@@ -217,7 +215,7 @@ public class RegionFile implements AutoCloseable {
 		if (cLen <= 0) throw new AssertionError("cLen==0");
 		if (cLen >= 255) log("大数据: {} #{} 占用的块: {} 长度: ", file, id, cLen, data.wIndex());
 
-		var raf = getUnsharedSource();
+		var raf = getSource();
 
 		int i1 = offsets[id];
 		int off = i1 >>> 8;
@@ -276,14 +274,14 @@ public class RegionFile implements AutoCloseable {
 
 			writePosAndBlock(raf, id, data, off, cLen);
 		} catch (Exception e) {
-			putUnsharedSource(raf);
+			closeSource(raf);
 			throw e;
 		}
 
 		if ((flag & F_DONT_UPDATE_TIME) == 0) {
 			setTimestamp(raf, id, (int) (System.currentTimeMillis() / 1000L));
 		}
-		putUnsharedSource(raf);
+		closeSource(raf);
 	}
 
 	public void delete(int id) throws IOException {
@@ -359,10 +357,10 @@ public class RegionFile implements AutoCloseable {
 	public final int getTimestamp(int id) {
 		if (timestamps != null) return timestamps[id];
 		try {
-			Source raf = getUnsharedSource();
+			Source raf = getSource();
 			raf.seek((long) (offsets.length + id) <<2);
 			int time = raf.asDataInput().readInt();
-			putUnsharedSource(raf);
+			closeSource(raf);
 			return time;
 		} catch (IOException e) {
 			return 0;

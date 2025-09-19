@@ -16,6 +16,8 @@ interface UnsafeTemplate {
 
 	int arrayBaseOffset(Class<?> arrayClass);
 	int arrayIndexScale(Class<?> arrayClass);
+	//long arrayBaseOffset$1(Class<?> arrayClass);
+	//long arrayIndexScale$1(Class<?> arrayClass);
 
 	Object allocateUninitializedArray(Class<?> componentType, int length);
 	Object allocateInstance(Class<?> cls) throws InstantiationException;

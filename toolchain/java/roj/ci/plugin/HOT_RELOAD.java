@@ -7,6 +7,7 @@ import roj.asm.AsmCache;
 import roj.asm.ClassDefinition;
 import roj.asm.ClassNode;
 import roj.asmx.Context;
+import roj.ci.BuildContext;
 import roj.ci.MCMake;
 import roj.collect.ArrayList;
 import roj.config.node.ConfigValue;

@@ -23,7 +23,7 @@ import static roj.text.Token.LITERAL;
  * @author Roj234
  * @since 2021/7/7 2:03
  */
-public class YamlParser extends Parser implements StreamParser {
+public class YamlParser extends TextParser implements StreamParser {
 	private static final int JSON_MODE = 16;
 
 	private static final short delim = 18,
@@ -59,18 +59,21 @@ public class YamlParser extends Parser implements StreamParser {
 			YAML_TOKENS.put(token.toUpperCase(), w);
 		}
 	}
-	{ tokens = YAML_TOKENS; literalEnd = YAML_LENDS; }
 
-	public YamlParser() {}
-	public YamlParser(int flag) {super(flag);}
+	public YamlParser() {this(NO_DUPLICATE_KEY);}
+	public YamlParser(@MagicConstant(flags = {ORDERED_MAP, LENIENT, NO_DUPLICATE_KEY}) int flags) {
+		super(flags);
+		tokens = YAML_TOKENS;
+		literalEnd = YAML_LENDS;
+	}
 
 	@Override
-	public ConfigValue parse(CharSequence text, @MagicConstant(flags = {ORDERED_MAP, LENIENT, NO_DUPLICATE_KEY}) int flags) throws ParseException {
-		this.flag = flags;
+	public ConfigValue parse(CharSequence text) throws ParseException {
+		flags &= ~JSON_MODE;
 		init(text);
 		if (!next().text().equals("---")) retractWord();
 		try {
-			return element(flags);
+			return element();
 		} catch (ParseException e) {
 			throw e.addPath("$");
 		} finally {
@@ -79,12 +82,12 @@ public class YamlParser extends Parser implements StreamParser {
 	}
 	@SuppressWarnings("fallthrough")
 	@Override
-	protected final ConfigValue element(int flags) throws ParseException {
+	protected final ConfigValue element() throws ParseException {
 		Token w = next();
 		String cnt = w.text();
 		switch (w.type()) {
 			case force_cast: {
-				ConfigValue val = element(flags);
+				ConfigValue val = element();
 				switch (cnt) {
 					case "str": return ConfigValue.valueOf(val.asString());
 					case "float": return ConfigValue.valueOf(val.asDouble());
@@ -102,14 +105,14 @@ public class YamlParser extends Parser implements StreamParser {
 				}
 			}
 			case lBracket:
-				this.flag |= JSON_MODE;
+				flags |= JSON_MODE;
 				ListValue v = list(this, new ListValue(), flags);
-				this.flag ^= JSON_MODE;
+				flags ^= JSON_MODE;
 				return v;
 			case lBrace:
-				this.flag |= JSON_MODE;
+				flags |= JSON_MODE;
 				MapValue v2 = JsonParser.map(this, flags);
-				this.flag ^= JSON_MODE;
+				flags ^= JSON_MODE;
 				return v2;
 			case multiline: case multiline_clump: return ConfigValue.valueOf(cnt);
 			case Token.STRING, Token.LITERAL: {
@@ -150,7 +153,7 @@ public class YamlParser extends Parser implements StreamParser {
 				}
 				return blockSeq();
 			case anchor: {
-				ConfigValue val = element(flags);
+				ConfigValue val = element();
 				anchors.put(cnt, val);
 				return val;
 			}
@@ -165,12 +168,13 @@ public class YamlParser extends Parser implements StreamParser {
 	}
 
 	@Override
-	public void parse(CharSequence text, @MagicConstant(flags = LENIENT) int flag, ValueEmitter emitter) throws ParseException {
-		this.flag = flag;
+	public void parse(CharSequence text, ValueEmitter emitter) throws ParseException {
+		flags &= ~JSON_MODE;
 		init(text);
-		if (!next().text().equals("---")) retractWord();
+		Token w = next();
+		if (w.text().equals("---")) w = next();
 		try {
-			streamElement(flag, emitter);
+			element(w, flags, emitter);
 		} catch (ParseException e) {
 			throw e.addPath("$");
 		} finally {
@@ -179,20 +183,19 @@ public class YamlParser extends Parser implements StreamParser {
 	}
 
 	@Override
-	public void streamElement(@MagicConstant(flags = LENIENT) int flags, ValueEmitter emitter) throws ParseException {
-		Token w = next();
+	public void element(Token w, @MagicConstant(flags = LENIENT) int flags, ValueEmitter emitter) throws ParseException {
 		try {
 			switch (w.type()) {
 				case join, force_cast, ref, anchor -> throw err("访问者模式不支持seek-past");
 				case lBracket -> {
-					this.flag |= JSON_MODE;
+					this.flags |= JSON_MODE;
 					JsonParser.list(this, emitter, flags);
-					this.flag ^= JSON_MODE;
+					this.flags ^= JSON_MODE;
 				}
 				case lBrace -> {
-					this.flag |= JSON_MODE;
+					this.flags |= JSON_MODE;
 					JsonParser.map(this, emitter, flags);
-					this.flag ^= JSON_MODE;
+					this.flags ^= JSON_MODE;
 				}
 				case multiline, multiline_clump -> emitter.emit(w.text());
 				case Token.STRING, Token.LITERAL -> {
@@ -255,7 +258,7 @@ public class YamlParser extends Parser implements StreamParser {
 				retractWord();
 				try {
 					prevIndent = firstIndent;
-					list.add(element(flag));
+					list.add(element());
 				} catch (ParseException e) {
 					throw e.addPath("["+list.size()+"]");
 				} finally {
@@ -289,11 +292,10 @@ public class YamlParser extends Parser implements StreamParser {
 				emitter.emitNull();
 				size++;
 			} else {
-				retractWord();
 				//addComment();
 				try {
 					prevIndent = firstIndent;
-					streamElement(flag, emitter);
+					element(w, flags, emitter);
 				} catch (ParseException e) {
 					throw e.addPath("["+size+"]");
 				} finally {
@@ -319,7 +321,7 @@ public class YamlParser extends Parser implements StreamParser {
 	 * c : x
 	 */
 	private ConfigValue map(Token w) throws ParseException {
-		Map<String, ConfigValue> map = (flag & ORDERED_MAP) != 0 ? new LinkedHashMap<>() : new HashMap<>();
+		Map<String, ConfigValue> map = (flags & ORDERED_MAP) != 0 ? new LinkedHashMap<>() : new HashMap<>();
 		Map<String, String> comment = null;
 
 		int superIndent = prevIndent;
@@ -349,8 +351,8 @@ public class YamlParser extends Parser implements StreamParser {
 
 					try {
 						prevIndent = firstIndent;
-						if (map.put(name, element(flag)) != null) {
-							if ((flag & NO_DUPLICATE_KEY) != 0) throw err("重复的key: "+name);
+						if (map.put(name, element()) != null) {
+							if ((flags & NO_DUPLICATE_KEY) != 0) throw err("重复的key: "+name);
 						}
 					} catch (ParseException e) {
 						throw e.addPath('.'+name);
@@ -396,7 +398,7 @@ public class YamlParser extends Parser implements StreamParser {
 					//addComment();
 					try {
 						prevIndent = firstIndent;
-						streamElement(flag, emitter);
+						element(next(), flags, emitter);
 					} catch (ParseException e) {
 						throw e.addPath('.'+name);
 					} finally {
@@ -437,7 +439,7 @@ public class YamlParser extends Parser implements StreamParser {
 		if (nextNN().type() == colon) {
 			if (indent <= prevIndent) {
 				if (prevLN == ln) {
-					if ((flag&LENIENT) == 0) throw err("一行内不允许同时放置列表和映射 (通过LENIENT参数关闭该限制)");
+					if ((flags&LENIENT) == 0) throw err("一行内不允许同时放置列表和映射 (通过LENIENT参数关闭该限制)");
 					// 算了，这样更简单..
 					int begin = firstKey.pos();
 					while (begin > 0) {
@@ -467,7 +469,7 @@ public class YamlParser extends Parser implements StreamParser {
 		if (nextNN().type() == colon) {
 			if (indent <= prevIndent) {
 				if (prevLN == ln) {
-					if ((flag&LENIENT) == 0) throw err("一行内不允许同时放置列表和映射 (通过LENIENT参数关闭该限制)");
+					if ((flags&LENIENT) == 0) throw err("一行内不允许同时放置列表和映射 (通过LENIENT参数关闭该限制)");
 					int begin = firstKey.pos();
 					while (begin > 0) {
 						indent++;
@@ -585,7 +587,7 @@ public class YamlParser extends Parser implements StreamParser {
 	@SuppressWarnings("fallthrough")
 	@Override
 	protected final boolean isValidToken(int off, Token w) {
-		if ((flag & JSON_MODE) == 0) switch (w.type()) {
+		if ((flags & JSON_MODE) == 0) switch (w.type()) {
 			case TRUE, FALSE, NULL:
 				if (!whiteSpaceUntilNextLine(index + off)) return false;
 			break;
@@ -612,7 +614,7 @@ public class YamlParser extends Parser implements StreamParser {
 
 	@Override
 	protected final Token readDigit(boolean sign) throws ParseException {
-		if ((flag & JSON_MODE) != 0) return digitReader(sign, DIGIT_HBO);
+		if ((flags & JSON_MODE) != 0) return digitReader(sign, DIGIT_HBO);
 
 		Token w = digitReader(sign, DIGIT_HBO);
 		if (!whiteSpaceUntilNextLine(index)) {
@@ -629,7 +631,7 @@ public class YamlParser extends Parser implements StreamParser {
 
 	protected final Token readLiteral() throws ParseException {
 		// {a:b}
-		if ((flag & JSON_MODE) != 0) {
+		if ((flags & JSON_MODE) != 0) {
 			literalEnd = TMP_JSON;
 			try {
 				return super.readLiteral();

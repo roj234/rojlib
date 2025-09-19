@@ -20,7 +20,7 @@ public class XmlEmitter implements ValueEmitter {
 	public static final TypedKey<Boolean> SHORT_TAG = new TypedKey<>("xml:void");
 	public static final TypedKey<Boolean> CDATA = new TypedKey<>("xml:CData");
 
-	protected static final byte
+	public static final byte
 		XML_BEGIN    = 0,
 		XML_NAME     = 1,
 		XML_ATTR     = 2,

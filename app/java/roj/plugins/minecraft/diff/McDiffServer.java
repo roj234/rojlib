@@ -51,7 +51,7 @@ public final class McDiffServer {
 		HashMap<String, String> moved = new HashMap<>();
 		List<String> deleted = new ArrayList<>();
 
-		var pool = TaskPool.common().newGroup();
+		var pool = TaskPool.cpu().newGroup();
 		//TaskPool.MaxThread(Runtime.getRuntime().availableProcessors(), "MCDiff-CRC32-Worker");
 
 		computeDiff(directory, filter, pack, empty, added, deleted, moved, pool);
@@ -73,7 +73,7 @@ public final class McDiffServer {
 		long myMem = (1L<<24) * affinity;
 		System.out.println("Allocating "+TextUtil.scaledNumber1024(myMem)+" of memory");
 		LZMA2Options opt = new LZMA2Options();
-		opt.setAsyncMode(1<<24, TaskPool.common(), affinity, new BufferPool(myMem,0,myMem, 0,0, 0, 10,0), LZMA2Options.ASYNC_DICT_NONE);
+		opt.setAsyncMode(1<<24, TaskPool.cpu(), affinity, new BufferPool(myMem,0,myMem, 0,0, 0, 10,0), LZMA2Options.ASYNC_DICT_NONE);
 		QZWriter genericParallel = qzfw.newParallelWriter();
 		genericParallel.setCodec(new LZMA2(opt));
 
@@ -87,7 +87,7 @@ public final class McDiffServer {
 
 			checkSpecialFileType:
 			if (path.contains(".dat") || path.contains(".nbt")) {
-				byte[] tmp = ArrayCache.getByteArray(4096, false);
+				byte[] tmp = ArrayCache.getIOBuffer();
 
 				try (InputStream in = new GZIPInputStream(new FileInputStream(file))) {
 					while (true) {
@@ -121,7 +121,7 @@ public final class McDiffServer {
 				File tempFile = null;
 				RegionFile prevRin = null;
 				try {
-					var in = pack.getStream(path);
+					var in = pack.getInputStream(path);
 					if (in != null) {
 						// 加载会失败的，如果对于diff
 						prevRin = new RegionFile(tempFile = File.createTempFile("mcDiffChunkTemp", ".tmp"));
@@ -136,7 +136,7 @@ public final class McDiffServer {
 								}
 
 								var buf = IOUtil.getSharedByteBuf();
-								new NbtParser().parse(in1, 0, new NbtEncoder(buf));
+								NbtParser.INSTANCE.parse(in1, new NbtEncoder(buf));
 								prevRin.write(block, buf);
 								prevRin.setTimestamp(block, timestamp);
 							}
@@ -255,7 +255,7 @@ public final class McDiffServer {
 		var hash2 = CryptoFactory.SM3();
 
 		long count = qzfw.source().position()-32;
-		byte[] tmp = ArrayCache.getByteArray(4096, false);
+		byte[] tmp = ArrayCache.getIOBuffer();
 		try (InputStream in = new FileInputStream(file)) {
 			IOUtil.readFully(in, tmp, 0, 32); // 跳过文件头
 			while (count > 0) {
@@ -409,10 +409,10 @@ public final class McDiffServer {
 		return crc;
 	}
 
-	private static boolean compare(File left, QZArchive pack, QZEntry entry) throws IOException {return compare(new FileInputStream(left), pack.getInputUncached(entry));}
+	private static boolean compare(File left, QZArchive pack, QZEntry entry) throws IOException {return compare(new FileInputStream(left), pack.getConcurrentInputStream(entry));}
 	private static boolean compare(InputStream ina, InputStream inb) {
-		byte[] a = ArrayCache.getByteArray(4096, false);
-		byte[] b = ArrayCache.getByteArray(4096, false);
+		byte[] a = ArrayCache.getIOBuffer();
+		byte[] b = ArrayCache.getIOBuffer();
 
 		try {
 			while (true) {

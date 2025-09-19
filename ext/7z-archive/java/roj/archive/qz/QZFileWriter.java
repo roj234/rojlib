@@ -41,7 +41,6 @@ public class QZFileWriter extends QZWriter {
      */
     public QZFileWriter(Source source) throws IOException {
         super(source);
-        if (source.length() < 32) source.setLength(32);
         source.seek(32);
         setCodec(new LZMA2());
     }
@@ -314,29 +313,31 @@ public class QZFileWriter extends QZWriter {
     }
     //region 实现细节
     private void writeHeader(ByteOutput buf) throws IOException {
-        try {
-            buf.write(kHeader);
+        buf.write(kHeader);
 
-            if (files.size() > 0) {
-                assert !blocks.isEmpty();
+        if (files.size() > 0) {
+            assert !blocks.isEmpty();
 
-                buf.write(kMainStreamsInfo);
-                writeStreamInfo(buf, 0);
-                writeWordBlocks(buf);
-                writeBlockFileMap(buf);
-                buf.write(kEnd);
-            }
-
-            files.addAll(emptyFiles);
-            writeFilesInfo(buf);
-
+            buf.write(kMainStreamsInfo);
+            writeStreamInfo(buf, 0);
+            writeWordBlocks(buf);
+            writeBlockFileMap(buf);
             buf.write(kEnd);
-        } finally {
-            blocks.clear();
-            files.clear();
-            emptyFiles.clear();
-            flagSum[8] = flagSum[9] = 0;
         }
+
+        files.addAll(emptyFiles);
+        writeFilesInfo(buf);
+
+        buf.write(kEnd);
+
+        blocks.clear();
+        files.clear();
+        emptyFiles.clear();
+
+        // 250925 trick for QIncrementPak
+        if (flagSum[8] > 0)
+            flagSum[8] = 0;
+        flagSum[9] = 0;
     }
     private void writeStreamInfo(ByteOutput buf, long offset) throws IOException {
         buf.put(kPackInfo)

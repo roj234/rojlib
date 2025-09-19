@@ -1,7 +1,7 @@
 package roj.plugins.llm;
 
-import roj.config.ConfigMaster;
-import roj.config.mapper.ObjectMapperFactory;
+import roj.config.JsonParser;
+import roj.config.mapper.ObjectMapper;
 import roj.config.table.TableWriter;
 import roj.text.DateFormat;
 import roj.text.TextUtil;
@@ -19,12 +19,12 @@ import java.util.Map;
 public class TranslateTask {
 	public static void main(String[] args) throws Exception {
 		var task = ChatTask.fromFile(new File("plugins/AIApi/templates/translate_en.json"));
-		var ser = ObjectMapperFactory.SAFE.mapOf(String.class);
+		var ser = ObjectMapper.SAFE.mapOf(String.class);
 
 		var recovery = new RandomAccessFile("progress.dat", "rw");
 		recovery.setLength(4);
 
-		Map<String, String> map = ConfigMaster.JSON.readObject(ser, new File("input.json"));
+		Map<String, String> map = ser.read(new File("input.json"), new JsonParser());
 
 		var out = TableWriter.csvWriterAppend("output.csv");
 		out.writeRow(Arrays.asList("text","translated","success", DateFormat.toLocalDateTime(System.currentTimeMillis())));

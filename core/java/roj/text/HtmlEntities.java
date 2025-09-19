@@ -17,34 +17,34 @@ import java.util.regex.Pattern;
  * @since 2025/05/30 19:40
  */
 public class HtmlEntities {
-	public static CharSequence escapeHtml(CharSequence str) {
+	public static CharSequence encode(CharSequence str) {
 		var out = h(str);
 		return out == null ? str : out.toStringAndFree();
 	}
 	@Attach("appendHtmlEntities")
-	public static CharList escapeHtml(CharList to, CharSequence str) {
+	public static CharList encode(CharList to, CharSequence str) {
 		var out = h(str);
 		if (out == null) to.append(str);
 		else out.appendToAndFree(to);
 		return to;
 	}
 	@Attach("htmlEntities")
-	public static CharList escapeHtmlInline(CharList sb) {
+	public static CharList encodeInline(CharList sb) {
 		return sb.replaceBatch(EncodeMap);
 	}
 
-	public static CharSequence unescapeHtml(CharSequence str) {
+	public static CharSequence decode(CharSequence str) {
 		var out = hd(str);
 		return out == null ? str : out.toStringAndFree();
 	}
 	@Attach("appendDeHtmlEntities")
-	public static void unescapeHtml(CharSequence str, CharList to) {
+	public static void decode(CharSequence str, CharList to) {
 		CharList out = hd(str);
 		if (out == null) to.append(str);
 		else out.appendToAndFree(to);
 	}
 	@Attach("deHtmlEntities")
-	public static CharList unescapeHtmlInline(CharList sb) {
+	public static CharList decodeInline(CharList sb) {
 		var out = hd(sb);
 		if (out != null) {
 			ArrayCache.putArray(sb.list);

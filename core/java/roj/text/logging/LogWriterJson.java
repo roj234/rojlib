@@ -2,10 +2,10 @@ package roj.text.logging;
 
 import roj.collect.HashSet;
 import roj.collect.Hasher;
-import roj.compiler.plugins.asm.ASM;
 import roj.config.JsonSerializer;
 import roj.text.CharList;
 import roj.text.Formatter;
+import roj.util.JVM;
 
 import java.io.PrintStream;
 import java.util.List;
@@ -110,7 +110,7 @@ final class LogWriterJson extends LogWriter {
 					ser.emitKey("file");
 					ser.emit(el.getFileName());
 				}
-				if (ASM.TARGET_JAVA_VERSION > 8) {
+				if (JVM.VERSION > 8) {
 					if (el.getModuleName() != null) {
 						ser.emitKey("module");
 						ser.emit(el.getMethodName());

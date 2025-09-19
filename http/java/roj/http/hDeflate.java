@@ -1,6 +1,5 @@
 package roj.http;
 
-import roj.compiler.plugins.asm.ASM;
 import roj.crypt.CRC32;
 import roj.io.BufferPool;
 import roj.math.MathUtils;
@@ -9,6 +8,7 @@ import roj.net.Event;
 import roj.net.handler.GDeflate;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
+import roj.util.JVM;
 
 import java.io.EOFException;
 import java.io.IOException;
@@ -84,7 +84,7 @@ public final class hDeflate extends GDeflate {
 
 		var in = (DynByteBuf) msg;
 		if ((flag&2) != 0) outCrc = CRC32.update(outCrc, in);
-		DynByteBuf out = ctx.allocate(ASM.TARGET_JAVA_VERSION >= 11, MathUtils.clamp(in.readableBytes(), 128, buf));
+		DynByteBuf out = ctx.allocate(JVM.VERSION >= 11, MathUtils.clamp(in.readableBytes(), 128, buf));
 		try {
 			deflateWrite(ctx, in, out, 0);
 		} finally {

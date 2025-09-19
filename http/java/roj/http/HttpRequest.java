@@ -410,7 +410,7 @@ public abstract class HttpRequest {
 					while (true) {
 						MyChannel ch = pollFirst();
 						if (ch == null) break;
-						if (!(ch.isOpen() & ch.isInputOpen() & ch.isOutputOpen())) continue;
+						if (!ch.isOutputOpen()) continue;
 						lock.unlock();
 
 						HttpClient shc = (HttpClient) ch.handler("h11@merger").handler();

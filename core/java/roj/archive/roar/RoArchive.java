@@ -3,7 +3,7 @@ package roj.archive.roar;
 import roj.archive.ArchiveEntry;
 import roj.archive.ArchiveFile;
 import roj.archive.ArchiveUtils;
-import roj.archive.zip.ZipFile;
+import roj.archive.zip.InflateInputStream;
 import roj.collect.ArrayList;
 import roj.collect.WeakCache;
 import roj.collect.XashMap;
@@ -11,7 +11,8 @@ import roj.io.IOUtil;
 import roj.io.source.Source;
 import roj.io.source.SourceInputStream;
 import roj.math.MathUtils;
-import roj.reflect.Unsafe;
+import roj.optimizer.FastVarHandle;
+import roj.reflect.Handles;
 import roj.util.ByteList;
 import roj.util.FastFailException;
 import roj.util.Helpers;
@@ -19,13 +20,12 @@ import roj.util.Helpers;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
+import java.lang.invoke.VarHandle;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.zip.ZipEntry;
-
-import static roj.reflect.Unsafe.U;
 
 /**
  * 鸣谢： <a href="https://phoboslab.org/log/2024/09/qop">A Simple Archive Format for Self-Contained Executables</a><br>
@@ -33,11 +33,12 @@ import static roj.reflect.Unsafe.U;
  * @author Roj234
  * @since 2025/7/7 0:42
  */
-public class RoArchive implements ArchiveFile {
+@FastVarHandle
+public sealed class RoArchive implements ArchiveFile permits RoWriteArchive {
 	Source r, cache;
-	private static final long CACHE = Unsafe.fieldOffset(RoArchive.class, "cache");
+	private static final VarHandle CACHE = Handles.lookup().findVarHandle(RoArchive.class, "cache", Source.class);
 
-	static final XashMap<Source, CacheNode> OPENED = WeakCache.shape(CacheNode.class).create();
+	static final XashMap<Source, CacheNode> ARCHIVES = WeakCache.shape(CacheNode.class).create();
 	static final class CacheNode extends WeakCache<Source> {
 		public CacheNode(Source key, XashMap<Source, CacheNode> owner) {super(key, owner);}
 		RoarEntry[] map;
@@ -57,7 +58,7 @@ public class RoArchive implements ArchiveFile {
 	public RoArchive(String name) throws IOException { this(new File(name)); }
 	public RoArchive(File file) throws IOException {
 		r = ArchiveUtils.tryOpenSplitArchive(file, true);
-		var node = OPENED.get(r);
+		var node = ARCHIVES.get(r);
 		if (node == null) reload();
 		else {
 			map = node.map;
@@ -77,8 +78,8 @@ public class RoArchive implements ArchiveFile {
 		r1.close();
 		r = null;
 
-		Source s = (Source) U.getAndSetReference(this, CACHE, null);
-		IOUtil.closeSilently(s);
+		Source cache = (Source) CACHE.getAndSet(this, r1);
+		IOUtil.closeSilently(cache);
 	}
 
 	public final void reload() throws IOException {
@@ -142,19 +143,19 @@ public class RoArchive implements ArchiveFile {
 			buf.release();
 		}
 
-		var node = new CacheNode(r, OPENED);
+		var node = new CacheNode(r, ARCHIVES);
 		node.map = map;
 		node.entries = entries;
 
-		synchronized (OPENED) {
-			OPENED.put(r, node);
+		synchronized (ARCHIVES) {
+			ARCHIVES.put(r, node);
 		}
 
 		map = node.map;
 		entries = node.entries;
 	}
 
-	protected static int getHash(RoarEntry mod) {return Arrays.hashCode(mod.name);}
+	protected static int getHash(RoarEntry entry) {return Arrays.hashCode(entry.name);}
 	@Override
 	public final RoarEntry getEntry(String name) {
 		ByteList data = IOUtil.getSharedByteBuf().putUTFData(name);
@@ -198,19 +199,14 @@ public class RoArchive implements ArchiveFile {
 		return entry.name;
 	}
 
-	public final InputStream getStream(String name) throws IOException {
-		RoarEntry entry = getEntry(name);
-		if (entry == null) return null;
-		return getStream(entry);
-	}
-	public final InputStream getStream(ArchiveEntry entry, byte[] pw) throws IOException { return getStream((RoarEntry) entry); }
-	public InputStream getStream(RoarEntry entry) throws IOException {
-		Source src = (Source) U.getAndSetReference(this, CACHE, null);
+	public final InputStream getInputStream(ArchiveEntry entry, byte[] password) throws IOException { return getInputStream((RoarEntry) entry); }
+	public InputStream getInputStream(RoarEntry entry) throws IOException {
+		Source src = (Source) CACHE.getAndSet(this, null);
 		if (src == null) src = r.copy();
 		src.seek(entry.offset);
 
 		InputStream in = new SourceInputStream.Shared(src, entry.compressedSize, this, CACHE);
-		if ((entry.flags&0xF) == ZipEntry.DEFLATED) in = ZipFile.getCachedInflater(in);
+		if ((entry.flags&0xF) == ZipEntry.DEFLATED) in = InflateInputStream.getInstance(in);
 		return in;
 	}
 }

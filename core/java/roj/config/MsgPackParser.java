@@ -3,12 +3,16 @@ package roj.config;
 import roj.io.ByteInput;
 import roj.io.ByteInputStream;
 import roj.io.CorruptedInputException;
+import roj.io.LimitInputStream;
+import roj.text.CharList;
+import roj.text.TextReader;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
 
 import java.io.EOFException;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 
 import static roj.reflect.Unsafe.U;
 
@@ -16,12 +20,12 @@ import static roj.reflect.Unsafe.U;
  * @author Roj234
  * @since 2025/4/24 15:50
  */
-public class MsgPackParser implements BinaryParser {
+public class MsgPackParser implements Parser {
 	public static final int EXT_STREAM_DATA = 0x00;
 
 	@Override
-	public final void parse(InputStream in, int flag, ValueEmitter emitter) throws IOException {parse(ByteInputStream.wrap(in), emitter);}
-	public final void parse(DynByteBuf buf, int flag, ValueEmitter emitter) throws IOException {parse(buf, emitter);}
+	public final void parse(InputStream in, ValueEmitter emitter) throws IOException {parse(ByteInputStream.wrap(in), emitter);}
+	public final void parse(DynByteBuf buf, ValueEmitter emitter) throws IOException {parse((ByteInput) buf, emitter);}
 
 	private static final byte[] LOOKUP = new byte[256];
 	private static final int FAKE_FIXMAP = 0xBD, FAKE_FIXARR = 0xBE, FAKE_FIXSTR = 0xBF;
@@ -135,12 +139,12 @@ public class MsgPackParser implements BinaryParser {
 	private static String readUTF(ByteInput in, int len) throws IOException {
 		if (len <= 0xFFFF || in instanceof DynByteBuf) return in.readUTF(len);
 
-		var buf = new ByteList();
-		int r = buf.readStream((ByteInputStream) in, len);
-		if (r < len) throw new EOFException("没有 "+len+" 字节可用");
-		String v = buf.readUTF(buf.readableBytes());
-		buf.release();
-		return v;
+		LimitInputStream is = new LimitInputStream((InputStream) in, len);
+		try (var tr = TextReader.from(is, StandardCharsets.UTF_8)) {
+			var str = new CharList().readFully(tr).toStringAndFree();
+			if (is.remain > 0) throw new EOFException("仅 "+(len-is.remain)+"/"+len+" 字节可用");
+			return str;
+		}
 	}
 
 	private void list(ByteInput in, ValueEmitter out, int size) throws IOException {

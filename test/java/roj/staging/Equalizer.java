@@ -13,7 +13,6 @@ import roj.util.DynByteBuf;
 
 import javax.sound.sampled.AudioFormat;
 import java.io.IOException;
-import java.util.Arrays;
 
 /**
  * @author Roj234-N
@@ -37,8 +36,8 @@ public abstract class Equalizer implements AudioSink {
 
 			@Override
 			protected void process(Vec2d[] complex) {
-				Tty.directWrite(Tty.Cursor.to(0,0));
-				FFT.displaySpectrum(complex, Tty.windowWidth, Tty.windowHeight-2);
+				Tty.write(Tty.Cursor.to(0,0));
+				FFT.displaySpectrum(complex, Tty.getColumns(), Tty.getRows() -2);
 			}
 		};
 
@@ -114,7 +113,7 @@ public abstract class Equalizer implements AudioSink {
 		for (int i = 0; i < samples; i++) {
 			int pos = channelPos;
 			for (int channel = 0; channel < channels; channel++) {
-				channelBuffer[channel][pos] = (short) data.readUShortLE();
+				channelBuffer[channel][pos] = (short) data.readUnsignedShortLE();
 			}
 
 			channelPos++;

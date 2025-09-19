@@ -46,7 +46,7 @@ public class DPIProxy extends Plugin {
 		for (var item : getConfig().getMap("inject").entrySet()) {
 			var ctx = compiler.ctx;
 
-			ctx.lexer.init(item.getValue().asString()+";");
+			ctx.tokenizer.init(item.getValue().asString()+";");
 			var node = ctx.ep.parse(ExprParser.STOP_SEMICOLON|ExprParser.SKIP_SEMICOLON);
 			compiler.injectedExpressions.put(item.getKey(), node.resolve(ctx));
 		}
@@ -56,8 +56,7 @@ public class DPIProxy extends Plugin {
 			if (realFile.isFile()) {
 				try {
 					String text = IOUtil.readString(realFile);
-					compiler.fileName = realFile.getName();
-					return compiler.linkLambda("roj/plugins/dpiProxy/impl/"+file, Type.klass("roj/plugins/dpiProxy/DpiMatcher"), text, "data");
+					return (DpiMatcher) compiler.compile(text, realFile.getName(), Type.klass("roj/plugins/dpiProxy/DpiMatcher"), "data");
 				} catch (Exception e) {
 					Helpers.athrow2(e);
 				}
@@ -86,7 +85,6 @@ public class DPIProxy extends Plugin {
 			}
 		}
 
-		compiler.compiler.reset();
 		LOGGER.info("插件启用成功：编译了{}个Matcher", matchers.size());
 		for (var server : servers) server.launch();
 	}

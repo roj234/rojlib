@@ -23,7 +23,7 @@ import java.util.List;
  */
 @Optional
 public class Torrent {
-	public static Torrent read(File file) throws IOException, ParseException {return ConfigMaster.BENCODE.readObject(Torrent.class, file);}
+	public static Torrent read(File file) throws IOException, ParseException {return ConfigMaster.BENCODE.readObject(file, Torrent.class);}
 
 	public String announce;
 	@Name("announce-list")

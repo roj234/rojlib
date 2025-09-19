@@ -1,7 +1,7 @@
 package roj.asmx.injector;
 
 import roj.asm.Attributed;
-import roj.asm.annotation.AList;
+import roj.asm.annotation.ArrayVal;
 
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;
@@ -11,7 +11,7 @@ import java.lang.annotation.Target;
 /**
  * 动态行为开关
  * @apiNote 被标注元素的注入行为将由{@code ClassWeaver}在运行时动态决定
- * @see CodeWeaver#shouldApply(String, Attributed, AList)
+ * @see CodeWeaver#shouldApply(String, Attributed, ArrayVal)
  * @author Roj234
  * @since 2021/4/21 22:51
  */

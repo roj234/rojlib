@@ -182,7 +182,7 @@ public class FindClass extends JFrame {
 		try (ZipFile za = new ZipFile(file)) {
 			for (ZEntry value : za.entries()) {
 				if (value.getName().toLowerCase().endsWith(".class")) {
-					ClassNode data = ClassNode.parseSkeleton(IOUtil.getSharedByteBuf().readStreamFully(za.getStream(value)).toByteArray());
+					ClassNode data = ClassNode.parseSkeleton(IOUtil.getSharedByteBuf().readStreamFully(za.getInputStream(value)).toByteArray());
 					ref.add(data);
 				}
 			}

@@ -3,22 +3,24 @@ package roj.http.h2;
 import roj.http.HttpHead;
 import roj.http.HttpUtil;
 import roj.io.IOUtil;
-import roj.reflect.Unsafe;
+import roj.optimizer.FastVarHandle;
+import roj.reflect.Handles;
 import roj.util.DynByteBuf;
 
 import java.io.IOException;
+import java.lang.invoke.VarHandle;
 import java.net.SocketException;
 import java.net.URI;
 import java.util.Locale;
 import java.util.Set;
 
 import static roj.http.h2.H2Connection.LOGGER;
-import static roj.reflect.Unsafe.U;
 
 /**
  * @author Roj234
  * @since 2022/10/7 23:47
  */
+@FastVarHandle
 public abstract class H2Stream {
 	public final int id;
 	protected H2Stream(int id) {this.id = id;}
@@ -44,11 +46,11 @@ public abstract class H2Stream {
 	}
 
 	private static final Set<String> PSEUDO_HEADERS = Set.of(":method", ":path", ":scheme", ":authority", ":status");
-	private static final long
-		RR = Unsafe.fieldOffset(HttpHead.class, "isRequest"),
-		AA = Unsafe.fieldOffset(HttpHead.class, "a"),
-		BB = Unsafe.fieldOffset(HttpHead.class, "b"),
-		CC = Unsafe.fieldOffset(HttpHead.class, "c");
+	private static final VarHandle
+		RR = Handles.lookup().findVarHandle(HttpHead.class, "isRequest", boolean.class),
+		AA = Handles.lookup().findVarHandle(HttpHead.class, "a", String.class),
+		BB = Handles.lookup().findVarHandle(HttpHead.class, "b", String.class),
+		CC = Handles.lookup().findVarHandle(HttpHead.class, "c", String.class);
 	protected HttpHead _header = new HttpHead(false,null,null,null);
 
 	final String header(DynByteBuf buf, HPACK coder, boolean first) throws IOException {
@@ -115,10 +117,10 @@ public abstract class H2Stream {
 				if (hh.remove(name) != null) return "Header.Context";
 			}
 
-			U.putReference(hh, AA, method);
-			U.putReference(hh, BB, path);
-			U.putReference(hh, CC, scheme.toUpperCase(Locale.ROOT)+"/2");
-			U.putBoolean(hh, RR, true);
+			AA.set(hh, method);
+			BB.set(hh, path);
+			CC.set(hh, scheme.toUpperCase(Locale.ROOT)+"/2");
+			RR.set(hh, true);
 		} else {
 			String status = hh.remove(":status");
 			if (status == null) return "Header.Missing";
@@ -133,10 +135,10 @@ public abstract class H2Stream {
 				return "Header.StatusError";
 			}
 
-			U.putReference(hh, AA, "HTTP/2");
-			U.putReference(hh, BB, status);
-			U.putReference(hh, CC, HttpUtil.getCodeDescription(intStatus));
-			U.putBoolean(hh, RR, false);
+			AA.set(hh, "HTTP/2");
+			BB.set(hh, status);
+			CC.set(hh, HttpUtil.getCodeDescription(intStatus));
+			RR.set(hh, false);
 		}
 
 		return null;
@@ -210,7 +212,7 @@ public abstract class H2Stream {
 	}
 	/**
 	 * 连接被关闭.
-	 * 可以使用{@link #isSuccessfullyFinished()}判断是正常关闭还是异常关闭
+	 * 可以使用{@link #_getState()}判断是正常关闭还是异常关闭
 	 * 这个方法至多调用一次
 	 */
 	protected void onFinish(H2Connection man) {}

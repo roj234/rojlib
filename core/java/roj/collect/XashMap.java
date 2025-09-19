@@ -45,14 +45,14 @@ public final class XashMap<K, V> extends AbstractSet<V> {
 	}
 	public static final class Builder<K, V> {
 		final Class<V> type;
-		final long next_offset, key_offset;
+		final long NEXT, KEY;
 		final Hasher<K> hasher;
 		final ObjectNew creater;
 
 		Builder(Class<V> type, long nextOffset, long keyOffset, Hasher<K> hasher, ObjectNew creater) {
 			this.type = type;
-			next_offset = nextOffset;
-			key_offset = keyOffset;
+			NEXT = nextOffset;
+			KEY = keyOffset;
 			this.hasher = hasher;
 			this.creater = creater;
 		}
@@ -74,16 +74,16 @@ public final class XashMap<K, V> extends AbstractSet<V> {
 		}
 
 		@SuppressWarnings("unchecked")
-		final K GET_KEY(@NotNull Object obj) { return (K) U.getReference(obj, key_offset); }
-		final void SET_KEY(@NotNull V obj, K key) { U.putReference(obj, key_offset, key); }
-		final Object GET_NEXT(@NotNull Object obj) { return U.getReference(obj, next_offset); }
-		final void SET_NEXT(@NotNull Object obj, Object next) { U.putReference(obj, next_offset, next); }
+		final K GetKey(@NotNull Object obj) { return (K) U.getReference(obj, KEY); }
+		final void SetKey(@NotNull V obj, K key) { U.putReference(obj, KEY, key); }
+		final Object GetNext(@NotNull Object obj) { return U.getReference(obj, NEXT); }
+		final void SetNext(@NotNull Object obj, Object next) { U.putReference(obj, NEXT, next); }
 
 		@SuppressWarnings("unchecked")
 		final V createValue(K k) {
 			if (creater == null) throw new UnsupportedOperationException("creation unavailable");
 			V v = (V) creater.createValue(k);
-			SET_KEY(v, k);
+			SetKey(v, k);
 			return v;
 		}
 	}
@@ -109,7 +109,7 @@ public final class XashMap<K, V> extends AbstractSet<V> {
 	public int size() { return size; }
 
 	@Override
-	public final boolean contains(Object o) { return get(builder.GET_KEY(builder.checkCast(o))) != null; }
+	public final boolean contains(Object o) { return get(builder.GetKey(builder.checkCast(o))) != null; }
 	public boolean containsKey(Object o) { return get(o) != null; }
 	public V get(Object k) { return getOrDefault(k, null); }
 	@SuppressWarnings("unchecked")
@@ -117,15 +117,15 @@ public final class XashMap<K, V> extends AbstractSet<V> {
 		if (entries != null) {
 			Object obj = entries[builder.hashCode((K) k)&mask];
 			while (obj != null) {
-				if (builder.equals((K) k, builder.GET_KEY(obj))) return (V) obj;
-				obj = builder.GET_NEXT(obj);
+				if (builder.equals((K) k, builder.GetKey(obj))) return (V) obj;
+				obj = builder.GetNext(obj);
 			}
 		}
 		return def;
 	}
 
-	public boolean add(@NotNull V value) { return null == put1(builder.GET_KEY(builder.checkCast(value)), value, false, false); }
-	public boolean set(@NotNull V value) { return null == put1(builder.GET_KEY(builder.checkCast(value)), value, true, false); }
+	public boolean add(@NotNull V value) { return null == put1(builder.GetKey(builder.checkCast(value)), value, false, false); }
+	public boolean set(@NotNull V value) { return null == put1(builder.GetKey(builder.checkCast(value)), value, true, false); }
 
 	public V put(K key, @NotNull V val) {
 		if (val == null) throw new NullPointerException("val");
@@ -136,14 +136,14 @@ public final class XashMap<K, V> extends AbstractSet<V> {
 		return put1(key, val, false, false);
 	}
 	public V computeIfAbsent(K key) { return put1(key, null, false, true); }
-	@NotNull public V intern(@NotNull V node) {return put1(builder.GET_KEY(builder.checkCast(node)), node, false, true);}
+	@NotNull public V intern(@NotNull V node) {return put1(builder.GetKey(builder.checkCast(node)), node, false, true);}
 
 	@SuppressWarnings("unchecked")
 	@Contract("_,_,_,true -> !null")
 	private V put1(K k, V v, boolean replace, boolean add) {
 		int i = builder.hashCode(k)&mask;
 
-		if (v != null && builder.GET_NEXT(builder.checkCast(v)) == v)
+		if (v != null && builder.GetNext(builder.checkCast(v)) == v)
 			throw new UnsupportedOperationException("entry "+v+" 被锁定，无法加入map");
 
 		if (entries == null) entries = new Object[mask+1];
@@ -151,15 +151,15 @@ public final class XashMap<K, V> extends AbstractSet<V> {
 		if (obj != null) {
 			Object prev = null;
 			while (obj != null) {
-				if (builder.equals(k, builder.GET_KEY(obj))) {
+				if (builder.equals(k, builder.GetKey(obj))) {
 					if (replace) {
 						if (v == null) v = builder.createValue(k);
 
-						builder.SET_NEXT(v, builder.GET_NEXT(obj));
-						builder.SET_NEXT(obj, null);
+						builder.SetNext(v, builder.GetNext(obj));
+						builder.SetNext(obj, null);
 
 						if (prev == null) entries[i] = v;
-						else builder.SET_NEXT(prev, v);
+						else builder.SetNext(prev, v);
 
 						return add ? v : null;
 					}
@@ -167,14 +167,14 @@ public final class XashMap<K, V> extends AbstractSet<V> {
 				}
 
 				prev = obj;
-				obj = builder.GET_NEXT(obj);
+				obj = builder.GetNext(obj);
 			}
 		}
 
 
 		if (v == null) v = builder.createValue(k);
 
-		builder.SET_NEXT(v, entries[i]);
+		builder.SetNext(v, entries[i]);
 		entries[i] = v;
 
 		if (++size > mask * LOAD_FACTOR) resize((mask+1)<<1);
@@ -182,7 +182,7 @@ public final class XashMap<K, V> extends AbstractSet<V> {
 	}
 
 	@Override
-	public boolean remove(Object o) { return removeKey(builder.GET_KEY(builder.checkCast(o))) != null; }
+	public boolean remove(Object o) { return removeKey(builder.GetKey(builder.checkCast(o))) != null; }
 	@SuppressWarnings("unchecked")
 	public V removeKey(K key) {
 		if (entries == null) return null;
@@ -191,20 +191,20 @@ public final class XashMap<K, V> extends AbstractSet<V> {
 		Object entry = entries[i], prev = null;
 		if (entry == null) return null;
 
-		while (!builder.equals(key, builder.GET_KEY(entry))) {
+		while (!builder.equals(key, builder.GetKey(entry))) {
 			prev = entry;
 
-			entry = builder.GET_NEXT(entry);
+			entry = builder.GetNext(entry);
 			if (entry == null) return null;
 		}
 
 		size--;
 
-		Object next = builder.GET_NEXT(entry);
-		if (prev != null) builder.SET_NEXT(prev, next);
+		Object next = builder.GetNext(entry);
+		if (prev != null) builder.SetNext(prev, next);
 		else entries[i] = next;
 
-		builder.SET_NEXT(entry, null);
+		builder.SetNext(entry, null);
 		return (V) entry;
 	}
 
@@ -218,17 +218,17 @@ public final class XashMap<K, V> extends AbstractSet<V> {
 		while (entry != v) {
 			prev = entry;
 
-			entry = builder.GET_NEXT(entry);
+			entry = builder.GetNext(entry);
 			if (entry == null) return false;
 		}
 
 		size--;
 
-		Object next = builder.GET_NEXT(entry);
-		if (prev != null) builder.SET_NEXT(prev, next);
+		Object next = builder.GetNext(entry);
+		if (prev != null) builder.SetNext(prev, next);
 		else entries[i] = next;
 
-		builder.SET_NEXT(entry, null);
+		builder.SetNext(entry, null);
 		return true;
 	}
 
@@ -246,12 +246,12 @@ public final class XashMap<K, V> extends AbstractSet<V> {
 		for (; i < j; i++) {
 			Object entry = entries[i];
 			while (entry != null) {
-				int newKey = builder.hashCode(builder.GET_KEY(entry))&len;
+				int newKey = builder.hashCode(builder.GetKey(entry))&len;
 
-				Object next = builder.GET_NEXT(entry);
+				Object next = builder.GetNext(entry);
 
 				Object old = newEntries[newKey];
-				builder.SET_NEXT(entry, old);
+				builder.SetNext(entry, old);
 				newEntries[newKey] = entry;
 
 				entry = next;
@@ -284,7 +284,7 @@ public final class XashMap<K, V> extends AbstractSet<V> {
 			while (true) {
 				if (entry != null) {
 					result = (V) entry;
-					entry = builder.GET_NEXT(entry);
+					entry = builder.GetNext(entry);
 					return true;
 				} else {
 					Object[] ent = localEntries;
@@ -305,16 +305,16 @@ public final class XashMap<K, V> extends AbstractSet<V> {
 					if (entry == result) break chk;
 
 					prev = entry;
-					entry = builder.GET_NEXT(entry);
+					entry = builder.GetNext(entry);
 				}
 
 				throw new ConcurrentModificationException();
 			}
 
-			Object next = builder.GET_NEXT(entry);
-			builder.SET_NEXT(entry, null);
+			Object next = builder.GetNext(entry);
+			builder.SetNext(entry, null);
 
-			if (prev != null) builder.SET_NEXT(prev, next);
+			if (prev != null) builder.SetNext(prev, next);
 			else entries[i-1] = next;
 
 			size--;
@@ -325,5 +325,5 @@ public final class XashMap<K, V> extends AbstractSet<V> {
 		}
 	}
 
-	final K _valueGetKey(V next) {return builder.GET_KEY(next);}
+	final K _valueGetKey(V next) {return builder.GetKey(next);}
 }

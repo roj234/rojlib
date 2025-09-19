@@ -93,8 +93,8 @@ final class ServerLaunchTcp extends ServerLaunch implements Selectable {
 
 			var ch = new TcpChImpl(sc, rcvBuf) {
 				@Override
-				protected void closeHandler() throws IOException {
-					super.closeHandler();
+				protected void fireClosed() throws IOException {
+					super.fireClosed();
 
 					maxConn.getAndIncrement();
 					SelectionKey key1 = ServerLaunchTcp.this.key;

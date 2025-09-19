@@ -53,7 +53,7 @@ final class ArrayHasher {
 			cw.invokeS("java/util/Arrays", "equals", "("+clz.toDesc()+clz.toDesc()+")Z");
 			cw.insn(IRETURN);
 
-			h = (Hasher<?>) Reflection.createInstance(ArrayHasher.class.getClassLoader(), hasher);
+			h = (Hasher<?>) Reflection.createInstance(ArrayHasher.class, hasher);
 			INSTANCES$L$ARRAY.setVolatile(INSTANCES, OFFSET, h);
 		}
 		return (Hasher<T>) h;

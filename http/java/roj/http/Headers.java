@@ -2,11 +2,10 @@ package roj.http;
 
 import org.jetbrains.annotations.NotNull;
 import roj.collect.ArrayList;
-import roj.collect.HashMap;
 import roj.collect.HashSet;
-import roj.collect.*;
+import roj.collect.Multimap;
+import roj.collect.ToIntMap;
 import roj.io.IOUtil;
-import roj.reflect.Unsafe;
 import roj.text.*;
 import roj.util.*;
 
@@ -157,7 +156,7 @@ public class Headers extends Multimap<CharSequence, String> {
 	public Headers(Map<CharSequence, String> data) {putAll(data);}
 
 	public static boolean parseHeader(Headers map, DynByteBuf buf) {
-		var tmp = new ByteList(ArrayCache.getByteArray(256, false));
+		var tmp = new ByteList(ArrayCache.getIOBuffer());
 		boolean b = parseHeader(map, buf, tmp);
 		tmp.release();
 		return b;
@@ -407,11 +406,10 @@ public class Headers extends Multimap<CharSequence, String> {
 		encType.putInt(name, enc);
 	}
 
-	private static final long MASK = Unsafe.fieldOffset(HashMap.class, "mask");
 	public void _moveFrom(Headers head) {
 		entries = null;
 		if (head.entries != null) {
-			Unsafe.U.putInt(this, MASK, 1);
+			mask = 1;
 			ensureCapacity(head.entries.length);
 			entries = head.entries;
 		}

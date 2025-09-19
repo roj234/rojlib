@@ -31,7 +31,7 @@ class Har implements Unpacker {
 	public TrieTree<?> load(File file) throws IOException {
 		PojoHar har;
 		try {
-			har = ConfigMaster.JSON.readObject(PojoHar.class, file).log;
+			har = ConfigMaster.JSON.readObject(file, PojoHar.class).log;
 		} catch (ParseException e) {
 			throw new IOException("无法解析文件", e);
 		}

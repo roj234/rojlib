@@ -33,25 +33,25 @@ public final class CstNameAndType extends Constant {
 
 	public final String toString() {
 		CharList sb = new CharList().append(super.toString())
-			.append(" 引用[").append((int) name.index).append(",").append((int) desc.index).append("] ");
-		return parseNodeDesc(sb, null, name.str(), desc.str());
+			.append(" 引用[#").append((int) name.index).append(",#").append((int) desc.index).append("] ");
+		return parseNodeDesc(sb, null, name.str(), desc.str()).toStringAndFree();
 	}
-	static String parseNodeDesc(CharList sb, String owner, String name, String type) {
+	static CharList parseNodeDesc(CharList sb, String owner, String name, String type) {
 		if (owner != null) {
 			name = owner.substring(owner.lastIndexOf('/')+1)+'.'+name;
 		}
 
 		if (type.startsWith("(")) {
 			try {
-				return sb.append(TypeHelper.humanize(Type.getMethodTypes(type), name, true)).toString();
+				return sb.append(TypeHelper.humanize(Type.getMethodTypes(type), name, true));
 			} catch (Exception ignored) {}
 		} else {
 			try {
 				Type.getType(type).toString(sb);
-				return sb.append(' ').append(name).toString();
+				return sb.append(' ').append(name);
 			} catch (Exception ignored) {}
 		}
-		return sb.append("[解析失败] ").append(name).append('|').append(type).toString();
+		return sb.append("*解析失败* ").append(name).append('|').append(type);
 	}
 
 	public final int hashCode() {

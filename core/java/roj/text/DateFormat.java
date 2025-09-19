@@ -87,7 +87,7 @@ public final class DateFormat {
 		IntList formats = new IntList();
 		ArrayList<String> formatChars = new ArrayList<>();
 
-		Tokenizer wr = new Tokenizer().literalEnd(BitSet.from("'\" ")).init(format);
+		Tokenizer wr = new Tokenizer().literalEnd(BitSet.from("\" ")).init(format);
 		try {
 			while (wr.hasNext()) {
 				Token w = wr.next();

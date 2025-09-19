@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html>
+<html lang="zh-CN">
 <head>
 	<meta charset="UTF-8">
 	<title>${site} - 系统错误</title>
@@ -8,59 +8,65 @@
 	<link href="/assets/error.css" type="text/css" rel="stylesheet" />
 </head>
 <body>
-	<div class="exception">
-		<div class="message">
-			<div class="info">
-				<h2>${title}</h2>
-				<h1>${desc}</h1>
-			</div>
-		</div>
-		<div class="code"><span>#1</span>${code}</div>
-		<div class="trace">
-			<h2>调用栈</h2>
-			<ol>${trace}</ol>
-		</div>
-		<div class="other">
-			<h2>相关信息</h2>
-			<table>${get}</table>
-			<table>${post}</table>
-			<table>${cookie}</table>
-			<table>${session}</table>
-			${extra}
+<div class="exception">
+	<div class="message">
+		<div class="info">
+			<h2>${title}</h2>
+			<h1>${desc}</h1>
 		</div>
 	</div>
-	<div class="copy">很抱歉影响你的浏览体验，${site}已记录日志并将尽快修复 <a style='float:right;'>&copy; 2019 RojMVC</a></div>
-</body>
+	<div class="code"><span>#1</span>${code}</div>
+	<div class="trace">
+		<h2>调用栈</h2>
+		<ol>${trace}</ol>
+	</div>
+	<div class="other">
+		<h2>相关信息</h2>
+		<table>${get}</table>
+		<table>${post}</table>
+		<table>${cookie}</table>
+		<table>${session}</table>
+		${extra}
+	</div>
+</div>
+<div class="copy">很抱歉影响你的浏览体验，${site}已记录日志并将尽快修复 <a style='float:right;'>&copy; 2019 RojMVC</a></div>
 <script>
-    function $(n) {return document.querySelectorAll(n);}
+	function $(n) {return document.querySelectorAll(n);}
 
-    // 短路径和长路径变换
-    for(const url of $('a[title],abbr[title]')) {
-        url.addEventListener("click", function(e) {
-            this.classList.toggle('active');
-            const x = this.title;
-            this.title = this.innerText;
-            this.innerText = x;
-            e.stopPropagation();
-            e.preventDefault();
-        });
-    }
+	// 点击切换短/长路径显示
+	for (const url of $('a[title],abbr[title]')) {
+		url.addEventListener("click", function(e) {
+			this.classList.toggle('active');
+			const x = this.title;
+			this.title = this.innerText;
+			this.innerText = x;
+			e.stopPropagation();
+			e.preventDefault();
+		});
+	}
 
-    const pre = $('pre');
-    let f = false;
-    for(let li of $(".trace ol li")) {
-        li.addEventListener("click", function() {
-            let id = Array.from(this.parentElement.children).indexOf(this);
-            pre.forEach(e => e.style.display = "none");
-            pre[id].style.display = "initial";
-            $(".code>span")[0].innerHTML = "#"+(id+1);
-        });
+	// 代码段与调用栈联动显示
+	const pre = $('pre');
+	let f = false;
+	for (let li of $(".trace ol li")) {
+		li.addEventListener("click", function() {
+			let id = Array.from(this.parentElement.children).indexOf(this);
+			pre.forEach(e => e.style.display = "none");
+			pre[id].style.display = "initial";
+			$(".code>span")[0].innerHTML = "#" + (id + 1);
 
-        if (!f) {li.click();f = true;}
-    }
+			// 高亮当前条目
+			$(".trace ol li").forEach(x => x.classList.remove("active"));
+			this.classList.add("active");
+		});
 
-    const yr = $(".copy a")[0];
-    yr.innerText = yr.innerText.replace("2019", new Date().getFullYear());
+		if (!f) { li.click(); f = true; }
+	}
+
+	// 年份更新
+	const yr = $(".copy a")[0];
+	yr.innerText = yr.innerText.replace("2019", new Date().getFullYear());
 </script>
 <script src="/assets/prettifier.min.js" onload="prettyPrint()" async></script>
+</body>
 </html>

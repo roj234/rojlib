@@ -26,6 +26,8 @@ public class Handles {
 		}
 	}
 
+	public static boolean isNull(VarHandle vh) {return vh == null;}
+
 	public VarHandle findVarHandle(Class<?> recv, String name, Class<?> type) {
 		try {
 			//ILSecurityManager sm = ILSecurityManager.getSecurityManager();

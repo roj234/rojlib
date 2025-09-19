@@ -14,22 +14,25 @@ import static roj.reflect.Unsafe.U;
  *
  * @see <a href="https://github.com/udoprog/c10t/blob/master/docs/NBT.txt">Online NBT specification</a>
  */
-public final class NbtParser implements BinaryParser {
+public final class NbtParser implements Parser {
 	public static final byte END = 0, BYTE = 1, SHORT = 2, INT = 3, LONG = 4, FLOAT = 5, DOUBLE = 6, BYTE_ARRAY = 7, STRING = 8, LIST = 9, COMPOUND = 10, INT_ARRAY = 11, LONG_ARRAY = 12;
 
-	@Override
-	public void parse(InputStream in, int flag, ValueEmitter emitter) throws IOException {parse((DataInput) (in instanceof DataInput ? in : new DataInputStream(in)), emitter);}
-	public void parse(DynByteBuf buf, int flag, ValueEmitter emitter) throws IOException {parse(buf, emitter);}
+	public static final NbtParser INSTANCE = new NbtParser();
+	private NbtParser() {}
 
-	public static void parse(DataInput in, ValueEmitter cc) throws IOException {
+	@Override
+	public void parse(InputStream in, ValueEmitter emitter) throws IOException {Parse((DataInput) (in instanceof DataInput ? in : new DataInputStream(in)), emitter);}
+	public void parse(DynByteBuf buf, ValueEmitter emitter) throws IOException {Parse(buf, emitter);}
+
+	public static void Parse(DataInput in, ValueEmitter emitter) throws IOException {
 		byte type = in.readByte();
 		if (type == 0) return;
 
 		char n = in.readChar();
 		if (n != 0) throw new IOException("根节点不应该有名称");
 
-		if (cc.supportArray()) parseSA(in, type, cc);
-		else parse(in, type, cc);
+		if (emitter.supportArray()) parseSA(in, type, emitter);
+		else parse(in, type, emitter);
 	}
 
 	private static void parse(DataInput in, byte type, ValueEmitter cc) throws IOException {

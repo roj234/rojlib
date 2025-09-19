@@ -101,7 +101,7 @@ public class ChunkUpload {
 		noCreation: {
 			try {
 				if (lock.isFile()) {
-					task = ConfigMaster.JSON.readObject(Task.class, lock);
+					task = ConfigMaster.JSON.readObject(lock, Task.class);
 					break noCreation;
 				}
 			} catch (Exception e) {

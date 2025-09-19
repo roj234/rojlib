@@ -3,9 +3,9 @@ package roj.http.server.auto;
 import org.jetbrains.annotations.Nullable;
 import roj.asm.ClassNode;
 import roj.asm.MethodNode;
-import roj.asm.annotation.AList;
 import roj.asm.annotation.AnnVal;
 import roj.asm.annotation.Annotation;
+import roj.asm.annotation.ArrayVal;
 import roj.asm.attr.Annotations;
 import roj.asm.attr.Attribute;
 import roj.asm.attr.ParameterAnnotations;
@@ -26,10 +26,10 @@ import roj.collect.HashMap;
 import roj.collect.IntMap;
 import roj.collect.ToIntMap;
 import roj.concurrent.Task;
-import roj.config.BinaryParser;
 import roj.config.JsonParser;
 import roj.config.MsgPackParser;
-import roj.config.mapper.ObjectMapperFactory;
+import roj.config.Parser;
+import roj.config.mapper.ObjectMapper;
 import roj.config.node.ConfigValue;
 import roj.http.Headers;
 import roj.http.HttpUtil;
@@ -191,7 +191,7 @@ public final class OKRouter implements Router {
 				} else {
 					if (prependInterceptors != null) {
 						var self = map.getList("interceptor");
-						if (self.isEmpty()) map.put("interceptor", new AList(prependInterceptors));
+						if (self.isEmpty()) map.put("interceptor", new ArrayVal(prependInterceptors));
 						else self.raw().addAll(0, prependInterceptors);
 					}
 
@@ -290,7 +290,7 @@ public final class OKRouter implements Router {
 				clinit.finish();
 			}
 
-			var inst = (Dispatcher) Reflection.createInstance(type.getClassLoader(), caller);
+			var inst = (Dispatcher) Reflection.createInstance(type, caller);
 			var defaultMime = Annotation.findInvisible(userRoute.cp, userRoute, "roj/http/server/auto/Mime");
 			return new RouterInfo(handlers, interceptors, inst, defaultMime != null ? defaultMime.getString("value") : null);
 		}
@@ -578,7 +578,7 @@ public final class OKRouter implements Router {
 	@IndirectReference
 	public static IllegalRequestException requestDebug(Throwable exc, Request req, String msg) {
 		var isBrowserRequest = Headers.getOneValue(req.get("accept"), "text/html") != null;
-		return new IllegalRequestException(400, /*isBrowserRequest ? */Content.internalError("参数'"+HtmlEntities.escapeHtml(msg)+"'解析失败", exc));
+		return new IllegalRequestException(400, /*isBrowserRequest ? */Content.internalError("参数'"+HtmlEntities.encode(msg)+"'解析失败", exc));
 	}
 	// 解析JSON请求体
 	@IndirectReference
@@ -586,16 +586,16 @@ public final class OKRouter implements Router {
 		ByteList body = req.body();
 		if (body == null) throw new FastFailException("没有请求体");
 
-		var serializer = ObjectMapperFactory.SAFE.serializer(type); serializer.reset();
-		BinaryParser parser;
+		var serializer = ObjectMapper.SAFE.reader(type);
+		Parser parser;
 
 		switch (req.getFirstHeaderValue("content-type")) {
 			default -> {
-				parser = (BinaryParser) req.threadLocal().get("or:parser:json");
+				parser = (Parser) req.threadLocal().get("or:parser:json");
 				if (parser == null) req.threadLocal().put("or:parser:json", parser = new JsonParser());
 			}
 			case "application/x-msgpack"/* Unofficial */, "application/vnd.msgpack" -> {
-				parser = (BinaryParser) req.threadLocal().get("or:parser:msgpack");
+				parser = (Parser) req.threadLocal().get("or:parser:msgpack");
 				if (parser == null) req.threadLocal().put("or:parser:msgpack", parser = new MsgPackParser());
 			}
 			case "application/x-www-form-urlencoded", "multipart/form-data" -> {
@@ -611,7 +611,7 @@ public final class OKRouter implements Router {
 		}
 
 		body.retain();
-		parser.parse(body, 0, serializer);
+		parser.parse(body, serializer);
 		return serializer.get();
 	}
 	//endregion

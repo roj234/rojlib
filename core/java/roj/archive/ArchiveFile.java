@@ -1,5 +1,6 @@
 package roj.archive;
 
+import org.jetbrains.annotations.Nullable;
 import org.jetbrains.annotations.UnmodifiableView;
 
 import java.io.Closeable;
@@ -18,13 +19,19 @@ public interface ArchiveFile extends Closeable {
 	 */
 	void reload() throws IOException;
 
-	ArchiveEntry getEntry(String name);
+	/**
+	 * Looks up an entry by name.
+	 */
+	@Nullable ArchiveEntry getEntry(String name);
+	/**
+	 * Returns an unmodifiable list of all entries in the archive.
+	 */
 	@UnmodifiableView Collection<? extends ArchiveEntry> entries();
 
-	default InputStream getStream(String name) throws IOException {
+	default InputStream getInputStream(String name) throws IOException {
 		var entry = getEntry(name);
-		return entry != null ? getStream(entry) : null;
+		return entry != null ? getInputStream(entry) : null;
 	}
-	default InputStream getStream(ArchiveEntry entry) throws IOException { return getStream(entry, null); }
-	InputStream getStream(ArchiveEntry entry, byte[] pw) throws IOException;
+	default InputStream getInputStream(ArchiveEntry entry) throws IOException { return getInputStream(entry, null); }
+	InputStream getInputStream(ArchiveEntry entry, byte[] password) throws IOException;
 }

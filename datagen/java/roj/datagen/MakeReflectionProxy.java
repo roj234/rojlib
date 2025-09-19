@@ -35,9 +35,6 @@ public class MakeReflectionProxy {
 		try (var fos = new FileOutputStream(new File(output, "roj/reflect/Unsafe$.class"))) {
 			fos.write(makeImpl(false));
 		}
-		try (var fos = new FileOutputStream(new File(output, "roj/reflect/Unsafe$2.class"))) {
-			AsmCache.toByteArrayShared(makeAdapter()).writeToStream(fos);
-		}
 	}
 
 	private static ClassNode generateClassDefiner() {
@@ -145,15 +142,6 @@ public class MakeReflectionProxy {
 		return ILCD;
 	}
 
-	private static ClassNode makeAdapter() {
-		var impl = new ClassNode();
-		impl.name("roj/reflect/Unsafe$");
-		impl.parent("java/lang/ILUnsafe");
-		impl.addInterface("roj/reflect/Unsafe");
-		impl.defaultConstructor();
-		return impl;
-	}
-
 	private static byte[] makeImpl(boolean nativeBE) throws IOException {
 		var impl = new ClassNode();
 		impl.name("java/lang/ILUnsafe");
@@ -163,7 +151,6 @@ public class MakeReflectionProxy {
 
 		System.out.println("Constructor offset: "+Integer.toHexString(10+impl.cp.byteLength()-4+1));
 
-		System.out.println("Runnable Index: "+impl.cp.getClassId("java/lang/Runnable"));
 		System.out.println("Unsafe Index: "+impl.cp.getClassId("roj/reflect/Unsafe"));
 		System.out.println("Object Index: "+impl.cp.getClassId("java/lang/Object"));
 
@@ -259,7 +246,8 @@ public class MakeReflectionProxy {
 				String methodName = method.name();
 				if (methodName.isEmpty()) continue;
 
-				w = impl.newMethod(method.modifier&~ACC_ABSTRACT, method.name(), method.rawDesc());
+				int $ = methodName.lastIndexOf('$');
+				w = impl.newMethod(ACC_PUBLIC|ACC_FINAL, $ < 0 ? methodName : methodName.substring(0, $)+methodName.substring($+1), method.rawDesc());
 				w.field(GETSTATIC, CLASS_NAME, "theInternalUnsafe", unsafeType);
 				int slot = 1;
 				for (Type parameter : method.parameters()) {
@@ -267,8 +255,13 @@ public class MakeReflectionProxy {
 					slot += parameter.length();
 				}
 				w.visitSize(slot, slot);
-				w.invokeV(unsafe, methodName, method.rawDesc());
+				w.invokeV(unsafe, $ < 0 ? methodName : methodName.substring(0, $), method.rawDesc());
 				w.return_(method.returnType());
+
+				if ($ > 0) {
+					System.out.println(w.method.name()+" index: "+(10+impl.cp.byteLength()+3+$));
+					impl.cp.getUtfId(w.method.name());
+				}
 			}
 		}
 
@@ -285,7 +278,7 @@ public class MakeReflectionProxy {
 
 
 		byte[] ref = AsmCache.toByteArray(impl);
-		System.out.println("ThisClass offset: "+Integer.toHexString(10+impl.cp.byteLength()+1));
+		System.out.println("ThisClass offset: "+Integer.toHexString(10+impl.cp.byteLength()+4+1));
 
 		System.out.println("Exact size: "+ref.length);
 		return ref;

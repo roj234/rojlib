@@ -24,8 +24,8 @@ import static roj.text.Token.*;
  * @author Roj234
  * @since 2022/1/6 19:49
  */
-public final class TomlParser extends Parser {
-	private static final int INLINE = 2;
+public final class TomlParser extends TextParser {
+	private static final int INLINE = 4;
 	private static final short eq = 17, dot = 18, dlmb = 19, drmb = 20;
 
 	private static final TrieTree<Token> TOML_TOKENS = new TrieTree<>();
@@ -52,16 +52,18 @@ public final class TomlParser extends Parser {
 		TOML_TOKENS.put("-"+k, Token.numberWord(0, v, k));
 	}
 
-	{ tokens = TOML_TOKENS; literalEnd = TOML_LENDS; }
-
-	public TomlParser() {}
-	public TomlParser(int flag) { super(flag); }
+	public TomlParser() {this(0);}
+	public TomlParser(@MagicConstant(flags = {COMMENT, LENIENT, ORDERED_MAP}) int flags) {
+		super(flags);
+		tokens = TOML_TOKENS;
+		literalEnd = TOML_LENDS;
+	}
 
 	@Override
-	protected ConfigValue element(@MagicConstant(flags = {LENIENT, ORDERED_MAP}) int flags) throws ParseException {
+	protected ConfigValue element() throws ParseException {
 		MapValue map = comment == null ? new MapValue() : new MapValue.Commentable();
 
-		MapValue root = tomlObject(flags);
+		MapValue root = map(flags);
 		if (root.size() > 0) map.put(MapValue.CONFIG_TOPLEVEL, root);
 
 		o:
@@ -72,7 +74,7 @@ public final class TomlParser extends Parser {
 					w = next();
 					if (w.type() != LITERAL && w.type() != STRING) unexpected(w.text(), "键");
 					try {
-						dotName(w.text(), map, flags | INLINE, "]");
+						name(w.text(), map, flags | INLINE, "]");
 					} catch (ParseException e) {
 						throw e.addPath('.' + k);
 					}
@@ -81,7 +83,7 @@ public final class TomlParser extends Parser {
 					w = next();
 					if (w.type() != LITERAL && w.type() != STRING) unexpected(w.text(), "键");
 					try {
-						dotName(w.text(), map, flags, "]]");
+						name(w.text(), map, flags, "]]");
 					} catch (ParseException e) {
 						throw e.addPath('.' + k);
 					}
@@ -99,9 +101,9 @@ public final class TomlParser extends Parser {
 	 * {xxx = yyy, zzz = uuu}
 	 */
 	@SuppressWarnings("fallthrough")
-	private MapValue tomlObject(int flag) throws ParseException {
-		Map<String, ConfigValue> valmap = createMap(flag);
-		MapValue map = (flag & INLINE) != 0 ? new IMap(valmap) : comment == null ? new MapValue(valmap) : new MapValue.Commentable(valmap);
+	private MapValue map(int flags) throws ParseException {
+		Map<String, ConfigValue> valmap = createMap(flags);
+		MapValue map = (flags & INLINE) != 0 ? new IMap(valmap) : comment == null ? new MapValue(valmap) : new MapValue.Commentable(valmap);
 
 		o:
 		while (true) {
@@ -114,7 +116,7 @@ public final class TomlParser extends Parser {
 				case rBrace: break o;
 				case INTEGER: case LITERAL: case STRING: break;
 				default:
-					if ((flag & INLINE) == 0) {
+					if ((flags & INLINE) == 0) {
 						retractWord();
 						break o;
 					}
@@ -122,17 +124,16 @@ public final class TomlParser extends Parser {
 			}
 
 			try {
-				dotName(w.text(), map, flag & ~INLINE, "=");
+				name(w.text(), map, flags & ~INLINE, "=");
 			} catch (ParseException e) {
 				throw e.addPath(k + '.');
 			}
-			if ((flag & (INLINE | LENIENT)) == 0) ensureLineEnd();
+			if ((flags & (INLINE | LENIENT)) == 0) ensureLineEnd();
 		}
 
 		return map;
 	}
-
-	private static Map<String, ConfigValue> createMap(int flag) { return (flag & ORDERED_MAP) != 0 ? new LinkedHashMap<>() : new HashMap<>(); }
+	private static Map<String, ConfigValue> createMap(int flags) { return (flags & ORDERED_MAP) != 0 ? new LinkedHashMap<>() : new HashMap<>(); }
 
 	@SuppressWarnings("fallthrough")
 	public static boolean literalSafe(CharSequence text) {
@@ -256,7 +257,7 @@ public final class TomlParser extends Parser {
 
 	String k;
 
-	private void dotName(String key, MapValue val, int flag, String except) throws ParseException {
+	private void name(String key, MapValue val, int flag, String except) throws ParseException {
 		firstChar = NONE_C2C;
 		Token w;
 		while (true) {
@@ -293,20 +294,20 @@ public final class TomlParser extends Parser {
 		}
 
 		if (except.equals("]]")) {
-			val.getOrCreateList(key).add(tomlObject(flag));
+			val.getOrCreateList(key).add(map(flag));
 		} else {
 			ConfigValue entry;
-			if (((flag & INLINE) != 0)) entry = tomlObject(flag & ~INLINE);
+			if (((flag & INLINE) != 0)) entry = map(flag & ~INLINE);
 			else {
 				w = next();
 				entry = switch (w.type()) {
-					case lBrace -> tomlObject(flag | INLINE);
+					case lBrace -> map(flag | INLINE);
 					case lBracket -> JsonParser.list(this, new IList(), flag);
 					case STRING, LITERAL -> {
 						int i = prevIndex;
 						if (next().type() == eq) {
 							index = i;
-							yield tomlObject(flag);
+							yield map(flag);
 						} else {
 							retractWord();
 							yield ConfigValue.valueOf(w.text());

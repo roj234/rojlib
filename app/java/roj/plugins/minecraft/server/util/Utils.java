@@ -20,7 +20,7 @@ public class Utils {
 	public static byte[] constantize(String path) {
 		try {
 			NbtEncoder ser = new NbtEncoder(IOUtil.getSharedByteBuf());
-			new JsonParser().parse(MinecraftServer.INSTANCE.getResource(path), 0, ser);
+			new JsonParser().parse(MinecraftServer.INSTANCE.getResource(path), ser);
 			return ser.buffer().toByteArray();
 		} catch (Exception e) {
 			return Helpers.athrow2(e);

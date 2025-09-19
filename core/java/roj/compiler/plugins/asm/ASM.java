@@ -9,14 +9,6 @@ import java.util.function.Consumer;
  * @since 2023/9/23 19:21
  */
 public class ASM {
-	public static final int TARGET_JAVA_VERSION;
-	static {
-		// 如果使用Lavac，就不会用到这个了
-		String v = System.getProperty("java.specification.version");
-		if (v.startsWith("1.")) v = v.substring(2);
-		TARGET_JAVA_VERSION = Integer.parseInt(v);
-	}
-
 	/**
 	 * 获取通过编译器参数或插件注入的'属性'，虽然方法签名是泛型，但实际值可以是任意表达式，并且可能和def类型不同
 	 */

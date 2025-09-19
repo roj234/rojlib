@@ -1,9 +1,12 @@
 package roj.archive.zip;
 
-import roj.util.function.ExceptionalSupplier;
+import org.jetbrains.annotations.Nullable;
+import roj.archive.ArchiveUtils;
+import roj.crypt.CRC32;
 import roj.io.IOUtil;
+import roj.util.ArrayCache;
 import roj.util.ByteList;
-import roj.util.Helpers;
+import roj.util.function.ExceptionalSupplier;
 
 import java.io.File;
 import java.io.IOException;
@@ -16,74 +19,98 @@ import java.util.zip.ZipEntry;
  */
 public final class ZipOutput implements AutoCloseable {
 	public final File file;
-	private ZipArchive some;
-	private ZipFileWriter all;
-	private boolean useZFW, compress, work;
+	private ZipArchive archive;
+	private ZipFileWriter writer;
+	private boolean incremental, compress = true, isOpen, checkCRC;
 
-	public ZipOutput(File file) {
-		this.file = file;
-	}
+	public ZipOutput(File file) {this.file = file;}
 
 	public boolean isCompress() { return compress; }
 	public void setCompress(boolean compress) { this.compress = compress; }
 
-	public boolean isOverwrite() {return useZFW;}
-	public ZipFileWriter getWriter() {return all;}
+	public void setCheckCRC(boolean checkCRC) {this.checkCRC = checkCRC;}
+
+	public boolean isOverwrite() {return !incremental;}
+	public ZipFileWriter getWriter() {return writer;}
 
 	public void begin(boolean incremental) throws IOException {
-		if (work) end();
+		if (isOpen) end();
 
-		useZFW = !incremental;
+		this.incremental = incremental;
 		if (incremental) {
-			if (some == null) {
-				some = new ZipArchive(file);
+			if (archive == null) {
+				archive = new ZipArchive(file);
 			} else {
-				some.reopen();
+				archive.reopen();
 			}
 		} else {
-			all = new ZipFileWriter(file);
-			if (some != null) {
-				some.close();
-				some = null;
+			writer = new ZipFileWriter(file);
+			if (archive != null) {
+				archive.close();
+				archive = null;
 			}
 		}
-		work = true;
+		isOpen = true;
 	}
 
 	public void setComment(String comment) {
-		if (useZFW) all.setComment(comment);
-		else some.setComment(comment);
+		if (!incremental) writer.setComment(comment);
+		else archive.setComment(comment);
 	}
 
-	public void set(String name, ByteList data) throws IOException {
-		if (useZFW) {
-			if (data != null) all.writeNamed(name, data, compress ? ZipEntry.DEFLATED : ZipEntry.STORED);
-		}
-		else some.put(name, data).flag |= compress && data != null && data.readableBytes() > 64 ? EntryMod.COMPRESS : 0;
-	}
+	private boolean shouldCompress(String name) {return compress && !ArchiveUtils.INCOMPRESSIBLE_FILE_EXT.contains(IOUtil.extensionName(name));}
 
-	public void set(String name, ExceptionalSupplier<ByteList, IOException> data) throws IOException {
-		if (useZFW) {
-			all.writeNamed(name, data.get(), compress ? ZipEntry.DEFLATED : ZipEntry.STORED);
+	public void set(String name, @Nullable ByteList data) throws IOException {
+		if (data == null && (incremental || archive.getEntry(name) == null)) return;
+
+		if (incremental) {
+			noMatch:
+			if (data != null && checkCRC) {
+				ZEntry entry = archive.getEntry(name);
+				if (entry != null && entry.getCrc32() == CRC32.crc32(data)) {
+					var arr = ArrayCache.getIOBuffer();
+					int offset = data.rIndex;
+					try (var in = archive.getInputStream(name)) {
+						while (true) {
+							int r = in.read(arr);
+							if (r < 0) {
+								if (offset == data.wIndex()) return;
+								break noMatch;
+							}
+							for (int i = 0; i < r; i++) {
+								if (data.getByte(offset++) != arr[i])
+									break noMatch;
+							}
+						}
+					}
+				}
+			}
+
+			EntryMod mod = archive.put(name, data);
+			mod.flag = shouldCompress(name) ? EntryMod.COMPRESS : 0;
 		} else {
-			some.put(name, data, compress);
+			writer.writeNamed(name, data, shouldCompress(name) ? ZipEntry.DEFLATED : ZipEntry.STORED);
 		}
 	}
 
+	public void set(String name, ExceptionalSupplier<ByteList, IOException> data) throws IOException {set(name, data, System.currentTimeMillis());}
 	public void set(String name, ExceptionalSupplier<ByteList, IOException> data, long modTime) throws IOException {
-		if (useZFW) {
-			all.writeNamed(name, data.get(), compress ? ZipEntry.DEFLATED : ZipEntry.STORED, modTime);
+		if (incremental) {
+			EntryMod mod = archive.put(name, data, shouldCompress(name));
+			mod.modificationTime = modTime;
 		} else {
-			some.put(name, data, compress).entry.setModificationTime(modTime);
+			writer.writeNamed(name, data.get(), shouldCompress(name) ? ZipEntry.DEFLATED : ZipEntry.STORED, modTime);
 		}
 	}
 
 	public void setStream(String name, ExceptionalSupplier<InputStream, IOException> data, long modTime) throws IOException {
-		if (useZFW) {
-			ZEntry ze = new ZEntry(name);
-			ze.setMethod(compress ? ZipEntry.DEFLATED : ZipEntry.STORED);
-			ze.setModificationTime(modTime);
-			all.beginEntry(ze);
+		if (incremental) {
+			archive.putStream(name, data, compress);
+		} else {
+			ZEntry entry = new ZEntry(name);
+			entry.setMethod(shouldCompress(name) ? ZipEntry.DEFLATED : ZipEntry.STORED);
+			entry.setModificationTime(modTime);
+			writer.beginEntry(entry);
 
 			byte[] b = IOUtil.getSharedByteBuf().list;
 			int r;
@@ -91,49 +118,46 @@ public final class ZipOutput implements AutoCloseable {
 				do {
 					r = in.read(b);
 					if (r < 0) break;
-					all.write(b, 0, r);
+					writer.write(b, 0, r);
 				} while (r == b.length);
 			} finally {
-				all.closeEntry();
+				writer.closeEntry();
 			}
-		} else {
-			some.putStream(name, data, compress);
 		}
 	}
 
 	public void end() throws IOException {
-		Exception e3 = null;
+		isOpen = false;
 		try {
-			if (useZFW) {
-				if (all != null) {
-					all.close();
-					all = null;
+			if (incremental) {
+				if (archive != null) {
+					archive.save();
+					archive.close();
 				}
-			} else if (some != null) {
-				some.save();
-				some.close();
+			} else {
+				if (writer != null) {
+					writer.close();
+					writer = null;
+				}
 			}
-		} catch (Exception e) {
-			e3 = e;
-			IOUtil.closeSilently(some);
-			IOUtil.closeSilently(all);
+		} finally {
+			IOUtil.closeSilently(archive);
+			IOUtil.closeSilently(writer);
 		}
-		work = false;
-		if (e3 != null) Helpers.athrow(e3);
 	}
 
 	public ZipArchive getArchive() throws IOException {
-		if (some == null) return new ZipArchive(file);
+		if (archive == null) return archive = new ZipArchive(file);
 
-		some.reopen();
-		return some;
+		archive.reopen();
+		return archive;
 	}
 
 	public void close() throws IOException {
 		end();
-		if (some != null) {
-			some.close();
-			some = null;
+		if (archive != null) {
+			archive.close();
+			archive = null;
 		}
 	}
 }

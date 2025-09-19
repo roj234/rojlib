@@ -10,11 +10,9 @@ import roj.concurrent.TaskPool;
 import roj.crypt.CryptoFactory;
 import roj.gui.Profiler;
 import roj.io.IOUtil;
-import roj.plugins.obfuscator.naming.ABC;
 import roj.plugins.obfuscator.naming.Deobfuscate;
 import roj.plugins.obfuscator.naming.NameObfuscator;
 import roj.plugins.obfuscator.naming.RenameExclusion;
-import roj.collect.FlagSet;
 
 import java.io.File;
 import java.io.IOException;
@@ -104,7 +102,7 @@ public class ObfuscatorNext {
 	}
 
 	public void obfuscate(List<Context> ctxs) {
-		var pool = TaskPool.common();
+		var pool = TaskPool.cpu();
 		var rand = CryptoFactory.WyRandom();
 
 		List<List<Context>> contextTasks = new ArrayList<>((ctxs.size()-1)/ASYNC_THRESHOLD + 1);

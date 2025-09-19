@@ -14,6 +14,7 @@ import roj.asmx.launcher.Autoload;
 import roj.asmx.launcher.Tweaker;
 import roj.ci.annotation.IndirectReference;
 import roj.collect.ArrayList;
+import roj.collect.BitSet;
 import roj.io.IOUtil;
 import roj.reflect.Reflection;
 import roj.reflect.Unsafe;
@@ -283,6 +284,11 @@ public class VarHandleRewriter implements ConstantPoolHooks.Hook<ClassNode> {
 		}
 
 		var transformer = new CodeWriter() {
+			final BitSet varHandleSlot = new BitSet();
+
+			public void setVarHandleSlot(int offset) {varHandleSlot.add(offset);}
+			public void reset() {varHandleSlot.clear();}
+
 			static final String[] POSTFIX = {"Volatile", "Acquire", "Release", "Plain", "Opaque"};
 			static final Type ERASER = Type.klass("java/lang/Object");
 
@@ -296,6 +302,7 @@ public class VarHandleRewriter implements ConstantPoolHooks.Hook<ClassNode> {
 				}
 				// INSTANCE INSTANCE FIELD
 				if (name.endsWith(STATIC_SUFFIX) && type.equals("J")) {
+					computeFrames(FrameVisitor.COMPUTE_SIZES);
 					switch (code) {
 						case PUTFIELD -> {
 							super.insn(DUP2);
@@ -342,7 +349,24 @@ public class VarHandleRewriter implements ConstantPoolHooks.Hook<ClassNode> {
 			}
 
 			@Override
+			public void insn(byte code) {
+				if (!decompressVar(code))
+					super.insn(code);
+			}
+
+			@Override
+			public void vars(byte code, int value) {
+				if (code == ALOAD && varHandleSlot.contains(value)) {
+					computeFrames(FrameVisitor.COMPUTE_SIZES);
+					code = LLOAD;
+				}
+				super.vars(code, value);
+			}
+
+			@Override
 			public void invoke(byte code, String owner, String name, String desc, boolean isInterfaceMethod) {
+				if (desc.contains("Ljava/lang/invoke/VarHandle;")) computeFrames(FrameVisitor.COMPUTE_FRAMES | FrameVisitor.COMPUTE_SIZES);
+
 				if (desc.equals("(Ljava/lang/Class;Ljava/lang/String;Ljava/lang/Class;)Ljava/lang/invoke/VarHandle;")) {
 					if (name.equals("findVarHandle")) {
 						super.invoke(INVOKESTATIC, "roj/util/optimizer/VarHandleRewriter", "instanceField", "(Ljava/lang/Object;Ljava/lang/Class;Ljava/lang/String;Ljava/lang/Class;)J", false);
@@ -421,12 +445,33 @@ public class VarHandleRewriter implements ConstantPoolHooks.Hook<ClassNode> {
 						super.clazz(Opcodes.CHECKCAST, returnType);
 					return;
 				}
+
+				if (desc.contains("Ljava/lang/invoke/VarHandle;I)")) {
+					desc = desc.replace("Ljava/lang/invoke/VarHandle;I", "J");
+					super.insn(POP);
+				} else {
+					desc = desc.replace("Ljava/lang/invoke/VarHandle;", "J");
+				}
 				super.invoke(code, owner, name, desc, isInterfaceMethod);
 			}
 		};
 
 		for (MethodNode method : context.methods) {
 			LOGGER.trace("正在转换方法 {}", method.name());
+			int offset = (method.modifier&ACC_STATIC) == 0 ? 1 : 0;
+			transformer.reset();
+			List<Type> parameters = method.parameters();
+			for (int i = 0; i < parameters.size(); i++) {
+				Type parameter = parameters.get(i);
+				if ("java/lang/invoke/VarHandle".equals(parameter.owner)) {
+					parameter = Type.LONG_TYPE;
+					parameters.set(i, parameter);
+					if (i != parameters.size()-1)
+						parameters.remove(i+1);
+					transformer.setVarHandleSlot(offset);
+				}
+				offset += parameter.length();
+			}
 			method.transform(context.cp, new ByteList(), transformer);
 		}
 

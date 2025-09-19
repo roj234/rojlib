@@ -8,7 +8,7 @@ import roj.collect.ArrayList;
 import roj.collect.TrieTreeSet;
 import roj.collect.XashMap;
 import roj.config.ConfigMaster;
-import roj.config.mapper.ObjectMapperFactory;
+import roj.config.mapper.ObjectMapper;
 import roj.config.node.MapValue;
 import roj.io.CorruptedInputException;
 import roj.io.IOUtil;
@@ -63,22 +63,22 @@ public class PluginManager {
 			}
 		}
 
-		for (var itr = plugins.iterator(); itr.hasNext(); ) {
-			var pd = itr.next();
-			if (!pd.library) try {
-				loadPlugin(pd);
-			} catch (Throwable e) {
-				LOGGER.error("插件{}加载失败", e, pd);
-				itr.remove();
-				unloadPlugin(pd);
+		for (PluginDescriptor pd : plugins) {
+			if (!pd.library) {
+				try {
+					loadPlugin(pd);
+				} catch (Throwable e) {
+					LOGGER.error("插件{}加载失败", e, pd);
+				}
 			}
 		}
 
 		for (var itr = plugins.iterator(); itr.hasNext(); ) {
 			var pd = itr.next();
-			if (pd.library && pd.state < LOADED) {
+			if (pd.state < LOADED) {
 				itr.remove();
-				LOGGER.debug("插件{}已识别,但是由于没有插件依赖它,未加载", pd);
+				if (pd.library && pd.state == UNLOAD)
+					LOGGER.debug("插件{}已识别,但是由于没有插件依赖它,未加载", pd);
 				continue;
 			}
 
@@ -87,7 +87,7 @@ public class PluginManager {
 			} catch (Throwable e) {
 				LOGGER.error("插件{}启用失败", e, pd);
 				itr.remove();
-				unloadPlugin(pd);
+				unloadPluginTrusted(pd);
 			}
 		}
 	}
@@ -147,16 +147,13 @@ public class PluginManager {
 				klass = PluginManager.class.getClassLoader().loadClass(pd.mainClass);
 			}
 		} catch (ClassNotFoundException|NoClassDefFoundError|IOException e) {
-			synchronized (pd.stateLock) {
-				pd.state = LOADED;
-				unloadPluginTrusted(pd);
-				pd.state = ERRORED;
-			}
+			unloadPluginTrusted(pd);
+			pd.state = ERRORED;
 			throw new FastFailException("无法初始化插件主类"+pd.mainClass, e);
 		}
 
-		var fn = ObjectMapperFactory.containerFactory(klass);
 		try {
+			var fn = ObjectMapper.containerFactory(klass);
 			if (fn == null) {
 				throw new FastFailException("在插件主类"+pd.mainClass+"中找不到无参构造器");
 			} else {
@@ -175,11 +172,8 @@ public class PluginManager {
 				if (pd.role != null) rolePlugins.putIfAbsent(pd.role, pd);
 			}
 		} catch (Exception e) {
-			synchronized (pd.stateLock) {
-				pd.state = LOADED;
-				unloadPluginTrusted(pd);
-				pd.state = ERRORED;
-			}
+			unloadPluginTrusted(pd);
+			pd.state = ERRORED;
 			throw e;
 		}
 	}
@@ -222,7 +216,7 @@ public class PluginManager {
 	private static final Pattern PLUGIN_ID = Pattern.compile("^[a-zA-Z_][a-zA-Z0-9\\-_.]*$");
 	private PluginDescriptor getMetadata(File plugin) throws IOException {
 		try (ZipFile za = new ZipFile(plugin)) {
-			InputStream in = za.getStream("plugin.yml");
+			InputStream in = za.getInputStream("plugin.yml");
 			if (in == null) return null;
 
 			MapValue config = ConfigMaster.YAML.parse(in).asMap();
@@ -309,11 +303,10 @@ public class PluginManager {
 			if (pd.state == ENABLED) return;
 
 			LOGGER.debug("正在启用插件 {}", pd);
+			pd.state = ENABLED;
 			try {
 				pd.instance.onEnable();
-				pd.state = ENABLED;
 			} catch (Throwable e) {
-				pd.state = ENABLED;
 				unloadPluginTrusted(pd);
 				pd.state = ERRORED;
 				throw e;
@@ -323,14 +316,16 @@ public class PluginManager {
 	public void disablePlugin(PluginDescriptor pd) {
 		synchronized (pd.stateLock) {
 			if (pd.state == UNLOAD) return;
-			try {
-				if (pd.state == ENABLED && pd.instance != null) pd.instance.onDisable();
-				pd.state = DISABLED;
-			} catch (Throwable e) {
-				LOGGER.error("无法禁用插件 {}",e,pd);
-			} finally {
-				Plugin instance = pd.instance;
-				if (instance != null) instance.postDisable();
+			Plugin instance = pd.instance;
+			if (pd.state != DISABLED && instance != null) {
+				try {
+					instance.onDisable();
+				} catch (Throwable e) {
+					LOGGER.error("无法禁用插件 {}",e,pd);
+				} finally {
+					pd.state = DISABLED;
+					instance.postDisable();
+				}
 			}
 		}
 	}

@@ -1,6 +1,9 @@
 package roj.asm.cp;
 
+import roj.asm.type.Type;
 import roj.util.DynByteBuf;
+
+import static roj.asm.type.Type.*;
 
 /**
  * @author Roj234
@@ -27,13 +30,19 @@ public abstract sealed class Constant implements Cloneable permits CstDouble, Cs
 		MODULE = 19,
 		PACKAGE = 20;
 
-	private static final String[] indexes = {
-		"UTF", null, "int", "float", "long", "double", "类", "String",
-		"字段", "方法", "接口", "DESC", null, null,
-		"METHOD_HANDLE", "METHOD_TYPE", "DYNAMIC", "INVOKE_DYNAMIC",
+	private static final String[] NAMES = {
+		"字符串", null, "int", "float", "long", "double", "Class", "String",
+		"字段", "方法", "接口", "名称和参数", null, null,
+		"MethodHandle", "MethodType", "动态常量", "动态方法",
 		"模块", "包"
 	};
-	public static String toString(int id) { return id < 1 || id > 20 ? null : indexes[id-1]; }
+	static final Type[] TYPES = {
+			null, null, INT_TYPE, FLOAT_TYPE, LONG_TYPE, DOUBLE_TYPE, klass("java/lang/Class"), klass("java/lang/String"),
+			null, null, null, null, klass("java/lang/invoke/MethodHandle"), klass("java/lang/invoke/MethodType"),
+			null, null, null, null
+	};
+
+	public static String toString(int id) { return id < 1 || id > 20 ? null : NAMES[id-1]; }
 
 	char index;
 
@@ -42,7 +51,13 @@ public abstract sealed class Constant implements Cloneable permits CstDouble, Cs
 	public abstract byte type();
 	abstract void write(DynByteBuf w);
 
-	public String toString() {return toString(type()) + "#" + (int) index;}
+	public Type resolvedType() {
+		Type type = TYPES[type()];
+		if (type == null) throw new IllegalArgumentException("Constant "+this+" is not loadable");
+		return type;
+	}
+
+	public String toString() {return toString(type())+"#"+(int) index;}
 	public String getEasyCompareValue() {throw new UnsupportedOperationException();}
 
 	public abstract boolean equals(Object o);
@@ -52,7 +67,7 @@ public abstract sealed class Constant implements Cloneable permits CstDouble, Cs
 	public Constant clone() {
 		try {
 			return (Constant) super.clone();
-		} catch (CloneNotSupportedException unable) {}
+		} catch (CloneNotSupportedException ignored) {}
 		return null;
 	}
 }

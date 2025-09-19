@@ -54,7 +54,7 @@ public final class JCompiler implements Compiler, DiagnosticListener<JavaFileObj
 
 	@Override
 	public void modifyOptions(List<String> options, Project project) {
-		if ("true".equals(project.conf.variables.get("javac:use_module"))) {
+		if ("true".equals(project.variables.get("javac:use_module"))) {
 			options.add("--module-path");
 			options.add(options.get(options.indexOf("-cp")+1));
 		}
@@ -123,7 +123,7 @@ public final class JCompiler implements Compiler, DiagnosticListener<JavaFileObj
 			return false;
 		}, listId, nameId);
 
-		return Helpers.cast(Reflection.createInstance(JCompiler.class.getClassLoader(), data));
+		return Helpers.cast(Reflection.createInstance(JCompiler.class, data));
 	}
 	@IndirectReference
 	public static JavaFileObject proxyGetOutput(StandardJavaFileManager delegation,
@@ -200,22 +200,18 @@ public final class JCompiler implements Compiler, DiagnosticListener<JavaFileObj
 		return "";
 	}
 
-	/**
-	 * @author solo6975
-	 * @since 2021/10/2 14:00
-	 */
 	private static final class MyJFO extends SimpleJavaFileObject implements ClassResource {
 		private final String name;
-		private final ByteList output;
+		private final ByteList data;
 
 		MyJFO(String className, String basePath) throws URISyntaxException {
 			super(new URI("file://"+ URICoder.encodeURIComponent(basePath)+className.replace('.', '/')+".class"), Kind.CLASS);
-			this.output = new ByteList();
+			this.data = new ByteList();
 			this.name = className.replace('.', '/')+".class";
 		}
 
-		@Override public OutputStream openOutputStream() {return output;}
+		@Override public OutputStream openOutputStream() {return data;}
 		@Override public String getFileName() {return name;}
-		@Override public ByteList getClassBytes() {return output;}
+		@Override public ByteList getClassBytes() {return data;}
 	}
 }

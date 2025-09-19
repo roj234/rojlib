@@ -5,6 +5,7 @@ import roj.archive.zip.ZipFileWriter;
 import roj.asm.MemberDescriptor;
 import roj.asmx.Context;
 import roj.asmx.mapper.Mapper;
+import roj.ci.BuildContext;
 import roj.ci.MCMake;
 import roj.ci.Project;
 import roj.ci.Workspace;
@@ -46,7 +47,7 @@ public class MAP implements Processor {
 
 	@Subscribe
 	public void onLibraryChange(LibraryModifiedEvent event) {
-		MCMake._lock();
+		MCMake._lock(false);
 		var owner = event.getOwner();
 		if (owner == null) {
 			for (var project : MCMake.projects.values()) {
@@ -114,6 +115,32 @@ public class MAP implements Processor {
 				LOGGER.info("已处理{}", in);
 			}
 		});
+
+		var mapName = argument("搜索词", Argument.string()).executes(ctx -> {
+			var word = Pattern.compile(ctx.argument("搜索词", String.class));
+
+			var workspace = ctx.argument("工作空间", Workspace.class);
+			if (workspace == null && defaultProject != null) workspace = defaultProject.workspace;
+			if (workspace == null || workspace.mapping == null) {
+				Tty.error("这个项目没有映射器");
+				return;
+			}
+
+			Mapper m = workspace.getMapper();
+			for (Map.Entry<MemberDescriptor, String> entry : m.getMethodMap().entrySet()) {
+				MemberDescriptor key = entry.getKey();
+				if (word.matcher(key.owner+"."+key.name+key.rawDesc).find()) {
+					System.out.println(key.owner+" "+key.name+key.rawDesc+" # "+entry.getValue());
+				}
+			}
+			for (Map.Entry<MemberDescriptor, String> entry : m.getFieldMap().entrySet()) {
+				MemberDescriptor key = entry.getKey();
+				if (word.matcher(key.owner+"."+key.name).find()) {
+					System.out.println(key.owner+" "+key.name+" # "+entry.getValue());
+				}
+			}
+		});
+
 		COMMANDS.register(literal("map")
 				.then(literal("create").executes(ctx -> {
 					JFrame frame = new MappingUI();
@@ -128,37 +155,13 @@ public class MAP implements Processor {
 					Mapper.LOGGER.setLevel(Level.ALL);
 					defaultProject.mapper.debugRelative(s.substring(0, i).replace('.', '/'), s.substring(i+1));
 				})))
-				.then(argument("工作空间", Argument.oneOf(workspaces)).then(finishNode))
-				.then(finishNode)
+				.then(argument("工作空间", Argument.oneOf(workspaces)).then(finishNode).then(mapName))
+				.then(finishNode).then(mapName)
 		);
 		COMMANDS.register(literal("unmap")
 				.then(argument("工作空间", Argument.oneOf(workspaces)).then(finishNode))
 				.then(finishNode)
 		);
-
-		var mapName = argument("搜索词", Argument.string()).executes(ctx -> {
-			var word = Pattern.compile(ctx.argument("搜索词", String.class));
-
-			var workspace = ctx.argument("工作空间", Workspace.class);
-			if (workspace == null && defaultProject != null) workspace = defaultProject.workspace;
-			if (workspace == null || workspace.mapping == null) {
-				Tty.error("这个项目没有映射器");
-				return;
-			}
-
-			Mapper m = workspace.getMapper();
-			for (Map.Entry<MemberDescriptor, String> entry : m.getMethodMap().entrySet()) {
-				if (word.matcher(entry.getKey().owner+"."+entry.getKey().name+entry.getKey().rawDesc).find()) {
-					System.out.println(entry.getKey()+" => "+entry.getValue());
-				}
-			}
-			for (Map.Entry<MemberDescriptor, String> entry : m.getFieldMap().entrySet()) {
-				if (word.matcher(entry.getKey().owner+"."+entry.getKey().name).find()) {
-					System.out.println(entry.getKey()+" => "+entry.getValue());
-				}
-			}
-		});
-		COMMANDS.register(literal("mapname").then(argument("工作空间", Argument.oneOf(workspaces)).then(mapName)).then(mapName));
 	}
 
 	@Override public String name() {return "映射";}
@@ -222,7 +225,7 @@ public class MAP implements Processor {
 			m.flag = (byte) flag;
 
 			String entryId = TextUtil.bytes2hex(hash);
-			var in = mzf.getStream(entryId);
+			var in = mzf.getInputStream(entryId);
 			if (in != null) {
 				try {
 					m.loadCache(in, true);

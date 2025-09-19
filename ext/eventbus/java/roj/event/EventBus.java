@@ -1,7 +1,6 @@
 package roj.event;
 
 import org.jetbrains.annotations.NotNull;
-import roj.Unused;
 import roj.asm.ClassNode;
 import roj.asm.Member;
 import roj.asm.Opcodes;
@@ -12,6 +11,7 @@ import roj.asmx.AnnotatedElement;
 import roj.asmx.AnnotationRepo;
 import roj.collect.ArrayList;
 import roj.collect.XashMap;
+import roj.debug.DebugTool;
 import roj.text.logging.Logger;
 
 import java.util.List;
@@ -296,6 +296,6 @@ public class EventBus {
 		}
 
 		log.error("事件的详细信息:");
-		log.error(Unused.deepToString(event));
+		log.error(DebugTool.inspect(event));
 	}
 }

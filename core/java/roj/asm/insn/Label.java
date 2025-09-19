@@ -9,6 +9,8 @@ import java.util.Arrays;
  * @since 2022/11/17 12:53
  */
 public class Label implements Comparable<Label> {
+	static final Label ZERO = atZero();
+
 	short block;
 	char offset;
 	char value;

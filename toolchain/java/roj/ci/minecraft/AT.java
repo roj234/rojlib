@@ -9,9 +9,9 @@ import roj.asm.ClassNode;
 import roj.asm.MemberDescriptor;
 import roj.asmx.TransformUtil;
 import roj.asmx.mapper.Mapper;
+import roj.ci.BuildContext;
 import roj.ci.Project;
 import roj.ci.event.ProjectUpdateEvent;
-import roj.ci.plugin.BuildContext;
 import roj.ci.plugin.Processor;
 import roj.collect.ArrayList;
 import roj.collect.HashMap;
@@ -128,7 +128,7 @@ public class AT implements Processor {
 			}
 
 			try (var za = new ZipArchive(atJar)) {
-				InputStream in = za.getStream(".desc");
+				InputStream in = za.getInputStream(".desc");
 				if (in != null && IOUtil.getSharedByteBuf().readStreamFully(in).readInt() == atList.hashCode()) {
 					break ok;
 				}
@@ -206,7 +206,7 @@ public class AT implements Processor {
 			if (zf == null && !open()) return null;
 			ZEntry entry = zf.getEntry(name);
 			if (entry != null) {
-				if (open()) return zf.getStream(entry);
+				if (open()) return zf.getInputStream(entry);
 			}
 			return null;
 		}

@@ -1,0 +1,128 @@
+package roj.config;
+
+import org.jetbrains.annotations.ApiStatus;
+import roj.collect.HashMap;
+import roj.collect.LinkedHashMap;
+import roj.config.node.ConfigValue;
+import roj.io.IOUtil;
+import roj.text.CharList;
+import roj.text.ParseException;
+import roj.text.TextReader;
+import roj.text.Tokenizer;
+import roj.util.DynByteBuf;
+
+import java.io.File;
+import java.io.IOException;
+import java.io.InputStream;
+import java.nio.charset.Charset;
+import java.util.Map;
+
+/**
+ * @author Roj233
+ * @since 2022/5/17 2:25
+ */
+public abstract class TextParser extends Tokenizer implements Parser {
+	public static final boolean ALWAYS_ESCAPE = Boolean.getBoolean("roj.config.noRawCheck");
+
+	/**
+	 * 解析注释<b>初始化Flag</b> <br>
+	 * 适用于: JSON YAML CCJSON CCYAML TOML
+	 */
+	public static final int COMMENT = 1;
+
+	/**
+	 * 弱化部分解析限制 <br>
+	 * 适用于: YAML CCYAML TOML XML
+	 */
+	public static final int LENIENT = 2;
+	/**
+	 * 检测并拒绝CMap中重复的key <br>
+	 * 适用于: JSON YAML INI
+	 */
+	public static final int NO_DUPLICATE_KEY = 4;
+	/**
+	 * 使用{@link LinkedHashMap}充当CMap中的map来保留配置文件key的顺序 <br>
+	 * 适用于: JSON YAML TOML INI
+	 */
+	public static final int ORDERED_MAP = 8;
+
+	protected TextParser(int flags) {
+		if ((flags & COMMENT) != 0) comment = new CharList();
+		this.flags = flags;
+	}
+
+	public ConfigValue parse(CharSequence text) throws ParseException {
+		init(text);
+		try {
+			return element();
+		} catch (ParseException e) {
+			throw e.addPath("$");
+		} finally {
+			init(null);
+		}
+	}
+	protected ConfigValue element() throws ParseException { throw new UnsupportedOperationException(); }
+
+	// null for auto detect
+	public Charset charset = null;
+	public final TextParser charset(Charset cs) { charset = cs; return this; }
+
+	public final ConfigValue parse(File file) throws IOException, ParseException {
+		try (TextReader in = new TextReader(file, charset)) {
+			return parse(in);
+		} catch (ParseException e) {
+			throw wrapWithFullText(file, e);
+		}
+	}
+	public final void parse(File file, ValueEmitter emitter) throws IOException, ParseException {
+		try (var text = new TextReader(file, charset)) {
+			parse(text, emitter);
+		} catch (ParseException e) {
+			throw wrapWithFullText(file, e);
+		}
+	}
+	public final ConfigValue parse(DynByteBuf buf) throws IOException, ParseException {
+		try (var text = new TextReader(buf, charset)) {
+			return parse(text);
+		}
+	}
+	public final ConfigValue parse(InputStream in) throws IOException, ParseException {
+		try (var text = new TextReader(in, charset)) {
+			return parse(text);
+		}
+	}
+	public final void parse(InputStream in, ValueEmitter emitter) throws IOException, ParseException {
+		try (var text = new TextReader(in, charset)) {
+			parse(text, emitter);
+		}
+	}
+
+	public void parse(CharSequence text, ValueEmitter emitter) throws ParseException {parse(text).accept(emitter);}
+
+	private static ParseException wrapWithFullText(File file, ParseException e) throws ParseException, IOException {
+		if (file.length() > 1048576) throw e;
+
+		var ex = new ParseException(IOUtil.readString(file), e.getMessage(), e.getIndex(), e.getCause());
+		ex.addPath(e.getPath());
+		ex.setStackTrace(e.getStackTrace());
+		return ex;
+	}
+
+	protected int flags;
+	@ApiStatus.Internal
+	public final Map<String, String> getComment(Map<String, String> map, String v) {
+		if (comment == null || comment.length() == 0) return map;
+		if (map == null) map = new HashMap<>();
+		map.put(v, comment.toString());
+		comment.clear();
+		return map;
+	}
+	@ApiStatus.Internal
+	public final void clearComment() {
+		if (comment == null) return;
+		comment.clear();
+	}
+
+	@Override
+	public final int flags() {return flags;}
+}

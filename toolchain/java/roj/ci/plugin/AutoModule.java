@@ -9,6 +9,7 @@ import roj.asm.attr.ClassListAttribute;
 import roj.asm.attr.ModuleAttribute;
 import roj.asm.attr.StringAttribute;
 import roj.asmx.Context;
+import roj.ci.BuildContext;
 import roj.ci.MCMake;
 import roj.collect.ArrayList;
 import roj.collect.HashSet;
@@ -107,7 +108,7 @@ public class AutoModule implements Processor {
 			moduleInfo.modifier = Opcodes.ACC_MODULE;
 
 			var moduleAttr = new ModuleAttribute(moduleName, 0);
-			moduleAttr.self.version = ctx.project.variables.get("version");
+			moduleAttr.self.version = ctx.project.variables.get("project_version");
 
 			moduleAttr.requires.add(new ModuleAttribute.Module("java.base", Opcodes.ACC_MANDATED));
 			var importModules = TextUtil.split(ctx.project.getVariables().getOrDefault("fmd:auto_module:import", ""), ' ');

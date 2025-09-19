@@ -18,11 +18,11 @@ public class LimitInputStream extends FilterInputStream {
 	public LimitInputStream(InputStream in, long length, boolean dispatchClose) {
 		super(in);
 		remain = length;
-		close = dispatchClose;
+		this.dispatchClose = dispatchClose;
 	}
 
 	public long remain;
-	private boolean close;
+	public boolean dispatchClose;
 
 	@Override
 	public int read() throws IOException {
@@ -69,8 +69,10 @@ public class LimitInputStream extends FilterInputStream {
 		return n;
 	}
 
+	public InputStream unwrap() {return in;}
+
 	@Override
 	public void close() throws IOException {
-		if (close) in.close();
+		if (dispatchClose) in.close();
 	}
 }

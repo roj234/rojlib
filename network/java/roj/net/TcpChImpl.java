@@ -1,10 +1,7 @@
 package roj.net;
 
-import roj.ci.annotation.Public;
 import roj.io.BufferPool;
-import roj.reflect.Bypass;
 import roj.util.DynByteBuf;
-import roj.util.JVM;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
@@ -22,18 +19,10 @@ import static roj.util.ByteList.EMPTY;
  * @since 2022/5/18 0:00
  */
 class TcpChImpl extends MyChannel {
-	private static volatile H TcpUtil;
-	@Public
-	private interface H {
-		default boolean isInputOpen(SocketChannel sc) { return !isInputClosed(sc); }
-		boolean isInputClosed(SocketChannel sc);
-		default boolean isOutputOpen(SocketChannel sc) { return !isOutputClosed(sc); }
-		boolean isOutputClosed(SocketChannel sc);
-	}
+	private static final int OUTPUT_CLOSED = 64;
 
 	private SocketChannel sc;
-
-	int buffer;
+	private int buffer;
 
 	TcpChImpl(int buffer) throws IOException {
 		this(SocketChannel.open(), buffer);
@@ -45,21 +34,10 @@ class TcpChImpl extends MyChannel {
 		rb = EMPTY;
 		this.buffer = buffer;
 		state = CONNECTED;
-
-		if (TcpUtil == null) {
-			synchronized (TcpChImpl.class) {
-				if (TcpUtil == null) {
-					String[] fields = JVM.VERSION < 11 ? new String[] {"isInputOpen", "isOutputOpen"} : new String[] {"isInputClosed", "isOutputClosed"};
-					TcpUtil = Bypass.builder(H.class).access(server.getClass(), fields, fields, null).build();
-				}
-			}
-		}
 	}
 
 	@Override
-	public boolean isInputOpen() { return state < CLOSED && TcpUtil.isInputOpen(sc); }
-	@Override
-	public boolean isOutputOpen() { return state < CLOSED && TcpUtil.isOutputOpen(sc); }
+	public boolean isOutputOpen() { return (flags&OUTPUT_CLOSED) == 0; }
 
 	@Override
 	public SocketAddress remoteAddress() {
@@ -85,7 +63,10 @@ class TcpChImpl extends MyChannel {
 	@Override
 	protected SocketAddress finishConnect0() throws IOException { return sc.finishConnect() ? sc.getRemoteAddress() : null; }
 	@Override
-	protected void closeGracefully0() throws IOException { if (sc.isOpen()) sc.shutdownOutput(); }
+	protected void closeGracefully0() throws IOException {
+		if (sc.isOpen()) sc.shutdownOutput();
+		addFlag(OUTPUT_CLOSED);
+	}
 	@Override
 	protected void disconnect0() throws IOException { sc.close(); ch = sc = SocketChannel.open(); rb.clear(); }
 
@@ -105,7 +86,7 @@ class TcpChImpl extends MyChannel {
 			pending.clear();
 			BufferPool.reserve(buf);
 
-			flag &= ~(PAUSE_FOR_FLUSH|TIMED_FLUSH);
+			flags &= ~(PAUSE_FOR_FLUSH|TIMED_FLUSH);
 			key.interestOps(SelectionKey.OP_READ);
 			fireFlushed();
 		} finally {
@@ -115,7 +96,7 @@ class TcpChImpl extends MyChannel {
 
 	@Override
 	protected void read() throws IOException {
-		if (state != OPENED || (flag&READ_INACTIVE) != 0) return;
+		if (state != OPENED || (flags &READ_INACTIVE) != 0) return;
 		var buf = rb;
 		if (buf == EMPTY) rb = buf = alloc().allocate(true, buffer, 0);
 		while (true) {
@@ -137,7 +118,7 @@ class TcpChImpl extends MyChannel {
 				if (buf.capacity() > buffer && !buf.isReadable()) alloc().expand(buf, buffer-buf.capacity());
 			}
 
-			if (r < w || (flag&READ_INACTIVE) != 0 || state != OPENED) return;
+			if (r < w || (flags &READ_INACTIVE) != 0 || state != OPENED) return;
 
 			if (!buf.isWritable()) rb = buf = alloc().expand(buf, buf.capacity());
 		}
@@ -180,7 +161,7 @@ class TcpChImpl extends MyChannel {
 				fireFlushed();
 			}
 		} finally {
-			if (o != buf) BufferPool.reserve(buf);
+			if (o != buf) buf.release();
 
 			buf = (DynByteBuf) o;
 			buf.rIndex = buf.wIndex();

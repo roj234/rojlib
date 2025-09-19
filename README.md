@@ -9,7 +9,7 @@
 > 以下是我觉得值得一提的东西，按字母顺序（以及我的喜好）排序
 ### roj.compiler Lava程序语言
 * 当前版本 1.0.4-alpha
-* [文档](docs/Re_Lavac.md) &nbsp; [命令行入口](core/java/roj/compiler/Lavac.java) &nbsp; [嵌入代码使用](app/java/roj/plugins/dpiProxy/DPIProxy.java)
+* [文档](compiler/README.md) &nbsp; [命令行入口](compiler/java/roj/compiler/Lavac.java) &nbsp; [嵌入代码使用](app/java/roj/plugins/dpiProxy/DPIProxy.java)
 
 教程：
 * [在家自制编译器·第一章 (WIP)](docs/hbc/part1.md)
@@ -38,7 +38,7 @@
 
 主要特点为按需解析，所以速度快，内存用的少，我用了都说好  
 [按需解析的字节码处理框架，100%原创](core/java/roj/asm/package-info.java)
-* [基于它的高性能事件系统](core/java/roj/asmx/event/EventBus.java) 设计模式抄的Forge 支持取消、继承、泛型
+* [基于它的高性能事件系统](ext/eventbus/java/roj/event/EventBus.java) 设计模式抄的Forge 支持取消、继承、泛型
 * [伪LaunchWrapper](core/java/roj/asmx/launcher/Loader.java) 对字节码进行转换
 * [类映射器](core/java/roj/asmx/mapper/Mapper.java) 编译模组必须的
 * * by using this framework, 它的速度是SpecialSource的十倍 _(2023/2/11更新:更快了)_
@@ -47,7 +47,7 @@
 * * 比起遍历转换器列表，它可以单点注册转换器需要转换的类、甚至引用某个类，或具有注解
 
 #### 图片展示
-![roj.asmx.mapper.MapperUI](docs/images/mapper v3.png)
+![roj.asmx.mapper.MapperUI](docs/images/mapper_v3.png)
 
 #### nixim
 * 使用注解注入一个class，修改其中一些方法，或者让它实现接口
@@ -175,19 +175,19 @@ jvav的SSL不好用，自用的话还不如自己写一个协议
 * [带或不带中转服务器的端口转发程序(重构中，WIP)](app/java/roj/plugins/frp/MyFRP.java)
 * * 客户端与服务器均能自签证书（用户ID）
 * * 中转服务器模式下支持多个房间(主机)并行
-* * ![内网穿透工具(旧版GUI)](docs/images/port transfer.png)
+* * ![内网穿透工具(旧版GUI)](docs/images/frp_old.png)
 * [小说校对工具](ext/ebook/java/roj/ebook/gui/NovelFrame.java)
-  ![小说校对工具(旧版)](docs/images/novel manager.png)
+  ![小说校对工具(旧版)](docs/images/novel_ui.png)
 * [NAT打洞(文档)](docs/Re_NAT.md) &nbsp; [代码](ext/p2p/java/roj/plugins/p2p/UPnPGateway.java)
 * [基于DP的中音英混合搜索](ext/pinyin/java/roj/text/pinyin/TextSearchEngine.java) 参考text-search-engine (JavaScript)
 
 ### roj.reflect 反射
 * [Java8-21通杀的高性能反射解决方案](docs/Re_Bypass.md) *现已兼容Java22
-* [获取调用者的实例，是对象！](core/java/roj/reflect/GetCallerInstance.java)
-* [把jdk.internal.misc.Unsafe的好方法(不对齐访问)暴露出来](core/java/roj/reflect/Unaligned.java)
+* [获取调用者的实例，是对象！](core/java/roj/reflect/Reflection.java)
+* [把VarHandle动态替换为Unsafe](core/java/roj/util/optimizer/VarHandleRewriter.java)
 * [动态生成的类和插件系统类卸载建通所需的‘虚引用’](core/java/roj/reflect/VirtualReference.java)
 * * 通过修改GC Root的方式，让动态生成的类能且仅能在插件的类被卸载时卸载，并且几乎没有额外开销
-* [在Java中直接使用机器码（汇编）或者无开销调用本机方法](core/java/roj/reflect/litasm/Intrinsics.java)
+* [在Java中直接使用机器码（汇编）或者无开销调用本机方法](core/java/roj/util/optimizer/Intrinsics.java)
 
 ### roj.sql 数据库操作
 * [从PHP搬过来的简易连接池和链式查询](ext/sql/java/roj/sql/QueryBuilder.java)

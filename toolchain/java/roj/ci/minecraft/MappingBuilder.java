@@ -5,7 +5,7 @@ import roj.asmx.mapper.Mapping;
 import roj.collect.ArrayList;
 import roj.collect.HashMap;
 import roj.config.ConfigMaster;
-import roj.config.Parser;
+import roj.config.TextParser;
 import roj.config.node.IntValue;
 import roj.io.IOUtil;
 import roj.text.ParseException;
@@ -36,7 +36,7 @@ public class MappingBuilder {
 	}
 
 	public Mapping build(File conf) throws IOException, ParseException {
-		var config = ConfigMaster.fromExtension(conf).parser().parse(conf, Parser.ORDERED_MAP).asMap();
+		var config = ConfigMaster.fromExtension(conf).parser(TextParser.ORDERED_MAP).parse(conf).asMap();
 		for (var entry : config.entrySet()) {
 			recursiveBuildMappingEntry(entry.getKey(), TextUtil.split(entry.getValue().asString(), '-'));
 		}

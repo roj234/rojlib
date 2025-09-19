@@ -5,9 +5,9 @@ import roj.config.node.BoolValue;
 import roj.config.node.ByteArrayValue;
 import roj.config.node.ConfigValue;
 import roj.config.node.IntArrayValue;
-import roj.io.CorruptedInputException;
 import roj.io.ByteInput;
 import roj.io.ByteInputStream;
+import roj.io.CorruptedInputException;
 import roj.util.ArrayCache;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
@@ -40,7 +40,7 @@ public class DerReader {
 		if (length > 65536) {
 			data = safeRead(length);
 		} else {
-			data = ArrayCache.getByteArray(length, true);
+			data = ArrayCache.getByteArray(length, false);
 			in.readFully(data, 0, length);
 		}
 		BigInteger bi = new BigInteger(data, 0, length);
@@ -105,9 +105,7 @@ public class DerReader {
 		ByteList buf = new ByteList();
 		int r = buf.readStream((ByteInputStream) in, len);
 		if (r < len) throw new EOFException("没有 "+len+" 字节可用");
-		byte[] v = buf.toByteArray();
-		buf.release();
-		return v;
+		return buf.toByteArrayAndFree();
 	}
 
 	public final int readLength() throws IOException {return readLength1(in);}
