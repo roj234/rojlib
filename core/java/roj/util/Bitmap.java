@@ -287,39 +287,43 @@ public sealed class Bitmap {
 				long mask = block == 64 ? -1L : (1L << block)-1;
 
 				final long maxOffset = bitmapCapacity()-block;
-				long subSize = size&((1L << SHIFT) - 1);
+				long gap = size&((1L << SHIFT) - 1);
 
 				while (true) {
-					notFound11:
+					failedUseChildForGap:
 					if ((bitmap&mask) == 0) {
-						if (subSize == 0) {
+						if (gap == 0) {
 							if (isAllEmpty(mask)) break;
 						} else if (offset+block < bitmapCapacity() && isAllEmpty(mask^Long.lowestOneBit(mask))) {
 							Bitmap p;
 							// 尝试不完整的分配
 							if (!isAllEmpty(Long.lowestOneBit(mask))) {
 								int i = get(offset);
-								// failed, next iter
-								if (i < 0 || (p = child[i]).tailEmpty() < subSize) break notFound11;
+								long tailEmpty;
+								if (i < 0 || (tailEmpty = (p = child[i]).tailEmpty()) < gap) break failedUseChildForGap;
 
-								long myOffset = p.tailEmpty();
-								boolean ok = p.malloc(p.totalSpace() - myOffset, myOffset);
+								if (tailEmpty > gap) tailEmpty = gap;
+								boolean ok = p.malloc(p.totalSpace() - tailEmpty, tailEmpty);
 								assert ok;
 
-								ok = goc(offset + block).malloc(0, align(((1L << SHIFT) - 1) + 1 - (myOffset - subSize)));
-								assert ok;
+								if (tailEmpty != gap) {
+									ok = goc(offset + block).malloc(0, align((1L << SHIFT) - (tailEmpty - gap)));
+									assert ok;
+								} else {
+									System.out.println("DEBUG1");
+								}
 
-								subSize = p.totalSpace() - myOffset;
+								gap = p.totalSpace() - tailEmpty;
 								mask ^= Long.lowestOneBit(mask);
 								break;
 							}
 
 							p = goc(offset + block);
-							if (p.headEmpty() >= subSize) {
-								boolean ok = p.malloc(0, subSize);
+							if (p.headEmpty() >= gap) {
+								boolean ok = p.malloc(0, gap);
 								assert ok;
 
-								subSize = 0;
+								gap = 0;
 								break;
 							}
 						}
@@ -334,7 +338,7 @@ public sealed class Bitmap {
 				bitmap |= mask;
 				free -= size;
 				// 前对齐 以后可以尝试移动到SubPage结尾
-				return ((long) offset << SHIFT) + subSize;
+				return ((long) offset << SHIFT) + gap;
 			} else {
 				for (int i = 0; i < childCount; i++) {
 					Bitmap p = child[i];
@@ -397,7 +401,11 @@ public sealed class Bitmap {
 			if ((prefix+((1L << SHIFT) - 1)) >>> SHIFT > bitFrom) return false;
 			lockPrefix();
 
-			if (bitFrom >= bitTo) return goc(bitFrom).malloc(off&((1L << SHIFT) - 1), len);
+			if (bitFrom >= bitTo) {
+				boolean allocated = goc(bitFrom).malloc(off & ((1L << SHIFT) - 1), len);
+				if (allocated) free -= len;
+				return allocated;
+			}
 
 			if (before != 0 && goc(bitFrom++).tailEmpty() < before) return false;
 

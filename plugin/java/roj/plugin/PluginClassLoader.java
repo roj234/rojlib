@@ -44,7 +44,7 @@ public class PluginClassLoader extends ClassLoader {
 	CodeWeaver weaver;
 
 	public PluginClassLoader(ClassLoader parent, PluginDescriptor plugin, PluginDescriptor[] accessible) throws IOException {
-		super(parent);
+		super(plugin.id, parent);
 		this.desc = plugin;
 		this.accessible = accessible;
 		this.archive = new ZipFile(plugin.source, ZipFile.FLAG_VERIFY|ZipFile.FLAG_BACKWARD_READ, plugin.charset);

@@ -234,9 +234,6 @@ public sealed class ZipFile implements ArchiveFile permits ZipArchive {
 				}
 
 				if (r.position() >= r.length()) {
-					if (r != r1) r.close();
-					r = r1;
-
 					if (((state&1) == 0 && !locEntries.isEmpty()) ||
 						(state&6) == 0 ||
 						(flags&FLAG_HAS_ERROR) != 0 ||
@@ -511,7 +508,19 @@ public sealed class ZipFile implements ArchiveFile permits ZipArchive {
 		cDirOffset = buf.getLongLE(36);
 	}
 
-	public void validateEntry(ZEntry entry) throws IOException {validateEntry(r, entry);}
+	Source openEntry(ZEntry entry) throws IOException {
+		Source src = (Source) CACHE.getAndSet(this, null);
+		if (src == null) src = r.copy();
+
+		validateEntry(src, entry);
+		return src;
+	}
+	void closeEntry(Source source) {
+		if (!CACHE.compareAndSet(this, null, source)) {
+			IOUtil.closeSilently(source);
+		}
+	}
+
 	private void validateEntry(Source r, ZEntry entry) throws IOException {
 		if ((entry.mzFlag & ZEntry.MZ_ERROR) != 0 && (flags & FLAG_VERIFY) != 0) throw new ZipException(entry+"报告自身已损坏");
 		if ((entry.mzFlag & ZEntry.MZ_BACKWARD) == 0) return;
@@ -588,10 +597,7 @@ public sealed class ZipFile implements ArchiveFile permits ZipArchive {
 	public final InputStream getRawStream(ZEntry entry) throws IOException {
 		if (entry.nameBytes == null) throw new ZipException("ZEntry不是从文件读取的");
 
-		Source src = (Source) CACHE.getAndSet(this, null);
-		if (src == null) src = r.copy();
-
-		validateEntry(src, entry);
+		Source src = openEntry(entry);
 		src.seek(entry.offset);
 		return new SourceInputStream.Shared(src, entry.cSize, this, CACHE);
 	}

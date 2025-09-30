@@ -1,6 +1,5 @@
 package roj.http.server;
 
-import roj.http.Headers;
 import roj.io.BufferPool;
 import roj.io.IOUtil;
 import roj.math.MathUtils;
@@ -49,7 +48,7 @@ final class FileContent implements Content {
 		file = info;
 
 		String v;
-		var rh = req.server;
+		var rh = req.response;
 		String eTag = file.getETag();
 
 		checkIfModified: {
@@ -196,9 +195,9 @@ final class FileContent implements Content {
 		return plus(206, req);
 	}
 
-	private static Content rangeNotSatisfiable(ResponseHeader rh, long length) {
+	private static Content rangeNotSatisfiable(Response rh, long length) {
 		rh.code(416);
-		rh.header("content-range", "bytes */"+length);
+		rh.setHeader("content-range", "bytes */"+length);
 		return Content.httpError(416);
 	}
 
@@ -222,39 +221,39 @@ final class FileContent implements Content {
 	}
 
 	private Content plus(int r, Request req) {
-		var h = req.server;
+		var h = req.response;
 		h.code(r).date();
 		if (r != 304) {
-			h.header("last-modified", DateFormat.toRFC5322Datetime(file.lastModified()));
+			h.setHeader("last-modified", DateFormat.toRFC5322Datetime(file.lastModified()));
 			if (r == 206) return this;
 
 			// 需要注意的是，服务器端在生成状态码为 304 的响应的时候，必须同时生成以下会存在于对应的 200 响应中的首部：Cache-Control、Content-Location、Date、ETag、Expires 和 Vary。
 			// 我怎么感觉我又没遵循标准了（
 			String tag = file.getETag();
-			if (tag != null) h.header("etag", tag);
+			if (tag != null) h.setHeader("etag", tag);
 			var def = flag&3;
-			if (def != 2 && (file.stats() & (1<<def)) != 0) h.header("accept-ranges", "bytes");
+			if (def != 2 && (file.stats() & (1<<def)) != 0) h.setHeader("accept-ranges", "bytes");
 		}
 		return Content.EMPTY;
 	}
 
 	@Override
-	public void prepare(ResponseHeader rh, Headers h) throws IOException {
+	public void prepare(Response resp) throws IOException {
 		boolean def = (flag&3) == 1;
 
 		FileChannel fch;
 		off = 0;
 		if (ranges.length == 0) {
 			remain = file.length(def);
-			if (cantSendfile(rh) || (fch = file.getSendFile(def)) == null) {
+			if (cantSendfile(resp) || (fch = file.getSendFile(def)) == null) {
 				in = file.get(def, 0);
 			} else {
 				sendfile = new SendfilePkt(fch);
 				sendfile.length = remain;
 			}
-			if ((flag&3) != 2) h.put("content-length", Long.toString(remain));
+			if ((flag&3) != 2) resp.setHeader("content-length", Long.toString(remain));
 		} else {
-			if (cantSendfile(rh) || (fch = file.getSendFile(def)) == null) {
+			if (cantSendfile(resp) || (fch = file.getSendFile(def)) == null) {
 				in = file.get(def, ranges[0]);
 			} else {
 				sendfile = new SendfilePkt(fch, ranges[0], remain);
@@ -268,12 +267,12 @@ final class FileContent implements Content {
 			}
 		}
 
-		file.prepare(rh, h);
+		file.prepare(resp, resp.headers());
 	}
-	private boolean cantSendfile(ResponseHeader rh) {return (flag&6) != 0 || !rh.connection().canSendfile();}
+	private boolean cantSendfile(Response rh) {return (flag&6) != 0 || !rh.connection().canSendfile();}
 
 	@Override
-	public boolean send(ContentWriter rh) throws IOException {
+	public boolean send(ContentWriter writer) throws IOException {
 		if (remain < 0) return false;
 
 		if (remain == 0) {
@@ -281,9 +280,9 @@ final class FileContent implements Content {
 
 			if (ranges.length > 2) {
 				String nextHeader = off >= ranges.length ? "--" : "\r\ncontent-range: byte "+ranges[off]+'-'+ranges[off+1]+'/'+file.length((flag&3) == 1)+"\r\n\r\n";
-				var t = rh.connection().alloc().allocate(true, splitter.length()+nextHeader.length());
+				var t = writer.connection().alloc().allocate(true, splitter.length()+nextHeader.length());
 				try {
-					rh.write(t.putAscii(splitter).putAscii(nextHeader));
+					writer.write(t.putAscii(splitter).putAscii(nextHeader));
 				} finally {
 					BufferPool.reserve(t);
 				}
@@ -308,14 +307,14 @@ final class FileContent implements Content {
 
 		if (sendfile != null) {
 			var prevLength = sendfile.length;
-			var limiter = rh.getSpeedLimiter();
+			var limiter = writer.getSpeedLimiter();
 			if (limiter != null) sendfile.length = limiter.limit((int) Math.min(sendfile.length, Integer.MAX_VALUE));
-			rh.connection().fireChannelWrite(sendfile);
+			writer.connection().fireChannelWrite(sendfile);
 			sendfile.length = prevLength;
 			sendfile.flip();
 			remain = sendfile.length;
 		} else {
-			remain -= rh.write(in, (int) MathUtils.clamp(remain, 0, Integer.MAX_VALUE));
+			remain -= writer.write(in, (int) MathUtils.clamp(remain, 0, Integer.MAX_VALUE));
 		}
 
 		return true;
@@ -347,21 +346,21 @@ final class FileContent implements Content {
 		GZWrapper(FileInfo file) {this.file = file;}
 
 		@Override
-		public void prepare(ResponseHeader rh, Headers h) throws IOException {
+		public void prepare(Response resp) throws IOException {
 			remain = file.length(true);
 			in = file.get(true, 0);
-			h.put("content-length", Long.toString(remain+18));
+			resp.setHeader("content-length", Long.toString(remain+18));
 			buf.putShort(0x1f8b).putLong(0x08000000000000FFL);
 
-			file.prepare(rh, h);
+			file.prepare(resp, resp.headers());
 		}
 
 		@Override
-		public boolean send(ContentWriter rh) throws IOException {
+		public boolean send(ContentWriter writer) throws IOException {
 			if (remain < 0) return false;
 
 			if (buf.isReadable()) {
-				rh.write(buf);
+				writer.write(buf);
 				if (buf.isReadable()) return true;
 				buf.clear();
 
@@ -371,7 +370,7 @@ final class FileContent implements Content {
 				}
 			}
 
-			remain -= rh.write(in, (int) MathUtils.clamp(remain, 0, Integer.MAX_VALUE));
+			remain -= writer.write(in, (int) MathUtils.clamp(remain, 0, Integer.MAX_VALUE));
 
 			if (remain == 0) buf.putIntLE(file.getCrc32()).putIntLE((int) (file.length(false)));
 			return true;

@@ -28,20 +28,20 @@ import static roj.http.server.HttpServer11.*;
  * @author Roj234
  * @since 2024/7/14 8:38
  */
-final class HttpServer20 extends H2Stream implements PostSetting, ResponseHeader, ContentWriter, ChannelHandler {
+final class HttpServer20 extends H2Stream implements PayloadInfo, Response, ContentWriter, ChannelHandler {
 	private final Router router;
 
 	public HttpServer20(Router router, int id) {
 		super(id);
 		this.router = router;
-		this.time = System.currentTimeMillis() + router.readTimeout(null);
+		this.time = System.currentTimeMillis() + router.readTimeout(false);
 	}
 
 	private long time;
 	private H2Connection man;
 	private Request req;
 	private Content body;
-	private RequestFinishHandler fh;
+	private ResponseFinishHandler fh;
 
 	@Override
 	protected void onHeaderDone(H2Connection man, HttpHead head, boolean hasData) throws IOException {
@@ -55,7 +55,7 @@ final class HttpServer20 extends H2Stream implements PostSetting, ResponseHeader
 		var req = HttpServer.getInstance().request().init(HttpUtil.getMethodId(head.getMethod()), path, query, head.versionStr());
 		req._moveFrom(head);
 
-		req.server = this;
+		req.response = this;
 		this.man = man;
 		this.req = req;
 		this.flag = 0;
@@ -68,7 +68,6 @@ final class HttpServer20 extends H2Stream implements PostSetting, ResponseHeader
 		postSize = -1;
 		exceptPostSize = head.getContentLength();
 		router.checkHeader(req, this);
-		time = System.currentTimeMillis() + router.readTimeout(req);
 
 		long len = postSize;
 		if (len < 0) {
@@ -83,7 +82,7 @@ final class HttpServer20 extends H2Stream implements PostSetting, ResponseHeader
 		}
 
 		if (ph != null) len = 512;
-		else if (len > 8388608) throw new IllegalArgumentException("请求体过大("+len+")必须使用PostHandler");
+		else if (len > POST_BUFFER_MAX) throw new IllegalArgumentException("请求体过大("+len+")必须使用PostHandler");
 
 		postBuffer = len <= 65535 ? (ByteList) man.channel().allocate(false, (int) len) : new ByteList();
 	}
@@ -93,19 +92,19 @@ final class HttpServer20 extends H2Stream implements PostSetting, ResponseHeader
 	private ByteList postBuffer;
 
 	@Override
-	public void postHandler(BodyParser ph) {this.ph = ph;}
+	public void setParser(BodyParser bodyParser) {this.ph = bodyParser;}
 
 	private long postSize, exceptPostSize;
 
-	public long postExceptLength() {return exceptPostSize;}
+	public long expectedLength() {return exceptPostSize;}
 
-	public void postAccept(long maxLen, int time) {
+	public void accept(long maxLen, int time) {
 		if (postSize >= 0) throw new IllegalStateException();
 		postSize = maxLen;
 		this.time += time;
 	}
 
-	public boolean postAccepted() {return postSize >= 0;}
+	public boolean isAccepted() {return postSize >= 0;}
 
 	//endregion
 	@Override
@@ -163,7 +162,7 @@ final class HttpServer20 extends H2Stream implements PostSetting, ResponseHeader
 		int enc = ENC_PLAIN;
 		boolean noBody = false;
 		if (body != null) {
-			body.prepare(this, h);
+			body.prepare(this);
 			if (h.header("content-length").equals("0")) {
 				noBody = true;
 				h.remove("content-length");
@@ -278,7 +277,7 @@ final class HttpServer20 extends H2Stream implements PostSetting, ResponseHeader
 	private void onFinish(boolean success) {
 		if (fh != null) {
 			try {
-				fh.onRequestFinish(this, success);
+				fh.onResponseFinish(this, success);
 			} catch (Exception e) {
 				H2Connection.LOGGER.warn("{}完成时出现了异常", e, fh.getClass());
 			}
@@ -324,12 +323,12 @@ final class HttpServer20 extends H2Stream implements PostSetting, ResponseHeader
 				def = HttpServer.getInstance().deflater(true);
 				flag |= FLAG_GZIP;
 				crc = CRC32.initial;
-				header("content-encoding", "gzip");
+				setHeader("content-encoding", "gzip");
 			}
 			case ENC_DEFLATE -> {
 				def = HttpServer.getInstance().deflater(false);
 				flag &= ~FLAG_GZIP;
-				header("content-encoding", "gzip");
+				setHeader("content-encoding", "gzip");
 			}
 		}
 
@@ -407,16 +406,16 @@ final class HttpServer20 extends H2Stream implements PostSetting, ResponseHeader
 
 	//endregion
 	//region ResponseHeader
-	@Override public void onFinish(RequestFinishHandler o) {fh = o;}
+	@Override public void onFinish(ResponseFinishHandler onFinish) {fh = onFinish;}
 	@Override public Request request() {return req;}
 
-	@Override public ResponseHeader code(int code) {req.responseHeader.put(":status", String.valueOf(code));return this;}
-	@Override public ResponseHeader die() {flag |= FLAG_GOAWAY;return this;}
-	@Override public ResponseHeader enableAsyncResponse(int extraTimeMs) {flag |= FLAG_ASYNC;time = System.currentTimeMillis()+extraTimeMs;return this;}
-	@Override public void body(Content resp) throws IOException {
+	@Override public Response code(int code) {req.responseHeader.put(":status", String.valueOf(code));return this;}
+	@Override public Response die() {flag |= FLAG_GOAWAY;return this;}
+	@Override public Response async(int extraTimeMs) {flag |= FLAG_ASYNC;time = System.currentTimeMillis()+extraTimeMs;return this;}
+	@Override public void body(Content content) throws IOException {
 		if ((flag & FLAG_ASYNC) == 0) {
 			if (getState() >= DATA_FIN) {
-				this.body = resp;
+				this.body = content;
 				return;
 			}
 
@@ -428,7 +427,7 @@ final class HttpServer20 extends H2Stream implements PostSetting, ResponseHeader
 		var lock = man.channel().channel().lock();
 		lock.lock();
 		try {
-			body = resp;
+			body = content;
 			time = System.currentTimeMillis() + router.writeTimeout(req, body);
 			sendHead(man);
 		} catch (Throwable e) {
@@ -437,8 +436,8 @@ final class HttpServer20 extends H2Stream implements PostSetting, ResponseHeader
 			lock.unlock();
 		}
 	}
-	@Override public ResponseHeader enableCompression() {flag |= FLAG_COMPRESS;return this;}
-	@Override public ResponseHeader disableCompression() {flag &= ~FLAG_COMPRESS;return this;}
+	@Override public Response enableCompression() {flag |= FLAG_COMPRESS;return this;}
+	@Override public Response disableCompression() {flag &= ~FLAG_COMPRESS;return this;}
 	@Override public Headers headers() {return req.responseHeader;}
 	//endregion
 }

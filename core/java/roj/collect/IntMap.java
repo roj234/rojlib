@@ -19,10 +19,10 @@ public final class IntMap<V> extends AbstractMap<Integer, V> implements _LibMap<
 	};
 
 	static final float REFERENCE_LOAD_FACTOR = 0.75f;
-	static final int REFERENCE_CHAIN_THRESHOLD = 5;
+	static final int REFERENCE_CHAIN_THRESHOLD = 4;
 
 	static final float PRIMITIVE_LOAD_FACTOR = 1f;
-	static final float PRIMITIVE_CHAIN_THRESHOLD = 5;
+	static final float PRIMITIVE_CHAIN_THRESHOLD = 4;
 
 	public static sealed class Entry<V> implements _LibEntry, Map.Entry<Integer, V> permits IntBiMap.Entry {
 		int key;
@@ -64,11 +64,10 @@ public final class IntMap<V> extends AbstractMap<Integer, V> implements _LibMap<
 		int length = MathUtils.nextPowerOfTwo(size);
 
 		if (entries != null) {
-			mask = (length>>1) - 1;
-			resize();
+			resize(length);
 		} else {
 			mask = length-1;
-			nextResize = (int) (length * REFERENCE_LOAD_FACTOR);
+			nextResize = (int) (length * PRIMITIVE_LOAD_FACTOR);
 		}
 	}
 
@@ -106,7 +105,7 @@ public final class IntMap<V> extends AbstractMap<Integer, V> implements _LibMap<
 	public final V get(Object key) {return get((int) key);}
 	public final V get(int key) {
 		Entry<V> entry = getEntry(key);
-		return entry == null ? null : entry.getValue();
+		return entry == null ? Helpers.maybeNull() : entry.getValue();
 	}
 	private Entry<V> getEntry(int key) {
 		Entry<V> entry = getFirst(key, false);
@@ -201,8 +200,7 @@ public final class IntMap<V> extends AbstractMap<Integer, V> implements _LibMap<
 	}
 
 	@SuppressWarnings("unchecked")
-	private void resize() {
-		int length = (mask+1) << 1;
+	private void resize(int length) {
 		if (length <= 0) return;
 
 		Entry<?>[] newEntries = new Entry<?>[length];
@@ -240,7 +238,7 @@ public final class IntMap<V> extends AbstractMap<Integer, V> implements _LibMap<
 
 					size++;
 					if (loop > PRIMITIVE_CHAIN_THRESHOLD && size > nextResize) {
-						resize();
+						resize((mask+1) << 1);
 						continue restart;
 					}
 

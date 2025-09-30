@@ -1,18 +1,24 @@
 package roj.crypt.jar;
 
-import roj.text.ParseException;
+import roj.config.node.ConfigValue;
+import roj.config.node.ListValue;
+import roj.config.node.MapValue;
 import roj.crypt.CryptoFactory;
 import roj.crypt.asn1.*;
-import roj.io.IOUtil;
 import roj.io.ByteInputStream;
+import roj.io.IOUtil;
+import roj.text.CharList;
+import roj.text.ParseException;
 import roj.util.ArrayUtil;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
 import roj.util.function.Flow;
 
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.math.BigInteger;
+import java.security.Timestamp;
 import java.security.cert.*;
 import java.util.*;
 
@@ -24,7 +30,8 @@ final class SignatureBlock extends CertPath {
 	private final List<X509Certificate> certs;
 	private final String digestAlg, signatureAlg;
 	private final X509Certificate signer;
-	private final byte[] signature, sfData;
+	private final byte[] signature, signData;
+	private ListValue unsignedAttrs;
 
 	private static final String PKCS7_ENCODING = "PKCS7", PKIPATH_ENCODING = "PkiPath";
 
@@ -40,7 +47,7 @@ final class SignatureBlock extends CertPath {
 	private static final Collection<String> encodingList = List.of(PKIPATH_ENCODING, PKCS7_ENCODING);
 
 	@SuppressWarnings("unchecked")
-	public SignatureBlock(List<? extends Certificate> certs, byte[] signature, String digestAlg, String signatureAlg, int signerId, byte[] sfData) throws CertificateException {
+	public SignatureBlock(List<? extends Certificate> certs, byte[] signature, String digestAlg, String signatureAlg, int signerId, byte[] signData) throws CertificateException {
 		super("X.509");
 
 		for (Object o : certs) {
@@ -55,7 +62,7 @@ final class SignatureBlock extends CertPath {
 		this.digestAlg = digestAlg;
 		this.signatureAlg = signatureAlg;
 		this.signer = (X509Certificate) certs.get(signerId);
-		this.sfData = sfData;
+		this.signData = signData;
 	}
 
 	public SignatureBlock(InputStream is) throws CertificateException {
@@ -91,7 +98,7 @@ final class SignatureBlock extends CertPath {
 					signatureAlg = null;
 					signer = null;
 					signature = null;
-					sfData = null;
+					signData = null;
 					return;
 				}
 
@@ -113,6 +120,8 @@ final class SignatureBlock extends CertPath {
 
 				BigInteger sn = ((DerValue.Int)signerInfo.query("sid.serialNumber")).value;
 
+				unsignedAttrs = (ListValue) signerInfo.getNullable("unsignedAttrs");
+
 				digestOid = KnownOID.valueOf(signerInfo.query("digestAlgorithm.algorithm")).assertType("hashAlg");
 				signOid = KnownOID.valueOf(signerInfo.query("signatureAlgorithm.algorithm"));
 				sign = (byte[]) signerInfo.get("signature").unwrap();
@@ -131,10 +140,11 @@ final class SignatureBlock extends CertPath {
 			digestAlg = digestOid.name();
 			signatureAlg = signOid.name().contains("with") ? signOid.assertType("signAlg").name() : digestOid+"with"+signOid.assertType("signType");
 			signature = sign;
-			sfData = (byte[]) info.query("contentInfo.content").unwrap();
+			signData = (byte[]) info.query("contentInfo.content").unwrap();
 		} catch (CertificateException e) {
 			throw e;
 		} catch (Exception e) {
+			e.printStackTrace();
 			throw new CertificateException("PKCS7 envelope解析失败: "+e.getMessage());
 		}
 	}
@@ -152,7 +162,7 @@ final class SignatureBlock extends CertPath {
 		}
 	}
 
-	public byte[] getSfData(byte[] sfData) {return this.sfData == null ? sfData : this.sfData;}
+	public byte[] getSfData(byte[] sfData) {return this.signData == null ? sfData : this.signData;}
 
 	@Override
 	public byte[] getEncoded() throws CertificateEncodingException {
@@ -189,9 +199,9 @@ final class SignatureBlock extends CertPath {
 		dw.end();//end=DigestAlgorithmIdentifiers
 		dw.begin(DerValue.SEQUENCE);//ContentInfo
 		dw.writeOid(1,2,840,113549,1,7,1);// data (PKCS#7)
-		if (sfData != null) {
+		if (signData != null) {
 			dw.begin(0xA0);//data
-			dw.writeBytes(sfData);
+			dw.writeBytes(signData);
 			dw.end();//end=data
 		}
 		dw.end();//end=ContentInfo
@@ -259,9 +269,12 @@ final class SignatureBlock extends CertPath {
 			if (false) {
 				dw.begin(0xA1);//OPTIONAL UnsignedAttributes
 				dw.begin(DerValue.SEQUENCE);
-				dw.writeOid(1,3,6,1,5,5,7,3,8);
-				// 2016-03-17 16:40:46 UTC
-				//dw.writeIso(DerValue.UTCTime, ACalendar.GMT().format("Y-m-d H:i:s", System.currentTimeMillis()).append(" UTC").toString());
+				dw.writeOid(KnownOID.timeStamping.oid.value);
+				dw.begin(DerValue.SET);
+
+				// TimestampToken in encoded PKCS7 block
+
+				dw.end();//end=value
 				dw.end();//end=attributes
 				dw.end();//end=UnsignedAttributes
 			}
@@ -295,4 +308,27 @@ final class SignatureBlock extends CertPath {
 	public byte[] getSignature() { return signature; }
 	public String getSignatureAlg() { return signatureAlg; }
 	public X509Certificate getSigner() {return signer;}
+
+	public Timestamp getTimestamp() {
+		if (unsignedAttrs == null) return null;
+		List<ConfigValue> raw = unsignedAttrs.raw();
+		for (int i = 0; i < raw.size(); i++) {
+			MapValue attribute = raw.get(i).asMap();
+			if (KnownOID.timeStamping.oid.equals(attribute.get("type"))) {
+				DerValue.Opaque timestamp = (DerValue.Opaque) attribute.getList("values").get(0);
+				SignatureBlock certPath;
+				try {
+					certPath = new SignatureBlock(new ByteArrayInputStream(timestamp.value));
+					ConfigValue timestampToken = PKCS7.parse("TimestampToken", new DerReader(DynByteBuf.wrap(certPath.signData)));
+					System.out.println("Found timestampToken: "+timestampToken);
+					String time = timestampToken.asMap().getString("genTime");
+					long timestamp1 = DerWriter.GENERALIZED_TIME.parse(new CharList(time));
+					return new Timestamp(new Date(timestamp1), certPath);
+				} catch (Exception e) {
+					e.printStackTrace();
+				}
+			}
+		}
+		return null;
+	}
 }

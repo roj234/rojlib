@@ -27,7 +27,7 @@ class WyRand extends Random {
 	@Override
 	public void setSeed(long seed) {
 		w = seed;
-		SEED.set(this, seed);
+		SEED.set(this, null);
 		HAVE_NEXT_NEXT_GAUSSIAN.set(this, false);
 	}
 

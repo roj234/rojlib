@@ -46,58 +46,54 @@ final class ClassMerger {
 	}
 
 	private void processOne(Context main, Context sub) {
-		ClassNode subData = sub.getData();
-		ClassNode mainData = main.getData();
+		ClassNode base = main.getData();
+		ClassNode extra = sub.getData();
 
-		var subMs = subData.methods;
-		var mainMs = mainData.methods;
-		outer:
-		for (int i = 0; i < subMs.size(); i++) {
-			var sm = subMs.get(i);
-			for (int j = 0; j < mainMs.size(); j++) {
-				var mm = mainMs.get(j);
-				if (sm.name().equals(mm.name()) && sm.rawDesc().equals(mm.rawDesc())) {
-					mainMs.set(j, detectPriority(mainData, mm, subData, sm));
-					continue outer;
-				}
+		var extraMethods = extra.methods;
+		var baseMethods = base.methods;
+
+		for (int i = 0; i < extraMethods.size(); i++) {
+			var sm = extraMethods.get(i);
+			int j = base.getMethod(sm.name(), sm.rawDesc());
+			if (j >= 0) {
+				baseMethods.set(j, detectPriority(base, baseMethods.get(j), extra, sm));
+			} else {
+				mergedMethod++;
+				baseMethods.add(sm.parsed(extra.cp));
 			}
-			mergedMethod++;
-			mainMs.add(sm.parsed(subData.cp));
 		}
 
-		var subFs = subData.fields;
-		var mainFs = mainData.fields;
+		var extraFields = extra.fields;
+		var baseFields = base.fields;
 		outer:
-		for (int i = 0; i < subFs.size(); i++) {
-			var fs = subFs.get(i);
-			for (int j = 0; j < mainFs.size(); j++) {
-				var fs2 = mainFs.get(j);
+		for (int i = 0; i < extraFields.size(); i++) {
+			var fs = extraFields.get(i);
+			for (int j = 0; j < baseFields.size(); j++) {
+				var fs2 = baseFields.get(j);
 				if (fs.name().equals(fs2.name()) && fs.rawDesc().equals(fs2.rawDesc())) {
 					continue outer;
 				}
 			}
 			mergedField++;
-			mainData.fields.add(fs.parsed(subData.cp));
+			base.fields.add(fs.parsed(extra.cp));
 		}
 
-		processInnerClasses(mainData, subData);
-		processItf(mainData, subData);
+		processInnerClasses(base, extra);
+		processItf(base, extra);
 	}
 
-	private MethodNode detectPriority(ClassNode main, MethodNode mainMethod, ClassNode sub, MethodNode subMethod) {
-		Attribute subCode = subMethod.getAttribute("Code");
-		if (subCode == null) return mainMethod;
-		Attribute mainCode = mainMethod.getAttribute("Code");
-		if (mainCode == null) return subMethod;
+	private MethodNode detectPriority(ClassNode base, MethodNode baseMethod, ClassNode extra, MethodNode extraMethod) {
+		if (extraMethod.getAttribute("Code") == null) return baseMethod;
+		if (baseMethod.getAttribute("Code") == null) return extraMethod;
 
-		var mainRealCode = mainMethod.getAttribute(main.cp, Attribute.Code);
-		var subRealCode = mainMethod.getAttribute(sub.cp, Attribute.Code);
+		var baseCode = baseMethod.getAttribute(base.cp, Attribute.Code);
+		var extraCode = extraMethod.getAttribute(extra.cp, Attribute.Code);
 
-		if (mainRealCode.instructions.length() != subRealCode.instructions.length()) {
+		if (baseCode.instructions.length() != extraCode.instructions.length()) {
 			replaceMethod++;
 		}
 
-		return mainRealCode.instructions.length() >= subRealCode.instructions.length() ? mainMethod : subMethod;
+		return baseCode.instructions.length() >= extraCode.instructions.length() ? baseMethod : extraMethod;
 	}
 
 	private void processInnerClasses(ClassNode main, ClassNode sub) {

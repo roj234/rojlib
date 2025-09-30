@@ -424,7 +424,7 @@ public final class MethodParser {
 			var type = ctx.compiler.resolve(a.type());
 			if (type.getAttribute(AStatementParser.NAME) instanceof AStatementParser stmt) {
 				if (statement != null)
-					ctx.report(Kind.ERROR, "cu.annotation.duplicateStatement", type);
+					ctx.report(Kind.ERROR, "block.annotation.duplicate", type);
 				statement = stmt;
 			}
 			var desc = ctx.compiler.getAnnotationDescriptor(type);
@@ -1360,7 +1360,7 @@ public final class MethodParser {
 		}
 
 		if (flowHook != null) {
-			if ((sectionFlag&SF_SWITCH) != 0) ctx.report(Kind.ERROR, "block.switch.exprMode.returnHook");
+			if ((sectionFlag&SF_SWITCH) != 0) ctx.report(Kind.ERROR, "block.switch.exprMode.return");
 
 			if (RETURNSTACK_TYPE.equals(rt.owner))
 				cw.invokeV(RETURNSTACK_TYPE, "toImmutable", "()L"+RETURNSTACK_TYPE+";");
@@ -1972,7 +1972,7 @@ public final class MethodParser {
 					kase.lineNumber = wr.LN;
 
 					if (hasNull) {
-						if (nullBranch != null) ctx.report(Kind.ERROR, "block.switch.duplicate:null");
+						if (nullBranch != null) ctx.report(Kind.ERROR, "block.switch.duplicate", "null");
 						nullBranch = kase;
 					}
 				break;
@@ -2846,7 +2846,7 @@ public final class MethodParser {
 		Expr node = ep.parse(ExprParser.STOP_RSB|ExprParser.SKIP_RSB|ExprParser.NAE).resolve(ctx);
 
 		if (node.type().isPrimitive()) {
-			ctx.report(Kind.ERROR, "block.sync.unexpectedPrimitive", node.type());
+			ctx.report(Kind.ERROR, "symbol.derefPrimitive", node.type());
 		}
 
 		beginCodeBlock();

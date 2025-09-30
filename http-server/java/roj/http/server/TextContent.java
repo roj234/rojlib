@@ -1,6 +1,5 @@
 package roj.http.server;
 
-import roj.http.Headers;
 import roj.net.ChannelCtx;
 import roj.text.CharList;
 import roj.text.FastCharset;
@@ -42,17 +41,33 @@ public class TextContent implements Content {
 	private DynByteBuf buf;
 	private int off;
 
-	public boolean send(ContentWriter rh) throws IOException {
+	@Override
+	public void prepare(Response resp) {
+		int len = text.length();
+		if (len > 127) resp.enableCompression();
+
+		int bufferCap = 4096;
+		if (len < 10000) {
+			int length = charset.byteCount(text);
+			resp.setHeader("content-length", Integer.toString(length));
+			if (bufferCap > length) bufferCap = length;
+		}
+		buf = resp.connection().alloc().allocate(true, bufferCap);
+		if (mime != null) resp.setHeader("content-type", mime);
+	}
+
+	@Override
+	public boolean send(ContentWriter writer) throws IOException {
 		if (buf == null) throw new IllegalStateException("Not prepared");
 
 		if (buf.isReadable()) {
-			rh.write(buf);
+			writer.write(buf);
 			if (buf.isReadable()) return true;
 		}
 
 		buf.clear();
 		off = charset.encodeFixedOut(text,off, text.length(),buf,buf.capacity());
-		rh.write(buf);
+		writer.write(buf);
 
 		return buf.isReadable() || off < text.length();
 	}
@@ -64,20 +79,5 @@ public class TextContent implements Content {
 			buf = null;
 		}
 		if (text instanceof CharList cl) cl._free();
-	}
-
-	@Override
-	public void prepare(ResponseHeader rh, Headers h) {
-		int len = text.length();
-		if (len > 127) rh.enableCompression();
-
-		int bufferCap = 4096;
-		if (len < 10000) {
-			int length = charset.byteCount(text);
-			h.putIfAbsent("content-length", Integer.toString(length));
-			if (bufferCap > length) bufferCap = length;
-		}
-		buf = rh.connection().alloc().allocate(true, bufferCap);
-		if (mime != null) h.putIfAbsent("content-type", mime);
 	}
 }

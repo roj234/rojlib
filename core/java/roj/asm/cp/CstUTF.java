@@ -67,8 +67,7 @@ public final class CstUTF extends Constant {
 
 	public boolean equals(Object o) {
 		if (o == this) return true;
-		if (!(o instanceof CstUTF)) return false;
-		CstUTF ref = (CstUTF) o;
+		if (!(o instanceof CstUTF ref)) return false;
 		return this.str().equals(ref.str());
 	}
 }

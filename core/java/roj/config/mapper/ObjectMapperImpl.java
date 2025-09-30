@@ -1,10 +1,7 @@
 package roj.config.mapper;
 
 import org.jetbrains.annotations.NotNull;
-import roj.asm.ClassNode;
-import roj.asm.FieldNode;
-import roj.asm.MethodNode;
-import roj.asm.Opcodes;
+import roj.asm.*;
 import roj.asm.annotation.Annotation;
 import roj.asm.attr.Annotations;
 import roj.asm.attr.Attribute;
@@ -873,38 +870,40 @@ final class ObjectMapperImpl extends ObjectMapper {
 			MethodNode get = null, set = null;
 			String writeMode = defaultWriteMode;
 			String readMode = defaultReadMode;
+			String nullValuePattern = null;
 			AsType as = null;
 			String comment = null;
 
 			for (int j = 0; j < list.size(); j++) {
 				Annotation anno = list.get(j);
 				switch (anno.type()) {
-					case "roj/config/mapper/Comment": comment = anno.getString("value"); break;
-					case "roj/config/mapper/Name": name = anno.getString("value"); break;
-					case "roj/config/mapper/Via": {
+					case "roj/config/mapper/Comment" -> comment = anno.getString("value");
+					case "roj/config/mapper/Name" -> name = anno.getString("value");
+					case "roj/config/mapper/Via" -> {
 						String sid = anno.getString("get", null);
 						if (sid != null) {
 							int id = data.getMethod(sid, "()".concat(f.rawDesc()));
-							if (id < 0) throw new IllegalArgumentException("无法找到get方法"+anno);
+							if (id < 0) throw new IllegalArgumentException("无法找到get方法" + anno);
 							get = data.methods.get(id);
 							unsafe &= 5;
 						}
 						sid = anno.getString("set", null);
 						if (sid != null) {
-							int id = data.getMethod(sid, "("+f.rawDesc()+")V");
-							if (id < 0) throw new IllegalArgumentException("无法找到set方法"+anno);
+							int id = data.getMethod(sid, "(" + f.rawDesc() + ")V");
+							if (id < 0) throw new IllegalArgumentException("无法找到set方法" + anno);
 							set = data.methods.get(id);
 							unsafe &= 2;
 						}
-						break;
 					}
-					case "roj/config/mapper/Optional":
+					case "roj/config/mapper/Optional" -> {
 						writeMode = anno.getEnumValue("write", "NON_NULL");
 						readMode = anno.getEnumValue("read", "OPTIONAL");
-						break;
-					case "roj/config/mapper/As":
+						nullValuePattern = anno.getString("nullValue", null);
+					}
+					case "roj/config/mapper/As" -> {
 						as = asTypes.get(anno.getString("value"));
-						if (as == null) throw new IllegalArgumentException("Unknown as "+anno);
+						if (as == null) throw new IllegalArgumentException("Unknown as " + anno);
+					}
 				}
 			}
 
@@ -925,7 +924,7 @@ final class ObjectMapperImpl extends ObjectMapper {
 			}
 
 			if ((flag & NO_SCHEMA) != 0) name = null;
-			asmStruct(fieldId, data, f, name, get, set, writeMode, noRead, as, (unsafe&4) != 0 ? o : null, comment);
+			asmStruct(fieldId, data, f, name, get, set, writeMode, noRead, as, (unsafe&4) != 0 ? o : null, comment, nullValuePattern);
 
 			if (!noRead) fieldId++;
 		}
@@ -960,7 +959,7 @@ final class ObjectMapperImpl extends ObjectMapper {
 				int fid = c.newField(ACC_PRIVATE|ACC_STATIC, "OPTIONAL", "Lroj/collect/BitSet;");
 				cw.insn(ALOAD_2);
 				cw.field(GETSTATIC, c, fid);
-				cw.invoke(DIRECT_IF_OVERRIDE, "roj/collect/BitSet", "addAll", "(Lroj/collect/BitSet;)Lroj/collect/BitSet;");
+				cw.invoke(DIRECT_IF_OVERRIDE, "roj/collect/BitSet", "or", "(Lroj/collect/BitSet;)Lroj/collect/BitSet;");
 				cw.insn(POP);
 
 				init.insn(ALOAD_2);
@@ -1000,7 +999,8 @@ final class ObjectMapperImpl extends ObjectMapper {
 						   final String actualName, final MethodNode get, final MethodNode set,
 						   final String writeMode, final boolean noRead, final AsType as,
 						   final Class<?> unsafePut,
-						   final String comment) {
+						   final String comment,
+						   final String nullValuePattern) {
 		Type type = as != null ? as.output : fn.fieldType();
 		int actualType = type.getActualType();
 		int methodType = switch (actualType) {
@@ -1131,20 +1131,18 @@ final class ObjectMapperImpl extends ObjectMapper {
 
 				switch (actualType) {
 					case Type.CLASS -> {
-						cw.insn(DUP);
-
-						if (writeMode.equals("CUSTOM")) {
-							assert false : "未实现";
-							// cw.field(GETFIELD, "");
-							// Nullable
-							cw.invokeItf("java/util/function/Predicate", "test", "(Ljava/lang/Object;)Z");
-							cw.jump(IFNE, skip);
-							break _ActualTypeIsClass;
-						}
-
-						cw.vars(ASTORE, 4);
 						cw.visitSizeMax(0, 5);
-						cw.jump(IFNULL, skip);
+						cw.vars(ASTORE, 4);
+						if (nullValuePattern == null) {
+							cw.vars(ALOAD, 4);
+							cw.jump(IFNULL, skip);
+						} else {
+							var desc = MemberDescriptor.fromJavapLike(nullValuePattern);
+							cw.field(GETSTATIC, desc.owner, desc.name, desc.rawDesc);
+							cw.vars(ALOAD, 4);
+							cw.invokeV("java/lang/Object", "equals", "(Ljava/lang/Object;)Z");
+							cw.jump(IFNE, skip);
+						}
 
 						if (writeMode.equals("NON_BLANK")) {
 							var actualTypeName = type.getActualClass();

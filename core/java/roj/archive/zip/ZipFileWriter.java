@@ -134,14 +134,18 @@ public class ZipFileWriter extends OutputStream implements ArchiveWriter {
 		long entryBeginOffset = file.position();
 
 		// 20250221 fixed 文件中不知道长度的Entry但是经过读取已经知道了，所以复制之前需要重写CEntry
-		owner.validateEntry(entry);
-		if ((entry.flags & GP_HAS_EXT) != 0 && entry.getCompressedSize() != 0) {
-			entry = entry.clone();
-			entry.flags &= ~GP_HAS_EXT;
-			ZipArchive.writeLOC(file, buf, entry);
-			file.put(owner.source(), entry.getOffset(), entry.getCompressedSize());
-		} else {
-			file.put(owner.source(), entry.startPos(), entry.endPos() - entry.startPos());
+		Source source = owner.openEntry(entry);
+		try {
+			if ((entry.flags & GP_HAS_EXT) != 0 && entry.getCompressedSize() != 0) {
+				entry = entry.clone();
+				entry.flags &= ~GP_HAS_EXT;
+				ZipArchive.writeLOC(file, buf, entry);
+				file.put(source, entry.getOffset(), entry.getCompressedSize());
+			} else {
+				file.put(source, entry.startPos(), entry.endPos() - entry.startPos());
+			}
+		} finally {
+			owner.closeEntry(source);
 		}
 
 		long delta = entryBeginOffset - entry.startPos();

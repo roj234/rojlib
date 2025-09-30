@@ -26,9 +26,9 @@ public class NIXIM implements Processor {
 	public String name() {return "Nixim注解上下文处理程序";}
 
 	@Override
-	public void afterCompile(BuildContext pc) {
+	public void afterCompilePost(BuildContext pc) {
 		var mapper = Objects.requireNonNull(pc.getProcessor(MAP.class), "Missing dep MAP for NIXIM").getProjectMapper(pc.project);
-		var ctx = pc.getSourceAnnotations(CodeWeaver.A_INJECTION);
+		var ctx = pc.getAnnotatedClasses(CodeWeaver.A_INJECTION);
 
 		for (int i = 0; i < ctx.size(); i++) {
 			ClassNode data = ctx.get(i).getData();
@@ -98,18 +98,18 @@ public class NIXIM implements Processor {
 		MemberDescriptor desc = ClassUtil.getInstance().sharedDesc;
 		desc.owner = dest;
 		desc.name = node.name();
-		desc.rawDesc = mapper.checkFieldType || node.rawDesc().startsWith("(") ? node.rawDesc() : "";
+		desc.rawDesc = mapper.isFieldHasType() || node.rawDesc().startsWith("(") ? node.rawDesc() : "";
 
 		Map<MemberDescriptor, String> map = desc.rawDesc.startsWith("(") ? mapper.getMethodMap() : mapper.getFieldMap();
 
-		List<String> parents = mapper.getSelfSupers().getOrDefault(dest, Collections.emptyList());
+		List<String> parents = mapper.getHierarchy().getOrDefault(dest, Collections.emptyList());
 		int i = 0;
 		while (true) {
 			String name = map.get(desc);
 			if (name != null) return name;
 			System.err.println("failed check " + desc);
 
-			if (mapper.getStopAnchor().contains(desc)) break;
+			if (mapper.getShadows().contains(desc)) break;
 
 			if (i == parents.size()) break;
 			desc.owner = parents.get(i++);

@@ -10,7 +10,7 @@ import roj.asm.type.IType;
 import roj.asm.type.ParameterizedType;
 import roj.asm.type.Signature;
 import roj.asm.type.Type;
-import roj.asmx.mapper.ParamNameMapper;
+import roj.asmx.ParamNameMapper;
 import roj.compiler.api.Compiler;
 import roj.compiler.asm.LPSignature;
 import roj.compiler.ast.ParseTask;

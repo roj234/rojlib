@@ -1,0 +1,23 @@
+{
+  "compilerOptions": {
+    "baseUrl": ".",
+    "jsx": "preserve",
+    "types": ["unconscious/jsx.d.ts"],
+    "module": "ESNext",
+    "paths": {
+      "@/*": ["src/*"],
+      "unconscious": ["unconscious/runtime.js"],
+      "unconscious@shared": ["unconscious/runtime_shared.js"],
+      "unconscious@ext/*": ["unconscious/ext/*"],
+      "unconscious@micro": ["unconscious/runtime_micro.js"]
+    },
+    "lib": [
+      "decorators",
+      "dom",
+      "es5",
+      "scripthost",
+      "es2015.collection"
+    ]
+  },
+  "exclude": ["node_modules", "dist"]
+}

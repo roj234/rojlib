@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>村子里最好的文本比较器</title>
+    <link href="src/merger.css" rel="stylesheet"/>
+</head>
+<body>
+<!-- 新增工具栏容器 -->
+<div class="toolbar">
+    <h1>村子里最好的文本比较器 *现已支持夜间模式</h1>
+    <!-- 主功能区 -->
+    <div class="buttons">
+        <button>← 合并到左</button>
+        <button>→ 合并到右</button>
+        <button>✎ 修改选区</button>
+        <span class="more-btn">⋮ 更多
+            <!-- 折叠菜单 -->
+            <div class="dropdown-menu">
+                <button>📄 导出报告</button>
+                <button>↔️ 交换文本</button>
+                <button>🧹 文本清理</button>
+                <button>⚙️ 设置</button>
+                <button id="night">🌓 夜间模式</button>
+            </div>
+        </span>
+    </div>
+</div>
+<script>
+	// 添加下拉菜单交互
+	document.addEventListener('DOMContentLoaded', () => {
+
+		// 夜间模式切换
+		document.querySelector('#night').addEventListener('click', () => {
+			document.documentElement.setAttribute('data-theme',
+				document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark'
+			);
+		});
+	});
+</script>
+
+<div class="container" id="side-by-side"></div>
+<div class="container" id="unified"></div>
+
+<script src="src/index.js" type="module"></script>
+</body>
+</html>

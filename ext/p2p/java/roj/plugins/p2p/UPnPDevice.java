@@ -188,7 +188,7 @@ public final class UPnPDevice {
 				UPnPGateway.LOGGER.debug("正在请求设备描述: {}", loc);
 				Element xml;
 				try {
-					xml = new XmlParser().parse(HttpRequest.builder().url(loc).header("connection", "close").execute(500).str());
+					xml = new XmlParser().parse(HttpRequest.builder().uri(loc).header("connection", "close").execute(500).text());
 
 					Node node = xml.querySelector("/root/URLBase");
 					String loc1 = node == null ? loc.substring(0, loc.indexOf('/')) : node.textContent();
@@ -258,7 +258,7 @@ public final class UPnPDevice {
 			data.append("</m:").append(action).append("></SOAP-ENV:Body></SOAP-ENV:Envelope>");
 
 			HttpRequest query = HttpRequest.builder()
-				.url(controlURL)
+				.uri(controlURL)
 				.header("Content-Type", "text/xml")
 				.header("SOAPAction", "\""+serviceType+"#"+action+"\"")
 				.header("Connection", "Close")
@@ -267,7 +267,7 @@ public final class UPnPDevice {
 
 			Element header;
 			try {
-				header = new XmlParser().parse(query.execute().str());
+				header = new XmlParser().parse(query.execute().text());
 			} catch (ParseException e) {
 				throw new CorruptedInputException("invalid SOAP response", e);
 			}

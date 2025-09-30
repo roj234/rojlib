@@ -285,11 +285,11 @@ public class SSOPlugin extends Plugin {
 	@Interceptor(value = "PermissionManager", global = true)
 	public Content checkURLPermission(Request req) {
 		String postfix = "";
-		String permissionNode = "web/".concat(req.absolutePath());
+		String permissionNode = "web/".concat(req.rawPath());
 		var user = getUserFromRequest(req);
 		if (user != null) {
 			var group = user.group;
-			if (group == null) return req.server().code(500).cast(Content.internalError("用户组配置错误"));
+			if (group == null) return req.response().code(500).cast(Content.internalError("用户组配置错误"));
 			if (group.isAdmin() || group.has(permissionNode)) return null;
 
 			postfix = "#denied";
@@ -314,9 +314,9 @@ public class SSOPlugin extends Plugin {
 	public String commonJs(Request req) {req.responseHeader().put("cache-control", "max-age=86400");return "const siteName=\""+(siteName != null ? Tokenizer.escape(siteName) : "X-SSO")+"\";";}
 
 	@GET
-	public void logout(Request req, ResponseHeader rh) {
+	public void logout(Request req, Response rh) {
 		req.sendCookieToClient(Collections.singletonList(new Cookie(COOKIE_ID).path("/").expires(-1)));
-		rh.code(302).header("location", "/"+sitePath);
+		rh.code(302).setHeader("location", "/"+sitePath);
 	}
 
 	@POST
@@ -434,12 +434,12 @@ public class SSOPlugin extends Plugin {
 	}
 
 	private final ConcurrentHashMap<String, QRLogin> qrLoginTemp = new ConcurrentHashMap<>();
-	private final class QRLogin implements RequestFinishHandler {
+	private final class QRLogin implements ResponseFinishHandler {
 		final String id;
 		final String address;
 		final long expire = System.currentTimeMillis() + QRCODE_TTL;
 
-		ResponseHeader rh;
+		Response rh;
 		String loginToken, accessToken;
 
 		public QRLogin(String id, String address) {
@@ -467,12 +467,12 @@ public class SSOPlugin extends Plugin {
 			}
 		}
 
-		public synchronized boolean await(ResponseHeader rh) {
+		public synchronized boolean await(Response rh) {
 			if (this.rh != null) return false;
 
 			if (loginToken == null) {
 				this.rh = rh;
-				rh.enableAsyncResponse(QRCODE_TTL).onFinish(this);
+				rh.async(QRCODE_TTL).onFinish(this);
 				return true;
 			}
 
@@ -480,11 +480,11 @@ public class SSOPlugin extends Plugin {
 			return true;
 		}
 
-		@Override public boolean onRequestFinish(ResponseHeader rh, boolean success) {
+		@Override public boolean onResponseFinish(Response response, boolean success) {
 			if (!success) qrLoginTemp.remove(id);
 			return false;
 		}
-		@Override public boolean onResponseTimeout(ResponseHeader rh) throws IllegalRequestException {
+		@Override public boolean onResponseTimeout(Response response) throws IllegalRequestException {
 			qrLoginTemp.remove(id);
 			throw new IllegalRequestException(200, Content.json("{\"ok\":false,\"msg\":\"信号灯已到达\"}"));
 		}
@@ -521,7 +521,7 @@ public class SSOPlugin extends Plugin {
 			if (System.currentTimeMillis() >= obj.expire) {
 				qrLoginTemp.remove(id);
 			} else {
-				if (obj.await(req.server()))
+				if (obj.await(req.response()))
 					return null;
 			}
 		}

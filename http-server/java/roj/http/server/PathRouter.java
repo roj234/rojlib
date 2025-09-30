@@ -18,11 +18,11 @@ public class PathRouter implements Router, Predicate<String> {
 	public PathRouter(File path) {this.path = path.getAbsolutePath();}
 
 	@Override
-	public Content response(Request req, ResponseHeader rh) throws IOException {
+	public Content response(Request req, Response resp) throws IOException {
 		String url = req.path();
-		var file = IOUtil.safePath2(path, url);
+		var file = IOUtil.safePath(path, url);
 		if (file == null) {
-			rh.code(500);
+			resp.code(500);
 			Logger.getLogger().fatal("啊呀呀，你写的路径过滤被绕过了！路径是："+url);
 			return Content.internalError("啊呀呀，你写的路径过滤被绕过了！路径是："+url);
 		}
@@ -30,22 +30,22 @@ public class PathRouter implements Router, Predicate<String> {
 		if (file.isDirectory()) {
 			file = new File(file, "index.html");
 			if (!file.isFile()) {
-				rh.code(403);
+				resp.code(403);
 				return Content.httpError(HttpUtil.FORBIDDEN);
 			}
 		} else if (!file.isFile()) {
-			rh.code(404);
+			resp.code(404);
 			return Content.httpError(HttpUtil.NOT_FOUND);
 		}
 
-		rh.code(200).header("cache-control", HttpUtil.CACHED_REVALIDATE);
+		resp.code(200).setHeader("cache-control", HttpUtil.CACHED_REVALIDATE);
 		return Content.file(req, new DiskFileInfo(file));
 	}
 
 	// (Optional) for OKRouter Prefix Delegation check
 	@Override
 	public boolean test(String url) {
-		var file = IOUtil.safePath2(path, url);
+		var file = IOUtil.safePath(path, url);
 		return file != null && file.exists();
 	}
 }

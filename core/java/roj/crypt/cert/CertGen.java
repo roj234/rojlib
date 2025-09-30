@@ -6,7 +6,6 @@ import roj.crypt.asn1.DerReader;
 import roj.crypt.asn1.DerValue;
 import roj.crypt.asn1.DerWriter;
 import roj.crypt.asn1.KnownOID;
-import roj.text.DateFormat;
 import roj.text.TextUtil;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
@@ -27,7 +26,6 @@ public final class CertGen {
 	public CertGen(SecureRandom srnd) {this.srnd = srnd;}
 
 	private final SecureRandom srnd;
-	private static final DateFormat dateFormat = DateFormat.create("YYYY MM DD HH ii ss \"Z\"");
 
 	public DerWriter generate(CertInfo subject, @NotNull CertInfo issuer) {return generate(subject, issuer, new DerWriter());}
 	public DerWriter generate(CertInfo subject, @NotNull CertInfo issuer, DerWriter dw) {
@@ -51,8 +49,8 @@ public final class CertGen {
 		dw.end(); //end signature
 		writeDN(issuer, dw); //issuer
 		dw.begin(DerValue.SEQUENCE); //begin Validity
-		dw.writeText(DerValue.GeneralizedTime, dateFormat.format(subject.notBefore));
-		dw.writeText(DerValue.GeneralizedTime, dateFormat.format(subject.notAfter));
+		dw.writeText(DerValue.GeneralizedTime, DerWriter.GENERALIZED_TIME.format(subject.notBefore));
+		dw.writeText(DerValue.GeneralizedTime, DerWriter.GENERALIZED_TIME.format(subject.notAfter));
 		dw.end(); //end Validity
 		writeDN(subject, dw); //subject
 		//dw.begin(DerValue.SEQUENCE); //begin SubjectPublicKeyInfo

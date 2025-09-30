@@ -2,8 +2,8 @@ package roj.plugins.ddns;
 
 import roj.config.JsonParser;
 import roj.config.node.MapValue;
-import roj.http.HttpClient;
 import roj.http.HttpRequest;
+import roj.http.HttpResponse;
 import roj.io.IOUtil;
 import roj.text.URICoder;
 import roj.ui.Tty;
@@ -21,19 +21,19 @@ final class CTLightCat extends IpGetter {
 
 	private boolean refreshAccessToken() throws Exception {
 		ByteList body = IOUtil.getSharedByteBuf().putAscii("username=useradmin&psd=").putAscii(URICoder.encodeURIComponent(pass));
-		HttpClient shc = HttpRequest.builder()
-										.url("http://"+catUrl+"/cgi-bin/luci")
+		HttpResponse shc = HttpRequest.builder()
+										.uri("http://"+catUrl+"/cgi-bin/luci")
 										.header("Content-Type","application/x-www-form-urlencoded")
 										.body(ByteList.wrap(body.toByteArray()))
 										.executePooled();
 
-		if (shc.head().getCode() == 302) {
+		if (shc.statusCode() == 302) {
 			refreshTime = System.currentTimeMillis();
-			accessToken = shc.head().getHeaderValue("set-cookie", "sysauth");
+			accessToken = shc.headers().getHeaderValue("set-cookie", "sysauth");
 			if (accessToken != null) return true;
 		}
 
-		Tty.warning("[getAddress]无法获取AccessToken 是否密码错误？: "+shc.head());
+		Tty.warning("[getAddress]无法获取AccessToken 是否密码错误？: "+shc.headers());
 		return false;
 	}
 
@@ -49,8 +49,8 @@ final class CTLightCat extends IpGetter {
 	public InetAddress[] getAddress(boolean checkV6) throws Exception {
 		if (System.currentTimeMillis() - refreshTime > 60000) refreshAccessToken();
 
-		HttpClient shc = HttpRequest.builder()
-			.url("http://"+catUrl+"/cgi-bin/luci/admin/settings/gwinfo?get=part")
+		HttpResponse shc = HttpRequest.builder()
+			.uri("http://"+catUrl+"/cgi-bin/luci/admin/settings/gwinfo?get=part")
 			.header("Cookie", "sysauth="+accessToken)
 			.executePooled();
 

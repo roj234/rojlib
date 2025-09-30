@@ -103,10 +103,10 @@ final class FileWatcher extends IFileWatcher implements Consumer<WatchKey> {
 				case "ENTRY_MODIFY", "ENTRY_CREATE", "ENTRY_DELETE": {
 					String id = key.watchable().toString()+File.separatorChar+event.context();
 					if (new File(id).isDirectory()) break;
-					if (handler.no == ID_LIB) {
+					/*if (handler.no == ID_LIB) {
 						MCMake.EVENT_BUS.post(new LibraryModifiedEvent(handler.owner));
 						break loop;
-					} else {
+					} else */{
 						if (handler.no == ID_SRC && !id.endsWith(".java")) continue;
 
 						// 总是添加，不管是否删除
@@ -173,10 +173,6 @@ final class FileWatcher extends IFileWatcher implements Consumer<WatchKey> {
 			if (proj.resPath.isDirectory()) {
 				key = proj.resPath.toPath().register(watcher, ALL_KIND, ExtendedWatchEventModifier.FILE_TREE);
 				actions.add(arr[0] = new X(proj, key, ID_RES));
-			}
-			if (proj.libPath.isDirectory()) {
-				key = proj.libPath.toPath().register(watcher, ALL_KIND, ExtendedWatchEventModifier.FILE_TREE);
-				actions.add(arr[2] = new X(proj, key, ID_LIB));
 			}
 
 			listeners.put(proj.getName(), arr);

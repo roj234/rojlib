@@ -23,12 +23,17 @@ public class SimpleResolver implements IResolver {
 	private final Function<CharSequence, LinkedClass> resolveToNode;
 
 	public SimpleResolver(ClassLoader classLoader) {
-		this.resolveToNode = s -> {
+		this.resolveToNode = createNodeResolver(classLoader);
+	}
+
+	protected @NotNull Function<CharSequence, LinkedClass> createNodeResolver(ClassLoader classLoader) {
+		return s -> {
 			String typeName = s.toString().concat(".class");
 			try (InputStream in = classLoader == null ? ClassLoader.getSystemResourceAsStream(typeName) : classLoader.getResourceAsStream(typeName)) {
 				if (in != null)
 					return new LinkedClass(ClassNode.parseSkeleton(IOUtil.getSharedByteBuf().readStreamFully(in).toByteArray()));
-			} catch (IOException ignored) {}
+			} catch (IOException ignored) {
+			}
 			return null;
 		};
 	}
@@ -39,7 +44,7 @@ public class SimpleResolver implements IResolver {
 	}
 	@Override public synchronized @NotNull ToIntMap<String> getHierarchyList(ClassDefinition info) {return definitions.computeIfAbsent(info.name(), resolveToNode).getHierarchyList(this);}
 
-	private static final class LinkedClass {
+	public static final class LinkedClass {
 		final ClassNode owner;
 
 		private ToIntMap<String> hierarchyList;

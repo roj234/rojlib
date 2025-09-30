@@ -1,34 +1,35 @@
 package roj.crypt.jar;
 
-import roj.collect.HashMap;
 import roj.collect.ArrayList;
+import roj.collect.HashMap;
 import roj.io.IOUtil;
 import roj.text.LineReader;
 import roj.util.ByteList;
+import roj.util.Helpers;
 
 import java.io.IOException;
 import java.io.InputStream;
 import java.security.MessageDigest;
 import java.util.List;
 import java.util.Map;
-import java.util.function.Function;
 
 /**
  * @author Roj234
  * @since 2024/3/25 16:57
  */
 final class ManifestBytes {
-	byte[] data;
-	Map<String, NamedAttr> namedAttrMap = new HashMap<>();
-	ByteAttr mainAttr;
+	final byte[] data;
+	final Entry mainAttribute;
+	final Map<String, List<Entry>> namedAttributes = new HashMap<>();
 
 	public ManifestBytes(InputStream in) throws IOException {this(IOUtil.read(in));}
 	@SuppressWarnings("fallthrough")
 	public ManifestBytes(byte[] data) {
 		this.data = data;
-		List<ByteAttr> tmp = new ArrayList<>();
 
 		int i = 0, len = data.length;
+		List<Entry> lines = new ArrayList<>(len/72);
+
 		loop:
 		while (true) {
 			int last = i-1;
@@ -47,7 +48,7 @@ final class ManifestBytes {
 						if (lineEnd == -2) lineEnd = i-1;
 
 						if (isEmptyLine || (i == len-1)) {
-							tmp.add(new ByteAttr(lineEnd, isEmptyLine ? last : i, ++i));
+							lines.add(new Entry(lineEnd, isEmptyLine ? last : i, ++i));
 							continue loop;
 						}
 
@@ -65,68 +66,56 @@ final class ManifestBytes {
 			break;
 		}
 
-		Map<String, NamedAttr> map = namedAttrMap;
-		Function<String, NamedAttr> mapper = NamedAttr::new;
-		for (int j = 1; j < tmp.size(); j++) {
-			ByteAttr attr = tmp.get(j);
-			String name = attr.init(data, tmp.get(j-1));
-			map.computeIfAbsent(name, mapper).sections.add(attr);
+		for (int j = 1; j < lines.size(); j++) {
+			Entry attr = lines.get(j);
+			String name = attr.findName(data, lines.get(j-1));
+			namedAttributes.computeIfAbsent(name, Helpers.fnArrayList()).add(attr);
 		}
-		mainAttr = tmp.get(0);
+		mainAttribute = lines.get(0);
 	}
 
-	public byte[] digest(MessageDigest digest, String s) {
-		NamedAttr attr = namedAttrMap.get(s);
-		if (attr == null && s == null) {
-			digest.reset();
-			digest.update(data, mainAttr.offset, mainAttr.startOfNext);
-			return digest.digest();
-		}
-		return attr.digest(digest, data);
+	public byte[] digest(MessageDigest digest) {
+		assert mainAttribute.offset == 0;
+		digest.reset();
+		digest.update(data, mainAttribute.offset, mainAttribute.startOfNext);
+		return digest.digest();
 	}
 
-	static final class NamedAttr {
-		final String name;
-		final List<ByteAttr> sections = new ArrayList<>();
-		NamedAttr(String name) { this.name = name; }
-
-		byte[] digest(MessageDigest digest, byte[] data) {
-			digest.reset();
-			for (ByteAttr section : sections) {
-				digest.update(data, section.offset, section.startOfNext-section.offset);
-			}
-
-			return digest.digest();
+	public byte[] digest(MessageDigest digest, String name) {
+		digest.reset();
+		for (Entry section : namedAttributes.get(name)) {
+			digest.update(data, section.offset, section.startOfNext-section.offset);
 		}
+		return digest.digest();
 	}
-	static final class ByteAttr {
+
+	static final class Entry {
 		int offset;
 		final int endOfLastLine, endOfSection, startOfNext;
 
-		ByteAttr(int endOfLastLine, int endOfSection, int startOfNext) {
+		Entry(int endOfLastLine, int endOfSection, int startOfNext) {
 			this.endOfLastLine = endOfLastLine;
 			this.endOfSection = endOfSection;
 			this.startOfNext = startOfNext;
 		}
 
-		String getAllLines(byte[] data) {
-			int myTerminate = endOfLastLine;
-			while (true) {
-				myTerminate++;
-				if (data[myTerminate] == '\n' && (myTerminate+1 == data.length || data[myTerminate+1] != ' ')) break;
-			}
-			return new String(data, myTerminate, endOfSection - myTerminate - 1);
+		private String getLines(byte[] data) {
+			int start = endOfLastLine;
+			do {
+				start++;
+			} while (data[start] != '\n' || (start + 1 != data.length && data[start + 1] == ' '));
+			return new String(data, start, endOfSection - start - 1);
 		}
 
-		void getAllLines(byte[] data, Map<String, String> map) {
-			for (String line : LineReader.create(getAllLines(data))) {
+		void getLines(byte[] data, Map<String, String> map) {
+			for (String line : LineReader.create(getLines(data))) {
 				int pos = line.indexOf(": ");
 				map.put(line.substring(0, pos), line.substring(pos+2));
 			}
 		}
 
 		@SuppressWarnings("fallthrough")
-		String init(byte[] data, ByteAttr p) {
+		String findName(byte[] data, Entry p) {
 			int i = offset = p.startOfNext;
 			if (data[i++] != 'N' || data[i++] != 'a' || data[i++] != 'm' || data[i++] != 'e' || data[i++] != ':' || data[i++] != ' ') {
 				throw new IllegalStateException("Attribute"+this+" missing name");

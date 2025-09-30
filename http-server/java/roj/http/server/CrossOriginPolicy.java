@@ -37,7 +37,7 @@ public class CrossOriginPolicy {
 			}
 		} else {
 			if (enforceOriginLimit && req.action() != HttpUtil.GET) {
-				req.server().code(403);
+				req.response().code(403);
 				return Content.EMPTY;
 			}
 		}

@@ -26,7 +26,9 @@ import java.net.SocketException;
 import java.util.List;
 import java.util.zip.Deflater;
 
-final class HttpServer11 extends PacketMerger implements PostSetting, ResponseHeader, ContentWriter {
+import static roj.http.server.HttpServer.POST_BUFFER_MAX;
+
+final class HttpServer11 extends PacketMerger implements PayloadInfo, Response, ContentWriter {
 	public static final Logger LOGGER = Logger.getLogger("IIS");
 
 	//region 使用Nixim注入的函数
@@ -60,7 +62,7 @@ final class HttpServer11 extends PacketMerger implements PostSetting, ResponseHe
 
 	private Request req;
 
-	private RequestFinishHandler fh;
+	private ResponseFinishHandler fh;
 	private BodyParser ph;
 
 	private ByteList postBuffer;
@@ -77,7 +79,7 @@ final class HttpServer11 extends PacketMerger implements PostSetting, ResponseHe
 	@Override
 	public void channelOpened(ChannelCtx ctx) {
 		state = RECV_HEAD;
-		time = System.currentTimeMillis() + router.readTimeout(null);
+		time = System.currentTimeMillis() + router.readTimeout(true);
 	}
 
 	@Override
@@ -138,7 +140,7 @@ final class HttpServer11 extends PacketMerger implements PostSetting, ResponseHe
 		switch (state) {
 			case HANG: HttpServer.getInstance().keepalive.remove(this);
 			case HANG_PRE:
-				time = System.currentTimeMillis() + router.readTimeout(null);
+				time = System.currentTimeMillis() + router.readTimeout(false);
 				state = RECV_HEAD;
 			case RECV_HEAD: {
 				// first line
@@ -176,7 +178,7 @@ final class HttpServer11 extends PacketMerger implements PostSetting, ResponseHe
 					if (act < 0) throw IllegalRequestException.badRequest("无效请求类型 "+method);
 
 					req = HttpServer.getInstance().request().init(act, path, query, version);
-					req.server = this;
+					req.response = this;
 				}
 
 				// headers
@@ -212,7 +214,6 @@ final class HttpServer11 extends PacketMerger implements PostSetting, ResponseHe
 				postSize = -1;
 
 				if (checkHeader(ctx, this)) return;
-				time = System.currentTimeMillis() + router.readTimeout(req);
 
 				boolean chunk = "chunked".equalsIgnoreCase(encoding);
 
@@ -261,7 +262,7 @@ final class HttpServer11 extends PacketMerger implements PostSetting, ResponseHe
 		// post accept
 		if (ph != null || state != RECV_BODY) return;
 
-		if (len > 8388608) throw new IllegalArgumentException("必须使用PostHandler");
+		if (len > POST_BUFFER_MAX) throw new IllegalArgumentException("请求体过大("+len+")必须使用PostHandler");
 
 		if (len <= 65535) {
 			assert postBuffer == null;
@@ -273,15 +274,15 @@ final class HttpServer11 extends PacketMerger implements PostSetting, ResponseHe
 		}
 	}
 
-	public long postExceptLength() {return exceptPostSize;}
-	public void postAccept(long len, int t) {
+	public long expectedLength() {return exceptPostSize;}
+	public void accept(long len, int t) {
 		if (state == RECV_HEAD) state = RECV_BODY;
 		else throw new IllegalStateException();
 		postSize = len;
 		time += t;
 	}
-	public boolean postAccepted() {return state == RECV_BODY;}
-	public void postHandler(BodyParser o) {ph = o; ch.channel().addAfter(ch, "http:body_parser", o);}
+	public boolean isAccepted() {return state == RECV_BODY;}
+	public void setParser(BodyParser bodyParser) {ph = bodyParser; ch.channel().addAfter(ch, "http:body_parser", bodyParser);}
 
 	private static void validateHeader(Headers h) throws IllegalRequestException {
 		int c = h.getCount("content-length");
@@ -345,7 +346,7 @@ final class HttpServer11 extends PacketMerger implements PostSetting, ResponseHe
 		ctx.close();
 	}
 
-	private boolean checkHeader(ChannelCtx ctx, PostSetting cfg) throws IOException {
+	private boolean checkHeader(ChannelCtx ctx, PayloadInfo cfg) throws IOException {
 		try {
 			router.checkHeader(req, cfg);
 			ctx.channelOpened();
@@ -424,7 +425,7 @@ final class HttpServer11 extends PacketMerger implements PostSetting, ResponseHe
 		int enc = HttpServer.ENC_PLAIN;
 		if (body == null) h.put("content-length", "0");
 		else {
-			body.prepare(this, h);
+			body.prepare(this);
 			if ((flag & FLAG_COMPRESS) != 0 && req.containsKey("accept-encoding") && !h.containsKey("content-encoding") && !h.header("content-length").equals("0")) {
 				enc = HttpServer.getInstance().parseAcceptEncoding(req.get("accept-encoding"));
 			}
@@ -476,13 +477,13 @@ final class HttpServer11 extends PacketMerger implements PostSetting, ResponseHe
 	}
 	@Override public Request request() {return req;}
 
-	@Override public ResponseHeader code(int code) {this.code = (short) code;return this;}
-	@Override public ResponseHeader die() {req.responseHeader.put("connection", "close");return this;}
-	@Override public ResponseHeader enableAsyncResponse(int extraTimeMs) {flag |= FLAG_ASYNC;time = System.currentTimeMillis()+extraTimeMs;return this;}
-	@Override public void body(Content resp) {
+	@Override public Response code(int code) {this.code = (short) code;return this;}
+	@Override public Response die() {req.responseHeader.put("connection", "close");return this;}
+	@Override public Response async(int extraTimeMs) {flag |= FLAG_ASYNC;time = System.currentTimeMillis()+extraTimeMs;return this;}
+	@Override public void body(Content content) {
 		if ((flag & FLAG_ASYNC) == 0) {
 			if (state != RECV_HEAD) {
-				this.body = resp;
+				this.body = content;
 				return;
 			}
 
@@ -495,7 +496,7 @@ final class HttpServer11 extends PacketMerger implements PostSetting, ResponseHe
 		var lock = ch.channel().lock();
 		lock.lock();
 		try {
-			body = resp;
+			body = content;
 			time = System.currentTimeMillis() + router.writeTimeout(req, body);
 			sendHead();
 		} catch (Exception e) {
@@ -510,8 +511,8 @@ final class HttpServer11 extends PacketMerger implements PostSetting, ResponseHe
 		}
 	}
 
-	@Override public ResponseHeader enableCompression() {flag |= FLAG_COMPRESS; return this;}
-	@Override public ResponseHeader disableCompression() {flag &= ~FLAG_COMPRESS; return this;}
+	@Override public Response enableCompression() {flag |= FLAG_COMPRESS; return this;}
+	@Override public Response disableCompression() {flag &= ~FLAG_COMPRESS; return this;}
 
 	@Override public Headers headers() {return req.responseHeader;}
 	//endregion
@@ -583,7 +584,7 @@ final class HttpServer11 extends PacketMerger implements PostSetting, ResponseHe
 		}
 
 		try {
-			if (fh != null && fh.onRequestFinish(this, !hasError())) {
+			if (fh != null && fh.onResponseFinish(this, !hasError())) {
 				state = CLOSED;
 				finish(true);
 				MyChannel channel = ch.channel();
@@ -717,7 +718,7 @@ final class HttpServer11 extends PacketMerger implements PostSetting, ResponseHe
 		hTE.reset(ch);
 		deflate(ch, HttpServer.ENC_PLAIN, null);
 
-		if (fh != null) fh.onRequestFinish(this, false);
+		if (fh != null) fh.onResponseFinish(this, false);
 
 		try {
 			super.channelClosed(ch);
@@ -728,7 +729,7 @@ final class HttpServer11 extends PacketMerger implements PostSetting, ResponseHe
 		if (e != null) Helpers.athrow(e);
 	}
 
-	public void onFinish(RequestFinishHandler o) {fh = o;}
+	public void onFinish(ResponseFinishHandler onFinish) {fh = onFinish;}
 	public boolean hasError() {return (flag & FLAG_ERRORED) != 0;}
 	//endregion
 }

@@ -40,20 +40,15 @@ public final class Javap {
 		}));
 		var verify = literal("verify").comment("验证Jar签名").then(argument("文件", Argument.file()).executes(ctx -> {
 			try (var zf = new ZipFile(ctx.argument("文件", File.class))) {
-				System.out.println("正在验证"+zf.toString());
+				System.out.println("正在验证"+zf);
 				JarVerifier verifier = JarVerifier.create(zf, null);
 				if (verifier == null) {
 					System.out.println("文件没有清单属性");
 					return;
 				}
-				if (!verifier.isSigned()) {
-					System.out.println("文件没有签名");
-					return;
-				}
 
-				verifier.ensureManifestValid(false);
-				System.out.println("清单和元签名校验通过");
-				System.out.println("是自签证书:"+!verifier.isSignTrusted());
+				int trustLevel = verifier.getTrustLevel();
+				System.out.println("信任等级:"+JarVerifier.getTrustLevelName(trustLevel)+"("+trustLevel+")");
 				System.out.println("签名算法:"+verifier.getAlgorithm());
 
 				for (ZEntry entry : zf.entries()) {

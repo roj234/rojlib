@@ -25,6 +25,8 @@ import java.util.zip.Deflater;
  */
 public final class HttpServer implements BiConsumer<String, String> {
 	public static final String SERVER_NAME = "openresty";
+	public static final int POST_BUFFER_MAX = 1048576;
+
 	private static final int KEEPALIVE_POOL = 32;
 	private static final int REQUEST_POOL = 10;
 

@@ -12,7 +12,8 @@ public final class Logger {
 	public static LogContext getRootContext() { return rootContext; }
 
 	public static Logger getLogger() { return getLogger(Reflection.getCallerClass(2).getSimpleName()); }
-	public static Logger getLogger(String name) { return getLogger(new LogContext(rootContext, name)); }
+	public static Logger getLogger(String name) { return getLogger(rootContext.child(name)); }
+	public static Logger getLogger(Logger parent, String name) { return getLogger(parent.ctx.child(name)); }
 	public static Logger getLogger(LogContext ctx) { return ctx.logger == null ? ctx.logger = new Logger(ctx) : ctx.logger; }
 
 	public static final Logger FALLBACK = getLogger("RojLib");

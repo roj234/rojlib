@@ -1,6 +1,7 @@
 package roj.asmx.injector;
 
 import org.jetbrains.annotations.NotNull;
+import roj.annotation.MayMutate;
 import roj.asm.*;
 import roj.asm.annotation.Annotation;
 import roj.asm.annotation.ArrayVal;
@@ -232,7 +233,7 @@ public class CodeWeaver implements Transformer {
 
 	protected final Map<String, Patch> registry = new HashMap<>();
 
-	public final void load(ClassNode data) throws WeaveException {
+	public final void load(@MayMutate ClassNode data) throws WeaveException {
 		Patch nx = read(data);
 		if (nx == null) return;
 		if (registry.putIfAbsent(nx.self, nx) != null) {

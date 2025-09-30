@@ -1,0 +1,16 @@
+{
+  "compilerOptions": {
+    "baseUrl": ".",
+    "declaration": true,
+    "emitDeclarationOnly": true,
+    "jsx": "preserve",
+    "paths": {
+      "@/*": ["src/*"],
+      "unconscious": ["unconscious/runtime.js"],
+      "unconscious@shared": ["unconscious/runtime_shared.js"],
+      "unconscious@ext/*": ["unconscious/ext/*"],
+      "unconscious@micro": ["unconscious/runtime_micro.js"]
+    }
+  },
+  "exclude": ["node_modules", "dist", "unconscious"]
+}

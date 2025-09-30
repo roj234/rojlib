@@ -9,7 +9,7 @@ import roj.collect.IntMap;
 import roj.http.Headers;
 import roj.http.server.FileInfo;
 import roj.http.server.MimeType;
-import roj.http.server.ResponseHeader;
+import roj.http.server.Response;
 import roj.io.IOUtil;
 import roj.io.source.Source;
 import roj.io.vfs.VirtualFile;
@@ -64,7 +64,7 @@ public final class QPakFileSystem implements WritableFileSystem {
 
 		// 2024/07/24 将文件存在检查移动到这里
 		if (alsoReadFrom != null) {
-			String safePath = IOUtil.safePath(pathname);
+			String safePath = IOUtil.normalizePath(pathname);
 			if (safePath.isEmpty()) safePath = "/";
 			File file = safePath.equals("/") ? alsoReadFrom : new File(alsoReadFrom, safePath);
 			if (file.exists()) {
@@ -100,7 +100,7 @@ public final class QPakFileSystem implements WritableFileSystem {
 		@Override public long length(boolean deflated) {return path.length();}
 		@Override public InputStream get(boolean deflated, long offset) throws IOException {return getInputStream(path);}
 		@Override public long lastModified() {return path.lastModified();}
-		@Override public void prepare(ResponseHeader rh, Headers h) {
+		@Override public void prepare(Response rh, Headers h) {
 			h.putIfAbsent("Content-Disposition", "attachment; filename=\""+ URICoder.encodeURIComponent(path.getName())+'"');
 			h.putIfAbsent("Content-Type", MimeType.getMimeType(path.getName()));
 		}

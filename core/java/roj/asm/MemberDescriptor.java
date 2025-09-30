@@ -1,6 +1,7 @@
 package roj.asm;
 
 import roj.asm.cp.CstRef;
+import roj.text.CharList;
 
 /**
  * 成员描述符
@@ -57,7 +58,14 @@ public class MemberDescriptor implements Member {
 	}
 
 	@Override
-	public String toString() { return owner + '.' + name + (rawDesc.isEmpty()?"":(rawDesc.startsWith("(")?"":" ") + rawDesc); }
+	public String toString() { return owner+'.'+toNameAndDesc(); }
+
+	public String toNameAndDesc() {
+		boolean flag = rawDesc.isEmpty() || rawDesc.startsWith("(");
+		return new CharList().append(name).append(flag ? "" : " ").append(rawDesc).toStringAndFree();
+	}
+
+	public boolean isMethod() {return rawDesc.startsWith("(");}
 
 	@Override
 	public boolean equals(Object o) {

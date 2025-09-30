@@ -156,7 +156,7 @@ public class ChunkUpload {
         return sb.append("]}");
 	}
 
-	public void uploadProcessor(Request req, PostSetting setting) throws IOException {
+	public void uploadProcessor(Request req, PayloadInfo setting) throws IOException {
 		var task = getTask(req.argument("taskId"));
 		if (task == null) throw IllegalRequestException.BAD_REQUEST;
 		int fragment = Integer.parseInt(req.argument("fragment"));
@@ -165,13 +165,13 @@ public class ChunkUpload {
 		var fc = task.getFc().position((long) task.fragmentSize * fragment);
 		var end = (fragment+1 == task.fragmentCount ? task.length : fc.position()+task.fragmentSize);
 
-		long uploadSize = setting.postExceptLength();
+		long uploadSize = setting.expectedLength();
 		long acceptSize = end - fc.position();
 		if (uploadSize >= 0 && acceptSize != uploadSize) throw IllegalRequestException.BAD_REQUEST;
 
-		setting.postAccept(acceptSize, 60000);
+		setting.accept(acceptSize, 60000);
 
-		setting.postHandler(new BodyParser() {
+		setting.setParser(new BodyParser() {
 			@Override
 			public void channelRead(ChannelCtx ctx, Object msg) throws IOException {
 				var buf = (DynByteBuf) msg;

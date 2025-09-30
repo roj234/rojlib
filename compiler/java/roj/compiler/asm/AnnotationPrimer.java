@@ -31,7 +31,7 @@ public final class AnnotationPrimer extends Annotation {
 	public boolean valueOnly;
 
 	public AnnotationPrimer(String type, int pos) {
-		this.setType(type);
+		super(type);
 		this.pos = pos - 1;
 	}
 

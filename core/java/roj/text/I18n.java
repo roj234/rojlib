@@ -21,10 +21,9 @@ public class I18n {
 				line = line.trim();
 				if (line.startsWith("#") || line.isEmpty()) continue;
 
-				int i = line.indexOf(": ");
+				int i = line.indexOf('=');
 				String k = line.substring(0, i++);
-				i++;
-				map.put(k, line.charAt(i) == '"' ? Tokenizer.unescape(line.substring(i+1, line.length()-1)) : line.substring(i));
+				map.put(k, Tokenizer.unescape(line.substring(i)));
 			}
 		} catch (Exception e) {
 			e.printStackTrace();

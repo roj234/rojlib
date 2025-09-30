@@ -82,20 +82,20 @@ public class ChatManager extends Plugin {
 	}
 
 	@Interceptor
-	public void logon(Request req, PostSetting ps) throws IllegalRequestException {
+	public void logon(Request req, PayloadInfo ps) throws IllegalRequestException {
 		var value = initUsr(req);
 		if (value == null) throw new IllegalRequestException(403);
 		req.threadLocal().put("USER", value);
 
-		if (ps != null) ps.postAccept(65536, 0);
+		if (ps != null) ps.accept(65536, 0);
 	}
 
 	@Interceptor
-	public Object parallelLimit(Request req, ResponseHeader rh, PostSetting ps) {
+	public Object parallelLimit(Request req, Response rh, PayloadInfo ps) {
 		ChatUser u = (ChatUser) req.threadLocal().get("USER");
 
 		if (u.uploadTasks.get() < 0) {
-			rh.code(503).header("Retry-After", "60");
+			rh.code(503).setHeader("Retry-After", "60");
 			return error("系统繁忙,请稍后再试");
 		}
 
@@ -110,7 +110,7 @@ public class ChatManager extends Plugin {
 
 	@GET("file/**")
 	@Interceptor({"logon","parallelLimit"})
-	public Content getFile(Request req, ResponseHeader rh) {
+	public Content getFile(Request req, Response rh) {
 		String safePath = req.path();
 		File file = new File(attDir, safePath);
 		if (!file.isFile()) return rh.code(404).noContent();
@@ -136,21 +136,21 @@ public class ChatManager extends Plugin {
 	}
 
 	@Interceptor
-	public void fileUpload(Request req, ResponseHeader rh, PostSetting ps) {
+	public void fileUpload(Request req, Response rh, PayloadInfo ps) {
 		ChatUser u = (ChatUser) req.threadLocal().get("USER");
 
 		var paths = TextUtil.split(req.path(), '/');
 		boolean img = paths.get(1).contains("img");
 		int count = TextUtil.parseInt(paths.get(2));
 
-		ps.postAccept(4194304, 10000);
-		ps.postHandler(new UploadHandler(req, count, u.id, img));
+		ps.accept(4194304, 10000);
+		ps.setParser(new UploadHandler(req, count, u.id, img));
 	}
 
 	@POST(value = "file/**")
 	@Interceptor({"logon","parallelLimit","fileUpload"})
 	public String postFile(Request req) {
-		UploadHandler ph = (UploadHandler) req.postHandler();
+		UploadHandler ph = (UploadHandler) req.bodyParser();
 
 		JsonSerializer ser = new JsonSerializer();
 		ser.emitList();
@@ -199,12 +199,12 @@ public class ChatManager extends Plugin {
 	}
 
 	@GET("user/head/**")
-	public Content user__head(Request req, ResponseHeader rh) {
+	public Content user__head(Request req, Response rh) {
 		File img = new File(attDir, req.path());
 		System.out.println(img.getAbsolutePath());
 		if (!img.isFile()) img = new File(attDir, "default");
 
-		rh.header("Access-Control-Allow-Origin", "*");
+		rh.setHeader("Access-Control-Allow-Origin", "*");
 		DiskFileInfo info = new DiskFileInfo(img);
 		return Content.file(req, info);
 	}

@@ -114,7 +114,7 @@ class LZMA2WriterN extends OutputStream {
 		write0(buf, (long) Unsafe.ARRAY_BYTE_BASE_OFFSET+off, len);
 	}
 	public final void write(long off, int len) throws IOException { write0(null, off, len); }
-	public final void write0(Object buf, long off, int len) throws IOException {
+	private void write0(Object buf, long off, int len) throws IOException {
 		try {
 			while (len > 0) {
 				int w = Math.min(inSize - inOffset, len);

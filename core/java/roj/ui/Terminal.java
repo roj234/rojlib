@@ -47,7 +47,7 @@ public class Terminal implements KeyHandler {
 	protected Runnable interruptHandler;
 	protected List<IntFunction<Boolean>> keyHandler = Collections.emptyList();
 
-	private boolean isDirty, _selectAll;
+	private boolean isDirty, _selectAll, arrowKeyPressed;
 
 	public Terminal(String prompt) {setPrompt(prompt);}
 	public void setPrompt(String prompt) {
@@ -75,7 +75,7 @@ public class Terminal implements KeyHandler {
 	protected CharList input() {return input;}
 	private void checkAnsi() {
 		invisible.clear();
-		Matcher m = ANSI_ESCAPE.matcher(input);
+		Matcher m = ANSI_SEQ.matcher(input);
 
 		int i = 0;
 		while (m.find(i)) {
@@ -110,6 +110,7 @@ public class Terminal implements KeyHandler {
 		input.clear();
 		input.append(backupInput);
 		backupInput = null;
+		arrowKeyPressed = false;
 
 		if (highlight != null) {
 			highlight = null;
@@ -243,6 +244,7 @@ public class Terminal implements KeyHandler {
 
 					if (tabs.size() > 0) {
 						setComplete((tabId == 0 ? tabs.size() : tabId) - 1);
+						arrowKeyPressed = true;
 						break;
 					}
 
@@ -262,6 +264,7 @@ public class Terminal implements KeyHandler {
 
 					if (tabs.size() > 0) {
 						setComplete((tabId+1) % tabs.size());
+						arrowKeyPressed = true;
 						break;
 					}
 
@@ -299,7 +302,8 @@ public class Terminal implements KeyHandler {
 					if (length() > INPUT_MAX) { beep(); return; }
 
 					if (tabs.size() > 0) {
-						endCompletion(true);
+						if (arrowKeyPressed) endCompletion(true);
+						else setComplete((tabId+1) % tabs.size());
 						break;
 					}
 

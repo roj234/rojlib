@@ -46,7 +46,7 @@ final class MySelector extends ArrayList<SelectionKey> implements Set<SelectionK
 							.build();
 					selectedKeys = Handles.lookup().findVarHandle(t.getClass(), "selectedKeys", Set.class);
 					publicSelectedKeys = Handles.lookup().findVarHandle(t.getClass(), "publicSelectedKeys", Set.class);
-					publicKeys = Handles.lookup().findVarHandle(t.getClass(), "publicKeys", HashSet.class);
+					publicKeys = Handles.lookup().findVarHandle(t.getClass(), "publicKeys", Set.class);
 				}
 			}
 		}

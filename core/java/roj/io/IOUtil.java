@@ -8,7 +8,6 @@ import roj.collect.ArrayList;
 import roj.compiler.plugins.annotations.Attach;
 import roj.concurrent.FastThreadLocal;
 import roj.config.node.IntValue;
-import roj.config.node.LongValue;
 import roj.crypt.Base64;
 import roj.crypt.CRC32;
 import roj.reflect.Reflection;
@@ -468,27 +467,21 @@ public final class IOUtil {
 	/**
 	 * 路径过滤函数，处理不可信的用户输入路径.
 	 */
-	public static String safePath(String path) {return safePath(path, true);}
-	@NotNull
-	public static String safePath(String path, boolean silent) throws InvalidPathException {
+	public static String normalizePath(String path) {
 		CharList sb = getSharedCharBuf();
 
 		int end = 0;
 		int i = 0;
 		while (i < path.length()) {
 			var c = path.charAt(i);
-			// 分号
-			if (c < 32 || c == File.pathSeparatorChar) {
-				if (!silent) throw new InvalidPathException(path, "illegal char", i);
-				break;
-			}
+			if (c < 32) throw new IllegalArgumentException("Illegal character in path");
 			i++;
 			end = i;
 		}
 
-		sb.append(path, 0, end).trim()
+		sb.append(path, 0, end)
 		  .replace(File.separatorChar, '/') // 在linux上，\是合法的文件名组成部分，而不是路径分隔符，而windows上二者皆是
-		  .replaceInReplaceResult("//", "/");
+		  .replaceRecursively("//", "/");
 
 		var paths = TextUtil.split(sb, '/');
 		if (sb.endsWith("/")) paths.add("");
@@ -498,8 +491,7 @@ public final class IOUtil {
 				paths.remove(j);
 			} else if (s.equals("..")) {
 				paths.remove(j);
-				if (j > 0) paths.remove(--j);
-				else if (!silent) throw new InvalidPathException(path, "illegal directory", j);
+				if (j > 0 && !isWindowsPartition(paths.get(j-1))) paths.remove(--j);
 			} else {
 				j++;
 			}
@@ -511,48 +503,97 @@ public final class IOUtil {
 	/**
 	 * 这是另外一个实现
 	 * @param base 允许访问的目录
-	 * @param relative 不可信的用户输入
+	 * @param child 不可信的用户输入
 	 * @return 如果输入合法，那么返回非空
 	 */
 	@Nullable
-	public static File safePath2(String base, String relative) {
-		File file = new File(base, relative);
+	public static File safePath(String base, String child) {
+		File file = new File(base, child);
 		try {
 			if (file.getCanonicalPath().startsWith(base)) return file;
 		} catch (IOException ignored) {}
 		return null;
 	}
-	public static File relativePath(File relativeBase, String myPath) {
-		File pathFile = new File(myPath);
+
+	/**
+	 * return relative path from base if child is not absolute.
+	 */
+	public static File resolvePath(File base, String child) {
+		File pathFile = new File(child);
 		if (pathFile.isAbsolute()) {
 			return pathFile;
 		} else {
-			return new File(relativeBase, myPath);
+			return new File(base, child);
 		}
 	}
 
-	public static long movePath(File from, File to, boolean move) throws IOException {
-		if (!from.isDirectory()) {
-			if (move) return from.renameTo(to) ? 1 : 0;
-			copyFile(from, to);
-			return 1;
-		}
-		if (from.equals(to)) return 1;
+	private static boolean isWindowsPartition(String path) {
+		return path.length() >= 2 && path.charAt(1) == ':' && ((path.charAt(0) >= 'A' && path.charAt(0) <= 'Z') || (path.charAt(0) >= 'a' && path.charAt(0) <= 'z'));
+	}
 
-		LongValue state = new LongValue();
+	/**
+	 * 将目录A转换为相对于目录B的相对路径
+	 * @param child1 源路径
+	 * @param base1 基准路径
+	 * @return 相对路径，如果无法转换则返回null
+	 */
+	@Nullable
+	public static String relativizePath(String base1, String child1) {
+		var base = TextUtil.split(normalizePath(base1), '/');
+		var child = TextUtil.split(normalizePath(child1), '/');
+
+		int baseCount = base.size();
+		int childCount = child.size();
+
+		// skip matching names
+		int n = Math.min(baseCount, childCount);
+		int i = 0;
+		while (i < n) {
+			if (!base.get(i).equals(child.get(i)))
+				break;
+			i++;
+		}
+		if (i == 0 && isWindowsPartition(child.get(i))) return null;
+
+		// remaining elements in child
+		List<String> childRemaining = child.subList(i, childCount);
+
+		// matched all of base
+		if (i == baseCount) return TextUtil.join(childRemaining, "/");
+
+		List<String> baseRemaining = base.subList(i, baseCount);
+
+		var sb = IOUtil.getSharedCharBuf().padEnd("../", baseRemaining.size() * 3);
+
+		for (int j = 0; j < childRemaining.size(); j++) {
+			sb.append(childRemaining.get(j)).append('/');
+		}
+
+		sb.setLength(sb.length()-1);
+		return sb.toString();
+	}
+
+	public static void movePath(File from, File to, boolean move) throws IOException {
+		if (from.equals(to)) return;
+
+		CopyOption[] OPTIONS = {StandardCopyOption.REPLACE_EXISTING};
+
+		if (!from.isDirectory()) {
+			if (move) Files.move(from.toPath(), to.toPath(), OPTIONS);
+			else Files.copy(from.toPath(), to.toPath(), OPTIONS);
+			return;
+		}
+
 		int len = from.getAbsolutePath().length()+1;
-		to.mkdirs();
-		Files.walkFileTree(from.toPath(), new SimpleFileVisitor<Path>() {
+		Files.createDirectories(to.toPath());
+		Files.walkFileTree(from.toPath(), new SimpleFileVisitor<>() {
 			@Override
 			public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) {
 				String relpath = dir.toString();
 				if (relpath.length() > len) {
 					relpath = relpath.substring(len);
 					if (!new File(to, relpath).mkdir()) {
-						state.value |= Long.MIN_VALUE;
 						return FileVisitResult.TERMINATE;
-					} else {
-						state.value += 1L << 20;
 					}
 				}
 				return FileVisitResult.CONTINUE;
@@ -560,19 +601,9 @@ public final class IOUtil {
 
 			@Override
 			public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
-				File from = file.toFile();
-				File target = new File(to, file.toString().substring(len));
-				if (move) {
-					if (from.renameTo(target)) {
-						state.value++;
-					} else {
-						state.value |= Long.MIN_VALUE;
-						return FileVisitResult.TERMINATE;
-					}
-				} else {
-					copyFile(from, target);
-					state.value++;
-				}
+				Path target = to.toPath().resolve(file.toString().substring(len));
+				if (move) Files.move(file, target, OPTIONS);
+				else Files.copy(file, target, OPTIONS);
 				return FileVisitResult.CONTINUE;
 			}
 
@@ -582,7 +613,6 @@ public final class IOUtil {
 				return FileVisitResult.CONTINUE;
 			}
 		});
-		return state.value;
 	}
 
 	@Attach

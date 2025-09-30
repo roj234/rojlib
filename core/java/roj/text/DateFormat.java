@@ -3,11 +3,9 @@ package roj.text;
 import org.jetbrains.annotations.ApiStatus;
 import roj.annotation.MayMutate;
 import roj.collect.ArrayList;
-import roj.collect.BitSet;
 import roj.collect.Int2IntMap;
 import roj.collect.IntList;
 import roj.io.IOUtil;
-import roj.util.Helpers;
 
 import java.util.Calendar;
 import java.util.TimeZone;
@@ -87,29 +85,62 @@ public final class DateFormat {
 		IntList formats = new IntList();
 		ArrayList<String> formatChars = new ArrayList<>();
 
-		Tokenizer wr = new Tokenizer().literalEnd(BitSet.from("\" ")).init(format);
-		try {
-			while (wr.hasNext()) {
-				Token w = wr.next();
-				if (w.type() == Token.LITERAL) {
-					String val = w.text();
-					Int2IntMap.Entry entry = STRATEGIES.getEntry(val.charAt(0) | (val.length() << 16));
-					if (entry == null) throw wr.err("unknown strategy "+val);
-					int strategy = entry.getIntValue();
-					formats.add(strategy);
-				} else if (w.type() == Token.STRING) {
-					formats.add(-1);
-					formatChars.add(w.text());
+		int prevI = 0;
+		int currentKind = 0;
+		for (int i = 0; i <= format.length(); i++) {
+			char c = 0;
+			if (i == format.length() || currentKind != kindOf(c = format.charAt(i))) {
+				var pattern = format.substring(prevI, i);
+				prevI = i;
+
+				if (currentKind == 0) {
+					var entry = STRATEGIES.getEntry(pattern.charAt(0) | (pattern.length() << 16));
+					if (entry == null) throw new IllegalStateException("invalid pattern "+pattern);
+					formats.add(entry.value);
+					currentKind = 2;
 				} else {
-					throw wr.err("未预料的类型");
+					pattern = pattern.trim();
+					if (!pattern.isEmpty()) {
+						formats.add(-1);
+						formatChars.add(pattern);
+					}
+					currentKind = 0;
+				}
+
+				if (c == '"') {
+					var output = IOUtil.getSharedCharBuf();
+					boolean slash = false;
+
+					try {
+						while (true) {
+							c = format.charAt(++i);
+							if (slash) {
+								i = Tokenizer.unescapeChar(format, c, output, i);
+								slash = false;
+							} else if (c == '"') {
+								prevI = ++i;
+								break;
+							} else if (c == '\\') {
+								slash = true;
+							} else {
+								output.append(c);
+							}
+						}
+					} catch (Exception e) {
+						throw new IllegalArgumentException("invalid pattern ", e);
+					}
+
+					formats.add(-1);
+					formatChars.add(output.toString());
+					currentKind = 0;
 				}
 			}
-		} catch (ParseException e) {
-			Helpers.athrow(e);
 		}
 
 		return new DateFormat(formats.toArray(), formatChars.toArray(new String[formatChars.size()]));
 	}
+	private static int kindOf(char c) {return Character.isAlphabetic(c) ? 0 : c == '"' ? 1 : 2;}
+
 	private DateFormat(int[] formats, String[] chars) {
 		this.formats = formats;
 		this.chars = chars;

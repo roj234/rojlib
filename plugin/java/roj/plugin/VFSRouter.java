@@ -1,7 +1,6 @@
 package roj.plugin;
 
 import roj.collect.HashMap;
-import roj.text.Tokenizer;
 import roj.http.HttpUtil;
 import roj.http.server.*;
 import roj.io.IOUtil;
@@ -9,6 +8,7 @@ import roj.io.vfs.VirtualFileSystem;
 import roj.text.CharList;
 import roj.text.Formatter;
 import roj.text.TextUtil;
+import roj.text.Tokenizer;
 import roj.util.Helpers;
 
 import java.io.File;
@@ -43,7 +43,7 @@ public class VFSRouter implements Router, Predicate<String> {
 	}
 
 	@Override
-	public Content response(Request req, ResponseHeader rh) throws IOException {
+	public Content response(Request req, Response resp) throws IOException {
 		String url = req.path();
 		if (url.equals("@@pi.js")) return Content.file(req, js);
 		else if (url.equals("@@pi.css")) return Content.file(req, css);
@@ -90,11 +90,11 @@ public class VFSRouter implements Router, Predicate<String> {
 			}
 		}
 		if (!file.isFile()) {
-			rh.code(404);
+			resp.code(404);
 			return Content.httpError(HttpUtil.NOT_FOUND);
 		}
 
-		rh.code(200).header("cache-control", HttpUtil.CACHED_REVALIDATE);
+		resp.code(200).setHeader("cache-control", HttpUtil.CACHED_REVALIDATE);
 		return Content.file(req, fs.toFileInfo(file));
 	}
 
@@ -103,7 +103,7 @@ public class VFSRouter implements Router, Predicate<String> {
 	public boolean test(String url) {
 		if (url.startsWith("@@pi.")) return true;
 
-		url = IOUtil.safePath(url);
+		url = IOUtil.normalizePath(url);
 		return fs.getPath(url).exists();
 	}
 }

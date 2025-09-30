@@ -33,7 +33,7 @@ public abstract sealed class Downloader implements Runnable, Closeable, ChannelH
 		state = DOWNLOADING;
 
 		HttpHead head = client.response();
-		int code = head.getCode();
+		int code = head.statusCode();
 		if (code < 200 || code > 299) throw new FileNotFoundException("远程返回: "+head);
 
 		DownloadTask.LOGGER.trace("子任务{}: 已连接服务器 {}", this, head);

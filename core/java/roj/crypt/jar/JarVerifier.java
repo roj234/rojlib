@@ -1,5 +1,6 @@
 package roj.crypt.jar;
 
+import org.intellij.lang.annotations.MagicConstant;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import roj.archive.ArchiveFile;
@@ -12,7 +13,6 @@ import roj.crypt.CryptoFactory;
 import roj.crypt.asn1.KnownOID;
 import roj.io.IOUtil;
 import roj.io.source.Source;
-import roj.text.CharList;
 import roj.util.ArrayCache;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
@@ -26,10 +26,7 @@ import java.security.*;
 import java.security.cert.Certificate;
 import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
+import java.util.*;
 import java.util.jar.Attributes;
 import java.util.jar.Manifest;
 
@@ -38,11 +35,22 @@ import java.util.jar.Manifest;
  * @since 2024/3/22 19:44
  */
 public class JarVerifier {
-	private static final String CREATED_BY = "ImpLib/JarSigner (v1.3)";
+	private static final String CREATED_BY = "ImpLib/JarSigner (v1.4)";
 	private static final HashSet<String> VALID_CERTIFICATE_EXTENSION = new HashSet<>("rsa", "dsa", "ec");
 	private static final List<String> SECURE_HASH_ALGORITHMS = Arrays.asList("SHA-512", "SHA-384", "SHA-256");
 	private static final ThreadLocal<Map<String, MessageDigest>> DIGESTS = new ThreadLocal<>();
 
+	public static final int TRUST_LEVEL_INVALID_SIGN = -1, TRUST_LEVEL_UNSIGNED = 0, TRUST_LEVEL_INVALID_USAGE = 1, TRUST_LEVEL_SIGNED = 2, TRUST_LEVEL_VERIFIED = 3;
+	private static final String[] TRUST_LEVEL_NAMES = {
+			"TRUST_LEVEL_INVALID_SIGN",
+			"TRUST_LEVEL_UNSIGNED",
+			"TRUST_LEVEL_INVALID_USAGE",
+			"TRUST_LEVEL_SIGNED",
+			"TRUST_LEVEL_VERIFIED"
+	};
+	public static String getTrustLevelName(int level) {return TRUST_LEVEL_NAMES[level+1];}
+
+	private byte trustLevel;
 	private final URL base;
 	private Manifest manifest;
 
@@ -50,8 +58,8 @@ public class JarVerifier {
 	private transient ManifestBytes manifestBytes;
 	private transient byte[] signatureBytes;
 
-	private Map<String, String> hashes;
-	private String algorithm, prevName;
+	private Map<String, byte[]> hashes;
+	private String algorithm;
 	private CodeSource source;
 
 	JarVerifier(URL url, Manifest manifest, ManifestBytes manifestBytes, byte[] signatureBytes, SignatureBlock block) {
@@ -62,221 +70,182 @@ public class JarVerifier {
 		this.block = block;
 	}
 
-	public boolean isSigned() { return block != null; }
-	public boolean isSignTrusted() {
+	@MagicConstant(intValues = {
+			TRUST_LEVEL_INVALID_SIGN,
+			TRUST_LEVEL_UNSIGNED,
+			TRUST_LEVEL_INVALID_USAGE,
+			TRUST_LEVEL_SIGNED,
+			TRUST_LEVEL_VERIFIED
+	})
+	public int getTrustLevel() {
+		if (trustLevel == 0) {
+			trustLevel = computeTrustLevel();
+		}
+		return trustLevel;
+	}
+	private byte computeTrustLevel() {
+		if (block == null) return TRUST_LEVEL_UNSIGNED;
+		try {
+			ensureManifestValid();
+		} catch (Exception e) {
+			return TRUST_LEVEL_INVALID_SIGN;
+		}
+
 		List<X509Certificate> certs = block.getCertificates();
 		try {
+			if (!block.getSigner().getExtendedKeyUsage().contains(KnownOID.codeSigning.toString())) {
+				return TRUST_LEVEL_INVALID_USAGE;
+			}
+
 			CryptoFactory.checkCertificateValidity(certs.toArray(new X509Certificate[certs.size()]));
-			return true;
+			return TRUST_LEVEL_VERIFIED;
 		} catch (Exception e) {
-			return false;
+			return TRUST_LEVEL_SIGNED;
 		}
 	}
 	public String getAlgorithm() {return block == null ? null : block.getSignatureAlg();}
 
-	public void ensureManifestValid(boolean lenient) throws GeneralSecurityException {
+	public void ensureManifestValid() throws GeneralSecurityException {
 		if (source != null) return;
 		if (block == null) {
 			algorithm = "SHA-256";
-			prevName = "SHA-256-Digest";
 			source = new CodeSource(base, (CodeSigner[]) null);
+			hashes = Collections.emptyMap();
 			return;
-		}
-
-		Map<String, MessageDigest> digests = DIGESTS.get();
-		if (digests == null) digests = new HashMap<>();
-
-		try {
-			readManifestAndHash(new ManifestBytes(signatureBytes), lenient);
-		} catch (IOException e) {
-			throw new SecurityException("签名清单格式错误");
-		}
-
-		int flag = 0;
-		Attributes main = manifest.getMainAttributes();
-		for (int i = 0; i < SECURE_HASH_ALGORITHMS.size(); i++) {
-			algorithm = SECURE_HASH_ALGORITHMS.get(i);
-			String digestStr = main.getValue(algorithm+"-Digest-Manifest");
-			if (digestStr != null && (flag & 1) == 0) {
-				flag |= 1;
-
-				MessageDigest digest = digester(digests, algorithm);
-				digest.update(manifestBytes.data);
-
-				byte[] except = Base64.decode(digestStr, IOUtil.getSharedByteBuf()).toByteArray();
-				byte[] computed = digest.digest();
-
-				if (!MessageDigest.isEqual(except, computed)) throw new SecurityException("清单校验失败");
-			}
-			digestStr = main.getValue(algorithm+"-Digest-Manifest-Main-Attributes");
-			if (digestStr != null && (flag & 2) == 0) {
-				flag |= 2;
-
-				MessageDigest digest = digester(digests, algorithm);
-				byte[] computed = manifestBytes.digest(digest, null);
-				byte[] except = Base64.decode(digestStr, IOUtil.getSharedByteBuf()).toByteArray();
-
-				if (!MessageDigest.isEqual(except, computed)) throw new SecurityException("清单主属性校验失败");
-			}
-
-			if (flag == 3) {
-				prevName = algorithm+"-Digest";
-				break;
-			}
-		}
-		if ((flag&3) == 0) throw new SecurityException("找不到清单哈希或清单主属性哈希");
-
-		if (hashes != null) {
-			for (Map.Entry<String, String> entry : hashes.entrySet()) {
-				MessageDigest digest = digester(digests, algorithm);
-
-				byte[] computed = manifestBytes.digest(digest, entry.getKey());
-				byte[] except = Base64.decode(entry.getValue(), IOUtil.getSharedByteBuf()).toByteArray();
-
-				if (!MessageDigest.isEqual(except, computed)) throw new SecurityException("清单"+entry.getKey()+"属性校验失败");
-			}
-		} else {
-			// Deprecated
-			for (Map.Entry<String, Attributes> entry : manifest.getEntries().entrySet()) {
-				String value = entry.getValue().getValue(prevName);
-				block:
-				if (value == null) {
-					int i = 0;
-					do {
-						algorithm = SECURE_HASH_ALGORITHMS.get(i);
-						value = entry.getValue().getValue(prevName = algorithm+"-Digest");
-						if (value != null) break block;
-						i++;
-					} while (i < SECURE_HASH_ALGORITHMS.size());
-
-					continue;
-				}
-
-				MessageDigest digest = digester(digests, algorithm);
-
-				byte[] computed = manifestBytes.digest(digest, entry.getKey());
-				byte[] except = Base64.decode(value, IOUtil.getSharedByteBuf()).toByteArray();
-
-				if (!MessageDigest.isEqual(except, computed)) throw new SecurityException("清单"+entry.getKey()+"属性校验失败");
-			}
 		}
 
 		Signature sign = Signature.getInstance(block.getSignatureAlg());
 		sign.initVerify(block.getSigner().getPublicKey());
 		sign.update(signatureBytes);
-		if (!sign.verify(block.getSignature())) throw new SecurityException("元签名校验失败");
+		if (!sign.verify(block.getSignature())) throw new SecurityException("签名清单校验失败");
 
 		try {
-			readManifestAndHash(manifestBytes, lenient);
+			verifyHashAlgorithm(new ManifestBytes(signatureBytes));
 		} catch (IOException e) {
-			throw new SecurityException("清单格式错误（这不应该发生）");
+			throw new SecurityException("签名清单格式错误", e);
 		}
-		this.manifestBytes = null;
-		this.signatureBytes = null;
-		this.source = new CodeSource(base, new CodeSigner[]{new CodeSigner(block, null)});
+		signatureBytes = null;
+
+		Map<String, MessageDigest> digests = DIGESTS.get();
+		if (digests == null) digests = new HashMap<>();
+
+		MessageDigest digest = digests.get(algorithm);
+		if (digest == null) digests.put(algorithm, digest = MessageDigest.getInstance(algorithm));
+
+		Attributes main = manifest.getMainAttributes();
+
+		String digestStr = main.getValue(algorithm.concat("-Digest-Manifest"));
+		if (digestStr != null) {
+			byte[] computed = digest.digest(manifestBytes.data);
+			byte[] except = Base64.decode(digestStr, IOUtil.getSharedByteBuf()).toByteArray();
+
+			if (!MessageDigest.isEqual(except, computed)) throw new SecurityException("清单校验失败");
+		} else {
+			throw new SecurityException("找不到清单哈希");
+		}
+
+		digestStr = main.getValue(algorithm.concat("-Digest-Manifest-Main-Attributes"));
+		if (digestStr != null) {
+			byte[] computed = manifestBytes.digest(digest);
+			byte[] except = Base64.decode(digestStr, IOUtil.getSharedByteBuf()).toByteArray();
+
+			if (!MessageDigest.isEqual(except, computed)) throw new SecurityException("清单主属性校验失败");
+		} else {
+			throw new SecurityException("找不到清单主属性哈希");
+		}
+
+		for (Map.Entry<String, byte[]> entry : hashes.entrySet()) {
+			byte[] computed = manifestBytes.digest(digest, entry.getKey());
+			if (!MessageDigest.isEqual(entry.getValue(), computed)) throw new SecurityException("清单"+entry.getKey()+"属性校验失败");
+		}
+
+		try {
+			verifyHashAlgorithm(manifestBytes);
+		} catch (IOException e) {
+			throw new SecurityException("清单格式错误", e);
+		}
+		manifestBytes = null;
+
+		source = new CodeSource(base, new CodeSigner[]{new CodeSigner(block, block.getTimestamp())});
 		DIGESTS.set(digests);
 	}
-	private boolean readManifestAndHash(ManifestBytes manifestBytes, boolean lenient) throws IOException {
-		this.hashes = new HashMap<>();
+	private void verifyHashAlgorithm(ManifestBytes manifestBytes) throws IOException {
+		this.hashes = new HashMap<>(manifestBytes.namedAttributes.size());
 
 		HashMap<String, String> tmpMap = new HashMap<>();
 		String prevName = null, algorithm = null;
-		outerLoop:
-		for (ManifestBytes.NamedAttr attribute : manifestBytes.namedAttrMap.values()) {
+		for (var attribute : manifestBytes.namedAttributes.entrySet()) {
 			tmpMap.clear();
-			for (ManifestBytes.ByteAttr section : attribute.sections) {
-				section.getAllLines(manifestBytes.data, tmpMap);
+			for (ManifestBytes.Entry section : attribute.getValue()) {
+				section.getLines(manifestBytes.data, tmpMap);
 			}
 
-			if (prevName != null) {
-				String hash = tmpMap.get(prevName);
-				if (hash != null) {
-					hashes.put(attribute.name, hash);
-					continue;
-				}
-			} else {
+			String encodedHash = tmpMap.get(prevName);
+			foundValidHash:
+			if (encodedHash == null) {
 				for (int i = 0; i < SECURE_HASH_ALGORITHMS.size(); i++) {
 					algorithm = SECURE_HASH_ALGORITHMS.get(i);
-					String hash = tmpMap.get(prevName = algorithm + "-Digest");
-					if (hash != null) {
-						hashes.put(attribute.name, hash);
-						continue outerLoop;
-					}
+					encodedHash = tmpMap.get(prevName = algorithm.concat("-Digest"));
+					if (encodedHash != null) break foundValidHash;
 				}
+				throw new IOException("无法验证清单属性"+attribute.getKey()+"="+tmpMap+": "+(algorithm == null ? "不安全的校验码" : "仅部分文件存在"+algorithm+"校验"));
 			}
-			if (!lenient) throw new IOException("无法验证清单属性"+attribute.name+"="+tmpMap+": 不安全的校验码，或在同一个文件中使用了不同种类的校验码，开启lenient模式忽略此错误");
-			else {
-				hashes = null;
-				manifest = new Manifest(new ByteArrayInputStream(manifestBytes.data));
-				return false;
-			}
+
+			byte[] hash = Base64.decode(encodedHash, IOUtil.getSharedByteBuf()).toByteArray();
+			hashes.put(attribute.getKey(), hash);
 		}
 
-		manifest = new Manifest(new ByteArrayInputStream(manifestBytes.data, 0, manifestBytes.mainAttr.endOfSection+3));
+		// 只读取主属性
+		this.manifest = new Manifest(new ByteArrayInputStream(manifestBytes.data, 0, manifestBytes.mainAttribute.endOfSection+3));
 		this.algorithm = algorithm;
-		this.prevName = prevName;
-		return true;
 	}
 
 	public Manifest getManifest() { return manifest; }
 	public CodeSource getCodeSource() { return source; }
 
-	private static MessageDigest digester(Map<String, MessageDigest> digests, String algorithm) throws NoSuchAlgorithmException {
-		MessageDigest digest = digests.get(algorithm);
-		if (digest == null) digests.put(algorithm, digest = MessageDigest.getInstance(algorithm));
-		return digest;
-	}
-	private static MessageDigest digesterLazyReuse(Map<String, MessageDigest> digests, String algorithm) throws NoSuchAlgorithmException {
-		MessageDigest digest = digests.remove(algorithm);
-		if (digest == null) digest = MessageDigest.getInstance(algorithm);
-		return digest;
+	private MessageDigest digester() {
+		Map<String, MessageDigest> map = DIGESTS.get();
+		if (map == null) DIGESTS.set(map = new HashMap<>());
+
+		MessageDigest digester = map.remove(algorithm);
+		try {
+			if (digester == null) digester = MessageDigest.getInstance(algorithm);
+			else digester.reset();
+		} catch (NoSuchAlgorithmException ignored) {}
+		return digester;
 	}
 
 	public InputStream wrapInput(String name, InputStream in) {
-		String except;
-		if (hashes != null) {
-			except = hashes.get(name);
-			if (except == null) return in;
-		} else {
-			// Deprecated
-			Attributes attr = manifest.getAttributes(name);
-			if (attr == null) return in;
+		byte[] hash = hashes.get(name);
+		if (hash == null) return in;
 
-			except = attr.getValue(prevName);
-			block:
-			if (except == null) {
-				for (int i = 0; i < SECURE_HASH_ALGORITHMS.size(); i++) {
-					algorithm = SECURE_HASH_ALGORITHMS.get(i);
-					except = attr.getValue(prevName = algorithm+"-Digest");
-					if (except != null) break block;
-				}
-				return in;
-			}
-		}
-
-		var digests = DIGESTS.get();
-		if (digests == null) {
-			digests = new HashMap<>();
-			DIGESTS.set(digests);
-		}
-
-		MessageDigest md;
-		try {
-			md = digesterLazyReuse(digests, algorithm);
-		} catch (NoSuchAlgorithmException e) {
-			return in;
-		}
-
-		md.reset();
-		return new DigestInputStream(in, md, except, name);
+		MessageDigest digester = digester();
+		return new DigestInputStream(in, digester, hash, name);
 	}
+
+	public void verify(String name, ByteList buf) {
+		byte[] hash = hashes.get(name);
+		if (hash == null) return;
+
+		MessageDigest digester = digester();
+
+		digester.update(buf.list, buf.arrayOffset()+buf.rIndex, buf.readableBytes());
+		byte[] digest = digester.digest();
+
+		DIGESTS.get().put(algorithm, digester);
+
+		if (!MessageDigest.isEqual(hash, digest)) {
+			throw new SecurityException(name+"的"+algorithm+"校验失败");
+		}
+	}
+
 	private static final class DigestInputStream extends InputStream {
 		private final InputStream in;
 		private MessageDigest md;
-		private final String hash;
+		private final byte[] hash;
 		private final String name;
 
-		public DigestInputStream(InputStream in, MessageDigest md, String hash, String name) {
+		public DigestInputStream(InputStream in, MessageDigest md, byte[] hash, String name) {
 			this.in = in;
 			this.md = md;
 			this.hash = hash;
@@ -311,11 +280,9 @@ public class JarVerifier {
 			md = null;
 			DIGESTS.get().put(digest.getAlgorithm(), digest);
 
-			var out = new CharList();
-			if (!Base64.encode(DynByteBuf.wrap(result), out).equals(hash)) {
+			if (!MessageDigest.isEqual(result, hash)) {
 				throw new SecurityException(name+"的"+digest.getAlgorithm()+"校验失败");
 			}
-			out._free();
 		}
 	}
 
@@ -450,7 +417,7 @@ public class JarVerifier {
 		ob.putAscii("Signature-Version: 1.0\r\n");
 		append72(ob, "Created-By: "+options.getOrDefault("jarSigner:creator", CREATED_BY));
 		append72(ob, hashAlg+"-Digest-Manifest: "+IOUtil.encodeBase64(md.digest(mfBytes)));
-		append72(ob, hashAlg+"-Digest-Manifest-Main-Attributes: "+IOUtil.encodeBase64(mb.digest(md, null)));
+		append72(ob, hashAlg+"-Digest-Manifest-Main-Attributes: "+IOUtil.encodeBase64(mb.digest(md)));
 
 		if (options.getOrDefault("jarSigner:addV2", "false").equals("true")) {
 			Source file = zf.source();
@@ -468,7 +435,7 @@ public class JarVerifier {
 		ArrayCache.putArray(buf);
 		ob.putAscii("\r\n");
 
-		for (String name : mb.namedAttrMap.keySet()) {
+		for (String name : mb.namedAttributes.keySet()) {
 			append72(ob, "Name: "+name);
 			append72(ob, digestKey+": "+IOUtil.encodeBase64(mb.digest(md, name)));
 			ob.putAscii("\r\n");

@@ -3,7 +3,7 @@ package roj.plugin;
 import roj.config.JsonSerializer;
 import roj.http.server.Content;
 import roj.http.server.Request;
-import roj.http.server.ResponseHeader;
+import roj.http.server.Response;
 import roj.http.server.auto.GET;
 import roj.http.server.auto.Interceptor;
 import roj.net.ChannelCtx;
@@ -40,7 +40,7 @@ final class WebUI {
 	}
 
 	@GET
-	public void terminal(Request req, ResponseHeader rh) throws IOException {
+	public void terminal(Request req, Response rh) throws IOException {
 		if (!terminal || System.currentTimeMillis() < XTerm.timeout) {
 			rh.code(403).body(Content.internalError("该功能未启用"));
 			return;

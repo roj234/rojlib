@@ -11,8 +11,8 @@ import java.util.Collections;
 public final class EmptyWorkspace {
 	public static Workspace build(MapValue config) {
 		var workspace = new Workspace();
-		workspace.type = "Empty";
-		workspace.id = "Empty";
+		workspace.type = "empty";
+		workspace.id = "empty";
 		workspace.depend = Collections.emptyList();
 		workspace.mappedDepend = Collections.emptyList();
 		workspace.unmappedDepend = Collections.emptyList();

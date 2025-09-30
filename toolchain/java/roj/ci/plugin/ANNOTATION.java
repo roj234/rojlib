@@ -10,7 +10,6 @@ import roj.asm.cp.Constant;
 import roj.asm.cp.ConstantPool;
 import roj.asm.cp.CstRefUTF;
 import roj.asm.type.Type;
-import roj.asmx.Context;
 import roj.ci.BuildContext;
 import roj.ci.MCMake;
 import roj.collect.BiMap;
@@ -28,8 +27,27 @@ public class ANNOTATION implements Processor {
 	@Override public boolean defaultEnabled() {return true;}
 
 	@Override
-	public void afterCompile(BuildContext ctx) {
-		var annotatedClass = ctx.getSourceAnnotations("roj/ci/annotation/ReplaceConstant");
+	public void afterCompilePre(BuildContext ctx) {
+		var annotatedClass = ctx.getAnnotatedClasses("roj/ci/annotation/ExcludeFromArtifact");
+		for (int i = 0; i < annotatedClass.size(); i++) {
+			ctx.removeClass(annotatedClass.get(i));
+		}
+		annotatedClass = ctx.getAnnotatedClasses("roj/ci/annotation/AliasOf");
+		for (int i = 0; i < annotatedClass.size(); i++) {
+			ctx.removeClass(annotatedClass.get(i));
+		}
+
+		BiMap<String, String> classMap = ctx.getMapper().getClassMap();
+		ctx.getDepAnnotations("roj/ci/annotation/AliasOf", annotatedElement -> {
+			Annotation aliasOf = annotatedElement.annotations().get("roj/ci/annotation/AliasOf");
+			Type aliasTarget = aliasOf.getClass("value");
+			classMap.put(annotatedElement.owner(), aliasTarget.owner());
+		});
+	}
+
+	@Override
+	public void afterCompilePost(BuildContext ctx) {
+		var annotatedClass = ctx.getAnnotatedClasses("roj/ci/annotation/ReplaceConstant");
 		for (int i = 0; i < annotatedClass.size(); i++) {
 			ClassNode data = annotatedClass.get(i).getData();
 			ConstantPool cp = data.cp();
@@ -58,12 +76,7 @@ public class ANNOTATION implements Processor {
 			}
 		}
 
-		annotatedClass = ctx.getSourceAnnotations("roj/ci/annotation/ExcludeFromArtifact");
-		for (int i = 0; i < annotatedClass.size(); i++) {
-			ctx.removeClasses(annotatedClass.get(i));
-		}
-
-		annotatedClass = ctx.getSourceAnnotations("roj/ci/annotation/Public");
+		annotatedClass = ctx.getAnnotatedClasses("roj/ci/annotation/Public");
 		for (int i = 0; i < annotatedClass.size(); i++) {
 			ClassNode data = annotatedClass.get(i).getData();
 			data.modifier |= Opcodes.ACC_PUBLIC;
@@ -80,20 +93,5 @@ public class ANNOTATION implements Processor {
 				}
 			}
 		}
-
-		BiMap<String, String> classMap = ctx.getMapper().getClassMap();
-
-		annotatedClass = ctx.getSourceAnnotations("roj/ci/annotation/AliasOf");
-		for (int i = 0; i < annotatedClass.size(); i++) {
-			Context context = annotatedClass.get(i);
-			ctx.removeClasses(context);
-		}
-
-		ctx.getDepAnnotations("roj/ci/annotation/AliasOf", annotatedElement -> {
-			Annotation aliasOf = annotatedElement.annotations().get("roj/ci/annotation/AliasOf");
-			Type aliasTarget = aliasOf.getClass("value");
-			classMap.put(annotatedElement.owner(), aliasTarget.owner());
-			MCMake.LOGGER.trace("Load {} from depCache: {}", aliasOf, annotatedElement.name());
-		});
 	}
 }

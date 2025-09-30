@@ -25,7 +25,6 @@ import java.io.IOException;
 import java.util.Collections;
 import java.util.List;
 import java.util.Set;
-import java.util.function.Predicate;
 
 /**
  * @author Roj234
@@ -320,15 +319,29 @@ public final class AnnotationRepo {
 		return elementCount;
 	}
 
+	public static String normalizeName(String name) {
+		int firstIndex = name.indexOf('$');
+		return firstIndex == -1 ? name : name.substring(0, firstIndex);
+	}
+
 	/**
-	 * 增量更新用，
+	 * 增量更新用，输入为修改的文件名转换为类名，所以需要忽略内部类，即$.
+	 * 这几乎是在字符串层面的转换
 	 * @param changedClasses [java/lang/Object]
 	 */
 	public void remove(Set<String> changedClasses) {
-		for (String type : changedClasses) annotations.remove(type);
-		Predicate<AnnotatedElement> remover = annotatedElement -> changedClasses.contains(annotatedElement.owner());
-		for (Set<AnnotatedElement> value : annotations.values()) {
-			value.removeIf(remover);
+		for (var itr1 = annotations.entrySet().iterator(); itr1.hasNext(); ) {
+			var entry = itr1.next();
+			if (changedClasses.contains(normalizeName(entry.getKey()))) {
+				itr1.remove();
+			} else {
+				for (var itr2 = entry.getValue().iterator(); itr2.hasNext(); ) {
+					var element = itr2.next();
+					if (changedClasses.contains(normalizeName(element.owner()))) {
+						itr2.remove();
+					}
+				}
+			}
 		}
 	}
 }

@@ -31,8 +31,7 @@ public final class IntBiMap<V> extends AbstractMap<Integer, V> implements _LibMa
 		int length = MathUtils.nextPowerOfTwo(size);
 
 		if (keyTab != null) {
-			mask = (length>>1) - 1;
-			resize();
+			resize(length);
 		} else {
 			mask = length-1;
 			nextResize = (int) (length * LOAD_FACTOR);
@@ -181,8 +180,7 @@ public final class IntBiMap<V> extends AbstractMap<Integer, V> implements _LibMa
 	public Set<Map.Entry<Integer, V>> entrySet() {return Helpers.cast(selfEntrySet());}
 
 	@SuppressWarnings("unchecked")
-	private void resize() {
-		int length = (mask+1) << 1;
+	private void resize(int length) {
 		if (length <= 0) return;
 
 		Entry<?>[] newKeys = new Entry<?>[length];
@@ -223,7 +221,7 @@ public final class IntBiMap<V> extends AbstractMap<Integer, V> implements _LibMa
 	}
 
 	private void addEntry(Entry<V> entry) {
-		if (size > nextResize) resize();
+		if (size > nextResize) resize((mask + 1) << 1);
 		if (keyTab == null) {
 			keyTab = new Entry<?>[mask+1];
 			valTab = new Entry<?>[mask+1];

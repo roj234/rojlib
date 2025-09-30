@@ -18,22 +18,20 @@ import roj.text.URICoder;
 import roj.text.logging.Level;
 import roj.text.logging.Logger;
 import roj.util.ByteList;
-import roj.util.FastFailException;
 import roj.util.Helpers;
+import roj.util.function.ExceptionalFunction;
 
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URL;
-import java.security.CodeSigner;
 import java.security.CodeSource;
 import java.security.GeneralSecurityException;
 import java.util.Arrays;
 import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.List;
-import java.util.function.Function;
 import java.util.jar.Attributes;
 import java.util.jar.JarFile;
 import java.util.jar.Manifest;
@@ -44,7 +42,7 @@ import static roj.asm.Opcodes.*;
  * @author Roj233
  * @since 2020/11/9 23:10
  */
-public class Loader implements Function<String, Class<?>> {
+public class Loader implements ExceptionalFunction<String, Class<?>, ClassNotFoundException> {
 	private static final ThreadLocal<int[]> IS_TRANSFORMING = ThreadLocal.withInitial(() -> new int[1]);
 	private static final Main MAIN;
 	static {
@@ -87,17 +85,17 @@ public class Loader implements Function<String, Class<?>> {
 		String mainClass = null;
 		int argOffset = 0;
 
-		if (args.length == 0) {
-			Manifest manifest = instance.getManifest();
-			if (manifest != null) {
-				Attributes mainAttributes = manifest.getMainAttributes();
-				mainClass = mainAttributes.getValue("Ignis-Main");
-				if (mainClass != null) {
-					String tweakerClass = mainAttributes.getValue("Ignis-Tweaker");
-					if (tweakerClass != null) tweakerName = tweakerClass;
-				}
+		Manifest manifest = instance.getManifest();
+		if (manifest != null) {
+			Attributes mainAttributes = manifest.getMainAttributes();
+			mainClass = mainAttributes.getValue("Ignis-Main");
+			if (mainClass != null) {
+				String tweakerClass = mainAttributes.getValue("Ignis-Tweaker");
+				if (tweakerClass != null) tweakerName = tweakerClass;
 			}
-		} else {
+		}
+
+		if (mainClass == null && args.length > 0) {
 			String p = args[0];
 			if (args.length >= 3 && (p.equals("-t") || p.equals("--tweaker"))) {
 				tweakerName = args[1];
@@ -266,7 +264,7 @@ public class Loader implements Function<String, Class<?>> {
 	}
 
 	@Override
-	public Class<?> apply(String name) {
+	public Class<?> apply(String name) throws ClassNotFoundException {
 		String newName;
 		if (nameTransformer == null) {
 			newName = name;
@@ -286,53 +284,38 @@ public class Loader implements Function<String, Class<?>> {
 		try {
 			name/*File Name*/ = newName.replace('.', '/').concat(".class");
 
-			found:
-			try {
+			found: {
 				for (int i = 0; i < archives.size(); i++) {
 					var za = archives.get(i);
 					if (za.get(name, buf)) {
+						cs = locations.get(i);
 						var jv = verifiers.get(i);
 						if (jv != null) {
-							//jv.check(name, buf);
-							addPackage(locations.get(i).getLocation(), name, jv);
+							jv.verify(name, buf);
+							addPackage(cs.getLocation(), name, jv);
 						}
-						cs = locations.get(i);
 						break found;
 					}
 				}
 
-				var in = MAIN.getParentResource(name);
+				var in = MAIN.getInitialResource(name);
 				if (in == null || loadExcept.strStartsWithThis(newName)) return Main.PARENT.loadClass(newName);
 
 				buf.readStreamFully(in);
-
-				URL url = Main.PARENT.getResource(name);
-				if (url != null) {
-					//格式 file:/PATH/...!xxx
-					String path = "file:".concat(url.getPath().substring(6));
-					int i = path.indexOf('!');
-					if (i > 0) path = path.substring(0, i);
-					cs = new CodeSource(new URL(path), (CodeSigner[]) null);
-				} else {
-					cs = Main.class.getProtectionDomain().getCodeSource();
-				}
-			} catch (IOException e) {
-				LOGGER.log(Level.ERROR, "读取类'{}'时发生异常", e, name);
-				throw e;
+				cs = Main.class.getProtectionDomain().getCodeSource();
 			}
 
 			if (!transformExcept.strStartsWithThis(newName))
 				transform(name, newName.replace('.', '/'), buf);
 			return MAIN.defineClassA(newName, buf.list, 0, buf.wIndex(), cs);
 		} catch (ClassNotFoundException e) {
-			Helpers.athrow(e);
-		}  catch (Throwable e) {
+			throw e;
+		} catch (Throwable e) {
 			LOGGER.debug("类 {} 加载失败", e, newName);
-			throw new FastFailException("关键错误：转换器故障 "+newName, e);
+			throw new ClassNotFoundException(newName, e);
 		} finally {
 			buf.release();
 		}
-		return null;
 	}
 
 	public final void transform(String name, String transformedName, ByteList list) {
@@ -418,7 +401,7 @@ public class Loader implements Function<String, Class<?>> {
 			}
 		}
 
-		var in = MAIN.getParentResource(name);
+		var in = MAIN.getInitialResource(name);
 		if (in == null) in = ClassLoader.getSystemResourceAsStream(name);
 		return in;
 	}
@@ -435,20 +418,21 @@ public class Loader implements Function<String, Class<?>> {
 			zf.readZip();
 		}
 
-		JarVerifier jv = JarVerifier.create(zf, file);
-		archives.add(zf);
-		int slot = verifiers.size();
-		verifiers.add(null);
-		locations.add(null);
-		if (jv != null) {
+		JarVerifier verifier = JarVerifier.create(zf, file);
+		if (verifier != null) {
 			try {
-				jv.ensureManifestValid(false);
+				verifier.ensureManifestValid();
 			} catch (GeneralSecurityException e) {
 				Helpers.athrow(e);
 			}
-			locations.set(slot, jv.getCodeSource());
-			verifiers.set(slot, jv);
+
+			locations.add(verifier.getCodeSource());
+			verifiers.add(verifier);
+		} else {
+			verifiers.add(null);
+			locations.add(null);
 		}
+		archives.add(zf);
 	}
 
 	private AnnotationRepo repo;

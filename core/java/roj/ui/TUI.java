@@ -48,26 +48,26 @@ public abstract class TUI implements KeyHandler {
 		var sb = new CharList().append(BLACK+"┌  "+RESET);
 		message.writeAnsi(sb, "\n"+BLACK+LINE+" "+RESET);
 		sb.append("\n"+BLACK+LINE+" "+RESET+"\n");
-		Tty.write(sb);
+		System.out.println(sb);
 	}
 	public static void end(Text message) {
 		var sb = new CharList().append(BLACK+"└  "+RESET);
 		message.writeAnsi(sb, "\n"+BLACK+LINE+" "+RESET);
-		Tty.write(sb.append('\n'+RESET));
+		System.out.println(sb.append('\n'+RESET));
 	}
 
 	private static int writeWithTrace(Text message, String icon) {
 		var sb = new CharList().append(icon).append(" "+RESET);
 		message.writeAnsi(sb, "\n"+BLACK+LINE+" "+RESET);
 		sb.append("\n"+BLACK+LINE+" "+RESET+"\n");
-		Tty.write(sb);
+		System.out.println(sb);
 		return Tty.splitByWidth(sb.toString(), Tty.getColumns()).size();
 	}
 
 	/**
 	 * 输入之前step返回的数值即可撤销这个step
 	 */
-	public static void stepUndo(int lh) {Tty.write(Cursor.moveVertical(-lh)+Screen.clearLineAfter);}
+	public static void stepUndo(int lh) {System.out.println(Cursor.moveVertical(-lh)+Screen.clearLineAfter);}
 	public static int stepSuccess(Text message) {return writeWithTrace(message, SUCCESS);}
 	public static int stepWarn(Text message) {return writeWithTrace(message, WARNING);}
 	public static int stepInfo(Text message) {return writeWithTrace(message, INFO);}
@@ -113,7 +113,7 @@ public abstract class TUI implements KeyHandler {
 			setExecutor(null);
 			setCommandEcho(false);
 			setInputHistory(false);
-			setAutoComplete(true);
+			//setAutoComplete(true);
 			input.append(initialValue);
 
 			this.message = message;
@@ -135,7 +135,7 @@ public abstract class TUI implements KeyHandler {
 			var sb = new CharList();
 			message.writeAnsi(sb.append(PENDING));
 			lineHeight = 3 + Tty.splitByWidth(sb.toString(), Tty.getColumns()).size();
-			Tty.write(sb.append("\n"+PENDING_LINE+RESET+"\n"+PENDING_LINE+"\n"+END+"\n"));
+			System.out.println(sb.append("\n"+PENDING_LINE+RESET+"\n"+PENDING_LINE+"\n"+END+"\n"));
 		}
 
 		int lineHeight;
@@ -147,7 +147,7 @@ public abstract class TUI implements KeyHandler {
 			if (!echo) line.padEnd("*", input.length());
 
 			CharList sb = new CharList().append(Cursor.moveVertical(-lineHeight)).append(line).append(Screen.clearLineAfter).append("\n\n\n");
-			Tty.write(sb);
+			System.out.println(sb);
 		}
 
 		@Override
@@ -161,14 +161,14 @@ public abstract class TUI implements KeyHandler {
 				synchronized (lock) {lock.wait();}
 			} catch (InterruptedException e) {
 				if (required) {
-					Tty.write(Cursor.moveVertical(-lineHeight)+FAILURE+"\n"+Screen.clearAfter+choice()+BLACK_END+"  \033["+Tty.RED+"m操作被用户取消！\033[0m\n");
+					System.out.println(Cursor.moveVertical(-lineHeight)+FAILURE+"\n"+Screen.clearAfter+choice()+BLACK_END+"  \033["+Tty.RED+"m操作被用户取消！\033[0m\n");
 					throw new CancellationException();
 				}
 			} finally {
 				Tty.popHandler();
 			}
 
-			Tty.write(Cursor.moveVertical(-lineHeight)+SUCCESS+"\n"+Screen.clearLineAfter+choice());
+			System.out.println(Cursor.moveVertical(-lineHeight)+SUCCESS+"\n"+Screen.clearLineAfter+choice());
 			return value;
 		}
 
@@ -197,7 +197,7 @@ public abstract class TUI implements KeyHandler {
 				width = Tty.getStringWidth(before);
 
 				message.writeAnsi(sb).append(RESET+"\n").append(before).append(SELECTED+" No\n"+PENDING_LINE+"\n"+END+"\n\033[0m");
-				Tty.write(sb);
+				System.out.println(sb);
 			}
 
 			@Override
@@ -220,7 +220,7 @@ public abstract class TUI implements KeyHandler {
 				if (newValue == value) return;
 				value = newValue;
 
-				Tty.write("\033[3F\033[4G"+(newValue!=0? SELECTED : UNSELECTED)+Cursor.toHorizontal(width)+(newValue==0? SELECTED : UNSELECTED)+"\n\n\n\033[3D");
+				System.out.println("\033[3F\033[4G"+(newValue!=0? SELECTED : UNSELECTED)+Cursor.toHorizontal(width)+(newValue==0? SELECTED : UNSELECTED)+"\n\n\n\033[3D");
 			}
 		};
 
@@ -256,7 +256,7 @@ public abstract class TUI implements KeyHandler {
 			message.writeAnsi(sb.append(PENDING));
 			writeChoice(sb.append(RESET), value);
 
-			Tty.write(sb.append("\n"+PENDING_LINE+"\n"+END+"\n"));
+			System.out.println(sb.append("\n"+PENDING_LINE+"\n"+END+"\n"));
 		}
 
 		void writeChoice(CharList sb, int current) {
@@ -306,7 +306,7 @@ public abstract class TUI implements KeyHandler {
 
 			CharList sb = new CharList().append(Cursor.moveVertical(-lineHeight));
 			writeChoice(sb, newValue);
-			Tty.write(sb.append("\n\n\n"));
+			System.out.println(sb.append("\n\n\n"));
 		}
 	}
 	//endregion
@@ -322,7 +322,7 @@ public abstract class TUI implements KeyHandler {
 				message.writeAnsi(sb.append(PENDING));
 				writeChoice(sb.append(RESET), selected);
 
-				Tty.write(sb.append("\n"+PENDING_LINE+"\n"+END+"\n"));
+				System.out.println(sb.append("\n"+PENDING_LINE+"\n"+END+"\n"));
 			}
 
 			@Override
@@ -386,7 +386,7 @@ public abstract class TUI implements KeyHandler {
 			private void toggleSelection() {
 				var sb = new CharList().append(Cursor.moveVertical(-lineHeight));
 				writeChoice(sb, selected);
-				Tty.write(sb.append("\n\n\n"));
+				System.out.println(sb.append("\n\n\n"));
 			}
 
 			private void setValue(int newValue) {
@@ -404,7 +404,7 @@ public abstract class TUI implements KeyHandler {
 	public static Progress progress(Text title, int extraLines) {
 		CharList sb = new CharList().append(PENDING);
 		title.writeAnsi(sb).append(RESET+'\n');
-		Tty.write(sb);
+		System.out.println(sb);
 		return new Progress(title, extraLines);
 	}
 	public static class Progress extends TUI {
@@ -468,7 +468,7 @@ public abstract class TUI implements KeyHandler {
 			applyHeightChange(sb, len);
 
 			sb.append(b ? "\n\n" : PENDING_LINE+"\n"+END+"\n");
-			Tty.write(sb);
+			System.out.println(sb);
 		}
 
 		public void success() {withMessage(null, SUCCESS);}
@@ -478,7 +478,7 @@ public abstract class TUI implements KeyHandler {
 		private void withMessage(Text message, String head) {
 			var sb = new CharList().append(Cursor.moveVertical(-lineHeight - 1)).append(head).append("\n"+Screen.clearAfter+BLACK_LINE);
 			if (message != null) message.writeAnsi(sb, "\n"+BLACK_LINE).append("\n"+BLACK_LINE);
-			Tty.write(sb.append('\n'));
+			System.out.println(sb.append('\n'));
 		}
 
 		@Override String choice() {return "";}
@@ -554,12 +554,12 @@ public abstract class TUI implements KeyHandler {
 
 	abstract String choice();
 	final void confirm() {
-		Tty.write(Cursor.moveVertical(-lineHeight)+SUCCESS+"\n"+Screen.clearAfter+choice());
+		System.out.println(Cursor.moveVertical(-lineHeight)+SUCCESS+"\n"+Screen.clearAfter+choice());
 		done = true;
 		synchronized (this) {notifyAll();}
 	}
 	final void cancel() {
-		Tty.write(Cursor.moveVertical(-lineHeight)+FAILURE+"\n"+Screen.clearAfter+choice()+BLACK_END+"  \033["+Tty.RED+"m操作被用户取消！\033[0m\n");
+		System.out.println(Cursor.moveVertical(-lineHeight)+FAILURE+"\n"+Screen.clearAfter+choice()+BLACK_END+"  \033["+Tty.RED+"m操作被用户取消！\033[0m\n");
 		//System.exit(1);
 		cancel = true;
 		done = true;

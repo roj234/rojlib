@@ -10,8 +10,8 @@ import roj.config.JsonParser;
 import roj.config.node.ListValue;
 import roj.config.node.MapValue;
 import roj.crypt.HMAC;
-import roj.http.HttpClient;
 import roj.http.HttpRequest;
+import roj.http.HttpResponse;
 import roj.io.IOUtil;
 import roj.text.CharList;
 import roj.text.DateFormat;
@@ -217,7 +217,7 @@ final class Aliyun implements IpMapper {
 		par.put("Type", type);
 
 		try {
-			HttpClient shc = HttpRequest.builder().url(makeUrl(par)).executePooled();
+			HttpResponse shc = HttpRequest.builder().uri(makeUrl(par)).executePooled();
 			MapValue cfg = _parse(shc);
 		} catch (Exception e) {
 			Tty.error("请求参数: " + par, e);
@@ -254,7 +254,7 @@ final class Aliyun implements IpMapper {
 		}
 	}
 
-	private MapValue _parse(HttpClient shc) throws Exception {
+	private MapValue _parse(HttpResponse shc) throws Exception {
 		MapValue map = new JsonParser().parse(shc.stream()).asMap();
 		if (map.containsKey("Message"))
 			throw new IllegalArgumentException("API错误: " + map.getString("Message"));

@@ -1,5 +1,6 @@
 package roj.http.server;
 
+import org.jetbrains.annotations.ApiStatus;
 import roj.net.ChannelCtx;
 import roj.net.ChannelHandler;
 import roj.util.DynByteBuf;
@@ -26,5 +27,6 @@ public interface BodyParser extends ChannelHandler {
 	 */
 	default void onComplete() throws IOException {}
 
+	@ApiStatus.Internal
 	default Map<String, ?> getMapLikeResult() {return null;}
 }

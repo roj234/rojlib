@@ -15,7 +15,7 @@ import roj.util.OperationDone;
 
 import java.io.IOException;
 import java.util.List;
-import java.util.function.BiFunction;
+import java.util.function.BiPredicate;
 
 import static roj.text.Token.*;
 
@@ -75,7 +75,7 @@ public class Tokenizer {
 	}
 	public final List<String> splitToString(String seq) throws ParseException {
 		init(seq);
-		List<String> list = new java.util.ArrayList<>();
+		List<String> list = new ArrayList<>();
 		while (true) {
 			Token w = next();
 			if (w.type() == Token.EOF) break;
@@ -451,17 +451,17 @@ public class Tokenizer {
 				case C_MAY__NUMBER_SIGN:
 					if (i+1 < in.length() && NUMBER.contains(in.charAt(i+1))) {
 						prevIndex = index = i;
-						return readDigit(true);
+						return readNumber(true);
 					}
 					// fall to literal(symbol)
 				default:
 					prevIndex = index = i;
 					Token w = readSymbol();
-					if (w == COMMENT_RETRY_HINT) {i = index;continue;}
+					if (w == CONSUMED_BY_SPECIAL_TOKEN) {i = index;continue;}
 					return w;
 				case C_NUMBER:
 					prevIndex = index = i;
-					return readDigit(false);
+					return readNumber(false);
 				case C_STRING:
 					prevIndex = i;
 					index = i+1;
@@ -474,22 +474,15 @@ public class Tokenizer {
 		return eof();
 	}
 
-	// region symbol matcher
-	@Deprecated protected static final Token COMMENT_RETRY_HINT = new Token();
-	@Deprecated private final IntValue posHold = new IntValue();
-	@Deprecated private final BiFunction<IntValue, Token, Boolean> searcher = (kPos, v) -> {
-		// staticy is not valid
-		// 'static;' , 'static ' or '++;' are valid=
-		if (isValidToken(kPos.value, v)) {
-			_bestLength = kPos.value;
-			_bestMatch = v;
-		}
-		return false;
-	};
-	@Deprecated private int _bestLength;
-	@Deprecated private Token _bestMatch;
+	protected static final Token CONSUMED_BY_SPECIAL_TOKEN = new Token();
+	protected static final int ST_SINGLE_LINE_COMMENT = -2, ST_MULTI_LINE_COMMENT = -3, ST_STRING = -4, ST_LITERAL_STRING = -5, ST_NUMBER = -6, ST_SIGNED_NUMBER = -7;
+	protected Token onSpecialToken(Token w) throws ParseException { throw new UnsupportedOperationException("unexpected error"); }
 
-	@Deprecated protected final Token readSymbol() throws ParseException {
+	// region symbol matcher
+	private final IntValue matchLen = new IntValue();
+	private final BiPredicate<IntValue, Token> matcher = (kPos, v) -> isValidToken(kPos.value, v);
+
+	protected final Token readSymbol() throws ParseException {
 		if (tokens != null) {
 			Token w = tryMatchToken();
 			if (w != null) return w;
@@ -497,55 +490,53 @@ public class Tokenizer {
 		return readLiteral();
 	}
 
-	@Deprecated protected final Token tryMatchToken() throws ParseException {
+	protected final Token tryMatchToken() throws ParseException {
 		CharSequence in = input;
 		int i = index;
 
-		Token w;
-		_bestMatch = null;
-		tokens.longestWithCallback(in, i, in.length(), posHold, searcher);
-		if ((w = _bestMatch) == null) return null;
+		var w = tokens.querySequence(in, i, in.length(), matchLen, matcher);
+		if (w == null) return null;
+		int bestMatchLen = matchLen.value;
 
 		if (w.getClass() == Token.class) {
 			if (w.pos < 0) {
-				index = i+_bestLength;
-				w = onSpecialToken0(w);
-				if (w != null) return w;
-				return COMMENT_RETRY_HINT;
+				index = i+bestMatchLen;
+				Token result = CONSUMED_BY_SPECIAL_TOKEN;
+				switch (w.pos) {
+					default -> result = onSpecialToken(w);
+					case ST_SINGLE_LINE_COMMENT -> singleLineComment(comment);
+					case ST_MULTI_LINE_COMMENT -> multiLineComment(comment, w.text);
+					case ST_STRING, ST_LITERAL_STRING -> {
+						CharSequence s = w.text;
+						if (s.length() != 1)
+							throw new UnsupportedOperationException("readSlashString not support len > 1 terminator");
+						return formClip(STRING, readSlashString(s.charAt(0), w.pos == ST_STRING));
+					}
+					case ST_NUMBER -> result = readNumber(false);
+					case ST_SIGNED_NUMBER -> result = readNumber(true);
+				}
+				return result;
 			}
-
 			else w = formClip(w.type(), w.text());
 		} else {
 			w = w.immutable();
 			w.pos = index;
 		}
 
-		index = i+_bestLength;
+		index = i+bestMatchLen;
 		return w;
 	}
 	// endregion
 
-	protected static final int ST_SINGLE_LINE_COMMENT = -2, ST_MULTI_LINE_COMMENT = -3, ST_STRING = -4, ST_LITERAL_STRING = -5;
-	private Token onSpecialToken0(Token w) throws ParseException {
-		switch (w.pos) {
-			default: return onSpecialToken(w);
-			case ST_SINGLE_LINE_COMMENT: singleLineComment(comment); return null;
-			case ST_MULTI_LINE_COMMENT: multiLineComment(comment, w.text); return null;
-			case ST_STRING, ST_LITERAL_STRING:
-				CharSequence s = w.text;
-				if (s.length() != 1) throw new UnsupportedOperationException("readSlashString not support len > 1 terminator");
-				return formClip(STRING, readSlashString(s.charAt(0), w.pos == ST_STRING));
-		}
-	}
-	protected Token onSpecialToken(Token w) throws ParseException { throw new UnsupportedOperationException("unexpected error"); }
-
+	// staticy is not valid
+	// 'static;' , 'static ' or '++;' are valid=
 	protected boolean isValidToken(int off, Token w) {
 		if (w.pos < 0) return true;
 
 		off += index;
 		if (off >= input.length()) return true;
 
-		boolean prevNoLit = literalEnd.contains(input.charAt(off-1));
+		boolean prevNoLit = literalEnd.contains(input.charAt(off-w.text.length()));
 		boolean curNoLit = literalEnd.contains(input.charAt(off));
 
 		return (prevNoLit^curNoLit) | prevNoLit;
@@ -610,9 +601,12 @@ public class Tokenizer {
 	protected final Token eof() { return wd.init(EOF, prevIndex, "/EOF"); }
 	// endregion
 	// region 数字解析
-	protected static final int DIGIT_HBO = 1, DIGIT_DFL = 2;
-	protected Token readDigit(boolean sign) throws ParseException { return digitReader(sign, DIGIT_HBO); }
-	protected Token onInvalidNumber(int flag, int i, String reason) throws ParseException {return readLiteral();}
+	/**
+	 * @deprecated 计划删除postfix literal
+	 */
+	@Deprecated
+	protected Token readNumber(boolean sign) throws ParseException { return readNumber(sign, false); }
+	protected Token onInvalidNumber(int errorLoc, String reason) throws ParseException {return readLiteral();}
 	protected Token onNumberFlow(CharList str, short from, short to) throws ParseException {return null;}
 
 	private static final BitSet
@@ -626,10 +620,11 @@ public class Tokenizer {
 	private static final int _NF_HEX = 1, _NF_BIN = 2, _NF_OCT = 3, _NF_END = 4, _NF_UNDERSCORE = 8;
 
 	/**
-	 * 6 种数字，尽在掌握
+	 * 6 种数字，尽在掌握.
+	 * 计划删除postfix literal
 	 */
 	@SuppressWarnings("fallthrough")
-	protected final Token digitReader(boolean sign, int oFlag) throws ParseException {
+	protected final Token readNumber(boolean sign, boolean allowPostfixLiteral) throws ParseException {
 		CharSequence in = input;
 		int i = index;
 
@@ -652,7 +647,7 @@ public class Tokenizer {
 		BitSet set = DEC_NUMBERS;
 		char c = in.charAt(i);
 		check1:
-		if (c == '0' && i+1 < in.length() && (oFlag & DIGIT_HBO) != 0) {
+		if (c == '0' && i+1 < in.length()) {
 			c = in.charAt(++i);
 			switch (c) {
 				case 'X': case 'x': flag = _NF_HEX; set = HEX_NUMBERS; i++; break;
@@ -663,11 +658,11 @@ public class Tokenizer {
 					break check1;
 			}
 			// 检测 0x_ 0b_, 保留 0_ 和 00_
-			if (i == in.length()) return onInvalidNumber(oFlag, index, "lexer.number.eof");
-			if ((c=in.charAt(i)) == '_' || !set.contains(c)) return onInvalidNumber(oFlag, i, "lexer.number.notNumber:");
+			if (i == in.length()) return onInvalidNumber(index, "lexer.number.eof");
+			if ((c=in.charAt(i)) == '_' || !set.contains(c)) return onInvalidNumber(i, "lexer.number.notNumber:");
 		} else if (c == '.') { // .5之类的
 			// 检测 .e .d .f
-			if (!NUMBER.contains(in.charAt(i))) return onInvalidNumber(oFlag, i, "lexer.number.exceptDec");
+			if (!NUMBER.contains(in.charAt(i))) return onInvalidNumber(i, "lexer.number.exceptDec");
 			type = 3; set = REAL_NUMBERS;
 		}
 
@@ -682,7 +677,7 @@ public class Tokenizer {
 				(!set.contains(c) &&
 				c != '_')) {
 				if (literalEnd.contains(c)) break;
-				return onInvalidNumber(oFlag, i, set.contains(c)?"lexer.number.exceptBlank":"lexer.number.notNumber:");
+				return onInvalidNumber(i, set.contains(c)?"lexer.number.exceptBlank":"lexer.number.notNumber:");
 			}
 
 			if (firstCharIsZero && c == '0' && prevI == i-1) prevI++;
@@ -711,6 +706,8 @@ public class Tokenizer {
 					if ((flag & 3) == _NF_HEX && set != REAL_NUMBERS_AFTER_EXP) break;
 					type = 2;
 					flag |= _NF_END;
+					// TODO so that we can use 1day in Lava !
+					//handleCustomPostfixLiterals();
 				}
 				case 'L', 'l' -> {
 					type = 1;
@@ -720,14 +717,14 @@ public class Tokenizer {
 				case '+', '-' -> { // 必须跟在e后面
 					c = in.charAt(i - 1);
 					if (c != 'E' && c != 'e' && c != 'p' && c != 'P')
-						return onInvalidNumber(oFlag, i, "lexer.number.notNumber:");
+						return onInvalidNumber(i, "lexer.number.notNumber:");
 				}
 			}
 			if (++i == in.length()) break;
 		}
 
 		if ((flag & _NF_END) != 0) {
-			if ((oFlag & DIGIT_DFL) == 0) return onInvalidNumber(oFlag, i, "设置DIGIT_DFL位以启用字母结尾的数字");
+			if (!allowPostfixLiteral) return onInvalidNumber(i, "设置DIGIT_DFL位以启用字母结尾的数字");
 			i--;
 		}
 		assert i > prevI;
@@ -737,13 +734,13 @@ public class Tokenizer {
 
 		CharList v = found; v.clear();
 		if ((flag & 3) == _NF_HEX && type > 1) {
-			if (set != REAL_NUMBERS_AFTER_EXP) return onInvalidNumber(oFlag, i, "lexer.number.formatError");
+			if (set != REAL_NUMBERS_AFTER_EXP) return onInvalidNumber(i, "lexer.number.formatError");
 			v.append("0x");
 		}
 
 		// 存在下划线
 		if ((flag & _NF_UNDERSCORE) != 0) {
-			if (c == '_') return onInvalidNumber(oFlag, i-1, "lexer.number.notNumber:");
+			if (c == '_') return onInvalidNumber(i-1, "lexer.number.notNumber:");
 			while (prevI < i) {
 				c = in.charAt(prevI++);
 				if (c != '_') v.append(c);
@@ -758,7 +755,7 @@ public class Tokenizer {
 				case 'P': case 'p':
 				case 'E': case 'e':
 				case '+': case '-':
-					return onInvalidNumber(oFlag, i, "lexer.number.noExponent");
+					return onInvalidNumber(i, "lexer.number.noExponent");
 			}
 		}
 
@@ -784,29 +781,29 @@ public class Tokenizer {
 						}
 					} else {
 						if (!TextUtil.checkMax(RADIX_MAX[flag], v, 0, v.length(), neg)) {
-							return onInvalidNumber(oFlag, index, "lexer.number.intLarge");
+							return onInvalidNumber(index, "lexer.number.intLarge");
 						}
 						w = numberWord(index, (int) _parseNumber(v, flag, neg), represent);
 					}
 				}
 				case 1 -> {
 					if (!TextUtil.checkMax(RADIX_MAX[flag = (flag&3)|4], v, 0, v.length(), neg)) {
-						return onInvalidNumber(oFlag, index, "lexer.number.longLarge");
+						return onInvalidNumber(index, "lexer.number.longLarge");
 					}
 					w = Token.numberWord(index, _parseNumber(v, flag, neg), represent);
 				}
 				case 2 -> {
 					float fv = FastDoubleParser.parseFloat(v);
 					if (neg) fv = -fv;
-					if (fv == Float.POSITIVE_INFINITY || fv == Float.NEGATIVE_INFINITY) return onInvalidNumber(oFlag, index, "lexer.number.floatLarge");
-					if (fv == 0 && !isZero(v)) return onInvalidNumber(oFlag, index, "lexer.number.floatSmall");
+					if (fv == Float.POSITIVE_INFINITY || fv == Float.NEGATIVE_INFINITY) return onInvalidNumber(index, "lexer.number.floatLarge");
+					if (fv == 0 && !isZero(v)) return onInvalidNumber(index, "lexer.number.floatSmall");
 					w = Token.numberWord(index, fv, represent);
 				}
 				case 3 -> {
 					double dv = FastDoubleParser.parseDouble(v);
 					if (neg) dv = -dv;
-					if (dv == Double.POSITIVE_INFINITY || dv == Double.NEGATIVE_INFINITY) return onInvalidNumber(oFlag, index, "lexer.number.floatLarge");
-					if (dv == 0 && !isZero(v)) return onInvalidNumber(oFlag, index, "lexer.number.floatSmall");
+					if (dv == Double.POSITIVE_INFINITY || dv == Double.NEGATIVE_INFINITY) return onInvalidNumber(index, "lexer.number.floatLarge");
+					if (dv == 0 && !isZero(v)) return onInvalidNumber(index, "lexer.number.floatSmall");
 					w = Token.numberWord(index, dv, represent);
 				}
 			}
@@ -815,7 +812,7 @@ public class Tokenizer {
 			index = i;
 			return w;
 		} catch (NumberFormatException e) {
-			return onInvalidNumber(' ', i, e.getMessage());
+			return onInvalidNumber(i, e.getMessage());
 		}
 	}
 

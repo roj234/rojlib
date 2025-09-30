@@ -5,10 +5,7 @@ import roj.archive.zip.ZipFileWriter;
 import roj.asm.MemberDescriptor;
 import roj.asmx.Context;
 import roj.asmx.mapper.Mapper;
-import roj.ci.BuildContext;
-import roj.ci.MCMake;
-import roj.ci.Project;
-import roj.ci.Workspace;
+import roj.ci.*;
 import roj.ci.event.LibraryModifiedEvent;
 import roj.ci.minecraft.MappingUI;
 import roj.collect.ArrayList;
@@ -83,9 +80,9 @@ public class MAP implements Processor {
 			var reverse = ctx.context.startsWith("unmap");
 			Mapper m;
 			if (reverse) {
-				m = new Mapper(workspace.getInvMapper());
+				m = new Mapper(workspace.getInverseMapping());
 			} else {
-				m = workspace.getMapper();
+				m = new Mapper(workspace.getMapping());
 				m.flag = (byte) flag;
 				m.loadLibraries(workspace.mappedDepend);
 			}
@@ -126,7 +123,7 @@ public class MAP implements Processor {
 				return;
 			}
 
-			Mapper m = workspace.getMapper();
+			var m = workspace.getMapping();
 			for (Map.Entry<MemberDescriptor, String> entry : m.getMethodMap().entrySet()) {
 				MemberDescriptor key = entry.getKey();
 				if (word.matcher(key.owner+"."+key.name+key.rawDesc).find()) {
@@ -174,7 +171,7 @@ public class MAP implements Processor {
 		return ctx.project.mapperState == null && ctx.project.workspace.mapping != null ? 1 : 2;
 	}
 
-	@Override public synchronized void afterCompile(BuildContext ctx) {
+	@Override public synchronized void afterCompilePre(BuildContext ctx) {
 		var project = ctx.project;
 		if (project.workspace.mapping != null) {
 			var mapper = getProjectMapper(project);
@@ -191,9 +188,9 @@ public class MAP implements Processor {
 			var state = project.mapperState;
 			if (state != null) {
 				libs.add(state);
-				mapper.mapIncr(ctx.getClasses());
+				mapper.mapIncr(ctx.getChangedClasses());
 			} else {
-				mapper.map(ctx.getClasses());
+				mapper.map(ctx.getChangedClasses());
 			}
 			project.mapperState = mapper.snapshot(state);
 		}
@@ -205,15 +202,19 @@ public class MAP implements Processor {
 
 		var libraries = new ArrayList<File>();
 		var digest = CryptoFactory.SM3();
-		Predicate<File> predicate = file -> {
+		Predicate<File> callback = file -> {
 			digest.update(IOUtil.getSharedByteBuf().putUTF(file.getName()).putLong(file.length()).putLong(file.lastModified()));
 
 			String name = file.getName().toLowerCase(Locale.ROOT);
 			return !name.startsWith(DONT_LOAD_PREFIX) && (name.endsWith(".zip") || name.endsWith(".jar"));
 		};
 		libraries.addAll(p.workspace.mappedDepend);
-		IOUtil.listFiles(new File(BASE, "lib"), libraries, predicate);
-		IOUtil.listFiles(p.libPath, libraries, predicate);
+		IOUtil.listFiles(new File(BASE, "lib"), libraries, callback);
+		for (Dependency dep : p.getCompileDependencies()) {
+			dep.forEachFile(f -> {
+				if (callback.test(f)) libraries.add(f);
+			});
+		}
 
 		LOGGER.trace("{}: 映射器的库列表：{}", p.getName(), libraries);
 
@@ -221,7 +222,7 @@ public class MAP implements Processor {
 		var hash = digest.digest();
 		loaded:
 		try (var mzf = new RoWriteArchive(new File(CACHE_PATH, "mapper_cache.roar"))) {
-			m = new Mapper(p.workspace.getMapper());
+			m = new Mapper(p.workspace.getMapping());
 			m.flag = (byte) flag;
 
 			String entryId = TextUtil.bytes2hex(hash);

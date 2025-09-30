@@ -5,14 +5,14 @@ import roj.archive.zip.ZipFile;
 import roj.collect.ArrayList;
 import roj.collect.HashMap;
 import roj.config.ConfigMaster;
-import roj.config.node.MapValue;
 import roj.config.mapper.Optional;
+import roj.config.node.MapValue;
 import roj.config.table.TableParser;
 import roj.config.table.TableReader;
 import roj.config.table.TableWriter;
 import roj.http.HttpUtil;
 import roj.http.server.IllegalRequestException;
-import roj.http.server.PostSetting;
+import roj.http.server.PayloadInfo;
 import roj.http.server.Request;
 import roj.http.server.ZipRouter;
 import roj.http.server.auto.*;
@@ -117,7 +117,7 @@ public class YellowPage extends Plugin implements TableReader {
 		var id = Integer.parseInt(checkNumber(req.argument("id")));
 		if (id < 0 || id >= db.size()) throw IllegalRequestException.BAD_REQUEST;
 
-		req.responseHeader().put("cache-control", HttpUtil.IMMUTABLE);
+		req.response().setHeader("cache-control", HttpUtil.IMMUTABLE);
 		return db.get(id);
 	}
 
@@ -161,7 +161,7 @@ public class YellowPage extends Plugin implements TableReader {
 		return file.delete() ? "ok" : "fail";
 	}
 
-	@Interceptor public void save(PostSetting ps) {ps.postAccept(65536, 100);}
+	@Interceptor public void save(PayloadInfo ps) {ps.accept(65536, 100);}
 	@POST
 	@Interceptor("save")
 	@SuppressWarnings("unchecked")

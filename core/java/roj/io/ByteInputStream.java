@@ -78,6 +78,7 @@ public class ByteInputStream extends MBInputStream implements ByteInput, Finisha
 		while ((total<n) && ((cur = (int) in.skip(n-total)) > 0)) {
 			total += cur;
 		}
+		totalRead += total;
 
 		return total;
 	}

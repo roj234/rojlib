@@ -17,7 +17,7 @@ public final class SwitchMapJ {
 		public static Builder builder(int size) {return new Builder(size);}
 		private Builder(int size) {
 			keys = new long[size];
-			mask = MathUtils.nextPowerOfTwo((int)(size * 1.5f)); // 负载因子≈66%
+			mask = MathUtils.nextPowerOfTwo((int)(size * 1.5f))-1; // 负载因子≈66%
 			tab = new int[mask+1];
 		}
 
@@ -27,7 +27,7 @@ public final class SwitchMapJ {
 				int slotVal = tab[idx];
 				if (slotVal == 0) {
 					keys[ord] = key;
-					tab[idx] = ord; // 存储索引+1（避免0冲突）
+					tab[idx] = ord+1;
 					return null;
 				} else if (keys[slotVal - 1] == key) {
 					throw new IllegalArgumentException("Duplicate key: " + key);
@@ -52,10 +52,10 @@ public final class SwitchMapJ {
 	public int get(long key) {
 		int idx = hash(key) & mask;
 		while (true) {
-			int slotVal = tab[idx];
-			if (slotVal == 0) return -1; // 未找到
-			if (keys[slotVal - 1] == key) return slotVal - 1; // 返回索引
-			idx = (idx + 1) & mask; // 继续探测
+			int slotVal = tab[idx]-1;
+			if (slotVal < 0) return -1;
+			if (keys[slotVal] == key) return slotVal;
+			idx = (idx + 1) & mask;
 		}
 	}
 

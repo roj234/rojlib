@@ -67,10 +67,10 @@ public class KeyStorePlugin extends Plugin {
 			var type = map.getString("type");
 
 			if (type.equals("standard")) {
-				loadCertificateAndKeys(IOUtil.relativePath(getDataFolder(), map.getString("certificate")), IOUtil.relativePath(getDataFolder(), map.getString("privateKey")), alias);
+				loadCertificateAndKeys(IOUtil.resolvePath(getDataFolder(), map.getString("certificate")), IOUtil.resolvePath(getDataFolder(), map.getString("privateKey")), alias);
 			} else if (type.startsWith("rojlib.")) {
 				var password = map.getString("pass");
-				KeyPair keyPair = KeyType.getInstance(type.substring(7)).loadKey(password.getBytes(StandardCharsets.UTF_8), IOUtil.relativePath(getDataFolder(), map.getString("file")));
+				KeyPair keyPair = KeyType.getInstance(type.substring(7)).loadKey(password.getBytes(StandardCharsets.UTF_8), IOUtil.resolvePath(getDataFolder(), map.getString("file")));
 
 				publicKeys.put(alias, Either.right(keyPair.getPublic()));
 				privateKeys.put(alias, keyPair.getPrivate());

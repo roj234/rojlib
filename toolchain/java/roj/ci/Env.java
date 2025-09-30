@@ -1,15 +1,20 @@
 package roj.ci;
 
+import roj.collect.ArrayList;
 import roj.collect.LinkedHashMap;
+import roj.collect.TrieTree;
 import roj.collect.TrieTreeSet;
 import roj.config.mapper.Optional;
 import roj.util.ArtifactVersion;
+import roj.util.Helpers;
+import roj.util.Pair;
 
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Pattern;
 
 /**
  * @author Roj234
@@ -30,24 +35,42 @@ final class Env {
 		static final ArtifactVersion DEFAULT_VERSION = new ArtifactVersion("1");
 
 		String name;
-		@Optional(nullValue = "roj.ci.Env.Type.PROJECT")
+		@Optional(nullValue = "roj/ci/Env$Type.PROJECT Lroj/ci/Env$Type;")
 		Type type = Type.PROJECT;
-		@Optional(nullValue = "roj.ci.Env.Project.DEFAULT_VERSION")
+		@Optional(nullValue = "roj/ci/Env$Project.DEFAULT_VERSION Lroj/util/ArtifactVersion;")
 		ArtifactVersion version = DEFAULT_VERSION;
-		@Optional(nullValue = "java.nio.charset.StandardCharsets.UTF_8")
+		@Optional(nullValue = "java/nio/charset/StandardCharsets.UTF_8 Ljava/nio/charset/Charset;")
 		Charset charset = StandardCharsets.UTF_8;
 		@Optional(write = Optional.WriteMode.NON_BLANK)
 		List<String> compiler_options = Collections.emptyList();
 		@Deprecated @Optional boolean compiler_options_overwrite;
 		String workspace;
 		@Optional(write = Optional.WriteMode.NON_BLANK)
-		Map<String, Dependency.Scope> dependency = Collections.emptyMap();
+		LinkedHashMap<String, Dependency.Scope> dependency = Helpers.cast(EMPTY_MAP);
 		@Optional(write = Optional.WriteMode.NON_BLANK)
 		LinkedHashMap<String, String> variables = EMPTY_MAP;
 		@Optional(write = Optional.WriteMode.NON_BLANK)
 		TrieTreeSet variable_replace_in = EMPTY_SET;
 		@Optional(write = Optional.WriteMode.NON_BLANK)
-		TrieTreeSet bundle_ignore = EMPTY_SET;
+		LinkedHashMap<String, String> shade = EMPTY_MAP;
+
+		void initShade() {
+			prefixShades = new TrieTree<>();
+			patternShades = new ArrayList<>();
+			for (var entry : shade.entrySet()) {
+				String pattern = entry.getKey();
+				if (pattern.startsWith("/")) {
+					patternShades.add(new Pair<>(Pattern.compile(pattern.substring(1)), entry.getValue()));
+				} else {
+					prefixShades.put(pattern, entry.getValue());
+				}
+			}
+		}
+
+		transient TrieTree<String> prefixShades;
+		transient List<Pair<Pattern, String>> patternShades;
+
+		transient Map<String, Dependency> dependencyInstances;
 	}
 
 	enum Type {
@@ -65,6 +88,6 @@ final class Env {
 		ARTIFACT;
 
 		boolean canBuild() {return this != MODULE;}
-		boolean hasFile() {return this != ARTIFACT;}
+		boolean needCompile() {return this != ARTIFACT;}
 	}
 }

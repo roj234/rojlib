@@ -48,7 +48,7 @@ public class MappingBuilder {
 		if (instructions.get(0).charAt(0) == 'L') {
 			String path = TextUtil.join(instructions.subList(2, instructions.size()), "-");
 			var supplier = context.get(path);
-			File input = supplier != null ? supplier.get() : IOUtil.relativePath(baseDir, path);
+			File input = supplier != null ? supplier.get() : IOUtil.resolvePath(baseDir, path);
 			String type = instructions.get(1).toLowerCase(Locale.ROOT);
 			switch (type) {
 				case "srg", "xsrg":
@@ -100,11 +100,11 @@ public class MappingBuilder {
 	private Mapping recursiveBuildMapping(List<String> instructions, IntValue index, Map<String, Mapping> mappings) {
 		String s = instructions.get(index.value++);
 		return switch (s.charAt(0)) {
-				case 'E' -> {
+				case 'E', 'e' -> {
 					Mapping a = recursiveBuildMapping(instructions, index, mappings);
 					Mapping b = recursiveBuildMapping(instructions, index, mappings);
 					Mapping out = a.copy();
-					out.extend(b, true);
+					out.extend(b, s.charAt(0) == 'e');
 					out._name = "E-"+b._name+"-"+a._name;
 					yield out;
 				}

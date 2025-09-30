@@ -15,10 +15,10 @@ final class SynchronizedFindMap<K, V> extends HashMap<K, V> {
 	public SynchronizedFindMap() {}
 
 	@Override
-	public AbstractEntry<K, V> getOrCreateEntry(K key) {
+	protected AbstractEntry<K, V> myCreateEntry(K key, V val) {
 		try {
 			lock.lock();
-			return super.getOrCreateEntry(key);
+			return super.myCreateEntry(key, val);
 		} finally {
 			lock.unlock();
 		}

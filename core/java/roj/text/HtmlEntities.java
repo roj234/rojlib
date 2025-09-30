@@ -1,6 +1,5 @@
 package roj.text;
 
-import roj.collect.HashMap;
 import roj.collect.TrieTree;
 import roj.compiler.plugins.annotations.Attach;
 import roj.config.node.IntValue;
@@ -62,10 +61,10 @@ public class HtmlEntities {
 		CharList out = null;
 		int prevI = 0, i = 0;
 
-		HashMap.Entry<IntValue, String> entry = new HashMap.Entry<>(new IntValue(), null);
+		IntValue matchLen1 = new IntValue();
 		while (i < len) {
-			tree.match(in, i, len, entry);
-			int matchLen = entry.getKey().value;
+			String match = tree.match(in, i, len, matchLen1);
+			int matchLen = matchLen1.value;
 			if (matchLen < 0) {
 				if (m == null || !m.find(i)) {
 					m = null;
@@ -80,7 +79,7 @@ public class HtmlEntities {
 			} else {
 				if (out == null) out = new CharList(len);
 
-				out.append(in, prevI, i).append(entry.getValue());
+				out.append(in, prevI, i).append(match);
 
 				i += matchLen;
 				prevI = i;

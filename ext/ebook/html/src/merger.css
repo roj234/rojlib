@@ -1,0 +1,313 @@
+:root {
+    /* 布局变量 */
+    --line-number-width: 50px;
+    --line-softwarp-shift: 10px;
+
+    /* 基础颜色 */
+    --text-color: #333;
+    --background-color: #fff;
+    --border-color: #ccc;
+    --secondary-bg: #f5f5f5;
+    --active-color: #f0f0f0;
+    --line-number-color: color-mix(in srgb, var(--text-color) 60%, black);
+
+    background-color: var(--background-color);
+    color: var(--text-color);
+
+    /* 高亮颜色 */
+    --highlight-replace: #fff4b0;
+    --highlight-modified: #cce5ff;
+    --highlight-insert: #ccffcc;
+    --highlight-delete: #fcbdbd;
+
+    /* 三种可选 */
+    --changed-fg: 70, 130, 255;
+    --changed-fg: 255, 115, 0;
+    --changed-fg: 140, 90, 200;
+
+    /* 变化指示颜色 */
+    --changed-bg: rgba(var(--changed-fg), 0.15);
+
+    /* 滚动条 */
+    --scrollbar-track: #f1f1f1;
+    --scrollbar-thumb: #c1c1c1;
+    --scrollbar-hover: #666;
+
+    /* 动画颜色 */
+    --selection-bg: rgba(70, 130, 255, 0.75);
+
+    /* 连接线 */
+    --link-replace: #ff9900;
+    --link-insert: #00cc00;
+    --link-delete: #ff6666;
+}
+
+@media (prefers-color-scheme: dark) {
+    :root,
+    :root[data-theme="dark"] {
+        /* 基础布局颜色 */
+        --text-color: #e0e0e0;
+        --background-color: #1e1e1e;
+        --border-color: #444;
+        --secondary-bg: #2a2a2a;
+        --active-color: #343434;
+
+        --highlight-replace: rgb(255, 153, 0, 0.5);
+        --highlight-modified: rgb(0, 122, 204, 0.7);
+        --highlight-insert: rgb(76, 175, 80, 0.7);
+        --highlight-delete: rgb(244, 67, 54, 0.5);
+
+        --scrollbar-track: #2d2d2d;
+        --scrollbar-thumb: #4d4d4d;
+        --scrollbar-hover: #666;
+
+        --selection-bg: rgba(70, 130, 255, 0.75);
+
+        --link-replace: #ff8000;
+        --link-insert: #4CAF50;
+        --link-delete: #F44336;
+    }
+}
+
+/* 统一动画效果 */
+* {
+    transition: color 0.3s ease, background-color 0.3s ease;
+}
+
+/* 增强选中文本的可读性 */
+::selection {
+    background: var(--selection-bg);
+}
+
+.container {
+    display: flex;
+    gap: 20px;
+    padding: 20px;
+    position: relative;
+}
+
+.text-box {
+    flex: 1;
+    border: 1px solid var(--border-color);
+    white-space: pre-wrap;
+    font-family: monospace;
+    overflow-y: auto;
+    position: relative;
+}
+.text-box::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+.text-box::-webkit-scrollbar-track {
+    background: var(--scrollbar-track);
+}
+.text-box::-webkit-scrollbar-thumb {
+    background: var(--scrollbar-thumb);
+    border-radius: 4px;
+    border: 1px solid var(--scrollbar-track);
+}
+.text-box::-webkit-scrollbar-thumb:hover {
+    background: var(--scrollbar-hover);
+}
+
+/* Firefox 兼容 */
+@supports (scrollbar-color: auto) {
+    .text-box {
+        scrollbar-width: thin;
+        scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+    }
+}
+
+.line {position: relative;}
+.line, .line-numbers {padding-left: calc(var(--line-number-width) + 20px - var(--line-softwarp-shift));}
+.line.odd {background-color: var(--secondary-bg);}
+
+.line:before {
+    content: "";
+    display: inline-block;
+    width: var(--line-softwarp-shift);
+}
+
+/* 行号 */
+.line-number {
+    position: absolute;
+    left: 0;
+    width: var(--line-number-width);
+    padding-right: 10px;
+    text-align: right;
+    color: var(--line-number-color);
+    background-color: var(--secondary-bg);
+    border-right: 1px solid var(--border-color);
+    user-select: none;
+}
+
+/* 高亮 */
+.unified, .replace {background-color: var(--highlight-replace);}
+.modified {background-color: var(--highlight-modified);}
+.insert {
+    background-color: var(--highlight-insert);
+    text-decoration: underline 2px solid var(--link-insert);
+}
+.delete {
+    background-color: var(--highlight-delete);
+    text-decoration: line-through;
+}
+
+ .changed {
+    background: var(--changed-bg) !important;
+    box-shadow: inset 4px 0 0 rgb(var(--changed-fg), 0.5);
+}
+.changed .line-number {
+    background: linear-gradient(
+            to right,
+            rgb(var(--changed-fg), 0.1) 0%,
+            rgb(var(--changed-fg), 0.1) 95%,
+            rgb(var(--changed-fg), 0.25) 96%,
+            rgb(var(--changed-fg), 0.25) 100%
+    );
+}
+
+/* 联合视图 */
+.unified-line {}
+.modified {left: 60px;}
+
+/* 占位符 */
+.caret {
+    /* background-color: #aaa; */
+    pointer-events: none;
+    text-decoration: none;
+    display: inline-block;
+    width: 2px;
+}
+.caret:before {content: " ";}
+
+/* 连线 */
+svg.links {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 1;
+}
+
+svg.links .link {
+    stroke-width: 1.5px;
+    stroke-dasharray: 3;
+    fill: none;
+}
+
+.link.replace { stroke: var(--link-replace); }
+.link.insert { stroke: var(--link-insert); }
+.link.delete { stroke: var(--link-delete); }
+
+/* 按钮样式 */
+.toolbar {
+    display: flex;
+    gap: 10px;
+    padding: 10px 20px;
+    background: var(--background-color);
+    color: var(--text-color);
+    border-bottom: 1px solid var(--border-color);
+    align-items: center;
+}
+.buttons>* {
+    padding: 8px 16px;
+    border: 1px solid var(--border-color);
+    background: var(--secondary-bg);
+    color: var(--text-color);
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+.buttons>*:hover {
+    background: var(--active-color);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+.toolbar h1 {
+    margin: 0;
+    margin-right: auto;
+    font-size: 24px;
+}
+
+.toolbar-segment {
+    display: flex;
+    align-items: center;
+    padding: 0 12px;
+    border-right: 1px solid var(--border-color);
+}
+
+.icon-btn {
+    padding: 8px;
+    min-width: auto;
+}
+
+.icon-btn::after {
+    content: attr(aria-label);
+    position: absolute;
+    bottom: -24px;
+    background: rgba(0,0,0,0.8);
+    color: white;
+    padding: 2px 8px;
+    border-radius: 4px;
+    opacity: 0;
+    transition: opacity 0.2s;
+}
+
+.icon-btn:hover::after {
+    opacity: 1;
+}
+
+/* 折叠菜单样式 */
+.more-btn {
+    position: relative;
+    padding-right: 30px;
+}
+
+.more-btn::after {
+    content: "▾";
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+}
+
+.dropdown-menu {
+    display: none;
+    position: absolute;
+    top: 90%;
+    right: 4px;
+    background: var(--background-color);
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    z-index: 100;
+    width: 240px;
+}
+
+.dropdown-menu button {
+    display: block;
+    width: 100%;
+    text-align: left;
+    border-radius: 0;
+    color: var(--text-color);
+    padding: 10px 16px;
+    background: var(--secondary-bg);
+    border: none;
+}
+
+.dropdown-menu button:hover {
+    background: var(--active-color);
+}
+
+/* 悬停展开 */
+.more-btn:hover::after {
+    content: "←";
+}
+.more-btn:hover .dropdown-menu {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 5px;
+    padding: 8px;
+}

@@ -1,5 +1,6 @@
 package roj.http.server.auto;
 
+import org.intellij.lang.annotations.MagicConstant;
 import roj.http.server.Request;
 
 import java.lang.annotation.ElementType;
@@ -8,59 +9,82 @@ import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
 /**
- * 注：默认允许POST和GET请求，手动用@Accepts指定
+ * Defines an HTTP route in the {@link OKRouter} framework.
+ * Annotate methods to turn them into request handlers. Defaults to allowing GET and POST methods.
+ * The route path uses method name with "__" replaced by "/". Supports advanced path matching syntax
+ * inspired by Vue Router, including parameters, regex constraints, optional/repeatable segments,
+ * and wildcards.
+ *
+ * <p><strong>Basic Example:</strong></p>
+ * <pre>{@code
+ * @Route("/users/:id")
+ * public User getUser(Request req, @RequestParam("id") int id) { ... }
+ * }</pre>
+ *
+ * <p><strong>方法参数:</strong> {@code [Request req], [Response response], [params...]} 前二者可以省略，但顺序不能改动.</p>
+ *
+ * <p>Use {@link Accepts} for custom HTTP methods, {@link Mime} for response types,
+ * and {@link Interceptor} for pre-processing.</p>
+ *
+ * <h3>路径匹配语法</h3>
+ * <table>
+ *   <tr><th>Example</th><th>Description</th><th>Type</th></tr>
+ *   <tr><td>{@code /user/:id}</td><td>Matches "/user/123", injects id="123" (use {@link Request#argument(String)} or annotations)</td><td>Parameter Injection</td></tr>
+ *   <tr><td>{@code /:lang(en|zh)/index}</td><td>{@code lang} accepts only "en" or "zh" (regex constraint)</td><td>Regex Constraint</td></tr>
+ *   <tr><td>{@code /list/:page?}</td><td>{@code page} is optional (? = 0-1 times)</td><td>Quantifier</td></tr>
+ *   <tr><td>{@code /images/**}</td><td>Matches "/images/2024/logo.png"</td><td>Wildcard Prefix</td></tr>
+ * </table>
+ *
+ * <p><h3>备注</h3>
+ * <ol>
+ *     <li>路径是否以{@code /}开始无任何影响，它们在解析时相同对待</li>
+ *     <li>正则约束的圆括号和前缀通配符的{@code /**}是固定句式</li>
+ *     <li>正则约束必须在次数约束之前, 这也是固定句式</li>
+ *     <li>{@code ?}限制出现零或一次，{@code +}限制一至多次，{@code *}限制零至多次；使用次数约束时，不建议使用参数注入，除非你很了解其规则</li>
+ *     <li>使用正则而不是代码约束参数，可能会影响性能</li>
+ *     <li>优先级：精确路径 > 正则约束 > 无约束 > ? > + > * > 前缀通配符</li>
+ *     <li>除了上面两种办法，你还可用{@link Request#arguments()}获取所有请求参数</li>
+ *     <li>通过{@link #strict()}开关严格模式
+ *       <ul>
+ *         <li>基础规则: {@code Route("/admin/")} 只匹配 {@code /admin/}.</li>
+ *         <li>严格模式(默认): {@code Route("/user")} 只匹配 {@code /user}.</li>
+ *         <li>宽松模式: {@code Route("/user")} 匹配 {@code /user} and {@code /user/} ({@link Request#path()} = "" or "/").</li>
+ *       </ul>
+ *     </li>
+ * </ol>
+ *
+ *
  * @author Roj234
  * @since 2023/2/5 11:35
- * 方法签名: [Request, [ResponseHeader]][请求参数]
+ * @see Accepts
+ * @see Request#path()
  */
 @Retention(RetentionPolicy.CLASS)
 @Target(ElementType.METHOD)
 public @interface Route {
 	/**
-	 * 路由路径定义规则（留空则使用方法名.replace('__', '/')）
-	 * <p>
-	 * 📖 <a href="https://router.vuejs.org/zh/guide/essentials/route-matching-syntax.html">完整语法文档</a>
-	 *
-	 * <p><h3>匹配规则</h3>
-	 * <table>
-	 *   <tr><th>示例</th><th>说明</th><th>名称</th></tr>
-	 *   <tr><td>/user/:id</td><td>匹配 "/user/123"，id="123"</td><td>参数匹配</td></tr>
-	 *   <tr><td>/:lang(en|zh)/index</td><td>lang 仅接受 en/zh</td><td>正则约束</td></tr>
-	 *   <tr><td>/list/:page?</td><td>page参数可省略</td><td>次数约束</td></tr>
-	 *   <tr><td>/images/**</td><td>匹配 "/images/2024/logo.png"</td><td>目录前缀</td></tr>
-	 * </table>
-	 *
-	 * <p><h3>备注</h3>
-	 * 1. 正则约束的圆括号和通配目录的'/..'是硬编码的结构<br>
-	 * 2. ?号允许参数出现零或一次，+号允许一至多次，*号允许零至多次；使用次数约束时，不建议使用参数注入<br>
-	 * 3. 正则约束必须在次数约束之前出现<br>
-	 * 4. 使用正则而不是代码来限制参数的取值，也许会降低性能<br>
-	 * 5. 匹配优先级：精确路径 > 正则约束的参数 > 不带约束的参数 > ?约束 > +约束 > *约束 > 目录前缀<br>
-	 * 6. 使用{@link RequestParam}注解将请求参数注入到方法<br>
-	 * 7. 不以斜杠结尾的路由会匹配以斜杠结尾的路径，这是为了向前兼容，你可开启严格模式
-	 *
-	 * <p><h3>宽松模式的斜杠匹配</h3>
-	 * Route("/user") → 匹配 "/user" 和 "/user/"<br>
-	 * Route("/admin/") → 匹配 "/admin/"<br>
-	 * <table>
-	 *   <tr><th>路径</th><th>request.path()</th></tr>
-	 *   <tr><td>/user</td><td>""</td></tr>
-	 *   <tr><td>/user/</td><td>"/"</td></tr>
-	 *   <tr><td>/admin/</td><td>""</td></tr>
-	 * </table>
+	 * The route path pattern. If empty, uses method name.replace("__", "/").
+	 * Full syntax documentation: <a href="https://router.vuejs.org/zh/guide/essentials/route-matching-syntax.html">Vue Router Guide</a>.
 	 *
 	 * @see Request#argument(String)
 	 * @see Request#arguments()
+	 * @see #strict()
 	 */
 	String value() default "啊随便写点什么反正我也不会用Proxy访问注解的";
-	@Deprecated boolean prefix() default false;
 	/**
-	 * 开启严格模式后，不以斜杠结尾的路由不再匹配以斜杠结尾的路径
+	 * If {@code true}, enables strict mode: non-trailing-slash routes do not match trailing-slash paths.
+	 *
+	 * @return whether strict mode is enabled
 	 */
-	boolean strict() default false;
+	boolean strict() default true;
 	/**
-	 * 从何处注入参数（未提供注解时的默认值）
+	 * 无注解的方法参数的值从何处获取.
 	 * 合理的值是POST或GET，但COOKIE、PARAM也可用
+	 * {@link GET} 会将默认值设置为GET.
+	 * {@link POST} 会设置为POST.
+	 * 这些的优先级低于手动指定
+	 * @return the source for deserialization
 	 */
+	@MagicConstant(stringValues = {"POST", "GET", "COOKIE", "PARAM"})
 	String deserializeFrom() default "";
 }

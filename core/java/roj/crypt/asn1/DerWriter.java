@@ -4,6 +4,7 @@ import org.intellij.lang.annotations.MagicConstant;
 import roj.collect.ArrayList;
 import roj.collect.IntList;
 import roj.io.IOUtil;
+import roj.text.DateFormat;
 import roj.util.*;
 
 import java.io.IOException;
@@ -18,6 +19,8 @@ import static roj.reflect.Unsafe.U;
  * @since 2024/3/25 3:22
  */
 public final class DerWriter {
+	public static final DateFormat GENERALIZED_TIME = DateFormat.create("YYYY MM DD HH ii ss \"Z\"");
+
 	private final ByteList T = new ByteList();
 	private final IntList L = new IntList();
 	private final ArrayList<Object> V = new ArrayList<>();

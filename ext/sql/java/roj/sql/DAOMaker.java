@@ -9,7 +9,7 @@ import roj.asm.insn.Label;
 import roj.asm.type.IType;
 import roj.asm.type.ParameterizedType;
 import roj.asm.type.Type;
-import roj.asmx.mapper.ParamNameMapper;
+import roj.asmx.ParamNameMapper;
 import roj.collect.ArrayList;
 import roj.collect.BitSet;
 import roj.collect.HashSet;

@@ -32,10 +32,10 @@ public class MIXIN implements Processor {
 	public String name() {return "Mixin注解上下文处理程序";}
 
 	@Override
-	public void afterCompile(BuildContext ctx) {
+	public void afterCompilePost(BuildContext ctx) {
 		var m = Objects.requireNonNull(ctx.getProcessor(MAP.class), "Missing dep MAP for MIXIN").getProjectMapper(ctx.project);
 
-		var annotatedClass = ctx.getSourceAnnotations("org/spongepowered/asm/mixin/Mixin");
+		var annotatedClass = ctx.getAnnotatedClasses("org/spongepowered/asm/mixin/Mixin");
 		for (int i = 0; i < annotatedClass.size(); i++) {
 			ClassNode data = annotatedClass.get(i).getData();
 			Annotation mixin = Annotation.findInvisible(data.cp, data, "org/spongepowered/asm/mixin/Mixin");
@@ -135,7 +135,7 @@ public class MIXIN implements Processor {
 		MemberDescriptor desc = ClassUtil.getInstance().sharedDesc;
 		desc.owner = targetClass;
 		desc.name = forcedName == null || forcedName.isEmpty() ? member.name() : forcedName;
-		desc.rawDesc = mapper.checkFieldType || memberDesc.startsWith("(") ? memberDesc : "";
+		desc.rawDesc = mapper.isFieldHasType() || memberDesc.startsWith("(") ? memberDesc : "";
 
 		boolean hasEmbeddedDesc = false;
 		int i = desc.name.indexOf('(');
@@ -152,14 +152,14 @@ public class MIXIN implements Processor {
 	private String tryMapMember(Mapper mapper, String targetClass, MemberDescriptor desc, boolean hasEmbeddedDesc, boolean isMethod) {
 		Map<MemberDescriptor, String> mapping = isMethod ? mapper.getMethodMap() : mapper.getFieldMap();
 
-		List<String> parents = mapper.getSelfSupers().getOrDefault(targetClass, Collections.emptyList());
+		List<String> parents = mapper.getHierarchy().getOrDefault(targetClass, Collections.emptyList());
 		int i = 0;
 		while (true) {
 			String mappedName = mapping.get(desc);
 			if (mappedName != null) return hasEmbeddedDesc ? mappedName + desc.rawDesc() : mappedName;
 			MCMake.LOGGER.debug("NotFoundInCurrent: {}", desc);
 
-			if (mapper.getStopAnchor().contains(desc)) break;
+			if (mapper.getShadows().contains(desc)) break;
 
 			if (i == parents.size()) break;
 			desc.owner = parents.get(i++);

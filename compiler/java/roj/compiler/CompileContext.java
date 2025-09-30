@@ -1,9 +1,6 @@
 package roj.compiler;
 
-import org.jetbrains.annotations.NotNull;
-import org.jetbrains.annotations.Nullable;
-import org.jetbrains.annotations.Range;
-import org.jetbrains.annotations.UnmodifiableView;
+import org.jetbrains.annotations.*;
 import roj.asm.*;
 import roj.asm.annotation.Annotation;
 import roj.asm.attr.Annotations;
@@ -208,26 +205,26 @@ public class CompileContext {
 	public int errorReportIndex;
 	private Set<Object> reportedType = new HashSet<>();
 
-	public final void report(Kind kind, String message) {report(kind, message, ArrayCache.OBJECTS);}
-	public final void report(Kind kind, String message, Object... args) {
+	public final void report(Kind kind, @PropertyKey(resourceBundle = "roj.compiler.messages") String message) {report(kind, message, ArrayCache.OBJECTS);}
+	public final void report(Kind kind, @PropertyKey(resourceBundle = "roj.compiler.messages") String message, Object... args) {
 		if (errorReportIndex >= 0) report(errorReportIndex, kind, message, args);
 		else report(tokenizer.__getlwBegin(), tokenizer.__getlwEnd(), kind, message, args);
 	}
 
-	public final void report(Expr pos, Kind kind, String message) {report(pos, kind, message, ArrayCache.OBJECTS);}
-	public void report(Expr pos, Kind kind, String message, Object... args) {
+	public final void report(Expr pos, Kind kind, @PropertyKey(resourceBundle = "roj.compiler.messages") String message) {report(pos, kind, message, ArrayCache.OBJECTS);}
+	public void report(Expr pos, Kind kind, @PropertyKey(resourceBundle = "roj.compiler.messages") String message, Object... args) {
 		if (checkArgument(args) || checkCapture(message, args)) return;
 		int start = pos.getWordStart();
 		int end = pos.getWordEnd();
 		if (end == 0) start = end = tokenizer.index;
 		hasError |= compiler.report(new Diagnostic(file, kind, start, end, message, args));
 	}
-	public void report(int start, int end, Kind kind, String message, Object... args) {
+	public void report(int start, int end, Kind kind, @PropertyKey(resourceBundle = "roj.compiler.messages") String message, Object... args) {
 		if (checkArgument(args) || checkCapture(message, args)) return;
 		hasError |= compiler.report(new Diagnostic(file, kind, start, end, message, args));
 	}
 
-	public void report(int pos, Kind kind, String message, Object... args) {
+	public void report(int pos, Kind kind, @PropertyKey(resourceBundle = "roj.compiler.messages") String message, Object... args) {
 		if (checkArgument(args) || checkCapture(message, args)) return;
 		hasError |= compiler.report(new Diagnostic(file, kind, pos, pos, message, args));
 	}
@@ -446,7 +443,7 @@ public class CompileContext {
 		if (allow < 0) allow = restriction.get(type, 0);
 		if (allow != 0) return false;
 
-		report(Kind.ERROR, "semantic.feature.import.restricted.member:[\""+type+"\","+(member instanceof MethodNode ? "invoke.method" :"symbol.field")+",\""+member.name()+"\"]");
+		report(Kind.ERROR, "semantic.feature.import.restricted.member", type, member instanceof MethodNode ? "invoke.method" : "symbol.field", member.name());
 		return true;
 	}
 
@@ -566,8 +563,8 @@ public class CompileContext {
 					break;
 				}
 
-				if ((ic.modifier &Opcodes.ACC_STATIC) != 0) {
-					report(Kind.ERROR, "type.error.staticGenericSub", type1, ic.name);
+				if ((ic.modifier&Opcodes.ACC_STATIC) != 0) {
+					report(Kind.ERROR, "type.staticGenericSub", type1, ic.name);
 				}
 
 				sign = info.getAttribute(info.cp(), Attribute.SIGNATURE);

@@ -137,6 +137,13 @@ public class Element extends Node {
 
 	public void toCompatXML(CharList sb) {
 		writeTag(sb);
+		if (tag.startsWith("?")) {
+			if (!children.isEmpty()) {
+				throw new IllegalStateException("Processing Instruction不能包含子元素");
+			}
+			sb.append("?>");
+			return;
+		}
 
 		if (isVoid && children.isEmpty()) {
 			sb.append("/>");

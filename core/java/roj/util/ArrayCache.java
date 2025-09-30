@@ -1,5 +1,6 @@
 package roj.util;
 
+import roj.RojLib;
 import roj.annotation.ForDebug;
 import roj.reflect.Unsafe;
 import roj.text.CharList;
@@ -22,7 +23,6 @@ public class ArrayCache {
 	public static final long[] LONGS = new long[0];
 	public static final Object[] OBJECTS = new Object[0];
 	public static final Class<?>[] CLASSES = new Class<?>[0];
-	public static <T> WeakReference<T> emptyWeakRef() {return Helpers.cast(G_Sential);}
 
 	private static final int MIN_ARRAY_SIZE = 256, LARGE_ARRAY_SIZE = 1048576;
 	private static final int ID_COUNT = 3, CACHE_COUNT = 15;
@@ -33,11 +33,6 @@ public class ArrayCache {
 		if (cache == null) CACHE.set(cache = new ArrayCache());
 		return cache;
 	}
-
-	// 100KB左右的指针
-	private static final Object[] G_Cache = new Object[ID_COUNT * 256 * CACHE_COUNT];
-	private static final int[] G_Using = new int[ID_COUNT * 256];
-	private static final WeakReference<?> G_Sential = new WeakReference<>(null);
 
 	// 1<<8 (256) => 1<<20 (1048576)
 	private final Object[] cache = new Object[ID_COUNT * 13 * CACHE_COUNT];
@@ -69,25 +64,6 @@ public class ArrayCache {
 			}
 		}
 
-		sb.append("大数组缓存:\n");
-		int[] ints = G_Using;
-		for (int i = 0; i < ints.length; i++) {
-			int bitset = ints[i];
-			int exist = 0, reserved = 0;
-			var base = i * CACHE_COUNT;
-			for (int j = 0; j < CACHE_COUNT; j++) {
-				var r = (Reference<?>) G_Cache[base+j];
-				if (r != null && r.get() != null) {
-					exist++;
-					if ((bitset&(1 << j)) != 0) reserved++;
-				}
-			}
-			if ((exist|reserved) == 0) continue;
-
-			sb.append("  类型").append(typeOf(i / 256)).append(" 容量").append((i&255)+1).append("M: ")
-			  .append(reserved).append('/').append(exist).append('\n');
-		}
-
 		return sb;
 	}
 	private static String typeOf(int i) {
@@ -101,72 +77,12 @@ public class ArrayCache {
 
 	public ArrayCache() {}
 
-	@SuppressWarnings("unchecked")
 	private static <T> T getGlobalArray(int idx, int size) {
-		new Throwable("Allocating huge array type="+typeOf(idx)+", size="+size).printStackTrace();
-		idx <<= 8;
-		int i1 = size / LARGE_ARRAY_SIZE - 1;
-		if (i1 >= 255) {
-			idx = idx + 255;
-		} else {
-			idx += i1;
-			if (Integer.lowestOneBit(size) != size) return null;
-		}
-
-		long offCache = Unsafe.ARRAY_OBJECT_BASE_OFFSET + Unsafe.ARRAY_OBJECT_INDEX_SCALE * CACHE_COUNT * (long) idx;
-		long offUsing = Unsafe.ARRAY_INT_BASE_OFFSET + ((long) idx << 2);
-		for (int i = 0; i < CACHE_COUNT; i++, offCache += Unsafe.ARRAY_OBJECT_INDEX_SCALE) {
-			var r = (Reference<?>) U.getReferenceVolatile(G_Cache, offCache);
-			Object t;
-			if (r != null && (t = r.get()) != null) {
-				while (true) {
-					int bits = U.getIntVolatile(G_Using, offUsing);
-					if ((bits & (1<<i)) != 0) break;
-					if (U.compareAndSetInt(G_Using, offUsing, bits, bits | (1<<i)))
-						return (T) t;
-				}
-			}
-		}
-
+		if (RojLib.IS_DEV) new Throwable("Allocating huge array "+typeOf(idx)+"["+size+"]").printStackTrace();
 		return null;
 	}
 
-	private static void putGlobalArray(int idx, Object array, int size) {
-		idx = idx * 256 + Math.min(size / LARGE_ARRAY_SIZE - 1, 255);
-
-		long offCache = Unsafe.ARRAY_OBJECT_BASE_OFFSET + Unsafe.ARRAY_OBJECT_INDEX_SCALE * CACHE_COUNT * (long) idx;
-		long offUsing = Unsafe.ARRAY_INT_BASE_OFFSET + ((long) idx << 2);
-		for (int i = 0; i < CACHE_COUNT; i++, offCache += Unsafe.ARRAY_OBJECT_INDEX_SCALE) {
-			var r = (Reference<?>) U.getReferenceVolatile(G_Cache, offCache);
-			if (r != null && r.get() == array) {
-				int mask = 1 << i;
-				while (true) {
-					int bits = U.getIntVolatile(G_Using, offUsing);
-					if ((bits & mask) == 0) throw new InternalError("using[i] == false");
-					if (U.compareAndSetInt(G_Using, offUsing, bits, bits&~mask))
-						return;
-				}
-			}
-		}
-
-		offCache = Unsafe.ARRAY_OBJECT_BASE_OFFSET + Unsafe.ARRAY_OBJECT_INDEX_SCALE * CACHE_COUNT * (long) idx;
-		for (int i = 0; i < CACHE_COUNT; i++, offCache += Unsafe.ARRAY_OBJECT_INDEX_SCALE) {
-			var r = (Reference<?>) U.getReferenceVolatile(G_Cache, offCache);
-			if (r == null || r.get() == null) {
-				if (U.compareAndSetReference(G_Cache, offCache, r, G_Sential)) {
-					var ref = i < 2 ? new SoftReference<>(array) : new WeakReference<>(array);
-					U.putReferenceVolatile(G_Cache, offCache, ref);
-
-					int mask = 1 << i;
-					while (true) {
-						int bits = U.getIntVolatile(G_Using, offUsing);
-						if ((bits & mask) == 0 || U.compareAndSetInt(G_Using, offUsing, bits, bits&~mask))
-							return;
-					}
-				}
-			}
-		}
-	}
+	private static void putGlobalArray(int idx, Object array, int size) {}
 
 	@SuppressWarnings("unchecked")
 	private <T> T getArray(int base, int size) {
@@ -217,14 +133,10 @@ public class ArrayCache {
 	public static byte[] getIOBuffer() {return getByteArray(8192, false);}
 	public static byte[] getByteArray(int size, boolean fillWithZeros) {
 		int size1 = (size+MIN_ARRAY_SIZE-1)& -MIN_ARRAY_SIZE;
-
 		byte[] array = size1 > LARGE_ARRAY_SIZE ? getGlobalArray(0, size1) : small().getArray(0, size1);
 
 		if (array == null) array = fillWithZeros ? new byte[size1] : (byte[]) U.allocateUninitializedArray(byte.class, size1);
-		else if (fillWithZeros) {
-			for (int i = 0; i < size; i++)
-				array[i] = 0;
-		}
+		else if (fillWithZeros) U.setMemory(array, Unsafe.ARRAY_INT_BASE_OFFSET, size, (byte) 0);
 
 		return array;
 	}
@@ -236,11 +148,9 @@ public class ArrayCache {
 	public static int[] getIntArray(int size, boolean fillWithZeros) {
 		int size1 = (size+MIN_ARRAY_SIZE-1) & -MIN_ARRAY_SIZE;
 		int[] array = size1 > LARGE_ARRAY_SIZE ? getGlobalArray(1, size1) : small().getArray(1, size1);
+
 		if (array == null) array = fillWithZeros ? new int[size1] : (int[]) U.allocateUninitializedArray(int.class, size1);
-		else if (fillWithZeros) {
-			for (int i = 0; i < size; i++)
-				array[i] = 0;
-		}
+		else if (fillWithZeros) U.setMemory(array, Unsafe.ARRAY_INT_BASE_OFFSET, size * 4L, (byte) 0);
 
 		return array;
 	}

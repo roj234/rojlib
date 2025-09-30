@@ -9,27 +9,25 @@ import roj.asmx.AnnotationRepo;
 import roj.asmx.Context;
 import roj.ci.event.LibraryModifiedEvent;
 import roj.collect.HashSet;
-import roj.collect.TrieTreeSet;
 import roj.collect.XashMap;
-import roj.http.curl.DownloadListener;
-import roj.http.curl.DownloadTask;
 import roj.io.IOUtil;
 import roj.text.CharList;
 import roj.text.TextUtil;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
 import roj.util.Helpers;
+import roj.util.Pair;
 
+import java.io.Closeable;
 import java.io.File;
 import java.io.IOException;
-import java.net.URI;
-import java.nio.file.Files;
 import java.security.MessageDigest;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Set;
-import java.util.concurrent.ExecutionException;
-import java.util.function.Predicate;
+import java.util.function.Consumer;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import static roj.ci.BuildContext.*;
 
@@ -37,13 +35,24 @@ import static roj.ci.BuildContext.*;
  * @author Roj234
  * @since 2025/08/30 03:32
  */
-public sealed interface Dependency {
+public sealed interface Dependency extends Closeable {
 	default @Nullable Project project() {return null;}
+	default void open(BuildContext ctx) throws IOException {}
+	default void close() throws IOException {}
+
 	int getResources(Project project, ZipOutput zipOutput, BuildContext ctx) throws IOException;
 	void getClasses(BuildContext context) throws IOException;
 	AnnotationRepo getAnnotations(BuildContext context) throws IOException;
 
-	void getClassPath(CharList classpath, int prefix);
+	void forEachFile(Consumer<File> consumer);
+	default void getClassPath(CharList classpath, File prefix) {
+		forEachFile(file -> {
+			String absolutePath = file.getAbsolutePath();
+			String relativized = IOUtil.relativizePath(prefix.getAbsolutePath(), absolutePath);
+			classpath.append(relativized == null ? absolutePath : relativized).append(File.pathSeparatorChar);
+		});
+	}
+	void writeProjectConfiguration(File root, CharList sb, String type);
 
 	static boolean verifyFile(String checksumAlgorithm, File file, byte[] expectedChecksum, String id) {
 		try {
@@ -63,7 +72,7 @@ public sealed interface Dependency {
 	}
 
 	final class ProjectDep implements Dependency {
-		final Project project;
+		private final Project project;
 
 		public ProjectDep(Project project) {this.project = project;}
 
@@ -72,32 +81,42 @@ public sealed interface Dependency {
 
 		@Override
 		public int getResources(Project building, ZipOutput writer, BuildContext ctx) {
-			int cnt = 0;
+			int updated = 0;
 			var prev = project.mappedWriter;
 			project.mappedWriter = writer;
 			try {
-				BuildContext.Changeset changeset = ctx.increment <= INC_REBUILD ? project.compiling.getFullResources() : project.compiling.resources;
+				int increment = ctx.increment;
+
+				BuildContext.Changeset changeset = increment <= INC_REBUILD ? project.compiling.getFullResources() : project.compiling.resources;
 
 				List<File> changed = changeset.getChanged();
-				Set<String> deleted = changeset.getDeleted();
+				Set<String> removed = changeset.getRemoved();
 
-				MCMake.LOGGER.debug("Dependency mode={} change {} delete {}", ctx.increment, changed.size(), deleted.size());
+				long stamp = ctx.lastBuildTime;
+				// 是否在同一批次编译
+				if (increment == INC_UPDATE && project.compiling.lastBuildTime > stamp) {
+					changed = IOUtil.listFiles(project.resPath, file -> file.lastModified() >= stamp);
+				}
+
+				if ((changed.size()|removed.size()) > 0)
+					MCMake.LOGGER.debug("Dependency resources [{}]: {} changed, {} removed.", project.getName(), changed.size(), removed.size());
 
 				long useCompileTimestamp = project.shouldUseCompileTimestamp() ? ctx.buildStartTime : 0;
-				TrieTreeSet bundleIgnore = building.conf.bundle_ignore;
 
 				for (File file : changed) {
 					String relPath = file.getAbsolutePath().substring(project.getResPrefix()).replace(File.separatorChar, '/');
-					if (!isIgnored(bundleIgnore, relPath)) {
-						project.writeRes(file, useCompileTimestamp != 0 ? useCompileTimestamp : file.lastModified(), building.variables, ctx);
-						cnt++;
+					String shadePath = applyShade(building.conf, relPath, this);
+					if (shadePath != null) {
+						project.writeRes(file, shadePath, useCompileTimestamp != 0 ? useCompileTimestamp : file.lastModified(), building.variables, ctx);
+						updated++;
 					}
 				}
 
-				for (String relPath : deleted) {
-					if (!isIgnored(bundleIgnore, relPath)) {
-						writer.set(relPath, (ByteList) null);
-						cnt++;
+				for (String relPath : removed) {
+					String shadePath = applyShade(building.conf, relPath, this);
+					if (shadePath != null) {
+						writer.set(shadePath, (ByteList) null);
+						updated++;
 					}
 				}
 			} catch (IOException e) {
@@ -105,32 +124,57 @@ public sealed interface Dependency {
 			} finally {
 				project.mappedWriter = prev;
 			}
-			return cnt;
+			return updated;
 		}
 
-		private boolean isIgnored(TrieTreeSet bundleIgnore, String relPath) {
-			boolean ignored;
-			if (bundleIgnore.isEmpty()) ignored = relPath.startsWith("META-INF/");
-			else {
-				ignored = bundleIgnore.strStartsWithThis(relPath);
-				if (ignored) {
-					String str = relPath + ":" + project.getName();
-					int i = bundleIgnore.longestMatches(str);
-					if (i > relPath.length()) {
-						ignored = i == str.length();
+		static String applyShade(Env.Project bundleIgnore, String relPath, Dependency own) {
+			if (bundleIgnore.shade.isEmpty()) return relPath.startsWith("META-INF/") ? null : relPath;
+
+			var match = bundleIgnore.prefixShades.longestMatch(relPath);
+			if (match != null) {
+				String str = relPath+":"+own.toString();
+				var subMatch = bundleIgnore.prefixShades.longestMatch(str);
+				return subMatch.getIntKey() == str.length() ? subMatch.getValue() : match.getValue();
+			}
+
+			for (Pair<Pattern, String> entry : bundleIgnore.patternShades) {
+				Matcher matcher = entry.getKey().matcher(relPath);
+				if (matcher.matches()) {
+					String shade = entry.getValue();
+					if (shade != null && shade.indexOf('$') >= 0) {
+						var sb = IOUtil.getSharedCharBuf().append(shade);
+						for (int i = 0; i < matcher.groupCount(); i++) {
+							sb.replace("$"+i, matcher.group(i));
+						}
+						return sb.toString();
 					}
+					return shade;
 				}
 			}
-			return ignored;
+
+			return relPath;
 		}
 
 		@Override
 		public void getClasses(BuildContext context) throws IOException {
-			long stamp = context.buildStartTime;
-			long fileTime = project.unmappedJar.lastModified();
+			long stamp = context.lastBuildTime;
 			int increment = context.increment;
 
-			if (increment == INC_UPDATE && fileTime < stamp) return;
+			// 是否在同一批次编译
+			if (increment == INC_UPDATE && project.compiling.lastBuildTime < context.lastBuildTime) {
+				List<Context> changed = project.compiling.getChangedClasses();
+				Set<String> removed = project.compiling.getRemovedClasses();
+				for (Context ctx : changed) {
+					context.addClass(ctx, project, false);
+				}
+				for (var className : removed) {
+					context.classRemoved(className);
+				}
+
+				if ((changed.size()|removed.size()) > 0)
+					MCMake.LOGGER.debug("Dependency binaries [{}]: {} changed, {} removed.", project.getName(), changed.size(), removed.size());
+				return;
+			}
 
 			try (var archive = project.unmappedWriter.getArchive()) {
 				for (ZEntry entry : archive.entries()) {
@@ -143,12 +187,12 @@ public sealed interface Dependency {
 			}
 		}
 
-		@Override
-		public AnnotationRepo getAnnotations(BuildContext context) {return project.annotationRepo;}
+		@Override public AnnotationRepo getAnnotations(BuildContext context) {return project.annotationRepo;}
+		@Override public void forEachFile(Consumer<File> consumer) {consumer.accept(project.unmappedJar);}
 
 		@Override
-		public void getClassPath(CharList classpath, int prefix) {
-			classpath.append(project.unmappedJar.getAbsolutePath().substring(prefix)).append(File.pathSeparatorChar);
+		public void writeProjectConfiguration(File root, CharList sb, String type) {
+			sb.append("type=\"module\" module-name=\"").append(project.getShortName()).append("\" />");
 		}
 
 		@Override
@@ -166,11 +210,11 @@ public sealed interface Dependency {
 	}
 
 	final class FileDep implements Dependency {
-		final File file;
-		long lastModified;
-		ZipFile archive;
-		Set<ZEntry> classes;
-		AnnotationRepo repo;
+		private final File file;
+		private long lastModified;
+		private ZipFile archive;
+		private Set<ZEntry> classes;
+		private AnnotationRepo repo;
 
 		private FileDep _next;
 
@@ -178,13 +222,17 @@ public sealed interface Dependency {
 			this.file = file;
 		}
 
-		private void init(BuildContext ctx) throws IOException {
+		public void open(BuildContext ctx) throws IOException {
 			if (archive == null) archive = new ZipFile(file);
-			else if (file.lastModified() != lastModified) {
+			else {
+				if (file.lastModified() == lastModified) return;
+
+				archive.source().reopen();
 				archive.reload();
 				MCMake.EVENT_BUS.post(new LibraryModifiedEvent(ctx.project));
 				repo = null;
-			} else return;
+			}
+			archive.source().close();
 
 			lastModified = file.lastModified();
 			classes = new HashSet<>();
@@ -200,34 +248,30 @@ public sealed interface Dependency {
 		}
 
 		@Override
-		public int getResources(Project project, ZipOutput zipOutput, BuildContext ctx) throws IOException {
-			init(ctx);
-
+		public int getResources(Project building, ZipOutput zipOutput, BuildContext ctx) throws IOException {
 			int updated = 0;
 			long lastBuildTime = ctx.increment <= INC_REBUILD ? 0 : ctx.lastBuildTime;
-			archive.source().reopen();
 			for (ZEntry entry : archive.entries()) {
-				String name = entry.getName();
-				if (name.endsWith("/") || name.startsWith("META-INF/") || classes.contains(entry)) continue;
+				String relPath = entry.getName();
+				String shadePath = ProjectDep.applyShade(building.conf, relPath, this);
+				if (shadePath == null) continue;
+				if (relPath.endsWith("/") || classes.contains(entry)) continue;
 
 				if (entry.getModificationTime() >= lastBuildTime) {
-					if (zipOutput.getWriter() != null) {
+					if (zipOutput.getWriter() != null && shadePath.equals(relPath)) {
 						zipOutput.getWriter().copy(archive, entry);
 					} else {
-						zipOutput.set(entry.getName(), () -> DynByteBuf.wrap(archive.get(entry)), entry.getModificationTime());
+						zipOutput.set(shadePath, () -> DynByteBuf.wrap(archive.get(entry)), entry.getModificationTime());
 					}
+
+					updated++;
 				}
-				updated++;
 			}
-			archive.source().close();
 			return updated;
 		}
 
 		@Override
 		public void getClasses(BuildContext ctx) throws IOException {
-			init(ctx);
-
-			archive.source().reopen();
 			int increment = ctx.increment;
 			long lastBuildTime = ctx.lastBuildTime;
 
@@ -237,25 +281,29 @@ public sealed interface Dependency {
 							increment != INC_LOAD || entry.getModificationTime() >= lastBuildTime);
 				}
 			}
-			archive.source().close();
 		}
 
 		@Override
-		public AnnotationRepo getAnnotations(BuildContext context) throws IOException {
-			init(context);
-
+		public AnnotationRepo getAnnotations(BuildContext ctx) throws IOException {
 			if (repo == null) {
-				archive.source().reopen();
 				repo = new AnnotationRepo();
 				repo.loadCacheOrAdd(archive);
-				archive.source().close();
 			}
 			return repo;
 		}
 
 		@Override
-		public void getClassPath(CharList classpath, int prefix) {
-			classpath.append(file.getAbsolutePath().substring(prefix)).append(File.pathSeparatorChar);
+		public void forEachFile(Consumer<File> consumer) {
+			consumer.accept(file);
+		}
+
+		@Override
+		public void writeProjectConfiguration(File root, CharList sb, String type) {
+			String absolutePath = file.getAbsolutePath();
+			String relativized = IOUtil.relativizePath(root.getAbsolutePath(), absolutePath);
+			String uri = relativized == null ? "jar://" + IOUtil.normalizePath(absolutePath) : "jar://$MODULE_DIR$/" + relativized;
+			sb.append(" type=\"module-library\"><library><CLASSES><root url=\"").append(uri).append("!/\" />\n" +
+					"</CLASSES><JAVADOC /><SOURCES /></library></orderEntry>");
 		}
 
 		@Override
@@ -273,26 +321,14 @@ public sealed interface Dependency {
 	}
 
 	final class DirDep implements Dependency {
-		final File dir;
-		static final XashMap.Builder<File, FileDep> BUILDER = XashMap.builder(File.class, FileDep.class, "file", "_next");
-		XashMap<File, FileDep> fileDeps = BUILDER.create();
-		AnnotationRepo repo;
+		private final File dir;
+		private static final XashMap.Builder<File, FileDep> BUILDER = XashMap.builder(File.class, FileDep.class, "file", "_next");
+		private XashMap<File, FileDep> fileDeps = BUILDER.create();
+		private AnnotationRepo repo;
 
-		public DirDep(File dir) {
-			this.dir = dir;
-		}
+		public DirDep(File dir) {this.dir = dir;}
 
-		@Override
-		public int getResources(Project project, ZipOutput zipOutput, BuildContext ctx) throws IOException {
-			init();
-			int cnt = 0;
-			for (FileDep dep : fileDeps) {
-				cnt += dep.getResources(project, zipOutput, ctx);
-			}
-			return cnt;
-		}
-
-		private void init() {
+		public void open(BuildContext ctx) throws IOException {
 			var files = new HashSet<>(IOUtil.listFiles(dir, file -> {
 				String ext = IOUtil.extensionName(file.getName());
 				return (ext.equals("zip") || ext.equals("jar")) && file.length() != 0;
@@ -303,9 +339,25 @@ public sealed interface Dependency {
 				if (!files.remove(dep.file)) {
 					IOUtil.closeSilently(dep.archive);
 					itr.remove();
+				} else {
+					dep.open(ctx);
 				}
 			}
-			for (File file : files) fileDeps.computeIfAbsent(file);
+			for (File file : files) fileDeps.computeIfAbsent(file).open(ctx);
+		}
+
+		@Override
+		public void close() throws IOException {
+			for (FileDep dep : fileDeps) dep.close();
+		}
+
+		@Override
+		public int getResources(Project project, ZipOutput zipOutput, BuildContext ctx) throws IOException {
+			int cnt = 0;
+			for (FileDep dep : fileDeps) {
+				cnt += dep.getResources(project, zipOutput, ctx);
+			}
+			return cnt;
 		}
 
 		@Override
@@ -316,34 +368,32 @@ public sealed interface Dependency {
 		}
 
 		@Override
-		public void getClassPath(CharList classpath, int prefix) {
-			Predicate<File> callback = jarFilter(classpath, prefix);
-			IOUtil.listFiles(dir, callback);
+		public void forEachFile(Consumer<File> consumer) {
+			for (FileDep dep : fileDeps) {
+				dep.forEachFile(consumer);
+			}
+		}
+
+		@Override
+		public void writeProjectConfiguration(File root, CharList sb, String type) {
+			String absolutePath = dir.getAbsolutePath();
+			String relativized = IOUtil.relativizePath(root.getAbsolutePath(), absolutePath);
+			String uri = relativized == null ? "file://" + IOUtil.normalizePath(absolutePath) : "file://$MODULE_DIR$/" + relativized;
+			sb.append(" type=\"module-library\"><library><CLASSES><root url=\"").append(uri).append("\" />\n" +
+					"</CLASSES><JAVADOC /><SOURCES />\n" +
+					"<jarDirectory url=\"").append(uri).append("\" recursive=\"true\" />\n" +
+					"</library></orderEntry>");
 		}
 
 		@Override
 		public AnnotationRepo getAnnotations(BuildContext context) throws IOException {
 			if (repo == null) {
-				init();
-
 				repo = new AnnotationRepo();
 				for (FileDep dep : fileDeps) {
-					dep.archive.source().reopen();
 					repo.loadCacheOrAdd(dep.archive);
-					dep.archive.source().close();
 				}
 			}
 			return repo;
-		}
-
-		public static Predicate<File> jarFilter(CharList classpath, int prefix) {
-			 return file -> {
-				String ext = IOUtil.extensionName(file.getName());
-				if ((ext.equals("zip") || ext.equals("jar")) && file.length() != 0) {
-					classpath.append(file.getAbsolutePath().substring(prefix)).append(File.pathSeparatorChar);
-				}
-				return false;
-			};
 		}
 
 		@Override
@@ -361,109 +411,46 @@ public sealed interface Dependency {
 	}
 
 	final class MavenDep implements Dependency {
-		final Project owner;
-		final String dependencyId;
+		private FileDep cache;
 
-		final String mavenId;
-		final String mavenPath;
-		final FileDep cache;
+		private final File cacheBase;
+		private final List<String> mavenUrls;
+		private final MavenCoordinate coordinate;
 
-		String checksumAlgorithm;
-		byte[] expectedChecksum;
-		final List<String> mavenUrls;
-		boolean checksumPassed;
+		public MavenDep(Project owner, String dependencyId, String mavenCoordinate, String checksumAlgorithm, byte[] expectedChecksum) {
+			this.coordinate = new MavenCoordinate(mavenCoordinate);
+			if ("sha1".equals(checksumAlgorithm)) this.coordinate.setChecksum(expectedChecksum);
 
-		public MavenDep(Project owner, String dependencyId, String mavenId, String checksumAlgorithm, byte[] expectedChecksum) {
-			this.owner = owner;
-			this.dependencyId = dependencyId;
-
-			this.mavenId = mavenId;
-			this.mavenPath = IOUtil.mavenIdToPath(mavenId).toStringAndFree();
-			this.checksumAlgorithm = checksumAlgorithm;
-			this.expectedChecksum = expectedChecksum;
 			this.mavenUrls = TextUtil.split(owner.variables.getOrDefault("fmd:maven:central", "https://repo1.maven.org/maven2/"), ';');
 
-			String path = owner.variables.get("fmd:maven:cache");
-			File cacheFile = path != null ? new File(path+"/"+mavenPath) : new File(MCMake.CACHE_PATH, ".m2/"+mavenPath);
-
-			cache = new FileDep(cacheFile);
+			String cachePath = owner.variables.get("fmd:maven:cache");
+			cacheBase = cachePath != null ? new File(cachePath) : new File(MCMake.CACHE_PATH, ".m2");
 		}
 
-		private void downloadFile() {
-			File cacheFile = cache.file;
-			if (!cacheFile.isFile() || (checksumAlgorithm != null && !checksumPassed && !verifyFile(checksumAlgorithm, cacheFile, expectedChecksum, mavenId))) {
-				try {
-					if (!Files.deleteIfExists(cacheFile.toPath())) {
-						Files.createDirectories(cacheFile.getParentFile().toPath());
-					}
-				} catch (IOException e) {
-					Helpers.athrow(e);
-				}
+		@Override public void open(BuildContext ctx) throws IOException {
+			locateCache();
+			cache.open(ctx);
+		}
 
-				Throwable cause = null;
-				for (String mavenCentral : mavenUrls) {
-					try {
-						var task = DownloadTask.createTask(mavenCentral+mavenPath, cacheFile, new DownloadListener.Single());
-						task.chunkStart = Integer.MAX_VALUE;
-						task.run();
-						task.get();
-
-						String checksum = task.client.response().get("x-checksum-sha1");
-						if (checksum != null) {
-							if (checksumAlgorithm == null) {
-								checksumAlgorithm = "SHA-1";
-								expectedChecksum = IOUtil.decodeHex(checksum);
-
-								URI u = URI.create(dependencyId);
-								String newDependencyId = new URI(u.getScheme(),
-										"sha1", checksum, u.getPort(),
-										u.getPath(), u.getQuery(),
-										u.getFragment()).toString();
-								MCMake.LOGGER.debug("NewDependencyId: {}", newDependencyId);
-
-								Scope scope = owner.conf.dependency.remove(dependencyId);
-								owner.conf.dependency.put(newDependencyId, scope);
-							}
-						}
-
-						if (checksumAlgorithm == null || verifyFile(checksumAlgorithm, cacheFile, expectedChecksum, mavenId)) {
-							checksumPassed = true;
-							return;
-						}
-						Files.deleteIfExists(cacheFile.toPath());
-					} catch (ExecutionException e) {
-						cause = e;
-					} catch (Exception e) {
-						Helpers.athrow(e);
-					}
-				}
-
-				Helpers.athrow(cause);
+		private void locateCache() throws IOException {
+			File file = coordinate.locate(cacheBase, mavenUrls, 1800);
+			if (cache == null || file.equals(cache.file)) {
+				IOUtil.closeSilently(cache);
+				cache = new FileDep(file);
 			}
 		}
 
-		@Override
-		public int getResources(Project project, ZipOutput zipOutput, BuildContext ctx) throws IOException {
-			downloadFile();
-			return cache.getResources(project, zipOutput, ctx);
-		}
-
-		@Override
-		public void getClasses(BuildContext context) throws IOException {
-			downloadFile();
-			cache.getClasses(context);
-		}
-
-		@Override
-		public AnnotationRepo getAnnotations(BuildContext context) throws IOException {
-			downloadFile();
-			return cache.getAnnotations(context);
-		}
-
-		@Override
-		public void getClassPath(CharList classpath, int prefix) {
-			downloadFile();
-			cache.getClassPath(classpath, prefix);
+		@Override public int getResources(Project project, ZipOutput zipOutput, BuildContext ctx) throws IOException {return cache.getResources(project, zipOutput, ctx);}
+		@Override public void getClasses(BuildContext context) throws IOException {cache.getClasses(context);}
+		@Override public AnnotationRepo getAnnotations(BuildContext context) throws IOException {return cache.getAnnotations(context);}
+		@Override public void forEachFile(Consumer<File> consumer) {cache.forEachFile(consumer);}
+		@Override public void writeProjectConfiguration(File root, CharList sb, String type) {
+			try {
+				locateCache();
+			} catch (IOException e) {
+				Helpers.athrow(e);
+			}
+			cache.writeProjectConfiguration(root, sb, type);
 		}
 	}
 

@@ -16,8 +16,8 @@ public class AdvanceCompress implements Processor {
 	public String name() {return "删除私有静态常量";}
 
 	@Override
-	public void afterCompile(BuildContext ctx) {
-		List<Context> classes = ctx.getClasses();
+	public void afterCompilePre(BuildContext ctx) {
+		List<Context> classes = ctx.getChangedClasses();
 		for (int i = 0; i < classes.size(); i++) {
 			Context ctx1 = classes.get(i);
 			List<FieldNode> fields = ctx1.getData().fields();

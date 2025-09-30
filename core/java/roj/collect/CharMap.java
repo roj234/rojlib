@@ -50,8 +50,7 @@ public final class CharMap<V> extends AbstractMap<Character, V> implements _LibM
 		int length = MathUtils.nextPowerOfTwo(size);
 
 		if (entries != null) {
-			mask = (length>>1) - 1;
-			resize();
+			resize(length);
 		} else {
 			mask = length-1;
 			nextResize = (int) (length * REFERENCE_LOAD_FACTOR);
@@ -189,8 +188,7 @@ public final class CharMap<V> extends AbstractMap<Character, V> implements _LibM
 	}
 
 	@SuppressWarnings("unchecked")
-	private void resize() {
-		int length = (mask+1) << 1;
+	private void resize(int length) {
 		if (length > 32768) length = 32768;
 
 		Entry<?>[] newEntries = new Entry<?>[length];
@@ -228,7 +226,7 @@ public final class CharMap<V> extends AbstractMap<Character, V> implements _LibM
 
 					size++;
 					if (loop > PRIMITIVE_CHAIN_THRESHOLD && size > nextResize) {
-						resize();
+						resize((mask + 1) << 1);
 						continue restart;
 					}
 

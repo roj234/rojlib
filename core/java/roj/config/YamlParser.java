@@ -243,12 +243,11 @@ public class YamlParser extends TextParser implements StreamParser {
 	 * - xyz
 	 */
 	private ListValue blockSeq() throws ParseException {
-		ListValue list = new ListValue();
-
 		int superIndent = prevIndent;
 		int firstIndent = indent;
 		if (firstIndent < superIndent) throw err("下级缩进("+firstIndent+")<上级("+superIndent+")");
 
+		ListValue list = new ListValue();
 		while (true) {
 			int line = LN, i = index;
 			Token w = next();
@@ -321,12 +320,12 @@ public class YamlParser extends TextParser implements StreamParser {
 	 * c : x
 	 */
 	private ConfigValue map(Token w) throws ParseException {
-		Map<String, ConfigValue> map = (flags & ORDERED_MAP) != 0 ? new LinkedHashMap<>() : new HashMap<>();
-		Map<String, String> comment = null;
-
 		int superIndent = prevIndent;
 		int firstIndent = indent;
 		if (firstIndent <= superIndent) throw err("下级缩进("+firstIndent+")<=上级("+superIndent+")");
+
+		Map<String, ConfigValue> map = (flags & ORDERED_MAP) != 0 ? new LinkedHashMap<>() : new HashMap<>();
+		Map<String, String> comment = null;
 
 		cyl:
 		while (true) {
@@ -553,7 +552,7 @@ public class YamlParser extends TextParser implements StreamParser {
 					if (i+1 < in.length() && NUMBER.contains(in.charAt(i+1))) {
 						prevIndex = index = i;
 						if (_indent > 0) indent = i - _indent;
-						return readDigit(true);
+						return readNumber(true);
 					}
 					// fall to literal(symbol)
 				default:
@@ -561,12 +560,12 @@ public class YamlParser extends TextParser implements StreamParser {
 					if (_indent > 0) indent = i - _indent;
 
 					Token w = readSymbol();
-					if (w == COMMENT_RETRY_HINT) {i = index;_indent = i;continue;}
+					if (w == CONSUMED_BY_SPECIAL_TOKEN) {i = index;_indent = i;continue;}
 					return w;
 				case C_NUMBER:
 					if (_indent > 0) indent = i - _indent;
 					prevIndex = index = i;
-					return readDigit(false);
+					return readNumber(false);
 				case C_WHITESPACE:
 					i++;
 					if (c == '\n') _indent = i;
@@ -613,10 +612,10 @@ public class YamlParser extends TextParser implements StreamParser {
 	}
 
 	@Override
-	protected final Token readDigit(boolean sign) throws ParseException {
-		if ((flags & JSON_MODE) != 0) return digitReader(sign, DIGIT_HBO);
+	protected final Token readNumber(boolean sign) throws ParseException {
+		if ((flags & JSON_MODE) != 0) return readNumber(sign, false);
 
-		Token w = digitReader(sign, DIGIT_HBO);
+		Token w = readNumber(sign, false);
 		if (!whiteSpaceUntilNextLine(index)) {
 			int move = index - prevIndex;
 			index = prevIndex;

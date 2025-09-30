@@ -1,16 +1,15 @@
 package roj.plugins.bittorrent;
 
-import roj.util.OperationDone;
 import roj.concurrent.Promise;
 import roj.config.ConfigMaster;
-import roj.text.ParseException;
 import roj.config.node.ConfigValue;
 import roj.config.node.MapValue;
-import roj.http.HttpHead;
 import roj.http.HttpRequest;
-import roj.util.FastFailException;
+import roj.text.ParseException;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
+import roj.util.FastFailException;
+import roj.util.OperationDone;
 
 import java.io.IOException;
 import java.net.InetAddress;
@@ -48,12 +47,11 @@ public abstract class Tracker {
 
 			return Promise.<MapValue>async(callback -> {
 				try {
-					HttpRequest.builder().url(url).query(session.getHttpParameter()).bodyLimit(1048576).execute(120000).await(httpClient -> {
+					HttpRequest.builder().uri(url).query(session.getHttpParameter()).bodyLimit(1048576).execute(120000).onCompletion(httpClient -> {
 						if (!httpClient.isDone()) return;
 						try {
-							HttpHead head = httpClient.head();
-							if (head.getCode() != 200) {
-								System.out.println(head);
+							if (httpClient.statusCode() != 200) {
+								System.out.println(httpClient.headers());
 							}
 							callback.resolve(ConfigMaster.BENCODE.parse(httpClient.bytes()).asMap());
 						} catch (IOException | ParseException e) {

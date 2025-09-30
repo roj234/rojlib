@@ -117,8 +117,7 @@ public final class HashBiMap<K, V> extends AbstractMap<K, V> implements BiMap<K,
 		int length = MathUtils.nextPowerOfTwo(size);
 
 		if (keyTab != null) {
-			mask = (length>>1) - 1;
-			resize();
+			resize(length);
 		} else {
 			mask = length-1;
 			nextResize = (int) (length * REFERENCE_LOAD_FACTOR);
@@ -243,8 +242,7 @@ public final class HashBiMap<K, V> extends AbstractMap<K, V> implements BiMap<K,
 	public BiMap<V, K> inverse() {return inverse;}
 
 	@SuppressWarnings("unchecked")
-	private void resize() {
-		int length = (mask+1) << 1;
+	private void resize(int length) {
 		if (length <= 0) return;
 
 		Entry<?,?>[] newKeys = new Entry<?,?>[length];
@@ -288,7 +286,7 @@ public final class HashBiMap<K, V> extends AbstractMap<K, V> implements BiMap<K,
 			keyTab = new Entry<?, ?>[mask+1];
 			valTab = new Entry<?, ?>[mask+1];
 		}
-		if (size > nextResize * REFERENCE_LOAD_FACTOR) resize();
+		if (size > nextResize * REFERENCE_LOAD_FACTOR) resize((mask + 1) << 1);
 
 		Entry<K, V> entry = new Entry<>(key, value);
 		ktAdd(entry);

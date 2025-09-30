@@ -69,15 +69,15 @@ public class PHPPlugin extends Plugin implements Router, Predicate<String> {
 	public int writeTimeout(@Nullable Request req, @Nullable Content resp) {return Integer.MAX_VALUE;}
 
 	@Override
-	public Content response(Request req, ResponseHeader rh) throws Exception {
-		if (req.path().endsWith(".php")) return fpm.response(req, rh);
+	public Content response(Request req, Response resp) throws Exception {
+		if (req.path().endsWith(".php")) return fpm.response(req, resp);
 
 		File file = new File(fpm.docRoot, req.path());
 		check: {
 			if (!file.isFile()) {
 				if (file.isDirectory()) {
 					if (!req.path().endsWith("/") && !req.path().isEmpty()) {
-						rh.code(302).header("Location", req.path()+"/");
+						resp.code(302).setHeader("Location", req.path()+"/");
 						return null;
 					}
 
@@ -86,13 +86,13 @@ public class PHPPlugin extends Plugin implements Router, Predicate<String> {
 						file = files[0];
 						if (file.getName().endsWith(".php")) {
 							req.setPath(req.path()+file.getName());
-							return fpm.response(req, rh);
+							return fpm.response(req, resp);
 						}
 						break check;
 					}
 				}
 
-				rh.code(404);
+				resp.code(404);
 				return Content.httpError(404);
 			}
 		}
@@ -103,12 +103,12 @@ public class PHPPlugin extends Plugin implements Router, Predicate<String> {
 	// (Optional) for OKRouter Prefix Delegation check
 	@Override
 	public boolean test(String url) {
-		var file = IOUtil.safePath2(fpm.docRoot.getAbsolutePath(), url);
+		var file = IOUtil.safePath(fpm.docRoot.getAbsolutePath(), url);
 		return file != null && file.exists();
 	}
 
 	@Override
-	public void checkHeader(Request req, @Nullable PostSetting cfg) throws IllegalRequestException {
+	public void checkHeader(Request req, @Nullable PayloadInfo cfg) throws IllegalRequestException {
 		if (req.path().endsWith(".php")) fpm.checkHeader(req, cfg);
 	}
 

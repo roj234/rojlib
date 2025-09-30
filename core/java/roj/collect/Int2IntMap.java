@@ -47,10 +47,12 @@ public final class Int2IntMap extends AbstractMap<Integer, Integer> implements _
 	public void ensureCapacity(int size) {
 		if (size <= mask) return;
 		int length = MathUtils.nextPowerOfTwo(size);
-		mask = length-1;
 
-		if (entries != null) resize();
-		else this.nextResize = (int) (length * PRIMITIVE_LOAD_FACTOR);
+		if (entries != null) resize(length);
+		else {
+			mask = length-1;
+			nextResize = (int) (length * PRIMITIVE_LOAD_FACTOR);
+		}
 	}
 
 	// GenericMap interface
@@ -206,8 +208,7 @@ public final class Int2IntMap extends AbstractMap<Integer, Integer> implements _
 		return entry.value;
 	}
 
-	private void resize() {
-		int length = MathUtils.nextPowerOfTwo(this.nextResize) << 1;
+	private void resize(int length) {
 		if (length <= 0) return;
 
 		Entry[] newEntries = new Entry[length];
@@ -251,7 +252,7 @@ public final class Int2IntMap extends AbstractMap<Integer, Integer> implements _
 
 					size++;
 					if (loop > PRIMITIVE_CHAIN_THRESHOLD && size > nextResize) {
-						resize();
+						resize((mask+1) << 1);
 						continue restart;
 					}
 

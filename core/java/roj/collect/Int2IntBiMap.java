@@ -34,8 +34,7 @@ public final class Int2IntBiMap extends AbstractMap<Integer, Integer> implements
 		int length = MathUtils.nextPowerOfTwo(size);
 
 		if (keyTab != null) {
-			mask = (length>>1) - 1;
-			resize();
+			resize(length);
 		} else {
 			mask = length-1;
 			nextResize = (int) (length * LOAD_FACTOR);
@@ -186,8 +185,7 @@ public final class Int2IntBiMap extends AbstractMap<Integer, Integer> implements
 	public Set<Entry> selfEntrySet() {return _LibEntrySet.create(this);}
 	public @NotNull Set<Map.Entry<Integer, Integer>> entrySet() {return Helpers.cast(selfEntrySet());}
 
-	private void resize() {
-		int length = (mask+1) << 1;
+	private void resize(int length) {
 		if (length <= 0) return;
 
 		Entry[] newKeys = new Entry[length];
@@ -227,7 +225,7 @@ public final class Int2IntBiMap extends AbstractMap<Integer, Integer> implements
 	}
 
 	private void addEntry(Entry entry) {
-		if (size > nextResize) resize();
+		if (size > nextResize) resize((mask + 1) << 1);
 		if (keyTab == null) {
 			keyTab = new Entry[mask+1];
 			valTab = new Entry[mask+1];

@@ -3,6 +3,7 @@ package roj.config.node;
 import org.intellij.lang.annotations.Language;
 import org.intellij.lang.annotations.MagicConstant;
 import org.jetbrains.annotations.Contract;
+import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import roj.config.ConfigMaster;
 import roj.config.ValueEmitter;
@@ -43,6 +44,7 @@ public abstract class ConfigValue {
 	public boolean mayCastTo(Type o) { return o == getType(); }
 
 	public static final int Q_SET = 1, Q_SET_IF_ABSENT = 2, Q_SET_IF_NOT_SIMILAR = 4, Q_CREATE_MID = 8, Q_REPLACE_MID = 16, Q_RETURN_CONTAINER = 32;
+	@NotNull
 	public final ConfigValue query(@Language("JSONPath") String jsonPath) { return update(jsonPath, 0, NullValue.NULL); }
 	@Contract("_, _, !null -> !null")
 	public final ConfigValue update(@Language("JSONPath") String jsonPath,

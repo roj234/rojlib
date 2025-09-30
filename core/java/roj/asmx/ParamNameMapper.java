@@ -1,4 +1,4 @@
-package roj.asmx.mapper;
+package roj.asmx;
 
 import org.jetbrains.annotations.Nullable;
 import roj.asm.MethodNode;

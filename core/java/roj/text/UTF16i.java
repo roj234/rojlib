@@ -20,8 +20,9 @@ final class UTF16i extends FastCharset {
 	@Override public long fastEncode(char[] s, int i, int end, Object ref, long addr, int outMax) {
 		while (i < end && outMax > 1) {
 			char c = s[i++];
+			U.putChar(ref, addr, Character.reverseBytes(c));
 			outMax -= 2;
-			U.putChar(ref, addr += 2, Character.reverseBytes(c));
+			addr += 2;
 		}
 
 		return ((long) i << 32) | outMax;
@@ -46,8 +47,7 @@ final class UTF16i extends FastCharset {
 			int c = Character.reverseBytes(U.getChar(ref, i)); i += 2;
 
 			if (c >= MIN_HIGH_SURROGATE) {
-				if (c >= MIN_LOW_SURROGATE) {
-					verifier.accept(MALFORMED - 2); continue;}
+				if (c >= MIN_LOW_SURROGATE) {verifier.accept(MALFORMED - 2); continue;}
 				if (i+2 > max) {i -= 2; break;}
 
 				int ls = Character.reverseBytes(U.getChar(ref, i)); i += 2;

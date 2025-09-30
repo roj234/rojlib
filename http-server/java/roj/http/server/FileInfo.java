@@ -25,6 +25,6 @@ public interface FileInfo {
 	long lastModified();
 	default String getETag() {return null;}
 	default int getCrc32() {return 0;}
-	default void prepare(ResponseHeader rh, Headers h) {}
+	default void prepare(Response rh, Headers h) {}
 	default void release(ChannelCtx ctx) {}
 }

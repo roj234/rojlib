@@ -92,10 +92,11 @@ public final class DownloadTask implements ChannelHandler, Runnable, Future<File
 	public int maxRedirect = defMaxRedirect;
 	public boolean ETag = useETag, checkTime = true;
 	public boolean allowDecompressAfterDownload;
+	public URI proxy;
 	public final HttpRequest client;
 
 	public DownloadTask(URI address, File file, DownloadListener handler, File info) {
-		client = HttpRequest.builder().url(address).headers(defHeaders);
+		client = HttpRequest.builder().uri(address).headers(defHeaders);
 		this.file = file;
 		this.handler = handler;
 		this.info = info;
@@ -105,7 +106,7 @@ public final class DownloadTask implements ChannelHandler, Runnable, Future<File
 	public void run() {
 		MyChannel ch = null;
 		try {
-			client.header("range", "bytes=0-");
+			client.proxy(proxy).header("range", "bytes=0-");
 
 			ch = MyChannel.openTCP();
 			ch.addLast("Redirect", new AutoRedirect(client, timeout, maxRedirect))
@@ -124,10 +125,10 @@ public final class DownloadTask implements ChannelHandler, Runnable, Future<File
 	@Override
 	public void channelOpened(ChannelCtx ctx) throws IOException {
 		HttpHead head = client.response();
-		int code = head.getCode();
+		int code = head.statusCode();
 		if (code < 200 || code > 299) throw new FileNotFoundException("远程返回: "+head);
 
-		LOGGER.debug("{}: 收到初始响应头 {}", this, head);
+		LOGGER.trace("{}: 收到初始响应头 {}", this, head);
 
 		String lastMod = head.header("last-modified");
 		if (!lastMod.isEmpty()) time = DateFormat.parseRFC5322Datetime(lastMod);
@@ -375,7 +376,7 @@ public final class DownloadTask implements ChannelHandler, Runnable, Future<File
 	}
 
 	private void mayThrow() throws ExecutionException {
-		if (error != null) throw new ExecutionException(client.url()+"下载失败", error);
+		if (error != null) throw new ExecutionException(client.uri()+"下载失败", error);
 	}
 
 	void onChunkSuccess() {

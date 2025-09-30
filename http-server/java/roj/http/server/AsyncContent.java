@@ -1,9 +1,8 @@
 package roj.http.server;
 
 import roj.collect.RingBuffer;
-import roj.http.Headers;
-import roj.io.IOUtil;
 import roj.io.BufferPool;
+import roj.io.IOUtil;
 import roj.net.ChannelCtx;
 import roj.util.DynByteBuf;
 
@@ -47,13 +46,10 @@ public class AsyncContent implements Content {
 	public boolean isEof() {return eof;}
 	public int getPendingCount() { return packets.size(); }
 
-	@Override
-	public void prepare(ResponseHeader rh, Headers h) throws IOException {}
-
-	public boolean send(ContentWriter rh) throws IOException {
+	public boolean send(ContentWriter writer) throws IOException {
 		DynByteBuf buf = packets.peekFirst();
 		if (buf != null) {
-			rh.write(buf);
+			writer.write(buf);
 			if (!buf.isReadable()) {
 				synchronized (packets) {packets.removeFirst();}
 				BufferPool.reserve(buf);

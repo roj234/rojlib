@@ -172,7 +172,7 @@ public final class Reflection {
 		if (privateAccess) flags |= NESTMATE_CLASS;
 
 		ClassLoader classLoader = nestHost.getClassLoader();
-		//if (classLoader == null) classLoader = ClassLoader.getSystemClassLoader();
+		if (classLoader == null) classLoader = ClassLoader.getSystemClassLoader();
 		Class<?> klass = defineClass(classLoader, nestHost, nestHost.getName()+"$R", buf.list, 0, buf.wIndex(), nestHost.getProtectionDomain(), flags);
 		try {
 			return U.allocateInstance(klass);

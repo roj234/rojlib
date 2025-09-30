@@ -212,8 +212,10 @@ public enum ConfigMaster {
 	@SuppressWarnings("unchecked")
 	public CharList writeObject(Object o, CharList sb) { return writeObject((ObjectWriter<Object>) ObjectMapper.SAFE.writer(o.getClass()), o, sb); }
 
-	public <T> void writeObject(ObjectWriter<T> ser, T o, File file) throws IOException { writeAndClose(ser, o, file, ""); }
-	public <T> void writeObject(ObjectWriter<T> ser, T o, File file, String indent) throws IOException { writeAndClose(ser, o, file, indent); }
+	public <T> void writeObject(ObjectWriter<T> ser, T o, File file) throws IOException { writeObject(ser, o, file, ""); }
+	public <T> void writeObject(ObjectWriter<T> ser, T o, File file, String indent) throws IOException {
+		IOUtil.writeFileEvenMoreSafe(file.getParentFile(), file.getName(), value -> writeAndClose(ser, o, value, indent));
+	}
 	public <T> DynByteBuf writeObject(ObjectWriter<T> ser, T o, DynByteBuf buf) throws IOException { writeAndClose(ser, o, buf, ""); return buf; }
 	public <T> CharList writeObject(ObjectWriter<T> ser, T o, CharList sb) { ser.write(serializer(sb, ""), o); return sb; }
 	public <T> CharList writeObject(ObjectWriter<T> ser, T o, CharList sb, String indent) { ser.write(serializer(sb, indent), o); return sb; }

@@ -15,8 +15,10 @@ import java.io.InputStream;
 import java.nio.ByteOrder;
 import java.nio.MappedByteBuffer;
 import java.nio.channels.FileChannel;
+import java.util.AbstractCollection;
 import java.util.Collection;
-import java.util.List;
+import java.util.Iterator;
+import java.util.NoSuchElementException;
 import java.util.concurrent.atomic.AtomicInteger;
 
 final class TinyArchive implements ArchiveFile {
@@ -32,6 +34,7 @@ final class TinyArchive implements ArchiveFile {
 	private final AtomicInteger parallelRead = new AtomicInteger();
 
 	Entry[] files;
+	int count;
 
 	TinyArchive(File file) throws IOException {
 		this.file = file;
@@ -42,7 +45,7 @@ final class TinyArchive implements ArchiveFile {
 	@Override public void close() {}
 	@Override public void reload() {}
 	@Override public @Nullable ArchiveEntry getEntry(String name) {return find(name);}
-	@Override public @UnmodifiableView Collection<? extends ArchiveEntry> entries() {return List.of();}
+	@Override public @UnmodifiableView Collection<? extends ArchiveEntry> entries() {return new Entries();}
 	@Override public InputStream getInputStream(ArchiveEntry entry, byte[] password) throws IOException {return get(entry.getName());}
 
 	static final class Entry implements ArchiveEntry {
@@ -130,6 +133,7 @@ final class TinyArchive implements ArchiveFile {
 		r.seek(off+pos+10);
 
 		int size = r.readUShortLE();
+		count = size;
 		size = nextPowerOfTwo(size);
 		files = new Entry[size];
 		r.skip(4);
@@ -201,6 +205,7 @@ final class TinyArchive implements ArchiveFile {
 		int magic = meta.readInt();
 		if (magic != HEADER_END) throw new IllegalStateException("Invalid magic");
 
+		count = entry_count;
 		off = meta.in.length() - 12 - (long) ENTRY_SIZE * entry_count;
 
 		int mask = nextPowerOfTwo(entry_count / 2);
@@ -230,6 +235,29 @@ final class TinyArchive implements ArchiveFile {
 			var prev = files[name.hashCode() & mask];
 			files[name.hashCode() & mask] = entry;
 			entry.next = prev;
+		}
+	}
+
+	private class Entries extends AbstractCollection<ArchiveEntry> implements Iterator<ArchiveEntry> {
+		Entry current;
+		int remain;
+		int index;
+
+		@Override public int size() {return count;}
+		@Override public Iterator<ArchiveEntry> iterator() {remain = count;return this;}
+		@Override public boolean hasNext() {return remain > 0;}
+		@Override public ArchiveEntry next() {
+			if (remain == 0) throw new NoSuchElementException();
+
+			if (current != null) {
+				current = current.next;
+			}
+			while (current == null) {
+				current = files[index++];
+			}
+
+			--remain;
+			return current;
 		}
 	}
 }

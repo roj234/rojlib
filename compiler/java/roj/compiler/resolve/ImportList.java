@@ -96,8 +96,8 @@ public final class ImportList {
 	public void setRestriction(FlagSet restriction) {this.restriction = restriction;}
 	public boolean isRestricted() {return restriction != null;}
 
-	public HashMap<String, Object> getImportClassRaw() {return importClass;}
-	public HashMap<String, Object> getImportStaticRaw() {return importStatic;}
+	public HashMap<String, ClassNode> getImportClassRaw() {return Helpers.cast(importClass);}
+	public HashMap<String, CompileContext.Import> getImportStaticRaw() {return Helpers.cast(importStatic);}
 
 	public void clear() {
 		importClass.clear();

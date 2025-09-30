@@ -8,6 +8,7 @@ import roj.archive.zip.ZipFileWriter;
 import roj.asm.MemberDescriptor;
 import roj.asmx.Context;
 import roj.asmx.mapper.Mapper;
+import roj.ci.minecraft.MappingUI;
 import roj.collect.ArrayList;
 import roj.collect.HashMap;
 import roj.collect.Int2IntMap;
@@ -15,7 +16,6 @@ import roj.concurrent.TaskPool;
 import roj.gui.GuiUtil;
 import roj.gui.OnChangeHelper;
 import roj.io.IOUtil;
-import roj.ci.minecraft.MappingUI;
 import roj.text.CharList;
 import roj.text.LineReader;
 import roj.text.TextReader;
@@ -49,8 +49,7 @@ public class MapperUI extends JFrame {
 	}
 	public void load(File file) {
 		MAPPER.clear();
-		MAPPER.checkFieldType = uiCheckFieldType.isSelected();
-		MAPPER.loadMap(file, uiInvert.isSelected());
+		MAPPER.loadMap(file, uiInvert.isSelected(), uiCheckFieldType.isSelected());
 
 		int flag = 0;
 		if (uiFlag1.isSelected()) flag |= Mapper.FLAG_FULL_CLASS_MAP;

@@ -2,6 +2,7 @@ package roj.ci;
 
 import org.jetbrains.annotations.Nullable;
 import roj.asmx.mapper.Mapper;
+import roj.asmx.mapper.Mapping;
 import roj.ci.event.ProjectUpdateEvent;
 import roj.ci.plugin.Processor;
 import roj.collect.ArrayList;
@@ -67,7 +68,7 @@ public class Workspace {
 		return projectPath;
 	}
 
-	public Mapper getMapper() throws IOException {
+	public Mapping getMapping() throws IOException {
 		var m = mapper;
 		if (m == null) {
 			m = new Mapper();
@@ -80,10 +81,10 @@ public class Workspace {
 		}
 		return m;
 	}
-	public Mapper getInvMapper() throws IOException {
+	public Mapper getInverseMapping() throws IOException {
 		var m = invMapper;
 		if (m == null) {
-			m = new Mapper(getMapper());
+			m = new Mapper(getMapping());
 			m.reverseSelf();
 			m.loadLibraries(unmappedDepend);
 			m.flag = 0;
@@ -106,6 +107,7 @@ public class Workspace {
 		}
 
 		File file = new File(getProjectPath(), ".idea/libraries/"+URICoder.escapeFileName(id)+".xml");
+		file.getParentFile().mkdirs();
 
 		var doc = new Document();
 		doc.headless();
@@ -149,7 +151,7 @@ public class Workspace {
 	 * mode = 2 regenerate
 	 */
 	public static void registerModule(Project p, int mode) throws IOException {
-		if (!p.conf.type.hasFile()) return;
+		if (!p.conf.type.needCompile()) return;
 		File ipr = new File(p.workspace.getProjectPath(), ".idea/modules.xml");
 		if (!ipr.isFile()) {
 			ipr.getParentFile().mkdirs();
@@ -251,41 +253,23 @@ public class Workspace {
 			Tokenizer.escape(sb.append("<orderEntry type=\"library\" name=\""), p.workspace.getLibraryId()).append("\" level=\"project\" />\n");
 		}
 
-		// TODO remove this
-		if (p.libPath.isDirectory()) {
-			sb.append("""
-					<orderEntry type="module-library">
-					  <library>
-					    <CLASSES>
-					      <root url="file://$MODULE_DIR$/lib" />
-					    </CLASSES>
-					    <JAVADOC />
-					    <SOURCES />
-					    <jarDirectory url="file://$MODULE_DIR$/lib" recursive="true" />
-					  </library>
-					</orderEntry>
-					""");
-		}
-
 		sb.append("""
 				<orderEntry type="library" name="MCMake公共依赖" level="project" />
 				<orderEntry type="sourceFolder" forTests="false" />
 				""");
 
 		for (Map.Entry<String, Dependency.Scope> entry : p.conf.dependency.entrySet()) {
-			var dependency = MCMake.projects.get(entry.getKey());
-			if (dependency != null) {
-				sb.append("<orderEntry type=\"module\" module-name=\"").append(dependency.getShortName());
-			} else {
-				// FIXME other libraries
-				continue;
-			}
+			Dependency dep = p.conf.dependencyInstances.get(entry.getKey());
+			if (dep == null) continue;
 
 			switch (entry.getValue()) {
-				case COMPILE -> sb.append("\" />\n");
-				case EXPORT -> sb.append("\" exported=\"\" />\n");
-				case BUNDLED -> sb.append("\" scope=\"PROVIDED\" />\n");
+				case COMPILE -> sb.append("<orderEntry ");
+				case EXPORT -> sb.append("<orderEntry exported=\"\" ");
+				case BUNDLED -> sb.append("<orderEntry scope=\"PROVIDED\" ");
 			}
+
+			dep.writeProjectConfiguration(p.root, sb, "IML");
+			sb.append('\n');
 		}
 
 		return sb.append("</component></module>");

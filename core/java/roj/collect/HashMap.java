@@ -187,8 +187,7 @@ public class HashMap<K, V> extends AbstractMap<K, V> implements FindMap<K, V>, _
 		int length = MathUtils.nextPowerOfTwo(size);
 
 		if (entries != null) {
-			mask = (length>>1) - 1;
-			resize();
+			resize(length);
 		} else {
 			mask = length-1;
 			nextResize = (int) (length * REFERENCE_LOAD_FACTOR);
@@ -221,7 +220,7 @@ public class HashMap<K, V> extends AbstractMap<K, V> implements FindMap<K, V>, _
 		if (entry == null) return null;
 		return entry.getValue();
 	}
-	private AbstractEntry<K, V> myCreateEntry(K key, V val) {
+	protected AbstractEntry<K, V> myCreateEntry(K key, V val) {
 		AbstractEntry<K, V> entry = getOrCreateEntry(key);
 		if (entry.key == UNDEFINED) {
 			entry.key = key;
@@ -393,8 +392,7 @@ public class HashMap<K, V> extends AbstractMap<K, V> implements FindMap<K, V>, _
 	protected void onDel(AbstractEntry<K, V> entry) {}
 
 	@SuppressWarnings("unchecked")
-	private void resize() {
-		int length = (mask+1) << 1;
+	private void resize(int length) {
 		if (length <= 0) return;
 
 		AbstractEntry<?, ?>[] newEntries = new AbstractEntry<?, ?>[length];
@@ -480,7 +478,7 @@ public class HashMap<K, V> extends AbstractMap<K, V> implements FindMap<K, V>, _
 						continue restart;
 
 					if (loop > REFERENCE_CHAIN_THRESHOLD && size > nextResize) {
-						resize();
+						resize((mask+1) << 1);
 						continue restart;
 					}
 

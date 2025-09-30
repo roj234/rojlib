@@ -137,7 +137,7 @@ public final class LZDecoder {
 		int copySize = Math.min(bufSize - pos, len);
 		var ioBuf = ArrayCache.getIOBuffer();
 		while (copySize > 0) {
-			int copied = Math.min(copySize, bufSize);
+			int copied = Math.min(copySize, ioBuf.length);
 			inData.readFully(ioBuf, 0, copied);
 			U.copyMemory(ioBuf, Unsafe.ARRAY_BYTE_BASE_OFFSET, null, buf + pos, copied);
 			pos += copied;
@@ -153,7 +153,7 @@ public final class LZDecoder {
 		int copySize = pos - start;
 		if (pos == bufSize) pos = 0;
 
-		U.copyMemory(null, buf+start, out, outOff, copySize);
+		if (outOff != 0) U.copyMemory(null, buf+start, out, outOff, copySize);
 		//System.arraycopy(buf, start, out, outOff, copySize);
 		start = pos;
 

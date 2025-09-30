@@ -129,5 +129,18 @@ public final class ArtifactVersion {
 		return tags.length - o.tags.length;
 	}
 
+	@Override
+	public final boolean equals(Object object) {
+		if (this == object) return true;
+		if (!(object instanceof ArtifactVersion that)) return false;
+
+		return canonical.equals(that.canonical);
+	}
+
+	@Override
+	public int hashCode() {
+		return canonical.hashCode();
+	}
+
 	public String toString() { return canonical; }
 }

@@ -19,6 +19,7 @@ import roj.util.Helpers;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 
 /**
@@ -28,14 +29,10 @@ import java.util.Map;
 public class Annotation extends MapValue {
 	private String type;
 
-	public Annotation() {super(new LinkedHashMap<>());}
-	public Annotation(String type) {
-		this();
-		this.type = type;
-	}
-	public Annotation(String type, Map<String, ConfigValue> values) {
-		super(values);
-		this.type = type;
+	public Annotation(String type) {this(type, new LinkedHashMap<>());}
+	public Annotation(@NotNull String type, @NotNull Map<String, ConfigValue> values) {
+		super(Objects.requireNonNull(values));
+		this.type = Objects.requireNonNull(type);
 	}
 
 	@Contract(pure = true)

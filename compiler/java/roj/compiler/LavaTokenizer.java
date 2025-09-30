@@ -156,6 +156,7 @@ public final class LavaTokenizer extends Tokenizer {
 	public int state = STATE_CLASS;
 	public BitSet[] literalState = LITERAL_STATE;
 
+	public LavaTokenizer() {firstChar = C2C;}
 	public static TrieTree<Token> getTokenMap() {return new TrieTree<>(TOKEN_MAP);}
 	public static BitSet getLiteralEnd() {return LITERAL_END.copy();}
 	public static BitSet[] getLiteralState() {
@@ -171,7 +172,7 @@ public final class LavaTokenizer extends Tokenizer {
 	static {
 		String path = System.getProperty("roj.compiler.i18n");
 		try {
-			i18n = new I18n(path == null ? IOUtil.getTextResourceIL("roj/compiler/zh-cn.yml") : IOUtil.readUTF(new File(path)));
+			i18n = new I18n(path == null ? IOUtil.getTextResourceIL("roj/compiler/messages.properties") : IOUtil.readUTF(new File(path)));
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
@@ -196,6 +197,7 @@ public final class LavaTokenizer extends Tokenizer {
 		// 文本块的支持
 		C2C.putAll(NUMBER_C2C);
 		C2C.remove('"');
+		C2C.put('\'', C_STRING); // char
 
 		TOKEN_MAP.put("\"", new Token().init(0, ST_STRING, "\""));
 		// hey, bro
@@ -289,34 +291,8 @@ public final class LavaTokenizer extends Tokenizer {
 	}
 
 	@Override
-	@SuppressWarnings("fallthrough")
-	public final Token readWord() throws ParseException {
-		CharSequence in = input;
-		int i = index;
-
-		while (i < in.length()) {
-			char c = in.charAt(i);
-			switch (C2C.getOrDefaultInt(c, 0)) {
-				default:
-					prevIndex = index = i;
-					Token w = readSymbol();
-					if (w == COMMENT_RETRY_HINT) {i = index;continue;}
-					return w;
-				case C_NUMBER:
-					prevIndex = index = i;
-					return digitReader(false, DIGIT_DFL|DIGIT_HBO);
-				case C_STRING:
-					prevIndex = i;
-					index = i+1;
-
-					CharList list = readSlashString('\'', true);
-					return formClip(CHARACTER, list);
-				case C_WHITESPACE: i++;
-			}
-		}
-
-		index = i;
-		return eof();
+	protected Token readNumber(boolean sign) throws ParseException {
+		return super.readNumber(sign, true);
 	}
 
 	@Override
@@ -327,11 +303,11 @@ public final class LavaTokenizer extends Tokenizer {
 	}
 
 	@Override
-	protected Token onInvalidNumber(int flag, int i, String reason) throws ParseException {
+	protected Token onInvalidNumber(int errorLoc, String reason) throws ParseException {
 		if (reason.equals("lexer.number.longLarge") && found.equals("9223372036854775808"))
 			return formClip(LONG_MIN_VALUE, "9223372036854775808");
-		if (reason.endsWith(":")) reason += "["+input.charAt(i)+"]";
-		CompileContext.get().report(i, Kind.ERROR, reason);
+		if (reason.endsWith(":")) reason += "["+input.charAt(errorLoc)+"]";
+		CompileContext.get().report(errorLoc, Kind.ERROR, reason);
 		//throw err(reason, i);
 		return readLiteral();
 	}

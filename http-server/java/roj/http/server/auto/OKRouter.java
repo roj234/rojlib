@@ -11,6 +11,7 @@ import roj.asm.attr.Attribute;
 import roj.asm.attr.ParameterAnnotations;
 import roj.asm.cp.ConstantPool;
 import roj.asm.cp.CstString;
+import roj.asm.frame.FrameVisitor;
 import roj.asm.insn.CodeWriter;
 import roj.asm.insn.Label;
 import roj.asm.insn.SwitchBlock;
@@ -19,7 +20,7 @@ import roj.asm.type.IType;
 import roj.asm.type.Signature;
 import roj.asm.type.Type;
 import roj.asm.type.TypeHelper;
-import roj.asmx.mapper.ParamNameMapper;
+import roj.asmx.ParamNameMapper;
 import roj.ci.annotation.IndirectReference;
 import roj.collect.ArrayList;
 import roj.collect.HashMap;
@@ -56,27 +57,58 @@ import static roj.asm.Opcodes.*;
 
 /**
  * 注解定义的Http路由器.
- * 在函数上使用{@link roj.http.server.auto.Route Route}、{@link GET}或{@link POST}注解，将这个函数变为请求处理函数
- * 如果选择Route注解，还可以用{@link Accepts}注解允许多个请求方法，例如POST与GET；还可以使用前缀匹配路径而不是精确匹配
- * 上述注解使用函数名称.replace("__", "/")作为默认的匹配路径
- * 在请求处理函数的参数上使用{@link QueryParam}、{@link Body}、注解从请求的GET或POST字段中提取对应名称的数据，支持基本类型、字符串、以及从Post的JSON/MsgPack格式反序列化对象
- * 在处理函数上使用{@link Body}注解，来避免重复填写From属性
- * 在类或函数上使用{@link Mime}注解，这会影响返回字符串函数的MimeType，没有默认值，而不影响返回{@link Content}的.
- * 在类或函数上使用{@link Interceptor}注解，
- *   如果这是一个请求处理函数，或者在类上使用，那么为它增加预处理器（拦截器），它们会按定义顺序（类 + 函数）在接收完该请求的头部时调用，而处理函数会在整个请求接收完后再调用.
- *   否则，将这个函数注册为预处理函数
+ * <p>函数声明:</p>
+ * <ul>
+ *   <li>在函数上使用{@link roj.http.server.auto.Route}、{@link GET}或{@link POST}注解，以声明一个<i>请求处理器</i></li>
+ *   <li>若使用Route注解，默认同时允许GET和POST，可用{@link Accepts}控制允许的请求方法</li>
+ *   <li>上述注解使用<i>函数名称</i>.replace("__", "/")作为无value时的缺省路径</li>
+ *   <li>{@link roj.http.server.auto.Route 路径匹配语法}</li>
+ * </ul>
+ * <p>参数注入:</p>
+ * <ul>
+ *   <li>{@link QueryParam}, {@link RequestParam}, {@link Header}: 将<i>来源</i>的数据注入到对应函数参数, 支持基本类型或String.</li>
+ *   <li>{@link roj.http.server.auto.Route#deserializeFrom()}: 设置无注解的参数的默认<i>来源</i>.</li>
+ *   <li>{@link Body} 将请求payload作为对象反序列化并注入参数, 支持JSON、MsgPack或表单(表单更建议用{@link Request#formData()}).</li>
+ * </ul>
+ * <p>拦截器/过滤器链 {@link Interceptor}:</p>
+ * <ul>
+ *   <li>1. 用于非<i>请求处理器</i>函数: 将其注册为过滤器，过滤器可以通过返回非null的响应中止请求处理.</li>
+ *   <li>注册过滤器时，只能声明一个名称.</li>
+ *   <li>注册过滤器时，可以声明是否为<i>全局过滤器</i>，其在整个OKRouter实例有效，否则仅在注册的对象有效.</li>
+ *   <li>2. 用于<i>请求处理器</i>函数时: 为它增加过滤器，它们以声明的顺序（先类后函数）在接收完该请求头时调用，而<i>请求处理器</i>会在请求体接收完后调用.</li>
+ *   <li>该模式也可对类使用，设置全局基础值(与方法上的注解合并).</li>
+ * </ul>
+ * <p>其它:</p>
+ * <ul>
+ *   <li>{@link Mime}: 设置返回String函数的Content-Type请求头，不标记时无默认值，这不影响返回{@link Content}的函数</li>
+ *   <li>除了<i>请求处理器</i>，也可在类上使用，设置全局默认值(可被方法上的注解覆盖).</li>
+ *   <li>支持JetBrains的注解，例如 {@link org.jetbrains.annotations.Nullable} 和 {@link org.jetbrains.annotations.Range 未实现}.
+ * </ul>
  *
- * @author solo6975
- * @since 2022/3/27 14:26
+ * <p>注册:</p>
+ * 在实例上调用 {@link #register(Object)} 以注册一个路由器, 为避免冲突，可以通过 {@link #register(Object, String)} 添加路径前缀.
+ * 冲突的路径将会在注册时抛出IllegalArgumentException
+ * 你也可以使用 {@link #addPrefixDelegation(String, Router)} 以Route注解的前缀通配模式代理其它Router实例.
+ * 使用ASM读取注解，需要class文件能从类加载器访问 {@link ClassLoader#getResourceAsStream(String)}
+ *
+ * @see roj.http.server.auto.Route
+ * @see GET
+ * @see POST
+ * @see Accepts
+ * @see Body
+ * @see QueryParam
+ * @see RequestParam
+ * @see Interceptor
+ * @see Mime
  */
 public final class OKRouter implements Router {
 	private static final String REQ = "roj/http/server/Request";
 	private static final int ACCEPTS_ALL = 511;
 
-	private final TypedKey<Route> RouterImplKey = new TypedKey<>("or:router");
+	private final TypedKey<RouteInfo> RouterImplKey = new TypedKey<>("or:router");
 	private final HashMap<String, Dispatcher> interceptors = new HashMap<>();
 
-	private final Node route = new Text("");
+	private final RouteNode route = new LiteralNode("");
 
 	private final boolean debug;
 	private List<Task> onFinishes = Collections.emptyList();
@@ -96,34 +128,32 @@ public final class OKRouter implements Router {
 	/**
 	 * 从注解生成用户路由器的调用实例(Dispatcher)以及方法ID映射
 	 */
-	private static final class CallerBuilder {
+	private static final class DispatcherBuilder {
 		private final boolean debug;
 
+		private ClassNode generatedClass;
 		private CodeWriter cw;
 		private final List<TryCatchBlock> exceptionHandlers = new ArrayList<>();
-		private final Annotation defaultSource = new Annotation();
+		private final Annotation defaultSource = new Annotation("");
 		// slot0 this, slot1 request, slot2 handler
-		private int slot, nextSlot = 3;
+		private int localIndices, nextLocalIndex = 3;
 		// instance, req, rh
-		private int bodyUsed;
+		private int bodyUsedFlags;
 
-		CallerBuilder(boolean debug) {this.debug = debug;}
-		RouterInfo build(Class<?> type) {
+		DispatcherBuilder(boolean debug) {this.debug = debug;}
+		RouteRegistration build(Class<?> type) {
 			var userRoute = ClassNode.fromType(type);
 			if (userRoute == null) throw new IllegalStateException("找不到"+type.getName()+"的类文件");
 
-			var caller = this.cn = new ClassNode();
+			var caller = generatedClass = new ClassNode();
 			caller.name(type.getName().replace('.', '/')+"$Router");
 			caller.interfaces().add("roj/http/server/auto/OKRouter$Dispatcher");
-			//caller.parent(Bypass.MAGIC_ACCESSOR_CLASS);
-			//not needed, only invoke type.xxx
-			//caller.putAttr(new AttrString("SourceFile", type.getName()));
 			caller.defaultConstructor();
 
 			caller.newField(ACC_PRIVATE, "$m", "I");
 			caller.newField(ACC_PRIVATE, "$i", TypeHelper.class2asm(type));
 
-			var cw = caller.newMethod(ACC_PUBLIC, "copyWith", "(ILjava/lang/Object;)Lroj/http/server/auto/OKRouter$Dispatcher;");
+			var cw = caller.newMethod(ACC_PUBLIC, "setMethodId", "(ILjava/lang/Object;)Lroj/http/server/auto/OKRouter$Dispatcher;");
 			cw.visitSize(2, 3);
 
 			cw.newObject(caller.name());
@@ -142,7 +172,7 @@ public final class OKRouter implements Router {
 			cw.insn(ARETURN);
 			cw.finish();
 
-			cw = this.cw = caller.newMethod(ACC_PUBLIC, "invoke", "(L"+REQ+";Lroj/http/server/ResponseHeader;Ljava/lang/Object;)Ljava/lang/Object;");
+			cw = this.cw = caller.newMethod(ACC_PUBLIC, "invoke", "(L"+REQ+";Lroj/http/server/Response;Ljava/lang/Object;)Ljava/lang/Object;");
 			cw.visitSize(5, 4);
 
 			cw.insn(ALOAD_0);
@@ -221,7 +251,7 @@ public final class OKRouter implements Router {
 							break noBody;
 						}
 
-						if(!"roj/http/server/ResponseHeader".equals(par.get(1).owner)) {
+						if(!"roj/http/server/Response".equals(par.get(1).owner)) {
 							cw.insn(ALOAD_1);
 							begin = 1;
 							break hasBody;
@@ -234,7 +264,7 @@ public final class OKRouter implements Router {
 
 					if (map.type().equals("roj/http/server/auto/Interceptor")) {
 						cw.insn(ALOAD_3);
-						cw.clazz(CHECKCAST, PostSetting.class.getName().replace('.', '/'));
+						cw.clazz(CHECKCAST, PayloadInfo.class.getName().replace('.', '/'));
 					} else {
 						defaultSource.put("source", map.getString("deserializeFrom", "UNDEFINED"));
 						convertParams(userRoute.cp, mn, begin);
@@ -292,30 +322,28 @@ public final class OKRouter implements Router {
 
 			var inst = (Dispatcher) Reflection.createInstance(type, caller);
 			var defaultMime = Annotation.findInvisible(userRoute.cp, userRoute, "roj/http/server/auto/Mime");
-			return new RouterInfo(handlers, interceptors, inst, defaultMime != null ? defaultMime.getString("value") : null);
+			return new RouteRegistration(handlers, interceptors, inst, defaultMime != null ? defaultMime.getString("value") : null);
 		}
 
-		// WARNING: clinit is wrong when ClassDefiner not use allocateInstance!
-		private ClassNode cn;
-		private final ToIntMap<String> typeFids = new ToIntMap<>();
+		private final ToIntMap<String> fieldIds = new ToIntMap<>();
 		private CodeWriter clinit;
 		private void loadType(String type) {
-			int fid = typeFids.getOrDefault(type, -1);
+			int fid = fieldIds.getOrDefault(type, -1);
 			if (fid < 0) {
-				fid = cn.newField(ACC_PRIVATE | ACC_STATIC | ACC_FINAL, "$"+cn.fields.size(), "Lroj/asm/type/IType;");
-				typeFids.putInt(type, fid);
+				fid = generatedClass.newField(ACC_PRIVATE | ACC_STATIC | ACC_FINAL, "$"+generatedClass.fields.size(), "Lroj/asm/type/IType;");
+				fieldIds.putInt(type, fid);
 
 				if (clinit == null) {
-					clinit = cn.newMethod(ACC_PUBLIC|ACC_STATIC, "<clinit>", "()V");
+					clinit = generatedClass.newMethod(ACC_PUBLIC|ACC_STATIC, "<clinit>", "()V");
 					clinit.visitSize(1, 0);
 				}
 
 				clinit.ldc(new CstString(type));
 				clinit.invokeS("roj/asm/type/Signature", "parseGeneric", "(Ljava/lang/CharSequence;)Lroj/asm/type/IType;");
-				clinit.field(PUTSTATIC, cn, fid);
+				clinit.field(PUTSTATIC, generatedClass, fid);
 			}
 
-			cw.field(GETSTATIC, cn, fid);
+			cw.field(GETSTATIC, generatedClass, fid);
 		}
 
 		private void convertParams(ConstantPool cp, MethodNode method, int begin) {
@@ -328,21 +356,21 @@ public final class OKRouter implements Router {
 			List<String> parNames = ParamNameMapper.getParameterNames(cp, method);
 			if (parNames == null) parNames = Collections.emptyList();
 
-			slot = 0;
-			nextSlot = 3;
-			bodyUsed = 0;
+			localIndices = 0;
+			nextLocalIndex = 3;
+			bodyUsedFlags = 0;
 
 			List<Type> parTypes = method.parameters();
 			for (; begin < parTypes.size(); begin++) {
-				convertParam(begin>=annos.size()?null:parseParameterAnnotations(annos.get(begin)),
+				processParameter(begin>=annos.size()?null:parseParameterAnnotations(annos.get(begin)),
 						begin>=parNames.size()?null:parNames.get(begin),
 						parTypes.get(begin),
 						begin>=genTypes.size() ? null : genTypes.get(begin));
 			}
 
-			cw.visitSizeMax(TypeHelper.paramSize(method.rawDesc())+3, nextSlot);
+			cw.visitSizeMax(TypeHelper.paramSize(method.rawDesc())+3, nextLocalIndex);
 		}
-		private void convertParam(@Nullable Annotation field, String name, Type rawType, IType type) {
+		private void processParameter(@Nullable Annotation field, String name, Type rawType, IType type) {
 			if (field == null) field = defaultSource;
 			name = field.getString("value", name);
 			if (type == null) type = rawType;
@@ -356,39 +384,39 @@ public final class OKRouter implements Router {
 			switch (source) {
 				case "HEAD" -> fromSlot = 1;
 				case "POST" -> {
-					fromSlot = (slot >>> 8) & 0xFF;
+					fromSlot = (localIndices >>> 8) & 0xFF;
 					if (fromSlot == 0) {
-						bodyUsed |= 2;
+						bodyUsedFlags |= 2;
 
 						c.insn(ALOAD_1);
 						c.invoke(INVOKEVIRTUAL, REQ, "formData", "()Ljava/util/Map;");
-						c.vars(ASTORE, fromSlot = nextSlot);
-						slot |= nextSlot++ << 8;
+						c.vars(ASTORE, fromSlot = nextLocalIndex);
+						localIndices |= nextLocalIndex++ << 8;
 					}
 				}
 				case "GET" -> {
-					fromSlot = (slot) & 0xFF;
+					fromSlot = (localIndices) & 0xFF;
 					if (fromSlot == 0) {
-						bodyUsed |= 1;
+						bodyUsedFlags |= 1;
 
 						c.insn(ALOAD_1);
 						c.invoke(INVOKEVIRTUAL, REQ, "queryParam", "()Ljava/util/Map;");
-						c.vars(ASTORE, fromSlot = nextSlot);
-						slot |= nextSlot++;
+						c.vars(ASTORE, fromSlot = nextLocalIndex);
+						localIndices |= nextLocalIndex++;
 					}
 				}
 				case "COOKIE" -> {
-					fromSlot = (slot >>> 16) & 0xFF;
+					fromSlot = (localIndices >>> 16) & 0xFF;
 					if (fromSlot == 0) {
 						c.insn(ALOAD_1);
 						c.invoke(INVOKEVIRTUAL, REQ, "cookie", "()Ljava/util/Map;");
-						c.vars(ASTORE, fromSlot = nextSlot);
-						slot |= nextSlot++ << 16;
+						c.vars(ASTORE, fromSlot = nextLocalIndex);
+						localIndices |= nextLocalIndex++ << 16;
 					}
 				}
 				case "BODY" -> {
-					if ((bodyUsed & 4) == 0) {
-						bodyUsed |= 4;
+					if ((bodyUsedFlags & 4) == 0) {
+						bodyUsedFlags |= 4;
 
 						if (rawType.getActualType() != Type.CLASS)
 							throw new IllegalArgumentException("基本类型无法使用JSON解析");
@@ -411,7 +439,7 @@ public final class OKRouter implements Router {
 					}
 				}
 			}
-			if ((bodyUsed & 6) == 6) throw new IllegalArgumentException("不能同时使用POST和BODY类型");
+			if ((bodyUsedFlags & 6) == 6) throw new IllegalArgumentException("不能同时使用POST和BODY类型");
 
 			var tce = new TryCatchBlock();
 			tce.start = cw.label();
@@ -465,22 +493,54 @@ public final class OKRouter implements Router {
 					cw.insn(DUP);
 					cw.insn(DUP);
 					cw.insn(I2C);
-					Label label = new Label();
-					cw.jump(IF_icmpeq, label);
-					cw.clazz(NEW, "roj/util/FastFailException");
-					cw.insn(DUP);
-					cw.ldc("参数超出范围");
-					cw.invokeD("roj/util/FastFailException", "<init>", "(Ljava/lang/String;)V");
-					cw.insn(ATHROW);
-					cw.label(label);
+					cw.jump(IF_icmpne, createOutOfBounds());
 				} else {
 					name = rawType.capitalized();
 					cw.clazz(CHECKCAST, "java/lang/String");
 					cw.invoke(INVOKESTATIC, "java/lang/"+(name.equals("Int")?"Integer":name), "parse"+name, "(Ljava/lang/String;)"+(char)rawType.type);
+
+					long min = field.getLong("min", Long.MIN_VALUE);
+					if (min != Long.MIN_VALUE) {
+						if (rawType.type == Type.LONG) {
+							cw.insn(DUP2);
+							cw.ldc(min);
+							cw.insn(LCMP);
+							cw.jump(IFLT, createOutOfBounds());
+						} else {
+							cw.insn(DUP);
+							cw.ldc((int) min);
+							cw.jump(IF_icmplt, createOutOfBounds());
+						}
+						cw.computeFrames(FrameVisitor.COMPUTE_SIZES);
+					}
+					long max = field.getLong("max", Long.MAX_VALUE);
+					if (max != Long.MAX_VALUE) {
+						if (rawType.type == Type.LONG) {
+							cw.insn(DUP2);
+							cw.ldc(max);
+							cw.insn(LCMP);
+							cw.jump(IFGT, createOutOfBounds());
+						} else {
+							cw.insn(DUP);
+							cw.ldc((int)max);
+							cw.jump(IF_icmpgt, createOutOfBounds());
+						}
+						cw.computeFrames(FrameVisitor.COMPUTE_SIZES);
+					}
+
 				}
 			}
 			tce.end = cw.label();
 			exceptionHandlers.add(tce);
+		}
+
+		private Label createOutOfBounds() {
+			cw.clazz(NEW, "roj/util/FastFailException");
+			cw.insn(DUP);
+			cw.ldc("参数超出范围");
+			cw.invokeD("roj/util/FastFailException", "<init>", "(Ljava/lang/String;)V");
+			cw.insn(ATHROW);
+			return cw.label();
 		}
 
 		@Nullable
@@ -525,7 +585,7 @@ public final class OKRouter implements Router {
 			return route;
 		}
 		private static Annotation parseParameterAnnotations(List<Annotation> list) {
-			Annotation holder = null;
+			Annotation container = null;
 			String source = null;
 			boolean optional = false;
 			long min = Long.MIN_VALUE;
@@ -536,20 +596,20 @@ public final class OKRouter implements Router {
 				switch (a.type()) {
 					default -> {continue;}
 					case "roj/http/server/auto/RequestParam" -> {
-						if (holder != null) throw new IllegalStateException("注解"+a+"与已有的"+holder+"重复");
-						source = "PARAM";
+						if (container != null) throw new IllegalStateException("注解"+a+"与已有的"+container+"重复");
+						source = a.getString("source", "PARAM");
 						optional = true; //实际上是不可空？
 					}
 					case "roj/http/server/auto/Header" -> {
-						if (holder != null) throw new IllegalStateException("注解"+a+"与已有的"+holder+"重复");
+						if (container != null) throw new IllegalStateException("注解"+a+"与已有的"+container+"重复");
 						source = "HEAD";
 					}
 					case "roj/http/server/auto/QueryParam" -> {
-						if (holder != null) throw new IllegalStateException("注解"+a+"与已有的"+holder+"重复");
+						if (container != null) throw new IllegalStateException("注解"+a+"与已有的"+container+"重复");
 						source = "GET";
 					}
 					case "roj/http/server/auto/Body" -> {
-						if (holder != null) throw new IllegalStateException("注解"+a+"与已有的"+holder+"重复");
+						if (container != null) throw new IllegalStateException("注解"+a+"与已有的"+container+"重复");
 						source = "BODY";
 					}
 					case "org/jetbrains/annotations/Nullable" -> {
@@ -557,21 +617,24 @@ public final class OKRouter implements Router {
 						continue;
 					}
 					case "org/jetbrains/annotations/Range" -> {
-						min = a.getLong("min");
-						max = a.getLong("max");
+						min = a.getLong("min", Long.MIN_VALUE);
+						max = a.getLong("max", Long.MAX_VALUE);
 						continue;
 					}
 				}
 
-				holder = a;
+				container = a;
 			}
 
-			if (holder == null) return null;
+			if (container == null) return null;
 
-			holder.put("source", source);
-			if (optional) holder.put("optional", true);
+			if (min != Long.MIN_VALUE) container.putIfAbsent("min", min);
+			if (max != Long.MAX_VALUE) container.putIfAbsent("max", max);
 
-			return holder;
+			container.put("source", source);
+			if (optional) container.put("optional", true);
+
+			return container;
 		}
 	}
 	// 生成请求调试信息
@@ -615,14 +678,14 @@ public final class OKRouter implements Router {
 		return serializer.get();
 	}
 	//endregion
-	private static final VirtualReference<HashMap<String, RouterInfo>> IMPLEMENTATION_CACHE = new VirtualReference<>();
-	private static final class RouterInfo {
+	private static final VirtualReference<HashMap<String, RouteRegistration>> REGISTRATIONS = new VirtualReference<>();
+	private static final class RouteRegistration {
 		final IntMap<Annotation> handlers;
 		final ToIntMap<String> interceptors;
 		final Dispatcher inst;
 		final String defaultMime;
 
-		RouterInfo(IntMap<Annotation> handlers, ToIntMap<String> interceptors, Dispatcher inst, String defaultMime) {
+		RouteRegistration(IntMap<Annotation> handlers, ToIntMap<String> interceptors, Dispatcher inst, String defaultMime) {
 			this.handlers = handlers;
 			this.interceptors = interceptors;
 			this.inst = inst;
@@ -633,27 +696,26 @@ public final class OKRouter implements Router {
 	public final OKRouter register(Object o) {return register(o, "");}
 	public final OKRouter register(Object o, String pathRel) {
 		var type = o.getClass();
-		var map = IMPLEMENTATION_CACHE.computeIfAbsent(type.getClassLoader(), Helpers.cast(Helpers.fnHashMap()));
-		var inst = map.get(type.getName());
-		if (inst == null) {
+		var map = REGISTRATIONS.computeIfAbsent(type.getClassLoader(), Helpers.cast(Helpers.fnHashMap()));
+		var registration = map.get(type.getName());
+		if (registration == null) {
 			synchronized (map) {
-				if ((inst = map.get(type.getName())) == null) {
-					inst = new CallerBuilder(debug).build(type);
-					map.put(type.getName(), inst);
+				if ((registration = map.get(type.getName())) == null) {
+					registration = new DispatcherBuilder(debug).build(type);
+					map.put(type.getName(), registration);
 				}
 			}
 		}
 
 		// 存放已经实例化的拦截器
 		HashMap<String, Dispatcher> interceptorInstance = new HashMap<>();
-		for (var entry : inst.handlers.selfEntrySet()) {
+		for (var entry : registration.handlers.selfEntrySet()) {
 			int i = entry.getIntKey();
 			var annotation = entry.getValue();
-			var subroute = new Route();
+			var info = new RouteInfo();
 
-			subroute.accepts = annotation.getInt("accepts", 3/* GET|POST */);
-			subroute.req = inst.inst.copyWith(i, o);
-			subroute.mime = annotation.getString("mime", inst.defaultMime);
+			info.contentType = annotation.getString("mime", registration.defaultMime);
+			info.handler = registration.inst.setMethodId(i, o);
 
 			List<Dispatcher> precs = Collections.emptyList();
 			var interceptorNames = annotation.getList("interceptor");
@@ -663,7 +725,7 @@ public final class OKRouter implements Router {
 
 					var interceptor = interceptorInstance.get(name);
 					if (interceptor == null) {
-						int methodId = inst.interceptors.getOrDefault(name, -1);
+						int methodId = registration.interceptors.getOrDefault(name, -1);
 						if (methodId == -1) {
 							if ((interceptor = interceptors.get(name)) == null) {
 								// 忽略这个拦截器
@@ -671,7 +733,7 @@ public final class OKRouter implements Router {
 								throw new IllegalArgumentException("未找到"+annotation+"引用的拦截器"+interceptorNames.get(j));
 							}
 						} else {
-							interceptor = inst.inst.copyWith(methodId & Integer.MAX_VALUE, o);
+							interceptor = registration.inst.setMethodId(methodId & Integer.MAX_VALUE, o);
 						}
 						interceptorInstance.put(name, interceptor);
 					}
@@ -684,59 +746,61 @@ public final class OKRouter implements Router {
 					}
 				}
 			}
-			subroute.prec = precs.toArray(new Dispatcher[precs.size()]);
+			info.filters = precs.toArray(new Dispatcher[precs.size()]);
 
-			int flag = annotation.getBool("prefix")?Node.PREFIX:0;
+			int flag = 0;
 			String subpath = annotation.getString("value");
 			if (subpath.endsWith("/**")) {
-				flag |= Node.PREFIX;
+				flag |= RouteNode.PREFIX;
 				subpath = subpath.substring(0, subpath.length()-2);
 			}
 			String url = pathRel.concat(subpath);
-			if (url.endsWith("/")) flag |= Node.DIRECTORY;
-			else if (annotation.getBool("strict")) flag |= Node.FILE;
+			if (url.endsWith("/")) flag |= RouteNode.DIRECTORY;
+			else if (annotation.getBool("strict", true)) flag |= RouteNode.FILE;
 
-			Node node = route.add(url, 0, url.length());
+			RouteNode node = route.add(url, 0, url.length());
 
-			Object prev = node.value;
-			if (prev == null) {
+			int supportedMethods = annotation.getInt("accepts", Accepts.GET | Accepts.POST);
+			var list = (RouteList)node.value;
+			if (list == null) {
+				list = new RouteList();
+				list.supportedMethods = supportedMethods;
+				list.defaultRoute = info;
+
 				node.flag |= (byte) flag;
-				node.value = subroute;
+				node.value = list;
 			} else {
-				if (node.flag != flag) throw new IllegalArgumentException("prefix定义不同/"+o+" in "+prev+"|"+subroute);
+				if (node.flag != flag) throw new IllegalArgumentException("prefix定义不同/"+o+" in "+list+"|"+info);
 
-				if (prev instanceof Route prevReq) {
-					Route[] newReq = new Route[8];
-					node.value = newReq;
+				RouteInfo[] routes = list.routes;
+				int currentMethods = list.supportedMethods;
 
-					if ((prevReq.accepts & subroute.accepts) != 0)
-						throw new IllegalArgumentException("冲突的请求类型处理器/"+o+" in "+prevReq+"|"+subroute+" accepts="+prevReq.accepts+"|"+subroute.accepts);
-
+				if (routes == null) {
+					list.routes = routes = new RouteInfo[8];
 					for (int j = 0; j < 8; j++) {
-						if ((subroute.accepts & (1<<j)) != 0) {
-							newReq[j] = subroute;
-						} else if ((prevReq.accepts & (1<<j)) != 0) {
-							newReq[j] = prevReq;
+						if ((currentMethods & (1<<j)) != 0) {
+							routes[j] = list.defaultRoute;
 						}
 					}
-				} else {
-					Route[] newReq = ((Route[]) prev);
-					for (int j = 0; j < 8; j++) {
-						if ((subroute.accepts & (1<<j)) != 0) {
-							if (newReq[j] != null)
-								throw new IllegalArgumentException("冲突的请求类型处理器/"+o+" in "+newReq[j]+"|"+subroute+":"+HttpUtil.getMethodName(j));
-							newReq[j] = subroute;
-						}
+				}
+
+				if ((currentMethods & supportedMethods) != 0)
+					throw new IllegalArgumentException("冲突的请求类型处理器/"+o+" in "+list.defaultRoute+" and "+info+" accepts="+currentMethods+" & "+supportedMethods);
+				list.supportedMethods |= supportedMethods;
+
+				for (int j = 0; j < 8; j++) {
+					if ((supportedMethods & (1<<j)) != 0) {
+						routes[j] = info;
 					}
 				}
 			}
 		}
 
-		for (var entry : inst.interceptors.selfEntrySet()) {
+		for (var entry : registration.interceptors.selfEntrySet()) {
 			if ((entry.value & Integer.MIN_VALUE) != 0) {
 				String name = entry.getKey();
 				if (interceptors.containsKey(name)) throw new IllegalStateException(o+"的"+name+"拦截器在当前上下文重复");
-				interceptors.put(name, inst.inst.copyWith(entry.value & Integer.MAX_VALUE, o));
+				interceptors.put(name, registration.inst.setMethodId(entry.value & Integer.MAX_VALUE, o));
 			}
 		}
 		return this;
@@ -752,26 +816,28 @@ public final class OKRouter implements Router {
 	public final OKRouter addPrefixDelegation(String path, Router router) {return addPrefixDelegation(path, router, (String[])null);}
 
 	/**
-	 * 注册path/**拦截器
-	 * 路径结尾是否有斜杠也会影响策略
-	 * @param path
-	 * @param router
-	 * @param interceptors
-	 * @return
+	 * 注册path前缀通配路由器.
+	 * @param path 路径结尾是否有斜杠会影响策略 (严格模式总是为假)
 	 */
 	public final OKRouter addPrefixDelegation(String path, Router router, @Nullable String... interceptors) {
-		Node node = route.add(path, 0, path.length());
+		RouteNode node = route.add(path, 0, path.length());
 		if (node.value != null) throw new IllegalArgumentException("子路径'"+path+"'已存在");
 
-		var aset = new Route();
+		var list = new RouteList();
+		list.supportedMethods = ACCEPTS_ALL;
+		if (router instanceof Predicate<?>) {
+			list.prefixValidator = Helpers.cast(router);
+		}
+		var info = new RouteInfo();
+		list.defaultRoute = info;
 
-		node.flag |= Node.PREFIX|(path.endsWith("/")?Node.DIRECTORY:0);
-		node.value = aset;
-		aset.accepts = ACCEPTS_ALL;
+
+		node.flag |= RouteNode.PREFIX|(path.endsWith("/")?RouteNode.DIRECTORY:0);
+		node.value = list;
 
 		if (interceptors == null || interceptors.length == 0) {
 			if (router instanceof OKRouter child) {
-				Node otherRoot = child.route;
+				RouteNode otherRoot = child.route;
 				node.flag = otherRoot.flag;
 				node.value = otherRoot.value;
 				node.table = otherRoot.table;
@@ -782,7 +848,7 @@ public final class OKRouter implements Router {
 				return this;
 			}
 
-			aset.prec = new Dispatcher[] {_getChecker(router)};
+			info.filters = new Dispatcher[] {_getChecker(router)};
 		} else {
 			var prec = new Dispatcher[interceptors.length + 1];
 			int size = 0;
@@ -796,9 +862,9 @@ public final class OKRouter implements Router {
 				}
 			}
 			prec[size] = _getChecker(router);
-			aset.prec = size == interceptors.length ? prec : Arrays.copyOf(prec, size+1);
+			info.filters = size == interceptors.length ? prec : Arrays.copyOf(prec, size+1);
 		}
-		aset.req = (req, srv, extra) -> {
+		info.handler = (req, srv, extra) -> {
 			try {
 				return router.response(req, srv);
 			} catch (Exception e) {
@@ -807,51 +873,44 @@ public final class OKRouter implements Router {
 			return null;
 		};
 
-		if (router instanceof Predicate<?>) {
-			aset.earlyCheck = Helpers.cast(router);
-		}
-
 		return this;
 	}
 	private static Dispatcher _getChecker(Router router) {
 		return (req, srv, extra) -> {
-			router.checkHeader(req, (PostSetting) extra);
+			router.checkHeader(req, (PayloadInfo) extra);
 			return null;
 		};
 	}
 
 	public final boolean removePrefixDelegation(String path) {return route.remove(path, 0, path.length());}
 
-	private static final class Route {
-		//bitset for http method
-		int accepts;
-		//accept this path for prefix router
-		Predicate<String> earlyCheck = Helpers.alwaysTrue();
-		String mime;
-		Dispatcher req;
-		Dispatcher[] prec;
-
-		@Override
-		public String toString() {return "processor="+req;}
+	private static final class RouteList {
+		int supportedMethods;
+		Predicate<String> prefixValidator = Helpers.alwaysTrue();
+		RouteInfo defaultRoute;
+		RouteInfo[] routes;
 	}
-	private static Route getRoute(Object o, int action) { return o instanceof Route ? ((Route) o) : ((Route[]) o)[action]; }
+	private static final class RouteInfo {
+		String contentType;
+		Dispatcher handler;
+		Dispatcher[] filters;
+	}
 
-	private static final class RouteMatcher {
-		private final ArrayList<Node> env1 = new ArrayList<>(), env2 = new ArrayList<>();
+	private static final class PathMatcher {
+		private final ArrayList<RouteNode> env1 = new ArrayList<>(), env2 = new ArrayList<>();
 		private final ArrayList<ArrayList<String>> par3 = new ArrayList<>(), par4 = new ArrayList<>();
 
 		int prefixLen;
-		Object value;
+		RouteList matchedValue;
 
-		private Node prefixNode;
+		private RouteNode prefixNode;
 		private ArrayList<String> prefixPar;
 		private int prefixParSize;
-		private boolean definitivelyMatch;
+		private boolean exactPrefixMatch;
 
-		boolean methodNotAllowedMatch;
 		int allowMethod;
 
-		final boolean match(Request req, Node root, String path, int i, int end) {
+		final boolean match(Request req, RouteNode root, String path, int i, int end) {
 			var nodeS = env1;
 			var nodeD = env2;
 			var parS = par3;
@@ -861,7 +920,7 @@ public final class OKRouter implements Router {
 
 			prefixNode = null;
 			prefixPar = null;
-			definitivelyMatch = false;
+			exactPrefixMatch = false;
 
 			int prevI = 0;
 			while (i < end) {
@@ -869,35 +928,26 @@ public final class OKRouter implements Router {
 				if (nextI >= end || nextI < 0) nextI = end;
 
 				for (int k = 0; k < nodeS.size(); k++) {
-					Node node = nodeS.get(k);
+					RouteNode node = nodeS.get(k);
 
-					if ((node.flag & Node.PREFIX) != 0 && checkPrefixMatch(node, path, i)) {
+					if (node instanceof ParamNode pn) {
+						ArrayList<String> params = parS.size() <= k ? new ArrayList<>() : new ArrayList<>(parS.get(k));
+						params.add(pn.name);
+						params.add(path.substring(prevI, i-1));
+
+						parD.ensureCapacity(k+1);
+						parD._setSize(k+1);
+						parD.getInternalArray()[k] = params;
+					}
+
+					if ((node.flag & RouteNode.PREFIX) != 0 && checkPrefixMatch(node, path, i)) {
 						prefixLen = i;
 						prefixNode = node;
-						prefixPar = parS.size() <= k ? null : parS.get(k);
+						prefixPar = parD.size() <= k ? null : parD.get(k);
 						if (prefixPar != null) prefixParSize = prefixPar.size();
 					}
 
-					int pos = nodeD.size();
-					String parName = node.get(path, i, nextI, nodeD);
-
-					syncParam:
-					if (nodeD.size() > pos) {
-						ArrayList<String> params = parS.size() <= k ? null : parS.get(k);
-						if (parName != null) {
-							if (params == null) params = new ArrayList<>();
-							params.add(parName);
-							params.add(path.substring(prevI, i-1));
-						} else if (params == null) break syncParam;
-
-						parD.ensureCapacity(nodeD.size());
-						parD._setSize(nodeD.size());
-
-						Object[] array = parD.getInternalArray();
-						for (int l = pos; l < nodeD.size(); l++) {
-							array[l] = params;
-						}
-					}
+					node.get(path, i, nextI, nodeD);
 				}
 
 				if (nodeD.isEmpty()) {
@@ -920,33 +970,31 @@ public final class OKRouter implements Router {
 				i = nextI+1;
 			}
 
-			Node node = null;
-			int priority = definitivelyMatch ? 5 : -1;
+			RouteNode node = null;
+			int priority = exactPrefixMatch ? 5 : -1;
 			ArrayList<String> par = null;
 
-			boolean isFile = path.charAt(end - 1) != '/';
+			boolean isFile = path.length() > 0 && path.charAt(end - 1) != '/';
 			for (int j = 0; j < nodeS.size(); j++) {
-				Node n = nodeS.get(j);
+				RouteNode n = nodeS.get(j);
 				if (n.value != null) {
 					// 目录和文件匹配
-					if ((n.flag & Node.DIRECTORY) != 0) {
+					if ((n.flag & RouteNode.DIRECTORY) != 0) {
 						if (isFile) continue;
-					} else if ((n.flag & Node.FILE) != 0) {
+					} else if ((n.flag & RouteNode.FILE) != 0) {
 						if (!isFile) continue;
 					}
 
 					int prio = n.priority();
 					if (prio > priority) {
-						int accepts = getRoute(n.value, req.action()).accepts;
-						allowMethod = accepts;
-						methodNotAllowedMatch = ((1 << req.action()) & accepts) == 0;
-						if (methodNotAllowedMatch) continue;
+						checkAllow(req, n);
+						if (allowMethod != 0) continue;
 
 						node = n;
 						priority = prio;
 						par = parS.size() <= j ? null : parS.get(j);
 
-						if (node instanceof Regex rex) {
+						if (node instanceof ParamNode rex) {
 							if (par == null) par = new ArrayList<>();
 
 							par.add(rex.name);
@@ -964,9 +1012,9 @@ public final class OKRouter implements Router {
 			if (node == null) return buildPrefix(req);
 
 			// 兼容之前的代码，非严格模式
-			if ((node.flag&Node.DIRECTORY) == 0 && !isFile) end--;
+			if ((node.flag&RouteNode.DIRECTORY) == 0 && !isFile) end--;
 			prefixLen = end;
-			value = getNodeValue(node);
+			matchedValue = getNodeValue(node);
 			if (par != null) {
 				var pathVariable = req.arguments();
 				int j = 0;
@@ -977,15 +1025,20 @@ public final class OKRouter implements Router {
 			return true;
 		}
 
-		private boolean checkPrefixMatch(Node node, String path, int i) {
-			Object v = getNodeValue(node);
-			return v instanceof Route r && (definitivelyMatch = r.earlyCheck.test(path.substring(i)));
+		private void checkAllow(Request req, RouteNode n) {
+			int accepts = getNodeValue(n).supportedMethods;
+			allowMethod = ((1 << req.action()) & accepts) == 0 ? accepts : 0;
+		}
+
+		private boolean checkPrefixMatch(RouteNode node, String path, int i) {
+			var v = getNodeValue(node);
+			return v != null && (exactPrefixMatch = v.prefixValidator.test(path.substring(i)));
 		}
 
 		private boolean buildPrefix(Request req) {
-			methodNotAllowedMatch = false;
 			if (prefixNode == null) return false;
-			value = getNodeValue(prefixNode);
+			checkAllow(req, prefixNode);
+			matchedValue = getNodeValue(prefixNode);
 
 			var par = prefixPar;
 			if (par != null) {
@@ -1000,16 +1053,17 @@ public final class OKRouter implements Router {
 			prefixPar = null;
 			return true;
 		}
-		private static Object getNodeValue(Node node) {
+		private static RouteList getNodeValue(RouteNode node) {
 			var v = node.value;
-			while (v instanceof Node n) {
+			while (v instanceof RouteNode n) {
 				v = n.value;
 			}
-			return v;
+			return (RouteList) v;
 		}
 	}
-	private static abstract sealed class Node {
+	private static abstract sealed class RouteNode {
 		String name;
+
 		// Route or Route[]
 		Object value;
 
@@ -1017,12 +1071,12 @@ public final class OKRouter implements Router {
 		static final byte PREFIX = 1, DIRECTORY = 2, FILE = 4;
 
 		private int mask;
-		private Text[] table;
+		private LiteralNode[] table;
 		int size;
 
-		private List<Regex> any = Collections.emptyList();
+		private List<ParamNode> any = Collections.emptyList();
 
-		public Node(String name) { this.name = name; }
+		public RouteNode(String name) { this.name = name; }
 
 		public boolean remove(String path, int i, int end) {
 			if (i >= end) return true;
@@ -1037,8 +1091,8 @@ public final class OKRouter implements Router {
 			if (table != null) {
 				int hash = hash(path, i, j);
 
-				Text prev = null;
-				Text node = table[hash & mask];
+				LiteralNode prev = null;
+				LiteralNode node = table[hash & mask];
 				while (node != null) {
 					if (path.regionMatches(i, node.name, 0, node.name.length())) {
 						if (!node.remove(path, j + 1, end)) return false;
@@ -1060,19 +1114,19 @@ public final class OKRouter implements Router {
 			return false;
 		}
 
-		Node add(String path, int i, int end) {
+		RouteNode add(String path, int i, int end) {
 			int j = path.indexOf('/', i);
 			if (j >= end || j < 0) j = end;
 			if (i >= j) return this;
 
 			if (table == null) {
-				table = new Text[4];
+				table = new LiteralNode[4];
 				mask = 3;
 			}
 
 			int hash = hash(path, i, j);
 			int count = 0;
-			Text node = table[hash & mask];
+			LiteralNode node = table[hash & mask];
 			while (node != null) {
 				if (path.regionMatches(i, node.name, 0, node.name.length())) {
 					return node.add(path, j+1, end);
@@ -1083,10 +1137,10 @@ public final class OKRouter implements Router {
 
 			if (count >= 3) resize();
 
-			Node node1;
+			RouteNode node1;
 			if (path.charAt(i) == ':') {
 				// regexNode
-				var node2 = new Regex(path.substring(i+1, j));
+				var node2 = new ParamNode(path.substring(i+1, j));
 				if (any.isEmpty()) any = new ArrayList<>();
 
 				i = any.indexOf(node2);
@@ -1100,7 +1154,7 @@ public final class OKRouter implements Router {
 					node1 = node2;
 				}
 			} else {
-				node = new Text(path.substring(i, j));
+				node = new LiteralNode(path.substring(i, j));
 				node.next = table[hash &= mask];
 				table[hash] = node;
 				size++;
@@ -1116,15 +1170,15 @@ public final class OKRouter implements Router {
 		}
 		private void resize() {
 			int length = (mask+1) << 1;
-			Text[] tab1 = new Text[length];
+			LiteralNode[] tab1 = new LiteralNode[length];
 			int mask1 = length-1;
 
 			int i = 0, j = table.length;
 			for (; i < j; i++) {
-				Text entry = table[i];
+				LiteralNode entry = table[i];
 
 				while (entry != null) {
-					Text next = entry.next;
+					LiteralNode next = entry.next;
 
 					int newKey = hash(entry.name, 0, entry.name.length()) & mask1;
 
@@ -1139,10 +1193,10 @@ public final class OKRouter implements Router {
 			this.mask = mask1;
 		}
 
-		String get(String path, int i, int end, List<Node> nodes) {
+		String get(String path, int i, int end, List<RouteNode> nodes) {
 			if (table != null) {
 				int hash = hash(path, i, end);
-				Text node = table[hash & mask];
+				LiteralNode node = table[hash & mask];
 				while (node != null) {
 					if (path.regionMatches(i, node.name, 0, node.name.length())) {
 						nodes.add(node);
@@ -1162,19 +1216,30 @@ public final class OKRouter implements Router {
 			// 高于正则匹配
 			int prio = 5;
 			// 完整匹配 > 前缀匹配
-			if ((flag & 1) == 0) prio++;
+			if ((flag & PREFIX) == 0) prio++;
 			return prio;
 		}
 	}
-	private static final class Text extends Node {
-		Text next;
-		Text(String name) { super(name); }
+	private static final class LiteralNode extends RouteNode {
+		LiteralNode next;
+		LiteralNode(String name) { super(name); }
 	}
-	private static final class Regex extends Node {
-		Pattern regexp;
+	private static final class ParamNode extends RouteNode {
+		Pattern pattern;
+
+		@Override
+		public String toString() {
+			return ":"+name+"("+pattern+")"+switch (flag&(ZERO|MORE)) {
+				case MORE -> "+";
+				case ZERO -> "?";
+				case ZERO|MORE -> "*";
+				default -> "";
+			};
+		}
 
 		static final Pattern REGEXP = Pattern.compile("([A-Za-z0-9-_]+)(?:\\((.+?)\\))?([+*?])?");
-		Regex(String url) {
+		static final int MORE = 8, ZERO = 16;
+		ParamNode(String url) {
 			super("regexp");
 
 			Matcher m = REGEXP.matcher(url);
@@ -1182,24 +1247,24 @@ public final class OKRouter implements Router {
 
 			name = m.group(1);
 			String regexp = m.group(2);
-			if (regexp != null) this.regexp = Pattern.compile(regexp);
+			if (regexp != null) this.pattern = Pattern.compile(regexp);
 			String count = m.group(3);
 			if (count != null) {
 				if (count.equals("+")) {
-					flag |= 4; // MORE
+					flag |= MORE;
 				} else if (count.equals("*")) {
-					flag |= 12; // ZERO | MORE
+					flag |= ZERO | MORE;
 				} else {
-					flag |= 8; // ZERO
+					flag |= ZERO;
 				}
 			}
 		}
 
-		final void match(String path, int i, int end, List<Node> nodes) {
-			if (regexp != null) {
-				Matcher m = regexp.matcher(path);
+		final void match(String path, int i, int end, List<RouteNode> nodes) {
+			if (pattern != null) {
+				Matcher m = pattern.matcher(path);
 				if (!m.find(i) || m.start() != i || m.end() != end) {
-					if ((flag&8) != 0) super.get(path, i, end, nodes);
+					if ((flag&ZERO) != 0) super.get(path, i, end, nodes);
 					return;
 				}
 			}
@@ -1208,10 +1273,10 @@ public final class OKRouter implements Router {
 		}
 
 		@Override
-		final String get(String path, int i, int end, List<Node> nodes) {
-			if ((flag&4) != 0) {
+		final String get(String path, int i, int end, List<RouteNode> nodes) {
+			if ((flag&MORE) != 0) {
 				Matcher m;
-				if (regexp == null || (m = regexp.matcher(path)).find(i) && m.start() == i && m.end() == end) {
+				if (pattern == null || (m = pattern.matcher(path)).find(i) && m.start() == i && m.end() == end) {
 					nodes.add(this);
 				}
 			}
@@ -1224,11 +1289,11 @@ public final class OKRouter implements Router {
 		int priority() {
 			int prio = 0;
 			// 有限匹配 > 无限匹配
-			if ((flag & 12) == 0) prio++;
+			if ((flag & (ZERO|MORE)) == 0) prio++;
 			// 必选匹配 > 可选匹配
-			if ((flag & 4) == 0) prio++;
+			if ((flag & MORE) == 0) prio++;
 			// 有限制 > 无限制
-			if (regexp != null) prio++;
+			if (pattern != null) prio++;
 			return prio;
 		}
 
@@ -1237,61 +1302,59 @@ public final class OKRouter implements Router {
 			if (this == o) return true;
 			if (o == null || getClass() != o.getClass()) return false;
 
-			Regex regex = (Regex) o;
-			if (!name.equals(regex.name) || flag != regex.flag) return false;
-			return regexp != null ? regexp.pattern().equals(regex.regexp.pattern()) : regex.regexp == null;
+			ParamNode node = (ParamNode) o;
+			if (!name.equals(node.name) || flag != node.flag) return false;
+			return pattern != null ? pattern.pattern().equals(node.pattern.pattern()) : node.pattern == null;
 		}
 
 		@Override
 		public int hashCode() {
 			int h = (name.hashCode() << 1) ^ flag;
-			return regexp != null ? h^regexp.hashCode() : h;
+			return pattern != null ? h^pattern.hashCode() : h;
 		}
 	}
 
 	@Override
-	public void checkHeader(Request req, @Nullable PostSetting cfg) throws IllegalRequestException {
+	public void checkHeader(Request req, @Nullable PayloadInfo cfg) throws IllegalRequestException {
 		String path = req.path();
-		int len = path.length();
 
-		Route set;
-		if (len == 0) {
-			Object o = route.value;
-			set = o == null ? null : getRoute(o, req.action());
+		var m = (PathMatcher) req.threadLocal().get("or:pathMatcher");
+		if (m == null) req.threadLocal().put("or:pathMatcher", m = new PathMatcher());
+
+		RouteList matchedValue = m.match(req, route, path, 0, path.length()) ? m.matchedValue : null;
+
+		RouteInfo set;
+
+		if (matchedValue != null) {
+			set = getRoute(m.matchedValue, req.action());
+			req.setPath(path.substring(m.prefixLen));
 		} else {
-			var m = (RouteMatcher) req.threadLocal().get("or:fn");
-			if (m == null) req.threadLocal().put("or:fn", m = new RouteMatcher());
-
-			if (m.match(req, route, path, 0, len) && m.value != null) {
-				set = getRoute(m.value, req.action());
-				req.setPath(path.substring(m.prefixLen));
-			} else {
-				if (m.methodNotAllowedMatch) {
-					req.responseHeader().put("allow", serializeAllow(m.allowMethod));
-					throw new IllegalRequestException(HttpUtil.METHOD_NOT_ALLOWED);
-				}
-
-				set = null;
+			if (m.allowMethod != 0) {
+				req.responseHeader().put("allow", serializeAllow(m.allowMethod));
+				throw new IllegalRequestException(HttpUtil.METHOD_NOT_ALLOWED);
 			}
+
+			set = null;
 		}
 
 		if (set == null) throw new IllegalRequestException(403);
-		if (((1 << req.action()) & set.accepts) == 0) {
-			req.responseHeader().put("allow", serializeAllow(set.accepts));
-			throw new IllegalRequestException(HttpUtil.METHOD_NOT_ALLOWED);
-		}
 
 		req.connection().attachment(RouterImplKey, set);
-		for (Dispatcher prec : set.prec) {
-			Object ret = prec.invoke(req, req.server(), cfg);
+		for (Dispatcher prec : set.filters) {
+			Object ret = prec.invoke(req, req.response(), cfg);
 			if (ret != null) {
 				if (ret instanceof Content r) throw new IllegalRequestException(0, r);
 				throw new IllegalRequestException(0, ret.toString());
 			}
 		}
 
-		if (cfg != null && !cfg.postAccepted()) Router.super.checkHeader(req, cfg);
+		if (cfg != null && !cfg.isAccepted()) Router.super.checkHeader(req, cfg);
 	}
+
+	private RouteInfo getRoute(RouteList o, int action) {
+		return o.routes == null ? o.defaultRoute : o.routes[action];
+	}
+
 	private static String serializeAllow(int accepts) {
 		var sb = IOUtil.getSharedByteBuf();
 		for (int i = 0; i < 8; i++) {
@@ -1305,12 +1368,12 @@ public final class OKRouter implements Router {
 	}
 
 	@Override
-	public Content response(Request req, ResponseHeader rh) throws IOException {
-		Route set = req.connection().attachment(RouterImplKey, null);
+	public Content response(Request req, Response resp) throws IOException {
+		RouteInfo set = req.connection().attachment(RouterImplKey, null);
 
 		Object ret;
 		try {
-			ret = set.req.invoke(req, rh, null);
+			ret = set.handler.invoke(req, resp, null);
 		} finally {
 			for (var c : onFinishes) {
 				try {
@@ -1322,11 +1385,11 @@ public final class OKRouter implements Router {
 		}
 		if (ret instanceof Content r) return r;
 		if (ret == null) return null;
-		return new TextContent(ret instanceof CharSequence cs ? cs : ret.toString(), set.mime);
+		return new TextContent(ret instanceof CharSequence cs ? cs : ret.toString(), set.contentType);
 	}
 
 	public interface Dispatcher {
-		Object invoke(Request req, ResponseHeader server, Object argument) throws IllegalRequestException;
-		default Dispatcher copyWith(int methodId, Object instance) { return this; }
+		Object invoke(Request req, Response server, Object argument) throws IllegalRequestException;
+		default Dispatcher setMethodId(int methodId, Object instance) { return this; }
 	}
 }

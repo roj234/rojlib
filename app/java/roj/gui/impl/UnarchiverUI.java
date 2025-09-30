@@ -230,7 +230,7 @@ public class UnarchiverUI extends JFrame {
 		BiConsumer<ArchiveEntry, InputStream> cb = (entry, in) -> {
 			if (javacSb == null || javacSb.strStartsWithThis(entry.getName())) {
 				String name = entry.getName();
-				if (uiPathFilter.isSelected()) name = URICoder.escapeFilePath(IOUtil.safePath(name));
+				if (uiPathFilter.isSelected()) name = URICoder.escapeFilePath(IOUtil.normalizePath(name));
 
 				File file1 = new File(basePath, name);
 
@@ -337,7 +337,7 @@ public class UnarchiverUI extends JFrame {
 
 				if ((storeFlag&8) != 0 && entry.isAntiItem()) {
 					String name = entry.getName();
-					if (uiPathFilter.isSelected()) name = URICoder.escapeFilePath(IOUtil.safePath(name));
+					if (uiPathFilter.isSelected()) name = URICoder.escapeFilePath(IOUtil.normalizePath(name));
 
 					File file1 = new File(basePath, name);
 					try {

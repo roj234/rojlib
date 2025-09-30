@@ -28,10 +28,10 @@ public class EasyMusicPlayer extends Plugin {
 	}
 
 	@Interceptor
-	public void userSongPostHandler(PostSetting setting) {
-		if (setting != null && setting.postExceptLength() < 2097152) {
-			setting.postHandler(new UrlEncodedParser());
-			setting.postAccept(2097152, 2000);
+	public void userSongPostHandler(PayloadInfo setting) {
+		if (setting != null && setting.expectedLength() < 2097152) {
+			setting.setParser(new UrlEncodedParser());
+			setting.accept(2097152, 2000);
 		}
 	}
 
@@ -40,9 +40,9 @@ public class EasyMusicPlayer extends Plugin {
 	public Content userSong(Request req) throws IOException {
 		var file = new File(getDataFolder(), "users/"+ URICoder.escapeFilePath(req.argument("user"))+".json.gz");
 
-		var handler = (UrlEncodedParser) req.postHandler();
+		var handler = (UrlEncodedParser) req.bodyParser();
 		if (handler == null) {
-			req.server().code(204);
+			req.response().code(204);
 			return null;
 		} else {
 			req.argument("user");

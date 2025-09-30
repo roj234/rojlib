@@ -4,7 +4,6 @@ import org.jetbrains.annotations.Nullable;
 import roj.collect.ArrayList;
 import roj.concurrent.PacketBuffer;
 import roj.config.ConfigMaster;
-import roj.text.ParseException;
 import roj.config.node.MapValue;
 import roj.http.WebSocket;
 import roj.http.server.Content;
@@ -16,6 +15,7 @@ import roj.plugin.PermissionHolder;
 import roj.plugin.Plugin;
 import roj.plugin.PluginDescriptor;
 import roj.plugin.SimplePlugin;
+import roj.text.ParseException;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
 import roj.util.Helpers;
@@ -195,14 +195,14 @@ public class SimpleMQ extends Plugin {
 		if (ph == null || !ph.hasPermission("mq/query/"+event)) return Content.json("\"权限不足\"");
 
 		var buffer = dataCache.get(event);
-		return buffer == null ? req.server().code(204).noContent() : Content.bytes(buffer);
+		return buffer == null ? req.response().code(204).noContent() : Content.bytes(buffer);
 	}
 
 	@Route("")
 	@Interceptor("cors")
 	public Object index(Request req) {
 		if (!"websocket".equals(req.header("upgrade")))
-			return req.server().code(503).cast("websocket server");
+			return req.response().code(503).cast("websocket server");
 
 		return Content.websocket(req, request -> {
 			var user = getUser(request);

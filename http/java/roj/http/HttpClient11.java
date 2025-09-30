@@ -10,7 +10,7 @@ import roj.util.DynByteBuf;
 import java.io.IOException;
 
 final class HttpClient11 extends HttpRequest implements ChannelHandler {
-	static final int SEND_HEAD=0,RECV_HEAD=1,PROCESSING=2,RECV_BODY=3,IDLE=4;
+	private static final int SEND_HEAD=0,RECV_HEAD=1,PROCESSING=2,RECV_BODY=3,IDLE=4,CLOSED=5;
 
 	private HttpHead response;
 
@@ -76,7 +76,7 @@ final class HttpClient11 extends HttpRequest implements ChannelHandler {
 				// maybe a limit?
 				if (!Headers.parseHeader(response, buf, IOUtil.getSharedByteBuf())) return;
 
-				boolean is1xx = response.getCode() >= 100 && response.getCode() < 200;
+				boolean is1xx = response.statusCode() >= 100 && response.statusCode() < 200;
 
 				state = PROCESSING;
 				ctx.channelOpened();
@@ -113,14 +113,9 @@ final class HttpClient11 extends HttpRequest implements ChannelHandler {
 	private static void throwTrailerData(DynByteBuf buf) throws IOException {throw new IOException("多余的数据:"+buf.slice(Math.min(buf.readableBytes(), 128)));}
 
 	private void end(ChannelCtx ctx) throws IOException {
-		if (state != IDLE) {
+		if (state < IDLE) {
 			state = IDLE;
-
-			Event event = new Event(DOWNLOAD_EOF).capture();
-			event.setData(true);
-			ctx.postEvent(event);
-
-			synchronized (this) { notifyAll(); }
+			postEvent(true, ctx);
 
 			if (response != null && response.header("connection").equalsIgnoreCase("close")) {
 				try {
@@ -133,15 +128,18 @@ final class HttpClient11 extends HttpRequest implements ChannelHandler {
 	@Override
 	public void channelClosed(ChannelCtx ctx) throws IOException {
 		closeBody();
-		if (state != IDLE) {
-			state = IDLE;
-
-			Event event = new Event(DOWNLOAD_EOF).capture();
-			event.setData(false);
-			ctx.postEvent(event);
-
-			synchronized (this) { notifyAll(); }
+		if (state < CLOSED) {
+			state = CLOSED;
+			postEvent(false, ctx);
 		}
+	}
+
+	private void postEvent(boolean successful, ChannelCtx ctx) throws IOException {
+		Event event = new Event(DOWNLOAD_EOF).capture();
+		event.setData(successful);
+		ctx.postEvent(event);
+
+		synchronized (this) { notifyAll(); }
 	}
 
 	@Override
@@ -156,7 +154,7 @@ final class HttpClient11 extends HttpRequest implements ChannelHandler {
 	@Override
 	public void waitFor() throws InterruptedException {
 		synchronized (this) {
-			while (state != IDLE) { wait(); }
+			while (state < IDLE) { wait(); }
 		}
 	}
 

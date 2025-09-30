@@ -16,6 +16,7 @@ import roj.gui.DoubleClickHelper;
 import roj.gui.GuiUtil;
 import roj.io.IOUtil;
 import roj.text.TextReader;
+import roj.text.TextUtil;
 import roj.util.Helpers;
 
 import javax.swing.*;
@@ -67,7 +68,7 @@ public class MappingUI extends JFrame {
 		Mapping m;
 
 		zip:
-		if (ext.equals("zip")) {
+		if (ext.equals("zip") || (ext.length() > 1 && TextUtil.isNumber(ext) == 0)) {
 			try (var zf = new ZipFile(input)) {
 				var tsrg = zf.getEntry("config.json");
 				if (tsrg != null) {
@@ -98,7 +99,7 @@ public class MappingUI extends JFrame {
 				m1.loadCache(src, true);
 			}
 			m = m1;
-		} else if (name1.equals("client.txt") || name1.equals("server.txt")) {
+		} else if (ext.equals("txt")) {
 			OjngMapping m1 = new OjngMapping();
 			m1.readMojangMap(input.getName(), TextReader.auto(input), new ArrayList<>());
 			m = m1;
@@ -239,6 +240,7 @@ public class MappingUI extends JFrame {
 			NamedMapping m = getNamedMapping();
 			NamedMapping om = uiMappingList.getSelectedValue();
 			if (m.name == null) m.name = "Dr-"+om.name;
+			// intended no copy
 			m.mapping = new Mapping(om.mapping);
 			m.mapping.deleteClassMap();
 			mappings.addElement(m);

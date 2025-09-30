@@ -14,10 +14,10 @@ import java.util.function.Function;
  * @author Roj234
  * @since 2021/2/14 18:26
  */
-final class WebSocketResponse implements RequestFinishHandler {
+final class WebSocketResponse implements ResponseFinishHandler {
 	static final Set<String> EMPTY_PROTOCOL = Collections.singleton("");
 	static Content websocket(Request req, Function<Request, WebSocket> newHandler, Set<String> protocols) {
-		var rh = req.server();
+		var rh = req.response();
 
 		String ver = req.header("sec-websocket-version");
 		String protocol = req.header("sec-websocket-protocol");
@@ -38,14 +38,14 @@ final class WebSocketResponse implements RequestFinishHandler {
 		//magic number而已
 		sha1.update(buf.putAscii(key).putAscii("258EAFA5-E914-47DA-95CA-C5AB0DC85B11").list, 0, buf.wIndex());
 
-		rh.header("Sec-WebSocket-Accept", IOUtil.encodeBase64(sha1.digest()));
-		if (!protocol.isEmpty()) rh.header("sec-websocket-protocol", protocol);
+		rh.setHeader("Sec-WebSocket-Accept", IOUtil.encodeBase64(sha1.digest()));
+		if (!protocol.isEmpty()) rh.setHeader("sec-websocket-protocol", protocol);
 
 		boolean zip;
 		String ext = req.header("sec-websocket-extensions");
 		//noinspection AssignmentUsedAsCondition
 		if (zip = ext.contains("permessage-deflate")) {
-			rh.header("sec-websocket-extensions", "permessage-deflate");
+			rh.setHeader("sec-websocket-extensions", "permessage-deflate");
 			// "Per-Message Compressed": RSV1 => compressed bit
 		}
 
@@ -63,11 +63,11 @@ final class WebSocketResponse implements RequestFinishHandler {
 	}
 
 	@Override
-	public boolean onRequestFinish(ResponseHeader tcp, boolean success) {
+	public boolean onResponseFinish(Response response, boolean success) {
 		WebSocket h;
 		if (!success || (h = newHandler.apply(req)) == null) return false;
 		if (zip) h.enableZip();
-		tcp.connection().addLast("WS-Handler", h);
+		response.connection().addLast("WS-Handler", h);
 		return true;
 	}
 }

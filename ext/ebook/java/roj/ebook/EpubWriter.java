@@ -38,7 +38,7 @@ public class EpubWriter extends EbookWriter {
 	private static ZipFile TEMPLATE;
 	static {
 		try {
-			TEMPLATE = new ZipFile(new ByteSource(IOUtil.getResourceIL("roj/plugins/novel/template.epub")), 0, StandardCharsets.UTF_8);
+			TEMPLATE = new ZipFile(new ByteSource(IOUtil.getResourceIL("roj/ebook/template.epub")), 0, StandardCharsets.UTF_8);
 			TEMPLATE.reload();
 		} catch (IOException ignored) {}
 	}

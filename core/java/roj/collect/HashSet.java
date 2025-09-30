@@ -7,6 +7,7 @@ import roj.math.MathUtils;
 import java.util.*;
 import java.util.function.Consumer;
 
+import static roj.collect.IntMap.REFERENCE_LOAD_FACTOR;
 import static roj.collect.IntMap.UNDEFINED;
 
 /**
@@ -21,10 +22,8 @@ public final class HashSet<E> extends AbstractSet<E> implements FindSet<E> {
 
 	private boolean hasNull;
 	private Object[] entries;
-	private int size, mask = 1;
+	private int size, mask;
 	private final Hasher<E> hasher;
-
-	static final float LOAD_FACTOR = 1f;
 
 	public HashSet() { this(16); }
 	public HashSet(int size) { hasher = Hasher.defaul(); ensureCapacity(size); }
@@ -50,16 +49,15 @@ public final class HashSet<E> extends AbstractSet<E> implements FindSet<E> {
 	}
 
 	public void ensureCapacity(int size) {
-		if (size < mask+1) return;
-		mask = MathUtils.nextPowerOfTwo(size)-1;
-		if (entries != null) resize(mask+1);
+		if (size <= mask) return;
+
+		int length = MathUtils.nextPowerOfTwo(size);
+		if (entries != null) resize(length);
+		else mask = length-1;
 	}
 
 	@NotNull
-	public Iterator<E> iterator() {
-		return isEmpty() ? Collections.emptyIterator() : new SetItr();
-	}
-	public AbstractIterator<E> setItr() { return new SetItr(); }
+	public Iterator<E> iterator() {return new Itr();}
 
 	public int size() { return size; }
 
@@ -74,7 +72,7 @@ public final class HashSet<E> extends AbstractSet<E> implements FindSet<E> {
 	public E intern(E e) {
 		if (e == null) return null;
 
-		if (size > mask * LOAD_FACTOR) {
+		if (size > mask * REFERENCE_LOAD_FACTOR) {
 			resize((mask+1) << 1);
 		}
 
@@ -139,7 +137,7 @@ public final class HashSet<E> extends AbstractSet<E> implements FindSet<E> {
 			return false;
 		}
 
-		if (size > mask * LOAD_FACTOR) {
+		if (size > mask * REFERENCE_LOAD_FACTOR) {
 			resize((mask+1)<<1);
 		}
 
@@ -288,12 +286,12 @@ public final class HashSet<E> extends AbstractSet<E> implements FindSet<E> {
 		}
 	}
 
-	final class SetItr extends AbstractIterator<E> {
+	final class Itr extends AbstractIterator<E> {
 		private Object[] prevList;
 		private Object entry;
 		private int i;
 
-		public SetItr() { reset(); }
+		public Itr() { reset(); }
 
 		@Override
 		public void reset() {

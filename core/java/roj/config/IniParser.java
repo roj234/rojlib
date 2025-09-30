@@ -174,7 +174,7 @@ public final class IniParser extends TextParser {
 
 				index = i-1;
 				try {
-					return NUMBER.contains(c) ? digitReader(false, 0) : readSymbol();
+					return NUMBER.contains(c) ? readNumber(false, false) : readSymbol();
 				} finally {
 					literalEnd = INI_LENDS;
 				}

@@ -29,7 +29,7 @@ public final class MainM extends Main {
 	static {ClassLoader.registerAsParallelCapable();}
 
 	@Override
-	public InputStream getParentResource(String name) {
+	public InputStream getInitialResource(String name) {
 		try {
 			return MyModule.getResourceAsStream(name);
 		} catch (IOException e) {

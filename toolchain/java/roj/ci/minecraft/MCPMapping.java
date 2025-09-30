@@ -35,7 +35,7 @@ final class MCPMapping extends Mapping {
 
 	public void apply(List<String> tmp, Mapping srg, Mapping save) throws IOException {
 		classMap = srg.getClassMap();
-		checkFieldType = srg.checkFieldType;
+		fieldHasType = srg.isFieldHasType();
 
 		save.getClassMap().putAll(classMap);
 

@@ -5,7 +5,6 @@ import roj.collect.HashMap;
 import roj.collect.HashSet;
 import roj.collect.IntMap;
 import roj.text.TextReader;
-import roj.ui.Completion;
 import roj.util.Helpers;
 import roj.util.OperationDone;
 

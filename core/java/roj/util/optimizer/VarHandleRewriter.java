@@ -263,7 +263,7 @@ public class VarHandleRewriter implements ConstantPoolHooks.Hook<ClassNode> {
 
 	@Override
 	public boolean transform(ClassNode context, ClassNode node) throws TransformException {
-		LOGGER.debug("开始转换 {}", node.name());
+		LOGGER.debug("正处理 {}", node.name());
 
 		ArrayList<FieldNode> fields = node.fields;
 		int size = fields.size();
@@ -394,7 +394,7 @@ public class VarHandleRewriter implements ConstantPoolHooks.Hook<ClassNode> {
 					computeFrames(FrameVisitor.COMPUTE_FRAMES | FrameVisitor.COMPUTE_SIZES);
 
 					List<Type> types = Type.getMethodTypes(desc);
-					LOGGER.trace("转换调用 From {}.{} {}", owner, name, types);
+					LOGGER.trace("转换调用 {}.{} {}", owner, name, types);
 
 					Type returnType = types.get(types.size() - 1);
 					for (int i = 0; i < types.size(); i++) {
@@ -427,7 +427,6 @@ public class VarHandleRewriter implements ConstantPoolHooks.Hook<ClassNode> {
 						String stringType = methodType.capitalized();
 						name = name.substring(0, insertAt) + (stringType.equals("Object") ? "Reference" : stringType) + name.substring(insertAt);
 
-						LOGGER.trace("转换调用 Array {}.{} {}", PROXY_NAME, name, types);
 						super.invoke(Opcodes.INVOKESTATIC, PROXY_NAME, name, Type.getMethodDescriptor(types), false);
 					} else {
 						types.add(0, Type.LONG_TYPE);
@@ -435,7 +434,6 @@ public class VarHandleRewriter implements ConstantPoolHooks.Hook<ClassNode> {
 						String stringType = methodType.capitalized();
 						name = name.substring(0, insertAt) + (stringType.equals("Object") ? "Reference" : stringType) + name.substring(insertAt);
 
-						LOGGER.trace("转换调用 InstanceOrStatic {}.{} {}", PROXY_NAME, name, types);
 						super.invoke(Opcodes.INVOKESTATIC, PROXY_NAME, name, Type.getMethodDescriptor(types), false);
 					}
 
@@ -457,7 +455,6 @@ public class VarHandleRewriter implements ConstantPoolHooks.Hook<ClassNode> {
 		};
 
 		for (MethodNode method : context.methods) {
-			LOGGER.trace("正在转换方法 {}", method.name());
 			int offset = (method.modifier&ACC_STATIC) == 0 ? 1 : 0;
 			transformer.reset();
 			List<Type> parameters = method.parameters();

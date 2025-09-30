@@ -34,7 +34,7 @@ public class ZipRouter implements Router, Predicate<String> {
 	public static Content zip(Request req, ZipFile zf, ZEntry ze) {return Content.file(req, new ZipFileInfo(zf, ze));}
 
 	@Override
-	public Content response(Request req, ResponseHeader rh) throws IOException {
+	public Content response(Request req, Response resp) throws IOException {
 		String url = req.path();
 
 		boolean isDir = url.isEmpty() || url.endsWith("/");
@@ -45,15 +45,15 @@ public class ZipRouter implements Router, Predicate<String> {
 			if (isDir) {
 				ze = zip.getEntry(url);
 				if (ze != null && ze.getName().endsWith("/")) {
-					rh.code(403);
+					resp.code(403);
 					return Content.httpError(HttpUtil.FORBIDDEN);
 				}
 			}
-			rh.code(404);
+			resp.code(404);
 			return Content.httpError(HttpUtil.NOT_FOUND);
 		}
 
-		rh.code(200).header("cache-control", getCacheControl(ze));
+		resp.code(200).setHeader("cache-control", getCacheControl(ze));
 		if (ze.isEncrypted()) throw new IllegalRequestException(500, "该文件已加密");
 		return Content.file(req, new ZipFileInfo(zip, ze));
 	}
@@ -94,6 +94,6 @@ public class ZipRouter implements Router, Predicate<String> {
 		@Override public long lastModified() {return ze.getModificationTime();}
 		@Override public int getCrc32() {return ze.getCrc32();}
 		@Override public String getETag() {return '"'+Integer.toUnsignedString(ze.getCrc32(), 36)+'"';}
-		@Override public void prepare(ResponseHeader rh, Headers h) {h.put("content-type", MimeType.getMimeType(ze.getName()));}
+		@Override public void prepare(Response rh, Headers h) {h.put("content-type", MimeType.getMimeType(ze.getName()));}
 	}
 }

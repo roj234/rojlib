@@ -114,8 +114,7 @@ public final class LavaCompileUnit extends CompileUnit {
 			ownerMethod.owner = name;
 			if (mn != null && !mn.name().startsWith("<")) {
 				ownerMethod.name = mn.name();
-				ownerMethod.parameters = mn.parameters();
-				ownerMethod.returnType = mn.returnType();
+				ownerMethod.rawDesc(mn.rawDesc());
 			}
 			c.addAttribute(ownerMethod);
 		}

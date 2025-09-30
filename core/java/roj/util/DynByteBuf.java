@@ -249,7 +249,7 @@ public abstract class DynByteBuf extends OutputStream implements CharSequence, B
 		return this;
 	}
 	public final DynByteBuf putZero(int count) {
-		long offset = _unsafeAddr() + preWrite(count);
+		long offset = preWrite(count) + _unsafeAddr();
 		U.setMemory(array(), offset, count, (byte)0);
 		return this;
 	}
@@ -615,6 +615,17 @@ public abstract class DynByteBuf extends OutputStream implements CharSequence, B
 	public final String info() {return getClass().getSimpleName()+"[rp="+rIndex+",wp="+wIndex+",cap="+capacity()+"=>"+maxCapacity()+"]";}
 	public abstract String dump();
 	// endregion
+	public final DynByteBuf writeAlignment(int alignment) {
+		int pad = alignment - (readableBytes() & (alignment-1));
+		if (pad != alignment) putZero(pad);
+		return this;
+	}
+	public final DynByteBuf readAlignment(int alignment) {
+		int pad = alignment - (rIndex & (alignment-1));
+		if (pad != alignment) rIndex += pad;
+		return this;
+	}
+
 	public abstract byte[] toByteArray();
 
 	public final String base64() {return base64(IOUtil.getSharedCharBuf()).toString();}

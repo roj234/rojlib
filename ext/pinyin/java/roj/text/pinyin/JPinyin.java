@@ -1,15 +1,16 @@
 package roj.text.pinyin;
 
 import roj.archive.xz.LZMA2InputStream;
-import roj.collect.*;
-import roj.text.Tokenizer;
+import roj.collect.ArrayList;
+import roj.collect.TrieEntry;
+import roj.collect.TrieTree;
+import roj.compiler.runtime.SwitchMapI;
 import roj.config.node.IntValue;
+import roj.io.ByteInputStream;
 import roj.io.IOUtil;
 import roj.text.CharList;
 import roj.text.FastCharset;
-import roj.util.DynByteBuf;
 
-import java.nio.CharBuffer;
 import java.util.Comparator;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -20,52 +21,60 @@ import java.util.Set;
  * @since 2020/9/30 20:51
  */
 public class JPinyin {
-	private static char[] StringPool;
-	private static int CPBits, CPMask;
+	private static String[] FIRST_TONE, LAST_TONE;
+	private static int toneBits, toneMask;
+	private static byte[] TONE_POOL;
 	private static final TrieTree<Integer> PinyinWords = new TrieTree<>();
-	private static final Int2IntMap FastSwitch = new Int2IntMap(8);
+	private static final SwitchMapI FastSwitch;
+
 	static {
-		// https://github.com/mozillazg/pinyin-data
-		try (LZMA2InputStream in = new LZMA2InputStream(JPinyin.class.getClassLoader().getResourceAsStream("roj/text/pinyin/JPinyin.lzma"), 524288)) {
-			int DATALEN = 1432238;
-			var bb = DynByteBuf.allocateDirect(DATALEN);
-			int i = in.read(bb.address(), DATALEN);
-			bb.wIndex(i);
-			assert i == DATALEN;
+		// 数据生成见roj.datagen.MakePinyinData
+		// 内部数据格式可能随时改动
+		try (var in = ByteInputStream.wrap(new LZMA2InputStream(JPinyin.class.getClassLoader().getResourceAsStream("roj/text/pinyin/JPinyin.lzma"), 65536+32768))) {
+			FIRST_TONE = new String[in.readUnsignedByte()+1];
+			FIRST_TONE[0] = "";
+			LAST_TONE = new String[in.readUnsignedByte()+1];
 
-			int zcpLenByte = bb.readVUInt(), zcpLen = bb.readVUInt();
-			int ycpLenByte = bb.readVUInt(), ycpLen = bb.readVUInt(), mapSize = bb.readVUInt();
-			int zbits = bb.readUnsignedByte(), ybits = bb.readUnsignedByte();
-
-			int mask = (1 << zbits) - 1;
-			CharBuffer zcp = CharBuffer.allocate(zcpLen);
-			FastCharset.GB18030().decodeFixedIn(bb,zcpLenByte,zcp);
-			char[] cp = zcp.array();
-
-			CPBits = ybits;
-			CPMask = (1 << ybits) - 1;
-			CharBuffer ycp = CharBuffer.allocate(ycpLen);
-			FastCharset.GB18030().decodeFixedIn(bb,ycpLenByte,ycp);
-			StringPool = ycp.array();
-
-			while (mapSize-- > 0) {
-				int zref = bb.readInt();
-				int yref = bb.readInt();
-				String key = new String(cp, zref >>> zbits, zref & mask);
-				PinyinWords.put(key, yref);
+			for (int j = 1; j < FIRST_TONE.length; j++) {
+				FIRST_TONE[j] = in.readVUIStr(FastCharset.UTF16BE());
+			}
+			for (int j = 1; j < LAST_TONE.length; j++) {
+				LAST_TONE[j] = in.readVUIStr(FastCharset.UTF16BE());
 			}
 
-			bb.release();
+			int tonePoolLength = in.readInt();
+
+			int skip = 4 - ((int)in.position() & 3);
+			if (skip != 4) in.skipBytes(skip);
+
+			TONE_POOL = in.readBytes(tonePoolLength);
+
+			int newOffset = (int) in.position();
+
+			int count = in.readInt();
+			toneBits = in.readInt();
+			toneMask = (1 << toneBits) - 1;
+
+			for (int i = 0; i < count; i++) {
+				String key = in.readVUIStr(FastCharset.UTF16BE());
+
+				PinyinWords.put(key, in.readInt() - (2 << toneBits));
+
+				skip = 4 - ((int)(in.position()-newOffset) & 3);
+				if (skip != 4) in.skipBytes(skip);
+			}
 		} catch (Exception e) {
 			e.printStackTrace();
 		}
 
-		FastSwitch.put('a', 0);
-		FastSwitch.put('e', 1);
-		FastSwitch.put('i', 2);
-		FastSwitch.put('o', 3);
-		FastSwitch.put('u', 4);
-		FastSwitch.put('v', 5);
+		var map = SwitchMapI.Builder.builder(6);
+		map.add('a', 0);
+		map.add('e', 1);
+		map.add('i', 2);
+		map.add('o', 3);
+		map.add('u', 4);
+		map.add('v', 5);
+		FastSwitch = map.build();
 	}
 	/**
 	 * 这个字是中文吗
@@ -87,7 +96,7 @@ public class JPinyin {
 
 	public static TrieTree<Integer> getPinyinWords() { return PinyinWords; }
 
-	private final HashMap.Entry<IntValue, Integer> entry = new HashMap.Entry<>(new IntValue(), null);
+	private final IntValue myMatchLen = new IntValue();
 
 	public JPinyin() {}
 
@@ -95,7 +104,7 @@ public class JPinyin {
 	public static final int PINYIN_TONE = 1;
 	public static final int PINYIN_TONE_NUMBER = 2;
 	public static final int PINYIN_NONE = 3;
-	public static final int PINYIN_DUOYINZI = 4;
+	public static final int PINYIN_MULTI = 4;
 
 	public String toPinyin(CharSequence s) { return toPinyin(s, "", IOUtil.getSharedCharBuf(), PINYIN_NONE).toString(); }
 	public String toPinyin(CharSequence s, int mode) { return toPinyin(s, "", IOUtil.getSharedCharBuf(), mode).toString(); }
@@ -105,12 +114,12 @@ public class JPinyin {
 
 		boolean hasSplitter = false;
 		while (i < len) {
-			PinyinWords.match(str, i, len, entry);
+			Integer match = PinyinWords.match(str, i, len, myMatchLen);
 
-			int matchLen = entry.getKey().value;
+			int matchLen = myMatchLen.value;
 			if (matchLen > 0) {
 				if (!hasSplitter) sb.append(splitter);
-				addTone(sb, entry.getValue(), matchLen > 1 ? mode|PINYIN_DUOYINZI : mode, splitter);
+				addTone(sb, match, matchLen > 1 ? mode|PINYIN_MULTI : mode, splitter);
 				hasSplitter = true;
 				i += matchLen;
 			} else {
@@ -122,59 +131,57 @@ public class JPinyin {
 		return sb;
 	}
 	private static void addTone(CharList sb, int cpState, int mode, String splitter) {
-		int off = cpState >>> CPBits;
-		int len = off + (cpState & CPMask);
-		int j = findNextNumber(off);
+		int off = cpState & toneMask;
+		int len = off + (cpState >>> toneBits);
 		while (true) {
+			int first = TONE_POOL[off]&0xFF;
+			int last = TONE_POOL[off+1]&0xFF;
 			switch (mode & 3) {
-				case PINYIN_TONE -> addTone(sb, off, j);
-				case PINYIN_FIRST_LETTER -> sb.append(StringPool[off]);
-				default/*case PINYIN_TONE_NUMBER*/ -> sb.append(StringPool, off, j + 1);
-				case PINYIN_NONE -> sb.append(StringPool, off, j);
+				case PINYIN_TONE -> addTone(sb, first, last);
+				case PINYIN_FIRST_LETTER -> sb.append((first == 0 ? LAST_TONE[last] : FIRST_TONE[first]).charAt(0));
+				default/*case PINYIN_TONE_NUMBER*/ -> sb.append(FIRST_TONE[first]).append(LAST_TONE[last]);
+				case PINYIN_NONE -> sb.append(FIRST_TONE[first]).append(LAST_TONE[last], 0, LAST_TONE[last].length()-1);
 			}
-			if ((mode & PINYIN_DUOYINZI) == 0) break;
+			if ((mode & PINYIN_MULTI) == 0) break;
 
-			off = j+1;
-			j = findNextNumber(off);
-			if (j+1 > len) break;
+			if (off == len) break;
+			off += 2;
 
 			sb.append(splitter);
 		}
 	}
-	private static int findNextNumber(int i) {
-		while (i < StringPool.length) {
-			if (Tokenizer.NUMBER.contains(StringPool[i])) return i;
-			i++;
-		}
-		return i;
-	}
-	private static void addTone(CharList sb, int from, int to) {
+	private static void addTone(CharList sb, int first, int last) {
 		String vowels = null;
 
-		int offset = sb.length()-from;
-		sb.append(StringPool, from, to);
+		int start = sb.length();
+
+		sb.append(FIRST_TONE[first]).append(LAST_TONE[last]);
+		char vowelIndex = sb.charAt(sb.length() - 1);
+		if (vowelIndex > '9') return;
+
+		sb.setLength(sb.length()-1);
+		int end = sb.length();
 
 		findProperVowel:
-		for (int i = from; i < to; i++) {
+		for (int i = start; i < end; i++) {
 			// 从前往后查找第一个a,e或ou
 			// 若不存在则从后往前查找i,o,u,v
-			switch (FastSwitch.getOrDefaultInt(StringPool[i], -1)) {
-				case 0: vowels = "aāáăà"; from = i; break findProperVowel;
-				case 1: vowels = "eēéĕè"; from = i; break findProperVowel;
-				case 2: vowels = "iīíĭì"; from = i; break;
-				case 3: vowels = "oōóŏò"; from = i; if (StringPool[i+1] == 'u') break findProperVowel; break;
-				case 4: vowels = "uūúŭù"; from = i; break;
-				case 5: vowels = "üǖǘǚǜ"; from = i; sb.set(offset+i, 'ü'); break;
+			switch (FastSwitch.get(sb.charAt(i))) {
+				case 0: vowels = "aāáăà"; start = i; break findProperVowel;
+				case 1: vowels = "eēéĕè"; start = i; break findProperVowel;
+				case 2: vowels = "iīíĭì"; start = i; break;
+				case 3: vowels = "oōóŏò"; start = i; if (i+1 < end && sb.charAt(i+1) == 'u') break findProperVowel; break;
+				case 4: vowels = "uūúŭù"; start = i; break;
+				case 5: vowels = "üǖǘǚǜ"; start = i; sb.set(i, 'ü'); break;
 			}
 		}
 		// replace v
-		for (int j = from; j < to; j++) {
-			if (StringPool[j] == 'v') sb.set(offset+j, 'ü');
+		for (int j = start; j < end; j++) {
+			if (sb.charAt(j) == 'v') sb.set(j, 'ü');
 		}
 
 		assert vowels != null : "invalid StringPool";
-		char vowel = vowels.charAt(StringPool[to]-'0');
-		sb.set(offset+from, vowel);
+		sb.set(start, vowels.charAt(vowelIndex-'0'));
 	}
 
 	public static Comparator<CharSequence> pinyinSorter() {
@@ -190,9 +197,9 @@ public class JPinyin {
 		var tmp = new LinkedHashSet<String>();
 
 		while (i < len) {
-			PinyinWords.match(str, i, len, entry);
+			Integer match = PinyinWords.match(str, i, len, myMatchLen);
 
-			int matchLen = entry.getKey().value;
+			int matchLen = myMatchLen.value;
 			if (matchLen > 0) {
 				if (sb.length() > 0) {
 					out.add(new String[] {sb.toString()});
@@ -200,9 +207,9 @@ public class JPinyin {
 				}
 
 				tmp.add(str.subSequence(i, i+matchLen).toString());
-				if (matchLen == 1) addTone2(tmp, entry.getValue());
+				if (matchLen == 1) addTone2(tmp, match);
 				else {
-					addTone(sb, entry.getValue(), PINYIN_NONE|PINYIN_DUOYINZI, "");
+					addTone(sb, match, PINYIN_NONE| PINYIN_MULTI, "");
 					tmp.add(sb.toString());
 					sb.clear();
 				}
@@ -222,13 +229,17 @@ public class JPinyin {
 		return out;
 	}
 	private static void addTone2(Set<String> tmp, int cpState) {
-		int off = cpState >>> CPBits;
-		int len = off + (cpState & CPMask);
-		int j = findNextNumber(off);
-		do {
-			tmp.add(new String(StringPool, off, j - off));
-			off = j+1;
-			j = findNextNumber(off);
-		} while (j+1 <= len);
+		int off = cpState & toneMask;
+		int len = off + (cpState >>> toneBits);
+		while (true) {
+			CharList sb = IOUtil.getSharedCharBuf();
+			sb.append(FIRST_TONE[TONE_POOL[off]]).append(LAST_TONE[TONE_POOL[off+1]]);
+			char vowelIndex = sb.charAt(sb.length() - 1);
+			if (vowelIndex <= '9') sb.setLength(sb.length()-1);
+			tmp.add(sb.toString());
+
+			if (off == len) break;
+			off += 2;
+		}
 	}
 }

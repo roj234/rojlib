@@ -20,9 +20,7 @@ public class AutoRedirect extends Timeout {
 	private int maxRedirect, maxRetry;
 	private URI redirectPending;
 
-	public AutoRedirect(HttpRequest req, int timeout, int redirect) {
-		this(req,timeout,redirect,0);
-	}
+	public AutoRedirect(HttpRequest req, int timeout, int redirect) {this(req,timeout,redirect,0);}
 	public AutoRedirect(HttpRequest req, int timeout, int redirect, int retry) {
 		super(timeout, 1000);
 		this.req = req;
@@ -37,7 +35,7 @@ public class AutoRedirect extends Timeout {
 	public void channelOpened(ChannelCtx ctx) throws IOException {
 		HttpHead header = req.response();
 
-		int code = header.getCode();
+		int code = header.statusCode();
 		if (maxRedirect >= 0 && code >= 200 && code < 400) {
 			String location = header.get("location");
 			if (location != null) {
@@ -46,7 +44,7 @@ public class AutoRedirect extends Timeout {
 					throw new FastFailException("AutoRedirect:重定向过多");
 				}
 
-				redirectPending = req.url().resolve(location);
+				redirectPending = req.uri().resolve(location);
 				return;
 			}
 		}
@@ -101,7 +99,7 @@ public class AutoRedirect extends Timeout {
 	public void exceptionCaught(ChannelCtx ctx, Throwable ex) throws Exception {
 		if (maxRetry-- > 0) {
 			req._address = null;
-			req._redirect(ctx.channel(), req.url(), readTimeout);
+			req._redirect(ctx.channel(), req.uri(), readTimeout);
 
 			lastRead = System.currentTimeMillis();
 		} else {

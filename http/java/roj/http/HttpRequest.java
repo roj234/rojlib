@@ -1,5 +1,6 @@
 package roj.http;
 
+import org.intellij.lang.annotations.MagicConstant;
 import org.jetbrains.annotations.ApiStatus;
 import org.jetbrains.annotations.Nullable;
 import roj.collect.ArrayList;
@@ -16,7 +17,10 @@ import roj.util.*;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.net.*;
+import java.net.InetAddress;
+import java.net.InetSocketAddress;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ThreadLocalRandom;
@@ -41,8 +45,11 @@ public abstract class HttpRequest {
 
 	public static final String DOWNLOAD_EOF = "httpReq:dataEnd";
 
-	private static final String DefGet = new String("GET");
-	private String action = DefGet;
+	/**
+	 * 根据是否有请求体自动切换GET和POST
+	 */
+	private static final String UNSET = new String("GET");
+	private String action = UNSET;
 
 	private String protocol, site, path = "/";
 	private volatile Object query;
@@ -70,14 +77,20 @@ public abstract class HttpRequest {
 	}
 
 	// region 设置请求参数
-	public final HttpRequest method(String type) {
+	public final HttpRequest GET() {action = "GET";return this;}
+	public final HttpRequest POST() {action = "POST";return this;}
+	public final HttpRequest PUT() {action = "PUT";return this;}
+	public final HttpRequest HEAD() {action = "HEAD";return this;}
+	public final HttpRequest DELETE() {action = "DELETE";return this;}
+	public final HttpRequest OPTIONS() {action = "OPTIONS";return this;}
+	public final HttpRequest method(@MagicConstant(stringValues = {"GET", "POST", "PUT", "HEAD", "DELETE", "OPTIONS", "TRACE", "CONNECT"}) String type) {
 		if (HttpUtil.getMethodId(type) < 0) throw new IllegalArgumentException(type);
 		action = type;
 		return this;
 	}
 	public final String method() { return action; }
 
-	public final HttpRequest withProxy(@Nullable URI uri) { proxy = uri; return this; }
+	public final HttpRequest proxy(@Nullable URI uri) { proxy = uri; return this; }
 
 	public final HttpRequest header(CharSequence k, String v) { headers.put(k, v); return this; }
 	public final HttpRequest headers(Map<? extends CharSequence, String> map) { headers.putAll(map); return this; }
@@ -87,15 +100,7 @@ public abstract class HttpRequest {
 		return this;
 	}
 
-	@Deprecated
-	public final HttpRequest url(URL url) {
-		try {
-			return url(url.toURI());
-		} catch (URISyntaxException e) {
-			throw new RuntimeException(e);
-		}
-	}
-	public final HttpRequest url(URI url) {
+	public final HttpRequest uri(URI url) {
 		this.protocol = url.getScheme().toLowerCase();
 
 		String host = url.getHost();
@@ -108,17 +113,8 @@ public abstract class HttpRequest {
 		this._address = null;
 		return this;
 	}
-	public final HttpRequest url(String url) {
-		/*this.protocol = protocol.toLowerCase();
-		this.site = site;
-		if (!path.startsWith("/")) path = "/".concat(path);
-		this.path = path;
-		this.query = query;
-
-		_address = null;*/
-		return url(URI.create(url));
-	}
-	public final URI url() {
+	public final HttpRequest uri(String url) {return uri(URI.create(url));}
+	public final URI uri() {
 		String site = this.site;
 		int port = site.lastIndexOf(':');
 		if (port > 0) {
@@ -142,7 +138,7 @@ public abstract class HttpRequest {
 	public final HttpRequest body2(Supplier<InputStream> b) { return setBody(b,2); }
 	private HttpRequest setBody(Object b, int i) {
 		if (b == null) i = 0;
-		else if (action == DefGet) action = "POST";
+		else if (action == UNSET) action = "POST";
 
 		body = b;
 		bodyType = (byte) i;
@@ -297,12 +293,12 @@ public abstract class HttpRequest {
 		return ch.connect(addr, timeout);
 	}
 	// region 一次连接
-	public final HttpClient execute() throws IOException { return execute(DEFAULT_TIMEOUT); }
-	public final HttpClient execute(int timeout) throws IOException {
+	public final HttpResponse execute() throws IOException { return execute(DEFAULT_TIMEOUT); }
+	public final HttpResponse execute(int timeout) throws IOException {
 		headers.putIfAbsent("connection", "close");
 
 		var ch = MyChannel.openTCP();
-		var client = new HttpClient();
+		var client = new HttpResponseImpl();
 		ch.addLast("h11@timer", new Timeout(timeout, 1000))
 		  .addLast("h11@merger", client);
 		attach(ch, timeout);
@@ -313,9 +309,9 @@ public abstract class HttpRequest {
 	//region 池化连接
 	public static int POOL_KEEPALIVE = 60000;
 
-	public final HttpClient executePooled() throws IOException { return executePooled(DEFAULT_TIMEOUT); }
-	public final HttpClient executePooled(int timeout) throws IOException { return executePooled(timeout, action.equals("GET") || action.equals("HEAD") || action.equals("OPTIONS") ? 1 : -1); }
-	public final HttpClient executePooled(int timeout, int maxRedirect) throws IOException { return executePooled(timeout, maxRedirect, 0); }
+	public final HttpResponse executePooled() throws IOException { return executePooled(DEFAULT_TIMEOUT); }
+	public final HttpResponse executePooled(int timeout) throws IOException { return executePooled(timeout, action.equals("GET") || action.equals("HEAD") || action.equals("OPTIONS") ? 1 : -1); }
+	public final HttpResponse executePooled(int timeout, int maxRedirect) throws IOException { return executePooled(timeout, maxRedirect, 0); }
 
 	/**
 	 * 使用连接池执行HTTP请求，支持重定向和重试机制
@@ -326,10 +322,10 @@ public abstract class HttpRequest {
 	 * @return HttpClient实例用于处理响应
 	 * @throws IOException 如果连接失败或发生I/O错误
 	 */
-	public final HttpClient executePooled(int timeout, int maxRedirect, int maxRetry) throws IOException {
+	public final HttpResponse executePooled(int timeout, int maxRedirect, int maxRetry) throws IOException {
 		headers.putIfAbsent("connection", "keep-alive");
 
-		HttpClient client = new HttpClient();
+		HttpResponseImpl client = new HttpResponseImpl();
 
 		Pool pool = POOLS.computeIfAbsent(getAddress(), NEW_POOL);
 		pool.executePooled(this, client, timeout, new AutoRedirect(this, timeout, maxRedirect, maxRetry));
@@ -365,7 +361,7 @@ public abstract class HttpRequest {
 
 		@Override
 		public void onEvent(ChannelCtx ctx, Event event) {
-			if (event.id.equals(HttpClient.SHC_FINISH)) {
+			if (event.id.equals(HttpResponseImpl.HC_FINISH)) {
 				_add(ctx, event);
 			} else if (event.id.equals(Timeout.READ_TIMEOUT)) {
 				AtomicLong aLong = ctx.attachment(SLEEP);
@@ -403,7 +399,7 @@ public abstract class HttpRequest {
 			}
 		}
 
-		void executePooled(HttpRequest request, HttpClient client, int timeout, ChannelHandler timer) throws IOException {
+		void executePooled(HttpRequest request, HttpResponseImpl client, int timeout, ChannelHandler timer) throws IOException {
 			while (true) {
 				if (size > 0) {
 					lock.lock();
@@ -413,7 +409,7 @@ public abstract class HttpRequest {
 						if (!ch.isOutputOpen()) continue;
 						lock.unlock();
 
-						HttpClient shc = (HttpClient) ch.handler("h11@merger").handler();
+						HttpResponseImpl shc = (HttpResponseImpl) ch.handler("h11@merger").handler();
 						if (shc.retain(request, client)) {
 							ch.remove("super_timer");
 							ch.addBefore("h11@merger", "super_timer", timer);
@@ -493,12 +489,12 @@ public abstract class HttpRequest {
 		@Override public final void channelOpened(ChannelCtx ctx) throws IOException {
 			ctx.channel().handler("h11@timer").removeSelf();
 
-			var httpClient = HttpClient.findHandler(ctx);
+			var httpClient = HttpResponseImpl.findOwner(ctx);
 			var head = ((HttpRequest) httpClient.handler()).response();
 			httpClient.removeSelf();
 
 			var accept = head.get("sec-websocket-accept");
-			if (accept == null || !accept.equals(acceptKey)) throw new FastFailException("对等端不是websocket("+head.getCode()+")", head);
+			if (accept == null || !accept.equals(acceptKey)) throw new FastFailException("对等端不是websocket("+head.statusCode()+")", head);
 
 			var deflate = head.getHeaderValue("sec-websocket-extensions", "permessage-deflate");
 			if (deflate != null) enableZip();
@@ -542,7 +538,7 @@ public abstract class HttpRequest {
 	// region Internal
 	void _redirect(MyChannel ch, URI url, int timeout) throws IOException {
 		var oldAddr = _address;
-		var newAddr = url(url).getAddress();
+		var newAddr = uri(url).getAddress();
 
 		if (newAddr.equals(oldAddr)) {
 			ChannelCtx h = ch.handler("h11@client");
@@ -562,6 +558,10 @@ public abstract class HttpRequest {
 				ch1.movePipeFrom(ch);
 				ch.close();
 				ch = ch1;
+			}
+
+			if ("https".equals(protocol)) {
+				ch.replace("h11@tls", new TLSClient(newAddr.getHostName(), newAddr.getPort()));
 			}
 
 			var addr = Net.applyProxy(proxy, newAddr, ch);

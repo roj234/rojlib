@@ -25,13 +25,13 @@ public class XmlParser extends TextParser {
 	private static final short
 		COMMENT = 11, CDATA_STRING = 12,
 		tag_start = 13, tag_start_close = 14, tag_end = 15, tag_end_close = 16,
-		header_start = 17, header_end = 18, equ = 19;
+		procInsnBegin = 17, procInsnEnd = 18, equ = 19, declaration = 20;
 
 	private static final TrieTree<Token> XML_TOKENS = new TrieTree<>();
 	private static final BitSet XML_LENDS = new BitSet();
 	static {
 		addKeywords(XML_TOKENS, TRUE, "true", "false");
-		addSymbols(XML_TOKENS, XML_LENDS, tag_start, "<", "</", ">", "/>", "<?", "?>", "=");
+		addSymbols(XML_TOKENS, XML_LENDS, tag_start, "<", "</", ">", "/>", "<?", "?>", "=", "<!");
 		addWhitespace(XML_LENDS);
 
 		XML_TOKENS.put("<!--", new Token().init(COMMENT, -99, "-->"));
@@ -79,7 +79,7 @@ public class XmlParser extends TextParser {
 		emitter.emitList();
 
 		Token w = next();
-		if (w.type() != header_start) {
+		if (w.type() != procInsnBegin) {
 			retractWord();
 			emitter.setProperty(XmlEmitter.HEADLESS, true);
 		} else {
@@ -88,21 +88,28 @@ public class XmlParser extends TextParser {
 			}
 
 			w = next();
-			if (w.type() != header_end) {
+			if (w.type() != procInsnEnd) {
 				emitter.emitMap();
 				do {
-					if (w.type() != LITERAL) {
-						if (w.type() != STRING || (flags & LENIENT) == 0)
-							throw err("期待属性名称");
-					}
+					if (w.type() != LITERAL && (flags & LENIENT) == 0)
+						throw err("无效的属性名称: "+w);
 					w = parseAttribute(w);
-				} while (w.type() != header_end);
+				} while (w.type() != procInsnEnd);
 				emitter.pop();
 			}
 		}
 
-		while (true) {
+		w = next();
+		if (w.type() == declaration) {
 			w = next();
+			if (w.type() != LITERAL || !w.text().equalsIgnoreCase("DOCTYPE")) {
+				throw err("期待DOCTYPE指令");
+			}
+			parseDoctype();
+			w = next();
+		}
+
+		while (true) {
 			if (w.type() != tag_start) {
 				if (w.type() == COMMENT) {
 					emitter.comment(w.text());
@@ -113,10 +120,28 @@ public class XmlParser extends TextParser {
 					break;
 			}
 			parseElement();
+			w = next();
 		}
 
 		if (w.type() != EOF) unexpected(w.text(), "eof");
 
+		emitter.pop();
+	}
+
+	private void parseDoctype() throws ParseException {
+		emitter.emitList();
+		emitter.emit("!DOCTYPE");
+		emitter.emitMap();
+
+		Token w;
+		do {
+			w = next();
+			if (w.type() == tag_end) break;
+			emitter.emitKey(w.text());
+			emitter.emitNull();
+		} while (true);
+
+		emitter.pop();
 		emitter.pop();
 	}
 
@@ -132,16 +157,14 @@ public class XmlParser extends TextParser {
 		if (w.type() != tag_end_close && w.type() != tag_end) {
 			emitter.emitMap();
 			do {
-				if (w.type() != LITERAL) {
-					if (w.type() != STRING || (flags & LENIENT) == 0)
-						throw err("期待属性名称");
-				}
+				if (w.type() != LITERAL && (flags & LENIENT) == 0)
+					throw err("无效的属性名称: "+w);
 				w = parseAttribute(w);
 			} while (w.type() != tag_end_close && w.type() != tag_end);
 			emitter.pop();
 		}
 
-		if (w.type() == tag_end_close || name.equals("!DOCTYPE") || !needCLOSE.test(name)) {
+		if (w.type() == tag_end_close || !needCLOSE.test(name)) {
 			emitter.setProperty(XmlEmitter.SHORT_TAG, true);
 			emitter.pop();
 			flags = prevFlag;
@@ -255,38 +278,6 @@ public class XmlParser extends TextParser {
 	public XmlParser setCloseTagPredicate(Predicate<String> p) {
 		this.needCLOSE = p == null ? Helpers.alwaysTrue() : p;
 		return this;
-	}
-
-	@Override
-	@SuppressWarnings("fallthrough")
-	public final Token readWord() throws ParseException {
-		CharSequence in = input;
-		int i = index;
-
-		while (i < in.length()) {
-			char c = in.charAt(i);
-			switch (SIGNED_NUMBER_C2C.getOrDefaultInt(c, 0)) {
-				case C_MAY__NUMBER_SIGN:
-					if (i+1 < in.length() && NUMBER.contains(in.charAt(i+1))) {
-						prevIndex = index = i;
-						return readDigit(true);
-					}
-					// fall to literal(symbol)
-				default:
-					prevIndex = index = i;
-					Token w = readSymbol();
-					if (w == COMMENT_RETRY_HINT) {i = index;continue;}
-					return w;
-				case C_NUMBER: prevIndex = index = i; return readDigit(false);
-				case C_STRING:
-					prevIndex = i;
-					index = i+1;
-					return formClip(STRING, readSlashString(c, true));
-				case C_WHITESPACE: i++;
-			}
-		}
-		index = i;
-		return eof();
 	}
 
 	/**

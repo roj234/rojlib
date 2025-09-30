@@ -1,206 +1,133 @@
+-- see Asn1Context for parser/encoder details
 
+AttributeTypeAndValue ::= SEQUENCE {
+	type OBJECT IDENTIFIER,
+	value ANY DEFINED BY type
+}
+RelativeDistinguishedName ::= SET SIZE (1 .. MAX) OF AttributeTypeAndValue
+RDNSequence ::= SEQUENCE OF RelativeDistinguishedName
+Name ::= CHOICE { rdnSequence RDNSequence }
 
-	AttributeTypeAndValue ::= SEQUENCE {
-		type OBJECT IDENTIFIER,
-		value ANY DEFINED BY type
-	}
-	RelativeDistinguishedName ::= SET SIZE (1 .. MAX) OF AttributeTypeAndValue
-	RDNSequence ::= SEQUENCE OF RelativeDistinguishedName
-	Name ::= CHOICE { rdnSequence RDNSequence }
+AlgorithmIdentifier ::= SEQUENCE {
+  algorithm OBJECT IDENTIFIER,
+  parameters ANY DEFINED BY algorithm OPTIONAL
+}
 
-   AlgorithmIdentifier ::= SEQUENCE {
-     algorithm OBJECT IDENTIFIER,
-     parameters ANY DEFINED BY algorithm OPTIONAL
-      }
+ContentEncryptionAlgorithmIdentifier ::= AlgorithmIdentifier
+DigestAlgorithmIdentifier ::= AlgorithmIdentifier
+DigestEncryptionAlgorithmIdentifier ::= AlgorithmIdentifier
+SignatureAlgorithmIdentifier ::= AlgorithmIdentifier
 
-   ContentEncryptionAlgorithmIdentifier ::= AlgorithmIdentifier
-   DigestAlgorithmIdentifier ::= AlgorithmIdentifier
-   DigestEncryptionAlgorithmIdentifier ::= AlgorithmIdentifier
-   SignatureAlgorithmIdentifier ::= AlgorithmIdentifier
+CertificateSerialNumber::= INTEGER
+IssuerAndSerialNumber ::= SEQUENCE {
+  issuer Name,
+  serialNumber CertificateSerialNumber
+}
 
-   CertificateSerialNumber::= INTEGER
-   IssuerAndSerialNumber ::= SEQUENCE {
-     issuer Name,
-     serialNumber CertificateSerialNumber }
+Signature ::= BIT STRING
 
-      Signature ::= BIT STRING
+CMSVersion ::= INTEGER { v0(0), v1(1), v2(2), v3(3), v4(4) }
+Version ::= INTEGER { v1(0), v2(1), v3(2) }
 
-      CMSVersion ::= INTEGER { v0(0), v1(1), v2(2), v3(3), v4(4) }
-      Version ::= INTEGER { v1(0), v2(1), v3(2) }
+Attribute ::= SEQUENCE {
+  type OBJECT IDENTIFIER,
+  value SET SIZE(1 .. MAX) OF ANY
+}
 
-   Attribute ::= SEQUENCE {
-     type OBJECT IDENTIFIER,
-     value SET SIZE(1 .. MAX) OF ANY
-   }
-   Attributes ::= SET OF Attribute
-   UnauthAttributes ::= SET SIZE(1 .. MAX) OF Attribute
-   SignedAttributes ::= SET SIZE(1 .. MAX) OF Attribute
-   UnsignedAttributes ::= SET SIZE(1 .. MAX) OF Attribute
+Attributes ::= SET OF Attribute
+UnauthAttributes ::= SET SIZE(1 .. MAX) OF Attribute
+SignedAttributes ::= SET SIZE(1 .. MAX) OF Attribute
+UnsignedAttributes ::= SET SIZE(1 .. MAX) OF Attribute
 
-    SubjectKeyIdentifier ::= OCTET STRING
-    SignatureValue ::= OCTET STRING
-    SignerIdentifier ::= CHOICE {
-    	issuerAndSerialNumber IssuerAndSerialNumber,
-    	subjectKeyIdentifier [0] IMPLICIT SubjectKeyIdentifier
-    }
-    SignerInfo ::= SEQUENCE {
-    	version CMSVersion,
-    	sid SignerIdentifier,
-    	digestAlgorithm DigestAlgorithmIdentifier,
-    	signedAttrs [0] IMPLICIT SignedAttributes OPTIONAL,
-    	signatureAlgorithm SignatureAlgorithmIdentifier,
-    	signature SignatureValue,
-    	unsignedAttrs[1] IMPLICIT UnsignedAttributes OPTIONAL
-    }
+SubjectKeyIdentifier ::= OCTET STRING
+SignatureValue ::= OCTET STRING
+SignerIdentifier ::= CHOICE {
+ 	issuerAndSerialNumber IssuerAndSerialNumber,
+ 	subjectKeyIdentifier [0] IMPLICIT SubjectKeyIdentifier
+}
 
-   -- ignored subtree parse
-   Certificate ::= SEQUENCE {}
+SignerInfo ::= SEQUENCE {
+ 	version CMSVersion,
+ 	sid SignerIdentifier,
+ 	digestAlgorithm DigestAlgorithmIdentifier,
+ 	signedAttrs [0] IMPLICIT SignedAttributes OPTIONAL,
+ 	signatureAlgorithm SignatureAlgorithmIdentifier,
+ 	signature SignatureValue,
+ 	unsignedAttrs[1] IMPLICIT UnsignedAttributes OPTIONAL
+}
 
-   ExtendedCertificateInfo ::= SEQUENCE {
-     version CMSVersion,
-     certificate Certificate,
-     attributes UnauthAttributes
-      }
+-- ignored subtree parse
+Certificate ::= SEQUENCE {}
 
-   ExtendedCertificate ::= SEQUENCE {
-     extendedCertificateInfo ExtendedCertificateInfo,
-     signatureAlgorithm SignatureAlgorithmIdentifier,
-     signature Signature
-      }
+ExtendedCertificateInfo ::= SEQUENCE {
+  version CMSVersion,
+  certificate Certificate,
+  attributes UnauthAttributes }
 
-   Digest ::= OCTET STRING
+ExtendedCertificate ::= SEQUENCE {
+  extendedCertificateInfo ExtendedCertificateInfo,
+  signatureAlgorithm SignatureAlgorithmIdentifier,
+  signature Signature
+}
 
-   -- ignored subtree parse
-   CertificateList ::= SEQUENCE {}
-   CertificateRevocationLists ::= SET OF CertificateList
+Digest ::= OCTET STRING
 
-   ExtendedCertificateOrCertificate ::= CHOICE {
-     certificate Certificate, -- X.509
+-- ignored subtree parse
+CertificateList ::= SEQUENCE {}
+CertificateRevocationLists ::= SET OF CertificateList
 
-     extendedCertificate [0] IMPLICIT ExtendedCertificate }
+ExtendedCertificateOrCertificate ::= CHOICE {
+  certificate Certificate, -- X.509
+  extendedCertificate [0] IMPLICIT ExtendedCertificate
+}
 
-   ExtendedCertificatesAndCertificates ::= SET OF ExtendedCertificateOrCertificate
+ExtendedCertificatesAndCertificates ::= SET OF ExtendedCertificateOrCertificate
 
-   KeyEncryptionAlgorithmIdentifier ::=
-     AlgorithmIdentifier
+KeyEncryptionAlgorithmIdentifier ::= AlgorithmIdentifier
 
-   Version ::= INTEGER
+Version ::= INTEGER
 
-   ContentType ::= OBJECT IDENTIFIER
+ContentType ::= OBJECT IDENTIFIER
 
-   ContentInfo ::= SEQUENCE {
-     contentType ContentType,
-     content
-       [0] EXPLICIT ANY DEFINED BY contentType OPTIONAL }
+ContentInfo ::= SEQUENCE {
+  contentType ContentType,
+  content [0] EXPLICIT ANY DEFINED BY contentType OPTIONAL
+}
 
-   Data ::= OCTET STRING
+Data ::= OCTET STRING
 
-   DigestAlgorithmIdentifiers ::= SET OF DigestAlgorithmIdentifier
+DigestAlgorithmIdentifiers ::= SET OF DigestAlgorithmIdentifier
 
-   SignerInfos ::= SET OF SignerInfo
+SignerInfos ::= SET OF SignerInfo
 
-   SignedData ::= SEQUENCE {
-     version Version,
-     digestAlgorithms DigestAlgorithmIdentifiers,
-     contentInfo ContentInfo,
-     certificates
-        [0] IMPLICIT ExtendedCertificatesAndCertificates
-          OPTIONAL,
-     crls
-       [1] IMPLICIT CertificateRevocationLists OPTIONAL,
-     signerInfos SignerInfos }
+SignedData ::= SEQUENCE {
+  version Version,
+  digestAlgorithms DigestAlgorithmIdentifiers,
+  contentInfo ContentInfo,
+  certificates[0] IMPLICIT ExtendedCertificatesAndCertificates OPTIONAL,
+  crls [1] IMPLICIT CertificateRevocationLists OPTIONAL,
+  signerInfos SignerInfos
+}
 
-   EncryptedDigest ::= OCTET STRING
+MessageImprint ::= SEQUENCE {
+    digestAlgorithm DigestAlgorithmIdentifier
+    digest OCTET_STRING
+}
 
-   SignerInfo ::= SEQUENCE {
-     version Version,
-     issuerAndSerialNumber IssuerAndSerialNumber,
-     digestAlgorithm DigestAlgorithmIdentifier,
-     authenticatedAttributes
-       [0] IMPLICIT Attributes OPTIONAL,
-     digestEncryptionAlgorithm
-       DigestEncryptionAlgorithmIdentifier,
-     encryptedDigest EncryptedDigest,
-     unauthenticatedAttributes
-       [1] IMPLICIT Attributes OPTIONAL }
+-- 这不是从RFC上面摘抄的了
+TimestampToken ::= SEQUENCE {
+    version Version,
+    policy OID,
+    messageImprint MessageImprint,
+    serialNumber CertificateSerialNumber,
+    genTime GENERALIZED_TIME,
+    -- nonce = NUMBER ?
+    other SET OF ANY
+}
 
-   DigestInfo ::= SEQUENCE {
-     digestAlgorithm DigestAlgorithmIdentifier,
-     digest Digest }
+pkcs-7 OBJECT IDENTIFIER ::= { iso(1) member-body(2) US(840) rsadsi(113549) pkcs(1) 7 }
 
-   EncryptedKey ::= OCTET STRING
-   KeyTransRecipientInfo ::= SEQUENCE {
-   	  version CMSVersion,
-   	  originator [0] EXPLICIT OriginatorIdentifierOrKey,
-   	  ukm [1] EXPLICIT UserKeyingMaterial OPTIONAL,
-   	  keyEncryptionAlgorithm KeyEncryptionAlgorithmIdentifier,
-   	  recipientEncryptedKeys RecipientEncryptedKeys
-   }
-   RecipientInfo ::= CHOICE {
-   	  ktri KeyTransRecipientInfo,
-   	  kari [1] IMPLICIT KeyAgreeRecipientInfo,
-   	  kekri [2] IMPLICIT KEKRecipientInfo,
-   	  pwri [3] IMPLICIT PasswordRecipientInfo,
-   	  ori [4] IMPLICIT OtherRecipientInfo
-   }
-
-   RecipientInfos ::= SET OF RecipientInfo
-
-   EncryptedContent ::= OCTET STRING
-
-   EncryptedContentInfo ::= SEQUENCE {
-     contentType ContentType,
-     contentEncryptionAlgorithm
-       ContentEncryptionAlgorithmIdentifier,
-     encryptedContent
-       [0] IMPLICIT EncryptedContent OPTIONAL }
-
-   EnvelopedData ::= SEQUENCE {
-     version Version,
-     recipientInfos RecipientInfos,
-     encryptedContentInfo EncryptedContentInfo }
-
-
-   EncryptedKey ::= OCTET STRING
-
-   RecipientInfo ::= SEQUENCE {
-     version Version,
-     issuerAndSerialNumber IssuerAndSerialNumber,
-     keyEncryptionAlgorithm
-
-       KeyEncryptionAlgorithmIdentifier,
-     encryptedKey EncryptedKey }
-
-   SignedAndEnvelopedData ::= SEQUENCE {
-     version Version,
-     recipientInfos RecipientInfos,
-     digestAlgorithms DigestAlgorithmIdentifiers,
-     encryptedContentInfo EncryptedContentInfo,
-     certificates
-        [0] IMPLICIT ExtendedCertificatesAndCertificates
-          OPTIONAL,
-     crls
-       [1] IMPLICIT CertificateRevocationLists OPTIONAL,
-     signerInfos SignerInfos }
-
-   DigestedData ::= SEQUENCE {
-     version Version,
-     digestAlgorithm DigestAlgorithmIdentifier,
-     contentInfo ContentInfo,
-     digest Digest }
-
-   EncryptedData ::= SEQUENCE {
-     version Version,
-     encryptedContentInfo EncryptedContentInfo }
-
-
-   pkcs-7 OBJECT IDENTIFIER ::= { iso(1) member-body(2) US(840) rsadsi(113549) pkcs(1) 7 }
-
-   -- 注意：parser不支持通过 -- 结束之后的注释
-   -- 注意：这里是故意大写方便unmarshalAny函数
-   Data OBJECT IDENTIFIER ::= { pkcs-7 1 }
-   SignedData OBJECT IDENTIFIER ::= { pkcs-7 2 }
-   EnvelopedData OBJECT IDENTIFIER ::= { pkcs-7 3 }
-   SignedAndEnvelopedData OBJECT IDENTIFIER ::= { pkcs-7 4 }
-   DigestedData OBJECT IDENTIFIER ::= { pkcs-7 5 }
-   EncryptedData OBJECT IDENTIFIER ::= { pkcs-7 6 }
+-- 注意：parser不支持通过 -- 结束之后的注释
+-- 注意：这里是故意大写方便unmarshalAny函数
+Data OBJECT IDENTIFIER ::= { pkcs-7 1 }
+SignedData OBJECT IDENTIFIER ::= { pkcs-7 2 }

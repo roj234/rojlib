@@ -3,7 +3,7 @@ package roj.plugins.web.flow;
 import roj.collect.RingBuffer;
 import roj.collect.ToLongMap;
 import roj.http.server.ContentWriter;
-import roj.http.server.ResponseHeader;
+import roj.http.server.Response;
 import roj.net.ChannelCtx;
 import roj.net.ChannelHandler;
 import roj.net.MyChannel;
@@ -48,7 +48,7 @@ class FlowController extends SpeedLimiter implements ChannelHandler {
 	}
 
 	@Override
-	public void handlerAdded(ChannelCtx ctx) {ctx.prev(ResponseHeader.class).limitSpeed(this);}
+	public void handlerAdded(ChannelCtx ctx) {ctx.prev(Response.class).limitSpeed(this);}
 
 	@Override
 	public synchronized void handlerRemoved(ChannelCtx ctx) {
@@ -66,7 +66,7 @@ class FlowController extends SpeedLimiter implements ChannelHandler {
 	public void channelOpened(ChannelCtx ctx) throws IOException {
 		// is address limiter
 		if (getLimitGroup().name == null) {
-			ResponseHeader prev = Objects.requireNonNull(ctx.prev(ResponseHeader.class));
+			Response prev = Objects.requireNonNull(ctx.prev(Response.class));
 			var request = prev.request();
 			var pipe = owner.loginCheck(this, request);
 			if (pipe == null) ctx.removeSelf();

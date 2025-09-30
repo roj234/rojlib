@@ -25,7 +25,8 @@ public interface DownloadListener extends Cancellable {
 
 		@Override public void onStart(Downloader task) {
 			progressBar.setName(task.owner.file.getName());
-			progressBar.addTotal(task.getTotal());
+			if (task.getTotal() < 0) progressBar.setUnlimited();
+			else progressBar.addTotal(task.getTotal());
 			progressBar.increment(task.getDownloaded());
 			workers.add(task);
 		}

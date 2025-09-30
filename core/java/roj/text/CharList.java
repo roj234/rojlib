@@ -3,7 +3,6 @@ package roj.text;
 import org.jetbrains.annotations.NotNull;
 import roj.collect.BitSet;
 import roj.collect.CharMap;
-import roj.collect.HashMap;
 import roj.collect.TrieTree;
 import roj.config.node.IntValue;
 import roj.io.IOUtil;
@@ -180,13 +179,12 @@ public class CharList implements CharSequence, Appendable {
 	public final boolean endsWith(CharSequence s) { return s.length() == 0 || (len >= s.length() && doMatch(s, len-s.length(), len-s.length()+1) >= 0); }
 
 	public final int indexOf(TrieTree<?> map, int pos) {
-		var entry = new HashMap.Entry<>(new IntValue(), null);
+		IntValue matchLen = new IntValue();
 		while (pos < len) {
-			map.match(this, pos, len, Helpers.cast(entry));
-			int len = entry.getKey().value;
+			map.match(this, pos, len, matchLen);
+			int len = matchLen.value;
 			if (len < 0) {
-				pos++;
-				continue;
+				pos++; continue;
 			}
 
 			return pos;
@@ -509,12 +507,12 @@ public class CharList implements CharSequence, Appendable {
 	// endregion
 	// region replace
 	public final CharList replace(char a, char b) { return replace(a, b, 0, len); }
-	public final CharList replace(char a, char b, int off, int len) {
-		checkBounds(off,off+len,this.len);
+	public final CharList replace(char a, char b, int start, int end) {
+		checkBounds(start,end,len);
 		if (a == b) return this;
 		char[] c = list;
-		for (; off < len; off++)
-			if (c[off] == a) c[off] = b;
+		for (; start < end; start++)
+			if (c[start] == a) c[start] = b;
 		return this;
 	}
 
@@ -573,7 +571,7 @@ public class CharList implements CharSequence, Appendable {
 	 * 在替换结果中搜索
 	 * "aaaa".replaceInReplaceResult("aa","a") => "a"
 	 */
-	public final CharList replaceInReplaceResult(CharSequence str, CharSequence target) {
+	public final CharList replaceRecursively(CharSequence str, CharSequence target) {
 		int pos = len;
 		while ((pos = lastIndexOf(str, pos)) != -1) {
 			replace(pos, pos+str.length(), target);
@@ -591,17 +589,17 @@ public class CharList implements CharSequence, Appendable {
 
 		int pos = 0;
 
-		HashMap.Entry<IntValue, String> entry = new HashMap.Entry<>(new IntValue(), null);
+		IntValue matchLen = new IntValue();
 		while (pos < len) {
-			map.match(this, pos, len, entry);
-			int len = entry.getKey().value;
+			String match = map.match(this, pos, len, matchLen);
+			int len = matchLen.value;
 			if (len < 0) {
 				pos++;
 				continue;
 			}
 
 			if (prevI == 0) out = createReplaceOutputList();
-			out.append(list, prevI, pos).append(entry.getValue());
+			out.append(list, prevI, pos).append(match);
 
 			pos += len;
 			prevI = pos;

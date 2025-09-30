@@ -61,7 +61,7 @@ public final class ZipOutput implements AutoCloseable {
 	private boolean shouldCompress(String name) {return compress && !ArchiveUtils.INCOMPRESSIBLE_FILE_EXT.contains(IOUtil.extensionName(name));}
 
 	public void set(String name, @Nullable ByteList data) throws IOException {
-		if (data == null && (incremental || archive.getEntry(name) == null)) return;
+		if (data == null && (!incremental || archive.getEntry(name) == null)) return;
 
 		if (incremental) {
 			noMatch:
@@ -105,7 +105,7 @@ public final class ZipOutput implements AutoCloseable {
 
 	public void setStream(String name, ExceptionalSupplier<InputStream, IOException> data, long modTime) throws IOException {
 		if (incremental) {
-			archive.putStream(name, data, compress);
+			archive.putStream(name, data, shouldCompress(name));
 		} else {
 			ZEntry entry = new ZEntry(name);
 			entry.setMethod(shouldCompress(name) ? ZipEntry.DEFLATED : ZipEntry.STORED);

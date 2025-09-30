@@ -84,14 +84,14 @@ public class AutoModule implements Processor {
 	public String name() {return "自动模块化";}
 
 	@Override
-	public void afterCompile(BuildContext ctx) {
-		if (ctx.increment > BuildContext.INC_REBUILD) return;
+	public void afterCompilePre(BuildContext ctx) {
+		if (ctx.getIncrement() > BuildContext.INC_REBUILD) return;
 
 		var moduleName = ctx.project.getVariables().getOrDefault("fmd:auto_module:name", ctx.project.getName());
 		if (!moduleName.isEmpty()) {
 			HashSet<String> packages = new HashSet<>();
 
-			for (Context context : ctx.getClasses()) {
+			for (Context context : ctx.getChangedClasses()) {
 				String className = context.getClassName();
 				if (className.startsWith("module-info")) return;
 

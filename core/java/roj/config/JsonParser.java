@@ -1,5 +1,6 @@
 package roj.config;
 
+import org.intellij.lang.annotations.Language;
 import org.intellij.lang.annotations.MagicConstant;
 import roj.collect.BitSet;
 import roj.collect.HashMap;
@@ -38,7 +39,7 @@ public class JsonParser extends TextParser implements StreamParser {
 		JSON_TOKENS.put("'", new Token().init(0, ST_LITERAL_STRING, "'"));
 	}
 
-	public static ConfigValue parses(CharSequence text) throws ParseException { return new JsonParser().parse(text); }
+	public static ConfigValue parses(@Language("JSON5") String text) throws ParseException { return new JsonParser().parse(text); }
 
 	public JsonParser() {this(0);}
 	public JsonParser(@MagicConstant(flags = {COMMENT, LENIENT, NO_DUPLICATE_KEY, ORDERED_MAP}) int flags) {

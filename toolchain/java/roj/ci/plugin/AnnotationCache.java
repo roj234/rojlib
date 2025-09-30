@@ -20,8 +20,8 @@ public class AnnotationCache implements Processor {
 	public String name() {return "注解缓存提供程序";}
 
 	@Override
-	public void afterCompile(BuildContext ctx) {
-		if (ctx.updateCount > 0 && "true".equals(ctx.project.getVariables().getOrDefault("fmd:annotation_cache", "true"))) {
+	public void afterCompilePost(BuildContext ctx) {
+		if (ctx.classesHaveChanged() && "true".equals(ctx.project.getVariables().getOrDefault("fmd:annotation_cache", "true"))) {
 			var repo = new AnnotationRepo();
 
 			Set<String> whitelist = new HashSet<>(TextUtil.split(ctx.project.getVariables().getOrDefault("fmd:annotation_inrepo", ""), ';'));

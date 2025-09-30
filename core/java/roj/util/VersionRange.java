@@ -2,6 +2,8 @@ package roj.util;
 
 import roj.text.CharList;
 
+import java.util.List;
+import java.util.Objects;
 import java.util.regex.Matcher;
 
 /**
@@ -20,7 +22,7 @@ import java.util.regex.Matcher;
  * <p>示例：</p>
  * <pre>
  * VersionRange range = VersionRange.parse("[1.0,2.0)");
- * boolean suitable = range.suitable(new ArtifactVersion("1.5"));
+ * boolean suitable = range.contains(new ArtifactVersion("1.5"));
  * </pre>
  *
  * <p>注意：此类是不可变的，</p>
@@ -28,7 +30,7 @@ import java.util.regex.Matcher;
  * @since 2023/1/7 22:12
  */
 public final class VersionRange {
-	private ArtifactVersion lower, upper;
+	private ArtifactVersion lowerBound, upperBound;
 	private boolean lowerInclusive, upperInclusive;
 
 	public static VersionRange parse(String s) {
@@ -44,14 +46,14 @@ public final class VersionRange {
 					range.lowerInclusive = true;
 					i++;
 				}
-				range.lower = new ArtifactVersion(s.substring(i).trim());
+				range.lowerBound = new ArtifactVersion(s.substring(i).trim());
 
 				return range;
 			}
 			case '=' -> {
 				int i = 1;
 				if (s.charAt(i) == '=') i++;
-				range.lower = range.upper = new ArtifactVersion(s.substring(i).trim());
+				range.lowerBound = range.upperBound = new ArtifactVersion(s.substring(i).trim());
 				return range;
 			}
 			case '<' -> {
@@ -60,26 +62,29 @@ public final class VersionRange {
 					range.upperInclusive = true;
 					i++;
 				}
-				range.upper = new ArtifactVersion(s.substring(i).trim());
+				range.upperBound = new ArtifactVersion(s.substring(i).trim());
 
 				return range;
 			}
 			case '~' -> {
 				var min = new ArtifactVersion(s.substring(1).trim());
-				range.lower = min;
+				range.lowerBound = min;
 				range.lowerInclusive = true;
 
 				Matcher semVer = ArtifactVersion.SEMVER.matcher(min.toString());
 				var version = new CharList().append(semVer.group(1)).append('.').append(Integer.parseInt(semVer.group(2))+1).append('.').append(semVer.group(3));
 				if (semVer.group(4) != null) version.append('-').append(semVer.group(4));
 
-				range.upper = new ArtifactVersion(version.toStringAndFree());
+				range.upperBound = new ArtifactVersion(version.toStringAndFree());
 
 				return range;
 			}
 			case '[' -> range.lowerInclusive = true;
 			case '(' -> {}
-			default -> throw new IllegalArgumentException("版本范围格式错误: "+s);
+			default -> {
+				range.lowerBound = range.upperBound = new ArtifactVersion(s);
+				return range;
+			}
 		}
 
 		c = s.charAt(s.length()-1);
@@ -88,19 +93,19 @@ public final class VersionRange {
 
 		int pos = s.indexOf(',');
 		if (pos < 0) {
-			range.lower = range.upper = new ArtifactVersion(s.substring(1, s.length()-1).trim());
+			range.lowerBound = range.upperBound = new ArtifactVersion(s.substring(1, s.length()-1).trim());
 		} else {
 			String lower = s.substring(1, pos).trim();
-			if (!lower.isEmpty()) range.lower = new ArtifactVersion(lower);
+			if (!lower.isEmpty()) range.lowerBound = new ArtifactVersion(lower);
 			else if (range.lowerInclusive) throw new IllegalArgumentException("版本范围格式错误: "+s);
 
 			String upper = s.substring(pos+1, s.length()-1).trim();
-			if (!upper.isEmpty()) range.upper = new ArtifactVersion(upper);
+			if (!upper.isEmpty()) range.upperBound = new ArtifactVersion(upper);
 			else if (range.upperInclusive) throw new IllegalArgumentException("版本范围格式错误: "+s);
 		}
 
-		if (range.lower != null && range.upper != null) {
-			int i = range.lower.compareTo(range.upper);
+		if (range.lowerBound != null && range.upperBound != null) {
+			int i = range.lowerBound.compareTo(range.upperBound);
 			if (i == 0) {
 				if (!(range.lowerInclusive & range.upperInclusive)) {
 					throw new IllegalArgumentException("版本范围格式错误: "+s);
@@ -113,15 +118,56 @@ public final class VersionRange {
 		return range;
 	}
 
-	public final boolean suitable(ArtifactVersion v) {
+	/**
+	 * 是否为只包含单个版本号的简单范围
+	 */
+	public boolean isSingleVersion() {return Objects.equals(lowerBound, upperBound);}
+
+	public ArtifactVersion getLowerBound() {return lowerBound;}
+	public ArtifactVersion getUpperBound() {return upperBound;}
+
+	/**
+	 * 选择接受范围内最高的版本
+	 */
+	public ArtifactVersion selectHighest(List<ArtifactVersion> versions) {
+		ArtifactVersion chosen = null;
+
+		for (ArtifactVersion version : versions) {
+			if (contains(version) && (chosen == null || version.compareTo(chosen) > 0)) {
+				chosen = version;
+			}
+		}
+
+		return chosen;
+	}
+
+	/**
+	 * 选择接受范围内最低的版本
+	 */
+	public ArtifactVersion selectLowest(List<ArtifactVersion> versions) {
+		ArtifactVersion chosen = null;
+
+		for (ArtifactVersion version : versions) {
+			if (contains(version) && (chosen == null || version.compareTo(chosen) < 0)) {
+				chosen = version;
+			}
+		}
+
+		return chosen;
+	}
+
+	/**
+	 * 是否接受该版本
+	 */
+	public final boolean contains(ArtifactVersion version) {
 		int r;
-		if (lower != null) {
-			r = v.compareTo(lower);
+		if (lowerBound != null) {
+			r = version.compareTo(lowerBound);
 			if (r < 0) return false;
 			if (r == 0) return lowerInclusive;
 		}
-		if (upper != null) {
-			r = v.compareTo(upper);
+		if (upperBound != null) {
+			r = version.compareTo(upperBound);
 			if (r > 0) return false;
 			if (r == 0) return upperInclusive;
 		}
@@ -132,9 +178,9 @@ public final class VersionRange {
 	public String toString() {
 		StringBuilder sb = new StringBuilder();
 		sb.append(lowerInclusive ? '[' : '(');
-		if (lower != null) sb.append(lower);
+		if (lowerBound != null) sb.append(lowerBound);
 		sb.append(',');
-		if (upper != null) sb.append(upper);
+		if (upperBound != null) sb.append(upperBound);
 		sb.append(upperInclusive ? ']' : ')');
 		return sb.toString();
 	}

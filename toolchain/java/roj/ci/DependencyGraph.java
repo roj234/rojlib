@@ -13,12 +13,20 @@ import java.util.Map;
 import java.util.Set;
 
 /**
+ * 这里的类名都是直接文件名, a.k.a. 内部类会被擦除
  * @author Roj234-N
  * @since 2025/5/7 13:11
  */
 final class DependencyGraph {
 	private final Map<String, Set<String>> graph = new HashMap<>();
-	//private final ToLongMap<String> memberHash = new ToLongMap<>();
+
+	public boolean isEmpty() {return graph.isEmpty();}
+
+	/**
+	 * 获取引用className的类
+	 * @param className 格式: 编译前类名
+	 */
+	public Set<String> get(String className) {return graph.getOrDefault(className, Collections.emptySet());}
 
 	/**
 	 * 添加一个类
@@ -41,23 +49,15 @@ final class DependencyGraph {
 	}
 
 	/**
-	 * 获取引用类className的类
+	 * 删除对这些类的引用
+	 * @param changed 格式: 编译前类名
 	 */
-	public Set<String> get(String className) {
-		return graph.getOrDefault(className, Collections.emptySet());
-	}
-
 	public void remove(Set<String> changed) {
+		//graph.keySet().removeAll(changed);
 		for (Set<String> value : graph.values()) {
 			value.removeAll(changed);
 		}
 	}
 
-	public void clear() {
-		graph.clear();
-	}
-
-	public boolean isEmpty() {
-		return graph.isEmpty();
-	}
+	public void clear() {graph.clear();}
 }

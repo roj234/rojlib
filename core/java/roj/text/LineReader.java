@@ -125,11 +125,11 @@ public interface LineReader extends Iterable<String> {
 
 		@Override
 		public boolean readLine(CharList buf) {
-			int prevLen = buf.length();
+			buf.clear();
 			while (true) {
 				if (i < 0) return false;
 				i = TextUtil.gAppendToNextCRLF(str, i, buf, -1);
-				if (keepEmpty || buf.length() > prevLen) return true;
+				if (keepEmpty || buf.length() > 0) return true;
 			}
 		}
 	}

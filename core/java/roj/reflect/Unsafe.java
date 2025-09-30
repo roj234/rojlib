@@ -246,10 +246,6 @@ public interface Unsafe {
 	default void putReference(Object o, long offset, Object x) {u.putObject(o, offset, x);}
 	//endregion
 	//region 这些函数被关键（pre-transform）API使用
-	@Deprecated default int getIntVolatile(Object o, long offset) {return u.getIntVolatile(o, offset);}
-	@Deprecated default Object getReferenceVolatile(Object o, long offset) {return u.getObjectVolatile(o, offset);}
-	@Deprecated default void putReferenceVolatile(Object o, long offset, Object x) {u.putObjectVolatile(o, offset, x);}
-	@Deprecated default boolean compareAndSetInt(Object o, long offset, int expected, int x) {return u.compareAndSwapInt(o, offset, expected, x);}
 	@Deprecated default boolean compareAndSetReference(Object o, long offset, Object expected, Object x) {return u.compareAndSwapObject(o, offset, expected, x);}
 	@Deprecated default Object getAndSetReference(Object o, long offset, Object newValue) {return u.getAndSetObject(o, offset, newValue);}
 	//region 内存分配

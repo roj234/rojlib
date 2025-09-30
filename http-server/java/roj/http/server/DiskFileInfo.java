@@ -87,7 +87,7 @@ public class DiskFileInfo implements FileInfo, ChannelHandler {
 	public long lastModified() {return lastModified;}
 
 	@Override
-	public void prepare(ResponseHeader rh, Headers h) {
+	public void prepare(Response rh, Headers h) {
 		if (STATE.compareAndSet(this, 2, 3)) {
 			cc = DynByteBuf.allocateDirect();
 			rh.connection().addBefore("h11@compr", "compress-capture", this);

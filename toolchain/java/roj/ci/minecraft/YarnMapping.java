@@ -111,19 +111,13 @@ final class YarnMapping extends Mapping {
 					if (method == null) throw new IllegalArgumentException("ARG出现在METHOD前");
 					// ARG index name
 					if (paramMap != null) {
-						List<String> list = paramMap.computeIfAbsent(method, Helpers.fnArrayList());
-
-						// simply ignore index to support new ParamNameMapper
-						list.add(tmp.get(2));
-						/*int argNo = Integer.parseInt(tmp.get(1));
-						while (list.size() <= argNo) list.add(null);
-						list.set(argNo, tmp.get(2));*/
+						paramMap.computeIfAbsent(method, Helpers.fnArrayList()).add(tmp.get(2));
 					}
 				}
 				case "FIELD" -> {
 					// FIELD intermediary_name new_name type
 					if (tmp.size() > 3) {
-						fieldMap.put(new MemberDescriptor(srcCls, tmp.get(1), checkFieldType ? tmp.get(3) : ""), tmp.get(2));
+						fieldMap.put(new MemberDescriptor(srcCls, tmp.get(1), fieldHasType ? tmp.get(3) : ""), tmp.get(2));
 					}
 				}
 				case "COMMENT" -> {
@@ -153,7 +147,7 @@ final class YarnMapping extends Mapping {
 					break;
 				case "FIELD":
 					// FIELD owner original_name type intermediary_name
-					fieldMap.put(new MemberDescriptor(tmp.get(1), tmp.get(3), checkFieldType?tmp.get(2):""), tmp.get(4));
+					fieldMap.put(new MemberDescriptor(tmp.get(1), tmp.get(3), fieldHasType ?tmp.get(2):""), tmp.get(4));
 					break;
 				default:
 					Tty.error(name + ":" + i + ": 未知标记类型. " + tmp);

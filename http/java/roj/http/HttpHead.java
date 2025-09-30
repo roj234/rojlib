@@ -31,14 +31,9 @@ public class HttpHead extends Headers {
 
 	public boolean isRequest() {return isRequest;}
 
-	public int getCode() {
+	public int statusCode() {
 		if (isRequest) throw new IllegalStateException();
 		return Integer.parseInt(b);
-	}
-
-	public String getCodeString() {
-		if (isRequest) throw new IllegalStateException();
-		return c;
 	}
 
 	public String getPath() {

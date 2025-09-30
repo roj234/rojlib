@@ -4,17 +4,18 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import roj.collect.TrieEntry.Itr;
 import roj.collect.TrieEntry.KeyItr;
-import roj.util.OperationDone;
 import roj.config.node.IntValue;
 import roj.io.IOUtil;
 import roj.text.CharList;
 import roj.text.TextUtil;
 import roj.util.Helpers;
+import roj.util.OperationDone;
 
 import java.nio.file.FileVisitResult;
 import java.util.*;
 import java.util.function.BiConsumer;
 import java.util.function.BiFunction;
+import java.util.function.BiPredicate;
 import java.util.function.Function;
 
 import static roj.collect.IntMap.UNDEFINED;
@@ -311,57 +312,58 @@ public class TrieTree<V> extends AbstractMap<CharSequence, V> {
 		final CharSequence s = (CharSequence) i;
 		return containsKey(s, 0, s.length());
 	}
-	public boolean containsKey(CharSequence s, int off, int len) { return getEntry(s, off, len) != null; }
+	public boolean containsKey(CharSequence seq, int start, int end) { return getEntry(seq, start, end) != null; }
 
-	public Map.Entry<IntValue, V> longestMatches(CharSequence s) { return longestMatches(s, 0, s.length()); }
-	public Map.Entry<IntValue, V> longestMatches(CharSequence s, int i, int len) {
-		HashMap.Entry<IntValue, V> entry = new HashMap.Entry<>(new IntValue(), null);
-		match(s,i,len,entry);
-		return entry.getKey().value < 0 ? null : entry;
+	public IntMap.Entry<V> longestMatch(CharSequence seq) { return longestMatch(seq, 0, seq.length()); }
+	public IntMap.Entry<V> longestMatch(CharSequence seq, int start, int end) {
+		IntValue matchLen = new IntValue();
+		V match = match(seq, start, end, matchLen);
+		return matchLen.value < 0 ? null : new IntMap.Entry<>(matchLen.value, match);
 	}
 	/**
-	 * 返回：s能连续匹配在map中的最长长度
+	 * 返回：seq[start,end)能连续匹配在map中的最长长度
 	 * map=["abcd"=A, "abcedf"=B]
-	 * s="abc", 返回 3, feed: -1=UNDEFINED
-	 * s="abcd" 返回 4, feed: 4=A
-	 * s="abcde" 返回 5, feed: 4=A
-	 * s="abcdef" 返回 6, feed: 6=B
+	 * seq="abc", 返回 UNDEFINED, _matchLen: -1
+	 * seq="abcd" 返回 A, _matchLen: 4
+	 * seq="abcde" 返回 A, _matchLen: 4
+	 * seq="abcdef" 返回 B, _matchLen: 6
 	 */
 	@SuppressWarnings("unchecked")
-	public int match(CharSequence s, int i, int len, HashMap.Entry<IntValue, V> feed) {
-		feed.key.value = -1;
+	public V match(CharSequence seq, int start, int end, IntValue _matchLen) {
+		_matchLen.value = -1;
 
-		int d = 0;
+		V matches = null;
+		int matchLen = 0;
 
-		//root.initFastMatcher();
 		Entry<V> entry = root;
-		while (i < len) {
-			entry = (Entry<V>) entry.getChild(s.charAt(i));
+		while (start < end) {
+			entry = (Entry<V>) entry.getChild(seq.charAt(start));
 			if (entry == null) break;
 
-			CharSequence text = entry.text();
+			var text = entry.text();
 			if (text != null) {
-				int lastMatch = TextUtil.lastMatches(text, 0, s, i, len - i);
-				d += lastMatch;
+				int lastMatch = TextUtil.lastMatches(text, 0, seq, start, end - start);
+				matchLen += lastMatch;
 
 				if (lastMatch < text.length()) break;
-				i += text.length();
+				start += text.length();
 			} else {
-				d++;
-				i++;
+				matchLen++;
+				start++;
 			}
 
 			if (entry.value != UNDEFINED) {
-				feed.key.value = d;
-				feed.value = entry.value;
+				_matchLen.value = matchLen;
+				matches = entry.value;
 			}
 		}
-		return d;
+		return matches;
 	}
 
 	@SuppressWarnings("unchecked")
-	public int longestWithCallback(CharSequence s, int i, int len, IntValue cont, BiFunction<IntValue, V, Boolean> callback) {
-		int d = 0;
+	public V querySequence(CharSequence s, int i, int len, IntValue _matchLen, BiPredicate<IntValue, V> predicate) {
+		int matchLen = 0;
+		V longestMatch = null;
 
 		Entry<V> entry = root;
 		while (i < len) {
@@ -371,21 +373,22 @@ public class TrieTree<V> extends AbstractMap<CharSequence, V> {
 			CharSequence text = entry.text();
 			if (text != null) {
 				int lastMatch = TextUtil.lastMatches(text, 0, s, i, len-i);
-				d += lastMatch;
+				matchLen += lastMatch;
 
 				if (lastMatch < text.length()) break;
 				i += text.length();
 			} else {
-				d++;
+				matchLen++;
 				i++;
 			}
 
 			if (entry.value != UNDEFINED) {
-				cont.value = d;
-				if (callback.apply(cont, entry.value)) break;
+				_matchLen.value = matchLen;
+				if (predicate.test(_matchLen, entry.value))
+					longestMatch = entry.value;
 			}
 		}
-		return d;
+		return longestMatch;
 	}
 
 	public List<V> valueMatches(CharSequence s, int limit) { return valueMatches(s, 0, s.length(), limit); }

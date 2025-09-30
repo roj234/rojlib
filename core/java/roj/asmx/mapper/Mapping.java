@@ -4,95 +4,149 @@ import org.jetbrains.annotations.Nullable;
 import roj.asm.ClassUtil;
 import roj.asm.MemberDescriptor;
 import roj.collect.*;
-import roj.config.node.IntValue;
 import roj.io.IOUtil;
 import roj.text.*;
-import roj.text.logging.Level;
 import roj.text.logging.Logger;
 import roj.util.Helpers;
 
 import java.io.File;
 import java.io.IOException;
-import java.io.InputStream;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
 /**
- * Class Mapping (format: XSrg)
+ * A mapping utility class for remapping class, field, and method names, typically used in obfuscation/deobfuscation scenarios,
+ * such as Minecraft modding or bytecode manipulation. It maintains bidirectional mappings for classes and unidirectional
+ * mappings for fields and methods, supporting loading/saving from custom mapping files, reversing, extending, and merging
+ * mappings.
+ *
+ * <p>The mapping file format is XSrg (Compacted SRG), which uses lines prefixed with keys like "CL" for classes, "F" for fields, "M" for methods, etc.
+ * Fields and methods are associated with their owning class, and types/descriptors can be included optionally based on
+ * the {@code fieldHasType} flag.</p>
+ *
+ * <p>This class uses a {@link BiMap} for class mappings and custom {@link FindMap} implementations for fields and methods
+ * to enable efficient lookups by descriptor.</p>
  *
  * @author Roj234
  * @since 2020/8/28 19:18
  */
 public class Mapping {
-	public static record MethodExtra(List<String> arguments, String javadoc) {}
-
 	public static final Logger LOGGER = Logger.getLogger("Mapper");
-	static { LOGGER.setLevel(Level.ERROR); }
 
 	public String _name;
 
 	protected BiMap<String, String> classMap;
 	protected FindMap<MemberDescriptor, String> fieldMap, methodMap;
-	protected TrieTree<String> packageMap;
 	protected Map<MemberDescriptor, List<String>> paramMap;
-	public boolean checkFieldType;
+	protected boolean fieldHasType;
 
-	public Map<MemberDescriptor, List<String>> getParamMap() {return paramMap;}
+	/**
+	 * Flag indicating whether field mappings include type descriptors.
+	 *
+	 * @return true if field mappings include types, false otherwise
+	 */
+	public boolean isFieldHasType() { return fieldHasType; }
 
-	public Mapping copy() {
-		Mapping m = new Mapping(checkFieldType);
-		m.classMap.putAll(classMap);
-		m.fieldMap.putAll(fieldMap);
-		m.methodMap.putAll(methodMap);
-		m.paramMap.putAll(paramMap);
-		if (packageMap != null) m.packageMap = new TrieTree<>(packageMap);
-		return m;
-	}
+	/**
+	 * Returns the parameter map.
+	 *
+	 * @return the map of method descriptors to parameter lists
+	 */
+	public Map<MemberDescriptor, List<String>> getParamMap() { return paramMap; }
 
-	public Mapping() {this(false);}
-	public Mapping(boolean checkFieldType) {
-		this.checkFieldType = checkFieldType;
+	/**
+	 * Constructs a new {@link Mapping} instance with default settings (no field types).
+	 */
+	public Mapping() { this(false); }
+
+	/**
+	 * Constructs a new {@link Mapping} instance.
+	 *
+	 * @param fieldHasType true if field mappings should include type descriptors
+	 */
+	public Mapping(boolean fieldHasType) {
+		this.fieldHasType = fieldHasType;
 		this.classMap = new HashBiMap<>(1000);
 		this.fieldMap = new HashMap<>(1000);
 		this.methodMap = new HashMap<>(1000);
 		this.paramMap = new HashMap<>();
 	}
 
+	/**
+	 * Constructs a new {@link Mapping} instance by copying the state from another mapping.
+	 * Note: This performs no copy of the internal maps.
+	 *
+	 * @param o the mapping to copy from
+	 */
 	public Mapping(Mapping o) {
 		this.classMap = o.classMap;
 		this.fieldMap = o.fieldMap;
 		this.methodMap = o.methodMap;
-		this.packageMap = o.packageMap;
 		this.paramMap = o.paramMap;
-		this.checkFieldType = o.checkFieldType;
+		this.fieldHasType = o.fieldHasType;
 	}
 
-	public final void loadMap(File path, boolean reverse) {
+	/**
+	 * Creates a shallow copy of this mapping.
+	 *
+	 * @return a new {@link Mapping} instance with copied contents
+	 */
+	public Mapping copy() {
+		Mapping m = new Mapping(fieldHasType);
+		m.classMap.putAll(classMap);
+		m.fieldMap.putAll(fieldMap);
+		m.methodMap.putAll(methodMap);
+		m.paramMap.putAll(paramMap);
+		return m;
+	}
+
+	public final void loadMap(File path, boolean reverse) {loadMap(path, reverse, fieldHasType);}
+
+	/**
+	 * Loads mappings from a file.
+	 *
+	 * @param path the file to load from
+	 * @param reverse true to load in reverse (mapped to original), false otherwise
+	 * @throws RuntimeException if unable to read the file
+	 */
+	public final void loadMap(File path, boolean reverse, boolean checkFieldTypeIfPresent) {
 		try (TextReader in = TextReader.auto(path)) {
-			loadMap(in, reverse);
+			loadMap(in, reverse, checkFieldTypeIfPresent);
 		} catch (IOException e) {
 			throw new RuntimeException("Unable to read mapping file", e);
 		}
 	}
-	public final void loadMap(InputStream in, boolean reverse) {
-		try (TextReader in2 = TextReader.auto(in)) {
-			loadMap(in2, reverse);
-		} catch (IOException e) {
-			throw new RuntimeException("Unable to read mapping file", e);
-		}
-	}
+
+	/**
+	 * Loads mappings from a line reader, enabling field type checking if present.
+	 *
+	 * @param lr the line reader to load from
+	 * @param reverse true to load in reverse (mapped to original), false otherwise
+	 */
+	public final void loadMap(LineReader lr, boolean reverse) {loadMap(lr, reverse, fieldHasType);}
+
+	/**
+	 * Loads mappings from a line reader.
+	 *
+	 * @param lr the line reader to load from
+	 * @param reverse true to load in reverse (mapped to original), false otherwise
+	 * @param checkFieldTypeIfPresent true to set {@link #fieldHasType} based on presence of field types in the file
+	 */
 	@SuppressWarnings("fallthrough")
-	public final void loadMap(LineReader slr, boolean reverse) {
-		java.util.ArrayList<String> q = new java.util.ArrayList<>();
+	public final void loadMap(LineReader lr, boolean reverse, boolean checkFieldTypeIfPresent) {
+		fieldHasType = false;
+		ArrayList<String> q = new ArrayList<>();
 		String last0 = null, last1 = null;
 		MemberDescriptor lastMethod = null;
+		TrieTree<String> packageRename = null;
+		var foundLen2 = false;
 
 		while (true) {
 			String s;
 			try {
-				s = slr.readLine();
+				s = lr.readLine();
 			} catch (Exception e) {
 				Helpers.athrow(e);
 				return;
@@ -109,10 +163,10 @@ public class Mapping {
 			switch (key) {
 				case "PK": // package
 					if (!q.get(0).equals(q.get(1))) {
-						if (packageMap == null) packageMap = new TrieTree<>();
+						if (packageRename == null) packageRename = new TrieTree<>();
 
-						if (reverse) packageMap.put(q.get(1), q.get(0));
-						else packageMap.put(q.get(0), q.get(1));
+						if (reverse) packageRename.put(q.get(1), q.get(0));
+						else packageRename.put(q.get(0), q.get(1));
 					}
 					break;
 				case "CL": // class
@@ -152,14 +206,18 @@ public class Mapping {
 					}
 					switch (q.size()) {
 						case 2:
-							if (checkFieldType) throw new IllegalArgumentException("FL(2) "+q+" is not supported when checkFieldType=true");
+							if (fieldHasType) throw new IllegalArgumentException("FL(2) "+q+" is not supported when checkFieldType=true");
+							foundLen2 = true;
+
 							if (reverse) fm.put(new MemberDescriptor(last1, q.get(1)), q.get(0));
 							else fm.put(new MemberDescriptor(last0, q.get(0)), q.get(1));
 						break;
 						case 3: q.add("~");
 						case 4:
-							if (reverse) fm.put(new MemberDescriptor(last1, q.get(2), !checkFieldType ? "" : q.get(3).equals("~") ? q.get(1) : q.get(3)), q.get(0));
-							else fm.put(new MemberDescriptor(last0, q.get(0), !checkFieldType ? "" : q.get(1)), q.get(2));
+							if (checkFieldTypeIfPresent && !foundLen2) fieldHasType = true;
+
+							if (reverse) fm.put(new MemberDescriptor(last1, q.get(2), !fieldHasType ? "" : q.get(3).equals("~") ? q.get(1) : q.get(3)), q.get(0));
+							else fm.put(new MemberDescriptor(last0, q.get(0), !fieldHasType ? "" : q.get(1)), q.get(2));
 						break;
 					}
 					break;
@@ -187,12 +245,34 @@ public class Mapping {
 			}
 		}
 
-		applyPackageRename();
+		if (packageRename != null) {
+			for (var entry : new ArrayList<>(classMap.entrySet())) {
+				var found = packageRename.longestMatch(entry.getValue());
+				if (found != null) {
+					String k = entry.getKey();
+					String v = found.getValue().concat(entry.getValue().substring(found.getIntKey()));
+					classMap.put(k, v);
+				}
+			}
+		}
 	}
 
+	/**
+	 * Saves the mappings to a file.
+	 *
+	 * @param file the file to write to
+	 * @throws IOException if writing fails
+	 */
 	public void saveMap(File file) throws IOException {
 		try (TextWriter ob = TextWriter.to(file)) { saveMap(ob); }
 	}
+
+	/**
+	 * Saves the mappings to an appendable writer.
+	 *
+	 * @param ob the appendable to write to
+	 * @throws IOException if writing fails
+	 */
 	public void saveMap(Appendable ob) throws IOException {
 		HashMap<String, CharList> classFos = new HashMap<>(classMap.size());
 
@@ -210,7 +290,7 @@ public class Mapping {
 			// don't write unchanged field
 			if (v.equals(d.name) && param == null) continue;
 
-			if (checkFieldType) {
+			if (fieldHasType) {
 				Tokenizer.escape(sb.append("F: "), d.name);
 				Tokenizer.escape(sb.append(' '), d.rawDesc);
 				Tokenizer.escape(sb.append(' '), v);
@@ -260,7 +340,13 @@ public class Mapping {
 		}
 	}
 
-	public static void makeInheritMap(Map<String, List<String>> superMap, @Nullable Map<String, String> filter) {
+	/**
+	 * Builds an inheritance-based super-class/interface map by traversing class hierarchies.
+	 *
+	 * @param superMap the map to populate, where keys are classes and values are lists of super-classes/interfaces
+	 * @param filter optional filter map to exclude certain classes
+	 */
+	protected static void makeHierarchyMap(Map<String, List<String>> superMap, @Nullable Map<String, String> filter) {
 		MapperList self = new MapperList();
 
 		for (Iterator<Map.Entry<String, List<String>>> itr = superMap.entrySet().iterator(); itr.hasNext(); ) {
@@ -298,6 +384,11 @@ public class Mapping {
 		}
 	}
 
+	/**
+	 * Checks if any class name has been remapped (i.e., original != mapped).
+	 *
+	 * @return true if at least one class name changed, false otherwise
+	 */
 	public boolean classNameChanged() {
 		for (Map.Entry<String, String> e : classMap.entrySet()) {
 			if (!e.getKey().equals(e.getValue())) return true;
@@ -305,58 +396,36 @@ public class Mapping {
 		return false;
 	}
 
-	public void applyPackageRename() {
-		if (packageMap == null || packageMap.isEmpty()) return;
-
-		for (Iterator<Map.Entry<String, String>> itr = new ArrayList<>(classMap.entrySet()).iterator(); itr.hasNext(); ) {
-			Map.Entry<String, String> entry = itr.next();
-			Map.Entry<IntValue, String> found = packageMap.longestMatches(entry.getValue());
-			if (found != null) {
-				String k = entry.getKey();
-				String v = found.getValue().concat(entry.getValue().substring(found.getKey().value));
-				itr.remove();
-				classMap.put(k, v);
-			}
-		}
-
-		packageMap.clear();
-	}
-
-	public final BiMap<String, String> getClassMap() {
-		return classMap;
-	}
-	public final FindMap<MemberDescriptor, String> getFieldMap() {
-		return fieldMap;
-	}
-	public final FindMap<MemberDescriptor, String> getMethodMap() {
-		return methodMap;
-	}
+	public final BiMap<String, String> getClassMap() {return classMap;}
+	public final FindMap<MemberDescriptor, String> getFieldMap() {return fieldMap;}
+	public final FindMap<MemberDescriptor, String> getMethodMap() {return methodMap;}
 
 	/**
-	 * Mapper{A->B} .reverse()   =>>  Mapper{B->A}
+	 * Reverses this mapping in-place. Mapper{original -&gt; mapped} becomes Mapper{mapped -&gt; original}.
+	 *
+	 * <p>Note: This modifies the internal state; use {@link #reverse()} for a non-destructive copy.</p>
 	 */
-	public void reverseSelf() {
-		reverse0(this);
-	}
+	public void reverseSelf() {reverse0(this);}
 
 	/**
-	 * Mapper{A->B} .reverse()   =>>  Mapper{B->A}
+	 * Creates a reversed copy of this mapping. Mapper{original -&gt; mapped} becomes Mapper{mapped -&gt; original}.
+	 *
+	 * @return a new reversed {@link Mapping} instance
 	 */
 	public Mapping reverse() {
-		Mapping newMap = new Mapping();
+		Mapping newMap = new Mapping(fieldHasType);
 		reverse0(newMap);
 		return newMap;
 	}
 
 	private void reverse0(Mapping dst) {
-		if (dst.checkFieldType != checkFieldType) throw new IllegalStateException("checkFieldType are not same");
 		ClassUtil U = ClassUtil.getInstance();
 
 		HashMap<MemberDescriptor, String> fieldMap1 = new HashMap<>(fieldMap.size());
 		for (Map.Entry<MemberDescriptor, String> entry : fieldMap.entrySet()) {
 			MemberDescriptor desc = entry.getKey();
 			MemberDescriptor target = new MemberDescriptor(classMap.getOrDefault(desc.owner, desc.owner), entry.getValue(), desc.rawDesc, desc.modifier);
-			if (checkFieldType) {
+			if (fieldHasType) {
 				String param = U.mapFieldType(classMap, desc.rawDesc);
 				if (param != null) target.rawDesc = param;
 			}
@@ -365,19 +434,29 @@ public class Mapping {
 		dst.fieldMap = fieldMap1;
 
 		HashMap<MemberDescriptor, String> methodMap1 = new HashMap<>(methodMap.size());
+		var copyParamMap = new HashMap<>(paramMap);
 		HashMap<MemberDescriptor, List<String>> paramMap1 = new HashMap<>(paramMap.size());
 		for (var entry : methodMap.entrySet()) {
 			var desc = entry.getKey();
 			var target = new MemberDescriptor(classMap.getOrDefault(desc.owner, desc.owner), entry.getValue(), U.mapMethodParam(classMap, desc.rawDesc), desc.modifier);
 			methodMap1.put(target, desc.name);
-			var data = paramMap1.get(desc);
+			var data = copyParamMap.remove(desc);
 			if (data != null) paramMap1.put(target, data);
 		}
+		for (Map.Entry<MemberDescriptor, List<String>> entry : copyParamMap.entrySet()) {
+			var desc = entry.getKey();
+			var target = new MemberDescriptor(classMap.getOrDefault(desc.owner, desc.owner), desc.name, U.mapMethodParam(classMap, desc.rawDesc), desc.modifier);
+			paramMap1.put(target, entry.getValue());
+		}
 		dst.methodMap = methodMap1;
+		dst.paramMap = paramMap1;
 
 		dst.classMap = classMap.inverse();
 	}
 
+	/**
+	 * Resets the class map to identity mappings (no remapping for classes).
+	 */
 	public void deleteClassMap() {
 		var newMap = new HashBiMap<String, String>();
 		for (Map.Entry<String, String> entry : classMap.entrySet()) {
@@ -387,13 +466,23 @@ public class Mapping {
 	}
 
 	/**
-	 * Mapper{A->B} .extend ( Mapper{B->C} )   =>>  Mapper{A->C}
+	 * Extends this mapping with another. Mapper{A -&gt; B} extended by Mapper{B -&gt; C} becomes Mapper{A -&gt; C}.
+	 * Unmapped entries are preserved if {@code keepNotfound} is true.
+	 *
+	 * @param from the mapping to extend from
+	 * @throws IllegalStateException if the field type flag mismatches
 	 */
-	public void extend(Mapping from) {
-		extend(from, true);
-	}
+	public void extend(Mapping from) {extend(from, true);}
+
+	/**
+	 * Extends this mapping with another. Mapper{A -&gt; B} extended by Mapper{B -&gt; C} becomes Mapper{A -&gt; C}.
+	 *
+	 * @param from the mapping to extend from
+	 * @param keepNotfound true to retain unmapped entries, false to remove them
+	 * @throws IllegalStateException if the field type flag mismatches
+	 */
 	public void extend(Mapping from, boolean keepNotfound) {
-		if (from.checkFieldType != checkFieldType) throw new IllegalStateException("checkFieldType are not same");
+		if (from.fieldHasType != fieldHasType) throw new IllegalStateException("checkFieldType are not same");
 		ClassUtil U = ClassUtil.getInstance();
 
 		MemberDescriptor d = U.sharedDesc;
@@ -404,7 +493,7 @@ public class Mapping {
 			String nn = U.mapClassName(classMap, fd.owner);
 			d.owner = nn != null ? nn : fd.owner;
 			d.name = entry.getValue();
-			if (checkFieldType) {
+			if (fieldHasType) {
 				String param = U.mapFieldType(classMap, d.rawDesc = fd.rawDesc);
 				if (param != null) d.rawDesc = param;
 			}
@@ -445,16 +534,40 @@ public class Mapping {
 		}
 	}
 
+	/**
+	 * Merges another mapping into this one, without priority resolution.
+	 *
+	 * @param other the mapping to merge
+	 * @throws IllegalStateException if the field type flag mismatches
+	 * @throws UnsupportedOperationException if conflicts occur without priority specified
+	 */
 	public void merge(Mapping other) { merge(other, null); }
+
+	/**
+	 * Merges another mapping into this one.
+	 *
+	 * @param other the mapping to merge
+	 * @param priority true to prioritize the other mapping in conflicts, false to keep this one, null to throw on conflicts
+	 * @throws IllegalStateException if the field type flag mismatches
+	 * @throws UnsupportedOperationException if conflicts occur without priority specified
+	 */
 	public void merge(Mapping other, Boolean priority) { merge(Collections.singletonList(other), priority); }
 
+	/**
+	 * Merges multiple mappings into this one.
+	 *
+	 * @param others the list of mappings to merge
+	 * @param priority true to prioritize later mappings in conflicts, false to prioritize earlier, null to throw on conflicts
+	 * @throws IllegalStateException if any field type flag mismatches
+	 * @throws UnsupportedOperationException if conflicts occur without priority specified
+	 */
 	public void merge(List<Mapping> others, Boolean priority) {
 		HashSet<String> ownerMod = new HashSet<>();
 		ToIntMap<String> replaceSubs = new ToIntMap<>();
 
 		for (int i = 0; i < others.size(); i++) {
 			Mapping other = others.get(i);
-			if (other.checkFieldType != checkFieldType) throw new IllegalStateException("checkFieldType are not same");
+			if (other.fieldHasType != fieldHasType) throw new IllegalStateException("checkFieldType are not same");
 		}
 
 		for (int i = 0; i < others.size(); i++) {
@@ -494,7 +607,7 @@ public class Mapping {
 					String newClass = classMap.get(prefix);
 					int pos1 = entry.getValue().indexOf('$');
 					String fixed = newClass.concat(pos1 < 0 ? name.substring(pos) : entry.getValue().substring(pos1));
-					System.out.println("前缀冲突: " + prefix + "=>" + newClass + "与其子类" + name.substring(pos) + "=>" + entry.getValue() + "不在同一域中");
+					LOGGER.warn("前缀冲突: " + prefix + "=>" + newClass + "与其子类" + name.substring(pos) + "=>" + entry.getValue() + "不在同一域中");
 					classMap.forcePut(name, fixed);
 				}
 			}

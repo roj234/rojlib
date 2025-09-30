@@ -17,7 +17,8 @@ public interface Processor {
 	default void init(ConfigValue config) {}
 	default InputStream wrapResource(String path, InputStream in) {return in;}
 	default int beforeCompile(ArrayList<String> options, List<File> sources, BuildContext ctx) {return 2;}
-	default void afterCompile(BuildContext ctx) {}
+	default void afterCompilePre(BuildContext ctx) {}
+	default void afterCompilePost(BuildContext ctx) {}
 
 	default boolean defaultEnabled() {return false;}
 }

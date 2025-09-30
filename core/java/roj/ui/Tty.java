@@ -16,7 +16,6 @@ import roj.text.TextUtil;
 import roj.text.Tokenizer;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
-import roj.util.FastFailException;
 import roj.util.OperationDone;
 
 import java.io.IOException;
@@ -369,10 +368,16 @@ public final class Tty extends DelegatedPrintStream {
 	public static int getColumns() {return instance.columns;}
 	public static int getRows() {return instance.rows;}
 	//endregion
+	// Valid string terminator sequences are BEL, ESC\, and 0x9c
+	private static final String ST = "(?:\\u0007|\\u001B\\u005C|\\u009C)";
+	// OSC sequences only: ESC ] ... ST (non-greedy until the first ST)
+	private static final String osc = "(?:\\u001B\\][\\s\\S]*?"+ST+")";
+	// CSI and related: ESC/C1, optional intermediates, optional params (supports ; and :) then final byte
+	private static final String csi = "[\\u001B\\u009B][\\[\\]()#;?]*(?:\\d{1,4}(?:[;:]\\d{0,4})*)?[\\dA-PR-TZcf-nq-uy=><~]";
 
-	public static final Pattern ANSI_ESCAPE = Pattern.compile("\033(?:\\[[^a-zA-Z]*?[a-zA-Z]|].*?\u0007)");
+	public static final Pattern ANSI_SEQ = Pattern.compile(osc+"|"+csi);
 	public static CharList stripAnsi(CharList b) {
-		Matcher m = ANSI_ESCAPE.matcher(b);
+		Matcher m = ANSI_SEQ.matcher(b);
 
 		int i = 0;
 		while (m.find(i)) {
@@ -575,14 +580,14 @@ public final class Tty extends DelegatedPrintStream {
 	}
 	private static void key(int vk, String seq) {KeyMap.putIfAbsent(new ByteList().putAscii(seq), vk);}
 
-	private final HashMap.Entry<IntValue, Integer> matcher = new HashMap.Entry<>(new IntValue(), null);
+	private final IntValue myMatchLen = new IntValue();
 	private void processInput(CharList inBuf) {
 		var buf = inBuf.list;
 		int i = 0;
 		int len = inBuf.length();
 		while (i < len) {
-			KeyMap.match(inBuf, i, len, matcher);
-			int matchLen = matcher.getKey().value;
+			Integer keyCode1 = KeyMap.match(inBuf, i, len, myMatchLen);
+			int matchLen = myMatchLen.value;
 			if (matchLen < 0) {
 				int keyCode = buf[i++];
 				handler.keyEnter(keyCode, false);
@@ -591,7 +596,7 @@ public final class Tty extends DelegatedPrintStream {
 
 			found: {
 				failed:
-				if (matcher.value == VK_ESCAPE) {
+				if (keyCode1 == VK_ESCAPE) {
 					if (i+1 < len && buf[i+1] == '[') {
 						int j = i+1;
 						while (true) {
@@ -606,7 +611,7 @@ public final class Tty extends DelegatedPrintStream {
 						break found;
 					}
 				}
-				handler.keyEnter(matcher.value, true);
+				handler.keyEnter(keyCode1, true);
 			}
 
 			i += matchLen;
@@ -672,26 +677,32 @@ public final class Tty extends DelegatedPrintStream {
 	private final ArrayList<KeyHandler> handlers = new ArrayList<>();
 
 	public @NotNull KeyHandler getHandler1() {return handler;}
-	public synchronized void pushHandler1(KeyHandler h) {
-		handlers.add(handler);
-		setHandler(h);
+	public void pushHandler1(KeyHandler h) {
+		synchronized (handlers) {
+			handlers.add(handler);
+			setHandler1(h);
+		}
 	}
-	public synchronized void setHandler1(KeyHandler h) {
+	public void setHandler1(KeyHandler h) {
 		if (h == null) h = DUMMY;
 
-		var prev = handler;
-		if (prev == h) return;
-		handler = h;
+		synchronized (handlers) {
+			var prev = handler;
+			if (prev == h) return;
+			handler = h;
 
-		prev.unregistered();
-		h.registered();
+			prev.unregistered();
+			h.registered();
+		}
 	}
-	public synchronized KeyHandler popHandler1() {
-		var h = handler;
-		var prev = handlers.pop();
-		if (prev == null) throw new IllegalStateException("Stack is empty");
-		setHandler(prev);
-		return h;
+	public KeyHandler popHandler1() {
+		synchronized (handlers) {
+			var h = handler;
+			var prev = handlers.pop();
+			if (prev == null) throw new IllegalStateException("Stack is empty");
+			setHandler1(prev);
+			return h;
+		}
 	}
 
 	public void onInput(DynByteBuf buf, FastCharset ucs) {
@@ -770,8 +781,8 @@ public final class Tty extends DelegatedPrintStream {
 
 	public int getCursor(CharSequence str) {
 		synchronized (inLock) {
-			if (cursorPos == 0) throw new IllegalStateException("递归读取光标?");
-			cursorPos = 0;
+			if (cursorPos < 0) throw new IllegalStateException("递归读取光标?");
+			cursorPos = -1;
 
 			ITty t = terminals.get(0);
 			t.write(str);
@@ -788,7 +799,8 @@ public final class Tty extends DelegatedPrintStream {
 				val = cursorPos;
 			}
 
-			if (val == 0) throw new IllegalStateException("读取光标位置失败");
+			cursorPos = 0;
+			if (val <= 0) throw new IllegalStateException("读取光标位置失败");
 			return val;
 		}
 	}
@@ -797,6 +809,42 @@ public final class Tty extends DelegatedPrintStream {
 	public void updateConsoleSize() {terminals.get(0).getConsoleSize(this);}
 	//endregion
 	//region 计算字符宽度
+	private static boolean isFullWidthCodePoint(int codePoint) {
+		// Code points are derived from:
+		// http://www.unix.org/Public/UNIDATA/EastAsianWidth.txt
+		return codePoint >= 0x1100 && (
+				codePoint <= 0x115F || // Hangul Jamo
+				codePoint == 0x2329 || // LEFT-POINTING ANGLE BRACKET
+				codePoint == 0x232A || // RIGHT-POINTING ANGLE BRACKET
+				// CJK Radicals Supplement .. Enclosed CJK Letters and Months
+				(0x2E80 <= codePoint && codePoint <= 0x3247 && codePoint != 0x303F) ||
+				// Enclosed CJK Letters and Months .. CJK Unified Ideographs Extension A
+				(0x3250 <= codePoint && codePoint <= 0x4DBF) ||
+				// CJK Unified Ideographs .. Yi Radicals
+				(0x4E00 <= codePoint && codePoint <= 0xA4C6) ||
+				// Hangul Jamo Extended-A
+				(0xA960 <= codePoint && codePoint <= 0xA97C) ||
+				// Hangul Syllables
+				(0xAC00 <= codePoint && codePoint <= 0xD7A3) ||
+				// CJK Compatibility Ideographs
+				(0xF900 <= codePoint && codePoint <= 0xFAFF) ||
+				// Vertical Forms
+				(0xFE10 <= codePoint && codePoint <= 0xFE19) ||
+				// CJK Compatibility Forms .. Small Form Variants
+				(0xFE30 <= codePoint && codePoint <= 0xFE6B) ||
+				// Halfwidth and Fullwidth Forms
+				(0xFF01 <= codePoint && codePoint <= 0xFF60) ||
+				(0xFFE0 <= codePoint && codePoint <= 0xFFE6) ||
+				// Kana Supplement
+				(0x1B000 <= codePoint && codePoint <= 0x1B001) ||
+				// Enclosed Ideographic Supplement
+				(0x1F200 <= codePoint && codePoint <= 0x1F251) ||
+				// CJK Unified Ideographs Extension B .. Tertiary Ideographic Plane
+				(0x20000 <= codePoint && codePoint <= 0x3FFFD)
+			)
+		;
+	}
+
 	// 16KB for 65536x [EXIST,WIDTH] bit
 	private final BitArray IsWidthChar = new BitArray(2, 65536);
 	/**
@@ -811,24 +859,19 @@ public final class Tty extends DelegatedPrintStream {
 		var data = IsWidthChar.get(c);
 		if ((data & 2) == 0) {
 			// 这个是二分查找，所以也缓存吧
-			var ub = Character.UnicodeBlock.of(c);
-			if (ub == null || ub.toString().startsWith("CJK"))
-				data = 3;
-			else {
+			if (isFullWidthCodePoint(c))
+				data = 1;
+			else if (!terminals.isEmpty()) {
 				// https://unix.stackexchange.com/questions/245013/get-the-display-width-of-a-string-of-characters
 				// 这也太邪门了……
 				try {
 					data = getCursor(outputBuf.append("\0337\033[1E").append(c).append("\033[6n\033[1K\0338"));
 					data = (data & 0xFFFF) - 1;
-					if (data > 1) throw new FastFailException("一个字符的宽度既不是1也不是2: "+data);
-
-					data |= 2;
-				} catch (Exception e) {
-					data = 3;
-				}
+					if (data > 1) System.err.println("字符("+Integer.toHexString(c)+")的宽度是"+(data+1));
+				} catch (Exception ignored) {}
 			}
 
-			IsWidthChar.set(c, data);
+			IsWidthChar.set(c, data|2);
 		}
 
 		return 1 + (data & 1);
@@ -837,18 +880,12 @@ public final class Tty extends DelegatedPrintStream {
 	 * 计算字符串的长度(按终端英文记)，忽略其中的ANSI转义序列.
 	 */
 	public int getStringWidth1(CharSequence s) {
-		s = ANSI_ESCAPE.matcher(s).replaceAll("");
+		s = ANSI_SEQ.matcher(s).replaceAll("");
 
 		int len = 0, maxLen = 0;
 		for (int i = 0; i < s.length(); i++) {
 			char c = s.charAt(i);
 			if (c == '\r' || c == '\n') { maxLen = Math.max(maxLen, len); len = 0; }
-			if (Character.isHighSurrogate(c)) {
-				// 控制台支持么，大概是否定的
-				i++;
-				len += 2;
-				continue;
-			}
 			len += getCharWidth1(c);
 		}
 		return Math.max(maxLen, len);
@@ -858,7 +895,7 @@ public final class Tty extends DelegatedPrintStream {
 	 * @param width 长度，按终端英文记
 	 */
 	public List<String> splitByWidth1(String s, int width) {
-		var m = s.indexOf('\033') >= 0 ? ANSI_ESCAPE.matcher(s) : null;
+		var m = s.indexOf('\033') >= 0 ? ANSI_SEQ.matcher(s) : null;
 
 		List<String> out = new ArrayList<>();
 		int prevI = 0, tmpWidth = 0;
@@ -918,8 +955,14 @@ public final class Tty extends DelegatedPrintStream {
 	//instance必须最后创建
 	private static final Tty instance = new Tty();
 	static {
-		String state = System.getProperty("roj.tty", "enable");
-		var tty = !state.equals("disable") ? NativeVT.initialize(state.equals("force")) : null;
+		/**
+		 * off: 跳过任何终端处理, 适用于嵌入其它库的，并且只使用Tty类中工具函数的情况
+		 * strip: 强制终端不存在, 并过滤输出的ANSI字符
+		 * force: 强制终端存在, 但是否交互性通过QueryCursorPos获取
+		 * auto: 根据本机函数和系统属性自动决定strip/force模式
+		 */
+		String state = System.getProperty("roj.tty", "auto");
+		var tty = state.equals("off") || state.equals("strip") ? null : NativeVT.initialize(state.equals("force"));
 		if (tty == null) tty = (ITty) RojLib.getObj("roj.ui.Terminal.fallback");
 		if (tty != null) {
 			instance.addListener(tty);
@@ -944,7 +987,7 @@ public final class Tty extends DelegatedPrintStream {
 					public int read() {throw new IllegalStateException("一旦注册过KeyHandler，那么System.in不再可用\n请使用roj.ui.TUI的函数");}
 				});
 			}
-		} else if (!state.equals("disable")) {
+		} else if (!state.equals("off")) {
 			var fallback = new NoAnsi();
 			instance.addListener(fallback);
 			fallback.start();

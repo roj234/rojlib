@@ -49,8 +49,7 @@ public final class LongMap<V> extends AbstractMap<Long, V> implements _LibMap<Lo
 		int length = MathUtils.nextPowerOfTwo(size);
 
 		if (entries != null) {
-			mask = (length>>1) - 1;
-			resize();
+			resize(length);
 		} else {
 			mask = length-1;
 			nextResize = (int) (length * REFERENCE_LOAD_FACTOR);
@@ -187,8 +186,7 @@ public final class LongMap<V> extends AbstractMap<Long, V> implements _LibMap<Lo
 	}
 
 	@SuppressWarnings("unchecked")
-	private void resize() {
-		int length = (mask+1) << 1;
+	private void resize(int length) {
 		if (length <= 0) return;
 
 		Entry<?>[] newEntries = new Entry<?>[length];
@@ -226,7 +224,7 @@ public final class LongMap<V> extends AbstractMap<Long, V> implements _LibMap<Lo
 
 					size++;
 					if (loop > PRIMITIVE_CHAIN_THRESHOLD && size > nextResize) {
-						resize();
+						resize((mask + 1) << 1);
 						continue restart;
 					}
 

@@ -5,7 +5,7 @@ import roj.asm.MethodNode;
 import roj.asm.Opcodes;
 import roj.asm.type.IType;
 import roj.asm.type.Type;
-import roj.asmx.mapper.ParamNameMapper;
+import roj.asmx.ParamNameMapper;
 import roj.collect.ArrayList;
 import roj.collect.HashMap;
 import roj.collect.IntMap;

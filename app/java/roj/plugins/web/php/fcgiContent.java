@@ -2,12 +2,12 @@ package roj.plugins.web.php;
 
 import roj.http.Headers;
 import roj.http.server.*;
-import roj.util.FastFailException;
 import roj.io.IOUtil;
 import roj.net.ChannelCtx;
 import roj.text.CharList;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
+import roj.util.FastFailException;
 import roj.util.Helpers;
 
 import java.io.File;
@@ -100,13 +100,12 @@ public final class fcgiContent extends AsyncContent implements BodyParser {
 	public boolean isHeaderFinished() {return headerFinished;}
 
 	@Override
-	public synchronized void prepare(ResponseHeader rh, Headers h) throws IOException {
-		super.prepare(rh, h);
+	public synchronized void prepare(Response resp) throws IOException {
 		var httpCode = headers.remove("status");
-		h.putAll(headers);
+		resp.headers().putAll(headers);
 		headers = null;
-		if (httpCode != null) rh.code(Integer.parseInt(httpCode.substring(0, httpCode.indexOf(' '))));
-		if (h.header("content-type").startsWith("text/")) rh.enableCompression();
+		if (httpCode != null) resp.code(Integer.parseInt(httpCode.substring(0, httpCode.indexOf(' '))));
+		if (resp.headers().header("content-type").startsWith("text/")) resp.enableCompression();
 	}
 
 	@Override
@@ -133,7 +132,7 @@ public final class fcgiContent extends AsyncContent implements BodyParser {
 		}
 
 		try {
-			req.server().body(body);
+			req.response().body(body);
 		} catch (IOException e) {
 			Helpers.athrow(e);
 		}
@@ -179,7 +178,7 @@ public final class fcgiContent extends AsyncContent implements BodyParser {
 	public String isInvalid() {
 		if (state >= REMOTE_FINISH) return "LState: "+state;
 		try {
-			var state = req.server()._getState();
+			var state = req.response()._getState();
 			if (!state.equals("PROCESSING") && !state.equals("RECV_BODY")) return "HState: "+state;
 			return null;
 		} catch (Exception e) {

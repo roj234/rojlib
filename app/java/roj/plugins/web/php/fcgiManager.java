@@ -22,7 +22,7 @@ public abstract class fcgiManager implements Router {
 	private static final TypedKey<fcgiContent> FCGI_Handler = new TypedKey<>("fcgi:handler");
 
 	@Override
-	public Content response(Request req, ResponseHeader rh) throws Exception {
+	public Content response(Request req, Response resp) throws Exception {
 		var h = req.connection().attachment(FCGI_Handler,null);
 		if (h == null) {
 			h = fcgi_pass(req, new HashMap<>());
@@ -30,19 +30,19 @@ public abstract class fcgiManager implements Router {
 		}
 
 		if (h.isHeaderFinished()) return h;
-		rh.enableAsyncResponse(60000);
+		resp.async(60000);
 		return null;
 	}
 
 	@Override
-	public void checkHeader(Request req, @Nullable PostSetting cfg) throws IllegalRequestException {
+	public void checkHeader(Request req, @Nullable PayloadInfo cfg) throws IllegalRequestException {
 		req.unshared();
 
 		fcgiContent h;
 		if (cfg != null) {
 			h = fcgi_pass(req, new HashMap<>());
-			cfg.postAccept(Integer.MAX_VALUE, 900000);
-			cfg.postHandler(h);
+			cfg.accept(Integer.MAX_VALUE, 900000);
+			cfg.setParser(h);
 		} else {
 			h = null;
 		}
@@ -63,13 +63,13 @@ public abstract class fcgiManager implements Router {
 		if (!field.isEmpty()) param.putIfAbsent("CONTENT_TYPE", field);
 
 		param.put("REQUEST_METHOD", HttpUtil.getMethodName(req.action()));
-		param.put("REQUEST_URI", req.absolutePath());
+		param.put("REQUEST_URI", req.rawPath());
 		if (req.query() != null) param.put("QUERY_STRING", req.query());
 
 		var addr = req.proxyRemoteAddress();
 		param.put("REMOTE_ADDR", addr.getHostString());
 		param.put("REMOTE_PORT", String.valueOf(addr.getPort()));
-		addr = (InetSocketAddress) req.server().connection().localAddress();
+		addr = (InetSocketAddress) req.response().connection().localAddress();
 		param.put("SERVER_ADDR", addr.getHostString());
 		param.put("SERVER_PORT", String.valueOf(addr.getPort()));
 

@@ -221,7 +221,7 @@ public final class CsvParser extends TextParser implements TableParser {
 			case 1: if (i < in.length() && in.charAt(i) == '\n') i++;
 			case 2: index = i; return formClip(line, "\n");
 			case 3: index = i; return formClip(separator, ",");
-			case 4: index = i-1; return digitReader(false,0);
+			case 4: index = i-1; return readNumber(false,false);
 		}
 	}
 

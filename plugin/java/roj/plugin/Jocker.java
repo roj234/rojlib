@@ -6,6 +6,7 @@ import roj.asm.annotation.Annotation;
 import roj.ci.annotation.ReplaceConstant;
 import roj.collect.CollectionX;
 import roj.collect.HashMap;
+import roj.concurrent.Task;
 import roj.concurrent.TaskPool;
 import roj.config.node.BoolValue;
 import roj.config.node.ConfigValue;
@@ -39,6 +40,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.Set;
 import java.util.function.Consumer;
 import java.util.function.IntFunction;
 
@@ -226,9 +228,8 @@ public final class Jocker extends PluginManager {
 			}
 			if (builtin.size() > 0) {
 				CMD.register(literal("load_builtin").then(argument("plugin", Argument.someOf(builtin)).executes(ctx -> {
-					List<PluginDescriptor> lt = Helpers.cast(ctx.argument("plugin", List.class));
-					for (int i = 0; i < lt.size(); i++) {
-						var pd1 = lt.get(i);
+					Set<PluginDescriptor> lt = Helpers.cast(ctx.argument("plugin", Set.class));
+					for (PluginDescriptor pd1 : lt) {
 						builtin.remove(pd1.id);
 						loadAndEnablePlugin(pd1);
 					}
@@ -292,8 +293,10 @@ public final class Jocker extends PluginManager {
 			super(Interrupter::shutdown, "Panger Shutdown");
 			Runtime.getRuntime().addShutdownHook(this);
 
-			// preload class, only for development purpose
+			// 预载关闭时会用到的类，仅用于开发时JAR会被外部直接修改
 			JVM.isShutdownInProgress();
+			TaskPool.common();
+			Task.class.getClassLoader();
 		}
 
 		@Override

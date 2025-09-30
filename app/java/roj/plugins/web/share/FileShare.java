@@ -225,7 +225,7 @@ public class FileShare extends Plugin {
     //region Get
     @GET(":shareId")
     public Content index(Request req) {
-        if (!req.absolutePath().endsWith("/")) return Content.redirect(req, "/"+req.absolutePath()+"/");
+        if (!req.rawPath().endsWith("/")) return Content.redirect(req, "/"+req.rawPath()+"/");
 
         var zip = getDescription().getArchive();
         return Content.file(req, new ZipRouter.ZipFileInfo(zip, zip.getEntry("share.html")));
@@ -248,7 +248,7 @@ public class FileShare extends Plugin {
             //U.compareAndSwapObject(share, VFS_OFFSET, null, vfs);
             router = share.vfs = new VFSRouter(vfs);
         }
-        return router.response(req, req.server());
+        return router.response(req, req.response());
     }
 
     @Route(":shareId/info")
@@ -305,7 +305,7 @@ public class FileShare extends Plugin {
         if (info == null) return Content.httpError(404);
 
         if (info.code != null && !checkShareCode(req, info)) {
-            req.server().code(403);
+            req.response().code(403);
             return Content.text("提取码不正确");
         }
 
@@ -452,8 +452,8 @@ public class FileShare extends Plugin {
 
     //region new
     @Interceptor
-    public void newHandler(Request req, PostSetting ps) {
-        if (ps != null) ps.postAccept(110000, 1000);
+    public void newHandler(Request req, PayloadInfo ps) {
+        if (ps != null) ps.accept(110000, 1000);
     }
 
     private static final Pattern ID_PATTERN = Pattern.compile("^[a-zA-Z0-9-_@]+$");
@@ -620,7 +620,7 @@ public class FileShare extends Plugin {
     public void shareUploadFile() {}
 
     @Interceptor
-    public void uploadProcessor(Request req, PostSetting setting) throws IOException {uploadManager.uploadProcessor(req, setting);}
+    public void uploadProcessor(Request req, PayloadInfo setting) throws IOException {uploadManager.uploadProcessor(req, setting);}
 
     @POST(":shareId/submit")
     public CharSequence sharePackup(Request req) {

@@ -9,8 +9,9 @@ import java.lang.ref.ReferenceQueue;
 import java.lang.ref.WeakReference;
 import java.util.AbstractSet;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.Iterator;
+
+import static roj.collect.IntMap.REFERENCE_LOAD_FACTOR;
 
 /**
  * @author Roj234
@@ -44,17 +45,17 @@ public class WeakHashSet<K> extends AbstractSet<K> implements FindSet<K>, _LibMa
 	public WeakHashSet(int size) { ensureCapacity(size); }
 
 	public final void ensureCapacity(int size) {
-		if (size < 0) throw new NegativeArraySizeException(String.valueOf(size));
 		if (size <= mask) return;
-		mask = MathUtils.nextPowerOfTwo(size)-1;
+		int length = MathUtils.nextPowerOfTwo(size);
 
-		if (entries != null) resize();
+		if (entries != null) resize(length);
+		else mask = length-1;
 	}
 
-	private static final class SetItr<K> extends _LibItr<Entry> implements Iterator<K> {
+	private static final class Itr<K> extends _LibItr<Entry> implements Iterator<K> {
 		K myValue;
 
-		SetItr(WeakHashSet<K> set) { super(set.entries, set); }
+		Itr(WeakHashSet<K> set) { super(set.entries, set); }
 
 		@Override
 		@SuppressWarnings("unchecked")
@@ -77,8 +78,8 @@ public class WeakHashSet<K> extends AbstractSet<K> implements FindSet<K>, _LibMa
 	public final _LibEntry[] __entries() { return entries; }
 	public final void __remove(Entry entry) { remove(entry.get()); }
 
-	public void resize() {
-		Entry[] newEntries = new Entry[mask+1];
+	public void resize(int len) {
+		Entry[] newEntries = new Entry[len--];
 
 		Entry entry, next;
 		int i = 0, j = entries.length;
@@ -90,7 +91,7 @@ public class WeakHashSet<K> extends AbstractSet<K> implements FindSet<K>, _LibMa
 				next = entry.next;
 
 				if (entry.get() != null) {
-					int newKey = entry.hash&mask;
+					int newKey = entry.hash&len;
 					Entry old = newEntries[newKey];
 					newEntries[newKey] = entry;
 					entry.next = Helpers.cast(old);
@@ -103,6 +104,7 @@ public class WeakHashSet<K> extends AbstractSet<K> implements FindSet<K>, _LibMa
 		}
 
 		entries = newEntries;
+		mask = len;
 	}
 
 	@Override
@@ -127,9 +129,8 @@ public class WeakHashSet<K> extends AbstractSet<K> implements FindSet<K>, _LibMa
 		doEvict();
 
 		if (entries == null) entries = new Entry[mask+1];
-		else if (size > mask * 0.8f) {
-			mask = ((mask+1) << 1) - 1;
-			resize();
+		else if (size > mask * REFERENCE_LOAD_FACTOR) {
+			resize((mask+1) << 1);
 		}
 
 		int hash = System.identityHashCode(key);
@@ -181,7 +182,7 @@ public class WeakHashSet<K> extends AbstractSet<K> implements FindSet<K>, _LibMa
 	}
 
 	@NotNull
-	public Iterator<K> iterator() { doEvict(); return isEmpty() ? Collections.emptyIterator() : new SetItr<>(this); }
+	public Iterator<K> iterator() { doEvict(); return new Itr<>(this); }
 
 	public void doEvict() {
 		Entry entry;

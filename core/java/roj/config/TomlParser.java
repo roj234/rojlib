@@ -158,13 +158,13 @@ public final class TomlParser extends TextParser {
 				case C_MAY__NUMBER_SIGN:
 					if (i+1 < in.length() && NUMBER.contains(in.charAt(i))) {
 						prevIndex = index = i;
-						return readDigit(true);
+						return readNumber(true);
 					}
 					// fall to literal(symbol)
 				default:
 					prevIndex = index = i;
 					Token w = readSymbol();
-					if (w == COMMENT_RETRY_HINT) {i = index;continue;}
+					if (w == CONSUMED_BY_SPECIAL_TOKEN) {i = index;continue;}
 					return w;
 				case C_NUMBER:
 					prevIndex = index = i;
@@ -177,7 +177,7 @@ public final class TomlParser extends TextParser {
 						if (w != null) return w;
 					}
 
-					return readDigit(false);
+					return readNumber(false);
 				case C_WHITESPACE: i++;
 			}
 		}
@@ -244,9 +244,9 @@ public final class TomlParser extends TextParser {
 	}
 
 	@Override
-	protected Token onInvalidNumber(int flag, int i, String reason) throws ParseException {
-		if (reason.endsWith(":")) reason += input.charAt(i);
-		throw err(reason, i);
+	protected Token onInvalidNumber(int errorLoc, String reason) throws ParseException {
+		if (reason.endsWith(":")) reason += input.charAt(errorLoc);
+		throw err(reason, errorLoc);
 	}
 
 	@Override

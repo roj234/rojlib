@@ -3,10 +3,9 @@ package roj.ci.minecraft;
 import roj.asm.MemberDescriptor;
 import roj.asmx.mapper.Mapping;
 import roj.config.JsonParser;
-import roj.text.ParseException;
 import roj.config.node.MapValue;
-import roj.io.IOUtil;
 import roj.text.LineReader;
+import roj.text.ParseException;
 import roj.text.TextReader;
 import roj.text.TextUtil;
 import roj.ui.Tty;
@@ -159,7 +158,7 @@ final class TSrgMapping extends Mapping {
 		public MCPConfig(File file) throws IOException {
 			zf = new ZipFile(file);
 			try {
-				manifest = JsonParser.parses(IOUtil.readUTF(zf.getInputStream(zf.getEntry("config.json")))).asMap();
+				manifest = new JsonParser().charset(StandardCharsets.UTF_8).parse(zf.getInputStream(zf.getEntry("config.json"))).asMap();
 			} catch (ParseException e) {
 				throw new IOException("reading manifest", e);
 			}

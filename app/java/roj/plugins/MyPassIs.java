@@ -7,6 +7,7 @@ import roj.config.NbtParser;
 import roj.config.node.ByteArrayValue;
 import roj.config.node.ConfigValue;
 import roj.config.node.MapValue;
+import roj.config.node.NullValue;
 import roj.crypt.*;
 import roj.io.IOUtil;
 import roj.plugin.Plugin;
@@ -162,7 +163,7 @@ public class MyPassIs extends Plugin {
 		char[] charset;
 		int length;
 
-		if (prev == null) {
+		if (prev == NullValue.NULL) {
 			MapValue m = new MapValue();
 			while (true) {
 				try {

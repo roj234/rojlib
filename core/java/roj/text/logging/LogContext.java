@@ -52,5 +52,5 @@ public final class LogContext {
 
 	LogWriter getWriter() {return getPrefix() == null ? LogWriterJson.LOCAL.get() : LogWriter.LOCAL.get();}
 
-	public LogContext child(String name) {return new LogContext(this, this.name+"/"+name);}
+	public LogContext child(String name) {return new LogContext(this, name);}
 }

@@ -2,8 +2,8 @@ package roj.plugins.llm;
 
 import roj.collect.ArrayList;
 import roj.config.ConfigMaster;
-import roj.http.HttpClient;
 import roj.http.HttpRequest;
+import roj.http.HttpResponse;
 import roj.text.CharList;
 import roj.text.ParseException;
 import roj.util.DynByteBuf;
@@ -43,7 +43,7 @@ public class ChatTask {
 
 	@SuppressWarnings("unchecked")
 	static <T> DynByteBuf encode(T o) throws IOException {return ConfigMaster.JSON.writeObject(/*(Serializer<T>) SerializerFactory.POOLED.serializer(o.getClass()), */o, DynByteBuf.allocate());}
-	static <T> T decode(HttpClient client, Class<T> response) throws IOException, ParseException {return ConfigMaster.JSON.readObject(client.stream(), response);}
+	static <T> T decode(HttpResponse client, Class<T> response) throws IOException, ParseException {return ConfigMaster.JSON.readObject(client.stream(), response);}
 
 	public String eval(String input) throws IOException {
 		List<OAIChatCompletionRequest.Message> messages = request.messages;
@@ -63,7 +63,7 @@ public class ChatTask {
 		while (true) {
 			OAIChatCompletionResponse response;
 			try {
-				response = decode(HttpRequest.builder().body(encode(request)).url(endpointUrl).executePooled(300000), OAIChatCompletionResponse.class);
+				response = decode(HttpRequest.builder().body(encode(request)).uri(endpointUrl).executePooled(300000), OAIChatCompletionResponse.class);
 			} catch (ParseException e) {
 				throw new IOException("响应格式错误", e);
 			}

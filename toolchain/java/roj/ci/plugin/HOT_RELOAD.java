@@ -98,16 +98,20 @@ public class HOT_RELOAD implements Processor {
 		IOUtil.closeSilently(channel6);
 	}
 
-	@Override public synchronized void afterCompile(BuildContext ctx) {
-		if (ctx.compiledClassIndex > 0) {
-			List<ClassNode> classData = new ArrayList<>(ctx.compiledClassIndex);
-			List<Context> classes = ctx.getClasses();
-			for (int i = 0; i < ctx.compiledClassIndex; i++) {
+	@Override
+	public void afterCompilePost(BuildContext ctx) {
+		if (!ctx.project.isArtifact()) {
+			List<Context> classes = ctx.getChangedClasses();
+			List<ClassNode> classData = new ArrayList<>(classes.size());
+			for (int i = 0; i < classes.size(); i++) {
 				classData.add(classes.get(i).getData());
 			}
-			sendChanges(classData);
+			synchronized (this) {
+				sendChanges(classData);
+			}
 		}
 	}
+
 	public void sendChanges(List<? extends ClassDefinition> modified) {
 		if (modified.isEmpty()) return;
 		if (modified.size() > 9999) throw new IllegalArgumentException("Too many classes modified");

@@ -246,7 +246,7 @@ final class MinecraftClientInfo {
 		if (nameNoVersion.endsWith("log4j-core")) fixLog4j(libFile);
 
 		if (sameVer) {
-			LOGGER.info("遇到了相同版本的 {}, 跳过", nameNoVersion);
+			LOGGER.debug("遇到了相同版本的 {}, 跳过", nameNoVersion);
 			return;
 		}
 		library.path = filePath;

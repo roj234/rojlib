@@ -79,18 +79,18 @@ public class Websocketd extends Plugin implements Router {
 	}
 
 	@Override
-	public void checkHeader(Request req, @Nullable PostSetting cfg) throws IllegalRequestException {
-		if (manager != null) manager.invoke(req, req.server(), cfg);
+	public void checkHeader(Request req, @Nullable PayloadInfo cfg) throws IllegalRequestException {
+		if (manager != null) manager.invoke(req, req.response(), cfg);
 	}
 	@Override
-	public Content response(Request req, ResponseHeader rh) throws IOException {
-		var cmd = cmdList.get(req.absolutePath());
+	public Content response(Request req, Response resp) throws IOException {
+		var cmd = cmdList.get(req.rawPath());
 		if (cmd != null) {
 			if ("websocket".equals(req.header("upgrade"))) return Content.websocket(req, new Worker(cmd));
 			var archive = getDescription().getArchive();
 			return ZipRouter.zip(req, archive, archive.getEntry("index.html"));
 		}
-		return rh.code(404).noContent();
+		return resp.code(404).noContent();
 	}
 
 	static final class Worker extends WebSocket implements Function<Request, WebSocket> {

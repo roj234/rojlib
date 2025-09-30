@@ -1,9 +1,9 @@
 package roj.asmx.mapper;
 
 import org.jetbrains.annotations.NotNull;
+import roj.archive.xz.LZMA2InputStream;
 import roj.archive.xz.LZMA2Options;
 import roj.archive.xz.LZMAInputStream;
-import roj.archive.xz.LZMAOutputStream;
 import roj.archive.zip.ZEntry;
 import roj.archive.zip.ZipFile;
 import roj.asm.*;
@@ -14,6 +14,7 @@ import roj.asm.cp.*;
 import roj.asm.type.Signature;
 import roj.asm.type.Type;
 import roj.asmx.Context;
+import roj.asmx.ParamNameMapper;
 import roj.collect.ArrayList;
 import roj.collect.HashMap;
 import roj.collect.HashSet;
@@ -29,10 +30,7 @@ import roj.util.DynByteBuf;
 import roj.util.Helpers;
 import roj.util.StringPool;
 
-import java.io.File;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
+import java.io.*;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Predicate;
@@ -49,21 +47,21 @@ import static roj.asmx.Context.runAsync;
  */
 public class Mapper extends Mapping {
 	public static final String DONT_LOAD_PREFIX = "[x]";
-	public static final int
-		/** 任意methodMap和fieldMap的owner均能在classMap中找到 */
-		FLAG_FULL_CLASS_MAP = 1,
-		/** (Obfuscator用) 删除冲突的mapping（方法继承） */
-		FLAG_FIX_INHERIT = 4,
-		/** (Obfuscator用) 删除冲突的mapping（子类实现的接口覆盖父类方法） */
-		MF_FIX_SUBIMPL = 2,
-		/** 启用注解伪继承 */
-		MF_ANNOTATION_INHERIT = 8,
-		/** 类名有变动 */
-		MF_RENAME_CLASS = 16,
-		/** 单线程 */
-		MF_SINGLE_THREAD = 32,
-		/** 修复class改名造成的访问问题 */
-		MF_FIX_ACCESS = 64;
+
+	/** 任意methodMap和fieldMap的owner均能在classMap中找到 */
+	public static final int FLAG_FULL_CLASS_MAP = 1,
+	/** (Obfuscator用) 删除冲突的mapping（方法继承） */
+	FLAG_FIX_INHERIT = 4,
+	/** (Obfuscator用) 删除冲突的mapping（子类实现的接口覆盖父类方法） */
+	MF_FIX_SUBIMPL = 2,
+	/** 启用注解伪继承 */
+	MF_ANNOTATION_INHERIT = 8,
+	/** 类名有变动 */
+	MF_RENAME_CLASS = 16,
+	/** 单线程 */
+	MF_SINGLE_THREAD = 32,
+	/** 修复class改名造成的访问问题 */
+	MF_FIX_ACCESS = 64;
 
 	private static final int ASYNC_THRESHOLD = 1000;
 	// 注意事项
@@ -78,23 +76,23 @@ public class Mapper extends Mapping {
 	private final ParamNameMapper paramMapper = new ParamNameMapper() {
 		@Override
 		protected List<String> getParamNames(MethodNode m) {
-			if (paramMap != null) {
+			if (!paramMap.isEmpty()) {
 				String owner = m.owner();
 
-				MemberDescriptor md = ClassUtil.getInstance().sharedDesc;
-				md.owner = classMap.getOrDefault(owner, owner);
-				md.name = m.name();
-				md.rawDesc = m.rawDesc();
+				MemberDescriptor d = ClassUtil.getInstance().sharedDesc;
+				d.owner = classMap.getOrDefault(owner, owner);
+				d.name = m.name();
+				d.rawDesc = m.rawDesc();
 
-				List<String> parents = selfSupers.getOrDefault(owner, Collections.emptyList());
+				List<String> parents = hierarchy.getOrDefault(owner, Collections.emptyList());
 				int i = 0;
-				do {
-					List<String> param = paramMap.get(md);
+				while (true) {
+					List<String> param = paramMap.get(d);
 					if (param != null) return copyOf(param);
 
 					if (i == parents.size()) break;
-					md.owner = parents.get(i++);
-				} while (true);
+					d.owner = parents.get(i++);
+				}
 			}
 
 			return Collections.emptyList();
@@ -104,6 +102,8 @@ public class Mapper extends Mapping {
 		protected String mapType(String type) { return ClassUtil.getInstance().mapFieldType(classMap, type); }
 		@Override
 		protected String mapGenericType(String type) {
+			if ((flag&MF_RENAME_CLASS) == 0) return type;
+
 			Signature s = Signature.parse(type);
 			s.rename(signatureMapper);
 			return s.toDesc();
@@ -114,36 +114,37 @@ public class Mapper extends Mapping {
 	/**
 	 * 来自依赖的数据
 	 */
-	public final HashSet<MemberDescriptor> libStopAnchor;
-	public final HashMap<String, List<String>> libSupers;
+	public final HashSet<MemberDescriptor> libShadows;
+	public final HashMap<String, List<String>> libHierarchy;
 
 	/**
 	 * 工作中数据
 	 */
 	private Map<MemberDescriptor, String> selfInherited;
-	private Set<MemberDescriptor> stopAnchor;
-	Map<String, List<String>> selfSupers;
+	private Set<MemberDescriptor> shadows;
+	// 加入flag区分接口和类，以提升FieldRef和InterfaceMethodRef处理时的性能
+	private Map<String, List<String>> hierarchy;
 
 	public byte flag = FLAG_FULL_CLASS_MAP;
 
 	public Mapper() { this(false); }
 	public Mapper(boolean checkFieldType) {
 		super(checkFieldType);
-		libSupers = new HashMap<>(128);
-		libStopAnchor = new HashSet<>();
+		libHierarchy = new HashMap<>(128);
+		libShadows = new HashSet<>();
 	}
 
 	public Mapper(Mapper o) {
 		super(o);
-		this.libStopAnchor = new HashSet<>(o.libStopAnchor);
-		this.libSupers = new HashMap<>(o.libSupers);
+		this.libShadows = new HashSet<>(o.libShadows);
+		this.libHierarchy = new HashMap<>(o.libHierarchy);
 		this.paramMapper.isValid = o.paramMapper.isValid;
 		this.flag = o.flag;
 	}
 	public Mapper(Mapping o) {
 		super(o);
-		this.libSupers = new HashMap<>(128);
-		this.libStopAnchor = new HashSet<>();
+		this.libHierarchy = new HashMap<>(128);
+		this.libShadows = new HashSet<>();
 	}
 
 	// region 缓存
@@ -152,7 +153,7 @@ public class Mapper extends Mapping {
 
 	public void saveCache(OutputStream cache, int saveMode) throws IOException {
 		StringPool pool = new StringPool();
-		if (!checkFieldType) pool.add("");
+		if (!fieldHasType) pool.add("");
 
 		ByteList w = IOUtil.getSharedByteBuf();
 
@@ -178,8 +179,8 @@ public class Mapper extends Mapping {
 		}
 
 		if ((saveMode&2) != 0) {
-			w.putVUInt(libSupers.size());
-			for (Map.Entry<String, List<String>> s : libSupers.entrySet()) {
+			w.putVUInt(libHierarchy.size());
+			for (Map.Entry<String, List<String>> s : libHierarchy.entrySet()) {
 				pool.add(w, s.getKey());
 
 				MapperList list = (MapperList) s.getValue();
@@ -187,15 +188,15 @@ public class Mapper extends Mapping {
 				for (int i = 0; i < list.size(); i++) pool.add(w, list.get(i));
 			}
 
-			w.putVUInt(libStopAnchor.size());
-			for (MemberDescriptor s : libStopAnchor) {
+			w.putVUInt(libShadows.size());
+			for (MemberDescriptor s : libShadows) {
 				pool.add(pool.add(pool.add(w, s.owner), s.name), s.rawDesc);
 			}
 		} else {
 			w.putShort(0);
 		}
 
-		try (var out = new LZMAOutputStream(cache, getLZMAOption(), false, true, -1)) {
+		try (var out = getLZMAOption().getOutputStream(cache)) {
 			try (var header = new ByteList.ToStream(out, false)) {
 				pool.writePool(header);
 			}
@@ -204,8 +205,18 @@ public class Mapper extends Mapping {
 	}
 
 	public Boolean loadCache(InputStream cache, boolean readClassInheritanceMap) throws IOException {
-		LZMA2Options lzmaOption = getLZMAOption();
-		var r = ByteInputStream.wrap(new LZMAInputStream(cache, -1, lzmaOption.getPropByte(), lzmaOption.getDictSize()));
+		var push = new PushbackInputStream(cache);
+		int read = push.read();
+		push.unread(read);
+		InputStream in;
+		if (read == 0) {
+			// legacy
+			LZMA2Options opt = getLZMAOption();
+			in = new LZMAInputStream(push, -1, opt.getPropByte(), opt.getDictSize());
+		} else {
+			in = new LZMA2InputStream(push, 2097152);
+		}
+		var r = ByteInputStream.wrap(in);
 
 		var pool = new StringPool(r);
 
@@ -237,12 +248,12 @@ public class Mapper extends Mapping {
 			sch.selfIdx = idx;
 			sch.index();
 
-			libSupers.put(name, sch);
+			libHierarchy.put(name, sch);
 		}
 
 		count = r.readVUInt();
 		while(count-- > 0) {
-			libStopAnchor.add(new MemberDescriptor(pool.get(r), pool.get(r), pool.get(r)));
+			libShadows.add(new MemberDescriptor(pool.get(r), pool.get(r), pool.get(r)));
 		}
 
 		return true;
@@ -255,13 +266,13 @@ public class Mapper extends Mapping {
 	public void map(List<Context> ctxs) {map(ctxs, TaskPool.cpu());}
 	public void map(List<Context> ctxs, Executor pool) {
 		if ((flag&MF_SINGLE_THREAD)!=0 || ctxs.size() <= ASYNC_THRESHOLD) {
-			_map(ctxs, true);
+			mapSync(ctxs, true);
 			return;
 		}
 
-		stopAnchor = Collections.newSetFromMap(new ConcurrentHashMap<>(libStopAnchor.size()));
-		stopAnchor.addAll(libStopAnchor);
-		selfSupers = new ConcurrentHashMap<>(ctxs.size());
+		shadows = Collections.newSetFromMap(new ConcurrentHashMap<>(libShadows.size()));
+		shadows.addAll(libShadows);
+		hierarchy = new ConcurrentHashMap<>(ctxs.size());
 		selfInherited = new SynchronizedFindMap<>();
 
 		List<List<Context>> tasks = new ArrayList<>((ctxs.size()-1)/ASYNC_THRESHOLD + 1);
@@ -275,54 +286,41 @@ public class Mapper extends Mapping {
 
 		runAsync(this::S1_parse, tasks, pool);
 
-		initSelfSuperMap();
+		buildHierarchy();
 
-		S2_begin(ctxs);
-
-		if ((flag&MF_FIX_ACCESS) != 0) S2_1_FixAccess(ctxs, false);
-		if ((flag&MF_FIX_SUBIMPL) != 0) S2_3_FixSubImpl(ctxs, true);
-
-		S2_end();
+		syncStage2(ctxs);
 
 		runAsync((ctx) -> S3_mapSelf(ctx, false), tasks, pool);
 		runAsync(this::S4_mapConstant, tasks, pool);
 		if ((flag&MF_RENAME_CLASS) != 0) {
 			runAsync(this::S5_mapClassName, tasks, pool);
 			runAsync(this::S5_1_resetDebugInfo, tasks, pool);
-		} else {
-			runAsync(this::S5_alt_mapParamName, tasks, pool);
 		}
 	}
 
 	/**
 	 * 增量
 	 */
-	public void mapIncr(List<Context> ctxs) { _map(ctxs, false); }
+	public void mapIncr(List<Context> ctxs) { mapSync(ctxs, false); }
 
-	private void _map(List<Context> ctxs, boolean full) {
-		if (selfSupers == null || full) initSelf(ctxs.size());
+	private void mapSync(List<Context> ctxs, boolean full) {
+		if (hierarchy == null || full) setupHierarchy(ctxs.size());
 
 		Context ctx = null;
 		try {
-			HashSet<String> modified = full?null:new HashSet<>();
-			for (int i = 0; i < ctxs.size(); i++) {
-				S1_parse(ctx = ctxs.get(i));
-				if (!full) modified.add(ctx.getData().name());
-			}
+			for (int i = 0; i < ctxs.size(); i++) S1_parse(ctx = ctxs.get(i));
 
-			initSelfSuperMap();
+			buildHierarchy();
+
 			if (!full) {
-				Predicate<MemberDescriptor> rem = key -> modified.contains(key.owner);
-				selfInherited.keySet().removeIf(rem);
-				stopAnchor.removeIf(rem);
+				HashSet<String> modified = new HashSet<>();
+				for (int i = 0; i < ctxs.size(); i++) {
+					modified.add(ctxs.get(i).getData().name());
+				}
+				onClassChanged(modified, false);
 			}
 
-			S2_begin(ctxs);
-
-			if ((flag&MF_FIX_ACCESS) != 0) S2_1_FixAccess(ctxs, false);
-			if ((flag&MF_FIX_SUBIMPL) != 0) S2_3_FixSubImpl(ctxs, false);
-
-			S2_end();
+			syncStage2(ctxs);
 
 			for (int i = 0; i < ctxs.size(); i++) S3_mapSelf(ctx = ctxs.get(i), false);
 			for (int i = 0; i < ctxs.size(); i++) S4_mapConstant(ctx = ctxs.get(i));
@@ -331,14 +329,28 @@ public class Mapper extends Mapping {
 					S5_mapClassName(ctx = ctxs.get(i));
 					S5_1_resetDebugInfo(ctx);
 				}
-			} else if (!paramMap.isEmpty()) {
-				for (int i = 0; i < ctxs.size(); i++) {
-					S5_alt_mapParamName(ctx = ctxs.get(i));
-				}
 			}
 		} catch (Throwable e) {
 			throw new RuntimeException("At parsing " + ctx, e);
 		}
+	}
+
+	private void syncStage2(List<Context> ctxs) {
+		if ((flag&(MF_FIX_ACCESS|MF_FIX_SUBIMPL)) != 0) {
+			S2_begin(ctxs);
+
+			if ((flag&MF_FIX_ACCESS) != 0) S2_1_FixAccess(ctxs, false);
+			if ((flag&MF_FIX_SUBIMPL) != 0) S2_3_FixSubImpl(ctxs, false);
+
+			S2_end();
+		}
+	}
+
+	public void onClassChanged(HashSet<String> modified, boolean removed) {
+		if (removed) hierarchy.keySet().removeAll(modified);
+		Predicate<MemberDescriptor> rem = key -> modified.contains(key.owner);
+		selfInherited.keySet().removeIf(rem);
+		shadows.removeIf(rem);
 	}
 
 	// region 映射
@@ -368,7 +380,7 @@ public class Mapper extends Mapping {
 			if (list.isEmpty()) return;
 		}
 
-		selfSupers.put(data.name(), list);
+		hierarchy.put(data.name(), list);
 	}
 
 	private HashMap<String, ClassDefinition> s2_tmp_byName;
@@ -438,7 +450,7 @@ public class Mapper extends Mapping {
 		for (int i = 0; i < ctxs.size(); i++) {
 			ClassNode data = ctxs.get(i).getData();
 
-			List<String> parents = selfSupers.get(data.name());
+			List<String> parents = hierarchy.get(data.name());
 			if (parents == null) continue;
 
 			exist.clear();
@@ -484,7 +496,7 @@ public class Mapper extends Mapping {
 						}
 					}
 
-					if (stopAnchor.contains(d)) break;
+					if (shadows.contains(d)) break;
 
 					if (k == exist.size()) break;
 					d.owner = exist.get(k++);
@@ -505,7 +517,7 @@ public class Mapper extends Mapping {
 			Member node;
 
 			int k = 0;
-			List<String> parents = selfSupers.getOrDefault(d.owner, Collections.emptyList());
+			List<String> parents = hierarchy.getOrDefault(d.owner, Collections.emptyList());
 
 			found:
 			while (true) {
@@ -521,7 +533,7 @@ public class Mapper extends Mapping {
 					}
 				}
 
-				if (stopAnchor.contains(d) || k == parents.size()) {
+				if (shadows.contains(d) || k == parents.size()) {
 					processed.add(ref.get(j));
 					continue nextNode;
 				}
@@ -573,7 +585,7 @@ public class Mapper extends Mapping {
 			tryMap(null, data.name(), data.fields, sameNameNodes, fieldMap);
 			tryMap(null, data.name(), data.methods, sameNameNodes, methodMap);
 
-			List<String> parents = selfSupers.getOrDefault(data.name(), Collections.emptyList());
+			List<String> parents = hierarchy.getOrDefault(data.name(), Collections.emptyList());
 			for (String parent : parents) {
 				checked.add(parent);
 				tryMap(data.name(), parent, getMethodInfoEx(parent), sameNameNodes, methodMap);
@@ -607,7 +619,7 @@ public class Mapper extends Mapping {
 						String owner, List<?> list,
 						HashMap<NameAndType, Set<NameAndType>> descs,
 						FindMap<MemberDescriptor, String> map) {
-		List<String> parents = selfSupers.getOrDefault(owner, Collections.emptyList());
+		List<String> parents = hierarchy.getOrDefault(owner, Collections.emptyList());
 		MemberDescriptor d = ClassUtil.getInstance().sharedDesc;
 		for (int i = 0; i < list.size(); i++) {
 			Member m = (Member) list.get(i);
@@ -632,9 +644,8 @@ public class Mapper extends Mapping {
 					break;
 				}
 
-				if (stopAnchor.contains(d)) {
-					//SIG:DEBUG
-					LOGGER.log(Level.DEBUG, "[debug] stop on {}", null, d);
+				if (shadows.contains(d)) {
+					LOGGER.log(Level.DEBUG, "[{}][Shadow] stopOn {}.{}{}", null, owner, i==0?"~":d.owner, d.name, d.rawDesc);
 					break;
 				}
 
@@ -735,7 +746,7 @@ public class Mapper extends Mapping {
 
 			interfaceMethods.clear();
 
-			List<String> parents = selfSupers.get(data.parent());
+			List<String> parents = hierarchy.get(data.parent());
 			if (parents == null) parents = ClassUtil.getInstance().getHierarchyList(data.parent());
 
 			for (int j = 0; j < itfs.size(); j++) {
@@ -838,96 +849,86 @@ public class Mapper extends Mapping {
 	 * Step 3 Self method/field name (and type in record)
 	 */
 	public final void S3_mapSelf(Context ctx, boolean simulate) {
-		ClassNode data = ctx.getData();
-		data.unparsed();
+		ClassNode node = ctx.getData();
 
-		List<String> parents = selfSupers.getOrDefault(data.name(), Collections.emptyList());
+		List<String> parents = hierarchy.getOrDefault(node.name(), Collections.emptyList());
 
 		MemberDescriptor d = ClassUtil.getInstance().sharedDesc;
 
-		List<MethodNode> methods = data.methods;
+		List<MethodNode> methods = node.methods;
 		for (int i = 0; i < methods.size(); i++) {
 			MethodNode m = methods.get(i);
 
-			d.owner = data.name();
+			if (!simulate) paramMapper.mapParam(node.cp, m);
+
+			if (m.name().startsWith("<")) continue;
+
+			int parentCount = (m.modifier&(Opcodes.ACC_PRIVATE|Opcodes.ACC_STATIC)) != 0 ? 0 : parents.size();
+
+			d.owner = node.name();
 			d.name = m.name();
 			d.rawDesc = m.rawDesc();
 
 			int j = 0;
 			while (true) {
 				Map.Entry<MemberDescriptor, String> entry = methodMap.find(d);
-				add_stop_anchor:
 				if (entry == null) {
-					if (j >= parents.size()) break;
+					if (j == parentCount) break;
 					d.owner = parents.get(j++);
 					continue;
-				} else {
-					int acc = entry.getKey().modifier;
-					if (acc == MemberDescriptor.FLAG_UNSET) {
-						if (j == 0) {
-							acc = entry.getKey().modifier = m.modifier();
-						} else {
-							if (simulate) {
-								LOGGER.warn("缺少元素 {}", entry);
-								if (j >= parents.size()) break;
-								d.owner = parents.get(j++);
-								continue;
-							}
-							throw new IllegalStateException("缺少元素: "+entry.getKey());
-						}
+				}
+
+				// 成员B能否重写成员A，无关继承路径，只依赖于成员A的访问修饰符。
+				// 如果从B到A的继承路径上有访问权限更低的，其不起作用，如果有final的，非法
+				int acc = entry.getKey().modifier;
+				if (acc == MemberDescriptor.FLAG_UNSET) {
+					if (simulate) {
+						LOGGER.warn("缺少 {} 的访问修饰符", entry.getKey());
+						if (j >= parents.size()) break;
+						d.owner = parents.get(j++);
+						continue;
 					}
+					throw new IllegalStateException("缺少 "+entry.getKey()+" 的访问修饰符");
+				}
 
-					boolean inheritable = true;
-
-					// 无法被继承
-					if (0 != (acc & (ACC_PRIVATE|ACC_STATIC|ACC_FINAL))) {
-						// j == 0 <==> d.owner == data.name (library only)
-						if (j > 0) break add_stop_anchor;
-						// 自己的方法
-						//inheritable = false;
-					} else if (0 == (acc & (ACC_PUBLIC|ACC_PROTECTED)) &&
-								!ClassUtil.arePackagesSame(data.name(), d.owner)) {
-						// package-private
-						break add_stop_anchor;
-					}
-
+				if (!d.owner.equals(node.name()) && (
+						0 != (acc & (ACC_PRIVATE|ACC_STATIC|ACC_FINAL))
+						|| (0 == (acc & (ACC_PUBLIC|ACC_PROTECTED)) && !ClassUtil.arePackagesSame(node.name(), d.owner))
+				)) {
+					LOGGER.log(Level.TRACE, "[Shadow]: {} 隐藏了 {}", null, node.name(), d);
+					d.owner = node.name();
+					shadows.add(d.copy());
+				} else if (!simulate) {
 					String newName = entry.getValue();
-					if (!simulate) {
-						m.name(newName);
-						d.owner = data.name();
-						// fast-path ONLY
-						selfInherited.put(d.copy(), newName);
-					}
+					m.name(newName);
 
-                    if (inheritable) break;
-                }
-
-				LOGGER.log(Level.TRACE, "[M-S]: {}.{}{} 无法继承 {} 类的对应方法", null, data.name(), d.name, d.rawDesc, j==0?"~":d.owner);
-				d.owner = data.name();
-				stopAnchor.add(d.copy()); // 这个方法未被子类（以及当前类）继承，通过继承链查找到的这个方法是无效的
+					d.owner = node.name();
+					// 加入一个fast path，用于快速查找reference
+					selfInherited.put(d.copy(), newName);
+				}
 				break;
 			}
 		}
 
 		d.rawDesc = "";
 
-		List<? extends Member> fields = data.fields;
+		List<? extends Member> fields = node.fields;
 		for (int i = 0; i < fields.size(); i++) {
 			FieldNode f = (FieldNode) fields.get(i);
 
-			d.owner = data.name();
+			d.owner = node.name();
 			d.name = f.name();
-			if (checkFieldType) d.rawDesc = f.rawDesc();
+			if (fieldHasType) d.rawDesc = f.rawDesc();
 
 			int j = 0;
 			while (true) {
 				String newName = fieldMap.get(d);
 				if (newName != null) {
-					// j == 0 <==> d.owner == data.name (library only)
+					// j == 0 <==> d.owner == node.name (library only)
 					if (j > 0) {
-						LOGGER.log(Level.TRACE, "[F-S]: {}.{}{} 无法继承 {} 类的对应字段", null, data.name(), d.name, d.rawDesc, d.owner);
-						d.owner = data.name();
-						stopAnchor.add(d.copy());
+						LOGGER.log(Level.TRACE, "[Shadow]: {} 隐藏了 {}", null, node.name(), d);
+						d.owner = node.name();
+						shadows.add(d.copy());
 					} else {
 						if (!simulate) f.name(newName);
 					}
@@ -939,23 +940,23 @@ public class Mapper extends Mapping {
 			}
 		}
 
-		if (!simulate) mapRecord(d, data);
+		if (!simulate) mapRecord(d, node);
 	}
 	/** Field name and type in 'Record' attribute */
-	private void mapRecord(MemberDescriptor d, ClassNode data) {
-		RecordAttribute r = data.getAttribute(data.cp, Attribute.Record);
+	private void mapRecord(MemberDescriptor d, ClassNode node) {
+		RecordAttribute r = node.getAttribute(node.cp, Attribute.Record);
 		if (r == null) return;
 
 		ClassUtil U = ClassUtil.getInstance();
 
-		d.owner = data.name();
+		d.owner = node.name();
 		d.rawDesc = "";
 		List<RecordAttribute.Field> vars = r.fields;
 		for (int i = 0; i < vars.size(); i++) {
 			RecordAttribute.Field v = vars.get(i);
 
 			d.name = v.name;
-			if (checkFieldType) d.rawDesc = v.type;
+			if (fieldHasType) d.rawDesc = v.type;
 
 			String newName = fieldMap.get(d);
 			if (newName != null) {
@@ -971,32 +972,30 @@ public class Mapper extends Mapping {
 	 * Step 4: Reference
 	 */
 	public final void S4_mapConstant(Context ctx) {
-		ClassNode data = ctx.getData();
+		ClassNode node = ctx.getData();
 
-		BootstrapMethods bs = null;
+		BootstrapMethods bsm = null;
 
-		List<Constant> list = data.cp.constants();
+		List<Constant> list = node.cp.constants();
 		for (int j = 0; j < list.size(); j++) {
 			Constant c = list.get(j);
 			switch (c.type()) {
-				case Constant.INTERFACE: case Constant.METHOD:
-					mapRef(data, (CstRef) c, true);
-					break;
-				case Constant.FIELD:
-					mapRef(data, (CstRef) c, false);
-					break;
-				case Constant.INVOKE_DYNAMIC:
-					if (bs == null) bs = data.getAttribute(data.cp,Attribute.BootstrapMethods);
-					if (bs == null) throw new IllegalArgumentException("有lambda却无BootstrapMethod, " + data.name());
-					mapLambda(bs, data, (CstDynamic) c);
-					break;
+				case Constant.INTERFACE, Constant.METHOD -> mapRef(node, (CstRef) c, true);
+				case Constant.FIELD -> mapRef(node, (CstRef) c, false);
+				case Constant.INVOKE_DYNAMIC -> {
+					if (bsm == null) {
+						bsm = node.getAttribute(node.cp, Attribute.BootstrapMethods);
+						if (bsm == null) throw new IllegalArgumentException("有lambda却无BootstrapMethod, "+node.name());
+					}
+					mapLambda(bsm, node, (CstDynamic) c);
+				}
 			}
 		}
 	}
 	/** Map: lambda method name */
 	private void mapLambda(BootstrapMethods bs, ClassNode data, CstDynamic dyn) {
 		if (dyn.tableIdx >= bs.methods.size())
-			throw new IllegalArgumentException("BootstrapMethod id 不存在: "+(int) dyn.tableIdx+" at class "+ data.name());
+			throw new IllegalArgumentException("BootstrapMethod #"+(int) dyn.tableIdx+"不存在, in class "+ data.name());
 
 		BootstrapMethods.Item ibm = bs.methods.get(dyn.tableIdx);
 		if (!ibm.isLambda()) return;
@@ -1013,7 +1012,7 @@ public class Mapper extends Mapping {
 		d.rawDesc = ibm.lambdaInterfaceDesc();
 		d.owner = Type.getReturnType(allDesc).owner;
 
-		List<String> parents = selfSupers.getOrDefault(d.owner, Collections.emptyList());
+		List<String> parents = hierarchy.getOrDefault(d.owner, Collections.emptyList());
 		int i = 0;
 		while (true) {
 			String name = methodMap.get(d);
@@ -1022,8 +1021,8 @@ public class Mapper extends Mapping {
 				return;
 			}
 
-			if (stopAnchor.contains(d)) {
-				LOGGER.log(Level.TRACE, "[L-S][{}]: {}.{}{}", null, data.name(), i==0?"~":d.owner, d.name, d.rawDesc);
+			if (shadows.contains(d)) {
+				LOGGER.log(Level.TRACE, "[{}][Shadow] stopOn {}.{}{}", null, data.name(), i==0?"~":d.owner, d.name, d.rawDesc);
 				break;
 			}
 
@@ -1048,11 +1047,11 @@ public class Mapper extends Mapping {
 				return;
 			}
 		} else {
-			if (!checkFieldType) d.rawDesc = "";
+			if (!fieldHasType) d.rawDesc = "";
 		}
 
 		FindMap<MemberDescriptor, String> map = method ? methodMap : fieldMap;
-		List<String> parents = selfSupers.getOrDefault(d.owner, Collections.emptyList());
+		List<String> parents = hierarchy.getOrDefault(d.owner, Collections.emptyList());
 		int i = 0;
 		while (true) {
 			String name = map.get(d);
@@ -1065,8 +1064,8 @@ public class Mapper extends Mapping {
 			}
 
 			// 是放在这里，因为d.owner一开始是data.name
-			if (stopAnchor.contains(d)) {
-				LOGGER.log(Level.TRACE, method?"[R-M-S][{}]: {}.{}{}":"[R-F-S][{}]: {}.{} {}", null, data.name(), d.owner, d.name, d.rawDesc);
+			if (shadows.contains(d)) {
+				LOGGER.log(Level.TRACE, "[{}][Shadow] stopOn {}.{}{}", null, data.name(), i==0?"~":d.owner, d.name, d.rawDesc);
 				break;
 			}
 
@@ -1086,10 +1085,26 @@ public class Mapper extends Mapping {
 		mapSignature(data.cp, data);
 		mapNodeAndAttrAndParam(U, data);
 		mapAnnotations(U, data.cp, data);
+		mapEnclosingMethod(U, data.cp, data);
 
 		data.unparsed(); // serialize to cp
 		mapConstant(U, data.cp);
 		mapClassAndSuper(data);
+	}
+	/** EnclosingMethod type & name */
+	private void mapEnclosingMethod(ClassUtil U, ConstantPool cp, ClassNode data) {
+		EnclosingMethod attribute = data.getAttribute(cp, Attribute.EnclosingMethod);
+		if (attribute != null && attribute.name != EnclosingMethod.PREDEFINED) {
+			MemberDescriptor d = U.sharedDesc;
+			d.owner = attribute.owner;
+			d.name = attribute.name;
+			d.rawDesc = attribute.rawDesc();
+
+			String mapName = methodMap.get(d);
+			if (mapName != null) attribute.name = mapName;
+
+			attribute.rawDesc(U.mapMethodParam(classMap, d.rawDesc));
+		}
 	}
 	/** InnerClass type */
 	private void mapInnerClass(ClassUtil U, ClassNode data) {
@@ -1172,7 +1187,7 @@ public class Mapper extends Mapping {
 				// old name
 				fd.owner = owner.str().substring(1,owner.str().length()-1);
 				fd.name = enum_name.str();
-				fd.rawDesc = checkFieldType ? owner.str() : "";
+				fd.rawDesc = fieldHasType ? owner.str() : "";
 
 				String newFieldName = fieldMap.get(fd);
 				if (newFieldName != null) {
@@ -1226,10 +1241,6 @@ public class Mapper extends Mapping {
 			mapSignature(data.cp, method);
 			mapAnnotations(U, data.cp, method);
 		}
-
-		for (int i = 0; i < nodes.size(); i++) {
-			paramMapper.mapParam(data.cp, (MethodNode) nodes.get(i));
-		}
 	}
 	/** Any other: interface, bootstrap method, class ref... */
 	private void mapConstant(ClassUtil U, ConstantPool cp) {
@@ -1278,25 +1289,17 @@ public class Mapper extends Mapping {
 			sourceFile.value = name.substring(name.lastIndexOf('/')+1, $ < 0 ? name.length() : $).concat(".java");
 		}
 	}
-
-	public final void S5_alt_mapParamName(Context context) {
-		var data = context.getData();
-		var nodes = data.methods;
-		for (int i = 0; i < nodes.size(); i++) {
-			paramMapper.mapParam(data.cp, nodes.get(i));
-		}
-	}
 	// endregion
 	// region libraries
 	public void loadLibraries(List<?> files) {
 		ArrayList<Context> classes = new ArrayList<>();
 		MemberDescriptor m = ClassUtil.getInstance().sharedDesc;
 
-		var prevSS = selfSupers;
-		var prevSA = stopAnchor;
+		var prevSS = hierarchy;
+		var prevSA = shadows;
 
-		selfSupers = libSupers;
-		stopAnchor = libStopAnchor;
+		hierarchy = libHierarchy;
+		shadows = libShadows;
 
 		for (int i = 0; i < files.size(); i++) {
 			Object o = files.get(i);
@@ -1325,13 +1328,13 @@ public class Mapper extends Mapping {
 			}
 		}
 
-		makeInheritMap(libSupers, (flag & FLAG_FULL_CLASS_MAP) != 0 ? classMap : null);
+		makeHierarchyMap(libHierarchy, (flag & FLAG_FULL_CLASS_MAP) != 0 ? classMap : null);
 
 		// compute stop anchors
 		for (int i = 0; i < classes.size(); i++) S3_mapSelf(classes.get(i), true);
 
-		selfSupers = prevSS;
-		stopAnchor = prevSA;
+		hierarchy = prevSS;
+		shadows = prevSA;
 	}
 	private void readLibFile(Context ctx, List<Context> classes, MemberDescriptor d) {
 		classes.add(ctx);
@@ -1344,7 +1347,7 @@ public class Mapper extends Mapping {
 		d.owner = data.name();
 		findAndReplace(methodMap, d, data.methods(), true);
 		d.rawDesc = "";
-		findAndReplace(fieldMap, d, data.fields(), checkFieldType);
+		findAndReplace(fieldMap, d, data.fields(), fieldHasType);
 	}
 	private void findAndReplace(FindMap<MemberDescriptor, String> flags, MemberDescriptor d, List<? extends Member> nodes, boolean par) {
 		for (int i = 0; i < nodes.size(); i++) {
@@ -1369,7 +1372,7 @@ public class Mapper extends Mapping {
 
 		// check inherit & overloads
 		for (MemberDescriptor d : new ArrayList<>(methodMap.keySet())) {
-			List<String> parents = libSupers.get(d.owner);
+			List<String> parents = libHierarchy.get(d.owner);
 			if (parents == null) continue;
 
 			m.name = d.name;
@@ -1386,12 +1389,12 @@ public class Mapper extends Mapping {
 					} else if (prev.getValue().equals(entry.getValue())) {
 						if ((flag&FLAG_FIX_INHERIT) != 0) methodMap.remove(m);
 					} else {
-						if ((flag&FLAG_FIX_INHERIT) == 0) LOGGER.log(Level.WARN, "[Packup]: 映射继承冲突: [{}|{}].{}{}", null, m.owner, d.owner, m.name, m.rawDesc);
+						if ((flag&FLAG_FIX_INHERIT) == 0) LOGGER.log(Level.WARN, "[Packup]: 映射继承冲突: {} and {}", null, prev, entry);
 						methodMap.remove(m);
 					}
 				}
 
-				if (libStopAnchor.contains(m)) prev = null;
+				if (libShadows.contains(m)) prev = null;
 			}
 		}
 
@@ -1419,35 +1422,36 @@ public class Mapper extends Mapping {
 		ref.nameAndType(data.cp.getDesc(newName, ref.nameAndType().rawDesc().str()));
 	}
 
+	@Deprecated
 	public void clear() {
 		classMap.clear();
 		fieldMap.clear();
 		methodMap.clear();
-		libSupers.clear();
-		libStopAnchor.clear();
+		libHierarchy.clear();
+		libShadows.clear();
 	}
 
-	public final void initSelfSuperMap() {
-		Map<String, List<String>> universe = new HashMap<>(libSupers);
-		for (int i = 0; i < extraStates.size(); i++) {
-			State state = extraStates.get(i);
-			universe.putAll(state.parents);
-			stopAnchor.addAll(state.stopAnchor);
-		}
-		universe.putAll(selfSupers); // replace lib class
-		selfSupers = universe;
-
-		makeInheritMap(universe, (flag & (FLAG_FULL_CLASS_MAP|MF_FIX_SUBIMPL)) == FLAG_FULL_CLASS_MAP ? classMap : null);
-	}
-
-	public final void initSelf(int size) {
-		stopAnchor = new HashSet<>(libStopAnchor);
-		selfSupers = new HashMap<>(size);
+	public final void setupHierarchy(int size) {
+		shadows = new HashSet<>(libShadows);
+		hierarchy = new HashMap<>(size);
 		selfInherited = new HashMap<>();
 	}
 
-	public Set<MemberDescriptor> getStopAnchor() { return stopAnchor; }
-	public Map<String, List<String>> getSelfSupers() { return selfSupers; }
+	public final void buildHierarchy() {
+		Map<String, List<String>> universe = new HashMap<>(libHierarchy);
+		for (int i = 0; i < extraStates.size(); i++) {
+			State state = extraStates.get(i);
+			universe.putAll(state.parents);
+			shadows.addAll(state.stopAnchor);
+		}
+		universe.putAll(hierarchy); // replace lib class
+		hierarchy = universe;
+
+		makeHierarchyMap(universe, (flag & (FLAG_FULL_CLASS_MAP|MF_FIX_SUBIMPL)) == FLAG_FULL_CLASS_MAP ? classMap : null);
+	}
+
+	public Set<MemberDescriptor> getShadows() { return shadows; }
+	public Map<String, List<String>> getHierarchy() { return hierarchy; }
 	public final List<State> getSeperatedLibraries() { return extraStates; }
 	public ParamNameMapper getParamTypeMapper() { return paramMapper; }
 
@@ -1461,13 +1465,13 @@ public class Mapper extends Mapping {
 	public final State snapshot(State s) {
 		if (s == null) s = new State();
 
-		if (selfSupers == null) throw new IllegalStateException("internal state is not MAP_FINISHED");
+		if (hierarchy == null) throw new IllegalStateException("internal state is not MAP_FINISHED");
 
 		s.parents.clear();
-		s.parents.putAll(selfSupers);
+		s.parents.putAll(hierarchy);
 		s.stopAnchor.clear();
-		s.stopAnchor.addAll(stopAnchor);
-		s.stopAnchor.removeAll(libStopAnchor);
+		s.stopAnchor.addAll(shadows);
+		s.stopAnchor.removeAll(libShadows);
 		s.inheritor.clear();
 		s.inheritor.putAll(selfInherited);
 
@@ -1484,7 +1488,7 @@ public class Mapper extends Mapping {
 		LOGGER.setLevel(Level.DEBUG);
 		LOGGER.info("==== 继承 ====");
 		LOGGER.info("  {} => {}", owner, classMap.get(owner));
-		List<String> parents = selfSupers.getOrDefault(owner, Collections.emptyList());
+		List<String> parents = hierarchy.getOrDefault(owner, Collections.emptyList());
 		for (int i = 0; i < parents.size(); i++) {
 			String p1 = classMap.get(parents.get(i));
 			LOGGER.info(p1 == null ? "  {}" :"  {} => {}", parents.get(i), p1);
@@ -1506,10 +1510,10 @@ public class Mapper extends Mapping {
 				d = d.copy();
 				while (i-- > 0) {
 					d.owner = parents.get(i);
-					if (stopAnchor.contains(d)) type = "S";
+					if (shadows.contains(d)) type = "S";
 				}
 			}
-			if (stopAnchor.contains(d)) type = "F";
+			if (shadows.contains(d)) type = "F";
 
 			LOGGER.info("  [{}] {} => {}", type, entry.getKey(), entry.getValue());
 		}

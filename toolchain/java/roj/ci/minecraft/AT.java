@@ -8,8 +8,9 @@ import roj.asm.AsmCache;
 import roj.asm.ClassNode;
 import roj.asm.MemberDescriptor;
 import roj.asmx.TransformUtil;
-import roj.asmx.mapper.Mapper;
+import roj.asmx.mapper.Mapping;
 import roj.ci.BuildContext;
+import roj.ci.Dependency;
 import roj.ci.Project;
 import roj.ci.event.ProjectUpdateEvent;
 import roj.ci.plugin.Processor;
@@ -60,7 +61,7 @@ public class AT implements Processor {
 		var atFile = new File(p.resPath, p.variables.getOrDefault("fmd:at", "META-INF/accesstransformer.cfg"));
 		if (atFile.isFile()) {
 			try {
-				var atList = buildATMapFromATCfg(atFile, p.workspace.getInvMapper());
+				var atList = buildATMapFromATCfg(atFile, p.workspace.getInverseMapping());
 				makeAT(options, atList, p);
 			} catch (IOException e) {
 				LOGGER.error("加载AT失败", e);
@@ -71,7 +72,7 @@ public class AT implements Processor {
 	}
 
 	@NotNull
-	static Map<String, List<String>> buildATMapFromATCfg(Object atFile, Mapper map) {
+	static Map<String, List<String>> buildATMapFromATCfg(Object atFile, Mapping map) {
 		Map<String, List<String>> atList = new HashMap<>();
 		try (var tr = makeTextReader(atFile)) {
 			while (true) {
@@ -139,7 +140,7 @@ public class AT implements Processor {
 			try (var zfw = new ZipFileWriter(atJar)) {
 				zfw.writeNamed(".desc", (ByteList) new ByteList().putInt(atList.hashCode()));
 
-				Predicate<File> predicate = file -> {
+				Predicate<File> callback = file -> {
 					String name = file.getName().toLowerCase(Locale.ROOT);
 					if (!name.startsWith(DONT_LOAD_PREFIX) && (name.endsWith(".zip") || name.endsWith(".jar"))) {
 						tryAt(file, atList, zfw);
@@ -154,8 +155,10 @@ public class AT implements Processor {
 				for (var file : p.workspace.mappedDepend) {
 					tryAt(file, atList, zfw);
 				}
-				IOUtil.listFiles(new File(BASE, "lib"), predicate);
-				IOUtil.listFiles(p.libPath, predicate);
+				IOUtil.listFiles(new File(BASE, "lib"), callback);
+				for (Dependency dep : p.getCompileDependencies()) {
+					dep.forEachFile(callback::test);
+				}
 			} catch (OperationDone ignored) {
 
 			} catch (IOException e) {

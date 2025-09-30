@@ -121,7 +121,8 @@ public class TransformUtil {
 	public static void compress(ClassNode data) {
 		var lazyLDC = new HashSet<Constant>();
 		var cpw = AsmCache.getInstance().constPool();
-		CodeVisitor smallerLdc = new CodeVisitor() {
+		// 1 byte per ldc instruction, slightly decrease output size
+		var ldcFirst = new CodeVisitor() {
 			protected void ldc(byte code, Constant c) {
 				if (code != LDC2_W) {
 					if (lazyLDC.add(c)) {
@@ -130,26 +131,33 @@ public class TransformUtil {
 				}
 			}
 		};
-		ByteList bw = new ByteList();
 
 		var methods = data.methods;
 		for (int i = 0; i < methods.size(); i++) {
-			methods.get(i).transform(data.cp, bw, smallerLdc);
+			// serialize Code attribute to byte[] for further visiting
+			methods.get(i).getAttribute(data.cp, "Code");
 		}
+		for (int i = 0; i < methods.size(); i++) {
+			// do visit
+			var code = methods.get(i).getAttribute(data.cp, "Code");
+			if (code != null) ldcFirst.visit(data.cp, code.getRawData().slice());
+		}
+		// add internal reference, e.g. Utf8 in String constant
 		for (var constant : lazyLDC) cpw.reset(constant);
 
+		ByteList tmp = new ByteList();
 		CodeWriter cw = new CodeWriter();
 		for (int i = 0; i < methods.size(); i++) {
 			MethodNode mn = methods.get(i);
 			Attribute code = mn.getAttribute("Code");
 			if (code != null) {
-				bw.clear();
-				cw.init(bw, cpw, mn);
+				tmp.clear();
+				cw.init(tmp, cpw, mn);
 				cw.visit(data.cp, code.getRawData());
 				cw.finish();
 
-				byte[] array = bw.toByteArray();
-				// dont parse my 'Code'
+				byte[] array = tmp.toByteArray();
+				// don't parse my 'Code' in next parsed() call
 				mn.addAttribute(new Attribute() {
 					@Override public String name() {return "Code";}
 					@Override public DynByteBuf getRawData() {return ByteList.wrap(array);}
@@ -157,10 +165,10 @@ public class TransformUtil {
 				});
 			}
 		}
-		bw.release();
-
+		tmp.release();
+		// handle other attributes
 		data.parsed();
-		// free shared constant pool
+		// swap shared constant pool
 		AsmCache.getInstance().constPool(data.cp);
 		data.cp = cpw;
 

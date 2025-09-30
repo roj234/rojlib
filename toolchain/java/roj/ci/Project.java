@@ -1,5 +1,6 @@
 package roj.ci;
 
+import org.jetbrains.annotations.Unmodifiable;
 import roj.archive.zip.ZipOutput;
 import roj.asmx.AnnotationRepo;
 import roj.asmx.mapper.Mapper;
@@ -36,9 +37,9 @@ public final class Project {
 	private final String name;
 	String version;
 	final Charset charset;
-	public final File root, srcPath, resPath, libPath, cachePath;
+	public final File root, srcPath, resPath, cachePath;
 
-	private List<Project> initialDep, buildOrderDep;
+	private List<Project> directDep, buildOrderDep;
 	private final EnumMap<Dependency.Scope, List<Dependency>> dependencies;
 	private List<Dependency> compileDependencies;
 
@@ -57,6 +58,7 @@ public final class Project {
 	MCMake.SignatureCache signatureCache;
 	final DependencyGraph dependencyGraph = new DependencyGraph();
 	final AnnotationRepo annotationRepo = new AnnotationRepo();
+	final StructureRepo structureRepo = new StructureRepo();
 
 	@Deprecated public Mapper mapper;
 	@Deprecated public Mapper.State mapperState;
@@ -65,7 +67,6 @@ public final class Project {
 	public String getSafeName() {return cachePath.getName();}
 	public String getShortName() {return name;}
 	int getResPrefix() {return resPrefix;}
-	public AnnotationRepo getAnnotationRepo() {return annotationRepo;}
 
 	public Project(Env.Project config, boolean mkdirs) throws IOException {
 		this.conf = config;
@@ -80,7 +81,6 @@ public final class Project {
 		this.root = new File(workspace.getProjectPath(), config.name);
 		this.srcPath = new File(root, "java");
 		this.resPath = new File(root, "resources");
-		this.libPath = new File(root, "lib");
 		this.cachePath = new File(MCMake.CACHE_PATH, ".pr/"+(config.name.equals(name) ? name : name+"@"+Integer.toHexString(config.name.hashCode())));
 		this.unmappedJar = new File(cachePath, "classes.jar");
 
@@ -115,7 +115,6 @@ public final class Project {
 		if (root.mkdirs() || mkdirs) {
 			srcPath.mkdir();
 			resPath.mkdir();
-			libPath.mkdir();
 		}
 		cachePath.mkdirs();
 
@@ -130,7 +129,10 @@ public final class Project {
 	public void init() {
 		if (compileDependencies != null) return;
 		compileDependencies = new ArrayList<>();
-		initialDep = new ArrayList<>();
+		directDep = new ArrayList<>();
+
+		conf.initShade();
+		conf.dependencyInstances = new HashMap<>(conf.dependency.size());
 
 		for (var entry : conf.dependency.entrySet()) {
 			var id = entry.getKey();
@@ -156,7 +158,7 @@ public final class Project {
 				switch (uri.getScheme()) {
 					case "file" -> {
 						String path = uri.getPath();
-						File file = IOUtil.relativePath(root, path);
+						File file = IOUtil.resolvePath(root, path);
 						if (!file.exists()) {
 							MCMake.LOGGER.warn("找不到依赖项目{}", file);
 							continue;
@@ -179,7 +181,7 @@ public final class Project {
 							continue;
 						}
 						dep = new Dependency.ProjectDep(project);
-						initialDep.add(project);
+						directDep.add(project);
 					}
 					default -> {
 						MCMake.LOGGER.warn("不支持的依赖类型{}", id);
@@ -193,10 +195,12 @@ public final class Project {
 					continue;
 				}
 				dep = new Dependency.ProjectDep(project);
-				initialDep.add(project);
+				directDep.add(project);
 			}
 
 			dependencies.computeIfAbsent(entry.getValue(), Helpers.fnArrayList()).add(dep);
+			conf.dependencyInstances.put(entry.getKey(), dep);
+
 			if (entry.getValue().inClasspath()) compileDependencies.add(dep);
 			if (entry.getValue().copyResource()) {
 				if (!conf.type.canBuild()) throw new IllegalArgumentException("不可构建的子模块不允许使用BUNDLED或PROCESSED引用\n如果子模块被BUNDLED，那么其EXPORT类型将被一并合入");
@@ -212,16 +216,16 @@ public final class Project {
 	public String toString() {return getName();}
 
 	private void gatherDependencies(Set<Project> all, Project exportOwner) {
-		for (var project : initialDep) {
+		for (var project : directDep) {
 			project.init();
 			project.gatherDependencies(all, exportOwner);
 
 			// EXPORT类型的依赖具有传递性
-			List<Dependency> exports = project.dependencies.getOrDefault(Dependency.Scope.EXPORT, Collections.emptyList());
-			for (Dependency dependency : exports) {
-				if (!exportOwner.compileDependencies.contains(dependency)) exportOwner.compileDependencies.add(dependency);
+			for (Dependency dependency : project.dependencies.getOrDefault(Dependency.Scope.EXPORT, Collections.emptyList())) {
+				if (!exportOwner.compileDependencies.contains(dependency))
+					exportOwner.compileDependencies.add(dependency);
 
-				List<Dependency> bundleDeps = dependencies.getOrDefault(Dependency.Scope.BUNDLED, Collections.emptyList());
+				List<Dependency> bundleDeps = exportOwner.dependencies.getOrDefault(Dependency.Scope.BUNDLED, Collections.emptyList());
 				boolean isBundled = bundleDeps.contains(new Dependency.ProjectDep(project));
 				if (isBundled && dependency.project().variables.getOrDefault("fmd:exportBundle", "true").equals("true")) {
 					if (!bundleDeps.contains(dependency)) bundleDeps.add(dependency);
@@ -231,9 +235,9 @@ public final class Project {
 		}
 	}
 
-	public List<Project> getProjectDependencies() {return buildOrderDep;}
-	public List<Dependency> getCompileDependencies() {return compileDependencies;}
-	public List<Dependency> getBundledDependencies() {return dependencies.getOrDefault(Dependency.Scope.BUNDLED, Collections.emptyList());}
+	@Unmodifiable public List<Project> getProjectDependencies() {return buildOrderDep;}
+	@Unmodifiable public List<Dependency> getCompileDependencies() {return compileDependencies;}
+	@Unmodifiable public List<Dependency> getBundledDependencies() {return dependencies.getOrDefault(Dependency.Scope.BUNDLED, Collections.emptyList());}
 
 	private int resCount;
 	public Callable<Integer> getAsyncResourceWriter(BuildContext ctx) {
@@ -243,15 +247,22 @@ public final class Project {
 
 			List<File> changed = ctx.resources.getChanged();
 			for (File file : changed) {
-				writeRes(file, useCompileTimestamp != 0 ? useCompileTimestamp : file.lastModified(), Collections.emptyMap(), ctx);
+				writeRes(file,
+						file.getAbsolutePath().substring(resPrefix).replace(File.separatorChar, '/'),
+						useCompileTimestamp != 0 ? useCompileTimestamp : file.lastModified(),
+						Collections.emptyMap(),
+						ctx
+				);
 			}
 
-			Set<String> deleted = ctx.sources.getDeleted();
-			for (String relPath : deleted) {
+			Set<String> removed = ctx.resources.getRemoved();
+			for (String relPath : removed) {
 				mappedWriter.set(relPath, (ByteList) null);
+				resCount++;
 			}
 
-			MCMake.LOGGER.debug("Resource {} changed {} deleted", changed.size(), deleted.size());
+			if ((changed.size()|removed.size()) > 0)
+				MCMake.LOGGER.debug("Resource: {} changed, {} removed.", changed.size(), removed.size());
 
 			for (Dependency bundle : getBundledDependencies()) {
 				resCount += bundle.getResources(this, mappedWriter, ctx);
@@ -263,9 +274,8 @@ public final class Project {
 
 	public boolean shouldUseCompileTimestamp() {return "true".equals(variables.get("fmd:resource:use_compile_timestamp"));}
 
-	void writeRes(File file, long time, Map<String, String> altVariables, BuildContext ctx) {
+	void writeRes(File file, String relPath, long time, Map<String, String> altVariables, BuildContext ctx) {
 		resCount++;
-		String relPath = file.getAbsolutePath().substring(resPrefix).replace(File.separatorChar, '/');
 		ExceptionalSupplier<InputStream, IOException> writer;
 		try {
 			if (varReplacePathPrefix.strStartsWithThis(relPath)) {
@@ -298,8 +308,7 @@ public final class Project {
 	public void setAutoCompile(boolean b) {autoCompile = b;}
 	public boolean isAutoCompile() {return autoCompile;}
 
-	public void compileSuccess(boolean increment) {
-		if (autoCompileTask != null) autoCompileTask.cancel();
+	public void buildSuccess(boolean increment) {
 		try {
 			MCMake.watcher.add(this);
 		} catch (IOException e) {
@@ -331,27 +340,25 @@ public final class Project {
 		}
 
 		MCMake._lock(false);
-		MCMake.LOGGER.debug("Auto compile start {}", roots);
+		MCMake.LOGGER.debug("自动编译开始, 目标: {}", roots);
 		try {
 			for (Project project : roots) {
 				try {
 					int code = MCMake.build(new HashSet<>("auto", "silent"), project);
 					if (code != 0) break;
 				} catch (Throwable e) {
-					Tty.error("自动编译出错", e);
+					MCMake.LOGGER.error("自动编译出错", e);
 					MCMake.watcher.removeAll();
 					return;
 				}
 			}
 		} finally {
-			MCMake.LOGGER.debug("Auto compile end.");
 			MCMake._unlock();
 		}
 		schedule();
 	}
+	// TODO hash check to avoid redundant change
 	public static void fileChanged(Project p) {
-		if (autoCompileTask != null) autoCompileTask.cancel();
-
 		var isRoot = true;
 		for (Project q : MCMake.projects.values()) {
 			if (q.autoCompile && q.buildOrderDep.contains(p)) {
@@ -361,18 +368,21 @@ public final class Project {
 				}
 			}
 		}
-		if (!isRoot) {
-			synchronized (fileChanged) {
-				fileChanged.add(p);
-			}
+		if (isRoot) {
+			synchronized (fileChanged) { fileChanged.add(p); }
 		}
 
 		schedule();
 	}
 
 	private static void schedule() {
+		if (autoCompileTask != null) autoCompileTask.cancel();
+
 		if (!fileChanged.isEmpty()) {
-			autoCompileTask = MCMake.TIMER.delay(Project::commitFiles, MCMake.config.getInt("自动编译防抖"));
+			synchronized (fileChanged) {
+				if (autoCompileTask != null) autoCompileTask.cancel();
+				autoCompileTask = MCMake.TIMER.delay(Project::commitFiles, MCMake.config.getInt("自动编译防抖"));
+			}
 		}
 	}
 
@@ -380,7 +390,9 @@ public final class Project {
 	public Map<String, String> getVariables() {return variables;}
 	public String getOutputFormat() {return Formatter.simple(variables.getOrDefault("fmd:name_format", "${project_name}-${project_version}.jar")).format(variables, IOUtil.getSharedCharBuf()).toString();}
 
-	public final class TwoMap extends AbstractMap<String, Object> {
+	public boolean isArtifact() {return conf.type == Env.Type.ARTIFACT;}
+
+	final class TwoMap extends AbstractMap<String, Object> {
 		private final Map<String, String> altVariables;
 		public TwoMap(Map<String, String> altVariables) {this.altVariables = altVariables;}
 

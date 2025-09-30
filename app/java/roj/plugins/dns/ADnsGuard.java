@@ -6,7 +6,7 @@ import roj.config.node.MapValue;
 import roj.debug.DebugTool;
 import roj.http.server.Content;
 import roj.http.server.Request;
-import roj.http.server.ResponseHeader;
+import roj.http.server.Response;
 import roj.http.server.auto.GET;
 import roj.http.server.auto.OKRouter;
 import roj.http.server.auto.POST;
@@ -139,7 +139,7 @@ public class ADnsGuard extends Plugin {
 	public String stat() {return DebugTool.inspect(resolved.entrySet());}
 
 	@POST
-	public void set(Request req, ResponseHeader rh, String url, String type, String cnt) {
+	public void set(Request req, Response rh, String url, String type, String cnt) {
 		String msg = null;
 		if (url == null || type == null || cnt == null) {
 			msg = "缺field";
@@ -179,6 +179,6 @@ public class ADnsGuard extends Plugin {
 			}
 		}
 
-		rh.code(302).header("Location", "./?msg="+ URICoder.encodeURI(msg));
+		rh.code(302).setHeader("Location", "./?msg="+ URICoder.encodeURI(msg));
 	}
 }

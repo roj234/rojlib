@@ -8,7 +8,7 @@ import roj.compiler.resolve.Resolver;
 import roj.concurrent.TaskPool;
 import roj.http.server.Content;
 import roj.http.server.Request;
-import roj.http.server.ResponseHeader;
+import roj.http.server.Response;
 import roj.io.IOUtil;
 import roj.plugins.web.error.GreatErrorPage;
 import roj.reflect.Reflection;
@@ -52,7 +52,7 @@ public class MyTemplateEngine {
 		return null;
 	}
 
-	public Content render(File file, Request req, ResponseHeader rh) {
+	public Content render(File file, Request req, Response rh) {
 		Cache fc;
 		synchronized (cache) {
 			fc = cache.computeIfAbsent(file);

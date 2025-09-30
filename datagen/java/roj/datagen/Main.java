@@ -20,7 +20,5 @@ public class Main {
 		try (var fos = new FileOutputStream(new File(output, path))) {
 			fos.write(data);
 		}
-
-		new MakePinyinData().run(input, output);
 	}
 }

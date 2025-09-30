@@ -3,6 +3,7 @@ package roj.ci;
 import org.intellij.lang.annotations.MagicConstant;
 import org.jetbrains.annotations.Nullable;
 import org.jetbrains.annotations.UnmodifiableView;
+import roj.annotation.MayMutate;
 import roj.archive.zip.ZEntry;
 import roj.archive.zip.ZipArchive;
 import roj.archive.zip.ZipOutput;
@@ -15,11 +16,11 @@ import roj.asmx.TransformException;
 import roj.asmx.injector.CodeWeaver;
 import roj.asmx.injector.WeaveException;
 import roj.asmx.mapper.Mapper;
+import roj.ci.annotation.IndirectReference;
 import roj.ci.plugin.Processor;
 import roj.collect.*;
 import roj.gui.Profiler;
 import roj.io.IOUtil;
-import roj.ui.Tty;
 import roj.util.ByteList;
 import roj.util.Helpers;
 import roj.util.TypedKey;
@@ -33,77 +34,98 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
 
+import static roj.ci.MCMake.LOGGER;
+
 /**
+ * Manages the build context for a project, handling incremental compilation, resource tracking,
+ * class transformations, and plugin integration. This class coordinates the build process,
+ * including changesets for sources and resources, processor hooks, and output generation.
+ *
  * @author Roj234
- * @since 2023/1/19 8:29
+ * @since 3.6
  */
-public class BuildContext {
+public final class BuildContext {
+	static final Set<Dependency> ALL_OPENED_DEPENDENCIES = Collections.newSetFromMap(new ConcurrentHashMap<>());
+	void openDependencies() throws IOException {
+		for (Dependency dep : project.getCompileDependencies()) {
+			if (ALL_OPENED_DEPENDENCIES.add(dep)) {
+				dep.open(this);
+			}
+		}
+	}
+	// 目前没有用处，预留
+	static void cleanup() {
+		for (Dependency dep : ALL_OPENED_DEPENDENCIES) {
+			IOUtil.closeSilently(dep);
+		}
+		ALL_OPENED_DEPENDENCIES.clear();
+	}
+
+	/**
+	 * The project being built.
+	 */
 	public final Project project;
-	public final List<Processor> processors;
+	/**
+	 * The start time of the build process, in milliseconds since the epoch.
+	 * Used for timestamp-based comparisons during incremental builds.
+	 */
+	public final long buildStartTime = System.currentTimeMillis();
+	/**
+	 * The timestamp of the last successful build, in milliseconds since the epoch.
+	 * Used to detect file changes in incremental builds.
+	 */
+	public long lastBuildTime;
 
 	/**
-	 * The changeset tracking changes to resources.
+	 * Indicates a full build, scanning all files without relying on prior state.
 	 */
-	public final Changeset resources;
-
+	public static final int INC_FULL = 0,
 	/**
-	 * The changeset tracking all resources.
+	 * Indicates a rebuild triggered by a missing artifact, recreating from cache if available.
 	 */
-	private Changeset fullResources;
-
+	INC_REBUILD = 1,
 	/**
-	 * The changeset tracking changes to source files.
+	 * Indicates a cold start, where no prior state in memory.
 	 */
-	public final Changeset sources;
-
+	INC_LOAD = 2,
 	/**
-	 * Full build, scanning all files.
+	 * Indicates a regular incremental build, updating only changed files.
 	 */
-	public static final int INC_FULL = 0;
+	INC_UPDATE = 3;
 
-	/**
-	 * Artifact is missing, recreate from cache.
-	 */
-	public static final int INC_REBUILD = 1;
-
-	/**
-	 * Cold start.
-	 */
-	public static final int INC_LOAD = 2;
-
-	/**
-	 * Regular incremental build.
-	 */
-	public static final int INC_UPDATE = 3;
+	int increment;
 
 	/**
 	 * The type of incremental build to perform. Must be one of {@link #INC_FULL},
 	 * {@link #INC_REBUILD}, {@link #INC_LOAD}, or {@link #INC_UPDATE}.
+	 * This value may be adjusted by processors during the build.
 	 *
 	 * @see #INC_FULL
 	 * @see #INC_REBUILD
 	 * @see #INC_LOAD
 	 * @see #INC_UPDATE
+	 * @since 3.8
 	 */
 	@MagicConstant(intValues = {INC_FULL, INC_REBUILD, INC_LOAD, INC_UPDATE})
-	public int increment;
+	public int getIncrement() {return increment;}
 
 	/**
-	 * The index of the last fully compiled class in the classes list.
+	 * The list of registered processors for this build, loaded from the workspace.
+	 * Processors can hook into various stages of the build process.
 	 */
-	public int compiledClassIndex;
+	private final List<Processor> processors;
 
 	/**
-	 * The count of updates performed during the build.
+	 * Constructs a new build context for the given project and incremental build type.
+	 * Initializes changesets for resources and sources, and prepares persistent state if needed.
+	 * Sets the project as currently compiling with this context.
+	 *
+	 * @param p the project to build
+	 * @param increment the initial incremental build type
 	 */
-	public int updateCount;
-
-	private final Map<String, Object> generatedFiles = new HashMap<>();
-
-	private Map<String, List<Context>> byAnnotation;
-
 	public BuildContext(Project p, int increment) {
 		this.project = p;
 		this.lastBuildTime = p.unmappedJar.lastModified();
@@ -118,21 +140,31 @@ public class BuildContext {
 			increment = Math.min(increment, INC_LOAD);
 			project.persistentState = new PersistentState();
 		}
-		//noinspection MagicConstant
 		this.increment = increment;
 
 		p.compiling = this;
 	}
 
+	//region Changeset
 	/**
-	 * The start time of the build process, in milliseconds since epoch.
+	 * The changeset tracking changes to resource files.
+	 * Resources include non-Java assets like configurations or textures.
 	 */
-	public final long buildStartTime = System.currentTimeMillis();
+	public final Changeset resources;
 	/**
-	 * The timestamp of the last build, used to determine file changes.
+	 * The changeset tracking changes to Java source files.
+	 * Handles incremental updates, dependency propagation, and structure diffs.
 	 */
-	public long lastBuildTime;
+	public final JavaChangeset sources;
+	//public final Changeset classes;
 
+	private Changeset fullResources;
+	/**
+	 * Returns the changeset tracking all resources, creating it on demand if needed.
+	 * Intended for use in {@link #INC_REBUILD} scenarios or when full resource scanning is required.
+	 *
+	 * @return the full resources changeset
+	 */
 	public Changeset getFullResources() {
 		if (fullResources == null) {
 			fullResources = new Changeset(project.resPath, project.getResPrefix(), FileWatcher.ID_RES, INC_REBUILD);
@@ -141,8 +173,16 @@ public class BuildContext {
 	}
 
 	/**
+	 * Structure repository diff handles, for inner classes diff check.
+	 *
+	 * @since 3.8
+	 */
+	Map<String, Object> structureDiffHandles = Collections.emptyMap();
+
+	/**
 	 * A sealed interface representing a changeset of files, either resources or sources.
-	 * Tracks changed and deleted files based on the build {@code increment}.
+	 * Tracks changed and removed files based on the current build {@link #increment} level.
+	 * Changes are detected via file watchers for incremental builds or full scans otherwise.
 	 */
 	public sealed class Changeset {
 		final File basePath;
@@ -150,9 +190,9 @@ public class BuildContext {
 		final int watcherSlot;
 		private final int overrideIncrement;
 		List<File> changed;
-		Set<String> deleted = Collections.emptySet();
+		Set<String> removed = Collections.emptySet();
 
-		public Changeset(File path, int prefix, int watcherSlot, int overrideIncrement) {
+		Changeset(File path, int prefix, int watcherSlot, int overrideIncrement) {
 			this.basePath = path;
 			this.prefixLength = prefix;
 			this.watcherSlot = watcherSlot;
@@ -161,11 +201,14 @@ public class BuildContext {
 
 		/**
 		 * Returns the list of changed files in this changeset.
-		 * For incremental builds and if available, uses file watcher data; otherwise, scans the base path.
+		 * For incremental builds ({@link #increment} > {@link #INC_REBUILD}), uses file watcher data if available;
+		 * otherwise, performs a full scan of the base path, filtering by last modified time against {@link #lastBuildTime}.
 		 *
 		 * @return the list of changed files
-		 * @throws IOException if an I/O error occurs while listing files
+		 * @throws IOException if an I/O error occurs while listing or accessing files
+		 * @implNote Must call this before call getRemoved()
 		 */
+		@UnmodifiableView
 		public List<File> getChanged() throws IOException {
 			if (changed == null) {
 				int incr = overrideIncrement < 0 ? increment : overrideIncrement;
@@ -173,15 +216,14 @@ public class BuildContext {
 					Set<String> modified = MCMake.watcher.getModified(project, watcherSlot);
 					if (!modified.contains(null)) {
 						changed = new ArrayList<>();
-						deleted = new HashSet<>();
+						removed = new HashSet<>();
 
 						synchronized (modified) {
 							for (String pathname : modified) {
 								File file = new File(pathname);
 								if (file.isFile()) changed.add(file);
-								else deleted.add(pathname.substring(prefixLength).replace(File.separatorChar, '/'));
+								else removed.add(pathname.substring(prefixLength).replace(File.separatorChar, '/'));
 							}
-							modified.clear();
 						}
 						return changed;
 					}
@@ -193,14 +235,20 @@ public class BuildContext {
 		}
 
 		/**
-		 * Returns the set of deleted file paths (relative to the prefix).
+		 * Returns the set of removed file paths, relative to the prefix.
+		 * Paths are normalized to use forward slashes ('/').
 		 *
-		 * @return the set of deleted files
+		 * @return the set of removed files (unmodifiable, empty if none)
 		 */
-		public Set<String> getDeleted() {return deleted;}
+		@UnmodifiableView
+		public Set<String> getRemoved() {return removed;}
+
+		public boolean isEmpty() {return (changed.size()|removed.size()) == 0;}
 	}
 	public final class JavaChangeset extends Changeset {
 		Set<String> changedClasses;
+		List<File> changeDeps = Collections.emptyList();
+		Set<String> structureChanged = Collections.emptySet();
 
 		JavaChangeset(File path) {super(path, -1, FileWatcher.ID_SRC, -1);}
 
@@ -211,31 +259,33 @@ public class BuildContext {
 
 			Project p = project;
 
+			loadDep:
 			if (increment != INC_FULL) {
 				if (p.dependencyGraph.isEmpty()) {
-					Profiler.startSection("dependencyGraph");
-					ZipArchive za = p.unmappedWriter.getArchive();
+					Profiler.startSection("memoryCacheConstruct");
+					ZipArchive za;
+					try {
+						za = p.unmappedWriter.getArchive();
+					} catch (Exception e) {
+						LOGGER.error("Failed to construct memory cache; force full build", e);
+
+						p.unmappedWriter.begin(false);
+						p.unmappedWriter.end();
+
+						increment = INC_FULL;
+						break loadDep;
+					}
 					for (ZEntry ze : za.entries()) {
-						p.dependencyGraph.add(ClassNode.parseSkeleton(za.get(ze)));
+						ClassNode node = ClassNode.parseSkeleton(za.get(ze));
+						p.dependencyGraph.add(node);
+						p.structureRepo.add(node);
 					}
 					p.annotationRepo.loadCacheOrAdd(za);
 					p.unmappedWriter.close();
 					if (!p.dependencyGraph.isEmpty()) {
-						MCMake.LOGGER.debug("Loaded DepGraph/Annotation from cache", p.unmappedJar);
+						LOGGER.debug("Constructed memory cache from file.");
 					}
 					Profiler.endSection();
-				}
-
-				String srcPrefix = project.srcPath.getPath();
-				for (var project : p.getProjectDependencies()) {
-					BuildContext state = project.compiling;
-					if (state != null) {
-						for (File file : state.sources.getChanged()) {
-							var pathname = file.getPath();
-							var className = pathname.substring(srcPrefix.length() + 1, pathname.length() - 5).replace(File.separatorChar, '/');
-							addDependency(project, className, srcPrefix);
-						}
-					}
 				}
 			}
 
@@ -244,13 +294,13 @@ public class BuildContext {
 					Set<String> modified = MCMake.watcher.getModified(project, watcherSlot);
 					if (!modified.contains(null)) {
 						changed = new ArrayList<>();
-						deleted = new HashSet<>();
+						changeDeps = new ArrayList<>();
+						removed = new HashSet<>();
 
 						synchronized (modified) {
 							for (String pathname : modified) {
 								incrementChange(new File(pathname));
 							}
-							modified.clear();
 						}
 
 						break useFastpath;
@@ -260,10 +310,12 @@ public class BuildContext {
 				if (increment == INC_FULL) {
 					p.dependencyGraph.clear();
 					p.annotationRepo.getAnnotations().clear();
+					p.structureRepo.clear();
 
 					changed = IOUtil.listFiles(basePath, file -> IOUtil.extensionName(file.getName()).equals("java"));
 				} else {
 					changed = new ArrayList<>();
+					changeDeps = new ArrayList<>();
 					IOUtil.listFiles(basePath, file -> {
 						boolean chosen = file.lastModified() >= lastBuildTime && IOUtil.extensionName(file.getName()).equals("java");
 						if (chosen) incrementChange(file);
@@ -272,10 +324,40 @@ public class BuildContext {
 				}
 			}
 
+			structureChanged = new HashSet<>(changed.size());
+			String srcPrefix = project.srcPath.getPath();
+			for (File file : changed) {
+				var pathname = file.getPath();
+				var className = pathname.substring(srcPrefix.length() + 1, pathname.length() - 5).replace(File.separatorChar, '/');
+				structureChanged.add(className);
+			}
+
+			if (increment != INC_FULL) {
+				for (var project : p.getProjectDependencies()) {
+					BuildContext state = project.compiling;
+					if (state != null) {
+						var directChanges = state.sources.structureChanged;
+						if (!directChanges.isEmpty()) {
+							LOGGER.trace("DepGraph propagate[{}]", project.getName());
+							for (var className : directChanges) {
+								addDependency(className, srcPrefix);
+							}
+						}
+					}
+				}
+			}
+
+			changed.addAll(changeDeps);
+			changeDeps = Collections.emptyList();
+
 			p.dependencyGraph.remove(changedClasses);
 			p.annotationRepo.remove(changedClasses);
+			structureDiffHandles = p.structureRepo.applyDiff(changedClasses);
+
 			if (changedClasses.size() > 0)
-				MCMake.LOGGER.debug("Remove changed classes from cache: {}", changedClasses);
+				LOGGER.debug("Evicted {} from memory cache.", changedClasses.size());
+			if (structureDiffHandles.size() > 0)
+				LOGGER.debug("Got {} structure diff handles.", structureDiffHandles.size());
 			return changed;
 		}
 
@@ -283,25 +365,200 @@ public class BuildContext {
 			String pathname = file.getAbsolutePath();
 			String srcPrefix = project.srcPath.getPath();
 			var className = pathname.substring(srcPrefix.length() + 1, pathname.length() - 5).replace(File.separatorChar, '/');
-			addDependency(project, className, srcPrefix);
 
-			if (file.isFile()) {
-				changed.add(file);
-			} else {
-				deleted.add(className);
+			if (file.isFile()) changed.add(file);
+			else {
+				removed.add(className);
+				project.structureRepo.fileRemoved(className);
 			}
 			changedClasses.add(className);
+
+			addDependency(className, srcPrefix);
 		}
 
-		private void addDependency(Project p, String className, String srcPrefix) {
-			for (String referent : p.dependencyGraph.get(className)) {
-				referent = srcPrefix + File.separatorChar + referent + ".java";
-				File ref = new File(referent);
-				MCMake.LOGGER.trace("DepGraph[{}] {} => {}", p.getName(), referent, className);
-				if (ref.isFile()) changed.add(ref);
+		private void addDependency(String className, String srcPrefix) {
+			LOGGER.trace(" Query: {}", className);
+			for (String reference : project.dependencyGraph.get(className)) {
+				var path = srcPrefix + File.separatorChar + reference + ".java";
+				File ref = new File(path);
+				if (ref.isFile()) {
+					LOGGER.trace("  Reference: {}", reference);
+					if (changedClasses.add(reference)) {
+						changeDeps.add(ref);
+					}
+				}
 			}
 		}
 	}
+	//endregion
+	//region Hooks (sorted by calling order)
+	/**
+	 * Wraps a resource input stream through all registered processors.
+	 *
+	 * @param path the resource path
+	 * @param in the input stream to wrap
+	 * @return the wrapped input stream
+	 */
+	InputStream wrapResource(String path, InputStream in) {
+		for (int i = 0; i < processors.size(); i++) {
+			in = processors.get(i).wrapResource(path, in);
+		}
+		return in;
+	}
+
+	/**
+	 * Invokes the beforeCompile hook on all processors, potentially adjusting the increment level.
+	 *
+	 * @param options the compiler options
+	 * @param sources the list of source files
+	 * @param increment the current increment level
+	 * @return the adjusted increment level
+	 */
+	int beforeCompile(ArrayList<String> options, List<File> sources, int increment) {
+		for (int i = 0; i < processors.size(); i++) {
+			increment = Math.min(processors.get(i).beforeCompile(options, sources, this), increment);
+		}
+		this.increment = increment;
+		return increment;
+	}
+
+	private List<Context> changedClasses;
+	private int directChangedClasses;
+	private final Set<String> removedClasses = new HashSet<>();
+
+	// 这三个结构节约了内存，不过若是对性能有很大影响，考虑使用XashMap<Context, Record(boolean isChanged, Project owner)>
+	// 考虑到都是KB级别的，而且多半还是young gen，也许我没必要这么抠
+	static final class ExtClass {
+		Context classInfo;
+		Project owner;
+		boolean isChanged;
+
+		@IndirectReference
+		private ExtClass _next;
+
+		public ExtClass(Context context, Project project, boolean needWriteIfOnLoad) {
+			this.classInfo = context;
+			this.owner = project;
+			this.isChanged = needWriteIfOnLoad;
+		}
+	}
+	private static final XashMap.Builder<Context, ExtClass> EXTERNAL_CLASS_INFO_BUILDER = XashMap.noCreation(ExtClass.class, "classInfo", "_next", Hasher.identity());
+	private final XashMap<Context, ExtClass> externalClasses = EXTERNAL_CLASS_INFO_BUILDER.create();
+
+	/**
+	 * Set directly (a.k.a. not from dependencies) changed classes.
+	 *
+	 * @param changedClasses the list of class contexts
+	 * @see MCMake#compile(Set, Project, BuildContext)
+	 */
+	void setChangedClasses(List<Context> changedClasses) {
+		this.changedClasses = changedClasses;
+		this.directChangedClasses = changedClasses.size();
+	}
+
+	/**
+	 * @param fileName 格式: 文件名
+	 */
+	void classRemoved(String fileName) {removedClasses.add(fileName);}
+
+	/**
+	 * Adds a class context to the build, associating it with a project and optionally mark it as changed.
+	 *
+	 * @param context the class context
+	 * @param project the owning project (or null for the main project)
+	 * @param needWriteIfOnLoad whether the class is needed to write.
+	 * @see Dependency#getClasses(BuildContext)
+	 */
+	void addClass(Context context, @Nullable Project project, boolean needWriteIfOnLoad) {
+		if (project == null) changedClasses.add(context);
+		else {
+			externalClasses.add(new ExtClass(context, project, needWriteIfOnLoad && increment == INC_LOAD));
+		}
+	}
+
+	/**
+	 * Performs post-compilation processing: partitions classes by project, invokes processor afterCompile hooks,
+	 * runs transformers, and prepares changed classes for output.
+	 *
+	 * @return the final list of processed classes, or null if transformation failed
+	 */
+	List<Context> afterCompile() {
+		Profiler.startSection("partition");
+		var classes = changedClasses;
+
+		for (ExtClass info : externalClasses) {
+			classes.add(info.classInfo);
+		}
+
+		Profiler.endStartSection("hook.pre");
+		for (int i = 0; i < processors.size(); i++) {
+			processors.get(i).afterCompilePre(this);
+		}
+
+		Profiler.endStartSection("transform");
+		try {
+			project.persistentState.runTransformers(classes);
+		} catch (TransformException e) {
+			LOGGER.error("Exception transforming classes", e);
+		}
+
+		if (increment == INC_LOAD) {
+			ArrayList<Context> classes1 = classes instanceof ArrayList<Context> x ? x : new ArrayList<>(classes);
+
+			int originalSize = classes1.size();
+			classes1._setSize(directChangedClasses);
+
+			for (var info : externalClasses) {
+				if (info.isChanged) {
+					classes1.add(info.classInfo);
+				}
+			}
+
+			Object[] a = classes1.getInternalArray();
+			for (int i = classes1.size(); i < originalSize; i++) a[i] = null;
+
+			changedClasses = classes = classes1;
+		}
+		byAnnotation = null;
+
+		Profiler.endStartSection("hook.post");
+		for (int i = 0; i < processors.size(); i++) {
+			processors.get(i).afterCompilePost(this);
+		}
+
+		Profiler.endSection();
+		return classes;
+	}
+
+	/**
+	 * Writes all generated files to the output archive.
+	 *
+	 * @param writer the zip output to write to
+	 * @return the number of files written
+	 * @throws IOException if an I/O error occurs during writing
+	 * @see MCMake#build(Set, Project, File)
+	 */
+	@SuppressWarnings("unchecked")
+	int writeGenerated(ZipOutput writer) throws IOException {
+		for (var entry : generatedFiles.entrySet()) {
+			if (entry.getValue() instanceof ByteList b) {
+				writer.set(entry.getKey(), b);
+			} else {
+				writer.set(entry.getKey(), (ExceptionalSupplier<ByteList, IOException>) entry.getValue(), buildStartTime);
+			}
+		}
+		LOGGER.debug("Write {} generated files for {}", generatedFiles.size(), project.getName());
+		if (generatedFiles.size() > 0) LOGGER.trace("{}", generatedFiles.keySet());
+		return generatedFiles.size();
+	}
+
+	void buildSuccess() {
+		Set<String> modified = MCMake.watcher.getModified(project, IFileWatcher.ID_RES);
+		if (!modified.contains(null)) modified.clear();
+		modified = MCMake.watcher.getModified(project, IFileWatcher.ID_SRC);
+		if (!modified.contains(null)) modified.clear();
+	}
+	//endregion
 
 	/**
 	 * A static class holding persistent state for the build, including transformers,
@@ -329,7 +586,7 @@ public class BuildContext {
 				}
 			}
 			if (!mapper.getClassMap().isEmpty()) {
-				mapper.initSelf(0);
+				mapper.setupHierarchy(0);
 				// 说真的，我不喜欢后处理
 				for (int i = 0; i < classes.size(); i++) {
 					Context context = classes.get(i);
@@ -339,197 +596,120 @@ public class BuildContext {
 			}
 		}
 
+		/**
+		 * Returns the mapper instance for class name remapping and debug info adjustments.
+		 *
+		 * @return the mapper
+		 */
 		public Mapper getMapper() {return mapper;}
 	}
 
 	/**
-	 * Wraps a resource input stream through all registered processors.
+	 * Returns an unmodifiable view of the set of class names whose structure (fields, methods, interfaces,
+	 * superclasses, etc.) has changed. Based on source file changes and dependency propagation.
 	 *
-	 * @param path the resource path
-	 * @param in the input stream to wrap
-	 * @return the wrapped input stream
+	 * @return the set of structure-changed [PrefixClassName] (empty if none)
+	 * @since 3.8
 	 */
-	public InputStream wrapResource(String path, InputStream in) {
-		for (int i = 0; i < processors.size(); i++) {
-			in = processors.get(i).wrapResource(path, in);
-		}
-		return in;
-	}
+	@UnmodifiableView
+	public Set<String> getStructureChangedClassNames() {return sources.structureChanged;}
+	/**
+	 * Returns an unmodifiable view of the list of compiled and processed class contexts.
+	 * Includes directly changed classes and those from dependencies.
+	 *
+	 * @return the list of changed classes (empty if none)
+	 */
+	@UnmodifiableView public List<Context> getChangedClasses() {return changedClasses;}
 
 	/**
-	 * Invokes the beforeCompile hook on all processors, potentially adjusting the increment level.
-	 *
-	 * @param options the compiler options
-	 * @param sources the list of source files
-	 * @param increment the current increment level
-	 * @return the adjusted increment level
+	 * Returns direct changed class count (compiled from current module, not inherited)
 	 */
-	public int beforeCompile(ArrayList<String> options, List<File> sources, int increment) {
-		for (int i = 0; i < processors.size(); i++) {
-			increment = Math.min(processors.get(i).beforeCompile(options, sources, this), increment);
-		}
-		this.increment = increment;
-		return increment;
-	}
-
-	private final IntervalPartition<IntervalPartition.Wrap<Project>> owners = new IntervalPartition<>();
-	private final Map<Project, List<Context>> myClasses = new HashMap<>();
-	private List<Context> classes;
-	private final Set<Context> changed = new HashSet<>(Hasher.identity());
-	/**
-	 * Sets the list of compiled classes and initializes the compiled class index.
-	 *
-	 * @param classes the list of class contexts
-	 */
-	public void setClasses(List<Context> classes) {this.classes = classes;this.compiledClassIndex = classes.size();}
-	/**
-	 * Adds a class context to the build, associating it with a project and marking it as changed if writable.
-	 *
-	 * @param context the class context
-	 * @param project the owning project (or null for the main project)
-	 * @param writable whether the class is writable and should be tracked for changes
-	 */
-	public void addClass(Context context, Project project, boolean writable) {
-		myClasses.computeIfAbsent(project, Helpers.fnArrayList()).add(context);
-		if (writable && increment == INC_LOAD) changed.add(context);
-	}
+	public int getDirectChangedClasses() {return directChangedClasses;}
 
 	/**
-	 * Adds a generated file to the context for later writing.
+	 * Returns an unmodifiable view of the set of removed class file names.
 	 *
-	 * @param name the file name
-	 * @param data the byte list data
+	 * @return the set of removed classes (empty if none)
+	 */
+	@UnmodifiableView public Set<String> getRemovedClasses() {return removedClasses;}
+
+	/**
+	 * Checks if any classes have been changed or removed in this build.
+	 *
+	 * @return {@code true} if classes have changed or been removed
+	 * @since 3.8
+	 */
+	public boolean classesHaveChanged() {return (changedClasses.size()|removedClasses.size()) != 0;}
+
+	//region Plugin APIs
+	private final Map<String, Object> generatedFiles = new HashMap<>();
+	/**
+	 * Adds a generated file to the context, which will be written to the output archive during the build.
+	 *
+	 * @param name the path/name of the generated file (relative to the artifact root)
+	 * @param data the byte data of the file
 	 */
 	public void addFile(String name, ByteList data) {generatedFiles.put(name, data);}
 
 	/**
-	 * Performs post-compilation processing: partitions classes by project, invokes processor afterCompile hooks,
-	 * runs transformers, and prepares changed classes for output.
-	 *
-	 * @return the final list of processed classes, or null if transformation failed
-	 */
-	public List<Context> afterCompile() {
-		Profiler.startSection("partition");
-		var classes = this.classes;
-		classes.addAll(myClasses.getOrDefault(null, Collections.emptyList()));
-		int index = classes.size();
-
-		for (var entry : myClasses.entrySet()) {
-			List<Context> value = entry.getValue();
-			classes.addAll(value);
-			owners.add(new IntervalPartition.Wrap<>(entry.getKey(), index, index += value.size()));
-		}
-
-		updateCount = increment == INC_LOAD ? compiledClassIndex : classes.size();
-
-		Profiler.endStartSection("processor");
-		for (int i = 0; i < processors.size(); i++) {
-			processors.get(i).afterCompile(this);
-		}
-		this.classes = Collections.emptyList();
-
-		Profiler.endStartSection("transformer");
-		try {
-			project.persistentState.runTransformers(classes);
-		} catch (TransformException e) {
-			Tty.error("类转换失败", e);
-			return null;
-		}
-
-		for (Context ctx : classes) {
-			if (changed.contains(ctx))
-				generatedFiles.put(ctx.getFileName(), (ExceptionalSupplier<ByteList, IOException>) ctx::getCompressedShared);
-		}
-
-		updateCount = increment == INC_LOAD ? compiledClassIndex : classes.size();
-		Profiler.endSection();
-		return classes;
-	}
-
-	/**
-	 * Writes all generated extra files to the mapped output archive.
-	 *
-	 * @param mappedWriter the zip output to write to
-	 * @return the number of files written
-	 * @throws IOException if an I/O error occurs during writing
-	 */
-	@SuppressWarnings("unchecked")
-	public int writeExtra(ZipOutput mappedWriter) throws IOException {
-		for (var entry : generatedFiles.entrySet()) {
-			if (entry.getValue() instanceof ByteList b) {
-				mappedWriter.set(entry.getKey(), b);
-			} else {
-				mappedWriter.set(entry.getKey(), (ExceptionalSupplier<ByteList, IOException>) entry.getValue(), buildStartTime);
-			}
-		}
-		return generatedFiles.size();
-	}
-
-	/**
-	 * Returns an unmodifiable view of the compiled classes list.
-	 *
-	 * @return the list of classes
-	 */
-	@UnmodifiableView
-	public List<Context> getClasses() {return classes;}
-
-	/**
 	 * Retrieves the variables map for the project owning the given class context.
+	 * Falls back to the main project's variables if no specific owner is found.
 	 *
 	 * @param context the class context
-	 * @return the variables map, falling back to the main project if no specific owner
+	 * @return the variables map for the owning project
 	 */
 	public Map<String, ?> getVariables(Context context) {
-		IntervalPartition.Segment segment = owners.segmentAt(classes.indexOf(context));
-		if (segment == null) return project.variables;
-
-		List<IntervalPartition.Wrap<Project>> coverage = segment.coverage();
-		if (coverage.isEmpty()) return project.variables;
-
-		return project.new TwoMap(coverage.get(0).obj.variables);
+		ExtClass extClass = externalClasses.get(context);
+		if (extClass == null) return project.variables;
+		return project.new TwoMap(extClass.owner.variables);
 	}
 
+	private Map<String, List<Context>> byAnnotation;
 	/**
-	 * Returns the list of source classes annotated with the given annotation type.
-	 * Builds an index of annotations if not already present.
+	 * Returns the list of classes annotated with the given annotation type.
+	 * Lazily builds an index of annotations from the changed classes if not already present.
+	 * Supports both runtime-visible and runtime-invisible annotations.
 	 *
-	 * @param type the annotation type
-	 * @return the list of matching class contexts
+	 * @param annotation the fully qualified annotation type (e.g., "org/example/Annotation")
+	 * @return the list of matching class contexts (empty if none)
 	 */
-	public List<Context> getSourceAnnotations(String type) {
+	public List<Context> getAnnotatedClasses(String annotation) {
 		if (byAnnotation == null) {
 			byAnnotation = new HashMap<>();
-			for (int j = 0; j < classes.size(); j++) {
-				Context ctx = classes.get(j);
+			for (int j = 0; j < changedClasses.size(); j++) {
+				Context ctx = changedClasses.get(j);
 				ClassNode data = ctx.getData();
 
-				var anns = Annotations.getAnnotations(data.cp, data, false);
-				for (int i = 0; i < anns.size(); i++) {
-					byAnnotation.computeIfAbsent(anns.get(i).type(), Helpers.fnArrayList()).add(ctx);
+				var list = Annotations.getAnnotations(data.cp, data, false);
+				for (int i = 0; i < list.size(); i++) {
+					byAnnotation.computeIfAbsent(list.get(i).type(), Helpers.fnArrayList()).add(ctx);
 				}
 
-				anns = Annotations.getAnnotations(data.cp, data, true);
-				for (int i = 0; i < anns.size(); i++) {
-					byAnnotation.computeIfAbsent(anns.get(i).type(), Helpers.fnArrayList()).add(ctx);
+				list = Annotations.getAnnotations(data.cp, data, true);
+				for (int i = 0; i < list.size(); i++) {
+					byAnnotation.computeIfAbsent(list.get(i).type(), Helpers.fnArrayList()).add(ctx);
 				}
 			}
 		}
-		return byAnnotation.getOrDefault(type, Collections.emptyList());
+		return byAnnotation.getOrDefault(annotation, Collections.emptyList());
 	}
 
 	/**
-	 * Consumes all dependency elements annotated with the given type from compile dependencies and the project's annotation repo.
+	 * Consumes all elements (classes, methods, fields, etc.) annotated with the given type
+	 * from compile-time dependencies and the project's annotation repository.
+	 * Useful for analysis or injection based on dependency annotations.
 	 *
-	 * @param type the annotation type
-	 * @param consumer the consumer to accept annotated elements
+	 * @param type the fully qualified annotation type
+	 * @param consumer the consumer to accept each annotated element
 	 */
 	public void getDepAnnotations(String type, Consumer<AnnotatedElement> consumer) {consumeAnnotations(type, consumer, project.getCompileDependencies());}
 
 	/**
-	 * Consumes all dependency elements annotated with the given type that will be bundled to the artifact.
+	 * Consumes all elements annotated with the given type from dependencies that will be bundled
+	 * into the final artifact. Excludes compile-only dependencies.
 	 *
-	 * @param type the annotation type
-	 * @param consumer the consumer to accept annotated elements
+	 * @param type the fully qualified annotation type
+	 * @param consumer the consumer to accept each annotated element
 	 */
 	public void getBundledAnnotations(String type, Consumer<AnnotatedElement> consumer) {consumeAnnotations(type, consumer, project.getBundledDependencies());}
 
@@ -539,7 +719,7 @@ public class BuildContext {
 			try {
 				annotatedElements = dependency.getAnnotations(this).annotatedBy(type);
 			} catch (IOException e) {
-				MCMake.LOGGER.warn("Could not get annotations for " + dependency, e);
+				LOGGER.warn("Could not get annotations for " + dependency, e);
 				continue;
 			}
 			annotatedElements.forEach(consumer);
@@ -549,50 +729,51 @@ public class BuildContext {
 	}
 
 	/**
-	 * Loads a mixin class node into the weaver for application during transformations.
+	 * Loads a mixin class node into the weaver registry for application during class transformations.
+	 * Mixins allow injecting code into target classes.
 	 *
 	 * @param mixin the mixin class node
-	 * @throws WeaveException if the mixin fails to load
+	 * @throws WeaveException if the mixin fails to load or validate
 	 */
-	public void mixin(ClassNode mixin) throws WeaveException {project.persistentState.weaver.load(mixin);}
+	public void mixin(@MayMutate ClassNode mixin) throws WeaveException {project.persistentState.weaver.load(mixin);}
 	/**
-	 * Enables constant pool hooks and returns the hooks instance for transformation.
+	 * Enables constant pool hooks for the build and returns the hooks instance.
+	 * Hooks allow custom transformations on constant pool entries during processing.
+	 * Must be called before transformations to take effect.
 	 *
-	 * @return the constant pool hooks
+	 * @return the constant pool hooks instance
 	 */
 	public ConstantPoolHooks getCPHooks() {project.persistentState.needTransform = true;return project.persistentState.hooks;}
 	/**
-	 * Returns the mapper for class name and debug info remapping.
+	 * Returns the mapper instance for remapping class names, method signatures, and debug information.
+	 * Commonly used for obfuscation, access widening, or name shortening.
 	 *
 	 * @return the mapper instance
 	 */
 	public Mapper getMapper() {return project.persistentState.mapper;}
 
 	/**
-	 * Removes a class context from the classes list and adjusts indices and partitions.
+	 * Removes a class context from the list of changed classes and adjusts internal indices and partitions.
+	 * Used during post-processing to filter out unwanted classes.
 	 *
 	 * @param context the class context to remove
 	 */
-	public void removeClasses(Context context) {
-		int i = classes.indexOf(context);
-		classes.remove(i);
-
-		int j = owners.indexAt(i);
-		if (j >= 0) {
-			IntervalPartition.Wrap<?> interval = owners.getSegments()[j].anchor().interval();
-			interval.endPos--;
-
-			for (j++; j < owners.getSegmentCount(); j++) {
-				interval = owners.getSegments()[j].anchor().interval();
-				interval.startPos--;
-				interval.endPos--;
-			}
-		}
-
-		if (i < compiledClassIndex) compiledClassIndex--;
+	public void removeClass(Context context) {
+		externalClasses.removeKey(context);
+		int i = changedClasses.indexOf(context);
+		changedClasses.remove(i);
+		if (i < directChangedClasses) directChangedClasses--;
 	}
 
+	/**
+	 * Retrieves the first processor of the specified type from the registered processors.
+	 *
+	 * @param <T> the processor type
+	 * @param type the class of the processor to find
+	 * @return the processor instance, or {@code null} if not found
+	 */
 	@SuppressWarnings("unchecked")
 	public <T extends Processor> @Nullable T getProcessor(Class<T> type) {
 		return (T) Flow.of(processors).filter(p -> p.getClass() == type).findFirst().orElse(null);}
+	//endregion
 }

@@ -37,7 +37,7 @@ public class LavaScript extends Plugin {
 
 				if (file.getName().endsWith(".html")) return engine.render(file, req, rh);
 
-				rh.code(200).header("cache-control", HttpUtil.CACHED_REVALIDATE);
+				rh.code(200).setHeader("cache-control", HttpUtil.CACHED_REVALIDATE);
 				return Content.file(req, new DiskFileInfo(file));
 			});
 			getLogger().warn("已注册路径路由器 {}/ => ", entry.getKey(), basePath);

@@ -14,6 +14,8 @@ import roj.util.Helpers;
 import java.io.File;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.function.Function;
 
 /**
  * @author Roj234
@@ -29,7 +31,7 @@ public interface Argument<T> {
 		return new FileArgument(2) {
 			@Override
 			protected @NotNull File getPath(String pathStr) {
-				return IOUtil.relativePath(base, pathStr);
+				return IOUtil.resolvePath(base, pathStr);
 			}
 		};
 	}
@@ -92,7 +94,7 @@ public interface Argument<T> {
 		for (String s : selection) map.put(s,s);
 		return oneOf(map);
 	}
-	static Argument<List<String>> stringFlags(String... flags) {
+	static Argument<Set<String>> stringFlags(String... flags) {
 		HashMap<String, String> map = new HashMap<>(flags.length);
 		for (String s : flags) map.put(s,s);
 		return Helpers.cast(anyOf(map));
@@ -100,12 +102,14 @@ public interface Argument<T> {
 	static <T extends Enum<T>> Argument<T> enumeration(Class<T> type) { return oneOf(Helpers.cast(Reflection.enumConstantDirectory(type))); }
 	static <T> Argument<T> oneOf(Map<String, T> map) { return new ArgSetOf<>(0, map); }
 	static Argument<String> suggest(Map<String, String> map) { return new ArgSetOf<>(1, map); }
-	static <T> Argument<List<T>> someOf(Map<String, T> map) { return Helpers.cast(new ArgSetOf<>(2, map)); }
-	static <T> Argument<List<T>> anyOf(Map<String, T> map) { return Helpers.cast(new ArgSetOf<>(3, map)); }
+	static <T> Argument<Set<T>> someOf(Map<String, T> map) { return Helpers.cast(new ArgSetOf<>(2, map)); }
+	static <T> Argument<Set<T>> anyOf(Map<String, T> map) { return Helpers.cast(new ArgSetOf<>(3, map)); }
 
 	class FileArgument implements Argument<File> {
-		private final int filter;
+		private int filter;
+		private Function<File, String> realFilter;
 		public FileArgument(int filter) {this.filter = filter;}
+		public FileArgument(Function<File, String> filter) {this.realFilter = filter;}
 
 		@Override
 		public File parse(CommandArgList ctx, List<Completion> completions) throws ParseException {
@@ -121,7 +125,7 @@ public interface Argument<T> {
 				if (path.isFile()) return null;
 				if (path.isDirectory() && !pathStr.endsWith(".")) {
 					match = "";
-					prefix = pathStr.endsWith("/") ? "" : "/";
+					prefix = pathStr.endsWith("/") || pathStr.endsWith(File.separator) ? "" : File.separator;
 				} else {
 					match = path.getName().toLowerCase();
 
@@ -135,17 +139,23 @@ public interface Argument<T> {
 				return null;
 			}
 
-			switch (filter) {
-				case 0 -> {
-					if (!path.exists()) throw ctx.error("路径不存在");
-				}
-				case 1 -> {
-					if (!path.isDirectory()) throw ctx.error("文件夹不存在");
-				}
-				case 2 -> {
-					if (!path.isFile()) throw ctx.error("文件不存在");
+			if (realFilter != null) {
+				String error = realFilter.apply(path);
+				if (error != null) throw ctx.error(error);
+			} else {
+				switch (filter) {
+					case 0 -> {
+						if (!path.exists()) throw ctx.error("路径不存在");
+					}
+					case 1 -> {
+						if (!path.isDirectory()) throw ctx.error("文件夹不存在");
+					}
+					case 2 -> {
+						if (!path.isFile()) throw ctx.error("文件不存在");
+					}
 				}
 			}
+
 			return path;
 		}
 
@@ -173,13 +183,13 @@ public interface Argument<T> {
 				{
 					if (!hasSlash) {
 						if (newSlash) {
-							fname = "'" + pathStr.substring(0, pathStr.length() + offset) + sb + "'";
+							fname = "\""+Tokenizer.escape(pathStr.substring(0, pathStr.length() + offset)+sb)+"\"";
 							offset = -pathStr.length();
 							break block1;
 						}
 					} else {
 						offset -= pathStr.endsWith("\\") ? 2 : 1;
-						sb.append('\'');
+						sb.append('"');
 					}
 
 					fname = sb.toString();
@@ -234,15 +244,18 @@ public interface Argument<T> {
 		public T parse(CommandArgList ctx, List<Completion> completions) throws ParseException {
 			updateChoices();
 			if (mode > 1) {
-				List<T> arr = new ArrayList<>();
+				Set<T> arr = new HashSet<>();
 				Token w = null;
 				while (true) {
 					var nextW = ctx.peekWord();
 					if (nextW == null) break;
 					w = nextW;
 
-					if (!choice.containsKey(w.text())) break;
-					arr.add(choice.get(ctx.nextString()));
+					T val = choice.get(w.text());
+					if (val == null || arr.contains(val)) break;
+
+					ctx.nextString();
+					arr.add(val);
 				}
 
 				if (completions != null) {
@@ -416,7 +429,7 @@ public interface Argument<T> {
 		};
 	}
 	static Argument<Boolean> bool() {
-		final HashSet<String> truly = new HashSet<>("true", "t", "yes", "y"), falsy = new HashSet<>("false", "f", "no", "n");
+		final HashSet<String> truly = new HashSet<>("true", "yes", "y"), falsy = new HashSet<>("false", "no", "n");
 		return new Argument<Boolean>() {
 			@Override
 			public Boolean parse(CommandArgList ctx, List<Completion> completions) throws ParseException {

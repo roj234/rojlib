@@ -1,8 +1,6 @@
 package roj.http.server;
 
-import org.jetbrains.annotations.CheckReturnValue;
-import org.jetbrains.annotations.NotNull;
-import org.jetbrains.annotations.Nullable;
+import org.jetbrains.annotations.*;
 import roj.collect.ArrayList;
 import roj.collect.HashMap;
 import roj.collect.Multimap;
@@ -41,9 +39,9 @@ public final class Request extends Headers {
 
 	private byte action;
 
-	private String path, initPath, version, query;
+	private String path, rawPath, version, query;
 
-	ResponseHeader server;
+	Response response;
 	byte externalRef;
 
 	final HttpServer ctx;
@@ -51,14 +49,13 @@ public final class Request extends Headers {
 
 	public Map<String, Object> threadLocal() {return ctx.ctx;}
 
-	public ResponseHeader server() { return server; }
-	public MyChannel connection() { return server.connection(); }
+	public MyChannel connection() { return response.connection(); }
 
 	Request init(byte action, String path, String query, String version) throws IllegalRequestException {
 		this.action = action;
 		this.version = version;
 		try {
-			this.path = initPath = IOUtil.safePath(URICoder.decodeURI(path));
+			this.path = rawPath = IOUtil.normalizePath(URICoder.decodeURI(path));
 			this.query = query.isEmpty() ? "" : query;
 		} catch (MalformedURLException e) {
 			throw IllegalRequestException.badRequest(e.getMessage());
@@ -67,8 +64,8 @@ public final class Request extends Headers {
 	}
 
 	void free() {
-		path = initPath = query = null;
-		server = null;
+		path = rawPath = query = null;
+		response = null;
 		cookie = null;
 		bodyData = queryParam = null;
 		if (arguments != null) arguments.clear();
@@ -79,45 +76,63 @@ public final class Request extends Headers {
 	}
 
 	/**
-	 * @return path + query parameter
+	 * 获取完整URL（路径 + 查询参数）。
+	 * @return URL字符串
 	 */
 	public String getURL() {
-		var sb = new CharList().append('/').append(initPath);
+		var sb = new CharList().append('/').append(rawPath);
 		return (query.isEmpty() ? sb : sb.append('?').append(query)).toStringAndFree();
 	}
 
+	/**
+	 * @see HttpUtil#getMethodName(int)
+	 */
 	public int action() { return action; }
-	public String path() { return path; }
+	/**
+	 * 获取当前路径。
+	 */
+	public String path() {return path;}
+	/**
+	 * 设置当前路径（路由器代理）。
+	 */
 	public void setPath(String path) {this.path = path;}
-	public String absolutePath() { return initPath; }
+	/**
+	 * 获取未修改的初始路径。
+	 */
+	public String rawPath() {return rawPath;}
 
 	private Multimap<String, String> arguments;
-	public String argument(String name) {return arguments.get(name);}
+	public String argument(String name) {return arguments().get(name);}
 	public Multimap<String, String> arguments() {
 		if (arguments == null) arguments = new Multimap<>();
 		return arguments;
 	}
 
 	public boolean isExpecting() {return "100-continue".equalsIgnoreCase(get("Expect"));}
+	/**
+	 * 获取主机名（从Host或:authority头部，或本地地址）。
+	 */
 	public String host() {
 		String host = get("host");
 		if (host == null) host = get(":authority");
-		return host == null ? ((InetSocketAddress) server.connection().localAddress()).getHostString() : host;
+		return host == null ? ((InetSocketAddress) response.connection().localAddress()).getHostString() : host;
 	}
 
 	/**
-	 * 在预处理器中调用，处理跨源策略，如果为null，那么允许所有源，但不允许身份信息，例如cookie
-	 * @param policy 跨源限制策略
-	 * @return 返回值如果非空，必须返回
+	 * 检查请求来源（CORS）策略。
+	 * 如果策略为null，则允许所有来源但禁用凭证（如Cookie）。
+	 *
+	 * @param policy 跨源策略（可为空）
+	 * @return Content 如果需要立即返回响应（如预检403），否则null
 	 */
 	@CheckReturnValue
 	public Content checkOrigin(@Nullable CrossOriginPolicy policy) {
 		if (get("origin") == null) return null;
 		if (policy == null) policy = CrossOriginPolicy.NO_LIMIT;
-		
+
 		// 预检请求
 		if (action() == HttpUtil.OPTIONS && (containsKey("access-control-request-method") || containsKey("access-control-request-headers"))) {
-			server.code(policy.preflightRequest(this) ? 204 : 403);
+			response.code(policy.preflightRequest(this) ? 204 : 403);
 			return Content.EMPTY;
 		} else {
 			return policy.simpleRequest(this);
@@ -130,6 +145,7 @@ public final class Request extends Headers {
 
 	public String query() {return query;}
 	// 注意，所有Map<String, String>类型的返回类型都是MultiMap | Collections.emptyMap
+	@UnmodifiableView
 	public Map<String, String> queryParam() throws IllegalRequestException {
 		if (queryParam == null) {
 			if (query.isEmpty()) return Collections.emptyMap();
@@ -142,9 +158,9 @@ public final class Request extends Headers {
 		return Helpers.cast(queryParam);
 	}
 
-	public BodyParser postHandler() {return (BodyParser) bodyData;}
-
+	public BodyParser bodyParser() {return (BodyParser) bodyData;}
 	public ByteList body() {return (ByteList) bodyData;}
+
 	public Map<String, String> formData() throws IllegalRequestException {
 		var charset = getCharset(this);
 		return formData(charset);
@@ -281,8 +297,16 @@ public final class Request extends Headers {
 	// endregion
 
 	final Headers responseHeader = new Headers();
+	@Contract(pure = true)
+	public Response response() {return response;}
+	@Contract(pure = true)
 	public Headers responseHeader() {return responseHeader;}
 
+	/**
+	 * 发送Cookie到客户端（Set-Cookie头部）。
+	 *
+	 * @param cookies Cookie列表
+	 */
 	public final void sendCookieToClient(List<Cookie> cookies) {
 		var sb = new CharList();
 
@@ -378,6 +402,7 @@ public final class Request extends Headers {
 	}
 
 	@Nullable
+	@Contract(pure = true)
 	public String bearerAuthorization() {
 		String auth = header("authorization");
 		return auth.regionMatches(true, 0, "bearer ", 0, 7) ? auth.substring(7) : null;
@@ -392,7 +417,7 @@ public final class Request extends Headers {
 	}
 
 	public boolean isSecure() {
-		var conn = server;
+		var conn = response;
 		if (conn == null) return false;
 
 		if (checkProxyToken()) {
@@ -400,11 +425,11 @@ public final class Request extends Headers {
 			return !field.isEmpty() && !field.equalsIgnoreCase("off") && !field.equalsIgnoreCase("false");
 		}
 
-		return server.connection().handler("h11@tls") != null;
+		return response.connection().handler("h11@tls") != null;
 	}
 
 	public InetSocketAddress proxyRemoteAddress() {
-		var conn = server;
+		var conn = response;
 		if (conn == null) return null;
 
 		if (checkProxyToken()) {
@@ -418,7 +443,7 @@ public final class Request extends Headers {
 	}
 
 	public CharList firstLine(CharList sb) {
-		sb.append(HttpUtil.getMethodName(action)).append(isSecure()?" https://":" http://").append(host()).append('/').append(initPath);
+		sb.append(HttpUtil.getMethodName(action)).append(isSecure()?" https://":" http://").append(host()).append('/').append(rawPath);
 		if (query != "") sb.append('?').append(query);
 		return sb.append(' ').append(version);
 	}

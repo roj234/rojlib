@@ -1,0 +1,40 @@
+# 站点根路径 (/sso/)
+path: sso
+# 站点名称
+name: EasySSO
+# 用户存储方式 file或db
+storage: file
+
+# 会话盐
+# 修改会导致所有登录失效
+# 空字符串: 插件每次加载时重新生成
+# 非字符串: 32字节的零
+# session_key: ~
+
+# 网页端注册
+register: no
+# 扫码登录
+qrcode: no
+
+# 用户组，你可以使用指令（或在未加载的时候修改文件）为用户分配用户组
+# web根节点为网页访问权限
+# io根节点为文件访问权限
+# 语法： [!]grant|revoke permissionNode[ permissionFlag][ "noinherit"]
+# ! => 覆盖权限
+# permissionNode => 使用 / 分隔，前后都不能出现/的权限节点，允许为任意字符串以适配目录名
+# permissionFlag => 整数，缺省时根据grant和revoke设置为1或0
+# noinherit => 禁用(不会被子节点)继承
+groups:
+ # 未登录的游客用户组，不得改名
+ guest:
+  - grant web/public
+ # 默认用户组，新注册的用户在该组，不得改名
+ default:
+  - grant web/public
+  - grant web/share
+ # 管理用户组，可以改名，注：UID为0的用户默认具有所有权限，无论其用户组如何
+ # 如果你不喜欢，请删除零号用户
+ admin:
+  - grant *
+  - grant web/webui
+

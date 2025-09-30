@@ -9,9 +9,11 @@ import roj.reflect.Unsafe;
 
 import java.util.*;
 
+import static roj.collect.IntMap.REFERENCE_LOAD_FACTOR;
 import static roj.reflect.Unsafe.U;
 
 /**
+ * 使用Object Instance自身作为Entry从而节省内存的HashMap
  * @author Roj234
  * @since 2024/1/26 06:09
  */
@@ -89,22 +91,20 @@ public final class XashMap<K, V> extends AbstractSet<V> {
 	}
 
 	private Object[] entries;
-	int size, mask = 1;
+	int size, mask;
 	private final Builder<K, V> builder;
-
-	static final float LOAD_FACTOR = 1f;
 
 	XashMap(Builder<K, V> builder, int size) { this.builder = builder; ensureCapacity(size); }
 
 	public void ensureCapacity(int size) {
 		if (size < mask+1) return;
-		mask = MathUtils.nextPowerOfTwo(size)-1;
-		if (entries != null) resize(mask+1);
+		int length = MathUtils.nextPowerOfTwo(size);
+		if (entries != null) resize(length);
+		else mask = length-1;
 	}
 
 	@NotNull
-	public Iterator<V> iterator() { return size == 0 ? Collections.emptyIterator() : new ValueItr(); }
-	public AbstractIterator<V> valItr() { return new ValueItr(); }
+	public Iterator<V> iterator() { return new Itr(); }
 
 	public int size() { return size; }
 
@@ -177,7 +177,7 @@ public final class XashMap<K, V> extends AbstractSet<V> {
 		builder.SetNext(v, entries[i]);
 		entries[i] = v;
 
-		if (++size > mask * LOAD_FACTOR) resize((mask+1)<<1);
+		if (++size > mask * REFERENCE_LOAD_FACTOR) resize((mask+1)<<1);
 		return add ? v : null;
 	}
 
@@ -262,12 +262,12 @@ public final class XashMap<K, V> extends AbstractSet<V> {
 		this.mask = len;
 	}
 
-	final class ValueItr extends AbstractIterator<V> {
+	final class Itr extends AbstractIterator<V> {
 		private Object[] localEntries;
 		private Object entry;
 		private int i;
 
-		public ValueItr() { reset(); }
+		public Itr() { reset(); }
 
 		@Override
 		public void reset() {
