@@ -206,6 +206,12 @@ final class UTF8 extends FastCharset {
 		}
 		return len;
 	}
-	@Override public int addBOM(Object ref, long addr) {U.put24UB(ref, addr, 0xEFBBBF);return 3;}
+	@Override public int addBOM(Object ref, long addr) {
+		final int BOM = 0xEFBBBF;
+		U.putByte(ref, addr++, (byte) (BOM >>> 16));
+		U.putByte(ref, addr++, (byte) (BOM >>> 8));
+		U.putByte(ref, addr, (byte) BOM);
+		return 3;
+	}
 	@Override public int encodeSize(int codepoint) {return codepoint <= 0x7FF ? codepoint > 0x7F ? 2 : 1 : codepoint > 0xFFFF ? 4 : 3;}
 }

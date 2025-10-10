@@ -33,20 +33,15 @@ public final class TrieTreeSet extends AbstractSet<CharSequence> {
 			this.isEnd = entry.isEnd;
 		}
 
-		public int copyFrom(TrieEntry x) {
+		public void copyFrom(TrieEntry x) {
 			Entry node = (Entry) x;
-			int v = 0;
-			if (node.isEnd && !isEnd) {
-				this.isEnd = true;
-				v = 1;
-			}
-
+			isEnd = node.isEnd;
+			mask = node.mask;
 			for (TrieEntry entry : node) {
-				TrieEntry sub = getChild(entry.firstChar);
-				if (sub == null) putChild(sub = entry.clone());
-				v += sub.copyFrom(entry);
+				TrieEntry sub = entry.clone();
+				putChild(sub);
+				sub.copyFrom(entry);
 			}
-			return v;
 		}
 
 		@Override
@@ -180,10 +175,6 @@ public final class TrieTreeSet extends AbstractSet<CharSequence> {
 		return entry.isEnd ? entry : null;
 	}
 
-	public void addTrieTree(TrieTreeSet m) {
-		size += root.copyFrom(m.root);
-	}
-
 	@Override
 	public int size() {
 		return size;
@@ -206,14 +197,12 @@ public final class TrieTreeSet extends AbstractSet<CharSequence> {
 
 	@Override
 	public boolean addAll(@NotNull Collection<? extends CharSequence> m) {
-		if (m instanceof TrieTreeSet) {
-			addTrieTree((TrieTreeSet) m);
+		if (size == 0 && m instanceof TrieTreeSet m1) {
+			size = m1.size;
+			root.copyFrom(m1.root);
 			return true;
 		}
-		for (CharSequence entry : m) {
-			this.add(entry);
-		}
-		return true;
+		return super.addAll(m);
 	}
 
 	@Override

@@ -9,7 +9,7 @@ public final class Copy extends QZCoder {
     private Copy() {}
 
     private static final byte[] ID = {0};
-    byte[] id() {return ID;}
+    public byte[] id() {return ID;}
 
     public OutputStream encode(OutputStream out) {return out;}
     public InputStream decode(InputStream in, byte[] password, long uncompressedSize, AtomicInteger memoryLimit) {return in;}

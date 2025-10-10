@@ -10,12 +10,14 @@ import roj.asm.cp.*;
 import roj.asm.type.IType;
 import roj.compiler.CompileContext;
 import roj.compiler.CompileUnit;
+import roj.compiler.LavaCompiler;
 import roj.compiler.LavaTokenizer;
 import roj.compiler.api.MethodDefault;
 import roj.compiler.asm.AnnotationPrimer;
 import roj.compiler.asm.MethodWriter;
 import roj.compiler.ast.expr.Expr;
 import roj.compiler.ast.expr.ExprParser;
+import roj.compiler.ast.expr.NewArray;
 import roj.compiler.ast.expr.RawExpr;
 import roj.compiler.diagnostic.Kind;
 import roj.config.node.ConfigValue;
@@ -45,7 +47,7 @@ import java.util.List;
  */
 public interface ParseTask {
 	static void defaultParameter(CompileUnit file, MethodNode mn, int id) throws ParseException {
-		var lc = file.lc();
+		var lc = file.context();
 		var wr = lc.tokenizer;
 		int state = wr.setState(LavaTokenizer.STATE_EXPR);
 		RawExpr expr = lc.ep.parse(ExprParser.STOP_RSB|ExprParser.STOP_COMMA|ExprParser.NAE);
@@ -62,10 +64,10 @@ public interface ParseTask {
 	}
 
 	static ParseTask annotationDefault(CompileUnit file, MethodNode mn) throws ParseException {
-		var wr = file.lc().tokenizer;
+		var wr = file.context().tokenizer;
 		int index = wr.index;
 		int state = wr.setState(LavaTokenizer.STATE_EXPR);
-		var expr = file.lc().ep.parse(ExprParser.STOP_SEMICOLON|ExprParser.SKIP_SEMICOLON|ExprParser._ENV_TYPED_ARRAY|ExprParser.NAE);
+		var expr = file.context().ep.parse(ExprParser.STOP_SEMICOLON|ExprParser.SKIP_SEMICOLON|ExprParser._ENV_TYPED_ARRAY|ExprParser.NAE);
 		wr.state = state;
 
 		var attr = new AnnotationDefault(null);
@@ -81,7 +83,7 @@ public interface ParseTask {
 
 
 	static ParseTask staticInit(CompileUnit file) throws ParseException {
-		var wr = file.lc().tokenizer;
+		var wr = file.context().tokenizer;
 		int linePos = wr.LN;
 		int lineIdx = wr.LNIndex;
 		int pos = wr.skipBrace();
@@ -93,7 +95,7 @@ public interface ParseTask {
 	}
 
 	static ParseTask instanceInit(CompileUnit file) throws ParseException {
-		var wr = file.lc().tokenizer;
+		var wr = file.context().tokenizer;
 		int linePos = wr.LN;
 		int lineIdx = wr.LNIndex;
 		int pos = wr.skipBrace();
@@ -109,11 +111,11 @@ public interface ParseTask {
 		};
 	}
 	static ParseTask field(CompileUnit file, FieldNode f) throws ParseException {
-		var wr = file.lc().tokenizer;
+		var wr = file.context().tokenizer;
 		int index = wr.index;
 		int line = wr.LN;
 		int state = wr.setState(LavaTokenizer.STATE_EXPR);
-		var expr = file.lc().ep.parse(ExprParser.STOP_COMMA|ExprParser.STOP_SEMICOLON|ExprParser.NAE);
+		var expr = file.context().ep.parse(ExprParser.STOP_COMMA|ExprParser.STOP_SEMICOLON|ExprParser._ENV_TYPED_ARRAY|ExprParser.NAE);
 		wr.state = state;
 
 		return new ParseTask() {
@@ -131,14 +133,17 @@ public interface ParseTask {
 				ctx.errorReportIndex = index;
 
 				var file = ctx.file;
+
+				IType fieldType = f.fieldType();
+				if (expr instanceof NewArray def) def.setType(fieldType);
 				var node = expr.resolve(ctx);
 
 				ctx.errorReportIndex = -1;
 
 				if ((f.modifier & Opcodes.ACC_FINAL) != 0) {
-					if (node.isConstant() || node.hasFeature(Expr.Feature.LDC_CLASS)) {
-						f.addAttribute(new ConstantValue(ParseTask.toConstant(node.constVal())));
-						if (isStatic) return;
+					if (!(node instanceof NewArray) && (node.isConstant() || node.hasFeature(Expr.Feature.LDC_CLASS))) {
+						var constant = toConstant(node.constVal());
+						f.addAttribute(new ConstantValue(constant));
 					}
 
 					if (ctx.fieldDFS) return;
@@ -150,11 +155,13 @@ public interface ParseTask {
 				}
 
 				if (isStatic) {
+					if (f.getAttribute("ConstantValue") != null) return;
+
 					var mp = file.getStaticInit();
 					ctx.setMethod(mp.method);
 
 					mp.lines().add(mp.label(), line);
-					ctx.writeCast(mp, node, f.fieldType());
+					ctx.writeCast(mp, node, fieldType);
 					mp.field(Opcodes.PUTSTATIC, file.name(), f.name(), f.rawDesc());
 				} else {
 					var mp = file.getGlobalInit();
@@ -162,9 +169,9 @@ public interface ParseTask {
 
 					mp.lines().add(mp.label(), line);
 					mp.vars(Opcodes.ALOAD, ctx.thisSlot);
-					ctx.writeCast(mp, node, f.fieldType());
+					ctx.writeCast(mp, node, fieldType);
 					mp.field(Opcodes.PUTFIELD, file.name(), f.name(), f.rawDesc());
-					mp.visitSizeMax(1 + f.fieldType().length(), 1);
+					mp.visitSizeMax(1 + fieldType.rawType().length(), 1);
 				}
 			}
 		};
@@ -184,7 +191,7 @@ public interface ParseTask {
 	}
 
 	static ParseTask method(CompileUnit file, MethodNode mn, List<String> argNames) throws ParseException {
-		var wr = file.lc().tokenizer;
+		var wr = file.context().tokenizer;
 		int linePos = wr.LN;
 		int lineIdx = wr.LNIndex;
 		int pos = wr.skipBrace();
@@ -203,13 +210,20 @@ public interface ParseTask {
 					file.appendGlobalInit(cw, buf, cw.lines);
 
 					cw.insertBefore(buf);
+					buf.release();
 				} else if (ctx.inConstructor && !ctx.thisConstructor) {
 					file.appendGlobalInit(cw, null, cw.lines);
 				}
 
-				cw.finish();
+				try {
+					cw.finish();
+				} catch (Throwable e) {
+					ctx.report(Kind.INTERNAL_ERROR, "lava.internalError", e.toString());
+					LavaCompiler.debugLogger().warn("lava.internalError", e);
+				}
 
 				mn.addAttribute(new UnparsedAttribute("Code", cw.bw.toByteArray()));
+				cw.bw.release();
 			}
 		};
 	}

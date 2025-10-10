@@ -7,7 +7,7 @@ import roj.config.NbtEncoder;
 import roj.config.NbtParserEx;
 import roj.config.mapper.ObjectMapper;
 import roj.config.mapper.ObjectReader;
-import roj.io.ByteInputStream;
+import roj.io.XDataInputStream;
 import roj.math.MathUtils;
 import roj.util.ByteList;
 import roj.util.Helpers;
@@ -100,7 +100,7 @@ public class FileSessionStorage extends SessionStorage implements BiConsumer<Str
 		File file = new File(baseDir, id);
 		if (!file.isFile()) return new HashMap<>();
 
-		try (var in = new ByteInputStream(new FileInputStream(file))) {
+		try (var in = new XDataInputStream(new FileInputStream(file))) {
 			ObjectReader<Map<String, Object>> des = adapter();
 			des.reset();
 			NbtParserEx.Parse(in, des);

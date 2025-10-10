@@ -3,7 +3,6 @@ package roj.http.server;
 import org.jetbrains.annotations.NotNull;
 import roj.collect.XashMap;
 import roj.io.IOUtil;
-import roj.util.Helpers;
 
 import java.util.Locale;
 import java.util.Objects;
@@ -14,8 +13,9 @@ import java.util.Objects;
  */
 public final class MimeType {
 	private static MimeType fallback = new MimeType("*", "application/octet-stream");
-	public static final XashMap<String, MimeType> REPOSITORY = Helpers.cast(XashMap.noCreation(MimeType.class, "ext").createSized(128));
+	public static final XashMap<String, MimeType> REPOSITORY;
 	static {
+		REPOSITORY = XashMap.forType(String.class, MimeType.class).key("ext").build().createSized(128);
 		try {
 			loadMimeMap(IOUtil.getTextResourceIL("roj/http/server/mime.cfg"));
 		} catch (Exception e) {

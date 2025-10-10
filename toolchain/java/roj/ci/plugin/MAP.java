@@ -39,7 +39,7 @@ import static roj.ui.CommandNode.literal;
  * @author Roj234
  * @since 2025/2/11 11:03
  */
-public class MAP implements Processor {
+public class MAP implements Plugin {
 	private int flag;
 
 	@Subscribe
@@ -50,14 +50,14 @@ public class MAP implements Processor {
 			for (var project : MCMake.projects.values()) {
 				project.mapper = null;
 				project.mapperState = null;
-				LOGGER.debug("库缓存失效 {}", project.getName());
+				log.debug("库缓存失效 {}", project.getName());
 			}
 		} else {
 			for (var project : MCMake.projects.values()) {
 				if (project == owner || project.getProjectDependencies().contains(owner)) {
 					project.mapper = null;
 					project.mapperState = null;
-					LOGGER.debug("库缓存失效 {}", project.getName());
+					log.debug("库缓存失效 {}", project.getName());
 				}
 			}
 		}
@@ -84,7 +84,7 @@ public class MAP implements Processor {
 			} else {
 				m = new Mapper(workspace.getMapping());
 				m.flag = (byte) flag;
-				m.loadLibraries(workspace.mappedDepend);
+				m.loadLibraries(workspace.getMappedDepend());
 			}
 
 			m.loadLibraries(files);
@@ -94,7 +94,7 @@ public class MAP implements Processor {
 				File in = files.get(i);
 				String postfix = reverse ? "-unmap" : "-mapped";
 				if (IOUtil.fileName(in.getName()).endsWith(postfix)) {
-					LOGGER.info("{}仅作为依赖，不映射", in.getName());
+					log.info("{}仅作为依赖，不映射", in.getName());
 					continue;
 				}
 				File out = IOUtil.deriveOutput(in, postfix);
@@ -109,7 +109,7 @@ public class MAP implements Processor {
 						zfw.writeNamed(klass.getFileName(), klass.getClassBytes());
 					}
 				}
-				LOGGER.info("已处理{}", in);
+				log.info("已处理{}", in);
 			}
 		});
 
@@ -167,11 +167,11 @@ public class MAP implements Processor {
 		if (config.asMap().getBool("子类实现")) flag |= MF_FIX_SUBIMPL;
 	}
 
-	@Override public int beforeCompile(ArrayList<String> options, List<File> sources, BuildContext ctx) {
-		return ctx.project.mapperState == null && ctx.project.workspace.mapping != null ? 1 : 2;
+	@Override public boolean preProcess(ArrayList<String> options, List<File> sources, BuildContext ctx) {
+		return ctx.project.mapperState == null && ctx.project.workspace.mapping != null;
 	}
 
-	@Override public synchronized void afterCompilePre(BuildContext ctx) {
+	@Override public synchronized void process(BuildContext ctx) {
 		var project = ctx.project;
 		if (project.workspace.mapping != null) {
 			var mapper = getProjectMapper(project);
@@ -208,15 +208,15 @@ public class MAP implements Processor {
 			String name = file.getName().toLowerCase(Locale.ROOT);
 			return !name.startsWith(DONT_LOAD_PREFIX) && (name.endsWith(".zip") || name.endsWith(".jar"));
 		};
-		libraries.addAll(p.workspace.mappedDepend);
+		libraries.addAll(p.workspace.getMappedDepend());
 		IOUtil.listFiles(new File(BASE, "lib"), libraries, callback);
 		for (Dependency dep : p.getCompileDependencies()) {
-			dep.forEachFile(f -> {
+			dep.forEachJar(f -> {
 				if (callback.test(f)) libraries.add(f);
 			});
 		}
 
-		LOGGER.trace("{}: 映射器的库列表：{}", p.getName(), libraries);
+		log.trace("{}: 映射器的库列表：{}", p.getName(), libraries);
 
 		Mapper m;
 		var hash = digest.digest();
@@ -230,16 +230,16 @@ public class MAP implements Processor {
 			if (in != null) {
 				try {
 					m.loadCache(in, true);
-					LOGGER.debug("{}: 从缓存恢复映射器 {}", p.getName(), entryId);
+					log.debug("{}: 从缓存恢复映射器 {}", p.getName(), entryId);
 					break loaded;
 				} catch (Exception e) {
-					LOGGER.warn("{}: 从缓存恢复映射器失败", e, p.getName());
+					log.warn("{}: 从缓存恢复映射器失败", e, p.getName());
 				} finally {
 					in.close();
 				}
 			}
 
-			LOGGER.debug("{}: 重新构建映射器", p.getName());
+			log.debug("{}: 重新构建映射器", p.getName());
 
 			m.loadLibraries(libraries);
 
@@ -257,7 +257,7 @@ public class MAP implements Processor {
 			mzf.save();
 			buf.release();
 		} catch (IOException e) {
-			LOGGER.error("{}: 映射器构建失败", e, p.getName());
+			log.error("{}: 映射器构建失败", e, p.getName());
 			return new Mapper();
 		}
 

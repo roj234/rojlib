@@ -16,7 +16,7 @@ public final class LZMA extends QZCoder {
     public LZMA(LZMA2Options options) { this.options = options; }
     LZMA(boolean unused) {}
 
-    QZCoder factory() {return new LZMA(true);}
+    public QZCoder factory() {return new LZMA(true);}
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
@@ -41,7 +41,7 @@ public final class LZMA extends QZCoder {
     }
 
     private static final byte[] ID = {3, 1, 1};
-    byte[] id() {return ID;}
+    public byte[] id() {return ID;}
 
     private byte props;
     private int dictSize;
@@ -78,14 +78,14 @@ public final class LZMA extends QZCoder {
     @Override
     public String toString() { return "LZMA:"+(options != null ? options : (31-Integer.numberOfLeadingZeros(dictSize))); }
 
-    void writeOptions(DynByteBuf buf) {
+    public void writeOptions(DynByteBuf buf) {
         if (options != null) {
             buf.put(options.getPropByte()).putIntLE(options.getDictSize());
         } else {
             buf.put(props).putIntLE(dictSize);
         }
     }
-    void readOptions(DynByteBuf buf, int length) {
+    public void readOptions(DynByteBuf buf, int length) {
 		props = buf.readByte();
         dictSize = buf.readIntLE();
     }

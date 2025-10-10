@@ -428,7 +428,7 @@ public final class Request extends Headers {
 		return response.connection().handler("h11@tls") != null;
 	}
 
-	public InetSocketAddress proxyRemoteAddress() {
+	public InetSocketAddress remoteAddress() {
 		var conn = response;
 		if (conn == null) return null;
 

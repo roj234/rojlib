@@ -57,7 +57,7 @@ final class QualifiedThis extends Expr {
 			if (cast.type < 0) {
 				ctx.report(this, Kind.ERROR, "qualifiedThis.inaccessible", thisType, type);
 			} else if (cast.distance > 1 || checkInterfaceInherit(ctx, type)) {
-				ctx.report(this, Kind.INCOMPATIBLE, "qualifiedThis.indirect", thisType, type);
+				ctx.report(this, Kind.FEATURE, "qualifiedThis.indirect", thisType, type);
 			}
 		}
 		return this;

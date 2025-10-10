@@ -4,8 +4,9 @@ import roj.http.Headers;
 import roj.io.IOUtil;
 import roj.net.ChannelCtx;
 import roj.net.ChannelHandler;
+import roj.net.SelectorLoop;
 import roj.optimizer.FastVarHandle;
-import roj.reflect.Handles;
+import roj.reflect.Telescope;
 import roj.text.URICoder;
 import roj.util.DynByteBuf;
 
@@ -22,13 +23,13 @@ import java.nio.file.StandardOpenOption;
 @FastVarHandle
 public class DiskFileInfo implements FileInfo, ChannelHandler {
 	protected final File file;
-	protected long lastModified;
+	protected long lastModified, lastUpdated;
 	private final boolean download;
 
 	private DynByteBuf cc;
 	private byte[] uc;
 
-	private static final VarHandle STATE = Handles.lookup().findVarHandle(DiskFileInfo.class, "state", int.class);
+	private static final VarHandle STATE = Telescope.lookup().findVarHandle(DiskFileInfo.class, "state", int.class);
 	private volatile int state;
 
 	public DiskFileInfo(File file) {this(file, false);}
@@ -51,8 +52,10 @@ public class DiskFileInfo implements FileInfo, ChannelHandler {
 
 	@Override
 	public int stats() {
-		if (uc == null && (System.currentTimeMillis()&511) == 0)
+		if (uc == null && (SelectorLoop.currentTimeMillis()-lastUpdated) > 500) {
+			lastUpdated = SelectorLoop.currentTimeMillis();
 			lastModified = file.lastModified();
+		}
 
 		int stat = FILE_RA;
 		int v = state;

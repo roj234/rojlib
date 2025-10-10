@@ -9,8 +9,6 @@ import roj.asm.cp.Constant;
 import roj.asm.cp.ConstantPool;
 import roj.asm.cp.CstClass;
 import roj.asm.cp.CstRef;
-import roj.concurrent.Executor;
-import roj.concurrent.TaskGroup;
 import roj.io.IOUtil;
 import roj.util.ByteList;
 import roj.util.Helpers;
@@ -236,23 +234,5 @@ public final class Context implements ClassResource, Consumer<Constant>, Supplie
 			}
 		}
 		return ctx;
-	}
-
-	public static void runAsync(Consumer<Context> action, List<List<Context>> ctxs, Executor executor) {
-		TaskGroup monitor = executor.newGroup();
-		for (int i = 0; i < ctxs.size(); i++) {
-			List<Context> files = ctxs.get(i);
-
-			monitor.execute(() -> {
-				for (int j = 0; j < files.size(); j++) {
-					try {
-						action.accept(files.get(j));
-					} catch (Throwable e) {
-						throw new RuntimeException(files.get(j).getFileName(), e);
-					}
-				}
-			});
-		}
-		monitor.await();
 	}
 }

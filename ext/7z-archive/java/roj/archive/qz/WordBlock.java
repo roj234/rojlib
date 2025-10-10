@@ -14,7 +14,7 @@ import java.io.OutputStream;
  * @since 2022/3/15 10:32
  */
 public final class WordBlock {
-	QZCoder[] coder;
+	QZCoder[] coders;
 	CoderInfo complexCoder;
 
 	long offset, size;
@@ -47,12 +47,13 @@ public final class WordBlock {
 	public QZEntry getFirstEntry() { return firstEntry; }
 	public long getuSize() { return uSize; }
 
-	public boolean hasProcessor(Class<? extends QZCoder> type) {
-		if (complexCoder != null) return complexCoder.hasProcessor(type);
-		for (QZCoder qzCoder : coder) {
-			if (type.isInstance(qzCoder)) return true;
+	public boolean hasCodec(Class<? extends QZCoder> type) {return getCodec(type) != null;}
+	public <T extends QZCoder> T getCodec(Class<T> type) {
+		if (complexCoder != null) return complexCoder.getCodec(type);
+		for (QZCoder qzCoder : coders) {
+			if (type.isInstance(qzCoder)) return type.cast(qzCoder);
 		}
-		return false;
+		return null;
 	}
 
 	@Override
@@ -60,9 +61,10 @@ public final class WordBlock {
 		StringBuilder sb = new StringBuilder();
 		sb.append("{\n")
 		  .append("  偏移").append(offset).append(",长度").append(size()).append('\n');
-		if (complexCoder == null) linearCoder(sb, coder);
-		// ENHANCE: A graph view for complex coder
-		else linearCoder(sb, (Object[]) coder);
+
+		if (complexCoder == null) linearCoder(sb, coders);
+		else sb.append(CoderInfo.printFilterMermaid(this));
+
 		sb.append("\n  包含").append(fileCount).append("个文件");
 
 		if ((hasCrc&1) != 0)

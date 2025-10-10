@@ -67,9 +67,9 @@ public class Annotation extends MapValue {
 	public String[] getStringArray(String name) {return getList(name).toStringArray();}
 
 	@Override
-	protected ConfigValue put(String k, ConfigValue v, int flag) {
+	protected ConfigValue put(String key, ConfigValue value, int flag) {
 		if (properties == Collections.EMPTY_MAP) properties = new LinkedHashMap<>();
-		return super.put(k, v, flag);
+		return super.put(key, value, flag);
 	}
 
 	public static Annotation parse(ConstantPool pool, DynByteBuf r) {

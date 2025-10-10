@@ -150,12 +150,12 @@ final class NativeVT implements ITty, Runnable {
 	private int flag;
 
 	private NativeVT() {
-		long offset = Unsafe.fieldOffset(FilterInputStream.class, "in");
+		long offset = Unsafe.objectFieldOffset(FilterInputStream.class, "in", InputStream.class);
 		Object in = System.in;
 		while (in instanceof FilterInputStream) in = Unsafe.U.getReference(in, offset);
 		this.in = (InputStream) in;
 
-		offset = Unsafe.fieldOffset(FilterOutputStream.class, "out");
+		offset = Unsafe.objectFieldOffset(FilterOutputStream.class, "out", OutputStream.class);
 		Object out = System.out;
 		while (out instanceof FilterOutputStream) out = Unsafe.U.getReference(out, offset);
 

@@ -6,8 +6,8 @@ import roj.collect.TrieEntry;
 import roj.collect.TrieTree;
 import roj.compiler.runtime.SwitchMapI;
 import roj.config.node.IntValue;
-import roj.io.ByteInputStream;
 import roj.io.IOUtil;
+import roj.io.XDataInputStream;
 import roj.text.CharList;
 import roj.text.FastCharset;
 
@@ -30,7 +30,7 @@ public class JPinyin {
 	static {
 		// 数据生成见roj.datagen.MakePinyinData
 		// 内部数据格式可能随时改动
-		try (var in = ByteInputStream.wrap(new LZMA2InputStream(JPinyin.class.getClassLoader().getResourceAsStream("roj/text/pinyin/JPinyin.lzma"), 65536+32768))) {
+		try (var in = XDataInputStream.wrap(new LZMA2InputStream(JPinyin.class.getClassLoader().getResourceAsStream("roj/text/pinyin/JPinyin.lzma"), 65536+32768))) {
 			FIRST_TONE = new String[in.readUnsignedByte()+1];
 			FIRST_TONE[0] = "";
 			LAST_TONE = new String[in.readUnsignedByte()+1];

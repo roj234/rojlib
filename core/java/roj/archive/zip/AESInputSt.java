@@ -4,12 +4,11 @@ import org.jetbrains.annotations.NotNull;
 import roj.crypt.CipherInputStream;
 import roj.io.IOUtil;
 import roj.io.source.SourceInputStream;
+import roj.text.TextUtil;
 
 import java.io.IOException;
 import java.io.InputStream;
 import java.security.MessageDigest;
-import java.util.Arrays;
-import java.util.zip.ZipException;
 
 /**
  * check HMAC when AES is in use
@@ -19,9 +18,7 @@ import java.util.zip.ZipException;
 final class AESInputSt extends CipherInputStream {
 	private boolean checked;
 
-	public AESInputSt(InputStream in, ZipAES cip) {
-		super(in, cip);
-	}
+	public AESInputSt(InputStream in, ZipAES cip) {super(in, cip);}
 
 	public int read(@NotNull byte[] b, int off, int len) throws IOException {
 		len = super.read(b, off, len);
@@ -34,11 +31,11 @@ final class AESInputSt extends CipherInputStream {
 		checked = true;
 
 		((SourceInputStream) in).remain += 10;
-		byte[] remote = new byte[10];
-		IOUtil.readFully(in, remote, 0, 10);
+		byte[] mac = new byte[10];
+		IOUtil.readFully(in, mac, 0, 10);
 
-		byte[] local = ((ZipAES) cipher).getTrailers();
+		byte[] except = ((ZipAES) cipher).getTrailers();
 
-		if (!MessageDigest.isEqual(local, remote)) throw new ZipException("HMAC checksum: excepting " + Arrays.toString(local) + ", got " + Arrays.toString(remote) + "\n" + "You can disable this by unset VERIFY bit");
+		if (!MessageDigest.isEqual(except, mac)) throw new IOException("校验失败(HMAC-SHA1): except="+TextUtil.bytes2hex(except)+", got="+TextUtil.bytes2hex(mac));
 	}
 }

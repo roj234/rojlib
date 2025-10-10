@@ -1,6 +1,6 @@
 package roj.image;
 
-import roj.io.ByteInput;
+import roj.io.XDataInput;
 
 import java.awt.color.ColorSpace;
 import java.awt.image.BufferedImage;
@@ -13,13 +13,13 @@ import java.util.function.IntConsumer;
  * @since 2024/5/19 17:36
  */
 public interface ImageDecoder {
-	boolean init(ByteInput in) throws IOException;
+	boolean init(XDataInput in) throws IOException;
 	int getWidth();
 	int getHeight();
 	boolean hasAlpha();
 	ColorSpace getColorSpace();
 	ColorModel getColorModel();
 
-	BufferedImage decodeImage(ByteInput in) throws IOException;
-	void decodeImage(ByteInput in, IntConsumer argb) throws IOException;
+	BufferedImage decodeImage(XDataInput in) throws IOException;
+	void decodeImage(XDataInput in, IntConsumer argb) throws IOException;
 }

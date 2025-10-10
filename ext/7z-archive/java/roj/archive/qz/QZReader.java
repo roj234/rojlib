@@ -6,7 +6,7 @@ import roj.io.LimitInputStream;
 import roj.io.source.Source;
 import roj.io.source.SourceInputStream;
 import roj.optimizer.FastVarHandle;
-import roj.reflect.Handles;
+import roj.reflect.Telescope;
 
 import java.io.Closeable;
 import java.io.EOFException;
@@ -21,7 +21,7 @@ import java.lang.invoke.VarHandle;
 @FastVarHandle
 public abstract sealed class QZReader implements Closeable permits QZArchive, QZArchive.ForkedReader {
 	Source r, cache;
-	static final VarHandle CACHE = Handles.lookup().findVarHandle(QZReader.class, "cache", Source.class);
+	static final VarHandle CACHE = Telescope.lookup().findVarHandle(QZReader.class, "cache", Source.class);
 
 	byte flag;
 
@@ -77,6 +77,8 @@ public abstract sealed class QZReader implements Closeable permits QZArchive, QZ
 		if (entry.next != null) {
 			activeEntry = entry;
 			activeInputStream = in;
+		} else {
+			in.dispatchClose = true;
 		}
 		return withVerification(entry, in);
 	}
@@ -104,7 +106,7 @@ public abstract sealed class QZReader implements Closeable permits QZArchive, QZ
 	}
 
 	private InputStream withVerification(QZEntry entry, LimitInputStream in) {
-		if ((flag&QZArchive.FLAG_RECOVERY) != 0 && (entry.flag&QZEntry.CRC) != 0)
+		if ((flag&QZArchive.FLAG_RECOVERY) == 0 && (entry.flag&QZEntry.CRC) != 0)
 			return new CRC32InputStream(in, entry.crc32);
 		return in;
 	}

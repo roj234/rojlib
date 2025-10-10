@@ -16,7 +16,6 @@ import roj.asm.frame.FrameVisitor;
 import roj.asm.type.TypeHelper;
 import roj.collect.ArrayList;
 import roj.io.IOUtil;
-import roj.text.logging.Logger;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
 
@@ -242,7 +241,7 @@ public class CodeWriter extends AbstractCodeWriter {
 		state = 2;
 
 		// make modify <clinit> easier
-		if ((computes &ADD_RETURN) != 0) insn(RETURN);
+		if ((computes&ADD_RETURN) != 0) insn(RETURN);
 		satisfySegments();
 
 		bw.setInt(tmpLenOffset - 4, bw.wIndex() - tmpLenOffset);
@@ -260,8 +259,8 @@ public class CodeWriter extends AbstractCodeWriter {
 		if (!segments.isEmpty()) {
 			endSegment();
 
-			int len = segments.size()+1;
-			int[] offSum = AsmCache.getInstance().getIntArray_(len);
+			int len = segments.size()+2;
+			int[] offSum = AsmCache.getInstance().getOffSumArray(len);
 			updateOffset(labels, offSum, len);
 
 			int wi = bw.wIndex();
@@ -280,6 +279,7 @@ public class CodeWriter extends AbstractCodeWriter {
 
 				changed |= updateOffset(labels, offSum, len);
 			} while (changed);
+			AsmCache.getInstance().putOffSumArray(offSum);
 		} else {
 			// used for getBci, and on simple method it fails
 			bci = bw.wIndex() - begin;
@@ -296,9 +296,10 @@ public class CodeWriter extends AbstractCodeWriter {
 		labels.clear();
 	}
 	public void _updateOffsets() {
-		int len = segments.size()+1;
-		int[] offSum = AsmCache.getInstance().getIntArray_(len);
+		int len = segments.size()+2;
+		int[] offSum = AsmCache.getInstance().getOffSumArray(len);
 		updateOffset(labels, offSum, len);
+		AsmCache.getInstance().putOffSumArray(offSum);
 	}
 
 	protected void visitException(int start, int end, int handler, CstClass type) {
@@ -351,13 +352,14 @@ public class CodeWriter extends AbstractCodeWriter {
 					codeOb.rIndex = rIndex;
 					codeOb.wIndex(codeOb.capacity());
 					var code = new Code(new ByteList().putInt(0).putInt(codeOb.readableBytes()).put(codeOb).putInt(0), cpw, method);
-					var code1 = method.getAttribute(null, Attribute.Code);
-					if (code1 != null) {
-						debugInfo = "";
-						code1.instructions = code.instructions;
-					} else {
-						debugInfo = code.toString();
-					}
+					debugInfo = code.toString();
+					try {
+						var code1 = method.getAttribute(null, Attribute.Code);
+						if (code1 != null) {
+							debugInfo = "";
+							code1.instructions = code.instructions;
+						}
+					} catch (Throwable ignored) {}
 				} catch (Throwable e1) {
 					debugInfo = "(Illegal instruction "+e1+"): "+codeOb.dump();
 				}
@@ -455,18 +457,8 @@ public class CodeWriter extends AbstractCodeWriter {
 				len = b.readableBytes();
 				frames = null;
 			}
-			/*case "RuntimeInvisibleTypeAnnotations", "RuntimeVisibleTypeAnnotations" -> {
-				var slice = b.slice();
-				var rita = Attribute.parse(null, cp, name, slice, AttrCode.ATTR_CODE);
-				slice.clear();
-				rita.toByteArrayNoHeader(slice, cpw);
-				if (slice.wIndex() != len) {
-					Logger.FALLBACK.debug("{}.{} 中遇到不支持的属性 {}", mn.owner(), mn.name(), name);
-					return;
-				}
-			}*/
 			default -> {
-				Logger.FALLBACK.debug("{}.{} 中遇到不支持的属性 {}", method.owner(), method.name(), name);
+				Attribute.foundUnknownAttribute(method, name);
 				return;
 			}
 		}
@@ -519,7 +511,7 @@ public class CodeWriter extends AbstractCodeWriter {
 
 		Label lbl = bciR2W.get(pos);
 		if (lbl == null) lbl = new Label();
-		else if (lbl.isValid()) return lbl;
+		else if (lbl.isBound()) return lbl;
 
 		if (before) {
 			if (segments.isEmpty() || pos < segments.get(0).length()) lbl.setFirst(pos);

@@ -1,15 +1,14 @@
 package roj.text;
 
+import org.jetbrains.annotations.NotNull;
 import roj.collect.ArrayList;
 import roj.io.IOUtil;
 
-import java.util.List;
 import java.util.Map;
 import java.util.TimeZone;
 
 /**
  * A functional interface for formatting templates with variable substitution.
- * @see roj.text.logging.LogContext#setComponents(List)
  * @author Roj234
  * @since 2022/11/29 21:34
  */
@@ -24,7 +23,7 @@ public interface Formatter {
 	 * @return the CharList containing the formatted result
 	 * @throws IllegalArgumentException if the environment contains invalid values or variables
 	 */
-	CharList format(Map<String, ?> env, CharList sb) throws IllegalArgumentException;
+	@NotNull CharList format(@NotNull Map<String, ?> env, @NotNull CharList sb) throws IllegalArgumentException;
 
 	/**
 	 * 是否是常量模板。
@@ -41,7 +40,7 @@ public interface Formatter {
 	static Formatter constant(String value) {
 		return new Formatter() {
 			@Override public boolean isConstant() {return true;}
-			@Override public CharList format(Map<String, ?> env, CharList sb) {return sb.append(value);}
+			@Override public @NotNull CharList format(@NotNull Map<String, ?> env, @NotNull CharList sb) {return sb.append(value);}
 		};
 	}
 

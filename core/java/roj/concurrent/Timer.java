@@ -2,7 +2,7 @@ package roj.concurrent;
 
 import roj.collect.ArrayList;
 import roj.optimizer.FastVarHandle;
-import roj.reflect.Handles;
+import roj.reflect.Telescope;
 import roj.text.CharList;
 import roj.text.logging.Logger;
 
@@ -56,8 +56,8 @@ public class Timer implements Runnable {
 		}
 
 		static final VarHandle
-				NEXT = Handles.lookup().findVarHandle(TaskHandle.class, "next", TaskHandle.class),
-				TIME = Handles.lookup().findVarHandle(TaskHandle.class, "timeLeft", long.class);
+				NEXT = Telescope.lookup().findVarHandle(TaskHandle.class, "next", TaskHandle.class),
+				TIME = Telescope.lookup().findVarHandle(TaskHandle.class, "timeLeft", long.class);
 
 		// TimingWheel | TimerTask
 		private Object owner;
@@ -204,7 +204,7 @@ public class Timer implements Runnable {
 		private final TimingWheel prev;
 		// @Stable
 		private volatile TimingWheel next;
-		private static final VarHandle NEXT = Handles.lookup().findVarHandle(TimingWheel.class, "next", TimingWheel.class);
+		private static final VarHandle NEXT = Telescope.lookup().findVarHandle(TimingWheel.class, "next", TimingWheel.class);
 		private TimingWheel next() {
 			while (next == null) {
 				TimingWheel next = new TimingWheel(this);
@@ -381,7 +381,7 @@ public class Timer implements Runnable {
 		}
 	}
 
-	private static final VarHandle HEAD = Handles.lookup().findVarHandle(Timer.class, "head", TaskHandle.class);
+	private static final VarHandle HEAD = Telescope.lookup().findVarHandle(Timer.class, "head", TaskHandle.class);
 
 	private final TimingWheel wheel = new TimingWheel(null);
 	private volatile boolean stopped;
@@ -462,10 +462,10 @@ public class Timer implements Runnable {
 		}
 	}
 
-	public TimerTask delay(Runnable task, long delay) {
+	public TimerTask delay(Runnable task, long delayMs) {
 		if (stopped) throw new IllegalStateException("Timer already cancelled.");
-		if (delay < 0) throw new IllegalArgumentException("Negative delay.");
-		var handle = new TaskHandle(wheel, task, System.currentTimeMillis()+delay);
+		if (delayMs < 0) throw new IllegalArgumentException("Negative delay.");
+		var handle = new TaskHandle(wheel, task, System.currentTimeMillis()+delayMs);
 		if (task instanceof PeriodicTask periodicTaskWrapper) {
 			periodicTaskWrapper.setHandle(handle);
 		}
@@ -476,9 +476,9 @@ public class Timer implements Runnable {
 		return handle;
 	}
 	// 周期任务是通过包装器实现的
-	public final TimerTask loop(Runnable task, long period) { return loop(task, period, -1, 0); }
-	public final TimerTask loop(Runnable task, long period, int repeat) { return loop(task, period, repeat, 0); }
-	public TimerTask loop(Runnable task, long period, int repeat, long delay) {return delay(new PeriodicTask(task, period, repeat, true), delay);}
+	public final TimerTask loop(Runnable task, long periodMs) { return loop(task, periodMs, -1, 0); }
+	public final TimerTask loop(Runnable task, long periodMs, int repeat) { return loop(task, periodMs, repeat, 0); }
+	public TimerTask loop(Runnable task, long periodMs, int repeat, long delayMs) {return delay(new PeriodicTask(task, periodMs, repeat, true), delayMs);}
 
 	/**
 	 * Terminates this timer, discarding any currently scheduled tasks.

@@ -52,11 +52,11 @@ import java.util.List;
 public class EventBus {
 	private static final String SUBSCRIBE_NAME = "roj/event/Subscribe";
 
-	private static final XashMap.Builder<String, ListenerList> LISTENERS_BUILDER = XashMap.noCreation(ListenerList.class, "type");
-	private static final XashMap.Builder<String, ListenerInfo.MapEntry> INFO_BUILDER = XashMap.noCreation(ListenerInfo.MapEntry.class, "owner");
+	private static final XashMap.Template<String, ListenerList> LISTENERS_TEMPLATE = XashMap.forType(String.class, ListenerList.class).key("type").build();
+	private static final XashMap.Template<String, ListenerInfo.MapEntry> INFO_TEMPLATE = XashMap.forType(String.class, ListenerInfo.MapEntry.class).key("owner").build();
 
-	private final XashMap<String, ListenerList> listenerLists = LISTENERS_BUILDER.create();
-	private final XashMap<String, ListenerInfo.MapEntry> entries = INFO_BUILDER.create();
+	private final XashMap<String, ListenerList> listenerLists = LISTENERS_TEMPLATE.create();
+	private final XashMap<String, ListenerInfo.MapEntry> entries = INFO_TEMPLATE.create();
 
 	/**
 	 * 创建一个空的EventBus实例。
@@ -74,7 +74,7 @@ public class EventBus {
 	 *
 	 * @param repo 注解仓库，用于扫描{@link Subscribe}注解的类
 	 * @throws IllegalArgumentException 如果扫描过程中发现无效监听器（如参数不匹配）
-	 * @see roj.asmx.launcher.Loader#getAnnotations()
+	 * @see roj.asmx.AnnotationRepoManager
 	 */
 	public EventBus(AnnotationRepo repo) {
 		List<ListenerInfo> objectList = new ArrayList<>(), staticList = new ArrayList<>();

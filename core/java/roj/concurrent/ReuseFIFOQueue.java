@@ -1,7 +1,7 @@
 package roj.concurrent;
 
 import roj.optimizer.FastVarHandle;
-import roj.reflect.Handles;
+import roj.reflect.Telescope;
 
 import java.lang.invoke.VarHandle;
 
@@ -14,8 +14,8 @@ public abstract class ReuseFIFOQueue<T extends ReuseFIFOQueue.Node> {
 	public static class Node {volatile Node next;}
 
 	private static final VarHandle
-			HEAD = Handles.lookup().findVarHandle(ReuseFIFOQueue.class, "head", Node.class),
-			TAIL = Handles.lookup().findVarHandle(ReuseFIFOQueue.class, "tail", Node.class);
+			HEAD = Telescope.lookup().findVarHandle(ReuseFIFOQueue.class, "head", Node.class),
+			TAIL = Telescope.lookup().findVarHandle(ReuseFIFOQueue.class, "tail", Node.class);
 
 	protected volatile Node head, tail;
 

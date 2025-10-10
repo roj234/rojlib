@@ -10,7 +10,7 @@
 
 package roj.archive.xz.lzma;
 
-import roj.archive.xz.rangecoder.RangeCoder;
+import static roj.archive.rangecoder.RangeCoder.initProbs;
 
 abstract sealed class LZMACoder permits LZMADecoder, LZMAEncoder {
 	static final int LOW_SYMBOLS = 1 << 3, MID_SYMBOLS = 1 << 3, HIGH_SYMBOLS = 1 << 8;
@@ -23,9 +23,14 @@ abstract sealed class LZMACoder permits LZMADecoder, LZMAEncoder {
 	static final int DIST_STATES = 4, DIST_SLOTS = 1 << 6, DIST_MODEL_START = 4, DIST_MODEL_END = 14;
 	static final int FULL_DISTANCES = 1 << (DIST_MODEL_END / 2);
 
+	static int getDistState(int len) { return len < DIST_STATES + MATCH_LEN_MIN ? len - MATCH_LEN_MIN : DIST_STATES - 1; }
+
 	static final int ALIGN_BITS = 4, ALIGN_SIZE = 1 << ALIGN_BITS, ALIGN_MASK = ALIGN_SIZE - 1;
 
 	static final int REPS = 4;
+
+	// for setProps, avoiding null check
+	private static final short[][] UNINIT_PROBS = new short[0][];
 
 	int posMask;
 	int lc;
@@ -43,14 +48,10 @@ abstract sealed class LZMACoder permits LZMADecoder, LZMAEncoder {
 	final short[][] distSpecial = {new short[2], new short[2], new short[4], new short[4], new short[8], new short[8], new short[16], new short[16], new short[32], new short[32]};
 	final short[] distAlign = new short[ALIGN_SIZE];
 
-	static int getDistState(int len) { return len < DIST_STATES + MATCH_LEN_MIN ? len - MATCH_LEN_MIN : DIST_STATES - 1; }
-
-	private static final short[][] MY_EMPTY = new short[0][];
-
-	short[][] literalProbs = MY_EMPTY;
+	short[][] literalProbs = UNINIT_PROBS;
 
 	final short[] choice = new short[2 << 1];
-	short[][] low = MY_EMPTY, mid;
+	short[][] low = UNINIT_PROBS, mid;
 	final short[] high = new short[HIGH_SYMBOLS], high2 = new short[HIGH_SYMBOLS];
 
 	LZMACoder(int lc, int lp, int pb) { setProp0(lc, lp, pb); }
@@ -82,23 +83,23 @@ abstract sealed class LZMACoder permits LZMADecoder, LZMAEncoder {
 		reps[3] = 0;
 		state = LIT_LIT;
 
-		RangeCoder.initProbs(isMatch);
-		RangeCoder.initProbs(isRep);
-		RangeCoder.initProbs(isRep0);
-		RangeCoder.initProbs(isRep1);
-		RangeCoder.initProbs(isRep2);
-		RangeCoder.initProbs(isRep0Long);
-		for (short[] probs : distSlots) RangeCoder.initProbs(probs);
-		for (short[] probs : distSpecial) RangeCoder.initProbs(probs);
-		RangeCoder.initProbs(distAlign);
+		initProbs(isMatch);
+		initProbs(isRep);
+		initProbs(isRep0);
+		initProbs(isRep1);
+		initProbs(isRep2);
+		initProbs(isRep0Long);
+		for (short[] probs : distSlots) initProbs(probs);
+		for (short[] probs : distSpecial) initProbs(probs);
+		initProbs(distAlign);
 
-		for (short[] probs : literalProbs) RangeCoder.initProbs(probs);
+		for (short[] probs : literalProbs) initProbs(probs);
 
-		RangeCoder.initProbs(choice);
-		for (short[] probs : low) RangeCoder.initProbs(probs);
-		for (short[] probs : mid) RangeCoder.initProbs(probs);
-		RangeCoder.initProbs(high);
-		RangeCoder.initProbs(high2);
+		initProbs(choice);
+		for (short[] probs : low) initProbs(probs);
+		for (short[] probs : mid) initProbs(probs);
+		initProbs(high);
+		initProbs(high2);
 	}
 
 	// region STATE
@@ -118,14 +119,14 @@ abstract sealed class LZMACoder permits LZMADecoder, LZMAEncoder {
 		NONLIT_MATCH = 10,
 		NONLIT_REP = 11;
 
-	static int state_updateLiteral(int state) {
+	static int stateUpdateLiteral(int state) {
 		if (state <= SHORTREP_LIT_LIT) return LIT_LIT;
 		else if (state <= LIT_SHORTREP) return state-3;
 		else return state-6;
 	}
-	static int state_updateMatch(int state) { return state < LIT_STATES ? LIT_MATCH : NONLIT_MATCH; }
-	static int state_updateLongRep(int state) { return state < LIT_STATES ? LIT_LONGREP : NONLIT_REP; }
-	static int state_updateShortRep(int state) { return state < LIT_STATES ? LIT_SHORTREP : NONLIT_REP; }
-	static boolean state_isLiteral(int state) { return state < LIT_STATES; }
+	static int stateUpdateMatch(int state) { return state < LIT_STATES ? LIT_MATCH : NONLIT_MATCH; }
+	static int stateUpdateLongRep(int state) { return state < LIT_STATES ? LIT_LONGREP : NONLIT_REP; }
+	static int stateUpdateShortRep(int state) { return state < LIT_STATES ? LIT_SHORTREP : NONLIT_REP; }
+	static boolean stateIsLiteral(int state) { return state < LIT_STATES; }
 	// endregion
 }

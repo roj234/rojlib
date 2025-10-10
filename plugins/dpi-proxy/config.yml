@@ -1,0 +1,11 @@
+
+logLevel: INFO
+
+proxies:
+  - port: 443
+    timeout: 1000
+    matcher:
+      - TLSHelloWaf
+
+inject:
+  EXPR_NAME: "\"lava_macro\""

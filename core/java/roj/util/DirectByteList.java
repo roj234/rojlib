@@ -22,11 +22,10 @@ import static roj.reflect.Unsafe.U;
  * @since 2021/5/29 20:45
  */
 public class DirectByteList extends DynByteBuf {
-	private static final boolean SAFER_BUT_NOT_TOTALLY_SAFE_TS_EXPAND = true;
-
 	protected NativeMemory nm;
 	protected volatile long address;
 	protected int length;
+	protected volatile boolean hasSlice;
 
 	DirectByteList(boolean unused) {}
 	DirectByteList() { nm = new NativeMemory(); }
@@ -67,13 +66,12 @@ public class DirectByteList extends DynByteBuf {
 			if (newLen > 1073741823 || newLen > maxCapacity()) newLen = maxCapacity();
 			if (nm == null || newLen <= length) throw new IndexOutOfBoundsException("长度为("+(nm==null&&length==0?"NaN":length)+" => "+newLen+")的缓冲区无法放下"+required+"字节");
 
-			if (SAFER_BUT_NOT_TOTALLY_SAFE_TS_EXPAND) {
+			if (hasSlice) {
 				int len = wIndex;
 				wIndex = 0;
-				NativeMemory prevNM = nm;
 				long prevAddr = address;
 
-				NativeMemory mem = new NativeMemory();
+				var mem = new NativeMemory();
 				long addr = mem.allocate(newLen);
 				U.copyMemory(prevAddr, addr, Math.min(newLen, len));
 
@@ -81,12 +79,11 @@ public class DirectByteList extends DynByteBuf {
 					mem.free();
 					throw new ConcurrentModificationException();
 				}
-				wIndex = len;
 
-				address = addr;
+				hasSlice = false;
 				nm = mem;
-
-				prevNM.free();
+				address = addr;
+				wIndex = len;
 			} else {
 				address = nm.resize(newLen);
 			}
@@ -302,7 +299,10 @@ public class DirectByteList extends DynByteBuf {
 	// endregion
 	// region Buffer Ops
 
-	public final DynByteBuf slice(int off, int len) {return new Slice(nm, testWI(off, len)+address, len);}
+	public DynByteBuf slice(int off, int len) {
+		hasSlice = true;
+		return new Slice(nm, testWI(off, len)+address, len);
+	}
 	@Override
 	public final DynByteBuf copySlice() {
 		int length = wIndex - rIndex;

@@ -25,11 +25,6 @@ public final class ClientLaunch {
 	public static ClientLaunch tcp() throws IOException { return new ClientLaunch(MyChannel.openTCP()); }
 	public static ClientLaunch tcp(String name) throws IOException { return new ClientLaunch(MyChannel.openTCP()); }
 
-	public ClientLaunch daemon(boolean s) {
-		if (loop != null) throw new IllegalStateException();
-		return this;
-	}
-
 	public final ClientLaunch loop(SelectorLoop s) { loop = s; return this; }
 	public final SelectorLoop loop() { return loop == null ? DEFAULT_LOOPER : loop; }
 

@@ -36,7 +36,7 @@ public class AnnotationType {
 	public static final int
 			TYPE = 1 << 2, FIELD = 1 << 3, METHOD = 1 << 4, PARAMETER = 1 << 5, CONSTRUCTOR = 1 << 6, LOCAL_VARIABLE = 1 << 7, ANNOTATION_TYPE = 1 << 8, PACKAGE = 1 << 9,
 			// 1.8
-			TYPE_PARAMETER = 1 << 10, TYPE_USE = 1 << 11, MODULE = 1 << 12, RECORD_COMPONENT = 1 << 13;
+			/*not implemented*/TYPE_PARAMETER = 1 << 10, /*not fully implemented*/TYPE_USE = 1 << 11, MODULE = 1 << 12, /*not implemented*/RECORD_COMPONENT = 1 << 13;
 
 	/**
 	 * 注解允许应用到的目标，由多个位组合而成，可能由Target注解控制，默认为任何

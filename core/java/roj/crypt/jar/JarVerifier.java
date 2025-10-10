@@ -84,10 +84,18 @@ public class JarVerifier {
 		return trustLevel;
 	}
 	private byte computeTrustLevel() {
-		if (block == null) return TRUST_LEVEL_UNSIGNED;
+		if (block == null) {
+			algorithm = "SHA-256";
+			source = new CodeSource(base, (CodeSigner[]) null);
+			hashes = Collections.emptyMap();
+
+			return TRUST_LEVEL_UNSIGNED;
+		}
+
 		try {
 			ensureManifestValid();
 		} catch (Exception e) {
+			e.printStackTrace();
 			return TRUST_LEVEL_INVALID_SIGN;
 		}
 
@@ -105,15 +113,7 @@ public class JarVerifier {
 	}
 	public String getAlgorithm() {return block == null ? null : block.getSignatureAlg();}
 
-	public void ensureManifestValid() throws GeneralSecurityException {
-		if (source != null) return;
-		if (block == null) {
-			algorithm = "SHA-256";
-			source = new CodeSource(base, (CodeSigner[]) null);
-			hashes = Collections.emptyMap();
-			return;
-		}
-
+	private void ensureManifestValid() throws GeneralSecurityException {
 		Signature sign = Signature.getInstance(block.getSignatureAlg());
 		sign.initVerify(block.getSigner().getPublicKey());
 		sign.update(signatureBytes);
@@ -321,7 +321,7 @@ public class JarVerifier {
 		if (mb == null) manifest = new Manifest(in);
 
 		IOUtil.closeSilently(in);
-		URL url = source != null ? new URL("file", "", source.getAbsolutePath().replace(File.separatorChar, '/')) : null;
+		URL url = source != null ? new URL("file", "", "/"+source.getAbsolutePath().replace(File.separatorChar, '/')) : null;
 		return new JarVerifier(url, manifest, mb, sb, signatureBlock);
 	}
 

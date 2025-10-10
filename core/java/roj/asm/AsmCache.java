@@ -9,6 +9,7 @@ import roj.asm.type.Type;
 import roj.collect.ArrayList;
 import roj.collect.IntMap;
 import roj.util.ArrayCache;
+import roj.util.ArrayUtil;
 import roj.util.ByteList;
 import roj.util.Helpers;
 
@@ -96,9 +97,9 @@ public final class AsmCache {
 	public byte[] getArray(int length) {
 		int avail = xInsn_sharedSegmentData.length - xInsn_sharedSegmentUsed;
 		if (avail < length) {
-			if (length > 127) return new byte[length];
+			if (length > 127) return ArrayUtil.newUninitializedByteArray(length);
 
-			xInsn_sharedSegmentData = ArrayCache.getByteArray(256,false);
+			xInsn_sharedSegmentData = ArrayUtil.newUninitializedByteArray(256);
 			xInsn_sharedSegmentUsed = 0;
 		}
 		return xInsn_sharedSegmentData;
@@ -115,9 +116,14 @@ public final class AsmCache {
 	public final int[] xInsn_sharedRefPos = new int[512];
 	public final Object[] xInsn_sharedRefVal = new Object[512];
 	public final Object[] xInsn_sharedSegments = new Object[256];
-	public int[] getIntArray_(int len) {
+
+	public int[] getOffSumArray(int len) {
 		if (xInsn_sharedRefPos.length < len) return ArrayCache.getIntArray(len,false);
 		return xInsn_sharedRefPos;
+	}
+	public void putOffSumArray(int[] offSum) {
+		if (xInsn_sharedRefPos != offSum)
+			ArrayCache.putArray(offSum);
 	}
 
 	public final CstTop constantMatcher = new CstTop();

@@ -13,7 +13,7 @@ import roj.ci.BuildContext;
 import roj.ci.Dependency;
 import roj.ci.Project;
 import roj.ci.event.ProjectUpdateEvent;
-import roj.ci.plugin.Processor;
+import roj.ci.plugin.Plugin;
 import roj.collect.ArrayList;
 import roj.collect.HashMap;
 import roj.config.node.ConfigValue;
@@ -43,32 +43,32 @@ import static roj.ci.MCMake.*;
  * @author Roj234
  * @since 2021/5/30 19:59
  */
-public class AT implements Processor {
+public class AT implements Plugin {
 	public AT() {EVENT_BUS.register(this);}
 
 	@Subscribe
 	public void onIMLUpdate(ProjectUpdateEvent event) {
-		if ("true".equals(event.getProject().variables.get("fmd:at")))
-			event.add(event.getProject().getSafeName()+"/at.jar");
+		if (!event.getProject().workspace.hasPlugin(this)) return;
+		event.add(event.getProject().getSafeName()+"/at.jar");
 	}
 
 	@Override public String name() {return "AccessTransformer";}
 	@Override public void init(ConfigValue config) {archives.clear();}
 
 	@Override
-	public int beforeCompile(ArrayList<String> options, List<File> sources, BuildContext ctx) {
+	public boolean preProcess(ArrayList<String> options, List<File> sources, BuildContext ctx) {
 		Project p = ctx.project;
-		var atFile = new File(p.resPath, p.variables.getOrDefault("fmd:at", "META-INF/accesstransformer.cfg"));
+		var atFile = new File(p.resPath, p.getVariables().getOrDefault("fmd:at", "META-INF/accesstransformer.cfg"));
 		if (atFile.isFile()) {
 			try {
 				var atList = buildATMapFromATCfg(atFile, p.workspace.getInverseMapping());
 				makeAT(options, atList, p);
 			} catch (IOException e) {
-				LOGGER.error("加载AT失败", e);
+				log.error("加载AT失败", e);
 			}
 		}
 
-		return 2;
+		return false;
 	}
 
 	@NotNull
@@ -91,13 +91,15 @@ public class AT implements Processor {
 
 					int i = e.indexOf('(');
 					if (i > 0) {
-						Map.Entry<MemberDescriptor, String> mcpName = map.getMethodMap().find(new MemberDescriptor(className, e.substring(0, i), e.substring(i)));
+						var desc = new MemberDescriptor(className, e.substring(0, i), e.substring(i));
+						Map.Entry<MemberDescriptor, String> mcpName = map.getMethodMap().find(desc);
 						if (mcpName != null) e = mcpName.getValue()+mcpName.getKey().rawDesc();
-						else if (!e.startsWith("<")) LOGGER.debug("未找到该字段的MCP名称: {}.{}", className, e);
+						else if (!e.startsWith("<")) log.info("未找到成员 {} 的MCP名称", desc);
 					} else {
-						Map.Entry<MemberDescriptor, String> mcpName = map.getFieldMap().find(new MemberDescriptor(className, e));
+						var desc = new MemberDescriptor(className, e);
+						Map.Entry<MemberDescriptor, String> mcpName = map.getFieldMap().find(desc);
 						if (mcpName != null) e = mcpName.getValue();
-						else LOGGER.debug("未找到该字段的MCP名称: {}.{}", className, e);
+						else log.info("未找到成员 {} 的MCP名称", desc);
 					}
 					strings.add(e);
 				}
@@ -149,15 +151,15 @@ public class AT implements Processor {
 					return false;
 				};
 
-				for (var file : p.workspace.depend) {
+				for (var file : p.workspace.getDepend()) {
 					tryAt(file, atList, zfw);
 				}
-				for (var file : p.workspace.mappedDepend) {
+				for (var file : p.workspace.getMappedDepend()) {
 					tryAt(file, atList, zfw);
 				}
 				IOUtil.listFiles(new File(BASE, "lib"), callback);
 				for (Dependency dep : p.getCompileDependencies()) {
-					dep.forEachFile(callback::test);
+					dep.forEachJar(callback::test);
 				}
 			} catch (OperationDone ignored) {
 
@@ -166,7 +168,7 @@ public class AT implements Processor {
 			}
 
 			if (!atList.isEmpty())
-				LOGGER.warn("Some ATs are not match: {}", atList);
+				log.warn("Some ATs are not match: {}", atList);
 		}
 	}
 
@@ -180,7 +182,7 @@ public class AT implements Processor {
 
 				InputStream stream = helper.getStream(entry.getKey());
 				if (stream != null) {
-					LOGGER.debug("Found AT {} in {}", entry.getKey(), file);
+					log.debug("Found AT {} in {}", entry.getKey(), file);
 					var data = ClassNode.parseSkeleton(IOUtil.getSharedByteBuf().readStreamFully(stream));
 
 					TransformUtil.makeAccessible(data, entry.getValue());

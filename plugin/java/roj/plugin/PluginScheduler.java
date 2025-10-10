@@ -42,8 +42,8 @@ public final class PluginScheduler extends Timer implements Executor {
 	}
 
 	@Override
-	public TimerTask loop(Runnable task, long period, int repeat, long delay) {
-		return delay(new PPeriodicTask(task, period, repeat), delay);
+	public TimerTask loop(Runnable task, long periodMs, int repeat, long delayMs) {
+		return delay(new PPeriodicTask(task, periodMs, repeat), delayMs);
 	}
 
 	@Override

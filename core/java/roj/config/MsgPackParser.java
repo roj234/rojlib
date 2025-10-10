@@ -1,11 +1,12 @@
 package roj.config;
 
-import roj.io.ByteInput;
-import roj.io.ByteInputStream;
 import roj.io.CorruptedInputException;
 import roj.io.LimitInputStream;
+import roj.io.XDataInput;
+import roj.io.XDataInputStream;
 import roj.text.CharList;
 import roj.text.TextReader;
+import roj.util.ArrayUtil;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
 
@@ -13,8 +14,6 @@ import java.io.EOFException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
-
-import static roj.reflect.Unsafe.U;
 
 /**
  * @author Roj234
@@ -24,8 +23,8 @@ public class MsgPackParser implements Parser {
 	public static final int EXT_STREAM_DATA = 0x00;
 
 	@Override
-	public final void parse(InputStream in, ValueEmitter emitter) throws IOException {parse(ByteInputStream.wrap(in), emitter);}
-	public final void parse(DynByteBuf buf, ValueEmitter emitter) throws IOException {parse((ByteInput) buf, emitter);}
+	public final void parse(InputStream in, ValueEmitter emitter) throws IOException {parse(XDataInputStream.wrap(in), emitter);}
+	public final void parse(DynByteBuf buf, ValueEmitter emitter) throws IOException {parse((XDataInput) buf, emitter);}
 
 	private static final byte[] LOOKUP = new byte[256];
 	private static final int FAKE_FIXMAP = 0xBD, FAKE_FIXARR = 0xBE, FAKE_FIXSTR = 0xBF;
@@ -70,8 +69,8 @@ public class MsgPackParser implements Parser {
 		for (int i = 0xC0; i <= 0xFF; i++) LOOKUP[i] = (byte) i;
 	}
 
-	public final void parse(ByteInput in, ValueEmitter out) throws IOException {parse(in, out, in.readUnsignedByte());}
-	private void parse(ByteInput in, ValueEmitter out, int tagByte) throws IOException {
+	public final void parse(XDataInput in, ValueEmitter out) throws IOException {parse(in, out, in.readUnsignedByte());}
+	private void parse(XDataInput in, ValueEmitter out, int tagByte) throws IOException {
 		switch (LOOKUP[tagByte]&0xFF) {
 			// [\x80 - \xBF}范围是安全的
 			default      -> out.emit((byte) tagByte);					// fixInt [\x00 - \x7F] | [\xE0 - \xFF]
@@ -115,28 +114,28 @@ public class MsgPackParser implements Parser {
 			case MAP32   -> map(in, out, readInt(in));
 		}
 	}
-	private static int readInt(ByteInput in) throws IOException {
+	private static int readInt(XDataInput in) throws IOException {
 		int len = in.readInt();
 		if (len < 0) throw new IOException("数据范围超出Java限制！ 0x"+Integer.toHexString(len));
 		return len;
 	}
-	private static long readLong(ByteInput in) throws IOException {
+	private static long readLong(XDataInput in) throws IOException {
 		long len = in.readLong();
 		if (len < 0) throw new IOException("数据范围超出Java限制！ 0x"+Long.toHexString(len));
 		return len;
 	}
-	private static byte[] readBytes(ByteInput in, int len) throws IOException {
+	private static byte[] readBytes(XDataInput in, int len) throws IOException {
 		if (len <= 0xFFFF || in instanceof DynByteBuf) return in.readBytes(len);
 
 		var buf = new ByteList();
-		int r = buf.readStream((ByteInputStream) in, len);
+		int r = buf.readStream((XDataInputStream) in, len);
 		if (r < len) throw new EOFException("没有 "+len+" 字节可用");
 		byte[] v = buf.toByteArray();
 		buf.release();
 
 		return v;
 	}
-	private static String readUTF(ByteInput in, int len) throws IOException {
+	private static String readUTF(XDataInput in, int len) throws IOException {
 		if (len <= 0xFFFF || in instanceof DynByteBuf) return in.readUTF(len);
 
 		LimitInputStream is = new LimitInputStream((InputStream) in, len);
@@ -147,12 +146,12 @@ public class MsgPackParser implements Parser {
 		}
 	}
 
-	private void list(ByteInput in, ValueEmitter out, int size) throws IOException {
+	private void list(XDataInput in, ValueEmitter out, int size) throws IOException {
 		out.emitList(size);
 		for (int i = 0; i < size; i++) parse(in, out);
 		out.pop();
 	}
-	private void map(ByteInput in, ValueEmitter out, int size) throws IOException {
+	private void map(XDataInput in, ValueEmitter out, int size) throws IOException {
 		out.emitMap(size);
 		for (int i = 0; i < size; i++) {
 			mapKey(in, out);
@@ -160,8 +159,8 @@ public class MsgPackParser implements Parser {
 		}
 		out.pop();
 	}
-	private static void mapKey(ByteInput in, ValueEmitter out) throws IOException {mapKey(in, out, in.readUnsignedByte());}
-	private static void mapKey(ByteInput in, ValueEmitter out, int tagByte) throws IOException {
+	private static void mapKey(XDataInput in, ValueEmitter out) throws IOException {mapKey(in, out, in.readUnsignedByte());}
+	private static void mapKey(XDataInput in, ValueEmitter out, int tagByte) throws IOException {
 		switch (LOOKUP[tagByte]&0xFF) {
 			case UINT8   -> out.emitKey(in.readUnsignedByte());
 			case UINT16  -> out.emitKey(in.readChar());
@@ -181,7 +180,7 @@ public class MsgPackParser implements Parser {
 		}
 	}
 
-	protected void ext(ByteInput in, ValueEmitter visitor, int dataLen) throws IOException {
+	protected void ext(XDataInput in, ValueEmitter visitor, int dataLen) throws IOException {
 		int extType = in.readByte();
 		switch (extType) {
 			case -1  -> timestamp(in, visitor, dataLen);  // 0b111 (reserved for array type)
@@ -199,7 +198,7 @@ public class MsgPackParser implements Parser {
 		}
 	}
 
-	private void timestamp(ByteInput in, ValueEmitter out, int dataLen) throws IOException {
+	private void timestamp(XDataInput in, ValueEmitter out, int dataLen) throws IOException {
 		switch (dataLen) {
 			case 4 -> out.emitTimestamp(in.readUnsignedInt() * 1000L); // unix second timestamp
 			case 8 -> {
@@ -218,7 +217,7 @@ public class MsgPackParser implements Parser {
 	}
 	//Proposal: support dynamic length arrays and maps for data streaming
 	//https://github.com/msgpack/msgpack/issues/270
-	private void stream(ByteInput in, ValueEmitter out, int dataLen) throws IOException {
+	private void stream(XDataInput in, ValueEmitter out, int dataLen) throws IOException {
 		if (dataLen == 1) { // 流式映射 (使用场景较多)
 			out.emitMap();
 			while (true) {
@@ -240,52 +239,52 @@ public class MsgPackParser implements Parser {
 			throw new CorruptedInputException("数据错误："+dataLen);
 		}
 	}
-	private void intArray(ByteInput in, ValueEmitter visitor, int dataLen) throws IOException {
-		int[] array = (int[]) U.allocateUninitializedArray(int.class, dataLen);
+	private void intArray(XDataInput in, ValueEmitter visitor, int dataLen) throws IOException {
+		int[] array = ArrayUtil.newUninitializedIntArray(dataLen);
 		for (int i = 0; i < array.length; i++) array[i] = in.readInt();
 		visitor.emit(array);
 	}
-	private void uintArray(ByteInput in, ValueEmitter visitor, int dataLen) throws IOException {
-		int[] array = (int[]) U.allocateUninitializedArray(int.class, dataLen);
+	private void uintArray(XDataInput in, ValueEmitter visitor, int dataLen) throws IOException {
+		int[] array = ArrayUtil.newUninitializedIntArray(dataLen);
 		for (int i = 0; i < array.length; i++) array[i] = in.readVUInt();
 		visitor.emit(array);
 	}
-	private void vintArray(ByteInput in, ValueEmitter visitor, int dataLen) throws IOException {
-		int[] array = (int[]) U.allocateUninitializedArray(int.class, dataLen);
-		for (int i = 0; i < array.length; i++) array[i] = ByteInput.zag(in.readVUInt());
+	private void vintArray(XDataInput in, ValueEmitter visitor, int dataLen) throws IOException {
+		int[] array = ArrayUtil.newUninitializedIntArray(dataLen);
+		for (int i = 0; i < array.length; i++) array[i] = XDataInput.zag(in.readVUInt());
 		visitor.emit(array);
 	}
-	private void longArray(ByteInput in, ValueEmitter visitor, int dataLen) throws IOException {
-		long[] array = (long[]) U.allocateUninitializedArray(long.class, dataLen);
+	private void longArray(XDataInput in, ValueEmitter visitor, int dataLen) throws IOException {
+		long[] array = ArrayUtil.newUninitializedLongArray(dataLen);
 		for (int i = 0; i < array.length; i++) array[i] = in.readLong();
 		visitor.emit(array);
 	}
-	private void ulongArray(ByteInput in, ValueEmitter visitor, int dataLen) throws IOException {
-		long[] array = (long[]) U.allocateUninitializedArray(long.class, dataLen);
+	private void ulongArray(XDataInput in, ValueEmitter visitor, int dataLen) throws IOException {
+		long[] array = ArrayUtil.newUninitializedLongArray(dataLen);
 		for (int i = 0; i < array.length; i++) array[i] = in.readVULong();
 		visitor.emit(array);
 	}
-	private void vlongArray(ByteInput in, ValueEmitter visitor, int dataLen) throws IOException {
-		long[] array = (long[]) U.allocateUninitializedArray(long.class, dataLen);
-		for (int i = 0; i < array.length; i++) array[i] = ByteInput.zag(in.readVULong());
+	private void vlongArray(XDataInput in, ValueEmitter visitor, int dataLen) throws IOException {
+		long[] array = ArrayUtil.newUninitializedLongArray(dataLen);
+		for (int i = 0; i < array.length; i++) array[i] = XDataInput.zag(in.readVULong());
 		visitor.emit(array);
 	}
 
 	private byte[][] objectPool;
 	// Proposal: Addition of 4 Predefined Extension Types to MessagePack to improve on-demand forward reading and storage efficiency
 	//https://github.com/msgpack/msgpack/issues/330
-	private void dedupData(ByteInput in, ValueEmitter out, int dataLen) throws IOException {
+	private void dedupData(XDataInput in, ValueEmitter out, int dataLen) throws IOException {
 		// Deduplication Array Container
 		objectPool = new byte[dataLen][];
 		for (int i = 0; i < dataLen; i++) {
 			objectPool[i] = readBytes(in, readArrayIndex(in));
 		}
 	}
-	private void dedupRef(ByteInput in, ValueEmitter out, int index) throws IOException {
+	private void dedupRef(XDataInput in, ValueEmitter out, int index) throws IOException {
 		// Deduplication Reference
 		parse(DynByteBuf.wrap(objectPool[index]), out);
 	}
-	private void predefinedMap(ByteInput in, ValueEmitter out, int index) throws IOException {
+	private void predefinedMap(XDataInput in, ValueEmitter out, int index) throws IOException {
 		// Predefined Map
 		var keys = DynByteBuf.wrap(objectPool[index]);
 		out.emitMap(keys.readUnsignedByte());
@@ -304,5 +303,5 @@ public class MsgPackParser implements Parser {
 		out.pop();
 	}
 
-	private static int readArrayIndex(ByteInput in) throws IOException {return Math.toIntExact(in.readVULong());}
+	private static int readArrayIndex(XDataInput in) throws IOException {return Math.toIntExact(in.readVULong());}
 }

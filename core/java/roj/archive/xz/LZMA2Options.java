@@ -1,12 +1,12 @@
 package roj.archive.xz;
 
 import org.intellij.lang.annotations.MagicConstant;
+import org.jetbrains.annotations.Range;
 import roj.archive.xz.lz.LZEncoder;
 import roj.archive.xz.lzma.LZMAEncoder;
 import roj.concurrent.Executor;
 import roj.concurrent.TaskGroup;
 import roj.concurrent.TaskPool;
-import roj.io.BufferPool;
 import roj.io.DummyOutputStream;
 import roj.math.MathUtils;
 import roj.text.CharList;
@@ -94,9 +94,16 @@ public class LZMA2Options implements Cloneable {
 	 * Match finder: Binary tree 2-3-4
 	 */
 	public static final int MF_BT4 = LZEncoder.MF_BT4;
+	/**
+	 * Match finder: Hash Chain 2-3-5
+	 */
+	public static final int MF_HC5 = LZEncoder.MF_HC5;
+	/**
+	 * Match finder: Binary tree 2-3-5
+	 */
+	public static final int MF_BT5 = LZEncoder.MF_BT5;
 
 	public static final int ASYNC_BLOCK_SIZE_MIN = 1 << 20, ASYNC_BLOCK_SIZE_MAX = 1 << 28;
-	public static final byte ASYNC_DICT_NONE = 0, ASYNC_DICT_SET = 1, ASYNC_DICT_ASYNCSET = 2;
 
 	private static final int[] presetToDictSize = {1 << 18, 1 << 20, 1 << 21, 1 << 22, 1 << 22, 1 << 23, 1 << 23, 1 << 24, 1 << 25, 1 << 26};
 	private static final int[] presetToDepthLimit = {4, 8, 24, 48};
@@ -111,8 +118,7 @@ public class LZMA2Options implements Cloneable {
 	private boolean nativeAccelerate;
 
 	private Executor asyncExecutor;
-	private BufferPool asyncBufferPool;
-	private LZMA2ParallelManager asyncMan;
+	private LZMA2ParallelEncoder asyncMan;
 
 	public LZMA2Options() { this(DEFAULT_COMPRESSION); }
 	public LZMA2Options(int preset) { setPreset(preset); }
@@ -139,7 +145,7 @@ public class LZMA2Options implements Cloneable {
 	 * 16&nbsp;MiB, or 32&nbsp;MiB, it is waste of memory to use the
 	 * presets 7, 8, or 9, respectively.
 	 */
-	public LZMA2Options setPreset(int preset) {
+	public LZMA2Options setPreset(@Range(from = 0, to = 9) int preset) {
 		if (preset < 0 || preset > 9) throw new IllegalArgumentException("Unsupported preset: " + preset);
 
 		lc = LC_DEFAULT;
@@ -149,7 +155,7 @@ public class LZMA2Options implements Cloneable {
 
 		if (preset <= 3) {
 			mode = MODE_FAST;
-			mf = MF_HC4;
+			mf = MF_HC5;
 			niceLen = preset <= 1 ? 128 : NICE_LEN_MAX;
 			depthLimit = presetToDepthLimit[preset];
 		} else {
@@ -176,7 +182,7 @@ public class LZMA2Options implements Cloneable {
 	 *
 	 * @throws IllegalArgumentException <code>dictSize</code> is not supported
 	 */
-	public LZMA2Options setDictSize(int dictSize) {
+	public LZMA2Options setDictSize(@Range(from = DICT_SIZE_MIN, to = DICT_SIZE_MAX) int dictSize) {
 		if (dictSize < DICT_SIZE_MIN) throw new IllegalArgumentException("LZMA2 dictionary size must be at least 4 KiB: " + dictSize + " B");
 		if (dictSize > DICT_SIZE_MAX) throw new IllegalArgumentException("LZMA2 dictionary size must not exceed " + (DICT_SIZE_MAX >> 20) + " MiB: " + dictSize + " B");
 
@@ -241,7 +247,7 @@ public class LZMA2Options implements Cloneable {
 	 */
 	public LZMA2Options setLcLp(int lc, int lp) {
 		if ((lc|lp) < 0 || lc + lp > LC_LP_MAX)
-			throw new IllegalArgumentException("lc + lp must not exceed " + LC_LP_MAX + ": " + lc + " + " + lp);
+			throw new IllegalArgumentException("lc + lp must not exceed "+LC_LP_MAX+": "+lc+" + "+lp);
 
 		this.lc = lc;
 		this.lp = lp;
@@ -271,8 +277,8 @@ public class LZMA2Options implements Cloneable {
 	 *
 	 * @throws IllegalArgumentException <code>pb</code> is invalid
 	 */
-	public LZMA2Options setPb(int pb) {
-		if (pb < 0 || pb > PB_MAX) throw new IllegalArgumentException("pb must not exceed " + PB_MAX + ": " + pb);
+	public LZMA2Options setPb(@Range(from = 0, to = PB_MAX) int pb) {
+		if (pb < 0 || pb > PB_MAX) throw new IllegalArgumentException("pb must not exceed "+PB_MAX+": "+pb);
 
 		this.pb = pb;
 		return this;
@@ -328,9 +334,8 @@ public class LZMA2Options implements Cloneable {
 	 *
 	 * @throws IllegalArgumentException <code>niceLen</code> is invalid
 	 */
-	public LZMA2Options setNiceLen(int niceLen) {
-		if (niceLen < NICE_LEN_MIN) throw new IllegalArgumentException("Minimum nice length of matches is " + NICE_LEN_MIN + " bytes: " + niceLen);
-		if (niceLen > NICE_LEN_MAX) throw new IllegalArgumentException("Maximum nice length of matches is " + NICE_LEN_MAX + ": " + niceLen);
+	public LZMA2Options setNiceLen(@Range(from = NICE_LEN_MIN, to = NICE_LEN_MAX) int niceLen) {
+		if (niceLen < NICE_LEN_MIN || niceLen > NICE_LEN_MAX) throw new IllegalArgumentException("nice length range of matches is "+NICE_LEN_MIN+" to "+NICE_LEN_MAX+" bytes: "+niceLen);
 
 		this.niceLen = niceLen;
 		return this;
@@ -347,8 +352,8 @@ public class LZMA2Options implements Cloneable {
 	 *
 	 * @throws IllegalArgumentException <code>mf</code> is not supported
 	 */
-	public LZMA2Options setMatchFinder(int mf) {
-		if (mf != MF_HC4 && mf != MF_BT4) throw new IllegalArgumentException("Unsupported match finder: " + mf);
+	public LZMA2Options setMatchFinder(@MagicConstant(intValues = {MF_HC4, MF_BT4, MF_HC5, MF_BT5}) int mf) {
+		if (mf < 0 || mf > 3) throw new IllegalArgumentException("Unsupported match finder: "+mf);
 		this.mf = mf;
 		return this;
 	}
@@ -382,29 +387,24 @@ public class LZMA2Options implements Cloneable {
 	 * @param blockSize 任务按照该大小分块并行，设置为-1来自动选择(不推荐自动选择)
 	 * @param executor 线程池
 	 * @param affinity 最大并行任务数量 (1-255)
-	 * @param dictMode 任务的词典处理模式，设置为-1来自动选择(不推荐自动选择)
-	 * <pre>{@link #ASYNC_DICT_NONE} 每个块重置词典, 速度快, 压缩率差, 内存占用小 (7-zip的默认模式) (支持并行解压)
-	 * {@link #ASYNC_DICT_SET} 在write的调用线程上设置词典, 速度慢, 压缩率好, 内存占用中等
-	 * {@link #ASYNC_DICT_ASYNCSET} 在异步任务线程上设置词典, 速度中等, 压缩率好, 内存大
+	 * @param noContext 每个块是否重置词典 <br>
+	 * {@code true} 每个块重置词典, 速度快, 压缩率差 (支持并行解压) <br>
+	 * {@code false} 异步设置词典, 速度慢, 压缩率好
 	 */
-	public void setAsyncMode(int blockSize, Executor executor, int affinity, BufferPool bufferPool, @MagicConstant(intValues = {ASYNC_DICT_NONE,ASYNC_DICT_SET,ASYNC_DICT_ASYNCSET}) int dictMode) {
+	public void setAsyncMode(int blockSize, Executor executor, int affinity, boolean noContext) {
 		asyncExecutor = executor;
-		asyncBufferPool = bufferPool;
-		asyncMan = new LZMA2ParallelManager(this, blockSize, dictMode, affinity);
+		asyncMan = new LZMA2ParallelEncoder(this, blockSize, noContext, affinity);
 	}
-	public void setAsyncMode(Executor executor, BufferPool bufferPool, LZMA2ParallelManager parallel) {
+	public void setAsyncMode(Executor executor, LZMA2ParallelEncoder parallel) {
 		asyncExecutor = executor;
-		asyncBufferPool = bufferPool;
 		asyncMan = parallel;
 	}
 	public void clearAsyncMode() {
 		asyncExecutor = null;
-		asyncBufferPool = null;
 		asyncMan = null;
 	}
 	public Executor getAsyncExecutor() { return asyncExecutor; }
-	public BufferPool getAsyncBufferPool() { return asyncBufferPool; }
-	public LZMA2ParallelManager getAsyncMan() { return asyncMan; }
+	public LZMA2ParallelEncoder getAsyncMan() { return asyncMan; }
 
 	public void setNativeAccelerate(boolean accelerate) {
 		if (accelerate && !LZMA2WriterN.AVAILABLE) throw new IllegalStateException("本机加速不可用");
@@ -413,11 +413,11 @@ public class LZMA2Options implements Cloneable {
 	public boolean isNativeAccelerate() {return nativeAccelerate;}
 	public static boolean isNativeAccelerateAvailable() {return LZMA2WriterN.AVAILABLE;}
 
-	public int getEncoderMemoryUsage() { return mode == MODE_UNCOMPRESSED ? LZMA2StoredWriter.getMemoryUsage() : LZMA2Writer.getMemoryUsage(this); }
+	public int getEncoderMemoryUsage() { return mode == MODE_UNCOMPRESSED ? LZMA2UncompressedOutputStream.getMemoryUsage() : LZMA2OutputStream.getMemoryUsage(this); }
 	public OutputStream getOutputStream(OutputStream out) {
-		if (mode == MODE_UNCOMPRESSED) return new LZMA2StoredWriter(out);
+		if (mode == MODE_UNCOMPRESSED) return new LZMA2UncompressedOutputStream(out);
 		if (nativeAccelerate) return new LZMA2WriterN(out, this);
-		return asyncMan != null ? asyncMan.createEncoder(out) : new LZMA2Writer(out, this);
+		return asyncMan != null ? asyncMan.createEncoder(out) : new LZMA2OutputStream(out, this);
 	}
 
 	public int getDecoderMemoryUsage() { return LZMA2InputStream.getMemoryUsage(dictSize); }

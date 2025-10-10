@@ -48,7 +48,7 @@ public sealed class QZEntry implements ArchiveEntry, Cloneable permits QZEntryA 
     public final int getCrc32() {return crc32;}
     public final WordBlock block() {return block;}
     public final long offset() {return offset;}
-    public final boolean isEncrypted() {return block != null && block.hasProcessor(QzAES.class);}
+    public final boolean isEncrypted() {return block != null && block.hasCodec(QzAES.class);}
 
     public final boolean hasAttributes() {return (flag&ATTR) != 0;}
     public final boolean isDirectory() {return (flag&DIRECTORY) != 0;}

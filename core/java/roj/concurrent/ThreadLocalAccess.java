@@ -2,7 +2,7 @@ package roj.concurrent;
 
 import roj.ci.annotation.Public;
 import roj.reflect.Bypass;
-import roj.reflect.Handles;
+import roj.reflect.Telescope;
 
 /**
  * @author Roj234
@@ -12,8 +12,8 @@ import roj.reflect.Handles;
 interface ThreadLocalAccess {
 	ThreadLocalAccess INSTANCE = Bypass.builder(ThreadLocalAccess.class)
 			.delegate_o(ThreadLocal.class, "getMap")
-			.delegate_o(Handles.findClass("java.lang.ThreadLocal$ThreadLocalMap"), new String[]{"remove", "getEntry"})
-			.access(Handles.findClass("java.lang.ThreadLocal$ThreadLocalMap$Entry"), "value", "getValue", null)
+			.delegate_o(Telescope.findClass("java.lang.ThreadLocal$ThreadLocalMap"), new String[]{"remove", "getEntry"})
+			.access(Telescope.findClass("java.lang.ThreadLocal$ThreadLocalMap$Entry"), "value", "getValue", null)
 			.build();
 
 	Object getMap(Object threadLocal, Thread thread);

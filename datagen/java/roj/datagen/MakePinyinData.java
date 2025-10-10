@@ -1,7 +1,7 @@
 package roj.datagen;
 
 import roj.archive.xz.LZMA2Options;
-import roj.archive.xz.LZMA2Writer;
+import roj.archive.xz.LZMA2OutputStream;
 import roj.collect.ArrayList;
 import roj.collect.HashSet;
 import roj.collect.*;
@@ -172,7 +172,7 @@ public class MakePinyinData {
 
 		ByteList byteBuffer = new ByteList();
 		try (OutputStream outputStream = lzmaOptions.getOutputStream(new FileOutputStream(outputFile))) {
-			LZMA2Writer lzmaWriter = (LZMA2Writer) outputStream;
+			LZMA2OutputStream lzmaWriter = (LZMA2OutputStream) outputStream;
 
 			byteBuffer.clear();
 			byteBuffer.put(initialEntries.size()).put(finalEntries.size());

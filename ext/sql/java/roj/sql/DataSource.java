@@ -34,10 +34,10 @@ public interface DataSource {
 
 	String DEFAULT_CHARSET = "UTF-16LE";
 	private static DataSource jdbc(String driverClass, String url, String user, String pass) {
-		ClassLoader classLoader = Reflection.getCallerClass(3, DataSource.class).getClassLoader();
-		boolean bypassClassLoaderRestriction = classLoader != DataSource.class.getClassLoader();
+		Class<?> caller = Reflection.getCallerClass(3, DataSource.class);
+		Class<?> driver;
 		try {
-			Class.forName(driverClass, true, classLoader);
+			driver = Class.forName(driverClass, true, caller.getClassLoader());
 		} catch (ClassNotFoundException e) {
 			throw new IllegalStateException("找不到数据库驱动程序:"+driverClass);
 		}
@@ -46,15 +46,11 @@ public interface DataSource {
 		if (user != null) info.put("user", user);
 		if (pass != null) info.put("password", pass);
 
-		return bypassClassLoaderRestriction ? () -> {
-			Thread.currentThread().setContextClassLoader(classLoader);
-			return GetConnection.INSTANCE.getConnection(url, info, null);
-		} : () -> (DriverManager.getConnection(url, info));
+		return () -> GetConnection.INSTANCE.getConnection(url, info, driver);
 	}
 
-	static interface GetConnection {
+	interface GetConnection {
 		GetConnection INSTANCE = Bypass.builder(GetConnection.class).delegate(DriverManager.class, "getConnection").build();
-
 		Connection getConnection(String url, Properties info, Class<?> caller);
 	}
 }

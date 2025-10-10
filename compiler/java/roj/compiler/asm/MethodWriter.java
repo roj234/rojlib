@@ -251,7 +251,7 @@ public class MethodWriter extends CodeWriter {
 	List<Segment> getSegments() {return segments;}
 
 	/**
-	 * 只能对封闭代码块序列化，这一步（明显的）会要求所有外部引用都已指定，否则直接抛异常 ({@link Label#isValid()})
+	 * 只能对封闭代码块序列化，这一步（明显的）会要求所有外部引用都已指定，否则直接抛异常 ({@link Label#isBound()})
 	 * @see CodeWriter#insertBefore(DynByteBuf) 主要用途
 	 */
 	public DynByteBuf serialize() {
@@ -293,5 +293,6 @@ public class MethodWriter extends CodeWriter {
 		}
 		labels.clear();
 		unrefLabels.clear();
+		bw.release();
 	}
 }

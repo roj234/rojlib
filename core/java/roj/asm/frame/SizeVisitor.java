@@ -22,8 +22,8 @@ import roj.util.FastFailException;
 
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.Deque;
 import java.util.List;
+import java.util.Queue;
 
 import static roj.asm.Opcodes.*;
 import static roj.asm.frame.Var2.T_REFERENCE;
@@ -204,7 +204,7 @@ public class SizeVisitor {
 	 * 该算法迭代地处理基本块，直到数据流（栈状态）达到不动点，以此确定栈的大小。
 	 */
 	private int computeMaxStackSize(DynByteBuf code, ConstantPool cp, int begin) {
-		Deque<BasicBlock> changeset = RingBuffer.unbounded();
+		Queue<BasicBlock> changeset = RingBuffer.unbounded();
 		List<BasicBlock> blocks = processed;
 
 		ToIntMap<BasicBlock> maxEntryHeights = new ToIntMap<>();

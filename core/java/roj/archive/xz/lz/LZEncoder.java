@@ -20,8 +20,9 @@ import java.io.OutputStream;
 
 import static roj.reflect.Unsafe.U;
 
-public abstract sealed class LZEncoder permits BT4, HC4 {
+public abstract sealed class LZEncoder permits BT, HashChain {
 	public static final int MF_HC4 = 0, MF_BT4 = 1;
+	public static final int MF_HC5 = 2, MF_BT5 = 3;
 
 	/**
 	 * Number of bytes to keep available before the current byte
@@ -53,7 +54,7 @@ public abstract sealed class LZEncoder permits BT4, HC4 {
 	private int writePos;
 	private int pendingSize;
 
-	final Hash234 hash;
+	final LZHash hash;
 	private final NativeMemory nm;
 
 	final int cyclicSize;
@@ -85,8 +86,8 @@ public abstract sealed class LZEncoder permits BT4, HC4 {
 
 		long m = 0;
 		m += getBufSize(dictSize, extraSizeBefore, extraSizeAfter, matchLenMax);
-		m += Hash234.getMemoryUsage(dictSize); // unit is byte
-		m += options.getMatchFinder() == MF_HC4 ? ((long) dictSize + 1) << 2 : ((long) dictSize + 1) << 3;
+		m += LZHash.getMemoryUsage(dictSize); // unit is byte
+		m += (options.getMatchFinder()&1) == 0 ? ((long) dictSize + 1) << 2 : ((long) dictSize + 1) << 3;
 		return (int) (m / 1024) + 3;
 	}
 
@@ -106,14 +107,15 @@ public abstract sealed class LZEncoder permits BT4, HC4 {
 		int niceLen = options.getNiceLen();
 		int depthLimit = options.getDepthLimit();
 
-		if (options.getMatchFinder() == MF_HC4) return new HC4(dictSize, extraSizeBefore, extraSizeAfter, niceLen, matchLenMax, depthLimit);
-		else return new BT4(dictSize, extraSizeBefore, extraSizeAfter, niceLen, matchLenMax, depthLimit);
+		var hash5 = (options.getMatchFinder()&2) != 0;
+		if ((options.getMatchFinder()&1) == 0) return new HashChain(dictSize, extraSizeBefore, extraSizeAfter, niceLen, matchLenMax, depthLimit, hash5);
+		else return new BT(dictSize, extraSizeBefore, extraSizeAfter, niceLen, matchLenMax, depthLimit, hash5);
 	}
 
 	/**
 	 * Creates a new LZEncoder. See <code>getInstance</code>.
 	 */
-	LZEncoder(int dictSize, int extraSizeBefore, int extraSizeAfter, int niceLen, int matchLenMax, int mem2Shift, int depthLimit) {
+	LZEncoder(int dictSize, int extraSizeBefore, int extraSizeAfter, int niceLen, int matchLenMax, int mem2Shift, int depthLimit, boolean hash5) {
 		bufSize = getBufSize(dictSize, extraSizeBefore, extraSizeAfter, matchLenMax);
 		nm = new NativeMemory();
 
@@ -137,7 +139,7 @@ public abstract sealed class LZEncoder permits BT4, HC4 {
 		buf = nm.allocate(((long) cyclicSize << mem2Shift) + bufSize);
 		base = buf+bufSize;
 
-		hash = new Hash234(dictSize);
+		hash = new LZHash(dictSize, hash5);
 	}
 
 	public final void free() {
@@ -166,7 +168,7 @@ public abstract sealed class LZEncoder permits BT4, HC4 {
 	 * function must be called immediately after creating the LZEncoder
 	 * before any data has been encoded.
 	 */
-	public final void setPresetDict(int dictSize, Object ref, long off, int len) {
+	public final int setPresetDict(int dictSize, Object ref, long off, int len) {
 		assert !isStarted();
 		assert writePos == 0;
 
@@ -176,7 +178,7 @@ public abstract sealed class LZEncoder permits BT4, HC4 {
 		long offset = off + len - copySize;
 		U.copyMemory(ref, offset, null, buf, copySize);
 		writePos += copySize;
-		skip(copySize);
+		return copySize;
 	}
 
 	/**
@@ -392,7 +394,74 @@ public abstract sealed class LZEncoder permits BT4, HC4 {
 	/**
 	 * Runs match finder for the next byte and returns the matches found.
 	 */
-	public abstract void match();
+	public void match() {
+		mcount = 0;
+
+		int matchLenLimit = matchLenMax;
+		int niceLenLimit = niceLen;
+		int avail = advance();
+
+		if (avail < matchLenLimit) {
+			if (avail == 0) return;
+
+			matchLenLimit = avail;
+			if (niceLenLimit > avail) niceLenLimit = avail;
+		}
+
+		hash.calcHashes(buf, readPos);
+		int delta2 = lzPos - hash.getHash2Pos();
+		int delta3 = lzPos - hash.getHash3Pos();
+		int currentMatch = hash.getHash4Pos();
+		hash.updateTables(lzPos);
+
+		int cyclicSize = Math.min(this.cyclicSize, lzPos);
+		int lenBest = 0;
+
+		// See if the hash from the first two bytes found a match.
+		// The hashing algorithm guarantees that if the first byte
+		// matches, also the second byte does, so there's no need to
+		// test the second byte.
+		if (delta2 < cyclicSize && U.getByte(buf + readPos - delta2) == U.getByte(buf + readPos)) {
+			lenBest = 2;
+			mlen[0] = 2;
+			mdist[0] = delta2 - 1;
+			mcount = 1;
+		}
+
+		// See if the hash from the first three bytes found a match that
+		// is different from the match possibly found by the two-byte hash.
+		// Also here the hashing algorithm guarantees that if the first byte
+		// matches, also the next two bytes do.
+		if (delta2 != delta3 && delta3 < cyclicSize && U.getByte(buf + readPos - delta3) == U.getByte(buf + readPos)) {
+			lenBest = 3;
+			mdist[mcount++] = delta3 - 1;
+			delta2 = delta3;
+		}
+
+		// If a match was found, see how long it is.
+		if (mcount > 0) {
+			while (lenBest < matchLenLimit && U.getByte(buf + readPos + lenBest - delta2) == U.getByte(buf + readPos + lenBest)) ++lenBest;
+
+			mlen[mcount - 1] = lenBest;
+
+			// Return if it is long enough (niceLen or reached the end of
+			// the dictionary).
+			if (lenBest >= niceLenLimit) {
+				skip(niceLenLimit, currentMatch);
+				return;
+			}
+		}
+
+		// Long enough match wasn't found so easily. Look for better matches
+		// from the binary tree.
+		lenBest = Math.max(lenBest, hash.size()-1);
+
+		match(currentMatch, matchLenLimit, lenBest, niceLenLimit);
+	}
+
+	abstract int advance();
+	abstract void skip(int niceLenLimit, int currentMatch);
+	abstract void match(int currentMatch, int matchLenLimit, int lenBest, int niceLenLimit);
 
 	/**
 	 * Skips the given number of bytes in the match finder.

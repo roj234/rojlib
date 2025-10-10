@@ -1,15 +1,15 @@
 package roj.ci;
 
 import org.jetbrains.annotations.Nullable;
+import org.jetbrains.annotations.Unmodifiable;
 import roj.asmx.mapper.Mapper;
 import roj.asmx.mapper.Mapping;
 import roj.ci.event.ProjectUpdateEvent;
-import roj.ci.plugin.Processor;
+import roj.ci.plugin.Plugin;
 import roj.collect.ArrayList;
 import roj.collect.LinkedHashMap;
 import roj.collect.TrieTreeSet;
 import roj.config.XmlParser;
-import roj.config.mapper.Optional;
 import roj.config.node.MapValue;
 import roj.config.node.xml.Document;
 import roj.config.node.xml.Node;
@@ -32,41 +32,88 @@ import java.util.Map;
  * @author Roj234
  * @since 2025/2/12 7:02
  */
-public class Workspace {
-	public interface Factory { Workspace build(MapValue config); }
+public final class Workspace {
+	public interface Factory { Env.Workspace build(MapValue config); }
 	public static Factory factory(Class<?> type) {return Bypass.builder(Factory.class).delegate(type, "build").build();}
 
-	public String type;
-	public String id;
-	@Optional String path = "projects";
-	public List<File> depend, mappedDepend, unmappedDepend;
-	@Optional public List<String> processors = Collections.emptyList();
+	public String id() {return conf.id;}
 
+	@Unmodifiable public List<File> getDepend() {return depend;}
+	@Unmodifiable public List<File> getMappedDepend() {return mappedDepend;}
+	@Unmodifiable public List<File> getUnmappedDepend() {return unmappedDepend;}
+
+	@Unmodifiable public LinkedHashMap<String, String> getVariables() {return variables;}
+	@Unmodifiable public TrieTreeSet getVariableReplaceContext() {return variableReplaceContext;}
+
+	public Workspace(Env.Workspace conf) {
+		this.conf = conf;
+		this.depend = conf.depend;
+		this.mappedDepend = conf.mappedDepend;
+		this.unmappedDepend = conf.unmappedDepend;
+		this.variables = conf.variables;
+		this.variableReplaceContext = conf.variableReplaceContext;
+		this.mapping = conf.mapping;
+	}
+
+	private Workspace _next;
+
+	final Env.Workspace conf;
+
+	private File path;
+
+	private List<Plugin> plugins;
+	private List<File> depend, mappedDepend, unmappedDepend;
 	@Nullable public File mapping;
-	private transient Mapper mapper, invMapper;
+	private Mapper mapper, invMapper;
 
-	@Optional public LinkedHashMap<String, String> variables = Env.EMPTY_MAP;
-	@Optional public TrieTreeSet variable_replace_in = Env.EMPTY_SET;
+	private LinkedHashMap<String, String> variables;
+	private TrieTreeSet variableReplaceContext;
 
-	private transient Workspace _next;
+	void init() {
+		if (plugins == Collections.EMPTY_LIST) throw new IllegalArgumentException("Recursive dependency chain involving "+conf.id);
+		if (plugins != null) return;
+		plugins = Collections.emptyList();
 
-	private transient List<Processor> processorsImp;
+		var processors = new ArrayList<Plugin>();
 
-	public List<Processor> getProcessors() {
-		if (processorsImp == null) {
-			processorsImp = Flow.of(MCMake.processors).filter(processor -> processors.contains(processor.getClass().getName())).toList();
+		var depName = conf.inherits;
+		if (depName != null) {
+			Workspace dep = MCMake.workspaces.get(depName);
+			if (dep == null) {
+				MCMake.log.warn("找不到工作空间{}的继承{}", conf.id, depName);
+				return;
+			}
+			dep.init();
+
+			if (path == null) path = dep.path;
+			depend = new ArrayList<>(dep.depend);
+			depend.addAll(conf.depend);
+			mappedDepend = new ArrayList<>(dep.mappedDepend);
+			mappedDepend.addAll(conf.mappedDepend);
+			unmappedDepend = new ArrayList<>(dep.unmappedDepend);
+			unmappedDepend.addAll(conf.unmappedDepend);
+			if (mapping == null) mapping = dep.mapping;
+			variables = new LinkedHashMap<>(dep.variables);
+			variables.putAll(conf.variables);
+			variableReplaceContext = new TrieTreeSet(dep.variableReplaceContext);
+			variableReplaceContext.addAll(conf.variableReplaceContext);
+
+			processors.addAll(dep.plugins);
 		}
-		return processorsImp;
+		int initialSize = processors.size();
+		Flow.of(MCMake.REGISTERED_PLUGINS).filter(processor -> conf.processors.contains(processor.getClass().getName())).forEach(processors::add);
+		if (processors.size()-initialSize < conf.processors.size()) MCMake.log.warn("工作空间 {} 的部分插件 {} 未启用", conf.id, conf.processors);
+		this.plugins = processors;
+
+		path = new File(MCMake.BASE, conf.path == null ? conf.id : conf.path);
+		path.mkdir();
 	}
 
-	private transient File projectPath;
-	File getProjectPath() {
-		if (projectPath == null) {
-			projectPath = new File(MCMake.BASE, path == null ? id : path);
-			projectPath.mkdir();
-		}
-		return projectPath;
-	}
+	@Unmodifiable
+	public List<Plugin> getPlugins() {return plugins;}
+	public boolean hasPlugin(Plugin plugin) {return plugins.contains(plugin);}
+
+	File getPath() {return path;}
 
 	public Mapping getMapping() throws IOException {
 		var m = mapper;
@@ -94,19 +141,8 @@ public class Workspace {
 		return m;
 	}
 
-	public void registerLibrary() {
-		if (processors == Collections.EMPTY_LIST)
-			processors = new ArrayList<>();
-		for (Processor processor : MCMake.processors) {
-			if (processor.defaultEnabled()) {
-				String name = processor.getClass().getName();
-				if (!processors.contains(name)) {
-					processors.add(name);
-				}
-			}
-		}
-
-		File file = new File(getProjectPath(), ".idea/libraries/"+URICoder.escapeFileName(id)+".xml");
+	void onAdd() {
+		File file = new File(path, ".idea/libraries/"+URICoder.escapeFileName(conf.id)+".xml");
 		file.getParentFile().mkdirs();
 
 		var doc = new Document();
@@ -134,15 +170,28 @@ public class Workspace {
 		try (var sout = TextWriter.to(file, StandardCharsets.UTF_8)) {
 			component.toCompatXML(sout);
 		} catch (IOException e) {
-			MCMake.LOGGER.error("registerLibrary", e);
+			MCMake.log.error("registerLibrary", e);
 		}
 	}
-	public void unregisterLibrary() {
-		File file = new File(getProjectPath(), ".idea/libraries/"+URICoder.escapeFileName(id)+".xml");
-		file.delete();
+	void onRemove() throws IOException {
+		for (File dependency : conf.unmappedDepend) {
+			Files.deleteIfExists(dependency.toPath());
+		}
+		for (File dependency : conf.mappedDepend) {
+			Files.deleteIfExists(dependency.toPath());
+		}
+		for (File dependency : conf.depend) {
+			Files.deleteIfExists(dependency.toPath());
+		}
+		if (conf.mapping != null)
+			Files.deleteIfExists(conf.mapping.toPath());
+
+		File file = new File(path, ".idea/libraries/"+URICoder.escapeFileName(conf.id)+".xml");
+		Files.deleteIfExists(file.toPath());
 	}
+
 	public String getLibraryId() {
-		return "MCMake工作空间-"+id;
+		return "MCMake工作空间-"+conf.id;
 	}
 
 	/**
@@ -150,9 +199,9 @@ public class Workspace {
 	 * mode = 1 del
 	 * mode = 2 regenerate
 	 */
-	public static void registerModule(Project p, int mode) throws IOException {
+	static void registerModule(Project p, int mode) throws IOException {
 		if (!p.conf.type.needCompile()) return;
-		File ipr = new File(p.workspace.getProjectPath(), ".idea/modules.xml");
+		File ipr = new File(p.workspace.getPath(), ".idea/modules.xml");
 		if (!ipr.isFile()) {
 			ipr.getParentFile().mkdirs();
 			try (var fos = new FileOutputStream(ipr)) {
@@ -198,7 +247,16 @@ public class Workspace {
 		if (mode == 1) {
 			Files.delete(iml.toPath());
 		} else {
-			CharList sb = generateIMLForProject(p);
+			List<Node> nodes = Collections.emptyList();
+			if (iml.isFile()) {
+				try {
+					nodes = ((Document) new XmlParser().parse(iml)).querySelectorAll("/module/component/content/excludeFolder");
+				} catch (ParseException e) {
+					MCMake.log.error("failed to parse {}", e, iml.getName());
+				}
+			}
+
+			CharList sb = generateIMLForProject(p, nodes);
 			try (var tw = TextWriter.to(iml, StandardCharsets.UTF_8)) {
 				tw.append(sb);
 			}
@@ -219,7 +277,7 @@ public class Workspace {
 		});
 	}
 
-	public static CharList generateIMLForProject(Project p) {
+	private static CharList generateIMLForProject(Project p, List<Node> keepNodes) {
 		var sb = new CharList("""
 				<?xml version="1.0" encoding="UTF-8"?><!--MCMake-->
 				<module type="JAVA_MODULE" version="4">
@@ -228,6 +286,11 @@ public class Workspace {
 				    <content url="file://$MODULE_DIR$">
 				      <sourceFolder url="file://$MODULE_DIR$/java" isTestSource="false" />
 				""");
+
+		for (Node node : keepNodes) {
+			node.toCompatXML(sb);
+			sb.append('\n');
+		}
 
 		if (p.resPath.isDirectory()) {
 			sb.append("<sourceFolder url=\"file://$MODULE_DIR$/resources\" type=\"java-resource\" />");

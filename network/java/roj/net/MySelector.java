@@ -4,7 +4,7 @@ import roj.ci.annotation.Public;
 import roj.collect.ArrayList;
 import roj.optimizer.FastVarHandle;
 import roj.reflect.Bypass;
-import roj.reflect.Handles;
+import roj.reflect.Telescope;
 
 import java.io.IOException;
 import java.lang.invoke.VarHandle;
@@ -44,9 +44,9 @@ final class MySelector extends ArrayList<SelectionKey> implements Set<SelectionK
 							.access(t.getClass(), "keys", "getSet", null)
 							.access(HashSet.class, "map", "getMap", null)
 							.build();
-					selectedKeys = Handles.lookup().findVarHandle(t.getClass(), "selectedKeys", Set.class);
-					publicSelectedKeys = Handles.lookup().findVarHandle(t.getClass(), "publicSelectedKeys", Set.class);
-					publicKeys = Handles.lookup().findVarHandle(t.getClass(), "publicKeys", Set.class);
+					selectedKeys = Telescope.trustedLookup().findVarHandle(t.getClass(), "selectedKeys", Set.class);
+					publicSelectedKeys = Telescope.trustedLookup().findVarHandle(t.getClass(), "publicSelectedKeys", Set.class);
+					publicKeys = Telescope.trustedLookup().findVarHandle(t.getClass(), "publicKeys", Set.class);
 				}
 			}
 		}

@@ -2,6 +2,7 @@ package roj.asm.attr;
 
 import org.intellij.lang.annotations.MagicConstant;
 import roj.asm.Attributed;
+import roj.asm.Member;
 import roj.asm.MethodNode;
 import roj.asm.cp.Constant;
 import roj.asm.cp.ConstantPool;
@@ -11,6 +12,7 @@ import roj.asm.insn.Code;
 import roj.asm.type.Signature;
 import roj.collect.HashMap;
 import roj.collect.IntBiMap;
+import roj.text.logging.Logger;
 import roj.util.DynByteBuf;
 import roj.util.Helpers;
 import roj.util.TypedKey;
@@ -81,10 +83,12 @@ public abstract class Attribute {
 
 	@SuppressWarnings("unchecked")
 	public static <T extends Attribute> T parseSingle(Attributed node, ConstantPool cp, TypedKey<T> type, AttributeList list, int origin) {
-		Attribute attr = list == null ? null : (Attribute) list.getByName(type.name);
+		if (list == null) return null;
+		Attribute attr = (Attribute) list.getByName(type.name);
 		if (attr == null) return null;
 		if (attr.getClass() == UnparsedAttribute.class) {
 			if (hasError || cp == null) return null;
+			// FIXME (lava) Thread safe for read-only access
 			attr = parse(node, cp, type.name, attr.getRawData(), origin);
 			if (attr == null) throw new UnsupportedOperationException("不支持的属性");
 			list.add(attr);
@@ -154,6 +158,10 @@ public abstract class Attribute {
 	}
 	private static void limit(int type, int except) {
 		if (type != except) throw new IllegalStateException("意料之外的属性,仅能在"+except+"中出现,却在"+type);
+	}
+
+	public static void foundUnknownAttribute(Member node, String name) {
+		Logger.FALLBACK.debug("{}.{} 中遇到不支持的属性 {}", node.owner(), node.name(), name);
 	}
 
 	public abstract String name();

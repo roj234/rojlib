@@ -1,6 +1,6 @@
 package roj.ci.minecraft;
 
-import roj.ci.Workspace;
+import roj.ci.Env;
 import roj.ui.EasyProgressBar;
 
 import java.io.File;
@@ -12,7 +12,7 @@ import java.io.IOException;
  */
 final class Fabric extends MinecraftWorkspace {
 	@Override
-	Workspace init(EasyProgressBar bar, MinecraftClientInfo clientInfo) throws IOException {
+	Env.Workspace init(EasyProgressBar bar, MinecraftClientInfo clientInfo) throws IOException {
 		return null;
 	}
 

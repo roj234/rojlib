@@ -119,7 +119,7 @@ public class ParameterizedType extends IGeneric {
 
 				prevI = ++i;
 			}
-			if (x != null) Logger.getLogger("GenericSub").warn("{}({}) => {} has too less '$'", t, this, newName);
+			if (x != null) Logger.FALLBACK.warn("{}({}) => {} has too less '$'", t, this, newName);
 		} else {
 			owner = fn.apply(owner);
 		}

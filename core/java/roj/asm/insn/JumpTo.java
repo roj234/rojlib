@@ -26,7 +26,7 @@ public class JumpTo extends Segment {
 	@Override
 	@SuppressWarnings("fallthrough")
 	public boolean write(CodeWriter to, int segmentId) {
-		if (!target.isValid()) throw new IllegalStateException("target is not valid: "+target);
+		if (!target.isBound()) throw new IllegalStateException("target is not bound: "+target);
 
 		DynByteBuf o = to.bw;
 

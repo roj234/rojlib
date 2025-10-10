@@ -23,14 +23,12 @@ setInterval(() => {
 // 这是一个异步组件，不过同样支持热重载，现在就试试吧
 // 在F12中对比源代码和转换后的代码，可以让你理解$asyncWithCleanup语法糖和$disposable函数是如何工作的
 const AsyncCounter = $asyncComponent(
-  () => new Promise((resolve, failure) => setTimeout(() => {
-	  if (Math.random() < 0.5) failure("哎呀。网络错误了！");
-	  import('./Counter.jsx').then(resolve);
-  }, Math.random() * 1000)),
-  {
-    loading: () => <div>加载中喵</div>,
-    error: err => <div>加载失败喵: {err}</div>
-  }
+	() => new Promise((resolve, failure) => setTimeout(() => {
+		if (Math.random() < 0.5) failure("哎呀。网络错误了！");
+		import('./Counter.jsx').then(n => resolve(n.Counter));
+	}, Math.random() * 1000)),
+	() => <div>加载中喵</div>,
+	err => <div>加载失败喵: {err}</div>
 );
 
 const items = $state([1, 2, 3]);

@@ -63,7 +63,7 @@ public abstract class Plugin {
 			config = parser.parse(configFile).asMap();
 
 			var defaults = getResource("config.yml");
-			if (defaults != null) config.merge(parser.parse(defaults).asMap(), true, true);
+			if (defaults != null) config.merge(parser.parse(defaults).asMap(), true, false);
 		} catch (ParseException|IOException e) {
 			throw new IllegalArgumentException("无法读取配置文件"+configFile.getName(),e);
 		}

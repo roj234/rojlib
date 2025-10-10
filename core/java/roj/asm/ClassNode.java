@@ -427,6 +427,12 @@ public class ClassNode implements ClassDefinition {
 		if (v != 0 && (modifier & (ACC_ABSTRACT|ACC_SUPER|ACC_ENUM)) != ACC_ABSTRACT)
 			throw new IllegalArgumentException("无效的描述符组合(Itf) "+this);
 
+		for (MethodNode method : methods) {
+			if ((method.getAttribute("Code") == null) == (0 == (method.modifier & (Opcodes.ACC_ABSTRACT | Opcodes.ACC_NATIVE)))) {
+				throw new IllegalArgumentException("方法 "+method.owner+'.'+method.name+method.desc+" 缺少Code属性.");
+			}
+		}
+
 		HashSet<String> descs = new HashSet<>();
 		fastValidate(Helpers.cast(methods), descs);
 		descs.clear();

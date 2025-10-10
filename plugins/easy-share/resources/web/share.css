@@ -1,0 +1,409 @@
+/** Copyright (c) Roj234 2025/03/06 All rights reserved */
+
+:root {
+	--color-light: #6b7276;
+	--color-lighter: #bfc8ca;
+	--color-focused: #34b5fa;
+	--color-dark: #293239;
+}
+
+/* region Reset */
+* {margin: 0;padding: 0;box-sizing: border-box}
+html{
+	color-scheme: dark;
+	font-size: 16px;
+}
+body {font-size: 0.75rem}
+ul, ol {list-style: none}
+a, [role=button], button:not(:disabled) {cursor: pointer}
+a {
+	color: rgb(128,128,192);
+	text-align: center;
+	text-decoration: none;
+}
+a:not(.file-btn):hover {text-decoration: underline;}
+button:disabled {cursor: not-allowed;}
+form button[type=submit]:disabled {cursor: wait;}
+textarea {resize: vertical}
+input,select,textarea,button {
+	outline: 0;
+	border: 1px solid var(--color-dark);
+	background: var(--color-dark);
+	transition: border-color 0.1s linear;
+}
+input:not([type=color]), select, textarea {padding: 0.25rem}
+input:disabled {cursor: not-allowed}
+input:focus, select:focus-visible, textarea:focus {
+	border-color: var(--color-focused) !important;
+}
+
+/* endregion */
+
+.wrapper {
+	position: fixed;
+	left: 0;
+	right: 0;
+	top: 0;
+	bottom: 0;
+
+	background: linear-gradient(-27deg,
+	rgba(17, 24, 39, 1) 0%,
+	rgba(48, 48, 128, 1) 50%,
+	rgba(17, 24, 39, 1) 100%);
+
+	display: flex;
+	justify-content: center;
+	align-items: center;
+
+	perspective: 1000px;
+}
+
+/* region main */
+.main {
+	background: rgba(0,0,0,0.15);
+	border: 1px solid rgba(255,255,255,0.2);
+	border-radius: 20px;
+	box-shadow: rgba(0,0,0,0.3) 0 0 15px;
+	overflow: hidden;
+	min-width: 400px;
+
+	position: absolute;
+	backface-visibility: hidden;
+	//transform-style: preserve-3d;
+}
+/* 旋转类，用于触发动画 */
+.fadeIn,.fadeOut {transition: transform 0.6s}
+.fadeIn {transform: rotateY(-360deg)}
+.fadeOut {transform: rotateY(-180deg)}
+
+.logo-box {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: space-between;
+	/* height: 120px; */
+	padding: 20px 10px;
+	gap: 16px;
+}
+
+.logo {
+	width: 48px;
+	height: 48px;
+	border-radius: 100%;
+}
+
+.file-box {
+	margin-top: 10px;
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+	padding: 0 20px;
+}
+
+.code-box {
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+}
+
+.code {
+	background: rgb(48,48,90);
+	color: #eee;
+
+	padding: 10px 0;
+	min-height: 36px;
+	border-radius: 6px;
+	font-size: 14px;
+}
+textarea.code {
+	width: 100%;
+	min-height: 169px;
+	max-height: 500px;
+	min-width: 500px;
+	padding: 10px
+}
+
+.file-btn {
+	background: linear-gradient(to right,
+	rgb(100, 100, 240) 0%,
+	rgb(232, 72, 160) 100%);
+	color: white;
+
+	padding: 10px 0;
+	line-height: 1;
+	border-radius: 6px;
+	font-size: 14px;
+}
+.file-btn:disabled {color: rgba(255, 255, 255, 0.3);}
+
+.bottom {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	margin-top: 10px;
+	padding: 10px 20px;
+	background: rgb(32,40,64);
+}
+/* endregion */
+/* region right bar */
+.sidebar {
+	position: fixed;
+	height: 100%;
+	width: 350px;
+	background: rgba(0,0,0,0.5);
+
+	display: flex;
+	flex-direction: column;
+	justify-content: space-between;
+}
+.sidebar.left {
+	left: -350px;
+	transition: left 0.3s ease-in-out;
+}
+.sidebar.right {
+	right: -350px;
+	transition: right 0.3s ease-in-out;
+}
+.sidebar i, .sidebar a {
+	font-size: 20px;
+	cursor: pointer;
+}
+.sidebar>.top {
+	display: flex;
+	justify-content: space-between;
+	padding: 10px;
+	border-bottom: 1px solid var(--color-lighter);
+}
+#left-list, #right-list {
+	height: 100%;
+	overflow-y: scroll;
+}
+.file-item {
+	padding: 16px 10px;
+	display: flex;
+	justify-content: space-evenly;
+	align-items: center;
+	gap: 10px;
+}
+.file-item:hover {
+	background: rgba(255,255,255,0.1);
+}
+.file-item > .file-type {
+	font-size: 36px !important;
+}
+.file-item .fa-eye {
+	color: rgb(128,128,192);
+}
+.file-item .fa-trash-o {
+	color: rgb(224, 50, 50);
+}
+.file-item > .file-desc {
+	display: flex;
+	flex-direction: column;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	width: 100%;
+}
+.file-item > .file-desc span {
+	color: var(--color-light);
+}
+/* endregion */
+/* region upload */
+.send-input {
+	display: flex;
+	justify-content: space-between;
+	gap: 8px;
+}
+.send-input input {
+	display: none;
+}
+.send-input label {
+	background-color: rgb(64,64,81);
+	text-align: center;
+	cursor: pointer;
+
+	padding: 10px;
+	line-height: 1;
+	border-radius: 6px;
+	font-size: 14px;
+
+	transition: background-color 0.1s ease-in-out;
+}
+
+.send-input input:checked + label {background-color: rgb(80, 80, 224);}
+input:invalid, textarea:invalid {border-color: rgb(224, 50, 50);}
+input:disabled {display: none;}
+
+.upload-box {
+	height: 200px;
+	border-radius: 20px;
+	background: rgba(0,0,0,0.2);
+
+	position: relative;
+	cursor: pointer;
+
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: space-evenly;
+}
+
+.upload-box::before {
+	content: "";
+	position: absolute;
+	top: 0;
+	left: 0;
+	right: 0;
+	bottom: 0;
+	z-index: -1;
+	background: conic-gradient(from var(--angle), red, yellow, blue, red);
+	padding: 4px;
+	-webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+	mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+	-webkit-mask-composite: clear;
+	mask-composite: exclude;
+	animation: rotateBorder 5s linear infinite;
+	border-radius: 22px;
+}
+@property --angle {
+	syntax: '<angle>';
+	initial-value: 0deg;
+	inherits: false;
+}
+@keyframes rotateBorder {
+	0% {--angle: 0deg;}
+	100% {--angle: 360deg;}
+}
+
+.upload-box.dragover #cloud-animation {
+	animation: rotate 1s linear infinite;
+}
+@keyframes rotate {
+	0% {top: 50%;}
+	100% {top: -50%;}
+}
+
+/* 进度条容器样式 */
+.file-item-wrapper.uploading {
+	height: 68px;
+	cursor: not-allowed;
+	transition: height 0.2s ease;
+	user-select: none;
+	overflow: hidden;
+	position: relative;
+}
+.file-item-wrapper.uploading > .file-item {
+	pointer-events: none;
+}
+.disabled {pointer-events: none;}
+
+/* 进度条样式 */
+.file-item > .progress {
+	width: 0;
+	height: 100%;
+	background: linear-gradient(45deg, #007bffb3 25%, #0000 25%, #0000 50%, #007bffb3 50%, #007bffb3 75%, #0000 75%, #0000);
+	background-size: 40px 40px;
+	animation: progressAnimation 1s linear infinite;
+	left: 0;
+	z-index: -1;
+	position: absolute;
+	transition: width 0.1s ease;
+}
+
+/* 进度条动画 */
+@keyframes progressAnimation {
+	0% {background-position: 0 0;}
+	100% {background-position: 40px 0;}
+}
+
+/* endregion */
+
+.detail-box > span {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+}
+
+.detail-box {
+	display: flex;
+	flex-direction: column;
+	padding: 20px 30px;
+	gap: 10px;
+	font-size: 14px;
+}
+
+.url-box {
+	display: flex;
+	justify-content: space-evenly;
+}
+.url-box > div {
+	margin: 10px;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	font-size: 14px;
+	font-weight: bold;
+	gap: 5px;
+}
+.url-box > div button {
+	padding: 8px 32px;
+	background: white;
+	color: rgb(78,68,228);
+	border-radius: 8px;
+	font-size: 24px;
+	font-weight: bold;
+}
+.url-box > div span {
+	font-size: 12px;
+	font-weight: normal;
+	color: grey;
+}
+
+.qrcode {
+	width: 128px;
+	height: 128px;
+	border-radius: 8px;
+	background: white;
+}
+
+#file-detail {
+	position: fixed;
+	background: rgb(32,48,72);
+	z-index: 1000;
+}
+
+#file-detail:before {
+	content: "";
+	position: fixed;
+	top: 0;
+	left: 0;
+	right: 0;
+	bottom: 0;
+	z-index: -1;
+	background: rgba(0,0,0,0.4);
+}
+
+@media (max-width: 576px) {
+	body {
+		font-size: 1rem;
+	}
+	.main {
+		width: 95%;
+	}
+	.sidebar {
+		background: black;
+	}
+	.sidebar.left {
+		left: -100%;
+		width: 100%;
+	}
+	.sidebar.right {
+		right: -85%;
+		width: 85%;
+	}
+	textarea.code {
+		min-width: auto;
+	}
+}

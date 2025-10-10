@@ -116,7 +116,7 @@ public class LazyBox extends Plugin {
 				for (int eccBytes = 2; dataBytes+eccBytes <= 255; eccBytes += 2) {
 					float ratio = (eccBytes/2f) / (dataBytes+eccBytes);
 					float delta = ratio - exceptingRatio;
-					if (delta > 0 && delta < 0.005 && delta < lastDelta) {
+					if (delta > 0 && delta < lastDelta) {
 						lastDelta = delta;
 						lastRatio = ratio;
 						lastDataByte = dataBytes;
@@ -132,9 +132,8 @@ public class LazyBox extends Plugin {
 			var metadata = new ByteList(16).put(0x00/*KIND_RS*/).put(lastDataByte).put(lastEccByte).putVUInt(stride).putVULong(fileSize);
 			metadata.putInt(CRC32.crc32(metadata.array(), 0, metadata.wIndex())).put(metadata.wIndex());
 
-			System.out.println("RS("+lastDataByte+","+(lastDataByte+lastEccByte)+") 将追加"+((float)lastEccByte)/(lastDataByte+lastEccByte)*100+"%的纠错码，允许在总体中出现"+lastRatio*100+"%的任意损坏");
-			System.out.println("牢记右侧参数：【"+ metadata.base64UrlSafe()+"】。它们追加在文件尾部不受纠错码保护，如果文件损坏严重，请手动输入以纠错");
 			//System.out.println("这个文件尾部看起来已经追加过纠错码了");
+			System.out.println("RS("+lastDataByte+","+(lastDataByte+lastEccByte)+") 追加"+((float)lastEccByte)/(lastDataByte+lastEccByte)*100+"%的纠错码，允许在总体中出现"+lastRatio*100+"%的任意损坏");
 			System.out.println("分块卷积算法的矩阵大小为"+stride+", 使能纠错长度不大于"+(recc.maxError()*stride)+"的连续错误");
 			System.out.println("按任意键（Ctrl+C以取消）以开始在文件"+file.getName()+"后追加纠错码");
 			char c = TUI.key(null, new CharList());

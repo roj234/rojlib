@@ -22,7 +22,7 @@ import roj.compiler.diagnostic.Kind;
 import roj.compiler.diagnostic.TextDiagnosticReporter;
 import roj.compiler.library.JarLibrary;
 import roj.compiler.library.Library;
-import roj.compiler.library.SymbolCacheLibrary;
+import roj.compiler.library.RuntimeLibrary;
 import roj.io.IOUtil;
 import roj.reflect.resolver.IResolver;
 import roj.text.logging.Logger;
@@ -66,21 +66,21 @@ public class Resolver implements IResolver {
 	public static File getCacheDirectory(String subPath) {return cacheEnabled ? new File(cacheDirectory, subPath) : null;}
 	public static void setCacheDirectory(File o) {cacheDirectory = o;}
 
-	private static final XashMap.Builder<String, CompileUnit> COMPILE_UNIT_BUILDER = XashMap.noCreation(CompileUnit.class, "name");
-	private static final XashMap.Builder<ClassDefinition, LinkedClass> CLASS_EXTRA_INFO_BUILDER = XashMap.builder(ClassDefinition.class, LinkedClass.class, "owner", "_next", Hasher.identity());
+	private static final XashMap.Template<String, CompileUnit> COMPILE_UNIT_TEMPLATE = XashMap.forType(String.class, CompileUnit.class).key("name").build();
+	private static final XashMap.Template<ClassDefinition, LinkedClass> CLASS_EXTRA_INFO_TEMPLATE = XashMap.forType(ClassDefinition.class, LinkedClass.class).key("owner").hasher(Hasher.identity()).newValue(LinkedClass::new).build();
 
-	protected final XashMap<String, CompileUnit> compileUnits = COMPILE_UNIT_BUILDER.create();
+	protected final XashMap<String, CompileUnit> compileUnits = COMPILE_UNIT_TEMPLATE.create();
 
 	// Libraries
 	protected final HashMap<String, Object> libraryByName = new HashMap<>();
 	protected final List<Library> libraries = new ArrayList<>(), unenumerableLibraries = new ArrayList<>();
 
-	protected final XashMap<ClassDefinition, LinkedClass> extraInfos = CLASS_EXTRA_INFO_BUILDER.create();
+	protected final XashMap<ClassDefinition, LinkedClass> extraInfos = CLASS_EXTRA_INFO_TEMPLATE.create();
 	protected Map<String, List<String>> shortNameIndex = Collections.emptyMap();
 
 	public Resolver() {this(true);}
 	public Resolver(boolean addRuntimeLibrary) {
-		if (addRuntimeLibrary) unenumerableLibraries.addAll(SymbolCacheLibrary.SYSTEM_MODULES);
+		if (addRuntimeLibrary) unenumerableLibraries.add(RuntimeLibrary.ALL_MODULES);
 	}
 
 	public void addLibrary(Library library) {
@@ -100,8 +100,11 @@ public class Resolver implements IResolver {
 		if (clz == null) {
 			var entry = libraryByName.getEntry(name);
 			if (entry != null) {
+				var value = entry.getValue();
+				if (value instanceof ClassNode c) return c;
+
 				synchronized (entry) {
-					var value = entry.getValue();
+					value = entry.getValue();
 					if (value instanceof ClassNode c) return c;
 
 					clz = ((Library) value).get(name);
@@ -172,7 +175,15 @@ public class Resolver implements IResolver {
 	}
 	//endregion
 	//region ResolveHelper
-	@NotNull public synchronized LinkedClass link(@NotNull ClassDefinition info) { return extraInfos.computeIfAbsent(info); }
+	@NotNull public LinkedClass link(@NotNull ClassDefinition info) {
+		LinkedClass linkedClass = extraInfos.get(info);
+		if (linkedClass == null) {
+			synchronized (this) {
+				linkedClass = extraInfos.computeIfAbsent(info);
+			}
+		}
+		return linkedClass;
+	}
 	public synchronized void unlink(ClassDefinition file) {extraInfos.removeKey(file);}
 
 	@NotNull public final ToIntMap<String> getHierarchyList(ClassDefinition info) {return link(info).getHierarchyList(this);}
@@ -427,7 +438,7 @@ public class Resolver implements IResolver {
 		int capa = Type.getSort(a.getActualType())-1;
 		int capb = Type.getSort(b.getActualType())-1;
 		// 双方都是数字
-		if ((capa&7) != 0 && (capb&7) != 0) return Type.klass("java/lang/Number");
+		if ((capa&7) != 0 && (capb&7) != 0) return Type.primitive(Type.getBySort(Math.max(capa, capb)+1));
 		// 没有任何一方是对象 (boolean=0 | void=-1)
 		if ((capa|capb) < 8) return Types.OBJECT_TYPE;
 

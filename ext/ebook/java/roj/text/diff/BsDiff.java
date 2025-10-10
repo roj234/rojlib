@@ -1,7 +1,7 @@
 package roj.text.diff;
 
-import roj.io.ByteInput;
 import roj.io.CorruptedInputException;
+import roj.io.XDataInput;
 import roj.io.source.Source;
 import roj.reflect.Unsafe;
 import roj.util.ArrayCache;
@@ -418,7 +418,7 @@ public final class BsDiff {
 		return i - lStart;
 	}
 
-	public static long patch(Source in, ByteInput patch, OutputStream out) throws IOException {
+	public static long patch(Source in, XDataInput patch, OutputStream out) throws IOException {
 		int wrote = 0;
 		int outputSize = patch.readIntLE();
 		byte[] tmp = ArrayCache.getByteArray(1024 * 3, false);

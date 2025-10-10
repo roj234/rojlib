@@ -16,6 +16,7 @@ import roj.compiler.asm.LPSignature;
 import roj.compiler.ast.ParseTask;
 import roj.compiler.ast.expr.Expr;
 import roj.compiler.diagnostic.TextDiagnosticReporter;
+import roj.compiler.library.ClassLoaderLibrary;
 import roj.compiler.plugins.TypeDeclPlugin;
 import roj.compiler.plugins.UintPlugin;
 import roj.compiler.plugins.annotations.AnnotationsPlugin;
@@ -45,14 +46,19 @@ import java.util.Objects;
 public class LambdaLinker implements LambdaCompiler {
 	public final LavaCompiler compiler = new LavaCompiler();
 	public final CompileContext ctx;
-	public final Sandbox classLoader = new Sandbox("LavaLambdaLinker", LambdaLinker.class.getClassLoader());
+	public final Sandbox classLoader;
 
 	public final Map<String, Expr> injectedExpressions;
 
 	public LambdaLinker() {
+		ClassLoader theLoader = Reflection.getCallerClass(2).getClassLoader();
+		classLoader = new Sandbox("LambdaLinker", theLoader);
+
 		CompileContext.set(compiler.createContext());
 		initDefaultPlugins(compiler);
 		CompileContext.set(null);
+
+		compiler.addLibrary(new ClassLoaderLibrary(theLoader));
 
 		injectedExpressions = compiler.attachment(AsmPlugin.INJECT_PROPERTY);
 		compiler.reporter = new TextDiagnosticReporter(1,1,1);
@@ -81,8 +87,6 @@ public class LambdaLinker implements LambdaCompiler {
 		TimeUnitPlugin.pluginInit(api);
 		new StreamChainPlugin().pluginInit(api);
 		new ComparisonChainPlugin().pluginInit(api);
-
-		api.attachment(AsmPlugin.INJECT_PROPERTY).put("咕咕咕", Expr.valueOf("咕咕咕咕，我是🕊"));
 	}
 
 	@Override

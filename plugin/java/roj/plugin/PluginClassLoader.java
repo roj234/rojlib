@@ -4,26 +4,27 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import roj.archive.zip.ZEntry;
 import roj.archive.zip.ZipFile;
-import roj.asmx.ConstantPoolHooks;
-import roj.asmx.Context;
-import roj.asmx.Transformer;
-import roj.asmx.injector.CodeWeaver;
-import roj.asmx.launcher.MainM;
+import roj.asm.ClassNode;
+import roj.asmx.*;
+import roj.asmx.launcher.Loader;
+import roj.asmx.launcher.boot.MainM;
 import roj.collect.ArrayList;
 import roj.collect.HashSet;
+import roj.crypt.jar.JarVerifier;
 import roj.io.source.FileSource;
 import roj.text.URICoder;
 import roj.util.ByteList;
 
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.lang.module.ModuleDescriptor;
 import java.net.MalformedURLException;
-import java.net.URI;
 import java.net.URL;
 import java.security.CodeSigner;
 import java.security.CodeSource;
 import java.security.ProtectionDomain;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Enumeration;
 import java.util.List;
@@ -38,10 +39,11 @@ public class PluginClassLoader extends ClassLoader {
 	final PluginDescriptor desc;
 	final PluginDescriptor[] accessible;
 	final ZipFile archive;
+	final JarVerifier jarVerifier;
+	final ProtectionDomain protectionDomain;
 
 	final List<Transformer> transformers = new ArrayList<>();
 	ConstantPoolHooks hooks;
-	CodeWeaver weaver;
 
 	public PluginClassLoader(ClassLoader parent, PluginDescriptor plugin, PluginDescriptor[] accessible) throws IOException {
 		super(plugin.id, parent);
@@ -49,6 +51,22 @@ public class PluginClassLoader extends ClassLoader {
 		this.accessible = accessible;
 		this.archive = new ZipFile(plugin.source, ZipFile.FLAG_VERIFY|ZipFile.FLAG_BACKWARD_READ, plugin.charset);
 		this.archive.reload();
+
+		File file = ((FileSource) plugin.source).getFile();
+		this.jarVerifier = JarVerifier.create(archive, file);
+		if (jarVerifier != null) jarVerifier.getTrustLevel();
+		var cs = jarVerifier == null ? new CodeSource(new URL("file", "", file.getAbsolutePath().replace(File.separatorChar, '/')), (CodeSigner[]) null) : jarVerifier.getCodeSource();
+		protectionDomain = new ProtectionDomain(cs, null);
+
+		if (Arrays.equals(cs.getCertificates(), Jocker.digitalCertificates)) {
+			desc.isTrusted = true;
+		}
+
+		AnnotationRepoManager.setAnnotations(this, () -> {
+			var repo = new AnnotationRepo();
+			repo.loadCacheOrAdd(archive);
+			return repo;
+		});
 
 		if (Jocker.class.getModule().isNamed() && Jocker.useModulePluginIfAvailable) {
 			var packages = new HashSet<String>();
@@ -60,30 +78,34 @@ public class PluginClassLoader extends ClassLoader {
 			}
 
 			if (!packages.isEmpty()) {
-				//ClassNode moduleInfo = Parser.parse(IOUtil.read(getResourceAsStream("module-info.class")));
+				String moduleId = plugin.id.replace('-', '.');
+				var in = archive.get("module-info.class");
+				if (in != null) {
+					var moduleInfo = ClassNode.parseSkeleton(in);
 
-				if (plugin.isModulePlugin) {
 					var depend = new HashSet<>(plugin.javaModuleDepend);
 					depend.add("java.base");
 					depend.add("roj.core");
 
-					var builder = ModuleDescriptor.newModule(plugin.id).packages(packages);
+					var builder = ModuleDescriptor.newModule(moduleId).packages(packages);
 					for (String require : depend) builder.requires(require);
 					try {
-						var m = MainM.defineSubModule(builder.build(), Jocker.class.getModule().getLayer(), this, URI.create("panger://plugin/"+plugin.fileName));
+						var m = MainM.defineSubModule(builder.build(), Jocker.class.getModule().getLayer(), this, cs.getLocation().toURI());
 						for (String require : depend) MainM.doAddReads(m.getLayer(), m, require);
 					} catch (Throwable e) {
 						throw new RuntimeException(e);
 					}
 				} else {
-					var builder = ModuleDescriptor.newAutomaticModule(plugin.id).packages(packages);
+					var builder = ModuleDescriptor.newAutomaticModule(moduleId).packages(packages);
 					try {
-						var m = MainM.defineSubModule(builder.build(), Jocker.class.getModule().getLayer(), this, URI.create("panger://plugin/legacy/"+plugin.fileName));
+						var m = MainM.defineSubModule(builder.build(), Jocker.class.getModule().getLayer(), this, cs.getLocation().toURI());
+
 						for (var ml : m.getLayer().parents()) {
 							for (Module require : ml.modules()) {
-								MainM.doAddReads(m.getLayer(), m, require.getName());
+								MainM.doAddReads(m, require);
 							}
 						}
+						MainM.doAddReads(m, Jocker.class.getModule());
 					} catch (Throwable e) {
 						throw new RuntimeException(e);
 					}
@@ -102,11 +124,11 @@ public class PluginClassLoader extends ClassLoader {
 
 	@Override
 	protected Class<?> findClass(String name) throws ClassNotFoundException {
-		String klass = name.replace('.', '/').concat(".class");
-		ZEntry entry = archive.getEntry(klass);
+		String entryName = name.replace('.', '/').concat(".class");
+		ZEntry entry = archive.getEntry(entryName);
 		if (entry == null) {
 			for (var s : accessible) {
-				if (s.classLoader != null && s.classLoader.archive.getEntry(klass) != null) {
+				if (s.classLoader != null && s.classLoader.archive.getEntry(entryName) != null) {
 					return s.classLoader.findClass(name);
 				}
 			}
@@ -116,18 +138,22 @@ public class PluginClassLoader extends ClassLoader {
 		PluginClassLoader prev = PLUGIN_CONTEXT.get();
 		PLUGIN_CONTEXT.set(this);
 		try {
-			var ctx = new Context(klass, archive.getInputStream(entry));
-			name = ctx.getClassName();
+			var in = archive.getInputStream(entry);
+			if (in != null) jarVerifier.wrapInput(entryName, in);
+			var ctx = new Context(entryName, in);
 
-			var cs = new CodeSource(getUrl(klass), (CodeSigner[]) null);
+			var globalTransformers = Loader.instance.getTransformers();
+			for (int i = 0; i < globalTransformers.size(); i++)
+				globalTransformers.get(i).transform(name, ctx);
 
-			for (Transformer transformer : transformers) {
-				transformer.transform(name, ctx);
-			}
-			PanSecurityManager.transformer.transform(name, ctx);
+			for (int i = 0; i < transformers.size(); i++)
+				transformers.get(i).transform(name, ctx);
+
+			if (!desc.isTrusted)
+				PanSecurityManager.transformer.transform(name, ctx);
 
 			ByteList buf = ctx.get();
-			return defineClass(name.replace('/', '.'), buf.list, 0, buf.wIndex(), new ProtectionDomain(cs, null));
+			return defineClass(name, buf.list, 0, buf.wIndex(), protectionDomain);
 		} catch (Exception e) {
 			throw new ClassNotFoundException("failed", e);
 		} finally {

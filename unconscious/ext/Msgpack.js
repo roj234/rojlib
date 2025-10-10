@@ -1,8 +1,8 @@
 /*! MsgPack encode & decode.
  *  Author: Roj234 @ 2025/04/24, All rights reserved
  */
-// Usage: MsgPack.encode(object)
-// Usage: MsgPack.decode(array | TypedArray | Buffer | DataView, {
+// Usage: MsgPack.encodeMsg(object)
+// Usage: MsgPack.decodeMsg(array | TypedArray | Buffer | DataView, {
 //     bigint: false,
 //     multiple: false,
 //     decodeExt: (dataView, type: number, offset: number, length: number) => any | exception,
@@ -29,7 +29,7 @@
  * @param {MsgpackDecodeOptions} [options=null]
  * @returns any | any[]
  */
-function decode(input, options) {
+function decodeMsg(input, options) {
 	if (Array.isArray(input)) input = new Uint8Array(input);
 	if (ArrayBuffer.isView(input) || (typeof Buffer !== "undefined" && Buffer.isBuffer(input))) input = new DataView(input.buffer, input.byteOffset, input.byteLength);
 	else if (!input instanceof DataView) throw new Error("不支持的输入: "+input);
@@ -38,12 +38,12 @@ function decode(input, options) {
 		const arr = [];
 		let offset = 0, result;
 		while (offset < input.byteLength) {
-			[result, offset] = decodeRaw(input, offset, options);
+			[result, offset] = decodeRawMsg(input, offset, options);
 			arr.push(result);
 		}
 		return arr;
 	} else {
-		return decodeRaw(input, 0, options)[0];
+		return decodeRawMsg(input, 0, options)[0];
 	}
 }
 
@@ -61,7 +61,7 @@ for (let i = 0xC0; i <= 0xFF; i++) LOOKUP[i] = i;
  * @param {MsgpackDecodeOptions} [options=null] extra options like no_schema
  * @returns {[any, number]} the result
  */
-function decodeRaw(dataView, offset, options) {
+function decodeRawMsg(dataView, offset, options) {
 	const bigint = options?.bigint ?? false;
 	const decodeExtUser = options?.decodeExt ?? ((dataView, type, offset, length) => {
 		//return data;
@@ -353,7 +353,7 @@ let obdv;
  * @param {any} data
  * @returns {Uint8Array}
  */
-function encode(data) {
+function encodeMsg(data) {
 	const pow32 = 0x100000000;	 // 2^32
 
 	let offset = 0;
@@ -650,4 +650,4 @@ function decodeUtf8(bytes, i, length) {
 	return str;
 }
 
-export {encode, decode, decodeRaw}
+export {encodeMsg, decodeMsg, decodeRawMsg}

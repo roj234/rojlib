@@ -2,6 +2,7 @@ package roj.plugins.llm;
 
 import roj.collect.ArrayList;
 import roj.config.ConfigMaster;
+import roj.config.mapper.ObjectMapper;
 import roj.http.HttpRequest;
 import roj.http.HttpResponse;
 import roj.text.CharList;
@@ -29,7 +30,9 @@ public class ChatTask {
 	public transient int totalInputTokens, totalOutputTokens;
 	private transient int initInputTokens;
 
-	public static ChatTask fromFile(File file) throws IOException, ParseException {return ConfigMaster.fromExtension(file).readObject(file, ChatTask.class).resolve();}
+	public static ChatTask fromFile(File file) throws IOException, ParseException {
+		return ObjectMapper.SAFE.read(file, ChatTask.class, ConfigMaster.fromExtension(file)).resolve();
+	}
 	public ChatTask() {}
 
 	private transient OAIChatCompletionRequest request;
@@ -41,9 +44,8 @@ public class ChatTask {
 	}
 	public ChatTask reset() {return resolve();}
 
-	@SuppressWarnings("unchecked")
-	static <T> DynByteBuf encode(T o) throws IOException {return ConfigMaster.JSON.writeObject(/*(Serializer<T>) SerializerFactory.POOLED.serializer(o.getClass()), */o, DynByteBuf.allocate());}
-	static <T> T decode(HttpResponse client, Class<T> response) throws IOException, ParseException {return ConfigMaster.JSON.readObject(client.stream(), response);}
+	static <T> DynByteBuf encode(T o) throws IOException {return ObjectMapper.SAFE.write(ConfigMaster.JSON, o, DynByteBuf.allocate());}
+	static <T> T decode(HttpResponse client, Class<T> response) throws IOException, ParseException {return ObjectMapper.SAFE.read(client.stream(), response, ConfigMaster.JSON);}
 
 	public String eval(String input) throws IOException {
 		List<OAIChatCompletionRequest.Message> messages = request.messages;

@@ -5,17 +5,22 @@ import roj.asm.ClassNode;
 import roj.asm.insn.CodeWriter;
 import roj.asm.type.Type;
 import roj.asmx.AnnotationRepo;
+import roj.asmx.AnnotationRepoManager;
 import roj.asmx.Context;
 import roj.asmx.Transformer;
+import roj.asmx.launcher.boot.Main;
 import roj.ci.annotation.IndirectReference;
 import roj.collect.ArrayList;
 import roj.collect.TrieTreeSet;
 import roj.crypt.jar.JarVerifier;
+import roj.io.CorruptedInputException;
 import roj.io.IOUtil;
 import roj.reflect.Bypass;
 import roj.reflect.Reflection;
 import roj.text.URICoder;
 import roj.text.logging.Level;
+import roj.text.logging.LogAppender;
+import roj.text.logging.LogContext;
 import roj.text.logging.Logger;
 import roj.util.ByteList;
 import roj.util.Helpers;
@@ -26,8 +31,9 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URL;
+import java.security.CodeSigner;
 import java.security.CodeSource;
-import java.security.GeneralSecurityException;
+import java.security.ProtectionDomain;
 import java.util.Arrays;
 import java.util.Enumeration;
 import java.util.HashMap;
@@ -67,7 +73,11 @@ public class Loader implements ExceptionalFunction<String, Class<?>, ClassNotFou
 		return s;
 	}
 
-	public static void init(String[] args) {
+	public static void init(String[] args) throws Exception {
+		LOGGER.context().appender(LogAppender.appendTo(IOUtil.getSharedCharBuf()));
+		LOGGER.fatal("");
+		LOGGER.context().appenders((LogContext.Appender[]) null);
+
 		if (addClasspaths()) {
 			LOGGER.warn("classpath复制失败，可能会出现奇怪问题");
 
@@ -139,7 +149,13 @@ public class Loader implements ExceptionalFunction<String, Class<?>, ClassNotFou
 		c.insn(RETURN);
 		c.finish();
 
+		AnnotationRepoManager.setAnnotations(MAIN, instance.getAnnotations());
+
 		Main.main = (Runnable) Reflection.createInstance(Loader.class, init);
+
+		// jarVerifier依赖很多库，例如Tokenizer和BufferPool等，它们可能需要ASM优化器处理；
+		// 在bootstrap期间，系统只信任Loader所在的jar
+		instance.initJarVerifier();
 	}
 	private static boolean addClasspaths() {
 		H fn;
@@ -192,7 +208,7 @@ public class Loader implements ExceptionalFunction<String, Class<?>, ClassNotFou
 	}
 
 	private final List<TinyArchive> archives = new ArrayList<>();
-	private final List<CodeSource> locations = new ArrayList<>();
+	private final List<ProtectionDomain> locations = new ArrayList<>();
 	private final List<JarVerifier> verifiers = new ArrayList<>();
 
 	private INameTransformer nameTransformer;
@@ -202,7 +218,7 @@ public class Loader implements ExceptionalFunction<String, Class<?>, ClassNotFou
 	private final TrieTreeSet loadExcept = new TrieTreeSet();
 	public Loader() {
 		transformExcept.addAll(Arrays.asList("roj.asm.", "roj.asmx.launcher.", "roj.reflect."));
-		loadExcept.addAll(Arrays.asList("java.", "javax."));
+		loadExcept.addAll(Arrays.asList("java.", "javax.", "roj.asmx.launcher.boot."));
 		new Context(null);
 	}
 
@@ -277,37 +293,39 @@ public class Loader implements ExceptionalFunction<String, Class<?>, ClassNotFou
 			}
 		}
 
+		if (loadExcept.strStartsWithThis(newName)) return Main.PARENT.loadClass(newName);
+
 		var buf = new ByteList();
 		buf.ensureCapacity(4096);
 
-		CodeSource cs;
+		ProtectionDomain pd;
 		try {
 			name/*File Name*/ = newName.replace('.', '/').concat(".class");
 
 			found: {
-				for (int i = 0; i < archives.size(); i++) {
+				for (int i = 0; i < locations.size(); i++) {
 					var za = archives.get(i);
 					if (za.get(name, buf)) {
-						cs = locations.get(i);
+						pd = locations.get(i);
 						var jv = verifiers.get(i);
 						if (jv != null) {
 							jv.verify(name, buf);
-							addPackage(cs.getLocation(), name, jv);
+							addPackage(pd.getCodeSource().getLocation(), name, jv);
 						}
 						break found;
 					}
 				}
 
 				var in = MAIN.getInitialResource(name);
-				if (in == null || loadExcept.strStartsWithThis(newName)) return Main.PARENT.loadClass(newName);
+				if (in == null) return Main.PARENT.loadClass(newName);
 
 				buf.readStreamFully(in);
-				cs = Main.class.getProtectionDomain().getCodeSource();
+				pd = Loader.class.getProtectionDomain();
 			}
 
 			if (!transformExcept.strStartsWithThis(newName))
 				transform(name, newName.replace('.', '/'), buf);
-			return MAIN.defineClassA(newName, buf.list, 0, buf.wIndex(), cs);
+			return MAIN.defineClassA(newName, buf.list, 0, buf.wIndex(), pd);
 		} catch (ClassNotFoundException e) {
 			throw e;
 		} catch (Throwable e) {
@@ -324,10 +342,11 @@ public class Loader implements ExceptionalFunction<String, Class<?>, ClassNotFou
 
 		List<Transformer> ts = transformers;
 		var reentrant = IS_TRANSFORMING.get();
-		if (reentrant[0]++ > 1) {
-			LOGGER.warn("可能正在循环依赖{}", transformedName);
+		if (reentrant[0] > 0) {
+			LOGGER.warn("类转换器可能循环依赖{}", transformedName);
 			return;
 		}
+		reentrant[0]++;
 
 		for (int i = 0; i < ts.size(); i++) {
 			try {
@@ -355,13 +374,14 @@ public class Loader implements ExceptionalFunction<String, Class<?>, ClassNotFou
 		}
 	}
 
+	private int manifestIndex;
 	public Manifest getManifest() {
-		for (int i = 0; i < archives.size(); i++) {
-			var jv = verifiers.get(i);
+		for (; manifestIndex < locations.size(); manifestIndex++) {
+			var jv = verifiers.get(manifestIndex);
 			if (jv != null) return jv.getManifest();
 
-			var zf = archives.get(i);
-			try (var in = zf.get("META-INF/MANIFEST.MF")) {
+			var zf = archives.get(manifestIndex);
+			try (var in = zf.getInputStream("META-INF/MANIFEST.MF")) {
 				if (in != null) return new Manifest(in);
 			} catch (IOException ignored) {}
 		}
@@ -392,7 +412,7 @@ public class Loader implements ExceptionalFunction<String, Class<?>, ClassNotFou
 			var zf = archives.get(i);
 			InputStream in = null;
 			try {
-				in = zf.get(name);
+				in = zf.getInputStream(name);
 			} catch (IOException ignored) {}
 			if (in != null) {
 				var jv = verifiers.get(i);
@@ -409,55 +429,49 @@ public class Loader implements ExceptionalFunction<String, Class<?>, ClassNotFou
 	public List<Transformer> getTransformers() {return transformers;}
 	public void addTransformerExclusion(String toExclude) {transformExcept.add(toExclude);}
 
-	public void addClasspath(URL url) throws IOException {
+	private void addClasspath(URL url) throws IOException {
 		File file = new File(URICoder.decodeURI(url.getPath().substring(1)));
 		var zf = new TinyArchive(file);
-		if (file.getName().endsWith(".roar")) {
-			zf.readRoar();
-		} else {
-			zf.readZip();
-		}
-
-		JarVerifier verifier = JarVerifier.create(zf, file);
-		if (verifier != null) {
-			try {
-				verifier.ensureManifestValid();
-			} catch (GeneralSecurityException e) {
-				Helpers.athrow(e);
-			}
-
-			locations.add(verifier.getCodeSource());
-			verifiers.add(verifier);
-		} else {
-			verifiers.add(null);
-			locations.add(null);
-		}
+		zf.reload();
 		archives.add(zf);
+		ProtectionDomain mypd = Loader.class.getProtectionDomain();
+		locations.add(url.toString().equals(mypd.getCodeSource().getLocation().toString()) ? mypd : null);
+		verifiers.add(null);
 	}
 
-	private AnnotationRepo repo;
-	public AnnotationRepo getAnnotations() throws IOException {
-		if (repo == null) {
-			repo = new AnnotationRepo();
-			if (archives.isEmpty()) {
-				try {
-					Enumeration<URL> resources = MAIN.getResources("META-INF/annotations.repo");
-					while (resources.hasMoreElements()) {
-						URL resource = resources.nextElement();
-						try (var in = resource.openStream()) {
-							repo.deserialize(IOUtil.getSharedByteBuf().readStreamFully(in));
-						}
+	private void initJarVerifier() throws IOException {
+		for (int i = 0; i < archives.size(); i++) {
+			var zf = archives.get(i);
+			JarVerifier verifier = JarVerifier.create(zf, zf.file);
+			if (verifier != null && verifier.getTrustLevel() == JarVerifier.TRUST_LEVEL_INVALID_SIGN) {
+				throw new CorruptedInputException("Signature verification failure");
+			}
+			locations.set(i, new ProtectionDomain(verifier == null ? new CodeSource(zf.file.toURI().toURL(), (CodeSigner[]) null) : verifier.getCodeSource(), null));
+			verifiers.set(i, verifier);
+		}
+	}
+
+	private AnnotationRepo getAnnotations() throws IOException {
+		var repo = new AnnotationRepo();
+		if (archives.isEmpty()) {
+			try {
+				Enumeration<URL> resources = MAIN.getResources("META-INF/annotations.repo");
+				while (resources.hasMoreElements()) {
+					URL resource = resources.nextElement();
+					try (var in = resource.openStream()) {
+						repo.deserialize(IOUtil.getSharedByteBuf().readStreamFully(in));
 					}
-				} catch (Exception e) {
-					Helpers.athrow(e);
 				}
-			} else {
-				repo = new AnnotationRepo();
-				for (var archive : archives) {
-					repo.loadCacheOrAdd(archive);
-				}
+			} catch (Exception e) {
+				Helpers.athrow(e);
+			}
+		} else {
+			repo = new AnnotationRepo();
+			for (var archive : archives) {
+				repo.loadCacheOrAdd(archive);
 			}
 		}
+
 		return repo;
 	}
 }

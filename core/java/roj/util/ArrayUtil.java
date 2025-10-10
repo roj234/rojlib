@@ -2,6 +2,7 @@ package roj.util;
 
 import roj.compiler.plugins.annotations.Attach;
 import roj.reflect.Bypass;
+import roj.reflect.Telescope;
 
 import java.util.*;
 import java.util.function.ToIntFunction;
@@ -13,14 +14,13 @@ import static roj.reflect.Unsafe.U;
  * @since 2020/10/15 0:43
  */
 public final class ArrayUtil {
+	public static byte[] newUninitializedByteArray(int size) {return (byte[]) U.allocateUninitializedArray(byte.class, size);}
+	public static char[] newUninitializedCharArray(int size) {return (char[]) U.allocateUninitializedArray(char.class, size);}
+	public static int[] newUninitializedIntArray(int size) {return (int[]) U.allocateUninitializedArray(int.class, size);}
+	public static long[] newUninitializedLongArray(int size) {return (long[]) U.allocateUninitializedArray(long.class, size);}
+
 	interface H {
-		H SCOPED_MEMORY_ACCESS = init();
-		private static H init() {
-			try {
-				return Bypass.builder(H.class).delegate(Class.forName("jdk.internal.util.ArraysSupport"), "vectorizedMismatch").build();
-			} catch (Throwable ignored) {}
-			return null;
-		}
+		H INSTANCE = Bypass.builder(H.class).delegate(Telescope.findClass("jdk.internal.util.ArraysSupport"), "vectorizedMismatch").build();
 
 		int vectorizedMismatch(Object a, long aOffset,
 							   Object b, long bOffset,
@@ -75,10 +75,10 @@ public final class ArrayUtil {
 							  int log2ArrayIndexScale) {
 		int i = 0;
 		// 当null时也就意味着是Java8 ... 无法确定处理器是否支持不对齐访问呢
-		if (length > (8 >> log2ArrayIndexScale) - 1 && H.SCOPED_MEMORY_ACCESS != null) {
+		if (length > (8 >> log2ArrayIndexScale) - 1 && H.INSTANCE != null) {
 			if (U.getByte(a, aOffset) != U.getByte(b, bOffset))
 				return 0;
-			i = H.SCOPED_MEMORY_ACCESS.vectorizedMismatch(a, aOffset, b, bOffset, length, log2ArrayIndexScale);
+			i = H.INSTANCE.vectorizedMismatch(a, aOffset, b, bOffset, length, log2ArrayIndexScale);
 			if (i >= 0) return i;
 			i = length - ~i;
 		}

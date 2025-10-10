@@ -7,7 +7,7 @@ import roj.concurrent.FastThreadLocal;
 import roj.concurrent.SegmentReadWriteLock;
 import roj.concurrent.Timer;
 import roj.optimizer.FastVarHandle;
-import roj.reflect.Handles;
+import roj.reflect.Telescope;
 import roj.text.CharList;
 import roj.text.logging.Logger;
 import roj.util.*;
@@ -17,8 +17,6 @@ import java.lang.invoke.VarHandle;
 import java.lang.ref.WeakReference;
 import java.nio.ByteBuffer;
 
-import static roj.reflect.Unsafe.U;
-import static roj.reflect.Unsafe.fieldOffset;
 import static roj.text.TextUtil.scaledNumber1024;
 
 /**
@@ -38,10 +36,10 @@ public final class BufferPool {
 	public static final BufferPool UNPOOLED = new BufferPool(0,0,0,0,0,0,0,0);
 
 	private static final VarHandle
-		DIRECT_SHELL_LEN = Handles.lookup().findVarHandle(BufferPool.class, "directShellLen", int.class),
-		HEAP_SHELL_LEN = Handles.lookup().findVarHandle(BufferPool.class, "heapShellLen", int.class),
-		HEAP = Handles.lookup().findVarHandle(BufferPool.class, "heap", byte[].class),
-		DIRECT_REF = Handles.lookup().findVarHandle(BufferPool.class, "directRef", NativeMemory.class),
+		DIRECT_SHELL_LEN = Telescope.lookup().findVarHandle(BufferPool.class, "directShellLen", int.class),
+		HEAP_SHELL_LEN = Telescope.lookup().findVarHandle(BufferPool.class, "heapShellLen", int.class),
+		HEAP = Telescope.lookup().findVarHandle(BufferPool.class, "heap", byte[].class),
+		DIRECT_REF = Telescope.lookup().findVarHandle(BufferPool.class, "directRef", NativeMemory.class),
 		SHELL$ARRAY = MethodHandles.arrayElementVarHandle(Pooled[].class);
 
 	private static final Logger LOGGER = Logger.getLogger();
@@ -539,11 +537,12 @@ public final class BufferPool {
 		void _expand(int len, boolean backward);
 		void _clear();
 	}
+	@FastVarHandle
 	private static final class PooledDirectBuf extends DirectByteList.Slice implements Pooled {
-		private static final long POOL = fieldOffset(PooledDirectBuf.class, "pool");
-		private volatile Object pool;
+		private static final VarHandle POOL = Telescope.lookup().findVarHandle(PooledDirectBuf.class, "pool", Object.class);
+		private Object pool;
 		private int refCount;
-		@Override public Object pool(Object p1) { return U.getAndSetReference(this, POOL, p1); }
+		@Override public Object pool(Object p1) { return POOL.getAndSet(this, p1); }
 
 		private Bitmap bitmap;
 		@Override public Bitmap page() { return bitmap; }
@@ -569,12 +568,12 @@ public final class BufferPool {
 
 		public NativeMemory memory() { return nm; }
 	}
+	@FastVarHandle
 	private static final class PooledHeapBuf extends ByteList.Slice implements Pooled {
-		private static final long POOL = fieldOffset(PooledHeapBuf.class, "pool");
-		private volatile Object pool;
+		private static final VarHandle POOL = Telescope.lookup().findVarHandle(PooledHeapBuf.class, "pool", Object.class);
+		private Object pool;
 		private int refCount;
-		@Override
-		public Object pool(Object p1) { return U.getAndSetReference(this, POOL, p1); }
+		@Override public Object pool(Object p1) { return POOL.getAndSet(this, p1); }
 
 		private Bitmap bitmap;
 		@Override public Bitmap page() { return bitmap; }

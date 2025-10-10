@@ -73,7 +73,8 @@ public final class McDiffServer {
 		long myMem = (1L<<24) * affinity;
 		System.out.println("Allocating "+TextUtil.scaledNumber1024(myMem)+" of memory");
 		LZMA2Options opt = new LZMA2Options();
-		opt.setAsyncMode(1<<24, TaskPool.cpu(), affinity, new BufferPool(myMem,0,myMem, 0,0, 0, 10,0), LZMA2Options.ASYNC_DICT_NONE);
+		opt.setAsyncMode(1<<24, TaskPool.cpu(), affinity, true);
+		opt.getAsyncMan().setMemoryLimit(myMem);
 		QZWriter genericParallel = qzfw.newParallelWriter();
 		genericParallel.setCodec(new LZMA2(opt));
 
@@ -125,7 +126,7 @@ public final class McDiffServer {
 					if (in != null) {
 						// 加载会失败的，如果对于diff
 						prevRin = new RegionFile(tempFile = File.createTempFile("mcDiffChunkTemp", ".tmp"));
-						try (var in1 = new ByteInputStream(in)) {
+						try (var in1 = new XDataInputStream(in)) {
 							while (in1.isReadable()) {
 								int block = in1.readShort();
 								int timestamp = in1.readInt();

@@ -4,7 +4,7 @@ import org.jetbrains.annotations.NotNull;
 import roj.concurrent.Timer;
 import roj.concurrent.TimerTask;
 import roj.optimizer.FastVarHandle;
-import roj.reflect.Handles;
+import roj.reflect.Telescope;
 import roj.text.CharList;
 import roj.text.TextUtil;
 
@@ -30,9 +30,9 @@ public class EasyProgressBar extends ProgressBar {
 	private static final double STALE_DECAY_FACTOR = 15000; // ms for exponential decay (e.g., halves roughly every ~10s)
 
 	private static final VarHandle
-			DELTA = Handles.lookup().findVarHandle(EasyProgressBar.class, "delta", long.class),
-			COMPLETED = Handles.lookup().findVarHandle(EasyProgressBar.class, "completed", long.class),
-			TOTAL = Handles.lookup().findVarHandle(EasyProgressBar.class, "total", long.class);
+			DELTA = Telescope.lookup().findVarHandle(EasyProgressBar.class, "delta", long.class),
+			COMPLETED = Telescope.lookup().findVarHandle(EasyProgressBar.class, "completed", long.class),
+			TOTAL = Telescope.lookup().findVarHandle(EasyProgressBar.class, "total", long.class);
 
 	public EasyProgressBar() { this(""); }
 	public EasyProgressBar(String name) { super(name); this.unit = "it"; }
@@ -177,11 +177,17 @@ public class EasyProgressBar extends ProgressBar {
 			timeUnit = "d";
 		}
 
-		sb.append(" \u001B[92m").append(
-				displaySpeed < 1000
-				? TextUtil.toFixed(displaySpeed, 2)
-				: TextUtil.scaledNumber(Math.round(displaySpeed))
-		).append(unit).append('/').append(timeUnit);
+		sb.append(" \u001B[92m");
+		if (unit.equals("B")) {
+			sb.append(TextUtil.scaledNumber1024((long) displaySpeed));
+		} else {
+			sb.append(
+					displaySpeed < 1000
+					? TextUtil.toFixed(displaySpeed, 2)
+					: TextUtil.scaledNumber(Math.round(displaySpeed))
+			).append(unit);
+		}
+		sb.append('/').append(timeUnit);
 
 		if (total >= 0) {
 			sb.append(" \u001B[93mETA: \u001B[94m");

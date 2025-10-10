@@ -1,7 +1,6 @@
 package roj.asm;
 
 import org.jetbrains.annotations.NotNull;
-import roj.RojLib;
 import roj.asm.attr.*;
 import roj.asm.cp.ConstantPool;
 import roj.asm.cp.CstUTF;
@@ -12,7 +11,6 @@ import roj.asm.type.Type;
 import roj.asm.type.TypeHelper;
 import roj.collect.ArrayList;
 import roj.text.CharList;
-import roj.text.logging.Logger;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
 import roj.util.Helpers;
@@ -68,10 +66,6 @@ public final class MethodNode extends MemberNode {
 	private Type out;
 
 	public MethodNode parsed(ConstantPool cp) {
-		if (RojLib.ASM_DEBUG && (getAttribute("Code") == null) == (0 == (modifier & (Opcodes.ACC_ABSTRACT | Opcodes.ACC_NATIVE)))) {
-			Logger.FALLBACK.warn("方法 "+owner+'.'+name+desc+" 缺少Code属性.");
-		}
-
 		if (attributes != null) {
 			Attribute.parseAll(this, cp, attributes, Signature.METHOD);
 		}
@@ -123,7 +117,7 @@ public final class MethodNode extends MemberNode {
 			desc = Type.getMethodDescriptor(in, out, desc.getClass() == String.class ? desc.toString() : null);
 			return desc.toString();
 		}
-		return desc.getClass() == CstUTF.class ? ((CstUTF) desc).str() : desc.toString();
+		return desc();
 	}
 	public void rawDesc(String desc) {
 		this.desc = Objects.requireNonNull(desc);
@@ -131,10 +125,14 @@ public final class MethodNode extends MemberNode {
 		out = null;
 	}
 
+	private String desc() {
+		Object desc1 = desc;
+		return desc1.getClass() == CstUTF.class ? ((CstUTF) desc1).str() : desc1.toString();
+	}
 	public List<Type> parameters() {
 		if (in == null) {
 			ArrayList<Type> in = AsmCache.getInstance().methodTypeTmp();
-			out = Type.getArgumentTypes(rawDesc(), in);
+			out = Type.getArgumentTypes(desc(), in);
 			this.in = new ArrayList<>(in);
 		}
 		return in;

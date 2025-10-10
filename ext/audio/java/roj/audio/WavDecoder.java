@@ -4,7 +4,7 @@ import org.jetbrains.annotations.Nullable;
 import roj.audio.tag.APETag;
 import roj.collect.HashMap;
 import roj.io.Finishable;
-import roj.io.ByteInputStream;
+import roj.io.XDataInputStream;
 import roj.io.source.Source;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
@@ -107,7 +107,7 @@ public class WavDecoder implements AudioDecoder {
 						APETag tag = new APETag();
 
 						in.seek(in.length() - 8);
-						var mdi = ByteInputStream.wrap(in.asInputStream());
+						var mdi = XDataInputStream.wrap(in.asInputStream());
 						try {
 							tag.parseTag(mdi, false);
 							return tag;

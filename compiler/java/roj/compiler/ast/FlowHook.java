@@ -59,7 +59,7 @@ class FlowHook {
 			//  当它跳转到代码块外部时，才需要执行finally
 			//   外部: Label未定义（后） or 在regionStart之前
 			//   同时, goto target替换成ldc + switch -> target
-			if (target.isValid() && target.compareTo(regionStart) >= 0) continue;
+			if (target.isBound() && target.compareTo(regionStart) >= 0) continue;
 
 			var fork = cw.fork();
 			finallyEmitter.accept(fork);

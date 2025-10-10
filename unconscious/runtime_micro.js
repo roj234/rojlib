@@ -1,14 +1,11 @@
-import {ID_CLASSLIST, ID_EVENTHANDLER, ID_NAMESPACE, ID_STYLELIST} from "./constant.js";
-
-/**
- * 开发时获取带名称的符号
- * @param name 符号名称
- * @returns {symbol}
- */
-function debugSymbol(name) {
-	return import.meta.env.DEV?Symbol(name):Symbol();
-}
-export {debugSymbol};
+import {
+	ID_CLASSLIST,
+	ID_DANGEROUSLY_SET_INNERHTML,
+	ID_EVENTHANDLER,
+	ID_NAMESPACE,
+	ID_STYLELIST,
+	isPureObject
+} from "./constant.js";
 
 /**
  * 创建 DOM 元素
@@ -17,9 +14,9 @@ export {debugSymbol};
  * @param {...*} children - 子元素列表（支持字符串、节点、响应式变量）
  * @returns {HTMLElement} 创建的 DOM 元素
  */
-function createElement(type, props, ...children) {
+export function createElement(type, props, ...children) {
 	// 创建元素
-	const element = document.createElementNS(props && props[ID_NAMESPACE] || "http://www.w3.org/1999/xhtml", type);
+	const element = document.createElementNS(props?.[ID_NAMESPACE] || "http://www.w3.org/1999/xhtml", type);
 
 	// 设置属性
 	if (props) {
@@ -38,7 +35,7 @@ function createElement(type, props, ...children) {
  * @param {...*} children - 子元素列表（支持字符串、节点、响应式变量）
  * @returns {DocumentFragment} 文档片段对象
  */
-function createFragment(...children) {
+export function createFragment(...children) {
 	const fragment = document.createDocumentFragment();
 	appendChildren(fragment, children);
 	return fragment;
@@ -49,7 +46,7 @@ function createFragment(...children) {
  * @param {Element} parent - 父元素
  * @param {Array} children - 子元素列表（支持字符串、节点、响应式变量）
  */
-function appendChildren(parent, children) {
+export function appendChildren(parent, children) {
 	for (const child of children) {
 		if (child == null) continue;
 		parent.appendChild(createChildNode(child));
@@ -72,28 +69,34 @@ function createChildNode(child) {
  * @param {string|Reactive<string>} value
  */
 function setAttribute(element, key, value) {
-	// 调试属性
-	if (import.meta.env.DEV && key.startsWith("__")) {
-		element[key] = value;
+	switch (key[0]) {
+		case "_":
+			element[key] = value;
 		return;
-	}
+		case ID_DANGEROUSLY_SET_INNERHTML:
+			element.innerHTML = value;
+		return;
+		case ID_STYLELIST:
+			element.style[key.substring(ID_STYLELIST.length)] = value;
+		return;
+		case ID_CLASSLIST:
+			element.classList.toggle(key.substring(ID_CLASSLIST.length), value);
+		return;
+		case ID_EVENTHANDLER:
+			let attrib; // once, capture, passive等
+			if (Array.isArray(value))
+				[value, attrib] = value;
 
-	if (key.startsWith(ID_STYLELIST)) {
-		element.style[key.substring(ID_STYLELIST.length)] = value;
-	} else
-	if (key.startsWith(ID_CLASSLIST)) {
-		element.classList.toggle(key.substring(ID_CLASSLIST.length), value);
-	} else
-	if (key.startsWith(ID_EVENTHANDLER)) {
-		let attrib; // once, capture, passive等
-		if (Array.isArray(value))
-			[value, attrib] = value;
-
-		element.addEventListener(key.substring(ID_EVENTHANDLER.length), value, attrib);
-	} else {
-		element.setAttribute(key, value);
+			element.addEventListener(key.substring(ID_EVENTHANDLER.length), value, attrib);
+		return;
+		case "s":
+			if (key === "style" && isPureObject(value)) {
+				Object.assign(element.style, value);
+				return;
+			}
+		break;
 	}
+	element.setAttribute(key, value);
 }
 
-export {createElement, createFragment, appendChildren};
-export {_left, _right, _middle, _button, _children, _prevent, _stop, _delegate} from './runtime_shared.js';
+export {_left, _right, _middle, _button, _children, _prevent, _stop, _delegate, debugSymbol} from './runtime_shared.js';

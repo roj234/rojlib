@@ -2,10 +2,9 @@ package roj.ui;
 
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Range;
-import roj.io.IOUtil;
 import roj.math.MathUtils;
 import roj.optimizer.FastVarHandle;
-import roj.reflect.Handles;
+import roj.reflect.Telescope;
 import roj.text.CharList;
 import roj.text.TextUtil;
 
@@ -22,7 +21,7 @@ public class ProgressBar implements AutoCloseable {
 
 	protected static final int BAR_DELAY = 40;
 	protected volatile long barTime;
-	protected static final VarHandle BAR_TIME = Handles.lookup().findVarHandle(ProgressBar.class, "barTime", long.class);
+	protected static final VarHandle BAR_TIME = Telescope.lookup().findVarHandle(ProgressBar.class, "barTime", long.class);
 
 	private boolean closed;
 
@@ -52,7 +51,7 @@ public class ProgressBar implements AutoCloseable {
 
 	private int spinnerFrame, prevAuxiliaryWidth;
 
-	public void setProgress(@Range(from = 0, to = 1) double progress) {
+	public synchronized void setProgress(@Range(from = 0, to = 1) double progress) {
 		progress = MathUtils.clamp(progress, 0, 1);
 
 		line.clear();
@@ -62,7 +61,7 @@ public class ProgressBar implements AutoCloseable {
 		else b.append(prefix);
 
 		// Pre-compute postfix to include its width in total prefix calculation for stability
-		var postfix = IOUtil.getSharedCharBuf();
+		var postfix = new CharList();
 		renderRight(postfix, progress);
 		int baseWidth = Tty.getStringWidth(b);
 		int postfixWidth = Tty.getStringWidth(postfix);
@@ -144,6 +143,8 @@ public class ProgressBar implements AutoCloseable {
 		}
 
 		render(b.append(postfix).append(Tty.reset));
+
+		postfix._free();
 	}
 
 	@NotNull

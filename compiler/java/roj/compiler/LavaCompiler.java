@@ -27,14 +27,17 @@ import roj.compiler.doc.JavadocProcessor;
 import roj.compiler.library.JarLibrary;
 import roj.compiler.library.Library;
 import roj.compiler.resolve.Resolver;
+import roj.concurrent.TaskGroup;
 import roj.io.IOUtil;
 import roj.reflect.Sandbox;
 import roj.reflect.Unsafe;
 import roj.text.ParseException;
 import roj.text.Token;
+import roj.ui.EasyProgressBar;
 import roj.util.ByteList;
 import roj.util.Helpers;
 import roj.util.TypedKey;
+import roj.util.function.ExceptionalRunnable;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -90,12 +93,14 @@ public class LavaCompiler extends Resolver implements Compiler {
 	 *
 	 * @param files 要编译的源文件列表
 	 * @return 成功编译后生成的类定义列表，如果编译失败则返回null
+	 * @implNote 如果不返回null，并且你想复用编译器实例，那么你必须手动清空它
 	 */
 	@SuppressWarnings("unchecked")
 	public @Nullable List<? extends ClassDefinition> compile(@MayMutate List<? extends CompileUnit> files) {
 		if (hasError) throw new IllegalStateException("hasError is true before compilation.");
 		try {
-			// TODO 未来支持并行编译时 必须让内部类在同一个线程上编译 这可以通过#addCompileUnit实现
+			if (CompileContext.get() == null) CompileContext.set(createContext());
+
 			for (int i = 0; i < files.size(); i++) {
 				try {
 					// 返回假如果不需要解析 (没有有意义的内容)
@@ -144,10 +149,125 @@ public class LavaCompiler extends Resolver implements Compiler {
 			return units;
 		} finally {
 			reset();
+			CompileContext.set(null);
 		}
 	}
+
+	private final ArrayList<CompileContext> parallelContexts = new ArrayList<>();
+	public synchronized void releaseContext(CompileContext ctx) {parallelContexts.add(ctx);}
+	public synchronized CompileContext retainContext() {
+		CompileContext r = parallelContexts.pop();
+		return r != null ? r : createContext();
+	}
+
+	@SuppressWarnings("unchecked")
+	public @Nullable List<? extends ClassDefinition> compile(@MayMutate List<? extends CompileUnit> files, TaskGroup group, EasyProgressBar prog) {
+		if (hasError) throw new IllegalStateException("hasError is true before compilation.");
+		try {
+			CompileContext ctx = retainContext();
+			for (CompileUnit unit : files) unit.setContext(ctx);
+			releaseContext(ctx);
+
+			var taskForFirstPass = split(Helpers.cast(files), 1000);
+
+			prog.setTotal(taskForFirstPass.size());
+			prog.setName("阶段1: 结构解析");
+
+			ExceptionalRunnable<Exception> cleanup = () -> {
+				CompileContext.remove();
+				prog.increment();
+			};
+			try {
+				group.executeAll(taskForFirstPass, CompileUnit::S1parseStruct, cleanup).await();
+			} catch (Exception e) {
+				e.printStackTrace();
+				hasError = true;
+			}
+			if (hasError()) return null;
+
+			var taskSecondPass = split(parsables, 1000);
+
+			prog.end("完成");
+			prog.setTotal(taskSecondPass.size());
+			prog.setName("阶段2.1: 名称解析");
+
+			group.executeAll(taskSecondPass, CompileUnit::S2p1resolveName, cleanup).await();
+			if (hasError()) return null;
+
+			prog.end("完成");
+			prog.setTotal(taskSecondPass.size());
+			prog.setName("阶段2.2: 类型解析");
+
+			group.executeAll(taskSecondPass, CompileUnit::S2p2resolveType, cleanup).await();
+			if (hasError()) return null;
+
+			prog.end("完成");
+			prog.setTotal(taskSecondPass.size());
+			prog.setName("阶段2.3: 引用解析");
+
+			group.executeAll(taskSecondPass, CompileUnit::S2p3resolveMethod, cleanup).await();
+			if (hasError()) return null;
+
+			prog.end("完成");
+			prog.setTotal(taskSecondPass.size());
+			prog.setName("阶段3: 注解和静态常量");
+
+			try {
+				group.executeAll(taskSecondPass, CompileUnit::S3processAnnotation, cleanup).await();
+			} catch (Exception e) {
+				e.printStackTrace();
+				hasError = true;
+			}
+			if (hasError()) return null;
+
+			prog.end("完成");
+			prog.setTotal(taskSecondPass.size());
+			prog.setName("阶段4: 方法");
+
+			try {
+				group.executeAll(taskSecondPass, CompileUnit::S4parseCode, cleanup).await();
+			} catch (Exception e) {
+				e.printStackTrace();
+				hasError = true;
+			}
+			if (hasError()) return null;
+
+			prog.end("完成");
+			prog.setTotal(taskSecondPass.size());
+			prog.setName("阶段5: 后处理");
+
+			group.executeAll(taskSecondPass, CompileUnit::S5serialize, cleanup).await();
+
+			parsables.addAll((Collection<? extends CompileUnit>) Helpers.cast(getGeneratedClasses()));
+			return parsables;
+		} finally {
+			reset();
+		}
+	}
+	private static @NotNull List<List<CompileUnit>> split(List<CompileUnit> files, int threshold) {
+		List<List<CompileUnit>> tasks = new ArrayList<>((files.size()+threshold-1)/threshold);
+
+		int i = 0;
+		while (i < files.size()) {
+			int len = Math.min(files.size(), i+threshold);
+
+			// 内部类必须和父类在同一线程上编译
+			// 这是一个没有考虑边界情况的检查，但是应该可用
+			var unit = files.get(len-1);
+			while (unit._parent != unit && len < files.size()) {
+				unit = files.get(len++);
+			}
+
+			tasks.add(files.subList(i, len));
+			i = len;
+		}
+		return tasks;
+	}
+
 	public Collection<ClassNode> getGeneratedClasses() {return generated.classes.values();}
 	public void reset() {
+		if (hasError) parsables.clear();
+
 		//extraInfos.removeIf(v -> v.owner instanceof CompileUnit);
 		for (CompileUnit unit : compileUnits) extraInfos.removeKey(unit);
 		compileUnits.clear();
@@ -157,7 +277,8 @@ public class LavaCompiler extends Resolver implements Compiler {
 		generated.module = null;
 	}
 
-	public synchronized void addCompileUnit(CompileUnit unit) {
+	// synchronized in CompileContext#addCompileUnit
+	public void addCompileUnit(CompileUnit unit) {
 		var existing = compileUnits.putIfAbsent(unit.name(), unit);
 		if (existing != null) throw new IllegalStateException("重复的编译单位: "+unit.name());
 		parsables.add(unit);
@@ -277,6 +398,8 @@ public class LavaCompiler extends Resolver implements Compiler {
 			File cache = getCacheDirectory("annotations$"+Helpers.sha1Hash(lib.jar.source().toString())+".repo");
 			if (cache != null) {
 				if (cache.isFile()) {
+					if (cache.length() == 0) return;
+
 					try (var in = new FileInputStream(cache)) {
 						if (annotations.deserialize(IOUtil.getSharedByteBuf().readStreamFully(in))) {
 							return;
@@ -286,15 +409,17 @@ public class LavaCompiler extends Resolver implements Compiler {
 					}
 				}
 
-				if (lib.jar.getEntry(AnnotationRepo.CACHE_NAME) == null) {
+				if (lib.jar.getEntry(AnnotationRepo.CACHE_PATH) == null) {
 					var repo = new AnnotationRepo();
 					try (var fos = new FileOutputStream(cache)) {
 						repo.add(lib.jar);
-						ByteList buf = IOUtil.getSharedByteBuf();
-						repo.serialize(buf);
-						buf.writeToStream(fos);
+						if (!repo.getAnnotations().isEmpty()) {
+							ByteList buf = IOUtil.getSharedByteBuf();
+							repo.serialize(buf);
+							buf.writeToStream(fos);
 
-						annotations.deserialize(buf);
+							annotations.deserialize(buf);
+						}
 						return;
 					} catch (Exception e) {
 						debugLogger().error("Failed to save annotation cache", e);
@@ -308,7 +433,8 @@ public class LavaCompiler extends Resolver implements Compiler {
 			}
 		} else {
 			for (String name : library.indexedContent()) {
-				annotations.add(library.get(name));
+				ClassNode node = library.get(name);
+				if (node != null) annotations.add(node);
 			}
 		}
 	}
@@ -319,7 +445,7 @@ public class LavaCompiler extends Resolver implements Compiler {
 			processors.computeIfAbsent(annotation, Helpers.fnArrayList()).add(processor);
 		}
 
-		if (processor.acceptClasspath()) {
+		if (processor.readClasspath()) {
 			getClasspathAnnotations();
 			for (String annotation : processor.acceptedAnnotations()) {
 				for (AnnotatedElement element : annotations.annotatedBy(annotation)) {

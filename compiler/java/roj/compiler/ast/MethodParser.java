@@ -16,7 +16,10 @@ import roj.collect.ArrayList;
 import roj.collect.HashMap;
 import roj.collect.HashSet;
 import roj.collect.*;
-import roj.compiler.*;
+import roj.compiler.CompileContext;
+import roj.compiler.CompileUnit;
+import roj.compiler.LavaCompiler;
+import roj.compiler.LavaTokenizer;
 import roj.compiler.api.AStatementParser;
 import roj.compiler.api.Compiler;
 import roj.compiler.api.SwitchableType;
@@ -196,7 +199,7 @@ public final class MethodParser {
 
 		cw.insn(ALOAD_1);
 		cw.invokeV(RETURNSTACK_TYPE, "getI", "()I");
-		cw.addSegment(generatorEntry = SwitchBlock.ofSwitch(TABLESWITCH));
+		generatorEntry = cw.tableSwitch();
 
 		// INIT
 		generatorEntry.branch(0, generatorEntry.def = cw.label());
@@ -278,11 +281,9 @@ public final class MethodParser {
 		int lvtSize = varMapper.map();
 		//cw.visitSize(0, Math.max(lvtSize, paramSize));
 
-		if (!DebugSetting.DisableFrameVisitor)
 		cw.computeFrames(file.version > ClassNode.JavaVersion(6)
 				? FrameVisitor.COMPUTE_FRAMES| FrameVisitor.COMPUTE_SIZES
 				: FrameVisitor.COMPUTE_SIZES);
-		else cw.visitSizeMax(10,10);
 	}
 	//endregion
 	/**
@@ -470,7 +471,7 @@ public final class MethodParser {
 	 * Unreachable statement检测
 	 */
 	private byte sectionFlag;
-	private static final byte SF_BLOCK = 1, SF_SWITCH = 2, SF_FOREACH = 4;
+	private static final byte SF_BLOCK = 1, SF_SWITCH = 2, SF_FOREACH_VAR_DECL = 4;
 
 	/**
 	 * 好点的代码块
@@ -977,7 +978,7 @@ public final class MethodParser {
 					for (int i = 0; i < breakHook.size(); i++) {
 						var segmentId = breakHook.get(i);
 						Label target = ((JumpTo) cw.getSegment(segmentId)).target;
-						if (target.isValid() && target.compareTo(tryBegin) >= 0) continue;
+						if (target.isBound() && target.compareTo(tryBegin) >= 0) continue;
 
 						int _branchId = breakHookId.getOrDefault(target, 0);
 						if (_branchId == 0) breakHookId.putInt(target, _branchId = procedureId++);
@@ -1022,9 +1023,8 @@ public final class MethodParser {
 				done:
 				if (finallyCanComplete) {
 					if (breakHookId != null) {
-						var segment = SwitchBlock.ofSwitch(TABLESWITCH);
 						cw.load(procedureIdVar);
-						cw.addSegment(segment);
+						var segment = cw.tableSwitch();
 
 						segment.def = cw.label();
 						cw.load(exc);
@@ -1395,10 +1395,11 @@ public final class MethodParser {
 	// region 条件判断: if / generic-condition
 	private void _if(Scope imLabel) throws ParseException {
 		Label ifFalse = condition(null, 0);
+		int hint = constantHint;
 
 		visMap.enter(imLabel);
 
-		if (constantHint < 0) skipBlockOrStatement();
+		if (hint < 0) skipBlockOrStatement();
 		else {
 			blockOrStatement();
 			visMap.orElse();
@@ -1411,7 +1412,7 @@ public final class MethodParser {
 			cw.label(ifFalse);
 		} else {
 			Label end;
-			if (constantHint == 0 && cw.isContinuousControlFlow()) {
+			if (hint == 0 && cw.isContinuousControlFlow()) {
 				cw.jump(end = new Label());
 			} else {
 				end = null;
@@ -1419,7 +1420,7 @@ public final class MethodParser {
 
 			// if goto else goto 由MethodWriter处理
 			cw.label(ifFalse);
-			if (constantHint > 0) skipBlockOrStatement();
+			if (hint > 0) skipBlockOrStatement();
 			else {
 				blockOrStatement();
 				visMap.orElse();
@@ -1451,7 +1452,7 @@ public final class MethodParser {
 		} else {
 			Expr node = expr.resolve(ctx);
 			if (node.isConstant() && node.type() == Type.BOOLEAN_TYPE) {
-				boolean flag = (boolean) node.constVal();
+				boolean flag = ((ConfigValue) node.constVal()).asBool();
 				constantHint = flag ? 1 : -1;
 
 				if (node.hasFeature(Expr.Feature.CONSTANT_WRITABLE)) {
@@ -1509,6 +1510,7 @@ public final class MethodParser {
 		boolean hasVar;
 		Label continueTo, breakTo, nBreakTo;
 		RawExpr execLast;
+		int hint = 0;
 
 		// for (var i = 0; i < len; i++) => keep i and len
 		var prevCol = varInLoop;
@@ -1517,9 +1519,9 @@ public final class MethodParser {
 		NoForEach:{
 		if (w.type() != semicolon) {
 			beginCodeBlock();
-			sectionFlag |= SF_FOREACH;
+			sectionFlag |= SF_FOREACH_VAR_DECL;
 			statement(w);
-			sectionFlag &= ~SF_FOREACH;
+			sectionFlag &= ~SF_FOREACH_VAR_DECL;
 			hasVar = true;
 
 			// region ForEach for (Vtype vname : expr) {}
@@ -1684,13 +1686,14 @@ public final class MethodParser {
 
 			continueTo = cw.label();
 			breakTo = condition(null, 1);
+			hint = constantHint;
 			execLast = ep.parse(ExprParser.STOP_RSB | ExprParser.SKIP_RSB);
 		}
 
 		visMap.enter(imLabel);
 
 		nBreakTo = CodeWriter.newLabel();
-		if (constantHint < 0) skipBlockOrStatement();
+		if (hint < 0) skipBlockOrStatement();
 		else {
 			loopBody(imLabel, continueTo, nBreakTo);
 			boolean runRest = cw.isContinuousControlFlow();
@@ -1956,7 +1959,7 @@ public final class MethodParser {
 								match = true;
 						} else {
 							// 防止用case (a = b)之类的搞坏VisMap
-							if (!node.hasFeature(Expr.Feature.STATIC_BEGIN) || (kind < 3 && (flags&32) == 0)) {
+							if (!node.hasFeature(Expr.Feature.STATIC_MEMBER_ACCESS) || (kind < 3 && (flags&32) == 0)) {
 								ctx.report(Kind.ERROR, "block.switch.nonConstant");
 								flags |= 32;
 							}
@@ -2084,9 +2087,8 @@ public final class MethodParser {
 		cw.load(switchVal);
 		cw.ldc(0);
 		cw.invokeDyn(tableIdx, "typeSwitch", "(Ljava/lang/Object;I)I");
-		SwitchBlock c = SwitchBlock.ofSwitch(TABLESWITCH);
+		SwitchBlock c = cw.tableSwitch();
 		c.def = node.breakTo; // 防止SwitchBlock#willJumpTo出现NPE，另外若是caseDefault==null，这个值也是真实的值
-		cw.addSegment(c);
 
 		var nullBranch = node.nullBranch;
 		if (nullBranch != null) {
@@ -2336,10 +2338,8 @@ public final class MethodParser {
 	}
 
 	private void linearMapping(Label breakTo, List<SwitchNode.Branch> branches) {
-		SwitchBlock sw = SwitchBlock.ofSwitch(TABLESWITCH);
+		SwitchBlock sw = cw.tableSwitch();
 		sw.def = breakTo;
-
-		cw.addSegment(sw);
 
 		int j = 0;
 		for (int i = 0; i < branches.size();) {
@@ -2401,10 +2401,8 @@ public final class MethodParser {
 			ctx.writeCast(cw, lookupTesting, Type.INT_TYPE);
 		}
 
-		var sw = SwitchBlock.ofAuto();
+		var sw = cw.autoSwitch();
 		sw.def = breakTo;
-
-		cw.addSegment(sw);
 
 		for (int i = 0; i < branches.size();) {
 			var branch = branches.get(i++);
@@ -2446,8 +2444,7 @@ public final class MethodParser {
 		c.store(v);
 		c.invoke(INVOKESPECIAL, "java/lang/String", "hashCode", "()I");
 
-		SwitchBlock sw = SwitchBlock.ofSwitch(LOOKUPSWITCH);
-		c.addSegment(sw);
+		SwitchBlock sw = c.lookupSwitch();
 		sw.def = breakTo;
 
 		// check duplicate
@@ -2901,8 +2898,9 @@ public final class MethodParser {
 
 		Expr condition = ep.parse(ExprParser.STOP_SEMICOLON | ExprParser.SKIP_SEMICOLON | ExprParser.STOP_COLON | ExprParser.NAE).resolve(ctx);
 		alwaysThrow: {
-			if (condition.isConstant() && condition.constVal() instanceof Boolean v) {
-				if (v) {
+			ConfigValue value = condition.constValTyped(roj.config.node.Type.BOOL);
+			if (value != null) {
+				if (value.asBool()) {
 					ctx.report(Kind.SEVERE_WARNING, "block.assert.constant");
 				} else {
 					break alwaysThrow;
@@ -3101,7 +3099,7 @@ public final class MethodParser {
 
 				w = wr.next();
 			} else {
-				if ((sectionFlag&SF_FOREACH) != 0) {
+				if ((sectionFlag&SF_FOREACH_VAR_DECL) != 0) {
 					var.hasValue = true;
 				} else {
 					if (isFinal) ctx.report(Kind.ERROR, "block.var.final");
@@ -3114,8 +3112,11 @@ public final class MethodParser {
 		} while (w.type() == comma);
 
 		if (w.type() != semicolon) {
-			if (!ctx.compiler.hasFeature(Compiler.OPTIONAL_SEMICOLON))
-				wr.unexpected(w.text(), ";");
+			if (w.type() != colon || (sectionFlag&SF_FOREACH_VAR_DECL) == 0) {
+				if (!ctx.compiler.hasFeature(Compiler.OPTIONAL_SEMICOLON))
+					wr.unexpected(w.text(), ";");
+			}
+
 			wr.retractWord();
 		}
 	}

@@ -78,67 +78,67 @@ public class MapValue extends ConfigValue {
 	public void dot(boolean dotMode) {this.dot = dotMode;}
 
 	// region PUT
-	public final ConfigValue put(String key, ConfigValue entry) { return put(key, entry == null ? NullValue.NULL : entry, 0); }
-	public final ConfigValue put(String key, @NotNull String entry) {
-		Objects.requireNonNull(entry);
+	public final ConfigValue put(String key, ConfigValue value) { return put(key, value == null ? NullValue.NULL : value, 0); }
+	public final ConfigValue put(String key, @NotNull String value) {
+		Objects.requireNonNull(value);
 
 		ConfigValue prev = get(key);
 		if (prev.getType() == Type.STRING) {
-			((StringValue) prev).value = entry;
+			((StringValue) prev).value = value;
 			return null;
 		} else {
-			return put(key, ConfigValue.valueOf(entry), 0);
+			return put(key, ConfigValue.valueOf(value), 0);
 		}
 	}
-	public final ConfigValue put(String key, boolean entry) { return put(key, ConfigValue.valueOf(entry), 0); }
-	public final ConfigValue put(String key, int entry) {
+	public final ConfigValue put(String key, boolean value) { return put(key, ConfigValue.valueOf(value), 0); }
+	public final ConfigValue put(String key, int value) {
 		ConfigValue prev = get(key);
 		if (prev.getType() == Type.INTEGER) {
-			((IntValue) prev).value = entry;
+			((IntValue) prev).value = value;
 			return null;
 		} else {
-			return put(key, ConfigValue.valueOf(entry), 0);
+			return put(key, ConfigValue.valueOf(value), 0);
 		}
 	}
-	public final ConfigValue put(String key, long entry) {
+	public final ConfigValue put(String key, long value) {
 		ConfigValue prev = get(key);
 		if (prev.getType() == Type.LONG) {
-			((LongValue) prev).value = entry;
+			((LongValue) prev).value = value;
 			return null;
 		} else {
-			return put(key, ConfigValue.valueOf(entry), 0);
+			return put(key, ConfigValue.valueOf(value), 0);
 		}
 	}
-	public final ConfigValue put(String key, double entry) {
+	public final ConfigValue put(String key, double value) {
 		ConfigValue prev = get(key);
 		if (prev.getType() == Type.DOUBLE) {
-			((DoubleValue) prev).value = entry;
+			((DoubleValue) prev).value = value;
 			return null;
 		} else {
-			return put(key, ConfigValue.valueOf(entry), 0);
+			return put(key, ConfigValue.valueOf(value), 0);
 		}
 	}
 
-	public final ConfigValue putIfAbsent(String key, ConfigValue v) { return put(key, v, Q_SET_IF_ABSENT);}
-	public final String putIfAbsent(String key, String v) { return put(key, ConfigValue.valueOf(v), Q_SET_IF_ABSENT).asString();}
-	public final boolean putIfAbsent(String key, boolean v) { return put(key, ConfigValue.valueOf(v), Q_SET_IF_ABSENT).asBool();}
-	public final int putIfAbsent(String key, int v) { return put(key, ConfigValue.valueOf(v), Q_SET_IF_ABSENT).asInt();}
-	public final long putIfAbsent(String key, long v) { return put(key, ConfigValue.valueOf(v), Q_SET_IF_ABSENT).asLong();}
-	public final double putIfAbsent(String key, double v) { return put(key, ConfigValue.valueOf(v), Q_SET_IF_ABSENT).asDouble();}
+	public final ConfigValue putIfAbsent(String key, ConfigValue value) { return put(key, value, Q_SET_IF_ABSENT);}
+	public final String putIfAbsent(String key, String value) { return put(key, ConfigValue.valueOf(value), Q_SET_IF_ABSENT).asString();}
+	public final boolean putIfAbsent(String key, boolean value) { return put(key, ConfigValue.valueOf(value), Q_SET_IF_ABSENT).asBool();}
+	public final int putIfAbsent(String key, int value) { return put(key, ConfigValue.valueOf(value), Q_SET_IF_ABSENT).asInt();}
+	public final long putIfAbsent(String key, long value) { return put(key, ConfigValue.valueOf(value), Q_SET_IF_ABSENT).asLong();}
+	public final double putIfAbsent(String key, double value) { return put(key, ConfigValue.valueOf(value), Q_SET_IF_ABSENT).asDouble();}
 
 	public final MapValue getOrCreateMap(String key) { return put(key, new MapValue(), Q_SET_IF_ABSENT).asMap();}
 	public final ListValue getOrCreateList(String key) { return put(key, new ListValue(), Q_SET_IF_ABSENT).asList();}
 
-	protected ConfigValue put(String k, ConfigValue v, int flag) {
+	protected ConfigValue put(String key, ConfigValue value, int flag) {
 		if (!dot) {
-			if ((flag & Q_SET_IF_ABSENT) == 0 || !properties.getOrDefault(k, NullValue.NULL).mayCastTo(v.getType())) {
-				properties.put(k, v);
-				return v;
+			if ((flag & Q_SET_IF_ABSENT) == 0 || !properties.getOrDefault(key, NullValue.NULL).mayCastTo(value.getType())) {
+				properties.put(key, value);
+				return value;
 			}
-			return properties.getOrDefault(k, v);
+			return properties.getOrDefault(key, value);
 		}
 
-		return update(k, Q_CREATE_MID|Q_SET|flag, v);
+		return update(key, Q_CREATE_MID|Q_SET|flag, value);
 	}
 	// endregion
 	// region GET
@@ -187,7 +187,7 @@ public class MapValue extends ConfigValue {
 	@Nullable public final ConfigValue getNullable(String k) {return get(k,null);}
 	@Contract("_,!null -> !null") public ConfigValue get(String k, ConfigValue def) {
 		if (k == null) return def;
-		return !dot ? properties.getOrDefault(k, def) : query(k);
+		return !dot ? properties.getOrDefault(k, def) : update(k, 0, def);
 	}
 	// endregion
 	public final void remove(String name) { properties.remove(name); }

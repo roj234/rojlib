@@ -1,6 +1,6 @@
 package roj.io.source;
 
-import roj.io.ByteInput;
+import roj.io.XDataInput;
 import roj.reflect.Unsafe;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
@@ -58,7 +58,7 @@ public class ByteSource extends Source {
 
 	public void reopen() {}
 
-	public ByteInput asDataInput() { return list; }
+	public XDataInput asDataInput() { return list; }
 	public InputStream asInputStream() { return list.asInputStream(); }
 
 	public Source copy() { return new ByteSource(buffer()); }

@@ -1,13 +1,12 @@
 package roj.plugin.di;
 
-import roj.archive.zip.ZipFile;
 import roj.asm.ClassNode;
 import roj.asm.Member;
 import roj.asm.Opcodes;
 import roj.asm.cp.CstClass;
 import roj.asm.type.Type;
 import roj.asmx.AnnotatedElement;
-import roj.asmx.AnnotationRepo;
+import roj.asmx.AnnotationRepoManager;
 import roj.asmx.ConstantPoolHooks;
 import roj.asmx.TransformUtil;
 import roj.ci.annotation.IndirectReference;
@@ -16,13 +15,11 @@ import roj.collect.HashMap;
 import roj.plugin.Jocker;
 import roj.plugin.PluginClassLoader;
 import roj.plugin.PluginDescriptor;
-import roj.reflect.Reflection;
 import roj.reflect.VirtualReference;
 import roj.util.FastFailException;
 import roj.util.Helpers;
 import roj.util.function.Flow;
 
-import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -68,27 +65,19 @@ public record DIContext(
 	 */
 	public static <T> void registerUnloadCallback(Class<T> type, BiConsumer<PluginDescriptor, T> instance) {
 		try {
-			dependencyProviders.getEntry(type.getClassLoader()).getValue().get(type)[1] = instance;
+			dependencyProviders.get(type.getClassLoader()).get(type)[1] = instance;
 		} catch (NullPointerException npe) {
 			throw new IllegalStateException("应在DependencyProvider注解所属类的静态初始化块内注册清理函数");
 		}
 	}
 
 	public static void onPluginLoaded(PluginDescriptor plugin) {
-		ZipFile archive = plugin.getArchive();
-		if (archive != null) {
-			AnnotationRepo repo = new AnnotationRepo();
-			try {
-				repo.loadCacheOrAdd(archive);
-			} catch (IOException e) {
-				e.printStackTrace();
-			}
+		PluginClassLoader pcl = plugin.getClassLoader();
+		if (pcl != null) {
+			dependencyLoad(pcl);
 
-			Set<AnnotatedElement> dependency = repo.annotatedBy("roj/plugin/di/DependencyProvider");
-			if (!dependency.isEmpty()) dependencyLoad(plugin.getClassLoader(), dependency);
-
-			Set<AnnotatedElement> autowired = repo.annotatedBy("roj/plugin/di/Autowired");
-			if (!autowired.isEmpty()) dependencyInjection(plugin, autowired);
+			Set<AnnotatedElement> autowired = AnnotationRepoManager.getAnnotations("roj/plugin/di/Autowired", pcl);
+			dependencyInjection(plugin, autowired);
 		}
 	}
 
@@ -100,7 +89,7 @@ public record DIContext(
 				Class<?> formalType = (Class<?>)objects.get(i);
 				Object instance = objects.get(i+1);
 
-				var cleanup = (BiConsumer<PluginDescriptor, Object>) dependencyProviders.getEntry(formalType.getClassLoader()).getValue().get(formalType)[1];
+				var cleanup = (BiConsumer<PluginDescriptor, Object>) dependencyProviders.get(formalType.getClassLoader()).get(formalType)[1];
 				if (cleanup != null) {
 					cleanup.accept(descriptor, instance);
 				}
@@ -108,21 +97,19 @@ public record DIContext(
 		}
 	}
 
-	public static void dependencyLoad(AnnotationRepo repo) {
-		dependencyLoad(DIContext.class.getClassLoader(), repo.annotatedBy("roj/plugin/di/DependencyProvider"));
+	public static void dependencyLoad(ClassLoader loader) {
+		Set<AnnotatedElement> annotations = AnnotationRepoManager.getAnnotations("roj/plugin/di/DependencyProvider", loader);
+		dependencyLoad(loader, annotations);
 	}
 
 	private static void dependencyLoad(ClassLoader classLoader, Set<AnnotatedElement> dependency) {
 		for (AnnotatedElement element : dependency) {
 			try {
-				Class<?> injectOwner = Class.forName(element.owner().replace('/', '.'), false, classLoader);
 				List<Type> types = Type.getMethodTypes(((Member) element.node()).rawDesc());
 				Class<?> injectType = Class.forName(types.get(types.size() - 1).owner.replace('/', '.'), false, classLoader);
 
 				Object[] objects = dependencyProviders.computeIfAbsent(injectType.getClassLoader(), Helpers.fnHashMap()).putIfAbsent(injectType, new Object[]{element, null});
 				if (objects != null) throw new IllegalStateException("priority暂未实现");
-
-				Reflection.ensureClassInitialized(injectOwner);
 			} catch (ClassNotFoundException|NoClassDefFoundError e) {
 				throw new FastFailException("无法加载依赖的类，可能是权限问题", e);
 			}
@@ -151,9 +138,9 @@ public record DIContext(
 					boolean hasCleanup;
 					try {
 						Class<?> type = Class.forName(typeName.replace('/', '.'), false, classLoader);
-						var entry = dependencyProviders.getEntry(type.getClassLoader());
+						var entry = dependencyProviders.get(type.getClassLoader());
 						Object[] typeDef;
-						if (entry == null || (typeDef = entry.getValue().get(type)) == null)
+						if (entry == null || (typeDef = entry.get(type)) == null)
 							throw new FastFailException("类型"+typeName+"未通过DependencyProvider注册");
 
 						method = (AnnotatedElement) typeDef[0];

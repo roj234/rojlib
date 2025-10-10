@@ -639,7 +639,8 @@ public final class DateFormat {
 			UTCMONTH = {"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
 
 	public String format(long timestampMillis) {return format(timestampMillis, IOUtil.getSharedCharBuf()).toString();}
-	public CharList format(long timestampMillis, CharList sb) {
+	public CharList format(long timestampMillis, CharList sb) {return format(timestampMillis, sb, timezone);}
+	public CharList format(long timestampMillis, CharList sb, TimeZone timezone) {
 		if (timezone != null) timestampMillis += timezone.getOffset(timestampMillis);
 		int[] fields = getCalendar(timestampMillis);
 

@@ -10,9 +10,9 @@
 
 package roj.archive.xz;
 
+import roj.archive.rangecoder.RangeDecoderFromStream;
 import roj.archive.xz.lz.LZDecoder;
 import roj.archive.xz.lzma.LZMADecoder;
-import roj.archive.xz.rangecoder.RangeDecoderFromStream;
 import roj.io.CorruptedInputException;
 import roj.io.Finishable;
 import roj.io.IOUtil;
@@ -382,7 +382,7 @@ public class LZMAInputStream extends MBInputStream implements Finishable {
 
 	public final synchronized void finish() {
 		if (lz != null) {
-			lz.putArraysToCache();
+			lz.free();
 			lz = null;
 			rc.finish();
 		}

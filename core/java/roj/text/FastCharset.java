@@ -35,7 +35,7 @@ public abstract class FastCharset {
 			case "GB2312", "x-mswin-936", "GBK", "GB18030" -> GB18030.INSTANCE;
 			case "UTF-16" -> UTF16n.INSTANCE;
 			case "UTF-16LE", "UTF-16BE" ->
-					JVM.BIG_ENDIAN == charset.name().equals("UTF-16BE") ? UTF16n.INSTANCE : null;
+					JVM.BIG_ENDIAN == charset.name().equals("UTF-16BE") ? UTF16n.INSTANCE : UTF16i.INSTANCE;
 			default -> null;
 		};
 	}

@@ -24,7 +24,7 @@ import roj.text.TextUtil;
 import roj.text.TextWriter;
 import roj.text.diff.BsDiff;
 import roj.text.diff.DiffInfo;
-import roj.text.logging.LogDestination;
+import roj.text.logging.LogAppender;
 import roj.text.logging.Logger;
 import roj.util.ArrayCache;
 import roj.util.FastFailException;
@@ -171,7 +171,7 @@ public class DiffFinder extends JFrame {
 						preWindow = in.readInt();
 						slideWindow = in.readInt();
 						base = new File(in.readUTF());
-						metas = ConfigMaster.NBT.readObject(in, FileMeta[].class);
+						metas = ObjectMapper.SAFE.read(in, FileMeta[].class, ConfigMaster.NBT);
 					} catch (Exception ex) {
 						JOptionPane.showMessageDialog(this, "检查点加载失败！\n" + ex.getMessage());
 						return;
@@ -220,7 +220,7 @@ public class DiffFinder extends JFrame {
 					out.writeInt(preWindow);
 					out.writeInt(slideWindow);
 					out.writeUTF(base.getAbsolutePath());
-					ConfigMaster.NBT.writeObject(metas, out);
+					ObjectMapper.SAFE.write(ConfigMaster.NBT, metas, out);
 				} catch (Exception ex) {
 					JOptionPane.showMessageDialog(this, "检查点保存失败！\n" + ex.getMessage());
 					return;
@@ -250,7 +250,7 @@ public class DiffFinder extends JFrame {
 		textRpl.put('\t', "");
 		textRpl.put(' ', "");
 		textRpl.put('　', "");
-		Logger.getRootContext().destination(LogDestination.stdout());
+		Logger.getRootContext().appender(LogAppender.console());
 	}
 	private static final Logger LOGGER = Logger.getLogger("Differ");
 	private void runDiffAsync(int completed, File base, FileMeta[] metas, File progress, File result, int preWindow, int slideWindow) {

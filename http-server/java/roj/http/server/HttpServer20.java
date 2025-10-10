@@ -34,7 +34,7 @@ final class HttpServer20 extends H2Stream implements PayloadInfo, Response, Cont
 	public HttpServer20(Router router, int id) {
 		super(id);
 		this.router = router;
-		this.time = System.currentTimeMillis() + router.readTimeout(false);
+		this.time = SelectorLoop.currentTimeMillis() + router.readTimeout(false);
 	}
 
 	private long time;
@@ -149,7 +149,7 @@ final class HttpServer20 extends H2Stream implements PayloadInfo, Response, Cont
 			}
 
 			if ((flag & FLAG_ASYNC) != 0 && body == null) return;
-			time = System.currentTimeMillis() + router.writeTimeout(req, body);
+			time = SelectorLoop.currentTimeMillis() + router.writeTimeout(req, body);
 		}
 		sendHead(man);
 	}
@@ -193,7 +193,7 @@ final class HttpServer20 extends H2Stream implements PayloadInfo, Response, Cont
 			}
 		}
 
-		if (System.currentTimeMillis() > time) {
+		if (SelectorLoop.currentTimeMillis() > time) {
 			switch (getState()) {
 				case HEAD_V, HEAD_R, DATA, HEAD_T -> {
 					if (req != null) throw new IllegalRequestException(HttpUtil.TIMEOUT);
@@ -355,7 +355,7 @@ final class HttpServer20 extends H2Stream implements PayloadInfo, Response, Cont
 		int limit = buf.readableBytes();
 		int window = man.getImmediateWindow(this);
 		if (limit > window) limit = window;
-		if (limiter != null && (limit = limiter.limit(limit)) <= 0) return;
+		if (limiter != null && (limit = limiter.tryAcquire(limit)) <= 0) return;
 
 		int prevWpos = buf.wIndex();
 		buf.wIndex(buf.rIndex + limit);
@@ -375,7 +375,7 @@ final class HttpServer20 extends H2Stream implements PayloadInfo, Response, Cont
 
 		if (limit < 0) limit = NOOB_LIMIT;
 		if (limit > window) limit = window;
-		if (limiter != null) limit = limiter.limit(limit);
+		if (limiter != null) limit = limiter.tryAcquire(limit);
 		if (limit <= 0) return 0;
 
 		int writeOnce = Math.min(NOOB_LIMIT, limit);
@@ -398,9 +398,10 @@ final class HttpServer20 extends H2Stream implements PayloadInfo, Response, Cont
 				buf.clear();
 			}
 
+			limiter.returnTokens(limit - totalRead);
 			return totalRead;
 		} finally {
-			BufferPool.reserve(buf);
+			buf.release();
 		}
 	}
 
@@ -411,7 +412,7 @@ final class HttpServer20 extends H2Stream implements PayloadInfo, Response, Cont
 
 	@Override public Response code(int code) {req.responseHeader.put(":status", String.valueOf(code));return this;}
 	@Override public Response die() {flag |= FLAG_GOAWAY;return this;}
-	@Override public Response async(int extraTimeMs) {flag |= FLAG_ASYNC;time = System.currentTimeMillis()+extraTimeMs;return this;}
+	@Override public Response async(int extraTimeMs) {flag |= FLAG_ASYNC;time = SelectorLoop.currentTimeMillis()+extraTimeMs;return this;}
 	@Override public void body(Content content) throws IOException {
 		if ((flag & FLAG_ASYNC) == 0) {
 			if (getState() >= DATA_FIN) {
@@ -428,7 +429,7 @@ final class HttpServer20 extends H2Stream implements PayloadInfo, Response, Cont
 		lock.lock();
 		try {
 			body = content;
-			time = System.currentTimeMillis() + router.writeTimeout(req, body);
+			time = SelectorLoop.currentTimeMillis() + router.writeTimeout(req, body);
 			sendHead(man);
 		} catch (Throwable e) {
 			onError(man, e);

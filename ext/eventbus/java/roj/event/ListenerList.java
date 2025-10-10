@@ -3,7 +3,7 @@ package roj.event;
 import roj.ci.annotation.IndirectReference;
 import roj.collect.ArrayList;
 import roj.optimizer.FastVarHandle;
-import roj.reflect.Handles;
+import roj.reflect.Telescope;
 import roj.util.Helpers;
 
 import java.lang.invoke.MethodHandles;
@@ -22,7 +22,7 @@ final class ListenerList {
 	final ListenerList parent;
 
 	private volatile int modCount;
-	private static final VarHandle MODCOUNT = Handles.lookup().findVarHandle(ListenerList.class, "modCount", int.class);
+	private static final VarHandle MODCOUNT = Telescope.lookup().findVarHandle(ListenerList.class, "modCount", int.class);
 
 	@IndirectReference
 	ListenerList _next;

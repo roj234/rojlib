@@ -15,13 +15,10 @@ import roj.io.IOUtil;
 import roj.net.*;
 import roj.net.handler.Timeout;
 import roj.net.mss.*;
-import roj.text.CharList;
-import roj.text.Formatter;
 import roj.text.URICoder;
-import roj.text.logging.Level;
+import roj.text.logging.LogContext;
 import roj.text.logging.Logger;
 import roj.ui.TUI;
-import roj.ui.Tty;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
 
@@ -33,7 +30,6 @@ import java.security.GeneralSecurityException;
 import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.locks.Lock;
-import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
 /**
@@ -67,22 +63,7 @@ public class FrpClient extends FrpCommon implements Consumer<MyChannel> {
 	public boolean needDoubleNegotiation;
 
 	public static void main(String[] args) throws Exception {
-		Formatter f;
-		if (Tty.IS_RICH) {
-			f = (env, sb) -> {
-				((BiConsumer<Object, CharList>) env.get("0")).accept(env, sb.append('['));
-
-				Level level = (Level) env.get("LEVEL");
-				sb.append("]\u001b[").append(level.color).append("m[").append(env.get("NAME"));
-				if (level.ordinal() > Level.WARN.ordinal())
-					sb.append("][").append(env.get("THREAD"));
-
-				return sb.append("]\u001b[0m: ");
-			};
-		} else {
-			f = Formatter.simple("[${0}][${THREAD}][${NAME}/${LEVEL}]: ");
-		}
-		Logger.getRootContext().setPrefix(f);
+		LogContext.setupDefaultConsoleLogFormat();
 
 		var role = args[0];
 

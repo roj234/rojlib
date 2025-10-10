@@ -5,7 +5,7 @@ import roj.collect.HashMap;
 import roj.collect.RingBuffer;
 import roj.io.BufferPool;
 import roj.optimizer.FastVarHandle;
-import roj.reflect.Handles;
+import roj.reflect.Telescope;
 import roj.util.DynByteBuf;
 import roj.util.Helpers;
 import roj.util.NativeMemory;
@@ -52,13 +52,14 @@ public abstract class MyChannel implements Selectable, Closeable {
 
 	protected final RingBuffer<Object> pending = RingBuffer.lazy(30);
 
-	private static final VarHandle FLAG = Handles.lookup().findVarHandle(MyChannel.class, "flags", byte.class);
+	private static final VarHandle FLAG = Telescope.lookup().findVarHandle(MyChannel.class, "flags", byte.class);
 	protected static final int PAUSE_FOR_FLUSH = 1, REINVOKE_READ = 2, READ_INACTIVE = 4, TIMED_FLUSH = 8, INPUT_CLOSED = 16, CLOSE_AFTER_FLUSH = 32;
-	protected byte flags;
+	protected volatile byte flags;
 
 	protected final ReentrantLock lock = new ReentrantLock();
 
-	public static MyChannel openTCP() throws IOException {return openTCP(2048);}
+	static final int DEFAULT_TCP_RECV_BUF = 2048;
+	public static MyChannel openTCP() throws IOException {return openTCP(DEFAULT_TCP_RECV_BUF);}
 	public static MyChannel openTCP(int buffer) throws IOException {return new TcpChImpl(buffer);}
 
 	// protected only used for UDPoverTCP
@@ -281,13 +282,14 @@ public abstract class MyChannel implements Selectable, Closeable {
 	}
 
 	// region State
+	public void setInitialBufferCapacity(int initialBufferCapacity) {}
+	public void setBufferRetainStrategy(int bufferRetainStrategy) {}
 
 	public void readActive() {
 		int ops = key.interestOps();
 		removeFlag(READ_INACTIVE);
 		if ((ops & SelectionKey.OP_READ) == 0) key.interestOps(ops | SelectionKey.OP_READ);
-		var rb = this.rb;
-		if (rb != null && rb.isReadable()) invokeReadLater();
+		invokeReadLater();
 	}
 	public void readInactive() {
 		int ops = key.interestOps();
@@ -430,7 +432,6 @@ public abstract class MyChannel implements Selectable, Closeable {
 			lock.unlock();
 		}
 	}
-	public int getConnectTimeoutRemain() { return timeout; }
 
 	public final void open() throws IOException {
 		lock.lock();
@@ -481,21 +482,26 @@ public abstract class MyChannel implements Selectable, Closeable {
 	@Override
 	public void tick(int elapsed) throws Exception {
 		if (state >= CLOSE_PENDING) return;
-		if (state == CONNECT_PENDING && timeout != 0 && (timeout -= elapsed) < 0) {
-			if (finishConnect()) return;
-			close();
-			throw new ConnectException("Connect timeout");
+		if (state == CONNECT_PENDING) {
+			if (timeout != 0 && (timeout -= elapsed) < 0 && !finishConnect()) {
+				close();
+				throw new ConnectException("Connect timeout");
+			}
+			return;
 		}
 
-		if ((flags &TIMED_FLUSH) != 0 && (System.currentTimeMillis()&15) == (hashCode()&15)) {
+		if ((flags&TIMED_FLUSH) != 0 && (SelectorLoop.currentTimeMillis()&15) == (hashCode()&15)) {
 			flush();
 		}
+
+		timeout++;
 
 		lock.lock();
 		try {
 			if ((flags & REINVOKE_READ) != 0) {
-				flags ^= REINVOKE_READ;
-				fireChannelRead(rb);
+				removeFlag(REINVOKE_READ);
+				if (rb.isReadable())
+					fireChannelRead(rb);
 			}
 
 			var pipe = pipelineHead;
@@ -553,15 +559,13 @@ public abstract class MyChannel implements Selectable, Closeable {
 			if (!finishConnect()) return;
 		}
 
+		timeout = 0;
 		if (!pending.isEmpty() && (readyOps & SelectionKey.OP_WRITE) != 0) {
 			int size = pending.size();
 			flush();
 			if (pending.size() == size) {
 				key.interestOps(0);
-
-				lock.lock();
-				flags |= TIMED_FLUSH;
-				lock.unlock();
+				addFlag(TIMED_FLUSH);
 			}
 			return;
 		}

@@ -10,9 +10,9 @@
 
 package roj.archive.xz.lzma;
 
+import roj.archive.rangecoder.RangeEncoder;
 import roj.archive.xz.LZMA2Options;
 import roj.archive.xz.lz.LZEncoder;
-import roj.archive.xz.rangecoder.RangeEncoder;
 
 final class LZMAEncoderFast extends LZMAEncoder {
 	private static final int EXTRA_SIZE_BEFORE = 1;

@@ -4,7 +4,7 @@
 JNIEXPORT jstring JNICALL Java_roj_io_IOUtil_getHardLinkUUID0(JNIEnv* env, jclass, jstring filePath) {
     const jchar* widePath = env->GetStringChars(filePath, 0);
     HANDLE hFile = CreateFileW(
-        reinterpret_cast<LPCWSTR>(widePath),  // Ê¹ÓÃ¿í×Ö·ûÂ·¾¶
+        reinterpret_cast<LPCWSTR>(widePath),  // ä½¿ç”¨å®½å­—ç¬¦è·¯å¾„
         FILE_READ_ATTRIBUTES,
         FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
         NULL,
@@ -44,7 +44,7 @@ JNIEXPORT jboolean JNICALL Java_roj_io_IOUtil_makeHardLink0(JNIEnv* env, jclass,
 
     result = CreateHardLinkW(reinterpret_cast<LPCWSTR>(dst), reinterpret_cast<LPCWSTR>(src), NULL);
 
-    // ÊÍ·Å×Ö·û´®×ÊÔ´
+    // é‡Šæ”¾å­—ç¬¦ä¸²èµ„æº
     env->ReleaseStringChars(link, dst);
     releaseSource:
     env->ReleaseStringChars(existing, src);

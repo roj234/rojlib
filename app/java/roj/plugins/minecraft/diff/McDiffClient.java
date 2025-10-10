@@ -9,10 +9,10 @@ import roj.config.NbtEncoder;
 import roj.config.NbtParser;
 import roj.crypt.CryptoFactory;
 import roj.crypt.KeyType;
-import roj.io.ByteInputStream;
 import roj.io.CorruptedInputException;
 import roj.io.IOUtil;
 import roj.io.RegionFile;
+import roj.io.XDataInputStream;
 import roj.io.source.ByteSource;
 import roj.text.TextReader;
 import roj.text.TextUtil;
@@ -39,7 +39,7 @@ public class McDiffClient {
 	public void apply(File basePath) throws IOException {
 		QZEntry hashes = archive.getEntry(".vcs|hashes");
 		System.out.println("正在验证哈希");
-		if (hashes != null) try (ByteInputStream in = new ByteInputStream(archive.getInputStream(hashes))) {
+		if (hashes != null) try (XDataInputStream in = new XDataInputStream(archive.getInputStream(hashes))) {
 			byte[] tmp = ArrayCache.getIOBuffer();
 			while (in.isReadable()) {
 				String name = in.readVUIGB();
@@ -101,7 +101,7 @@ public class McDiffClient {
 							return;
 						}
 
-						try (var mdi = new ByteInputStream(in)) {
+						try (var mdi = new XDataInputStream(in)) {
 							// short pos int timestamp int patchLength
 							while (mdi.isReadable()) {
 								int pos = mdi.readShort();

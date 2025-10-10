@@ -27,14 +27,15 @@ import java.util.zip.Deflater;
  * @since 2024/3/17 2:18
  */
 public class EpubWriter extends EbookWriter {
+	private static final boolean SHOW_MAKER_INFO = false;
+
 	public static final Metadata<Integer> COMPRESSION_LEVEL = new Metadata<>("epub:compression_level", Deflater.DEFAULT_COMPRESSION);
 	public static final Metadata<String> LANGUAGE = new Metadata<>("epub:language", "zh-CN");
 	public static final Metadata<String> SOURCE = new Metadata<>("epub:source", "web");
-	public static final Metadata<String> PUBLISHER = new Metadata<>("epub:publisher", "起点中文网");
+	public static final Metadata<String> PUBLISHER = new Metadata<>("epub:publisher", null);
 	public static final Metadata<String> PUBLICATION_DATE = new Metadata<>("epub:publication_date", "1980-01-01");
 	public static final Metadata<String> MODIFICATION_DATE = new Metadata<>("epub:modification_date", "1980-01-01");
 
-	private static final boolean SHOW_MAKER_INFO = false;
 	private static ZipFile TEMPLATE;
 	static {
 		try {

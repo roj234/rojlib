@@ -5,6 +5,7 @@ import org.jetbrains.annotations.Nullable;
 import roj.RojLib;
 import roj.compiler.plugins.annotations.Attach;
 import roj.io.IOUtil;
+import roj.reflect.Telescope;
 import roj.reflect.Unsafe;
 import roj.text.TextReader;
 import roj.text.TextUtil;
@@ -87,8 +88,8 @@ public final class GuiUtil {
 	}
 
 	public static long getWindowHandle(Window window) {
-		Object peer = U.getReference(window, Unsafe.fieldOffset(Component.class, "peer"));
-		return U.getLong(peer, Unsafe.fieldOffset(peer.getClass(), "hwnd"));
+		Object peer = U.getReference(window, Unsafe.objectFieldOffset(Component.class, "peer", Telescope.findClass("java.awt.peer.ComponentPeer")));
+		return U.getLong(peer, Unsafe.objectFieldOffset(peer.getClass(), "hwnd", long.class));
 	}
 
 	//static {Intrinsics.linkNative("USER32");}

@@ -2,6 +2,7 @@ package roj.plugins.bittorrent;
 
 import roj.config.ConfigMaster;
 import roj.config.mapper.Name;
+import roj.config.mapper.ObjectMapper;
 import roj.config.mapper.Optional;
 import roj.io.IOUtil;
 import roj.text.CharList;
@@ -23,7 +24,7 @@ import java.util.List;
  */
 @Optional
 public class Torrent {
-	public static Torrent read(File file) throws IOException, ParseException {return ConfigMaster.BENCODE.readObject(file, Torrent.class);}
+	public static Torrent read(File file) throws IOException, ParseException {return ObjectMapper.SAFE.read(file, Torrent.class, ConfigMaster.BENCODE);}
 
 	public String announce;
 	@Name("announce-list")
@@ -117,7 +118,7 @@ public class Torrent {
 		public byte[] getInfoHash() {
 			if (infoHash == null) try {
 				ByteList buf = IOUtil.getSharedByteBuf();
-				ConfigMaster.BENCODE.writeObject(this, buf);
+				ObjectMapper.SAFE.write(ConfigMaster.BENCODE, this, buf);
 
 				var md = MessageDigest.getInstance("SHA-1");
 				md.update(buf.list, 0, buf.wIndex());

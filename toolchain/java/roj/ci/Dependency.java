@@ -10,6 +10,7 @@ import roj.asmx.Context;
 import roj.ci.event.LibraryModifiedEvent;
 import roj.collect.HashSet;
 import roj.collect.XashMap;
+import roj.config.node.IntValue;
 import roj.io.IOUtil;
 import roj.text.CharList;
 import roj.text.TextUtil;
@@ -20,7 +21,13 @@ import roj.util.Pair;
 
 import java.io.Closeable;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.IOException;
+import java.nio.file.FileVisitResult;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.SimpleFileVisitor;
+import java.nio.file.attribute.BasicFileAttributes;
 import java.security.MessageDigest;
 import java.util.Arrays;
 import java.util.List;
@@ -38,15 +45,16 @@ import static roj.ci.BuildContext.*;
 public sealed interface Dependency extends Closeable {
 	default @Nullable Project project() {return null;}
 	default void open(BuildContext ctx) throws IOException {}
+	default void unlock() {}
 	default void close() throws IOException {}
 
 	int getResources(Project project, ZipOutput zipOutput, BuildContext ctx) throws IOException;
 	void getClasses(BuildContext context) throws IOException;
 	AnnotationRepo getAnnotations(BuildContext context) throws IOException;
 
-	void forEachFile(Consumer<File> consumer);
+	void forEachJar(Consumer<File> consumer);
 	default void getClassPath(CharList classpath, File prefix) {
-		forEachFile(file -> {
+		forEachJar(file -> {
 			String absolutePath = file.getAbsolutePath();
 			String relativized = IOUtil.relativizePath(prefix.getAbsolutePath(), absolutePath);
 			classpath.append(relativized == null ? absolutePath : relativized).append(File.pathSeparatorChar);
@@ -60,11 +68,11 @@ public sealed interface Dependency extends Closeable {
 			IOUtil.digestFile(file, file.length(), digest);
 			byte[] checksum = digest.digest();
 			if (!Arrays.equals(checksum, expectedChecksum)) {
-				MCMake.LOGGER.warn("文件校验失败: {} (期望: {}, 实际: {})", id, IOUtil.encodeHex(expectedChecksum), IOUtil.encodeHex(checksum));
+				MCMake.log.warn("文件校验失败: {} (期望: {}, 实际: {})", id, IOUtil.encodeHex(expectedChecksum), IOUtil.encodeHex(checksum));
 				return false;
 			}
 		} catch (Exception e) {
-			MCMake.LOGGER.warn("无法计算文件校验和: {}", e, id);
+			MCMake.log.warn("无法计算文件校验和: {}", e, id);
 			return false;
 		}
 
@@ -85,7 +93,7 @@ public sealed interface Dependency extends Closeable {
 			var prev = project.mappedWriter;
 			project.mappedWriter = writer;
 			try {
-				int increment = ctx.increment;
+				int increment = ctx.incrementLevel;
 
 				BuildContext.Changeset changeset = increment <= INC_REBUILD ? project.compiling.getFullResources() : project.compiling.resources;
 
@@ -99,7 +107,7 @@ public sealed interface Dependency extends Closeable {
 				}
 
 				if ((changed.size()|removed.size()) > 0)
-					MCMake.LOGGER.debug("Dependency resources [{}]: {} changed, {} removed.", project.getName(), changed.size(), removed.size());
+					MCMake.log.debug("Dependency resources [{}]: {} changed, {} removed.", project.getName(), changed.size(), removed.size());
 
 				long useCompileTimestamp = project.shouldUseCompileTimestamp() ? ctx.buildStartTime : 0;
 
@@ -120,7 +128,7 @@ public sealed interface Dependency extends Closeable {
 					}
 				}
 			} catch (IOException e) {
-				MCMake.LOGGER.warn("Exception writing resources for ProjectDep {}", e, project);
+				MCMake.log.warn("Exception writing resources for ProjectDep {}", e, project);
 			} finally {
 				project.mappedWriter = prev;
 			}
@@ -158,7 +166,7 @@ public sealed interface Dependency extends Closeable {
 		@Override
 		public void getClasses(BuildContext context) throws IOException {
 			long stamp = context.lastBuildTime;
-			int increment = context.increment;
+			int increment = context.incrementLevel;
 
 			// 是否在同一批次编译
 			if (increment == INC_UPDATE && project.compiling.lastBuildTime < context.lastBuildTime) {
@@ -172,7 +180,7 @@ public sealed interface Dependency extends Closeable {
 				}
 
 				if ((changed.size()|removed.size()) > 0)
-					MCMake.LOGGER.debug("Dependency binaries [{}]: {} changed, {} removed.", project.getName(), changed.size(), removed.size());
+					MCMake.log.debug("Dependency binaries [{}]: {} changed, {} removed.", project.getName(), changed.size(), removed.size());
 				return;
 			}
 
@@ -188,7 +196,7 @@ public sealed interface Dependency extends Closeable {
 		}
 
 		@Override public AnnotationRepo getAnnotations(BuildContext context) {return project.annotationRepo;}
-		@Override public void forEachFile(Consumer<File> consumer) {consumer.accept(project.unmappedJar);}
+		@Override public void forEachJar(Consumer<File> consumer) {consumer.accept(project.unmappedJar);}
 
 		@Override
 		public void writeProjectConfiguration(File root, CharList sb, String type) {
@@ -248,9 +256,21 @@ public sealed interface Dependency extends Closeable {
 		}
 
 		@Override
+		public void unlock() {
+			if (archive != null)
+				archive.closeCache();
+		}
+
+		@Override
+		public void close() throws IOException {
+			IOUtil.closeSilently(archive);
+			archive = null;
+		}
+
+		@Override
 		public int getResources(Project building, ZipOutput zipOutput, BuildContext ctx) throws IOException {
 			int updated = 0;
-			long lastBuildTime = ctx.increment <= INC_REBUILD ? 0 : ctx.lastBuildTime;
+			long lastBuildTime = ctx.incrementLevel <= INC_REBUILD ? 0 : ctx.lastBuildTime;
 			for (ZEntry entry : archive.entries()) {
 				String relPath = entry.getName();
 				String shadePath = ProjectDep.applyShade(building.conf, relPath, this);
@@ -272,7 +292,7 @@ public sealed interface Dependency extends Closeable {
 
 		@Override
 		public void getClasses(BuildContext ctx) throws IOException {
-			int increment = ctx.increment;
+			int increment = ctx.incrementLevel;
 			long lastBuildTime = ctx.lastBuildTime;
 
 			for (ZEntry entry : classes) {
@@ -293,7 +313,7 @@ public sealed interface Dependency extends Closeable {
 		}
 
 		@Override
-		public void forEachFile(Consumer<File> consumer) {
+		public void forEachJar(Consumer<File> consumer) {
 			consumer.accept(file);
 		}
 
@@ -322,8 +342,8 @@ public sealed interface Dependency extends Closeable {
 
 	final class DirDep implements Dependency {
 		private final File dir;
-		private static final XashMap.Builder<File, FileDep> BUILDER = XashMap.builder(File.class, FileDep.class, "file", "_next");
-		private XashMap<File, FileDep> fileDeps = BUILDER.create();
+		private static final XashMap.Template<File, FileDep> TEMPLATE = XashMap.forType(File.class, FileDep.class).key("file").newValue(FileDep::new).build();
+		private final XashMap<File, FileDep> fileDeps = TEMPLATE.create();
 		private AnnotationRepo repo;
 
 		public DirDep(File dir) {this.dir = dir;}
@@ -347,8 +367,14 @@ public sealed interface Dependency extends Closeable {
 		}
 
 		@Override
+		public void unlock() {
+			for (FileDep dep : fileDeps) dep.unlock();
+		}
+
+		@Override
 		public void close() throws IOException {
 			for (FileDep dep : fileDeps) dep.close();
+			fileDeps.clear();
 		}
 
 		@Override
@@ -368,9 +394,9 @@ public sealed interface Dependency extends Closeable {
 		}
 
 		@Override
-		public void forEachFile(Consumer<File> consumer) {
+		public void forEachJar(Consumer<File> consumer) {
 			for (FileDep dep : fileDeps) {
-				dep.forEachFile(consumer);
+				dep.forEachJar(consumer);
 			}
 		}
 
@@ -379,7 +405,7 @@ public sealed interface Dependency extends Closeable {
 			String absolutePath = dir.getAbsolutePath();
 			String relativized = IOUtil.relativizePath(root.getAbsolutePath(), absolutePath);
 			String uri = relativized == null ? "file://" + IOUtil.normalizePath(absolutePath) : "file://$MODULE_DIR$/" + relativized;
-			sb.append(" type=\"module-library\"><library><CLASSES><root url=\"").append(uri).append("\" />\n" +
+			sb.append("type=\"module-library\"><library><CLASSES><root url=\"").append(uri).append("\" />\n" +
 					"</CLASSES><JAVADOC /><SOURCES />\n" +
 					"<jarDirectory url=\"").append(uri).append("\" recursive=\"true\" />\n" +
 					"</library></orderEntry>");
@@ -428,12 +454,16 @@ public sealed interface Dependency extends Closeable {
 		}
 
 		@Override public void open(BuildContext ctx) throws IOException {
-			locateCache();
+			locateCache(false);
 			cache.open(ctx);
 		}
+		@Override public void close() throws IOException {
+			IOUtil.closeSilently(cache);
+		}
+		@Override public void unlock() {cache.unlock();}
 
-		private void locateCache() throws IOException {
-			File file = coordinate.locate(cacheBase, mavenUrls, 1800);
+		private void locateCache(boolean optional) throws IOException {
+			File file = coordinate.locate(cacheBase, mavenUrls, 1800, !optional);
 			if (cache == null || file.equals(cache.file)) {
 				IOUtil.closeSilently(cache);
 				cache = new FileDep(file);
@@ -443,15 +473,79 @@ public sealed interface Dependency extends Closeable {
 		@Override public int getResources(Project project, ZipOutput zipOutput, BuildContext ctx) throws IOException {return cache.getResources(project, zipOutput, ctx);}
 		@Override public void getClasses(BuildContext context) throws IOException {cache.getClasses(context);}
 		@Override public AnnotationRepo getAnnotations(BuildContext context) throws IOException {return cache.getAnnotations(context);}
-		@Override public void forEachFile(Consumer<File> consumer) {cache.forEachFile(consumer);}
+		@Override public void forEachJar(Consumer<File> consumer) {cache.forEachJar(consumer);}
 		@Override public void writeProjectConfiguration(File root, CharList sb, String type) {
 			try {
-				locateCache();
+				locateCache(true);
 			} catch (IOException e) {
 				Helpers.athrow(e);
 			}
-			cache.writeProjectConfiguration(root, sb, type);
+			if (cache != null)
+				cache.writeProjectConfiguration(root, sb, type);
 		}
+
+		@Override
+		public boolean equals(Object o) {
+			if (this == o) return true;
+			if (o == null || getClass() != o.getClass()) return false;
+
+			MavenDep mavenDep = (MavenDep) o;
+			return mavenUrls.equals(mavenDep.mavenUrls) && coordinate.equals(mavenDep.coordinate);
+		}
+
+		@Override
+		public int hashCode() {
+			int result = mavenUrls.hashCode();
+			result = 31 * result + coordinate.hashCode();
+			return result;
+		}
+	}
+
+	final class ResourceFolderDep implements Dependency {
+		private final File resPath;
+
+		public ResourceFolderDep(File resPath) {this.resPath = resPath;}
+
+		@Override
+		public int getResources(Project building, ZipOutput writer, BuildContext ctx) {
+			IntValue updated = new IntValue(0);
+			try {
+				int increment = ctx.incrementLevel;
+				long stamp = ctx.lastBuildTime;
+				int prefixLength = resPath.getAbsolutePath().length() + 1;
+
+				Files.walkFileTree(resPath.toPath(), new SimpleFileVisitor<>() {
+					@Override
+					public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
+						String relPath = file.toString().substring(prefixLength).replace(File.separatorChar, '/');
+						long modTime = attrs.lastModifiedTime().toMillis();
+						if (increment <= INC_REBUILD || modTime >= stamp) {
+							writer.setStream(relPath, () -> new FileInputStream(file.toString()), modTime);
+							updated.value++;
+						}
+						return FileVisitResult.CONTINUE;
+					}
+				});
+			} catch (IOException e) {
+				MCMake.log.warn("Exception writing resources {}", e, resPath);
+			}
+			return updated.value;
+		}
+
+		@Override public void getClasses(BuildContext context) {}
+		@Override public AnnotationRepo getAnnotations(BuildContext context) {return new AnnotationRepo();}
+		@Override public void forEachJar(Consumer<File> consumer) {}
+		@Override public void writeProjectConfiguration(File root, CharList sb, String type) {}
+
+		@Override public String toString() {return "RES:"+ resPath.getName();}
+
+		@Override public final boolean equals(Object object) {
+			if (this == object) return true;
+			if (!(object instanceof ResourceFolderDep that)) return false;
+
+			return resPath.equals(that.resPath);
+		}
+		@Override public int hashCode() {return resPath.hashCode();}
 	}
 
 	enum Scope {

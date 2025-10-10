@@ -2,12 +2,11 @@ package roj.collect;
 
 import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.NotNull;
-import roj.ci.annotation.Public;
 import roj.math.MathUtils;
-import roj.reflect.Bypass;
 import roj.reflect.Unsafe;
 
 import java.util.*;
+import java.util.function.Function;
 
 import static roj.collect.IntMap.REFERENCE_LOAD_FACTOR;
 import static roj.reflect.Unsafe.U;
@@ -18,45 +17,60 @@ import static roj.reflect.Unsafe.U;
  * @since 2024/1/26 06:09
  */
 public final class XashMap<K, V> extends AbstractSet<V> {
-	public static <K, V> Builder<K, V> builder(Class<K> kType, Class<V> vType, String field_key, String field_next) { return builder(kType, vType, field_key, field_next, Hasher.defaul()); }
-	public static <K, V> Builder<K, V> builder(Class<K> kType, Class<V> vType, String field_key, String field_next, Hasher<K> hasher) {
-		Bypass<ObjectNew> da = Bypass.builder(ObjectNew.class).unchecked();
-		try {
-			da.construct(vType, "createValue", kType);
-		} catch (IllegalArgumentException e) {
-			da.construct(vType, "createValueNoarg");
+	public static <K, V> Builder<K, V> forType(Class<K> kType, Class<V> vType) {return new Builder<>(kType, vType);}
+
+	public static final class Builder<K, V> {
+		private String keyField = "key", nextField = "_next";
+		private Class<K> kType;
+		private final Class<V> vType;
+		private Function<K, V> newValue;
+		private Hasher<K> hasher = Hasher.defaul();
+
+		public Builder(Class<K> kType, Class<V> vType) {
+			this.kType = kType;
+			this.vType = vType;
 		}
 
-		ObjectNew creator = da.build();
-		long key = Unsafe.fieldOffset(vType, field_key);
-		long next = Unsafe.fieldOffset(vType, field_next);
-		return new Builder<>(vType, next, key, hasher, creator);
-	}
-	public static <K, V> Builder<K, V> noCreation(Class<V> vType, String field_key) {return noCreation(vType, field_key, "_next");}
-	public static <K, V> Builder<K, V> noCreation(Class<V> vType, String field_key, String field_next) {return noCreation(vType, field_key, field_next, Hasher.defaul());}
-	public static <K, V> Builder<K, V> noCreation(Class<V> vType, String field_key, String field_next, Hasher<K> hasher) {
-		long key = Unsafe.fieldOffset(vType, field_key);
-		long next = Unsafe.fieldOffset(vType, field_next);
-		return new Builder<>(vType, next, key, hasher, null);
+		public Builder<K, V> key(String field) {
+			this.keyField = field;
+			return this;
+		}
+		public Builder<K, V> next(String field) {
+			this.nextField = field;
+			return this;
+		}
+		public Builder<K, V> hasher(Hasher<K> hasher) {
+			this.hasher = hasher;
+			return this;
+		}
+		public Builder<K, V> newValue(Function<K, V> newValue) {
+			this.newValue = newValue;
+			return this;
+		}
+		public Builder<K, V> realKeyType(Class<K> kType) {
+			this.kType = kType;
+			return this;
+		}
+
+		public Template<K, V> build() {
+			long key = Unsafe.objectFieldOffset(vType, keyField, kType);
+			long next = Unsafe.objectFieldOffset(vType, nextField, vType);
+			return new Template<>(vType, next, key, hasher, newValue);
+		}
 	}
 
-	@Public
-	private interface ObjectNew {
-		default Object createValue(Object key) { return createValueNoarg(); }
-		Object createValueNoarg();
-	}
-	public static final class Builder<K, V> {
+	public static final class Template<K, V> {
 		final Class<V> type;
 		final long NEXT, KEY;
 		final Hasher<K> hasher;
-		final ObjectNew creater;
+		final Function<K, V> newValue;
 
-		Builder(Class<V> type, long nextOffset, long keyOffset, Hasher<K> hasher, ObjectNew creater) {
+		Template(Class<V> type, long nextOffset, long keyOffset, Hasher<K> hasher, Function<K, V> newValue) {
 			this.type = type;
 			NEXT = nextOffset;
 			KEY = keyOffset;
 			this.hasher = hasher;
-			this.creater = creater;
+			this.newValue = newValue;
 		}
 
 		public XashMap<K, V> create() { return new XashMap<>(this, 16); }
@@ -83,8 +97,8 @@ public final class XashMap<K, V> extends AbstractSet<V> {
 
 		@SuppressWarnings("unchecked")
 		final V createValue(K k) {
-			if (creater == null) throw new UnsupportedOperationException("creation unavailable");
-			V v = (V) creater.createValue(k);
+			if (newValue == null) throw new UnsupportedOperationException("creation unavailable");
+			V v = (V) newValue.apply(k);
 			SetKey(v, k);
 			return v;
 		}
@@ -92,9 +106,9 @@ public final class XashMap<K, V> extends AbstractSet<V> {
 
 	private Object[] entries;
 	int size, mask;
-	private final Builder<K, V> builder;
+	private final Template<K, V> template;
 
-	XashMap(Builder<K, V> builder, int size) { this.builder = builder; ensureCapacity(size); }
+	XashMap(Template<K, V> template, int size) { this.template = template; ensureCapacity(size); }
 
 	public void ensureCapacity(int size) {
 		if (size < mask+1) return;
@@ -109,23 +123,25 @@ public final class XashMap<K, V> extends AbstractSet<V> {
 	public int size() { return size; }
 
 	@Override
-	public final boolean contains(Object o) { return get(builder.GetKey(builder.checkCast(o))) != null; }
+	public final boolean contains(Object o) { return get(template.GetKey(template.checkCast(o))) != null; }
 	public boolean containsKey(Object o) { return get(o) != null; }
 	public V get(Object k) { return getOrDefault(k, null); }
 	@SuppressWarnings("unchecked")
 	public V getOrDefault(Object k, V def) {
+		// Concurrent
+		Object[] entries = this.entries;
 		if (entries != null) {
-			Object obj = entries[builder.hashCode((K) k)&mask];
+			Object obj = entries[template.hashCode((K) k)&(entries.length-1)];
 			while (obj != null) {
-				if (builder.equals((K) k, builder.GetKey(obj))) return (V) obj;
-				obj = builder.GetNext(obj);
+				if (template.equals((K) k, template.GetKey(obj))) return (V) obj;
+				obj = template.GetNext(obj);
 			}
 		}
 		return def;
 	}
 
-	public boolean add(@NotNull V value) { return null == put1(builder.GetKey(builder.checkCast(value)), value, false, false); }
-	public boolean set(@NotNull V value) { return null == put1(builder.GetKey(builder.checkCast(value)), value, true, false); }
+	public boolean add(@NotNull V value) { return null == put1(template.GetKey(template.checkCast(value)), value, false, false); }
+	public boolean set(@NotNull V value) { return null == put1(template.GetKey(template.checkCast(value)), value, true, false); }
 
 	public V put(K key, @NotNull V val) {
 		if (val == null) throw new NullPointerException("val");
@@ -136,14 +152,14 @@ public final class XashMap<K, V> extends AbstractSet<V> {
 		return put1(key, val, false, false);
 	}
 	public V computeIfAbsent(K key) { return put1(key, null, false, true); }
-	@NotNull public V intern(@NotNull V node) {return put1(builder.GetKey(builder.checkCast(node)), node, false, true);}
+	@NotNull public V intern(@NotNull V node) {return put1(template.GetKey(template.checkCast(node)), node, false, true);}
 
 	@SuppressWarnings("unchecked")
 	@Contract("_,_,_,true -> !null")
 	private V put1(K k, V v, boolean replace, boolean add) {
-		int i = builder.hashCode(k)&mask;
+		int i = template.hashCode(k)&mask;
 
-		if (v != null && builder.GetNext(builder.checkCast(v)) == v)
+		if (v != null && template.GetNext(template.checkCast(v)) == v)
 			throw new UnsupportedOperationException("entry "+v+" 被锁定，无法加入map");
 
 		if (entries == null) entries = new Object[mask+1];
@@ -151,15 +167,15 @@ public final class XashMap<K, V> extends AbstractSet<V> {
 		if (obj != null) {
 			Object prev = null;
 			while (obj != null) {
-				if (builder.equals(k, builder.GetKey(obj))) {
+				if (template.equals(k, template.GetKey(obj))) {
 					if (replace) {
-						if (v == null) v = builder.createValue(k);
+						if (v == null) v = template.createValue(k);
 
-						builder.SetNext(v, builder.GetNext(obj));
-						builder.SetNext(obj, null);
+						template.SetNext(v, template.GetNext(obj));
+						template.SetNext(obj, null);
 
 						if (prev == null) entries[i] = v;
-						else builder.SetNext(prev, v);
+						else template.SetNext(prev, v);
 
 						return add ? v : null;
 					}
@@ -167,14 +183,14 @@ public final class XashMap<K, V> extends AbstractSet<V> {
 				}
 
 				prev = obj;
-				obj = builder.GetNext(obj);
+				obj = template.GetNext(obj);
 			}
 		}
 
 
-		if (v == null) v = builder.createValue(k);
+		if (v == null) v = template.createValue(k);
 
-		builder.SetNext(v, entries[i]);
+		template.SetNext(v, entries[i]);
 		entries[i] = v;
 
 		if (++size > mask * REFERENCE_LOAD_FACTOR) resize((mask+1)<<1);
@@ -182,29 +198,29 @@ public final class XashMap<K, V> extends AbstractSet<V> {
 	}
 
 	@Override
-	public boolean remove(Object o) { return removeKey(builder.GetKey(builder.checkCast(o))) != null; }
+	public boolean remove(Object o) { return removeKey(template.GetKey(template.checkCast(o))) != null; }
 	@SuppressWarnings("unchecked")
 	public V removeKey(K key) {
 		if (entries == null) return null;
 
-		int i = builder.hashCode(key)&mask;
+		int i = template.hashCode(key)&mask;
 		Object entry = entries[i], prev = null;
 		if (entry == null) return null;
 
-		while (!builder.equals(key, builder.GetKey(entry))) {
+		while (!template.equals(key, template.GetKey(entry))) {
 			prev = entry;
 
-			entry = builder.GetNext(entry);
+			entry = template.GetNext(entry);
 			if (entry == null) return null;
 		}
 
 		size--;
 
-		Object next = builder.GetNext(entry);
-		if (prev != null) builder.SetNext(prev, next);
+		Object next = template.GetNext(entry);
+		if (prev != null) template.SetNext(prev, next);
 		else entries[i] = next;
 
-		builder.SetNext(entry, null);
+		template.SetNext(entry, null);
 		return (V) entry;
 	}
 
@@ -218,17 +234,17 @@ public final class XashMap<K, V> extends AbstractSet<V> {
 		while (entry != v) {
 			prev = entry;
 
-			entry = builder.GetNext(entry);
+			entry = template.GetNext(entry);
 			if (entry == null) return false;
 		}
 
 		size--;
 
-		Object next = builder.GetNext(entry);
-		if (prev != null) builder.SetNext(prev, next);
+		Object next = template.GetNext(entry);
+		if (prev != null) template.SetNext(prev, next);
 		else entries[i] = next;
 
-		builder.SetNext(entry, null);
+		template.SetNext(entry, null);
 		return true;
 	}
 
@@ -246,12 +262,12 @@ public final class XashMap<K, V> extends AbstractSet<V> {
 		for (; i < j; i++) {
 			Object entry = entries[i];
 			while (entry != null) {
-				int newKey = builder.hashCode(builder.GetKey(entry))&len;
+				int newKey = template.hashCode(template.GetKey(entry))&len;
 
-				Object next = builder.GetNext(entry);
+				Object next = template.GetNext(entry);
 
 				Object old = newEntries[newKey];
-				builder.SetNext(entry, old);
+				template.SetNext(entry, old);
 				newEntries[newKey] = entry;
 
 				entry = next;
@@ -284,7 +300,7 @@ public final class XashMap<K, V> extends AbstractSet<V> {
 			while (true) {
 				if (entry != null) {
 					result = (V) entry;
-					entry = builder.GetNext(entry);
+					entry = template.GetNext(entry);
 					return true;
 				} else {
 					Object[] ent = localEntries;
@@ -305,16 +321,16 @@ public final class XashMap<K, V> extends AbstractSet<V> {
 					if (entry == result) break chk;
 
 					prev = entry;
-					entry = builder.GetNext(entry);
+					entry = template.GetNext(entry);
 				}
 
 				throw new ConcurrentModificationException();
 			}
 
-			Object next = builder.GetNext(entry);
-			builder.SetNext(entry, null);
+			Object next = template.GetNext(entry);
+			template.SetNext(entry, null);
 
-			if (prev != null) builder.SetNext(prev, next);
+			if (prev != null) template.SetNext(prev, next);
 			else entries[i-1] = next;
 
 			size--;
@@ -325,5 +341,5 @@ public final class XashMap<K, V> extends AbstractSet<V> {
 		}
 	}
 
-	final K _valueGetKey(V next) {return builder.GetKey(next);}
+	final K _valueGetKey(V next) {return template.GetKey(next);}
 }

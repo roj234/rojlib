@@ -10,9 +10,9 @@
 
 package roj.archive.xz.lzma;
 
+import roj.archive.rangecoder.RangeEncoder;
 import roj.archive.xz.LZMA2Options;
 import roj.archive.xz.lz.LZEncoder;
-import roj.archive.xz.rangecoder.RangeEncoder;
 import roj.reflect.Unsafe;
 import roj.util.ArrayUtil;
 
@@ -20,7 +20,8 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.util.Arrays;
 
-import static roj.archive.xz.rangecoder.RangeEncoder.*;
+import static roj.archive.rangecoder.RangeCoder.BIT_MODEL_TOTAL;
+import static roj.archive.rangecoder.RangeCoder.BIT_MODEL_TOTAL_BITS;
 
 public abstract sealed class LZMAEncoder extends LZMACoder permits LZMAEncoderFast, LZMAEncoderNormal {
 	public static final int MODE_FAST = 1, MODE_NORMAL = 2;
@@ -225,7 +226,9 @@ public abstract sealed class LZMAEncoder extends LZMACoder permits LZMAEncoderFa
 		try {
 			if (!lz.isStarted() && !encodeInit()) return false;
 
-			while (uncompressedSize <= LZMA2_UNCOMPRESSED_LIMIT && rc.lzma2_getPendingSize() <= LZMA2_COMPRESSED_LIMIT) if (!encodeSymbol()) return false;
+			while (uncompressedSize <= LZMA2_UNCOMPRESSED_LIMIT && rc.getPendingSize() <= LZMA2_COMPRESSED_LIMIT)
+				if (!encodeSymbol())
+					return false;
 		} catch (IOException e) {
 			assert false;
 		}
@@ -303,7 +306,7 @@ public abstract sealed class LZMAEncoder extends LZMACoder permits LZMAEncoderFa
 	private void encodeLiteral(short[] probs) throws IOException {
 		int symbol = lz.getByte(readAhead) | 0x100;
 
-		if (state_isLiteral(state)) {
+		if (stateIsLiteral(state)) {
 			int subencoderIndex;
 			int bit;
 
@@ -332,11 +335,11 @@ public abstract sealed class LZMAEncoder extends LZMACoder permits LZMAEncoderFa
 			} while (symbol < 0x10000);
 		}
 
-		state = state_updateLiteral(state);
+		state = stateUpdateLiteral(state);
 	}
 
 	private void encodeMatch(int dist, int len, int posState) throws IOException {
-		state = state_updateMatch(state);
+		state = stateUpdateMatch(state);
 		encodeLength(len, posState, 0);
 
 		int distSlot = getDistSlot(dist);
@@ -390,10 +393,10 @@ public abstract sealed class LZMAEncoder extends LZMACoder permits LZMAEncoderFa
 		}
 
 		if (len == 1) {
-			this.state = state_updateShortRep(state);
+			this.state = stateUpdateShortRep(state);
 		} else {
 			encodeLength(len, posState, 2);
-			this.state = state_updateLongRep(state);
+			this.state = stateUpdateLongRep(state);
 		}
 	}
 
@@ -432,7 +435,7 @@ public abstract sealed class LZMAEncoder extends LZMACoder permits LZMAEncoderFa
 		int price = getBitPrice(isMatch[(pos & posMask) + (state<<4)], 0);
 
 		int i = getSubcoderIndex(prevByte, pos);
-		price += state_isLiteral(state) ? _getLiteralPrice(literalProbs[i], curByte) : _getLiteralPriceMatched(literalProbs[i], curByte, matchByte);
+		price += stateIsLiteral(state) ? _getLiteralPrice(literalProbs[i], curByte) : _getLiteralPriceMatched(literalProbs[i], curByte, matchByte);
 
 		return price;
 	}
@@ -612,26 +615,81 @@ public abstract sealed class LZMAEncoder extends LZMACoder permits LZMAEncoderFa
 		--counters[posState];
 	}
 
-	final int getMatchPrice(int len, int posState) { return prices[posState][len - MATCH_LEN_MIN]; }
+	private int getMatchPrice(int len, int posState) { return prices[posState][len - MATCH_LEN_MIN]; }
 	final int getRepeatPrice(int len, int posState) { return getMatchPrice(len, posState+posMask+1); }
 
-	public final void lzPresetDict(int dictSize, byte[] dict) {
-		if (dict != null) lzPresetDict(dictSize, dict, 0, dict.length);
+	private static final int MOVE_REDUCING_BITS = 4, BIT_PRICE_SHIFT_BITS = 4;
+	private static final short[] PRICES = new short[BIT_MODEL_TOTAL >>> MOVE_REDUCING_BITS];
+	static {
+		for (int i = (1 << MOVE_REDUCING_BITS) / 2; i < BIT_MODEL_TOTAL; i += (1 << MOVE_REDUCING_BITS)) {
+			int w = i;
+			int bitCount = 0;
+
+			for (int j = 0; j < BIT_PRICE_SHIFT_BITS; ++j) {
+				w *= w;
+				bitCount <<= 1;
+
+				while ((w & 0xFFFF0000) != 0) {
+					w >>>= 1;
+					++bitCount;
+				}
+			}
+
+			PRICES[i >> MOVE_REDUCING_BITS] = (short) ((BIT_MODEL_TOTAL_BITS << BIT_PRICE_SHIFT_BITS) - 15 - bitCount);
+		}
 	}
-	public final void lzPresetDict(int dictSize, byte[] dict, int off, int len) {
+	private static int getBitPrice(int prob, int bit) {
+		// NOTE: Unlike in RangeEncoder#encodeBit(), here bit must be 0 or 1.
+		assert bit == 0 || bit == 1;
+		return PRICES[(prob ^ ((-bit) & (BIT_MODEL_TOTAL - 1))) >>> MOVE_REDUCING_BITS];
+	}
+
+	private static int getBitTreePrice(short[] probs, int symbol) {
+		int price = 0;
+		symbol |= probs.length;
+
+		do {
+			int bit = symbol & 1;
+			symbol >>>= 1;
+			price += getBitPrice(probs[symbol], bit);
+		} while (symbol != 1);
+
+		return price;
+	}
+	private static int getReverseBitTreePrice(short[] probs, int symbol) {
+		int price = 0;
+		int index = 1;
+		symbol |= probs.length;
+
+		do {
+			int bit = symbol & 1;
+			symbol >>>= 1;
+			price += getBitPrice(probs[index], bit);
+			index = (index << 1) | bit;
+		} while (symbol != 1);
+
+		return price;
+	}
+	private static int getDirectBitsPrice(int count) { return count << BIT_PRICE_SHIFT_BITS; }
+
+	public final void setPresetDict(int dictSize, byte[] dict) {
+		if (dict != null) setPresetDict(dictSize, dict, 0, dict.length);
+	}
+	public final void setPresetDict(int dictSize, byte[] dict, int off, int len) {
 		ArrayUtil.checkRange(dict, off, len);
-		lzPresetDict0(dictSize, dict, (long) Unsafe.ARRAY_BYTE_BASE_OFFSET +off, len);
+		int copySize = lz.setPresetDict(dictSize, dict, (long) Unsafe.ARRAY_BYTE_BASE_OFFSET + off, len);
+		lz.skip(copySize);
 	}
-	public final void lzPresetDict0(int dictSize, Object ref, long off, int len) { lz.setPresetDict(dictSize, ref, off, len); }
+	public final int setPresetDict0(int dictSize, Object ref, long off, int len) { return lz.setPresetDict(dictSize, ref, off, len); }
 
-	public final int lzFill(byte[] in, int off, int len) { return lzFill0(in, (long) Unsafe.ARRAY_BYTE_BASE_OFFSET +off, len); }
-	public final int lzFill(long addr, int len) { return lzFill0(null, addr, len); }
-	public final int lzFill0(Object in, long off, int len) {return lz.fillWindow(in, off, len);}
+	public final int fillWindow(byte[] in, int off, int len) { return fillWindow0(in, (long) Unsafe.ARRAY_BYTE_BASE_OFFSET +off, len); }
+	public final int fillWindow(long addr, int len) { return fillWindow0(null, addr, len); }
+	public final int fillWindow0(Object in, long off, int len) {return lz.fillWindow(in, off, len);}
 
-	public final void lzCopy(OutputStream out, int backward, int len) throws IOException {lz.copyUncompressed(out, backward, len);}
+	public final void copyUncompressed(OutputStream out, int backward, int len) throws IOException {lz.copyUncompressed(out, backward, len);}
 
-	public final void lzFlush() {lz.setFlushing();}
-	public final void lzFinish() {lz.setFinishing();}
+	public final void setFlushing() {lz.setFlushing();}
+	public final void setFinishing() {lz.setFinishing();}
 
-	public final void lzReset() {lz.reset();}
+	public final LZEncoder getLzEncoder() {return lz;}
 }

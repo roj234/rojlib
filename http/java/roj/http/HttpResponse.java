@@ -30,17 +30,30 @@ public interface HttpResponse {
 
 	// 状态管理
 	/**
-	 * 请求是否成功
+	 * 响应是否成功
 	 */
 	boolean isSuccess();
 	/**
-	 * 请求是否完成，无论成功或失败
+	 * 等待响应完成，可能成功或失败
 	 */
 	boolean isDone();
-
+	/**
+	 * 阻塞直到响应完成
+	 */
 	void awaitCompletion() throws InterruptedException;
-	void onCompletion(Consumer<HttpResponse> o) throws IOException;
 
+	/**
+	 * 注册状态改变回调.
+	 * 值得注意的是，它最多可能被调用三次
+	 * 1. 注册时
+	 * 2. 响应头获取时
+	 * 3. 响应完成时
+	 */
+	void onReadyStateChange(Consumer<HttpResponse> handler) throws IOException;
+
+	/**
+	 * 断开与服务器的连接
+	 */
 	void disconnect() throws IOException;
 
 	// 请求体

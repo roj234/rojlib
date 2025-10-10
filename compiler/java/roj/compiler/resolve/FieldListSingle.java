@@ -4,7 +4,6 @@ import org.jetbrains.annotations.NotNull;
 import roj.asm.ClassDefinition;
 import roj.asm.FieldNode;
 import roj.compiler.CompileContext;
-import roj.text.CharList;
 
 /**
  * @author Roj234
@@ -21,19 +20,16 @@ final class FieldListSingle extends ComponentList {
 
 	@NotNull
 	public FieldResult findField(CompileContext ctx, int flag) {
-		var tmp = new CharList();
-		ctx.errorCapture = makeErrorCapture(tmp);
-
+		ctx.enableErrorCapture();
 		try {
 			if (ctx.canAccessSymbol(owner, node, (flag&IN_STATIC) != 0, true)) {
-				tmp._free();
 				FieldList.checkBridgeMethod(ctx, owner, node);
 				checkDeprecation(ctx, owner, node);
 				return new FieldResult(owner, node);
 			}
-			return new FieldResult(tmp.replace('/', '.').toStringAndFree());
+			return new FieldResult(ctx.getCapturedError().replace('/', '.').toString());
 		} finally {
-			ctx.errorCapture = null;
+			ctx.disableErrorCapture();
 		}
 	}
 }

@@ -15,7 +15,7 @@ import roj.asmx.mapper.Mapper;
 import roj.ci.BuildContext;
 import roj.ci.MCMake;
 import roj.ci.plugin.MAP;
-import roj.ci.plugin.Processor;
+import roj.ci.plugin.Plugin;
 import roj.collect.ArrayList;
 
 import java.util.Collections;
@@ -27,12 +27,12 @@ import java.util.Objects;
  * @author solo6975
  * @since 2022/5/22 1:58
  */
-public class MIXIN implements Processor {
+public class MIXIN implements Plugin {
 	@Override
 	public String name() {return "Mixin注解上下文处理程序";}
 
 	@Override
-	public void afterCompilePost(BuildContext ctx) {
+	public void postProcess(BuildContext ctx) {
 		var m = Objects.requireNonNull(ctx.getProcessor(MAP.class), "Missing dep MAP for MIXIN").getProjectMapper(ctx.project);
 
 		var annotatedClass = ctx.getAnnotatedClasses("org/spongepowered/asm/mixin/Mixin");
@@ -69,7 +69,7 @@ public class MIXIN implements Processor {
 
 						member.name(mappedName);
 					} else {
-						MCMake.LOGGER.warn("无法为对象{}.{}找到映射", mixinClass.name(), member.name());
+						MCMake.log.info("无法为成员 {}.{} 找到映射名: ", mixinClass.name(), member);
 					}
 					break;
 				}
@@ -88,7 +88,7 @@ public class MIXIN implements Processor {
 					if (mappedTarget != null) {
 						at.put("target", AnnVal.valueOf("L"+target.owner+";"+mappedTarget+target.rawDesc));
 					} else {
-						MCMake.LOGGER.warn("无法为对象{}.{}找到映射", target);
+						MCMake.log.info("无法为成员 {} 找到映射名: ", target);
 					}
 				}
 				if (anno.type().equals("org/spongepowered/asm/mixin/injection/Inject") || anno.type().equals("org/spongepowered/asm/mixin/injection/Redirect")
@@ -101,7 +101,7 @@ public class MIXIN implements Processor {
 						if (mappedName != null) {
 							anno.put("method", new ArrayVal(Collections.singletonList(AnnVal.valueOf(mappedName))));
 						} else {
-							MCMake.LOGGER.warn("无法为对象{}.{}找到映射", mixinClass.name(), member.name());
+							MCMake.log.info("无法为成员 {}.{} 找到映射名: ", mixinClass.name(), member);
 						}
 					}
 					break;
@@ -125,7 +125,7 @@ public class MIXIN implements Processor {
 						Type returnType = ((ParameterizedType) signature.values.get(signature.values.size() - 2)).typeParameters.get(0).rawType();
 						parameters.set(parameters.size() - 1, returnType);
 					} catch (Exception e) {
-						MCMake.LOGGER.warn("failed to obtain generic CallbackInfoReturnable {}", signature);
+						MCMake.log.warn("failed to obtain generic CallbackInfoReturnable {}", signature);
 					}
 				}
 				memberDesc = Type.getMethodDescriptor(parameters);
@@ -157,7 +157,7 @@ public class MIXIN implements Processor {
 		while (true) {
 			String mappedName = mapping.get(desc);
 			if (mappedName != null) return hasEmbeddedDesc ? mappedName + desc.rawDesc() : mappedName;
-			MCMake.LOGGER.debug("NotFoundInCurrent: {}", desc);
+			MCMake.log.debug("NotFoundInCurrent: {}", desc);
 
 			if (mapper.getShadows().contains(desc)) break;
 

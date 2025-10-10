@@ -6,6 +6,7 @@ import roj.asm.AsmCache;
 import roj.asm.ClassNode;
 import roj.asmx.Context;
 import roj.collect.ArrayList;
+import roj.concurrent.TaskGroup;
 import roj.concurrent.TaskPool;
 import roj.crypt.CryptoFactory;
 import roj.gui.Profiler;
@@ -18,8 +19,6 @@ import java.io.File;
 import java.io.IOException;
 import java.util.List;
 import java.util.Random;
-
-import static roj.asmx.Context.runAsync;
 
 /**
  * @author Roj234
@@ -114,11 +113,12 @@ public class ObfuscatorNext {
 			i += len;
 		}
 
+		TaskGroup group = pool.newGroup();
 		for (ObfuscateTask task : tasks) {
 			if (task.isMulti()) {
-				task.forEach(ctxs, rand, pool);
+				task.forEach(ctxs, rand, group);
 			} else {
-				runAsync(ctx -> task.apply(ctx, rand), contextTasks, pool);
+				group.executeAll(contextTasks, ctx -> task.apply(ctx, rand)).await();
 			}
 		}
 	}

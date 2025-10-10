@@ -1,0 +1,5 @@
+id: ${project_name}
+desc: 动态域名服务
+version: ${project_version}
+authors: ["Roj234"]
+mainClass: roj.plugins.ddns.DDNSClient

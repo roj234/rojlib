@@ -39,6 +39,7 @@ import roj.text.Token;
 import roj.util.ArrayCache;
 import roj.util.DynByteBuf;
 import roj.util.Helpers;
+import roj.util.OperationDone;
 import roj.util.function.Flow;
 
 import java.util.*;
@@ -59,6 +60,8 @@ import static roj.text.Token.LITERAL;
  * @since 2020/12/31 17:34
  */
 public abstract class CompileUnit extends ClassNode {
+	private CompileUnit _next;
+
 	/**
 	 * 暂存不完整的类名 - S1
 	 * XashMap索引项 - All
@@ -71,10 +74,9 @@ public abstract class CompileUnit extends ClassNode {
 		this.name = name;
 	}
 
-	private Object _next;
-
-	// Class level flags
-	protected static final int _ACC_RECORD = 1 << 31, _ACC_STRUCT = 1 << 30, _ACC_INNER_CLASS = 1 << 29, _ACC_ALGEBRA_DERIVED_TYPE = 1 << 28;
+	// Class level flags (extraModifiers)
+	protected static final int _X_RECORD = 1 << 31, _X_INNER_CLASS = 1 << 30, _X_ANONYMOUS_CLASS = 1 << 29;
+	@Deprecated protected static final int _X_STRUCT = 1 << 28, _X_ALGEBRA_DERIVED_TYPE = 1 << 27;
 	// read via _modifier()
 	protected static final int _ACC_DEFAULT = 1 << 16, _ACC_ANNOTATION = 1 << 17, _ACC_SEALED = 1 << 18, _ACC_NON_SEALED = 1 << 19;
 	protected static final int CLASS_ACC = ACC_PUBLIC|ACC_FINAL|ACC_ABSTRACT|ACC_STRICT|_ACC_ANNOTATION|_ACC_SEALED|_ACC_NON_SEALED;
@@ -121,7 +123,16 @@ public abstract class CompileUnit extends ClassNode {
 	protected int _children;
 
 	protected CompileContext ctx;
-	public void _setCtx(CompileContext ctx) {this.ctx = ctx;}
+	public void setContext(CompileContext ctx) {this.ctx = ctx;}
+	protected final CompileContext getContext() {
+		var ctx = CompileContext.get();
+		if (ctx == null) {
+			ctx = this.ctx.compiler.retainContext();
+			CompileContext.set(ctx);
+		}
+		ctx.setClass(this);
+		return ctx;
+	}
 
 	public void setMinimumBinaryCompatibility(int level) {
 		int javaVersion = JavaVersion(level);
@@ -140,7 +151,7 @@ public abstract class CompileUnit extends ClassNode {
 		_parent = this;
 	}
 	public ImportList getImportList() {return importList;}
-	public CompileContext lc() {return ctx;}
+	public CompileContext context() {return ctx;}
 	public String getSourceFile() {return filename;}
 	public CharSequence getCode() {return code;}
 
@@ -309,7 +320,7 @@ public abstract class CompileUnit extends ClassNode {
 
 	public static final int TYPE_PRIMITIVE = 1, TYPE_GENERIC = 2, TYPE_NO_ARRAY = 4, TYPE_ALLOW_VOID = 8;
 	protected static final int GENERIC_INNER = 8, SKIP_TYPE_PARAM = 16;
-	private static final int GENERIC_TERMINATE = 32;
+	private static final int GENERIC_TERMINATE = 32, CHECK_MODE = 64;
 	/**
 	 * 读取类型声明（支持泛型、数组等特性）.<br>
 	 * ⚠ 该函数只有在阶段4时能被外部调用。
@@ -422,10 +433,10 @@ public abstract class CompileUnit extends ClassNode {
 	 * @param type 基础类型名称
 	 * @return 完整的泛型类型表示
 	 */
-	public final IType readGenericPart(Token w, String type) throws ParseException {
+	public final IType readGenericPart(Token w, String type, boolean checkOnly) throws ParseException {
 		int prev = ctx.tokenizer.setState(STATE_TYPE);
 		try {
-			return readGeneric(type, w, GENERIC_INNER);
+			return readGeneric(type, w, GENERIC_INNER | (checkOnly ? CHECK_MODE : 0));
 		} finally {
 			ctx.tokenizer.state = prev;
 		}
@@ -482,7 +493,10 @@ public abstract class CompileUnit extends ClassNode {
 					w = wr.next();
 				} while (w.type() == comma);
 
-				if (w.type() != gtr) wr.unexpected(w.text(), "type.except.afterLss");
+				if (w.type() != gtr) {
+					if ((flags&CHECK_MODE) != 0) throw OperationDone.INSTANCE;
+					wr.unexpected(w.text(), "type.except.afterLss");
+				}
 			}
 
 			w = wr.next();
@@ -637,8 +651,7 @@ public abstract class CompileUnit extends ClassNode {
 	 * </ul>
 	 */
 	public void S2p1resolveName() {
-		var ctx = CompileContext.get();
-		ctx.setClass(this);
+		var ctx = getContext();
 		ctx.errorReportIndex = classIdx;
 		// TypeResolver
 		importList.resolve(ctx);
@@ -839,9 +852,7 @@ public abstract class CompileUnit extends ClassNode {
 	 * 注意：本阶段可能修改类的字节码结构并添加合成方法。
 	 */
 	public void S2p2resolveType() {
-		var ctx = CompileContext.get();
-		ctx.setClass(this);
-
+		var ctx = getContext();
 		ctx.errorReportIndex = classIdx;
 		// 检测循环继承
 		ctx.getHierarchyList(this);
@@ -918,8 +929,7 @@ public abstract class CompileUnit extends ClassNode {
 		}
 
 		// 是否需要生成默认构造器
-		// use extraModifier so that anonymous class can disable it
-		boolean generateConstructor = (extraModifier & ACC_INTERFACE) == 0;
+		boolean generateConstructor = (extraModifier & (ACC_INTERFACE|_X_ANONYMOUS_CLASS)) == 0;
 
 		names.clear();
 		List<MethodNode> methods = this.methods;
@@ -1011,7 +1021,7 @@ public abstract class CompileUnit extends ClassNode {
 		// endregion
 		// region 记录和结构体的默认方法生成
 		recordDefaults:
-		if ((extraModifier&_ACC_RECORD) != 0) {
+		if ((extraModifier&_X_RECORD) != 0) {
 			var bArguments = new ArrayList<Constant>();
 			var fieldNames = new CharList();
 			bArguments.add(cp.getClazz(name));
@@ -1074,7 +1084,7 @@ public abstract class CompileUnit extends ClassNode {
 				cw.finish();
 			}
 
-			if ((extraModifier & _ACC_STRUCT) != 0) break recordDefaults;
+			if ((extraModifier & _X_STRUCT) != 0) break recordDefaults;
 
 			if (fieldNames.length() > 0) fieldNames.setLength(fieldNames.length()-1);
 			bArguments.set(1, new CstString(fieldNames.toStringAndFree()));
@@ -1150,7 +1160,7 @@ public abstract class CompileUnit extends ClassNode {
 			glinit.field(PUTFIELD, name, NestContext.InnerClass.FIELD_HOST_REF, "L"+_parent.name+";");
 		}
 	}
-	public boolean isNonStaticInnerClass() {return _parent != this && (extraModifier&(ACC_STATIC|_ACC_INNER_CLASS)) == _ACC_INNER_CLASS;}
+	public boolean isNonStaticInnerClass() {return _parent != this && (extraModifier&(ACC_STATIC|_X_INNER_CLASS)) == _X_INNER_CLASS;}
 	public boolean isInheritedNonStaticInnerClass() {
 		if (isNonStaticInnerClass()) {
 			String parent = parent();
@@ -1306,8 +1316,7 @@ public abstract class CompileUnit extends ClassNode {
 	 * </ol>
 	 */
 	public void S2p3resolveMethod() {
-		var ctx = CompileContext.get();
-		ctx.setClass(this);
+		var ctx = getContext();
 		ctx.errorReportIndex = classIdx;
 
 		final HashSet<NameAndType> implementCheck = Helpers.cast(ctx.tmpSet);
@@ -1672,8 +1681,7 @@ public abstract class CompileUnit extends ClassNode {
 	 * </ul>
 	 */
 	void S3_DFSField() throws ParseException {
-		var ctx = CompileContext.get();
-		ctx.setClass(this);
+		var ctx = getContext();
 
 		synchronized (this) {
 			if (fieldParseState < 0) {
@@ -1762,7 +1770,7 @@ public abstract class CompileUnit extends ClassNode {
 						list.remove(i--);
 					}
 				} else {
-					int targetType = applicableToNode(annotated.getKey());
+					int targetType = getNodeTypeMask(annotated.getKey());
 					if ((desc.applicableTo() & targetType) == 0) {
 						ctx.report(Kind.ERROR, "cu.annotation.notApplicable", type, targetType);
 					}
@@ -1807,20 +1815,20 @@ public abstract class CompileUnit extends ClassNode {
 		annoTask.clear();
 	}
 	// 注解的适用类型
-	private static int applicableToNode(Attributed key) {
+	private static int getNodeTypeMask(Attributed key) {
 		int mask;
 		if (key instanceof FieldNode) {
-			mask = AnnotationType.FIELD;
+			mask = AnnotationType.FIELD | AnnotationType.TYPE_USE;
 		} else if (key instanceof MethodNode m) {
-			mask = m.name().startsWith("<") ? AnnotationType.CONSTRUCTOR : AnnotationType.METHOD;
+			mask = m.name().startsWith("<") ? AnnotationType.CONSTRUCTOR : (AnnotationType.METHOD | AnnotationType.TYPE_USE);
 		} else if (key instanceof ClassDefinition c) {
 			if (c.name().endsWith("/package-info")) mask = AnnotationType.PACKAGE;
 			else if (c.name().equals("module-info")) mask = AnnotationType.MODULE;
 			else mask = (c.modifier()&Opcodes.ACC_ANNOTATION) != 0 ? AnnotationType.ANNOTATION_TYPE : AnnotationType.TYPE;
 		} else if (key instanceof ParamAnnotationRef) {
-			mask = AnnotationType.PARAMETER;
+			mask = AnnotationType.PARAMETER | AnnotationType.TYPE_USE;
 		} else if (key instanceof Variable) {
-			mask = AnnotationType.LOCAL_VARIABLE;
+			mask = AnnotationType.LOCAL_VARIABLE | AnnotationType.TYPE_USE;
 		} else {
 			throw new AssertionError("不支持的注解目标："+key.getClass());
 		}
@@ -2035,8 +2043,7 @@ public abstract class CompileUnit extends ClassNode {
 	 * @see ParseTask
 	 */
 	public void S4parseCode() throws ParseException {
-		var ctx = CompileContext.get();
-		ctx.setClass(this);
+		var ctx = getContext();
 
 		var backup = ctx.pushEnclosingContext();
 		addEnclosingContext(ctx);
@@ -2055,8 +2062,8 @@ public abstract class CompileUnit extends ClassNode {
 		finalFields.clear();
 
 		// 隐式构造器
-		if (glinit != null && glInitBytes == null && extraModifier != (ACC_FINAL|ACC_INTERFACE)) {
-			glinit.computeFrames(FrameVisitor.COMPUTE_SIZES| FrameVisitor.COMPUTE_FRAMES);
+		if (glinit != null && glInitBytes == null && (extraModifier&_X_ANONYMOUS_CLASS) == 0) {
+			glinit.computeFrames(FrameVisitor.COMPUTE_SIZES|FrameVisitor.COMPUTE_FRAMES);
 			glinit.insn(Opcodes.RETURN);
 			glinit.finish();
 		}
@@ -2065,19 +2072,22 @@ public abstract class CompileUnit extends ClassNode {
 	}
 
 	private void addEnclosingContext(CompileContext ctx) {
-		if (isNonStaticInnerClass()) {
-			var that = this;
-			assert ctx.enclosing.isEmpty() : "Enclosing owner is not empty for non-static inner class ??";
-			int size = ctx.enclosing.size();
-			do {
-				ctx.enclosing.add(size, NestContext.innerClass(ctx, that._parent.name(), that));
-				that = that._parent;
-			} while (that != that._parent && that.isNonStaticInnerClass());
-		} else {
-			if (!ctx.enclosingContext().isEmpty()) {
-				LavaCompiler.debugLogger().info("Debug enclosing context: "+ctx.enclosingContext());
-			}
+		if ((extraModifier&_X_ANONYMOUS_CLASS) != 0) return;
+
+		var hasInstance = isNonStaticInnerClass();
+		var that = this;
+		if (!ctx.enclosingContext().isEmpty()) {
+			LavaCompiler.debugLogger().info("addEnclosingContext(): Enclosing is not empty??: "+ctx.enclosingContext());
+			new Throwable().printStackTrace();
+			return;
 		}
+
+		int size = ctx.enclosing.size();
+		do {
+			ctx.enclosing.add(size, NestContext.innerClass(that._parent.name(), that, !hasInstance));
+			that = that._parent;
+			hasInstance = that.isNonStaticInnerClass();
+		} while (that != that._parent);
 	}
 
 	public void j11PrivateConstructor(MethodNode method) {

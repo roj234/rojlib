@@ -157,6 +157,7 @@ public class Tokenizer {
 	private Token lastToken;
 	private short lwType;
 	private int lwBegin, lwEnd;
+	private CharList prevFound = new CharList();
 	private CharSequence lwStr;
 
 	private byte seek;
@@ -225,7 +226,13 @@ public class Tokenizer {
 			lwType = w.type;
 			lwBegin = w.pos;
 			lwEnd = index;
-			lwStr = w.text;
+			if (w.text == found) {
+				prevFound.clear();
+				prevFound.append(w.text);
+				lwStr = prevFound;
+			} else {
+				lwStr = w.text.toString();
+			}
 		}
 
 		afterWord();
@@ -597,7 +604,7 @@ public class Tokenizer {
 
 	protected Token newWord() {return new Token();}
 	protected final Token wd = newWord();
-	protected Token formClip(short id, CharSequence s) { return wd.init(id, prevIndex, s.toString()); }
+	protected Token formClip(short id, CharSequence s) { return wd.init(id, prevIndex, s); }
 	protected final Token eof() { return wd.init(EOF, prevIndex, "/EOF"); }
 	// endregion
 	// region 数字解析
@@ -762,7 +769,8 @@ public class Tokenizer {
 		if ((flag & _NF_END) != 0) i++;
 
 		try {
-			CharSequence represent = input.subSequence(index, i);
+			var represent = prevFound; represent.clear();
+			represent.append(input, index, i);
 
 			Token w;
 			for(;;) {
@@ -772,7 +780,7 @@ public class Tokenizer {
 						if (TextUtil.checkMax(TextUtil.LONG_MAXS, v, 0, v.length(), neg)) {
 							w = onNumberFlow(v, INTEGER, LONG);
 							if (w != null) break;
-							w = Token.numberWord(index, _parseNumber(v, 4, neg), represent);
+							w = numberWord(index, _parseNumber(v, 4, neg), represent);
 						} else {
 							w = onNumberFlow(v, INTEGER, DOUBLE);
 							if (w != null) break;
@@ -790,21 +798,21 @@ public class Tokenizer {
 					if (!TextUtil.checkMax(RADIX_MAX[flag = (flag&3)|4], v, 0, v.length(), neg)) {
 						return onInvalidNumber(index, "lexer.number.longLarge");
 					}
-					w = Token.numberWord(index, _parseNumber(v, flag, neg), represent);
+					w = numberWord(index, _parseNumber(v, flag, neg), represent);
 				}
 				case 2 -> {
 					float fv = FastDoubleParser.parseFloat(v);
 					if (neg) fv = -fv;
 					if (fv == Float.POSITIVE_INFINITY || fv == Float.NEGATIVE_INFINITY) return onInvalidNumber(index, "lexer.number.floatLarge");
 					if (fv == 0 && !isZero(v)) return onInvalidNumber(index, "lexer.number.floatSmall");
-					w = Token.numberWord(index, fv, represent);
+					w = numberWord(index, fv, represent);
 				}
 				case 3 -> {
 					double dv = FastDoubleParser.parseDouble(v);
 					if (neg) dv = -dv;
 					if (dv == Double.POSITIVE_INFINITY || dv == Double.NEGATIVE_INFINITY) return onInvalidNumber(index, "lexer.number.floatLarge");
 					if (dv == 0 && !isZero(v)) return onInvalidNumber(index, "lexer.number.floatSmall");
-					w = Token.numberWord(index, dv, represent);
+					w = numberWord(index, dv, represent);
 				}
 			}
 			break;
@@ -919,7 +927,7 @@ public class Tokenizer {
 			long ts = DateFormat.daySinceUnixZero(y, m, d) * 86400000L;
 
 			c = index == in.length() ? 0 : in.charAt(index);
-			if (c != 'T' && c != 't' && c != ' ')
+			if (c != 'T' && c != 't' && c != ' ' && c != '_')
 				return timeWord(RFCDATE_DATE, i, ts, in.subSequence(i, index).toString());
 			index++;
 

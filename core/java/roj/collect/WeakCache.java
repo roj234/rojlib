@@ -41,9 +41,9 @@ public class WeakCache<K> extends WeakReference<K> implements Runnable {
 		}
 	}
 
-	private static final long _NEXT = Unsafe.fieldOffset(WeakCache.class, "_next");
-	private static final long REFERENT = Unsafe.fieldOffset(Reference.class, "referent");
-	public static <K, V extends WeakCache<K>> XashMap.Builder<K, V> shape(Class<V> vType) {
-		return new XashMap.Builder<>(vType, _NEXT, REFERENT, Hasher.identity(), null);
+	private static final long _NEXT = Unsafe.objectFieldOffset(WeakCache.class, "_next", WeakCache.class);
+	private static final long REFERENT = Unsafe.objectFieldOffset(Reference.class, "referent", Object.class);
+	public static <K, V extends WeakCache<K>> XashMap.Template<K, V> shape(Class<V> vType) {
+		return new XashMap.Template<>(vType, _NEXT, REFERENT, Hasher.identity(), null);
 	}
 }

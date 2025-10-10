@@ -1,0 +1,185 @@
+
+
+.filter {
+  /*background: linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.02));*/
+  background: var(--bg);
+  border: 1px solid var(--border);
+  padding: 16px;
+  /*box-shadow: 0 10px 30px rgba(0,0,0,0.25);*/
+}
+
+.filter-row + .filter-row { margin-top: 14px; }
+
+.filter-label {
+  font-size: 13px;
+  color: var(--muted);
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.choice-scroll {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 4px;
+  scroll-snap-type: x proximity;
+  white-space: nowrap;
+  overscroll-behavior-x: contain;
+}
+
+.choice-scroll::-webkit-scrollbar { height: 6px; }
+.choice-scroll::-webkit-scrollbar-track { background: transparent; }
+.choice-scroll::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,0.12);
+  border-radius: 3px;
+}
+.choice-scroll:hover::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.18); }
+
+.chip {
+  appearance: none;
+  border: 1px solid transparent;
+  background: var(--chip-bg);
+  color: var(--text);
+  padding: 8px 12px;
+  border-radius: 999px;
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+  scroll-snap-align: start;
+}
+.chip:hover { background: var(--chip-hover); }
+.chip.active {
+  background: var(--chip-active);
+  border-color: var(--chip-active-border);
+  box-shadow: 0 0 0 2px rgba(91,135,255,0.25);
+}
+.chip:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--focus);
+}
+
+/* 输入框 + 警告 */
+.input-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.text-input {
+  width: 100%;
+  background: var(--chip-bg);
+  border: 1px solid transparent;
+  color: var(--text);
+  height: 34px;
+  padding: 0 12px;
+  border-radius: 10px;
+  font-size: 14px;
+}
+.text-input::placeholder { color: var(--muted); }
+.text-input:focus {
+  outline: none;
+  border-color: var(--focus);
+  box-shadow: 0 0 0 2px rgba(122,178,255,0.25);
+}
+.text-input.invalid {
+  border-color: var(--error);
+  box-shadow: 0 0 0 2px rgba(255,107,107,0.18);
+}
+
+textarea.text-input {
+  min-height: 80px;
+  resize: vertical;
+  white-space: pre-wrap;
+  font-size: 14px;
+  padding: 8px 16px;
+}
+
+.input-warning {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--error);
+  background: var(--error-bg);
+  padding: 6px 8px;
+  border-radius: 8px;
+}
+
+/* 双滑块范围选择器 */
+.range-wrap {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 12px;
+}
+.range-slider {
+  position: relative;
+  height: 22px;
+}
+.range-track-bg {
+  position: absolute;
+  left: 0; right: 0; top: 50%;
+  transform: translateY(-50%);
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(128,128,128,0.16);
+}
+.range-track-fill {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  height: 6px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--accent), var(--accent-2));
+}
+.range-slider input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  position: absolute;
+  left: 0; right: 0; top: 0; bottom: 0;
+  width: 100%;
+  background: transparent;
+  pointer-events: none;
+}
+.range-slider input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  pointer-events: auto;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #fff;
+  border: 2px solid var(--accent);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.25);
+}
+.range-slider input[type="range"]::-moz-range-thumb {
+  pointer-events: auto;
+  width: 16px; height: 16px;
+  border-radius: 50%;
+  background: #fff;
+  border: 2px solid var(--accent);
+}
+.range-values {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.range-values input[type="number"] {
+  width: 80px;
+  height: 30px;
+  background: var(--chip-bg);
+  border: 1px solid transparent;
+  color: var(--text);
+  border-radius: 8px;
+  padding: 0 8px;
+}
+.range-values input[type="number"]:focus {
+  outline: none;
+  border-color: var(--focus);
+  box-shadow: 0 0 0 2px rgba(122,178,255,0.25);
+}

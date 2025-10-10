@@ -137,28 +137,29 @@ public final class ClassUtil {
 	public static Supplier<IResolver> currentResolver;
 	private static volatile IResolver global;
 	private IResolver resolver() {
+		if (resolver != null) return resolver;
+
 		if (currentResolver != null) {
 			IResolver impl = currentResolver.get();
 			if (impl != null) return impl;
 		}
 
-		if (resolver == null) {
-			if (global == null) {
-				synchronized (ClassUtil.class) {
-					if (global == null) {
-						global = new SimpleResolver(ClassNode.class.getClassLoader());
-					}
+		if (global == null) {
+			synchronized (ClassUtil.class) {
+				if (global == null) {
+					global = new SimpleResolver(ClassNode.class.getClassLoader());
 				}
 			}
-			resolver = global;
 		}
-		return resolver;
+		return global;
 	}
 
 	private IResolver resolver;
 
 	public ClassUtil() {}
 	public ClassUtil(IResolver impl) {resolver = impl;}
+
+	public void setResolver(IResolver resolver) {this.resolver = resolver;}
 
 	public ClassNode resolve(CharSequence name) {return resolver().resolve(name);}
 

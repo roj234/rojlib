@@ -174,8 +174,9 @@ public class FindClass extends JFrame {
 			for (File aaa : IOUtil.listFiles(file, f -> IOUtil.extensionName(f.getName()).equals("jar"))) {
 				read(aaa);
 			}
+		} else {
+			read(file);
 		}
-		read(file);
 	}
 
 	private void read(File file) {

@@ -1,0 +1,5 @@
+id: ${project_name}
+desc: “深度包检测”转发器
+version: ${project_version}
+authors: ["Roj234"]
+mainClass: roj.plugins.dpiProxy.DPIProxy

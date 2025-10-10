@@ -69,7 +69,7 @@ final class MemberAccess extends LeftValue {
 	ArrayList<String> nameChain;
 
 	private long nullishBits;
-	private static final byte ARRAY_LENGTH = 1, FINAL_FIELD = 2, SELF_FIELD = 4, RESOLVED = 8;
+	private static final byte ARRAY_LENGTH = 1, FINAL_FIELD = 2, READ_HOOK = 4, RESOLVED = 8, WRITE_HOOK = 16;
 	private byte flags;
 
 	// 解析时填充
@@ -340,20 +340,24 @@ final class MemberAccess extends LeftValue {
 			if (node != null) return node;
 		}
 
-		if (ctx.fieldDFS) ctx.checkSelfField(chain[chain.length-1], false);
-
 		if (isStaticField()) nullishBits &= ~1;
 		if (nullishBits != 0) {
 			flags |= FINAL_FIELD;
 			if ((flags&ARRAY_LENGTH) != 0) ctx.report(this, Kind.ERROR, "memberAccess.opChain.arrayLen");
 		} else if ((fn.modifier&Opcodes.ACC_FINAL) != 0) flags |= FINAL_FIELD;
 
-		// == is better
-		//noinspection all
-		if (part != null && part == ctx.file.name()) {
-			flags |= SELF_FIELD;
-			// redirect check to CompileContext
-			if (ctx.inConstructor) flags &= ~FINAL_FIELD;
+		if (ctx.inConstructor && ctx.file.name().equals(part) && (flags&FINAL_FIELD) != 0) {
+			// nullish总是无法赋值
+			if (nullishBits == 0) flags &= ~FINAL_FIELD;
+
+			// 检查非法前向引用
+			flags |= READ_HOOK;
+
+			// 让checkSelfField检查字段是否为final
+			if (chain.length == 1) flags |= WRITE_HOOK;
+
+			// TODO 放在这里？有更好的位置吗
+			if (ctx.fieldDFS) ctx.accessFinalField(chain[0], false);
 		}
 		return this;
 	}
@@ -361,7 +365,7 @@ final class MemberAccess extends LeftValue {
 	@Override
 	public boolean hasFeature(Feature feature) {
 		if (feature == Feature.ENUM_REFERENCE) return isStaticField() && (chain[0].modifier & Opcodes.ACC_ENUM) != 0;
-		if (feature == Feature.STATIC_BEGIN) return parent == null;
+		if (feature == Feature.STATIC_MEMBER_ACCESS) return parent == null;
 		return false;
 	}
 
@@ -373,6 +377,7 @@ final class MemberAccess extends LeftValue {
 
 	@Override
 	protected void write1(MethodWriter cw, @NotNull TypeCast.Cast cast) {
+		if ((flags&READ_HOOK) != 0) CompileContext.get().accessFinalField(chain[0], false);
 		mustBeStatement(cast);
 
 		int length = chain.length - (flags&ARRAY_LENGTH);
@@ -385,13 +390,13 @@ final class MemberAccess extends LeftValue {
 
 	@Override
 	public void preStore(MethodWriter cw) {
-		if ((flags&SELF_FIELD) != 0) CompileContext.get().checkSelfField(chain[chain.length-1], true);
+		if ((flags&WRITE_HOOK) != 0) CompileContext.get().accessFinalField(chain[0], true);
 		write(cw, chain.length-1);
 	}
 
 	@Override
 	public void preLoadStore(MethodWriter cw) {
-		if ((flags&SELF_FIELD) != 0) CompileContext.get().checkSelfField(chain[chain.length-1], false);
+		if ((flags&READ_HOOK) != 0) CompileContext.get().accessFinalField(chain[0], false);
 		write(cw, chain.length-1);
 		if (!isStaticField()) {
 			/*if (parent instanceof LocalVariable) parent.write(cw);

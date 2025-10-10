@@ -44,7 +44,7 @@ public final class LZDecoder {
 		}
 	}
 
-	public void putArraysToCache() { bufHandle.free(); }
+	public void free() { bufHandle.free(); }
 
 	public void reset() {
 		start = 0;
@@ -65,10 +65,11 @@ public final class LZDecoder {
 	public int getPos() { return pos; }
 	public int getDictSize() { return bufSize; }
 
-	public int getByte(int dist) {
+	public int getByte(int dist) throws IOException {
 		int offset = pos - dist - 1;
 		if (/*pos <= dist*/offset < 0) offset += bufSize;
 
+		if (offset < 0 || offset >= bufSize) throw new CorruptedInputException("invalid offset");
 		return U.getByte(buf + offset) & 0xFF;//buf[offset] & 0xFF;
 	}
 
@@ -146,6 +147,19 @@ public final class LZDecoder {
 		ArrayCache.putArray(ioBuf);
 
 		if (full < pos) full = pos;
+	}
+
+	public int errorRecovery(int lastGoodPos, int chunkSize) {
+		int goodSize = pos - start;
+
+		limit = (lastGoodPos + chunkSize) % bufSize;
+		pos = limit;
+		if (full < limit) full = limit;
+		start = limit;
+
+		pendingLen = 0;
+
+		return goodSize;
 	}
 
 	public int flush(byte[] out, int outOff) { return flush0(out, (long) Unsafe.ARRAY_BYTE_BASE_OFFSET+outOff); }

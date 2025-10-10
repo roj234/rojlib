@@ -9,7 +9,6 @@ import roj.asm.ClassDefinition;
 import roj.ci.annotation.IndirectReference;
 import roj.ci.annotation.Public;
 import roj.compiler.plugins.annotations.Attach;
-import roj.compiler.plugins.eval.Constexpr;
 import roj.util.ByteList;
 import roj.util.Helpers;
 import roj.util.JVM;
@@ -34,14 +33,13 @@ import static roj.reflect.Unsafe.U;
  */
 public final class Reflection {
 	static final sun.misc.Unsafe u;
-	@IndirectReference
-	public static final MethodHandles.Lookup IMPL_LOOKUP;
+	static final MethodHandles.Lookup IMPL_LOOKUP;
 
-	@IndirectReference
-	private static final String PROP_NAME = "_ILJ9DC_", CLASS_NAME = "java/lang/🔓_IL🐟";
+	public static final String PROP_NAME = "_ILJ9DC_", PROXY_CLASS = "java/lang/🔓_IL🐟";
 	private static final BiConsumer<Object, String> openModule;
 	static final Function<Object[], Class<?>> defineClass;
 
+	//private static native MethodHandles.Lookup getImplLookup();
 	static {
 		try {
 			Field f = sun.misc.Unsafe.class.getDeclaredField("theUnsafe");
@@ -57,10 +55,9 @@ public final class Reflection {
 				bytes[175] = 0x3F;
 				bytes[1324] = 0x3F;
 			}
-			var type = IMPL_LOOKUP.defineClass(bytes);
 
-			if (JVM.VERSION > 21) IMPL_LOOKUP.ensureInitialized(type);
-			else u.ensureClassInitialized(type);
+			var type = IMPL_LOOKUP.defineClass(bytes);
+			IMPL_LOOKUP.ensureInitialized(type);
 
 			Object instance = System.getProperties().remove(PROP_NAME);
 			defineClass = Helpers.cast(instance);
@@ -91,26 +88,8 @@ public final class Reflection {
 		throw new AssertionError("数据错误");
 	}
 
-	@ApiStatus.Internal
-	public static Field getField(Class<?> type, String name) throws NoSuchFieldException {
-		while (type != null && type != Object.class) {
-			try {
-				Field field = type.getDeclaredField(name);
-
-				var sm = ILSecurityManager.getSecurityManager();
-				if (sm != null && !sm.checkAccess(field, getCallerClass(2, Unsafe.class))) break;
-
-				return field;
-			} catch (NoSuchFieldException ignored) {}
-			type = type.getSuperclass();
-		}
-		throw new NoSuchFieldException(name);
-	}
-
 	//region 类
-	public static final String MAGIC_ACCESSOR_CLASS = JVM.VERSION > 21 ? "java/lang/Object" : CLASS_NAME;
-	@Constexpr
-	public static String getMagicAccessorClass() {return CLASS_NAME;}
+	public static final String MAGIC_ACCESSOR_CLASS = JVM.VERSION > 21 ? "java/lang/Object" : PROXY_CLASS;
 
 	private static final AtomicInteger ID = new AtomicInteger();
 	public static int uniqueId() {return ID.getAndIncrement();}
@@ -123,7 +102,8 @@ public final class Reflection {
 			ACCESS_VM_ANNOTATIONS     = 0x00000008;
 	// also a 'Trusted' lookup for defineClass redirect
 	@IndirectReference
-	public static Class<?> defineClass(ClassLoader loader, Class<?> nestHost, String name, byte[] b, int off, int len, ProtectionDomain pd, @MagicConstant(flags = {NESTMATE_CLASS, HIDDEN_CLASS, STRONG_LOADER_LINK, ACCESS_VM_ANNOTATIONS}) int flags) {
+	public static Class<?> defineClass(ClassLoader loader, Class<?> nestHost, String name, byte[] b, int off, int len, ProtectionDomain pd,
+									   @MagicConstant(flags = {NESTMATE_CLASS, HIDDEN_CLASS, STRONG_LOADER_LINK, ACCESS_VM_ANNOTATIONS}) int flags) {
 		if (loader == null) throw new NullPointerException("classLoader cannot be null");
 
 		if (pd == null) pd = loader.getClass().getProtectionDomain();
@@ -180,9 +160,6 @@ public final class Reflection {
 			throw new IllegalStateException("类构造失败", e);
 		}
 	}
-
-	@Attach
-	public static void ensureClassInitialized(Class<?> klass) {U.ensureClassInitialized(klass);}
 
 	/**
 	 * 获取枚举的valueMap，用于valueOf而不触发异常.
@@ -257,13 +234,13 @@ public final class Reflection {
 		});
 	}
 	private static final class CalleeInternals {
-		static final long LOCALS = Unsafe.fieldOffset(Handles.findClass("java.lang.LiveStackFrameInfo"), "locals");
+		static final long LOCALS = Unsafe.objectFieldOffset(Telescope.findClass("java.lang.LiveStackFrameInfo"), "locals", Object[].class);
 		static final StackWalker LIVE;
 
 		static {
 			// simple java.lang.LiveStackFrame.getStackWalker() without SM checks
-			var optionType = Handles.findClass("java.lang.StackWalker$ExtendedOption");
-			var localsAndOperands = U.getReference(optionType, Unsafe.fieldOffset(optionType, "LOCALS_AND_OPERANDS"));
+			var optionType = Telescope.findClass("java.lang.StackWalker$ExtendedOption");
+			var localsAndOperands = U.getReference(optionType, Unsafe.objectFieldOffset(optionType, "LOCALS_AND_OPERANDS", optionType));
 			BiFunction<Object, Object, StackWalker> fn = Helpers.cast(Bypass.builder(BiFunction.class).delegate_o(StackWalker.class, "newInstance", "apply").build());
 			LIVE = fn.apply(Collections.emptySet(), localsAndOperands);
 		}

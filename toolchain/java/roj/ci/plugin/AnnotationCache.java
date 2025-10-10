@@ -15,18 +15,18 @@ import java.util.Set;
  * @author Roj234
  * @since 2025/3/18 15:29
  */
-public class AnnotationCache implements Processor {
+public class AnnotationCache implements Plugin {
 	@Override
 	public String name() {return "注解缓存提供程序";}
 
 	@Override
-	public void afterCompilePost(BuildContext ctx) {
+	public void postProcess(BuildContext ctx) {
 		if (ctx.classesHaveChanged() && "true".equals(ctx.project.getVariables().getOrDefault("fmd:annotation_cache", "true"))) {
 			var repo = new AnnotationRepo();
 
 			Set<String> whitelist = new HashSet<>(TextUtil.split(ctx.project.getVariables().getOrDefault("fmd:annotation_inrepo", ""), ';'));
 			ctx.getDepAnnotations("roj/ci/annotation/InRepo", el -> whitelist.add(el.owner()));
-			MCMake.LOGGER.debug("AnnotationCache whitelist={}", whitelist);
+			MCMake.log.debug("AnnotationCache whitelist={}", whitelist);
 
 			for (String type : whitelist) {
 				ctx.getBundledAnnotations(type, el -> {
@@ -37,8 +37,8 @@ public class AnnotationCache implements Processor {
 			if (!repo.getAnnotations().isEmpty()) {
 				var buf = IOUtil.getSharedByteBuf();
 				repo.serialize(buf);
-				ctx.addFile(AnnotationRepo.CACHE_NAME, DynByteBuf.wrap(buf.toByteArray()));
-				MCMake.LOGGER.debug("AnnotationCache size={}.", buf.wIndex());
+				ctx.addFile(AnnotationRepo.CACHE_PATH, DynByteBuf.wrap(buf.toByteArray()));
+				MCMake.log.debug("AnnotationCache size={}.", buf.wIndex());
 			}
 		}
 	}

@@ -2,50 +2,60 @@ package roj.text.logging;
 
 import roj.asm.type.Type;
 import roj.asm.type.TypeHelper;
-import roj.collect.HashMap;
-import roj.concurrent.TimerTask;
+import roj.collect.HashSet;
+import roj.collect.Hasher;
+import roj.config.JsonSerializer;
+import roj.config.TextEmitter;
 import roj.text.CharList;
-import roj.text.LineReader;
+import roj.text.Formatter;
+import roj.text.TextUtil;
+import roj.util.ArrayCache;
 import roj.util.DynByteBuf;
 import roj.util.Helpers;
 import roj.util.JVM;
 
-import java.io.PrintStream;
+import java.io.IOException;
 import java.io.PrintWriter;
 import java.io.Writer;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
-import java.util.Objects;
+import java.util.Map;
 
 /**
  * @author Roj233
  * @since 2022/6/1 5:09
  */
-sealed class LogWriter extends PrintWriter permits LogWriterJson {
+class LogWriter extends PrintWriter {
 	static final ThreadLocal<LogWriter> LOCAL = ThreadLocal.withInitial(LogWriter::new);
+
+	void printError(Throwable e, Appendable target, String prefix) {
+		packet.clear();
+		packet.append(prefix);
+		prefixLen = packet.length();
+		errOut = target;
+
+		try {
+			e.printStackTrace(this);
+		} finally {
+			errOut = null;
+		}
+	}
 
 	public void println(Object x) {
 		try {
+			errOut.append(packet, 0, prefixLen);
+
 			String s = String.valueOf(x);
-			if (s.startsWith("\tat ")) simplifyPackage(s, sb);
-			else sb.append(s).append('\n');
-			myOut.append(sb);
-			sb.setLength(prefix);
+			if (s.startsWith("\tat ")) simplifyPackage(s, errOut);
+			else errOut.append(s).append('\n');
+
 		} catch (Exception e) {
 			Helpers.athrow(e);
 		}
 	}
-
-	void printError(Throwable e, Appendable myOut, String prefix) {
-		sb.clear();
-		sb.append(prefix);
-		this.prefix = sb.length();
-		this.myOut = myOut;
-		e.printStackTrace(this);
-	}
-
 	private static final int PACKAGE_NAME_LENGTH = 2;
-	private static void simplifyPackage(String name, CharList sb) {
+	private static void simplifyPackage(String name, Appendable sb) throws IOException {
 		sb.append("\tat ");
 		int end = name.lastIndexOf('.', name.indexOf('('));
 		int i = 4;
@@ -68,25 +78,14 @@ sealed class LogWriter extends PrintWriter permits LogWriterJson {
 		sb.append(name, i, name.length()).append('\n');
 	}
 
-	static final class MyMap extends HashMap<String, Object> {
-		List<?> components;
+	final HashMap<String, Object> variables = new HashMap<>();
+	final Object[] sharedArguments = new Object[4];
 
-		@Override
-		public Object getOrDefault(Object key, Object def) {
-			String s = key.toString();
-			if (s.charAt(0) >= '0' && s.charAt(0) <= '9') return components.get(Integer.parseInt(s));
-			else return super.getOrDefault(s, def);
-		}
-	}
+	final CharList line = new CharList(256);
+	int prefixLen;
 
-	final MyMap tmpCtx = new MyMap();
-	final Object[] holder = new Object[4];
-
-	int prefix;
-	Appendable myOut;
-
-	final CharList lineTemp = new CharList(256);
-	final CharList sb = new CharList(256);
+	final CharList packet = new CharList(ArrayCache.getIOCharBuffer());
+	Appendable errOut;
 
 	public LogWriter() {
 		super(JVM.VERSION >= 11 ? nullWriter() : new Writer() {
@@ -94,132 +93,57 @@ sealed class LogWriter extends PrintWriter permits LogWriterJson {
 			public void flush(){}
 			public void close(){}
 		}, true);
-		tmpCtx.put("THREAD", Thread.currentThread().getName());
+		variables.put("thread", Thread.currentThread().getName());
 	}
 
-	private TimerTask task;
-	private LogContext prevCtx;
-	private Level prevLevel;
-	private CharSequence prevTxt;
-	private Throwable prevExc;
-	private Object[] prevArg;
-	private volatile int prevCount;
-	private long prevTime;
+	CharList serialize(LogContext ctx, Formatter format, Level level, CharSequence msg, Throwable ex, Object[] args, int argc) {
+		var m = variables;
+		m.put("level", level);
+		m.put("logger", ctx.name());
 
-	private static boolean equals(Object[] a, Object[] a2, int len) {
-		if (a==a2) return true;
-		if (a2==null) return false;
-		if (a2.length != len) return false;
+		var sb = packet; sb.clear();
+		format.format(m, sb);
+		int pfxLen = sb.length();
 
-		for (int i=0; i<len; i++) {
-			if (!Objects.equals(a[i], a2[i]))
-				return false;
+		if (msg != null) {
+			int i = 0;
+			int argIndex = 0;
+
+			while (true) {
+				line.clear();
+				i = TextUtil.gAppendToNextCRLF(msg, i, line, -1);
+
+				argIndex = replaceArg(packet, line, args, argc, argIndex);
+				packet.append('\n');
+
+				if (i < 0) break;
+				packet.append(packet, 0, pfxLen);
+			}
 		}
 
-		return true;
+		if (ex != null) {
+			errOut = sb;
+			prefixLen = pfxLen;
+			ex.printStackTrace(this);
+		}
+
+		return sb;
 	}
-	private void delayedShowTask() {
-		if (prevCount > 0) {
-			synchronized (this) {
-				if (prevCount > 0) {
-					String txt = prevTxt+" (x"+prevCount+" in total)";
-					prevCount = 0;
-					prevTxt = null;
-					Object[] arg = prevArg;
-					LOCAL.get().log(prevCtx, prevLevel, txt, prevExc, arg, arg == null ? 0 : arg.length);
-				}
-			}
-		}
-	}
-
-	void log(LogContext ctx, Level level, CharSequence msg, Throwable ex, Object[] args, int argc) {
-		/*if (ex == prevExc && msg.equals(prevTxt) && equals(args, prevArg, argc)) {
-			if (++prevCount % 100 == 0) msg += " (x100)";
-			else if (System.currentTimeMillis() - prevTime < 100) {
-				if (prevCount == 1) {
-					task = Scheduler.getDefaultScheduler().delay(this::delayedShowTask, 100);
-				}
-				return;
-			}
-		} else {
-			if (task != null) task.cancel();
-			delayedShowTask();
-
-			prevCtx = ctx;
-			prevLevel = level;
-			prevTxt = msg;
-			prevExc = ex;
-			prevArg = args == holder ? Arrays.copyOf(args, argc) : args;
-			prevTime = System.currentTimeMillis();
-		}*/
-
-		MyMap m = tmpCtx;
-		m.put("LEVEL", level);
-		m.put("NAME", ctx.name());
-		m.components = ctx.getComponents();
-
-		CharList sb = this.sb; sb.clear();
-		ctx.getPrefix().format(m, sb);
-
-		int pref = sb.length();
-
-		CharSequence msg1;
-		if (argc > 0) {
-			lineTemp.clear();
-			replaceArg(lineTemp, msg.toString(), args, argc);
-			msg1 = lineTemp;
-		} else {
-			msg1 = msg;
-		}
-
-		LogDestination dst = ctx.destination();
-		try {
-			Appendable out = dst.getAndLock();
-			if (msg1 != null) {
-				for (String line : LineReader.create(msg1, false)) {
-					out.append(sb.append(line).append('\n'));
-					sb.setLength(pref);
-				}
-			}
-
-			if (ex != null) {
-				prefix = pref;
-				myOut = out;
-				try {
-					ex.printStackTrace(this);
-				} finally {
-					myOut = null;
-				}
-			}
-
-			dst.unlockAndFlush();
-		} catch (Exception e) {
-			try { dst.unlockAndFlush(); } catch (Exception ignored) {}
-
-			try {
-				PrintStream prevErr = System.err;
-				prevErr.println("LogDestination ["+dst.getClass().getName()+"] has thrown an exception during logging");
-				e.printStackTrace(prevErr);
-			} catch (Exception ignored) {}
-		}
-	}
-
-	static void replaceArg(CharList sb, String msg, Object[] args, int argc) {
-		int j = 0;
+	private static int replaceArg(CharList out, CharSequence in, Object[] args, int argc, int argIndex) {
 		int prev = 0;
-		for (int i = 0; i < msg.length(); ) {
-			char c = msg.charAt(i++);
-			if (c == '{' && i < msg.length() && msg.charAt(i++) == '}') {
-				sb.append(msg, prev, i-2);
+		for (int i = 0; i < in.length(); ) {
+			char c = in.charAt(i++);
+			if (c == '{' && i < in.length() && in.charAt(i++) == '}') {
+				out.append(in, prev, i-2);
 				prev = i;
 
-				if (j < argc) toString(sb, args[j++]);
-				else sb.append("{}");
+				if (argIndex < argc) toString(out, args[argIndex++]);
+				else out.append("{}");
 			}
 		}
-		sb.append(msg, prev, msg.length());
+		out.append(in, prev, in.length());
+		return argIndex;
 	}
-
 	private static void toString(CharList sb, Object arg) {
 		if (arg == null) {
 			sb.append("null");
@@ -246,5 +170,112 @@ sealed class LogWriter extends PrintWriter permits LogWriterJson {
 		}
 
 		sb.append(arg);
+	}
+
+	CharList serializeJson(LogContext ctx, Level level, CharSequence msg, Throwable ex, Object[] args, int argc) {
+		packet.clear();
+		var json = new JsonSerializer().to(packet);
+		json.emitMap();
+
+		json.emitKey("context");
+		json.emitMap();
+
+		CharList sb = this.line;
+		var m = variables;
+		m.put("level", level);
+		m.put("logger", ctx.name());
+
+		for (Map.Entry<String, Object> entry : m.entrySet()) {
+			json.emitKey(entry.getKey());
+			Object value = entry.getValue();
+
+			if (value instanceof Formatter f) {
+				sb.clear();
+				json.valString(f.format(m, sb));
+			} else {
+				json.emit(String.valueOf(value));
+			}
+		}
+
+		json.pop();
+
+		json.emitKey("message");
+		if (argc > 0) {
+			sb.clear();
+			replaceArg(sb, msg, args, argc, 0);
+			json.valString(sb);
+		}
+		else json.valString(msg);
+
+		if (ex != null) {
+			json.emitKey("exception");
+			writeException(ex, new HashSet<>(Hasher.identity()), json);
+		}
+
+		return json.getValue();
+	}
+
+	private static void writeException(Throwable ex, HashSet<Throwable> dejavu, TextEmitter ser) {
+		if (!dejavu.add(ex)) {
+			ser.emit("circular reference");
+			return;
+		}
+
+		ser.emitMap();
+
+		ser.emitKey("type");
+		ser.emit(ex.getClass().getSimpleName());
+
+		if (ex.getMessage() != null) {
+			ser.emitKey("message");
+			ser.emit(ex.getMessage());
+		}
+
+		var trace = LogHelper.INSTANCE.getStackTrace(ex);
+		if (trace.length > 0) {
+			ser.emitKey("trace");
+			ser.emitList();
+
+			for (var el : trace) {
+				ser.emitMap();
+				ser.emitKey("class");
+				ser.emit(el.getClassName());
+				ser.emitKey("method");
+				ser.emit(el.getMethodName());
+				if (el.getLineNumber() != -1) {
+					ser.emitKey("line");
+					ser.emit(el.getLineNumber());
+				}
+				if (el.getFileName() != null) {
+					ser.emitKey("file");
+					ser.emit(el.getFileName());
+				}
+				if (JVM.VERSION > 8) {
+					if (el.getModuleName() != null) {
+						ser.emitKey("module");
+						ser.emit(el.getMethodName());
+					}
+				}
+				ser.pop();
+			}
+		}
+
+		List<Throwable> suppressed = LogHelper.INSTANCE.getSuppressed(ex);
+		if (suppressed != null) {
+			ser.emitKey("suppressed");
+			ser.emitList();
+			for (Throwable th : suppressed) {
+				writeException(th, dejavu, ser);
+			}
+			ser.pop();
+		}
+
+		Throwable cause = ex.getCause();
+		if (cause != null) {
+			ser.emitKey("cause");
+			writeException(cause, dejavu, ser);
+		}
+
+		ser.pop();
 	}
 }

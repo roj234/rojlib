@@ -9,10 +9,7 @@ import roj.compiler.CompileContext;
 import roj.compiler.asm.MethodWriter;
 import roj.compiler.diagnostic.Kind;
 import roj.compiler.resolve.TypeCast;
-import roj.config.node.DoubleValue;
-import roj.config.node.FloatValue;
-import roj.config.node.IntValue;
-import roj.config.node.LongValue;
+import roj.config.node.*;
 
 import static roj.asm.Opcodes.*;
 import static roj.compiler.LavaTokenizer.*;
@@ -69,7 +66,7 @@ class PrefixOp extends PrefixOperator {
 
 		return switch (Type.getSort(actualType)) {
 			default -> this;
-			case Type.SORT_BOOLEAN -> constant(type, !(boolean) right.constVal());
+			case Type.SORT_BOOLEAN -> constant(type, ConfigValue.valueOf(!((ConfigValue) right.constVal()).asBool()));
 			case Type.SORT_BYTE, Type.SORT_CHAR, Type.SORT_SHORT, Type.SORT_INT -> {
 				var x = (IntValue) right.constVal();
 				switch (op) {

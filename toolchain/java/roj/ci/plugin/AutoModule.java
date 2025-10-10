@@ -27,7 +27,7 @@ import static roj.ui.CommandNode.literal;
  * @author Roj234
  * @since 2025/3/22 7:59
  */
-public class AutoModule implements Processor {
+public class AutoModule implements Plugin {
 	static {
 		MCMake.COMMANDS.register(literal("automodule").then(argument("文件", Argument.file()).then(argument("模块名", Argument.string()).executes(ctx -> {
 			File file = ctx.argument("文件", File.class);
@@ -84,8 +84,8 @@ public class AutoModule implements Processor {
 	public String name() {return "自动模块化";}
 
 	@Override
-	public void afterCompilePre(BuildContext ctx) {
-		if (ctx.getIncrement() > BuildContext.INC_REBUILD) return;
+	public void process(BuildContext ctx) {
+		if (ctx.getIncrementLevel() > BuildContext.INC_REBUILD) return;
 
 		var moduleName = ctx.project.getVariables().getOrDefault("fmd:auto_module:name", ctx.project.getName());
 		if (!moduleName.isEmpty()) {
@@ -108,7 +108,7 @@ public class AutoModule implements Processor {
 			moduleInfo.modifier = Opcodes.ACC_MODULE;
 
 			var moduleAttr = new ModuleAttribute(moduleName, 0);
-			moduleAttr.self.version = ctx.project.variables.get("project_version");
+			moduleAttr.self.version = ctx.project.getVariables().get("project_version");
 
 			moduleAttr.requires.add(new ModuleAttribute.Module("java.base", Opcodes.ACC_MANDATED));
 			var importModules = TextUtil.split(ctx.project.getVariables().getOrDefault("fmd:auto_module:import", ""), ' ');

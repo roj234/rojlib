@@ -11,15 +11,15 @@ public class JsonSerializer extends TextEmitter {
 	public JsonSerializer() { super(); }
 	public JsonSerializer(@NotNull String indent) { super(indent); }
 
-	protected final void listNext() { writer.append(','); }
-	protected final void mapNext() { writer.append(','); }
-	protected final void endLevel() {
+	protected void listNext() { writer.append(','); }
+	protected void mapNext() { writer.append(','); }
+	protected void endLevel() {
 		if ((flag&NEXT) != 0) indent(depth);
 		writer.append((flag & 12) == LIST ? ']' : '}');
 	}
 
-	public final void emitMap() { push(MAP); writer.append('{'); }
-	public final void emitList() { push(LIST); writer.append('['); }
+	public void emitMap() { push(MAP); writer.append('{'); }
+	public void emitList() { push(LIST); writer.append('['); }
 
 	@Override
 	protected void indent(int depth) {
@@ -30,7 +30,7 @@ public class JsonSerializer extends TextEmitter {
 		}
 	}
 
-	public final void key0(String key) {
+	public void key0(String key) {
 		indent(depth);
 		Tokenizer.escape(writer.append('"'), key, 0, '\'').append("\":");
 		if (indentCount > 0) writer.append(' ');

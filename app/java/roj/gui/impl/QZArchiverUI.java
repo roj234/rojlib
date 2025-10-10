@@ -6,7 +6,7 @@ package roj.gui.impl;
 
 import roj.archive.qz.util.QZArchiver;
 import roj.archive.xz.LZMA2Options;
-import roj.archive.xz.LZMA2ParallelManager;
+import roj.archive.xz.LZMA2ParallelEncoder;
 import roj.collect.ArrayList;
 import roj.concurrent.TaskGroup;
 import roj.concurrent.TaskPool;
@@ -14,10 +14,12 @@ import roj.gui.CMBoxValue;
 import roj.gui.GuiProgressBar;
 import roj.gui.GuiUtil;
 import roj.gui.OnChangeHelper;
-import roj.io.BufferPool;
+import roj.io.IOUtil;
 import roj.math.MathUtils;
+import roj.text.CharList;
 import roj.text.LineReader;
 import roj.text.TextUtil;
+import roj.text.logging.LogHelper;
 import roj.ui.EasyProgressBar;
 import roj.util.ByteList;
 import roj.util.FastFailException;
@@ -106,7 +108,7 @@ public class QZArchiverUI extends JFrame {
 			arc.encryptionSaltLength = ((Number) uiSaltLength.getValue()).intValue();
 			arc.encryptFileName = uiCryptHeader.isSelected();
 		}
-		arc.useBCJ = uiBCJ.isSelected();
+		arc.useFilter = uiBCJ.isSelected();
 		arc.useBCJ2 = uiBCJ2.isSelected();
 		arc.options = options;
 		arc.updateMode = uiAppendOptions.getSelectedIndex();
@@ -116,7 +118,7 @@ public class QZArchiverUI extends JFrame {
 		arc.outputFilename = out.getName();
 		arc.keepOldArchive = uiKeepArchive.isSelected();
 		if (uiSortByFilename.isSelected()) {
-			arc.fileSorter = (f1, f2) -> f1.getName().compareTo(f2.getName());
+			arc.fileSorter = (f1, f2) -> IOUtil.extensionName(f1.getName()).compareTo(IOUtil.extensionName(f2.getName()));
 		}
 
 		uiLog.setText("正在计数文件\n");
@@ -132,7 +134,6 @@ public class QZArchiverUI extends JFrame {
 		int[] arr = createTaskPool();
 		int threads = arr[0];
 		TaskPool pool2;
-		BufferPool buffer;
 
 		options.clearAsyncMode();
 		if (uiSplitTask.isSelected()) {
@@ -143,31 +144,39 @@ public class QZArchiverUI extends JFrame {
 				arc.autoSplitTaskThreshold = Integer.parseInt(JOptionPane.showInputDialog(this, "在并行小于多少时开始拆分任务？", Math.max(threads/2, 3)));
 				myOpt = arc.autoSplitTaskOptions = arc.options.clone();
 			}
-			int blockSize = (int) MathUtils.clamp(chunkSize, LZMA2Options.ASYNC_BLOCK_SIZE_MIN, LZMA2Options.ASYNC_BLOCK_SIZE_MAX);
+			int blockSize = (int) MathUtils.clamp(Math.min(chunkSize, arc.getUncompressedSize() / threads), LZMA2Options.ASYNC_BLOCK_SIZE_MIN, LZMA2Options.ASYNC_BLOCK_SIZE_MAX);
 
-			LZMA2ParallelManager man = new LZMA2ParallelManager(myOpt, blockSize, uiSplitTaskType.getSelectedIndex(), threads);
-			long mem = (man.getExtraMemoryUsageBytes(uiMixedMode.isSelected()) & ~7) + (16 * threads);// 8-byte alignment
+			LZMA2ParallelEncoder man = new LZMA2ParallelEncoder(myOpt, blockSize, uiSplitTaskType.getSelectedIndex() != 0, threads);
+			long mem = (long) (man.asyncBufLen + (uiMixedMode.isSelected() ? man.bufLen : 1)) * man.taskAffinity + man.bufLen;
 			long needed = mem - ((long) arr[1]<<10);
 			if (needed > 0) {
 				JOptionPane.showMessageDialog(this, "压缩所需的内存超过了内存输入框的限制\n还需要"+TextUtil.scaledNumber1024(needed)+"的内存", "压缩流并行导致的内存不足", JOptionPane.ERROR_MESSAGE);
 				return;
 			}
-			uiLog.append("压缩流并行需要的额外内存:"+TextUtil.scaledNumber1024(mem)+"\n");
+			uiLog.append("压缩流并行需要的最大额外内存:"+TextUtil.scaledNumber1024(mem)+"\n");
 
 			pool2 = TaskPool.newFixed(threads, "split-worker-");
-			buffer = new BufferPool(mem, 0, mem, 0, 0, 0, threads, 0);
+			man.setMemoryLimit(mem);
 
-			myOpt.setAsyncMode(pool2, buffer, man);
+			myOpt.setAsyncMode(pool2, man);
 			if (arc.threads == 1) threads = 1;
 		} else {
 			pool2 = null;
-			buffer = null;
 		}
 
 		TaskPool pool = TaskPool.newFixed(threads, "7z-worker-");
 		TaskGroup group = pool.newGroup();
 
 		ActionListener stopListener = e -> {
+			LZMA2ParallelEncoder man = options.getAsyncMan();
+			if (man != null) {
+				try {
+					man.cancel();
+				} catch (IOException ex) {
+					ex.printStackTrace();
+				}
+			}
+
 			arc.interrupt();
 			group.cancel();
 			pool.shutdownNow();
@@ -187,12 +196,6 @@ public class QZArchiverUI extends JFrame {
 				pool.shutdownNow();
 				if (pool2 != null) {
 					pool2.shutdownNow();
-
-					try {
-						buffer.release();
-					} catch (Exception e) {
-						e.printStackTrace();
-					}
 				}
 				bar.close();
 				uiProgress.setValue(10000);
@@ -213,6 +216,8 @@ public class QZArchiverUI extends JFrame {
 		md = new DefaultComboBoxModel<>();
 		md.addElement(new CMBoxValue("Hash4", LZMA2Options.MF_HC4));
 		md.addElement(new CMBoxValue("Binary4", LZMA2Options.MF_BT4));
+		md.addElement(new CMBoxValue("Hash5", LZMA2Options.MF_HC5));
+		md.addElement(new CMBoxValue("Binary5", LZMA2Options.MF_BT5));
 		uiMatchFinder.setModel(Helpers.cast(md));
 
 		md = new DefaultComboBoxModel<>();
@@ -372,36 +377,33 @@ public class QZArchiverUI extends JFrame {
 		ActionListener[] tip = new ActionListener[3];
 		tip[0] = e -> {
 			JOptionPane.showMessageDialog(this,
-					"<html><body>"
-							+ "<h3 style='margin-top:0; color:#1F4E79;'>压缩模式对比</h3>"
-
-							+ "<div style='background:#F2F2F2; padding:10px; border-left:4px solid #2E75B6;'>"
-							+ "<b style='color:#2E75B6;'>块级并行（项目默认）</b><br>"
-							+ "&nbsp;&nbsp;• 文件合并为字块（连续二进制流），<b>并行压缩多个字块</b><br>"
-							+ "&nbsp;&nbsp;• 固实大小越小，字块越多，并行度越高<br>"
-							+ "&nbsp;&nbsp;• <font color='green'>优点：</font>压缩率高<br>"
-							+ "&nbsp;&nbsp;• <font color='red'>缺点：</font>文件大小差异大时，末期CPU利用率不高"
-							+ "</div>"
-
-							+ "<div style='background:#F2F2F2; padding:10px; border-left:4px solid #C00000;'>"
-							+ "<b style='color:#C00000;'>LZMA2流并行（7-zip默认）</b><br>"
-							+ "&nbsp;&nbsp;• 文件合并为字块，同时压缩单个字块，使用LZMA2流的并行压缩功能<br>"
-							+ "&nbsp;&nbsp;• 固实大小越大，字块越长，（块边界导致的）压缩率损失越小<br>"
-							+ "&nbsp;&nbsp;• <font color='green'>优点：</font>大文件压缩效率高<br>"
-							+ "&nbsp;&nbsp;• <font color='red'>缺点：</font><br>"
-							+ "&nbsp;&nbsp;&nbsp;&nbsp;- 进度条出现延迟（内部分块缓冲）<br>"
-							+ "&nbsp;&nbsp;&nbsp;&nbsp;- 压缩率降低约0.3‰~1.5‰（块头字典重置开销等）"
-							+ "</div>"
-
-							+ "<div style='padding:10px; border-left:4px solid #000000;'>"
-							+ "<b>高级选项</b><br>"
-							+ "&nbsp;&nbsp;• <b>混合模式：</b>同时使用两种并行策略<br>"
-							+ "&nbsp;&nbsp;&nbsp;&nbsp;<font color='#BF9000'><i>→ 高效（疯狂）的选择，最高可达 CPU核心数 &times; 核心数 线程</i></font><br>"
-							+ "&nbsp;&nbsp;• <b>自动拆分：</b>文件级并行末期自动切换压缩流并行<br>"
-							+ "&nbsp;&nbsp;&nbsp;&nbsp;<font color='#BF9000'><i>→ 均衡的选择，优化末期CPU利用率的同时不损失太多压缩率</i></font><br>"
-							+ "</div>"
-
-							+ "</body></html>",
+					"""
+							<html><body>\
+							<h3 style='margin-top:0; color:#1F4E79;'>压缩模式对比</h3>\
+							<div style='background:#F2F2F2; padding:10px; border-left:4px solid #2E75B6;'>\
+							<b style='color:#2E75B6;'>块级并行（项目默认）</b><br>\
+							&nbsp;&nbsp;• 文件合并为字块（连续二进制流），<b>并行压缩多个字块</b><br>\
+							&nbsp;&nbsp;• 固实大小越小，字块越多，并行度越高<br>\
+							&nbsp;&nbsp;• <font color='green'>优点：</font>支持并行解压<br>\
+							&nbsp;&nbsp;• <font color='red'>缺点：</font>文件大小差异大时，压缩率不佳且CPU利用率低\
+							</div>\
+							<div style='background:#F2F2F2; padding:10px; border-left:4px solid #C00000;'>\
+							<b style='color:#C00000;'>LZMA2流并行（7-zip默认）</b><br>\
+							&nbsp;&nbsp;• 文件合并为字块，同时压缩单个字块，使用LZMA2流的并行压缩功能<br>\
+							&nbsp;&nbsp;• 固实大小越大，字块越长，并行度越高<br>\
+							&nbsp;&nbsp;• <font color='green'>优点：</font>大文件压缩效率高<br>\
+							&nbsp;&nbsp;• <font color='red'>缺点：</font>流内单字节损坏导致后续数据无效<br>\
+							</div>\
+							<div style='padding:10px; border-left:4px solid #000000;'>\
+							<b>提高CPU利用率（均负面影响压缩率）</b><br>\
+							&nbsp;&nbsp;• <b>注意事项：</b>系统总是使用尽可能多的线程<br>\
+							&nbsp;&nbsp;&nbsp;&nbsp;<font color='#BF9000'><i>→ 即便这可能影响压缩率；您可降低最大线程数以约束</i></font><br>\
+							&nbsp;&nbsp;• <b>自动拆分：</b>为长尾文件使用压缩流并行<br>\
+							&nbsp;&nbsp;&nbsp;&nbsp;<font color='#BF9000'><i>→ 均衡的选择，优化末期CPU利用率</i></font><br>\
+							&nbsp;&nbsp;• <b>混合模式：</b>同时使用两种并行策略<br>\
+							&nbsp;&nbsp;&nbsp;&nbsp;<font color='#BF9000'><i>→ 高效（疯狂）的选择，需要大量内存，最高可达 CPU核心数^2 线程</i></font><br>\
+							</div>\
+							</body></html>""",
 					"压缩模式选择指南",
 					JOptionPane.WARNING_MESSAGE
 			);
@@ -429,9 +431,8 @@ public class QZArchiverUI extends JFrame {
 			uiMixedMode.setEnabled(b);
 		});
 		md = new DefaultComboBoxModel<>();
-		md.addElement("压缩率中低|压缩快|内存低");
-		md.addElement("压缩率中高|压缩慢|内存中");
-		md.addElement("压缩率中高|压缩中|内存高");
+		md.addElement("效果差|压缩快|内存低");
+		md.addElement("效果好|压缩慢|内存高");
 		uiSplitTaskType.setModel(Helpers.cast(md));
 		// endregion
 		GuiUtil.dropFilePath(uiInput, null, false);
@@ -440,7 +441,10 @@ public class QZArchiverUI extends JFrame {
 			try {
 				begin();
 			} catch (Exception ex) {
-				throw new RuntimeException(ex);
+				ex.printStackTrace();
+				CharList sb = IOUtil.getSharedCharBuf();
+				LogHelper.printError(ex, sb);
+				JOptionPane.showMessageDialog(this, sb.toString(), "无法打开压缩包", JOptionPane.ERROR_MESSAGE);
 			}
 		});
 		uiHideComplicate.addActionListener(e -> {
@@ -450,6 +454,7 @@ public class QZArchiverUI extends JFrame {
 				cc.setVisible(!v);
 			}
 		});
+		bRecoveryRecord.addActionListener(e -> iRecoveryRecord.setEnabled(bRecoveryRecord.isSelected()));
 		bCheckSymbolicLink.addActionListener(e -> {
 			if (bCheckSymbolicLink.isSelected())JOptionPane.showMessageDialog(
 					this,
@@ -507,8 +512,8 @@ public class QZArchiverUI extends JFrame {
 			}
 
 			int blockSize = MathUtils.clamp((int) TextUtil.unscaledNumber1024(text), LZMA2Options.ASYNC_BLOCK_SIZE_MIN, LZMA2Options.ASYNC_BLOCK_SIZE_MAX);
-			LZMA2ParallelManager man = new LZMA2ParallelManager(options, blockSize, uiSplitTaskType.getSelectedIndex(), 1);
-			myUsage += man.getExtraMemoryUsageBytes(uiMixedMode.isSelected());
+			LZMA2ParallelEncoder man = new LZMA2ParallelEncoder(options, blockSize, uiSplitTaskType.getSelectedIndex() != 0, 1);
+			myUsage += man.asyncBufLen + (uiMixedMode.isSelected() ? man.bufLen : 0);
 		}
 		uiMemoryUsage.setText("内存/线程:"+msg+toDigital(myUsage));
 	}
@@ -616,7 +621,7 @@ public class QZArchiverUI extends JFrame {
         bExpTwoPass = new JCheckBox();
 
         //======== this ========
-        setTitle("Roj234 SevenZ Archiver 3.0");
+        setTitle("Roj234 SevenZ Archiver 3.2");
         var contentPane = getContentPane();
         contentPane.setLayout(null);
 
@@ -893,15 +898,15 @@ public class QZArchiverUI extends JFrame {
         separator6.setBounds(130, 330, 180, 2);
 
         //---- uiBCJ ----
-        uiBCJ.setText("\u5bf9\u53ef\u6267\u884c\u6587\u4ef6\u4f7f\u7528BCJ");
+        uiBCJ.setText("\u4f7f\u7528\u9884\u5904\u7406\u5668");
         uiBCJ.setSelected(true);
         contentPane.add(uiBCJ);
-        uiBCJ.setBounds(new Rectangle(new Point(300, 99), uiBCJ.getPreferredSize()));
+        uiBCJ.setBounds(new Rectangle(new Point(300, 100), uiBCJ.getPreferredSize()));
 
         //---- uiBCJ2 ----
         uiBCJ2.setText("BCJ2");
         contentPane.add(uiBCJ2);
-        uiBCJ2.setBounds(new Rectangle(new Point(440, 99), uiBCJ2.getPreferredSize()));
+        uiBCJ2.setBounds(new Rectangle(new Point(395, 100), uiBCJ2.getPreferredSize()));
 
         //======== scrollPane1 ========
         {
@@ -933,17 +938,17 @@ public class QZArchiverUI extends JFrame {
         uiReadDirFromLog.setBounds(new Rectangle(new Point(125, 333), uiReadDirFromLog.getPreferredSize()));
 
         //---- uiSortByFilename ----
-        uiSortByFilename.setText("\u6309\u6587\u4ef6\u540d\u6392\u5e8f");
+        uiSortByFilename.setText("\u6309\u6269\u5c55\u540d\u6392\u5e8f");
         contentPane.add(uiSortByFilename);
         uiSortByFilename.setBounds(new Rectangle(new Point(395, 290), uiSortByFilename.getPreferredSize()));
 
         //---- bCheckSymbolicLink ----
-        bCheckSymbolicLink.setText("\u68c0\u6d4b\u5e76\u5904\u7406\u7b26\u53f7\u94fe\u63a5");
+        bCheckSymbolicLink.setText("\u7b26\u53f7\u94fe\u63a5");
         contentPane.add(bCheckSymbolicLink);
         bCheckSymbolicLink.setBounds(new Rectangle(new Point(495, 180), bCheckSymbolicLink.getPreferredSize()));
 
         //---- bCheckHardLink ----
-        bCheckHardLink.setText("\u68c0\u6d4b\u5e76\u5904\u7406\u786c\u94fe\u63a5");
+        bCheckHardLink.setText("\u786c\u94fe\u63a5");
         contentPane.add(bCheckHardLink);
         bCheckHardLink.setBounds(new Rectangle(new Point(495, 200), bCheckHardLink.getPreferredSize()));
 
@@ -954,7 +959,6 @@ public class QZArchiverUI extends JFrame {
 
         //---- bClearArchive ----
         bClearArchive.setText("\u5b8c\u6210\u540e\u53bb\u9664\u5f52\u6863\u5c5e\u6027");
-        bClearArchive.setEnabled(false);
         contentPane.add(bClearArchive);
         bClearArchive.setBounds(new Rectangle(new Point(495, 240), bClearArchive.getPreferredSize()));
 
@@ -971,7 +975,7 @@ public class QZArchiverUI extends JFrame {
         iRecoveryRecord.setBounds(530, 280, 75, 20);
 
         //---- bExpTwoPass ----
-        bExpTwoPass.setText("\u5185\u5bb9\u611f\u77e5\u805a\u7c7b \u5b9e\u9a8c\u6027 \u63d0\u9ad8\u538b\u7f29\u7387 \u6162");
+        bExpTwoPass.setText("\u5185\u5bb9\u611f\u77e5\u805a\u7c7b \u5b9e\u9a8c\u6027 \u964d\u4f4e\u538b\u7f29\u7387 \u6162");
         contentPane.add(bExpTwoPass);
         bExpTwoPass.setBounds(new Rectangle(new Point(395, 330), bExpTwoPass.getPreferredSize()));
 

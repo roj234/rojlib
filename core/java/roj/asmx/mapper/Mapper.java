@@ -20,9 +20,10 @@ import roj.collect.HashMap;
 import roj.collect.HashSet;
 import roj.collect.*;
 import roj.concurrent.Executor;
+import roj.concurrent.TaskGroup;
 import roj.concurrent.TaskPool;
-import roj.io.ByteInputStream;
 import roj.io.IOUtil;
+import roj.io.XDataInputStream;
 import roj.text.CharList;
 import roj.text.logging.Level;
 import roj.util.ByteList;
@@ -38,7 +39,6 @@ import java.util.function.UnaryOperator;
 
 import static roj.asm.Opcodes.*;
 import static roj.asm.type.Type.ARRAY;
-import static roj.asmx.Context.runAsync;
 
 /**
  * @author Roj234
@@ -216,7 +216,7 @@ public class Mapper extends Mapping {
 		} else {
 			in = new LZMA2InputStream(push, 2097152);
 		}
-		var r = ByteInputStream.wrap(in);
+		var r = XDataInputStream.wrap(in);
 
 		var pool = new StringPool(r);
 
@@ -275,26 +275,20 @@ public class Mapper extends Mapping {
 		hierarchy = new ConcurrentHashMap<>(ctxs.size());
 		selfInherited = new SynchronizedFindMap<>();
 
-		List<List<Context>> tasks = new ArrayList<>((ctxs.size()-1)/ASYNC_THRESHOLD + 1);
+		List<List<Context>> tasks = TaskGroup.split(ctxs, ASYNC_THRESHOLD);
+		var group = pool.newGroup();
 
-		int i = 0;
-		while (i < ctxs.size()) {
-			int len = Math.min(ctxs.size()-i, ASYNC_THRESHOLD);
-			tasks.add(ctxs.subList(i, i+len));
-			i += len;
-		}
-
-		runAsync(this::S1_parse, tasks, pool);
+		group.executeAll(tasks, this::S1_parse).await();
 
 		buildHierarchy();
 
 		syncStage2(ctxs);
 
-		runAsync((ctx) -> S3_mapSelf(ctx, false), tasks, pool);
-		runAsync(this::S4_mapConstant, tasks, pool);
+		group.executeAll(tasks, (ctx) -> S3_mapSelf(ctx, false)).await();
+		group.executeAll(tasks, this::S4_mapConstant).await();
 		if ((flag&MF_RENAME_CLASS) != 0) {
-			runAsync(this::S5_mapClassName, tasks, pool);
-			runAsync(this::S5_1_resetDebugInfo, tasks, pool);
+			group.executeAll(tasks, this::S5_mapClassName).await();
+			group.executeAll(tasks, this::S5_1_resetDebugInfo).await();
 		}
 	}
 
@@ -1394,7 +1388,7 @@ public class Mapper extends Mapping {
 					}
 				}
 
-				if (libShadows.contains(m)) prev = null;
+				if (libShadows.contains(m) || (m.modifier&ACC_PRIVATE) != 0) prev = null;
 			}
 		}
 

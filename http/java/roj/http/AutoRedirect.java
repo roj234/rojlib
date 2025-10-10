@@ -3,6 +3,7 @@ package roj.http;
 import roj.concurrent.TaskPool;
 import roj.net.ChannelCtx;
 import roj.net.Event;
+import roj.net.SelectorLoop;
 import roj.net.handler.Timeout;
 import roj.util.DynByteBuf;
 import roj.util.FastFailException;
@@ -101,7 +102,7 @@ public class AutoRedirect extends Timeout {
 			req._address = null;
 			req._redirect(ctx.channel(), req.uri(), readTimeout);
 
-			lastRead = System.currentTimeMillis();
+			lastRead = SelectorLoop.currentTimeMillis();
 		} else {
 			ctx.exceptionCaught(ex);
 		}

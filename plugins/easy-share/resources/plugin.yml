@@ -1,0 +1,5 @@
+id: ${project_name}
+desc: 简单文件共享
+version: ${project_version}
+authors: ["Roj234"]
+mainClass: roj.plugins.share.FileShare

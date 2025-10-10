@@ -40,20 +40,23 @@ import java.util.concurrent.ThreadLocalRandom;
  */
 @Mime("text/plain")
 public class YellowPage extends Plugin implements TableReader {
-	private Plugin easySso;
+	private Plugin sso;
 	private Formatter index, site;
 	private List<String> db;
 	private int multiplier;
 
 	@Override
 	protected void onEnable() throws Exception {
-		easySso = getPluginManager().getPluginInstance(PluginDescriptor.Role.PermissionManager);
+		sso = getPluginManager().getPluginInstance(PluginDescriptor.Role.PermissionManager);
 
 		MapValue config = new MapValue();//getConfig();
-		config.put("path", "nav");
+		config.putIfAbsent("path", "nav");
+
+		String path = config.getString("path");
+		if (!path.endsWith("/")) path = path + "/";
 
 		ZipFile archive = getDescription().getArchive();
-		registerRoute(config.getString("path")+"/", new OKRouter().addPrefixDelegation("assets/", new ZipRouter(archive, "assets/")).register(this), "PermissionManager");
+		registerRoute(path, new OKRouter().addPrefixDelegation("assets/", new ZipRouter(archive, "assets/")).register(this), "PermissionManager");
 
 		index = Formatter.simple(IOUtil.readString(archive.getInputStream("index.html")));
 		site = Formatter.simple(IOUtil.readString(archive.getInputStream("site.html")));
@@ -186,6 +189,6 @@ public class YellowPage extends Plugin implements TableReader {
 		return "ok";
 	}
 
-	@Nullable private PermissionHolder getUser(Request req) {return easySso == null ? null : easySso.ipc(new TypedKey<>("getUser"), req);}
+	@Nullable private PermissionHolder getUser(Request req) {return sso == null ? null : sso.ipc(new TypedKey<>("getUser"), req);}
 	private int getUID(Request req) {var user = getUser(req);return user == null ? -1 : user.getId();}
 }

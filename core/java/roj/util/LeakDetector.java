@@ -22,8 +22,8 @@ public final class LeakDetector {
 		}
 	}
 
-	private static final XashMap.Builder<Object, Leak> BUILDER = WeakCache.shape(Leak.class);
-	private final XashMap<Object, Leak> monitor = BUILDER.create();
+	private static final XashMap.Template<Object, Leak> TEMPLATE = WeakCache.shape(Leak.class);
+	private final XashMap<Object, Leak> monitor = TEMPLATE.create();
 	private static int counter = ThreadLocalRandom.current().nextInt();
 
 	public static LeakDetector create() {

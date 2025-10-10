@@ -19,7 +19,7 @@ public final class Deflate extends QZCoder {
 	private final int level;
 
 	private static final byte[] ID = {4,1,8};
-	byte[] id() {return ID;}
+	public byte[] id() {return ID;}
 
 	private final AtomicReference<Deflater> def = new AtomicReference<>();
 

@@ -1,8 +1,0 @@
-id: RemoteFileSystem
-desc: 远程Source文件系统服务端
-version: ${project_version}
-authors: ["Roj234"]
-mainClass: roj.io.remote.RemoteFileSystem
-loadAfter:
-  - keyStore
-  - EasySSO

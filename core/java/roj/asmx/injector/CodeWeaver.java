@@ -1591,7 +1591,7 @@ public class CodeWeaver implements Transformer {
 		List<LineNumberTable.Item> list = lnTo.list;
 		for (int i = list.size()-1; i >= 0; i--) {
 			LineNumberTable.Item item = list.get(i);
-			if (!item.pos.isValid()) list.remove(i);
+			if (!item.pos.isBound()) list.remove(i);
 		}
 
 		System.out.println(lnTo);

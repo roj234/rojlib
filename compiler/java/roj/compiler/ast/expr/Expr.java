@@ -51,7 +51,8 @@ public abstract class Expr implements RawExpr {
 		ENUM_REFERENCE,
 		//尾调用
 		TAILREC,
-		STATIC_BEGIN
+		STATIC_MEMBER_ACCESS,
+		ALLOW_IMPLICIT_CAST
 	}
 	public boolean hasFeature(Feature feature) {return false;}
 	public abstract IType type();
@@ -63,6 +64,7 @@ public abstract class Expr implements RawExpr {
 
 	@Override public boolean isConstant() {return RawExpr.super.isConstant();}
 	@Override public Object constVal() {return RawExpr.super.constVal();}
+	public ConfigValue constValTyped(roj.config.node.Type type) {return isConstant() && constVal() instanceof ConfigValue value && value.mayCastTo(type) ? value : null;}
 
 	public LeftValue asLeftValue(CompileContext ctx) {
 		ctx.report(this, Kind.ERROR, "var.notAssignable", this);
@@ -87,7 +89,7 @@ public abstract class Expr implements RawExpr {
 	public static Expr constant(IType type, Object value) {return new Literal(type, value);}
 	public static Expr classRef(Type type) {return new Literal(new ParameterizedType("java/lang/Class", Collections.singletonList(type)), type);}
 	public static Expr valueOf(String v) {return new Literal(Types.STRING_TYPE, v);}
-	public static Expr valueOf(boolean v) {return new Literal(Type.BOOLEAN_TYPE, v);}
+	public static Expr valueOf(boolean v) {return new Literal(Type.BOOLEAN_TYPE, ConfigValue.valueOf(v));}
 	public static Expr valueOf(int v) {return new Literal(Type.INT_TYPE, ConfigValue.valueOf(v));}
 	public static Expr valueOf(ConfigValue v) {
 		if (v.dataType() == 's') return valueOf(v.asString());

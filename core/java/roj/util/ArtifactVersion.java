@@ -15,12 +15,14 @@ public final class ArtifactVersion {
 	public static final Pattern SEMVER = Pattern.compile("^(\\d+)(?:\\.(\\d+))?(?:\\.(\\d+))?(?:-([a-zA-Z\\d.-]+?))?(\\+.+?)?$");
 	private static final Pattern DOT = Pattern.compile("[-.]");
 
-	private final String canonical;
+	private final String original, canonical;
 	private final int[] version;
 	private final Comparable<?>[] tags;
 	private final byte qualifierType;
 
 	public ArtifactVersion(String version) {
+		this.original = version;
+
 		Matcher matcher = SEMVER.matcher(version);
 		String tag;
 		String[] splittedTag;
@@ -142,5 +144,5 @@ public final class ArtifactVersion {
 		return canonical.hashCode();
 	}
 
-	public String toString() { return canonical; }
+	public String toString() { return original; }
 }

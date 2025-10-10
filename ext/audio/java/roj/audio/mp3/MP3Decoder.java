@@ -8,11 +8,11 @@ import roj.audio.tag.APETag;
 import roj.audio.tag.ID3Tag;
 import roj.concurrent.Executor;
 import roj.concurrent.TaskPool;
-import roj.io.ByteInputStream;
 import roj.io.Finishable;
+import roj.io.XDataInputStream;
 import roj.io.source.Source;
 import roj.optimizer.FastVarHandle;
-import roj.reflect.Handles;
+import roj.reflect.Telescope;
 import roj.text.logging.Logger;
 import roj.util.ArrayCache;
 import roj.util.DynByteBuf;
@@ -28,8 +28,7 @@ import java.lang.invoke.VarHandle;
 @FastVarHandle
 public final class MP3Decoder implements AudioDecoder {
 	private static final Logger LOGGER = Logger.getLogger("MP3");
-	private static final int BUFFER_LEN = 16384;
-	private static final VarHandle STATE = Handles.lookup().findVarHandle(MP3Decoder.class, "state", int.class);
+	private static final VarHandle STATE = Telescope.lookup().findVarHandle(MP3Decoder.class, "state", int.class);
 
 	private Source in;
 	private AudioSink out;
@@ -37,7 +36,7 @@ public final class MP3Decoder implements AudioDecoder {
 	private Executor asyncPool;
 
 	private final Header header = new Header();
-	private final byte[] buf = ArrayCache.getByteArray(BUFFER_LEN, false);
+	private final byte[] buf = ArrayCache.getIOBuffer();
 	private int off, maxOff;
 	private volatile int state;
 	private volatile long seekPos;
@@ -73,7 +72,7 @@ public final class MP3Decoder implements AudioDecoder {
 		AudioMetadata tag = null;
 
 		int len;
-		if ((len = in.read(buf, 0, Math.min(BUFFER_LEN, 4096))) <= 10) {
+		if ((len = in.read(buf, 0, Math.min(buf.length, 4096))) <= 10) {
 			state = 2;
 			return null;
 		}
@@ -84,7 +83,7 @@ public final class MP3Decoder implements AudioDecoder {
 		int tagSize = id3.checkID3V2(_buf);
 		if (tagSize > len) {
 			in.seek(0);
-			var st = ByteInputStream.wrap(in.asInputStream());
+			var st = XDataInputStream.wrap(in.asInputStream());
 			try {
 				id3.parseID3V2(st);
 			} finally {
@@ -121,7 +120,7 @@ public final class MP3Decoder implements AudioDecoder {
 				if (tagSize != 0) {
 					in.seek(length - 32 - Math.abs(tagSize));
 
-					var st = ByteInputStream.wrap(in.asInputStream());
+					var st = XDataInputStream.wrap(in.asInputStream());
 					try {
 						ape.parseTag(st, tagSize < 0);
 					} finally {
@@ -228,7 +227,7 @@ public final class MP3Decoder implements AudioDecoder {
 
 			if (len > 0) System.arraycopy(buf, off, buf, 0, len); // 把off的buf移到起始位置
 
-			int read = in.read(buf, len, BUFFER_LEN - len);
+			int read = in.read(buf, len, buf.length - len);
 			maxOff = len + read;
 			off = 0;
 

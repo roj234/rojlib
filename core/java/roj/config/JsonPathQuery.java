@@ -15,12 +15,12 @@ import java.util.regex.Pattern;
  */
 public class JsonPathQuery implements ValueEmitter {
 	private static class PathNode {
-		private static final XashMap.Builder<Object, PathNode> BUILDER = XashMap.builder(Object.class, PathNode.class, "key", "_next");
+		private static final XashMap.Template<Object, PathNode> TEMPLATE = XashMap.forType(Object.class, PathNode.class).newValue(PathNode::new).build();
 
 		final Object key;
 		private PathNode _next;
 
-		final XashMap<Object, PathNode> children = BUILDER.createSized(2);
+		final XashMap<Object, PathNode> children = TEMPLATE.createSized(2);
 
 		ValueEmitter visitor;
 

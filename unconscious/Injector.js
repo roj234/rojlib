@@ -35,50 +35,43 @@ async function injectBabelAddExports() {
 }
 
 /**
- * 它先于任何我能控制的脚本执行我有什么办法 (可以写一个entrypoint替代vite cli，但是懒)
- * @return {Promise<boolean>}
- */
-async function injectViteBin() {
-    const MY_CODE = '/*UCBetterNodeImport*/{const a = process.cwd, b = a(), c=process.env.INIT_CWD;process.env.ORIG_CWD=b;process.cwd = () => {const d = a();return d===b?c:d};}';
-    const vitePath = path.join(process.cwd(), 'node_modules', 'vite');
-
-    const packageJsonPath = path.join(vitePath, 'package.json');
-    const viteEntryPath = path.join(vitePath, JSON.parse(await fs.readFile(packageJsonPath, 'utf8')).bin.vite);
-
-    let code = await fs.readFile(viteEntryPath, 'utf8');
-    if (code.includes(MY_CODE)) return false;
-
-    const lines = code.split('\n');
-
-    if (lines[0].startsWith('#!')) {
-        lines.splice(1, 0, MY_CODE);
-    } else {
-        console.warn('Warning: No shebang found in vite entrypoint.');
-        lines.unshift(MY_CODE);
-    }
-
-    code = lines.join('\n');
-    await fs.writeFile(viteEntryPath, code, {encoding: "utf8"});
-    return true;
-}
-
-/**
- * 我必须这么做来处理导入语句
+ * 也许我该提一个PR？
  * @return {Promise<boolean>}
  */
 function injectViteConfigLoad() {
-    const REPLACE_FROM = `[{
-\t\t\tname: "externalize-deps",`;
-    const REPLACE_TO = `[{
-  name: "UCBetterNodeImport",
-  setup(build) {
-    build.onResolve({ filter: /^[^.@/].+\\// }, (args) => {
-    const fileAtProjectRoot = path.join(process.env.ORIG_CWD, args.path);
-      if (fs.existsSync(fileAtProjectRoot)) return { path: fileAtProjectRoot };
-    });
-  }
-},`+REPLACE_FROM.substring(1);
-    const vitePath = path.join(process.cwd(), 'node_modules', 'vite');
+    const REPLACE_FROM = [
+        `workerConstructor === "Worker" ? \`\${jsContent}
+            const blob = typeof self !== "undefined" && self.Blob && new Blob([\${workerType === "classic" ? \`'(self.URL || self.webkitURL).revokeObjectURL(self.location.href);',\` : \`'URL.revokeObjectURL(import.meta.url);',\`}jsContent], { type: "text/javascript;charset=utf-8" });
+            export default function WorkerWrapper(options) {
+              let objURL;
+              try {
+                objURL = blob && (self.URL || self.webkitURL).createObjectURL(blob);
+                if (!objURL) throw ''
+                const worker = new \${workerConstructor}(objURL, \${workerTypeOption});
+                worker.addEventListener("error", () => {
+                  (self.URL || self.webkitURL).revokeObjectURL(objURL);
+                });
+                return worker;
+              } catch(e) {
+                return new \${workerConstructor}(
+                  'data:text/javascript;charset=utf-8,' + encodeURIComponent(jsContent),
+                  \${workerTypeOption}
+                );
+              }
+            }\` : `
+    ];
+    const REPLACE_TO = [
+        `workerConstructor === "Worker" ? \`\${jsContent}
+            const blob = typeof self !== "undefined" && self.Blob && new Blob([\${workerType === "classic" ? \`'(self.URL || self.webkitURL).revokeObjectURL(self.location.href);',\` : \`'URL.revokeObjectURL(import.meta.url);',\`}jsContent], { type: "text/javascript;charset=utf-8" });
+            export default function WorkerWrapper(options) {
+                const objURL = URL.createObjectURL(blob);
+                const worker = new \${workerConstructor}(objURL, \${workerTypeOption});
+                worker.addEventListener("error", () => {
+                  URL.revokeObjectURL(objURL);
+                });
+                return worker;
+            }\` : `
+    ];
 
     return new Promise(resolve => {
         async function replaceInFiles(dir) {
@@ -91,7 +84,10 @@ function injectViteConfigLoad() {
                 } else if (entry.isFile() && path.extname(entry.name) === '.js') {
                     // 如果是.js文件，读取内容并替换
                     let content = await fs.readFile(fullPath, 'utf8');
-                    let content1 = content.replace(REPLACE_FROM, REPLACE_TO);
+                    let content1 = content;
+                    for (let i = 0; i < REPLACE_FROM.length; i++) {
+                        content1 = content1.replace(REPLACE_FROM[i], REPLACE_TO[i]);
+                    }
                     if (content !== content1) {
                         await fs.writeFile(fullPath, content1, {encoding: "utf8"});
                         console.log(`Processed: ${fullPath}`);
@@ -129,15 +125,24 @@ async function deleteMapFiles(dir) {
     return deletedCount;
 }
 
+function scriptPath(pkg) {
+    const fileUrl = new URL(import.meta.resolve(pkg));
+    return path.normalize(fileUrl.pathname.slice(process.platform === 'win32' ? 1 : 0));
+}
+
 const startDir = process.argv[2] || process.cwd();
+
+let vitePath = scriptPath("vite").replaceAll("\\", "/");
+let i = vitePath.lastIndexOf("node_modules/vite");
+if (i < 0) throw new Error("Could not find node_modules");
+vitePath = vitePath.substring(0, i+17);
 
 // Mixin太好用了家人们！
 // 你先别管这是否违反NPM的ToS（反正我发布在GitHub上），你就说好不好用吧
-Promise.all([injectBabelAddExports(), injectViteBin(), injectViteConfigLoad(), deleteMapFiles(path.join(startDir, 'node_modules'))])
-    .then(([addExportOk, injectViteOk, injectViteConfigOk, deleteMapCount]) => {
+Promise.all([injectBabelAddExports(), injectViteConfigLoad(), deleteMapFiles(path.join(vitePath, '..'))])
+    .then(([addExportOk, injectViteOk, deleteMapCount]) => {
         if (addExportOk) console.log('Babel注入成功.');
-        if (injectViteOk) console.log('Vite注入成功.');
-        if (injectViteConfigOk) console.log('Vite MJS Bundler注入成功.');
+        if (injectViteOk) console.log('Vite Polyfill注入成功.');
         if (deleteMapCount) console.log(`Deleted ${deleteMapCount} unused files.`);
 }).catch(err => {
     console.error('操作文件时出错:', err);

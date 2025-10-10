@@ -6,7 +6,7 @@ import roj.audio.AudioMetadata;
 import roj.collect.Multimap;
 import roj.crypt.CRC32;
 import roj.io.IOUtil;
-import roj.io.ByteInput;
+import roj.io.XDataInput;
 import roj.io.source.Source;
 import roj.text.CharList;
 import roj.text.FastCharset;
@@ -214,7 +214,7 @@ public class ID3Tag implements AudioMetadata {
 	 * 解析ID3 v2标签信息。
 	 * <a href="https://mutagen-specs.readthedocs.io/en/latest/id3/id3v2.4.0-structure.html#id3v2-header">ID3 tag version 2.4.0 - Main Structure — Mutagen Specs 1.0 documentation</a>
 	 */
-	public void parseID3V2(ByteInput in) throws IOException {
+	public void parseID3V2(XDataInput in) throws IOException {
 		in.skipForce(3);
 
 		int id3_ver  = in.readUnsignedByte(); // ID3V2.[ver]
@@ -248,7 +248,7 @@ public class ID3Tag implements AudioMetadata {
 		while (in.position() < end && readFrame(in));
 	}
 
-	private static int synchSafeInt(ByteInput in) throws IOException {
+	private static int synchSafeInt(XDataInput in) throws IOException {
 		int i = in.readUnsignedByte() << 21;
 		i |= in.readUnsignedByte() << 14;
 		i |= in.readUnsignedByte() << 7;
@@ -256,12 +256,12 @@ public class ID3Tag implements AudioMetadata {
 		return i;
 	}
 
-	private static String readString(ByteInput in, int len) throws IOException {return readString(in, in.readUnsignedByte(), len-1);}
-	private static String readString(ByteInput in, int encoding, int len) throws IOException {
+	private static String readString(XDataInput in, int len) throws IOException {return readString(in, in.readUnsignedByte(), len-1);}
+	private static String readString(XDataInput in, int encoding, int len) throws IOException {
 		return new String(in.readBytes(len), encoding == 1 ? StandardCharsets.UTF_16 : StandardCharsets.ISO_8859_1);
 	}
 
-	private boolean readFrame(ByteInput in) throws IOException {
+	private boolean readFrame(XDataInput in) throws IOException {
 		String tag = in.readAscii(4);
 		// padding
 		if (tag.charAt(0) == 0) return false;

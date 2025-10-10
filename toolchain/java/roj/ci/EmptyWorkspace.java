@@ -2,21 +2,15 @@ package roj.ci;
 
 import roj.config.node.MapValue;
 
-import java.util.Collections;
-
 /**
  * @author Roj234
  * @since 2025/2/12 3:47
  */
 public final class EmptyWorkspace {
-	public static Workspace build(MapValue config) {
-		var workspace = new Workspace();
+	public static Env.Workspace build(MapValue config) {
+		var workspace = new Env.Workspace();
 		workspace.type = "empty";
 		workspace.id = "empty";
-		workspace.depend = Collections.emptyList();
-		workspace.mappedDepend = Collections.emptyList();
-		workspace.unmappedDepend = Collections.emptyList();
-		workspace.mapping = null;
 		return workspace;
 	}
 }

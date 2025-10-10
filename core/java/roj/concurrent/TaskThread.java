@@ -3,7 +3,7 @@ package roj.concurrent;
 import org.jetbrains.annotations.Async;
 import roj.compiler.api.Synchronizable;
 import roj.optimizer.FastVarHandle;
-import roj.reflect.Handles;
+import roj.reflect.Telescope;
 import roj.reflect.Reflection;
 import roj.util.ArrayUtil;
 
@@ -19,7 +19,7 @@ public class TaskThread extends FastLocalThread implements ExecutorService {
 	private ConcurrentLinkedQueue<Runnable> tasks = new ConcurrentLinkedQueue<>();
 	private UncaughtExceptionHandler exceptionHandler = LOG_HANDLER;
 
-	static final VarHandle STATE = Handles.lookup().findVarHandle(TaskThread.class, "state", int.class);
+	static final VarHandle STATE = Telescope.lookup().findVarHandle(TaskThread.class, "state", int.class);
 	//0 => running, 1 => terminating, 2 => stopped
 	volatile int state = 0;
 

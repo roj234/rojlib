@@ -336,7 +336,7 @@ public abstract class QZWriter extends OutputStream implements ArchiveWriter {
         var wb = new WordBlock();
         blocks.add(wb);
 
-        wb.coder = coders;
+        wb.coders = coders;
         if (complexCoder != null) {
             flagSum[9] += cOffsets;
             wb.complexCoder = complexCoder;
@@ -349,9 +349,9 @@ public abstract class QZWriter extends OutputStream implements ArchiveWriter {
             wb.outSizes = new long[coders.length-1];
 
         OutputStream out = source;
-        for (int i = 0; i < wb.coder.length; i++) {
+        for (int i = 0; i < wb.coders.length; i++) {
             out = wb.new Counter(out, i-1);
-            out = wb.coder[i].encode(out);
+            out = wb.coders[i].encode(out);
         }
         return this.out = out;
     }

@@ -6,7 +6,7 @@ import roj.net.ChannelCtx;
 import roj.net.ChannelHandler;
 import roj.net.Event;
 import roj.optimizer.FastVarHandle;
-import roj.reflect.Handles;
+import roj.reflect.Telescope;
 import roj.text.logging.Logger;
 import roj.util.JVM;
 
@@ -29,7 +29,7 @@ public class Fail2Ban implements ChannelHandler, Runnable {
 
 	@FastVarHandle
 	final class Attempt {
-		private static final VarHandle COUNT = Handles.lookup().findVarHandle(Attempt.class, "count", int.class);
+		private static final VarHandle COUNT = Telescope.lookup().findVarHandle(Attempt.class, "count", int.class);
 		private volatile int count;
 		private long forgive;
 		public Attempt(InetAddress address) {}

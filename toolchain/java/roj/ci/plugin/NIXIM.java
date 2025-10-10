@@ -10,7 +10,7 @@ import roj.asm.attr.Annotations;
 import roj.asmx.injector.CodeWeaver;
 import roj.asmx.mapper.Mapper;
 import roj.ci.BuildContext;
-import roj.ui.Tty;
+import roj.ci.MCMake;
 
 import java.util.Collections;
 import java.util.List;
@@ -21,12 +21,12 @@ import java.util.Objects;
  * @author solo6975
  * @since 2022/5/22 1:58
  */
-public class NIXIM implements Processor {
+public class NIXIM implements Plugin {
 	@Override
 	public String name() {return "Nixim注解上下文处理程序";}
 
 	@Override
-	public void afterCompilePost(BuildContext pc) {
+	public void postProcess(BuildContext pc) {
 		var mapper = Objects.requireNonNull(pc.getProcessor(MAP.class), "Missing dep MAP for NIXIM").getProjectMapper(pc.project);
 		var ctx = pc.getAnnotatedClasses(CodeWeaver.A_INJECTION);
 
@@ -64,7 +64,7 @@ public class NIXIM implements Processor {
 							}
 							anno.put("value", AnnVal.valueOf(name));
 						} else {
-							Tty.warning("无法为对象找到签名: " + data.name() + " " + node);
+							MCMake.log.info("无法为成员 {}.{} 找到映射名: ", data.name(), node);
 						}
 					}
 					break;
@@ -74,7 +74,7 @@ public class NIXIM implements Processor {
 						if (name != null) {
 							anno.put("value", AnnVal.valueOf(name));
 						} else {
-							Tty.warning("无法为对象找到签名: " + data.name() + " " + node);
+							MCMake.log.info("无法为成员 {}.{} 找到映射名: ", data.name(), node);
 						}
 					}
 					break;
@@ -85,7 +85,7 @@ public class NIXIM implements Processor {
 						if (name != null) {
 							anno.put("value", AnnVal.valueOf(name));
 						} else {
-							Tty.warning("无法为对象找到签名: " + data.name() + " " + node);
+							MCMake.log.info("无法为成员 {}.{} 找到映射名: ", data.name(), node);
 						}
 					}
 					break;

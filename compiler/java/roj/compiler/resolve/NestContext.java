@@ -17,6 +17,7 @@ import roj.compiler.asm.MethodWriter;
 import roj.compiler.asm.Variable;
 import roj.compiler.ast.expr.Expr;
 import roj.compiler.ast.expr.LocalVariable;
+import roj.text.CharList;
 
 import java.util.Collections;
 import java.util.List;
@@ -58,6 +59,7 @@ public sealed abstract class NestContext {
 
 	public static NestContext anonymous(CompileContext ctx, CompileUnit nest, MethodWriter nestConstructor, List<Expr> hostArgsLoad) {return new NestContext.InnerClass(ctx.file.name(), hostArgsLoad, ctx.variables, nest, nestConstructor, ctx.inStatic);}
 	public static NestContext innerClass(CompileContext ctx, String host, CompileUnit nest) {return new NestContext.InnerClass(host, nest, ctx.inStatic);}
+	public static NestContext innerClass(String host, CompileUnit nest, boolean inStatic) {return new NestContext.InnerClass(host, nest, inStatic);}
 	public static NestContext lambda(CompileContext ctx, List<Type> nestArgs, List<Type> hostArgs, List<Expr> hostArgsLoad) {return new NestContext.Lambda(ctx.variables, nestArgs, hostArgs, hostArgsLoad);}
 
 	public static final class InnerClass extends NestContext {
@@ -72,14 +74,14 @@ public sealed abstract class NestContext {
 		// 内部字段
 		private final ToIntMap<Object> fieldIds = new ToIntMap<>();
 
-		private boolean noInstanceMember;
+		private boolean isStatic;
 
 		InnerClass(String host, List<Expr> hostArgs, Map<String, Variable> hostVars, CompileUnit self, MethodWriter nestConstructor, boolean inStatic) {
 			super(host, hostArgs, hostVars);
 			this.self = self;
 			this.constructor = nestConstructor;
 			this.localSize = nestConstructor.getLocalSize();
-			this.noInstanceMember = inStatic;
+			this.isStatic = inStatic;
 		}
 
 		InnerClass(String host, CompileUnit self, boolean inStatic) {
@@ -89,7 +91,7 @@ public sealed abstract class NestContext {
 			this.localSize = 0;
 
 			fieldIds.putInt(this, self.getField(FIELD_HOST_REF));
-			this.noInstanceMember = inStatic;
+			this.isStatic = inStatic;
 		}
 
 		@Override
@@ -100,7 +102,7 @@ public sealed abstract class NestContext {
 
 		@Override public String nestHost() {return host;}
 		@Override public Import nestHostRef() {return Import.replace(new Self(Type.klass(host)));}
-		@Override public boolean inStatic() {return noInstanceMember;}
+		@Override public boolean inStatic() {return isStatic;}
 
 		@Override
 		public Import transferInto(CompileContext ctx, Import state, String name) {
@@ -163,7 +165,7 @@ public sealed abstract class NestContext {
 			if ((fieldNode.modifier & ACC_STATIC) != 0)
 				return new Import(owner, fieldNode.name(), true);
 
-			if (noInstanceMember) {
+			if (isStatic) {
 				ctx.setImportError("symbol.nonStatic.symbol", host, name, "symbol.field");
 				return null;
 			}
@@ -182,7 +184,7 @@ public sealed abstract class NestContext {
 			if ((owner.methods.get(methodId).modifier & ACC_STATIC) != 0)
 				return new Import(owner, name, true);
 
-			if (noInstanceMember) {
+			if (isStatic) {
 				ctx.setImportError("symbol.nonStatic.symbol", host, name, "invoke.method");
 				return null;
 			}
@@ -213,6 +215,16 @@ public sealed abstract class NestContext {
 
 			@Override
 			public int hashCode() {return type.hashCode();}
+		}
+
+		@Override
+		public String toString() {
+			var sb = new CharList();
+			sb.append(constructor == null ? "InnerClass" : "AnonymousClass");
+			sb.append("{");
+			if (isStatic) sb.append("static, ");
+			sb.append(self.name()).append(" => ").append(host);
+			return sb.append("}").toString();
 		}
 	}
 	public static final class Lambda extends NestContext {
@@ -285,8 +297,12 @@ public sealed abstract class NestContext {
 				Variable variable = value.getVariable();
 				variables.put("\1Lambda$"+i++, variable);
 				variable.end = new Label(0);
-				System.out.println("fid="+variable);
 			}
+		}
+
+		@Override
+		public String toString() {
+			return "Lambda{" + "nestArgs=" + nestArgs + '}';
 		}
 	}
 }

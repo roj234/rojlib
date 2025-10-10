@@ -4,6 +4,7 @@ import roj.collect.*;
 import roj.concurrent.TaskGroup;
 import roj.concurrent.TaskPool;
 import roj.config.ConfigMaster;
+import roj.config.mapper.ObjectMapper;
 import roj.config.mapper.Optional;
 import roj.io.IOUtil;
 import roj.io.RegionFile;
@@ -33,8 +34,8 @@ public class ChunkTrim {
 
 	private static MCTWhitelist whitelist;
 
-	public static void init(File file1) throws IOException, ParseException {
-		whitelist = ConfigMaster.JSON.readObject(file1, MCTWhitelist.class);
+	public static void init(File file) throws IOException, ParseException {
+		whitelist = ObjectMapper.SAFE.read(file, MCTWhitelist.class, ConfigMaster.JSON);
 	}
 
 	public static void createBackup(File worldDir, File backup) {
@@ -90,7 +91,7 @@ public class ChunkTrim {
 
 							NbtChunk chunk;
 							try (var nbt = rf.getBufferedInputStream(j)) {
-								chunk = ConfigMaster.NBT.readObject(nbt, NbtChunk.class);
+								chunk = ObjectMapper.SAFE.read(nbt, NbtChunk.class, ConfigMaster.NBT);
 							} catch (Exception e) {
 								e.printStackTrace();
 								delete = "数据错误(Data Error)";

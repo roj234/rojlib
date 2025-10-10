@@ -2,6 +2,7 @@ package roj.text;
 
 import roj.ci.annotation.Public;
 import roj.reflect.Bypass;
+import roj.reflect.Telescope;
 
 /**
  * 提供高效解析双精度（{@code double}）和单精度（{@code float}）浮点数的方法。
@@ -125,16 +126,13 @@ public class FastDoubleParser {
 
 	private static final H INSTANCE;
 	static {
-		try {
-			var target = Class.forName("jdk.internal.math.FloatingDecimal$ASCIIToBinaryBuffer");
-			INSTANCE = Bypass.builder(H.class).unchecked()
-					.construct(target, "newParser")
-					.delegate(target, new String[]{"floatValue","doubleValue"})
-					.access(target, new String[]{"isNegative","decExponent","digits","nDigits"}, null, new String[]{"isNegative","decExponent","digits","nDigits"})
-					.build();
-		} catch (ClassNotFoundException e) {
-			throw new RuntimeException(e);
-		}
+		var target = Telescope.findClass("jdk.internal.math.FloatingDecimal$ASCIIToBinaryBuffer");
+		String[] fieldNames = {"isNegative", "decExponent", "digits", "nDigits"};
+		INSTANCE = Bypass.builder(H.class).unchecked()
+				.construct(target, "newParser")
+				.delegate(target, new String[]{"floatValue","doubleValue"})
+				.access(target, fieldNames, null, fieldNames)
+				.build();
 	}
 	private static final ThreadLocal<Object> PARSER = ThreadLocal.withInitial(() -> INSTANCE.newParser(false, 0, null, 0));
 

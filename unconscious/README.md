@@ -1,13 +1,12 @@
-# Unconscious v1.5.0
+# Unconscious v1.6.0
 
 '上一代' 轻量级响应式框架，直接操作真实 DOM，提供细粒度更新和高性能。专注于最小化运行时开销，支持现代函数组件和丰富的 JSX 扩展语法。
 - Svelte家的Vue风味的React
 
 ## You have been warned
-- [Injector.js](Injector.js)会修改node_modules中部分文件的内容，以适应我的开发方式和RojLib的项目结构
-- - 修改了Vite MJS Bundler的代码，注入了一个导入插件，这样就能在任何位置的config里使用不带./或/前缀的模块导入
-- - 修改了Vite命令行入口的代码，注入了一个cwd函数的hack，这样我可以在任何地方打开终端，然后键入yarn dev，从此处启动vite，而不需要手动指定配置文件的位置
-- - 在IDE中运行时，由于npm run无法设置工作目录，请指定环境变量`INIT_CWD`
+- [Injector.js](Injector.js)会修改node_modules中部分文件的内容
+- - 修改了babel以暴露一些parser的内部API
+- - 修改了Vite WebWorker Polyfill的代码，理论上不影响现代浏览器
 
 ## 特点
 
@@ -43,7 +42,7 @@
 ```bash
 git clone rojlib
 cd rojlib
-yarn
+npm install
 ```
 
 ### 示例
@@ -73,6 +72,21 @@ import {appendChildren} from "unconscious";
 appendChildren(document.body, [<Counter/>]);
 ```
 
+这些导出语法支持组件热更新
+```js
+export function Component() {}
+export const Component = () => {}
+```
+
+这些导出语法支持重载，但不支持组件热更新，并有一些限制
+```js
+export default () => {}
+
+// t 必须是 let或var，如果是const将在重载时报错
+let t = '';
+export {t}
+```
+
 ### 全功能示例
 - 点击查看[全功能示例](example/src/main.js)，这个示例使用了后面介绍的所有函数
 - 要理解示例代码，我假设你对JSX语法有一定了解，使用或了解过Vue和React
@@ -80,7 +94,7 @@ appendChildren(document.body, [<Counter/>]);
 
 ### 异步状态
 - `$asyncState(fetcher, param?)`：管理 Promise 状态（`loading`、`error`、`value`）。参数变化时自动重取。
-- `$asyncComponent(loader, options)`：懒加载组件（`loading`/`error` 回调）。
+- `$asyncComponent(loader, loading, error)`：懒加载组件（`loading`/`error` 回调）。
 
 示例：
 ```jsx
@@ -123,15 +137,28 @@ function List() {
 ## 内置功能
 
 ### 元素装饰器
-绑定响应式样式或类（编译为 `_stylesBehaviour`/`_classesBehaviour`）。
+绑定响应式样式或类。
 
 ```jsx
 const color = $state("#ff0000");
 const bold = $state(false);
 
-<div style:color={color} class="test" class:bold={bold}>动态文本</div>
-// 更新 color.value 时，仅修改对应 style 属性；bold 控制类添加/移除
+// 请注意，下面这些**全部**都是编译器实现的语法糖，使用它们有很多注意事项
+// 1. 如果存在响应式的"style"或"class"，那么不应该再使用"style:xx"语法糖，否则它们会相互覆盖
+// 2. 但是非响应式的"style"可以，例如
+<div class="test" class:bold={bold}>非响应式属性可以和【响应式子属性】一起使用</div>
+// 3. 默认style支持使用属性，例如
+<div style={{fontSize: "16px"}}>style支持使用属性</div>
+// 4. 但不支持响应式，你需要显式的写：
+<div style:reactive={{color, fontSize: "16px"}}>style显式使用响应式属性</div>
+// 这是为了优化性能的妥协，毕竟编译器很难确认这个参数是否是响应式的，但程序员很容易
+// 5. class不支持直接用对象
+<div class={{test: true}}>说真的，你写那么多true，却不使用响应式，很好玩吗（）</div>
+// 6. 除非也响应式
+<div class:reactive={{test: true, bold}}>class必须使用响应式属性才能用对象</div>
+
 ```
+
 // 这是浏览器的处理  
 响应式样式支持驼峰（`fontSize`）或连字符（`background-color`）格式。
 
@@ -213,10 +240,6 @@ const user = $store('user', { name: '游客', token: '' }, { persist: true });
 // 自动保存到 LocalStorage（配置立即或延迟）
 user.name = "用户";
 user.token = "123456";
-
-// 快照与销毁
-const snapshot = user.$snapshot(); // 深克隆
-user.$dispose(); // 清理
 ```
 
 配置（Vite 环境变量）：

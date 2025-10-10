@@ -26,16 +26,18 @@ import roj.compiler.ast.MethodParser;
 import roj.compiler.ast.expr.*;
 import roj.compiler.diagnostic.Diagnostic;
 import roj.compiler.diagnostic.Kind;
+import roj.compiler.diagnostic.TranslatableString;
 import roj.compiler.resolve.*;
 import roj.config.node.ConfigValue;
+import roj.io.IOUtil;
 import roj.text.CharList;
 import roj.text.ParseException;
 import roj.text.TextUtil;
+import roj.text.Tokenizer;
 import roj.util.ArrayCache;
 import roj.util.Helpers;
 
 import java.util.*;
-import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
@@ -155,11 +157,12 @@ public class CompileContext {
 		this.caster.typeParams = file.signature == null ? Collections.emptyMap() : file.signature.typeVariables;
 		this.fieldDFS = false;
 		this.constructorChain.clear();
+		this.compileUnits.clear();
 
 		file.ctx = this;
 	}
 	public void setupFieldDFS() {
-		constructorFields = file.finalFields;
+		uninitializedFinalFields = file.finalFields;
 		inStatic = true;
 		inConstructor = true;
 		fieldDFS = true;
@@ -173,10 +176,10 @@ public class CompileContext {
 		noCallConstructor = inConstructor = node.name().startsWith("<");
 		if (inConstructor) {
 			if (node.name().equals("<init>")) {
-				constructorFields = new HashSet<>(Hasher.identity());
-				constructorFields.addAll(file.finalFields);
+				uninitializedFinalFields = new HashSet<>(Hasher.identity());
+				uninitializedFinalFields.addAll(file.finalFields);
 			} else {
-				constructorFields = file.finalFields;
+				uninitializedFinalFields = file.finalFields;
 			}
 		}
 		method = node;
@@ -193,6 +196,17 @@ public class CompileContext {
 		errorReportIndex = -1;
 	}
 
+	private final List<CompileUnit> compileUnits = new ArrayList<>();
+	public void addCompileUnit(CompileUnit unit) {compileUnits.add(unit);}
+	public void commitCompileUnits() {
+		synchronized (compiler) {
+			for (CompileUnit unit : compileUnits) {
+				compiler.addCompileUnit(unit);
+			}
+		}
+		compileUnits.clear();
+	}
+
 	public String currentCodeBlockForReport() {return "[symbol.type,\" \","+file.name()+"]";}
 
 	//region 错误报告
@@ -201,7 +215,16 @@ public class CompileContext {
 	protected boolean hasError;
 	public boolean hasError() {return hasError;}
 
-	public BiConsumer<String, Object[]> errorCapture;
+	private final CharList capturedError = new CharList();
+	private boolean errorCaptureEnabled;
+
+	public void enableErrorCapture() {errorCaptureEnabled = true;}
+	public CharList getCapturedError() {return capturedError;}
+	public void disableErrorCapture() {
+		errorCaptureEnabled = false;
+		capturedError.clear();
+	}
+
 	public int errorReportIndex;
 	private Set<Object> reportedType = new HashSet<>();
 
@@ -236,8 +259,15 @@ public class CompileContext {
 		return false;
 	}
 
-	private boolean checkCapture(String message, Object[] args) {
-		if (errorCapture != null) {errorCapture.accept(message, args);return true;}
+	private boolean checkCapture(String message, Object[] arguments) {
+		if (errorCaptureEnabled) {
+			var tmp = IOUtil.getSharedCharBuf();
+			TranslatableString.of(message, arguments).translate(LavaTokenizer.i18n, tmp);
+			capturedError.clear();
+			capturedError.append('"');
+			Tokenizer.escape(capturedError, tmp, 0, '\'').append('"');
+			return true;
+		}
 		return false;
 	}
 
@@ -297,31 +327,15 @@ public class CompileContext {
 		return false;
 	}
 
-	private HashSet<FieldNode> constructorFields;
-	public final void checkSelfField(FieldNode node, boolean write) {
-		boolean constructor = inConstructor;
-		if (inStatic) {
-			if ((node.modifier()&Opcodes.ACC_STATIC) == 0)
-				report(Kind.ERROR, "symbol.nonStatic.symbol", file.name(), node.name(), "symbol.field");
-		} else if ((node.modifier()&Opcodes.ACC_STATIC) != 0) {
-			constructor = false;
-		}
-
-		if ((node.modifier()&Opcodes.ACC_FINAL) != 0) {
-			if (write) {
-				if (constructor) {
-					if (!constructorFields.remove(node)) {
-						report(Kind.ERROR, "symbol.field.writeAfterWrite", file.name(), node.name());
-					}
-				} else {
-					report(Kind.ERROR, "symbol.field.writeFinal", file.name(), node.name());
-				}
-			} else {
-				if (constructor) {
-					if (constructorFields.contains(node)) {
-						report(Kind.ERROR, "symbol.field.readBeforeWrite", file.name(), node.name());
-					}
-				}
+	private HashSet<FieldNode> uninitializedFinalFields;
+	public final void accessFinalField(FieldNode node, boolean write) {
+		if (write) {
+			if (!uninitializedFinalFields.remove(node)) {
+				report(Kind.ERROR, "symbol.field.writeAfterWrite", file.name(), node.name());
+			}
+		} else {
+			if (uninitializedFinalFields.contains(node)) {
+				report(Kind.ERROR, "symbol.field.readBeforeWrite", file.name(), node.name());
 			}
 		}
 	}
@@ -675,15 +689,15 @@ public class CompileContext {
 		return error;
 	}
 
-	private CharList tmpErrorMsg = new CharList();
 	private String fcResolveInnerClass(CharList desc, ClassNode owner, int fieldNamePos, String firstError, boolean allowClassExpr) {
 		while (true) {
 			// capture last error to tmpErrorMsg
-			errorCapture = ComponentList.makeErrorCapture(tmpErrorMsg);
+			enableErrorCapture();
 			if (!canAccessType(owner, true)) {
 				if (firstError.isEmpty())
-					firstError = tmpErrorMsg.toString();
+					firstError = getCapturedError().toString();
 			}
+			disableErrorCapture();
 
 			// priority field than InnerClass
 			String error = resolveFieldChain(owner, null, desc, fieldNamePos);
@@ -1083,6 +1097,8 @@ public class CompileContext {
 				var override = getOperatorOverride(expr, toType, assign);
 				if (override != null) return override;
 
+				if (cast.type > TypeCast.DOWNCAST && expr.hasFeature(Expr.Feature.ALLOW_IMPLICIT_CAST))
+					return cast;
 				report(Kind.ERROR, "typeCast.error."+cast.type, rType, toType);
 			}
 		}
@@ -1286,17 +1302,22 @@ public class CompileContext {
 	//region 递归状态管理
 	private CompileContext prev, next;
 
-	private static final ThreadLocal<CompileContext> FTL = new ThreadLocal<>();
+	private static final ThreadLocal<CompileContext> LOCAL_CONTEXT = new ThreadLocal<>();
 
 	public static void set(@Nullable CompileContext ctx) {
 		if (ctx != null) ctx.next = null;
-		FTL.set(ctx);
+		LOCAL_CONTEXT.set(ctx);
+	}
+	public static void remove() {
+		var ctx = LOCAL_CONTEXT.get();
+		LOCAL_CONTEXT.remove();
+		if (ctx != null) ctx.compiler.releaseContext(ctx);
 	}
 
-	public static CompileContext get() {return FTL.get();}
+	public static CompileContext get() {return LOCAL_CONTEXT.get();}
 
 	public static CompileContext push() {
-		var ctx = FTL.get();
+		var ctx = LOCAL_CONTEXT.get();
 		CompileContext next = ctx.next;
 		if (next == null) {
 			ctx.next = next = ctx.compiler.createContext();
@@ -1304,7 +1325,7 @@ public class CompileContext {
 			next.prev = ctx;
 		}
 
-		FTL.set(next);
+		LOCAL_CONTEXT.set(next);
 		return next;
 	}
 	public static void pop() {set(Objects.requireNonNull(get().prev, "stack is empty"));}
@@ -1318,7 +1339,7 @@ public class CompileContext {
 		};
 	}
 
-	public void pushNestContext(NestContext context) {if (enclosing.size() > 10)report(Kind.INCOMPATIBLE, "lc.nestTooDeep");enclosing.add(context);}
+	public void pushNestContext(NestContext context) {if (enclosing.size() > 10)report(Kind.FEATURE, "lc.nestTooDeep");enclosing.add(context);}
 	public void popNestContext() {enclosing.pop().onPop();}
 
 	@UnmodifiableView public ArrayList<NestContext> enclosingContext() {return enclosing;}

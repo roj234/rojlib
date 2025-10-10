@@ -5,9 +5,9 @@ import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
-@ExcludeFromArtifact
-@Retention(RetentionPolicy.RUNTIME)
+@Retention(RetentionPolicy.CLASS)
 @Target({ElementType.FIELD, ElementType.TYPE})
+@AliasOf(value = Object.class, altValue = "jdk.internal.vm.annotation.Contended")
 public @interface Contended {
 	/**
 	 * 组

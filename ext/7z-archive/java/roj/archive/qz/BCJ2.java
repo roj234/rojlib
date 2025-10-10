@@ -1,8 +1,8 @@
 package roj.archive.qz;
 
 import org.jetbrains.annotations.NotNull;
-import roj.archive.xz.rangecoder.RangeDecoderFromStream;
-import roj.archive.xz.rangecoder.RangeEncoderToStream;
+import roj.archive.rangecoder.RangeDecoderFromStream;
+import roj.archive.rangecoder.RangeEncoderToStream;
 import roj.io.CorruptedInputException;
 import roj.io.Finishable;
 import roj.io.IOUtil;
@@ -14,7 +14,7 @@ import java.io.OutputStream;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static java.lang.Integer.MIN_VALUE;
-import static roj.archive.xz.rangecoder.RangeCoder.initProbs;
+import static roj.archive.rangecoder.RangeCoder.initProbs;
 /**
  * @author Roj234
  * @since 2023/5/29 12:26

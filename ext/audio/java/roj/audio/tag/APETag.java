@@ -4,7 +4,7 @@ import org.jetbrains.annotations.Nullable;
 import roj.audio.AudioMetadata;
 import roj.collect.HashMap;
 import roj.io.IOUtil;
-import roj.io.ByteInput;
+import roj.io.XDataInput;
 import roj.reflect.Unsafe;
 import roj.util.TypedKey;
 
@@ -39,7 +39,7 @@ public class APETag implements AudioMetadata {
 		return 0;
 	}
 
-	public void parseTag(ByteInput st, boolean noHeader) throws IOException {
+	public void parseTag(XDataInput st, boolean noHeader) throws IOException {
 		if (!noHeader) {
 			if (st.readLong() != SIGNATURE) return;
 			int apeVer = st.readIntLE();
@@ -53,7 +53,7 @@ public class APETag implements AudioMetadata {
 		for (int i = 0; i < itemCount; i++) readItem(st);
 	}
 
-	private void readItem(ByteInput st) throws IOException {
+	private void readItem(XDataInput st) throws IOException {
 		int valueSize = st.readIntLE();
 		int flags = st.readInt()&7;
 

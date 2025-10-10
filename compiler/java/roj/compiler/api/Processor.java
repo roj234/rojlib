@@ -18,7 +18,7 @@ import java.util.Set;
 public interface Processor {
 	Set<String> acceptedAnnotations();
 
-	default boolean acceptClasspath() {return false;}
+	default boolean readClasspath() {return false;}
 
 	void handle(CompileContext ctx, ClassDefinition file, Attributed node, Annotation annotation);
 

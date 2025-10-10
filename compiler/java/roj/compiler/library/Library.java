@@ -28,11 +28,11 @@ public interface Library {
 	}
 
 	/**
-	 * 应当被加入索引的类名称
+	 * 应当被加入类名索引的类名称
 	 */
 	default Collection<String> indexedContent() {return Collections.emptySet();}
 	/**
-	 * 该库中所有的类名称
+	 * 应当被加入短名称索引的类名称
 	 */
 	default Collection<String> content() {return indexedContent();}
 

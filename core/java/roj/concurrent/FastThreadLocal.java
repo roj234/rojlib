@@ -2,6 +2,7 @@ package roj.concurrent;
 
 import roj.collect.BitSet;
 import roj.collect.IntMap;
+import roj.reflect.Telescope;
 import roj.reflect.Unsafe;
 import roj.util.ArrayCache;
 
@@ -43,7 +44,8 @@ public class FastThreadLocal<T> {
 	public static void clear() {
 		var t = Thread.currentThread();
 		try {
-			Unsafe.U.putReference(t, Unsafe.fieldOffset(Thread.class, "threadLocals"), null);
+			long offset = Unsafe.objectFieldOffset(Thread.class, "threadLocals", Telescope.findClass("java.lang.ThreadLocal$ThreadLocalMap"));
+			Unsafe.U.putReference(t, offset, null);
 		} catch (Exception e) {
 			e.printStackTrace();
 		}

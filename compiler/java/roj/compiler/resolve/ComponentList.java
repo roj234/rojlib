@@ -8,17 +8,11 @@ import roj.asm.Member;
 import roj.asm.MethodNode;
 import roj.asm.type.IType;
 import roj.compiler.CompileContext;
-import roj.compiler.LavaTokenizer;
 import roj.compiler.diagnostic.Kind;
-import roj.compiler.diagnostic.TranslatableString;
-import roj.io.IOUtil;
-import roj.text.CharList;
-import roj.text.Tokenizer;
 
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import java.util.function.BiConsumer;
 
 /**
  * @author Roj234
@@ -54,15 +48,5 @@ public abstract class ComponentList {
 			// TODO better toString
 			ctx.report(Kind.WARNING, "annotation.deprecated", member.rawDesc().startsWith("(") ? "invoke.method" : "symbol.field", member.name().equals("<init>") ? "new "+owner.name()+"()" : member);
 		}
-	}
-
-	public static BiConsumer<String, Object[]> makeErrorCapture(CharList sb) {
-		return (message, arguments) -> {
-			var tmp = IOUtil.getSharedCharBuf();
-			TranslatableString.of(message, arguments).translate(LavaTokenizer.i18n, tmp);
-			sb.clear();
-			sb.append('"');
-			Tokenizer.escape(sb, tmp, 0, '\'').append('"');
-		};
 	}
 }

@@ -3,9 +3,7 @@ package roj.ci;
 import roj.collect.ToIntMap;
 import roj.collect.ToLongMap;
 import roj.config.ConfigMaster;
-import roj.config.JsonParser;
 import roj.config.mapper.Optional;
-import roj.io.IOUtil;
 import roj.text.ParseException;
 
 import java.io.File;
@@ -43,9 +41,9 @@ public class Statistic {
 		var file = new File(MCMake.CONF_PATH, "statistics.json");
 		if (file.isFile()) {
 			try {
-				instance = MCMake.CONFIG.read(file, Statistic.class, new JsonParser());
+				instance = MCMake.CONFIG.read(file, Statistic.class, ConfigMaster.JSON);
 			} catch (IOException | ParseException e) {
-				MCMake.LOGGER.error("Exception while reading statistics.json", e);
+				MCMake.log.error("Exception while reading statistics.json", e);
 				return;
 			}
 		}
@@ -57,11 +55,10 @@ public class Statistic {
 	private static void save() {
 		if (isDirty) {
 			try {
-				IOUtil.writeFileEvenMoreSafe(MCMake.CONF_PATH, "statistics.json",
-						value -> ConfigMaster.JSON.writeObject(MCMake.CONFIG.writer(Statistic.class), instance, value));
+				MCMake.CONFIG.write(ConfigMaster.JSON, instance, new File(MCMake.CONF_PATH, "statistics.json"));
 				isDirty = false;
 			} catch (IOException e) {
-				MCMake.LOGGER.warn("Exception saving statistics.json", e);
+				MCMake.log.warn("Exception saving statistics.json", e);
 			}
 		}
 	}

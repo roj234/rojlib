@@ -43,13 +43,13 @@ final class ServerLaunchUdp extends ServerLaunch {
 
 		udp.open();
 		loop().register(udp, null, SelectionKey.OP_READ);
-		if (name != null) SHARED.put(name, this);
+		if (name != null) NAMED.put(name, this);
 		return this;
 	}
 
 	public final boolean isOpen() { return udp.isOpen(); }
 	public final void close() throws IOException {
-		if (name != null) SHARED.remove(name, this); udp.close(); }
+		if (name != null) NAMED.remove(name, this); udp.close(); }
 
 	@Override
 	public void addTCPConnection(MyChannel channel) throws IOException {

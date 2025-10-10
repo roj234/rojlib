@@ -30,15 +30,12 @@ import roj.text.CharList;
 import roj.text.ParseException;
 import roj.text.Token;
 import roj.util.Helpers;
-import roj.util.Multisort;
-import roj.util.NativeArray;
 import roj.util.function.Flow;
 
 import java.util.Collections;
 import java.util.List;
 
 import static roj.compiler.LavaTokenizer.*;
-import static roj.reflect.Unsafe.U;
 import static roj.text.Token.LITERAL;
 
 /**
@@ -195,20 +192,14 @@ public final class ExprParser {
 	}
 
 	private final ArrayList<Expr> nodes = new ArrayList<>();
-	/**
-	 * 低10位放优先级
-	 * 高21位放节点索引
-	 * 最高位放右结合标记
-	 */
-	private final IntList binaryOps = new IntList();
-	private static final Multisort.MyComparator BOP_SORTER = (refLeft, offLeft, offRight) -> {
-		int l = U.getInt(refLeft, offLeft);
-		int r = U.getInt(offRight);
-		int priority = Integer.compare(r & 1023, l & 1023);
-		if (priority != 0) return priority;
-		// 正数不会改变顺序，但是如果是负数，那么就会反过来，这就变成右结合了
-		return Integer.compare(Math.abs(l), Math.abs(r));
-	};
+	private final IntList opStack = new IntList();
+	private boolean shouldMerge(int stackTop, int newState) {
+		int curState = stateMap.getInt(SM_ExprTerm | stackTop);
+		// 优先级相同时考虑结合性
+		if (curState == newState) return (curState&SM_RightAssoc) == 0;
+		// 优先级不同时直接比较优先级, 这里用 == 或 >= 没有区别
+		return (curState & 0x3FF) >= (newState & 0x3FF);
+	}
 
 	private int depth = -1;
 	public Int2IntMap stateMap = SM;
@@ -218,13 +209,13 @@ public final class ExprParser {
 
 	public RawExpr parse(int flag) throws ParseException {
 		hasNullExpr = false;
+		depth = -1;
 		RawExpr node;
 		try {
 			node = parse1(flag);
 		} catch (ParseException e) {
-			depth = -1;
 			nodes.clear();
-			binaryOps.clear();
+			opStack.clear();
 			tmp0.clear();
 
 			//throw e;
@@ -243,8 +234,7 @@ public final class ExprParser {
 		if (++depth > 127) throw wr.err("expr.stackOverflow");
 
 		var nodes = this.nodes;
-		int bopCount = binaryOps.size();
-		int nodeCount = nodes.size();
+		int opCount = opStack.size();
 
 		while (true) {
 			PrefixOperator up = null;
@@ -547,7 +537,7 @@ public final class ExprParser {
 									wr.retract();
 
 									if (b) {
-										IType type = ctx.file.readGenericPart(w, ((MemberAccess) cur).toClassRef().owner);
+										IType type = ctx.file.readGenericPart(w, ((MemberAccess) cur).toClassRef().owner, false);
 
 										w = wr.next();
 										if (w.type() != LITERAL) throw wr.err("unexpected_2:[\""+w.text()+"\",lexer.identifier]");
@@ -652,7 +642,6 @@ public final class ExprParser {
 
 						var node = invoke(cur, copyOrEmpty(args));
 						node.wordStart = wordStart;
-						if (null instanceof List) node.setExplicitArgumentType(Helpers.cast(null));
 						cur = node;
 					break;}
 					case -11:{//xxx.new SomeClass(...)
@@ -691,7 +680,7 @@ public final class ExprParser {
 						short vtype = w.type();
 
 						Expr right = parse1(flag & ~(CHECK_VARIABLE_DECLARE|SKIP_SEMICOLON|SKIP_COMMA|SKIP_RMB|SKIP_RSB) | STOP_COMMA | NAE);
-						cur = assign(vn, vtype == assign ? right : binaryOp((short) (vtype + binary_assign_delta), cur, right));
+						cur = assign(vn, vtype == assign ? right : binaryOp(vtype, cur, right));
 					}
 					break endValueConv;
 					case -8://inc, dec
@@ -733,7 +722,7 @@ public final class ExprParser {
 			// 优先级也不低
 			// if ("5"+3 instanceof String ? "5"+3 instanceof String : "5"+3 instanceof String);
 			if (w.type() == INSTANCEOF) {
-				cur = buildBinaryTree(nodes, nodeCount, bopCount);
+				cur = mergeOp(opCount, nodes);
 
 				IType targetType = ctx.file.readType(CompileUnit.TYPE_GENERIC);
 				String variable = wr.nextIf(LITERAL) ? w.text() : null;
@@ -746,48 +735,18 @@ public final class ExprParser {
 
 			// *AI命名建议：中缀运算符（Infix Operator） | 如`+`、`*`等连接子表达式的符号。
 			// 二元运算符 | 三元运算符 | 终结符
-			_sid = stateMap.getOrDefaultInt(SM_ExprTerm | w.type(), 0);
-			if (_sid == 0) {
-				if (ctx.compiler.hasFeature(Compiler.OPTIONAL_SEMICOLON) && depth == 0 && cur != null) {
-					wr.retractWord();
-					break;
-				}
-
-				exceptingStopWord(w.text(), flag);
-				break;
-			}
-
-			if ((_sid&0x400) != 0) {
-				// 除了逗号之外, 还有 instanceof 和 ?
-				// 它们是-1, 所以这两个值都为真
-				if ((_sid & 0x40) != 0) break;
-				// 终结符
-				// 0x400 = FLAG_TERMINATOR
-				// 0x020 = FLAG_NEVER_SKIP
-				int shl = _sid & 31;
-				if ((flag & (1 << shl)) == 0) {
-					if (ctx.compiler.hasFeature(Compiler.OPTIONAL_SEMICOLON) && depth == 0 && cur != null) {
-						wr.retractWord();
-						break;
-					}
-
-					exceptingStopWord(w.text(), flag);
-					break;
-				}
-				if ((_sid & 0x20) != 0 || (flag & (1 << (shl+1))) == 0) wr.retractWord();
-
-				break;
-			}
+			_sid = checkTerminalOrInfix(wr, w, flag, cur != null);
+			if (_sid == 0) break;
 
 			// 二元运算符
 			checkNullExpr(cur);
-
-			// range 0 - 1023
-			binaryOps.add((nodes.size() << 10) | (_sid&0x3FF));
-			nodes.add(new BinaryOp(w.type()));
+			while (opStack.size() > opCount && shouldMerge(opStack.peek(), _sid)) {
+				mergeOp(nodes);
+			}
+			opStack.add(w.type());
 		}
 
-		Expr cur = buildBinaryTree(nodes, nodeCount, bopCount);
+		Expr cur = mergeOp(opCount, nodes);
 
 		if (w.type() == comma) {
 			if ((flag & STOP_COMMA) == 0) {
@@ -802,7 +761,9 @@ public final class ExprParser {
 					args.add(parse1(flag|STOP_COMMA|SKIP_COMMA|NAE));
 					w = wr.current();
 				} while (w.type() == comma);
-				if (w.type() != semicolon) ue(wr, w.text(), ";");
+
+				int _sid = checkTerminalOrInfix(wr, w, flag, true);
+				if (_sid != 0) exceptingStopWord(w.text(), flag);
 
 				cur = new SequenceExpr(copyOf(args));
 				cur.wordStart = start;
@@ -833,43 +794,65 @@ public final class ExprParser {
 		return cur;
 	}
 
-	private List<Expr> copyOrEmpty(List<Expr> args) {
-		return args.isEmpty() ? Collections.emptyList() : copyOf(args);
+	private Expr mergeOp(int opCount, ArrayList<Expr> nodes) {
+		while (opStack.size() > opCount) mergeOp(nodes);
+		return nodes.pop();
+	}
+	private void mergeOp(ArrayList<Expr> nodes) {
+		short opInfo = (short)opStack.pop();
+
+		Expr op, right = nodes.pop(), left = nodes.pop();
+		//checkNullExpr(right);
+
+		int sid = stateMap.getInt(SM_ExprTerm | opInfo);
+		if ((sid & CU_Binary) != 0) {
+			op = ((Compiler.BinaryOp) callbacks.get(sid >>> 12)).parse(ctx, left, right);
+		} else {
+			op = new BinaryOp(opInfo, left, right);
+		}
+		nodes.add(op);
 	}
 
-	/**
-	 * 根据优先级构建二元表达式树.
-	 * 20250330: 现已支持右结合！
-	 */
-	private Expr buildBinaryTree(ArrayList<Expr> nodes, int nodeCount, int bopCount) {
-		Expr cur;
-		var ops = binaryOps;
-		if (ops.size() > bopCount) {
-			Multisort.sort(bopCount, ops.size(), BOP_SORTER, NativeArray.primitiveArray(ops.getRawArray()));
+	private int checkTerminalOrInfix(LavaTokenizer wr, Token w, int flag, boolean hasExpr) {
+		int _sid = stateMap.getOrDefaultInt(SM_ExprTerm | w.type(), 0);
+		if (_sid == 0) {
+			if (ctx.compiler.hasFeature(Compiler.OPTIONAL_SEMICOLON) && depth == 0 && hasExpr) {
+				wr.retractWord();
+				return 0;
+			}
 
-			int i = bopCount;
-			do {
-				int ord = (ops.get(i) >>> 10) & 2097151;
-
-				var op = (BinaryOp) nodes.get(ord);
-
-				op.left = nodes.set(ord-1, op);
-				op.right = nodes.set(ord+1, op);
-				checkNullExpr(op.right);
-
-				int sid = stateMap.getOrDefaultInt(op.operator, 0);
-				if ((sid&CU_Binary) != 0) cur = ((Compiler.BinaryOp) callbacks.get(sid >>> 12)).parse(ctx, op.left, op.right);
-				else cur = op;
-			} while (++i != ops.size());
-
-			ops.removeRange(bopCount, ops.size());
-			nodes.removeRange(nodeCount, nodes.size());
-		} else {
-			assert nodes.size() == nodeCount+1;
-			// 肯定有这一项，但是可能是null
-			cur = nodes.pop();
+			exceptingStopWord(w.text(), flag);
+			return 0;
 		}
-		return cur;
+
+		if ((_sid&0x400) != 0) {
+			// 除了逗号之外, 还有 instanceof 和 ?
+			// 它们是-1, 所以这两个值都为真
+			if ((_sid & 0x40) != 0) return 0;
+
+			// 终结符
+			// 0x400 = FLAG_TERMINATOR
+			// 0x020 = FLAG_NEVER_SKIP
+			int shl = _sid & 31;
+			if ((flag & (1 << shl)) == 0) {
+				if (ctx.compiler.hasFeature(Compiler.OPTIONAL_SEMICOLON) && depth == 0 && hasExpr) {
+					wr.retractWord();
+					return 0;
+				}
+
+				exceptingStopWord(w.text(), flag);
+				return 0;
+			}
+			if ((_sid & 0x20) != 0 || (flag & (1 << (shl+1))) == 0) wr.retractWord();
+
+			return 0;
+		}
+
+		return _sid;
+	}
+
+	private List<Expr> copyOrEmpty(List<Expr> args) {
+		return args.isEmpty() ? Collections.emptyList() : copyOf(args);
 	}
 
 	private boolean hasNullExpr;
@@ -1042,8 +1025,15 @@ public final class ExprParser {
 		if (w.type() != rParen) {
 			// 泛型 或 数组
 			if (w.type() == lss || w.type() == lBracket) {
+				IType extended;
+				try {
+					extended = ctx.file.readGenericPart(w, sb.toString(), true);
+				} catch (Exception e) {
+					// 也不是很corner的case: (variable < 5
+					return null;
+				}
+
 				wr.skip();
-				IType extended = ctx.file.readGenericPart(w, sb.toString());
 				if (wr.nextIf(LITERAL)) return pLambdaTyped(wr, extended);
 				return extended;
 			}
@@ -1127,11 +1117,13 @@ public final class ExprParser {
 		while (true) {
 			// _ENV_TYPED_ARRAY may not stable
 			Expr expr = parse1(STOP_RSB|STOP_COMMA|SKIP_COMMA|_ENV_INVOKE|_ENV_TYPED_ARRAY);
-			// noinspection all
-			if (expr == null || (args.add(expr) & expr.getClass() == NamedArgumentList.class)) {
-				ctx.tokenizer.except(rParen, ")");
-				break;
+			if (expr != null) {
+				args.add(expr);
+				if (ctx.tokenizer.current().type() != rParen && expr.getClass() != NamedArgumentList.class) continue;
 			}
+
+			ctx.tokenizer.except(rParen, ")");
+			break;
 		}
 	}
 
@@ -1242,7 +1234,7 @@ public final class ExprParser {
 
 	private static final ObjectMapper MAPPER = ObjectMapper.pooled();
 
-	public static String serialize(Expr node) { return ConfigMaster.JSON.writeObject(MAPPER.writer(Expr.class), node, new CharList()).toStringAndFree(); }
+	public static String serialize(Expr node) {return MAPPER.writer(Expr.class).write(ConfigMaster.JSON, node, new CharList()).toStringAndFree(); }
 	public static void serialize(Expr node, ValueEmitter visitor) { MAPPER.writer(Expr.class).write(visitor, node); }
-	public static RawExpr deserialize(String string) throws ParseException {return ConfigMaster.JSON.readObject(MAPPER.reader(Expr.class), string);}
+	public static RawExpr deserialize(String string) throws ParseException {return MAPPER.reader(Expr.class).read(string, ConfigMaster.JSON);}
 }

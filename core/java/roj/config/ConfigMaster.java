@@ -2,9 +2,6 @@ package roj.config;
 
 import org.intellij.lang.annotations.MagicConstant;
 import org.jetbrains.annotations.NotNull;
-import roj.config.mapper.ObjectMapper;
-import roj.config.mapper.ObjectReader;
-import roj.config.mapper.ObjectWriter;
 import roj.config.node.ConfigValue;
 import roj.config.node.xml.Element;
 import roj.config.node.xml.Node;
@@ -71,9 +68,9 @@ public enum ConfigMaster {
 	 * 不是所有格式都支持流式序列化
 	 * @param out 可以是File、OutputStream或DynByteBuf
 	 */
-	private ValueEmitter serializer(Object out)  { return serializer(out, ""); }
+	public ValueEmitter serializer(Object out)  { return serializer(out, ""); }
 	// 也不是所有格式都支持indent 哈哈
-	private ValueEmitter serializer(Object out, String indent) {
+	public ValueEmitter serializer(Object out, String indent) {
 		try {
 			return switch (this) {
 				case JSON -> new JsonSerializer(indent).to(textEncoder(out));
@@ -89,7 +86,7 @@ public enum ConfigMaster {
 			throw OperationDone.NEVER;
 		}
 	}
-	private boolean hasSerializer() { return ordinal() >= NBT.ordinal() && ordinal() <= YAML.ordinal(); }
+	public boolean hasSerializer() { return ordinal() >= NBT.ordinal() && ordinal() <= YAML.ordinal(); }
 
 	private static @NotNull DynByteBuf binaryEncoder(Object out) throws IOException {
 		return out instanceof DynByteBuf buf
@@ -112,7 +109,7 @@ public enum ConfigMaster {
 	 * 不是所有格式都支持序列化
 	 * @param out 可以是File、OutputStream或DynByteBuf
 	 */
-	private void serialize(Object out, ConfigValue entry) throws IOException {
+	public void serialize(Object out, ConfigValue entry) throws IOException {
 		switch (this) {
 			case JSON, YAML, INI, NBT, XNBT, MSGPACK, BENCODE -> {
 				try (var emitter = serializer(out)) {
@@ -172,64 +169,5 @@ public enum ConfigMaster {
 		Parser p = parser();
 		if (!(p instanceof TextParser tp)) throw new UnsupportedOperationException(this+"不是文本配置格式");
 		return tp.parse(text);
-	}
-
-	@Deprecated
-	public <T> T readObject(File file, Class<T> type) throws IOException, ParseException { return ObjectMapper.SAFE.read(file, type, parser()); }
-	/**
-	 * @implNote 由于部分二进制格式可能存在数据分界，所以不会关闭in
-	 */
-	@Deprecated
-	public <T> T readObject(InputStream in, Class<T> type) throws IOException, ParseException {return ObjectMapper.SAFE.read(in, type, parser());}
-	@Deprecated
-	public <T> T readObject(DynByteBuf buf, Class<T> type) throws IOException, ParseException {return ObjectMapper.SAFE.read(buf, type, parser());}
-	@Deprecated
-	public <T> T readObject(CharSequence sb, Class<T> type) throws ParseException { return readObject(ObjectMapper.SAFE.reader(type), sb); }
-
-	@Deprecated
-	public <T> T readObject(ObjectReader<T> ser, File file) throws IOException, ParseException {parser().parse(file, ser.reset());return ser.get();}
-	@Deprecated
-	public <T> T readObject(ObjectReader<T> ser, InputStream in) throws IOException, ParseException {parser().parse(in, ser.reset());return ser.get();}
-	@Deprecated
-	public <T> T readObject(ObjectReader<T> ser, CharSequence sb) throws ParseException {
-		var p = parser();
-		if (!(p instanceof TextParser tp)) throw new UnsupportedOperationException(this+"不是文本配置格式");
-		tp.parse(sb, ser.reset());
-		return ser.get();
-	}
-
-	@SuppressWarnings("unchecked")
-	public void writeObject(Object o, File file) throws IOException { writeObject((ObjectWriter<Object>) ObjectMapper.SAFE.writer(o.getClass()), o, file); }
-	@SuppressWarnings("unchecked")
-	public void writeObject(Object o, File file, String indent) throws IOException {writeObject((ObjectWriter<Object>) ObjectMapper.SAFE.writer(o.getClass()), o, file, indent); }
-	@SuppressWarnings("unchecked")
-	public void writeObject(Object o, OutputStream out) throws IOException {
-		ObjectWriter<Object> ser = (ObjectWriter<Object>) ObjectMapper.SAFE.writer(o.getClass());
-		writeAndClose(ser, o, out, "");
-	}
-	@SuppressWarnings("unchecked")
-	public DynByteBuf writeObject(Object o, DynByteBuf buf) throws IOException { return writeObject((ObjectWriter<Object>) ObjectMapper.SAFE.writer(o.getClass()), o, buf); }
-	@SuppressWarnings("unchecked")
-	public CharList writeObject(Object o, CharList sb) { return writeObject((ObjectWriter<Object>) ObjectMapper.SAFE.writer(o.getClass()), o, sb); }
-
-	public <T> void writeObject(ObjectWriter<T> ser, T o, File file) throws IOException { writeObject(ser, o, file, ""); }
-	public <T> void writeObject(ObjectWriter<T> ser, T o, File file, String indent) throws IOException {
-		IOUtil.writeFileEvenMoreSafe(file.getParentFile(), file.getName(), value -> writeAndClose(ser, o, value, indent));
-	}
-	public <T> DynByteBuf writeObject(ObjectWriter<T> ser, T o, DynByteBuf buf) throws IOException { writeAndClose(ser, o, buf, ""); return buf; }
-	public <T> CharList writeObject(ObjectWriter<T> ser, T o, CharList sb) { ser.write(serializer(sb, ""), o); return sb; }
-	public <T> CharList writeObject(ObjectWriter<T> ser, T o, CharList sb, String indent) { ser.write(serializer(sb, indent), o); return sb; }
-
-	private <T> void writeAndClose(ObjectWriter<T> ser, T o, Object out, String indent) throws IOException {
-		if (hasSerializer()) {
-			try (ValueEmitter v = serializer(out, indent)) {
-				ser.write(v, o);
-			}
-		} else {
-			var tmp = new TreeEmitter();
-			tmp.setProperty(TreeEmitter.ORDERED_MAP, true);
-			ser.write(tmp, o);
-			serialize(out, tmp.get());
-		}
 	}
 }

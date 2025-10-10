@@ -47,7 +47,7 @@ public abstract class Tracker {
 
 			return Promise.<MapValue>async(callback -> {
 				try {
-					HttpRequest.builder().uri(url).query(session.getHttpParameter()).bodyLimit(1048576).execute(120000).onCompletion(httpClient -> {
+					HttpRequest.builder().uri(url).query(session.getHttpParameter()).bodyLimit(1048576).execute(120000).onReadyStateChange(httpClient -> {
 						if (!httpClient.isDone()) return;
 						try {
 							if (httpClient.statusCode() != 200) {
@@ -184,14 +184,14 @@ public abstract class Tracker {
 		@Override
 		Promise<Void> update(Session session) {
 			Promise<Void> sync = Promise.sync();
-			Promise.Callback callback = (Promise.Callback) sync;
+			Promise.Result result = (Promise.Result) sync;
 
 			var obj = new Object() {
 				int i = 0;
 				void next() {
 					if (i == trackers.size()) {
 						errorCount++;
-						callback.reject(new FastFailException("Nothing completed"));
+						result.reject(new FastFailException("Nothing completed"));
 						return;
 					}
 
@@ -201,7 +201,7 @@ public abstract class Tracker {
 							.then(
 									(success, _callback) -> {
 										previousIndex = index;
-										callback.resolve(null);
+										result.resolve(null);
 									},
 									failure -> { next(); return null; }
 							);

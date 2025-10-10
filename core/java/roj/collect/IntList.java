@@ -4,13 +4,12 @@ import org.jetbrains.annotations.NotNull;
 import roj.compiler.api.RandomAccessible;
 import roj.reflect.Unsafe;
 import roj.util.ArrayCache;
+import roj.util.ArrayUtil;
 import roj.util.Multisort;
 
 import java.util.Arrays;
 import java.util.ListIterator;
 import java.util.PrimitiveIterator;
-
-import static roj.reflect.Unsafe.U;
 
 /**
  * @author Roj234
@@ -22,13 +21,12 @@ public class IntList implements Iterable<Integer> {
 	protected int size;
 
 	public IntList() {list = ArrayCache.INTS;}
-	public IntList(int size) {
-		list = (int[]) U.allocateUninitializedArray(int.class, size);}
+	public IntList(int size) {list = ArrayUtil.newUninitializedIntArray(size);}
 
 	public void ensureCapacity(int cap) {
 		if (list.length < cap) {
 			int length = ((cap * 3) >> 1) + 1;
-			int[] newList = (int[]) U.allocateUninitializedArray(int.class, length);
+			int[] newList = ArrayUtil.newUninitializedIntArray(length);
 			if (size > 0) System.arraycopy(list, 0, newList, 0, size);
 			list = newList;
 		}

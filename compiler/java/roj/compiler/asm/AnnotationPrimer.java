@@ -38,7 +38,7 @@ public final class AnnotationPrimer extends Annotation {
 	public void newEntry(CompileUnit file, String key) throws ParseException {
 		Object expr;
 
-		var wr = file.lc().tokenizer;
+		var wr = file.context().tokenizer;
 		Token w = wr.next();
 		wr.retractWord();
 
@@ -65,16 +65,16 @@ public final class AnnotationPrimer extends Annotation {
 		}
 
 		if (wr.nextIf(LavaTokenizer.at)) {
-			var list = file.lc().tmpAnnotations;
+			var list = file.context().tmpAnnotations;
 			int size = list.size();
 
 			file.readAnnotations(list);
-			if (list.size() != size+1) file.lc().report(Kind.ERROR, "cu.annotation.multiAnnotation");
+			if (list.size() != size+1) file.context().report(Kind.ERROR, "cu.annotation.multiAnnotation");
 			expr = list.pop();
 		} else {
 			int state = wr.setState(LavaTokenizer.STATE_EXPR);
 			// _ENV_TYPED_ARRAY允许直接使用数组生成式而不用给定类型
-			expr = file.lc().ep.parse(ExprParser.STOP_COMMA|ExprParser.STOP_RSB|ExprParser._ENV_TYPED_ARRAY);
+			expr = file.context().ep.parse(ExprParser.STOP_COMMA|ExprParser.STOP_RSB|ExprParser._ENV_TYPED_ARRAY);
 			wr.state = state;
 
 			if (expr == null) return;

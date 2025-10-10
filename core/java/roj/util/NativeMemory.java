@@ -35,10 +35,8 @@ public class NativeMemory {
 		}
 		Object newHeapBuffer2(Object buf, int mark, int pos, int lim, int cap, int off, Object memorySegmentProxy);
 
-		default byte[] getHb(ByteBuffer buf) { return null; }
-		default int getOffset(ByteBuffer buf) { return 0; }
-		void setHb(ByteBuffer buf, byte[] hb);
-		void setOffset(ByteBuffer buf, int offset);
+		byte[] hb(ByteBuffer buf);
+		int offset(ByteBuffer buf);
 
 		void setCapacity(Buffer b, int newCapacity);
 		long getAddress(Buffer b);
@@ -57,7 +55,8 @@ public class NativeMemory {
 	static {
 		try {
 			Bypass<H> da = Bypass.builder(H.class);
-			da.access(ByteBuffer.class, new String[]{"hb","offset"});
+			String[] strings = {"hb", "offset"};
+			da.access(ByteBuffer.class, strings, strings, null);
 
 			var dbb = Class.forName("java.nio.DirectByteBuffer");
 			try {
@@ -92,10 +91,10 @@ public class NativeMemory {
 	}
 
 	public static DynByteBuf fromBuffer(ByteBuffer buf, int capacity) {
-		byte[] array = h.getHb(buf);
+		byte[] array = h.hb(buf);
 		DynByteBuf b;
 		if (array != null) {
-			b = new ByteList.Slice(array, h.getOffset(buf), capacity);
+			b = new ByteList.Slice(array, h.offset(buf), capacity);
 		} else if (buf.isDirect()) {
 			b = new DirectByteList.Slice(null, getAddress(buf), capacity);
 		} else {

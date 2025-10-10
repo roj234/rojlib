@@ -126,7 +126,7 @@ public final class InsnList extends AbstractCodeWriter implements Iterable<InsnN
 
 		Label lbl = bciR2W.get(pos);
 		if (lbl == null) lbl = newLabel();
-		else if (lbl.isValid()) return lbl;
+		else if (lbl.isBound()) return lbl;
 
 		labels.add(lbl);
 
@@ -759,9 +759,10 @@ public final class InsnList extends AbstractCodeWriter implements Iterable<InsnN
 	}
 	private void satisfySegments() {
 		if (segments.size() > 0) {
-			int segLen = segments.size()+1;
-			int[] offSum = AsmCache.getInstance().getIntArray_(segLen);
+			int segLen = segments.size()+2;
+			int[] offSum = AsmCache.getInstance().getOffSumArray(segLen);
 			boolean updated = updateOffset(labels, offSum, segLen);
+			AsmCache.getInstance().putOffSumArray(offSum);
 			offset = offSum[segments.size()-1]; // last block begin
 		} else {
 			offset = 0;

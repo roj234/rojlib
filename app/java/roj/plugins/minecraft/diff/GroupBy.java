@@ -4,6 +4,7 @@ import roj.collect.HashSet;
 import roj.collect.LongMap;
 import roj.concurrent.TaskGroup;
 import roj.config.ConfigMaster;
+import roj.config.mapper.ObjectMapper;
 import roj.config.node.ConfigValue;
 import roj.config.node.ListValue;
 import roj.config.node.Type;
@@ -68,7 +69,7 @@ public class GroupBy {
 
 						_ChunkPos chunk;
 						try (var nbt = rf.getBufferedInputStream(j)) {
-							chunk = ConfigMaster.NBT.readObject(nbt, _ChunkPos.class);
+							chunk = ObjectMapper.SAFE.read(nbt, _ChunkPos.class, ConfigMaster.NBT);
 							chunks.add(chunkPos(chunk.xPos, chunk.zPos));
 						} catch (Exception e) {
 						}

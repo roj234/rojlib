@@ -73,6 +73,8 @@ public class TranslatableString {
 		Token w;
 		do {
 			w = wr.next();
+			if (w.type() == 15) break;
+
 			if (w.type() == Token.LITERAL) {
 				var str = i18n.translate(w.text());
 
@@ -107,6 +109,8 @@ public class TranslatableString {
 			int i = 0;
 			do {
 				w = wr.next();
+				if (w.type() == 15) break;
+
 				if (w.type() == Token.LITERAL) {
 					var str = i18n.translate(w.text());
 

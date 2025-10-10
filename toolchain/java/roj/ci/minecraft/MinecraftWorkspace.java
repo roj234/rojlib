@@ -4,7 +4,7 @@ import org.jetbrains.annotations.Nullable;
 import roj.archive.zip.ZEntry;
 import roj.archive.zip.ZipArchive;
 import roj.archive.zip.ZipFileWriter;
-import roj.ci.Workspace;
+import roj.ci.Env;
 import roj.collect.HashMap;
 import roj.config.node.MapValue;
 import roj.http.curl.DownloadTask;
@@ -19,7 +19,7 @@ import java.io.IOException;
 import java.util.concurrent.ExecutionException;
 
 import static roj.ci.MCMake.CACHE_PATH;
-import static roj.ci.MCMake.LOGGER;
+import static roj.ci.MCMake.log;
 import static roj.ui.TUI.*;
 
 /**
@@ -28,7 +28,7 @@ import static roj.ui.TUI.*;
  */
 public abstract sealed class MinecraftWorkspace permits Fabric, ForgeLegacy, Forge {
 	@Nullable
-	public static Workspace build(MapValue config) {
+	public static Env.Workspace build(MapValue config) {
 		start(text("构建Minecraft工作空间"));
 
 		File mcRoot = new File(config.getString("MC路径"));
@@ -55,7 +55,7 @@ public abstract sealed class MinecraftWorkspace permits Fabric, ForgeLegacy, For
 				if (instance != null) {
 					TUI.stepInfo(text("目标模组加载器："+instance.getClass().getSimpleName()));
 					try (var bar = new EasyProgressBar()) {
-						Workspace result = instance.init(bar, clientInfo);
+						var result = instance.init(bar, clientInfo);
 						if (result != null) {
 							TUI.end(text("构建成功"));
 							return result;
@@ -85,7 +85,7 @@ public abstract sealed class MinecraftWorkspace permits Fabric, ForgeLegacy, For
 		};
 	}
 
-	abstract Workspace init(EasyProgressBar bar, MinecraftClientInfo clientInfo) throws IOException;
+	abstract Env.Workspace init(EasyProgressBar bar, MinecraftClientInfo clientInfo) throws IOException;
 
 	private static MinecraftWorkspace findProperInstance(MinecraftClientInfo info) {
 		if (info.libraries.containsKey("cpw/mods:modlauncher")) {
@@ -111,12 +111,12 @@ public abstract sealed class MinecraftWorkspace permits Fabric, ForgeLegacy, For
 
 				File file = new File(info.libraryPath, libName);
 				if (!file.isFile()) {
-					LOGGER.error("找不到依赖 {}", libName);
+					log.error("找不到依赖 {}", libName);
 					continue;
 				}
 
 				if (mergeLibraryHook(libName, file) || libName.startsWith("com/mojang/patchy")) {
-					LOGGER.debug("跳过 {}", libName);
+					log.debug("跳过 {}", libName);
 					continue;
 				}
 
@@ -128,7 +128,7 @@ public abstract sealed class MinecraftWorkspace permits Fabric, ForgeLegacy, For
 								if (!libName.equals(prevPkg)) {
 									prevPkg = prevPkg.substring(prevPkg.lastIndexOf('/') + 1);
 									libName = libName.substring(libName.lastIndexOf('/') + 1);
-									LOGGER.warn("在依赖{}和{}中找到了相同的类{}", prevPkg, libName, entry.getName());
+									log.warn("在依赖{}和{}中找到了相同的类{}", prevPkg, libName, entry.getName());
 								}
 							} else {
 								zfw.copy(mzf, entry);

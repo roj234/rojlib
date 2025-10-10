@@ -23,6 +23,19 @@ public class Mat4x3d implements Cloneable {
 		m22 = a33;
 		m23 = a34;
 	}
+	public Mat4x3d(double a11, double a12, double a13,
+				   double a21, double a22, double a23,
+				   double a31, double a32, double a33) {
+		m00 = a11;
+		m01 = a12;
+		m02 = a13;
+		m10 = a21;
+		m11 = a22;
+		m12 = a23;
+		m20 = a31;
+		m21 = a32;
+		m22 = a33;
+	}
 	public Mat4x3d(double[] matrix) {set(matrix);}
 	public Mat4x3d(Mat4x3d matrix) {set(matrix);}
 
@@ -291,9 +304,9 @@ public class Mat4x3d implements Cloneable {
 		return this;
 	}
 
-	public Vector mul(Vector v) {return mul(v, new Vec3d());}
-	public Vector mulInPlace(Vector v) {return mul(v, v);}
-	public Vector mul(Vector v, Vector dst) {
+	public Vec3d mul(Vector v) {return mul(v, new Vec3d());}
+	public <T extends Vector> T mulInPlace(T v) {return mul(v, v);}
+	public <T extends Vector> T mul(Vector v, T dst) {
 		double x = m00 * v.x() + m01 * v.y() + m02 * v.z() + m03 * v.w();
 		double y = m10 * v.x() + m11 * v.y() + m12 * v.z() + m13 * v.w();
 		dst.z(m20 * v.x() + m21 * v.y() + m22 * v.z() + m23 * v.w());
@@ -621,49 +634,40 @@ public class Mat4x3d implements Cloneable {
 	 */
 	public Mat4x3d invert() {
 		// calculate inverse of upper 3x3 matrix
-		double m0 = m11 * m22 - m12 * m21;
-		double m1 = m02 * m21 - m01 * m22;
-		double m2 = m01 * m12 - m02 * m11;
-		double m3 = m12 * m20 - m10 * m22;
-		double m4 = m00 * m22 - m02 * m20;
-		double m5 = m02 * m10 - m00 * m12;
-		double m6 = m10 * m21 - m11 * m20;
-		double m7 = m01 * m20 - m00 * m21;
-		double m8 = m00 * m11 - m01 * m10;
+		double nm02 = Math.fma(m01, m12, -m02 * m11);
+		double nm12 = Math.fma(m02, m10, -m00 * m12);
+		double nm22 = Math.fma(m00, m11, -m01 * m10);
 
-		double det = m00 * m0 + m01 * (-m3) + m02 * m6;
+		double det = Math.fma(nm22, m22, Math.fma(nm12, m21, nm02 * m20));
 		if (det == 0) return null;
+		double idet = 1.0 / det;
 
-		m0 /= det;
-		m1 /= det;
-		m2 /= det;
-		m3 /= det;
-		m4 /= det;
-		m5 /= det;
-		m6 /= det;
-		m7 /= det;
-		m8 /= det;
+		double nm00 = Math.fma(m11, m22, -m21 * m12) * idet;
+		double nm01 = Math.fma(m21, m02, -m01 * m22) * idet;
+		nm02 *= idet;
+		double nm10 = Math.fma(m20, m12, -m10 * m22) * idet;
+		double nm11 = Math.fma(m00, m22, -m20 * m02) * idet;
+		nm12 *= idet;
+		double nm20 = Math.fma(m10, m21, -m20 * m11) * idet;
+		double nm21 = Math.fma(m20, m01, -m00 * m21) * idet;
+		nm22 *= idet;
 
-		m00 = m0;
-		m01 = m1;
-		m02 = m2;
-
-		m10 = m3;
-		m11 = m4;
-		m12 = m5;
-
-		m20 = m6;
-		m21 = m7;
-		m22 = m8;
+		m00 = nm00;
+		m01 = nm01;
+		m02 = nm02;
+		m10 = nm10;
+		m11 = nm11;
+		m12 = nm12;
+		m20 = nm20;
+		m21 = nm21;
+		m22 = nm22;
 
 		// calculate product of inverse upper 3x3 matrix and translation part
 		double u = -m03, v = -m13, w = -m23;
 
-		m03 = m0 * u + m1 * v + m2 * w; // tx
-		m13 = m3 * u + m4 * v + m5 * w; // ty
-		m23 = m6 * u + m7 * v + m8 * w; // tz
-
-		// assemble inverse matrix
+		m03 = nm00 * u + nm01 * v + nm02 * w; // tx
+		m13 = nm10 * u + nm11 * v + nm12 * w; // ty
+		m23 = nm20 * u + nm21 * v + nm22 * w; // tz
 		return this;
 	}
 

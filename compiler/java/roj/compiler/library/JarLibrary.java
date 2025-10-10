@@ -20,8 +20,9 @@ public class JarLibrary implements Library {
 	private final HashSet<String> info;
 	private final String moduleName;
 
-	public JarLibrary(File file) throws IOException {
-		this.jar = new ZipFile(file, ZipFile.FLAG_BACKWARD_READ);
+	public JarLibrary(File file) throws IOException {this(new ZipFile(file, ZipFile.FLAG_BACKWARD_READ));}
+	public JarLibrary(ZipFile file) {
+		this.jar = file;
 		this.info = new HashSet<>();
 
 		for (ZEntry entry : jar.entries()) {

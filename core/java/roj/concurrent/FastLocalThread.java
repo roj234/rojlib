@@ -8,6 +8,8 @@ import roj.util.ArrayCache;
  */
 public class FastLocalThread extends Thread {
 	public FastLocalThread() {super();}
+	public FastLocalThread(Runnable runnable) {super(runnable);}
+	public FastLocalThread(Runnable runnable, String name) {super(runnable, name);}
 	Object[] localDataArray = ArrayCache.OBJECTS;
 	final Object arrayLock = new Object();
 }

@@ -1,14 +1,19 @@
 package roj.concurrent;
 
+import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
+import roj.collect.ArrayList;
 import roj.optimizer.FastVarHandle;
-import roj.reflect.Handles;
+import roj.reflect.Telescope;
 import roj.util.Helpers;
 import roj.util.OperationDone;
+import roj.util.function.ExceptionalConsumer;
+import roj.util.function.ExceptionalRunnable;
 import roj.util.function.Flow;
 
 import java.lang.invoke.VarHandle;
 import java.util.Collections;
+import java.util.List;
 import java.util.Set;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.ConcurrentHashMap;
@@ -19,13 +24,25 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 @FastVarHandle
 public class TaskGroup implements Executor, Cancellable {
+	public static <T> @NotNull List<List<T>> split(List<T> files, int threshold) {
+		List<List<T>> tasks = new ArrayList<>((files.size()+threshold-1)/threshold);
+
+		int i = 0;
+		while (i < files.size()) {
+			int len = Math.min(files.size()-i, threshold);
+			tasks.add(files.subList(i, i+len));
+			i += len;
+		}
+		return tasks;
+	}
+
 	@FastVarHandle
 	private class MTask implements Runnable, Cancellable {
 		volatile MTask next;
 		Throwable throwable;
 
 		private static final int INITIAL = 0, RUNNING = 1, CANCELLING = 2, CANCELLED = 3;
-		private static final VarHandle STATE = Handles.lookup().findVarHandle(MTask.class, "state", int.class);
+		private static final VarHandle STATE = Telescope.lookup().findVarHandle(MTask.class, "state", int.class);
 		private volatile int state;
 
 		private Thread executor;
@@ -82,9 +99,9 @@ public class TaskGroup implements Executor, Cancellable {
 	private final Object lock = new Object();
 	private final Set<MTask> helpRunner;
 
-	static final VarHandle FAILED = Handles.lookup().findVarHandle(TaskGroup.class, "failedTasks", MTask.class);
-	static final VarHandle FINISHED = Handles.lookup().findVarHandle(TaskGroup.class, "finishedTasks", int.class);
-	static final VarHandle TOTAL = Handles.lookup().findVarHandle(TaskGroup.class, "totalTasks", int.class);
+	static final VarHandle FAILED = Telescope.lookup().findVarHandle(TaskGroup.class, "failedTasks", MTask.class);
+	static final VarHandle FINISHED = Telescope.lookup().findVarHandle(TaskGroup.class, "finishedTasks", int.class);
+	static final VarHandle TOTAL = Telescope.lookup().findVarHandle(TaskGroup.class, "totalTasks", int.class);
 
 	private boolean failFast = true;
 	private volatile MTask failedTasks;
@@ -124,6 +141,48 @@ public class TaskGroup implements Executor, Cancellable {
 			helpRunner.add(task1);
 		}
 		owner.execute(task1);
+	}
+
+	public <T> TaskGroup executeAll(List<List<T>> tasks, ExceptionalConsumer<T, Throwable> action) {
+		for (int i = 0; i < tasks.size(); i++) {
+			List<T> subTasks = tasks.get(i);
+
+			execute(() -> {
+				for (int j = 0; j < subTasks.size(); j++) {
+					try {
+						action.accept(subTasks.get(j));
+					} catch (Throwable e) {
+						throw new RuntimeException(subTasks.get(j).toString(), e);
+					}
+				}
+			});
+		}
+		return this;
+	}
+	public <T> TaskGroup executeAll(List<List<T>> tasks, ExceptionalConsumer<T, Throwable> action, ExceptionalRunnable<Exception> cleaner) {
+		for (int i = 0; i < tasks.size(); i++) {
+			List<T> subTasks = tasks.get(i);
+
+			executeUnsafe(() -> {
+				try {
+					for (int j = 0; j < subTasks.size(); j++) {
+						T value = subTasks.get(j);
+						try {
+							action.accept(value);
+						} catch (Throwable e) {
+							try {
+								throw new RuntimeException(value.toString(), e);
+							} catch (Throwable e1) {
+								Helpers.athrow(e);
+							}
+						}
+					}
+				} finally {
+					cleaner.run();
+				}
+			});
+		}
+		return this;
 	}
 
 	/**
@@ -218,7 +277,8 @@ public class TaskGroup implements Executor, Cancellable {
 		Throwable ex = exceptionList.throwable;
 		while (exceptionList.next != null) {
 			exceptionList = exceptionList.next;
-			ex.addSuppressed(exceptionList.throwable);
+			if (ex != exceptionList.throwable)
+				ex.addSuppressed(exceptionList.throwable);
 		}
 
 		return ex;

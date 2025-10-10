@@ -21,5 +21,5 @@ public class ProjectUpdateEvent extends Event {
 
 	public Project getProject() {return project;}
 
-	public void add(String name) {libraries.append("<root url=\"jar://$MODULE_DIR$/").append(relativePath).append("cache/").append(name).append("!/\" />\n");}
+	public void add(String name) {libraries.append("<root url=\"jar://$MODULE_DIR$/").append(relativePath).append("cache/.pr/").append(name).append("!/\" />\n");}
 }

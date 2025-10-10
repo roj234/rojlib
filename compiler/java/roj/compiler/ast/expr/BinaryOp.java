@@ -34,6 +34,8 @@ final class BinaryOp extends Expr {
 	private static final BitSet BIT_OP = BitSet.from(and,or,xor,shr,ushr), BITSHIFT = BitSet.from(shl,shr,ushr);
 	private static final byte[] BIT_COUNT = new byte[] {-1, -1, 8, 16, 16, 32, 64};
 
+	private static final byte HAS_ZERO = 1, LEFT_IS_ZERO = 2, BINARY_ASSIGN = 4;
+
 	private IType type;
 	private TypeCast.Cast castLeft, castRight;
 	private byte flag;
@@ -43,9 +45,19 @@ final class BinaryOp extends Expr {
 
 	BinaryOp(short op) { this.operator = op; }
 	BinaryOp(short op, Expr left, Expr right) {
+		if (op >= binary_assign_base_offset) {
+			op += binary_assign_delta;
+			flag |= BINARY_ASSIGN;
+		}
 		this.operator = op;
 		this.left = left;
 		this.right = right;
+	}
+
+	@Override
+	public boolean hasFeature(Feature feature) {
+		if (feature == Feature.ALLOW_IMPLICIT_CAST) return (flag & BINARY_ASSIGN) != 0;
+		return false;
 	}
 
 	@Override
@@ -234,7 +246,7 @@ final class BinaryOp extends Expr {
 					// equ 和 neq 应该可以直接删除跳转？反正boolean也就是0和非0 （AND 1就行）
 					case equ, neq, lss, geq, gtr, leq -> {
 						if (sort <= Type.SORT_INT && ((ConfigValue) right.constVal()).asInt() == 0) {
-							flag = 1;
+							flag |= HAS_ZERO;
 						}
 					}
 					// expr ?? null => expr
@@ -255,7 +267,7 @@ final class BinaryOp extends Expr {
 
 		switch (operator) {
 			case logic_and, logic_or:
-				var exprVal = (boolean) left.constVal();
+				var exprVal = ((ConfigValue) left.constVal()).asBool();
 				var v = exprVal == (operator == logic_and) ? right : Expr.valueOf(exprVal);
 				ctx.report(this, Kind.WARNING, "binary.constant", v);
 				return v;
@@ -273,7 +285,7 @@ final class BinaryOp extends Expr {
 				}
 				case equ, neq, lss, geq, gtr, leq -> {
 					if (sort <= Type.SORT_INT && ((ConfigValue) left.constVal()).asInt() == 0) {
-						flag = 2;
+						flag |= HAS_ZERO|LEFT_IS_ZERO;
 					}
 				}
 			}
@@ -366,7 +378,7 @@ final class BinaryOp extends Expr {
 				}));
 			}
 			case SORT_BOOLEAN_MY: {
-				boolean l = (boolean) left.constVal(), r = (boolean) right.constVal();
+				boolean l = ((ConfigValue) left.constVal()).asBool(), r = ((ConfigValue) right.constVal()).asBool();
 				return valueOf(switch (operator) {
 					case and -> l&r;
 					case or -> l|r;
@@ -468,8 +480,14 @@ final class BinaryOp extends Expr {
 		}
 
 		mustBeStatement(cast);
-		if (flag != 2) writeLeft(cw);
-		if (flag != 1) writeRight(cw);
+		if ((flag & HAS_ZERO) == 0) {
+			writeLeft(cw);
+			writeRight(cw);
+		} else if ((flag & LEFT_IS_ZERO) == 0) {
+			writeLeft(cw);
+		} else {
+			writeRight(cw);
+		}
 		writeOperator(cw);
 	}
 
@@ -517,8 +535,14 @@ final class BinaryOp extends Expr {
 		}
 
 		var flag = this.flag;
-		if (flag != 2) writeLeft(cw);
-		if (flag != 1) writeRight(cw);
+		if ((flag & HAS_ZERO) == 0) {
+			writeLeft(cw);
+			writeRight(cw);
+		} else if ((flag & LEFT_IS_ZERO) == 0) {
+			writeLeft(cw);
+		} else {
+			writeRight(cw);
+		}
 
 		int opc = stackType;
 		if (opc < 0) opc = 0;
@@ -539,7 +563,7 @@ final class BinaryOp extends Expr {
 	}
 
 	private int invertOperator() {
-		return (flag == 2 ? switch (operator) {
+		return ((flag&LEFT_IS_ZERO) != 0 ? switch (operator) {
 			case lss -> gtr;
 			case geq -> leq;
 			case gtr -> lss;
@@ -576,7 +600,7 @@ final class BinaryOp extends Expr {
 
 			case lss, geq, gtr, leq: {
 				opc = writeCmp(cw, opc);
-				if (stackType == 0 && opr <= neq && flag == 0) {
+				if (stackType == 0 && opr <= neq && (flag&HAS_ZERO) == 0) {
 					cw.insn(ISUB); // (left - right) == 0
 					if (opr == equ) {
 						cw.insn(ICONST_1);
@@ -603,7 +627,7 @@ final class BinaryOp extends Expr {
 				cw.insn((byte) (FCMPL -4+opc*2 + ((operator-equ)&1)));
 				yield IFEQ;
 			}
-			default -> flag != 0 ? IFEQ : IF_icmpeq;
+			default -> (flag&HAS_ZERO) != 0 ? IFEQ : IF_icmpeq;
 		};
 	}
 	private void jump(MethodWriter cw, int code) {

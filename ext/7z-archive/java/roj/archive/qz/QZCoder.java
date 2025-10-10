@@ -1,6 +1,7 @@
 package roj.archive.qz;
 
 import roj.archive.xz.MemoryLimitException;
+import roj.asmx.AnnotationRepoManager;
 import roj.collect.HashMap;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
@@ -17,10 +18,10 @@ import java.util.zip.Deflater;
  */
 public abstract class QZCoder {
 	private static final HashMap<ByteList, QZCoder> coders = new HashMap<>();
-	private static void reg(QZCoder c) { coders.put(ByteList.wrap(c.id()), c); }
+	public static synchronized void register(QZCoder c) { coders.put(ByteList.wrap(c.id()), c); }
 
-	QZCoder factory() {return this;}
-	abstract byte[] id();
+	protected QZCoder factory() {return this;}
+	public abstract byte[] id();
 
 	public OutputStream encode(OutputStream out) throws IOException { throw new UnsupportedOperationException(); }
 	public abstract InputStream decode(InputStream in, byte[] password, long uncompressedSize, AtomicInteger memoryLimit) throws IOException;
@@ -31,23 +32,24 @@ public abstract class QZCoder {
 	@Override
 	public String toString() { return getClass().getSimpleName(); }
 
-	void writeOptions(DynByteBuf buf) {}
-	void readOptions(DynByteBuf buf, int length) throws IOException {}
+	public void writeOptions(DynByteBuf buf) {}
+	public void readOptions(DynByteBuf buf, int length) throws IOException {}
 
 	public static QZCoder create(DynByteBuf buf) {
 		if (coders.isEmpty()) {
 			synchronized (coders) {
 				if (coders.isEmpty()) {
-					reg(Copy.INSTANCE);
-					reg(new QzAES());
-					reg(new Deflate(Deflater.DEFAULT_COMPRESSION));
-					reg(new LZMA(true));
-					reg(new LZMA2(true));
-					reg(BCJ.X86);
-					reg(BCJ.ARM);
-					reg(BCJ.ARM_THUMB);
-					reg(new Delta());
-					reg(new BCJ2());
+					register(Copy.INSTANCE);
+					register(new QzAES());
+					register(new Deflate(Deflater.DEFAULT_COMPRESSION));
+					register(new LZMA(true));
+					register(new LZMA2(true));
+					register(BCJ.X86);
+					register(BCJ.ARM);
+					register(BCJ.ARM_THUMB);
+					register(new Delta());
+					register(new BCJ2());
+					AnnotationRepoManager.initializeAnnotatedType("roj/archive/qz/QZCustomCoder", QZCoder.class.getClassLoader(), true);
 				}
 			}
 		}

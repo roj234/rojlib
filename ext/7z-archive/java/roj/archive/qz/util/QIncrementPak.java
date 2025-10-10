@@ -4,15 +4,15 @@ import org.jetbrains.annotations.ApiStatus;
 import org.jetbrains.annotations.NotNull;
 import roj.archive.qz.QZArchive;
 import roj.archive.qz.QZFileWriter;
-import roj.archive.xz.LZMA2Writer;
+import roj.archive.xz.LZMA2OutputStream;
 import roj.asmx.injector.Copy;
 import roj.asmx.injector.Redirect;
 import roj.asmx.injector.Shadow;
 import roj.asmx.injector.Weave;
 import roj.asmx.launcher.Autoload;
 import roj.crypt.CRC32;
-import roj.io.ByteOutput;
 import roj.io.IOUtil;
+import roj.io.XDataOutput;
 import roj.io.source.CompositeSource;
 import roj.io.source.Source;
 import roj.util.ByteList;
@@ -194,13 +194,13 @@ public class QIncrementPak {
 		@Copy
 		private boolean useSingleHeader;
 
-		@Redirect(value = "writeStreamInfo", injectDesc = "(Lroj/io/ByteOutput;J)V", matcher = "putVULong(J)Lroj/io/ByteOutput;", occurrences = 0)
-		private static ByteOutput writeOffset(ByteOutput ob, long offset, QZSHImpl self) throws IOException {
+		@Redirect(value = "writeStreamInfo", injectDesc = "(Lroj/io/XDataOutput;J)V", matcher = "putVULong(J)Lroj/io/XDataOutput;", occurrences = 0)
+		private static XDataOutput writeOffset(XDataOutput ob, long offset, QZSHImpl self) throws IOException {
 			if (!self.useSingleHeader) return ob.putVULong(offset);
 
 			ob.put(0xF0).flush();
 
-			if (self.out instanceof LZMA2Writer w) {
+			if (self.out instanceof LZMA2OutputStream w) {
 				// 强制flush并禁止接下来块的压缩，以便我能确定性的得到一个int的offset
 				w.setCompressionDisabled(true);
 			}
@@ -208,7 +208,7 @@ public class QIncrementPak {
 			self.headerBegin = self.source.position();
 			ob.putInt(0);
 
-			if (self.out instanceof LZMA2Writer w) {
+			if (self.out instanceof LZMA2OutputStream w) {
 				ob.flush();
 				w.setCompressionDisabled(false);
 				self.headerBegin = self.source.position() - 4;

@@ -6,6 +6,7 @@ import roj.asm.ClassNode;
 import roj.asm.annotation.Annotation;
 import roj.asm.annotation.ArrayVal;
 import roj.asmx.AnnotatedElement;
+import roj.asmx.AnnotationRepoManager;
 import roj.asmx.ConstantPoolHooks;
 import roj.asmx.TransformUtil;
 import roj.asmx.injector.CodeWeaver;
@@ -35,7 +36,7 @@ public class Tweaker {
 		try {
 			List<A> classes = new ArrayList<>();
 
-			for (AnnotatedElement element : loader.getAnnotations().annotatedBy("roj/asmx/launcher/Autoload")) {
+			for (AnnotatedElement element : AnnotationRepoManager.getAnnotations("roj/asmx/launcher/Autoload", Tweaker.class.getClassLoader())) {
 				Annotation a = element.annotations().get("roj/asmx/launcher/Autoload");
 				int priority = a.getInt("priority", 0);
 				String owner = element.owner();

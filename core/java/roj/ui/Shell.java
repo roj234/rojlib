@@ -258,7 +258,7 @@ public class Shell extends Terminal {
 	private void realExec(Command command) {
 		try {
 			command.exec(argList.createContext());
-		} catch (Exception e) {
+		} catch (Throwable e) {
 			LOGGER.warn("指令执行出错", e);
 		}
 	}

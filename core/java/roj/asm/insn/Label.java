@@ -26,6 +26,9 @@ public class Label implements Comparable<Label> {
 		value = label.value;
 	}
 
+	private void ensureValid() {
+		if (block == -2) throw new IllegalStateException("标签引用的BCI@"+offset+"不存在");
+	}
 	public final boolean isUnset() {return block == -1 && offset == 0;}
 	public final boolean isRaw() {return block == -1 && offset != 0;}
 	public void clear() {
@@ -50,7 +53,7 @@ public class Label implements Comparable<Label> {
 		block += size;
 	}
 
-	public boolean isValid() { return block >= 0; }
+	public boolean isBound() { return block >= 0; }
 	public int getBlock() { return block; }
 	public int getOffset() { return block < 0 ? -1 : offset; }
 	public int getValue() { return value; }
@@ -65,6 +68,7 @@ public class Label implements Comparable<Label> {
 	boolean update(int[] sum, int len) {
 		int pos = value;
 		if (block < 0) {
+			ensureValid();
 			if (isUnset()) throw new IllegalStateException("无法序列化未初始化的标签");
 
 			block = (short) findBlock(sum, offset, len);
@@ -84,7 +88,7 @@ public class Label implements Comparable<Label> {
 	@Override
 	public String toString() {
 		if (isUnset()) return "<### uninitialized>";
-		if (block == -1) return "<"+(int)offset+" unresolved>";
+		if (block < 0) return "<"+(int)offset+" unresolved>";
 		return "<"+(int)value + "[b"+block+" + "+(int)offset+"]>";
 	}
 
@@ -94,17 +98,12 @@ public class Label implements Comparable<Label> {
 		if (o == null || getClass() != o.getClass()) return false;
 
 		Label label = (Label) o;
-
-		assert isValid();
 		if (block != label.block) return false;
 		return offset == label.offset;
 	}
 
 	@Override
-	public int hashCode() {
-		assert isValid() : this+" not valid";
-		return (block << 16) ^ offset;
-	}
+	public int hashCode() {return (block << 16) ^ offset;}
 
 	@Override
 	public int compareTo(@NotNull Label o) {

@@ -1,5 +1,7 @@
 package roj.util.optimizer;
 
+import org.jetbrains.annotations.ApiStatus;
+import roj.RojLib;
 import roj.asm.*;
 import roj.asm.annotation.Annotation;
 import roj.asm.attr.Annotations;
@@ -17,13 +19,12 @@ import roj.collect.ArrayList;
 import roj.collect.BitSet;
 import roj.io.IOUtil;
 import roj.reflect.Reflection;
-import roj.reflect.Unsafe;
+import roj.reflect.Telescope;
 import roj.text.logging.Logger;
 import roj.util.ByteList;
-import roj.util.Helpers;
 
 import java.io.IOException;
-import java.lang.reflect.Field;
+import java.lang.invoke.MethodHandles;
 import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
@@ -37,43 +38,45 @@ import static roj.asm.Opcodes.*;
 @Autoload
 public class VarHandleRewriter implements ConstantPoolHooks.Hook<ClassNode> {
 	private static final Logger LOGGER = Logger.getLogger("VHRewriter");
-	private static final String PROXY_NAME = "java/lang/VHProxy";
+	public static final String PROXY_NAME = "java/lang/VHProxy";
 	private static final String STATIC_SUFFIX = "$STATIC", ARRAY_SUFFIX = "$ARRAY";
 
 	@IndirectReference
+	@ApiStatus.Internal
 	public static long instanceField(Object o, Class<?> recv, String name, Class<?> type) {
-		try {
-			Field field = Reflection.getField(recv, name);
-			if (!field.getType().isAssignableFrom(type)) throw new NoSuchFieldException("Field "+name+" ("+field.getType()+") is not "+type);
-			return Unsafe.U.objectFieldOffset(field);
-		} catch (Exception e) {
-			Helpers.athrow(e);
-			return 0;
-		}
+		var resolver = o instanceof Telescope telescope ? telescope : Telescope.trustedLookup().in((MethodHandles.Lookup) o);
+		Object handle = resolver.findField(recv, name, type, false);
+		return resolver.objectFieldOffset(handle);
 	}
 	@IndirectReference
+	@ApiStatus.Internal
 	public static Object[] staticField(Object o, Class<?> recv, String name, Class<?> type) {
-		try {
-			Field field = Reflection.getField(recv, name);
-			if (!field.getType().isAssignableFrom(type)) throw new NoSuchFieldException("Field "+name+" ("+field.getType()+") is not "+type);
-			return new Object[] {
-				Unsafe.U.staticFieldOffset(field),
-				Unsafe.U.staticFieldBase(field)
-			};
-		} catch (Exception e) {
-			Helpers.athrow(e);
-			return null;
-		}
+		var resolver = o instanceof Telescope telescope ? telescope : Telescope.trustedLookup().in((MethodHandles.Lookup) o);
+		Object handle = resolver.findStatic(recv, name, type);
+		return new Object[] {
+				resolver.staticFieldOffset(handle),
+				resolver.staticFieldBase(handle),
+		};
 	}
 
+	private static boolean hotSpotVM;
 	static {
 		try {
 			Reflection.defineSystemClass(makeProxy());
+			RojLib.setObj("VarHandleRewriter", true);
 			Tweaker.CONDITIONAL.annotatedClass("roj/optimizer/FastVarHandle", new VarHandleRewriter());
 		} catch (Exception e) {
 			LOGGER.fatal("初始化失败", e);
 		}
+
+		try {
+			Object field = Telescope.trustedLookup().findField(VarHandleRewriter.class, "LOGGER", Logger.class, true);
+			hotSpotVM = VarHandleRewriter.class == Telescope.trustedLookup().staticFieldBase(field);
+		} catch (Exception ignored) {}
 	}
+
+	public static void ensureClassInitialized() {}
+	public static boolean isHotSpotVM() {return hotSpotVM;}
 
 	private interface Stem {
 		int getTT(Object o);
@@ -158,7 +161,7 @@ public class VarHandleRewriter implements ConstantPoolHooks.Hook<ClassNode> {
 						newName,
 						"()V"
 				);
-				w.field(GETSTATIC, Reflection.getMagicAccessorClass(), "theInternalUnsafe", unsafeType);
+				w.field(GETSTATIC, Reflection.PROXY_CLASS, "theInternalUnsafe", unsafeType);
 
 				w.insn(ALOAD_2);
 				w.insn(LLOAD_0);
@@ -214,7 +217,7 @@ public class VarHandleRewriter implements ConstantPoolHooks.Hook<ClassNode> {
 				delegateParameter.add(1, Type.INT_TYPE);
 				w.method.setReturnType(delegateParameter.remove(delegateParameter.size()-1));
 
-				w.field(GETSTATIC, Reflection.getMagicAccessorClass(), "theInternalUnsafe", unsafeType);
+				w.field(GETSTATIC, Reflection.PROXY_CLASS, "theInternalUnsafe", unsafeType);
 
 				w.insn(ALOAD_0);
 				w.insn(ILOAD_1);

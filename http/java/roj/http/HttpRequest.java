@@ -32,6 +32,7 @@ import java.util.function.Function;
 import java.util.function.Supplier;
 
 public abstract class HttpRequest {
+	public static URI DEFAULT_PROXY;
 	public static int DEFAULT_TIMEOUT = 10000;
 	public static final Headers DEFAULT_HEADERS = new Headers();
 	static {
@@ -61,7 +62,7 @@ public abstract class HttpRequest {
 	private Headers headers;
 	private final ArrayList<Map.Entry<String, String>> autoHeaders = new ArrayList<>(4);
 
-	private URI proxy;
+	private URI proxy = DEFAULT_PROXY;
 	InetSocketAddress _address;
 
 	protected long responseBodyLimit = Long.MAX_VALUE;

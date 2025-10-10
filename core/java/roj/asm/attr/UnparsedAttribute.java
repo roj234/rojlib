@@ -54,6 +54,10 @@ public class UnparsedAttribute extends Attribute {
 
 	public String toString() { return name()+(data==null?"":": "+getRawData().dump()); }
 
-	public DynByteBuf getRawData() { return data == null ? null : (DynByteBuf) (data.getClass() == byte[].class ? data = new ByteList((byte[]) data) : data); }
+	public DynByteBuf getRawData() {
+		if (data == null) return null;
+		Object data1 = data;
+		return (DynByteBuf) (data1.getClass() == byte[].class ? data = new ByteList((byte[]) data1) : data1);
+	}
 	public void setRawData(@MayMutate DynByteBuf data) { this.data = data; }
 }

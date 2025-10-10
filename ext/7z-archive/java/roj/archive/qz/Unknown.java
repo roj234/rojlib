@@ -1,8 +1,10 @@
 package roj.archive.qz;
 
+import roj.text.TextUtil;
+import roj.util.DynByteBuf;
+
 import java.io.IOException;
 import java.io.InputStream;
-import java.util.Arrays;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -11,8 +13,11 @@ import java.util.concurrent.atomic.AtomicInteger;
  */
 final class Unknown extends QZCoder {
 	private final byte[] id;
+	private byte[] options;
 	Unknown(byte[] id) {this.id = id;}
 
-	byte[] id() {return id;}
-	public InputStream decode(InputStream in, byte[] password, long uncompressedSize, AtomicInteger memoryLimit) throws IOException {throw new IOException("不支持的解码器"+Arrays.toString(id));}
+	public byte[] id() {return id;}
+	public InputStream decode(InputStream in, byte[] password, long uncompressedSize, AtomicInteger memoryLimit) throws IOException {throw new IOException("不支持的解码器"+TextUtil.bytes2hex(id)+":"+TextUtil.bytes2hex(options));}
+
+	public void readOptions(DynByteBuf buf, int length) {options = buf.readBytes(length);}
 }

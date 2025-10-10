@@ -9,8 +9,10 @@ import roj.collect.HashMap;
 import roj.collect.HashSet;
 import roj.collect.TrieTreeSet;
 import roj.concurrent.TimerTask;
+import roj.config.ConfigMaster;
 import roj.io.IOUtil;
 import roj.text.Formatter;
+import roj.text.ParseException;
 import roj.ui.Tty;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
@@ -45,7 +47,7 @@ public final class Project {
 
 	final Compiler compiler;
 	public final Workspace workspace;
-	public final Map<String, String> variables;
+	final Map<String, String> variables;
 	private final TrieTreeSet varReplacePathPrefix;
 
 	final File unmappedJar;
@@ -59,6 +61,10 @@ public final class Project {
 	final DependencyGraph dependencyGraph = new DependencyGraph();
 	final AnnotationRepo annotationRepo = new AnnotationRepo();
 	final StructureRepo structureRepo = new StructureRepo();
+	/**
+	 * @since 3.13
+	 */
+	private FileList fileList = new FileList();
 
 	@Deprecated public Mapper mapper;
 	@Deprecated public Mapper.State mapperState;
@@ -78,13 +84,13 @@ public final class Project {
 		if (ws == null) throw new NullPointerException("找不到工作空间"+config.workspace);
 		this.workspace = ws;
 
-		this.root = new File(workspace.getProjectPath(), config.name);
+		this.root = new File(workspace.getPath(), config.name);
 		this.srcPath = new File(root, "java");
 		this.resPath = new File(root, "resources");
 		this.cachePath = new File(MCMake.CACHE_PATH, ".pr/"+(config.name.equals(name) ? name : name+"@"+Integer.toHexString(config.name.hashCode())));
 		this.unmappedJar = new File(cachePath, "classes.jar");
 
-		this.variables = new HashMap<>(ws.variables);
+		this.variables = new HashMap<>(ws.getVariables());
 		this.variables.put("project_name", name);
 		this.variables.put("project_version", version);
 		this.variables.putAll(config.variables);
@@ -93,11 +99,11 @@ public final class Project {
 		}*/
 
 		this.dependencies = new EnumMap<>(Dependency.Scope.class);
-		if (workspace.variable_replace_in.isEmpty() || conf.variable_replace_in.isEmpty()) {
-			this.varReplacePathPrefix = workspace.variable_replace_in.isEmpty() ? conf.variable_replace_in : workspace.variable_replace_in;
+		if (workspace.getVariableReplaceContext().isEmpty() || conf.variableReplaceContext.isEmpty()) {
+			this.varReplacePathPrefix = workspace.getVariableReplaceContext().isEmpty() ? conf.variableReplaceContext : workspace.getVariableReplaceContext();
 		} else {
-			this.varReplacePathPrefix = new TrieTreeSet(conf.variable_replace_in);
-			this.varReplacePathPrefix.addAll(workspace.variable_replace_in);
+			this.varReplacePathPrefix = new TrieTreeSet(conf.variableReplaceContext);
+			this.varReplacePathPrefix.addAll(workspace.getVariableReplaceContext());
 		}
 
 		if (config.type == Env.Type.ARTIFACT) {
@@ -117,6 +123,36 @@ public final class Project {
 			resPath.mkdir();
 		}
 		cachePath.mkdirs();
+
+		fileList = new FileList();
+		var fileListCache = new File(cachePath, "fileList.msg");
+		if (false) successFullyLoadFileList: {
+			if (fileListCache.exists()) {
+				try {
+					fileList = MCMake.CONFIG.read(fileListCache, FileList.class, ConfigMaster.MSGPACK);
+					break successFullyLoadFileList;
+				} catch (ParseException e) {
+					MCMake.log.error("Could not deserialize FileList", e);
+				}
+			}
+
+			fileList.setPrefix(root.getAbsolutePath()+"/");
+
+			MCMake.log.debug("Generating FileList");
+
+			var srcChanged = IOUtil.listFiles(srcPath, BuildContext.JavaChangeset::isCompilable);
+			var resChanged = IOUtil.listFiles(resPath);
+			for (File file : srcChanged) {
+				fileList.fileChanged(file.getAbsolutePath());
+			}
+			for (File file : resChanged) {
+				fileList.fileChanged(file.getAbsolutePath());
+			}
+
+			fileList.commit();
+			savePersistentState();
+		}
+		fileList.setPrefix(root.getAbsolutePath()+"/");
 
 		unmappedWriter = new ZipOutput(unmappedJar);
 		if (unmappedJar.length() == 0) {
@@ -142,7 +178,7 @@ public final class Project {
 				try {
 					uri = new URI(id);
 				} catch (URISyntaxException e) {
-					MCMake.LOGGER.warn("不支持的依赖类型{}", e, id);
+					MCMake.log.warn("不支持的依赖类型{}", e, id);
 					continue;
 				}
 
@@ -160,7 +196,7 @@ public final class Project {
 						String path = uri.getPath();
 						File file = IOUtil.resolvePath(root, path);
 						if (!file.exists()) {
-							MCMake.LOGGER.warn("找不到依赖项目{}", file);
+							MCMake.log.warn("找不到依赖项目{}", uri);
 							continue;
 						}
 
@@ -174,30 +210,41 @@ public final class Project {
 						if (path.startsWith("/")) path = path.substring(1);
 						dep = new Dependency.MavenDep(this, id, path, checksumAlgorithm, expectedChecksum);
 					}
+					case "resource" -> {
+						String path = uri.getPath();
+						File file = IOUtil.resolvePath(root, path);
+						if (!file.isDirectory()) {
+							MCMake.log.warn("找不到依赖项目{}", uri);
+							continue;
+						}
+
+						dep = new Dependency.ResourceFolderDep(file);
+					}
 					case "project" -> {
 						Project project = MCMake.projects.get(uri.getPath());
 						if (project == null) {
-							MCMake.LOGGER.warn("找不到依赖项目{}", uri.getPath());
+							MCMake.log.warn("找不到依赖项目{}", uri.getPath());
 							continue;
 						}
 						dep = new Dependency.ProjectDep(project);
 						directDep.add(project);
 					}
 					default -> {
-						MCMake.LOGGER.warn("不支持的依赖类型{}", id);
+						MCMake.log.warn("不支持的依赖类型{}", id);
 						continue;
 					}
 				}
 			} else {
 				Project project = MCMake.projects.get(id);
 				if (project == null) {
-					MCMake.LOGGER.warn("找不到依赖项目{}", id);
+					MCMake.log.warn("找不到依赖项目{}", id);
 					continue;
 				}
 				dep = new Dependency.ProjectDep(project);
 				directDep.add(project);
 			}
 
+			dep = BuildContext.internDependency(dep);
 			dependencies.computeIfAbsent(entry.getValue(), Helpers.fnArrayList()).add(dep);
 			conf.dependencyInstances.put(entry.getKey(), dep);
 
@@ -210,6 +257,11 @@ public final class Project {
 		var projects = new LinkedHashSet<Project>();
 		gatherDependencies(projects, this);
 		buildOrderDep = new ArrayList<>(projects);
+	}
+
+	public void close() {
+		IOUtil.closeSilently(mappedWriter);
+		IOUtil.closeSilently(unmappedWriter);
 	}
 
 	@Override
@@ -253,6 +305,7 @@ public final class Project {
 						Collections.emptyMap(),
 						ctx
 				);
+				resCount++;
 			}
 
 			Set<String> removed = ctx.resources.getRemoved();
@@ -262,7 +315,7 @@ public final class Project {
 			}
 
 			if ((changed.size()|removed.size()) > 0)
-				MCMake.LOGGER.debug("Resource: {} changed, {} removed.", changed.size(), removed.size());
+				MCMake.log.debug("Resource: {} changed, {} removed.", changed.size(), removed.size());
 
 			for (Dependency bundle : getBundledDependencies()) {
 				resCount += bundle.getResources(this, mappedWriter, ctx);
@@ -275,7 +328,6 @@ public final class Project {
 	public boolean shouldUseCompileTimestamp() {return "true".equals(variables.get("fmd:resource:use_compile_timestamp"));}
 
 	void writeRes(File file, String relPath, long time, Map<String, String> altVariables, BuildContext ctx) {
-		resCount++;
 		ExceptionalSupplier<InputStream, IOException> writer;
 		try {
 			if (varReplacePathPrefix.strStartsWithThis(relPath)) {
@@ -283,7 +335,7 @@ public final class Project {
 				try {
 					string = IOUtil.readString(file);
 				} catch (Exception e) {
-					MCMake.LOGGER.warn("变量替换规则可能命中了二进制文件{}", e, relPath);
+					MCMake.log.warn("变量替换规则可能命中了二进制文件{}", e, relPath);
 					return;
 				}
 
@@ -300,7 +352,7 @@ public final class Project {
 
 			mappedWriter.setStream(relPath, writer, time);
 		} catch (IOException e) {
-			MCMake.LOGGER.warn("资源文件{}复制失败", e, relPath);
+			MCMake.log.warn("资源文件{}复制失败", e, relPath);
 		}
 	}
 
@@ -309,6 +361,8 @@ public final class Project {
 	public boolean isAutoCompile() {return autoCompile;}
 
 	public void buildSuccess(boolean increment) {
+		fileList.commit();
+
 		try {
 			MCMake.watcher.add(this);
 		} catch (IOException e) {
@@ -326,28 +380,48 @@ public final class Project {
 			}
 		}
 	}
+	void savePersistentState() {
+		if (false && fileList.wasChanged()) {
+			try {
+				MCMake.CONFIG.write(ConfigMaster.MSGPACK, fileList, new File(cachePath, "fileList.msg"));
+			} catch (IOException e) {
+				MCMake.log.warn("Failed to save FileList", e);
+			}
+		}
+	}
+	void clearPersistentState() {
+		fileList = new FileList();
+		fileList.setPrefix(root.getAbsolutePath()+"/");
+	}
+
+	void fileChanged(String pathname) {fileList.fileChanged(pathname);}
+	Set<String> getDeleted(int watcherSlot) {
+		Set<String> alt = fileList.getDeletedAlt(watcherSlot == FileWatcher.ID_SRC ? "java" : "resources");
+		if (alt != null) return alt;
+		return Collections.emptySet();
+	}
 
 	private static TimerTask autoCompileTask;
-	private static final Set<Project> fileChanged = new HashSet<>();
-	private static void commitFiles() {
+	private static final Set<Project> buildPending = new HashSet<>();
+	private static void executePendingBuild() {
 		HashSet<Project> roots;
-		synchronized (fileChanged) {
-			roots = new HashSet<>(fileChanged);
-			for (Project project : fileChanged) {
+		synchronized (buildPending) {
+			roots = new HashSet<>(buildPending);
+			for (Project project : buildPending) {
 				roots.removeAll(project.buildOrderDep);
 			}
-			fileChanged.clear();
+			buildPending.clear();
 		}
 
 		MCMake._lock(false);
-		MCMake.LOGGER.debug("自动编译开始, 目标: {}", roots);
+		MCMake.log.debug("自动编译开始, 目标: {}", roots);
 		try {
 			for (Project project : roots) {
 				try {
 					int code = MCMake.build(new HashSet<>("auto", "silent"), project);
 					if (code != 0) break;
 				} catch (Throwable e) {
-					MCMake.LOGGER.error("自动编译出错", e);
+					MCMake.log.error("自动编译出错", e);
 					MCMake.watcher.removeAll();
 					return;
 				}
@@ -355,38 +429,40 @@ public final class Project {
 		} finally {
 			MCMake._unlock();
 		}
-		schedule();
+		throttleBuild();
 	}
-	// TODO hash check to avoid redundant change
-	public static void fileChanged(Project p) {
+
+	public void fileChanged() {
+		if (!fileList.havePendingChanges()) return;
+
 		var isRoot = true;
 		for (Project q : MCMake.projects.values()) {
-			if (q.autoCompile && q.buildOrderDep.contains(p)) {
-				synchronized (fileChanged) {
+			if (q.autoCompile && q.buildOrderDep.contains(this)) {
+				synchronized (buildPending) {
 					isRoot = false;
-					fileChanged.add(q);
+					buildPending.add(q);
 				}
 			}
 		}
 		if (isRoot) {
-			synchronized (fileChanged) { fileChanged.add(p); }
+			synchronized (buildPending) { buildPending.add(this); }
 		}
 
-		schedule();
+		throttleBuild();
 	}
 
-	private static void schedule() {
+	private static void throttleBuild() {
 		if (autoCompileTask != null) autoCompileTask.cancel();
 
-		if (!fileChanged.isEmpty()) {
-			synchronized (fileChanged) {
+		if (!buildPending.isEmpty()) {
+			synchronized (buildPending) {
 				if (autoCompileTask != null) autoCompileTask.cancel();
-				autoCompileTask = MCMake.TIMER.delay(Project::commitFiles, MCMake.config.getInt("自动编译防抖"));
+				autoCompileTask = MCMake.TIMER.delay(Project::executePendingBuild, MCMake.config.getInt("自动编译防抖"));
 			}
 		}
 	}
 
-	public Env.Project serialize() {return conf;}
+	@Unmodifiable
 	public Map<String, String> getVariables() {return variables;}
 	public String getOutputFormat() {return Formatter.simple(variables.getOrDefault("fmd:name_format", "${project_name}-${project_version}.jar")).format(variables, IOUtil.getSharedCharBuf()).toString();}
 

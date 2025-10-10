@@ -10,9 +10,10 @@
 
 package roj.archive.xz;
 
+import roj.archive.rangecoder.RangeEncoderToStream;
 import roj.archive.xz.lzma.LZMAEncoder;
-import roj.archive.xz.rangecoder.RangeEncoderToStream;
 import roj.io.Finishable;
+import roj.io.MBOutputStream;
 import roj.math.MathUtils;
 import roj.util.ArrayUtil;
 
@@ -24,7 +25,7 @@ import java.io.OutputStream;
  *
  * @since 1.6
  */
-public class LZMAOutputStream extends OutputStream implements Finishable {
+public class LZMAOutputStream extends MBOutputStream implements Finishable {
 	private OutputStream out;
 
 	private final RangeEncoderToStream rc;
@@ -61,7 +62,7 @@ public class LZMAOutputStream extends OutputStream implements Finishable {
 			if (useHeader) throw new IllegalArgumentException("Preset dictionary cannot be used in .lzma files " +
 				"(try a raw LZMA stream instead)");
 
-			lzma.lzPresetDict(dictSize, presetDict);
+			lzma.setPresetDict(dictSize, presetDict);
 		}
 
 		props = options.getPropByte();
@@ -143,12 +144,6 @@ public class LZMAOutputStream extends OutputStream implements Finishable {
 	 */
 	public long getUncompressedSize() { return processed; }
 
-	private final byte[] b1 = new byte[1];
-	public void write(int b) throws IOException {
-		b1[0] = (byte) b;
-		write(b1, 0, 1);
-	}
-
 	public void write(byte[] buf, int off, int len) throws IOException {
 		ArrayUtil.checkRange(buf, off, len);
 		if (finished) throw new IOException("Stream finished or closed");
@@ -160,7 +155,7 @@ public class LZMAOutputStream extends OutputStream implements Finishable {
 
 		try {
 			while (len > 0) {
-				int used = lzma.lzFill(buf, off, len);
+				int used = lzma.fillWindow(buf, off, len);
 				off += used;
 				len -= used;
 				lzma.encodeForLZMA1();
@@ -185,7 +180,7 @@ public class LZMAOutputStream extends OutputStream implements Finishable {
 				throw new IOException("Expected uncompressed size ("+expectedUncompressedSize+") doesn't equal " +
 					"the number of bytes written to the stream ("+processed+")");
 
-			lzma.lzFinish();
+			lzma.setFinishing();
 			lzma.encodeForLZMA1();
 
 			if (useEndMarker) lzma.encodeLZMA1EndMarker();

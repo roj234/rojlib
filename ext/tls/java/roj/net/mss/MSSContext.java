@@ -15,16 +15,7 @@ import java.security.SecureRandom;
  * @since 2024/11/20 23:39
  */
 public class MSSContext {
-	private static MSSContext DEFAULT_CONTEXT = new MSSContext();
-	public static MSSContext getDefault() {return DEFAULT_CONTEXT;}
-	public static void setDefault(MSSContext context) {DEFAULT_CONTEXT = context;}
-
 	public static final byte PRESHARED_ONLY = 0x1, VERIFY_CLIENT = 0x2;
-
-	protected SecureRandom getSecureRandom() {return new SecureRandom();}
-
-	protected byte flags;
-	public MSSContext setFlags(byte flags) {this.flags = flags;return this;}
 
 	public static CharMap<CipherSuite> defaultCipherSuites = new CharMap<>();
 	static {
@@ -33,6 +24,16 @@ public class MSSContext {
 			defaultCipherSuites.put((char) suite.id, suite);
 		}
 	}
+
+	private static MSSContext DEFAULT_CONTEXT = new MSSContext();
+	public static MSSContext getDefault() {return DEFAULT_CONTEXT;}
+	public static void setDefault(MSSContext context) {DEFAULT_CONTEXT = context;}
+
+	protected byte flags;
+	public MSSContext setFlags(byte flags) {this.flags = flags;return this;}
+
+	protected SecureRandom getSecureRandom() {return new SecureRandom();}
+
 	protected CharMap<CipherSuite> cipherSuites = defaultCipherSuites;
 	public CharMap<CipherSuite> getCipherSuites() {return cipherSuites;}
 	public MSSContext setCipherSuites(CipherSuite suite1, CipherSuite... suiteN) {
@@ -95,7 +96,7 @@ public class MSSContext {
 			if (alpn != null) {
 				var buf = extIn.remove(Extension.application_layer_protocol);
 				if (buf == null || !alpn.equals(buf.readAscii(buf.readableBytes())))
-					throw new MSSException(MSSEngine.NEGOTIATION_FAILED, "alpn", null);
+					throw new MSSException(MSSEngine.NEGOTIATION_FAILED, "alpn != "+alpn, null);
 			}
 		}
 
@@ -116,10 +117,4 @@ public class MSSContext {
 		return new MSSEngineServer(this);
 	}
 	public final MSSEngine clientEngine() {return new MSSEngineClient(this);}
-
-	public final TLSEngine serverEngineT() {
-		if (cert == null && getClass() == MSSContext.class) throw new IllegalArgumentException("未设置服务器证书");
-		return new TLSEngineServer(this);
-	}
-	public final TLSEngine clientEngineT() {return new TLSEngineClient(this);}
 }

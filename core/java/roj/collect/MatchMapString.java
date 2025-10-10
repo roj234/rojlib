@@ -1,11 +1,12 @@
 package roj.collect;
 
 import org.intellij.lang.annotations.MagicConstant;
-import roj.reflect.Unsafe;
+import roj.reflect.Telescope;
 import roj.util.ArrayCache;
 import roj.util.Multisort;
 import roj.util.NativeArray;
 
+import java.lang.invoke.VarHandle;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
@@ -206,19 +207,19 @@ public class MatchMapString<V> {
 		return s;
 	}
 
-	private static final long VOL_OFFSET = Unsafe.fieldOffset(MatchMapString.class, "vol0");
-	private Object[] vol0;
-	private Object[] getVolArray() {
-		Object[] vol0 = (Object[]) U.getAndSetReference(this, VOL_OFFSET, null);
+	private static final VarHandle CACHE = Telescope.lookup().findVarHandle(MatchMapString.class, "vol0", Object[].class);
+	private Object[] cache;
+	private Object[] getCache() {
+		Object[] vol0 = (Object[]) CACHE.getAndSet(this, null);
 		if (vol0 == null) vol0 = new Object[] { new PosList(), new PosList(), new ArrayList<>(), new ArrayList<>(), new int[2] };
 		return vol0;
 	}
-	private void setVolArray(Object[] vol0) {
-		((PosList) vol0[0]).clear();
-		((PosList) vol0[1]).clear();
-		((ArrayList<?>) vol0[2]).clear();
-		((ArrayList<?>) vol0[3]).clear();
-		U.compareAndSetReference(this, VOL_OFFSET, null, vol0);
+	private void putCache(Object[] cache) {
+		((PosList) cache[0]).clear();
+		((PosList) cache[1]).clear();
+		((ArrayList<?>) cache[2]).clear();
+		((ArrayList<?>) cache[3]).clear();
+		CACHE.compareAndSet(this, null, cache);
 	}
 
 	public static final byte MATCH_SHORTER = 1, MATCH_LONGER = 2, MATCH_CONTINUOUS = 4;
@@ -253,7 +254,7 @@ public class MatchMapString<V> {
 		PosList prev = map.get(key.charAt(0));
 		if (prev == null) return out;
 
-		Object[] vol0 = getVolArray();
+		Object[] vol0 = getCache();
 		PosList next = (PosList) vol0[0];
 
 		List<BitSet>
@@ -370,7 +371,7 @@ public class MatchMapString<V> {
 					out.add((Entry<V>) entry);
 			}
 
-			setVolArray(vol0);
+			putCache(vol0);
 			return out;
 		}
 
@@ -386,7 +387,7 @@ public class MatchMapString<V> {
 			out.add((Entry<V>) entry);
 		}
 
-		setVolArray(vol0);
+		putCache(vol0);
 		return out;
 	}
 
@@ -411,7 +412,7 @@ public class MatchMapString<V> {
 		PosList prev = map.get(key.charAt(0));
 		if (prev == null) return out;
 
-		Object[] vol0 = getVolArray();
+		Object[] vol0 = getCache();
 		PosList next = (PosList) vol0[0];
 
 		int i = 1;
@@ -520,7 +521,7 @@ public class MatchMapString<V> {
 			}
 		}
 
-		setVolArray(vol0);
+		putCache(vol0);
 		return out;
 	}
 

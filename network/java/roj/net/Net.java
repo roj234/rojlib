@@ -123,7 +123,7 @@ public final class Net {
 		}
 
 		if ((colon == -1 && (num.length() == 0 || j != 14)) || j > 14) throw new IllegalArgumentException("Address overflow: " + ip);
-		int st = TextUtil.parseInt(num, 1);
+		int st = num.length() == 0 ? 0 : TextUtil.parseInt(num, 1);
 		addr[j++] = (byte) (st >> 8);
 		addr[j] = (byte) st;
 
@@ -185,8 +185,8 @@ public final class Net {
 	public static URI socks5(InetSocketAddress server) {return URI.create("socks5://"+server);}
 	public static URI socks5(InetSocketAddress server, String username, String password) {return URI.create("socks5://"+URICoder.encodeURIComponent(username)+":"+URICoder.encodeURIComponent(password)+"@"+server);}
 
-	public static InetSocketAddress applyProxy(@Nullable URI proxy, InetSocketAddress originalAddr, MyChannel ch) throws IOException {
-		if (proxy == null) return originalAddr;
+	public static InetSocketAddress applyProxy(@Nullable URI proxy, InetSocketAddress connectAddress, MyChannel ch) throws IOException {
+		if (proxy == null) return connectAddress;
 		switch (proxy.getScheme()) {
 			default -> throw new IllegalArgumentException("Not know "+proxy+" proxy");
 			case "socks5" -> {
@@ -201,7 +201,7 @@ public final class Net {
 						pass = URICoder.decodeURI(info.substring(i+1));
 					}
 				}
-				ch.addFirst("@proxy", new Socks5Client(originalAddr, user, pass));
+				ch.addFirst("@proxy", new Socks5Client(connectAddress, user, pass));
 				return new InetSocketAddress(InetAddress.getByName(proxy.getHost()), proxy.getPort());
 			}
 		}

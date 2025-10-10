@@ -5,7 +5,6 @@ import roj.crypt.CRC32;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.util.zip.ZipException;
 
 /**
  * @author Roj234
@@ -38,8 +37,8 @@ public final class CRC32InputStream extends InputStream {
 		return len;
 	}
 
-	private void check() throws ZipException {
+	private void check() throws IOException {
 		crc = CRC32.finish(crc);
-		if (except != crc) throw new ZipException("CRC32校验错误: except="+Integer.toHexString(except)+", got="+Integer.toHexString(crc));
+		if (except != crc) throw new IOException("校验失败(CRC32): except="+Integer.toHexString(except)+", got="+Integer.toHexString(crc));
 	}
 }

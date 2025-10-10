@@ -12,10 +12,10 @@ import static roj.archive.ArchiveUtils.*;
  */
 final class QZEntryA extends QZEntry {
     static final long[] SPARSE_ATTRIBUTE_OFFSET = new long[] {
-        Unsafe.fieldOffset(QZEntryA.class, "createTime"),
-        Unsafe.fieldOffset(QZEntryA.class, "accessTime"),
-        Unsafe.fieldOffset(QZEntryA.class, "modifyTime"),
-        Unsafe.fieldOffset(QZEntryA.class, "attributes")
+        Unsafe.objectFieldOffset(QZEntryA.class, "createTime", long.class),
+        Unsafe.objectFieldOffset(QZEntryA.class, "accessTime", long.class),
+        Unsafe.objectFieldOffset(QZEntryA.class, "modifyTime", long.class),
+        Unsafe.objectFieldOffset(QZEntryA.class, "attributes", int.class)
     };
 
     long accessTime, createTime, modifyTime;

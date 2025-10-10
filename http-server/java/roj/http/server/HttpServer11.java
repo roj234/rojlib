@@ -7,6 +7,7 @@ import roj.io.IOUtil;
 import roj.net.ChannelCtx;
 import roj.net.Event;
 import roj.net.MyChannel;
+import roj.net.SelectorLoop;
 import roj.net.handler.PacketMerger;
 import roj.net.util.SpeedLimiter;
 import roj.text.CharList;
@@ -79,7 +80,7 @@ final class HttpServer11 extends PacketMerger implements PayloadInfo, Response, 
 	@Override
 	public void channelOpened(ChannelCtx ctx) {
 		state = RECV_HEAD;
-		time = System.currentTimeMillis() + router.readTimeout(true);
+		time = SelectorLoop.currentTimeMillis() + router.readTimeout(true);
 	}
 
 	@Override
@@ -93,12 +94,12 @@ final class HttpServer11 extends PacketMerger implements PayloadInfo, Response, 
 			else if (!hasMore) outEof();
 		}
 
-		if (System.currentTimeMillis() > time || !ctx.isInputOpen()) {
+		if (SelectorLoop.currentTimeMillis() > time || !ctx.isInputOpen()) {
 			switch (state) {
 				case RECV_HEAD, RECV_BODY, PROCESSING:
 					if (!ctx.isOutputOpen() || req == null) {
 						ctx.channel().closeGracefully();
-						time = System.currentTimeMillis() + 500;
+						time = SelectorLoop.currentTimeMillis() + 500;
 						state = CLOSED;
 						return;
 					}
@@ -116,7 +117,7 @@ final class HttpServer11 extends PacketMerger implements PayloadInfo, Response, 
 				case SEND_BODY: LOGGER.warn("发送超时[在规定的时间内未能将响应体全部发送]: {}", body); break;
 				case HANG_PRE:
 					if (ctx.isInputOpen()) {
-						time = System.currentTimeMillis() + router.keepaliveTimeout();
+						time = SelectorLoop.currentTimeMillis() + router.keepaliveTimeout();
 
 						var prev = HttpServer.getInstance().keepalive.ringAddLast(this);
 						if (prev != null) prev.ch.close();
@@ -140,7 +141,7 @@ final class HttpServer11 extends PacketMerger implements PayloadInfo, Response, 
 		switch (state) {
 			case HANG: HttpServer.getInstance().keepalive.remove(this);
 			case HANG_PRE:
-				time = System.currentTimeMillis() + router.readTimeout(false);
+				time = SelectorLoop.currentTimeMillis() + router.readTimeout(false);
 				state = RECV_HEAD;
 			case RECV_HEAD: {
 				// first line
@@ -384,7 +385,7 @@ final class HttpServer11 extends PacketMerger implements PayloadInfo, Response, 
 
 		// handlerRemoved() in response()
 		if (ch != null && ((flag & FLAG_ASYNC) == 0 || body != null)) {
-			time += System.currentTimeMillis() + router.writeTimeout(req, body);
+			time += SelectorLoop.currentTimeMillis() + router.writeTimeout(req, body);
 			sendHead();
 		}
 	}
@@ -479,7 +480,7 @@ final class HttpServer11 extends PacketMerger implements PayloadInfo, Response, 
 
 	@Override public Response code(int code) {this.code = (short) code;return this;}
 	@Override public Response die() {req.responseHeader.put("connection", "close");return this;}
-	@Override public Response async(int extraTimeMs) {flag |= FLAG_ASYNC;time = System.currentTimeMillis()+extraTimeMs;return this;}
+	@Override public Response async(int extraTimeMs) {flag |= FLAG_ASYNC;time = SelectorLoop.currentTimeMillis()+extraTimeMs;return this;}
 	@Override public void body(Content content) {
 		if ((flag & FLAG_ASYNC) == 0) {
 			if (state != RECV_HEAD) {
@@ -497,7 +498,7 @@ final class HttpServer11 extends PacketMerger implements PayloadInfo, Response, 
 		lock.lock();
 		try {
 			body = content;
-			time = System.currentTimeMillis() + router.writeTimeout(req, body);
+			time = SelectorLoop.currentTimeMillis() + router.writeTimeout(req, body);
 			sendHead();
 		} catch (Exception e) {
 			try {
@@ -527,7 +528,7 @@ final class HttpServer11 extends PacketMerger implements PayloadInfo, Response, 
 		if ((flag&SEND_BODY) == 0) throw new IllegalStateException();
 
 		int len = buf.readableBytes();
-		if (ch.isFlushing() || limiter != null && (len = limiter.limit(len)) <= 0) return;
+		if (ch.isFlushing() || limiter != null && (len = limiter.tryAcquire(len)) <= 0) return;
 
 		ch.channelWrite(len < buf.readableBytes() ? buf.slice(len) : buf);
 		sendBytes += len;
@@ -536,7 +537,7 @@ final class HttpServer11 extends PacketMerger implements PayloadInfo, Response, 
 		if ((flag&SEND_BODY) == 0) throw new IllegalStateException();
 
 		if (limit < 0) limit = NOOB_LIMIT;
-		if (ch.isFlushing() || limiter != null && (limit = limiter.limit(limit)) <= 0) return 0;
+		if (ch.isFlushing() || limiter != null && (limit = limiter.tryAcquire(limit)) <= 0) return 0;
 
 		int writeOnce = Math.min(NOOB_LIMIT, limit);
 		var buf = (ByteList) ch.allocate(false, writeOnce);
@@ -557,6 +558,7 @@ final class HttpServer11 extends PacketMerger implements PayloadInfo, Response, 
 			}
 
 			sendBytes += totalRead;
+			if (limiter != null) limiter.returnTokens(limit - totalRead);
 			return totalRead;
 		} finally {
 			buf.release();
@@ -565,7 +567,7 @@ final class HttpServer11 extends PacketMerger implements PayloadInfo, Response, 
 
 	private boolean outEof() throws IOException {
 		// for close-notify or hang
-		time = System.currentTimeMillis() + 100;
+		time = SelectorLoop.currentTimeMillis() + 100;
 
 		if (ch.isOutputOpen()) {
 			ch.postEvent(hDeflate.OUT_FINISH);
@@ -583,6 +585,8 @@ final class HttpServer11 extends PacketMerger implements PayloadInfo, Response, 
 			ch.postEvent(hTE.OUT_FINISH);
 		}
 
+		var fh = this.fh;
+		this.fh = null;
 		try {
 			if (fh != null && fh.onResponseFinish(this, !hasError())) {
 				state = CLOSED;
@@ -593,9 +597,8 @@ final class HttpServer11 extends PacketMerger implements PayloadInfo, Response, 
 				channel.readActive();
 				return true;
 			}
-			fh = null;
 		} catch (Exception e) {
-			LOGGER.warn("onRequestFinish时发生了异常", e);
+			LOGGER.warn("onRequestFinish() 发生异常", e);
 		}
 
 		if (req == null || "close".equalsIgnoreCase(req.responseHeader.get("connection"))) {

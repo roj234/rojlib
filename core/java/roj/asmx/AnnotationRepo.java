@@ -31,7 +31,7 @@ import java.util.Set;
  * @since 2023/12/26 12:47
  */
 public final class AnnotationRepo {
-	public static final String CACHE_NAME = "META-INF/annotations.repo";
+	public static final String CACHE_PATH = "META-INF/annotations.repo";
 	static final int MAX_CACHE_SIZE = 1048576;
 
 	private final HashMap<String, Set<AnnotatedElement>> annotations = new HashMap<>();
@@ -60,7 +60,7 @@ public final class AnnotationRepo {
 
 	private boolean loadFromCache(ArchiveFile archive) {
 		try {
-			var entry = archive.getEntry(CACHE_NAME);
+			var entry = archive.getEntry(CACHE_PATH);
 			if (entry != null && entry.getSize() <= MAX_CACHE_SIZE) {
 				if (deserialize(IOUtil.getSharedByteBuf().readStreamFully(archive.getInputStream(entry)))) return true;
 			}

@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+	<meta charset="UTF-8"/>
+	<meta name="viewport" content="width=device-width, initial-scale=1"/>
+	<title>简单共享</title>
+	<link rel="shortcut icon" href="/favicon.ico"/>
+	<meta name="color-scheme" content="dark"/>
+	<link href="/assets/font-awesome.css" rel="stylesheet"/>
+	<link href="/assets/font-awesome.woff2?v=4.7.0" rel="preload" as="font" crossorigin="anonymous"/>
+	<link href="/assets/implib_v2.css" rel="stylesheet"/>
+	<link href="../share.css" rel="stylesheet"/>
+</head>
+<body>
+<div class="wrapper flip-container">
+	<div class="main" id="loading">
+		<div class="logo-box">
+			<img class="logo fa-spin" src="../logo.png" alt="ImpLib Logo">
+			<h1>简单共享</h1>
+			<h2>SimpleFileShare</h2>
+		</div>
+		<div class="bottom">加载中，请稍后<i>50%</i></div>
+	</div>
+	<!-- 提取 -->
+	<div class="main fadeOut" id="get-file">
+		<div class="logo-box">
+			<img class="logo" src="../logo.png" alt="ImpLib Logo">
+			<h2></h2>
+			<p style="display: flex; width: 100%; justify-content: space-around; gap: 10px"></p>
+		</div>
+		<form class="file-box" id="get-protected">
+			<div class="code-box"><label for="code">提取码</label><input class="code" id="code" placeholder="请输入您的提取码" required /></div>
+			<button class="file-btn" type="submit" name="submit">提取文件&nbsp;&nbsp;<i class="fa fa-chevron-right"></i></button>
+		</form>
+		<div class="file-box" id="get-text">
+			<textarea class="code" style="min-height: 300px; color: white" readonly></textarea>
+			<button class="file-btn" onclick="this.previousElementSibling.select();document.execCommand('copy')">复制到剪贴板&nbsp;&nbsp;<i class="fa fa-copy"></i></button>
+		</div>
+		<div class="file-box" id="get-ok">
+			<a id="get-explore" class="file-btn" target="_blank" href="explore/">在线预览&nbsp;&nbsp;<i class="fa fa-list-alt"></i></a>
+			<div class="code-box"><label>请使用谷歌浏览器批量下载</label><button class="file-btn" id="get-download" disabled>一键下载&nbsp;&nbsp;<i class="fa fa-download"></i></button></div>
+			<button class="file-btn" id="get-cloud" title="未实现" disabled>云端保存&nbsp;&nbsp;<i class="fa fa-save"></i></button>
+		</div>
+		<div class="bottom"><i class="fa fa-level-down" style="color: greenyellow">&nbsp;<button title="未实现" disabled>投诉</button></i><a href="../new/" target="_blank">我要发送文件</a></div>
+	</div>
+	<!-- 上传 -->
+	<form class="main fadeOut" id="upload-form">
+		<div class="logo-box">
+			<img class="logo" src="../logo.png" alt="ImpLib Logo">
+			<h2>SimpleFileShare</h2>
+		</div>
+		<div class="file-box">
+			<div class="send-input">
+				<input type="radio" value="file" id="send-file" name="send-type" checked />
+				<label for="send-file">上传文件</label>
+				<input type="radio" value="text" id="send-text" name="send-type" />
+				<label for="send-text">分享文本</label>
+				<input type="radio" value="folder" id="send-folder" name="send-type" />
+				<label for="send-folder">转发文件</label>
+			</div>
+			<div id="send-file-box" class="send-box upload-box">
+				<p>
+					<i style="font-size: 56px; position: relative" class="fa fa-cloud">
+						<i id="cloud-animation" style="font-size: 36px; position: absolute; left: 20%; top: 10px; color: rgba(0,0,0,0.8)" class="fa fa-arrow-up"></i>
+					</i>
+				</p>
+				<p id="val-file-text" style="text-align: center">单击或拖入以上传<br>不限大小和格式，支持文件夹</p>
+				<input id="val-file" type="file" multiple style="display: none" />
+			</div>
+			<div id="send-text-box" class="send-box code-box" style="display: none">
+				<label for="val-text">要分享的文本</label>
+				<textarea class="code" id="val-text" placeholder="留言" maxlength="100000" required disabled></textarea>
+			</div>
+			<div id="send-folder-box" class="send-box code-box" style="display: none">
+				<label for="val-folder">文件夹路径</label>
+				<input class="code" id="val-folder" placeholder="位于服务器上的用户文件夹路径" required disabled />
+			</div>
+		</div>
+		<div class="file-box expire-box">
+			<label for="expire">过期方式</label>
+			<select class="code" id="expire">
+				<option selected value="time">按时间</option>
+				<option value="count">按次数</option>
+				<option value="never">永不过期</option>
+			</select>
+			<input class="code" id="expire-time" placeholder="过期时间" type="datetime-local" required />
+			<input class="code" id="expire-count" placeholder="允许的提取次数" type="number" min="1" max="1000" disabled required />
+		</div>
+		<div class="file-box">
+			<div class="code-box">
+				<label>自定义 [可选]</label>
+				<input class="code" name="name" placeholder="分享描述" maxlength="30" />
+				<input class="code" name="code" placeholder="提取码" title="设置为none以公开分享" minlength="4" maxlength="14" />
+				<input class="code" name="id" placeholder="分享链接" minlength="6" maxlength="30" pattern="[a-zA-Z0-9-_@]+" />
+			</div>
+			<button class="file-btn" type="submit"><i class="fa fa-send-o"></i>&nbsp;&nbsp;分享</button>
+		</div>
+		<div class="bottom"><i></i><a class="log-link">分享记录 <i class="fa fa-clock-o"></i></a></div>
+	</form>
+	<div class="main" id="file-detail" style="display: none"></div>
+	<div class="sidebar left">
+		<div class="top"><h2>分享记录</h2><i class="fa fa-close fa-file-" title="关闭" id="left-list-close"></i></div>
+		<div id="left-list"></div>
+	</div>
+	<div class="sidebar right">
+		<div class="top"><h2>文件列表</h2></div>
+		<div id="right-list"></div>
+	</div>
+</div>
+<div id="notifications"></div>
+</body>
+<script src="/assets/implib_v2.js"></script>
+<!--script onerror="const s=document.createElement('script');s.src='/assets/qrious.min.js';document.body.append(s);this.remove();" src="https://cdnjs.cloudflare.com/ajax/libs/qrious/4.0.2/qrious.min.js" integrity="sha384-Dr98ddmUw2QkdCarNQ+OL7xLty7cSxgR0T7v1tq4UErS/qLV0132sBYTolRAFuOV" crossorigin="anonymous" async></script-->
+<script src='/assets/qrious.min.js'; async></script>
+<script type="module" src="../share.js"></script>
+</html>

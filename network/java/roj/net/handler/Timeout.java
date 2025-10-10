@@ -3,6 +3,7 @@ package roj.net.handler;
 import roj.net.ChannelCtx;
 import roj.net.ChannelHandler;
 import roj.net.Event;
+import roj.net.SelectorLoop;
 
 import java.io.IOException;
 
@@ -26,24 +27,24 @@ public class Timeout implements ChannelHandler {
 	@Override
 	public void channelRead(ChannelCtx ctx, Object msg) throws IOException {
 		ctx.channelRead(msg);
-		lastRead = System.currentTimeMillis();
+		lastRead = SelectorLoop.currentTimeMillis();
 	}
 
 	@Override
 	public void channelWrite(ChannelCtx ctx, Object msg) throws IOException {
-		if (pending++ == 0) lastWrite = System.currentTimeMillis();
+		if (pending++ == 0) lastWrite = SelectorLoop.currentTimeMillis();
 		ctx.channelWrite(msg);
 	}
 
 	@Override
 	public void channelFlushed(ChannelCtx ctx) {
-		lastWrite = System.currentTimeMillis();
+		lastWrite = SelectorLoop.currentTimeMillis();
 		pending--;
 	}
 
 	@Override
 	public void channelTick(ChannelCtx ctx) throws IOException {
-		long time = System.currentTimeMillis();
+		long time = SelectorLoop.currentTimeMillis();
 		if (readTimeout > 0 && time - lastRead > readTimeout) {
 			if (ctx.postEvent(READ_TIMEOUT).getResult() != Event.RESULT_DENY)
 				closeChannel(ctx);

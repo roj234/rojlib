@@ -7,7 +7,6 @@ import roj.io.IOUtil;
 import roj.io.source.FileSource;
 import roj.io.source.Source;
 import roj.ui.EasyProgressBar;
-import roj.util.Helpers;
 import roj.util.function.Flow;
 
 import java.io.File;
@@ -36,7 +35,7 @@ final class ContentAwareChunkOrganizer {
 		var chunks = new ArrayList<List<File>>();
 
 		var sources = new ArrayList<Source>();
-		XashMap<String, Cluster> clustersMap = Helpers.cast(XashMap.noCreation(Cluster.class, "file").create());
+		XashMap<String, Cluster> clustersMap = XashMap.forType(String.class, Cluster.class).key("file").build().create();
 
 		try (var bar = new EasyProgressBar("")) {
 			bar.setTotal(files.size());

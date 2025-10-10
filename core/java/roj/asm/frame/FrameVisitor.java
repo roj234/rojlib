@@ -10,6 +10,7 @@ import roj.asm.insn.Segment;
 import roj.asm.type.Type;
 import roj.collect.ArrayList;
 import roj.collect.HashMap;
+import roj.collect.RingBuffer;
 import roj.text.CharList;
 import roj.util.DynByteBuf;
 import roj.util.FastFailException;
@@ -35,9 +36,9 @@ public class FrameVisitor extends SizeVisitor {
 	public static final byte COMPUTE_SIZES = 2;
 	public static final byte VALIDATE = 4;
 
-	private Var2[] currentLocals;
-	private Var2[] currentStack;
-	private int currentStackSize;
+	private Var2[] locals;
+	private Var2[] stack;
+	private int stackSize;
 
 	private final Map<BasicBlock, List<BasicBlock>> tryHandlerMap = new HashMap<>();
 
@@ -50,9 +51,9 @@ public class FrameVisitor extends SizeVisitor {
 	public void init(MethodNode method, List<Segment> blocks) {
 		super.init(method, blocks);
 
-		currentLocals = NONE;
-		currentStack = NONE;
-		currentStackSize = 0;
+		locals = NONE;
+		stack = NONE;
+		stackSize = 0;
 
 		boolean isConstructor = method.name().equals("<init>");
 		int slot = 0 == (method.modifier()&ACC_STATIC) ? 1 : 0;
@@ -71,7 +72,7 @@ public class FrameVisitor extends SizeVisitor {
 			if (isDual(item)) slot++;
 		}
 
-		current.enterLocals = currentLocals.clone();
+		current.enterLocals = locals.clone();
 	}
 
 	public static boolean debug;
@@ -96,7 +97,7 @@ public class FrameVisitor extends SizeVisitor {
 		if (blocks.size() == 1 && !blocks.get(0).isFrame && (flags&VALIDATE) == 0) return null;
 
 		// 1. 初始化 Worklist，这是一个存放待处理块的队列。
-		Deque<BasicBlock> changeset = new ArrayDeque<>();
+		Queue<BasicBlock> changeset = RingBuffer.unbounded();
 
 		// 2. 初始化入口块
 		BasicBlock first = blocks.get(0);
@@ -121,7 +122,7 @@ public class FrameVisitor extends SizeVisitor {
 		int end = code.wIndex();
 		// 4. 主循环，直到不动点
 		while (!changeset.isEmpty()) {
-			BasicBlock block = changeset.poll();
+			BasicBlock block = changeset.remove();
 
 			code.rIndex = begin + block.pc;
 			int i = processed.indexOf(block);
@@ -180,14 +181,34 @@ public class FrameVisitor extends SizeVisitor {
 
 	private void loadState(BasicBlock block) {
 		current = block;
-		currentLocals = block.enterLocals.clone();
-		currentStack = block.enterStack.clone();
-		currentStackSize = block.enterStack.length;
+
+		Var2[] loadLocal = block.enterLocals;
+
+		if (locals.length < loadLocal.length)
+			locals = loadLocal.clone();
+		else {
+			System.arraycopy(loadLocal, 0, locals, 0, loadLocal.length);
+			for (int i = loadLocal.length; i < locals.length; i++) locals[i] = null;
+		}
+
+		Var2[] localStack = block.enterStack;
+		stackSize = localStack.length;
+
+		if (stack.length < stackSize)
+			stack = localStack.clone();
+		else {
+			System.arraycopy(localStack, 0, stack, 0, stackSize);
+			for (int i = stackSize; i < stack.length; i++) stack[i] = null;
+		}
 	}
 
 	private void saveState(BasicBlock block) {
-		block.exitLocals = currentLocals.clone();
-		block.exitStack = Arrays.copyOf(currentStack, currentStackSize);
+		if (block.exitLocals.length != locals.length) block.exitLocals = locals.clone();
+		else System.arraycopy(locals, 0, block.exitLocals, 0, locals.length);
+
+		if (block.exitStack.length != stackSize) block.exitStack = Arrays.copyOf(stack, stackSize);
+		else System.arraycopy(stack, 0, block.exitStack, 0, stackSize);
+
 		block.reachable = true;
 	}
 
@@ -248,7 +269,8 @@ public class FrameVisitor extends SizeVisitor {
 		}
 	}
 
-	private static Var2 @NotNull [] compressLocals(Var2[] locals, List<Var2> tmpLocals) {
+	@NotNull
+	private static Var2[] compressLocals(Var2[] locals, List<Var2> tmpLocals) {
 		int localSize = 0;
 		for (int j = 0; j < locals.length;) {
 			Var2 item = locals[j++];
@@ -640,13 +662,13 @@ public class FrameVisitor extends SizeVisitor {
 			if (method.name().equals("<init>") && (pop.type == T_UNINITIAL_THIS || pop.type == T_UNINITIAL)) {
 				if (pop.type == T_UNINITIAL_THIS) instance.owner = this.method.owner();
 
-				for (int i = 0; i < currentLocals.length; i++) {
-					Var2 x = currentLocals[i];
-					if (x == pop) currentLocals[i] = instance;
+				for (int i = 0; i < locals.length; i++) {
+					Var2 x = locals[i];
+					if (x == pop) locals[i] = instance;
 				}
-				for (int i = 0; i < currentStackSize; i++) {
-					Var2 x = currentStack[i];
-					if (x == pop) currentStack[i] = instance;
+				for (int i = 0; i < stackSize; i++) {
+					Var2 x = stack[i];
+					if (x == pop) stack[i] = instance;
 				}
 			}
 		}
@@ -681,22 +703,22 @@ public class FrameVisitor extends SizeVisitor {
 	}
 
 	private Var2 get(int i) {
-		if (i >= currentLocals.length) throw new FastFailException("未定义的变量#"+i);
-		Var2 item = currentLocals[i];
+		if (i >= locals.length) throw new FastFailException("未定义的变量#"+i);
+		Var2 item = locals[i];
 		if (item == null) throw new FastFailException("未定义的变量#"+i);
 		return item;
 	}
 	private void set(int i, Var2 type) {
-		if (i >= currentLocals.length) currentLocals = Arrays.copyOf(currentLocals, i+1);
-
-		Var2 prev = currentLocals[i];
-		currentLocals[i] = type;
 		if (isDual(type)) set(i+1, SECOND);
+		if (i >= locals.length) locals = Arrays.copyOf(locals, i+1);
+
+		Var2 prev = locals[i];
+		locals[i] = type;
 		if (prev == null || prev == type) return;
 
 		if (isDual(prev) && !isDual(type)) {
-			assert currentLocals[i+1] == SECOND;
-			currentLocals[i+1] = TOP;
+			assert locals[i+1] == SECOND;
+			locals[i+1] = TOP;
 		}
 
 		// 对于任何一个在异常处理器[startBci,endBci]之间的基本块，记录每一个变量slot被assign时的类型，如果与start之前的状态不符，那么在异常处理器中它就是TOP类型
@@ -722,18 +744,18 @@ public class FrameVisitor extends SizeVisitor {
 		return item;
 	}
 	private Var2 pop() {
-		if (currentStackSize == 0) throw new FastFailException("Attempt to pop empty stack.");
-		var item = currentStack[--currentStackSize];
-		currentStack[currentStackSize] = null;
+		if (stackSize == 0) throw new FastFailException("Attempt to pop empty stack.");
+		var item = stack[--stackSize];
+		stack[stackSize] = null;
 		return item;
 	}
 
 	private void push(byte type) {push(of(type, null));}
 	private void push(String owner) {push(new Var2(T_REFERENCE, owner));}
 	private void push(Var2 type) {
-		if (currentStackSize >= currentStack.length)
-			currentStack = Arrays.copyOf(currentStack, currentStack.length+4);
-		currentStack[currentStackSize++] = type;
+		if (stackSize >= stack.length)
+			stack = Arrays.copyOf(stack, stack.length+4);
+		stack[stackSize++] = type;
 	}
 	// endregion
 	// region Frame writing

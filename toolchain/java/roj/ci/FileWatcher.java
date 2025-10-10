@@ -28,7 +28,7 @@ import static roj.ci.MCMake.BASE;
  */
 final class FileWatcher extends IFileWatcher implements Consumer<WatchKey> {
 	private static final class X {
-		private Object _next;
+		private X _next;
 
 		WatchKey key;
 		final Project owner;
@@ -56,8 +56,8 @@ final class FileWatcher extends IFileWatcher implements Consumer<WatchKey> {
 
 	public FileWatcher() throws IOException {
 		watcher = IOUtil.syncWatchPoll("文件修改监控", this);
-		XashMap.Builder<WatchKey, X> builder = XashMap.noCreation(X.class, "key", "_next", Hasher.identity());
-		actions = builder.create();
+		XashMap.Template<WatchKey, X> template = XashMap.forType(WatchKey.class, X.class).hasher(Hasher.identity()).build();
+		actions = template.create();
 		listeners = new HashMap<>();
 		via = new X();
 		actions.add(via);
@@ -101,18 +101,14 @@ final class FileWatcher extends IFileWatcher implements Consumer<WatchKey> {
 					break loop;
 				}
 				case "ENTRY_MODIFY", "ENTRY_CREATE", "ENTRY_DELETE": {
-					String id = key.watchable().toString()+File.separatorChar+event.context();
-					if (new File(id).isDirectory()) break;
-					/*if (handler.no == ID_LIB) {
-						MCMake.EVENT_BUS.post(new LibraryModifiedEvent(handler.owner));
-						break loop;
-					} else */{
-						if (handler.no == ID_SRC && !id.endsWith(".java")) continue;
+					String pathname = key.watchable().toString()+File.separatorChar+event.context();
+					if (new File(pathname).isDirectory()) break;
+					if (handler.no == ID_SRC && !pathname.endsWith(".java")) continue;
 
-						// 总是添加，不管是否删除
-						synchronized (s) {
-							s.add(id);
-						}
+					handler.owner.fileChanged(pathname);
+					// 总是添加，不管是否删除
+					synchronized (s) {
+						s.add(pathname);
 					}
 				}
 			}
@@ -134,7 +130,7 @@ final class FileWatcher extends IFileWatcher implements Consumer<WatchKey> {
 				}
 			}
 		} else {
-			Project.fileChanged(handler.owner);
+			handler.owner.fileChanged();
 		}
 	}
 

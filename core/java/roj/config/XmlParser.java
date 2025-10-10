@@ -113,6 +113,7 @@ public class XmlParser extends TextParser {
 			if (w.type() != tag_start) {
 				if (w.type() == COMMENT) {
 					emitter.comment(w.text());
+					w = next();
 					continue;
 				}
 

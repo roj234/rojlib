@@ -495,7 +495,7 @@ public class HashMap<K, V> extends AbstractMap<K, V> implements FindMap<K, V>, _
 
 	private boolean treeify(K key, int loop) {
 		AbstractEntry<K, V> entry;
-		if (hasher != Hasher.defaul()) Logger.FALLBACK.warn("Custom hasher "+hasher+"(A "+hasher.getClass().getName()+") generate many("+loop+") hash collisions for "+ key.getClass().getName(), new Throwable());
+		if (hasher != Hasher.defaul()) Logger.FALLBACK.warn("Custom hasher "+hasher+"(A "+hasher.getClass().getName()+") generate many("+loop+") hash collisions for "+key.getClass().getName(), new Throwable());
 		if (!acceptTreeNode()) return false;
 
 		AbstractEntry<K, V>[] arr = Helpers.cast(new AbstractEntry<?,?>[MathUtils.nextPowerOfTwo(loop +1)]);

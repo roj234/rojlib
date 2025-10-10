@@ -11,19 +11,19 @@ import java.util.List;
  * @author Roj234
  * @since 2025/09/03 4:20
  */
-public class AdvanceCompress implements Processor {
+public class AdvanceCompress implements Plugin {
 	@Override
 	public String name() {return "删除私有静态常量";}
 
 	@Override
-	public void afterCompilePre(BuildContext ctx) {
+	public void process(BuildContext ctx) {
 		List<Context> classes = ctx.getChangedClasses();
 		for (int i = 0; i < classes.size(); i++) {
 			Context ctx1 = classes.get(i);
 			List<FieldNode> fields = ctx1.getData().fields();
 			for (int j = fields.size() - 1; j >= 0; j--) {
 				FieldNode field = fields.get(j);
-				if (field.getAttribute("ConstantValue") != null && (field.modifier&Opcodes.ACC_STATIC) != 0) {
+				if (field.getAttribute("ConstantValue") != null && (field.modifier&(Opcodes.ACC_STATIC|Opcodes.ACC_PUBLIC)) == Opcodes.ACC_STATIC) {
 					fields.remove(j);
 				}
 			}

@@ -6,6 +6,7 @@ import roj.archive.ArchiveFile;
 import roj.archive.ArchiveWriter;
 import roj.crypt.CRC32;
 import roj.io.IOUtil;
+import roj.io.MBOutputStream;
 import roj.io.source.CompositeSource;
 import roj.io.source.FileSource;
 import roj.io.source.Source;
@@ -15,7 +16,6 @@ import roj.util.DynByteBuf;
 
 import java.io.File;
 import java.io.IOException;
-import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.zip.Deflater;
 import java.util.zip.ZipEntry;
@@ -27,7 +27,7 @@ import static roj.archive.zip.ZipArchive.*;
  * @author solo6975
  * @since 2021/10/5 13:54
  */
-public class ZipFileWriter extends OutputStream implements ArchiveWriter {
+public class ZipFileWriter extends MBOutputStream implements ArchiveWriter {
 	private Source file;
 	private final Deflater def;
 	private final ByteList CENs = new ByteList(), buf = new ByteList();
@@ -188,15 +188,6 @@ public class ZipFileWriter extends OutputStream implements ArchiveWriter {
 
 		ZipArchive.writeLOC(file, buf, ze);
 		dataBeginOffset = file.position();
-	}
-
-	private byte[] b1;
-	@Override
-	@Deprecated
-	public final void write(int b) throws IOException {
-		if (b1 == null) b1 = new byte[1];
-		b1[0] = (byte) b;
-		write(b1,0,1);
 	}
 
 	@Override

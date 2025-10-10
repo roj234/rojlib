@@ -1,16 +1,23 @@
 package roj.asm.cp;
 
+import roj.optimizer.FastVarHandle;
+import roj.reflect.Telescope;
 import roj.text.CharList;
 import roj.text.FastCharset;
 import roj.text.Tokenizer;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
 
+import java.lang.invoke.VarHandle;
+
 /**
  * @author Roj234
  * @since 2021/5/29 17:16
  */
+@FastVarHandle
 public final class CstUTF extends Constant {
+	// concurrent | TODO pre-process attributes in Lava Compiler
+	private static final VarHandle DATA = Telescope.lookup().findVarHandle(CstUTF.class, "data", Object.class);
 	Object data;
 
 	CstUTF() {}
@@ -18,21 +25,33 @@ public final class CstUTF extends Constant {
 	CstUTF(String b) {data = b;ConstantPool.verifyUtf(b);}
 
 	public String str() {
-		block: {
+		Object data = this.data; // non-volatile read
+
+		while (true) {
 			DynByteBuf in;
-			if (data.getClass() == byte[].class) {
-				in = ByteList.wrap((byte[]) data);
-			} else if (data instanceof DynByteBuf) {
-				in = (DynByteBuf) data;
-			} else {
-				break block;
+
+			if (data != null) {
+				if (data.getClass() == byte[].class) {
+					in = ByteList.wrap((byte[]) data);
+				} else if (data instanceof DynByteBuf) {
+					in = (DynByteBuf) data;
+				} else {
+					break;
+				}
+
+				if (DATA.compareAndSet(this, data, null)) {
+					var out = new CharList();
+					int rPos = in.rIndex;
+					FastCharset.UTF8().decodeFixedIn(in, in.readableBytes(), out);
+					in.rIndex = rPos;
+					data = out.toStringAndFree();
+
+					DATA.setVolatile(this, data);
+				}
 			}
 
-			var out = new CharList();
-			int rPos = in.rIndex;
-			FastCharset.UTF8().decodeFixedIn(in, in.readableBytes(), out);
-			in.rIndex = rPos;
-			data = out.toStringAndFree();
+			Thread.onSpinWait();
+			data = DATA.getVolatile(this);
 		}
 
 		return data.toString();

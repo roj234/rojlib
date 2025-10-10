@@ -17,7 +17,7 @@ import roj.asmx.injector.CodeWeaver;
 import roj.asmx.injector.WeaveException;
 import roj.asmx.mapper.Mapper;
 import roj.ci.annotation.IndirectReference;
-import roj.ci.plugin.Processor;
+import roj.ci.plugin.Plugin;
 import roj.collect.*;
 import roj.gui.Profiler;
 import roj.io.IOUtil;
@@ -37,7 +37,7 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
 
-import static roj.ci.MCMake.LOGGER;
+import static roj.ci.MCMake.log;
 
 /**
  * Manages the build context for a project, handling incremental compilation, resource tracking,
@@ -48,7 +48,23 @@ import static roj.ci.MCMake.LOGGER;
  * @since 3.6
  */
 public final class BuildContext {
+	static final FindSet<Dependency> ALL_DEPENDENCIES = new HashSet<>();
+	public static Dependency internDependency(Dependency dep) {
+		synchronized (ALL_DEPENDENCIES) {
+			return ALL_DEPENDENCIES.intern(dep);
+		}
+	}
+	public static void closeAllDependencies() {
+		synchronized (ALL_DEPENDENCIES) {
+			for (Dependency dependency : ALL_DEPENDENCIES) {
+				IOUtil.closeSilently(dependency);
+			}
+		}
+		ALL_DEPENDENCIES.clear();
+	}
+
 	static final Set<Dependency> ALL_OPENED_DEPENDENCIES = Collections.newSetFromMap(new ConcurrentHashMap<>());
+
 	void openDependencies() throws IOException {
 		for (Dependency dep : project.getCompileDependencies()) {
 			if (ALL_OPENED_DEPENDENCIES.add(dep)) {
@@ -56,10 +72,9 @@ public final class BuildContext {
 			}
 		}
 	}
-	// 目前没有用处，预留
 	static void cleanup() {
 		for (Dependency dep : ALL_OPENED_DEPENDENCIES) {
-			IOUtil.closeSilently(dep);
+			dep.unlock();
 		}
 		ALL_OPENED_DEPENDENCIES.clear();
 	}
@@ -96,7 +111,7 @@ public final class BuildContext {
 	 */
 	INC_UPDATE = 3;
 
-	int increment;
+	int incrementLevel;
 
 	/**
 	 * The type of incremental build to perform. Must be one of {@link #INC_FULL},
@@ -110,13 +125,13 @@ public final class BuildContext {
 	 * @since 3.8
 	 */
 	@MagicConstant(intValues = {INC_FULL, INC_REBUILD, INC_LOAD, INC_UPDATE})
-	public int getIncrement() {return increment;}
+	public int getIncrementLevel() {return incrementLevel;}
 
 	/**
 	 * The list of registered processors for this build, loaded from the workspace.
 	 * Processors can hook into various stages of the build process.
 	 */
-	private final List<Processor> processors;
+	private final List<Plugin> plugins;
 
 	/**
 	 * Constructs a new build context for the given project and incremental build type.
@@ -124,23 +139,24 @@ public final class BuildContext {
 	 * Sets the project as currently compiling with this context.
 	 *
 	 * @param p the project to build
-	 * @param increment the initial incremental build type
+	 * @param incrementLevel the initial incremental build type
 	 */
-	public BuildContext(Project p, int increment) {
+	public BuildContext(Project p, int incrementLevel) {
 		this.project = p;
 		this.lastBuildTime = p.unmappedJar.lastModified();
 
-		this.processors = p.workspace.getProcessors();
+		this.plugins = p.workspace.getPlugins();
 		this.resources = new Changeset(project.resPath, project.getResPrefix(), FileWatcher.ID_RES, -1);
 		this.sources = new JavaChangeset(project.srcPath);
 
-		if (increment == INC_FULL) {
+		if (incrementLevel == INC_FULL) {
 			project.persistentState = new PersistentState();
+			project.clearPersistentState();
 		} else if (project.persistentState == null) {
-			increment = Math.min(increment, INC_LOAD);
+			incrementLevel = Math.min(incrementLevel, INC_LOAD);
 			project.persistentState = new PersistentState();
 		}
-		this.increment = increment;
+		this.incrementLevel = incrementLevel;
 
 		p.compiling = this;
 	}
@@ -181,7 +197,7 @@ public final class BuildContext {
 
 	/**
 	 * A sealed interface representing a changeset of files, either resources or sources.
-	 * Tracks changed and removed files based on the current build {@link #increment} level.
+	 * Tracks changed and removed files based on the current build {@link #incrementLevel} level.
 	 * Changes are detected via file watchers for incremental builds or full scans otherwise.
 	 */
 	public sealed class Changeset {
@@ -201,7 +217,7 @@ public final class BuildContext {
 
 		/**
 		 * Returns the list of changed files in this changeset.
-		 * For incremental builds ({@link #increment} > {@link #INC_REBUILD}), uses file watcher data if available;
+		 * For incremental builds ({@link #incrementLevel} > {@link #INC_REBUILD}), uses file watcher data if available;
 		 * otherwise, performs a full scan of the base path, filtering by last modified time against {@link #lastBuildTime}.
 		 *
 		 * @return the list of changed files
@@ -211,12 +227,13 @@ public final class BuildContext {
 		@UnmodifiableView
 		public List<File> getChanged() throws IOException {
 			if (changed == null) {
-				int incr = overrideIncrement < 0 ? increment : overrideIncrement;
+				int incr = overrideIncrement < 0 ? incrementLevel : overrideIncrement;
 				if (incr > INC_REBUILD) {
+					removed = new HashSet<>();
+
 					Set<String> modified = MCMake.watcher.getModified(project, watcherSlot);
 					if (!modified.contains(null)) {
 						changed = new ArrayList<>();
-						removed = new HashSet<>();
 
 						synchronized (modified) {
 							for (String pathname : modified) {
@@ -226,6 +243,10 @@ public final class BuildContext {
 							}
 						}
 						return changed;
+					}
+
+					for (String pathname : project.getDeleted(watcherSlot)) {
+						removed.add(pathname.substring(prefixLength).replace(File.separatorChar, '/'));
 					}
 				}
 
@@ -260,19 +281,19 @@ public final class BuildContext {
 			Project p = project;
 
 			loadDep:
-			if (increment != INC_FULL) {
+			if (incrementLevel != INC_FULL) {
 				if (p.dependencyGraph.isEmpty()) {
 					Profiler.startSection("memoryCacheConstruct");
 					ZipArchive za;
 					try {
 						za = p.unmappedWriter.getArchive();
 					} catch (Exception e) {
-						LOGGER.error("Failed to construct memory cache; force full build", e);
+						log.error("Failed to construct memory cache; force full build", e);
 
 						p.unmappedWriter.begin(false);
 						p.unmappedWriter.end();
 
-						increment = INC_FULL;
+						incrementLevel = INC_FULL;
 						break loadDep;
 					}
 					for (ZEntry ze : za.entries()) {
@@ -283,19 +304,20 @@ public final class BuildContext {
 					p.annotationRepo.loadCacheOrAdd(za);
 					p.unmappedWriter.close();
 					if (!p.dependencyGraph.isEmpty()) {
-						LOGGER.debug("Constructed memory cache from file.");
+						log.debug("Constructed memory cache from file.");
 					}
 					Profiler.endSection();
 				}
 			}
 
 			useFastpath: {
-				if (increment > INC_REBUILD) {
+				if (incrementLevel > INC_REBUILD) {
+					removed = new HashSet<>();
+					changeDeps = new ArrayList<>();
+
 					Set<String> modified = MCMake.watcher.getModified(project, watcherSlot);
 					if (!modified.contains(null)) {
 						changed = new ArrayList<>();
-						changeDeps = new ArrayList<>();
-						removed = new HashSet<>();
 
 						synchronized (modified) {
 							for (String pathname : modified) {
@@ -305,19 +327,23 @@ public final class BuildContext {
 
 						break useFastpath;
 					}
+
+					for (String pathname : project.getDeleted(watcherSlot)) {
+						incrementChange(new File(pathname));
+					}
 				}
 
-				if (increment == INC_FULL) {
+				if (incrementLevel == INC_FULL) {
 					p.dependencyGraph.clear();
 					p.annotationRepo.getAnnotations().clear();
 					p.structureRepo.clear();
 
-					changed = IOUtil.listFiles(basePath, file -> IOUtil.extensionName(file.getName()).equals("java"));
+					changed = IOUtil.listFiles(basePath, JavaChangeset::isCompilable);
 				} else {
 					changed = new ArrayList<>();
 					changeDeps = new ArrayList<>();
 					IOUtil.listFiles(basePath, file -> {
-						boolean chosen = file.lastModified() >= lastBuildTime && IOUtil.extensionName(file.getName()).equals("java");
+						boolean chosen = file.lastModified() >= lastBuildTime && isCompilable(file);
 						if (chosen) incrementChange(file);
 						return false;
 					});
@@ -332,13 +358,13 @@ public final class BuildContext {
 				structureChanged.add(className);
 			}
 
-			if (increment != INC_FULL) {
+			if (incrementLevel != INC_FULL) {
 				for (var project : p.getProjectDependencies()) {
 					BuildContext state = project.compiling;
 					if (state != null) {
 						var directChanges = state.sources.structureChanged;
 						if (!directChanges.isEmpty()) {
-							LOGGER.trace("DepGraph propagate[{}]", project.getName());
+							log.trace("DepGraph propagate[{}]", project.getName());
 							for (var className : directChanges) {
 								addDependency(className, srcPrefix);
 							}
@@ -355,10 +381,14 @@ public final class BuildContext {
 			structureDiffHandles = p.structureRepo.applyDiff(changedClasses);
 
 			if (changedClasses.size() > 0)
-				LOGGER.debug("Evicted {} from memory cache.", changedClasses.size());
+				log.debug("Evicted {} from memory cache.", changedClasses.size());
 			if (structureDiffHandles.size() > 0)
-				LOGGER.debug("Got {} structure diff handles.", structureDiffHandles.size());
+				log.debug("Got {} structure diff handles.", structureDiffHandles.size());
 			return changed;
+		}
+
+		static boolean isCompilable(File file) {
+			return IOUtil.extensionName(file.getName()).equals("java");
 		}
 
 		private void incrementChange(File file) {
@@ -377,12 +407,12 @@ public final class BuildContext {
 		}
 
 		private void addDependency(String className, String srcPrefix) {
-			LOGGER.trace(" Query: {}", className);
+			log.trace(" Query: {}", className);
 			for (String reference : project.dependencyGraph.get(className)) {
 				var path = srcPrefix + File.separatorChar + reference + ".java";
 				File ref = new File(path);
 				if (ref.isFile()) {
-					LOGGER.trace("  Reference: {}", reference);
+					log.trace("  Reference: {}", reference);
 					if (changedClasses.add(reference)) {
 						changeDeps.add(ref);
 					}
@@ -400,8 +430,8 @@ public final class BuildContext {
 	 * @return the wrapped input stream
 	 */
 	InputStream wrapResource(String path, InputStream in) {
-		for (int i = 0; i < processors.size(); i++) {
-			in = processors.get(i).wrapResource(path, in);
+		for (int i = 0; i < plugins.size(); i++) {
+			in = plugins.get(i).wrapResource(path, in);
 		}
 		return in;
 	}
@@ -411,15 +441,17 @@ public final class BuildContext {
 	 *
 	 * @param options the compiler options
 	 * @param sources the list of source files
-	 * @param increment the current increment level
 	 * @return the adjusted increment level
 	 */
-	int beforeCompile(ArrayList<String> options, List<File> sources, int increment) {
-		for (int i = 0; i < processors.size(); i++) {
-			increment = Math.min(processors.get(i).beforeCompile(options, sources, this), increment);
+	int beforeCompile(ArrayList<String> options, List<File> sources) {
+		for (int i = 0; i < plugins.size(); i++) {
+			Profiler.startSection("plugin["+plugins.get(i).name()+"]");
+			if (plugins.get(i).preProcess(options, sources, this)) {
+				incrementLevel = Math.min(INC_LOAD, incrementLevel);
+			}
+			Profiler.endSection();
 		}
-		this.increment = increment;
-		return increment;
+		return incrementLevel;
 	}
 
 	private List<Context> changedClasses;
@@ -442,8 +474,8 @@ public final class BuildContext {
 			this.isChanged = needWriteIfOnLoad;
 		}
 	}
-	private static final XashMap.Builder<Context, ExtClass> EXTERNAL_CLASS_INFO_BUILDER = XashMap.noCreation(ExtClass.class, "classInfo", "_next", Hasher.identity());
-	private final XashMap<Context, ExtClass> externalClasses = EXTERNAL_CLASS_INFO_BUILDER.create();
+	private static final XashMap.Template<Context, ExtClass> EXTERNAL_CLASS_INFO_TEMPLATE = XashMap.forType(Context.class, ExtClass.class).key("classInfo").hasher(Hasher.identity()).build();
+	private final XashMap<Context, ExtClass> externalClasses = EXTERNAL_CLASS_INFO_TEMPLATE.create();
 
 	/**
 	 * Set directly (a.k.a. not from dependencies) changed classes.
@@ -472,7 +504,7 @@ public final class BuildContext {
 	void addClass(Context context, @Nullable Project project, boolean needWriteIfOnLoad) {
 		if (project == null) changedClasses.add(context);
 		else {
-			externalClasses.add(new ExtClass(context, project, needWriteIfOnLoad && increment == INC_LOAD));
+			externalClasses.add(new ExtClass(context, project, needWriteIfOnLoad && incrementLevel == INC_LOAD));
 		}
 	}
 
@@ -491,18 +523,20 @@ public final class BuildContext {
 		}
 
 		Profiler.endStartSection("hook.pre");
-		for (int i = 0; i < processors.size(); i++) {
-			processors.get(i).afterCompilePre(this);
+		for (int i = 0; i < plugins.size(); i++) {
+			Profiler.startSection("plugin["+plugins.get(i).name()+"]");
+			plugins.get(i).process(this);
+			Profiler.endSection();
 		}
 
 		Profiler.endStartSection("transform");
 		try {
 			project.persistentState.runTransformers(classes);
 		} catch (TransformException e) {
-			LOGGER.error("Exception transforming classes", e);
+			log.error("Exception transforming classes", e);
 		}
 
-		if (increment == INC_LOAD) {
+		if (incrementLevel == INC_LOAD) {
 			ArrayList<Context> classes1 = classes instanceof ArrayList<Context> x ? x : new ArrayList<>(classes);
 
 			int originalSize = classes1.size();
@@ -522,8 +556,10 @@ public final class BuildContext {
 		byAnnotation = null;
 
 		Profiler.endStartSection("hook.post");
-		for (int i = 0; i < processors.size(); i++) {
-			processors.get(i).afterCompilePost(this);
+		for (int i = 0; i < plugins.size(); i++) {
+			Profiler.startSection("plugin["+plugins.get(i).name()+"]");
+			plugins.get(i).postProcess(this);
+			Profiler.endSection();
 		}
 
 		Profiler.endSection();
@@ -547,8 +583,8 @@ public final class BuildContext {
 				writer.set(entry.getKey(), (ExceptionalSupplier<ByteList, IOException>) entry.getValue(), buildStartTime);
 			}
 		}
-		LOGGER.debug("Write {} generated files for {}", generatedFiles.size(), project.getName());
-		if (generatedFiles.size() > 0) LOGGER.trace("{}", generatedFiles.keySet());
+		log.debug("Write {} generated files for {}", generatedFiles.size(), project.getName());
+		if (generatedFiles.size() > 0) log.trace("{}", generatedFiles.keySet());
 		return generatedFiles.size();
 	}
 
@@ -642,6 +678,22 @@ public final class BuildContext {
 	public boolean classesHaveChanged() {return (changedClasses.size()|removedClasses.size()) != 0;}
 
 	//region Plugin APIs
+	/**
+	 * Get artifact of current building project
+	 * @since 3.12
+	 */
+	public ZipOutput artifact() {return project.mappedWriter;}
+
+	/**
+	 * @since 3.12
+	 */
+	public <T> T getIncrementCache(TypedKey<T> key) {return (T) project.persistentState.data.get(key);}
+
+	/**
+	 * @since 3.12
+	 */
+	public <T> void setIncrementCache(TypedKey<T> key, T value) {project.persistentState.data.put(key, value);}
+
 	private final Map<String, Object> generatedFiles = new HashMap<>();
 	/**
 	 * Adds a generated file to the context, which will be written to the output archive during the build.
@@ -718,8 +770,8 @@ public final class BuildContext {
 			Set<AnnotatedElement> annotatedElements;
 			try {
 				annotatedElements = dependency.getAnnotations(this).annotatedBy(type);
-			} catch (IOException e) {
-				LOGGER.warn("Could not get annotations for " + dependency, e);
+			} catch (Exception e) {
+				log.warn("Could not get annotations for " + dependency, e);
 				continue;
 			}
 			annotatedElements.forEach(consumer);
@@ -761,6 +813,10 @@ public final class BuildContext {
 	public void removeClass(Context context) {
 		externalClasses.removeKey(context);
 		int i = changedClasses.indexOf(context);
+		if (i < 0) {
+			log.error("{} already removed", context);
+			return;
+		}
 		changedClasses.remove(i);
 		if (i < directChangedClasses) directChangedClasses--;
 	}
@@ -773,7 +829,7 @@ public final class BuildContext {
 	 * @return the processor instance, or {@code null} if not found
 	 */
 	@SuppressWarnings("unchecked")
-	public <T extends Processor> @Nullable T getProcessor(Class<T> type) {
-		return (T) Flow.of(processors).filter(p -> p.getClass() == type).findFirst().orElse(null);}
+	public <T extends Plugin> @Nullable T getProcessor(Class<T> type) {
+		return (T) Flow.of(plugins).filter(p -> p.getClass() == type).findFirst().orElse(null);}
 	//endregion
 }

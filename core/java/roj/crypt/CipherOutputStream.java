@@ -1,9 +1,10 @@
 package roj.crypt;
 
 import org.jetbrains.annotations.NotNull;
+import roj.io.BufferPool;
 import roj.io.Finishable;
 import roj.io.IOUtil;
-import roj.io.BufferPool;
+import roj.io.MBOutputStream;
 import roj.util.ByteList;
 import roj.util.Helpers;
 
@@ -15,7 +16,7 @@ import java.security.GeneralSecurityException;
  * @author Roj234
  * @since 2022/11/12 15:27
  */
-public class CipherOutputStream extends OutputStream implements Finishable {
+public class CipherOutputStream extends MBOutputStream implements Finishable {
 	static final int BUFFER_SIZE = 1024;
 
 	protected OutputStream out;
@@ -47,7 +48,6 @@ public class CipherOutputStream extends OutputStream implements Finishable {
 		}
 	}
 
-	public void write(int b) throws IOException {IOUtil.writeSingleByteHelper(this, b);}
 	public void write(@NotNull byte[] b, int off, int len) throws IOException {
 		if (out == null) throw new IOException("Stream closed");
 

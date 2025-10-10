@@ -6,7 +6,7 @@ import roj.collect.Hasher;
 import roj.config.NbtParser;
 import roj.config.mapper.ObjectMapper;
 import roj.config.mapper.Optional;
-import roj.io.ByteInputStream;
+import roj.io.XDataInputStream;
 import roj.plugins.minecraft.server.MinecraftServer;
 import roj.util.Helpers;
 import roj.util.JVM;
@@ -34,7 +34,7 @@ public final class Block {
 			var intern = new HashSet<>(Hasher.array(Object[].class));
 			_tmp = new HashSet<>();
 
-			var mdi = new ByteInputStream(in);
+			var mdi = new XDataInputStream(in);
 			int i = 0;
 			while (true) {
 				conv.reset();

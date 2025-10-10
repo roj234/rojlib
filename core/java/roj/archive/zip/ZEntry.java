@@ -58,7 +58,7 @@ public class ZEntry implements IntervalPartition.Range, ArchiveEntry, Cloneable 
 	char extraLenOfLOC;
 	byte EXTLenOfLOC;
 
-	private ZEntry next;
+	private ZEntry _next;
 
 	public ZEntry(String name) {
 		this.name = name;

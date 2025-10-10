@@ -72,9 +72,9 @@ public final class NbtEncoder implements ValueEmitter {
 			int utfExtra = s.length() * 2 / 3;
 			int numCn = 0;
 			for (int i = 0; i < s.length(); i++) {
-				if (FastCharset.GB18030().encodeSize(s.charAt(i)) == 2) {
+				if (FastCharset.UTF16LE().encodeSize(s.charAt(i)) == 2) {
 					if (++numCn > utfExtra) {
-						onValue(X_GB18030_STRING);
+						onValue(X_UTF16LE_STRING);
 						out.putVUIGB(s);
 						return;
 					}

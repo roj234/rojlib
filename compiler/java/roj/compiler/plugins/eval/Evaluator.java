@@ -3,7 +3,6 @@ package roj.compiler.plugins.eval;
 import roj.asm.*;
 import roj.asm.insn.CodeWriter;
 import roj.asm.insn.Label;
-import roj.asm.insn.SwitchBlock;
 import roj.asm.type.Type;
 import roj.asm.type.TypeHelper;
 import roj.asmx.AnnotatedElement;
@@ -78,8 +77,7 @@ public interface Evaluator {
 		c.insn(ALOAD_2);
 		c.insn(ASTORE_0);
 		c.insn(ILOAD_1);
-		var segment = SwitchBlock.ofSwitch(TABLESWITCH);
-		c.addSegment(segment);
+		var segment = c.tableSwitch();
 
 		for (int i = 0; i < invoker.size(); i++) {
 			Label label = c.label();

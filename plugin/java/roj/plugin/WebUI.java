@@ -14,7 +14,7 @@ import roj.util.DynByteBuf;
 import java.awt.event.KeyEvent;
 import java.io.IOException;
 
-import static roj.plugin.PanTweaker.CONFIG;
+import static roj.plugin.Jocker.CONFIG;
 import static roj.ui.CommandNode.literal;
 
 /**

@@ -8,9 +8,9 @@ import roj.collect.IntervalPartition.Range;
 import roj.io.Finishable;
 import roj.io.IOUtil;
 import roj.io.source.Source;
-import roj.text.logging.Logger;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
+import roj.util.FastFailException;
 import roj.util.Helpers;
 import roj.util.function.ExceptionalSupplier;
 
@@ -153,6 +153,7 @@ public final class RoWriteArchive extends RoArchive {
 
 		ByteList bw = new ByteList(2048);
 		Deflater def = new Deflater(level, true);
+		FastFailException dataExceptions = null;
 
 		for (Iterator<EntryMod> itr = modified.iterator(); itr.hasNext(); ) {
 			EntryMod mod = itr.next();
@@ -179,7 +180,8 @@ public final class RoWriteArchive extends RoArchive {
 				try {
 					data = ((ExceptionalSupplier<?,IOException>) data).get();
 				} catch (Exception ex) {
-					Logger.FALLBACK.error("无法保存{}的数据", ex, entry.name);
+					if (dataExceptions == null) dataExceptions = new FastFailException("无法保存"+entry.getName()+"的数据", ex);
+					else dataExceptions.addSuppressed(ex);
 					continue;
 				}
 			}
@@ -237,8 +239,10 @@ public final class RoWriteArchive extends RoArchive {
 					IOUtil.copyStream(in, out);
 				}
 			} catch (Throwable ex) {
-				def.end();
-				Logger.FALLBACK.error("无法保存{}的数据", ex, entry.name);
+				def.reset();
+
+				if (dataExceptions == null) dataExceptions = new FastFailException("无法保存"+entry.getName()+"的数据", ex);
+				else dataExceptions.addSuppressed(ex);
 			} finally {
 				in.close();
 			}
@@ -278,5 +282,7 @@ public final class RoWriteArchive extends RoArchive {
 			node.map = map;
 			node.entries = entries;
 		}
+
+		if (dataExceptions != null) throw dataExceptions;
 	}
 }

@@ -6,6 +6,7 @@ import roj.archive.zip.ZipFileWriter;
 import roj.asm.AsmCache;
 import roj.asm.ClassDefinition;
 import roj.asm.ClassNode;
+import roj.collect.ArrayList;
 import roj.compiler.api.Compiler;
 import roj.compiler.api.CompilerPlugin;
 import roj.compiler.api.Processor;
@@ -24,7 +25,6 @@ import java.io.IOException;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
 import java.nio.charset.Charset;
-import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -36,7 +36,7 @@ public final class Lavac extends LavaCompiler {
 	public static String getCompileTime() {return DateFormat.toLocalDateTime(System.currentTimeMillis());}
 	public static String getCurrentTime() {return DateFormat.toLocalDateTime(System.currentTimeMillis());}
 
-	public static final String VERSION = "1.1.4-alpha (compiled on "+getCompileTime()+")";
+	public static final String VERSION = "1.2.0-alpha (compiled on "+getCompileTime()+")";
 
 	private Charset charset;
 	private final ArrayList<CompileUnit> allFiles = new ArrayList<>();
@@ -208,9 +208,7 @@ public final class Lavac extends LavaCompiler {
 
 		File dst = bin == null ? new File("output.jar") : new File(bin);
 
-		CompileContext.set(compiler.createContext());
 		boolean ok = compiler.compile(dst);
-		CompileContext.set(null);
 		reporter.summary();
 
 		if (ok) {

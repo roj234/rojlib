@@ -1,12 +1,14 @@
 package roj.collect;
 
 import org.intellij.lang.annotations.MagicConstant;
-import roj.reflect.Unsafe;
+import roj.optimizer.FastVarHandle;
+import roj.reflect.Telescope;
 import roj.util.ArrayCache;
 import roj.util.Helpers;
 import roj.util.Multisort;
 import roj.util.NativeArray;
 
+import java.lang.invoke.VarHandle;
 import java.util.*;
 import java.util.function.Function;
 
@@ -17,6 +19,7 @@ import static roj.reflect.Unsafe.U;
  *
  * @since 2024/1/26 05:23
  */
+@FastVarHandle
 public class MatchMap<K extends Comparable<K>, V> {
 	public static abstract class AbstractEntry<V> {
 		public V value;
@@ -228,22 +231,23 @@ public class MatchMap<K extends Comparable<K>, V> {
 
 	public void clear() { size = 0; map.clear(); }
 
-	private static final long CACHE_OFFSET = Unsafe.fieldOffset(MatchMap.class, "stateCache");
-	private static class State {
+	private static final class State {
 		final PosList a = new PosList(), b = new PosList();
 		final ArrayList<BitSet> aflag = new ArrayList<>(), bflag = new ArrayList<>();
 	}
-	private State stateCache;
-	private State getStateCache() {
-		var stateCache = (State) U.getAndSetReference(this, CACHE_OFFSET, null);
+
+	private static final VarHandle CACHE = Telescope.lookup().findVarHandle(MatchMap.class, "cache", State.class);
+	private State cache;
+	private State getCache() {
+		var stateCache = (State) CACHE.getAndSet(this, null);
 		return stateCache == null ? new State() : stateCache;
 	}
-	private void setStateCache(State state) {
+	private void setCache(State state) {
 		state.a.clear();
 		state.b.clear();
 		state.aflag.clear();
 		state.bflag.clear();
-		U.compareAndSetReference(this, CACHE_OFFSET, null, state);
+		CACHE.compareAndSet(this, null, state);
 	}
 
 	public static final byte MATCH_SHORTER = 1, MATCH_LONGER = 2, MATCH_CONTINUOUS = 4;
@@ -304,7 +308,7 @@ public class MatchMap<K extends Comparable<K>, V> {
 
 		var o = needle.get(bestStart);
 
-		var tmp = getStateCache();
+		var tmp = getCache();
 		var prev = tmp.a;
 		ArrayList<BitSet> prevBits = tmp.aflag, nextBits = tmp.bflag;
 
@@ -419,7 +423,7 @@ public class MatchMap<K extends Comparable<K>, V> {
 			out.add((Entry<V>) entry);
 		}
 
-		setStateCache(tmp);
+		setCache(tmp);
 		return out;
 	}
 
@@ -450,7 +454,7 @@ public class MatchMap<K extends Comparable<K>, V> {
 	public <COL extends Collection<Entry<V>>> COL matchOrdered(List<?> needle, @MagicConstant(flags = {MATCH_CONTINUOUS, MATCH_SHORTER, MATCH_LONGER}) final int flag, COL out) {
 		if (out.size() < 2) return matchUnordered(needle, flag, out);
 
-		var tmp = getStateCache();
+		var tmp = getCache();
 		List<PosList> zero = Helpers.cast(tmp.aflag);
 
 		Object o = needle.get(0);
@@ -466,7 +470,7 @@ public class MatchMap<K extends Comparable<K>, V> {
 		}
 
 		if (zero.isEmpty()) {
-			setStateCache(tmp);
+			setCache(tmp);
 			return out;
 		}
 
@@ -553,7 +557,7 @@ public class MatchMap<K extends Comparable<K>, V> {
 			}
 		}
 
-		setStateCache(tmp);
+		setCache(tmp);
 		return out;
 	}
 }

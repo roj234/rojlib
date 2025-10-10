@@ -13,7 +13,7 @@ import roj.io.source.BufferedSource;
 import roj.io.source.Source;
 import roj.io.source.SourceInputStream;
 import roj.optimizer.FastVarHandle;
-import roj.reflect.Handles;
+import roj.reflect.Telescope;
 import roj.util.ArrayCache;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
@@ -39,9 +39,9 @@ import java.util.zip.ZipException;
 @FastVarHandle
 public sealed class ZipFile implements ArchiveFile permits ZipArchive {
 	Source r, cache;
-	static final VarHandle CACHE = Handles.lookup().findVarHandle(ZipFile.class, "cache", Source.class);
+	static final VarHandle CACHE = Telescope.lookup().findVarHandle(ZipFile.class, "cache", Source.class);
 
-	static final XashMap.Builder<String, ZEntry> ENTRY_BUILDER = XashMap.noCreation(ZEntry.class, "name", "next");
+	static final XashMap.Template<String, ZEntry> ENTRY_TEMPLATE = XashMap.forType(String.class, ZEntry.class).key("name").build();
 
 	static final XashMap<Source, CacheNode> ARCHIVES = WeakCache.shape(CacheNode.class).create();
 	static final class CacheNode extends WeakCache<Source> {
@@ -112,6 +112,7 @@ public sealed class ZipFile implements ArchiveFile permits ZipArchive {
 		if (node == null) {
 			reload();
 		} else {
+			System.out.println("Zip Cache Reuse "+r);
 			entries = node.entries;
 			namedEntries = node.namedEntries;
 
@@ -157,7 +158,7 @@ public sealed class ZipFile implements ArchiveFile permits ZipArchive {
 			buf = null;
 		}
 
-		var namedEntries = ENTRY_BUILDER.createSized(entries.size());
+		var namedEntries = ENTRY_TEMPLATE.createSized(entries.size());
 
 		var node = new CacheNode(r, ARCHIVES);
 		node.namedEntries = namedEntries;
@@ -519,6 +520,11 @@ public sealed class ZipFile implements ArchiveFile permits ZipArchive {
 		if (!CACHE.compareAndSet(this, null, source)) {
 			IOUtil.closeSilently(source);
 		}
+	}
+
+	public void closeCache() {
+		Source src = (Source) CACHE.getAndSet(this, null);
+		IOUtil.closeSilently(src);
 	}
 
 	private void validateEntry(Source r, ZEntry entry) throws IOException {

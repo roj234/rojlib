@@ -83,9 +83,9 @@ auto_compile: ["my_first_mod"] # 自动编译的项目列表，可选
           my_custom_var: "some_value"
           fmd:maven:central: "https://maven.fabricmc.net;https://repo1.maven.org/maven2/"
         ```
--   `variable_replace_in` (字符串列表, 可选)：
+-   `variableReplaceContext` (字符串列表, 可选)：
     -   **描述**：需要进行变量替换的文件路径模式集合。MCMake 会扫描这些路径下匹配的文件，并将其中的 `${variable}` 格式的字符串替换为实际变量值。
-    -   **示例**：`variable_replace_in: ["**.java", "resources/*.json"]`
+    -   **示例**：`variableReplaceContext: ["**.java", "resources/*.json"]`
 
 ### 2. `projects` (列表)
 
@@ -136,9 +136,9 @@ auto_compile: ["my_first_mod"] # 自动编译的项目列表，可选
 -   `variables` (映射表, 可选)：
     -   **描述**：项目专属的自定义变量。会覆盖工作空间中同名变量，并可用于模板替换。
     -   **请参阅上文工作空间 `variables` 部分的详细描述。**
--   `variable_replace_in` (字符串列表, 可选)：
+-   `variableReplaceContext` (字符串列表, 可选)：
     -   **描述**：项目专属的需要进行变量替换的文件路径模式集合。
-    -   **请参阅上文工作空间 `variable_replace_in` 部分的详细描述。**
+    -   **请参阅上文工作空间 `variableReplaceContext` 部分的详细描述。**
 -   `shade` (映射表, 可选)：
     -   **描述**：打包时需要重命名的文件路径模式映射。键是查找模式，值是替换字符串。
         -   以 `/` 开头的键会被视为正则表达式，替换字符串中可以使用 `$1`, `$2` 等捕获组。

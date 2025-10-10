@@ -61,9 +61,13 @@ final class Literal extends Expr {
 	public void write(MethodWriter cw, @NotNull TypeCast.Cast cast) {
 		switch (cast.type) {
 			case TypeCast.LOSSY, TypeCast.NUMBER_UPCAST, TypeCast.BOXING -> {
-				String name = cast.getOp1() == 0 ? "III" : Opcodes.toString(cast.getOp1());
-				assert name.length() == 3;
-				writePrimitive(cw, Math.max(Type.SORT_INT, Type.getSort(name.charAt(2))));
+				char targetPrimitiveType;
+				if (cast.getOp1() == 0) targetPrimitiveType = 'I';
+				else {
+					targetPrimitiveType = Opcodes.toString(cast.getOp1()).charAt(2);
+					if (targetPrimitiveType == 'L') targetPrimitiveType = 'J';
+				}
+				writePrimitive(cw, Math.max(Type.SORT_INT, Type.getSort(targetPrimitiveType)));
 				if (cast.type == TypeCast.BOXING)
 					cast.writeBox(cw);
 

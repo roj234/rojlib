@@ -1,5 +1,6 @@
 package roj.collect;
 
+import org.jetbrains.annotations.Contract;
 import roj.math.MathUtils;
 import roj.util.Helpers;
 
@@ -82,14 +83,18 @@ public final class Int2IntMap extends AbstractMap<Integer, Integer> implements _
 	@Override
 	@Deprecated
 	public final boolean containsKey(Object key) {return containsKey((int) key);}
-	public final boolean containsKey(int i) {return getEntry(i) != null;}
+	public final boolean containsKey(int key) {return getEntry(key) != null;}
 
 	@Override
 	@Deprecated
 	public final Integer get(Object key) {return get((int) key);}
-	public final Integer get(int id) {
-		Entry entry = getEntry(id);
+	public final Integer get(int key) {
+		Entry entry = getEntry(key);
 		return entry == null ? null : entry.getIntValue();
+	}
+	public final int getInt(int key) {
+		Entry entry = getEntry(key);
+		return entry == null ? 0 : entry.getIntValue();
 	}
 	public final Entry getEntry(int id) {
 		Entry entry = getFirst(id, false);
@@ -103,6 +108,7 @@ public final class Int2IntMap extends AbstractMap<Integer, Integer> implements _
 	@Override
 	@Deprecated
 	public final Integer put(Integer key, Integer value) {return put((int)key, (int)value);}
+	@Contract(mutates = "this")
 	public Integer put(int key, int val) {
 		Entry entry = getOrCreateEntry(key);
 		if (entry.key != key) {
@@ -115,6 +121,7 @@ public final class Int2IntMap extends AbstractMap<Integer, Integer> implements _
 		entry.value = val;
 		return oldV;
 	}
+	@Contract(mutates = "this")
 	public int putInt(int key, int val) {
 		Entry entry = getOrCreateEntry(key);
 		if (entry.key != key) {
@@ -131,6 +138,7 @@ public final class Int2IntMap extends AbstractMap<Integer, Integer> implements _
 	@Override
 	@Deprecated
 	public final Integer remove(Object key) {return remove((int) key);}
+	@Contract(mutates = "this")
 	public Integer remove(int key) {
 		Entry entry = getFirst(key, false);
 		if (entry == null) return null;
@@ -156,6 +164,7 @@ public final class Int2IntMap extends AbstractMap<Integer, Integer> implements _
 		}
 	}
 
+	@Contract(mutates = "this")
 	public void putAll(Int2IntMap map) {
 		if (map.entries == null) return;
 		ensureCapacity(size + map.size());
@@ -187,7 +196,9 @@ public final class Int2IntMap extends AbstractMap<Integer, Integer> implements _
 		return entry == null ? def : entry.value;
 	}
 
+	@Contract(mutates = "this")
 	public Entry getEntryOrCreate(int key) {return getEntryOrCreate(key, 0);}
+	@Contract(mutates = "this")
 	public Entry getEntryOrCreate(int key, int def) {
 		Entry entry = getOrCreateEntry(key);
 		if (entry.key != key) {
@@ -199,6 +210,7 @@ public final class Int2IntMap extends AbstractMap<Integer, Integer> implements _
 	}
 
 	// return v if new
+	@Contract(mutates = "this")
 	public int putIntIfAbsent(int k, int v) {
 		Entry entry = getOrCreateEntry(k);
 		if (entry.key != k) {

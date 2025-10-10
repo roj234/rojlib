@@ -1,308 +1,132 @@
 package roj.reflect;
 
 import org.jetbrains.annotations.NotNull;
-import roj.asm.ClassNode;
-import roj.asm.Opcodes;
-import roj.math.MathUtils;
 import roj.optimizer.FastVarHandle;
-import roj.util.Helpers;
 
-import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
-import java.lang.ref.ReferenceQueue;
-import java.lang.ref.WeakReference;
-import java.util.Arrays;
-import java.util.concurrent.locks.ReadWriteLock;
-import java.util.concurrent.locks.ReentrantReadWriteLock;
-import java.util.function.Consumer;
+import java.util.Objects;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
 
-import static roj.reflect.Unsafe.U;
-
 /**
- * 让ClassLoader能正确的被卸载，防止内存泄露 <pre>
- * 存放在里面的V（无误）是“Virtual”引用的
- * 1. Inherit   在V中存放K(ClassLoader)定义的类不会阻止类加载器的GC回收
- * 2. Strong    即使V不被引用，V也不会被回收
- * 3. Recycle   V只在K和K定义的类被回收时回收
- * </pre>
- * 原理也很简单，通过一个比较黑科技的方式将V的GC Root移到了K名下 <br>
- * 而不是VirtualReference的创建者名下
+ * 提供了一种将强引用值 {@code V} 与特定 {@link ClassLoader} 关联的机制，
+ * 同时尊重 {@code ClassLoader} 的生命周期，以允许其在不再需要时被正确卸载。
+ *
+ * <p>此类的行为类似于 {@link java.util.Map Map}，其中的值 {@code V} 并非由
+ * {@code VirtualReference} 实例直接引用，而是通过其关联的 {@code ClassLoader}
+ * 引用。因此，{@code V} 的生命周期与对应的 {@code ClassLoader} 紧密绑定：
+ * 只要 {@code ClassLoader} 处于活动状态，{@code V} 就会被保留。
+ * 当 {@code ClassLoader} 被垃圾回收时，与之关联的 {@code V} 会自动被回收。
+ *
+ * <p>这个机制解决了在动态加载代码（例如，插件系统、热重载或使用 ASM 等工具动态生成类）
+ * 时，正确管理 {@code ClassLoader} 生命周期的一个常见挑战。
+ *
+ * <h3>ClassLoader 卸载的挑战</h3>
+ * 为了让一个 {@code ClassLoader} 及其加载的所有类能够被垃圾回收，必须同时满足两个主要条件：
+ * <ol>
+ *     <li>不存在指向 {@code ClassLoader} 实例本身的任何外部强引用。</li>
+ *     <li>不存在指向该 {@code ClassLoader} 加载的任何 {@code Class} 实例的外部强引用，
+ *         也不存在指向这些类的任何实例的强引用。</li>
+ * </ol>
+ * 这里的“外部引用”指的是来自非该 {@code ClassLoader} 所加载的类或对象的引用链，
+ * 或者来自 GC 根 (GC Root) 的引用。如果这些条件未能满足，即使 {@code ClassLoader}
+ * 表面上不再被使用，它及其加载的所有类和对象也会持续占用内存，导致内存泄漏。
+ *
+ * <p>然而，在实际应用中，我们常常需要将一些数据（例如，为某个 {@code ClassLoader}
+ * 生成的缓存、反射数据或单例实例）与特定的 {@code ClassLoader} 关联起来。
+ * 传统的做法常常面临以下问题：
+ *
+ * <ol>
+ *     <li><b>使用 {@code WeakReference} 存储引用：</b> 如果使用 {@code WeakReference<V>}
+ *         来存储值 {@code V}，那么 {@code V} 可能会随时被垃圾回收，这对于需要其持久存储
+ *         直到 {@code ClassLoader} 卸载为止的场景是不可接受的。</li>
+ *     <li><b>使用普通 {@code Map} 存储强引用：</b> 直接在一个外部的 {@code Map<ClassLoader, V>}
+ *         中存储强引用 {@code V}，会导致 {@code VirtualReference} 实例本身或者包含它的
+ *         外部 {@code Map} 成为一个 GC 根，从而阻止 {@code ClassLoader} 的卸载。
+ *         这形成了典型的内存泄漏。</li>
+ * </ol>
+ *
  * @author Roj234
- * @since 2024/6/4 3:31
+ * @since 2024/6/4
+ * @revised 2025/10/17
+ * @see ClassValue
  */
 @FastVarHandle
-public class VirtualReference<V> {
+public final class VirtualReference<V> {
 	/*
-	 * Java里面的一个类加载器要被卸载，需要同时满足两个条件
-	 *   1. 这个类加载器没有被外部引用
-	 *   2. 这个类加载器加载的所有类都没有被外部引用
-	 * 外部：不是这个类加载器加载的类
-	 * 满足上述条件后，这个类加载器和它加载的所有类，会被一起卸载
+	 * 旧版本的 VirtualReference 在目标 ClassLoader 中动态生成一个带有静态字段的辅助类，
+	 * 并将值存储在该静态字段中来解决这个问题。这种方法确实能将数据的 GC 根移入 ClassLoader，
+	 * 但具有如下缺陷：
+	 *  1. 代码复杂，依赖 ASM 进行字节码生成；
+	 *  2. 依赖一个关键假设：staticFieldBase(T.field) == T.class，而它通常仅在 HotSpot 虚拟机上成立；
+	 *  3. 强依赖 Unsafe 和 long fieldOffset (VarHandle 或 Field 会强引用生成的 Class 对象)
 	 *
-	 * 然而问题来了，如果我要保留一个类的引用，应该如何保存
-	 * 1. 最简单的方式就是类名->弱引用的类，因为类是弱引用的，可以被卸载
-	 * 然而这种方法有问题，也就是类名虽然理论上是唯一的，但实际上“可以”重复
+	 * 作为RojLib逐步删除编译期Unsafe使用，并通过ASM转换器在运行时优化代码计划的一部分，这个类现已重构
 	 *
-	 * 2. 所以我们需要一个 弱引用的加载器 -> 类名 -> 弱引用的类
-	 * 这确实满足了“保留一个类的引用”，但是问题并未到此结束
+	 * 重构后的 VirtualReference 极大地简化了解决方案，它利用了 ClassLoader 类内部一个私有但稳定的字段：
+	 *   private final ConcurrentHashMap<String, NamedPackage> packages;
+	 * 该字段在多个 Java 版本 (7-25+) 和 JVM 实现中展现出了卓越的稳定性，因 Package 缓存确有意义.
+	 * 不仅如此，我们还有其它候选字段，包括但不限于 package2certs, parallelLockMap 等。
+	 * 而且，由于 ConcurrentHashMap 本身就是线程安全的，我们也不再需要之前的同步和锁了。
 	 *
-	 * 3. 如果我需要保留一个重量级的、动态生成的、由目标类加载器K加载的对象，让它在K的生命周期内不被回收，应该怎么办？
-	 * 上述方法不再成立，因为弱引用的重量级对象可能随时被回收
-	 * 如果不使用弱引用，这个对象会一直引用K，造成内存泄露
+	 * 因为 Java 的泛型擦除，我们可以在这些内部 Map 中存储非 key 的类型，
+	 * 例如键是 VirtualReference 实例，值是类型 V，而不干扰其原始用途。
 	 *
-	 * 4. 解决方案，就是我的VirtualReference
-	 * 它通过修改GC引用根的方式，将3.转换为了2.问题
-	 * 【类加载器加载的类只会和加载器一起回收】
-	 *  所以我生成了一个类，它只有一个静态字段，由K加载
-	 *  它的GC Root就是K，能和K一起回收
+	 * 新的方法提供了和旧版本相同的引用语义，同时
+	 *  1. 显著降低了代码的复杂性；
+	 *  2. 提高了在不同 JVM 实现之间的兼容性；
+	 *  3. 消除了动态类生成和复杂的 Unsafe 操作的需要。
 	 */
-	private final ReferenceQueue<Object> queue = new ReferenceQueue<>();
-	private final ReadWriteLock lock = new ReentrantReadWriteLock();
+	private static final VarHandle PACKAGES = Telescope.trustedLookup().findVarHandle(ClassLoader.class, "packages", ConcurrentHashMap.class);
 
-	private static final VarHandle
-		ENTRIES = MethodHandles.arrayElementVarHandle(Entry[].class),
-		NEXT = Handles.lookup().findVarHandle(Entry.class, "next", Entry.class),
-		VALUE = Handles.lookup().findVarHandle(Entry.class, "v", WeakReference.class),
-		SIZE = Handles.lookup().findVarHandle(VirtualReference.class, "size", int.class);
+	public VirtualReference() {}
 
-	private static final Entry<?> SENTIAL = new Entry<>(null, null);
-
-	public static final class Entry<V> extends WeakReference<ClassLoader> {
-		final int hash;
-		Entry<V> next;
-
-		public Entry(ReferenceQueue<?> queue, ClassLoader k) {
-			super(k, Helpers.cast(queue));
-			hash = System.identityHashCode(k);
-		}
-
-		// 非常黑科技的方式，来保留一个对value的引用
-		private WeakReference<Class<?>> v = Helpers.cast(SENTIAL);
-		private long offset;
-
-		@SuppressWarnings("unchecked")
-		public V getValue() {
-			Class<?> o = v.get();
-			return o == null ? null : (V) U.getReference(o, offset);
-		}
-
-		public void setValue(V v) {
-			if (this.v != null) {
-				Class<?> ref = this.v.get();
-				if (ref == null) throw new IllegalStateException("key was freed???");
-				U.putReference(ref, offset, v);
-				return;
-			}
-
-			ClassLoader loader = get();
-			if (loader == null) throw new IllegalStateException("key was freed???");
-
-			var ref = new ClassNode();
-			ref.modifier = Opcodes.ACC_PUBLIC|Opcodes.ACC_FINAL;
-			ref.name(loader.getClass().getName().replace('.', '/')+"$OwnedRef$"+Reflection.uniqueId());
-			ref.newField(Opcodes.ACC_PUBLIC|Opcodes.ACC_STATIC, "v", "Ljava/lang/Object;");
-
-			Class<?> klass = Reflection.defineClass(loader, ref);
-
-			this.v = new WeakReference<>(klass);
-			offset = Unsafe.fieldOffset(klass, "v");
-			U.putReference(klass, offset, v);
-		}
-	}
-
-	private void doEvict() {
-		Entry<?>[] array = entries;
-		Entry<?> remove;
-		while ((remove = (Entry<?>) queue.poll()) != null) {
-			int i = remove.hash & (array.length - 1);
-
-			loop:
-			for (;;) {
-				var entry = array[i];
-				if (entry == null) continue;
-
-				Entry<?> prev = null;
-				for (;;) {
-					if (entry == remove) {
-						Object next = NEXT.getAndSet(entry, SENTIAL);
-						if (next != SENTIAL) {
-							if (prev == null) array[i] = (Entry<?>) next;
-							else prev.next = Helpers.cast(next);
-
-							SIZE.getAndAdd(this, -1);
-						}
-
-						break loop;
-					}
-
-					prev = entry;
-					entry = entry.next;
-				}
-			}
-		}
-	}
-
-	private Entry<?>[] entries;
-	private volatile int size;
-	private int length = 1;
-
-	public VirtualReference() { this(4); }
-	public VirtualReference(int size) {
-		if (size < length) return;
-		length = MathUtils.nextPowerOfTwo(size);
-	}
-
+	/**
+	 * @see ConcurrentHashMap#get(Object)
+	 */
 	@SuppressWarnings("unchecked")
-	private void resize() {
-		Entry<?>[] newEntries = new Entry<?>[length];
-		int newMask = length-1;
-
-		int i = 0, j = entries.length;
-		for (; i < j; i++) {
-			Entry<V> entry = (Entry<V>) entries[i];
-			if (entry == null) continue;
-
-			do {
-				Entry<V> next = entry.next;
-				int newKey = entry.hash & newMask;
-				entry.next = (Entry<V>) newEntries[newKey];
-				newEntries[newKey] = entry;
-				entry = next;
-			} while (entry != null);
-		}
-
-		entries = newEntries;
-	}
-
-	@SuppressWarnings("unchecked")
-	public Entry<V> getEntry(ClassLoader key) {
+	public V get(ClassLoader key) {
+		// 如果 key 为 null （系统类），则使用加载此类的 ClassLoader 作为默认值 (通常是应用类加载器)。
 		if (key == null) key = VirtualReference.class.getClassLoader();
 
-		lock.readLock().lock();
-		try {
-			doEvict();
+		// 访问 ClassLoader 内部的 'packages' map。
+		// 由于类型擦除，尽管其内部类型是 <String, NamedPackage>，
+		// 但我们可以将其视为 <VirtualReference<V>, V>，从而将其用于我们的目的。
+		var map = (ConcurrentHashMap<VirtualReference<V>, V>) PACKAGES.get(key);
 
-			Entry<?>[] array = entries;
-			Entry<V> entry = array == null ? null : (Entry<V>) array[System.identityHashCode(key)&(array.length - 1)];
-
-			while (entry != null) {
-				if (key == entry.get()) return entry;
-				entry = entry.next;
-			}
-		} finally {
-			lock.readLock().unlock();
-		}
-		return null;
+		return map.get(this);
 	}
 
+	/**
+	 * @see ConcurrentHashMap#computeIfAbsent(Object, Function)
+	 */
 	@SuppressWarnings("unchecked")
-	public void forEach(Consumer<Entry<V>> consumer) {
-		lock.readLock().lock();
-		try {
-			doEvict();
-
-			for (Entry<?> entry : entries) {
-				while (entry != null) {
-					consumer.accept((Entry<V>) entry);
-					entry = entry.next;
-				}
-			}
-		} finally {
-			lock.readLock().unlock();
-		}
-	}
-
-	public final V computeIfAbsent(ClassLoader key, @NotNull Function<? super ClassLoader, ? extends V> mapper) {
+	public V computeIfAbsent(ClassLoader key, @NotNull Function<? super ClassLoader, ? extends V> mapper) {
 		if (key == null) key = VirtualReference.class.getClassLoader();
+		var map = (ConcurrentHashMap<VirtualReference<V>, V>) PACKAGES.get(key);
 
-		if (size == length) {
-			lock.writeLock().lock();
-			try {
-				if (size == length)
-					resize();
-			} finally {
-				lock.writeLock().unlock();
-			}
-		}
-
-		Entry<V> entry;
-		lock.readLock().lock();
-		try {
-			doEvict();
-
-			entry = getOrCreateEntry(key);
-		} finally {
-			lock.readLock().unlock();
-		}
-
-		while (true) {
-			V value = entry.getValue();
-			if (value != null) return value;
-
-			if (VALUE.compareAndSet(entry, SENTIAL, null)) {
-				SIZE.getAndAdd(this, 1);
-
-				entry.setValue(value = mapper.apply(key));
-				return value;
-			}
-		}
+		ClassLoader finalKey = key;
+		Objects.requireNonNull(mapper);
+		return map.computeIfAbsent(this, ignored -> mapper.apply(finalKey));
 	}
 
-	public final void clear() {
-		if (size == 0) return;
-
-		lock.writeLock().lock();
-
-		size = 0;
-		Arrays.fill(entries, null);
-		doEvict();
-
-		lock.writeLock().unlock();
-	}
-
+	/**
+	 * @see ConcurrentHashMap#remove(Object)
+	 */
 	@SuppressWarnings("unchecked")
-	private Entry<V> getOrCreateEntry(ClassLoader key) {
-		Entry<?>[] array = entries;
-		if (array == null) {
-			lock.readLock().unlock();
-			lock.writeLock().lock();
-			try {
-				array = entries;
-				if (array == null) entries = array = new Entry<?>[length];
-			} finally {
-				lock.writeLock().unlock();
-				lock.readLock().lock();
-			}
-		}
+	public final void remove(ClassLoader key) {
+		if (key == null) key = VirtualReference.class.getClassLoader();
+		var map = (ConcurrentHashMap<VirtualReference<V>, V>) PACKAGES.get(key);
+		map.remove(this);
+	}
 
-		int i = System.identityHashCode(key)&(array.length-1);
-		Entry<V> entry;
-		// CAS first
-		for (;;) {
-			for (;;) {
-				entry = (Entry<V>) ENTRIES.getVolatile(array, i);
-				if (entry != null) break;
-
-				if (ENTRIES.compareAndSet(array, i, null, SENTIAL)) {
-					ENTRIES.setVolatile(array, i, entry = new Entry<>(queue, key));
-					return entry;
-				}
-			}
-
-			while (entry != SENTIAL) {
-				if (key == entry.get()) return entry;
-
-				if (entry.next == null) {
-					if (NEXT.compareAndSet(entry, null, SENTIAL)) {
-						Entry<V> next = new Entry<>(queue, key);
-						entry.next = next;
-						return next;
-					}
-				}
-
-				entry = entry.next;
-			}
-		}
+	/**
+	 * @see ConcurrentHashMap#put(Object, Object)
+	 */
+	@SuppressWarnings("unchecked")
+	public void put(ClassLoader key, V val) {
+		if (key == null) key = VirtualReference.class.getClassLoader();
+		var map = (ConcurrentHashMap<VirtualReference<V>, V>) PACKAGES.get(key);
+		map.put(this, val);
 	}
 }

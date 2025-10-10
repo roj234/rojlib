@@ -3,12 +3,11 @@ package roj.util;
 import roj.concurrent.FastThreadLocal;
 import roj.io.IOUtil;
 import roj.optimizer.FastVarHandle;
-import roj.reflect.Handles;
+import roj.reflect.Telescope;
 
 import java.lang.invoke.VarHandle;
 import java.nio.ByteOrder;
 import java.util.IdentityHashMap;
-import java.util.concurrent.locks.LockSupport;
 
 /**
  * @author Roj234
@@ -26,7 +25,7 @@ public final class JVM {
 
 	@FastVarHandle
 	private static final class SIP {
-		private static final VarHandle HOOKS$STATIC = Handles.lookup().findStaticVarHandle(Handles.findClass("java.lang.ApplicationShutdownHooks"), "hooks", IdentityHashMap.class);
+		private static final VarHandle HOOKS$STATIC = Telescope.trustedLookup().findStaticVarHandle(Telescope.findClass("java.lang.ApplicationShutdownHooks"), "hooks", IdentityHashMap.class);
 		private static boolean isShutdownInProgress() {return HOOKS$STATIC.get() == null;}
 	}
 	public static boolean isShutdownInProgress() {return SIP.isShutdownInProgress();}
@@ -70,11 +69,15 @@ public final class JVM {
 			FastThreadLocal.clear();
 			started = true;
 			currentThread().setName("睡美人");
-			for(;;) LockSupport.parkNanos(Long.MAX_VALUE);
+			try {
+				for(;;) Thread.sleep(Long.MAX_VALUE);
+			} catch (InterruptedException ignored) {}
 		}
 
 		@Override public void run() {
-			for(;;) LockSupport.parkNanos(Long.MAX_VALUE);
+			try {
+				for(;;) Thread.sleep(Long.MAX_VALUE);
+			} catch (InterruptedException ignored) {}
 		}
 	}
 }

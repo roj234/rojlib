@@ -20,7 +20,8 @@ final class ServerLaunchTcp extends ServerLaunch implements Selectable {
 	private final ServerSocketChannel tcp;
 	private SelectionKey key;
 
-	private int rcvBuf = 1536;
+	private int receiveBuffer = MyChannel.DEFAULT_TCP_RECV_BUF;
+	private int bufferRetainStrategy;
 	private AtomicInteger maxConn;
 
 	ServerLaunchTcp(String name) throws IOException {
@@ -31,14 +32,16 @@ final class ServerLaunchTcp extends ServerLaunch implements Selectable {
 
 	public <T> ServerLaunch option(SocketOption<T> k, T v) throws IOException {
 		if (k == TCP_MAX_CONNECTION) maxConn = new AtomicInteger((Integer) v);
-		else if (k == TCP_RECEIVE_BUFFER) rcvBuf = (Integer) v;
+		else if (k == TCP_RECEIVE_BUFFER) receiveBuffer = (Integer) v;
 		else if (k == StandardSocketOptions.SO_REUSEPORT) Net.setReusePort(tcp, (boolean) v);
+		else if (k == BUFFER_RETAIN_STRATEGY) bufferRetainStrategy = (Integer) v;
 		else tcp.setOption(k, v);
 		return this;
 	}
 	public <T> T option(SocketOption<T> k) throws IOException {
 		if (k == TCP_MAX_CONNECTION) return Helpers.cast(maxConn == null ? -1 : maxConn.get());
-		else if (k == TCP_RECEIVE_BUFFER) return Helpers.cast(rcvBuf);
+		else if (k == TCP_RECEIVE_BUFFER) return Helpers.cast(receiveBuffer);
+		else if (k == BUFFER_RETAIN_STRATEGY) return Helpers.cast(bufferRetainStrategy);
 		else return tcp.getOption(k);
 	}
 
@@ -48,14 +51,14 @@ final class ServerLaunchTcp extends ServerLaunch implements Selectable {
 	public ServerLaunch launch() throws IOException {
 		if (initializator == null) throw new IllegalStateException("no initializator");
 
-		if (name != null) SHARED.put(name, this);
+		if (name != null) NAMED.put(name, this);
 		loop().register(this, null, SelectionKey.OP_ACCEPT);
 		return this;
 	}
 
 	public final boolean isOpen() { return tcp.isOpen(); }
 	public final void close() throws IOException {
-		if (name != null) SHARED.remove(name, this); tcp.close(); }
+		if (name != null) NAMED.remove(name, this); tcp.close(); }
 
 	@Override
 	public void register(Selector sel, int ops, Object att) throws IOException {
@@ -75,7 +78,7 @@ final class ServerLaunchTcp extends ServerLaunch implements Selectable {
 			if (sc == null) return;
 			sc.configureBlocking(false);
 
-			var ch = new TcpChImpl(sc, rcvBuf);
+			var ch = new TcpChImpl(sc, receiveBuffer, bufferRetainStrategy);
 			initialize(ch);
 		}
 	}
@@ -91,7 +94,7 @@ final class ServerLaunchTcp extends ServerLaunch implements Selectable {
 			if (sc == null) return;
 			sc.configureBlocking(false);
 
-			var ch = new TcpChImpl(sc, rcvBuf) {
+			var ch = new TcpChImpl(sc, receiveBuffer, bufferRetainStrategy) {
 				@Override
 				protected void fireClosed() throws IOException {
 					super.fireClosed();

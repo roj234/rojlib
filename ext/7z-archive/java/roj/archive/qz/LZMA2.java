@@ -2,7 +2,7 @@ package roj.archive.qz;
 
 import roj.archive.xz.LZMA2InputStream;
 import roj.archive.xz.LZMA2Options;
-import roj.archive.xz.LZMA2ParallelInputStream;
+import roj.archive.xz.LZMA2ParallelDecoder;
 import roj.util.DynByteBuf;
 
 import java.io.IOException;
@@ -11,14 +11,24 @@ import java.io.OutputStream;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public final class LZMA2 extends QZCoder {
-    public static boolean experimental_async_decompress;
+    public static final int NORMAL_DECOMPRESSION = 0;
+    public static final int ERROR_RECOVERY = 1;
+    public static final int PARALLEL_DECOMPRESS = 2;
+
+    private byte decompressionMode;
+    /**
+     * 0 -> normal
+     * 1 -> error recovery
+     * 2 -> parallel
+     */
+    public void setDecompressionMode(int mode) {this.decompressionMode = (byte) mode;}
 
     public LZMA2() { options = new LZMA2Options(); }
     public LZMA2(int level) { options = new LZMA2Options(level); }
     public LZMA2(LZMA2Options options) { this.options = options; }
     LZMA2(boolean unused) {}
 
-    QZCoder factory() {return new LZMA2(true);}
+    public QZCoder factory() {return new LZMA2(true);}
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
@@ -32,7 +42,7 @@ public final class LZMA2 extends QZCoder {
     public int hashCode() {return getDictSize();}
 
     private static final byte[] ID = {33};
-    byte[] id() { return ID; }
+    public byte[] id() { return ID; }
 
     private int dictSize;
     private LZMA2Options options;
@@ -48,22 +58,26 @@ public final class LZMA2 extends QZCoder {
         }
         useMemory(memoryLimit, LZMA2InputStream.getMemoryUsage(dictSize));
 
-        return experimental_async_decompress ? new LZMA2ParallelInputStream(in, dictSize) : new LZMA2InputStream(in, dictSize);
+        return switch (decompressionMode) {
+            default -> new LZMA2InputStream(in, dictSize);
+            case PARALLEL_DECOMPRESS -> new LZMA2ParallelDecoder(in, dictSize);
+            case ERROR_RECOVERY -> new LZMA2InputStream.ErrorRecovery(in, dictSize);
+        };
     }
-    private int getDictSize() {return options==null?this.dictSize:options.getDictSize();}
+    public int getDictSize() {return options==null?this.dictSize:options.getDictSize();}
 
     @Override
     public String toString() { return "LZMA2:"+(options != null ? options : (31-Integer.numberOfLeadingZeros(dictSize))); }
 
     @Override
-    void writeOptions(DynByteBuf buf) {
+    public void writeOptions(DynByteBuf buf) {
         int dictSize = getDictSize();
         int dictPower = Integer.numberOfLeadingZeros(dictSize);
         int secondBit = (dictSize >>> (30-dictPower)) - 2;
         buf.put((byte) ((19 - dictPower) * 2 + secondBit));
     }
     @Override
-    void readOptions(DynByteBuf buf, int length) throws IOException {
+    public void readOptions(DynByteBuf buf, int length) throws IOException {
         if (length != 1) throw new IOException("Invalid LZMA2 option");
         int b = buf.readUnsignedByte();
         if ((b & ~0x3f) != 0) throw new IOException("Invalid LZMA2 option");

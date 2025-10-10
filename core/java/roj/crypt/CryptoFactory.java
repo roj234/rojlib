@@ -96,7 +96,11 @@ public final class CryptoFactory extends Provider {
 			throw OperationDone.NEVER;
 		}
 	};
-	public static MessageDigest getSharedDigest(@MagicConstant(stringValues = {"SHA-1", "SHA-256"}) String algorithm) {return DIGESTS.get().computeIfAbsent(algorithm, NEW_DIGEST);}
+	public static MessageDigest getSharedDigest(@MagicConstant(stringValues = {"SHA-1", "SHA-256"}) String algorithm) {
+		MessageDigest digest = DIGESTS.get().computeIfAbsent(algorithm, NEW_DIGEST);
+		digest.reset();
+		return digest;
+	}
 	public static MessageDigest getMessageDigest(String algorithm) {
 		return NEW_DIGEST.apply(algorithm);
 		//(MessageDigest) getSharedDigest(algorithm).clone();
@@ -351,7 +355,7 @@ public final class CryptoFactory extends Provider {
 	}
 
 	private static final int BLOCK_SIZE = 16;
-	private static final int P1 = 0x9e3779b1, P2 = 0x85ebca7, P3 = 0xc2b2ae3d, P4 = 0x27d4eb2f, P5 = 0x165667b1;
+	private static final int P1 = 0x9e3779b1, P2 = 0x85ebca77, P3 = 0xc2b2ae3d, P4 = 0x27d4eb2f, P5 = 0x165667b1;
 
 	static {RojLib.linkLibrary(CryptoFactory.class, RojLib.GENERIC);}
 
@@ -360,37 +364,37 @@ public final class CryptoFactory extends Provider {
 		return xxHash32(seed, (Object) buf, Unsafe.ARRAY_BYTE_BASE_OFFSET+off, len);
 	}
 	public static int xxHash32(int seed, Object buf, long off, int len) {
-		int a,b,c,d;
-		// INIT STATE
-		a = seed + P1 + P2;
-		b = seed + P2;
-		c = seed;
-		d = seed - P1;
-		// INIT STATE
 		long end = off + len;
-		// BLOCK
-		while (end-off >= BLOCK_SIZE) {
-			a = rotateLeft(a + U.get32UL(buf, off) * P2, 13) * P1;
-			b = rotateLeft(b + U.get32UL(buf, (off + 4)) * P2, 13) * P1;
-			c = rotateLeft(c + U.get32UL(buf, (off + 8)) * P2, 13) * P1;
-			d = rotateLeft(d + U.get32UL(buf, (off + 12)) * P2, 13) * P1;
+		int hash;
 
-			off += BLOCK_SIZE;
+		if (len >= BLOCK_SIZE) {
+			int a = seed + P1 + P2;
+			int b = seed + P2;
+			int c = seed;
+			int d = seed - P1;
+
+			do {
+				a = rotateLeft(a + U.get32UL(buf, off) * P2, 13) * P1;
+				b = rotateLeft(b + U.get32UL(buf, (off + 4)) * P2, 13) * P1;
+				c = rotateLeft(c + U.get32UL(buf, (off + 8)) * P2, 13) * P1;
+				d = rotateLeft(d + U.get32UL(buf, (off + 12)) * P2, 13) * P1;
+
+				off += BLOCK_SIZE;
+			} while (off <= end - BLOCK_SIZE);
+
+			hash = rotateLeft(a, 1) + rotateLeft(b, 7) + rotateLeft(c, 12) + rotateLeft(d, 18);
+		} else {
+			hash = seed + P5;
 		}
-		// BLOCK
-
-		int hash = len > BLOCK_SIZE
-				? rotateLeft(a, 1) + rotateLeft(b, 7) + rotateLeft(c, 12) + rotateLeft(d, 18)
-				: c + P5;
 
 		hash += len;
 
-		while (end-off >= 4) {
+		while (off <= end - 4) {
 			hash = rotateLeft(hash + U.get32UL(buf, off) * P3, 17) * P4;
 			off += 4;
 		}
 
-		while (end-off > 0) {
+		while (off < end) {
 			hash = rotateLeft(hash + (U.getByte(buf, off) & 0xFF) * P5, 11) * P1;
 			off++;
 		}
@@ -404,9 +408,8 @@ public final class CryptoFactory extends Provider {
 		return hash;
 	}
 
-	public static long wyhash(long seed, byte[] data) {
-		return wyhash(data, Unsafe.ARRAY_BYTE_BASE_OFFSET, data.length, seed, WYHASH_SECRET);
-	}
+	public static long wyhash(long seed, byte[] data) {return wyhash(seed, data, 0, data.length);}
+	public static long wyhash(long seed, byte[] data, int off, int len) {return wyhash(data, Unsafe.ARRAY_BYTE_BASE_OFFSET + off, len, seed, WYHASH_SECRET);}
 	/**
 	 * translated by Roj234-N
 	 * @since 2025/5/9 15:17

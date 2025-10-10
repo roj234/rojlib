@@ -24,7 +24,7 @@ public class GeneratorUtil {
 		var impl = file.newAnonymousClass_NoBody(mn, null);
 		impl.parent(GENERATOR_TYPE);
 
-		var wr = file.lc().tokenizer;
+		var wr = file.context().tokenizer;
 		int linePos = wr.LN;
 		int lineIdx = wr.LNIndex;
 		int pos = wr.skipBrace();

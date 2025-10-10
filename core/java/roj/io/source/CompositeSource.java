@@ -87,7 +87,7 @@ public final class CompositeSource extends Source {
 		int read = 0;
 		while (read < len) {
 			int r = s.read(b, off+read, len-read);
-			if (r < len) {
+			if (r < 0) {
 				if (sid+1 == ref.size()) break;
 				next();
 			} else {
@@ -102,24 +102,24 @@ public final class CompositeSource extends Source {
 	public void write(DynByteBuf data) throws IOException {
 		if (!writable) throw new IOException("源是只读的");
 
-		int readable = data.readableBytes();
-		written += readable;
+		int len = data.readableBytes();
+		written += len;
 
 		if (fragmentSize <= 0) {
 			s.write(data);
 			return;
 		}
 
-		while (readable > 0) {
-			int writable = (int) Math.min(Integer.MAX_VALUE, fragmentSize - s.position());
+		while (len > 0) {
+			int written = (int) Math.min(Integer.MAX_VALUE, fragmentSize - s.position());
 
-			if (readable <= writable) {
+			if (len <= written) {
 				s.write(data);
 				return;
 			}
 
-			s.write(data.slice(writable));
-			readable -= writable;
+			s.write(data.slice(written));
+			len -= written;
 			next();
 		}
 	}
@@ -135,18 +135,20 @@ public final class CompositeSource extends Source {
 			return;
 		}
 
+		long remain = fragmentSize - s.position();
 		while (len > 0) {
-			int writable = (int) Math.min(Integer.MAX_VALUE, fragmentSize - s.position());
+			long written = Math.min(len, remain);
 
-			if (len <= writable) {
-				s.put(src, off, len);
-				return;
+			s.put(src, off, written);
+			off += written;
+			len -= written;
+
+			if (remain == written) {
+				next();
+				remain = fragmentSize;
+			} else {
+				remain -= written;
 			}
-
-			s.put(src, off, writable);
-			off += writable;
-			len -= writable;
-			next();
 		}
 	}
 

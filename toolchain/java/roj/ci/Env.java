@@ -1,5 +1,6 @@
 package roj.ci;
 
+import roj.ci.plugin.Plugin;
 import roj.collect.ArrayList;
 import roj.collect.LinkedHashMap;
 import roj.collect.TrieTree;
@@ -9,6 +10,7 @@ import roj.util.ArtifactVersion;
 import roj.util.Helpers;
 import roj.util.Pair;
 
+import java.io.File;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.util.Collections;
@@ -21,7 +23,7 @@ import java.util.regex.Pattern;
  * @since 2025/08/29 21:27
  */
 @Optional(write = Optional.WriteMode.ALWAYS)
-final class Env {
+public final class Env {
 	static final TrieTreeSet EMPTY_SET = new TrieTreeSet();
 	static final LinkedHashMap<String, String> EMPTY_MAP = new LinkedHashMap<>();
 
@@ -50,7 +52,7 @@ final class Env {
 		@Optional(write = Optional.WriteMode.NON_BLANK)
 		LinkedHashMap<String, String> variables = EMPTY_MAP;
 		@Optional(write = Optional.WriteMode.NON_BLANK)
-		TrieTreeSet variable_replace_in = EMPTY_SET;
+		TrieTreeSet variableReplaceContext = EMPTY_SET;
 		@Optional(write = Optional.WriteMode.NON_BLANK)
 		LinkedHashMap<String, String> shade = EMPTY_MAP;
 
@@ -71,6 +73,35 @@ final class Env {
 		transient List<Pair<Pattern, String>> patternShades;
 
 		transient Map<String, Dependency> dependencyInstances;
+	}
+
+	public static final class Workspace {
+
+		public String id;
+		public String type;
+		@Optional public String path = "projects";
+		@Optional public String inherits;
+
+		@Optional public List<File> depend = Collections.emptyList(), mappedDepend = Collections.emptyList(), unmappedDepend = Collections.emptyList();
+		@Optional public List<String> processors = Collections.emptyList();
+
+		@Optional public File mapping;
+
+		@Optional public LinkedHashMap<String, String> variables = EMPTY_MAP;
+		@Optional public TrieTreeSet variableReplaceContext = EMPTY_SET;
+
+		void postBuild() {
+			if (processors == Collections.EMPTY_LIST)
+				processors = new ArrayList<>();
+			for (Plugin plugin : MCMake.REGISTERED_PLUGINS) {
+				if (plugin.defaultEnabled()) {
+					String name = plugin.getClass().getName();
+					if (!processors.contains(name)) {
+						processors.add(name);
+					}
+				}
+			}
+		}
 	}
 
 	enum Type {

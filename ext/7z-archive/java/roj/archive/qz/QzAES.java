@@ -40,9 +40,9 @@ public final class QzAES extends QZCoder {
     }
     QzAES() {}
 
-    QZCoder factory() {return new QzAES();}
+    public QZCoder factory() {return new QzAES();}
     private static final byte[] ID = {6,-15,7,1};
-    byte[] id() {return ID;}
+    public byte[] id() {return ID;}
 
     public OutputStream encode(OutputStream out) throws IOException {
         if (lastKey == null) throw new IllegalArgumentException("缺少密码");
@@ -109,7 +109,7 @@ public final class QzAES extends QZCoder {
     final byte[] iv = new byte[16];
 
     @Override
-    void readOptions(DynByteBuf buf, int length) {
+    public void readOptions(DynByteBuf buf, int length) {
         lastKey = null;
 
         int b0 = buf.readUnsignedByte();
@@ -125,7 +125,7 @@ public final class QzAES extends QZCoder {
     }
 
     @Override
-    void writeOptions(DynByteBuf buf) {
+	public void writeOptions(DynByteBuf buf) {
         int info = cyclePower << 8;
 
         int ivLen = 16;

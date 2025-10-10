@@ -85,6 +85,7 @@ public interface IType extends Cloneable {
 	 * Example: {@code ? extends Number & Serializable} – accepts subtypes of both.
 	 * @apiNote Not literally "? extends A & B"
 	 */
+	// maybe rename => INTERSECTION_TYPE
 	BOUNDED_WILDCARD = 6,
 	/**
 	 * Captured wildcard, representing an inferred or "erased" type during generic operations.

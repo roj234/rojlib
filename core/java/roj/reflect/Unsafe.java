@@ -1,8 +1,6 @@
 package roj.reflect;
 
 import org.jetbrains.annotations.ApiStatus;
-import roj.asm.Opcodes;
-import roj.util.Helpers;
 import roj.util.JVM;
 
 import java.lang.reflect.Field;
@@ -52,25 +50,22 @@ public interface Unsafe {
 	int ARRAY_FLOAT_BASE_OFFSET = U.arrayBaseOffset(float[].class);
 	int ARRAY_DOUBLE_BASE_OFFSET = U.arrayBaseOffset(double[].class);
 	int ARRAY_OBJECT_BASE_OFFSET = U.arrayBaseOffset(Object[].class);
+	int ARRAY_BOOLEAN_INDEX_SCALE = U.arrayIndexScale(boolean[].class);
 	int ARRAY_OBJECT_INDEX_SCALE = U.arrayIndexScale(Object[].class);
 
 	/** The value of {@code addressSize()} */
 	int ADDRESS_SIZE = U.addressSize();
 
-	default int addressSize() {return u.addressSize();}
+	@ApiStatus.Internal default int addressSize() {return u.addressSize();}
 
-	default long objectFieldOffset(Field f) {return u.objectFieldOffset(f);}
-	default long staticFieldOffset(Field f) {return u.staticFieldOffset(f);}
-	default Object staticFieldBase(Field f) {return u.staticFieldBase(f);}
+	@ApiStatus.Internal @Deprecated default long objectFieldOffset(Field f) {return u.objectFieldOffset(f);}
+	@ApiStatus.Internal @Deprecated default long staticFieldOffset(Field f) {return u.staticFieldOffset(f);}
+	@ApiStatus.Internal @Deprecated default Object staticFieldBase(Field f) {return u.staticFieldBase(f);}
 
-	static long fieldOffset(Class<?> type, String fieldName) {
-		try {
-			var field = Reflection.getField(type, fieldName);
-			return (field.getModifiers() & Opcodes.ACC_STATIC) == 0 ? U.objectFieldOffset(field) : U.staticFieldOffset(field);
-		} catch (Exception e) {
-			Helpers.athrow(e);
-			return 0;
-		}
+	@Deprecated static long objectFieldOffset(Class<?> recv, String name, Class<?> type) {
+		var resolver = Telescope.trustedLookup();
+		Object handle = resolver.findField(recv, name, type, false);
+		return resolver.objectFieldOffset(handle);
 	}
 
 	/**
@@ -113,18 +108,9 @@ public interface Unsafe {
 		throw new AssertionError(componentType+"不是基本类型");
 	}
 
-	/**
-	 * Allocates an instance but does not run any constructor.
-	 * Initializes the class if it has not yet been.
-	 */
 	@ApiStatus.Internal default Object allocateInstance(Class<?> cls) throws InstantiationException {return u.allocateInstance(cls);}
 
-	/**
-	 * Ensures the given class has been initialized. This is often
-	 * needed in conjunction with obtaining the static field base of a
-	 * class.
-	 */
-	@ApiStatus.Internal default void ensureClassInitialized(Class<?> c) {u.ensureClassInitialized(c);}
+	@ApiStatus.Internal @Deprecated default void ensureClassInitialized(Class<?> c) {u.ensureClassInitialized(c);}
 
 	//region 单地址模式 deprecated
 	default byte getByte(long address) {return u.getByte(address);}
@@ -145,7 +131,6 @@ public interface Unsafe {
 	default void putAddress(long address, long x) {u.putAddress(address, x);}
 	//endregion
 	//region 内存读写 plain
-	default boolean getBoolean(Object o, long offset) {return u.getBoolean(o, offset);}
 	default byte getByte(Object o, long offset) {return u.getByte(o, offset);}
 	default short getShort(Object o, long offset) {return u.getShort(o, offset);}
 	default char getChar(Object o, long offset) {return u.getChar(o, offset);}
@@ -153,7 +138,6 @@ public interface Unsafe {
 	default long getLong(Object o, long offset) {return u.getLong(o, offset);}
 	default float getFloat(Object o, long offset) {return u.getFloat(o, offset);}
 	default double getDouble(Object o, long offset) {return u.getDouble(o, offset);}
-	default Object getObject(Object o, long offset) {return getReference(o, offset);}
 	default Object getReference(Object o, long offset) {return u.getObject(o, offset);}
 
 	default int get16UL(Object o, long offset) {return (u.getByte(o, offset++) & 0xFF) | (u.getByte(o, offset) & 0xFF) << 8;}
@@ -186,11 +170,6 @@ public interface Unsafe {
 		u.putByte(o, offset++, (byte) x);
 		u.putByte(o, offset, (byte) (x >>> 8));
 	}
-	default void put24UL(Object o, long offset, int x) {
-		u.putByte(o, offset++, (byte) x);
-		u.putByte(o, offset++, (byte) (x >>> 8));
-		u.putByte(o, offset, (byte) (x >>> 16));
-	}
 	default void put32UL(Object o, long offset, int x) {
 		u.putByte(o, offset++, (byte) x);
 		u.putByte(o, offset++, (byte) (x >>> 8));
@@ -212,11 +191,6 @@ public interface Unsafe {
 		u.putByte(o, offset++, (byte) (x >>> 8));
 		u.putByte(o, offset, (byte) x);
 	}
-	default void put24UB(Object o, long offset, int x) {
-		u.putByte(o, offset++, (byte) (x >>> 16));
-		u.putByte(o, offset++, (byte) (x >>> 8));
-		u.putByte(o, offset, (byte) x);
-	}
 	default void put32UB(Object o, long offset, int x) {
 		u.putByte(o, offset++, (byte) (x >>> 24));
 		u.putByte(o, offset++, (byte) (x >>> 16));
@@ -234,7 +208,6 @@ public interface Unsafe {
 		u.putByte(o, offset, (byte) x);
 	}
 
-	default void putBoolean(Object o, long offset, boolean x) {u.putBoolean(o, offset, x);}
 	default void putByte(Object o, long offset, byte x) {u.putByte(o, offset, x);}
 	default void putShort(Object o, long offset, short x) {u.putShort(o, offset, x);}
 	default void putChar(Object o, long offset, char x) {u.putChar(o, offset, x);}
@@ -242,20 +215,17 @@ public interface Unsafe {
 	default void putLong(Object o, long offset, long x) {u.putLong(o, offset, x);}
 	default void putFloat(Object o, long offset, float x) {u.putFloat(o, offset, x);}
 	default void putDouble(Object o, long offset, double x) {u.putDouble(o, offset, x);}
-	default void putObject(Object o, long offset, Object x) {putReference(o, offset, x);}
 	default void putReference(Object o, long offset, Object x) {u.putObject(o, offset, x);}
 	//endregion
-	//region 这些函数被关键（pre-transform）API使用
-	@Deprecated default boolean compareAndSetReference(Object o, long offset, Object expected, Object x) {return u.compareAndSwapObject(o, offset, expected, x);}
-	@Deprecated default Object getAndSetReference(Object o, long offset, Object newValue) {return u.getAndSetObject(o, offset, newValue);}
 	//region 内存分配
-	default long allocateMemory(long bytes) {return u.allocateMemory(bytes);}
-	default long reallocateMemory(long address, long bytes) {return u.reallocateMemory(address, bytes);}
+	@ApiStatus.Internal default long allocateMemory(long bytes) {return u.allocateMemory(bytes);}
+	@ApiStatus.Internal default long reallocateMemory(long address, long bytes) {return u.reallocateMemory(address, bytes);}
+	@ApiStatus.Internal default void freeMemory(long address) {u.freeMemory(address);}
+
 	default void setMemory(Object o, long offset, long bytes, byte value) {u.setMemory(o, offset, bytes, value);}
 	default void setMemory(long address, long bytes, byte value) {u.setMemory(address, bytes, value);}
 	default void copyMemory(Object srcBase, long srcOffset, Object destBase, long destOffset, long bytes) {u.copyMemory(srcBase, srcOffset, destBase, destOffset, bytes);}
 	default void copyMemory(long srcAddress, long destAddress, long bytes) {u.copyMemory(srcAddress, destAddress, bytes);}
-	default void freeMemory(long address) {u.freeMemory(address);}
 	//endregion
 
 	/**

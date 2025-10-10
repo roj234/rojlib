@@ -22,7 +22,7 @@ import java.util.Set;
  * @since 2024/6/10 3:27
  */
 final class ClassStage implements Processor {
-	@Override public boolean acceptClasspath() {return true;}
+	@Override public boolean readClasspath() {return true;}
 
 	private static final Set<String> ACCEPTS = new HashSet<>("roj/compiler/plugins/annotations/Attach", "roj/compiler/plugins/annotations/Operator", "roj/compiler/plugins/annotations/Property");
 	@Override public Set<String> acceptedAnnotations() {return ACCEPTS;}

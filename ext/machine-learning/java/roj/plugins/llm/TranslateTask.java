@@ -1,6 +1,6 @@
 package roj.plugins.llm;
 
-import roj.config.JsonParser;
+import roj.config.ConfigMaster;
 import roj.config.mapper.ObjectMapper;
 import roj.config.table.TableWriter;
 import roj.text.DateFormat;
@@ -24,7 +24,7 @@ public class TranslateTask {
 		var recovery = new RandomAccessFile("progress.dat", "rw");
 		recovery.setLength(4);
 
-		Map<String, String> map = ser.read(new File("input.json"), new JsonParser());
+		Map<String, String> map = ser.read(new File("input.json"), ConfigMaster.JSON);
 
 		var out = TableWriter.csvWriterAppend("output.csv");
 		out.writeRow(Arrays.asList("text","translated","success", DateFormat.toLocalDateTime(System.currentTimeMillis())));

@@ -88,10 +88,6 @@ interface UnsafeTemplate {
 	void freeMemory(long address);
 	//endregion
 	//region 内存读写 volatile acquire release opaque
-	int getIntVolatile(Object o, long offset);
-	Object getReferenceVolatile(Object o, long offset);
-	void putReferenceVolatile(Object o, long offset, Object x);
-	boolean compareAndSetInt(Object o, long offset, int expected, int x);
 	boolean compareAndSetReference(Object o, long offset, Object expected, Object x);
 	Object getAndSetReference(Object o, long offset, Object newValue);
 	//endregion

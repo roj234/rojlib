@@ -322,7 +322,7 @@ public final class LavaTokenizer extends Tokenizer {
 			}
 			case 2 -> {
 				readJavadoc();
-				return null;
+				return CONSUMED_BY_SPECIAL_TOKEN;
 			}
 			case 1 -> {
 				return readStringBlock();

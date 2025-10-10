@@ -1,10 +1,7 @@
 package roj.archive.xz;
 
 import roj.RojLib;
-import roj.io.BufferPool;
-import roj.io.Finishable;
-import roj.io.IOUtil;
-import roj.io.UnsafeOutputStream;
+import roj.io.*;
 import roj.reflect.Unsafe;
 import roj.util.ArrayCache;
 import roj.util.ArrayUtil;
@@ -20,7 +17,7 @@ import static roj.reflect.Unsafe.U;
  * @author Roj234
  * @since 2023/11/17 2:10
  */
-class LZMA2WriterN extends OutputStream {
+class LZMA2WriterN extends MBOutputStream {
 	static final boolean AVAILABLE;
 	static {
 		RojLib.hasNative(0);
@@ -107,8 +104,6 @@ class LZMA2WriterN extends OutputStream {
 		}
 	}
 
-	@Override
-	public final void write(int b) throws IOException {write(new byte[]{(byte) b}, 0, 1);}
 	public final void write(byte[] buf, int off, int len) throws IOException {
 		ArrayUtil.checkRange(buf, off, len);
 		write0(buf, (long) Unsafe.ARRAY_BYTE_BASE_OFFSET+off, len);
@@ -200,6 +195,7 @@ class LZMA2WriterN extends OutputStream {
 	private static native boolean initNatives();
 	private static native long getMemoryUsage(long _nativeOptions);
 	private synchronized native long nInit(long _nativeOptions);
+	private synchronized native long nSetProperty(int propertyId, int propertyValue);
 	private synchronized native long nWrite(int len);
 	private synchronized native long nFlush();
 	private synchronized native long nFinish();

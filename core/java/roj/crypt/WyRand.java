@@ -1,7 +1,7 @@
 package roj.crypt;
 
 import roj.optimizer.FastVarHandle;
-import roj.reflect.Handles;
+import roj.reflect.Telescope;
 
 import java.lang.invoke.VarHandle;
 import java.util.Random;
@@ -14,8 +14,8 @@ import java.util.concurrent.atomic.AtomicLong;
 @FastVarHandle
 class WyRand extends Random {
 	private static final VarHandle
-			SEED = Handles.lookup().findVarHandle(Random.class, "seed", AtomicLong.class),
-			HAVE_NEXT_NEXT_GAUSSIAN = Handles.lookup().findVarHandle(Random.class, "haveNextNextGaussian", boolean.class);
+			SEED = Telescope.lookup().findVarHandle(Random.class, "seed", AtomicLong.class),
+			HAVE_NEXT_NEXT_GAUSSIAN = Telescope.lookup().findVarHandle(Random.class, "haveNextNextGaussian", boolean.class);
 
 	static final long WY_INCREMENT = 0x2d358dccaa6c78a5L, WY_XOR = 0x8bb84b93962eacc9L;
 

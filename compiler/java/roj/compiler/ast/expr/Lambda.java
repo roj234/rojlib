@@ -208,7 +208,7 @@ public final class Lambda extends Expr {
 				next.setClass(ctx.file);
 				next.tokenizer.state = LavaTokenizer.STATE_EXPR;
 				task.parse(next);
-				ctx.file._setCtx(ctx);
+				ctx.file.setContext(ctx);
 			} catch (ParseException e) {
 				throw new ResolveException("Lambda表达式解析失败", e);
 			} finally {

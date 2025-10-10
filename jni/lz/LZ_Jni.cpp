@@ -17,42 +17,6 @@
         return 0;\
     }
 
-/*static inline bool LzJni_init(JNIEnv *env) {
-    size_t const CNBuffSize = 20 MB;
-    void* const CNBuffer = malloc(CNBuffSize);
-    size_t const compressedBufferSize = FL2_compressBound(CNBuffSize);
-    void* const compressedBuffer = malloc(compressedBufferSize);
-    FL2_CStream *const cstream = FL2_createCStreamMt(nbThreads, 1);
-
-    FL2_outBuffer out = { compressedBuffer, compressedBufferSize, 0 };
-    FL2_dictBuffer dict;
-    FL2_cBuffer cbuf;
-    size_t r;
-
-    CHECK(FL2_initCStream(cstream, 2));
-    FL2_getDictionaryBuffer(cstream, &dict);
-    memcpy(dict.dst, CNBuffer, dict.size);
-    CHECK_V(res, FL2_updateDictionary(cstream, dict.size));
-    r = dict.size;
-    FL2_getDictionaryBuffer(cstream, &dict);
-    memcpy((BYTE*)dict.dst, (BYTE*)CNBuffer + r, r / 2);
-    CHECK(FL2_updateDictionary(cstream, r / 2));
-    r = FL2_endStream(cstream, NULL);
-    if (r == 0) goto _output_error;
-    while (FL2_getNextCompressedBuffer(cstream, &cbuf) != 0) {
-        memcpy((BYTE*)out.dst + out.pos, cbuf.src, cbuf.size);
-        out.pos += cbuf.size;
-    }
-    r = FL2_endStream(cstream, NULL);
-    if (r == 0) goto _output_error;
-    while (FL2_getNextCompressedBuffer(cstream, &cbuf) != 0) {
-        memcpy((BYTE*)out.dst + out.pos, cbuf.src, cbuf.size);
-        out.pos += cbuf.size;
-    }
-    r = FL2_endStream(cstream, NULL);
-    if (r != 0) goto _output_error;
-}*/
-
 #ifdef _WIN32
 FARPROC lz_funcptr[11];
 #endif

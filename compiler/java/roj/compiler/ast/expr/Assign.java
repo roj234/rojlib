@@ -42,7 +42,7 @@ final class Assign extends Expr {
 
 		if (right instanceof BinaryOp op) {
 			right = op.resolveEx(ctx, true);
-			if (right == NaE.resolveFailed(this)) return right;
+			if (right instanceof NaE) return right;
 
 			if (node.equals(op.left)) {
 				// a = a + b
@@ -62,7 +62,7 @@ final class Assign extends Expr {
 		if (right instanceof Cast c) {
 			int castType = c.cast.type;
 			if ((castType == -1 || castType == -2) && !(left instanceof LocalVariable))
-				ctx.report(this, Kind.INCOMPATIBLE, "assign.incompatible.redundantCast");
+				ctx.report(this, Kind.FEATURE, "assign.incompatible.redundantCast");
 		}
 
 		// 常量传播
@@ -129,7 +129,7 @@ final class Assign extends Expr {
 		}
 		cw.insn((byte) (op - Type.SORT_INT + unifiedSort));
 
-		// sort => [2, 3, 4]
+		// char t += 3; 因为java都是int所以有一个implicit转换插入
 		if (sort < Type.SORT_INT && primType == 0 && isVariable) cw.insn((byte) (Opcodes.I2B - Type.SORT_BYTE + sort));
 		else if (primType != 0) ctx.castTo(Type.primitive(primType), type, 0).write(cw);
 
@@ -142,16 +142,22 @@ final class Assign extends Expr {
 	protected void write1(MethodWriter cw, @NotNull TypeCast.Cast cast) {
 		var noRet = cast == NORET;
 
-		// a = a + 1
-		if (right instanceof BinaryOp op) {
-			if (op.left.equals(left)) {
-				if (sameVarShrink(cw, op, noRet, op.right)) return;
-			} else if (op.left.isConstant() && op.right.equals(left)) {
-				if (sameVarShrink(cw, op, noRet, op.left)) return;
+		optimizedBinaryOp: {
+			fallback:
+			// a = a + 1 这种尝试优化成 iinc, 甚至 a = 1 + a 也行
+			if (right instanceof BinaryOp op) {
+				if (op.left.equals(left)) {
+					if (sameVarShrink(cw, op, noRet, op.right)) return;
+				} else if (op.left.isConstant() && op.right.equals(left)) {
+					if (sameVarShrink(cw, op, noRet, op.left)) return;
+				} else {
+					break fallback;
+				}
+
+				if (isCastNeeded()) this.cast.write(cw);
+				break optimizedBinaryOp;
 			}
 
-			if (isCastNeeded()) this.cast.write(cw);
-		} else {
 			left.preStore(cw);
 			right.write(cw, isCastNeeded() ? this.cast : TypeCast.Cast.IDENTITY);
 		}

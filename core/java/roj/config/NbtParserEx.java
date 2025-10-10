@@ -1,13 +1,14 @@
 package roj.config;
 
-import roj.io.ByteInput;
-import roj.io.ByteInputStream;
+import roj.io.XDataInput;
+import roj.io.XDataInputStream;
+import roj.text.FastCharset;
+import roj.util.ArrayUtil;
 
 import java.io.IOException;
 import java.io.InputStream;
 
 import static roj.config.NbtParser.*;
-import static roj.reflect.Unsafe.U;
 
 /**
  * Extended NBT
@@ -17,15 +18,15 @@ import static roj.reflect.Unsafe.U;
  * @since 2024/4/30 20:17
  */
 public final class NbtParserEx implements Parser {
-	public static final byte X_GB18030_STRING = 13, X_LATIN1_STRING = 14, X_NULL = 15, X_DEDUP_LIST = 16;
+	public static final byte X_UTF16LE_STRING = 13, X_LATIN1_STRING = 14, X_NULL = 15, X_DEDUP_LIST = 16;
 
 	public static final NbtParserEx INSTANCE = new NbtParserEx();
 	private NbtParserEx() {}
 
 	@Override
-	public void parse(InputStream in, ValueEmitter emitter) throws IOException {Parse(ByteInputStream.wrap(in), emitter);}
+	public void parse(InputStream in, ValueEmitter emitter) throws IOException {Parse(XDataInputStream.wrap(in), emitter);}
 
-	public static void Parse(ByteInput in, ValueEmitter cc) throws IOException {
+	public static void Parse(XDataInput in, ValueEmitter cc) throws IOException {
 		byte type = in.readByte();
 		if (type == 0) return;
 
@@ -34,7 +35,7 @@ public final class NbtParserEx implements Parser {
 		parse(in, type, cc);
 	}
 
-	private static void parse(ByteInput in, byte type, ValueEmitter cc) throws IOException {
+	private static void parse(XDataInput in, byte type, ValueEmitter cc) throws IOException {
 		switch (type) {
 			default -> throw new IOException("Corrupted NBT(invalid id "+type+")");
 			case X_NULL -> cc.emitNull();
@@ -46,12 +47,12 @@ public final class NbtParserEx implements Parser {
 			case DOUBLE -> cc.emit(in.readDouble());
 			case BYTE_ARRAY -> {
 				int length = in.readInt();
-				var arr = (byte[]) U.allocateUninitializedArray(byte.class, length);
+				var arr = ArrayUtil.newUninitializedByteArray(length);
 				in.readFully(arr);
 				cc.emit(arr);
 			}
 			case STRING -> cc.emit(in.readUTF());
-			case X_GB18030_STRING -> cc.emit(in.readGB(in.readVUInt()));
+			case X_UTF16LE_STRING -> cc.emit(in.readVUIStr(in.readVUInt(), FastCharset.UTF16LE()));
 			case X_LATIN1_STRING -> cc.emit(in.readAscii(in.readVUInt()));
 			case X_DEDUP_LIST -> {
 				int mapKeySize = in.readUnsignedByte();
@@ -81,20 +82,20 @@ public final class NbtParserEx implements Parser {
 			}
 			case INT_ARRAY -> {
 				int length = in.readInt();
-				var arr = (int[]) U.allocateUninitializedArray(int.class, length);
+				var arr = ArrayUtil.newUninitializedIntArray(length);
 				for (int i = 0; i < arr.length; i++) arr[i] = in.readInt();
 				cc.emit(arr);
 			}
 			case LONG_ARRAY -> {
 				int length = in.readInt();
-				var arr = (long[]) U.allocateUninitializedArray(long.class, length);
+				var arr = ArrayUtil.newUninitializedLongArray(length);
 				for (int i = 0; i < arr.length; i++) arr[i] = in.readLong();
 				cc.emit(arr);
 			}
 		}
 	}
 
-	private static void useKey(ByteInput in, ValueEmitter cc, String[] mapKey) throws IOException {
+	private static void useKey(XDataInput in, ValueEmitter cc, String[] mapKey) throws IOException {
 		cc.emitMap(mapKey.length);
 		for (String key : mapKey) {
 			cc.emitKey(key);

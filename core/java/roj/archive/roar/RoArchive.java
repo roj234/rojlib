@@ -12,7 +12,7 @@ import roj.io.source.Source;
 import roj.io.source.SourceInputStream;
 import roj.math.MathUtils;
 import roj.optimizer.FastVarHandle;
-import roj.reflect.Handles;
+import roj.reflect.Telescope;
 import roj.util.ByteList;
 import roj.util.FastFailException;
 import roj.util.Helpers;
@@ -36,7 +36,7 @@ import java.util.zip.ZipEntry;
 @FastVarHandle
 public sealed class RoArchive implements ArchiveFile permits RoWriteArchive {
 	Source r, cache;
-	private static final VarHandle CACHE = Handles.lookup().findVarHandle(RoArchive.class, "cache", Source.class);
+	private static final VarHandle CACHE = Telescope.lookup().findVarHandle(RoArchive.class, "cache", Source.class);
 
 	static final XashMap<Source, CacheNode> ARCHIVES = WeakCache.shape(CacheNode.class).create();
 	static final class CacheNode extends WeakCache<Source> {

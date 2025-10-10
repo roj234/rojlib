@@ -27,9 +27,7 @@ import roj.collect.HashMap;
 import roj.collect.IntMap;
 import roj.collect.ToIntMap;
 import roj.concurrent.Task;
-import roj.config.JsonParser;
-import roj.config.MsgPackParser;
-import roj.config.Parser;
+import roj.config.ConfigMaster;
 import roj.config.mapper.ObjectMapper;
 import roj.config.node.ConfigValue;
 import roj.http.Headers;
@@ -181,8 +179,7 @@ public final class OKRouter implements Router {
 			cw.insn(ALOAD_0);
 			cw.field(GETFIELD, caller, 0);
 
-			var seg = SwitchBlock.ofSwitch(TABLESWITCH);
-			cw.addSegment(seg);
+			var seg = cw.tableSwitch();
 
 			SwitchBlock seg2;
 			CodeWriter cw2;
@@ -191,7 +188,7 @@ public final class OKRouter implements Router {
 				cw2.visitSize(1, 1);
 				cw2.insn(ALOAD_0);
 				cw2.field(GETFIELD, caller, 0);
-				seg2 = SwitchBlock.ofSwitch(TABLESWITCH);
+				seg2 = cw2.tableSwitch();
 				cw2.addSegment(seg2);
 			} else {
 				seg2 = null;
@@ -650,17 +647,11 @@ public final class OKRouter implements Router {
 		if (body == null) throw new FastFailException("没有请求体");
 
 		var serializer = ObjectMapper.SAFE.reader(type);
-		Parser parser;
+		ConfigMaster configType;
 
 		switch (req.getFirstHeaderValue("content-type")) {
-			default -> {
-				parser = (Parser) req.threadLocal().get("or:parser:json");
-				if (parser == null) req.threadLocal().put("or:parser:json", parser = new JsonParser());
-			}
-			case "application/x-msgpack"/* Unofficial */, "application/vnd.msgpack" -> {
-				parser = (Parser) req.threadLocal().get("or:parser:msgpack");
-				if (parser == null) req.threadLocal().put("or:parser:msgpack", parser = new MsgPackParser());
-			}
+			default -> configType = ConfigMaster.JSON;
+			case "application/x-msgpack"/* Unofficial */, "application/vnd.msgpack" -> configType = ConfigMaster.MSGPACK;
 			case "application/x-www-form-urlencoded", "multipart/form-data" -> {
 				var data = req.formData();
 				serializer.emitMap(data.size());
@@ -674,8 +665,7 @@ public final class OKRouter implements Router {
 		}
 
 		body.retain();
-		parser.parse(body, serializer);
-		return serializer.get();
+		return serializer.read(body, configType);
 	}
 	//endregion
 	private static final VirtualReference<HashMap<String, RouteRegistration>> REGISTRATIONS = new VirtualReference<>();
@@ -756,7 +746,7 @@ public final class OKRouter implements Router {
 			}
 			String url = pathRel.concat(subpath);
 			if (url.endsWith("/")) flag |= RouteNode.DIRECTORY;
-			else if (annotation.getBool("strict", true)) flag |= RouteNode.FILE;
+			else if (!url.isEmpty() && annotation.getBool("strict", true)) flag |= RouteNode.FILE;
 
 			RouteNode node = route.add(url, 0, url.length());
 
@@ -830,7 +820,6 @@ public final class OKRouter implements Router {
 		}
 		var info = new RouteInfo();
 		list.defaultRoute = info;
-
 
 		node.flag |= RouteNode.PREFIX|(path.endsWith("/")?RouteNode.DIRECTORY:0);
 		node.value = list;
@@ -931,7 +920,7 @@ public final class OKRouter implements Router {
 					RouteNode node = nodeS.get(k);
 
 					if (node instanceof ParamNode pn) {
-						ArrayList<String> params = parS.size() <= k ? new ArrayList<>() : new ArrayList<>(parS.get(k));
+						ArrayList<String> params = parS.size() <= k || parS.get(k) == null ? new ArrayList<>() : new ArrayList<>(parS.get(k));
 						params.add(pn.name);
 						params.add(path.substring(prevI, i-1));
 
@@ -1012,7 +1001,7 @@ public final class OKRouter implements Router {
 			if (node == null) return buildPrefix(req);
 
 			// 兼容之前的代码，非严格模式
-			if ((node.flag&RouteNode.DIRECTORY) == 0 && !isFile) end--;
+			if ((node.flag&RouteNode.DIRECTORY) == 0 && !isFile && end > 0) end--;
 			prefixLen = end;
 			matchedValue = getNodeValue(node);
 			if (par != null) {

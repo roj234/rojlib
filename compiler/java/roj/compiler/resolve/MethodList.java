@@ -209,8 +209,7 @@ final class MethodList extends ComponentList {
 			else sb.append('"').append(TextUtil.join(actualArguments, ",")).append('"');
 			sb.append(",\")\"],[");
 
-			CharList tmp = new CharList();
-			ctx.errorCapture = makeErrorCapture(tmp);
+			ctx.enableErrorCapture();
 
 			for (int i = 0; i < size; i++) {
 				MethodNode mn = methods.get(i);
@@ -218,12 +217,12 @@ final class MethodList extends ComponentList {
 				else sb.append("\"  \",invoke.method,\"").append(mn.owner()).append('.').append(mn.name());
 				getArg(mn, that, sb.append("\",\"(\",")).append("\")\",invoke.notApplicable,\"\n    \",");
 
-				getErrorMsg(ctx, that, actualArguments, (flags&IN_STATIC) != 0, mn, sb.append("\"(\","), tmp);
+				getErrorMsg(ctx, that, actualArguments, (flags&IN_STATIC) != 0, mn, sb.append("\"(\","), ctx.getCapturedError());
 				sb.append("\")\n\",");
 			}
 			sb.set(sb.length()-1, ']');
 
-			ctx.errorCapture = null;
+			ctx.disableErrorCapture();
 			ctx.report(Kind.ERROR, sb.replace('/', '.').toStringAndFree());
 		} else {
 			checkDeprecation(ctx, owner, best.method);

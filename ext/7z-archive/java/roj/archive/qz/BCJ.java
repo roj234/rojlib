@@ -20,7 +20,7 @@ public final class BCJ extends QZCoder {
 	private final byte[] id;
 
 	private BCJ(int type) { id = new byte[] {3,3,(byte)type,(byte)(type==1?3:1)}; }
-	byte[] id() {return id;}
+	public byte[] id() {return id;}
 
 	public OutputStream encode(OutputStream out) { return new CipherOutputStream(out, bcj(true)); }
 	public InputStream decode(InputStream in, byte[] p, long u, AtomicInteger m) { return new CipherInputStream(in, bcj(false)); }

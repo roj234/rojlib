@@ -57,8 +57,7 @@ final class FieldList extends ComponentList {
 
 		sb.append(fields.get(0).name()).append(",[");
 
-		CharList tmp = new CharList();
-		ctx.errorCapture = makeErrorCapture(tmp);
+		ctx.enableErrorCapture();
 
 		for (int i = 0; i < size; i++) {
 			ClassDefinition owner = owners.get(i);
@@ -66,13 +65,11 @@ final class FieldList extends ComponentList {
 
 			ctx.canAccessSymbol(owner, fn, (flags&IN_STATIC) != 0, true);
 			sb.append("\"  \",symbol.field,").append(owner.name()).append('.').append(fn.name());
-			sb.append(",invoke.notApplicable,").append(tmp).append(",\"\n\",");
-			tmp.clear();
+			sb.append(",invoke.notApplicable,").append(ctx.getCapturedError()).append(",\"\n\",");
 		}
 		sb.setLength(sb.length()-1);
 
-		ctx.errorCapture = null;
-		tmp._free();
+		ctx.disableErrorCapture();
 		return new FieldResult(sb.append("]]").replace('/', '.').toStringAndFree());
 	}
 

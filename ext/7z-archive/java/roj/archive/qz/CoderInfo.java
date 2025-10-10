@@ -3,9 +3,11 @@ package roj.archive.qz;
 import org.jetbrains.annotations.NotNull;
 import roj.collect.HashMap;
 import roj.collect.IntMap;
-import roj.io.ByteOutput;
 import roj.io.Finishable;
 import roj.io.IOUtil;
+import roj.io.XDataOutput;
+import roj.text.CharList;
+import roj.text.TextUtil;
 import roj.util.ArrayUtil;
 import roj.util.ByteList;
 import roj.util.Helpers;
@@ -43,12 +45,12 @@ final class CoderInfo extends QZCoder {
 		this.outputStreamIndex = outputStreamIndex;
 	}
 
-	@Override byte[] id() {return null;}
+	@Override public byte[] id() {return null;}
 	@Override public InputStream decode(InputStream a, byte[] b, long c, AtomicInteger d) throws IOException {throw new IllegalArgumentException("CoderInfo应该由根节点解压，而不是QZCoder，这是编程错误。");}
 	@Override public OutputStream encode(OutputStream a) throws IOException {throw new IllegalArgumentException("CoderInfo应该由根节点压缩，而不是QZCoder，这是编程错误。");}
 
 	@Override
-	public String toString() { return String.valueOf(outputStreamIndex)+'#'+ coder; }
+	public String toString() { return String.valueOf(outputStreamIndex)+'#'+coder; }
 
 	/**
 	 * Checks if this coder or any of its dependencies is of the specified type.
@@ -56,19 +58,21 @@ final class CoderInfo extends QZCoder {
 	 * @param type The coder type to check for
 	 * @return true if this coder or any dependency matches the type
 	 */
-	public boolean hasProcessor(Class<? extends QZCoder> type) {
-		if (type.isInstance(coder)) return true;
+	public <T extends QZCoder> T getCodec(Class<T> type) {
+		if (type.isInstance(coder)) return type.cast(coder);
 		for (Object connection : uses) {
 			if (connection.getClass() == Integer.class) {
 				continue;
 			} else if (connection.getClass() == CoderInfo.class) {
-				if (((CoderInfo) connection).hasProcessor(type)) return true;
+				T processor = ((CoderInfo) connection).getCodec(type);
+				if (processor != null) return processor;
 			} else {
 				IntMap.Entry<CoderInfo> entry = Helpers.cast(connection);
-				if (entry.getValue().hasProcessor(type)) return true;
+				T processor = entry.getValue().getCodec(type);
+				if (processor != null) return processor;
 			}
 		}
-		return false;
+		return null;
 	}
 
 	/**
@@ -292,10 +296,10 @@ final class CoderInfo extends QZCoder {
 	 * @param block The word block being processed
 	 * @param buffer The output buffer
 	 */
-	void writeCoders(WordBlock block, ByteOutput buffer) throws IOException {
+	void writeCoders(WordBlock block, XDataOutput buffer) throws IOException {
 		ByteList options = IOUtil.getSharedByteBuf();
 
-		var sortedCoders = (CoderInfo[]) block.coder;
+		var sortedCoders = (CoderInfo[]) block.coders;
 		buffer.putVUInt(sortedCoders.length);
 
 		// Write coders
@@ -374,11 +378,92 @@ final class CoderInfo extends QZCoder {
 		int originalIndex = outputStreamIndex;
 		outputStreamIndex = -1;
 
-		var sortedCoders = (CoderInfo[]) block.coder;
+		var sortedCoders = (CoderInfo[]) block.coders;
 		for (CoderInfo coder : sortedCoders) {
 			if (coder.outputStreamIndex > originalIndex) coder.outputStreamIndex--;
 		}
 
 		return originalIndex;
+	}
+
+	/**
+	 * 将过滤器节点树以Mermaid格式打印
+	 * @return Mermaid格式的字符串
+	 */
+	public static String printFilterMermaid(WordBlock block) {
+		CharList mermaid = new CharList();
+		mermaid.append("```mermaid\ngraph TD\n");
+
+		var sortedCoders = (CoderInfo[]) block.coders;
+
+		for (CoderInfo coder : sortedCoders) {
+			for (Object pipe : coder.uses) {
+				Object parentNode;
+				int offset = 0;
+
+				if (pipe.getClass() == CoderInfo.class) {
+					parentNode = pipe;
+				} else if (pipe.getClass() != Integer.class) {
+					IntMap.Entry<CoderInfo> entry = Helpers.cast(pipe);
+					parentNode = entry.getValue();
+					offset = entry.getIntKey();
+				} else {
+					parentNode = pipe;
+					offset = -1;
+				}
+
+				String currentNodeId = getNodeId(coder);
+				String currentNodeLabel = getNodeLabel(coder);
+
+				long size;
+				if (offset >= 0) {
+					int i = ((CoderInfo) pipe).outputStreamIndex;
+					size = i == block.outSizes.length ? block.uSize : block.outSizes[i];
+					mermaid.append("    ").append(getNodeId(parentNode))
+							.append("[\"").append(getNodeLabel(parentNode)).append("\"]")
+							.append(" --> ");
+				} else {
+					int i = (int) parentNode;
+					size = i == 0 ? block.size : block.extraSizes[i - 1];
+					mermaid.append("    src").append(i)
+							.append("(\"Stream #").append(i).append("\")")
+							.append(" --> ");
+				}
+
+				mermaid.append("|").append(TextUtil.scaledNumber1024(size)).append("|")
+						.append(currentNodeId)
+						.append("[\"").append(currentNodeLabel).append("\"]")
+						.append("\n");
+			}
+		}
+
+		var coder = block.complexCoder();
+		mermaid.append("    ").append(getNodeId(coder))
+				.append("[\"").append(getNodeLabel(coder)).append("\"]")
+				.append(" --> ")
+				.append("|").append(TextUtil.scaledNumber1024(block.uSize)).append("|")
+				.append("_output")
+				.append("([\"Output\"])")
+				.append("\n");
+
+		return mermaid.append("```").toStringAndFree();
+	}
+
+	private static String getNodeId(Object node) {return Integer.toString(System.identityHashCode(node), 36).replace('-', '_');}
+
+	/**
+	 * 转义Mermaid文本中的特殊字符
+	 */
+	private static String getNodeLabel(Object node) {
+		String text;
+		if (node instanceof IntMap.Entry<?> entry) {
+			text = entry.getValue().toString();
+		} else {
+			text = ((CoderInfo) node).coder.toString();
+		}
+
+		return text.replace("\"", "&quot;")
+				.replace("<", "&lt;")
+				.replace(">", "&gt;");
 	}
 }

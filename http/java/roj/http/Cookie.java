@@ -110,5 +110,5 @@ public final class Cookie {
 	}
 
 	@Override
-	public String toString() { return URICoder.encodeURIComponent(name)+"="+ URICoder.encodeURIComponent(value); }
+	public String toString() { return URICoder.encodeURIComponent(name)+"="+URICoder.encodeURIComponent(value); }
 }

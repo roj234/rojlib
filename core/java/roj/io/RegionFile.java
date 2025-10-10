@@ -7,7 +7,7 @@ import roj.io.source.Source;
 import roj.io.source.SourceInputStream;
 import roj.math.MathUtils;
 import roj.optimizer.FastVarHandle;
-import roj.reflect.Handles;
+import roj.reflect.Telescope;
 import roj.text.logging.Level;
 import roj.text.logging.Logger;
 import roj.util.ByteList;
@@ -46,7 +46,7 @@ public class RegionFile implements AutoCloseable {
 	protected byte flag;
 
 	Source cache;
-	static final VarHandle CACHE = Handles.lookup().findVarHandle(RegionFile.class, "cache", Source.class);
+	static final VarHandle CACHE = Telescope.lookup().findVarHandle(RegionFile.class, "cache", Source.class);
 	protected Lock lock = new ReentrantLock();
 
 	public RegionFile(File file) throws IOException {
@@ -146,9 +146,9 @@ public class RegionFile implements AutoCloseable {
 		}
 	}
 
-	public ByteInputStream getBufferedInputStream(int id) throws IOException {
+	public XDataInputStream getBufferedInputStream(int id) throws IOException {
 		var in = getInputStream(id, null);
-		return in == null ? null : new ByteInputStream(in);
+		return in == null ? null : new XDataInputStream(in);
 	}
 	// holder[0]是(磁盘上的)数据长度 [1]是Unix时间戳/1000
 	public InputStream getInputStream(int id) throws IOException {return _in(id, null);}

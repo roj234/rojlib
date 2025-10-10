@@ -1,0 +1,35 @@
+
+loggers:
+  '':
+    level: INFO
+    appenders:
+      - console
+
+  MCMake:
+    level: ALL
+    appenders:
+      - log
+      - ref: console
+        threshold: INFO
+
+appenders:
+  console:
+    type: CONSOLE
+    format: "[%d{MM-DD\" \"HH:ii:ss}] %padLeft{5}%level [%limit{10}%logger] "
+    ansi_format: "[%d{MM-DD\" \"HH:ii:ss}] %color[%limit{10}%logger]\u001b[0m "
+
+  log:
+    type: FILE
+    format: "%d{YYYY-MM-DD\" \"HH:ii:ss.xxx} %level [%logger] [%thread] "
+    charset: UTF-8
+    async:
+      enable: true
+      buffer: 10
+    path: "cache/logs"
+    file_name: "latest.log"
+    rotation:
+      size: 1MB
+      file_name: "%d{YYYY-MM-DD}.log.gz"
+    remove:
+      last: 14
+      max_size: 10MB

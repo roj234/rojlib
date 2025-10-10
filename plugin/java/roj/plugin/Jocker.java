@@ -3,13 +3,16 @@ package roj.plugin;
 import roj.archive.zip.ZEntry;
 import roj.archive.zip.ZipFile;
 import roj.asm.annotation.Annotation;
+import roj.asmx.AnnotationRepoManager;
 import roj.ci.annotation.ReplaceConstant;
 import roj.collect.CollectionX;
 import roj.collect.HashMap;
 import roj.concurrent.Task;
 import roj.concurrent.TaskPool;
+import roj.config.ConfigMaster;
 import roj.config.node.BoolValue;
 import roj.config.node.ConfigValue;
+import roj.config.node.MapValue;
 import roj.config.node.Type;
 import roj.http.server.HttpServer;
 import roj.http.server.PathRouter;
@@ -22,11 +25,11 @@ import roj.plugin.di.DIContext;
 import roj.reflect.ILSecurityManager;
 import roj.reflect.Reflection;
 import roj.text.CharList;
-import roj.text.Formatter;
+import roj.text.ParseException;
 import roj.text.TextReader;
 import roj.text.Tokenizer;
 import roj.text.logging.Level;
-import roj.text.logging.Logger;
+import roj.text.logging.LogContext;
 import roj.ui.*;
 import roj.util.ArtifactVersion;
 import roj.util.Helpers;
@@ -37,6 +40,8 @@ import java.io.File;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
+import java.security.CodeSource;
+import java.security.cert.Certificate;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
@@ -44,7 +49,6 @@ import java.util.Set;
 import java.util.function.Consumer;
 import java.util.function.IntFunction;
 
-import static roj.plugin.PanTweaker.CONFIG;
 import static roj.ui.CommandNode.argument;
 import static roj.ui.CommandNode.literal;
 
@@ -58,28 +62,24 @@ public final class Jocker extends PluginManager {
 	static final boolean useModulePluginIfAvailable = true;
 
 	static Jocker pm;
+	static MapValue CONFIG;
+
 	public static PluginManager getPluginManager() {return pm;}
+
+	static Certificate[] digitalCertificates = Jocker.class.getProtectionDomain().getCodeSource().getCertificates();
 
 	@SuppressWarnings("unchecked")
 	public static void main(String[] args) throws Exception {
+		File file = new File("plugins/Core/config.yml");
+		try {
+			Jocker.CONFIG = file.isFile() ? ConfigMaster.YAML.parse(file).asMap() : new MapValue();
+		} catch (IOException | ParseException e) {
+			Helpers.athrow(e);
+		}
+
 		long time = System.currentTimeMillis();
 
-		Formatter f;
-		if (Tty.IS_RICH) {
-			f = (env, sb) -> {
-				((Formatter) env.get("0")).format(env, sb.append('['));
-
-				Level level = (Level) env.get("LEVEL");
-				sb.append("]\u001b[").append(level.color).append("m[").append(env.get("NAME"));
-				if (level.ordinal() > Level.WARN.ordinal())
-					sb.append("][").append(env.get("THREAD"));
-
-				return sb.append("]\u001b[0m: ");
-			};
-		} else {
-			f = Formatter.simple("[${0}][${THREAD}][${NAME}/${LEVEL}]: ");
-		}
-		Logger.getRootContext().setPrefix(f);
+		LogContext.setupDefaultConsoleLogFormat();
 		LOGGER.setLevel(Level.valueOf(CONFIG.getString("plugin_log", "INFO")));
 		PanSecurityManager.LOGGER.setLevel(Level.valueOf(CONFIG.getString("security_log", "INFO")));
 
@@ -90,7 +90,7 @@ public final class Jocker extends PluginManager {
 		File plugins = new File("plugins"); plugins.mkdir();
 		pm = new Jocker(plugins);
 		pm.registerSystemCommands();
-		DIContext.dependencyLoad(PanTweaker.annotations);
+		DIContext.dependencyLoad(Jocker.class.getClassLoader());
 		pm.loadBuiltinPlugins();
 		ILSecurityManager.setSecurityManager(new PanSecurityManager.ILHook());
 		pm.findPlugins();
@@ -135,7 +135,7 @@ public final class Jocker extends PluginManager {
 		pd.version = new ArtifactVersion("${project_version}");
 		pd.authors = Collections.singletonList("Roj234");
 
-		pd.skipCheck = true;
+		pd.isTrusted = true;
 		pd.dynamicLoadClass = true;
 		pd.accessUnsafe = true;
 
@@ -196,14 +196,14 @@ public final class Jocker extends PluginManager {
 		CMD.register(literal("stop").executes(ctx -> System.exit(0)));
 	}
 	private void loadBuiltinPlugins() {
-		PluginDescriptor pd;
 		ConfigValue entry = CONFIG.get("load_builtin", BoolValue.TRUE);
 		if (!entry.mayCastTo(Type.BOOL) || entry.asBool()) {
 			HashMap<String, PluginDescriptor> builtin = new HashMap<>();
-			for (var info : PanTweaker.annotations.annotatedBy("roj/plugin/SimplePlugin")) {
+
+			for (var info : AnnotationRepoManager.getAnnotations("roj/plugin/SimplePlugin", Jocker.class.getClassLoader())) {
 				Annotation pin = info.annotations().get("roj/plugin/SimplePlugin");
 
-				pd = new PluginDescriptor();
+				var pd = new PluginDescriptor();
 				pd.fileName = pin.getBool("inheritConfig") ? "/builtin_inherit" : "/builtin";
 				pd.mainClass = info.owner().replace('/', '.');
 
@@ -221,7 +221,7 @@ public final class Jocker extends PluginManager {
 			LOGGER.info("找到{}个内置插件", builtin.size());
 			if (entry.mayCastTo(Type.BOOL) && entry.asBool()) {
 				for (var name : CONFIG.getList("load_builtins").asList().raw()) {
-					pd = builtin.remove(name.asString());
+					var pd = builtin.remove(name.asString());
 					if (pd != null) plugins.add(pd);
 					else LOGGER.warn("找不到内置插件 {}", name.asString());
 				}
@@ -240,8 +240,14 @@ public final class Jocker extends PluginManager {
 
 	public static void addChannelInitializator(Consumer<MyChannel> ch) {
 		var caller = Reflection.getCallerClass(2);
-		if (caller.getClassLoader() instanceof PluginClassLoader) throw new IllegalStateException("not allowed for external plugin");
-		httpServer.initializator(httpServer.initializator().andThen(ch));
+		CodeSource cs = caller.getProtectionDomain().getCodeSource();
+		if (cs != null) {
+			if (Arrays.equals(cs.getCertificates(), digitalCertificates)) {
+				httpServer.initializator(httpServer.initializator().andThen(ch));
+				return;
+			}
+		}
+		throw new IllegalStateException("not allowed for external plugin");
 	}
 
 	private static ServerLaunch httpServer;

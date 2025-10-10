@@ -1,6 +1,5 @@
 package roj.util;
 
-import roj.RojLib;
 import roj.annotation.ForDebug;
 import roj.reflect.Unsafe;
 import roj.text.CharList;
@@ -78,7 +77,7 @@ public class ArrayCache {
 	public ArrayCache() {}
 
 	private static <T> T getGlobalArray(int idx, int size) {
-		if (RojLib.IS_DEV) new Throwable("Allocating huge array "+typeOf(idx)+"["+size+"]").printStackTrace();
+		//if (RojLib.IS_DEV) new Throwable("Allocating huge array "+typeOf(idx)+"["+size+"]").printStackTrace();
 		return null;
 	}
 

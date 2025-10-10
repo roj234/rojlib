@@ -2,6 +2,7 @@ package roj.compiler.resolve;
 
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
+import org.jetbrains.annotations.Unmodifiable;
 import roj.asm.MethodNode;
 import roj.asm.attr.Attribute;
 import roj.asm.type.IType;
@@ -46,12 +47,14 @@ public final class MethodResult {
 		this.error = error;
 	}
 
-	public @NotNull String rawDesc() {return desc != null ? Type.getMethodDescriptor(Arrays.asList(desc)) : method.rawDesc();}
-	public @NotNull List<IType> desc() {return desc != null ? Arrays.asList(desc) : Helpers.cast(Type.getMethodTypes(method.rawDesc()));}
-	public @NotNull List<IType> parameters() {
+	public @NotNull @Unmodifiable String rawDesc() {return desc != null ? Type.getMethodDescriptor(Arrays.asList(desc)) : method.rawDesc();}
+
+	public @NotNull @Unmodifiable List<IType> desc() {return desc != null ? Arrays.asList(desc) : Helpers.cast(Type.getMethodTypes(method.rawDesc()));}
+	public @NotNull @Unmodifiable List<IType> parameters() {
 		if (desc == null) return Helpers.cast(method.parameters());
 		// 不复制数组
-		var list = ArrayList.asModifiableList(desc); list.pop();
+		var list = ArrayList.asModifiableList(desc);
+		list._setSize(desc.length-1);
 		return list;
 	}
 	public @NotNull IType returnType() {return desc == null ? method.returnType() : desc[desc.length-1];}

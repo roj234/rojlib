@@ -1,7 +1,7 @@
 package roj.concurrent;
 
 import roj.optimizer.FastVarHandle;
-import roj.reflect.Handles;
+import roj.reflect.Telescope;
 
 import java.lang.invoke.VarHandle;
 
@@ -17,7 +17,7 @@ public class PeriodicTask implements Runnable, Cancellable {
 	protected final long period;
 	protected int repeat;
 
-	private static final VarHandle STATE = Handles.lookup().findVarHandle(PeriodicTask.class, "state", int.class);
+	private static final VarHandle STATE = Telescope.lookup().findVarHandle(PeriodicTask.class, "state", int.class);
 	/**
 	 * -1: 任务取消
 	 *  0: '固定频率'模式

@@ -24,6 +24,7 @@ import roj.util.TypedKey;
 import java.io.IOException;
 import java.util.Collections;
 import java.util.List;
+import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.locks.Lock;
 
@@ -34,11 +35,11 @@ import java.util.concurrent.locks.Lock;
 @Deprecated
 @SimplePlugin(id = "simpleMQ", desc = "基于websocket的实时消息队列", version = "1.1")
 public class SimpleMQ extends Plugin {
-	private Plugin easySso;
+	private Plugin sso;
 
 	@Override
 	protected void onEnable() throws Exception {
-		easySso = getPluginManager().getPluginInstance(PluginDescriptor.Role.PermissionManager);
+		sso = Objects.requireNonNull(getPluginManager().getPluginInstance(PluginDescriptor.Role.PermissionManager), "找不到权限管理插件");
 		registerRoute("mq", new OKRouter().register(this), "PermissionManager");
 	}
 
@@ -223,5 +224,5 @@ public class SimpleMQ extends Plugin {
 	public Object cors(Request req) {return req.checkOrigin(null);}
 
 	@Nullable
-	private PermissionHolder getUser(Request req) {return easySso.ipc(new TypedKey<>("getUser"), req);}
+	private PermissionHolder getUser(Request req) {return sso.ipc(new TypedKey<>("getUser"), req);}
 }

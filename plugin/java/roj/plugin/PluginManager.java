@@ -1,7 +1,6 @@
 package roj.plugin;
 
 import org.jetbrains.annotations.Contract;
-import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import roj.archive.zip.ZipFile;
 import roj.collect.ArrayList;
@@ -30,11 +29,11 @@ import java.util.regex.Pattern;
  * @since 2023/12/25 16:08
  */
 public class PluginManager {
-	private static final XashMap.Builder<String, PluginDescriptor> PM_BUILDER = XashMap.noCreation(PluginDescriptor.class, "id");
+	private static final XashMap.Template<String, PluginDescriptor> PM_TEMPLATE = XashMap.forType(String.class, PluginDescriptor.class).key("id").build();
 	static final Logger LOGGER = Logger.getLogger();
 
 	final PluginDescriptor systemPlugin = new PluginDescriptor();
-	final XashMap<String, PluginDescriptor> plugins = PM_BUILDER.create();
+	final XashMap<String, PluginDescriptor> plugins = PM_TEMPLATE.create();
 	final EnumMap<PluginDescriptor.Role, PluginDescriptor> rolePlugins = new EnumMap<>(PluginDescriptor.Role.class);
 
 	boolean stopping;
@@ -160,7 +159,7 @@ public class PluginManager {
 				pd.instance = (Plugin) fn.apply(0);
 				File dataFolder;
 				if (pd.fileName.equals("/builtin_inherit")) {
-					pd.instance.config = PanTweaker.CONFIG;
+					pd.instance.config = Jocker.CONFIG;
 					dataFolder = new File(pluginFolder, "Core");
 				} else {
 					dataFolder = new File(pluginFolder, pd.id);
@@ -241,7 +240,7 @@ public class PluginManager {
 			ArrayList<String> path = config.getList("extraPath").toStringList();
 			pd.extraPath = new TrieTreeSet();
 			pd.extraPath.add("plugins"+File.separatorChar+plugin.getName());
-			pd.extraPath.add("plugins"+File.separatorChar+pd.id+"\\");
+			pd.extraPath.add("plugins"+File.separatorChar+pd.id+File.separatorChar);
 			for (String s : path) pd.extraPath.add(new File(s).getAbsolutePath());
 
 			pd.reflectiveClass = new TrieTreeSet(config.getList("reflectivePackage").toStringList());
@@ -266,7 +265,7 @@ public class PluginManager {
 		var pd = plugins.get(id);
 		return pd == null ? null : pd.instance;
 	}
-	@NotNull
+	@Nullable
 	@Contract(pure = true)
 	public Plugin getPluginInstance(PluginDescriptor.Role role) {
 		var pd = rolePlugins.get(role);
@@ -275,7 +274,7 @@ public class PluginManager {
 				throw new NullPointerException("插件"+pd+"状态异常");
 			return pd.instance;
 		}
-		throw new IllegalStateException("没有"+role+"类型的实例");
+		return null;
 	}
 
 	public void enablePlugin(PluginDescriptor pd) throws Exception {

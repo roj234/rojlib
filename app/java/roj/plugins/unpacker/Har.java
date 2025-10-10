@@ -2,6 +2,7 @@ package roj.plugins.unpacker;
 
 import roj.collect.TrieTree;
 import roj.config.ConfigMaster;
+import roj.config.mapper.ObjectMapper;
 import roj.config.mapper.Optional;
 import roj.crypt.Base64;
 import roj.io.IOUtil;
@@ -31,7 +32,7 @@ class Har implements Unpacker {
 	public TrieTree<?> load(File file) throws IOException {
 		PojoHar har;
 		try {
-			har = ConfigMaster.JSON.readObject(file, PojoHar.class).log;
+			har = ObjectMapper.SAFE.read(file, PojoHar.class, ConfigMaster.JSON).log;
 		} catch (ParseException e) {
 			throw new IOException("无法解析文件", e);
 		}

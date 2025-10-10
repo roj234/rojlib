@@ -67,17 +67,17 @@ public final class LavaCompileUnit extends CompileUnit {
 		c.name = i <= 0 ? "" : name.substring(0, i);
 		c.header(acc);
 
-		ctx.compiler.addCompileUnit(c);
+		ctx.addCompileUnit(c);
 	}
 	private void _newInner(int acc) throws ParseException {
 		LavaCompileUnit c = new LavaCompileUnit(this, false);
 
 		c.name = name.concat("$");
-		c.header(acc|_ACC_INNER_CLASS);
+		c.header(acc|_X_INNER_CLASS);
 		acc = c.modifier;
 
 		if (ctx.compiler.hasFeature(Compiler.EMIT_INNER_CLASS)) {
-			if ((acc & (ACC_INTERFACE|ACC_ENUM|_ACC_RECORD)) != 0) acc |= ACC_STATIC;
+			if ((acc & (ACC_INTERFACE|ACC_ENUM|_X_RECORD)) != 0) acc |= ACC_STATIC;
 
 			var desc = InnerClasses.Item.innerClass(c.name, acc);
 			this.innerClasses().add(desc);
@@ -87,21 +87,22 @@ public final class LavaCompileUnit extends CompileUnit {
 		if (ctx.compiler.getMaximumBinaryCompatibility() >= Compiler.JAVA_11)
 			addNestMember(c);
 
+		c.extraModifier = acc;
 		if ((acc&ACC_PROTECTED) != 0) {
 			acc &= ~ACC_PROTECTED;
 			acc |= ACC_PUBLIC;
 		}
 		c.modifier = (char) (acc&~(ACC_PRIVATE|ACC_STATIC));
 
-		ctx.compiler.addCompileUnit(c);
+		ctx.addCompileUnit(c);
 	}
 	public LavaCompileUnit newAnonymousClass(@Nullable MethodNode mn) throws ParseException {
 		LavaCompileUnit c = new LavaCompileUnit(this, false);
 
 		c.name(c.name = IOUtil.getSharedCharBuf().append(name).append('$').append(++_children).toString());
 		c.modifier = ACC_FINAL|ACC_SUPER;
-		// magic number to disable auto constructor
-		c.extraModifier = ACC_FINAL|ACC_INTERFACE;
+		// ACC_FINAL|ACC_INTERFACE is a 'magic number' to disable auto constructor
+		c.extraModifier = ACC_FINAL|_X_ANONYMOUS_CLASS;
 
 		c.body();
 
@@ -127,9 +128,7 @@ public final class LavaCompileUnit extends CompileUnit {
 	// endregion
 	// region 阶段1非公共部分: package, import, package-info, module-info
 	public boolean S1parseStruct() throws ParseException {
-		var ctx = CompileContext.get();
-		ctx.setClass(this);
-
+		var ctx = getContext();
 		var wr = ctx.tokenizer;
 
 		wr.index = 0;
@@ -236,7 +235,7 @@ public final class LavaCompileUnit extends CompileUnit {
 		}
 
 		boolean shouldAdd = isNormalClass || packageAnnotation;
-		if (shouldAdd) ctx.compiler.addCompileUnit(this);
+		if (shouldAdd) ctx.addCompileUnit(this);
 
 		// 辅助类
 		while (!wr.nextIf(EOF)) {
@@ -244,6 +243,7 @@ public final class LavaCompileUnit extends CompileUnit {
 			_newHelper(acc);
 		}
 
+		ctx.commitCompileUnits();
 		return shouldAdd;
 	}
 	private void parseModuleInfo(LavaTokenizer wr, boolean moduleIsOpen) throws ParseException {
@@ -364,19 +364,19 @@ public final class LavaCompileUnit extends CompileUnit {
 					parent("java/lang/Enum");
 				} else {
 					ctx.report(Kind.WARNING, "ADT enumeration");
-					acc |= _ACC_ALGEBRA_DERIVED_TYPE;
+					acc |= _X_ALGEBRA_DERIVED_TYPE;
 				}
 				acc |= ACC_ENUM|ACC_FINAL;
 			}
 			case RECORD -> {
 				notSealable(acc);
 				setMinimumBinaryCompatibility(Compiler.JAVA_17);
-				acc |= ACC_FINAL|_ACC_RECORD;
+				acc |= ACC_FINAL|_X_RECORD;
 				parent("java/lang/Record");
 			}
 			case STRUCT -> {
 				notSealable(acc);
-				acc |= ACC_FINAL|_ACC_RECORD|_ACC_STRUCT;
+				acc |= ACC_FINAL|_X_RECORD|_X_STRUCT;
 				parent("roj/compiler/runtime/Struct");
 			}
 			case CLASS -> acc |= ACC_SUPER;
@@ -401,7 +401,7 @@ public final class LavaCompileUnit extends CompileUnit {
 			genericDecl(wr);
 
 			// 泛型非静态类
-			if ((acc & _ACC_INNER_CLASS) != 0) {
+			if ((acc & _X_INNER_CLASS) != 0) {
 				var t = _parent;
 				do {
 					if ((currentNode.parent = t.signature) != null) break;
@@ -425,7 +425,7 @@ public final class LavaCompileUnit extends CompileUnit {
 		// 继承
 		checkExtends:
 		if (w.type() == EXTENDS) {
-			if ((acc & (ACC_ENUM|ACC_ANNOTATION|_ACC_RECORD)) != 0) ctx.report(Kind.ERROR, "cu.noInheritance", name, parent());
+			if ((acc & (ACC_ENUM|ACC_ANNOTATION|_X_RECORD)) != 0) ctx.report(Kind.ERROR, "cu.noInheritance", name, parent());
 			if ((acc & ACC_INTERFACE) != 0) break checkExtends;
 
 			IType type = readType(wr, TYPE_GENERIC|TYPE_NO_ARRAY);
@@ -442,7 +442,7 @@ public final class LavaCompileUnit extends CompileUnit {
 		structCheck:{
 		// record
 		recordCheck:
-		if ((acc & _ACC_RECORD) != 0) {
+		if ((acc & _X_RECORD) != 0) {
 			if (w.type() != lParen) {
 				ctx.report(Kind.ERROR, "cu.record.header");
 				break recordCheck;
@@ -462,7 +462,7 @@ public final class LavaCompileUnit extends CompileUnit {
 
 				String name = wr.except(LITERAL, "cu.name").text();
 
-				var field = new FieldNode(((acc & _ACC_STRUCT) != 0)
+				var field = new FieldNode(((acc & _X_STRUCT) != 0)
 						? ACC_PUBLIC
 						: (ctx.compiler.hasFeature(Compiler.PUBLIC_RECORD_FIELD) ? ACC_PUBLIC : ACC_PRIVATE) | ACC_FINAL,
 					name, type.rawType());
@@ -471,11 +471,11 @@ public final class LavaCompileUnit extends CompileUnit {
 				finishSignature(null, Signature.FIELD, field);
 
 				fields.add(field);
-				if ((acc & _ACC_STRUCT) == 0) finalFields.add(field);
+				if ((acc & _X_STRUCT) == 0) finalFields.add(field);
 				fieldIdx.add(wr.index);
 
 				w = wr.next();
-				if ((acc&_ACC_STRUCT) != 0 && w.type() == lBracket) {
+				if ((acc& _X_STRUCT) != 0 && w.type() == lBracket) {
 					// C-style array definition
 					field.modifier |= ACC_NATIVE; // SPECIAL PROCESSING
 
@@ -502,7 +502,7 @@ public final class LavaCompileUnit extends CompileUnit {
 
 			miscFieldId = fields.size();
 
-			if ((acc & _ACC_STRUCT) != 0) {
+			if ((acc & _X_STRUCT) != 0) {
 				modifier |= ACC_NATIVE;
 				wr.except(semicolon);
 				break structCheck;
@@ -708,7 +708,7 @@ public final class LavaCompileUnit extends CompileUnit {
 				methodIdx.add(w.pos());
 				if ((acc&ACC_METHOD_ILLEGAL) != 0) ctx.report(Kind.ERROR, "modifier.notAllowed", showModifiers(acc&ACC_METHOD_ILLEGAL, ACC_SHOW_FIELD));
 				if ((acc & ACC_ABSTRACT) != 0) {
-					if ((acc&ACC_STRICT) != 0) ctx.report(Kind.ERROR, "modifier.conflict:[strictfp,abstract]");
+					if ((acc&ACC_STRICT) != 0) ctx.report(Kind.ERROR, "modifier.conflict", "strictfp", "abstract");
 					if ((modifier & ACC_ABSTRACT) == 0) ctx.report(Kind.ERROR, "cu.method.noAbstract", this.name, name);
 				}
 
@@ -916,9 +916,11 @@ public final class LavaCompileUnit extends CompileUnit {
 					fieldIdx.add(w.pos());
 
 					w = wr.next();
-					if (w.type() == assign) addParseTask(ParseTask.field(this, field));
+					if (w.type() == assign) {
+						addParseTask(ParseTask.field(this, field));
+						w = wr.next();
+					}
 
-					w = wr.next();
 					if (w.type() != comma) {
 						if (w.type() != semicolon) throw wr.err("cu.except.fieldEnd");
 						break;
@@ -1069,7 +1071,7 @@ public final class LavaCompileUnit extends CompileUnit {
 			if (ctx.compiler.getMaximumBinaryCompatibility() >= Compiler.JAVA_11)
 				addNestMember(container);
 
-			ctx.compiler.addCompileUnit(container);
+			ctx.addCompileUnit(container);
 
 			int start = wr.current().pos();
 

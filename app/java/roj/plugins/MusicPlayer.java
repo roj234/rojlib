@@ -11,7 +11,7 @@ import roj.io.source.Source;
 import roj.optimizer.FastVarHandle;
 import roj.plugin.Plugin;
 import roj.plugin.SimplePlugin;
-import roj.reflect.Handles;
+import roj.reflect.Telescope;
 import roj.text.CharList;
 import roj.ui.Argument;
 import roj.ui.Command;
@@ -35,7 +35,7 @@ import static roj.ui.CommandNode.literal;
 @FastVarHandle
 @SimplePlugin(id = "musicPlayer", version = "2.1.1", desc = "音乐播放测试", inheritConfig = true)
 public class MusicPlayer extends Plugin implements Runnable {
-	private static final VarHandle FLAG = Handles.lookup().findVarHandle(MusicPlayer.class, "flag", int.class);
+	private static final VarHandle FLAG = Telescope.lookup().findVarHandle(MusicPlayer.class, "flag", int.class);
 	private static final int STOP = 1, SKIP_AUTO = 2;
 	private static final int END_STOP = 1, END_NEXT = 2, IS_RANDOM = 4;
 

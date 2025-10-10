@@ -136,7 +136,7 @@ public abstract class TrieEntry implements Iterable<TrieEntry>, Cloneable, _LibE
 	}
 
 	// endregion
-	public abstract int copyFrom(TrieEntry node);
+	public abstract void copyFrom(TrieEntry node);
 
 	public abstract boolean isLeaf();
 

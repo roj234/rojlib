@@ -10,6 +10,7 @@ import roj.asm.type.IType;
 import roj.asm.type.ParameterizedType;
 import roj.asm.type.Type;
 import roj.asmx.ParamNameMapper;
+import roj.ci.annotation.IndirectReference;
 import roj.collect.ArrayList;
 import roj.collect.BitSet;
 import roj.collect.HashSet;
@@ -309,6 +310,7 @@ final class DAOMaker {
 
 	private static final WeakHashMap<PreparedStatement, List<Object>> adapterCache = new WeakHashMap<>();
 
+	@IndirectReference
 	public static <T> List<T> _doSelectMany(PreparedStatement stm, Class<T> type) throws Exception {
 		var adapters = adapterCache.get(stm);
 		if (adapters == null) {
@@ -334,6 +336,7 @@ final class DAOMaker {
 		ser.pop();
 		return ser.get();
 	}
+	@IndirectReference
 	public static <T> T _doSelectOne(PreparedStatement stm, Class<T> type) throws Exception {
 		var adapters = adapterCache.get(stm);
 		if (adapters == null) {
@@ -359,7 +362,7 @@ final class DAOMaker {
 	private static ObjectMapper getSerializerFactory(Class<?> type) {
 		if (type.getClassLoader() == null || type.getClassLoader() == DAOMaker.class.getClassLoader()) return ObjectMapper.SAFE;
 
-		var map = IMPLEMENTATION_CACHE.getEntry(type.getClassLoader()).getValue();
+		var map = IMPLEMENTATION_CACHE.get(type.getClassLoader());
 		assert map != null;
 
 		Object v = map.get(null);

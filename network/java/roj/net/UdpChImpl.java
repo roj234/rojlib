@@ -110,7 +110,7 @@ class UdpChImpl extends MyChannel {
 				first.address = addr;
 				fireChannelRead(first);
 			} finally {
-				BufferPool.reserve(buf);
+				buf.release();
 			}
 
 			if ((flags &READ_INACTIVE) != 0) break;

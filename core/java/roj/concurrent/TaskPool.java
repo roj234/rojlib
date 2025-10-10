@@ -6,8 +6,7 @@ import roj.collect.HashSet;
 import roj.collect.IntMap;
 import roj.collect.RingBuffer;
 import roj.optimizer.FastVarHandle;
-import roj.reflect.Handles;
-import roj.text.logging.Logger;
+import roj.reflect.Telescope;
 
 import java.lang.invoke.VarHandle;
 import java.util.List;
@@ -41,7 +40,7 @@ public class TaskPool implements ExecutorService {
 	private volatile int running;
 	private volatile long prevStop;
 
-	private static final VarHandle RUNNING = Handles.lookup().findVarHandle(TaskPool.class, "running", int.class);
+	private static final VarHandle RUNNING = Telescope.lookup().findVarHandle(TaskPool.class, "running", int.class);
 
 	final ReentrantLock queueLock = new ReentrantLock();
 	final Condition noFull = queueLock.newCondition();
@@ -255,7 +254,6 @@ public class TaskPool implements ExecutorService {
 
 	public class PoolThread extends FastLocalThread {
 		public PoolThread(String name) {setName(name);setDaemon(true);}
-		public static final Logger LOGGER = Logger.getLogger("ThreadPool");
 
 		public TaskPool pool() {return TaskPool.this;}
 

@@ -2,12 +2,16 @@ import {createFilter, normalizePath} from 'vite';
 import fs from 'fs';
 import path from 'path';
 import {MIXIN_ID} from "./MyJSXParser.mjs";
-import UCTransformer from './BabelPlugin.mjs';
 
 import {parse as babelParse} from '@babel/parser';
 import {generate as babelGenerate} from '@babel/generator';
 import codeFrame from "@babel/code-frame";
 import traverse from "@babel/traverse";
+
+import HotModuleReplace from "./transformer/HotModuleReplace.js";
+import RemoveSpecialImport from "./transformer/RemoveSpecialImport.js";
+import UCTransformer from './transformer/Unconscious.js';
+import SideEffectAnalyze from "./transformer/SideEffectAnalyze.js";
 
 const DEFAULT_FILTER = /\.[jt]sx?$/;
 const scriptPath = import.meta.dirname;
@@ -70,25 +74,50 @@ export default (options = {}) => {
     generateOptions: {},
     ...options,
     cwd: process.cwd(),
-    plugins: [[UCTransformer, options], ...plugins].map(t => {
+    plugins: [
+      [SideEffectAnalyze],
+      [UCTransformer, options],
+      [RemoveSpecialImport],
+      [HotModuleReplace],
+      ...plugins].map(t => {
       if (Array.isArray(t)) return t[0](null, t[1]);
       return typeof t === "function" ? t(null, {}) : t;
-    })
+    }),
+    removeSpecialImport: {
+      'unconscious': ['$watchWithCleanup']
+    }
   };
 
   const customFilter = createFilter(include, exclude);
   return {
     name: "unconscious",
     enforce: 'pre',
+    handleHotUpdate({ file, timestamp, modules, server }) {
+      server.ws.send({
+        type: 'custom',
+        event: 'module-graph',
+        data: {
+          id: file,
+          timestamp: timestamp,
+          updated: modules.map(m => {
+            return {
+              id: m.id,
+              parent: Array.from(m.importers).map(importer => importer.id),
+              child: Array.from(m.importedModules).map(importer => importer.id)
+            }
+          })
+        }
+      });
+    },
     config(userConfig, {mode}) {
       config.envName = mode;
 
       return {
         resolve: {
           alias: {
-            ...theLibrary,
             'unconscious@shared': scriptPath+'/runtime_shared.js',
-            'unconscious@ext': scriptPath+'/ext'
+            'unconscious/ext': scriptPath+'/ext',
+            ...theLibrary,
           }
         },
 
@@ -106,7 +135,10 @@ export default (options = {}) => {
                 const namespace = "";
 
                 build.onLoad({ filter: /.*/, namespace }, async (args) => {
-                  if (args.path.startsWith(normalizePath(scriptPath+"/runtime"))) return;
+                  if (args.path.startsWith(normalizePath(scriptPath))) {
+                    if (!normalizePath(args.path.substring(scriptPath.length+1)).includes("/")) return;
+                  }
+                  else if (normalizePath(args.path).includes("/node_modules/")) return;
                   if (!customFilter(args.path)) return;
 
                   const code = await fs.promises.readFile(args.path, "utf8");
@@ -120,7 +152,10 @@ export default (options = {}) => {
           rollupOptions: { plugins: [{
             name: "unconscious_prebuild",
             async load(path) {
-              if (path.startsWith(scriptPath+"/runtime")) return;
+              if (path.startsWith(scriptPath)) {
+                if (!normalizePath(path.substring(scriptPath.length+1)).includes("/")) return;
+              }
+              else if (scriptPath.includes("/node_modules/")) return;
               if (!customFilter(path)) return;
 
               const code = await fs.promises.readFile(path, "utf8");
@@ -131,7 +166,9 @@ export default (options = {}) => {
     },
     // 构建阶段
     transform(code, filename, transformOptions) {
-      if (filename.startsWith(normalizePath(scriptPath+"/runtime"))) return;
+      if (filename.startsWith(normalizePath(scriptPath))) {
+        if (!filename.substring(scriptPath.length+1).includes("/")) return;
+      }
       if (!customFilter(filename)) return;
 
       return transform(code, { filename, ...config, inputSourceMap: transformOptions?.inMap }, true);
@@ -166,11 +203,16 @@ class File {
     this.code = code;
     this.ast = ast;
     this.opts = options;
+    this.metadata = {};
     this.path = traverse.NodePath.get({
       parentPath: null,
       parent: ast,
       container: ast,
-      key: "program"
+      key: "program",
+      hub: {
+        buildError: this.buildCodeFrameError.bind(this),
+        file: this
+      }
     }).setContext();
     this.scope = this.path.scope;
   }
@@ -224,8 +266,11 @@ function transform(code, options, needSourceMap) {
   const visitors = [];
 
   for (const plugin of options.plugins) {
+    if (plugin.developmentOnly && options.envName !== "development") continue;
+
     const pass = new PluginPass(file, plugin.key);
     passes.push(pass);
+    plugin.pre?.call(pass, file);
     visitors.push(plugin.visitor);
   }
 

@@ -23,6 +23,7 @@ import java.io.File;
 import java.io.IOException;
 import java.util.Collections;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 
 /**
@@ -44,7 +45,7 @@ public class ChatManager extends Plugin {
 		attDir = new File(getDataFolder(), "att");
 		if (!attDir.isDirectory() && !attDir.mkdirs()) throw new IOException("Failed to create attachment directory");
 
-		easySso = getPluginManager().getPluginInstance(PluginDescriptor.Role.PermissionManager);
+		easySso = Objects.requireNonNull(getPluginManager().getPluginInstance(PluginDescriptor.Role.PermissionManager), "找不到权限管理插件");
 
 		ChatGroup T = new ChatGroup();
 		T.id = 114514;

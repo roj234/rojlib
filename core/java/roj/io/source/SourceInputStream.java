@@ -6,7 +6,6 @@ import roj.optimizer.FastVarHandle;
 import java.io.IOException;
 import java.io.InputStream;
 import java.lang.invoke.VarHandle;
-import java.util.zip.ZipException;
 
 /**
  * @author Roj234
@@ -60,7 +59,7 @@ public sealed class SourceInputStream extends InputStream {
 		if (n <= 0) return 0;
 
 		long end = src.position()+n;
-		if (end > src.length()) throw new ZipException("File size externally changed.");
+		if (end > src.length()) throw new IOException("File size externally changed.");
 		src.seek(end);
 		remain -= n;
 		return n;

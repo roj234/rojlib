@@ -2,6 +2,7 @@ package roj.plugins.minecraft;
 
 import roj.collect.IntList;
 import roj.config.ConfigMaster;
+import roj.config.mapper.ObjectMapper;
 import roj.io.IOUtil;
 import roj.text.TextReader;
 import roj.ui.Tty;
@@ -122,7 +123,7 @@ public class PicMap {
 		}
 
 		try (var os = new GZIPOutputStream(new FileOutputStream(out))) {
-			ConfigMaster.NBT.writeObject(new MapRoot(map), os);
+			ObjectMapper.SAFE.write(ConfigMaster.NBT, new MapRoot(map), os);
 		}
 	}
 }

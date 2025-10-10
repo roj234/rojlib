@@ -2,12 +2,11 @@ package roj.plugin;
 
 import org.jetbrains.annotations.Nullable;
 import roj.archive.zip.ZipFile;
-import roj.asmx.Transformer;
 import roj.collect.TrieTreeSet;
 import roj.io.source.Source;
-import roj.util.ArtifactVersion;
 import roj.text.CharList;
 import roj.text.TextUtil;
+import roj.util.ArtifactVersion;
 
 import java.nio.charset.Charset;
 import java.util.Collections;
@@ -48,7 +47,7 @@ public class PluginDescriptor {
 	// 基于transformer的安全管理
 	TrieTreeSet reflectiveClass, extraPath;
 	boolean loadNative, dynamicLoadClass, accessUnsafe;
-	boolean skipCheck;
+	boolean isTrusted;
 
 	final Object stateLock = new Object();
 	volatile int state;
@@ -56,11 +55,6 @@ public class PluginDescriptor {
 	private PluginDescriptor _next;
 
 	public PluginClassLoader getClassLoader() {return classLoader;}
-	public void addTransformer(Transformer transformer) {
-		if (transformer.getClass().getClassLoader() != PluginDescriptor.class.getClassLoader())
-			throw new IllegalArgumentException("不允许");
-		classLoader.transformers.add(transformer);
-	}
 
 	public String getId() { return id; }
 	public ArtifactVersion getVersion() { return version; }

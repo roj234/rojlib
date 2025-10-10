@@ -4,7 +4,7 @@ import roj.http.HttpHead;
 import roj.http.HttpUtil;
 import roj.io.IOUtil;
 import roj.optimizer.FastVarHandle;
-import roj.reflect.Handles;
+import roj.reflect.Telescope;
 import roj.util.DynByteBuf;
 
 import java.io.IOException;
@@ -47,10 +47,10 @@ public abstract class H2Stream {
 
 	private static final Set<String> PSEUDO_HEADERS = Set.of(":method", ":path", ":scheme", ":authority", ":status");
 	private static final VarHandle
-		RR = Handles.lookup().findVarHandle(HttpHead.class, "isRequest", boolean.class),
-		AA = Handles.lookup().findVarHandle(HttpHead.class, "a", String.class),
-		BB = Handles.lookup().findVarHandle(HttpHead.class, "b", String.class),
-		CC = Handles.lookup().findVarHandle(HttpHead.class, "c", String.class);
+		RR = Telescope.trustedLookup().findVarHandle(HttpHead.class, "isRequest", boolean.class),
+		AA = Telescope.trustedLookup().findVarHandle(HttpHead.class, "a", String.class),
+		BB = Telescope.trustedLookup().findVarHandle(HttpHead.class, "b", String.class),
+		CC = Telescope.trustedLookup().findVarHandle(HttpHead.class, "c", String.class);
 	protected HttpHead _header = new HttpHead(false,null,null,null);
 
 	final String header(DynByteBuf buf, HPACK coder, boolean first) throws IOException {

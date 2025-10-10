@@ -18,7 +18,14 @@ public abstract class ServerLaunch implements Closeable {
 
 	public static final SocketOption<Integer> TCP_RECEIVE_BUFFER = new MyOption<>("TCP_RECEIVE_BUFFER", Integer.class);
 	public static final SocketOption<Integer> TCP_MAX_CONNECTION = new MyOption<>("TCP_MAX_CONNECTION", Integer.class);
-	public static final ConcurrentHashMap<String, ServerLaunch> SHARED = new ConcurrentHashMap<>();
+	/**
+	 * OWN_BUFFER(-1): 始终占用(与Channel绑定)
+	 * INSTANT_BUFFER(0): 动态分配并立即释放
+	 * 其他值（大于0）连续指定毫秒内未收到数据就释放
+	 * 默认值为0
+	 */
+	public static final SocketOption<Integer> BUFFER_RETAIN_STRATEGY = new MyOption<>("BUFFER_RETAIN_STRATEGY", Integer.class);
+	public static final ConcurrentHashMap<String, ServerLaunch> NAMED = new ConcurrentHashMap<>();
 
 	SelectorLoop loop = DEFAULT_LOOPER;
 
@@ -37,7 +44,7 @@ public abstract class ServerLaunch implements Closeable {
 	public static ServerLaunch shadow(String name, Consumer<MyChannel> initializator) {return new Shadow(name).initializator(initializator);}
 	private static final class Shadow extends ServerLaunch {
 		private final String name;
-		public Shadow(String name) {this.name = name;SHARED.put(name, this);}
+		public Shadow(String name) {this.name = name;NAMED.put(name, this);}
 
 		@Override public <T> ServerLaunch option(SocketOption<T> k, T v) {throw new UnsupportedOperationException();}
 		@Override public <T> T option(SocketOption<T> k) {return null;}
@@ -45,7 +52,7 @@ public abstract class ServerLaunch implements Closeable {
 		@Override public SocketAddress localAddress() {return null;}
 		@Override public ServerLaunch launch() {return this;}
 		@Override public boolean isOpen() {return true;}
-		@Override public void close() {SHARED.remove(name, this);}
+		@Override public void close() {NAMED.remove(name, this);}
 		@Override public void addTCPConnection(MyChannel channel) throws IOException {
 			initializator.accept(channel);
 			channel.fireOpen();

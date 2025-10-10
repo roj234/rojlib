@@ -20,6 +20,7 @@ import roj.compiler.ast.expr.Invoke;
 import roj.compiler.ast.expr.Lambda;
 import roj.compiler.diagnostic.Kind;
 import roj.compiler.resolve.TypeCast;
+import roj.config.node.BoolValue;
 import roj.reflect.Reflection;
 import roj.util.Helpers;
 import roj.util.OperationDone;
@@ -114,7 +115,7 @@ public final class AsmPlugin extends InvokeHook {
 
 					@Override public IType type() {return Type.BOOLEAN_TYPE;}
 					@Override public boolean isConstant() {return true;}
-					@Override public Object constVal() {return false;}
+					@Override public Object constVal() {return BoolValue.FALSE;}
 
 					@Override public boolean hasFeature(Feature feature) {return feature == Feature.CONSTANT_WRITABLE;}
 

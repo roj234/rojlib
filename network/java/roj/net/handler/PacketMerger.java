@@ -1,9 +1,8 @@
 package roj.net.handler;
 
-import roj.io.BufferPool;
+import roj.io.IOUtil;
 import roj.net.ChannelCtx;
 import roj.net.ChannelHandler;
-import roj.util.ByteList;
 import roj.util.DynByteBuf;
 
 import java.io.IOException;
@@ -43,22 +42,13 @@ public abstract class PacketMerger implements ChannelHandler {
 				}
 			}
 		} finally {
-			if (m != null) BufferPool.reserve(m);
+			if (m != null) m.release();
 		}
-	}
-
-	public DynByteBuf getAs(boolean direct) {
-		if (merged == null || !merged.isReadable()) return ByteList.EMPTY;
-
-		DynByteBuf copy = direct ? DynByteBuf.allocateDirect(merged.readableBytes()) : DynByteBuf.allocate(merged.readableBytes());
-		return copy.put(merged);
 	}
 
 	@Override
 	public void channelClosed(ChannelCtx ctx) throws IOException {
-		if (merged != null) {
-			BufferPool.reserve(merged);
-			merged = null;
-		}
+		IOUtil.closeSilently(merged);
+		merged = null;
 	}
 }

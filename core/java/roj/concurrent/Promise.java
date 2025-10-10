@@ -17,10 +17,10 @@ import java.util.function.Supplier;
  */
 public sealed interface Promise<T> extends Future<T> permits PromiseImpl {
 	@SuppressWarnings("unchecked")
-	static <T, X extends Promise<T> & Callback> X sync() { return (X) new PromiseImpl<>(); }
+	static <T, X extends Promise<T> & Result> X sync() { return (X) new PromiseImpl<>(); }
 
-	static <T> Promise<T> async(Consumer<Callback> handler) {return async(TaskPool.common(), handler);}
-	static <T> Promise<T> async(Executor executor, Consumer<Callback> handler) {
+	static <T> Promise<T> async(Consumer<Result> handler) {return async(TaskPool.common(), handler);}
+	static <T> Promise<T> async(Executor executor, Consumer<Result> handler) {
 		PromiseImpl<T> impl = new PromiseImpl<>(executor);
 		executor.execute(() -> {
 			try {
@@ -96,14 +96,14 @@ public sealed interface Promise<T> extends Future<T> permits PromiseImpl {
 
 		PromiseImpl<T> any = new PromiseImpl<>(executor);
 
-		BiConsumer<?, Callback> h = (value, _next) -> any.resolve(value);
+		BiConsumer<?, Result> h = (value, _next) -> any.resolve(value);
 		for (Promise<?> p : children) p.then(Helpers.cast(h));
 
 		return any;
 	}
 
-	default Promise<Object> then(BiConsumer<T, Callback> fn) {return then(fn, null);}
-	Promise<Object> then(BiConsumer<T, Callback> fn, Function<Throwable, ?> recover);
+	default Promise<Object> then(BiConsumer<T, Result> fn) {return then(fn, null);}
+	Promise<Object> then(BiConsumer<T, Result> fn, Function<Throwable, ?> recover);
 	default Promise<Void> thenAccept(Consumer<T> fn) {
 		return Helpers.cast(then((value, callback) -> {
 			fn.accept(value);
@@ -129,7 +129,7 @@ public sealed interface Promise<T> extends Future<T> permits PromiseImpl {
 	T get() throws InterruptedException, ExecutionException;
 	T get(long timeout, TimeUnit unit) throws InterruptedException, ExecutionException, TimeoutException;
 
-	interface Callback {
+	interface Result {
 		// T | Promise<T>
 		void resolve(Object result);
 		void reject(Throwable reason);

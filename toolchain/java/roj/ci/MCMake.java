@@ -4,13 +4,16 @@ import org.jetbrains.annotations.NotNull;
 import roj.archive.qz.*;
 import roj.archive.qz.util.QZArchiver;
 import roj.archive.xz.LZMA2Options;
-import roj.archive.zip.*;
+import roj.archive.zip.ZEntry;
+import roj.archive.zip.ZipArchive;
+import roj.archive.zip.ZipFileWriter;
+import roj.archive.zip.ZipOutput;
 import roj.asm.ClassNode;
 import roj.asmx.AnnotationRepo;
 import roj.asmx.ClassResource;
 import roj.asmx.Context;
 import roj.ci.annotation.ReplaceConstant;
-import roj.ci.plugin.Processor;
+import roj.ci.plugin.Plugin;
 import roj.collect.ArrayList;
 import roj.collect.HashMap;
 import roj.collect.HashSet;
@@ -32,25 +35,26 @@ import roj.config.schema.Schema;
 import roj.crypt.jar.JarVerifier;
 import roj.event.EventBus;
 import roj.gui.Profiler;
+import roj.http.HttpRequest;
+import roj.http.curl.DownloadTask;
 import roj.io.IOUtil;
 import roj.io.source.FileSource;
 import roj.reflect.Sandbox;
-import roj.text.Formatter;
-import roj.text.*;
-import roj.text.logging.Level;
+import roj.text.CharList;
+import roj.text.DateFormat;
+import roj.text.ParseException;
+import roj.text.TextUtil;
+import roj.text.logging.LogContext;
 import roj.text.logging.Logger;
 import roj.ui.*;
-import roj.util.ArtifactVersion;
-import roj.util.DynByteBuf;
-import roj.util.Helpers;
-import roj.util.JVM;
+import roj.util.*;
 import roj.util.function.Flow;
 
 import java.io.*;
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
-import java.nio.file.Files;
+import java.net.URI;
 import java.security.*;
 import java.security.cert.Certificate;
 import java.security.cert.CertificateException;
@@ -75,7 +79,7 @@ import static roj.ui.CommandNode.literal;
 public final class MCMake {
 	static final String VERSION = "${project_version}";
 
-	public static final Logger LOGGER = Logger.getLogger("MCMake");
+	public static final Logger log = Logger.getLogger("MCMake");
 	public static final File
 			BASE = new File("").getAbsoluteFile(),
 			BIN_PATH = IOUtil.getJar(MCMake.class).getParentFile(),
@@ -95,7 +99,7 @@ public final class MCMake {
 
 	public static MapValue config;
 	static IFileWatcher watcher;
-	static final List<Processor> processors = new ArrayList<>();
+	static final List<Plugin> REGISTERED_PLUGINS = new ArrayList<>();
 
 	public static Project defaultProject;
 	public static final HashMap<String, Project> projects = new HashMap<>();
@@ -123,7 +127,7 @@ public final class MCMake {
 				project.compiling = null;
 			}
 			BuildContext.cleanup();
-			MCMake.LOGGER.debug("编译组结束, 释放临时状态.");
+			log.debug("编译组结束, 释放临时状态.");
 		}
 		COMPILE_LOCK.unlock();
 	}
@@ -139,22 +143,22 @@ public final class MCMake {
 		if (Tty.IS_RICH) {
 			Tty.write(Tty.Screen.clearScreen);
 			Tty.write("\u001b]0;MCMake v"+VERSION+" [Roj234]\7");
-			setupLogFormat();
+			Tty.write(Tty.Cursor.to(0,0));
 		}
 
 		String slogan = "MCMake，您的最后一个模组开发工具！ "+VERSION+" | 2019-2025";
 		System.out.println(slogan);
 
 		System.setProperty("roj.compiler.symbolCache", CACHE_PATH.getAbsolutePath());
-		System.setProperty("roj.ui.eventDriven", "true");
 
 		if (!loadConfig()) System.exit(-1);
 		var loadEnv = false;
 		try {
 			loadEnv();
 			loadEnv = true;
+			Runtime.getRuntime().addShutdownHook(new Thread(MCMake::saveProjectStates));
 		} catch (Exception e) {
-			LOGGER.fatal("环境配置env.yml解析失败! 请修复并输入reload", e);
+			log.fatal("环境配置env.yml解析失败! 请修复并输入reload", e);
 			updatePrompt();
 		}
 
@@ -205,26 +209,29 @@ public final class MCMake {
 		var c = COMMANDS;
 
 		var buildProject = argument("选项", Argument.stringFlags("full", "diagnostic", "profile", "full/inherit")).executes(ctx -> {
-			Set<Project> projects = Helpers.cast(ctx.argument("项目名称", Set.class));
+			var workspace = ctx.argument("工作空间", Workspace.class);
+
+			Flow<Project> flow;
+			if (workspace != null) {
+				flow = Flow.of(MCMake.projects.values()).filter(p -> workspace == p.workspace);
+			} else {
+				Set<Project> projects = Helpers.cast(ctx.argument("项目名称", Set.class));
+				flow = Flow.of(projects);
+			}
+
 			Set<String> options = Helpers.cast(ctx.argument("选项", Set.class));
 
 			Profiler p = options.contains("profile") ? new Profiler("build").begin() : null;
 			_lock(true);
 			try {
 				int exitcode = 0;
-				if (projects.isEmpty()) {
-					for (Project project : Flow.of(MCMake.projects.values()).filter(p1 -> p1.conf.type.canBuild()).toList()) {
-						if (project.compiling == null) {
-							exitcode |= build(options, project);
-						}
-					}
-				} else {
-					for (Project project : new ArrayList<>(projects)) {
-						projects.removeAll(project.getProjectDependencies());
-					}
-					for (Project project : projects) {
-						exitcode |= build(options, project);
-					}
+
+				Set<Project> projects = flow.filter(p1 -> p1.conf.type.canBuild()).toSet();
+				for (Project project : new ArrayList<>(projects)) {
+					projects.removeAll(project.getProjectDependencies());
+				}
+				for (Project project : projects) {
+					exitcode |= build(options, project);
 				}
 
 				if (immediateExit) System.exit(exitcode);
@@ -236,13 +243,15 @@ public final class MCMake {
 				}
 			}
 		});
-		c.register(literal("build").then(argument("项目名称", Argument.anyOf(projects)).then(buildProject)));
+		c.register(literal("build")
+				.then(argument("项目名称", Argument.someOf(projects)).then(buildProject))
+				.then(argument("工作空间", Argument.oneOf(workspaces)).then(buildProject)));
 
 		var pr = literal("project")
 			.then(literal("create").then(argument("项目名称", Argument.string()).then(argument("工作空间名称", Argument.oneOf(workspaces)).executes(ctx -> {
 				var example = new Env.Project();
 				example.name = ctx.argument("项目名称", String.class);
-				example.workspace = ctx.argument("工作空间名称", Workspace.class).id;
+				example.workspace = ctx.argument("工作空间名称", Workspace.class).id();
 
 				var project = new Project(example, true);
 				project.init();
@@ -273,14 +282,16 @@ public final class MCMake {
 
 		var ws = literal("workspace")
 			.then(literal("create").then(argument("工作空间类型", Argument.oneOf(workspaceTypes)).executes(ctx -> {
-				Workspace space = ctx.argument("工作空间类型", Workspace.Factory.class).build(config.getMap("工作区").getMap("x"));
+				var space = ctx.argument("工作空间类型", Workspace.Factory.class).build(config.getMap("工作区").getMap("x"));
 				if (space != null) {
 					String id = TUI.inputOpt(TUI.text("自定义工作空间'"+space.id+"'的名称，按Ctrl+C以取消"), Argument.string());
 					if (id != null && !id.isBlank()) space.id = id;
 
 					TUI.stepInfo(TUI.text("注册Library和配置"));
-					space.registerLibrary();
-					workspaces.put(space.id, space);
+					space.postBuild();
+					var ws1 = new Workspace(space);
+					ws1.onAdd();
+					workspaces.put(space.id, ws1);
 					saveEnv();
 
 					TUI.end(TUI.text("工作空间'"+space.id+"'构建成功！"));
@@ -288,24 +299,12 @@ public final class MCMake {
 			})))
 			.then(literal("delete").then(argument("工作空间名称", Argument.oneOf(workspaces)).executes(ctx -> {
 				Workspace space = ctx.argument("工作空间名称", Workspace.class);
-				char nn = TUI.key("YyNn", "输入Y确定删除'"+space.id+"'及其所有文件");
+				char nn = TUI.key("YyNn", "输入Y确定删除'"+space.id()+"'及其所有文件");
 				if (nn != 'Y' && nn != 'y') return;
-				for (File dependency : space.unmappedDepend) {
-					Files.deleteIfExists(dependency.toPath());
-				}
-				for (File dependency : space.mappedDepend) {
-					Files.deleteIfExists(dependency.toPath());
-				}
-				for (File dependency : space.depend) {
-					Files.deleteIfExists(dependency.toPath());
-				}
-				if (space.mapping != null)
-					Files.deleteIfExists(space.mapping.toPath());
-
-				space.unregisterLibrary();
-				workspaces.remove(space.id);
+				space.onRemove();
+				workspaces.remove(space.id());
 				saveEnv();
-				System.out.println("工作空间'"+space.id+"'已删除");
+				System.out.println("工作空间'"+space.id()+"'已删除");
 			})));
 		importExportWorkspace(ws);
 		c.register(ws);
@@ -335,7 +334,7 @@ public final class MCMake {
 					if (ze.getName().endsWith("/")) {
 						za.put(ze.getName(), null);
                         if (ze.getSize() != 0) {
-							LOGGER.warn("找到了有大小的文件夹{}", ze);
+							log.warn("找到了有大小的文件夹{}", ze);
 							za.put(ze.getName().substring(0, ze.getName().length()-1), DynByteBuf.wrap(za.get(ze)));
 						}
                     }
@@ -365,6 +364,21 @@ public final class MCMake {
 			System.out.println("按ForgeGradle每次构建至少需要30秒计算, MCMake至少为你节约了 "+myTime(timeWasted-buildTimes));
 		}));
 
+		c.register(literal("fuck_javac").then(argument("version", Argument.number(6, JVM.VERSION)).then(argument("jarFile", Argument.file()).executes(ctx -> {
+			var targetVersion = ClassNode.JavaVersion(ctx.argument("version", Integer.class));
+			var targetJar = ctx.argument("jarFile", File.class);
+			try (var za = new ZipArchive(targetJar)) {
+				for (ZEntry entry : za.entries()) {
+					if (entry.getName().endsWith(".class")) {
+						ByteList r = IOUtil.getSharedByteBuf().readStreamFully(za.getInputStream(entry));
+						r.setInt(4, targetVersion);
+						za.put(entry.getName(), (ByteList) r.copySlice());
+					}
+				}
+				za.save();
+			}
+		}))));
+
 		runScript();
 
 		c.sortCommands();
@@ -384,19 +398,6 @@ public final class MCMake {
 	}
 
 	private static void updatePrompt() {COMMANDS.setPrompt("\u001b[33mMCMake"+(defaultProject == null ? "" : "\u001b[97m[\u001b[96m"+defaultProject.getName()+"\u001b[97m]")+"\u001b[33m > ");}
-
-	private static void setupLogFormat() {
-		Logger.getRootContext().setPrefix((env, sb) -> {
-			((Formatter) env.get("0")).format(env, sb.append('['));
-
-			Level level = (Level) env.get("LEVEL");
-			sb.append("]\u001b[").append(level.color).append("m[").append(env.get("NAME"));
-			if (level.ordinal() > Level.WARN.ordinal())
-				sb.append("][").append(env.get("THREAD"));
-
-			return sb.append("]\u001b[0m: ");
-		});
-	}
 
 	//region 导入导出&其它指令
 	private static void runScript() {
@@ -448,7 +449,7 @@ public final class MCMake {
 					return;
 				}
 
-				Workspace workspace = CONFIG.read(in, Workspace.class, new YamlParser());
+				var workspace = CONFIG.read(in, Env.Workspace.class, ConfigMaster.YAML);
 				workspace.id = IOUtil.normalizePath(workspace.id);
 
 				if (MCMake.workspaces.containsKey(workspace.id)) {
@@ -537,7 +538,9 @@ public final class MCMake {
 				for (ZipFileWriter zfw : libraryWriter.values()) zfw.close();
 
 				if (!monitor.isCancelled()) {
-					MCMake.workspaces.put(workspace.id, workspace);
+					var ws = new Workspace(workspace);
+					MCMake.workspaces.put(workspace.id, ws);
+					ws.init();
 					MCMake.saveEnv();
 
 					bar.end("成功");
@@ -546,14 +549,14 @@ public final class MCMake {
 		}))).then(literal("export").then(argument("工作空间名称", Argument.oneOf(MCMake.workspaces)).executes(ctx -> {
 			Workspace space = MCMake.CONFIG.reader(Workspace.class).copyOf(ctx.argument("工作空间名称", Workspace.class));
 
-			try (var qzfw = new QZFileWriter("workspace-"+space.id+".7z");
-				 var bar = new EasyProgressBar("导出"+space.id, "B")) {
+			try (var qzfw = new QZFileWriter("workspace-"+space.id()+".7z");
+				 var bar = new EasyProgressBar("导出"+space.id(), "B")) {
 
-				bar.addTotal(Integer.MAX_VALUE);
+				bar.setUnlimited();
 
-				var files = new ArrayList<>(space.depend);
-				files.addAll(space.mappedDepend);
-				files.addAll(space.unmappedDepend);
+				var files = new ArrayList<>(space.getDepend());
+				files.addAll(space.getMappedDepend());
+				files.addAll(space.getUnmappedDepend());
 
 				TaskGroup monitor = TaskPool.cpu().newGroup();
 
@@ -589,8 +592,7 @@ public final class MCMake {
 				qzfw.setCodec(new LZMA2(new LZMA2Options(9).setDictSize(524288)));
 
 				qzfw.beginEntry(QZEntry.of("workspace.yml"));
-				ConfigMaster.YAML.writeObject(MCMake.CONFIG.writer(Workspace.class), space, IOUtil.getSharedByteBuf()).writeToStream(qzfw);
-
+				CONFIG.write(ConfigMaster.YAML, space.conf, IOUtil.getSharedByteBuf()).writeToStream(qzfw);
 				bar.end("成功");
 			}
 		})));
@@ -611,14 +613,13 @@ public final class MCMake {
 			arc.storeHardLinks = true;
 			arc.solidSize = Long.MAX_VALUE;
 			arc.options.setPreset(9).setDictSize(4194304);
-			arc.useBCJ = true;
+			arc.useFilter = true;
 			arc.cacheDirectory = BASE;
 			arc.outputDirectory = BASE;
 			arc.outputFilename = "mcmake-project-"+proj.getSafeName()+"-"+ DateFormat.format("Ymd", System.currentTimeMillis())+".7z";
 
 			arc.prepare();
-
-			String ymldata = ConfigMaster.YAML.writeObject(CONFIG.writer(Env.Project.class), proj.serialize(), IOUtil.getSharedCharBuf()).toString();
+			String ymldata = CONFIG.write(ConfigMaster.YAML, proj.conf, IOUtil.getSharedCharBuf()).toString();
 			arc.appendBinary(new QZCoder[]{Copy.INSTANCE}, Collections.singletonList(ymldata), Collections.singletonList(QZEntry.of("project.yml")));
 
 			try (var bar = new EasyProgressBar("导出项目")) {
@@ -636,7 +637,7 @@ public final class MCMake {
 					return;
 				}
 
-				Env.Project pojo = CONFIG.read(in, Env.Project.class, new YamlParser());
+				Env.Project pojo = CONFIG.read(in, Env.Project.class, ConfigMaster.YAML);
 				pojo.name = IOUtil.normalizePath(pojo.name);
 
 				if (projects.containsKey(pojo.name)) {
@@ -650,7 +651,7 @@ public final class MCMake {
 					return;
 				}
 
-				var basePath = new File(workspace.getProjectPath(), pojo.name);
+				var basePath = new File(workspace.getPath(), pojo.name);
 				if (basePath.exists()) {
 					Tty.warning("项目目录'"+basePath+"'非空，是否清空目录\nY: 清空并导入\nN: 不清空并导入\nCtrl+C: 取消操作");
 					char selection = TUI.key("YyNn", "您的选择: ");
@@ -693,14 +694,22 @@ public final class MCMake {
 	//region 配置文件
 	private static boolean loadConfig() {
 		try {
-			config = new YamlParser(TextParser.NO_DUPLICATE_KEY|TextParser.ORDERED_MAP).parse(new File(CONF_PATH, "config.yml")).asMap();
+			YamlParser parser = new YamlParser(TextParser.NO_DUPLICATE_KEY | TextParser.ORDERED_MAP | TextParser.LENIENT);
+
+			config = parser.parse(new File(CONF_PATH, "config.yml")).asMap();
 			configSchema.validate(config);
+
+			String string = config.getString("日志配置文件", null);
+			var logger = string == null ? parser.parse(IOUtil.getTextResourceIL("logger.yml")) : parser.parse(string);
+			LogContext.loadFromConfig(logger.asMap());
 		} catch (Exception e) {
-			LOGGER.fatal("系统配置config.yml解析失败!", e);
+			log.fatal("系统配置config.yml解析失败!", e);
 			return false;
 		}
 
-		Logger.getRootContext().level(Level.valueOf(config.getString("日志级别", "DEBUG")));
+		DownloadTask.timeout = HttpRequest.DEFAULT_TIMEOUT = config.getInt("连接超时");
+		DownloadTask.defChunkStart = DownloadTask.defMinChunkSize = config.getInt("分块大小");
+		HttpRequest.DEFAULT_PROXY = config.containsKey("网络代理") ? URI.create(config.getString("网络代理")) : null;
 
 		if (watcher != null) watcher.removeAll();
 
@@ -708,7 +717,7 @@ public final class MCMake {
 		try {
 			w = new FileWatcher();
 		} catch (IOException e) {
-			LOGGER.error("无法启动文件监控", e);
+			log.error("无法启动文件监控", e);
 		}
 		if (w == null) w = new IFileWatcher();
 		watcher = w;
@@ -721,7 +730,7 @@ public final class MCMake {
 				var instance = Workspace.factory(Class.forName(value.getString("type")));
 				workspaceTypes.put(name, instance);
 			} catch (ClassNotFoundException e) {
-				LOGGER.error("无法初始化工作区{}", e, name);
+				log.error("无法初始化工作区{}", e, name);
 			}
 		}
 
@@ -733,18 +742,18 @@ public final class MCMake {
 				var instance = new Compiler.Factory(value);
 				compilerTypes.put(name, instance);
 			} catch (ClassNotFoundException e) {
-				LOGGER.error("无法初始化编译器{}", e, name);
+				log.error("无法初始化编译器{}", e, name);
 			}
 		}
 
-		processors.clear();
+		REGISTERED_PLUGINS.clear();
 		for (var entry : config.getMap("插件").entrySet()) {
 			try {
-				Processor processor = (Processor) Class.forName(entry.getKey()).newInstance();
-				processors.add(processor);
-				processor.init(entry.getValue());
+				Plugin plugin = (Plugin) Class.forName(entry.getKey()).newInstance();
+				REGISTERED_PLUGINS.add(plugin);
+				plugin.init(entry.getValue());
 			} catch (Throwable e) {
-				LOGGER.error("无法加载插件{}", e, entry.getKey());
+				log.error("无法加载插件{}", e, entry.getKey());
 			}
 		}
 
@@ -752,6 +761,9 @@ public final class MCMake {
 	}
 	private static void loadEnv() throws IOException, ParseException {
 		watcher.removeAll();
+
+		BuildContext.closeAllDependencies();
+		for (var project : projects.values()) project.close();
 
 		File file = new File(CONF_PATH, "env.yml");
 		if (!file.isFile()) {
@@ -764,53 +776,56 @@ public final class MCMake {
 		envSchema.validate(envData);
 
 		var env = CONFIG.reader(Env.class).read(envData);
-		var deleteIml = !projects.isEmpty();
+		var regenerate = !projects.isEmpty();
+
+		saveProjectStates();
 
 		workspaces.clear();
 		projects.clear();
 
 		for (var workspace : env.workspaces) {
-			workspaces.put(workspace.id, workspace);
+			workspaces.put(workspace.id, new Workspace(workspace));
+		}
+		for (Workspace value : workspaces.values()) {
+			value.init();
+			if (regenerate) value.onAdd();
 		}
 		for (var config : env.projects) {
 			try {
 				var project = new Project(config, false);
 				projects.put(project.getName(), project);
 			} catch (IOException e) {
-				LOGGER.error("无法加载项目{}", e, config.name);
+				log.error("无法加载项目{}", e, config.name);
 			}
 		}
 		for (var name : env.auto_compile) {
 			var project = projects.get(name);
 			if (project != null) project.setAutoCompile(true);
 		}
+		for (var value : projects.values()) {
+			value.init();
+			if (value.getVariables().getOrDefault("fmd:generate_project", "true").equals("true"))
+				Workspace.registerModule(value, regenerate ? 2 : 0);
+		}
 		defaultProject = projects.get(env.default_project);
-		for (var value : projects.values()) {
-			value.init();
-			Workspace.registerModule(value, deleteIml ? 2 : 0);
-		}
-		for (var value : projects.values()) {
-			value.init();
-			Workspace.registerModule(value, deleteIml ? 2 : 0);
-		}
 		updatePrompt();
 	}
 	static void saveEnv() {
 		var env = getEnvPojo();
 		try {
-			ConfigMaster.YAML.writeObject(CONFIG.writer(Env.class), env, new File(CONF_PATH, "env.yml"));
+			CONFIG.write(ConfigMaster.YAML, env, new File(CONF_PATH, "env.yml"));
 		} catch (IOException e) {
-			LOGGER.error("配置保存失败", e);
+			log.error("配置保存失败", e);
 		}
 	}
 	private static Env getEnvPojo() {
 		var env = new Env();
 		env.auto_compile = new ArrayList<>();
 		env.projects = new ArrayList<>();
-		env.workspaces = new ArrayList<>(workspaces.values());
+		env.workspaces = Flow.of(workspaces.values()).map(x -> x.conf).toList();
 		env.workspaces.sort((o1, o2) -> o1.id.compareTo(o2.id));
 		for (Project value : projects.values()) {
-			env.projects.add(value.serialize());
+			env.projects.add(value.conf);
 			if (value.isAutoCompile()) {
 				env.auto_compile.add(value.getName());
 			}
@@ -818,6 +833,12 @@ public final class MCMake {
 		env.projects.sort((o1, o2) -> o1.name.compareTo(o2.name));
 		if (defaultProject != null) env.default_project = defaultProject.getName();
 		return env;
+	}
+
+	private static void saveProjectStates() {
+		for (Project p : projects.values()) {
+			p.savePersistentState();
+		}
 	}
 
 	private static class MySerializer {
@@ -861,7 +882,7 @@ public final class MCMake {
 
 						File artifact = new File(OUTPUT_PATH, depend.getOutputFormat());
 
-						MCMake.LOGGER.debug("Build [{}]: config={}", depend.getName(), copyArgs);
+						log.debug("Build [{}]: config={}", depend.getName(), copyArgs);
 						try {
 							success = depend.conf.type.canBuild() ? build(copyArgs, depend, artifact) : compile(copyArgs, depend);
 							if (!success) {
@@ -882,7 +903,7 @@ public final class MCMake {
 
 			File artifact = new File(OUTPUT_PATH, project.getOutputFormat());
 
-			MCMake.LOGGER.debug("Build [{}]: config={}", project.getName(), args);
+			log.debug("Build [{}]: config={}", project.getName(), args);
 			success = build(args, project, artifact);
 			if (!success) {
 				Statistic.afterProjectBuild(project.getName(), System.currentTimeMillis() - project.compiling.buildStartTime, args, false);
@@ -892,7 +913,7 @@ public final class MCMake {
 			if (project.mappedWriter != null) try {
 				project.mappedWriter.end();
 			} catch (Throwable e) {
-				LOGGER.warn("mapperWriter", e);
+				log.warn("mapperWriter", e);
 			}
 			_unlock();
 		}
@@ -942,12 +963,13 @@ public final class MCMake {
 
 		Profiler.endStartSection("lockOutput");
 
+		artifact.getParentFile().mkdirs();
 		ZipOutput mappedWriter = lockOutput(p, artifact);
 		try {
-			mappedWriter.begin(context.increment > INC_REBUILD);
+			mappedWriter.begin(context.incrementLevel > INC_REBUILD);
 		} catch (Exception e) {
-			context.increment = INC_REBUILD;
-			LOGGER.error("工件打开失败, 正在尝试重新生成", e);
+			context.incrementLevel = INC_REBUILD;
+			log.error("工件打开失败, 正在尝试重新生成", e);
 			mappedWriter.begin(false);
 		}
 		mappedWriter.setComment("MCMake "+VERSION+" by Roj234\r\nhttps://www.github.com/roj234/rojlib");
@@ -975,14 +997,14 @@ public final class MCMake {
 		Profiler.endStartSection("afterCompile");
 		int oldSize = changed.size();
 		changed = context.afterCompile();
-		LOGGER.debug("afterCompile hook({}): changed {} => {}", context.increment, oldSize, changed.size());
+		log.debug("afterCompile hook({}): changed {} => {}", context.incrementLevel, oldSize, changed.size());
 
 		int resourceUpdated;
 		Profiler.endStartSection("writeResource");
 		try {
 			resourceUpdated = resources.get();
 		} catch (Exception e) {
-			LOGGER.error("资源更新失败["+p.getName()+"]", e);
+			log.error("资源更新失败["+p.getName()+"]", e);
 			return false;
 		}
 
@@ -994,20 +1016,15 @@ public final class MCMake {
 				mappedWriter.set(ctx.getFileName(), ctx::getCompressedShared, context.buildStartTime);
 			}
 		} catch (Throwable e) {
-			LOGGER.error("代码更新失败["+p.getName()+":"+ctx.getFileName()+"]", e);
+			log.error("代码更新失败["+p.getName()+":"+ctx.getFileName()+"]", e);
 			return false;
 		}
 
-		if (context.increment > INC_REBUILD) {
+		if (context.incrementLevel > INC_REBUILD) {
 			ZipArchive writer = mappedWriter.getArchive();
 			for (String className : context.getRemovedClasses()) {
-				EntryMod mod = writer.createMod(className);
-				if (mod.data != null) {
-					LOGGER.warn(" [!]MCMake.java: 计划删除的类{}具有内容 {}", className, mod.data.getClass());
-					mod.data = null;
-					mod.flag = 0;
-				}
-				LOGGER.trace("Removing {}", className);
+				boolean replaced = writer.createMod(className).data != null;
+				log.trace(replaced ? "Replaced (in artifact) {}" : "Remove (in artifact) {}", className);
 			}
 		}
 
@@ -1020,9 +1037,10 @@ public final class MCMake {
 			Profiler.endStartSection("signature");
 			try {
 				signatureJar(p);
-				LOGGER.trace("签名成功");
+				log.trace("签名成功");
 			} catch (Exception e) {
-				LOGGER.error("签名失败", e);
+				log.error("签名失败", e);
+				return false;
 			}
 		}
 
@@ -1031,7 +1049,7 @@ public final class MCMake {
 		if (wasUpdated && !(needCompile ? p.unmappedJar : artifact).setLastModified(context.buildStartTime)) Tty.warning("设置时间戳失败!");
 		if (wasUpdated || !args.contains("silent")) Tty.success((wasUpdated?"构建成功":"无变更")+"["+p.getName()+"]! "+(System.currentTimeMillis()-context.buildStartTime)+"ms");
 		context.buildSuccess();
-		p.buildSuccess(context.increment > 0);
+		p.buildSuccess(context.incrementLevel > 0);
 
 		Profiler.endSection();
 		return true;
@@ -1057,10 +1075,10 @@ public final class MCMake {
 
 		var prefix = BASE.getAbsolutePath().length()+1;
 
-		for (File file : p.workspace.depend) {
+		for (File file : p.workspace.getDepend()) {
 			classpath.append(file.getAbsolutePath().substring(prefix)).append(File.pathSeparatorChar);
 		}
-		for (File file : p.workspace.mappedDepend) {
+		for (File file : p.workspace.getMappedDepend()) {
 			classpath.append(file.getAbsolutePath().substring(prefix)).append(File.pathSeparatorChar);
 		}
 		IOUtil.listFiles(new File(BASE, "lib"),  file -> {
@@ -1087,7 +1105,7 @@ public final class MCMake {
 			return true;
 		}
 
-		int increment = context.increment;
+		int increment = context.incrementLevel;
 
 		Profiler.startSection("listSources");
 
@@ -1095,7 +1113,7 @@ public final class MCMake {
 		Set<String> removed = context.sources.getRemoved();
 
 		if ((changed.size()|removed.size()) > 0)
-			LOGGER.debug("Source: {} changed, {} removed.", changed.size(), removed.size());
+			log.debug("Source: {} changed, {} removed.", changed.size(), removed.size());
 
 		if (changed.isEmpty() && removed.isEmpty() && increment != INC_LOAD && increment != INC_REBUILD) {
 			context.setChangedClasses(new ArrayList<>());
@@ -1116,10 +1134,10 @@ public final class MCMake {
 			options.addAll("-cp", classPath, "-encoding", p.charset.name());
 			p.compiler.modifyOptions(options, p);
 
-			LOGGER.debug("ModifyArg pre: increment={}, argument={}", increment, options);
+			log.debug("ModifyArg pre: increment={}, argument={}", increment, options);
 			Profiler.endStartSection("beforeCompile");
-			increment = context.beforeCompile(options, changed, increment);
-			LOGGER.debug("ModifyArg post: increment={}, argument={}", increment, options);
+			increment = context.beforeCompile(options, changed);
+			log.debug("ModifyArg post: increment={}, argument={}", increment, options);
 
 			Profiler.endStartSection("compile");
 			outputs = p.compiler.compile(options, changed, args.contains("diagnostic"));
@@ -1130,7 +1148,7 @@ public final class MCMake {
 				return false;
 			}
 
-			LOGGER.debug("Compile successful with {} outputs", outputs.size());
+			log.debug("Compile successful with {} outputs", outputs.size());
 		}
 
 		Profiler.endStartSection("outputJar");
@@ -1165,13 +1183,13 @@ public final class MCMake {
 			for (var className : context.structureDiffHandles.keySet()) {
 				needUpdate.add(AnnotationRepo.normalizeName(className));
 				p.structureRepo.remove(className);
-				MCMake.LOGGER.trace("Remove structure for {}", className);
+				log.trace("Remove structure for {}", className);
 			}
 
 			for (var itr = context.sources.structureChanged.iterator(); itr.hasNext(); ) {
 				String className = itr.next();
 				if (!needUpdate.contains(className)) {
-					MCMake.LOGGER.trace("Structure of {} did not change, stop propagating.", className);
+					log.trace("Structure of {} did not change, stop propagating.", className);
 					itr.remove();
 				}
 			}
@@ -1188,12 +1206,11 @@ public final class MCMake {
 						className = className.substring(0, subClass < 0 ? className.length()-6 : subClass);
 
 						if (removed.contains(className) || needUpdate.contains(className)) {
-							// 如果这个文件已经通过set被设置了新值，那么不要删除它
-							if (za.createMod(entry.getName()).data == null) {
-								LOGGER.trace("Remove {}", entry.getName());
+							// createMod: 当且仅当相同名称未调用set时才删除
+							boolean fileReallyRemoved = za.createMod(entry.getName()).data == null;
+							if (fileReallyRemoved) {
+								log.trace("classRemoved('{}')", entry.getName());
 								context.classRemoved(entry.getName());
-							} else {
-								LOGGER.trace("Remove skip {}", entry.getName());
 							}
 						}
 					}
@@ -1218,7 +1235,7 @@ public final class MCMake {
 
 				Profiler.endSection();
 
-				LOGGER.debug("Loaded {} classes from build cache.", count);
+				log.debug("Loaded {} classes from build cache.", count);
 			}
 		} catch (Throwable e) {
 			Tty.warning("增量更新失败["+p.getName()+"]", e);

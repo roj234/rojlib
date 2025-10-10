@@ -1,0 +1,14 @@
+GetIp: roj.plugins.ddns.CTLightCat
+CatUrl: 192.168.1.1
+CatPassword: xxxxxx
+
+# alt
+# GetIp: roj.plugins.ddns.Stun
+
+#Minute
+Interval: 5
+
+Services:
+  - Type: roj.plugins.ddns.Dynv6
+    HttpToken: xxx
+    Hosts: ["xxx.dynv6.net"]

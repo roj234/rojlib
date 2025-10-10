@@ -4,6 +4,7 @@ import roj.collect.ArrayList;
 import roj.collect.IntMap;
 import roj.reflect.Unsafe;
 import roj.util.DynByteBuf;
+import roj.util.Helpers;
 
 import java.lang.annotation.Annotation;
 
@@ -335,7 +336,11 @@ abstract class Assembler {
 		for (Annotation annotation : annotations) {
 			if (annotation instanceof ObjectField field) {
 				if (field.value().isEmpty()) return 0;
-				return (int) Unsafe.fieldOffset(type, field.value());
+				try {
+					return (int) Unsafe.objectFieldOffset(type, field.value(), type.getDeclaredField(field.value()).getType());
+				} catch (NoSuchFieldException e) {
+					Helpers.athrow(e);
+				}
 			}
 		}
 

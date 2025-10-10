@@ -169,7 +169,7 @@ public final class IOUtil {
 	public static void readFully(InputStream in, byte[] b, int off, int len) throws IOException {
 		while (len > 0) {
 			int r = in.read(b, off, len);
-			if (r < 0) throw new EOFException();
+			if (r < 0) throw new EOFException("Premature end of stream, remaining "+len+" bytes");
 			len -= r;
 			off += r;
 		}
@@ -358,6 +358,7 @@ public final class IOUtil {
 
 	// 非线程安全，主要目的是写入文件时抛出异常，不会造成文件内容丢失
 	public static boolean writeFileEvenMoreSafe(File baseFolder, String baseName, ExceptionalConsumer<File, IOException> consumer) throws IOException {
+		baseFolder.mkdirs();
 		var realFile = new File(baseFolder, baseName);
 		var tmpFile = new File(baseFolder, baseName+"."+randomFileName()+".new");
 		var deletePend = new File(baseFolder, baseName+"."+randomFileName()+".old");
@@ -450,6 +451,12 @@ public final class IOUtil {
 		path = path.substring(Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\'))+1);
 		int i = path.lastIndexOf('.');
 		return i < 0 ? "" : path.substring(i+1).toLowerCase(Locale.ROOT);
+	}
+
+	public static String extensionNameDot(String path) {
+		path = path.substring(Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\'))+1);
+		int i = path.lastIndexOf('.');
+		return i < 0 ? "" : path.substring(i).toLowerCase(Locale.ROOT);
 	}
 
 	public static String fileName(String pat) {
@@ -671,8 +678,8 @@ public final class IOUtil {
 		var watcher = FileSystems.getDefault().newWatchService();
 		try {
 			long off;
-			if ((off=pendingKeys_offset) == 0) {
-				off = pendingKeys_offset = Unsafe.fieldOffset(Class.forName("sun.nio.fs.AbstractWatchService"), "pendingKeys");
+			if ((off = pendingKeys_offset) == 0) {
+				off = pendingKeys_offset = Unsafe.objectFieldOffset(Class.forName("sun.nio.fs.AbstractWatchService"), "pendingKeys", LinkedBlockingDeque.class);
 			}
 			if (off > 0) {
 				U.putReference(watcher, off, new LinkedBlockingDeque<>() {

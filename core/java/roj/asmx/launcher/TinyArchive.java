@@ -36,17 +36,22 @@ final class TinyArchive implements ArchiveFile {
 	Entry[] files;
 	int count;
 
+	static {InflateInputStream.class.getClass();}
+
 	TinyArchive(File file) throws IOException {
 		this.file = file;
 		this.r = new DataIn(file);
 		r.ignoreClose = true;
 	}
 
-	@Override public void close() {}
-	@Override public void reload() {}
+	@Override public void close() throws IOException {r.in.close();}
+	@Override public void reload() throws IOException {
+		if (file.getName().endsWith(".roar")) readRoar();
+		else readZip();
+	}
 	@Override public @Nullable ArchiveEntry getEntry(String name) {return find(name);}
 	@Override public @UnmodifiableView Collection<? extends ArchiveEntry> entries() {return new Entries();}
-	@Override public InputStream getInputStream(ArchiveEntry entry, byte[] password) throws IOException {return get(entry.getName());}
+	@Override public InputStream getInputStream(ArchiveEntry entry, byte[] password) throws IOException {return getInputStream(entry.getName());}
 
 	static final class Entry implements ArchiveEntry {
 		byte flag;
@@ -71,7 +76,7 @@ final class TinyArchive implements ArchiveFile {
 		return null;
 	}
 
-	boolean get(String name, ByteList buf) throws IOException {
+	public boolean get(String name, ByteList buf) throws IOException {
 		var entry = find(name);
 		if (buf == null || entry == null)
 			return entry != null;
@@ -99,7 +104,7 @@ final class TinyArchive implements ArchiveFile {
 		}
 	}
 
-	InputStream get(String name) throws IOException {
+	public InputStream getInputStream(String name) throws IOException {
 		var entry = find(name);
 		if (entry == null) return null;
 

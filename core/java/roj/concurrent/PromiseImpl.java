@@ -3,7 +3,7 @@ package roj.concurrent;
 import org.jetbrains.annotations.NotNull;
 import roj.compiler.api.Synchronizable;
 import roj.optimizer.FastVarHandle;
-import roj.reflect.Handles;
+import roj.reflect.Telescope;
 import roj.text.logging.Logger;
 import roj.util.Helpers;
 
@@ -21,18 +21,18 @@ import java.util.function.Function;
  */
 @Synchronizable
 @FastVarHandle
-final class PromiseImpl<T> implements Promise<T>, Runnable, Cancellable, Promise.Callback {
+final class PromiseImpl<T> implements Promise<T>, Runnable, Cancellable, Promise.Result {
 	PromiseImpl() {}
 	PromiseImpl(Executor executor) {this.executor = executor;}
 
-	private static final VarHandle STATE = Handles.lookup().findVarHandle(PromiseImpl.class, "state", int.class);
+	private static final VarHandle STATE = Telescope.lookup().findVarHandle(PromiseImpl.class, "state", int.class);
 	static final int
 		TASK_COMPLETE = 1, TASK_SUCCESS = 2,
 		WAIT = 4, CALLBACK = 8,
 		INVOKE_HANDLER = 16;
 	volatile int state;
 
-	private BiConsumer<?, Callback> resolveHandler;
+	private BiConsumer<?, Result> resolveHandler;
 	private Function<Throwable, ?> rejectHandler;
 
 	Object result;
@@ -41,7 +41,7 @@ final class PromiseImpl<T> implements Promise<T>, Runnable, Cancellable, Promise
 	private Executor executor, rejectExecutor;
 
 	@Override
-	public Promise<Object> then(BiConsumer<T, Callback> fn, Function<Throwable, ?> recover) {
+	public Promise<Object> then(BiConsumer<T, Result> fn, Function<Throwable, ?> recover) {
 		PromiseImpl<Object> p = new PromiseImpl<>(executor);
 
 		synchronized (this) {

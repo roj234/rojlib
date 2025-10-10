@@ -6,6 +6,8 @@ import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
 /**
+ * 防止静态分析器意外删除这个类.
+ * 如果by不填，那么假设和所处类相同
  * @author Roj234
  * @since 2024/1/6 2:19
  */

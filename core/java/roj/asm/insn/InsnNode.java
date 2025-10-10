@@ -200,7 +200,7 @@ public final class InsnNode {
 	 */
 	@MagicConstant(valuesFromClass = Opcodes.class)
 	public final byte opcode() {
-		if (!pos.isValid()) throw new IllegalStateException("Node was removed");
+		if (!pos.isBound()) throw new IllegalStateException("Node was removed");
 		return code;
 	}
 	/**
@@ -797,7 +797,7 @@ public final class InsnNode {
 	public String toString() {
 		CharList sb = new CharList();
 
-		if (pos.isValid()) sb.append("#").append(pos.getValue()).append(' ');
+		if (pos.isBound()) sb.append("#").append(pos.getValue()).append(' ');
 		else sb.append("#<invalid>: ");
 
 		sb.append(Opcodes.toString(code)).append(' ');

@@ -184,7 +184,7 @@ public final class hCE implements ChannelHandler {
 
 		// Check header magic
 		if (buf.readUnsignedShortLE() != GZIP_MAGIC) {
-			throw new ZipException("Not in GZIP format");
+			throw new ZipException("Not GZIP magic");
 		}
 		// Check compression method
 		if (buf.readUnsignedByte() != 8) {

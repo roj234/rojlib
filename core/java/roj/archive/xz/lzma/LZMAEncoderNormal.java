@@ -10,9 +10,9 @@
 
 package roj.archive.xz.lzma;
 
+import roj.archive.rangecoder.RangeEncoder;
 import roj.archive.xz.LZMA2Options;
 import roj.archive.xz.lz.LZEncoder;
-import roj.archive.xz.rangecoder.RangeEncoder;
 import roj.reflect.Unsafe;
 import roj.util.NativeMemory;
 
@@ -349,13 +349,13 @@ final class LZMAEncoderNormal extends LZMAEncoder {
 			if (oHasPrev2(optCur)) {
 				int pos = oGetOptPrev2(optCur);
 				oSetState(optCur, oGetState(pos));
-				if (oGetBackPrev2(optCur) < REPS) oSetState(optCur, state_updateLongRep(oGetState(optCur)));
-				else oSetState(optCur, state_updateMatch(oGetState(optCur)));
+				if (oGetBackPrev2(optCur) < REPS) oSetState(optCur, stateUpdateLongRep(oGetState(optCur)));
+				else oSetState(optCur, stateUpdateMatch(oGetState(optCur)));
 			} else {
 				oSetState(optCur, oGetState(optPrev));
 			}
 
-			oSetState(optCur, state_updateLiteral(oGetState(optCur)));
+			oSetState(optCur, stateUpdateLiteral(oGetState(optCur)));
 		} else {
 			oSetState(optCur, oGetState(optPrev));
 		}
@@ -364,8 +364,8 @@ final class LZMAEncoderNormal extends LZMAEncoder {
 			// Must be either a short rep or a literal.
 			assert oGetBackPrev(optCur) == 0 || oGetBackPrev(optCur) == -1;
 
-			if (oGetBackPrev(optCur) == 0) oSetState(optCur, state_updateShortRep(oGetState(optCur)));
-			else oSetState(optCur, state_updateLiteral(oGetState(optCur)));
+			if (oGetBackPrev(optCur) == 0) oSetState(optCur, stateUpdateShortRep(oGetState(optCur)));
+			else oSetState(optCur, stateUpdateLiteral(oGetState(optCur)));
 
 			U.copyMemory(
 				opts+ (long) optPrev*OPT_STRUCT_SIZE+REPS_OFF,
@@ -376,11 +376,11 @@ final class LZMAEncoderNormal extends LZMAEncoder {
 			if (oPrev1IsLiteral(optCur) && oHasPrev2(optCur)) {
 				optPrev = oGetOptPrev2(optCur);
 				back = oGetBackPrev2(optCur);
-				oSetState(optCur, state_updateLongRep(oGetState(optCur)));
+				oSetState(optCur, stateUpdateLongRep(oGetState(optCur)));
 			} else {
 				back = oGetBackPrev(optCur);
-				if (back < REPS) oSetState(optCur, state_updateLongRep(oGetState(optCur)));
-				else oSetState(optCur, state_updateMatch(oGetState(optCur)));
+				if (back < REPS) oSetState(optCur, stateUpdateLongRep(oGetState(optCur)));
+				else oSetState(optCur, stateUpdateMatch(oGetState(optCur)));
 			}
 
 			if (back < REPS) {
@@ -435,7 +435,7 @@ final class LZMAEncoderNormal extends LZMAEncoder {
 			int len = lz.getMatchLen(1, oGetRep(optCur, 0), lenLimit);
 
 			if (len >= MATCH_LEN_MIN) {
-				nextState = state_updateLiteral(oGetState(optCur));
+				nextState = stateUpdateLiteral(oGetState(optCur));
 				int nextPosState = (pos + 1) & posMask;
 				int price = literalPrice + getLongRepAndLenPrice(0, len, nextState, nextPosState);
 
@@ -475,14 +475,14 @@ final class LZMAEncoderNormal extends LZMAEncoder {
 			if (len2 >= MATCH_LEN_MIN) {
 				// Rep
 				int price = longRepPrice + getRepeatPrice(len, posState);
-				nextState = state_updateLongRep(oGetState(optCur));
+				nextState = stateUpdateLongRep(oGetState(optCur));
 
 				// Literal
 				int curByte = lz.getByte(len, 0);
 				int matchByte = lz.getByte(0); // lz.getByte(len, len)
 				int prevByte = lz.getByte(len, 1);
 				price += getLiteralPrice(curByte, matchByte, prevByte, pos + len, nextState);
-				nextState = state_updateLiteral(nextState);
+				nextState = stateUpdateLiteral(nextState);
 
 				// Rep0
 				int nextPosState = (pos + len + 1) & posMask;
@@ -537,14 +537,14 @@ final class LZMAEncoderNormal extends LZMAEncoder {
 			int len2 = lz.getMatchLen(len + 1, dist, len2Limit);
 
 			if (len2 >= MATCH_LEN_MIN) {
-				nextState = state_updateMatch(oGetState(optCur));
+				nextState = stateUpdateMatch(oGetState(optCur));
 
 				// Literal
 				int curByte = lz.getByte(len, 0);
 				int matchByte = lz.getByte(0); // lz.getByte(len, len)
 				int prevByte = lz.getByte(len, 1);
 				int price = matchAndLenPrice + getLiteralPrice(curByte, matchByte, prevByte, pos + len, nextState);
-				nextState = state_updateLiteral(nextState);
+				nextState = stateUpdateLiteral(nextState);
 
 				// Rep0
 				int nextPosState = (pos + len + 1) & posMask;

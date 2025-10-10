@@ -43,6 +43,7 @@ class VirtualList {
 	 * @param {HTMLElement} config.element - 父元素
 	 * @param {Array<T>} config.data - 数据源
 	 * @param {number} config.itemHeight - 每项的高度
+	 * @param {function(item: T): any} [config.keyFunc=item => item] - 生成唯一索引的函数
 	 * @param {function(data: T, index: number, recycle: Array<HTMLElement>): HTMLElement} config.renderer - 渲染函数
 	 * @param {number} [config.height=element.offsetHeight] - 总高度
 	 * @param {boolean} [config.visible=auto] - 当前是否可见
@@ -67,6 +68,7 @@ class VirtualList {
 		})).observe(wrapper);
 
 		this.render = (config.fixed ? this._updateFixed : this._update).bind(this);
+		this.keyFunc = config.keyFunc ?? (item => item[ITEM_KEY] ?? item);
 
 		// 头疼医头，脚疼医脚，解决丢失滚动目标的问题；完美的解决方案是对列表项使用绝对定位，使得浏览器基于父元素定位，但是这会引入每次滚动更新offset的开销
 		wrapper.addEventListener('wheel', this._handleMouseWheel, PASSIVE_EVENT);
@@ -74,8 +76,7 @@ class VirtualList {
 		wrapper.addEventListener('scroll', this.render);
 
 		if ((this.items = config.data)) {
-			if (this._visible) {
-				if (this.height === 0) throw "参数height不能为0";
+			if (this._visible && this.height) {
 				this.render();
 			} else {
 				this._updatePending = true;
@@ -294,7 +295,7 @@ class VirtualList {
 		// 遍历现有元素，回收不可见或key变化的元素
 		for (const item of Array.from(container.children)) {
 			const i = item[INDEX];
-			if (i < startIndex || i >= endIndex || item[ITEM_KEY] !== (items[i][ITEM_KEY] ?? items[i])) {
+			if (i < startIndex || i >= endIndex || item[ITEM_KEY] !== this.keyFunc(items[i], i)) {
 				if (item === this._hoveringElement) {
 					item.style.visibility = 'hidden';
 					item.style.position = 'fixed';
@@ -319,7 +320,7 @@ class VirtualList {
 			// 创建或复用元素
 			const item = this.renderer(items[i], i, recycle);
 			item[INDEX] = i;
-			item[ITEM_KEY] = items[i][ITEM_KEY] ?? items[i];
+			item[ITEM_KEY] = this.keyFunc(items[i], i);
 
 			if (!anchorNode) {
 				// 情况1：向上滚动

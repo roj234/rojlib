@@ -2,7 +2,6 @@ package roj.collect;
 
 import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.NotNull;
-import roj.config.mapper.ObjectMapper;
 import roj.math.MathUtils;
 import roj.text.TextUtil;
 import roj.util.ArrayCache;
@@ -35,7 +34,7 @@ public class RingBuffer<E> extends AbstractCollection<E> implements Deque<E> {
 		if (capacity == 0) {
 			/**
 			 * Why can be zero
-			 * @see ObjectMapper#containerFactory(Class)
+			 * @see roj.config.mapper.ObjectMapper#containerFactory(Class)
 			 */
 			maxCapacity = ArrayCache.MAX_ARRAY_SIZE;
 			elements = ArrayCache.OBJECTS;

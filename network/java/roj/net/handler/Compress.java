@@ -15,8 +15,6 @@ import java.util.zip.Inflater;
 public class Compress extends GDeflate {
 	public static final int F_PER_INPUT_RESET = 1;
 
-	public static final byte[] _FULL_FLUSH = {0, 0, -1, -1};
-
 	private int max, thr;
 	private byte flag;
 
@@ -74,6 +72,7 @@ public class Compress extends GDeflate {
 			if (merged != null && out.readableBytes() < prevLen) return;
 			throw new CorruptedInputException("解压的长度("+out.readableBytes()+") != 包头的长度("+prevLen+")");
 		}
+		super.readPacket(ctx, out);
 	}
 
 	@Override
@@ -89,6 +88,7 @@ public class Compress extends GDeflate {
 			} finally {
 				if (out != in) out.release();
 			}
+			return;
 		}
 
 		out = ctx.allocate(false, Math.min(buf, in.readableBytes()+5)).put(/*TERMINATE*/1).putVUInt(in.readableBytes() - thr);

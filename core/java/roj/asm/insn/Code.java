@@ -18,8 +18,8 @@ import roj.io.IOUtil;
 import roj.text.CharList;
 import roj.text.LineReader;
 import roj.text.TextUtil;
-import roj.text.logging.Logger;
 import roj.util.DynByteBuf;
+import roj.util.FastFailException;
 
 import java.util.List;
 
@@ -86,19 +86,16 @@ public class Code extends Attribute implements Attributed {
 						case "StackMapTable" -> FrameVisitor.readFrames(frames = new ArrayList<>(), r, cp, instructions, mn.owner(), localSize, stackSize);
 						case "RuntimeInvisibleTypeAnnotations", "RuntimeVisibleTypeAnnotations" -> attributes._add(new TypeAnnotations(name, r, cp));
 						default -> {
-							Logger.FALLBACK.debug("{}.{} 中遇到不支持的属性 {}", mn.owner(), mn.name(), name);
+							foundUnknownAttribute(mn, name);
 							r.rIndex = r.wIndex();
 							continue;
 						}
 					}
 
-					if (r.isReadable()) {
-						Logger.FALLBACK.warn("无法读取"+mn.owner()+"."+mn.name()+"的'Code'的子属性'"+name+"' ,剩余了"+r.readableBytes()+",数据:"+r.dump());
-						r.rIndex = r.wIndex();
-					}
+					if (r.isReadable()) throw new FastFailException("剩余"+r.readableBytes()+"字节");
 				} catch (Throwable e) {
 					r.rIndex = br;
-					throw new RuntimeException("读取子属性'"+name+"',数据:"+r.dump(), e);
+					throw new RuntimeException("读取属性'"+name+"',数据:"+r.dump(), e);
 				} finally {
 					r.wIndex(exw);
 				}

@@ -14,8 +14,7 @@ import roj.text.Token;
 import java.util.Map;
 
 import static roj.config.JsonParser.*;
-import static roj.text.Token.EOF;
-import static roj.text.Token.LITERAL;
+import static roj.text.Token.*;
 
 /**
  * Yaml解析器
@@ -33,7 +32,7 @@ public class YamlParser extends TextParser implements StreamParser {
 
 	private static final TrieTree<Token> YAML_TOKENS = new TrieTree<>();
 	// - for timestamp
-	private static final BitSet YAML_LENDS = new BitSet(), TMP1 = BitSet.from("\r\n:#"), TMP_JSON = BitSet.from(":,{}[]\r\n \t");
+	private static final BitSet YAML_LENDS = new BitSet(), TMP1 = BitSet.from("\r\n:#"), TMP_JSON = BitSet.from(":,{}[]\r\n\t");
 
 	static {
 		put(TRUE, "True", "On", "Yes");
@@ -60,7 +59,7 @@ public class YamlParser extends TextParser implements StreamParser {
 		}
 	}
 
-	public YamlParser() {this(NO_DUPLICATE_KEY);}
+	public YamlParser() {this(NO_DUPLICATE_KEY|LENIENT);}
 	public YamlParser(@MagicConstant(flags = {ORDERED_MAP, LENIENT, NO_DUPLICATE_KEY}) int flags) {
 		super(flags);
 		tokens = YAML_TOKENS;
@@ -148,7 +147,7 @@ public class YamlParser extends TextParser implements StreamParser {
 			}
 			case delim:
 				if (prevLN == LN && LN != 1) {
-					if ((flags &LENIENT) == 0) throw err("一行内不允许放置多级列表 (你看的不累吗) (通过LENIENT参数关闭该限制)");
+					if ((flags&LENIENT) == 0) throw err("一行内不允许放置多级列表 (你看的不累吗) (通过LENIENT参数关闭该限制)");
 					prevIndent = -2;
 				}
 				return blockSeq();
@@ -617,11 +616,12 @@ public class YamlParser extends TextParser implements StreamParser {
 
 		Token w = readNumber(sign, false);
 		if (!whiteSpaceUntilNextLine(index)) {
-			int move = index - prevIndex;
+			int len = index - prevIndex;
 			index = prevIndex;
-			if (move == 4 && input.charAt(prevIndex+4) == '-') {
+			if (w.type() == INTEGER && len == 4 && input.charAt(prevIndex+4) == '-') {
 				w = ISO8601Datetime(false);
-				if (w != null) return w;
+				if (w != null && whiteSpaceUntilNextLine(index)) return w;
+				index = prevIndex;
 			}
 			return readLiteral();
 		}

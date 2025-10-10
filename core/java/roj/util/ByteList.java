@@ -338,7 +338,7 @@ public class ByteList extends DynByteBuf implements Appendable {
 	// endregion
 	// region Buffer Ops
 
-	public final ByteList slice(int off, int len) {
+	public ByteList slice(int off, int len) {
 		return len == 0 ? EMPTY : new Slice(list, testWI(off, len)+arrayOffset(), len);
 	}
 	public final ByteList sliceNoIndexCheck(int off, int len) {return new Slice(list, off, len);}

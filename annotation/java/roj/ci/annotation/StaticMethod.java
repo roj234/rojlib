@@ -6,7 +6,7 @@ import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
 /**
- * 这是静态函数，WIP
+ * 将final的实例函数转换为静态函数调用，未实现
  * @author Roj234
  * @since 2025/9/22 18:37
  */

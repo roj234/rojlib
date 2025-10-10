@@ -36,7 +36,7 @@ import java.util.function.BiConsumer;
 import java.util.function.Function;
 import java.util.regex.Pattern;
 
-import static roj.ci.MCMake.LOGGER;
+import static roj.ci.MCMake.log;
 
 /**
  * @author Roj234
@@ -54,10 +54,10 @@ final class MinecraftClientInfo {
 		Library(String name) {this.name = name;}
 	}
 
-	private static final XashMap.Builder<String, Library> BUILDER = XashMap.builder(String.class, Library.class, "name", "_next");
+	private static final XashMap.Template<String, Library> TEMPLATE = XashMap.forType(String.class, Library.class).key("name").newValue(Library::new).build();
 
 	File libraryPath;
-	XashMap<String, Library> libraries = BUILDER.create();
+	XashMap<String, Library> libraries = TEMPLATE.create();
 	Function<String, Promise<File>> downloader;
 	File nativePath;
 
@@ -159,7 +159,7 @@ final class MinecraftClientInfo {
 		try {
 			return Tokenizer.arguments().splitToString(argString);
 		} catch (ParseException e) {
-			LOGGER.warn("无法解析指令 {}: ", e, argString);
+			log.warn("无法解析指令 {}: ", e, argString);
 			return Collections.emptyList();
 		}
 	}
@@ -183,7 +183,7 @@ final class MinecraftClientInfo {
 		String nameNoVersion = sb.append(parts.get(0)).append(':').append(parts.get(1)).toString();
 
 		if (!fitRules(libraryInfo.getList("rules"))) {
-			LOGGER.debug("{}不符合加载规则{},跳过", mavenId, libraryInfo.get("rules"));
+			log.debug("{}不符合加载规则{},跳过", mavenId, libraryInfo.get("rules"));
 			return;
 		}
 
@@ -193,11 +193,11 @@ final class MinecraftClientInfo {
 		if (library.version != null) {
 			switch (version.compareTo(library.version)) {
 				case -1 -> {
-					LOGGER.debug("已有新版本{}的{}, 跳过旧版本{}", library.version, nameNoVersion, version);
+					log.debug("已有新版本{}的{}, 跳过旧版本{}", library.version, nameNoVersion, version);
 					return;
 				}
 				case 0 -> sameVer = true;
-				case 1 -> LOGGER.debug("已有新版本{}的{}, 跳过旧版本{}", version, nameNoVersion, library.version);
+				case 1 -> log.debug("已有新版本{}的{}, 跳过旧版本{}", version, nameNoVersion, library.version);
 			}
 		}
 		library.version = version;
@@ -229,7 +229,7 @@ final class MinecraftClientInfo {
 
 		if (!libFile.isFile()) {
 			if (downloader == null) {
-				LOGGER.warn("依赖丢失: {}", filePath);
+				log.warn("依赖丢失: {}", filePath);
 			} else {
 				 downloadLibrary(libraryInfo, classifier, filePath);
 			}
@@ -246,7 +246,7 @@ final class MinecraftClientInfo {
 		if (nameNoVersion.endsWith("log4j-core")) fixLog4j(libFile);
 
 		if (sameVer) {
-			LOGGER.debug("遇到了相同版本的 {}, 跳过", nameNoVersion);
+			log.debug("遇到了相同版本的 {}, 跳过", nameNoVersion);
 			return;
 		}
 		library.path = filePath;
@@ -271,7 +271,7 @@ final class MinecraftClientInfo {
 		for (ConfigValue entry : libraryInfo.getMap("extract").getList("exclude")) trieTree.add(entry.asString());
 		trieTree.add("META-INF");
 
-		LOGGER.debug("提取本地库{}", libFile);
+		log.debug("提取本地库{}", libFile);
 		try (var zf = new ZipFile(libFile)) {
 			for (ZEntry entry : zf.entries()) {
 				final String name = entry.getName();
@@ -280,12 +280,12 @@ final class MinecraftClientInfo {
 						IOUtil.copyStream(zf.getInputStream(entry), fos);
 					}
 				} else {
-					LOGGER.debug("排除文件{}#!{}", libFile, entry);
+					log.debug("排除文件{}#!{}", libFile, entry);
 				}
 
 			}
 		} catch (IOException e) {
-			LOGGER.warn("无法读取本地库{}", e, libFile);
+			log.warn("无法读取本地库{}", e, libFile);
 		}
 	}
 
@@ -354,7 +354,7 @@ final class MinecraftClientInfo {
 	}
 
 	static int RETRY_COUNT = 5;
-	static class DownloadTask implements BiConsumer<File, Promise.Callback>, Function<Throwable, Object> {
+	static class DownloadTask implements BiConsumer<File, Promise.Result>, Function<Throwable, Object> {
 		File savedFile;
 
 		String url;
@@ -363,7 +363,7 @@ final class MinecraftClientInfo {
 		int retry;
 
 		@Override
-		public void accept(File file, Promise.Callback callback) {
+		public void accept(File file, Promise.Result result) {
 			if (size != 0 && file.length() != size) throw new IllegalStateException("大小校验失败");
 
 			if (!sha1.isEmpty()) {
@@ -389,7 +389,7 @@ final class MinecraftClientInfo {
 				try {
 					Files.delete(file.toPath());
 				} catch (IOException e) {
-					LOGGER.warn("临时文件删除失败，您可手动删除", e);
+					log.warn("临时文件删除失败，您可手动删除", e);
 				}
 			}
 		}
@@ -397,9 +397,9 @@ final class MinecraftClientInfo {
 		@Override
 		public Object apply(Throwable throwable) {
 			int p1 = ++retry;
-			LOGGER.warn("依赖{}下载失败, 重试{}/{}", savedFile, p1, RETRY_COUNT);
+			log.warn("依赖{}下载失败, 重试{}/{}", savedFile, p1, RETRY_COUNT);
 			if (p1 > RETRY_COUNT) {
-				LOGGER.warn("任务取消");
+				log.warn("任务取消");
 			} else {
 				downloader.apply(url).then(this).rejected(this);
 			}

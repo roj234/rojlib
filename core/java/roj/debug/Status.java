@@ -18,7 +18,7 @@ final class Status implements StatusMBean {
 	static {
 		try {
 			registerMBean();
-		} catch (Exception e) {
+		} catch (Throwable e) {
 			System.err.println("Failed to register RojLib StatusMBean");
 			e.printStackTrace();
 		}

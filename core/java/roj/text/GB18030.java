@@ -2,6 +2,7 @@ package roj.text;
 
 import roj.archive.xz.LZMA2InputStream;
 import roj.util.ArrayCache;
+import roj.util.ArrayUtil;
 
 import java.io.IOException;
 import java.util.function.IntConsumer;
@@ -23,8 +24,8 @@ final class GB18030 extends FastCharset {
 	private static final char[] DECODER, ENCODER;
 
 	static {
-		DECODER = (char[]) U.allocateUninitializedArray(char.class, 63486);
-		ENCODER = (char[]) U.allocateUninitializedArray(char.class, 65408);
+		DECODER = ArrayUtil.newUninitializedCharArray(63486);
+		ENCODER = ArrayUtil.newUninitializedCharArray(65408);
 		try (var in = new LZMA2InputStream(GB18030.class.getClassLoader().getResourceAsStream("roj/text/GB18030.lzma"), 6144)) {
 			byte[] b = ArrayCache.getIOBuffer();
 			int off = 0;

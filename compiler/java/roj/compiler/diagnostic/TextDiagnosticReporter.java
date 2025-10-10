@@ -27,7 +27,7 @@ public class TextDiagnosticReporter implements Function<Diagnostic, Boolean> {
 	private String getErrorType(Kind kind) {
 		counter[kind.ordinal()]++;
 		return switch (kind) {
-			case INCOMPATIBLE -> "INCOMPATIBLE";
+			case FEATURE -> "特性";
 			case NOTE -> "注";
 			case WARNING -> "警告";
 			case SEVERE_WARNING -> "强警告";

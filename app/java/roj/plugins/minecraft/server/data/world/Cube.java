@@ -18,8 +18,8 @@ public final class Cube<T> {
 	int bits;
 	BitArray palette;
 
-	private static final XashMap.Builder<Object, Ref<?>> REF_BUILDER = Helpers.cast(XashMap.builder(Object.class, Ref.class, "block", "next", Hasher.defaul()));
-	private final XashMap<T, Ref<T>> blockRef = Helpers.cast(REF_BUILDER.createSized(1 << bits));
+	private static final XashMap.Template<Object, Ref<?>> REF_TEMPLATE = Helpers.cast(XashMap.forType(Object.class, Ref.class).key("block").newValue(Ref::new).build());
+	private final XashMap<T, Ref<T>> blockRef = Helpers.cast(REF_TEMPLATE.createSized(1 << bits));
 	private final ArrayList<Ref<T>> byId = new ArrayList<>(1 << bits);
 	private BitSet emptySlot;
 

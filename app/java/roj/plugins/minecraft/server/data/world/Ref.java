@@ -11,7 +11,7 @@ final class Ref<T> {
 	short id;
 	short count;
 
-	Ref<T> next;
+	Ref<T> _next;
 
 	@Override
 	public String toString() {

@@ -344,7 +344,7 @@ public class Signature extends Attribute {
 		return sign;
 	}
 
-	public static IType parseGeneric(CharSequence s) {return parseValue(s, new IntValue(), 0, IOUtil.getSharedCharBuf());}
+	public static IType parseGeneric(CharSequence s) {return parseValue(s, new IntValue(), F_PRIMITIVE, IOUtil.getSharedCharBuf());}
 
 	private static final int F_PLACEHOLDER = 0x1000, F_PRIMITIVE = 0x2000, F_SUBCLASS = 0x4000;
 	@SuppressWarnings("MagicConstant")

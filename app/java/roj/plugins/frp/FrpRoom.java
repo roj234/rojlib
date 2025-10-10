@@ -19,7 +19,7 @@ import java.util.Set;
  * @since 2024/11/20 3:02
  */
 public class FrpRoom implements ChannelHandler {
-	static final XashMap.Builder<String, PortMapEntry> setMaker = XashMap.noCreation(PortMapEntry.class, "name");
+	static final XashMap.Template<String, PortMapEntry> setMaker = XashMap.forType(String.class, PortMapEntry.class).key("name").build();
 
 	public byte[] hash;
 

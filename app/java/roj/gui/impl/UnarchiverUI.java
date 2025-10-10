@@ -6,8 +6,10 @@ package roj.gui.impl;
 
 import roj.archive.ArchiveEntry;
 import roj.archive.ArchiveFile;
+import roj.archive.qz.LZMA2;
 import roj.archive.qz.QZArchive;
 import roj.archive.qz.QZEntry;
+import roj.archive.qz.WordBlock;
 import roj.archive.qz.util.QZArchiver;
 import roj.archive.zip.ZEntry;
 import roj.archive.zip.ZipFile;
@@ -350,6 +352,14 @@ public class UnarchiverUI extends JFrame {
 			}
 		}
 
+		if (bErrorRecovery.isSelected()) {
+			for (WordBlock block : qzArhive.getWordBlocks()) {
+				LZMA2 codec = block.getCodec(LZMA2.class);
+				if (codec != null) {
+					codec.setDecompressionMode(LZMA2.ERROR_RECOVERY);
+				}
+			}
+		}
 		qzArhive.parallelDecompress(pool, Helpers.cast(cb), password);
 	}
 
@@ -398,9 +408,10 @@ public class UnarchiverUI extends JFrame {
         uiPasswordInfo = new JLabel();
         uiNoVerify = new JCheckBox();
         uiCharset = new JTextField();
+        bErrorRecovery = new JCheckBox();
 
         //======== this ========
-        setTitle("Roj234 Unarchiver 1.3");
+        setTitle("Roj234 Unarchiver 1.4");
         var contentPane = getContentPane();
         contentPane.setLayout(null);
 
@@ -514,6 +525,11 @@ public class UnarchiverUI extends JFrame {
         contentPane.add(uiCharset);
         uiCharset.setBounds(305, 417, 75, uiCharset.getPreferredSize().height);
 
+        //---- bErrorRecovery ----
+        bErrorRecovery.setText("\u6545\u969c\u6062\u590d");
+        contentPane.add(bErrorRecovery);
+        bErrorRecovery.setBounds(new Rectangle(new Point(135, 90), bErrorRecovery.getPreferredSize()));
+
         contentPane.setPreferredSize(new Dimension(390, 650));
         pack();
         setLocationRelativeTo(getOwner());
@@ -539,5 +555,6 @@ public class UnarchiverUI extends JFrame {
     private JLabel uiPasswordInfo;
     private JCheckBox uiNoVerify;
     private JTextField uiCharset;
+    private JCheckBox bErrorRecovery;
 	// JFormDesigner - End of variables declaration  //GEN-END:variables  @formatter:on
 }

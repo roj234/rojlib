@@ -51,7 +51,7 @@ public sealed class Type implements IType permits Type.ADT {
 
 	public static final int SORT_VOID = 0, SORT_BOOLEAN = 1, SORT_BYTE = 2, SORT_CHAR = 3, SORT_SHORT = 4, SORT_INT = 5, SORT_LONG = 6, SORT_FLOAT = 7, SORT_DOUBLE = 8, SORT_OBJECT = 9;
 	/**
-	 * 获取类型的’类型‘。
+	 * 获取类型的‘类型’。
 	 * 原文这个sort真是一语双关.
 	 * 可以用来方便的switch
 	 * <pre>
@@ -143,7 +143,7 @@ public sealed class Type implements IType permits Type.ADT {
 		if (type == CLASS) throw new IllegalArgumentException("不能使用此方法创建CLASS类型的实例");
 
 		this.type = (byte) type;
-		setArray(array);
+		setArrayDim(array);
 	}
 	/**
 	 * TYPE_CLASS
@@ -151,7 +151,7 @@ public sealed class Type implements IType permits Type.ADT {
 	private Type(String owner, int array) {
 		this.type = CLASS;
 		this.owner = Objects.requireNonNull(owner);
-		setArray(array);
+		setArrayDim(array);
 	}
 
 	public static Type primitive(@MagicConstant(intValues = {VOID,BOOLEAN,BYTE,CHAR,SHORT,INT,FLOAT,DOUBLE,LONG}) int primitive) {
@@ -221,7 +221,7 @@ public sealed class Type implements IType permits Type.ADT {
 				int pos = desc.lastIndexOf('[')+1;
 				Type t = parse(desc, pos);
 				if (t.owner == null) t = Type.primitive(t.type, pos - off);
-				else t.setArray(pos - off);
+				else t.setArrayDim(pos - off);
 				return t;
 			case CLASS:
 				if (!desc.endsWith(";")) throw new IllegalArgumentException("类型 '" + desc + "' 未以;结束");
@@ -355,12 +355,6 @@ public sealed class Type implements IType permits Type.ADT {
 	@Override public Type rawType() {return this;}
 	@Override public int array() {return array&0xFF;}
 	@Override public void setArrayDim(int array) {
-		if (type != CLASS && array != 0) {
-			if (this.array == 0) throw new IllegalStateException("修改基本类型常量 "+this);
-		}
-		setArray(array);
-	}
-	private void setArray(int array) {
 		if ((array &0xFF) != array) throw new ArrayIndexOutOfBoundsException(array);
 		this.array = (byte) array;
 	}

@@ -1,0 +1,14 @@
+# 站点根路径 (/share/)
+path: share
+# 数据存储方式 file或db 未实现
+storage: file
+
+# EasySSO权限节点
+# 创建分享: share
+# 创建公开分享: share/public
+# 自定义链接: share/custom_id
+# 自定义提取码: share/custom_code
+# 创建计次分享: share/expire/count
+# 创建永久分享: share/expire/never
+# 创建目录分享: share/path
+# 创建文件分享: share/file

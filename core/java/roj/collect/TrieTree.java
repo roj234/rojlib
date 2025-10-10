@@ -8,7 +8,6 @@ import roj.config.node.IntValue;
 import roj.io.IOUtil;
 import roj.text.CharList;
 import roj.text.TextUtil;
-import roj.util.Helpers;
 import roj.util.OperationDone;
 
 import java.nio.file.FileVisitResult;
@@ -54,20 +53,16 @@ public class TrieTree<V> extends AbstractMap<CharSequence, V> {
 		public boolean isLeaf() { return value != UNDEFINED; }
 
 		@SuppressWarnings("unchecked")
-		public int copyFrom(TrieEntry x) {
+		public void copyFrom(TrieEntry x) {
 			Entry<?> node = (Entry<?>) x;
-			int v = 0;
-			if (node.value != UNDEFINED && value == UNDEFINED) {
-				this.value = (V) node.value;
-				v = 1;
-			}
+			this.value = (V) node.value;
 
+			mask = node.mask;
 			for (TrieEntry entry : node) {
-				TrieEntry sub = getChild(entry.firstChar);
-				if (sub == null) putChild(sub = entry.clone());
-				v += sub.copyFrom(entry);
+				TrieEntry sub = entry.clone();
+				putChild(sub);
+				sub.copyFrom(entry);
 			}
-			return v;
 		}
 
 		public V getValue() {
@@ -107,10 +102,6 @@ public class TrieTree<V> extends AbstractMap<CharSequence, V> {
 
 	public TrieTree() {}
 	public TrieTree(Map<CharSequence, V> map) {putAll(map);}
-
-	public void addTrieTree(TrieTree<? extends V> m) {
-		size += root.copyFrom(Helpers.cast(m.root));
-	}
 
 	@SuppressWarnings("unchecked")
 	Entry<V> entryForPut(CharSequence s, int i, int len) {
@@ -222,9 +213,7 @@ public class TrieTree<V> extends AbstractMap<CharSequence, V> {
 		return entry.value != UNDEFINED ? entry : null;
 	}
 
-	public Entry<V> getRoot() {
-		return root;
-	}
+	public Entry<V> getRoot() {return root;}
 
 	@Override
 	public int size() { return size; }
@@ -240,12 +229,13 @@ public class TrieTree<V> extends AbstractMap<CharSequence, V> {
 	}
 
 	@Override
-	@SuppressWarnings("unchecked")
 	public void putAll(@NotNull Map<? extends CharSequence, ? extends V> m) {
-		if (m instanceof TrieTree) {
-			addTrieTree((TrieTree<? extends V>) m);
+		if (size == 0 && m instanceof TrieTree<?> m1) {
+			size = m1.size;
+			root.copyFrom(m1.root);
 			return;
 		}
+
 		for (Map.Entry<? extends CharSequence, ? extends V> entry : m.entrySet()) {
 			this.put(entry.getKey(), entry.getValue());
 		}

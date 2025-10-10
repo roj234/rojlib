@@ -25,7 +25,7 @@ final class OptimizedJumpTo extends JumpTo {
 		var to = (MethodWriter) x;
 		int bci = to.bci();
 		List<Segment> segments = to.getSegments();
-		if (!target.isValid()) throw new IllegalStateException("target is not valid: "+target);
+		if (!target.isBound()) throw new IllegalStateException("target is not bound: "+target);
 
 		while (target.getOffset() == 0 && target.getBlock() > 0) {
 			int i = target.getBlock();

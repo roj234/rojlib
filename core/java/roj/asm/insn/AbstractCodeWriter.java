@@ -11,7 +11,6 @@ import roj.collect.ArrayList;
 import roj.collect.HashSet;
 import roj.collect.Hasher;
 import roj.collect.IntMap;
-import roj.text.logging.Logger;
 import roj.util.DynByteBuf;
 
 import java.util.Arrays;
@@ -36,9 +35,9 @@ public abstract class AbstractCodeWriter extends CodeVisitor {
 	IntMap<Label> bciR2W;
 	final void validateBciRef() {
 		for (IntMap.Entry<Label> entry : bciR2W.selfEntrySet()) {
-			if (!entry.getValue().isValid()) {
+			if (!entry.getValue().isBound()) {
 				if (RojLib.ASM_DEBUG) {
-					Logger.FALLBACK.error("找不到标签引用的BCI @"+entry.getIntKey());
+					entry.getValue().block = -2;
 				} else {
 					throw new IllegalArgumentException("BCI @"+entry.getIntKey()+" 不存在");
 				}
@@ -306,6 +305,16 @@ public abstract class AbstractCodeWriter extends CodeVisitor {
 		ldc(new CstString(s));
 		invoke(INVOKEVIRTUAL, "java/io/PrintStream", "println", "(Ljava/lang/String;)V");
 	}
+
+	private SwitchBlock sw(byte code) {
+		SwitchBlock c = new SwitchBlock(code);
+		addSegment(c);
+		return c;
+	}
+
+	public final SwitchBlock tableSwitch() {return sw(TABLESWITCH);}
+	public final SwitchBlock lookupSwitch() {return sw(LOOKUPSWITCH);}
+	public final SwitchBlock autoSwitch() {return sw((byte) 0);}
 	// endregion
 
 	private static final Supplier<Label> _NEWLABEL = Label::new;
@@ -345,6 +354,7 @@ public abstract class AbstractCodeWriter extends CodeVisitor {
 				Segment c = segments.get(i);
 				offSum[++i] = offSum[i-1] + c.length();
 			} while (i != segments.size());
+			offSum[i+1] = offSum[i];
 		} else {
 			offSum[1] = bci();
 		}
@@ -365,6 +375,7 @@ public abstract class AbstractCodeWriter extends CodeVisitor {
 		else {
 			StaticSegment prev = (StaticSegment) segments.get(segments.size()-1);
 			prev.setData(codeOb);
+			codeOb.release();
 			offset += prev.length();
 			codeOb = null;
 		}

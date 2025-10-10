@@ -22,12 +22,12 @@ import java.util.List;
  * @author Roj234
  * @since 2025/2/16 23:02
  */
-public class ANNOTATION implements Processor {
+public class ANNOTATION implements Plugin {
 	@Override public String name() {return "编译期注解处理程序";}
 	@Override public boolean defaultEnabled() {return true;}
 
 	@Override
-	public void afterCompilePre(BuildContext ctx) {
+	public void process(BuildContext ctx) {
 		var annotatedClass = ctx.getAnnotatedClasses("roj/ci/annotation/ExcludeFromArtifact");
 		for (int i = 0; i < annotatedClass.size(); i++) {
 			ctx.removeClass(annotatedClass.get(i));
@@ -41,12 +41,13 @@ public class ANNOTATION implements Processor {
 		ctx.getDepAnnotations("roj/ci/annotation/AliasOf", annotatedElement -> {
 			Annotation aliasOf = annotatedElement.annotations().get("roj/ci/annotation/AliasOf");
 			Type aliasTarget = aliasOf.getClass("value");
-			classMap.put(annotatedElement.owner(), aliasTarget.owner());
+			String altValue = aliasOf.getString("altValue", null);
+			classMap.put(annotatedElement.owner(), altValue == null ? aliasTarget.owner() : altValue.replace('.', '/'));
 		});
 	}
 
 	@Override
-	public void afterCompilePost(BuildContext ctx) {
+	public void postProcess(BuildContext ctx) {
 		var annotatedClass = ctx.getAnnotatedClasses("roj/ci/annotation/ReplaceConstant");
 		for (int i = 0; i < annotatedClass.size(); i++) {
 			ClassNode data = annotatedClass.get(i).getData();
@@ -70,7 +71,7 @@ public class ANNOTATION implements Processor {
 						String string = Formatter.simple(template).format(ctx.getVariables(annotatedClass.get(i)), IOUtil.getSharedCharBuf()).toString();
 						str.setValue(cp.getUtf(string));
 						if (string.contains("${"))
-							MCMake.LOGGER.warn("未完全匹配的格式字符串 '"+string+"' ("+annotatedClass.get(i).getFileName()+")");
+							MCMake.log.warn("未完全匹配的格式字符串 '"+string+"' ("+annotatedClass.get(i).getFileName()+")");
 					}
 				}
 			}

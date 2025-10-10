@@ -1,9 +1,11 @@
 package roj.plugins.web.template;
 
+import roj.asm.ClassDefinition;
 import roj.collect.XashMap;
 import roj.compiler.CompileContext;
 import roj.compiler.LavaCompileUnit;
 import roj.compiler.LavaCompiler;
+import roj.compiler.resolve.ImportList;
 import roj.compiler.resolve.Resolver;
 import roj.concurrent.TaskPool;
 import roj.http.server.Content;
@@ -11,7 +13,6 @@ import roj.http.server.Request;
 import roj.http.server.Response;
 import roj.io.IOUtil;
 import roj.plugins.web.error.GreatErrorPage;
-import roj.reflect.Reflection;
 import roj.reflect.Sandbox;
 import roj.text.CharList;
 import roj.text.LineReader;
@@ -19,7 +20,11 @@ import roj.text.ParseException;
 import roj.text.Tokenizer;
 
 import java.io.File;
+import java.util.Collections;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
+
+import static roj.reflect.Unsafe.U;
 
 /**
  * @author Roj234
@@ -28,12 +33,12 @@ import java.util.concurrent.atomic.AtomicInteger;
 public class MyTemplateEngine {
 	private final LavaCompiler compiler = new LavaCompiler();
 	private final ThreadLocal<CompileContext> myContext = new ThreadLocal<>();
-	private final ClassLoader loader = new Sandbox("MyTemplateEngine", MyTemplateEngine.class.getClassLoader());
+	private final Sandbox loader = new Sandbox("MyTemplateEngine", MyTemplateEngine.class.getClassLoader());
 
 	private final AtomicInteger classId = new AtomicInteger();
 
-	private static final XashMap.Builder<File, Cache> BUILDER = XashMap.builder(File.class, Cache.class, "file", "_next");
-	private final XashMap<File, Cache> cache = BUILDER.create();
+	private static final XashMap.Template<File, Cache> TEMPLATE = XashMap.forType(File.class, Cache.class).key("file").newValue(k -> new Cache()).build();
+	private final XashMap<File, Cache> cache = TEMPLATE.create();
 
 	static final class Cache {
 		Cache _next;
@@ -103,9 +108,8 @@ public class MyTemplateEngine {
 
 	public Template parse(String sourceFile, String template, CharList code) throws ParseException {
 		code.append("package roj.plugins.web.template.servlet;" +
-				   "package-restricted;" +
 				   "import roj.http.server.Request;" +
-				   "import roj.http.server.ResponseHeader;" +
+				   "import roj.http.server.Response;" +
 				   "import roj.text.CharList;" +
 				   "import roj.plugins.web.template.*;");
 
@@ -158,24 +162,29 @@ public class MyTemplateEngine {
 		}
 
 		var unit = new LavaCompileUnit(sourceFile, code.toStringAndFree());
+		unit.getImportList().setRestriction(ImportList.DEFAULT_ALLOWLIST);
 
 		var ctx = myContext.get();
 		if (ctx == null) myContext.set(ctx = compiler.createContext());
 
 		CompileContext.set(ctx);
 		try {
-			unit.S1parseStruct();
-			unit.S2p1resolveName();
-			unit.S2p2resolveType();
-			unit.S2p3resolveMethod();
-			unit.S3processAnnotation();
-			unit.S4parseCode();
-			unit.S5serialize();
+			List<? extends ClassDefinition> compile = compiler.compile(Collections.singletonList(unit));
+			if (compile != null) {
+				for (ClassDefinition classDefinition : compile) {
+					loader.add(classDefinition);
+				}
+
+				Class<?> klass = loader.loadClass(unit.name().replace('/', '.'));
+				return (Template) U.allocateInstance(klass);
+			}
+		} catch (Throwable e) {
+			throw new IllegalStateException("编译失败", e);
 		} finally {
 			CompileContext.set(null);
 		}
 
-		return (Template) Reflection.createInstance(loader, unit);
+		throw new IllegalStateException("编译失败");
 	}
 
 	private void templateBody(CharList code, String line, LineReader.Impl itr, String paramType, CharList miscMethod) {

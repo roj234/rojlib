@@ -14,17 +14,16 @@ import roj.collect.HashSet;
 import roj.collect.ToIntMap;
 import roj.compiler.diagnostic.Kind;
 
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
+import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * @author Roj234
  * @since 2024/2/6 2:40
  */
 public final class LinkedClass {
-	private Object _next;
+	private LinkedClass _next;
+
 	public final ClassDefinition owner;
 
 	public LinkedClass(ClassDefinition owner) {this.owner = Objects.requireNonNull(owner);}
@@ -84,71 +83,73 @@ public final class LinkedClass {
 	private ToIntMap<String> hierarchyList;
 	private boolean query;
 
-	public synchronized ToIntMap<String> getHierarchyList(Resolver ctx) {
+	public ToIntMap<String> getHierarchyList(Resolver ctx) {
 		if (hierarchyList != null) return hierarchyList;
 
-		if (query) throw ResolveException.ofIllegalInput("semantic.resolution.cyclicDepend", owner.name());
-		query = true;
+		synchronized (this) {
+			if (query) throw ResolveException.ofIllegalInput("semantic.resolution.cyclicDepend", owner.name());
+			query = true;
 
-		ToIntMap<String> list = new ToIntMap<>();
+			ToIntMap<String> list = new ToIntMap<>();
 
-		ClassDefinition info = owner;
-		while (true) {
-			String owner = info.name();
-			try {
-				int i = list.size();
-				list.putInt(owner, (i << 16) | i);
-			} catch (IllegalArgumentException e) {
-				throw ResolveException.ofIllegalInput("semantic.resolution.cyclicDepend", owner);
-			}
+			ClassDefinition info = owner;
+			while (true) {
+				String owner = info.name();
+				try {
+					int i = list.size();
+					list.putInt(owner, (i << 16) | i);
+				} catch (IllegalArgumentException e) {
+					throw ResolveException.ofIllegalInput("semantic.resolution.cyclicDepend", owner);
+				}
 
-			owner = info.parent();
-			if (owner == null) break;
-			info = ctx.resolve(owner);
-			if (info == null) {
-				ctx.report(this.owner, Kind.SEVERE_WARNING, -1, "symbol.noSuchClass", owner);
-				break;
-			}
-		}
-
-		info = owner;
-		int castDistance = 1;
-		int justAnId = list.size();
-		while (true) {
-			List<String> itf = info.interfaces();
-			for (int i = 0; i < itf.size(); i++) {
-				String name = itf.get(i);
-
-				ClassDefinition itfInfo = ctx.resolve(name);
-				if (itfInfo == null) {
-					ctx.report(this.owner, Kind.SEVERE_WARNING, -1, "symbol.noSuchClass", name);
+				owner = info.parent();
+				if (owner == null) break;
+				info = ctx.resolve(owner);
+				if (info == null) {
+					ctx.report(this.owner, Kind.SEVERE_WARNING, -1, "symbol.noSuchClass", owner);
 					break;
 				}
-
-				list.putInt(name, (justAnId++ << 16) | castDistance);
-
-				for (var entry : ctx.getHierarchyList(itfInfo).selfEntrySet()) {
-					name = entry.getKey();
-					int id = entry.value;
-
-					// id's castDistance is smaller
-					// parentList是包含自身的
-					if ((list.getInt(name)&0xFFFF) > (id&0xFFFF)) {
-						list.putInt(name, (castDistance == 1 ? 0x80000000 : 0) | (justAnId++ << 16) | (castDistance + (id & 0xFFFF)));
-					}
-				}
 			}
 
-			castDistance++;
-			String owner = info.parent();
-			if (owner == null) break;
-			info = ctx.resolve(owner);
-			if (info == null) break;
+			info = owner;
+			int castDistance = 1;
+			int justAnId = list.size();
+			while (true) {
+				List<String> itf = info.interfaces();
+				for (int i = 0; i < itf.size(); i++) {
+					String name = itf.get(i);
+
+					ClassDefinition itfInfo = ctx.resolve(name);
+					if (itfInfo == null) {
+						ctx.report(this.owner, Kind.SEVERE_WARNING, -1, "symbol.noSuchClass", name);
+						break;
+					}
+
+					list.putInt(name, (justAnId++ << 16) | castDistance);
+
+					for (var entry : ctx.getHierarchyList(itfInfo).selfEntrySet()) {
+						name = entry.getKey();
+						int id = entry.value;
+
+						// id's castDistance is smaller
+						// parentList是包含自身的
+						if ((list.getInt(name)&0xFFFF) > (id&0xFFFF)) {
+							list.putInt(name, (castDistance == 1 ? 0x80000000 : 0) | (justAnId++ << 16) | (castDistance + (id & 0xFFFF)));
+						}
+					}
+				}
+
+				castDistance++;
+				String owner = info.parent();
+				if (owner == null) break;
+				info = ctx.resolve(owner);
+				if (info == null) break;
+			}
+
+			query = false;
+
+			return this.hierarchyList = list;
 		}
-
-		query = false;
-
-		return this.hierarchyList = list;
 	}
 
 	// endregion
@@ -166,7 +167,7 @@ public final class LinkedClass {
 
 	// endregion
 	// region 方法
-	private HashMap<String, ComponentList> methods;
+	private volatile HashMap<String, ComponentList> methods;
 
 	/*
 	 * <pre> 调用的实际方法由以下查找过程选择：
@@ -196,7 +197,7 @@ public final class LinkedClass {
 		if (methods == null) {
 			synchronized (this) {
 				if (methods != null) return methods;
-				methods = new HashMap<>();
+				var methods = new HashMap<String, ComponentList>();
 
 				ClassDefinition type = owner;
 				List<? extends Member> methods1 = type.methods();
@@ -265,6 +266,8 @@ public final class LinkedClass {
 						entry.setValue(new MethodListSingle(ml.methods.get(0), ml.isOverriddenMethod(0)));
 					}
 				}
+
+				this.methods = methods;
 			}
 		}
 
@@ -272,13 +275,13 @@ public final class LinkedClass {
 	}
 	//endregion
 	//region 字段
-	private HashMap<String, ComponentList> fields;
+	private volatile HashMap<String, ComponentList> fields;
 
 	public HashMap<String, ComponentList> getFields(Resolver ctx) {
 		if (fields == null) {
 			synchronized (this) {
 				if (fields != null) return fields;
-				fields = new HashMap<>();
+				var fields = new HashMap<String, ComponentList>();
 
 				ClassDefinition type = owner;
 				List<? extends Member> fields1 = type.fields();
@@ -330,6 +333,8 @@ public final class LinkedClass {
 						entry.setValue(new FieldListSingle(type, fl.fields.get(0)));
 					}
 				}
+
+				this.fields = fields;
 			}
 		}
 
@@ -337,7 +342,7 @@ public final class LinkedClass {
 	}
 	//endregion
 	// region 类型拥有者
-	private Map<String, List<IType>> typeParamOwner;
+	private volatile Map<String, List<IType>> typeParamOwner;
 
 	// overriding type parameter bounds
 	// a. class Ch<T> extends Su<T>
@@ -351,7 +356,7 @@ public final class LinkedClass {
 				Signature sign = owner.getAttribute(owner.cp(), Attribute.SIGNATURE);
 				if (sign == null) return typeParamOwner = Collections.emptyMap();
 
-				typeParamOwner = new HashMap<>();
+				var typeParamOwner = new HashMap<String, List<IType>>();
 				Map<String, List<IType>> tmp = new HashMap<>();
 				for (IType value : sign.values) {
 					if (value.kind() == IType.OBJECT_BOUND) continue;
@@ -380,6 +385,7 @@ public final class LinkedClass {
 				}
 
 				typeParamOwner.putAll(tmp);
+				this.typeParamOwner = typeParamOwner;
 			}
 		}
 
@@ -387,22 +393,22 @@ public final class LinkedClass {
 	}
 	// endregion
 	private volatile Map<String, InnerClasses.Item> innerClasses;
-	private boolean resolvingInnerClass;
+	private static final Set<LinkedClass> resolvingInnerClass = Collections.newSetFromMap(new ConcurrentHashMap<>());
 	/**
 	 * 自己或继承的内部类，只包含真正的内部类，不包含对外部的内部类的引用，感觉也用不上，给反编译用的，大家好像都在用$判断
 	 */
 	public Map<String, InnerClasses.Item> getInnerClasses(Resolver ctx) {
 		if (innerClasses == null) {
+			var classes = owner.getAttribute(owner.cp(), Attribute.InnerClasses);
+			if (classes == null) return innerClasses = Collections.emptyMap();
+
+			var parentDecl = ctx.getInnerClassInfo(ctx.resolve(owner.parent()));
+
 			synchronized (this) {
 				if (innerClasses != null) return innerClasses;
 
-				var classes = owner.getAttribute(owner.cp(), Attribute.InnerClasses);
-				if (classes == null) return innerClasses = Collections.emptyMap();
+				if (!resolvingInnerClass.add(this)) return Collections.emptyMap();
 
-				if (resolvingInnerClass) return Collections.emptyMap();
-				resolvingInnerClass = true;
-
-				var parentDecl = ctx.getInnerClassInfo(ctx.resolve(owner.parent()));
 				var decl = new HashMap<>(parentDecl);
 
 				var list = classes.classes;
@@ -422,7 +428,7 @@ public final class LinkedClass {
 					}
 				}
 
-				resolvingInnerClass = false;
+				resolvingInnerClass.remove(this);
 				innerClasses = decl.isEmpty() ? Collections.emptyMap() : decl;
 			}
 		}

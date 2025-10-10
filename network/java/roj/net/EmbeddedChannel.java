@@ -2,7 +2,6 @@ package roj.net;
 
 import roj.collect.ArrayList;
 import roj.collect.HashSet;
-import roj.io.BufferPool;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
 
@@ -218,7 +217,7 @@ public class EmbeddedChannel extends MyChannel {
 
 			assert pending.size() == 1 : "composite buffer violation";
 			pending.clear();
-			BufferPool.reserve(buf);
+			buf.release();
 
 			flags &= ~(PAUSE_FOR_FLUSH|TIMED_FLUSH);
 			fireFlushed();

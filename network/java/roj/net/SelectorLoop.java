@@ -23,6 +23,12 @@ import static roj.net.Net.LOGGER;
  * @since 2022/1/24 11:38
  */
 public final class SelectorLoop implements Closeable {
+	/**
+	 * 也许调用System.currentTimeMillis会有更大开销
+	 */
+	public static long currentTimeMillis() {return currentTimeMillis;}
+	static volatile long currentTimeMillis;
+
 	public static final BiConsumer<String, Throwable> PRINT_HANDLER = (reason, error) -> LOGGER.warn("在{}阶段发生了未处理的异常", error, reason);
 
 	final class Poller extends FastLocalThread implements Consumer<SelectionKey> {
@@ -133,7 +139,9 @@ public final class SelectorLoop implements Closeable {
 
 				if (!sel.isOpen()) break;
 
-				int missedTime = (int) (System.currentTimeMillis() - time);
+				long now = System.currentTimeMillis();
+				currentTimeMillis = now;
+				int missedTime = (int) (now - time);
 				if (missedTime >= 1) {
 					delayed = 0;
 
@@ -143,7 +151,7 @@ public final class SelectorLoop implements Closeable {
 							prevAlert = time;
 						}
 						missedTime = 1;
-						time = System.currentTimeMillis();
+						time = now;
 					}
 
 					int cycle = Math.min(missedTime, 10);
@@ -174,7 +182,7 @@ public final class SelectorLoop implements Closeable {
 					}
 
 					if (missedTime < 0) {
-						time = System.currentTimeMillis();
+						time = now;
 						if (missedTime < -1) LOGGER.warn("时间倒流了{}ms", -missedTime);
 					}
 				}

@@ -3,10 +3,9 @@ properties:
   version:
     type: STRING
     pattern: MCMake \d+\.\d+\.\d+
-  日志级别:
+  日志配置文件:
     type: STRING
-    default: INFO
-    pattern: ALL|TRACE|DEBUG|INFO|WARN|ERROR|OFF
+    required: false
   自动编译防抖:
     type: INTEGER
     default: 250

@@ -4,8 +4,8 @@ import org.jetbrains.annotations.Nullable;
 import roj.collect.ArrayList;
 import roj.collect.HashMap;
 import roj.collect.HashSet;
+import roj.config.ConfigMaster;
 import roj.config.MsgPackEncoder;
-import roj.config.MsgPackParser;
 import roj.config.XmlParser;
 import roj.config.node.xml.Document;
 import roj.config.node.xml.Node;
@@ -79,7 +79,7 @@ public class MavenCoordinate {
 		transient Set<ArtifactVersion> checksumPassed = new HashSet<>();
 	}
 
-	public File locate(File repoBase, List<String> candidateUrls, int updatePeriodMinute) throws IOException {
+	public File locate(File repoBase, List<String> candidateUrls, int updatePeriodMinute, boolean downloadNow) throws IOException {
 		var localMetadataFile = new File(repoBase, IOUtil.getSharedCharBuf().append(groupId).append('/').append(artifactId).append("/metadata.msg").toString());
 
 		var metadata = this.metadata;
@@ -89,7 +89,7 @@ public class MavenCoordinate {
 			if (localMetadataFile.isFile()) {
 				try {
 					if (metadata == null || metadata.urlHash == null) {
-						var newMetadata = MCMake.CONFIG.read(localMetadataFile, Metadata.class, new MsgPackParser());
+						var newMetadata = MCMake.CONFIG.read(localMetadataFile, Metadata.class, ConfigMaster.MSGPACK);
 						if (metadata != null) newMetadata.checksum.putAll(metadata.checksum);
 						metadata = newMetadata;
 					}
@@ -100,7 +100,7 @@ public class MavenCoordinate {
 						break foundValidMetadata;
 					}
 				} catch (Exception e) {
-					MCMake.LOGGER.error("Failed to read {}'s metadata", e, this);
+					MCMake.log.error("Failed to read {}'s metadata", e, this);
 				}
 			}
 
@@ -109,18 +109,24 @@ public class MavenCoordinate {
 			if (metadata != null && urlHash.equals(metadata.urlHash))
 				remoteMetadata = tryDownloadRemoteMetadata(urlHash, metadata.baseUrl);
 
-			if (remoteMetadata == null) remoteMetadata = findRemoteMetadata(urlHash, candidateUrls);
+			if (remoteMetadata == null) {
+				if (!downloadNow) return null;
+				remoteMetadata = findRemoteMetadata(urlHash, candidateUrls);
+			}
 
 			// 假设maven的文件是immutable的
 			if (metadata != null) remoteMetadata.checksum.putAll(metadata.checksum);
 
-			try (var out = new FileOutputStream(localMetadataFile)) {
-				ByteList bb = IOUtil.getSharedByteBuf();
-				MCMake.CONFIG.write(new MsgPackEncoder.Compressed(bb), remoteMetadata);
-				bb.writeToStream(out);
-			} catch (Exception e) {
-				MCMake.LOGGER.error("Failed to save {}'s metadata", e, this);
-			}
+			Metadata finalRemoteMetadata = remoteMetadata;
+			IOUtil.writeFileEvenMoreSafe(localMetadataFile.getParentFile(), localMetadataFile.getName(), file -> {
+				try (var out = new FileOutputStream(file)) {
+					ByteList bb = IOUtil.getSharedByteBuf();
+					MCMake.CONFIG.write(new MsgPackEncoder.Compressed(bb), finalRemoteMetadata);
+					bb.writeToStream(out);
+				} catch (Exception e) {
+					MCMake.log.error("Failed to save {}'s metadata", e, this);
+				}
+			});
 
 			this.metadata = metadata = remoteMetadata;
 		}
@@ -187,7 +193,7 @@ public class MavenCoordinate {
 				String lastModStr = response.headers().get("last-modified");
 				long lastModified;
 				if (lastModStr == null) {
-					MCMake.LOGGER.warn("Source {} does not provide last-modified header.", baseUrl);
+					MCMake.log.warn("Source {} does not provide last-modified header.", baseUrl);
 					lastModified = 0;
 				} else {
 					lastModified = DateFormat.parseRFC5322Datetime(lastModStr);
@@ -215,12 +221,12 @@ public class MavenCoordinate {
 
 				return metadata;
 			} else {
-				MCMake.LOGGER.debug("status code {} for {}", response, metadataUrl);
+				MCMake.log.debug("status code {} for {}", response, metadataUrl);
 			}
 		} catch (ParseException | RuntimeException e) {
-			MCMake.LOGGER.warn("无法解析Maven仓库 {} 的响应", e, metadataUrl);
+			MCMake.log.warn("无法解析Maven仓库 {} 的响应", e, metadataUrl);
 		} catch (IOException e) {
-			MCMake.LOGGER.debug("无法读取Maven仓库 {} 的响应", e, metadataUrl);
+			MCMake.log.debug("无法读取Maven仓库 {} 的响应", e, metadataUrl);
 		}
 		return null;
 	}
@@ -228,5 +234,24 @@ public class MavenCoordinate {
 	private static String makeUrlHash(List<String> candidateUrls) {return Helpers.sha1Hash(TextUtil.join(candidateUrls, "\0"));}
 
 	@Override
-	public String toString() {return groupId+":"+artifactId;}
+	public boolean equals(Object o) {
+		if (this == o) return true;
+		if (o == null || getClass() != o.getClass()) return false;
+
+		MavenCoordinate that = (MavenCoordinate) o;
+		return groupId.equals(that.groupId) && artifactId.equals(that.artifactId) && classifier.equals(that.classifier) && packaging.equals(that.packaging) && version.equals(that.version);
+	}
+
+	@Override
+	public int hashCode() {
+		int result = groupId.hashCode();
+		result = 31 * result + artifactId.hashCode();
+		result = 31 * result + classifier.hashCode();
+		result = 31 * result + packaging.hashCode();
+		result = 31 * result + version.hashCode();
+		return result;
+	}
+
+	@Override
+	public String toString() {return groupId+":"+artifactId+":"+version;}
 }

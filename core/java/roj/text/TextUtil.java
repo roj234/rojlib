@@ -758,7 +758,7 @@ public class TextUtil {
 		long offset = CODER_OFFSET;
 		if (offset < 0) {
 			try {
-				offset = Unsafe.fieldOffset(String.class, "coder");
+				offset = Unsafe.objectFieldOffset(String.class, "coder", byte.class);
 			} catch (Exception e) {
 				offset = 0;
 			}

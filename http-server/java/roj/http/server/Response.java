@@ -4,6 +4,7 @@ import org.jetbrains.annotations.ApiStatus;
 import org.jetbrains.annotations.Contract;
 import roj.http.Headers;
 import roj.net.MyChannel;
+import roj.net.SelectorLoop;
 import roj.net.util.SpeedLimiter;
 import roj.text.DateFormat;
 
@@ -65,7 +66,7 @@ public interface Response {
 	/**
 	 * 添加Date头部，使用当前时间（RFC 5322格式）。
 	 */
-	default Response date() {return setHeader("date", DateFormat.toRFC5322Datetime(System.currentTimeMillis()));}
+	default Response date() {return setHeader("date", DateFormat.toRFC5322Datetime(SelectorLoop.currentTimeMillis()));}
 	default Response setHeader(String k, String v) {headers().put(k, v);return this;}
 	default Response addHeader(String k, String v) {headers().add(k, v);return this;}
 	/**

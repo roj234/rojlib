@@ -10,8 +10,8 @@
 
 package roj.archive.xz.lzma;
 
+import roj.archive.rangecoder.RangeDecoder;
 import roj.archive.xz.lz.LZDecoder;
-import roj.archive.xz.rangecoder.RangeDecoder;
 
 import java.io.IOException;
 
@@ -60,7 +60,7 @@ public final class LZMADecoder extends LZMACoder {
 
 	private void decodeLiteral(short[] probs) throws IOException {
 		int symbol;
-		if (state_isLiteral(state)) {
+		if (stateIsLiteral(state)) {
 			symbol = rc.decodeBitTree(probs, 0x100);
 		} else {
 			symbol = 1;
@@ -81,11 +81,11 @@ public final class LZMADecoder extends LZMACoder {
 		}
 
 		lz.putByte(symbol);
-		state = state_updateLiteral(state);
+		state = stateUpdateLiteral(state);
 	}
 
 	private int decodeMatch(int posState) throws IOException {
-		state = state_updateMatch(state);
+		state = stateUpdateMatch(state);
 
 		reps[3] = reps[2];
 		reps[2] = reps[1];
@@ -125,7 +125,7 @@ public final class LZMADecoder extends LZMACoder {
 
 		if (rc.decodeBit(isRep0, state) == 0) {
 			if (rc.decodeBit(isRep0Long, posState + (state<<4)) == 0) {
-				this.state = state_updateShortRep(state);
+				this.state = stateUpdateShortRep(state);
 				return 1;
 			}
 		} else {
@@ -148,7 +148,7 @@ public final class LZMADecoder extends LZMACoder {
 			reps[0] = tmp;
 		}
 
-		this.state = state_updateLongRep(state);
+		this.state = stateUpdateLongRep(state);
 
 		return decodeRepeatLen(posState);
 	}

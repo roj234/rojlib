@@ -308,8 +308,9 @@ final class FileContent implements Content {
 		if (sendfile != null) {
 			var prevLength = sendfile.length;
 			var limiter = writer.getSpeedLimiter();
-			if (limiter != null) sendfile.length = limiter.limit((int) Math.min(sendfile.length, Integer.MAX_VALUE));
+			if (limiter != null) sendfile.length = limiter.tryAcquire((int) Math.min(sendfile.length, Integer.MAX_VALUE));
 			writer.connection().fireChannelWrite(sendfile);
+			if (limiter != null) limiter.returnTokens((int) (sendfile.length - sendfile.written));
 			sendfile.length = prevLength;
 			sendfile.flip();
 			remain = sendfile.length;

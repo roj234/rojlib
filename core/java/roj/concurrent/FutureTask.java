@@ -3,7 +3,7 @@ package roj.concurrent;
 import org.jetbrains.annotations.NotNull;
 import roj.compiler.api.Synchronizable;
 import roj.optimizer.FastVarHandle;
-import roj.reflect.Handles;
+import roj.reflect.Telescope;
 import roj.util.Helpers;
 
 import java.lang.invoke.VarHandle;
@@ -17,7 +17,7 @@ import java.util.concurrent.*;
 @FastVarHandle
 public class FutureTask<T> implements RunnableFuture<T>, Cancellable {
 	private static final int INITIAL = 0, RUNNING = 1, CANCELLING = 2, CANCELLED = 3, COMPLETED = 4, FAILED = 5;
-	private static final VarHandle STATE = Handles.lookup().findVarHandle(FutureTask.class, "state", int.class);
+	private static final VarHandle STATE = Telescope.lookup().findVarHandle(FutureTask.class, "state", int.class);
 	private volatile int state;
 
 	private Thread executor;

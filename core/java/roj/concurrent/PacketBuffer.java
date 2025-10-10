@@ -2,7 +2,7 @@ package roj.concurrent;
 
 import org.jetbrains.annotations.Nullable;
 import roj.io.BufferPool;
-import roj.reflect.Handles;
+import roj.reflect.Telescope;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
 
@@ -21,8 +21,8 @@ public final class PacketBuffer extends ReuseFIFOQueue<PacketBuffer.Entry> {
 		volatile Thread waiter;
 	}
 
-	private static final VarHandle SIZE = Handles.lookup().findVarHandle(PacketBuffer.class, "size", int.class);
-	private static final VarHandle RECYCLE = Handles.lookup().findVarHandle(PacketBuffer.class, "recycle", Node.class);
+	private static final VarHandle SIZE = Telescope.lookup().findVarHandle(PacketBuffer.class, "size", int.class);
+	private static final VarHandle RECYCLE = Telescope.lookup().findVarHandle(PacketBuffer.class, "recycle", Node.class);
 
 	private volatile int recycleSize;
 	private volatile Node recycle;
@@ -61,7 +61,7 @@ public final class PacketBuffer extends ReuseFIFOQueue<PacketBuffer.Entry> {
 		Thread waiter = wait ? Thread.currentThread() : null;
 		entry.waiter = waiter;
 
-		Handles.storeFence();
+		VarHandle.releaseFence();
 
 		addLast(entry);
 
@@ -105,7 +105,7 @@ public final class PacketBuffer extends ReuseFIFOQueue<PacketBuffer.Entry> {
 		entry.waiter = null;
 		LockSupport.unpark(thread);
 
-		Handles.storeFence();
+		VarHandle.releaseFence();
 
 		return buf;
 	}

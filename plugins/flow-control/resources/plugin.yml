@@ -1,0 +1,5 @@
+id: ${project_name}
+desc: HTTP限速限流系统
+version: ${project_version}
+authors: ["Roj234"]
+mainClass: roj.plugins.flow.FlowControl

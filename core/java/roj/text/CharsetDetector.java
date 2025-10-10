@@ -35,8 +35,6 @@ public final class CharsetDetector implements AutoCloseable {
 
 	static {
 		register("UTF-8", CharsetDetector::scoreUTF8);
-		register("UTF-16LE", CharsetDetector::scoreUTF16LE);
-		register("UTF-16BE", CharsetDetector::scoreUTF16BE);
 		register("GB18030", CharsetDetector::scoreGB18030);
 		register("BIG5", CharsetDetector::scoreBIG5);
 		register("Shift-JIS", CharsetDetector::scoreShiftJIS);
@@ -86,7 +84,7 @@ public final class CharsetDetector implements AutoCloseable {
 		bLen = len;
 
 		var scores = new int[charsetNames.size()];
-		int minScore = 0;
+		int secondaryMaxScore = 0;
 		int maxScore = 0;
 		int maxScoreIndex = 0;
 
@@ -105,13 +103,15 @@ public final class CharsetDetector implements AutoCloseable {
 				if (score > maxScore) {
 					maxScore = score;
 					maxScoreIndex = i;
+				} else if (score > secondaryMaxScore) {
+					secondaryMaxScore = score;
 				}
-				minScore = Math.min(minScore, score);
 			}
 
 			// 如果差异很大，可以中止
-			if (maxScore - minScore > 100)
+			if (maxScore - secondaryMaxScore > Math.max(bLen/10, 100)) {
 				return charsetNames.get(maxScoreIndex);
+			}
 
 			// EOF
 			if (len == bLen) break;
@@ -128,7 +128,7 @@ public final class CharsetDetector implements AutoCloseable {
 			}
 		}
 
-		if (maxScore - minScore > bLen/10)
+		if (maxScore > bLen/4)
 			return charsetNames.get(maxScoreIndex);
 
 		throw new IOException("无法确定编码,"+charsetNames+","+Arrays.toString(scores));
@@ -222,24 +222,12 @@ public final class CharsetDetector implements AutoCloseable {
 		}
 	}
 
-	public static final int ASCII_SUCCESS = 1, DECODE_SUCCESS = 2, FREQUENCY_SUCCESS = 3, CONTROL_BYTE = -1, DECODE_FAILURE = 5;
+	public static final int ASCII_SUCCESS = 1, DECODE_SUCCESS = 2, FREQUENCY_SUCCESS = 3, CONTROL_BYTE = -1, DECODE_FAILURE = 127;
 
 	// 评分函数 for each encoding
 	private static int scoreUTF8(byte[] data, int off, int end) {
 		var verifier = new GreatScorer();
 		FastCharset.UTF8().fastValidate(data, Unsafe.ARRAY_BYTE_BASE_OFFSET + off, Unsafe.ARRAY_BYTE_BASE_OFFSET + end, verifier);
-		return verifier.score;
-	}
-
-	private static int scoreUTF16LE(byte[] data, int off, int end) {
-		var verifier = new GreatScorer();
-		FastCharset.UTF16LE().fastValidate(data, Unsafe.ARRAY_BYTE_BASE_OFFSET + off, Unsafe.ARRAY_BYTE_BASE_OFFSET + end, verifier);
-		return verifier.score;
-	}
-
-	private static int scoreUTF16BE(byte[] data, int off, int end) {
-		var verifier = new GreatScorer();
-		FastCharset.UTF16BE().fastValidate(data, Unsafe.ARRAY_BYTE_BASE_OFFSET + off, Unsafe.ARRAY_BYTE_BASE_OFFSET + end, verifier);
 		return verifier.score;
 	}
 
@@ -335,8 +323,10 @@ public final class CharsetDetector implements AutoCloseable {
 			} else if (isControl(c)) { // 控制字符
 				score += CONTROL_BYTE;
 			} else if (VERY_COMMON.contains(c) || c >= Character.MIN_SUPPLEMENTARY_CODE_POINT) { // 常用字或（正确解码的）表情符号
-				score += FREQUENCY_SUCCESS;
+				score += FREQUENCY_SUCCESS+1;
 			} else if (COMMON.contains(c)) {
+				score += FREQUENCY_SUCCESS;
+			} else if (c > 0xFF) {
 				score += DECODE_SUCCESS;
 			} else {
 				score += ASCII_SUCCESS;

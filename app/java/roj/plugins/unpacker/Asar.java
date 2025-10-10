@@ -2,13 +2,13 @@ package roj.plugins.unpacker;
 
 import roj.collect.TrieTree;
 import roj.config.JsonParser;
-import roj.text.ParseException;
 import roj.config.node.ConfigValue;
 import roj.config.node.MapValue;
 import roj.io.CorruptedInputException;
 import roj.io.IOUtil;
-import roj.io.ByteInputStream;
+import roj.io.XDataInputStream;
 import roj.text.CharList;
+import roj.text.ParseException;
 import roj.text.TextUtil;
 
 import java.io.File;
@@ -28,7 +28,7 @@ class Asar extends Scene {
 	@Override
 	public TrieTree<?> load(File file) throws IOException {
 		this.file = file;
-		try (ByteInputStream f = new ByteInputStream(new FileInputStream(file))) {
+		try (XDataInputStream f = new XDataInputStream(new FileInputStream(file))) {
 			if (0x04000000 != f.readInt()) throw new IOException("Not ASAR header (04000000)");
 
 			int headerSize = f.readIntLE();

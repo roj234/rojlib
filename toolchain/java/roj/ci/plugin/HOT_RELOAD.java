@@ -33,7 +33,7 @@ import java.util.function.Consumer;
  * @author Roj234
  * @since 2025/2/11 11:03
  */
-public class HOT_RELOAD implements Processor {
+public class HOT_RELOAD implements Plugin {
 	private static final Logger LOGGER = Logger.getLogger("热重载青春版");
 	private final ArrayList<Client> clients = new ArrayList<>();
 	private ServerLaunch channel4, channel6;
@@ -66,8 +66,9 @@ public class HOT_RELOAD implements Processor {
 				e.printStackTrace();
 			}
 		}
-		MCMake.LOGGER.info("\"热重载青春版\"启动成功，在任意JVM中加入该参数即可使用");
-		MCMake.LOGGER.info("  -javaagent:\""+Tokenizer.escape(agent.getAbsolutePath())+"\"="+config.asInt());
+		MCMake.log.info("\"热重载青春版\"启动成功，在任意JVM中加入该参数即可使用");
+		MCMake.log.info("  -javaagent:\""+Tokenizer.escape(agent.getAbsolutePath())+"\"="+config.asInt());
+		MCMake.log.info("添加 -XXalt+jvm 以在JBR中启用 DCEVM");
 	}
 
 	public void start(int port) throws IOException {
@@ -99,7 +100,7 @@ public class HOT_RELOAD implements Processor {
 	}
 
 	@Override
-	public void afterCompilePost(BuildContext ctx) {
+	public void postProcess(BuildContext ctx) {
 		if (!ctx.project.isArtifact()) {
 			List<Context> classes = ctx.getChangedClasses();
 			List<ClassNode> classData = new ArrayList<>(classes.size());

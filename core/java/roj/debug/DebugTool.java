@@ -4,10 +4,7 @@ import roj.archive.zip.ZEntry;
 import roj.archive.zip.ZipFileWriter;
 import roj.asm.AsmCache;
 import roj.asm.ClassNode;
-import roj.config.JsonSerializer;
-import roj.config.TextEmitter;
-import roj.config.mapper.ObjectMapper;
-import roj.text.CharList;
+import roj.ci.annotation.RedirectTo;
 import roj.util.Helpers;
 
 import javax.management.MBeanServer;
@@ -21,16 +18,9 @@ import java.lang.management.ManagementFactory;
  * @since 2024/5/15 16:45
  */
 public class DebugTool {
+	@RedirectTo("roj/config/mapper/ObjectMapper.__redirected__inspect(Ljava/lang/Object;)Ljava/lang/String;")
 	public static String inspect(Object o) {
-		try {
-			CharList sb = new CharList();
-			TextEmitter textEmitter = new JsonSerializer("    ").to(sb);
-			ObjectMapper.SAFE.writer(o.getClass()).write(textEmitter, Helpers.cast(o));
-			return sb.toStringAndFree();
-		} catch (Throwable e) {
-			e.printStackTrace();
-			return "failed to inspect "+o.getClass();
-		}
+		return "failed to inspect "+o.getClass().getName()+": ObjectMapper module not present.";
 	}
 
 	public static void dump(String id, ClassNode data) {

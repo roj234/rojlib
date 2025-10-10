@@ -22,19 +22,23 @@ class TcpChImpl extends MyChannel {
 	private static final int OUTPUT_CLOSED = 64;
 
 	private SocketChannel sc;
-	private int buffer;
+	private int initialBufferCapacity, bufferRetainStrategy;
 
-	TcpChImpl(int buffer) throws IOException {
-		this(SocketChannel.open(), buffer);
+	TcpChImpl(int initialBufferCapacity) throws IOException {
+		this(SocketChannel.open(), initialBufferCapacity, 0);
 		ch.configureBlocking(false);
 		state = 0;
 	}
-	TcpChImpl(SocketChannel server, int buffer) {
+	TcpChImpl(SocketChannel server, int initialBufferCapacity, int bufferRetainStrategy) {
 		ch = sc = server;
 		rb = EMPTY;
-		this.buffer = buffer;
+		this.initialBufferCapacity = initialBufferCapacity;
+		this.bufferRetainStrategy = bufferRetainStrategy;
 		state = CONNECTED;
 	}
+
+	public void setInitialBufferCapacity(int initialBufferCapacity) {this.initialBufferCapacity = initialBufferCapacity;}
+	public void setBufferRetainStrategy(int bufferRetainStrategy) {this.bufferRetainStrategy = bufferRetainStrategy;}
 
 	@Override
 	public boolean isOutputOpen() { return (flags&OUTPUT_CLOSED) == 0; }
@@ -50,7 +54,7 @@ class TcpChImpl extends MyChannel {
 
 	@Override
 	public <T> MyChannel setOption(SocketOption<T> k, T v) throws IOException {
-		if (k == ServerLaunch.TCP_RECEIVE_BUFFER) buffer = (Integer) v;
+		if (k == ServerLaunch.TCP_RECEIVE_BUFFER) initialBufferCapacity = (Integer) v;
 		else if (k == StandardSocketOptions.SO_REUSEPORT) Net.setReusePort(sc, (boolean) v);
 		else sc.setOption(k, v);
 		return this;
@@ -70,6 +74,23 @@ class TcpChImpl extends MyChannel {
 	@Override
 	protected void disconnect0() throws IOException { sc.close(); ch = sc = SocketChannel.open(); rb.clear(); }
 
+	@Override
+	public void tick(int elapsed) throws Exception {
+		super.tick(elapsed);
+
+		if (bufferRetainStrategy > 0 && timeout >= bufferRetainStrategy && !rb.isReadable()) {
+			lock.lock();
+			try {
+				if (!rb.isReadable()) {
+					rb.release();
+					rb = EMPTY;
+				}
+			} finally {
+				lock.unlock();
+			}
+		}
+	}
+
 	public void flush() throws IOException {
 		if (state >= CLOSED) return;
 		if (pending.isEmpty()) return;
@@ -84,7 +105,7 @@ class TcpChImpl extends MyChannel {
 
 			assert pending.size() == 1 : "composite buffer violation";
 			pending.clear();
-			BufferPool.reserve(buf);
+			buf.release();
 
 			flags &= ~(PAUSE_FOR_FLUSH|TIMED_FLUSH);
 			key.interestOps(SelectionKey.OP_READ);
@@ -96,9 +117,9 @@ class TcpChImpl extends MyChannel {
 
 	@Override
 	protected void read() throws IOException {
-		if (state != OPENED || (flags &READ_INACTIVE) != 0) return;
+		if (state != OPENED || (flags&READ_INACTIVE) != 0) return;
 		var buf = rb;
-		if (buf == EMPTY) rb = buf = alloc().allocate(true, buffer, 0);
+		if (buf == EMPTY) rb = buf = alloc().allocate(true, initialBufferCapacity, 0);
 		while (true) {
 			int w = buf.writableBytes();
 			ByteBuffer nioBuffer = syncNioRead(buf);
@@ -115,10 +136,16 @@ class TcpChImpl extends MyChannel {
 				fireChannelRead(buf);
 				buf.compact();
 				// reset to initial capacity if buffer is empty
-				if (buf.capacity() > buffer && !buf.isReadable()) alloc().expand(buf, buffer-buf.capacity());
+				if (buf.capacity() > initialBufferCapacity && !buf.isReadable()) alloc().expand(buf, initialBufferCapacity -buf.capacity());
 			}
 
-			if (r < w || (flags &READ_INACTIVE) != 0 || state != OPENED) return;
+			if (r < w || (flags&READ_INACTIVE) != 0 || state != OPENED) {
+				if (!buf.isReadable() && bufferRetainStrategy == 0) {
+					buf.release();
+					rb = EMPTY;
+				}
+				return;
+			}
 
 			if (!buf.isWritable()) rb = buf = alloc().expand(buf, buf.capacity());
 		}

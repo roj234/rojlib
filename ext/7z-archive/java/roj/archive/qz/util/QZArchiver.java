@@ -2,6 +2,7 @@ package roj.archive.qz.util;
 
 import org.intellij.lang.annotations.MagicConstant;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 import roj.archive.ArchiveUtils;
 import roj.archive.qz.*;
 import roj.archive.xz.LZMA2Options;
@@ -19,19 +20,14 @@ import roj.math.MathUtils;
 import roj.text.TextUtil;
 import roj.text.logging.Logger;
 import roj.ui.EasyProgressBar;
-import roj.util.ArrayCache;
-import roj.util.DynByteBuf;
-import roj.util.Helpers;
-import roj.util.OS;
+import roj.util.*;
 
 import java.io.*;
 import java.nio.file.*;
 import java.nio.file.attribute.BasicFileAttributes;
+import java.nio.file.attribute.DosFileAttributeView;
 import java.nio.file.attribute.DosFileAttributes;
-import java.util.Comparator;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 
@@ -94,8 +90,8 @@ public class QZArchiver {
 	public int pathFormat;
 
 	/**
-	 * 是否启用两阶段压缩（提升压缩率但降低速度）
-	 * <p><b>实验性：</b>速度慢的不可思议的同时还可能降低压缩率</p>
+	 * 是否启用两阶段压缩
+	 * <p><b>实验性：</b>付出一定的预处理时间和O(n * 小常数项)的内存最高可以降低接近10%的压缩后大小</p>
 	 * @see ContentAwareChunkOrganizer
 	 */
 	public boolean twoPass;
@@ -142,7 +138,7 @@ public class QZArchiver {
 	 */
 	public boolean filterByArchiveAttribute;
 	/**
-	 * 压缩完成后是否清除文件的"归档"属性 (未实现)
+	 * 压缩完成后是否清除文件的"归档"属性
 	 * <p>仅在Windows系统上有意义</p>
 	 */
 	public boolean clearArchiveAttribute;
@@ -151,7 +147,7 @@ public class QZArchiver {
 	/**
 	 * 压缩线程数
 	 * <p>用于计算固实块大小</p>
-	 * 如果设置为1并且线程池不是单线程的，会导致JVM崩溃
+	 * 如果设置为1并在compress函数中提供了一个多线程Executor，会导致JVM崩溃
 	 */
 	public int threads;
 	/**
@@ -187,10 +183,14 @@ public class QZArchiver {
 	 */
 	@NotNull public LZMA2Options options = new LZMA2Options();
 	/**
-	 * 是否启用可执行文件跳转地址预处理器
-	 * <p>目前仅支持X86体系结构的文件，如果不是，请勿开启，可能降低压缩率</p>
+	 * 是否启用部分文件格式的预处理器 (WAV,EXE,SO等)
 	 */
-	public boolean useBCJ, useBCJ2;
+	public boolean useFilter;
+	/**
+	 * 是否启用可执行文件跳转地址预处理器V2 (BCJ2)
+	 * <p>仅支持X86体系结构的文件</p>
+	 */
+	public boolean useBCJ2;
 	/**
 	 * 压缩归档头 (建议启用)
 	 */
@@ -212,14 +212,15 @@ public class QZArchiver {
 	/**
 	 * 盐值长度（字节数，0表示不使用盐值）
 	 */
-	public int encryptionSaltLength;
+	public int encryptionSaltLength = 16;
 	//endregion
 	//region 输出
 	/**
-	 * 文件缓存目录（null表示禁用文件缓存）
-	 * <p>在与某些特定参数组合并压缩大文件时可能消耗很多内存甚至失败</p>
+	 * 文件缓存目录（null表示禁用文件缓存），优先内存，其次文件
+	 * <p>在与某些特定参数组合并压缩大文件时可能消耗很多内存，此时需要使用文件缓存</p>
 	 */
 	public File cacheDirectory;
+	//public int memoryCacheMaxSize;
 	/**
 	 * 输出目录（用于存放生成的归档文件）
 	 */
@@ -230,14 +231,14 @@ public class QZArchiver {
 	 */
 	@NotNull public String outputFilename;
 	/**
-	 * 是否保留原始归档文件（对部分追加操作模式无效 - 因为直接修改原始文件有检测&优化）
-	 * 如果保留，那么请处理compress函数返回的File，它是临时文件
+	 * 是否保留原始归档文件（对'部分追加'操作模式无效 - 因为直接修改原始文件有检测&优化）
+	 * 如果保留，那么请手动重命名compress()返回的File
 	 */
 	public boolean keepOldArchive;
 	//endregion
 
 	private QZArchive oldArchive;
-	private long keepSize;
+	private long keepSize, uncompressedSize;
 
 	private final HashBiMap<String, File> byPath = new HashBiMap<>();
 	private final Map<WordBlock, List<QZEntry>> keep = new HashMap<>();
@@ -248,26 +249,32 @@ public class QZArchiver {
 	private final Map<String, QZEntry> hardlinkRef = new HashMap<>();
 	private boolean firstIsUncompressed;
 
-	private static final HashSet<String> UNCOMPRESSED = ArchiveUtils.INCOMPRESSIBLE_FILE_EXT;
-	private static final HashSet<String> EXECUTABLE_X86 = new HashSet<>("exe", "dll", "sys", "so");
+	private static final HashSet<String> PROGRAM_FILE_EXT = new HashSet<>("exe", "dll", "sys", "so");
+
+	private final Map<FileCategory, List<File>> fileByCategory = new EnumMap<>(FileCategory.class);
+	private enum FileCategory {
+		UNCOMPRESSED,
+		REGULAR,
+		EXECUTABLE_X86,
+		EXECUTABLE_ARM,
+		EMPTY_OR_FOLDER,
+		RAW_AUDIO,
+	}
+	private void addFile(FileCategory category, File file) {
+		fileByCategory.computeIfAbsent(category, Helpers.fnArrayList()).add(file);
+	}
 
 	public long prepare() throws IOException {
 		firstIsUncompressed = false;
 		appends.clear();
-		keep.clear();
 		empties.clear();
+		uncompressedSize = 0;
 
 		List<File> paths = inputDirectories;
 		String inAbsPath = new File(outputDirectory, outputFilename).getAbsolutePath();
 		int[] prefix = new int[1];
 
 		Map<String, File> byPath = this.byPath; byPath.clear();
-		List<File>
-			uncompressed = new ArrayList<>(),
-			executable = new ArrayList<>(),
-			compressed = new ArrayList<>(),
-			emptyOrFolder = new ArrayList<>();
-		final long[] compressedLen = {0};
 
 		Consumer<File> callback = file -> {
 			if (file.getAbsolutePath().startsWith(inAbsPath)) return;
@@ -276,24 +283,40 @@ public class QZArchiver {
 
 			long length = file.length();
 			if (length == 0) {
-				emptyOrFolder.add(file);
+				addFile(FileCategory.EMPTY_OR_FOLDER, file);
 				return;
 			}
 
 			String ext = IOUtil.extensionName(file.getName());
-			if (UNCOMPRESSED.contains(ext)) uncompressed.add(file);
-			else {
-				if (useBCJ && EXECUTABLE_X86.contains(ext)) executable.add(file);
-				else compressed.add(file);
+			foundFilter:
+			if (ArchiveUtils.INCOMPRESSIBLE_FILE_EXT.contains(ext) || options.getMode() == LZMA2Options.MODE_UNCOMPRESSED) {
+				addFile(FileCategory.UNCOMPRESSED, file);
+			} else {
+				uncompressedSize += file.length();
 
-				compressedLen[0] += file.length();
+				if (useFilter) {
+					if (PROGRAM_FILE_EXT.contains(ext)) {
+						addFile(FileCategory.EXECUTABLE_X86, file);
+						break foundFilter;
+					}
+					else if ("wav".equals(ext)) {
+						addFile(FileCategory.RAW_AUDIO, file);
+						break foundFilter;
+					}
+					/*else if ("bmp".equals(ext) || "raw".equals(ext)) {
+						addFile(FileCategory.RAW_IMAGE, file);
+						break foundFilter;
+					}*/
+				}
+
+				addFile(FileCategory.REGULAR, file);
 			}
 		};
 
 		if (fileSorter != null) {
-			compressed.sort(fileSorter);
-			executable.sort(fileSorter);
-			uncompressed.sort(fileSorter);
+			for (var files : fileByCategory.values()) {
+				files.sort(fileSorter);
+			}
 		}
 
 		if (pathFormat == PF_FULL) {
@@ -316,7 +339,7 @@ public class QZArchiver {
 				callback.accept(path);
 			} else {
 				if (pathFormat == PF_RELATIVE) prefix[0] = path.getAbsolutePath().length()+1;
-				traverseFolder(path, callback, emptyOrFolder);
+				traverseFolder(path, callback);
 			}
 		}
 
@@ -328,7 +351,6 @@ public class QZArchiver {
 			} catch (Exception e) {
 				IOUtil.closeSilently(io);
 				throw e;
-				//e.printStackTrace();
 			}
 		}
 
@@ -393,7 +415,7 @@ public class QZArchiver {
 			}
 		}
 
-		// EMPTY
+		var emptyOrFolder = fileByCategory.getOrDefault(FileCategory.EMPTY_OR_FOLDER, Collections.emptyList());
 		for (int i = 0; i < emptyOrFolder.size(); i++) {
 			QZEntry entry = entryFor(emptyOrFolder.get(i));
 			if (entry != null) empties.add(entry);
@@ -402,15 +424,9 @@ public class QZArchiver {
 		List<Object> tmpa = new ArrayList<>();
 		List<QZEntry> tmpb = new ArrayList<>();
 
-		QzAES qzAes = encryptionPassword == null ? null : new QzAES(encryptionPassword, encryptionPower, encryptionSaltLength);
+		QzAES encrypt = encryptionPassword == null ? null : new QzAES(encryptionPassword, encryptionPower, encryptionSaltLength);
 
-		boolean isUncompressed = options.getMode() == LZMA2Options.MODE_UNCOMPRESSED;
-		if (isUncompressed) {
-			uncompressed.addAll(compressed);
-			uncompressed.addAll(executable);
-		}
-
-		// UNCOMPRESSED
+		var uncompressed = fileByCategory.getOrDefault(FileCategory.UNCOMPRESSED, Collections.emptyList());
 		if (!uncompressed.isEmpty()) {
 			long size = 0;
 			firstIsUncompressed = true;
@@ -423,30 +439,44 @@ public class QZArchiver {
 				}
 			}
 
-			addBlock(new QZCoder[] {qzAes == null ? Copy.INSTANCE : qzAes}, tmpa, tmpb, size);
+			addBlock(new QZCoder[] {encrypt == null ? Copy.INSTANCE : encrypt}, tmpa, tmpb, size);
 		}
-		if (isUncompressed) return Long.MAX_VALUE;
 
-		long chunkSize = autoSolidSize ? MathUtils.clamp(compressedLen[0] / threads, LZMA2Options.ASYNC_BLOCK_SIZE_MIN, LZMA2Options.ASYNC_BLOCK_SIZE_MAX) : solidSize;
+		if (options.getMode() == LZMA2Options.MODE_UNCOMPRESSED) return Long.MAX_VALUE;
+
+		long chunkSize = autoSolidSize ? MathUtils.clamp(uncompressedSize / threads, LZMA2Options.ASYNC_BLOCK_SIZE_MIN, LZMA2Options.ASYNC_BLOCK_SIZE_MAX) : solidSize;
 		if (chunkSize < 0) chunkSize = Long.MAX_VALUE;
 
-		QZCoder lzma2 = new LZMA2(options);
-		QZCoder[] coders = qzAes == null ? new QZCoder[] {lzma2} : new QZCoder[] {lzma2, qzAes};
+		var lzma2 = new LZMA2(options);
+		QZCoder[] regularMethods = encrypt == null ? new QZCoder[] {lzma2} : new QZCoder[] {lzma2, encrypt};
 
-		if (twoPass) makeBlockContentAware(compressed, chunkSize, coders, tmpb);
-		else makeBlock(compressed, chunkSize, coders, tmpa, tmpb);
+		var regular = fileByCategory.get(FileCategory.REGULAR);
+		if (regular != null) {
+			if (twoPass) makeBlockContentAware(regular, chunkSize, regularMethods, tmpb);
+			else makeBlock(regular, chunkSize, regularMethods, tmpa, tmpb);
+		}
 
-		makeBlock(executable, chunkSize, useBCJ ? getBcjCoder(qzAes, lzma2) : coders, tmpa, tmpb);
+		var executable = fileByCategory.get(FileCategory.EXECUTABLE_X86);
+		if (executable != null) makeBlock(executable, chunkSize, getBcjCoder(encrypt, lzma2), tmpa, tmpb);
+
+		var audio = fileByCategory.get(FileCategory.RAW_AUDIO);
+		if (audio != null) {
+			var delta = new Delta(2);
+			QZCoder[] methods = encrypt == null ? new QZCoder[]{delta, lzma2} : new QZCoder[]{delta, lzma2, encrypt};
+			makeBlock(audio, chunkSize, methods, tmpa, tmpb);
+		}
 
 		hardlinkRef.clear();
 		if (!symbolicLinks.isEmpty()) {
 			List<String> contents = symbolicLinkValues;
-			appendBinary(coders, contents, symbolicLinks);
+			appendBinary(regularMethods, contents, symbolicLinks);
 			contents.clear();
 		}
 
 		return chunkSize;
 	}
+
+	public long getUncompressedSize() {return uncompressedSize;}
 
 	public void appendBinary(QZCoder[] coders, List<?> contents, List<QZEntry> entries) {
 		BlockData block = new BlockData();
@@ -473,17 +503,19 @@ public class QZArchiver {
 	/**
 	 * 自定义文件处理函数
 	 */
-	protected void traverseFolder(File path, Consumer<File> callback, List<File> emptyOrFolder) throws IOException {
-		Files.walkFileTree(path.toPath(), new SimpleFileVisitor<Path>() {
+	protected void traverseFolder(File path, Consumer<File> callback) throws IOException {
+		Files.walkFileTree(path.toPath(), new SimpleFileVisitor<>() {
 			boolean next;
+
 			@Override
 			public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) {
 				if (storeDirectories) {
 					if (!next) next = true;
-					else emptyOrFolder.add(dir.toFile());
+					else addFile(FileCategory.EMPTY_OR_FOLDER, dir.toFile());
 				}
 				return FileVisitResult.CONTINUE;
 			}
+
 			@Override
 			public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) {
 				callback.accept(file.toFile());
@@ -492,15 +524,14 @@ public class QZArchiver {
 		});
 	}
 
-	private QZCoder[] getBcjCoder(QzAES qzAes, QZCoder lzma2) {
+	private QZCoder[] getBcjCoder(QzAES encrypt, QZCoder lzma2) {
 		if (useBCJ2) {
-			// 需要全部加密么？
 			LZMA lc0lp2 = new LZMA(new LZMA2Options().setLcLp(0, 2));
-			return qzAes == null ?
+			return encrypt == null ?
 				new QZCoder[] {new BCJ2(), lzma2, null, lc0lp2, null, lc0lp2, null, null} :
-				new QZCoder[] {new BCJ2(), lzma2, qzAes, null, lc0lp2, qzAes, null, lc0lp2, qzAes, null, qzAes, null};
+				new QZCoder[] {new BCJ2(), lzma2, encrypt, null, lc0lp2, encrypt, null, lc0lp2, encrypt, null, encrypt, null};
 		} else {
-			return qzAes == null ? new QZCoder[] {BCJ.X86, lzma2} : new QZCoder[] {BCJ.X86, lzma2, qzAes};
+			return encrypt == null ? new QZCoder[] {BCJ.X86, lzma2} : new QZCoder[] {BCJ.X86, lzma2, encrypt};
 		}
 	}
 
@@ -751,7 +782,7 @@ public class QZArchiver {
 				coders = new QZCoder[] {qzAes == null ? Copy.INSTANCE : qzAes};
 			} else {
 				QZCoder lzma2 = options.getMode() == LZMA2Options.MODE_UNCOMPRESSED ? Copy.INSTANCE : new LZMA2(options);
-				if (useBCJ && EXECUTABLE_X86.contains(IOUtil.extensionName(entry.getValue().get(0).getName()))) {
+				if (useFilter && PROGRAM_FILE_EXT.contains(IOUtil.extensionName(entry.getValue().get(0).getName()))) {
 					coders = getBcjCoder(qzAes, lzma2);
 				} else {
 					coders = qzAes == null ? new QZCoder[] {lzma2} : new QZCoder[] {lzma2, qzAes};
@@ -803,15 +834,22 @@ public class QZArchiver {
 			bar.setProgress(0);
 		}
 
+		var asyncMan = options.getAsyncMan();
+		if (asyncMan != null && bar != null) {
+			asyncMan.setProgressListener(bar::increment);
+			bar.setName("3/4 压缩(StreamParallel)");
+		}
+		EasyProgressBar altProgressbar = asyncMan == null ? bar : null;
+
 		writer.flush();
 		writer.setIgnoreClose(true);
 		for (int i = 0; i < appends.size(); i++) {
 			int myi = i;
 			group.executeUnsafe(() -> {
 				try (QZWriter writer1 = /*myi == 0 ? writer : */parallel(writer)) {
-					writeBlock(bar, appends.get(myi), writer1, group);
+					writeBlock(altProgressbar, appends.get(myi), writer1, group);
 				}
-				if (bar != null) bar.setName("3/4 压缩("+blockCompleted.incrementAndGet()+"/"+appends.size()+")");
+				if (altProgressbar != null) altProgressbar.setName("3/4 压缩("+blockCompleted.incrementAndGet()+"/"+appends.size()+")");
 			});
 
 			if (!symbolicLinks.isEmpty() && i == appends.size()-2) {
@@ -833,6 +871,24 @@ public class QZArchiver {
 			writer.setCompressHeader(0);
 		}
 
+		writer.finish();
+
+		if (clearArchiveAttribute) {
+			for (BlockData append : appends) {
+				for (Object item : append.data) {
+					if (item instanceof File f) {
+						DosFileAttributeView attr;
+						try {
+							attr = Files.getFileAttributeView(f.toPath(), DosFileAttributeView.class, storeSymbolicLinks ? READ_LINK : FOLLOW_LINK);
+							attr.setArchive(false);
+						} catch (IOException e) {
+							LOGGER.error("无法删除文件 {} 的归档属性", e, f);
+						}
+					}
+				}
+			}
+		}
+
 		} finally {
 			writer.setIgnoreClose(false);
 			writer.close();
@@ -848,7 +904,7 @@ public class QZArchiver {
 			cacheDirectory == null ? qfw.newParallelWriter() : qfw.newParallelWriter(new CacheSource(1048576, 134217728, "qzx-", cacheDirectory));
 	}
 
-	private void writeBlock(EasyProgressBar bar, BlockData block, QZWriter writer, TaskGroup canSplit) throws IOException {
+	private void writeBlock(@Nullable EasyProgressBar bar, BlockData block, QZWriter writer, TaskGroup canSplit) throws IOException {
 		writer.setCodec(block.coders);
 		QZEntry[] file = block.entries;
 		for (int i = 0; i < file.length; i++) {
@@ -865,12 +921,13 @@ public class QZArchiver {
 					e.printStackTrace();
 				}
 			} else if (block.data[i] instanceof DynByteBuf buf) {
+				if (bar != null) bar.increment(buf.readableBytes());
 				buf.writeToStream(writer);
 				buf.release();
-				bar.increment();
 			} else {
-				IOUtil.getSharedByteBuf().putUTFData(block.data[i].toString()).writeToStream(writer);
-				bar.increment();
+				ByteList buf = IOUtil.getSharedByteBuf().putUTFData(block.data[i].toString());
+				if (bar != null) bar.increment(buf.readableBytes());
+				buf.writeToStream(writer);
 			}
 
 			if (autoSplitTaskThreshold > 0 && canSplit != null && ((TaskPool)canSplit.owner()).busyCount() <= autoSplitTaskThreshold) {

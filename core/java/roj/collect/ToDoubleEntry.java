@@ -15,15 +15,16 @@ public class ToDoubleEntry<T> implements Map.Entry<T, Double> {
 	public static <T1> ToDoubleEntry<T1> constantNeg1() { return Helpers.cast(DEF_1); }
 	public static <T1> ToDoubleEntry<T1> create(double value) {
 		ToDoubleEntry<?> entry = new ToDoubleEntry<>(IntMap.UNDEFINED, value);
-		entry.next = entry;
+		entry._next = entry;
 		return Helpers.cast(entry);
 	}
 
-	private static final XashMap.Builder<?, ToDoubleEntry<?>> BUILDER = Helpers.cast(XashMap.builder(Object.class, ToDoubleEntry.class, "key", "next"));
-	public static <T1> XashMap<T1, ToDoubleEntry<T1>> newMap() { return Helpers.cast(BUILDER.create()); }
-	public static <T1> XashMap<T1, ToDoubleEntry<T1>> newMap(int initialCapacity) { return Helpers.cast(BUILDER.createSized(initialCapacity)); }
+	private static final XashMap.Template<?, ToDoubleEntry<?>> MAP = Helpers.cast(XashMap.forType(Object.class, ToDoubleEntry.class).newValue(ToDoubleEntry::new).build());
 
-	private ToDoubleEntry<?> next;
+	public static <T1> XashMap<T1, ToDoubleEntry<T1>> newMap() { return Helpers.cast(MAP.create()); }
+	public static <T1> XashMap<T1, ToDoubleEntry<T1>> newMap(int initialCapacity) { return Helpers.cast(MAP.createSized(initialCapacity)); }
+
+	private ToDoubleEntry<?> _next;
 
 	public ToDoubleEntry() {}
 	public ToDoubleEntry(T key) { this.key = key; }

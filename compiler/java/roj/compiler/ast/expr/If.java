@@ -10,6 +10,7 @@ import roj.compiler.LavaCompiler;
 import roj.compiler.asm.MethodWriter;
 import roj.compiler.diagnostic.Kind;
 import roj.compiler.resolve.TypeCast;
+import roj.config.node.ConfigValue;
 import roj.config.node.IntValue;
 
 /**
@@ -20,7 +21,7 @@ import roj.config.node.IntValue;
 final class If extends Expr {
 	private Expr condition, trueBranch, falseBranch;
 	private IType type;
-	private TypeCast.Cast cast;
+	private TypeCast.Cast condToBool, trueToCommon, falseToCommon;
 	private byte boolHack;
 
 	public If(Expr condition, Expr trueBranch, Expr falseBranch) {
@@ -40,20 +41,22 @@ final class If extends Expr {
 			ctx.report(this, Kind.WARNING, "if.constant");
 
 		condition = condition.resolve(ctx);
-		cast = ctx.castTo(condition.type(), Type.BOOLEAN_TYPE, 0);
+		condToBool = ctx.castTo(condition.type(), Type.BOOLEAN_TYPE, 0);
 
 		trueBranch = trueBranch.resolve(ctx);
 		falseBranch = falseBranch.resolve(ctx);
 		type = ctx.getCommonParent(trueBranch.type(), falseBranch.type());
+		trueToCommon = ctx.castTo(trueBranch.type(), type, 0);
+		falseToCommon = ctx.castTo(falseBranch.type(), type, 0);
 
-		if (cast.type >= 0 && condition.isConstant())
-			return (boolean) condition.constVal() ? trueBranch : falseBranch;
+		if (condToBool.type >= 0 && condition.isConstant())
+			return ((ConfigValue) condition.constVal()).asBool() ? trueBranch : falseBranch;
 
 		if (trueBranch.equals(falseBranch)) {
 			ctx.report(this, Kind.WARNING, "if.constant");
 		}
 
-		if (trueBranch.isConstant()& falseBranch.isConstant()) {
+		if (trueBranch.isConstant()&falseBranch.isConstant()) {
 			if (trueBranch.constVal() instanceof IntValue tv && falseBranch.constVal() instanceof IntValue fv) {
 				if (fv.value == 0) {
 					// if not 1 => IMUL
@@ -80,7 +83,7 @@ final class If extends Expr {
 			mustBeStatement(cast);
 			LavaCompiler.debugLogger().info("trinary.note.boolean_hack {}", this);
 
-			condition.write(cw, this.cast);
+			condition.write(cw, this.condToBool);
 			int value = ((IntValue) trueBranch.constVal()).value;
 
 			if (boolHack != 1) {
@@ -99,18 +102,16 @@ final class If extends Expr {
 		var end = new Label();
 		var falsy = new Label();
 
-		condition.writeShortCircuit(cw, this.cast, false, falsy);
+		condition.writeShortCircuit(cw, this.condToBool, false, falsy);
 		vis.enter(null);
 
-		cast = noRet(cast);
-
 		//GenericSafe(using getCommonParent)
-		trueBranch.write(cw, cast);
+		trueBranch.write(cw, cast == NORET ? NORET : trueToCommon);
 		vis.orElse();
 		cw.jump(end);
 
 		cw.label(falsy);
-		falseBranch.write(cw, cast);
+		falseBranch.write(cw, cast == NORET ? NORET : falseToCommon);
 
 		cw.label(end);
 		vis.exit();

@@ -1,7 +1,7 @@
 package roj.util;
 
 import roj.collect.ToIntMap;
-import roj.io.ByteInput;
+import roj.io.XDataInput;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -16,7 +16,7 @@ public class StringPool {
 	private final ToIntMap<String> index;
 	private final List<String> values;
 
-	public StringPool(ByteInput w) throws IOException {
+	public StringPool(XDataInput w) throws IOException {
 		int len = w.readVUInt();
 		String[] array = new String[len];
 		this.index = null;
@@ -25,7 +25,7 @@ public class StringPool {
 			array[i] = w.readVUIGB();
 		}
 	}
-	public String get(ByteInput r) throws IOException { return values.get(r.readVUInt()); }
+	public String get(XDataInput r) throws IOException { return values.get(r.readVUInt()); }
 
 	public StringPool() { values = new ArrayList<>(); index = new ToIntMap<>(); }
 

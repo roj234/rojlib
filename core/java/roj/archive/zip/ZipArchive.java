@@ -10,11 +10,7 @@ import roj.io.Finishable;
 import roj.io.IOUtil;
 import roj.io.source.Source;
 import roj.optimizer.FastVarHandle;
-import roj.text.logging.Logger;
-import roj.util.ArrayCache;
-import roj.util.ByteList;
-import roj.util.DynByteBuf;
-import roj.util.Helpers;
+import roj.util.*;
 import roj.util.function.ExceptionalSupplier;
 
 import java.io.File;
@@ -58,7 +54,7 @@ public final class ZipArchive extends ZipFile {
 	public ZipArchive(File file, int flag, Charset charset) throws IOException {
 		super(ArchiveUtils.tryOpenSplitArchive(file, false), flag & ~FLAG_BACKWARD_READ, charset);
 		if (r.length() > 0) reload();
-		else namedEntries = ENTRY_BUILDER.create();
+		else namedEntries = ENTRY_TEMPLATE.create();
 		this.file = file;
 	}
 	public ZipArchive(Source source, int flag, Charset cs) { super(source, flag & ~FLAG_BACKWARD_READ, cs); }
@@ -189,6 +185,7 @@ public final class ZipArchive extends ZipFile {
 		OutputStream out = r;
 
 		ByteList bw = new ByteList(2048);
+		FastFailException dataExceptions = null;
 
 		long precisionModTime = System.currentTimeMillis();
 		int modTime = ZEntry.java2DosTime(precisionModTime);
@@ -241,7 +238,8 @@ public final class ZipArchive extends ZipFile {
 				try {
 					data = ((ExceptionalSupplier<?,IOException>) data).get();
 				} catch (Exception ex) {
-					Logger.FALLBACK.error("无法保存{}的数据", ex, entry.name);
+					if (dataExceptions == null) dataExceptions = new FastFailException("无法保存"+entry.name+"的数据", ex);
+					else dataExceptions.addSuppressed(ex);
 					continue;
 				}
 			}
@@ -353,8 +351,10 @@ public final class ZipArchive extends ZipFile {
 				}
 				entry.crc32 = CRC32.finish(crc);
 			} catch (Throwable ex) {
-				def.end();
-				Logger.FALLBACK.error("无法保存{}的数据", ex, entry.name);
+				def.reset();
+
+				if (dataExceptions == null) dataExceptions = new FastFailException("无法保存"+entry.name+"的数据", ex);
+				else dataExceptions.addSuppressed(ex);
 			} finally {
 				in.close();
 			}
@@ -428,6 +428,8 @@ public final class ZipArchive extends ZipFile {
 			node.entries = entries;
 			node.namedEntries = namedEntries;
 		}
+
+		if (dataExceptions != null) throw dataExceptions;
 	}
 
 	private File file;

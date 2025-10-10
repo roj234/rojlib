@@ -30,7 +30,8 @@ public final class ZipOutput implements AutoCloseable {
 
 	public void setCheckCRC(boolean checkCRC) {this.checkCRC = checkCRC;}
 
-	public boolean isOverwrite() {return !incremental;}
+	public boolean isIncremental() {return incremental;}
+
 	public ZipFileWriter getWriter() {return writer;}
 
 	public void begin(boolean incremental) throws IOException {
@@ -129,20 +130,13 @@ public final class ZipOutput implements AutoCloseable {
 	public void end() throws IOException {
 		isOpen = false;
 		try {
-			if (incremental) {
-				if (archive != null) {
-					archive.save();
-					archive.close();
-				}
-			} else {
-				if (writer != null) {
-					writer.close();
-					writer = null;
-				}
+			if (incremental && archive != null) {
+				archive.save();
 			}
 		} finally {
 			IOUtil.closeSilently(archive);
 			IOUtil.closeSilently(writer);
+			writer = null;
 		}
 	}
 
@@ -155,9 +149,6 @@ public final class ZipOutput implements AutoCloseable {
 
 	public void close() throws IOException {
 		end();
-		if (archive != null) {
-			archive.close();
-			archive = null;
-		}
+		archive = null;
 	}
 }

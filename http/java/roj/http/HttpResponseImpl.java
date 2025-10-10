@@ -2,22 +2,17 @@ package roj.http;
 
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
-import org.jetbrains.annotations.UnmodifiableView;
 import roj.io.IOUtil;
 import roj.io.MBInputStream;
 import roj.net.ChannelCtx;
 import roj.net.ChannelHandler;
 import roj.net.Event;
 import roj.text.TextReader;
-import roj.util.ArtifactVersion;
-import roj.util.ByteList;
-import roj.util.DynByteBuf;
+import roj.util.*;
 
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.Charset;
-import java.util.concurrent.locks.Condition;
-import java.util.concurrent.locks.Lock;
 import java.util.function.Consumer;
 
 /**
@@ -25,20 +20,21 @@ import java.util.function.Consumer;
  * @since 2022/10/15 11:24
  */
 final class HttpResponseImpl implements ChannelHandler, HttpResponse {
+	// 经验值, 未调用byte()时的缓冲区最大大小
+	private static final int MAX_BUFFER_SIZE = 32768;
 	static final String HC_FINISH = "hc:finish";
 
 	private HttpHead head;
-	private DynByteBuf data;
-	private InputStream is;
+	private DynByteBuf buffer;
+	private InputStream inputStream;
 
-	private Lock lock;
-	private Condition hasData;
+	private final Object streamLock = new Object();
 
 	static final byte READY = 0, HEAD = 1, FAIL = 2, SUCCESS = 3;
 	volatile byte state;
 
 	ChannelCtx ctx1;
-	private boolean async;
+	private volatile boolean needGetAll;
 	private Throwable ex;
 
 	private Consumer<HttpResponse> callback;
@@ -47,8 +43,6 @@ final class HttpResponseImpl implements ChannelHandler, HttpResponse {
 	public void handlerAdded(ChannelCtx ctx) {
 		reset();
 		ctx1 = ctx;
-		lock = ctx.channel().lock();
-		hasData = lock.newCondition();
 	}
 
 	@Override
@@ -68,12 +62,26 @@ final class HttpResponseImpl implements ChannelHandler, HttpResponse {
 		DynByteBuf in = (DynByteBuf) msg;
 		if (!in.isReadable()) return;
 
-		try {
-			data.compact().put(in);
-			if (async) ctx.channelRead(data);
-			hasData.signalAll();
-		} finally {
-			in.rIndex = in.wIndex();
+		if (ctx.next() != null) {
+			if (buffer.isReadable()) {
+				buffer.compact().put(in);
+				in.rIndex = in.wIndex();
+
+				ctx.channelRead(buffer);
+			} else {
+				buffer.clear();
+				ctx.channelRead(in);
+			}
+		} else {
+			synchronized (streamLock) {
+				buffer.compact().put(in);
+				in.rIndex = in.wIndex();
+				streamLock.notifyAll();
+
+				if (!needGetAll && buffer.readableBytes() >= MAX_BUFFER_SIZE) {
+					ctx.readInactive();
+				}
+			}
 		}
 	}
 
@@ -117,9 +125,9 @@ final class HttpResponseImpl implements ChannelHandler, HttpResponse {
 			notifyAll();
 		}
 
-		lock.lock();
-		hasData.signalAll();
-		lock.unlock();
+		synchronized (streamLock) {
+			streamLock.notifyAll();
+		}
 
 		if (callback != null) callback.accept(this);
 	}
@@ -155,11 +163,11 @@ final class HttpResponseImpl implements ChannelHandler, HttpResponse {
 	void reset() {
 		state = READY;
 		head = null;
-		data = new ByteList();
-		is = null;
+		if (buffer != null) buffer.release();
+		buffer = new ByteList();
+		inputStream = null;
 		ctx1 = null;
 		ex = null;
-		async = false;
 		callback = null;
 	}
 
@@ -167,9 +175,7 @@ final class HttpResponseImpl implements ChannelHandler, HttpResponse {
 
 	@Override public int statusCode() throws IOException {return headers().statusCode();}
 	@Override public ArtifactVersion version() throws IOException {return headers().version();}
-	@Override
-	@UnmodifiableView
-	public HttpHead headers() throws IOException {
+	@Override public HttpHead headers() throws IOException {
 		try {
 			synchronized (this) {
 				while(state < HEAD) wait();
@@ -189,10 +195,10 @@ final class HttpResponseImpl implements ChannelHandler, HttpResponse {
 		while(state < FAIL) wait();
 	}
 	@Override
-	public synchronized void onCompletion(Consumer<HttpResponse> o) throws IOException {
+	public synchronized void onReadyStateChange(Consumer<HttpResponse> handler) throws IOException {
 		ensureOpen();
-		callback = o;
-		if (state >= HEAD) o.accept(this);
+		callback = handler;
+		if (state >= HEAD) handler.accept(this);
 	}
 	@Override
 	public void disconnect() throws IOException {
@@ -205,8 +211,15 @@ final class HttpResponseImpl implements ChannelHandler, HttpResponse {
 
 	@Override
 	public synchronized ByteList bytes() throws IOException {
-		if (async) throw new IllegalStateException("async handler active");
-		if (is != null) throw new IllegalStateException("stream active");
+		ensureOpen();
+
+		if (ctx1.next() != null) throw new IllegalStateException("async handler active");
+		if (inputStream != null) throw new IllegalStateException("stream active");
+		long len = headers().getContentLength();
+		if (len > ArrayCache.MAX_ARRAY_SIZE) throw new OutOfMemoryError("Content length("+len+") > MAX_ARRAY_SIZE");
+
+		needGetAll = true;
+		ctx1.readActive();
 
 		try {
 			awaitCompletion();
@@ -216,61 +229,63 @@ final class HttpResponseImpl implements ChannelHandler, HttpResponse {
 		}
 
 		ensureOpen();
-		return (ByteList) data;
+		return (ByteList) buffer;
 	}
 	@Override
 	public String text(Charset charset) throws IOException {
-		try (TextReader sr = new TextReader(stream(), charset)) {
-			return IOUtil.read(sr);
+		try (var reader = new TextReader(stream(), charset)) {
+			return IOUtil.read(reader);
 		}
 	}
 	@Override
 	public synchronized void pipe(ChannelHandler h) throws IOException {
-		if (is != null) throw new IllegalStateException("stream active");
 		ensureOpen();
+		if (inputStream != null) throw new IllegalStateException("stream active");
 
-		ctx1.channel().remove("async_handler");
-		ctx1.channel().addLast("async_handler", h);
-		ChannelCtx ctx = ctx1.channel().handler("async_handler");
-
-		lock.lock();
-		try {
-			h.channelRead(ctx, data);
-		} finally {
-			lock.unlock();
-		}
+		var ch = ctx1.channel();
+		ch.addLast("http:asyncResponse", h);
+		ch.readActive();
 	}
 	@Override
-	public synchronized InputStream stream() {
-		if (is != null) return is;
+	public synchronized InputStream stream() throws IOException {
+		ensureOpen();
+		if (inputStream != null) return inputStream;
+		if (ctx1.next() != null) throw new IllegalStateException("async handler active");
 
-		if (async) throw new IllegalStateException("async handler active");
-		return is = new MBInputStream() {
+		return inputStream = new MBInputStream() {
 			@Override
 			public int read(byte[] b, int off, int len) throws IOException {
-				if (len < 0 || off < 0 || len > b.length - off) throw new ArrayIndexOutOfBoundsException();
+				ArrayUtil.checkRange(b, off, len);
 				if (len == 0) return 0;
 
-				lock.lock();
-				try {
-					while (!data.isReadable()) {
+				var buf = buffer;
+				synchronized (streamLock) {
+					while (!buf.isReadable()) {
 						ensureOpen();
 						if (state >= FAIL) return -1;
 
-						hasData.awaitUninterruptibly();
+						try {
+							streamLock.wait();
+						} catch (InterruptedException e) {
+							close();
+							throw IOUtil.rethrowAsIOException(e);
+						}
 					}
 
-					int v = Math.min(data.readableBytes(), len);
-					data.readFully(b, off, v);
-					return v;
-				} finally {
-					lock.unlock();
+					int read = Math.min(buf.readableBytes(), len);
+					buf.readFully(b, off, read);
+
+					if (buf.readableBytes() < MAX_BUFFER_SIZE && state < FAIL) {
+						ctx1.readActive();
+					}
+
+					return read;
 				}
 			}
 
 			@Override
 			public int available() {
-				int len = data.readableBytes();
+				int len = buffer.readableBytes();
 				return len == 0 && state >= FAIL ? -1 : len;
 			}
 
@@ -289,7 +304,7 @@ final class HttpResponseImpl implements ChannelHandler, HttpResponse {
 			case SUCCESS: sb.append("success"); break;
 		}
 		sb.append('>');
-		if (is != null) sb.append(", streaming");
+		if (inputStream != null) sb.append(", streaming");
 		return sb.append('}').toString();
 	}
 }

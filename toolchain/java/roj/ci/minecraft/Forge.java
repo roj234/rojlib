@@ -8,7 +8,7 @@ import roj.asmx.Context;
 import roj.asmx.TransformUtil;
 import roj.asmx.mapper.Mapper;
 import roj.asmx.mapper.Mapping;
-import roj.ci.Workspace;
+import roj.ci.Env;
 import roj.collect.ArrayList;
 import roj.collect.HashMap;
 import roj.collect.LinkedHashMap;
@@ -29,7 +29,7 @@ import java.util.Collections;
 import java.util.List;
 
 import static roj.ci.MCMake.CACHE_PATH;
-import static roj.ci.MCMake.LOGGER;
+import static roj.ci.MCMake.log;
 import static roj.ui.TUI.*;
 
 /**
@@ -40,7 +40,7 @@ final class Forge extends MinecraftWorkspace {
 	byte[] atBytes;
 
 	@Override
-	Workspace init(EasyProgressBar bar, MinecraftClientInfo clientInfo) throws IOException {
+	Env.Workspace init(EasyProgressBar bar, MinecraftClientInfo clientInfo) throws IOException {
 		File com2int = input(text("指定映射配置(*.yml)或手动提供【调试名到中间名】映射表(*.srg) （必须）"), Argument.file());
 		if (com2int == null) return null;
 		File serverPath = inputOpt(text("同版本的Forge服务端目录（可选，用于服务端开发）"), Argument.folder());
@@ -130,7 +130,7 @@ final class Forge extends MinecraftWorkspace {
 
 			var merger = new ClassMerger();
 			clientData = new ArrayList<>(merger.process(clientData, serverData));
-			LOGGER.debug("ClassMerger: {}/{} entries, {} combined", merger.clientOnly, merger.both, merger.mergedField+merger.mergedMethod+merger.replaceMethod);
+			log.debug("ClassMerger: {}/{} entries, {} combined", merger.clientOnly, merger.both, merger.mergedField+merger.mergedMethod+merger.replaceMethod);
 		}
 
 		try (var writeProgress = new EasyProgressBar("压缩Mapped依赖")) {
@@ -157,7 +157,7 @@ final class Forge extends MinecraftWorkspace {
 			var at = atList.remove(ctx.getFileName());
 			if (at != null) TransformUtil.makeAccessible(ctx.getData(), at);
 		}
-		if (!atList.isEmpty()) LOGGER.error("未成功应用的AT: {}", atList);
+		if (!atList.isEmpty()) log.error("未成功应用的AT: {}", atList);
 
 		mapper.loadLibraries(Arrays.asList(libraries, combinedCache));
 		mapper.packup();
@@ -186,7 +186,7 @@ final class Forge extends MinecraftWorkspace {
 			mapper.saveCache(fs, 1);
 		}
 
-		var workspace = new Workspace();
+		var workspace = new Env.Workspace();
 		workspace.type = "minecraft/forge";
 		workspace.id = mcVersion+"-Forge"+forgeVersion;
 		workspace.depend = Collections.singletonList(libraries);
@@ -197,7 +197,7 @@ final class Forge extends MinecraftWorkspace {
 		workspace.processors.add("roj.ci.plugin.MAP");
 		workspace.processors.add("roj.ci.minecraft.AT");
 		workspace.processors.add("roj.ci.minecraft.MIXIN");
-		workspace.variable_replace_in = new TrieTreeSet("META-INF/MANIFEST.MF", "META-INF/mods.toml", "pack.mcmeta");
+		workspace.variableReplaceContext = new TrieTreeSet("META-INF/MANIFEST.MF", "META-INF/mods.toml", "pack.mcmeta");
 		workspace.variables = new LinkedHashMap<>();
 		workspace.variables.put("mc_version", mcVersion);
 		workspace.variables.put("forge_version", forgeVersion);

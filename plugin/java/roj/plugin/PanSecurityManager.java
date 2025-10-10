@@ -10,12 +10,14 @@ import roj.asmx.*;
 import roj.collect.*;
 import roj.reflect.ILSecurityManager;
 import roj.reflect.Reflection;
+import roj.reflect.Telescope;
 import roj.reflect.Unsafe;
 import roj.text.URICoder;
 import roj.text.logging.Logger;
 import roj.util.ArrayCache;
 import roj.util.ByteList;
 import roj.util.Helpers;
+import roj.util.optimizer.VarHandleRewriter;
 
 import java.io.*;
 import java.lang.reflect.Constructor;
@@ -35,12 +37,11 @@ import java.util.Arrays;
  * @since 2023/8/4 15:36
  */
 public final class PanSecurityManager extends MethodHook {
-	static final TrieTreeSet
-		GlobalClassBlackList = new TrieTreeSet("roj/plugin/Pan"),
-		GlobalFileWhiteList = new TrieTreeSet(),
-		GlobalReflectWhiteList = new TrieTreeSet();
+	static final TrieTreeSet GlobalClassBlackList = new TrieTreeSet("roj/plugin/Pan", VarHandleRewriter.PROXY_NAME, Reflection.PROXY_CLASS);
+	static final TrieTreeSet GlobalFileWhiteList = new TrieTreeSet();
+	static final TrieTreeSet GlobalReflectWhiteList = new TrieTreeSet();
 
-	static final Logger LOGGER = Logger.getLogger(Jocker.LOGGER.context().child("Security"));
+	static final Logger LOGGER = Jocker.LOGGER.context().child("Security").logger();
 
 	PanSecurityManager() {
 		hooks.put(new MemberDescriptor("roj/reflect/Unsafe", "U", "Lroj/reflect/Unsafe;"),
@@ -48,10 +49,6 @@ public final class PanSecurityManager extends MethodHook {
 	}
 
 	static final class ILHook extends ILSecurityManager {
-		public boolean checkAccess(Field f, Class<?> caller) { return filterField(f, false, caller) != null; }
-		public boolean checkInvoke(Method m, Class<?> caller) { return filterMethod(m, false, caller) != null; }
-		public boolean checkConstruct(Constructor<?> c, Class<?> caller) { return filterConstructor(c, false, caller) != null; }
-
 		public void checkAccess(String owner, String name, String desc, Class<?> caller) {
 			MemberDescriptor d = ClassUtil.getInstance().sharedDesc;
 			d.owner = owner;
@@ -295,11 +292,11 @@ public final class PanSecurityManager extends MethodHook {
 	public static Path hook_callFrom_getPath(FileSystem fs, String first, String[] more, Class<?> caller) {
 		Path path = fs.getPath(first, more);
 		if (fs == FileSystems.getDefault() && !checkFileAccess(path.toFile(), caller))
-			throw new SecurityException("权限不足");
+			throw new SecurityException("没有访问"+path+"的权限");
 		return path;
 	}
 	public static Path hook_callFrom_toPath(File f, Class<?> caller) {
-		if (!checkFileAccess(f, caller)) throw new SecurityException("权限不足");
+		if (!checkFileAccess(f, caller)) throw new SecurityException("没有访问"+f+"的权限");
 		return f.toPath();
 	}
 
@@ -353,6 +350,13 @@ public final class PanSecurityManager extends MethodHook {
 	}
 	// endregion
 	// region Unsafe
+	@RealDesc(value = "roj/reflect/Telescope.trustedLookup()Lroj/reflect/Telescope;", callFrom = true)
+	public static Telescope hook_static_trustedLookup(Class<?> caller) {
+		var pd = Jocker.pm.getOwner(caller);
+		if (!pd.accessUnsafe) throw new SecurityException("accessUnsafe权限未为"+pd+"开启");
+		return Telescope.trustedLookup();
+	}
+
 	public static Unsafe Unsafe_getUnsafe(Class<?> caller) {
 		var pd = Jocker.pm.getOwner(caller);
 		if (!pd.accessUnsafe) throw new SecurityException("accessUnsafe权限未为"+pd+"开启");
@@ -371,7 +375,7 @@ public final class PanSecurityManager extends MethodHook {
 
 	static ByteList preDefineHook(String name, PluginDescriptor pd1, ByteList buf) {
 		if (!pd1.dynamicLoadClass) throw new SecurityException("dynamicLoadClass权限未为"+pd1+"开启");
-		if (!pd1.skipCheck) {
+		if (!pd1.isTrusted) {
 			// 一个有趣的问题是，如果另一个线程异步修改这个数组？
 			// 因为final了，所以就不用clone
 			buf = new ByteList(buf.toByteArray());
@@ -426,10 +430,19 @@ public final class PanSecurityManager extends MethodHook {
 	static boolean checkFileAccess(File file, Class<?> caller) { return checkFileAccess(file.getPath(), caller); }
 	static boolean checkFileAccess(String path, Class<?> caller) {
 		var pd = Jocker.pm.getOwner(caller);
-		if (pd.skipCheck || GlobalFileWhiteList.strStartsWithThis(path) || pd.extraPath.strStartsWithThis(path)) {
+		if (pd.isTrusted || GlobalFileWhiteList.strStartsWithThis(path) || pd.extraPath.strStartsWithThis(path)) {
 			LOGGER.debug("允许{}读写 {}", pd.id, path);
 			return true;
 		}
+
+		if (!path.endsWith(File.separator))
+			path = path.concat(File.separator);
+
+		if (GlobalFileWhiteList.strStartsWithThis(path) || pd.extraPath.strStartsWithThis(path)) {
+			LOGGER.debug("允许{}读写 {}", pd.id, path);
+			return true;
+		}
+
 		LOGGER.debug("禁止{}读写 {}", pd.id, path);
 		return false;
 	}
@@ -450,12 +463,12 @@ public final class PanSecurityManager extends MethodHook {
 
 		var pd = Jocker.pm.getOwner(caller);
 
-		if (!pd.skipCheck && (d.owner.startsWith("roj/plugin/") || d.owner.startsWith("roj/reflect/"))) {
+		if (!pd.isTrusted && (d.owner.startsWith("roj/plugin/") || d.owner.startsWith("roj/reflect/"))) {
 			LOGGER.debug("禁止反射 {} (SYSTEM_INTERNAL)", d);
 			return IntMap.UNDEFINED;
 		}
 
-		if (pd.skipCheck || GlobalReflectWhiteList.strStartsWithThis(d.owner) || pd.reflectiveClass.strStartsWithThis(d.owner)) {
+		if (pd.isTrusted || GlobalReflectWhiteList.strStartsWithThis(d.owner) || pd.reflectiveClass.strStartsWithThis(d.owner)) {
 			LOGGER.debug("允许{}反射 {}", pd.id, d);
 			return null;
 		}

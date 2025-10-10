@@ -121,7 +121,7 @@ public final class NewArray extends Expr {
 				var value = ((ConfigValue)node.constVal()).asInt();
 				if (value >= 0 && value <= UNSIGNED_MAX[sort]) {
 					if (exprType.getActualType() != Type.CHAR)
-						ctx.report(this, Kind.INCOMPATIBLE, "arrayDef.autoCastNumber", node, exprType);
+						ctx.report(this, Kind.FEATURE, "arrayDef.autoCastNumber", node, exprType);
 				} else {
 					ctx.report(this, Kind.ERROR, "typeCast.error.-2", node.type(), exprType);
 				}
@@ -158,7 +158,6 @@ public final class NewArray extends Expr {
 	private void autoType(CompileContext ctx) {
 		flag |= 8;
 
-		ctx.report(this, Kind.WARNING, "arrayDef.autoTypeTip");
 		IType cp = null;
 
 		for (int i = 0; i < expr.size(); i++) {
@@ -174,6 +173,7 @@ public final class NewArray extends Expr {
 			cp.setArrayDim(cp.array()+1);
 			type = cp;
 		}
+		ctx.report(this, Kind.WARNING, "arrayDef.autoTypeTip", type);
 	}
 
 	@Override public IType type() { return type == null ? WildcardType.anyType : type; }
