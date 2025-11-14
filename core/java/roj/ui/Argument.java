@@ -285,13 +285,30 @@ public interface Argument<T> {
 		}
 
 		private void complete(String val, List<Completion> completions) {
+			int count = 0;
 			for (String name : choice.keySet()) {
-				if (name.startsWith(val) && !name.equals(val)) completions.add(new Completion(name.substring(val.length())));
+				if (name.startsWith(val) && !name.equals(val)) {
+					if (++count > 100) continue;
+					completions.add(new Completion(name.substring(val.length())));
+				}
+			}
+			if (count > 100) {
+				completions.add(0, new Completion(Text.of("\0...").color16(Tty.BLACK+Tty.HIGHLIGHT), Text.of("+ "+(choice.size() - 100)+" more")));
 			}
 		}
 
 		@Override
-		public void example(List<Completion> completions) { updateChoices(); for (String name : choice.keySet()) completions.add(new Completion(name)); }
+		public void example(List<Completion> completions) {
+			updateChoices();
+			int count = 0;
+			for (String name : choice.keySet()) {
+				if (++count > 100) break;
+				completions.add(new Completion(name));
+			}
+			if (choice.size() > 100) {
+				completions.add(0, new Completion(Text.of("\0...").color16(Tty.BLACK+Tty.HIGHLIGHT), Text.of("+ "+(choice.size() - 100)+" more")));
+			}
+		}
 
 		@Override
 		public String format(String name, int mode) {

@@ -99,4 +99,12 @@ final class Poly1305 extends BufferedDigest implements MessageAuthenticCode {
 		Acc.clear();
 		buf.clear();
 	}
+
+	@Override
+	public Object clone() {
+		Poly1305 clone = new Poly1305();
+		clone.R.setArray0(R.getArray0());
+		clone.S.setArray0(S.getArray0());
+		return clone;
+	}
 }

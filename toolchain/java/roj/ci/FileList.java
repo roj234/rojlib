@@ -4,6 +4,7 @@ import roj.collect.HashMap;
 import roj.collect.HashSet;
 import roj.crypt.CryptoFactory;
 import roj.io.IOUtil;
+import roj.util.ArrayCache;
 import roj.util.function.Flow;
 
 import java.io.File;
@@ -21,6 +22,7 @@ import java.util.Set;
 final class FileList {
 	transient final Map<String, byte[]> changed = new HashMap<>();
 	transient final Set<String> removed = new HashSet<>();
+	transient Set<String> fsDeleted;
 	private final Map<String, byte[]> files = new HashMap<>();
 	private transient String prefix;
 	private transient boolean wasChanged;
@@ -34,13 +36,23 @@ final class FileList {
 	}
 
 	public Set<String> getDeletedAlt(String prefix) {
+		fsDeleted = null;
+
 		if (havePendingChanges()) {
-			MCMake.log.error("assertion error: havePendingChanges()");
+			MCMake.log.debug("getDeletedAlt(): return null on havePendingChanges()");
 			return null;
 		}
 
-		return Flow.of(files.keySet())
-				.filter(pathname -> pathname.startsWith(prefix) && !new File(this.prefix+pathname).exists())
+		Set<String> deletedAlt = Flow.of(files.keySet())
+				.filter(pathname -> pathname.startsWith(prefix) && !new File(this.prefix + pathname).exists())
+				.toSet();
+
+		if (!deletedAlt.isEmpty()) {
+			this.fsDeleted = deletedAlt;
+			wasChanged = true;
+		}
+
+		return Flow.of(deletedAlt)
 				.map(pathname -> this.prefix.concat(pathname))
 				.toSet();
 	}
@@ -83,6 +95,12 @@ final class FileList {
 		return true;
 	}
 
+	public void addFileFromFS(File file) {
+		if (!file.isFile()) return;
+
+		String pathname = file.getAbsolutePath().replace(File.separatorChar, '/').substring(prefix.length());
+		changed.put(pathname, ArrayCache.BYTES);
+	}
 	/**
 	 * 提交所有挂起的变化到稳定文件集合
 	 *
@@ -90,7 +108,14 @@ final class FileList {
 	 * 然后清空所有挂起的变更集合。
 	 */
 	public synchronized void commit() {
-		if (!havePendingChanges()) return;
+		if (!havePendingChanges()) {
+			if (fsDeleted != null) {
+				wasChanged = true;
+				files.keySet().removeAll(fsDeleted);
+				fsDeleted = null;
+			}
+			return;
+		}
 
 		wasChanged = true;
 		files.keySet().removeAll(removed);

@@ -19,16 +19,17 @@ import static roj.reflect.Unsafe.U;
  * @since 2022/2/14 9:03
  */
 sealed class ChaCha extends RCipher permits XChaCha {
-	static final int ROUND = 10;
-
 	//       cccccccc  cccccccc  cccccccc  cccccccc
 	//       kkkkkkkk  kkkkkkkk  kkkkkkkk  kkkkkkkk
 	//       kkkkkkkk  kkkkkkkk  kkkkkkkk  kkkkkkkk
 	//       bbbbbbbb  nnnnnnnn  nnnnnnnn  nnnnnnnn
 	final int[] key = new int[16], tmp = new int[16];
+	final int rounds;
 	private int pos;
 
-	ChaCha() {
+	ChaCha() {this(10);}
+	ChaCha(int rounds2) {
+		this.rounds = rounds2;
 		int[] T = key;
 		T[0] = 0x61707865;
 		T[1] = 0x3320646e;
@@ -37,7 +38,7 @@ sealed class ChaCha extends RCipher permits XChaCha {
 	}
 
 	@Override
-	public void init(int flags, byte[] key, AlgorithmParameterSpec par, SecureRandom random) throws InvalidAlgorithmParameterException, InvalidKeyException {
+	public void init(boolean flags, byte[] key, AlgorithmParameterSpec par, SecureRandom random) throws InvalidAlgorithmParameterException, InvalidKeyException {
 		if (key.length != 32) throw new InvalidKeyException("Key should be 256 bits length");
 
 		for (int i = 0; i < 8; i++) {
@@ -143,13 +144,13 @@ sealed class ChaCha extends RCipher permits XChaCha {
 		int[] Dst = tmp;
 
 		System.arraycopy(Src, 0, Dst, 0, 16);
-		Round(Dst);
+		Round(Dst, rounds);
 		for (int i = 0; i < 16; i++) Dst[i] = reverseBytes(Dst[i] + Src[i]);
 		Src[12]++; // Counter
 	}
 
-	static void Round(int[] T) {
-		for (int round = 0; round < ROUND; round++) {
+	static void Round(int[] T, int rounds) {
+		for (int round = 0; round < rounds; round++) {
 			Quarter(T, 0, 4, 8, 12);
 			Quarter(T, 1, 5, 9, 13);
 			Quarter(T, 2, 6, 10, 14);

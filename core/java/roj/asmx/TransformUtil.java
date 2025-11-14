@@ -143,7 +143,7 @@ public class TransformUtil {
 			if (code != null) ldcFirst.visit(data.cp, code.getRawData().slice());
 		}
 		// add internal reference, e.g. Utf8 in String constant
-		for (var constant : lazyLDC) cpw.reset(constant);
+		for (var constant : lazyLDC) cpw.intern(constant);
 
 		ByteList tmp = new ByteList();
 		CodeWriter cw = new CodeWriter();

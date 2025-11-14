@@ -49,7 +49,7 @@ public class WavDecoder implements AudioDecoder {
 		in.readFully(buf, fmtLen);
 
 		int format = buf.readUnsignedShortLE();
-		if (format != 1) throw new IOException("compressed WAVE file (0x"+Integer.toHexString(format)+")");
+		if (format != 1 && format != 0xFFFE) throw new IOException("compressed WAVE file (0x"+Integer.toHexString(format)+")");
 
 		this.in = in;
 

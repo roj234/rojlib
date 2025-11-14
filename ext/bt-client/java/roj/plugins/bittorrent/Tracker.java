@@ -23,7 +23,7 @@ import java.util.concurrent.ThreadLocalRandom;
  * @since 2025/05/20 20:00
  */
 public abstract class Tracker {
-	abstract Promise<Void> update(Session session);
+	abstract Promise<?> update(Session session);
 	abstract int errorCount();
 
 	public static Tracker httpTracker(String url) {return new HTTP(url);}
@@ -39,7 +39,7 @@ public abstract class Tracker {
 		HTTP(String url) {this.url = url;}
 
 		@Override
-		Promise<Void> update(Session session) {
+		Promise<?> update(Session session) {
 			long time = System.currentTimeMillis() / 1000;
 			long notifyAfter = session.isDirty() ? 0 : interval;
 
@@ -76,7 +76,7 @@ public abstract class Tracker {
 					MapValue map = item.asMap();
 					session.addPeer(map.getString("peer id"), new InetSocketAddress(map.getString("IP"), map.getInt("Port")));
 				}
-			}).rejected(exc -> {
+			}).exceptionally(exc -> {
 				exc.printStackTrace();
 
 				interval = System.currentTimeMillis() / 1000 + (10L << errorCount);
@@ -92,7 +92,7 @@ public abstract class Tracker {
 		UDP(String url) {super(url);}
 
 		@Override
-		Promise<Void> update(Session session) {
+		Promise<?> update(Session session) {
 			long time = System.currentTimeMillis() / 1000;
 			long notifyAfter = session.isDirty() ? 0 : interval;
 
@@ -164,7 +164,7 @@ public abstract class Tracker {
 			}).thenAccept(data -> {
 				System.out.println("response="+data);
 
-			}).rejected(exc -> {
+			}).exceptionally(exc -> {
 				exc.printStackTrace();
 
 				interval = System.currentTimeMillis() / 1000 + (10L << errorCount);
@@ -183,7 +183,7 @@ public abstract class Tracker {
 
 		@Override
 		Promise<Void> update(Session session) {
-			Promise<Void> sync = Promise.sync();
+			Promise<Void> sync = Promise.manual();
 			Promise.Result result = (Promise.Result) sync;
 
 			var obj = new Object() {

@@ -29,12 +29,12 @@ public final class InnerClasses extends Attribute {
 		List<Item> classes = this.classes = new ArrayList<>(count);
 
 		while (count-- > 0) {
-			String selfName = ((CstClass) pool.get(r)).value().str();
-			CstClass outer = (CstClass) pool.getNullable(r);
+			String selfName = ((CstClass) pool.resolve(r)).value().str();
+			CstClass outer = (CstClass) pool.resolveOrNull(r);
 			// If C is not a member of a class or an interface (that is, if C is a top-level class or interface (JLS §7.6) or a local class (JLS §14.3) or an anonymous class (JLS §15.9.5)), the value of the outer_class_info_index item must be 0.
 			String outerName = outer == null ? null : outer.value().str();
 
-			CstUTF nameS = (CstUTF) pool.getNullable(r);
+			CstUTF nameS = (CstUTF) pool.resolveOrNull(r);
 			// If C is anonymous (JLS §15.9.5), the item must be null
 			// Otherwise, the item must be a Utf8
 			String name = nameS == null ? null : nameS.str();

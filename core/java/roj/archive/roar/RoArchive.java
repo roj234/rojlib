@@ -4,9 +4,8 @@ import roj.archive.ArchiveEntry;
 import roj.archive.ArchiveFile;
 import roj.archive.ArchiveUtils;
 import roj.archive.zip.InflateInputStream;
+import roj.archive.zip.ZipEntry;
 import roj.collect.ArrayList;
-import roj.collect.WeakCache;
-import roj.collect.XashMap;
 import roj.io.IOUtil;
 import roj.io.source.Source;
 import roj.io.source.SourceInputStream;
@@ -22,10 +21,8 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.lang.invoke.VarHandle;
 import java.util.Arrays;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
-import java.util.zip.ZipEntry;
 
 /**
  * 鸣谢： <a href="https://phoboslab.org/log/2024/09/qop">A Simple Archive Format for Self-Contained Executables</a><br>
@@ -37,13 +34,6 @@ import java.util.zip.ZipEntry;
 public sealed class RoArchive implements ArchiveFile permits RoWriteArchive {
 	Source r, cache;
 	private static final VarHandle CACHE = Telescope.lookup().findVarHandle(RoArchive.class, "cache", Source.class);
-
-	static final XashMap<Source, CacheNode> ARCHIVES = WeakCache.shape(CacheNode.class).create();
-	static final class CacheNode extends WeakCache<Source> {
-		public CacheNode(Source key, XashMap<Source, CacheNode> owner) {super(key, owner);}
-		RoarEntry[] map;
-		List<RoarEntry> entries;
-	}
 
 	RoarEntry[] map;
 	List<RoarEntry> entries;
@@ -58,12 +48,7 @@ public sealed class RoArchive implements ArchiveFile permits RoWriteArchive {
 	public RoArchive(String name) throws IOException { this(new File(name)); }
 	public RoArchive(File file) throws IOException {
 		r = ArchiveUtils.tryOpenSplitArchive(file, true);
-		var node = ARCHIVES.get(r);
-		if (node == null) reload();
-		else {
-			map = node.map;
-			entries = node.entries;
-		}
+		reload();
 	}
 
 	public RoArchive(Source source) {r = source;}
@@ -142,17 +127,6 @@ public sealed class RoArchive implements ArchiveFile permits RoWriteArchive {
 		} finally {
 			buf.release();
 		}
-
-		var node = new CacheNode(r, ARCHIVES);
-		node.map = map;
-		node.entries = entries;
-
-		synchronized (ARCHIVES) {
-			ARCHIVES.put(r, node);
-		}
-
-		map = node.map;
-		entries = node.entries;
 	}
 
 	protected static int getHash(RoarEntry entry) {return Arrays.hashCode(entry.name);}
@@ -188,7 +162,7 @@ public sealed class RoArchive implements ArchiveFile permits RoWriteArchive {
 		return null;
 	}
 	@Override
-	public final Collection<RoarEntry> entries() { return Collections.unmodifiableCollection(entries); }
+	public final List<RoarEntry> entries() { return Collections.unmodifiableList(entries); }
 
 	private byte[] readName(RoarEntry entry) throws IOException {
 		if (entry.name == null) {

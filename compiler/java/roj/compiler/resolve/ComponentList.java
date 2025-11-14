@@ -3,7 +3,7 @@ package roj.compiler.resolve;
 import org.intellij.lang.annotations.MagicConstant;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
-import roj.asm.ClassDefinition;
+import roj.asm.ClassNode;
 import roj.asm.Member;
 import roj.asm.MethodNode;
 import roj.asm.type.IType;
@@ -40,13 +40,12 @@ public abstract class ComponentList {
 	public List<MethodNode> getMethods() {throw new UnsupportedOperationException("这不是方法列表");}
 	public boolean isOverriddenMethod(int id) {return false;}
 
-	static void checkDeprecation(CompileContext ctx, ClassDefinition owner, Member member) {
+	static void checkDeprecation(CompileContext ctx, ClassNode owner, Member member) {
 		if (owner.getAttribute("Deprecated") != null) {
 			ctx.report(Kind.WARNING, "annotation.deprecated", "symbol.type", owner);
 		}
 		if (member.getAttribute("Deprecated") != null) {
-			// TODO better toString
-			ctx.report(Kind.WARNING, "annotation.deprecated", member.rawDesc().startsWith("(") ? "invoke.method" : "symbol.field", member.name().equals("<init>") ? "new "+owner.name()+"()" : member);
+			ctx.report(Kind.WARNING, "annotation.deprecated", member.rawDesc().startsWith("(") ? "invoke.method" : "symbol.field", member);
 		}
 	}
 }

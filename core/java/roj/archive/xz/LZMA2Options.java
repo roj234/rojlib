@@ -117,8 +117,7 @@ public class LZMA2Options implements Cloneable {
 	private int depthLimit;
 	private boolean nativeAccelerate;
 
-	private Executor asyncExecutor;
-	private LZMA2ParallelEncoder asyncMan;
+	private LZMA2ParallelEncoder parallelEncoder;
 
 	public LZMA2Options() { this(DEFAULT_COMPRESSION); }
 	public LZMA2Options(int preset) { setPreset(preset); }
@@ -383,32 +382,17 @@ public class LZMA2Options implements Cloneable {
 
 	/**
 	 * <pre>启用对于单独压缩流的多线程压缩模式
-	 * <b>注意，对比{@link roj.archive.qz.QZFileWriter#newParallelWriter()}的不同文件并行模式,单压缩流并行会损失千分之一左右压缩率</b>
-	 * @param blockSize 任务按照该大小分块并行，设置为-1来自动选择(不推荐自动选择)
-	 * @param executor 线程池
-	 * @param affinity 最大并行任务数量 (1-255)
-	 * @param noContext 每个块是否重置词典 <br>
-	 * {@code true} 每个块重置词典, 速度快, 压缩率差 (支持并行解压) <br>
-	 * {@code false} 异步设置词典, 速度慢, 压缩率好
+	 * <b>注意，对比{@link roj.archive.sevenz.SevenZPacker#newParallelWriter()}的不同文件并行模式,单压缩流并行会损失压缩率</b>
+	 * @see LZMA2ParallelEncoder
 	 */
-	public void setAsyncMode(int blockSize, Executor executor, int affinity, boolean noContext) {
-		asyncExecutor = executor;
-		asyncMan = new LZMA2ParallelEncoder(this, blockSize, noContext, affinity);
-	}
-	public void setAsyncMode(Executor executor, LZMA2ParallelEncoder parallel) {
-		asyncExecutor = executor;
-		asyncMan = parallel;
-	}
-	public void clearAsyncMode() {
-		asyncExecutor = null;
-		asyncMan = null;
-	}
-	public Executor getAsyncExecutor() { return asyncExecutor; }
-	public LZMA2ParallelEncoder getAsyncMan() { return asyncMan; }
+	public LZMA2Options enableParallel(LZMA2ParallelEncoder parallel) {parallelEncoder = parallel;return this;}
+	public LZMA2Options disableParallel() {parallelEncoder = null;return this;}
+	public LZMA2ParallelEncoder getParallelEncoder() {return parallelEncoder;}
 
-	public void setNativeAccelerate(boolean accelerate) {
+	public LZMA2Options setNativeAccelerate(boolean accelerate) {
 		if (accelerate && !LZMA2WriterN.AVAILABLE) throw new IllegalStateException("本机加速不可用");
 		this.nativeAccelerate = accelerate;
+		return this;
 	}
 	public boolean isNativeAccelerate() {return nativeAccelerate;}
 	public static boolean isNativeAccelerateAvailable() {return LZMA2WriterN.AVAILABLE;}
@@ -417,7 +401,8 @@ public class LZMA2Options implements Cloneable {
 	public OutputStream getOutputStream(OutputStream out) {
 		if (mode == MODE_UNCOMPRESSED) return new LZMA2UncompressedOutputStream(out);
 		if (nativeAccelerate) return new LZMA2WriterN(out, this);
-		return asyncMan != null ? asyncMan.createEncoder(out) : new LZMA2OutputStream(out, this);
+		if (parallelEncoder != null) return parallelEncoder.getOutputStream(out);
+		return new LZMA2OutputStream(out, this);
 	}
 
 	public int getDecoderMemoryUsage() { return LZMA2InputStream.getMemoryUsage(dictSize); }
@@ -426,7 +411,7 @@ public class LZMA2Options implements Cloneable {
 	public LZMA2Options clone() {
 		try {
 			LZMA2Options opt = (LZMA2Options) super.clone();
-			opt.clearAsyncMode();
+			opt.disableParallel();
 			return opt;
 		} catch (CloneNotSupportedException e) {
 			throw new RuntimeException(e);
@@ -487,7 +472,7 @@ public class LZMA2Options implements Cloneable {
 		if (mf != options.mf) return false;
 		if (depthLimit != options.depthLimit) return false;
 		if (!Arrays.equals(presetDict, options.presetDict)) return false;
-		return asyncMan != null ? asyncMan.equals(options.asyncMan) : options.asyncMan == null;
+		return parallelEncoder != null ? parallelEncoder.equals(options.parallelEncoder) : options.parallelEncoder == null;
 	}
 
 	@Override

@@ -15,12 +15,12 @@ import roj.archive.xz.lz.LZDecoder;
 import roj.archive.xz.lzma.LZMADecoder;
 import roj.io.CorruptedInputException;
 import roj.io.MBInputStream;
+import roj.io.XDataInputStream;
 import roj.reflect.Unsafe;
 import roj.text.logging.Logger;
 import roj.util.ArrayUtil;
 import roj.util.Helpers;
 
-import java.io.DataInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 
@@ -51,7 +51,7 @@ public sealed class LZMA2InputStream extends MBInputStream {
 
 	private static final int COMPRESSED_SIZE_MAX = 1 << 16;
 
-	private DataInputStream in;
+	private XDataInputStream in;
 
 	LZDecoder lz;
 	RangeDecoder rc;
@@ -108,7 +108,13 @@ public sealed class LZMA2InputStream extends MBInputStream {
 		// in this constructor.
 		if (in == null) throw new NullPointerException();
 
-		this.in = new DataInputStream(in);
+		// 使用这个BufferedInputStream + DataInputStream的混合体
+		// - 值得注意的是DataInputStream在创建时即申请240字节的UTF解码缓冲区，而我的实现并不需要
+		// 缓冲区大小 = chunk header(1) + chunk size(2) + uncompressed size(2) + prop(1) + mark(1) + code(4)
+		// - 这是最大可能的原本需要多次调用的读取大小
+		// 代价：原先的实现可以保证'不多读任何字节'，现在不行了
+		// - 不过你可以在外面套一层XDataInputStream
+		this.in = in instanceof XDataInputStream xin ? xin : new XDataInputStream(in, 12);
 		this.rc = new RangeDecoder(COMPRESSED_SIZE_MAX);
 		this.lz = new LZDecoder(getDictSize(dictSize), presetDict);
 
@@ -294,7 +300,7 @@ public sealed class LZMA2InputStream extends MBInputStream {
 	}
 
 	public int available() throws IOException {
-		return in == null || state < 0 ? 0 : state== LZMA2Encoder.STATE_LZMA ? uncompressedSize : Math.min(uncompressedSize, in.available());
+		return in == null ? 0 : state == LZMA2Encoder.STATE_LZMA ? uncompressedSize : Math.min(uncompressedSize, in.available());
 	}
 
 	private synchronized void putArraysToCache() {

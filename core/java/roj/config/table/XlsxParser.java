@@ -1,7 +1,7 @@
 package roj.config.table;
 
 import org.jetbrains.annotations.NotNull;
-import roj.archive.zip.ZEntry;
+import roj.archive.zip.ZipEntry;
 import roj.archive.zip.ZipFile;
 import roj.collect.ArrayList;
 import roj.collect.HashMap;
@@ -75,9 +75,9 @@ final class XlsxParser implements TableParser {
 		if (charset == null) charset = StandardCharsets.UTF_8;
 		xml.charset = charset;
 
-		try (ZipFile zf = new ZipFile(file, ZipFile.FLAG_BACKWARD_READ, charset)) {
+		try (ZipFile zf = new ZipFile(file, ZipFile.FLAG_ReadCENOnly, charset)) {
 			zf.reload();
-			ZEntry ze = zf.getEntry("xl/sharedStrings.xml");
+			ZipEntry ze = zf.getEntry("xl/sharedStrings.xml");
 
 			readWith(zf, ze, entry -> {
 				if (sharedStrings.isEmpty()) sharedStrings.ensureCapacity(replaceNodes.get("sst").attr("count").asInt());
@@ -128,7 +128,7 @@ final class XlsxParser implements TableParser {
 				emptyRow = true;
 
 				int javac傻逼 = i;
-				readWith(zf, (ZEntry) sheetList.get(i+2), entry -> {
+				readWith(zf, (ZipEntry) sheetList.get(i+2), entry -> {
 					rowHandler.accept(entry);
 					if (entry.tag.equals("c")) return;
 
@@ -193,7 +193,7 @@ final class XlsxParser implements TableParser {
 		xy[1] = yPos;
 	}
 
-	private void readWith(ZipFile zip, ZEntry entry, Consumer<Element> c) throws IOException,ParseException {
+	private void readWith(ZipFile zip, ZipEntry entry, Consumer<Element> c) throws IOException,ParseException {
 		consumer = c;
 
 		try (InputStream in = zip.getInputStream(entry)) {

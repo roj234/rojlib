@@ -73,7 +73,7 @@ public class Annotation extends MapValue {
 	}
 
 	public static Annotation parse(ConstantPool pool, DynByteBuf r) {
-		String type = ((CstUTF) pool.get(r)).str();
+		String type = ((CstUTF) pool.resolve(r)).str();
 		if (!type.endsWith(";")) throw new IllegalArgumentException("无效的注解类型:"+type);
 		int len = r.readUnsignedShort();
 
@@ -81,7 +81,7 @@ public class Annotation extends MapValue {
 		if (len > 0) {
 			params = new LinkedHashMap<>(len);
 			while (len-- > 0) {
-				params.put(((CstUTF) pool.get(r)).str(), AnnVal.parse(pool, r));
+				params.put(((CstUTF) pool.resolve(r)).str(), AnnVal.parse(pool, r));
 			}
 		} else {
 			params = Collections.emptyMap();

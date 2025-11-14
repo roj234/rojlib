@@ -9,12 +9,12 @@ import roj.io.IOUtil;
 import roj.text.CharList;
 import roj.text.TextUtil;
 import roj.util.OperationDone;
+import roj.util.function.IntBiPredicate;
 
 import java.nio.file.FileVisitResult;
 import java.util.*;
 import java.util.function.BiConsumer;
 import java.util.function.BiFunction;
-import java.util.function.BiPredicate;
 import java.util.function.Function;
 
 import static roj.collect.IntMap.UNDEFINED;
@@ -27,7 +27,7 @@ public class TrieTree<V> extends AbstractMap<CharSequence, V> {
 	static final int COMPRESS_START_DEPTH = 1;
 
 	public static class Entry<V> extends TrieEntry {
-		V value;
+		public V value;
 
 		@SuppressWarnings("unchecked")
 		public Entry(char c) {
@@ -91,7 +91,7 @@ public class TrieTree<V> extends AbstractMap<CharSequence, V> {
 			this.val = val;
 		}
 
-		CharSequence text() { return val; }
+		public CharSequence text() { return val; }
 		public void append(CharList sb) { sb.append(val); }
 		public int length() { return val.length(); }
 		public String toString() { return "\""+val+'"'; }
@@ -351,7 +351,7 @@ public class TrieTree<V> extends AbstractMap<CharSequence, V> {
 	}
 
 	@SuppressWarnings("unchecked")
-	public V querySequence(CharSequence s, int i, int len, IntValue _matchLen, BiPredicate<IntValue, V> predicate) {
+	public V querySequence(CharSequence s, int i, int len, IntBiPredicate<V> predicate) {
 		int matchLen = 0;
 		V longestMatch = null;
 
@@ -373,9 +373,9 @@ public class TrieTree<V> extends AbstractMap<CharSequence, V> {
 			}
 
 			if (entry.value != UNDEFINED) {
-				_matchLen.value = matchLen;
-				if (predicate.test(_matchLen, entry.value))
+				if (predicate.test(matchLen, entry.value)) {
 					longestMatch = entry.value;
+				}
 			}
 		}
 		return longestMatch;

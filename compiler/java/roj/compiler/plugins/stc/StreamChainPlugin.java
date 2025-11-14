@@ -17,9 +17,9 @@ import roj.compiler.ast.expr.Invoke;
 import roj.compiler.ast.expr.LeftValue;
 import roj.compiler.diagnostic.Kind;
 import roj.compiler.resolve.TypeCast;
-import roj.util.ArrayUtil;
 import roj.util.TypedKey;
 
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
@@ -107,7 +107,7 @@ public class StreamChainPlugin implements Compiler.Resolver {
 						break;
 					} else {
 						if (x instanceof ChainExpr altChain) {
-							ArrayUtil.inverse(chain);
+							Collections.reverse(chain);
 							i = altChain.chain.size();
 							altChain.chain.addAll(chain);
 							chain = altChain.chain;
@@ -117,7 +117,7 @@ public class StreamChainPlugin implements Compiler.Resolver {
 						}
 					}
 				}
-				ArrayUtil.inverse(chain);
+				Collections.reverse(chain);
 			}
 
 			for (; i < chain.size()-1; i++) {

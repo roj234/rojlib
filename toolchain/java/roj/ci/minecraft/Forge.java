@@ -1,8 +1,8 @@
 package roj.ci.minecraft;
 
-import roj.archive.zip.ZEntry;
+import roj.archive.zip.ZipEntry;
 import roj.archive.zip.ZipFile;
-import roj.archive.zip.ZipFileWriter;
+import roj.archive.zip.ZipPacker;
 import roj.asm.MemberDescriptor;
 import roj.asmx.Context;
 import roj.asmx.TransformUtil;
@@ -50,7 +50,7 @@ final class Forge extends MinecraftWorkspace {
 		File tempArchive = new File(CACHE_PATH, "~ws-temp~"+Long.toString(System.nanoTime(), 36)+".jar");
 
 		bar.setTotal(5);
-		var resources = new ZipFileWriter(new FileSource(tempArchive), 8);
+		var resources = new ZipPacker(new FileSource(tempArchive), 8);
 		var clientData = new ArrayList<Context>();
 
 		Mapper mapper;
@@ -164,7 +164,7 @@ final class Forge extends MinecraftWorkspace {
 		mapper.map(clientData);
 
 		var combinedCacheMcp = new File(CACHE_PATH, "gen-"+mcVersion+"-Forge"+forgeVersion+"_mcp.jar");
-		try (var zfw = new ZipFileWriter(combinedCacheMcp);
+		try (var zfw = new ZipPacker(combinedCacheMcp);
 			 var writeProgress = new EasyProgressBar("压缩Unmapped依赖")) {
 			writeProgress.setTotal(clientData.size());
 			for (int i = 0; i < clientData.size(); i++) {
@@ -205,7 +205,7 @@ final class Forge extends MinecraftWorkspace {
 		return workspace;
 	}
 
-	private String combine(File libraryPath, List<String> arguments, List<Context> contexts, ZipFileWriter CombinedCache, boolean skipUniversal) throws IOException {
+	private String combine(File libraryPath, List<String> arguments, List<Context> contexts, ZipPacker CombinedCache, boolean skipUniversal) throws IOException {
 		var launchTarget = arguments.get(arguments.indexOf("--launchTarget")+1).replace("forge", "");
 		var mcVersion = arguments.get(arguments.indexOf("--fml.mcVersion")+1);
 		var mcpVersion = arguments.get(arguments.indexOf("--fml.mcpVersion")+1);
@@ -222,9 +222,9 @@ final class Forge extends MinecraftWorkspace {
 			return null;
 		}
 
-		var PatchSrg = new ZipFile(patchedSrg, ZipFile.FLAG_BACKWARD_READ | ZipFile.FLAG_VERIFY);
-		var ForgeSided = new ZipFile(forgeSided, ZipFile.FLAG_BACKWARD_READ | ZipFile.FLAG_VERIFY);
-		var ForgeUniversal = new ZipFile(forgeUniversal, ZipFile.FLAG_BACKWARD_READ | ZipFile.FLAG_VERIFY);
+		var PatchSrg = new ZipFile(patchedSrg, ZipFile.FLAG_ReadCENOnly | ZipFile.FLAG_Verify);
+		var ForgeSided = new ZipFile(forgeSided, ZipFile.FLAG_ReadCENOnly | ZipFile.FLAG_Verify);
+		var ForgeUniversal = new ZipFile(forgeUniversal, ZipFile.FLAG_ReadCENOnly | ZipFile.FLAG_Verify);
 
 		var fileList = new HashMap<String, ZipFile>();
 
@@ -233,13 +233,13 @@ final class Forge extends MinecraftWorkspace {
 		if (!skipUniversal) bar.addTotal(ForgeUniversal.entries().size());
 		bar.addTotal(ForgeSided.entries().size());
 
-		for (ZEntry entry : PatchSrg.entries()) {
+		for (ZipEntry entry : PatchSrg.entries()) {
 			if (!entry.isDirectory())
 				fileList.put(entry.getName(), PatchSrg);
 			bar.increment();
 		}
 		if (!skipUniversal) {
-			for (ZEntry entry : ForgeUniversal.entries()) {
+			for (ZipEntry entry : ForgeUniversal.entries()) {
 				if (!entry.isDirectory()) {
 					if (!entry.getName().startsWith("META-INF/")) {
 						fileList.put(entry.getName(), ForgeUniversal);
@@ -250,7 +250,7 @@ final class Forge extends MinecraftWorkspace {
 				bar.increment();
 			}
 		}
-		for (ZEntry entry : ForgeSided.entries()) {
+		for (ZipEntry entry : ForgeSided.entries()) {
 			if (!entry.isDirectory())
 				fileList.put(entry.getName(), ForgeSided);
 			bar.increment();

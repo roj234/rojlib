@@ -1,6 +1,6 @@
 package roj.unleaked;
 
-import roj.archive.zip.ZipArchive;
+import roj.archive.zip.ZipEditor;
 import roj.asm.AsmCache;
 import roj.asm.ClassNode;
 import roj.asm.Opcodes;
@@ -42,7 +42,7 @@ public class UnleakMain extends MethodHook {
 	}
 
 	public static void run(File thePlugin) {
-		try(var zipArchive = new ZipArchive(thePlugin)) {
+		try(var zipArchive = new ZipEditor(thePlugin)) {
 			String main = ConfigMaster.YAML.parse(zipArchive.getInputStream("plugin.yml")).asMap().getString("main").replace('.', '/') + ".class";
 			byte[] bytes = zipArchive.get(main);
 			ClassNode mainClass = ClassNode.parseAll(bytes);

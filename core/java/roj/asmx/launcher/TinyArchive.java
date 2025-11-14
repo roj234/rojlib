@@ -5,6 +5,7 @@ import org.jetbrains.annotations.UnmodifiableView;
 import roj.archive.ArchiveEntry;
 import roj.archive.ArchiveFile;
 import roj.archive.zip.InflateInputStream;
+import roj.io.IOUtil;
 import roj.io.LimitInputStream;
 import roj.util.ByteList;
 
@@ -12,16 +13,14 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.nio.ByteOrder;
-import java.nio.MappedByteBuffer;
-import java.nio.channels.FileChannel;
 import java.util.AbstractCollection;
 import java.util.Collection;
 import java.util.Iterator;
 import java.util.NoSuchElementException;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.zip.ZipException;
 
-final class TinyArchive implements ArchiveFile {
+final class TinyArchive implements ArchiveFile<ArchiveEntry> {
 	static int nextPowerOfTwo(int cap) {
 		int n = -1 >>> Integer.numberOfLeadingZeros(cap - 1);
 		return (n < 0) ? 1 : (n >= 1073741824) ? 1073741824 : n + 1;
@@ -120,31 +119,114 @@ final class TinyArchive implements ArchiveFile {
 	}
 
 	public void readZip() throws IOException {
-		var r = this.r;
+		final int MAX_EOCD_SEARCH = 65535 + 22;
 
-		long off = Math.max(r.in.length()-4096, 0);
-		MappedByteBuffer mb = r.in.getChannel().map(FileChannel.MapMode.READ_ONLY, off, r.in.length()-off);
-		mb.order(ByteOrder.BIG_ENDIAN);
+		DataIn r = this.r;
+		var tmp = new byte[512];
 
-		int pos = mb.capacity()-3;
-		while (pos > 0) {
-			if ((mb.get(--pos) & 0xFF) != 'P') continue;
+		long fileSize = r.in.length();
+		long pos = fileSize - 18;
+		long lim = Math.max(0, fileSize - MAX_EOCD_SEARCH);
 
-			int field = mb.getInt(pos);
-			if (field == 0x504b0506) break;
+		long cenOffset = 0;
+		long cenLength = 0;
+
+		foundEOCD:
+		while (pos > lim+3) {
+			int toRead = (int) Math.min(pos - lim, 512);
+			long off = pos - toRead;
+
+			r.seek(off);
+			IOUtil.readFully(r, tmp, 0, toRead);
+
+			for (int i = toRead - 4; i >= 0; i--) {
+				if (tmp[i] != 'P'
+						|| tmp[i+1] != 'K'
+						|| tmp[i+2] != 0x05
+						|| tmp[i+3] != 0x06
+				) continue;
+
+				long endPos = off + i;
+				long zip64Pos = endPos - 20;
+
+				if (zip64Pos >= 0) {
+					r.seek(zip64Pos);
+
+					// 提前检查zip64，减少IO次数
+					if (r.readInt() == 0x504b0607) {
+						IOUtil.skipFully(r, 4);
+						endPos = zip64Pos = r.readLongLE();
+						IOUtil.skipFully(r, 8);
+					} else {
+						zip64Pos = -1;
+						IOUtil.skipFully(r, 20);
+					}
+				} else {
+					r.seek(endPos + 4);
+				}
+
+				boolean endNeedZip64;
+				try {
+					IOUtil.skipFully(r, 6);
+					count = r.readUnsignedShortLE();
+					cenLength = r.readIntLE() & 0xFFFFFFFFL;
+					cenOffset = r.readIntLE() & 0xFFFFFFFFL;
+					int commentLen = r.readUnsignedShortLE();
+					IOUtil.skipFully(r, commentLen);
+					endNeedZip64 = cenLength == 0xFFFFFFFFL || cenOffset == 0xFFFFFFFFL || count == 0xFFFF;
+				} catch (IOException ignored) {
+					continue;
+				}
+
+				// Verify EOCD
+				if (r.position() != r.in.length()) continue;
+
+				if (endNeedZip64 && zip64Pos >= 0) {
+					r.seek(zip64Pos);
+
+					IOUtil.skipFully(r, 28);
+
+					count = Math.toIntExact(r.readLongLE());
+					cenLength = r.readLongLE();
+					cenOffset = r.readLongLE();
+				}
+
+				if (cenOffset + cenLength > endPos) throw new ZipException("invalid END header (bad central directory size)");
+				if (endPos - cenLength < 0) throw new ZipException("invalid END header (bad central directory offset)");
+
+				pos = -1;
+				break foundEOCD;
+			}
+
+			pos = off + 3;
 		}
-		// have no way to unload this;
 
-		r.seek(off+pos+10);
+		files = new Entry[nextPowerOfTwo(count)];
 
-		int size = r.readUShortLE();
-		count = size;
-		size = nextPowerOfTwo(size);
-		files = new Entry[size];
-		r.skip(4);
-		int pos1 = r.readIntLE();
-		r.seek(pos1);
-		while (r.readInt() == 0x504b0102) readEntry(r);
+		if (count == 0) {
+			if (pos >= 0) throw new ZipException("zip END header not found");
+			return;
+		}
+
+		r.seek(cenOffset);
+
+		long endPos = cenOffset + cenLength;
+		int size = 0;
+		while (true) {
+			if (r.readInt() != 0x504b0102) throw new ZipException("invalid CEN header (bad signature)");
+
+			size++;
+			readEntry(r);
+
+			long remain = endPos - r.position();
+			if (remain <= 0) {
+				if (remain != 0)
+					throw new ZipException("invalid END header (bad central directory size)");
+				break;
+			}
+		}
+
+		if (size != count) throw new ZipException("invalid END header (bad central directory count)");
 
 		r.close();
 	}
@@ -153,14 +235,14 @@ final class TinyArchive implements ArchiveFile {
 
 		r.skip(4);
 
-		int flags = r.readUShortLE();
-		int method = r.readUShortLE();
+		int flags = r.readUnsignedShortLE();
+		int method = r.readUnsignedShortLE();
 
 		r.skip(8);
 		v.len = r.readIntLE(); //cSize
 		int uSize = r.readIntLE();
-		int nameLen = r.readUShortLE();
-		int toSkip = r.readUShortLE()+r.readUShortLE();
+		int nameLen = r.readUnsignedShortLE();
+		int toSkip = r.readUnsignedShortLE()+r.readUnsignedShortLE();
 		r.skip(8);
 		long locPos = r.readIntLE()&0xFFFFFFFFL;
 

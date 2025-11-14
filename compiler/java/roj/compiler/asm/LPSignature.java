@@ -9,8 +9,11 @@ import roj.compiler.CompileContext;
 import roj.compiler.api.Types;
 import roj.compiler.diagnostic.Kind;
 
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+
+import static roj.asm.type.IType.UNBOUNDED_WILDCARD;
 
 public final class LPSignature extends Signature {
 	public static final List<IType> UNBOUNDED_TYPE_PARAM = Collections.singletonList(Types.OBJECT_TYPE);
@@ -64,7 +67,9 @@ public final class LPSignature extends Signature {
 		if (mn == null) {
 			// field
 			if (returns != null) {
-				values = Collections.singletonList(returns instanceof LavaParameterizedType gp ? applyTypeParam(gp) : returns);
+				// values must be mutable
+				//noinspection ArraysAsListWithZeroOrOneArgument
+				values = Arrays.asList(returns instanceof LavaParameterizedType gp ? applyTypeParam(gp) : returns);
 				returns = null;
 			}
 			return;
@@ -92,7 +97,7 @@ public final class LPSignature extends Signature {
 	}
 
 	public IType applyTypeParam(IType type) {
-		if (type == WildcardType.anyGeneric) return type;
+		if (type == WildcardType.anyGeneric || type.kind() == UNBOUNDED_WILDCARD) return type;
 
 		String owner = type.owner();
 		if (owner == null) return type;
@@ -138,9 +143,9 @@ public final class LPSignature extends Signature {
 	}
 
 	public boolean isTypeParam(String name) {return typeVariables.get(name) != null;}
-	public Type typeParamToBound(Type type) {
-		var types = typeVariables.get(type.owner);
-		if (types == null) return type;
+	public Type typeParamToBound(IType type) {
+		var types = typeVariables.get(type instanceof TypeVariable tv ? tv.name : type.owner());
+		if (types == null) return type.rawType();
 
 		for(;;) {
 			var gt = types.get(0);

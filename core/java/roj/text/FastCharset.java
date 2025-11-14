@@ -1,6 +1,7 @@
 package roj.text;
 
 import org.jetbrains.annotations.Nullable;
+import roj.compiler.runtime.SwitchMap;
 import roj.util.*;
 
 import java.io.IOException;
@@ -29,16 +30,26 @@ public abstract class FastCharset {
 	public static FastCharset UTF16LE() {return JVM.BIG_ENDIAN ? UTF16i.INSTANCE : UTF16n.INSTANCE;}
 	public static FastCharset UTF16BE() {return JVM.BIG_ENDIAN ? UTF16n.INSTANCE : UTF16i.INSTANCE;}
 	@Nullable public static FastCharset getInstance(Charset charset) {
-		return switch (charset.name()) {
-			case "UTF-8" -> UTF8.INSTANCE;
-			case "ISO-8859-1" -> LATIN1.INSTANCE;
-			case "GB2312", "x-mswin-936", "GBK", "GB18030" -> GB18030.INSTANCE;
-			case "UTF-16" -> UTF16n.INSTANCE;
-			case "UTF-16LE", "UTF-16BE" ->
-					JVM.BIG_ENDIAN == charset.name().equals("UTF-16BE") ? UTF16n.INSTANCE : UTF16i.INSTANCE;
+		return switch (CHARSET_LOOKUP.get(charset.name())) {
+			case 1 -> UTF8.INSTANCE;
+			case 2 -> LATIN1.INSTANCE;
+			case 3 -> GB18030.INSTANCE;
+			case 4 -> UTF16n.INSTANCE;
+			case 5 -> UTF16i.INSTANCE;
 			default -> null;
 		};
 	}
+	private static final SwitchMap CHARSET_LOOKUP = SwitchMap.Builder.builder(9, true)
+			.add("UTF-8", 1)
+			.add("ISO-8859-1", 2)
+			.add("GB2312", 3)
+			.add("x-mswin-936", 3)
+			.add("GBK", 3)
+			.add("GB18030", 3)
+			.add("UTF-16", 4)
+			.add("UTF-16LE", !JVM.BIG_ENDIAN ? 4 : 5)
+			.add("UTF-16BE",  JVM.BIG_ENDIAN ? 4 : 5)
+			.build();
 
 	/**
 	 * @return 字符集规范名称

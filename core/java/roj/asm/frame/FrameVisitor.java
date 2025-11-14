@@ -333,7 +333,7 @@ public class FrameVisitor extends SizeVisitor {
 				case LSHL, LSHR, LUSHR -> pop(T_INT);
 				case DADD, DSUB, DMUL, DDIV, DREM -> math(T_DOUBLE);
 				case LDC -> ldc(cp.constants().get(r.readUnsignedByte()-1));
-				case LDC_W, LDC2_W -> ldc(cp.get(r));
+				case LDC_W, LDC2_W -> ldc(cp.resolve(r));
 				case BIPUSH -> {
 					push(T_INT);
 					r.rIndex += 1;
@@ -426,13 +426,13 @@ public class FrameVisitor extends SizeVisitor {
 					pop(T_INT);
 					pop();
 				}
-				case PUTFIELD, GETFIELD, PUTSTATIC, GETSTATIC -> field(code, cp.getRef(r, true));
-				case INVOKEVIRTUAL, INVOKESPECIAL, INVOKESTATIC -> invoke(code, cp.getRef(r, false));
+				case PUTFIELD, GETFIELD, PUTSTATIC, GETSTATIC -> field(code, cp.resolveMember(r, true));
+				case INVOKEVIRTUAL, INVOKESPECIAL, INVOKESTATIC -> invoke(code, cp.resolveMember(r, false));
 				case INVOKEINTERFACE -> {
-					invoke(code, cp.get(r));
+					invoke(code, cp.resolve(r));
 					r.rIndex += 2;
 				}
-				case INVOKEDYNAMIC -> invokeDynamic(cp.get(r), r.readUnsignedShort());
+				case INVOKEDYNAMIC -> invokeDynamic(cp.resolve(r), r.readUnsignedShort());
 				case NEWARRAY -> {
 					pop(T_INT);
 					sb.clear();
@@ -445,13 +445,13 @@ public class FrameVisitor extends SizeVisitor {
 					push(T_INT);
 				}
 				case NEW -> {
-					Var2 var2 = of(T_UNINITIAL, cp.getRefName(r, Constant.CLASS));
+					Var2 var2 = of(T_UNINITIAL, cp.resolveName(r, Constant.CLASS));
 					var2.pc = pc;
 					push(var2);
 				}
 				case ANEWARRAY -> {
 					pop(T_INT);
-					String className = cp.getRefName(r, Constant.CLASS);
+					String className = cp.resolveName(r, Constant.CLASS);
 					if (className.endsWith(";") || className.startsWith("[")) push("[".concat(className));
 					else {
 						sb.clear();
@@ -460,10 +460,10 @@ public class FrameVisitor extends SizeVisitor {
 				}
 				case CHECKCAST -> {
 					pop();
-					push(cp.getRefName(r, Constant.CLASS));
+					push(cp.resolveName(r, Constant.CLASS));
 				}
 				case MULTIANEWARRAY -> {
-					var arrayType = cp.getRefName(r, Constant.CLASS);
+					var arrayType = cp.resolveName(r, Constant.CLASS);
 					int arrayDepth = r.readUnsignedByte();
 					while (arrayDepth-- > 0) pop(T_INT);
 					push(arrayType);
@@ -825,7 +825,7 @@ public class FrameVisitor extends SizeVisitor {
 	private static Var2 getVar(ConstantPool pool, DynByteBuf r, AbstractCodeWriter pc, String owner) {
 		byte type = r.readByte();
 		return switch (type) {
-			case T_REFERENCE -> new Var2(type, pool.getRefName(r, Constant.CLASS));
+			case T_REFERENCE -> new Var2(type, pool.resolveName(r, Constant.CLASS));
 			case T_UNINITIAL -> new Var2(pc._monitor(r.readUnsignedShort()));
 			case T_UNINITIAL_THIS -> new Var2(type, owner);
 			default -> of(type, null);

@@ -1,13 +1,12 @@
 package roj.ci;
 
 import org.jetbrains.annotations.NotNull;
-import roj.archive.qz.*;
-import roj.archive.qz.util.QZArchiver;
+import roj.archive.sevenz.*;
+import roj.archive.sevenz.util.SevenZArchiver;
 import roj.archive.xz.LZMA2Options;
-import roj.archive.zip.ZEntry;
-import roj.archive.zip.ZipArchive;
-import roj.archive.zip.ZipFileWriter;
-import roj.archive.zip.ZipOutput;
+import roj.archive.zip.ZipEditor;
+import roj.archive.zip.ZipEntry;
+import roj.archive.zip.ZipPacker;
 import roj.asm.ClassNode;
 import roj.asmx.AnnotationRepo;
 import roj.asmx.ClassResource;
@@ -63,7 +62,6 @@ import java.util.concurrent.Future;
 import java.util.concurrent.locks.LockSupport;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.zip.Deflater;
-import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
 import static roj.ci.BuildContext.*;
@@ -134,6 +132,8 @@ public final class MCMake {
 
 	@SuppressWarnings({"fallthrough"})
 	public static void main(String[] args) throws Exception {
+		JVM.AccurateTimer.setEventDriven();
+
 		var parser = new YamlParser();
 		var value = parser.parse(IOUtil.getTextResourceIL("config.schema.yml"));
 		configSchema = CONFIG.read(value, Schema.class);
@@ -201,8 +201,6 @@ public final class MCMake {
 			System.out.println("使用支持ANSI转义的终端以获得更好的体验");
 			Tty.pushHandler(COMMANDS);
 		}
-
-		JVM.AccurateTimer.parkForMe();
 	}
 
 	private static void registerCommands() {
@@ -314,12 +312,12 @@ public final class MCMake {
 		c.register(literal("zip").then(argument("路径", Argument.file()).executes(ctx -> {
 			var file = ctx.argument("路径", File.class);
 			if (file.getName().endsWith(".7z")) {
-				try (var qz = new QZArchive(new FileSource(file))) {
-					QZFileWriter qzfw = qz.append();
+				try (var qz = new SevenZFile(new FileSource(file))) {
+					SevenZPacker qzfw = qz.append();
 
-					ArrayList<QZEntry> emptyFiles = qzfw.getEmptyFiles();
+					ArrayList<SevenZEntry> emptyFiles = qzfw.getEmptyFiles();
 					for (int i = emptyFiles.size() - 1; i >= 0; i--) {
-						QZEntry emptyFile = emptyFiles.get(i);
+						SevenZEntry emptyFile = emptyFiles.get(i);
 						if (emptyFile.isDirectory() && emptyFile.getName().contains("/")) {
 							qzfw.removeEmptyFile(i);
 						}
@@ -329,8 +327,8 @@ public final class MCMake {
 				}
 				return;
 			}
-			try (ZipArchive za = new ZipArchive(file)) {
-				for (ZEntry ze : za.entries()) {
+			try (ZipEditor za = new ZipEditor(file)) {
+				for (ZipEntry ze : za.entries()) {
 					if (ze.getName().endsWith("/")) {
 						za.put(ze.getName(), null);
                         if (ze.getSize() != 0) {
@@ -367,8 +365,8 @@ public final class MCMake {
 		c.register(literal("fuck_javac").then(argument("version", Argument.number(6, JVM.VERSION)).then(argument("jarFile", Argument.file()).executes(ctx -> {
 			var targetVersion = ClassNode.JavaVersion(ctx.argument("version", Integer.class));
 			var targetJar = ctx.argument("jarFile", File.class);
-			try (var za = new ZipArchive(targetJar)) {
-				for (ZEntry entry : za.entries()) {
+			try (var za = new ZipEditor(targetJar)) {
+				for (ZipEntry entry : za.entries()) {
 					if (entry.getName().endsWith(".class")) {
 						ByteList r = IOUtil.getSharedByteBuf().readStreamFully(za.getInputStream(entry));
 						r.setInt(4, targetVersion);
@@ -439,7 +437,7 @@ public final class MCMake {
 	public static void importExportWorkspace(CommandNode node) {
 		node.then(literal("import").then(argument("工作空间归档", Argument.file()).executes(ctx -> {
 			File archiveFile = ctx.argument("工作空间归档", File.class);
-			try (var archive = new QZArchive(archiveFile);
+			try (var archive = new SevenZFile(archiveFile);
 				 var bar = new EasyProgressBar("导入工作空间", "B")) {
 				archive.setMemoryLimitKb(26214400);
 
@@ -458,7 +456,7 @@ public final class MCMake {
 				}
 
 				bar.setName("导入"+workspace.id);
-				for (QZEntry entry : archive.entries()) {
+				for (SevenZEntry entry : archive.entries()) {
 					if (entry.getName().equals("workspace.yml")) continue;
 					bar.addTotal(entry.getSize());
 				}
@@ -500,9 +498,9 @@ public final class MCMake {
 
 				for (var itr = filenameMapping.entrySet().iterator(); itr.hasNext(); ) {
 					Map.Entry<String, Object> generalizedEntry = Helpers.cast(itr.next());
-					generalizedEntry.setValue(new ZipFileWriter(((File) generalizedEntry.getValue()), Deflater.BEST_COMPRESSION, 0));
+					generalizedEntry.setValue(new ZipPacker(((File) generalizedEntry.getValue()), Deflater.BEST_COMPRESSION, 0));
 				}
-				Map<String, ZipFileWriter> libraryWriter = Helpers.cast(filenameMapping);
+				Map<String, ZipPacker> libraryWriter = Helpers.cast(filenameMapping);
 
 				if (workspace.mapping != null) {
 					workspace.mapping = new File(CACHE_PATH, "ws-"+workspace.id+"-mapping.lzma");
@@ -517,17 +515,17 @@ public final class MCMake {
 					if (i < 0) {
 						var file = workspace.mapping;
 						if (file != null) try (var out = new FileOutputStream(file)) {
-							QZArchiver.copyStreamWithProgress(in1, out, bar);
+							SevenZArchiver.copyStreamWithProgress(in1, out, bar);
 						} catch (IOException e) {
 							e.printStackTrace();
 						}
 					} else {
-						ZipFileWriter zfw = libraryWriter.get(pathname.substring(0, i));
+						ZipPacker zfw = libraryWriter.get(pathname.substring(0, i));
 						pathname = pathname.substring(i+1);
 						synchronized (zfw) {
 							try {
-								zfw.beginEntry(new ZEntry(pathname));
-								QZArchiver.copyStreamWithProgress(in1, zfw, bar);
+								zfw.beginEntry(new ZipEntry(pathname));
+								SevenZArchiver.copyStreamWithProgress(in1, zfw, bar);
 							} catch (IOException e) {
 								e.printStackTrace();
 							}
@@ -535,7 +533,7 @@ public final class MCMake {
 					}
 				});
 				monitor.await();
-				for (ZipFileWriter zfw : libraryWriter.values()) zfw.close();
+				for (ZipPacker zfw : libraryWriter.values()) zfw.close();
 
 				if (!monitor.isCancelled()) {
 					var ws = new Workspace(workspace);
@@ -549,10 +547,10 @@ public final class MCMake {
 		}))).then(literal("export").then(argument("工作空间名称", Argument.oneOf(MCMake.workspaces)).executes(ctx -> {
 			Workspace space = MCMake.CONFIG.reader(Workspace.class).copyOf(ctx.argument("工作空间名称", Workspace.class));
 
-			try (var qzfw = new QZFileWriter("workspace-"+space.id()+".7z");
+			try (var qzfw = new SevenZPacker("workspace-"+space.id()+".7z");
 				 var bar = new EasyProgressBar("导出"+space.id(), "B")) {
 
-				bar.setUnlimited();
+				bar.setIndeterminate();
 
 				var files = new ArrayList<>(space.getDepend());
 				files.addAll(space.getMappedDepend());
@@ -567,11 +565,11 @@ public final class MCMake {
 							out.setCodec(new LZMA2(new LZMA2Options(9).setDictSize(16777216)));
 
 							while (true) {
-								ZipEntry entry = in.getNextEntry();
+								java.util.zip.ZipEntry entry = in.getNextEntry();
 								if (entry == null || entry.isDirectory()) break;
 
-								out.beginEntry(QZEntry.of(file.getName()+"/"+entry));
-								QZArchiver.copyStreamWithProgress(in, out, bar);
+								out.beginEntry(SevenZEntry.of(file.getName()+"/"+entry));
+								SevenZArchiver.copyStreamWithProgress(in, out, bar);
 							}
 						}
 					});
@@ -583,15 +581,15 @@ public final class MCMake {
 
 				File mapping = space.mapping;
 				if (mapping != null) {
-					qzfw.beginEntry(QZEntry.of(mapping.getName()));
+					qzfw.beginEntry(SevenZEntry.of(mapping.getName()));
 					try (var in = new FileInputStream(mapping)) {
-						QZArchiver.copyStreamWithProgress(in, qzfw, bar);
+						SevenZArchiver.copyStreamWithProgress(in, qzfw, bar);
 					}
 				}
 
 				qzfw.setCodec(new LZMA2(new LZMA2Options(9).setDictSize(524288)));
 
-				qzfw.beginEntry(QZEntry.of("workspace.yml"));
+				qzfw.beginEntry(SevenZEntry.of("workspace.yml"));
 				CONFIG.write(ConfigMaster.YAML, space.conf, IOUtil.getSharedByteBuf()).writeToStream(qzfw);
 				bar.end("成功");
 			}
@@ -603,33 +601,33 @@ public final class MCMake {
 			Project proj = ctx.argument("项目名称", Project.class);
 			File projectRoot = proj.root;
 
-			QZArchiver arc = new QZArchiver();
+			SevenZArchiver arc = new SevenZArchiver();
 			arc.inputDirectories = Collections.singletonList(projectRoot);
 			//arc.threads = 0;
-			arc.updateMode = QZArchiver.UM_REPLACE;
-			arc.pathFormat = QZArchiver.PF_RELATIVE;
+			arc.updateMode = SevenZArchiver.UM_REPLACE;
+			arc.pathFormat = SevenZArchiver.PF_RELATIVE;
 			arc.storeModifiedTime = true;
 			arc.storeSymbolicLinks = true;
 			arc.storeHardLinks = true;
 			arc.solidSize = Long.MAX_VALUE;
 			arc.options.setPreset(9).setDictSize(4194304);
 			arc.useFilter = true;
-			arc.cacheDirectory = BASE;
 			arc.outputDirectory = BASE;
 			arc.outputFilename = "mcmake-project-"+proj.getSafeName()+"-"+ DateFormat.format("Ymd", System.currentTimeMillis())+".7z";
 
 			arc.prepare();
+			arc.organize();
 			String ymldata = CONFIG.write(ConfigMaster.YAML, proj.conf, IOUtil.getSharedCharBuf()).toString();
-			arc.appendBinary(new QZCoder[]{Copy.INSTANCE}, Collections.singletonList(ymldata), Collections.singletonList(QZEntry.of("project.yml")));
+			arc.appendChunk(new SevenZCodec[]{Copy.INSTANCE}, Collections.singletonList(ymldata), Collections.singletonList(SevenZEntry.of("project.yml")));
 
 			try (var bar = new EasyProgressBar("导出项目")) {
-				arc.compress(TaskPool.cpu(), bar);
+				arc.compress(TaskPool.cpu().newGroup(), bar);
 			}
 		})))
 		.then(literal("import").then(argument("项目归档", Argument.file()).executes(ctx -> {
 			File archiveFile = ctx.argument("项目归档", File.class);
 
-			try (var archive = new QZArchive(archiveFile);
+			try (var archive = new SevenZFile(archiveFile);
 				 var bar = new EasyProgressBar("导入项目", "B")) {
 				InputStream in = archive.getInputStream("project.yml");
 				if (in == null) {
@@ -660,7 +658,7 @@ public final class MCMake {
 				}
 
 				bar.setName("导入"+pojo.name);
-				for (QZEntry entry : archive.entries()) {
+				for (SevenZEntry entry : archive.entries()) {
 					if (entry.getName().equals("project.yml")) continue;
 					bar.addTotal(entry.getSize());
 				}
@@ -672,7 +670,7 @@ public final class MCMake {
 					file.getParentFile().mkdirs();
 
 					try (var out = new FileOutputStream(file)) {
-						QZArchiver.copyStreamWithProgress(in1, out, bar);
+						SevenZArchiver.copyStreamWithProgress(in1, out, bar);
 					} catch (IOException e) {
 						e.printStackTrace();
 					}
@@ -922,7 +920,7 @@ public final class MCMake {
 	}
 	// region Build
 	private static boolean compile(Set<String> args, Project p) throws IOException {
-		int increment = p.unmappedJar.length() != 0 && !args.contains("full") ? INC_UPDATE : INC_FULL;
+		int increment = p.unmappedJar.length() > 22 && !args.contains("full") ? INC_UPDATE : INC_FULL;
 
 		Profiler.startSection("environment");
 
@@ -951,7 +949,7 @@ public final class MCMake {
 	}
 	private static boolean build(Set<String> args, Project p, File artifact) throws IOException {
 		boolean needCompile = p.conf.type.needCompile();
-		int increment = (p.unmappedJar.length() == 0 && needCompile) || args.contains("full") ? INC_FULL
+		int increment = (p.unmappedJar.length() <= 22 && needCompile) || args.contains("full") ? INC_FULL
 				: artifact.isFile() ? INC_UPDATE : INC_REBUILD;
 
 		Profiler.startSection("environment");
@@ -976,36 +974,38 @@ public final class MCMake {
 
 		Future<Integer> resources = TaskPool.cpu().submit(p.getAsyncResourceWriter(context));
 
+		List<Context> changed;
+		int resourceUpdated;
+
 		Profiler.endStartSection("compile");
-		if (!compile(args, p, context)) {
+		try {
+			if (!compile(args, p, context)) return false;
+
+			changed = context.getChangedClasses();
+
+			Profiler.endStartSection("getDependencyClasses");
+			for (var dependency : p.getBundledDependencies())
+				dependency.getClasses(context);
+
+			Profiler.endStartSection("afterCompile");
+			int oldSize = changed.size();
+			changed = context.afterCompile();
+			log.debug("afterCompile hook({}): changed {} => {}", context.incrementLevel, oldSize, changed.size());
+
+			Profiler.endStartSection("writeResource");
+			try {
+				resourceUpdated = resources.get();
+			} catch (Exception e) {
+				log.error("资源更新失败["+p.getName()+"]", e);
+				return false;
+			}
+		} finally {
 			Profiler.endStartSection("writeResource [FAILURE]");
 			resources.cancel(false);
 			try {
 				resources.get();
 			} catch (Exception ignored) {}
-
 			Profiler.endSection();
-			return false;
-		}
-
-		var changed = context.getChangedClasses();
-
-		Profiler.endStartSection("getDependencyClasses");
-		for (var dependency : p.getBundledDependencies())
-			dependency.getClasses(context);
-
-		Profiler.endStartSection("afterCompile");
-		int oldSize = changed.size();
-		changed = context.afterCompile();
-		log.debug("afterCompile hook({}): changed {} => {}", context.incrementLevel, oldSize, changed.size());
-
-		int resourceUpdated;
-		Profiler.endStartSection("writeResource");
-		try {
-			resourceUpdated = resources.get();
-		} catch (Exception e) {
-			log.error("资源更新失败["+p.getName()+"]", e);
-			return false;
 		}
 
 		Profiler.endStartSection("writeClasses");
@@ -1021,7 +1021,7 @@ public final class MCMake {
 		}
 
 		if (context.incrementLevel > INC_REBUILD) {
-			ZipArchive writer = mappedWriter.getArchive();
+			ZipEditor writer = mappedWriter.getArchive();
 			for (String className : context.getRemovedClasses()) {
 				boolean replaced = writer.createMod(className).data != null;
 				log.trace(replaced ? "Replaced (in artifact) {}" : "Remove (in artifact) {}", className);
@@ -1157,12 +1157,12 @@ public final class MCMake {
 		context.setChangedClasses(compilerOutput);
 
 		ZipOutput unmappedWriter = p.unmappedWriter;
+		Profiler.startSection("update");
 		try {
 			unmappedWriter.begin(increment > 0);
 
 			var needUpdate = new HashSet<String>();
 
-			Profiler.startSection("update");
 			// 更新
 			for (int i = 0; i < outputs.size(); i++) {
 				var out = outputs.get(i);
@@ -1198,8 +1198,8 @@ public final class MCMake {
 			if (increment > 0) {
 				Profiler.endStartSection("remove");
 
-				ZipArchive za = unmappedWriter.getArchive();
-				for (ZEntry entry : za.entries()) {
+				ZipEditor za = unmappedWriter.getArchive();
+				for (ZipEntry entry : za.entries()) {
 					String className = entry.getName();
 					if (className.endsWith(".class")) {
 						int subClass = className.indexOf('$');
@@ -1225,15 +1225,13 @@ public final class MCMake {
 				for (int i = 0; i < compilerOutput.size(); i++) changedFiles.add(compilerOutput.get(i).getFileName());
 
 				int count = 0;
-				ZipArchive za = unmappedWriter.getArchive();
-				for (ZEntry ze : za.entries()) {
+				ZipEditor za = unmappedWriter.getArchive();
+				for (ZipEntry ze : za.entries()) {
 					if (!changedFiles.contains(ze.getName())) {
 						count++;
 						context.addClass(new Context(ze.getName(), za.get(ze)), null, false);
 					}
 				}
-
-				Profiler.endSection();
 
 				log.debug("Loaded {} classes from build cache.", count);
 			}
@@ -1272,7 +1270,6 @@ public final class MCMake {
 		}
 
 		try (var zf = p.mappedWriter.getArchive()) {
-			zf.reopen();
 			JarVerifier.signJar(zf, result.certificate_chain, result.private_key, result.options);
 			zf.save();
 		}

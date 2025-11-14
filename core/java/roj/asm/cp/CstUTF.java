@@ -22,7 +22,7 @@ public final class CstUTF extends Constant {
 
 	CstUTF() {}
 	CstUTF(Object b) {data = b;}
-	CstUTF(String b) {data = b;ConstantPool.verifyUtf(b);}
+	CstUTF(String b) {data = b;ConstantPool.verifyUtfLength(b);}
 
 	public String str() {
 		Object data = this.data; // non-volatile read

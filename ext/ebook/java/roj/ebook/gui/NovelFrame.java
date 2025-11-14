@@ -187,22 +187,18 @@ public class NovelFrame extends JFrame {
 		uiChapters.addMouseListener(uxChapterClick);
 
 		btnDelByLen.addActionListener(e -> {
-			initChapters();
-
 			String s = JOptionPane.showInputDialog(this, "长度 (以!开始来小于等于)");
 			boolean lss = s.startsWith("!");
 			if (lss) s = s.substring(1);
 			int i = Integer.parseInt(s);
-			for (int j = chapters.size() - 1; j >= 0; j--) {
-				Chapter c = chapters.get(j);
+			List<Chapter> children = ((Chapter) chaptersTree.getRoot()).children;
+			for (int j = children.size() - 1; j >= 0; j--) {
+				Chapter c = children.get(j);
 				int len = (c.text == null ? c.end - c.start : c.text.length());
 				if (lss ? len <= i : len == i) {
-					chapters.remove(j);
+					children.remove(j);
 				}
 			}
-			List<Chapter> children = ((Chapter) chaptersTree.getRoot()).children;
-			children.clear();
-			children.addAll(chapters);
 			chaptersTree.reload();
 		});
 

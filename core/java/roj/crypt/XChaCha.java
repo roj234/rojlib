@@ -13,6 +13,7 @@ import java.security.SecureRandom;
  */
 final class XChaCha extends ChaCha {
 	XChaCha() {}
+	XChaCha(int rounds) {super(rounds);}
 
 	int[] keyIv;
 
@@ -54,7 +55,7 @@ final class XChaCha extends ChaCha {
 		Key[14] = keyIv[12]; // Nonce
 		Key[15] = keyIv[13];
 
-		Round(Tmp);
+		Round(Tmp, rounds);
 
 		// SubKey
 		Key[4] = Tmp[0];

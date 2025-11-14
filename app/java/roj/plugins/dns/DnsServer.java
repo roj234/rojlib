@@ -410,14 +410,14 @@ public class DnsServer implements ChannelHandler {
 		 * 2 STATUS  DNS状态请求
 		 * 5 UPDATE  DNS域更新请求
 		 */
-		query.opcode = (char) br.readBit(4);
+		query.opcode = (char) br.readBits(4);
 		br.skipBits(2);
         /*int AA = r.readBit1();
         int TC = r.readBit1();*/
 		/**
 		 * 如果可行的话，执行递归查询
 		 */
-		query.iterate = br.readBit1() == 1;
+		query.iterate = br.read1Bit() == 1;
 
 		r.rIndex++;
         /*int RA = r.readBit1();
@@ -639,18 +639,16 @@ public class DnsServer implements ChannelHandler {
 		 * 2 STATUS  DNS状态请求
 		 * 5 UPDATE  DNS域更新请求
 		 */
-		resp.opcode = (char) r.readBit(4);
-		resp.authorizedAnswer = r.readBit1() != 0; // 授权回答
-		resp.truncated = r.readBit1() != 0; // TC
+		resp.opcode = (char) r.readBits(4);
+		resp.authorizedAnswer = r.read1Bit() != 0; // 授权回答
+		resp.truncated = r.read1Bit() != 0; // TC
 		r.skipBits(1); // RD
-		resp.iterate = r.readBit1() != 0; // RA
+		resp.iterate = r.read1Bit() != 0; // RA
 		r.skipBits(3);
 		// Z
 		// AD // Authorization ??
 		// CD // Not-Authorization data ??
-		resp.responseCode = (byte) r.readBit(4);
-
-		r.endBitRead();
+		resp.responseCode = (byte) r.readBits(4);
 
 		int numQst = r1.readUnsignedShort();
 		int numRes = r1.readUnsignedShort();

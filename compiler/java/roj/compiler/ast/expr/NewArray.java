@@ -108,7 +108,7 @@ public final class NewArray extends Expr {
 						castType = TypeCast.IMPLICIT;
 						break ok;
 					}
-
+				} else {
 					isAllConstant = false;
 				}
 				sourceType = node.type();

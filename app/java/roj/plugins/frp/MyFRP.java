@@ -78,6 +78,7 @@ public class MyFRP implements ChannelHandler {
 	}
 
 	public static void main(String[] args) throws Exception {
+		JVM.AccurateTimer.setEventDriven();
 		System.out.println("程序版本: "+Constants.PROTOCOL_VERSION);
 
 		PrintStream o = System.out;
@@ -103,7 +104,6 @@ public class MyFRP implements ChannelHandler {
 
 		new MyFRP().start(new File(args[0]));
 		Constants.registerShutdownHook(loop);
-		JVM.AccurateTimer.parkForMe();
 	}
 
 	private void start(File file) throws Exception {

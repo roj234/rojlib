@@ -18,7 +18,7 @@ public final class ZipCrypto extends RCipher {
 
 	public boolean encrypt;
 
-	public void init(int mode, byte[] key) {
+	public void init(boolean encrypt, byte[] key) {
 		int key0 = 0x12345678;
 		int key1 = 0x23456789;
 		int key2 = 0x34567890;
@@ -33,9 +33,9 @@ public final class ZipCrypto extends RCipher {
 		this.key0 = key0;
 		this.key1 = key1;
 		this.key2 = key2;
-		this.encrypt = RCipher.ENCRYPT_MODE == mode;
+		this.encrypt = encrypt;
 	}
-	public void init(int mode, byte[] key, AlgorithmParameterSpec config, SecureRandom random) { init(mode, key); }
+	public void init(boolean encrypt, byte[] key, AlgorithmParameterSpec config, SecureRandom random) { init(encrypt, key); }
 
 	@Override
 	public void crypt(DynByteBuf in, DynByteBuf out) throws ShortBufferException {

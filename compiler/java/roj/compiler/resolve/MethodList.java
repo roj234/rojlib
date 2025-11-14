@@ -1,6 +1,6 @@
 package roj.compiler.resolve;
 
-import roj.asm.ClassDefinition;
+import roj.asm.ClassNode;
 import roj.asm.ClassUtil;
 import roj.asm.MethodNode;
 import roj.asm.Opcodes;
@@ -34,13 +34,13 @@ import java.util.Map;
  * @since 2024/1/28 5:41
  */
 final class MethodList extends ComponentList {
-	ClassDefinition owner;
+	ClassNode owner;
 	final ArrayList<MethodNode> methods = new ArrayList<>();
 	private int childId;
 	private HashMap<String, List<MethodNode>> ddtmp = new HashMap<>();
 	private BitSet overrider;
 
-	void add(ClassDefinition klass, MethodNode mn) {
+	void add(ClassNode klass, MethodNode mn) {
 		// 忽略改变返回类型的重载的parent (a.k.a 如果有对应的桥接方法，就不去父类查询了)
 		var list = ddtmp.computeIfAbsent(Type.getMethodDescriptor(mn.parameters()), Helpers.fnArrayList());
 		for (int i = 0; i < list.size(); i++) {
@@ -61,7 +61,7 @@ final class MethodList extends ComponentList {
 	 * @param klass 所有者
 	 * @return 是否可以压缩为MethodListSingle
 	 */
-	boolean pack(ClassDefinition klass) {
+	boolean pack(ClassNode klass) {
 		ddtmp = null;
 		owner = klass;
 

@@ -7,15 +7,14 @@ import roj.collect.ArrayList;
 import roj.collect.BitSet;
 import roj.collect.Int2IntMap;
 import roj.collect.TrieTree;
-import roj.config.node.IntValue;
 import roj.io.IOUtil;
 import roj.util.FastFailException;
 import roj.util.Helpers;
 import roj.util.OperationDone;
+import roj.util.function.IntBiPredicate;
 
 import java.io.IOException;
 import java.util.List;
-import java.util.function.BiPredicate;
 
 import static roj.text.Token.*;
 
@@ -486,8 +485,12 @@ public class Tokenizer {
 	protected Token onSpecialToken(Token w) throws ParseException { throw new UnsupportedOperationException("unexpected error"); }
 
 	// region symbol matcher
-	private final IntValue matchLen = new IntValue();
-	private final BiPredicate<IntValue, Token> matcher = (kPos, v) -> isValidToken(kPos.value, v);
+	private int matchLen;
+	private final IntBiPredicate<Token> matcher = (kPos, v) -> {
+		boolean validToken = isValidToken(kPos, v);
+		if (validToken) matchLen = kPos;
+		return validToken;
+	};
 
 	protected final Token readSymbol() throws ParseException {
 		if (tokens != null) {
@@ -501,9 +504,10 @@ public class Tokenizer {
 		CharSequence in = input;
 		int i = index;
 
-		var w = tokens.querySequence(in, i, in.length(), matchLen, matcher);
+		matchLen = 0;
+		var w = tokens.querySequence(in, i, in.length(), matcher);
 		if (w == null) return null;
-		int bestMatchLen = matchLen.value;
+		int bestMatchLen = matchLen;
 
 		if (w.getClass() == Token.class) {
 			if (w.pos < 0) {

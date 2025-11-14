@@ -18,7 +18,7 @@ public interface LogAppender {
 	static LogAppender console() {
 		// allow System.setOut() to work properly
 		//noinspection Convert2MethodRef
-		return (sb) -> System.out.println(sb);
+		return (sb) -> System.out.print(sb);
 	}
 	static LogAppender appendTo(Appendable out) {return out::append;}
 	static LogAppender to(OutputStream out) { return new Stream(out, null); }

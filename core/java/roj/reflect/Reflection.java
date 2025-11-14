@@ -153,7 +153,7 @@ public final class Reflection {
 
 		ClassLoader classLoader = nestHost.getClassLoader();
 		if (classLoader == null) classLoader = ClassLoader.getSystemClassLoader();
-		Class<?> klass = defineClass(classLoader, nestHost, nestHost.getName()+"$R", buf.list, 0, buf.wIndex(), nestHost.getProtectionDomain(), flags);
+		Class<?> klass = defineClass(classLoader, nestHost, nestHost.getName()+"$R"/*+node.name()*/, buf.list, 0, buf.wIndex(), nestHost.getProtectionDomain(), flags);
 		try {
 			return U.allocateInstance(klass);
 		} catch (Throwable e) {
@@ -240,7 +240,9 @@ public final class Reflection {
 		static {
 			// simple java.lang.LiveStackFrame.getStackWalker() without SM checks
 			var optionType = Telescope.findClass("java.lang.StackWalker$ExtendedOption");
-			var localsAndOperands = U.getReference(optionType, Unsafe.objectFieldOffset(optionType, "LOCALS_AND_OPERANDS", optionType));
+			Telescope lookup = Telescope.trustedLookup();
+			Object localsAndOperandsField = lookup.findStatic(optionType, "LOCALS_AND_OPERANDS", optionType);
+			var localsAndOperands = U.getReference(lookup.staticFieldBase(localsAndOperandsField), lookup.staticFieldOffset(localsAndOperandsField));
 			BiFunction<Object, Object, StackWalker> fn = Helpers.cast(Bypass.builder(BiFunction.class).delegate_o(StackWalker.class, "newInstance", "apply").build());
 			LIVE = fn.apply(Collections.emptySet(), localsAndOperands);
 		}

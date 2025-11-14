@@ -1,7 +1,7 @@
 package roj.ci.plugin;
 
-import roj.archive.zip.ZEntry;
-import roj.archive.zip.ZipOutput;
+import roj.archive.zip.ZipEditor;
+import roj.archive.zip.ZipEntry;
 import roj.asm.ClassNode;
 import roj.asm.Opcodes;
 import roj.asm.insn.CodeWriter;
@@ -26,13 +26,17 @@ public class MyPackageList implements Plugin {
 				packages.add(name.substring(0, name.lastIndexOf('/')).replace('/', '.'));
 			}
 
-			ZipOutput artifact = ctx.artifact();
 			try {
-				for (ZEntry entry : artifact.getArchive().entries()) {
-					String name = entry.getName();
-					if (name.startsWith("META-INF/")) continue;
-					if (!name.endsWith(".class")) continue;
-					packages.add(name.substring(0, name.lastIndexOf('/')).replace('/', '.'));
+				ZipEditor archive = ctx.artifact().getArchiveIfPresent();
+				if (archive != null) {
+					for (ZipEntry entry : archive.entries()) {
+						String name = entry.getName();
+						if (name.startsWith("META-INF/")) continue;
+						if (!name.endsWith(".class")) continue;
+						packages.add(name.substring(0, name.lastIndexOf('/')).replace('/', '.'));
+					}
+				} else {
+					System.out.println("No ZipArchive present");
 				}
 			} catch (Exception e) {
 				e.printStackTrace();

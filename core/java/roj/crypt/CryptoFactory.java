@@ -110,6 +110,10 @@ public final class CryptoFactory extends Provider {
 	public static RCipher AES_GCM() {return new AES_GCM();}
 	public static RCipher ChaCha_Poly1305() {return new ChaCha_Poly1305(new ChaCha());}
 	public static RCipher XChaCha_Poly1305() {return new ChaCha_Poly1305(new XChaCha());}
+	public static RCipher XChaCha(int nrounds) {
+		if ((nrounds&1) != 0) throw new IllegalArgumentException("nrounds must be even");
+		return new XChaCha(nrounds/2);
+	}
 
 	//Hash
 	public static BufferedDigest SM3() {return new SM3();}
@@ -157,7 +161,7 @@ public final class CryptoFactory extends Provider {
 		siv = Arrays.copyOf(siv, 16);
 
 		var aes_ctr = new FeedbackCipher(CryptoFactory.AES(), FeedbackCipher.MODE_CTR);
-		aes_ctr.init(RCipher.ENCRYPT_MODE, key, new IvParameterSpecNC(siv), null);
+		aes_ctr.init(true, key, new IvParameterSpecNC(siv), null);
 		output.put(siv);
 		aes_ctr.cryptFinal(plaintext, output);
 	}
@@ -174,7 +178,7 @@ public final class CryptoFactory extends Provider {
 		int begin = output.wIndex();
 
 		var aes_ctr = new FeedbackCipher(CryptoFactory.AES(), FeedbackCipher.MODE_CTR);
-		aes_ctr.init(RCipher.DECRYPT_MODE, key, new IvParameterSpecNC(siv), null);
+		aes_ctr.init(false, key, new IvParameterSpecNC(siv), null);
 		aes_ctr.cryptFinal(ciphertext, output);
 
 		var mac = new HMAC(getSharedDigest("SHA-256"));
@@ -409,93 +413,8 @@ public final class CryptoFactory extends Provider {
 	}
 
 	public static long wyhash(long seed, byte[] data) {return wyhash(seed, data, 0, data.length);}
-	public static long wyhash(long seed, byte[] data, int off, int len) {return wyhash(data, Unsafe.ARRAY_BYTE_BASE_OFFSET + off, len, seed, WYHASH_SECRET);}
-	/**
-	 * translated by Roj234-N
-	 * @since 2025/5/9 15:17
-	 */
-	// This is free and unencumbered software released into the public domain under The Unlicense (http://unlicense.org/)
-	// main repo: https://github.com/wangyi-fudan/wyhash
-	// author: 王一 Wang Yi <godspeed_china@yeah.net>
-	// contributors: Reini Urban, Dietrich Epp, Joshua Haberman, Tommy Ettinger, Daniel Lemire, Otmar Ertl, cocowalla, leo-yuriev, Diego Barrios Romero, paulie-g, dumblob, Yann Collet, ivte-ms, hyb, James Z.M. Gao, easyaspi314 (Devin), TheOneric
-	public static long wyhash(Object p1, long p2, int len, long seed, long[] secret) {
-		seed ^= wymix(seed ^ secret[0], secret[1]);
-		long a, b;
-
-		if (/*_likely_*/len <= 16) {
-			if (/*_likely_*/len >= 4) {
-				a = ((U.get32UL(p1, p2) & 0xFFFFFFFFL) << 32) | U.get32UL(p1, p2 + ((len >> 3) << 2)) & 0xFFFFFFFFL;
-				b = ((U.get32UL(p1, p2 + len - 4) & 0xFFFFFFFFL) << 32) | U.get32UL(p1, p2 + len - 4 - ((len >> 3) << 2)) & 0xFFFFFFFFL;
-			} else if (/*_likely_*/len > 0) {
-				a = wyr3(p1, p2, len);
-				b = 0;
-			} else {
-				a = b = 0;
-			}
-		} else {
-			int i = len;
-			if (/*_unlikely_*/i >= 48) {
-				long see1 = seed, see2 = seed;
-				do {
-					seed = wymix(U.get64UL(p1, p2) ^ secret[1], U.get64UL(p1, p2 + 8) ^ seed);
-					see1 = wymix(U.get64UL(p1, p2 + 16) ^ secret[2], U.get64UL(p1, p2 + 24) ^ see1);
-					see2 = wymix(U.get64UL(p1, p2 + 32) ^ secret[3], U.get64UL(p1, p2 + 40) ^ see2);
-					p2 += 48;
-					i -= 48;
-				} while (i >= 48);
-				seed ^= see1 ^ see2;
-			}
-			while (i > 16) {
-				seed = wymix(U.get64UL(p1, p2) ^ secret[1], U.get64UL(p1, p2 + 8) ^ seed);
-				i -= 16;
-				p2 += 16;
-			}
-			a = U.get64UL(p1, p2 + i - 16);
-			b = U.get64UL(p1, p2 + i - 8);
-		}
-
-		a ^= secret[1];
-		b ^= seed;
-		long hi = Math.multiplyHigh(a, b);
-		long lo = a * b;
-
-		if (WYHASH_CONDOM) {
-			a ^= lo;
-			b ^= hi;
-		} else {
-			a = lo;
-			b = hi;
-		}
-		return wymix(a ^ secret[0] ^ len, b ^ secret[1]);
-	}
-
-	private static final boolean WYHASH_CONDOM = false;
-	private static final long[] WYHASH_SECRET = {
-			0x2d358dccaa6c78a5L,
-			0x8bb84b93962eacc9L,
-			0x4b33a62ed433d4a3L,
-			0x4d5a2da51de1aa47L
-	};
-
-	static long wymix(long a, long b) {
-		long hi = Math.multiplyHigh(a, b);
-		long lo = a * b;
-		if (WYHASH_CONDOM) {
-			a ^= lo;
-			b ^= hi;
-		} else {
-			a = lo;
-			b = hi;
-		}
-		return a ^ b;
-	}
-
-	private static long wyr3(Object base, long offset, long k) {
-		long b0 = U.getByte(base, offset) & 0xFFL;
-		long b1 = U.getByte(base, offset + (k >> 1)) & 0xFFL;
-		long b2 = U.getByte(base, offset + k - 1) & 0xFFL;
-		return (b0 << 16) | (b1 << 8) | b2;
-	}
+	public static long wyhash(long seed, byte[] data, int off, int len) {return wyhash(data, Unsafe.ARRAY_BYTE_BASE_OFFSET + off, len, seed, WyRand.WYHASH_SECRET);}
+	public static long wyhash(Object p1, long p2, int len, long seed, long[] secret) {return WyRand.wyhash(p1, p2, len, seed, secret);}
 	//endregion
 
 	static int[] reverse(int[] arr, int i, int length) {

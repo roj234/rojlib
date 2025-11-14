@@ -1,8 +1,6 @@
 package roj.archive.algorithms.model;
 
 import org.jetbrains.annotations.Range;
-import roj.archive.algorithms.EntropyModelInputStream;
-import roj.archive.algorithms.EntropyModelOutputStream;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -20,17 +18,20 @@ public final class PPMdOptions {
 	private static final byte[] ORDER_BY_LEVEL2 = {3,4,4,4,5,6,6,7,8,9};
 
 	public PPMdOptions() {this(0);}
-	public PPMdOptions(@Range(from = 0, to = 9) int level) {
-		if (level == 0) level = 5;
-
-		level--;
-		dictSize = (1 << 20) << level;
-		order = ORDER_BY_LEVEL[level];
-	}
+	public PPMdOptions(@Range(from = 0, to = 9) int preset) {setPreset(preset);}
 	public PPMdOptions(@Range(from = PPMd7.PPMD7_MIN_ORDER, to = PPMd7.PPMD7_MAX_ORDER) int order,
 					   @Range(from = PPMd7.PPMD7_MIN_MEM_SIZE, to = PPMd7.PPMD7_MAX_MEM_SIZE) int dictSize) {
 		setOrder(order);
 		setDictSize(dictSize);
+	}
+
+	public PPMdOptions setPreset(int preset) {
+		if (preset == 0) preset = 5;
+
+		preset--;
+		dictSize = (1 << 20) << preset;
+		order = ORDER_BY_LEVEL[preset];
+		return this;
 	}
 
 	public byte getOrder() { return (byte) order; }
@@ -48,4 +49,20 @@ public final class PPMdOptions {
 
 	public InputStream getInputStream(InputStream in) throws IOException {return new EntropyModelInputStream(in, createModel());}
 	public OutputStream getOutputStream(OutputStream out) {return new EntropyModelOutputStream(out, createModel());}
+
+	@Override
+	public boolean equals(Object o) {
+		if (this == o) return true;
+		if (o == null || getClass() != o.getClass()) return false;
+
+		PPMdOptions that = (PPMdOptions) o;
+		return order == that.order && dictSize == that.dictSize;
+	}
+
+	@Override
+	public int hashCode() {
+		int result = order;
+		result = 31 * result + dictSize;
+		return result;
+	}
 }

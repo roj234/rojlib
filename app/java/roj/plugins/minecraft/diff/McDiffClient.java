@@ -1,8 +1,8 @@
 package roj.plugins.minecraft.diff;
 
-import roj.archive.qz.QZArchive;
-import roj.archive.qz.QZEntry;
-import roj.archive.qz.WordBlock;
+import roj.archive.sevenz.SevenZFile;
+import roj.archive.sevenz.SevenZEntry;
+import roj.archive.sevenz.WordBlock;
 import roj.collect.HashMap;
 import roj.concurrent.TaskPool;
 import roj.config.NbtEncoder;
@@ -33,11 +33,11 @@ import java.util.zip.GZIPOutputStream;
  * @since 2023/12/21 1:31
  */
 public class McDiffClient {
-	QZArchive archive;
+	SevenZFile archive;
 	HashMap<String, String> renames = new HashMap<>();
 
 	public void apply(File basePath) throws IOException {
-		QZEntry hashes = archive.getEntry(".vcs|hashes");
+		SevenZEntry hashes = archive.getEntry(".vcs|hashes");
 		System.out.println("正在验证哈希");
 		if (hashes != null) try (XDataInputStream in = new XDataInputStream(archive.getInputStream(hashes))) {
 			byte[] tmp = ArrayCache.getIOBuffer();
@@ -54,7 +54,7 @@ public class McDiffClient {
 		var pool = TaskPool.cpu().newGroup();
 		var bar = new EasyProgressBar("应用更新包");
 		bar.addTotal(archive.getEntriesByPresentOrder().length);
-		for (QZEntry entry : archive.getEntriesByPresentOrder()) {
+		for (SevenZEntry entry : archive.getEntriesByPresentOrder()) {
 			String name = entry.getName();
 
 			if (name.startsWith(".vcs")) {
@@ -139,9 +139,9 @@ public class McDiffClient {
 	}
 
 	public void load(File arc, boolean skipSignatureCheck) throws IOException, GeneralSecurityException {
-		load(new QZArchive(arc));
+		load(new SevenZFile(arc));
 
-		QZEntry entry = archive.getEntry(".vcs|signature");
+		SevenZEntry entry = archive.getEntry(".vcs|signature");
 		if (entry == null) {
 			if (skipSignatureCheck) return;
 			throw new CorruptedInputException("更新包未签名");
@@ -152,10 +152,10 @@ public class McDiffClient {
 
 		verifySign(arc, entry, blocks);
 	}
-	public void load(QZArchive arc) throws IOException, GeneralSecurityException {
+	public void load(SevenZFile arc) throws IOException, GeneralSecurityException {
 		archive = arc;
 
-		for (QZEntry entry : archive.getEntriesByPresentOrder()) {
+		for (SevenZEntry entry : archive.getEntriesByPresentOrder()) {
 			String name = entry.getName();
 			if (name.indexOf('\\') >= 0 || name.contains("../")) throw new CorruptedInputException("文件不安全");
 
@@ -173,7 +173,7 @@ public class McDiffClient {
 		}
 	}
 
-	private void verifySign(File file, QZEntry entry, WordBlock[] blocks) throws IOException, GeneralSecurityException {
+	private void verifySign(File file, SevenZEntry entry, WordBlock[] blocks) throws IOException, GeneralSecurityException {
 		byte[] sign;
 		Signature dsa;
 		try (TextReader in = new TextReader(archive.getInputStream(entry), StandardCharsets.US_ASCII)) {
@@ -209,7 +209,7 @@ public class McDiffClient {
 		ArrayCache.putArray(tmp);
 
 		ByteList buf = IOUtil.getSharedByteBuf();
-		for (QZEntry entry1 : archive.getEntriesByPresentOrder()) {
+		for (SevenZEntry entry1 : archive.getEntriesByPresentOrder()) {
 			if (entry1 == entry) continue;
 
 			buf.putChars(entry1.getName());

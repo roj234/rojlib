@@ -2,6 +2,7 @@ package roj.compiler.plugins;
 
 import roj.asm.Attributed;
 import roj.asm.ClassDefinition;
+import roj.asm.ClassNode;
 import roj.asm.MethodNode;
 import roj.asm.annotation.Annotation;
 import roj.asm.attr.UnparsedAttribute;
@@ -34,7 +35,7 @@ public class JavaLangAnnotations implements Processor {
 				}
 			}
 			case "java/lang/FunctionalInterface" -> {
-				MethodNode lambdaMethod = ctx.compiler.link(file).getLambdaMethod();
+				MethodNode lambdaMethod = ctx.compiler.link((ClassNode) file).getLambdaMethod();
 				if (lambdaMethod == null) {
 					ctx.compiler.report(file, Kind.ERROR, annotation.pos, "annotation.functionalInterface", file);
 				}

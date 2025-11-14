@@ -37,7 +37,7 @@ public class UnparsedAttribute extends Attribute {
 
 	@Override
 	public void toByteArray(DynByteBuf w, ConstantPool pool) {
-		w.putShort(name.getClass() == CstUTF.class ? pool.fit((CstUTF) name) : pool.getUtfId(name.toString()));
+		w.putShort(name.getClass() == CstUTF.class ? pool.internIndex((CstUTF) name) : pool.getUtfId(name.toString()));
 		if (data == null) {
 			w.putInt(0);
 		} else if (data.getClass() == byte[].class) {

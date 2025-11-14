@@ -22,13 +22,13 @@ public final class BootstrapMethods extends Attribute {
 		int len = r.readUnsignedShort();
 		List<Item> methods = this.methods = new ArrayList<>(len);
 		while (len-- > 0) {
-			CstMethodHandle handle = pool.get(r);
+			CstMethodHandle handle = pool.resolve(r);
 
 			// parsing arguments
 			int argc = r.readUnsignedShort();
 			var list = new ArrayList<Constant>(argc);
 			for (int i = 0; i < argc; i++) {
-				Constant c = pool.get(r);
+				Constant c = pool.resolve(r);
 				switch (c.type()) {
 					case Constant.STRING, Constant.CLASS, Constant.INT, Constant.LONG, Constant.FLOAT, Constant.DOUBLE, Constant.METHOD_HANDLE, Constant.METHOD_TYPE -> {}
 					default -> throw new IllegalStateException("Unexpected constant: "+c);
@@ -121,7 +121,7 @@ public final class BootstrapMethods extends Attribute {
 			w.putShort(pool.getMethodHandleId(kind, linker))
 			 .putShort(arguments.size());
 			for (int i = 0; i < arguments.size(); i++) {
-				w.putShort(pool.fit(arguments.get(i)));
+				w.putShort(pool.internIndex(arguments.get(i)));
 			}
 		}
 

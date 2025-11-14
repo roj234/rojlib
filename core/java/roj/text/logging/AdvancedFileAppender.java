@@ -33,8 +33,6 @@ public class AdvancedFileAppender implements LogAppender, Runnable {
 	private final int rotationFileSizeKb;
 	private final Formatter rotationFilePath;
 	private String nextRotationFileName;
-	private long heartbeat;
-	private int deltaTime;
 
 	// remove
 	private final int maxFileCount, maxFileSizeKb;
@@ -43,7 +41,7 @@ public class AdvancedFileAppender implements LogAppender, Runnable {
 	private final boolean immediateFlush;
 
 	private final Charset charset;
-	private final Thread writer = new FastLocalThread(this, "Async Log Writer");
+	private final Thread writer = new FastLocalThread(this, "RojLib 异步日志追加 ");
 	private volatile boolean running = true;
 
 	public AdvancedFileAppender(MapValue data) {
@@ -76,10 +74,9 @@ public class AdvancedFileAppender implements LogAppender, Runnable {
 	@Override
 	public void append(CharList sb) throws IOException {
 		try {
-			while (!queue.offer(sb.toString(), 10, TimeUnit.MILLISECONDS)) {
-				if (System.currentTimeMillis() - heartbeat > 1000) {
-					throw new IOException("Heartbeat timed out");
-				}
+			String str = sb.toString();
+			if (!queue.offer(str, 1000, TimeUnit.MILLISECONDS)) {
+				throw new IOException("Log timed out: " + str);
 			}
 		} catch (InterruptedException e) {
 			throw IOUtil.rethrowAsIOException(e);
@@ -90,19 +87,14 @@ public class AdvancedFileAppender implements LogAppender, Runnable {
 		try {
 			File logFile = changeFile(null, null);
 			var writer = TextWriter.append(logFile, charset);
+			int deltaTime = 0;
+			long prevTime = System.currentTimeMillis();
 			try {
 				while (running || !queue.isEmpty()) {
-					try {
-						var message = queue.take();
-						writer.append(message);
-						writer.flush();
-					} catch (InterruptedException e) {
-						Thread.currentThread().interrupt();
-						break;
-					}
-
 					long time = System.currentTimeMillis();
-					deltaTime += time - heartbeat;
+					deltaTime += time - prevTime;
+					prevTime = time;
+
 					if (deltaTime < 0 || deltaTime > 1000) {
 						deltaTime = 0;
 
@@ -112,7 +104,15 @@ public class AdvancedFileAppender implements LogAppender, Runnable {
 							logFile = newFile;
 						}
 					}
-					heartbeat = time;
+
+					try {
+						var message = queue.take();
+						writer.append(message);
+						writer.flush();
+					} catch (InterruptedException e) {
+						Thread.currentThread().interrupt();
+						break;
+					}
 				}
 			} finally {
 				writer.close();
@@ -169,6 +169,7 @@ public class AdvancedFileAppender implements LogAppender, Runnable {
 		if (currentFile == null) {
 			CharList sb = IOUtil.getSharedCharBuf();
 			String filename = logName.format(Collections.emptyMap(), sb).toString();
+			writer.setName(writer.getName()+IOUtil.fileName(filename));
 
 			currentFile = new File(logPath, filename);
 

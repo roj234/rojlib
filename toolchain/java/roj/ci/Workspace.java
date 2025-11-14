@@ -325,14 +325,23 @@ public final class Workspace {
 			Dependency dep = p.conf.dependencyInstances.get(entry.getKey());
 			if (dep == null) continue;
 
+			int lenI = sb.length();
+
 			switch (entry.getValue()) {
 				case COMPILE -> sb.append("<orderEntry ");
 				case EXPORT -> sb.append("<orderEntry exported=\"\" ");
 				case BUNDLED -> sb.append("<orderEntry scope=\"PROVIDED\" ");
 			}
 
+			int lenJ = sb.length();
+
 			dep.writeProjectConfiguration(p.root, sb, "IML");
-			sb.append('\n');
+
+			if (lenJ == sb.length()) {
+				sb.setLength(lenI);
+			} else {
+				sb.append('\n');
+			}
 		}
 
 		return sb.append("</component></module>");

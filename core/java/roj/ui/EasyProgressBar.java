@@ -49,7 +49,7 @@ public class EasyProgressBar extends ProgressBar {
 	}
 
 	public void reset() {setTotal(0);}
-	public void setUnlimited() {setTotal(-1);}
+	public void setIndeterminate() {setTotal(-1);}
 	public void setTotal(long total) {
 		completed = 0;
 		this.total = total;

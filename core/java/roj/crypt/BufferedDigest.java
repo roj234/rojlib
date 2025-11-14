@@ -11,7 +11,7 @@ import java.security.MessageDigest;
  * @author solo6975
  * @since 2021/10/3 15:06
  */
-public abstract class BufferedDigest extends MessageDigest implements Cloneable {
+public abstract class BufferedDigest extends MessageDigest {
 	protected final ByteList buf;
 	protected long length;
 

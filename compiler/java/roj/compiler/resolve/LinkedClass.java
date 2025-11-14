@@ -24,9 +24,9 @@ import java.util.concurrent.ConcurrentHashMap;
 public final class LinkedClass {
 	private LinkedClass _next;
 
-	public final ClassDefinition owner;
+	public final ClassNode owner;
 
-	public LinkedClass(ClassDefinition owner) {this.owner = Objects.requireNonNull(owner);}
+	public LinkedClass(ClassNode owner) {this.owner = Objects.requireNonNull(owner);}
 
 	private MethodNode lambdaMethod;
 	private byte lambdaType; // 只有1，2有效，3，4，5均是提供错误诊断
@@ -92,7 +92,7 @@ public final class LinkedClass {
 
 			ToIntMap<String> list = new ToIntMap<>();
 
-			ClassDefinition info = owner;
+			ClassNode info = owner;
 			while (true) {
 				String owner = info.name();
 				try {
@@ -119,7 +119,7 @@ public final class LinkedClass {
 				for (int i = 0; i < itf.size(); i++) {
 					String name = itf.get(i);
 
-					ClassDefinition itfInfo = ctx.resolve(name);
+					ClassNode itfInfo = ctx.resolve(name);
 					if (itfInfo == null) {
 						ctx.report(this.owner, Kind.SEVERE_WARNING, -1, "symbol.noSuchClass", name);
 						break;
@@ -199,7 +199,7 @@ public final class LinkedClass {
 				if (methods != null) return methods;
 				var methods = new HashMap<String, ComponentList>();
 
-				ClassDefinition type = owner;
+				var type = owner;
 				List<? extends Member> methods1 = type.methods();
 				HashSet<MemberDescriptor> bridgeIgnore = new HashSet<>();
 				for (int i = 0; i < methods1.size(); i++) {
@@ -229,7 +229,7 @@ public final class LinkedClass {
 					List<String> itf = type.interfaces();
 
 					while (true) {
-						ClassDefinition info = ctx.resolve(className);
+						var info = ctx.resolve(className);
 						if (info == null) {
 							ctx.report(type, Kind.SEVERE_WARNING, -1, "symbol.noSuchClass", className);
 						} else for (Map.Entry<String, ComponentList> entry : ctx.link(info).getMethods(ctx).entrySet()) {
@@ -283,7 +283,7 @@ public final class LinkedClass {
 				if (fields != null) return fields;
 				var fields = new HashMap<String, ComponentList>();
 
-				ClassDefinition type = owner;
+				var type = owner;
 				List<? extends Member> fields1 = type.fields();
 				for (int i = 0; i < fields1.size(); i++) {
 					FieldNode fn = (FieldNode) fields1.get(i);
@@ -299,7 +299,7 @@ public final class LinkedClass {
 					List<String> itf = type.interfaces();
 
 					while (true) {
-						ClassDefinition info = ctx.resolve(className);
+						var info = ctx.resolve(className);
 						if (info == null) {
 							ctx.report(type, Kind.SEVERE_WARNING, -1, "symbol.noSuchClass", className);
 						} else {
@@ -361,9 +361,9 @@ public final class LinkedClass {
 				for (IType value : sign.values) {
 					if (value.kind() == IType.OBJECT_BOUND) continue;
 
-					ClassDefinition ref = ctx.resolve(value.owner());
+					var ref = ctx.resolve(value.owner());
 					if (ref == null) {
-						ctx.report(this.owner, Kind.SEVERE_WARNING, -1, "symbol.noSuchClass", owner);
+						ctx.report(this.owner, Kind.SEVERE_WARNING, -1, "symbol.noSuchClass", value.owner());
 						continue;
 					}
 
@@ -395,21 +395,28 @@ public final class LinkedClass {
 	private volatile Map<String, InnerClasses.Item> innerClasses;
 	private static final Set<LinkedClass> resolvingInnerClass = Collections.newSetFromMap(new ConcurrentHashMap<>());
 	/**
-	 * 自己或继承的内部类，只包含真正的内部类，不包含对外部的内部类的引用，感觉也用不上，给反编译用的，大家好像都在用$判断
+	 * 自己或继承的内部类，只包含真正的内部类，不包含对外部的内部类的引用
+	 * 感觉也用不上，【对外部的内部类的引用】是给反编译用的，但是大家好像都在用$判断
 	 */
 	public Map<String, InnerClasses.Item> getInnerClasses(Resolver ctx) {
 		if (innerClasses == null) {
-			var classes = owner.getAttribute(owner.cp(), Attribute.InnerClasses);
-			if (classes == null) return innerClasses = Collections.emptyMap();
+			Map<String, InnerClasses.Item> decl = new HashMap<>();
 
-			var parentDecl = ctx.getInnerClassInfo(ctx.resolve(owner.parent()));
+			// 这里的优先级规则符合JLS吗？
+			var interfaces = owner.interfaces();
+			for (int i = interfaces.size() - 1; i >= 0; i--) {
+				putDeclOrWarn(ctx, decl, interfaces.get(i));
+			}
+			String parent = owner.parent();
+			if (parent != null) putDeclOrWarn(ctx, decl, parent);
+
+			var classes = owner.getAttribute(owner.cp(), Attribute.InnerClasses);
+			if (classes == null) return innerClasses = decl.isEmpty() ? Collections.emptyMap() : decl;
 
 			synchronized (this) {
 				if (innerClasses != null) return innerClasses;
 
 				if (!resolvingInnerClass.add(this)) return Collections.emptyMap();
-
-				var decl = new HashMap<>(parentDecl);
 
 				var list = classes.classes;
 				for (int i = 0; i < list.size(); i++) {
@@ -419,7 +426,7 @@ public final class LinkedClass {
 
 						if (owner.name().equals(ref.parent)) {
 							decl.put("!"+ref.name, ref);
-							for (var entry : ctx.link(ctx.resolve(ref.self)).getInnerClasses(ctx).entrySet()) {
+							for (var entry : ctx.getInnerClassInfo(ctx.resolve(ref.self)).entrySet()) {
 								if (entry.getKey().startsWith("!") && ref.self.equals(entry.getValue().parent)) {
 									decl.put("!"+ref.name+"/"+entry.getKey().substring(1), entry.getValue());
 								}
@@ -434,5 +441,14 @@ public final class LinkedClass {
 		}
 
 		return innerClasses;
+	}
+
+	private void putDeclOrWarn(Resolver ctx, Map<String, InnerClasses.Item> decl, String parent) {
+		ClassNode node = ctx.resolve(parent);
+		if (node == null) {
+			ctx.report(this.owner, Kind.SEVERE_WARNING, -1, "symbol.noSuchClass", parent);
+		} else {
+			decl.putAll(ctx.getInnerClassInfo(node));
+		}
 	}
 }

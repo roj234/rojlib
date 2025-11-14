@@ -57,7 +57,7 @@ public final class AsmCache {
 	private final Object[][] cpArr = new Object[10][];
 	private int cpCount;
 
-	public void getCpWriter(ArrayList<Constant> constants) {
+	public void retainHugeArray(ArrayList<Constant> constants) {
 		if (cpCount == 10) return;
 		int i = cpCount++;
 		Object[] objects = cpArr[i];
@@ -68,19 +68,21 @@ public final class AsmCache {
 		}
 	}
 
-	public void freeCpWriter(ArrayList<Constant> constants, boolean discard) {
+	public void freeHugeArray(ArrayList<Constant> constants, boolean discard) {
 		if (cpCount == 0) return;
 
 		Object[] cpArray = constants.getInternalArray();
 
-		if (discard) constants._setArray(null);
-		else {
+		if (discard) {
+			constants.clear();
+			constants._setArray(ArrayCache.OBJECTS);
+		} else {
 			if (cpArray.length == constants.size()) return;
 			constants.trimToSize();
-		}
 
-		int len = constants.size();
-		for (int i = len-1; i >= 0; i--) cpArray[i] = null;
+			int len = constants.size();
+			for (int i = len-1; i >= 0; i--) cpArray[i] = null;
+		}
 
 		cpArr[--cpCount] = cpArray;
 	}

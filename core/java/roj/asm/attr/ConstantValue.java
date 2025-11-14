@@ -16,6 +16,6 @@ public final class ConstantValue extends Attribute {
 	@Override
 	public String name() { return "ConstantValue"; }
 	@Override
-	public void toByteArrayNoHeader(DynByteBuf w, ConstantPool pool) { w.putShort(pool.fit(c)); }
+	public void toByteArrayNoHeader(DynByteBuf w, ConstantPool pool) { w.putShort(pool.internIndex(c)); }
 	public String toString() { return "ConstantValue: " + c; }
 }

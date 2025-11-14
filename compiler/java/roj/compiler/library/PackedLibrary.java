@@ -1,8 +1,8 @@
 package roj.compiler.library;
 
-import roj.archive.zip.ZEntry;
+import roj.archive.zip.ZipEntry;
 import roj.archive.zip.ZipFile;
-import roj.archive.zip.ZipFileWriter;
+import roj.archive.zip.ZipPacker;
 import roj.asm.ClassNode;
 import roj.asm.cp.ConstantPool;
 import roj.collect.ArrayList;
@@ -27,7 +27,7 @@ public final class PackedLibrary implements Library {
 		List<Library> output = new ArrayList<>();
 		var zf = new ZipFile(symTable);
 
-		for (ZEntry entry : zf.entries()) {
+		for (ZipEntry entry : zf.entries()) {
 			if (!entry.getName().endsWith("/v")) {
 				try (var in = XDataInputStream.wrap(zf.getInputStream(entry))) {
 					output.add(new PackedLibrary(in, zf, entry.getName()));
@@ -41,14 +41,14 @@ public final class PackedLibrary implements Library {
 		return output;
 	}
 	public static void saveCache(File symCache, List<PackedLibrary> caches) throws IOException {
-		try (var tmp = new ZipFileWriter(symCache);
+		try (var tmp = new ZipPacker(symCache);
 			 var ob = new ByteList.ToStream(tmp)) {
 			for (var cache : caches) {
-				tmp.beginEntry(new ZEntry(cache.module));
+				tmp.beginEntry(new ZipEntry(cache.module));
 				cache.serializeK(ob);
 				ob.flush();
 
-				tmp.beginEntry(new ZEntry(cache.module+"/v"));
+				tmp.beginEntry(new ZipEntry(cache.module+"/v"));
 				cache.serializeV(ob);
 				ob.flush();
 			}
@@ -109,7 +109,7 @@ public final class PackedLibrary implements Library {
 	}
 
 	private ZipFile zf;
-	private ZEntry ze;
+	private ZipEntry ze;
 	private void readV() {
 		try {
 			var buf = zf.get(ze, IOUtil.getSharedByteBuf());

@@ -117,16 +117,7 @@ public class MavenCoordinate {
 			// 假设maven的文件是immutable的
 			if (metadata != null) remoteMetadata.checksum.putAll(metadata.checksum);
 
-			Metadata finalRemoteMetadata = remoteMetadata;
-			IOUtil.writeFileEvenMoreSafe(localMetadataFile.getParentFile(), localMetadataFile.getName(), file -> {
-				try (var out = new FileOutputStream(file)) {
-					ByteList bb = IOUtil.getSharedByteBuf();
-					MCMake.CONFIG.write(new MsgPackEncoder.Compressed(bb), finalRemoteMetadata);
-					bb.writeToStream(out);
-				} catch (Exception e) {
-					MCMake.log.error("Failed to save {}'s metadata", e, this);
-				}
-			});
+			saveMetadata(localMetadataFile, remoteMetadata);
 
 			this.metadata = metadata = remoteMetadata;
 		}
@@ -156,6 +147,7 @@ public class MavenCoordinate {
 				String checksum = task.client.response().get("x-checksum-sha1");
 				if (checksum != null) {
 					metadata.checksum.put(chosenVersion, IOUtil.decodeHex(checksum));
+					saveMetadata(localMetadataFile, metadata);
 				}
 
 				if (!Dependency.verifyFile(CHECKSUM, localCache, metadata.checksum.get(chosenVersion), toString())) {
@@ -168,6 +160,18 @@ public class MavenCoordinate {
 		}
 
 		return localCache;
+	}
+
+	private void saveMetadata(File localMetadataFile, Metadata finalRemoteMetadata) throws IOException {
+		IOUtil.writeFileEvenMoreSafe(localMetadataFile.getParentFile(), localMetadataFile.getName(), file -> {
+			try (var out = new FileOutputStream(file)) {
+				ByteList bb = IOUtil.getSharedByteBuf();
+				MCMake.CONFIG.write(new MsgPackEncoder.Compressed(bb), finalRemoteMetadata);
+				bb.writeToStream(out);
+			} catch (Exception e) {
+				MCMake.log.error("Failed to save {}'s metadata", e, this);
+			}
+		});
 	}
 
 	private  String artifactPath(ArtifactVersion version, boolean isUrl) {

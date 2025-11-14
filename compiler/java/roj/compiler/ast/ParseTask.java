@@ -148,7 +148,7 @@ public interface ParseTask {
 
 					if (ctx.fieldDFS) return;
 
-					if (!file.finalFields.remove(f)) {
+					if (!file.uninitializedFinalFields.remove(f)) {
 						ctx.report(Kind.ERROR, "symbol.field.writeAfterWrite", file.name(), f.name());
 						return;
 					}

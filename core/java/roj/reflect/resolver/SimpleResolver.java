@@ -42,7 +42,7 @@ public class SimpleResolver implements IResolver {
 		LinkedClass linkedClass = definitions.computeIfAbsent(name, resolveToNode);
 		return linkedClass == null ? null : linkedClass.owner;
 	}
-	@Override public synchronized @NotNull ToIntMap<String> getHierarchyList(ClassDefinition info) {return definitions.computeIfAbsent(info.name(), resolveToNode).getHierarchyList(this);}
+	@Override public synchronized @NotNull ToIntMap<String> getHierarchyList(ClassNode info) {return definitions.computeIfAbsent(info.name(), resolveToNode).getHierarchyList(this);}
 
 	public static final class LinkedClass {
 		final ClassNode owner;
@@ -84,7 +84,7 @@ public class SimpleResolver implements IResolver {
 				for (int i = 0; i < itf.size(); i++) {
 					String name = itf.get(i);
 
-					ClassDefinition itfInfo = ctx.resolve(name);
+					var itfInfo = ctx.resolve(name);
 					if (itfInfo == null) break;
 
 					list.putInt(name, (justAnId++ << 16) | castDistance);

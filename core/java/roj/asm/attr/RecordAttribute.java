@@ -27,13 +27,13 @@ public final class RecordAttribute extends Attribute {
 			Field rd = new Field();
 			fields.add(rd);
 
-			rd.name = ((CstUTF) cp.get(r)).str();
-			rd.type = ((CstUTF) cp.get(r)).str();
+			rd.name = ((CstUTF) cp.resolve(r)).str();
+			rd.type = ((CstUTF) cp.resolve(r)).str();
 			int len1 = r.readUnsignedShort();
 			if (len1 > 0) {
 				rd.attributes = new AttributeList(len1);
 				while (len1-- > 0) {
-					String name0 = ((CstUTF) cp.get(r)).str();
+					String name0 = ((CstUTF) cp.resolve(r)).str();
 					rd.attributes._add(Attribute.parse(rd, cp, name0, r.slice(r.readInt()), ATTR_RECORD));
 				}
 			}

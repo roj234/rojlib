@@ -61,7 +61,7 @@ public final class TrieTreeSet extends AbstractSet<CharSequence> {
 			this.val = val;
 		}
 
-		CharSequence text() { return val; }
+		public CharSequence text() { return val; }
 		@Override
 		public void append(CharList sb) { sb.append(val); }
 		@Override

@@ -61,24 +61,20 @@ public final class NbtEncoder implements ValueEmitter {
 	}
 	public final void emit(String s) {
 		if (XNbt) {
-			if (s == null) {
-				emitNull();return;}
+			if (s == null) {emitNull();return;}
+
 			if (TextUtil.isLatin1(s)) {
 				onValue(X_LATIN1_STRING);
 				out.putVUInt(s.length()).putAscii(s);
 				return;
 			}
 
-			int utfExtra = s.length() * 2 / 3;
-			int numCn = 0;
-			for (int i = 0; i < s.length(); i++) {
-				if (FastCharset.UTF16LE().encodeSize(s.charAt(i)) == 2) {
-					if (++numCn > utfExtra) {
-						onValue(X_UTF16LE_STRING);
-						out.putVUIGB(s);
-						return;
-					}
-				}
+			int utfEncodeLen = FastCharset.UTF8().byteCount(s);
+			int utf16LEEncodeLen = FastCharset.UTF16LE().byteCount(s);
+			if (utf16LEEncodeLen < utfEncodeLen) {
+				onValue(X_UTF16LE_STRING);
+				out.putStrData(s, FastCharset.UTF16LE());
+				return;
 			}
 		}
 

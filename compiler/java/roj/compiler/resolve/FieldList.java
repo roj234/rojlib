@@ -1,7 +1,7 @@
 package roj.compiler.resolve;
 
 import org.jetbrains.annotations.NotNull;
-import roj.asm.ClassDefinition;
+import roj.asm.ClassNode;
 import roj.asm.FieldNode;
 import roj.asm.Opcodes;
 import roj.collect.ArrayList;
@@ -17,16 +17,16 @@ import roj.text.CharList;
  * @since 2024/2/6 2:21
  */
 final class FieldList extends ComponentList {
-	final ArrayList<ClassDefinition> owners = new ArrayList<>();
+	final ArrayList<ClassNode> owners = new ArrayList<>();
 	final ArrayList<FieldNode> fields = new ArrayList<>();
 	private int childId;
 
-	void add(ClassDefinition klass, FieldNode mn) {
+	void add(ClassNode klass, FieldNode mn) {
 		owners.add(klass);
 		fields.add(mn);
 	}
 
-	boolean pack(ClassDefinition klass) {
+	boolean pack(ClassNode klass) {
 		for (int i = 0; i < fields.size(); i++) {
 			if (!owners.get(i).equals(klass)) {
 				childId = i;
@@ -43,7 +43,7 @@ final class FieldList extends ComponentList {
 		int size = (flags&THIS_ONLY) != 0 ? childId : fields.size();
 
 		for (int j = 0; j < size; j++) {
-			ClassDefinition owner = owners.get(j);
+			ClassNode owner = owners.get(j);
 			FieldNode fn = fields.get(j);
 
 			if (ctx.canAccessSymbol(owner, fn, (flags&IN_STATIC) != 0, false)) {
@@ -60,7 +60,7 @@ final class FieldList extends ComponentList {
 		ctx.enableErrorCapture();
 
 		for (int i = 0; i < size; i++) {
-			ClassDefinition owner = owners.get(i);
+			ClassNode owner = owners.get(i);
 			FieldNode fn = fields.get(i);
 
 			ctx.canAccessSymbol(owner, fn, (flags&IN_STATIC) != 0, true);
@@ -73,7 +73,7 @@ final class FieldList extends ComponentList {
 		return new FieldResult(sb.append("]]").replace('/', '.').toStringAndFree());
 	}
 
-	static void checkBridgeMethod(CompileContext ctx, ClassDefinition owner, FieldNode fn) {
+	static void checkBridgeMethod(CompileContext ctx, ClassNode owner, FieldNode fn) {
 		if ((fn.modifier&Opcodes.ACC_PRIVATE) == 0 || ctx.file == owner ||
 			ctx.compiler.getMaximumBinaryCompatibility() >= Compiler.JAVA_11) return;
 

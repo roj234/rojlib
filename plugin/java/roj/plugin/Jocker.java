@@ -1,6 +1,6 @@
 package roj.plugin;
 
-import roj.archive.zip.ZEntry;
+import roj.archive.zip.ZipEntry;
 import roj.archive.zip.ZipFile;
 import roj.asm.annotation.Annotation;
 import roj.asmx.AnnotationRepoManager;
@@ -70,6 +70,7 @@ public final class Jocker extends PluginManager {
 
 	@SuppressWarnings("unchecked")
 	public static void main(String[] args) throws Exception {
+		JVM.AccurateTimer.setEventDriven();
 		File file = new File("plugins/Core/config.yml");
 		try {
 			Jocker.CONFIG = file.isFile() ? ConfigMaster.YAML.parse(file).asMap() : new MapValue();
@@ -111,7 +112,7 @@ public final class Jocker extends PluginManager {
 			}
 		} else if (router != null) {
 			for (var itr = resources.entries().iterator(); itr.hasNext(); ) {
-				ZEntry entry = itr.next();
+				ZipEntry entry = itr.next();
 				if (entry.getName().startsWith("webui/")) {
 					itr.remove();
 				}
@@ -124,7 +125,6 @@ public final class Jocker extends PluginManager {
 		Tty.setHandler(CMD);
 
 		LOGGER.info("启动耗时: {}ms", System.currentTimeMillis()-time);
-		JVM.AccurateTimer.parkForMe();
 	}
 
 	private Jocker(File pluginFolder) {

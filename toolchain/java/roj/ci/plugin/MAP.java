@@ -1,7 +1,7 @@
 package roj.ci.plugin;
 
 import roj.archive.roar.RoWriteArchive;
-import roj.archive.zip.ZipFileWriter;
+import roj.archive.zip.ZipPacker;
 import roj.asm.MemberDescriptor;
 import roj.asmx.Context;
 import roj.asmx.mapper.Mapper;
@@ -98,7 +98,7 @@ public class MAP implements Plugin {
 					continue;
 				}
 				File out = IOUtil.deriveOutput(in, postfix);
-				try (var zfw = new ZipFileWriter(out)) {
+				try (var zfw = new ZipPacker(out)) {
 					var classes = Context.fromZip(in, zfw);
 
 					m.map(classes);

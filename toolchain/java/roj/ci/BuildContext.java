@@ -4,9 +4,8 @@ import org.intellij.lang.annotations.MagicConstant;
 import org.jetbrains.annotations.Nullable;
 import org.jetbrains.annotations.UnmodifiableView;
 import roj.annotation.MayMutate;
-import roj.archive.zip.ZEntry;
-import roj.archive.zip.ZipArchive;
-import roj.archive.zip.ZipOutput;
+import roj.archive.zip.ZipEditor;
+import roj.archive.zip.ZipEntry;
 import roj.asm.ClassNode;
 import roj.asm.attr.Annotations;
 import roj.asmx.AnnotatedElement;
@@ -22,6 +21,7 @@ import roj.collect.*;
 import roj.gui.Profiler;
 import roj.io.IOUtil;
 import roj.util.ByteList;
+import roj.util.DynByteBuf;
 import roj.util.Helpers;
 import roj.util.TypedKey;
 import roj.util.function.ExceptionalSupplier;
@@ -66,6 +66,7 @@ public final class BuildContext {
 	static final Set<Dependency> ALL_OPENED_DEPENDENCIES = Collections.newSetFromMap(new ConcurrentHashMap<>());
 
 	void openDependencies() throws IOException {
+		project.initializeFileList(incrementLevel == INC_FULL);
 		for (Dependency dep : project.getCompileDependencies()) {
 			if (ALL_OPENED_DEPENDENCIES.add(dep)) {
 				dep.open(this);
@@ -284,7 +285,7 @@ public final class BuildContext {
 			if (incrementLevel != INC_FULL) {
 				if (p.dependencyGraph.isEmpty()) {
 					Profiler.startSection("memoryCacheConstruct");
-					ZipArchive za;
+					ZipEditor za;
 					try {
 						za = p.unmappedWriter.getArchive();
 					} catch (Exception e) {
@@ -296,7 +297,7 @@ public final class BuildContext {
 						incrementLevel = INC_FULL;
 						break loadDep;
 					}
-					for (ZEntry ze : za.entries()) {
+					for (ZipEntry ze : za.entries()) {
 						ClassNode node = ClassNode.parseSkeleton(za.get(ze));
 						p.dependencyGraph.add(node);
 						p.structureRepo.add(node);
@@ -580,7 +581,7 @@ public final class BuildContext {
 			if (entry.getValue() instanceof ByteList b) {
 				writer.set(entry.getKey(), b);
 			} else {
-				writer.set(entry.getKey(), (ExceptionalSupplier<ByteList, IOException>) entry.getValue(), buildStartTime);
+				writer.set(entry.getKey(), (ExceptionalSupplier<DynByteBuf, IOException>) entry.getValue(), buildStartTime);
 			}
 		}
 		log.debug("Write {} generated files for {}", generatedFiles.size(), project.getName());
@@ -786,8 +787,9 @@ public final class BuildContext {
 	 *
 	 * @param mixin the mixin class node
 	 * @throws WeaveException if the mixin fails to load or validate
+	 * @since 3.15
 	 */
-	public void mixin(@MayMutate ClassNode mixin) throws WeaveException {project.persistentState.weaver.load(mixin);}
+	public void addMixin(@MayMutate ClassNode mixin) throws WeaveException {project.persistentState.weaver.load(mixin);}
 	/**
 	 * Enables constant pool hooks for the build and returns the hooks instance.
 	 * Hooks allow custom transformations on constant pool entries during processing.
@@ -795,7 +797,7 @@ public final class BuildContext {
 	 *
 	 * @return the constant pool hooks instance
 	 */
-	public ConstantPoolHooks getCPHooks() {project.persistentState.needTransform = true;return project.persistentState.hooks;}
+	public ConstantPoolHooks classNodeEvents() {project.persistentState.needTransform = true;return project.persistentState.hooks;}
 	/**
 	 * Returns the mapper instance for remapping class names, method signatures, and debug information.
 	 * Commonly used for obfuscation, access widening, or name shortening.

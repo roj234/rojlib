@@ -2,6 +2,7 @@ package roj.http;
 
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
+import roj.concurrent.Promise;
 import roj.io.IOUtil;
 import roj.io.MBInputStream;
 import roj.net.ChannelCtx;
@@ -14,6 +15,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.Charset;
 import java.util.function.Consumer;
+import java.util.function.IntPredicate;
 
 /**
  * @author Roj234
@@ -37,7 +39,7 @@ final class HttpResponseImpl implements ChannelHandler, HttpResponse {
 	private volatile boolean needGetAll;
 	private Throwable ex;
 
-	private Consumer<HttpResponse> callback;
+	private volatile Consumer<HttpResponse> callback;
 
 	@Override
 	public void handlerAdded(ChannelCtx ctx) {
@@ -88,7 +90,7 @@ final class HttpResponseImpl implements ChannelHandler, HttpResponse {
 	@Override
 	public void onEvent(ChannelCtx ctx, Event event) throws IOException {
 		if (event.id.equals(HttpRequest.DOWNLOAD_EOF)) {
-			finish(ctx, (boolean) event.getData());
+			finish((boolean) event.getData());
 
 			if (state != SUCCESS || ctx.postEvent(HC_FINISH).getResult() == Event.RESULT_DEFAULT) {
 				try {
@@ -106,13 +108,13 @@ final class HttpResponseImpl implements ChannelHandler, HttpResponse {
 		//ctx.exceptionCaught(e);
 	}
 	@Override
-	public void channelClosed(ChannelCtx ctx) throws IOException { finish(ctx, false); }
+	public void channelClosed(ChannelCtx ctx) throws IOException { finish(false); }
 
 	private void ensureOpen() throws IOException {
 		if (state == FAIL) throw new IOException("请求失败: "+this, ex);
 	}
 
-	private void finish(ChannelCtx ctx, boolean ok) {
+	private void finish(boolean ok) {
 		synchronized (this) {
 			if (state < FAIL) {
 				if (ok) {
@@ -121,7 +123,10 @@ final class HttpResponseImpl implements ChannelHandler, HttpResponse {
 					state = FAIL;
 					if (ex == null) ex = new IllegalStateException("未预料的连接关闭");
 				}
+			} else {
+				return;
 			}
+
 			notifyAll();
 		}
 
@@ -146,7 +151,7 @@ final class HttpResponseImpl implements ChannelHandler, HttpResponse {
 			return true;
 		} catch (Exception e) {
 			shc.ex = e;
-			shc.finish(ctx1, false);
+			shc.finish(false);
 			return false;
 		}
 	}
@@ -192,11 +197,11 @@ final class HttpResponseImpl implements ChannelHandler, HttpResponse {
 	@Override public boolean isDone() { return state >= FAIL; }
 	@Override
 	public synchronized void awaitCompletion() throws InterruptedException {
-		while(state < FAIL) wait();
+		while (state < FAIL) wait();
 	}
 	@Override
-	public synchronized void onReadyStateChange(Consumer<HttpResponse> handler) throws IOException {
-		ensureOpen();
+	public synchronized void onReadyStateChange(Consumer<HttpResponse> handler) {
+		if (callback != null) throw new IllegalStateException("Already have handler");
 		callback = handler;
 		if (state >= HEAD) handler.accept(this);
 	}
@@ -231,6 +236,42 @@ final class HttpResponseImpl implements ChannelHandler, HttpResponse {
 		ensureOpen();
 		return (ByteList) buffer;
 	}
+
+	@Override
+	public Promise<ByteList> asyncBytes(IntPredicate code) {
+		if (ctx1.next() != null) throw new IllegalStateException("async handler active");
+		if (inputStream != null) throw new IllegalStateException("stream active");
+
+		needGetAll = true;
+		ctx1.readActive();
+
+		Promise<ByteList> sync = Promise.manual();
+
+		onReadyStateChange(that -> {
+			if (head != null && !code.test(head.statusCode()) && state != FAIL) {
+				ex = new IllegalStateException("Unexpected status code: "+head.statusCode());
+				finish(false);
+			}
+
+			if (!that.isDone()) {
+				long len = head.getContentLength();
+				if (len > ArrayCache.MAX_ARRAY_SIZE) {
+					ex = new OutOfMemoryError("Content length("+len+") > MAX_ARRAY_SIZE");
+					finish(false);
+				}
+			} else {
+				var callback = (Promise.Result)sync;
+				if (state == FAIL) {
+					callback.reject(ex);
+				} else {
+					callback.resolve(buffer);
+				}
+			}
+		});
+
+		return sync;
+	}
+
 	@Override
 	public String text(Charset charset) throws IOException {
 		try (var reader = new TextReader(stream(), charset)) {

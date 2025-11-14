@@ -1,22 +1,24 @@
 package roj.ci.plugin;
 
-import roj.asm.ClassNode;
-import roj.asm.FieldNode;
-import roj.asm.MethodNode;
-import roj.asm.Opcodes;
+import roj.asm.*;
 import roj.asm.annotation.Annotation;
 import roj.asm.attr.Annotations;
 import roj.asm.cp.Constant;
 import roj.asm.cp.ConstantPool;
 import roj.asm.cp.CstRefUTF;
+import roj.asm.insn.CodeWriter;
 import roj.asm.type.Type;
+import roj.asm.type.TypeHelper;
 import roj.ci.BuildContext;
-import roj.ci.MCMake;
 import roj.collect.BiMap;
 import roj.io.IOUtil;
 import roj.text.Formatter;
 
 import java.util.List;
+
+import static roj.asm.Opcodes.ACC_STATIC;
+import static roj.asm.Opcodes.ALOAD_0;
+import static roj.ci.MCMake.log;
 
 /**
  * @author Roj234
@@ -42,8 +44,43 @@ public class ANNOTATION implements Plugin {
 			Annotation aliasOf = annotatedElement.annotations().get("roj/ci/annotation/AliasOf");
 			Type aliasTarget = aliasOf.getClass("value");
 			String altValue = aliasOf.getString("altValue", null);
+
+			// 对于简单的成员名称转换，尽管你可以使用classNodeEvents，但是数据驱动的Mapper支持多线程，而且将考虑ClassNode中现有及未来的所有引用
 			classMap.put(annotatedElement.owner(), altValue == null ? aliasTarget.owner() : altValue.replace('.', '/'));
 		});
+
+		ctx.getDepAnnotations("roj/ci/annotation/StaticHook", element -> {
+			Annotation annotation = element.annotations().get("roj/ci/annotation/StaticHook");
+			MemberDescriptor descriptor = MemberDescriptor.fromJavapLike(annotation.getString("value"));
+
+			// 使用事件驱动的方式来按需遍历类，而不是ctx.getChangedClass()然后判断名称是否合适。
+			ctx.classNodeEvents().declaredMethod(descriptor.owner, descriptor.name, descriptor.rawDesc, (classNode, methodNode) -> {
+				CodeWriter cw = methodNode.overwrite(classNode.cp);
+
+				int staticOffset = (methodNode.modifier & ACC_STATIC) == 0 ? 1 : 0;
+
+				int slots = TypeHelper.paramSize(methodNode.rawDesc())+staticOffset;
+				cw.visitSize(slots, slots);
+
+				if (staticOffset != 0) cw.insn(ALOAD_0);
+
+				List<Type> parameters = cw.method.parameters();
+				for (int i = 0; i < parameters.size(); i++) {
+					cw.varLoad(parameters.get(i), i+ staticOffset);
+				}
+
+				cw.invokeS(descriptor.owner, descriptor.name, descriptor.rawDesc);
+				cw.return_(cw.method.returnType());
+				cw.finish();
+
+				return true;
+			});
+		});
+
+		// 对于更加复杂的需求，你可以加载甚至动态生成Mixin
+		//ctx.addMixin(mixin);
+
+		// 注意，事件驱动的转换必须在post阶段之前调用
 	}
 
 	@Override
@@ -71,7 +108,7 @@ public class ANNOTATION implements Plugin {
 						String string = Formatter.simple(template).format(ctx.getVariables(annotatedClass.get(i)), IOUtil.getSharedCharBuf()).toString();
 						str.setValue(cp.getUtf(string));
 						if (string.contains("${"))
-							MCMake.log.warn("未完全匹配的格式字符串 '"+string+"' ("+annotatedClass.get(i).getFileName()+")");
+							log.warn("未完全匹配的格式字符串 '"+string+"' ("+annotatedClass.get(i).getFileName()+")");
 					}
 				}
 			}

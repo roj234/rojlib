@@ -1,7 +1,8 @@
 package roj.plugins.minecraft.diff;
 
-import roj.archive.qz.*;
+import roj.archive.sevenz.*;
 import roj.archive.xz.LZMA2Options;
+import roj.archive.xz.LZMA2ParallelEncoder;
 import roj.archive.xz.LZMAOutputStream;
 import roj.collect.ArrayList;
 import roj.collect.HashMap;
@@ -21,6 +22,7 @@ import roj.ui.EasyProgressBar;
 import roj.util.ArrayCache;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
+import roj.util.MemoryLimit;
 
 import java.io.*;
 import java.nio.charset.StandardCharsets;
@@ -44,7 +46,7 @@ public final class McDiffServer {
 	public McDiffServer(KeyPair kp) {userCert = kp;}
 
 	public void makeDiff(File fullPack, File directory, Predicate<File> filter, File diffFile) throws IOException {
-		QZArchive pack = new QZArchive(fullPack);
+		SevenZFile pack = new SevenZFile(fullPack);
 
 		List<String> empty = new ArrayList<>();
 		HashSet<String> added = new HashSet<>();
@@ -56,33 +58,36 @@ public final class McDiffServer {
 
 		computeDiff(directory, filter, pack, empty, added, deleted, moved, pool);
 
-		QZFileWriter qzfw = new QZFileWriter(diffFile.getAbsolutePath());
+		SevenZPacker qzfw = new SevenZPacker(diffFile.getAbsolutePath());
 
 		System.out.println("正在处理删除 (2/4)");
-		for (String path : deleted) qzfw.beginEntry(QZEntry.ofNoAttribute(".vcs/"+path));
+		for (String path : deleted) qzfw.beginEntry(SevenZEntry.ofNoAttribute(".vcs/"+path));
 		for (Map.Entry<String, String> entry : moved.entrySet()) {
-			qzfw.beginEntry(QZEntry.ofNoAttribute(".vcs/"+entry.getKey()));
+			qzfw.beginEntry(SevenZEntry.ofNoAttribute(".vcs/"+entry.getKey()));
 			qzfw.write(entry.getValue().getBytes(StandardCharsets.UTF_16LE));
 		}
 		qzfw.flush();
 		for (String path : empty) {
-			qzfw.beginEntry(QZEntry.ofNoAttribute(path));
+			qzfw.beginEntry(SevenZEntry.ofNoAttribute(path));
 		}
 
-		int affinity = Runtime.getRuntime().availableProcessors();
-		long myMem = (1L<<24) * affinity;
+		int threadCount = Runtime.getRuntime().availableProcessors();
+		long myMem = (1L<<24) * threadCount;
 		System.out.println("Allocating "+TextUtil.scaledNumber1024(myMem)+" of memory");
+
 		LZMA2Options opt = new LZMA2Options();
-		opt.setAsyncMode(1<<24, TaskPool.cpu(), affinity, true);
-		opt.getAsyncMan().setMemoryLimit(myMem);
-		QZWriter genericParallel = qzfw.newParallelWriter();
+		LZMA2ParallelEncoder parallelEncoder = new LZMA2ParallelEncoder(opt, 1<<24, true);
+		parallelEncoder.setExecutionProfile(new MemoryLimit(myMem), TaskPool.cpu(), threadCount);
+		opt.enableParallel(parallelEncoder);
+
+		SevenZWriter genericParallel = qzfw.newParallelWriter();
 		genericParallel.setCodec(new LZMA2(opt));
 
 		System.out.println("正在处理新增 (3/4)");
 		bar.setTotal(added.size());
 		for (String path : added) {
 			File file = new File(directory, path);
-			QZEntry entry = QZEntry.of(path);
+			SevenZEntry entry = SevenZEntry.of(path);
 
 			int flag = 0;
 
@@ -147,7 +152,7 @@ public final class McDiffServer {
 
 				RegionFile javac傻逼 = prevRin;
 				File javac大傻逼 = tempFile;
-				QZWriter w = qzfw.newParallelWriter();
+				SevenZWriter w = qzfw.newParallelWriter();
 				w.setCodec(new LZMA2(7));
 				w.beginEntry(entry);
 
@@ -216,12 +221,12 @@ public final class McDiffServer {
 
 		genericParallel.close();
 
-		qzfw.beginEntry(QZEntry.ofNoAttribute(".vcs|hashes"));
+		qzfw.beginEntry(SevenZEntry.ofNoAttribute(".vcs|hashes"));
 		try (var out = DynByteBuf.toStream(qzfw, false)) {
-			for (QZEntry file : qzfw.getFiles()) {
+			for (SevenZEntry file : qzfw.getFiles()) {
 				// or other kind that need original file
 				if (file.getModificationTime() == REGION) {
-					QZEntry entry = pack.getEntry(file.getName());
+					SevenZEntry entry = pack.getEntry(file.getName());
 					if (entry != null) out.putVUIGB(entry.getName()).putLong(entry.getSize()).putInt(entry.getCrc32());
 				}
 			}
@@ -239,13 +244,13 @@ public final class McDiffServer {
 		qzfw.close();
 	}
 
-	private static void addWarning(QZFileWriter qzfw) throws IOException {
-		QZEntry entry = QZEntry.of(".vcs|请勿修改包内文件");
+	private static void addWarning(SevenZPacker qzfw) throws IOException {
+		SevenZEntry entry = SevenZEntry.of(".vcs|请勿修改包内文件");
 		entry.setModificationTime(System.currentTimeMillis());
 		qzfw.beginEntry(entry);
 	}
 
-	private void addSignature(File file, QZFileWriter qzfw) throws IOException {
+	private void addSignature(File file, SevenZPacker qzfw) throws IOException {
 		// 主要是让签名能存入同一个压缩包，不要写两次磁盘，也不要分成两个文件
 		// 验证了Metadata的文件名、大小、顺序，和WordBlock的数据
 		// 修改日期之类的就没有验证了
@@ -255,7 +260,7 @@ public final class McDiffServer {
 		var hash1 = CryptoFactory.Blake3(32);
 		var hash2 = CryptoFactory.SM3();
 
-		long count = qzfw.source().position()-32;
+		long count = qzfw.getSource().position()-32;
 		byte[] tmp = ArrayCache.getIOBuffer();
 		try (InputStream in = new FileInputStream(file)) {
 			IOUtil.readFully(in, tmp, 0, 32); // 跳过文件头
@@ -273,7 +278,7 @@ public final class McDiffServer {
 		ArrayCache.putArray(tmp);
 
 		ByteList buf = IOUtil.getSharedByteBuf();
-		for (QZEntry entry1 : qzfw.getFiles()) {
+		for (SevenZEntry entry1 : qzfw.getFiles()) {
 			buf.putChars(entry1.getName()).putLong(entry1.getSize());
 
 			if (buf.wIndex() > 1024) {
@@ -283,7 +288,7 @@ public final class McDiffServer {
 				buf.clear();
 			}
 		}
-		for (QZEntry entry1 : qzfw.getEmptyFiles()) {
+		for (SevenZEntry entry1 : qzfw.getEmptyFiles()) {
 			buf.putChars(entry1.getName());
 
 			if (buf.wIndex() > 1024) {
@@ -317,7 +322,7 @@ public final class McDiffServer {
 			   .putAscii(hexSign).put('\n')
 			   .putAscii(KeyType.getInstance(algorithm).toPEM(userCert.getPublic()));
 
-			qzfw.beginEntry(QZEntry.ofNoAttribute(".vcs|signature"));
+			qzfw.beginEntry(SevenZEntry.ofNoAttribute(".vcs|signature"));
 			buf.writeToStream(qzfw);
 		} catch (Exception e) {
 			System.out.println("签名失败！");
@@ -326,7 +331,7 @@ public final class McDiffServer {
 	}
 
 	private static void computeDiff(File directory, Predicate<File> filter,
-									QZArchive pack,
+									SevenZFile pack,
 									List<String> empty,
 									HashSet<String> added,
 									List<String> deleted,
@@ -349,7 +354,7 @@ public final class McDiffServer {
 				continue;
 			}
 
-			QZEntry oldEntry = oldEntries.remove(name);
+			SevenZEntry oldEntry = oldEntries.remove(name);
 			synchronized (added) {
 				added.add(name);
 				if (oldEntry != null && oldEntry.getSize() == file.length()) {
@@ -372,7 +377,7 @@ public final class McDiffServer {
 			}
 		}
 
-		for (QZEntry oldEntry : oldEntries.values()) {
+		for (SevenZEntry oldEntry : oldEntries.values()) {
 			if (oldEntry.isDirectory()) continue;
 
 			String entry = moveCheck.get(oldEntry.getCrc32());
@@ -410,7 +415,7 @@ public final class McDiffServer {
 		return crc;
 	}
 
-	private static boolean compare(File left, QZArchive pack, QZEntry entry) throws IOException {return compare(new FileInputStream(left), pack.getConcurrentInputStream(entry));}
+	private static boolean compare(File left, SevenZFile pack, SevenZEntry entry) throws IOException {return compare(new FileInputStream(left), pack.getConcurrentInputStream(entry));}
 	private static boolean compare(InputStream ina, InputStream inb) {
 		byte[] a = ArrayCache.getIOBuffer();
 		byte[] b = ArrayCache.getIOBuffer();

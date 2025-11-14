@@ -20,6 +20,7 @@ import java.net.InetAddress;
  */
 public class ServiceManager {
 	public static void main(String[] args) throws Exception {
+		JVM.AccurateTimer.setEventDriven();
 		if (!JVM.isRoot()) {
 			System.out.println("You need root permission to run PrivilegedServices");
 			return;
@@ -45,6 +46,5 @@ public class ServiceManager {
 		}).launch();
 
 		System.out.println("RPC server now listening on localhost:"+port);
-		JVM.AccurateTimer.parkForMe();
 	}
 }

@@ -492,7 +492,7 @@ public class Terminal implements KeyHandler {
 
 		renderLine(relCursor);
 	}
-	protected void renderLine(int cursor) {Tty.renderBottomLine(line, true, promptWidth +cursor+1);}
+	protected void renderLine(int cursor) {Tty.renderBottomLine(line, false, promptWidth+cursor+1);}
 
 	private int computeMaxWidth() {
 		int maxWidth = Tty.getColumns() - promptWidth;

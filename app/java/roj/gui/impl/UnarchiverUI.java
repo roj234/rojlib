@@ -6,16 +6,17 @@ package roj.gui.impl;
 
 import roj.archive.ArchiveEntry;
 import roj.archive.ArchiveFile;
-import roj.archive.qz.LZMA2;
-import roj.archive.qz.QZArchive;
-import roj.archive.qz.QZEntry;
-import roj.archive.qz.WordBlock;
-import roj.archive.qz.util.QZArchiver;
-import roj.archive.zip.ZEntry;
+import roj.archive.sevenz.LZMA2;
+import roj.archive.sevenz.SevenZEntry;
+import roj.archive.sevenz.SevenZFile;
+import roj.archive.sevenz.WordBlock;
+import roj.archive.sevenz.util.SevenZArchiver;
+import roj.archive.zip.ZipEntry;
 import roj.archive.zip.ZipFile;
 import roj.collect.TrieTreeSet;
 import roj.concurrent.TaskGroup;
 import roj.concurrent.TaskPool;
+import roj.config.node.IntValue;
 import roj.gui.GuiProgressBar;
 import roj.gui.GuiUtil;
 import roj.gui.TreeBuilder;
@@ -48,12 +49,12 @@ import java.nio.charset.Charset;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.BasicFileAttributeView;
+import java.nio.file.attribute.DosFileAttributeView;
 import java.util.Arrays;
 import java.util.List;
 import java.util.function.BiConsumer;
 
-import static roj.archive.WinAttributes.FILE_ATTRIBUTE_NORMAL;
-import static roj.archive.WinAttributes.FILE_ATTRIBUTE_REPARSE_POINT;
+import static roj.archive.WinAttributes.*;
 
 /**
  * @author Roj234
@@ -69,8 +70,8 @@ public class UnarchiverUI extends JFrame {
 	}
 
 	private final DefaultTreeModel fileTree = new DefaultTreeModel(null);
-	private ArchiveFile archiveFile;
-	private QZArchive qzArhive;
+	private ArchiveFile<?> archiveFile;
+	private SevenZFile qzArhive;
 	private ZipFile zipFile;
 
 	public UnarchiverUI() {
@@ -167,14 +168,14 @@ public class UnarchiverUI extends JFrame {
 			}
 
 			if (h[0] == 'P' && h[1] == 'K') {
-				archiveFile = zipFile = new ZipFile(archive, ZipFile.FLAG_BACKWARD_READ, uiCharset.getText().isEmpty() ? Charset.defaultCharset() : Charset.forName(uiCharset.getText()));
+				archiveFile = zipFile = new ZipFile(archive, ZipFile.FLAG_ReadCENOnly, uiCharset.getText().isEmpty() ? Charset.defaultCharset() : Charset.forName(uiCharset.getText()));
 				uiStoreAnti.setEnabled(false);
 			} else if (h[0] == '7' && h[1] == 'z') {
 				List<String> password = null;
 				while (true) {
 					try {
 						String strPass = password == null ? null : password.remove(0);
-						archiveFile = qzArhive = new QZArchive(archive, strPass);
+						archiveFile = qzArhive = new SevenZFile(archive, strPass);
 						if (strPass != null) uiPasswordInfo.setText("密码是"+strPass);
 						break;
 					} catch (CorruptedInputException|IllegalArgumentException ex) {
@@ -209,7 +210,7 @@ public class UnarchiverUI extends JFrame {
 		} else {
 			set = new TrieTreeSet();
 			for (TreePath path : paths) {
-				TreeBuilder.Node<QZEntry> node = Helpers.cast(path.getLastPathComponent());
+				TreeBuilder.Node<SevenZEntry> node = Helpers.cast(path.getLastPathComponent());
 				if (node == uiPathTree.getModel().getRoot()) {
 					set = null;
 					break;
@@ -225,20 +226,46 @@ public class UnarchiverUI extends JFrame {
 		if (uiStoreCTime.isSelected()) storeFlag |= 4;
 		if (uiStoreAnti.isSelected())  storeFlag |= 8;
 		if (uiStoreAttr.isSelected())  storeFlag |= 16;
-		if (bFollowLink.isSelected())  storeFlag |= 32;
+		IntValue storeFlag1 = new IntValue(storeFlag);
 
-		int storeFlag1 = storeFlag;
 		TrieTreeSet javacSb = set;
 		BiConsumer<ArchiveEntry, InputStream> cb = (entry, in) -> {
 			if (javacSb == null || javacSb.strStartsWithThis(entry.getName())) {
+				int storeFlag2 = storeFlag1.value;
+
+				boolean entryIsLink = (entry.getWinAttributes() & FILE_ATTRIBUTE_REPARSE_POINT) != 0;
+				boolean allowLink = (storeFlag2 & 32) != 0;
+				if (entryIsLink != allowLink) {
+					bar.increment(entry.getSize());
+					return;
+				}
+
 				String name = entry.getName();
 				if (uiPathFilter.isSelected()) name = URICoder.escapeFilePath(IOUtil.normalizePath(name));
 
 				File file1 = new File(basePath, name);
 
+				if (entry instanceof SevenZEntry qze && qze.isAntiItem()) {
+					if ((storeFlag2&8) != 0) {
+						if (qze.isDirectory()) {
+							IOUtil.deletePath(file1);
+						} else {
+							try {
+								Files.deleteIfExists(file1.toPath());
+							} catch (IOException e) {
+								logger.warn("文件{}无法删除", e, file1);
+							}
+						}
+					}
+
+					return;
+				}
+
 				if (entry.isDirectory()) {
 					file1.mkdirs();
 					return;
+				} else {
+					file1.getParentFile().mkdirs();
 				}
 
 				int ord = 0;
@@ -253,76 +280,57 @@ public class UnarchiverUI extends JFrame {
 					file1 = new File(basePath, name);
 				}
 
-				file1.getParentFile().mkdirs();
 				try {
-					if ((storeFlag1&32) != 0 && (entry.getWinAttributes()&FILE_ATTRIBUTE_REPARSE_POINT) != 0) {
+					if (entryIsLink) {
+						bar.increment(in.available());
+
 						if ((entry.getWinAttributes()&FILE_ATTRIBUTE_NORMAL) != 0) {
 							Files.createLink(file1.toPath(), Path.of(basePath.getAbsolutePath()+File.separatorChar+IOUtil.readUTF(in)));
+							return;
 						} else {
 							Files.createSymbolicLink(file1.toPath(), Path.of(IOUtil.readUTF(in)));
 						}
 					} else {
-						IOUtil.createSparseFile(file1, entry.getSize());
 						assert in.available() == Math.min(entry.getSize(), Integer.MAX_VALUE);
 						try (var out = new FileSource(file1)) {
-							QZArchiver.copyStreamWithProgress(in, out, bar);
+							out.setLength(entry.getSize());
+							SevenZArchiver.copyStreamWithProgress(in, out, bar);
 						}
 						assert file1.length() == entry.getSize();
+						if ((storeFlag2&16) != 0) {
+							var view = Files.getFileAttributeView(file1.toPath(), DosFileAttributeView.class);
+							int winAttributes = entry.getWinAttributes();
+							view.setArchive((winAttributes & FILE_ATTRIBUTE_ARCHIVE) != 0);
+							view.setHidden((winAttributes & FILE_ATTRIBUTE_HIDDEN) != 0);
+							view.setSystem((winAttributes & FILE_ATTRIBUTE_SYSTEM) != 0);
+							view.setReadOnly((winAttributes & FILE_ATTRIBUTE_READONLY) != 0);
+						}
 					}
 
-					if ((storeFlag1&7) != 0) {
+					if ((storeFlag2&7) != 0) {
 						var view = Files.getFileAttributeView(file1.toPath(), BasicFileAttributeView.class);
 						view.setTimes(
-							(storeFlag1&1) == 0 ? null : entry.getPrecisionModificationTime(),
-							(storeFlag1&2) == 0 ? null : entry.getPrecisionAccessTime(),
-							(storeFlag1&4) == 0 ? null : entry.getPrecisionCreationTime());
+							(storeFlag2&1) == 0 ? null : entry.getPrecisionModificationTime(),
+							(storeFlag2&2) == 0 ? null : entry.getPrecisionAccessTime(),
+							(storeFlag2&4) == 0 ? null : entry.getPrecisionCreationTime());
 					}
 				} catch (Exception ex) {
 					logger.warn("文件{}解压错误", ex, name);
 				}
-
-				bar.increment(entry.getSize());
 			}
 		};
 
 		if (zipFile != null) {
-			byte[] password = null;
-			for (ZEntry entry : zipFile.entries()) {
-				if (set == null || set.strStartsWithThis(entry.getName())) {
-					block:
-					if (entry.isEncrypted() && password == null) {
-						List<String> passwords = TextUtil.split(uiPasswords.getText(), '\n');
-						for (String pass : passwords) {
-							for (String charset : new String[] {"UTF8", "UTF_16LE", "UTF_16BE", "GBK", "GB18030", "SHIFT_JIS"}) {
-								password = checkPassword(entry, pass, charset);
-								if (password != null) {
-									uiPasswordInfo.setText("密码是"+charset+"@"+pass);
-									break block;
-								}
-							}
-						}
-						JOptionPane.showMessageDialog(this, "密码错误, 解压失败");
-						throw new IllegalArgumentException("密码错误");
-					}
-					bar.addTotal(entry.getSize());
-				}
-			}
-
-			byte[] javacSbAgain = password;
-			for (ZEntry entry : zipFile.entries()) {
-				if (set == null || set.strStartsWithThis(entry.getName())) {
-					pool.executeUnsafe(() -> {
-						try (InputStream in = zipFile.getInputStream(entry, javacSbAgain)) {
-							cb.accept(entry, in);
-						}
-					});
-				}
-			}
+			unarchiveZip(pool, bar, set, cb, storeFlag1);
 			return;
 		}
 
+		unarchiveSevenZ(pool, bar, set, cb, storeFlag1);
+	}
+
+	private void unarchiveSevenZ(TaskGroup pool, EasyProgressBar bar, TrieTreeSet set, BiConsumer<ArchiveEntry, InputStream> cb, IntValue storeFlag1) {
 		byte[] password = null;
-		for (QZEntry entry : qzArhive.getEntriesByPresentOrder()) {
+		for (SevenZEntry entry : qzArhive.getEntriesByPresentOrder()) {
 			if (set == null || set.strStartsWithThis(entry.getName())) {
 				block:
 				if (entry.isEncrypted() && password == null) {
@@ -336,18 +344,6 @@ public class UnarchiverUI extends JFrame {
 					}
 					throw new IllegalArgumentException("密码错误");
 				}
-
-				if ((storeFlag&8) != 0 && entry.isAntiItem()) {
-					String name = entry.getName();
-					if (uiPathFilter.isSelected()) name = URICoder.escapeFilePath(IOUtil.normalizePath(name));
-
-					File file1 = new File(basePath, name);
-					try {
-						Files.deleteIfExists(file1.toPath());
-					} catch (IOException ex) {
-						logger.warn("文件{}无法删除", ex, file1);
-					}
-				}
 				bar.addTotal(entry.getSize());
 			}
 		}
@@ -360,7 +356,65 @@ public class UnarchiverUI extends JFrame {
 				}
 			}
 		}
-		qzArhive.parallelDecompress(pool, Helpers.cast(cb), password);
+		qzArhive.parallelDecompress(pool, cb, password);
+		if (bFollowLink.isSelected()) {
+			pool.await();
+			storeFlag1.value |= 32;
+			qzArhive.parallelDecompress(pool, cb, password);
+		}
+	}
+
+	private void unarchiveZip(TaskGroup pool, EasyProgressBar bar, TrieTreeSet set, BiConsumer<ArchiveEntry, InputStream> cb, IntValue storeFlag1) {
+		byte[] password = null;
+		for (ZipEntry entry : zipFile.entries()) {
+			if (set == null || set.strStartsWithThis(entry.getName())) {
+				block:
+				if (entry.isEncrypted() && password == null) {
+					List<String> passwords = TextUtil.split(uiPasswords.getText(), '\n');
+					for (String pass : passwords) {
+						for (String charset : new String[] {"UTF8", "UTF_16LE", "UTF_16BE", "GBK", "GB18030", "SHIFT_JIS"}) {
+							password = checkPassword(entry, pass, charset);
+							if (password != null) {
+								uiPasswordInfo.setText("密码是"+charset+"@"+pass);
+								break block;
+							}
+						}
+					}
+					JOptionPane.showMessageDialog(this, "密码错误, 解压失败");
+					throw new IllegalArgumentException("密码错误");
+				}
+				bar.addTotal(entry.getSize());
+			}
+		}
+
+		byte[] javacSbAgain = password;
+		for (ZipEntry entry : zipFile.entries()) {
+			if ((entry.getWinAttributes()&FILE_ATTRIBUTE_REPARSE_POINT) == 0) {
+				if (set == null || set.strStartsWithThis(entry.getName())) {
+					pool.executeUnsafe(() -> {
+						try (InputStream in = zipFile.getInputStream(entry, javacSbAgain)) {
+							cb.accept(entry, in);
+						}
+					});
+				}
+			}
+		}
+
+		if (bFollowLink.isSelected()) {
+			pool.await();
+			storeFlag1.value |= 32;
+			for (ZipEntry entry : zipFile.entries()) {
+				if ((entry.getWinAttributes()&FILE_ATTRIBUTE_REPARSE_POINT) != 0) {
+					if (set == null || set.strStartsWithThis(entry.getName())) {
+						pool.executeUnsafe(() -> {
+							try (InputStream in = zipFile.getInputStream(entry, javacSbAgain)) {
+								cb.accept(entry, in);
+							}
+						});
+					}
+				}
+			}
+		}
 	}
 
 	private void closeFile() {
@@ -375,7 +429,7 @@ public class UnarchiverUI extends JFrame {
 
 	private byte[] checkPassword(ArchiveEntry entry, String pass, String charset) {
 		byte[] password;
-		try (InputStream in = archiveFile.getInputStream(entry, password = pass.getBytes(Charset.forName(charset)))) {
+		try (InputStream in = archiveFile.getInputStream(Helpers.cast(entry), password = pass.getBytes(Charset.forName(charset)))) {
 			in.skip(1048576);
 			return password;
 		} catch (Exception ex) {
@@ -411,7 +465,7 @@ public class UnarchiverUI extends JFrame {
         bErrorRecovery = new JCheckBox();
 
         //======== this ========
-        setTitle("Roj234 Unarchiver 1.4");
+        setTitle("Roj234 Unarchiver 1.5");
         var contentPane = getContentPane();
         contentPane.setLayout(null);
 
@@ -479,7 +533,6 @@ public class UnarchiverUI extends JFrame {
 
         //---- uiStoreAttr ----
         uiStoreAttr.setText("DOS\u5c5e\u6027");
-        uiStoreAttr.setEnabled(false);
         contentPane.add(uiStoreAttr);
         uiStoreAttr.setBounds(new Rectangle(new Point(210, 90), uiStoreAttr.getPreferredSize()));
 

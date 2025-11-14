@@ -10,7 +10,6 @@ import roj.text.TextUtil;
 
 import java.io.File;
 import java.io.FileInputStream;
-import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.file.FileVisitResult;
 
@@ -59,14 +58,10 @@ class Scene implements Unpacker {
 				file.getParentFile().mkdirs();
 
 				try {
-					IOUtil.createSparseFile(file, v.length);
-
-					FileOutputStream out = new FileOutputStream(file);
-					try {
+					try (var out = new FileSource(file)) {
+						out.setLength(v.length);
 						in.seek(v.offset);
 						IOUtil.copyStream(new SourceInputStream(in, v.length, false), out);
-					} finally {
-						IOUtil.closeSilently(out);
 					}
 				} catch (IOException e) {
 					e.printStackTrace();

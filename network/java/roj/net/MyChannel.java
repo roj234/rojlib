@@ -646,7 +646,7 @@ public abstract class MyChannel implements Selectable, Closeable {
 			try {
 				pipe.handler.channelClosed(pipe);
 			} catch (Throwable e) {
-				if (ee == null) ee = e;
+				if (ee == null || ee == e) ee = e;
 				else ee.addSuppressed(e);
 			}
 			pipe = pipe.prev;

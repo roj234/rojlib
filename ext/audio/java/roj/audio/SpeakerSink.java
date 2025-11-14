@@ -25,7 +25,6 @@ public class SpeakerSink implements AudioSink {
 		int cap = (int) (h.getFrameRate()*frameSize)/2;
 		int halfSecond = (cap * frameSize + frameSize - 1) / frameSize;
 
-		format = h;
 		if (out != null) {
 			if (out.isOpen()) out.close();
 			if (!cannotReopen傻逼java) {
@@ -46,8 +45,9 @@ public class SpeakerSink implements AudioSink {
 		} catch (LineUnavailableException e) {
 			throw new IOException(e);
 		}
-		paused = false;
 		out.start();
+		paused = false;
+		format = h;
 		mute(muted);
 		setVolume(gain);
 	}

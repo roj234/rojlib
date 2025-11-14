@@ -5,3 +5,5 @@ dist
 *.iml
 package.json
 package-lock.json
+*.dll
+*.so

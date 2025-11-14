@@ -2,7 +2,6 @@ package roj.compiler.ast;
 
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
-import roj.asm.ClassDefinition;
 import roj.asm.ClassNode;
 import roj.asm.MethodNode;
 import roj.asm.Opcodes;
@@ -1261,7 +1260,7 @@ public final class MethodParser {
 		}
 	}
 	private void invokeClose(Variable v, boolean report) {
-		ClassDefinition info = ctx.compiler.resolve(v.type.owner());
+		ClassNode info = ctx.compiler.resolve(v.type.owner());
 		var result = ctx.getMethodList(info, "close").findMethod(ctx, Collections.emptyList(), 0);
 		assert result != null;
 
@@ -2605,7 +2604,7 @@ public final class MethodParser {
 				else start = c.label();
 
 				c.insn(ALOAD_0);
-				ctx.writeCast(cw, expr, valueType);
+				ctx.writeCast(c, expr, valueType);
 				Label end = c.label();
 				c.ldc(i);
 				c.invokeV(builderType, "add", addDesc);
@@ -2634,6 +2633,14 @@ public final class MethodParser {
 		return sm;
 	}
 
+	/**
+	 *
+	 * @param endPoint break跳转到的目标
+	 * @param newSwitch 是否新式switch (用 -> 的那个)，永远不fallthrough
+	 * @param parse 是否解析还是忽略 (编译期常量跳过)
+	 * @return 这个switch分支是否会fallthrough到后面的代码
+	 * @throws ParseException
+	 */
 	@SuppressWarnings("fallthrough")
 	private boolean switchBlock(Label endPoint, boolean newSwitch, boolean parse) throws ParseException {
 		while (true) {
@@ -2651,14 +2658,9 @@ public final class MethodParser {
 						endCodeBlock();
 						return flow;
 					} else if (flow) {
-						if (wr.next().type() != rBrace) ctx.report(Kind.WARNING, "block.switch.fallthrough");
-						wr.retractWord();
+						if (w.type() != rBrace) ctx.report(Kind.WARNING, "block.switch.fallthrough");
 					}
 
-					System.out.println("Cw is JumpingTo "+endPoint);
-					System.out.println(cw.isContinuousControlFlow());
-					System.out.println(cw);
-					if (cw.isJumpingTo(endPoint) != cw.isContinuousControlFlow()) throw new AssertionError();
 				return cw.isContinuousControlFlow();
 			}
 
@@ -2861,7 +2863,7 @@ public final class MethodParser {
 			cw.store(ref);
 		}
 
-		ClassDefinition info = ctx.compiler.resolve(node.type().owner());
+		ClassNode info = ctx.compiler.resolve(node.type().owner());
 
 		var prevDFI = ctx.dynamicFieldImport;
 		var prevDMI = ctx.dynamicMethodImport;

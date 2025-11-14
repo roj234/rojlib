@@ -63,9 +63,7 @@ public interface Unsafe {
 	@ApiStatus.Internal @Deprecated default Object staticFieldBase(Field f) {return u.staticFieldBase(f);}
 
 	@Deprecated static long objectFieldOffset(Class<?> recv, String name, Class<?> type) {
-		var resolver = Telescope.trustedLookup();
-		Object handle = resolver.findField(recv, name, type, false);
-		return resolver.objectFieldOffset(handle);
+		return Telescope.trustedLookup().objectFieldOffset(recv, name, type);
 	}
 
 	/**
@@ -227,21 +225,4 @@ public interface Unsafe {
 	default void copyMemory(Object srcBase, long srcOffset, Object destBase, long destOffset, long bytes) {u.copyMemory(srcBase, srcOffset, destBase, destOffset, bytes);}
 	default void copyMemory(long srcAddress, long destAddress, long bytes) {u.copyMemory(srcAddress, destAddress, bytes);}
 	//endregion
-
-	/**
-	 * Gets the load average in the system run queue assigned
-	 * to the available processors averaged over various periods of time.
-	 * This method retrieves the given {@code nelem} samples and
-	 * assigns to the elements of the given {@code loadavg} array.
-	 * The system imposes a maximum of 3 samples, representing
-	 * averages over the last 1,  5,  and  15 minutes, respectively.
-	 *
-	 * @param loadavg an array of double of size nelems
-	 * @param nelems the number of samples to be retrieved and
-	 *        must be 1 to 3.
-	 *
-	 * @return the number of samples actually retrieved; or -1
-	 *         if the load average is unobtainable.
-	 */
-	default int getLoadAverage(double[] loadavg, int nelems) {return u.getLoadAverage(loadavg, nelems);}
 }

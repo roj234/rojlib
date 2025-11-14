@@ -3,6 +3,7 @@ package roj.http.server;
 import roj.net.ChannelCtx;
 import roj.text.CharList;
 import roj.text.FastCharset;
+import roj.text.HtmlEntities;
 import roj.text.logging.LogHelper;
 import roj.util.DynByteBuf;
 
@@ -32,8 +33,13 @@ public class TextContent implements Content {
 			  "<body style=\"background-color:#ebf0f6;font-family:'Microsoft Yahei';line-height:1.5;position:fixed;width:100%;height:100%;display:flex;justify-content:center;align-items:center\">" +
 			  "<div style=\"background:#fff;border-radius:8px;padding-bottom:50px;box-shadow:0 5px 20px rgb(0,0,0,0.3)\"><div style=\"font-size:24px;margin:20px 0;text-align:center\">").append(title)
 		  .append("</div><div style=\"color:#333;background:#f8f8f8;font-size:16px;margin:0 24px;border-radius:2px;padding:24px 40px\"><pre style=\"border-left:5px solid #1890ff;padding:5px 10px;color:#666\">");
-		if (o instanceof Throwable ex) LogHelper.printError(ex, sb, "");
-		else sb.append(o);
+		if (o instanceof Throwable ex) {
+			CharList tmp = new CharList();
+			LogHelper.printError(ex, tmp, "");
+			HtmlEntities.encode(sb, tmp);
+			tmp._free();
+		}
+		else HtmlEntities.encode(sb, o instanceof CharSequence cs ? cs : String.valueOf(o));
 		sb.append("</pre><i onclick=\"location.reload()\">刷新一下？</i></div></div></body></html>");
 		return new TextContent(sb, "text/html");
 	}

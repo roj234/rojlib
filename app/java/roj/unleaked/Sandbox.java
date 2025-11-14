@@ -1,6 +1,6 @@
 package roj.unleaked;
 
-import roj.archive.zip.ZipArchive;
+import roj.archive.zip.ZipEditor;
 import roj.asmx.Context;
 import roj.collect.HashSet;
 import roj.collect.TrieTreeSet;
@@ -16,8 +16,8 @@ final class Sandbox extends ClassLoader {
 	private static final TrieTreeSet allowed = new TrieTreeSet("roj.unleaked", "java.io.InputStream", "java.io.ByteArrayOutputStream", "java.nio.charset", "java.lang", "java.util", "java.util.regex", "java.util.function", "java.text", "java.time", "java.lang.invoke", "javax.crypto", "java.security");
 	private static final HashSet<String> disallowed = new HashSet<>("java.lang.Process", "java.lang.ProcessBuilder", "java.lang.Thread");
 
-	private final ZipArchive za;
-	Sandbox(ZipArchive archive) {za = archive;}
+	private final ZipEditor za;
+	Sandbox(ZipEditor archive) {za = archive;}
 
 	@Override
 	protected Class<?> loadClass(String name, boolean resolve) throws ClassNotFoundException {

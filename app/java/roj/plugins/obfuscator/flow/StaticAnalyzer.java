@@ -1,7 +1,7 @@
 package roj.plugins.obfuscator.flow;
 
-import roj.archive.zip.ZEntry;
-import roj.archive.zip.ZipArchive;
+import roj.archive.zip.ZipEditor;
+import roj.archive.zip.ZipEntry;
 import roj.asm.ClassNode;
 import roj.asm.MemberDescriptor;
 import roj.asm.MethodNode;
@@ -29,8 +29,8 @@ public class StaticAnalyzer {
 		IOUtil.copyFile(new File(args[0]), new File(args[1]));
 		Map<String, Context> map = new HashMap<>();
 
-		ZipArchive zf = new ZipArchive(new File(args[1]));
-		for (ZEntry entry : zf.entries()) {
+		ZipEditor zf = new ZipEditor(new File(args[1]));
+		for (ZipEntry entry : zf.entries()) {
 			if (entry.getName().endsWith(".class")) {
 				Context ctx = new Context(entry.getName(), zf.get(entry));
 				map.put(ctx.getData().name(), ctx);

@@ -1,6 +1,6 @@
 package roj.compiler.library;
 
-import roj.archive.zip.ZEntry;
+import roj.archive.zip.ZipEntry;
 import roj.archive.zip.ZipFile;
 import roj.asm.ClassNode;
 import roj.collect.HashSet;
@@ -20,12 +20,12 @@ public class JarLibrary implements Library {
 	private final HashSet<String> info;
 	private final String moduleName;
 
-	public JarLibrary(File file) throws IOException {this(new ZipFile(file, ZipFile.FLAG_BACKWARD_READ));}
+	public JarLibrary(File file) throws IOException {this(new ZipFile(file, ZipFile.FLAG_ReadCENOnly));}
 	public JarLibrary(ZipFile file) {
 		this.jar = file;
 		this.info = new HashSet<>();
 
-		for (ZEntry entry : jar.entries()) {
+		for (ZipEntry entry : jar.entries()) {
 			String name = entry.getName();
 			if (name.endsWith(".class")) info.add(name.substring(0, name.length() - 6).intern());
 		}

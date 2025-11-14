@@ -66,7 +66,7 @@ public class RemoteFSClient implements ChannelHandler, Consumer<MyChannel> {
 	@SuppressWarnings("unchecked")
 	public Promise<RemoteFSClient> connect(InetSocketAddress address) throws IOException {
 		ClientLaunch.tcp().connect(address).initializator(this).launch();
-		return (Promise<RemoteFSClient>) (result = Promise.sync());
+		return (Promise<RemoteFSClient>) (result = Promise.manual(TaskPool.common()));
 	}
 
 	@Override
@@ -136,7 +136,7 @@ public class RemoteFSClient implements ChannelHandler, Consumer<MyChannel> {
 			else if (rpc.type != 2 || rpc.p0.readableBytes() == 0) {
 				if (rpc.type == 5) {
 					if (result != null) {
-						result.resolveOn(this, TaskPool.common());
+						result.resolve(this);
 					}
 				}
 				rpc.done(null);

@@ -45,7 +45,7 @@ public final class AnnotationPrimer extends Annotation {
 		checkExpr:{
 		if (w.type() == LavaTokenizer.lBrace) {
 			wr.mark();
-			System.out.println(wr.next());
+			wr.next();
 			if (wr.next().type() == LavaTokenizer.at) {
 				wr.skip();
 
@@ -101,7 +101,7 @@ public final class AnnotationPrimer extends Annotation {
 		ctx.dynamicFieldImport = prevDfi;
 
 		if (!node.isConstant() && !node.hasFeature(Expr.Feature.ENUM_REFERENCE)) {
-			ctx.report(Kind.ERROR, "cu.annotation.noConstant");
+			ctx.report(Kind.ERROR, "cu.annotation.noConstant", node.getClass());
 			return null;
 		}
 

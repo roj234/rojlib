@@ -123,7 +123,7 @@ public abstract class Node extends ConfigValue {
 	@Override public boolean mayCastTo(Type o) {return o == Type.STRING || o == Type.MAP || o == Type.LIST;}
 
 	@Override public final String asString() {return textContent();}
-	@Override public final MapValue asMap() {return new MapValue(attributesWritable());}
+	@Override public final MapValue asMap() {return new MapValue(attributesForWrite());}
 	@Override public final ListValue asList() {return new ListValue(childNodes());}
 
 	public static final byte ELEMENT = 0, TEXT = 's', CDATA = 2, COMMENT = 3, ATTRIBUTE = 4;
@@ -143,7 +143,7 @@ public abstract class Node extends ConfigValue {
 
 	@UnmodifiableView
 	public Map<String, ConfigValue> attributes() {return Collections.emptyMap();}
-	public Map<String, ConfigValue> attributesWritable() {return Collections.emptyMap();}
+	protected Map<String, ConfigValue> attributesForWrite() {return Collections.emptyMap();}
 	// endregion
 	// region children
 	public int size() { return 0; }

@@ -1,9 +1,9 @@
 package roj.ci.minecraft;
 
 import org.jetbrains.annotations.NotNull;
-import roj.archive.zip.ZEntry;
-import roj.archive.zip.ZipArchive;
-import roj.archive.zip.ZipFileWriter;
+import roj.archive.zip.ZipEditor;
+import roj.archive.zip.ZipEntry;
+import roj.archive.zip.ZipPacker;
 import roj.asm.AsmCache;
 import roj.asm.ClassNode;
 import roj.asm.MemberDescriptor;
@@ -130,7 +130,7 @@ public class AT implements Plugin {
 				options.set(i, atJar.getAbsolutePath()+File.pathSeparatorChar+options.get(i));
 			}
 
-			try (var za = new ZipArchive(atJar)) {
+			try (var za = new ZipEditor(atJar)) {
 				InputStream in = za.getInputStream(".desc");
 				if (in != null && IOUtil.getSharedByteBuf().readStreamFully(in).readInt() == atList.hashCode()) {
 					break ok;
@@ -139,7 +139,7 @@ public class AT implements Plugin {
 				e.printStackTrace();
 			}
 
-			try (var zfw = new ZipFileWriter(atJar)) {
+			try (var zfw = new ZipPacker(atJar)) {
 				zfw.writeNamed(".desc", (ByteList) new ByteList().putInt(atList.hashCode()));
 
 				Predicate<File> callback = file -> {
@@ -173,7 +173,7 @@ public class AT implements Plugin {
 	}
 
 	private Map<File, Arch> archives = new HashMap<>();
-	private void tryAt(File file, Map<String, List<String>> list, ZipFileWriter zfw) {
+	private void tryAt(File file, Map<String, List<String>> list, ZipPacker zfw) {
 		Arch helper = archives.computeIfAbsent(file, Arch::new);
 		try {
 			if (!helper.open()) archives.remove(file);
@@ -200,7 +200,7 @@ public class AT implements Plugin {
 	}
 	static final class Arch {
 		private final File file;
-		private ZipArchive zf;
+		private ZipEditor zf;
 		private long lastModify;
 
 		private Arch(File file) {
@@ -209,7 +209,7 @@ public class AT implements Plugin {
 
 		private InputStream getStream(String name) throws IOException {
 			if (zf == null && !open()) return null;
-			ZEntry entry = zf.getEntry(name);
+			ZipEntry entry = zf.getEntry(name);
 			if (entry != null) {
 				if (open()) return zf.getInputStream(entry);
 			}
@@ -231,7 +231,7 @@ public class AT implements Plugin {
 						lastModify = lastMod;
 					}
 				} else {
-					zf = new ZipArchive(file, ZipArchive.FLAG_BACKWARD_READ);
+					zf = new ZipEditor(file, ZipEditor.FLAG_ReadCENOnly);
 					lastModify = lastMod;
 				}
 			}

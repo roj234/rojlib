@@ -30,12 +30,12 @@ public final class ClassView implements ClassDefinition {
 		int cfo = r.rIndex; // acc
 		char acc = r.readChar();
 
-		ClassView node = new ClassView(modifiable?r.toByteArray():null, cfo, pool.getRefName(r, Constant.CLASS), pool.getRefName(r));
+		ClassView node = new ClassView(modifiable?r.toByteArray():null, cfo, pool.resolveName(r, Constant.CLASS), pool.resolveClassName(r));
 		node.modifier = acc;
 
 		int len = r.readUnsignedShort();
 		ArrayList<String> itf = new ArrayList<>(len);
-		while (len-- > 0) itf.add(pool.getRefName(r, Constant.CLASS));
+		while (len-- > 0) itf.add(pool.resolveName(r, Constant.CLASS));
 
 		node.interfaces = itf;
 
@@ -47,7 +47,7 @@ public final class ClassView implements ClassDefinition {
 
 				acc = r.readChar();
 
-				MOF d = node.new MOF(((CstUTF) pool.get(r)).str(), ((CstUTF) pool.get(r)).str(), offset);
+				MOF d = node.new MOF(((CstUTF) pool.resolve(r)).str(), ((CstUTF) pool.resolve(r)).str(), offset);
 				d.modifier = acc;
 				com.add(d);
 

@@ -4,7 +4,7 @@
 
 package roj.gui.impl;
 
-import roj.archive.zip.ZipFileWriter;
+import roj.archive.zip.ZipPacker;
 import roj.asm.MemberDescriptor;
 import roj.asmx.Context;
 import roj.asmx.mapper.Mapper;
@@ -126,7 +126,7 @@ public class MapperUI extends JFrame {
 		try {
 			for (File file : input) {
 				File out = input.size() == 1 && !output.isDirectory() ? output : new File(output, file.getName());
-				ZipFileWriter zfwOut = new ZipFileWriter(out);
+				ZipPacker zfwOut = new ZipPacker(out);
 
 				List<Context> arr = Context.fromZip(file, zfwOut);
 				files.add(new MapTask(ctxs.size(), arr.size(), zfwOut));
@@ -150,10 +150,10 @@ public class MapperUI extends JFrame {
 		System.out.println(System.currentTimeMillis()-begin);
 	}
 	private static final class MapTask {
-		ZipFileWriter zfw;
+		ZipPacker zfw;
 		int off, len;
 
-		MapTask(int off, int len, ZipFileWriter zfw) {
+		MapTask(int off, int len, ZipPacker zfw) {
 			this.zfw = zfw;
 			this.off = off;
 			this.len = len;

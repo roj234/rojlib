@@ -6,12 +6,14 @@ import org.jetbrains.annotations.Nullable;
 import roj.asm.AsmCache;
 import roj.asm.attr.BootstrapMethods;
 import roj.collect.ArrayList;
-import roj.collect.HashSet;
 import roj.collect.IntMap;
+import roj.collect.IntSet;
+import roj.math.MathUtils;
 import roj.text.TextUtil;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
 
+import java.util.Arrays;
 import java.util.List;
 import java.util.function.Consumer;
 
@@ -19,22 +21,22 @@ import static roj.asm.cp.Constant.*;
 
 /**
  * @author Roj234
- * @version 2.0
+ * @version 3.0
  * @since 2021/5/29 17:16
  */
 public final class ConstantPool {
 	public static final int ONLY_STRING = -1, BYTE_STRING = 0, CHAR_STRING = 1;
 
 	private final ArrayList<Constant> constants;
-	private HashSet<Constant> refMap;
+	private RefMap refMap;
 	private int length;
-	private boolean isForWrite;
+	private boolean useSharedArray;
 
 	public ConstantPool(int size) {constants = new ArrayList<>(size);}
-	public ConstantPool() {
-		constants = new ArrayList<>();
-		refMap = new HashSet<>();
-	}
+	/**
+	 * Initialize for WRITE (intern calls)
+	 */
+	public ConstantPool() {constants = new ArrayList<>();}
 
 	public void read(DynByteBuf r, @MagicConstant(intValues = {ONLY_STRING,BYTE_STRING,CHAR_STRING}) int stringDecodeType) {
 		int len = r.readUnsignedShort()-1;
@@ -102,7 +104,6 @@ public final class ConstantPool {
 
 		length = r.rIndex - begin;
 	}
-
 	private static void readName(DynByteBuf r, Object[] csts, int len, Consumer<Constant> listener) {
 		int i = 0;
 		while (i < len) {
@@ -134,7 +135,6 @@ public final class ConstantPool {
 			}
 		}
 	}
-
 	private static Constant readConstant(DynByteBuf r, Object[] arr, int i, boolean parseUTF) {
 		int b = r.readUnsignedByte();
 		switch (b) {
@@ -231,32 +231,59 @@ public final class ConstantPool {
 	}
 
 	public final List<Constant> constants() {return constants;}
-	public final @Nullable Constant getNullable(DynByteBuf r) {
-		int i = r.readUnsignedShort()-1;
-		return i < 0 ? null : constants.get(i);
-	}
+
+	//region resolve
+	/**
+	 * 从缓冲区读取一个指定类型的常量。
+	 *
+	 * @param r 包含 u2 索引的缓冲区
+	 * @param <T> 预期的常量类型
+	 * @return 对应的常量对象
+	 * @throws IndexOutOfBoundsException 如果索引无效
+	 */
 	@SuppressWarnings("unchecked")
-	public final @NotNull <T extends Constant> T get(DynByteBuf r) {return (T) constants.getInternalArray()[r.readUnsignedShort()-1];}
-	public final @Nullable String getRefName(DynByteBuf r) {
-		int id = r.readUnsignedShort()-1;
-		return id < 0 ? null : ((CstClass) constants.getInternalArray()[id]).value().str();
+	public final @NotNull <T extends Constant> T resolve(DynByteBuf r) {return (T) constants.getInternalArray()[r.readUnsignedShort()-1];}
+	/**
+	 * 从缓冲区读取常量。
+	 *
+	 * @param r 包含 u2 索引的缓冲区
+	 * @return 常量对象，如果索引为 0 则返回 null
+	 */
+	public final @Nullable Constant resolveOrNull(DynByteBuf r) {
+		int i = r.readUnsignedShort()-1;
+		return i < 0 ? null : (Constant) constants.getInternalArray()[i];
 	}
-	public final @NotNull String getRefName(DynByteBuf r, int type) {
+	/**
+	 * 从缓冲区读取一个{@link CstClass}常量，并返回其引用的类名。
+	 *
+	 * @param r 包含 u2 索引的缓冲区
+	 * @return 类名字符串，如果索引为 0 则返回 null
+	 */
+	public final @Nullable String resolveClassName(DynByteBuf r) {
+		int i = r.readUnsignedShort()-1;
+		return i < 0 ? null : ((CstClass) constants.getInternalArray()[i]).value().str();
+	}
+	/**
+	 * 从缓冲区读取一个{@link CstRefUTF}常量，验证其类型，并返回引用值。
+	 * @param expectedType 期望的常量类型（如 MODULE, PACKAGE 等）
+	 */
+	public final @NotNull String resolveName(DynByteBuf r, int expectedType) {
 		var c = (CstRefUTF) constants.getInternalArray()[r.readUnsignedShort()-1];
-		if (c.type() != type) throw new IllegalStateException("excepting"+Constant.toString(type)+" but got "+c);
+		if (c.type() != expectedType) throw new IllegalStateException("excepting"+Constant.toString(expectedType)+" but got "+c);
 		return c.value().str();
 	}
-	public final @NotNull CstRef getRef(DynByteBuf r, boolean isField) {
+	public final @NotNull CstRef resolveMember(DynByteBuf r, boolean isField) {
 		var c = (CstRef) constants.getInternalArray()[r.readUnsignedShort()-1];
 		if (c.type() == FIELD != isField) throw new IllegalStateException("excepting" + (isField ? "field" : "method") + "but got "+c);
 		return c;
 	}
+	//endregion
 
 	private void initRefMap() {
-		if (refMap == null) refMap = new HashSet<>(constants.size());
-		else {
-			if (!refMap.isEmpty()) return;
-			refMap.ensureCapacity(constants.size());
+		if (refMap == null) {
+			refMap = new RefMap(Math.max(constants.size(), 16));
+		} else if (!refMap.isEmpty()) {
+			return;
 		}
 
 		Object[] cst = constants.getInternalArray();
@@ -268,13 +295,13 @@ public final class ConstantPool {
 			if (c != c1) c.index = c1.index;
 		}
 
-		if (!isForWrite) {
-			isForWrite = true;
-			AsmCache.getInstance().getCpWriter(constants);
+		if (!useSharedArray) {
+			useSharedArray = true;
+			AsmCache.getInstance().retainHugeArray(constants);
 		}
 	}
+
 	public void add(Constant c) {
-		if (!refMap.isEmpty()) refMap.add(c);
 		constants.add(c);
 		int size = constants.size();
 		c.index = (char) size;
@@ -292,6 +319,7 @@ public final class ConstantPool {
 			default -> throw new IllegalArgumentException("不支持的常量类型"+c.type()+" "+c.getClass().getName());
 		}
 
+		if (refMap != null) refMap.add(c);
 		if (listener != null) listener.accept(c);
 	}
 	public boolean contains(Constant c) {
@@ -301,10 +329,10 @@ public final class ConstantPool {
 
 	public void setUTFValue(CstUTF utf, String str) {
 		if (!contains(utf)) throw new IllegalArgumentException(utf+"不在该常量池中");
-		verifyUtf(str);
+		verifyUtfLength(str);
 
 		boolean rm;
-		if (!refMap.isEmpty()) {
+		if (refMap != null) {
 			rm = refMap.remove(utf);
 			assert rm : "不在该常量池中";
 		} else {
@@ -320,7 +348,14 @@ public final class ConstantPool {
 
 		if (rm) refMap.add(utf);
 	}
+	static void verifyUtfLength(String str) {
+		if (str.length() >= 0x10000/3) {
+			if (str.length() >= 0x10000 || ByteList.countJavaUTF(str) >= 0x10000)
+				throw new IllegalArgumentException("UTF8字符串太长，限制是65535字节，"+str.length()+"！");
+		}
+	}
 
+	//region add-on-demand
 	public CstUTF getUtf(CharSequence str) {
 		initRefMap();
 
@@ -381,7 +416,7 @@ public final class ConstantPool {
 	public int getItfRefId(String owner, String name, String desc) {return getRefByType(owner, name, desc, INTERFACE).index;}
 
 	public CstMethodHandle getMethodHandle(@MagicConstant(valuesFromClass = BootstrapMethods.Kind.class) byte kind, CstRef ref) {
-		var find = new CstMethodHandle(kind, reset(ref));
+		var find = new CstMethodHandle(kind, intern(ref));
 		var found = (CstMethodHandle) refMap.find(find);
 		if (found == find) add(find);
 		return found;
@@ -448,33 +483,35 @@ public final class ConstantPool {
 		if (found == find) add(found = new CstDouble(i));
 		return found.index;
 	}
+	//endregion
 
 	public int indexOf(Constant c) {return c.index;}
-	public int fit(Constant c) {return reset(c).index;}
+
+	public int internIndex(Constant c) {return intern(c).index;}
 	@SuppressWarnings({"unchecked", "fallthrough"})
-	public <T extends Constant> T reset(T c) {
+	public <T extends Constant> T intern(T c) {
 		switch (c.type()) {
 			case DYNAMIC, INVOKE_DYNAMIC -> {
 				CstDynamic dyn = (CstDynamic) c;
-				dyn.setDesc(reset(dyn.desc()));
+				dyn.setDesc(intern(dyn.desc()));
 			}
 			case CLASS, STRING, METHOD_TYPE, MODULE, PACKAGE -> {
 				CstRefUTF ref = (CstRefUTF) c;
-				ref.setValue(reset(ref.value()));
+				ref.setValue(intern(ref.value()));
 			}
 			case METHOD_HANDLE -> {
 				CstMethodHandle ref = ((CstMethodHandle) c);
-				ref.setTarget(reset(ref.getTarget()));
+				ref.setTarget(intern(ref.getTarget()));
 			}
 			case METHOD, INTERFACE, FIELD -> {
 				CstRef ref = (CstRef) c;
-				ref.clazz(reset(ref.clazz()));
-				ref.nameAndType(reset(ref.nameAndType()));
+				ref.clazz(intern(ref.clazz()));
+				ref.nameAndType(intern(ref.nameAndType()));
 			}
 			case NAME_AND_TYPE -> {
 				CstNameAndType nat = (CstNameAndType) c;
-				nat.name(reset(nat.name()));
-				nat.rawDesc(reset(nat.rawDesc()));
+				nat.name(intern(nat.name()));
+				nat.rawDesc(intern(nat.rawDesc()));
 			}
 			// No container type
 			case UTF, INT, DOUBLE, FLOAT, LONG -> {}
@@ -493,26 +530,25 @@ public final class ConstantPool {
 		add(c);
 		return c;
 	}
-	static void verifyUtf(String str) {
-		if (str.length() >= 0x10000/3) {
-			if (str.length() >= 0x10000 || ByteList.countJavaUTF(str) >= 0x10000) throw new IllegalArgumentException("UTF8字符串太长，限制是65535字节，"+str.length()+"！");
-		}
-	}
 
 	public int byteLength() {
 		if (length == 0) throw new IllegalStateException("This pool is not ready to write");
 		return length;
 	}
 
+	/**
+	 *
+	 * @param discard 释放资源
+	 */
 	public void write(DynByteBuf w, boolean discard) {
 		w.putShort(constants.size()+1);
 		List<Constant> csts = constants;
 		for (int i = 0; i < csts.size(); i++)
 			csts.get(i).write(w);
 
-		if (isForWrite) {
-			isForWrite = false;
-			AsmCache.getInstance().freeCpWriter(constants, discard);
+		if (useSharedArray) {
+			useSharedArray = false;
+			AsmCache.getInstance().freeHugeArray(constants, discard);
 		}
 	}
 
@@ -537,7 +573,7 @@ public final class ConstantPool {
 
 	public void clear() {
 		constants.clear();
-		refMap.clear();
+		if (refMap != null) refMap.clear();
 		length = 0;
 		if (listener != null) listener.accept(null);
 	}
@@ -560,6 +596,114 @@ public final class ConstantPool {
 					}
 				}
 			}
+		}
+	}
+
+	/**
+	 * 新的开放寻址哈希表实现，它比我对内存占用优化过的HashSet还少20%的内存，而且性能更好（我没测和大小分布的关系，可能大常量池表现差也说不定），这大概是因为缓存局部性
+	 */
+	private final class RefMap {
+		private static final float LOAD_FACTOR = 0.75f;
+
+		// 28 bytes, 但是table可以用char[]而不需要一个特殊值表示tombstone了
+		private final IntSet tombstone = new IntSet();
+		private char[] table;
+		private int size;
+		private int mask;
+
+		RefMap(int capacity) {
+			int n = MathUtils.nextPowerOfTwo(capacity);
+			this.table = new char[n];
+			this.mask = n - 1;
+		}
+
+		public boolean isEmpty() {
+			return size == 0;
+		}
+
+		public Constant find(Constant key) {
+			int h = hash(key.hashCode());
+			int i = h & mask;
+			while (table[i] != 0) {
+				if (!tombstone.contains(i)) {
+					Constant c = constants.get(table[i] - 1);
+					if (key.equals(c)) return c;
+				}
+				i = (i + 1) & mask;
+			}
+			return key;
+		}
+
+		public void add(Constant key) {intern(key);}
+
+		public Constant intern(Constant key) {
+			int h = hash(key.hashCode());
+			int i = h & mask;
+			int firstRemoved = -1;
+
+			while (table[i] != 0) {
+				if (!tombstone.contains(i)) {
+					Constant c = constants.get(table[i] - 1);
+					if (key.equals(c)) return c;
+				} else {
+					if (firstRemoved == -1) firstRemoved = i;
+				}
+				i = (i + 1) & mask;
+			}
+
+			if (firstRemoved != -1) {
+				i = firstRemoved;
+				tombstone.remove(firstRemoved);
+			}
+
+			table[i] = key.index;
+			size++;
+			if (size > table.length * LOAD_FACTOR) rehash();
+
+			return key;
+		}
+
+		public boolean remove(Constant key) {
+			int h = hash(key.hashCode());
+			int i = h & mask;
+			while (table[i] != 0) {
+				if (!tombstone.contains(i) && constants.get(table[i] - 1) == key) {
+					// 如果本身是最后一个
+					if (table[(i + 1) & mask] == 0)
+						table[i] = 0;
+					else tombstone.add(i);
+					size--;
+					return true;
+				}
+				i = (i + 1) & mask;
+			}
+			return false;
+		}
+
+		public void clear() {
+			if (size == 0) return;
+			size = 0;
+			Arrays.fill(table, (char) 0);
+			tombstone.clear();
+		}
+
+		private void rehash() {
+			char[] oldTable = table;
+			int newCap = oldTable.length << 1;
+			table = new char[newCap];
+			mask = newCap - 1;
+			size = 0;
+			for (int i = 0; i < oldTable.length; i++) {
+				int index = oldTable[i];
+				if (index > 0 && !tombstone.contains(i)) {
+					add(constants.get(index - 1));
+				}
+			}
+			tombstone.clear();
+		}
+
+		private int hash(int h) {
+			return h ^ (h >>> 16);
 		}
 	}
 }

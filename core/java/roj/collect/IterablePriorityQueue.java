@@ -1,7 +1,6 @@
 package roj.collect;
 
 import org.jetbrains.annotations.NotNull;
-import roj.util.ArrayUtil;
 import roj.util.Helpers;
 
 import java.util.*;
@@ -21,7 +20,7 @@ public class IterablePriorityQueue<E> extends AbstractCollection<E> {
 
 	protected final int binarySearch(E key) {
 		key.getClass();
-		return ArrayUtil.binarySearch(entries, 0, size, key, Helpers.cast(cmp));
+		return Arrays.binarySearch(entries, 0, size, key, Helpers.cast(cmp));
 	}
 
 	public IterablePriorityQueue() {this(DEF_SIZE, Helpers.cast(Comparator.naturalOrder()));}

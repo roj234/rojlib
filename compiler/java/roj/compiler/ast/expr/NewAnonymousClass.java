@@ -74,7 +74,7 @@ final class NewAnonymousClass extends Expr {
 			var sign = new LPSignature(Signature.CLASS);
 			if ((info.modifier() & Opcodes.ACC_INTERFACE) != 0) sign._impl(parentType);
 			else sign._add(parentType);
-			klass.signature = sign;
+			klass.classSignature = sign;
 			klass.addAttribute(sign);
 		}
 
@@ -109,8 +109,8 @@ final class NewAnonymousClass extends Expr {
 			constructor = klass.createDelegation(Opcodes.ACC_SYNTHETIC, r.method, r.method, false, false);
 		}
 
-		klass.S2p1resolveName();
-		klass.S2p2resolveType();
+		klass.S2p1resolveInheritance();
+		klass.S2p2resolveMembers();
 		klass.NAC_SetGlobalInit(constructor);
 		klass.S2p3resolveMethod();
 		CompileContext.pop();

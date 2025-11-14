@@ -64,7 +64,7 @@ public class NIXIM implements Plugin {
 							}
 							anno.put("value", AnnVal.valueOf(name));
 						} else {
-							MCMake.log.info("无法为成员 {}.{} 找到映射名: ", data.name(), node);
+							MCMake.log.info("无法为成员 {}.{} 找到映射名: ", data.name(), node.name());
 						}
 					}
 					break;
@@ -74,7 +74,7 @@ public class NIXIM implements Plugin {
 						if (name != null) {
 							anno.put("value", AnnVal.valueOf(name));
 						} else {
-							MCMake.log.info("无法为成员 {}.{} 找到映射名: ", data.name(), node);
+							MCMake.log.info("无法为成员 {}.{} 找到映射名: ", data.name(), node.name());
 						}
 					}
 					break;

@@ -31,6 +31,7 @@ import roj.util.Helpers;
 import java.io.File;
 import java.io.IOException;
 import java.util.*;
+import java.util.function.Consumer;
 import java.util.function.Function;
 
 /**
@@ -44,6 +45,7 @@ public class Resolver implements IResolver {
 
 	static {
 		String property = System.getProperty("roj.compiler.symbolCache", ".lavaCache");
+		//noinspection AssignmentUsedAsCondition
 		if ((cacheEnabled = !property.equals("DISABLE"))) {
 			cacheDirectory = new File(property);
 		}
@@ -67,31 +69,41 @@ public class Resolver implements IResolver {
 	public static void setCacheDirectory(File o) {cacheDirectory = o;}
 
 	private static final XashMap.Template<String, CompileUnit> COMPILE_UNIT_TEMPLATE = XashMap.forType(String.class, CompileUnit.class).key("name").build();
-	private static final XashMap.Template<ClassDefinition, LinkedClass> CLASS_EXTRA_INFO_TEMPLATE = XashMap.forType(ClassDefinition.class, LinkedClass.class).key("owner").hasher(Hasher.identity()).newValue(LinkedClass::new).build();
+	private static final XashMap.Template<ClassNode, LinkedClass> CLASS_EXTRA_INFO_TEMPLATE = XashMap.forType(ClassNode.class, LinkedClass.class).key("owner").hasher(Hasher.identity()).newValue(LinkedClass::new).build();
 
 	protected final XashMap<String, CompileUnit> compileUnits = COMPILE_UNIT_TEMPLATE.create();
 
 	// Libraries
 	protected final HashMap<String, Object> libraryByName = new HashMap<>();
-	protected final List<Library> libraries = new ArrayList<>(), unenumerableLibraries = new ArrayList<>();
+	// 布局：
+	// [0, unernumerableEnd): 不可枚举的库
+	// [unernumerableEnd, libraries.size()]: 可枚举的库
+	protected final List<Library> libraries = new ArrayList<>();
+	protected int unernumerableEnd;
 
-	protected final XashMap<ClassDefinition, LinkedClass> extraInfos = CLASS_EXTRA_INFO_TEMPLATE.create();
+	protected final XashMap<ClassNode, LinkedClass> extraInfos = CLASS_EXTRA_INFO_TEMPLATE.create();
 	protected Map<String, List<String>> shortNameIndex = Collections.emptyMap();
 
 	public Resolver() {this(true);}
 	public Resolver(boolean addRuntimeLibrary) {
-		if (addRuntimeLibrary) unenumerableLibraries.add(RuntimeLibrary.ALL_MODULES);
+		if (addRuntimeLibrary) {
+			libraries.add(RuntimeLibrary.ALL_MODULES);
+			unernumerableEnd = 1;
+		}
 	}
 
+	/**
+	 * 先添加的优先级更高
+	 */
 	public void addLibrary(Library library) {
 		var content = library.indexedContent();
 		if (content.isEmpty()) {
-			unenumerableLibraries.add(library);
+			libraries.add(unernumerableEnd++, library);
 		} else {
+			libraries.add(library);
 			for (String className : content)
-				libraryByName.put(className, library);
+				libraryByName.putIfAbsent(className, library);
 		}
-		libraries.add(library);
 		shortNameIndex = Collections.emptyMap();
 	}
 
@@ -114,8 +126,8 @@ public class Resolver implements IResolver {
 				return clz;
 			}
 
-			for (int i = unenumerableLibraries.size()-1; i >= 0; i--) {
-				var library = unenumerableLibraries.get(i);
+			for (int i = 0; i < unernumerableEnd; i++) {
+				var library = libraries.get(i);
 				if ((clz = library.get(name)) != null) {
 					var key = name.toString();
 					clz = onClassLoaded(key, clz);
@@ -143,17 +155,17 @@ public class Resolver implements IResolver {
 		if (!fastPath.isEmpty()) return fastPath;
 
 		fastPath = new HashMap<>();
+		String moduleName = null;
+
+		Map<String, List<String>> javacSB = fastPath;
+		Consumer<String> addExported = name -> {
+			if (!name.contains("$")) {
+				addFastPath(name, javacSB);
+			}
+		};
 
 		for (Library library : libraries) {
-			for (String name : library.content()) {
-				if (!name.contains("$") && !name.startsWith("[")) addFastPath(name, fastPath);
-			}
-		}
-		// 大部分是空的，但SymbolCache不是，因为它的类太多了
-		for (Library module : unenumerableLibraries) {
-			for (String name : module.content()) {
-				addFastPath(name, fastPath);
-			}
+			library.exportedContent(moduleName, addExported);
 		}
 
 		for (Map.Entry<String, List<String>> entry : fastPath.entrySet()) {
@@ -175,7 +187,7 @@ public class Resolver implements IResolver {
 	}
 	//endregion
 	//region ResolveHelper
-	@NotNull public LinkedClass link(@NotNull ClassDefinition info) {
+	@NotNull public LinkedClass link(@NotNull ClassNode info) {
 		LinkedClass linkedClass = extraInfos.get(info);
 		if (linkedClass == null) {
 			synchronized (this) {
@@ -184,14 +196,14 @@ public class Resolver implements IResolver {
 		}
 		return linkedClass;
 	}
-	public synchronized void unlink(ClassDefinition file) {extraInfos.removeKey(file);}
+	public synchronized void unlink(ClassNode file) {extraInfos.removeKey(file);}
 
-	@NotNull public final ToIntMap<String> getHierarchyList(ClassDefinition info) {return link(info).getHierarchyList(this);}
-	@NotNull public final ComponentList getMethodList(ClassDefinition info, String name) {return link(info).getMethods(this).getOrDefault(name, ComponentList.NOT_FOUND);}
-	@NotNull public final ComponentList getFieldList(ClassDefinition info, String name) {return link(info).getFields(this).getOrDefault(name, ComponentList.NOT_FOUND);}
-	@Nullable public final List<IType> getTypeArgumentsFor(ClassDefinition info, String superType) {return link(info).getTypeParamOwner(this).get(superType);}
-	@NotNull public final Map<String, InnerClasses.Item> getInnerClassInfo(ClassDefinition info) {return link(info).getInnerClasses(this);}
-	public final AnnotationType getAnnotationDescriptor(ClassDefinition info) {return link(info).annotationInfo();}
+	@NotNull public final ToIntMap<String> getHierarchyList(ClassNode info) {return link(info).getHierarchyList(this);}
+	@NotNull public final ComponentList getMethodList(ClassNode info, String name) {return link(info).getMethods(this).getOrDefault(name, ComponentList.NOT_FOUND);}
+	@NotNull public final ComponentList getFieldList(ClassNode info, String name) {return link(info).getFields(this).getOrDefault(name, ComponentList.NOT_FOUND);}
+	@Nullable public final List<IType> getTypeArgumentsFor(ClassNode info, String superType) {return link(info).getTypeParamOwner(this).get(superType);}
+	@NotNull public final Map<String, InnerClasses.Item> getInnerClassInfo(ClassNode info) {return link(info).getInnerClasses(this);}
+	public final AnnotationType getAnnotationDescriptor(ClassNode info) {return link(info).annotationInfo();}
 	public final void fillAnnotationDefault(AnnotationPrimer annotation) {
 		var self = getAnnotationDescriptor(resolve(annotation.type()));
 		for (var entry : self.elementDefault.entrySet()) annotation.raw().putIfAbsent(entry.getKey(), entry.getValue());
@@ -386,7 +398,7 @@ public class Resolver implements IResolver {
 	 * @see <a href="https://docs.oracle.com/javase/specs/jls/se17/html/jls-5.html#jls-5.1.5">JLS 5.1.5. Widening Reference Conversions</a>
 	 */
 	public final boolean instanceOf(String testClass, String instClass) {
-		ClassDefinition info = resolve(testClass);
+		ClassNode info = resolve(testClass);
 		if (info == null) return false;
 		return getHierarchyList(info).containsKey(instClass);
 	}
@@ -453,9 +465,9 @@ public class Resolver implements IResolver {
 					: new WildcardType(Arrays.asList(Type.klass("java/lang/Cloneable"), Type.klass("java/lang/Serializable")));
 		}
 
-		ClassDefinition infoA = resolve(a.owner());
+		ClassNode infoA = resolve(a.owner());
 		if (infoA == null) return a; // should be checked by CompileContext#resolveType
-		ClassDefinition infoB = resolve(b.owner());
+		ClassNode infoB = resolve(b.owner());
 		if (infoB == null) return a; //
 
 		String commonParent = getCommonAncestor(infoA, infoB);
@@ -515,7 +527,7 @@ public class Resolver implements IResolver {
 	/**
 	 * 返回ab两个类(Class)的共同祖先
 	 */
-	public final String getCommonAncestor(ClassDefinition infoA, ClassDefinition infoB) {
+	public final String getCommonAncestor(ClassNode infoA, ClassNode infoB) {
 		ToIntMap<String> tmp,
 				listA = getHierarchyList(infoA),
 				listB = getHierarchyList(infoB);

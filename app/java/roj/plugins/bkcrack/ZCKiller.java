@@ -1,18 +1,18 @@
 package roj.plugins.bkcrack;
 
+import roj.collect.ArrayList;
 import roj.collect.IntList;
 import roj.collect.IntMap;
 import roj.collect.IntervalPartition;
-import roj.collect.ArrayList;
 import roj.concurrent.Executor;
 import roj.concurrent.TaskGroup;
-import roj.util.FastFailException;
 import roj.io.IOUtil;
 import roj.ui.EasyProgressBar;
-import roj.util.ArrayUtil;
 import roj.util.ByteList;
+import roj.util.FastFailException;
 import roj.util.Helpers;
 
+import java.util.Collections;
 import java.util.List;
 
 /**
@@ -88,7 +88,7 @@ final class ZCKiller {
 			}
 		}
 		if (extraPlainsAfter == null) extraPlainsBefore = merged;
-		if (extraPlainsBefore != null) ArrayUtil.inverse(extraPlainsBefore);
+		if (extraPlainsBefore != null) Collections.reverse(extraPlainsBefore);
 	}
 
 	byte[] cipher, plain, keystream;

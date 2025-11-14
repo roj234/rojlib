@@ -69,7 +69,7 @@ public class MIXIN implements Plugin {
 
 						member.name(mappedName);
 					} else {
-						MCMake.log.info("无法为成员 {}.{} 找到映射名: ", mixinClass.name(), member);
+						MCMake.log.info("无法为成员 {}.{} 找到映射名: ", mixinClass.name(), member.name());
 					}
 					break;
 				}
@@ -101,7 +101,7 @@ public class MIXIN implements Plugin {
 						if (mappedName != null) {
 							anno.put("method", new ArrayVal(Collections.singletonList(AnnVal.valueOf(mappedName))));
 						} else {
-							MCMake.log.info("无法为成员 {}.{} 找到映射名: ", mixinClass.name(), member);
+							MCMake.log.info("无法为成员 {}.{} 找到映射名: ", mixinClass.name(), member.name());
 						}
 					}
 					break;

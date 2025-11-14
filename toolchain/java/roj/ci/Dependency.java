@@ -1,9 +1,8 @@
 package roj.ci;
 
 import org.jetbrains.annotations.Nullable;
-import roj.archive.zip.ZEntry;
+import roj.archive.zip.ZipEntry;
 import roj.archive.zip.ZipFile;
-import roj.archive.zip.ZipOutput;
 import roj.asm.ClassView;
 import roj.asmx.AnnotationRepo;
 import roj.asmx.Context;
@@ -86,6 +85,9 @@ public sealed interface Dependency extends Closeable {
 
 		@Override
 		public @Nullable Project project() {return project;}
+
+		@Override
+		public void open(BuildContext ctx) throws IOException {project.initializeFileList(false);}
 
 		@Override
 		public int getResources(Project building, ZipOutput writer, BuildContext ctx) {
@@ -185,7 +187,7 @@ public sealed interface Dependency extends Closeable {
 			}
 
 			try (var archive = project.unmappedWriter.getArchive()) {
-				for (ZEntry entry : archive.entries()) {
+				for (ZipEntry entry : archive.entries()) {
 					String name = entry.getName();
 					if (increment != INC_UPDATE || entry.getModificationTime() >= stamp) {
 						context.addClass(new Context(name, archive.get(entry)), project,
@@ -221,7 +223,7 @@ public sealed interface Dependency extends Closeable {
 		private final File file;
 		private long lastModified;
 		private ZipFile archive;
-		private Set<ZEntry> classes;
+		private Set<ZipEntry> classes;
 		private AnnotationRepo repo;
 
 		private FileDep _next;
@@ -244,7 +246,7 @@ public sealed interface Dependency extends Closeable {
 
 			lastModified = file.lastModified();
 			classes = new HashSet<>();
-			for (ZEntry entry : archive.entries()) {
+			for (ZipEntry entry : archive.entries()) {
 				String name = entry.getName();
 				if (name.endsWith(".class")) {
 					ClassView view = ClassView.parse(DynByteBuf.wrap(archive.get(entry)), false);
@@ -271,7 +273,7 @@ public sealed interface Dependency extends Closeable {
 		public int getResources(Project building, ZipOutput zipOutput, BuildContext ctx) throws IOException {
 			int updated = 0;
 			long lastBuildTime = ctx.incrementLevel <= INC_REBUILD ? 0 : ctx.lastBuildTime;
-			for (ZEntry entry : archive.entries()) {
+			for (ZipEntry entry : archive.entries()) {
 				String relPath = entry.getName();
 				String shadePath = ProjectDep.applyShade(building.conf, relPath, this);
 				if (shadePath == null) continue;
@@ -295,7 +297,7 @@ public sealed interface Dependency extends Closeable {
 			int increment = ctx.incrementLevel;
 			long lastBuildTime = ctx.lastBuildTime;
 
-			for (ZEntry entry : classes) {
+			for (ZipEntry entry : classes) {
 				if (increment != INC_UPDATE || entry.getModificationTime() >= lastBuildTime) {
 					ctx.addClass(new Context(entry.getName(), archive.get(entry)), null,
 							increment != INC_LOAD || entry.getModificationTime() >= lastBuildTime);

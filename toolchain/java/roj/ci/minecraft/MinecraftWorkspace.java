@@ -1,9 +1,9 @@
 package roj.ci.minecraft;
 
 import org.jetbrains.annotations.Nullable;
-import roj.archive.zip.ZEntry;
-import roj.archive.zip.ZipArchive;
-import roj.archive.zip.ZipFileWriter;
+import roj.archive.zip.ZipEditor;
+import roj.archive.zip.ZipEntry;
+import roj.archive.zip.ZipPacker;
 import roj.ci.Env;
 import roj.collect.HashMap;
 import roj.config.node.MapValue;
@@ -105,7 +105,7 @@ public abstract sealed class MinecraftWorkspace permits Fabric, ForgeLegacy, For
 		bar.setTotal(info.libraries.size());
 
 		HashMap<String, String> dupChecker = new HashMap<>();
-		try (var zfw = new ZipFileWriter(libraryFileName)) {
+		try (var zfw = new ZipPacker(libraryFileName)) {
 			for (var itr = info.libraries.iterator(); itr.hasNext(); bar.increment(1)) {
 				String libName = itr.next().path;
 
@@ -120,8 +120,8 @@ public abstract sealed class MinecraftWorkspace permits Fabric, ForgeLegacy, For
 					continue;
 				}
 
-				try (var mzf = new ZipArchive(file, ZipArchive.FLAG_BACKWARD_READ)) {
-					for (ZEntry entry : mzf.entries()) {
+				try (var mzf = new ZipEditor(file, ZipEditor.FLAG_ReadCENOnly)) {
+					for (ZipEntry entry : mzf.entries()) {
 						if (entry.getName().endsWith(".class") && !entry.getName().endsWith("module-info.class")) {
 							String prevPkg = dupChecker.get(entry.getName());
 							if (prevPkg != null) {

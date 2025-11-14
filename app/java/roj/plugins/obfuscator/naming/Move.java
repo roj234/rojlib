@@ -10,8 +10,8 @@ import roj.collect.HashMap;
 import roj.compiler.resolve.ComponentList;
 import roj.compiler.resolve.Resolver;
 import roj.text.CharList;
-import roj.util.ArrayUtil;
 
+import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Random;
@@ -30,7 +30,7 @@ public final class Move extends SimpleNamer {
 
 	public Move(Resolver resolver, List<Context> ctxs, Random rnd) {
 		List<Context> ctxs1 = new ArrayList<>(ctxs);
-		ArrayUtil.shuffle(ctxs1, rnd);
+		Collections.shuffle(ctxs1, rnd);
 
 		for (Context ctx : ctxs1) {
 			ClassNode data = ctx.getData();
@@ -63,7 +63,7 @@ public final class Move extends SimpleNamer {
 
 	private void apply(Random rnd, LinkedHashSet<String> list, HashMap<String, String> map) {
 		ArrayList<String> target = new ArrayList<>(list);
-		ArrayUtil.shuffle(target, rnd);
+		Collections.shuffle(target, rnd);
 		int i = 0;
 		for (String s : list) map.put(s, target.get(i++));
 	}

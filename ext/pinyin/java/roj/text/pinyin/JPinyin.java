@@ -233,7 +233,7 @@ public class JPinyin {
 		int len = off + (cpState >>> toneBits);
 		while (true) {
 			CharList sb = IOUtil.getSharedCharBuf();
-			sb.append(FIRST_TONE[TONE_POOL[off]]).append(LAST_TONE[TONE_POOL[off+1]]);
+			sb.append(FIRST_TONE[TONE_POOL[off]&0xFF]).append(LAST_TONE[TONE_POOL[off+1]&0xFF]);
 			char vowelIndex = sb.charAt(sb.length() - 1);
 			if (vowelIndex <= '9') sb.setLength(sb.length()-1);
 			tmp.add(sb.toString());

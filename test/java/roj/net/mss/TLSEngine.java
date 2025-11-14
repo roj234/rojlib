@@ -41,13 +41,13 @@ public abstract class TLSEngine {
 	public abstract boolean maySendMessage();
 	public final boolean isClosed() {return stage == HS_FAIL;}
 
-	protected final RCipher getSessionCipher(MSSSession session, int mode) throws MSSException {
+	protected final RCipher getSessionCipher(MSSSession session, boolean encrypt) throws MSSException {
 		HMAC pfKd = new HMAC(session.suite.sign.get());
 		byte[] pfSk = session.key;
 
 		RCipher cipher = session.suite.cipher.get();
 		try {
-			cipher.init(mode,
+			cipher.init(encrypt,
 				CryptoFactory.HKDF_expand(pfKd, pfSk, new ByteList(2).putAscii("PF"), session.suite.cipher.getKeySize()), null,
 				new HKDFPRNG(pfKd, pfSk, "PF"));
 		} catch (GeneralSecurityException e) {

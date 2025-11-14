@@ -1,8 +1,7 @@
 package roj.plugins.minecraft;
 
-import roj.archive.zip.EntryMod;
-import roj.archive.zip.ZEntry;
-import roj.archive.zip.ZipArchive;
+import roj.archive.zip.ZipEditor;
+import roj.archive.zip.ZipEntry;
 import roj.asm.MemberDescriptor;
 import roj.asmx.mapper.Mapper;
 import roj.collect.ArrayList;
@@ -51,7 +50,7 @@ import static roj.ui.CommandNode.literal;
  * @since 2025/07/24 04:38
  */
 public class DatapackHelper {
-	private static List<ZipArchive> datapackList = new ArrayList<>();
+	private static List<ZipEditor> datapackList = new ArrayList<>();
 
 	public static void main(String[] args) throws ParseException {
 		CommandNode unmap = literal("dp_unmap").comment("fabric to forge").then(argument("文件夹", Argument.folder()).executes(ctx -> {
@@ -88,7 +87,7 @@ public class DatapackHelper {
 			for (File file : dir.listFiles()) {
 				if (file.getName().endsWith(".zip") || file.getName().endsWith(".jar")) {
 					try {
-						datapackList.add(new ZipArchive(file));
+						datapackList.add(new ZipEditor(file));
 						System.out.println("添加了 "+file.getName());
 					} catch (Exception e) {
 						e.printStackTrace();
@@ -97,11 +96,11 @@ public class DatapackHelper {
 			}
 		}));
 		var addpack = literal("add_pack").comment("添加数据包").then(argument("文件", Argument.file()).executes(ctx -> {
-			datapackList.add(new ZipArchive(ctx.argument("文件", File.class)));
+			datapackList.add(new ZipEditor(ctx.argument("文件", File.class)));
 		}));
 		var save = literal("save").comment("保存对文件的修改").executes(ctx -> {
-			for (ZipArchive zipArchive : datapackList) {
-				for (ZEntry entry : zipArchive.entries()) {
+			for (ZipEditor zipArchive : datapackList) {
+				for (ZipEntry entry : zipArchive.entries()) {
 					String name = entry.getName();
 					if (name.equals("pack.png") || name.equals("icon.png")) {
 						try {
@@ -129,7 +128,7 @@ public class DatapackHelper {
 			System.out.println("已优化并保存");
 		});
 		var close = literal("close").comment("丢弃未保存的修改并关闭所有数据包").executes(ctx -> {
-			for (ZipArchive zipArchive : datapackList) {
+			for (ZipEditor zipArchive : datapackList) {
 				zipArchive.close();
 			}
 			datapackList.clear();
@@ -140,7 +139,7 @@ public class DatapackHelper {
 			var pool = TaskPool.cpu().newGroup();
 			for (var zf : datapackList) {
 				pool.executeUnsafe(() -> {
-					for (ZEntry ze : zf.entries()) {
+					for (ZipEntry ze : zf.entries()) {
 						if (ze.getName().endsWith(".json")) {
 							try (TextReader in = new TextReader(zf.getInputStream(ze), StandardCharsets.UTF_8)) {
 								CharList sb = IOUtil.getSharedCharBuf().readFully(in);
@@ -162,7 +161,7 @@ public class DatapackHelper {
 			for (var zf : datapackList) {
 				pool.executeUnsafe(() -> {
 					IntValue flag = new IntValue();
-					for (ZEntry ze : zf.entries()) {
+					for (ZipEntry ze : zf.entries()) {
 						if (ze.getName().endsWith(".json")) {
 							try (TextReader in = new TextReader(zf.getInputStream(ze), StandardCharsets.UTF_8)) {
 								flag.value = 0;
@@ -179,7 +178,7 @@ public class DatapackHelper {
 
 								if (flag.value != 0) {
 									ByteList byteList = new ByteList().putUTFData(sb);
-									zf.put(ze.getName(), byteList).flag = EntryMod.COMPRESS;
+									zf.put(ze.getName(), byteList).setMethod(ZipEntry.DEFLATED);
 								}
 							}
 						}
@@ -195,8 +194,8 @@ public class DatapackHelper {
 		var regreplace = literal("regreplace").comment("正则替换字符串").then(argument("查找", Argument.string()).then(argument("替换", Argument.string()).executes(replacer)));
 
 		var remove_signature = literal("removesign").comment("清除JAR签名").executes(ctx -> {
-			for (ZipArchive za : datapackList) {
-				for (ZEntry entry : za.entries()) {
+			for (ZipEditor za : datapackList) {
+				for (ZipEntry entry : za.entries()) {
 					if (entry.getName().startsWith("META-INF/") && entry.getName().lastIndexOf('/') == 8 && (entry.getName().endsWith(".SF") || entry.getName().endsWith(".RSA"))) {
 						za.put(entry.getName(), null);
 					}
@@ -205,7 +204,7 @@ public class DatapackHelper {
 		});
 
 		var face_compress = literal("autocull").comment("自动方块状态剔除").executes(ctx -> {
-			for (ZipArchive zipArchive : datapackList) {
+			for (ZipEditor zipArchive : datapackList) {
 				cullFace(zipArchive);
 			}
 		});
@@ -214,7 +213,7 @@ public class DatapackHelper {
 			try (var out = TextWriter.to(ctx.argument("to", File.class))) {
 				var json = new JsonSerializer("\t").to(out);
 				json.emitMap();
-				for (ZipArchive in : datapackList) {
+				for (ZipEditor in : datapackList) {
 					dumpZhcn(in, json);
 				}
 				json.pop();
@@ -233,12 +232,12 @@ public class DatapackHelper {
 	}
 
 	private static final Pattern TRANSLATION_PATTERN = Pattern.compile("^assets/([a-z_\\-]+)/lang/(.._..)\\.json");
-	record LangState(LinkedHashMap<String, String> translation, ZEntry hash) {}
+	record LangState(LinkedHashMap<String, String> translation, ZipEntry hash) {}
 	@SuppressWarnings("unchecked")
-	private static void dumpZhcn(ZipArchive za, TextEmitter json) {
+	private static void dumpZhcn(ZipEditor za, TextEmitter json) {
 		HashMap<String, Map<String, LangState>> states = new HashMap<>();
 
-		for (ZEntry ze : za.entries()) {
+		for (ZipEntry ze : za.entries()) {
 			Matcher matcher = TRANSLATION_PATTERN.matcher(ze.getName());
 			if (matcher.matches()) {
 				var modid = matcher.group(1);
@@ -314,7 +313,7 @@ public class DatapackHelper {
 	}
 
 	private static final Pattern BLOCK_MODEL_PATTERN = Pattern.compile("^assets/[a-z_\\-]+/models/block/.+\\.json");
-	public static void cullFace(ZipArchive za) {
+	public static void cullFace(ZipEditor za) {
 		var up_plane = new Rect3d(-1, 15.99, -1, 17, 17, 17);
 		var down_plane = new Rect3d(-1, -1, -1, 17, 0.01, 17);
 		var north_plane = new Rect3d(-1, -1, -1, 17, 17, 0.01);
@@ -322,7 +321,7 @@ public class DatapackHelper {
 		var east_plane = new Rect3d(15.99, -1, -1, 17, 17, 17);
 		var west_plane = new Rect3d(-1, -1, -1, 0.01, 17, 17);
 
-		for (ZEntry ze : za.entries()) {
+		for (ZipEntry ze : za.entries()) {
 			if (BLOCK_MODEL_PATTERN.matcher(ze.getName()).matches()) {
 				MapValue map = null;
 				try {

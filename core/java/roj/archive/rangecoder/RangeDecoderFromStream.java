@@ -1,7 +1,7 @@
 package roj.archive.rangecoder;
 
 import roj.io.CorruptedInputException;
-import roj.io.PushbackInputStream;
+import roj.io.XDataInputStream;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -11,7 +11,7 @@ public final class RangeDecoderFromStream extends RangeDecoder {
 
 	public RangeDecoderFromStream(InputStream in) throws IOException { this(in, false); }
 	public RangeDecoderFromStream(InputStream in, boolean mustNotReadBeyond) throws IOException {
-		super(4096, mustNotReadBeyond&&!(in instanceof PushbackInputStream));
+		super(4096, mustNotReadBeyond&&!(in instanceof XDataInputStream));
 
 		if (in.read() != 0x00) throw new CorruptedInputException();
 
@@ -23,10 +23,8 @@ public final class RangeDecoderFromStream extends RangeDecoder {
 
 	@Override
 	public void finish() {
-		if (pos < len && isFinished() && in instanceof PushbackInputStream pin) {
-			byte[] buf = new byte[len-pos];
-			System.arraycopy(this.buf, pos, buf, 0, len-pos);
-			pin.setBuffer(buf, 0, buf.length);
+		if (pos < len && isFinished() && in instanceof XDataInputStream pin) {
+			pin.unread(this.buf, pos, len-pos);
 		}
 
 		super.finish();

@@ -315,10 +315,12 @@ public sealed class Type implements IType permits Type.ADT {
 	/**
 	 * 返回基础操作码code适合当前Type的变种
 	 */
+	@MagicConstant(valuesFromClass = Opcodes.class)
 	public byte getOpcode(int code) {
 		int shift = TypeInfo.byId[getActualType()-BYTE].opShift;
 		int data = Opcodes.shift(code);
 		if (data >>> 8 <= shift) throw new IllegalStateException(Opcodes.toString(code)+"不存在适合"+this+"的变种");
+		//noinspection MagicConstant
 		return (byte) ((data&0xFF)+shift);
 	}
 

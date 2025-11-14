@@ -140,7 +140,7 @@ public class CodeWriter extends AbstractCodeWriter {
 		len1 = r.readUnsignedShort();
 		int wend = r.wIndex();
 		while (len1 > 0) {
-			String name = ((CstUTF) cp.get(r)).str();
+			String name = ((CstUTF) cp.resolve(r)).str();
 			int end = r.readInt() + r.rIndex;
 			r.wIndex(end);
 			try {
@@ -204,12 +204,12 @@ public class CodeWriter extends AbstractCodeWriter {
 		// 同时读写，长度可能会变，特别是Transformer#compress...
 		if (bciR2W != null) addSegment(new Ldc(code, c));
 		else {
-			int i = cpw.fit(c);
+			int i = cpw.internIndex(c);
 			if (i < 256) codeOb.put(LDC).put(i);
 			else codeOb.put(LDC_W).putShort(i);
 		}
 	}
-	protected void ldc2(Constant c) { codeOb.put(LDC2_W).putShort(cpw.fit(c)); }
+	protected void ldc2(Constant c) { codeOb.put(LDC2_W).putShort(cpw.internIndex(c)); }
 
 	public void invokeDyn(int idx, String name, String desc, @Range(from = 0, to = 0) int reserved) { codeOb.put(INVOKEDYNAMIC).putShort(cpw.getInvokeDynId(idx, name, desc)).putShort(reserved); }
 	public void invokeItf(String owner, String name, String desc) { codeOb.put(INVOKEINTERFACE).putShort(cpw.getItfRefId(owner, name, desc)).putShortLE(1+TypeHelper.paramSize(desc)); }
@@ -309,7 +309,7 @@ public class CodeWriter extends AbstractCodeWriter {
 		end = Objects.requireNonNull(bciR2W.get(end), "异常处理器的一部分无法找到").getValue();
 		handler = Objects.requireNonNull(bciR2W.get(handler), "异常处理器的一部分无法找到").getValue();
 
-		bw.putShort(start).putShort(end).putShort(handler).putShort(type == null ? 0 : cpw.fit(type));
+		bw.putShort(start).putShort(end).putShort(handler).putShort(type == null ? 0 : cpw.internIndex(type));
 		// 在这里是exception的数量
 		tmpLen++;
 
@@ -438,8 +438,8 @@ public class CodeWriter extends AbstractCodeWriter {
 					b.setShort(b.rIndex - 4, start = bciR2W.get(start).getValue())
 							.setShort(b.rIndex - 2, (oldEnd == null ? bci : oldEnd.getValue()) - start);
 					if (cp != cpw) {
-						b.setShort(b.rIndex, cpw.fit(cp.get(b)));
-						b.setShort(b.rIndex, cpw.fit(cp.get(b)));
+						b.setShort(b.rIndex, cpw.internIndex(cp.resolve(b)));
+						b.setShort(b.rIndex, cpw.internIndex(cp.resolve(b)));
 						b.rIndex += 2;
 					} else {
 						b.rIndex += 6;

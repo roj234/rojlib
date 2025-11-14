@@ -12,6 +12,7 @@ import java.lang.ref.WeakReference;
 import static roj.reflect.Unsafe.U;
 
 public class ArrayCache {
+	public static final int IO_BUFFER_SIZE = 8192;
 	public static final int MAX_ARRAY_SIZE = Integer.MAX_VALUE - 8;
 
 	public static final byte[] BYTES = new byte[0];
@@ -129,7 +130,7 @@ public class ArrayCache {
 		using[idx] &= ~(1<<free);
 	}
 
-	public static byte[] getIOBuffer() {return getByteArray(8192, false);}
+	public static byte[] getIOBuffer() {return getByteArray(IO_BUFFER_SIZE, false);}
 	public static byte[] getByteArray(int size, boolean fillWithZeros) {
 		int size1 = (size+MIN_ARRAY_SIZE-1)& -MIN_ARRAY_SIZE;
 		byte[] array = size1 > LARGE_ARRAY_SIZE ? getGlobalArray(0, size1) : small().getArray(0, size1);
@@ -159,7 +160,7 @@ public class ArrayCache {
 	}
 
 	// such buffer should not smaller < 256
-	public static char[] getIOCharBuffer() {return getCharArray(4096);}
+	public static char[] getIOCharBuffer() {return getCharArray(IO_BUFFER_SIZE/2);}
 	public static char[] getCharArray(int size) {
 		// round up to CHIP_SIZE
 		// 分块... 反正get实际意义是... 长度至少为N的数组

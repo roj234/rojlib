@@ -17,7 +17,13 @@ public final class Document extends Element {
 	public Element createElement(String tag) {return new Element(tag);}
 
 	@Override
-	public Map<String, ConfigValue> attributes() {return Collections.emptyMap();}
+	protected Map<String, ConfigValue> attributesForWrite() {
+		if (attributes == null) throw new UnsupportedOperationException("Headless document");
+		return super.attributesForWrite();
+	}
+
+	@Override
+	public Map<String, ConfigValue> attributes() {return attributes == null ? Collections.emptyMap() : attributes;}
 
 	protected void toXML(CharList sb, int depth) {
 		if (depth != 0) throw new UnsupportedOperationException("Xml header must on top");

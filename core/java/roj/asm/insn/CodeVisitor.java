@@ -35,14 +35,14 @@ public class CodeVisitor {
 		visitExceptions();
 		len = r.readUnsignedShort();
 		while (len-- > 0) {
-			visitException(r.readUnsignedShort(), r.readUnsignedShort(), r.readUnsignedShort(), (CstClass) cp.getNullable(r));
+			visitException(r.readUnsignedShort(), r.readUnsignedShort(), r.readUnsignedShort(), (CstClass) cp.resolveOrNull(r));
 		}
 
 		visitAttributes();
 		len = r.readUnsignedShort();
 		int wend = r.wIndex();
 		while (len-- > 0) {
-			String name = ((CstUTF) cp.get(r)).str();
+			String name = ((CstUTF) cp.resolve(r)).str();
 			int length = r.readInt();
 			int end = length + r.rIndex;
 			r.wIndex(end);
@@ -72,10 +72,10 @@ public class CodeVisitor {
 				else visitPreInsn();
 
 				switch (code) {
-					case PUTFIELD, GETFIELD, PUTSTATIC, GETSTATIC -> field(code, cp.getRef(r, true));
-					case INVOKEVIRTUAL, INVOKESPECIAL, INVOKESTATIC -> invoke(code, cp.getRef(r, false));
-					case INVOKEINTERFACE -> invokeItf((CstRef.Interface) cp.get(r), r.readShort());
-					case INVOKEDYNAMIC -> invokeDyn(cp.get(r), r.readUnsignedShort());
+					case PUTFIELD, GETFIELD, PUTSTATIC, GETSTATIC -> field(code, cp.resolveMember(r, true));
+					case INVOKEVIRTUAL, INVOKESPECIAL, INVOKESTATIC -> invoke(code, cp.resolveMember(r, false));
+					case INVOKEINTERFACE -> invokeItf((CstRef.Interface) cp.resolve(r), r.readShort());
+					case INVOKEDYNAMIC -> invokeDyn(cp.resolve(r), r.readUnsignedShort());
 					case GOTO, IFEQ, IFNE, IFLT, IFGE, IFGT, IFLE, IF_icmpeq, IF_icmpne, IF_icmplt, IF_icmpge, IF_icmpgt, IF_icmple, IF_acmpeq, IF_acmpne, IFNULL, IFNONNULL, JSR -> jump(code, r.readShort());
 					case GOTO_W, JSR_W -> jump(code, r.readInt());
 					case SIPUSH -> smallNum(code, r.readShort());
@@ -83,11 +83,11 @@ public class CodeVisitor {
 					case BIPUSH -> smallNum(code, r.readByte());
 					case NEWARRAY -> newArray(r.readByte());
 					case LDC -> ldc(LDC, cp.constants().get(r.readUnsignedByte()-1));
-					case LDC_W, LDC2_W -> ldc(code, cp.get(r));
+					case LDC_W, LDC2_W -> ldc(code, cp.resolve(r));
 					case IINC -> iinc(widen ? r.readUnsignedShort() : r.readUnsignedByte(), widen ? r.readShort() : r.readByte());
 					case WIDE -> {}
-					case NEW, ANEWARRAY, INSTANCEOF, CHECKCAST -> clazz(code, cp.get(r));
-					case MULTIANEWARRAY -> multiArray(cp.get(r), r.readUnsignedByte());
+					case NEW, ANEWARRAY, INSTANCEOF, CHECKCAST -> clazz(code, cp.resolve(r));
+					case MULTIANEWARRAY -> multiArray(cp.resolve(r), r.readUnsignedByte());
 					case ISTORE, LSTORE, FSTORE, DSTORE, ASTORE, ILOAD, LLOAD, FLOAD, DLOAD, ALOAD -> vars(code, widen ? r.readUnsignedShort() : r.readUnsignedByte());
 					case TABLESWITCH -> {
 						// align

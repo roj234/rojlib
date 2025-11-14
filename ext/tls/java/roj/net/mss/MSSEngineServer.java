@@ -147,7 +147,7 @@ final class MSSEngineServer extends MSSEngine {
 			if (sess == null) break zeroRtt;
 
 			if (sess.key != null) {
-				preDecoder = getSessionCipher(sess, RCipher.DECRYPT_MODE);
+				preDecoder = getSessionCipher(sess, false);
 			}
 
 			sess.key = deriveKey("session", 64);
@@ -226,8 +226,8 @@ final class MSSEngineServer extends MSSEngine {
 
 		var prng = getPRNG("comm_prng");
 		// 和Client是反的，因为PRNG顺序
-		decoder.init(RCipher.DECRYPT_MODE, deriveKey("c2s0", suite.cipher.getKeySize()), null, prng);
-		encoder.init(RCipher.ENCRYPT_MODE, deriveKey("s2c0", suite.cipher.getKeySize()), null, prng);
+		decoder.init(false, deriveKey("c2s0", suite.cipher.getKeySize()), null, prng);
+		encoder.init(true, deriveKey("s2c0", suite.cipher.getKeySize()), null, prng);
 
 		ob.rIndex = pos;
 		DynByteBuf encb = config.buffer(encoder.engineGetOutputSize(ob.readableBytes()));

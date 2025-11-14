@@ -12,6 +12,7 @@ import java.io.InputStream;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
+import java.util.function.Consumer;
 
 /**
  * @author Roj234
@@ -34,7 +35,9 @@ public interface Library {
 	/**
 	 * 应当被加入短名称索引的类名称
 	 */
-	default Collection<String> content() {return indexedContent();}
+	default void exportedContent(@Nullable String moduleName, Consumer<String> callback) {
+		indexedContent().forEach(callback);
+	}
 
 	@Nullable ClassNode get(CharSequence name);
 

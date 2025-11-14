@@ -12,7 +12,6 @@ import roj.collect.ArrayList;
 import roj.collect.IntMap;
 import roj.collect.ToIntMap;
 import roj.concurrent.Promise;
-import roj.concurrent.TaskPool;
 import roj.io.IOUtil;
 import roj.net.ChannelCtx;
 import roj.net.ChannelHandler;
@@ -54,7 +53,7 @@ public class RPCClientImpl implements RPCClient, ChannelHandler {
 
 	private final Map<String, Pair<Object, Integer>> methodIdQueries = new roj.collect.HashMap<>();
 	private final IntMap<Consumer<Object>> callbacks = new IntMap<>();
-	private Promise<RPCClient> openCallback = Promise.sync();
+	private Promise<RPCClient> openCallback = Promise.manual();
 
 	@Override public void handlerAdded(ChannelCtx ctx) {this.connection = ctx;}
 	@Override public void channelRead(ChannelCtx ctx, Object msg) throws IOException {((ClientPacket) msg).handle(this);}
@@ -64,7 +63,7 @@ public class RPCClientImpl implements RPCClient, ChannelHandler {
 	}
 	@Override public void channelClosed(ChannelCtx ctx) {
 		if (error == null) error = new AsynchronousCloseException();
-		((Promise.Result) openCallback).rejectOn(error, TaskPool.common());
+		((Promise.Result) openCallback).reject(error);
 
 		for (Pair<Object, Integer> value : methodIdQueries.values()) {
 			Object lock = value.getKey();
@@ -76,7 +75,7 @@ public class RPCClientImpl implements RPCClient, ChannelHandler {
 		callbacks.clear();
 	}
 	@Override public void channelOpened(ChannelCtx ctx) {
-		((Promise.Result) openCallback).resolveOn(this, TaskPool.common());
+		((Promise.Result) openCallback).resolve(this);
 	}
 
 	public void attachTo(MyChannel channel) {
@@ -162,7 +161,7 @@ public class RPCClientImpl implements RPCClient, ChannelHandler {
 
 		params.release();
 
-		var promise = Promise.sync();
+		var promise = Promise.manual();
 
 		self.callbacks.put(transactionId, promise::resolve);
 		self.connection.channel().fireChannelWrite(packet);

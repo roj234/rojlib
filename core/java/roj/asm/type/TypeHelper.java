@@ -101,11 +101,12 @@ public final class TypeHelper {
 		return humanize(types, methodName, trimPackage, IOUtil.getSharedCharBuf()).toString();
 	}
 	public static CharList humanize(List<Type> types, String methodName, boolean trimPackage, CharList sb) {
+		int pos = sb.length();
 		Type t = types.remove(types.size() - 1);
 
-		if (trimPackage && t.owner != null) {
+		if (t.owner != null) {
 			String o = t.owner;
-			sb.append(o, o.lastIndexOf('/') + 1, o.length());
+			sb.append(o, trimPackage ? o.lastIndexOf('/') + 1 : 0, o.length());
 			for (int j = t.array() - 1; j >= 0; j--) sb.append("[]");
 		} else {
 			t.toString(sb);
@@ -116,9 +117,9 @@ public final class TypeHelper {
 			int i = 0;
 			do {
 				t = types.get(i++);
-				if (trimPackage && t.owner != null) {
+				if (t.owner != null) {
 					String o = t.owner;
-					sb.append(o, o.lastIndexOf('/') + 1, o.length());
+					sb.append(o, trimPackage ? o.lastIndexOf('/') + 1 : 0, o.length());
 					for (int j = t.array() - 1; j >= 0; j--) sb.append("[]");
 				} else {
 					t.toString(sb);
@@ -130,7 +131,7 @@ public final class TypeHelper {
 
 		types.add(t);
 
-		return sb.append(')');
+		return sb.replace('/', '.', pos, sb.length()).append(')');
 	}
 
 	/**

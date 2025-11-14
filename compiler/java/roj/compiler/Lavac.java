@@ -1,10 +1,9 @@
 package roj.compiler;
 
-import roj.archive.zip.ZEntry;
+import roj.archive.zip.ZipEntry;
 import roj.archive.zip.ZipFile;
-import roj.archive.zip.ZipFileWriter;
+import roj.archive.zip.ZipPacker;
 import roj.asm.AsmCache;
-import roj.asm.ClassDefinition;
 import roj.asm.ClassNode;
 import roj.collect.ArrayList;
 import roj.compiler.api.Compiler;
@@ -219,7 +218,7 @@ public final class Lavac extends LavaCompiler {
 						@Override
 						protected Class<?> findClass(String name) throws ClassNotFoundException {
 							String klass = name.replace('.', '/').concat(".class");
-							ZEntry entry = archive.getEntry(klass);
+							ZipEntry entry = archive.getEntry(klass);
 							if (entry == null) throw new ClassNotFoundException(name);
 
 							ByteList buf;
@@ -246,15 +245,15 @@ public final class Lavac extends LavaCompiler {
 	}
 
 	private boolean compile(File output) {
-		List<? extends ClassDefinition> result = null;
+		List<? extends ClassNode> result = null;
 		try {
 			result = compile(allFiles);
 
 			if (result != null) {
-				try (var zfw = new ZipFileWriter(output)) {
+				try (var zfw = new ZipPacker(output)) {
 					for (int i = 0; i < result.size(); i++) {
 						var data = result.get(i);
-						zfw.beginEntry(new ZEntry(data.name().concat(".class")));
+						zfw.beginEntry(new ZipEntry(data.name().concat(".class")));
 						ByteList x = AsmCache.toByteArrayShared(data);
 						x.writeToStream(zfw);
 						if (data.name().equals("Test")) {

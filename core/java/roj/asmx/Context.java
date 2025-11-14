@@ -1,8 +1,8 @@
 package roj.asmx;
 
-import roj.archive.zip.ZEntry;
+import roj.archive.zip.ZipEntry;
 import roj.archive.zip.ZipFile;
-import roj.archive.zip.ZipFileWriter;
+import roj.archive.zip.ZipPacker;
 import roj.asm.AsmCache;
 import roj.asm.ClassNode;
 import roj.asm.cp.Constant;
@@ -218,18 +218,18 @@ public final class Context implements ClassResource, Consumer<Constant>, Supplie
 	}
 	public String getClassName() {return getFileName().substring(0, name.length()-6);}
 
-	public static List<Context> fromZip(File input, ZipFileWriter rw) throws IOException {
+	public static List<Context> fromZip(File input, ZipPacker zp) throws IOException {
 		List<Context> ctx = new ArrayList<>();
 
-		try (ZipFile archive = new ZipFile(input)) {
-			for (ZEntry value : archive.entries()) {
-				String name = value.getName();
+		try (ZipFile zf = new ZipFile(input)) {
+			for (ZipEntry entry : zf.entries()) {
+				String name = entry.getName();
 				if (name.endsWith("/")) continue;
 
 				if (name.endsWith(".class")) {
-					ctx.add(new Context(name, archive.get(value)));
-				} else if (rw != null) {
-					rw.copy(archive, value);
+					ctx.add(new Context(name, zf.get(entry)));
+				} else if (zp != null) {
+					zp.copy(zf, entry);
 				}
 			}
 		}

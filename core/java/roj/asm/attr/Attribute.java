@@ -116,7 +116,7 @@ public abstract class Attribute {
 				case "RuntimeInvisibleAnnotations": return new Annotations(name, data, cp);
 				case "RuntimeVisibleParameterAnnotations":
 				case "RuntimeInvisibleParameterAnnotations": return new ParameterAnnotations(name, data, cp);
-				case "Signature": return Signature.parse(((CstUTF) cp.get(data)).str(), origin);
+				case "Signature": return Signature.parse(((CstUTF) cp.resolve(data)).str(), origin);
 				case "Synthetic": case "Deprecated": break;
 				// method only
 				case "MethodParameters": limit(origin,Signature.METHOD); return new MethodParameters(data, cp);
@@ -124,7 +124,7 @@ public abstract class Attribute {
 				case "AnnotationDefault": limit(origin,Signature.METHOD); return new AnnotationDefault(data, cp);
 				case "Code": limit(origin,Signature.METHOD); return new Code(data, cp, (MethodNode)node);
 				// field only
-				case "ConstantValue": limit(origin,Signature.FIELD); return new ConstantValue(cp.get(data));
+				case "ConstantValue": limit(origin,Signature.FIELD); return new ConstantValue(cp.resolve(data));
 				// class only
 				case "Record": limit(origin,Signature.CLASS); return new RecordAttribute(data, cp);
 				case "InnerClasses": limit(origin,Signature.CLASS); return new InnerClasses(data, cp);
@@ -133,13 +133,13 @@ public abstract class Attribute {
 				case "PermittedSubclasses":
 				case "NestMembers": limit(origin,Signature.CLASS); return new ClassListAttribute(name, data, cp);
 				case "ModuleMainClass":
-				case "NestHost": limit(origin,Signature.CLASS); return new StringAttribute(name, cp.getRefName(data, Constant.CLASS));
+				case "NestHost": limit(origin,Signature.CLASS); return new StringAttribute(name, cp.resolveName(data, Constant.CLASS));
 				case "ModuleTarget":
-				case "SourceFile": limit(origin,Signature.CLASS); return new StringAttribute(name, ((CstUTF) cp.get(data)).str());
+				case "SourceFile": limit(origin,Signature.CLASS); return new StringAttribute(name, ((CstUTF) cp.resolve(data)).str());
 				case "BootstrapMethods": limit(origin,Signature.CLASS); return new BootstrapMethods(data, cp);
 				case "ModuleHash": limit(origin,Signature.CLASS); return new ModuleHashes(data, cp);
 				// 匿名类所属的方法
-				case "EnclosingMethod": limit(origin,Signature.CLASS); return new EnclosingMethod(cp.get(data), (CstNameAndType) cp.getNullable(data));
+				case "EnclosingMethod": limit(origin,Signature.CLASS); return new EnclosingMethod(cp.resolve(data), (CstNameAndType) cp.resolveOrNull(data));
 				case "SourceDebugExtension": break;
 			}
 		} catch (Throwable e) {

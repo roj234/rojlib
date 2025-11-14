@@ -1,6 +1,9 @@
 package roj.compiler.plugins.eval;
 
-import roj.asm.*;
+import roj.asm.ClassNode;
+import roj.asm.ClassView;
+import roj.asm.Member;
+import roj.asm.MethodNode;
 import roj.asm.insn.CodeWriter;
 import roj.asm.insn.Label;
 import roj.asm.type.Type;
@@ -150,7 +153,7 @@ public interface Evaluator {
 
 		for (int j = 0; j < invoker.size(); j++) {
 			Member mof = invoker.get(j);
-			ClassDefinition info = ctx.resolve(mof.owner());
+			ClassNode info = ctx.resolve(mof.owner());
 			int i = info.getMethod(mof.name(), mof.rawDesc());
 			info.methods().get(i).addAttribute(new CompiledMethod(evaluator, j, Type.getReturnType(mof.rawDesc())));
 		}

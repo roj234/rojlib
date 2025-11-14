@@ -2,7 +2,7 @@ package roj.plugin;
 
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
-import roj.archive.zip.ZEntry;
+import roj.archive.zip.ZipEntry;
 import roj.archive.zip.ZipFile;
 import roj.asm.ClassNode;
 import roj.asmx.*;
@@ -49,7 +49,7 @@ public class PluginClassLoader extends ClassLoader {
 		super(plugin.id, parent);
 		this.desc = plugin;
 		this.accessible = accessible;
-		this.archive = new ZipFile(plugin.source, ZipFile.FLAG_VERIFY|ZipFile.FLAG_BACKWARD_READ, plugin.charset);
+		this.archive = new ZipFile(plugin.source, ZipFile.FLAG_Verify|ZipFile.FLAG_ReadCENOnly, plugin.charset);
 		this.archive.reload();
 
 		File file = ((FileSource) plugin.source).getFile();
@@ -70,7 +70,7 @@ public class PluginClassLoader extends ClassLoader {
 
 		if (Jocker.class.getModule().isNamed() && Jocker.useModulePluginIfAvailable) {
 			var packages = new HashSet<String>();
-			for (ZEntry entry : this.archive.entries()) {
+			for (ZipEntry entry : this.archive.entries()) {
 				String name = entry.getName();
 				if (name.startsWith("META-INF/")) continue;
 				if (!name.endsWith(".class")) continue;
@@ -125,7 +125,7 @@ public class PluginClassLoader extends ClassLoader {
 	@Override
 	protected Class<?> findClass(String name) throws ClassNotFoundException {
 		String entryName = name.replace('.', '/').concat(".class");
-		ZEntry entry = archive.getEntry(entryName);
+		ZipEntry entry = archive.getEntry(entryName);
 		if (entry == null) {
 			for (var s : accessible) {
 				if (s.classLoader != null && s.classLoader.archive.getEntry(entryName) != null) {
@@ -183,7 +183,7 @@ public class PluginClassLoader extends ClassLoader {
 	@Nullable
 	@Override
 	public InputStream getResourceAsStream(String name) {
-		ZEntry entry = archive.getEntry(name);
+		ZipEntry entry = archive.getEntry(name);
 		if (entry == null) return getParent().getResourceAsStream(name);
 		try {
 			return archive.getInputStream(entry);

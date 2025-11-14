@@ -2,7 +2,7 @@ package roj.compiler.ast.expr;
 
 import org.jetbrains.annotations.NotNull;
 import roj.annotation.MayMutate;
-import roj.asm.ClassDefinition;
+import roj.asm.ClassNode;
 import roj.asm.MethodNode;
 import roj.asm.Opcodes;
 import roj.asm.annotation.Annotation;
@@ -71,7 +71,7 @@ public final class Invoke extends Expr {
 	// 方法实例的类型
 	private IType instanceType;
 	// 标志位
-	private static final byte RESOLVED = 1, INVOKE_SPECIAL = ComponentList.THIS_ONLY, INTERFACE_CLASS = 4, POLYSIGN = 8, ARG0_IS_THIS = 16;
+	private static final byte RESOLVED = 1, INVOKE_SPECIAL = ComponentList.THIS_ONLY, INTERFACE_CLASS = 4, POLYSIGN = 8, NONSTATIC_CHILD = 16, THIS_CALL = 32;
 	private byte flag;
 
 	public static Invoke staticMethod(MethodNode node) {return staticMethod(node, Collections.emptyList());}
@@ -147,7 +147,7 @@ public final class Invoke extends Expr {
 		IType instanceType = null;
 		// 取值表达式expr是否有副作用 (目前只有自动生成this时为false)
 		boolean hasSideEffect = true;
-		ClassDefinition methodOwner;
+		ClassNode methodOwner;
 		String methodOwnerName, methodName;
 		block:
 		if (expr.getClass() == MemberAccess.class) {
@@ -222,7 +222,7 @@ public final class Invoke extends Expr {
 						methodOwner = Objects.requireNonNull(ctx.resolve(t));
 					} else {
 						// 静态方法
-						methodOwner = (ClassDefinition) expr;
+						methodOwner = (ClassNode) expr;
 						expr = null;
 					}
 					break block;
@@ -263,7 +263,7 @@ public final class Invoke extends Expr {
 				return NaE.resolveFailed(this);
 			}
 
-			flag |= INVOKE_SPECIAL;
+			flag |= INVOKE_SPECIAL|THIS_CALL;
 			instanceType = ((This) expr).resolve(ctx).type();
 			methodOwner = ctx.compiler.resolve(instanceType.owner());
 			methodName = "<init>";
@@ -276,7 +276,7 @@ public final class Invoke extends Expr {
 				args = EnumUtil.prepend(args, new LocalVariable(ctx.getVariable(NestContext.InnerClass.FIELD_HOST_REF)));
 			}
 		} else {// new Type
-			if ((flag&ARG0_IS_THIS) != 0) {
+			if ((flag&NONSTATIC_CHILD) != 0) {
 				Expr that = args.get(0).resolve(ctx);
 				args.set(0, that);
 
@@ -310,7 +310,7 @@ public final class Invoke extends Expr {
 			}
 
 			// newEnclosingClass检查
-			if ((flag & ARG0_IS_THIS) == 0) {
+			if ((flag&NONSTATIC_CHILD) == 0) {
 				var icFlags = ctx.compiler.getInnerClassInfo(methodOwner).get(methodOwner.name());
 				if (icFlags != null && (icFlags.modifier&ACC_STATIC) == 0) {
 					if (!ctx.getHierarchyList(ctx.file).containsKey(icFlags.parent)) {
@@ -336,6 +336,12 @@ public final class Invoke extends Expr {
 
 			if (last.getClass() != NamedArgumentList.class) argumentType.add(last.type());
 			else namedArgumentType = ((NamedArgumentList) last).resolve();
+
+			// has Error
+			for (int i = 0; i < argumentType.size(); i++) {
+				if (argumentType.get(i) == NaE.UNRESOLVABLE)
+					return NaE.resolveFailed(this);
+			}
 		} else argumentType.clear();
 
 		block:
@@ -575,7 +581,7 @@ public final class Invoke extends Expr {
 			cw.invoke(opcode == Opcodes.INVOKEVIRTUAL ? Opcodes.INVOKEINTERFACE : opcode, owner, method.name(), method.rawDesc(), true);
 		} else {
 			cw.invoke(opcode, owner, method.name(), method.rawDesc());
-			if (ctx.inConstructor && expr instanceof This) {
+			if ((flag&THIS_CALL) != 0 && ctx.inConstructor && expr instanceof This) {
 				if (!ctx.bp.vis().isTopScope())
 					ctx.report(Kind.ERROR, "invoke.constructor.childScope", expr);
 				ctx.onCallConstructor(method);
@@ -624,7 +630,7 @@ public final class Invoke extends Expr {
 	/**
 	 * var.new XXX()语法, 指定第一个参数为This
 	 */
-	public Invoke setThisArg() {flag |= ARG0_IS_THIS;return this;}
+	public Invoke setThisArg() {flag |= NONSTATIC_CHILD;return this;}
 
 	public int getArgumentCount() {
 		if (args.size() == 0) return 0;

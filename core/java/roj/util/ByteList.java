@@ -155,6 +155,14 @@ public class ByteList extends DynByteBuf implements Appendable {
 		return this;
 	}
 
+	@Override
+	public DynByteBuf set(int wi, byte[] b, int off, int len) {
+		ArrayUtil.checkRange(b, off, len);
+		wi = testWI(wi, len)+arrayOffset();
+		System.arraycopy(b, off, list, wi, len);
+		return this;
+	}
+
 	public final ByteList setChars(int wi, CharSequence s) {
 		wi = testWI(wi, s.length() << 1)+arrayOffset();
 		byte[] list = this.list;

@@ -122,7 +122,7 @@ final class StringConcat extends Expr {
 			));
 
 			var recipe = new CharList();
-			var desc = new CharList();
+			var desc = new CharList().append('(');
 			for (int i = 0; i < nodes.size(); i++) {
 				Expr node = nodes.get(i);
 				if (node.isConstant()) {
@@ -141,7 +141,7 @@ final class StringConcat extends Expr {
 			}
 
 			recipeList.add(cw.cpw.getUtf(recipe.toStringAndFree()));
-			cw.invokeDyn(tableIdx, "toString", desc.toStringAndFree());
+			cw.invokeDyn(tableIdx, "toString", desc.append(")Ljava/lang/String;").toStringAndFree());
 		} else {
 			int tableIdx = ctx.file.addNewLambdaRef(new BootstrapMethods.Item(
 					BootstrapMethods.Kind.INVOKESTATIC,
@@ -153,7 +153,7 @@ final class StringConcat extends Expr {
 					Collections.emptyList()
 			));
 
-			var desc = new CharList();
+			var desc = new CharList().append('(');
 			for (int i = 0; i < nodes.size(); i++) {
 				Expr node = nodes.get(i);
 				var type = node.type();
@@ -164,7 +164,7 @@ final class StringConcat extends Expr {
 				node.write(cw);
 				type.rawType().toDesc(desc);
 			}
-			cw.invokeDyn(tableIdx, "toString", desc.toStringAndFree());
+			cw.invokeDyn(tableIdx, "toString", desc.append(")Ljava/lang/String;").toStringAndFree());
 		}
 	}
 	private void legacyConcat(MethodWriter cw, CompileContext lc) {

@@ -49,7 +49,7 @@ final class MultiReturn extends Expr {
 			}
 		}
 
-		LPSignature node = ctx.file.currentNode;
+		LPSignature node = ctx.file.activeSignature;
 		if (node != null) {
 			IType type1 = node.values.get(node.values.size() - 1);
 			if (type1.owner().equals(RETURNSTACK_TYPE) && type1 instanceof ParameterizedType g) {

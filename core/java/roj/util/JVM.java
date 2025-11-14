@@ -1,6 +1,5 @@
 package roj.util;
 
-import roj.concurrent.FastThreadLocal;
 import roj.io.IOUtil;
 import roj.optimizer.FastVarHandle;
 import roj.reflect.Telescope;
@@ -57,21 +56,21 @@ public final class JVM {
 	public static void useAccurateTiming() {
 		if (!AccurateTimer.started) {
 			AccurateTimer.started = true;
-			new AccurateTimer().start();
+			new AccurateTimer(true).start();
 		}
 	}
 	public static final class AccurateTimer extends Thread {
-		private AccurateTimer() {setName("睡美人");setDaemon(true);}
+		private AccurateTimer(boolean daemon) {setName("RojLib 睡美人");setDaemon(daemon);}
 
 		private static boolean started;
 
-		public static void parkForMe() {
-			FastThreadLocal.clear();
-			started = true;
-			currentThread().setName("睡美人");
-			try {
-				for(;;) Thread.sleep(Long.MAX_VALUE);
-			} catch (InterruptedException ignored) {}
+		public static void setEventDriven() {
+			if (started) {
+				System.err.println("AccurateTimer already started");
+			} else {
+				started = true;
+			}
+			new AccurateTimer(false).start();
 		}
 
 		@Override public void run() {

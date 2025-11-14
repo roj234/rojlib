@@ -7,7 +7,7 @@ new FormModel {
 			"autoSize": false
 		} ) {
 			name: "this"
-			"title": "Roj234 Unarchiver 1.4"
+			"title": "Roj234 Unarchiver 1.5"
 			add( new FormComponent( "javax.swing.JLabel" ) {
 				name: "label2"
 				"text": "解压到"
@@ -126,7 +126,6 @@ new FormModel {
 			add( new FormComponent( "javax.swing.JCheckBox" ) {
 				name: "uiStoreAttr"
 				"text": "DOS属性"
-				"enabled": false
 			}, new FormLayoutConstraints( class com.jformdesigner.runtime.NullConstraints ) {
 				"x": 210
 				"y": 90

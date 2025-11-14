@@ -15,12 +15,12 @@ import java.util.Map;
 public class ModuleHashes extends Attribute {
 	public ModuleHashes(){map = new HashMap<>();}
 	public ModuleHashes(DynByteBuf r, ConstantPool cp) {
-		algorithm = ((CstUTF) cp.get(r)).str();
+		algorithm = ((CstUTF) cp.resolve(r)).str();
 
 		int len = r.readUnsignedShort();
 		map = new HashMap<>(len);
 		for (int i = 0; i < len; i++) {
-			String moduleName = cp.getRefName(r, Constant.MODULE);
+			String moduleName = cp.resolveName(r, Constant.MODULE);
 
 			int hashLen = r.readUnsignedShort();
 			if (hashLen == 0) throw new IllegalArgumentException("hashLen == 0");

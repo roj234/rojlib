@@ -5,6 +5,7 @@ import roj.io.BufferPool;
 import roj.io.Finishable;
 import roj.io.IOUtil;
 import roj.io.MBOutputStream;
+import roj.util.ArrayCache;
 import roj.util.ByteList;
 import roj.util.Helpers;
 
@@ -17,8 +18,6 @@ import java.security.GeneralSecurityException;
  * @since 2022/11/12 15:27
  */
 public class CipherOutputStream extends MBOutputStream implements Finishable {
-	static final int BUFFER_SIZE = 1024;
-
 	protected OutputStream out;
 
 	private final ByteList.Slice inputBuffer = new ByteList.Slice();
@@ -34,10 +33,11 @@ public class CipherOutputStream extends MBOutputStream implements Finishable {
 		int blockSize1 = cipher.engineGetBlockSize();
 		if (blockSize1 != 0) {
 			// 计算最佳缓冲区大小
-			int bufferSize = BUFFER_SIZE;
-			while (cipher.engineGetOutputSize(bufferSize) > BUFFER_SIZE) {
+			int bufferSize = ArrayCache.IO_BUFFER_SIZE;
+			while (bufferSize > 0 && cipher.engineGetOutputSize(bufferSize) > ArrayCache.IO_BUFFER_SIZE) {
 				bufferSize -= blockSize1;
 			}
+			bufferSize = Math.max(cipher.engineGetBlockSize(), bufferSize);
 
 			outputBuffer = (ByteList) BufferPool.buffer(false, bufferSize);
 			inputBuffer.set(outputBuffer.array(), outputBuffer.arrayOffset(), outputBuffer.capacity());
@@ -68,7 +68,7 @@ public class CipherOutputStream extends MBOutputStream implements Finishable {
 				off += bytesToWrite;
 				len -= bytesToWrite;
 
-				if (ib.writableBytes() == 0) flush();
+				if (ib.writableBytes() == 0) internalFlush();
 			}
 		} catch (Exception e) {
 			IOUtil.closeSilently(this);
@@ -77,6 +77,11 @@ public class CipherOutputStream extends MBOutputStream implements Finishable {
 	}
 
 	public void flush() throws IOException {
+		internalFlush();
+		out.flush();
+	}
+
+	private void internalFlush() throws IOException {
 		if (blockSize == 0) return;
 
 		outputBuffer.clear();
@@ -87,14 +92,12 @@ public class CipherOutputStream extends MBOutputStream implements Finishable {
 		}
 		outputBuffer.writeToStream(out);
 		inputBuffer.compact();
-
-		out.flush();
 	}
 
 	@Override
 	public void finish() throws IOException {
 		if (blockSize != 0 && inputBuffer.isReadable()) {
-			flush();
+			internalFlush();
 			try {
 				finalBlock();
 			} catch (Exception e) {

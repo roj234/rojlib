@@ -77,7 +77,7 @@ public class KeyType {
 			pass = CryptoFactory.HKDF_HmacSha256(pass, null, 32);
 			FeedbackCipher c = new FeedbackCipher(CryptoFactory.AES(), FeedbackCipher.MODE_CTR);
 
-			c.init(RCipher.ENCRYPT_MODE, pass, new IvParameterSpecNC(iv), null);
+			c.init(true, pass, new IvParameterSpecNC(iv), null);
 			cos = new CipherOutputStream(cos, c);
 		}
 
@@ -111,7 +111,7 @@ public class KeyType {
 
 			pass = CryptoFactory.HKDF_HmacSha256(pass, null, 32);
 			FeedbackCipher c = new FeedbackCipher(CryptoFactory.AES(), FeedbackCipher.MODE_CTR);
-			c.init(RCipher.DECRYPT_MODE, pass, new IvParameterSpecNC(iv), null);
+			c.init(false, pass, new IvParameterSpecNC(iv), null);
 			cis = new CipherInputStream(cis, c);
 		}
 

@@ -4,7 +4,7 @@
 
 #define BLOCK_SIZE 16
 #define P1 0x9e3779b1
-#define P2 0x85ebca7
+#define P2 0x85ebca77
 #define P3 0xc2b2ae3d
 #define P4 0x27d4eb2f
 #define P5 0x165667b1

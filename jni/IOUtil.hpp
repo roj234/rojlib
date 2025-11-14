@@ -48,6 +48,6 @@ JNIEXPORT jboolean JNICALL Java_roj_io_IOUtil_makeHardLink0(JNIEnv* env, jclass,
     env->ReleaseStringChars(link, dst);
     releaseSource:
     env->ReleaseStringChars(existing, src);
-    
+
     return result ? JNI_TRUE : JNI_FALSE;
 }

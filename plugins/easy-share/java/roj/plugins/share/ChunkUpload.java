@@ -121,9 +121,9 @@ final class ChunkUpload {
 			task.tmp = tmpFile;
 
 			try {
-				IOUtil.createSparseFile(tmpFile, size);
+				IOUtil.allocateFile(tmpFile, size);
 			} catch (Exception e) {
-				LOGGER.warn("初始化稀疏文件失败", e);
+				LOGGER.warn("分配文件空间失败", e);
 				return Content.internalError("任务创建失败", e);
 			}
 		}

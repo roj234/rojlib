@@ -5,6 +5,7 @@ import org.jetbrains.annotations.NotNull;
 import roj.math.MathUtils;
 import roj.text.TextUtil;
 import roj.util.ArrayCache;
+import roj.util.Helpers;
 
 import java.util.*;
 import java.util.function.Consumer;
@@ -321,6 +322,12 @@ public class RingBuffer<E> extends AbstractCollection<E> implements Deque<E> {
 	@NotNull
 	@Override
 	public Iterator<E> descendingIterator() {return size == 0 ? Collections.emptyIterator() : new Itr(true);}
+
+	public void sort(Comparator<E> comparator) {
+		if (head != 0 || tail != size) setCapacity(size);
+		Arrays.sort(elements, 0, size, Helpers.cast(comparator));
+	}
+
 	private final class Itr implements Iterator<E> {
 		byte direction;
 		int cursor, remaining;

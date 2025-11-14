@@ -1,8 +1,7 @@
 package roj.compiler.resolve;
 
 import org.intellij.lang.annotations.MagicConstant;
-import roj.asm.ClassDefinition;
-import roj.asm.MethodNode;
+import roj.asm.ClassNode;
 import roj.asm.Opcodes;
 import roj.asm.annotation.Annotation;
 import roj.asm.attr.AnnotationDefault;
@@ -57,12 +56,12 @@ public class AnnotationType {
 	public HashMap<String, Type> elementType = new HashMap<>();
 
 	public AnnotationType(int type) {this.applicableTo = type;}
-	public AnnotationType(ClassDefinition node) {
+	public AnnotationType(ClassNode node) {
 		if ((node.modifier()&Opcodes.ACC_ANNOTATION) == 0) throw new IllegalArgumentException(node.name()+"不是注解");
 
 		var methods = node.methods();
 		for (int i = 0; i < methods.size(); i++) {
-			var method = (MethodNode)methods.get(i);
+			var method = methods.get(i);
 			if ((method.modifier() & Opcodes.ACC_STATIC) != 0) continue;
 			var defVal = method.getAttribute(node.cp(), Attribute.AnnotationDefault);
 			if (defVal != null)

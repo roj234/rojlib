@@ -45,8 +45,8 @@ public abstract class MemberNode implements Member {
 
 	public final void toByteArray(DynByteBuf w, ConstantPool pool) {
 		w.putShort(modifier)
-		 .putShort(name.getClass() == CstUTF.class ? pool.fit((CstUTF) name) : pool.getUtfId(name.toString()))
-		 .putShort(desc.getClass() == CstUTF.class ? pool.fit((CstUTF) desc) : pool.getUtfId(rawDesc()));
+		 .putShort(name.getClass() == CstUTF.class ? pool.internIndex((CstUTF) name) : pool.getUtfId(name.toString()))
+		 .putShort(desc.getClass() == CstUTF.class ? pool.internIndex((CstUTF) desc) : pool.getUtfId(rawDesc()));
 
 		if (attributes == null) w.putShort(0);
 		else attributes.toByteArray(w, pool);

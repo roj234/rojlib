@@ -62,29 +62,31 @@ public class ConstantPoolHooks implements Transformer {
 		Object tr;
 		boolean mod = false;
 
-		var cpArr = data.cp.constants();
-		for (int i = 0; i < cpArr.size(); i++) {
-			Constant c = cpArr.get(i);
-			switch (c.type()) {
-				case Constant.CLASS:
-					tr = reference.get(((CstClass) c).value().str());
-					if (tr != null) mod |= transform(tr, data, c);
-				break;
-				case Constant.FIELD:
-				case Constant.METHOD:
-				case Constant.INTERFACE:
-					var ref = (CstRef) c;
-					d.owner = ref.owner();
-					d.name = ref.name();
-					d.rawDesc = ref.rawDesc();
+		if (!reference.isEmpty()) {
+			var cpArr = data.cp.constants();
+			for (int i = 0; i < cpArr.size(); i++) {
+				Constant c = cpArr.get(i);
+				switch (c.type()) {
+					case Constant.CLASS:
+						tr = reference.get(((CstClass) c).value().str());
+						if (tr != null) mod |= transform(tr, data, c);
+						break;
+					case Constant.FIELD:
+					case Constant.METHOD:
+					case Constant.INTERFACE:
+						var ref = (CstRef) c;
+						d.owner = ref.owner();
+						d.name = ref.name();
+						d.rawDesc = ref.rawDesc();
 
-					tr = reference.get(d);
-					if (tr != null) mod |= transform(tr, data, c);
+						tr = reference.get(d);
+						if (tr != null) mod |= transform(tr, data, c);
 
-					d.owner = "";
-					tr = reference.get(d);
-					if (tr != null) mod |= transform(tr, data, c);
-				break;
+						d.owner = "";
+						tr = reference.get(d);
+						if (tr != null) mod |= transform(tr, data, c);
+						break;
+				}
 			}
 		}
 
@@ -122,6 +124,8 @@ public class ConstantPoolHooks implements Transformer {
 		return mod;
 	}
 	private boolean checkAnnotation(ClassNode data, Attributed node, TypedKey<Annotations> flag, HashMap<Object, Object> ref) throws TransformException {
+		if (ref.isEmpty()) return false;
+
 		Annotations attr = node.getAttribute(data.cp, flag);
 		boolean mod = false;
 		if (attr != null) {

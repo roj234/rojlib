@@ -27,7 +27,7 @@ public final class ClassListAttribute extends Attribute {
 
 		int len = r.readUnsignedShort();
 		value = new ArrayList<>(len);
-		while (len-- > 0) value.add(pool.getRefName(r, type == MODULE_PACKAGES_ID ? Constant.PACKAGE : Constant.CLASS));
+		while (len-- > 0) value.add(pool.resolveName(r, type == MODULE_PACKAGES_ID ? Constant.PACKAGE : Constant.CLASS));
 	}
 
 	public final List<String> value;

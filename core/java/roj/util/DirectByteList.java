@@ -96,8 +96,8 @@ public class DirectByteList extends DynByteBuf {
 		int len = readableBytes();
 		if (len <= 0) return;
 
-		if (out instanceof UnsafeOutputStream) {
-			((UnsafeOutputStream) out).write0(null, address, len);
+		if (out instanceof UnsafeOutputStream uo) {
+			uo.write0(null, address, len);
 			return;
 		}
 
@@ -147,6 +147,13 @@ public class DirectByteList extends DynByteBuf {
 	@Override
 	public DynByteBuf set(int wi, DynByteBuf b, int off, int len) {
 		U.copyMemory(b.array(), b._unsafeAddr()+off, null, testWI(wi, len) + address, len);
+		return this;
+	}
+
+	@Override
+	public DynByteBuf set(int wi, byte[] b, int off, int len) {
+		ArrayUtil.checkRange(b, off, len);
+		U.copyMemory(b, Unsafe.ARRAY_BYTE_BASE_OFFSET+off, null, testWI(wi, len) + address, len);
 		return this;
 	}
 

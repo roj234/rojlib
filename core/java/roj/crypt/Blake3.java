@@ -11,7 +11,7 @@ import static java.lang.Integer.rotateRight;
 /**
  * @since 2023/5/29 17:23
  */
-public final class Blake3 extends BufferedDigest implements MessageAuthenticCode {
+public final class Blake3 extends BufferedDigest implements MessageAuthenticCode, Cloneable {
     private static final int BLOCK_LEN = 64, CHUNK_LEN = 1024;
 
     private static final byte[] SIGMA = new byte[]{2, 6, 3, 10, 7, 0, 4, 13, 1, 11, 12, 5, 9, 14, 15, 8};

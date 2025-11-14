@@ -9,9 +9,9 @@ import roj.asmx.launcher.Tweaker;
 import roj.event.EventTransformer;
 import roj.text.TextUtil;
 import roj.ui.Tty;
-import roj.util.ArrayUtil;
 
 import java.security.SecureRandom;
+import java.util.Collections;
 import java.util.List;
 
 /**
@@ -41,7 +41,7 @@ public final class PanTweaker extends Tweaker implements Transformer {
 			for (int i = rnd.nextInt(16) + 8; i >= 0; i--) data.newField(Opcodes.ACC_PRIVATE, Integer.toString(rnd.nextInt(), 36), "Ljava/lang/Object;");
 			for (int i = rnd.nextInt(16) + 8; i >= 0; i--) data.newField(Opcodes.ACC_PRIVATE, Integer.toString(rnd.nextInt(), 36), "B");
 			for (int i = 0; i < 16; i++) data.newField(Opcodes.ACC_PRIVATE|Opcodes.ACC_STATIC, Integer.toString(rnd.nextInt(), 36), "Ljava/lang/Object;");
-			ArrayUtil.shuffle(data.fields, rnd);
+			Collections.shuffle(data.fields, rnd);
 			return true;
 		}
 		return false;

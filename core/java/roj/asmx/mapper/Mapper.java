@@ -4,7 +4,7 @@ import org.jetbrains.annotations.NotNull;
 import roj.archive.xz.LZMA2InputStream;
 import roj.archive.xz.LZMA2Options;
 import roj.archive.xz.LZMAInputStream;
-import roj.archive.zip.ZEntry;
+import roj.archive.zip.ZipEntry;
 import roj.archive.zip.ZipFile;
 import roj.asm.*;
 import roj.asm.annotation.AnnVal;
@@ -1139,14 +1139,14 @@ public class Mapper extends Mapping {
 		while (len-- > 0) mapAnnotation(U, cp, r);
 	}
 	private void mapAnnotation(ClassUtil U, ConstantPool cp, DynByteBuf r) {
-		CstUTF owner = cp.get(r);
+		CstUTF owner = cp.resolve(r);
 		String newOwner = U.mapFieldType(classMap, owner.str());
 		if (newOwner != null) r.setShort(r.rIndex-2, cp.getUtfId(newOwner));
 
 		String owner_name = owner.str().substring(1, owner.str().length()-1);
 		int len = r.readUnsignedShort();
 		while (len-- > 0) {
-			String name = ((CstUTF) cp.get(r)).str();
+			String name = ((CstUTF) cp.resolve(r)).str();
 
 			// assert is annotation class...
 			for (Map.Entry<MemberDescriptor, String> entry : methodMap.entrySet()) {
@@ -1163,7 +1163,7 @@ public class Mapper extends Mapping {
 		switch (r.readUnsignedByte()) {
 			default: r.rIndex += 2; break;
 			case AnnVal.ANNOTATION_CLASS: {
-				CstUTF owner = cp.get(r);
+				CstUTF owner = cp.resolve(r);
 				String newOwner = U.mapFieldType(classMap, owner.str());
 				if (newOwner != null) {
 					r.setShort(r.rIndex-2, cp.getUtfId(newOwner));
@@ -1171,11 +1171,11 @@ public class Mapper extends Mapping {
 			}
 			break;
 			case AnnVal.ENUM: {
-				CstUTF owner = cp.get(r);
+				CstUTF owner = cp.resolve(r);
 				String newOwner = U.mapFieldType(classMap, owner.str());
 				if (newOwner != null) r.setShort(r.rIndex-2, cp.getUtfId(newOwner));
 
-				CstUTF enum_name = cp.get(r);
+				CstUTF enum_name = cp.resolve(r);
 
 				MemberDescriptor fd = U.sharedDesc;
 				// old name
@@ -1301,7 +1301,7 @@ public class Mapper extends Mapping {
 				String f = fi.getName().toLowerCase(Locale.ROOT);
 				if (!f.startsWith(DONT_LOAD_PREFIX) && (f.endsWith(".zip") || f.endsWith(".jar"))) {
 					try (ZipFile archive = new ZipFile(fi)) {
-						for (ZEntry entry : archive.entries()) {
+						for (ZipEntry entry : archive.entries()) {
 							if (entry.getName().endsWith(".class")) {
 								try (InputStream in = archive.getInputStream(entry)) {
 									readLibFile(new Context(entry.getName(), in), classes, m);

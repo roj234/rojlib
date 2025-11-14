@@ -1,7 +1,7 @@
 package roj.compiler.ast.expr;
 
 import org.jetbrains.annotations.NotNull;
-import roj.asm.ClassDefinition;
+import roj.asm.ClassNode;
 import roj.asm.FieldNode;
 import roj.asm.Opcodes;
 import roj.asm.insn.Label;
@@ -96,7 +96,7 @@ public abstract class Expr implements RawExpr {
 		return new Literal(Type.primitive(v.dataType()), v);
 	}
 
-	public static Expr fieldChain(Expr parent, ClassDefinition begin, IType type, boolean isFinal, FieldNode... chain) {return MemberAccess.fieldChain(parent, begin, type, isFinal, chain);}
+	public static Expr fieldChain(Expr parent, ClassNode begin, IType type, boolean isFinal, FieldNode... chain) {return MemberAccess.fieldChain(parent, begin, type, isFinal, chain);}
 
 	public static Expr packedBooleanArray(DynByteBuf data) {return new NewPackedArray(Type.BOOLEAN, data);}
 	public static Expr packedByteArray(DynByteBuf data) {return new NewPackedArray(Type.BYTE, data);}

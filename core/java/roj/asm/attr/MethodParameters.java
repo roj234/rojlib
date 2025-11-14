@@ -17,7 +17,7 @@ public final class MethodParameters extends Attribute {
 		int len = r.readUnsignedByte();
 		var params = this.flags = new ArrayList<>(len);
 		while (len-- > 0) {
-			var utf = (CstUTF) pool.getNullable(r);
+			var utf = (CstUTF) pool.resolveOrNull(r);
 			params.add(new MethodParam(utf == null ? null : utf.str(), r.readChar()));
 		}
 	}

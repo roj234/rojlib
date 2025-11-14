@@ -552,10 +552,14 @@ final class ObjectMapperImpl extends ObjectMapper {
 		ClassNode c = new GenericTemplate(Type.LONG,asmType,methodType,asmType,true).generate(ByteList.wrap(b));
 
 		switch (asmType.type) {
-			case Type.LONG: addUpgrader(c, I2L); copyArrayRef(c, Type.LONG); break;
-			case Type.FLOAT: addUpgrader(c, F2D); break;
-			case Type.INT: copyArrayRef(c, Type.INT); break;
-			case Type.BYTE: copyArrayRef(c, Type.BYTE); break;
+			case Type.LONG -> {
+				addUpgrader(c, I2L);
+				copyArrayRef(c, Type.LONG);
+			}
+			case Type.FLOAT -> addUpgrader(c, D2F);
+			case Type.DOUBLE -> addUpgrader(c, F2D);
+			case Type.INT -> copyArrayRef(c, Type.INT);
+			case Type.BYTE -> copyArrayRef(c, Type.BYTE);
 		}
 
 		c.name("roj/config/mapper/PAS$"+asmType);
@@ -579,8 +583,10 @@ final class ObjectMapperImpl extends ObjectMapper {
 		String orig = Opcodes.toString(code);
 		String id = orig.replace('L', 'J');
 
-		CodeWriter ir = c.newMethod(ACC_PUBLIC|ACC_FINAL, "read", "(Lroj/config/mapper/MappingContext;"+id.charAt(0)+")V");
-		ir.visitSize(3,3);
+		char c1 = id.charAt(0);
+		var stackSize = (c1 == 'D' || c1 == 'J') ? 4 : 3;
+		CodeWriter ir = c.newMethod(ACC_PUBLIC|ACC_FINAL, "read", "(Lroj/config/mapper/MappingContext;"+ c1 +")V");
+		ir.visitSize(stackSize, stackSize);
 		ir.insn(ALOAD_0);
 		ir.insn(ALOAD_1);
 		ir.insn((byte) opcodeByName().getInt(orig.charAt(0)+"LOAD_2"));

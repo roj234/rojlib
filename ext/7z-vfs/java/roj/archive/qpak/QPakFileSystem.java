@@ -1,7 +1,7 @@
 package roj.archive.qpak;
 
 import org.jetbrains.annotations.NotNull;
-import roj.archive.qz.*;
+import roj.archive.sevenz.*;
 import roj.archive.xz.LZMA2Options;
 import roj.collect.ArrayList;
 import roj.collect.HashMap;
@@ -29,15 +29,15 @@ import java.util.function.Predicate;
  * @since 2023/11/4 20:15
  */
 public final class QPakFileSystem implements WritableFileSystem {
-	private List<QZArchive> archives;
-	private final IntMap<QZFileWriter> metadataOverride = new IntMap<>();
+	private List<SevenZFile> archives;
+	private final IntMap<SevenZPacker> metadataOverride = new IntMap<>();
 	private final HashMap<String, QFile> files = new HashMap<>();
 
 	private final File alsoReadFrom;
-	private final QZFileWriter patch;
+	private final SevenZPacker patch;
 	private final boolean writeToPatch;
 
-	public QPakFileSystem(List<QZArchive> archives, File alsoReadFrom, QZFileWriter patch, boolean writeToPatch) {
+	public QPakFileSystem(List<SevenZFile> archives, File alsoReadFrom, SevenZPacker patch, boolean writeToPatch) {
 		this.archives = archives;
 		this.alsoReadFrom = alsoReadFrom;
 		this.patch = patch;
@@ -106,7 +106,7 @@ public final class QPakFileSystem implements WritableFileSystem {
 		}
 	}
 
-	final void markMetadataDirty(QZEntry entry, short archiveIndex) {
+	final void markMetadataDirty(SevenZEntry entry, short archiveIndex) {
 		var qzfw = metadataOverride.get(archiveIndex);
 		if (qzfw == null) {
 			try {
@@ -124,7 +124,7 @@ public final class QPakFileSystem implements WritableFileSystem {
 		if (dest.ref != null) return false;
 
 		if (writeToPatch) {
-			QZEntry entry = QZEntry.of(dest.getName());
+			SevenZEntry entry = SevenZEntry.of(dest.getName());
 			entry.setModificationTime(System.currentTimeMillis());
 			entry.setIsDirectory(directory);
 			dest.ref = entry;
@@ -153,9 +153,9 @@ public final class QPakFileSystem implements WritableFileSystem {
 		if (path.ref.getClass() == File.class) {
 			if (!((File) path.ref).delete()) return false;
 		} else {
-			QZEntry entry = (QZEntry) path.ref;
+			SevenZEntry entry = (SevenZEntry) path.ref;
 
-			QZEntry entry1 = QZEntry.of(entry.getName());
+			SevenZEntry entry1 = SevenZEntry.of(entry.getName());
 			entry1.setModificationTime(System.currentTimeMillis());
 			entry1.setAntiItem(true);
 			patch.beginEntry(entry1);
@@ -172,17 +172,17 @@ public final class QPakFileSystem implements WritableFileSystem {
 		if (path.ref == null || !path.isFile()) throw new FileNotFoundException();
 		if (path.ref.getClass() == File.class) return new FileInputStream((File) path.ref);
 
-		return archives.get(path.archiveIndex).getConcurrentInputStream((QZEntry) path.ref);
+		return archives.get(path.archiveIndex).getConcurrentInputStream((SevenZEntry) path.ref);
 	}
 
 	public OutputStream getOutputStream(VirtualFile path, boolean append) throws IOException {return getOutputStream(((QFile) path), append);}
 	final OutputStream getOutputStream(QFile path, boolean append) throws IOException {
-		if (path.archiveIndex != -1 && path.ref instanceof QZEntry) delete(path);
+		if (path.archiveIndex != -1 && path.ref instanceof SevenZEntry) delete(path);
 		if (path.ref == null) create(path, false);
 		if (path.ref.getClass() == File.class) return new FileOutputStream((File) path.ref, append);
 
-		QZWriter out = patch.newParallelWriter();
-		out.beginEntry(((QZEntry) path.ref));
+		SevenZWriter out = patch.newParallelWriter();
+		out.beginEntry(((SevenZEntry) path.ref));
 		return out;
 	}
 

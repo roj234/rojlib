@@ -1,7 +1,11 @@
 package roj.asmx.launcher;
 
+import roj.reflect.Unsafe;
+
 import java.io.*;
 import java.nio.charset.StandardCharsets;
+
+import static roj.reflect.Unsafe.U;
 
 /**
  * @author Roj234
@@ -91,24 +95,26 @@ final class DataIn extends InputStream {
 
 	public int readUnsignedShort() throws IOException {
 		int i = doRead(2);
-		return ((list[i] & 0xFF) << 8) | (list[i + 1] & 0xFF);
+		return U.get16UB(list, Unsafe.ARRAY_BYTE_BASE_OFFSET + i);
 	}
 
-	public final int readUShortLE() throws IOException {
+	public final int readUnsignedShortLE() throws IOException {
 		int i = doRead(2);
-		return (list[i] & 0xFF) | ((list[i + 1] & 0xFF) << 8);
+		return U.get16UL(list, Unsafe.ARRAY_BYTE_BASE_OFFSET + i);
 	}
 
 	public final int readInt() throws IOException {
 		int i = doRead(4);
-		byte[] l = this.list;
-		return (l[i++] & 0xFF) << 24 | (l[i++] & 0xFF) << 16 | (l[i++] & 0xFF) << 8 | (l[i] & 0xFF);
+		return U.get32UB(list, Unsafe.ARRAY_BYTE_BASE_OFFSET + i);
 	}
 
 	public final int readIntLE() throws IOException {
 		int i = doRead(4);
-		byte[] l = this.list;
-		return (l[i++] & 0xFF) | (l[i++] & 0xFF) << 8 | (l[i++] & 0xFF) << 16 | (l[i] & 0xFF) << 24;
+		return U.get32UL(list, Unsafe.ARRAY_BYTE_BASE_OFFSET + i);
+	}
+	public final long readLongLE() throws IOException {
+		int i = doRead(8);
+		return U.get64UL(list, Unsafe.ARRAY_BYTE_BASE_OFFSET + i);
 	}
 
 	public final String readUTF(int len) throws IOException {
@@ -119,8 +125,22 @@ final class DataIn extends InputStream {
 		return "";
 	}
 
-	public void seek(long pos) throws IOException {
-		in.seek(pos);
-		this.pos = lim = 0;
+	public void seek(long position) throws IOException {
+		long filePtr = in.getFilePointer();
+		long bufferStart = filePtr - lim;
+
+		if (position >= bufferStart && position < filePtr) {
+			// 内存指针重定位
+			pos = (int) (position - bufferStart);
+		} else {
+			// 物理指针重定位
+			in.seek(position);
+			pos = 0;
+			lim = 0;
+		}
+	}
+
+	public long position() throws IOException {
+		return in.getFilePointer() + pos - lim;
 	}
 }

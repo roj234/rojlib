@@ -194,7 +194,19 @@ public final class ImportList {
 		var entry = ctx.importCache.getEntry(name);
 		if (entry != null) return entry.getValue();
 
+		// 尝试父类或父接口中的内部类 不过要检测accessible吗？
+		// 这优先级真是高
+		if (ctx.currentStage > 21) {
+			var innerClassItem = ctx.compiler.getInnerClassInfo(ctx.file).get("!"+name);
+			if (innerClassItem != null) {
+				var info = ctx.compiler.resolve(innerClassItem.self);
+				ctx.importCache.put(name, info);
+				return info;
+			}
+		}
+
 		var info = resolve1(ctx, name);
+
 		if (info == null) {
 			int slash = name.indexOf('/');
 			if (slash >= 0) {

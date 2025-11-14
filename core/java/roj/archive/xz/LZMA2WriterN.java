@@ -95,7 +95,7 @@ class LZMA2WriterN extends MBOutputStream {
 		addr += 4;
 		U.putInt(addr, opt.getDepthLimit()); // depthLimit
 		addr += 4;
-		U.putByte(addr, opt.getAsyncMan() == null ? 0 : (byte) opt.getAsyncMan().taskAffinity); // asyncThreads
+		U.putByte(addr, opt.getParallelEncoder() == null ? 0 : (byte) opt.getParallelEncoder().getMaxThreads()); // asyncThreads
 
 		try {
 			long l = nInit(nStruct.address());

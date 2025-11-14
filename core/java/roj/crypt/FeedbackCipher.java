@@ -97,14 +97,14 @@ public class FeedbackCipher extends RCipher {
 	public String getAlgorithm() { return cip.getAlgorithm()+"/"+getMode()+"/"+"NoPadding"; }
 
 	@Override
-	public void init(int mode, byte[] key, AlgorithmParameterSpec par, SecureRandom random) throws InvalidAlgorithmParameterException, InvalidKeyException {
-		decrypt = mode == RCipher.DECRYPT_MODE;
+	public void init(boolean encrypt, byte[] key, AlgorithmParameterSpec par, SecureRandom random) throws InvalidAlgorithmParameterException, InvalidKeyException {
+		decrypt = encrypt == false;
 		switch (type) {
 			case MODE_OFB: case MODE_CFB: case MODE_CTR:
-				mode = RCipher.ENCRYPT_MODE;
+				encrypt = true;
 			break;
 		}
-		if (key != null) cip.init(mode, key);
+		if (key != null) cip.init(encrypt, key);
 
 		vec.clear();
 		tmp.clear();

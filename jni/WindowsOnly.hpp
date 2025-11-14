@@ -2,6 +2,8 @@
 // Created by Roj234 on 2024/10/27 0027.
 //
 
+JNIEXPORT jlong JNICALL Java_roj_RojLib_getLastError(JNIEnv *, jclass) { return GetLastError(); }
+
 #pragma comment(lib, "user32.lib")
 
 JNIEXPORT jlong JNICALL Java_roj_gui_GuiUtil_GetWindowLong(JNIEnv *, jclass, jlong hwnd, jint dwType) {return GetWindowLong((HWND) hwnd, dwType);}
@@ -12,7 +14,7 @@ JNIEXPORT void JNICALL Java_roj_gui_GuiUtil_SetWindowLong(JNIEnv *, jclass, jlon
 static const BOOL NIO_TRUE = TRUE, NIO_FALSE = FALSE;
 JNIEXPORT jint JNICALL Java_roj_net_Net_SetSocketOpt(JNIEnv *env, jclass, jint fd, jboolean on) {return setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, reinterpret_cast<const char *>(on ? &NIO_TRUE : &NIO_FALSE), sizeof(BOOL));}
 
-#include "win64/wprogressbar.cpp"
+/*#include "win64/wprogressbar.cpp"
 
 ITaskbarList3 *taskbarInstance;
 
@@ -31,4 +33,6 @@ JNIEXPORT void JNICALL Java_roj_ui_Taskbar_setProgressValue(JNIEnv *, jclass, jl
 static inline void OnFreeLibrary() {
     ReleaseTaskbarProgress(taskbarInstance);
     taskbarInstance = nullptr;
-}
+}*/
+
+#include "win64/dacl.cpp"

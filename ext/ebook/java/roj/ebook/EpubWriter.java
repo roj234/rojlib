@@ -1,9 +1,9 @@
 package roj.ebook;
 
 import org.jetbrains.annotations.Contract;
-import roj.archive.zip.ZEntry;
+import roj.archive.zip.ZipEntry;
 import roj.archive.zip.ZipFile;
-import roj.archive.zip.ZipFileWriter;
+import roj.archive.zip.ZipPacker;
 import roj.collect.ArrayList;
 import roj.io.IOUtil;
 import roj.io.source.ByteSource;
@@ -44,7 +44,7 @@ public class EpubWriter extends EbookWriter {
 		} catch (IOException ignored) {}
 	}
 
-	private final ZipFileWriter zfw;
+	private final ZipPacker zfw;
 	private TextWriter tw;
 
 	private final String cover;
@@ -57,8 +57,8 @@ public class EpubWriter extends EbookWriter {
 	private final int userChapterStart;
 
 	public EpubWriter(Map<Metadata<?>, ?> metadataList, Source output) throws IOException {
-		this.zfw = new ZipFileWriter(output, getMetadata(metadataList, COMPRESSION_LEVEL));
-		for (ZEntry value : TEMPLATE.entries()) zfw.copy(TEMPLATE, value);
+		this.zfw = new ZipPacker(output, getMetadata(metadataList, COMPRESSION_LEVEL));
+		for (ZipEntry value : TEMPLATE.entries()) zfw.copy(TEMPLATE, value);
 
 		String uuid = UUID.randomUUID().toString();
 		String title = getMetadata(metadataList, TITLE);
@@ -116,7 +116,7 @@ public class EpubWriter extends EbookWriter {
 			endOpfMeta();
 			xmlOpf.append("\n<item href=\"Images/cover.").append(coverExt).append("\" id=\"cover.").append(coverExt).append("\" media-type=\"image/").append(coverExt).append("\" />");
 
-			zfw.beginEntry(new ZEntry("Images/cover."+coverExt));
+			zfw.beginEntry(new ZipEntry("Images/cover."+coverExt));
 			zfw.write(IOUtil.read(cover));
 
 			CHAPTER("封面", "cover", true)
@@ -172,7 +172,7 @@ public class EpubWriter extends EbookWriter {
 		tocNo++;
 
 		if (immediate) {
-			zfw.beginEntry(new ZEntry("Text/"+link+".html"));
+			zfw.beginEntry(new ZipEntry("Text/"+link+".html"));
 			return tw.append("""
 			<?xml version="1.0" encoding="utf-8" standalone="no"?>
 			<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN" "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd">
@@ -208,7 +208,7 @@ public class EpubWriter extends EbookWriter {
 		int prevDepth;
 
 		try {
-			zfw.beginEntry(new ZEntry("content.opf"));
+			zfw.beginEntry(new ZipEntry("content.opf"));
 			var x = tw.append(xmlOpf); xmlOpf._free();
 			for (int i = 0, len = xmlRefs.size()/3; i < len; i ++) {
 				String link = xmlRefs.get(i*3).toString();
@@ -224,7 +224,7 @@ public class EpubWriter extends EbookWriter {
 
 			tw.flush();
 
-			zfw.beginEntry(new ZEntry("toc.ncx"));
+			zfw.beginEntry(new ZipEntry("toc.ncx"));
 			x = tw.append(xmlToc); xmlToc._free();
 			prevDepth = -1;
 			for (int i = 0, len = xmlRefs.size()/3; i < len; i ++) {
@@ -250,7 +250,7 @@ public class EpubWriter extends EbookWriter {
 			x.append("</navMap>\n</ncx>");
 			tw.flush();
 
-			zfw.beginEntry(new ZEntry("Text/index.html"));
+			zfw.beginEntry(new ZipEntry("Text/index.html"));
 			x = tw.append("""
 			<?xml version="1.0" encoding="utf-8" standalone="no"?>
 			<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN" "http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd">

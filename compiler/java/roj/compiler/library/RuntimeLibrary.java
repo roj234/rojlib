@@ -1,8 +1,9 @@
 package roj.compiler.library;
 
-import roj.archive.zip.ZEntry;
+import org.jetbrains.annotations.Nullable;
+import roj.archive.zip.ZipEntry;
 import roj.archive.zip.ZipFile;
-import roj.archive.zip.ZipFileWriter;
+import roj.archive.zip.ZipPacker;
 import roj.asm.ClassNode;
 import roj.asm.ClassView;
 import roj.asm.Opcodes;
@@ -29,6 +30,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Set;
+import java.util.function.Consumer;
 import java.util.function.Function;
 
 /**
@@ -120,19 +122,19 @@ public final class RuntimeLibrary extends ClassLoaderLibrary {
 						var in = ClassView.parse(DynByteBuf.wrap(j9.getResource(ir, path)), false);
 						if ((in.modifier & Opcodes.ACC_PUBLIC) == 0) continue;
 
-						cache.classNamesPublic.add(className);
+						cache.classNamesExported.add(className);
 					}
 				}
 			}
 
-			var tmp = new ZipFileWriter(symTable);
+			var tmp = new ZipPacker(symTable);
 			var ob = new ByteList.ToStream(tmp);
 
 			tmp.setComment(version);
 			for (var cache : caches.values()) {
-				if (cache.classNamesPublic.isEmpty()) continue;
+				if (cache.classNamesExported.isEmpty()) continue;
 
-				tmp.beginEntry(new ZEntry(cache.module));
+				tmp.beginEntry(new ZipEntry(cache.module));
 				cache.serialize(ob);
 				ob.flush();
 			}
@@ -153,7 +155,7 @@ public final class RuntimeLibrary extends ClassLoaderLibrary {
 				throw OperationDone.INSTANCE;
 			}
 
-			for (ZEntry entry : zf.entries()) {
+			for (ZipEntry entry : zf.entries()) {
 				try (var in = XDataInputStream.wrap(zf.getInputStream(entry))) {
 					modules.add(new RuntimeLibrary(entry.getName(), in));
 				} catch (Exception e) {
@@ -178,7 +180,7 @@ public final class RuntimeLibrary extends ClassLoaderLibrary {
 	}
 
 	private final String module;
-	private final HashSet<String> classNamesAll = new HashSet<>(), classNamesPublic = new HashSet<>();
+	private final HashSet<String> classNamesAll = new HashSet<>(), classNamesExported = new HashSet<>();
 
 	public RuntimeLibrary(String module) {super(null);this.module = module;}
 	public RuntimeLibrary(String module, XDataInput buf) throws IOException {
@@ -186,21 +188,21 @@ public final class RuntimeLibrary extends ClassLoaderLibrary {
 		this.module = module;
 
 		var len = buf.readVUInt();
-		classNamesPublic.ensureCapacity(len);
-		for (int i = 0; i < len; i++) classNamesPublic.add(buf.readVUIUTF());
+		classNamesExported.ensureCapacity(len);
+		for (int i = 0; i < len; i++) classNamesExported.add(buf.readVUIUTF());
 
 		len = buf.readVUInt();
-		classNamesAll.ensureCapacity(classNamesPublic.size() + len);
-		classNamesAll.addAll(classNamesPublic);
+		classNamesAll.ensureCapacity(classNamesExported.size() + len);
+		classNamesAll.addAll(classNamesExported);
 		for (int i = 0; i < len; i++) classNamesAll.add(buf.readVUIUTF());
 	}
 	private void serialize(DynByteBuf buf) {
-		buf.putVUInt(classNamesPublic.size());
-		for (var className : classNamesPublic) buf.putVUIUTF(className);
+		buf.putVUInt(classNamesExported.size());
+		for (var className : classNamesExported) buf.putVUIUTF(className);
 
-		buf.putVUInt(classNamesAll.size() - classNamesPublic.size());
+		buf.putVUInt(classNamesAll.size() - classNamesExported.size());
 		for (var className : classNamesAll) {
-			if (!classNamesPublic.contains(className))
+			if (!classNamesExported.contains(className))
 				buf.putVUIUTF(className);
 		}
 	}
@@ -208,7 +210,7 @@ public final class RuntimeLibrary extends ClassLoaderLibrary {
 	@Override public String moduleName() {return module;}
 	@Override public Collection<String> indexedContent() {return classNamesAll;}
 
-	@Override public Collection<String> content() {return classNamesPublic;}
+	@Override public void exportedContent(@Nullable String moduleName, Consumer<String> callback) {classNamesExported.forEach(callback);}
 	@Override public ClassNode get(CharSequence name) {
 		//if (!classNamesAll.contains(name)) return null;
 

@@ -1,6 +1,5 @@
 package roj.reflect.resolver;
 
-import roj.asm.ClassDefinition;
 import roj.asm.ClassNode;
 import roj.collect.ToIntMap;
 
@@ -10,5 +9,5 @@ import roj.collect.ToIntMap;
  */
 public interface IResolver {
 	ClassNode resolve(CharSequence name);
-	ToIntMap<String> getHierarchyList(ClassDefinition info);
+	ToIntMap<String> getHierarchyList(ClassNode info);
 }

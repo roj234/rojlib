@@ -1,7 +1,6 @@
 package roj.compiler.ast.expr;
 
 import org.jetbrains.annotations.NotNull;
-import roj.asm.ClassDefinition;
 import roj.asm.ClassNode;
 import roj.asm.MethodNode;
 import roj.asm.Opcodes;
@@ -108,7 +107,7 @@ public final class Lambda extends Expr {
 			if (methodRef instanceof MemberAccess d) {
 				methodRef = null;
 				Expr next = d.resolveEx(ctx, n1 -> {
-					var n = (ClassDefinition) n1;
+					var n = (ClassNode) n1;
 					methodRef = constant(Type.klass(n.name()), new CstClass(n.name()));
 				}, null);
 				if (methodRef == null) methodRef = next;

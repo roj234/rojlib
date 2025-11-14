@@ -1,5 +1,6 @@
 package roj.asmx;
 
+import roj.archive.ArchiveEntry;
 import roj.archive.ArchiveFile;
 import roj.archive.zip.ZipFile;
 import roj.asm.*;
@@ -45,7 +46,7 @@ public final class AnnotationRepo {
 			e.printStackTrace();
 		}
 	}
-	public void add(ArchiveFile archive) throws IOException {
+	public <T extends ArchiveEntry> void add(ArchiveFile<T> archive) throws IOException {
 		for (var entry : archive.entries()) {
 			if (IOUtil.extensionName(entry.getName()).equals("class")) {
 				addRaw(IOUtil.getSharedByteBuf().readStreamFully(archive.getInputStream(entry)), entry.getName());
@@ -53,12 +54,12 @@ public final class AnnotationRepo {
 		}
 	}
 
-	public void loadCacheOrAdd(ArchiveFile archive) throws IOException {
+	public void loadCacheOrAdd(ArchiveFile<?> archive) throws IOException {
 		if (loadFromCache(archive)) return;
 		add(archive);
 	}
 
-	private boolean loadFromCache(ArchiveFile archive) {
+	private <T extends ArchiveEntry> boolean loadFromCache(ArchiveFile<T> archive) {
 		try {
 			var entry = archive.getEntry(CACHE_PATH);
 			if (entry != null && entry.getSize() <= MAX_CACHE_SIZE) {
@@ -116,9 +117,9 @@ public final class AnnotationRepo {
 		cp.read(r, ConstantPool.BYTE_STRING);
 
 		var acc = r.readChar();
-		var name = cp.getRefName(r, Constant.CLASS).intern();
+		var name = cp.resolveName(r, Constant.CLASS).intern();
 		if (name.endsWith("-info") || !name.concat(".class").equals(fileName)) return;
-		var parent = cp.getRefName(r);
+		var parent = cp.resolveClassName(r);
 		if (parent != null) parent = parent.intern();
 
 		var skeleton = new ClassView(null, -1, name, parent);
@@ -128,7 +129,7 @@ public final class AnnotationRepo {
 
 		rawNodes.clear();
 		int len = r.readUnsignedShort();
-		for (int i = 0; i < len; i++) rawNodes.add(cp.getRefName(r, Constant.CLASS).intern());
+		for (int i = 0; i < len; i++) rawNodes.add(cp.resolveName(r, Constant.CLASS).intern());
 		skeleton.interfaces = Helpers.cast(ArrayUtil.immutableCopyOf(rawNodes));
 
 		for (int i = 0; i < 2; i++) {
@@ -136,7 +137,7 @@ public final class AnnotationRepo {
 			rawNodes.clear();
 			while (len-- > 0) {
 				acc = r.readChar();
-				var node = skeleton.new MOF(((CstUTF) cp.get(r)).str().intern(), ((CstUTF) cp.get(r)).str().intern(), 0);
+				var node = skeleton.new MOF(((CstUTF) cp.resolve(r)).str().intern(), ((CstUTF) cp.resolve(r)).str().intern(), 0);
 				node.modifier = acc;
 
 				int attrSize = r.readUnsignedShort();
@@ -145,7 +146,7 @@ public final class AnnotationRepo {
 				AnnotatedElement.Node xnode = null;
 
 				while (attrSize-- > 0) {
-					var name1 = ((CstUTF) cp.get(r)).str();
+					var name1 = ((CstUTF) cp.resolve(r)).str();
 					int length = r.readInt();
 					if (name1.equals("RuntimeVisibleAnnotations") || name1.equals("RuntimeInvisibleAnnotations")) {
 						if (xnode == null) {
@@ -170,7 +171,7 @@ public final class AnnotationRepo {
 
 		int attrSize = r.readUnsignedShort();
 		while (attrSize-- > 0) {
-			var name1 = ((CstUTF) cp.get(r)).str();
+			var name1 = ((CstUTF) cp.resolve(r)).str();
 			int length = r.readInt();
 			if (name1.equals("RuntimeVisibleAnnotations") || name1.equals("RuntimeInvisibleAnnotations")) {
 				int annoSize = r.readUnsignedShort();
@@ -225,7 +226,7 @@ public final class AnnotationRepo {
 		int widx = buf.wIndex();
 		buf.wIndex(start);
 		buf.putAscii("ANNOREP").put(0).putShort(annotations.size()).putShort(elements.size()).putShort(this.annotations.size());
-		cp.write(buf, false);
+		cp.write(buf, true);
 		buf.wIndex(widx);
 		AsmCache.getInstance().constPool(cp);
 	}
@@ -290,12 +291,12 @@ public final class AnnotationRepo {
 		return true;
 	}
 	private int readAcc(DynByteBuf r, ConstantPool cp, AnnotatedElement[] elements, int elementCount) {
-		var skeleton = new ClassView(null, 0, ((CstUTF) cp.get(r)).str(), ((CstUTF) cp.get(r)).str());
+		var skeleton = new ClassView(null, 0, ((CstUTF) cp.resolve(r)).str(), ((CstUTF) cp.resolve(r)).str());
 		skeleton.modifier = r.readChar();
 
 		rawNodes.clear();
 		int len = r.readUnsignedShort();
-		for (int i = 0; i < len; i++) rawNodes.add(((CstUTF) cp.get(r)).str());
+		for (int i = 0; i < len; i++) rawNodes.add(((CstUTF) cp.resolve(r)).str());
 		skeleton.interfaces = Helpers.cast(ArrayUtil.immutableCopyOf(rawNodes));
 
 		Type type = new Type(skeleton);
@@ -306,7 +307,7 @@ public final class AnnotationRepo {
 
 			rawNodes.clear();
 			for (int j = 0; j < len; j++) {
-				var mof = skeleton.new MOF(((CstUTF) cp.get(r)).str(), ((CstUTF) cp.get(r)).str(), 0);
+				var mof = skeleton.new MOF(((CstUTF) cp.resolve(r)).str(), ((CstUTF) cp.resolve(r)).str(), 0);
 				mof.modifier = r.readChar();
 				rawNodes.add(mof);
 				elements[elementCount++] = new Node(type, mof);

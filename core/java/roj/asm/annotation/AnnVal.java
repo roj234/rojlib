@@ -31,7 +31,7 @@ public abstract sealed class AnnVal extends ConfigValue permits TypeVal, EnumVal
 		switch (type) {
 			case BOOLEAN, BYTE, SHORT, CHAR, INT:
 			case DOUBLE, FLOAT, LONG, STRING, ANNOTATION_CLASS:
-				Constant c = pool.get(r);
+				Constant c = pool.resolve(r);
 				return switch (type) {
 					case BOOLEAN -> valueOf(((CstInt) c).value != 0);
 					case BYTE -> valueOf((byte) ((CstInt) c).value);
@@ -45,7 +45,7 @@ public abstract sealed class AnnVal extends ConfigValue permits TypeVal, EnumVal
 					case ANNOTATION_CLASS -> valueOf(Type.getType(((CstUTF) c).str()));
 					default -> throw new IllegalStateException("Unexpected value: " + type);
 				};
-			case ENUM: return new EnumVal(checkSemicolon(((CstUTF) pool.get(r)).str()), ((CstUTF) pool.get(r)).str());
+			case ENUM: return new EnumVal(checkSemicolon(((CstUTF) pool.resolve(r)).str()), ((CstUTF) pool.resolve(r)).str());
 			case ANNOTATION: return Annotation.parse(pool, r);
 			case ARRAY:
 				int len = r.readUnsignedShort();

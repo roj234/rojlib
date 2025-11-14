@@ -508,14 +508,12 @@ public class DiffFinder extends JFrame {
 				}
 
 				int finalI = i;
-				Runnable cb = () -> {
+				if (!tasks.isEmpty()) Promise.all(cleanup, tasks).thenRun(() -> {
 					synchronized (finishedBlock) {
 						finishedBlock.add(finalI);
 						freeMemory(layered, finishedBlock);
 					}
-				};
-
-				if (!tasks.isEmpty()) Promise.all(cleanup, tasks).thenRun(cb);
+				});
 			}
 
 			comparator.awaitTermination();

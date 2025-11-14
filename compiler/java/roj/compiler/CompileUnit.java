@@ -74,7 +74,7 @@ public abstract class CompileUnit extends ClassNode {
 		this.name = name;
 	}
 
-	// Class level flags (extraModifiers)
+	// Class level flags (extendedFlags)
 	protected static final int _X_RECORD = 1 << 31, _X_INNER_CLASS = 1 << 30, _X_ANONYMOUS_CLASS = 1 << 29;
 	@Deprecated protected static final int _X_STRUCT = 1 << 28, _X_ALGEBRA_DERIVED_TYPE = 1 << 27;
 	// read via _modifier()
@@ -90,18 +90,20 @@ public abstract class CompileUnit extends ClassNode {
 
 	protected final ImportList importList;
 
-	protected int extraModifier;
+	protected long extendedFlags;
 
 	// 诊断的起始位置
 	protected int classIdx;
 	protected final IntList methodIdx = new IntList(), fieldIdx = new IntList();
 
-	// Generic
-	public LPSignature signature, currentNode;
+	// 类的泛型签名 当前处理的签名上下文
+	public LPSignature classSignature, activeSignature;
 
-	// Supplementary
-	protected int miscFieldId;
-	public final HashSet<FieldNode> finalFields = new HashSet<>(Hasher.identity());
+	// record class
+	// 同时在作用域外复用 (aliasing) 作为枚举类 $VALUES 的 index
+	protected int componentFieldCount;
+
+	public final HashSet<FieldNode> uninitializedFinalFields = new HashSet<>(Hasher.identity());
 
 	// code block task
 	private final ArrayList<ParseTask> lazyTasks = new ArrayList<>();
@@ -116,21 +118,22 @@ public abstract class CompileUnit extends ClassNode {
 		}
 	}
 
-	// inner class owner, equal this if not
+	// 等于自身，如果没有Host
 	@NotNull
-	protected final CompileUnit _parent;
-	// anonymous class index
-	protected int _children;
+	protected final CompileUnit nestHost;
+	// 匿名类序号 $1
+	protected int nextAnonymousClassId;
 
 	protected CompileContext ctx;
 	public void setContext(CompileContext ctx) {this.ctx = ctx;}
-	protected final CompileContext getContext() {
+	protected final CompileContext getContext(int stage) {
 		var ctx = CompileContext.get();
 		if (ctx == null) {
 			ctx = this.ctx.compiler.retainContext();
 			CompileContext.set(ctx);
 		}
 		ctx.setClass(this);
+		ctx.currentStage = stage;
 		return ctx;
 	}
 
@@ -148,7 +151,7 @@ public abstract class CompileUnit extends ClassNode {
 		this.code = code;
 		importList = new ImportList();
 
-		_parent = this;
+		nestHost = this;
 	}
 	public ImportList getImportList() {return importList;}
 	public CompileContext context() {return ctx;}
@@ -164,14 +167,14 @@ public abstract class CompileUnit extends ClassNode {
 	}
 
 	// region 文件中的其余类
-	protected CompileUnit(CompileUnit parent, boolean helperClass) {
+	protected CompileUnit(CompileUnit parent, boolean isAuxiliaryClass) {
 		filename = parent.filename;
 		ctx = parent.ctx;
 
 		if (ctx.compiler.hasFeature(Compiler.EMIT_SOURCE_FILE))
 			addAttribute(parent.getAttribute("SourceFile"));
 
-		_parent = helperClass ? this : parent;
+		nestHost = isAuxiliaryClass ? this : parent;
 
 		// [20241206] temporary workaround for Macro & NewAnonymousClass
 		code = parent.ctx.tokenizer.getText();
@@ -199,7 +202,7 @@ public abstract class CompileUnit extends ClassNode {
 	public final ClassNode newAnonymousClass_NoBody(@Nullable MethodNode mn, @Nullable InnerClasses.Item desc) {
 		var c = new ClassNode();
 
-		c.name(IOUtil.getSharedCharBuf().append(name).append('$').append(++_children).toString());
+		c.name(IOUtil.getSharedCharBuf().append(name).append('$').append(++nextAnonymousClassId).toString());
 		c.modifier = ACC_FINAL|ACC_SUPER;
 
 		if (ctx.compiler.hasFeature(Compiler.EMIT_INNER_CLASS)) {
@@ -237,8 +240,8 @@ public abstract class CompileUnit extends ClassNode {
 	public final void addNestMember(ClassNode c) {
 		assert ctx.compiler.getMaximumBinaryCompatibility() >= Compiler.JAVA_11;
 
-		var top = _parent;
-		while (top._parent != top) top = top._parent;
+		var top = nestHost;
+		while (top.nestHost != top) top = top.nestHost;
 
 		if (c instanceof CompileUnit cu) cu.setMinimumBinaryCompatibility(Compiler.JAVA_11);
 		top.setMinimumBinaryCompatibility(Compiler.JAVA_11);
@@ -335,8 +338,8 @@ public abstract class CompileUnit extends ClassNode {
 	 */
 	public final IType readType(@MagicConstant(flags = {TYPE_PRIMITIVE, TYPE_GENERIC, TYPE_NO_ARRAY, TYPE_ALLOW_VOID}) int flags) throws ParseException {
 		IType type = readType(ctx.tokenizer, flags);
-		if (currentNode != null && type instanceof LavaParameterizedType g)
-			return currentNode.applyTypeParam(g);
+		if (activeSignature != null && type instanceof LavaParameterizedType g)
+			return activeSignature.applyTypeParam(g);
 		return type;
 	}
 	/**
@@ -367,7 +370,7 @@ public abstract class CompileUnit extends ClassNode {
 				}
 			}
 
-			type = currentNode == null || !currentNode.isTypeParam(klass) ? Type.klass(klass) : (flags & SKIP_TYPE_PARAM) != 0 ? new LavaParameterizedType(klass) : new TypeVariable(klass);
+			type = activeSignature == null || !activeSignature.isTypeParam(klass) ? Type.klass(klass) : (flags & SKIP_TYPE_PARAM) != 0 ? new LavaParameterizedType(klass) : new TypeVariable(klass);
 		}
 
 		if ((flags & TYPE_NO_ARRAY) == 0) {
@@ -531,13 +534,13 @@ public abstract class CompileUnit extends ClassNode {
 	}
 
 	protected final LPSignature makeSignature() {
-		if (currentNode == null) currentNode = new LPSignature(0);
-		return currentNode;
+		if (activeSignature == null) activeSignature = new LPSignature(0);
+		return activeSignature;
 	}
 	protected final LPSignature finishSignature(LPSignature parent, int kind, Attributed attr) {
-		var sign = currentNode;
+		var sign = activeSignature;
 		if (sign == null) return null;
-		currentNode = null;
+		activeSignature = null;
 
 		sign.parent = parent;
 		sign.type = (byte) kind;
@@ -632,31 +635,34 @@ public abstract class CompileUnit extends ClassNode {
 	// region 阶段2 解析引用
 	// region 2.1 名称引用
 	/**
-	 * Stage 2 (1/3) 解析当前编译单元中的名称引用。
-	 * <p>
-	 * 本阶段将使用Stage 1收集的包名、类名和导入信息，将以下元素的简单名称解析为全限定名称：
+	 * Stage 2 (1/3)：解析当前编译单元中的「父类型相关」名称引用。
+	 *
+	 * <p>本阶段在 Stage 1 收集到的包名、类名和导入信息的基础上，完成以下解析和检查：</p>
+	 *
+	 * <h3>解析的名称引用</h3>
 	 * <ul>
-	 *   <li>类继承的父类（extends）</li>
-	 *   <li>实现的接口（implements）</li>
-	 *   <li>字段类型和方法签名（参数类型、返回类型）</li>
-	 *   <li>密封类的permits声明</li>
-	 *   <li>类及成员上的注解</li>
+	 *   <li>父类（{@code extends}）</li>
+	 *   <li>实现的接口（{@code implements}）</li>
+	 *   <li>密封类（{@code sealed class}）的 {@code permits} 声明</li>
+	 *   <li>类签名（泛型签名）中出现的类型参数上界</li>
 	 * </ul>
-	 * <p>并进行以下语义检查：
+	 *
+	 * <h3>语义检查</h3>
 	 * <ul>
-	 *   <li>父类必须是可继承的非final类型</li>
-	 *   <li>实现的接口必须是接口类型</li>
-	 *   <li>密封类允许的子类必须存在</li>
-	 *   <li>所有名称引用必须有效(能找到一个具体的类)</li>
+	 *   <li>当前类所在包名不能与已存在的类型同名</li>
+	 *   <li>父类必须存在，且是可继承的非接口类型</li>
+	 *   <li>{@code implements} 指定的类型必须存在且为接口类型</li>
+	 *   <li>密封类 {@code permits} 声明的每个子类必须存在</li>
+	 *   <li>所有名称引用必须能解析到一个具体的类或接口（即符号必须存在）</li>
 	 * </ul>
+	 *
+	 * <p>解析成功后，本阶段会把简单名替换为对应的全限定VM名称，例如java/lang/Object</p>
 	 */
-	public void S2p1resolveName() {
-		var ctx = getContext();
+	public void S2p1resolveInheritance() {
+		var ctx = getContext(21);
 		ctx.errorReportIndex = classIdx;
 		// TypeResolver
 		importList.resolve(ctx);
-
-		var hasErrorInRawType = false;
 
 		int endIndex = name.lastIndexOf('/');
 		if (endIndex > 0) {
@@ -666,13 +672,15 @@ public abstract class CompileUnit extends ClassNode {
 			}
 		}
 
+		var rawTypeResolveFail = false;
+
 		// extends
 		var pInfo = ctx.resolve(parent());
-        if (pInfo == null) {
-			hasErrorInRawType = true;
+		if (pInfo == null) {
+			rawTypeResolveFail = true;
 			ctx.report(Kind.ERROR, "symbol.noSuchSymbol", "symbol.type", parent(), "[symbol.type,\" \","+name+", \" \", cu.unknown.super]");
 		} else {
-            int acc = pInfo.modifier;
+			int acc = pInfo.modifier;
 			if (0 != (acc & ACC_FINAL)) {
 				ctx.report(Kind.ERROR, "cu.resolve.notInheritable", "cu.final", parent());
 			} else if (0 != (acc & ACC_INTERFACE)) {
@@ -680,28 +688,28 @@ public abstract class CompileUnit extends ClassNode {
 			}
 
 			parent(pInfo.name());
-        }
+		}
 
 		// implements
 		var itfs = interfaces;
 		for (int i = 0; i < itfs.size(); i++) {
 			String iname = itfs.get(i).value().str();
 			var info = ctx.resolve(iname);
-            if (info == null) {
-				hasErrorInRawType = true;
+			if (info == null) {
+				rawTypeResolveFail = true;
 				ctx.report(Kind.ERROR, "symbol.noSuchSymbol", "symbol.type", iname, "[symbol.type,\" \","+name+", \" \", [cu.unknown.interface, "+i+"]]");
 			} else {
-                int acc = info.modifier;
-                if (0 == (acc & ACC_INTERFACE)) {
+				int acc = info.modifier;
+				if (0 == (acc & ACC_INTERFACE)) {
 					ctx.report(Kind.ERROR, "cu.resolve.notInheritable", "cu.class", info.name());
-                }
+				}
 
 				interfaces.set(i, cp.getClazz(info.name()));
-            }
+			}
 		}
 
 		// permits
-		if ((extraModifier&_ACC_SEALED) != 0) {
+		if ((extendedFlags&_ACC_SEALED) != 0) {
 			var subclasses = (ClassListAttribute) getAttribute("PermittedSubclasses");
 			if (subclasses != null) {
 				List<String> value = subclasses.value;
@@ -718,100 +726,9 @@ public abstract class CompileUnit extends ClassNode {
 			}
 		}
 
-		var sign1 = signature;
-		// class
-		if (sign1 != null) {
-			currentNode = sign1;
-			if (!hasErrorInRawType)
-				sign1.resolve(ctx);
-		}
-
-		ctx.reportPseudoType = true;
-		// fields
-		for (int i = 0; i < fieldIdx.size(); i++) {
-			ctx.errorReportIndex = fieldIdx.get(i);
-			var field = fields.get(i);
-			var s = (LPSignature) field.getAttribute("Signature");
-			if (s != null) {
-				currentNode = s;
-				s.resolve(ctx);
-				field.fieldType(s.typeParamToBound(s.values.get(0).rawType()));
-			} else {
-				field.fieldType(ctx.resolveType(field.fieldType()).rawType());
-			}
-		}
-		// methods
-		for (int i = 0; i < methodIdx.size(); i++) {
-			ctx.errorReportIndex = methodIdx.get(i);
-			var method = methods.get(i);
-			var s = (LPSignature) method.getAttribute("Signature");
-			List<Type> par = method.parameters();
-			if (s != null) {
-				currentNode = s;
-				s.resolve(ctx);
-				for (int j = 0; j < par.size(); j++) par.set(j, s.typeParamToBound(s.values.get(j).rawType()));
-				method.setReturnType(s.typeParamToBound(s.values.get(par.size()).rawType()));
-			} else {
-				for (int j = 0; j < par.size(); j++) par.set(j, ctx.resolveType(par.get(j)).rawType());
-				method.setReturnType(ctx.resolveType(method.returnType()).rawType());
-			}
-		}
-		ctx.reportPseudoType = false;
-
-		// annotation
-		for (var list : annoTask.values()) {
-			resolveAnnotationTypes(ctx, list);
-		}
-	}
-	/**
-	 * 递归解析注解中的全限定名.<br>
-	 * 此方法也被{@link MethodParser}调用用于处理方法内部注解
-	 *
-	 * @param annotations  待解析的注解列表，列表元素会被原地修改为解析后的状态
-	 */
-	public final void resolveAnnotationTypes(CompileContext ctx, List<AnnotationPrimer> annotations) {
-		for (int i = 0; i < annotations.size();) {
-			var annotation = annotations.get(i);
-			ctx.errorReportIndex = annotation.pos;
-
-			failure: {
-				if (!resolveAnnotationType(ctx, annotation)) {
-					break failure;
-				}
-
-				//noinspection ForLoopReplaceableByForEach
-				for (Iterator<?> itr = annotation.values().iterator(); itr.hasNext(); ) {
-					if (itr.next() instanceof ConfigValue value) {
-						if (value instanceof ArrayVal array) {
-							var list1 = array.raw();
-							for (int j = 0; j < list1.size(); j++) {
-								if (!resolveAnnotationType(ctx, (AnnotationPrimer) list1.get(j))) {
-									break failure;
-								}
-							}
-						} else {
-							if (!resolveAnnotationType(ctx, (AnnotationPrimer) value)) {
-								break failure;
-							}
-						}
-					}
-				}
-
-				i++;
-				continue;
-			}
-
-			annotations.remove(i);
-		}
-	}
-	private boolean resolveAnnotationType(CompileContext ctx, AnnotationPrimer a) {
-		var type = ctx.resolve(a.type());
-		if (type != null) {
-			a.setType(type.name());
-			return true;
-		}
-		ctx.reportNoSuchType(Kind.ERROR, a.type());
-		return false;
+		var sign1 = classSignature;
+		if (sign1 != null && !rawTypeResolveFail)
+			sign1.resolve(ctx);
 	}
 	// endregion
 	// region 2.2 类型引用
@@ -821,16 +738,20 @@ public abstract class CompileUnit extends ClassNode {
 	 * 由于进行了名称解析，所以现在可以构建{@link LinkedClass}了，已有足够的信息生成符号表<br>
 	 * 本阶段执行以下操作：
 	 * <ul>
-	 *   <li>验证类继承关系的正确性：
+	 *   <li>验证类继承关系：
 	 *     <ul>
 	 *       <li>检测循环继承</li>
 	 *       <li>检查静态继承非静态类</li>
 	 *       <li>验证密封类（sealed class）的permits子类完整性</li>
+	 *       <li>确保Throwable子类不能具有泛型</li>
 	 *     </ul>
 	 *   </li>
-	 *   <li>处理泛型异常的限制：
+	 *   <li>进行方法级别的验证：
 	 *     <ul>
-	 *       <li>确保Throwable子类不能具有泛型</li>
+	 *       <li>解析字段类型（包括 {@code Signature} 属性中的泛型类型）</li>
+	 *       <li>检查注解方法的返回类型有效性</li>
+	 *       <li>验证throws子句的异常类型合法性</li>
+	 *       <li>检测方法签名冲突</li>
 	 *     </ul>
 	 *   </li>
 	 *   <li>生成必要的默认方法：
@@ -840,26 +761,19 @@ public abstract class CompileUnit extends ClassNode {
 	 *       <li>生成默认构造器（并处理内部类的宿主引用）</li>
 	 *     </ul>
 	 *   </li>
-	 *   <li>进行方法级别的验证：
-	 *     <ul>
-	 *       <li>检查注解方法的返回类型有效性</li>
-	 *       <li>验证throws子句的异常类型合法性</li>
-	 *       <li>检测方法签名冲突</li>
-	 *     </ul>
-	 *   </li>
 	 * </ul>
 	 * <p>
-	 * 注意：本阶段可能修改类的字节码结构并添加合成方法。
+	 * 本阶段“定型”类的结构：字段类型、方法签名和成员都会在这里确定，后续若要修改，暂时不一定支持
 	 */
-	public void S2p2resolveType() {
-		var ctx = getContext();
+	public void S2p2resolveMembers() {
+		var ctx = getContext(22);
 		ctx.errorReportIndex = classIdx;
 		// 检测循环继承
 		ctx.getHierarchyList(this);
 
 		String parent = parent();
 		// 检测泛型异常
-		if (signature != null && ctx.instanceOf(parent, "java/lang/Throwable")) {
+		if (classSignature != null && ctx.instanceOf(parent, "java/lang/Throwable")) {
 			ctx.report(Kind.ERROR, "cu.genericException");
 		}
 		// 不能静态继承非静态类
@@ -867,13 +781,11 @@ public abstract class CompileUnit extends ClassNode {
 		var icFlag = ctx.compiler.getInnerClassInfo(parentInfo).get(parent);
 		if (icFlag != null && (icFlag.modifier&ACC_STATIC) == 0) {
 			if (isNonStaticInnerClass()) {
-				ctx.castTo(Type.klass(_parent.name()), Type.klass(icFlag.parent), 0);
+				ctx.castTo(Type.klass(nestHost.name()), Type.klass(icFlag.parent), 0);
 			} else {
 				ctx.report(Kind.ERROR, "cu.inheritNonStatic", icFlag.parent);
 			}
 		}
-
-		var names = ctx.getTmpSet();
 
 		// 权限和密封类完整性检查
 		{
@@ -888,7 +800,7 @@ public abstract class CompileUnit extends ClassNode {
 			// 检查是否继承自密封类
 			var ps = info.getAttribute(info.cp, Attribute.PermittedSubclasses);
 			if (ps != null) {
-				if ((extraModifier&(_ACC_SEALED|_ACC_NON_SEALED|ACC_FINAL)) == 0) {
+				if ((extendedFlags&(_ACC_SEALED|_ACC_NON_SEALED|ACC_FINAL)) == 0) {
 					ctx.report(Kind.ERROR, "cu.sealed.missing");
 				}
 
@@ -903,7 +815,7 @@ public abstract class CompileUnit extends ClassNode {
 		}
 
 		// 检查permits的子类是否真的继承了我
-		if ((extraModifier&_ACC_SEALED) != 0) {
+		if ((extendedFlags&_ACC_SEALED) != 0) {
 			var subclasses = (ClassListAttribute) getAttribute("PermittedSubclasses");
 
 			if (subclasses == null) {
@@ -929,9 +841,54 @@ public abstract class CompileUnit extends ClassNode {
 		}
 
 		// 是否需要生成默认构造器
-		boolean generateConstructor = (extraModifier & (ACC_INTERFACE|_X_ANONYMOUS_CLASS)) == 0;
+		boolean generateConstructor = (extendedFlags & (ACC_INTERFACE|_X_ANONYMOUS_CLASS)) == 0;
 
-		names.clear();
+		ctx.reportPseudoType = true;
+		// fields
+		for (int i = 0; i < fieldIdx.size(); i++) {
+			ctx.errorReportIndex = fieldIdx.get(i);
+			var field = fields.get(i);
+			var s = (LPSignature) field.getAttribute("Signature");
+			if (s != null) {
+				activeSignature = s;
+				s.resolve(ctx);
+				field.fieldType(s.typeParamToBound(s.values.get(0)));
+			} else {
+				field.fieldType(ctx.resolveType(field.fieldType()).rawType());
+			}
+		}
+		// methods
+		for (int i = 0; i < methodIdx.size(); i++) {
+			ctx.errorReportIndex = methodIdx.get(i);
+			var method = methods.get(i);
+			var s = (LPSignature) method.getAttribute("Signature");
+			List<Type> par = method.parameters();
+			if (s != null) {
+				activeSignature = s;
+				ctx.caster.typeParams = s.typeVariables;
+
+				s.resolve(ctx);
+				for (int j = 0; j < par.size(); j++) par.set(j, s.typeParamToBound(s.values.get(j)));
+				method.setReturnType(s.typeParamToBound(s.values.get(par.size())));
+			} else {
+				for (int j = 0; j < par.size(); j++) par.set(j, ctx.resolveType(par.get(j)).rawType());
+				method.setReturnType(ctx.resolveType(method.returnType()).rawType());
+			}
+		}
+		ctx.reportPseudoType = false;
+
+		// TODO 本阶段后续要用到这个字段吗？
+		activeSignature = new LPSignature(1);
+		activeSignature.values = null;
+		activeSignature.typeVariables = null;
+
+		// annotation
+		for (var list : annoTask.values()) {
+			resolveAnnotationTypes(ctx, list);
+		}
+
+		// 检查方法参数重复
+		var names = ctx.getTmpSet();
 		List<MethodNode> methods = this.methods;
 		for (int i = 0; i < methodIdx.size(); i++) {
 			ctx.errorReportIndex = methodIdx.get(i);
@@ -959,7 +916,7 @@ public abstract class CompileUnit extends ClassNode {
 			if (exThrown != null) {
 				List<String> classes = exThrown.value;
 				for (int j = 0; j < classes.size(); j++) {
-					ClassDefinition info = ctx.resolve(classes.get(j));
+					ClassNode info = ctx.resolve(classes.get(j));
 					if (info == null) {
 						ctx.reportNoSuchType(Kind.ERROR, classes.get(i));
 					} else {
@@ -973,6 +930,7 @@ public abstract class CompileUnit extends ClassNode {
 				}
 			}
 		}
+
 		// region 枚举的默认方法生成
 		if ((modifier&ACC_ENUM) != 0) {
 			if (generateConstructor) {
@@ -985,7 +943,7 @@ public abstract class CompileUnit extends ClassNode {
 			String arrayType_ = "[L"+name+";";
 
 			//int fid = getField("$VALUES");
-			int fid = miscFieldId = newField(ACC_PRIVATE|ACC_STATIC|ACC_FINAL/*|ACC_SYNTHETIC*/, "$VALUES", arrayType_);
+			int fid = componentFieldCount = newField(ACC_PRIVATE|ACC_STATIC|ACC_FINAL/*|ACC_SYNTHETIC*/, "$VALUES", arrayType_);
 
 			CodeWriter w;
 
@@ -1021,13 +979,13 @@ public abstract class CompileUnit extends ClassNode {
 		// endregion
 		// region 记录和结构体的默认方法生成
 		recordDefaults:
-		if ((extraModifier&_X_RECORD) != 0) {
+		if ((extendedFlags&_X_RECORD) != 0) {
 			var bArguments = new ArrayList<Constant>();
 			var fieldNames = new CharList();
 			bArguments.add(cp.getClazz(name));
 			bArguments.add(null);
 
-			for (int i = 0; i < miscFieldId; i++) {
+			for (int i = 0; i < componentFieldCount; i++) {
 				var field = fields.get(i);
 
 				fieldNames.append(field.name()).append(';');
@@ -1064,11 +1022,11 @@ public abstract class CompileUnit extends ClassNode {
 				cw.invoke(INVOKESPECIAL, "java/lang/Record", "<init>", "()V");
 
 				List<Type> parameters = methods.get(methods.size() - 1).parameters();
-				for (int i = 0; i < miscFieldId; i++) parameters.add(fields.get(i).fieldType());
+				for (int i = 0; i < componentFieldCount; i++) parameters.add(fields.get(i).fieldType());
 
 				int slot = 1, stack = 1;
-				for (int i = 0; i < miscFieldId; i++) {
-					finalFields.remove(fields.get(i));
+				for (int i = 0; i < componentFieldCount; i++) {
+					uninitializedFinalFields.remove(fields.get(i));
 					Type fieldType = fields.get(i).fieldType();
 
 					cw.insn(ALOAD_0);
@@ -1084,7 +1042,7 @@ public abstract class CompileUnit extends ClassNode {
 				cw.finish();
 			}
 
-			if ((extraModifier & _X_STRUCT) != 0) break recordDefaults;
+			if ((extendedFlags & _X_STRUCT) != 0) break recordDefaults;
 
 			if (fieldNames.length() > 0) fieldNames.setLength(fieldNames.length()-1);
 			bArguments.set(1, new CstString(fieldNames.toStringAndFree()));
@@ -1144,10 +1102,10 @@ public abstract class CompileUnit extends ClassNode {
 		}
 		// endregion
 		boolean isNewNonStaticInnerClass = isNonStaticInnerClass() && !isInheritedNonStaticInnerClass();
-		if (isNewNonStaticInnerClass) newField(ACC_SYNTHETIC|ACC_FINAL, NestContext.InnerClass.FIELD_HOST_REF, Type.klass(_parent.name()));
+		if (isNewNonStaticInnerClass) newField(ACC_SYNTHETIC|ACC_FINAL, NestContext.InnerClass.FIELD_HOST_REF, Type.klass(nestHost.name()));
 
 		if (generateConstructor) {
-			var cw = glinit = newWritableMethod(ACC_PUBLIC, "<init>", isNonStaticInnerClass() ? "(L"+_parent.name()+";)V" : "()V");
+			var cw = glinit = newWritableMethod(ACC_PUBLIC, "<init>", isNonStaticInnerClass() ? "(L"+nestHost.name()+";)V" : "()V");
 			cw.visitSize(1,1);
 			cw.computeFrames(FrameVisitor.COMPUTE_SIZES);
 			cw.insertBefore(DynByteBuf.wrap(invokeDefaultConstructor()));
@@ -1157,16 +1115,97 @@ public abstract class CompileUnit extends ClassNode {
 			var glinit = getGlobalInit();
 			glinit.insn(ALOAD_0);
 			glinit.insn(ALOAD_1);
-			glinit.field(PUTFIELD, name, NestContext.InnerClass.FIELD_HOST_REF, "L"+_parent.name+";");
+			glinit.field(PUTFIELD, name, NestContext.InnerClass.FIELD_HOST_REF, "L"+nestHost.name+";");
 		}
 	}
-	public boolean isNonStaticInnerClass() {return _parent != this && (extraModifier&(ACC_STATIC|_X_INNER_CLASS)) == _X_INNER_CLASS;}
+
+	/**
+	 * 递归解析注解中的类型引用，将注解的类型名解析为全限定名。
+	 *
+	 * <p>此方法不仅用于类级/成员级注解，也会被 {@link MethodParser} 调用，
+	 * 用于处理方法体内部出现的注解。</p>
+	 *
+	 * <p>解析逻辑：</p>
+	 * <ol>
+	 *   <li>对每个 {@link AnnotationPrimer} 解析其类型名</li>
+	 *   <li>如果注解值中包含其他注解（单个或数组），递归解析其类型名</li>
+	 *   <li>解析失败的注解会被从列表中移除，并报告错误</li>
+	 * </ol>
+	 *
+	 * @param ctx         当前编译上下文
+	 * @param annotations 待解析的注解列表。解析成功后：
+	 *                    <ul>
+	 *                      <li>注解类型会被替换为解析后的全限定名</li>
+	 *                      <li>无法解析的注解会被从列表中移除</li>
+	 *                    </ul>
+	 */
+	public final void resolveAnnotationTypes(CompileContext ctx, List<AnnotationPrimer> annotations) {
+		for (int i = 0; i < annotations.size();) {
+			var annotation = annotations.get(i);
+			ctx.errorReportIndex = annotation.pos;
+
+			failure: {
+				if (!resolveAnnotationType(ctx, annotation)) {
+					break failure;
+				}
+
+				//noinspection ForLoopReplaceableByForEach
+				for (Iterator<?> itr = annotation.values().iterator(); itr.hasNext(); ) {
+					if (itr.next() instanceof ConfigValue value) {
+						if (value instanceof ArrayVal array) {
+							var list1 = array.raw();
+							for (int j = 0; j < list1.size(); j++) {
+								if (!resolveAnnotationType(ctx, (AnnotationPrimer) list1.get(j))) {
+									break failure;
+								}
+							}
+						} else {
+							if (!resolveAnnotationType(ctx, (AnnotationPrimer) value)) {
+								break failure;
+							}
+						}
+					}
+				}
+
+				i++;
+				continue;
+			}
+
+			annotations.remove(i);
+		}
+	}
+	private boolean resolveAnnotationType(CompileContext ctx, AnnotationPrimer a) {
+		var type = ctx.resolve(a.type());
+		if (type != null) {
+			a.setType(type.name());
+			return true;
+		}
+		ctx.reportNoSuchType(Kind.ERROR, a.type());
+		return false;
+	}
+
+	/**
+	 * 当前类是否为“非静态内部类”。
+	 *
+	 * <p>判定条件：</p>
+	 * <ul>
+	 *   <li>存在父类（{@code _parent != this}）且标记为内部类</li>
+	 *   <li>未声明为 {@code static}</li>
+	 * </ul>
+	 */
+	public boolean isNonStaticInnerClass() {return nestHost != this && (extendedFlags&(ACC_STATIC|_X_INNER_CLASS)) == _X_INNER_CLASS;}
+	/**
+	 * 当前非静态内部类是否“继承自”一个非静态内部类。
+	 *
+	 * <p>返回 {@code true} 表示父类本身就是一个非静态内部类，
+	 * 且当前类沿用父类构造器约定（即已经具备宿主引用语义）。</p>
+	 */
 	public boolean isInheritedNonStaticInnerClass() {
 		if (isNonStaticInnerClass()) {
 			String parent = parent();
-			var parentInfo = ctx.compiler.resolve(parent);
-			var icFlag = ctx.compiler.getInnerClassInfo(parentInfo).get(parent);
-			return icFlag != null && (icFlag.modifier & ACC_STATIC) == 0;
+			var parentNode = ctx.compiler.resolve(parent);
+			var info = ctx.compiler.getInnerClassInfo(parentNode).get(parent);
+			return info != null && (info.modifier & ACC_STATIC) == 0;
 		}
 		return false;
 	}
@@ -1208,7 +1247,7 @@ public abstract class CompileUnit extends ClassNode {
 			var mn = pInfo.getMethodObj("<init>", parentArg);
 			if (mn != null) {
 				ctx.canAccessSymbol(pInfo, mn, false, true);
-				if (_parent != this && pInfo instanceof CompileUnit) j11PrivateConstructor(mn);
+				if (nestHost != this && pInfo instanceof CompileUnit) j11PrivateConstructor(mn);
 			} else if (pInfo.getMethodObj("<init>") != null) {
 				// 2.2阶段其实没法保证方法的确定性，但是已知只会生成无参构造器，就能在这里做检查了.
 				// 如果存在任意有参构造器，就不会生成默认的无参public构造器了
@@ -1316,7 +1355,7 @@ public abstract class CompileUnit extends ClassNode {
 	 * </ol>
 	 */
 	public void S2p3resolveMethod() {
-		var ctx = getContext();
+		var ctx = getContext(23);
 		ctx.errorReportIndex = classIdx;
 
 		final HashSet<NameAndType> implementCheck = Helpers.cast(ctx.tmpSet);
@@ -1427,21 +1466,27 @@ public abstract class CompileUnit extends ClassNode {
 
 							var prev = overridableMethods.getEntry(m);
 							if (prev != null) {
-								char idx = prev.getKey().modifier;
-								ctx.errorReportIndex = idx == 0 ? classIdx : methodIdx.get(idx-1);
-								MethodResult value = genericCombine(prev.getValue(), method);
-								prev.setValue(value);
-								ctx.errorReportIndex = classIdx;
-							} else {
-								m.modifier = 0;
-								for (int k = 0; k < this.methods.size(); k++) {
-									var myMethod = this.methods.get(k);
-									if (method.name().equals(myMethod.name()) && myMethod.rawDesc().startsWith(param)) {
-										m.modifier = (char) (k+1);
-										break;
+								MethodResult prevVal = prev.getValue();
+
+								int idx = prevVal.distance;
+								if (idx < 0) {
+									idx = 0;
+									for (int k = 0; k < this.methods.size(); k++) {
+										var myMethod = this.methods.get(k);
+										if (method.name().equals(myMethod.name()) && myMethod.rawDesc().startsWith(param)) {
+											idx = (char) (k+1);
+											break;
+										}
 									}
 								}
 
+								ctx.errorReportIndex = idx == 0 ? classIdx : methodIdx.get(idx-1);
+								MethodResult value = genericCombine(prevVal, method);
+								value.distance = idx;
+								prev.setValue(value);
+								ctx.errorReportIndex = classIdx;
+							} else {
+								val.distance = -1;
 								overridableMethods.put(implementCheck.find(m), val);
 								m = new NameAndType();
 							}
@@ -1451,17 +1496,6 @@ public abstract class CompileUnit extends ClassNode {
 			}
 
 			ctx.tmpNat = m;
-
-			/*// 删除2和4状态
-			for (var itr = implementCheck.iterator(); itr.hasNext(); ) {
-				if ((itr.next().modifier & (ACC_ABSTRACT | __ACC_UNRELATED)) == 0) {
-					itr.remove();
-				}
-			}
-			// 删除未被自己覆盖的overridable
-			for (Iterator<NameAndType> itr = overridableMethods.keySet().iterator(); itr.hasNext(); ) {
-				if (itr.next().modifier == 0) itr.remove();
-			}*/
 		}
 
 		var d = ctx.tmpNat;
@@ -1484,10 +1518,10 @@ public abstract class CompileUnit extends ClassNode {
 
 			var inherit = inheritResult.method;
 
+			implementCheck.removeValue(d);
 			var overrideGenericInfo = ctx.inferrer.inferOverride(ctx, inherit, Type.klass(name), myArgs);
 			if (overrideGenericInfo == null) continue;
 
-			implementCheck.removeValue(d);
 			// 检查覆盖静态或访问权限降低
 			checkDowngrade(impl, inherit, ctx);
 
@@ -1548,7 +1582,7 @@ public abstract class CompileUnit extends ClassNode {
 				// 前面没做删除，所以在这里做检查
 				if ((method.modifier&ACC_ABSTRACT) == 0) continue;
 
-				ctx.report(Kind.ERROR, "cu.override.noImplement", name, method.owner.replace('/', '.'), method.name);
+				ctx.report(Kind.ERROR, "cu.override.noImplement", name, method);
 			}
 		}
 		implementCheck.clear();
@@ -1593,23 +1627,37 @@ public abstract class CompileUnit extends ClassNode {
 		return prev;
 	}
 	// 访问权限是否降级以及能否override, 此处对override的函数已经具备访问权限
-	private void checkDowngrade(MethodNode my, MethodNode it, CompileContext ctx) {
-		if ((my.modifier&ACC_STATIC) != (it.modifier&ACC_STATIC)) {
-			String inline = "cu.override.static."+((my.modifier&ACC_STATIC) != 0 ? "self" : "other");
-			ctx.report(Kind.ERROR, "cu.override.unable", my.owner().replace('/', '.'), it.owner().replace('/', '.'), it, inline);
+	private void checkDowngrade(MethodNode decl, MethodNode orig, CompileContext ctx) {
+		String reason;
+
+		hasError: {
+			if ((orig.modifier&ACC_FINAL) != 0) {
+				reason = "cu.override.final";
+				break hasError;
+			}
+
+			if ((decl.modifier&ACC_STATIC) != (orig.modifier&ACC_STATIC)) {
+				reason = "cu.override.static."+((decl.modifier&ACC_STATIC) != 0 ? "self" : "other");
+				break hasError;
+			}
+
+			// 之前有做canAccessSymbol检查，所以不需要考虑package-private的问题……但是似乎又会碰到
+			int declaredAccessLevel = decl.modifier&(ACC_PUBLIC|ACC_PROTECTED);
+			int originalAccessLevel = orig.modifier&(ACC_PUBLIC|ACC_PROTECTED);
+			if (declaredAccessLevel != ACC_PUBLIC && declaredAccessLevel != originalAccessLevel) {
+				if (declaredAccessLevel != ACC_PROTECTED || originalAccessLevel != 0) {
+					reason = "cu.override.access:[\"" +
+							(originalAccessLevel == 0 ? "package-private" : showModifiers(originalAccessLevel, ACC_SHOW_METHOD)) + "\",\"" +
+							(declaredAccessLevel == 0 ? "package-private" : showModifiers(declaredAccessLevel, ACC_SHOW_METHOD)) + "\"]";
+					break hasError;
+				}
+			}
+
+			return;
 		}
 
-		int myLevel = my.modifier&(ACC_PUBLIC|ACC_PROTECTED);
-		int itLevel = it.modifier&(ACC_PUBLIC|ACC_PROTECTED);
-		pass: {
-			if (myLevel == ACC_PUBLIC || myLevel == itLevel) break pass;
-			if (itLevel == 0 && myLevel == ACC_PROTECTED) break pass;
 
-			String inline = "cu.override.access:[\""+
-					(itLevel==0?"package-private":showModifiers(itLevel, ACC_SHOW_METHOD))+"\",\""+
-					(myLevel==0?"package-private":showModifiers(myLevel, ACC_SHOW_METHOD))+"\"]";
-			ctx.report(Kind.ERROR, "cu.override.unable", my.owner().replace('/', '.'), it.owner().replace('/', '.'), it, inline);
-		}
+		ctx.report(Kind.ERROR, "cu.override.unable", decl.owner().replace('/', '.'), orig.owner().replace('/', '.'), orig, reason);
 	}
 	// endregion
 	/**
@@ -1668,7 +1716,7 @@ public abstract class CompileUnit extends ClassNode {
 	private int fieldParseState;
 	void _setSign(Attributed method) {
 		var sign = (LPSignature) method.getAttribute("Signature");
-		currentNode = sign != null ? sign : signature;
+		activeSignature = sign != null ? sign : classSignature;
 	}
 	// 解析static final字段，不过顺便把非final也解析了
 	/**
@@ -1681,7 +1729,7 @@ public abstract class CompileUnit extends ClassNode {
 	 * </ul>
 	 */
 	void S3_DFSField() throws ParseException {
-		var ctx = getContext();
+		var ctx = getContext(30);
 
 		synchronized (this) {
 			if (fieldParseState < 0) {
@@ -1697,7 +1745,6 @@ public abstract class CompileUnit extends ClassNode {
 		var backup = ctx.pushEnclosingContext();
 		addEnclosingContext(ctx);
 
-		currentNode = signature;
 		ctx.tokenizer.state = STATE_EXPR;
 		// 优先级的定义写在ParseTask中
 		lazyTasks.sort((o1, o2) -> Integer.compare(o1.priority(), o2.priority()));
@@ -1705,7 +1752,10 @@ public abstract class CompileUnit extends ClassNode {
 		for (taskId = 0; taskId < lazyTasks.size(); taskId++) {
 			var task = lazyTasks.get(taskId);
 			if (task.priority() > 0) break;
-			if (task.isStaticFinalField()) task.parse(ctx);
+			if (task.isStaticFinalField()) {
+				activeSignature = classSignature;
+				task.parse(ctx);
+			}
 		}
 
 		ctx.popEnclosingContext(backup);
@@ -2043,26 +2093,28 @@ public abstract class CompileUnit extends ClassNode {
 	 * @see ParseTask
 	 */
 	public void S4parseCode() throws ParseException {
-		var ctx = getContext();
+		var ctx = getContext(40);
 
 		var backup = ctx.pushEnclosingContext();
 		addEnclosingContext(ctx);
 
-		currentNode = signature;
 		ctx.tokenizer.state = STATE_EXPR;
 
-		for (int i = 0; i < lazyTasks.size(); i++) lazyTasks.get(i).parse(ctx);
+		for (int i = 0; i < lazyTasks.size(); i++) {
+			activeSignature = classSignature;
+			lazyTasks.get(i).parse(ctx);
+		}
 		lazyTasks.clear();
 
 		if (clinit != null) clinit.insn(Opcodes.RETURN);
 
-		for (FieldNode field : finalFields) {
+		for (FieldNode field : uninitializedFinalFields) {
 			ctx.report(fieldIdx.get(fields.indexOfAddress(field)), Kind.ERROR, "var.notAssigned", field.name());
 		}
-		finalFields.clear();
+		uninitializedFinalFields.clear();
 
 		// 隐式构造器
-		if (glinit != null && glInitBytes == null && (extraModifier&_X_ANONYMOUS_CLASS) == 0) {
+		if (glinit != null && glInitBytes == null && (extendedFlags&_X_ANONYMOUS_CLASS) == 0) {
 			glinit.computeFrames(FrameVisitor.COMPUTE_SIZES|FrameVisitor.COMPUTE_FRAMES);
 			glinit.insn(Opcodes.RETURN);
 			glinit.finish();
@@ -2072,7 +2124,7 @@ public abstract class CompileUnit extends ClassNode {
 	}
 
 	private void addEnclosingContext(CompileContext ctx) {
-		if ((extraModifier&_X_ANONYMOUS_CLASS) != 0) return;
+		if ((extendedFlags&_X_ANONYMOUS_CLASS) != 0) return;
 
 		var hasInstance = isNonStaticInnerClass();
 		var that = this;
@@ -2084,10 +2136,10 @@ public abstract class CompileUnit extends ClassNode {
 
 		int size = ctx.enclosing.size();
 		do {
-			ctx.enclosing.add(size, NestContext.innerClass(that._parent.name(), that, !hasInstance));
-			that = that._parent;
+			ctx.enclosing.add(size, NestContext.innerClass(that.nestHost.name(), that, !hasInstance));
+			that = that.nestHost;
 			hasInstance = that.isNonStaticInnerClass();
-		} while (that != that._parent);
+		} while (that != that.nestHost);
 	}
 
 	public void j11PrivateConstructor(MethodNode method) {

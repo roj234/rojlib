@@ -15,8 +15,6 @@ import java.security.spec.AlgorithmParameterSpec;
  * @since 2023/4/29 0:08
  */
 public abstract class RCipher extends CipherSpi {
-	public static final int ENCRYPT_MODE = Cipher.ENCRYPT_MODE, DECRYPT_MODE = Cipher.DECRYPT_MODE;
-
 	public static RCipher getInstance(String algorithm) {return CryptoFactory.getCipherInstance(algorithm);}
 
 	public String getAlgorithm() { return getClass().getSimpleName(); }
@@ -60,7 +58,7 @@ public abstract class RCipher extends CipherSpi {
 		byte[] key1 = key.getEncoded();
 		if (key1 == null) throw new InvalidKeyException("RAW key bytes missing");
 
-		init(mode, key1, par, random);
+		init(mode == Cipher.ENCRYPT_MODE, key1, par, random);
 	}
 	protected final void engineInit(int mode, Key key, AlgorithmParameters par, SecureRandom random) throws InvalidKeyException, InvalidAlgorithmParameterException {
 		engineInit(mode, key, par == null ? null : engineFindParameter(par), random);
@@ -157,14 +155,14 @@ public abstract class RCipher extends CipherSpi {
 	}
 	// endregion
 
-	public void init(int mode, byte[] key) throws InvalidKeyException {
+	public void init(boolean encrypt, byte[] key) throws InvalidKeyException {
 		try {
-			init(mode, key, null, null);
+			init(encrypt, key, null, null);
 		} catch (InvalidAlgorithmParameterException e) {
 			throw new ProviderException("Unexpected error", e);
 		}
 	}
-	public abstract void init(int mode, byte[] key, AlgorithmParameterSpec par, SecureRandom random) throws InvalidAlgorithmParameterException, InvalidKeyException;
+	public abstract void init(boolean encrypt, byte[] key, AlgorithmParameterSpec par, SecureRandom random) throws InvalidAlgorithmParameterException, InvalidKeyException;
 
 	public void insertAAD(DynByteBuf aad) {
 		throw new UnsupportedOperationException("The underlying Cipher implementation does not support this method");

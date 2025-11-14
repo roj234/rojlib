@@ -40,6 +40,11 @@ final class PromiseImpl<T> implements Promise<T>, Runnable, Cancellable, Promise
 	private PromiseImpl<?> next;
 	private Executor executor, rejectExecutor;
 
+	public Promise<T> on(Executor executor) {
+		this.executor = executor;
+		return this;
+	}
+
 	@Override
 	public Promise<Object> then(BiConsumer<T, Result> fn, Function<Throwable, ?> recover) {
 		PromiseImpl<Object> p = new PromiseImpl<>(executor);
@@ -68,13 +73,13 @@ final class PromiseImpl<T> implements Promise<T>, Runnable, Cancellable, Promise
 		return this;
 	}
 
-	@Override public final Promise<T> rejected(Function<Throwable, T> recover) {return setRejectHandler(recover);}
-	@Override public final Promise<T> rejectedCompose(Function<Throwable, Promise<T>> recover) {return setRejectHandler(recover);}
-	@Override public final Promise<T> rejectedAsync(Executor executor, Function<Throwable, T> recover) {
+	@Override public final Promise<T> exceptionally(Function<Throwable, T> recover) {return setRejectHandler(recover);}
+	@Override public final Promise<T> exceptionallyCompose(Function<Throwable, Promise<T>> recover) {return setRejectHandler(recover);}
+	@Override public final Promise<T> exceptionallyAsync(Executor executor, Function<Throwable, T> recover) {
 		this.rejectExecutor = executor;
 		return setRejectHandler(recover);
 	}
-	@Override public final Promise<T> rejectedComposeAsync(Executor executor, Function<Throwable, T> recover) {
+	@Override public final Promise<T> exceptionallyComposeAsync(Executor executor, Function<Throwable, T> recover) {
 		this.rejectExecutor = executor;
 		return setRejectHandler(recover);
 	}
@@ -129,17 +134,17 @@ final class PromiseImpl<T> implements Promise<T>, Runnable, Cancellable, Promise
 			if (notifyNext(state)) return;
 
 			LOGGER.error("异步{}发生了异常", (Throwable) result, this);
+			STATE.getAndBitwiseAnd(this, ~INVOKE_HANDLER);
 		}
 	}
 
 	// next在等待当前Promise完成吗
 	private boolean notifyNext(int state) {
-		if ((state&CALLBACK) != 0 && STATE.compareAndSet(next, next.state&(CALLBACK|WAIT), state)) {
-			do {
-				state = this.state;
-			} while (!STATE.compareAndSet(this, state, state & ~CALLBACK));
-
+		if ((state&CALLBACK) != 0 && next != null && STATE.compareAndSet(next, next.state&(CALLBACK|WAIT), state)) {
 			next.result = result;
+
+			STATE.getAndBitwiseAnd(this, ~CALLBACK);
+
 			next._apply();
 			return true;
 		}
@@ -147,6 +152,7 @@ final class PromiseImpl<T> implements Promise<T>, Runnable, Cancellable, Promise
 	}
 
 	private boolean once(int flag) {
+		//STATE.getAndBitwiseOr(this, flag) &
 		while (true) {
 			int st = state;
 			if ((st&flag) != 0) return false;
@@ -188,7 +194,7 @@ final class PromiseImpl<T> implements Promise<T>, Runnable, Cancellable, Promise
 								}
 								waitFor.next = this;
 							}
-							break;
+							return;
 						}
 					} else {
 						state = waitFor.state;
@@ -201,24 +207,18 @@ final class PromiseImpl<T> implements Promise<T>, Runnable, Cancellable, Promise
 
 		finish(TASK_COMPLETE|TASK_SUCCESS, value);
 	}
-	@Override public void resolveOn(Object value, Executor executor1) {
-		executor = executor1;
-		resolve(value);
-	}
 	@Override public void reject(Throwable reason) {finish(TASK_COMPLETE, reason);}
-	@Override public void rejectOn(Throwable reason, Executor executor1) {
-		executor = executor1;
-		reject(reason);
-	}
 
 	private void finish(int target, Object value) {
 		int s = state&CALLBACK;
-		if (STATE.compareAndSet(this, s, s|target)) result = value;
-		_apply();
+		if (STATE.compareAndSet(this, s, s|target)) {
+			result = value;
+			_apply();
+		}
 	}
 	// endregion
 
-	public byte state() { return (byte) (state&3); }
+	public byte rawState() { return (byte) (state&3); }
 
 	@Override
 	@SuppressWarnings("unchecked")
@@ -270,7 +270,7 @@ final class PromiseImpl<T> implements Promise<T>, Runnable, Cancellable, Promise
 			if ((state&WAIT) != 0) sb.append("<pending for another promise>");
 			else sb.append("<pending>");
 		} else {
-			sb.append('<').append(state() == FULFILLED ? "fulfilled" : "rejected").append(": ").append(result).append('>');
+			sb.append('<').append(rawState() == FULFILLED ? "fulfilled" : "rejected").append(": ").append(result).append('>');
 		}
 		if ((state&CALLBACK) != 0) sb.append(", callback=").append(next);
 		if (resolveHandler == null) sb.append(", tail");

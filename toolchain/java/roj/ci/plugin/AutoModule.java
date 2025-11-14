@@ -1,6 +1,6 @@
 package roj.ci.plugin;
 
-import roj.archive.zip.ZipArchive;
+import roj.archive.zip.ZipEditor;
 import roj.asm.AsmCache;
 import roj.asm.ClassNode;
 import roj.asm.Opcodes;
@@ -72,7 +72,7 @@ public class AutoModule implements Plugin {
 			moduleInfo.addAttribute(moduleAttr);
 
 			System.out.println(moduleAttr);
-			try (var za = new ZipArchive(file)) {
+			try (var za = new ZipEditor(file)) {
 				za.put("module-info.class", DynByteBuf.wrap(AsmCache.toByteArray(moduleInfo)));
 				za.save();
 			}

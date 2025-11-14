@@ -108,15 +108,7 @@ public abstract class Source extends DataOutputStream {
 		if (dis == null) dis = new DataInputStream(asInputStream());
 		return dis;
 	}
-	public InputStream asInputStream() {
-		long len;
-		try {
-			len = length()-position();
-		} catch (IOException e) {
-			len = 0;
-		}
-		return new SourceInputStream(this, len);
-	}
+	public InputStream asInputStream() {return new SourceInputStream(this, -1);}
 
 	/**
 	 * Did not ensure return is writable

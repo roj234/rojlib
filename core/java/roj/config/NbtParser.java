@@ -1,13 +1,12 @@
 package roj.config;
 
+import roj.util.ArrayUtil;
 import roj.util.DynByteBuf;
 
 import java.io.DataInput;
 import java.io.DataInputStream;
 import java.io.IOException;
 import java.io.InputStream;
-
-import static roj.reflect.Unsafe.U;
 
 /**
  * NBT IO class
@@ -92,7 +91,7 @@ public final class NbtParser implements Parser {
 			case DOUBLE -> cc.emit(in.readDouble());
 			case BYTE_ARRAY -> {
 				int length = in.readInt();
-				var arr = (byte[]) U.allocateUninitializedArray(byte.class, length);
+				var arr = ArrayUtil.newUninitializedByteArray(length);
 				in.readFully(arr);
 				cc.emit(arr);
 			}
@@ -116,13 +115,13 @@ public final class NbtParser implements Parser {
 			}
 			case INT_ARRAY -> {
 				int length = in.readInt();
-				var arr = (int[]) U.allocateUninitializedArray(int.class, length);
+				var arr = ArrayUtil.newUninitializedIntArray(length);
 				for (int i = 0; i < arr.length; i++) arr[i] = in.readInt();
 				cc.emit(arr);
 			}
 			case LONG_ARRAY -> {
 				int length = in.readInt();
-				var arr = (long[]) U.allocateUninitializedArray(long.class, length);
+				var arr = ArrayUtil.newUninitializedLongArray(length);
 				for (int i = 0; i < arr.length; i++) arr[i] = in.readLong();
 				cc.emit(arr);
 			}

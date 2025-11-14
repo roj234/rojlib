@@ -30,4 +30,5 @@ public interface MessageAuthenticCode {
 	byte[] digest();
 	int digest(byte[] b, int off, int len) throws DigestException;
 	default byte[] digestShared() {return digest();}
+	void digest(DynByteBuf b);
 }

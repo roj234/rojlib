@@ -158,7 +158,7 @@ public final class CompositeSource extends Source {
 		s = setSource(sid);
 		s.seek(0);
 	}
-	public Source getSource() {return s;}
+	public Source getCurrentFragment() {return s;}
 	public int ordinal() {return sid;}
 
 	public void next() throws IOException {
@@ -221,16 +221,15 @@ public final class CompositeSource extends Source {
 		} else {
 			offset = -1;
 
-			for (int i = 0; i < ref.size(); i++) {
+			int i = 0;
+			for (; i < ref.size() - 1; i++) {
 				long len = getLength(i);
-				if (pos > len) {
-					pos -= len;
-				} else {
-					s = setSource(i);
-					s.seek(pos);
-					return;
-				}
+				if (pos <= len) break;
+				pos -= len;
 			}
+
+			s = setSource(i);
+			s.seek(pos);
 		}
 	}
 	public long position() throws IOException { return (fragmentSize > 0 ? sid * fragmentSize : getOffset()) + s.position(); }

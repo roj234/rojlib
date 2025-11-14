@@ -1,6 +1,6 @@
 package roj.config.table;
 
-import roj.archive.zip.ZipFileWriter;
+import roj.archive.zip.ZipPacker;
 import roj.io.source.Source;
 import roj.text.TextWriter;
 
@@ -31,10 +31,10 @@ public interface TableWriter extends Closeable, Flushable {
 	static TableWriter csvWriterAppend(File file, Charset charset) throws IOException {return new CsvWriter(TextWriter.append(file, charset));}
 	static TableWriter csvWriter(Closeable out, Charset charset) {return new CsvWriter(new TextWriter(out, charset));}
 
-	static XlsxWriter xlsxWriter(File file) throws IOException {return new XlsxWriter(new ZipFileWriter(file));}
-	static XlsxWriter xlsxWriter(Source source) throws IOException {return new XlsxWriter(new ZipFileWriter(source, Deflater.DEFAULT_COMPRESSION));}
-	static XlsxWriter xlsxWriter(File file, int compression) throws IOException {return new XlsxWriter(new ZipFileWriter(file, compression, 0));}
-	static XlsxWriter xlsxWriter(Source source, int compression) throws IOException {return new XlsxWriter(new ZipFileWriter(source, compression));}
+	static XlsxWriter xlsxWriter(File file) throws IOException {return new XlsxWriter(new ZipPacker(file));}
+	static XlsxWriter xlsxWriter(Source source) throws IOException {return new XlsxWriter(new ZipPacker(source, Deflater.DEFAULT_COMPRESSION));}
+	static XlsxWriter xlsxWriter(File file, int compression) throws IOException {return new XlsxWriter(new ZipPacker(file, compression, 0));}
+	static XlsxWriter xlsxWriter(Source source, int compression) throws IOException {return new XlsxWriter(new ZipPacker(source, compression));}
 
 	default void writeRow() throws IOException {writeRow(Collections.emptyList());}
 	default void writeRow(Object row) throws IOException {writeRow(Collections.singletonList(row));}

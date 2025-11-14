@@ -139,7 +139,7 @@ public class MyPassIs extends Plugin {
 			try (InputStream in = new FileInputStream(keyFile)) {
 				byte[] iv = new byte[16];
 				IOUtil.readFully(in, iv);
-				cipher.init(RCipher.DECRYPT_MODE, pass, new IvParameterSpecNC(iv), null);
+				cipher.init(false, pass, new IvParameterSpecNC(iv), null);
 
 				data = NbtParser.INSTANCE.parse(new CipherInputStream(in, cipher)).asMap();
 			} catch (Exception e) {
@@ -262,7 +262,7 @@ public class MyPassIs extends Plugin {
 			byte[] iv1 = new SecureRandom().generateSeed(16);
 			out.write(iv1);
 
-			cipher.init(RCipher.ENCRYPT_MODE, pass, new IvParameterSpecNC(iv1), null);
+			cipher.init(true, pass, new IvParameterSpecNC(iv1), null);
 
 			ByteList buf = IOUtil.getSharedByteBuf();
 			ConfigMaster.NBT.toBytes(data, buf);

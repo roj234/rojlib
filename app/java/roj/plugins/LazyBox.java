@@ -1,8 +1,8 @@
 package roj.plugins;
 
-import roj.archive.qz.*;
-import roj.archive.zip.ZEntry;
-import roj.archive.zip.ZipArchive;
+import roj.archive.sevenz.*;
+import roj.archive.zip.ZipEditor;
+import roj.archive.zip.ZipEntry;
 import roj.archive.zip.ZipFile;
 import roj.asm.ClassNode;
 import roj.asmx.Context;
@@ -14,7 +14,7 @@ import roj.collect.IntMap;
 import roj.concurrent.TaskGroup;
 import roj.concurrent.TaskPool;
 import roj.crypt.CRC32;
-import roj.crypt.ReedSolomonECC;
+import roj.ecc.ReedSolomonCodec;
 import roj.http.curl.DownloadTask;
 import roj.io.IOUtil;
 import roj.io.LimitInputStream;
@@ -85,8 +85,8 @@ public class LazyBox extends Plugin {
 								.executes(this::updateExe))));
 		registerCommand(literal("zipupdate").then(argument("path", Argument.file()).executes(this::zipUpdate)));
 		registerCommand(literal("ziprmfolder").then(argument("file", Argument.file()).executes(ctx -> {
-			try (var za = new ZipArchive(ctx.argument("file", File.class))) {
-				for (ZEntry ze : za.entries()) {
+			try (var za = new ZipEditor(ctx.argument("file", File.class))) {
+				for (ZipEntry ze : za.entries()) {
 					String name = ze.getName();
 					if (name.endsWith("/")) {
 						if (ze.getSize() == 0) {
@@ -126,7 +126,7 @@ public class LazyBox extends Plugin {
 			}
 
 			long fileSize = file.length();
-			var recc = new ReedSolomonECC(lastDataByte, lastEccByte);
+			var recc = new ReedSolomonCodec(lastDataByte, lastEccByte);
 			int stride = (int) Math.min((fileSize+recc.dataSize()-1) / recc.dataSize(), (Math.min(fileSize, 1048576) / recc.maxError()));
 
 			var metadata = new ByteList(16).put(0x00/*KIND_RS*/).put(lastDataByte).put(lastEccByte).putVUInt(stride).putVULong(fileSize);
@@ -170,7 +170,7 @@ public class LazyBox extends Plugin {
 				int eccType = metadata.readUnsignedByte();
 				if (eccType != 0) throw new FastFailException("不是RS纠错码："+eccType);
 
-				var recc = new ReedSolomonECC(metadata.readUnsignedByte(), metadata.readUnsignedByte());
+				var recc = new ReedSolomonCodec(metadata.readUnsignedByte(), metadata.readUnsignedByte());
 				var stride = metadata.readVUInt();
 
 				var originalSize = metadata.readVULong();
@@ -205,7 +205,7 @@ public class LazyBox extends Plugin {
 				int eccType = metadata.readUnsignedByte();
 				if (eccType != 0) throw new FastFailException("不是RS纠错码："+eccType);
 
-				var recc = new ReedSolomonECC(metadata.readUnsignedByte(), metadata.readUnsignedByte());
+				var recc = new ReedSolomonCodec(metadata.readUnsignedByte(), metadata.readUnsignedByte());
 				int stride = metadata.readVUInt();
 
 				var originalSize = metadata.readVULong();
@@ -348,7 +348,7 @@ public class LazyBox extends Plugin {
 			if (dst == null) dst = IOUtil.deriveOutput(src, "-注入");
 			IOUtil.copyFile(src, dst);
 
-			try (var archive = new ZipArchive(dst)) {
+			try (var archive = new ZipEditor(dst)) {
 				for (var entry : nx.registry().entrySet()) {
 					String file = entry.getKey().replace('.', '/')+".class";
 					InputStream in = archive.getInputStream(file);
@@ -381,9 +381,9 @@ public class LazyBox extends Plugin {
 	}
 
 	private void zipUpdate(CommandContext ctx) throws IOException {
-		var za = new ZipArchive(ctx.argument("path", File.class));
+		var za = new ZipEditor(ctx.argument("path", File.class));
 
-		Collection<String> entryName = CollectionX.mapToView(za.entries(), ZEntry::getName, ZEntry::new);
+		Collection<String> entryName = CollectionX.mapToView(za.entries(), ZipEntry::getName, ZipEntry::new);
 		Map<String, String> fileView = CollectionX.toMap(entryName, x -> x.endsWith("/") ? null : x);
 
 		var update = new Shell("\u001b[96mZUpdate \u001b[97m> ");
@@ -421,8 +421,8 @@ public class LazyBox extends Plugin {
 		EasyProgressBar bar = new EasyProgressBar("验证压缩文件", "B");
 
 		AtomicReference<Throwable> failed = new AtomicReference<>();
-		try (QZArchive archive = new QZArchive(file)) {
-			for (QZEntry entry : archive.getEntriesByPresentOrder()) {
+		try (SevenZFile archive = new SevenZFile(file)) {
+			for (SevenZEntry entry : archive.getEntriesByPresentOrder()) {
 				bar.addTotal(entry.getSize());
 			}
 
@@ -450,7 +450,7 @@ public class LazyBox extends Plugin {
 
 			monitor.await();
 		} catch (Exception e) {
-			failed.set(e);
+			failed.compareAndSet(null, e);
 		}
 
 		Throwable exception = failed.getAndSet(null);
@@ -460,23 +460,24 @@ public class LazyBox extends Plugin {
 		} else {
 			bar.end("验证成功");
 		}
+		bar.close();
 	}
 
 	private void qzDiff(CommandContext ctx) throws IOException {
-		QZArchive in1 = new QZArchive(ctx.argument("file1", File.class));
-		QZArchive in2 = new QZArchive(ctx.argument("file2", File.class));
-		HashMap<String, QZEntry> remain = in1.getEntries();
+		SevenZFile in1 = new SevenZFile(ctx.argument("file1", File.class));
+		SevenZFile in2 = new SevenZFile(ctx.argument("file2", File.class));
+		HashMap<String, SevenZEntry> remain = in1.getEntries();
 
 		int add = 0, change = 0, del = 0, move = 0;
 
-		IntMap<QZEntry> in2_by_crc32 = new IntMap<>();
-		HashMap<QZEntry, String> in1_should_copy = new HashMap<>(), in2_should_copy = new HashMap<>();
-		for (QZEntry entry : in2.getEntriesByPresentOrder()) {
+		IntMap<SevenZEntry> in2_by_crc32 = new IntMap<>();
+		HashMap<SevenZEntry, String> in1_should_copy = new HashMap<>(), in2_should_copy = new HashMap<>();
+		for (SevenZEntry entry : in2.getEntriesByPresentOrder()) {
 			if (entry.isDirectory()) continue;
 
-			QZEntry oldEntry = remain.remove(entry.getName());
+			SevenZEntry oldEntry = remain.remove(entry.getName());
 			if (oldEntry == null) {
-				QZEntry prev = in2_by_crc32.put(entry.getCrc32(), entry);
+				SevenZEntry prev = in2_by_crc32.put(entry.getCrc32(), entry);
 				if (prev != null) System.out.println("警告：在"+entry.getCrc32()+"["+entry.getName()+"]上出现了CRC冲突");
 
 				in2_should_copy.put(entry, "add/"+entry.getName());
@@ -489,10 +490,10 @@ public class LazyBox extends Plugin {
 			}
 		}
 
-		for (QZEntry oldEntry : remain.values()) {
+		for (SevenZEntry oldEntry : remain.values()) {
 			if (oldEntry.isDirectory()) continue;
 
-			QZEntry entry = in2_by_crc32.get(oldEntry.getCrc32());
+			SevenZEntry entry = in2_by_crc32.get(oldEntry.getCrc32());
 			if (entry != null) {
 				in2_should_copy.remove(entry);
 
@@ -513,15 +514,15 @@ public class LazyBox extends Plugin {
 		Shell c1 = new Shell("\u001b[96m7zDiff \u001b[97m> ");
 		Tty.pushHandler(c1);
 		c1.register(literal("save").then(argument("out", Argument.string()).executes(c -> {
-			QZFileWriter out = new QZFileWriter(c.argument("out", String.class));
+			SevenZPacker out = new SevenZPacker(c.argument("out", String.class));
 			out.setCodec(new LZMA2(3));
 
-			for (QZEntry oldEntry : remain.values()) {
+			for (SevenZEntry oldEntry : remain.values()) {
 				if (oldEntry.isDirectory()) continue;
-				QZEntry entry = in2_by_crc32.remove(oldEntry.getCrc32());
+				SevenZEntry entry = in2_by_crc32.remove(oldEntry.getCrc32());
 				if (entry != null) {
 					in2_should_copy.remove(entry);
-					out.beginEntry(QZEntry.ofNoAttribute("renamed/"+oldEntry.getName()));
+					out.beginEntry(SevenZEntry.ofNoAttribute("renamed/"+oldEntry.getName()));
 					out.write(entry.getName().getBytes(StandardCharsets.UTF_8));
 				} else {
 					in1_should_copy.put(oldEntry, "del/"+oldEntry.getName());
@@ -555,13 +556,13 @@ public class LazyBox extends Plugin {
 			Tty.popHandler();
 		}));
 	}
-	private static void copy(TaskGroup monitor, QZArchive arc, HashMap<QZEntry, String> should_copy, QZFileWriter out, EasyProgressBar bar) {
+	private static void copy(TaskGroup monitor, SevenZFile arc, HashMap<SevenZEntry, String> should_copy, SevenZPacker out, EasyProgressBar bar) {
 		arc.parallelDecompress(monitor, (entry, in) -> {
 			String prefix = should_copy.get(entry);
 			if (prefix == null) return;
 
-			try (QZWriter w = out.newParallelWriter()) {
-				w.beginEntry(QZEntry.ofNoAttribute(prefix));
+			try (SevenZWriter w = out.newParallelWriter()) {
+				w.beginEntry(SevenZEntry.ofNoAttribute(prefix));
 				IOUtil.copyStream(in, w);
 				bar.increment(1);
 			} catch (Exception e) {
@@ -598,8 +599,8 @@ public class LazyBox extends Plugin {
 		File zip = ctx.argument("压缩包", File.class);
 
 		long offset = Long.MAX_VALUE;
-		try (var zf = new ZipFile(exe, ZipFile.FLAG_VERIFY|ZipFile.FLAG_BACKWARD_READ)) {
-			for (ZEntry entry : zf.entries()) {
+		try (var zf = new ZipFile(exe, ZipFile.FLAG_Verify |ZipFile.FLAG_ReadCENOnly)) {
+			for (ZipEntry entry : zf.entries()) {
 				offset = Math.min(offset, entry.startPos());
 			}
 		}

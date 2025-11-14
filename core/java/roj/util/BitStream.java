@@ -2,109 +2,220 @@ package roj.util;
 
 /**
  * @author Roj234
- * @since 2022/10/8 8:22
+ * @since 2022/10/8
+ * @revised 2025/12/27
+ * @version 2.0
  */
-public final class BitStream {
-	public DynByteBuf byteBuffer;
+public sealed class BitStream {
+	private static int MASK(int nbits) {return nbits == 32 ? -1 : (1 << nbits) - 1;}
+
+	public DynByteBuf bytes;
+	public long buffer;
+	public int bitCount;
 
 	public BitStream() {}
-	public BitStream(DynByteBuf byteBuffer) { init(byteBuffer); }
-	public BitStream init(DynByteBuf buf) {
-		byteBuffer = buf;
-		bitPos = 0;
-		bitBuffer = 0;
+	public BitStream(DynByteBuf data) {this.bytes = data;}
+	public BitStream init(DynByteBuf data) {
+		bytes = data;
+		bitCount = 0;
+		buffer = 0;
 		return this;
 	}
 
-	public byte bitPos;
+	public int readableBits() {return bitCount + bytes.readableBytes() * 8;}
+	public boolean isReadable() {return bitCount > 0 || bytes.isReadable();}
+	public boolean isBigEndian() {return true;}
 
-	// region read
-	public final int readableBits() { return (byteBuffer.readableBytes() << 3) - bitPos; }
-
-	public final int readBit1() {
-		byte bi = bitPos;
-		int bit = ((byteBuffer.getByte(byteBuffer.rIndex) << (bi & 0x7)) >>> 7) & 0x1;
-
-		byteBuffer.rIndex += (++bi) >> 3;
-		bitPos = (byte) (bi & 0x7);
-		return bit;
+	public final int read1Bit() {
+		ensure(1);
+		return (int) (buffer >>> (bitCount -= 1));
 	}
-	public final int readBit(int numBits) {
-		int d;
-		int ri = byteBuffer.rIndex;
-		switch (numBits) {
-			case 0: return 0;
-			case 1: return readBit1();
-			case 2, 3, 4, 5, 6, 7, 8, 9:
-				d = ((((byteBuffer.getUnsignedByte(ri++) << 8) | get0(ri)) << bitPos) & 0xFFFF) >>> 16 - numBits;
-			break;
-			case 10, 11, 12, 13, 14, 15, 16, 17:
-				d = ((((byteBuffer.getUnsignedByte(ri++) << 16) | (get0(ri++) << 8) | get0(ri)) << bitPos) & 0xFFFFFF) >>> 24 - numBits;
-			break;
-			case 18, 19, 20, 21, 22, 23, 24, 25:
-				d = (((byteBuffer.getUnsignedByte(ri++) << 24) | (get0(ri++) << 16) | (get0(ri++) << 8) | get0(ri)) << bitPos) >>> 32 - numBits;
-			break;
-			case 26, 27, 28, 29, 30, 31, 32: //case 33:
-				d = (int) ((((((long) byteBuffer.getUnsignedByte(ri++) << 32) | (get0(ri++) << 24) | (get0(ri++) << 16) | (get0(ri++) << 8) | get0(ri)) << bitPos) & 0xFFFFFFFFFFL) >>> 40 - numBits);
-			break;
-			default: throw new IllegalArgumentException("count("+numBits+") must in [0,32]");
+
+	public int peekBits(int nbits) {
+		if (nbits == 0) return 0;
+		ensure(nbits);
+		return (int) (buffer >>> (bitCount - nbits)) & MASK(nbits);
+	}
+
+	public int readBits(int nbits) {
+		if (nbits == 0) return 0;
+		ensure(nbits);
+		return (int) (buffer >>> (bitCount -= nbits)) & MASK(nbits);
+	}
+
+	public int peekOptionalBits(int nbits) {
+		if (nbits == 0) return 0;
+		nbits = effort(nbits);
+		return (int) (buffer >>> (bitCount - nbits)) & MASK(nbits);
+	}
+
+	public int readOptionalBits(int nbits) {
+		if (nbits == 0) return 0;
+		nbits = effort(nbits);
+		return (int) (buffer >>> (bitCount -= nbits)) & MASK(nbits);
+	}
+
+	private void ensure(int nbits) {
+		while (bitCount < nbits) {
+			// throw if not enough
+			buffer = (buffer << 8) | bytes.readUnsignedByte();
+			bitCount += 8;
 		}
-		next(numBits);
-		return d;
-	}
-	private int get0(int i) { return i >= byteBuffer.wIndex ? 0 : byteBuffer.getUnsignedByte(i); }
-	private void next(int count) {
-		int idx = bitPos + count;
-		byteBuffer.rIndex += idx >> 3;
-		bitPos = (byte) (idx & 0x7);
 	}
 
-	public final void skipBits(int count) {
-		if (count < 0) retractBits(-count);
-		else next(count);
-	}
-	public final void retractBits(int i) {
-		byteBuffer.rIndex -= i >> 3;
-		i &= 7;
+	private int effort(int nbits) {
+		while (bitCount < nbits) {
+			if (!bytes.isReadable()) {
+				nbits = bitCount;
+				break;
+			}
 
-		int idx = bitPos - i;
-		if (idx >= 0) {
-			bitPos = (byte) idx;
+			buffer = (buffer << 8) | bytes.readUnsignedByte();
+			bitCount += 8;
+		}
+		return nbits;
+	}
+
+	/**
+	 * 跳过指定的位数。
+	 * @param nbits 正数为向后跳过，负数为向前回退
+	 */
+	public void skipBits(int nbits) {
+		if (nbits >= 0 && nbits <= bitCount) {
+			bitCount -= nbits;
 			return;
 		}
-		byteBuffer.rIndex--;
-		bitPos = (byte) (idx + 8);
+
+		long bitPos = ((long) bytes.rIndex * 8) - bitCount;
+		bitPos += nbits;
+		if (bitPos < 0) bitPos = 0;
+
+		int byteIdx = (int) (bitPos >>> 3);
+		int bitOffset = (int) bitPos & 7;
+
+		bytes.rIndex(byteIdx);
+		buffer = 0;
+		bitCount = 0;
+
+		if (bitOffset > 0) readBits(bitOffset);
 	}
 
-	public final void endBitRead() {
-		if (bitPos > 0) {
-			bitPos = 0;
-			byteBuffer.rIndex++;
-		}
-	}
-	// endregion
-	// region write
-	public long bitBuffer;
-
-	public final void writeBit(int bit, int val) {
-		int len = bitPos + bit;
+	public void writeBit(int bit, int val) {
+		int len = bitCount + bit;
 		// max 32+7 bits in buffer
-		long buf = (bitBuffer << bit) | (val & 0xFFFFFFFFL);
+		long buf = (buffer << bit) | (val & 0xFFFFFFFFL);
 
 		while (len > 8) {
 			len -= 8;
-			byteBuffer.put((byte) (buf >>> len));
+			bytes.put((byte) (buf >>> len));
 		}
 
-		this.bitBuffer = buf;
-		bitPos = (byte) len;
+		buffer = buf;
+		bitCount = (byte) len;
 	}
-	public final void endBitWrite() {
-		if (bitPos > 0) {
-			byteBuffer.put((byte)(bitBuffer << (8 - bitPos)));
-			bitPos = 0;
+	public void endBitWrite() {
+		if (bitCount > 0) {
+			bytes.put((byte)(buffer << (8 - bitCount)));
+			bitCount = 0;
 		}
-		bitBuffer = 0;
+		buffer = 0;
 	}
-	// endregion
+
+	public static final class LittleEndian extends BitStream {
+		public LittleEndian() { super(); }
+		public LittleEndian(DynByteBuf data) { super(data); }
+
+		@Override
+		public boolean isBigEndian() { return false; }
+
+		@Override
+		public int peekBits(int nbits) {
+			if (nbits == 0) return 0;
+			ensure(nbits);
+			// 小端序：直接从 buffer 的低位截取
+			return (int) (buffer & MASK(nbits));
+		}
+
+		@Override
+		public int readBits(int nbits) {
+			if (nbits == 0) return 0;
+			ensure(nbits);
+			int result = (int) (buffer & MASK(nbits));
+			// 右移消耗掉已读的低位
+			buffer >>>= nbits;
+			bitCount -= nbits;
+			return result;
+		}
+
+		@Override
+		public int peekOptionalBits(int nbits) {
+			if (nbits == 0) return 0;
+			nbits = effort(nbits);
+			return (int) (buffer & MASK(nbits));
+		}
+
+		@Override
+		public int readOptionalBits(int nbits) {
+			if (nbits == 0) return 0;
+			nbits = effort(nbits);
+			int result = (int) (buffer & MASK(nbits));
+			buffer >>>= nbits;
+			bitCount -= nbits;
+			return result;
+		}
+
+		private void ensure(int nbits) {
+			while (bitCount < nbits) {
+				buffer |= ((long) bytes.readUnsignedByte() << bitCount);
+				bitCount += 8;
+			}
+		}
+
+		private int effort(int nbits) {
+			while (bitCount < nbits) {
+				if (!bytes.isReadable()) {
+					nbits = bitCount;
+					break;
+				}
+
+				buffer |= ((long) bytes.readUnsignedByte() << bitCount);
+				bitCount += 8;
+			}
+			return nbits;
+		}
+
+		@Override
+		public void skipBits(int nbits) {
+			if (nbits >= 0 && nbits <= bitCount) {
+				buffer >>>= nbits;
+				bitCount -= nbits;
+				return;
+			}
+
+			super.skipBits(nbits);
+		}
+
+		@Override
+		public final void writeBit(int bit, int val) {
+			// 将新位放入 buffer 的高位
+			buffer |= ((long) (val & MASK(bit)) << bitCount);
+			bitCount += bit;
+
+			// 当积攒超过 8 位时，从低位吐出字节
+			while (bitCount >= 8) {
+				bytes.put((byte) buffer);
+				buffer >>>= 8;
+				bitCount -= 8;
+			}
+		}
+
+		@Override
+		public final void endBitWrite() {
+			if (bitCount > 0) {
+				bytes.put((byte) buffer);
+				bitCount = 0;
+			}
+			buffer = 0;
+		}
+	}
 }

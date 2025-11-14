@@ -37,6 +37,7 @@ public class OptionParser {
 			CharList charList = shell.dumpNodes(new CharList().append("Usage: ").append(tool).append("\n"), 4);
 			System.out.println(charList.append('\n').toStringAndFree());
 			if (allowUserInput) {
+				JVM.AccurateTimer.setEventDriven();
 				System.out.println(
 						"Welcome to "+tool+" CLI [v1.0]\n" +
 						"Type 'help' for commands, 'exit' to quit\n\n");
@@ -46,7 +47,6 @@ public class OptionParser {
 					System.out.println("Goodbye!");
 					System.exit(0);
 				})));
-				JVM.AccurateTimer.parkForMe();
 			}
 		}
 		return executed;

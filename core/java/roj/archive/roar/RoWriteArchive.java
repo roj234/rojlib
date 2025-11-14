@@ -277,12 +277,6 @@ public final class RoWriteArchive extends RoArchive {
 
 		r.setLength(r.position());
 
-		CacheNode node = ARCHIVES.get(r);
-		if (node != null) {
-			node.map = map;
-			node.entries = entries;
-		}
-
 		if (dataExceptions != null) throw dataExceptions;
 	}
 }

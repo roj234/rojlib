@@ -1,6 +1,7 @@
 package roj.io;
 
 import org.jetbrains.annotations.NotNull;
+import roj.io.source.Source;
 import roj.reflect.Unsafe;
 import roj.text.FastCharset;
 import roj.util.ArrayCache;
@@ -33,6 +34,10 @@ public class XDataInputStream extends MBInputStream implements XDataInput, Finis
 
 	private final InputStream in;
 	public XDataInputStream(InputStream in) {this.in = in;}
+	public XDataInputStream(InputStream in, int bufferSize) {
+		this.in = in;
+		this.buf = new byte[bufferSize];
+	}
 
 	@Override
 	public final int read(byte[] b, int off, int len) throws IOException {
@@ -52,17 +57,8 @@ public class XDataInputStream extends MBInputStream implements XDataInput, Finis
 		}
 		return r < 0 ? total == 0 ? r : total : total+r;
 	}
-	@Override
-	public final void readFully(byte[] b) throws IOException { readFully(b, 0, b.length); }
-	@Override
-	public final void readFully(byte[] b, int off, int len) throws IOException {
-		int n = 0;
-		while (n < len) {
-			int r = read(b, off + n, len - n);
-			if (r < 0) throw new EOFException();
-			n += r;
-		}
-	}
+	@Override public final void readFully(byte[] b) throws IOException {IOUtil.readFully(this, b);}
+	@Override public final void readFully(byte[] b, int off, int len) throws IOException {IOUtil.readFully(this, b, off, len);}
 
 	@Override
 	public final int skipBytes(int n) throws IOException {
@@ -77,8 +73,8 @@ public class XDataInputStream extends MBInputStream implements XDataInput, Finis
 		int cur;
 		while ((total<n) && ((cur = (int) in.skip(n-total)) > 0)) {
 			total += cur;
+			totalRead += cur;
 		}
-		totalRead += total;
 
 		return total;
 	}
@@ -139,6 +135,32 @@ public class XDataInputStream extends MBInputStream implements XDataInput, Finis
 		} else {
 			pos = o+count;
 			return o;
+		}
+	}
+
+	public void unread(byte[] b, int off, int len) {
+		byte[] buf = this.buf;
+
+		int immediateAvail = buf.length - lim;
+		if (immediateAvail >= len) {
+			System.arraycopy(b, off, buf, lim, len);
+			lim += len;
+			return;
+		}
+
+		int remaining = lim - pos;
+		if (buf.length - remaining < len) {
+			buf = ArrayCache.getByteArray(remaining + len, false);
+		}
+
+		System.arraycopy(this.buf, pos, buf, 0, remaining);
+		System.arraycopy(b, off, buf, remaining, len);
+		pos = 0;
+		lim = remaining+len;
+
+		if (this.buf != buf) {
+			ArrayCache.putArray(this.buf);
+			this.buf = buf;
 		}
 	}
 
@@ -272,6 +294,24 @@ public class XDataInputStream extends MBInputStream implements XDataInput, Finis
 
 	private long totalRead;
 	@Override public long position() throws IOException {return totalRead + pos - lim;}
+
+	public void seek(Source src, long pos) throws IOException {
+		if (syncPosition(pos)) src.seek(pos);
+	}
+
+	public boolean syncPosition(long position) {
+		long filePtr = totalRead;
+		long bufferStart = filePtr - lim;
+
+		if (position >= bufferStart && position < filePtr) {
+			pos = (int) (position - bufferStart);
+			return false;
+		} else {
+			pos = lim = 0;
+			totalRead = position;
+			return true;
+		}
+	}
 
 	private int mark = -1;
 

@@ -65,20 +65,20 @@ public class ClassNode implements ClassDefinition {
 		ConstantPool cp = new ConstantPool();
 		cp.read(buf, ConstantPool.CHAR_STRING);
 
-		ClassNode klass = new ClassNode(version, cp, buf.readUnsignedShort(), cp.get(buf), (CstClass) cp.getNullable(buf));
+		ClassNode klass = new ClassNode(version, cp, buf.readUnsignedShort(), cp.resolve(buf), (CstClass) cp.resolveOrNull(buf));
 
 		int len = buf.readUnsignedShort();
 		if (len > 0) {
 			var itf = klass.itfList();
 			itf.ensureCapacity(len);
-			while (len-- > 0) itf.add(cp.get(buf));
+			while (len-- > 0) itf.add(cp.resolve(buf));
 		}
 
 		len = buf.readUnsignedShort();
 		var fields = klass.fields;
 		fields.ensureCapacity(len);
 		while (len-- > 0) {
-			var field = new FieldNode(buf.readShort(), ((CstUTF) cp.get(buf)).str(), ((CstUTF) cp.get(buf)).str());
+			var field = new FieldNode(buf.readShort(), ((CstUTF) cp.resolve(buf)).str(), ((CstUTF) cp.resolve(buf)).str());
 			fields.add(field);
 			pattr(cp, buf, field, Signature.FIELD);
 		}
@@ -87,7 +87,7 @@ public class ClassNode implements ClassDefinition {
 		var methods = klass.methods;
 		methods.ensureCapacity(len);
 		while (len-- > 0) {
-			var method = new MethodNode(buf.readShort(), klass.name(), ((CstUTF) cp.get(buf)).str(), ((CstUTF) cp.get(buf)).str());
+			var method = new MethodNode(buf.readShort(), klass.name(), ((CstUTF) cp.resolve(buf)).str(), ((CstUTF) cp.resolve(buf)).str());
 			methods.add(method);
 			pattr(cp, buf, method, Signature.METHOD);
 		}
@@ -129,20 +129,20 @@ public class ClassNode implements ClassDefinition {
 	 */
 	@NotNull
 	public static ClassNode parseSkeletonWith(DynByteBuf buf, int version, ConstantPool pool) {
-		var klass = new ClassNode(version, pool, buf.readUnsignedShort(), pool.get(buf), (CstClass) pool.getNullable(buf));
+		var klass = new ClassNode(version, pool, buf.readUnsignedShort(), pool.resolve(buf), (CstClass) pool.resolveOrNull(buf));
 
 		int len = buf.readUnsignedShort();
 		if (len > 0) {
 			var itf = klass.itfList();
 			itf.ensureCapacity(len);
-			while (len-- > 0) itf.add(pool.get(buf));
+			while (len-- > 0) itf.add(pool.resolve(buf));
 		}
 
 		len = buf.readUnsignedShort();
 		var fields = klass.fields;
 		fields.ensureCapacity(len);
 		while (len-- > 0) {
-			var field = new FieldNode(buf.readShort(), pool.get(buf), pool.get(buf));
+			var field = new FieldNode(buf.readShort(), pool.resolve(buf), pool.resolve(buf));
 			fields.add(field);
 			uattr(pool, buf, field);
 		}
@@ -151,7 +151,7 @@ public class ClassNode implements ClassDefinition {
 		var methods = klass.methods;
 		methods.ensureCapacity(len);
 		while (len-- > 0) {
-			var method = new MethodNode(buf.readShort(), klass.name(), pool.get(buf), pool.get(buf));
+			var method = new MethodNode(buf.readShort(), klass.name(), pool.resolve(buf), pool.resolve(buf));
 			methods.add(method);
 			uattr(pool, buf, method);
 		}
@@ -169,7 +169,7 @@ public class ClassNode implements ClassDefinition {
 
 		int origEnd = buf.wIndex();
 		while (len-- > 0) {
-			String name = ((CstUTF) pool.get(buf)).str();
+			String name = ((CstUTF) pool.resolve(buf)).str();
 			int length = buf.readInt();
 
 			int end = buf.rIndex + length;
@@ -190,7 +190,7 @@ public class ClassNode implements ClassDefinition {
 		var attributes = node.attributes();
 		attributes.ensureCapacity(len);
 		while (len-- > 0) {
-			CstUTF name = pool.get(r);
+			CstUTF name = pool.resolve(r);
 			int length = r.readInt();
 			// ByteList$Slice consumes 40 bytes , byte[] array header consumes 24+length bytes
 			attributes._add(new UnparsedAttribute(name, length == 0 ? null : length <= 16 ? r.readBytes(length) : r.slice(length)));
@@ -277,13 +277,13 @@ public class ClassNode implements ClassDefinition {
 	}
 	public final void getBytesNoCp(DynByteBuf w, ConstantPool cw) {
 		w.putShort(modifier)
-		 .putShort(cw.fit(nameCst))
-		 .putShort(parentCst == null ? 0 : cw.fit(parentCst))
+		 .putShort(cw.internIndex(nameCst))
+		 .putShort(parentCst == null ? 0 : cw.internIndex(parentCst))
 		 .putShort(interfaces.size());
 
 		var interfaces = this.interfaces;
 		for (int i = 0; i < interfaces.size(); i++) {
-			w.putShort(cw.fit(interfaces.get(i)));
+			w.putShort(cw.internIndex(interfaces.get(i)));
 		}
 
 		var fields = this.fields;

@@ -62,7 +62,7 @@ class RemoveDebugInfo implements ObfuscateTask {
 			w.putShort(0);
 
 			while (len1-- > 0) {
-				String name = ((CstUTF) pool.get(r)).str();
+				String name = ((CstUTF) pool.resolve(r)).str();
 				int len = r.readInt();
 				int end = len + r.rIndex;
 				switch (name) {

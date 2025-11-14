@@ -11,6 +11,7 @@ import roj.asm.type.IType;
 import roj.asm.type.Signature;
 import roj.asm.type.TypeHelper;
 import roj.ci.annotation.IndirectReference;
+import roj.ci.annotation.StaticHook;
 import roj.collect.HashMap;
 import roj.config.*;
 import roj.config.node.ConfigValue;
@@ -44,7 +45,8 @@ import static roj.asm.Opcodes.*;
  * @since 2024/3/24 18:53
  */
 public abstract class ObjectMapper {
-	public static String __redirected__inspect(Object o) {
+	@StaticHook("roj/debug/DebugTool.inspect(Ljava/lang/Object;)Ljava/lang/String;")
+	public static String __inspect(Object o) {
 		try {
 			CharList sb = new CharList();
 			TextEmitter textEmitter = new JsonSerializer("    ").to(sb);

@@ -293,19 +293,21 @@ public final class IOUtil {
 	}
 
 	@Attach
-	public static void createSparseFile(File file, long length) throws IOException {
-		// noinspection all
+	public static void allocateFile(File file, long length) throws IOException {
 		if (file.length() != length) {
-			// noinspection all
-			if (!file.isFile() || (file.length() < length && file.delete())) {
-				FileChannel fc = FileChannel.open(file.toPath(), StandardOpenOption.WRITE, StandardOpenOption.CREATE_NEW, StandardOpenOption.SPARSE)
-											.position(length-1);
+			try (var raf = new RandomAccessFile(file, "rw")) {
+				raf.setLength(length);
+			}
+		} else if (length == 0) file.createNewFile();
+	}
+
+	@Attach
+	public static void createSparseFile(File file, long length) throws IOException {
+		if (file.length() != length) {
+			Files.deleteIfExists(file.toPath());
+			try (var fc = FileChannel.open(file.toPath(), StandardOpenOption.WRITE, StandardOpenOption.CREATE_NEW, StandardOpenOption.SPARSE).position(length-1)) {
+				fc.truncate(length);
 				fc.write(ByteBuffer.wrap(new byte[1]));
-				fc.close();
-			} else if (length < Integer.MAX_VALUE) {
-				RandomAccessFile raf = new RandomAccessFile(file, "rw");
-				raf.setLength(length); // alloc
-				raf.close();
 			}
 		} else if (length == 0) file.createNewFile();
 	}
@@ -707,7 +709,7 @@ public final class IOUtil {
 				consumer.accept(key);
 			}
 		});
-		if (threadName == null) threadName = "FileWatcher2-"+watcher.hashCode();
+		if (threadName == null) threadName = "RojLib 文件监控/后备 #"+watcher.hashCode();
 		t.setName(threadName);
 		t.setDaemon(true);
 		t.start();

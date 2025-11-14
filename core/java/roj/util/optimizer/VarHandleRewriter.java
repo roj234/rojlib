@@ -45,8 +45,7 @@ public class VarHandleRewriter implements ConstantPoolHooks.Hook<ClassNode> {
 	@ApiStatus.Internal
 	public static long instanceField(Object o, Class<?> recv, String name, Class<?> type) {
 		var resolver = o instanceof Telescope telescope ? telescope : Telescope.trustedLookup().in((MethodHandles.Lookup) o);
-		Object handle = resolver.findField(recv, name, type, false);
-		return resolver.objectFieldOffset(handle);
+		return resolver.objectFieldOffset(recv, name, type);
 	}
 	@IndirectReference
 	@ApiStatus.Internal

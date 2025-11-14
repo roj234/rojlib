@@ -151,39 +151,30 @@ final class HPACK {
 		}
 	}
 
-	private final BitStream bu;
+	private final BitStream bitStream = new BitStream();
 
 	private boolean encoderSizeChanged, decoderSizeChanged;
-	private final Table encode_tbl, decode_tbl;
-	private final Field checker;
-	private final HashSet<Field> encode_fp;
+	private final Table encode_tab = new Table(4096), decode_tab = new Table(4096);
+	private final Field checker = new Field();
+	private final HashSet<Field> encode_fp = new HashSet<>();
 
-	public HPACK() {
-		bu = new BitStream();
-
-		encode_tbl = new Table(4096);
-		encode_tbl.owner = this;
-		checker = new Field();
-		encode_fp = new HashSet<>();
-
-		decode_tbl = new Table(4096);
-	}
+	public HPACK() {encode_tab.owner = this;}
 
 	public void clear() {
-		encode_tbl.clear();
+		encode_tab.clear();
 		encode_fp.clear();
-		decode_tbl.clear();
+		decode_tab.clear();
 	}
 
 	public void setEncoderTableSize(int encodeMax/*REMOTE*/) {
-		if (encodeMax != encode_tbl.cap) {
-			encode_tbl.setMaxCapacity(encodeMax);
+		if (encodeMax != encode_tab.cap) {
+			encode_tab.setMaxCapacity(encodeMax);
 			encoderSizeChanged = true;
 		}
 	}
 	public void setDecoderTableSize(int decodeMax/*LOCAL*/) {
-		if (decodeMax != decode_tbl.cap) {
-			decode_tbl.setMaxCapacity(decodeMax);
+		if (decodeMax != decode_tab.cap) {
+			decode_tab.setMaxCapacity(decodeMax);
 			decoderSizeChanged = true;
 		}
 	}
@@ -191,13 +182,13 @@ final class HPACK {
 	public void encode(CharSequence k, CharSequence v, DynByteBuf out) {encode(k,v,out,0);}
 	public void encode(CharSequence k, CharSequence v, DynByteBuf out, int indexType) {
 		if (encoderSizeChanged) {
-			writeInt(0x20, 5, encode_tbl.cap, out);
+			writeInt(0x20, 5, encode_tab.cap, out);
 			encoderSizeChanged = false;
 		}
 
 		int id = findExistField(STATIC_MAP, k, v);
 		// 0: not, <0: pair, >0: key
-		if (id >= 0 && encode_tbl.cap > 0) {
+		if (id >= 0 && encode_tab.cap > 0) {
 			int dyn_id = findExistField(encode_fp, k, v);
 			if (dyn_id < 0 || id == 0) id = dyn_id;
 		}
@@ -208,7 +199,7 @@ final class HPACK {
 		switch (indexType) {
 			// 01xx xxxx
 			case H2Connection.FIELD_SAVE -> {
-				encode_tbl._add(F(k.toString(), v.toString()));
+				encode_tab._add(F(k.toString(), v.toString()));
 				writeInt(0x40, 6, id, out);
 			}
 			// 0000 xxxx
@@ -229,15 +220,15 @@ final class HPACK {
 			// 1xxx xxxx    Indexed Header Field
 			case 8, 9, 10, 11, 12, 13, 14, 15 -> {
 				if ((k &= 0x7F) == 0) throw new H2Exception(ERROR_COMPRESS, "HPACK.Table.IndexError");
-				f = decode_tbl.getField(k == 0x7F ? readInt(in, 0x7F) : k);
+				f = decode_tab.getField(k == 0x7F ? readInt(in, 0x7F) : k);
 			}
 			// 01xx xxxx    Literal Header Field with Incremental Indexing
-			case 4, 5, 6, 7 -> decode_tbl._add(f = getField(in, k, 63));
+			case 4, 5, 6, 7 -> decode_tab._add(f = getField(in, k, 63));
 			// 001x xxxx    Dynamic Table Size Update
 			case 2, 3 -> {
 				if ((k &= 31) == 31) k = readInt(in, 31);
-				if (k < 0 || k > decode_tbl.cap) throw new H2Exception(ERROR_COMPRESS, "HPACK.Table.SizeError");
-				decode_tbl.setMaxCapacity(k);
+				if (k < 0 || k > decode_tab.cap) throw new H2Exception(ERROR_COMPRESS, "HPACK.Table.SizeError");
+				decode_tab.setMaxCapacity(k);
 				decoderSizeChanged = false;
 			}
 			// 0001 xxxx    Literal Header Field Never Indexed
@@ -276,7 +267,7 @@ final class HPACK {
 		if (len < str.length()) {
 			writeInt(128, 7, len, out);
 			out.ensureWritable(len);
-			huffmanEncode(str, bu.init(out));
+			huffmanEncode(str, bitStream.init(out));
 		} else {
 			writeInt(0, 7, str.length(), out);
 			out.putAscii(str);
@@ -296,7 +287,7 @@ final class HPACK {
 
 	private Field getField(DynByteBuf in, int k, int mask) throws H2Exception {
 		k &= mask;
-		return F(k!=0 ? decode_tbl.getField(k==mask ? readInt(in, mask) : k).k.toString() : checkKey(readString(in)), readString(in));
+		return F(k!=0 ? decode_tab.getField(k==mask ? readInt(in, mask) : k).k.toString() : checkKey(readString(in)), readString(in));
 	}
 
 	private static String checkKey(String key) throws H2Exception {
@@ -316,9 +307,11 @@ final class HPACK {
 		int length = (first&0x7F)==0x7F?readInt(in, 0x7F):first&0x7F;
 		if (first < 0) {
 			int lim = in.wIndex();
+			if (lim - in.rIndex < length) throw new H2Exception(ERROR_PROTOCOL, "HPACK.PrematureEnd");
+
 			in.wIndex(in.rIndex+length);
 			try {
-				return huffmanDecode(bu.init(in));
+				return huffmanDecode(bitStream.init(in));
 			} finally {
 				in.wIndex(lim);
 			}
@@ -346,33 +339,15 @@ final class HPACK {
 	// region huffman
 
 	private static final class Entry {
-		Entry() {
-			entries = new Entry[256];
-			bit = 8;
-		}
-
-		Entry(int sym, int bit) {
-			this.sym = (char) sym;
-			this.bit = (byte) bit;
-		}
-
-		byte bit;
-		char sym;
-
 		Entry[] entries;
+		char sym;
+		byte bits;
 
-		Entry put(int id) {
-			Entry e = entries[id];
-			if (e == null) entries[id] = e = new Entry();
-			return e;
-		}
-
-		Entry get(int id) {
-			return entries[id&0xFF];
-		}
+		Entry() {entries = new Entry[256]; bits = 8;}
+		Entry(int sym, int bits) {this.sym = (char) sym; this.bits = (byte) bits;}
 	}
 	private static final int[] HUFFMAN_SYM = new int[257];
-	private static final byte[] HUFFMAN_SYM_LEN = new byte[257];
+	private static final byte[] HUFFMAN_SYM_BITS = new byte[257];
 	private static final Entry HUFFMAN_TAB = new Entry();
 	static {
 		String table = "b/4v//9jn///xc///+Pn///yc///+Xn///zc///+fn///0Y///q9////5z///6ef///V7////3n/" +
@@ -390,18 +365,26 @@ final class HPACK {
 		ByteList list = ByteList.allocate(999);
 		Base64.decode(table, list);
 
-		BitStream br = new BitStream(list);
+		var br = new BitStream(list);
 		for (int i = 0; i < 257; i++) {
-			int len = br.readBit(5);
-			int code = br.readBit(len);
+			int len = br.readBits(5);
+			int code = br.readBits(len);
 
 			HUFFMAN_SYM[i] = code;
-			HUFFMAN_SYM_LEN[i] = (byte) len;
+			HUFFMAN_SYM_BITS[i] = (byte) len;
 
 			Entry entry = HUFFMAN_TAB;
 			while (len > 8) {
 				len -= 8;
-				entry = entry.put(0xFF & (code>>>len));
+
+				int slot = (code >>> len) & 0xFF;
+
+				Entry[] items = entry.entries;
+				entry = items[slot];
+				if (entry == null) {
+					entry = new Entry();
+					items[slot] = entry;
+				}
 			}
 
 			Entry end = new Entry(i, len);
@@ -421,55 +404,55 @@ final class HPACK {
 	private static void huffmanEncode(CharSequence seq, BitStream out) {
 		for (int i = 0; i < seq.length(); i++) {
 			int id = seq.charAt(i);
-			out.writeBit(HUFFMAN_SYM_LEN[id], HUFFMAN_SYM[id]);
+			out.writeBit(HUFFMAN_SYM_BITS[id], HUFFMAN_SYM[id]);
 		}
-		if (out.bitPos > 0) {
-			long l = out.bitBuffer << (8 - out.bitPos);
-			l |= (0xFF >>> out.bitPos);
-			out.byteBuffer.put((byte) l);
-			out.bitPos = 0;
+		if (out.bitCount > 0) {
+			long l = out.buffer << (8 - out.bitCount);
+			l |= (0xFF >>> out.bitCount);
+			out.bytes.put((byte) l);
+			out.bitCount = 0;
 		}
 	}
 	private static int huffmanLength(CharSequence seq) {
 		long len = 0;
 		for (int i = 0; i < seq.length(); i++) {
-			len += HUFFMAN_SYM_LEN[seq.charAt(i)];
+			len += HUFFMAN_SYM_BITS[seq.charAt(i)];
 		}
 		if ((len & 7) != 0) len += 8;
 		return (int) (len >>> 3);
 	}
 
 	private static String huffmanDecode(BitStream in) throws H2Exception {
-		CharList tmp = IOUtil.getSharedCharBuf();
+		CharList sb = IOUtil.getSharedCharBuf();
 
-		out:
-		while (in.byteBuffer.isReadable()) {
+		int remain;
+		notEnoughData:
+		while ((remain = in.readableBits()) > 0) {
 			Entry table = HUFFMAN_TAB;
 			while (true) {
-				int remain = in.readableBits();
-
-				table = table.get(in.readBit(8));
+				table = table.entries[in.peekOptionalBits(8)];
 				if (table == null) throw new H2Exception(ERROR_COMPRESS, "HPACK.Huffman.InvalidCode");
 
-				if (remain < table.bit) break out;
+				int symBits = table.bits;
+				if (remain < symBits) break notEnoughData;
+				in.skipBits(symBits);
+				remain -= symBits;
+
 				if (table.entries == null) {
 					if (table.sym == 256) throw new H2Exception(ERROR_COMPRESS, "HPACK.Huffman.UnexpectedEOF");
-					tmp.append(table.sym);
-					in.retractBits(8-table.bit);
+					sb.append(table.sym);
 					break;
 				}
 			}
 		}
-		in.retractBits(-in.readableBits());
 
-		int mask = (1 << in.bitPos) - 1;
-		if (in.bitPos >0 && (in.byteBuffer.getByte(in.byteBuffer.rIndex) & mask) != mask) {
+		// '1's padding
+		int mask = (1 << remain) - 1;
+		if (remain > 0 && (in.readBits(remain) & mask) != mask) {
 			throw new H2Exception(ERROR_COMPRESS, "HPACK.Huffman.InvalidPadding");
 		}
-		in.endBitRead();
 
-		return tmp.toString();
+		return sb.toString();
 	}
-
 	// endregion
 }

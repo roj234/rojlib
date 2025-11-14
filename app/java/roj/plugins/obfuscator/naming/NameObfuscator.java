@@ -16,7 +16,6 @@ import roj.io.IOUtil;
 import roj.plugins.obfuscator.ObfuscateTask;
 import roj.text.CharList;
 import roj.text.logging.Level;
-import roj.util.ArrayUtil;
 
 import java.util.Collections;
 import java.util.List;
@@ -49,7 +48,7 @@ public class NameObfuscator implements ObfuscateTask {
 
 	@Override
 	public void forEach(List<Context> arr, Random rand, Executor executor) {
-		if (this.rand != null) ArrayUtil.shuffle(arr, this.rand);
+		if (this.rand != null) Collections.shuffle(arr, this.rand);
 
 		Mapper.LOGGER.setLevel(Level.ALL);
 

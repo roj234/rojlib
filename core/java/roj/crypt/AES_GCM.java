@@ -27,8 +27,8 @@ final class AES_GCM extends AES {
 
 	private final ByteList tmp = ByteList.allocate(AES_BLOCK_SIZE,AES_BLOCK_SIZE);
 
-	public void init(int mode, byte[] key, AlgorithmParameterSpec par, SecureRandom random) throws InvalidAlgorithmParameterException, InvalidKeyException {
-		super.init(mode, key, null, null);
+	public void init(boolean encrypt, byte[] key, AlgorithmParameterSpec par, SecureRandom random) throws InvalidAlgorithmParameterException, InvalidKeyException {
+		super.init(encrypt, key, null, null);
 
 		ByteList H = tmp; H.clear(); Arrays.fill(H.array(), (byte) 0);
 		aes_encrypt(encrypt_key, rounds4, H.sliceNoIndexCheck(0, AES_BLOCK_SIZE), H);

@@ -1,35 +1,28 @@
 package roj.archive.zip;
 
-import roj.archive.ArchiveEntry;
 import roj.archive.ArchiveFile;
 import roj.archive.ArchiveUtils;
 import roj.collect.ArrayList;
-import roj.collect.WeakCache;
 import roj.collect.XashMap;
-import roj.crypt.CipherInputStream;
-import roj.io.CRC32InputStream;
 import roj.io.IOUtil;
-import roj.io.source.BufferedSource;
+import roj.io.XDataInputStream;
 import roj.io.source.Source;
 import roj.io.source.SourceInputStream;
 import roj.optimizer.FastVarHandle;
 import roj.reflect.Telescope;
+import roj.text.FastCharset;
 import roj.util.ArrayCache;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
-import roj.util.Helpers;
 
-import java.io.EOFException;
-import java.io.File;
-import java.io.IOException;
-import java.io.InputStream;
+import java.io.*;
 import java.lang.invoke.VarHandle;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
-import java.util.Collection;
+import java.util.Arrays;
 import java.util.Collections;
+import java.util.List;
 import java.util.zip.Inflater;
-import java.util.zip.ZipEntry;
 import java.util.zip.ZipException;
 
 /**
@@ -37,26 +30,37 @@ import java.util.zip.ZipException;
  * @since 2024/3/18 10:01
  */
 @FastVarHandle
-public sealed class ZipFile implements ArchiveFile permits ZipArchive {
+public sealed class ZipFile implements ArchiveFile<ZipEntry> permits ZipEditor {
 	Source r, cache;
 	static final VarHandle CACHE = Telescope.lookup().findVarHandle(ZipFile.class, "cache", Source.class);
 
-	static final XashMap.Template<String, ZEntry> ENTRY_TEMPLATE = XashMap.forType(String.class, ZEntry.class).key("name").build();
+	static final XashMap.Template<String, ZipEntry> ENTRY_TEMPLATE = XashMap.forType(String.class, ZipEntry.class).key("name").build();
 
-	static final XashMap<Source, CacheNode> ARCHIVES = WeakCache.shape(CacheNode.class).create();
-	static final class CacheNode extends WeakCache<Source> {
-		public CacheNode(Source key, XashMap<Source, CacheNode> owner) {super(key, owner);}
-		ArrayList<ZEntry> entries;
-		XashMap<String, ZEntry> namedEntries;
-	}
+	XashMap<String, ZipEntry> namedEntries;
+	ArrayList<ZipEntry> entries = new ArrayList<>();
 
-	XashMap<String, ZEntry> namedEntries;
-	ArrayList<ZEntry> entries = new ArrayList<>();
-
-	private ByteList buf;
 	final Charset cs;
-
 	byte flags;
+
+	public static class JarInfo {
+		public ZipEntry manifest;
+		public List<ZipEntry> signfiles = new ArrayList<>();
+		public boolean hasMultiManifest;
+
+		public void onEntry(ZipEntry entry) {
+			String name = entry.name;
+			if (name.startsWith("META-INF/") && name.indexOf('/', 9) == -1) {
+				if (name.equals("META-INF/MANIFEST.MF")) {
+					if (manifest != null) hasMultiManifest = true;
+					manifest = entry;
+				} else if (name.endsWith(".SF")) {
+					signfiles.add(entry);
+				} else if (name.endsWith(".RSA") || name.endsWith(".DSA") || name.endsWith(".EC")) {
+					signfiles.add(entry);
+				}
+			}
+		}
+	}
 
 	public static final long U32_MAX = 4294967295L;
 	public static final int ARRAY_READ_MAX = 100 << 20;
@@ -70,35 +74,23 @@ public sealed class ZipFile implements ArchiveFile permits ZipArchive {
 		HEADER_CEN               = 0x504b0102;
 
 	public static final int
-		FLAG_KILL_EXT	   = 1,
-		FLAG_VERIFY		   = 2,
-		FLAG_BACKWARD_READ = 4,
-		FLAG_FORCE_UTF     = 8,
+		FLAG_Verify      = 1,
+		FLAG_ReadCENOnly = 2,
+		FLAG_RemoveEXT   = 4,
+		FLAG_JAR         = 8,
 
-		FLAG_DUPLICATE_FILE = 64,
-		FLAG_HAS_ERROR = 128;
-
-	static final int
-		GP_ENCRYPTED = 1,
-		GP_HAS_EXT   = 8,
-		GP_STRONG_ENC= 64,
-		GP_UTF       = 2048;
-
-	public static final byte
-		CRYPT_NONE = 0,
-		CRYPT_ZIP2 = 1,
-		CRYPT_AES  = 2,
-		CRYPT_AES2 = 3;
+		FLAG_SaveInUTF   = 64,
+		FLAG_ReadOnly    = 128;
 
 	static final int
-		VER_MZF = 54,
-		ZIP_STORED = 10,
-		ZIP_DEFLATED = 20,
-		ZIP_64 = 45,
-		ZIP_AES = 51;
+		GP_ENCRYPTED  = 1,
+		GP_HAS_EXT    = 8,
+		GP_STRONG_ENC = 64,
+		/** Unicode (UTF-8) File System */
+		GP_UFS        = 2048;
 
 	public ZipFile(String name) throws IOException { this(new File(name)); }
-	public ZipFile(File file) throws IOException { this(file, FLAG_KILL_EXT|FLAG_BACKWARD_READ|FLAG_VERIFY); }
+	public ZipFile(File file) throws IOException { this(file, FLAG_RemoveEXT | FLAG_ReadCENOnly | FLAG_Verify); }
 	public ZipFile(File file, int flag) throws IOException { this(file, flag, 0, StandardCharsets.UTF_8); }
 	public ZipFile(File file, int flag, Charset charset) throws IOException { this(file, flag, 0, charset); }
 	public ZipFile(File file, int flag, long offset, Charset charset) throws IOException {
@@ -108,17 +100,7 @@ public sealed class ZipFile implements ArchiveFile permits ZipArchive {
 		r = ArchiveUtils.tryOpenSplitArchive(file, true);
 		r.seek(offset);
 
-		var node = ARCHIVES.get(r);
-		if (node == null) {
-			reload();
-		} else {
-			System.out.println("Zip Cache Reuse "+r);
-			entries = node.entries;
-			namedEntries = node.namedEntries;
-
-			if (node.namedEntries == null)
-				flags |= FLAG_DUPLICATE_FILE;
-		}
+		reload();
 	}
 
 	public ZipFile(Source source, int flag, Charset cs) {
@@ -141,375 +123,415 @@ public sealed class ZipFile implements ArchiveFile permits ZipArchive {
 		IOUtil.closeSilently(cache);
 	}
 
+	private JarInfo jarInfo;
 	public final void reload() throws IOException {
-		cDirLen = cDirOffset = 0;
+		cenLength = cenOffset = 0;
 
-		buf = new ByteList(256);
 		entries = new ArrayList<>();
 		namedEntries = null;
+		jarInfo = (flags & FLAG_JAR) != 0 ? new JarInfo() : null;
+
+		var tmp = ArrayCache.getIOBuffer();
+		var in = new XDataInputStream(r.asInputStream(), 4096);
 		try {
-			if ((flags & FLAG_BACKWARD_READ) == 0 || r.length() < 1024 || !readBackward())
-				readForward();
-		} catch (IOException e) {
-			IOUtil.closeSilently(this);
-			Helpers.athrow(e);
-		} finally {
-			buf.release();
-			buf = null;
-		}
+			var buf = DynByteBuf.wrap(tmp);
 
-		var namedEntries = ENTRY_TEMPLATE.createSized(entries.size());
-
-		var node = new CacheNode(r, ARCHIVES);
-		node.namedEntries = namedEntries;
-
-		for (int i = 0; i < entries.size(); i++) {
-			if (!namedEntries.add(entries.get(i))) {
-				node.namedEntries = null;
-				node.entries = entries;
+			long pos = r.position();
+			if ((flags & FLAG_ReadCENOnly) != 0 && r.length() >= 1024) {
+				if (readBackward(in, buf)) return;
 			}
+			in.seek(r, pos);
+			readForward(in, buf);
+		} catch (Throwable e) {
+			IOUtil.closeSilently(this);
+			throw e;
+		} finally {
+			ArrayCache.putArray(tmp);
+			in.finish();
 		}
-
-		synchronized (ARCHIVES) {
-			ARCHIVES.put(r, node);
-		}
-
-		this.entries = node.entries;
-		this.namedEntries = node.namedEntries;
-
-		if (node.namedEntries == null) flags |= FLAG_DUPLICATE_FILE;
-		else flags &= ~FLAG_DUPLICATE_FILE;
 	}
 
 	@Override
-	public final ZEntry getEntry(String name) {
-		if ((flags&FLAG_DUPLICATE_FILE) != 0) throw new IllegalArgumentException("这个压缩文件包含重复的名称！该文件可能已损坏，请通过entries()迭代获取Entry");
+	public final ZipEntry getEntry(String name) {
+		if (namedEntries == null) {
+			var namedEntries = ENTRY_TEMPLATE.createSized(entries.size());
+
+			for (int i = 0; i < entries.size(); i++) {
+				if (!namedEntries.add(entries.get(i))) {
+					throw new IllegalArgumentException("这个压缩文件包含重复的名称！该文件可能已损坏，请通过entries()迭代获取Entry");
+				}
+			}
+
+			this.namedEntries = namedEntries;
+		}
+
 		return namedEntries.get(name);
 	}
 	@Override
-	public final Collection<ZEntry> entries() { return Collections.unmodifiableCollection(entries == null ? namedEntries : entries); }
+	public final List<ZipEntry> entries() { return Collections.unmodifiableList(entries); }
 
 	// region Load (LOC EXT CEN END)
-	private void readForward() throws IOException {
-		Source r1 = r;
-		if (!r.isBuffered()) r = BufferedSource.wrap(r);
+	private void readForward(XDataInputStream in, ByteList buf) throws IOException {
+		ArrayList<ZipEntry> locEntries = new ArrayList<>();
+		int header = 0;
 
-		ArrayList<ZEntry> locEntries = new ArrayList<>();
-
-		// found_cen = 1
-		// found_end = 2
-		// found_zip64 = 4
-		int state = 0;
-		int field;
-
-		try {
-			loop:
-			while (true) {
-				field = r.asDataInput().readInt();
-				switch (field) {
-					case HEADER_LOC:
-						if ((state&7) != 0 && (flags & FLAG_VERIFY) != 0) break loop;
-
-						readLOC(locEntries);
-						break;
-					case HEADER_CEN:
-						if ((state&6) != 0 && (flags & FLAG_VERIFY) != 0) break loop;
-
-						readCEN(locEntries);
-						state |= 1;
-						break;
-					case HEADER_END:
-						if ((state&2) != 0 && (flags & FLAG_VERIFY) != 0) break loop;
-
-						readEND((state&4) != 0);
-						state |= 2;
-						break;
-					case HEADER_ZIP64_END:
-						if ((state&4) != 0 && (flags & FLAG_VERIFY) != 0) break loop;
-
-						readEND64();
-						state |= 4;
-						break;
-					case HEADER_ZIP64_END_LOCATOR: r.skip(16); break;
-					default: break loop;
-				}
-
-				if (r.position() >= r.length()) {
-					if (((state&1) == 0 && !locEntries.isEmpty()) ||
-						(state&6) == 0 ||
-						(flags&FLAG_HAS_ERROR) != 0 ||
-						locEntries.size() != entries.size()) {
-
-						flags |= FLAG_HAS_ERROR;
-						entries = locEntries;
+		foundUnknownHeader: {
+			while (in.position() < r.length()) {
+				header = in.readInt();
+				if (header == HEADER_LOC) {
+					readLOC(locEntries, in, buf);
+				} else if (header == HEADER_CEN) {
+					readCEN(locEntries, in, buf);
+				} else {
+					int state = 0;
+					if (header == HEADER_ZIP64_END) {
+						readEND64(in);
+						header = in.readInt();
+						state = 1;
 					}
 
-					return;
+					if (header == HEADER_ZIP64_END_LOCATOR) {
+						in.skipBytes(16);
+						header = in.readInt();
+						state = 1;
+					}
+
+					if (header == HEADER_END) {
+						readEND(state != 0, in);
+					} else {
+						break foundUnknownHeader;
+					}
+
+					break;
 				}
 			}
 
-			throw new ZipException("未知的ZIP头: 0x"+Integer.toHexString(field)+", pos="+r.position());
-		} finally {
-			if (r != r1) {
-				r.close();
-				r = r1;
+			if (in.position() != r.length() || (flags&FLAG_ReadOnly) != 0 || !locEntries.equals(entries)) {
+				flags |= FLAG_ReadOnly;
+				entries = locEntries;
 			}
+			return;
 		}
+
+		throw new ZipException("unknown header 0x"+Integer.toHexString(header)+" at "+Long.toHexString(in.position() - 4));
 	}
-	private boolean readBackward() throws IOException {
-		var tmp = IOUtil.getSharedByteBuf();
-		long off = r.length()-1024;
-		r.seek(off);
-		r.readFully(tmp, 1024);
-		boolean hasEnd = false;
-		int pos = 1020;
-		while (pos > 0) {
-			if (tmp.getUnsignedByte(--pos) != 'P') continue;
+	private boolean readBackward(XDataInputStream in, ByteList buf) throws IOException {
+		final int MAX_EOCD_SEARCH = 65535 + 22;
 
-			int field = tmp.getInt(pos);
-			if (field == HEADER_END) {
-				r.seek(off+pos+4);
+		byte[] tmp = buf.list;
+		long fileSize = r.length();
+		long pos = fileSize - 18;
+		long lim = Math.max(0, fileSize - MAX_EOCD_SEARCH);
+		int cenCount = 0;
 
-				if (!readEND(false)) break;
+		foundEOCD:
+		while (pos > lim+3) {
+			int toRead = (int) Math.min(pos - lim, 512);
+			long off = pos - toRead;
 
-				hasEnd = true;
-			} else if (field == HEADER_ZIP64_END) {
-				r.seek(off+pos+4);
+			r.seek(off);
+			r.readFully(tmp, 0, toRead);
 
-				readEND64();
+			for (int i = toRead - 4; i >= 0; i--) {
+				if (tmp[i] != 'P'
+					|| tmp[i+1] != 'K'
+					|| tmp[i+2] != 0x05
+					|| tmp[i+3] != 0x06
+				) continue;
 
-				if (hasEnd) break;
+				long endPos = off + i;
+				long zip64Pos = endPos - 20;
+
+				if (zip64Pos >= 0) {
+					in.seek(r, zip64Pos);
+
+					// 提前检查zip64，减少IO次数
+					if (in.readInt() == HEADER_ZIP64_END_LOCATOR) {
+						in.skipBytes(4); // u4 startDisk
+						endPos = zip64Pos = in.readLongLE();
+						in.skipBytes(8); // u4 totalDisks
+					} else {
+						zip64Pos = -1;
+						in.skipBytes(20);
+					}
+				} else {
+					in.seek(r, endPos + 4);
+				}
+
+				try {
+					cenCount = readEND(false, in);
+				} catch (IOException ignored) {
+					continue;
+				}
+
+				// Verify EOCD
+				if (in.position() != r.length()) continue;
+
+				boolean endNeedZip64 = cenLength == U32_MAX || cenOffset == U32_MAX || cenCount == 0xFFFF;
+
+				if (endNeedZip64 && zip64Pos >= 0) {
+					in.seek(r, zip64Pos);
+					if (in.readInt() != HEADER_ZIP64_END)
+						throw new ZipException("invalid END header (bad zip64 locator)");
+					cenCount = readEND64(in);
+				}
+
+				if (cenOffset + cenLength > endPos) throw new ZipException("invalid END header (bad central directory size)");
+				if (endPos - cenLength < 0) throw new ZipException("invalid END header (bad central directory offset)");
+
+				pos = -1;
+				break foundEOCD;
 			}
+
+			pos = off + 3;
 		}
 
-		if (pos == 0) {
-			flags &= ~FLAG_BACKWARD_READ;
-			return false;
+		if (cenLength == 0) {
+			flags &= ~FLAG_ReadCENOnly;
+			return pos < 0;
 		}
 
-        entries.ensureCapacity(cDirOnDisk);
-
-        Source r1 = r;
-        if (!r.isBuffered()) r = BufferedSource.wrap(r);
+        entries.ensureCapacity(cenCount);
 
         try {
-            r.seek(cDirOffset);
-            while (r.position() < r.length()) {
-                int header = r.asDataInput().readInt();
-                switch (header) {
-                    /*ByteList buf = read(16);
+			in.seek(r, cenOffset);
 
-                    if (!zip64) {
-                        System.out.println("HEADER_ZIP64_END_LOCATOR is not fully implemented!");
-                        r.seek(buf.readLongLE(4));
-                    }*/
-                    // 0  u4 eof_disk
-                    // 4  u8 position
-                    // 12 u4 total_disk
-                    case HEADER_ZIP64_END_LOCATOR: r.skip(16); break;
-                    case HEADER_ZIP64_END, HEADER_END: return true;
-                    case HEADER_CEN: readCEN(null); break;
-                    default: throw new ZipException("未知的ZIP头: 0x"+Integer.toHexString(header));
-                }
-            }
+			long endPos = cenOffset + cenLength;
+			while (true) {
+				int header = in.readInt();
+				if (header != HEADER_CEN) {
+					throw new ZipException("invalid CEN header (bad signature 0x"+Integer.toHexString(header)+" at offset "+(in.position()-4)+")");
+				}
+
+				readCEN(null, in, buf);
+
+				long remain = endPos - in.position();
+				if (remain <= 0) {
+					if (remain != 0)
+						throw new ZipException("invalid END header (bad central directory size)");
+					break;
+				}
+			}
         } finally {
-            if (r1 != r) {
-                r.close();
-                r = r1;
-            }
-        }
-		return false;
+			in.finish();
+		}
+		if (entries.size() != cenCount) throw new ZipException("invalid END header (bad central directory count)");
+		return true;
     }
 
-	private ByteList read(int len) throws IOException {
-		ByteList b = buf; b.clear();
-		b.ensureCapacity(len);
-		r.readFully(b.list, 0, len);
-		b.wIndex(len);
-		return b;
-	}
-	private void readLOC(ArrayList<ZEntry> locEntries) throws IOException {
-		ByteList buf = read(26);
-		ZEntry entry = new ZEntry();
+	private void readLOC(ArrayList<ZipEntry> locEntries, XDataInputStream in, ByteList buf) throws IOException {
+		ZipEntry entry = new ZipEntry();
 
-		//entry.minExtractVer = buffer.readUShortLE(0);
-		int flags = buf.getUnsignedShortLE(2);
-		entry.flags = (char) flags;
-		entry.method = (char) buf.getUnsignedShortLE(4);
-		entry.modTime = buf.getIntLE(6);
-		entry.crc32 = buf.getIntLE(10);
-		long cSize = buf.getUnsignedIntLE(14);
-		entry.cSize = cSize;
-		entry.uSize = buf.getUnsignedIntLE(18);
+		in.skipBytes(2); // u2 minExtractVer
+		int flags = in.readUnsignedShortLE();
+		entry.flags = flags;
+		entry.method = (char) in.readUnsignedShortLE();
+		entry.modTime = in.readIntLE();
+		entry.crc32 = in.readIntLE();
+		long cSize = in.readUnsignedIntLE();
+		entry.compressedSize = cSize;
+		entry.size = in.readUnsignedIntLE();
 
-		readName(entry, flags, buf.getUnsignedShortLE(22));
-		int extraLen = buf.getUnsignedShortLE(24);
+		int nameLen = in.readUnsignedShortLE();
+		int extraLen = in.readUnsignedShortLE();
+
+		readName(entry, flags, nameLen, in);
 
 		if (extraLen > 0) {
-			buf = read(extraLen);
+			buf.clear();
+			buf.readStream(in, extraLen);
 			entry.extraLenOfLOC = (char) extraLen;
 			entry.readLOCExtra(this, buf);
-			cSize = entry.cSize;
+			cSize = entry.compressedSize;
 		}
 
-		long off = r.position();
-		if (off > r.length()) throw new EOFException();
+		long off = in.position();
+		if (off + cSize > r.length()) throw new ZipException("invalid LOC header (bad compressed size)");
+
 		entry.offset = off;
 
-		// obviously not support encrypted files
-		// 8; HAS EXT
-		if ((flags & 8) != 0 && cSize == 0) {
-			// skip method
-			var in1 = (InflateInputStream) InflateInputStream.getInstance(new SourceInputStream(r, Long.MAX_VALUE, false));
-			byte[] tmp = buf.list;
-			while (in1.read(tmp) >= 0);
+		if ((flags & GP_HAS_EXT) != 0 && cSize == 0) {
+			if (entry.isEncrypted()) throw new ZipException("invalid EXT header (encrypted entry)");
+			if (entry.getMethod() != ZipEntry.DEFLATED) throw new ZipException("invalid EXT header (unsupported compression method)");
 
+			// skip method
+			var in1 = (InflateInputStream) InflateInputStream.getInstance(in);
+			IOUtil.skip(in1, Long.MAX_VALUE);
 			Inflater inf = in1.getInflater();
 
 			// 不删除EXT标记，只是保存大小，这样不需要【移动文件】这么大的IO
-			if ((this.flags & FLAG_KILL_EXT) != 0) {
+			if ((this.flags & FLAG_RemoveEXT) != 0) {
 				if (inf.getBytesRead() < U32_MAX && inf.getBytesWritten() < U32_MAX) {
-					// top + header + offset (usize)
-					r.seek(entry.startPos() + 4 + 14);
-					// C(ompressed)Size
-					r.writeInt(Integer.reverseBytes(inf.getTotalIn()));
-					// U(ncompressed)Size
-					r.writeInt(Integer.reverseBytes(inf.getTotalOut()));
+					int compressedSize = inf.getTotalIn();
+					int uncompressedSize = inf.getTotalOut();
+					fixEntrySize(entry, compressedSize, uncompressedSize);
 				}
 			}
 
-			entry.cSize = inf.getBytesRead();
-			entry.uSize = inf.getBytesWritten();
+			entry.compressedSize = inf.getBytesRead();
+			entry.size = inf.getBytesWritten();
 
-			r.seek(off + inf.getBytesRead());
-			skipEXT(entry);
+			in.seek(r, off + inf.getBytesRead());
+			skipEXT(entry, in);
 
-			in1.close();
+			in1.finish();
 		} else {
-			r.seek(off + cSize);
-			if ((flags & 8) != 0) skipEXT(entry);
+			in.seek(r, off + cSize);
+			if ((flags & GP_HAS_EXT) != 0) skipEXT(entry, in);
 		}
-		entry.setEndPos(r.position());
 
 		locEntries.add(entry);
 	}
-	private void skipEXT(ZEntry entry) throws IOException {
-		boolean is64 = entry.cSize >= U32_MAX | entry.uSize >= U32_MAX;
-		if (r.asDataInput().readInt() != HEADER_EXT) {
-			r.skip(is64 ? 16 : 8);
-		} else {
-			r.skip(is64 ? 20 : 12);
-		}
+
+	private void fixEntrySize(ZipEntry entry, int compressedSize, int uncompressedSize) throws IOException {
+		long offset = r.position();
+
+		// top + header + offset (usize)
+		r.seek(entry.startPos() + 4 + 14);
+		r.writeInt(Integer.reverseBytes(compressedSize));
+		r.writeInt(Integer.reverseBytes(uncompressedSize));
+
+		r.seek(offset);
 	}
-	private void readName(ZEntry entry, int flags, int nameLen) throws IOException {
-		entry.nameBytes = new byte[nameLen];
-		r.readFully(entry.nameBytes);
-		if (cs == StandardCharsets.UTF_8 || (flags & GP_UTF) != 0) {
-			entry.name = IOUtil.decodeUTF8(entry.nameBytes);
+
+	private void skipEXT(ZipEntry entry, DataInput in) throws IOException {
+		boolean is64 = entry.compressedSize >= U32_MAX | entry.size >= U32_MAX;
+		int skipSize = in.readInt() != HEADER_EXT
+				? is64 ? 16 : 8
+				: is64 ? 20 : 12;
+		in.skipBytes(skipSize);
+		entry.setEXTLenOfLOC(skipSize + 4);
+	}
+	private void readName(ZipEntry entry, int flags, int nameLen, XDataInputStream in) throws IOException {
+		entry.nameBytes = in.readBytes(nameLen);
+
+		var cs = (flags & GP_UFS) != 0 ? StandardCharsets.UTF_8 : this.cs;
+
+		FastCharset fcs = FastCharset.getInstance(cs);
+		if (fcs != null) {
+			var TL = IOUtil.SharedBuf.get();
+			var sb = TL.charBuf; sb.clear();
+			fcs.decodeFixedIn(TL.wrap(entry.nameBytes), entry.nameBytes.length, sb);
+			entry.name = sb.toString();
 		} else {
 			entry.name = new String(entry.nameBytes, 0, nameLen, cs);
 		}
 	}
-	private void readCEN(ArrayList<ZEntry> entryForward) throws IOException {
-		ByteList buf = read(42);
-		ZEntry entry = new ZEntry();
+	private void readCEN(ArrayList<ZipEntry> entryForward, XDataInputStream in, ByteList buf) throws IOException {
+		ZipEntry entry = new ZipEntry();
 
-		//entry.ver = buf[0] | buf[1] << 8;
-		//entry.minExtractVer = buf[2] | buf[3] << 8;
-		entry.flags = (char) buf.getUnsignedShortLE(4);
-		entry.method = (char) buf.getUnsignedShortLE(6);
-		entry.modTime = buf.getIntLE(8);
-		entry.crc32 = buf.getIntLE(12);
-		entry.cSize = buf.getUnsignedIntLE(16);
-		entry.uSize = buf.getUnsignedIntLE(20);
+		in.skipBytes(1); // versionMadeBy
+		int hostSystem = in.readUnsignedByte();
+		in.skipBytes(2); // minExtractVersion
 
-		//entry.disk = (char) buf.readUShortLE(30);
-		entry.internalAttr = (char) buf.getUnsignedShortLE(32);
-		entry.externalAttr = buf.getIntLE(34);
-		long fileHeader = buf.getUnsignedIntLE(38);
+		int flags = in.readUnsignedShortLE();
+		entry.method = (char) in.readUnsignedShortLE();
+		entry.modTime = in.readIntLE();
+		entry.crc32 = in.readIntLE();
+		entry.compressedSize = in.readUnsignedIntLE();
+		entry.size = in.readUnsignedIntLE();
 
-		int nameLen = buf.getUnsignedShortLE(24);
+		int nameLen = in.readUnsignedShortLE();
+		int extraLen = in.readUnsignedShortLE();
+		int commentLen = in.readUnsignedShortLE();
 
-		readName(entry, entry.flags, nameLen);
+		in.skipBytes(2); // u2 diskId
+
+		flags |= switch (hostSystem) {
+			default -> 0;
+			case  3 -> 1;
+			case 10 -> 2;
+			case 19 -> 3;
+		} << 23;
+
+		int iAttr = in.readUnsignedShortLE();
+		flags |= (iAttr&7) << 20;
+
+		entry.flags = flags;
+		entry.attributes = in.readIntLE();
+		long fileHeader = in.readUnsignedIntLE();
+
+		readName(entry, flags, nameLen, in);
 
 		// ignore per-file comment
-		int commentLen = buf.getUnsignedShortLE(28);
-		r.skip(commentLen);
+		in.skipBytes(commentLen);
 
-		int extraLen = buf.getUnsignedShortLE(26);
 		if (extraLen > 0) {
-			buf = read(extraLen);
+			buf.clear();
+			buf.readStream(in, extraLen);
 			fileHeader = entry.readCENExtra(this, buf, fileHeader);
 		}
 
-		entry.mzFlag |= ZEntry.MZ_BACKWARD;
+		entry.flags |= ZipEntry.MZ_BACKWARD;
 		entry.offset = fileHeader + 30 + nameLen;
 
 		if (entryForward == null) {
 			if (!entries.isEmpty() && entries.getLast().offset > entry.offset) {
-				flags |= FLAG_HAS_ERROR;
-				entry.mzFlag |= ZEntry.MZ_ERROR;
+				this.flags |= FLAG_ReadOnly;
+				entry.flags |= ZipEntry.MZ_Error;
 			}
 		} else {
 			if (entries.size() >= entryForward.size()) {
-				flags |= FLAG_HAS_ERROR;
-				entry.mzFlag |= ZEntry.MZ_ERROR;
+				this.flags |= FLAG_ReadOnly;
+				entry.flags |= ZipEntry.MZ_Error;
 			} else {
-				ZEntry prev = entryForward.get(entries.size());
+				ZipEntry prev = entryForward.get(entries.size());
 				if (!prev.merge(entry)) {
-					if ((flags&FLAG_VERIFY) != 0)
+					if ((this.flags & FLAG_Verify) != 0)
 						throw new ZipException("压缩参数在LOC和CEN间不匹配("+prev+", "+entry+")");
-					flags |= FLAG_HAS_ERROR;
-					entry.mzFlag |= ZEntry.MZ_ERROR;
+					this.flags |= FLAG_ReadOnly;
+					entry.flags |= ZipEntry.MZ_Error;
+					prev.flags |= ZipEntry.MZ_Error;
 				} else {
 					entry = prev;
 				}
 			}
 		}
 
+		if (jarInfo != null) jarInfo.onEntry(entry);
+
 		entries.add(entry);
 	}
-	private boolean readEND(boolean zip64) throws IOException {
-		ByteList buf = read(18);
+	private int readEND(boolean zip64, XDataInputStream in) throws IOException {
+		int cenCount;
 
 		if (!zip64) {
-			//diskId = buf.readUShortLE(0);
-			//cDirBegin = buf.readUShortLE(2);
-			cDirOnDisk = buf.getUnsignedShortLE(4);
-			cDirTotal = buf.getUnsignedShortLE(6);
-
-			cDirLen = buf.getUnsignedIntLE(8);
-			cDirOffset = buf.getUnsignedIntLE(12);
-		}
-
-		int commentLen = buf.getUnsignedShortLE(16);
-		if (commentLen > 0) {
-			buf = read(commentLen);
-			comment = buf.toByteArray();
+			in.skipBytes(6);
+			// u2 diskId
+			// u2 cenBeginDiskId
+			// u2 cenOnThisDisk
+			cenCount = in.readUnsignedShortLE();
+			cenLength = in.readUnsignedIntLE();
+			cenOffset = in.readUnsignedIntLE();
 		} else {
-			comment = ArrayCache.BYTES;
+			cenCount = 0;
+			in.skipBytes(16);
 		}
 
-		return !zip64 && (cDirLen == U32_MAX || cDirOffset == U32_MAX || cDirOnDisk == 0xFFFF);
+		int commentLen = in.readUnsignedShortLE();
+		comment = commentLen > 0 ? in.readBytes(commentLen) : ArrayCache.BYTES;
+
+		return cenCount;
 	}
-	private void readEND64() throws IOException {
-		ByteList buf = read((int) read(8).readLongLE());
-		// 0  u2 ver
-		// 2  u2 ver
+	private int readEND64(XDataInputStream in) throws IOException {
+		long dataLength = in.readLongLE();
+
+		in.skipBytes(20);
+		// 0  u2 verMajor
+		// 2  u2 verMinor
 		// 4  u4 diskId
-		// 8  u4 attrBeginId ???啥意思
-		// 12 u8 diskEntryCount
-		// 20 u8 totalEntryCount
-		// 28 u8 cDirLen
-		// 36 u8 cDirBegin
-		cDirOnDisk = (int) buf.getLongLE(12);
-		cDirTotal = (int) buf.getLongLE(20);
+		// 8  u4 attrBeginId
+		// 12 u8 cenOnThisDisk
+		int cenCount = Math.toIntExact(in.readLongLE());
+		cenLength = in.readLongLE();
+		cenOffset = in.readLongLE();
 
-		cDirLen = buf.getLongLE(28);
-		cDirOffset = buf.getLongLE(36);
+		in.skipForce(dataLength - 44);
+
+		return cenCount;
 	}
 
-	Source openEntry(ZEntry entry) throws IOException {
+	Source openEntry(ZipEntry entry) throws IOException {
 		Source src = (Source) CACHE.getAndSet(this, null);
 		if (src == null) src = r.copy();
 
@@ -527,12 +549,12 @@ public sealed class ZipFile implements ArchiveFile permits ZipArchive {
 		IOUtil.closeSilently(src);
 	}
 
-	private void validateEntry(Source r, ZEntry entry) throws IOException {
-		if ((entry.mzFlag & ZEntry.MZ_ERROR) != 0 && (flags & FLAG_VERIFY) != 0) throw new ZipException(entry+"报告自身已损坏");
-		if ((entry.mzFlag & ZEntry.MZ_BACKWARD) == 0) return;
+	final void validateEntry(Source r, ZipEntry entry) throws IOException {
+		if ((entry.flags & ZipEntry.MZ_BACKWARD) == 0) return;
+		if ((entry.flags & ZipEntry.MZ_Error) != 0 && (flags & FLAG_Verify) != 0) throw new ZipException(entry+"已损坏");
 
 		int extraLen;
-		if ((flags & FLAG_VERIFY) == 0) {
+		if ((flags & FLAG_Verify) == 0) {
 			r.seek(entry.startPos() + 28);
 
 			extraLen = r.read() | (r.read()<<8);
@@ -540,30 +562,33 @@ public sealed class ZipFile implements ArchiveFile permits ZipArchive {
 		} else {
 			r.seek(entry.startPos() + 4);
 			// 2024/10/02 针对关键参数做验证 防止快速模式和正常模式解压的数据不统一
-			var tmp = new byte[26];
-			r.readFully(tmp);
+			var cachedArray = ArrayCache.getIOBuffer();
+
+			verifySuccess:try {
+
+			var tmp = cachedArray;
+			r.readFully(tmp, 0, 26);
 			var buf = DynByteBuf.wrap(tmp);
 
-			verifySuccess_:{
-			verifyFailed:{
+			verifyFailure:{
 
 			var cSize = buf.getUnsignedIntLE(14);
-			if (cSize != 0 && entry.cSize != cSize) break verifyFailed;
+			if (cSize != 0 && entry.compressedSize != cSize) break verifyFailure;
 
 			var uSize = buf.getUnsignedIntLE(18);
-			if (uSize != 0 && entry.uSize != uSize) break verifyFailed;
+			if (uSize != 0 && entry.size != uSize) break verifyFailure;
 
 			extraLen = buf.getUnsignedShortLE(24);
 
 			var prevNameBytes = entry.nameBytes;
 			var nameLen = buf.getUnsignedShortLE(22);
-			if (nameLen != prevNameBytes.length) break verifyFailed;
+			if (nameLen != prevNameBytes.length) break verifyFailure;
 
 			if (nameLen > tmp.length) tmp = new byte[nameLen];
 			r.readFully(tmp, 0, nameLen);
 
-			for (int i = 0; i < nameLen; i++) {
-				if (prevNameBytes[i] != tmp[i]) break verifyFailed;
+			if (!Arrays.equals(prevNameBytes, 0, nameLen, tmp, 0, nameLen)) {
+				break verifyFailure;
 			}
 
 			var prevName = entry.name;
@@ -576,94 +601,68 @@ public sealed class ZipFile implements ArchiveFile permits ZipArchive {
 			}
 
 			if (prevName.equals(entry.name) && prevOffset == entry.offset)
-				break verifySuccess_;
+				break verifySuccess;
 
 			}
-			throw new ZipException("ZEntry的名称，偏移和长度必须相同[可能是漏洞利用]");
+			throw new ZipException("invalid LOC header (名称，偏移和长度与CEN不同)");
+			} finally {
+				ArrayCache.putArray(cachedArray);
 			}
 		}
 
-		entry.mzFlag ^= ZEntry.MZ_BACKWARD;
+		if ((entry.flags & 8) != 0) {
+			if ((this.flags & FLAG_RemoveEXT) != 0) {
+				if (entry.compressedSize < U32_MAX && entry.size < U32_MAX) {
+					fixEntrySize(entry, (int) entry.compressedSize, (int) entry.size);
+				}
+			}
+
+			r.seek(entry.offset + entry.compressedSize);
+			skipEXT(entry, r.asDataInput());
+		}
+
+		entry.flags ^= ZipEntry.MZ_BACKWARD;
 		entry.extraLenOfLOC = (char) extraLen;
 		entry.offset += extraLen;
 	}
 	// endregion
 
-	int cDirOnDisk, cDirTotal;
-	long cDirLen, cDirOffset;
+	long cenOffset, cenLength;
 	byte[] comment = ArrayCache.BYTES;
 
 	public final byte[] getComment() { return comment; }
 	public final String getCommentString() { return new String(comment, cs); }
 
 	@Override
-	public final String toString() { return "ZipArchive{" + "files=" + cDirTotal + ", comment='" + getCommentString() + '\'' + '}'; }
+	public final String toString() { return "ZipFile{"+entries.size()+" entries, comment='" + getCommentString() + '\'' + '}'; }
 
 	// region Read
-	public final InputStream getRawStream(ZEntry entry) throws IOException {
+	public final InputStream getRawStream(ZipEntry entry) throws IOException {
 		if (entry.nameBytes == null) throw new ZipException("ZEntry不是从文件读取的");
 
 		Source src = openEntry(entry);
 		src.seek(entry.offset);
-		return new SourceInputStream.Shared(src, entry.cSize, this, CACHE);
+		return new SourceInputStream.Shared(src, entry.compressedSize, this, CACHE);
 	}
 
 	public final byte[] get(String entry) throws IOException {
-		ZEntry file = getEntry(entry);
+		ZipEntry file = getEntry(entry);
 		if (file == null) return null;
 		return get(file);
 	}
-	public final byte[] get(ZEntry file) throws IOException {
-		if (file.uSize > ARRAY_READ_MAX) throw new ZipException("Entry too large, either use a pre-sized array or use streaming method");
-		return get(file, new ByteList((int) file.uSize)).list;
+	public final byte[] get(ZipEntry file) throws IOException {
+		if (file.size > ARRAY_READ_MAX) throw new ZipException("Entry too large, either use a pre-sized array or use streaming method");
+		return get(file, new ByteList((int) file.size)).list;
 	}
-	public ByteList get(ZEntry file, ByteList buf) throws IOException {
-		buf.ensureCapacity((int) (buf.wIndex() + file.uSize));
+	public ByteList get(ZipEntry file, ByteList buf) throws IOException {
+		buf.ensureCapacity((int) (buf.wIndex() + file.size));
 		return buf.readStreamFully(getInputStream(file, null));
 	}
 
-	public final InputStream getInputStream(ZEntry entry) throws IOException { return getInputStream(entry, null); }
-	public final InputStream getInputStream(ArchiveEntry entry, byte[] password) throws IOException { return getInputStream((ZEntry) entry, password); }
-	public InputStream getInputStream(ZEntry entry, byte[] pw) throws IOException {
+	public final InputStream getInputStream(ZipEntry entry) throws IOException { return getInputStream(entry, null); }
+	public final InputStream getInputStream(ZipEntry entry, byte[] password) throws IOException {
 		InputStream in = getRawStream(entry);
-
-		if (entry.isEncrypted()) {
-			if (pw == null) throw new IllegalArgumentException("缺少密码: "+entry);
-			if (entry.getEncryptType() == CRYPT_ZIP2) {
-				ZipCrypto c = new ZipCrypto();
-				c.init(ZipCrypto.DECRYPT_MODE, pw);
-
-				in = new CipherInputStream(in, c);
-
-				// has ext, CRC cannot be computed before
-				int checkByte = (entry.flags & GP_HAS_EXT) != 0 ? 0xFF&(entry.modTime >>> 8) : entry.crc32 >>> 24;
-
-				long r = in.skip(11);
-				if (r < 11) throw new ZipException("数据错误: "+r);
-
-				int myCb = in.read();
-				if (myCb != checkByte && (flags & FLAG_VERIFY) != 0) throw new ZipException("校验错误: check="+checkByte+", read="+myCb);
-			} else {
-				ZipAES c = new ZipAES();
-				boolean checkPassed = c.setKeyDecrypt(pw, in);
-				if (!checkPassed && (flags & FLAG_VERIFY) != 0) throw new ZipException("校验错误: 密码错误？");
-
-				((SourceInputStream) in).remain -= 10;
-				if ((flags & FLAG_VERIFY) != 0) {
-					in = new AESInputSt(in, c);
-				} else {
-					in = new CipherInputStream(in, c);
-				}
-			}
-		}
-
-		if (entry.method == ZipEntry.DEFLATED)
-			in = InflateInputStream.getInstance(in);
-
-		if ((entry.mzFlag & ZEntry.MZ_NoCrc) == 0 && (flags & FLAG_VERIFY) != 0)
-			in = new CRC32InputStream(in, entry.crc32);
-
-		return in;
+		return ZipEntryWriter.getInputStream(in, entry, password, (flags & FLAG_Verify) != 0);
 	}
 	// endregion
 }

@@ -1,6 +1,8 @@
 package roj.archive.zip;
 
 import roj.collect.ArrayList;
+import roj.io.Finishable;
+import roj.io.source.SourceInputStream;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -11,7 +13,7 @@ import java.util.zip.InflaterInputStream;
  * @author Roj234
  * @since 2023/3/14 0:42
  */
-public final class InflateInputStream extends InflaterInputStream {
+public final class InflateInputStream extends InflaterInputStream implements Finishable {
 	private static final ThreadLocal<ArrayList<InflateInputStream>> CACHE = ThreadLocal.withInitial(ArrayList::new);
 	private static final int CACHE_MAX = 10;
 
@@ -47,6 +49,19 @@ public final class InflateInputStream extends InflaterInputStream {
 				inflateIns.add(this);
 				in.close();
 			} else {
+				super.close();
+			}
+		}
+	}
+	@Override public void finish() throws IOException {
+		if (!closed) {
+			closed = true;
+
+			var inflateIns = CACHE.get();
+			if (inflateIns.size() < CACHE_MAX) {
+				inflateIns.add(this);
+			} else {
+				in = SourceInputStream.nullInputStream();
 				super.close();
 			}
 		}

@@ -67,7 +67,7 @@ public class Code extends Attribute implements Attributed {
 				int bci = r.readUnsignedShort();
 				Label end = bci == codeLength ? null : instructions._monitor(bci);
 				Label handler = instructions._monitor(r.readUnsignedShort());
-				ex.add(new TryCatchBlock(start, end, handler, cp.getRefName(r)));
+				ex.add(new TryCatchBlock(start, end, handler, cp.resolveClassName(r)));
 			}
 		}
 
@@ -75,7 +75,7 @@ public class Code extends Attribute implements Attributed {
 		if (len > 0) {
 			attributes = new AttributeList(len);
 			while (len-- > 0) {
-				String name = ((CstUTF) cp.get(r)).str();
+				String name = ((CstUTF) cp.resolve(r)).str();
 				int exw = r.wIndex();
 				int br;
 				r.wIndex(r.readInt()+(br=r.rIndex));

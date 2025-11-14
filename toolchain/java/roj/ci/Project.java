@@ -1,7 +1,6 @@
 package roj.ci;
 
 import org.jetbrains.annotations.Unmodifiable;
-import roj.archive.zip.ZipOutput;
 import roj.asmx.AnnotationRepo;
 import roj.asmx.mapper.Mapper;
 import roj.collect.ArrayList;
@@ -124,10 +123,9 @@ public final class Project {
 		}
 		cachePath.mkdirs();
 
-		fileList = new FileList();
 		var fileListCache = new File(cachePath, "fileList.msg");
-		if (false) successFullyLoadFileList: {
-			if (fileListCache.exists()) {
+		successFullyLoadFileList: {
+			if (MCMake.config.getBool("持久化ChangeList") && fileListCache.exists()) {
 				try {
 					fileList = MCMake.CONFIG.read(fileListCache, FileList.class, ConfigMaster.MSGPACK);
 					break successFullyLoadFileList;
@@ -136,21 +134,7 @@ public final class Project {
 				}
 			}
 
-			fileList.setPrefix(root.getAbsolutePath()+"/");
-
-			MCMake.log.debug("Generating FileList");
-
-			var srcChanged = IOUtil.listFiles(srcPath, BuildContext.JavaChangeset::isCompilable);
-			var resChanged = IOUtil.listFiles(resPath);
-			for (File file : srcChanged) {
-				fileList.fileChanged(file.getAbsolutePath());
-			}
-			for (File file : resChanged) {
-				fileList.fileChanged(file.getAbsolutePath());
-			}
-
-			fileList.commit();
-			savePersistentState();
+			fileList = new FileList();
 		}
 		fileList.setPrefix(root.getAbsolutePath()+"/");
 
@@ -158,6 +142,7 @@ public final class Project {
 		if (unmappedJar.length() == 0) {
 			unmappedWriter.begin(false);
 			unmappedWriter.end();
+			unmappedJar.setLastModified(0L);
 		}
 
 		resPrefix = resPath.getAbsolutePath().length()+1;
@@ -381,7 +366,7 @@ public final class Project {
 		}
 	}
 	void savePersistentState() {
-		if (false && fileList.wasChanged()) {
+		if (MCMake.config.getBool("持久化ChangeList") && fileList.wasChanged()) {
 			try {
 				MCMake.CONFIG.write(ConfigMaster.MSGPACK, fileList, new File(cachePath, "fileList.msg"));
 			} catch (IOException e) {
@@ -392,6 +377,21 @@ public final class Project {
 	void clearPersistentState() {
 		fileList = new FileList();
 		fileList.setPrefix(root.getAbsolutePath()+"/");
+	}
+	void initializeFileList(boolean forceReload) {
+		if (!MCMake.config.getBool("持久化ChangeList")) return;
+		if (!fileList.isEmpty() && !forceReload) return;
+
+		clearPersistentState();
+		MCMake.log.debug("initializeFileList {}", name);
+
+		var srcChanged = IOUtil.listFiles(srcPath, BuildContext.JavaChangeset::isCompilable);
+		for (File file : srcChanged) fileList.addFileFromFS(file);
+
+		var resChanged = IOUtil.listFiles(resPath);
+		for (File file : resChanged) fileList.addFileFromFS(file);
+
+		fileList.commit();
 	}
 
 	void fileChanged(String pathname) {fileList.fileChanged(pathname);}

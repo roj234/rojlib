@@ -1,8 +1,8 @@
 package roj.ci.plugin;
 
-import roj.archive.zip.ZEntry;
+import roj.archive.zip.ZipEntry;
 import roj.archive.zip.ZipFile;
-import roj.archive.zip.ZipFileWriter;
+import roj.archive.zip.ZipPacker;
 import roj.asm.AsmCache;
 import roj.asm.ClassDefinition;
 import roj.asm.ClassNode;
@@ -51,8 +51,8 @@ public class HOT_RELOAD implements Plugin {
 
 		File agent = new File(MCMake.BIN_PATH, "agent.jar");
 		if (!agent.isFile()) {
-			try (var zfw = new ZipFileWriter(agent)) {
-				zfw.beginEntry(new ZEntry("META-INF/MANIFEST.MF"));
+			try (var zfw = new ZipPacker(agent)) {
+				zfw.beginEntry(new ZipEntry("META-INF/MANIFEST.MF"));
 				zfw.write(("""
                         Manifest-Version: 1.0
                         Premain-Class: roj.ci.plugin.HRAgent

@@ -37,7 +37,7 @@ final class SM4 extends RCipher {
 	}
 
 	@Override
-	public void init(int mode, byte[] key, AlgorithmParameterSpec par, SecureRandom random) throws InvalidAlgorithmParameterException, InvalidKeyException {
+	public void init(boolean encrypt, byte[] key, AlgorithmParameterSpec par, SecureRandom random) throws InvalidAlgorithmParameterException, InvalidKeyException {
 		if (key.length != 16) throw new IllegalArgumentException("128bit key is required");
 
 		int i;
@@ -56,8 +56,8 @@ final class SM4 extends RCipher {
 			sKey[i] = sKey[i-4] ^ sm4_iRK(sKey[i-3] ^ sKey[i-2] ^ sKey[i-1] ^ CK[i]);
 		}
 
-		encrypt = mode != RCipher.DECRYPT_MODE;
-		if (encrypt) CryptoFactory.reverse(sKey, 0, 32);
+		this.encrypt = encrypt != false;
+		if (this.encrypt) CryptoFactory.reverse(sKey, 0, 32);
 	}
 
 	@Override protected boolean isBareBlockCipher() { return true; }

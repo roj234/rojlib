@@ -134,6 +134,11 @@ public sealed class Telescope {
 		return null;
 	}
 
+	public final long objectFieldOffset(Class<?> recv, String name, Class<?> type) {
+		Object handle = findField(recv, name, type, false);
+		return objectFieldOffset(handle);
+	}
+
 	public long objectFieldOffset(Object handle) {return Unsafe.U.objectFieldOffset((Field) handle);}
 	public long staticFieldOffset(Object handle) {return Unsafe.U.staticFieldOffset((Field) handle);}
 	public Object staticFieldBase(Object handle) {return Unsafe.U.staticFieldBase((Field) handle);}

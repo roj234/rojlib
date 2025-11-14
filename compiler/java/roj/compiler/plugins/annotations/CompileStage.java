@@ -48,7 +48,7 @@ final class CompileStage implements Processor {
 					throw new IllegalStateException("字段"+node+"已经有值");
 				}
 				((FieldNode) node).addAttribute(new ConstantValue(new CstInt(start.value)));
-				cu.finalFields.remove(node);
+				cu.uninitializedFinalFields.remove(node);
 
 				start.value += annotation.getInt("step", 1);
 			}

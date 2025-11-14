@@ -1,7 +1,7 @@
 package roj.plugins.obfuscator;
 
-import roj.archive.zip.ZEntry;
-import roj.archive.zip.ZipFileWriter;
+import roj.archive.zip.ZipEntry;
+import roj.archive.zip.ZipPacker;
 import roj.asm.AsmCache;
 import roj.asm.ClassNode;
 import roj.asmx.Context;
@@ -35,7 +35,7 @@ public class ObfuscatorNext {
 		var src = new File("example.jar");
 
 		Profiler.startSection("LoadResource");
-		ZipFileWriter zfw = /*ObfUtil.createFakeZip*/new ZipFileWriter(IOUtil.deriveOutput(src, ".obf"));
+		ZipPacker zfw = /*ObfUtil.createFakeZip*/new ZipPacker(IOUtil.deriveOutput(src, ".obf"));
 		List<Context> arr = Context.fromZip(src, zfw);
 
 		Profiler.endStartSection("exclusion");
@@ -48,7 +48,7 @@ public class ObfuscatorNext {
 			if (!data.name().equals(className)) {
 				System.out.println("Name conflict for "+className+", skip.");
 				arr.remove(i--);
-				zfw.beginEntry(new ZEntry(className+".class"));
+				zfw.beginEntry(new ZipEntry(className+".class"));
 				AsmCache.toByteArrayShared(data).writeToStream(zfw);
 				zfw.closeEntry();
 				continue;

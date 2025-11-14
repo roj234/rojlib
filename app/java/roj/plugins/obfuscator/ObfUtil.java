@@ -1,7 +1,7 @@
 package roj.plugins.obfuscator;
 
-import roj.archive.zip.ZEntry;
-import roj.archive.zip.ZipFileWriter;
+import roj.archive.zip.ZipEntry;
+import roj.archive.zip.ZipPacker;
 import roj.asm.ClassNode;
 import roj.asm.MethodNode;
 import roj.asmx.Context;
@@ -14,7 +14,6 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Random;
-import java.util.zip.ZipEntry;
 
 /**
  * @author solo6975
@@ -37,22 +36,22 @@ public class ObfUtil {
 		}
 	}
 
-	public static ZipFileWriter createFakeZip(File file) throws IOException {
+	public static ZipPacker createFakeZip(File file) throws IOException {
 		FileSource source = new FileSource(file);
-		try (var zfw = new ZipFileWriter(source, 0)) {
+		try (var zfw = new ZipPacker(source, 0)) {
 			long originalPosition;
 
 			zfw.setComment("你好棒棒哦");
-			zfw.beginEntry(new ZEntry("loader.dll"));
+			zfw.beginEntry(new ZipEntry("loader.dll"));
 			zfw.write("测试测试".getBytes(StandardCharsets.UTF_8));
 			originalPosition = source.position();
 			source.seek(originalPosition+73841);
 			zfw.closeEntry();
 			source.seek(originalPosition);
 
-			ZEntry largeFile = new ZEntry("很大的文件");
+			ZipEntry largeFile = new ZipEntry("很大的文件");
 			largeFile.setMethod(ZipEntry.STORED);
-			zfw.beginEntry(largeFile, true);
+			zfw.beginEntry(largeFile, true, null);
 
 			originalPosition = source.position();
 			source.seek(originalPosition+10495768);
@@ -61,7 +60,7 @@ public class ObfUtil {
 		}
 
 		source = new FileSource(file);
-		var zfw = new ZipFileWriter(source, 9);
+		var zfw = new ZipPacker(source, 9);
 		source.seek(source.length());
 		return zfw;
 	}

@@ -151,4 +151,7 @@ final class SM3 extends BufferedDigest {
 	private static int GG(int X, int Y, int Z) { return (X & Y) | (~X & Z); }
 	private static int P0(int X) {return X ^ rotateLeft(X, 9) ^ rotateLeft(X, 17);}
 	private static int P1(int X) {return X ^ rotateLeft(X, 15) ^ rotateLeft(X, 23);}
+
+	@Override
+	public Object clone() {return new SM3();}
 }

@@ -31,7 +31,7 @@ import java.util.zip.InflaterInputStream;
 public final class DownloadTask implements ChannelHandler, Runnable, Future<File> {
 	public static final Logger LOGGER = Logger.getLogger(DownloadTask.class.getSimpleName());
 
-	static final TaskThread POOL = new TaskThread("RojLib - 多线程下载器");
+	static final TaskThread POOL = new TaskThread("RojLib 多线程下载器");
 	static {POOL.start();}
 
 	public static int defChunkStart = 65536;
@@ -142,7 +142,7 @@ public final class DownloadTask implements ChannelHandler, Runnable, Future<File
 		this.encoding = encoding;
 
 		File tmpFile = new File(file.getAbsolutePath()+".tmp");
-		if (len > 0) IOUtil.createSparseFile(tmpFile, len);
+		if (len > 0) IOUtil.allocateFile(tmpFile, len);
 
 		try (var raf = new RandomAccessFile(info, "rw")) {
 			int chunks;

@@ -1,7 +1,7 @@
 package roj.ci.minecraft;
 
-import roj.archive.zip.ZEntry;
-import roj.archive.zip.ZipArchive;
+import roj.archive.zip.ZipEditor;
+import roj.archive.zip.ZipEntry;
 import roj.archive.zip.ZipFile;
 import roj.collect.ArrayList;
 import roj.collect.TrieTreeSet;
@@ -256,7 +256,7 @@ final class MinecraftClientInfo {
 		try (var zf = new ZipFile(libFile)) {
 			int nativeCount = 0;
 			int classCount = 0;
-			for (ZEntry entry : zf.entries()) {
+			for (ZipEntry entry : zf.entries()) {
 				if (entry.getName().endsWith(".class")) classCount++;
 				if (entry.getName().endsWith(".dll") || entry.getName().endsWith(".so")) nativeCount++;
 			}
@@ -273,7 +273,7 @@ final class MinecraftClientInfo {
 
 		log.debug("提取本地库{}", libFile);
 		try (var zf = new ZipFile(libFile)) {
-			for (ZEntry entry : zf.entries()) {
+			for (ZipEntry entry : zf.entries()) {
 				final String name = entry.getName();
 				if (!entry.isDirectory() && !trieTree.strStartsWithThis(name) && (name.endsWith(".dll") || name.endsWith(".so"))) {
 					try (var fos = new FileOutputStream(new File(nativePath, name))) {
@@ -290,7 +290,7 @@ final class MinecraftClientInfo {
 	}
 
 	private static void fixLog4j(File lib) {
-		try (ZipArchive mzf = new ZipArchive(lib)) {
+		try (ZipEditor mzf = new ZipEditor(lib)) {
 			byte[] b = mzf.get("org/apache/logging/log4j/core/lookup/JndiLookup.class");
 			if (b != null) mzf.put("org/apache/logging/log4j/core/lookup/JndiLookup.class", null);
 		} catch (Throwable e) {
@@ -401,7 +401,7 @@ final class MinecraftClientInfo {
 			if (p1 > RETRY_COUNT) {
 				log.warn("任务取消");
 			} else {
-				downloader.apply(url).then(this).rejected(this);
+				downloader.apply(url).then(this).exceptionally(this);
 			}
 
 			return null;
@@ -410,7 +410,7 @@ final class MinecraftClientInfo {
 		Function<String, Promise<File>> downloader;
 		public void run(Function<String, Promise<File>> downloader) {
 			this.downloader = downloader;
-			downloader.apply(url).then(this).rejected(this);
+			downloader.apply(url).then(this).exceptionally(this);
 		}
 	}
 	private void downloadLibrary(MapValue libraryInfo, String classifiers, String libFileName) {

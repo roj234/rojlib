@@ -1,7 +1,6 @@
 package roj.compiler.resolve;
 
 import org.jetbrains.annotations.Range;
-import roj.asm.ClassDefinition;
 import roj.asm.Opcodes;
 import roj.asm.insn.CodeWriter;
 import roj.asm.type.*;
@@ -521,8 +520,8 @@ public class TypeCast {
 		return checkInheritable(from, to);
 	}
 	public Cast checkInheritable(Type from, Type to) {
-		ClassDefinition fromClass = context.resolve(from.owner);
-		ClassDefinition toClass = context.resolve(to.owner);
+		var fromClass = context.resolve(from.owner);
+		var toClass = context.resolve(to.owner);
 
 		if (fromClass == null) return ERROR(UNDEFINED);
 		if (toClass == null) return ERROR(UNDEFINED);

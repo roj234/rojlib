@@ -71,10 +71,14 @@ public class CompileContext {
 	// 功能应该自解释了
 	// 后两个：如果没显式调用super就插入默认构造器，如果没调用this就插入GlobalInit
 	public boolean inStatic, inConstructor, noCallConstructor, thisConstructor;
-	// 递归构造器检查
+	/**
+	 * 递归构造器检查
+	 */
 	private final HashMap<MethodNode, MethodNode> constructorChain = HashMap.withCustomHasher(Hasher.identity());
 
-	// stage2.1解析方法和字段的基础类型时不生成警告
+	/**
+	 * stage2.1解析泛型方法和字段的基础类型时不生成警告
+	 */
 	public boolean reportPseudoType;
 
 	/**
@@ -105,19 +109,31 @@ public class CompileContext {
 	 */
 	public int globalInitInsertTo;
 
-	// lambda方法的序号
+	/**
+	 * lambda方法的序号
+	 */
 	protected int syntheticMethodId;
 	public String lambdaName() { return method.name()+"^lmd^"+(syntheticMethodId++);}
 	public String accessorName() {return "access^"+(syntheticMethodId++);}
 
-	// lambda用到，阻止预定义ID的变量被直接序列化入SolidBlock
+	/**
+	 * lambda用到，阻止预定义ID的变量被直接序列化入SolidBlock
+	 */
 	public boolean isArgumentDynamic;
 
 	// stage3 constant resolution
 	public boolean fieldDFS;
 
-	// 宽容的泛型转换检查 - 可能在运行时造成问题
+	//
+	/**
+	 * 宽容的泛型转换检查 - 可能在运行时造成问题
+	 */
 	public boolean lenientGenericCast;
+
+	/**
+	 * 当前解析的文件所处的阶段
+	 */
+	public int currentStage;
 
 	public CompileContext(LavaCompiler ctx) {
 		this.compiler = ctx;
@@ -130,9 +146,9 @@ public class CompileContext {
 
 	public MethodWriter createMethodWriter(ClassNode file, MethodNode node) {return new MethodWriter(file, node, compiler.hasFeature(Compiler.EMIT_LOCAL_VARIABLES), this);}
 
-	@NotNull public ToIntMap<String> getHierarchyList(ClassDefinition info) {return compiler.getHierarchyList(info);}
-	@NotNull public ComponentList getFieldList(ClassDefinition info, String name) {return compiler.getFieldList(info, name);}
-	@NotNull public ComponentList getMethodList(ClassDefinition info, String name) {return compiler.getMethodList(info, name);}
+	@NotNull public ToIntMap<String> getHierarchyList(ClassNode info) {return compiler.getHierarchyList(info);}
+	@NotNull public ComponentList getFieldList(ClassNode info, String name) {return compiler.getFieldList(info, name);}
+	@NotNull public ComponentList getMethodList(ClassNode info, String name) {return compiler.getMethodList(info, name);}
 
 	public void clear() {
 		this.file = null;
@@ -154,7 +170,7 @@ public class CompileContext {
 		int pos = this.tokenizer.index;
 		this.tokenizer.init(file.getCode());
 		this.tokenizer.index = pos;
-		this.caster.typeParams = file.signature == null ? Collections.emptyMap() : file.signature.typeVariables;
+		this.caster.typeParams = file.classSignature == null ? Collections.emptyMap() : file.classSignature.typeVariables;
 		this.fieldDFS = false;
 		this.constructorChain.clear();
 		this.compileUnits.clear();
@@ -162,7 +178,7 @@ public class CompileContext {
 		file.ctx = this;
 	}
 	public void setupFieldDFS() {
-		uninitializedFinalFields = file.finalFields;
+		uninitializedFinalFields = file.uninitializedFinalFields;
 		inStatic = true;
 		inConstructor = true;
 		fieldDFS = true;
@@ -170,16 +186,16 @@ public class CompileContext {
 	public void setMethod(MethodNode node) {
 		file._setSign(node);
 		// LPSignature的typeParams具有继承功能
-		caster.typeParams = file.currentNode == null ? Collections.emptyMap() : file.currentNode.typeVariables;
+		caster.typeParams = file.activeSignature == null ? Collections.emptyMap() : file.activeSignature.typeVariables;
 
 		inStatic = (node.modifier&Opcodes.ACC_STATIC) != 0;
 		noCallConstructor = inConstructor = node.name().startsWith("<");
 		if (inConstructor) {
 			if (node.name().equals("<init>")) {
 				uninitializedFinalFields = new HashSet<>(Hasher.identity());
-				uninitializedFinalFields.addAll(file.finalFields);
+				uninitializedFinalFields.addAll(file.uninitializedFinalFields);
 			} else {
-				uninitializedFinalFields = file.finalFields;
+				uninitializedFinalFields = file.uninitializedFinalFields;
 			}
 		}
 		method = node;
@@ -281,8 +297,8 @@ public class CompileContext {
 	//endregion
 	// region 访问权限和final字段赋值检查
 	@SuppressWarnings("fallthrough")
-	public void accessTypeOrReport(ClassDefinition type) {canAccessType(type, true);}
-	public boolean canAccessType(ClassDefinition type, boolean report) {
+	public void accessTypeOrReport(ClassNode type) {canAccessType(type, true);}
+	public boolean canAccessType(ClassNode type, boolean report) {
 		if (type == file) return true;
 
 		int modifier = type.modifier();
@@ -293,7 +309,7 @@ public class CompileContext {
 		return checkAccessModifier(modifier, type, null, report ? "symbol.accessDenied" : null, "symbol.type");
 	}
 	// 这里不会检测某些东西 (override, static has been written等)
-	public boolean canAccessSymbol(ClassDefinition type, Member member, boolean staticEnv, boolean report) {
+	public boolean canAccessSymbol(ClassNode type, Member member, boolean staticEnv, boolean report) {
 		String memberType = member instanceof FieldNode ? "symbol.field" : "invoke.method";
 		if (staticEnv && (member.modifier()&Opcodes.ACC_STATIC) == 0) {
 			if (report) report(Kind.ERROR, "symbol.nonStatic.symbol", type.name(), member.name(), memberType);
@@ -302,7 +318,7 @@ public class CompileContext {
 
 		return type == file || checkAccessModifier(member.modifier(), type, member.name(), report ? "symbol.accessDenied" : null, memberType);
 	}
-	private boolean checkAccessModifier(int flag, ClassDefinition type, String member, String message, String memberType) {
+	private boolean checkAccessModifier(int flag, ClassNode type, String member, String message, String memberType) {
 		String modifier;
 		switch ((flag & (Opcodes.ACC_PUBLIC|Opcodes.ACC_PROTECTED|Opcodes.ACC_PRIVATE))) {
 			default: throw ResolveException.ofIllegalInput("semantic.resolution.illegalModifier", Integer.toHexString(flag));
@@ -361,7 +377,7 @@ public class CompileContext {
 	// endregion
 	// region 解析 符号引用 类型表示 类型实例
 	@NotNull
-	public ComponentList getMethodListOrReport(ClassDefinition type, String name, Expr callerForDebug) {
+	public ComponentList getMethodListOrReport(ClassNode type, String name, Expr callerForDebug) {
 		var list = compiler.getMethodList(type, name);
 		if (list == ComponentList.NOT_FOUND) {
 			int argc = callerForDebug instanceof Invoke a ? a.getArgumentCount() : Integer.MAX_VALUE;
@@ -369,7 +385,7 @@ public class CompileContext {
 		}
 		return list;
 	}
-	private String reportSimilarMethod(ClassDefinition type, String method, int argc) {
+	private String reportSimilarMethod(ClassNode type, String method, int argc) {
 		var similar = new ArrayList<String>();
 		loop:
 		for (var entry : compiler.link(type).getMethods(compiler).entrySet()) {
@@ -389,7 +405,7 @@ public class CompileContext {
 		sb.append(TextUtil.join(similar, "\n    "));
 		return sb.append("\"]").toString();
 	}
-	private String reportSimilarField(ClassDefinition type, String field) {
+	private String reportSimilarField(ClassNode type, String field) {
 		var similar = new ArrayList<String>();
 		for (var entry : compiler.link(type).getFields(compiler).entrySet()) {
 			checkSimilarity(field, entry.getKey(), similar);
@@ -447,7 +463,7 @@ public class CompileContext {
 			report(Kind.ERROR, "semantic.feature.import.restricted.intermediate", type);
 		}
 	}
-	public boolean checkRestriction(ClassDefinition owner, Member member) {
+	public boolean checkRestriction(ClassNode owner, Member member) {
 		if (owner instanceof CompileUnit) return false;
 
 		String type = owner.name();
@@ -616,7 +632,7 @@ public class CompileContext {
 	//region DotGet字符串解析
 	private static final String NO_ERROR = new String("");
 
-	private ClassDefinition frStart;
+	private ClassNode frStart;
 	private final ArrayList<FieldNode> frChains = new ArrayList<>();
 	private IType frFinalType;
 	private int frClassPrefix;
@@ -740,9 +756,9 @@ public class CompileContext {
 	 * @param fieldType 起始类型的类型变量，如果没有ParameterizedType可以不提供
 	 * @param desc a/b/c格式的字段访问字符串
 	 */
-	public final String resolveFieldChain(ClassDefinition owner, @Nullable IType fieldType, CharList desc) { return resolveFieldChain(owner, fieldType, desc, 0); }
+	public final String resolveFieldChain(ClassNode owner, @Nullable IType fieldType, CharList desc) { return resolveFieldChain(owner, fieldType, desc, 0); }
 
-	private String resolveFieldChain(ClassDefinition owner, IType fieldType, CharList desc, int fieldNamePos) {
+	private String resolveFieldChain(ClassNode owner, IType fieldType, CharList desc, int fieldNamePos) {
 		frStart = owner;
 		List<FieldNode> result = frChains; result.clear();
 
@@ -808,7 +824,7 @@ public class CompileContext {
 		}
 	}
 
-	public final ClassDefinition getFrStart() {return frStart;}
+	public final ClassNode getFrStart() {return frStart;}
 	public final ArrayList<FieldNode> getFrChains() {return frChains;}
 	public final IType getFrFinalType() {return frFinalType;}
 	// optional chaining offset
@@ -816,23 +832,23 @@ public class CompileContext {
 	//endregion
 	//region [可重载] 静态导入 内部类
 	public static final class Import {
-		public ClassDefinition owner;
+		public ClassNode owner;
 		public String name;
 		public Object parent;
 		public boolean isStatic;
 
 		public static Import replace(@NotNull Expr node) {return new Import(null, null, Objects.requireNonNull(node));}
-		public static Import staticCall(@NotNull ClassDefinition owner, @NotNull String name) {return new Import(Objects.requireNonNull(owner), Objects.requireNonNull(name), null);}
-		public static Import virtualCall(@NotNull ClassDefinition owner, @NotNull String name, @Nullable Expr prev) {return new Import(Objects.requireNonNull(owner), Objects.requireNonNull(name), prev);}
-		public static Import constructor(@NotNull ClassDefinition owner, @NotNull String name, @Nullable Expr prev) {return new Import(Objects.requireNonNull(owner), "<init>", Type.klass(owner.name()));}
+		public static Import staticCall(@NotNull ClassNode owner, @NotNull String name) {return new Import(Objects.requireNonNull(owner), Objects.requireNonNull(name), null);}
+		public static Import virtualCall(@NotNull ClassNode owner, @NotNull String name, @Nullable Expr prev) {return new Import(Objects.requireNonNull(owner), Objects.requireNonNull(name), prev);}
+		public static Import constructor(@NotNull ClassNode owner, @NotNull String name, @Nullable Expr prev) {return new Import(Objects.requireNonNull(owner), "<init>", Type.klass(owner.name()));}
 
-		public Import(ClassDefinition owner, String name, Object parent) {
+		public Import(ClassNode owner, String name, Object parent) {
 			this.owner = owner;
 			this.name = name;
 			this.parent = parent;
 		}
 
-		public Import(ClassDefinition owner, String name, boolean isStatic) {
+		public Import(ClassNode owner, String name, boolean isStatic) {
 			this.owner = owner;
 			this.name = name;
 			this.isStatic = isStatic;
@@ -862,7 +878,7 @@ public class CompileContext {
 	 * @param prev 之前的动态导入对象
 	 */
 	@NotNull
-	public final Function<String, Import> getFieldDFI(ClassDefinition info, Variable ref, Function<String, Import> prev) {
+	public final Function<String, Import> getFieldDFI(ClassNode info, Variable ref, Function<String, Import> prev) {
 		return name -> {
 			var cl = getFieldList(info, name);
 			if (cl != ComponentList.NOT_FOUND) {
@@ -1079,20 +1095,20 @@ public class CompileContext {
 	 */
 	public final IType getCommonParent(IType a, IType b) {return compiler.getCommonAncestor(a, b);}
 	/**
-	 * @see LavaCompiler#getCommonAncestor(ClassDefinition, ClassDefinition)
+	 * @see LavaCompiler#getCommonAncestor(ClassNode, ClassNode)
 	 */
-	public final String getCommonParent(ClassDefinition infoA, ClassDefinition infoB) {return compiler.getCommonAncestor(infoA, infoB);}
+	public final String getCommonParent(ClassNode infoA, ClassNode infoB) {return compiler.getCommonAncestor(infoA, infoB);}
 	//endregion
 
 	// Cast | Expr
 	public Object autoCast(Expr expr, IType toType) {
 		var rType = expr.type();
 
-		var allow = expr.isConstant() && toType.getActualType() == Type.CHAR;
+		var allowImplicitCast = expr.isConstant() && toType.getActualType() == Type.CHAR;
 		var cast = castTo(rType, toType, -8);
 		if (cast.type < 0) {
-			if (!rType.equals(rType = expr.minType())) {
-				cast = castTo(rType, toType, allow ? TypeCast.IMPLICIT : 0);
+			if (allowImplicitCast || !rType.equals(rType = expr.minType())) {
+				cast = castTo(rType, toType, allowImplicitCast ? TypeCast.IMPLICIT : 0);
 			} else {
 				var override = getOperatorOverride(expr, toType, assign);
 				if (override != null) return override;
@@ -1103,7 +1119,7 @@ public class CompileContext {
 			}
 		}
 
-		if (allow && cast.type == TypeCast.IMPLICIT) {
+		if (allowImplicitCast && cast.type == TypeCast.IMPLICIT) {
 			var number = ((ConfigValue)expr.constVal()).asInt();
 			if (number < 0 || number > 65535)
 				report(Kind.ERROR, "typeCast.error.-2", rType, toType);
@@ -1161,7 +1177,7 @@ public class CompileContext {
 	 * @param rt 是否为运行时可见注解
 	 * @return 注解对象
 	 */
-	public Annotation getAnnotation(ClassDefinition type, Attributed node, String annotation, boolean rt) {
+	public Annotation getAnnotation(ClassNode type, Attributed node, String annotation, boolean rt) {
 		return Annotation.find(Annotations.getAnnotations(type.cp(), node, rt), annotation);
 	}
 
@@ -1181,7 +1197,7 @@ public class CompileContext {
 	 * @return 参数默认值索引表（参数位置 → 序列化表达式）
 	 * @see #parseDefaultArgument(String) 反序列化方法
 	 */
-	public IntMap<String> getDefaultArguments(ClassDefinition klass, MethodNode method) {
+	public IntMap<String> getDefaultArguments(ClassNode klass, MethodNode method) {
 		MethodDefault attr = method.getAttribute(klass.cp(), MethodDefault.ID);
 		return attr != null ? attr.defaultValue : EMPTY;
 	}
@@ -1249,7 +1265,7 @@ public class CompileContext {
 	 * @implNote 默认实现把基本类型包装类中的所有静态函数返回了
 	 */
 	@Nullable
-	public ClassDefinition getPrimitiveMethod(IType type) {
+	public ClassNode getPrimitiveMethod(IType type) {
 		assert type.isPrimitive();
 		return compiler.resolve(Type.getWrapper(type).owner());
 	}
@@ -1269,7 +1285,7 @@ public class CompileContext {
 	 * @return 常量表达式。
 	 */
 	@Nullable
-	public Expr getConstantValue(ClassDefinition klass, FieldNode field, IType fieldType) {
+	public Expr getConstantValue(ClassNode klass, FieldNode field, IType fieldType) {
 		if (fieldDFS && klass != file && klass instanceof CompileUnit cu) {
 			ArrayList<NestContext> bak = enclosing;
 			try {

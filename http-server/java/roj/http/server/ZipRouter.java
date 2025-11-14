@@ -1,6 +1,6 @@
 package roj.http.server;
 
-import roj.archive.zip.ZEntry;
+import roj.archive.zip.ZipEntry;
 import roj.archive.zip.ZipFile;
 import roj.http.Headers;
 import roj.http.HttpUtil;
@@ -10,7 +10,6 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.function.Predicate;
-import java.util.zip.ZipEntry;
 
 /**
  * @author Roj234
@@ -26,12 +25,12 @@ public class ZipRouter implements Router, Predicate<String> {
 	public ZipRouter(ZipFile zf) {this.zip = zf;}
 	public ZipRouter(ZipFile zf, String prefix) {this.zip = zf;this.prefix = prefix;}
 
-	protected String getCacheControl(ZEntry ze) {return cacheControl;}
+	protected String getCacheControl(ZipEntry ze) {return cacheControl;}
 	public ZipRouter setCacheControl(String var) {cacheControl = var;return this;}
 	public String getPrefix() {return prefix;}
 	public void setPrefix(String prefix) {this.prefix = prefix;}
 
-	public static Content zip(Request req, ZipFile zf, ZEntry ze) {return Content.file(req, new ZipFileInfo(zf, ze));}
+	public static Content zip(Request req, ZipFile zf, ZipEntry ze) {return Content.file(req, new ZipFileInfo(zf, ze));}
 
 	@Override
 	public Content response(Request req, Response resp) throws IOException {
@@ -40,7 +39,7 @@ public class ZipRouter implements Router, Predicate<String> {
 		boolean isDir = url.isEmpty() || url.endsWith("/");
 		url = prefix.concat(url);
 
-		ZEntry ze = zip.getEntry(isDir ? url+"index.html" : url);
+		ZipEntry ze = zip.getEntry(isDir ? url+"index.html" : url);
 		if (ze == null) {
 			if (isDir) {
 				ze = zip.getEntry(url);
@@ -69,9 +68,9 @@ public class ZipRouter implements Router, Predicate<String> {
 
 	public static final class ZipFileInfo implements FileInfo {
 		final ZipFile zf;
-		final ZEntry ze;
+		final ZipEntry ze;
 
-		public ZipFileInfo(ZipFile zf, ZEntry ze) {
+		public ZipFileInfo(ZipFile zf, ZipEntry ze) {
 			this.zf = zf;
 			this.ze = ze;
 		}

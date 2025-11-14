@@ -2,11 +2,9 @@ package roj.plugins.minecraft.server.network;
 
 import roj.collect.IntMap;
 import roj.concurrent.Promise;
-import roj.concurrent.TaskPool;
 import roj.crypt.CryptoFactory;
 import roj.crypt.FeedbackCipher;
 import roj.crypt.IvParameterSpecNC;
-import roj.crypt.RCipher;
 import roj.io.IOUtil;
 import roj.net.ChannelCtx;
 import roj.net.ChannelHandler;
@@ -84,7 +82,7 @@ public class LoginHello implements ChannelHandler {
 				String serverHash;
 				try {
 					Cipher rsa = Cipher.getInstance("RSA");
-					rsa.init(RCipher.DECRYPT_MODE, serverPrivateKey);
+					rsa.init(Cipher.DECRYPT_MODE, serverPrivateKey);
 
 					boolean success;
 					if (playerKey == null) {
@@ -129,7 +127,7 @@ public class LoginHello implements ChannelHandler {
 					} finally {
 						ctx.channel().lock().unlock();
 					}
-				}).rejected(exc -> {
+				}).exceptionally(exc -> {
 					MinecraftServer.INSTANCE.getLogger().error("Promise Failure", exc);
 					player.disconnect(exc instanceof MinecraftException me ? me.sendToPlayer : exc.toString());
 					return IntMap.UNDEFINED;
@@ -153,12 +151,12 @@ public class LoginHello implements ChannelHandler {
 	static void insertCipher(MyChannel channel, byte[] aesKey) throws IOException {
 		try {
 			var aes = CryptoFactory.AES();
-			aes.init(RCipher.ENCRYPT_MODE, aesKey); // avoid extra compute
+			aes.init(true, aesKey); // avoid extra compute
 
 			var encrypt = new FeedbackCipher(aes, FeedbackCipher.MODE_CFB);
-			encrypt.init(RCipher.ENCRYPT_MODE, aesKey, new IvParameterSpecNC(aesKey), null);
+			encrypt.init(true, aesKey, new IvParameterSpecNC(aesKey), null);
 			var decrypt = new FeedbackCipher(aes, FeedbackCipher.MODE_CFB);
-			decrypt.init(RCipher.DECRYPT_MODE, aesKey, new IvParameterSpecNC(aesKey), null);
+			decrypt.init(false, aesKey, new IvParameterSpecNC(aesKey), null);
 
 			channel.addBefore("splitter", "cipher", new CipherWrapper(encrypt, decrypt, true));
 		} catch (GeneralSecurityException e) {

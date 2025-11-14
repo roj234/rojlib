@@ -53,7 +53,7 @@ public abstract class ParamNameMapper {
 				r = a instanceof UnparsedAttribute ? a.getRawData() : UnparsedAttribute.serialize(pool, IOUtil.getSharedByteBuf(), a).getRawData();
 				int len = r.readUnsignedByte();
 				for (int i = 0; i < len; i++) {
-					CstUTF namecst = (CstUTF) pool.getNullable(r);
+					CstUTF namecst = (CstUTF) pool.resolveOrNull(r);
 					r.rIndex += 2;
 
 					if (namecst != null) {
@@ -88,7 +88,7 @@ public abstract class ParamNameMapper {
 			len = r.readUnsignedShort();
 
 			while (len-- > 0) {
-				String aname = ((CstUTF) pool.get(r)).str();
+				String aname = ((CstUTF) pool.resolve(r)).str();
 				int end = r.readInt() + r.rIndex;
 				switch (aname) {
 					case "LocalVariableTable" -> {
@@ -165,9 +165,9 @@ public abstract class ParamNameMapper {
 			v.start = r.readUnsignedShort();
 			v.end = r.readUnsignedShort();
 			v.nameOff = r.rIndex;
-			v.name = cp.get(r);
+			v.name = cp.resolve(r);
 			v.typeOff = r.rIndex;
-			v.type = cp.get(r);
+			v.type = cp.resolve(r);
 			v.slot = r.readUnsignedShort();
 			list.add(v);
 		}

@@ -1,6 +1,6 @@
 package roj.archive.qpak;
 
-import roj.archive.qz.QZEntry;
+import roj.archive.sevenz.SevenZEntry;
 import roj.io.IOUtil;
 import roj.io.vfs.VirtualFile;
 import roj.io.vfs.WritableFile;
@@ -50,11 +50,11 @@ final class QFile implements Comparable<QFile>, WritableFile {
 	public boolean canWrite() { return fs.canWrite(); }
 	public boolean exists() { return ref != null; }
 
-	public boolean isDirectory() { return ref != null && (ref.getClass() == File.class ? ((File) ref).isDirectory() : ((QZEntry) ref).isDirectory()); }
-	public boolean isFile() { return ref != null && (ref.getClass() == File.class ? ((File) ref).isFile() : !((QZEntry) ref).isDirectory()); }
-	public long lastModified() { return ref == null ? 0 : ref.getClass() == File.class ? ((File) ref).lastModified() : ((QZEntry) ref).getModificationTime(); }
+	public boolean isDirectory() { return ref != null && (ref.getClass() == File.class ? ((File) ref).isDirectory() : ((SevenZEntry) ref).isDirectory()); }
+	public boolean isFile() { return ref != null && (ref.getClass() == File.class ? ((File) ref).isFile() : !((SevenZEntry) ref).isDirectory()); }
+	public long lastModified() { return ref == null ? 0 : ref.getClass() == File.class ? ((File) ref).lastModified() : ((SevenZEntry) ref).getModificationTime(); }
 
-	public long length() { return ref == null ? 0 : ref.getClass() == File.class ? ((File) ref).length() : ((QZEntry) ref).getSize(); }
+	public long length() { return ref == null ? 0 : ref.getClass() == File.class ? ((File) ref).length() : ((SevenZEntry) ref).getSize(); }
 
 	/* -- File operations -- */
 
@@ -99,7 +99,7 @@ final class QFile implements Comparable<QFile>, WritableFile {
 			return true;
 		}
 
-		QZEntry entry = (QZEntry) ref;
+		SevenZEntry entry = (SevenZEntry) ref;
 		if (dest.ref instanceof File) {
 			File file = (File) dest.ref;
 			if (!entry.isDirectory()) {
@@ -129,7 +129,7 @@ final class QFile implements Comparable<QFile>, WritableFile {
 
 		if (ref.getClass() == File.class) return ((File) ref).setLastModified(time);
 
-		QZEntry entry = (QZEntry) ref;
+		SevenZEntry entry = (SevenZEntry) ref;
 		entry.setModificationTime(time);
 		fs.markMetadataDirty(entry, archiveIndex);
 		return true;

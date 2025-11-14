@@ -1,7 +1,6 @@
 package roj.archive.algorithms.model;
 
 import org.jetbrains.annotations.Range;
-import roj.archive.algorithms.EntropyModel;
 import roj.archive.rangecoder.RangeDecoder;
 import roj.archive.rangecoder.RangeEncoder;
 import roj.util.NativeMemory;

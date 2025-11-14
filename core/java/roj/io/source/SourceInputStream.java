@@ -12,6 +12,8 @@ import java.lang.invoke.VarHandle;
  * @since 2022/12/7 14:27
  */
 public sealed class SourceInputStream extends InputStream {
+	public static InputStream nullInputStream() {return new SourceInputStream(null, 0);}
+
 	public SourceInputStream(Source src, long length) {
 		this.src = src;
 		this.doClose = src != null;
@@ -29,37 +31,36 @@ public sealed class SourceInputStream extends InputStream {
 
 	@Override
 	public int read() throws IOException {
-		if (remain <= 0) return -1;
+		if (remain == 0) return -1;
 
 		int v = src.read();
-		if (v < 0) remain = 0;
-		else remain--;
+		if (remain > 0 && v >= 0) remain--;
 		return v;
 	}
 
 	@Override
 	public int read(@NotNull byte[] b, int off, int len) throws IOException {
-		if (remain <= 0) return -1;
+		if (len == 0) return 0;
+		if (remain < 0) return src.read(b, off, len);
+		if (remain == 0) return -1;
 
-		len = Math.min(len, available());
+		len = (int) Math.min(len, remain);
 		len = src.read(b, off, len);
-		if (len < 0) remain = 0;
-		else remain -= len;
+		if (len > 0) remain -= len;
 		return len;
 	}
 
 	@Override
 	public int available() throws IOException {
-		return remain > Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) remain;
+		return remain > Integer.MAX_VALUE ? Integer.MAX_VALUE : Math.max((int)remain, 0);
 	}
 
 	@Override
 	public long skip(long n) throws IOException {
-		n = Math.min(n, remain);
+		if (remain >= 0) n = Math.min(n, remain);
 		if (n <= 0) return 0;
 
-		long end = src.position()+n;
-		if (end > src.length()) throw new IOException("File size externally changed.");
+		long end = Math.min(src.position()+n, src.length());
 		src.seek(end);
 		remain -= n;
 		return n;

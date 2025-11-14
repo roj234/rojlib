@@ -4,7 +4,7 @@
 
 package roj.gui.impl;
 
-import roj.archive.zip.ZEntry;
+import roj.archive.zip.ZipEntry;
 import roj.archive.zip.ZipFile;
 import roj.asm.*;
 import roj.asm.annotation.Annotation;
@@ -181,7 +181,7 @@ public class FindClass extends JFrame {
 
 	private void read(File file) {
 		try (ZipFile za = new ZipFile(file)) {
-			for (ZEntry value : za.entries()) {
+			for (ZipEntry value : za.entries()) {
 				if (value.getName().toLowerCase().endsWith(".class")) {
 					ClassNode data = ClassNode.parseSkeleton(IOUtil.getSharedByteBuf().readStreamFully(za.getInputStream(value)).toByteArray());
 					ref.add(data);

@@ -21,27 +21,16 @@ public class HtmlEntities {
 		return out == null ? str : out.toStringAndFree();
 	}
 	@Attach("appendHtmlEntities")
-	public static CharList encode(CharList to, CharSequence str) {
-		var out = h(str);
-		if (out == null) to.append(str);
-		else out.appendToAndFree(to);
-		return to;
-	}
+	public static CharList encode(CharList to, CharSequence str) {return replaceMulti(str, null, EncodeMap, to);}
 	@Attach("htmlEntities")
-	public static CharList encodeInline(CharList sb) {
-		return sb.replaceBatch(EncodeMap);
-	}
+	public static CharList encodeInline(CharList sb) {return sb.replaceBatch(EncodeMap);}
 
 	public static CharSequence decode(CharSequence str) {
 		var out = hd(str);
 		return out == null ? str : out.toStringAndFree();
 	}
 	@Attach("appendDeHtmlEntities")
-	public static void decode(CharSequence str, CharList to) {
-		CharList out = hd(str);
-		if (out == null) to.append(str);
-		else out.appendToAndFree(to);
-	}
+	public static void decode(CharSequence str, CharList to) {replaceMulti(str, AmpBang.matcher(str), Tab.DecodeMap, to);}
 	@Attach("deHtmlEntities")
 	public static CharList decodeInline(CharList sb) {
 		var out = hd(sb);
@@ -53,12 +42,11 @@ public class HtmlEntities {
 		return sb;
 	}
 
-	private static CharList h(CharSequence s) { return replaceMulti(s, null, EncodeMap); }
-	private static CharList hd(CharSequence in) { return replaceMulti(in, AmpBang.matcher(in), Tab.DecodeMap); }
+	private static CharList h(CharSequence s) { return replaceMulti(s, null, EncodeMap, null); }
+	private static CharList hd(CharSequence in) { return replaceMulti(in, AmpBang.matcher(in), Tab.DecodeMap, null); }
 
-	private static CharList replaceMulti(CharSequence in, Matcher m, TrieTree<String> tree) {
+	private static CharList replaceMulti(CharSequence in, Matcher m, TrieTree<String> tree, CharList out) {
 		int len = in.length();
-		CharList out = null;
 		int prevI = 0, i = 0;
 
 		IntValue matchLen1 = new IntValue();
@@ -73,7 +61,9 @@ public class HtmlEntities {
 					if (out == null) out = new CharList(len);
 
 					out.append(in, prevI, m.start(0));
-					out.appendCodePoint(Integer.parseInt(m.group(1)));
+					String escape = m.group(1);
+					var isHex = escape.startsWith("x");
+					out.appendCodePoint((int) Tokenizer.parseNumber(escape, isHex ? 1 : 0, escape.length(), isHex ? 1 : 0, false));
 					i = prevI = m.end(0);
 				}
 			} else {
@@ -89,7 +79,7 @@ public class HtmlEntities {
 		return out == null ? null : out.append(in, prevI, len);
 	}
 
-	private static final Pattern AmpBang = Pattern.compile("&#([0-9]{1,8});");
+	private static final Pattern AmpBang = Pattern.compile("&#([0-9]{1,7}|x[0-9A-Fa-f]{1,6});");
 	public static final TrieTree<String> EncodeMap = new TrieTree<>();
 	static {
 		EncodeMap.put("&", "&amp;");

@@ -17,12 +17,13 @@ import roj.ui.Argument;
 import roj.ui.Command;
 import roj.ui.ProgressBar;
 import roj.ui.Tty;
-import roj.util.ArrayUtil;
 import roj.util.Helpers;
 
 import java.io.File;
 import java.lang.invoke.VarHandle;
+import java.util.Collections;
 import java.util.List;
+import java.util.Random;
 import java.util.concurrent.locks.LockSupport;
 
 import static roj.ui.CommandNode.argument;
@@ -127,7 +128,8 @@ public class MusicPlayer extends Plugin implements Runnable {
 			var prevMode = mode;
 			 switch (ctx.argument("模式", String.class)) {
 				 case "random" -> {
-					 ArrayUtil.shuffle(playList, CryptoFactory.L64W64X128MixRandom());
+					 Random r = CryptoFactory.L64W64X128MixRandom();
+					 Collections.shuffle(playList, r);
 					 mode = END_NEXT|IS_RANDOM;
 					 return;
 				 }

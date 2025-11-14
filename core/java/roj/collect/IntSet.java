@@ -25,7 +25,6 @@ public class IntSet extends AbstractSet<Integer> {
 
 	private Entry[] entries;
 	private int size, mask = 1;
-	private int nextMask;
 
 	public IntSet() {this(16);}
 	public IntSet(int size) {ensureCapacity(size);}
@@ -38,7 +37,7 @@ public class IntSet extends AbstractSet<Integer> {
 	public void ensureCapacity(int size) {
 		if (size <= mask + 1) return;
 		mask = MathUtils.nextPowerOfTwo(size) - 1;
-		resize();
+		resize(mask);
 	}
 
 	public int size() {return size;}
@@ -165,8 +164,6 @@ public class IntSet extends AbstractSet<Integer> {
 
 	public final boolean add(Integer v) {return add((int) v);}
 	public final boolean add(int key) {
-		if (nextMask != 0) resize();
-
 		int mKey = key & ~31;
 
 		if (entries == null) entries = new Entry[mask+1];
@@ -224,9 +221,9 @@ public class IntSet extends AbstractSet<Integer> {
 			depth++;
 		}
 
-		if (depth > 3) nextMask = ((mask+1) << 1) - 1;
-
 		size++;
+
+		try {
 
 		// convert to bitset
 		if (dualEntry != null) {
@@ -258,6 +255,10 @@ public class IntSet extends AbstractSet<Integer> {
 			merge(key, entry);
 		}
 		return true;
+
+		} finally {
+			if (depth > 3) resize(((mask+1) << 1) - 1);
+		}
 	}
 
 	@NotNull
@@ -296,10 +297,7 @@ public class IntSet extends AbstractSet<Integer> {
 		}
 		return entry;
 	}
-	private void resize() {
-		int mask1 = nextMask;
-		nextMask = 0;
-
+	private void resize(int mask1) {
 		if (entries == null) return;
 		Entry[] entries1 = new Entry[mask1+1];
 

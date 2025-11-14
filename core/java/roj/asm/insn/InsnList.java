@@ -171,7 +171,7 @@ public final class InsnList extends AbstractCodeWriter implements Iterable<InsnN
 					}
 				}
 				case "java.lang.String" -> index = cp.getClassId(c.toString());
-				default -> index = cp.fit((Constant) c);
+				default -> index = cp.internIndex((Constant) c);
 			}
 
 			bb.setShort(offset+1, index);

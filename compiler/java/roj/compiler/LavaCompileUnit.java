@@ -87,7 +87,7 @@ public final class LavaCompileUnit extends CompileUnit {
 		if (ctx.compiler.getMaximumBinaryCompatibility() >= Compiler.JAVA_11)
 			addNestMember(c);
 
-		c.extraModifier = acc;
+		c.extendedFlags = acc;
 		if ((acc&ACC_PROTECTED) != 0) {
 			acc &= ~ACC_PROTECTED;
 			acc |= ACC_PUBLIC;
@@ -99,10 +99,10 @@ public final class LavaCompileUnit extends CompileUnit {
 	public LavaCompileUnit newAnonymousClass(@Nullable MethodNode mn) throws ParseException {
 		LavaCompileUnit c = new LavaCompileUnit(this, false);
 
-		c.name(c.name = IOUtil.getSharedCharBuf().append(name).append('$').append(++_children).toString());
+		c.name(c.name = IOUtil.getSharedCharBuf().append(name).append('$').append(++nextAnonymousClassId).toString());
 		c.modifier = ACC_FINAL|ACC_SUPER;
 		// ACC_FINAL|ACC_INTERFACE is a 'magic number' to disable auto constructor
-		c.extraModifier = ACC_FINAL|_X_ANONYMOUS_CLASS;
+		c.extendedFlags = ACC_FINAL|_X_ANONYMOUS_CLASS;
 
 		c.body();
 
@@ -128,11 +128,12 @@ public final class LavaCompileUnit extends CompileUnit {
 	// endregion
 	// region 阶段1非公共部分: package, import, package-info, module-info
 	public boolean S1parseStruct() throws ParseException {
-		var ctx = getContext();
+		var ctx = getContext(10);
+		ctx.currentStage = 0;
 		var wr = ctx.tokenizer;
 
 		wr.index = 0;
-		wr.state = STATE_CLASS;
+		wr.state = STATE_HEADER;
 		wr.javadoc = null;
 
 		// 默认包""
@@ -225,6 +226,7 @@ public final class LavaCompileUnit extends CompileUnit {
 
 		wr.retractWord();
 		name = pkg;
+		wr.state = STATE_CLASS;
 
 		if (isNormalClass) {
 			int acc = readModifiers(wr, CLASS_ACC);
@@ -341,7 +343,7 @@ public final class LavaCompileUnit extends CompileUnit {
 		LavaTokenizer wr = ctx.tokenizer;
 
 		// 虽然看起来很怪，但是确实满足了this inner和helper正确的javadoc提交逻辑
-		_parent.attachJavadoc(this);
+		nestHost.attachJavadoc(this);
 		// 修饰符和注解
 		commitAnnotations(this);
 
@@ -383,13 +385,13 @@ public final class LavaCompileUnit extends CompileUnit {
 			default -> throw wr.err("unexpected_2:[\""+w.text()+"\",cu.except.type]");
 		}
 		modifier = (char)acc;
-		extraModifier = acc;
+		extendedFlags = acc;
 
 		// 名称
 		w = wr.except(LITERAL, "cu.name");
 		classIdx = w.pos()+1;
 
-		if (ctx.compiler.hasFeature(Compiler.VERIFY_FILENAME) && (acc&ACC_PUBLIC) != 0 && _parent == this && !IOUtil.fileName(filename).equals(w.text())) {
+		if (ctx.compiler.hasFeature(Compiler.VERIFY_FILENAME) && (acc&ACC_PUBLIC) != 0 && nestHost == this && !IOUtil.fileName(filename).equals(w.text())) {
 			ctx.report(Kind.SEVERE_WARNING, "cu.filename", filename);
 		}
 
@@ -402,11 +404,11 @@ public final class LavaCompileUnit extends CompileUnit {
 
 			// 泛型非静态类
 			if ((acc & _X_INNER_CLASS) != 0) {
-				var t = _parent;
+				var t = nestHost;
 				do {
-					if ((currentNode.parent = t.signature) != null) break;
-					t = t._parent;
-				} while (t._parent != t);
+					if ((activeSignature.parent = t.classSignature) != null) break;
+					t = t.nestHost;
+				} while (t.nestHost != t);
 			}
 
 			w = wr.next();
@@ -429,14 +431,14 @@ public final class LavaCompileUnit extends CompileUnit {
 			if ((acc & ACC_INTERFACE) != 0) break checkExtends;
 
 			IType type = readType(wr, TYPE_GENERIC|TYPE_NO_ARRAY);
-			if (type.kind() > 0 || currentNode != null) makeSignature()._add(type);
+			if (type.kind() > 0 || activeSignature != null) makeSignature()._add(type);
 			parent(type.owner());
 
 			w = wr.next();
 		} else if ((acc & ACC_ENUM) != 0) {
 			makeSignature()._add(new ParameterizedType("java/lang/Enum", Collections.singletonList(Type.klass(name))));
-		} else if (currentNode != null) {
-			currentNode._add(Types.OBJECT_TYPE);
+		} else if (activeSignature != null) {
+			activeSignature._add(Types.OBJECT_TYPE);
 		}
 
 		structCheck:{
@@ -448,8 +450,8 @@ public final class LavaCompileUnit extends CompileUnit {
 				break recordCheck;
 			}
 
-			var classSelf = currentNode;
-			currentNode = null;
+			var classSelf = activeSignature;
+			activeSignature = null;
 
 			var attr = new RecordAttribute();
 			addAttribute(attr);
@@ -471,7 +473,7 @@ public final class LavaCompileUnit extends CompileUnit {
 				finishSignature(null, Signature.FIELD, field);
 
 				fields.add(field);
-				if ((acc & _X_STRUCT) == 0) finalFields.add(field);
+				if ((acc & _X_STRUCT) == 0) uninitializedFinalFields.add(field);
 				fieldIdx.add(wr.index);
 
 				w = wr.next();
@@ -496,11 +498,11 @@ public final class LavaCompileUnit extends CompileUnit {
 				attr.fields.add(RecordAttribute.Field.link(field));
 			} while (w.type() == comma);
 
-			currentNode = classSelf;
+			activeSignature = classSelf;
 
 			if (w.type() != rParen) throw wr.err("unexpected_2:[\""+w.text()+"\",cu.except.record]");
 
-			miscFieldId = fields.size();
+			componentFieldCount = fields.size();
 
 			if ((acc & _X_STRUCT) != 0) {
 				modifier |= ACC_NATIVE;
@@ -516,7 +518,7 @@ public final class LavaCompileUnit extends CompileUnit {
 			var interfaces = itfList();
 			do {
 				IType type = readType(wr, TYPE_GENERIC|TYPE_NO_ARRAY);
-				if (type.kind() > 0 || currentNode != null) makeSignature()._impl(type);
+				if (type.kind() > 0 || activeSignature != null) makeSignature()._impl(type);
 				interfaces.add(new CstClass(type.owner()));
 
 				w = wr.next();
@@ -540,10 +542,10 @@ public final class LavaCompileUnit extends CompileUnit {
 			} while (w.type() == comma);
 		}
 
-		signature = finishSignature(_parent == this ? null : _parent.signature, Signature.CLASS, this);
-		for (int i = 0; i < miscFieldId; i++) {
+		classSignature = finishSignature(nestHost == this ? null : nestHost.classSignature, Signature.CLASS, this);
+		for (int i = 0; i < componentFieldCount; i++) {
 			var sign = (LPSignature) fields.get(i).getAttribute("Signature");
-			if (sign != null) sign.parent = signature;
+			if (sign != null) sign.parent = classSignature;
 		}
 
 		if (w.type() == semicolon) return;
@@ -619,15 +621,15 @@ public final class LavaCompileUnit extends CompileUnit {
 						// no interface checks 😄
 						addParseTask(ParseTask.staticInit(this));
 					}
-					if (currentNode != null) {
+					if (activeSignature != null) {
 						ctx.report(Kind.ERROR, "type.illegalGenericDecl");
-						currentNode = null;
+						activeSignature = null;
 					}
 				continue;
 				case CLASS, INTERFACE, ENUM, AT_INTERFACE, RECORD:
-					if (currentNode != null) {
+					if (activeSignature != null) {
 						ctx.report(Kind.ERROR, "type.illegalGenericDecl");
-						currentNode = null;
+						activeSignature = null;
 					}
 
 					wr.retractWord();
@@ -728,10 +730,10 @@ public final class LavaCompileUnit extends CompileUnit {
 						par.add(Types.STRING_TYPE);
 						par.add(Type.INT_TYPE);
 					}
-					else if (_parent != this && (extraModifier & ACC_STATIC) == 0) {
+					else if (nestHost != this && (extendedFlags & ACC_STATIC) == 0) {
 						paramNames.add(NestContext.InnerClass.FIELD_HOST_REF);
 						var par = method.parameters();
-						par.add(Type.klass(_parent.name()));
+						par.add(Type.klass(nestHost.name()));
 					}
 				}
 
@@ -827,7 +829,7 @@ public final class LavaCompileUnit extends CompileUnit {
 					} while (w.type() == comma);
 				}
 
-				finishSignature(signature, Signature.METHOD, method);
+				finishSignature(classSignature, Signature.METHOD, method);
 
 				// 不能包含方法体:
 				noMethodBody: {
@@ -884,7 +886,7 @@ public final class LavaCompileUnit extends CompileUnit {
 
 				wr.retractWord();
 
-				Signature s = finishSignature(signature, Signature.FIELD, null);
+				Signature s = finishSignature(classSignature, Signature.FIELD, null);
 
 				var list = ctx.tmpAnnotations.isEmpty() ? null : new ArrayList<>(ctx.tmpAnnotations);
 
@@ -912,7 +914,7 @@ public final class LavaCompileUnit extends CompileUnit {
 					if (s != null) field.addAttribute(s);
 
 					fields.add(field);
-					if ((acc & ACC_FINAL) != 0) finalFields.add(field);
+					if ((acc & ACC_FINAL) != 0) uninitializedFinalFields.add(field);
 					fieldIdx.add(w.pos());
 
 					w = wr.next();
@@ -1016,7 +1018,7 @@ public final class LavaCompileUnit extends CompileUnit {
 					enumInit.get(i).resolve(lc).write(cw);
 					cw.field(PUTSTATIC, this, i);
 
-					finalFields.remove(fields.get(i));
+					uninitializedFinalFields.remove(fields.get(i));
 				}
 				lc.errorReportIndex = -1;
 
@@ -1029,7 +1031,7 @@ public final class LavaCompileUnit extends CompileUnit {
 					cw.insn(AASTORE);
 				}
 
-				cw.field(PUTSTATIC, this, miscFieldId/* $VALUES */);
+				cw.field(PUTSTATIC, this, componentFieldCount/* $VALUES */);
 			});
 		}
 
@@ -1133,7 +1135,7 @@ public final class LavaCompileUnit extends CompileUnit {
 					enumInit.get(i).resolve(lc).write(cw);
 					cw.field(PUTSTATIC, this, i);
 
-					finalFields.remove(fields.get(i));
+					uninitializedFinalFields.remove(fields.get(i));
 				}
 				lc.errorReportIndex = -1;
 
@@ -1146,7 +1148,7 @@ public final class LavaCompileUnit extends CompileUnit {
 					cw.insn(AASTORE);
 				}
 
-				cw.field(PUTSTATIC, this, miscFieldId/* $VALUES */);
+				cw.field(PUTSTATIC, this, componentFieldCount/* $VALUES */);
 			});
 		}
 

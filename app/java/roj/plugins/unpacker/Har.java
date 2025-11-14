@@ -6,12 +6,12 @@ import roj.config.mapper.ObjectMapper;
 import roj.config.mapper.Optional;
 import roj.crypt.Base64;
 import roj.io.IOUtil;
+import roj.io.source.FileSource;
 import roj.text.ParseException;
 import roj.util.ByteList;
 import roj.util.Helpers;
 
 import java.io.File;
-import java.io.FileOutputStream;
 import java.io.IOException;
 import java.net.MalformedURLException;
 import java.net.URL;
@@ -78,8 +78,8 @@ class Har implements Unpacker {
 			file.getParentFile().mkdirs();
 
 			try {
-				IOUtil.createSparseFile(file, v.length);
-				try (var out = new FileOutputStream(file)) {
+				try (var out = new FileSource(file)) {
+					out.setLength(v.length);
 					out.write(v);
 				}
 			} catch (IOException e) {

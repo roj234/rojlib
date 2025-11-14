@@ -4,6 +4,8 @@ import roj.asm.ClassDefinition;
 import roj.asm.FieldNode;
 import roj.asm.MethodNode;
 import roj.asm.type.IType;
+import roj.asm.type.Type;
+import roj.asm.type.TypeHelper;
 import roj.compiler.ast.expr.Expr;
 import roj.config.JsonParser;
 import roj.io.IOUtil;
@@ -48,9 +50,9 @@ public class TranslatableString {
 				} else if (arg instanceof ClassDefinition classNode) {
 					str = classNode.name().replace('/', '.');
 				} else if (arg instanceof MethodNode methodNode) {
-					str = methodNode.toString();
+					str = TypeHelper.humanize(Type.getMethodTypes(methodNode.rawDesc()), methodNode.name(), false);
 				} else if (arg instanceof FieldNode fieldNode) {
-					str = fieldNode.toString();
+					str = fieldNode.name();
 				} else if (arg instanceof IType type) {
 					str = type.toString();
 				}  else if (arg instanceof Expr expr) {

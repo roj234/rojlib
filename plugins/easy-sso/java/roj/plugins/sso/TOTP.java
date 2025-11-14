@@ -50,7 +50,7 @@ public final class TOTP {
 		var br = new BitStream(DynByteBuf.wrap(secretKey));
 		// Base32NoPadding
 		while (br.readableBits() > 0) {
-			int i = br.readBit(5);
+			int i = br.readBits(5);
 			if (i > 25) sb.append((char)('2'-26 + i));
 			else sb.append((char)('A'+i));
 		}

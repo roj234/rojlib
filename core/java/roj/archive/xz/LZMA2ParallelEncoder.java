@@ -1,10 +1,10 @@
 package roj.archive.xz;
 
 import org.jetbrains.annotations.NotNull;
-import org.jetbrains.annotations.Range;
 import roj.collect.ArrayList;
 import roj.collect.HashSet;
 import roj.collect.IntMap;
+import roj.concurrent.Executor;
 import roj.concurrent.Task;
 import roj.io.Finishable;
 import roj.io.IOUtil;
@@ -30,27 +30,38 @@ import static roj.reflect.Unsafe.U;
  */
 public final class LZMA2ParallelEncoder {
 	public final LZMA2Options options;
+	public Executor executor;
 
-	public final boolean noContext;
-	public final int taskAffinity, dictSize;
-	public final int bufPos, bufLen, asyncBufOff, asyncBufLen;
+	final boolean noContext;
+	final int bufPos, bufLen, asyncBufOff, asyncBufLen;
+	private final long asyncCompressorMem;
+
+	public long getAsyncCompressorMemoryUsage() {return asyncCompressorMem;}
+	public long getEncodeBufferCapacity() {return bufLen;}
+	public long getBlockSize() {return bufLen - bufPos;}
 
 	private final HashSet<Encoder> encoders = new HashSet<>();
 	private final ArrayList<Compressor> compressors = new ArrayList<>();
 
 	private int taskFree;
 
-	private long memoryLimit;
+	private MemoryLimit memoryLimit;
 	private IntConsumer progressListener;
 
+	/**
+	 *
+	 * @param blockSize 任务按照该大小分块并行，设置为0来自动选择
+	 * @param noContext 每个块是否重置词典 <br>
+	 * {@code true} 每个块重置词典, 速度快, 压缩率差 (支持并行解压) <br>
+	 * {@code false} 异步设置词典, 速度慢, 压缩率好
+	 */
 	public LZMA2ParallelEncoder(LZMA2Options options,
 								int blockSize,
-								boolean noContext,
-								@Range(from = 1, to = 255) int affinity) {
+								boolean noContext
+	) {
 		if (blockSize != 0 && blockSize < ASYNC_BLOCK_SIZE_MIN || blockSize > ASYNC_BLOCK_SIZE_MAX) throw new IllegalArgumentException("无效的分块大小 "+blockSize);
-		if (affinity < 1) throw new IllegalArgumentException("无效的并行任务数量 "+affinity);
 
-		int dictSize = this.dictSize = options.getDictSize();
+		int dictSize = options.getDictSize();
 		if (blockSize == 0) {
 			blockSize = dictSize << 2;
 
@@ -66,41 +77,58 @@ public final class LZMA2ParallelEncoder {
 		if (noContext) dictSize = 0;
 
 		this.options = options;
-		this.taskFree = this.taskAffinity = affinity;
 
 		this.bufPos = dictSize; // 给上一个块的字典预留
 		this.bufLen = dictSize + blockSize;
 
 		// 1 / 10000 是 6 / 65536 的近似值
 		// in的前缀预留这些字节，确保输入输出使用同一个buffer时永远不会覆盖
-		asyncBufLen = (int) Math.ceil(blockSize * 1.0001);
+		asyncBufLen = (int) Math.ceil(blockSize * 1.0001f);
 		asyncBufOff = asyncBufLen - blockSize;
+		asyncCompressorMem = options.getEncoderMemoryUsage() * 1024L + asyncBufLen;
+	}
+
+	public int getMaxThreads() {return taskFree + compressors.size();}
+	public void setExecutionProfile(MemoryLimit memoryLimit, Executor executor, int makThreads) {
+		if (!encoders.isEmpty()) throw new IllegalStateException("Running");
+		if (makThreads < 1) throw new IllegalArgumentException("无效的并行任务数量 "+makThreads);
+		this.memoryLimit = memoryLimit;
+		this.executor = executor;
+		this.taskFree = makThreads;
 	}
 
 	public void setProgressListener(IntConsumer progressListener) {this.progressListener = progressListener;}
 
-	public void setMemoryLimit(long memoryLimit) {this.memoryLimit = memoryLimit;}
-
 	final NativeMemory add(Encoder encoder) throws IOException {
-		if (memoryLimit == 0) throw new IllegalStateException("Specify memory limit first");
-		NativeMemory buf = new NativeMemory(bufLen);
-		synchronized (encoders) {encoders.add(encoder);}
-		return buf;
+		memoryLimit.acquire(bufLen);
+		try {
+			NativeMemory buf = new NativeMemory(bufLen);
+			synchronized (this) {encoders.add(encoder);}
+			return buf;
+		} catch (OutOfMemoryError e) {
+			memoryLimit.release(bufLen);
+			throw e;
+		}
 	}
 
 	final void remove(Encoder encoder, NativeMemory mem) {
 		mem.free();
-		synchronized (encoders) {
+		long freed = 0;
+		synchronized (this) {
 			encoders.remove(encoder);
+			freed += bufLen;
+
 			if (encoders.isEmpty()) {
 				for (Compressor compressor : compressors) {
 					compressor.free();
-					memoryLimit += asyncBufLen;
 				}
+				freed += asyncCompressorMem * compressors.size();
+				taskFree += compressors.size();
 				compressors.clear();
-				taskFree = taskAffinity;
 			}
 		}
+
+		memoryLimit.release(freed);
 	}
 
 	final void submitTask(Encoder encoder) throws IOException {
@@ -112,16 +140,17 @@ public final class LZMA2ParallelEncoder {
 		}
 
 		if (compressor == null) {
-			if (taskFree > 0 && memoryLimit > asyncBufLen) {
+			if (taskFree > 0 && memoryLimit.tryAcquire(asyncCompressorMem)) {
 				synchronized (this) {
-					if (taskFree > 0 && memoryLimit > asyncBufLen) {
-						memoryLimit -= asyncBufLen;
+					if (taskFree > 0) {
 						taskFree--;
 
 						DynByteBuf in = DynByteBuf.allocateDirect(asyncBufLen, asyncBufLen);
 
 						compressor = new Compressor(this);
 						compressor.out = compressor.in = in;
+					} else {
+						memoryLimit.release(asyncCompressorMem);
 					}
 				}
 			}
@@ -148,7 +177,7 @@ public final class LZMA2ParallelEncoder {
 			compressor.owner = encoder;
 
 			Task task = encoder.prepareTask(compressor);
-			options.getAsyncExecutor().executeUnsafe(task);
+			executor.executeUnsafe(task);
 		} catch (Exception e) {
 			Helpers.athrow(e);
 		}
@@ -159,9 +188,8 @@ public final class LZMA2ParallelEncoder {
 			synchronized (this) {
 				if (encoders.isEmpty()) {
 					compressor.free();
-
-					memoryLimit += asyncBufLen;
-					taskFree++;
+					taskFree ++;
+					memoryLimit.release(asyncCompressorMem);
 					return;
 				}
 			}
@@ -173,7 +201,7 @@ public final class LZMA2ParallelEncoder {
 		}
 	}
 
-	public final OutputStream createEncoder(OutputStream out) { return new Encoder(out, this); }
+	public final OutputStream getOutputStream(OutputStream out) { return new Encoder(out, this); }
 
 	public void cancel() throws IOException {
 		synchronized (this) {
@@ -240,7 +268,7 @@ public final class LZMA2ParallelEncoder {
 			int dictSize;
 			if (man.noContext) dictSize = 0;
 			else {
-				dictSize = man.dictSize;
+				dictSize = man.options.getDictSize();
 				if (task.id > 0) task.lzma.setPresetDict0(dictSize, null, buf, dictSize);
 			}
 
@@ -347,7 +375,7 @@ public final class LZMA2ParallelEncoder {
 			if (id == 0) {
 				byte[] presetDict = man.options.getPresetDict();
 				if (presetDict != null && presetDict.length > 0) {
-					lzma.setPresetDict(man.dictSize, presetDict);
+					lzma.setPresetDict(man.options.getDictSize(), presetDict);
 					state = PROP_RESET;
 				} else {
 					state = DICT_RESET;
@@ -357,7 +385,7 @@ public final class LZMA2ParallelEncoder {
 					state = DICT_RESET;
 				} else {
 					state = STATE_RESET;
-					lzma.getLzEncoder().skip(man.dictSize);
+					lzma.getLzEncoder().skip(man.options.getDictSize());
 				}
 			}
 

@@ -1,6 +1,6 @@
 package roj.plugins;
 
-import roj.archive.zip.ZipArchive;
+import roj.archive.zip.ZipEditor;
 import roj.collect.ArrayList;
 import roj.collect.CollectionX;
 import roj.collect.HashMap;
@@ -121,7 +121,7 @@ public class KeyStorePlugin extends Plugin {
 			options.put("jarSigner:signatureHashAlgorithm", signHashAlg);
 
 			getLogger().info("正在签名……");
-			try(var zf = new ZipArchive(jar)) {
+			try(var zf = new ZipEditor(jar)) {
 				JarVerifier.signJar(zf, publicKeys.get(alias).asLeft(), privateKeys.get(alias), options);
 				zf.save();
 				Tty.success("签名完成");

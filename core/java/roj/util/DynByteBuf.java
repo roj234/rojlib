@@ -264,6 +264,10 @@ public abstract class DynByteBuf extends OutputStream implements CharSequence, X
 	public final DynByteBuf set(int offset, DynByteBuf b) {return set(offset, b, b.rIndex, b.readableBytes());}
 	public final DynByteBuf set(int offset, DynByteBuf b, int len) {return set(offset, b, b.rIndex, len);}
 	public abstract DynByteBuf set(int offset, DynByteBuf b, int off, int len);
+
+	public final DynByteBuf set(int offset, byte[] b) {return set(offset, b, 0, b.length);}
+	public abstract DynByteBuf set(int offset, byte[] b, int off, int len);
+
 	//region 基本类型
 	public final DynByteBuf putBool(boolean n) {return put(n?1:0);}
 	@IndirectReference
@@ -629,7 +633,7 @@ public abstract class DynByteBuf extends OutputStream implements CharSequence, X
 
 	public abstract DynByteBuf compact();
 
-	public final String info() {return getClass().getSimpleName()+"[rp="+rIndex+",wp="+wIndex+",cap="+capacity()+"=>"+maxCapacity()+"]";}
+	public final String info() {return getClass().getSimpleName()+"@"+Integer.toHexString(System.identityHashCode(this))+"[rp="+rIndex+",wp="+wIndex+",cap="+capacity()+"=>"+maxCapacity()+"]";}
 	public abstract String dump();
 	// endregion
 	public final DynByteBuf writeAlignment(int alignment) {
@@ -663,7 +667,7 @@ public abstract class DynByteBuf extends OutputStream implements CharSequence, X
 		if (len != b.readableBytes()) return false;
 		assert len <= capacity() : info();
 
-		return ArrayUtil.compare(array(), _unsafeAddr()+rIndex, b.array(), b._unsafeAddr()+b.rIndex, len, ArrayUtil.LOG2_ARRAY_BYTE_INDEX_SCALE) < 0;
+		return ArrayUtil.mismatch(array(), _unsafeAddr()+rIndex, b.array(), b._unsafeAddr()+b.rIndex, len, ArrayUtil.LOG2_ARRAY_BYTE_INDEX_SCALE) < 0;
 	}
 	@Override
 	public int hashCode() {

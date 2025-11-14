@@ -95,10 +95,9 @@ public final class XashMap<K, V> extends AbstractSet<V> {
 		final Object GetNext(@NotNull Object obj) { return U.getReference(obj, NEXT); }
 		final void SetNext(@NotNull Object obj, Object next) { U.putReference(obj, NEXT, next); }
 
-		@SuppressWarnings("unchecked")
 		final V createValue(K k) {
 			if (newValue == null) throw new UnsupportedOperationException("creation unavailable");
-			V v = (V) newValue.apply(k);
+			V v = newValue.apply(k);
 			SetKey(v, k);
 			return v;
 		}

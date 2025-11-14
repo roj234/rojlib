@@ -4,6 +4,7 @@ import org.intellij.lang.annotations.MagicConstant;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.jetbrains.annotations.Range;
+import org.jetbrains.annotations.Unmodifiable;
 import roj.asm.Attributed;
 import roj.asm.ClassDefinition;
 import roj.asm.ClassNode;
@@ -54,31 +55,30 @@ public interface Compiler {
 	 * @param shortName 短名称，例如"List"
 	 * @return 包含完整包路径的候选列表, 如["java/lang"]，或空列表
 	 */
-	@NotNull List<String> getPackageNameByShortName(String shortName);
+	@NotNull @Unmodifiable List<String> getPackageNameByShortName(String shortName);
 
 	//region 类扩展信息API
-	@NotNull LinkedClass link(@NotNull ClassDefinition info);
+	@NotNull LinkedClass link(@NotNull ClassNode info);
 	/**
 	 * 修改指定类结构后，使指定类的ResolveHelper失效，并在下一次getResolveHelper中重新生成
 	 * @param info 发生结构变化的类信息
 	 * @apiNote 不是线程安全的，最好别用
 	 */
-	void unlink(ClassDefinition info);
+	void unlink(ClassNode info);
 	/**
 	 * 获取类继承层级信息
-	 * 由于Java并没有给这些自定义类型只读的包装器 禁止修改返回值！
-	 * 值的高16位存放递增的index{@link CompileContext#getCommonParent(ClassDefinition, ClassDefinition)}，低16位存放info类到key类需要向上转型的最低次数
+	 * 值的高16位存放递增的index{@link CompileContext#getCommonParent(ClassNode, ClassNode)}，低16位存放info类到key类需要向上转型的最低次数
 	 * @param info 目标类信息
 	 */
-	@NotNull ToIntMap<String> getHierarchyList(ClassDefinition info);
+	@NotNull @Unmodifiable ToIntMap<String> getHierarchyList(ClassNode info);
 	/**
 	 * 获取方法重载列表，不存在时返回{@link ComponentList#NOT_FOUND}
 	 */
-	@NotNull ComponentList getMethodList(ClassDefinition info, String name);
+	@NotNull ComponentList getMethodList(ClassNode info, String name);
 	/**
 	 * 获取字段重载列表，不存在时返回{@link ComponentList#NOT_FOUND}
 	 */
-	@NotNull ComponentList getFieldList(ClassDefinition info, String name);
+	@NotNull ComponentList getFieldList(ClassNode info, String name);
 	/**
 	 * 获取泛型类型参数的实际类型
 	 * 注意：info和superType是同一类型时将会返回null！
@@ -87,13 +87,13 @@ public interface Compiler {
 	 * @return 类型参数列表，当superType不是info的父类/接口时返回null
 	 * @throws ClassNotFoundException 当superType不存在时抛出
 	 */
-	@Nullable List<IType> getTypeArgumentsFor(ClassDefinition info, String superType) throws ClassNotFoundException;
+	@Nullable @Unmodifiable List<IType> getTypeArgumentsFor(ClassNode info, String superType) throws ClassNotFoundException;
 	/**
 	 * 获取内部类元信息
 	 * @param info 外层类元数据（不可为null）
 	 * @return 内部类名到元信息的不可变映射（键为全限定名，或以!开头的简单类名，只包含具名类，不包含匿名类或引用）
 	 */
-	@NotNull Map<String, InnerClasses.Item> getInnerClassInfo(ClassDefinition info);
+	@NotNull @Unmodifiable Map<String, InnerClasses.Item> getInnerClassInfo(ClassNode info);
 	//endregion
 	//region 预定义特性API
 	// not change bytecode
@@ -227,7 +227,7 @@ public interface Compiler {
 	 *   <li>处理classpath中的方法参数注解时可能抛出未支持异常</li>
 	 * </ul>
 	 *
-	 * @see Processor#handle(CompileContext, ClassDefinition file, Attributed node, Annotation)
+	 * @see Processor#handle(CompileContext, ClassNode file, Attributed node, Annotation)
 	 */
 	void addAnnotationProcessor(Processor processor);
 

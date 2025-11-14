@@ -34,7 +34,7 @@ final class L64W64X128Mix extends WyRand {
 		long a = w + WY_INCREMENT;
 		long b = a ^ WY_XOR;
 		w = a;
-		a = CryptoFactory.wymix(a, b);
+		a = wymix(a, b);
 
 		long s1 = x0;
 		long s0 = x1;

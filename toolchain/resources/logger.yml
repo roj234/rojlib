@@ -31,5 +31,5 @@ appenders:
       size: 1MB
       file_name: "%d{YYYY-MM-DD}.log.gz"
     remove:
-      last: 14
+      last: 3
       max_size: 10MB

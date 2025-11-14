@@ -42,6 +42,7 @@ FJNIEXPORT int FJNICALL IL_bsdiff_getDiffLength(const int32_t *sfx, const uint8_
 FJNIEXPORT uint32_t FJNICALL IL_xxHash32(int32_t seed, uint8_t *buf, int32_t off, int32_t len);
 
 JNIEXPORT jlong JNICALL Java_roj_RojLib_init(JNIEnv *, jclass);
+JNIEXPORT jlong JNICALL Java_roj_RojLib_getLastError(JNIEnv *, jclass);
 
 JNIEXPORT jint JNICALL Java_roj_ui_NativeVT_SetConsoleMode(JNIEnv *, jclass, jint, jint, jint);
 JNIEXPORT jlong JNICALL Java_roj_ui_NativeVT_GetConsoleWindow(JNIEnv *, jclass);
@@ -63,5 +64,8 @@ JNIEXPORT void JNICALL Java_roj_ui_Taskbar_setProgressValue(JNIEnv *, jclass, jl
 
 JNIEXPORT jstring JNICALL Java_roj_io_IOUtil_getHardLinkUUID0(JNIEnv* env, jclass, jstring filePath);
 JNIEXPORT jboolean JNICALL Java_roj_io_IOUtil_makeHardLink0(JNIEnv* env, jclass, jstring link, jstring existing);
+
+JNIEXPORT jbyteArray JNICALL Java_roj_io_SecurityDescriptor_get0(JNIEnv* env, jclass, jstring path, jboolean admin);
+JNIEXPORT jboolean JNICALL Java_roj_io_SecurityDescriptor_set0(JNIEnv* env, jclass, jstring path, jlong sd, jboolean admin);
 
 #endif //ROJLIB_JNI_EXPORTS_H

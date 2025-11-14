@@ -140,7 +140,7 @@ public abstract class TrieEntry implements Iterable<TrieEntry>, Cloneable, _LibE
 
 	public abstract boolean isLeaf();
 
-	CharSequence text() { return null; }
+	public CharSequence text() { return null; }
 	public void append(CharList sb) { sb.append(firstChar); }
 	public int length() { return 1; }
 

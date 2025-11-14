@@ -105,7 +105,7 @@ final class ClassStage implements Processor {
 		String desc = mn.rawDesc();
 
 		var params = Type.getMethodTypes(desc);
-		ClassDefinition info = ctx.resolve(params.get(0));
+		var info = ctx.resolve(params.get(0));
 		if (info != null) {
 			params.remove(0);
 
@@ -113,7 +113,7 @@ final class ClassStage implements Processor {
 			int idx = info.getMethod(mn.name(), desc);
 			if (idx >= 0 && !annotation.getBool("override")) return;
 
-			MethodNode replace = new MethodNode(Opcodes.ACC_PUBLIC, info.name(), annotation.getString("value", mn.name()), desc);
+			var replace = new MethodNode(Opcodes.ACC_PUBLIC, info.name(), annotation.getString("value", mn.name()), desc);
 			replace.addAttribute(new AttachedMethod(new MethodNode(mn)));
 			if (idx >= 0) info.methods().set(idx, Helpers.cast(replace));
 			else info.methods().add(Helpers.cast(replace));

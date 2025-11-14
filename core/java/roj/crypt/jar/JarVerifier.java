@@ -3,9 +3,10 @@ package roj.crypt.jar;
 import org.intellij.lang.annotations.MagicConstant;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
+import roj.archive.ArchiveEntry;
 import roj.archive.ArchiveFile;
-import roj.archive.zip.ZEntry;
-import roj.archive.zip.ZipArchive;
+import roj.archive.zip.ZipEditor;
+import roj.archive.zip.ZipEntry;
 import roj.collect.HashMap;
 import roj.collect.HashSet;
 import roj.crypt.Base64;
@@ -289,7 +290,7 @@ public class JarVerifier {
 	// classloading hook
 	static {DigestInputStream.init();}
 	@Nullable
-	public static JarVerifier create(ArchiveFile zf, File source) throws IOException {
+	public static <T extends ArchiveEntry> JarVerifier create(ArchiveFile<T> zf, File source) throws IOException {
 		InputStream in = zf.getInputStream("META-INF/MANIFEST.MF");
 		if (in == null) return null;
 
@@ -332,7 +333,7 @@ public class JarVerifier {
 	 * @param prk 私钥，对应第一个证书
 	 * @param options 选项  jarSigner:signatureHashAlgorithm jarSigner:manifestHashAlgorithm jarSigner:skipPerFileAttributes jarSigner:signatureFileName jarSigner:cacheHash jarSigner:creator
 	 */
-	public static void signJar(ZipArchive zf, List<Certificate> certs, PrivateKey prk, Map<String, String> options) throws GeneralSecurityException, IOException {
+	public static void signJar(ZipEditor zf, List<Certificate> certs, PrivateKey prk, Map<String, String> options) throws GeneralSecurityException, IOException {
 		String keyAlg = certs.get(0).getPublicKey().getAlgorithm();
 		var digestAlg = options.getOrDefault("jarSigner:signatureHashAlgorithm", "SHA-256");
 
@@ -359,7 +360,7 @@ public class JarVerifier {
 
 		byte[] buf = ArrayCache.getIOBuffer();
 		var digestKey = new Attributes.Name(hashAlg+"-Digest");
-		for (ZEntry entry : zf.entries()) {
+		for (ZipEntry entry : zf.entries()) {
 			if (entry.getName().startsWith("META-INF/")) {
 				if (entry.getName().equals("META-INF/MANIFEST.MF")) continue;
 				if (VALID_CERTIFICATE_EXTENSION.contains(IOUtil.extensionName(entry.getName()))) {
@@ -403,6 +404,8 @@ public class JarVerifier {
 				if (cacheHash) {
 					options.put(digestKey+":"+entry.getName(), Integer.toString((int)(entry.getModificationTime() * entry.getCrc32()), 36)+"|"+digest);
 				}
+			} catch (Exception e) {
+				throw new IOException("Exception reading "+entry.getName(), e);
 			}
 		}
 

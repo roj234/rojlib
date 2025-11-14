@@ -46,7 +46,7 @@ public final class ModuleAttribute extends Attribute {
 
 		len = r.readUnsignedShort();
 		List<String> use = this.uses = new ArrayList<>(len);
-		while (len-- > 0) use.add(pool.getRefName(r, Constant.CLASS));
+		while (len-- > 0) use.add(pool.resolveName(r, Constant.CLASS));
 
 		len = r.readUnsignedShort();
 		List<Provide> provide = this.provides = new ArrayList<>(len);
@@ -172,9 +172,9 @@ public final class ModuleAttribute extends Attribute {
 		public String version;
 
 		public Module(DynByteBuf r, ConstantPool pool) {
-			name = pool.getRefName(r, Constant.MODULE);
+			name = pool.resolveName(r, Constant.MODULE);
 			access = r.readUnsignedShort();
-			var utf = (CstUTF) pool.getNullable(r);
+			var utf = (CstUTF) pool.resolveOrNull(r);
 			version = utf == null ? null : utf.str();
 		}
 		public Module(String name, int access) {
@@ -196,12 +196,12 @@ public final class ModuleAttribute extends Attribute {
 		public List<String> to;
 
 		public Export(DynByteBuf r, ConstantPool pool) {
-			pkg = pool.getRefName(r, Constant.PACKAGE);
+			pkg = pool.resolveName(r, Constant.PACKAGE);
 			access = r.readUnsignedShort();
 
 			int len = r.readUnsignedShort();
 			to = new ArrayList<>(len);
-			while (len-- > 0) to.add(pool.getRefName(r, Constant.MODULE));
+			while (len-- > 0) to.add(pool.resolveName(r, Constant.MODULE));
 		}
 		public Export(String pkg) {
 			this.pkg = pkg;
@@ -224,13 +224,13 @@ public final class ModuleAttribute extends Attribute {
 		public final List<String> impl;
 
 		public Provide(DynByteBuf r, ConstantPool pool) {
-			spi = pool.getRefName(r, Constant.CLASS);
+			spi = pool.resolveName(r, Constant.CLASS);
 
 			int len = r.readUnsignedShort();
 			if (len == 0) throw new IllegalArgumentException("Provide cannot be empty");
 
 			impl = new ArrayList<>(len);
-			while (len-- > 0) impl.add(pool.getRefName(r, Constant.CLASS));
+			while (len-- > 0) impl.add(pool.resolveName(r, Constant.CLASS));
 		}
 		public Provide(String spi) {
 			this.spi = spi;

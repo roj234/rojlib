@@ -161,6 +161,11 @@ public final class MethodNode extends MemberNode {
 			parameters();
 
 			Signature sig = getAttribute(cp, Attribute.SIGNATURE);
+
+			if (sig != null && !sig.typeVariables.isEmpty()) {
+				sig.getTypeVariables(sb).append(' ');
+			}
+
 			if (owner != null && name().equals("<init>")) {
 				assert out.type == Type.VOID;
 				TypeHelper.toStringOptionalPackage(sb, owner.name());

@@ -30,9 +30,9 @@ final class ChaCha_Poly1305 extends RCipher {
 	ChaCha_Poly1305() {this(new ChaCha());}
 	ChaCha_Poly1305(ChaCha c) { this.c = c; }
 
-	public final void init(int mode, byte[] key, AlgorithmParameterSpec par, SecureRandom random) throws InvalidAlgorithmParameterException, InvalidKeyException {
-		c.init(mode, key, par, random);
-		this.decrypt = mode == RCipher.DECRYPT_MODE;
+	public final void init(boolean encrypt, byte[] key, AlgorithmParameterSpec par, SecureRandom random) throws InvalidAlgorithmParameterException, InvalidKeyException {
+		c.init(encrypt, key, par, random);
+		this.decrypt = encrypt == false;
 	}
 
 	public int engineGetOutputSize(int data) { return decrypt ? data - 16 : data + 16; }

@@ -59,15 +59,15 @@ public class Element extends Node {
 	// region 属性
 	Map<String, ConfigValue> attributes = Collections.emptyMap();
 
-	public Element attr(String name, String value) { attributesWritable().put(name, valueOf(value)); return this; }
-	public Element attr(String name, int value) { attributesWritable().put(name, valueOf(value)); return this; }
-	public Element attr(String name, double value) { attributesWritable().put(name, valueOf(value)); return this; }
-	public Element attr(String name, boolean value) { attributesWritable().put(name, valueOf(value)); return this; }
-	public ConfigValue attr(String name) { return attributes.getOrDefault(name, NullValue.NULL); }
-	public void attr(String k, ConfigValue v) { attributesWritable().put(k, v); }
+	public Element attr(String name, String value) { attr(name, valueOf(value)); return this; }
+	public Element attr(String name, int value) { attr(name, valueOf(value)); return this; }
+	public Element attr(String name, double value) { attr(name, valueOf(value)); return this; }
+	public Element attr(String name, boolean value) { attr(name, valueOf(value)); return this; }
+	public ConfigValue attr(String name) { return attributes().getOrDefault(name, NullValue.NULL); }
+	public void attr(String k, ConfigValue v) { attributesForWrite().put(k, v); }
 
 	@Override
-	public Map<String, ConfigValue> attributesWritable() {
+	protected Map<String, ConfigValue> attributesForWrite() {
 		if (!(attributes instanceof HashMap))
 			attributes = new HashMap<>(attributes);
 		return attributes;

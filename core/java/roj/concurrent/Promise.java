@@ -1,6 +1,11 @@
 package roj.concurrent;
 
+import org.jetbrains.annotations.ApiStatus;
+import org.jetbrains.annotations.Nullable;
 import roj.util.Helpers;
+import roj.util.function.ExceptionalConsumer;
+import roj.util.function.ExceptionalFunction;
+import roj.util.function.ExceptionalRunnable;
 
 import java.util.Arrays;
 import java.util.List;
@@ -16,11 +21,17 @@ import java.util.function.Supplier;
  * @since 2022/10/7 23:54
  */
 public sealed interface Promise<T> extends Future<T> permits PromiseImpl {
+	static <T, X extends Promise<T> & Result> X manual() {return manual(TaskPool.common());}
+	/**
+	 *
+	 * @param executor resolve / reject execute on, use null to on same thread (not recommended)
+	 */
 	@SuppressWarnings("unchecked")
-	static <T, X extends Promise<T> & Result> X sync() { return (X) new PromiseImpl<>(); }
+	static <T, X extends Promise<T> & Result> X manual(@Nullable Executor executor) {return (X) new PromiseImpl<>().on(executor);}
 
-	static <T> Promise<T> async(Consumer<Result> handler) {return async(TaskPool.common(), handler);}
-	static <T> Promise<T> async(Executor executor, Consumer<Result> handler) {
+	// invokeasync?
+	static <T> Promise<T> async(ExceptionalConsumer<Result, Throwable> handler) {return async(TaskPool.common(), handler);}
+	static <T> Promise<T> async(Executor executor, ExceptionalConsumer<Result, Throwable> handler) {
 		PromiseImpl<T> impl = new PromiseImpl<>(executor);
 		executor.execute(() -> {
 			try {
@@ -102,29 +113,34 @@ public sealed interface Promise<T> extends Future<T> permits PromiseImpl {
 		return any;
 	}
 
+	@ApiStatus.Internal
 	default Promise<Object> then(BiConsumer<T, Result> fn) {return then(fn, null);}
 	Promise<Object> then(BiConsumer<T, Result> fn, Function<Throwable, ?> recover);
-	default Promise<Void> thenAccept(Consumer<T> fn) {
+	@SuppressWarnings("unchecked")
+	default Promise<T> thenAccept(ExceptionalConsumer<T, Throwable> fn) {
 		return Helpers.cast(then((value, callback) -> {
-			fn.accept(value);
-			callback.resolve(null);
+			((Consumer<T>)fn).accept(value);
+			callback.resolve(value);
 		}));
 	}
-	default Promise<Void> thenRun(Runnable fn) {
+	default Promise<T> thenRun(ExceptionalRunnable<Throwable> fn) {
 		return Helpers.cast(then((value, callback) -> {
-			fn.run();
-			callback.resolve(null);
+			((Runnable)fn).run();
+			callback.resolve(value);
 		}));
 	}
-	default <NEXT> Promise<NEXT> thenApply(Function<T, NEXT> fn) {return Helpers.cast(then((value, callback) -> callback.resolve(fn.apply(value))));}
+	@SuppressWarnings("unchecked")
+	default <NEXT> Promise<NEXT> thenApply(ExceptionalFunction<T, NEXT, Throwable> fn) {
+		return Helpers.cast(then((value, callback) -> callback.resolve(((Function<T, NEXT>)fn).apply(value))));
+	}
 
-	Promise<T> rejected(Function<Throwable, T> recover);
-	Promise<T> rejectedAsync(Executor executor, Function<Throwable, T> recover);
-	Promise<T> rejectedCompose(Function<Throwable, Promise<T>> recover);
-	Promise<T> rejectedComposeAsync(Executor executor, Function<Throwable, T> recover);
+	Promise<T> exceptionally(Function<Throwable, T> recover);
+	Promise<T> exceptionallyCompose(Function<Throwable, Promise<T>> recover);
+	Promise<T> exceptionallyAsync(Executor executor, Function<Throwable, T> recover);
+	Promise<T> exceptionallyComposeAsync(Executor executor, Function<Throwable, T> recover);
 
 	int PENDING = 0, FULFILLED = PromiseImpl.TASK_COMPLETE|PromiseImpl.TASK_SUCCESS, REJECTED = PromiseImpl.TASK_COMPLETE;
-	byte state();
+	byte rawState();
 	T getNow();
 	T get() throws InterruptedException, ExecutionException;
 	T get(long timeout, TimeUnit unit) throws InterruptedException, ExecutionException, TimeoutException;
@@ -133,7 +149,5 @@ public sealed interface Promise<T> extends Future<T> permits PromiseImpl {
 		// T | Promise<T>
 		void resolve(Object result);
 		void reject(Throwable reason);
-		void resolveOn(Object result, Executor handler);
-		void rejectOn(Throwable reason, Executor handler);
 	}
 }

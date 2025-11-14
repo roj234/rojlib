@@ -63,9 +63,12 @@ public class LimitInputStream extends FilterInputStream {
 		n = Math.min(n, remain);
 		if (n <= 0) return 0;
 
-		if (n < (n = in.skip(n)))
+		long nSkip = IOUtil.skip(in, n);
+		if (nSkip < n) {
+			remain = 0;
 			close();
-		remain -= n;
+		} else remain -= nSkip;
+
 		return n;
 	}
 

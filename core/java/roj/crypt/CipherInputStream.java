@@ -1,9 +1,11 @@
 package roj.crypt;
 
 import org.jetbrains.annotations.NotNull;
+import roj.io.BufferPool;
+import roj.io.Finishable;
 import roj.io.IOUtil;
 import roj.io.MBInputStream;
-import roj.io.BufferPool;
+import roj.util.ArrayCache;
 import roj.util.ByteList;
 import roj.util.Helpers;
 
@@ -15,9 +17,9 @@ import java.io.InputStream;
  * @author Roj234
  * @since 2022/11/12 15:27
  */
-public class CipherInputStream extends MBInputStream {
+public class CipherInputStream extends MBInputStream implements Finishable {
 	protected InputStream in;
-	@Deprecated boolean eof;
+	protected boolean eof;
 
 	private final ByteList.Slice inputBuffer = new ByteList.Slice();
 	private ByteList outputBuffer;
@@ -28,8 +30,13 @@ public class CipherInputStream extends MBInputStream {
 		this.in = in;
 		this.cipher = cipher;
 
-		this.outputBuffer = (ByteList) BufferPool.buffer(false, CipherOutputStream.BUFFER_SIZE);
+		this.outputBuffer = (ByteList) BufferPool.buffer(false, Math.max(ArrayCache.IO_BUFFER_SIZE, cipher.engineGetBlockSize()));
 		this.inputBuffer.set(outputBuffer.array(), outputBuffer.arrayOffset(), outputBuffer.capacity());
+	}
+
+	public void wipe() throws IOException {
+		outputBuffer.clear();
+		inputBuffer.clear();
 	}
 
 	@Override
@@ -60,7 +67,7 @@ public class CipherInputStream extends MBInputStream {
 
 					// 没有剩余字节了
 					if (!inputBuffer.isReadable()) {
-						close();
+						finish();
 						return len == remaining ? -1 : len - remaining;
 					}
 
@@ -84,11 +91,15 @@ public class CipherInputStream extends MBInputStream {
 	}
 
 	@Override
-	public void close() throws IOException {
+	public void finish() throws IOException {
 		// 释放缓冲区
 		IOUtil.closeSilently(outputBuffer);
 		outputBuffer = ByteList.EMPTY;
+	}
 
+	@Override
+	public void close() throws IOException {
+		finish();
 		in.close();
 	}
 }

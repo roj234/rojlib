@@ -4,9 +4,10 @@ import org.intellij.lang.annotations.MagicConstant;
 import roj.collect.CharMap;
 import roj.crypt.KeyExchange;
 import roj.io.IOUtil;
-import roj.util.ArrayUtil;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
+
+import java.util.Arrays;
 
 /**
  * MSS客户端
@@ -158,11 +159,11 @@ public final class TLSEngineClient extends TLSEngine {
 	private int handleServerHelloSsl(DynByteBuf out, DynByteBuf in) throws MSSException {
 		if (in.readUnsignedShort() != 0x0303) return error(NEGOTIATION_FAILED, "legacy_version");
 		in.readFully(sharedKey, 32, 32);
-		if (ArrayUtil.rangedEquals(sharedKey,56,8,DOWNGRADE_11,0,7) &&
+		if (Arrays.equals(sharedKey, 56, 56 + 8, DOWNGRADE_11, 0, 7) &&
 			(sharedKey[63]&0xFF) <= 1) {
 			return error(ILLEGAL_PARAM, "random");
 		}
-		if (ArrayUtil.rangedEquals(sharedKey,32,32,HELLO_RETRY_REQUEST,0,32)) {
+		if (Arrays.equals(sharedKey, 32, 32 + 32, HELLO_RETRY_REQUEST, 0, 32)) {
 			// hello_retry
 		}
 

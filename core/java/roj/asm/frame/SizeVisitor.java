@@ -337,17 +337,17 @@ public class SizeVisitor {
 					stack(-arrayDepth);
 				}
 				case PUTFIELD, GETFIELD, PUTSTATIC, GETSTATIC -> {
-					CstRef field = cp.getRef(r, true);
+					CstRef field = cp.resolveMember(r, true);
 					char c = field.rawDesc().charAt(0);
 					int len = c == Type.LONG || c == Type.DOUBLE ? 2 : 1;
 					stack((code & 1) != 0 ? -len : len);
 				}
-				case INVOKEVIRTUAL, INVOKESPECIAL, INVOKESTATIC -> invoke(code, cp.getRef(r, false));
+				case INVOKEVIRTUAL, INVOKESPECIAL, INVOKESTATIC -> invoke(code, cp.resolveMember(r, false));
 				case INVOKEINTERFACE -> {
-					invoke(code, cp.get(r));
+					invoke(code, cp.resolve(r));
 					r.rIndex += 2;
 				}
-				case INVOKEDYNAMIC -> invoke(cp.get(r), r.readUnsignedShort());
+				case INVOKEDYNAMIC -> invoke(cp.resolve(r), r.readUnsignedShort());
 
 				case IRETURN, LRETURN, FRETURN, DRETURN, ARETURN, RETURN, ATHROW -> controlFlowTerminated = true;
 

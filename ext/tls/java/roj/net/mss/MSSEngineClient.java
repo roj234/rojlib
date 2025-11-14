@@ -3,7 +3,6 @@ package roj.net.mss;
 import roj.collect.CharMap;
 import roj.crypt.HMAC;
 import roj.crypt.KeyExchange;
-import roj.crypt.RCipher;
 import roj.io.IOUtil;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
@@ -97,7 +96,7 @@ final class MSSEngineClient extends MSSEngine {
 		var session = config.getOrCreateSession(context, null, 0);
 		if (session != null) {
 			if (session.key != null) {
-				encoder = getSessionCipher(session, RCipher.ENCRYPT_MODE);
+				encoder = getSessionCipher(session, true);
 			}
 			ext.put(Extension.session, new ByteList(session.id));
 		}
@@ -154,8 +153,8 @@ final class MSSEngineClient extends MSSEngine {
 		decoder = suite.cipher.get();
 
 		var prng = getPRNG("comm_prng");
-		encoder.init(RCipher.ENCRYPT_MODE, deriveKey("c2s0", suite.cipher.getKeySize()), null, prng);
-		decoder.init(RCipher.DECRYPT_MODE, deriveKey("s2c0", suite.cipher.getKeySize()), null, prng);
+		encoder.init(true, deriveKey("c2s0", suite.cipher.getKeySize()), null, prng);
+		decoder.init(false, deriveKey("s2c0", suite.cipher.getKeySize()), null, prng);
 
 		decoder.cryptInline(rx, rx.readableBytes());
 		CharMap<DynByteBuf> extIn = Extension.read(rx);

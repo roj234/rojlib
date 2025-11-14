@@ -1,7 +1,7 @@
 package roj.plugins;
 
-import roj.archive.zip.ZEntry;
-import roj.archive.zip.ZipArchive;
+import roj.archive.zip.ZipEditor;
+import roj.archive.zip.ZipEntry;
 import roj.asm.AsmCache;
 import roj.asm.ClassNode;
 import roj.asm.cp.Constant;
@@ -24,7 +24,6 @@ import java.util.Enumeration;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 
 import static roj.ui.CommandNode.argument;
@@ -113,11 +112,11 @@ public class Translator extends Plugin {
 					}
 				}
 			} else {
-				try (ZipArchive mzf = new ZipArchive(f)) {
+				try (ZipEditor mzf = new ZipEditor(f)) {
 					mzf.setComment("Roj234's class translator");
 
 					String path = f.getName()+'/';
-					for (ZEntry file : mzf.entries()) {
+					for (ZipEntry file : mzf.entries()) {
 						String name = file.getName();
 						if (name.endsWith(".class")) {
 							ib.clear();
@@ -178,9 +177,9 @@ public class Translator extends Plugin {
 			} else {
 				try (ZipFile zf = new ZipFile(f)) {
 					String path = f.getName()+'/';
-					Enumeration<? extends ZipEntry> e = zf.entries();
+					Enumeration<? extends java.util.zip.ZipEntry> e = zf.entries();
 					while (e.hasMoreElements()) {
-						ZipEntry ze = e.nextElement();
+						java.util.zip.ZipEntry ze = e.nextElement();
 						if (ze.getName().endsWith(".class")) {
 							buf.clear();
 							read(path, buf.readStreamFully(zf.getInputStream(ze)));

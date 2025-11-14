@@ -1,5 +1,6 @@
 package roj.crypt;
 
+import roj.util.DynByteBuf;
 import roj.util.Helpers;
 
 import java.security.DigestException;
@@ -73,6 +74,9 @@ public class HMAC extends MessageDigest implements MessageAuthenticCode {
 		reset();
 		return hash;
 	}
+
+	@Override
+	public void digest(DynByteBuf b) {b.put(digestShared());}
 
 	@Override
 	protected void engineReset() {

@@ -227,7 +227,7 @@ public class MakePinyinData {
 		IntMap<ToIntMap<String>> pinyinUsageMap = new IntMap<>(); // 存储每个汉字的拼音使用频率
 
 		progressBar.setName("Phase 1: analyze");
-		progressBar.setUnlimited();
+		progressBar.setIndeterminate();
 		// 处理单字拼音文件
 		try (TextReader reader = TextReader.auto(wordPinyinFile)) {
 			CharList buffer = IOUtil.getSharedCharBuf();

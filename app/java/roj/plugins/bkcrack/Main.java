@@ -1,9 +1,9 @@
 package roj.plugins.bkcrack;
 
-import roj.archive.zip.ZEntry;
 import roj.archive.zip.ZipCrypto;
+import roj.archive.zip.ZipEntry;
 import roj.archive.zip.ZipFile;
-import roj.archive.zip.ZipFileWriter;
+import roj.archive.zip.ZipPacker;
 import roj.collect.IntMap;
 import roj.concurrent.Executor;
 import roj.concurrent.TaskPool;
@@ -26,7 +26,6 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.zip.Inflater;
 import java.util.zip.InflaterInputStream;
-import java.util.zip.ZipEntry;
 
 import static roj.ui.CommandNode.argument;
 import static roj.ui.CommandNode.literal;
@@ -88,9 +87,9 @@ public class Main extends Plugin {
 	}
 
 	private static void tryFindPass(String entryName, String[] args, File file, int argOff, boolean stopOnFirstKey) throws IOException {
-		ZipFile mzf = new ZipFile(file, ZipFile.FLAG_BACKWARD_READ, charset);
-		ZEntry entry = mzf.getEntry(entryName);
-		if (entry == null || entry.getEncryptType() != ZipFile.CRYPT_ZIP2) {
+		ZipFile mzf = new ZipFile(file, ZipFile.FLAG_ReadCENOnly, charset);
+		ZipEntry entry = mzf.getEntry(entryName);
+		if (entry == null || entry.getEncryptMethod() != ZipEntry.ENC_ZIPCRYPTO) {
 			System.out.println("没找到或不符合要求:"+entryName);
 			return;
 		}
@@ -177,10 +176,10 @@ public class Main extends Plugin {
 		var bar = new EasyProgressBar("解密数据", "文件");
 
 		try (var zip = new ZipFile(f);
-			 var out = new ZipFileWriter(new File(f.getAbsolutePath() + ".crk.zip"))) {
+			 var out = new ZipPacker(new File(f.getAbsolutePath() + ".crk.zip"))) {
 			bar.addTotal(zip.entries().size());
 
-			for (ZEntry entry : zip.entries()) {
+			for (ZipEntry entry : zip.entries()) {
 				if (entry.isEncrypted()) {
 					zc.copyState(state, true);
 					inf.reset();
@@ -188,7 +187,7 @@ public class Main extends Plugin {
 					try (var in = new CipherInputStream(zip.getRawStream(entry), zc)) {
 						in.skip(12);
 						InputStream iin = entry.getMethod() == 0 ? in : new InflaterInputStream(in, inf);
-						ZEntry entry1 = new ZEntry(entry.getName());
+						ZipEntry entry1 = new ZipEntry(entry.getName());
 						entry1.setMethod(ZipEntry.STORED);
 						out.beginEntry(entry1);
 						IOUtil.copyStream(iin, out);
@@ -206,7 +205,7 @@ public class Main extends Plugin {
 	private static byte[] getExample(byte[] cipher, int[] key) throws IOException {
 		ZipCrypto zc = new ZipCrypto();
 
-		zc.init(ZipCrypto.DECRYPT_MODE, ArrayCache.BYTES, null, null);
+		zc.init(false, ArrayCache.BYTES, null, null);
 		zc.copyState(key, true);
 
 		CipherInputStream cs = new CipherInputStream(new ByteArrayInputStream(cipher), zc);

@@ -4,7 +4,6 @@ import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.NotNull;
 import roj.math.MathUtils;
 import roj.text.logging.Logger;
-import roj.util.ArrayUtil;
 import roj.util.FastFailException;
 import roj.util.Helpers;
 
@@ -83,7 +82,7 @@ public class HashMap<K, V> extends AbstractMap<K, V> implements FindMap<K, V>, _
 			lastPos = -1;
 
 			AbstractEntry<?, ?>[] arr = Helpers.cast(this.key);
-			int pos = ArrayUtil.binarySearch(arr, 0, len, key, this);
+			int pos = Arrays.binarySearch(arr, 0, len, key, this);
 			AbstractEntry<?, ?> entry;
 			if (pos < 0) {
 				// full search

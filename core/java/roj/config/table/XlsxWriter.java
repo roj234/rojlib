@@ -1,15 +1,15 @@
 package roj.config.table;
 
-import roj.archive.zip.ZEntry;
+import roj.archive.zip.ZipEntry;
 import roj.archive.zip.ZipFile;
-import roj.archive.zip.ZipFileWriter;
-import roj.collect.IntList;
+import roj.archive.zip.ZipPacker;
 import roj.collect.ArrayList;
+import roj.collect.IntList;
 import roj.collect.ToIntMap;
-import roj.text.Tokenizer;
 import roj.io.IOUtil;
 import roj.io.source.ByteSource;
 import roj.text.CharList;
+import roj.text.Tokenizer;
 import roj.util.ByteList;
 
 import java.io.IOException;
@@ -29,7 +29,7 @@ public class XlsxWriter implements TableWriter {
 		} catch (IOException ignored) {}
 	}
 
-	private final ZipFileWriter zip;
+	private final ZipPacker zip;
 
 	private String sheetName;
 	private ByteList sheet;
@@ -38,12 +38,12 @@ public class XlsxWriter implements TableWriter {
 	private final List<Object> sheets = new ArrayList<>();
 	private static final int SHEET_OBJECT_SIZE = 4;
 
-	public XlsxWriter(ZipFileWriter zfw) throws IOException {
+	public XlsxWriter(ZipPacker zfw) throws IOException {
 		zip = zfw;
-		for (ZEntry entry : TEMPLATE.entries()) {
+		for (ZipEntry entry : TEMPLATE.entries()) {
 			if (!entry.getName().endsWith("/")) zfw.copy(TEMPLATE, entry);
 		}
-		zip.beginEntry(new ZEntry("xl/sharedStrings.xml"));
+		zip.beginEntry(new ZipEntry("xl/sharedStrings.xml"));
 		tmpB.putAscii("<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n" + "<sst xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\">").writeToStream(zip);
 		tmpB.clear();
 	}
@@ -177,7 +177,7 @@ public class XlsxWriter implements TableWriter {
 		zip.closeEntry();
 		beginSheet(null);
 		for (int i = 0; i < sheets.size(); i += SHEET_OBJECT_SIZE) {
-			zip.beginEntry(new ZEntry("xl/worksheets/sheet"+(i/SHEET_OBJECT_SIZE+1)+".xml"));
+			zip.beginEntry(new ZipEntry("xl/worksheets/sheet"+(i/SHEET_OBJECT_SIZE+1)+".xml"));
 
 			tmpB.clear();
 			tmpB.putAscii("<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n" +
@@ -211,7 +211,7 @@ public class XlsxWriter implements TableWriter {
 
 			zip.closeEntry();
 		}
-		zip.beginEntry(new ZEntry("xl/workbook.xml"));
+		zip.beginEntry(new ZipEntry("xl/workbook.xml"));
 		tmpB.clear();
 		tmpB.putAscii("<workbook xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\"><fileVersion appName=\"xl\" lastEdited=\"3\" lowestEdited=\"5\" rupBuild=\"9302\"/><sheets>");
 		for (int i = 0; i < sheets.size(); i += SHEET_OBJECT_SIZE) {
@@ -219,7 +219,7 @@ public class XlsxWriter implements TableWriter {
 		}
 		tmpB.putAscii("</sheets></workbook>").writeToStream(zip);
 		zip.closeEntry();
-		zip.beginEntry(new ZEntry("xl/_rels/workbook.xml.rels"));
+		zip.beginEntry(new ZipEntry("xl/_rels/workbook.xml.rels"));
 		tmpB.clear();
 		tmpB.putAscii("<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n" + "<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">");
 		for (int i = 0; i < sheets.size(); i += SHEET_OBJECT_SIZE) {

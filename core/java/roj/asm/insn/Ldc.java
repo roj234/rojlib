@@ -25,7 +25,7 @@ final class Ldc extends Segment {
 		int prevCode = code;
 
 		DynByteBuf o = to.bw;
-		int index = to.cpw.fit(constant);
+		int index = to.cpw.internIndex(constant);
 		if (index <= 255) {
 			o.put(code = LDC).put(index);
 		} else {

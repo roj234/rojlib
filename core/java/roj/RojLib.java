@@ -7,6 +7,7 @@ import roj.util.optimizer.LibraryLoader;
 
 import java.io.File;
 import java.io.FileOutputStream;
+import java.nio.file.Files;
 
 /**
  * @author Roj233
@@ -81,7 +82,12 @@ public final class RojLib {
 					}
 				}
 
-				System.load(tmp.getAbsolutePath());
+				try {
+					System.load(tmp.getAbsolutePath());
+				} catch (Exception e) {
+					Files.deleteIfExists(tmp.toPath());
+					throw e;
+				}
 				LibFile = tmp;
 				return true;
 			}
@@ -92,4 +98,5 @@ public final class RojLib {
 	}
 
 	private static native long init();
+	public static native long getLastError();
 }

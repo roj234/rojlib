@@ -49,6 +49,12 @@ public final class BsDiff {
 
 	@IntrinsicCandidate("IL_bsdiff_init")
 	private static void initializeSuffixArray(final byte[] baseData, final int[] suffixArray, int size) {
+		if (baseData.length > 0xFFFFF) {
+			var divsufSort = new DivSufSort();
+			divsufSort.computeSuffixArray(baseData, suffixArray, size);
+			return;
+		}
+
 		int[] frequencyBucket = ArrayCache.getIntArray(256, true);
 		// Count character frequencies
 		for (int i = 0; i < baseData.length; i++) frequencyBucket[toUnsignedByte(baseData[i])]++;
@@ -395,7 +401,7 @@ public final class BsDiff {
 
 			int i = suffixArray[mid];
 			int len = Math.min(left.length-i, right.length-rightOff);
-			int ret = ArrayUtil.compare(
+			int ret = ArrayUtil.mismatch(
 					left, Unsafe.ARRAY_BYTE_BASE_OFFSET + i,
 					right, Unsafe.ARRAY_BYTE_BASE_OFFSET + rightOff,
 					len, ArrayUtil.LOG2_ARRAY_BYTE_INDEX_SCALE);

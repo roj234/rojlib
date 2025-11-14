@@ -37,10 +37,10 @@ class AES extends RCipher {
 	@Override public RCipher copyWith(boolean isEncryptMode) {return new AES(this, isEncryptMode);}
 
 	@Override
-	public void init(int mode, byte[] key, AlgorithmParameterSpec par, SecureRandom random) throws InvalidAlgorithmParameterException, InvalidKeyException {
+	public void init(boolean encrypt, byte[] key, AlgorithmParameterSpec par, SecureRandom random) throws InvalidAlgorithmParameterException, InvalidKeyException {
 		if (par != null || random != null) throw new InvalidAlgorithmParameterException();
 
-		this.encrypt = mode != RCipher.DECRYPT_MODE;
+		this.encrypt = encrypt;
 		if (Arrays.equals(lastKey, key)) return;
 
 		switch (key.length) {

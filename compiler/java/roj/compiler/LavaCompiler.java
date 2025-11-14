@@ -55,8 +55,8 @@ import java.util.Map;
  * <li>{@link roj.compiler.resolve.LinkedClass Cache}s for data bound to classes, including:
  *     <ul>
  *     <li>MethodList and FieldList, distinguished only by name (ignoring access modifiers or parameter counts). The former improves error reporting beyond "not found," and the latter supports varargs and named types.</li>
- *     <li>Hierarchy list, using {@code IntBiMap} for ordered access and O(n) {@link #getCommonAncestor(ClassDefinition, ClassDefinition) nearest common ancestor lookup}.</li>
- *     <li>{@link #getTypeArgumentsFor(ClassDefinition, String)} and</li>
+ *     <li>Hierarchy list, using {@code IntBiMap} for ordered access and O(n) {@link #getCommonAncestor(ClassNode, ClassNode) nearest common ancestor lookup}.</li>
+ *     <li>{@link #getTypeArgumentsFor(ClassNode, String)} and</li>
  *     <li>InnerClassFlags for retrieving actual access flags of inner classes.</li>
  *     </ul>
  * </li>
@@ -84,6 +84,7 @@ public class LavaCompiler extends Resolver implements Compiler {
 	}
 
 	public ArrayList<CompileUnit> parsables = new ArrayList<>();
+	public int stopAt;
 
 	/**
 	 * 编译输入的源文件并返回生成的类定义。
@@ -96,7 +97,7 @@ public class LavaCompiler extends Resolver implements Compiler {
 	 * @implNote 如果不返回null，并且你想复用编译器实例，那么你必须手动清空它
 	 */
 	@SuppressWarnings("unchecked")
-	public @Nullable List<? extends ClassDefinition> compile(@MayMutate List<? extends CompileUnit> files) {
+	public @Nullable List<? extends ClassNode> compile(@MayMutate List<? extends CompileUnit> files) {
 		if (hasError) throw new IllegalStateException("hasError is true before compilation.");
 		try {
 			if (CompileContext.get() == null) CompileContext.set(createContext());
@@ -113,11 +114,11 @@ public class LavaCompiler extends Resolver implements Compiler {
 			if (hasError()) return null;
 			var units = parsables;
 			for (int i = 0; i < units.size(); i++) {
-				units.get(i).S2p1resolveName();
+				units.get(i).S2p1resolveInheritance();
 			}
 			if (hasError()) return null;
 			for (int i = 0; i < units.size(); i++) {
-				units.get(i).S2p2resolveType();
+				units.get(i).S2p2resolveMembers();
 			}
 			if (hasError()) return null;
 			for (int i = 0; i < units.size(); i++) {
@@ -161,7 +162,7 @@ public class LavaCompiler extends Resolver implements Compiler {
 	}
 
 	@SuppressWarnings("unchecked")
-	public @Nullable List<? extends ClassDefinition> compile(@MayMutate List<? extends CompileUnit> files, TaskGroup group, EasyProgressBar prog) {
+	public @Nullable List<? extends ClassNode> compile(@MayMutate List<? extends CompileUnit> files, TaskGroup group, EasyProgressBar prog) {
 		if (hasError) throw new IllegalStateException("hasError is true before compilation.");
 		try {
 			CompileContext ctx = retainContext();
@@ -191,14 +192,14 @@ public class LavaCompiler extends Resolver implements Compiler {
 			prog.setTotal(taskSecondPass.size());
 			prog.setName("阶段2.1: 名称解析");
 
-			group.executeAll(taskSecondPass, CompileUnit::S2p1resolveName, cleanup).await();
+			group.executeAll(taskSecondPass, CompileUnit::S2p1resolveInheritance, cleanup).await();
 			if (hasError()) return null;
 
 			prog.end("完成");
 			prog.setTotal(taskSecondPass.size());
 			prog.setName("阶段2.2: 类型解析");
 
-			group.executeAll(taskSecondPass, CompileUnit::S2p2resolveType, cleanup).await();
+			group.executeAll(taskSecondPass, CompileUnit::S2p2resolveMembers, cleanup).await();
 			if (hasError()) return null;
 
 			prog.end("完成");
@@ -254,7 +255,7 @@ public class LavaCompiler extends Resolver implements Compiler {
 			// 内部类必须和父类在同一线程上编译
 			// 这是一个没有考虑边界情况的检查，但是应该可用
 			var unit = files.get(len-1);
-			while (unit._parent != unit && len < files.size()) {
+			while (unit.nestHost != unit && len < files.size()) {
 				unit = files.get(len++);
 			}
 
@@ -295,6 +296,7 @@ public class LavaCompiler extends Resolver implements Compiler {
 
 	public JavadocProcessor createJavadocProcessor(Javadoc javadoc, CompileUnit file) {return JavadocProcessor.NULL;}
 
+	// 在不同类型的数组上创建附加方法
 	public ClassNode resolveArray(IType type) {
 		System.out.println("Resolve array desc "+type);
 		String arrayTypeDesc = type.toDesc();
@@ -327,7 +329,7 @@ public class LavaCompiler extends Resolver implements Compiler {
 	public boolean hasFeature(int specId) {return features.contains(specId);}
 
 	/**
-	 * Gets the maximum binary compatibility version supported.
+	 * Gets the maximum binary compatibility version allowed.
 	 *
 	 * @return the maximum version, ranging from 6 to 21
 	 */
@@ -386,8 +388,8 @@ public class LavaCompiler extends Resolver implements Compiler {
 	public AnnotationRepo getClasspathAnnotations() {
 		if (annotations == null) {
 			annotations = new AnnotationRepo();
-			for (Library library : libraries) {
-				addAnnotations(library);
+			for (int i = unernumerableEnd; i < libraries.size(); i++) {
+				addAnnotations(libraries.get(i));
 			}
 		}
 		return annotations;
@@ -456,8 +458,8 @@ public class LavaCompiler extends Resolver implements Compiler {
 	}
 
 	public void runAnnotationProcessor(CompileUnit file, Attributed node, List<AnnotationPrimer> annotations) {
+		var lc = file.ctx;
 		for (AnnotationPrimer annotation : annotations) {
-			var lc = CompileContext.get();
 			for (Processor processor : processors.getOrDefault(annotation.type(), Collections.emptyList())) {
 				processor.handle(lc, file, node, annotation);
 			}
@@ -564,8 +566,10 @@ public class LavaCompiler extends Resolver implements Compiler {
 	@Override public void addOpHandler(String operator, ExprOp resolver) {operators.computeIfAbsentI(tokenId(operator), x -> new ArrayList<>()).add(resolver);}
 	//endregion
 	//region 沙盒API
+	@Deprecated
 	private Sandbox sandbox;
 
+	@Deprecated
 	private synchronized Sandbox getSandbox() {
 		if (sandbox == null) {
 			report(null, Kind.SEVERE_WARNING, -1, "lava.sandbox");
@@ -574,8 +578,11 @@ public class LavaCompiler extends Resolver implements Compiler {
 		return sandbox;
 	}
 
+	@Deprecated
 	public void addSandboxWhitelist(String packageOrTypename, boolean childInheritance) {getSandbox().restriction.add(packageOrTypename, 1, false, childInheritance);}
+	@Deprecated
 	public void addSandboxBlacklist(String packageOrTypename, boolean childInheritance) {getSandbox().restriction.add(packageOrTypename, 0, false, childInheritance);}
+	@Deprecated
 	public Object createSandboxInstance(ClassNode data) {
 		String name = data.name().replace('/', '.');
 		addSandboxClass(name, AsmCache.toByteArray(data));
@@ -585,8 +592,9 @@ public class LavaCompiler extends Resolver implements Compiler {
 		} catch (Exception e) {
 			throw new RuntimeException(e);
 		}
-}
-	public void addSandboxClass(String className, byte[] data) {getSandbox().classBytes.put(className, data);}
+	}
+	@Deprecated
+	private void addSandboxClass(String className, byte[] data) {getSandbox().classBytes.put(className, data);}
 	//endregion
 	//region 附件API
 	private Map<TypedKey<?>, Object> attachments = Collections.emptyMap();

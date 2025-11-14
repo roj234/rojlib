@@ -150,9 +150,9 @@ public final class LavaTokenizer extends Tokenizer {
 	private static final Int2IntMap C2C = new Int2IntMap();
 	private static final TrieTree<Token> TOKEN_MAP = new TrieTree<>();
 	private static final BitSet LITERAL_END = new BitSet();
-	private static final BitSet[] LITERAL_STATE = new BitSet[4];
+	private static final BitSet[] LITERAL_STATE = new BitSet[5];
 
-	public static final int STATE_CLASS = 0, STATE_MODULE = 1, STATE_EXPR = 2, STATE_TYPE = 3;
+	public static final int STATE_CLASS = 0, STATE_MODULE = 1, STATE_EXPR = 2, STATE_TYPE = 3, STATE_HEADER = 4;
 	public int state = STATE_CLASS;
 	public BitSet[] literalState = LITERAL_STATE;
 
@@ -181,7 +181,8 @@ public final class LavaTokenizer extends Tokenizer {
 			BitSet set = new BitSet();
 			for (int id = 0; id < INITIAL_TOKEN_COUNT; id++) {
 				if (id <= CHARACTER || id >= 100 || switch (state) {
-					case STATE_CLASS -> id <= LavaTokenizer.DOUBLE;
+					case STATE_HEADER -> id <= LavaTokenizer.DOUBLE;
+					case STATE_CLASS -> id >= INTERFACE && id <= LavaTokenizer.DOUBLE;
 					case STATE_EXPR -> id >= VOID && id <= FINALLY || id == CLASS || id == FINAL || id == CONST || id == DEFAULT || id == SUPER || id == SYNCHRONIZED;
 					case STATE_TYPE -> id >= VOID && id <= FINALLY || id == SUPER || id == EXTENDS;
 					case STATE_MODULE -> id >= REQUIRES && id <= TO || id == WITH || id == STATIC;
