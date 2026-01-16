@@ -30,7 +30,6 @@ import roj.concurrent.Task;
 import roj.config.ConfigMaster;
 import roj.config.mapper.ObjectMapper;
 import roj.config.node.ConfigValue;
-import roj.http.Headers;
 import roj.http.HttpUtil;
 import roj.http.server.*;
 import roj.io.IOUtil;
@@ -269,7 +268,7 @@ public final class OKRouter implements Router {
 				}
 
 				cw.invoke(INVOKEVIRTUAL, mn.owner(), mn.name(), mn.rawDesc());
-				if (mn.returnType().type != Type.CLASS) {
+				if (mn.returnType().type != Type.OBJECT) {
 					if (mn.returnType().type != Type.VOID)
 						throw new IllegalArgumentException("方法返回值必须是空值或对象:"+mn);
 					else cw.insn(ACONST_NULL);
@@ -415,7 +414,7 @@ public final class OKRouter implements Router {
 					if ((bodyUsedFlags & 4) == 0) {
 						bodyUsedFlags |= 4;
 
-						if (rawType.getActualType() != Type.CLASS)
+						if (rawType.getActualType() != Type.OBJECT)
 							throw new IllegalArgumentException("基本类型无法使用JSON解析");
 
 						var tce = new TryCatchBlock();
@@ -475,7 +474,7 @@ public final class OKRouter implements Router {
 
 			addExHandler: {
 				int type1 = rawType.getActualType();
-				if (type1 == Type.CLASS) {
+				if (type1 == Type.OBJECT) {
 					if (rawType.owner != null) {
 						if (rawType.owner.equals("java/lang/String") || rawType.owner.equals("java/lang/CharSequence")) {
 							cw.invoke(INVOKEVIRTUAL, "java/lang/Object", "toString", "()Ljava/lang/String;");
@@ -637,7 +636,7 @@ public final class OKRouter implements Router {
 	// 生成请求调试信息
 	@IndirectReference
 	public static IllegalRequestException requestDebug(Throwable exc, Request req, String msg) {
-		var isBrowserRequest = Headers.getOneValue(req.get("accept"), "text/html") != null;
+		var isBrowserRequest = req.containsKey("accept", "text/html");
 		return new IllegalRequestException(400, /*isBrowserRequest ? */Content.internalError("参数'"+HtmlEntities.encode(msg)+"'解析失败", exc));
 	}
 	// 解析JSON请求体
@@ -649,7 +648,7 @@ public final class OKRouter implements Router {
 		var serializer = ObjectMapper.SAFE.reader(type);
 		ConfigMaster configType;
 
-		switch (req.getFirstHeaderValue("content-type")) {
+		switch (req.header("content-type")) {
 			default -> configType = ConfigMaster.JSON;
 			case "application/x-msgpack"/* Unofficial */, "application/vnd.msgpack" -> configType = ConfigMaster.MSGPACK;
 			case "application/x-www-form-urlencoded", "multipart/form-data" -> {

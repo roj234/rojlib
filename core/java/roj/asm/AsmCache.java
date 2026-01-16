@@ -58,12 +58,12 @@ public final class AsmCache {
 	private int cpCount;
 
 	public void retainHugeArray(ArrayList<Constant> constants) {
-		if (cpCount == 10) return;
-		int i = cpCount++;
-		Object[] objects = cpArr[i];
-		if (objects == null) objects = new Object[1024];
-
 		if (constants.isEmpty()) {
+			if (cpCount == 10) return;
+			int i = cpCount++;
+			Object[] objects = cpArr[i];
+			if (objects == null) objects = new Object[1024];
+
 			constants._setArray(objects);
 		}
 	}

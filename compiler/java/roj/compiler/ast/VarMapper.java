@@ -3,9 +3,8 @@ package roj.compiler.ast;
 import roj.collect.ArrayList;
 import roj.collect.BitSet;
 import roj.collect.IntMap;
-import roj.collect.IntervalPartition;
-import roj.collect.IntervalPartition.Endpoint;
-import roj.collect.IntervalPartition.Segment;
+import roj.collect.SweepLine;
+import roj.collect.SweepLine.Segment;
 import roj.compiler.asm.Variable;
 
 import java.util.List;
@@ -16,38 +15,32 @@ import java.util.List;
  * @since 2022/2/23 15:27
  */
 final class VarMapper {
-	private final IntervalPartition<Variable> vars = new IntervalPartition<>(10, false, 100);
-
 	private final BitSet freeId = new BitSet();
-	private final List<Variable> tmp2 = new ArrayList<>();
+	private final List<Variable> vars = new ArrayList<>();
 	private int reservedPeak;
 
-	public void add(Variable v) {tmp2.add(v);}
+	public void add(Variable v) {vars.add(v);}
 	public void reserve(int slot) {
 		if (reservedPeak < slot) freeId.addRange(reservedPeak, slot);
 		freeId.remove(slot);
 		if (reservedPeak < slot + 1) reservedPeak = slot + 1;
 	}
 	public int map() {
-		var union = vars;
-		union.clear();
-		for (Variable v : tmp2) union.add(v);
-		tmp2.clear();
-
 		var freeId = this.freeId;
-		var curVars = tmp2;
-
-		IntMap<Variable> known = new IntMap<>();
+		var curVars = vars;
+		var scans = SweepLine.scan(curVars, SweepLine.Range.getExtractor());
+		var known = new IntMap<Variable>();
+		curVars.clear();
 
 		int id = reservedPeak, peakId = id;
 
-		Segment[] list = union.getSegments();
-		for (int j = 0; j < union.getSegmentCount(); j++) {
-			Endpoint p = list[j].anchor();
-			while (p != null) {
-				Variable v = p.interval();
-				boolean end = p.isEnd();
-				p = p.next();
+
+		for (int j = 0; j < scans.size();) {
+			var p = scans.get(j++);
+			int currentPos = getPos(p);
+			while (true) {
+				Variable v = p.value;
+				boolean end = p.isEnd;
 
 				if (end) {
 					if (curVars.remove(v)) continue;
@@ -59,6 +52,12 @@ final class VarMapper {
 				} else {
 					curVars.add(v);
 				}
+
+				if (j >= scans.size()) break;
+
+				p = scans.get(j);
+				if (getPos(p) != currentPos) break;
+				j++;
 			}
 
 			for (int i = 0; i < curVars.size(); i++) {
@@ -90,9 +89,11 @@ final class VarMapper {
 			curVars.clear();
 		}
 		freeId.clear();
-		vars.clear();
 
 		return peakId;
 	}
-	public void clear() {tmp2.clear();freeId.clear();reservedPeak = 0;}
+
+	private static int getPos(Segment<Variable> p) {return (p.isEnd ? p.value.end : p.value.start).getValue();}
+
+	public void clear() {vars.clear();freeId.clear();reservedPeak = 0;}
 }

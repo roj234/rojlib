@@ -18,7 +18,7 @@ import java.util.List;
 import java.util.Map;
 
 import static roj.asm.type.ParameterizedType.*;
-import static roj.asm.type.Type.CLASS;
+import static roj.asm.type.Type.OBJECT;
 import static roj.asm.type.Type.VOID;
 
 /**
@@ -131,7 +131,7 @@ public class TypeCast {
 			SOLID[i- IMPOSSIBLE] = new Cast(i, -1); // -1 : not applicable
 		}
 	}
-	public static Cast ERROR(@Range(from = IMPOSSIBLE, to = DOWNCAST) int type) { return SOLID[type- IMPOSSIBLE]; }
+	public static Cast ERROR(@Range(from = IMPOSSIBLE, to = DOWNCAST) int type) { return SOLID[type-IMPOSSIBLE]; }
 	private static Cast DOWNCAST(IType type) {
 		Cast cast = new Cast(DOWNCAST, -1);
 		cast.type1 = type;
@@ -480,7 +480,7 @@ public class TypeCast {
 		// 数组继承
 		int arrayDelta = from.array() - to.array();
 		if (arrayDelta < 0) { // 转成更高维度 (包括从Object到)
-			if (from.type != CLASS) return ERROR(IMPOSSIBLE); // 基本类型不可能
+			if (from.type != OBJECT) return ERROR(IMPOSSIBLE); // 基本类型不可能
 
 			/*String[] x;
 			x = (String[]) (String) null;

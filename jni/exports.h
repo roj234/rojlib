@@ -44,6 +44,10 @@ FJNIEXPORT uint32_t FJNICALL IL_xxHash32(int32_t seed, uint8_t *buf, int32_t off
 JNIEXPORT jlong JNICALL Java_roj_RojLib_init(JNIEnv *, jclass);
 JNIEXPORT jlong JNICALL Java_roj_RojLib_getLastError(JNIEnv *, jclass);
 
+JNIEXPORT jint JNICALL Java_roj_webui_WebUI_launch0(JNIEnv* env, jclass, jstring url, jstring user_data_dir, jlong pOptions);
+JNIEXPORT jlong JNICALL Java_roj_webui_WebUI_bindWindow0(JNIEnv* env, jclass, jlong pid);
+JNIEXPORT jstring JNICALL Java_roj_webui_WebUI_pickFile0(JNIEnv* env, jclass, jlong pOptions);
+
 JNIEXPORT jint JNICALL Java_roj_ui_NativeVT_SetConsoleMode(JNIEnv *, jclass, jint, jint, jint);
 JNIEXPORT jlong JNICALL Java_roj_ui_NativeVT_GetConsoleWindow(JNIEnv *, jclass);
 JNIEXPORT jint JNICALL Java_roj_ui_NativeVT_GetConsoleSize(JNIEnv *, jclass);
@@ -57,10 +61,6 @@ JNIEXPORT jint JNICALL Java_roj_net_Net_SetSocketOpt(JNIEnv *, jclass, jint, jbo
 
 JNIEXPORT jlong JNICALL Java_roj_gui_GuiUtil_GetWindowLong(JNIEnv *, jclass, jlong hwnd, jint dwType);
 JNIEXPORT void JNICALL Java_roj_gui_GuiUtil_SetWindowLong(JNIEnv *, jclass, jlong hwnd, jint dwType, jlong flags);
-
-JNIEXPORT void JNICALL Java_roj_ui_Taskbar_initNatives(JNIEnv *env, jclass);
-JNIEXPORT void JNICALL Java_roj_ui_Taskbar_setProgressType(JNIEnv *, jclass, jlong hwnd, jint type);
-JNIEXPORT void JNICALL Java_roj_ui_Taskbar_setProgressValue(JNIEnv *, jclass, jlong hwnd, jlong progress, jlong total);
 
 JNIEXPORT jstring JNICALL Java_roj_io_IOUtil_getHardLinkUUID0(JNIEnv* env, jclass, jstring filePath);
 JNIEXPORT jboolean JNICALL Java_roj_io_IOUtil_makeHardLink0(JNIEnv* env, jclass, jstring link, jstring existing);

@@ -260,7 +260,7 @@ public final class MCMake {
 			.then(literal("delete").then(argument("项目名称", Argument.oneOf(projects)).executes(ctx -> {
 				var proj = ctx.argument("项目名称", Project.class);
 				Workspace.registerModule(proj, 1);
-				IOUtil.deletePath(proj.cachePath);
+				IOUtil.deleteRecursively(proj.cachePath);
 				projects.remove(proj.getName());
 				saveEnv();
 				System.out.println("已从配置中删除，请手动删除projects目录下文件");
@@ -370,7 +370,7 @@ public final class MCMake {
 					if (entry.getName().endsWith(".class")) {
 						ByteList r = IOUtil.getSharedByteBuf().readStreamFully(za.getInputStream(entry));
 						r.setInt(4, targetVersion);
-						za.put(entry.getName(), (ByteList) r.copySlice());
+						za.put(entry.getName(), r.copySlice());
 					}
 				}
 				za.save();
@@ -405,7 +405,7 @@ public final class MCMake {
 			var files = Collections.singletonList(LavaCompileUnit.create(scriptFile.getName(), IOUtil.readString(scriptFile)));
 
 			var compiler = new LavaCompiler();
-			new TestPlugin().pluginInit(compiler);
+			new TestPlugin(compiler);
 
 			compiler.features.add(roj.compiler.api.Compiler.EMIT_INNER_CLASS);
 			compiler.features.add(roj.compiler.api.Compiler.EMIT_LINE_NUMBERS);
@@ -448,7 +448,7 @@ public final class MCMake {
 				}
 
 				var workspace = CONFIG.read(in, Env.Workspace.class, ConfigMaster.YAML);
-				workspace.id = IOUtil.normalizePath(workspace.id);
+				workspace.id = IOUtil.normalize(workspace.id);
 
 				if (MCMake.workspaces.containsKey(workspace.id)) {
 					Tty.warning("同名工作空间("+workspace.id+")已存在");
@@ -510,7 +510,7 @@ public final class MCMake {
 				archive.parallelDecompress(monitor, (entry, in1) -> {
 					if (entry.isDirectory() || entry.getName().equals("workspace.yml")) return;
 
-					String pathname = IOUtil.normalizePath(entry.getName());
+					String pathname = IOUtil.normalize(entry.getName());
 					int i = pathname.indexOf('/');
 					if (i < 0) {
 						var file = workspace.mapping;
@@ -636,7 +636,7 @@ public final class MCMake {
 				}
 
 				Env.Project pojo = CONFIG.read(in, Env.Project.class, ConfigMaster.YAML);
-				pojo.name = IOUtil.normalizePath(pojo.name);
+				pojo.name = IOUtil.normalize(pojo.name);
 
 				if (projects.containsKey(pojo.name)) {
 					Tty.warning("同名项目("+pojo.name+")已存在");
@@ -654,7 +654,7 @@ public final class MCMake {
 					Tty.warning("项目目录'"+basePath+"'非空，是否清空目录\nY: 清空并导入\nN: 不清空并导入\nCtrl+C: 取消操作");
 					char selection = TUI.key("YyNn", "您的选择: ");
 					if (selection == 0) return;
-					if (selection == 'Y' || selection == 'y') IOUtil.deletePath(basePath);
+					if (selection == 'Y' || selection == 'y') IOUtil.deleteRecursively(basePath);
 				}
 
 				bar.setName("导入"+pojo.name);
@@ -666,7 +666,7 @@ public final class MCMake {
 				TaskGroup monitor = TaskPool.cpu().newGroup();
 				archive.parallelDecompress(monitor, (entry, in1) -> {
 					if (entry.isDirectory() || entry.getName().equals("project.yml")) return;
-					var file = new File(basePath, IOUtil.normalizePath(entry.getName()));
+					var file = new File(basePath, IOUtil.normalize(entry.getName()));
 					file.getParentFile().mkdirs();
 
 					try (var out = new FileOutputStream(file)) {
@@ -850,7 +850,7 @@ public final class MCMake {
 			String path = v.getAbsolutePath();
 			return path.startsWith(dataBase) ? path.substring(dataBase.length() + 1) : path;
 		}
-		public static File fromString(String v) {return v == null ? null : IOUtil.resolvePath(CACHE_PATH, v);}
+		public static File fromString(String v) {return v == null ? null : IOUtil.resolve(CACHE_PATH, v);}
 	}
 	//endregion
 
@@ -874,7 +874,10 @@ public final class MCMake {
 						bar.setName("构建依赖["+depend.getName()+"]");
 						bar.setProgress((double)i / allDependencies.size());
 
-						if (depend.compiling != null) continue;
+						if (depend.compiling != null) {
+							if (depend.compiling.hasError) return 1;
+							continue;
+						}
 
 						Profiler.startSection(depend.getName());
 
@@ -884,6 +887,7 @@ public final class MCMake {
 						try {
 							success = depend.conf.type.canBuild() ? build(copyArgs, depend, artifact) : compile(copyArgs, depend);
 							if (!success) {
+								depend.compiling.hasError = true;
 								Statistic.afterProjectBuild(depend.getName(), System.currentTimeMillis() - depend.compiling.buildStartTime, args, false);
 								bar.end("构建失败");
 								break block;
@@ -904,6 +908,7 @@ public final class MCMake {
 			log.debug("Build [{}]: config={}", project.getName(), args);
 			success = build(args, project, artifact);
 			if (!success) {
+				project.compiling.hasError = true;
 				Statistic.afterProjectBuild(project.getName(), System.currentTimeMillis() - project.compiling.buildStartTime, args, false);
 				if (args.contains("full")) watcher.remove(project);
 			}
@@ -1023,7 +1028,7 @@ public final class MCMake {
 		if (context.incrementLevel > INC_REBUILD) {
 			ZipEditor writer = mappedWriter.getArchive();
 			for (String className : context.getRemovedClasses()) {
-				boolean replaced = writer.createMod(className).data != null;
+				boolean replaced = writer.prepareUpdate(className).data != null;
 				log.trace(replaced ? "Replaced (in artifact) {}" : "Remove (in artifact) {}", className);
 			}
 		}
@@ -1056,7 +1061,7 @@ public final class MCMake {
 	}
 	private static ZipOutput lockOutput(Project p, File jarFile) {
 		int amount = 30 * 20;
-		while (jarFile.isFile() && !IOUtil.isReallyWritable(jarFile)) {
+		while (jarFile.isFile() && !IOUtil.isWritable(jarFile)) {
 			if ((amount % 100) == 0) Tty.warning("输出jar已被其它程序锁定, 等待解锁……");
 			LockSupport.parkNanos(50_000_000L);
 			if (--amount == 0) throw new IllegalStateException("输出被锁定");
@@ -1081,12 +1086,11 @@ public final class MCMake {
 		for (File file : p.workspace.getMappedDepend()) {
 			classpath.append(file.getAbsolutePath().substring(prefix)).append(File.pathSeparatorChar);
 		}
-		IOUtil.listFiles(new File(BASE, "lib"),  file -> {
-			String ext = IOUtil.extensionName(file.getName());
-			if ((ext.equals("zip") || ext.equals("jar")) && file.length() != 0) {
-				classpath.append(file.getAbsolutePath().substring(prefix)).append(File.pathSeparatorChar);
+		IOUtil.listPaths(new File(BASE, "lib"),  (pathname, attr) -> {
+			String ext = IOUtil.getExtension(pathname);
+			if ((ext.equals("zip") || ext.equals("jar")) && attr.size() != 0) {
+				classpath.append(pathname.substring(prefix)).append(File.pathSeparatorChar);
 			}
-			return false;
 		});
 
 		var dependencies = p.getCompileDependencies();
@@ -1121,10 +1125,9 @@ public final class MCMake {
 			return true;
 		}
 
-		List<? extends ClassResource> outputs;
-		if (changed.isEmpty()) {
-			outputs = new ArrayList<>();
-		} else {
+		List<ClassResource> outputs = new ArrayList<>(), resources = new ArrayList<>();
+
+		if (!changed.isEmpty()) {
 			Profiler.endStartSection("parameters");
 
 			String classPath = getClassPath(p, increment > 0);
@@ -1140,12 +1143,21 @@ public final class MCMake {
 			log.debug("ModifyArg post: increment={}, argument={}", increment, options);
 
 			Profiler.endStartSection("compile");
-			outputs = p.compiler.compile(options, changed, args.contains("diagnostic"));
 
 			// 编译失败
-			if (outputs == null) {
+			if (!p.compiler.compile(options, changed, outputs, resources, args.contains("diagnostic"))) {
 				Profiler.endSection();
 				return false;
+			}
+
+			if (!resources.isEmpty()) {
+				String errorMessage = "使用注解处理器生成资源。详见: https://github.com/roj234/RojLib/blob/master/toolchain/docs/WARNINGS.md#APT_GENERATE_RESOURCE";
+				if (p.conf.type != Env.Type.PROJECT) throw new UnsupportedOperationException("错误：不支持"+errorMessage);
+				log.warn("警告: 不建议"+errorMessage);
+
+				for (ClassResource resource : resources) {
+					context.addFile(resource.getFileName(), resource.getClassBytes());
+				}
 			}
 
 			log.debug("Compile successful with {} outputs", outputs.size());
@@ -1207,7 +1219,7 @@ public final class MCMake {
 
 						if (removed.contains(className) || needUpdate.contains(className)) {
 							// createMod: 当且仅当相同名称未调用set时才删除
-							boolean fileReallyRemoved = za.createMod(entry.getName()).data == null;
+							boolean fileReallyRemoved = za.prepareUpdate(entry.getName()).data == null;
 							if (fileReallyRemoved) {
 								log.trace("classRemoved('{}')", entry.getName());
 								context.classRemoved(entry.getName());
@@ -1263,7 +1275,7 @@ public final class MCMake {
 		var options = result.options;
 		if (options.isEmpty()) {
 			options.put("jarSigner:creator", "MCMake/"+VERSION);
-			options.put("jarSigner:signatureFileName", p.variables.getOrDefault("fmd:signature:certificate_name", IOUtil.fileName(keystore.getName())));
+			options.put("jarSigner:signatureFileName", p.variables.getOrDefault("fmd:signature:certificate_name", IOUtil.getBaseName(keystore.getName())));
 			options.put("jarSigner:manifestHashAlgorithm", p.variables.getOrDefault("fmd:signature:manifest_hash_algorithm", "SHA-256"));
 			options.put("jarSigner:signatureHashAlgorithm", p.variables.getOrDefault("fmd:signature:signature_hash_algorithm", "SHA-256"));
 			options.put("jarSigner:cacheHash", "true");

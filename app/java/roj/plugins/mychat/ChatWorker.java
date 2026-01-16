@@ -36,7 +36,7 @@ class ChatWorker extends WebSocket {
 	private final ChatManager server;
 	public ChatWorker(ChatManager server, ChatUser user) {
 		maxData = 262144;
-		compressSize = 127;
+		compressThreshold = 127;
 		this.server = server;
 		this.user = user;
 	}

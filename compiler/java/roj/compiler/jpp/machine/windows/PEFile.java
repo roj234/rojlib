@@ -1,7 +1,6 @@
 package roj.compiler.jpp.machine.windows;
 
 import roj.compiler.jpp.machine.NativeExecutable;
-import roj.io.IOUtil;
 import roj.io.source.FileSource;
 import roj.io.source.Source;
 import roj.util.ByteList;
@@ -128,13 +127,13 @@ public class PEFile extends NativeExecutable {
 		} else if (newLen == oldLen || (doMove && !isLastTable(idx) && type != Table.CERTIFICATE_TABLE)) {
 			if (newLen > oldLen) {
 				long from = (idx >>> 32) + oldLen;
-				IOUtil.transferFileSelf(src.channel(), from, (idx >>> 32) + newLen, src.length() - from);
+				src.moveSelf(from, (idx >>> 32) + newLen, src.length() - from);
 			}
 			src.seek(idx >>> 32);
 			src.write(data.list, data.arrayOffset(), newLen);
 			if (newLen < oldLen) {
 				long from = (idx >>> 32) + oldLen;
-				IOUtil.transferFileSelf(src.channel(), from, (idx >>> 32) + newLen, src.length() - from);
+				src.moveSelf(from, (idx >>> 32) + newLen, src.length() - from);
 			}
 			dataIndexes[type.ordinal()] = (idx & 0xFFFFFFFF00000000L) | newLen;
 		} else if (isLastTable(idx)) {

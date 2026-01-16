@@ -7,7 +7,7 @@ import roj.asm.type.TypeHelper;
 import roj.asmx.ClassResource;
 import roj.asmx.TransformUtil;
 import roj.ci.annotation.IndirectReference;
-import roj.collect.ArrayList;
+import roj.io.IOUtil;
 import roj.reflect.Reflection;
 import roj.text.CharList;
 import roj.text.TextReader;
@@ -18,14 +18,9 @@ import roj.util.ByteList;
 import roj.util.Helpers;
 
 import javax.tools.*;
-import java.io.File;
-import java.io.IOException;
-import java.io.OutputStream;
-import java.lang.reflect.Method;
+import java.io.*;
 import java.net.URI;
-import java.net.URISyntaxException;
 import java.nio.charset.StandardCharsets;
-import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 import java.util.function.Function;
@@ -60,17 +55,17 @@ public final class JCompiler implements Compiler, DiagnosticListener<JavaFileObj
 		}
 	}
 
-	public synchronized List<? extends ClassResource> compile(List<String> options, List<File> sources, boolean showDiagnosticId) {
-		if (sources.isEmpty()) return Collections.emptyList();
+	@Override
+	public synchronized boolean compile(List<String> options, List<File> sources, List<ClassResource> classes, List<ClassResource> resources, boolean showDiagnosticId) {
+		if (sources.isEmpty()) return true;
 
 		ignored = warnings = errors = 0;
 		showErrorCode = showDiagnosticId;
 		buf = new CharList(1024);
 		buf.append(Tty.Screen.clearAfter);
 
-		List<MyJFO> compiled = new ArrayList<>();
 		var jfm = javac.getStandardFileManager(this, Locale.getDefault(), StandardCharsets.UTF_8);
-		jfm = createOrUseDelegation(jfm, compiled, basePath);
+		jfm = createForwarder(jfm, classes, resources, basePath);
 
 		var jfo = jfm.getJavaFileObjectsFromFiles(sources);
 		var task = javac.getTask(null, jfm, this, options, null, jfo);
@@ -82,10 +77,10 @@ public final class JCompiler implements Compiler, DiagnosticListener<JavaFileObj
 		if (buf.length() > 3)
 			System.out.println(new Text(buf).bgColor16(result ? Tty.BLUE : Tty.RED).color16(Tty.WHITE+Tty.HIGHLIGHT).toAnsiString());
 		buf._free();
-		return result ? compiled : null;
+		return result;
 	}
 
-	private static StandardJavaFileManager createOrUseDelegation(Object...par) {
+	private static StandardJavaFileManager createForwarder(Object...par) {
 		if (delegationClass == null) {
 			synchronized (JCompiler.class) {
 				if (delegationClass == null) {
@@ -100,47 +95,70 @@ public final class JCompiler implements Compiler, DiagnosticListener<JavaFileObj
 		return delegationClass.apply(par);
 	}
 	private static volatile Function<Object[], StandardJavaFileManager> delegationClass;
-	private static Function<Object[], StandardJavaFileManager> createDelegation() throws Exception {
-		Method proxyGetOutput = StandardJavaFileManager.class.getMethod("getJavaFileForOutput", JavaFileManager.Location.class, String.class, JavaFileObject.Kind.class, FileObject.class);
-
+	private static Function<Object[], StandardJavaFileManager> createDelegation() {
 		ClassNode data = new ClassNode();
 		data.name("roj/ci/JCompiler$MySFM");
 
-		int listId = data.newField(0, "bo", Type.klass("java/util/List"));
-		int nameId = data.newField(0, "aa", Type.klass("java/lang/String"));
+		int listId = data.newField(0, "classList", Type.klass("java/util/List"));
+		int list2Id = data.newField(0, "resList", Type.klass("java/util/List"));
+		int nameId = data.newField(0, "basePath", Type.klass("java/lang/String"));
 
 		TransformUtil.proxyClass(data, new Class<?>[] {StandardJavaFileManager.class}, (m, cw) -> {
-			if (m.equals(proxyGetOutput)) {
+			if (m.getName().equals("getJavaFileForOutput") || m.getName().equals("getJavaFileForOutputForOriginatingFiles")) {
 				int s = TypeHelper.paramSize(cw.method.rawDesc())+1;
 				cw.visitSize(s+2,s);
+				cw.insn(Opcodes.POP);
 				cw.insn(Opcodes.ALOAD_0);
 				cw.field(Opcodes.GETFIELD, data, listId);
 				cw.insn(Opcodes.ALOAD_0);
 				cw.field(Opcodes.GETFIELD, data, nameId);
-				cw.invoke(Opcodes.INVOKESTATIC, "roj/ci/JCompiler", "proxyGetOutput", TypeHelper.class2asm(new Class<?>[]{StandardJavaFileManager.class, JavaFileManager.Location.class, String.class, JavaFileObject.Kind.class, FileObject.class, List.class, String.class}, JavaFileObject.class));
+				cw.invoke(Opcodes.INVOKESTATIC, "roj/ci/JCompiler", "proxyGetOutput", TypeHelper.class2asm(new Class<?>[]{StandardJavaFileManager.class, JavaFileManager.Location.class, String.class, JavaFileObject.Kind.class, List.class, String.class}, JavaFileObject.class));
 				return true;
 			}
+			if (m.getName().equals("getFileForOutput") || m.getName().equals("getFileForOutputForOriginatingFiles")) {
+				int s = TypeHelper.paramSize(cw.method.rawDesc())+1;
+				cw.visitSize(s+2,s);
+				cw.insn(Opcodes.POP);
+				cw.insn(Opcodes.ALOAD_0);
+				cw.field(Opcodes.GETFIELD, data, list2Id);
+				cw.insn(Opcodes.ALOAD_0);
+				cw.field(Opcodes.GETFIELD, data, nameId);
+				cw.invoke(Opcodes.INVOKESTATIC, "roj/ci/JCompiler", "proxyGetOutput", TypeHelper.class2asm(new Class<?>[]{StandardJavaFileManager.class, JavaFileManager.Location.class, String.class, String.class, List.class, String.class}, FileObject.class));
+				return true;
+			}
+
 			return false;
-		}, listId, nameId);
+		}, listId, list2Id, nameId);
 
 		return Helpers.cast(Reflection.createInstance(JCompiler.class, data));
 	}
 	@IndirectReference
 	public static JavaFileObject proxyGetOutput(StandardJavaFileManager delegation,
 												JavaFileManager.Location location, String className,
-												JavaFileObject.Kind kind, FileObject sibling,
+												JavaFileObject.Kind kind,
 												List<MyJFO> outputs,
-												String basePath) throws IOException {
-		if (kind == JavaFileObject.Kind.CLASS) {
-			try {
-				MyJFO blo = new MyJFO(className, basePath);
-				outputs.add(blo);
-				return blo;
-			} catch (URISyntaxException e) {
-				e.printStackTrace();
-			}
-		}
-		return delegation.getJavaFileForOutput(location, className, kind, sibling);
+												String basePath) {
+		var fileName = className.replace('.', '/')+kind.extension;
+		var uri = URI.create("file://"+URICoder.encodeURIComponent(basePath)+fileName);
+
+		MyJFO jfo = new MyJFO(fileName, uri, kind);
+		if (kind == JavaFileObject.Kind.CLASS)
+			outputs.add(jfo);
+		return jfo;
+	}
+	@IndirectReference
+	public static FileObject proxyGetOutput(StandardJavaFileManager delegation,
+												JavaFileManager.Location location, String packageName,
+												String relativeName,
+												List<MyJFO> outputs,
+												String basePath) {
+
+		var fileName = packageName.replace('.', '/')+relativeName;
+		var uri = URI.create("file://"+URICoder.encodeURIComponent(basePath)+fileName);
+
+		MyJFO jfo = new MyJFO(fileName, uri, JavaFileObject.Kind.OTHER);
+		outputs.add(jfo);
+		return jfo;
 	}
 
 	@Override
@@ -204,13 +222,17 @@ public final class JCompiler implements Compiler, DiagnosticListener<JavaFileObj
 		private final String name;
 		private final ByteList data;
 
-		MyJFO(String className, String basePath) throws URISyntaxException {
-			super(new URI("file://"+ URICoder.encodeURIComponent(basePath)+className.replace('.', '/')+".class"), Kind.CLASS);
+		MyJFO(String fileName, URI uri, Kind kind) {
+			super(uri, kind);
+			this.name = fileName;
 			this.data = new ByteList();
-			this.name = className.replace('.', '/')+".class";
 		}
 
+		@Override public InputStream openInputStream() {return data.slice().asInputStream();}
 		@Override public OutputStream openOutputStream() {return data;}
+		@Override public Reader openReader(boolean ignoreEncodingErrors) {return new InputStreamReader(openInputStream());}
+		@Override public CharSequence getCharContent(boolean ignoreEncodingErrors) throws IOException {return IOUtil.read(openReader(ignoreEncodingErrors));}
+
 		@Override public String getFileName() {return name;}
 		@Override public ByteList getClassBytes() {return data;}
 	}

@@ -101,7 +101,7 @@ public class PicMap {
 		}
 
 		File file = new File(args[0]);
-		File out = new File(file.getParentFile(), IOUtil.fileName(args[0])+".dat");
+		File out = new File(file.getParentFile(), IOUtil.getBaseName(args[0])+".dat");
 
 		convertMap(file, out);
 	}

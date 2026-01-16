@@ -227,7 +227,7 @@ public interface Compiler {
 	 *   <li>处理classpath中的方法参数注解时可能抛出未支持异常</li>
 	 * </ul>
 	 *
-	 * @see Processor#handle(CompileContext, ClassNode file, Attributed node, Annotation)
+	 * @see Processor#handle(CompileContext, ClassDefinition file, Attributed node, Annotation)
 	 */
 	void addAnnotationProcessor(Processor processor);
 
@@ -412,33 +412,6 @@ public interface Compiler {
 	 * @param operator 运算符 可以是任意字符串 如果不使用特殊符号，可能需要管理{@link #tokenLiteralEnd(String) LiteralEnd}
 	 */
 	void addOpHandler(String operator, ExprOp resolver);
-	//endregion
-	//region 沙盒类加载器API
-	/**
-	 * 添加沙盒白名单
-	 *
-	 * 默认的包白名单(不继承): "java.lang", "java.util", "java.util.regex", "java.util.function", "java.text", "roj.compiler", "roj.text", "roj.config.node"
-	 * 默认的类黑名单: "java.lang.Process", "java.lang.ProcessBuilder", "java.lang.Thread", "java.lang.ClassLoader"
-	 * @param packageOrTypename 包名（如"java/util"）或全限定类名（如"java/lang/String"）
-	 * @param childInheritance 是否递归应用于子包
-	 * @apiNote 对全限定类名应用继承的结果是未定义的
-	 */
-	@Deprecated
-	void addSandboxWhitelist(String packageOrTypename, boolean childInheritance);
-	/**
-	 * 添加沙盒黑名单（优先级高于白名单）
-	 */
-	@Deprecated
-	void addSandboxBlacklist(String packageOrTypename, boolean childInheritance);
-	/**
-	 * 实例化沙盒环境中的类
-	 * 警告：不调用构造器
-	 * @param data 类字节码结构
-	 * @throws NoClassDefFoundError 受策略限制无法加载某些类时
-	 * @deprecated 请自己创建类加载器，防止不同插件冲突
-	 */
-	@Deprecated
-	Object createSandboxInstance(ClassNode data) throws NoClassDefFoundError;
 	//endregion
 	//region 附件API
 	<T> T attachment(TypedKey<T> key);

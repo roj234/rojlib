@@ -2,19 +2,13 @@ package roj.gui;
 
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
-import roj.RojLib;
 import roj.compiler.plugins.annotations.Attach;
 import roj.io.IOUtil;
-import roj.reflect.Telescope;
-import roj.reflect.Unsafe;
 import roj.text.TextReader;
 import roj.text.TextUtil;
 import roj.util.Helpers;
-import roj.util.NativeException;
 import roj.util.OS;
-import roj.util.optimizer.IntrinsicCandidate;
 
-import javax.imageio.ImageIO;
 import javax.swing.*;
 import javax.swing.filechooser.FileFilter;
 import javax.swing.text.BadLocationException;
@@ -27,12 +21,8 @@ import java.awt.dnd.DropTarget;
 import java.awt.dnd.DropTargetAdapter;
 import java.awt.dnd.DropTargetDropEvent;
 import java.io.File;
-import java.io.IOException;
-import java.io.InputStream;
 import java.util.List;
 import java.util.function.Consumer;
-
-import static roj.reflect.Unsafe.U;
 
 /**
  * @author Roj234
@@ -66,36 +56,7 @@ public final class GuiUtil {
 		}
 	}
 
-	public static void setIcon(JFrame frame, String fileName) {
-		InputStream stream = GuiUtil.class.getClassLoader().getResourceAsStream(fileName);
-		if (stream != null) {
-			try {
-				frame.setIconImage(ImageIO.read(stream));
-			} catch (IOException e) {
-				e.printStackTrace();
-			}
-		}
-	}
-
-	public static void setClickThrough(Window window) throws Exception {
-		if (!RojLib.hasNative(RojLib.WIN32)) throw new NativeException("不支持所请求的操作");
-
-		long hwnd = getWindowHandle(window);
-
-		long flags = GetWindowLong(hwnd, -20/*GWL_EXSTYLE*/);
-		flags |= 524320/*WS_EX_LAYERED|WS_EX_TRANSPARENT*/;
-		SetWindowLong(hwnd, -20, flags);
-	}
-
-	public static long getWindowHandle(Window window) {
-		Object peer = U.getReference(window, Unsafe.objectFieldOffset(Component.class, "peer", Telescope.findClass("java.awt.peer.ComponentPeer")));
-		return U.getLong(peer, Unsafe.objectFieldOffset(peer.getClass(), "hwnd", long.class));
-	}
-
-	//static {Intrinsics.linkNative("USER32");}
-	@IntrinsicCandidate
 	private static native long GetWindowLong(long hwnd, int dwType);
-	@IntrinsicCandidate
 	private static native void SetWindowLong(long hwnd, int dwType, long flags);
 
 	@NotNull
@@ -248,7 +209,7 @@ public final class GuiUtil {
 	public static FileFilter newExtensionFilter(String extension, String briefDesc) {
 		String desc = briefDesc+" (*."+extension+")";
 		return new FileFilter() {
-			@Override public boolean accept(File f) {return f.isDirectory() || IOUtil.extensionName(f.getName()).equals(extension);}
+			@Override public boolean accept(File f) {return f.isDirectory() || IOUtil.getExtension(f.getName()).equals(extension);}
 			@Override public String getDescription() {return desc;}
 		};
 	}

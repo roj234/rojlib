@@ -125,7 +125,7 @@ public class EasyProgressBar extends ProgressBar {
 		return String.valueOf(filled ? Tty.BLUE : Tty.CYAN+Tty.HIGHLIGHT);
 	}
 
-	private double getAvgSpeed(long now) {
+	public final double getAvgSpeed(long now) {
 		// Handle initial case or no speed yet: use total elapsed / completed for base speed
 		if (Double.isNaN(avgSpeed) || avgSpeed <= 0) {
 			if (completed > 0 && startTime > 0) {

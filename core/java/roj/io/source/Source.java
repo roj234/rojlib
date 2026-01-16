@@ -6,7 +6,6 @@ import roj.util.ByteList;
 import roj.util.DynByteBuf;
 
 import java.io.*;
-import java.nio.channels.FileChannel;
 
 /**
  * @author Roj233
@@ -66,8 +65,6 @@ public abstract class Source extends DataOutputStream {
 	public abstract void setLength(long length) throws IOException;
 	public abstract long length() throws IOException;
 
-	public boolean hasChannel() { return false; }
-	public FileChannel channel() { return null; }
 	/**
 	 * 和isBuffered没关系
 	 */
@@ -77,8 +74,6 @@ public abstract class Source extends DataOutputStream {
 		var buf = src.buffer();
 		if (buf != null) {
 			write(buf.slice((int) offset, (int) len));
-		} else if (hasChannel()&src.hasChannel()) {
-			src.channel().transferTo(offset, len, channel());
 		} else {
 			var pos = src.position();
 			src.seek(offset);

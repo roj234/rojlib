@@ -1,188 +1,221 @@
 package roj.io.source;
 
-import roj.io.BufferPool;
-import roj.util.ByteList;
+import roj.util.ArrayCache;
+import roj.util.ArrayUtil;
 import roj.util.DynByteBuf;
 
 import java.io.IOException;
-import java.nio.channels.FileChannel;
 
 /**
  * @author Roj233
  * @since 2021/8/18 13:36
+ * @revised 2026/1/24 23:47
  */
 public class BufferedSource extends Source {
-	private static final int PAGE = 4096;
+	private final Source src;
+	private final boolean closeable;
+	private long pos, length;
 
-	private long pos, len;
-	private int sync;
+	private byte[] buf;
+	private int bufPtr, bufLen;
+	private boolean isDirty;
 
-	private final Source s;
-	private final boolean close;
+	public static Source autoClose(Source copy) throws IOException {return new BufferedSource(copy, true);}
+	public static Source wrap(Source copy) throws IOException {return new BufferedSource(copy, false);}
 
-	private int bufPos;
-	private final ByteList buf;
+	public BufferedSource(Source src, boolean dispatchClose) throws IOException {
+		this.src = src;
+		this.buf = ArrayCache.getIOBuffer();
+		this.pos = src.position();
+		this.length = src.length();
+		this.closeable = dispatchClose;
+	}
 
-	public static Source autoClose(Source copy) throws IOException {return new BufferedSource(copy, 4096, BufferPool.localPool(), true);}
-	public static Source wrap(Source copy) throws IOException {return new BufferedSource(copy, 4096, BufferPool.localPool(), false);}
+	private void fill() throws IOException {
+		flush();
 
-	public BufferedSource(Source s, int buf, BufferPool pool, boolean dispatchClose) throws IOException {
-		this.s = s;
-		this.bufPos = -1;
-		this.buf = (ByteList) pool.allocate(false, buf, 0);
-		this.pos = s.position();
-		this.len = s.length();
-		this.close = dispatchClose;
+		pos += bufLen;
+		bufLen = src.read(buf);
+		if (bufLen == -1) bufLen = 0;
+		bufPtr = 0;
 	}
 
 	@Override
 	public int read() throws IOException {
-		sl();
-
-		sync |= 1;
-		return pos >= len ? -1 : buffer(pos).getUnsignedByte(((int)pos++&(PAGE-1)));
+		if (bufPtr >= bufLen) {
+			fill();
+			if (bufLen == 0) return -1; // EOF
+		}
+		return buf[bufPtr++] & 0xff;
 	}
 
 	@Override
 	public int read(byte[] b, int off, int len) throws IOException {
-		if (len < 0) throw new ArrayIndexOutOfBoundsException();
-		if (len == 0) return 0;
+		ArrayUtil.checkRange(b, off, len);
 
-		sl();
+		int totalRead = 0;
+		while (len > 0) {
+			if (bufPtr >= bufLen) {
+				flush();
 
-		long p = pos;
+				// 读穿透 (已经在XDataInputStream里写了一遍了)
+				// 不过这个版本更好……
+				if (len >= buf.length) {
+					src.seek(pos + bufPtr);
+					int read = src.read(b, off + totalRead, len);
+					if (read == -1) return totalRead == 0 ? -1 : totalRead;
 
-		len = (int) Math.min(len, this.len-p);
-		if (len <= 0) return -1;
+					totalRead += read;
+					pos += bufPtr + read;
+					bufPtr = 0;
+					bufLen = 0;
+					return totalRead;
+				} else {
+					fill();
+					if (bufLen == 0) return totalRead == 0 ? -1 : totalRead;
+				}
+			}
 
-		int plen = (int) p&(PAGE-1);
-		int rLen = Math.min(len, PAGE-plen);
-		buffer(p).readFully(plen, b, off, rLen);
-		p += rLen;
+			int copy = Math.min(len, bufLen - bufPtr);
+			System.arraycopy(buf, bufPtr, b, off + totalRead, copy);
 
-		int end = off+len;
-		off += rLen;
-
-		while (end-off >= PAGE) {
-			buffer(p).readFully(0, b, off, PAGE);
-			off += PAGE;
-			p += PAGE;
+			bufPtr += copy;
+			totalRead += copy;
+			len -= copy;
 		}
-
-		if (end>off) {
-			buffer(p).readFully(0, b, off, end-off);
-			p += end-off;
-		}
-
-		pos = p;
-		sync |= 1;
-
-		return len;
+		return totalRead;
 	}
 
 	@Override
 	public void write(byte[] b, int off, int len) throws IOException {
-		sp();
+		if (!src.isWritable()) throw new IOException("Not writable");
+		ArrayUtil.checkRange(b, off, len);
 
-		s.write(b, off, len);
+		while (len > 0) {
+			if (bufPtr >= buf.length) {
+				flush();
+				pos += buf.length;
+				bufPtr = 0;
+				bufLen = 0;
+			}
 
-		invalidate(pos, pos += len);
+			// XDataOutput也许也应该实现一下写穿透
+			if (len >= buf.length && bufPtr == 0) {
+				//src.seek(bufPos);
+				src.write(b, off, len);
+				pos += len;
+				break;
+			}
+
+			int copy = Math.min(len, buf.length - bufPtr);
+			System.arraycopy(b, off, buf, bufPtr, copy);
+
+			bufPtr += copy;
+			if (bufPtr > bufLen) bufLen = bufPtr;
+			isDirty = true;
+
+			off += copy;
+			len -= copy;
+		}
+
+		if (pos + bufPtr > length) length = pos + bufPtr;
 	}
 
 	@Override
 	public void write(DynByteBuf data) throws IOException {
-		sp();
 		int len = data.readableBytes();
+		while (len > 0) {
+			if (bufPtr >= buf.length) {
+				flush();
+				pos += buf.length;
+				bufPtr = 0;
+				bufLen = 0;
+			}
 
-		s.write(data);
+			// 写穿透
+			if (len >= buf.length && bufPtr == 0) {
+				//src.seek(bufPos);
+				src.write(data);
+				pos += len;
+				break;
+			}
 
-		invalidate(pos, pos += len);
+			int copy = Math.min(len, buf.length - bufPtr);
+			data.read(buf, bufPtr, copy);
+
+			bufPtr += copy;
+			if (bufPtr > bufLen) bufLen = bufPtr;
+			isDirty = true;
+
+			len -= copy;
+		}
+
+		if (pos + bufPtr > length) length = pos + bufPtr;
 	}
 
 	@Override
-	public void seek(long p) {
-		pos = p;
-		sync |= 1;
+	public void flush() throws IOException {
+		if (isDirty) {
+			//src.seek(pos);
+			src.write(buf, 0, bufLen);
+			isDirty = false;
+		}
+	}
+
+	@Override
+	public void seek(long p) throws IOException {
+		if (p >= pos && p < pos + bufLen) {
+			bufPtr = (int) (p - pos);
+		} else {
+			flush();
+			src.seek(p);
+			pos = p;
+			bufPtr = 0;
+			bufLen = 0;
+		}
 	}
 	@Override
-	public long position() {
-		return pos;
-	}
+	public long position() {return pos + bufPtr;}
 
 	@Override
 	public void setLength(long length) throws IOException {
-		s.setLength(length);
-		len = length;
-		sync &= ~2;
+		src.setLength(length);
+		this.length = length;
 	}
 	@Override
-	public long length() throws IOException {
-		sl();
-		return len;
-	}
-
-	@Override
-	public FileChannel channel() {
-		return s.channel();
-	}
+	public long length() throws IOException {return length;}
 
 	@Override
 	public void close() throws IOException {
-		BufferPool.reserve(buf);
-		if (close) s.close();
+		flush();
+
+		if (buf != null) {
+			ArrayCache.putArray(buf);
+			buf = null;
+		}
+		if (closeable) src.close();
 	}
 	@Override
 	public void reopen() throws IOException {
-		if (close) s.reopen();
+		if (closeable) src.reopen();
 	}
 
 	@Override
-	public Source copy() throws IOException { return new BufferedSource(s.copy(), 4096, BufferPool.localPool(), close); }
+	public Source copy() throws IOException { return new BufferedSource(src.copy(), closeable); }
 
 	public void moveSelf(long from, long to, long length) throws IOException {
-		bufPos = -1;
-		s.moveSelf(from, to, length);
-	}
-
-	private void invalidate(long from, long to) {
-		int f = (int) (from>>>12);
-		int t = (int) ((to+(PAGE-1))>>>12);
-		if (bufPos >= f && bufPos < t) {
-			bufPos = -1;
-		}
+		flush();
+		src.moveSelf(from, to, length);
+		pos = src.position();
+		bufPtr = 0;
+		bufLen = 0;
 	}
 
 	@Override public boolean isBuffered() {return true;}
-	@Override public boolean isWritable() {return s.isWritable();}
-
-	private ByteList buffer(long pos) throws IOException {
-		if (bufPos != (int) (pos>>>12)) {
-			bufPos = (int) (pos>>>12);
-
-			s.seek(pos & -PAGE);
-			sync |= 1;
-
-			int len = s.read(buf.list, buf.arrayOffset(), PAGE);
-			buf.rIndex = 0;
-			buf.wIndex(len);
-		}
-		return buf;
-	}
-	private void sp() throws IOException {
-		if ((sync & 1) != 0) {
-			s.seek(pos);
-			sync ^= 1;
-		}
-	}
-	private void sl() throws IOException {
-		if ((sync & 2) != 0) {
-			len = s.length();
-			sync ^= 2;
-		}
-	}
+	@Override public boolean isWritable() {return src.isWritable();}
 
 	@Override
-	public String toString() { return "BufferedSource@"+s; }
+	public String toString() { return "Buffered "+src; }
 
 	@Override
 	public boolean equals(Object o) {
@@ -190,8 +223,8 @@ public class BufferedSource extends Source {
 		if (o == null || getClass() != o.getClass()) return false;
 
 		BufferedSource that = (BufferedSource) o;
-		return s.equals(that.s);
+		return src.equals(that.src);
 	}
 
-	@Override public int hashCode() {return s.hashCode()+1;}
+	@Override public int hashCode() {return src.hashCode()+1;}
 }

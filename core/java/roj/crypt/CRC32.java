@@ -4,8 +4,9 @@ import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.NotNull;
 import roj.ci.annotation.Public;
 import roj.reflect.Bypass;
-import roj.util.ArrayUtil;
 import roj.util.DynByteBuf;
+
+import java.util.Objects;
 
 import static roj.reflect.Unsafe.U;
 
@@ -47,12 +48,18 @@ public class CRC32 {
 	}
 
 	@Contract(pure = true) public static int crc32(DynByteBuf buf) {
+		int len = buf.readableBytes();
+		if (len == 0) return 0;
+
 		return buf.isDirect()
-				? crc32(buf.address() + buf.rIndex, buf.readableBytes())
-				: crc32(buf.array(), buf.arrayOffset() + buf.rIndex, buf.readableBytes());
+				? crc32(buf.address() + buf.rIndex, len)
+				: crc32(buf.array(), buf.arrayOffset() + buf.rIndex, len);
 	}
 	@Contract(pure = true) public static int crc32(DynByteBuf buf, int off, int len) {
-		ArrayUtil.checkRange(buf.wIndex(), off, len);
+		if (len == 0) return 0;
+
+		int capacity = buf.wIndex();
+		Objects.checkFromIndexSize(off, len, capacity);
 		return buf.isDirect()
 				? crc32(buf.address() + off, len)
 				: crc32(buf.array(), buf.arrayOffset() + off, len);

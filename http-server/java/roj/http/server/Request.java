@@ -3,6 +3,7 @@ package roj.http.server;
 import org.jetbrains.annotations.*;
 import roj.collect.ArrayList;
 import roj.collect.HashMap;
+import roj.collect.HashSet;
 import roj.collect.Multimap;
 import roj.crypt.Base64;
 import roj.http.Cookie;
@@ -32,6 +33,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.function.BiConsumer;
 import java.util.function.BiFunction;
 
 public final class Request extends Headers {
@@ -55,7 +57,7 @@ public final class Request extends Headers {
 		this.action = action;
 		this.version = version;
 		try {
-			this.path = rawPath = IOUtil.normalizePath(URICoder.decodeURI(path));
+			this.path = rawPath = IOUtil.normalize(URICoder.decodeURI(path));
 			this.query = query.isEmpty() ? "" : query;
 		} catch (MalformedURLException e) {
 			throw IllegalRequestException.badRequest(e.getMessage());
@@ -66,13 +68,14 @@ public final class Request extends Headers {
 	void free() {
 		path = rawPath = query = null;
 		response = null;
-		cookie = null;
+		cookies = null;
 		bodyData = queryParam = null;
 		if (arguments != null) arguments.clear();
 		clear();
 		session_write_close();
 		sessionName = JSESSIONID;
 		responseHeader.clear();
+		setCookie = null;
 	}
 
 	/**
@@ -141,7 +144,7 @@ public final class Request extends Headers {
 
 	// region 请求参数
 	Object bodyData, queryParam;
-	private Map<String, Cookie> cookie;
+	private Map<String, String> cookies;
 
 	public String query() {return query;}
 	// 注意，所有Map<String, String>类型的返回类型都是MultiMap | Collections.emptyMap
@@ -149,13 +152,51 @@ public final class Request extends Headers {
 	public Map<String, String> queryParam() throws IllegalRequestException {
 		if (queryParam == null) {
 			if (query.isEmpty()) return Collections.emptyMap();
+
+			var sb = new CharList();
+			String query = this.query;
+			int i = 0;
+			int length = query.length();
+			var map = new Multimap<String, String>();
+
 			try {
-				queryParam = simpleValue(query, "&", true);
+				for (int j = i; j < length;) {
+					char c = query.charAt(j++);
+					if (c == '=') {
+						String key = decodeURI(sb, query, i, j - 1);
+
+						int valueEnd = query.indexOf('&', j);
+						if (valueEnd < 0) valueEnd = length;
+
+						String value = decodeURI(sb, query, j, valueEnd);
+						map.add(key, value);
+
+						j = valueEnd+1;
+						i = j;
+					} else if (c == '&') {
+						if (j-1 > i)
+							map.add(decodeURI(sb, query, i, j-1), "");
+
+						i = j;
+					}
+				}
+
+				if (i < query.length())
+					map.add(decodeURI(sb, query, i, query.length()), "");
+
+				queryParam = map;
 			} catch (MalformedURLException e) {
 				throw IllegalRequestException.badRequest(e.getMessage());
+			} finally {
+				sb._free();
 			}
 		}
 		return Helpers.cast(queryParam);
+	}
+	private static String decodeURI(CharList sb, String s, int start, int end) throws MalformedURLException {
+		sb.clear();
+		int readPtr = URICoder.decodeURI(sb.append(s, start, end), true);
+		return sb.substring(readPtr);
 	}
 
 	public BodyParser bodyParser() {return (BodyParser) bodyData;}
@@ -168,7 +209,7 @@ public final class Request extends Headers {
 
 	@NotNull
 	private static Charset getCharset(Headers headers) throws IllegalRequestException {
-		String charsetName = headers.getHeaderValue("content-type", "charset");
+		String charsetName = headers.findElement("content-type", "text/*").get("charset");
 		Charset charset;
 		if (charsetName == null) charset = StandardCharsets.UTF_8;
 		else try {
@@ -190,7 +231,7 @@ public final class Request extends Headers {
 
 						@Override protected @NotNull Object begin(ChannelCtx ctx, Headers header) throws IOException {
 							charset = header == null ? StandardCharsets.UTF_8 : getCharset(header);
-							String name = header.getHeaderValue("content-disposition", "name");
+							String name = header.getParameter("content-disposition", "name");
 							if (name == null) throw new FastFailException("不支持的分块头");
 							return name;
 						}
@@ -270,29 +311,31 @@ public final class Request extends Headers {
 		return gf;
 	}
 
-	public final Map<String, String> rawCookie() throws MalformedURLException {
-		String field = header("cookie");
-		if (field.isEmpty()) return Collections.emptyMap();
-		return simpleValue(field, "; ", true);
-	}
-	public Map<String, Cookie> cookie() throws IllegalRequestException {
-		if (cookie == null) {
-			Map<String, String> fromClient;
+	public final Map<String, String> cookies() throws IllegalRequestException {
+		if (cookies == null) {
+			String cookie = get("cookie");
+			if (cookie == null) return cookies = Collections.emptyMap();
+
+			cookies = new HashMap<>();
+
+			BiConsumer<String, String> callback = (k, v) -> {
+				try {
+					if (v.startsWith("\"")) v = Tokenizer.unescape(v.substring(1, v.length()-1));
+					cookies.put(URICoder.decodeURI(k), URICoder.decodeURI(v));
+				} catch (Exception e) {
+					Helpers.athrow(e);
+				}
+			};
+
 			try {
-				fromClient = rawCookie();
-				if (fromClient.isEmpty()) return cookie = new HashMap<>();
-			} catch (MalformedURLException e) {
+				HttpUtil.parseParameters(cookie, callback);
+				for (String s : getRest("cookie")) HttpUtil.parseParameters(s, callback);
+			} catch (Exception e) {
 				throw IllegalRequestException.badRequest(e.getMessage());
 			}
-
-			for (Map.Entry<String, ?> entry : fromClient.entrySet()) {
-				Cookie c = new Cookie(entry.getKey(), entry.getValue().toString());
-				c.clearDirty();
-				entry.setValue(Helpers.cast(c));
-			}
-			cookie = Helpers.cast(fromClient);
 		}
-		return cookie;
+
+		return cookies;
 	}
 	// endregion
 
@@ -302,31 +345,32 @@ public final class Request extends Headers {
 	@Contract(pure = true)
 	public Headers responseHeader() {return responseHeader;}
 
+	private List<Cookie> setCookie;
 	/**
 	 * 发送Cookie到客户端（Set-Cookie头部）。
-	 *
-	 * @param cookies Cookie列表
 	 */
-	public final void sendCookieToClient(List<Cookie> cookies) {
-		var sb = new CharList();
-
-		for (int i = 0; i < cookies.size(); i++) {
-			cookies.get(i).write(sb, true);
-			responseHeader.add("set-cookie", sb.toString());
-			sb.clear();
-		}
-
-		sb._free();
+	public void setCookie(Cookie cookie) {
+		if (setCookie == null) setCookie = new ArrayList<>();
+		setCookie.add(cookie);
 	}
+
 	void packToHeader() {
-		if (cookie != null) {
-			List<Cookie> modified = new ArrayList<>();
-			for (var entry : cookie.entrySet()) {
-				Cookie c = entry.getValue();
-				if (c.isDirty()) modified.add(c);
+		if (setCookie != null) {
+			var sb = new CharList();
+			var sent = new HashSet<String>(setCookie.size());
+
+			for (int i = setCookie.size() - 1; i >= 0; i--) {
+				Cookie cookie = setCookie.get(i);
+				if (sent.add(cookie.name)) {
+					cookie.write(sb, true);
+					responseHeader.add("set-cookie", sb.toString());
+					sb.clear();
+				}
 			}
-			if (!modified.isEmpty()) sendCookieToClient(modified);
+
+			sb._free();
 		}
+
 	}
 
 	//region session
@@ -340,12 +384,13 @@ public final class Request extends Headers {
 		if (storage == null) throw new IllegalStateException("没有SessionStorage");
 
 		if (session == null) {
-			Cookie c = cookie().get(sessionName);
-			if (c != null && SessionStorage.isValid(c.value())) sessionId = c.value();
+			String c = cookies().get(sessionName);
+			if (c != null && SessionStorage.isValid(c)) sessionId = c;
 			else if (!createIfNonExist) return null;
 			else {
-				c = new Cookie(sessionName, sessionId = storage.newId()).httpOnly(true);
-				cookie.put(sessionName, c);
+				sessionId = storage.newId();
+				cookies.put(sessionName, c);
+				setCookie(new Cookie(sessionName, sessionId).httpOnly(true));
 			}
 			session = storage.get(sessionId);
 			if (session == null && createIfNonExist) session = new HashMap<>();
@@ -365,10 +410,7 @@ public final class Request extends Headers {
 			ctx.getSessionStorage().remove(sessionId);
 			session = null;
 			sessionId = null;
-
-			Cookie ck = new Cookie(sessionName, "");
-			ck.expires(System.currentTimeMillis()-1);
-			cookie.put(sessionName, ck);
+			setCookie(new Cookie(sessionName).expires(0));
 		}
 	}
 	//endregion

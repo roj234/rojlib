@@ -316,7 +316,7 @@ public class RegionFile implements AutoCloseable {
 		if (offsets.length != target.offsets.length || chunkSize != target.chunkSize)
 			throw new IOException("Incompatible regions");
 
-		boolean channel = raf.hasChannel() && target.raf.hasChannel();
+		//boolean channel = raf.hasChannel() && target.raf.hasChannel();
 		ByteList tmp = IOUtil.getSharedByteBuf();
 		for (int i = 0; i < offsets.length; i++) {
 			/*if (!hasData(i)) continue;

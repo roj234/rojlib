@@ -25,7 +25,7 @@ public final class ParamAnnotationRef implements Attributed {
 	public void addAttribute(Attribute attr) {
 		boolean vis = ((Annotations) attr).vis;
 
-		ParameterAnnotations p = (ParameterAnnotations) method.getAttribute((vis ? Attribute.RtParameterAnnotations : Attribute.ClParameterAnnotations).name);
+		ParameterAnnotations p = (ParameterAnnotations) method.getAttribute((vis ? Attribute.VisibleParameterAnnotations : Attribute.InvisibleParameterAnnotations).name);
 		if (p == null) method.addAttribute(p = new ParameterAnnotations(vis));
 
 		List<List<Annotation>> list = p.annotations;

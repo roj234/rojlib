@@ -418,7 +418,7 @@ public final class ExprParser {
 				case -9 -> cur = Expr.valueOf(false);
 				case -10-> cur = Expr.constant(WildcardType.anyType, null);
 				// MIN_VALUE_NUMBER_LITERAL
-				case -17 -> CompileContext.get().report(Kind.ERROR, "lexer.number.overflow");
+				case -17 -> ctx.report(Kind.ERROR, "lexer.number.overflow");
 				// this
 				case -11 -> cur = Super();
 				case -12 -> cur = This();
@@ -994,7 +994,7 @@ public final class ExprParser {
 
 		String first = w.text();
 
-		var sb = CompileContext.get().getTmpSb();
+		var sb = ctx.getTmpSb();
 		sb.append(first);
 
 		wr.state = STATE_TYPE;

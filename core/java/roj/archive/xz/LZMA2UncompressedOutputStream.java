@@ -10,12 +10,15 @@
 package roj.archive.xz;
 
 import roj.io.Finishable;
+import roj.io.IOUtil;
 import roj.io.MBOutputStream;
 import roj.util.ArrayCache;
 import roj.util.ArrayUtil;
 
 import java.io.IOException;
 import java.io.OutputStream;
+
+import static roj.archive.xz.LZMA2Encoder.COMPRESSED_SIZE_MAX;
 
 class LZMA2UncompressedOutputStream extends MBOutputStream implements Finishable {
 	private OutputStream out;
@@ -34,42 +37,58 @@ class LZMA2UncompressedOutputStream extends MBOutputStream implements Finishable
 	LZMA2UncompressedOutputStream(OutputStream out) {
 		if (out == null) throw new NullPointerException();
 		this.out = out;
-		uncompBuf = ArrayCache.getByteArray(LZMA2OutputStream.COMPRESSED_SIZE_MAX, false);
+		uncompBuf = ArrayCache.getByteArray(COMPRESSED_SIZE_MAX, false);
 	}
 
+	@Override
 	public void write(byte[] buf, int off, int len) throws IOException {
 		ArrayUtil.checkRange(buf, off, len);
 		if (finished) throw new IOException("Stream finished or closed");
 
 		try {
-			while (len > 0) {
-				int copySize = Math.min(LZMA2OutputStream.COMPRESSED_SIZE_MAX - uncompPos, len);
+			if (uncompPos > 0) {
+				int copySize = Math.min(COMPRESSED_SIZE_MAX - uncompPos, len);
 				System.arraycopy(buf, off, uncompBuf, uncompPos, copySize);
+				off += copySize;
 				len -= copySize;
 				uncompPos += copySize;
 
-				if (uncompPos == LZMA2OutputStream.COMPRESSED_SIZE_MAX) writeChunk();
+				if (uncompPos == COMPRESSED_SIZE_MAX) writeChunk();
+			}
+
+			if (len == 0) return;
+
+			while (len >= COMPRESSED_SIZE_MAX) {
+				writeChunk(buf, off, COMPRESSED_SIZE_MAX);
+				off += COMPRESSED_SIZE_MAX;
+				len -= COMPRESSED_SIZE_MAX;
+			}
+
+			if (len > 0) {
+				System.arraycopy(buf, off, uncompBuf, 0, len);
+				uncompPos = len;
 			}
 		} catch (Throwable e) {
-			try {
-				close();
-			} catch (Throwable ignored) {}
+			IOUtil.closeSilently(out);
 			throw e;
 		}
 	}
 
 	private void writeChunk() throws IOException {
+		writeChunk(uncompBuf, 0, uncompPos);
+		uncompPos = 0;
+	}
+	private void writeChunk(byte[] uncompBuf, int off, int len) throws IOException {
 		out.write(dictResetNeeded ? 0x01 : 0x02);
-		int s = uncompPos-1;
+		int s = len-1;
 		out.write(s >>> 8);
 		out.write(s);
-		out.write(uncompBuf, 0, uncompPos);
-		uncompPos = 0;
+		out.write(uncompBuf, off, len);
 		dictResetNeeded = false;
 	}
 
 	private void writeEndMarker() throws IOException {
-		if (finished) throw new IOException("Stream finished or closed");
+		if (finished) return;
 		finished = true;
 
 		try {
@@ -80,31 +99,28 @@ class LZMA2UncompressedOutputStream extends MBOutputStream implements Finishable
 		}
 	}
 
+	@Override
 	public void flush() throws IOException {
 		if (finished) throw new IOException("Stream finished or closed");
-
 		try {
 			if (uncompPos > 0) writeChunk();
 			out.flush();
 		} catch (Throwable e) {
-			try {
-				close();
-			} catch (Throwable ignored) {}
+			IOUtil.closeSilently(out);
 			throw e;
 		}
 	}
 
+	@Override
 	public synchronized void finish() throws IOException {
 		if (!finished) {
-			writeEndMarker();
-
 			try {
-				if (out instanceof Finishable)
-					((Finishable) out).finish();
-			} catch (IOException e) {
-				try {
-					close();
-				} catch (Throwable ignored) {}
+				writeEndMarker();
+				if (out instanceof Finishable f) {
+					f.finish();
+				}
+			} catch (Throwable e) {
+				IOUtil.closeSilently(out);
 				throw e;
 			}
 		}
@@ -112,15 +128,12 @@ class LZMA2UncompressedOutputStream extends MBOutputStream implements Finishable
 
 	public synchronized void close() throws IOException {
 		if (out != null) {
-			if (!finished) {
-				try {
-					writeEndMarker();
-				} catch (IOException ignored) {}
-			}
-
 			try {
-				out.close();
+				if (!finished) {
+					writeEndMarker();
+				}
 			} finally {
+				IOUtil.closeSilently(out);
 				out = null;
 			}
 		}

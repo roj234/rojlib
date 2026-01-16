@@ -15,7 +15,10 @@ import roj.config.node.xml.Document;
 import roj.config.node.xml.Node;
 import roj.io.IOUtil;
 import roj.reflect.Bypass;
-import roj.text.*;
+import roj.text.CharList;
+import roj.text.ParseException;
+import roj.text.TextWriter;
+import roj.text.Tokenizer;
 import roj.util.function.Flow;
 
 import java.io.File;
@@ -142,7 +145,7 @@ public final class Workspace {
 	}
 
 	void onAdd() {
-		File file = new File(path, ".idea/libraries/"+URICoder.escapeFileName(conf.id)+".xml");
+		File file = new File(path, ".idea/libraries/"+IOUtil.escapeFileName(conf.id)+".xml");
 		file.getParentFile().mkdirs();
 
 		var doc = new Document();
@@ -186,7 +189,7 @@ public final class Workspace {
 		if (conf.mapping != null)
 			Files.deleteIfExists(conf.mapping.toPath());
 
-		File file = new File(path, ".idea/libraries/"+URICoder.escapeFileName(conf.id)+".xml");
+		File file = new File(path, ".idea/libraries/"+IOUtil.escapeFileName(conf.id)+".xml");
 		Files.deleteIfExists(file.toPath());
 	}
 
@@ -270,7 +273,7 @@ public final class Workspace {
 			modules.add(module);
 		}
 
-		IOUtil.writeFileEvenMoreSafe(ipr.getParentFile(), ipr.getName(), file -> {
+		IOUtil.writeAtomically(ipr.getParentFile(), ipr.getName(), file -> {
 			try (var tw = TextWriter.to(file, StandardCharsets.UTF_8)) {
 				document.toXML(tw);
 			}

@@ -5,6 +5,7 @@ import roj.compiler.runtime.RtUtil;
 import roj.util.ArrayCache;
 
 import java.util.Arrays;
+import java.util.Objects;
 import java.util.function.IntConsumer;
 import java.util.function.IntUnaryOperator;
 
@@ -18,16 +19,12 @@ public class BitArray {
 	private final int bits, mask, length;
 
 	public BitArray(@Range(from = 1, to = 32) int bits, @Range(from = 0, to = Integer.MAX_VALUE) int length) {
-		if (bits < 1 || bits > 32 || length < 0) throw new IllegalArgumentException();
-
 		this.data = new int[(bits*length + 31) / 32];
 		this.bits = bits;
 		this.length = length;
 		this.mask = bits == 32 ? -1 : ((1 << bits)-1);
 	}
 	public BitArray(@Range(from = 1, to = 32) int bits, @Range(from = 0, to = Integer.MAX_VALUE) int length, int[] data) {
-		if (bits < 1 || bits > 32 || length < 0) throw new IllegalArgumentException();
-
 		int len = (bits*length + 31) / 32;
 		if (data.length != len) throw new IllegalArgumentException("data.length != "+len+" (is "+data.length+")");
 
@@ -41,7 +38,7 @@ public class BitArray {
 	public int length() { return length; }
 
 	public final int get(int i) {
-		check(i);
+		Objects.checkIndex(i, length);
 
 		i *= bits;
 		int bitPos = (i&31);
@@ -51,7 +48,7 @@ public class BitArray {
 		else return (data[i] >>> bitPos) & mask;
 	}
 	public final void set(int i, int val) {
-		check(i);
+		Objects.checkIndex(i, length);
 		if ((val & ~mask) != 0) throw new IllegalArgumentException("val "+val+" outside of mask "+mask);
 
 		i *= bits;
@@ -74,7 +71,7 @@ public class BitArray {
 		}
 	}
 	public void replace(int i, IntUnaryOperator op) {
-		check(i);
+		Objects.checkIndex(i, length);
 
 		i *= bits;
 		int bitPos = i&31;
@@ -95,7 +92,7 @@ public class BitArray {
 	}
 
 	public final void setAll(int off, int len, int val) {
-		checkBatch(off, len);
+		Objects.checkFromIndexSize(off, len, this.length);
 		if ((val & ~mask) != 0) throw new IllegalArgumentException("val "+val+" outside of mask "+mask);
 		if (len == 0) return;
 
@@ -126,7 +123,7 @@ public class BitArray {
 		if (i < data.length) data[i] = (int) d;
 	}
 	public final void getAll(int off, int len, IntConsumer consumer) {
-		checkBatch(off, len);
+		Objects.checkFromIndexSize(off, len, this.length);
 		if (len == 0) return;
 
 		int i = off*bits;
@@ -154,8 +151,8 @@ public class BitArray {
 	public final void putAll(BitArray array, int off, int len, boolean cast) {
 		if (array.bits > bits && !cast) throw new IllegalArgumentException("array.bits > bits: truncation");
 
-		checkBatch(off, len);
-		array.checkBatch(off, len);
+		Objects.checkFromIndexSize(off, len, this.length);
+		Objects.checkFromIndexSize(off, len, array.length);
 
 		copyInternal(array.data, array.bits, data, bits, off, len);
 	}
@@ -221,14 +218,6 @@ public class BitArray {
 	}
 
 	public String pack() {return RtUtil.pack(data);}
-
-	private void check(int i) {
-		if (i < 0 || i >= length) throw new ArrayIndexOutOfBoundsException(i);
-	}
-	private void checkBatch(int off, int len) {
-		if ((off|len) < 0 || off+len < 0 || off+len > length)
-			throw new ArrayIndexOutOfBoundsException("off="+off+",len="+len+",arraylen="+length);
-	}
 
 	@Override
 	public String toString() { return "BitArray("+bits+")["+length+"]"+Arrays.toString(toIntArray()); }

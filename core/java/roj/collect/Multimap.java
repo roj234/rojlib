@@ -1,7 +1,7 @@
 package roj.collect;
 
-import roj.util.OperationDone;
 import roj.util.Helpers;
+import roj.util.OperationDone;
 
 import java.util.Collections;
 import java.util.LinkedList;
@@ -29,6 +29,12 @@ public class Multimap<K, V> extends HashMap<K, V> {
 				throw OperationDone.INSTANCE;
 			}
 		}
+	}
+
+	public boolean containsKey(K key, V value) {
+		var entry = (Entry) getEntry(key);
+		if (entry == null) return false;
+		return value.equals(entry.value) || entry.rest.contains(value);
 	}
 
 	public final V get(K key, int index) {

@@ -1,7 +1,6 @@
 package roj.http.server;
 
 import roj.collect.Multimap;
-import roj.io.IOUtil;
 import roj.net.ChannelCtx;
 import roj.text.URICoder;
 import roj.util.ByteList;
@@ -17,6 +16,8 @@ import java.util.Map;
  * @since 2022/3/13 15:15
  */
 public class UrlEncodedParser implements BodyParser {
+	private static final int MAX_KEY_LENGTH = 1024;
+
 	public Multimap<String, String> fields;
 	@Override public void handlerAdded(ChannelCtx ctx) {fields = new Multimap<>();key = null;val.clear();}
 	@Override public Map<String, ?> getMapLikeResult() {return fields;}
@@ -38,14 +39,13 @@ public class UrlEncodedParser implements BodyParser {
 			buf.wIndex(i);
 			try {
 				if (c == '&') {
-					val.put(buf); // terminate
-					submit();
+					// terminate previous
+					fields.add(key, URICoder.decodeURI(val.put(buf), true));
 					key = null;
 					val.clear();
 					c = '=';
 				} else {
-					if (buf.readableBytes() > 384) throw invalidKey();
-					key = URICoder.decodeURI(IOUtil.getSharedCharBuf(), IOUtil.getSharedByteBuf(), buf, true).toString();
+					makeKey(buf);
 					c = '&';
 				}
 			} catch (MalformedURLException e) {
@@ -60,23 +60,23 @@ public class UrlEncodedParser implements BodyParser {
 			if (c == '&') {
 				val.put(buf);
 				buf.rIndex = buf.wIndex();
-			} else if (buf.readableBytes() > 384) {
+			} else if (buf.readableBytes() > MAX_KEY_LENGTH) {
 				throw invalidKey();
 			}
 		}
 	}
 	@Override
 	public void onSuccess(DynByteBuf buf) throws IOException {
-		if (key == null) {
-			if (buf.readableBytes() > 384) throw invalidKey();
-			key = URICoder.decodeURI(IOUtil.getSharedCharBuf(), IOUtil.getSharedByteBuf(), buf, true).toString();
-		}
-		submit();
+		if (key == null) makeKey(buf);
+		fields.add(key, URICoder.decodeURI(val, true));
 		val.release();
 	}
 
-	private void submit() throws MalformedURLException {
-		fields.add(key, URICoder.decodeURI(IOUtil.getSharedCharBuf(), IOUtil.getSharedByteBuf(), val, true).toString());
+	private void makeKey(DynByteBuf buf) throws IllegalRequestException, MalformedURLException {
+		if (buf.readableBytes() > MAX_KEY_LENGTH) throw invalidKey();
+		while (buf.isReadable() && buf.getByte(buf.rIndex) == '&') buf.rIndex++;
+		if (!buf.isReadable()) throw invalidKey();
+		key = URICoder.decodeURI(buf, true);
 	}
 
 	private static IllegalRequestException invalidKey() {return IllegalRequestException.badRequest("invalid form key");}

@@ -527,8 +527,8 @@ public class SevenZPacker extends SevenZWriter {
             writeBits(j -> {
                 SevenZEntry e = files.get(j);
                 if (e.uSize == 0) {
-                    if ((e.flag& SevenZEntry.DIRECTORY) == 0) emptyFile.add(count.value);
-                    if ((e.flag& SevenZEntry.ANTI) != 0) anti.add(count.value);
+                    if ((e.flag&SevenZEntry.DIRECTORY) == 0) emptyFile.add(count.value);
+                    if ((e.flag&SevenZEntry.ANTI) != 0) anti.add(count.value);
                     count.value++;
                     return 1;
                 }
@@ -590,7 +590,7 @@ public class SevenZPacker extends SevenZWriter {
         long offset = SevenZEntryA.FIELD_OFFSET[3];
         for (int i = 0; i < files.size(); i++) {
             SevenZEntry entry = files.get(i);
-            if ((entry.flag& SevenZEntry.ATTR) != 0)
+            if ((entry.flag&SevenZEntry.ATTR) != 0)
                 buf.putIntLE(U.getInt(entry, offset));
         }
     }

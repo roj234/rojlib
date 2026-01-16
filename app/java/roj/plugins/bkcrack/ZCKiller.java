@@ -3,14 +3,13 @@ package roj.plugins.bkcrack;
 import roj.collect.ArrayList;
 import roj.collect.IntList;
 import roj.collect.IntMap;
-import roj.collect.IntervalPartition;
+import roj.collect.SweepLine;
 import roj.concurrent.Executor;
 import roj.concurrent.TaskGroup;
 import roj.io.IOUtil;
 import roj.ui.EasyProgressBar;
 import roj.util.ByteList;
 import roj.util.FastFailException;
-import roj.util.Helpers;
 
 import java.util.Collections;
 import java.util.List;
@@ -23,9 +22,9 @@ final class ZCKiller {
 	static final int ENCRYPTION_HEADER_SIZE = 12;
 
 	ZCKiller(byte[] cipher, IntMap<byte[]> knownPlains) {
-		IntervalPartition<IntervalPartition.Wrap<byte[]>> unioner = new IntervalPartition<>(10, false, 0);
+		List<IntMap.Entry<byte[]>> plainSegments = new ArrayList<>();
 
-		int total = 0;
+		int plainLength = 0;
 		for (IntMap.Entry<byte[]> entry : knownPlains.selfEntrySet()) {
 			int offset = entry.getIntKey();
 			if (offset < -12) throw new IllegalArgumentException("offset < -12");
@@ -36,29 +35,32 @@ final class ZCKiller {
 			if (offset + plain.length > cipher.length)
 				throw new IllegalArgumentException("plains offset " + offset + " exceeds ciphertext boundary");
 
-			total += plain.length;
-
-			unioner.add(new IntervalPartition.Wrap<>(plain, offset, offset+plain.length));
+			plainLength += plain.length;
+			plainSegments.add(new IntMap.Entry<>(offset, plain));
 		}
 
-		if(total < Solver.CIPHER_KEY_SIZE) {
-			throw new IllegalArgumentException("not enough plain (" + total + ", minimum " + Solver.CIPHER_KEY_SIZE + ") " +
-				"there will be " + (1L << ((Solver.CIPHER_KEY_SIZE-total)<<3)) + " results");
+		if(plainLength < Solver.CIPHER_KEY_SIZE) {
+			throw new IllegalArgumentException("not enough plain ("+plainLength+", minimum "+Solver.CIPHER_KEY_SIZE+") " +
+				"there will be "+(1L << ((Solver.CIPHER_KEY_SIZE-plainLength)<<3))+" results");
 		}
 
 		List<IntMap.Entry<byte[]>> merged = new ArrayList<>();
 
-		ByteList tmp = IOUtil.getSharedByteBuf();
-		unioner.mergeConnected((list, length) -> {
-			tmp.clear();
-			for (int j = 0; j < list.size(); j++) {
-				IntervalPartition.Wrap<byte[]> w = Helpers.cast(list.get(j));
-				tmp.put(w.obj);
+		SweepLine.merge(plainSegments, new SweepLine.RangeExtractor<>() {
+			@Override public long startPos(IntMap.Entry<byte[]> type) {return type.getIntKey();}
+			@Override public long endPos(IntMap.Entry<byte[]> type) {return type.getIntKey() + type.getValue().length;}
+		}, (list, length) -> {
+			if (list.size() == 1) {
+				merged.add(list.get(0));
+			} else {
+				ByteList buf = IOUtil.getSharedByteBuf();
+				for (int j = 0; j < list.size(); j++) buf.put(list.get(j).getIntKey());
+				merged.add(new IntMap.Entry<>(list.get(0).getIntKey(), buf.toByteArray()));
 			}
-			merged.add(new IntMap.Entry<>((int) list.get(0).startPos(), tmp.toByteArray()));
 		});
 
 		merged.sort((o1, o2) -> Integer.compare(o1.getValue().length, o2.getValue().length));
+
 		// longest
 		IntMap.Entry<byte[]> longest = merged.remove(merged.size() - 1);
 
@@ -115,14 +117,14 @@ final class ZCKiller {
 	List<Cipher> find(Executor th) {
 		var bar = progress = new EasyProgressBar("进度");
 
-		bar.setTitle("进度: Z-创建");
+		bar.setLine("进度: Z-创建");
 		Zreduction zr = new Zreduction(keystream);
 		if(keystream.length > Solver.MIN_CONTIGUOUS_PLAIN_LENGTH) {
-			bar.setTitle("进度: Z-筛选");
+			bar.setLine("进度: Z-筛选");
 			zr.filter();
 		}
 
-		bar.setTitle("进度: Z-生成");
+		bar.setLine("进度: Z-生成");
 		zr.generate();
 
 		int zIndex = zr.getIndex();

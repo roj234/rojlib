@@ -85,7 +85,7 @@ final class MapLiteral extends Expr {
 		cw.insn(DUP);
 		cw.ldc(keys.size());
 		cw.invoke(INVOKESPECIAL, "roj/collect/HashMap", "<init>", "(I)V");
-		var ctx = CompileContext.get();
+		var ctx = cw.ctx;
 		for (int i = 0; i < keys.size(); i++) {
 			cw.insn(DUP);
 

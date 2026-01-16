@@ -41,7 +41,7 @@ public final class Annotations extends Attribute {
 
 	@NotNull
 	public static List<Annotation> getAnnotations(ConstantPool cp, Attributed node, boolean vis) {
-		var attr = node.getAttribute(cp, vis? RtAnnotations : ClAnnotations);
+		var attr = node.getAttribute(cp, vis? VisibleAnnotations : InvisibleAnnotations);
 		return attr == null ? Collections.emptyList() : attr.annotations;
 	}
 

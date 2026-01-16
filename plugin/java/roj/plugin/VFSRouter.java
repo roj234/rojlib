@@ -103,7 +103,7 @@ public class VFSRouter implements Router, Predicate<String> {
 	public boolean test(String url) {
 		if (url.startsWith("@@pi.")) return true;
 
-		url = IOUtil.normalizePath(url);
+		url = IOUtil.normalize(url);
 		return fs.getPath(url).exists();
 	}
 }

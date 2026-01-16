@@ -42,7 +42,7 @@ public final class TypeHelper {
 			char c = desc.charAt(i);
 			switch (c) {
 				case Type.ARRAY -> {}
-				case Type.CLASS -> {
+				case Type.OBJECT -> {
 					i = desc.indexOf(';', i+1);
 					if (i <= 0) throw new IllegalArgumentException("方法描述无效:"+desc);
 					size++;

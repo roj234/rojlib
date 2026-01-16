@@ -103,7 +103,7 @@ public class PHPFpm extends Plugin implements Router, Predicate<String> {
 	// (Optional) for OKRouter Prefix Delegation check
 	@Override
 	public boolean test(String url) {
-		var file = IOUtil.safePath(fpm.docRoot.getAbsolutePath(), url);
+		var file = IOUtil.resolveSafe(fpm.docRoot, url);
 		return file != null && file.exists();
 	}
 

@@ -104,7 +104,7 @@ public final class ClassUtil {
 		int off = 0;
 		char type = fd.charAt(0);
 		if (type == Type.ARRAY) type = fd.charAt(off = (fd.lastIndexOf(Type.ARRAY) + 1));
-		if (type != Type.CLASS) return null;
+		if (type != Type.OBJECT) return null;
 
 		String nn = mapClassName(classMap, fd, off+1, fd.length()-1);
 		if (nn == null) return null;

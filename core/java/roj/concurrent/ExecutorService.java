@@ -41,4 +41,7 @@ public interface ExecutorService extends Executor {
 			}
 		}
 	}
+
+	boolean isOnExecutor();
+	default TaskGroup newGroup() {return newGroup(isOnExecutor());}
 }

@@ -266,7 +266,7 @@ public class SevenZArchiverUI extends JFrame {
 		archiver.fastAppendCheck = uiFastCheck.isSelected();
 		archiver.pathFormat = uiPathType.getSelectedIndex();
 		if (uiSortByFilename.isSelected()) {
-			archiver.fileSorter = (f1, f2) -> IOUtil.extensionName(f1.getName()).compareTo(IOUtil.extensionName(f2.getName()));
+			archiver.fileSorter = (f1, f2) -> IOUtil.getExtension(f1.getName()).compareTo(IOUtil.getExtension(f2.getName()));
 		}
 		//endregion
 		//region 属性存储/过滤
@@ -327,12 +327,7 @@ public class SevenZArchiverUI extends JFrame {
 		uiPreset.setModel(Helpers.cast(md));
 		uiPreset.addActionListener(e -> {
 			int level = ((CMBoxValue) uiPreset.getSelectedItem()).value;
-			if (level == 0) {
-				options.setMode(LZMA2Options.MODE_UNCOMPRESSED);
-			} else {
-				options.setPreset(level);
-			}
-
+			options.setPreset(level);
 			uiBCJ2.setSelected(level == 9);
 			syncToUI(true);
 		});

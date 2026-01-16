@@ -26,8 +26,8 @@ public final class Deflate extends SevenZCodec {
 	public OutputStream encode(OutputStream out) throws IOException {
 		return new DeflaterOutputStream(out, new Deflater(level, true)) {
 			public void close() throws IOException {
-				def.end();
 				super.close();
+				def.end();
 			}
 		};
 	}

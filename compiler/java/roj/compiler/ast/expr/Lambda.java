@@ -88,6 +88,8 @@ public final class Lambda extends Expr {
 		this.methodName = methodName;
 	}
 
+	public Expr getMethodRef() {return methodRef;}
+
 	@Override
 	public String toString() {return methodRef == null
 			? (args.size() == 1 && args.get(0).type == null

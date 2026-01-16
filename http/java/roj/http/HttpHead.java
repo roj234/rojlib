@@ -3,11 +3,12 @@ package roj.http;
 import org.jetbrains.annotations.Nullable;
 import roj.annotation.MayMutate;
 import roj.collect.ArrayList;
+import roj.text.Tokenizer;
 import roj.text.URICoder;
 import roj.util.ArtifactVersion;
 import roj.util.DynByteBuf;
+import roj.util.Helpers;
 
-import java.net.MalformedURLException;
 import java.util.Collections;
 import java.util.List;
 import java.util.function.BiConsumer;
@@ -108,29 +109,31 @@ public class HttpHead extends Headers {
 	}
 
 	public final List<Cookie> cookies() {
-		String field = header("set-cookie");
-		if (field.isEmpty()) return Collections.emptyList();
+		String field = get("set-cookie");
+		if (field == null) return Collections.emptyList();
 
 		List<Cookie> cookies = new ArrayList<>();
-		complexValue(field, new BiConsumer<>() {
+		BiConsumer<String, String> callback = new BiConsumer<>() {
 			Cookie cookie;
 
 			@Override
 			public void accept(String k, String v) {
-				if (cookie != null && cookie.read(k, v)) return;
-
 				try {
-					if (cookie != null) cookie.clearDirty();
-					cookie = new Cookie(URICoder.decodeURI(k), URICoder.decodeURI(v));
-					cookies.add(cookie);
-				} catch (MalformedURLException e) {
-					cookie = new Cookie("invalid");
+					if (v.startsWith("\"")) v = Tokenizer.unescape(v.substring(1, v.length()-1));
+					if (cookie == null) {
+						cookie = new Cookie(URICoder.decodeURI(k), URICoder.decodeURI(v));
+						cookies.add(cookie);
+					} else {
+						cookie.read(k, v);
+					}
+				} catch (Throwable e) {
+					Helpers.athrow(e);
 				}
 			}
-		}, false);
+		};
 
-		int i = cookies.size()-1;
-		if (i >= 0) cookies.get(i).clearDirty();
+		HttpUtil.parseParameters(field, callback);
+		for (String s : getRest("set-cookie")) HttpUtil.parseParameters(s, callback);
 
 		return cookies;
 	}

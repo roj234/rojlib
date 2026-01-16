@@ -146,7 +146,7 @@ public class Signature extends Attribute {
 			values.get(0).toString(sb);
 		} else {
 			if (type == METHOD) {
-				toMethodString(sb, "<some method>");
+				toMethodString(sb, "#NAME");
 			} else {
 				getTypeVariables(sb);
 				if (!"java/lang/Object".equals(values.get(0).owner())) values.get(0).toString(sb.append(" extends "));
@@ -165,8 +165,9 @@ public class Signature extends Attribute {
 	}
 	public void toMethodString(CharList sb, String name) {
 		values.get(values.size() - 1).toString(sb);
-		if (name != null) sb.append(' ').append(name);
-		sb.append(' ').append('(');
+		sb.append(' ');
+		if (name != null) sb.append(name);
+		sb.append('(');
 		int i = 0;
 		if (values.size() > 1) {
 			for (;;) {

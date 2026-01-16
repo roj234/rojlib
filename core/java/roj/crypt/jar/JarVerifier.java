@@ -301,7 +301,7 @@ public class JarVerifier {
 
 		for (var entry : zf.entries()) {
 			String name = entry.getName();
-			String extName = IOUtil.extensionName(name);
+			String extName = IOUtil.getExtension(name);
 			if (name.startsWith("META-INF/") && VALID_CERTIFICATE_EXTENSION.contains(extName)) {
 				try {
 					signatureBlock = new SignatureBlock(zf.getInputStream(entry));
@@ -363,8 +363,8 @@ public class JarVerifier {
 		for (ZipEntry entry : zf.entries()) {
 			if (entry.getName().startsWith("META-INF/")) {
 				if (entry.getName().equals("META-INF/MANIFEST.MF")) continue;
-				if (VALID_CERTIFICATE_EXTENSION.contains(IOUtil.extensionName(entry.getName()))) {
-					String oldSfName = "META-INF/"+IOUtil.fileName(entry.getName())+".SF";
+				if (VALID_CERTIFICATE_EXTENSION.contains(IOUtil.getExtension(entry.getName()))) {
+					String oldSfName = "META-INF/"+IOUtil.getBaseName(entry.getName())+".SF";
 					zf.put(entry.getName(), null);
 					zf.put(oldSfName, null);
 					mf.getEntries().remove(entry.getName());

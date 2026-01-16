@@ -488,7 +488,7 @@ public class CompileContext {
 	 * @return 大部分时间和输入参数相同 有些Magic会被特殊处理
 	 */
 	public final IType resolveType(IType type) {
-		if (type.kind() == IType.SIMPLE_TYPE ? type.rawType().type != Type.CLASS : type.kind() != IType.PARAMETERIZED_TYPE) return type;
+		if (type.kind() == IType.SIMPLE_TYPE ? type.rawType().type != Type.OBJECT : type.kind() != IType.PARAMETERIZED_TYPE) return type;
 
 		// 不预先检查全限定名，适配package-restricted模式
 		var info = resolve(type.owner());
@@ -1379,6 +1379,21 @@ public class CompileContext {
 	// toClassRef, report, 等等
 	private final CharList tmpSb = new CharList();
 	public CharList getTmpSb() {tmpSb.clear();return tmpSb;}
+
+	private final ArrayList<CharList> stringBuilders = new ArrayList<>();
+	public CharList getRecursiveSb() {
+		CharList pop = stringBuilders.pop();
+		if (pop == null) pop = new CharList();
+		return pop;
+	}
+	public void releaseRecursiveSb(CharList sb) {
+		if (stringBuilders.size() < 10) {
+			sb.clear();
+			stringBuilders.add(sb);
+		} else {
+			sb._free();
+		}
+	}
 
 	// S2实现检查临时
 	public NameAndType tmpNat = new NameAndType();

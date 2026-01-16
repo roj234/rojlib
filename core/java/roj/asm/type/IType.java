@@ -126,7 +126,7 @@ public interface IType extends Cloneable {
 	@Contract(pure = true) default void validate(@MagicConstant(intValues = {E_TYPE_VARIABLE, E_ARGUMENT, E_RETURN, E_THROW, E_PARAMETERIZED}) int positionType, int index) {}
 
 	@Contract(pure = true) default boolean isPrimitive() { return false; }
-	@Contract(pure = true) default int getActualType() { return Type.CLASS; }
+	@Contract(pure = true) default int getActualType() { return Type.OBJECT; }
 
 	@Contract(pure = true) default Type rawType() { throw new UnsupportedOperationException(getClass().getName()); }
 	@Contract(pure = true) default int array() { return 0; }

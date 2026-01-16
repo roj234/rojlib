@@ -1,9 +1,9 @@
 package roj.crypt;
 
 import roj.text.CharList;
+import roj.text.FastNumberParser;
 import roj.text.TextUtil;
 import roj.util.ByteList;
-import roj.util.DirectByteList;
 import roj.util.DynByteBuf;
 
 import java.security.SecureRandom;
@@ -54,7 +54,7 @@ public final class MySaltedHash {
 	public boolean compare(CharSequence str, byte[] pass) {
 		List<String> hash1 = TextUtil.split(str, '$');
 		if (hash1.size() != 5 || !hash1.get(1).equals("b3")) throw new IllegalArgumentException("unsupported MAC "+hash1.get(1));
-		int cost = TextUtil.parseInt(hash1.get(2));
+		int cost = FastNumberParser.parseInt(hash1.get(2));
 		if (cost < 0 || cost > 20) return false;
 
 		var tmp = ctmp; tmp.clear();

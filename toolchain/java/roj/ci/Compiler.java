@@ -16,7 +16,7 @@ import java.util.function.BiFunction;
  */
 public interface Compiler {
 	Factory factory();
-	List<? extends ClassResource> compile(List<String> options, List<File> sources, boolean showDiagnosticId);
+	boolean compile(List<String> options, List<File> sources, List<ClassResource> classes, List<ClassResource> resources, boolean showDiagnosticId);
 	default void modifyOptions(List<String> options, Project project) {}
 
 	/**

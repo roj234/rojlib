@@ -9,5 +9,5 @@ import roj.text.CharList;
  */
 public interface Template {
 	default boolean isFast() { return false; }
-	void render(Request request, CharList response, TemplateRenderer renderer);
+	void render(Request request, CharList response);
 }

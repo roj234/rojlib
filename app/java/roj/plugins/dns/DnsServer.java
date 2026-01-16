@@ -6,8 +6,8 @@ import roj.config.node.MapValue;
 import roj.io.IOUtil;
 import roj.net.*;
 import roj.text.CharList;
+import roj.text.FastNumberParser;
 import roj.text.TextReader;
-import roj.text.TextUtil;
 import roj.util.BitStream;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
@@ -61,7 +61,7 @@ public class DnsServer implements ChannelHandler {
 		for (int i = 0; i < list.size(); i++) {
 			String id = list.get(i).asString();
 			int j = id.lastIndexOf(':');
-			forwardDns.add(new InetSocketAddress(id.substring(0, j), TextUtil.parseInt(id.substring(j + 1))));
+			forwardDns.add(new InetSocketAddress(id.substring(0, j), FastNumberParser.parseInt(id.substring(j + 1))));
 			System.out.println(forwardDns);
 		}
 		if (!cfg.getString("fakeDnsServer").isEmpty()) fakeDns = new InetSocketAddress(cfg.getString("fakeDnsServer"), 53);

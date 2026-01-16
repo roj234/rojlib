@@ -14,6 +14,32 @@ import java.nio.charset.StandardCharsets;
 public class RtUtil {
 	public static final String CLASS_NAME = "roj/compiler/runtime/RtUtil";
 
+	@IndirectReference
+	public static void nullCheck(Object value, String name) {
+		if (value == null)
+			throw new NullPointerException(name);
+	}
+
+	@IndirectReference
+	public static long rangeCheck(long value, String name, long min, long max) {
+		if (value < min || value > max)
+			throw createException(value, name, min, max);
+		return value;
+	}
+	private static IllegalArgumentException createException(long value, String name, long min, long max) {
+		return new IllegalArgumentException("'"+name+"' must be between "+min+" and "+max+": "+value);
+	}
+
+	@IndirectReference
+	public static int rangeCheck(int value, String name, int min, int max) {
+		if (value < min || value > max)
+			throw createException(value, name, min, max);
+		return value;
+	}
+	private static IllegalArgumentException createException(int value, String name, int min, int max) {
+		return new IllegalArgumentException("'"+name+"' must be between "+min+" and "+max+": "+value);
+	}
+
 	public static String flagToString(int flag, String... flagNames) {
 		var sb = new StringBuilder();
 		for (int i = 0; i < flagNames.length; i++) {
@@ -70,16 +96,14 @@ public class RtUtil {
 
 	@Constexpr
 	@Contract(pure = true)
-	public static int positiveMod(int dividend, @Range(from = 1, to = Integer.MAX_VALUE) int divisor) {
-		if (divisor <= 0) throw new IllegalArgumentException("divisor must be positive");
+	public static int positiveMod(int dividend, @Range(from = 1, to = Integer.MAX_VALUE, enforce = false) int divisor) {
 		var remainder = dividend % divisor;
 		return remainder >= 0 ? remainder : (remainder + divisor) % divisor;
 	}
 
 	@Constexpr
 	@Contract(pure = true)
-	public static long positiveMod(long dividend, @Range(from = 1, to = Integer.MAX_VALUE) long divisor) {
-		if (divisor <= 0) throw new IllegalArgumentException("divisor must be positive");
+	public static long positiveMod(long dividend, @Range(from = 1, to = Integer.MAX_VALUE, enforce = false) long divisor) {
 		var remainder = dividend % divisor;
 		return remainder >= 0 ? remainder : (remainder + divisor) % divisor;
 	}

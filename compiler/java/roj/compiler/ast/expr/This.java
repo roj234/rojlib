@@ -38,8 +38,8 @@ final class This extends Expr {
 	protected void write1(MethodWriter cw, @NotNull TypeCast.Cast cast) {
 		mustBeStatement(cast);
 
-		var ctx = CompileContext.get();
-		// 不在上面检查是为了Invoke local static method
+		var ctx = cw.ctx;
+		// 不在resolve检查是为了Invoke local static method
 		if (ctx.inStatic) ctx.report(this, Kind.ERROR, "this.static");
 
 		ctx.thisUsed = true;

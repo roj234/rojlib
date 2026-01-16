@@ -3,9 +3,11 @@ package roj.archive.zip;
 import org.jetbrains.annotations.NotNull;
 import roj.archive.ArchiveUtils;
 import roj.collect.ArrayList;
-import roj.collect.HashSet;
+import roj.collect.FindSet;
+import roj.collect.LinkedOpenHashSet;
 import roj.crypt.CRC32;
 import roj.io.IOUtil;
+import roj.io.source.BufferedSource;
 import roj.io.source.Source;
 import roj.optimizer.FastVarHandle;
 import roj.util.ArrayCache;
@@ -21,10 +23,10 @@ import java.io.OutputStream;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
+import java.util.Set;
 import java.util.zip.Deflater;
 
-import static roj.archive.zip.ZipEntryWriter.writeCEN;
-import static roj.archive.zip.ZipEntryWriter.writeEND;
+import static roj.archive.zip.ZipEntryWriter.*;
 
 /**
  * 支持分卷压缩文件
@@ -33,16 +35,16 @@ import static roj.archive.zip.ZipEntryWriter.writeEND;
  * 支持ZIP64
  * <p>
  * 禁止使用{@link #FLAG_ReadCENOnly}的限制已移除，但对性能的影响有待测试.
- * TODO 支持重命名
+ * 现已支持重命名！
  *
  * @author Roj233
  * @since 2021/7/10
  * @revised 2025/12/28
- * @version 4.0
+ * @version 4.3
  */
 @FastVarHandle
 public final class ZipEditor extends ZipFile {
-	private final HashSet<ZipUpdate> modified = new HashSet<>();
+	private final FindSet<ZipUpdate> pendingUpdates = new LinkedOpenHashSet<>();
 
 	public ZipEditor(String name) throws IOException { this(new File(name)); }
 	public ZipEditor(File file) throws IOException { this(file, FLAG_RemoveEXT | FLAG_Verify); }
@@ -73,43 +75,42 @@ public final class ZipEditor extends ZipFile {
 
 	/** 如果 data 为 null 那么删除 */
 	public ZipUpdate put(String name, DynByteBuf data) {
-		ZipUpdate mod = createMod(name);
+		ZipUpdate mod = prepareUpdate(name);
 		mod.data = data;
 		mod.setMethod(data != null && data.readableBytes() > 100 ? ZipEntry.DEFLATED : ZipEntry.STORED);
 		return mod;
 	}
 	public ZipUpdate put(String name, ExceptionalSupplier<DynByteBuf, IOException> getData, boolean compress) {
-		ZipUpdate mod = createMod(name);
+		ZipUpdate mod = prepareUpdate(name);
 		mod.data = getData;
 		mod.setMethod(compress ? ZipEntry.DEFLATED : ZipEntry.STORED);
 		return mod;
 	}
 	public ZipUpdate putStream(String name, ExceptionalSupplier<InputStream, IOException> in, boolean compress) {
-		ZipUpdate mod = createMod(name);
+		ZipUpdate mod = prepareUpdate(name);
 		mod.data = in;
 		mod.setMethod(compress ? ZipEntry.DEFLATED : ZipEntry.STORED);
 		return mod;
 	}
-	public ZipUpdate createMod(String name) {
-		if ((flags & FLAG_ReadOnly) != 0) throw new IllegalStateException("该压缩文件不符合规范，因此无法写入");
-		ZipUpdate update = new ZipUpdate(name);
-		return modified.intern(update);
+	public ZipUpdate prepareUpdate(String name) {
+		if ((flags & FLAG_HasError) != 0) throw new IllegalStateException("该压缩文件不符合规范，因此无法写入");
+		return pendingUpdates.intern(new ZipUpdate(name));
 	}
 
-	public HashSet<ZipUpdate> getModified() { return modified; }
+	public Set<ZipUpdate> getPendingUpdates() { return pendingUpdates; }
 
 	@Override
 	public void close() throws IOException {
-		modified.clear();
+		pendingUpdates.clear();
 		super.close();
 	}
 
 	public void save() throws IOException { save(Deflater.DEFAULT_COMPRESSION); }
 	@SuppressWarnings("unchecked")
 	public void save(int level) throws IOException {
-		if (modified.isEmpty()) return;
+		if (pendingUpdates.isEmpty()) return;
 
-		truncateRemovedEntriesAndMoveToLastLOCEnd();
+		removeStaleEntryAndDoRename();
 
 		ByteList buf = new ByteList(2048);
 		FastFailException dataExceptions = null;
@@ -117,13 +118,15 @@ public final class ZipEditor extends ZipFile {
 		long precisionModTime = System.currentTimeMillis();
 		int modTime = ZipEntry.java2DosTime(precisionModTime);
 
-		var impl = new ZipEntryWriter(r, buf, level);
+		var impl = new ZipEntryWriter(r.isBuffered() ? r : BufferedSource.wrap(r), buf, level);
 
 		// write LOCs
-		entries.ensureCapacity(entries.size() + modified.size());
-		for (ZipUpdate mod : modified) {
+		entries.ensureCapacity(entries.size() + pendingUpdates.size());
+		for (ZipUpdate mod : pendingUpdates) {
 			ZipEntry entry = mod.entry;
 			entries.add(entry);
+			if (namedEntries != null)
+				namedEntries.add(entry);
 
 			entry.setEncryptMethod(mod.getEncryptMethod());
 			entry.method = (char) mod.getMethod();
@@ -155,13 +158,10 @@ public final class ZipEditor extends ZipFile {
 				useZip64 = false;
 				in = null;
 				entry.size = b.readableBytes();
-				entry.compressedSize = 0;
 				entry.crc32 = CRC32.crc32(b);
 			} else {
 				in = (InputStream) data;
 				if (in.available() == Integer.MAX_VALUE) useZip64 = true;
-				entry.size = entry.compressedSize = useZip64 ? U32_MAX : 0;
-				entry.crc32 = 0;
 			}
 
 			long pos = impl.rawOut.position();
@@ -184,75 +184,149 @@ public final class ZipEditor extends ZipFile {
 			}
 		}
 
-		sortCENsAndWriteEOCL(buf, r);
+		impl.rawOut.close();
+		writeCENandEND(buf, r);
 		buf.release();
 
-		modified.clear();
+		pendingUpdates.clear();
 
 		r.setLength(r.position());
 
 		if (dataExceptions != null) throw dataExceptions;
 	}
 
-	private void truncateRemovedEntriesAndMoveToLastLOCEnd() throws IOException {
+	private void removeStaleEntryAndDoRename() throws IOException {
 		if (entries.isEmpty()) {
 			r.seek(cenOffset);
 		} else {
-			var keeping = new ArrayList<ZipEntry>();
-			var IOCombiner = new Object() {
-				int keepingSize = 0;
-				long delta = 0;
-				long prevEnd = entries.get(0).startPos();
-				long position = 0;
+			var retainedEntries = new ArrayList<ZipEntry>();
+			// 高效的合并IO & `压缩`文件，同时移除了之前版本中复杂的线段树和xor-like操作
+			// - 应用'思想'，而不是'数据结构'甚至'实现'
+			var relocator = new Object() {
+				int lastCommitSize = 0;
+				long writePtr = entries.get(0).startPos(); // 20260118修复: 压缩文件可能不从zero offset开始
 
-				void combine() throws IOException {
-					if (keeping.size() > keepingSize) {
-						ZipEntry entry = keeping.get(keepingSize);
-						long begin = entry.startPos();
+				void flush(long blockEnd) throws IOException {
+					if (retainedEntries.size() > lastCommitSize) {
+						long blockStart = retainedEntries.get(lastCommitSize).startPos();
 
-						delta += prevEnd - begin;
-
-						long length = 0;
-						for (int j = keepingSize; j < keeping.size(); j++) {
-							entry = keeping.get(j);
-
-							// 计算extraLenOfLOC和EXTlenOfLOC字段
-							if ((flags & FLAG_ReadCENOnly) != 0) {
-								validateEntry(r, entry);
-							}
-
-							entry.offset += delta;
-							length += entry.endPos() - entry.startPos();
+						long totalShift = writePtr - blockStart;
+						for (int i = lastCommitSize; i < retainedEntries.size(); i++) {
+							retainedEntries.get(i).offset += totalShift;
 						}
 
-						prevEnd = begin + length;
+						long dataLength = blockEnd - blockStart;
+						if (blockStart != writePtr) r.moveSelf(blockStart, writePtr, dataLength);
 
-						if (begin != position) r.moveSelf(begin, position, length);
-						position += length;
+						writePtr += dataLength;
 
-						keepingSize = keeping.size();
+						lastCommitSize = retainedEntries.size();
 					}
 				}
 			};
-			r.seek(IOCombiner.prevEnd);
+			r.seek(relocator.writePtr);
 
-			ZipUpdate checker = new ZipUpdate(null);
+			ZipUpdate queryKey = new ZipUpdate(null);
 
 			for (int i = 0; i < entries.size(); i++) {
 				ZipEntry entry = entries.get(i);
-				checker.name = entry.name;
+				queryKey.name = entry.name;
 
-				ZipUpdate mod = modified.find(checker);
-				if (mod == checker) { // 保留
-					keeping.add(entry);
+				ZipUpdate update = pendingUpdates.find(queryKey);
+				if (update == queryKey) { // 保留
+					retainedEntries.add(entry);
 				} else {
-					IOCombiner.combine();
+					relocator.flush(entry.startPos());
 
-					if (mod.data == null) { // 删除
-						modified.remove(mod);
+					// 重命名
+					if (update.newName != null) {
+						if ((flags & FLAG_ReadCENOnly) != 0) {
+							validateEntry(r, entry);
+						}
+
+						// 重命名中间状态可能产生键冲突
+						namedEntries = null;
+
+						entry.name = update.newName;
+						entry.flags &= ~GP_HAS_EXT;
+
+						if ((flags & FLAG_SaveInUTF) != 0 || (entry.flags & GP_UFS) != 0) {
+							entry.flags |= GP_UFS;
+							entry.nameBytes = IOUtil.encodeUTF8(entry.name);
+						} else {
+							entry.nameBytes = entry.name.getBytes(cs);
+						}
+
+						var buf = new ByteList();
+
+						// 一个比较难绷的问题之文件名太长把后面数据覆盖了怎么办……
+						int availableSpace = (int) Math.min(entry.offset - relocator.writePtr, Integer.MAX_VALUE);
+						int neededSpace = 30 + entry.nameBytes.length + entry.extraLenOfLOC;
+						int remainSpace = availableSpace - neededSpace;
+
+						// 空间可能不足时再重算 extraLenOfLOC
+						if (remainSpace < 256) {
+							remainSpace += entry.extraLenOfLOC;
+							buf.putShort(0);
+							entry.writeLOCExtra(buf, 2, 0);
+							buf.clear();
+							remainSpace -= entry.extraLenOfLOC;
+
+							if (remainSpace < 0) {
+								// 增加 64K 空间，这是一次全部复制，代价很大
+								// 不过扩展 64K 之后应该也不需要第二次扩展了
+								//
+								// 更好的办法是先遍历一遍重命名的Update，计算总共需要的扩展大小，然后从第一个文件名变长的Update之前的文件中，挑选一个足够大但最小的项目放到内存里
+								// 这也许会很慢……
+								//
+								// 不过重命名本来就用的少，你看人家7zFM都不支持重命名！
+								// 什么都不支持，连往已存在的压缩包里加东西的时候选算法都不支持！
+								// 要是支持我还在这里写代码？
+								//
+								// 还有，你都看到这里了，还不去用那个创建新文件的 roj.archive.zip.ZipChangeList.applyTo(roj.archive.zip.ZipFile, roj.archive.zip.ZipPacker) ？
+
+								int expandedSpace = 65536 - remainSpace;
+
+								r.moveSelf(entry.endPos(), entry.endPos() + expandedSpace, cenOffset - entry.endPos());
+								r.moveSelf(entry.offset, entry.offset -= remainSpace, entry.endPos() - entry.startPos());
+
+								for (int j = i+1; j < entries.size(); j++) entries.get(j).offset += expandedSpace;
+								cenOffset += expandedSpace;
+							}
+						}
+
+						r.seek(relocator.writePtr);
+						writeLOC(r, buf, entry);
+						relocator.writePtr += buf.wIndex();
+
+						buf.release();
+
+						long length = entry.getCompressedSize();
+						// 否则扩展时已经顺便复制了
+						if (remainSpace >= 0) {
+							r.moveSelf(entry.offset, relocator.writePtr, length);
+							entry.offset = relocator.writePtr;
+						}
+						relocator.writePtr += length;
+
+						if (update.data == null)
+							pendingUpdates.remove(update);
+
+						retainedEntries.add(entry);
+						relocator.lastCommitSize++;
+
+						// 重命名之后这个entry不能复用
+						continue;
+					}
+
+					if (update.data == null) { // 删除
+						pendingUpdates.remove(update);
+
+						if (namedEntries != null)
+							namedEntries.remove(entry);
 					} else { // 变化
-						checkEmptyDir(mod);
-						mod.entry = entry;
+						checkEmptyDir(update);
+						update.entry = entry;
 
 						if ((flags & FLAG_SaveInUTF) != 0 && (entry.flags & GP_UFS) == 0) {
 							entry.flags |= GP_UFS;
@@ -263,15 +337,15 @@ public final class ZipEditor extends ZipFile {
 				}
 			}
 
-			IOCombiner.combine();
-			r.seek(IOCombiner.position);
+			relocator.flush(cenOffset);
+			r.seek(relocator.writePtr);
 
-			entries = keeping;
+			entries = retainedEntries;
 		}
 
-		for (var itr = modified.iterator(); itr.hasNext(); ) {
+		for (var itr = pendingUpdates.iterator(); itr.hasNext(); ) {
 			ZipUpdate mod = itr.next();
-			// 删除不存在的项目，忽略
+			// 删除不存在(没匹配上)的项目
 			if (mod.data == null) itr.remove();
 			else if (mod.entry == null) {
 				// 创建新的项目
@@ -293,10 +367,10 @@ public final class ZipEditor extends ZipFile {
 
 	private static void checkEmptyDir(ZipUpdate mod) {
 		String name = mod.name;
-		if (name.endsWith("/")) throw new IllegalArgumentException("目录不是空的");
+		if (name.endsWith("/")) throw new IllegalArgumentException("目录不能包含数据");
 	}
 
-	private void sortCENsAndWriteEOCL(ByteList buf, OutputStream out) throws IOException {
+	private void writeCENandEND(ByteList buf, OutputStream out) throws IOException {
 		cenOffset = r.position();
 
 		buf.clear();
@@ -326,7 +400,7 @@ public final class ZipEditor extends ZipFile {
 	/**
 	 * re-open internal RandomAccessFile, to continue operate
 	 */
-	public void reopen() throws IOException {
+	public void ensureOpen() throws IOException {
 		if (file == null) throw new IOException("不是从文件打开");
 		if (r == null) {
 			r = ArchiveUtils.tryOpenSplitArchive(file, false);

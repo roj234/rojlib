@@ -32,7 +32,6 @@ public class FlagSet {
 	 * @throws NullPointerException 如果节点为null
 	 */
 	public void add(String node, @Range(from = 0, to = Integer.MAX_VALUE) int value, boolean important, boolean inheritable) {
-		assert value >= 0;
 		if (important) value |= IMPORTANT;
 		if (inheritable) map.putInt(node.concat(delimiter), value);
 		map.putInt(node, value);

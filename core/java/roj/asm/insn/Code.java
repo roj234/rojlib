@@ -133,25 +133,21 @@ public class Code extends Attribute implements Attributed {
 
 		c.visitAttributes();
 
-		if (computes != 0) {
+		if ((computes & COMPUTE_SIZES) != 0) {
 			FrameVisitor fv = c.frameVisitor;
 
-			if ((computes & COMPUTE_SIZES) != 0) {
-				stackSize = (char) fv.maxStackSize;
-				localSize = (char) fv.maxLocalSize;
-			}
+			stackSize = (char) fv.maxStackSize;
+			localSize = (char) fv.maxLocalSize;
+		}
 
-			if ((computes & COMPUTE_FRAMES) != 0) {
-				frames = c.frames;
-			}
-		} else {
-			s:
-			if (frames != null) {
-				int stack = c.visitAttributeI("StackMapTable");
-				if (stack < 0) break s;
-				FrameVisitor.writeFrames(frames, w, cp);
-				c.visitAttributeIEnd(stack);
-			}
+		smtOverrided:
+		if ((computes & COMPUTE_FRAMES) != 0) {
+			frames = c.frames;
+		} else if (frames != null) {
+			int stack = c.visitAttributeI("StackMapTable");
+			if (stack < 0) break smtOverrided;
+			FrameVisitor.writeFrames(frames, w, cp);
+			c.visitAttributeIEnd(stack);
 		}
 
 		AttributeList attrs = attributes;

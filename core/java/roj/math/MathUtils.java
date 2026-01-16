@@ -3,28 +3,18 @@ package roj.math;
 import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Range;
-import roj.collect.Int2IntMap;
-import roj.collect.IntList;
 import roj.compiler.runtime.RtUtil;
-import roj.util.Helpers;
 
-import java.util.*;
-import java.util.function.ToIntFunction;
+import java.util.Iterator;
+import java.util.NoSuchElementException;
+import java.util.PrimitiveIterator;
+import java.util.Random;
 
 /**
  * Math utilities.
  */
 public abstract class MathUtils {
 	public static final double HALF_PI = Math.PI / 2, TWO_PI = Math.PI * 2;
-
-	public static <T> IntList discretization(Iterable<T> list, ToIntFunction<T> retriever) {
-		if (retriever == null) retriever = Helpers.cast((ToIntFunction<Number>) Number::intValue);
-
-		IntList out = new IntList(list instanceof Collection ? ((Collection<T>) list).size() : 10);
-		Int2IntMap map = new Int2IntMap();
-		for (T t : list) out.add(map.putIntIfAbsent(retriever.applyAsInt(t), map.size()));
-		return out;
-	}
 
 	public static int clamp(int val, int min, int max) { return val < min ? min : val > max ? max : val; }
 	public static long clamp(long val, long min, long max) { return val < min ? min : val > max ? max : val; }
@@ -53,6 +43,60 @@ public abstract class MathUtils {
 	public static int positiveMod(int dividend, @Range(from = 1, to = Integer.MAX_VALUE) int divisor) {return RtUtil.positiveMod(dividend, divisor);}
 	@Contract(pure = true)
 	public static long positiveMod(long dividend, @Range(from = 1, to = Integer.MAX_VALUE) long divisor) {return RtUtil.positiveMod(dividend, divisor);}
+
+	/**
+	 * Generates a <b>mathematically</b> uniform distribution {@code double}
+	 * from the given random source.
+	 * <p>
+	 * This algorithm generate a stream of bits uniformly at random and
+	 * interpret it as the fractional part of the binary expansion of a
+	 * number in [0, 1], 0.00001010011111010100...; then round it.
+	 * @param random The random source
+	 * @return A mathematically uniform distribution double in range [0, 1]
+	 */
+	public static double realNextDouble(Random random) {
+		int exponent = -64;
+		long significand;
+
+		// Not simply return 0 here, as there are some chances for 1e-N
+		while (/*UNLIKELY*/(significand = random.nextLong()) == 0) {
+			exponent -= 64;
+
+			// Small, always rounding to zero, and nearly impossible to happen
+			if (/*UNLIKELY*/exponent < Double.MIN_EXPONENT + 1 - /*Double.PRECISION*/53)
+				return 0;
+		}
+
+		/*
+		 * There is a 1 somewhere in significand, not necessarily in
+		 * the most significant position.  If there are leading zeros,
+		 * shift them into the exponent and refill the less-significant
+		 * bits of the significand.  Can't predict one way or another
+		 * whether there are leading zeros: there's a fifty-fifty
+		 * chance, if random64 is uniformly distributed.
+		 */
+		int shift = Long.numberOfLeadingZeros(significand);
+		if (shift != 0) {
+			exponent -= shift;
+			significand <<= shift;
+			significand |= random.nextLong() >>> (64 - shift);
+		}
+
+		/*
+		 * Set the sticky bit, since there is almost surely another 1
+		 * in the bit stream.  Otherwise, we might round what looks
+		 * like a tie to even when, almost surely, were we to look
+		 * further in the bit stream, there would be a 1 breaking the
+		 * tie.
+		 */
+		significand |= 1;
+
+		/*
+		 * Convert to double (rounding) and scale by 2^exponent.
+		 */
+		long bits = ((long) (exponent + 1023) << 52) | (significand >>> 12);
+		return Double.longBitsToDouble(bits);
+	}
 
 	/**
 	 * Returns an iterator providing a number sequence. This sequence starts with <i>{@code from}</i> (given as
@@ -162,33 +206,6 @@ public abstract class MathUtils {
 		}
 	}
 
-	public static int average(int[] values) {
-		if (values == null || values.length == 0) return 0;
-		int sum = 0;
-		for (int v : values) sum += v;
-		return sum / values.length;
-	}
-
-	public static long average(long[] values) {
-		if (values == null || values.length == 0) return 0L;
-		long sum = 0L;
-		for (long v : values) sum += v;
-		return sum / values.length;
-	}
-
-	public static double[] pdf2cdf(double[] pdf) {
-		double[] cdf = new double[pdf.length];
-		cdf[0] = pdf[0];
-		for (int i = 1; i < cdf.length-1; i++) cdf[i] = pdf[i] + cdf[i-1];
-		// Force set last cdf to 1, preventing floating-point summing error in the loop.
-		cdf[cdf.length-1] = 1;
-		return cdf;
-	}
-	public static int cdfRandom(Random rand, double[] cdf) {
-		double x = rand.nextDouble();
-		int pos = Arrays.binarySearch(cdf, x);
-		return pos >= 0 ? pos : -pos - 2;
-	}
 	public static int randomRange(Random rand, int min, int max) {return min + rand.nextInt(max - min + 1);}
 
 	/**

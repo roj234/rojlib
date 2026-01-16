@@ -4,10 +4,7 @@ import roj.compiler.plugins.annotations.Attach;
 import roj.reflect.Bypass;
 import roj.reflect.Telescope;
 
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.List;
+import java.util.*;
 import java.util.function.ToIntFunction;
 
 import static roj.reflect.Unsafe.U;
@@ -112,12 +109,7 @@ public final class ArrayUtil {
 		return -(low + 1);
 	}
 
-	public static void checkRange(byte[] b, int off, int len) {checkRange(b.length, off, len);}
-	public static void checkRange(int capacity, int off, int len) {
-		if ((off|len|(off+len)) < 0 || off + len > capacity)
-			throw new IndexOutOfBoundsException("off="+off+",len="+len+",cap="+capacity);
-	}
-
+	public static void checkRange(byte[] b, int off, int len) {Objects.checkFromIndexSize(off, len, b.length);}
 
 	private static final Class<?> IMMUTABLE_ARRAY_TYPE = Arrays.asList().getClass();
 	@SuppressWarnings("unchecked")

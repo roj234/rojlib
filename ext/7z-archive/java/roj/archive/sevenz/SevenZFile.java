@@ -5,6 +5,7 @@ import roj.archive.ArchiveFile;
 import roj.archive.ArchiveUtils;
 import roj.collect.*;
 import roj.concurrent.TaskGroup;
+import roj.config.node.LongValue;
 import roj.crypt.CRC32;
 import roj.io.*;
 import roj.io.source.Source;
@@ -258,7 +259,7 @@ public final class SevenZFile extends SevenZReader implements ArchiveFile<SevenZ
 
 				this.in = new XDataInputStream(rawIn = that.isRecovering() ? in : new CRC32InputStream(in, myCrc));
 				readHeader();
-				if ((that.flag & FLAG_DUMP_HIDDEN) != 0) findSurprise(32+offset, length);
+				if ((that.flag & FLAG_DUMP_HIDDEN) != 0) findHiddenData(32+offset, length);
 			} finally {
 				IOUtil.closeSilently(buf);
 				if (in != null) in.finish();
@@ -266,41 +267,38 @@ public final class SevenZFile extends SevenZReader implements ArchiveFile<SevenZ
 		}
 
 		private long ecOff, ecLen;
-		private void findSurprise(long ehOff, long ehLen) throws IOException {
-			if (ecLen != 0 && in.position() != ecLen) System.out.println("EncodedHeader存在剩余信息");
+		private void findHiddenData(long ehOff, long ehLen) throws IOException {
+			if (ecLen != 0 && in.position() != ecLen) System.out.println("EncodedHeader尾部存在剩余信息");
 
-			IntervalPartition<IntervalPartition.Wrap<String>> tree = new IntervalPartition<>();
+			List<SweepLine.SimpleRange<String>> items = new ArrayList<>();
 
-			tree.add(new IntervalPartition.Wrap<>("SignatureHeader", 0, 32));
-			tree.add(new IntervalPartition.Wrap<>("Header", ehOff, ehOff+ehLen));
+			items.add(new SweepLine.SimpleRange<>("SignatureHeader", 0, 32));
+			items.add(new SweepLine.SimpleRange<>("Header", ehOff, ehOff+ehLen));
 			if (blocks != null) {
 				WordBlock lastBlock = blocks[blocks.length - 1];
-				tree.add(new IntervalPartition.Wrap<>("PackedStreams", blocks[0].offset, lastBlock.offset+lastBlock.size));
+				items.add(new SweepLine.SimpleRange<>("PackedStreams", blocks[0].offset, lastBlock.offset+lastBlock.size));
 			}
 			if (externalBlocks != null) {
 				WordBlock lastBlock = externalBlocks[externalBlocks.length - 1];
-				tree.add(new IntervalPartition.Wrap<>("AdditionalPackedStreams", externalBlocks[0].offset, lastBlock.offset+lastBlock.size));
+				items.add(new SweepLine.SimpleRange<>("AdditionalPackedStreams", externalBlocks[0].offset, lastBlock.offset+lastBlock.size));
 			}
 			if (ecOff != 0) {
-				tree.add(new IntervalPartition.Wrap<>("PackedStreamsForHeaders", ecOff, ecOff+ecLen));
+				items.add(new SweepLine.SimpleRange<>("PackedStreamsForHeaders", ecOff, ecOff+ecLen));
 			}
 
-			long hasInfo = 0;
-			for (var region : tree) {
-				if (hasInfo != 0) {
-					System.out.println("文件的["+hasInfo+","+region.pos()+"]有一些隐藏信息");
-					hasInfo = 0;
+			LongValue hasInfo = new LongValue(0);
+			SweepLine.merge(items, (ranges, length) -> {
+				long prevEnd = hasInfo.value;
+				long start = ranges.get(0).startPos;
+
+				if (prevEnd < start) {
+					System.out.println("文件的["+prevEnd+","+start+"]有一些隐藏信息");
 				}
 
-				if (region.coverage().size() != 1) {
-					if (region.coverage().size() > 1)
-						throw new CorruptedInputException("overlapped region (wb + end header ??)");
-					if (region.pos() != that.r.length())
-						hasInfo = region.pos();
-				}
-			}
+				hasInfo.value = start + length;
+			});
 
-			if (hasInfo != 0) {
+			if (hasInfo.value != that.r.length()) {
 				System.out.println("文件的["+hasInfo+","+that.r.length()+"]有一些隐藏信息");
 			}
 		}

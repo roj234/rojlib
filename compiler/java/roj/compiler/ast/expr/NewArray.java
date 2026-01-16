@@ -187,7 +187,7 @@ public final class NewArray extends Expr {
 	@Override
 	protected void write1(MethodWriter cw, @NotNull TypeCast.Cast cast) {
 		if ((flag&8) != 0) {
-			var ctx = CompileContext.get();
+			var ctx = cw.ctx;
 			if (cast.getType1() == null) {
 				ctx.report(this, Kind.ERROR, "lambda.untyped");
 				return;
@@ -221,7 +221,7 @@ public final class NewArray extends Expr {
 	private Type makeArray(MethodWriter cw, int dimension) {
 		Type at = type.rawType();
 		if (at.array() == 1) {
-			if (at.type != Type.CLASS) cw.newArray(Type.getArrayType(at.type));
+			if (at.type != Type.OBJECT) cw.newArray(Type.getArrayType(at.type));
 			else cw.clazz(Opcodes.ANEWARRAY, at.owner);
 		} else {
 			cw.multiArray(at.getActualClass(), dimension);

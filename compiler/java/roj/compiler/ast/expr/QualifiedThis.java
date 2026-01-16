@@ -77,7 +77,7 @@ final class QualifiedThis extends Expr {
 
 	@Override
 	protected void write1(MethodWriter cw, @NotNull TypeCast.Cast cast) {
-		var ctx = CompileContext.get();
+		var ctx = cw.ctx;
 		mustBeStatement(cast);
 
 		if (nestDepth > 0) {

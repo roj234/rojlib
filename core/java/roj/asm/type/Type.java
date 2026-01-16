@@ -21,7 +21,7 @@ import java.util.function.UnaryOperator;
  * @since 2021/6/18 9:51
  */
 public sealed class Type implements IType permits Type.ADT {
-	public static final char ARRAY = '[', CLASS = 'L', VOID = 'V', BOOLEAN = 'Z', BYTE = 'B', CHAR = 'C', SHORT = 'S', INT = 'I', LONG = 'J', FLOAT = 'F', DOUBLE = 'D';
+	public static final char ARRAY = '[', OBJECT = 'L', VOID = 'V', BOOLEAN = 'Z', BYTE = 'B', CHAR = 'C', SHORT = 'S', INT = 'I', LONG = 'J', FLOAT = 'F', DOUBLE = 'D';
 
 	/** The {@code void} type. */
 	public static final Type VOID_TYPE = primitive(VOID);
@@ -123,11 +123,11 @@ public sealed class Type implements IType permits Type.ADT {
 		@Override
 		public void toString(CharList sb) {
 			super.toString(sb);
-			if (type != CLASS) sb.append("<alias of ").append(getName(type)).append(">");
+			if (type != OBJECT) sb.append("<alias of ").append(getName(type)).append(">");
 		}
 	}
 
-	@MagicConstant(intValues = {VOID,BOOLEAN,BYTE,CHAR,SHORT,INT,FLOAT,DOUBLE,LONG,CLASS})
+	@MagicConstant(intValues = {VOID,BOOLEAN,BYTE,CHAR,SHORT,INT,FLOAT,DOUBLE,LONG,OBJECT})
 	public final byte type;
 	public String owner;
 	private byte array;
@@ -140,7 +140,7 @@ public sealed class Type implements IType permits Type.ADT {
 	private Type(int type, int array) {
 		if (!isValid(type)) throw new IllegalArgumentException("类型不合法: "+(char)type);
 		if (type == ARRAY) throw new IllegalArgumentException("不能创建ARRAY类型的实例");
-		if (type == CLASS) throw new IllegalArgumentException("不能使用此方法创建CLASS类型的实例");
+		if (type == OBJECT) throw new IllegalArgumentException("不能使用此方法创建CLASS类型的实例");
 
 		this.type = (byte) type;
 		setArrayDim(array);
@@ -149,7 +149,7 @@ public sealed class Type implements IType permits Type.ADT {
 	 * TYPE_CLASS
 	 */
 	private Type(String owner, int array) {
-		this.type = CLASS;
+		this.type = OBJECT;
 		this.owner = Objects.requireNonNull(owner);
 		setArrayDim(array);
 	}
@@ -223,7 +223,7 @@ public sealed class Type implements IType permits Type.ADT {
 				if (t.owner == null) t = Type.primitive(t.type, pos - off);
 				else t.setArrayDim(pos - off);
 				return t;
-			case CLASS:
+			case OBJECT:
 				if (!desc.endsWith(";")) throw new IllegalArgumentException("类型 '" + desc + "' 未以;结束");
 				return Type.klass(desc.substring(off + 1, desc.length() - 1));
 			default: return primitive(c0);
@@ -234,13 +234,13 @@ public sealed class Type implements IType permits Type.ADT {
 	@Override public byte kind() {return SIMPLE_TYPE;}
 	@Override public String toDesc() {
 		int type = getActualType();
-		if (type != Type.CLASS) return TypeInfo.byId[type - Type.BYTE].desc;
+		if (type != Type.OBJECT) return TypeInfo.byId[type - Type.BYTE].desc;
 		return IType.super.toDesc();
 	}
 	@Override public final void toDesc(CharList sb) {
 		for (int i = array&0xFF; i > 0; i--) sb.append('[');
 		sb.append((char) type);
-		if (type == CLASS) sb.append(owner).append(';');
+		if (type == OBJECT) sb.append(owner).append(';');
 	}
 	@Override public void toString(CharList sb) {
 		if (owner != null) TypeHelper.toStringOptionalPackage(sb, owner);
@@ -285,13 +285,13 @@ public sealed class Type implements IType permits Type.ADT {
 				if (type == VOID) throw new IllegalStateException("输入参数不能是void类型");
 			}
 			case E_THROW -> {
-				if (type != CLASS || array != 0) throw new IllegalStateException(this+"不是异常类型");
+				if (type != OBJECT || array != 0) throw new IllegalStateException(this+"不是异常类型");
 			}
 		}
 	}
 
-	public boolean isPrimitive() {return array == 0 && type != CLASS;}
-	public int getActualType() {return array == 0 ? type : CLASS;}
+	public boolean isPrimitive() {return array == 0 && type != OBJECT;}
+	public int getActualType() {return array == 0 ? type : OBJECT;}
 	/**
 	 * 当是KLASS类型且不是数组时返回类的直接表示形式，否则返回Desc
 	 */
@@ -389,7 +389,7 @@ public sealed class Type implements IType permits Type.ADT {
 
 		if (type != type1.type) return false;
 		if (array != type1.array) return false;
-		return type != CLASS || owner.equals(type1.owner);
+		return type != OBJECT || owner.equals(type1.owner);
 	}
 
 	@Override

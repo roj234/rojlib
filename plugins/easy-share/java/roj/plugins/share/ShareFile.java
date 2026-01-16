@@ -26,7 +26,7 @@ final class ShareFile implements VirtualFile {
 	public ShareFile() {}
 	public ShareFile(File file, int prefixLength) {
 		this.name = file.getName();
-		this.mime = MimeType.getMimeType(IOUtil.extensionName(name));
+		this.mime = MimeType.getMimeType(IOUtil.getExtension(name));
 		this.size = file.length();
 		this.lastModified = file.lastModified();
 		String path = file.getAbsolutePath();

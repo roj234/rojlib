@@ -134,6 +134,7 @@ public class TaskGroup implements Executor, Cancellable {
 			int total = totalTasks;
 			if (total < 0) return;
 			if (TOTAL.compareAndSet(this, total, total+1)) break;
+			Thread.onSpinWait();
 		}
 
 		MTask task1 = new MTask(task);
@@ -298,7 +299,7 @@ public class TaskGroup implements Executor, Cancellable {
 	 *
 	 * @return the total number of tasks submitted
 	 */
-	public int getTotalTasks() {return totalTasks &Integer.MAX_VALUE;}
+	public int getTotalTasks() {return totalTasks&Integer.MAX_VALUE;}
 
 	/**
 	 * Attempts to cancel all tasks managed by this monitor.

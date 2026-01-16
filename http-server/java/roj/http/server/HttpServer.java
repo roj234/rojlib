@@ -4,7 +4,6 @@ import roj.ci.annotation.IndirectReference;
 import roj.collect.ArrayList;
 import roj.collect.HashMap;
 import roj.collect.RingBuffer;
-import roj.http.Headers;
 import roj.http.HttpUtil;
 import roj.http.h2.H2Connection;
 import roj.net.ChannelHandler;
@@ -151,7 +150,7 @@ public final class HttpServer implements BiConsumer<String, String> {
 	int parseAcceptEncoding(String field) throws IllegalRequestException {
 		_maxQ = 0;
 		_mustCompress = false;
-		Headers.complexValue(field, this, false);
+		HttpUtil.parseParameters(field, this);
 		if (_mustCompress && _enc == ENC_PLAIN) throw new IllegalRequestException(406);
 		return _enc;
 	}

@@ -168,7 +168,7 @@ final class MethodList extends ComponentList {
 			if (!namedArguments.isEmpty()) continue;
 			}
 
-			var result = ctx.inferrer.infer(owner, method, that, myParam == null ? actualArguments : myParam);
+			var result = ctx.inferrer.resolveInvocation(owner, method, that, myParam == null ? actualArguments : myParam);
 			if (result.method == null) continue;
 
 			int score = result.distance;
@@ -235,7 +235,7 @@ final class MethodList extends ComponentList {
 	private static void getErrorMsg(CompileContext ctx, IType genericHint, List<IType> params, boolean in_static, MethodNode mn, CharList sb, CharList errRpt) {
 		var info = ctx.compiler.resolve(mn.owner());
 		if (ctx.canAccessSymbol(info, mn, in_static, true)) {
-			appendError(ctx.inferrer.infer(info, mn, genericHint, params), sb);
+			appendError(ctx.inferrer.resolveInvocation(info, mn, genericHint, params), sb);
 		}
 		if (errRpt.length() > 0) {
 			sb.append(errRpt).append(',');

@@ -3,9 +3,9 @@ package roj.sql;
 import roj.collect.ArrayList;
 import roj.collect.HashMap;
 import roj.collect.*;
-import roj.text.Tokenizer;
 import roj.text.CharList;
 import roj.text.TextUtil;
+import roj.text.Tokenizer;
 import roj.util.Helpers;
 
 import java.sql.*;
@@ -338,7 +338,7 @@ public final class QueryBuilder implements AutoCloseable {
 	 */
 	public Map<String, String> nextMap() throws SQLException {
 		List<String> list = next();
-		return list == null ? null : new ListMap<>(select_field_names(), list);
+		return list == null ? null : new RowMap<>(select_field_names(), list);
 	}
 
 	private IntBiMap<String> select_index;

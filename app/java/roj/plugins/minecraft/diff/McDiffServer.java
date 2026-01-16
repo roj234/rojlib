@@ -173,12 +173,12 @@ public final class McDiffServer {
 								ByteList patch = IOUtil.getSharedByteBuf();
 								diff.makePatch(r, patch);
 
-								DummyOutputStream tmp2 = new DummyOutputStream();
+								NullOutputStream tmp2 = new NullOutputStream();
 								try (OutputStream tmp3 = new LZMAOutputStream(tmp2, new LZMA2Options(), patch.readableBytes())) {
 									patch.writeToStream(tmp3);
 								}
 
-								if (tmp2.wrote < file.length()/2) {
+								if (tmp2.writtenBytes < file.length()/2) {
 									out.putShort(i).putInt(rin.getTimestamp(i)).putInt(patch.readableBytes());
 									out.flush();
 									patch.writeToStream(w);

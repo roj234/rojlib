@@ -7,8 +7,7 @@ import roj.collect.TrieTree;
 import roj.config.node.IntValue;
 import roj.io.IOUtil;
 import roj.math.MathUtils;
-import roj.util.ArrayCache;
-import roj.util.Helpers;
+import roj.util.*;
 
 import java.io.IOException;
 import java.io.Reader;
@@ -84,7 +83,7 @@ public class CharList implements CharSequence, Appendable {
 	protected int len;
 
 	public CharList() { list = ArrayCache.CHARS; }
-	public CharList(int len) { list = ArrayCache.getCharArray(len); }
+	public CharList(int len) { list = new char[len]; }
 	public CharList(char[] array) {
 		list = array;
 		len = array.length;
@@ -288,7 +287,19 @@ public class CharList implements CharSequence, Appendable {
 	}
 	public final CharList append(CharSequence csq) {
 		if (csq == null) return append("null");
+		if (csq instanceof ByteList bl && bl.hasArray()) return append(bl);
 		return append(csq, 0, csq.length());
+	}
+	public CharList append(DynByteBuf buf) {
+		if (buf.hasArray()) {
+			int readLen = buf.readableBytes();
+			ensureCapacity(len + readLen);
+			StringAccess.INSTANCE.inflate(buf.array(), buf.arrayOffset() + buf.rIndex, list, len, readLen);
+			len += readLen;
+		} else {
+			append(buf, 0, buf.readableBytes());
+		}
+		return this;
 	}
 	public CharList append(CharSequence cs, int start, int end) {
 		Class<?> c = cs.getClass();

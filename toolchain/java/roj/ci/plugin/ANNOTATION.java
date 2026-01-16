@@ -69,7 +69,7 @@ public class ANNOTATION implements Plugin {
 					cw.varLoad(parameters.get(i), i+ staticOffset);
 				}
 
-				cw.invokeS(descriptor.owner, descriptor.name, descriptor.rawDesc);
+				cw.invokeS(element.owner(), element.name(), element.desc());
 				cw.return_(cw.method.returnType());
 				cw.finish();
 

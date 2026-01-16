@@ -14,10 +14,7 @@ import roj.io.IOUtil;
 import roj.net.Net;
 import roj.plugin.Plugin;
 import roj.plugins.dns.DnsServer.Record;
-import roj.text.CharList;
-import roj.text.TextReader;
-import roj.text.TextUtil;
-import roj.text.URICoder;
+import roj.text.*;
 import roj.util.DynByteBuf;
 import roj.util.Helpers;
 
@@ -152,7 +149,7 @@ public class ADnsGuard extends Plugin {
 			} else {
 				Record e = new Record();
 				e.TTL = Integer.MAX_VALUE;
-				short qType = (short) TextUtil.parseInt(type);
+				short qType = (short) FastNumberParser.parseInt(type);
 				e.qType = qType;
 				if (qType == Q_A || qType == Q_AAAA) {
 					e.data = Net.ip2bytes(cnt);

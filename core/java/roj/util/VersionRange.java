@@ -71,7 +71,10 @@ public final class VersionRange {
 				range.lowerBound = min;
 				range.lowerInclusive = true;
 
-				Matcher semVer = ArtifactVersion.SEMVER.matcher(min.toString());
+				Matcher semVer = ArtifactVersion.SEMVER.matcher(min.getCanonical());
+				if (semVer.matches()) {
+
+				}
 				var version = new CharList().append(semVer.group(1)).append('.').append(Integer.parseInt(semVer.group(2))+1).append('.').append(semVer.group(3));
 				if (semVer.group(4) != null) version.append('-').append(semVer.group(4));
 

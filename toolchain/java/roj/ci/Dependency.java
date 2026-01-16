@@ -9,9 +9,13 @@ import roj.asmx.Context;
 import roj.ci.event.LibraryModifiedEvent;
 import roj.collect.HashSet;
 import roj.collect.XashMap;
+import roj.config.ConfigMaster;
 import roj.config.node.IntValue;
+import roj.config.node.xml.Document;
+import roj.config.node.xml.Node;
 import roj.io.IOUtil;
 import roj.text.CharList;
+import roj.text.ParseException;
 import roj.text.TextUtil;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
@@ -55,7 +59,7 @@ public sealed interface Dependency extends Closeable {
 	default void getClassPath(CharList classpath, File prefix) {
 		forEachJar(file -> {
 			String absolutePath = file.getAbsolutePath();
-			String relativized = IOUtil.relativizePath(prefix.getAbsolutePath(), absolutePath);
+			String relativized = IOUtil.relativize(prefix.getAbsolutePath(), absolutePath);
 			classpath.append(relativized == null ? absolutePath : relativized).append(File.pathSeparatorChar);
 		});
 	}
@@ -105,7 +109,7 @@ public sealed interface Dependency extends Closeable {
 				long stamp = ctx.lastBuildTime;
 				// 是否在同一批次编译
 				if (increment == INC_UPDATE && project.compiling.lastBuildTime > stamp) {
-					changed = IOUtil.listFiles(project.resPath, file -> file.lastModified() >= stamp);
+					changed = IOUtil.listFiles(project.resPath, (pathname, attr) -> attr.lastModifiedTime().toMillis() >= stamp);
 				}
 
 				if ((changed.size()|removed.size()) > 0)
@@ -242,7 +246,6 @@ public sealed interface Dependency extends Closeable {
 				MCMake.EVENT_BUS.post(new LibraryModifiedEvent(ctx.project));
 				repo = null;
 			}
-			archive.source().close();
 
 			lastModified = file.lastModified();
 			classes = new HashSet<>();
@@ -255,6 +258,8 @@ public sealed interface Dependency extends Closeable {
 					}
 				}
 			}
+
+			archive.source().close();
 		}
 
 		@Override
@@ -321,9 +326,9 @@ public sealed interface Dependency extends Closeable {
 
 		@Override
 		public void writeProjectConfiguration(File root, CharList sb, String type) {
-			String absolutePath = file.getAbsolutePath();
-			String relativized = IOUtil.relativizePath(root.getAbsolutePath(), absolutePath);
-			String uri = relativized == null ? "jar://" + IOUtil.normalizePath(absolutePath) : "jar://$MODULE_DIR$/" + relativized;
+			String absolutePath = file == null ? "uninitialized.jar" : file.getAbsolutePath();
+			String relativized = IOUtil.relativize(root.getAbsolutePath(), absolutePath);
+			String uri = relativized == null ? "jar://" + IOUtil.normalize(absolutePath) : "jar://$MODULE_DIR$/" + relativized;
 			sb.append(" type=\"module-library\"><library><CLASSES><root url=\"").append(uri).append("!/\" />\n" +
 					"</CLASSES><JAVADOC /><SOURCES /></library></orderEntry>");
 		}
@@ -351,10 +356,10 @@ public sealed interface Dependency extends Closeable {
 		public DirDep(File dir) {this.dir = dir;}
 
 		public void open(BuildContext ctx) throws IOException {
-			var files = new HashSet<>(IOUtil.listFiles(dir, file -> {
-				String ext = IOUtil.extensionName(file.getName());
-				return (ext.equals("zip") || ext.equals("jar")) && file.length() != 0;
-			}));
+			var files = IOUtil.listFiles(dir, new HashSet<>(), (pathname, attr) -> {
+				String ext = IOUtil.getExtension(pathname);
+				return (ext.equals("zip") || ext.equals("jar")) && attr.size() != 0;
+			});
 
 			for (var itr = fileDeps.iterator(); itr.hasNext(); ) {
 				FileDep dep = itr.next();
@@ -405,8 +410,8 @@ public sealed interface Dependency extends Closeable {
 		@Override
 		public void writeProjectConfiguration(File root, CharList sb, String type) {
 			String absolutePath = dir.getAbsolutePath();
-			String relativized = IOUtil.relativizePath(root.getAbsolutePath(), absolutePath);
-			String uri = relativized == null ? "file://" + IOUtil.normalizePath(absolutePath) : "file://$MODULE_DIR$/" + relativized;
+			String relativized = IOUtil.relativize(root.getAbsolutePath(), absolutePath);
+			String uri = relativized == null ? "file://" + IOUtil.normalize(absolutePath) : "file://$MODULE_DIR$/" + relativized;
 			sb.append("type=\"module-library\"><library><CLASSES><root url=\"").append(uri).append("\" />\n" +
 					"</CLASSES><JAVADOC /><SOURCES />\n" +
 					"<jarDirectory url=\"").append(uri).append("\" recursive=\"true\" />\n" +
@@ -456,20 +461,58 @@ public sealed interface Dependency extends Closeable {
 		}
 
 		@Override public void open(BuildContext ctx) throws IOException {
-			locateCache(false);
+			locateCache(ctx, false);
 			cache.open(ctx);
 		}
-		@Override public void close() throws IOException {
-			IOUtil.closeSilently(cache);
-		}
-		@Override public void unlock() {cache.unlock();}
 
-		private void locateCache(boolean optional) throws IOException {
+		@Override public void close() throws IOException {IOUtil.closeSilently(cache);}
+		@Override public void unlock() {if (cache != null) cache.unlock();}
+
+		private void locateCache(BuildContext ctx, boolean optional) throws IOException {
+			long time = System.currentTimeMillis();
 			File file = coordinate.locate(cacheBase, mavenUrls, 1800, !optional);
+			if (file == null) return;
+
 			if (cache == null || file.equals(cache.file)) {
 				IOUtil.closeSilently(cache);
 				cache = new FileDep(file);
+
+				if (ctx != null && System.currentTimeMillis() - time > 100)
+					checkDeps(ctx);
 			}
+		}
+
+		private void checkDeps(BuildContext ctx) throws IOException {
+			cache.open(ctx);
+
+			Set<String> deps = new HashSet<>();
+			for (var dep : ctx.project.getBundledDependencies()) {
+				if (dep instanceof MavenDep md) {
+					deps.add(md.coordinate.groupId + ":" + md.coordinate.artifactId);
+				}
+			}
+			for (ZipEntry entry : cache.archive.entries()) {
+				if (entry.getName().startsWith("META-INF/maven") && entry.getName().equals("/pom.xml")) {
+					try {
+						var doc = (Document) ConfigMaster.XML.parse(cache.archive.getInputStream(entry));
+						for (Node node : doc.querySelectorAll("/project/dependencies/dependency")) {
+							Node groupId = node.querySelector("/groupId");
+							Node artifactId = node.querySelector("/artifactId");
+							Node scope = node.querySelector("/scope");
+							if (scope != null && scope.asString().equals("test")) continue;
+
+							String item = groupId + ":" + artifactId;
+							if (deps.add(item)) {
+								MavenCoordinate.LOGGER.warn("项目"+ ctx.project.getName()+"可能缺少Maven依赖 "+item);
+							}
+						}
+					} catch (ParseException e) {
+						MavenCoordinate.LOGGER.warn("Failed to parse "+entry.getName(), e);
+					}
+				}
+			}
+
+			cache.close();
 		}
 
 		@Override public int getResources(Project project, ZipOutput zipOutput, BuildContext ctx) throws IOException {return cache.getResources(project, zipOutput, ctx);}
@@ -478,7 +521,7 @@ public sealed interface Dependency extends Closeable {
 		@Override public void forEachJar(Consumer<File> consumer) {cache.forEachJar(consumer);}
 		@Override public void writeProjectConfiguration(File root, CharList sb, String type) {
 			try {
-				locateCache(true);
+				locateCache(null, true);
 			} catch (IOException e) {
 				Helpers.athrow(e);
 			}

@@ -30,6 +30,7 @@ import roj.util.function.Flow;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.file.attribute.BasicFileAttributes;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -94,6 +95,11 @@ public final class BuildContext {
 	 * Used to detect file changes in incremental builds.
 	 */
 	public long lastBuildTime;
+	/**
+	 * 这个构建失败了
+	 * @since 3.17
+	 */
+	public boolean hasError;
 
 	/**
 	 * Indicates a full build, scanning all files without relying on prior state.
@@ -251,7 +257,7 @@ public final class BuildContext {
 					}
 				}
 
-				changed = IOUtil.listFiles(basePath, file -> incr <= INC_REBUILD || file.lastModified() >= lastBuildTime);
+				changed = IOUtil.listFiles(basePath, (pathname, attr) -> incr <= INC_REBUILD || attr.lastModifiedTime().toMillis() >= lastBuildTime);
 			}
 			return changed;
 		}
@@ -322,7 +328,7 @@ public final class BuildContext {
 
 						synchronized (modified) {
 							for (String pathname : modified) {
-								incrementChange(new File(pathname));
+								incrementChange(pathname);
 							}
 						}
 
@@ -330,7 +336,7 @@ public final class BuildContext {
 					}
 
 					for (String pathname : project.getDeleted(watcherSlot)) {
-						incrementChange(new File(pathname));
+						incrementChange(pathname);
 					}
 				}
 
@@ -343,10 +349,9 @@ public final class BuildContext {
 				} else {
 					changed = new ArrayList<>();
 					changeDeps = new ArrayList<>();
-					IOUtil.listFiles(basePath, file -> {
-						boolean chosen = file.lastModified() >= lastBuildTime && isCompilable(file);
-						if (chosen) incrementChange(file);
-						return false;
+					IOUtil.listPaths(basePath, (pathname, attr) -> {
+						boolean chosen = attr.lastModifiedTime().toMillis() >= lastBuildTime && isCompilable(pathname, attr);
+						if (chosen) incrementChange(pathname);
 					});
 				}
 			}
@@ -388,15 +393,15 @@ public final class BuildContext {
 			return changed;
 		}
 
-		static boolean isCompilable(File file) {
-			return IOUtil.extensionName(file.getName()).equals("java");
+		static boolean isCompilable(String path, BasicFileAttributes attr) {
+			return IOUtil.getExtension(path).equals("java");
 		}
 
-		private void incrementChange(File file) {
-			String pathname = file.getAbsolutePath();
+		private void incrementChange(String pathname) {
 			String srcPrefix = project.srcPath.getPath();
 			var className = pathname.substring(srcPrefix.length() + 1, pathname.length() - 5).replace(File.separatorChar, '/');
 
+			var file = new File(pathname);
 			if (file.isFile()) changed.add(file);
 			else {
 				removed.add(className);
@@ -607,7 +612,6 @@ public final class BuildContext {
 		private final CodeWeaver weaver = new CodeWeaver();
 		private final ConstantPoolHooks hooks = new ConstantPoolHooks();
 		private final Mapper mapper = new Mapper();
-		private boolean needTransform;
 
 		void runTransformers(List<Context> classes) throws TransformException {
 			if (!weaver.registry().isEmpty()) {
@@ -616,7 +620,7 @@ public final class BuildContext {
 					weaver.transform(context.getClassName(), context);
 				}
 			}
-			if (needTransform) {
+			if (hooks.isNotEmpty()) {
 				for (int i = 0; i < classes.size(); i++) {
 					Context context = classes.get(i);
 					hooks.transform(context.getClassName(), context);
@@ -688,6 +692,7 @@ public final class BuildContext {
 	/**
 	 * @since 3.12
 	 */
+	@SuppressWarnings("unchecked")
 	public <T> T getIncrementCache(TypedKey<T> key) {return (T) project.persistentState.data.get(key);}
 
 	/**
@@ -797,7 +802,7 @@ public final class BuildContext {
 	 *
 	 * @return the constant pool hooks instance
 	 */
-	public ConstantPoolHooks classNodeEvents() {project.persistentState.needTransform = true;return project.persistentState.hooks;}
+	public ConstantPoolHooks classNodeEvents() {return project.persistentState.hooks;}
 	/**
 	 * Returns the mapper instance for remapping class names, method signatures, and debug information.
 	 * Commonly used for obfuscation, access widening, or name shortening.

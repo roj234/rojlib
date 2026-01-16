@@ -19,12 +19,10 @@ import roj.concurrent.TaskPool;
 import roj.config.node.IntValue;
 import roj.gui.GuiProgressBar;
 import roj.gui.GuiUtil;
-import roj.gui.TreeBuilder;
 import roj.io.CorruptedInputException;
 import roj.io.IOUtil;
 import roj.io.source.FileSource;
 import roj.text.TextUtil;
-import roj.text.URICoder;
 import roj.text.logging.Logger;
 import roj.ui.EasyProgressBar;
 import roj.util.FastFailException;
@@ -59,6 +57,7 @@ import static roj.archive.WinAttributes.*;
 /**
  * @author Roj234
  */
+@Deprecated
 public class UnarchiverUI extends JFrame {
 	public static void main(String[] args) throws Exception {
 		GuiUtil.systemLaf();
@@ -241,14 +240,14 @@ public class UnarchiverUI extends JFrame {
 				}
 
 				String name = entry.getName();
-				if (uiPathFilter.isSelected()) name = URICoder.escapeFilePath(IOUtil.normalizePath(name));
+				if (uiPathFilter.isSelected()) name = IOUtil.escapeFilePath(IOUtil.normalize(name));
 
 				File file1 = new File(basePath, name);
 
 				if (entry instanceof SevenZEntry qze && qze.isAntiItem()) {
 					if ((storeFlag2&8) != 0) {
 						if (qze.isDirectory()) {
-							IOUtil.deletePath(file1);
+							IOUtil.deleteRecursively(file1);
 						} else {
 							try {
 								Files.deleteIfExists(file1.toPath());
@@ -276,7 +275,7 @@ public class UnarchiverUI extends JFrame {
 						case 1: break loop; // replace
 						case 2: break; // rename
 					}
-					name = IOUtil.fileName(name)+"("+ ++ord +")."+IOUtil.extensionName(name);
+					name = IOUtil.getBaseName(name)+"("+ ++ord +")."+IOUtil.getExtension(name);
 					file1 = new File(basePath, name);
 				}
 

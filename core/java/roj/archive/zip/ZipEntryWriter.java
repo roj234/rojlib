@@ -23,6 +23,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.security.InvalidKeyException;
+import java.util.Arrays;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.zip.Deflater;
 import java.util.zip.DeflaterOutputStream;
@@ -82,6 +83,11 @@ final class ZipEntryWriter extends MBOutputStream {
 		return lzma2Options;
 	}
 
+	/**
+	 *
+	 * @param stream 流式压缩 (若为false并且使用ZipCrypto加密，那么crc32必须已知！)
+	 * @param useZip64 在LOC预先写入Zip64扩展字段
+	 */
 	public void beginEntry(
 			ZipEntry entry,
 			boolean stream,
@@ -99,17 +105,24 @@ final class ZipEntryWriter extends MBOutputStream {
 
 		int encryptType = entry.getEncryptMethod();
 
-		if (stream) {
-			if (useZip64) entry.compressedSize = entry.size = U32_MAX;
+		sizeIsKnown: {
+			if (stream) {
+				if (encryptType == ZipEntry.ENC_ZIPCRYPTO) {
+					// 由于无法预知大小，所以必须存在EXT标记
+					entry.flags |= GP_HAS_EXT;
+				}
 
-			if (encryptType == ZipEntry.ENC_ZIPCRYPTO) {
-				// 由于无法预知大小，所以必须存在EXT标记
-				entry.flags |= GP_HAS_EXT;
+				if (entry.getMethod() == ZipEntry.LZMA) {
+					entry.flags |= 2; // LZMA EOS Marker Present
+				}
+			} else {
+				if (entry.size != 0 && entry.getMethod() == ZipEntry.STORED) {
+					entry.compressedSize = entry.size;
+					break sizeIsKnown;
+				}
 			}
 
-			if (entry.getMethod() == ZipEntry.LZMA) {
-				entry.flags |= 2; // LZMA EOS Marker Present
-			}
+			entry.compressedSize = entry.size = useZip64 ? U32_MAX : 0;
 		}
 
 		LOCOffset = rawOut.position();
@@ -248,7 +261,7 @@ final class ZipEntryWriter extends MBOutputStream {
 		if (entry == null) throw new ZipException("Entry closed");
 
 		inputSize += buf.readableBytes();
-		if (!stream) crc32 = CRC32.update(crc32, buf);
+		if (stream) crc32 = CRC32.update(crc32, buf);
 
 		if (isLast) {
 			// tricks for accelerate
@@ -298,11 +311,19 @@ final class ZipEntryWriter extends MBOutputStream {
 
 		boolean useZip64 = entry.compressedSize >= U32_MAX || entry.size >= U32_MAX;
 		boolean requireZip64 = compressedSize > U32_MAX || uncompressedSize > U32_MAX;
+		// 这也可以降级为警告，因为只是LOC里缺失了这些数据
 		if (requireZip64 && !useZip64) throw new ZipException("文件过大(4GB), 请在beginEntry中启用zip64");
+
+		int _crc32 = CRC32.finish(crc32);
+
+		boolean updateLOC =
+				compressedSize != entry.compressedSize
+			 || uncompressedSize != entry.size
+			 || (!stream && entry.crc32 != _crc32);
 
 		entry.compressedSize = compressedSize;
 		entry.size = uncompressedSize;
-		if (stream) entry.crc32 = CRC32.finish(crc32);
+		if (stream) entry.crc32 = _crc32;
 
 		crc32 = CRC32.initial;
 		inputSize = 0;
@@ -311,24 +332,26 @@ final class ZipEntryWriter extends MBOutputStream {
 			if (!stream) throw new IllegalStateException("EXT record on non-stream entry");
 
 			writeEXT(f, buf, entry);
-			pos = f.position();
+			pos += buf.rIndex;
 		}
 
-		var buf = this.buf; buf.clear();
-		buf.putIntLE(entry.getCRC32FW())
-		   .putIntLE((int) Math.min(compressedSize, U32_MAX))
-		   .putIntLE((int) Math.min(uncompressedSize, U32_MAX));
+		if (updateLOC) {
+			var buf = this.buf; buf.clear();
+			buf.putIntLE(entry.getCRC32FW())
+			   .putIntLE((int) Math.min(compressedSize, U32_MAX))
+			   .putIntLE((int) Math.min(uncompressedSize, U32_MAX));
 
-		f.seek(LOCOffset+14);
-		f.write(buf);
+			f.seek(LOCOffset+14);
+			f.write(buf);
 
-		if (useZip64) {
-			f.seek(LOCOffset+34+entry.nameBytes.length);
-			buf.clear();
-			f.write(buf.putLongLE(uncompressedSize).putLongLE(compressedSize));
+			if (useZip64) {
+				f.seek(LOCOffset+34+entry.nameBytes.length);
+				buf.clear();
+				f.write(buf.putLongLE(uncompressedSize).putLongLE(compressedSize));
+			}
+
+			f.seek(pos);
 		}
-
-		f.seek(pos);
 	}
 
 	public void finish() {
@@ -430,6 +453,18 @@ final class ZipEntryWriter extends MBOutputStream {
 		   .putIntLE(co)
 		   .putShortLE(comment.length)
 		   .put(comment);
+	}
+
+	static int roarHash(ZipEntry entry) {return Arrays.hashCode(entry.nameBytes);}
+	static void roarWriteLOC(OutputStream out, ByteList buf, ZipEntry file) throws IOException {out.write(file.nameBytes);}
+	static void roarWriteCEN(ByteList buf, ZipEntry entry) {
+		// uint32_t size, compressedSize;
+		// uint32_t hash;
+		// uint16_t nameLen;
+		// uint16_t flags;
+		buf.putInt((int) entry.size).putInt((int) entry.compressedSize)
+		   .putInt(roarHash(entry)).putShort(entry.nameBytes.length)
+		   .putShort(entry.method);
 	}
 
 	private static final class DeflateOutputStream extends DeflaterOutputStream implements Finishable {

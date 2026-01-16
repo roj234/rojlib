@@ -1,18 +1,22 @@
 package roj.http;
 
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
+import org.jetbrains.annotations.UnknownNullability;
 import roj.collect.ArrayList;
 import roj.collect.HashSet;
-import roj.collect.Multimap;
-import roj.collect.ToIntMap;
+import roj.collect.*;
 import roj.io.IOUtil;
 import roj.text.*;
-import roj.util.*;
+import roj.util.ArrayCache;
+import roj.util.ByteList;
+import roj.util.DynByteBuf;
+import roj.util.Helpers;
 
 import java.io.IOException;
 import java.net.MalformedURLException;
 import java.util.*;
-import java.util.function.BiConsumer;
+import java.util.function.Consumer;
 
 import static roj.collect.IntMap.UNDEFINED;
 
@@ -21,138 +25,9 @@ import static roj.collect.IntMap.UNDEFINED;
  * @since 2021/10/23 21:20
  */
 public class Headers extends Multimap<CharSequence, String> {
-	public static void encodeVal(Iterator<Map.Entry<String, String>> itr, Appendable sb) {
-		if (!itr.hasNext()) return;
-		try {
-			while (true) {
-				Map.Entry<String, String> entry = itr.next();
-				sb.append(entry.getKey());
-				String v = entry.getValue();
-
-				f:
-				if (v != null) {
-					sb.append('=');
-					for (int i = 0; i < v.length(); i++) {
-						switch (v.charAt(i)) {
-							case ' ':
-							case ',':
-							case '=':
-								sb.append('"').append(v).append('"');
-								break f;
-							case '"':
-								throw new IllegalArgumentException("'\"' Should not occur");
-						}
-					}
-					sb.append(v);
-				}
-
-				if (!itr.hasNext()) break;
-				sb.append(',');
-			}
-		} catch (IOException e) {
-			Helpers.athrow(e);
-		}
-	}
-
-	public static String getOneValue(CharSequence field, String key) {
-		var vo = new Entry<>();
-		vo.key = key;
-		try {
-			complexValue(field, vo, false);
-		} catch (OperationDone e) {
-			return Helpers.cast(vo.getKey());
-		}
-		return null;
-	}
-	private static List<Map.Entry<String, String>> getValues(CharSequence field) {
-		List<Map.Entry<String, String>> kvs = new ArrayList<>();
-		complexValue(field, (k, v) -> kvs.add(new SimpleImmutableEntry<>(k, v)), false);
-		return kvs;
-	}
-
-	@Deprecated
-	public static Multimap<String, String> simpleValue(CharSequence query, String delim, boolean throwOrSkip) throws MalformedURLException {
-		List<String> queries = TextUtil.split(query, delim);
-		Multimap<String, String> map = new Multimap<>(queries.size());
-
-		for (int i = 0; i < queries.size(); i++) {
-			String s = queries.get(i);
-			int j = s.indexOf('=');
-			try {
-				if (j == -1) map.add(URICoder.decodeURI(s), "");
-				else map.add(URICoder.decodeURI(s.substring(0, j)), URICoder.decodeURI(s.substring(j+1)));
-			} catch (MalformedURLException e) {
-				if (throwOrSkip) throw e;
-			}
-		}
-		return map;
-	}
-	@SuppressWarnings("fallthrough")
-	public static void complexValue(CharSequence field, BiConsumer<String,String> kvs, boolean throwOrSkip) {
-		try {
-		String k = null;
-		int i = 0, j = 0;
-		int flag = 0;
-		while (i < field.length()) {
-			char c = field.charAt(i++);
-			if (flag == 1) {
-				if (c == '"') {
-					if (k == null) throw new IllegalArgumentException("Escaped key");
-					kvs.accept(URICoder.decodeURI(k), Sub(field, j, i - 1));
-					j = i;
-					k = null;
-					flag = 2;
-				}
-			} else {
-				switch (c) {
-					case '=':
-						if (k != null) throw new IllegalArgumentException("Unexpected '='");
-						k = Sub(field, j, i - 1);
-						j = i;
-						flag = 0;
-						break;
-					case '"':
-						flag = 1;
-						j = i;
-						break;
-					case ' ':
-					case '\t':
-						c = ' ';
-						while (true) {
-							int c1 = field.charAt(i);
-							if (c1 != ' ' && c1 != '\t') break;
-							i++;
-						}
-					case ',':
-					case ';':
-						if (k != null) {
-							kvs.accept(URICoder.decodeURI(k), Sub(field, j, i - 1));
-							k = null;
-						} else {
-							if (i - 1 > j) kvs.accept(Sub(field, j, i - 1), "");
-							else if (c != ' ' && (flag & 2) == 0) throw new IllegalArgumentException("'" + c + "' on empty");
-						}
-						flag = 0;
-						j = i;
-						break;
-				}
-			}
-		}
-
-		if (k != null) {
-			kvs.accept(URICoder.decodeURI(k), Sub(field, j, i));
-		} else if (i > j) {
-			kvs.accept(Sub(field, j, i).toLowerCase(Locale.ROOT), "");
-		}
-		} catch (MalformedURLException e) {
-			if (throwOrSkip) Helpers.athrow(e);
-		}
-	}
-	private static String Sub(CharSequence c, int s, int e) throws MalformedURLException { return URICoder.decodeURI(c.subSequence(s, e)); }
-
 	public Headers() {this(8);}
 	public Headers(int size) {super(size);}
-	public Headers(CharSequence data) {putAllS(data);}
+	public Headers(CharSequence data) {parseFromText(data);}
 	public Headers(Map<CharSequence, String> data) {putAll(data);}
 
 	public static boolean parseHeader(Headers map, DynByteBuf buf) {
@@ -161,6 +36,9 @@ public class Headers extends Multimap<CharSequence, String> {
 		tmp.release();
 		return b;
 	}
+	/**
+	 * 这个函数是流式的，它可以按行解析
+	 */
 	public static boolean parseHeader(Headers map, DynByteBuf buf, ByteList tmp) {
 		if (!buf.isReadable()) return false;
 
@@ -208,7 +86,11 @@ public class Headers extends Multimap<CharSequence, String> {
 					String val = tmp.readUTF(tmp.readableBytes()); tmp.clear();
 					checkVal(val);
 
-					map.add(key, val);
+					if (LIST_TYPE.contains(key)) {
+						addOWS(map, key, val);
+					} else {
+						map.add(key, val);
+					}
 
 					if (c == '\r') {
 						if (i+1 >= len) return false;
@@ -228,7 +110,46 @@ public class Headers extends Multimap<CharSequence, String> {
 			}
 		}
 	}
-	public void putAllS(CharSequence data) {
+
+	public static void addOWS(Headers map, String key, String val) {
+		int prev = 0;
+		int length = val.length();
+
+		for (int i = 0; i < length;) {
+			char c = val.charAt(i);
+			if (c == ',') {
+				map.add(key, val.substring(prev, i++));
+
+				while (i < length) {
+					if (val.charAt(i) == ' ') i++;
+					else break;
+				}
+
+				prev = i;
+			} else {
+				if (c != '"') { i++; continue; }
+
+				var isEscaped = false;
+				for (;;) {
+					if (++i == length) throw new IllegalArgumentException("Unterminated quoted-string at("+i+"): "+val);
+
+					c = val.charAt(i);
+					if (c == '\\') {
+						isEscaped = true;
+					} else if (isEscaped) {
+						isEscaped = false;
+					} else if (c == '"') {
+						i++;
+						break;
+					}
+				}
+			}
+		}
+
+		map.add(key, val.substring(prev));
+	}
+
+	public void parseFromText(CharSequence data) {
 		for (String line : LineReader.create(data)) {
 			if (line.isEmpty()) continue;
 
@@ -237,12 +158,162 @@ public class Headers extends Multimap<CharSequence, String> {
 		}
 	}
 
-	@NotNull public String header(String key) { return getOrDefault(key,""); }
+	@NotNull public String header(String field) { return getOrDefault(field,""); }
 
-	public String getFirstHeaderValue(String key) { return getOneValue(header(key),null); }
-	public String getHeaderValue(String key, String minorKey) { return getOneValue(header(key),minorKey); }
-	public List<Map.Entry<String,String>> getHeaderValues(String key) { return getValues(header(key)); }
-	public void getHeaderValues(String key, BiConsumer<String, String> consumer) { complexValue(header(key),consumer,false); }
+	public static final class HeaderElement extends ListMap<String, String> {
+		public HeaderElement() {super(new ArrayList<>(), new ArrayList<>());}
+		public HeaderElement(String field) {this();HttpUtil.parseParameters(field, this::add);}
+		public HeaderElement(List<String> keys, List<String> values) {super(keys, values);}
+
+		public String getUnescaped(Object key) throws ParseException {
+			String s = super.get(key);
+			return s == null ? null : Tokenizer.unescape(s);
+		}
+		public String getDecoded(Object key) throws MalformedURLException {
+			String s = super.get(key);
+			return s == null ? null : URICoder.decodeURI(s);
+		}
+
+		public Iterable<String> getAll(String key) {
+			return () -> new AbstractIterator<>() {
+				int index;
+
+				@Override
+				protected boolean computeNext() {
+					for (int i = index; i < keys.size(); i++) {
+						if (keys.get(i).equals(key)) {
+							result = values.get(i);
+							index = i;
+							return true;
+						}
+					}
+					return false;
+				}
+			};
+		}
+
+		public void add(String key) {add(key, null);}
+		public void add(String key, @Nullable String value) {
+			keys.add(key);
+			values.add(value);
+		}
+
+		@Override
+		public String put(String key, @Nullable String value) {
+			int index = keys.indexOf(key);
+			if (index < 0) {
+				keys.add(key);
+				values.add(value);
+				return null;
+			} else {
+				return values.set(index, value);
+			}
+		}
+
+		@Override
+		public String remove(Object key) {return remove((String) key, false);}
+		public String remove(String key, boolean onlyLast) {
+			String removed = null;
+
+			for (int i = keys.size() - 1; i >= 0; i--) {
+				var item = keys.get(i);
+				if (key.equals(item)) {
+					keys.remove(i);
+					removed = values.remove(i);
+					if (onlyLast) break;
+				}
+			}
+
+			return removed;
+		}
+
+		@Override
+		public void clear() {
+			keys.clear();
+			values.clear();
+		}
+
+		public void writeTo(CharList sb) {
+			for (int i = 0; i < keys.size();) {
+				var key = keys.get(i);
+				var value = values.get(i);
+				sb.append(key);
+
+				if (value != null) {
+					sb.append('=').append(value);
+				}
+
+				if (++i == keys.size()) break;
+				sb.append(';');
+			}
+		}
+
+		public String toString() {
+			var sb = new CharList();
+			writeTo(sb);
+			return sb.toStringAndFree();
+		}
+
+		@UnknownNullability
+		public String mainValue() {return values.isEmpty() ? null : values.get(0);}
+	}
+
+	@NotNull public HeaderElement getElement(String field) {return new HeaderElement(header(field));}
+	@NotNull public HeaderElement findElement(String field, String token) {
+		String fieldValue = findValue(field, token);
+		return new HeaderElement(fieldValue == null ? "" : fieldValue);
+	}
+	public void forEachElement(String field, Consumer<HeaderElement> consumer) {
+		var entry = (Entry<CharSequence, String>) getEntry(field);
+		if (entry == null) return;
+
+		consumer.accept(new HeaderElement(entry.value));
+		for (String item : entry.rest) {
+			consumer.accept(new HeaderElement(item));
+		}
+	}
+
+	@Override
+	public boolean containsKey(CharSequence field, String token) {
+		String fieldValue = findValue(field, token);
+		return fieldValue != null;
+	}
+
+	private String findValue(CharSequence field, String token) {
+		var entry = (Entry<CharSequence, String>) getEntry(field);
+		String fieldValue = null;
+		if (entry != null) {
+			if (tokenMatches(entry.value, token)) fieldValue = entry.value;
+			else for (String item : entry.rest) {
+				if (tokenMatches(item, token)) {
+					fieldValue = item;
+					break;
+				}
+			}
+		}
+		return fieldValue;
+	}
+	private static boolean tokenMatches(String a, String b) {
+		boolean isPrefixMatch = b.endsWith("*");
+		if (isPrefixMatch) return a.regionMatches(0, b, 0, b.length()-1);
+
+		if (!a.startsWith(b)) return false;
+		if (a.length() == b.length()) return true;
+		char c = a.charAt(b.length());
+		return c == ' ' || c == '\t' || c == ';';
+	}
+
+	/**
+	 * 获取非列表字段的属性
+	 * @param field 字段名称
+	 * @param attribute 属性名称
+	 * @return 属性值
+	 */
+	@Nullable
+	public String getParameter(String field, String attribute) {
+		assert !LIST_TYPE.contains(field);
+		return HttpUtil.getParameter(header(field), attribute);
+	}
 
 	public long getContentLength() {return Long.parseLong(getOrDefault("content-length", "-1"));}
 	public String getContentEncoding() {return getOrDefault("content-encoding", "identity").toLowerCase(Locale.ROOT);}
@@ -329,6 +400,7 @@ public class Headers extends Multimap<CharSequence, String> {
 		return key;
 	}
 
+	private static final HashSet<CharSequence> LIST_TYPE = new HashSet<>();
 	private static final HashSet<CharSequence> dedup = new HashSet<>();
 	static {
 		F("accept-charset");F("accept-encoding");
@@ -339,9 +411,39 @@ public class Headers extends Multimap<CharSequence, String> {
 		F("if-unmodified-since");F("last-modified");F("link");F("location");F("max-forwards");F("proxy-authenticate");
 		F("proxy-authorization");F("range");F("referer");F("refresh");F("retry-after");F("server");F("set-cookie");
 		F("strict-transport-security");F("transfer-encoding");F("user-agent");F("vary");F("via");F("www-authenticate");
+
+		// RFC 9110
+		C("trailer");
+		C("connection");
+		C("via");
+		C("upgrade");
+		C("content-encoding");
+		C("content-language");
+		C("te");
+		C("allow");
+		//C("www-authenticate");
+		C("authentication-info");
+		C("proxy-authenticate");
+		C("proxy-authentication-info");
+		C("accept");
+		C("accept-charset");
+		C("accept-encoding");
+		C("accept-language");
+		C("vary");
+
+		// RFC 9111
+		C("cache-control");
+
+		// MDN
+		C("access-control-allow-headers");
+		C("access-control-allow-methods");
+		C("access-control-allow-expose-headers");
+
+		C("x-forwarded-for");
+		C("forwarded");
 	}
 	private static void F(String s) { dedup.add(s); }
-
+	private static void C(String s) { LIST_TYPE.add(s); }
 	// endregion
 
 	public final void encode(Appendable sb) {
@@ -353,18 +455,34 @@ public class Headers extends Multimap<CharSequence, String> {
 				char c = key.charAt(0);
 				int offset = c == ':' || c == '*' || c == '^' ? 1 : 0;
 
-				h(sb, key, offset, entry.getValue());
+				boolean canCombine = LIST_TYPE.contains(key);
 
-				List<String> all = entry.rest;
-				for (int i = 0; i < all.size(); i++) {
-					h(sb, key, offset, all.get(i));
+				String value = entry.getValue();
+				int valueLength = value.length();
+
+				sb.append(key, offset, key.length()).append(value.isEmpty() ? ":" : ": ").append(value);
+
+				List<String> rest = entry.rest;
+				for (int i = 0; i < rest.size(); i++) {
+					value = rest.get(i);
+
+					if (canCombine && valueLength + value.length() <= 80) {
+						sb.append(", ");
+						valueLength += value.length();
+					} else {
+						sb.append("\r\n").append(key, offset, key.length()).append(": ");
+						valueLength = 0;
+					}
+
+					sb.append(value);
 				}
+
+				sb.append("\r\n");
 			}
 		} catch (IOException e) {
 			Helpers.athrow(e);
 		}
 	}
-	private static Appendable h(Appendable sb, CharSequence key, int off, String value) throws IOException {return sb.append(key, off, key.length()).append(value.isEmpty()?":":": ").append(value).append("\r\n");}
 
 	private static void checkKey(CharSequence key) {
 		for (int i = 0; i < key.length(); i++) {

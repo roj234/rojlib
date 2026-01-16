@@ -65,7 +65,8 @@ public abstract class WebSocket implements ChannelHandler {
 	public static final int RSV_COMPRESS = 0x40;
 
 	// flag的可选位
-	public static final int REMOTE_NO_CTX = 0x01, // 对等端压缩无上下文 (跨消息复用字典)
+	public static final int
+		REMOTE_NO_CTX = 0x01, // 对等端压缩无上下文 (跨消息复用字典)
 		LOCAL_NO_CTX = 0x02, // 本地压缩无上下文
 		LOCAL_SIMPLE_MASK = 0x04, // 作为客户端时,跳过mask步骤
 		ACCEPT_PARTIAL_MSG = 0x08, // 禁用分片组装 (此时isLast可能为假)
@@ -109,7 +110,7 @@ public abstract class WebSocket implements ChannelHandler {
 	}
 
 	// 最大数据长度
-	protected int maxData, maxDataOnce, compressSize;
+	protected int maxData, maxDataOnce, compressThreshold;
 	// 空置时间 ms (注意: 你不应因发送操作而将其重置, 因为其目的是检测对等端是否还存活)
 	protected int idle;
 	protected byte flag;
@@ -127,11 +128,11 @@ public abstract class WebSocket implements ChannelHandler {
 		fragmentSize = 4096;
 	}
 
-	public final void enableZip() {
+	public final void setCompression(int compression) {
 		if (def != null) return;
 		this.def = new Deflater(Deflater.DEFAULT_COMPRESSION, true);
 		this.inf = new Inflater(true);
-		this.flag |= COMPRESS_AVAILABLE;
+		this.flag |= compression;
 	}
 
 	public void setMaxData(int maxData) {this.maxData = maxData;}
@@ -308,7 +309,7 @@ public abstract class WebSocket implements ChannelHandler {
 					inf.reset();
 				}
 			} catch (Exception e) {
-				BufferPool.reserve(zo);
+				zo.release();
 				throw e;
 			}
 
@@ -344,7 +345,7 @@ public abstract class WebSocket implements ChannelHandler {
 			}
 		} finally {
 			state = HEADER;
-			if (compressed) BufferPool.reserve(rb);
+			if (compressed) rb.release();
 			else if (rb.capacity() != 0) rb.wIndex(wPos);
 		}
 	}
@@ -357,13 +358,13 @@ public abstract class WebSocket implements ChannelHandler {
 		long addr = b._unsafeAddr()+b.rIndex;
 		long len = addr+b.readableBytes();
 		while (len-addr >= 4) {
-			U.putInt(ref,addr,maskI^ U.getInt(ref,addr));
+			U.putInt(ref,addr,maskI^U.getInt(ref,addr));
 			addr += 4;
 		}
 
 		int i = 0;
 		while (addr < len) {
-			U.putByte(ref,addr,(byte)(mask[i++]^ U.getByte(ref,addr)));
+			U.putByte(ref,addr,(byte)(mask[i++]^U.getByte(ref,addr)));
 			addr++;
 		}
 	}
@@ -414,10 +415,7 @@ public abstract class WebSocket implements ChannelHandler {
 	}
 	public final void sendBinary(DynByteBuf data) throws IOException { send(FRAME_BINARY, data); }
 	public final void sendClose(int code, @Nullable String msg) throws IOException {
-		if (errCode != 0) {
-			ch.close();
-			return;
-		}
+		if (errCode != 0) { ch.close(); return; }
 
 		if (msg == null) msg = "";
 		else if (msg.length() > 125) msg = msg.substring(0, 125);
@@ -453,6 +451,7 @@ public abstract class WebSocket implements ChannelHandler {
 				flag |= __CONTINUOUS_SENDING;
 			}
 		} else {
+			//noinspection MagicConstant
 			frameType = isLast ? 0x80 : FRAME_CONTINUE;
 		}
 		send0(frameType, data, (flag & __SEND_COMPRESS) != 0);
@@ -472,7 +471,7 @@ public abstract class WebSocket implements ChannelHandler {
 		if ((frameType & RSV_COMPRESS) > (flag & RSV_COMPRESS)) throw new IOException("Invalid compress state");
 
 		if (data == null) data = ByteList.EMPTY;
-		else if (compressSize != 0 && data.readableBytes() > compressSize && (flag & RSV_COMPRESS) != 0) frameType |= RSV_COMPRESS;
+		else if (compressThreshold != 0 && data.readableBytes() > compressThreshold && (flag & RSV_COMPRESS) != 0) frameType |= RSV_COMPRESS;
 
 		int rem = data.readableBytes();
 		boolean comp = rem > 0 && (frameType & RSV_COMPRESS) != 0;
@@ -504,6 +503,7 @@ public abstract class WebSocket implements ChannelHandler {
 			DynByteBuf buf = null;
 			if (data.hasArray()) {
 				def.setInput(data.array(), data.arrayOffset() + data.rIndex, data.readableBytes());
+				data.rIndex = data.wIndex();
 			} else {
 				buf = ch.allocate(false, $len);
 				byte[] zb = buf.array();
@@ -578,7 +578,7 @@ public abstract class WebSocket implements ChannelHandler {
 		try {
 			ch.channelWrite(out);
 		} finally {
-			BufferPool.reserve(out);
+			out.release();
 		}
 	}
 

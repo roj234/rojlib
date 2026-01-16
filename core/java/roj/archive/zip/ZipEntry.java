@@ -3,7 +3,6 @@ package roj.archive.zip;
 import org.intellij.lang.annotations.MagicConstant;
 import roj.archive.ArchiveEntry;
 import roj.archive.WinAttributes;
-import roj.collect.IntervalPartition;
 import roj.crypt.CRC32;
 import roj.text.DateFormat;
 import roj.text.TextUtil;
@@ -23,7 +22,7 @@ import static roj.archive.zip.ZipFile.*;
  * @author Roj234
  * @since 2023/3/14 0:43
  */
-public class ZipEntry implements IntervalPartition.Range, ArchiveEntry, Cloneable {
+public class ZipEntry implements ArchiveEntry, Cloneable {
 	public static final int
 			STORED = 0,
 			DEFLATED = 8,
@@ -88,8 +87,8 @@ public class ZipEntry implements IntervalPartition.Range, ArchiveEntry, Cloneabl
 	public boolean isDirectory() { return name.endsWith("/"); }
 
 	public long getOffset() { return offset; }
-	@Override public final long startPos() { return offset - 30 - nameBytes.length - extraLenOfLOC; }
-	@Override public final long endPos() {
+	public final long startPos() { return offset - 30 - nameBytes.length - extraLenOfLOC; }
+	public final long endPos() {
 		long EXTLenOfLOC = (flags & GP_HAS_EXT) != 0 ? ((flags >>> 16) & 12) + 12 : 0;
 		return offset + compressedSize + EXTLenOfLOC;
 	}
@@ -393,12 +392,14 @@ public class ZipEntry implements IntervalPartition.Range, ArchiveEntry, Cloneabl
 		if (method != cen.method ||
 			compressedSize != cen.compressedSize ||
 			size != cen.size ||
+			offset != cen.offset ||
 			((flags^cen.flags) & 0xFFFF) != 0 ||
 			!name.equals(cen.name)) {
 			return false;
 		}
 
 		if (crc32 == 0) crc32 = cen.crc32;
+		else if (crc32 != cen.crc32) return false;
 
 		if (cen.pModTime != 0) pModTime = cen.pModTime;
 		if (cen.pAccTime != 0) pAccTime = cen.pAccTime;
@@ -454,7 +455,9 @@ public class ZipEntry implements IntervalPartition.Range, ArchiveEntry, Cloneabl
 	@Override
 	protected ZipEntry clone() {
 		try {
-			return (ZipEntry) super.clone();
+			ZipEntry clone = (ZipEntry) super.clone();
+			clone._next = null;
+			return clone;
 		} catch (CloneNotSupportedException e) {
 			throw OperationDone.NEVER;
 		}

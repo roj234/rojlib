@@ -72,7 +72,7 @@ public interface Response {
 	/**
 	 * 添加多个头部（从字符串解析）。
 	 */
-	default Response setHeader(String headerLines) {headers().putAllS(headerLines);return this;}
+	default Response setHeader(String headerLines) {headers().parseFromText(headerLines);return this;}
 
 	/**
 	 * 获取当前已经存在的响应头部。

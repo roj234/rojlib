@@ -27,6 +27,7 @@ public final class ZipUpdate {
 	byte flags;
 
 	public Object data;
+	public String newName;
 	public long modificationTime;
 	public byte[] password;
 
@@ -70,4 +71,13 @@ public final class ZipUpdate {
 
 	@Override
 	public int hashCode() { return name.hashCode(); }
+
+	@Override
+	public String toString() {
+		return "ZipUpdate{" +
+				"name='" + name + '\'' +
+				", data=" + data +
+				", newName='" + newName + '\'' +
+				'}';
+	}
 }

@@ -17,7 +17,7 @@ import roj.compiler.api.CompilerPlugin;
 		@Property: 假装getter和setter是一个属性
 		@Singleton: 比双检锁更好的单例模式""")
 public class AnnotationsPlugin {
-	public static void pluginInit(Compiler api) {
+	public AnnotationsPlugin(Compiler api) {
 		api.addAnnotationProcessor(new ClassStage());
 		api.addAnnotationProcessor(new CompileStage());
 	}

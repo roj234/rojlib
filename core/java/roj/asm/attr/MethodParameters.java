@@ -58,5 +58,6 @@ public final class MethodParameters extends Attribute {
 		}
 	}
 
-	public int getFlag(int i, int def) { return flags.size() > i ? flags.get(i).flag : def; }
+	public int getFlag(int i, int def) { return i < flags.size() ? flags.get(i).flag : def; }
+	public String getName(int i, String def) { return i < flags.size() ? flags.get(i).name : def; }
 }

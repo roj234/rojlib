@@ -70,7 +70,7 @@ public final class DownloadTask implements ChannelHandler, Runnable, Future<File
 		if (parent != null && !parent.isDirectory() && !parent.mkdirs()) throw new IOException("无法创建下载目录");
 
 		File info = new File(file.getAbsolutePath()+".nfo");
-		if (info.isFile() && !IOUtil.isReallyWritable(info)) {
+		if (info.isFile() && !IOUtil.isWritable(info)) {
 			throw new IOException("下载进度文件无法写入");
 		}
 

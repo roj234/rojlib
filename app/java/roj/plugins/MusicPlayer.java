@@ -59,8 +59,8 @@ public class MusicPlayer extends Plugin implements Runnable {
 	@Override
 	protected void onEnable() throws Exception {
 		String path = getConfig().getString("music_path", "D:\\Music");
-		initList = IOUtil.listFiles(new File(path), file -> {
-			String ext = IOUtil.extensionName(file.getName());
+		initList = IOUtil.listFiles(new File(path), (pathname, attr) -> {
+			String ext = IOUtil.getExtension(pathname);
 			return ext.equals("mp3") || ext.equals("wav")/* || ext.equals("ogg") || ext.equals("flac")*/;
 		});
 		playList = new ArrayList<>(initList);
@@ -80,7 +80,7 @@ public class MusicPlayer extends Plugin implements Runnable {
 				String name = null;
 				var meta = metadata;
 				if (meta != null && meta.getTitle() != null) name = meta.getArtist() == null ? meta.getTitle()+" - 佚名" : meta.getTitle()+" - "+meta.getArtist();
-				if (name == null) name = IOUtil.fileName(playList.get(playIndex).getName());
+				if (name == null) name = IOUtil.getBaseName(playList.get(playIndex).getName());
 
 				int displayWidth = 40;
 
@@ -238,7 +238,7 @@ public class MusicPlayer extends Plugin implements Runnable {
 			if ((flag & STOP) != 0) {LockSupport.park();continue;}
 
 			var song = playList.get(playIndex);
-			String type = IOUtil.extensionName(song.getName());
+			String type = IOUtil.getExtension(song.getName());
 			switch (type) {
 				case "mp3" -> decoder = new MP3Decoder();
 				case "wav" -> decoder = new WavDecoder();

@@ -145,11 +145,11 @@ final class NewAnonymousClass extends Expr {
 	@Override
 	public void write(MethodWriter cw, @NotNull TypeCast.Cast cast) {
 		if (!(cast.getType1() instanceof ParameterizedType g)) {
-			CompileContext.get().report(this, Kind.ERROR, "lambda.untyped");
+			cw.ctx.report(this, Kind.ERROR, "lambda.untyped");
 			return;
 		}
 
 		((ParameterizedType) newExpr.expr).typeParameters = g.typeParameters;
-		resolveNow(CompileContext.get()).write(cw, cast);
+		resolveNow(cw.ctx).write(cw, cast);
 	}
 }

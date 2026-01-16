@@ -1,6 +1,7 @@
 package roj.ci.plugin;
 
-import roj.archive.roar.RoWriteArchive;
+import roj.archive.zip.ZipEditor;
+import roj.archive.zip.ZipEntry;
 import roj.archive.zip.ZipPacker;
 import roj.asm.MemberDescriptor;
 import roj.asmx.Context;
@@ -23,10 +24,12 @@ import roj.util.Helpers;
 import javax.swing.*;
 import java.io.File;
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.attribute.BasicFileAttributes;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.function.Predicate;
+import java.util.function.BiPredicate;
 import java.util.regex.Pattern;
 
 import static roj.asmx.mapper.Mapper.DONT_LOAD_PREFIX;
@@ -93,11 +96,11 @@ public class MAP implements Plugin {
 			for (int i = 0; i < files.size(); i++) {
 				File in = files.get(i);
 				String postfix = reverse ? "-unmap" : "-mapped";
-				if (IOUtil.fileName(in.getName()).endsWith(postfix)) {
+				if (IOUtil.getBaseName(in.getName()).endsWith(postfix)) {
 					log.info("{}仅作为依赖，不映射", in.getName());
 					continue;
 				}
-				File out = IOUtil.deriveOutput(in, postfix);
+				File out = IOUtil.addSuffix(in, postfix);
 				try (var zfw = new ZipPacker(out)) {
 					var classes = Context.fromZip(in, zfw);
 
@@ -202,17 +205,23 @@ public class MAP implements Plugin {
 
 		var libraries = new ArrayList<File>();
 		var digest = CryptoFactory.SM3();
-		Predicate<File> callback = file -> {
-			digest.update(IOUtil.getSharedByteBuf().putUTF(file.getName()).putLong(file.length()).putLong(file.lastModified()));
+		BiPredicate<String, BasicFileAttributes> callback = (pathname, attr) -> {
+			String name = IOUtil.getName(pathname);
+			digest.update(IOUtil.getSharedByteBuf().putUTF(name).putLong(attr.size()).putLong(attr.lastModifiedTime().toMillis()));
 
-			String name = file.getName().toLowerCase(Locale.ROOT);
+			name = name.toLowerCase(Locale.ROOT);
 			return !name.startsWith(DONT_LOAD_PREFIX) && (name.endsWith(".zip") || name.endsWith(".jar"));
 		};
 		libraries.addAll(p.workspace.getMappedDepend());
 		IOUtil.listFiles(new File(BASE, "lib"), libraries, callback);
 		for (Dependency dep : p.getCompileDependencies()) {
 			dep.forEachJar(f -> {
-				if (callback.test(f)) libraries.add(f);
+				try {
+					if (callback.test(f.getAbsolutePath(), Files.readAttributes(f.toPath(), BasicFileAttributes.class)))
+						libraries.add(f);
+				} catch (IOException e) {
+					Helpers.athrow(e);
+				}
 			});
 		}
 
@@ -221,7 +230,7 @@ public class MAP implements Plugin {
 		Mapper m;
 		var hash = digest.digest();
 		loaded:
-		try (var mzf = new RoWriteArchive(new File(CACHE_PATH, "mapper_cache.roar"))) {
+		try (var mzf = new ZipEditor(new File(CACHE_PATH, "mapper_cache.zip"))) {
 			m = new Mapper(p.workspace.getMapping());
 			m.flag = (byte) flag;
 
@@ -253,7 +262,7 @@ public class MAP implements Plugin {
 				for (int i = 0; i < cacheWipe; i++) mzf.put(entries.get(i).getName(), null);
 			}
 
-			mzf.put(entryId, buf).compress = false;
+			mzf.put(entryId, buf).setMethod(ZipEntry.STORED);
 			mzf.save();
 			buf.release();
 		} catch (IOException e) {

@@ -7,7 +7,7 @@ import roj.archive.xz.lzma.LZMAEncoder;
 import roj.concurrent.Executor;
 import roj.concurrent.TaskGroup;
 import roj.concurrent.TaskPool;
-import roj.io.DummyOutputStream;
+import roj.io.NullOutputStream;
 import roj.math.MathUtils;
 import roj.text.CharList;
 import roj.text.TextUtil;
@@ -19,7 +19,26 @@ import java.util.Arrays;
 import java.util.concurrent.atomic.AtomicReference;
 
 public class LZMA2Options implements Cloneable {
-	public static final int BEST_SPEED = 1, BEST_COMPRESSION = 9, DEFAULT_COMPRESSION = 5;
+	/**
+	 * Compression level for no compression.
+	 */
+	public static final int NO_COMPRESSION = 0;
+
+	/**
+	 * Compression level for fastest compression.
+	 */
+	public static final int BEST_SPEED = 1;
+
+	/**
+	 * Compression level for best compression.
+	 */
+	public static final int BEST_COMPRESSION = 9;
+
+	/**
+	 * Default compression level.
+	 */
+	public static final int DEFAULT_COMPRESSION = -1;
+
 
 	public static final int DICT_SIZE_MIN = 4096;
 	/**
@@ -32,12 +51,9 @@ public class LZMA2Options implements Cloneable {
 	 * <p>
 	 * If you really need bigger dictionary for decompression,
 	 * use {@link LZMA2InputStream} directly.
+	 * @implNote 现在使用本机内存和Unsafe，这个限制如有必要可以越过
 	 */
 	public static final int DICT_SIZE_MAX = Integer.MAX_VALUE - 536879377;
-	/**
-	 * The default dictionary size is 8 MiB.
-	 */
-	public static final int DICT_SIZE_DEFAULT = 8 << 20;
 
 	/**
 	 * Maximum value for lc + lp is 4.
@@ -144,8 +160,12 @@ public class LZMA2Options implements Cloneable {
 	 * 16&nbsp;MiB, or 32&nbsp;MiB, it is waste of memory to use the
 	 * presets 7, 8, or 9, respectively.
 	 */
-	public LZMA2Options setPreset(@Range(from = 0, to = 9) int preset) {
-		if (preset < 0 || preset > 9) throw new IllegalArgumentException("Unsupported preset: " + preset);
+	public LZMA2Options setPreset(@Range(from = -1, to = 9) int preset) {
+		if (preset == DEFAULT_COMPRESSION) preset = 5;
+		if (preset == NO_COMPRESSION) {
+			mode = MODE_UNCOMPRESSED;
+			return this;
+		}
 
 		lc = LC_DEFAULT;
 		lp = LP_DEFAULT;
@@ -182,9 +202,6 @@ public class LZMA2Options implements Cloneable {
 	 * @throws IllegalArgumentException <code>dictSize</code> is not supported
 	 */
 	public LZMA2Options setDictSize(@Range(from = DICT_SIZE_MIN, to = DICT_SIZE_MAX) int dictSize) {
-		if (dictSize < DICT_SIZE_MIN) throw new IllegalArgumentException("LZMA2 dictionary size must be at least 4 KiB: " + dictSize + " B");
-		if (dictSize > DICT_SIZE_MAX) throw new IllegalArgumentException("LZMA2 dictionary size must not exceed " + (DICT_SIZE_MAX >> 20) + " MiB: " + dictSize + " B");
-
 		this.dictSize = dictSize;
 		return this;
 	}
@@ -277,8 +294,6 @@ public class LZMA2Options implements Cloneable {
 	 * @throws IllegalArgumentException <code>pb</code> is invalid
 	 */
 	public LZMA2Options setPb(@Range(from = 0, to = PB_MAX) int pb) {
-		if (pb < 0 || pb > PB_MAX) throw new IllegalArgumentException("pb must not exceed "+PB_MAX+": "+pb);
-
 		this.pb = pb;
 		return this;
 	}
@@ -334,8 +349,6 @@ public class LZMA2Options implements Cloneable {
 	 * @throws IllegalArgumentException <code>niceLen</code> is invalid
 	 */
 	public LZMA2Options setNiceLen(@Range(from = NICE_LEN_MIN, to = NICE_LEN_MAX) int niceLen) {
-		if (niceLen < NICE_LEN_MIN || niceLen > NICE_LEN_MAX) throw new IllegalArgumentException("nice length range of matches is "+NICE_LEN_MIN+" to "+NICE_LEN_MAX+" bytes: "+niceLen);
-
 		this.niceLen = niceLen;
 		return this;
 	}
@@ -432,15 +445,15 @@ public class LZMA2Options implements Cloneable {
 					copy.pb = pb;
 
 					monitor.execute(() -> {
-						DummyOutputStream counter = new DummyOutputStream();
+						NullOutputStream counter = new NullOutputStream();
 						try (OutputStream os = copy.getOutputStream(counter)) {
 							os.write(data);
 						} catch (Exception ignored) {}
 
-						Object[] b = new Object[]{copy, counter.wrote};
+						Object[] b = new Object[]{copy, counter.writtenBytes};
 						while (true) {
 							Object[] prev = ref.get();
-							if (prev != null && (int)prev[1] <= counter.wrote) return;
+							if (prev != null && (int)prev[1] <= counter.writtenBytes) return;
 							if (ref.compareAndSet(prev, b)) return;
 						}
 					});

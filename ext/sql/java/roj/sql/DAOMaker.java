@@ -285,7 +285,7 @@ final class DAOMaker {
 			case Type.LONG -> "setLong";
 			case Type.FLOAT -> "setFloat";
 			case Type.DOUBLE -> "setDouble";
-			case Type.CLASS -> {
+			case Type.OBJECT -> {
 				if (type.array() != 0) {
 					if (type.array() != 1 || type.type != Type.BYTE) throw new IllegalArgumentException("无法处理"+type);
 					yield "setBytes";
@@ -392,7 +392,7 @@ final class DAOMaker {
 				case Type.LONG -> longAdapter(i);
 				case Type.FLOAT -> floatAdapter(i);
 				case Type.DOUBLE -> doubleAdapter(i);
-				case Type.CLASS -> {
+				case Type.OBJECT -> {
 					if (type.array() != 0) {
 						if (type.array() != 1 || type.type != Type.BYTE) throw new IllegalArgumentException("无法处理"+type);
 						yield byteArrayAdapter(i);

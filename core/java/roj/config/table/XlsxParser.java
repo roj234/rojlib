@@ -11,8 +11,8 @@ import roj.config.node.ConfigValue;
 import roj.config.node.xml.Element;
 import roj.config.node.xml.Node;
 import roj.io.source.Source;
+import roj.text.FastNumberParser;
 import roj.text.ParseException;
-import roj.text.TextUtil;
 import roj.text.Tokenizer;
 import roj.util.FastFailException;
 
@@ -189,7 +189,7 @@ final class XlsxParser implements TableParser {
 			yPos += v;
 		}
 
-		xy[0] = TextUtil.parseInt(str, i, str.length());
+		xy[0] = FastNumberParser.parseInt(str, i, str.length());
 		xy[1] = yPos;
 	}
 

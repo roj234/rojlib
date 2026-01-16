@@ -238,8 +238,6 @@ public abstract class CompileUnit extends ClassNode {
 	 * @param c 要成为嵌套子成员的类节点
 	 */
 	public final void addNestMember(ClassNode c) {
-		assert ctx.compiler.getMaximumBinaryCompatibility() >= Compiler.JAVA_11;
-
 		var top = nestHost;
 		while (top.nestHost != top) top = top.nestHost;
 
@@ -370,7 +368,8 @@ public abstract class CompileUnit extends ClassNode {
 				}
 			}
 
-			type = activeSignature == null || !activeSignature.isTypeParam(klass) ? Type.klass(klass) : (flags & SKIP_TYPE_PARAM) != 0 ? new LavaParameterizedType(klass) : new TypeVariable(klass);
+			var sign = activeSignature != null ? activeSignature : classSignature;
+			type = sign == null || !sign.isTypeParam(klass) ? Type.klass(klass) : (flags & SKIP_TYPE_PARAM) != 0 ? new LavaParameterizedType(klass) : new TypeVariable(klass);
 		}
 
 		if ((flags & TYPE_NO_ARRAY) == 0) {
@@ -1519,8 +1518,8 @@ public abstract class CompileUnit extends ClassNode {
 			var inherit = inheritResult.method;
 
 			implementCheck.removeValue(d);
-			var overrideGenericInfo = ctx.inferrer.inferOverride(ctx, inherit, Type.klass(name), myArgs);
-			if (overrideGenericInfo == null) continue;
+			if (!ctx.inferrer.validateOverrideCompatibility(ctx, inherit, Type.klass(name), myArgs, inheritResult.parameters()))
+				continue;
 
 			// 检查覆盖静态或访问权限降低
 			checkDowngrade(impl, inherit, ctx);
@@ -1538,11 +1537,11 @@ public abstract class CompileUnit extends ClassNode {
 				}
 			}
 
-			IType overrideReturnType = overrideGenericInfo.returnType();
+			IType overrideReturnType = inheritResult.returnType();
 
 			// 返回值更精确而需要桥接，或更不精确而无法覆盖
-			var cast = ctx.inferrer.overrideCast(myReturn, overrideReturnType);
-			if (cast.type != 0) {
+			var cast = ctx.caster.checkCast(myReturn, overrideReturnType);
+			if (cast.type != TypeCast.UPCAST) {
 				String inline = "cu.override.returnType:[typeCast.error."+cast.type+",\""+myReturn+"\",\""+overrideReturnType+"\"]";
 				ctx.report(Kind.ERROR, "cu.override.unable", name, inherit.owner(), inherit, inline);
 			} else
@@ -1556,7 +1555,7 @@ public abstract class CompileUnit extends ClassNode {
 				// 声明相同或更少的异常
 				var myThrows = myGenericInfo.getExceptions(ctx);
 				if (!myThrows.isEmpty()) {
-					List<IType> itThrows = overrideGenericInfo.getExceptions(ctx);
+					List<IType> itThrows = inheritResult.getExceptions(ctx);
 					outer:
 					for (IType f : myThrows) {
 						if (ctx.castTo(f, Types.RUNTIME_EXCEPTION, TypeCast.IMPOSSIBLE).type == 0) continue;

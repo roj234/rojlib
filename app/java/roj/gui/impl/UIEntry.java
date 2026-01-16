@@ -86,7 +86,7 @@ public class UIEntry extends JFrame {
 
 	public UIEntry() {
 		initComponents();
-		bind(uiArchiver, "roj.gui.impl.QZArchiverUI");
+		bind(uiArchiver, "roj.gui.impl.SevenZArchiverUI");
 		bind(uiUnarchiver, "roj.gui.impl.UnarchiverUI");
 		bind(uiFindClass, "roj.gui.impl.FindClass");
 		bind(uiNovel, "roj.ebook.gui.NovelFrame");

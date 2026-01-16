@@ -64,7 +64,7 @@ public class MappingUI extends JFrame {
 	}
 	private void load(File input) throws IOException {
 		String name1 = input.getName();
-		String ext = IOUtil.extensionName(name1);
+		String ext = IOUtil.getExtension(name1);
 		Mapping m;
 
 		zip:

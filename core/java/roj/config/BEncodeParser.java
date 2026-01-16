@@ -4,14 +4,13 @@ import org.intellij.lang.annotations.MagicConstant;
 import roj.collect.Int2IntMap;
 import roj.io.IOUtil;
 import roj.text.CharList;
+import roj.text.FastNumberParser;
 import roj.text.ParseException;
 import roj.util.ByteList;
 
 import java.io.EOFException;
 import java.io.IOException;
 import java.io.InputStream;
-
-import static roj.config.JsonParser.parseNumber;
 
 /**
  * bittorrent解析器
@@ -147,7 +146,7 @@ public final class BEncodeParser implements Parser {
 
 		CharList t = IOUtil.getSharedCharBuf();
 		while (c >= 0) {
-			if (c == 'e' || c == ':') return parseNumber(t, 4, neg);
+			if (c == 'e' || c == ':') return FastNumberParser.parseLong(t, 4, neg);
 
 			t.append((char) c);
 			c = in.read();

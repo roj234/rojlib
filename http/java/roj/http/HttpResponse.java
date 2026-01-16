@@ -96,7 +96,7 @@ public interface HttpResponse {
 	 * 基于Content-Type或{@link roj.text.CharsetDetector}自动检测编码，并返回结果
 	 */
 	default String text() throws IOException {
-		String charset = headers().getHeaderValue("content-type", "charset");
+		String charset = headers().findElement("content-type", "text/*").get("charset");
 		return text(charset == null ? null : Charset.forName(charset));
 	}
 	String text(@Nullable Charset charset) throws IOException;

@@ -17,6 +17,7 @@ import roj.text.DateFormat;
 import roj.text.TextReader;
 import roj.text.TextUtil;
 import roj.util.ByteList;
+import roj.util.FastFailException;
 import roj.util.Helpers;
 
 import java.io.File;
@@ -62,7 +63,6 @@ public final class Lavac extends LavaCompiler {
 				      -features +<feat1>[,-<feat2>]   启用或禁用Lava语言特性
 				      -target <发行版>                生成支持不高于特定 JVM 版本的类文件
 				        你可以在任何目标版本中使用编译器-only特性，例如var
-				      -allow <class1>[,<class2>]      预编译沙盒白名单, 以逗号分隔的全限定名前缀
 				      -processor <class1>[,<class2>]  指定实现了LavaAPI的注解处理程序的全限定名称
 				      -plugin <class1>[,<class2>]     指定实现了LavaAPI的编译器插件的全限定名称
 				        请注意，注解处理程序和编译器插件将在JVM的-cp选项中寻找，编译器的-cp选项只影响编译
@@ -163,22 +163,15 @@ public final class Lavac extends LavaCompiler {
 					for (var proc : TextUtil.split(args[++i], ',')) {
 						try {
 							var type = lookup.findClass(proc);
-							var methodType = MethodType.methodType(void.class, Compiler.class);
 							var annotation = type.getAnnotation(CompilerPlugin.class);
-							if (annotation.instance()) {
-								Object o = lookup.findConstructor(type, MethodType.methodType(void.class)).invoke();
-								lookup.findVirtual(type, annotation.init(), methodType).invoke(o, compiler);
+							if (annotation != null) {
+								Object o = lookup.findConstructor(type, MethodType.methodType(void.class, Compiler.class)).invokeExact((Compiler)compiler);
 							} else {
-								lookup.findStatic(type, annotation.init(), methodType).invoke(compiler);
+								throw new FastFailException("未能在 "+proc+" 找到注解");
 							}
 						} catch (Throwable e1) {
 							throw new RuntimeException(e1);
 						}
-					}
-				}
-				case "-allow" -> {
-					for (String packageOrTypeName : TextUtil.split(args[++i], ',')) {
-						compiler.addSandboxWhitelist(packageOrTypeName, false);
 					}
 				}
 				default -> {break loop;}
@@ -278,7 +271,7 @@ public final class Lavac extends LavaCompiler {
 				return false;
 			});
 		} else {
-			if (IOUtil.extensionName(file.getName()).endsWith("ava")) {
+			if (IOUtil.getExtension(file.getName()).endsWith("ava")) {
 				String code;
 				try (var r = TextReader.from(file, charset)) {
 					code = IOUtil.read(r);
@@ -300,7 +293,7 @@ public final class Lavac extends LavaCompiler {
 			});
 		}
 
-		String s = IOUtil.extensionName(file.getName());
+		String s = IOUtil.getExtension(file.getName());
 		if (s.equals("zip") || s.equals("jar")) {
 			try {
 				addLibrary(new JarLibrary(file));

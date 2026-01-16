@@ -14,6 +14,7 @@ import roj.util.function.ExceptionalSupplier;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.zip.Deflater;
 
 /**
  * @author Roj233
@@ -24,7 +25,7 @@ public final class ZipOutput implements AutoCloseable {
 	private ZipEditor archive;
 	private ZipPacker writer;
 	private boolean incremental, isOpen;
-	private int compressionLevel = 5;
+	private int compressionLevel = Deflater.DEFAULT_COMPRESSION;
 
 	public ZipOutput(File file) {this.file = file;}
 
@@ -39,11 +40,7 @@ public final class ZipOutput implements AutoCloseable {
 
 		this.incremental = incremental;
 		if (incremental) {
-			if (archive == null) {
-				archive = new ZipEditor(file);
-			} else {
-				archive.reopen();
-			}
+			getArchive();
 		} else {
 			writer = new ZipPacker(file);
 			writer.setCompressionLevel(compressionLevel);
@@ -60,7 +57,7 @@ public final class ZipOutput implements AutoCloseable {
 		else archive.setComment(comment);
 	}
 
-	private boolean shouldCompress(String name) {return compressionLevel > 0 && !ArchiveUtils.INCOMPRESSIBLE_FILE_EXT.contains(IOUtil.extensionName(name));}
+	private boolean shouldCompress(String name) {return compressionLevel != 0 && !ArchiveUtils.INCOMPRESSIBLE_FILE_EXT.contains(IOUtil.getExtension(name));}
 
 	public void set(String name, @Nullable ByteList data) throws IOException {
 		if (data == null && (!incremental || archive.getEntry(name) == null)) return;
@@ -110,6 +107,7 @@ public final class ZipOutput implements AutoCloseable {
 		isOpen = false;
 		try {
 			if (incremental && archive != null) {
+				archive.ensureOpen();
 				archive.save(compressionLevel);
 			}
 		} finally {
@@ -121,7 +119,7 @@ public final class ZipOutput implements AutoCloseable {
 
 	public ZipEditor getArchive() throws IOException {
 		if (archive == null) return archive = new ZipEditor(file);
-		archive.reopen();
+		archive.ensureOpen();
 		return archive;
 	}
 	@Nullable

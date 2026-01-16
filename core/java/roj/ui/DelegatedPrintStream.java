@@ -1,16 +1,14 @@
 package roj.ui;
 
 import org.jetbrains.annotations.NotNull;
-import roj.io.DummyOutputStream;
+import roj.io.NullOutputStream;
 import roj.text.CharList;
-import roj.text.FastCharset;
 import roj.text.TextUtil;
 import roj.util.ByteList;
 
 import java.io.PrintStream;
 import java.util.Formatter;
 import java.util.Locale;
-import java.util.Objects;
 
 /**
  * @author Roj234
@@ -21,7 +19,7 @@ public abstract class DelegatedPrintStream extends PrintStream {
 	protected ByteList bb = new ByteList();
 
 	public DelegatedPrintStream() {
-		super(DummyOutputStream.INSTANCE);
+		super(NullOutputStream.INSTANCE);
 		super.close();
 	}
 

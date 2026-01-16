@@ -5,6 +5,7 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import roj.RojLib;
 import roj.collect.ArrayList;
+import roj.collect.BitSet;
 import roj.compiler.plugins.annotations.Attach;
 import roj.concurrent.FastThreadLocal;
 import roj.config.node.IntValue;
@@ -27,12 +28,14 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.security.MessageDigest;
-import java.util.Collections;
+import java.util.Collection;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.concurrent.LinkedBlockingDeque;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.function.BiConsumer;
+import java.util.function.BiPredicate;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
 
@@ -224,162 +227,47 @@ public final class IOUtil {
 		}
 	}
 
+	public static String randomFileName() {return Long.toString(ThreadLocalRandom.current().nextLong(), 36);}
+
 	public static void copyFile(File source, File target) throws IOException {Files.copy(source.toPath(), target.toPath(), StandardCopyOption.REPLACE_EXISTING);}
 
 	@Attach("listAll")
-	public static List<File> listFiles(File file) {return listFiles(file, ArrayList.hugeCapacity(0), Helpers.alwaysTrue());}
+	public static List<File> listFiles(File file) {return listFiles(file, Helpers.alwaysTrue());}
 	@Attach("listAll")
-	public static List<File> listFiles(File file, Predicate<File> predicate) {return listFiles(file, ArrayList.hugeCapacity(0), predicate);}
-	@Attach("listAll")
-	public static List<File> listFiles(File file, List<File> files, Predicate<File> predicate) {
+	@Deprecated
+	public static List<File> listFiles(File file, Predicate<File> predicate) {
+		List<File> files = ArrayList.hugeCapacity(0);
+		listPaths(file, (pathname, attr) -> {
+			File t = new File(pathname);
+			if (predicate.test(t)) files.add(t);
+		});
+		return files;
+	}
+
+	public static List<File> listFiles(File file, BiPredicate<String, BasicFileAttributes> predicate) {
+		return listFiles(file, ArrayList.hugeCapacity(0), predicate);
+	}
+	public static <T extends Collection<File>> T listFiles(File file, T files, BiPredicate<String, BasicFileAttributes> predicate) {
+		listPaths(file, (path, attr) -> {
+			if (predicate.test(path, attr)) {
+				files.add(new File(path));
+			}
+		});
+		return files;
+	}
+	public static void listPaths(File path, BiConsumer<String, BasicFileAttributes> consumer) {
 		try {
-			if (!file.exists()) return Collections.emptyList();
-			Files.walkFileTree(file.toPath(), new SimpleFileVisitor<Path>() {
+			if (!path.exists()) return;
+			Files.walkFileTree(path.toPath(), new SimpleFileVisitor<Path>() {
 				@Override
 				public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) {
-					File t = file.toFile();
-					if (predicate.test(t)) files.add(t);
+					consumer.accept(file.toString(), attrs);
 					return FileVisitResult.CONTINUE;
 				}
 			});
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
-		return files;
-	}
-
-	@Attach
-	public static boolean deletePath(File file) {
-		try {
-			Files.walkFileTree(file.toPath(), new SimpleFileVisitor<Path>() {
-				@Override
-				public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
-					Files.delete(file);
-					return FileVisitResult.CONTINUE;
-				}
-
-				@Override
-				public FileVisitResult postVisitDirectory(Path dir, IOException exc) throws IOException {
-					Files.delete(dir);
-					if (exc != null) throw exc;
-					return FileVisitResult.CONTINUE;
-				}
-			});
-		} catch (IOException e) {
-			return false;
-		}
-		return true;
-	}
-
-	@Attach
-	public static int removeEmptyPaths(File file) {
-		IntValue tmp = new IntValue();
-		try {
-			Files.walkFileTree(file.toPath(), new SimpleFileVisitor<Path>() {
-				int size;
-				@Override
-				public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) {size++;return FileVisitResult.CONTINUE;}
-				@Override
-				public FileVisitResult postVisitDirectory(Path dir, IOException exc) throws IOException {
-					if (--size > 0) {
-						Files.delete(dir);
-						tmp.value++;
-					}
-					return FileVisitResult.CONTINUE;
-				}
-			});
-		} catch (IOException ignored) {}
-		return tmp.value;
-	}
-
-	@Attach
-	public static void allocateFile(File file, long length) throws IOException {
-		if (file.length() != length) {
-			try (var raf = new RandomAccessFile(file, "rw")) {
-				raf.setLength(length);
-			}
-		} else if (length == 0) file.createNewFile();
-	}
-
-	@Attach
-	public static void createSparseFile(File file, long length) throws IOException {
-		if (file.length() != length) {
-			Files.deleteIfExists(file.toPath());
-			try (var fc = FileChannel.open(file.toPath(), StandardOpenOption.WRITE, StandardOpenOption.CREATE_NEW, StandardOpenOption.SPARSE).position(length-1)) {
-				fc.truncate(length);
-				fc.write(ByteBuffer.wrap(new byte[1]));
-			}
-		} else if (length == 0) file.createNewFile();
-	}
-
-	public static boolean isReallyWritable(File file) {
-		try (var f = new RandomAccessFile(file, "rw")) {
-			long l = f.length();
-		} catch (IOException e) {
-			return false;
-		}
-		return true;
-	}
-
-	/**
-	 * 文件内部复制, 返回时fc的位置不确定
-	 */
-	public static long transferFileSelf(FileChannel fc, long from, long to, long len) throws IOException {
-		if (from == to || len == 0) return len;
-
-		if (from > to ? to + len <= from : from + len <= to) { // 区间不交叉
-			return fc.transferTo(from, len, fc.position(to));
-		}
-
-		if (len <= 1048576) {
-			ByteBuffer direct = ByteBuffer.allocateDirect((int) len);
-			try {
-				direct.position(0).limit((int) len);
-				fc.read(direct, from);
-				direct.position(0);
-				return fc.position(to).write(direct);
-			} finally {
-				NativeMemory.freeDirectBuffer(direct);
-			}
-		} else {
-			File tmpPath = new File(System.getProperty("java.io.tmpdir"));
-			File tmpFile;
-			do {
-				tmpFile = new File(tmpPath, "FUT~"+randomFileName()+".tmp");
-			} while (tmpFile.exists());
-
-			try (FileChannel ct = FileChannel.open(tmpFile.toPath(),
-					StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE, StandardOpenOption.READ, StandardOpenOption.DELETE_ON_CLOSE)) {
-				fc.transferTo(from, len, ct.position(0));
-				return ct.transferTo(0, len, fc.position(to));
-			}
-		}
-	}
-
-	public static String randomFileName() {return Long.toString(ThreadLocalRandom.current().nextLong(), 36);}
-
-	// 非线程安全，主要目的是写入文件时抛出异常，不会造成文件内容丢失
-	public static boolean writeFileEvenMoreSafe(File baseFolder, String baseName, ExceptionalConsumer<File, IOException> consumer) throws IOException {
-		baseFolder.mkdirs();
-		var realFile = new File(baseFolder, baseName);
-		var tmpFile = new File(baseFolder, baseName+"."+randomFileName()+".new");
-		var deletePend = new File(baseFolder, baseName+"."+randomFileName()+".old");
-
-		if (!realFile.isFile()) tmpFile = realFile;
-
-		try {
-			consumer.accept(tmpFile);
-		} catch (Throwable e) {
-			if (!tmpFile.delete()) {
-				tmpFile.deleteOnExit();
-			}
-			throw e;
-		}
-
-		if (tmpFile == realFile) return true;
-
-		deletePend.delete();
-		return realFile.renameTo(deletePend) && tmpFile.renameTo(realFile) && deletePend.delete();
 	}
 
 	public static void digestFile(File file, long length, MessageDigest digest) throws IOException {
@@ -443,40 +331,72 @@ public final class IOUtil {
 		return sb.append('.').append(ext);
 	}
 
-	public static File deriveOutput(File src, String postfix) {
-		var path = src.getName();
+	//region 文件名和路径工具
+	/**
+	 * 在原文件名和扩展名之间插入后缀
+	 * 例如: test.xml -> test_processed.xml
+	 */
+	public static File addSuffix(File base, String suffix) {
+		var path = base.getName();
 		int i = path.lastIndexOf('.');
-		return new File(src.getParentFile(), i < 0 ? path+postfix : path.substring(0, i)+postfix+path.substring(i));
+		return new File(base.getParentFile(), i < 0 ? path+suffix : path.substring(0, i)+suffix+path.substring(i));
 	}
 
-	public static String extensionName(String path) {
-		path = path.substring(Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\'))+1);
+	/**
+	 * 获取小写的文件扩展名 (不含点)
+	 * 例如: "index.HtMl" -> "html"
+	 */
+	public static String getExtension(String path) {
+		path = getName(path);
 		int i = path.lastIndexOf('.');
 		return i < 0 ? "" : path.substring(i+1).toLowerCase(Locale.ROOT);
 	}
 
-	public static String extensionNameDot(String path) {
-		path = path.substring(Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\'))+1);
+	/**
+	 * 获取小写的文件扩展名 (含点)
+	 * 例如: "index.HtMl" -> ".html"
+	 */
+	public static String getExtensionWithDot(String path) {
+		path = getName(path);
 		int i = path.lastIndexOf('.');
 		return i < 0 ? "" : path.substring(i).toLowerCase(Locale.ROOT);
 	}
 
-	public static String fileName(String pat) {
-		pat = pat.substring(Math.max(pat.lastIndexOf('/'), pat.lastIndexOf('\\'))+1);
-		int i = pat.lastIndexOf('.');
-		return i < 0 ? pat : pat.substring(0, i);
+	/**
+	 * 获取基础文件名 (不含路径，不含扩展名)
+	 * 例如: "/path/to/script.sh" -> "script"
+	 */
+	public static String getBaseName(String path) {
+		path = getName(path);
+		int i = path.lastIndexOf('.');
+		return i < 0 ? path : path.substring(0, i);
 	}
 
-	public static String pathToName(String text) {
-		int i = text.lastIndexOf('/');
-		i = Math.max(i, text.lastIndexOf('\\'));
-		return text.substring(i+1);
+	/**
+	 * 获取完整文件名 (不含路径)
+	 * 例如: "/path/to/image.png" -> "image.png"
+	 */
+	public static String getName(String path) {
+		int i = path.lastIndexOf('/');
+		i = Math.max(i, path.lastIndexOf('\\'));
+		return path.substring(i+1);
+	}
+
+	/**
+	 * 获取目录前缀的长度，用于切割相对路径
+	 */
+	public static int getPrefixLength(File path) {
+		String path1 = path.getAbsolutePath();
+		int length = path1.length();
+		// windows 上 "C:\" 时为真
+		return path1.endsWith(File.separator)/* && isWindowsPartition(path1) */ ? length : length+1;
 	}
 
 	/**
 	 * 路径过滤函数，处理不可信的用户输入路径.
+	 * 规范化路径，解析 . 和 .. 并统一分隔符
 	 */
-	public static String normalizePath(String path) {
+	public static String normalize(String path) {
 		CharList sb = getSharedCharBuf();
 
 		int end = 0;
@@ -509,25 +429,11 @@ public final class IOUtil {
 			paths.remove(0);
 		return TextUtil.join(paths, "/");
 	}
-	/**
-	 * 这是另外一个实现
-	 * @param base 允许访问的目录
-	 * @param child 不可信的用户输入
-	 * @return 如果输入合法，那么返回非空
-	 */
-	@Nullable
-	public static File safePath(String base, String child) {
-		File file = new File(base, child);
-		try {
-			if (file.getCanonicalPath().startsWith(base)) return file;
-		} catch (IOException ignored) {}
-		return null;
-	}
 
 	/**
-	 * return relative path from base if child is not absolute.
+	 * 解析路径，如果 child 是绝对路径则直接返回，否则相对于 base 解析
 	 */
-	public static File resolvePath(File base, String child) {
+	public static File resolve(File base, String child) {
 		File pathFile = new File(child);
 		if (pathFile.isAbsolute()) {
 			return pathFile;
@@ -536,20 +442,35 @@ public final class IOUtil {
 		}
 	}
 
+	/**
+	 * 安全解析路径，防止路径穿越攻击
+	 * @param base 根目录
+	 * @param child 外部输入的子路径
+	 * @return 越权则返回 null
+	 */
+	@Nullable
+	public static File resolveSafe(File base, String child) {
+		File file = new File(base, child);
+		try {
+			if (file.getCanonicalPath().startsWith(base.getCanonicalPath())) return file;
+		} catch (IOException ignored) {}
+		return null;
+	}
+
 	private static boolean isWindowsPartition(String path) {
 		return path.length() >= 2 && path.charAt(1) == ':' && ((path.charAt(0) >= 'A' && path.charAt(0) <= 'Z') || (path.charAt(0) >= 'a' && path.charAt(0) <= 'z'));
 	}
 
 	/**
-	 * 将目录A转换为相对于目录B的相对路径
+	 * 计算 child 相对于 base 的相对路径
 	 * @param child1 源路径
 	 * @param base1 基准路径
-	 * @return 相对路径，如果无法转换则返回null
+	 * @return 相对路径，如果无法转换(如windows上不同分区)则返回null
 	 */
 	@Nullable
-	public static String relativizePath(String base1, String child1) {
-		var base = TextUtil.split(normalizePath(base1), '/');
-		var child = TextUtil.split(normalizePath(child1), '/');
+	public static String relativize(String base1, String child1) {
+		var base = TextUtil.split(normalize(base1), '/');
+		var child = TextUtil.split(normalize(child1), '/');
 
 		int baseCount = base.size();
 		int childCount = child.size();
@@ -582,7 +503,89 @@ public final class IOUtil {
 		return sb.toString();
 	}
 
-	public static void movePath(File from, File to, boolean move) throws IOException {
+	private static final BitSet FILE_NAME_INVALID = BitSet.from("%\\/:*?\"<>|"), FILE_PATH_INVALID = BitSet.from("%:*?\"<>|");
+	public static String escapeFilePath(CharSequence src) { return escape(new CharList(), src, FILE_PATH_INVALID).toStringAndFree(); }
+	public static String escapeFileName(CharSequence src) { return escape(new CharList(), src, FILE_NAME_INVALID).toStringAndFree(); }
+	private static CharList escape(CharList sb, CharSequence src, BitSet blacklist) {
+		for (int i = 0; i < src.length(); i++) {
+			char c = src.charAt(i);
+			if (!blacklist.contains(c)) sb.append(c);
+			else sb.append("%").append(TextUtil.b2h(c>>>4)).append(TextUtil.b2h(c&15));
+		}
+		return sb;
+	}
+	//endregion
+	//region 文件创建、复制和删除工具
+	public static boolean isWritable(File file) {
+		boolean writable = Files.isWritable(file.toPath());
+
+		try {
+			new RandomAccessFile(file, "rw").close();
+		} catch (IOException e) {
+			assert !writable;
+			return false;
+		}
+
+		assert writable;
+		return true;
+	}
+
+	@Attach
+	public static void allocateFile(File file, long length) throws IOException {
+		if (file.length() != length) {
+			try (var raf = new RandomAccessFile(file, "rw")) {
+				raf.setLength(length);
+			}
+		} else if (length == 0) file.createNewFile();
+	}
+
+	@Attach
+	public static void createSparseFile(File file, long length) throws IOException {
+		if (file.length() != length) {
+			Files.deleteIfExists(file.toPath());
+			try (var fc = FileChannel.open(file.toPath(), StandardOpenOption.WRITE, StandardOpenOption.CREATE_NEW, StandardOpenOption.SPARSE).position(length-1)) {
+				fc.truncate(length);
+				fc.write(ByteBuffer.wrap(new byte[1]));
+			}
+		} else if (length == 0) file.createNewFile();
+	}
+
+	/**
+	 * 文件内部复制, 返回时fc的位置不确定
+	 */
+	public static long copyInternal(FileChannel fc, long from, long to, long len) throws IOException {
+		if (from == to || len == 0) return len;
+
+		if (from > to ? to + len <= from : from + len <= to) { // 区间不交叉
+			return fc.transferTo(from, len, fc.position(to));
+		}
+
+		if (len <= 1048576) {
+			ByteBuffer direct = ByteBuffer.allocateDirect((int) len);
+			try {
+				direct.position(0).limit((int) len);
+				fc.read(direct, from);
+				direct.position(0);
+				return fc.position(to).write(direct);
+			} finally {
+				NativeMemory.freeDirectBuffer(direct);
+			}
+		} else {
+			File tmpPath = new File(System.getProperty("java.io.tmpdir"));
+			File tmpFile;
+			do {
+				tmpFile = new File(tmpPath, "FUT~"+randomFileName()+".tmp");
+			} while (tmpFile.exists());
+
+			try (FileChannel ct = FileChannel.open(tmpFile.toPath(),
+					StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE, StandardOpenOption.READ, StandardOpenOption.DELETE_ON_CLOSE)) {
+				fc.transferTo(from, len, ct.position(0));
+				return ct.transferTo(0, len, fc.position(to));
+			}
+		}
+	}
+
+	public static void copyOrMove(File from, File to, boolean move) throws IOException {
 		if (from.equals(to)) return;
 
 		CopyOption[] OPTIONS = {StandardCopyOption.REPLACE_EXISTING};
@@ -593,15 +596,15 @@ public final class IOUtil {
 			return;
 		}
 
-		int len = from.getAbsolutePath().length()+1;
+		int prefixLength = getPrefixLength(from);
 		Files.createDirectories(to.toPath());
 		Files.walkFileTree(from.toPath(), new SimpleFileVisitor<>() {
 			@Override
 			public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) {
-				String relpath = dir.toString();
-				if (relpath.length() > len) {
-					relpath = relpath.substring(len);
-					if (!new File(to, relpath).mkdir()) {
+				String pathname = dir.toString();
+				if (pathname.length() > prefixLength) {
+					pathname = pathname.substring(prefixLength);
+					if (!new File(to, pathname).mkdir()) {
 						return FileVisitResult.TERMINATE;
 					}
 				}
@@ -610,7 +613,7 @@ public final class IOUtil {
 
 			@Override
 			public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
-				Path target = to.toPath().resolve(file.toString().substring(len));
+				Path target = to.toPath().resolve(file.toString().substring(prefixLength));
 				if (move) Files.move(file, target, OPTIONS);
 				else Files.copy(file, target, OPTIONS);
 				return FileVisitResult.CONTINUE;
@@ -623,6 +626,86 @@ public final class IOUtil {
 			}
 		});
 	}
+
+	// 非线程安全，主要目的是写入文件时抛出异常，不会造成文件内容丢失
+	public static boolean writeAtomically(File path, String name, ExceptionalConsumer<File, IOException> consumer) throws IOException {
+		String rand = randomFileName();
+
+		path.mkdirs();
+		var file = new File(path, name);
+		var writeTemp = new File(path, name+"."+rand+".new");
+		var deleteTemp = new File(path, name+"."+rand+".old");
+
+		if (!file.isFile()) writeTemp = file;
+
+		try {
+			consumer.accept(writeTemp);
+		} catch (Throwable e) {
+			if (!writeTemp.delete()) {
+				writeTemp.deleteOnExit();
+			}
+			throw e;
+		}
+		if (writeTemp == file) return true;
+
+		CopyOption[] stupidVarargs = {StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING};
+
+		Files.move(file.toPath(), deleteTemp.toPath(), stupidVarargs);
+		Files.move(writeTemp.toPath(), file.toPath(), stupidVarargs);
+		Files.deleteIfExists(deleteTemp.toPath());
+		return true;
+	}
+
+	@Attach
+	public static boolean deleteRecursively(File path) {return deleteRecursively(path.toPath());}
+	@Attach
+	public static boolean deleteRecursively(Path path) {
+		try {
+			Files.walkFileTree(path, new SimpleFileVisitor<>() {
+				@Override
+				public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
+					Files.delete(file);
+					return FileVisitResult.CONTINUE;
+				}
+
+				@Override
+				public FileVisitResult postVisitDirectory(Path dir, IOException exc) throws IOException {
+					Files.delete(dir);
+					if (exc != null) throw exc;
+					return FileVisitResult.CONTINUE;
+				}
+			});
+		} catch (IOException e) {
+			return false;
+		}
+		return true;
+	}
+
+	@Attach
+	public static int deleteEmptyDirectories(File path) {return deleteEmptyDirectories(path.toPath());}
+	@Attach
+	public static int deleteEmptyDirectories(Path path) {
+		IntValue deleteCount = new IntValue();
+		try {
+			Files.walkFileTree(path, new SimpleFileVisitor<>() {
+				int depth;
+				@Override
+				public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) {depth++;return FileVisitResult.CONTINUE;}
+				@Override
+				public FileVisitResult postVisitDirectory(Path dir, IOException exc) throws IOException {
+					if (--depth > 0) {
+						try {
+							Files.delete(dir);
+							deleteCount.value++;
+						} catch (DirectoryNotEmptyException ignored) {}
+					}
+					return FileVisitResult.CONTINUE;
+				}
+			});
+		} catch (IOException ignored) {}
+		return deleteCount.value;
+	}
+	//endregion
 
 	@Attach
 	public static void closeSilently(@Nullable AutoCloseable c) {

@@ -28,7 +28,6 @@ import roj.util.TypedKey;
 
 import java.io.File;
 import java.io.IOException;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -199,7 +198,7 @@ public class FileShare extends Plugin {
         }
 
         try {
-            IOUtil.writeFileEvenMoreSafe(getDataFolder(), "db.yml", file -> {
+            IOUtil.writeAtomically(getDataFolder(), "db.yml", file -> {
                 ownerSerializer.writer(Serialized.class).write(ConfigMaster.YAML, snapshot, file);
                 getLogger().debug("配置已保存");
             });
@@ -235,7 +234,7 @@ public class FileShare extends Plugin {
         var share = getUnexpired(req);
         if (share == null) return Content.httpError(404);
 
-		if (share.code != null && !share.code.equals(req.cookie().getOrDefault("code", Cookie.EMPTY).value())) {
+		if (share.code != null && !share.code.equals(req.cookies().get("code"))) {
 			return Content.httpError(403);
 		}
 
@@ -277,14 +276,14 @@ public class FileShare extends Plugin {
 
             info.view++;
             dirty = true;
-            req.sendCookieToClient(Collections.singletonList(new Cookie("code", token).expires(0)));
+            req.setCookie(new Cookie("code", token).expires(0));
         }
 
         return ObjectMapper.SAFE.write(ConfigMaster.JSON, info, new CharList().append("{\"ok\":true,\"data\":")).append('}');
     }
 
     private boolean checkShareCode(Request req, Share info) throws IllegalRequestException {
-        String cookieCode = req.cookie().getOrDefault("code", Cookie.EMPTY).value();
+        String cookieCode = req.cookies().getOrDefault("code", "");
         if (info.expireType() != 2 && !info.code.isEmpty()) return info.code.equals(cookieCode);
 
         var token = Base64.decode(cookieCode, IOUtil.getSharedByteBuf(), Base64.B64_URL_SAFE_REV);
@@ -577,7 +576,7 @@ public class FileShare extends Plugin {
                 file.path = path;
             file.size = size;
             file.lastModified = lastModified;
-            file.mime = MimeType.getMimeType(IOUtil.extensionName(name));
+            file.mime = MimeType.getMimeType(IOUtil.getExtension(name));
 
 
             synchronized (shareInfo) {

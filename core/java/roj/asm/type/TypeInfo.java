@@ -46,7 +46,7 @@ final class TypeInfo {
 		byId[DOUBLE-BYTE] = new TypeInfo("D", "Double", new Type(DOUBLE), 3, "D", SORT_DOUBLE, klass("java/lang/Double"), 7);
 		byId[INT-BYTE] = new TypeInfo("I", "Int", new Type(INT), 0, "I", SORT_INT, klass("java/lang/Integer"), 10);
 		byId[LONG-BYTE] = new TypeInfo("J", "Long", new Type(LONG), 1, "L", SORT_LONG, klass("java/lang/Long"), 11);
-		byId[CLASS-BYTE] = new TypeInfo("L", "Object", klass("java/lang/Object"), 4, "A", SORT_OBJECT, null, -1);
+		byId[OBJECT -BYTE] = new TypeInfo("L", "Object", klass("java/lang/Object"), 4, "A", SORT_OBJECT, null, -1);
 		byId[SHORT-BYTE] = new TypeInfo("S", "Short", new Type(SHORT), 0, "I", SORT_SHORT, klass("java/lang/Short"), 9);
 		byId[VOID-BYTE] = new TypeInfo("V", "Void", new Type(VOID), 5, null, SORT_VOID, klass("java/lang/Void"), -1);
 		byId[BOOLEAN-BYTE] = new TypeInfo("Z", "Boolean", new Type(BOOLEAN), 0, "I", SORT_BOOLEAN, klass("java/lang/Boolean"), 4);

@@ -98,7 +98,7 @@ final class If extends Expr {
 			return;
 		}
 
-		var vis = CompileContext.get().bp.vis();
+		var vis = cw.ctx.bp.vis();
 		var end = new Label();
 		var falsy = new Label();
 

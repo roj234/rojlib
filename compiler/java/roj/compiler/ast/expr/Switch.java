@@ -133,7 +133,7 @@ final class Switch extends Expr {
 	protected void write1(MethodWriter cw, @NotNull TypeCast.Cast cast) {
 		mustBeStatement(cast);
 
-		var ctx = CompileContext.get();
+		var ctx = cw.ctx;
 
 		var type = this.type;
 		if (cast.getType1() != null) type = cast.getType1();

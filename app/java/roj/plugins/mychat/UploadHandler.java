@@ -11,7 +11,7 @@ import roj.http.server.MultipartParser;
 import roj.http.server.Request;
 import roj.io.IOUtil;
 import roj.net.ChannelCtx;
-import roj.text.TextUtil;
+import roj.text.FastNumberParser;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
 
@@ -80,10 +80,10 @@ public class UploadHandler extends MultipartParser {
 	protected @NotNull Object begin(ChannelCtx ctx, Headers header) throws IOException {
 		close0();
 
-		String name = header.getHeaderValue("content-disposition", "name");
+		String name = header.getParameter("content-disposition", "name");
 		if (name == null) throw new UnsupportedOperationException("没有content-disposition.name,如果需要处理隐式的text/plain或特殊的头，请覆盖此方法");
 
-		int i = this.i = TextUtil.parseInt(name);
+		int i = this.i = FastNumberParser.parseInt(name);
 		if (i < 0 || i > files.length) throw new ArrayIndexOutOfBoundsException();
 		try {
 			fos = new FileOutputStream(files[i] = getFile());

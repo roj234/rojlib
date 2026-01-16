@@ -10,7 +10,6 @@ import roj.asm.type.ParameterizedType;
 import roj.asm.type.Type;
 import roj.collect.HashMap;
 import roj.compiler.CompileContext;
-import roj.compiler.LavaCompiler;
 import roj.compiler.api.Compiler;
 import roj.compiler.api.CompilerPlugin;
 import roj.compiler.api.InvokeHook;
@@ -22,6 +21,7 @@ import roj.compiler.diagnostic.Kind;
 import roj.compiler.resolve.TypeCast;
 import roj.config.node.BoolValue;
 import roj.reflect.Reflection;
+import roj.reflect.Sandbox;
 import roj.util.Helpers;
 import roj.util.OperationDone;
 import roj.util.TypedKey;
@@ -30,16 +30,20 @@ import java.util.List;
 import java.util.function.Consumer;
 
 /**
- * TODO 常量值注入
  * @author Roj234
  * @since 2024/6/4 22:15
  */
 @CompilerPlugin(name = "asm", desc = "名字起的奇奇怪怪其实大概挺基础的")
 public final class AsmPlugin extends InvokeHook {
+	static final TypedKey<Sandbox> SANDBOX = new TypedKey<>("asm:sandbox");
 	public static final TypedKey<HashMap<String, Expr>> INJECT_PROPERTY = new TypedKey<>("asmHook:injected_property");
 	private final HashMap<String, Expr> properties = new HashMap<>();
 
-	public void pluginInit(Compiler api) {
+	public AsmPlugin(Compiler api) {
+		var sandbox = new Sandbox("ASM Sandbox", AsmPlugin.class.getClassLoader());
+		sandbox.allow("roj.compiler.plugins.asm.WriterImpl", false);
+		api.attachment(SANDBOX, sandbox);
+
 		var info = api.resolve("roj/compiler/plugins/asm/ASM");
 		List<MethodNode> methods = Helpers.cast(info.methods()); methods.clear();
 
@@ -102,9 +106,8 @@ public final class AsmPlugin extends InvokeHook {
 
 				Consumer<MethodWriter> writer;
 				try {
-					LavaCompiler capi = ctx.compiler;
-					capi.addSandboxWhitelist("roj.compiler.plugins.asm.WriterImpl", false);
-					writer = (Consumer<MethodWriter>) capi.createSandboxInstance(newClass);
+					var sandbox = ctx.compiler.attachment(SANDBOX);
+					writer = (Consumer<MethodWriter>) sandbox.newInstance(newClass);
 				} catch (Throwable e) {
 					ctx.report(Kind.ERROR, "asm("+lambda+")还没实现喵");
 					return Expr.valueOf(true);
@@ -131,5 +134,4 @@ public final class AsmPlugin extends InvokeHook {
 				return replace != null ? replace : args.get(1);
 		}
 	}
-
 }

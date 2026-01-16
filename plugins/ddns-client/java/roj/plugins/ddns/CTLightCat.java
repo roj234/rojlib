@@ -29,7 +29,7 @@ final class CTLightCat extends IpGetter {
 
 		if (shc.statusCode() == 302) {
 			refreshTime = System.currentTimeMillis();
-			accessToken = shc.headers().getHeaderValue("set-cookie", "sysauth");
+			accessToken = shc.headers().findElement("set-cookie", "sysauth").mainValue();
 			if (accessToken != null) return true;
 		}
 

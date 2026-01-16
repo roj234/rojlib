@@ -119,7 +119,7 @@ public class JNIHeadersPlugin implements Processor {
 			case LONG -> "jlong";
 			case FLOAT -> "jfloat";
 			case DOUBLE -> "jdouble";
-			case CLASS -> {
+			case OBJECT -> {
 				if (t.array() >= 1) {
 					if (t.array() != 1) yield "jobjectArray";
 					yield switch (t.type) {

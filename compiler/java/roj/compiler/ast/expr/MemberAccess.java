@@ -58,7 +58,7 @@ final class MemberAccess extends LeftValue {
 		cw.insn(Opcodes.POP);
 		int type1 = targetType.getActualType();
 		if (type1 != Type.VOID) {
-			if (type1 != Type.CLASS) cw.ctx.report(caller, Kind.ERROR, "symbol.derefPrimitive", targetType);
+			if (type1 != Type.OBJECT) cw.ctx.report(caller, Kind.ERROR, "symbol.derefPrimitive", targetType);
 			cw.insn(Opcodes.ACONST_NULL);
 		}
 		cw.label(end);
@@ -211,7 +211,7 @@ final class MemberAccess extends LeftValue {
 
 		String part = nameChain.get(0);
 		int i = 0;
-		CharList sb = ctx.getTmpSb();
+		CharList sb = ctx.getRecursiveSb();
 		while (true) {
 			sb.append(part);
 			if (++i == nameChain.size()) break;
@@ -221,6 +221,8 @@ final class MemberAccess extends LeftValue {
 			}
 			sb.append('/');
 		}
+
+		try {
 
 		if (flags >= 0) { // parent不为null, 下面是处理importField
 			IType fType;
@@ -286,6 +288,10 @@ final class MemberAccess extends LeftValue {
 			}
 
 			part = ctx.getFrChains().get(0).fieldType().owner();
+		}
+
+		} finally {
+			ctx.releaseRecursiveSb(sb);
 		}
 
 		owner = ctx.getFrStart();
@@ -377,7 +383,7 @@ final class MemberAccess extends LeftValue {
 
 	@Override
 	protected void write1(MethodWriter cw, @NotNull TypeCast.Cast cast) {
-		if ((flags&READ_HOOK) != 0) CompileContext.get().accessFinalField(chain[0], false);
+		if ((flags&READ_HOOK) != 0) cw.ctx.accessFinalField(chain[0], false);
 		mustBeStatement(cast);
 
 		int length = chain.length - (flags&ARRAY_LENGTH);
@@ -390,13 +396,13 @@ final class MemberAccess extends LeftValue {
 
 	@Override
 	public void preStore(MethodWriter cw) {
-		if ((flags&WRITE_HOOK) != 0) CompileContext.get().accessFinalField(chain[0], true);
+		if ((flags&WRITE_HOOK) != 0) cw.ctx.accessFinalField(chain[0], true);
 		write(cw, chain.length-1);
 	}
 
 	@Override
 	public void preLoadStore(MethodWriter cw) {
-		if ((flags&READ_HOOK) != 0) CompileContext.get().accessFinalField(chain[0], false);
+		if ((flags&READ_HOOK) != 0) cw.ctx.accessFinalField(chain[0], false);
 		write(cw, chain.length-1);
 		if (!isStaticField()) {
 			/*if (parent instanceof LocalVariable) parent.write(cw);

@@ -81,9 +81,9 @@ public final class FieldNode extends MemberNode {
 		ConstantPool cp = owner == null ? null : owner.cp;
 
 		Annotations a;
-		a = getAttribute(cp, Attribute.RtAnnotations);
+		a = getAttribute(cp, Attribute.VisibleAnnotations);
 		if (a != null) a.toString(sb, prefix);
-		a = getAttribute(cp, Attribute.ClAnnotations);
+		a = getAttribute(cp, Attribute.InvisibleAnnotations);
 		if (a != null) a.toString(sb, prefix);
 
 		Signature sig = writeSignature ? getAttribute(cp, Attribute.SIGNATURE) : null;

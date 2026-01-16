@@ -107,8 +107,8 @@ public final class AttributeList extends ArrayList<Attribute> {
 	}
 
 	@Override
-	public Attribute set(int i, Attribute now) {
-		Attribute prev = super.set(i, now);
+	public Attribute set(int index, Attribute now) {
+		Attribute prev = super.set(index, now);
 		if (byName != null) {
 			byName.remove(prev.name());
 			byName.put(now.name(), now);

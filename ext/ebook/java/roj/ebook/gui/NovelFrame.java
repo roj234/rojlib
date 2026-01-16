@@ -240,7 +240,9 @@ public class NovelFrame extends JFrame {
 				if (chapter.type != matcher && pi >= 0) {
 					// range [pi+1 ... i)
 					List<Chapter> toAdd = _ch.subList(pi + 1, i);
-					_ch.get(pi).children = new ArrayList<>(toAdd);
+					Chapter p = _ch.get(pi);
+					p.children = new ArrayList<>(toAdd);
+					for (Chapter ch : toAdd) ch.parent = p;
 					toAdd.clear();
 					i = pi+1;
 
@@ -253,7 +255,9 @@ public class NovelFrame extends JFrame {
 
 			if (pi >= 0) {
 				List<Chapter> toAdd = _ch.subList(pi + 1, i);
-				_ch.get(pi).children = new ArrayList<>(toAdd);
+				Chapter p = _ch.get(pi);
+				p.children = new ArrayList<>(toAdd);
+				for (Chapter ch : toAdd) ch.parent = p;
 				toAdd.clear();
 			}
 
@@ -745,7 +749,7 @@ public class NovelFrame extends JFrame {
 	}
 
 	private void btnInsertMode(ActionEvent e) {
-		uxDrag.insertMode = btnInsertMode.isSelected();
+		//uxDrag.insertMode = btnInsertMode.isSelected();
 	}
 	// endregion
 	// region 功能区-输出格式
@@ -788,7 +792,7 @@ public class NovelFrame extends JFrame {
 	private void write_epub(ActionEvent e) {
 		String text = uiNovelPath.getText();
 
-		String fileName = IOUtil.fileName(text);
+		String fileName = IOUtil.getBaseName(text);
 		File path = new File(new File(text).getParent(), fileName+".epub");
 
 		String title, author;

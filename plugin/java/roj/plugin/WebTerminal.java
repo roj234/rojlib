@@ -26,7 +26,7 @@ public class WebTerminal extends WebSocket implements ITty {
 	public void handlerAdded(ChannelCtx ctx) {
 		super.handlerAdded(ctx);
 		fragmentSize = Integer.MAX_VALUE;
-		compressSize = 255;
+		compressThreshold = 255;
 		Tty.getInstance().addListener(this);
 		LOGGER.warn("{}已连接", ctx.remoteAddress());
 	}

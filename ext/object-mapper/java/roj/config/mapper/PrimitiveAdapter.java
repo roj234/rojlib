@@ -8,7 +8,7 @@ import roj.config.ValueEmitter;
  * @since 2023/3/23 18:18
  */
 final class PrimitiveAdapter extends TypeAdapter {
-	static final PrimitiveAdapter STR = new PrimitiveAdapter(Type.CLASS);
+	static final PrimitiveAdapter STR = new PrimitiveAdapter(Type.OBJECT);
 
 	private final byte type;
 	PrimitiveAdapter(int type) {this.type = (byte) type;}
@@ -25,7 +25,7 @@ final class PrimitiveAdapter extends TypeAdapter {
 				case Type.BYTE -> o = n.byteValue();
 				case Type.SHORT -> o = n.shortValue();
 				case Type.INT -> o = n.intValue();
-				case Type.CLASS -> o = n.toString();
+				case Type.OBJECT -> o = n.toString();
 				default -> throw new IllegalArgumentException("Cannot convert "+o+" to "+(char)type);
 			}
 		} else {
@@ -39,7 +39,7 @@ final class PrimitiveAdapter extends TypeAdapter {
 				case Type.SHORT -> o = Short.parseShort(s);
 				case Type.INT -> o = Integer.parseInt(s);
 				case Type.CHAR -> o = o.toString().charAt(0);
-				case Type.CLASS -> o = o == null ? null : s;
+				case Type.OBJECT -> o = o == null ? null : s;
 				default -> throw new IllegalArgumentException("Cannot convert "+o+" to "+(char)type);
 			}
 		}
@@ -56,7 +56,7 @@ final class PrimitiveAdapter extends TypeAdapter {
 		}
 
 		switch (type) {
-			case Type.CLASS -> c.emit(o.toString());
+			case Type.OBJECT -> c.emit(o.toString());
 			case Type.BOOLEAN -> c.emit((Boolean) o);
 			case Type.LONG -> c.emit(((Number) o).longValue());
 			case Type.DOUBLE -> c.emit(((Number) o).doubleValue());

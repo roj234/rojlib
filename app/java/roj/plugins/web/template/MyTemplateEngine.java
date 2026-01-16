@@ -8,18 +8,17 @@ import roj.compiler.LavaCompiler;
 import roj.compiler.resolve.ImportList;
 import roj.compiler.resolve.Resolver;
 import roj.concurrent.TaskPool;
+import roj.config.XmlParser;
 import roj.http.server.Content;
 import roj.http.server.Request;
 import roj.http.server.Response;
 import roj.io.IOUtil;
 import roj.plugins.web.error.GreatErrorPage;
 import roj.reflect.Sandbox;
-import roj.text.CharList;
-import roj.text.LineReader;
-import roj.text.ParseException;
-import roj.text.Tokenizer;
+import roj.text.*;
 
 import java.io.File;
+import java.nio.charset.StandardCharsets;
 import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -87,19 +86,13 @@ public class MyTemplateEngine {
 		rh.enableCompression();
 		if (tpl.isFast()) {
 			CharList tmp = new CharList();
-			tpl.render(req, tmp, null);
+			tpl.render(req, tmp);
 			return Content.html(tmp);
 		} else {
 			var renderer = new TemplateRenderer();
 			TaskPool.common().executeUnsafe(() -> {
-				try {
-					CharList tmp = new CharList();
-					tpl.render(req, tmp, renderer);
-					if (tmp.length() > 0) {
-						renderer.offer(IOUtil.getSharedByteBuf().putUTFData(tmp));
-					}
-				} finally {
-					renderer.setEof();
+				try (var tw = new TextWriter(renderer, StandardCharsets.UTF_8)) {
+					tpl.render(req, tw);
 				}
 			});
 			return renderer;
@@ -188,6 +181,9 @@ public class MyTemplateEngine {
 	}
 
 	private void templateBody(CharList code, String line, LineReader.Impl itr, String paramType, CharList miscMethod) {
+		var parser = new XmlParser() {
+
+		};
 		boolean isWriting = false;
 
 		while (true) {

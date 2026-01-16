@@ -19,7 +19,6 @@ import roj.util.function.Flow;
 
 import java.io.File;
 import java.io.IOException;
-import java.util.Collections;
 import java.util.List;
 
 /**
@@ -40,8 +39,9 @@ public final class LCompiler extends TextDiagnosticReporter implements Compiler 
 
 	@Override public Factory factory() {return factory;}
 
-	public synchronized List<? extends ClassResource> compile(List<String> options, List<File> sources, boolean showDiagnosticId) {
-		if (sources.isEmpty()) return Collections.emptyList();
+	@Override
+	public synchronized boolean compile(List<String> options, List<File> sources, List<ClassResource> classes, List<ClassResource> resources, boolean showDiagnosticId) {
+		if (sources.isEmpty()) return true;
 
 		total = err = warn = 0;
 		showErrorCode = showDiagnosticId;
@@ -53,7 +53,7 @@ public final class LCompiler extends TextDiagnosticReporter implements Compiler 
 				files.add(LavaCompileUnit.create(source.getName(), IOUtil.readString(source)));
 			} catch (IOException e) {
 				e.printStackTrace();
-				return null;
+				return false;
 			}
 		}
 
@@ -74,7 +74,7 @@ public final class LCompiler extends TextDiagnosticReporter implements Compiler 
 						compiler.addLibrary(new JarLibrary(new File(s)));
 					} catch (IOException e) {
 						e.printStackTrace();
-						return null;
+						return false;
 					}
 				}
 			}
@@ -91,8 +91,9 @@ public final class LCompiler extends TextDiagnosticReporter implements Compiler 
 		super.summary();
 		System.out.println(new Text(buf).bgColor16(result != null ? Tty.BLUE : Tty.RED).color16(Tty.WHITE+Tty.HIGHLIGHT).toAnsiString());
 		buf._free();
-		if (result == null) return null;
-		return Flow.of(result).map(ClassResource::fromDefinition).toList();
+		if (result == null) return false;
+		Flow.of(result).map(ClassResource::fromDefinition).forEach(classes::add);
+		return true;
 	}
 
 	@Override

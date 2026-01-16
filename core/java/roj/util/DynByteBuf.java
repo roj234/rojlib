@@ -273,20 +273,20 @@ public abstract class DynByteBuf extends OutputStream implements CharSequence, X
 	@IndirectReference
 	public final DynByteBuf putByte(byte n) {return put(n);}
 
-	public abstract DynByteBuf put(@Range(from = -128, to = 0xFF) int n);
-	public abstract DynByteBuf set(int offset, @Range(from = -128, to = 0xFF) int n);
+	public abstract DynByteBuf put(@Range(from = -128, to = 0xFF, enforce = false) int n);
+	public abstract DynByteBuf set(int offset, @Range(from = -128, to = 0xFF, enforce = false) int n);
 
-	public final DynByteBuf putShort(@Range(from = -32768, to = 0xFFFF) int n) {return put16UB(preWrite(2), n);}
-	public final DynByteBuf setShort(int offset, @Range(from = -32768, to = 0xFFFF) int n) {return put16UB(testWI(offset, 2), n);}
-	private DynByteBuf put16UB(int offset,@Range(from = -32768, to = 0xFFFF) int n) {U.put16UB(array(), _unsafeAddr()+offset, n);return this;}
+	public final DynByteBuf putShort(@Range(from = -32768, to = 0xFFFF, enforce = false) int n) {return put16UB(preWrite(2), n);}
+	public final DynByteBuf setShort(int offset, @Range(from = -32768, to = 0xFFFF, enforce = false) int n) {return put16UB(testWI(offset, 2), n);}
+	private DynByteBuf put16UB(int offset,@Range(from = -32768, to = 0xFFFF, enforce = false) int n) {U.put16UB(array(), _unsafeAddr()+offset, n);return this;}
 
-	public final DynByteBuf putShortLE(@Range(from = -32768, to = 0xFFFF) int n) {return put16UL(preWrite(2), n);}
-	public final DynByteBuf setShortLE(int offset, @Range(from = -32768, to = 0xFFFF) int n) {return put16UL(testWI(offset, 2), n);}
-	private DynByteBuf put16UL(int offset, @Range(from = -32768, to = 0xFFFF) int n) {U.put16UL(array(), _unsafeAddr()+offset, n);return this;}
+	public final DynByteBuf putShortLE(@Range(from = -32768, to = 0xFFFF, enforce = false) int n) {return put16UL(preWrite(2), n);}
+	public final DynByteBuf setShortLE(int offset, @Range(from = -32768, to = 0xFFFF, enforce = false) int n) {return put16UL(testWI(offset, 2), n);}
+	private DynByteBuf put16UL(int offset, @Range(from = -32768, to = 0xFFFF, enforce = false) int n) {U.put16UL(array(), _unsafeAddr()+offset, n);return this;}
 
-	public final DynByteBuf putMedium(@Range(from = 0, to = 0xFFFFFF) int n) {return put24UB(preWrite(3), n);}
-	public final DynByteBuf setMedium(int offset, @Range(from = 0, to = 0xFFFFFF) int n) {return put24UB(testWI(offset, 3), n);}
-	private DynByteBuf put24UB(int offset, @Range(from = 0, to = 0xFFFFFF) int n) {
+	public final DynByteBuf putMedium(@Range(from = 0, to = 0xFFFFFF, enforce = false) int n) {return put24UB(preWrite(3), n);}
+	public final DynByteBuf setMedium(int offset, @Range(from = 0, to = 0xFFFFFF, enforce = false) int n) {return put24UB(testWI(offset, 3), n);}
+	private DynByteBuf put24UB(int offset, @Range(from = 0, to = 0xFFFFFF, enforce = false) int n) {
 		Object o = array();
 		long offset1 = _unsafeAddr()+offset;
 		U.putByte(o, offset1++, (byte) (n >>> 16));
@@ -294,9 +294,9 @@ public abstract class DynByteBuf extends OutputStream implements CharSequence, X
 		U.putByte(o, offset1, (byte) n);
 		return this;}
 
-	public final DynByteBuf putMediumLE(@Range(from = 0, to = 0xFFFFFF) int n) {return put24UL(preWrite(3), n);}
-	public final DynByteBuf setMediumLE(int offset, @Range(from = 0, to = 0xFFFFFF) int n) {return put24UL(testWI(offset, 3), n);}
-	private DynByteBuf put24UL(int offset, @Range(from = 0, to = 0xFFFFFF) int n) {
+	public final DynByteBuf putMediumLE(@Range(from = 0, to = 0xFFFFFF, enforce = false) int n) {return put24UL(preWrite(3), n);}
+	public final DynByteBuf setMediumLE(int offset, @Range(from = 0, to = 0xFFFFFF, enforce = false) int n) {return put24UL(testWI(offset, 3), n);}
+	private DynByteBuf put24UL(int offset, @Range(from = 0, to = 0xFFFFFF, enforce = false) int n) {
 		Object o = array();
 		long offset1 = _unsafeAddr()+offset;
 		U.putByte(o, offset1++, (byte) n);

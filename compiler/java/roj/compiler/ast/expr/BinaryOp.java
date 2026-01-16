@@ -97,7 +97,7 @@ final class BinaryOp extends Expr {
 
 	private static int getPrimitiveOrWrapperSort(IType type) {
 		int i = type.getActualType();
-		if (i == Type.CLASS) {
+		if (i == Type.OBJECT) {
 			if (type.kind() != 0) return Type.SORT_OBJECT;
 			i = TypeCast.getWrappedPrimitive(type);
 			if (i == 0) return Type.SORT_OBJECT;

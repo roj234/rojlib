@@ -169,7 +169,7 @@ public class AdvancedFileAppender implements LogAppender, Runnable {
 		if (currentFile == null) {
 			CharList sb = IOUtil.getSharedCharBuf();
 			String filename = logName.format(Collections.emptyMap(), sb).toString();
-			writer.setName(writer.getName()+IOUtil.fileName(filename));
+			writer.setName(writer.getName()+IOUtil.getBaseName(filename));
 
 			currentFile = new File(logPath, filename);
 
@@ -188,13 +188,13 @@ public class AdvancedFileAppender implements LogAppender, Runnable {
 		var rotateFile = new File(logPath, newFilename);
 		int nth = 1;
 		while (rotateFile.exists()) {
-			String n = IOUtil.fileName(filename);
-			newFilename = IOUtil.fileName(n)+"-"+nth+IOUtil.extensionNameDot(n)+IOUtil.extensionNameDot(filename);
+			String n = IOUtil.getBaseName(filename);
+			newFilename = IOUtil.getBaseName(n)+"-"+nth+IOUtil.getExtensionWithDot(n)+IOUtil.getExtensionWithDot(filename);
 			rotateFile = new File(logPath, newFilename);
 			nth++;
 		}
 
-		String s = IOUtil.extensionName(filename);
+		String s = IOUtil.getExtension(filename);
 		switch (s) {
 			default -> Files.move(currentFile.toPath(), rotateFile.toPath());
 			case "gz" -> {

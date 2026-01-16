@@ -36,7 +36,7 @@ public class ProgressBar implements AutoCloseable {
 	protected void render(CharList b) { if (!closed) Tty.renderBottomLine(b); }
 	protected void renderRight(CharList sb, double progress) {}
 
-	public void setTitle(String text) {
+	public void setLine(String text) {
 		line.clear();
 		render(line.append(text));
 	}
@@ -157,6 +157,12 @@ public class ProgressBar implements AutoCloseable {
 	public final void end(String message) { end(message, Tty.GREEN); }
 	public final void end(String message, int color) {
 		end();
+
+		if (message == null) {
+			System.out.println(line);
+			line.clear();
+			return;
+		}
 
 		line.clear();
 		System.out.println(line

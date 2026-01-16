@@ -63,7 +63,8 @@ public class HtmlEntities {
 					out.append(in, prevI, m.start(0));
 					String escape = m.group(1);
 					var isHex = escape.startsWith("x");
-					out.appendCodePoint((int) Tokenizer.parseNumber(escape, isHex ? 1 : 0, escape.length(), isHex ? 1 : 0, false));
+					int radixId = isHex ? FastNumberParser.NUM_HEX : FastNumberParser.NUM_DEC;
+					out.appendCodePoint(FastNumberParser.parseInt(escape, radixId, escape.length(), radixId));
 					i = prevI = m.end(0);
 				}
 			} else {

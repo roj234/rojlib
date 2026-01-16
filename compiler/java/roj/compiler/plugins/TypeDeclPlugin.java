@@ -25,7 +25,7 @@ import java.util.Collections;
 		其中，methodCall应当接收roj.asm.IType<T>
 		注意：IType实际没有泛型，但它能表示泛型，你可通过IType的各种函数在运行时拿到泛型类型""")
 public final class TypeDeclPlugin implements Compiler.StartOp {
-	public void pluginInit(Compiler api) {api.newExprOp("__Type", this);}
+	public TypeDeclPlugin(Compiler api) {api.newExprOp("__Type", this);}
 
 	private final MethodNode typeDecl = new MethodNode(Opcodes.ACC_STATIC|Opcodes.ACC_PUBLIC, "roj/asm/type/Signature", "parseGeneric", "(Ljava/lang/CharSequence;)Lroj/asm/type/IType;");
 	@Override

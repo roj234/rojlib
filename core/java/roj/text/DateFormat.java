@@ -359,7 +359,7 @@ public final class DateFormat {
 
 		if (i-prevI<minLen) throw new IllegalArgumentException("错误的时间范围");
 
-		int num = TextUtil.parseInt(sb, prevI, i);
+		int num = FastNumberParser.parseInt(sb, prevI, i);
 		if (num < min || num > max) throw new IllegalArgumentException("错误的时间范围");
 
 		cal[IDX] = i;
@@ -837,7 +837,7 @@ public final class DateFormat {
 		}
 		if (week == 8) throw new IllegalArgumentException("无效的周"+str);
 		if (seq.charAt(3) != ',' || seq.charAt(4) != ' ') throw new IllegalArgumentException("分隔符错误");
-		int day = TextUtil.parseInt(seq, 5, 7);
+		int day = FastNumberParser.parseInt(seq, 5, 7);
 		if (seq.charAt(7) != ' ') throw new IllegalArgumentException("分隔符错误");
 
 		str = seq.subSequence(8, 11).toString();
@@ -852,13 +852,13 @@ public final class DateFormat {
 
 		if (seq.charAt(11) != ' ') throw new IllegalArgumentException("分隔符错误");
 
-		int year = TextUtil.parseInt(seq, 12, 16);
+		int year = FastNumberParser.parseInt(seq, 12, 16);
 		if (seq.charAt(16) != ' ') throw new IllegalArgumentException("分隔符错误");
-		int h = TextUtil.parseInt(seq, 17, 19);
+		int h = FastNumberParser.parseInt(seq, 17, 19);
 		if (seq.charAt(19) != ':') throw new IllegalArgumentException("分隔符错误");
-		int m = TextUtil.parseInt(seq, 20, 22);
+		int m = FastNumberParser.parseInt(seq, 20, 22);
 		if (seq.charAt(22) != ':') throw new IllegalArgumentException("分隔符错误");
-		int s = TextUtil.parseInt(seq, 23, 25);
+		int s = FastNumberParser.parseInt(seq, 23, 25);
 		if (seq.charAt(25) != ' ') throw new IllegalArgumentException("分隔符错误");
 
 		if (h > 23) throw new IllegalArgumentException("你一天"+h+"小时");
@@ -872,7 +872,7 @@ public final class DateFormat {
 			case '-':
 				i = 1;
 			case '+':
-				i *= TextUtil.parseInt(seq, 27, 31);
+				i *= FastNumberParser.parseInt(seq, 27, 31);
 				int d = i % 100;
 				if (d < -59 || d > 59) throw new IllegalArgumentException("你一小时"+d+"分钟");
 				a += 60000 * d;

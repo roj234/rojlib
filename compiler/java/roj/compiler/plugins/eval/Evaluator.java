@@ -21,14 +21,18 @@ import roj.compiler.api.CompilerPlugin;
 import roj.compiler.ast.ParseTask;
 import roj.compiler.diagnostic.Kind;
 import roj.compiler.resolve.ImportList;
+import roj.concurrent.LazyThreadLocal;
 import roj.io.IOUtil;
 import roj.reflect.Reflection;
+import roj.reflect.Sandbox;
 import roj.text.CharList;
 import roj.text.Token;
 import roj.util.DynByteBuf;
+import roj.util.TypedKey;
 
 import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.TimeoutException;
 
 import static roj.asm.Opcodes.*;
 
@@ -38,13 +42,19 @@ import static roj.asm.Opcodes.*;
  */
 @CompilerPlugin(name = "evaluator", desc = "预编译和宏")
 public interface Evaluator {
+	TypedKey<Sandbox> SANDBOX = new TypedKey<>("evaluator:sandbox");
+	LazyThreadLocal<Boolean> STOP_NOW = new LazyThreadLocal<>(false);
 	@IndirectReference
-	// timeout hook, WIP
-	static boolean forceStop() {return false;}
+	static void checkJump() throws TimeoutException {
+		if (STOP_NOW.get()) throw new TimeoutException();
+	}
 
 	public static void pluginInit(Compiler ctx) {
 		HashMap<String, byte[]> data = new HashMap<>();
 		ArrayList<Member> invoker = new ArrayList<>();
+
+		var sandbox = new Sandbox("Evaluator Sandbox", Evaluator.class.getClassLoader());
+		ctx.attachment(SANDBOX, sandbox);
 
 		for (AnnotatedElement element : ctx.getClasspathAnnotations().annotatedBy("roj/compiler/plugins/eval/Constexpr")) {
 			if (element.isLeaf()) {
@@ -59,7 +69,7 @@ public interface Evaluator {
 			if (!data.containsKey(element.owner()) && info != null) {
 				DynByteBuf bytes = info.toByteArray(IOUtil.getSharedByteBuf());
 				data.put(element.owner(), bytes.toByteArray());
-				ctx.addSandboxWhitelist(element.owner().replace('/', '.'), true);
+				sandbox.allow(element.owner().replace('/', '.'), true);
 			}
 		}
 
@@ -69,8 +79,9 @@ public interface Evaluator {
 			}
 		}
 
-		ctx.addSandboxWhitelist("roj.compiler.plugins.eval", true);
-		ctx.addSandboxWhitelist("roj.config.node", true);
+		sandbox.allow("roj.compiler.plugins.eval", true);
+		sandbox.allow("roj.config.node", true);
+		sandbox.allow("roj.text.CharList", false);
 
 		var invokerInst = new ClassNode();
 		invokerInst.name("roj/compiler/plugins/eval/Evaluator$"+Reflection.uniqueId());
@@ -149,7 +160,7 @@ public interface Evaluator {
 			c.insn(ARETURN);
 		}
 
-		var evaluator = (Evaluator) ctx.createSandboxInstance(invokerInst);
+		var evaluator = (Evaluator) sandbox.newInstance(invokerInst);
 
 		for (int j = 0; j < invoker.size(); j++) {
 			Member mof = invoker.get(j);
@@ -158,7 +169,6 @@ public interface Evaluator {
 			info.methods().get(i).addAttribute(new CompiledMethod(evaluator, j, Type.getReturnType(mof.rawDesc())));
 		}
 
-		ctx.addSandboxWhitelist("roj.text.CharList", false);
 		ctx.addAnnotationStatement("LavaMacro", (ctx1, writer, annotations) -> {
 			var tok = ctx1.tokenizer;
 
@@ -190,7 +200,7 @@ public interface Evaluator {
 				int after = subctx.tokenizer.index;
 
 				if (!subctx.compiler.hasError) {
-					var impl = (Macro) ctx1.compiler.createSandboxInstance(def);
+					var impl = (Macro) ctx1.compiler.attachment(SANDBOX).newInstance(def);
 					impl.toString(sb);
 				}
 

@@ -31,9 +31,7 @@ public final class MoreOpPlugin implements Compiler.ExprOp {
 
 	private final Type LIST_TYPE = Type.klass("java/util/List");
 	private final Type MAP_TYPE = Type.klass("java/util/Map");
-	public MoreOpPlugin() {}
-
-	public void pluginInit(Compiler api) {
+	public MoreOpPlugin(Compiler api) {
 		api.onBinary(Type.klass("java/util/Collection"), "+=", Types.OBJECT_TYPE, new MethodNode(Opcodes.ACC_PUBLIC | Opcodes.ACC_INTERFACE, "java/util/Collection", "add", "(Ljava/lang/Object;)Z"), false);
 		api.addOpHandler("[", this);
 		api.onBinary(Type.klass("java/lang/String"), "*", Type.INT_TYPE, new MethodNode(Opcodes.ACC_PUBLIC, "java/lang/String", "repeat", "(I)Ljava/lang/String;"), false);

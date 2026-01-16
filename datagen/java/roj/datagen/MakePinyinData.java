@@ -285,7 +285,7 @@ public class MakePinyinData {
 			}
 		}
 		progressBar.end("总大小: " + pinyinTrie.size());
-		progressBar.setTitle("Phase 2: sort");
+		progressBar.setLine("Phase 2: sort");
 
 		// 根据使用频率调整单字拼音的顺序
 		for (var iterator = pinyinUsageMap.selfEntrySet().iterator(); iterator.hasNext(); ) {
@@ -343,7 +343,7 @@ public class MakePinyinData {
 			}
 		}
 		progressBar.end("总大小: " + pinyinTrie.size());
-		progressBar.setTitle("Phase 3: partialMatch");
+		progressBar.setLine("Phase 3: partialMatch");
 
 		// 检查词组拼音是否可以被部分匹配优化
 		ArrayList<Map.Entry<CharSequence, List<String>>> allEntries = new ArrayList<>(pinyinTrie.entrySet());

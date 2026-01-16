@@ -4,7 +4,6 @@ import roj.collect.ArrayList;
 import roj.collect.HashMap;
 import roj.collect.HashSet;
 import roj.config.JsonParser;
-import roj.text.ParseException;
 import roj.config.node.ConfigValue;
 import roj.config.node.ListValue;
 import roj.config.node.MapValue;
@@ -12,10 +11,11 @@ import roj.io.IOUtil;
 import roj.plugin.Plugin;
 import roj.plugin.SimplePlugin;
 import roj.text.CharList;
+import roj.text.ParseException;
 import roj.text.TextWriter;
 import roj.ui.Argument;
-import roj.ui.TUI;
 import roj.ui.Shell;
+import roj.ui.TUI;
 import roj.ui.Tty;
 
 import java.io.File;
@@ -159,8 +159,8 @@ public class MCTrim extends Plugin {
 			}
 		}
 
-		IOUtil.removeEmptyPaths(assets);
-		IOUtil.removeEmptyPaths(libraries);
+		IOUtil.deleteEmptyDirectories(assets);
+		IOUtil.deleteEmptyDirectories(libraries);
 
 		if (error) System.out.println("上述文件未成功删除");
 	}

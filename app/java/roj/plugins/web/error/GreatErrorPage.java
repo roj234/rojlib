@@ -148,7 +148,7 @@ public class GreatErrorPage {
 		data.put("post", display_table(sb, "POST", map).toString());
 
 		try {
-			map = req.rawCookie();
+			map = req.cookies();
 		} catch (Exception ex) {
 			map = null;
 		}
@@ -184,7 +184,7 @@ public class GreatErrorPage {
 		if (line == -2) return sb.append("<a>(Native method)</a>");
 
 		if (file == null) sb.append("<a>(Unknown Source)");
-		else sb.append("<a title='").append(CODEBASE).append('\\').append(file).append("'>").append(IOUtil.pathToName(file));
+		else sb.append("<a title='").append(CODEBASE).append('\\').append(file).append("'>").append(IOUtil.getName(file));
 
 		sb.append("</a>");
 		if (line != -1) sb.append(" line ").append(line);

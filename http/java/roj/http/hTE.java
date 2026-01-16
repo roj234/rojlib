@@ -5,7 +5,7 @@ import roj.net.Event;
 import roj.net.MyChannel;
 import roj.net.handler.PacketMerger;
 import roj.reflect.Unsafe;
-import roj.text.TextUtil;
+import roj.text.FastNumberParser;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
 
@@ -128,7 +128,7 @@ public final class hTE extends PacketMerger {
 			buf.rIndex += len;
 
 			try {
-				inLen = TextUtil.parseInt(tmp, 1);
+				inLen = FastNumberParser.parseInt(tmp, 1);
 			} catch (NumberFormatException e) {
 				throw new IllegalArgumentException("ChunkEncoding: 长度无效: "+tmp.dump());
 			}

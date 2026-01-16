@@ -5,6 +5,7 @@ import roj.io.Finishable;
 import roj.util.ArrayCache;
 import roj.util.DynByteBuf;
 import roj.util.Helpers;
+import roj.util.StringAccess;
 
 import java.io.Closeable;
 import java.io.File;
@@ -131,6 +132,31 @@ public class TextWriter extends CharList implements Closeable, Finishable {
 				start += readable;
 				len += readable;
 				if (len == ch.length) flush();
+			}
+		} catch (IOException e) {
+			Helpers.athrow(e);
+		}
+		return this;
+	}
+
+	@Override
+	public CharList append(DynByteBuf buf) {
+		try {
+			int start = 0;
+			int end = buf.readableBytes();
+
+			if (buf.hasArray()) {
+				char[] ch = list;
+				while (start < end) {
+					int readable = Math.min(end-start, ch.length-len);
+					StringAccess.INSTANCE.inflate(buf.array(), buf.arrayOffset() + buf.rIndex + start, list, len, readable);
+
+					start += readable;
+					len += readable;
+					if (len == ch.length) flush();
+				}
+			} else {
+				return append(buf, 0, end);
 			}
 		} catch (IOException e) {
 			Helpers.athrow(e);

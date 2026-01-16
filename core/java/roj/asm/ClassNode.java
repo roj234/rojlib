@@ -532,9 +532,9 @@ public class ClassNode implements ClassDefinition {
 	public String toString() {
 		CharList sb = new CharList(1000);
 
-		var _a = getAttribute(cp, Attribute.RtAnnotations);
+		var _a = getAttribute(cp, Attribute.VisibleAnnotations);
 		if (_a != null) _a.toString(sb, 0);
-		_a = getAttribute(cp, Attribute.ClAnnotations);
+		_a = getAttribute(cp, Attribute.InvisibleAnnotations);
 		if (_a != null) _a.toString(sb, 0);
 
 		int acc = modifier;

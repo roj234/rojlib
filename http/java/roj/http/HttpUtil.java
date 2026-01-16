@@ -1,9 +1,17 @@
 package roj.http;
 
+import org.jetbrains.annotations.Nullable;
+import roj.collect.BitSet;
 import roj.collect.CharMap;
+import roj.collect.Multimap;
 import roj.crypt.Base64;
 import roj.io.IOUtil;
+import roj.text.TextUtil;
 import roj.util.ByteList;
+import roj.util.Helpers;
+import roj.util.OperationDone;
+
+import java.util.function.BiConsumer;
 
 /**
  * A helper class which define the HTTP request methods, response codes and some CORS-specified utility methods
@@ -112,6 +120,85 @@ public class HttpUtil {
 		String auth = Base64.encode(in, IOUtil.getSharedCharBuf()).toString();
 		in.release();
 		return auth;
+	}
+	//endregion
+	//region 请求头字段中的参数
+	public static String getParameter(CharSequence fieldValue, @Nullable String key) {
+		var vo = new Multimap.Entry<>();
+		vo.key = key;
+		try {
+			parseParameters(fieldValue, vo);
+		} catch (OperationDone e) {
+			return Helpers.cast(vo.getKey());
+		}
+		return null;
+	}
+
+	public static final BitSet TOKEN_SAFE = BitSet.from(TextUtil.DIGITS).addAll("!#$%&'*+-.^_`|~");
+	@SuppressWarnings("fallthrough")
+	public static void parseParameters(CharSequence fieldValue, BiConsumer<String, String> callback) {
+		int i = 0;
+		int length = fieldValue.length();
+
+		outerLoop:
+		while (i < length) {
+			do {
+				if (fieldValue.charAt(i) != ' ') break;
+				i++;
+			} while (i < length);
+
+			int j = i;
+			for (; j < length; j++) {
+				char c = fieldValue.charAt(j);
+				if (!TOKEN_SAFE.contains(c)) break;
+			}
+
+			if (i == j) throw new IllegalArgumentException("Empty token at("+i+"): "+fieldValue);
+			String key = fieldValue.subSequence(i, j).toString();
+
+			if (j < length && fieldValue.charAt(j) == '=') {
+				i = ++j;
+
+				if (i < length) {
+					if (fieldValue.charAt(i) == '"') {
+						boolean isEscaped = false;
+						while (true) {
+							if (++i == length) throw new IllegalArgumentException("Unterminated quoted-string at("+i+"): "+fieldValue);
+
+							char c = fieldValue.charAt(i);
+							if (c == '\\') {
+								isEscaped = true;
+							} else if (isEscaped) {
+								isEscaped = false;
+							} else if (c == '"') {
+								i++;
+								break;
+							}
+						}
+					} else {
+						for (; i < length; i++) {
+							char c = fieldValue.charAt(i);
+							if (!TOKEN_SAFE.contains(c)) break;
+						}
+					}
+				}
+
+				String value = fieldValue.subSequence(j, i).toString();
+				callback.accept(key, value);
+			} else {
+				i = j;
+				callback.accept(key, null);
+			}
+
+			char c;
+			do {
+				if (i == length) break outerLoop;
+			} while ((c = fieldValue.charAt(i++)) == ' ');
+
+			if (c != ';') {
+				throw new IllegalArgumentException("Unrecognized token at("+i+"): "+fieldValue);
+			}
+		}
 	}
 	//endregion
 }

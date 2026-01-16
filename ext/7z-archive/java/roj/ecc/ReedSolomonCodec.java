@@ -2,46 +2,81 @@ package roj.ecc;
 
 import org.jetbrains.annotations.Nullable;
 import roj.annotation.MayMutate;
-import roj.io.source.ByteSource;
 import roj.io.source.Source;
 import roj.text.logging.Logger;
 import roj.ui.EasyProgressBar;
 import roj.util.ArrayCache;
-import roj.util.ByteList;
-import roj.util.DynByteBuf;
 import roj.util.FastFailException;
 
-import java.io.*;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.util.Arrays;
 
 /**
- * <We should never use C language>
+ * 不要用C语言谢谢喵，灌注Java谢谢喵
  * @author Roj234
  * @since 2024/12/19 14:02
  */
 public final class ReedSolomonCodec {
-	private final byte[] generator, fullBuf, ecBuf;
-	private final int codeBytes;
-	public ReedSolomonCodec(int codeBytes, int ecBytes) {
-		if (codeBytes+ecBytes > 255) throw new IllegalStateException("Max chunk=255 (not 256!)");
-		this.generator = polyNewGenerator(ecBytes);
-		this.fullBuf = new byte[codeBytes+ecBytes];
+	private final byte[] fullBuf, ecBuf;
+	private final short[] logGenerator;
+	private final int dataBytes;
+	public ReedSolomonCodec(int dataBytes, int ecBytes) {
+		if (dataBytes+ecBytes > 255) throw new IllegalArgumentException("Max chunk=255 (not 256!)");
+		if (ecBytes <= 0) throw new IllegalArgumentException("EC bytes must > 0");
+		if (dataBytes <= 0) throw new IllegalArgumentException("Data bytes must > 0");
+		var generator = polyNewGenerator(ecBytes);
+		this.logGenerator = new short[ecBytes];
+		for (int i = 0; i < ecBytes; i++) {
+			// 注意: 这里没有log函数最后的&255
+			logGenerator[i] = LOG_TABLE[generator[i + 1] & 255];
+		}
+		this.fullBuf = new byte[dataBytes+ecBytes];
 		this.ecBuf = new byte[ecBytes];
-		this.codeBytes = codeBytes;
+		this.dataBytes = dataBytes;
 	}
 	public int chunkSize() {return fullBuf.length;}
-	public int dataSize() {return codeBytes;}
-	public int eccSize() {return generator.length - 1;}
-	public int maxError() {return eccSize()/2;}
+	public int dataBytes() {return dataBytes;}
+	public int ecBytes() {return logGenerator.length;}
+	public int maxError() {return ecBytes()/2;}
 
+	/**
+	 * 输入一个chunkSize大小的数组，根据前dataBytes个字节填入后ecBytes数据
+	 */
 	public void generateCode(byte[] buf) {
-		byte[] result = fullBuf;
+		byte[] state = ecBuf;
+		Arrays.fill(state, (byte)0);
 
-		System.arraycopy(buf, 0, result, 0, codeBytes);
-		for (int i = codeBytes; i < result.length; i++) result[i] = 0;
+		for (int i = 0; i < dataBytes; i++)
+			lfsrUpdate(state, 0, buf[i]);
 
-		polyMod(result, generator);
-		System.arraycopy(result, codeBytes, buf, codeBytes, result.length - codeBytes);
+		System.arraycopy(state, 0, buf, dataBytes, ecBuf.length);
+	}
+
+	private void lfsrUpdate(byte[] state, int off, byte input) {
+		// State(x) = (State(x) * x + input) % Generator(x)
+		int feedback = (state[off] ^ input) & 0xFF;
+
+		var lgGen = this.logGenerator;
+		int ecBytes = lgGen.length;
+
+		// 这虽然是一个条件跳转，但实测可以在随机数据集上提升~5%性能
+		if (feedback == 0) {
+			System.arraycopy(state, off + 1, state, off, ecBytes - 1);
+			state[off + ecBytes - 1] = 0;
+			return;
+		}
+
+		int logFeedback = LOG_TABLE[feedback & 255];
+
+		int i = 0;
+		for (; i < ecBytes - 1; i++) {
+			// NewState[i] = OldState[i+1] ^ (Generator[i+1] * Feedback)
+			state[off + i] = (byte) (state[off + i + 1] ^ exp( lgGen[i] + logFeedback));
+		}
+
+		state[off + i] = exp( lgGen[i] + logFeedback);
 	}
 
 	/**
@@ -93,10 +128,19 @@ public final class ReedSolomonCodec {
 			omega = polyNew(omega);
 		} else {
 			var syndromePoly = polyNew(syndromeCoeff);
-			var sigmaOmega = runEuclideanAlgorithm(polyNewMono(eccSize, 1), syndromePoly, eccSize);
 
+			var sigmaOmega = runEuclideanAlgorithm(polyNewMono(eccSize, 1), syndromePoly, eccSize);
 			sigma = sigmaOmega[0];
 			omega = sigmaOmega[1];
+
+			// omega生成算法错在哪？
+			/*sigma = runBerlekampMassey(syndromePoly);
+			omega = polyMul(sigma, syndromePoly);
+
+			int start = Math.max(0, omega.length - eccSize);
+			for (int i = 0; i < start; i++) omega[i] = 0;
+
+			omega = polyNew(omega);*/
 
 			errorCount = sigma.length-1;
 			errorLocations = new byte[errorCount];
@@ -178,64 +222,60 @@ public final class ReedSolomonCodec {
 		return new byte[][] {sigma, omega};
 	}
 
+	private byte[] runBerlekampMassey(byte[] syndromes) {
+		int n = syndromes.length;
+		byte[] sigma = {1};
+		byte[] bPoly = {1};
+		int L = 0;
+		int m = 1;
+		int bValue = 1;
+
+		for (int nIdx = 0; nIdx < n; nIdx++) {
+			// 1. 计算偏差 d
+			// d = S[n] + sum_{i=1}^{L} sigma[i] * S[n-i]
+			int delta = syndromes[n - 1 - nIdx] & 0xFF;
+			for (int i = Math.min(sigma.length - 1, L); i > 0; i--) {
+				delta ^= mul(sigma[sigma.length - 1 - i], syndromes[n - 1 - (nIdx - i)]);
+			}
+
+			if (delta == 0) {
+				// 预测正确，只需增加位移
+				m++;
+			} else {
+				// 2. 预测失败，更新 sigma
+				byte[] oldSigma = sigma.clone();
+
+				// 计算 scale = d / bValue
+				int scale = mul(delta, inv(bValue));
+
+				// sigma = sigma - scale * x^m * bPoly
+				// 注意：在 GF(2^8) 中，减法等于加法 (XOR)
+				byte[] updateTerm = polyMulMono(bPoly, m, scale);
+				sigma = polyAdd(sigma, updateTerm, false);
+
+				if (2 * L <= nIdx) {
+					// 3. 更新阶数和修正项
+					L = nIdx + 1 - L;
+					bPoly = oldSigma;
+					bValue = delta;
+					m = 1;
+				} else {
+					m++;
+				}
+			}
+		}
+		return polyNew(sigma);
+	}
+
 	//region 交错和反交错
 	private static final Logger LOGGER = Logger.getLogger("RECC");
 
 	/**
 	 * 通过交错，使连续错误分散，进而使得原本只能纠正n个错误的RS码能纠正(n * lanes)个连续错误
 	 */
-	public void generateInterleavedCodeOld(InputStream in, OutputStream out, int stride, @Nullable EasyProgressBar bar) throws IOException {
-		var codeword = dataSize();
-		// 一个codeword行，stride列的矩阵
-		var matrix = ArrayCache.getByteArray(Math.max(eccSize(), codeword) * stride, false);
-		var poly = fullBuf;
-
-		while (true) {
-			int r = in.read(matrix, 0, stride * codeword);
-			if (bar != null) bar.increment(r);
-			if (r < stride * codeword) {
-				if (r < 0) break;
-				assert in.read() < 0 : "excepting EOF: "+in.getClass();
-
-				//stride = (r + codeword - 1) / codeword;
-				//for (; r < stride * codeword; r++) matrix[r] = 0;
-			}
-
-			for (int i = 0; i < stride; i++) {
-				int j = 0;
-				for (; j < codeword; j++) poly[j] = matrix[j * stride + i];
-				for (; j < poly.length; j++) poly[j] = 0;
-
-				polyMod(poly, generator);
-				System.out.println(new ByteList(poly).dump());
-				for (int x = 0; x < eccSize(); x++) matrix[x * stride + i] = poly[x + codeword];
-			}
-
-			out.write(matrix, 0, eccSize() * stride);
-		}
-
-		ArrayCache.putArray(matrix);
-	}
-
-	private void incrementalUpdate(byte[] state, int off, byte input) {
-		// State(x) = (State(x) * x + input) % Generator(x)
-		int feedback = (state[off] ^ input) & 0xFF;
-
-		byte[] gen = generator;
-		int eccSize = gen.length - 1;
-
-		int i = 0;
-		for (; i < eccSize - 1; i++) {
-			// NewState[i] = OldState[i+1] ^ (Generator[i+1] * Feedback)
-			state[off + i] = (byte) (state[off + i + 1] ^ mul(gen[i + 1], feedback));
-		}
-
-		// 处理最后一位（移位后这一位补0）
-		state[off + i] = (byte) mul(gen[eccSize], feedback);
-	}
 	public void generateInterleavedCode(InputStream dataIn, OutputStream eccOut, int lanes, @Nullable EasyProgressBar bar) throws IOException {
-		var dataSize = dataSize();
-		var eccSize = eccSize();
+		var dataSize = dataBytes();
+		var eccSize = ecBytes();
 
 		int laneIndex = 0;
 		int laneRounds = 0;
@@ -253,13 +293,17 @@ public final class ReedSolomonCodec {
 				if (rest == 0) break;
 
 				while (rest > 0) {
-					incrementalUpdate(ecc, laneIndex++ * eccSize, ioBuffer[i++]);
+					lfsrUpdate(ecc, laneIndex++ * eccSize, ioBuffer[i++]);
 					rest--;
 				}
 
 				if (laneIndex == lanes) {
 					if (++laneRounds == dataSize) {
-						eccOut.write(ecc, 0, lanes * eccSize);
+						for (int j = 0; j < eccSize; j++) {
+							for (int k = 0; k < lanes; k++) {
+								eccOut.write(ecc[k * eccSize + j]);
+							}
+						}
 						Arrays.fill(ecc, 0, lanes * eccSize, (byte) 0);
 
 						laneRounds = 0;
@@ -274,36 +318,32 @@ public final class ReedSolomonCodec {
 
 		ArrayCache.putArray(ioBuffer);
 
+		// 末尾零填充
 		if ((laneIndex|laneRounds) != 0) {
-			System.out.println(laneIndex);
-			System.out.println(laneRounds);
-
 			for (; laneIndex < lanes; laneIndex++) {
-				incrementalUpdate(ecc, laneIndex * eccSize, (byte) 0);
+				lfsrUpdate(ecc, laneIndex * eccSize, (byte) 0);
 			}
 
-			if (laneRounds != 0) {
+			if (laneRounds != dataSize) {
 				for (int laneIndex1 = 0; laneIndex1 < lanes; laneIndex1++) {
-					for (int j = laneRounds; j < dataSize; j++) {
-						incrementalUpdate(ecc, laneIndex1 * eccSize, (byte) 0);
+					for (int j = laneRounds+1; j < dataSize; j++) {
+						lfsrUpdate(ecc, laneIndex1 * eccSize, (byte) 0);
 					}
 				}
 			}
 
-			System.out.println(DynByteBuf.wrap(ecc).dump());
 			for (int j = 0; j < eccSize; j++) {
 				for (int i = 0; i < lanes; i++) {
-					eccOut.write(ecc[j * lanes + i]);
+					eccOut.write(ecc[i * eccSize + j]);
 				}
 			}
-			//eccOut.write(ecc, 0, lanes * eccSize);
 		}
 
 		ArrayCache.putArray(ecc);
 	}
 
 	public int interleavedErrorCorrection(Source file, long dataSize, int lanes, @Nullable EasyProgressBar bar) throws IOException {
-		var codeword = dataSize();
+		var codeword = dataBytes();
 		var matrix = ArrayCache.getByteArray(chunkSize() * lanes, false);
 		var poly = fullBuf;
 
@@ -316,8 +356,7 @@ public final class ReedSolomonCodec {
 				r = (int) (dataSize - file.position());
 				if (r == 0) break;
 
-				//lanes = (r + codeword - 1) / codeword;
-				//for (int i = r; i < lanes * codeword; i++) matrix[i] = 0;
+				for (int i = r; i < lanes * codeword; i++) matrix[i] = 0;
 			}
 
 			file.readFully(matrix, 0, r);
@@ -327,7 +366,7 @@ public final class ReedSolomonCodec {
 			var pos = file.position();
 
 			file.seek(eccFileOffset);
-			int eccr = lanes * eccSize();
+			int eccr = lanes * ecBytes();
 			file.readFully(matrix, fileDataLength, eccr);
 			eccFileOffset += eccr;
 
@@ -365,57 +404,21 @@ public final class ReedSolomonCodec {
 		return errorFixed;
 	}
 
-	public static void main(String[] args) throws Exception {
-		var rs = new ReedSolomonCodec(128, 16);
-		byte[] testFile;
-		try (var fis = new FileInputStream("D:\\StoryWriter\\workspace\\ecc-design.md")) {
-			testFile = fis.readAllBytes();
-		}
-		testFile = Arrays.copyOf(testFile, 127);
-
-		var baos1 = new ByteArrayOutputStream();
-		var baos2 = new ByteArrayOutputStream();
-
-		int lanes = 2;
-
-		rs.generateInterleavedCodeOld(new ByteArrayInputStream(testFile), baos1, lanes, null);
-		rs.generateInterleavedCode(new ByteArrayInputStream(testFile), baos2, lanes, null);
-
-		ByteList a = DynByteBuf.wrap(baos1.toByteArray());
-		ByteList b = DynByteBuf.wrap(baos2.toByteArray());
-
-		{
-			System.out.println("A");
-			ByteSource file = new ByteSource();
-			file.write(testFile);
-			file.write(a);
-			file.seek(0);
-			rs.interleavedErrorCorrection(file, testFile.length, lanes, null);
-		}
-
-		{
-			System.out.println("B");
-			ByteSource file = new ByteSource();
-			file.write(testFile);
-			file.write(b);
-			file.seek(0);
-			rs.interleavedErrorCorrection(file, testFile.length, lanes, null);
-		}
-
-		System.out.println(a.readableBytes());
-		System.out.println(b.readableBytes());
-
-		System.out.println(a.dump());
-		System.out.println(b.dump());
-	}
-
 	//endregion
 	//region GF(p = x^8 + x^4 + x^3 + x^2 + 1, n = 8)
-	private static final byte[] EXP_TABLE = new byte[256], LOG_TABLE = new byte[256];
+	private static final byte[] EXP_TABLE = new byte[511 + 512 + 512];
+	private static final short[] LOG_TABLE = new short[256];
 	static {
 		for (var i = 0; i < 8; i++) EXP_TABLE[i] = (byte) (1 << i);
 		for (var i = 8; i < 256; i++) EXP_TABLE[i] = (byte) (EXP_TABLE[i - 4] ^ EXP_TABLE[i - 5] ^ EXP_TABLE[i - 6] ^ EXP_TABLE[i - 8]);
-		for (var i = 0; i < 255; i++) LOG_TABLE[EXP_TABLE[i]&255] = (byte) i;
+		for (var i = 0; i < 255; i++) LOG_TABLE[EXP_TABLE[i]&255] = (short) i;
+
+		// 分支预测优化: 消除exp中的条件跳转, 提升~50%的性能
+		for (var i = 255; i < 511; i++) EXP_TABLE[i] = EXP_TABLE[i - 255];
+		// 分支预测优化: 消除lfsrUpdate中的条件跳转, 提升~20%的性能
+		LOG_TABLE[0] = 512;
+		// 初始化数组已经填充0了
+		//for (var i = 512; i < EXP_TABLE.length; i++) EXP_TABLE[i] = 0;
 	}
 	private static int log(int v) {
 		assert v != 0;
@@ -423,15 +426,15 @@ public final class ReedSolomonCodec {
 	}
 	private static byte exp(int v) {
 		assert v >= 0;
-		if (v >= 255)
-			v -= 255;
+		// if (v >= 255) v -= 255;
 		return EXP_TABLE[v];
 	}
 	private static int mul(int a, int b) {
-		if (a == 0 || b == 0) return 0;
-		/*if (a == 1) return b;
-		if (b == 1) return a;*/
-		return exp(log(a) + log(b));
+		return EXP_TABLE[LOG_TABLE[a&255] + LOG_TABLE[b&255]];
+		/*if (a == 0 || b == 0) return 0;
+		if (a == 1) return b;
+		if (b == 1) return a;
+		return exp(log(a) + log(b));*/
 	}
 	private static byte inv(int v) {return EXP_TABLE[255 - log(v)];}
 	//endregion

@@ -2,7 +2,7 @@ package roj.crypt.asn1;
 
 import roj.collect.ArrayList;
 import roj.collect.IntBiMap;
-import roj.collect.ListMap;
+import roj.collect.RowMap;
 import roj.config.JsonSerializer;
 import roj.config.ValueEmitter;
 import roj.config.node.*;
@@ -81,7 +81,7 @@ public interface DerValue {
 		public final String type;
 
 		public Sequence(String type, IntBiMap<String> index, List<ConfigValue> values) {
-			super(new ListMap<>(index, values));
+			super(new RowMap<>(index, values));
 			this.type = type;
 		}
 	}

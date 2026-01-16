@@ -64,7 +64,7 @@ public final class QPakFileSystem implements WritableFileSystem {
 
 		// 2024/07/24 将文件存在检查移动到这里
 		if (alsoReadFrom != null) {
-			String safePath = IOUtil.normalizePath(pathname);
+			String safePath = IOUtil.normalize(pathname);
 			if (safePath.isEmpty()) safePath = "/";
 			File file = safePath.equals("/") ? alsoReadFrom : new File(alsoReadFrom, safePath);
 			if (file.exists()) {

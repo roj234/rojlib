@@ -55,7 +55,7 @@ public interface ObjectWriter<T> {
 	@StaticMethod default DynByteBuf write(ConfigMaster type, T o, DynByteBuf buf) {return write(type, o, buf, "");}
 
 	@StaticMethod default boolean write(ConfigMaster type, T o, File file, String indent) throws IOException {
-		return IOUtil.writeFileEvenMoreSafe(file.getParentFile(), file.getName(), value -> write0(type, o, value, indent));
+		return IOUtil.writeAtomically(file.getParentFile(), file.getName(), value -> write0(type, o, value, indent));
 	}
 	@StaticMethod default void write(ConfigMaster type, T o, OutputStream out, String indent) throws IOException {write0(type, o, out, indent);}
 	@StaticMethod default CharList write(ConfigMaster type, T o, CharList sb, String indent) {write0(type, o, sb, indent);return sb;}

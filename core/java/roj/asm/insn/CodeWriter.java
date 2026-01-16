@@ -371,7 +371,7 @@ public class CodeWriter extends AbstractCodeWriter {
 				U.put16UB(codeOb.array(), codeOb._unsafeAddr()-6, frameVisitor.maxLocalSize);
 			}
 
-			if (frames != null) {
+			if ((computes & COMPUTE_FRAMES) != 0 && frames != null) {
 				int stack = visitAttributeI("StackMapTable");
 				FrameVisitor.writeFrames(frames, bw, cpw);
 				visitAttributeIEnd(stack);

@@ -3,6 +3,7 @@ package roj.config.node;
 import org.jetbrains.annotations.NotNull;
 import roj.config.ValueEmitter;
 import roj.text.CharList;
+import roj.text.FastNumberParser;
 import roj.text.TextUtil;
 import roj.text.Tokenizer;
 
@@ -33,7 +34,9 @@ public final class StringValue extends ConfigValue implements Comparable<ConfigV
 	}
 
 	public boolean asBool() { return value.equalsIgnoreCase("true") || !value.equalsIgnoreCase("false") && super.asBool(); }
-	public int asInt() { return TextUtil.isNumber(value) == 0 ? TextUtil.parseInt(value) : super.asInt(); }
+	public int asInt() {
+		return TextUtil.isNumber(value) == 0 ? FastNumberParser.parseInt(value) : super.asInt();
+	}
 	public long asLong() { return TextUtil.isNumber(value) == 0 ? Long.parseLong(value) : super.asLong(); }
 	public float asFloat() { return Float.parseFloat(value); }
 	public double asDouble() { return Double.parseDouble(value); }

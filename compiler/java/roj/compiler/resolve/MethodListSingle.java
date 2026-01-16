@@ -112,7 +112,7 @@ final class MethodListSingle extends ComponentList {
 			}
 
 			ctx.inferrer._minCastAllow = -1;
-			result = ctx.inferrer.infer(owner, method, that, actualArguments);
+			result = ctx.inferrer.resolveInvocation(owner, method, that, actualArguments);
 			ctx.inferrer._minCastAllow = 0;
 			if (result.method != null) {
 				result.filledArguments = fillArguments;
@@ -123,23 +123,27 @@ final class MethodListSingle extends ComponentList {
 		}
 
 		if ((flags & NO_REPORT) == 0) {
-			if (result == null) result = ctx.inferrer.infer(owner, method, that, actualArguments);
+			if (result == null) result = ctx.inferrer.resolveInvocation(owner, method, that, actualArguments);
 
-			CharList sb = new CharList().append("invoke.incompatible.single:[\"").append(method.owner()).append("\",[");
-			if (method.name().equals("<init>")) sb.append("invoke.constructor],[");
-			else sb.append("invoke.method,\" ").append(method.name()).append("\"],[");
-
-			sb.append("\"  \",invoke.except,\" \",");
-			MethodList.getArg(method, that, sb).append("\"\n\",");
-
-			MethodList.appendInput(actualArguments, sb);
-
-			sb.append("\"  \",invoke.reason,\" \",");
-			MethodList.appendError(result, sb);
-			sb.append("\"\n\"]");
-
-			ctx.report(Kind.ERROR, sb.replace('/', '.').toStringAndFree());
+			reportError(ctx, that, actualArguments, method, result);
 		}
 		return null;
+	}
+
+	static void reportError(CompileContext ctx, IType that, List<IType> actualArguments, MethodNode method, MethodResult result) {
+		CharList sb = new CharList().append("invoke.incompatible.single:[\"").append(method.owner()).append("\",[");
+		if (method.name().equals("<init>")) sb.append("invoke.constructor],[");
+		else sb.append("invoke.method,\" ").append(method.name()).append("\"],[");
+
+		sb.append("\"  \",invoke.except,\" \",");
+		MethodList.getArg(method, that, sb).append("\"\n\",");
+
+		MethodList.appendInput(actualArguments, sb);
+
+		sb.append("\"  \",invoke.reason,\" \",");
+		MethodList.appendError(result, sb);
+		sb.append("\"\n\"]");
+
+		ctx.report(Kind.ERROR, sb.replace('/', '.').toStringAndFree());
 	}
 }

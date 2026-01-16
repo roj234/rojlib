@@ -102,14 +102,12 @@ public final class CompositeSource extends Source {
 	public void write(DynByteBuf data) throws IOException {
 		if (!writable) throw new IOException("源是只读的");
 
-		int len = data.readableBytes();
-		written += len;
-
 		if (fragmentSize <= 0) {
 			s.write(data);
 			return;
 		}
 
+		int len = data.readableBytes();
 		while (len > 0) {
 			int written = (int) Math.min(Integer.MAX_VALUE, fragmentSize - s.position());
 
@@ -127,8 +125,6 @@ public final class CompositeSource extends Source {
 	@Override
 	public void put(Source src, long off, long len) throws IOException {
 		if (!writable) throw new IOException("源是只读的");
-
-		written += len;
 
 		if (fragmentSize <= 0) {
 			s.put(src, off, len);

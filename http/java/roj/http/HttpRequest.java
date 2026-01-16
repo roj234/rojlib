@@ -497,8 +497,17 @@ public abstract class HttpRequest {
 			var accept = head.get("sec-websocket-accept");
 			if (accept == null || !accept.equals(acceptKey)) throw new FastFailException("对等端不是websocket("+head.statusCode()+")", head);
 
-			var deflate = head.getHeaderValue("sec-websocket-extensions", "permessage-deflate");
-			if (deflate != null) enableZip();
+			var serverExt = head.getElement("sec-websocket-extensions");
+			if (serverExt.containsKey("permessage-deflate")) {
+				int compression = COMPRESS_AVAILABLE;
+				if (serverExt.containsKey("client_no_context_takeover")) {
+					compression |= LOCAL_NO_CTX;
+				}
+				if (serverExt.containsKey("server_no_context_takeover")) {
+					compression |= REMOTE_NO_CTX;
+				}
+				setCompression(compression);
+			}
 
 			onOpened(head);
 			state = 1;

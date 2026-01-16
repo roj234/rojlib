@@ -10,10 +10,7 @@ import roj.config.node.IntValue;
 import roj.config.node.ListValue;
 import roj.config.node.MapValue;
 import roj.io.IOUtil;
-import roj.text.CharList;
-import roj.text.FastCharset;
-import roj.text.TextUtil;
-import roj.text.Tokenizer;
+import roj.text.*;
 import roj.util.ByteList;
 import roj.util.DynByteBuf;
 import roj.util.OperationDone;
@@ -621,8 +618,8 @@ public final class Tty extends DelegatedPrintStream {
 		if (buf.charAt(end) == 'R') {
 			int i = TextUtil.indexOf(buf, ";", start, end);
 			if (i >= 0) {
-				int height = TextUtil.parseInt(buf, start, i);
-				int width = TextUtil.parseInt(buf, i+1, end);
+				int height = FastNumberParser.parseInt(buf, start, i);
+				int width = FastNumberParser.parseInt(buf, i + 1, end);
 				cursorPos = (height << 16) | width;
 				return;
 			}
@@ -633,9 +630,9 @@ public final class Tty extends DelegatedPrintStream {
 			while (buf.charAt(i3) >= '0' && buf.charAt(i3) <= '9') i3++;
 
 			if ((i1|i2|i3) > 0) {
-				int button = TextUtil.parseInt(buf, start+1, i1);
-				int x = TextUtil.parseInt(buf, i1+1, i2)-1;
-				int y = TextUtil.parseInt(buf, i2+1, i3)-1;
+				int button = FastNumberParser.parseInt(buf, start + 1, i1);
+				int x = FastNumberParser.parseInt(buf, i1 + 1, i2) -1;
+				int y = FastNumberParser.parseInt(buf, i2 + 1, i3) -1;
 				boolean press = buf.charAt(i3) == 'M';
 
 				int event;

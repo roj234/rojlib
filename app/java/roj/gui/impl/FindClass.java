@@ -131,20 +131,20 @@ public class FindClass extends JFrame {
 		}
 		if (uiserAnnotation.isSelected()) {
 			for (ClassNode data : ref) {
-				Annotations aa = data.getAttribute(data.cp, Attribute.RtAnnotations);
+				Annotations aa = data.getAttribute(data.cp, Attribute.VisibleAnnotations);
 				checkAnnotation(filter, aa, out, data, data);
-				Annotations bb = data.getAttribute(data.cp, Attribute.ClAnnotations);
+				Annotations bb = data.getAttribute(data.cp, Attribute.InvisibleAnnotations);
 				checkAnnotation(filter, bb, out, data, data);
 				for (MethodNode method : data.methods) {
-					aa = method.getAttribute(data.cp, Attribute.RtAnnotations);
+					aa = method.getAttribute(data.cp, Attribute.VisibleAnnotations);
 					checkAnnotation(filter, aa, out, method, data);
-					bb = method.getAttribute(data.cp, Attribute.ClAnnotations);
+					bb = method.getAttribute(data.cp, Attribute.InvisibleAnnotations);
 					checkAnnotation(filter, bb, out, method, data);
 				}
 				for (FieldNode method : data.fields) {
-					aa = method.getAttribute(data.cp, Attribute.RtAnnotations);
+					aa = method.getAttribute(data.cp, Attribute.VisibleAnnotations);
 					checkAnnotation(filter, aa, out, method, data);
-					bb = method.getAttribute(data.cp, Attribute.ClAnnotations);
+					bb = method.getAttribute(data.cp, Attribute.InvisibleAnnotations);
 					checkAnnotation(filter, bb, out, method, data);
 				}
 			}
@@ -171,7 +171,7 @@ public class FindClass extends JFrame {
 	private void open(File file) {
 		ref.clear();
 		if (file.isDirectory()) {
-			for (File aaa : IOUtil.listFiles(file, f -> IOUtil.extensionName(f.getName()).equals("jar"))) {
+			for (File aaa : IOUtil.listFiles(file, (pathname, attr) -> IOUtil.getExtension(pathname).equals("jar"))) {
 				read(aaa);
 			}
 		} else {

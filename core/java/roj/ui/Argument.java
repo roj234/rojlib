@@ -31,7 +31,7 @@ public interface Argument<T> {
 		return new FileArgument(2) {
 			@Override
 			protected @NotNull File getPath(String pathStr) {
-				return IOUtil.resolvePath(base, pathStr);
+				return IOUtil.resolve(base, pathStr);
 			}
 		};
 	}

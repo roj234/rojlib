@@ -140,7 +140,26 @@ final class ObjectMapperImpl extends ObjectMapper {
 
 	@Override
 	public ObjectMapper registerType(Class<?> type) {
-		make(type, type.getName(), perClassFlag.applyAsInt(type));
+		int flag = perClassFlag.applyAsInt(type) | GENERATE;
+		var ser = make(type, type.getName(), flag);
+
+		if (ser instanceof GA) {
+			ser = (TypeAdapter) ((GA)ser).clone();
+		}
+
+		synchronized (localRegistry) {
+			localRegistry.put(type.getName(), ser);
+			if (ser instanceof GA) {
+				var prev = this.perClassFlag;
+				perClassFlag = n -> flag;
+				try {
+					((GA) ser).init2(this, null);
+				} finally {
+					this.perClassFlag = prev;
+				}
+			}
+		}
+
 		return this;
 	}
 	@Override
@@ -425,8 +444,6 @@ final class ObjectMapperImpl extends ObjectMapper {
 			return ser;
 		}
 
-		if ((flag & GENERATE) == 0) throw new IllegalArgumentException("未找到"+name+"的序列化器");
-
 		if (mustBeDynamic(type)) {
 			if (!mustExact/* && (this.flag & ALLOW_DYNAMIC) != 0*/) return dynamicRoot;
 			throw new IllegalArgumentException(name+"是抽象的，无法直接生成序列化器");
@@ -476,6 +493,7 @@ final class ObjectMapperImpl extends ObjectMapper {
 							ser = new ObjectArrayAdapter(component, make(null, component, null, false));
 						}
 					} else {
+						if ((flag & GENERATE) == 0) throw new IllegalArgumentException("未找到"+name+"的序列化器");
 						ser = klass(type, flag, SerializeSetting.IDENTITY);
 					}
 				}
@@ -624,7 +642,7 @@ final class ObjectMapperImpl extends ObjectMapper {
 		} else ser = -1;
 
 		// region read()
-		String methodType = type.getActualType() == Type.CLASS ? "Ljava/lang/Object;" : type.toDesc();
+		String methodType = type.getActualType() == Type.OBJECT ? "Ljava/lang/Object;" : type.toDesc();
 		cw = c.newMethod(ACC_PUBLIC|ACC_FINAL, "read", "(Lroj/config/mapper/MappingContext;"+methodType+")V");
 		cw.visitSize(3,3);
 
@@ -1051,7 +1069,7 @@ final class ObjectMapperImpl extends ObjectMapper {
 		int actualType = type.getActualType();
 		int methodType = switch (actualType) {
 			// char序列化成字符串
-			case Type.CHAR -> Type.CLASS;
+			case Type.CHAR -> Type.OBJECT;
 			case Type.BYTE, Type.SHORT -> Type.INT;
 			//case Type.FLOAT: methodType = Type.DOUBLE; break;
 			default -> actualType;
@@ -1112,7 +1130,7 @@ final class ObjectMapperImpl extends ObjectMapper {
 				}
 			} else {
 				cw.vars(myCode, 2);
-				if (actualType == Type.CLASS) {
+				if (actualType == Type.OBJECT) {
 					String type1 = type.getActualClass();
 					if (type1.equals("java/lang/String")) {
 						cw.invoke(INVOKESTATIC, "roj/config/mapper/ObjectMapperImpl", "valueOf", "(Ljava/lang/Object;)Ljava/lang/String;");
@@ -1166,7 +1184,7 @@ final class ObjectMapperImpl extends ObjectMapper {
 			case Type.DOUBLE: methodType = Type.LONG; myCode = LLOAD; cw.visitSizeMax(4,0); continue;
 			case Type.LONG: methodType = Type.INT; myCode = ILOAD; cw.visitSizeMax(4,0); continue;
 			// parseInt | parseFloat
-			case Type.INT: methodType = Type.CLASS; myCode = -1; continue;
+			case Type.INT: methodType = Type.OBJECT; myCode = -1; continue;
 		}
 		break;
 		}
@@ -1184,7 +1202,7 @@ final class ObjectMapperImpl extends ObjectMapper {
 				else cw.invoke(INVOKEVIRTUAL, get);
 
 				switch (actualType) {
-					case Type.CLASS -> {
+					case Type.OBJECT -> {
 						cw.visitSizeMax(0, 5);
 						cw.vars(ASTORE, 4);
 						if (nullValuePattern == null) {
@@ -1273,7 +1291,7 @@ final class ObjectMapperImpl extends ObjectMapper {
 
 		cw = keyCw;
 		block:
-		if (actualType == Type.CLASS && !"java/lang/String".equals(type.getActualClass())) {
+		if (actualType == Type.OBJECT && !"java/lang/String".equals(type.getActualClass())) {
 			int id;
 			String serType = type.getActualClass();
 			Signature serSig = fn.getAttribute(data.cp, Attribute.SIGNATURE);
@@ -1334,7 +1352,7 @@ final class ObjectMapperImpl extends ObjectMapper {
 			}
 
 			// String
-			if (skip != null && actualType == Type.CLASS) cw.vars(ALOAD, 4);
+			if (skip != null && actualType == Type.OBJECT) cw.vars(ALOAD, 4);
 			else {
 				cw.insn(ALOAD_2);
 				if (get == null) cw.field(GETFIELD, data.name(), fn.name(), fn.rawDesc());
@@ -1376,7 +1394,7 @@ final class ObjectMapperImpl extends ObjectMapper {
 		String desc;
 		int size = 1;
 		switch (methodType) {
-			case Type.CLASS: desc = "(Lroj/config/mapper/MappingContext;Ljava/lang/Object;)V"; break;
+			case Type.OBJECT: desc = "(Lroj/config/mapper/MappingContext;Ljava/lang/Object;)V"; break;
 			case Type.INT: desc = "(Lroj/config/mapper/MappingContext;I)V"; break;
 			case Type.FLOAT: desc = "(Lroj/config/mapper/MappingContext;F)V"; break;
 			case Type.DOUBLE: desc = "(Lroj/config/mapper/MappingContext;D)V"; size = 2; break;
@@ -1422,7 +1440,7 @@ final class ObjectMapperImpl extends ObjectMapper {
 			cw.insn(RETURN);
 		}
 
-		if (methodType == Type.CLASS) {
+		if (methodType == Type.OBJECT) {
 			t.seg.branch(-2, cw.label());
 			cw.insn(ALOAD_1);
 			cw.insn(ICONST_1);

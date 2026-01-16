@@ -39,7 +39,7 @@ class PrefixOp extends PrefixOperator {
 		boolean mutate = op == inc || op == dec;
 
 		int actualType = type.getActualType();
-		if (actualType == Type.CLASS) {
+		if (actualType == Type.OBJECT) {
 			actualType = TypeCast.getWrappedPrimitive(type);
 			if (actualType == 0) return notApplicable(ctx);
 			if (mutate) ctx.report(this, Kind.SEVERE_WARNING, "op.wrapper", type, byId(op));
@@ -54,7 +54,7 @@ class PrefixOp extends PrefixOperator {
 			break;
 
 			default: type = Type.INT_TYPE;
-			case Type.CLASS, Type.LONG:
+			case Type.OBJECT, Type.LONG:
 				if (op != logic_not) break;
 			// fallthrough
 			case Type.VOID: return notApplicable(ctx);
@@ -124,7 +124,7 @@ class PrefixOp extends PrefixOperator {
 		right.write(cw);
 
 		int actualType = type.getActualType();
-		if (actualType == Type.CLASS) {
+		if (actualType == Type.OBJECT) {
 			actualType = TypeCast.getWrappedPrimitive(type);
 			// 手动拆箱，不通过TypeCast
 			//noinspection MagicConstant

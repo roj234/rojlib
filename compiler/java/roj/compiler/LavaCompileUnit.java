@@ -87,7 +87,6 @@ public final class LavaCompileUnit extends CompileUnit {
 		if (ctx.compiler.getMaximumBinaryCompatibility() >= Compiler.JAVA_11)
 			addNestMember(c);
 
-		c.extendedFlags = acc;
 		if ((acc&ACC_PROTECTED) != 0) {
 			acc &= ~ACC_PROTECTED;
 			acc |= ACC_PUBLIC;
@@ -391,7 +390,7 @@ public final class LavaCompileUnit extends CompileUnit {
 		w = wr.except(LITERAL, "cu.name");
 		classIdx = w.pos()+1;
 
-		if (ctx.compiler.hasFeature(Compiler.VERIFY_FILENAME) && (acc&ACC_PUBLIC) != 0 && nestHost == this && !IOUtil.fileName(filename).equals(w.text())) {
+		if (ctx.compiler.hasFeature(Compiler.VERIFY_FILENAME) && (acc&ACC_PUBLIC) != 0 && nestHost == this && !IOUtil.getBaseName(filename).equals(w.text())) {
 			ctx.report(Kind.SEVERE_WARNING, "cu.filename", filename);
 		}
 
@@ -415,14 +414,14 @@ public final class LavaCompileUnit extends CompileUnit {
 		}
 
 		// TODO 派生继承
-		if (w.type() == lParen) {
+		/*if (w.type() == lParen) {
 			if ((acc & (ACC_INTERFACE)) != 0) ctx.report(Kind.ERROR, "派生继承无法在此处使用");
 
 			Token next = wr.next();
 			// 基本类型或String
 
 			wr.except(rParen);
-		}
+		}*/
 
 		// 继承
 		checkExtends:
@@ -438,7 +437,8 @@ public final class LavaCompileUnit extends CompileUnit {
 		} else if ((acc & ACC_ENUM) != 0) {
 			makeSignature()._add(new ParameterizedType("java/lang/Enum", Collections.singletonList(Type.klass(name))));
 		} else if (activeSignature != null) {
-			activeSignature._add(Types.OBJECT_TYPE);
+			String parent = parent();
+			activeSignature._add("java/lang/Object".equals(parent) ? Types.OBJECT_TYPE : Type.klass(parent));
 		}
 
 		structCheck:{
@@ -451,7 +451,11 @@ public final class LavaCompileUnit extends CompileUnit {
 			}
 
 			var classSelf = activeSignature;
-			activeSignature = null;
+			if (classSelf != null) {
+				classSelf.type = Signature.CLASS;
+				classSignature = classSelf;
+				activeSignature = null;
+			}
 
 			var attr = new RecordAttribute();
 			addAttribute(attr);
@@ -460,7 +464,7 @@ public final class LavaCompileUnit extends CompileUnit {
 				readModifiers(wr, _ACC_ANNOTATION);
 
 				IType type = readType(wr, TYPE_PRIMITIVE|TYPE_GENERIC|SKIP_TYPE_PARAM);
-				if (type.kind() != 0) makeSignature().returns = type;
+				if (type.kind() != IType.SIMPLE_TYPE) makeSignature().returns = type;
 
 				String name = wr.except(LITERAL, "cu.name").text();
 
@@ -470,7 +474,7 @@ public final class LavaCompileUnit extends CompileUnit {
 					name, type.rawType());
 
 				commitAnnotations(field);
-				finishSignature(null, Signature.FIELD, field);
+				finishSignature(classSelf, Signature.FIELD, field);
 
 				fields.add(field);
 				if ((acc & _X_STRUCT) == 0) uninitializedFinalFields.add(field);

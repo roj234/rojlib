@@ -2,6 +2,7 @@ package roj.http.server;
 
 import roj.collect.Multimap;
 import roj.http.Headers;
+import roj.http.HttpUtil;
 import roj.io.IOUtil;
 import roj.net.ChannelCtx;
 import roj.text.FastMatcher;
@@ -43,7 +44,7 @@ public class MultipartParser implements BodyParser {
 		if (contentType.startsWith("multipart/")) {
 			//boundary里面会有特殊字符吗？
 			//Escape.CHARSET.set(FastCharset.ISO_8859_1());
-			String strBound = Headers.getOneValue(contentType, "boundary");
+			String strBound = HttpUtil.getParameter(contentType, "boundary");
 			if (strBound == null) throw new IllegalArgumentException("Not found boundary in Content-Type header: " + contentType);
 			matcher = new FastMatcher(boundary = "--".concat(strBound));
 			state = 0;
@@ -153,7 +154,7 @@ public class MultipartParser implements BodyParser {
 	}
 
 	protected Object begin(ChannelCtx ctx, Headers header) throws IOException {
-		String name = header.getHeaderValue("content-disposition", "name");
+		String name = header.getParameter("content-disposition", "name");
 		if (name == null) throw new UnsupportedOperationException("没有content-disposition.name,如果需要处理隐式的text/plain或特殊的头，请覆盖此方法");
 		long contentLength = header.getContentLength();
 		FormData value = new FormData(name, ctx.allocate(true, contentLength >= 0 && contentLength < 0xFFFF ? (int) contentLength : 0xFFFF));
@@ -168,7 +169,7 @@ public class MultipartParser implements BodyParser {
 	protected void end(ChannelCtx ctx, DynByteBuf buf) throws IOException { data(ctx, buf); }
 
 	protected MultipartParser beginChild(ChannelCtx ctx, Headers header) {
-		String name = header.getHeaderValue("content-disposition", "name");
+		String name = header.getParameter("content-disposition", "name");
 		if (name == null) throw new UnsupportedOperationException("没有content-disposition.name,如果需要处理隐式的text/plain或特殊的头，请覆盖此方法");
 		var child = new MultipartParser();
 		data.add(name, new FormData(name, child.data));

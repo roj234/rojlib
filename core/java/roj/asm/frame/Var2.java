@@ -67,7 +67,7 @@ public final class Var2 {
 			case Type.FLOAT -> FLOAT;
 			case Type.DOUBLE -> DOUBLE;
 			case Type.LONG -> LONG;
-			case Type.CLASS -> new Var2(T_REFERENCE, type.getActualClass());
+			case Type.OBJECT -> new Var2(T_REFERENCE, type.getActualClass());
 			default -> throw new IllegalStateException("Unexpected type: "+type);
 		};
 	}

@@ -66,7 +66,7 @@ final class MultiReturn extends Expr {
 
 	@Override
 	protected void write1(MethodWriter cw, @NotNull TypeCast.Cast cast) {
-		var ctx = CompileContext.get();
+		var ctx = cw.ctx;
 
 		if (unsafeCall != null) for (var itr = unsafeCall.iterator(); itr.hasNext(); ) {
 			int i = itr.nextInt();

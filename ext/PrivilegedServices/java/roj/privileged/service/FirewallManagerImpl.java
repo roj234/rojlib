@@ -6,7 +6,6 @@ import roj.concurrent.TimerTask;
 import roj.io.IOUtil;
 import roj.net.Net;
 import roj.privileged.api.FirewallManager;
-import roj.text.URICoder;
 import roj.text.logging.Logger;
 import roj.util.FastFailException;
 import roj.util.OS;
@@ -79,7 +78,7 @@ final class FirewallManagerImpl implements FirewallManager {
 		rules.clear();
 	}
 
-	private static String generateRuleName(String source, int port) {return "IL_Block_"+URICoder.escapeFileName(source)+"_"+(port > 0 ? port : "ALL");}
+	private static String generateRuleName(String source, int port) {return "IL_Block_"+IOUtil.escapeFileName(source)+"_"+(port > 0 ? port : "ALL");}
 
 	private boolean addWindowsRule(String source, int port) throws IOException {
 		String ruleName = generateRuleName(source, port);

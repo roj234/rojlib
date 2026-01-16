@@ -25,13 +25,6 @@ public class TLSClient extends PacketMerger {
 	private final ByteBuffer[] tmp = new ByteBuffer[1];
 	private int bufCap = 1024;
 
-	public TLSClient() {
-		try {
-			engine = SSLContext.getDefault().createSSLEngine();
-		} catch (NoSuchAlgorithmException e) {
-			throw new RuntimeException(e);
-		}
-	}
 	public TLSClient(String host, int port) {
 		try {
 			engine = SSLContext.getDefault().createSSLEngine(host, port);
@@ -52,7 +45,7 @@ public class TLSClient extends PacketMerger {
 		engine.setUseClientMode(true);
 		engine.beginHandshake();
 		status = engine.getHandshakeStatus();
-		if (status != SSLEngineResult.HandshakeStatus.FINISHED) handshake(ctx, EMPTY);
+		if (status != SSLEngineResult.HandshakeStatus.NOT_HANDSHAKING) handshake(ctx, EMPTY);
 	}
 
 	@Override
@@ -97,7 +90,8 @@ public class TLSClient extends PacketMerger {
 							ctx.channelWrite(out);
 						}
 
-						if (!tmp[0].hasRemaining()) return req;
+						var newStatus = req.getHandshakeStatus();
+						if (!tmp[0].hasRemaining() || newStatus != SSLEngineResult.HandshakeStatus.FINISHED) return req;
 						break;
 				}
 			}
@@ -153,7 +147,9 @@ public class TLSClient extends PacketMerger {
 							mergedRead(ctx, out);
 						}
 
-						if (!buf.hasRemaining() || req.bytesProduced() == 0) return req;
+						// 别问我为什么是FINISHED，问就是JDK大傻逼，反正我也不知道为什么这个API能做的这么垃圾
+						var newStatus = req.getHandshakeStatus();
+						if (!buf.hasRemaining() || newStatus != SSLEngineResult.HandshakeStatus.FINISHED) return req;
 						break;
 				}
 			}
@@ -180,13 +176,13 @@ public class TLSClient extends PacketMerger {
 				case NEED_WRAP:
 					tmp[0] = EMPTY;
 					r = channelWrite0(ctx);
+					if (r.getStatus() != SSLEngineResult.Status.OK) throw new SSLException(r.getStatus() + " state during handshake");
 
 					status = r.getHandshakeStatus();
 					if (status == SSLEngineResult.HandshakeStatus.NEED_TASK) {
 						status = doTasks();
 					}
 
-					if (r.getStatus() != SSLEngineResult.Status.OK) throw new SSLException(r.getStatus() + " state during handshake");
 					break;
 				case FINISHED:
 					ctx.postEvent(new Event(ALPN_EVENT, engine.getApplicationProtocol()));

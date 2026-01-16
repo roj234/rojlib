@@ -76,7 +76,7 @@ public abstract sealed class MinecraftWorkspace permits Fabric, ForgeLegacy, For
 	static ExceptionalSupplier<File, IOException> mapDownloader(String downloadUrl) {
 		return () -> {
 			try {
-				File cache = new File(CACHE_PATH, ".temp/"+ Helpers.sha1Hash(downloadUrl)+"."+IOUtil.extensionName(downloadUrl));
+				File cache = new File(CACHE_PATH, ".temp/"+ Helpers.sha1Hash(downloadUrl)+"."+IOUtil.getExtension(downloadUrl));
 				cache.getParentFile().mkdirs();
 				return cache.isFile() ? cache : DownloadTask.download(downloadUrl, cache).get();
 			} catch (InterruptedException | ExecutionException e) {

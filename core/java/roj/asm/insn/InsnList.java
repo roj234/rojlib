@@ -617,41 +617,40 @@ public final class InsnList extends AbstractCodeWriter implements Iterable<InsnN
 					tmp.setData(bytecode); // right
 				}
 			}
+		}
 
-			// 然后修复label
-			int blockDelta = toInsert.size() - segmentRemoved;
-			for (var itr = dst.labels.iterator(); itr.hasNext(); ) {
-				Label label = itr.next();
-				if (clone ? ((label.block|label.offset) != 0 && label.value == 0) : src.labels.contains(label)) continue;
+		int blockDelta = toInsert.size() - segmentRemoved;
 
-				int labelBlock = label.block;
-				// 受影响的label
-				check:
-				if (labelBlock >= dstart.block && labelBlock <= dend.block) {
-					if (label.block == dstart.block && label.offset < dstart.offset) {
-						continue;
-					}
-					if (label.block == dend.block && label.offset >= dend.offset) {
-						label.offset -= dend.offset;
-						// 如果这部分还存在
-						//if (leftSplit) label.offset += dstart.offset;
-						break check;
-					}
+		// 修复label
+		for (var itr = dst.labels.iterator(); itr.hasNext(); ) {
+			Label label = itr.next();
+			if (clone ? ((label.block|label.offset) != 0 && label.value == 0) : src.labels.contains(label)) continue;
 
-					label.clear();
-					itr.remove();
+			int labelBlock = label.block;
+			// 受影响的label
+			check:
+			if (labelBlock >= dstart.block && labelBlock <= dend.block) {
+				if (label.block == dstart.block && label.offset < dstart.offset) {
+					continue;
+				}
+				if (label.block == dend.block && label.offset >= dend.offset) {
+					label.offset -= dend.offset;
+					// 如果这部分还存在
+					//if (leftSplit) label.offset += dstart.offset;
+					break check;
 				}
 
-				if (label.block >= dend.block) {
-					label.block += blockDelta;
-				}
+				label.clear();
+				itr.remove();
+			}
+
+			if (label.block >= dend.block) {
+				label.block += blockDelta;
 			}
 		}
 
 		// 按顺序插入所有的segment
-
 		ArrayList<Segment> dstSegments = dst.segments instanceof ArrayList<Segment> x ? x : (ArrayList<Segment>) (dst.segments = new ArrayList<>(dst.segments));
-		int blockDelta = toInsert.size() - segmentRemoved;
 
 		dstSegments.ensureCapacity(dstSegments.size()+blockDelta);
 		Object[] array = dstSegments.getInternalArray();

@@ -213,7 +213,7 @@ public final class MethodParser {
 
 			cw.insn(ALOAD_1);
 			char vType = (char) var.type.getActualType();
-			if (vType == Type.CLASS) {
+			if (vType == Type.OBJECT) {
 				cw.invokeV(RETURNSTACK_TYPE, "getL", "()Ljava/lang/Object;");
 				cw.clazz(CHECKCAST, var.type.rawType());
 			} else {
@@ -1832,7 +1832,7 @@ public final class MethodParser {
 		switch (sType.getActualType()) {
 			case Type.BOOLEAN, Type.VOID, Type.FLOAT, Type.DOUBLE -> ctx.report(Kind.ERROR, "block.switch.incompatible", sType);
 			case Type.LONG -> kind = 6;
-			case Type.CLASS -> {
+			case Type.OBJECT -> {
 				String owner = sType.owner();
 				if (owner.equals("java/lang/Integer")) break;
 				if (owner.equals("java/lang/Long")) {kind = 6;break;}
@@ -2747,7 +2747,7 @@ public final class MethodParser {
 
 					cw.load(variable);
 					// TODO 20250708 此时不知道这个变量在后面是否用过，未来可以考虑把这个做成一个Segment，检测end是否在后面
-					cw.invokeV(RETURNSTACK_TYPE, "put", "("+(varType==Type.CLASS?"Ljava/lang/Object;":(char)varType)+")L"+RETURNSTACK_TYPE+";");
+					cw.invokeV(RETURNSTACK_TYPE, "put", "("+(varType==Type.OBJECT?"Ljava/lang/Object;":(char)varType)+")L"+RETURNSTACK_TYPE+";");
 				}
 			}
 
@@ -2755,7 +2755,7 @@ public final class MethodParser {
 		}
 
 		int varType = returnTypeG.getActualType();
-		cw.invokeV(RETURNSTACK_TYPE, "put", "("+(varType==Type.CLASS?"Ljava/lang/Object;":(char)varType)+")L"+RETURNSTACK_TYPE+";");
+		cw.invokeV(RETURNSTACK_TYPE, "put", "("+(varType==Type.OBJECT?"Ljava/lang/Object;":(char)varType)+")L"+RETURNSTACK_TYPE+";");
 
 		cw.insn(POP);
 		cw.insn(Opcodes.RETURN);
@@ -2766,7 +2766,7 @@ public final class MethodParser {
 				varType = variable.type.getActualType();
 
 				cw.insn(ALOAD_1);
-				if (varType == Type.CLASS) {
+				if (varType == Type.OBJECT) {
 					cw.invokeV(RETURNSTACK_TYPE, "getL", "()Ljava/lang/Object;");
 					cw.clazz(CHECKCAST, variable.type.rawType().getActualClass());
 				} else {
@@ -2921,7 +2921,7 @@ public final class MethodParser {
 
 			//ctx.stackEnter(2);
 			int type = message.type().getActualType();
-			if (type == Type.CLASS) {
+			if (type == Type.OBJECT) {
 				ctx.writeCast(cw, message, Types.OBJECT_TYPE);
 				desc = "(Ljava/lang/Object;)V";
 			} else {
@@ -3016,11 +3016,11 @@ public final class MethodParser {
 			Variable v = (Variable) variables.get(i);
 			i++;
 			if (v == null) {
-				if (tc == Type.CLASS) {
+				if (tc == Type.OBJECT) {
 					int prevI = i;
 					while (true) {
 						if (i == variables.size()) break outerLoop;
-						if (variables.get(i) != null || types.get(i).getActualType() != Type.CLASS) break;
+						if (variables.get(i) != null || types.get(i).getActualType() != Type.OBJECT) break;
 						i++;
 					}
 
@@ -3032,7 +3032,7 @@ public final class MethodParser {
 					while (true) {
 						if (i == variables.size()) break outerLoop;
 						IType vtyp1 = types.get(i);
-						if (variables.get(i) != null || vtyp1.getActualType() == Type.CLASS) break;
+						if (variables.get(i) != null || vtyp1.getActualType() == Type.OBJECT) break;
 
 						byteLength += vtyp1.rawType().length();
 						i++;
@@ -3047,7 +3047,7 @@ public final class MethodParser {
 
 			cw.load(tmp);
 
-			if (tc == Type.CLASS) {
+			if (tc == Type.OBJECT) {
 				cw.invokeV(RETURNSTACK_TYPE, "getL", "()Ljava/lang/Object;");
 				cw.clazz(CHECKCAST, vtype.rawType());
 			} else {

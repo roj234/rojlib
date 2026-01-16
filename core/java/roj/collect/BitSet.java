@@ -459,50 +459,54 @@ public class BitSet implements Iterable<Integer> {
 		return new String(str);
 	}
 
-	public static BitSet readBits(XDataInput buf, int byteLength) throws IOException {
-		if (byteLength == 0) return new BitSet();
+	public static BitSet readBits(XDataInput buf, int bits) throws IOException {
+		if (bits == 0) return new BitSet();
 
-		long[] set = new long[(byteLength+63)/64];
+		long[] set = new long[(bits+63)/64];
 		int i = 0;
-		int count = 0;
+		int size = 0;
 
-		while (byteLength >= 64) {
-			long bits = buf.readLongLE();
+		while (bits >= 64) {
+			long item = buf.readLongLE();
 
-			count += Long.bitCount(bits);
-			set[i++] = invertBits(bits);
+			size += Long.bitCount(item);
+			set[i++] = invertBits(item);
 
-			byteLength -= 64;
+			bits -= 64;
 		}
 
-		int shl = 0;
-		long fin = 0;
-		while (byteLength > 0) {
-			fin |= (long) buf.readUnsignedByte() << shl;
-			shl += 8;
-			byteLength -= 8;
+		if (bits > 0) {
+			int shift = 0;
+			long last = 0;
+			do {
+				last |= (long) buf.readUnsignedByte() << shift;
+				shift += 8;
+				bits -= 8;
+			} while (bits > 0);
+
+			size += Long.bitCount(last);
+			set[set.length-1] = invertBits(last);
 		}
 
-		count += Long.bitCount(fin);
-		set[set.length-1] = invertBits(fin);
-
-		return new BitSet(set, count);
+		return new BitSet(set, size);
 	}
 	public void writeBits(XDataOutput buf) throws IOException {
-		int size = max+1;
+		int bits = max+1;
 
 		int i = 0;
 
-		while (size >= 64) {
+		while (bits >= 64) {
 			buf.putLongLE(invertBits(set[i++]));
-			size -= 64;
+			bits -= 64;
 		}
 
-		long fin = invertBits(set[i]);
-		while (size > 0) {
-			buf.put((byte) fin);
-			fin >>>= 8;
-			size -= 8;
+		if (bits > 0) {
+			long last = invertBits(set[i]);
+			do {
+				buf.put((byte) last);
+				last >>>= 8;
+				bits -= 8;
+			} while (bits > 0);
 		}
 	}
 	static long invertBits(long i) {

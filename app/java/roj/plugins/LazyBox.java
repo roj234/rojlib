@@ -127,7 +127,7 @@ public class LazyBox extends Plugin {
 
 			long fileSize = file.length();
 			var recc = new ReedSolomonCodec(lastDataByte, lastEccByte);
-			int stride = (int) Math.min((fileSize+recc.dataSize()-1) / recc.dataSize(), (Math.min(fileSize, 1048576) / recc.maxError()));
+			int stride = (int) Math.min((fileSize+recc.dataBytes()-1) / recc.dataBytes(), (Math.min(fileSize, 1048576) / recc.maxError()));
 
 			var metadata = new ByteList(16).put(0x00/*KIND_RS*/).put(lastDataByte).put(lastEccByte).putVUInt(stride).putVULong(fileSize);
 			metadata.putInt(CRC32.crc32(metadata.array(), 0, metadata.wIndex())).put(metadata.wIndex());
@@ -230,7 +230,7 @@ public class LazyBox extends Plugin {
 				return;
 			}
 
-			IOUtil.movePath(src, dst, ctx.context.startsWith("fmove"));
+			IOUtil.copyOrMove(src, dst, ctx.context.startsWith("fmove"));
 		}));
 		registerCommand(literal("fcopy").then(child));
 		registerCommand(literal("fmove").then(child));
@@ -240,7 +240,7 @@ public class LazyBox extends Plugin {
 			char c = TUI.key("YyNn");
 			if (c != 'y' && c != 'Y') return;
 
-			System.out.println(IOUtil.deletePath(path));
+			System.out.println(IOUtil.deleteRecursively(path));
 		})));
 		registerCommand(literal("fmtime")
 			.then(argument("文件", Argument.path())
@@ -320,7 +320,7 @@ public class LazyBox extends Plugin {
 			File src = ctx.argument("注入(Nixim)", File.class);
 			if (src.isDirectory()) {
 				IOUtil.listFiles(src, file -> {
-					if (IOUtil.extensionName(file.getName()).equals("class")) {
+					if (IOUtil.getExtension(file.getName()).equals("class")) {
 						try {
 							nx.read(ClassNode.parseSkeleton(IOUtil.read(file)));
 						} catch (WeaveException | IOException e) {
@@ -330,12 +330,12 @@ public class LazyBox extends Plugin {
 					return false;
 				});
 			} else {
-				if (IOUtil.extensionName(src.getName()).equals("class")) {
+				if (IOUtil.getExtension(src.getName()).equals("class")) {
 					nx.read(ClassNode.parseSkeleton(IOUtil.read(src)));
 				} else {
 					try (var zf = new ZipFile(src)) {
 						for (var ze : zf.entries()) {
-							if (IOUtil.extensionName(ze.getName()).equals("class")) {
+							if (IOUtil.getExtension(ze.getName()).equals("class")) {
 								nx.read(ClassNode.parseSkeleton(zf.get(ze)));
 							}
 						}
@@ -345,7 +345,7 @@ public class LazyBox extends Plugin {
 
 			src = ctx.argument("源", File.class);
 			File dst = ctx.argument("保存至", File.class);
-			if (dst == null) dst = IOUtil.deriveOutput(src, "-注入");
+			if (dst == null) dst = IOUtil.addSuffix(src, "-注入");
 			IOUtil.copyFile(src, dst);
 
 			try (var archive = new ZipEditor(dst)) {
@@ -404,7 +404,7 @@ public class LazyBox extends Plugin {
 			}, true);
 		}))));
 		update.register(literal("del").then(argument("name", Argument.oneOf(fileView)).executes(c -> za.put(ctx.argument("name", String.class), null))));
-		update.register(literal("reload").executes(c -> za.getModified().clear()));
+		update.register(literal("reload").executes(c -> za.getPendingUpdates().clear()));
 		update.register(literal("save").executes(c -> za.save()));
 		update.register(literal("exit").executes(c -> {
 			za.close();

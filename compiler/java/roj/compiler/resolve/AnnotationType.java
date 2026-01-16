@@ -69,7 +69,7 @@ public class AnnotationType {
 			elementType.put(method.name(), method.returnType());
 		}
 
-		Annotations attr = node.getAttribute(node.cp(), Attribute.RtAnnotations);
+		Annotations attr = node.getAttribute(node.cp(), Attribute.VisibleAnnotations);
 		if (attr == null) return;
 
 		List<Annotation> list = attr.annotations;
@@ -116,7 +116,8 @@ public class AnnotationType {
 			}
 		}
 
-		applicableTo = tmp == 0 ? -1 : tmp;
+		if ((tmp&~3) == 0) tmp |= ~3;
+		applicableTo = tmp;
 	}
 
 	/**

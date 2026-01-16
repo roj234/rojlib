@@ -152,7 +152,7 @@ public class StreamChainPlugin implements Compiler.Resolver {
 		}
 	}
 
-	public void pluginInit(Compiler api) {
+	public StreamChainPlugin(Compiler api) {
 		api.addResolveListener(0, this);
 		api.attachment(INSTANCE, this);
 	}

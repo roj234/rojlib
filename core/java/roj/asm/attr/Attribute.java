@@ -31,14 +31,14 @@ public abstract class Attribute {
 	}
 
 	public static final TypedKey<TypeAnnotations>
-		RtTypeAnnotations = register("RuntimeVisibleTypeAnnotations"),
-		ClTypeAnnotations = register("RuntimeInvisibleTypeAnnotations");
+		VisibleTypeAnnotations = register("RuntimeVisibleTypeAnnotations"),
+		InvisibleTypeAnnotations = register("RuntimeInvisibleTypeAnnotations");
 	public static final TypedKey<Annotations>
-		RtAnnotations = register("RuntimeVisibleAnnotations"),
-		ClAnnotations = register("RuntimeInvisibleAnnotations");
+		VisibleAnnotations = register("RuntimeVisibleAnnotations"),
+		InvisibleAnnotations = register("RuntimeInvisibleAnnotations");
 	public static final TypedKey<ParameterAnnotations>
-		RtParameterAnnotations = register("RuntimeVisibleParameterAnnotations"),
-		ClParameterAnnotations = register("RuntimeInvisibleParameterAnnotations");
+		VisibleParameterAnnotations = register("RuntimeVisibleParameterAnnotations"),
+		InvisibleParameterAnnotations = register("RuntimeInvisibleParameterAnnotations");
 	public static final TypedKey<Signature> SIGNATURE = register("Signature");
 	// class
 	public static final TypedKey<RecordAttribute> Record = register("Record");

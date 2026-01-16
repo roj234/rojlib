@@ -3,7 +3,7 @@ package roj.config.node;
 import org.jetbrains.annotations.NotNull;
 import roj.config.ValueEmitter;
 import roj.text.CharList;
-import roj.text.TextUtil;
+import roj.text.FastNumberParser;
 
 /**
  * @author Roj234
@@ -13,7 +13,8 @@ public final class IntValue extends ConfigValue implements Comparable<ConfigValu
 	public int value;
 	public IntValue() {}
 	public IntValue(int n) {value = n;}
-	public static ConfigValue valueOf(String number) { return valueOf(TextUtil.parseInt(number)); }
+	public static ConfigValue valueOf(String number) {
+		return valueOf(FastNumberParser.parseInt(number)); }
 
 	public Type getType() { return Type.INTEGER; }
 	protected boolean eqVal(ConfigValue o) { return o.asInt() == value; }

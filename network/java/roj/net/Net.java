@@ -8,6 +8,7 @@ import roj.collect.HashSet;
 import roj.net.handler.Socks5Client;
 import roj.reflect.Bypass;
 import roj.text.CharList;
+import roj.text.FastNumberParser;
 import roj.text.TextUtil;
 import roj.text.URICoder;
 import roj.text.logging.Logger;
@@ -78,7 +79,7 @@ public final class Net {
 		for (int i = 0; i < ip.length(); i++) {
 			char c = ip.charAt(i);
 			if (c == '.') {
-				addr[pos++] = (byte) TextUtil.parseInt(num);
+				addr[pos++] = (byte) FastNumberParser.parseInt(num);
 				if (pos == 4) throw new IllegalArgumentException("invalid ipv4: "+ip);
 				num.clear();
 			} else {
@@ -87,7 +88,7 @@ public final class Net {
 		}
 
 		if (num.length() == 0 || pos != 3) throw new IllegalArgumentException("invalid ipv4: "+ip);
-		addr[3] = (byte) TextUtil.parseInt(num);
+		addr[3] = (byte) FastNumberParser.parseInt(num);
 		return addr;
 	}
 	public static byte[] v6ipBytes(CharSequence ip) {
@@ -109,7 +110,7 @@ public final class Net {
 					colon = j;
 					continue;
 				}
-				int st = TextUtil.parseInt(num, 1);
+				int st = FastNumberParser.parseInt(num, 1);
 				addr[j++] = (byte) (st >> 8);
 				addr[j++] = (byte) st;
 
@@ -123,7 +124,8 @@ public final class Net {
 		}
 
 		if ((colon == -1 && (num.length() == 0 || j != 14)) || j > 14) throw new IllegalArgumentException("Address overflow: " + ip);
-		int st = num.length() == 0 ? 0 : TextUtil.parseInt(num, 1);
+		int st;
+		st = num.length() == 0 ? 0 : FastNumberParser.parseInt(num, 1);
 		addr[j++] = (byte) (st >> 8);
 		addr[j] = (byte) st;
 

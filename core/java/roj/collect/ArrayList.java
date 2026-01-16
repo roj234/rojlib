@@ -154,12 +154,8 @@ public class ArrayList<E> extends AbstractCollection<E> implements List<E>, Rand
 	@Contract(mutates = "this")
 	public boolean addAll(E[] collection, int index, int start, int len) {
 		rangeCheck(index);
-
+		Objects.checkFromIndexSize(start, len, collection.length);
 		if (len == 0) return false;
-		if (len < 0) throw new NegativeArraySizeException();
-		if (start < 0) throw new ArrayIndexOutOfBoundsException(start);
-
-		if (start + len > collection.length) throw new ArrayIndexOutOfBoundsException(len);
 
 		ensureCapacity(size + len);
 		if (size != index) System.arraycopy(list, index, list, index + len, size - index);
@@ -169,7 +165,7 @@ public class ArrayList<E> extends AbstractCollection<E> implements List<E>, Rand
 	}
 
 	void rangeCheck(int i) {
-		if (i < 0 || i > size) throw new ArrayIndexOutOfBoundsException(i);
+		Objects.checkIndex(i, size+1);
 	}
 
 	@Override
@@ -257,19 +253,19 @@ public class ArrayList<E> extends AbstractCollection<E> implements List<E>, Rand
 	}
 
 	@SuppressWarnings("unchecked")
-	public E set(int i, E e) {
-		if (i >= size) throw new ArrayIndexOutOfBoundsException(i);
-		Object o = list[i];
-		list[i] = e;
+	public E set(int index, E e) {
+		Objects.checkIndex(index, size);
+		Object o = list[index];
+		list[index] = e;
 		return (E) o;
 	}
 
 	@Override
-	public void add(int i, E e) {
-		if (i < 0 || i > size) throw new ArrayIndexOutOfBoundsException(i);
+	public void add(int index, E e) {
+		rangeCheck(index);
 		ensureCapacity(size + 1);
-		if (i != size) System.arraycopy(list, i, list, i + 1, size - i);
-		list[i] = e;
+		if (index != size) System.arraycopy(list, index, list, index + 1, size - index);
+		list[index] = e;
 		size++;
 	}
 
@@ -298,7 +294,7 @@ public class ArrayList<E> extends AbstractCollection<E> implements List<E>, Rand
 
 	@SuppressWarnings("unchecked")
 	public E remove(int index) {
-		if (index >= size) throw new ArrayIndexOutOfBoundsException(index);
+		Objects.checkIndex(index, size);
 		Object o = list[index];
 		if (size - 1 - index > 0) System.arraycopy(list, index + 1, list, index, size - 1 - index);
 		list[--size] = null;
@@ -334,7 +330,7 @@ public class ArrayList<E> extends AbstractCollection<E> implements List<E>, Rand
 
 	@SuppressWarnings("unchecked")
 	public E get(int i) {
-		if (i < 0 || i >= size) throw new ArrayIndexOutOfBoundsException(i);
+		Objects.checkIndex(i, size);
 		return (E) list[i];
 	}
 	@SuppressWarnings("unchecked")

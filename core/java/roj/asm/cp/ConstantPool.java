@@ -282,7 +282,9 @@ public final class ConstantPool {
 	private void initRefMap() {
 		if (refMap == null) {
 			refMap = new RefMap(Math.max(constants.size(), 16));
-		} else if (!refMap.isEmpty()) {
+		} else if (refMap.isEmpty()) {
+			refMap.ensureCapacity(constants.size());
+		} else {
 			return;
 		}
 
@@ -319,7 +321,10 @@ public final class ConstantPool {
 			default -> throw new IllegalArgumentException("不支持的常量类型"+c.type()+" "+c.getClass().getName());
 		}
 
-		if (refMap != null) refMap.add(c);
+		if (!refMap.isEmpty()) {
+			refMap.ensureCapacity(size);
+			refMap.add(c);
+		}
 		if (listener != null) listener.accept(c);
 	}
 	public boolean contains(Constant c) {
@@ -603,23 +608,16 @@ public final class ConstantPool {
 	 * 新的开放寻址哈希表实现，它比我对内存占用优化过的HashSet还少20%的内存，而且性能更好（我没测和大小分布的关系，可能大常量池表现差也说不定），这大概是因为缓存局部性
 	 */
 	private final class RefMap {
-		private static final float LOAD_FACTOR = 0.75f;
-
-		// 28 bytes, 但是table可以用char[]而不需要一个特殊值表示tombstone了
+		// 通过这个Set，table可以使用char[]范围，而不需要占用一个特殊值表示tombstone了
 		private final IntSet tombstone = new IntSet();
+
 		private char[] table;
-		private int size;
 		private int mask;
+		private boolean empty = true;
 
-		RefMap(int capacity) {
-			int n = MathUtils.nextPowerOfTwo(capacity);
-			this.table = new char[n];
-			this.mask = n - 1;
-		}
+		RefMap(int capacity) {ensureCapacity(capacity);}
 
-		public boolean isEmpty() {
-			return size == 0;
-		}
+		public boolean isEmpty() {return empty;}
 
 		public Constant find(Constant key) {
 			int h = hash(key.hashCode());
@@ -657,8 +655,7 @@ public final class ConstantPool {
 			}
 
 			table[i] = key.index;
-			size++;
-			if (size > table.length * LOAD_FACTOR) rehash();
+			empty = false;
 
 			return key;
 		}
@@ -672,7 +669,6 @@ public final class ConstantPool {
 					if (table[(i + 1) & mask] == 0)
 						table[i] = 0;
 					else tombstone.add(i);
-					size--;
 					return true;
 				}
 				i = (i + 1) & mask;
@@ -681,28 +677,39 @@ public final class ConstantPool {
 		}
 
 		public void clear() {
-			if (size == 0) return;
-			size = 0;
+			if (empty) return;
+			empty = true;
 			Arrays.fill(table, (char) 0);
 			tombstone.clear();
 		}
 
-		private void rehash() {
-			char[] oldTable = table;
-			int newCap = oldTable.length << 1;
+		public void ensureCapacity(int size) {
+			// 0.75 Load Factor
+			int newCap = MathUtils.nextPowerOfTwo((size * 4) / 3);
+			if (newCap > 131072) newCap = 131072;
+			if (table == null || table.length < newCap) rehash(newCap);
+		}
+		private void rehash(int newCap) {
 			table = new char[newCap];
 			mask = newCap - 1;
-			size = 0;
-			for (int i = 0; i < oldTable.length; i++) {
-				int index = oldTable[i];
-				if (index > 0 && !tombstone.contains(i)) {
-					add(constants.get(index - 1));
-				}
-			}
 			tombstone.clear();
+
+			for (int index = 0; index < constants.size(); index++) {
+				var c = constants.get(index);
+				if (c == CstTop.TOP) continue;
+
+				int h = hash(c.hashCode());
+				int i = h & mask;
+
+				while (table[i] != 0) {
+					i = (i + 1) & mask;
+				}
+				table[i] = c.index;
+			}
+			empty = constants.isEmpty();
 		}
 
-		private int hash(int h) {
+		private static int hash(int h) {
 			return h ^ (h >>> 16);
 		}
 	}

@@ -16,6 +16,7 @@ import roj.io.IOUtil;
 import roj.text.DateFormat;
 import roj.text.ParseException;
 import roj.text.TextUtil;
+import roj.text.logging.Logger;
 import roj.util.*;
 
 import java.io.File;
@@ -31,6 +32,8 @@ import java.util.Set;
  * @since 2025/10/09 23:08
  */
 public class MavenCoordinate {
+	public static final Logger LOGGER = Logger.getLogger("Maven");
+
 	public final String groupId, artifactId, classifier, packaging;
 	public final VersionRange version;
 
@@ -163,7 +166,7 @@ public class MavenCoordinate {
 	}
 
 	private void saveMetadata(File localMetadataFile, Metadata finalRemoteMetadata) throws IOException {
-		IOUtil.writeFileEvenMoreSafe(localMetadataFile.getParentFile(), localMetadataFile.getName(), file -> {
+		IOUtil.writeAtomically(localMetadataFile.getParentFile(), localMetadataFile.getName(), file -> {
 			try (var out = new FileOutputStream(file)) {
 				ByteList bb = IOUtil.getSharedByteBuf();
 				MCMake.CONFIG.write(new MsgPackEncoder.Compressed(bb), finalRemoteMetadata);

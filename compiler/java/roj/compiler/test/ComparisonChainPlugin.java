@@ -22,7 +22,7 @@ import java.util.List;
  */
 @CompilerPlugin(name = "comparisonTest", desc = "StreamChain测试插件")
 public class ComparisonChainPlugin {
-	public void pluginInit(Compiler api) {
+	public ComparisonChainPlugin(Compiler api) {
 		String name = "roj/compiler/test/ComparisonChain";
 
 		StreamChain chain = api.attachment(StreamChainPlugin.INSTANCE).newStreamChain(name, false, ch -> {

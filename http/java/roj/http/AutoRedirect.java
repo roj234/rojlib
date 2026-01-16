@@ -93,7 +93,7 @@ public class AutoRedirect extends Timeout {
 
 	@Override
 	protected void closeChannel(ChannelCtx ctx) {
-		throw new FastFailException("连接"+ctx.remoteAddress()+"超时");
+		throw new FastFailException("等待"+ctx.remoteAddress()+"响应时超时");
 	}
 
 	@Override

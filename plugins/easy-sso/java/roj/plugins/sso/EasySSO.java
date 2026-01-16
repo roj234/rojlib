@@ -24,7 +24,6 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.SecureRandom;
-import java.util.Collections;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.regex.Matcher;
@@ -265,18 +264,18 @@ public class EasySSO extends Plugin {
 		var token = req.bearerAuthorization();
 		if (token != null) return verifyToken(req, token, 'L');
 
-		Cookie cookie = null;
+		String cookie = null;
 		try {
-			cookie = req.cookie().get(COOKIE_ID);
+			cookie = req.cookies().get(COOKIE_ID);
 		} catch (IllegalRequestException e) {
 			Helpers.athrow(e);
 		}
 
 		if (cookie != null) {
-			User user = verifyToken(req, cookie.value(), 'L');
+			User user = verifyToken(req, cookie, 'L');
 			if (user != null) return user;
 
-			cookie.path("/").value("").expires(-1);
+			req.setCookie(new Cookie(COOKIE_ID).path("/").expires(-1));
 		}
 
 		return null;
@@ -315,7 +314,7 @@ public class EasySSO extends Plugin {
 
 	@GET
 	public void logout(Request req, Response rh) {
-		req.sendCookieToClient(Collections.singletonList(new Cookie(COOKIE_ID).path("/").expires(-1)));
+		req.setCookie(new Cookie(COOKIE_ID).path("/").expires(-1));
 		rh.code(302).setHeader("location", "/"+sitePath);
 	}
 
@@ -414,7 +413,7 @@ public class EasySSO extends Plugin {
 	public String changePassword(Request req, String pass) throws IllegalRequestException {
 		if (pass.length() < 6 || pass.length() > 39) throw BAD_REQUEST;
 
-		var token = req.cookie().get(COOKIE_ID).value();
+		var token = req.cookies().getOrDefault(COOKIE_ID, "");
 
 		ByteList buf = IOUtil.getSharedByteBuf();
 		Base64.decode(token, buf, Base64.B64_URL_SAFE_REV);
@@ -597,12 +596,13 @@ public class EasySSO extends Plugin {
 
 	@Interceptor("login")
 	public String loginInterceptor(Request req) throws IllegalRequestException {
-		var token = req.cookie().get(COOKIE_ID);
+		var token = req.cookies().get(COOKIE_ID);
 		if (token != null) {
-			User u = verifyToken(req, token.value(), 'L');
+			User u = verifyToken(req, token, 'L');
 			req.threadLocal().put("xsso:user", u);
 			if (u != null) return null;
-			token.path("/").expires(-1);
+
+			req.setCookie(new Cookie(COOKIE_ID).path("/").expires(-1));
 		}
 
 		return "{\"ok\":false,\"msg\":\"未登录\"}";
@@ -686,7 +686,7 @@ public class EasySSO extends Plugin {
 		return sb.append('}').toStringAndFree();
 	}
 	private void setCookie(Request req, String loginToken) {
-		req.sendCookieToClient(Collections.singletonList(new Cookie(COOKIE_ID, loginToken).path("/").secure(req.isSecure()).expires(accessTokenNoStore ? 0 : accessTokenTTL).httpOnly(true).sameSite("Strict")));
+		req.setCookie(new Cookie(COOKIE_ID, loginToken).path("/").secure(req.isSecure()).expires(accessTokenNoStore ? 0 : accessTokenTTL).httpOnly(true).sameSite("Strict"));
 	}
 
 	private String makeToken(User u, char usage, long expire, LocalData o) {

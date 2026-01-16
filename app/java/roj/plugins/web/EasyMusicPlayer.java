@@ -6,9 +6,9 @@ import roj.http.server.auto.GET;
 import roj.http.server.auto.Interceptor;
 import roj.http.server.auto.OKRouter;
 import roj.http.server.auto.POST;
+import roj.io.IOUtil;
 import roj.plugin.Plugin;
 import roj.text.TextWriter;
-import roj.text.URICoder;
 
 import java.io.File;
 import java.io.FileOutputStream;
@@ -38,7 +38,7 @@ public class EasyMusicPlayer extends Plugin {
 	@Interceptor("userSongPostHandler")
 	@POST("data/set/:key")
 	public Content userSong(Request req) throws IOException {
-		var file = new File(getDataFolder(), "users/"+ URICoder.escapeFilePath(req.argument("user"))+".json.gz");
+		var file = new File(getDataFolder(), "users/"+IOUtil.escapeFilePath(req.argument("user"))+".json.gz");
 
 		var handler = (UrlEncodedParser) req.bodyParser();
 		if (handler == null) {
@@ -61,7 +61,7 @@ public class EasyMusicPlayer extends Plugin {
 
 	@GET("data/get/:key?")
 	public Content loadUserSong(Request req) throws IOException {
-		var file = new File(getDataFolder(), "users/"+ URICoder.escapeFilePath(req.argument("user"))+".json.gz");
+		var file = new File(getDataFolder(), "users/"+IOUtil.escapeFilePath(req.argument("user"))+".json.gz");
 
 		if (!file.isFile()) return Content.json("{\"history\":[], \"playing\":[], \"custom_list\":null}");
 		return Content.file(req, new GZFileInfo(file));

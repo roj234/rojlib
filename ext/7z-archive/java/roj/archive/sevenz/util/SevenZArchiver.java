@@ -443,7 +443,7 @@ public class SevenZArchiver {
 				return;
 			}
 
-			String ext = IOUtil.extensionName(file.getName());
+			String ext = IOUtil.getExtension(file.getName());
 			if (ArchiveUtils.INCOMPRESSIBLE_FILE_EXT.contains(ext) || options.getMode() == LZMA2Options.MODE_UNCOMPRESSED) {
 				addFile(FileCategory.UNCOMPRESSED, file, entryName, attr);
 			} else {
@@ -485,10 +485,7 @@ public class SevenZArchiver {
 				callback.accept(path, Files.readAttributes(path.toPath(), BasicFileAttributes.class, FOLLOW_LINK));
 			} else {
 				if (pathFormat == PF_RELATIVE) {
-					String path1 = path.getAbsolutePath();
-					int length = path1.length();
-					// C:\
-					prefixLength = path1.endsWith(File.separator) ? length : length+1;
+					prefixLength = IOUtil.getPrefixLength(path);
 				}
 				traverseFolder(path, callback);
 			}

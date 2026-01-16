@@ -3,8 +3,8 @@ package roj.concurrent;
 import org.jetbrains.annotations.Async;
 import roj.compiler.api.Synchronizable;
 import roj.optimizer.FastVarHandle;
-import roj.reflect.Telescope;
 import roj.reflect.Reflection;
+import roj.reflect.Telescope;
 import roj.util.ArrayUtil;
 
 import java.lang.invoke.VarHandle;
@@ -86,4 +86,7 @@ public class TaskThread extends FastLocalThread implements ExecutorService {
 			while (!tasks.isEmpty()) wait();
 		}
 	}
+
+	@Override
+	public boolean isOnExecutor() {return Thread.currentThread() == this;}
 }

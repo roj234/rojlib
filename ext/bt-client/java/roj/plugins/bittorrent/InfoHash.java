@@ -2,20 +2,19 @@ package roj.plugins.bittorrent;
 
 import roj.collect.Int2IntMap;
 import roj.crypt.CryptoFactory;
-import roj.util.OperationDone;
 import roj.io.IOUtil;
 import roj.io.source.FileSource;
 import roj.io.source.Source;
 import roj.text.CharList;
+import roj.text.FastNumberParser;
 import roj.util.ByteList;
+import roj.util.OperationDone;
 
 import java.io.EOFException;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.security.MessageDigest;
-
-import static roj.config.JsonParser.parseNumber;
 
 /**
  * InfoHash
@@ -120,7 +119,7 @@ final class InfoHash {
 
 		CharList t = IOUtil.getSharedCharBuf();
 		while (c >= 0) {
-			if (c == 'e' || c == ':') return parseNumber(t, 4, neg);
+			if (c == 'e' || c == ':') return FastNumberParser.parseLong(t, 4, neg);
 
 			t.append((char) c);
 			c = in.read();

@@ -29,10 +29,12 @@ import java.io.Closeable;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.file.attribute.BasicFileAttributes;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.function.Predicate;
+import java.util.function.BiConsumer;
+import java.util.function.Consumer;
 
 import static roj.asmx.mapper.Mapper.DONT_LOAD_PREFIX;
 import static roj.ci.MCMake.*;
@@ -140,15 +142,14 @@ public class AT implements Plugin {
 			}
 
 			try (var zfw = new ZipPacker(atJar)) {
-				zfw.writeNamed(".desc", (ByteList) new ByteList().putInt(atList.hashCode()));
+				zfw.writeNamed(".desc", new ByteList().putInt(atList.hashCode()));
 
-				Predicate<File> callback = file -> {
-					String name = file.getName().toLowerCase(Locale.ROOT);
+				BiConsumer<String, BasicFileAttributes> callback = (pathname, attr) -> {
+					String name = IOUtil.getName(pathname).toLowerCase(Locale.ROOT);
 					if (!name.startsWith(DONT_LOAD_PREFIX) && (name.endsWith(".zip") || name.endsWith(".jar"))) {
-						tryAt(file, atList, zfw);
+						tryAt(new File(pathname), atList, zfw);
 						if (atList.isEmpty()) throw OperationDone.INSTANCE;
 					}
-					return false;
 				};
 
 				for (var file : p.workspace.getDepend()) {
@@ -157,9 +158,10 @@ public class AT implements Plugin {
 				for (var file : p.workspace.getMappedDepend()) {
 					tryAt(file, atList, zfw);
 				}
-				IOUtil.listFiles(new File(BASE, "lib"), callback);
+				IOUtil.listPaths(new File(BASE, "lib"), callback);
+				Consumer<File> fileConsumer = file -> callback.accept(file.getAbsolutePath(), null);
 				for (Dependency dep : p.getCompileDependencies()) {
-					dep.forEachJar(callback::test);
+					dep.forEachJar(fileConsumer);
 				}
 			} catch (OperationDone ignored) {
 
@@ -224,7 +226,7 @@ public class AT implements Plugin {
 				long lastMod = file.lastModified();
 
 				if (zf != null) {
-					zf.reopen();
+					zf.ensureOpen();
 
 					if (lastMod != lastModify) {
 						zf.reload();

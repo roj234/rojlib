@@ -7,7 +7,6 @@ import java.io.DataInput;
 import java.io.File;
 import java.io.IOException;
 import java.io.RandomAccessFile;
-import java.nio.channels.FileChannel;
 
 /**
  * @author Roj233
@@ -46,13 +45,19 @@ public class FileSource extends Source {
 	public long position() throws IOException { return io.getFilePointer()-offset; }
 
 	public void setLength(long length) throws IOException {
-		if (length < 0) throw new IOException();
-		io.setLength(length+offset);
+		length += offset;
+		if (length < 0) throw new IOException("Negative length");
+		io.setLength(length);
 	}
 	public long length() throws IOException { return io.length()-offset; }
 
-	public boolean hasChannel() { return true; }
-	public FileChannel channel() { return io.getChannel(); }
+	@Override
+	public void put(Source src, long offset, long len) throws IOException {
+		if (src instanceof FileSource fs) {
+			fs.io.getChannel().transferTo(offset, len, io.getChannel());
+		}
+		super.put(src, offset, len);
+	}
 
 	@Override
 	public void close() throws IOException { super.close(); io.close(); }
@@ -66,7 +71,7 @@ public class FileSource extends Source {
 	@Override public boolean isWritable() {return write;}
 	@Override public DataInput asDataInput() {return io;}
 	@Override public Source copy() throws IOException { return new FileSource(file, offset, write); }
-	@Override public void moveSelf(long from, long to, long length) throws IOException { IOUtil.transferFileSelf(channel(), from, to, length); }
+	@Override public void moveSelf(long from, long to, long length) throws IOException { IOUtil.copyInternal(io.getChannel(), from, to, length); }
 	@Override public String toString() { return file.getPath(); }
 
 	@Override
@@ -83,7 +88,7 @@ public class FileSource extends Source {
 	@Override
 	public int hashCode() {
 		int result = file.hashCode();
-		result = 31 * result + (int) (offset ^ (offset >>> 32));
+		result = 31 * result + Long.hashCode(offset);
 		return result;
 	}
 }

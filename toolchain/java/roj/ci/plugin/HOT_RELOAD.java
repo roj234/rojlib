@@ -68,7 +68,7 @@ public class HOT_RELOAD implements Plugin {
 		}
 		MCMake.log.info("\"热重载青春版\"启动成功，在任意JVM中加入该参数即可使用");
 		MCMake.log.info("  -javaagent:\""+Tokenizer.escape(agent.getAbsolutePath())+"\"="+config.asInt());
-		MCMake.log.info("添加 -XXalt+jvm 以在JBR中启用 DCEVM");
+		MCMake.log.info("添加 -XX:+AllowEnhancedClassRedefinition 以在JBR中启用 DCEVM");
 	}
 
 	public void start(int port) throws IOException {

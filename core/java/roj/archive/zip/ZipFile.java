@@ -80,7 +80,7 @@ public sealed class ZipFile implements ArchiveFile<ZipEntry> permits ZipEditor {
 		FLAG_JAR         = 8,
 
 		FLAG_SaveInUTF   = 64,
-		FLAG_ReadOnly    = 128;
+		FLAG_HasError = 128;
 
 	static final int
 		GP_ENCRYPTED  = 1,
@@ -90,14 +90,14 @@ public sealed class ZipFile implements ArchiveFile<ZipEntry> permits ZipEditor {
 		GP_UFS        = 2048;
 
 	public ZipFile(String name) throws IOException { this(new File(name)); }
-	public ZipFile(File file) throws IOException { this(file, FLAG_RemoveEXT | FLAG_ReadCENOnly | FLAG_Verify); }
+	public ZipFile(File file) throws IOException { this(file, FLAG_ReadCENOnly | FLAG_Verify); }
 	public ZipFile(File file, int flag) throws IOException { this(file, flag, 0, StandardCharsets.UTF_8); }
 	public ZipFile(File file, int flag, Charset charset) throws IOException { this(file, flag, 0, charset); }
 	public ZipFile(File file, int flag, long offset, Charset charset) throws IOException {
 		this.flags = (byte) flag;
 		this.cs = charset;
 
-		r = ArchiveUtils.tryOpenSplitArchive(file, true);
+		r = ArchiveUtils.tryOpenSplitArchive(file, (flag & FLAG_RemoveEXT) == 0);
 		r.seek(offset);
 
 		reload();
@@ -206,8 +206,8 @@ public sealed class ZipFile implements ArchiveFile<ZipEntry> permits ZipEditor {
 				}
 			}
 
-			if (in.position() != r.length() || (flags&FLAG_ReadOnly) != 0 || !locEntries.equals(entries)) {
-				flags |= FLAG_ReadOnly;
+			if (in.position() != r.length() || (flags& FLAG_HasError) != 0 || !locEntries.equals(entries)) {
+				flags |= FLAG_HasError;
 				entries = locEntries;
 			}
 			return;
@@ -467,19 +467,19 @@ public sealed class ZipFile implements ArchiveFile<ZipEntry> permits ZipEditor {
 
 		if (entryForward == null) {
 			if (!entries.isEmpty() && entries.getLast().offset > entry.offset) {
-				this.flags |= FLAG_ReadOnly;
+				this.flags |= FLAG_HasError;
 				entry.flags |= ZipEntry.MZ_Error;
 			}
 		} else {
 			if (entries.size() >= entryForward.size()) {
-				this.flags |= FLAG_ReadOnly;
+				this.flags |= FLAG_HasError;
 				entry.flags |= ZipEntry.MZ_Error;
 			} else {
 				ZipEntry prev = entryForward.get(entries.size());
 				if (!prev.merge(entry)) {
 					if ((this.flags & FLAG_Verify) != 0)
 						throw new ZipException("压缩参数在LOC和CEN间不匹配("+prev+", "+entry+")");
-					this.flags |= FLAG_ReadOnly;
+					this.flags |= FLAG_HasError;
 					entry.flags |= ZipEntry.MZ_Error;
 					prev.flags |= ZipEntry.MZ_Error;
 				} else {

@@ -175,7 +175,7 @@ public abstract class AbstractCodeWriter extends CodeVisitor {
 	public final void newArraySized(Type t, int size) {
 		ldc(size);
 		int type = t.getActualType();
-		if (type == CLASS) clazz(ANEWARRAY, t.getActualClass());
+		if (type == OBJECT) clazz(ANEWARRAY, t.getActualClass());
 		else newArray(Type.getArrayType(type));
 	}
 	public final void newArraySized(Type t, int... size) {

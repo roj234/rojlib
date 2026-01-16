@@ -13,6 +13,7 @@ import roj.plugin.Plugin;
 import roj.plugin.PluginDescriptor;
 import roj.plugin.SimplePlugin;
 import roj.text.CharList;
+import roj.text.FastNumberParser;
 import roj.text.TextUtil;
 import roj.text.Tokenizer;
 import roj.util.DynByteBuf;
@@ -142,7 +143,7 @@ public class ChatManager extends Plugin {
 
 		var paths = TextUtil.split(req.path(), '/');
 		boolean img = paths.get(1).contains("img");
-		int count = TextUtil.parseInt(paths.get(2));
+		int count = FastNumberParser.parseInt(paths.get(2));
 
 		ps.accept(4194304, 10000);
 		ps.setParser(new UploadHandler(req, count, u.id, img));

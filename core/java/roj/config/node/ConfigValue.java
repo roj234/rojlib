@@ -9,7 +9,7 @@ import roj.config.ConfigMaster;
 import roj.config.ValueEmitter;
 import roj.io.IOUtil;
 import roj.text.CharList;
-import roj.text.TextUtil;
+import roj.text.FastNumberParser;
 
 import java.util.List;
 import java.util.Map;
@@ -82,7 +82,8 @@ public abstract class ConfigValue {
 
 						if (j==i) throw new IllegalArgumentException("invalid ListEq: not number: "+jsonPath);
 						if (tmp.length() > 0) throw new AssertionError();
-						int pos = TextUtil.parseInt(tmp.append(jsonPath, i, j));
+						CharSequence s = tmp.append(jsonPath, i, j);
+						int pos = FastNumberParser.parseInt(s);
 						tmp.clear();
 
 						if (j == jsonPath.length()-1) {

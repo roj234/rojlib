@@ -5,6 +5,7 @@ import roj.asm.MemberDescriptor;
 import roj.asmx.mapper.Mapping;
 import roj.collect.HashMap;
 import roj.io.IOUtil;
+import roj.text.FastNumberParser;
 import roj.text.LineReader;
 import roj.text.TextReader;
 import roj.text.TextUtil;
@@ -150,7 +151,7 @@ final class MCPMapping extends Mapping {
 				continue;
 			}
 
-			int slotId = TextUtil.parseInt(tmp.get(2));
+			int slotId = FastNumberParser.parseInt(tmp.get(2));
 
 			for (MemberDescriptor desc : data) {
 				List<String> list = params.computeIfAbsent(desc, Helpers.fnArrayList());

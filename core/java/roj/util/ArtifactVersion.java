@@ -5,6 +5,7 @@ import roj.collect.ArrayList;
 import roj.collect.IntList;
 import roj.config.node.ConfigValue;
 import roj.text.CharList;
+import roj.text.FastNumberParser;
 import roj.text.TextUtil;
 
 import java.util.Locale;
@@ -50,7 +51,7 @@ public final class ArtifactVersion {
 					if (foundSplitter) {
 						foundSplitter = false;
 
-						items.add(TextUtil.parseInt(sb));
+						items.add(FastNumberParser.parseInt(sb));
 						sb.clear();
 					}
 
@@ -61,7 +62,7 @@ public final class ArtifactVersion {
 				}
 			}
 			if (sb.length() != 0) {
-				items.add(TextUtil.parseInt(sb));
+				items.add(FastNumberParser.parseInt(sb));
 				sb.clear();
 			}
 
@@ -78,7 +79,7 @@ public final class ArtifactVersion {
 		if (tag != null && !tag.isBlank()) {
 			for (String t : splittedTag) {
 				if (TextUtil.isNumber(t) == 0) {
-					if (TextUtil.isNumber(t, TextUtil.INT_MAXS) == 0) {
+					if (TextUtil.isNumber(t, FastNumberParser.INT_MAXS) == 0) {
 						tags.add((Comparable<?>) ConfigValue.valueOf(Integer.parseInt(t)));
 					} else {
 						tags.add((Comparable<?>) ConfigValue.valueOf(Long.parseLong(t)));
@@ -101,12 +102,10 @@ public final class ArtifactVersion {
 		}
 		this.tags = tags.toArray(new Comparable<?>[tags.size()]);
 
-		if (tag != null) {
-			canonical = sb.append(tag).toString();
-		} else {
-			sb.setLength(sb.length()-1);
-			canonical = sb.toString();
-		}
+		if (tag != null) sb.append(tag);
+		else sb.setLength(sb.length()-1);
+
+		canonical = sb.toStringAndFree();
 	}
 
 	public int compareTo(@NotNull ArtifactVersion o) {
@@ -130,6 +129,8 @@ public final class ArtifactVersion {
 		}
 		return tags.length - o.tags.length;
 	}
+
+	public String getCanonical() {return canonical;}
 
 	@Override
 	public final boolean equals(Object object) {

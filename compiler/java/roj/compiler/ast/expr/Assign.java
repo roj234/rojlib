@@ -79,7 +79,7 @@ final class Assign extends Expr {
 	}
 
 	static void incOrDec(LeftValue expr, MethodWriter cw, boolean noRet, boolean returnBefore, int amount) {
-		var ctx = CompileContext.get();
+		var ctx = cw.ctx;
 		boolean isVariable = false;
 
 		IType type = expr.type();
@@ -181,12 +181,10 @@ final class Assign extends Expr {
 			}
 			if ((short)value != value) break block;
 
-			var ctx = CompileContext.get();
-
-			ctx.loadVar(lv.v);
+			cw.ctx.loadVar(lv.v);
 			cw.iinc(lv.v, value);
 			if (!noRet) left.write(cw);
-			ctx.storeVar(lv.v);
+			cw.ctx.storeVar(lv.v);
 			return true;
 		}
 

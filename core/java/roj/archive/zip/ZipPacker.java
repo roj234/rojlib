@@ -3,6 +3,7 @@ package roj.archive.zip;
 import org.intellij.lang.annotations.MagicConstant;
 import org.jetbrains.annotations.NotNull;
 import roj.archive.ArchivePacker;
+import roj.crypt.CRC32;
 import roj.io.MBOutputStream;
 import roj.io.source.CompositeSource;
 import roj.io.source.FileSource;
@@ -60,37 +61,47 @@ public class ZipPacker extends MBOutputStream implements ArchivePacker<ZipFile, 
 			long modTime
 	) throws IOException {
 		if (impl.entry != null) closeEntry();
-		if (name.endsWith("/")) throw new ZipException("目录不是空的: "+name);
+		if (name.endsWith("/")) throw new ZipException("目录不能具有数据: "+name);
 
 		var entry = new ZipEntry(name);
 		entry.setMethod(method);
 		entry.setModificationTime(modTime);
 		entry.setGeneralPurposeFlags(GP_UFS);
-		writeNamed(entry, data);
+		write(entry, data);
 	}
-	public void writeNamed(ZipEntry entry, DynByteBuf data) throws IOException {
+	@Override
+	public void write(ZipEntry entry, DynByteBuf data) throws IOException {
 		// 内存缓冲区的大小不可能超过2GB，更不用说4GB了
-		beginEntry(entry, false, null);
+		if (impl.entry != null) closeEntry();
 
+		entry.crc32 = CRC32.crc32(data);
+		entry.size = data.readableBytes();
+		impl.beginEntry(entry, false, false, password);
 		impl.write(data, true);
 		//assert impl.compressedSize <= 0xFFFFFFFFL : "布什硌门，你怎么还能越压越大的？";
 		closeEntry();
 	}
 
 	@Override
-	public void copy(ZipFile owner, ZipEntry entry) throws IOException {
+	public void copy(ZipFile owner, ZipEntry entry) throws IOException {copy(owner, entry, false);}
+	public void copy(ZipFile owner, ZipEntry entry, boolean headerChanged) throws IOException {
 		if (impl.entry != null) closeEntry();
 
 		var rawOut = impl.rawOut;
 
 		long entryBeginOffset = rawOut.position();
 
-		// 20250221 fixed 不知道长度的Entry经过openEntry已经知道了，所以需要更新LOC并移除EXT
 		Source source = owner.openEntry(entry);
+
+		// 20250221 fixed 不知道长度的Entry经过openEntry已经知道了，所以更新LOC并移除EXT
+		if ((entry.flags & GP_HAS_EXT) != 0 && entry.getCompressedSize() != 0) {
+			entry = entry.clone();
+			entry.flags &= ~GP_HAS_EXT;
+			headerChanged = true;
+		}
+
 		try {
-			if ((entry.flags & GP_HAS_EXT) != 0 && entry.getCompressedSize() != 0) {
-				entry = entry.clone();
-				entry.flags &= ~GP_HAS_EXT;
+			if (headerChanged) {
 				writeLOC(rawOut, buf, entry);
 				rawOut.put(source, entry.getOffset(), entry.getCompressedSize());
 			} else {

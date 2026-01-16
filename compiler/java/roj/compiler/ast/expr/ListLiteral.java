@@ -58,12 +58,12 @@ final class ListLiteral extends Expr {
 		cw.clazz(ANEWARRAY, type.typeParameters.get(0).rawType().owner);
 
 		var vType = type.typeParameters.get(0);
-		var lc = CompileContext.get();
+		var ctx = cw.ctx;
 		for (int i = 0; i < elements.size(); i++) {
 			cw.insn(DUP);
 			cw.ldc(i);
 			var node = elements.get(i);
-			node.write(cw, lc.castTo(node.type(), vType, 0));
+			node.write(cw, ctx.castTo(node.type(), vType, 0));
 			cw.insn(AASTORE);
 		}
 

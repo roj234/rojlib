@@ -26,7 +26,7 @@ public enum ConfigMaster {
 	BENCODE, NBT, XNBT, MSGPACK, JSON, YAML, XML, TOML, INI, CSV;
 
 	public static ConfigMaster fromExtension(File path) {
-		String ext = IOUtil.extensionName(path.getName());
+		String ext = IOUtil.getExtension(path.getName());
 		return switch (ext) {
 			case "yml", "yaml" -> YAML;
 			case "xml" -> XML;

@@ -147,9 +147,9 @@ public final class MethodNode extends MemberNode {
 		Annotations a;
 
 		if (getAttribute("Deprecated") != null) sb.padEnd(' ', prefix).append("@Deprecated").append('\n');
-		a = getAttribute(cp, Attribute.RtAnnotations);
+		a = getAttribute(cp, Attribute.VisibleAnnotations);
 		if (a != null) a.toString(sb, prefix);
-		a = getAttribute(cp, Attribute.ClAnnotations);
+		a = getAttribute(cp, Attribute.InvisibleAnnotations);
 		if (a != null) a.toString(sb, prefix);
 
 		sb.padEnd(' ', prefix);
@@ -181,8 +181,8 @@ public final class MethodNode extends MemberNode {
 				var modifiers = getAttribute(cp, Attribute.MethodParameters);
 				// 警告: 规范不要求注解必须按descriptor排序，编译器可以让第0个表示用户显式提供的参数，而不是标识符的第0个
 				//https://docs.oracle.com/javase/specs/jvms/se17/html/jvms-4.html#jvms-4.7.18
-				var a1 = getAttribute(cp, Attribute.ClParameterAnnotations);
-				var a2 = getAttribute(cp, Attribute.RtParameterAnnotations);
+				var a1 = getAttribute(cp, Attribute.InvisibleParameterAnnotations);
+				var a2 = getAttribute(cp, Attribute.VisibleParameterAnnotations);
 				Code code;
 				try {
 					code = getAttribute(cp, Attribute.Code);

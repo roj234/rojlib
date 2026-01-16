@@ -17,6 +17,4 @@ import java.lang.annotation.Target;
 public @interface CompilerPlugin {
 	String name();
 	String desc();
-	boolean instance() default false;
-	String init() default "pluginInit";
 }

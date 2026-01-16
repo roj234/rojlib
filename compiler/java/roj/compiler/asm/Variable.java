@@ -3,13 +3,13 @@ package roj.compiler.asm;
 import org.jetbrains.annotations.Nullable;
 import roj.asm.attr.LocalVariableTable;
 import roj.asm.type.IType;
-import roj.collect.IntervalPartition;
+import roj.collect.SweepLine;
 
 /**
  * @author Roj234
  * @since 2023/9/24 4:27
  */
-public class Variable extends LocalVariableTable.Item implements IntervalPartition.Range {
+public class Variable extends LocalVariableTable.Item implements SweepLine.Range {
 	public Variable(String name, IType type) { super(name, type); slot = -1; }
 
 	public boolean isFinal, hasValue;
@@ -34,9 +34,6 @@ public class Variable extends LocalVariableTable.Item implements IntervalPartiti
 	 * * NestContext把这个设为0(magic number) 来阻止已知slot的立即序列化
 	 */
 	public int pos;
-
-	// (WIP) 基于VisMap分区返回的占用状态：解决生命周期黑洞问题
-	public IntervalPartition<?> complexStartEnd;
 
 	public long startPos() { return start.getValue(); }
 	public long endPos() { return end.getValue(); }

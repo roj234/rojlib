@@ -107,7 +107,7 @@ public class IterablePriorityQueue<E> extends AbstractCollection<E> {
 
 	@SuppressWarnings("unchecked")
 	public E remove(int idx) {
-		if (idx >= size) throw new ArrayIndexOutOfBoundsException(idx);
+		Objects.checkIndex(idx, size);
 
 		Object[] data1 = this.entries;
 		E e = (E) data1[idx];

@@ -102,7 +102,7 @@ class MHtml extends MultipartParser implements Unpacker {
 		try {
 			URI url1 = new URI(url);
 			url = url1.getHost() + url1.getPath();
-			url = IOUtil.normalizePath(url);
+			url = IOUtil.normalize(url);
 			if (url.endsWith("/")) url += "index.html";
 		} catch (URISyntaxException e) {
 			e.printStackTrace();

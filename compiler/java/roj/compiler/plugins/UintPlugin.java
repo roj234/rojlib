@@ -65,7 +65,7 @@ public final class UintPlugin extends InvokeHook implements Library, Compiler.Ex
 			mustBeStatement(cast);
 			IType type = left.type();
 			if (type.getActualType() != 'L' && !type.isPrimitive()) type = Type.primitive(type.getActualType());
-			left.write(cw, CompileContext.get().castTo(type, Type.primitive(is64 < 2 ? Type.INT : Type.LONG), TypeCast.DOWNCAST));
+			left.write(cw, cw.ctx.castTo(type, Type.primitive(is64 < 2 ? Type.INT : Type.LONG), TypeCast.DOWNCAST));
 		}
 	}
 
@@ -90,7 +90,7 @@ public final class UintPlugin extends InvokeHook implements Library, Compiler.Ex
 
 	private final ClassNode Uint32, Uint64;
 	private final MethodNode u32ToString, u32FromString, u64ToString, u64FromString;
-	public UintPlugin() {
+	public UintPlugin(Compiler api) {
 		Uint32 = new ClassNode();
 		Uint32.name("uint32");
 		Uint32.parent(null);
@@ -128,26 +128,6 @@ public final class UintPlugin extends InvokeHook implements Library, Compiler.Ex
 		Uint64.methods.add(m1);
 
 		//for (MethodNode node : exprRef) node.putAttr(this);
-	}
-
-	@Override public ClassNode get(CharSequence name) {
-		if (name.equals("uint32")) {return Uint32;}
-		if (name.equals("uint64")) {return Uint64;}
-		return null;
-	}
-	@Override public String toString() {return "Plugin<uint>";}
-	@Override public Expr eval(MethodNode owner, @Nullable Expr that, List<Expr> args, Invoke node) {
-		boolean is32 = owner.owner().equals("uint32");
-		if (owner.name().equals("parse")) {
-			return is32
-				? _u32(Invoke.staticMethod(u32FromString, that))
-				: _u64(Invoke.staticMethod(u64FromString, that));
-		} else {
-			return Invoke.staticMethod(is32?u32ToString:u64ToString, _i32(that));
-		}
-	}
-
-	public void pluginInit(Compiler api) {
 		api.addLibrary(this);
 
 		api.addOpHandler("(", this); // 窄化转型失败 (cast)
@@ -172,6 +152,23 @@ public final class UintPlugin extends InvokeHook implements Library, Compiler.Ex
 		api.addOpHandler("|", this);
 		api.addOpHandler("^", this);
 		//api.onOperator(">>>", math);
+	}
+
+	@Override public ClassNode get(CharSequence name) {
+		if (name.equals("uint32")) {return Uint32;}
+		if (name.equals("uint64")) {return Uint64;}
+		return null;
+	}
+	@Override public String toString() {return "Plugin<uint>";}
+	@Override public Expr eval(MethodNode owner, @Nullable Expr that, List<Expr> args, Invoke node) {
+		boolean is32 = owner.owner().equals("uint32");
+		if (owner.name().equals("parse")) {
+			return is32
+				? _u32(Invoke.staticMethod(u32FromString, that))
+				: _u64(Invoke.staticMethod(u64FromString, that));
+		} else {
+			return Invoke.staticMethod(is32?u32ToString:u64ToString, _i32(that));
+		}
 	}
 
 	@Override

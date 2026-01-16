@@ -13,14 +13,14 @@ import java.util.function.Predicate;
  * @since 2024/7/22 23:18
  */
 public class PathRouter implements Router, Predicate<String> {
-	public final String path;
-	public PathRouter(String path) {this.path = new File(path).getAbsolutePath();}
-	public PathRouter(File path) {this.path = path.getAbsolutePath();}
+	public final File path;
+	public PathRouter(String path) {this.path = new File(path);}
+	public PathRouter(File path) {this.path = path;}
 
 	@Override
 	public Content response(Request req, Response resp) throws IOException {
 		String url = req.path();
-		var file = IOUtil.safePath(path, url);
+		var file = IOUtil.resolveSafe(path, url);
 		if (file == null) {
 			resp.code(500);
 			Logger.getLogger().fatal("啊呀呀，你写的路径过滤被绕过了！路径是："+url);
@@ -45,7 +45,7 @@ public class PathRouter implements Router, Predicate<String> {
 	// (Optional) for OKRouter Prefix Delegation check
 	@Override
 	public boolean test(String url) {
-		var file = IOUtil.safePath(path, url);
+		var file = IOUtil.resolveSafe(path, url);
 		return file != null && file.exists();
 	}
 }

@@ -40,7 +40,7 @@ final class PostfixOp extends Expr {
 
 		IType type = node.type();
 		int actualType = type.getActualType();
-		if (actualType == Type.CLASS) {
+		if (actualType == Type.OBJECT) {
 			actualType = TypeCast.getWrappedPrimitive(type);
 			if (actualType == 0) {
 				Expr override = ctx.getOperatorOverride(left, null, op | CompileContext.UNARY_POST);

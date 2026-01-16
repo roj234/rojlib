@@ -1,7 +1,6 @@
 package roj.text;
 
 import org.jetbrains.annotations.NotNull;
-import org.jetbrains.annotations.Range;
 import org.jetbrains.annotations.Unmodifiable;
 import roj.RojLib;
 import roj.collect.ArrayList;
@@ -18,6 +17,7 @@ import java.io.Console;
 import java.io.IOException;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Objects;
@@ -130,17 +130,29 @@ public class TextUtil {
 	 */
 	public static char b2h(int a) { return (char) DIGITS[a&0xF]; }
 
+	private static final byte[] H2B = new byte[55];
+	static {
+		Arrays.fill(H2B, (byte) -1);
+		int start = '0';
+		for (int i = '0'; i <= '9'; i++) {
+			H2B[i - start] = (byte) (i - '0');
+		}
+		for (int i = 'A'; i <= 'F'; i++) {
+			H2B[i - start] = (byte) (i - 'A' + 10);
+		}
+		for (int i = 'a'; i <= 'f'; i++) {
+			H2B[i - start] = (byte) (i - 'a' + 10);
+		}
+	}
 	/**
 	 * hex to byte
 	 */
 	public static int h2b(char c) {
-		if (c < '0' || c > '9') {
-			if ((c >= 'A' && c <= 'F') || ((c = Character.toUpperCase(c)) >= 'A' && c <= 'F')) {
-				return c - 55;
-			}
-			throw new IllegalArgumentException("Not a hex character '"+c+"'");
-		}
-		return c - '0';
+		try {
+			byte b = H2B[c - '0'];
+			if (b >= 0) return b;
+		} catch (ArrayIndexOutOfBoundsException ignored) {}
+		throw new IllegalArgumentException("Not a hex character '"+c+"'");
 	}
 
 	public static byte[] hex2bytes(String str) { return hex2bytes(str, IOUtil.getSharedByteBuf()).toByteArray(); }
@@ -272,7 +284,7 @@ public class TextUtil {
 	 *
 	 * @return -1 不是, 0 整数, 1 小数
 	 */
-	public static int isNumber(CharSequence s) { return isNumber(s, LONG_MAXS); }
+	public static int isNumber(CharSequence s) { return isNumber(s, FastNumberParser.LONG_MAXS); }
 	public static int isNumber(CharSequence s, byte[] max) {
 		if (s == null || s.length() == 0) return -1;
 		int dot = 0;
@@ -295,7 +307,7 @@ public class TextUtil {
 		}
 
 		if (dot > 0) return s.length() == 1 ? -1 : 1;
-		return max != null && !checkMax(max, s, off, s.length(), s.charAt(0) == '-') ? 1 : 0;
+		return max != null && !FastNumberParser.checkMax(max, s, off, s.length(), s.charAt(0) == '-') ? 1 : 0;
 	}
 
 	/**
@@ -337,31 +349,6 @@ public class TextUtil {
 			p = 10*p;
 		}
 		return 19;
-	}
-
-	public static int parseInt(CharSequence s) throws NumberFormatException { return parseInt(s, 0); }
-	public static int parseInt(CharSequence s, @Range(from = 0, to = 3) int radix) throws NumberFormatException {
-		boolean n = s.charAt(0) == '-';
-		return (int) Tokenizer.parseNumber(s, n?1:0, s.length(), radix, n);
-	}
-	public static int parseInt(CharSequence s, int start, int end) throws NumberFormatException {
-		return (int) Tokenizer.parseNumber(s, start, end, 0, false);
-	}
-
-	public static final byte[] INT_MAXS = new byte[] {'2', '1', '4', '7', '4', '8', '3', '6', '4', '8'};
-	public static final byte[] LONG_MAXS = new byte[] {'9', '2', '2', '3', '3', '7', '2', '0', '3', '6', '8', '5', '4', '7', '7', '5', '8', '0', '8'};
-	public static boolean checkMax(byte[] maxs, CharSequence s, int off, int end, boolean negative) {
-		//noinspection StatementWithEmptyBody
-		while (s.charAt(off) == '0' && ++off < end);
-
-		int k = maxs.length + off;
-		if (end != k) return end < k;
-
-		for (int i = off; i < k; i++) {
-			if (s.charAt(i) > maxs[i-off]) return false;
-		}
-
-		return maxs[maxs.length - 1] - s.charAt(k-1) >= (negative?0:1);
 	}
 
 	public static String toFixed(double d) { return toFixed(d, 5); }

@@ -93,10 +93,7 @@ public class TaskPool implements ExecutorService {
 
 	public void setExceptionHandler(Thread.UncaughtExceptionHandler handler) {exceptionHandler = handler;}
 
-	@Override
-	public TaskGroup newGroup() {
-		return newGroup(Thread.currentThread() instanceof PoolThread impl && impl.pool() == this);
-	}
+	public boolean isOnExecutor() {return Thread.currentThread() instanceof PoolThread impl && impl.pool() == this;}
 
 	@Override
 	public void execute(@Async.Schedule Runnable task) {

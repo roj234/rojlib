@@ -6,7 +6,6 @@ import java.io.DataInput;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
-import java.nio.channels.FileChannel;
 import java.nio.file.Files;
 
 /**
@@ -22,7 +21,7 @@ public class CacheSource extends Source {
 	public CacheSource() { this(0, Integer.MAX_VALUE); }
 	public CacheSource(int initMem, int maxMemory) { this(initMem, maxMemory, null, null); }
 	public CacheSource(int initMem, int maxMemory, String prefix, File folder) {
-		this.source = new ByteSource(DynByteBuf.allocateDirect(initMem, maxMemory));
+		this.source = new MemorySource(DynByteBuf.allocateDirect(initMem, maxMemory));
 		this.maxLength = maxMemory;
 		this.next = folder;
 		this.prefix = prefix;
@@ -44,8 +43,6 @@ public class CacheSource extends Source {
 	public long position() throws IOException { return source.position(); }
 	public void setLength(long length) throws IOException { if (prefix != null && length > maxLength) convert(); source.setLength(length); }
 	public long length() throws IOException { return source.length(); }
-	public boolean hasChannel() { return source.hasChannel(); }
-	public FileChannel channel() { return source.channel(); }
 	public DynByteBuf buffer() { return source.buffer(); }
 	public synchronized void close() throws IOException {
 		if (source == null) return;

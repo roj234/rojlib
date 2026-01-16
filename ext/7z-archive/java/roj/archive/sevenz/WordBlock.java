@@ -3,7 +3,6 @@ package roj.archive.sevenz;
 import roj.collect.IntMap;
 import roj.text.TextUtil;
 import roj.util.ArrayCache;
-import roj.util.ArrayUtil;
 
 import java.io.FilterOutputStream;
 import java.io.IOException;
@@ -106,10 +105,8 @@ public final class WordBlock {
 		}
 		@Override
 		public void write(byte[] b, int off, int len) throws IOException {
-			if (len > 0) {
-				out.write(b, off, len);
-				inc(len);
-			} else if (len < 0) ArrayUtil.checkRange(b, off, len);
+			out.write(b, off, len);
+			inc(len);
 		}
 
 		private void inc(int len) { if (id >= 0) outSizes[id] += len; else size += len; }

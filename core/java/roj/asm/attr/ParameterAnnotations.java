@@ -16,7 +16,7 @@ public final class ParameterAnnotations extends Attribute {
 	public static final String VISIBLE = "RuntimeVisibleParameterAnnotations", INVISIBLE = "RuntimeInvisibleParameterAnnotations";
 
 	public static List<List<Annotation>> getParameterAnnotation(ConstantPool cp, MethodNode m, boolean vis) {
-		ParameterAnnotations pa = m.getAttribute(cp, vis ? RtParameterAnnotations : ClParameterAnnotations);
+		ParameterAnnotations pa = m.getAttribute(cp, vis ? VisibleParameterAnnotations : InvisibleParameterAnnotations);
 		return pa == null ? null : pa.annotations;
 	}
 

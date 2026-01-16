@@ -11,6 +11,8 @@ import roj.util.OperationDone;
  * @since 2025/10/26 3:25
  */
 public class PseudoType implements IType {
+	public static final int PSEUDO_TYPE = 9;
+
 	private String typename;
 	private Type bound;
 
@@ -22,7 +24,7 @@ public class PseudoType implements IType {
 	public TypeCast.Cast castTo(IType type) {return TypeCast.ERROR(TypeCast.IMPOSSIBLE);}
 	public TypeCast.Cast castFrom(IType type) {return TypeCast.ERROR(TypeCast.IMPOSSIBLE);}
 
-	@Override public byte kind() { return USER_DEFINED_TYPE; }
+	@Override public byte kind() { return PSEUDO_TYPE; }
 	@Override public void toDesc(CharList sb) { bound.toDesc(sb); }
 
 	@Override public boolean isPrimitive() { return bound.isPrimitive(); }

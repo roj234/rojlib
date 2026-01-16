@@ -182,7 +182,7 @@ public class EventBus {
 
 			List<ListenerInfo> objectList = new ArrayList<>(), staticList = new ArrayList<>();
 			for (var mn : data.methods) {
-				var annotations = mn.getAttribute(data.cp, Attribute.ClAnnotations);
+				var annotations = mn.getAttribute(data.cp, Attribute.InvisibleAnnotations);
 				if (annotations == null) continue;
 				for (var annotation : annotations.annotations) {
 					if (annotation.type().equals(SUBSCRIBE_NAME)) {

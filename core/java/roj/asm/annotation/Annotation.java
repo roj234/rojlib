@@ -3,7 +3,7 @@ package roj.asm.annotation;
 import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.NotNull;
 import roj.asm.Attributed;
-import roj.asm.attr.Attribute;
+import roj.asm.attr.Annotations;
 import roj.asm.cp.ConstantPool;
 import roj.asm.cp.CstUTF;
 import roj.asm.type.Type;
@@ -148,27 +148,18 @@ public class Annotation extends MapValue {
 		return null;
 	}
 
-	public static Annotation findInvisible(ConstantPool cp, Attributed node, String type) {
-		var attr = node.getAttribute(cp, Attribute.ClAnnotations);
-		if (attr != null) {
-			var list = attr.annotations;
-			for (int i = 0; i < list.size(); i++) {
-				var a = list.get(i);
-				if (a.type().equals(type)) return a;
+	public static Annotation poll(List<Annotation> list, String type) {
+		for (int i = 0; i < list.size(); i++) {
+			var a = list.get(i);
+			if (a.type().equals(type)) {
+				list.remove(i);
+				return a;
 			}
 		}
 		return null;
 	}
 
-	public static Annotation findVisible(ConstantPool cp, Attributed node, String type) {
-		var attr = node.getAttribute(cp, Attribute.RtAnnotations);
-		if (attr != null) {
-			var list = attr.annotations;
-			for (int i = 0; i < list.size(); i++) {
-				var a = list.get(i);
-				if (a.type().equals(type)) return a;
-			}
-		}
-		return null;
+	public static Annotation findInvisible(ConstantPool cp, Attributed node, String type) {
+		return find(Annotations.getAnnotations(cp, node, false), type);
 	}
 }

@@ -1,12 +1,12 @@
 package roj.plugins.unpacker;
 
 import roj.collect.CollectionX;
-import roj.util.OperationDone;
 import roj.io.IOUtil;
 import roj.plugin.Plugin;
 import roj.plugin.SimplePlugin;
 import roj.ui.Argument;
 import roj.ui.CommandContext;
+import roj.util.OperationDone;
 
 import java.io.File;
 import java.io.IOException;
@@ -46,7 +46,7 @@ public class UnpackerPlugin extends Plugin {
 
 	private void autoUnpack(CommandContext ctx) {
 		File file = ctx.argument("in", File.class);
-		String ext = IOUtil.extensionName(file.getName());
+		String ext = IOUtil.getExtension(file.getName());
 		if (ext.equals("har") || ext.equals("asar") || ext.equals("mhtml")) {
 			ctx.put("packType", ext);
 		} else if (ext.equals("pkg")) {

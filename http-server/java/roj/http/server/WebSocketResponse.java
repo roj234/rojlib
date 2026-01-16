@@ -1,6 +1,7 @@
 package roj.http.server;
 
 import roj.crypt.CryptoFactory;
+import roj.http.Headers;
 import roj.http.HttpUtil;
 import roj.http.WebSocket;
 import roj.io.IOUtil;
@@ -27,7 +28,7 @@ final class WebSocketResponse implements ResponseFinishHandler {
 		}
 
 		String key = req.header("sec-websocket-key");
-		rh.code(HttpUtil.SWITCHING_PROTOCOL).headers().putAllS("""
+		rh.code(HttpUtil.SWITCHING_PROTOCOL).headers().parseFromText("""
 			upgrade: websocket\r
 			connection: Upgrade\r
 			sec-websocket-version: 13""");
@@ -38,36 +39,48 @@ final class WebSocketResponse implements ResponseFinishHandler {
 		//magic number而已
 		sha1.update(buf.putAscii(key).putAscii("258EAFA5-E914-47DA-95CA-C5AB0DC85B11").list, 0, buf.wIndex());
 
-		rh.setHeader("Sec-WebSocket-Accept", IOUtil.encodeBase64(sha1.digest()));
+		rh.setHeader("sec-webSocket-accept", IOUtil.encodeBase64(sha1.digest()));
 		if (!protocol.isEmpty()) rh.setHeader("sec-websocket-protocol", protocol);
 
-		boolean zip;
-		String ext = req.header("sec-websocket-extensions");
-		//noinspection AssignmentUsedAsCondition
-		if (zip = ext.contains("permessage-deflate")) {
-			rh.setHeader("sec-websocket-extensions", "permessage-deflate");
-			// "Per-Message Compressed": RSV1 => compressed bit
+		int compression = 0;
+		var clientExt = req.getElement("sec-websocket-extensions");
+		if (clientExt.containsKey("permessage-deflate")) {
+			var serverExt = new Headers.HeaderElement();
+			serverExt.add("permessage-deflate");
+
+			compression |= WebSocket.COMPRESS_AVAILABLE;
+			if (clientExt.containsKey("client_no_context_takeover")) {
+				serverExt.add("client_no_context_takeover");
+				compression |= WebSocket.REMOTE_NO_CTX;
+			}
+
+			// JVM的Deflater设置这个不太行
+			/*if (serverExt.contains("client_max_window_bits")) {
+
+			}*/
+
+			rh.setHeader("sec-websocket-extensions", serverExt.toString());
 		}
 
-		rh.onFinish(new WebSocketResponse(newHandler, req, zip));
+		rh.onFinish(new WebSocketResponse(newHandler, req, compression));
 		return null;
 	}
 
 	private final Function<Request, WebSocket> newHandler;
 	private final Request req;
-	private final boolean zip;
-	private WebSocketResponse(Function<Request, WebSocket> handler, Request req, boolean zip) {
+	private final byte compression;
+	private WebSocketResponse(Function<Request, WebSocket> handler, Request req, int compression) {
 		newHandler = handler;
 		this.req = req;
-		this.zip = zip;
+		this.compression = (byte) compression;
 	}
 
 	@Override
 	public boolean onResponseFinish(Response response, boolean success) {
-		WebSocket h;
-		if (!success || (h = newHandler.apply(req)) == null) return false;
-		if (zip) h.enableZip();
-		response.connection().addLast("WS-Handler", h);
+		WebSocket ws;
+		if (!success || (ws = newHandler.apply(req)) == null) return false;
+		ws.setCompression(compression);
+		response.connection().addLast("WS-Handler", ws);
 		return true;
 	}
 }

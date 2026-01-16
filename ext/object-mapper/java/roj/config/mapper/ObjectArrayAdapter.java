@@ -25,6 +25,7 @@ final class ObjectArrayAdapter extends TypeAdapter {
 			ctx.setRef(buf.toArray((Object[]) Array.newInstance(type,buf.size())));
 			ctx.releaseBuffer(buf);
 		}
+		ctx.fieldState = 1;
 	}
 
 	@Override

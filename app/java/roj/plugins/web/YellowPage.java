@@ -20,10 +20,7 @@ import roj.io.IOUtil;
 import roj.plugin.PermissionHolder;
 import roj.plugin.Plugin;
 import roj.plugin.PluginDescriptor;
-import roj.text.CharList;
-import roj.text.Formatter;
-import roj.text.ParseException;
-import roj.text.TextUtil;
+import roj.text.*;
 import roj.util.ByteList;
 import roj.util.TypedKey;
 
@@ -96,7 +93,7 @@ public class YellowPage extends Plugin implements TableReader {
 		db.add(row.get(2) == null ? row.get(0) : row.get(0)+"——"+ s +"《"+row.get(2)+"》");
 	}
 
-	private static String checkNumber(String id) {return TextUtil.isNumber(id, TextUtil.INT_MAXS) == 0 ? id : "-1";}
+	private static String checkNumber(String id) {return TextUtil.isNumber(id, FastNumberParser.INT_MAXS) == 0 ? id : "-1";}
 
 	@POST("set/:id(\\d+)")
 	public String set(Request req) {
@@ -174,7 +171,7 @@ public class YellowPage extends Plugin implements TableReader {
 
 		try {
 			List<List<String>> parse = (List<List<String>>) ConfigMaster.JSON.parse(req.body()).unwrap();
-			IOUtil.writeFileEvenMoreSafe(getDataFolder(), "data/"+uid+".csv", file -> {
+			IOUtil.writeAtomically(getDataFolder(), "data/"+uid+".csv", file -> {
 				try (var csv = TableWriter.csvWriter(file)) {
 					for (List<String> strings : parse) {
 						csv.writeRow(strings);

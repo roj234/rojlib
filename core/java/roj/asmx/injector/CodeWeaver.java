@@ -306,7 +306,7 @@ public class CodeWeaver implements Transformer {
 			MethodNode method = methods.get(i);
 			String name = method.name();
 			if (name.startsWith("$$$")) {
-				if (method.getAttribute(Attribute.ClAnnotations.name) != null)
+				if (method.getAttribute(Attribute.InvisibleAnnotations.name) != null)
 					throw new WeaveException("特殊方法("+name+")不能包含注解");
 
 				if (!name.startsWith(MARKER_InitSuper)) {
@@ -479,7 +479,7 @@ public class CodeWeaver implements Transformer {
 	private static String internalName(String className) { return className.replace('.', '/'); }
 
 	private static Map<String, Annotation> getAnnotations(Attributed node, ClassNode data) {
-		Annotations attr = node.getAttribute(data.cp, Attribute.ClAnnotations);
+		Annotations attr = node.getAttribute(data.cp, Attribute.InvisibleAnnotations);
 		if (attr == null || attr.writeIgnore()) return Collections.emptyMap();
 		HashMap<String, Annotation> map = new HashMap<>(attr.annotations.size());
 		List<Annotation> annotations = attr.annotations;

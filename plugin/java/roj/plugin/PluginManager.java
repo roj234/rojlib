@@ -50,7 +50,7 @@ public class PluginManager {
 		File[] plugins = pluginFolder.listFiles();
 		if (plugins == null) return;
 		for (File file : plugins) {
-			String ext = IOUtil.extensionName(file.getName());
+			String ext = IOUtil.getExtension(file.getName());
 			if (ext.equals("jar") || ext.equals("zip")) findPlugin(file);
 		}
 	}

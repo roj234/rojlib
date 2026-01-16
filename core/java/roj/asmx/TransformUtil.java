@@ -59,7 +59,7 @@ public class TransformUtil {
 
 		switch (t.getActualType()) {
 			//case VOID -> {}
-			case CLASS -> cw.insn(ACONST_NULL);
+			case OBJECT -> cw.insn(ACONST_NULL);
 			case BOOLEAN, BYTE, CHAR, SHORT, INT -> cw.insn(ICONST_0);
 			case FLOAT -> cw.insn(FCONST_0);
 			case DOUBLE -> cw.insn(DCONST_0);

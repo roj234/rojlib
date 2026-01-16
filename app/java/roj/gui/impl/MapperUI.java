@@ -26,10 +26,11 @@ import java.awt.*;
 import java.io.File;
 import java.io.IOException;
 import java.nio.charset.Charset;
+import java.nio.file.attribute.BasicFileAttributes;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import java.util.function.Predicate;
+import java.util.function.BiPredicate;
 import java.util.regex.Pattern;
 
 /**
@@ -66,7 +67,7 @@ public class MapperUI extends JFrame {
 			} else if (f.isFile()) {
 				lib.add(f);
 			} else {
-				lib.addAll(IOUtil.listFiles(f, jarFilter()));
+				IOUtil.listFiles(f, lib, jarFilter());
 			}
 		}
 
@@ -167,9 +168,9 @@ public class MapperUI extends JFrame {
 			zfw.finish();
 		}
 	}
-	private static Predicate<File> jarFilter() {
-		return fn -> {
-			String ext = IOUtil.extensionName(fn.getName());
+	private static BiPredicate<String, BasicFileAttributes> jarFilter() {
+		return (pathname, attr) -> {
+			String ext = IOUtil.getExtension(pathname);
 			return ext.equals("jar") || ext.equals("zip");
 		};
 	}

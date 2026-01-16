@@ -67,10 +67,10 @@ public class KeyStorePlugin extends Plugin {
 			var type = map.getString("type");
 
 			if (type.equals("standard")) {
-				loadCertificateAndKeys(IOUtil.resolvePath(getDataFolder(), map.getString("certificate")), IOUtil.resolvePath(getDataFolder(), map.getString("privateKey")), alias);
+				loadCertificateAndKeys(IOUtil.resolve(getDataFolder(), map.getString("certificate")), IOUtil.resolve(getDataFolder(), map.getString("privateKey")), alias);
 			} else if (type.startsWith("rojlib.")) {
 				var password = map.getString("pass");
-				KeyPair keyPair = KeyType.getInstance(type.substring(7)).loadKey(password.getBytes(StandardCharsets.UTF_8), IOUtil.resolvePath(getDataFolder(), map.getString("file")));
+				KeyPair keyPair = KeyType.getInstance(type.substring(7)).loadKey(password.getBytes(StandardCharsets.UTF_8), IOUtil.resolve(getDataFolder(), map.getString("file")));
 
 				publicKeys.put(alias, Either.right(keyPair.getPublic()));
 				privateKeys.put(alias, keyPair.getPrivate());
@@ -90,7 +90,7 @@ public class KeyStorePlugin extends Plugin {
 		Command load = ctx -> {
 			var pem = ctx.argument("证书pem", File.class);
 			var key = ctx.argument("私钥key", File.class);
-			var name = ctx.argument("别名", String.class, IOUtil.fileName(key.getName()));
+			var name = ctx.argument("别名", String.class, IOUtil.getBaseName(key.getName()));
 
 			loadCertificateAndKeys(pem, key, name);
 		};

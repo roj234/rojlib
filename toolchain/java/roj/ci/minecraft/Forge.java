@@ -55,7 +55,7 @@ final class Forge extends MinecraftWorkspace {
 
 		Mapper mapper;
 
-		if (IOUtil.extensionName(com2int.getName()).equals("yml")) {
+		if (IOUtil.getExtension(com2int.getName()).equals("yml")) {
 			var context = new HashMap<String, ExceptionalSupplier<File, IOException>>();
 			var arguments = clientInfo.gameArguments;
 			var mcVersion = arguments.get(arguments.indexOf("--fml.mcVersion")+1);
@@ -145,7 +145,7 @@ final class Forge extends MinecraftWorkspace {
 		}
 
 		var combinedCache = new File(CACHE_PATH, "gen-"+mcVersion+"-Forge"+forgeVersion+"_srg.jar");
-		IOUtil.movePath(tempArchive, combinedCache, true);
+		IOUtil.copyOrMove(tempArchive, combinedCache, true);
 
 		bar.setName("映射");
 		bar.increment();

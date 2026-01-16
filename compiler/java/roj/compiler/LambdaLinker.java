@@ -78,15 +78,15 @@ public class LambdaLinker implements LambdaCompiler {
 		api.addLibrary(Resolver.Libs.SELF);
 
 		Evaluator.pluginInit(api);
-		new AsmPlugin().pluginInit(api);
-		AnnotationsPlugin.pluginInit(api);
-		new MoreOpPlugin().pluginInit(api);
-		new TypeDeclPlugin().pluginInit(api);
-		new UintPlugin().pluginInit(api);
-		new TestPlugin().pluginInit(api);
+		new AsmPlugin(api);
+		new AnnotationsPlugin(api);
+		new MoreOpPlugin(api);
+		new TypeDeclPlugin(api);
+		new UintPlugin(api);
+		new TestPlugin(api);
 		TimeUnitPlugin.pluginInit(api);
-		new StreamChainPlugin().pluginInit(api);
-		new ComparisonChainPlugin().pluginInit(api);
+		new StreamChainPlugin(api);
+		new ComparisonChainPlugin(api);
 	}
 
 	@Override

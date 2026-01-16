@@ -9,6 +9,7 @@ import roj.util.Multisort;
 
 import java.util.Arrays;
 import java.util.ListIterator;
+import java.util.Objects;
 import java.util.PrimitiveIterator;
 
 /**
@@ -84,11 +85,11 @@ public class IntList implements Iterable<Integer> {
 		return true;
 	}
 
-	public boolean addAll(int i, int[] ints) {
-		if (i > size) throw new ArrayIndexOutOfBoundsException(i);
+	public boolean addAll(int index, int[] ints) {
+		Objects.checkIndex(index, size+1);
 		ensureCapacity(size + ints.length);
-		System.arraycopy(list, i, list, i + ints.length, size - i);
-		System.arraycopy(ints, 0, list, i, ints.length);
+		System.arraycopy(list, index, list, index + ints.length, size - index);
+		System.arraycopy(ints, 0, list, index, ints.length);
 		size += ints.length;
 		return true;
 	}
@@ -96,31 +97,31 @@ public class IntList implements Iterable<Integer> {
 	public void clear() {size = 0;}
 	public void trimToSize() {if (list.length != size) list = Arrays.copyOf(list, size);}
 
-	public int get(int i) {
-		if (i >= size) throw new ArrayIndexOutOfBoundsException(i);
-		return list[i];
+	public int get(int index) {
+		Objects.checkIndex(index, size);
+		return list[index];
 	}
 
-	public int set(int i, int e) {
-		if (i >= size) throw new ArrayIndexOutOfBoundsException(i);
-		int o = list[i];
-		list[i] = e;
+	public int set(int index, int val) {
+		Objects.checkIndex(index, size);
+		int o = list[index];
+		list[index] = val;
 		return o;
 	}
 
-	public void add(int i, int e) {
-		if (i > size) throw new ArrayIndexOutOfBoundsException(i);
+	public void add(int index, int val) {
+		Objects.checkIndex(index, size+1);
 		ensureCapacity(size + 1);
-		if (i != size) System.arraycopy(list, i, list, i + 1, size - i);
-		list[i] = e;
+		if (index != size) System.arraycopy(list, index, list, index + 1, size - index);
+		list[index] = val;
 		size++;
 	}
 
-	public int remove(int i) {
-		if (i >= size) throw new ArrayIndexOutOfBoundsException(i);
+	public int remove(int index) {
+		Objects.checkIndex(index, size);
 
-		int val = list[i];
-		if (size - 1 - i > 0) System.arraycopy(list, i + 1, list, i, size - 1 - i);
+		int val = list[index];
+		if (size - 1 - index > 0) System.arraycopy(list, index + 1, list, index, size - 1 - index);
 		size--;
 		return val;
 	}

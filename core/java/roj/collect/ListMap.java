@@ -6,56 +6,50 @@ import java.util.*;
 
 /**
  * @author Roj234
- * @since 2023/5/17 7:19
+ * @since 2026/1/22 17:01
  */
-public final class ListMap<K, V> extends AbstractMap<K, V> {
-	final IntBiMap<K> index;
-	final List<V> values;
-	int size;
+public class ListMap<K, V> extends AbstractMap<K, V> {
+	protected final List<K> keys;
+	protected final List<V> values;
 
-	public ListMap(IntBiMap<K> index, List<V> values) {
-		this.index = index;
+	public ListMap(@NotNull List<K> keys, @NotNull List<V> values) {
+		this.keys = keys;
 		this.values = values;
-		this.size = values.size();
-		for (int i = 0; i < values.size(); i++) {
-			if (values.get(i) == null) size--;
-		}
 	}
 
-	public int size() {return size;}
-	@SuppressWarnings("unchecked")
+	public int size() {return keys.size();}
 	public boolean containsKey(Object key) {
-		int id = index.getByValueOrDefault((K) key, -1);
-		return id >= 0 && id < values.size() && values.get(id) != null; }
-	public boolean containsValue(Object value) { //noinspection SuspiciousMethodCalls
-		return value != null && values.contains(value); }
+		//noinspection SuspiciousMethodCalls
+		return keys.contains(key);
+	}
+	public boolean containsValue(Object value) {
+		//noinspection SuspiciousMethodCalls
+		return values.contains(value);
+	}
 
 	@Override
 	public V get(Object key) {
-		int i = index.getByValueOrDefault(key.toString(), -1);
-		return i < 0 || i >= values.size() ? null : values.get(i);
+		//noinspection SuspiciousMethodCalls
+		int i = keys.indexOf(key);
+		return i < 0 ? null : values.get(i);
 	}
 
 	@NotNull
 	@Override
 	public Set<Entry<K, V>> entrySet() {
 		return new AbstractSet<>() {
-			public int size() { return size; }
-			public Iterator<Entry<K, V>> iterator() {
+			public int size() { return keys.size(); }
+			public @NotNull Iterator<Entry<K, V>> iterator() {
 				return new AbstractIterator<>() {
-					int i = 0;
+					int i;
 
 					@Override
 					protected boolean computeNext() {
 						if (i == values.size()) return false;
 
-						K key;
-						V val;
-						do {
-							key = index.get(i);
-							val = values.get(i);
-							i++;
-						} while (val == null);
+						K key = keys.get(i);
+						V val = values.get(i);
+						i++;
 
 						result = new SimpleImmutableEntry<>(key, val);
 						return true;

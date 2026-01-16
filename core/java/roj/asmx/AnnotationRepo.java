@@ -48,7 +48,7 @@ public final class AnnotationRepo {
 	}
 	public <T extends ArchiveEntry> void add(ArchiveFile<T> archive) throws IOException {
 		for (var entry : archive.entries()) {
-			if (IOUtil.extensionName(entry.getName()).equals("class")) {
+			if (IOUtil.getExtension(entry.getName()).equals("class")) {
 				addRaw(IOUtil.getSharedByteBuf().readStreamFully(archive.getInputStream(entry)), entry.getName());
 			}
 		}
@@ -94,11 +94,11 @@ public final class AnnotationRepo {
 		}
 	}
 	private void add2(ConstantPool cp, Attributed node, AnnotatedElement info) {
-		Annotations attr = node.getAttribute(cp, Attribute.RtAnnotations);
+		Annotations attr = node.getAttribute(cp, Attribute.VisibleAnnotations);
 		if (attr != null) for (int i = 0; i < attr.annotations.size(); i++) {
 			add3(info, attr.annotations.get(i));
 		}
-		attr = node.getAttribute(cp, Attribute.ClAnnotations);
+		attr = node.getAttribute(cp, Attribute.InvisibleAnnotations);
 		if (attr != null) for (int i = 0; i < attr.annotations.size(); i++) {
 			add3(info, attr.annotations.get(i));
 		}

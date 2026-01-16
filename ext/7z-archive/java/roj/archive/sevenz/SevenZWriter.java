@@ -1,7 +1,5 @@
 package roj.archive.sevenz;
 
-import roj.archive.ArchiveEntry;
-import roj.archive.ArchiveFile;
 import roj.archive.ArchivePacker;
 import roj.collect.ArrayList;
 import roj.config.node.IntValue;
@@ -16,7 +14,7 @@ import java.util.Arrays;
  * @author Roj234
  * @since 2023/3/14 22:08
  */
-public abstract class SevenZWriter extends OutputStream implements ArchivePacker {
+public abstract class SevenZWriter extends OutputStream implements ArchivePacker<SevenZFile, SevenZEntry> {
     Source source;
     public final Source getSource() {return source;}
 
@@ -200,18 +198,16 @@ public abstract class SevenZWriter extends OutputStream implements ArchivePacker
      * @param entry 要复制的条目
      * @throws IOException 当源块包含多个文件 (防止误操作, 如果确需复制多个文件, 使用{@link #copy(SevenZFile, WordBlock) 显式重载})
      */
-    public final void copy(ArchiveFile owner, ArchiveEntry entry) throws IOException {
-        SevenZFile archive = (SevenZFile) owner;
-        SevenZEntry entry1 = (SevenZEntry) entry;
-        if (entry1.uSize == 0) {
-            beginEntry(entry1);
+    public final void copy(SevenZFile owner, SevenZEntry entry) throws IOException {
+        if (entry.uSize == 0) {
+            beginEntry(entry);
             closeEntry();
             return;
         }
-        WordBlock b = entry1.block;
+        WordBlock b = entry.block;
         if (b.fileCount != 1) throw new IOException("写入固实7z字块请使用copy的重载");
 
-        copy(archive, b);
+        copy(owner, b);
     }
     public final void copy(SevenZFile archive, WordBlock b) throws IOException {
         if (b == null) throw new NullPointerException("b");
@@ -232,13 +228,12 @@ public abstract class SevenZWriter extends OutputStream implements ArchivePacker
         }
     }
 
-    public final void beginEntry(ArchiveEntry entry) throws IOException {
-        SevenZEntry ent = (SevenZEntry) entry;
+    public final void beginEntry(SevenZEntry entry) throws IOException {
         if (finished) throw new IOException("Stream closed");
 
         closeEntry();
-        countFlag(ent.flag & ~SevenZEntry.CRC, 1);
-        currentEntry = ent;
+        countFlag(entry.flag & ~SevenZEntry.CRC, 1);
+        currentEntry = entry;
     }
     public final void write(int b) throws IOException {
         if (currentEntry == null) throw new IOException("No active entry");

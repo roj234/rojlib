@@ -2,7 +2,6 @@ package roj.text;
 
 import org.jetbrains.annotations.Contract;
 import org.jetbrains.annotations.Nullable;
-import org.jetbrains.annotations.Range;
 import roj.collect.ArrayList;
 import roj.collect.BitSet;
 import roj.collect.Int2IntMap;
@@ -16,6 +15,7 @@ import roj.util.function.IntBiPredicate;
 import java.io.IOException;
 import java.util.List;
 
+import static roj.text.FastNumberParser.*;
 import static roj.text.Token.*;
 
 /**
@@ -110,7 +110,7 @@ public class Tokenizer {
 				i++;
 				if (i == text.length()) break;
 			}
-			int val = (int) parseNumber(text, j, i, 0);
+			int val = parseInt(text, j, i);
 
 			indexes.put(key, new Token().init(val, 0, key));
 
@@ -162,6 +162,7 @@ public class Tokenizer {
 	private byte seek;
 	private short prevSeekPos, seekPos;
 	private final ArrayList<Token> prevTokens = new ArrayList<>();
+	// TODO use Token lookahead(int)
 	public final void mark() throws ParseException {
 		if ((seek&1) != 0) throw new UnsupportedOperationException("嵌套的seek");
 
@@ -413,7 +414,7 @@ public class Tokenizer {
 				break;
 				case -2: // UXXXXXXXX
 					try {
-						int codepoint = (int) parseNumber(in, i, i += 8, _NF_HEX);
+						int codepoint = parseInt(in, i, i += 8, NUM_HEX);
 						if (codepoint > Character.MAX_CODE_POINT) throw new FastFailException("codePoint="+codepoint);
 
 						if (Character.isBmpCodePoint(codepoint)) {
@@ -428,7 +429,7 @@ public class Tokenizer {
 				break;
 				case -3: // uXXXX
 					try {
-						out.append((char) parseNumber(in, i, i += 4, _NF_HEX));
+						out.append((char) parseInt(in, i, i += 4, NUM_HEX));
 					} catch (Exception e) {
 						throw new ParseException(in, "无效的\\uXXXX转义:"+e.getMessage(), i);
 					}
@@ -628,7 +629,7 @@ public class Tokenizer {
 		REAL_NUMBERS = BitSet.from("0123456789DdEeFf"),
 		REAL_NUMBERS_HEX = BitSet.from("0123456789ABCDEFabcdefPp"),
 		REAL_NUMBERS_AFTER_EXP = BitSet.from("0123456789DdFf+-");
-	private static final int _NF_HEX = 1, _NF_BIN = 2, _NF_OCT = 3, _NF_END = 4, _NF_UNDERSCORE = 8;
+	private static final int _NF_END = 4, _NF_UNDERSCORE = 8;
 
 	/**
 	 * 6 种数字，尽在掌握.
@@ -661,10 +662,10 @@ public class Tokenizer {
 		if (c == '0' && i+1 < in.length()) {
 			c = in.charAt(++i);
 			switch (c) {
-				case 'X': case 'x': flag = _NF_HEX; set = HEX_NUMBERS; i++; break;
-				case 'B': case 'b': flag = _NF_BIN; set = BIN_NUMBERS; i++; break;
+				case 'X': case 'x': flag = NUM_HEX; set = HEX_NUMBERS; i++; break;
+				case 'B': case 'b': flag = NUM_BIN; set = BIN_NUMBERS; i++; break;
 				default:
-					if (NUMBER.contains(c)) {flag = _NF_OCT; set = OCT_NUMBERS;}
+					if (NUMBER.contains(c)) {flag = NUM_OCT; set = OCT_NUMBERS;}
 					i--;
 					break check1;
 			}
@@ -695,26 +696,26 @@ public class Tokenizer {
 
 			switch (c) {
 				case 'P', 'p' -> {
-					assert ((flag & 3) == _NF_HEX);
+					assert ((flag & 3) == NUM_HEX);
 					type = 3;
 					set = REAL_NUMBERS_AFTER_EXP;
 				}
 				case 'E', 'e' -> { // 5e3之类的
-					if ((flag & 3) == _NF_HEX) break;
+					if ((flag & 3) == NUM_HEX) break;
 					type = 3;
 					set = REAL_NUMBERS_AFTER_EXP;
 				}
 				case '.' -> {
 					type = 3;
-					set = (flag & 3) == _NF_HEX ? REAL_NUMBERS_HEX : REAL_NUMBERS;
+					set = (flag & 3) == NUM_HEX ? REAL_NUMBERS_HEX : REAL_NUMBERS;
 				}
 				case 'D', 'd' -> {
-					if ((flag & 3) == _NF_HEX && set != REAL_NUMBERS_AFTER_EXP) break;
+					if ((flag & 3) == NUM_HEX && set != REAL_NUMBERS_AFTER_EXP) break;
 					type = 3;
 					flag |= _NF_END;
 				}
 				case 'F', 'f' -> {
-					if ((flag & 3) == _NF_HEX && set != REAL_NUMBERS_AFTER_EXP) break;
+					if ((flag & 3) == NUM_HEX && set != REAL_NUMBERS_AFTER_EXP) break;
 					type = 2;
 					flag |= _NF_END;
 					// TODO so that we can use 1day in Lava !
@@ -744,7 +745,7 @@ public class Tokenizer {
 		c = in.charAt(i-1);
 
 		CharList v = found; v.clear();
-		if ((flag & 3) == _NF_HEX && type > 1) {
+		if ((flag & 3) == NUM_HEX && type > 1) {
 			if (set != REAL_NUMBERS_AFTER_EXP) return onInvalidNumber(i, "lexer.number.formatError");
 			v.append("0x");
 		}
@@ -780,11 +781,11 @@ public class Tokenizer {
 			for(;;) {
 			switch (type) {
 				default -> {
-					if ((flag &= 3) == 0 && !TextUtil.checkMax(TextUtil.INT_MAXS, v, 0, v.length(), neg)) {
-						if (TextUtil.checkMax(TextUtil.LONG_MAXS, v, 0, v.length(), neg)) {
+					if ((flag &= 3) == 0 && !checkMax(INT_MAXS, v, 0, v.length(), neg)) {
+						if (checkMax(LONG_MAXS, v, 0, v.length(), neg)) {
 							w = onNumberFlow(v, INTEGER, LONG);
 							if (w != null) break;
-							w = numberWord(index, _parseNumber(v, 4, neg), represent);
+							w = numberWord(index, parseLongRaw(v, 4, neg), represent);
 						} else {
 							w = onNumberFlow(v, INTEGER, DOUBLE);
 							if (w != null) break;
@@ -792,30 +793,30 @@ public class Tokenizer {
 							continue;
 						}
 					} else {
-						if (!TextUtil.checkMax(RADIX_MAX[flag], v, 0, v.length(), neg)) {
+						if (!checkMax(RADIX_MAX[flag], v, 0, v.length(), neg)) {
 							return onInvalidNumber(index, "lexer.number.intLarge");
 						}
-						w = numberWord(index, (int) _parseNumber(v, flag, neg), represent);
+						w = numberWord(index, (int) parseLongRaw(v, flag, neg), represent);
 					}
 				}
 				case 1 -> {
-					if (!TextUtil.checkMax(RADIX_MAX[flag = (flag&3)|4], v, 0, v.length(), neg)) {
+					if (!checkMax(RADIX_MAX[flag = (flag&3)|4], v, 0, v.length(), neg)) {
 						return onInvalidNumber(index, "lexer.number.longLarge");
 					}
-					w = numberWord(index, _parseNumber(v, flag, neg), represent);
+					w = numberWord(index, parseLongRaw(v, flag, neg), represent);
 				}
 				case 2 -> {
-					float fv = FastDoubleParser.parseFloat(v);
+					float fv = parseFloat(v);
 					if (neg) fv = -fv;
 					if (fv == Float.POSITIVE_INFINITY || fv == Float.NEGATIVE_INFINITY) return onInvalidNumber(index, "lexer.number.floatLarge");
-					if (fv == 0 && !isZero(v)) return onInvalidNumber(index, "lexer.number.floatSmall");
+					if (fv == 0 && !isZeroValue(v)) return onInvalidNumber(index, "lexer.number.floatSmall");
 					w = numberWord(index, fv, represent);
 				}
 				case 3 -> {
-					double dv = FastDoubleParser.parseDouble(v);
+					double dv = parseDouble(v);
 					if (neg) dv = -dv;
 					if (dv == Double.POSITIVE_INFINITY || dv == Double.NEGATIVE_INFINITY) return onInvalidNumber(index, "lexer.number.floatLarge");
-					if (dv == 0 && !isZero(v)) return onInvalidNumber(index, "lexer.number.floatSmall");
+					if (dv == 0 && !isZeroValue(v)) return onInvalidNumber(index, "lexer.number.floatSmall");
 					w = numberWord(index, dv, represent);
 				}
 			}
@@ -826,89 +827,6 @@ public class Tokenizer {
 		} catch (NumberFormatException e) {
 			return onInvalidNumber(i, e.getMessage());
 		}
-	}
-
-	private static boolean isZero(CharList sb) {
-		if (sb.startsWith("0x")) {
-			for (int i = 2; i < sb.length(); i++) {
-				char c = sb.list[i];
-				if (c == 'p' || c == 'P') return true;
-				if (c != '0' && c != '.') return false;
-			}
-		} else {
-			for (int i = 0; i < sb.length(); i++) {
-				char c = sb.list[i];
-				if (c == 'e' || c == 'E') return true;
-				if (c != '0' && c != '.') return false;
-			}
-		}
-
-		return true;
-	}
-	private static final byte[][] RADIX_MAX = new byte[8][];
-	private static final byte[] RADIX = {10, 16, 2, 8};
-	static {
-		// n mean see digitReader()
-		// RM[n] => int max
-		// RM[n|LONG] => long max
-
-		RADIX_MAX[0] = TextUtil.INT_MAXS;
-		RADIX_MAX[4] = TextUtil.LONG_MAXS;
-
-		RADIX_MAX[_NF_HEX] = new byte[8];
-		RADIX_MAX[_NF_HEX|4] = new byte[16];
-		fill(_NF_HEX, 'f');
-
-		RADIX_MAX[_NF_OCT] = new byte[16];
-		RADIX_MAX[_NF_OCT|4] = new byte[32];
-		fill(_NF_OCT, '7');
-
-		RADIX_MAX[_NF_BIN] = new byte[32];
-		RADIX_MAX[_NF_BIN|4] = new byte[64];
-		fill(_NF_BIN, '1');
-	}
-	private static void fill(int off, char num) {
-		fill(RADIX_MAX[off], num);
-		fill(RADIX_MAX[off|4], num);
-	}
-	private static void fill(byte[] a0, char num) {
-		int i = a0.length-1;
-		// +1是因为他们是(be treated as)unsigned的
-		a0[i] = (byte) (num+1);
-		while (--i >= 0) {
-			a0[i] = (byte) num;
-		}
-	}
-	private static long _parseNumber(CharList s, int radix, boolean neg) {
-		radix = RADIX[radix&3];
-		long v = 0;
-		int len = s.length();
-		for (int i = 0; i < len; i++) {
-			v *= radix;
-			v += Character.digit(s.charAt(i), radix);
-		}
-		return neg ? -v : v;
-	}
-
-	public static long parseNumber(CharSequence s, int i, int len, int mode) { return parseNumber(s, i, len, mode, false); }
-	public static long parseNumber(CharSequence s, @Range(from = 0, to = 7) int mode, boolean neg) { return parseNumber(s, 0, s.length(), mode, neg); }
-	public static long parseNumber(CharSequence s, int i, int len, @Range(from = 0, to = 7) int radixId, boolean neg) throws NumberFormatException {
-		// range check done
-		if (!TextUtil.checkMax(RADIX_MAX[radixId], s, i, len, neg))
-			throw new NumberFormatException("lexer.number.overflow:"+s);
-
-		radixId = RADIX[radixId&3];
-		long v = 0;
-		while (i < len) {
-			int digit = Character.digit(s.charAt(i), radixId);
-			if (digit < 0) throw new NumberFormatException("s["+i+"]='"+s.charAt(i)+"' 不是合法的数字: "+s);
-			i++;
-
-			v *= radixId;
-			v += digit;
-		}
-
-		return neg ? -v : v;
 	}
 
 	private static final ThreadLocal<String> IsoParserError = new ThreadLocal<>();
@@ -1011,7 +929,7 @@ public class Tokenizer {
 			throw OperationDone.INSTANCE;
 		}
 
-		int num = (int) parseNumber(in, prevI, i, 0);
+		int num = parseInt(in, prevI, i);
 		if (max > 0 && num > max) {
 			IsoParserError.set("错误的时间范围");
 			throw OperationDone.INSTANCE;

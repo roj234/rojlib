@@ -96,7 +96,7 @@ final class StringConcat extends Expr {
 			return;
 		}
 
-		var ctx = CompileContext.get();
+		var ctx = cw.ctx;
 		if (ctx.compiler.hasFeature(Compiler.SHARED_STRING_CONCAT)) {
 			myConcat(cw, ctx);
 		} else {

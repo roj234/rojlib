@@ -20,6 +20,8 @@ struct bsdiff {
     void* ctx;
 };
 
+typedef const char* string;
+
 static jclass nativeException;
 static inline void Error(JNIEnv *env, const char* msg) { env->ThrowNew(nativeException, msg); }
 static inline void OnFreeLibrary();
@@ -41,12 +43,30 @@ static inline void OnFreeLibrary();
 
 #endif
 
+// 定义连接宏
+#define CONCAT_HELPER(a, b) a##b
+#define CONCAT(a, b) CONCAT_HELPER(a, b)
+
+#define PREFIX my_
+#include "printf_tpl.c"
+#undef PREFIX
+#undef MY_PREFIX
+
+#define char wchar_t
+#define PREFIX my_w
+#include "printf_tpl.c"
+#undef PREFIX
+#undef MY_PREFIX
+#undef char
+
 #include "aes.hpp"
 #include "bsdiff.hpp"
 #include "lz/LZ_Jni.cpp"
 #include "xxhash.hpp"
 #include "SharedMemory.hpp"
 #include "Terminal.hpp"
+#include "WebUI.hpp"
+#include "FilePicker.hpp"
 
 #define cpuid(func,ax,bx,cx,dx)\
 __asm__ __volatile__ ("cpuid":\

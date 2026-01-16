@@ -5,7 +5,10 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import org.jetbrains.annotations.Range;
 import roj.annotation.MayMutate;
-import roj.asm.*;
+import roj.asm.Attributed;
+import roj.asm.ClassNode;
+import roj.asm.MethodNode;
+import roj.asm.Opcodes;
 import roj.asm.attr.ModuleAttribute;
 import roj.asm.type.IType;
 import roj.asm.type.Type;
@@ -29,8 +32,6 @@ import roj.compiler.library.Library;
 import roj.compiler.resolve.Resolver;
 import roj.concurrent.TaskGroup;
 import roj.io.IOUtil;
-import roj.reflect.Sandbox;
-import roj.reflect.Unsafe;
 import roj.text.ParseException;
 import roj.text.Token;
 import roj.ui.EasyProgressBar;
@@ -84,7 +85,7 @@ public class LavaCompiler extends Resolver implements Compiler {
 	}
 
 	public ArrayList<CompileUnit> parsables = new ArrayList<>();
-	public int stopAt;
+	public boolean skipCodeGen;
 
 	/**
 	 * 编译输入的源文件并返回生成的类定义。
@@ -134,17 +135,19 @@ public class LavaCompiler extends Resolver implements Compiler {
 				}
 			}
 			if (hasError()) return null;
-			for (int i = 0; i < units.size(); i++) {
-				try {
-					units.get(i).S4parseCode();
-				} catch (ParseException e) {
-					e.printStackTrace();
-					hasError = true;
+			if (!skipCodeGen) {
+				for (int i = 0; i < units.size(); i++) {
+					try {
+						units.get(i).S4parseCode();
+					} catch (ParseException e) {
+						e.printStackTrace();
+						hasError = true;
+					}
 				}
-			}
-			if (hasError()) return null;
-			for (int i = 0; i < units.size(); i++) {
-				units.get(i).S5serialize();
+				if (hasError()) return null;
+				for (int i = 0; i < units.size(); i++) {
+					units.get(i).S5serialize();
+				}
 			}
 			units.addAll((Collection<? extends CompileUnit>) Helpers.cast(getGeneratedClasses()));
 			return units;
@@ -222,22 +225,24 @@ public class LavaCompiler extends Resolver implements Compiler {
 			if (hasError()) return null;
 
 			prog.end("完成");
-			prog.setTotal(taskSecondPass.size());
-			prog.setName("阶段4: 方法");
+			if (!skipCodeGen) {
+				prog.setTotal(taskSecondPass.size());
+				prog.setName("阶段4: 方法");
 
-			try {
-				group.executeAll(taskSecondPass, CompileUnit::S4parseCode, cleanup).await();
-			} catch (Exception e) {
-				e.printStackTrace();
-				hasError = true;
+				try {
+					group.executeAll(taskSecondPass, CompileUnit::S4parseCode, cleanup).await();
+				} catch (Exception e) {
+					e.printStackTrace();
+					hasError = true;
+				}
+				if (hasError()) return null;
+
+				prog.end("完成");
+				prog.setTotal(taskSecondPass.size());
+				prog.setName("阶段5: 后处理");
+
+				group.executeAll(taskSecondPass, CompileUnit::S5serialize, cleanup).await();
 			}
-			if (hasError()) return null;
-
-			prog.end("完成");
-			prog.setTotal(taskSecondPass.size());
-			prog.setName("阶段5: 后处理");
-
-			group.executeAll(taskSecondPass, CompileUnit::S5serialize, cleanup).await();
 
 			parsables.addAll((Collection<? extends CompileUnit>) Helpers.cast(getGeneratedClasses()));
 			return parsables;
@@ -298,7 +303,10 @@ public class LavaCompiler extends Resolver implements Compiler {
 
 	// 在不同类型的数组上创建附加方法
 	public ClassNode resolveArray(IType type) {
-		System.out.println("Resolve array desc "+type);
+		System.out.println("resolveArray("+type+")");
+		if (true) return AnyArray;
+
+
 		String arrayTypeDesc = type.toDesc();
 		Object o = libraryByName.get(arrayTypeDesc);
 		if (o != null) return (ClassNode) o;
@@ -564,37 +572,6 @@ public class LavaCompiler extends Resolver implements Compiler {
 	@Override public void onUnary(String operator, Type type, MethodNode node, int side) {operators.computeIfAbsentI(tokenId(operator), x -> new ArrayList<>()).add(SimpleOp(type, null, node));}
 	@Override public void onBinary(Type left, String operator, Type right, MethodNode node, boolean swap) {operators.computeIfAbsentI(tokenId(operator), x -> new ArrayList<>()).add(SimpleOp(left, right, node));}
 	@Override public void addOpHandler(String operator, ExprOp resolver) {operators.computeIfAbsentI(tokenId(operator), x -> new ArrayList<>()).add(resolver);}
-	//endregion
-	//region 沙盒API
-	@Deprecated
-	private Sandbox sandbox;
-
-	@Deprecated
-	private synchronized Sandbox getSandbox() {
-		if (sandbox == null) {
-			report(null, Kind.SEVERE_WARNING, -1, "lava.sandbox");
-			sandbox = new Sandbox("Lava", LavaCompiler.class.getClassLoader(), true);
-		}
-		return sandbox;
-	}
-
-	@Deprecated
-	public void addSandboxWhitelist(String packageOrTypename, boolean childInheritance) {getSandbox().restriction.add(packageOrTypename, 1, false, childInheritance);}
-	@Deprecated
-	public void addSandboxBlacklist(String packageOrTypename, boolean childInheritance) {getSandbox().restriction.add(packageOrTypename, 0, false, childInheritance);}
-	@Deprecated
-	public Object createSandboxInstance(ClassNode data) {
-		String name = data.name().replace('/', '.');
-		addSandboxClass(name, AsmCache.toByteArray(data));
-		try {
-			var type = getSandbox().loadClass(name);
-			return Unsafe.U.allocateInstance(type);
-		} catch (Exception e) {
-			throw new RuntimeException(e);
-		}
-	}
-	@Deprecated
-	private void addSandboxClass(String className, byte[] data) {getSandbox().classBytes.put(className, data);}
 	//endregion
 	//region 附件API
 	private Map<TypedKey<?>, Object> attachments = Collections.emptyMap();

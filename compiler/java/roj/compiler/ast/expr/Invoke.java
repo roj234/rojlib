@@ -511,7 +511,7 @@ public final class Invoke extends Expr {
 
 	@Override
 	protected void write1(MethodWriter cw, @NotNull TypeCast.Cast _returnType) {
-		var ctx = CompileContext.get();
+		var ctx = cw.ctx;
 		if (ctx.inReturn && checkTailrec(ctx, cw)) return;
 
 		var isNullishOwner = false;

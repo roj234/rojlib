@@ -95,7 +95,7 @@ final class FileContent implements Content {
 		int stat = info.stats();
 
 		int compress = 0;
-		if (req.getHeaderValue("accept-encoding", "deflate") != null) {
+		if (req.containsKey("accept-encoding", "deflate")) {
 			if ((stat & FileInfo.FILE_DEFLATED) != 0) {
 				compress = 1;
 				req.responseHeader.put("content-encoding", "deflate");
@@ -103,7 +103,7 @@ final class FileContent implements Content {
 				compress = 2;
 				rh.enableCompression();
 			}
-		} else if ((stat & FileInfo.FILE_HAS_CRC32) != 0 && req.getHeaderValue("accept-encoding", "gzip") != null) {
+		} else if ((stat & FileInfo.FILE_HAS_CRC32) != 0 && req.containsKey("accept-encoding", "gzip")) {
 			if ((stat & FileInfo.FILE_DEFLATED) != 0) {
 				req.responseHeader.put("content-encoding", "gzip");
 				plus(200, req);

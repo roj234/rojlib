@@ -35,7 +35,7 @@ public class ObfuscatorNext {
 		var src = new File("example.jar");
 
 		Profiler.startSection("LoadResource");
-		ZipPacker zfw = /*ObfUtil.createFakeZip*/new ZipPacker(IOUtil.deriveOutput(src, ".obf"));
+		ZipPacker zfw = /*ObfUtil.createFakeZip*/new ZipPacker(IOUtil.addSuffix(src, ".obf"));
 		List<Context> arr = Context.fromZip(src, zfw);
 
 		Profiler.endStartSection("exclusion");

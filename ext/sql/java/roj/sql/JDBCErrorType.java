@@ -6,7 +6,7 @@ import roj.asmx.injector.Weave;
 import roj.asmx.launcher.Autoload;
 import roj.collect.ArrayList;
 import roj.collect.IntBiMap;
-import roj.collect.ListMap;
+import roj.collect.RowMap;
 
 import java.util.List;
 import java.util.Map;
@@ -31,7 +31,7 @@ final class JDBCErrorType {
 			List<String> values = new ArrayList<>(inst.logs);
 			IntBiMap<String> index = new IntBiMap<>(values.size());
 			for (int i = 0; i < values.size(); ) index.put(i, String.valueOf(++i));
-			return new ListMap<>(index, values);
+			return new RowMap<>(index, values);
 		});
 	}
 }

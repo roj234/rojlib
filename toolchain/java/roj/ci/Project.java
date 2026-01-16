@@ -179,7 +179,7 @@ public final class Project {
 				switch (uri.getScheme()) {
 					case "file" -> {
 						String path = uri.getPath();
-						File file = IOUtil.resolvePath(root, path);
+						File file = IOUtil.resolve(root, path);
 						if (!file.exists()) {
 							MCMake.log.warn("找不到依赖项目{}", uri);
 							continue;
@@ -197,7 +197,7 @@ public final class Project {
 					}
 					case "resource" -> {
 						String path = uri.getPath();
-						File file = IOUtil.resolvePath(root, path);
+						File file = IOUtil.resolve(root, path);
 						if (!file.isDirectory()) {
 							MCMake.log.warn("找不到依赖项目{}", uri);
 							continue;

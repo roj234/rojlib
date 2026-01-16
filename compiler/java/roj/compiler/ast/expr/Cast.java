@@ -53,7 +53,7 @@ final class Cast extends PrefixOp {
 
 		if (type.isPrimitive() && rType.isPrimitive() && right.isConstant()) {
 			if (this.cast.isIdentity()) {
-				CompileContext.get().report(this, Kind.WARNING, "cast.redundant", type);
+				ctx.report(this, Kind.WARNING, "cast.redundant", type);
 			}
 			return constant(type, AnnotationPrimer.castPrimitive((ConfigValue) right.constVal(), type));
 		}
@@ -63,7 +63,7 @@ final class Cast extends PrefixOp {
 	@Override
 	protected void write1(MethodWriter cw, @NotNull TypeCast.Cast cast) {
 		if (cast.isIdentity() && this.cast.isIdentity()) {
-			CompileContext.get().report(this, Kind.WARNING, "cast.redundant", type);
+			cw.ctx.report(this, Kind.WARNING, "cast.redundant", type);
 		}
 
 		right.write(cw, this.cast);

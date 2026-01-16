@@ -22,7 +22,7 @@ import roj.util.Helpers;
  * @since 2024/2/20 1:28
  */
 public class TestPlugin {
-	public void pluginInit(Compiler api) {
+	public TestPlugin(Compiler api) {
 		// <minecraft:stone>
 		api.newStartOp("<", (ctx) -> {
 			var wr = ctx.tokenizer;

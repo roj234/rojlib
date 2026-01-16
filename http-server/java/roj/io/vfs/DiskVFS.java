@@ -24,7 +24,7 @@ public class DiskVFS implements VirtualFileSystem {
 	@Override public void close() throws IOException {}
 
 	@Override
-	public @NotNull VirtualFile getPath(String pathname) {return new DiskFile(new File(base, IOUtil.normalizePath(pathname)));}
+	public @NotNull VirtualFile getPath(String pathname) {return new DiskFile(new File(base, IOUtil.normalize(pathname)));}
 
 	@Override
 	public @NotNull VirtualFile getPath(VirtualFile parent, String child) {return new DiskFile(new File(((DiskFile) parent).getFile(), child));}
